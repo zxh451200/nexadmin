@@ -19,7 +19,7 @@
 
 ## 10 分钟上手
 
-前置：Go 1.25、Node（Dockerfile 用 node:22）、一个空的 MySQL / MariaDB / PostgreSQL 库。
+前置：Go 1.26、Node（Dockerfile 用 node:22）、一个空的 MySQL / MariaDB / PostgreSQL 库。
 
 ```
 sh scripts/build.sh              # 前端 npm ci + npm run build，再 go build -tags embedweb，产物 bin/nexadmin-server
@@ -58,5 +58,5 @@ sh scripts/build.sh              # 前端 npm ci + npm run build，再 go build 
 
 ## 许可与支持
 
-- 许可证：待补充
+- 许可证：[MIT](LICENSE)（`core/`、`modules/`、`pkg/`、`cmd/`、`web/src/framework/` 等框架区源码；业务与插件代码归各自作者）
 - 技术支持与联系方式：待补充
