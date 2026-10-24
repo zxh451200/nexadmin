@@ -188,21 +188,29 @@ func (m *module) passwordLogin(ctx context.Context, req auth.LoginRequest) (*aut
 		return nil, response.Locked(lockSeconds(until))
 	}
 
-	var u User
-	err = db.Where("username = ?", username).First(&u).Error
-	found := err == nil
-	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+	// username 的唯一约束是 (tenant_id, username)，跨租户允许同名；登录按密码在候选中消歧，
+	// 谁匹配就登录谁（停用的候选跳过）。候选为空或全部不匹配走与单用户相同的失败路径。
+	var cands []User
+	err = db.Where("username = ?", username).Order("id ASC").Find(&cands).Error
+	if err != nil {
 		return nil, err
 	}
-	switch {
-	case !found:
-		burn(req.Password)
-	case !auth.CheckPassword(u.Password, req.Password):
-		found = false
-	case u.Status != statusOn:
-		d.Log.Info("login rejected: user disabled", zap.String("username", username), zap.String("ip", req.IP))
-		found = false
+	var u *User
+	for i := range cands {
+		if !auth.CheckPassword(cands[i].Password, req.Password) {
+			continue
+		}
+		if cands[i].Status != statusOn {
+			d.Log.Info("login rejected: user disabled", zap.String("username", username), zap.String("ip", req.IP))
+			continue
+		}
+		u = &cands[i]
+		break
 	}
+	if u == nil && len(cands) == 0 {
+		burn(req.Password) // 没有任何候选时补一次 bcrypt 比较，保持与“密码错误”耗时接近
+	}
+	found := u != nil
 	if !found {
 		// 本地账号密码失败（含用户不存在 / 停用）：按序尝试外部校验器（LDAP 等）。未注册时 handled 恒为 false，行为不变。
 		// 存在与不存在的用户名走完全相同的路径，失败计数与锁定逻辑不变。
@@ -226,7 +234,7 @@ func (m *module) passwordLogin(ctx context.Context, req auth.LoginRequest) (*aut
 	if err := db.Model(&User{}).Where("id = ?", int64(u.ID)).UpdateColumn("last_login_at", time.Now().UTC()).Error; err != nil {
 		d.Log.Warn("update last_login_at failed", zap.Error(err))
 	}
-	return buildAuthUser(db, &u)
+	return buildAuthUser(db, u)
 }
 
 // VerifyPassword is reusable by sensitive action confirmations.
