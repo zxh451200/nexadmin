@@ -20,3 +20,9 @@ config/config.yaml
 
 # 安全扫描插件状态
 .mimosa/
+
+# Python 字节码缓存
+__pycache__/
+
+# 本地工具会话产物
+.zcode/
