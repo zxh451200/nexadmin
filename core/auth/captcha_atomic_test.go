@@ -12,7 +12,7 @@ import (
 func TestCaptchaConcurrentVerifyConsumesOnce(t *testing.T) {
 	s := newCaptchaSvc(t)
 	ctx := context.Background()
-	key, _, _ := s.NewCaptcha(ctx)
+	key, _, _ := s.NewCaptcha(ctx, "9.9.9.9")
 	ans := answerOf(t, s, key)
 	var wins atomic.Int32
 	var wg sync.WaitGroup
@@ -22,7 +22,7 @@ func TestCaptchaConcurrentVerifyConsumesOnce(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			<-start
-			if ok, _ := s.VerifyCaptcha(ctx, key, ans); ok {
+			if ok, _ := s.VerifyCaptcha(ctx, key, ans, "9.9.9.9"); ok {
 				wins.Add(1)
 			}
 		}()
@@ -61,8 +61,10 @@ func TestRecordLoginFailureConcurrentExactCount(t *testing.T) {
 			t.Fatalf("%s 计数 %q，期望精确为 %d", k, v, n)
 		}
 	}
-	if needed.Load() != n-captchaAfterFails+1 {
-		t.Fatalf("要求验证码的次数 %d，期望 %d", needed.Load(), n-captchaAfterFails+1)
+	// 用户名与 IP 两个维度各自独立自增，同一 goroutine 在两键上的序号不保证一致；
+	// need 只保证下界：两个序号都落在阈值之前（<=2）的 goroutine 至多 captchaAfterFails-1 个。
+	if got := needed.Load(); got < n-captchaAfterFails+1 {
+		t.Fatalf("要求验证码的次数 %d，至少应为 %d", got, n-captchaAfterFails+1)
 	}
 	if need, _ := s.LoginNeedsCaptcha(ctx, "alice", "1.1.1.1"); !need {
 		t.Fatal("达到阈值后该用户名必须要求验证码")

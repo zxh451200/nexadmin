@@ -87,3 +87,28 @@ func TestCORSDevAllowsAnyOriginWithoutWildcard(t *testing.T) {
 		t.Fatal("never wildcard")
 	}
 }
+
+// 基线安全头挂全局；业务 handler 可以覆盖同名头（文件预览的 CSP sandbox 依赖这一点）。
+func TestSecurityHeadersDefaultsAndOverride(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	e := gin.New()
+	e.Use(SecurityHeaders())
+	e.GET("/plain", func(c *gin.Context) { c.String(http.StatusOK, "ok") })
+	e.GET("/override", func(c *gin.Context) {
+		c.Header("X-Frame-Options", "DENY")
+		c.String(http.StatusOK, "ok")
+	})
+	w := httptest.NewRecorder()
+	e.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/plain", nil))
+	h := w.Header()
+	if h.Get("X-Content-Type-Options") != "nosniff" ||
+		h.Get("X-Frame-Options") != "SAMEORIGIN" ||
+		h.Get("Referrer-Policy") != "strict-origin-when-cross-origin" {
+		t.Fatalf("missing baseline security headers: %v", h)
+	}
+	w = httptest.NewRecorder()
+	e.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/override", nil))
+	if w.Header().Get("X-Frame-Options") != "DENY" {
+		t.Fatalf("handler must be able to override baseline headers, got %q", w.Header().Get("X-Frame-Options"))
+	}
+}

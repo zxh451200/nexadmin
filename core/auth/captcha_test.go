@@ -30,19 +30,23 @@ func newCaptchaSvc(t *testing.T) *Service {
 	return &Service{cache: ch}
 }
 
-// answerOf 直接从缓存读答案（测试专用）。
+// answerOf 直接从缓存读答案（测试专用）；缓存里存的是 "ip|answer"。
 func answerOf(t *testing.T, s *Service, key string) string {
 	t.Helper()
 	v, err := s.cache.Get(context.Background(), captchaKey(key))
 	if err != nil {
 		t.Fatal(err)
 	}
-	return v
+	_, text, _ := strings.Cut(v, "|")
+	return text
 }
+
+// testIP 是测试统一使用的签发/校验 IP。
+const testIP = "10.0.0.9"
 
 func TestCaptchaImageIsPNG(t *testing.T) {
 	s := newCaptchaSvc(t)
-	key, img, err := s.NewCaptcha(context.Background())
+	key, img, err := s.NewCaptcha(context.Background(), testIP)
 	if err != nil || key == "" {
 		t.Fatalf("NewCaptcha: %v", err)
 	}
@@ -59,25 +63,44 @@ func TestCaptchaImageIsPNG(t *testing.T) {
 func TestCaptchaOneTime(t *testing.T) {
 	s := newCaptchaSvc(t)
 	ctx := context.Background()
-	key, _, _ := s.NewCaptcha(ctx)
+	key, _, _ := s.NewCaptcha(ctx, testIP)
 	ans := answerOf(t, s, key)
-	if ok, _ := s.VerifyCaptcha(ctx, key, ans); !ok {
+	if ok, _ := s.VerifyCaptcha(ctx, key, ans, testIP); !ok {
 		t.Fatal("correct answer must pass once")
 	}
-	if ok, _ := s.VerifyCaptcha(ctx, key, ans); ok {
+	if ok, _ := s.VerifyCaptcha(ctx, key, ans, testIP); ok {
 		t.Fatal("the same captcha must not verify twice")
 	}
 	// 答错同样作废：不能对同一张图反复试
-	key2, _, _ := s.NewCaptcha(ctx)
+	key2, _, _ := s.NewCaptcha(ctx, testIP)
 	ans2 := answerOf(t, s, key2)
-	if ok, _ := s.VerifyCaptcha(ctx, key2, "x"+ans2); ok {
+	if ok, _ := s.VerifyCaptcha(ctx, key2, "x"+ans2, testIP); ok {
 		t.Fatal("wrong answer must fail")
 	}
-	if ok, _ := s.VerifyCaptcha(ctx, key2, ans2); ok {
+	if ok, _ := s.VerifyCaptcha(ctx, key2, ans2, testIP); ok {
 		t.Fatal("captcha must be consumed by a failed attempt")
 	}
-	if ok, _ := s.VerifyCaptcha(ctx, "", ans); ok {
+	if ok, _ := s.VerifyCaptcha(ctx, "", ans, testIP); ok {
 		t.Fatal("empty key must fail")
+	}
+}
+
+// 验证码绑定签发时的客户端 IP：其他来源即使拿到 key+答案也无效。
+func TestCaptchaBoundToIP(t *testing.T) {
+	s := newCaptchaSvc(t)
+	ctx := context.Background()
+	key, _, _ := s.NewCaptcha(ctx, "10.0.0.9")
+	ans := answerOf(t, s, key)
+	if ok, _ := s.VerifyCaptcha(ctx, key, ans, "10.0.0.9"); !ok {
+		t.Fatal("same IP must pass")
+	}
+	key2, _, _ := s.NewCaptcha(ctx, "10.0.0.9")
+	if ok, _ := s.VerifyCaptcha(ctx, key2, answerOf(t, s, key2), "10.0.0.10"); ok {
+		t.Fatal("captcha issued to one IP must not verify from another")
+	}
+	key3, _, _ := s.NewCaptcha(ctx, "10.0.0.9")
+	if ok, _ := s.VerifyCaptcha(ctx, key3, answerOf(t, s, key3), ""); ok {
+		t.Fatal("empty IP must not verify an IP-bound captcha")
 	}
 }
 
@@ -87,10 +110,10 @@ func TestCaptchaExpires(t *testing.T) {
 	defer func() { captchaTTL = old }()
 	s := newCaptchaSvc(t)
 	ctx := context.Background()
-	key, _, _ := s.NewCaptcha(ctx)
+	key, _, _ := s.NewCaptcha(ctx, testIP)
 	ans := answerOf(t, s, key)
 	time.Sleep(90 * time.Millisecond)
-	if ok, _ := s.VerifyCaptcha(ctx, key, ans); ok {
+	if ok, _ := s.VerifyCaptcha(ctx, key, ans, testIP); ok {
 		t.Fatal("expired captcha must fail")
 	}
 }
@@ -158,8 +181,8 @@ func TestLoginRequiresCaptchaAfterThreeFailures(t *testing.T) {
 	if fp.calls != calls {
 		t.Fatal("provider must not be called without a valid captcha")
 	}
-	// 验证码错误同样被拒，并且该验证码作废
-	key, _, _ := s.NewCaptcha(context.Background())
+	// 验证码错误同样被拒，并且该验证码作废（签发/校验都走 10.0.0.9，与 doLogin 的 RemoteAddr 一致）
+	key, _, _ := s.NewCaptcha(context.Background(), testIP)
 	ans := answerOf(t, s, key)
 	if r := doLogin(t, e, "ghost", "right", key, "x"+ans); r.Code != 400 {
 		t.Fatalf("wrong captcha must be rejected, got %+v", r)
@@ -168,7 +191,7 @@ func TestLoginRequiresCaptchaAfterThreeFailures(t *testing.T) {
 		t.Fatalf("consumed captcha must be rejected, got %+v", r)
 	}
 	// 正确的验证码 + 正确的密码：登录成功并清除该用户名的计数
-	key, _, _ = s.NewCaptcha(context.Background())
+	key, _, _ = s.NewCaptcha(context.Background(), testIP)
 	if r := doLogin(t, e, "ghost", "right", key, answerOf(t, s, key)); r.Code != 0 {
 		t.Fatalf("valid captcha + password must succeed, got %+v", r)
 	}

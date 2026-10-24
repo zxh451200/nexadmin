@@ -49,7 +49,12 @@ func Desc(summary string) gin.HandlerFunc {
 func (a *App) newEngine() *gin.Engine {
 	e := gin.New()
 	ConfigureClientIP(e, a.cfg.Server.TrustedProxies, a.log)
-	e.Use(metrics.Middleware(), middleware.Recovery(a.log), middleware.Logger(a.log), middleware.CORS(!a.cfg.IsProduction(), a.cfg.Server.CORSOrigins...), middleware.I18n(i18n.Default()))
+	if !a.cfg.IsProduction() { // dev 模式 CORS 对任意 Origin 反射（前端 vite 开发服务器依赖）；生产部署漏配 app.env=production 时在这里提醒
+		a.log.Warn("dev mode: CORS reflects any Origin and dev conveniences are on; set app.env=production for deployments",
+			zap.Strings("cors_origins", a.cfg.Server.CORSOrigins))
+	}
+	e.Use(metrics.Middleware(), middleware.Recovery(a.log), middleware.Logger(a.log),
+		middleware.SecurityHeaders(), middleware.CORS(!a.cfg.IsProduction(), a.cfg.Server.CORSOrigins...), middleware.I18n(i18n.Default()))
 	return e
 }
 

@@ -96,6 +96,18 @@ func CORS(dev bool, allowed ...string) gin.HandlerFunc {
 	}
 }
 
+// SecurityHeaders 为所有响应设置基线安全头（在业务 handler 之前执行，handler 可覆盖同名头，
+// 如文件预览的 CSP sandbox）。X-Frame-Options 用 SAMEORIGIN 而不是 DENY，保留本站自查预览的合法内嵌。
+func SecurityHeaders() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		h := c.Writer.Header()
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("X-Frame-Options", "SAMEORIGIN")
+		h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		c.Next()
+	}
+}
+
 // I18n 按 Accept-Language 协商语言并写入 request context。
 func I18n(b *i18n.Bundle) gin.HandlerFunc {
 	return func(c *gin.Context) {

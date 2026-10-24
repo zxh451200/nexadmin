@@ -39,7 +39,7 @@ func (h *Handler) SendSMS(c *gin.Context) {
 			response.Fail(c, response.Unavailable("auth.provider_missing").WithMsg("短信服务未启用"))
 			return
 		}
-		ok, err := h.auth.VerifyCaptcha(ctx, in.CaptchaKey, in.Captcha)
+		ok, err := h.auth.VerifyCaptcha(ctx, in.CaptchaKey, in.Captcha, c.ClientIP())
 		if err != nil {
 			response.Fail(c, err)
 			return

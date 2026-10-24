@@ -70,7 +70,7 @@ func (h *Handler) Login(c *gin.Context) {
 			return
 		}
 		if need {
-			ok, err := h.Svc.VerifyCaptcha(ctx, req.CaptchaKey, req.Captcha)
+			ok, err := h.Svc.VerifyCaptcha(ctx, req.CaptchaKey, req.Captcha, req.IP)
 			if err != nil {
 				response.Fail(c, err)
 				return
@@ -152,7 +152,7 @@ func (h *Handler) afterLoginFailure(c *gin.Context, req LoginRequest, err error,
 
 // Captcha GET /auth/captcha：返回 {key, image}，60 秒有效、一次性。
 func (h *Handler) Captcha(c *gin.Context) {
-	key, img, err := h.Svc.NewCaptcha(c.Request.Context())
+	key, img, err := h.Svc.NewCaptcha(c.Request.Context(), c.ClientIP())
 	if err != nil {
 		response.Fail(c, err)
 		return

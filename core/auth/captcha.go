@@ -153,7 +153,8 @@ func renderCaptcha(text string) ([]byte, error) {
 }
 
 // NewCaptcha 生成验证码，返回 key 与 data URI 图片；答案 60 秒后失效。
-func (s *Service) NewCaptcha(ctx context.Context) (key, dataURI string, err error) {
+// 答案与签发时的客户端 IP 绑定存储（ip|answer），校验时必须来自同一 IP，防止 key+答案被转交给其他来源使用。
+func (s *Service) NewCaptcha(ctx context.Context, ip string) (key, dataURI string, err error) {
 	text, err := randDigits(captchaLen)
 	if err != nil {
 		return "", "", err
@@ -167,14 +168,15 @@ func (s *Service) NewCaptcha(ctx context.Context) (key, dataURI string, err erro
 	if err != nil {
 		return "", "", err
 	}
-	if err := s.cache.Set(ctx, captchaKey(key), text, captchaTTL); err != nil {
+	if err := s.cache.Set(ctx, captchaKey(key), ip+"|"+text, captchaTTL); err != nil {
 		return "", "", err
 	}
 	return key, "data:image/png;base64," + base64.StdEncoding.EncodeToString(pngBytes), nil
 }
 
 // VerifyCaptcha 校验并作废验证码（一次性：无论对错，同一个 key 只能校验一次）。
-func (s *Service) VerifyCaptcha(ctx context.Context, key, answer string) (bool, error) {
+// ip 与签发时不一致即失败（签发时未带 IP 的记录不绑定，答案为整串值）。
+func (s *Service) VerifyCaptcha(ctx context.Context, key, answer, ip string) (bool, error) {
 	key, answer = strings.TrimSpace(key), strings.TrimSpace(answer)
 	if key == "" || len(key) > 64 {
 		return false, nil
@@ -187,7 +189,14 @@ func (s *Service) VerifyCaptcha(ctx context.Context, key, answer string) (bool, 
 	if err != nil {
 		return false, err
 	}
-	return subtle.ConstantTimeCompare([]byte(want), []byte(answer)) == 1, nil
+	boundIP, wantText, found := strings.Cut(want, "|")
+	if !found {
+		boundIP, wantText = "", want
+	}
+	if boundIP != "" && subtle.ConstantTimeCompare([]byte(boundIP), []byte(ip)) != 1 {
+		return false, nil
+	}
+	return subtle.ConstantTimeCompare([]byte(wantText), []byte(answer)) == 1, nil
 }
 
 func (s *Service) failCount(ctx context.Context, key string) (int, error) {
