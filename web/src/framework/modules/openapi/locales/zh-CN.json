@@ -1,0 +1,145 @@
+{
+  "openapi": {
+    "menu": "开放平台",
+    "title": "开放平台",
+    "description": "管理对外开放的应用凭证、事件 Webhook 以及投递记录",
+    "neverUsed": "从未使用",
+    "btn": { "edit": "编辑" },
+    "tab": { "apps": "应用", "webhooks": "Webhook", "deliveries": "投递记录", "docs": "接口文档" },
+    "eventGroup": { "user": "用户", "dept": "部门", "role": "角色", "notice": "公告" },
+    "apps": {
+      "create": "新增应用",
+      "empty": "暂无开放应用",
+      "resetSecret": "重置密钥",
+      "resetConfirm": "重置后「{{name}}」当前的 AppSecret 立即失效，调用方需要更新配置。确定继续吗？",
+      "deleteConfirm": "确定要删除应用「{{name}}」吗？使用它的调用方将立即无法访问。",
+      "ipUnlimited": "不限制",
+      "ipCount": "{{count}} 条",
+      "fields": {
+        "name": "应用名称",
+        "appKey": "AppKey",
+        "appSecret": "AppSecret",
+        "description": "描述",
+        "roles": "授权角色",
+        "enabled": "启用",
+        "ipAllow": "IP 白名单",
+        "createdAt": "创建时间",
+        "lastUsedAt": "最近调用"
+      },
+      "form": {
+        "createTitle": "新增应用",
+        "editTitle": "编辑应用",
+        "nameTooLong": "名称不能超过 50 个字符",
+        "descTooLong": "描述不能超过 200 个字符",
+        "rolesPlaceholder": "选择角色",
+        "rolesHint": "应用调用接口时拥有所选角色的权限之和；不选则没有任何权限。",
+        "ipHint": "每行一个 IPv4 / IPv6 地址或 CIDR，如 203.0.113.10、10.0.0.0/8。留空表示不限制来源 IP。",
+        "ipInvalid": "不是有效的 IP 或 CIDR：{{ip}}",
+        "ipDuplicated": "存在重复的 IP 条目"
+      },
+      "secret": {
+        "title": "应用已创建，请保存密钥",
+        "onceHint": "AppSecret 只会显示这一次，离开后将无法再次查看。丢失后只能重置密钥。",
+        "saved": "我已保存"
+      },
+      "guide": {
+        "action": "接入说明",
+        "title": "接入说明",
+        "section": "签名调用说明",
+        "hint": "所有开放接口请求都必须携带以下请求头，服务端据此验证身份与防重放。",
+        "header": {
+          "X-App-Key": "应用的 AppKey",
+          "X-Timestamp": "请求时间，Unix 秒；与服务器时间偏差需在 ±5 分钟内",
+          "X-Nonce": "每次请求唯一的随机串，重复使用会被拒绝",
+          "X-Signature": "签名结果，小写十六进制"
+        },
+        "stringToSign": "签名串（用换行符 \\n 连接，query 为不含 ? 的原始查询串，没有则为空串，body 为原始请求体）：",
+        "algorithm": "签名 = HMAC-SHA256(AppSecret, 签名串)，输出小写十六进制。",
+        "window": "时间窗为 ±5 分钟，超出时间窗或 Nonce 重复的请求会被拒绝。",
+        "example": "示例（Node.js 18+）",
+        "copyExample": "复制示例代码"
+      }
+    },
+    "webhooks": {
+      "create": "新增 Webhook",
+      "empty": "暂无 Webhook",
+      "test": "发送测试",
+      "resetSecret": "重置签名密钥",
+      "resetConfirm": "重置后「{{name}}」当前的签名密钥立即失效，接收方需要同步更新。确定继续吗？",
+      "deleteConfirm": "确定要删除 Webhook「{{name}}」吗？删除后不再推送事件。",
+      "fields": {
+        "name": "名称",
+        "url": "接收地址",
+        "events": "订阅事件",
+        "enabled": "启用",
+        "secret": "签名密钥",
+        "createdAt": "创建时间"
+      },
+      "form": {
+        "createTitle": "新增 Webhook",
+        "editTitle": "编辑 Webhook",
+        "nameTooLong": "名称不能超过 50 个字符",
+        "urlHint": "必须是 https 地址；开发环境允许 http://localhost。",
+        "urlInvalid": "请输入 https 地址（开发可用 http://localhost）",
+        "eventsRequired": "至少选择一个事件"
+      },
+      "secret": {
+        "title": "Webhook 已创建，请保存签名密钥",
+        "onceHint": "签名密钥只会显示这一次，离开后将无法再次查看。丢失后只能重置。",
+        "usage": "每次推送都会携带用该密钥计算的签名，接收方应校验签名后再处理事件。",
+        "saved": "我已保存"
+      },
+      "testResult": {
+        "title": "测试结果",
+        "success": "成功",
+        "failed": "失败",
+        "statusCode": "状态码",
+        "duration": "耗时",
+        "ms": "{{ms}} ms"
+      }
+    },
+    "docs": {
+      "searchPlaceholder": "搜索路径或权限码",
+      "count": "共 {{count}} 个接口",
+      "download": "下载 openapi.json",
+      "empty": "没有匹配的接口",
+      "detail": "接口详情",
+      "yes": "可以",
+      "no": "不可以",
+      "noPerm": "无（登录即可 / 公开）",
+      "curlToken": "curl 示例：个人访问令牌",
+      "curlSign": "curl 示例：应用签名",
+      "copyCurl": "复制示例",
+      "notCallable": "该接口不允许此凭证调用。",
+      "publicNote": "公开接口，无需凭证，直接请求即可。",
+      "auth": { "public": "无需登录", "login": "需要登录", "super": "仅超级管理员" },
+      "fields": { "module": "所属模块", "perm": "权限码", "auth": "认证要求", "token": "令牌可调用", "app": "应用签名可调用", "summary": "摘要" }
+    },
+    "deliveries": {
+      "empty": "暂无投递记录",
+      "detail": "投递详情",
+      "retry": "重试",
+      "retryQueued": "已加入重试队列",
+      "noBody": "无响应内容",
+      "truncated": "响应内容较长，仅显示前 {{count}} 个字符。",
+      "filter": {
+        "webhook": "Webhook",
+        "allWebhooks": "全部 Webhook",
+        "status": "状态",
+        "allStatus": "全部状态"
+      },
+      "status": { "success": "成功", "failed": "失败", "pending": "待投递" },
+      "fields": {
+        "webhook": "Webhook",
+        "event": "事件",
+        "status": "状态",
+        "attempts": "尝试次数",
+        "responseCode": "响应码",
+        "responseBody": "响应内容",
+        "error": "错误信息",
+        "createdAt": "创建时间",
+        "nextRetryAt": "下次重试"
+      }
+    }
+  }
+}

@@ -1,0 +1,39 @@
+id: identity
+name: 身份源
+version: 1.0.0
+description: 按租户独立的身份源（LDAP/AD 登录、CAS 单点登录），支持测试连接、测试用户登录与自动建号。官方付费插件。
+author: NexAdmin
+edition: pro
+requires_nexadmin: ">=0.1.0"
+
+# 安装时写入 sys_menu；title 是 i18n key，文案在 web/locales 的 plugin_identity 命名空间里。
+menus:
+  - parent: /system
+    type: menu
+    title: plugin_identity.menu
+    path: /system/identity
+    component: plugins/identity/IdentityPage
+    perm: identity:list
+    icon: KeyRound
+    sort: 110
+    keep_alive: true
+  - parent: identity:list
+    type: button
+    title: plugin_identity.btn.edit
+    perm: identity:edit
+    sort: 10
+  - parent: identity:list
+    type: button
+    title: plugin_identity.btn.test
+    perm: identity:test
+    sort: 20
+  - parent: identity:list
+    type: button
+    title: plugin_identity.btn.sync
+    perm: identity:sync
+    sort: 30
+  - parent: identity:list
+    type: button
+    title: plugin_identity.btn.match
+    perm: identity:match
+    sort: 40

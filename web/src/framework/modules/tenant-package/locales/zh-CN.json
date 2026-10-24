@@ -1,0 +1,21 @@
+{
+  "tenantPkg": {
+    "menu": "租户套餐",
+    "title": "租户套餐",
+    "description": "定义租户可用的菜单、用户数与存储空间",
+    "name": "套餐名称",
+    "menus": "菜单权限",
+    "menuCount": "{{count}} 项",
+    "maxUsers": "用户上限",
+    "maxStorage": "存储上限",
+    "maxStorageMb": "存储上限 (MB)",
+    "unlimited": "不限",
+    "zeroUnlimited": "0 表示不限制",
+    "searchPlaceholder": "搜索套餐名称或备注",
+    "create": "新增套餐",
+    "edit": "编辑套餐",
+    "deleteConfirm": "确定删除选中的 {{count}} 个套餐吗？",
+    "maxRoles": "角色上限",
+    "aiDailyQuota": "AI 每日调用次数"
+  }
+}

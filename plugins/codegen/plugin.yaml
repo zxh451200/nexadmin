@@ -1,0 +1,24 @@
+id: codegen
+name: 代码生成器
+version: 1.0.0
+description: 代码生成器（读取业务表结构，按推荐配置生成 Go 模块与前端页面，在线预览、打包 zip 下载）。官方付费插件，无状态、不建表、不写磁盘。
+author: NexAdmin
+edition: pro
+requires_nexadmin: ">=0.1.0"
+
+# 安装时写入 sys_menu；title 是 i18n key，文案在 web/locales 的 plugin_codegen 命名空间里。
+menus:
+  - parent: /system
+    type: menu
+    title: plugin_codegen.menu
+    path: /system/codegen
+    component: plugins/codegen/CodegenPage
+    perm: codegen:list
+    icon: Code
+    sort: 120
+    keep_alive: true
+  - parent: codegen:list
+    type: button
+    title: plugin_codegen.btn.download
+    perm: codegen:download
+    sort: 10

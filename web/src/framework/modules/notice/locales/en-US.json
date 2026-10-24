@@ -1,0 +1,63 @@
+{
+  "notice": {
+    "menu": "Notices",
+    "title": "Notices",
+    "description": "Publish or revoke announcements and track who has read them",
+    "create": "New notice",
+    "createTitle": "New notice",
+    "editTitle": "Edit notice",
+    "searchPlaceholder": "Search by title",
+    "empty": "No notices yet",
+    "publish": "Publish",
+    "revoke": "Revoke",
+    "publishConfirm": "Publish \"{{title}}\"?",
+    "revokeConfirm": "Revoke \"{{title}}\"? Users will no longer see it.",
+    "pinnedTag": "Pinned",
+    "platformTag": "Platform",
+    "titleTooLong": "Title must be at most 100 characters",
+    "contentRequired": "Please enter the notice content",
+    "targetRequired": "Please select recipients",
+    "expireAfterPublish": "Expiry must be later than the scheduled publish time",
+    "fields": {
+      "title": "Title",
+      "type": "Type",
+      "level": "Level",
+      "status": "Status",
+      "content": "Content",
+      "scope": "Audience",
+      "pinned": "Pinned",
+      "popup": "Login popup",
+      "platform": "Platform notice (all tenants)",
+      "publishAt": "Scheduled publish",
+      "expireAt": "Expires at",
+      "attachments": "Attachments",
+      "readStats": "Read / unread",
+      "publishedAt": "Published at"
+    },
+    "scope": {
+      "all": "Everyone",
+      "role": "Specific roles",
+      "dept": "Specific departments",
+      "user": "Specific users"
+    },
+    "targets": {
+      "role": "Roles",
+      "dept": "Departments",
+      "user": "Users"
+    },
+    "hints": {
+      "publishAt": "Leave empty to take effect immediately after publishing",
+      "popup": "Shown after login; clicking \"Got it\" marks it as read",
+      "platform": "Visible to every tenant; platform admins only"
+    },
+    "stats": {
+      "action": "Read stats",
+      "title": "Read statistics",
+      "read": "Read",
+      "unread": "Unread",
+      "readRate": "Read rate",
+      "unreadList": "Unread users",
+      "allRead": "Everyone has read this notice"
+    }
+  }
+}

@@ -1,0 +1,69 @@
+/* 富文本排版（编辑器与 RichTextView 共用），颜色全部取自主题 token */
+.nex-richtext {
+  color: hsl(var(--foreground));
+  font-size: 1rem;
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+}
+.nex-richtext > * + * { margin-block-start: 0.75em; }
+.nex-richtext h1 { font-size: 1.75em; font-weight: 700; line-height: 1.3; }
+.nex-richtext h2 { font-size: 1.4em; font-weight: 600; line-height: 1.35; }
+.nex-richtext h3 { font-size: 1.2em; font-weight: 600; line-height: 1.4; }
+.nex-richtext ul { list-style: disc; padding-inline-start: 1.5em; }
+.nex-richtext ol { list-style: decimal; padding-inline-start: 1.5em; }
+.nex-richtext li > p { margin: 0; }
+.nex-richtext a { color: hsl(var(--primary)); text-decoration: underline; text-underline-offset: 2px; }
+.nex-richtext blockquote {
+  border-inline-start: 3px solid hsl(var(--border));
+  padding-inline-start: 1em;
+  color: hsl(var(--muted-foreground));
+}
+.nex-richtext code {
+  background: hsl(var(--muted));
+  border-radius: 0.25rem;
+  padding: 0.1em 0.35em;
+  font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+  font-size: 0.9em;
+}
+.nex-richtext pre {
+  background: hsl(var(--muted));
+  border-radius: 0.5rem;
+  padding: 0.75em 1em;
+  overflow-x: auto;
+  font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+  font-size: 0.875em;
+}
+.nex-richtext pre code { background: transparent; padding: 0; }
+.nex-richtext hr { border: 0; border-block-start: 1px solid hsl(var(--border)); margin-block: 1.25em; }
+.nex-richtext img, .nex-richtext video { max-width: 100%; height: auto; border-radius: 0.5rem; }
+.nex-richtext mark { border-radius: 0.2em; padding-inline: 0.1em; }
+.nex-richtext table { border-collapse: collapse; width: 100%; table-layout: fixed; display: block; overflow-x: auto; }
+.nex-richtext th, .nex-richtext td {
+  border: 1px solid hsl(var(--border));
+  padding: 0.4em 0.6em;
+  min-width: 4em;
+  vertical-align: top;
+  text-align: start;
+  position: relative;
+}
+.nex-richtext th { background: hsl(var(--muted)); font-weight: 600; }
+.nex-richtext .selectedCell::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: hsl(var(--primary) / 0.15);
+  pointer-events: none;
+}
+.nex-richtext [style*='text-align: center'] { text-align: center; }
+.nex-richtext [style*='text-align: right'] { text-align: end; }
+
+/* 编辑器 */
+.nex-richtext-editor .ProseMirror { outline: none; min-height: 12rem; padding: 0.75rem; }
+.nex-richtext-editor .ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: inline-start;
+  height: 0;
+  pointer-events: none;
+  color: hsl(var(--muted-foreground));
+}
+.nex-richtext-editor .ProseMirror-selectednode { outline: 2px solid hsl(var(--ring)); }

@@ -1,0 +1,99 @@
+{
+  "user": {
+    "menu": "Users",
+    "title": "Users",
+    "description": "Manage accounts, departments, posts and roles",
+    "keyword": "Keyword",
+    "keywordPlaceholder": "Username / name / phone / email",
+    "dept": "Department",
+    "allDepts": "All departments",
+    "col": {
+      "avatar": "Avatar",
+      "nickname": "Name",
+      "username": "Username",
+      "dept": "Department",
+      "roles": "Roles",
+      "phone": "Phone",
+      "status": "Status",
+      "createdAt": "Created at"
+    },
+    "form": {
+      "createTitle": "New user",
+      "editTitle": "Edit user",
+      "username": "Username",
+      "nickname": "Nickname",
+      "phone": "Phone",
+      "email": "Email",
+      "gender": "Gender",
+      "dept": "Department",
+      "posts": "Posts",
+      "roles": "Roles",
+      "status": "Status",
+      "avatar": "Avatar",
+      "region": "Region",
+      "remark": "Remark",
+      "defaultPasswordHint": "New users get the initial password Nex@123456. Ask them to change it after first sign-in."
+    },
+    "v": {
+      "usernameMin": "Username must be at least 3 characters",
+      "usernameFormat": "Only letters, digits, underscore, dot and hyphen are allowed",
+      "nicknameRequired": "Please enter a nickname",
+      "phoneFormat": "Invalid phone number",
+      "emailFormat": "Invalid email address",
+      "deptRequired": "Please select a department",
+      "rolesRequired": "Please select at least one role",
+      "passwordMin": "Password must be at least 8 characters",
+      "passwordMismatch": "Passwords do not match"
+    },
+    "resetPassword": {
+      "action": "Reset password",
+      "title": "Reset password",
+      "description": "Set a new password for {{name}}",
+      "password": "New password",
+      "confirm": "Confirm password",
+      "success": "Password has been reset"
+    },
+    "deleteOne": "Delete user \"{{name}}\"? This cannot be undone.",
+    "deleteBatch": "Delete the {{count}} selected users? This cannot be undone.",
+    "locked": "Locked",
+    "unlock": {
+      "action": "Unlock",
+      "success": "Account unlocked"
+    },
+    "statusChanged": "Status updated",
+    "export": {
+      "success": "Exported {{count}} records",
+      "done": "Export completed",
+      "filename": "users"
+    },
+    "import": {
+      "title": "Import users",
+      "description": "Download the template, fill it in, then upload an Excel (.xlsx) or CSV file. Failed rows do not affect the others",
+      "template": "Download template",
+      "templateFilename": "user-import-template",
+      "start": "Start import",
+      "file": "Choose file",
+      "fileHint": "Supports .xlsx and .csv (CSV must be UTF-8); only the first worksheet of an Excel file is read. Fill department, roles and posts by name; separate multiple values with semicolons.",
+      "result": "Import finished: {{success}} succeeded, {{failed}} failed",
+      "errorRow": "Row {{row}}: {{reason}}",
+      "downloadFailed": "Download failed rows",
+      "failedFilename": "import-failed-rows",
+      "col": { "row": "Row", "reason": "Reason" },
+      "chooseFile": "Please choose a file first"
+    },
+    "csv": {
+      "username": "Username",
+      "nickname": "Name",
+      "dept": "Department",
+      "roles": "Roles",
+      "phone": "Phone",
+      "email": "Email",
+      "status": "Status",
+      "createdAt": "Created at",
+      "gender": "Gender",
+      "remark": "Remark",
+      "sampleDept": "Engineering",
+      "sampleRole": "Operator"
+    }
+  }
+}

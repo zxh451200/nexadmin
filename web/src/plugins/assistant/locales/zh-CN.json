@@ -1,0 +1,50 @@
+{ "plugin_assistant": {
+  "menu": "AI 助手",
+  "title": "AI 助手",
+  "description": "最多保存 30 个个人命名会话，每个保留最近 6 轮成功对话及 12 KiB 历史。旧会话仍缓存 30 分钟。消息已读操作需密码确认后点击继续，待确认状态会过期。",
+  "conversations": {
+    "select": "选择会话", "legacy": "旧缓存会话", "new": "新建会话",
+    "rename": "重命名", "delete": "删除", "name": "会话名称（最多 80 字）",
+    "save": "保存", "dismiss": "取消编辑", "confirmDelete": "确定永久删除此会话及已保存的对话？",
+    "error": "会话列表或修改不可用，请刷新，并检查 30 个会话上限、名称长度、运行状态及数据库迁移配置。"
+  },
+  "input": "输入消息，例如：我有多少条未读消息？",
+  "send": "发送",
+  "clear": "清空会话",
+  "confirmClear": "确定清空个人会话？",
+  "refresh": "刷新",
+  "cancel": "取消运行",
+  "cancelling": "已请求取消",
+  "you": "我",
+  "empty": "开始一次对话。仅成功完成的对话会进入历史。",
+  "bytes": "UTF-8 字节",
+  "usage": "本次计量 {{tokens}} · {{rounds}} 轮模型调用",
+  "disabled": "AI 未启用或当前租户不可用，请联系管理员检查 AI 配置。",
+  "error": "请求未完成，请刷新确认会话状态；请勿直接重复发送，以免重复计费。",
+  "confirmation": {
+    "title": "操作确认",
+    "instructions": "打开现有确认页面并使用密码确认，然后返回此处点击“继续”。仅返回页面不会执行操作。",
+    "expiry": "确认到期时间：",
+    "expired": "此确认已过期。请清空会话，或在会话允许时发送新请求。",
+    "invalid": "确认信息缺失或无效，请刷新会话或清空会话。",
+    "permission": "打开确认页面及继续操作需要 mcp:list 权限。",
+    "open": "打开确认页面",
+    "continue": "继续",
+    "pending": "操作仍待确认或会话状态已变化，请刷新会话，并完成密码确认后再点击“继续”。"
+  },
+  "status": {
+    "idle": "就绪",
+    "running": "运行中",
+    "awaiting_confirmation": "等待确认",
+    "confirmation_expired": "确认已过期",
+    "completed": "已完成",
+    "stopped": "已停止或服务调用失败",
+    "cancelled": "已取消",
+    "timeout": "运行超时",
+    "output_limit": "回复过长，未保存",
+    "disabled": "AI 不可用",
+    "quota": "AI 配额已用尽",
+    "rate_limited": "AI 请求过于频繁",
+    "budget": "本次会话超出计量预算"
+  }
+} }

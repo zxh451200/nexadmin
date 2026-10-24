@@ -1,0 +1,75 @@
+{
+  "serverMonitor": {
+    "menu": "服务监控",
+    "title": "服务监控",
+    "description": "服务器与 Go 运行时的实时指标，用于判断负载和排查性能问题",
+    "cores": "核",
+    "gcCount": "累计 GC 次数",
+    "refresh": {
+      "label": "自动刷新",
+      "v3000": "每 3 秒",
+      "v10000": "每 10 秒",
+      "v30000": "每 30 秒",
+      "v0": "暂停"
+    },
+    "unit": { "d": "天", "h": "小时", "m": "分" },
+    "card": { "cpu": "CPU 使用率", "memory": "内存已用", "disk": "磁盘已用", "uptime": "运行时长", "load": "负载" },
+    "chart": {
+      "cpuMem": "CPU / 内存使用率（%）",
+      "network": "网络流量（Kbps）",
+      "goroutines": "Goroutine 数",
+      "heap": "堆内存（MB）",
+      "gc": "GC 暂停（ms）"
+    },
+    "series": {
+      "cpu": "CPU",
+      "mem": "内存",
+      "in": "入站",
+      "out": "出站",
+      "goroutines": "Goroutine",
+      "heap": "堆内存",
+      "gc": "暂停时间"
+    },
+    "info": {
+      "title": "服务器信息",
+      "os": "操作系统",
+      "arch": "架构",
+      "goVersion": "Go 版本",
+      "hostname": "主机名",
+      "ip": "IP 地址",
+      "startedAt": "启动时间"
+    },
+    "disk": { "title": "磁盘分区", "mount": "挂载点", "total": "总容量", "used": "已用", "usage": "使用率" },
+    "tabs": { "metrics": "运行指标", "clientErrors": "前端错误" },
+    "health": {
+      "title": "健康检查",
+      "updatedAt": "更新于 {{time}}",
+      "latency": "延迟 {{ms}} ms",
+      "loadFailed": "健康检查加载失败，请刷新重试。",
+      "status": { "ok": "正常", "warn": "警告", "fail": "异常" },
+      "item": {
+        "db": "数据库",
+        "cache": "缓存",
+        "storage": "文件存储",
+        "migrations": "数据库迁移",
+        "plugins": "插件授权",
+        "disk": "磁盘空间"
+      }
+    },
+    "clientErrors": {
+      "keywordPlaceholder": "搜索消息、路由或用户",
+      "anonymous": "未登录",
+      "col": { "time": "最近出现", "count": "次数", "message": "错误信息", "route": "路由", "user": "用户" },
+      "detail": {
+        "open": "详情",
+        "title": "错误详情",
+        "firstSeen": "首次出现",
+        "lastSeen": "最近出现",
+        "version": "前端版本",
+        "ua": "User-Agent",
+        "stack": "堆栈（前 20 行）",
+        "noStack": "未上报堆栈"
+      }
+    }
+  }
+}

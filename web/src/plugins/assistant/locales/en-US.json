@@ -1,0 +1,48 @@
+{ "plugin_assistant": {
+  "menu": "AI Assistant",
+  "title": "AI Assistant",
+  "description": "Keep up to 30 personal named conversations, each retaining the latest 6 successful turns within 12 KiB. Legacy sessions remain cached for 30 minutes. Marking messages read requires password confirmation and Continue; pending confirmations expire.",
+  "conversations": {
+    "select": "Conversation", "legacy": "Legacy cached session", "new": "New conversation",
+    "rename": "Rename", "delete": "Delete", "name": "Conversation name (up to 80 characters)",
+    "save": "Save", "dismiss": "Dismiss", "confirmDelete": "Permanently delete this conversation and its retained turns?",
+    "error": "Conversation list or change unavailable. Refresh and check the 30-conversation limit, name length, active run, and database migration setup."
+  },
+  "input": "Enter a message, e.g. How many unread messages do I have?",
+  "send": "Send",
+  "clear": "Clear conversation",
+  "confirmClear": "Clear your personal conversation?",
+  "refresh": "Refresh",
+  "cancel": "Cancel run",
+  "cancelling": "Cancellation requested",
+  "you": "You",
+  "empty": "Start a conversation. Only successfully completed turns enter history.",
+  "bytes": "UTF-8 bytes",
+  "usage": "Run metering {{tokens}} · {{rounds}} model rounds",
+  "disabled": "AI is disabled or unavailable for this tenant. Ask an administrator to check AI settings.",
+  "error": "The request did not complete. Refresh to check the session before resending to avoid duplicate charges.",
+  "confirmation": {
+    "title": "Write confirmation",
+    "instructions": "Open the confirmation page, confirm with your password, then return and select Continue. Returning alone does not execute the write.",
+    "expiry": "Expires:", "expired": "Confirmation expired. Clear the conversation or send a new request when available.",
+    "invalid": "Confirmation data is invalid. Refresh or clear the conversation.",
+    "permission": "Opening confirmations and continuing requires mcp:list permission.",
+    "open": "Open confirmation", "continue": "Continue",
+    "pending": "Approval is pending or the conversation changed. Refresh and complete password confirmation before continuing."
+  },
+  "status": {
+    "idle": "Ready",
+    "running": "Running",
+    "awaiting_confirmation": "Awaiting confirmation",
+    "confirmation_expired": "Confirmation expired",
+    "completed": "Completed",
+    "stopped": "Stopped or service call failed",
+    "cancelled": "Cancelled",
+    "timeout": "Timed out",
+    "output_limit": "Reply too long; not saved",
+    "disabled": "AI unavailable",
+    "quota": "AI quota exhausted",
+    "rate_limited": "Too many AI requests",
+    "budget": "Run metering budget exhausted"
+  }
+} }

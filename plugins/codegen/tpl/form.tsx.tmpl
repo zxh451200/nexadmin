@@ -1,0 +1,150 @@
+import { useEffect, useMemo } from 'react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
+import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
+[[- if .HasControl "date"]]
+import { DatePicker } from '@/framework/components/DatePicker'
+[[- end]]
+[[- if .HasControl "datetime"]]
+import { DateTimePicker } from '@/framework/components/DateTimePicker'
+[[- end]]
+import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
+import { FormGrid, FormLayout } from '@/framework/components/FormLayout'
+import { Button } from '@/framework/ui/button'
+import { Input } from '@/framework/ui/input'
+[[- if .HasControl "switch"]]
+import { Switch } from '@/framework/ui/switch'
+[[- end]]
+[[- if .HasControl "textarea"]]
+import { Textarea } from '@/framework/ui/textarea'
+[[- end]]
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/framework/ui/form'
+import { useSave[[.Pascal]], type [[.Pascal]], type [[.Pascal]]Form } from './api'
+
+export interface [[.Pascal]]FormDialogProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  editing?: [[.Pascal]] | null
+}
+
+interface FormValues {
+[[- range .FormFields]]
+  [[.Camel]]: [[if eq .Kind "bool"]]boolean[[else]]string[[end]]
+[[- end]]
+}
+
+const empty: FormValues = {
+[[- range .FormFields]]
+  [[.Camel]]: [[if eq .Kind "bool"]]false[[else]]''[[end]],
+[[- end]]
+}
+
+function toValues(r: [[.Pascal]]): FormValues {
+  return {
+[[- range .FormFields]]
+    [[.Camel]]: [[if or (eq .Kind "int") (eq .Kind "float")]]String(r.[[.Camel]])[[else if isTime .]]r.[[.Camel]] ?? ''[[else]]r.[[.Camel]][[end]],
+[[- end]]
+  }
+}
+
+function toBody(v: FormValues): [[.Pascal]]Form {
+  return {
+[[- range .FormFields]]
+    [[.Camel]]: [[if eq .Kind "string"]]v.[[.Camel]].trim()[[else if eq .Kind "int"]]Math.trunc(Number(v.[[.Camel]]) || 0)[[else if eq .Kind "float"]]Number(v.[[.Camel]]) || 0[[else if isTime .]]v.[[.Camel]] || null[[else]]v.[[.Camel]][[end]],
+[[- end]]
+  }
+}
+
+export function [[.Pascal]]FormDialog({ open, onOpenChange, editing }: [[.Pascal]]FormDialogProps) {
+  const { t } = useTranslation()
+  const save = useSave[[.Pascal]]()
+
+  const schema = useMemo(
+    () =>
+      z.object({
+[[- range .FormFields]]
+        [[.Camel]]: [[if eq .Kind "string"]]z.string().trim().max([[.MaxLen]])[[if .Required]].min(1, t('[[$.Module]].validation.[[.Camel]]Required'))[[end]][[else if eq .Kind "text"]]z.string()[[if .Required]].min(1, t('[[$.Module]].validation.[[.Camel]]Required'))[[end]][[else if eq .Kind "int"]]z.string().regex(/^-?\d*$/)[[else if eq .Kind "float"]]z.string().regex(/^-?\d*\.?\d*$/)[[else if eq .Kind "bool"]]z.boolean()[[else if isTime .]]z.string()[[if .Required]].min(1, t('[[$.Module]].validation.[[.Camel]]Required'))[[end]][[else]]z.string()[[end]],
+[[- end]]
+      }),
+    [t],
+  )
+
+  const form = useForm<FormValues>({ resolver: zodResolver(schema) as never, defaultValues: empty })
+
+  useEffect(() => {
+    if (open) form.reset(editing ? toValues(editing) : empty)
+  }, [open, editing, form])
+
+  const onSubmit = form.handleSubmit(async (v) => {
+    try {
+      await save.mutateAsync({ id: editing?.id, data: toBody(v) })
+      toast.success(t('common.operateSuccess'))
+      onOpenChange(false)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+    }
+  })
+
+  const formId = '[[.Module]]-form'
+
+  return (
+    <ResponsiveDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={editing ? t('[[.Module]].action.edit') : t('[[.Module]].action.add')}
+      footer={
+        <>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            {t('common.cancel')}
+          </Button>
+          <Button type="submit" form={formId} disabled={save.isPending}>
+            {t('common.save')}
+          </Button>
+        </>
+      }
+    >
+      <Form {...form}>
+        <FormLayout id={formId} onSubmit={onSubmit} showRequiredHint>
+          <FormGrid cols={1}>
+[[- range .FormFields]]
+            <FormField
+              control={form.control}
+              name="[[.Camel]]"
+              render={({ field }) => (
+[[- if eq .Control "switch"]]
+                <FormItem className="flex items-center justify-between gap-3">
+                  <FormLabel>{t('[[$.Module]].field.[[.Camel]]')}</FormLabel>
+                  <FormControl>
+                    <Switch checked={field.value as boolean} onCheckedChange={field.onChange} />
+                  </FormControl>
+                </FormItem>
+[[- else]]
+                <FormItem>
+                  <FormLabel>{t('[[$.Module]].field.[[.Camel]]')}</FormLabel>
+                  <FormControl>
+[[- if eq .Control "date"]]
+                    <DatePicker value={field.value as string} onChange={field.onChange} />
+[[- else if eq .Control "datetime"]]
+                    <DateTimePicker value={field.value as string} onChange={field.onChange} />
+[[- else if eq .Control "textarea"]]
+                    <Textarea rows={3} {...field} value={field.value as string} />
+[[- else if eq .Control "number"]]
+                    <Input {...field} value={field.value as string} type="number" inputMode="[[if eq .Kind "int"]]numeric[[else]]decimal[[end]]" step={[[if eq .Kind "int"]]1[[else]]'any'[[end]]} />
+[[- else]]
+                    <Input {...field} value={field.value as string} />
+[[- end]]
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+[[- end]]
+              )}
+            />
+[[- end]]
+          </FormGrid>
+        </FormLayout>
+      </Form>
+    </ResponsiveDialog>
+  )
+}

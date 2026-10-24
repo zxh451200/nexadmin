@@ -1,0 +1,69 @@
+{
+  "plugin_report": {
+    "menu": "Report center",
+    "title": "Report center",
+    "description": "Structured datasets, charts, report pages and data screens. Data only comes from admin-approved tables and columns, always isolated by tenant and data scope",
+    "btn": { "dataset": "Manage datasets", "chart": "Manage charts", "report": "Manage reports", "screen": "Manage screens" },
+    "tabs": { "reports": "Reports", "screens": "Data screens", "charts": "Charts", "datasets": "Datasets" },
+    "card": { "overview": "Report center", "reports": "Reports", "screens": "Visible screens", "loadFailed": "Failed to load" },
+    "searchPlaceholder": "Search by name",
+    "empty": "No data",
+    "truncated": "Result truncated at the row limit",
+    "loadFailed": "Failed to load, please try again later",
+    "type": { "bar": "Bar", "line": "Line", "pie": "Pie", "table": "Table", "metric": "Metric" },
+    "agg": { "count": "Count", "sum": "Sum", "avg": "Average", "min": "Min", "max": "Max" },
+    "bucket": { "none": "No bucket", "day": "By day", "month": "By month", "year": "By year" },
+    "op": { "=": "equals", "!=": "not equals", ">": "greater than", "<": "less than", ">=": "at least", "<=": "at most", "in": "in", "like": "contains", "between": "between" },
+    "colType": { "string": "Text", "number": "Number", "time": "Time", "bool": "Boolean" },
+    "color": {
+      "chart-1": "Chart 1", "chart-2": "Chart 2", "chart-3": "Chart 3", "chart-4": "Chart 4", "chart-5": "Chart 5",
+      "primary": "Primary", "success": "Success", "warning": "Warning", "destructive": "Destructive", "info": "Info"
+    },
+    "source": { "plg_cron_job": "Scheduled jobs", "plg_cron_log": "Scheduled job runs", "sys_login_log": "Login log" },
+    "field": {
+      "name": "Name", "handler": "Handler", "enabled": "Enabled", "retry_count": "Retries", "last_status": "Last status",
+      "last_run_at": "Last run", "created_at": "Created at", "job_name": "Job name", "trigger_type": "Trigger",
+      "status": "Status", "attempts": "Attempts", "cost_ms": "Duration (ms)", "started_at": "Started at", "finished_at": "Finished at",
+      "login_type": "Login type", "fail_reason": "Failure reason", "browser": "Browser", "os": "OS"
+    },
+    "filter": { "add": "Add condition", "column": "Field", "op": "Operator", "value": "Value", "inHint": "Separate values with commas", "betweenHint": "Separate start and end with ~" },
+    "dataset": {
+      "create": "New dataset", "createTitle": "New dataset", "editTitle": "Edit dataset", "source": "Table", "columns": "Available fields",
+      "fixedFilters": "Fixed filters", "fixedFiltersHint": "Applied to every chart using this dataset. Conditions can only be added; tenant and data scope limits cannot be relaxed",
+      "pickSource": "Pick a table first", "empty": "No datasets yet",
+      "deleteConfirm": "Delete dataset \"{{name}}\"? It cannot be deleted while charts still use it.",
+      "safeHint": "Choose only from the admin-approved tables and fields. Raw SQL is not supported. The current tenant condition is added to every query automatically."
+    },
+    "chart": {
+      "create": "New chart", "createTitle": "New chart", "editTitle": "Edit chart", "empty": "No charts yet",
+      "deleteConfirm": "Delete chart \"{{name}}\"? Reports and screens using it will show \"Chart deleted\".",
+      "dataset": "Dataset", "type": "Chart type", "shape": "Dimensions / measures", "pickDataset": "Pick a dataset first",
+      "dimensions": "Dimensions", "dimension": "Dimension field", "bucket": "Time bucket", "addDimension": "Add dimension",
+      "measures": "Measures", "agg": "Aggregation", "measureColumn": "Measure field", "allRows": "All rows", "addMeasure": "Add measure",
+      "filters": "Filters", "orderBy": "Sort", "orderDefault": "Default (first dimension)", "dimensionN": "Dimension {{n}}", "measureN": "Measure {{n}}",
+      "desc": "Descending", "limit": "Max rows (up to 5000)", "unit": "Unit", "colors": "Colors (semantic, used in order)", "stacked": "Stacked",
+      "shapeCartesian": "Bar and line charts need at least 1 dimension and 1 measure", "shapePie": "A pie chart needs 1 dimension and 1 measure",
+      "shapeMetric": "A metric card needs 1 measure and no dimensions", "shapeTable": "A table needs at least 1 column"
+    },
+    "report": {
+      "create": "New report", "createTitle": "New report", "editTitle": "Edit report", "pick": "Select a report", "empty": "No reports yet",
+      "notFound": "Report not found or no access", "noCharts": "This report has no charts yet", "chartDeleted": "Chart deleted",
+      "deleteConfirm": "Delete report \"{{name}}\"?", "group": "Group", "items": "Charts", "chart": "Chart", "span": "Width",
+      "spanN": "{{n}}/12 wide", "addItem": "Add chart", "filters": "Filters", "filtersHint": "A filter applies to the bound field of every chart that uses the same dataset",
+      "filterLabel": "Filter name", "filterType": "Type", "filterColumn": "Field", "dateRange": "Date range", "select": "Dropdown",
+      "multiple": "Allow multiple", "addFilter": "Add filter", "allOption": "{{label}}: all", "export": "Export xlsx",
+      "exportTruncated": "Export hit the row limit and only contains the first 5000 rows"
+    },
+    "screen": {
+      "create": "New screen", "createTitle": "New screen", "editTitle": "Edit screen", "empty": "No screens to view",
+      "emptyHint": "A screen is visible only after an admin authorizes one of your roles", "noRemark": "No description", "open": "Show full screen",
+      "deleteConfirm": "Delete screen \"{{name}}\"?", "notFound": "Screen not found or no access", "emptyCanvas": "The canvas has no components yet",
+      "title": "Screen title", "refresh": "Auto refresh", "noRefresh": "No auto refresh", "everySec": "Every {{sec}} s", "autoRefresh": "Refreshes every {{sec}} s (paused when the page is hidden)",
+      "enterFull": "Full screen", "exitFull": "Exit full screen", "addChart": "Add a chart", "add": "Add to canvas", "noSpace": "Not enough free space on the canvas",
+      "rejected": "That position is outside the canvas or overlaps another component", "editorHint": "Drag to move and use the bottom-end handle to resize. Arrow keys move (Shift+arrows resize, Delete removes).",
+      "canvasHint": "The canvas is a {{cols}}-column grid with up to {{rows}} rows; the layout is stored as JSON.", "itemTitle": "Component title", "width": "Width", "height": "Height",
+      "removeItem": "Remove component", "itemAria": "{{name}}, position {{x}},{{y}}, size {{w}}×{{h}}",
+      "roles": "Visible to roles", "rolesHint": "With no role selected, only admins (super admin or screen managers) can see it"
+    }
+  }
+}

@@ -1,0 +1,19 @@
+package [[.Module]]
+
+import (
+	"gorm.io/gorm"
+
+	"[[.GoModule]]/core/seed"
+)
+
+// seedMenus 补齐菜单与按钮权限：按业务键 code 匹配，不存在才插入，已存在（哪怕被改过）一律不动。
+// 新增的菜单超管默认可见，普通角色需要到「角色管理」里分配。
+func seedMenus(db *gorm.DB) error {
+	_, err := seed.Menus(db, []seed.MenuItem{
+		{Code: "[[.Module]]:list", Type: "menu", Title: "[[.Module]].menu", Icon: "FileText", Path: "/[[.Module]]",
+			Component: "[[.Module]]/[[.Pascal]]Page", Perm: "[[.Module]]:list", Sort: 100, KeepAlive: true},
+		{Parent: "[[.Module]]:list", Code: "[[.Module]]:edit", Type: "button", Title: "common.edit", Perm: "[[.Module]]:edit", Sort: 10},
+		{Parent: "[[.Module]]:list", Code: "[[.Module]]:delete", Type: "button", Title: "common.delete", Perm: "[[.Module]]:delete", Sort: 20},
+	})
+	return err
+}

@@ -1,0 +1,57 @@
+error:
+  internal: 服务器内部错误
+  bad_request: 请求参数不正确
+  unauthorized: 未登录或登录已过期
+  forbidden: 没有权限执行此操作
+  not_found: 资源不存在
+  not_initialized: 系统尚未初始化
+  tenant_mismatch: 无权访问该租户
+  unknown: 未知错误
+  ai_tenant_disabled: 当前租户已被平台关闭 AI 功能，请联系平台管理员
+  ai_quota_exceeded: 今日 AI 调用次数已达租户上限（%d 次），请明天再试或联系平台管理员
+  mcp_operation_failed: MCP 操作未能完成，请重新发起
+  mcp_confirmation_revoked: MCP 确认已因多次校验作废，请重新发起操作
+auth:
+  provider_missing: 登录服务未启用
+  invalid_credentials: 用户名或密码错误
+  captcha_invalid: 验证码错误或已过期
+  login_denied: 登录被拒绝
+  challenge_invalid: 验证已失效，请重新登录
+  verify_failed: 验证失败，请重试
+  provider:
+    wecom: 企业微信
+    dingtalk: 钉钉
+    feishu: 飞书
+    google: Google
+    github: GitHub
+    oidc: OIDC
+setup:
+  local_only: 请在服务器本机打开 http://localhost:%d 完成初始化；经反向代理或从其他机器访问，需设置 setup.allow_remote=true 并在请求头 X-Setup-Token 携带控制台打印的初始化令牌
+  token_invalid: 初始化令牌不正确
+  running: 初始化正在进行中
+  invalid_input: 初始化参数不正确
+tenant:
+  expired: 租户已过期，请联系平台管理员续期
+  suspended: 租户已被停用，请联系平台管理员
+  quota_users: 用户数已达套餐上限（%d 个），无法继续新增
+  quota_roles: 角色数已达套餐上限（%d 个），无法继续新增
+  quota_storage: 存储空间已达套餐上限（%d MB），无法继续上传
+  domain_invalid: 域名格式不正确
+  domain_reserved: 该域名为保留域名，不能绑定
+  domain_taken: 域名已被其他租户绑定
+  admin_invalid: 租户管理员账号、密码或邮箱不符合要求
+notice:
+  audience_all_forbidden: 您的数据范围不是“全部”，不能向全员发布公告，请改为指定角色、部门或用户
+  audience_dept_forbidden: 所选发布部门中包含超出您数据范围的部门
+  audience_user_forbidden: 所选发布用户中包含超出您数据范围的用户
+  audience_platform_forbidden: 您的数据范围不是“全部”，不能发布平台公告
+post:
+  in_use: 该岗位仍被 %d 个用户使用，无法删除
+dept:
+  has_users: 该部门下还有 %d 个用户，无法删除
+role:
+  in_use: 该角色仍被 %d 个用户使用，无法删除
+recycle:
+  source_gone: 源数据已不存在，回收记录已清理
+dict:
+  builtin: 内置字典受保护：不能删除，也不能修改字典类型编码或内置字典数据的值

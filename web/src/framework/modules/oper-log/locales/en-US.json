@@ -1,0 +1,56 @@
+{
+  "operLog": {
+    "menu": "Operation Logs",
+    "description": "Audit trail of create, update and delete operations in the admin",
+    "col": {
+      "module": "Module",
+      "type": "Type",
+      "operator": "Operator",
+      "ip": "IP",
+      "status": "Status",
+      "cost": "Duration",
+      "time": "Time"
+    },
+    "filter": {
+      "keyword": "Keyword",
+      "keywordPlaceholder": "Module / operator / URL",
+      "type": "Operation type",
+      "status": "Status",
+      "time": "Time range"
+    },
+    "action": {
+      "export": "Export Excel",
+      "clean": "Clean up",
+      "deleteSelected": "Delete selected"
+    },
+    "detail": {
+      "title": "Operation details",
+      "method": "Method",
+      "url": "URL",
+      "params": "Request params",
+      "response": "Response",
+      "error": "Exception",
+      "location": "Location",
+      "empty": "None"
+    },
+    "clean": {
+      "title": "Clean up operation logs",
+      "description": "Choose a range. Logs in that range will be permanently deleted.",
+      "range": "Range",
+      "d7": "Older than 7 days",
+      "d30": "Older than 30 days",
+      "d90": "Older than 90 days",
+      "all": "All logs",
+      "confirm": "Clean up these logs? This cannot be undone.",
+      "done": "Removed {{count}} logs"
+    },
+    "confirm": {
+      "delete": "Delete the {{count}} selected logs?"
+    },
+    "export": {
+      "done": "Export complete",
+      "tooMany": "Too many rows to export. Narrow the filters (e.g. the time range) or use the Export Center",
+      "filename": "operation-log"
+    }
+  }
+}

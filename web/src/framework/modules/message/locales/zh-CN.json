@@ -1,0 +1,26 @@
+{
+  "message": {
+    "menu": "消息中心",
+    "title": "消息中心",
+    "description": "查看系统消息与已发布的公告",
+    "tabMessages": "消息",
+    "tabNotices": "公告",
+    "onlyUnread": "仅看未读",
+    "readAll": "全部已读",
+    "unread": "未读",
+    "pinned": "置顶",
+    "goLink": "前往查看",
+    "attachments": "附件",
+    "deleteConfirm": "确定删除这条消息吗？",
+    "emptyMessages": "暂无消息",
+    "emptyNotices": "暂无公告",
+    "fields": {
+      "title": "标题",
+      "category": "分类",
+      "time": "时间",
+      "type": "类型",
+      "level": "级别",
+      "publishedAt": "发布时间"
+    }
+  }
+}

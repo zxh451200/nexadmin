@@ -1,0 +1,43 @@
+import { Cell, Legend, Pie, PieChart, Tooltip } from 'recharts'
+import { useTranslation } from 'react-i18next'
+import { ChartBox } from '@/framework/components/ChartBox'
+import { ChartCard } from '@/framework/components/ChartCard'
+import { Skeleton } from '@/framework/ui/skeleton'
+import { useDashboardStats } from '../api'
+
+export default function OperRatioCard() {
+  const { t } = useTranslation()
+  const { data } = useDashboardStats()
+  return (
+    <ChartCard title={t('dashboard.operRatio')}>
+      {data ? (
+        <ChartBox height={260}>
+          {({ width, height }) => (
+            <PieChart width={width} height={height}>
+              <Pie
+                data={data.operTypes.map((o) => ({ name: t(`dashboard.oper.${o.type}`), value: o.value }))}
+                dataKey="value"
+                nameKey="name"
+                innerRadius="55%"
+                outerRadius="80%"
+                paddingAngle={2}
+                stroke="hsl(var(--card))"
+              >
+                {data.operTypes.map((o, i) => (
+                  <Cell key={o.type} fill={`hsl(var(--chart-${(i % 5) + 1}))`} />
+                ))}
+              </Pie>
+              <Tooltip
+                contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, color: 'hsl(var(--foreground))', fontSize: 12 }}
+                itemStyle={{ color: 'hsl(var(--foreground))' }}
+              />
+              <Legend wrapperStyle={{ fontSize: 12 }} />
+            </PieChart>
+          )}
+        </ChartBox>
+      ) : (
+        <Skeleton className="h-64 w-full" />
+      )}
+    </ChartCard>
+  )
+}

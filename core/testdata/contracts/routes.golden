@@ -1,0 +1,2 @@
+GET /api/v1/contract
+GET /api/v1/admin/contract

@@ -1,0 +1,22 @@
+{
+  "picker": {
+    "searchPlaceholder": "搜索…",
+    "loadMore": "加载更多",
+    "collapse": "收起",
+    "expand": "展开",
+    "selectRegion": "请选择省市区",
+    "regionSearch": "输入名称或拼音搜索",
+    "province": "省/直辖市",
+    "city": "市",
+    "district": "区/县",
+    "selectCountry": "请选择国家/地区",
+    "selectIcon": "请选择图标",
+    "searchIcon": "搜索图标名",
+    "selectColor": "请选择颜色",
+    "customColor": "自定义颜色",
+    "selectDate": "请选择日期",
+    "selectDateTime": "请选择日期时间",
+    "selectDateRange": "请选择日期范围",
+    "time": "时间"
+  }
+}

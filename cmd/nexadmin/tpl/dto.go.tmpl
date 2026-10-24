@@ -1,0 +1,35 @@
+package [[.Name]]
+
+import (
+[[- if .UsesUpload]]
+	"encoding/json"
+[[end]]
+	"time"
+
+	"[[.Module]]/pkg/idgen"
+)
+
+// View 是接口返回的表示（ID 一律是字符串）。
+type View struct {
+	ID idgen.ID `json:"id"`
+[[- range .Fields]]
+	[[.Pascal]] [[.ViewType]] `json:"[[.Camel]]"`
+[[- end]]
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// Form 是新增 / 修改的请求体。
+type Form struct {
+[[- range .FormFields]]
+	[[.Pascal]] [[.FormType]] `json:"[[.Camel]]"[[if .Required]] binding:"required,max=255"[[else if eq .Kind "string"]] binding:"max=255"[[else if eq .Kind "dict"]] binding:"max=64"[[end]]`
+[[- end]]
+}
+
+// ListQuery 是列表查询条件；Filters 的键是固定的列名（来自生成代码，不来自请求）。
+type ListQuery struct {
+	Keyword  string
+	Filters  map[string]any
+	Page     int
+	PageSize int
+}

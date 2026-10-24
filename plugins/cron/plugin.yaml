@@ -1,0 +1,40 @@
+id: cron
+name: 定时任务
+version: 1.0.0
+description: 定时任务（5 段 cron 调度、内置安全处理器、立即执行、失败重试、执行日志）。官方示例付费插件。
+author: NexAdmin
+edition: pro
+requires_nexadmin: ">=0.1.0"
+
+# 安装时写入 sys_menu（字段与内置菜单一致；parent 写父节点 code，目录用其 path）。
+# title 是 i18n key，文案在 web/locales 的 plugin_cron 命名空间里。
+menus:
+  - parent: /system
+    type: menu
+    title: plugin_cron.menu
+    path: /system/cron
+    component: plugins/cron/CronPage
+    perm: cron:list
+    icon: Timer
+    sort: 100
+    keep_alive: true
+  - parent: cron:list
+    type: button
+    title: plugin_cron.btn.edit
+    perm: cron:edit
+    sort: 10
+  - parent: cron:list
+    type: button
+    title: plugin_cron.btn.run
+    perm: cron:run
+    sort: 20
+  - parent: cron:list
+    type: button
+    title: plugin_cron.btn.log
+    perm: cron:log
+    sort: 30
+  - parent: cron:list
+    type: button
+    title: plugin_cron.btn.clean
+    perm: cron:clean
+    sort: 40

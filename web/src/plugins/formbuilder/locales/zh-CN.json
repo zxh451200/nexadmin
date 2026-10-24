@@ -1,0 +1,123 @@
+{
+  "plugin_formbuilder": {
+    "menu": "表单构建器",
+    "fillMenu": "填写表单",
+    "title": "表单构建器",
+    "description": "可视化设计表单、版本化发布，登录用户填写后由服务端按发布版本重新校验，并支持提交收集与导出",
+    "btn": { "publish": "发布表单", "submission": "查看提交", "export": "导出提交" },
+    "card": { "pending": "待填写表单", "pendingHint": "有表单等待你填写", "noPending": "暂无待填写的表单", "loadFailed": "加载失败" },
+    "searchPlaceholder": "按名称搜索",
+    "empty": "暂无数据",
+    "loadFailed": "加载失败，请稍后重试",
+    "all": "全部",
+    "stars": "{{n}} 星",
+    "create": "新建表单",
+    "createTitle": "新建表单",
+    "design": "设计",
+    "copy": "复制",
+    "copySuffix": "副本",
+    "online": "上线",
+    "offline": "下线",
+    "unpublished": "有未发布修改",
+    "publishConfirm": "确定发布表单「{{name}}」吗？发布后将生成新版本，登录用户即可填写。",
+    "offlineConfirm": "确定下线表单「{{name}}」吗？下线后用户将无法继续填写，已收集的提交不受影响。",
+    "deleteConfirm": "确定删除表单「{{name}}」吗？其下 {{count}} 条提交将一并删除，且无法恢复。",
+    "import": { "title": "导入表单", "export": "导出定义", "tooLarge": "文件过大，无法导入", "invalid": "文件格式不正确，无法导入" },
+    "fields": {
+      "name": "表单名称", "description": "表单说明", "status": "状态", "version": "版本", "submissionCount": "提交数",
+      "deadline": "截止时间", "quota": "名额"
+    },
+    "status": { "draft": "草稿", "published": "已发布", "offline": "已下线" },
+    "closed": { "expired": "已截止", "full": "名额已满", "submitted": "已提交" },
+    "closedHint": {
+      "expired": "该表单已过截止时间，无法继续填写",
+      "full": "该表单提交数已达上限，无法继续填写",
+      "submitted": "你已提交过该表单，且不允许重复提交"
+    },
+    "fillTitle": "填写表单",
+    "fillDescription": "这里列出了可供你填写的已发布表单",
+    "fillEmpty": "暂无可填写的表单",
+    "fillNotFound": "表单不存在或你无权填写",
+    "fillNow": "去填写",
+    "fillView": "查看",
+    "fill": {
+      "submitted": "提交成功", "successDefault": "感谢你的填写", "backToList": "返回列表", "again": "再填一份",
+      "failed": "提交失败"
+    },
+    "types": {
+      "text": "单行文本", "textarea": "多行文本", "number": "数字", "radio": "单选", "checkbox": "多选", "select": "下拉选择",
+      "date": "日期", "switch": "开关", "rating": "评分", "file": "文件上传", "section": "分组说明"
+    },
+    "ops": {
+      "eq": "等于", "ne": "不等于", "in": "属于", "contains": "包含", "empty": "为空", "notEmpty": "不为空",
+      "gt": "大于", "gte": "大于等于", "lt": "小于", "lte": "小于等于"
+    },
+    "problem": { "title": "缺少标题", "options": "缺少选项", "pattern": "正则表达式无效" },
+    "errors": {
+      "required": "此项为必填",
+      "number": "请输入有效的数字",
+      "integer": "请输入整数",
+      "min": "不能小于 {{n}}",
+      "max": "不能大于 {{n}}",
+      "minLen": "至少输入 {{n}} 个字符",
+      "maxLen": "最多输入 {{n}} 个字符",
+      "pattern": "格式不正确",
+      "minCount": "至少选择 {{n}} 项",
+      "maxCount": "最多选择 {{n}} 项",
+      "minFiles": "至少上传 {{n}} 个文件",
+      "maxFiles": "最多上传 {{n}} 个文件",
+      "minDate": "不能早于 {{d}}",
+      "maxDate": "不能晚于 {{d}}",
+      "rating": "请选择 1 到 {{n}} 的评分",
+      "mustOn": "需要打开此开关"
+    },
+    "audience": {
+      "everyone": "所有登录用户均可填写", "limited": "仅所选角色和用户可填写", "roles": "角色", "users": "用户",
+      "searchUser": "搜索用户", "searchResult": "搜索结果", "removeUser": "移除用户 {{name}}"
+    },
+    "cond": {
+      "add": "添加条件", "advanced": "该条件较复杂，请清除后重新配置", "clear": "清除条件", "all": "满足全部条件",
+      "any": "满足任一条件", "mode": "匹配方式", "field": "字段", "op": "操作符", "value": "值",
+      "inHint": "多个值用逗号分隔", "noRefs": "没有可引用的前置字段"
+    },
+    "prop": {
+      "title": "标题", "description": "说明", "placeholder": "占位提示", "required": "必填", "mustOn": "必须打开",
+      "key": "字段标识", "keyHint": "提交数据中使用的标识，仅限字母、数字和下划线", "keyInvalid": "字段标识格式不正确或已被占用",
+      "showIf": "显示条件", "showIfHint": "满足条件时才显示该字段，隐藏字段不参与校验",
+      "default": "默认值", "noDefault": "无默认值", "defaultOn": "默认打开",
+      "options": "选项", "optionsHint": "每个选项的值需唯一", "optionSource": "选项来源", "sourceManual": "手动配置", "sourceDict": "数据字典",
+      "dictType": "字典类型", "dictPlaceholder": "选择字典类型", "dictHint": "选项取自所选字典，随字典变化",
+      "multiple": "允许多选", "integer": "仅限整数", "min": "最小值", "max": "最大值",
+      "minLen": "最少字符数", "maxLen": "最多字符数", "pattern": "正则校验", "patternHint": "留空则不校验格式",
+      "minCount": "最少选择数", "maxCount": "最多选择数", "minDate": "最早日期", "maxDate": "最晚日期",
+      "minFiles": "最少文件数", "maxFiles": "最多文件数", "maxFilesHint": "单次最多可上传的文件数量",
+      "stars": "星级数量"
+    },
+    "designer": {
+      "palette": "字段类型", "canvas": "表单画布", "drag": "拖动排序：{{name}}", "moveUp": "上移", "moveDown": "下移", "duplicate": "复制字段",
+      "emptyCanvas": "从左侧添加字段开始设计", "selectHint": "选择一个字段以编辑其属性", "hasCond": "设置了显示条件",
+      "untitled": "未命名", "unsaved": "未保存", "notFound": "表单不存在或已被删除",
+      "tabDesign": "设计", "tabPreview": "预览", "tabSettings": "设置",
+      "saveDraft": "保存草稿", "saved": "已保存", "published": "发布成功",
+      "needField": "请至少添加一个字段", "fixProblems": "请先修复标记的字段问题", "tooMany": "最多添加 {{n}} 个字段",
+      "condsCleaned": "已清理 {{n}} 个失效的显示条件", "discardConfirm": "有未保存的修改，确定离开吗？",
+      "previewOk": "校验通过", "previewCheck": "校验", "previewReset": "重置", "previewHint": "预览仅用于试填，不会产生提交",
+      "addOption": "添加选项", "optionN": "选项 {{n}}", "optionLabel": "选项 {{n}} 名称", "optionLabelPh": "选项名称",
+      "optionValue": "选项 {{n}} 值", "optionValuePh": "选项值", "optionRemove": "删除选项 {{n}}"
+    },
+    "settings": {
+      "basic": "基本信息", "rules": "填写规则", "audience": "填写范围", "versions": "历史版本",
+      "successMessage": "提交成功提示", "successMessageHint": "提交成功后展示给用户，留空使用默认文案",
+      "allowRepeat": "允许重复提交", "allowRepeatHint": "关闭后每位用户只能提交一次",
+      "deadlineHint": "超过该时间后无法继续填写", "noDeadline": "不限制截止时间",
+      "maxSubmissions": "提交上限", "maxSubmissionsHint": "0 表示不限制",
+      "noVersions": "尚未发布过版本", "versionMeta": "{{n}} 个字段 · {{time}}", "exportVersion": "导出 v{{v}} 的定义"
+    },
+    "submissions": {
+      "description": "查看并导出用户提交的内容", "submitter": "提交人", "submittedAt": "提交时间", "detail": "提交详情",
+      "filterField": "筛选字段", "filterValue": "筛选值", "empty": "暂无提交", "truncated": "结果已按行数上限截断",
+      "deleteConfirm": "确定删除「{{name}}」的这条提交吗？删除后无法恢复。",
+      "exportXlsx": "导出 xlsx", "exportJob": "后台导出", "exportJobSubmitted": "导出任务已提交，可在导出任务中查看"
+    }
+  }
+}

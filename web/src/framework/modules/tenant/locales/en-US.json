@@ -1,0 +1,52 @@
+{
+  "tenant": {
+    "menu": "Tenants",
+    "title": "Tenants",
+    "description": "Manage tenants, package binding, domains and validity",
+    "name": "Tenant name",
+    "domain": "Domain",
+    "package": "Package",
+    "expireAt": "Expires at",
+    "newExpireAt": "New expiry date",
+    "adminUsername": "Admin account",
+    "adminPassword": "Admin password",
+    "basicInfo": "Basic info",
+    "adminInfo": "Admin account",
+    "searchPlaceholder": "Search name, domain or admin account",
+    "create": "New tenant",
+    "edit": "Edit tenant",
+    "renew": "Renew",
+    "suspend": "Suspend",
+    "resume": "Resume",
+    "suspendConfirm": "Users of tenant \"{{name}}\" will be unable to sign in once suspended. Continue?",
+    "deleteConfirm": "Delete the {{count}} selected tenant(s)? This cannot be undone.",
+    "quotaInfo": "Quotas",
+    "aiInfo": "AI features",
+    "aiEnabled": "Allow AI",
+    "aiEnabledHint": "When off, AI entry points are hidden for every user of this tenant and calls are rejected. Platform super administrators are not affected",
+    "quotaInherit": "Follow plan",
+    "quotaHint": "Leave empty to follow the plan; 0 means unlimited",
+    "createAdmin": "Also create a tenant administrator",
+    "createAdminHint": "Creates an admin account in the new tenant with the “Tenant admin” role; everything is rolled back on failure",
+    "adminEmail": "Administrator email",
+    "adminPasswordHint": "At least 8 characters. Used only to create the account; never stored in plain text or echoed back",
+    "expired": "Expired",
+    "expiredDays": "Expired {{count}} d ago",
+    "expiresToday": "Expires today",
+    "daysLeft": "{{count}} d left",
+    "expiredNotice": "This tenant has expired or been suspended. Please contact the platform administrator.",
+    "usage": {
+      "title": "Usage",
+      "users": "Users",
+      "storage": "Storage"
+    },
+    "expireSoon": "This tenant expires in {{count}} day(s) ({{date}}). Sign-in will be blocked after that; please contact the platform administrator to renew.",
+    "expireSoonToday": "This tenant expires today ({{date}}). Sign-in will be blocked after that; please contact the platform administrator to renew.",
+    "expireSoonDismiss": "Dismiss",
+    "err": {
+      "username": "2-64 letters, digits or _ . @ -",
+      "password": "Password is required",
+      "email": "Invalid email address"
+    }
+  }
+}

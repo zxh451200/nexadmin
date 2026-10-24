@@ -1,0 +1,121 @@
+{
+  "profile": {
+    "menu": "Profile",
+    "description": "Manage your profile, password, linked accounts, devices and preferences",
+    "tab": {
+      "basic": "Profile",
+      "password": "Password",
+      "bindings": "Linked accounts",
+      "sessions": "Devices",
+      "preferences": "Preferences",
+      "tokens": "Access tokens"
+    },
+    "tokens": {
+      "description": "Access tokens let scripts or third-party programs call open APIs on your behalf, never beyond your own permissions.",
+      "create": "New token",
+      "createTitle": "New access token",
+      "generate": "Generate token",
+      "empty": "No access tokens yet",
+      "nameTooLong": "Name must be 50 characters or fewer",
+      "namePlaceholder": "e.g. CI pipeline",
+      "neverUsed": "Never used",
+      "neverWarning": "A token that never expires stays valid for as long as it is leaked, which is risky. Set an expiry and rotate it regularly.",
+      "revoke": "Revoke",
+      "revokeConfirm": "Token \"{{name}}\" stops working immediately and programs using it lose access. This cannot be undone. Revoke it?",
+      "revoked": "Token revoked",
+      "fields": {
+        "name": "Name",
+        "scope": "Scope",
+        "prefix": "Prefix",
+        "lastUsedAt": "Last used",
+        "expiresAt": "Expires"
+      },
+      "scope": { "read": "Read-only", "write": "Read & write" },
+      "scopeHint": {
+        "read": "Can query data only; no create, update or delete.",
+        "write": "Can query and modify data. Keep it safe."
+      },
+      "expiry": { "30": "30 days", "90": "90 days", "365": "1 year", "never": "Never expires" },
+      "state": { "expired": "Expired", "soon": "Expiring soon", "active": "Active" },
+      "reveal": {
+        "title": "Token created",
+        "onceHint": "Copy and store it now. You will not be able to view this token again after leaving; if lost, revoke it and create a new one.",
+        "token": "Access token",
+        "usage": "Usage example",
+        "copyCurl": "Copy curl example",
+        "saved": "I have saved it"
+      }
+    },
+    "basic": {
+      "avatar": "Avatar",
+      "avatarHint": "Square crop, 256×256 or larger recommended",
+      "username": "Account",
+      "nickname": "Nickname",
+      "gender": "Gender",
+      "phone": "Phone",
+      "phoneHint": "Change your phone number under Linked accounts",
+      "email": "Email",
+      "region": "Region",
+      "bio": "Bio",
+      "bioPlaceholder": "Tell us about yourself",
+      "nicknameRequired": "Nickname is required",
+      "emailInvalid": "Invalid email address",
+      "saved": "Profile saved"
+    },
+    "password": {
+      "old": "Current password",
+      "new": "New password",
+      "confirm": "Confirm new password",
+      "oldRequired": "Current password is required",
+      "mismatch": "Passwords do not match",
+      "sameAsOld": "New password must differ from the current one",
+      "submit": "Update password",
+      "done": "Password updated"
+    },
+    "bindings": {
+      "phoneTitle": "Phone number",
+      "phoneUnbound": "No phone linked. Link one to sign in by phone",
+      "phoneBound": "Linked {{phone}}",
+      "bind": "Link",
+      "change": "Change",
+      "unbind": "Unlink",
+      "bound": "Linked",
+      "notBound": "Not linked",
+      "thirdParty": "Third-party accounts",
+      "boundAs": "{{name}} · linked {{time}}",
+      "phoneInput": "Phone number",
+      "codeInput": "Code",
+      "sendCode": "Send code",
+      "resend": "Resend in {{count}}s",
+      "codeSent": "Code sent",
+      "phoneInvalid": "Enter an 11-digit phone number",
+      "codeInvalid": "Enter the 6-digit code",
+      "phoneDialog": "Link phone number",
+      "confirmUnbind": "Unlink {{name}}?",
+      "bindDone": "Linked",
+      "unbindDone": "Unlinked"
+    },
+    "sessions": {
+      "title": "My devices",
+      "description": "You can sign other devices out. The current device cannot be signed out here.",
+      "current": "This device",
+      "device": "Device",
+      "ip": "IP",
+      "location": "Location",
+      "loginAt": "Signed in",
+      "lastActive": "Last active",
+      "kick": "Sign out",
+      "confirmKick": "Sign this device out?",
+      "kicked": "Device signed out"
+    },
+    "pref": {
+      "language": "Language",
+      "theme": "Theme",
+      "timezone": "Time zone",
+      "light": "Light",
+      "dark": "Dark",
+      "system": "System",
+      "saved": "Preferences updated"
+    }
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "plugin_audit": {
+    "menu": "Data change audit",
+    "title": "Data change audit",
+    "description": "Records inserts, updates and deletes on audited tables with field-level before/after comparison; sensitive fields are masked",
+    "tabs": { "logs": "Change records", "scope": "Audit scope" },
+    "btn": { "config": "Audit scope", "clean": "Clean records" },
+    "all": "All",
+    "system": "System",
+    "detail": "Change details",
+    "empty": "No change records",
+    "operatorPlaceholder": "Operator",
+    "fields": {
+      "time": "Time",
+      "table": "Table",
+      "rowPk": "Primary key",
+      "action": "Action",
+      "operator": "Operator",
+      "changedFields": "Changed fields",
+      "timeRange": "Time range"
+    },
+    "action": { "create": "Create", "update": "Update", "delete": "Delete" },
+    "diff": {
+      "title": "Field comparison",
+      "field": "Field",
+      "old": "Old value",
+      "new": "New value",
+      "empty": "empty",
+      "emptyString": "empty string",
+      "none": "No field changed"
+    },
+    "scope": {
+      "title": "Audited tables",
+      "description": "Only the tables selected here are audited; nothing is audited by default. This plugin's own tables and log-style tables are excluded.",
+      "placeholder": "Select tables to audit",
+      "selectedCount": "{{count}} table(s) selected",
+      "search": "Search tables",
+      "noTables": "No tables available",
+      "remove": "Remove {{name}}",
+      "noneSelected": "No table is audited right now, so no change records will be produced.",
+      "note": "Takes effect immediately on this instance; other instances sync within 30 seconds. Values of password / secret / token fields are always recorded as ***."
+    },
+    "clean": {
+      "title": "Clean change records",
+      "description": "Deletes records older than the retention period. This cannot be undone.",
+      "keep": "Keep the last",
+      "days": "{{count}} days",
+      "done": "Cleaned {{count}} records"
+    }
+  }
+}

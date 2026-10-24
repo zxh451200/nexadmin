@@ -1,0 +1,52 @@
+{
+  "tenant": {
+    "menu": "租户管理",
+    "title": "租户管理",
+    "description": "管理租户、套餐绑定、域名与有效期",
+    "name": "租户名称",
+    "domain": "域名",
+    "package": "套餐",
+    "expireAt": "过期时间",
+    "newExpireAt": "新的过期时间",
+    "adminUsername": "管理员账号",
+    "adminPassword": "管理员密码",
+    "basicInfo": "基本信息",
+    "adminInfo": "管理员账号",
+    "searchPlaceholder": "搜索名称、域名或管理员账号",
+    "create": "新增租户",
+    "edit": "编辑租户",
+    "renew": "续期",
+    "suspend": "停用",
+    "resume": "恢复",
+    "suspendConfirm": "停用后租户“{{name}}”下的用户将无法登录，确定停用吗？",
+    "deleteConfirm": "确定删除选中的 {{count}} 个租户吗？该操作不可恢复。",
+    "quotaInfo": "额度",
+    "aiInfo": "AI 功能",
+    "aiEnabled": "允许使用 AI",
+    "aiEnabledHint": "关闭后该租户下所有用户的 AI 入口隐藏，调用也会被拒绝；平台超管不受限",
+    "quotaInherit": "沿用套餐",
+    "quotaHint": "留空沿用套餐，0 表示不限制",
+    "createAdmin": "同时创建租户管理员",
+    "createAdminHint": "在新租户内创建管理员账号并赋予“租户管理员”角色，失败则整体回滚",
+    "adminEmail": "管理员邮箱",
+    "adminPasswordHint": "至少 8 位；仅用于创建账号，不会保存明文，也不会回显",
+    "expired": "已过期",
+    "expiredDays": "已过期 {{count}} 天",
+    "expiresToday": "今天到期",
+    "daysLeft": "剩余 {{count}} 天",
+    "expiredNotice": "租户已过期或已停用，请联系平台管理员",
+    "usage": {
+      "title": "用量",
+      "users": "用户",
+      "storage": "存储"
+    },
+    "expireSoon": "租户将在 {{count}} 天后（{{date}}）到期，到期后将无法登录，请尽快联系平台管理员续期",
+    "expireSoonToday": "租户今天（{{date}}）到期，到期后将无法登录，请尽快联系平台管理员续期",
+    "expireSoonDismiss": "关闭提示",
+    "err": {
+      "username": "账号为 2-64 位字母、数字或 _ . @ -",
+      "password": "请输入密码",
+      "email": "邮箱格式不正确"
+    }
+  }
+}

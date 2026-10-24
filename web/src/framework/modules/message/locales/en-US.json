@@ -1,0 +1,26 @@
+{
+  "message": {
+    "menu": "Message center",
+    "title": "Message center",
+    "description": "View system messages and published notices",
+    "tabMessages": "Messages",
+    "tabNotices": "Notices",
+    "onlyUnread": "Unread only",
+    "readAll": "Mark all as read",
+    "unread": "Unread",
+    "pinned": "Pinned",
+    "goLink": "Open link",
+    "attachments": "Attachments",
+    "deleteConfirm": "Delete this message?",
+    "emptyMessages": "No messages",
+    "emptyNotices": "No notices",
+    "fields": {
+      "title": "Title",
+      "category": "Category",
+      "time": "Time",
+      "type": "Type",
+      "level": "Level",
+      "publishedAt": "Published at"
+    }
+  }
+}

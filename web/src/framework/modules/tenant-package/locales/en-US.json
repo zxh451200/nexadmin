@@ -1,0 +1,21 @@
+{
+  "tenantPkg": {
+    "menu": "Tenant packages",
+    "title": "Tenant packages",
+    "description": "Define the menus, user count and storage available to tenants",
+    "name": "Package name",
+    "menus": "Menu permissions",
+    "menuCount": "{{count}} items",
+    "maxUsers": "User limit",
+    "maxStorage": "Storage limit",
+    "maxStorageMb": "Storage limit (MB)",
+    "unlimited": "Unlimited",
+    "zeroUnlimited": "0 means unlimited",
+    "searchPlaceholder": "Search package name or remark",
+    "create": "New package",
+    "edit": "Edit package",
+    "deleteConfirm": "Delete the {{count}} selected package(s)?",
+    "maxRoles": "Role limit",
+    "aiDailyQuota": "AI calls per day"
+  }
+}

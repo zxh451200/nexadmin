@@ -1,0 +1,116 @@
+历史报告（本轮未重新运行原静态接口核对器）
+以下数量、路径及判断仅代表原生成时状态，不代表当前缺陷或当前通过记录。忘记密码、日志导出等能力已有实现，不按旧报告重复立项。
+本轮三类公共契约使用 core/testdata/contracts 的 Go golden 和 scripts/ci/contract_version.py 独立验证；不据此推断下列静态接口结果已复验。
+
+== NexAdmin 前后端契约静态核对 ==
+后端路由 251 条（其中动态/通配 2 条未参与核对，权限码 82 个）；前端调用 214 个唯一接口（243 处）；前端 mock 契约 226 条
+A 前端调用了但后端没有: 2 | B 前端 mock 有但后端没有: 6 | C 后端有但前端从未调用: 36 | 无法解析: 6
+
+A) 前端调用了但后端没有注册（联调必挂，最重要；按严重程度排序）: 2 项
+  [framework/pages] 2 项
+    后端无此路径  POST  /api/v1/auth/forgot/reset  web/src/framework/pages/login/ForgotPasswordDialog.tsx:93  
+    后端无此路径  POST  /api/v1/auth/forgot/send   web/src/framework/pages/login/ForgotPasswordDialog.tsx:73  
+      · POST /api/v1/auth/forgot/reset 最接近: POST /api/v1/auth/logout (core/router.go:146)
+      · POST /api/v1/auth/forgot/reset 最接近: POST /api/v1/auth/refresh (core/router.go:144)
+      · POST /api/v1/auth/forgot/send 最接近: POST /api/v1/auth/oauth/bind (modules/system/user/oauth_http.go:33)
+      · POST /api/v1/auth/forgot/send 最接近: POST /api/v1/auth/login (core/router.go:142)
+
+B) 前端 mock 有但后端没有（mock 契约领先于后端）: 6 项
+  [framework/pages] 2 项
+    后端无此路径  POST  /api/v1/auth/forgot/reset  web/src/framework/pages/login/forgot.mock.ts:22  (前端代码也在调用)
+    后端无此路径  POST  /api/v1/auth/forgot/send   web/src/framework/pages/login/forgot.mock.ts:13  (前端代码也在调用)
+      · POST /api/v1/auth/forgot/reset 最接近: POST /api/v1/auth/logout (core/router.go:146)
+      · POST /api/v1/auth/forgot/reset 最接近: POST /api/v1/auth/refresh (core/router.go:144)
+      · POST /api/v1/auth/forgot/send 最接近: POST /api/v1/auth/oauth/bind (modules/system/user/oauth_http.go:33)
+      · POST /api/v1/auth/forgot/send 最接近: POST /api/v1/auth/login (core/router.go:142)
+  [role] 1 项
+    方法不符  DELETE  /api/v1/roles  web/src/framework/modules/role/role.mock.ts:137  (前端未调用，多为 createCrudMock 自带路由)
+      · DELETE /api/v1/roles: 后端该路径只注册了 GET,POST，方法对不上
+      · DELETE /api/v1/roles 最接近: GET /api/v1/roles (modules/system/role/module.go:26)
+      · DELETE /api/v1/roles 最接近: POST /api/v1/roles (modules/system/role/module.go:30)
+  [config] 1 项
+    疑似拼写  PUT  /api/v1/configs/sort  web/src/framework/modules/config/config.mock.ts:136  (前端未调用，多为 createCrudMock 自带路由)
+      · PUT /api/v1/configs/sort: 仅被后端占位吞掉静态段才对上：PUT /api/v1/configs/:id（modules/system/config/module.go:38），疑似路径拼写错误
+  [tenant-package] 1 项
+    疑似拼写  PUT  /api/v1/tenant-packages/sort  web/src/framework/modules/tenant-package/tenantPkg.mock.ts:66  (前端未调用，多为 createCrudMock 自带路由)
+      · PUT /api/v1/tenant-packages/sort: 仅被后端占位吞掉静态段才对上：PUT /api/v1/tenant-packages/:id（modules/system/tenant/module.go:32），疑似路径拼写错误
+  [user] 1 项
+    疑似拼写  PUT  /api/v1/users/sort  web/src/framework/modules/user/user.mock.ts:318  (前端未调用，多为 createCrudMock 自带路由)
+      · PUT /api/v1/users/sort: 仅被后端占位吞掉静态段才对上：PUT /api/v1/users/:id（modules/system/user/module.go:42），疑似路径拼写错误
+
+C) 后端有路由但前端从未调用（仅提示，不是错误）: 36 条
+  [apimonitor]
+    GET    /api/v1/monitor/api  (modules/apimonitor/module.go:37)
+  [cachemonitor]
+    GET    /api/v1/monitor/cache  (modules/cachemonitor/module.go:50)
+  [core]
+    POST   /api/v1/system/shutdown  (core/shutdown.go:22)
+  [file]
+    DELETE /api/v1/files/:id  (modules/file/module.go:52)
+    GET    /api/v1/files/:id/content  (modules/file/module.go:63)
+    GET    /api/v1/files/public/:token/:name  (modules/file/module.go:62)
+  [internal/example]
+    GET    /api/v1/example/hello  (internal/modules/example/module.go:24)
+    GET    /api/v1/example/ping  (internal/modules/example/module.go:27)
+  [profile]
+    DELETE /api/v1/profile/bindings/phone  (modules/profile/module.go:42)
+  [region]
+    GET    /api/v1/regions  (modules/region/module.go:34)
+  [servermonitor]
+    GET    /api/v1/monitor/server  (modules/servermonitor/module.go:33)
+  [sso]
+    GET    /api/v1/oauth/.well-known/openid-configuration  (modules/sso/module.go:82)
+    GET    /api/v1/oauth/jwks  (modules/sso/module.go:83)
+    GET    /api/v1/oauth/logout  (modules/sso/module.go:87)
+    GET    /api/v1/oauth/org/depts  (modules/sso/module.go:89)
+    GET    /api/v1/oauth/org/users  (modules/sso/module.go:88)
+    POST   /api/v1/oauth/token  (modules/sso/module.go:84)
+    GET    /api/v1/oauth/userinfo  (modules/sso/module.go:85)
+    POST   /api/v1/oauth/userinfo  (modules/sso/module.go:86)
+  [system/config]
+    DELETE /api/v1/configs/:id  (modules/system/config/module.go:39)
+    GET    /api/v1/configs/:id  (modules/system/config/module.go:36)
+  [system/dept]
+    GET    /api/v1/depts/:id  (modules/system/dept/module.go:27)
+  [system/dict]
+    DELETE /api/v1/dict/data  (modules/system/dict/module.go:42)
+    GET    /api/v1/dict/data/:id  (modules/system/dict/module.go:38)
+    DELETE /api/v1/dict/types  (modules/system/dict/module.go:33)
+    GET    /api/v1/dict/types/:id  (modules/system/dict/module.go:29)
+  [system/menu]
+    GET    /api/v1/menus/:id  (modules/system/menu/module.go:33)
+  [system/post]
+    GET    /api/v1/posts/:id  (modules/system/post/module.go:29)
+  [system/role]
+    GET    /api/v1/roles/:id  (modules/system/role/module.go:29)
+  [system/tenant]
+    DELETE /api/v1/tenant-packages/:id  (modules/system/tenant/module.go:33)
+    GET    /api/v1/tenant-packages/:id  (modules/system/tenant/module.go:30)
+    DELETE /api/v1/tenants/:id  (modules/system/tenant/module.go:44)
+    GET    /api/v1/tenants/:id  (modules/system/tenant/module.go:39)
+  [system/user]
+    GET    /api/v1/auth/providers  (modules/system/user/oauth_http.go:30)
+    DELETE /api/v1/users/:id  (modules/system/user/module.go:43)
+    GET    /api/v1/users/:id  (modules/system/user/module.go:40)
+
+字段级核对（前端 api.ts 的 interface 对 后端 dto.go/model.go 的 json tag）: 已配对 10 个，前端有而后端无 1 个字段
+  web/src/framework/modules/profile/api.ts:41  LoginSession.location?  -> 后端 LoginSession (modules/profile/model.go:71)
+跳过 94 个 interface（不确定即跳过）:
+     2  同名后端结构体没有 json tag（gorm 模型，响应结构在别处）
+    29  找不到唯一的同名后端结构体
+    48  模块目录无法按命名约定配对后端 dto.go/model.go
+    15  请求/表单类 interface（非响应）
+
+无法静态解析的条目（需人工核对）: 6
+  [backend] modules/plugin/module.go:55  POST /api/v1/plugins/?/license
+      动态拼接路径（? 为无法静态解析的段），不参与核对
+  [backend] modules/plugin/module.go:60  ANY /api/v1/plugins/?/*rest
+      动态拼接路径（? 为无法静态解析的段），不参与核对
+  [frontend] web/src/framework/components/RemoteSelect.tsx:58  api.get<Page<Row> | Row[]>(url, { ...params, keyword: keyword || undef
+      第一个参数不是静态字符串（动态 URL，需人工核对）
+  [frontend] web/src/framework/components/TreeSelect.tsx:53  api.get<Node[]>(url as string), enabled: !data && !!url, stale
+      第一个参数不是静态字符串（动态 URL，需人工核对）
+  [frontend] web/src/framework/hooks/use-live-metrics.ts:14  api.get<T>(url, undefined, { silent: true }), refetchInterval: int
+      第一个参数不是静态字符串（动态 URL，需人工核对）
+  [frontend] web/src/framework/setup/steps/ConnectionSteps.tsx:69  api.post<TestResult>(url, payload, { silent: true })) } catch (e)
+      第一个参数不是静态字符串（动态 URL，需人工核对）

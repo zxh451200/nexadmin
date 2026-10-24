@@ -1,0 +1,64 @@
+{
+  "role": {
+    "menu": "角色管理",
+    "title": "角色管理",
+    "description": "拖动行可调整排序；为角色分配菜单与按钮权限",
+    "col": {
+      "name": "名称",
+      "code": "标识",
+      "sort": "排序",
+      "dataScope": "数据范围",
+      "status": "状态",
+      "assignable": "可分配",
+      "remark": "备注",
+      "createdAt": "创建时间"
+    },
+    "form": {
+      "createTitle": "新建角色",
+      "editTitle": "编辑角色",
+      "name": "名称",
+      "code": "标识",
+      "codeHint": "唯一标识，如 operator",
+      "sort": "排序",
+      "status": "状态",
+      "dataScope": "数据范围",
+      "deptIds": "自定义部门",
+      "assignable": "允许被下级管理员分配",
+      "assignableHint": "关闭后，只有超级管理员能把该角色分配给用户",
+      "assignableBuiltin": "内置超级管理员角色固定不可分配",
+      "remark": "备注"
+    },
+    "v": {
+      "nameRequired": "请输入角色名称",
+      "codeRequired": "请输入角色标识",
+      "codeFormat": "标识只能包含字母、数字和下划线，且以字母开头",
+      "sortNumber": "排序必须是整数",
+      "deptRequired": "请至少选择一个部门"
+    },
+    "builtin": "内置",
+    "assignable": {
+      "yes": "可分配",
+      "no": "不可分配"
+    },
+    "assign": {
+      "action": "分配权限",
+      "title": "分配权限",
+      "description": "角色：{{name}}",
+      "success": "权限已保存",
+      "empty": "暂无可分配的权限",
+      "expandAll": "展开全部",
+      "collapseAll": "收起全部",
+      "selectAll": "全选",
+      "clearAll": "清空",
+      "selectedCount": "已选 {{count}} 项",
+      "expand": "展开",
+      "collapse": "收起",
+      "type": {
+        "dir": "目录",
+        "menu": "菜单",
+        "button": "按钮"
+      }
+    },
+    "deleteConfirm": "确定删除角色「{{name}}」吗？此操作不可恢复。"
+  }
+}

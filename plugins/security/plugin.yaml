@@ -1,0 +1,49 @@
+id: security
+name: 高级安全
+version: 1.0.0
+description: 高级安全（二次验证 TOTP + 一次性恢复码、强制策略与宽限期、登录 IP 黑白名单）。官方付费插件。
+author: NexAdmin
+edition: pro
+requires_nexadmin: ">=0.1.0"
+
+# 安装时写入 sys_menu；title 是 i18n key，文案在 web/locales 的 plugin_security 命名空间里。
+menus:
+  - parent: /system
+    type: menu
+    title: plugin_security.menu
+    path: /system/security
+    component: plugins/security/SecurityPage
+    perm: security:self
+    icon: ShieldCheck
+    sort: 110
+    keep_alive: true
+  - parent: security:self
+    type: button
+    title: plugin_security.btn.policy
+    perm: security:policy
+    sort: 10
+  - parent: security:self
+    type: button
+    title: plugin_security.btn.user
+    perm: security:user
+    sort: 20
+  - parent: security:self
+    type: button
+    title: plugin_security.btn.reset
+    perm: security:reset
+    sort: 30
+  - parent: security:self
+    type: button
+    title: plugin_security.btn.ip
+    perm: security:ip
+    sort: 40
+  - parent: security:self
+    type: button
+    title: plugin_security.btn.ipEdit
+    perm: security:ip:edit
+    sort: 50
+  - parent: security:self
+    type: button
+    title: plugin_security.btn.log
+    perm: security:log
+    sort: 60

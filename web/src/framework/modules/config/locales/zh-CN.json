@@ -1,0 +1,36 @@
+{
+  "sysConfig": {
+    "menu": "系统参数",
+    "title": "系统参数",
+    "description": "运营可直接修改的系统级配置，无需发版",
+    "name": "参数名称",
+    "key": "参数键",
+    "value": "参数值",
+    "type": "值类型",
+    "isPublic": "是否公开",
+    "allTypes": "全部类型",
+    "searchPlaceholder": "搜索名称、键或值",
+    "create": "新增参数",
+    "edit": "编辑参数",
+    "refreshCache": "刷新缓存",
+    "refreshed": "缓存已刷新",
+    "deleteConfirm": "确定删除选中的 {{count}} 个参数吗？",
+    "types": {
+      "string": "字符串",
+      "number": "数字",
+      "boolean": "布尔",
+      "json": "JSON"
+    },
+    "upload": {
+      "title": "上传限制",
+      "description": "留空或填 0 表示不限制；前端选择文件时会按此预检",
+      "maxImage": "图片上限 (MB)",
+      "maxVideo": "视频上限 (MB)",
+      "maxFile": "普通文件上限 (MB)",
+      "unlimited": "不限制",
+      "unlimitedWarning": "未限制上传大小，磁盘可能被占满",
+      "allowedTypes": "允许的文件类型",
+      "allowedTypesHint": "仅列表中的类型允许上传"
+    }
+  }
+}

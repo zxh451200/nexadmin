@@ -1,0 +1,43 @@
+{
+  "jobs": {
+    "menu": "导出中心",
+    "description": "大数据量导出在后台生成，完成后可在这里下载；结果文件保留 7 天",
+    "col": {
+      "type": "任务类型",
+      "status": "状态",
+      "progress": "进度",
+      "owner": "创建人",
+      "createdAt": "创建时间",
+      "duration": "耗时"
+    },
+    "type": { "all": "全部类型", "user.export": "用户导出" },
+    "status": {
+      "all": "全部状态",
+      "queued": "排队中",
+      "running": "执行中",
+      "success": "已完成",
+      "failed": "失败",
+      "canceled": "已取消"
+    },
+    "filter": { "type": "任务类型", "status": "状态" },
+    "scope": { "mine": "我的任务", "all": "全部任务" },
+    "action": { "download": "下载", "cancel": "取消", "retry": "重试", "delete": "删除", "refresh": "刷新" },
+    "confirm": {
+      "cancel": "确定取消该任务？",
+      "delete": "确定删除该任务及其结果文件？此操作不可恢复。"
+    },
+    "toast": {
+      "submitted": "已提交到导出中心",
+      "goCenter": "去查看",
+      "done": "导出完成",
+      "goDownload": "去下载",
+      "failed": "导出失败",
+      "canceled": "任务已取消",
+      "retried": "已重新提交",
+      "deleted": "已删除"
+    },
+    "duration": { "sec": "{{n}} 秒", "min": "{{m}} 分 {{s}} 秒" },
+    "indicator": { "label": "导出中心，{{count}} 个任务进行中", "none": "导出中心" },
+    "btn": { "all": "全部任务" }
+  }
+}

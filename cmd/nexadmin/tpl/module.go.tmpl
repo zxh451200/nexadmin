@@ -1,0 +1,37 @@
+package [[.Name]]
+
+import (
+	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
+
+	"[[.Module]]/core"
+)
+
+// 与 internal/modules/modules.go 里的空导入配合：init 注册，main.go 不用再改。
+func init() { core.RegisterBuiltin(module{}) }
+
+type module struct{}
+
+func (module) Name() string { return "[[.Name]]" }
+
+// 建表不用写代码：migrations/business/<引擎>/[[.MigFile]] 由框架迁移运行器在启动时自动执行（重启服务即可）。
+
+// Seed 种入菜单与按钮权限（setup.Seeder，初始化向导 / init 时），幂等。
+func (module) Seed(db *gorm.DB) error { return seedMenus(db) }
+
+// SeedOnStartup 每次启动补齐缺失的菜单（setup.StartupSeeder）；已齐全时只有一次查询。
+func (module) SeedOnStartup(db *gorm.DB) error { return seedMenus(db) }
+
+// Register 注册路由（/api/v1 下，默认要求登录），权限码 [[.Name]]:list / [[.Name]]:edit / [[.Name]]:delete。
+func (module) Register(r *gin.RouterGroup, d *core.Deps) {
+	h := NewHandler(NewService(d.DB))
+	r.GET("/[[.Plural]]", core.Perm("[[.Name]]:list"), h.List)
+	r.GET("/[[.Plural]]/:id", core.Perm("[[.Name]]:list"), h.Get)
+	r.POST("/[[.Plural]]", core.Perm("[[.Name]]:edit"), h.Create)
+[[- if .Sortable]]
+	r.PUT("/[[.Plural]]/sort", core.Perm("[[.Name]]:edit"), h.Sort)
+[[- end]]
+	r.PUT("/[[.Plural]]/:id", core.Perm("[[.Name]]:edit"), h.Update)
+	r.DELETE("/[[.Plural]]/:id", core.Perm("[[.Name]]:delete"), h.Delete)
+	r.DELETE("/[[.Plural]]", core.Perm("[[.Name]]:delete"), h.DeleteBatch)
+}

@@ -1,0 +1,6 @@
+{
+  "framework_version": "0.1.1",
+  "framework_paths": ["core/", "modules/", "pkg/", "docs/", "deploy/", "cmd/", "web/src/framework/", "web/src/App.tsx", "web/src/main.tsx", "web/src/index.css", "web/src/lib/", "web/src/vite-env.d.ts", "web/index.html", "web/public/", "web/.env.production", "web/.env.development", "web/vite.config.ts", "web/tailwind.config.ts", "web/postcss.config.js", "web/tsconfig.json", "web/eslint.config.js", "web/embed.go", "web/embed_dev.go", "scripts/", "migrations/framework/", "config/default.yaml", "config/license-keys.pub", "config/license-revoked.json"],
+  "merge_paths": ["go.mod", "go.sum", "web/package.json"],
+  "user_paths": ["internal/", "plugins/", "web/src/plugins/", "web/src/pages/", "web/src/locales/", "web/src/theme.css", "config/config.yaml", "config/locales/", "migrations/business/", "data/", ".dev-keys/", ".github/", "AGENTS.md", "CLAUDE.md", "README.md", ".gitignore", ".dockerignore", "web/package-lock.json"]
+}

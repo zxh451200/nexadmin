@@ -1,0 +1,105 @@
+{
+  "plugin_security": {
+    "menu": "高级安全",
+    "title": "高级安全",
+    "description": "二次验证（TOTP）、强制策略与登录 IP 黑白名单",
+    "tabs": { "twofa": "二次验证", "policy": "强制策略", "users": "用户状态", "ip": "IP 黑白名单", "logs": "操作日志" },
+    "btn": { "policy": "编辑策略", "user": "查看用户状态", "reset": "重置二次验证", "ip": "查看 IP 规则", "ipEdit": "编辑 IP 规则", "log": "查看操作日志" },
+    "copy": "复制",
+    "copied": "已复制",
+    "required": {
+      "title": "管理员要求启用二次验证",
+      "grace": "请在 {{time}} 前完成绑定，逾期将无法登录。",
+      "desc": "请尽快完成绑定。"
+    },
+    "twofa": {
+      "title": "二次验证（TOTP）",
+      "desc": "绑定验证器 App（如 Google Authenticator、Microsoft Authenticator）后，登录时需要再输入 6 位动态码。",
+      "on": "已启用",
+      "off": "未启用",
+      "start": "开始绑定",
+      "noQr": "请在验证器 App 中选择“手动输入密钥”，填入下面的密钥（或使用 otpauth 链接）。当前版本不内置二维码。",
+      "secret": "密钥",
+      "uri": "otpauth 链接",
+      "code": "验证码",
+      "codePlaceholder": "6 位数字",
+      "confirmEnable": "确认并启用",
+      "recoveryLeft": "剩余恢复码：{{count}} 个",
+      "recoveryInput": "恢复码",
+      "recoveryPlaceholder": "xxxxx-xxxxx",
+      "useRecovery": "改用恢复码",
+      "useCode": "改用动态码",
+      "regen": "重新生成恢复码",
+      "disable": "关闭二次验证",
+      "cannotDisable": "管理员策略要求启用二次验证，无法自行关闭。"
+    },
+    "recovery": {
+      "title": "请保存恢复码",
+      "once": "每个恢复码只能使用一次，且只会显示这一次。丢失手机时用它登录。",
+      "saved": "我已保存"
+    },
+    "policy": {
+      "title": "强制策略",
+      "desc": "决定哪些用户必须启用二次验证。",
+      "mode": { "optional": "可选", "all": "全员强制", "roles": "按角色强制" },
+      "modeDesc": {
+        "optional": "用户自行决定是否启用。",
+        "all": "所有用户都必须启用。",
+        "roles": "仅指定角色的用户必须启用。"
+      },
+      "roles": "角色编码",
+      "rolesHint": "多个角色用英文逗号分隔，填写角色编码而不是名称。",
+      "graceDays": "绑定宽限期（天）",
+      "graceHint": "宽限期内未绑定的用户仍可登录并在本页完成绑定；到期后将无法登录（超级管理员除外），管理员可在“用户状态”中重置。修改策略会重新计算宽限期。"
+    },
+    "users": {
+      "username": "用户名",
+      "status": "状态",
+      "enabledAt": "启用时间",
+      "graceUntil": "宽限截止",
+      "search": "按用户名搜索",
+      "empty": "暂无记录",
+      "reset": "重置二次验证",
+      "resetConfirm": "确定重置用户 {{name}} 的二次验证吗？其密钥与恢复码将被清除。",
+      "state": { "enabled": "已启用", "pending": "待确认", "grace": "宽限期内", "expired": "宽限已过期" }
+    },
+    "ip": {
+      "hint": "拒绝规则优先；存在启用的允许规则时，只放行名单内的 IP。保存前会校验你当前的 IP 不会被锁在外面。",
+      "yourIp": "你当前的 IP：{{ip}}",
+      "create": "新增规则",
+      "createTitle": "新增 IP 规则",
+      "editTitle": "编辑 IP 规则",
+      "action": "动作",
+      "actions": { "allow": "允许", "deny": "拒绝" },
+      "cidr": "IP 或 CIDR",
+      "cidrHint": "支持 IPv4 / IPv6，如 203.0.113.7、10.0.0.0/8、2001:db8::/32。",
+      "scope": "作用范围",
+      "scopes": { "all": "全站登录", "super": "仅超管登录" },
+      "remark": "备注",
+      "enabled": "启用",
+      "on": "启用",
+      "off": "停用",
+      "empty": "暂无规则",
+      "deleteConfirm": "确定删除规则 {{cidr}} 吗？",
+      "errors": { "cidrRequired": "请输入 IP 或 CIDR" }
+    },
+    "logs": {
+      "time": "时间",
+      "operator": "操作人",
+      "action": "操作",
+      "target": "对象",
+      "detail": "详情",
+      "empty": "暂无日志",
+      "actions": {
+        "enable_2fa": "启用二次验证",
+        "disable_2fa": "关闭二次验证",
+        "regen_recovery": "重新生成恢复码",
+        "reset_2fa": "重置用户二次验证",
+        "save_policy": "保存强制策略",
+        "create_ip_rule": "新增 IP 规则",
+        "update_ip_rule": "修改 IP 规则",
+        "delete_ip_rule": "删除 IP 规则"
+      }
+    }
+  }
+}

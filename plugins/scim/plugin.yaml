@@ -1,0 +1,21 @@
+id: scim
+name: SCIM 用户同步
+version: 1.0.0
+description: 企业身份平台 SCIM 2.0 用户同步。官方付费插件。
+author: NexAdmin
+edition: pro
+requires_nexadmin: ">=0.1.0"
+menus:
+  - parent: /system
+    type: menu
+    title: plugin_scim.menu
+    path: /system/scim
+    component: plugins/scim/ScimPage
+    perm: scim:list
+    icon: UsersRound
+    sort: 120
+  - parent: scim:list
+    type: button
+    title: plugin_scim.btn.token
+    perm: scim:token
+    sort: 10

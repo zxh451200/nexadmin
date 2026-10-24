@@ -1,0 +1,37 @@
+{
+  "plugin": {
+    "menu": "Plugins",
+    "btn": {
+      "license": "Import license"
+    }
+  },
+  "pluginMgr": {
+    "menu": "Plugins",
+    "title": "Plugins",
+    "description": "Installed plugins with version and license status. Imported licenses take effect immediately, no rebuild needed.",
+    "edition": { "free": "Free", "pro": "Pro" },
+    "status": { "active": "Active", "unlicensed": "Unlicensed", "expired": "Expired", "invalid": "Invalid", "revoked": "Revoked" },
+    "field": { "customer": "Customer", "expiresAt": "Expires", "reason": "Reason", "serial": "Serial" },
+    "expiring": {
+      "title": "License expiring soon",
+      "item": "{{name}} ({{days}} days left)",
+      "sep": ", ",
+      "badge": "Expires in {{days}} days"
+    },
+    "license": {
+      "action": "Import license",
+      "title": "Import license - {{name}}",
+      "desc": "Choose a license file or paste its text",
+      "file": "License file",
+      "paste": "License text",
+      "placeholder": "Paste the contents of the .lic file",
+      "tooLarge": "File too large, please check it is a license file",
+      "effective": "License imported and effective immediately",
+      "needRestart": "License imported, restart the service to apply"
+    },
+    "empty": {
+      "title": "No plugins installed",
+      "desc": "Run the command below in the project root, then rebuild and restart:"
+    }
+  }
+}

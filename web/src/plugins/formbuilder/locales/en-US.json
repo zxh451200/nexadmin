@@ -1,0 +1,123 @@
+{
+  "plugin_formbuilder": {
+    "menu": "Form builder",
+    "fillMenu": "Fill forms",
+    "title": "Form builder",
+    "description": "Design forms visually and publish them as versions. Signed-in users fill them in, the server re-validates against the published version, and submissions can be collected and exported",
+    "btn": { "publish": "Publish forms", "submission": "View submissions", "export": "Export submissions" },
+    "card": { "pending": "Forms to fill", "pendingHint": "Forms are waiting for you", "noPending": "No forms to fill", "loadFailed": "Failed to load" },
+    "searchPlaceholder": "Search by name",
+    "empty": "No data",
+    "loadFailed": "Failed to load, please try again later",
+    "all": "All",
+    "stars": "{{n}} stars",
+    "create": "New form",
+    "createTitle": "New form",
+    "design": "Design",
+    "copy": "Duplicate",
+    "copySuffix": "copy",
+    "online": "Bring online",
+    "offline": "Take offline",
+    "unpublished": "Unpublished changes",
+    "publishConfirm": "Publish form \"{{name}}\"? A new version will be created and signed-in users can start filling it.",
+    "offlineConfirm": "Take form \"{{name}}\" offline? Users can no longer fill it; collected submissions are kept.",
+    "deleteConfirm": "Delete form \"{{name}}\"? Its {{count}} submissions will be deleted as well and cannot be recovered.",
+    "import": { "title": "Import form", "export": "Export definition", "tooLarge": "File is too large to import", "invalid": "Invalid file format, cannot import" },
+    "fields": {
+      "name": "Form name", "description": "Description", "status": "Status", "version": "Version", "submissionCount": "Submissions",
+      "deadline": "Deadline", "quota": "Quota"
+    },
+    "status": { "draft": "Draft", "published": "Published", "offline": "Offline" },
+    "closed": { "expired": "Closed", "full": "Full", "submitted": "Submitted" },
+    "closedHint": {
+      "expired": "This form is past its deadline and can no longer be filled",
+      "full": "This form has reached its submission limit and can no longer be filled",
+      "submitted": "You have already submitted this form and repeat submissions are not allowed"
+    },
+    "fillTitle": "Fill forms",
+    "fillDescription": "Published forms available for you to fill",
+    "fillEmpty": "No forms to fill",
+    "fillNotFound": "The form does not exist or you are not allowed to fill it",
+    "fillNow": "Fill in",
+    "fillView": "View",
+    "fill": {
+      "submitted": "Submitted", "successDefault": "Thanks for your response", "backToList": "Back to list", "again": "Fill another",
+      "failed": "Submission failed"
+    },
+    "types": {
+      "text": "Single-line text", "textarea": "Multi-line text", "number": "Number", "radio": "Single choice", "checkbox": "Multiple choice", "select": "Dropdown",
+      "date": "Date", "switch": "Switch", "rating": "Rating", "file": "File upload", "section": "Section"
+    },
+    "ops": {
+      "eq": "equals", "ne": "not equals", "in": "is one of", "contains": "contains", "empty": "is empty", "notEmpty": "is not empty",
+      "gt": "greater than", "gte": "at least", "lt": "less than", "lte": "at most"
+    },
+    "problem": { "title": "Missing title", "options": "Missing options", "pattern": "Invalid regular expression" },
+    "errors": {
+      "required": "This field is required",
+      "number": "Enter a valid number",
+      "integer": "Enter an integer",
+      "min": "Must be at least {{n}}",
+      "max": "Must be at most {{n}}",
+      "minLen": "Enter at least {{n}} characters",
+      "maxLen": "Enter at most {{n}} characters",
+      "pattern": "Invalid format",
+      "minCount": "Select at least {{n}}",
+      "maxCount": "Select at most {{n}}",
+      "minFiles": "Upload at least {{n}} files",
+      "maxFiles": "Upload at most {{n}} files",
+      "minDate": "Must not be earlier than {{d}}",
+      "maxDate": "Must not be later than {{d}}",
+      "rating": "Choose a rating from 1 to {{n}}",
+      "mustOn": "This switch must be on"
+    },
+    "audience": {
+      "everyone": "All signed-in users can fill this form", "limited": "Only the selected roles and users can fill this form", "roles": "Roles", "users": "Users",
+      "searchUser": "Search users", "searchResult": "Search results", "removeUser": "Remove user {{name}}"
+    },
+    "cond": {
+      "add": "Add condition", "advanced": "This condition is too complex. Clear it and configure again", "clear": "Clear condition", "all": "Match all conditions",
+      "any": "Match any condition", "mode": "Match mode", "field": "Field", "op": "Operator", "value": "Value",
+      "inHint": "Separate multiple values with commas", "noRefs": "No earlier fields to reference"
+    },
+    "prop": {
+      "title": "Title", "description": "Description", "placeholder": "Placeholder", "required": "Required", "mustOn": "Must be on",
+      "key": "Field key", "keyHint": "Key used in submitted data. Letters, digits and underscores only", "keyInvalid": "Invalid field key or already in use",
+      "showIf": "Visibility condition", "showIfHint": "The field is shown only when the condition is met. Hidden fields are not validated",
+      "default": "Default value", "noDefault": "No default", "defaultOn": "On by default",
+      "options": "Options", "optionsHint": "Option values must be unique", "optionSource": "Option source", "sourceManual": "Manual", "sourceDict": "Dictionary",
+      "dictType": "Dictionary type", "dictPlaceholder": "Select a dictionary type", "dictHint": "Options come from the selected dictionary and follow its changes",
+      "multiple": "Allow multiple", "integer": "Integers only", "min": "Minimum", "max": "Maximum",
+      "minLen": "Min characters", "maxLen": "Max characters", "pattern": "Regex validation", "patternHint": "Leave empty to skip format validation",
+      "minCount": "Min selections", "maxCount": "Max selections", "minDate": "Earliest date", "maxDate": "Latest date",
+      "minFiles": "Min files", "maxFiles": "Max files", "maxFilesHint": "Maximum number of files per submission",
+      "stars": "Number of stars"
+    },
+    "designer": {
+      "palette": "Field types", "canvas": "Form canvas", "drag": "Drag to reorder: {{name}}", "moveUp": "Move up", "moveDown": "Move down", "duplicate": "Duplicate field",
+      "emptyCanvas": "Add fields from the left to start designing", "selectHint": "Select a field to edit its properties", "hasCond": "Has a visibility condition",
+      "untitled": "Untitled", "unsaved": "Unsaved", "notFound": "The form does not exist or has been deleted",
+      "tabDesign": "Design", "tabPreview": "Preview", "tabSettings": "Settings",
+      "saveDraft": "Save draft", "saved": "Saved", "published": "Published",
+      "needField": "Add at least one field", "fixProblems": "Fix the flagged field problems first", "tooMany": "At most {{n}} fields can be added",
+      "condsCleaned": "Removed {{n}} invalid visibility conditions", "discardConfirm": "You have unsaved changes. Leave anyway?",
+      "previewOk": "Validation passed", "previewCheck": "Validate", "previewReset": "Reset", "previewHint": "Preview is for trying out only and creates no submissions",
+      "addOption": "Add option", "optionN": "Option {{n}}", "optionLabel": "Option {{n}} label", "optionLabelPh": "Option label",
+      "optionValue": "Option {{n}} value", "optionValuePh": "Option value", "optionRemove": "Remove option {{n}}"
+    },
+    "settings": {
+      "basic": "Basics", "rules": "Fill rules", "audience": "Audience", "versions": "Version history",
+      "successMessage": "Success message", "successMessageHint": "Shown to users after submitting. Leave empty to use the default",
+      "allowRepeat": "Allow repeat submissions", "allowRepeatHint": "When off, each user can submit only once",
+      "deadlineHint": "The form can no longer be filled after this time", "noDeadline": "No deadline",
+      "maxSubmissions": "Submission limit", "maxSubmissionsHint": "0 means unlimited",
+      "noVersions": "No version published yet", "versionMeta": "{{n}} fields · {{time}}", "exportVersion": "Export definition of v{{v}}"
+    },
+    "submissions": {
+      "description": "View and export what users have submitted", "submitter": "Submitter", "submittedAt": "Submitted at", "detail": "Submission details",
+      "filterField": "Filter field", "filterValue": "Filter value", "empty": "No submissions", "truncated": "Result truncated at the row limit",
+      "deleteConfirm": "Delete this submission from \"{{name}}\"? This cannot be undone.",
+      "exportXlsx": "Export xlsx", "exportJob": "Export in background", "exportJobSubmitted": "Export task submitted. Check it in export tasks"
+    }
+  }
+}

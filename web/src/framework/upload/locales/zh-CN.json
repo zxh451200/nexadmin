@@ -1,0 +1,24 @@
+{
+  "uploader": {
+    "add_image": "上传图片",
+    "add_video": "上传视频",
+    "add_file": "上传文件",
+    "kind_image": "图片",
+    "kind_video": "视频",
+    "kind_file": "文件",
+    "uploading": "上传中",
+    "failed": "上传失败",
+    "retry": "重试",
+    "drag": "拖动调整顺序",
+    "maxCount": "最多上传 {{count}} 个文件",
+    "errSize": "「{{name}}」超过大小限制（{{limit}} MB）",
+    "errType": "「{{name}}」的文件类型不被允许",
+    "errKind": "「{{name}}」不是{{kind}}类型",
+    "cropTitle": "裁剪图片",
+    "cropHint": "拖动选框调整裁剪区域",
+    "cropFixed": "输出尺寸固定为 {{width}} × {{height}}",
+    "zoomIn": "放大",
+    "zoomOut": "缩小",
+    "rotate": "旋转"
+  }
+}

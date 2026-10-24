@@ -1,0 +1,55 @@
+{
+  "loginLog": {
+    "menu": "Login Logs",
+    "description": "Sign-in results per account. Failures show a category only; details stay in server logs",
+    "col": {
+      "username": "Account",
+      "type": "Method",
+      "ip": "IP",
+      "location": "Location",
+      "browser": "Browser",
+      "os": "OS",
+      "status": "Status",
+      "reason": "Failure reason",
+      "time": "Time"
+    },
+    "filter": {
+      "keyword": "Keyword",
+      "keywordPlaceholder": "Account / IP",
+      "type": "Method",
+      "status": "Status",
+      "time": "Time range",
+      "allTypes": "All methods"
+    },
+    "type": {
+      "password": "Password",
+      "phone": "Phone",
+      "wecom": "WeCom",
+      "dingtalk": "DingTalk",
+      "feishu": "Feishu",
+      "google": "Google",
+      "github": "GitHub",
+      "oidc": "OIDC"
+    },
+    "reason": {
+      "credentials": "Incorrect account or password",
+      "captcha": "Incorrect captcha",
+      "locked": "Too many attempts, temporarily locked",
+      "disabled": "Account unavailable",
+      "blocked": "Sign-in restricted",
+      "other": "Sign-in failed"
+    },
+    "action": {
+      "export": "Export Excel",
+      "deleteSelected": "Delete selected"
+    },
+    "confirm": {
+      "delete": "Delete the {{count}} selected logs?"
+    },
+    "export": {
+      "done": "Export complete",
+      "tooMany": "Too many rows to export. Narrow the filters (e.g. the time range) or use the Export Center",
+      "filename": "login-log"
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "recycle": {
+    "menu": "回收站",
+    "description": "已删除的用户、角色、字典、公告等数据，可还原或彻底删除",
+    "col": { "name": "名称", "type": "类型", "deletedBy": "删除人", "deletedAt": "删除时间" },
+    "type": { "all": "全部类型", "user": "用户", "role": "角色", "dict": "字典", "notice": "公告", "post": "岗位" },
+    "filter": { "keyword": "关键词", "keywordPlaceholder": "名称", "type": "数据类型" },
+    "action": { "restore": "还原", "purge": "彻底删除" },
+    "confirm": {
+      "restore": "确认还原 {{name}}？",
+      "purge": "确认彻底删除 {{name}}？删除后无法恢复。"
+    },
+    "restored": "已还原",
+    "purged": "已彻底删除"
+  }
+}

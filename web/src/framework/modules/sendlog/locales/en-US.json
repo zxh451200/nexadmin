@@ -1,0 +1,67 @@
+{
+  "sendlog": {
+    "menu": "Send Logs",
+    "description": "Delivery results of SMS, email and robot messages. Recipients are masked; verification codes, message bodies and secrets are never stored",
+    "col": {
+      "channel": "Channel",
+      "scene": "Scene",
+      "recipient": "Recipient",
+      "subject": "Title / template",
+      "status": "Status",
+      "error": "Failure reason",
+      "duration": "Duration",
+      "time": "Time"
+    },
+    "filter": {
+      "recipient": "Recipient",
+      "recipientPlaceholder": "Phone suffix / email domain / robot name",
+      "channel": "Channel",
+      "allChannels": "All channels",
+      "status": "Status",
+      "allStatuses": "All statuses",
+      "time": "Time range"
+    },
+    "channel": {
+      "sms": "SMS",
+      "email": "Email",
+      "robot": "Robot"
+    },
+    "status": {
+      "success": "Success",
+      "fail": "Failed",
+      "skipped": "Skipped"
+    },
+    "scene": {
+      "notice": "Notification",
+      "verify_code": "Verification code",
+      "bind_phone": "Phone binding",
+      "account": "Account notice",
+      "security": "Security alert",
+      "test": "Test"
+    },
+    "action": {
+      "clean": "Clean up",
+      "deleteSelected": "Delete selected"
+    },
+    "detail": {
+      "title": "Send details",
+      "id": "Record ID",
+      "empty": "None",
+      "notice": "Recipients are masked for privacy. Verification codes, message bodies and secrets are never stored here."
+    },
+    "clean": {
+      "title": "Clean up send logs",
+      "description": "Logs older than the selected number of days will be permanently deleted.",
+      "range": "Range",
+      "d7": "Logs older than 7 days",
+      "d30": "Logs older than 30 days",
+      "d90": "Logs older than 90 days",
+      "d180": "Logs older than 180 days",
+      "confirm": "Clean up? This cannot be undone.",
+      "done": "Removed {{count}} logs"
+    },
+    "confirm": {
+      "delete": "Delete the {{count}} selected logs?"
+    }
+  }
+}

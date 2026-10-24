@@ -1,0 +1,26 @@
+id: i18n-editor
+name: 多语言在线编辑
+version: 1.0.0
+description: 多语言词条在线编辑、草稿、发布与版本回滚。官方付费插件。
+author: NexAdmin
+edition: pro
+requires_nexadmin: ">=0.1.0"
+menus:
+  - parent: /system
+    type: menu
+    title: plugin_i18n_editor.menu
+    path: /system/i18n-editor
+    component: plugins/i18n-editor/I18nEditorPage
+    perm: i18n-editor:list
+    icon: Languages
+    sort: 130
+  - parent: i18n-editor:list
+    type: button
+    title: plugin_i18n_editor.btn.edit
+    perm: i18n-editor:edit
+    sort: 10
+  - parent: i18n-editor:list
+    type: button
+    title: plugin_i18n_editor.btn.publish
+    perm: i18n-editor:publish
+    sort: 20

@@ -1,0 +1,204 @@
+package [[.Module]]
+
+import (
+	"context"
+	"errors"
+[[- if .UsesStrings]]
+	"strings"
+[[- end]]
+[[- if .HasFormTime]]
+	"time"
+[[- end]]
+
+	"gorm.io/gorm"
+[[- if .HasQuery]]
+	"gorm.io/gorm/clause"
+[[- end]]
+
+	"[[.GoModule]]/core/response"
+[[- if .PlainTenant]]
+	tn "[[.GoModule]]/core/tenant"
+[[- end]]
+	"[[.GoModule]]/pkg/idgen"
+)
+
+// Service 是 [[.Pascal]] 的业务层：只经 gorm 参数化查询。
+// [[if .Tenant]]表有 tenant_id 列：查询 / 更新 / 删除由框架租户 scope 自动追加 tenant_id 条件[[if eq .Shape "plain"]]，创建时在 Save 里显式填入当前租户[[end]]。[[else]]表没有 tenant_id 列，不做租户隔离。[[end]]
+type Service struct{ db *gorm.DB }
+
+// NewService 创建服务。
+func NewService(db *gorm.DB) *Service { return &Service{db: db} }
+
+func ids64(ids []idgen.ID) []int64 {
+	out := make([]int64, len(ids))
+	for i, v := range ids {
+		out[i] = int64(v)
+	}
+	return out
+}
+[[- if .HasStringQuery]]
+
+// likeArg 转义 LIKE 通配符。
+func likeArg(s string) string {
+	r := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+	return "%" + r.Replace(s) + "%"
+}
+[[- end]]
+[[- if .HasFormTime]]
+
+var timeLayouts = []string{time.RFC3339Nano, "2006-01-02T15:04:05", "2006-01-02 15:04:05", "2006-01-02T15:04", "2006-01-02 15:04", "2006-01-02"}
+
+// parseTime 解析日期 / 日期时间；空串或 nil 返回 nil。
+func parseTime(s *string) (*time.Time, error) {
+	if s == nil || strings.TrimSpace(*s) == "" {
+		return nil, nil
+	}
+	v := strings.TrimSpace(*s)
+	for _, l := range timeLayouts {
+		if t, err := time.Parse(l, v); err == nil {
+			return &t, nil
+		}
+	}
+	return nil, &time.ParseError{Value: v, Message: "unsupported time format"}
+}
+[[- end]]
+
+func toView(m *[[.Pascal]]) View {
+	return View{
+		ID: m.ID,
+[[- range .Fields]]
+		[[.Pascal]]: m.[[.Pascal]],
+[[- end]]
+[[- if .HasStamps]]
+		CreatedAt: m.CreatedAt,
+		UpdatedAt: m.UpdatedAt,
+[[- end]]
+	}
+}
+
+// apply 把请求体写到模型上。
+func (f Form) apply(m *[[.Pascal]]) error {
+[[- range .FormFields]]
+[[- if isTime .]]
+	t[[.Pascal]], err := parseTime(f.[[.Pascal]])
+	if err != nil {
+		return response.BadRequest("error.bad_request").WithMsg("invalid [[.Camel]]")
+	}
+[[- if .Required]]
+	if t[[.Pascal]] == nil {
+		return response.BadRequest("error.bad_request").WithMsg("[[.Camel]] is required")
+	}
+[[- end]]
+	m.[[.Pascal]] = t[[.Pascal]]
+[[- else if eq .Kind "string"]]
+	m.[[.Pascal]] = strings.TrimSpace(f.[[.Pascal]])
+[[- if .Required]]
+	if m.[[.Pascal]] == "" {
+		return response.BadRequest("error.bad_request").WithMsg("[[.Camel]] is required")
+	}
+[[- end]]
+[[- else]]
+	m.[[.Pascal]] = f.[[.Pascal]]
+[[- if and .Required (eq .Kind "text")]]
+	if m.[[.Pascal]] == "" {
+		return response.BadRequest("error.bad_request").WithMsg("[[.Camel]] is required")
+	}
+[[- end]]
+[[- end]]
+[[- end]]
+	return nil
+}
+
+func (s *Service) get(ctx context.Context, id idgen.ID) (*[[.Pascal]], error) {
+	var m [[.Pascal]]
+	err := s.db.WithContext(ctx).First(&m, "id = ?", int64(id)).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, response.NotFound("error.not_found")
+	}
+	return &m, err
+}
+
+// List 分页列表，按 id 倒序（新的在前）。
+func (s *Service) List(ctx context.Context, q ListQuery) ([]View, int64, error) {
+	base := s.db.WithContext(ctx).Model(&[[.Pascal]]{})
+[[- range .QueryFields]]
+[[- if eq .Kind "string"]]
+	if q.[[.Pascal]] != "" {
+		base = base.Where(clause.Like{Column: clause.Column{Name: "[[.Name]]"}, Value: likeArg(q.[[.Pascal]])})
+	}
+[[- else]]
+	if q.[[.Pascal]] != nil {
+		base = base.Where(clause.Eq{Column: clause.Column{Name: "[[.Name]]"}, Value: *q.[[.Pascal]]})
+	}
+[[- end]]
+[[- end]]
+	base = base.Session(&gorm.Session{})
+	var total int64
+	if err := base.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	var rows [][[.Pascal]]
+	err := base.Order("id DESC").Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Find(&rows).Error
+	if err != nil {
+		return nil, 0, err
+	}
+	out := make([]View, len(rows))
+	for i := range rows {
+		out[i] = toView(&rows[i])
+	}
+	return out, total, nil
+}
+
+// Get 返回详情。
+func (s *Service) Get(ctx context.Context, id idgen.ID) (*View, error) {
+	m, err := s.get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	v := toView(m)
+	return &v, nil
+}
+
+// Save 新增（id 为 0）或修改。
+func (s *Service) Save(ctx context.Context, id idgen.ID, f Form) (*View, error) {
+	var m [[.Pascal]]
+	if id != 0 {
+		cur, err := s.get(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		m = *cur
+	}
+	if err := f.apply(&m); err != nil {
+		return nil, err
+	}
+	db := s.db.WithContext(ctx)
+	if id == 0 {
+[[- if eq .Shape "plain"]]
+		nid, err := idgen.Next()
+		if err != nil {
+			return nil, err
+		}
+		m.ID = nid
+[[- if .Tenant]]
+		tid, ok := tn.From(ctx)
+		if !ok {
+			return nil, response.BadRequest("error.bad_request").WithMsg("missing tenant")
+		}
+		m.TenantID = tid
+[[- end]]
+[[- end]]
+		if err := db.Create(&m).Error; err != nil {
+			return nil, err
+		}
+	} else if err := db.Save(&m).Error; err != nil {
+		return nil, err
+	}
+	v := toView(&m)
+	return &v, nil
+}
+
+// Delete 删除（不存在的 ID 忽略）。
+func (s *Service) Delete(ctx context.Context, ids []idgen.ID) error {
+	return s.db.WithContext(ctx).Where("id IN ?", ids64(ids)).Delete(&[[.Pascal]]{}).Error
+}

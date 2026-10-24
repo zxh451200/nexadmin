@@ -1,0 +1,105 @@
+{
+  "plugin_security": {
+    "menu": "Advanced security",
+    "title": "Advanced security",
+    "description": "Two-factor authentication (TOTP), enforcement policy and login IP allow/deny lists",
+    "tabs": { "twofa": "Two-factor", "policy": "Policy", "users": "User status", "ip": "IP rules", "logs": "Audit log" },
+    "btn": { "policy": "Edit policy", "user": "View user status", "reset": "Reset two-factor", "ip": "View IP rules", "ipEdit": "Edit IP rules", "log": "View audit log" },
+    "copy": "Copy",
+    "copied": "Copied",
+    "required": {
+      "title": "Two-factor authentication is required",
+      "grace": "Finish setting it up before {{time}}, otherwise you will not be able to sign in.",
+      "desc": "Please finish setting it up as soon as possible."
+    },
+    "twofa": {
+      "title": "Two-factor authentication (TOTP)",
+      "desc": "After you bind an authenticator app (Google Authenticator, Microsoft Authenticator, ...), signing in also requires a 6-digit code.",
+      "on": "Enabled",
+      "off": "Disabled",
+      "start": "Start setup",
+      "noQr": "In your authenticator app choose \"enter a setup key manually\" and use the key below (or the otpauth link). This build does not render a QR code.",
+      "secret": "Secret key",
+      "uri": "otpauth link",
+      "code": "Verification code",
+      "codePlaceholder": "6 digits",
+      "confirmEnable": "Confirm and enable",
+      "recoveryLeft": "Recovery codes left: {{count}}",
+      "recoveryInput": "Recovery code",
+      "recoveryPlaceholder": "xxxxx-xxxxx",
+      "useRecovery": "Use a recovery code instead",
+      "useCode": "Use an authenticator code instead",
+      "regen": "Regenerate recovery codes",
+      "disable": "Disable two-factor",
+      "cannotDisable": "Your administrator requires two-factor authentication, so you cannot turn it off."
+    },
+    "recovery": {
+      "title": "Save your recovery codes",
+      "once": "Each code works once and is shown only now. Use one to sign in if you lose your phone.",
+      "saved": "I have saved them"
+    },
+    "policy": {
+      "title": "Enforcement policy",
+      "desc": "Decide who must enable two-factor authentication.",
+      "mode": { "optional": "Optional", "all": "Required for everyone", "roles": "Required for selected roles" },
+      "modeDesc": {
+        "optional": "Users decide for themselves.",
+        "all": "Every user must enable it.",
+        "roles": "Only users with the selected roles must enable it."
+      },
+      "roles": "Role codes",
+      "rolesHint": "Separate multiple roles with commas. Use role codes, not display names.",
+      "graceDays": "Grace period (days)",
+      "graceHint": "Users who have not bound yet can still sign in during the grace period and set it up on this page. After it ends they cannot sign in (super admins excepted); an administrator can reset them under User status. Changing the policy restarts the grace period."
+    },
+    "users": {
+      "username": "Username",
+      "status": "Status",
+      "enabledAt": "Enabled at",
+      "graceUntil": "Grace until",
+      "search": "Search by username",
+      "empty": "No records",
+      "reset": "Reset two-factor",
+      "resetConfirm": "Reset two-factor authentication for {{name}}? Their key and recovery codes will be removed.",
+      "state": { "enabled": "Enabled", "pending": "Pending", "grace": "In grace period", "expired": "Grace expired" }
+    },
+    "ip": {
+      "hint": "Deny rules win. When any enabled allow rule exists, only listed IPs may sign in. Saving checks that your own IP is not locked out.",
+      "yourIp": "Your current IP: {{ip}}",
+      "create": "New rule",
+      "createTitle": "New IP rule",
+      "editTitle": "Edit IP rule",
+      "action": "Action",
+      "actions": { "allow": "Allow", "deny": "Deny" },
+      "cidr": "IP or CIDR",
+      "cidrHint": "IPv4 and IPv6 are supported, e.g. 203.0.113.7, 10.0.0.0/8, 2001:db8::/32.",
+      "scope": "Scope",
+      "scopes": { "all": "All logins", "super": "Super admin logins only" },
+      "remark": "Remark",
+      "enabled": "Enabled",
+      "on": "On",
+      "off": "Off",
+      "empty": "No rules yet",
+      "deleteConfirm": "Delete rule {{cidr}}?",
+      "errors": { "cidrRequired": "Enter an IP or CIDR" }
+    },
+    "logs": {
+      "time": "Time",
+      "operator": "Operator",
+      "action": "Action",
+      "target": "Target",
+      "detail": "Detail",
+      "empty": "No log entries",
+      "actions": {
+        "enable_2fa": "Enabled two-factor",
+        "disable_2fa": "Disabled two-factor",
+        "regen_recovery": "Regenerated recovery codes",
+        "reset_2fa": "Reset user two-factor",
+        "save_policy": "Saved policy",
+        "create_ip_rule": "Created IP rule",
+        "update_ip_rule": "Updated IP rule",
+        "delete_ip_rule": "Deleted IP rule"
+      }
+    }
+  }
+}

@@ -1,0 +1,166 @@
+/* NexAdmin 主题 token：HSL 三元组 'H S% L%'。两个主题共用色相，只调明度。
+   色调：深空蓝黑 + 靛蓝主色 + 青色点缀（--brand-from → --brand-to 渐变）。 */
+:root {
+  --background: 230 33% 97%;
+  --foreground: 232 40% 11%;
+  --card: 0 0% 100%;
+  --card-foreground: 232 40% 11%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 232 40% 11%;
+
+  --primary: 238 82% 55%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 230 30% 94%;
+  --secondary-foreground: 232 40% 16%;
+  --muted: 230 28% 95%;
+  --muted-foreground: 228 14% 38%;
+  --accent: 240 80% 96%;
+  --accent-foreground: 243 60% 40%;
+
+  --destructive: 0 72% 46%;
+  --destructive-foreground: 0 0% 100%;
+  --success: 152 69% 28%;
+  --success-foreground: 0 0% 100%;
+  --warning: 30 95% 33%;
+  --warning-foreground: 0 0% 100%;
+  --info: 199 89% 31%;
+  --info-foreground: 0 0% 100%;
+
+  --border: 230 28% 89%;
+  --input: 230 24% 84%;
+  --ring: 238 82% 55%;
+  --radius: 0.75rem;
+
+  /* 品牌渐变两端：靛蓝 → 青 */
+  --brand-from: 243 85% 58%;
+  --brand-to: 192 90% 42%;
+
+  --sidebar: 0 0% 100%;
+  --sidebar-foreground: 232 25% 28%;
+  --sidebar-accent: 240 90% 96%;
+  --sidebar-accent-foreground: 243 70% 45%;
+  --sidebar-border: 230 28% 90%;
+
+  --chart-1: 238 82% 55%;
+  --chart-2: 192 90% 38%;
+  --chart-3: 268 70% 55%;
+  --chart-4: 152 65% 32%;
+  --chart-5: 32 95% 42%;
+  --chart-1-foreground: 0 0% 100%;
+  --chart-2-foreground: 0 0% 100%;
+  --chart-3-foreground: 0 0% 100%;
+  --chart-4-foreground: 0 0% 100%;
+  --chart-5-foreground: 0 0% 100%;
+
+  color-scheme: light;
+}
+
+.dark {
+  --background: 232 40% 5.5%;
+  --foreground: 220 25% 94%;
+  --card: 232 32% 8.5%;
+  --card-foreground: 220 25% 94%;
+  --popover: 232 34% 10%;
+  --popover-foreground: 220 25% 94%;
+
+  --primary: 238 85% 63%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 232 24% 14%;
+  --secondary-foreground: 220 25% 94%;
+  --muted: 232 24% 12%;
+  --muted-foreground: 225 14% 68%;
+  --accent: 240 45% 18%;
+  --accent-foreground: 235 100% 93%;
+
+  --destructive: 0 84% 62%;
+  --destructive-foreground: 232 40% 6%;
+  --success: 152 60% 50%;
+  --success-foreground: 232 40% 6%;
+  --warning: 34 95% 56%;
+  --warning-foreground: 232 40% 6%;
+  --info: 192 90% 55%;
+  --info-foreground: 232 40% 6%;
+
+  --border: 232 22% 17%;
+  --input: 232 22% 21%;
+  --ring: 238 90% 70%;
+
+  --brand-from: 243 90% 66%;
+  --brand-to: 192 95% 52%;
+
+  --sidebar: 233 45% 4.5%;
+  --sidebar-foreground: 225 18% 78%;
+  --sidebar-accent: 238 50% 16%;
+  --sidebar-accent-foreground: 230 100% 95%;
+  --sidebar-border: 232 25% 12%;
+
+  --chart-1: 238 90% 70%;
+  --chart-2: 192 95% 52%;
+  --chart-3: 268 85% 72%;
+  --chart-4: 160 70% 48%;
+  --chart-5: 38 95% 58%;
+  --chart-1-foreground: 232 40% 6%;
+  --chart-2-foreground: 232 40% 6%;
+  --chart-3-foreground: 232 40% 6%;
+  --chart-4-foreground: 232 40% 6%;
+  --chart-5-foreground: 232 40% 6%;
+
+  color-scheme: dark;
+}
+
+@layer utilities {
+  /* 品牌渐变：靛蓝为主，尾端带一点青 */
+  .bg-brand-gradient {
+    background-image: linear-gradient(135deg, hsl(var(--brand-from)) 0%, hsl(var(--primary)) 55%, hsl(var(--brand-to)) 170%);
+  }
+  .text-gradient {
+    background-image: linear-gradient(90deg, hsl(var(--brand-from)), hsl(var(--brand-to)));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+  }
+
+  /* 卡片质感：亮色柔和投影，暗色顶部 1px 高光边 */
+  .card-edge {
+    box-shadow: 0 1px 2px hsl(232 40% 20% / 0.04), 0 10px 28px -14px hsl(232 40% 20% / 0.14);
+  }
+  .dark .card-edge {
+    box-shadow: inset 0 1px 0 0 hsl(0 0% 100% / 0.05), 0 12px 32px -16px hsl(232 60% 2% / 0.8);
+  }
+
+  /* 毛玻璃：暗色轻透明 + 品牌色细边 */
+  .glass {
+    background-color: hsl(var(--card) / 0.8);
+    border: 1px solid hsl(var(--border) / 0.8);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+  }
+  .dark .glass {
+    background-color: hsl(var(--card) / 0.6);
+    border-color: hsl(var(--brand-from) / 0.22);
+    box-shadow: inset 0 1px 0 0 hsl(0 0% 100% / 0.05), 0 24px 48px -24px hsl(var(--brand-from) / 0.35);
+  }
+
+  /* 品牌色柔和光晕 */
+  .glow {
+    box-shadow: 0 0 0 1px hsl(var(--brand-from) / 0.4), 0 0 28px -6px hsl(var(--brand-from) / 0.6);
+  }
+
+  /* 极淡点阵背景 */
+  .tech-grid {
+    background-image: radial-gradient(hsl(var(--foreground) / 0.09) 1px, transparent 1px);
+    background-size: 22px 22px;
+  }
+  /* 渐变底上的浅色点阵（工作台顶部横幅） */
+  .dot-grid-light {
+    background-image: radial-gradient(hsl(var(--primary-foreground) / 0.28) 1px, transparent 1px);
+    background-size: 20px 20px;
+  }
+
+  /* 数字：等宽 */
+  .num {
+    font-family: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+}

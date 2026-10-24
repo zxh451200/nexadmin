@@ -1,0 +1,176 @@
+package [[.Name]]
+
+import (
+	"context"
+	"errors"
+	"strings"
+
+	"gorm.io/gorm"
+
+	"[[.Module]]/core/response"
+	"[[.Module]]/pkg/idgen"
+)
+
+// Service 是 [[.Pascal]] 的业务层：只经 gorm 参数化查询，租户隔离由 TenantModel 自动追加。
+type Service struct{ db *gorm.DB }
+
+func NewService(db *gorm.DB) *Service { return &Service{db: db} }
+
+func badReq(msg string) error { return response.BadRequest("error.bad_request").WithMsg(msg) }
+
+func ids64(ids []idgen.ID) []int64 {
+	out := make([]int64, len(ids))
+	for i, v := range ids {
+		out[i] = int64(v)
+	}
+	return out
+}
+
+func toView(m *[[.Pascal]]) View {
+	return View{
+		ID: m.ID,
+[[- range .Fields]]
+		[[.Pascal]]: [[if or (eq .Kind "image") (eq .Kind "file")]]rawJSON(m.[[.Pascal]])[[else]]m.[[.Pascal]][[end]],
+[[- end]]
+		CreatedAt: m.CreatedAt,
+		UpdatedAt: m.UpdatedAt,
+	}
+}
+
+// apply 把请求体写到模型上。
+func (f Form) apply(m *[[.Pascal]]) error {
+[[- range .FormFields]]
+[[- if or (eq .Kind "date") (eq .Kind "datetime")]]
+	t[[.Pascal]], err := parseTime(f.[[.Pascal]])
+	if err != nil {
+		return badReq("invalid [[.Camel]]")
+	}
+	m.[[.Pascal]] = t[[.Pascal]]
+[[- else if eq .Kind "string"]]
+	m.[[.Pascal]] = strings.TrimSpace(f.[[.Pascal]])
+[[- else if or (eq .Kind "image") (eq .Kind "file")]]
+	m.[[.Pascal]] = jsonText(f.[[.Pascal]])
+[[- else]]
+	m.[[.Pascal]] = f.[[.Pascal]]
+[[- end]]
+[[- end]]
+	return nil
+}
+
+func (s *Service) get(ctx context.Context, id idgen.ID) (*[[.Pascal]], error) {
+	var m [[.Pascal]]
+	err := s.db.WithContext(ctx).First(&m, "id = ?", int64(id)).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, response.NotFound("error.not_found")
+	}
+	return &m, err
+}
+
+// List 分页列表，支持关键字与筛选；[[if .Sortable]]按 sort、id 升序[[else]]按 id 倒序（新的在前）[[end]]。
+func (s *Service) List(ctx context.Context, q ListQuery) ([]View, int64, error) {
+	base := s.db.WithContext(ctx).Model(&[[.Pascal]]{})
+[[- if .SearchFields]]
+	if kw := strings.TrimSpace(q.Keyword); kw != "" {
+		like := likeArg(kw)
+		base = base.Where("[[.SearchWhere]]", [[.SearchArgs]])
+	}
+[[- end]]
+	for col, v := range q.Filters {
+		base = base.Where(col+" = ?", v)
+	}
+	base = base.Session(&gorm.Session{})
+	var total int64
+	if err := base.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	var rows [][[.Pascal]]
+	err := base.Order("[[if .Sortable]]sort ASC, id ASC[[else]]id DESC[[end]]").
+		Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Find(&rows).Error
+	if err != nil {
+		return nil, 0, err
+	}
+	out := make([]View, len(rows))
+	for i := range rows {
+		out[i] = toView(&rows[i])
+	}
+	return out, total, nil
+}
+
+// Get 返回详情。
+func (s *Service) Get(ctx context.Context, id idgen.ID) (*View, error) {
+	m, err := s.get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	v := toView(m)
+	return &v, nil
+}
+
+// Save 新增（id 为 0）或修改。
+func (s *Service) Save(ctx context.Context, id idgen.ID, f Form) (*View, error) {
+	var m [[.Pascal]]
+	if id != 0 {
+		cur, err := s.get(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		m = *cur
+	}
+	if err := f.apply(&m); err != nil {
+		return nil, err
+	}
+	db := s.db.WithContext(ctx)
+	if id == 0 {
+[[- if .Sortable]]
+		var max int
+		if err := db.Model(&[[.Pascal]]{}).Select("COALESCE(MAX(sort), 0)").Scan(&max).Error; err != nil {
+			return nil, err
+		}
+		m.Sort = max + 10
+[[- end]]
+		if err := db.Create(&m).Error; err != nil {
+			return nil, err
+		}
+	} else if err := db.Save(&m).Error; err != nil {
+		return nil, err
+	}
+	v := toView(&m)
+	return &v, nil
+}
+
+// Delete 删除（不存在的 ID 忽略）。
+func (s *Service) Delete(ctx context.Context, ids []idgen.ID) error {
+	return s.db.WithContext(ctx).Where("id IN ?", ids64(ids)).Delete(&[[.Pascal]]{}).Error
+}
+[[- if .Sortable]]
+
+// Sort 按提交的完整 id 顺序整组重排（sort = 序号 × 10），一个事务；
+// 提交的 id 集合必须与库里完全一致，否则 409，避免两人同时拖动互相覆盖。
+func (s *Service) Sort(ctx context.Context, ids []idgen.ID) error {
+	changed := response.Conflict("error.conflict").WithMsg("列表已变化，请刷新")
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var cur []int64
+		if err := tx.Model(&[[.Pascal]]{}).Order("sort, id").Pluck("id", &cur).Error; err != nil {
+			return err
+		}
+		want := make(map[int64]bool, len(ids))
+		for _, id := range ids {
+			want[int64(id)] = true
+		}
+		if len(cur) != len(ids) || len(want) != len(ids) {
+			return changed
+		}
+		for _, c := range cur {
+			if !want[c] {
+				return changed
+			}
+		}
+		for i, id := range ids {
+			if err := tx.Model(&[[.Pascal]]{}).Where("id = ?", int64(id)).Update("sort", (i+1)*10).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+[[- end]]

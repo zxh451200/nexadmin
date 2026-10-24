@@ -1,0 +1,57 @@
+{
+  "plugin_codegen": {
+    "menu": "Code Generator",
+    "title": "Code Generator",
+    "description": "Read a business table, generate a Go module and frontend pages from a recommended config, preview them, then download a zip",
+    "btn": { "download": "Download package" },
+    "steps": { "table": "1. Pick a table", "config": "2. Configure columns", "preview": "3. Preview & download" },
+    "tables": { "name": "Table", "search": "Search by table name", "empty": "No business tables to generate from", "select": "Select" },
+    "config": {
+      "module": "Module name",
+      "moduleHint": "Lowercase letter first, then letters and digits; used as the Go package, the frontend folder and the i18n namespace",
+      "goModule": "Go module path",
+      "goModuleHint": "The module in your project's go.mod; defaults to nexadmin",
+      "shape": "Table shape: {{shape}}"
+    },
+    "shape": {
+      "tenant": "Multi-tenant (embeds TenantModel, tenant-scoped automatically)",
+      "platform": "Platform-level (embeds PlatformModel, no tenant condition)",
+      "plain": "Plain (explicit ID; the current tenant is filled on create when tenant_id exists)"
+    },
+    "col": {
+      "name": "Column",
+      "type": "Type",
+      "comment": "Comment",
+      "list": "In list",
+      "query": "Filter",
+      "form": "In form",
+      "required": "Required",
+      "control": "Control",
+      "system": "System",
+      "unsupported": "Unsupported",
+      "empty": "This table has no columns"
+    },
+    "controls": { "input": "Input", "textarea": "Textarea", "number": "Number", "switch": "Switch", "date": "Date", "datetime": "Date & time" },
+    "preview": {
+      "path": "File path",
+      "lang": "Type",
+      "empty": "No files were generated",
+      "viewer": "Code viewer",
+      "readonly": "Read-only",
+      "pick": "Pick a file on the left"
+    },
+    "notes": {
+      "import_line": "Add one blank import to internal/modules/modules.go; rebuild and restart to seed the menu:",
+      "api_prefix": "API prefix:",
+      "null_zero": "The table already exists, so no migration is generated; NULL columns are read as zero values and written back as zero values."
+    },
+    "action": { "back": "Back", "preview": "Preview files", "download": "Download zip" },
+    "downloaded": "Package downloaded",
+    "done": { "title": "Next steps", "description": "Unzip into the project root, then:" },
+    "errors": {
+      "module": "Use lowercase letters and digits, starting with a letter, up to 31 characters",
+      "goModule": "Invalid Go module path",
+      "load": "Failed to load columns"
+    }
+  }
+}

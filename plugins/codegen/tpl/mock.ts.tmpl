@@ -1,0 +1,103 @@
+import { defineMock, genId, mockError } from '@/framework/request/mock'
+import type { [[.Pascal]], [[.Pascal]]Form } from './api'
+
+[[- if .HasStamps]]
+
+const T = '2025-03-01T10:00:00.000Z'
+[[- end]]
+
+let items: [[.Pascal]][] = [
+[[- range $i := .MockRows]]
+  {
+    id: '[[mockid $i]]',
+[[- range $.Fields]]
+    [[.Camel]]: [[mock . $i]],
+[[- end]]
+[[- if $.HasStamps]]
+    createdAt: T,
+    updatedAt: T,
+[[- end]]
+  },
+[[- end]]
+]
+
+const find = (id: string) => items.find((x) => x.id === id) ?? mockError(404, 'Not found')
+
+defineMock([
+  {
+    method: 'GET',
+    url: '/[[.Plural]]',
+    handler: ({ query }) => {
+      [[if .QueryFields]]let[[else]]const[[end]] rows = items.slice()
+[[- range .QueryFields]]
+[[- if eq .Kind "string"]]
+      if (query.[[.Camel]]) rows = rows.filter((x) => x.[[.Camel]].toLowerCase().includes(String(query.[[.Camel]]).trim().toLowerCase()))
+[[- else if eq .Kind "bool"]]
+      if (query.[[.Camel]] === '1' || query.[[.Camel]] === '0') rows = rows.filter((x) => x.[[.Camel]] === (query.[[.Camel]] === '1'))
+[[- else if eq .Kind "date"]]
+      if (query.[[.Camel]]) rows = rows.filter((x) => (x.[[.Camel]] ?? '').slice(0, 10) === String(query.[[.Camel]]))
+[[- else]]
+      if (query.[[.Camel]]) rows = rows.filter((x) => String(x.[[.Camel]]) === String(query.[[.Camel]]).trim())
+[[- end]]
+[[- end]]
+      rows.sort((a, b) => b.id.localeCompare(a.id))
+      const page = Number(query.page ?? 1)
+      const pageSize = Number(query.pageSize ?? 10)
+      return { list: rows.slice((page - 1) * pageSize, page * pageSize), total: rows.length, page, pageSize }
+    },
+  },
+  { method: 'GET', url: '/[[.Plural]]/:id', handler: ({ params }) => find(params.id) },
+  {
+    method: 'POST',
+    url: '/[[.Plural]]',
+    handler: ({ body }) => {
+[[- if .HasStamps]]
+      const now = new Date().toISOString()
+[[- end]]
+      const f = body as [[.Pascal]]Form
+      const row: [[.Pascal]] = { ...emptyRow(), ...f, id: genId()[[if .HasStamps]], createdAt: now, updatedAt: now[[end]] }
+      items = [...items, row]
+      return row
+    },
+  },
+  {
+    method: 'PUT',
+    url: '/[[.Plural]]/:id',
+    handler: ({ params, body }) => {
+      const cur = find(params.id)
+      const next: [[.Pascal]] = { ...cur, ...(body as [[.Pascal]]Form), id: cur.id[[if .HasStamps]], updatedAt: new Date().toISOString()[[end]] }
+      items = items.map((x) => (x.id === cur.id ? next : x))
+      return next
+    },
+  },
+  {
+    method: 'DELETE',
+    url: '/[[.Plural]]/:id',
+    handler: ({ params }) => {
+      items = items.filter((x) => x.id !== params.id)
+      return null
+    },
+  },
+  {
+    method: 'DELETE',
+    url: '/[[.Plural]]',
+    handler: ({ query }) => {
+      const ids = String(query.ids ?? '').split(',')
+      items = items.filter((x) => !ids.includes(x.id))
+      return null
+    },
+  },
+])
+
+function emptyRow(): [[.Pascal]] {
+  return {
+    id: '',
+[[- range .Fields]]
+    [[.Camel]]: [[mockEmpty .]],
+[[- end]]
+[[- if .HasStamps]]
+    createdAt: T,
+    updatedAt: T,
+[[- end]]
+  }
+}

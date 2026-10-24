@@ -1,0 +1,35 @@
+{
+  "tabs": {
+    "bar": "Open pages",
+    "close": "Close tab",
+    "more": "Tab actions",
+    "refresh": "Refresh",
+    "closeOthers": "Close others",
+    "closeRight": "Close to the right",
+    "closeAll": "Close all",
+    "refreshPage": "Refresh current page",
+    "fullscreen": "Enter fullscreen",
+    "exitFullscreen": "Exit fullscreen"
+  },
+  "cmdk": {
+    "placeholder": "Search menu…",
+    "inputLabel": "Search menus or actions",
+    "title": "Global search",
+    "description": "Type to search menus or quick actions",
+    "empty": "No results found",
+    "actions": "Quick actions",
+    "toggleTheme": "Toggle theme",
+    "toggleLanguage": "Switch language",
+    "logout": "Log out",
+    "open": "Search"
+  },
+  "pwa": {
+    "updateAvailable": "A new version is available. Click to refresh",
+    "refresh": "Refresh",
+    "install": "Install app",
+    "iosHint": "To install: tap the Share button, then choose \"Add to Home Screen\""
+  },
+  "watermark": {
+    "label": "Page watermark"
+  }
+}

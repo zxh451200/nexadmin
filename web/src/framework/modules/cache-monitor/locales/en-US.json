@@ -1,0 +1,43 @@
+{
+  "cacheMonitor": {
+    "menu": "Cache monitor",
+    "title": "Cache monitor",
+    "description": "Status, hit rate and key distribution of the cache service (Valkey / in-memory)",
+    "refresh": {
+      "label": "Auto refresh",
+      "v3000": "Every 3 s",
+      "v10000": "Every 10 s",
+      "v30000": "Every 30 s",
+      "v0": "Paused"
+    },
+    "card": { "memory": "Memory used", "keys": "Keys", "hitRate": "Hit rate", "qps": "Requests / s" },
+    "chart": { "hit": "Hit rate (%)", "qps": "Requests per second", "commands": "Commands executed" },
+    "series": { "hit": "Hit rate", "qps": "Requests", "count": "Count" },
+    "info": {
+      "title": "Instance info",
+      "running": "Running",
+      "driver": "Cache type",
+      "memory": "In-memory",
+      "version": "Version",
+      "uptime": "Uptime",
+      "days": "days",
+      "connections": "Client connections",
+      "maxMemory": "Memory limit"
+    },
+    "prefix": {
+      "title": "Key prefixes",
+      "name": "Prefix",
+      "desc": "Purpose",
+      "keys": "Keys",
+      "ttl": "TTL",
+      "d": {
+        "session": "Login sessions",
+        "captcha": "Captcha",
+        "online": "Online users",
+        "dict": "Dictionary cache",
+        "tenant": "Tenant info",
+        "ratelimit": "Rate limiting"
+      }
+    }
+  }
+}

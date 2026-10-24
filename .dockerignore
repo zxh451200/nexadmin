@@ -1,0 +1,12 @@
+node_modules
+web/node_modules
+web/dist
+bin
+.git
+data/*
+logs/*
+backup
+config/config.yaml
+.dev-keys
+.env.local
+*.log

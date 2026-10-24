@@ -1,0 +1,99 @@
+{
+  "user": {
+    "menu": "用户管理",
+    "title": "用户管理",
+    "description": "管理系统账号、所属部门、岗位与角色",
+    "keyword": "关键词",
+    "keywordPlaceholder": "账号 / 姓名 / 手机 / 邮箱",
+    "dept": "部门",
+    "allDepts": "全部部门",
+    "col": {
+      "avatar": "头像",
+      "nickname": "姓名",
+      "username": "账号",
+      "dept": "部门",
+      "roles": "角色",
+      "phone": "手机",
+      "status": "状态",
+      "createdAt": "创建时间"
+    },
+    "form": {
+      "createTitle": "新建用户",
+      "editTitle": "编辑用户",
+      "username": "账号",
+      "nickname": "昵称",
+      "phone": "手机",
+      "email": "邮箱",
+      "gender": "性别",
+      "dept": "部门",
+      "posts": "岗位",
+      "roles": "角色",
+      "status": "状态",
+      "avatar": "头像",
+      "region": "所在地区",
+      "remark": "备注",
+      "defaultPasswordHint": "新建用户的初始密码为 Nex@123456，首次登录后请修改"
+    },
+    "v": {
+      "usernameMin": "账号至少 3 个字符",
+      "usernameFormat": "账号只能包含字母、数字、下划线、点和短横线",
+      "nicknameRequired": "请输入昵称",
+      "phoneFormat": "手机号格式不正确",
+      "emailFormat": "邮箱格式不正确",
+      "deptRequired": "请选择部门",
+      "rolesRequired": "请至少选择一个角色",
+      "passwordMin": "密码至少 8 位",
+      "passwordMismatch": "两次输入的密码不一致"
+    },
+    "resetPassword": {
+      "action": "重置密码",
+      "title": "重置密码",
+      "description": "为用户 {{name}} 设置新密码",
+      "password": "新密码",
+      "confirm": "确认密码",
+      "success": "密码已重置"
+    },
+    "deleteOne": "确定删除用户「{{name}}」吗？此操作不可恢复。",
+    "deleteBatch": "确定删除选中的 {{count}} 个用户吗？此操作不可恢复。",
+    "locked": "已锁定",
+    "unlock": {
+      "action": "解锁",
+      "success": "账号已解锁"
+    },
+    "statusChanged": "状态已更新",
+    "export": {
+      "success": "已导出 {{count}} 条记录",
+      "done": "导出完成",
+      "filename": "用户列表"
+    },
+    "import": {
+      "title": "导入用户",
+      "description": "下载模板，按格式填写后上传 Excel（.xlsx）或 CSV 文件；部分失败不影响其它行",
+      "template": "下载导入模板",
+      "templateFilename": "用户导入模板",
+      "start": "开始导入",
+      "file": "选择文件",
+      "fileHint": "支持 .xlsx 与 .csv（CSV 为 UTF-8），读取 Excel 的第一个工作表。部门、角色、岗位按名称填写，多个用分号分隔。",
+      "result": "导入完成：成功 {{success}} 条，失败 {{failed}} 条",
+      "errorRow": "第 {{row}} 行：{{reason}}",
+      "downloadFailed": "下载失败行",
+      "failedFilename": "导入失败行",
+      "col": { "row": "行号", "reason": "失败原因" },
+      "chooseFile": "请先选择文件"
+    },
+    "csv": {
+      "username": "账号",
+      "nickname": "姓名",
+      "dept": "部门",
+      "roles": "角色",
+      "phone": "手机",
+      "email": "邮箱",
+      "status": "状态",
+      "createdAt": "创建时间",
+      "gender": "性别",
+      "remark": "备注",
+      "sampleDept": "研发部",
+      "sampleRole": "运营"
+    }
+  }
+}

@@ -1,0 +1,204 @@
+import { useState } from 'react'
+import { Pencil, Plus, Trash2 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
+import { Can } from '@/framework/auth/Can'
+import { useConfirm } from '@/framework/components/ConfirmDialog'
+import { DataTable, type Column } from '@/framework/components/DataTable'
+[[- if .HasDict]]
+import { DictSelect } from '@/framework/components/DictSelect'
+import { DictTag } from '@/framework/components/DictTag'
+[[- end]]
+import { FilterBar } from '@/framework/components/FilterBar'
+import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
+[[- if .HasRef]]
+import { RemoteSelect } from '@/framework/components/RemoteSelect'
+[[- end]]
+import { Button } from '@/framework/ui/button'
+import { Input } from '@/framework/ui/input'
+import { useDelete[[.Pascal]]s, use[[.Pascal]]List, [[if .Sortable]]useSort[[.Pascal]]s, [[end]]type [[.Pascal]], type [[.Pascal]]Query } from './api'
+import { [[.Pascal]]FormDialog } from './[[.Pascal]]FormDialog'
+[[- if .HasTime]]
+
+function fmt(v: string | null, lang: string, withTime: boolean) {
+  if (!v) return ''
+  const d = new Date(v.length === 10 ? v + 'T00:00:00' : v.replace(' ', 'T'))
+  if (Number.isNaN(d.getTime())) return v
+  return new Intl.DateTimeFormat(lang, withTime
+    ? { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }
+    : { year: 'numeric', month: '2-digit', day: '2-digit' }).format(d)
+}
+[[- end]]
+
+export default function [[.Pascal]]Page() {
+  const { t[[if .HasTime]], i18n[[end]] } = useTranslation()
+  const confirm = useConfirm()
+  const [draft, setDraft] = useState<[[.Pascal]]Query>({})
+  const [filters, setFilters] = useState<[[.Pascal]]Query>({})
+[[- if .Sortable]]
+  const { data, isLoading } = use[[.Pascal]]List({ ...filters, page: 1, pageSize: 200 })
+  const sort = useSort[[.Pascal]]s()
+  // 带筛选时列表只是一部分，整组重排会被服务端以 409 拒绝，所以此时不开放拖动
+  const filtered = Object.values(filters).some(Boolean)
+[[- else]]
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
+  const { data, isLoading } = use[[.Pascal]]List({ ...filters, page, pageSize })
+[[- end]]
+  const remove = useDelete[[.Pascal]]s()
+  const [selected, setSelected] = useState<string[]>([])
+  const [formOpen, setFormOpen] = useState(false)
+  const [editing, setEditing] = useState<[[.Pascal]] | null>(null)
+
+  const openForm = (row: [[.Pascal]] | null) => {
+    setEditing(row)
+    setFormOpen(true)
+  }
+
+  const onDelete = async (ids: string[]) => {
+    if (!(await confirm({ destructive: true, description: t('common.deleteConfirm') }))) return
+    try {
+      await remove.mutateAsync(ids)
+      setSelected((s) => s.filter((x) => !ids.includes(x)))
+      toast.success(t('common.operateSuccess'))
+    } catch {
+      toast.error(t('common.operateFailed'))
+    }
+  }
+
+  const columns: Column<[[.Pascal]]>[] = [
+[[- range .ColFields]]
+    {
+      key: '[[.Camel]]',
+      title: t('[[$.Name]].field.[[.Camel]]'),
+[[- if .Mobile]]
+      mobile: '[[.Mobile]]',
+[[- end]]
+[[- if eq .Kind "text"]]
+      render: (r) => <span className="line-clamp-2 max-w-sm">{r.[[.Camel]]}</span>,
+[[- else if eq .Kind "bool"]]
+      render: (r) => (r.[[.Camel]] ? t('common.yes') : t('common.no')),
+[[- else if eq .Kind "dict"]]
+      render: (r) => <DictTag dict="[[.Arg]]" value={r.[[.Camel]]} />,
+[[- else if eq .Kind "date"]]
+      render: (r) => <span className="num">{fmt(r.[[.Camel]], i18n.language, false)}</span>,
+[[- else if eq .Kind "datetime"]]
+      render: (r) => <span className="num">{fmt(r.[[.Camel]], i18n.language, true)}</span>,
+[[- else if eq .Kind "ref"]]
+      render: (r) => <span className="num text-muted-foreground">{r.[[.Camel]] || '-'}</span>,
+[[- else if eq .Kind "image"]]
+      render: (r) =>
+        r.[[.Camel]][0] ? (
+          <img src={r.[[.Camel]][0].url} alt={r.[[.Camel]][0].name} className="size-10 rounded-md border border-border object-cover" />
+        ) : (
+          <span className="text-muted-foreground">-</span>
+        ),
+[[- else if eq .Kind "file"]]
+      render: (r) => r.[[.Camel]].length || <span className="text-muted-foreground">-</span>,
+[[- end]]
+    },
+[[- end]]
+  ]
+
+  return (
+    <PageContainer>
+      <PageHeader
+        title={t('[[.Name]].menu')}
+        description={t('[[.Name]].description')}
+        actions={
+          <Can perm="[[.Name]]:edit">
+            <Button onClick={() => openForm(null)}>
+              <Plus aria-hidden="true" />
+              {t('[[.Name]].action.add')}
+            </Button>
+          </Can>
+        }
+      />
+[[- if or .SearchFields .FilterFields]]
+
+      <FilterBar
+        onSearch={() => {
+          setFilters(draft)
+[[- if not .Sortable]]
+          setPage(1)
+[[- end]]
+          setSelected([])
+        }}
+        onReset={() => {
+          setDraft({})
+          setFilters({})
+[[- if not .Sortable]]
+          setPage(1)
+[[- end]]
+          setSelected([])
+        }}
+      >
+[[- if .SearchFields]]
+        <Input
+          className="md:w-56"
+          value={draft.keyword ?? ''}
+          onChange={(e) => setDraft((d) => ({ ...d, keyword: e.target.value }))}
+          placeholder={t('[[.Name]].searchPlaceholder')}
+          aria-label={t('common.keyword')}
+        />
+[[- end]]
+[[- range .FilterFields]]
+[[- if eq .Kind "dict"]]
+        <DictSelect className="md:w-36" dict="[[.Arg]]" placeholder={t('[[$.Name]].field.[[.Camel]]')} value={draft.[[.Camel]] as string | undefined} onChange={(v) => setDraft((d) => ({ ...d, [[.Camel]]: v }))} />
+[[- else if eq .Kind "ref"]]
+        <RemoteSelect className="md:w-44" url="[[.RefURL]]" labelKey="[[.RefLabel]]" placeholder={t('[[$.Name]].field.[[.Camel]]')} value={draft.[[.Camel]] as string | undefined} onChange={(v) => setDraft((d) => ({ ...d, [[.Camel]]: v }))} />
+[[- end]]
+[[- end]]
+      </FilterBar>
+[[- end]]
+
+      <DataTable
+        columns={columns}
+        data={data?.list ?? []}
+        rowKey="id"
+        loading={isLoading}
+        columnSettingsKey="[[.Name]]-list"
+[[- if .Sortable]]
+        pagination={false}
+        sortable={filtered ? undefined : { onReorder: (ids) => sort.mutateAsync(ids) }}
+[[- else]]
+        pagination={{
+          page,
+          pageSize,
+          total: data?.total ?? 0,
+          onChange: (p, s) => {
+            setPage(p)
+            setPageSize(s)
+          },
+        }}
+[[- end]]
+        selection={{ selected, onChange: setSelected }}
+        batchActions={(ids) => (
+          <Can perm="[[.Name]]:delete">
+            <Button variant="destructive" size="sm" onClick={() => onDelete(ids)}>
+              <Trash2 aria-hidden="true" />
+              {t('common.delete')}
+            </Button>
+          </Can>
+        )}
+        emptyText={t('[[.Name]].empty')}
+        rowActions={(r) => (
+          <>
+            <Can perm="[[.Name]]:edit">
+              <Button variant="ghost" size="icon" aria-label={t('common.edit')} onClick={() => openForm(r)}>
+                <Pencil aria-hidden="true" />
+              </Button>
+            </Can>
+            <Can perm="[[.Name]]:delete">
+              <Button variant="ghost" size="icon" className="text-destructive" aria-label={t('common.delete')} onClick={() => onDelete([r.id])}>
+                <Trash2 aria-hidden="true" />
+              </Button>
+            </Can>
+          </>
+        )}
+      />
+
+      <[[.Pascal]]FormDialog open={formOpen} onOpenChange={setFormOpen} editing={editing} />
+    </PageContainer>
+  )
+}

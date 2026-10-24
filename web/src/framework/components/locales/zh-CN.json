@@ -1,0 +1,35 @@
+{
+  "dataTable": {
+    "columnSettings": "列设置",
+    "columnSettingsHint": "选择要显示的列",
+    "resetColumns": "恢复默认",
+    "dragHandle": "拖动排序",
+    "selectAllRows": "选择全部行",
+    "selectRow": "选择此行",
+    "selectedCount": "已选 {{count}} 项",
+    "totalCount": "共 {{count}} 条",
+    "pageInfo": "第 {{page}} / {{pages}} 页",
+    "pageSizeOption": "{{size}} 条/页",
+    "pageSizeLabel": "每页条数",
+    "prevPage": "上一页",
+    "nextPage": "下一页",
+    "goToPage": "跳转到第 {{page}} 页",
+    "expand": "展开",
+    "collapse": "收起",
+    "expandAll": "全部展开",
+    "collapseAll": "全部收起",
+    "batchActions": "批量操作",
+    "reorderFailed": "调整顺序失败，已恢复原顺序"
+  },
+  "dialog": {
+    "confirmTitle": "请确认",
+    "close": "关闭"
+  },
+  "filterBar": {
+    "filter": "筛选",
+    "title": "筛选条件"
+  },
+  "formLayout": {
+    "requiredHint": "带 * 号的为必填项"
+  }
+}

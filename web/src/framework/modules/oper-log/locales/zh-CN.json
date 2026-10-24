@@ -1,0 +1,56 @@
+{
+  "operLog": {
+    "menu": "操作日志",
+    "description": "记录后台的新增、修改、删除等操作，便于审计与排查",
+    "col": {
+      "module": "模块",
+      "type": "操作类型",
+      "operator": "操作人",
+      "ip": "IP",
+      "status": "状态",
+      "cost": "耗时",
+      "time": "时间"
+    },
+    "filter": {
+      "keyword": "关键词",
+      "keywordPlaceholder": "模块 / 操作人 / 请求地址",
+      "type": "操作类型",
+      "status": "状态",
+      "time": "时间范围"
+    },
+    "action": {
+      "export": "导出 Excel",
+      "clean": "清理",
+      "deleteSelected": "删除所选"
+    },
+    "detail": {
+      "title": "操作详情",
+      "method": "请求方法",
+      "url": "请求地址",
+      "params": "请求参数",
+      "response": "响应结果",
+      "error": "异常信息",
+      "location": "归属地",
+      "empty": "无"
+    },
+    "clean": {
+      "title": "清理操作日志",
+      "description": "选择保留范围，早于该范围的日志将被永久删除。",
+      "range": "清理范围",
+      "d7": "7 天前的日志",
+      "d30": "30 天前的日志",
+      "d90": "90 天前的日志",
+      "all": "全部日志",
+      "confirm": "确认清理？此操作不可恢复。",
+      "done": "已清理 {{count}} 条日志"
+    },
+    "confirm": {
+      "delete": "确认删除所选的 {{count}} 条日志？"
+    },
+    "export": {
+      "done": "已导出到文件",
+      "tooMany": "导出行数超过上限，请缩小筛选范围（如时间范围），或使用导出中心",
+      "filename": "操作日志"
+    }
+  }
+}

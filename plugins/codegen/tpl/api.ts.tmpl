@@ -1,0 +1,51 @@
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { api } from '@/framework/request/http'
+import type { Page, PageQuery } from '@/framework/request/types'
+
+export interface [[.Pascal]] {
+  id: string
+[[- range .Fields]]
+  [[.Camel]]: [[.TSType]]
+[[- end]]
+[[- if .HasStamps]]
+  createdAt: string
+  updatedAt: string
+[[- end]]
+}
+
+export interface [[.Pascal]]Form {
+[[- range .FormFields]]
+  [[.Camel]]: [[.TSType]]
+[[- end]]
+}
+
+/** 列表查询：各查询条件的值（字符串，空表示不筛选）。 */
+export type [[.Pascal]]Query = PageQuery
+
+const KEY = ['[[.Module]]'] as const
+
+export function use[[.Pascal]]List(query: [[.Pascal]]Query) {
+  return useQuery({
+    queryKey: [...KEY, 'list', query],
+    queryFn: () => api.get<Page<[[.Pascal]]>>('/[[.Plural]]', query),
+    placeholderData: keepPreviousData,
+  })
+}
+
+export function useSave[[.Pascal]]() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, data }: { id?: string; data: [[.Pascal]]Form }) =>
+      id ? api.put<[[.Pascal]]>(`/[[.Plural]]/${id}`, data) : api.post<[[.Pascal]]>('/[[.Plural]]', data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+  })
+}
+
+export function useDelete[[.Pascal]]s() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (ids: string[]) =>
+      ids.length === 1 ? api.del(`/[[.Plural]]/${ids[0]}`) : api.del('/[[.Plural]]', { ids: ids.join(',') }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+  })
+}

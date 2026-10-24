@@ -1,0 +1,40 @@
+{
+  "allowed": ["MIT", "BSD-2-Clause", "BSD-3-Clause", "Apache-2.0", "ISC", "PostgreSQL", "0BSD"],
+  "exceptions": [
+    {
+      "ecosystem": "npm",
+      "name": "@fontsource-variable/inter",
+      "version": "5.3.0",
+      "license": "OFL-1.1",
+      "reason": "Unmodified Inter font assets; retain OFL notices and reserved font names when redistributing."
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@fontsource-variable/jetbrains-mono",
+      "version": "5.3.0",
+      "license": "OFL-1.1",
+      "reason": "Unmodified JetBrains Mono font assets; retain OFL notices and reserved font names when redistributing."
+    },
+    {
+      "ecosystem": "npm",
+      "name": "minimatch",
+      "version": "10.2.6",
+      "license": "BlueOak-1.0.0",
+      "reason": "Permissive license for this exact ESLint tooling dependency; retain copyright and license notices."
+    },
+    {
+      "ecosystem": "npm",
+      "name": "argparse",
+      "version": "2.0.1",
+      "license": "Python-2.0",
+      "reason": "PSF permissive license for the unmodified argument parser; preserve its license and attribution."
+    },
+    {
+      "ecosystem": "npm",
+      "name": "caniuse-lite",
+      "version": "1.0.30001816",
+      "license": "CC-BY-4.0",
+      "reason": "Browser compatibility data used by build tooling; retain attribution and the CC-BY notice for redistributed data."
+    }
+  ]
+}

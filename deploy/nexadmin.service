@@ -1,0 +1,43 @@
+# systemd 单元示例（仅示例）。安装：
+#   useradd -r -s /usr/sbin/nologin nexadmin
+#   mkdir -p /opt/nexadmin/{bin,config,data,logs,backup} && 放入 bin/nexadmin-server、config/default.yaml、migrations/
+#   chown -R nexadmin:nexadmin /opt/nexadmin/{config,data,logs,backup}
+#   备份（备份页 / reinit / restore）需要本机有 mysqldump 或 pg_dump（恢复还要 mysql / psql）：apt install mariadb-client postgresql-client
+#   备份目录默认 ./backup = /opt/nexadmin/backup（WorkingDirectory 下），已列入 ReadWritePaths；改了 backup.dir 要同步改 ReadWritePaths。
+#   cp deploy/nexadmin.service /etc/systemd/system/ && systemctl daemon-reload && systemctl enable --now nexadmin
+# /etc/nexadmin/nexadmin.env 示例（权限 0600，root 所有）：
+#   NEXADMIN_APP_ENV=production
+#   NEXADMIN_DATABASE_PASSWORD=请替换
+[Unit]
+Description=NexAdmin server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=nexadmin
+Group=nexadmin
+WorkingDirectory=/opt/nexadmin
+EnvironmentFile=/etc/nexadmin/nexadmin.env
+ExecStart=/opt/nexadmin/bin/nexadmin-server
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65536
+
+# 安全加固
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+# 只有这些目录可写（config/ 初始化向导要写 config.yaml；backup/ 是默认 backup.dir，备份与 reinit 备份写这里）
+ReadWritePaths=/opt/nexadmin/config /opt/nexadmin/data /opt/nexadmin/logs /opt/nexadmin/backup
+
+[Install]
+WantedBy=multi-user.target

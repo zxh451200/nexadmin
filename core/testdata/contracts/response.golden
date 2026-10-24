@@ -1,0 +1,11 @@
+success 200 {"code":0,"message":"ok","data":{"id":"9007199254740993"}}
+page 200 {"code":0,"message":"ok","data":{"list":[],"total":0,"page":1,"pageSize":10}}
+bad_request 400 {"code":400,"message":"bad","data":null}
+unauthorized 401 {"code":401,"message":"auth","data":null}
+forbidden 403 {"code":403,"message":"denied","data":null}
+not_found 404 {"code":404,"message":"missing","data":null}
+conflict 409 {"code":409,"message":"conflict","data":null}
+internal 500 {"code":500,"message":"internal","data":null}
+unavailable 503 {"code":503,"message":"unavailable","data":null}
+locked 423 {"code":423,"message":"LOCKED:30","data":null}
+reason 503 {"code":503,"message":"setup","data":null,"reason":"NOT_INITIALIZED"}

@@ -1,0 +1,103 @@
+import { defineMock, genId, mockError } from '@/framework/request/mock'
+import type { [[.Pascal]], [[.Pascal]]Form } from './api'
+
+const T = '2025-03-01T10:00:00.000Z'
+
+let items: [[.Pascal]][] = [
+[[- range $i := .MockRows]]
+  {
+    id: '[[mockid $i]]',
+[[- range $.Fields]]
+    [[.Camel]]: [[mock . $i]],
+[[- end]]
+    createdAt: T,
+    updatedAt: T,
+  },
+[[- end]]
+]
+
+const find = (id: string) => items.find((x) => x.id === id) ?? mockError(404, 'Not found')
+[[- if .Sortable]]
+const order = (a: [[.Pascal]], b: [[.Pascal]]) => a.sort - b.sort || a.id.localeCompare(b.id)
+[[- else]]
+const order = (a: [[.Pascal]], b: [[.Pascal]]) => b.id.localeCompare(a.id)
+[[- end]]
+
+// 固定路径必须先于 /:id 注册
+defineMock([
+[[- if .Sortable]]
+  {
+    method: 'PUT',
+    url: '/[[.Plural]]/sort',
+    handler: ({ body }) => {
+      const ids: string[] = body?.ids ?? []
+      if (ids.length !== items.length || !items.every((x) => ids.includes(x.id))) {
+        mockError(409, '列表已变化，请刷新')
+      }
+      ids.forEach((id, i) => {
+        find(id).sort = (i + 1) * 10
+      })
+      return null
+    },
+  },
+[[- end]]
+  {
+    method: 'GET',
+    url: '/[[.Plural]]',
+    handler: ({ query }) => {
+      let rows = items.slice()
+[[- if .SearchFields]]
+      const kw = String(query.keyword ?? '').trim().toLowerCase()
+      if (kw) rows = rows.filter((x) => [[range $k, $f := .SearchFields]][[if $k]] || [[end]]x.[[$f.Camel]].toLowerCase().includes(kw)[[end]])
+[[- end]]
+[[- range .FilterFields]]
+[[- if ne .Kind "bool"]]
+      if (query.[[.Camel]]) rows = rows.filter((x) => x.[[.Camel]] === query.[[.Camel]])
+[[- end]]
+[[- end]]
+      rows.sort(order)
+      const page = Number(query.page ?? 1)
+      const pageSize = Number(query.pageSize ?? 10)
+      return { list: rows.slice((page - 1) * pageSize, page * pageSize), total: rows.length, page, pageSize }
+    },
+  },
+  { method: 'GET', url: '/[[.Plural]]/:id', handler: ({ params }) => find(params.id) },
+  {
+    method: 'POST',
+    url: '/[[.Plural]]',
+    handler: ({ body }) => {
+      const now = new Date().toISOString()
+      const f = body as [[.Pascal]]Form
+      const row: [[.Pascal]] = { ...f, id: genId(), [[if .Sortable]]sort: (items.length + 1) * 10, [[end]]createdAt: now, updatedAt: now }
+      items = [...items, row]
+      return row
+    },
+  },
+  {
+    method: 'PUT',
+    url: '/[[.Plural]]/:id',
+    handler: ({ params, body }) => {
+      const cur = find(params.id)
+      const next: [[.Pascal]] = { ...cur, ...(body as [[.Pascal]]Form), id: cur.id, updatedAt: new Date().toISOString() }
+      items = items.map((x) => (x.id === cur.id ? next : x))
+      return next
+    },
+  },
+  {
+    method: 'DELETE',
+    url: '/[[.Plural]]/:id',
+    handler: ({ params }) => {
+      items = items.filter((x) => x.id !== params.id)
+      return null
+    },
+  },
+  {
+    method: 'DELETE',
+    url: '/[[.Plural]]',
+    handler: ({ query }) => {
+      const ids = String(query.ids ?? '').split(',')
+      items = items.filter((x) => !ids.includes(x.id))
+      return null
+    },
+  },
+])

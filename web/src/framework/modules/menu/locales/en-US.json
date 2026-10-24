@@ -1,0 +1,69 @@
+{
+  "sysMenu": {
+    "menu": "Menus",
+    "docs": "Documentation",
+    "description": "Manage directories, menus and button permissions. Drag to reorder within the same parent.",
+    "dir": {
+      "system": "System",
+      "content": "Content",
+      "monitor": "Monitoring",
+      "tenant": "Tenants"
+    },
+    "btn": {
+      "create": "Create",
+      "update": "Update",
+      "delete": "Delete",
+      "export": "Export",
+      "import": "Import",
+      "resetPwd": "Reset password",
+      "assign": "Assign permissions",
+      "publish": "Publish",
+      "platform": "Platform notice",
+      "upload": "Upload",
+      "forceLogout": "Force logout",
+      "unlock": "Unlock",
+      "restore": "Restore",
+      "license": "Import license"
+    },
+    "col": {
+      "title": "Title",
+      "type": "Type",
+      "perm": "Permission",
+      "path": "Route path",
+      "sort": "Order",
+      "status": "Status"
+    },
+    "field": {
+      "type": "Type",
+      "parent": "Parent",
+      "parentPlaceholder": "Top level (no parent)",
+      "title": "Title",
+      "titleHint": "An i18n key (e.g. user.menu) or plain text",
+      "icon": "Icon",
+      "path": "Route path",
+      "component": "Component path",
+      "perm": "Permission",
+      "permHint": "Format: module:action, e.g. user:create",
+      "sort": "Order",
+      "keepAlive": "Keep alive",
+      "hidden": "Hidden",
+      "external": "External link",
+      "status": "Status"
+    },
+    "action": {
+      "add": "New menu",
+      "addChild": "Add child",
+      "edit": "Edit menu"
+    },
+    "validation": {
+      "titleRequired": "Title is required",
+      "pathRequired": "Route path is required",
+      "permRequired": "Permission is required",
+      "sortInvalid": "Order must be an integer"
+    },
+    "confirm": {
+      "delete": "Delete menu \"{{name}}\"?",
+      "deleteCascade": "Delete menu \"{{name}}\"? Its {{count}} descendant menus/buttons will also be deleted. This cannot be undone."
+    }
+  }
+}

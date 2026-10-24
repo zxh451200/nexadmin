@@ -1,0 +1,35 @@
+{
+  "dataTable": {
+    "columnSettings": "Columns",
+    "columnSettingsHint": "Choose columns to display",
+    "resetColumns": "Reset to default",
+    "dragHandle": "Drag to reorder",
+    "selectAllRows": "Select all rows",
+    "selectRow": "Select this row",
+    "selectedCount": "{{count}} selected",
+    "totalCount": "{{count}} items in total",
+    "pageInfo": "Page {{page}} of {{pages}}",
+    "pageSizeOption": "{{size}} / page",
+    "pageSizeLabel": "Rows per page",
+    "prevPage": "Previous page",
+    "nextPage": "Next page",
+    "goToPage": "Go to page {{page}}",
+    "expand": "Expand",
+    "collapse": "Collapse",
+    "expandAll": "Expand all",
+    "collapseAll": "Collapse all",
+    "batchActions": "Batch actions",
+    "reorderFailed": "Failed to reorder, the original order was restored"
+  },
+  "dialog": {
+    "confirmTitle": "Please confirm",
+    "close": "Close"
+  },
+  "filterBar": {
+    "filter": "Filter",
+    "title": "Filters"
+  },
+  "formLayout": {
+    "requiredHint": "Fields marked with * are required"
+  }
+}

@@ -1,0 +1,61 @@
+// Package [[.Module]] 由 NexAdmin codegen 插件生成：表 [[.Table]] 的增删改查。
+// 表形态 [[.Shape]]：[[if eq .Shape "tenant"]]嵌入 TenantModel（雪花 ID + 租户隔离 + 时间戳）[[else if eq .Shape "platform"]]嵌入 PlatformModel（雪花 ID + 时间戳）[[else]]显式 ID[[if .Tenant]] 与 TenantID[[end]][[end]]。
+package [[.Module]]
+
+import (
+[[- if .UsesTimeModel]]
+	"time"
+[[end]]
+[[- if .UsesDatabase]]
+	"[[.GoModule]]/core/database"
+[[- end]]
+	"[[.GoModule]]/pkg/idgen"
+)
+
+// [[.Pascal]] 对应表 [[.Table]]。
+type [[.Pascal]] struct {
+[[- if eq .Shape "tenant"]]
+	database.TenantModel
+[[- else if eq .Shape "platform"]]
+	database.PlatformModel
+[[- else]]
+	ID idgen.ID `gorm:"column:id;primaryKey;autoIncrement:false"`
+[[- if .Tenant]]
+	TenantID idgen.ID `gorm:"column:tenant_id;not null"`
+[[- end]]
+[[- end]]
+[[- range .Fields]]
+	[[.Pascal]] [[.GoType]] `gorm:"column:[[.Name]]"`[[if .Comment]] // [[.Comment]][[end]]
+[[- end]]
+}
+
+// TableName 指定表名。
+func ([[.Pascal]]) TableName() string { return "[[.Table]]" }
+
+// View 是接口返回的表示（ID 一律序列化为字符串）。
+type View struct {
+	ID idgen.ID `json:"id"`
+[[- range .Fields]]
+	[[.Pascal]] [[.GoType]] `json:"[[.Camel]]"`
+[[- end]]
+[[- if .HasStamps]]
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+[[- end]]
+}
+
+// Form 是新增 / 修改的请求体。
+type Form struct {
+[[- range .FormFields]]
+	[[.Pascal]] [[.FormType]] `json:"[[.Camel]]"[[bind .]]`
+[[- end]]
+}
+
+// ListQuery 是列表查询条件；零值 / nil 表示不筛选。
+type ListQuery struct {
+	Page     int
+	PageSize int
+[[- range .QueryFields]]
+	[[.Pascal]] [[queryType .]]
+[[- end]]
+}

@@ -1,0 +1,69 @@
+{
+  "sysMenu": {
+    "menu": "菜单管理",
+    "docs": "帮助文档",
+    "description": "维护目录、菜单与按钮权限，同一父级下可拖动排序",
+    "dir": {
+      "system": "系统管理",
+      "content": "内容管理",
+      "monitor": "系统监控",
+      "tenant": "租户管理"
+    },
+    "btn": {
+      "create": "新增",
+      "update": "修改",
+      "delete": "删除",
+      "export": "导出",
+      "import": "导入",
+      "resetPwd": "重置密码",
+      "assign": "分配权限",
+      "publish": "发布",
+      "platform": "平台公告",
+      "upload": "上传",
+      "forceLogout": "强制下线",
+      "unlock": "解锁",
+      "restore": "还原",
+      "license": "导入授权"
+    },
+    "col": {
+      "title": "标题",
+      "type": "类型",
+      "perm": "权限标识",
+      "path": "路由路径",
+      "sort": "排序",
+      "status": "状态"
+    },
+    "field": {
+      "type": "菜单类型",
+      "parent": "上级菜单",
+      "parentPlaceholder": "顶级（无上级）",
+      "title": "标题",
+      "titleHint": "可填写 i18n key（如 user.menu）或直接填写文本",
+      "icon": "图标",
+      "path": "路由路径",
+      "component": "组件路径",
+      "perm": "权限标识",
+      "permHint": "格式：模块:动作，如 user:create",
+      "sort": "排序",
+      "keepAlive": "缓存页面",
+      "hidden": "隐藏菜单",
+      "external": "外链",
+      "status": "状态"
+    },
+    "action": {
+      "add": "新增菜单",
+      "addChild": "新增下级",
+      "edit": "编辑菜单"
+    },
+    "validation": {
+      "titleRequired": "请输入标题",
+      "pathRequired": "请输入路由路径",
+      "permRequired": "请输入权限标识",
+      "sortInvalid": "排序必须是整数"
+    },
+    "confirm": {
+      "delete": "确定删除菜单「{{name}}」吗？",
+      "deleteCascade": "确定删除菜单「{{name}}」吗？其下 {{count}} 个下级菜单/按钮将一并删除，此操作不可恢复。"
+    }
+  }
+}

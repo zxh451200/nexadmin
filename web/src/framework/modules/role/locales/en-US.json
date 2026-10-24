@@ -1,0 +1,64 @@
+{
+  "role": {
+    "menu": "Roles",
+    "title": "Roles",
+    "description": "Drag rows to reorder; assign menu and button permissions to a role",
+    "col": {
+      "name": "Name",
+      "code": "Code",
+      "sort": "Order",
+      "dataScope": "Data scope",
+      "status": "Status",
+      "assignable": "Assignable",
+      "remark": "Remark",
+      "createdAt": "Created at"
+    },
+    "form": {
+      "createTitle": "New role",
+      "editTitle": "Edit role",
+      "name": "Name",
+      "code": "Code",
+      "codeHint": "Unique identifier, e.g. operator",
+      "sort": "Order",
+      "status": "Status",
+      "dataScope": "Data scope",
+      "deptIds": "Custom departments",
+      "assignable": "Allow sub-admins to assign",
+      "assignableHint": "When off, only super admins can assign this role to users",
+      "assignableBuiltin": "The built-in super admin role can never be assigned by sub-admins",
+      "remark": "Remark"
+    },
+    "v": {
+      "nameRequired": "Please enter a role name",
+      "codeRequired": "Please enter a role code",
+      "codeFormat": "Letters, digits and underscore only, starting with a letter",
+      "sortNumber": "Order must be an integer",
+      "deptRequired": "Please select at least one department"
+    },
+    "builtin": "Built-in",
+    "assignable": {
+      "yes": "Assignable",
+      "no": "Not assignable"
+    },
+    "assign": {
+      "action": "Assign permissions",
+      "title": "Assign permissions",
+      "description": "Role: {{name}}",
+      "success": "Permissions saved",
+      "empty": "No permissions available",
+      "expandAll": "Expand all",
+      "collapseAll": "Collapse all",
+      "selectAll": "Select all",
+      "clearAll": "Clear",
+      "selectedCount": "{{count}} selected",
+      "expand": "Expand",
+      "collapse": "Collapse",
+      "type": {
+        "dir": "Directory",
+        "menu": "Menu",
+        "button": "Button"
+      }
+    },
+    "deleteConfirm": "Delete role \"{{name}}\"? This cannot be undone."
+  }
+}

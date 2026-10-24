@@ -1,0 +1,145 @@
+{
+  "openapi": {
+    "menu": "Open platform",
+    "title": "Open platform",
+    "description": "Manage app credentials, event webhooks and delivery logs exposed to third parties",
+    "neverUsed": "Never used",
+    "btn": { "edit": "Edit" },
+    "tab": { "apps": "Apps", "webhooks": "Webhooks", "deliveries": "Deliveries", "docs": "API docs" },
+    "eventGroup": { "user": "Users", "dept": "Departments", "role": "Roles", "notice": "Notices" },
+    "apps": {
+      "create": "New app",
+      "empty": "No open apps yet",
+      "resetSecret": "Reset secret",
+      "resetConfirm": "The current AppSecret of \"{{name}}\" stops working immediately and callers must update their config. Continue?",
+      "deleteConfirm": "Delete app \"{{name}}\"? Its callers will lose access immediately.",
+      "ipUnlimited": "Unrestricted",
+      "ipCount": "{{count}} entries",
+      "fields": {
+        "name": "App name",
+        "appKey": "AppKey",
+        "appSecret": "AppSecret",
+        "description": "Description",
+        "roles": "Authorized roles",
+        "enabled": "Enabled",
+        "ipAllow": "IP allowlist",
+        "createdAt": "Created",
+        "lastUsedAt": "Last call"
+      },
+      "form": {
+        "createTitle": "New app",
+        "editTitle": "Edit app",
+        "nameTooLong": "Name must be 50 characters or fewer",
+        "descTooLong": "Description must be 200 characters or fewer",
+        "rolesPlaceholder": "Select roles",
+        "rolesHint": "The app gets the union of the selected roles' permissions when calling APIs; with no roles it has no permissions.",
+        "ipHint": "One IPv4 / IPv6 address or CIDR per line, e.g. 203.0.113.10 or 10.0.0.0/8. Leave empty to allow any source IP.",
+        "ipInvalid": "Not a valid IP or CIDR: {{ip}}",
+        "ipDuplicated": "Duplicate IP entries found"
+      },
+      "secret": {
+        "title": "App created — save the secret",
+        "onceHint": "The AppSecret is shown only once. You will not be able to view it again after leaving; if lost, reset it.",
+        "saved": "I have saved it"
+      },
+      "guide": {
+        "action": "Integration guide",
+        "title": "Integration guide",
+        "section": "Signed requests",
+        "hint": "Every open API request must carry the headers below so the server can verify identity and prevent replay.",
+        "header": {
+          "X-App-Key": "The app's AppKey",
+          "X-Timestamp": "Request time in Unix seconds; must be within ±5 minutes of server time",
+          "X-Nonce": "A random string unique per request; reuse is rejected",
+          "X-Signature": "The signature, lowercase hex"
+        },
+        "stringToSign": "String to sign (joined by newline \\n; query is the raw query string without ?, empty if none; body is the raw request body):",
+        "algorithm": "Signature = HMAC-SHA256(AppSecret, stringToSign), output as lowercase hex.",
+        "window": "The time window is ±5 minutes; requests outside it or with a repeated nonce are rejected.",
+        "example": "Example (Node.js 18+)",
+        "copyExample": "Copy example code"
+      }
+    },
+    "webhooks": {
+      "create": "New webhook",
+      "empty": "No webhooks yet",
+      "test": "Send test",
+      "resetSecret": "Reset signing secret",
+      "resetConfirm": "The current signing secret of \"{{name}}\" stops working immediately and the receiver must be updated. Continue?",
+      "deleteConfirm": "Delete webhook \"{{name}}\"? Events will no longer be pushed.",
+      "fields": {
+        "name": "Name",
+        "url": "Endpoint URL",
+        "events": "Subscribed events",
+        "enabled": "Enabled",
+        "secret": "Signing secret",
+        "createdAt": "Created"
+      },
+      "form": {
+        "createTitle": "New webhook",
+        "editTitle": "Edit webhook",
+        "nameTooLong": "Name must be 50 characters or fewer",
+        "urlHint": "Must be an https URL; http://localhost is allowed for development.",
+        "urlInvalid": "Enter an https URL (http://localhost allowed for development)",
+        "eventsRequired": "Select at least one event"
+      },
+      "secret": {
+        "title": "Webhook created — save the signing secret",
+        "onceHint": "The signing secret is shown only once. You will not be able to view it again after leaving; if lost, reset it.",
+        "usage": "Every delivery carries a signature computed with this secret. Receivers should verify it before handling the event.",
+        "saved": "I have saved it"
+      },
+      "testResult": {
+        "title": "Test result",
+        "success": "Success",
+        "failed": "Failed",
+        "statusCode": "Status code",
+        "duration": "Duration",
+        "ms": "{{ms}} ms"
+      }
+    },
+    "docs": {
+      "searchPlaceholder": "Search path or permission code",
+      "count": "{{count}} endpoints",
+      "download": "Download openapi.json",
+      "empty": "No matching endpoints",
+      "detail": "Endpoint details",
+      "yes": "Yes",
+      "no": "No",
+      "noPerm": "None (login only / public)",
+      "curlToken": "curl example: personal access token",
+      "curlSign": "curl example: app signature",
+      "copyCurl": "Copy example",
+      "notCallable": "This endpoint cannot be called with this credential.",
+      "publicNote": "Public endpoint; no credential needed.",
+      "auth": { "public": "No login required", "login": "Login required", "super": "Super admin only" },
+      "fields": { "module": "Module", "perm": "Permission", "auth": "Authentication", "token": "Callable by token", "app": "Callable by app signature", "summary": "Summary" }
+    },
+    "deliveries": {
+      "empty": "No deliveries yet",
+      "detail": "Delivery details",
+      "retry": "Retry",
+      "retryQueued": "Queued for retry",
+      "noBody": "No response body",
+      "truncated": "The response is long; only the first {{count}} characters are shown.",
+      "filter": {
+        "webhook": "Webhook",
+        "allWebhooks": "All webhooks",
+        "status": "Status",
+        "allStatus": "All statuses"
+      },
+      "status": { "success": "Success", "failed": "Failed", "pending": "Pending" },
+      "fields": {
+        "webhook": "Webhook",
+        "event": "Event",
+        "status": "Status",
+        "attempts": "Attempts",
+        "responseCode": "Response code",
+        "responseBody": "Response body",
+        "error": "Error",
+        "createdAt": "Created",
+        "nextRetryAt": "Next retry"
+      }
+    }
+  }
+}

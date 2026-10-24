@@ -1,0 +1,27 @@
+{
+  "online": {
+    "menu": "在线用户",
+    "description": "当前持有有效会话的用户，可强制下线",
+    "col": {
+      "username": "账号",
+      "nickname": "姓名",
+      "dept": "部门",
+      "device": "设备",
+      "client": "浏览器 / 系统",
+      "ip": "IP",
+      "loginAt": "登录时间",
+      "lastActive": "最后活跃"
+    },
+    "filter": {
+      "keyword": "关键词",
+      "keywordPlaceholder": "账号 / 姓名 / IP"
+    },
+    "action": {
+      "forceLogout": "强制下线"
+    },
+    "confirm": {
+      "forceLogout": "确认强制下线 {{name}}？该用户的当前会话将立即失效。"
+    },
+    "forced": "已强制下线"
+  }
+}

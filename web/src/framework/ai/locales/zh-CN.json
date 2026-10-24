@@ -1,0 +1,47 @@
+{
+  "ai": {
+    "filter": {
+      "placeholder": "用一句话描述想找的数据，例如：上个月停用的用户",
+      "label": "AI 筛选",
+      "submit": "AI 筛选",
+      "applied": "已按「{{text}}」筛选：{{explanation}}",
+      "clear": "清除 AI 筛选",
+      "failed": "AI 筛选失败，请稍后重试"
+    },
+    "translate": {
+      "button": "AI 翻译",
+      "menuLabel": "翻译为",
+      "empty": "没有可翻译的内容",
+      "noLanguage": "暂无其他可选语言",
+      "failed": "AI 翻译失败，请稍后重试",
+      "done": "已翻译为 {{lang}}"
+    },
+    "write": {
+      "button": "AI 写作",
+      "menuLabel": "AI 写作助手",
+      "draft": "按要点起草",
+      "polish": "润色现有内容",
+      "toneLabel": "语气",
+      "tone": {
+        "default": "保持原有",
+        "formal": "正式",
+        "friendly": "亲切",
+        "concise": "简洁"
+      },
+      "empty": "请先填写要点或待润色的内容",
+      "emptyBody": "请先填写正文要点，或填写标题作为要点",
+      "done": "AI 已生成内容",
+      "undo": "撤销",
+      "failed": "AI 写作失败，请稍后重试",
+      "mock": {
+        "title": "【通知】{{text}}",
+        "greeting": "各位同事：",
+        "closing": "请相关人员知悉并配合，如有疑问请联系管理员。"
+      }
+    },
+    "error": {
+      "tenantDisabled": "当前租户已被平台关闭 AI 功能，请联系平台管理员",
+      "quotaExceeded": "今日 AI 调用次数已达租户上限（{{count}} 次），请明天再试或联系平台管理员"
+    }
+  }
+}

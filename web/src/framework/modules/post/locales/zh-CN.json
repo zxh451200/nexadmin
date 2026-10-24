@@ -1,0 +1,32 @@
+{
+  "post": {
+    "menu": "岗位管理",
+    "description": "维护岗位及所属部门，可拖动调整顺序",
+    "col": {
+      "name": "岗位名称",
+      "code": "岗位编码",
+      "dept": "所属部门",
+      "status": "状态",
+      "remark": "备注"
+    },
+    "field": {
+      "name": "岗位名称",
+      "code": "岗位编码",
+      "dept": "所属部门",
+      "status": "状态",
+      "remark": "备注"
+    },
+    "action": {
+      "add": "新增岗位",
+      "edit": "编辑岗位"
+    },
+    "validation": {
+      "nameRequired": "请输入岗位名称",
+      "codeRequired": "请输入岗位编码",
+      "codeInvalid": "编码只能包含字母、数字、下划线和连字符"
+    },
+    "confirm": {
+      "delete": "确定删除岗位「{{name}}」吗？"
+    }
+  }
+}

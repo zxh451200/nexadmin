@@ -1,0 +1,11 @@
+{
+  "plugin_scim": {
+    "menu": "SCIM 用户同步",
+    "title": "SCIM 用户同步",
+    "description": "为企业身份平台管理 SCIM Bearer Token。",
+    "tokenName": "Token 名称",
+    "createToken": "创建 Token",
+    "revoke": "撤销",
+    "columns": { "name": "名称", "createdAt": "创建时间", "lastUsed": "最后使用", "revoked": "已撤销", "actions": "操作" }
+  }
+}

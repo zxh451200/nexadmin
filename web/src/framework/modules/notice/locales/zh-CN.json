@@ -1,0 +1,63 @@
+{
+  "notice": {
+    "menu": "通知公告",
+    "title": "通知公告",
+    "description": "发布、撤回公告，并查看已读未读情况",
+    "create": "新建公告",
+    "createTitle": "新建公告",
+    "editTitle": "编辑公告",
+    "searchPlaceholder": "搜索公告标题",
+    "empty": "暂无公告",
+    "publish": "发布",
+    "revoke": "撤回",
+    "publishConfirm": "确定发布「{{title}}」吗？",
+    "revokeConfirm": "确定撤回「{{title}}」吗？撤回后用户将无法再看到该公告。",
+    "pinnedTag": "置顶",
+    "platformTag": "平台",
+    "titleTooLong": "标题不能超过 100 个字符",
+    "contentRequired": "请填写公告正文",
+    "targetRequired": "请选择发布对象",
+    "expireAfterPublish": "到期时间必须晚于定时发布时间",
+    "fields": {
+      "title": "标题",
+      "type": "类型",
+      "level": "级别",
+      "status": "状态",
+      "content": "正文",
+      "scope": "发布范围",
+      "pinned": "置顶",
+      "popup": "登录弹窗",
+      "platform": "平台公告（全部租户）",
+      "publishAt": "定时发布",
+      "expireAt": "到期时间",
+      "attachments": "附件",
+      "readStats": "已读/未读",
+      "publishedAt": "发布时间"
+    },
+    "scope": {
+      "all": "全员",
+      "role": "指定角色",
+      "dept": "指定部门",
+      "user": "指定用户"
+    },
+    "targets": {
+      "role": "选择角色",
+      "dept": "选择部门",
+      "user": "选择用户"
+    },
+    "hints": {
+      "publishAt": "留空表示发布后立即生效",
+      "popup": "用户登录后弹窗提示，点击「我知道了」记为已读",
+      "platform": "对所有租户可见，仅平台管理员可设置"
+    },
+    "stats": {
+      "action": "已读统计",
+      "title": "已读统计",
+      "read": "已读",
+      "unread": "未读",
+      "readRate": "已读率",
+      "unreadList": "未读名单",
+      "allRead": "所有人都已阅读"
+    }
+  }
+}

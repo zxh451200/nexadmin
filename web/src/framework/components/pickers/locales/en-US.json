@@ -1,0 +1,22 @@
+{
+  "picker": {
+    "searchPlaceholder": "Search…",
+    "loadMore": "Load more",
+    "collapse": "Collapse",
+    "expand": "Expand",
+    "selectRegion": "Select province / city / district",
+    "regionSearch": "Search by name or pinyin",
+    "province": "Province",
+    "city": "City",
+    "district": "District",
+    "selectCountry": "Select country / region",
+    "selectIcon": "Select an icon",
+    "searchIcon": "Search icon name",
+    "selectColor": "Select a color",
+    "customColor": "Custom color",
+    "selectDate": "Select a date",
+    "selectDateTime": "Select date and time",
+    "selectDateRange": "Select a date range",
+    "time": "Time"
+  }
+}

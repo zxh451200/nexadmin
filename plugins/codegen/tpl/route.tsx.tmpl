@@ -1,0 +1,11 @@
+import { lazy } from 'react'
+import type { ModuleRoute } from '@/framework/router/types'
+
+export const routes: ModuleRoute[] = [
+  {
+    path: '[[.Module]]',
+    component: lazy(() => import('./[[.Pascal]]Page')),
+    perm: '[[.Module]]:list',
+    menu: { title: '[[.Module]].menu', icon: 'FileText', order: 100, group: 'content' },
+  },
+]

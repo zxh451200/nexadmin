@@ -1,0 +1,43 @@
+{
+  "cacheMonitor": {
+    "menu": "缓存监控",
+    "title": "缓存监控",
+    "description": "缓存服务（Valkey / 内存）的运行状态、命中率与键分布",
+    "refresh": {
+      "label": "自动刷新",
+      "v3000": "每 3 秒",
+      "v10000": "每 10 秒",
+      "v30000": "每 30 秒",
+      "v0": "暂停"
+    },
+    "card": { "memory": "内存已用", "keys": "键数量", "hitRate": "命中率", "qps": "每秒请求" },
+    "chart": { "hit": "命中率（%）", "qps": "每秒请求数", "commands": "命令执行次数" },
+    "series": { "hit": "命中率", "qps": "请求数", "count": "次数" },
+    "info": {
+      "title": "实例信息",
+      "running": "运行中",
+      "driver": "缓存类型",
+      "memory": "内存缓存",
+      "version": "版本",
+      "uptime": "已运行",
+      "days": "天",
+      "connections": "客户端连接数",
+      "maxMemory": "内存上限"
+    },
+    "prefix": {
+      "title": "键前缀分布",
+      "name": "键前缀",
+      "desc": "用途",
+      "keys": "数量",
+      "ttl": "过期时间",
+      "d": {
+        "session": "登录会话",
+        "captcha": "图形验证码",
+        "online": "在线用户",
+        "dict": "字典缓存",
+        "tenant": "租户信息",
+        "ratelimit": "接口限流"
+      }
+    }
+  }
+}

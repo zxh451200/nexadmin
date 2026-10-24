@@ -1,0 +1,43 @@
+{
+  "jobs": {
+    "menu": "Export center",
+    "description": "Large exports are generated in the background and can be downloaded here. Result files are kept for 7 days",
+    "col": {
+      "type": "Task type",
+      "status": "Status",
+      "progress": "Progress",
+      "owner": "Created by",
+      "createdAt": "Created at",
+      "duration": "Duration"
+    },
+    "type": { "all": "All types", "user.export": "User export" },
+    "status": {
+      "all": "All statuses",
+      "queued": "Queued",
+      "running": "Running",
+      "success": "Completed",
+      "failed": "Failed",
+      "canceled": "Canceled"
+    },
+    "filter": { "type": "Task type", "status": "Status" },
+    "scope": { "mine": "My tasks", "all": "All tasks" },
+    "action": { "download": "Download", "cancel": "Cancel", "retry": "Retry", "delete": "Delete", "refresh": "Refresh" },
+    "confirm": {
+      "cancel": "Cancel this task?",
+      "delete": "Delete this task and its result file? This cannot be undone."
+    },
+    "toast": {
+      "submitted": "Submitted to the export center",
+      "goCenter": "View",
+      "done": "Export completed",
+      "goDownload": "Download",
+      "failed": "Export failed",
+      "canceled": "Task canceled",
+      "retried": "Resubmitted",
+      "deleted": "Deleted"
+    },
+    "duration": { "sec": "{{n}} s", "min": "{{m}} min {{s}} s" },
+    "indicator": { "label": "Export center, {{count}} tasks in progress", "none": "Export center" },
+    "btn": { "all": "All tasks" }
+  }
+}

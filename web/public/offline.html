@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <title>当前离线 · Offline</title>
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <style>
+      :root { --bg: #f4f7fb; --fg: #0f1226; --muted: #5b6275; --primary: #2e34eb; --on-primary: #fff; }
+      @media (prefers-color-scheme: dark) {
+        :root { --bg: #0b1020; --fg: #eef0f6; --muted: #a3a9bd; --primary: #5b61f5; --on-primary: #fff; }
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; min-height: 100dvh; display: grid; place-items: center; padding: 24px; background: var(--bg); color: var(--fg);
+        font: 16px/1.6 system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+      main { max-width: 26rem; text-align: center; }
+      h1 { margin: 0 0 8px; font-size: 1.5rem; }
+      p { margin: 0 0 8px; color: var(--muted); }
+      .en { margin-top: 20px; }
+      button { margin-top: 24px; min-height: 44px; padding: 0 28px; border: 0; border-radius: 8px; cursor: pointer;
+        background: var(--primary); color: var(--on-primary); font: inherit; font-weight: 600; }
+      button:focus-visible { outline: 3px solid var(--fg); outline-offset: 2px; }
+    </style>
+  </head>
+  <body>
+    <main role="status" aria-live="polite">
+      <h1 data-zh>当前离线</h1>
+      <p data-zh>无法连接到服务器，请检查网络后重试。</p>
+      <h1 data-en class="en">You are offline</h1>
+      <p data-en>Unable to reach the server. Check your connection and try again.</p>
+      <button type="button" id="retry"><span data-zh>重试</span> / <span data-en>Retry</span></button>
+    </main>
+    <script>
+      // 默认中英并列；识别到语言偏好后只显示对应语言
+      (function () {
+        var lang = (localStorage.getItem('nex-lang') || navigator.language || '').toLowerCase()
+        var zh = lang.indexOf('zh') === 0
+        document.documentElement.lang = zh ? 'zh-CN' : 'en'
+        var hide = zh ? '[data-en]' : '[data-zh]'
+        Array.prototype.forEach.call(document.querySelectorAll('h1' + hide + ',p' + hide), function (el) { el.hidden = true })
+        var btn = document.getElementById('retry')
+        btn.innerHTML = zh ? '重试' : 'Retry'
+        document.title = zh ? '当前离线' : 'Offline'
+        btn.addEventListener('click', function () { location.reload() })
+        window.addEventListener('online', function () { location.reload() })
+      })()
+    </script>
+  </body>
+</html>

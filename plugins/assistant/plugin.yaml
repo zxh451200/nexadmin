@@ -1,0 +1,18 @@
+id: assistant
+name: AI 助手
+version: 1.1.0
+description: 个人命名会话持久化 AI 助手，支持只读查询与密码确认后的消息已读操作，复用平台 AI 配额与审计。
+author: NexAdmin
+edition: pro
+requires_nexadmin: ">=0.1.0"
+migration_target: platform
+menus:
+  - parent: /monitor
+    type: menu
+    title: plugin_assistant.menu
+    path: /monitor/assistant
+    component: plugins/assistant/AssistantPage
+    perm: assistant:use
+    icon: MessageSquare
+    sort: 80
+    keep_alive: false

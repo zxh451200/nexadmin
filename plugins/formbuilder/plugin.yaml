@@ -1,0 +1,42 @@
+id: formbuilder
+name: 表单构建器
+version: 1.0.0
+description: 表单构建器（可视化设计表单、版本化发布、登录用户填写、服务端按发布版本重新校验、提交收集与 xlsx 导出、表单定义导入导出）。官方付费插件，不提供匿名填写。
+author: NexAdmin
+edition: pro
+requires_nexadmin: ">=0.1.0"
+
+# 安装时写入 sys_menu；title 是 i18n key，文案在 web/locales 的 plugin_formbuilder 命名空间里。
+menus:
+  - parent: /system
+    type: menu
+    title: plugin_formbuilder.menu
+    path: /system/formbuilder
+    component: plugins/formbuilder/FormbuilderPage
+    perm: formbuilder:design
+    icon: ClipboardList
+    sort: 130
+    keep_alive: true
+  - parent: formbuilder:design
+    type: button
+    title: plugin_formbuilder.btn.publish
+    perm: formbuilder:publish
+    sort: 10
+  - parent: formbuilder:design
+    type: button
+    title: plugin_formbuilder.btn.submission
+    perm: formbuilder:submission
+    sort: 20
+  - parent: formbuilder:design
+    type: button
+    title: plugin_formbuilder.btn.export
+    perm: formbuilder:export
+    sort: 30
+  - parent: /system
+    type: menu
+    title: plugin_formbuilder.fillMenu
+    path: /system/formbuilder/fill
+    component: plugins/formbuilder/FillPage
+    perm: formbuilder:fill
+    icon: FilePen
+    sort: 131

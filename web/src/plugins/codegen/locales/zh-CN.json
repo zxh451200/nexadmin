@@ -1,0 +1,57 @@
+{
+  "plugin_codegen": {
+    "menu": "代码生成器",
+    "title": "代码生成器",
+    "description": "读取业务表结构，按推荐配置生成 Go 模块与前端页面；先预览，再打包 zip 下载",
+    "btn": { "download": "下载代码包" },
+    "steps": { "table": "1. 选择表", "config": "2. 配置列", "preview": "3. 预览与下载" },
+    "tables": { "name": "表名", "search": "按表名搜索", "empty": "没有可生成的业务表", "select": "选择" },
+    "config": {
+      "module": "模块名",
+      "moduleHint": "小写字母开头的字母数字，同时作为 Go 包名、前端目录名和 i18n 命名空间",
+      "goModule": "Go 模块路径",
+      "goModuleHint": "你的项目 go.mod 里的 module，留空使用 nexadmin",
+      "shape": "表形态：{{shape}}"
+    },
+    "shape": {
+      "tenant": "多租户（嵌入 TenantModel，自动按租户隔离）",
+      "platform": "平台级（嵌入 PlatformModel，不带租户条件）",
+      "plain": "普通（显式 ID，有 tenant_id 列时创建时填入当前租户）"
+    },
+    "col": {
+      "name": "列名",
+      "type": "类型",
+      "comment": "注释",
+      "list": "列表显示",
+      "query": "查询条件",
+      "form": "表单字段",
+      "required": "必填",
+      "control": "控件",
+      "system": "系统列",
+      "unsupported": "不支持",
+      "empty": "这张表没有列"
+    },
+    "controls": { "input": "输入框", "textarea": "多行文本", "number": "数字", "switch": "开关", "date": "日期", "datetime": "日期时间" },
+    "preview": {
+      "path": "文件路径",
+      "lang": "类型",
+      "empty": "没有生成任何文件",
+      "viewer": "代码查看",
+      "readonly": "只读",
+      "pick": "请选择左侧的文件"
+    },
+    "notes": {
+      "import_line": "在 internal/modules/modules.go 加一行空导入，重新编译并重启后自动补菜单：",
+      "api_prefix": "接口前缀：",
+      "null_zero": "表已存在，不生成迁移；值为 NULL 的列读出为零值，保存时写回零值。"
+    },
+    "action": { "back": "上一步", "preview": "预览文件", "download": "下载 zip" },
+    "downloaded": "代码包已下载",
+    "done": { "title": "下一步", "description": "解压到项目根目录后，按下面几步接入：" },
+    "errors": {
+      "module": "模块名需为小写字母开头的字母数字，最长 31 位",
+      "goModule": "Go 模块路径格式不正确",
+      "load": "列信息加载失败"
+    }
+  }
+}

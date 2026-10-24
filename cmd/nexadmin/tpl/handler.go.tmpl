@@ -1,0 +1,145 @@
+package [[.Name]]
+
+import (
+	"strings"
+
+	"github.com/gin-gonic/gin"
+
+	"[[.Module]]/core/response"
+	"[[.Module]]/pkg/idgen"
+)
+
+// Handler 是 HTTP 层，只做参数解析和响应。
+type Handler struct{ svc *Service }
+
+func NewHandler(svc *Service) *Handler { return &Handler{svc: svc} }
+
+func paramID(c *gin.Context) (idgen.ID, bool) {
+	id, err := idgen.Parse(c.Param("id"))
+	if err != nil || id == 0 {
+		response.Fail(c, response.BadRequest("error.bad_request"))
+		return 0, false
+	}
+	return id, true
+}
+
+func respond(c *gin.Context, data any, err error) {
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, data)
+}
+
+// List GET /[[.Plural]]
+func (h *Handler) List(c *gin.Context) {
+	page, size := response.ParsePage(c)
+	filters := map[string]any{}
+[[- range .FilterFields]]
+[[- if eq .Kind "dict"]]
+	if v := c.Query("[[.Camel]]"); v != "" {
+		filters["[[.Name]]"] = v
+	}
+[[- else if eq .Kind "ref"]]
+	if v := c.Query("[[.Camel]]"); v != "" {
+		id, err := idgen.Parse(v)
+		if err != nil {
+			response.Fail(c, response.BadRequest("error.bad_request"))
+			return
+		}
+		filters["[[.Name]]"] = int64(id)
+	}
+[[- else if eq .Kind "bool"]]
+	switch c.Query("[[.Camel]]") {
+	case "1", "true":
+		filters["[[.Name]]"] = true
+	case "0", "false":
+		filters["[[.Name]]"] = false
+	}
+[[- end]]
+[[- end]]
+	q := ListQuery{Keyword: strings.TrimSpace(c.Query("keyword")), Filters: filters, Page: page, PageSize: size}
+	list, total, err := h.svc.List(c.Request.Context(), q)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.Page(c, list, total, page, size)
+}
+
+// Get GET /[[.Plural]]/:id
+func (h *Handler) Get(c *gin.Context) {
+	if id, ok := paramID(c); ok {
+		v, err := h.svc.Get(c.Request.Context(), id)
+		respond(c, v, err)
+	}
+}
+
+func (h *Handler) save(c *gin.Context, id idgen.ID) {
+	var f Form
+	if !response.BindJSON(c, &f) {
+		return
+	}
+	v, err := h.svc.Save(c.Request.Context(), id, f)
+	respond(c, v, err)
+}
+
+// Create POST /[[.Plural]]
+func (h *Handler) Create(c *gin.Context) { h.save(c, 0) }
+
+// Update PUT /[[.Plural]]/:id
+func (h *Handler) Update(c *gin.Context) {
+	if id, ok := paramID(c); ok {
+		h.save(c, id)
+	}
+}
+
+// Delete DELETE /[[.Plural]]/:id
+func (h *Handler) Delete(c *gin.Context) {
+	if id, ok := paramID(c); ok {
+		respond(c, nil, h.svc.Delete(c.Request.Context(), []idgen.ID{id}))
+	}
+}
+
+func parseIDs(list []string) ([]idgen.ID, bool) {
+	var ids []idgen.ID
+	for _, s := range list {
+		if s = strings.TrimSpace(s); s == "" {
+			continue
+		}
+		id, err := idgen.Parse(s)
+		if err != nil {
+			return nil, false
+		}
+		ids = append(ids, id)
+	}
+	return ids, true
+}
+
+// DeleteBatch DELETE /[[.Plural]]?ids=1,2,3
+func (h *Handler) DeleteBatch(c *gin.Context) {
+	ids, ok := parseIDs(strings.Split(c.Query("ids"), ","))
+	if !ok || len(ids) == 0 {
+		response.Fail(c, response.BadRequest("error.bad_request"))
+		return
+	}
+	respond(c, nil, h.svc.Delete(c.Request.Context(), ids))
+}
+[[- if .Sortable]]
+
+// Sort PUT /[[.Plural]]/sort，请求体 {"ids": [...]} 是整组的新顺序。
+func (h *Handler) Sort(c *gin.Context) {
+	var body struct {
+		IDs []string `json:"ids" binding:"required"`
+	}
+	if !response.BindJSON(c, &body) {
+		return
+	}
+	ids, ok := parseIDs(body.IDs)
+	if !ok {
+		response.Fail(c, response.BadRequest("error.bad_request"))
+		return
+	}
+	respond(c, nil, h.svc.Sort(c.Request.Context(), ids))
+}
+[[- end]]

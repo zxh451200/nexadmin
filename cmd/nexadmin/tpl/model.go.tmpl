@@ -1,0 +1,23 @@
+// Package [[.Name]] 由 nexadmin add module 生成：[[.Pascal]] 的增删改查。
+// 模型嵌入 TenantModel（多租户 + 雪花 ID）；业务表不使用 sys_ 前缀。
+package [[.Name]]
+
+import (
+[[- if .UsesTime]]
+	"time"
+[[end]]
+	"[[.Module]]/core/database"
+[[- if .UsesIdgen]]
+	"[[.Module]]/pkg/idgen"
+[[- end]]
+)
+
+// [[.Pascal]] 对应表 [[.Table]]。
+type [[.Pascal]] struct {
+	database.TenantModel
+[[- range .Fields]]
+	[[.Pascal]] [[.ModelType]] `gorm:"column:[[.Name]]"`
+[[- end]]
+}
+
+func ([[.Pascal]]) TableName() string { return "[[.Table]]" }

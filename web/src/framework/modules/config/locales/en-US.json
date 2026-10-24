@@ -1,0 +1,36 @@
+{
+  "sysConfig": {
+    "menu": "System config",
+    "title": "System config",
+    "description": "System-level settings operators can change without a release",
+    "name": "Name",
+    "key": "Key",
+    "value": "Value",
+    "type": "Value type",
+    "isPublic": "Public",
+    "allTypes": "All types",
+    "searchPlaceholder": "Search name, key or value",
+    "create": "New setting",
+    "edit": "Edit setting",
+    "refreshCache": "Refresh cache",
+    "refreshed": "Cache refreshed",
+    "deleteConfirm": "Delete the {{count}} selected setting(s)?",
+    "types": {
+      "string": "String",
+      "number": "Number",
+      "boolean": "Boolean",
+      "json": "JSON"
+    },
+    "upload": {
+      "title": "Upload limits",
+      "description": "Leave empty or 0 for no limit; the client pre-checks files against these values",
+      "maxImage": "Image limit (MB)",
+      "maxVideo": "Video limit (MB)",
+      "maxFile": "File limit (MB)",
+      "unlimited": "No limit",
+      "unlimitedWarning": "Upload size is unlimited; the disk may fill up",
+      "allowedTypes": "Allowed file types",
+      "allowedTypesHint": "Only the listed types can be uploaded"
+    }
+  }
+}

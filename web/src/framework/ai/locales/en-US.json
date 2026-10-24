@@ -1,0 +1,47 @@
+{
+  "ai": {
+    "filter": {
+      "placeholder": "Describe what you are looking for, e.g. users disabled last month",
+      "label": "AI filter",
+      "submit": "AI filter",
+      "applied": "Filtered by \"{{text}}\": {{explanation}}",
+      "clear": "Clear AI filter",
+      "failed": "AI filter failed, please try again later"
+    },
+    "translate": {
+      "button": "AI translate",
+      "menuLabel": "Translate to",
+      "empty": "Nothing to translate",
+      "noLanguage": "No other languages available",
+      "failed": "AI translation failed, please try again later",
+      "done": "Translated to {{lang}}"
+    },
+    "write": {
+      "button": "AI write",
+      "menuLabel": "AI writing assistant",
+      "draft": "Draft from key points",
+      "polish": "Polish existing text",
+      "toneLabel": "Tone",
+      "tone": {
+        "default": "Keep original",
+        "formal": "Formal",
+        "friendly": "Friendly",
+        "concise": "Concise"
+      },
+      "empty": "Enter key points or the text to polish first",
+      "emptyBody": "Enter key points in the body, or a title to use as the key points",
+      "done": "AI generated the text",
+      "undo": "Undo",
+      "failed": "AI writing failed, please try again later",
+      "mock": {
+        "title": "[Notice] {{text}}",
+        "greeting": "Dear colleagues,",
+        "closing": "Please take note and cooperate. Contact the administrator if you have any questions."
+      }
+    },
+    "error": {
+      "tenantDisabled": "AI is turned off for your tenant. Please contact the platform administrator",
+      "quotaExceeded": "Your tenant has reached its daily AI call limit ({{count}}). Please try again tomorrow or contact the platform administrator"
+    }
+  }
+}

@@ -1,0 +1,1 @@
+{"plugin_i18n_editor":{"menu":"多语言在线编辑","title":"多语言在线编辑","description":"管理租户级多语言词条，支持草稿、发布和版本回滚。","publish":"发布","rollback":"回滚版本","version":"版本 {{version}}","edit":"编辑","save":"保存草稿","key":"词条 Key","value":"文案内容","currentVersion":"当前版本 {{version}}","columns":{"key":"Key","value":"文案","status":"状态","actions":"操作"}}}

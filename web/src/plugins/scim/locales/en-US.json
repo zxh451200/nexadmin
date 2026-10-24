@@ -1,0 +1,11 @@
+{
+  "plugin_scim": {
+    "menu": "SCIM sync",
+    "title": "SCIM user synchronization",
+    "description": "Manage bearer tokens for enterprise identity providers.",
+    "tokenName": "Token name",
+    "createToken": "Create token",
+    "revoke": "Revoke",
+    "columns": { "name": "Name", "createdAt": "Created", "lastUsed": "Last used", "revoked": "Revoked", "actions": "Actions" }
+  }
+}

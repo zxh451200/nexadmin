@@ -1,0 +1,150 @@
+{
+  "settings": {
+    "menu": "System Settings",
+    "title": "System Settings",
+    "description": "Site, cache, storage, AI, SMS and sign-in configuration",
+    "testConnection": "Test connection",
+    "tabs": {
+      "site": "Site",
+      "security": "Sign-in security",
+      "cache": "Cache",
+      "storage": "File storage",
+      "ai": "AI model",
+      "sms": "SMS",
+      "notify": "Notifications",
+      "auth": "Sign-in"
+    },
+    "test": {
+      "ok": "Connection test succeeded",
+      "failed": "Connection test failed: {{reason}}",
+      "reason": {
+        "noAddress": "address is empty",
+        "incomplete": "configuration is incomplete",
+        "noProvider": "no provider selected",
+        "unknown": "unknown reason",
+        "noRecipient": "No test recipient",
+        "sendFailed": "Sending failed; check the settings and server logs",
+        "robotNotFound": "Robot not found; set its name first",
+        "unavailable": "Notification service unavailable"
+      }
+    },
+    "site": {
+      "title": "Site information",
+      "description": "Site name, logo, copyright and default language",
+      "siteName": "Site name",
+      "logo": "Logo",
+      "copyright": "Copyright",
+      "defaultLanguage": "Default language",
+      "watermark": "Page watermark",
+      "watermarkHint": "Overlay the username and time on pages"
+    },
+    "cache": {
+      "title": "Cache",
+      "description": "Choose the cache backend; Valkey suits multi-instance deployments",
+      "type": "Cache type",
+      "memory": "In-memory",
+      "address": "Address",
+      "password": "Password"
+    },
+    "storage": {
+      "title": "File storage",
+      "description": "Where uploaded files are stored",
+      "type": "Storage type",
+      "local": "Local",
+      "s3": "S3 compatible",
+      "readonlyHint": "File storage is determined by config/config.yaml on the server (storage.driver / storage.s3.*) and is read-only here. Edit the file and restart the service to change it. The setup wizard and init --config write these values."
+    },
+    "ai": {
+      "title": "AI model",
+      "description": "Configure an OpenAI-compatible model service",
+      "hint": "If not configured, all AI entry points are hidden automatically",
+      "enabled": "Enable AI",
+      "model": "Model",
+      "timeoutSec": "Timeout (seconds)",
+      "redact": "Redact sensitive data before sending",
+      "redactHint": "Phone numbers, emails, ID card numbers and bank card numbers are replaced with placeholders before being sent to the model and are not restored in the result. Keeping this on is recommended"
+    },
+    "sms": {
+      "title": "SMS",
+      "description": "Provider used to send verification codes and other messages",
+      "provider": "Provider",
+      "none": "Disabled",
+      "aliyun": "Alibaba Cloud",
+      "tencent": "Tencent Cloud",
+      "log": "Log only (development)",
+      "logWarning": "\"Log only\" just writes message content to the server log and sends nothing. Do not use it in production.",
+      "signName": "Signature",
+      "templateCode": "Template"
+    },
+    "security": {
+      "title": "Sign-in security",
+      "description": "Temporarily lock an account after repeated wrong passwords to block brute force",
+      "maxAttempts": "Allowed consecutive failures",
+      "maxAttemptsHint": "The account is locked once this count is reached",
+      "lockMinutes": "Lock duration",
+      "lockMinutesHint": "Sign-in is blocked while locked; an admin can unlock it in User management",
+      "times_one": "{{count}} time",
+      "times_other": "{{count}} times",
+      "minutes_one": "{{count}} minute",
+      "minutes_other": "{{count}} minutes"
+    },
+    "auth": {
+      "title": "Sign-in methods",
+      "description": "Account, phone and third-party sign-in",
+      "basicMethods": "Basic methods",
+      "account": "Username and password",
+      "phone": "Phone verification code",
+      "thirdParty": "Third-party sign-in",
+      "providers": {
+        "wecom": "WeCom",
+        "dingtalk": "DingTalk",
+        "feishu": "Feishu",
+        "google": "Google",
+        "github": "GitHub",
+        "oidc": "OIDC"
+      },
+      "matchBy": "Account matching",
+      "matchByHint": "Existing users are matched by this field after third-party sign-in",
+      "matchPhone": "Phone",
+      "matchEmail": "Email",
+      "matchEmployeeNo": "Employee ID",
+      "autoCreate": "Auto-create accounts",
+      "autoCreateHint": "Create a new account when no user matches",
+      "allowedDomains": "Allowed email domains",
+      "allowedDomainsHint": "Separate multiple domains with commas; leave empty for no restriction",
+      "proxy": "Outbound proxy",
+      "proxyHint": "Used when reaching overseas services such as Google and GitHub"
+    },
+    "notify": {
+      "title": "Notification channels",
+      "description": "Email (SMTP) and group robots; SMS uses the SMS section",
+      "hint": "Business messages can be delivered by email, SMS or group robots. Forgot-password relies on the email channel and is hidden on the login page until email is configured.",
+      "mail": "Email (SMTP)",
+      "port": "Port",
+      "security": "Encryption",
+      "securityNone": "None",
+      "username": "Username",
+      "password": "Password",
+      "fromName": "Sender name",
+      "fromAddr": "Sender address",
+      "testTo": "Test recipient",
+      "sendTest": "Send test",
+      "robots": "Group robots",
+      "addRobot": "Add robot",
+      "removeRobot": "Remove",
+      "noRobots": "No robots yet",
+      "robotName": "Name",
+      "robotType": "Type",
+      "robotSecret": "Signing secret",
+      "robotSecretHint": "DingTalk signing / Feishu signature secret; not needed for WeCom",
+      "markdown": "Use Markdown",
+      "type": {
+        "dingtalk": "DingTalk",
+        "feishu": "Feishu",
+        "wecom": "WeCom"
+      },
+      "accountMail": "Account notification email",
+      "accountMailHint": "Email the user when an account is created or an admin resets the password (never includes the password). Off by default."
+    }
+  }
+}

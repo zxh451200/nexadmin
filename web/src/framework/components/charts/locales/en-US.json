@@ -1,0 +1,12 @@
+{
+  "charts": {
+    "vsLast": "vs last period",
+    "up": "Up",
+    "down": "Down",
+    "flat": "Flat",
+    "chartType": "Chart type",
+    "line": "Line",
+    "area": "Area",
+    "bar": "Bar"
+  }
+}

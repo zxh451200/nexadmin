@@ -1,0 +1,69 @@
+{
+  "plugin_report": {
+    "menu": "报表中心",
+    "title": "报表中心",
+    "description": "结构化数据集、图表、报表页与数据大屏；数据只来自管理员授权的白名单表与列，自动按租户与数据范围隔离",
+    "btn": { "dataset": "数据集管理", "chart": "图表管理", "report": "报表管理", "screen": "大屏管理" },
+    "tabs": { "reports": "报表", "screens": "数据大屏", "charts": "图表", "datasets": "数据集" },
+    "card": { "overview": "报表中心", "reports": "报表", "screens": "可见大屏", "loadFailed": "加载失败" },
+    "searchPlaceholder": "按名称搜索",
+    "empty": "暂无数据",
+    "truncated": "结果已按行数上限截断",
+    "loadFailed": "加载失败，请稍后重试",
+    "type": { "bar": "柱状图", "line": "折线图", "pie": "饼图", "table": "表格", "metric": "指标卡" },
+    "agg": { "count": "计数", "sum": "求和", "avg": "平均", "min": "最小", "max": "最大" },
+    "bucket": { "none": "不分桶", "day": "按日", "month": "按月", "year": "按年" },
+    "op": { "=": "等于", "!=": "不等于", ">": "大于", "<": "小于", ">=": "大于等于", "<=": "小于等于", "in": "属于", "like": "包含", "between": "介于" },
+    "colType": { "string": "文本", "number": "数值", "time": "时间", "bool": "布尔" },
+    "color": {
+      "chart-1": "图表色 1", "chart-2": "图表色 2", "chart-3": "图表色 3", "chart-4": "图表色 4", "chart-5": "图表色 5",
+      "primary": "主色", "success": "成功", "warning": "警告", "destructive": "危险", "info": "信息"
+    },
+    "source": { "plg_cron_job": "定时任务", "plg_cron_log": "定时任务执行日志", "sys_login_log": "登录日志" },
+    "field": {
+      "name": "名称", "handler": "处理器", "enabled": "是否启用", "retry_count": "重试次数", "last_status": "最近状态",
+      "last_run_at": "最近执行时间", "created_at": "创建时间", "job_name": "任务名称", "trigger_type": "触发方式",
+      "status": "状态", "attempts": "尝试次数", "cost_ms": "耗时(ms)", "started_at": "开始时间", "finished_at": "结束时间",
+      "login_type": "登录方式", "fail_reason": "失败原因", "browser": "浏览器", "os": "操作系统"
+    },
+    "filter": { "add": "添加条件", "column": "字段", "op": "操作符", "value": "值", "inHint": "多个值用逗号分隔", "betweenHint": "起止值用 ~ 分隔" },
+    "dataset": {
+      "create": "新建数据集", "createTitle": "新建数据集", "editTitle": "编辑数据集", "source": "数据表", "columns": "可用字段",
+      "fixedFilters": "固定过滤", "fixedFiltersHint": "对使用该数据集的所有图表生效，只能追加条件，不能放宽租户与数据范围限制",
+      "pickSource": "请先选择数据表", "empty": "还没有数据集",
+      "deleteConfirm": "确定删除数据集「{{name}}」吗？仍被图表使用时无法删除。",
+      "safeHint": "只能从管理员授权的白名单表与字段中选择；不支持手写 SQL。每次查询都会自动附加当前租户条件。"
+    },
+    "chart": {
+      "create": "新建图表", "createTitle": "新建图表", "editTitle": "编辑图表", "empty": "还没有图表",
+      "deleteConfirm": "确定删除图表「{{name}}」吗？引用它的报表和大屏会显示「图表已删除」。",
+      "dataset": "数据集", "type": "图表类型", "shape": "维度 / 度量", "pickDataset": "请先选择数据集",
+      "dimensions": "维度", "dimension": "维度字段", "bucket": "时间分桶", "addDimension": "添加维度",
+      "measures": "度量", "agg": "聚合方式", "measureColumn": "度量字段", "allRows": "全部行", "addMeasure": "添加度量",
+      "filters": "筛选", "orderBy": "排序", "orderDefault": "默认（按第一个维度）", "dimensionN": "维度 {{n}}", "measureN": "度量 {{n}}",
+      "desc": "倒序", "limit": "最大行数（≤ 5000）", "unit": "单位", "colors": "颜色（语义色，按顺序使用）", "stacked": "堆叠",
+      "shapeCartesian": "柱状图/折线图需要至少 1 个维度和 1 个度量", "shapePie": "饼图需要 1 个维度和 1 个度量",
+      "shapeMetric": "指标卡需要 1 个度量，且不能有维度", "shapeTable": "表格至少需要 1 列"
+    },
+    "report": {
+      "create": "新建报表", "createTitle": "新建报表", "editTitle": "编辑报表", "pick": "选择报表", "empty": "还没有报表",
+      "notFound": "报表不存在或无权查看", "noCharts": "这张报表还没有图表", "chartDeleted": "图表已删除",
+      "deleteConfirm": "确定删除报表「{{name}}」吗？", "group": "分组", "items": "图表", "chart": "图表", "span": "宽度",
+      "spanN": "{{n}}/12 宽", "addItem": "添加图表", "filters": "筛选器", "filtersHint": "筛选器作用于绑定了同一数据集的图表字段",
+      "filterLabel": "筛选器名称", "filterType": "类型", "filterColumn": "字段", "dateRange": "日期范围", "select": "下拉选择",
+      "multiple": "允许多选", "addFilter": "添加筛选器", "allOption": "{{label}}：全部", "export": "导出 xlsx",
+      "exportTruncated": "导出行数已达上限，仅包含前 5000 行"
+    },
+    "screen": {
+      "create": "新建大屏", "createTitle": "新建大屏", "editTitle": "编辑大屏", "empty": "没有可查看的大屏",
+      "emptyHint": "大屏需要由管理员授权给你的角色后才可见", "noRemark": "暂无说明", "open": "全屏展示",
+      "deleteConfirm": "确定删除大屏「{{name}}」吗？", "notFound": "大屏不存在或无权查看", "emptyCanvas": "画布上还没有组件",
+      "title": "大屏标题", "refresh": "自动刷新", "noRefresh": "不自动刷新", "everySec": "每 {{sec}} 秒", "autoRefresh": "每 {{sec}} 秒自动刷新（切走页面时暂停）",
+      "enterFull": "全屏", "exitFull": "退出全屏", "addChart": "添加图表", "add": "添加到画布", "noSpace": "画布上没有足够的空位",
+      "rejected": "该位置超出画布或与其他组件重叠", "editorHint": "拖拽移动，右下角手柄缩放；也可用方向键移动（Shift+方向键缩放，Delete 删除）。",
+      "canvasHint": "画布为 {{cols}} 列栅格，最多 {{rows}} 行；布局以 JSON 保存。", "itemTitle": "组件标题", "width": "宽", "height": "高",
+      "removeItem": "移除组件", "itemAria": "{{name}}，位置 {{x}},{{y}}，大小 {{w}}×{{h}}",
+      "roles": "可见角色", "rolesHint": "未选择任何角色时，仅管理员（超管或拥有大屏管理权限）可见"
+    }
+  }
+}

@@ -1,0 +1,98 @@
+import { Suspense, lazy, useMemo } from 'react'
+import { Navigate, Route, Routes } from 'react-router-dom'
+import { RequireAuth } from '@/framework/auth/RequireAuth'
+import { checkPerm } from '@/framework/auth/usePermission'
+import { useAuth } from '@/framework/auth/useAuth'
+import { AppLayout } from '@/framework/layout/AppLayout'
+import ForbiddenPage from '@/framework/pages/ForbiddenPage'
+import LoginPage from '@/framework/pages/LoginPage'
+import NotFoundPage from '@/framework/pages/NotFoundPage'
+import { Skeleton } from '@/framework/ui/skeleton'
+import { allRoutes, buildMenuTree } from './discover'
+import type { ModuleRoute } from './types'
+
+// SSO 授权确认页：无布局的全屏页；未登录由 RequireAuth 跳登录页并带回跳地址
+const SsoAuthorizePage = lazy(() => import('@/framework/modules/sso/AuthorizePage'))
+// 第三方登录 / 绑定的授权回调落地页：不要求已登录（登录场景尚无令牌）
+const OAuthCallbackPage = lazy(() => import('@/framework/pages/OAuthCallbackPage'))
+const McpConfirmationPage = lazy(() => import('@/framework/pages/McpConfirmationPage'))
+
+function Fallback() {
+  return (
+    <div className="space-y-4 p-4 md:p-6" role="status" aria-busy="true">
+      <Skeleton className="h-8 w-48" />
+      <Skeleton className="h-64 w-full" />
+    </div>
+  )
+}
+
+function Guarded({ route }: { route: ModuleRoute }) {
+  const perms = useAuth((s) => s.perms)
+  if (!checkPerm(perms, route.perm)) return <ForbiddenPage />
+  const Component = route.component
+  return (
+    <Suspense fallback={<Fallback />}>
+      <Component />
+    </Suspense>
+  )
+}
+
+function HomeRedirect() {
+  const perms = useAuth((s) => s.perms)
+  const first = useMemo(() => buildMenuTree(perms)[0]?.children?.[0]?.path, [perms])
+  return first ? <Navigate to={first} replace /> : <ForbiddenPage />
+}
+
+export function AppRoutes() {
+  return (
+    <Routes>
+      <Route path="/login" element={<LoginPage />} />
+      <Route
+        path="/login/oauth/:provider"
+        element={
+          <Suspense fallback={<Fallback />}>
+            <OAuthCallbackPage />
+          </Suspense>
+        }
+      />
+      {/* 已初始化的进程里向导不存在，直接去登录页 */}
+      <Route path="/setup" element={<Navigate to="/login" replace />} />
+      <Route
+        path="/mcp/confirmations/:id"
+        element={
+          <RequireAuth>
+            <Suspense fallback={<Fallback />}>
+              <McpConfirmationPage />
+            </Suspense>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/sso/authorize"
+        element={
+          <RequireAuth>
+            <Suspense fallback={<Fallback />}>
+              <SsoAuthorizePage />
+            </Suspense>
+          </RequireAuth>
+        }
+      />
+      <Route
+        element={
+          <RequireAuth>
+            <AppLayout />
+          </RequireAuth>
+        }
+      >
+        <Route index element={<HomeRedirect />} />
+        {allRoutes.map((r) => (
+          <Route key={r.path} path={r.path} element={<Guarded route={r} />} />
+        ))}
+        <Route path="403" element={<ForbiddenPage />} />
+        <Route path="*" element={<NotFoundPage />} />
+      </Route>
+    </Routes>
+  )
+}
+
+export default AppRoutes

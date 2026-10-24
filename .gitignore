@@ -1,0 +1,22 @@
+node_modules/
+dist/
+bin/
+data/*
+!data/.gitkeep
+logs/*
+!logs/.gitkeep
+backup/
+config/config.yaml
+.env.local
+*.log
+
+# 插件授权私钥（开发用，禁止提交）
+.dev-keys/
+
+# 编译产物
+/nexadmin
+/server
+/cmd/nexadmin/nexadmin
+
+# 安全扫描插件状态
+.mimosa/

@@ -1,0 +1,57 @@
+# 派生验证 lane（设计文档 §11）：只在发版前跑，不在每个 PR 跑。
+# 红 = 框架不许发版。仅存在于框架仓库，nexadmin new 与源码包都排除本文件。
+name: derive
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*", "rc*"]
+
+permissions:
+  contents: read
+
+jobs:
+  derive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: nexadmin
+          POSTGRES_PASSWORD: derive-check-pg
+          POSTGRES_DB: nexadmin
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U nexadmin -d nexadmin"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22.14.0
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: 生成非交互初始化文件
+        run: |
+          cat > "$RUNNER_TEMP/init.json" <<'EOF'
+          {
+            "db": {"type": "postgresql", "host": "127.0.0.1", "port": 5432,
+                   "username": "nexadmin", "password": "derive-check-pg", "database": "nexadmin", "autoCreate": false},
+            "cache": {"type": "memory"},
+            "admin": {"username": "derive", "password": "Derive-Check-1a!", "siteName": "derive", "language": "zh-CN", "timezone": "UTC"},
+            "optional": {}
+          }
+          EOF
+      - name: 派生验证
+        env:
+          INIT_CONFIG: ${{ runner.temp }}/init.json
+        run: bash scripts/derive_check/run.sh

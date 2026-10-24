@@ -1,0 +1,57 @@
+error:
+  internal: Internal server error
+  bad_request: Invalid request parameters
+  unauthorized: Not signed in or session expired
+  forbidden: You do not have permission to do this
+  not_found: Resource not found
+  not_initialized: System is not initialized
+  tenant_mismatch: Access to this tenant is not allowed
+  unknown: Unknown error
+  ai_tenant_disabled: AI is turned off for your tenant. Please contact the platform administrator
+  ai_quota_exceeded: Your tenant has reached its daily AI call limit (%d). Please try again tomorrow or contact the platform administrator
+  mcp_operation_failed: The MCP operation could not be completed. Please start it again
+  mcp_confirmation_revoked: This MCP confirmation was revoked after too many attempts. Please start the operation again
+auth:
+  provider_missing: Sign-in service is not enabled
+  invalid_credentials: Incorrect username or password
+  captcha_invalid: Incorrect or expired verification code
+  login_denied: Sign-in is not allowed
+  challenge_invalid: Verification expired. Please sign in again
+  verify_failed: Verification failed. Please try again
+  provider:
+    wecom: WeCom
+    dingtalk: DingTalk
+    feishu: Feishu
+    google: Google
+    github: GitHub
+    oidc: OIDC
+setup:
+  local_only: Open http://localhost:%d on the server itself to finish setup. Behind a reverse proxy or from another machine, set setup.allow_remote=true and send the setup token (printed in the console) in the X-Setup-Token header
+  token_invalid: Invalid setup token
+  running: Setup is already running
+  invalid_input: Invalid setup parameters
+tenant:
+  expired: This tenant has expired. Please contact the platform administrator to renew.
+  suspended: This tenant has been suspended. Please contact the platform administrator.
+  quota_users: The user limit of your plan (%d) has been reached
+  quota_roles: The role limit of your plan (%d) has been reached
+  quota_storage: The storage limit of your plan (%d MB) has been reached
+  domain_invalid: Invalid domain name
+  domain_reserved: This domain is reserved and cannot be bound
+  domain_taken: This domain is already bound to another tenant
+  admin_invalid: Invalid tenant administrator username, password or email
+notice:
+  audience_all_forbidden: Your data scope is not "All", so you cannot publish to everyone. Choose specific roles, departments or users instead
+  audience_dept_forbidden: The selected departments include some outside your data scope
+  audience_user_forbidden: The selected users include some outside your data scope
+  audience_platform_forbidden: Your data scope is not "All", so you cannot publish platform notices
+post:
+  in_use: This post is still assigned to %d user(s) and cannot be deleted
+dept:
+  has_users: This department still has %d user(s) and cannot be deleted
+role:
+  in_use: This role is still assigned to %d user(s) and cannot be deleted
+recycle:
+  source_gone: The original data no longer exists; the recycle record has been removed
+dict:
+  builtin: Built-in dictionaries are protected; they cannot be deleted, and the type code or built-in item values cannot be changed

@@ -1,0 +1,29 @@
+id: audit
+name: 数据变更审计
+version: 1.0.0
+description: 数据变更审计（按表开启，记录新增/修改/删除的字段级前后对比，敏感字段脱敏，异步批量写入）。官方付费插件，面向企业合规。
+author: NexAdmin
+edition: pro
+requires_nexadmin: ">=0.1.0"
+
+# 安装时写入 sys_menu；title 是 i18n key，文案在 web/locales 的 plugin_audit 命名空间里。
+menus:
+  - parent: /system
+    type: menu
+    title: plugin_audit.menu
+    path: /system/audit
+    component: plugins/audit/AuditPage
+    perm: audit:list
+    icon: ScrollText
+    sort: 110
+    keep_alive: true
+  - parent: audit:list
+    type: button
+    title: plugin_audit.btn.config
+    perm: audit:config
+    sort: 10
+  - parent: audit:list
+    type: button
+    title: plugin_audit.btn.clean
+    perm: audit:clean
+    sort: 20

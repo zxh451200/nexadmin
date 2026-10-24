@@ -1,0 +1,376 @@
+[
+ {
+  "code": "110000",
+  "name": "北京市",
+  "pinyin": "beijing",
+  "children": [
+   {
+    "code": "110100",
+    "name": "市辖区",
+    "pinyin": "shixiaqu",
+    "children": [
+     {
+      "code": "110101",
+      "name": "东城区",
+      "pinyin": "dongcheng"
+     },
+     {
+      "code": "110102",
+      "name": "西城区",
+      "pinyin": "xicheng"
+     },
+     {
+      "code": "110105",
+      "name": "朝阳区",
+      "pinyin": "chaoyang"
+     },
+     {
+      "code": "110106",
+      "name": "丰台区",
+      "pinyin": "fengtai"
+     },
+     {
+      "code": "110108",
+      "name": "海淀区",
+      "pinyin": "haidian"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "code": "320000",
+  "name": "江苏省",
+  "pinyin": "jiangsu",
+  "children": [
+   {
+    "code": "320100",
+    "name": "南京市",
+    "pinyin": "nanjing",
+    "children": [
+     {
+      "code": "320102",
+      "name": "玄武区",
+      "pinyin": "xuanwu"
+     },
+     {
+      "code": "320104",
+      "name": "秦淮区",
+      "pinyin": "qinhuai"
+     },
+     {
+      "code": "320105",
+      "name": "建邺区",
+      "pinyin": "jianye"
+     },
+     {
+      "code": "320106",
+      "name": "鼓楼区",
+      "pinyin": "gulou"
+     }
+    ]
+   },
+   {
+    "code": "320200",
+    "name": "无锡市",
+    "pinyin": "wuxi",
+    "children": [
+     {
+      "code": "320205",
+      "name": "锡山区",
+      "pinyin": "xishan"
+     },
+     {
+      "code": "320206",
+      "name": "惠山区",
+      "pinyin": "huishan"
+     },
+     {
+      "code": "320211",
+      "name": "滨湖区",
+      "pinyin": "binhu"
+     }
+    ]
+   },
+   {
+    "code": "320500",
+    "name": "苏州市",
+    "pinyin": "suzhou",
+    "children": [
+     {
+      "code": "320505",
+      "name": "虎丘区",
+      "pinyin": "huqiu"
+     },
+     {
+      "code": "320506",
+      "name": "吴中区",
+      "pinyin": "wuzhong"
+     },
+     {
+      "code": "320507",
+      "name": "相城区",
+      "pinyin": "xiangcheng"
+     },
+     {
+      "code": "320508",
+      "name": "姑苏区",
+      "pinyin": "gusu"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "code": "330000",
+  "name": "浙江省",
+  "pinyin": "zhejiang",
+  "children": [
+   {
+    "code": "330100",
+    "name": "杭州市",
+    "pinyin": "hangzhou",
+    "children": [
+     {
+      "code": "330102",
+      "name": "上城区",
+      "pinyin": "shangcheng"
+     },
+     {
+      "code": "330105",
+      "name": "拱墅区",
+      "pinyin": "gongshu"
+     },
+     {
+      "code": "330106",
+      "name": "西湖区",
+      "pinyin": "xihu"
+     },
+     {
+      "code": "330108",
+      "name": "滨江区",
+      "pinyin": "binjiang"
+     },
+     {
+      "code": "330109",
+      "name": "萧山区",
+      "pinyin": "xiaoshan"
+     },
+     {
+      "code": "330110",
+      "name": "余杭区",
+      "pinyin": "yuhang"
+     }
+    ]
+   },
+   {
+    "code": "330200",
+    "name": "宁波市",
+    "pinyin": "ningbo",
+    "children": [
+     {
+      "code": "330203",
+      "name": "海曙区",
+      "pinyin": "haishu"
+     },
+     {
+      "code": "330205",
+      "name": "江北区",
+      "pinyin": "jiangbei"
+     },
+     {
+      "code": "330206",
+      "name": "北仑区",
+      "pinyin": "beilun"
+     },
+     {
+      "code": "330212",
+      "name": "鄞州区",
+      "pinyin": "yinzhou"
+     }
+    ]
+   },
+   {
+    "code": "330300",
+    "name": "温州市",
+    "pinyin": "wenzhou",
+    "children": [
+     {
+      "code": "330302",
+      "name": "鹿城区",
+      "pinyin": "lucheng"
+     },
+     {
+      "code": "330303",
+      "name": "龙湾区",
+      "pinyin": "longwan"
+     },
+     {
+      "code": "330304",
+      "name": "瓯海区",
+      "pinyin": "ouhai"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "code": "440000",
+  "name": "广东省",
+  "pinyin": "guangdong",
+  "children": [
+   {
+    "code": "440100",
+    "name": "广州市",
+    "pinyin": "guangzhou",
+    "children": [
+     {
+      "code": "440103",
+      "name": "荔湾区",
+      "pinyin": "liwan"
+     },
+     {
+      "code": "440104",
+      "name": "越秀区",
+      "pinyin": "yuexiu"
+     },
+     {
+      "code": "440105",
+      "name": "海珠区",
+      "pinyin": "haizhu"
+     },
+     {
+      "code": "440106",
+      "name": "天河区",
+      "pinyin": "tianhe"
+     },
+     {
+      "code": "440111",
+      "name": "白云区",
+      "pinyin": "baiyun"
+     }
+    ]
+   },
+   {
+    "code": "440300",
+    "name": "深圳市",
+    "pinyin": "shenzhen",
+    "children": [
+     {
+      "code": "440303",
+      "name": "罗湖区",
+      "pinyin": "luohu"
+     },
+     {
+      "code": "440304",
+      "name": "福田区",
+      "pinyin": "futian"
+     },
+     {
+      "code": "440305",
+      "name": "南山区",
+      "pinyin": "nanshan"
+     },
+     {
+      "code": "440306",
+      "name": "宝安区",
+      "pinyin": "baoan"
+     },
+     {
+      "code": "440307",
+      "name": "龙岗区",
+      "pinyin": "longgang"
+     },
+     {
+      "code": "440308",
+      "name": "盐田区",
+      "pinyin": "yantian"
+     }
+    ]
+   },
+   {
+    "code": "440400",
+    "name": "珠海市",
+    "pinyin": "zhuhai",
+    "children": [
+     {
+      "code": "440402",
+      "name": "香洲区",
+      "pinyin": "xiangzhou"
+     },
+     {
+      "code": "440403",
+      "name": "斗门区",
+      "pinyin": "doumen"
+     },
+     {
+      "code": "440404",
+      "name": "金湾区",
+      "pinyin": "jinwan"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "code": "510000",
+  "name": "四川省",
+  "pinyin": "sichuan",
+  "children": [
+   {
+    "code": "510100",
+    "name": "成都市",
+    "pinyin": "chengdu",
+    "children": [
+     {
+      "code": "510104",
+      "name": "锦江区",
+      "pinyin": "jinjiang"
+     },
+     {
+      "code": "510105",
+      "name": "青羊区",
+      "pinyin": "qingyang"
+     },
+     {
+      "code": "510106",
+      "name": "金牛区",
+      "pinyin": "jinniu"
+     },
+     {
+      "code": "510107",
+      "name": "武侯区",
+      "pinyin": "wuhou"
+     },
+     {
+      "code": "510108",
+      "name": "成华区",
+      "pinyin": "chenghua"
+     }
+    ]
+   },
+   {
+    "code": "510700",
+    "name": "绵阳市",
+    "pinyin": "mianyang",
+    "children": [
+     {
+      "code": "510703",
+      "name": "涪城区",
+      "pinyin": "fucheng"
+     },
+     {
+      "code": "510704",
+      "name": "游仙区",
+      "pinyin": "youxian"
+     },
+     {
+      "code": "510705",
+      "name": "安州区",
+      "pinyin": "anzhou"
+     }
+    ]
+   }
+  ]
+ }
+]

@@ -1,0 +1,40 @@
+{
+  "dept": {
+    "menu": "Departments",
+    "description": "Manage the org structure. Drag to reorder within the same parent.",
+    "readonlyHint": "Outside your data scope; shown only to keep the hierarchy",
+    "col": {
+      "name": "Name",
+      "leader": "Leader",
+      "phone": "Phone",
+      "email": "Email",
+      "sort": "Order",
+      "status": "Status"
+    },
+    "field": {
+      "parent": "Parent",
+      "parentPlaceholder": "Top level (no parent)",
+      "name": "Name",
+      "leader": "Leader",
+      "phone": "Phone",
+      "email": "Email",
+      "sort": "Order",
+      "status": "Status"
+    },
+    "action": {
+      "add": "New department",
+      "addChild": "Add child",
+      "edit": "Edit department"
+    },
+    "validation": {
+      "nameRequired": "Name is required",
+      "emailInvalid": "Invalid email address",
+      "phoneInvalid": "Invalid phone number",
+      "sortInvalid": "Order must be an integer"
+    },
+    "confirm": {
+      "delete": "Delete department \"{{name}}\"?",
+      "deleteCascade": "Delete department \"{{name}}\"? Its {{count}} descendant departments will also be deleted. This cannot be undone."
+    }
+  }
+}

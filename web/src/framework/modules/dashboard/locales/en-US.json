@@ -1,0 +1,101 @@
+{
+  "dashboard": {
+    "menu": "Dashboard",
+    "greeting": {
+      "morning": "Good morning",
+      "noon": "Good noon",
+      "afternoon": "Good afternoon",
+      "evening": "Good evening"
+    },
+    "welcome": "{{greeting}}, {{name}}",
+    "welcomeSub": "Today is {{date}}. Have a productive day.",
+    "stat": {
+      "users": "Total users",
+      "todayLogin": "Logins today",
+      "unreadMessages": "Unread messages",
+      "storage": "Storage used"
+    },
+    "storageValue": "{{used}} / {{total}} GB",
+    "loginTrend": "Logins, last 7 days",
+    "requestTrend": "Requests, last 7 days",
+    "operRatio": "Operation types",
+    "series": {
+      "logins": "Successful",
+      "failures": "Failed",
+      "requests": "Requests",
+      "errors": "Errors"
+    },
+    "oper": {
+      "query": "Query",
+      "update": "Update",
+      "insert": "Create",
+      "delete": "Delete",
+      "export": "Export"
+    },
+    "todos": "To-do",
+    "todoMessage": "Message",
+    "todoNotice": "Notice",
+    "noTodos": "Nothing to do",
+    "quickLinks": "Quick links",
+    "recentNotices": "Recent announcements",
+    "noNotices": "No announcements",
+    "viewMore": "View more",
+    "important": "Important",
+    "loadFailed": "Failed to load data",
+    "cardFailed": "This card failed to load",
+    "cardRetry": "Retry",
+    "card": {
+      "stats": "Overview"
+    },
+    "layout": {
+      "edit": "Edit layout",
+      "hint": "Drag the handle or use the move up/down buttons to reorder, or turn a switch off to hide a card. Changes apply after you press Save.",
+      "save": "Save",
+      "cancel": "Cancel",
+      "reset": "Restore defaults",
+      "show": "Show",
+      "restore": "Show card \"{{title}}\"",
+      "hiddenTitle": "Hidden ({{count}})",
+      "hiddenEmpty": "No hidden cards",
+      "dragHandle": "Drag to reposition \"{{title}}\"",
+      "dragInstructions": "Press Space to pick up a card, use the arrow keys to move it, press Space again to drop it, or Esc to cancel.",
+      "moveUp": "Move \"{{title}}\" up",
+      "moveDown": "Move \"{{title}}\" down",
+      "visibleSwitch": "Show \"{{title}}\"",
+      "size": {
+        "sm": "1/4 width",
+        "md": "1/2 width",
+        "lg": "3/4 width",
+        "full": "Full width"
+      },
+      "announce": {
+        "moved": "\"{{title}}\" moved to position {{pos}} of {{total}}",
+        "hidden": "\"{{title}}\" hidden",
+        "shown": "\"{{title}}\" shown",
+        "dragStart": "Picked up \"{{title}}\"",
+        "dragOver": "\"{{title}}\" is now at position {{pos}} of {{total}}",
+        "dragEnd": "Dropped \"{{title}}\" at position {{pos}} of {{total}}",
+        "dragCancel": "Move of \"{{title}}\" cancelled"
+      },
+      "saved": "Layout saved",
+      "saveFailed": "Failed to save the layout, please try again",
+      "resetTitle": "Restore default layout",
+      "resetDesc": "Your saved layout will be deleted and the default order restored. Unsaved changes are discarded too.",
+      "resetDone": "Default layout restored",
+      "resetFailed": "Failed to restore defaults, please try again",
+      "discardTitle": "Discard changes",
+      "discardDesc": "You have unsaved layout changes. Discard them?",
+      "discard": "Discard"
+    },
+    "link": {
+      "user": "Users",
+      "role": "Roles",
+      "dept": "Departments",
+      "dict": "Dictionaries",
+      "notice": "Announcements",
+      "message": "Messages",
+      "file": "Files",
+      "operLog": "Operation log"
+    }
+  }
+}

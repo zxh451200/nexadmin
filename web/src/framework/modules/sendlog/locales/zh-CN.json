@@ -1,0 +1,67 @@
+{
+  "sendlog": {
+    "menu": "发送日志",
+    "description": "记录短信、邮件、机器人的投递结果；收件人已脱敏，日志里不含验证码、正文和密钥",
+    "col": {
+      "channel": "渠道",
+      "scene": "场景",
+      "recipient": "收件人",
+      "subject": "标题 / 模板",
+      "status": "状态",
+      "error": "失败原因",
+      "duration": "耗时",
+      "time": "时间"
+    },
+    "filter": {
+      "recipient": "收件人",
+      "recipientPlaceholder": "手机号尾号 / 邮箱域名 / 机器人名",
+      "channel": "渠道",
+      "allChannels": "全部渠道",
+      "status": "状态",
+      "allStatuses": "全部状态",
+      "time": "时间范围"
+    },
+    "channel": {
+      "sms": "短信",
+      "email": "邮件",
+      "robot": "机器人"
+    },
+    "status": {
+      "success": "成功",
+      "fail": "失败",
+      "skipped": "已跳过"
+    },
+    "scene": {
+      "notice": "通知",
+      "verify_code": "验证码",
+      "bind_phone": "绑定手机号",
+      "account": "账号通知",
+      "security": "安全告警",
+      "test": "测试"
+    },
+    "action": {
+      "clean": "清理",
+      "deleteSelected": "删除所选"
+    },
+    "detail": {
+      "title": "发送详情",
+      "id": "记录 ID",
+      "empty": "无",
+      "notice": "为保护隐私，收件人已脱敏；这里不会保存验证码、正文和密钥。"
+    },
+    "clean": {
+      "title": "清理发送日志",
+      "description": "早于所选天数的发送日志将被永久删除。",
+      "range": "清理范围",
+      "d7": "7 天前的日志",
+      "d30": "30 天前的日志",
+      "d90": "90 天前的日志",
+      "d180": "180 天前的日志",
+      "confirm": "确认清理？此操作不可恢复。",
+      "done": "已清理 {{count}} 条日志"
+    },
+    "confirm": {
+      "delete": "确认删除所选的 {{count}} 条日志？"
+    }
+  }
+}

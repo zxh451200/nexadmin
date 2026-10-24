@@ -1,0 +1,46 @@
+package [[.Name]]
+
+import (
+	"encoding/json"
+	"strings"
+	"time"
+)
+
+var timeLayouts = []string{time.RFC3339Nano, "2006-01-02T15:04:05", "2006-01-02 15:04:05", "2006-01-02T15:04", "2006-01-02 15:04", "2006-01-02"}
+
+// parseTime 解析日期 / 日期时间；空串或 nil 返回 nil。
+func parseTime(s *string) (*time.Time, error) {
+	if s == nil || strings.TrimSpace(*s) == "" {
+		return nil, nil
+	}
+	v := strings.TrimSpace(*s)
+	for _, l := range timeLayouts {
+		if t, err := time.Parse(l, v); err == nil {
+			return &t, nil
+		}
+	}
+	return nil, &time.ParseError{Value: v, Message: "unsupported time format"}
+}
+
+// jsonText 把图片 / 文件字段规整成合法的 JSON 数组文本。
+func jsonText(raw json.RawMessage) string {
+	v := strings.TrimSpace(string(raw))
+	if v == "" || v == "null" || !json.Valid(raw) || !strings.HasPrefix(v, "[") {
+		return "[]"
+	}
+	return v
+}
+
+// rawJSON 是 jsonText 的反向：库里的文本 -> 接口返回的 JSON 数组。
+func rawJSON(s string) json.RawMessage {
+	if strings.TrimSpace(s) == "" || !json.Valid([]byte(s)) {
+		return json.RawMessage("[]")
+	}
+	return json.RawMessage(s)
+}
+
+// likeArg 转义 LIKE 通配符。
+func likeArg(s string) string {
+	r := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+	return "%" + r.Replace(s) + "%"
+}

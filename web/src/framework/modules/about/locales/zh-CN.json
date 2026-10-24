@@ -1,0 +1,19 @@
+{
+  "about": {
+    "menu": "关于",
+    "title": "关于",
+    "description": "系统版本与运行环境信息",
+    "version": "版本号",
+    "buildTime": "构建时间",
+    "dbEngine": "数据库引擎",
+    "goVersion": "Go 版本",
+    "os": "操作系统",
+    "licensesTitle": "开源许可证清单",
+    "licensesHint": "清单由框架仓库的许可证闸在 CI 中生成，用于审计",
+    "name": "名称",
+    "pkgVersion": "版本",
+    "license": "许可证",
+    "allLicenses": "全部许可证",
+    "searchPlaceholder": "搜索依赖名称"
+  }
+}

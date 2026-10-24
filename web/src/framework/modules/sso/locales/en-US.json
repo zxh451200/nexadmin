@@ -1,0 +1,97 @@
+{
+  "sso": {
+    "menu": "App management",
+    "title": "App management",
+    "description": "Manage downstream apps connected to single sign-on (SSO), their callback URLs and visibility",
+    "create": "Add app",
+    "empty": "No apps connected yet",
+    "copy": "Copy",
+    "copied": "Copied",
+    "copyFailed": "Copy failed, please select and copy manually",
+    "allUsers": "All signed-in users",
+    "resetSecret": "Reset secret",
+    "resetConfirm": "The current secret of \"{{name}}\" stops working immediately and the app must be updated. Continue?",
+    "deleteConfirm": "Delete app \"{{name}}\"? It will no longer be able to use single sign-on.",
+    "btn": { "edit": "Edit" },
+    "fields": {
+      "name": "App name",
+      "clientId": "Client ID",
+      "clientSecret": "Client Secret",
+      "enabled": "Enabled",
+      "roles": "Visible roles",
+      "redirectUris": "Callback URLs",
+      "redirectCount": "Callback URLs",
+      "logo": "Logo",
+      "homeUrl": "App URL",
+      "description": "Description",
+      "allowOrgRead": "Allow reading org directory"
+    },
+    "keys": {
+      "entry": "Key rotation",
+      "title": "Signing keys",
+      "description": "SSO tokens are signed with RS256; public keys are published to downstream apps through JWKS",
+      "notice": "After rotation the new key signs tokens immediately. The old key stays in JWKS for 7 days (already-issued tokens keep verifying) and is then removed automatically. The key is shared site-wide, so rotation affects every connected app.",
+      "rotate": "Rotate now",
+      "confirm": "Rotate the signing key? The new key becomes the signing key immediately and the old key is removed after 7 days. Downstream apps pick up the new public key from JWKS; if any app hard-codes a public key, switch it to JWKS first.",
+      "rotated": "Signing key rotated",
+      "createdAt": "Created",
+      "retiresAt": "Removed at",
+      "status": { "active": "Signing", "retiring": "Verify only (to be removed)" }
+    },
+    "form": {
+      "createTitle": "Add app",
+      "editTitle": "Edit app",
+      "nameTooLong": "Name must be 50 characters or fewer",
+      "descTooLong": "Description must be 200 characters or fewer",
+      "redirectHint": "One per line. Must be a full https URL (http://localhost is allowed for local debugging)",
+      "redirectRequired": "Enter at least one callback URL",
+      "redirectInvalid": "Invalid callback URL: {{uri}} (must be a full https or localhost URL without a # fragment)",
+      "rolesHint": "Leave empty to show the app to all signed-in users",
+      "logoUrl": "Logo URL",
+      "logoUrlPlaceholder": "Or enter a logo image URL",
+      "homeUrl": "App URL",
+      "homeUrlHint": "Opened in a new tab when the card is clicked in the app center",
+      "urlInvalid": "Enter a full URL starting with http(s)://",
+      "allowOrgReadHint": "When on, the app can use client_credentials (scope org.read) to get a token and read this tenant's users and departments (/oauth/org/users, /oauth/org/depts). Turning it off invalidates issued tokens immediately."
+    },
+    "secret": {
+      "title": "App secret",
+      "onceHint": "The Client Secret is shown only this once. You cannot view it again after closing, so copy and store it now. If lost, it can only be reset.",
+      "saved": "I have saved it"
+    },
+    "access": {
+      "action": "Integration info",
+      "title": "Integration info",
+      "section": "Downstream app configuration",
+      "hint": "Use these endpoints in the downstream app with the OIDC / OAuth 2.0 authorization code flow",
+      "issuer": "Issuer",
+      "discovery": "Discovery URL",
+      "authorization": "Authorization endpoint",
+      "token": "Token endpoint"
+    },
+    "portal": {
+      "menu": "App center",
+      "title": "App center",
+      "description": "Click an app card to open it in a new tab and sign in automatically",
+      "emptyTitle": "No apps available",
+      "emptyDesc": "No apps have been made available to you yet. Please contact an administrator."
+    },
+    "authorize": {
+      "title": "{{name}} is requesting access to your account",
+      "account": "Signed in as {{name}}",
+      "willGet": "After you allow, this app will get your:",
+      "scope": {
+        "openid": "Unique account ID",
+        "profile": "Name and avatar",
+        "email": "Email",
+        "phone": "Phone number"
+      },
+      "redirectTo": "You will be redirected to {{host}}",
+      "allow": "Allow and continue",
+      "deny": "Cancel",
+      "badRedirect": "Invalid return address, redirect refused",
+      "invalidTitle": "Invalid authorization request",
+      "invalidDesc": "The app does not exist, is disabled, or the callback URL is not registered. Please contact the app administrator."
+    }
+  }
+}

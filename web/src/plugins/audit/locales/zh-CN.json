@@ -1,0 +1,51 @@
+{
+  "plugin_audit": {
+    "menu": "数据变更审计",
+    "title": "数据变更审计",
+    "description": "记录被审计表的新增、修改、删除，字段级前后对比，敏感字段自动脱敏",
+    "tabs": { "logs": "变更记录", "scope": "审计范围" },
+    "btn": { "config": "审计范围", "clean": "清理记录" },
+    "all": "全部",
+    "system": "系统",
+    "detail": "变更详情",
+    "empty": "暂无变更记录",
+    "operatorPlaceholder": "操作人",
+    "fields": {
+      "time": "时间",
+      "table": "表",
+      "rowPk": "主键",
+      "action": "操作类型",
+      "operator": "操作人",
+      "changedFields": "变更字段",
+      "timeRange": "时间范围"
+    },
+    "action": { "create": "新增", "update": "修改", "delete": "删除" },
+    "diff": {
+      "title": "字段对比",
+      "field": "字段",
+      "old": "旧值",
+      "new": "新值",
+      "empty": "空",
+      "emptyString": "空字符串",
+      "none": "没有字段变化"
+    },
+    "scope": {
+      "title": "被审计的表",
+      "description": "只有在这里选中的表才会记录变更，默认不审计任何表。已排除本插件自己的表和日志类大表。",
+      "placeholder": "选择要审计的表",
+      "selectedCount": "已选 {{count}} 张表",
+      "search": "搜索表名",
+      "noTables": "没有可选的表",
+      "remove": "移除 {{name}}",
+      "noneSelected": "当前没有审计任何表，不会产生变更记录。",
+      "note": "保存后立即在当前实例生效，其他实例最长 30 秒内同步。password / secret / token 等敏感字段的值一律记为 ***。"
+    },
+    "clean": {
+      "title": "清理变更记录",
+      "description": "删除保留期之外的变更记录，不可恢复。",
+      "keep": "保留最近",
+      "days": "{{count}} 天",
+      "done": "已清理 {{count}} 条记录"
+    }
+  }
+}

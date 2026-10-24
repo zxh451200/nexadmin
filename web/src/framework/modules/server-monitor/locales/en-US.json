@@ -1,0 +1,75 @@
+{
+  "serverMonitor": {
+    "menu": "Server monitor",
+    "title": "Server monitor",
+    "description": "Live metrics of the server and Go runtime, for load checks and performance troubleshooting",
+    "cores": "cores",
+    "gcCount": "Total GC runs",
+    "refresh": {
+      "label": "Auto refresh",
+      "v3000": "Every 3 s",
+      "v10000": "Every 10 s",
+      "v30000": "Every 30 s",
+      "v0": "Paused"
+    },
+    "unit": { "d": "d", "h": "h", "m": "m" },
+    "card": { "cpu": "CPU usage", "memory": "Memory used", "disk": "Disk used", "uptime": "Uptime", "load": "Load" },
+    "chart": {
+      "cpuMem": "CPU / memory usage (%)",
+      "network": "Network traffic (Kbps)",
+      "goroutines": "Goroutines",
+      "heap": "Heap memory (MB)",
+      "gc": "GC pause (ms)"
+    },
+    "series": {
+      "cpu": "CPU",
+      "mem": "Memory",
+      "in": "Inbound",
+      "out": "Outbound",
+      "goroutines": "Goroutines",
+      "heap": "Heap",
+      "gc": "Pause"
+    },
+    "info": {
+      "title": "Server info",
+      "os": "OS",
+      "arch": "Architecture",
+      "goVersion": "Go version",
+      "hostname": "Hostname",
+      "ip": "IP address",
+      "startedAt": "Started at"
+    },
+    "disk": { "title": "Disk partitions", "mount": "Mount point", "total": "Total", "used": "Used", "usage": "Usage" },
+    "tabs": { "metrics": "Metrics", "clientErrors": "Frontend errors" },
+    "health": {
+      "title": "Health checks",
+      "updatedAt": "Updated {{time}}",
+      "latency": "Latency {{ms}} ms",
+      "loadFailed": "Failed to load health checks. Please refresh and try again.",
+      "status": { "ok": "Healthy", "warn": "Warning", "fail": "Failing" },
+      "item": {
+        "db": "Database",
+        "cache": "Cache",
+        "storage": "File storage",
+        "migrations": "Migrations",
+        "plugins": "Plugin licenses",
+        "disk": "Disk space"
+      }
+    },
+    "clientErrors": {
+      "keywordPlaceholder": "Search message, route or user",
+      "anonymous": "Not signed in",
+      "col": { "time": "Last seen", "count": "Count", "message": "Message", "route": "Route", "user": "User" },
+      "detail": {
+        "open": "Details",
+        "title": "Error details",
+        "firstSeen": "First seen",
+        "lastSeen": "Last seen",
+        "version": "Frontend version",
+        "ua": "User agent",
+        "stack": "Stack (first 20 lines)",
+        "noStack": "No stack was reported"
+      }
+    }
+  }
+}

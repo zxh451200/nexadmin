@@ -1,0 +1,81 @@
+# 仅示例：生产环境请替换所有密码、固定镜像版本，并按需放到内网/加 TLS 反代。
+# 用法：
+#   在项目根目录写 .env（POSTGRES_PASSWORD=...，必填）或直接 export
+#   docker compose -f deploy/docker-compose.example.yml up -d --build
+#   docker compose -f deploy/docker-compose.example.yml --profile cache up -d   # 同时启用 valkey
+# 首次部署用非交互初始化（容器内不开放远程向导）：
+#   docker compose -f deploy/docker-compose.example.yml run --rm app init --config /app/config/init.yaml
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: nexadmin:latest
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      NEXADMIN_APP_ENV: production
+      NEXADMIN_DATABASE_TYPE: postgres
+      NEXADMIN_DATABASE_HOST: postgres
+      NEXADMIN_DATABASE_PORT: "5432"
+      NEXADMIN_DATABASE_USER: nexadmin
+      NEXADMIN_DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?请设置 POSTGRES_PASSWORD}
+      NEXADMIN_DATABASE_NAME: nexadmin
+      # 启用 valkey profile 时改为：NEXADMIN_CACHE_DRIVER=redis、NEXADMIN_CACHE_ADDR=valkey:6379
+      # 备份目录（镜像里已默认指向这里，写出来是为了一目了然；环境变量优先于 config.yaml 的 backup.dir）
+      NEXADMIN_BACKUP_DIR: /app/data/backup
+      # 前面有 nginx 等反向代理时，必须把代理地址写进 server.trusted_proxies（否则限流 / 登录日志 / IP 白名单看到的都是代理 IP），例如：
+      # NEXADMIN_SERVER_TRUSTED_PROXIES: "172.16.0.0/12"
+    volumes:
+      - nexadmin_config:/app/config
+      - nexadmin_data:/app/data
+      - nexadmin_backup:/app/data/backup   # 备份单独一个卷，便于定期拷走；备份页 / reinit / restore 都用它
+      - nexadmin_logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 3s
+      start_period: 20s
+      retries: 3
+
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: nexadmin
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?请设置 POSTGRES_PASSWORD}
+      POSTGRES_DB: nexadmin
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nexadmin -d nexadmin"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  valkey:  # 可选：--profile cache 才启动；单实例用默认 memory 缓存即可
+    image: valkey/valkey:8
+    profiles: ["cache"]
+    restart: unless-stopped
+    command: ["valkey-server", "--requirepass", "${VALKEY_PASSWORD:-change-me}"]
+    environment:
+      VALKEY_PASSWORD: ${VALKEY_PASSWORD:-change-me}
+    volumes:
+      - valkey_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "valkey-cli -a \"$${VALKEY_PASSWORD:-change-me}\" ping | grep -q PONG"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  nexadmin_config:
+  nexadmin_data:
+  nexadmin_backup:
+  nexadmin_logs:
+  pg_data:
+  valkey_data:

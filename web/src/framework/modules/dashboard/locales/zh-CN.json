@@ -1,0 +1,101 @@
+{
+  "dashboard": {
+    "menu": "工作台",
+    "greeting": {
+      "morning": "早上好",
+      "noon": "中午好",
+      "afternoon": "下午好",
+      "evening": "晚上好"
+    },
+    "welcome": "{{greeting}}，{{name}}",
+    "welcomeSub": "今天是 {{date}}，祝你工作顺利。",
+    "stat": {
+      "users": "用户总数",
+      "todayLogin": "今日登录",
+      "unreadMessages": "未读消息",
+      "storage": "存储用量"
+    },
+    "storageValue": "{{used}} / {{total}} GB",
+    "loginTrend": "近 7 天登录趋势",
+    "requestTrend": "近 7 天请求量",
+    "operRatio": "操作类型占比",
+    "series": {
+      "logins": "登录成功",
+      "failures": "登录失败",
+      "requests": "请求数",
+      "errors": "错误数"
+    },
+    "oper": {
+      "query": "查询",
+      "update": "修改",
+      "insert": "新增",
+      "delete": "删除",
+      "export": "导出"
+    },
+    "todos": "待办事项",
+    "todoMessage": "消息",
+    "todoNotice": "公告",
+    "noTodos": "暂无待办",
+    "quickLinks": "快捷入口",
+    "recentNotices": "最近公告",
+    "noNotices": "暂无公告",
+    "viewMore": "查看更多",
+    "important": "重要",
+    "loadFailed": "数据加载失败",
+    "cardFailed": "该卡片加载失败",
+    "cardRetry": "重试",
+    "card": {
+      "stats": "统计概览"
+    },
+    "layout": {
+      "edit": "编辑布局",
+      "hint": "拖动手柄、使用上移/下移按钮调整顺序，或关闭开关隐藏卡片；点击「保存」后生效。",
+      "save": "保存",
+      "cancel": "取消",
+      "reset": "恢复默认",
+      "show": "显示",
+      "restore": "显示卡片「{{title}}」",
+      "hiddenTitle": "已隐藏（{{count}}）",
+      "hiddenEmpty": "没有隐藏的卡片",
+      "dragHandle": "拖动调整「{{title}}」的位置",
+      "dragInstructions": "按空格键拿起卡片，用方向键移动，再按空格键放下，按 Esc 取消。",
+      "moveUp": "上移「{{title}}」",
+      "moveDown": "下移「{{title}}」",
+      "visibleSwitch": "显示「{{title}}」",
+      "size": {
+        "sm": "1/4 宽",
+        "md": "1/2 宽",
+        "lg": "3/4 宽",
+        "full": "整行"
+      },
+      "announce": {
+        "moved": "「{{title}}」已移到第 {{pos}} 位，共 {{total}} 张",
+        "hidden": "已隐藏「{{title}}」",
+        "shown": "已显示「{{title}}」",
+        "dragStart": "已拿起「{{title}}」",
+        "dragOver": "「{{title}}」移到第 {{pos}} 位，共 {{total}} 张",
+        "dragEnd": "已放下「{{title}}」，位置第 {{pos}}，共 {{total}} 张",
+        "dragCancel": "已取消移动「{{title}}」"
+      },
+      "saved": "布局已保存",
+      "saveFailed": "布局保存失败，请重试",
+      "resetTitle": "恢复默认布局",
+      "resetDesc": "将删除你保存的布局并恢复为默认顺序，未保存的修改也会丢弃。",
+      "resetDone": "已恢复默认布局",
+      "resetFailed": "恢复默认失败，请重试",
+      "discardTitle": "放弃修改",
+      "discardDesc": "有未保存的布局修改，确定放弃吗？",
+      "discard": "放弃"
+    },
+    "link": {
+      "user": "用户管理",
+      "role": "角色管理",
+      "dept": "部门管理",
+      "dict": "字典管理",
+      "notice": "通知公告",
+      "message": "消息中心",
+      "file": "文件管理",
+      "operLog": "操作日志"
+    }
+  }
+}

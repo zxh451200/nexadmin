@@ -1,0 +1,34 @@
+{
+  "dict": {
+    "menu": "Dictionaries",
+    "title": "Dictionaries",
+    "description": "Manage dictionary types and data used by selects and tags",
+    "tag": {
+      "default": "Default",
+      "success": "Success",
+      "warning": "Warning",
+      "destructive": "Destructive",
+      "info": "Info"
+    },
+    "type": {
+      "title": "Dictionary types",
+      "name": "Type name",
+      "code": "Type code",
+      "searchPlaceholder": "Search name or code",
+      "create": "New dictionary type",
+      "edit": "Edit dictionary type",
+      "builtin": "Built-in",
+      "deleteConfirm": "Delete dictionary type \"{{name}}\"?"
+    },
+    "data": {
+      "title": "Dictionary data",
+      "label": "Label",
+      "value": "Value",
+      "tag": "Tag color",
+      "selectType": "Select a dictionary type on the left first",
+      "create": "New dictionary item",
+      "edit": "Edit dictionary item",
+      "deleteConfirm": "Delete dictionary item \"{{name}}\"?"
+    }
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "uploader": {
+    "add_image": "Upload image",
+    "add_video": "Upload video",
+    "add_file": "Upload file",
+    "kind_image": "an image",
+    "kind_video": "a video",
+    "kind_file": "a file",
+    "uploading": "Uploading",
+    "failed": "Upload failed",
+    "retry": "Retry",
+    "drag": "Drag to reorder",
+    "maxCount": "At most {{count}} files",
+    "errSize": "\"{{name}}\" exceeds the size limit ({{limit}} MB)",
+    "errType": "The type of \"{{name}}\" is not allowed",
+    "errKind": "\"{{name}}\" is not {{kind}}",
+    "cropTitle": "Crop image",
+    "cropHint": "Drag the box to adjust the crop area",
+    "cropFixed": "Output size is fixed at {{width}} × {{height}}",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "rotate": "Rotate"
+  }
+}

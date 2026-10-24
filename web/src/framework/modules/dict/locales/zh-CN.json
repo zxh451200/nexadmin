@@ -1,0 +1,34 @@
+{
+  "dict": {
+    "menu": "字典管理",
+    "title": "字典管理",
+    "description": "维护字典类型与字典数据，供下拉选择与标签渲染使用",
+    "tag": {
+      "default": "默认",
+      "success": "成功",
+      "warning": "警告",
+      "destructive": "危险",
+      "info": "信息"
+    },
+    "type": {
+      "title": "字典类型",
+      "name": "类型名称",
+      "code": "类型编码",
+      "searchPlaceholder": "搜索名称或编码",
+      "create": "新增字典类型",
+      "edit": "编辑字典类型",
+      "builtin": "内置",
+      "deleteConfirm": "确定删除字典类型“{{name}}”吗？"
+    },
+    "data": {
+      "title": "字典数据",
+      "label": "标签",
+      "value": "值",
+      "tag": "标签颜色",
+      "selectType": "请先在左侧选择一个字典类型",
+      "create": "新增字典数据",
+      "edit": "编辑字典数据",
+      "deleteConfirm": "确定删除字典数据“{{name}}”吗？"
+    }
+  }
+}

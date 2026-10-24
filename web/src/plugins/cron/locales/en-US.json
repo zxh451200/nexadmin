@@ -1,0 +1,102 @@
+{
+  "plugin_cron": {
+    "menu": "Scheduled jobs",
+    "title": "Scheduled jobs",
+    "description": "Schedule built-in handlers with cron expressions, with retries, run-now and execution logs",
+    "tabs": { "jobs": "Jobs", "logs": "Execution logs" },
+    "card": { "overview": "Cron overview", "total": "Total jobs", "enabled": "Enabled", "failed24h": "Failed in 24h", "loadFailed": "Failed to load data" },
+    "btn": { "edit": "Edit job", "run": "Run now", "log": "View logs", "clean": "Clean logs" },
+    "create": "New job",
+    "createTitle": "New job",
+    "editTitle": "Edit job",
+    "searchPlaceholder": "Search by job name",
+    "empty": "No scheduled jobs yet",
+    "emptyLogs": "No execution logs",
+    "fields": {
+      "name": "Name",
+      "cronExpr": "Cron expression",
+      "handler": "Type",
+      "params": "Parameters (JSON)",
+      "enabled": "Enabled",
+      "retryCount": "Retries on failure",
+      "nextRunAt": "Next run",
+      "lastRun": "Last run",
+      "job": "Job",
+      "status": "Status",
+      "trigger": "Trigger",
+      "startedAt": "Started at",
+      "costMs": "Duration",
+      "attempts": "Attempts",
+      "output": "Output",
+      "error": "Error"
+    },
+    "hints": {
+      "cronExpr": "min hour day month weekday; supports * , - /; evaluated in the server's local time zone",
+      "params": "Leave empty for defaults; must be a JSON object",
+      "retryCount": "How many times to retry after a failure (0-10), with exponential backoff",
+      "http": "method (GET/POST), url, body, timeoutSec (max 30); public addresses only",
+      "clean_logs": "days (retention, default 30), targets (oper / login, default both)",
+      "log": "message (text to write)"
+    },
+    "handlers": {
+      "http": "HTTP request",
+      "clean_logs": "Clean operation/login logs",
+      "log": "Write a log line (demo)"
+    },
+    "paramsExample": {
+      "http": "{\"method\":\"GET\",\"url\":\"https://example.com/health\",\"timeoutSec\":10}",
+      "clean_logs": "{\"days\":30}",
+      "log": "{\"message\":\"hello\"}"
+    },
+    "presets": {
+      "label": "Presets",
+      "custom": "Custom",
+      "everyMinute": "Every minute",
+      "every5Minutes": "Every 5 minutes",
+      "everyHour": "Every hour",
+      "dailyMidnight": "Daily at midnight",
+      "dailyNoon": "Daily at noon",
+      "weekdays9": "Weekdays at 9:00",
+      "mondayMorning": "Mondays at midnight",
+      "monthlyFirst": "1st of every month"
+    },
+    "preview": {
+      "title": "Next 5 runs",
+      "none": "No matching time within 5 years"
+    },
+    "errors": {
+      "nameRequired": "Please enter a name",
+      "nameTooLong": "Name must be at most 100 characters",
+      "fields": "Exactly 5 fields are required: min hour day month weekday",
+      "value": "Contains an unrecognized value",
+      "range": "Value out of range",
+      "step": "Invalid step",
+      "empty": "Contains an empty item",
+      "paramsJson": "Parameters must be a JSON object",
+      "retryRange": "Retries must be between 0 and 10"
+    },
+    "status": { "running": "Running", "success": "Success", "failed": "Failed" },
+    "trigger": { "schedule": "Scheduled", "manual": "Manual" },
+    "all": "All",
+    "enabledOn": "Enabled",
+    "enabledOff": "Disabled",
+    "run": "Run now",
+    "runConfirm": "Run \"{{name}}\" once now?",
+    "runStarted": "Started. Check the execution logs for the result",
+    "deleteConfirm": "Delete job \"{{name}}\"? Existing execution logs are kept.",
+    "viewLogs": "View logs",
+    "logDetail": "Execution details",
+    "clean": {
+      "title": "Clean execution logs",
+      "description": "Deletes finished logs older than the selected period; running entries are never deleted.",
+      "days": "Keep the last",
+      "d7": "7 days",
+      "d30": "30 days",
+      "d90": "90 days",
+      "all": "Clear everything",
+      "done": "Cleaned {{count}} log entries"
+    },
+    "ms": "{{value}} ms",
+    "seconds": "{{value}} s"
+  }
+}

@@ -1,0 +1,97 @@
+{
+  "sso": {
+    "menu": "应用管理",
+    "title": "应用管理",
+    "description": "管理接入统一登录（SSO）的下游应用、回调地址与可见范围",
+    "create": "新增应用",
+    "empty": "暂无接入应用",
+    "copy": "复制",
+    "copied": "已复制",
+    "copyFailed": "复制失败，请手动选择复制",
+    "allUsers": "所有登录用户",
+    "resetSecret": "重置密钥",
+    "resetConfirm": "重置后「{{name}}」当前的密钥立即失效，需要在应用侧更新配置。确定继续吗？",
+    "deleteConfirm": "确定要删除应用「{{name}}」吗？该应用将无法再使用单点登录。",
+    "btn": { "edit": "编辑" },
+    "fields": {
+      "name": "应用名称",
+      "clientId": "Client ID",
+      "clientSecret": "Client Secret",
+      "enabled": "启用",
+      "roles": "可见角色",
+      "redirectUris": "回调地址",
+      "redirectCount": "回调地址数",
+      "logo": "Logo",
+      "homeUrl": "应用地址",
+      "description": "描述",
+      "allowOrgRead": "允许读取组织架构"
+    },
+    "keys": {
+      "entry": "密钥轮换",
+      "title": "签名密钥",
+      "description": "单点登录令牌使用 RS256 签名，公钥通过 JWKS 发布给下游应用",
+      "notice": "轮换后新密钥立即用于签发令牌；旧密钥继续留在 JWKS 里 7 天（已签发的令牌照常验证），到期自动移除。该密钥为全站共用，轮换会影响所有接入应用。",
+      "rotate": "立即轮换",
+      "confirm": "确定要轮换签名密钥吗？新密钥会立即成为签名密钥，旧密钥保留 7 天后移除。下游应用按 JWKS 自动获取新公钥；若有应用写死了公钥，请先改为读取 JWKS。",
+      "rotated": "已轮换签名密钥",
+      "createdAt": "创建时间",
+      "retiresAt": "移除时间",
+      "status": { "active": "当前签名", "retiring": "仅验签（待移除）" }
+    },
+    "form": {
+      "createTitle": "新增应用",
+      "editTitle": "编辑应用",
+      "nameTooLong": "名称不能超过 50 个字符",
+      "descTooLong": "描述不能超过 200 个字符",
+      "redirectHint": "每行一个，必须是完整的 https 地址（本地调试可用 http://localhost）",
+      "redirectRequired": "至少填写一个回调地址",
+      "redirectInvalid": "回调地址不合法：{{uri}}（需为 https 或 localhost 的完整 URL，且不能带 # 片段）",
+      "rolesHint": "不选表示所有登录用户可见",
+      "logoUrl": "Logo 地址",
+      "logoUrlPlaceholder": "或直接填写 Logo 图片地址",
+      "homeUrl": "应用地址",
+      "homeUrlHint": "应用中心点击卡片后在新标签页打开",
+      "urlInvalid": "请输入以 http(s):// 开头的完整地址",
+      "allowOrgReadHint": "勾选后，该应用可用 client_credentials（scope 为 org.read）换取令牌，只读拉取本租户的用户与部门通讯录（/oauth/org/users、/oauth/org/depts）。取消勾选后已签发的令牌立即失效。"
+    },
+    "secret": {
+      "title": "应用密钥",
+      "onceHint": "Client Secret 只显示这一次，关闭后将无法再次查看，请立即复制并妥善保存。丢失后只能重置。",
+      "saved": "我已保存"
+    },
+    "access": {
+      "action": "接入信息",
+      "title": "接入信息",
+      "section": "下游应用接入配置",
+      "hint": "在下游应用中按 OIDC / OAuth 2.0 授权码模式填写以下地址",
+      "issuer": "Issuer",
+      "discovery": "Discovery 地址",
+      "authorization": "授权端点",
+      "token": "令牌端点"
+    },
+    "portal": {
+      "menu": "应用中心",
+      "title": "应用中心",
+      "description": "点击应用卡片，在新标签页中打开并自动登录",
+      "emptyTitle": "暂无可用应用",
+      "emptyDesc": "管理员还没有为你开放任何应用，请联系管理员。"
+    },
+    "authorize": {
+      "title": "{{name}} 请求访问你的账号",
+      "account": "当前登录账号：{{name}}",
+      "willGet": "授权后，该应用将获得你的：",
+      "scope": {
+        "openid": "账号唯一标识",
+        "profile": "姓名、头像",
+        "email": "邮箱",
+        "phone": "手机号"
+      },
+      "redirectTo": "授权后将跳转到 {{host}}",
+      "allow": "同意并继续",
+      "deny": "取消",
+      "badRedirect": "返回地址不合法，已拒绝跳转",
+      "invalidTitle": "授权请求无效",
+      "invalidDesc": "应用不存在、已停用，或回调地址未登记。请联系应用管理员。"
+    }
+  }
+}

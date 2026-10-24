@@ -1,0 +1,27 @@
+{
+  "online": {
+    "menu": "Online Users",
+    "description": "Users with an active session. You can sign them out",
+    "col": {
+      "username": "Account",
+      "nickname": "Name",
+      "dept": "Department",
+      "device": "Device",
+      "client": "Browser / OS",
+      "ip": "IP",
+      "loginAt": "Signed in",
+      "lastActive": "Last active"
+    },
+    "filter": {
+      "keyword": "Keyword",
+      "keywordPlaceholder": "Account / name / IP"
+    },
+    "action": {
+      "forceLogout": "Force sign-out"
+    },
+    "confirm": {
+      "forceLogout": "Force {{name}} to sign out? Their current session will end immediately."
+    },
+    "forced": "Signed out"
+  }
+}

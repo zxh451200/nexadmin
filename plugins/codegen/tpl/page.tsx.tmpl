@@ -1,0 +1,192 @@
+import { useState } from 'react'
+import { Pencil, Plus, Trash2 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
+import { Can } from '@/framework/auth/Can'
+import { useConfirm } from '@/framework/components/ConfirmDialog'
+import { DataTable, type Column } from '@/framework/components/DataTable'
+[[- if .HasKindQuery "date"]]
+import { DatePicker } from '@/framework/components/DatePicker'
+[[- end]]
+[[- if .QueryFields]]
+import { FilterBar } from '@/framework/components/FilterBar'
+[[- end]]
+import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
+import { Button } from '@/framework/ui/button'
+[[- if .HasInputQuery]]
+import { Input } from '@/framework/ui/input'
+[[- end]]
+[[- if .HasKindQuery "bool"]]
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
+[[- end]]
+import { useDelete[[.Pascal]]s, use[[.Pascal]]List, type [[.Pascal]][[if .QueryFields]], type [[.Pascal]]Query[[end]] } from './api'
+import { [[.Pascal]]FormDialog } from './[[.Pascal]]FormDialog'
+[[- if .HasTimeList]]
+
+function fmt(v: string | null, lang: string, withTime: boolean) {
+  if (!v) return ''
+  const d = new Date(v.length === 10 ? v + 'T00:00:00' : v.replace(' ', 'T'))
+  if (Number.isNaN(d.getTime())) return v
+  return new Intl.DateTimeFormat(lang, withTime
+    ? { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }
+    : { year: 'numeric', month: '2-digit', day: '2-digit' }).format(d)
+}
+[[- end]]
+[[- if .HasKindQuery "bool"]]
+
+const ALL = '__all__'
+[[- end]]
+
+export default function [[.Pascal]]Page() {
+  const { t[[if .HasTimeList]], i18n[[end]] } = useTranslation()
+  const confirm = useConfirm()
+[[- if .QueryFields]]
+  const [draft, setDraft] = useState<[[.Pascal]]Query>({})
+  const [filters, setFilters] = useState<[[.Pascal]]Query>({})
+[[- end]]
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
+  const { data, isLoading } = use[[.Pascal]]List({ [[if .QueryFields]]...filters, [[end]]page, pageSize })
+  const remove = useDelete[[.Pascal]]s()
+  const [selected, setSelected] = useState<string[]>([])
+  const [formOpen, setFormOpen] = useState(false)
+  const [editing, setEditing] = useState<[[.Pascal]] | null>(null)
+
+  const openForm = (row: [[.Pascal]] | null) => {
+    setEditing(row)
+    setFormOpen(true)
+  }
+
+  const onDelete = async (ids: string[]) => {
+    if (!(await confirm({ destructive: true, description: t('common.deleteConfirm') }))) return
+    try {
+      await remove.mutateAsync(ids)
+      setSelected((s) => s.filter((x) => !ids.includes(x)))
+      toast.success(t('common.operateSuccess'))
+    } catch {
+      toast.error(t('common.operateFailed'))
+    }
+  }
+
+  const columns: Column<[[.Pascal]]>[] = [
+[[- range $i, $f := .ListFields]]
+    {
+      key: '[[$f.Camel]]',
+      title: t('[[$.Module]].field.[[$f.Camel]]'),
+[[- if eq $i 0]]
+      mobile: 'title',
+[[- end]]
+[[- if eq $f.Kind "bool"]]
+      render: (r) => (r.[[$f.Camel]] ? t('common.yes') : t('common.no')),
+[[- else if eq $f.Kind "date"]]
+      render: (r) => <span className="num">{fmt(r.[[$f.Camel]], i18n.language, false)}</span>,
+[[- else if eq $f.Kind "datetime"]]
+      render: (r) => <span className="num">{fmt(r.[[$f.Camel]], i18n.language, true)}</span>,
+[[- else if eq $f.Kind "id"]]
+      render: (r) => <span className="num text-muted-foreground">{r.[[$f.Camel]] || '-'}</span>,
+[[- end]]
+    },
+[[- end]]
+  ]
+
+  return (
+    <PageContainer>
+      <PageHeader
+        title={t('[[.Module]].menu')}
+        description={t('[[.Module]].description')}
+        actions={
+          <Can perm="[[.Module]]:edit">
+            <Button onClick={() => openForm(null)}>
+              <Plus aria-hidden="true" />
+              {t('[[.Module]].action.add')}
+            </Button>
+          </Can>
+        }
+      />
+[[- if .QueryFields]]
+
+      <FilterBar
+        onSearch={() => {
+          setFilters(draft)
+          setPage(1)
+          setSelected([])
+        }}
+        onReset={() => {
+          setDraft({})
+          setFilters({})
+          setPage(1)
+          setSelected([])
+        }}
+      >
+[[- range .QueryFields]]
+[[- if eq .Kind "bool"]]
+        <Select value={(draft.[[.Camel]] as string | undefined) ?? ALL} onValueChange={(v) => setDraft((d) => ({ ...d, [[.Camel]]: v === ALL ? undefined : v }))}>
+          <SelectTrigger className="md:w-40" aria-label={t('[[$.Module]].field.[[.Camel]]')}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>{t('[[$.Module]].field.[[.Camel]]')}: {t('[[$.Module]].all')}</SelectItem>
+            <SelectItem value="1">{t('common.yes')}</SelectItem>
+            <SelectItem value="0">{t('common.no')}</SelectItem>
+          </SelectContent>
+        </Select>
+[[- else if eq .Kind "date"]]
+        <DatePicker value={(draft.[[.Camel]] as string | undefined) ?? ''} onChange={(v) => setDraft((d) => ({ ...d, [[.Camel]]: v || undefined }))} />
+[[- else]]
+        <Input
+          className="md:w-48"
+          value={(draft.[[.Camel]] as string | undefined) ?? ''}
+          onChange={(e) => setDraft((d) => ({ ...d, [[.Camel]]: e.target.value }))}
+          placeholder={t('[[$.Module]].field.[[.Camel]]')}
+          aria-label={t('[[$.Module]].field.[[.Camel]]')}
+        />
+[[- end]]
+[[- end]]
+      </FilterBar>
+[[- end]]
+
+      <DataTable
+        columns={columns}
+        data={data?.list ?? []}
+        rowKey="id"
+        loading={isLoading}
+        columnSettingsKey="[[.Module]]-list"
+        pagination={{
+          page,
+          pageSize,
+          total: data?.total ?? 0,
+          onChange: (p, s) => {
+            setPage(p)
+            setPageSize(s)
+          },
+        }}
+        selection={{ selected, onChange: setSelected }}
+        batchActions={(ids) => (
+          <Can perm="[[.Module]]:delete">
+            <Button variant="destructive" size="sm" onClick={() => onDelete(ids)}>
+              <Trash2 aria-hidden="true" />
+              {t('common.delete')}
+            </Button>
+          </Can>
+        )}
+        emptyText={t('[[.Module]].empty')}
+        rowActions={(r) => (
+          <>
+            <Can perm="[[.Module]]:edit">
+              <Button variant="ghost" size="icon" aria-label={t('common.edit')} onClick={() => openForm(r)}>
+                <Pencil aria-hidden="true" />
+              </Button>
+            </Can>
+            <Can perm="[[.Module]]:delete">
+              <Button variant="ghost" size="icon" className="text-destructive" aria-label={t('common.delete')} onClick={() => onDelete([r.id])}>
+                <Trash2 aria-hidden="true" />
+              </Button>
+            </Can>
+          </>
+        )}
+      />
+
+      <[[.Pascal]]FormDialog open={formOpen} onOpenChange={setFormOpen} editing={editing} />
+    </PageContainer>
+  )
+}

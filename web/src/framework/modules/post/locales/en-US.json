@@ -1,0 +1,32 @@
+{
+  "post": {
+    "menu": "Posts",
+    "description": "Manage posts and their departments. Drag to reorder.",
+    "col": {
+      "name": "Name",
+      "code": "Code",
+      "dept": "Department",
+      "status": "Status",
+      "remark": "Remark"
+    },
+    "field": {
+      "name": "Name",
+      "code": "Code",
+      "dept": "Department",
+      "status": "Status",
+      "remark": "Remark"
+    },
+    "action": {
+      "add": "New post",
+      "edit": "Edit post"
+    },
+    "validation": {
+      "nameRequired": "Name is required",
+      "codeRequired": "Code is required",
+      "codeInvalid": "Only letters, digits, underscores and hyphens are allowed"
+    },
+    "confirm": {
+      "delete": "Delete post \"{{name}}\"?"
+    }
+  }
+}

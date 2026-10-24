@@ -1,0 +1,37 @@
+{
+  "plugin": {
+    "menu": "插件管理",
+    "btn": {
+      "license": "导入授权"
+    }
+  },
+  "pluginMgr": {
+    "menu": "插件管理",
+    "title": "插件管理",
+    "description": "已安装插件的版本与授权状态；授权文件导入后立即生效，无需重新编译",
+    "edition": { "free": "免费", "pro": "专业" },
+    "status": { "active": "有效", "unlicensed": "未授权", "expired": "已过期", "invalid": "无效", "revoked": "已吊销" },
+    "field": { "customer": "客户", "expiresAt": "到期时间", "reason": "原因", "serial": "序列号" },
+    "expiring": {
+      "title": "授权即将过期",
+      "item": "{{name}}（剩余 {{days}} 天）",
+      "sep": "、",
+      "badge": "{{days}} 天后到期"
+    },
+    "license": {
+      "action": "导入授权",
+      "title": "导入授权 - {{name}}",
+      "desc": "选择授权文件，或直接粘贴授权文本",
+      "file": "授权文件",
+      "paste": "授权文本",
+      "placeholder": "粘贴 .lic 文件内容",
+      "tooLarge": "文件过大，请确认是授权文件",
+      "effective": "授权已导入并立即生效",
+      "needRestart": "授权已导入，需重启服务后生效"
+    },
+    "empty": {
+      "title": "尚未安装任何插件",
+      "desc": "在项目根目录执行以下命令安装插件，然后重新编译并重启："
+    }
+  }
+}

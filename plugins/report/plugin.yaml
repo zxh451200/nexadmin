@@ -1,0 +1,40 @@
+id: report
+name: 报表中心
+version: 1.0.0
+description: 报表中心 + 数据大屏（结构化数据集：表/列白名单、参数化查询、自动租户与数据范围隔离；柱/折/饼/表格/指标卡；报表页筛选器联动与 xlsx 导出；画布式数据大屏，按角色授权）。官方付费插件。
+author: NexAdmin
+edition: pro
+requires_nexadmin: ">=0.1.0"
+
+# 安装时写入 sys_menu；title 是 i18n key，文案在 web/locales 的 plugin_report 命名空间里。
+# 页面内的页签（报表 / 数据大屏 / 图表 / 数据集）按下面的权限点显示；大屏展示页是隐藏路由，不进菜单。
+menus:
+  - parent: /monitor
+    type: menu
+    title: plugin_report.menu
+    path: /monitor/report
+    component: plugins/report/ReportPage
+    perm: report:view
+    icon: ChartColumn
+    sort: 70
+    keep_alive: true
+  - parent: report:view
+    type: button
+    title: plugin_report.btn.dataset
+    perm: report:dataset
+    sort: 10
+  - parent: report:view
+    type: button
+    title: plugin_report.btn.chart
+    perm: report:chart
+    sort: 20
+  - parent: report:view
+    type: button
+    title: plugin_report.btn.report
+    perm: report:report
+    sort: 30
+  - parent: report:view
+    type: button
+    title: plugin_report.btn.screen
+    perm: report:screen
+    sort: 40

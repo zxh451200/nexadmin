@@ -1,0 +1,15 @@
+title = "Nexadmin worktree secret policy"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Dependency installations and Git metadata; application tests remain scanned"
+paths = ['''(^|/)node_modules/''', '''(^|/)\.git/''']
+
+[[allowlists]]
+description = "Public AWS SigV4 documentation vector used only in this signing test"
+condition = "AND"
+paths = ['''^core/storage/sigv4_test\.go$''']
+regexTarget = "secret"
+regexes = ['''^AKIAW0AZ82CEIYN8O9EZ$''', '''^wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY$''']

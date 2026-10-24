@@ -1,0 +1,40 @@
+{
+  "dept": {
+    "menu": "部门管理",
+    "description": "维护组织架构，同一上级下可拖动排序",
+    "readonlyHint": "超出数据范围，仅用于展示层级",
+    "col": {
+      "name": "部门名称",
+      "leader": "负责人",
+      "phone": "电话",
+      "email": "邮箱",
+      "sort": "排序",
+      "status": "状态"
+    },
+    "field": {
+      "parent": "上级部门",
+      "parentPlaceholder": "顶级（无上级）",
+      "name": "部门名称",
+      "leader": "负责人",
+      "phone": "联系电话",
+      "email": "邮箱",
+      "sort": "排序",
+      "status": "状态"
+    },
+    "action": {
+      "add": "新增部门",
+      "addChild": "新增下级",
+      "edit": "编辑部门"
+    },
+    "validation": {
+      "nameRequired": "请输入部门名称",
+      "emailInvalid": "邮箱格式不正确",
+      "phoneInvalid": "电话格式不正确",
+      "sortInvalid": "排序必须是整数"
+    },
+    "confirm": {
+      "delete": "确定删除部门「{{name}}」吗？",
+      "deleteCascade": "确定删除部门「{{name}}」吗？其下 {{count}} 个下级部门将一并删除，此操作不可恢复。"
+    }
+  }
+}
