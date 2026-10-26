@@ -1,0 +1,23 @@
+id: totp
+name: 两步验证
+version: 0.1.0
+description: RFC 6238 TOTP 两步验证(RFC 6238,兼容 Google Authenticator):绑定验证器、登录二次验证、步长防重放;LoginGate 钩子。
+author: NexAdmin
+edition: pro
+requires_nexadmin: ">=0.1.0"
+menus:
+  - parent: /
+    type: dir
+    title: plugin_totp.dir
+    path: /mine
+    icon: ShieldCheck
+    sort: 90
+  - parent: /mine
+    type: menu
+    title: plugin_totp.menu
+    path: /mine/totp
+    component: plugins/totp/TotpPage
+    perm: totp:manage
+    icon: ShieldCheck
+    sort: 1
+    keep_alive: true

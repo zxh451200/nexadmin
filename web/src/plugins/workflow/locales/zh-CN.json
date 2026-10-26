@@ -1,0 +1,36 @@
+{
+  "plugin_workflow": {
+    "title": "工作流",
+    "description": "审批流程的发起、待办与流转历史",
+    "dir": "工作流",
+    "menu": "审批中心",
+    "perm": {
+      "start": "发起/撤回",
+      "approve": "审批",
+      "edit": "流程定义管理"
+    },
+    "tabs": {
+      "todo": "我的待办",
+      "done": "我已办",
+      "all": "全部实例"
+    },
+    "empty": "暂无流程",
+    "loading": "加载中…",
+    "total": "共 {{count}} 条",
+    "prev": "上一页",
+    "next": "下一页",
+    "submitter": "提交人",
+    "commentPlaceholder": "审批意见(选填)",
+    "approve": "同意",
+    "reject": "驳回",
+    "escalate": "超时升级",
+    "withdraw": "撤回",
+    "withdrawConfirm": "确认撤回该流程?撤回后不可恢复。",
+    "status": {
+      "running": "审批中",
+      "approved": "已通过",
+      "rejected": "已驳回",
+      "cancelled": "已撤回"
+    }
+  }
+}

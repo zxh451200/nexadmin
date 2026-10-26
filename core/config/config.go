@@ -105,6 +105,11 @@ type Config struct {
 		Enabled bool   `mapstructure:"enabled"`
 		Token   string `mapstructure:"token"`
 	} `mapstructure:"metrics"`
+	// Secret 是静态加密（core/secret）：主密钥来自 NEXADMIN_SECRET_KEY 或 data/secret.key。
+	// algorithm 默认 aes-gcm；sm4-gcm 为国密选项（新密文 enc:v2:，旧 v1 密文仍可解）。
+	Secret struct {
+		Algorithm string `mapstructure:"algorithm"`
+	} `mapstructure:"secret"`
 
 	// 以下由 Load 填充，不来自 yaml。
 	DefaultConfigPath string `mapstructure:"-"`
@@ -256,6 +261,10 @@ type Auth struct {
 	JWTSecret     string         `mapstructure:"jwt_secret"`     // 空 = 自动生成并保存到 data/jwt.secret
 	AccessTTL     time.Duration  `mapstructure:"access_ttl"`
 	RefreshTTL    time.Duration  `mapstructure:"refresh_ttl"`
+	// 自助注册（POST /auth/register）：默认关闭。开启后登录页出现注册入口，
+	// 注册强制图形验证码并受 IP 限流，建号走与手工创建相同的租户额度检查。
+	AllowRegister bool     `mapstructure:"allow_register"`
+	RegisterRoles []string `mapstructure:"register_roles"` // 注册用户默认挂的角色码（在当前租户内解析）；空 = 不挂角色，待管理员分配
 }
 
 // DefaultLanguage 返回默认语言码。
@@ -362,6 +371,11 @@ func (c *Config) validate() error {
 	}
 	if c.Backup.KeepDays < 0 || c.Backup.KeepCount < 0 {
 		return fmt.Errorf("config: backup.keep_days and backup.keep_count must not be negative")
+	}
+	switch c.Secret.Algorithm {
+	case "", "aes-gcm", "sm4-gcm":
+	default:
+		return fmt.Errorf("config: secret.algorithm must be aes-gcm or sm4-gcm, got %q", c.Secret.Algorithm)
 	}
 	return nil
 }

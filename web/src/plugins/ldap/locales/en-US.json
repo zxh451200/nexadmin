@@ -1,0 +1,18 @@
+{
+  "plugin_ldap": {
+    "title": "LDAP/AD Login",
+    "description": "Directory login: LDAP is tried after local password fails",
+    "dir": "LDAP Login",
+    "menu": "LDAP Config",
+    "enabled": "Enable LDAP login",
+    "host": "LDAP server",
+    "port": "Port",
+    "matchExisting": "Match existing local account",
+    "autoCreate": "Auto-create account",
+    "pwKeep": "Leave blank to keep current",
+    "test": "Test connection",
+    "testOk": "LDAP connection OK",
+    "on": "Enabled",
+    "off": "Disabled"
+  }
+}

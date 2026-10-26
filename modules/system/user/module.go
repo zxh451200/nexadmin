@@ -33,6 +33,7 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	m.provisioner(svc)
 	d.Notify.SetDirectory(directory{svc: h.svc}) // 邮件 / 短信渠道按用户资料里的邮箱 / 手机号发送
 	m.registerForgot(d)                          // POST /auth/forgot/send-code、/auth/forgot/reset（匿名）
+	m.registerSelf(d)                            // POST /auth/register（匿名，auth.allow_register 开启时才有）
 	r.GET("/users", core.Perm("user:list"), h.list)
 	r.GET("/users/export", core.Perm("user:export"), h.export)
 	ah := &asyncHandler{svc: h.svc, syncLimit: syncLimitOf(d.Config.Export.SyncLimit)}

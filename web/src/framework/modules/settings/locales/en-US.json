@@ -83,8 +83,10 @@
       "maxAttemptsHint": "The account is locked once this count is reached",
       "lockMinutes": "Lock duration",
       "lockMinutesHint": "Sign-in is blocked while locked; an admin can unlock it in User management",
+      "times": "{{count}} times",
       "times_one": "{{count}} time",
       "times_other": "{{count}} times",
+      "minutes": "{{count}} minutes",
       "minutes_one": "{{count}} minute",
       "minutes_other": "{{count}} minutes"
     },

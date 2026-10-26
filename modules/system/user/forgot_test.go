@@ -22,7 +22,8 @@ import (
 
 type fakeStore struct {
 	mu     sync.Mutex
-	users  map[string]*forgotUser
+	users  map[string]*forgotUser // byEmail 按 key 查
+	phones map[string]*forgotUser // byPhone 按归一化手机号查
 	hashes map[idgen.ID]string
 	sets   int
 }
@@ -31,6 +32,15 @@ func (f *fakeStore) byEmail(_ context.Context, e string) (*forgotUser, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.users[e], nil
+}
+
+func (f *fakeStore) byPhone(_ context.Context, p string) (*forgotUser, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.phones == nil {
+		return nil, nil
+	}
+	return f.phones[p], nil
 }
 
 func (f *fakeStore) setPassword(_ context.Context, id idgen.ID, h string) error {
@@ -84,7 +94,7 @@ func newFgEnv(t *testing.T, configured bool) *fgEnv {
 		return st, nil
 	})
 	st := &fakeStore{users: map[string]*forgotUser{"alice@example.org": {ID: 1, Username: "alice", Name: "Alice"}}, hashes: map[idgen.ID]string{}}
-	return &fgEnv{f: newForgotService(st, c, ns, zap.NewNop()), st: st, mb: mb, ns: ns}
+	return &fgEnv{f: newForgotService(st, c, ns, nil, zap.NewNop()), st: st, mb: mb, ns: ns}
 }
 
 var codeRe = regexp.MustCompile(`\b(\d{6})\b`)

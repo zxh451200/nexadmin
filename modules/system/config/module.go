@@ -9,6 +9,7 @@ import (
 	"gorm.io/gorm"
 
 	"nexadmin/core"
+	"nexadmin/core/auth"
 	tn "nexadmin/core/tenant"
 	"nexadmin/pkg/idgen"
 )
@@ -43,6 +44,18 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	core.SetUploadLimitsSource(svc.uploadLimits)
 	if d.OnClose != nil {
 		d.OnClose(func() { core.SetUploadLimitsSource(nil) })
+	}
+	// 自助注册的运行时开关来自「参数设置」的 user.register_enabled（默认关闭）；
+	// 行缺失 / 读库失败回退 YAML auth.allow_register。/auth/register 与 /auth/methods 都从这里取。
+	auth.SetRegisterEnabledSource(svc.registerEnabledSourceFn(d.Config.Auth.AllowRegister))
+	if d.OnClose != nil {
+		d.OnClose(func() { auth.SetRegisterEnabledSource(nil) })
+	}
+	// 「登录验证码」的运行时开关来自「参数设置」的 login.captcha_enabled（出厂 true = 默认强制）；
+	// 关闭后回落到自适应策略（连续失败达到阈值才要求）。/auth/login 与 /auth/methods 都从这里取。
+	auth.SetLoginCaptchaSource(svc.loginCaptchaSourceFn(true))
+	if d.OnClose != nil {
+		d.OnClose(func() { auth.SetLoginCaptchaSource(nil) })
 	}
 
 	r.GET("/config/upload", h.GetUpload) // 上传组件读取限制，登录即可
@@ -88,12 +101,10 @@ var factoryRows = []struct {
 	public           bool
 	remark           string
 }{
-	{1, "站点名称", "site.name", "NexAdmin", TypeString, true, "显示在浏览器标题与登录页"},
-	{2, "站点 Logo", "site.logo", "/logo.svg", TypeString, true, ""},
 	{3, "版权信息", "site.copyright", "© 2026 NexAdmin", TypeString, true, "页脚展示"},
 	{4, "用户初始密码", "user.default_password", "Nex@123456", TypeString, false, "新建用户及重置密码时使用"},
 	{5, "开放注册", "user.register_enabled", "false", TypeBoolean, true, ""},
-	{6, "登录验证码", "login.captcha_enabled", "true", TypeBoolean, true, "关闭后登录页不再出现验证码"},
+	{6, "登录验证码", "login.captcha_enabled", "true", TypeBoolean, true, "开启=登录必须先过图形验证码；关闭=连续失败达到阈值后才要求"},
 	{7, "登录最大重试次数", "login.max_retry", "5", TypeNumber, false, ""},
 	{8, "账号锁定时长(分钟)", "login.lock_minutes", "30", TypeNumber, false, ""},
 	{10, "IP 白名单", "security.ip_whitelist", `["10.0.0.0/8","192.168.0.0/16"]`, TypeJSON, false, "仅超管端生效"},
@@ -129,8 +140,13 @@ func (module) Seed(db *gorm.DB) error {
 }
 
 // SeedOnStartup 实现 setup.StartupSeeder：一次查询比对出厂参数键，齐全就返回；缺项才走完整的幂等 Seed。
+// 老版本出厂参数里的 site.name / site.logo 是无消费的死配置（站点信息实际由设置页「站点」分区的
+// siteName / logoUrl 提供，默认 logo 也早已统一为 /icon.svg），这里幂等清掉，让参数页与生效配置一致。
 func (m module) SeedOnStartup(db *gorm.DB) error {
 	db = db.WithContext(tn.Skip(db.Statement.Context))
+	if err := db.Where("config_key IN ?", []string{"site.name", "site.logo"}).Delete(&Config{}).Error; err != nil {
+		return err
+	}
 	var keys []string
 	if err := db.Model(&Config{}).Pluck("config_key", &keys).Error; err != nil {
 		return err

@@ -1,0 +1,35 @@
+{
+  "plugin_imports": {
+    "title": "导入中心",
+    "description": "通用 CSV 导入:模板下载、逐行校验、错误行报告",
+    "dir": "导入中心",
+    "menu": "导入中心",
+    "perm": {
+      "run": "执行导入"
+    },
+    "all": "全部",
+    "empty": "暂无导入记录",
+    "pickFileFirst": "请选择数据来源和 CSV 文件",
+    "doneSummary": "导入完成:成功 {{ok}} 行,失败 {{fail}} 行",
+    "downloadTemplate": "下载模板",
+    "run": "开始导入",
+    "errorsCsv": "下载失败明细",
+    "fields": {
+      "source": "数据来源",
+      "file": "CSV 文件",
+      "fileName": "文件",
+      "totalRows": "总行数",
+      "okRows": "成功",
+      "failRows": "失败",
+      "status": "状态",
+      "createdBy": "操作人",
+      "createdAt": "时间"
+    },
+    "status": {
+      "pending": "排队中",
+      "running": "处理中",
+      "done": "已完成",
+      "failed": "失败"
+    }
+  }
+}

@@ -258,6 +258,9 @@ defineMock([
     handler: () => ({
       methods: ['password', 'phone'],
       forgotEnabled: true,
+      forgotChannels: ['email', 'phone'],
+      registerEnabled: true,
+      captchaEnabled: true,
       providers: [
         { key: 'wecom', name: '企业微信' },
         { key: 'dingtalk', name: '钉钉' },
@@ -267,6 +270,21 @@ defineMock([
         { key: 'oidc', name: 'OIDC' },
       ],
     }),
+  },
+  {
+    method: 'POST',
+    url: '/auth/register',
+    handler: (ctx) => {
+      const username = String(ctx.body?.username ?? '').trim()
+      const password = String(ctx.body?.password ?? '')
+      if (!/^[A-Za-z][A-Za-z0-9_]{2,31}$/.test(username)) mockError(400, '账号需以字母开头，3-32 位，仅限字母、数字、下划线')
+      if (!password || password.length > 72) mockError(400, '密码长度为 1-72 字节')
+      if (String(ctx.body?.captcha ?? '').length !== 4) mockError(400, '验证码错误或已过期')
+      if (users[username]) mockError(400, '账号已存在')
+      users[username] = { ...users.admin, username, id: String(Date.now()), nickname: username }
+      // 注册即登录：与 /auth/login 同形返回令牌
+      return { accessToken: tokenFor(username, 'a'), refreshToken: tokenFor(username, 'r'), user: pub(users[username]) }
+    },
   },
 ])
 

@@ -54,8 +54,6 @@ const row = (
 ): ConfigRow => ({ id: cid(n), name, key, value, type, isPublic, remark, createdAt: iso(90 - n * 4) })
 
 const seed: ConfigRow[] = [
-  row(1, '站点名称', 'site.name', 'NexAdmin', 'string', true, '显示在浏览器标题与登录页'),
-  row(2, '站点 Logo', 'site.logo', '/logo.svg', 'string', true),
   row(3, '版权信息', 'site.copyright', '© 2026 NexAdmin', 'string', true, '页脚展示'),
   row(4, '用户初始密码', 'user.default_password', 'Nex@123456', 'string', false, '新建用户及重置密码时使用'),
   row(5, '开放注册', 'user.register_enabled', 'false', 'boolean', true),

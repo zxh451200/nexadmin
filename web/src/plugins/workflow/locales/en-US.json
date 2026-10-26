@@ -1,0 +1,36 @@
+{
+  "plugin_workflow": {
+    "title": "Workflow",
+    "description": "Start, track and complete approval flows",
+    "dir": "Workflow",
+    "menu": "Approvals",
+    "perm": {
+      "start": "Start / withdraw",
+      "approve": "Approve",
+      "edit": "Manage definitions"
+    },
+    "tabs": {
+      "todo": "My todo",
+      "done": "My done",
+      "all": "All instances"
+    },
+    "empty": "No instances",
+    "loading": "Loading…",
+    "total": "{{count}} in total",
+    "prev": "Prev",
+    "next": "Next",
+    "submitter": "Submitted by",
+    "commentPlaceholder": "Comment (optional)",
+    "approve": "Approve",
+    "reject": "Reject",
+    "escalate": "Escalate",
+    "withdraw": "Withdraw",
+    "withdrawConfirm": "Withdraw this instance? It cannot be resumed.",
+    "status": {
+      "running": "Running",
+      "approved": "Approved",
+      "rejected": "Rejected",
+      "cancelled": "Withdrawn"
+    }
+  }
+}

@@ -11,14 +11,17 @@ import { Label } from '@/framework/ui/label'
 type Step = 1 | 2 | 3
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const PHONE_RE = /^1\d{10}$/
 const COOLDOWN = 60
 
 interface Props {
   open: boolean
   onOpenChange: (open: boolean) => void
+  /** 可用的找回渠道（来自 /auth/methods 的 forgotChannels）；缺省按邮箱+手机号都可用处理 */
+  channels?: string[]
 }
 
-export function ForgotPasswordDialog({ open, onOpenChange }: Props) {
+export function ForgotPasswordDialog({ open, onOpenChange, channels }: Props) {
   const { t } = useTranslation()
   const [step, setStep] = useState<Step>(1)
   const [target, setTarget] = useState('')
@@ -29,6 +32,9 @@ export function ForgotPasswordDialog({ open, onOpenChange }: Props) {
   const [left, setLeft] = useState(0)
   const [busy, setBusy] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
+
+  const emailOnly = channels?.length === 1 && channels[0] === 'email'
+  const phoneOnly = channels?.length === 1 && channels[0] === 'phone'
 
   // 每次打开都从头开始
   useEffect(() => {
@@ -50,7 +56,13 @@ export function ForgotPasswordDialog({ open, onOpenChange }: Props) {
     return () => clearTimeout(timer)
   }, [left])
 
-  const targetError = () => (EMAIL_RE.test(target.trim()) ? '' : t('forgot.emailInvalid'))
+  // 后端按 target 格式分渠道：含 @ 走邮件验证码，否则按手机号走短信验证码
+  const targetError = () => {
+    const v = target.trim()
+    if (v.includes('@')) return EMAIL_RE.test(v) ? '' : t('forgot.emailInvalid')
+    if (emailOnly) return t('forgot.emailInvalid')
+    return PHONE_RE.test(v) ? '' : t(phoneOnly ? 'forgot.phoneInvalid' : 'forgot.targetInvalid')
+  }
 
   const send = async (next?: Step) => {
     const err = targetError()
@@ -140,14 +152,19 @@ export function ForgotPasswordDialog({ open, onOpenChange }: Props) {
       {step === 1 && (
         <div className="space-y-5">
           <div className="space-y-2">
-            <Label htmlFor="forgot-target">{t('forgot.email')}</Label>
+            <Label htmlFor="forgot-target">
+              {t(emailOnly ? 'forgot.email' : phoneOnly ? 'forgot.phone' : 'forgot.target')}
+            </Label>
             <Input
               id="forgot-target"
-              type="email"
-              autoComplete="email"
+              type={emailOnly ? 'email' : 'text'}
+              inputMode={phoneOnly ? 'tel' : undefined}
+              autoComplete={emailOnly ? 'email' : 'off'}
               value={target}
               onChange={(e) => setTarget(e.target.value)}
-              placeholder={t('forgot.emailPlaceholder')}
+              placeholder={t(
+                emailOnly ? 'forgot.emailPlaceholder' : phoneOnly ? 'forgot.phonePlaceholder' : 'forgot.targetPlaceholder',
+              )}
               aria-invalid={!!errors.target}
             />
             {errors.target && <p className="text-sm text-destructive">{errors.target}</p>}

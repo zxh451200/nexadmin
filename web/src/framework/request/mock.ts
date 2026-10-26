@@ -69,6 +69,7 @@ const PUBLIC_PREFIXES = [
   '/auth/sms-code',
   '/auth/refresh',
   '/auth/methods',
+  '/auth/register',
   '/auth/providers',
   '/auth/oauth',
   '/auth/forgot',

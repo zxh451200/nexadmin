@@ -17,6 +17,7 @@ import (
 	coreai "nexadmin/core/ai"
 	"nexadmin/core/notify"
 	"nexadmin/core/response"
+	"nexadmin/core/tenant"
 	"nexadmin/pkg/idgen"
 )
 
@@ -201,6 +202,45 @@ func (s *Service) values(ctx context.Context, keys ...string) (map[string]string
 		m[r.Key] = r.Value
 	}
 	return m, nil
+}
+
+// boolConfigValue 解析布尔类参数（user.register_enabled / login.captcha_enabled）的取值：
+// 行不存在 / 值为空 / 读库失败时回退各自的兜底值。
+func boolConfigValue(v string, present bool, fallback bool) bool {
+	if !present || strings.TrimSpace(v) == "" {
+		return fallback
+	}
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "true", "1", "yes", "on":
+		return true
+	}
+	return false
+}
+
+// registerEnabledSourceFn 返回自助注册的运行时开关：每次调用现读 sys_config，
+// 后台参数页改完即刻生效，无需重启。
+func (s *Service) registerEnabledSourceFn(fallback bool) func(context.Context) bool {
+	return func(ctx context.Context) bool {
+		m, err := s.values(tenant.Skip(ctx), "user.register_enabled")
+		if err != nil {
+			return fallback
+		}
+		v, ok := m["user.register_enabled"]
+		return boolConfigValue(v, ok, fallback)
+	}
+}
+
+// loginCaptchaSourceFn 返回「登录验证码」的运行时开关（出厂 true：密码登录必须先过图形验证码）。
+// 行缺失 / 读库失败时回退 fallback（一般传 true，保持“默认开启”语义）。
+func (s *Service) loginCaptchaSourceFn(fallback bool) func(context.Context) bool {
+	return func(ctx context.Context) bool {
+		m, err := s.values(tenant.Skip(ctx), "login.captcha_enabled")
+		if err != nil {
+			return fallback
+		}
+		v, ok := m["login.captcha_enabled"]
+		return boolConfigValue(v, ok, fallback)
+	}
 }
 
 // clamp 把非法（负数、NaN、Inf）限制值归零，0 表示不限制。

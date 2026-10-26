@@ -7,6 +7,7 @@ import (
 
 	"nexadmin/core/auth"
 	"nexadmin/core/config"
+	"nexadmin/core/notify"
 	"nexadmin/core/response"
 	"nexadmin/modules/internal/oauthflow"
 	"nexadmin/modules/internal/session"
@@ -90,7 +91,8 @@ func (h *Handler) BindPhone(c *gin.Context) {
 		response.Fail(c, response.BadRequest("error.bad_request").WithMsg("手机号格式不正确"))
 		return
 	}
-	ctx := c.Request.Context()
+	// 校验与发送同场景（notify.SceneBindPhone）：场景隔离的验证码 key 要求两侧一致
+	ctx := smscode.WithScene(c.Request.Context(), notify.SceneBindPhone)
 	if err := h.sms.Verify(ctx, in.Phone, in.Code); err != nil {
 		response.Fail(c, err)
 		return

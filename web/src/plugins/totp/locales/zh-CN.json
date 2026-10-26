@@ -1,0 +1,19 @@
+{
+  "plugin_totp": {
+    "title": "两步验证",
+    "description": "绑定验证器 App,登录时要求输入动态码",
+    "dir": "个人",
+    "menu": "两步验证",
+    "statusLabel": "当前状态",
+    "on": "已启用",
+    "off": "未启用",
+    "startEnroll": "开始绑定",
+    "secretLabel": "密钥(手动录入用)",
+    "uriLabel": "验证器 URI(扫码用)",
+    "codePlaceholder": "输入 6 位动态码",
+    "confirm": "确认绑定",
+    "confirmed": "两步验证已启用",
+    "disabled": "两步验证已关闭",
+    "codeWrong": "验证码错误,请重试"
+  }
+}

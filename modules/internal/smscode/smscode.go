@@ -1,7 +1,9 @@
-// Package smscode 是短信验证码服务：发送（经 pkg/sms）、限流、校验。手机号登录与个人中心绑定手机号共用。
+// Package smscode 是短信验证码服务：发送（经 pkg/sms）、限流、校验。手机号登录、个人中心绑定手机号
+// 与忘记密码共用。
 //
 // 规则（设计文档 §12）：6 位、5 分钟有效、加盐哈希后存 core/cache；同一手机号 60 秒一次、每天有上限，
 // 同一 IP 每小时有上限；同一验证码连续输错 5 次作废；校验成功即作废。
+// 验证码按场景隔离（WithScene）：一个场景发的验证码不能在另一个场景使用；冷却与每日 / IP 限额跨场景共享。
 package smscode
 
 import (
@@ -100,8 +102,8 @@ func (s *Service) SetRecorder(r notify.Recorder) {
 
 type sceneKey struct{}
 
-// WithScene 标记这次发送的场景（notify.Scene*），默认是 notify.SceneVerifyCode。
-// 个人中心绑定手机号用 notify.SceneBindPhone，与手机号登录区分开。
+// WithScene 标记这次发送 / 校验的场景：验证码的缓存 key 按场景隔离，Send 与对应的 Verify 必须带同一场景。
+// 默认 notify.SceneVerifyCode（手机号登录）；绑定手机号用 notify.SceneBindPhone，忘记密码用 notify.SceneForgot。
 func WithScene(ctx context.Context, scene string) context.Context {
 	return context.WithValue(ctx, sceneKey{}, scene)
 }
@@ -139,11 +141,15 @@ func (s *Service) bump(ctx context.Context, key string, limit int, ttl time.Dura
 	return n <= int64(limit), nil
 }
 
-func codeKey(phone string) string { return cache.GlobalKey("sms", "code", digest(phone)) }
+// codeKey/triesKey 带场景：同一手机号在登录、绑定手机号、忘记密码等场景的验证码互不通用；
+// 冷却与每日 / IP 限额仍按手机号共享（跨场景也不能刷）。
+func codeKey(ctx context.Context, phone string) string {
+	return cache.GlobalKey("sms", sceneOf(ctx), "code", digest(phone))
+}
 
 // triesKey 是某一条验证码的输错计数 key；带上盐，重新发送的新验证码天然从 0 开始计数。
-func triesKey(phone, salt string) string {
-	return cache.GlobalKey("sms", "tries", digest(phone), salt)
+func triesKey(ctx context.Context, phone, salt string) string {
+	return cache.GlobalKey("sms", sceneOf(ctx), "tries", digest(phone), salt)
 }
 
 // Send 发送验证码。deliver=false 时走完全相同的限流与计数但不真正发送、不生成验证码：
@@ -197,14 +203,14 @@ func (s *Service) Send(ctx context.Context, phone, ip string, deliver bool) erro
 	}
 	sl := hex.EncodeToString(salt)
 	val := fmt.Sprintf("%s|%s|0|%d", sl, digest(sl, phone, code), s.now().Add(CodeTTL).Unix())
-	if err := s.cache.Set(ctx, codeKey(phone), val, CodeTTL); err != nil {
+	if err := s.cache.Set(ctx, codeKey(ctx, phone), val, CodeTTL); err != nil {
 		return err
 	}
 	t0 := time.Now()
 	err = s.prov.Send(ctx, phone, s.template, map[string]string{"code": code})
 	s.record(ctx, phone, code, err, time.Since(t0))
 	if err != nil {
-		_ = s.cache.Del(ctx, codeKey(phone)) // 没发出去的验证码不留着
+		_ = s.cache.Del(ctx, codeKey(ctx, phone)) // 没发出去的验证码不留着
 		s.log.Error("send sms failed", zap.String("phone", sms.MaskPhone(phone)), zap.Error(err))
 		return response.Unavailable("auth.provider_missing").WithMsg("短信发送失败，请稍后再试")
 	}
@@ -231,7 +237,7 @@ func (s *Service) record(ctx context.Context, phone, code string, err error, spe
 // 每次校验尝试先原子 Incr 该验证码的尝试计数，再比对：并发猜测最多只有前 MaxAttempts 次会被比对，
 // 第 MaxAttempts 次输错、或超过上限的尝试都会用 Del 作废验证码；成功用 GetDel 一次性消费。
 func (s *Service) Verify(ctx context.Context, phone, code string) error {
-	key := codeKey(phone)
+	key := codeKey(ctx, phone)
 	raw, err := s.cache.Get(ctx, key)
 	if errors.Is(err, cache.ErrNotFound) {
 		return badCode()
@@ -245,7 +251,7 @@ func (s *Service) Verify(ctx context.Context, phone, code string) error {
 	}
 	exp, _ := strconv.ParseInt(parts[3], 10, 64)
 	remain := time.Unix(exp, 0).Sub(s.now())
-	tk := triesKey(phone, parts[0])
+	tk := triesKey(ctx, phone, parts[0])
 	if remain <= 0 {
 		_ = s.cache.Del(ctx, key) // 计数 key 不删：留给 TTL，避免已通过读取的并发尝试把计数重置为 0
 		return badCode()

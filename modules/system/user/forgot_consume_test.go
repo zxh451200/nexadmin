@@ -12,7 +12,7 @@ import (
 // 两个“实例”（各自的进程内锁）共用同一份缓存：同一验证码并发校验，只有一个能成功。
 func TestForgotVerifyConsumesAtomicallyAcrossInstances(t *testing.T) {
 	e := newFgEnv(t, true)
-	f2 := newForgotService(e.st, e.f.cache, e.ns, zap.NewNop())
+	f2 := newForgotService(e.st, e.f.cache, e.ns, nil, zap.NewNop())
 	ctx := context.Background()
 	code := e.codeFor(t, "alice@example.org")
 

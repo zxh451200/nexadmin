@@ -17,12 +17,15 @@ import (
 	"nexadmin/core/middleware"
 	"nexadmin/core/notify"
 	"nexadmin/core/response"
+	"nexadmin/modules/internal/smscode"
 	"nexadmin/pkg/idgen"
 	"nexadmin/pkg/mail"
 )
 
-// 忘记密码（邮箱验证码）规则：6 位、10 分钟有效、加盐哈希存 core/cache；同邮箱 60 秒一次、每小时有上限，
-// 同 IP 限流；连续输错 5 次作废，校验成功即作废（一次性）；邮箱不存在 / 账号停用时对外表现与成功发送完全一致（防枚举）。
+// 忘记密码（邮箱或手机号验证码）规则：6 位、邮件 10 分钟 / 短信 5 分钟有效、加盐哈希存 core/cache；
+// 同目标 60 秒一次、每小时有上限，同 IP 限流；连续输错 5 次作废，校验成功即作废（一次性）；
+// 账号不存在 / 停用时对外表现与成功发送完全一致（防枚举）。短信场景的冷却与每日 / IP 限额
+// 由 modules/internal/smscode 统一执行，并与手机号登录、绑定手机号共享同一手机号的额度。
 const (
 	forgotTTL      = 10 * time.Minute
 	forgotCooldown = 60 * time.Second
@@ -33,6 +36,8 @@ const (
 type forgotStore interface {
 	// byEmail 返回启用状态且邮箱唯一匹配的账号；找不到、停用或邮箱重复返回 (nil, nil)。
 	byEmail(ctx context.Context, email string) (*forgotUser, error)
+	// byPhone 返回启用状态且手机号唯一匹配的账号（含 +86/86 前缀写法）；找不到、停用或重复返回 (nil, nil)。
+	byPhone(ctx context.Context, phone string) (*forgotUser, error)
 	setPassword(ctx context.Context, id idgen.ID, hash string) error
 }
 
@@ -40,6 +45,20 @@ type forgotUser struct {
 	ID       idgen.ID
 	Username string
 	Name     string
+	Email    string // 有邮箱时重置成功发安全告警邮件；没有就跳过
+}
+
+// uniqueForgotUser 列表恰好一条且启用才返回；停用 / 多条 / 空（防枚举：多条视为不存在）都返回 nil。
+func uniqueForgotUser(us []User) *forgotUser {
+	if len(us) != 1 || us[0].Status != statusOn {
+		return nil
+	}
+	u := us[0]
+	name := u.Nickname
+	if name == "" {
+		name = u.Username
+	}
+	return &forgotUser{ID: u.ID, Username: u.Username, Name: name, Email: u.Email}
 }
 
 type gormForgotStore struct{ db *gorm.DB }
@@ -49,23 +68,31 @@ func (g gormForgotStore) byEmail(ctx context.Context, email string) (*forgotUser
 	if err := g.db.WithContext(ctx).Where("LOWER(email) = ?", email).Limit(2).Find(&us).Error; err != nil {
 		return nil, err
 	}
-	if len(us) != 1 || us[0].Status != statusOn {
-		return nil, nil
+	return uniqueForgotUser(us), nil
+}
+
+func (g gormForgotStore) byPhone(ctx context.Context, phone string) (*forgotUser, error) {
+	var us []User
+	if err := g.db.WithContext(ctx).Where("phone IN ?", []string{phone, "+86" + phone, "86" + phone, "+86 " + phone}).Limit(2).Find(&us).Error; err != nil {
+		return nil, err
 	}
-	u := us[0]
-	name := u.Nickname
-	if name == "" {
-		name = u.Username
-	}
-	return &forgotUser{ID: u.ID, Username: u.Username, Name: name}, nil
+	return uniqueForgotUser(us), nil
 }
 
 func (g gormForgotStore) setPassword(ctx context.Context, id idgen.ID, hash string) error {
 	return g.db.WithContext(ctx).Model(&User{}).Where("id = ?", int64(id)).Update("password", hash).Error
 }
 
+// smsSender 是忘记密码用到的短信验证码能力；生产环境是 *smscode.Service，测试用假实现。
+type smsSender interface {
+	Enabled() bool
+	Send(ctx context.Context, phone, ip string, deliver bool) error
+	Verify(ctx context.Context, phone, code string) error
+}
+
 type forgotService struct {
 	store  forgotStore
+	sms    smsSender
 	cache  cache.Cache
 	notify *notify.Service
 	log    *zap.Logger
@@ -75,9 +102,9 @@ type forgotService struct {
 	now    func() time.Time
 }
 
-func newForgotService(st forgotStore, c cache.Cache, n *notify.Service, log *zap.Logger) *forgotService {
+func newForgotService(st forgotStore, c cache.Cache, n *notify.Service, sms smsSender, log *zap.Logger) *forgotService {
 	return &forgotService{
-		store: st, cache: c, notify: n, log: log, now: time.Now,
+		store: st, sms: sms, cache: c, notify: n, log: log, now: time.Now,
 		ipSend: middleware.NewLimiter(c, log, "forgot_send_ip", 10, time.Hour),
 		ipRst:  middleware.NewLimiter(c, log, "forgot_reset_ip", 30, time.Hour),
 		acct:   middleware.NewLimiter(c, log, "forgot_acct", 5, time.Hour),
@@ -114,8 +141,33 @@ func normEmail(raw string) (string, error) {
 	return strings.ToLower(a), nil
 }
 
-// sendCode 发送验证码。对外只有三种结果：邮件未配置（503）、被限流（429）、成功（含“账号不存在”）。
-func (f *forgotService) sendCode(ctx context.Context, rawEmail, ip, lang string) error {
+// sendCode 发送验证码。target 含 @ 走邮件，否则视为手机号走短信。
+// 对外只有三种结果：渠道未配置（503）、被限流（429）、成功（含“账号不存在”）。
+func (f *forgotService) sendCode(ctx context.Context, rawTarget, ip, lang string) error {
+	if strings.Contains(rawTarget, "@") {
+		return f.sendEmailCode(ctx, rawTarget, ip, lang)
+	}
+	return f.sendPhoneCode(ctx, rawTarget, ip)
+}
+
+// sendPhoneCode 手机号短信验证码。冷却 / 每日 / IP 限额由 smscode 统一控制（与其他短信场景共享额度）；
+// 手机号未绑定账号时同样计数、响应一致但不真正发送（防枚举，见 smscode.Send 的 deliver 语义）。
+func (f *forgotService) sendPhoneCode(ctx context.Context, rawPhone, ip string) error {
+	phone := normalizePhone(rawPhone)
+	if phone == "" {
+		return response.BadRequest("error.bad_request").WithMsg("手机号格式不正确")
+	}
+	if f.sms == nil || !f.sms.Enabled() {
+		return response.Unavailable("auth.provider_missing").WithMsg("短信服务未启用")
+	}
+	u, err := f.store.byPhone(ctx, phone)
+	if err != nil {
+		return err
+	}
+	return f.sms.Send(smscode.WithScene(ctx, notify.SceneForgot), phone, ip, u != nil)
+}
+
+func (f *forgotService) sendEmailCode(ctx context.Context, rawEmail, ip, lang string) error {
 	email, err := normEmail(rawEmail)
 	if err != nil {
 		return err

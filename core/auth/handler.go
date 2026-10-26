@@ -15,7 +15,8 @@ import (
 type Handler struct {
 	Svc *Service
 	Cfg *config.Config
-	// ForgotEnabled 报告「忘记密码」是否可用（邮件渠道已配置）；nil = 不可用。登录页据此显示 / 隐藏入口。
+	// ForgotEnabled 报告「忘记密码」的邮件渠道是否可用（SMTP 已配置）；nil = 邮件渠道不可用。
+	// 登录页入口的最终显隐 = 邮件或短信任一可用（Methods 里的 forgotChannels）。
 	ForgotEnabled func(ctx context.Context) bool
 }
 
@@ -63,11 +64,15 @@ func (h *Handler) Login(c *gin.Context) {
 		response.Fail(c, err)
 		return
 	}
-	if pwd { // 同一用户名或 IP 连续失败达到阈值后，必须先通过图形验证码，通过前不会去碰密码校验
+	if pwd { // 「登录验证码」强制开启时必须先过图形验证码；否则同一用户名或 IP 连续失败达到阈值后才要求。
+		// 两种情况都在碰密码校验之前验证，通过前不会去比对密码。
 		need, err := h.Svc.LoginNeedsCaptcha(ctx, req.Username, req.IP)
 		if err != nil {
 			response.Fail(c, err)
 			return
+		}
+		if !need {
+			need = LoginCaptcha(ctx)
 		}
 		if need {
 			ok, err := h.Svc.VerifyCaptcha(ctx, req.CaptchaKey, req.Captcha, req.IP)
@@ -236,6 +241,20 @@ func (h *Handler) Methods(c *gin.Context) {
 		}
 		providers = append(providers, provider{Key: k, Name: name})
 	}
-	forgot := h.ForgotEnabled != nil && h.ForgotEnabled(c.Request.Context())
-	response.OK(c, gin.H{"methods": methods, "providers": providers, "forgotEnabled": forgot})
+	forgotChannels := make([]string, 0, 2)
+	if h.ForgotEnabled != nil && h.ForgotEnabled(c.Request.Context()) {
+		forgotChannels = append(forgotChannels, "email")
+	}
+	if h.Cfg.SMS.Provider != "" { // 忘记密码也支持手机号短信找回（见 /auth/forgot/send-code）
+		forgotChannels = append(forgotChannels, "phone")
+	}
+	response.OK(c, gin.H{
+		"methods": methods, "providers": providers,
+		"forgotEnabled": len(forgotChannels) > 0, "forgotChannels": forgotChannels,
+		// 运行时开关（设置页「参数设置」的 user.register_enabled，默认关闭），与 /auth/register 的闸门同源
+		"registerEnabled": RegisterEnabled(c.Request.Context()),
+		// 「登录验证码」强制开启（设置页 login.captcha_enabled，出厂 true）：前端据此首屏显示验证码输入；
+		// 关闭时仍是自适应（连续失败达到阈值后要求），由失败响应的 reason 通知前端
+		"captchaEnabled": LoginCaptcha(c.Request.Context()),
+	})
 }

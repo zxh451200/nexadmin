@@ -68,6 +68,11 @@ type Deps struct {
 	Public *gin.RouterGroup // /api/v1，不要求登录
 	Admin  *gin.RouterGroup // /api/v1/admin，仅超管，跳过租户隔离
 	Root   *gin.Engine      // 站点根路由，供标准协议端点使用
+	// RootGroup 是根引擎上带插件授权闸门的分组（"" 前缀）：插件要在根路径提供公开页面
+	// （如官网插件的 /、/news）时必须用它注册，而不是直接用 Root（后者不过授权闸门，
+	// 且热挂载时运行中的引擎不允许加路由）。启动挂载时由插件管理器创建；热挂载时为 nil，
+	// 插件应跳过根路径注册（授权导入后重启生效）。
+	RootGroup *gin.RouterGroup
 	// OnClose 登记服务停止时要执行的清理函数（后注册的先执行），后台 goroutine 型模块用它优雅退出。
 	OnClose func(func())
 	// Bus 是跨实例事件广播（基于 core/cache 发布订阅）。nil 安全：测试里手工构造的 Deps 不填也不会 panic，

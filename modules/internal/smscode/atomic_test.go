@@ -84,7 +84,7 @@ func TestConcurrentWrongAttemptsInvalidateCode(t *testing.T) {
 	}
 	close(start)
 	wg.Wait()
-	if ok, _ := s.cache.Exists(ctx, codeKey(phone)); ok {
+	if ok, _ := s.cache.Exists(ctx, codeKey(ctx, phone)); ok {
 		t.Fatal("达到输错上限后验证码必须被 Del 作废")
 	}
 	if err := s.Verify(ctx, phone, rec.code); err == nil {

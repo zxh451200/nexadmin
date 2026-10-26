@@ -54,6 +54,21 @@ func TestGormClaimOptimistic(t *testing.T) {
 	}
 }
 
+// 队列为空是正常情况：Claim 返回 nil, nil，且不应产生 ErrRecordNotFound 错误日志。
+func TestGormClaimEmptyQueue(t *testing.T) {
+	db, mock := mockDB(t)
+	s := NewGormStore(db)
+
+	mock.ExpectQuery("FROM `sys_job` WHERE").WillReturnRows(sqlmock.NewRows(candCols))
+	j, err := s.Claim(context.Background(), []string{"t"}, "n1", time.Now())
+	if err != nil || j != nil {
+		t.Fatalf("job=%v err=%v", j, err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Error(err)
+	}
+}
+
 // 结束落库同样带旧状态条件：被取消的任务 Finish 返回 false。
 func TestGormFinishGuardedByRunning(t *testing.T) {
 	db, mock := mockDB(t)

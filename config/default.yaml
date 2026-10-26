@@ -37,6 +37,8 @@ languages:
 auth:
   methods: [password]       # password | phone；phone 还需要配置下面的 sms.provider，否则自动隐藏
   single_session: false     # true = 同一用户只保留最后一次登录，旧 access/refresh token 会立即失效
+  allow_register: false     # 自助注册的兜底值：运行时真源是后台「参数设置」的 user.register_enabled（默认关闭，改完即时生效），仅该参数行缺失时读本项。强制图形验证码 + IP 限流；注册用户进当前租户并受套餐用户数上限约束
+  register_roles: []        # 注册用户默认挂的角色码（当前租户内解析，如 [guest]）；空 = 不挂角色，注册后待管理员分配权限
   # 第三方快捷登录（OAuth2 授权码流程）。没配置的不显示；缺 client_id / client_secret / redirect_uris 视为未配置。
   # 在 config/config.yaml 里按需取消注释。密钥务必用 ${ENV} 引用环境变量，不要明文写进仓库。
   # 通用字段（每个 provider 都支持）：
@@ -143,6 +145,7 @@ ai:
   model: ""
   allow_private_base_url: false  # true 才允许 base_url 指向私网 / 回环（Ollama、vLLM、内网网关）；链路本地与云元数据地址永远拒绝
 disabled_modules: []
+disabled_plugins: []        # 按插件 id 停用插件（如 [website]）：不挂载、不迁移、接口文档不出现；free 插件的软停用开关，pro 插件也可用
 backup:                     # 数据库备份（需要本机有 mysqldump / pg_dump）；恢复用命令行 nexadmin-server restore
   dir: ./backup             # 备份目录（权限 0700，文件 0600）
   keep_days: 30             # 保留天数，0 = 不按天清理（以下三项首次启动作为初始值，之后以页面设置为准）
@@ -169,3 +172,5 @@ ratelimit:                  # 固定窗口限流；计数放 cache（redis 多�
 metrics:                    # Prometheus 文本格式指标，挂在根路径 /metrics（不在 /api/v1 下）
   enabled: true             # 默认开启，但 token 为空时只允许回环地址（127.0.0.1 / ::1）访问
   token: ""                 # 非空 = 必须带 Authorization: Bearer <token>（任何来源地址都要），常量时间比较
+secret:                     # 静态加密（core/secret）：业务敏感字段落库加密的主密钥来自 NEXADMIN_SECRET_KEY 或 data/secret.key
+  algorithm: aes-gcm        # aes-gcm（默认，enc:v1:）| sm4-gcm（国密 SM4-GCM，enc:v2:；切换后旧 v1 密文仍可解，新写入用 v2）

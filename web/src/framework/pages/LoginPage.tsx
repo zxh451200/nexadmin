@@ -14,6 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/framework/ui/tabs'
 import { ForgotPasswordDialog } from './login/ForgotPasswordDialog'
 import { PasswordForm } from './login/PasswordForm'
 import { PhoneForm } from './login/PhoneForm'
+import { RegisterForm } from './login/RegisterForm'
 import { SecondFactorDialog } from './login/SecondFactorDialog'
 import { SocialLogin } from './login/SocialLogin'
 
@@ -48,8 +49,24 @@ function BrandPanel({ name, logoUrl, copyright }: { name: string; logoUrl?: stri
   const { t } = useTranslation()
   const mask = 'radial-gradient(ellipse at 30% 40%, hsl(var(--foreground)) 20%, transparent 75%)'
   return (
-    <aside className="relative hidden overflow-hidden bg-brand-gradient text-primary-foreground lg:flex lg:w-[55%] lg:flex-col lg:justify-between lg:p-12 xl:p-16">
+    <div className="relative hidden lg:block lg:w-1/2">
+      {/* 斜线底衬：与面板同形状再垫一层纯品牌色。裁剪边缘的抗锯齿像素从
+          “半透明渐变 × 页面背景”变成“半透明渐变 × 品牌色”，两层叠加后边缘不透明度
+          接近 1，消除缩放到非整数比例时斜线上出现的深色镶边（阴影线）。 */}
+      <div className="absolute inset-0 bg-primary" style={{ clipPath: 'url(#login-brand-s)' }} aria-hidden="true" />
+      <aside
+        className="relative h-full overflow-hidden bg-brand-gradient text-primary-foreground lg:flex lg:flex-col lg:justify-between lg:p-12 xl:p-16"
+        style={{ clipPath: 'url(#login-brand-s)' }}
+      >
       <style>{keyframes}</style>
+      {/* 右缘斜线裁剪（参考 gin-vue-admin 的斜切分栏）：objectBoundingBox 单位随面板尺寸自适应 */}
+      <svg width="0" height="0" className="absolute" aria-hidden="true" focusable="false">
+        <defs>
+          <clipPath id="login-brand-s" clipPathUnits="objectBoundingBox">
+            <path d="M0,0 L1,0 L0.85,1 L0,1 Z" />
+          </clipPath>
+        </defs>
+      </svg>
       <div className="dot-grid-light absolute inset-0" style={{ maskImage: mask, WebkitMaskImage: mask }} aria-hidden="true" />
       <div className="pointer-events-none absolute -start-24 -top-24 size-96 rounded-full bg-primary-foreground/20 blur-3xl" aria-hidden="true" />
       <div className="pointer-events-none absolute -bottom-32 end-0 size-[28rem] rounded-full bg-accent/30 blur-3xl" aria-hidden="true" />
@@ -75,13 +92,13 @@ function BrandPanel({ name, logoUrl, copyright }: { name: string; logoUrl?: stri
       />
 
       <div className="relative flex items-center gap-3">
-        <div className="flex size-10 items-center justify-center rounded-xl bg-primary-foreground/15">
+        <div className={`flex size-10 items-center justify-center rounded-xl ${logoUrl ? '' : 'bg-primary-foreground/15'}`}>
           <Logo url={logoUrl} name={name} className="size-6 object-contain" />
         </div>
         <span className="text-lg font-semibold">{name}</span>
       </div>
 
-      <div className="relative max-w-xl">
+      <div className="relative max-w-[480px]">
         <h2 className="text-5xl font-bold tracking-tight xl:text-6xl">{name}</h2>
         <p className="mt-4 text-2xl font-medium">{t('loginPage.slogan')}</p>
         <p className="mt-2 text-base opacity-80">{t('loginPage.sloganDesc')}</p>
@@ -101,7 +118,8 @@ function BrandPanel({ name, logoUrl, copyright }: { name: string; logoUrl?: stri
       </div>
 
       <p className="relative text-sm opacity-70">{copyright}</p>
-    </aside>
+      </aside>
+    </div>
   )
 }
 
@@ -117,6 +135,8 @@ export default function LoginPage() {
   const [continuationError, setContinuationError] = useState<{ message: string } | null>(null)
   const [continuationNext, setContinuationNext] = useState<string | null>(null)
   const continuation = useRef<Promise<LoginContinuation> | null | undefined>(undefined)
+  // 注册模式（auth.allow_register 开启时登录页提供注册入口）；注册即登录，成功直接进系统
+  const [registering, setRegistering] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -176,7 +196,7 @@ export default function LoginPage() {
       <div className="flex flex-1 flex-col">
         <header className="flex items-center justify-between gap-3 px-5 pt-5 lg:hidden">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand-gradient text-primary-foreground glow">
+            <div className={`flex size-10 shrink-0 items-center justify-center rounded-xl text-primary-foreground ${logoUrl ? '' : 'bg-brand-gradient glow'}`}>
               <Logo url={logoUrl} name={name} className="size-6 object-contain" />
             </div>
             <span className="truncate text-lg font-semibold text-foreground">{name}</span>
@@ -194,47 +214,67 @@ export default function LoginPage() {
 
         <main className="flex flex-1 items-center justify-center px-6 pb-[max(2rem,env(safe-area-inset-bottom))] pt-4 lg:pb-12">
           <div className="w-full max-w-sm">
-            <div className="mb-8 hidden size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground lg:flex">
+            <div className={`mb-8 hidden size-10 items-center justify-center rounded-xl text-primary-foreground lg:flex ${logoUrl ? '' : 'bg-primary'}`}>
               <Logo url={logoUrl} name={name} className="size-5 object-contain" />
             </div>
             <div className="mb-8">
-              <h1 className="text-3xl font-bold tracking-tight text-foreground">{t('loginPage.welcome')}</h1>
-              <p className="mt-2 text-sm text-muted-foreground">{t('loginPage.welcomeHint')}</p>
+              <h1 className="text-3xl font-bold tracking-tight text-foreground">
+                {registering ? t('login.register.title') : t('loginPage.welcome')}
+              </h1>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {registering ? t('login.register.welcomeHint') : t('loginPage.welcomeHint')}
+              </p>
             </div>
             {continuationError && <p role="alert" className="mb-4 text-sm text-destructive">{continuationError.message || t('login.otpFailed')}</p>}
 
-            <fieldset disabled={continuing || challenge !== null}>
-            {methods.length > 1 ? (
-              <Tabs defaultValue={methods[0]}>
-                <TabsList className="grid w-full grid-cols-2">
-                  {methods.map((m) => (
-                    <TabsTrigger key={m} value={m} className="min-h-11 md:min-h-0">
-                      {t(m === 'password' ? 'login.tabPassword' : 'login.tabPhone')}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-                <TabsContent value="password" className="mt-6">
-                  <PasswordForm onSuccess={done} onForgot={onForgot} onChallenge={setChallenge} />
-                </TabsContent>
-                <TabsContent value="phone" className="mt-6">
-                  <PhoneForm onSuccess={done} onChallenge={setChallenge} />
-                </TabsContent>
-              </Tabs>
-            ) : methods[0] === 'phone' ? (
-              <PhoneForm onSuccess={done} onChallenge={setChallenge} />
+            {registering ? (
+              <RegisterForm onSuccess={done} onLogin={() => setRegistering(false)} onChallenge={setChallenge} />
             ) : (
-              <PasswordForm onSuccess={done} onForgot={onForgot} onChallenge={setChallenge} />
-            )}
+              <fieldset disabled={continuing || challenge !== null}>
+                {methods.length > 1 ? (
+                  <Tabs defaultValue={methods[0]}>
+                    <TabsList className="grid w-full grid-cols-2">
+                      {methods.map((m) => (
+                        <TabsTrigger key={m} value={m} className="min-h-11 md:min-h-0">
+                          {t(m === 'password' ? 'login.tabPassword' : 'login.tabPhone')}
+                        </TabsTrigger>
+                      ))}
+                    </TabsList>
+                    <TabsContent value="password" className="mt-6">
+                      <PasswordForm onSuccess={done} onForgot={onForgot} onChallenge={setChallenge} captchaAlways={data.captchaEnabled} />
+                    </TabsContent>
+                    <TabsContent value="phone" className="mt-6">
+                      <PhoneForm onSuccess={done} onChallenge={setChallenge} />
+                    </TabsContent>
+                  </Tabs>
+                ) : methods[0] === 'phone' ? (
+                  <PhoneForm onSuccess={done} onChallenge={setChallenge} />
+                ) : (
+                  <PasswordForm onSuccess={done} onForgot={onForgot} onChallenge={setChallenge} captchaAlways={data.captchaEnabled} />
+                )}
 
-            <SocialLogin providers={data.providers} redirect={redirect} />
-            </fieldset>
+                <SocialLogin providers={data.providers} redirect={redirect} />
+                {data.registerEnabled ? (
+                  <p className="mt-6 text-center text-sm text-muted-foreground">
+                    {t('login.register.noAccount')}{' '}
+                    <button
+                      type="button"
+                      className="font-medium text-primary underline-offset-4 hover:underline"
+                      onClick={() => { setRegistering(true); setForgotOpen(false) }}
+                    >
+                      {t('login.register.toRegister')}
+                    </button>
+                  </p>
+                ) : null}
+              </fieldset>
+            )}
 
             <p className="mt-8 text-center text-xs text-muted-foreground lg:hidden">{copyright}</p>
           </div>
         </main>
       </div>
 
-      <ForgotPasswordDialog open={forgotOpen} onOpenChange={setForgotOpen} />
+      <ForgotPasswordDialog open={forgotOpen} onOpenChange={setForgotOpen} channels={data.forgotChannels} />
       <SecondFactorDialog challenge={challenge} onChallenge={setChallenge} onVerified={() => { setChallenge(null); done() }} onCancel={() => {
         setChallenge(null)
         setContinuationNext(null)

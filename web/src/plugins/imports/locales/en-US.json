@@ -1,0 +1,35 @@
+{
+  "plugin_imports": {
+    "title": "Import Center",
+    "description": "Generic CSV import: template download, row validation, error report",
+    "dir": "Import Center",
+    "menu": "Import Center",
+    "perm": {
+      "run": "Run imports"
+    },
+    "all": "All",
+    "empty": "No imports yet",
+    "pickFileFirst": "Pick a source and a CSV file first",
+    "doneSummary": "Import finished: {{ok}} ok, {{fail}} failed",
+    "downloadTemplate": "Download template",
+    "run": "Start import",
+    "errorsCsv": "Failed rows",
+    "fields": {
+      "source": "Source",
+      "file": "CSV file",
+      "fileName": "File",
+      "totalRows": "Total",
+      "okRows": "OK",
+      "failRows": "Failed",
+      "status": "Status",
+      "createdBy": "By",
+      "createdAt": "Time"
+    },
+    "status": {
+      "pending": "Queued",
+      "running": "Processing",
+      "done": "Done",
+      "failed": "Failed"
+    }
+  }
+}

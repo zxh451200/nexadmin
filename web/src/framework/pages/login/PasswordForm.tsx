@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Eye, EyeOff, Loader2, Lock } from 'lucide-react'
+import { Eye, EyeOff, Loader2, Lock, ShieldCheck } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '@/framework/auth/useAuth'
 import { ApiError } from '@/framework/request/http'
@@ -13,15 +13,36 @@ import { Input } from '@/framework/ui/input'
 import type { LoginChallenge } from '@/framework/auth/types'
 import { CaptchaField, useCaptcha } from './CaptchaField'
 
-export function PasswordForm({ onSuccess, onForgot, onChallenge }: { onSuccess: () => void; onForgot?: () => void; onChallenge?: (c: LoginChallenge) => void }) {
+export function PasswordForm({
+  onSuccess,
+  onForgot,
+  // TOTP 挑战由 PasswordForm 内联处理（验证码在密码下方），不再弹 SecondFactorDialog；
+  // onChallenge 保留在接口上供 PhoneForm 等其他入口使用，PasswordForm 自身不再调用。
+  onChallenge: _onChallenge,
+  captchaAlways,
+}: {
+  onSuccess: () => void
+  onForgot?: () => void
+  onChallenge?: (c: LoginChallenge) => void
+  /** 「登录验证码」强制开启（/auth/methods 的 captchaEnabled）：首屏就要求图形验证码 */
+  captchaAlways?: boolean
+}) {
   const { t } = useTranslation()
   const login = useAuth((s) => s.login)
-  // 默认不要求验证码；服务端在同一用户名/IP 连续失败 3 次后返回 reason=CAPTCHA_REQUIRED，此时才出现验证码输入
-  const [needCaptcha, setNeedCaptcha] = useState(false)
+  const verifyLogin = useAuth((s) => s.verifyLogin)
+  // captchaAlways（参数设置「登录验证码」开启）时首屏即要求验证码；
+  // 否则默认不要求，服务端在同一用户名/IP 连续失败后返回 reason=CAPTCHA_REQUIRED，此时才出现验证码输入
+  const [needCaptcha, setNeedCaptcha] = useState(!!captchaAlways)
+  useEffect(() => setNeedCaptcha(!!captchaAlways), [captchaAlways])
   const { captcha, refresh } = useCaptcha(needCaptcha)
   const [show, setShow] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [verifying, setVerifying] = useState(false)
   const [lockLeft, setLockLeft] = useState(0)
+  // 服务端要求 TOTP 二次验证时的挑战；非 null 时密码下方出现动态码输入，登录按钮变「验证」
+  const [challenge, setChallenge] = useState<LoginChallenge | null>(null)
+  const [totpCode, setTotpCode] = useState('')
+  const [totpError, setTotpError] = useState('')
 
   // 锁定倒计时：每秒递减，归零后提示自动消失
   useEffect(() => {
@@ -47,6 +68,32 @@ export function PasswordForm({ onSuccess, onForgot, onChallenge }: { onSuccess: 
       form.setError('captcha', { message: t('login.captchaRequired') })
       return
     }
+    // 二次验证阶段：用挑战 ID + TOTP 码换令牌
+    if (challenge) {
+      const value = totpCode.trim()
+      if (!/^\d{6}$/.test(value)) {
+        setTotpError(t('login.otpInvalid'))
+        return
+      }
+      setVerifying(true)
+      setTotpError('')
+      try {
+        const step = await verifyLogin(challenge.id, value)
+        if ('challenge' in step) {
+          setChallenge(step.challenge)
+          setTotpCode('')
+        } else {
+          onSuccess()
+        }
+      } catch (e) {
+        setTotpCode('')
+        setTotpError(e instanceof Error ? e.message : t('login.otpFailed'))
+      } finally {
+        setVerifying(false)
+      }
+      return
+    }
+    // 首次登录：用户名 + 密码
     setSubmitting(true)
     try {
       const step = await login({
@@ -57,7 +104,8 @@ export function PasswordForm({ onSuccess, onForgot, onChallenge }: { onSuccess: 
       })
       if ('challenge' in step) {
         form.setValue('password', '')
-        onChallenge?.(step.challenge)
+        // 内联处理二次验证（TOTP 输入出现在密码下方），不弹 SecondFactorDialog。
+        setChallenge(step.challenge)
       } else {
         onSuccess()
       }
@@ -89,7 +137,7 @@ export function PasswordForm({ onSuccess, onForgot, onChallenge }: { onSuccess: 
             <FormItem>
               <FormLabel>{t('login.username')}</FormLabel>
               <FormControl>
-                <Input {...field} autoComplete="username" placeholder={t('login.usernamePlaceholder')} />
+                <Input {...field} autoComplete="username" placeholder={t('login.usernamePlaceholder')} disabled={!!challenge} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -103,7 +151,7 @@ export function PasswordForm({ onSuccess, onForgot, onChallenge }: { onSuccess: 
               <FormLabel>{t('login.password')}</FormLabel>
               <div className="relative">
                 <FormControl>
-                  <Input {...field} type={show ? 'text' : 'password'} autoComplete="current-password" className="pe-12" placeholder={t('login.passwordPlaceholder')} />
+                  <Input {...field} type={show ? 'text' : 'password'} autoComplete="current-password" className="pe-12" placeholder={t('login.passwordPlaceholder')} disabled={!!challenge} />
                 </FormControl>
                 <button
                   type="button"
@@ -118,18 +166,45 @@ export function PasswordForm({ onSuccess, onForgot, onChallenge }: { onSuccess: 
             </FormItem>
           )}
         />
-        {needCaptcha ? <CaptchaField form={form} captcha={captcha} onRefresh={refresh} /> : null}
-        {onForgot ? (
+        {needCaptcha && !challenge ? <CaptchaField form={form} captcha={captcha} onRefresh={refresh} /> : null}
+
+        {challenge ? (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="size-4 text-muted-foreground" aria-hidden="true" />
+              <span className="text-sm text-muted-foreground">{t('login.totpInlineLabel')}</span>
+            </div>
+            {totpError ? (
+              <Alert variant="destructive" role="alert">
+                <AlertDescription>{totpError}</AlertDescription>
+              </Alert>
+            ) : null}
+            <Input
+              value={totpCode}
+              onChange={(e) => {
+                setTotpCode(e.target.value)
+                setTotpError('')
+              }}
+              autoComplete="one-time-code"
+              inputMode="numeric"
+              maxLength={6}
+              placeholder={t('login.otpPlaceholder')}
+              autoFocus
+            />
+          </div>
+        ) : null}
+
+        <Button type="submit" className="w-full" disabled={submitting || verifying}>
+          {(submitting || verifying) && <Loader2 className="me-2 size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />}
+          {challenge ? t('login.otpSubmit') : t('login.submit')}
+        </Button>
+        {onForgot && !challenge ? (
           <div className="flex justify-end">
             <Button type="button" variant="link" className="h-auto p-0" onClick={onForgot}>
               {t('login.forgotPassword')}
             </Button>
           </div>
         ) : null}
-        <Button type="submit" className="w-full" disabled={submitting}>
-          {submitting && <Loader2 className="me-2 size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />}
-          {t('login.submit')}
-        </Button>
       </form>
     </Form>
   )

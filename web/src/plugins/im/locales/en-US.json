@@ -1,0 +1,31 @@
+{
+  "plugin_im": {
+    "title": "Live Chat",
+    "description": "Conversations between visitors and agents",
+    "dir": "Live Chat",
+    "menu": "Messages",
+    "perm": {
+      "reply": "Reply to messages",
+      "edit": "Close conversations"
+    },
+    "all": "All",
+    "empty": "No conversations",
+    "noMessages": "No messages yet",
+    "loading": "Loading…",
+    "pickConversation": "Pick a conversation on the left to reply",
+    "searchPlaceholder": "Conv no / visitor / preview",
+    "close": "Close conversation",
+    "closeConfirm": "Close conversation {{no}}? The visitor can no longer send messages.",
+    "replyPlaceholder": "Type a reply, Enter to send",
+    "send": "Send",
+    "status": {
+      "open": "Open",
+      "closed": "Closed"
+    },
+    "senders": {
+      "visitor": "Visitor",
+      "agent": "Agent",
+      "system": "System"
+    }
+  }
+}

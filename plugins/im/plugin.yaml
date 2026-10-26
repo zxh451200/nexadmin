@@ -1,0 +1,31 @@
+id: im
+name: 在线客服
+version: 0.1.0
+description: 会话与消息：访客-坐席双向聊天（biz 三元组幂等挂业务对象）、坐席未读、im.message.created 事件；P0 传输层为短轮询。
+author: NexAdmin
+edition: pro
+requires_nexadmin: ">=0.1.0"
+menus:
+  - parent: /
+    type: dir
+    title: plugin_im.dir
+    path: /im
+    icon: MessagesSquare
+    sort: 61
+  - parent: /im
+    type: menu
+    title: plugin_im.menu
+    path: /im/conversations
+    component: plugins/im/ImPage
+    perm: im:list
+    icon: MessagesSquare
+    sort: 1
+    keep_alive: true
+  - parent: im:list
+    type: button
+    title: plugin_im.perm.reply
+    perm: im:reply
+  - parent: im:list
+    type: button
+    title: plugin_im.perm.edit
+    perm: im:edit

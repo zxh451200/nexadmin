@@ -1,0 +1,19 @@
+{
+  "plugin_totp": {
+    "title": "Two-Factor Auth",
+    "description": "Bind an authenticator app for login verification",
+    "dir": "Personal",
+    "menu": "Two-Factor Auth",
+    "statusLabel": "Current status",
+    "on": "Enabled",
+    "off": "Not enabled",
+    "startEnroll": "Start setup",
+    "secretLabel": "Secret (manual entry)",
+    "uriLabel": "Authenticator URI (scan)",
+    "codePlaceholder": "Enter 6-digit code",
+    "confirm": "Confirm",
+    "confirmed": "Two-factor auth enabled",
+    "disabled": "Two-factor auth disabled",
+    "codeWrong": "Wrong code, try again"
+  }
+}

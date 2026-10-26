@@ -131,12 +131,13 @@ func (s *GormStore) Claim(ctx context.Context, types []string, node string, now 
 	}
 	for range 5 { // 候选被别的实例抢走时换下一个
 		var c Job
-		err := s.tx(ctx).Where("status = ? AND type IN ?", StatusQueued, types).Order("created_at ASC, id ASC").Limit(1).Take(&c).Error
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, nil
+		// 用 Find 而不是 Take：队列为空是正常情况，不该产生 ErrRecordNotFound 错误日志（每 PollEvery 一次）。
+		found := s.tx(ctx).Where("status = ? AND type IN ?", StatusQueued, types).Order("created_at ASC, id ASC").Limit(1).Find(&c)
+		if found.Error != nil {
+			return nil, found.Error
 		}
-		if err != nil {
-			return nil, err
+		if found.RowsAffected == 0 {
+			return nil, nil
 		}
 		res := s.tx(ctx).Model(&Job{}).Where("id = ? AND status = ?", int64(c.ID), StatusQueued).
 			Updates(map[string]any{"status": StatusRunning, "node": node, "started_at": now, "progress": 0, "message": ""})

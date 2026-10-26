@@ -8,6 +8,9 @@ export interface ModuleRoute {
   perm?: string // 需要的权限点，如 'user:list'
   hidden?: boolean // true 则不进菜单
   menu?: { title: string; icon?: string; order?: number; group?: MenuGroupKey } // title 为 i18n key；icon 为 lucide 图标名
+  // true = 沉浸式全屏页：有鉴权但无布局壳（侧边栏/顶栏不渲染），数据大屏、三维场景等用；
+  // 页面仍可出现在菜单里，适合搭配页面内自实现的全屏 API 使用。
+  fullscreen?: boolean
 }
 
 export interface MenuNode {

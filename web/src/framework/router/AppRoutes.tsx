@@ -77,6 +77,20 @@ export function AppRoutes() {
           </RequireAuth>
         }
       />
+      {/* fullscreen 路由：有鉴权但无布局壳（数据大屏 / 三维场景等沉浸页面），先于布局分支注册 */}
+      {allRoutes
+        .filter((r) => r.fullscreen)
+        .map((r) => (
+          <Route
+            key={r.path}
+            path={r.path}
+            element={
+              <RequireAuth>
+                <Guarded route={r} />
+              </RequireAuth>
+            }
+          />
+        ))}
       <Route
         element={
           <RequireAuth>
@@ -85,9 +99,11 @@ export function AppRoutes() {
         }
       >
         <Route index element={<HomeRedirect />} />
-        {allRoutes.map((r) => (
-          <Route key={r.path} path={r.path} element={<Guarded route={r} />} />
-        ))}
+        {allRoutes
+          .filter((r) => !r.fullscreen)
+          .map((r) => (
+            <Route key={r.path} path={r.path} element={<Guarded route={r} />} />
+          ))}
         <Route path="403" element={<ForbiddenPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>

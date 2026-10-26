@@ -83,8 +83,10 @@
       "maxAttemptsHint": "达到该次数后账号将被锁定",
       "lockMinutes": "锁定时长",
       "lockMinutesHint": "锁定期间无法登录，可在用户管理中手动解锁",
+      "times": "{{count}} 次",
       "times_one": "{{count}} 次",
       "times_other": "{{count}} 次",
+      "minutes": "{{count}} 分钟",
       "minutes_one": "{{count}} 分钟",
       "minutes_other": "{{count}} 分钟"
     },

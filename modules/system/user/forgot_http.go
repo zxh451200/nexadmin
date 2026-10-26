@@ -17,6 +17,7 @@ import (
 	"nexadmin/core/middleware"
 	"nexadmin/core/notify"
 	"nexadmin/core/response"
+	"nexadmin/modules/internal/smscode"
 	"nexadmin/pkg/idgen"
 	"nexadmin/pkg/mail"
 )
@@ -68,8 +69,29 @@ func (f *forgotService) verify(ctx context.Context, email, code string) error {
 	return badCode()
 }
 
-// reset 校验验证码并设置新密码。
-func (f *forgotService) reset(ctx context.Context, rawEmail, code, newPassword, ip, lang string) error {
+// reset 校验验证码并设置新密码。target 含 @ 走邮件，否则视为手机号走短信。
+func (f *forgotService) reset(ctx context.Context, rawTarget, code, newPassword, ip, lang string) error {
+	if strings.Contains(rawTarget, "@") {
+		return f.resetEmail(ctx, rawTarget, code, newPassword, ip, lang)
+	}
+	return f.resetPhone(ctx, rawTarget, code, newPassword, ip, lang)
+}
+
+// alertReset 重置成功后的安全告警：有邮箱就发（尽力而为，失败只记日志），没有就跳过。
+func (f *forgotService) alertReset(ctx context.Context, email, name, ip, lang, via string) {
+	if strings.TrimSpace(email) == "" {
+		return
+	}
+	alert := mail.Data{
+		Name: name, Title: "Password reset", Time: f.now().UTC().Format("2006-01-02 15:04:05 UTC"), IP: ip,
+		Content: "Your password was reset with a " + via + " verification code. / 您的密码刚刚通过" + via + "验证码重置。",
+	}
+	if err := f.notify.SendMail(ctx, email, mail.TplSecurityAlert, lang, alert); err != nil {
+		f.log.Warn("forgot: cannot queue security alert mail", zap.Error(err))
+	}
+}
+
+func (f *forgotService) resetEmail(ctx context.Context, rawEmail, code, newPassword, ip, lang string) error {
 	email, err := normEmail(rawEmail)
 	if err != nil {
 		return err
@@ -102,13 +124,46 @@ func (f *forgotService) reset(ctx context.Context, rawEmail, code, newPassword, 
 	}
 	_ = clearLock(ctx, f.cache, u.Username) // 重置后顺带解除登录锁定
 	_ = f.cache.Del(ctx, cache.Key(ctx, "forgot", "cool", digest(email)))
-	alert := mail.Data{
-		Name: u.Name, Title: "Password reset", Time: f.now().UTC().Format("2006-01-02 15:04:05 UTC"), IP: ip,
-		Content: "Your password was reset with an email verification code. / 您的密码刚刚通过邮箱验证码重置。",
+	f.alertReset(ctx, email, u.Name, ip, lang, "email")
+	return nil
+}
+
+func (f *forgotService) resetPhone(ctx context.Context, rawPhone, code, newPassword, ip, lang string) error {
+	phone := normalizePhone(rawPhone)
+	if phone == "" {
+		return bad("手机号格式不正确")
 	}
-	if err := f.notify.SendMail(ctx, email, mail.TplSecurityAlert, lang, alert); err != nil {
-		f.log.Warn("forgot: cannot queue security alert mail", zap.Error(err))
+	if newPassword == "" || len(newPassword) > 72 {
+		return bad("密码长度为 1-72 字节")
 	}
+	if len(code) != 6 {
+		return badCode()
+	}
+	if f.sms == nil || !f.sms.Enabled() {
+		return response.Unavailable("auth.provider_missing").WithMsg("短信服务未启用")
+	}
+	if ok, _ := f.ipRst.Hit(ctx, ip); !ok {
+		return tooMany()
+	}
+	if err := f.sms.Verify(smscode.WithScene(ctx, notify.SceneForgot), phone, code); err != nil {
+		return err
+	}
+	u, err := f.store.byPhone(ctx, phone)
+	if err != nil {
+		return err
+	}
+	if u == nil {
+		return badCode()
+	}
+	hash, err := auth.HashPassword(newPassword)
+	if err != nil {
+		return err
+	}
+	if err := f.store.setPassword(ctx, u.ID, hash); err != nil {
+		return err
+	}
+	_ = clearLock(ctx, f.cache, u.Username)
+	f.alertReset(ctx, u.Email, u.Name, ip, lang, "短信")
 	return nil
 }
 
@@ -121,8 +176,9 @@ func reqLang(c *gin.Context) string {
 }
 
 // registerForgot 注册匿名接口 POST /auth/forgot/send-code 与 /auth/forgot/reset。
+// target 含 @ 走邮件验证码，否则走手机号短信验证码（共用 modules/internal/smscode 的额度与场景隔离）。
 func (m *module) registerForgot(d *core.Deps) {
-	f := newForgotService(gormForgotStore{db: d.DB}, d.Cache, d.Notify, d.Log)
+	f := newForgotService(gormForgotStore{db: d.DB}, d.Cache, d.Notify, smscode.Shared(d.Config, d.Cache, d.Log), d.Log)
 	byIP := middleware.RateLimit(d.Cache, d.Log, "forgot_route", middleware.ByIPAndPath(), 60, time.Hour)
 	d.Public.POST("/auth/forgot/send-code", byIP, func(c *gin.Context) {
 		var body struct {

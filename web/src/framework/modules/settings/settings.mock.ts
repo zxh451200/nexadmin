@@ -9,7 +9,7 @@ const provider = () => ({ enabled: false, clientId: '', clientSecret: '' })
 const defaults = (): AllSettings => ({
   site: {
     siteName: 'NexAdmin',
-    logoUrl: '',
+    logoUrl: '/icon.svg',
     copyright: '© 2026 NexAdmin',
     defaultLanguage: 'zh-CN',
     watermark: false,

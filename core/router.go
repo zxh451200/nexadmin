@@ -25,6 +25,7 @@ import (
 	"nexadmin/core/secret"
 	"nexadmin/core/setup"
 	"nexadmin/core/tenant"
+	"nexadmin/core/ws"
 	"nexadmin/pkg/idgen"
 )
 
@@ -149,7 +150,7 @@ func (a *App) buildFull() (*gin.Engine, error) {
 		return nil, err
 	}
 	a.registerMetricSources(db)
-	if err := secret.InitDefault(cfg.DataDir); err != nil { // 静态加密主密钥：NEXADMIN_SECRET_KEY 或 data/secret.key
+	if err := secret.InitDefaultWithAlgorithm(cfg.DataDir, cfg.Secret.Algorithm); err != nil { // 静态加密主密钥：NEXADMIN_SECRET_KEY 或 data/secret.key；算法见 secret.algorithm
 		return nil, err
 	}
 	svc, err := auth.NewService(cfg, ch)
@@ -171,6 +172,11 @@ func (a *App) buildFull() (*gin.Engine, error) {
 	}
 
 	e := a.newEngine()
+
+	// WebSocket hub:所有插件的实时推送共用一条 WS 连接(见 core/ws)。
+	wsHub := ws.NewHub(0)
+	ws.SetDefault(wsHub)
+	e.GET("/ws", ws.NewHandler(wsHub, svc).Handle)
 	api := e.Group(contractAPIPrefix)
 	api.Use(middleware.ParseToken(svc), openapi.Authenticate(openapi.Options{
 		Store: openapi.GormStore{DB: db}, Cache: ch, Log: a.log,

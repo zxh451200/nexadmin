@@ -1,0 +1,35 @@
+id: workflow
+name: 工作流
+version: 0.1.0
+description: 自研 BPMN 2.0 子集：开始 → 审批（或签/会签）→ 排他网关 → 结束，加签/回退/撤回/超时自动升级/BPMN XML 导出；workflow.* 事件供宿主推送通知。
+author: NexAdmin
+edition: pro
+requires_nexadmin: ">=0.1.0"
+menus:
+  - parent: /
+    type: dir
+    title: plugin_workflow.dir
+    path: /workflow
+    icon: GitBranch
+    sort: 63
+  - parent: /workflow
+    type: menu
+    title: plugin_workflow.menu
+    path: /workflow/center
+    component: plugins/workflow/WorkflowPage
+    perm: workflow:list
+    icon: GitBranch
+    sort: 1
+    keep_alive: true
+  - parent: workflow:list
+    type: button
+    title: plugin_workflow.perm.start
+    perm: workflow:start
+  - parent: workflow:list
+    type: button
+    title: plugin_workflow.perm.approve
+    perm: workflow:approve
+  - parent: workflow:list
+    type: button
+    title: plugin_workflow.perm.edit
+    perm: workflow:edit

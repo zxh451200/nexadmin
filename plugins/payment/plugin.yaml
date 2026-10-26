@@ -1,0 +1,36 @@
+id: payment
+name: 支付中心
+version: 0.1.0
+description: 收单核心：支付单状态机、渠道抽象与回调验签、退款、payment.* 事件；业务系统通过进程内 API 对接，P0 内置 mock 渠道。
+author: NexAdmin
+edition: pro
+requires_nexadmin: ">=0.1.0"
+migration_target: platform
+menus:
+  - parent: /
+    type: dir
+    title: plugin_payment.dir
+    path: /payment
+    icon: Wallet
+    sort: 60
+  - parent: /payment
+    type: menu
+    title: plugin_payment.menu
+    path: /payment/orders
+    component: plugins/payment/PaymentPage
+    perm: payment:list
+    icon: CreditCard
+    sort: 1
+    keep_alive: true
+  - parent: payment:list
+    type: button
+    title: plugin_payment.perm.edit
+    perm: payment:edit
+  - parent: payment:list
+    type: button
+    title: plugin_payment.perm.channel
+    perm: payment:channel
+  - parent: payment:list
+    type: button
+    title: plugin_payment.perm.refund
+    perm: payment:refund

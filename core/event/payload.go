@@ -41,6 +41,17 @@ var catalog = []Info{
 	{NoticePublished, "公告已发布"},
 }
 
+// Register 向事件目录追加条目，供插件在 init/Register 阶段声明自己的事件。
+// 同名条目忽略；目录返回副本，不暴露内部切片。
+func Register(infos ...Info) {
+	for _, info := range infos {
+		if info.Name == "" || Known(info.Name) {
+			continue
+		}
+		catalog = append(catalog, info)
+	}
+}
+
 // Catalog 返回事件目录（副本）。
 func Catalog() []Info { return append([]Info(nil), catalog...) }
 

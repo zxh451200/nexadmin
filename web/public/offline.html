@@ -6,6 +6,18 @@
     <meta name="color-scheme" content="light dark" />
     <title>当前离线 · Offline</title>
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <script>
+      // 渲染前定好语言并写到 <html data-lang>，由 CSS 隐藏另一语言：
+      // 若等脚本渲染后再 hidden，双语文案先撑高内容、body 又是垂直居中，卡片会上下跳动
+      (function () {
+        var lang = ''
+        try { lang = localStorage.getItem('nex-lang') || '' } catch (e) {}
+        lang = (lang || navigator.language || '').toLowerCase()
+        var zh = lang.indexOf('zh') === 0
+        document.documentElement.lang = zh ? 'zh-CN' : 'en'
+        document.documentElement.dataset.lang = zh ? 'zh' : 'en'
+      })()
+    </script>
     <style>
       :root { --bg: #f4f7fb; --fg: #0f1226; --muted: #5b6275; --primary: #2e34eb; --on-primary: #fff; }
       @media (prefers-color-scheme: dark) {
@@ -17,32 +29,57 @@
       main { max-width: 26rem; text-align: center; }
       h1 { margin: 0 0 8px; font-size: 1.5rem; }
       p { margin: 0 0 8px; color: var(--muted); }
-      .en { margin-top: 20px; }
       button { margin-top: 24px; min-height: 44px; padding: 0 28px; border: 0; border-radius: 8px; cursor: pointer;
         background: var(--primary); color: var(--on-primary); font: inherit; font-weight: 600; }
       button:focus-visible { outline: 3px solid var(--fg); outline-offset: 2px; }
+      html[data-lang="zh"] [data-en] { display: none; }
+      html[data-lang="en"] [data-zh] { display: none; }
     </style>
   </head>
   <body>
     <main role="status" aria-live="polite">
       <h1 data-zh>当前离线</h1>
       <p data-zh>无法连接到服务器，请检查网络后重试。</p>
-      <h1 data-en class="en">You are offline</h1>
+      <h1 data-en>You are offline</h1>
       <p data-en>Unable to reach the server. Check your connection and try again.</p>
-      <button type="button" id="retry"><span data-zh>重试</span> / <span data-en>Retry</span></button>
+      <button type="button" id="retry"><span data-zh>重试</span><span data-en>Retry</span></button>
     </main>
     <script>
-      // 默认中英并列；识别到语言偏好后只显示对应语言
       (function () {
-        var lang = (localStorage.getItem('nex-lang') || navigator.language || '').toLowerCase()
-        var zh = lang.indexOf('zh') === 0
-        document.documentElement.lang = zh ? 'zh-CN' : 'en'
-        var hide = zh ? '[data-en]' : '[data-zh]'
-        Array.prototype.forEach.call(document.querySelectorAll('h1' + hide + ',p' + hide), function (el) { el.hidden = true })
-        var btn = document.getElementById('retry')
-        btn.innerHTML = zh ? '重试' : 'Retry'
+        var zh = document.documentElement.dataset.lang === 'zh'
         document.title = zh ? '当前离线' : 'Offline'
-        btn.addEventListener('click', function () { location.reload() })
+        var btn = document.getElementById('retry')
+        var labels = {
+          idle: { zh: '重试', en: 'Retry' },
+          busy: { zh: '连接中…', en: 'Checking…' },
+          fail: { zh: '仍未连接', en: 'Still offline' },
+        }
+        function setLabel(k) {
+          btn.querySelector('[data-zh]').textContent = labels[k].zh
+          btn.querySelector('[data-en]').textContent = labels[k].en
+        }
+        // 重试先探测服务端，可达才整页刷新；仍离线时只改按钮文案，
+        // 避免 reload 让垂直居中的整块内容随视口重排上下跳动。
+        btn.addEventListener('click', function () {
+          if (btn.disabled) return
+          btn.disabled = true
+          setLabel('busy')
+          var ctl = new AbortController()
+          var timer = setTimeout(function () { ctl.abort() }, 4000)
+          fetch('/healthz', { cache: 'no-store', signal: ctl.signal }).then(
+            function (res) {
+              clearTimeout(timer)
+              if (res.ok) { location.reload(); return }
+              setLabel('fail')
+              btn.disabled = false
+            },
+            function () {
+              clearTimeout(timer)
+              setLabel('fail')
+              btn.disabled = false
+            },
+          )
+        })
         window.addEventListener('online', function () { location.reload() })
       })()
     </script>

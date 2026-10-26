@@ -51,8 +51,14 @@ export type OAuthCallbackResult = LoginResult | ChallengeResult | { needBind: tr
 export interface AuthMethods {
   methods: LoginType[]
   providers: { key: string; name: string }[]
-  /** 邮件渠道已配置时为 true；登录页据此显示「忘记密码」入口 */
+  /** 邮件或短信任一可用时为 true；登录页据此显示「忘记密码」入口 */
   forgotEnabled?: boolean
+  /** 可用的找回渠道：email（SMTP 已配置）/ phone（短信已配置）；找回对话框据此适配输入 */
+  forgotChannels?: string[]
+  /** 运行时开关（设置页「参数设置」的 user.register_enabled，默认关闭），与 /auth/register 的闸门同源 */
+  registerEnabled?: boolean
+  /** 「登录验证码」强制开启（login.captcha_enabled，出厂 true）：登录首屏就显示图形验证码；关闭时按失败响应自适应 */
+  captchaEnabled?: boolean
 }
 
 export interface CaptchaResult {

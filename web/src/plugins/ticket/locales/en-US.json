@@ -1,0 +1,44 @@
+{
+  "plugin_ticket": {
+    "title": "Ticket Center",
+    "description": "Submit, follow up and close after-sales requests",
+    "dir": "Ticket Center",
+    "menu": "Tickets",
+    "perm": {
+      "reply": "Reply & claim",
+      "edit": "Status & assignment"
+    },
+    "all": "All",
+    "empty": "No tickets",
+    "overdue": "Overdue",
+    "loading": "Loading…",
+    "pickTicket": "Pick a ticket on the left to work on",
+    "searchPlaceholder": "Ticket no / title / preview",
+    "assign": "Claim",
+    "assignee": "Assignee",
+    "claim": "Start processing",
+    "resolve": "Mark resolved",
+    "close": "Close ticket",
+    "closeConfirm": "Close ticket {{no}}? A reply from the reporter reopens it.",
+    "replyPlaceholder": "Type a reply, Enter to send",
+    "send": "Reply",
+    "closedNotice": "Ticket is closed; a reply from the reporter reopens it.",
+    "status": {
+      "open": "Open",
+      "processing": "Processing",
+      "resolved": "Resolved",
+      "closed": "Closed"
+    },
+    "priority": {
+      "urgent": "Urgent",
+      "high": "High",
+      "normal": "Normal",
+      "low": "Low"
+    },
+    "repliers": {
+      "reporter": "Reporter",
+      "agent": "Agent",
+      "system": "System"
+    }
+  }
+}

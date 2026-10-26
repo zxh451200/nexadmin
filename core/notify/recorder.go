@@ -22,8 +22,9 @@ const (
 // 发送场景（Record.Scene）。
 const (
 	SceneNotice     = "notice"      // 通过 Send 投递的普通通知
-	SceneVerifyCode = "verify_code" // 验证码（短信登录、忘记密码）
+	SceneVerifyCode = "verify_code" // 验证码（短信登录）
 	SceneBindPhone  = "bind_phone"  // 个人中心绑定手机号的验证码
+	SceneForgot     = "forgot"      // 忘记密码的短信验证码（验证码 key 按场景隔离，见 modules/internal/smscode）
 	SceneAccount    = "account"     // 账号创建 / 重置密码通知
 	SceneSecurity   = "security"    // 安全告警
 	SceneTest       = "test"        // 设置页「发送测试」

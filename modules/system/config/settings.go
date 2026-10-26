@@ -41,7 +41,7 @@ func defaultSettings() map[string]map[string]any {
 	oidc := provider()
 	oidc["issuer"] = ""
 	return map[string]map[string]any{
-		"site":     {"siteName": "NexAdmin", "logoUrl": "", "copyright": "© 2026 NexAdmin", "defaultLanguage": "zh-CN", "watermark": false},
+		"site":     {"siteName": "NexAdmin", "logoUrl": "/icon.svg", "copyright": "© 2026 NexAdmin", "defaultLanguage": "zh-CN", "watermark": false},
 		"security": {"maxAttempts": "5", "lockMinutes": "15"},
 		"cache":    {"type": "memory", "address": "", "password": ""},
 		"storage":  {"type": "local", "endpoint": "", "bucket": "", "region": "", "accessKey": "", "secretKey": ""},

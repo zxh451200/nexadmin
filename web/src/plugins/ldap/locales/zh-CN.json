@@ -1,0 +1,18 @@
+{
+  "plugin_ldap": {
+    "title": "LDAP/AD 登录",
+    "description": "企业目录登录:本地密码失败后自动尝试 LDAP 校验",
+    "dir": "LDAP 登录",
+    "menu": "LDAP 配置",
+    "enabled": "启用 LDAP 登录",
+    "host": "LDAP 服务器地址",
+    "port": "端口",
+    "matchExisting": "绑定同名本地账号",
+    "autoCreate": "自动建号",
+    "pwKeep": "留空表示不修改",
+    "test": "连通性测试",
+    "testOk": "LDAP 连接正常",
+    "on": "已启用",
+    "off": "未启用"
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "plugin_ticket": {
+    "title": "工单中心",
+    "description": "售后与请求的提交、跟进与关闭",
+    "dir": "工单中心",
+    "menu": "工单",
+    "perm": {
+      "reply": "回复与认领",
+      "edit": "状态与改派"
+    },
+    "all": "全部",
+    "empty": "暂无工单",
+    "overdue": "已超时",
+    "loading": "加载中…",
+    "pickTicket": "选择左侧工单查看与处理",
+    "searchPlaceholder": "工单号 / 标题 / 摘要",
+    "assign": "认领",
+    "assignee": "负责人",
+    "claim": "开始处理",
+    "resolve": "标记解决",
+    "close": "关闭工单",
+    "closeConfirm": "确认关闭工单 {{no}}？关闭后报告人回复会自动重开。",
+    "replyPlaceholder": "输入回复，回车发送",
+    "send": "回复",
+    "closedNotice": "工单已关闭；报告人补充回复会自动重开。",
+    "status": {
+      "open": "待处理",
+      "processing": "处理中",
+      "resolved": "已解决",
+      "closed": "已关闭"
+    },
+    "priority": {
+      "urgent": "紧急",
+      "high": "高",
+      "normal": "普通",
+      "low": "低"
+    },
+    "repliers": {
+      "reporter": "报告人",
+      "agent": "客服",
+      "system": "系统"
+    }
+  }
+}
