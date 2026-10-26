@@ -1,0 +1,13 @@
+{{define "content"}}
+<article class="section article">
+  <div class="container article-in">
+    <header class="article-head">
+      {{if .Post.PublishedAt}}<time class="article-date">{{fmtDate .Lang .Post.PublishedAt}}</time>{{end}}
+      <h1 class="page-title">{{.Post.Title}}</h1>
+    </header>
+    {{if .Post.CoverURL}}<img class="article-cover" src="{{.Post.CoverURL}}" alt="">{{end}}
+    <div class="article-body">{{safeHTML .Post.Content}}</div>
+    <p class="article-back"><a href="{{.URL "/news"}}">{{.T "news.back"}}</a></p>
+  </div>
+</article>
+{{end}}

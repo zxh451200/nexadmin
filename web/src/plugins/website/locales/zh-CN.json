@@ -1,0 +1,109 @@
+{
+  "plugin_website": {
+    "dir": "网站管理",
+    "menu": {
+      "settings": "站点设置",
+      "nav": "导航管理",
+      "features": "特性管理",
+      "pages": "页面管理",
+      "posts": "新闻管理"
+    },
+    "settings": {
+      "title": "站点设置",
+      "desc": "站点名称、首页文案与页脚信息；保存后官网即时生效"
+    },
+    "nav": {
+      "title": "导航管理",
+      "desc": "官网顶栏导航项",
+      "create": "新建导航",
+      "edit": "编辑导航",
+      "required": "请填写名称与链接",
+      "deleteConfirm": "确认删除导航「{{name}}」？"
+    },
+    "feature": {
+      "title": "特性管理",
+      "desc": "首页能力网格的卡片",
+      "create": "新建特性",
+      "edit": "编辑特性",
+      "required": "请填写标题",
+      "deleteConfirm": "确认删除特性「{{name}}」？"
+    },
+    "page": {
+      "title": "页面管理",
+      "desc": "自定义单页，路径 /p/:slug，如「关于我们」",
+      "create": "新建页面",
+      "edit": "编辑页面",
+      "required": "请填写标题与 slug",
+      "deleteConfirm": "确认删除页面「{{name}}」？"
+    },
+    "post": {
+      "title": "新闻管理",
+      "desc": "官网动态，路径 /news/:slug",
+      "create": "新建新闻",
+      "edit": "编辑新闻",
+      "required": "请填写标题与 slug",
+      "deleteConfirm": "确认删除新闻「{{name}}」？"
+    },
+    "all": "全部",
+    "empty": "暂无数据",
+    "searchPlaceholder": "标题 / slug",
+    "viewSite": "在官网查看",
+    "enabledOn": "启用",
+    "enabledOff": "停用",
+    "publishedOn": "已发布",
+    "publishedOff": "草稿",
+    "fields": {
+      "siteName": "站点名称",
+      "siteDesc": "站点描述（SEO）",
+      "logoUrl": "Logo 地址",
+      "homeTitle": "首页主标题",
+      "homeSubtitle": "首页副文",
+      "homeCtaLabel": "主按钮文字",
+      "homeCtaHref": "主按钮链接",
+      "seoKeywords": "SEO 关键词",
+      "contactEmail": "联系邮箱",
+      "icp": "备案号",
+      "footerNote": "页脚备注",
+      "navLabel": "名称",
+      "navHref": "链接",
+      "featureTitle": "标题",
+      "featureDesc": "描述",
+      "featureIcon": "图标",
+      "pageTitle": "页面标题",
+      "postTitle": "新闻标题",
+      "slug": "slug",
+      "seoDesc": "SEO 描述",
+      "coverUrl": "封面图地址",
+      "summary": "摘要",
+      "content": "正文",
+      "published": "发布状态",
+      "sort": "排序",
+      "enabled": "启用"
+    },
+    "hint": {
+      "homeTitle": "两行标题请用换行分隔，末行渲染为渐变文字",
+      "logoUrl": "图片 URL 或点击右侧按钮上传（PNG / JPEG / WebP / GIF，≤2MB）；留空使用内置字母标志"
+    },
+    "logo": {
+      "upload": "上传",
+      "uploading": "上传中…",
+      "uploaded": "图片已上传，记得保存设置"
+    },
+    "placeholder": {
+      "siteName": "NexAdmin",
+      "siteDesc": "一句话介绍，会用于标题与搜索摘要",
+      "homeTitle": "为生产级后台系统\n而生的全栈框架",
+      "homeCtaHref": "#quickstart",
+      "contactEmail": "team@example.com",
+      "icp": "京ICP备00000000号"
+    },
+    "market": {
+      "enabled": "启用官网插件市场",
+      "enabledHint": "关闭后官网不再展示插件市场入口与相关页面；后台「插件管理 → 插件市场」不受影响。"
+    },
+    "i18n": {
+      "title": "多语言内容",
+      "hint": "按语言填写译文；留空的字段在该语言页面回退到上面的原文。新增语言后这里会自动出现。"
+    }
+  }
+}

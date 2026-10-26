@@ -1,0 +1,109 @@
+{
+  "plugin_website": {
+    "dir": "Website",
+    "menu": {
+      "settings": "Site settings",
+      "nav": "Navigation",
+      "features": "Features",
+      "pages": "Pages",
+      "posts": "News"
+    },
+    "settings": {
+      "title": "Site settings",
+      "desc": "Site name, home copy and footer; changes go live immediately"
+    },
+    "nav": {
+      "title": "Navigation",
+      "desc": "Top navigation items of the public site",
+      "create": "New link",
+      "edit": "Edit link",
+      "required": "Label and href are required",
+      "deleteConfirm": "Delete navigation \"{{name}}\"?"
+    },
+    "feature": {
+      "title": "Features",
+      "desc": "Cards in the home capability grid",
+      "create": "New feature",
+      "edit": "Edit feature",
+      "required": "Title is required",
+      "deleteConfirm": "Delete feature \"{{name}}\"?"
+    },
+    "page": {
+      "title": "Pages",
+      "desc": "Custom single pages at /p/:slug, e.g. About",
+      "create": "New page",
+      "edit": "Edit page",
+      "required": "Title and slug are required",
+      "deleteConfirm": "Delete page \"{{name}}\"?"
+    },
+    "post": {
+      "title": "News",
+      "desc": "Site updates at /news/:slug",
+      "create": "New post",
+      "edit": "Edit post",
+      "required": "Title and slug are required",
+      "deleteConfirm": "Delete post \"{{name}}\"?"
+    },
+    "all": "All",
+    "empty": "No data",
+    "searchPlaceholder": "Title / slug",
+    "viewSite": "View on site",
+    "enabledOn": "Enabled",
+    "enabledOff": "Disabled",
+    "publishedOn": "Published",
+    "publishedOff": "Draft",
+    "fields": {
+      "siteName": "Site name",
+      "siteDesc": "Site description (SEO)",
+      "logoUrl": "Logo URL",
+      "homeTitle": "Home headline",
+      "homeSubtitle": "Home subtitle",
+      "homeCtaLabel": "CTA label",
+      "homeCtaHref": "CTA link",
+      "seoKeywords": "SEO keywords",
+      "contactEmail": "Contact email",
+      "icp": "ICP filing no.",
+      "footerNote": "Footer note",
+      "navLabel": "Label",
+      "navHref": "Href",
+      "featureTitle": "Title",
+      "featureDesc": "Description",
+      "featureIcon": "Icon",
+      "pageTitle": "Page title",
+      "postTitle": "Post title",
+      "slug": "Slug",
+      "seoDesc": "SEO description",
+      "coverUrl": "Cover URL",
+      "summary": "Summary",
+      "content": "Content",
+      "published": "Published",
+      "sort": "Sort",
+      "enabled": "Enabled"
+    },
+    "hint": {
+      "homeTitle": "Use a line break for two lines; the last line renders as gradient text",
+      "logoUrl": "Image URL, or upload with the button (PNG/JPEG/WebP/GIF, ≤2MB); leave empty for the built-in letter mark"
+    },
+    "logo": {
+      "upload": "Upload",
+      "uploading": "Uploading…",
+      "uploaded": "Uploaded — remember to save"
+    },
+    "placeholder": {
+      "siteName": "NexAdmin",
+      "siteDesc": "One-line intro used in title and search snippets",
+      "homeTitle": "A full-stack framework\nbuilt for production admin systems",
+      "homeCtaHref": "#quickstart",
+      "contactEmail": "team@example.com",
+      "icp": "e.g. 京ICP备00000000号"
+    },
+    "market": {
+      "enabled": "Enable public plugin marketplace",
+      "enabledHint": "When off, the public site hides all marketplace links and pages. The admin marketplace is unaffected."
+    },
+    "i18n": {
+      "title": "Translations",
+      "hint": "Fill in each language. Empty fields fall back to the source text above. New languages appear here automatically."
+    }
+  }
+}

@@ -1,0 +1,85 @@
+{{define "content"}}
+<section class="section market-head">
+  <div class="container">
+    <p class="fig">{{.T "market.fig"}}</p>
+    <h1 class="page-title">{{.T "market.heading"}}</h1>
+    <p class="section-sub">{{.T "market.pageDesc"}}</p>
+    <div class="market-stats">
+      <span>{{.TF "market.count" .PluginCount}}</span>
+      <span>{{.TF "market.matched" .MarketFiltered}}</span>
+      <a href="/plugins/index.json">{{.T "market.catalogJson"}}</a>
+    </div>
+  </div>
+</section>
+
+<section class="section market-body">
+  <div class="container">
+    <form class="market-toolbar" action="{{.URL "/plugins"}}" method="get" role="search">
+      <div class="market-search">
+        <span class="market-search-icon" aria-hidden="true">⌕</span>
+        <input type="search" name="q" value="{{.MarketQuery}}" placeholder="{{.T "market.searchPlaceholder"}}" aria-label="{{.T "market.searchAria"}}" autocomplete="off">
+      </div>
+      {{if .MarketCategory}}<input type="hidden" name="category" value="{{.MarketCategory}}">{{end}}
+      {{if .MarketEdition}}<input type="hidden" name="edition" value="{{.MarketEdition}}">{{end}}
+      <button class="btn btn-ghost btn-sm" type="submit">{{.T "market.search"}}</button>
+      {{if or .MarketQuery .MarketCategory .MarketEdition}}<a class="market-clear" href="{{.URL "/plugins"}}">{{.T "market.clear"}}</a>{{end}}
+    </form>
+
+    <div class="market-filters">
+      <div class="chips" role="group" aria-label="{{.T "market.filterCategory"}}">
+        {{range .MarketCategories}}<a class="chip{{if .Active}} active{{end}}" href="{{$.URL .Href}}"{{if .Active}} aria-current="true"{{end}}>{{.Label}}</a>{{end}}
+      </div>
+      <div class="chips" role="group" aria-label="{{.T "market.filterEdition"}}">
+        {{range .MarketEditions}}<a class="chip{{if .Active}} active{{end}}" href="{{$.URL .Href}}"{{if .Active}} aria-current="true"{{end}}>{{.Label}}</a>{{end}}
+      </div>
+    </div>
+
+    {{if .Plugins}}
+    <div class="plugin-grid">
+      {{range .Plugins}}
+      <article class="plugin-card" data-reveal>
+        {{if .Cover}}<img class="plugin-cover" src="{{.Cover}}" alt="" loading="lazy">{{else}}<div class="plugin-cover plugin-cover-fallback cat-{{.Category}}" aria-hidden="true"><span>{{.Initial}}</span></div>{{end}}
+        <header class="plugin-card-head">
+          <span class="plugin-icon" aria-hidden="true">{{.Initial}}</span>
+          <div class="plugin-title">
+            <h2><a href="{{$.URL .DetailURL}}">{{.Name}}</a></h2>
+            <span class="plugin-id">{{.ID}} · v{{.Version}}</span>
+          </div>
+          <span class="pill {{if .Pro}}pro{{end}}">{{if .Pro}}{{$.T "market.pro"}}{{else}}{{$.T "market.free"}}{{end}}</span>
+        </header>
+        <p class="plugin-desc">{{.Description}}</p>
+        <div class="plugin-stats-line">
+          {{if .RatingCount}}<span class="plugin-rating">★ {{.RatingAvg}} <small>({{.RatingCount}})</small></span>{{end}}
+          {{if .Downloads}}<span>{{$.TF "market.downloads" .DownloadsText}}</span>{{end}}
+        </div>
+        <footer class="plugin-card-foot">
+          <span class="plugin-cat">{{.CategoryLabel}}</span>
+          <span class="plugin-price">{{if .Price}}{{.Price}}{{else}}—{{end}}</span>
+          <a class="plugin-link" href="{{$.URL .DetailURL}}" aria-label="{{$.TF "market.detailAria" .Name}}">{{$.T "market.detail"}}</a>
+        </footer>
+      </article>
+      {{end}}
+    </div>
+    {{else}}
+    <div class="market-empty">
+      {{if .MarketAvailable}}
+      <p>{{if .MarketQuery}}{{.TF "market.emptyQuery" .MarketQuery}}{{else}}{{.T "market.emptyNoQuery"}}{{end}} {{.T "market.emptyHint"}}</p>
+      <a class="btn btn-ghost btn-sm" href="{{.URL "/plugins"}}">{{.T "market.viewAll"}}</a>
+      {{else}}
+      <p>{{.T "market.emptyNone"}}</p>
+      {{end}}
+    </div>
+    {{end}}
+
+    {{if .ContactEmail}}
+    <div class="market-submit">
+      <div>
+        <h2>{{.T "market.submitTitle"}}</h2>
+        <p>{{.T "market.submitDesc"}}</p>
+      </div>
+      <a class="btn btn-ghost" href="mailto:{{.ContactEmail}}?subject={{urlquery (.T "market.submitSubject")}}">{{.T "market.submitCta"}}</a>
+    </div>
+    {{end}}
+  </div>
+</section>
+{{end}}

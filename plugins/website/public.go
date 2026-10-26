@@ -1,0 +1,321 @@
+package website
+
+import (
+	"context"
+	"crypto/ed25519"
+	"encoding/xml"
+	"errors"
+	"fmt"
+	"io/fs"
+	"net/http"
+	"path"
+	"strings"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
+	"gorm.io/gorm"
+
+	"nexadmin/core/plugin/market"
+	"nexadmin/pkg/idgen"
+)
+
+// 公开官网页（匿名 SSR）。路由注册在根引擎的 RootGroup 上（见 plugin.go），
+// 已带插件授权闸门与本插件自己的 IP 限流。
+
+type siteHandler struct {
+	svc *Service
+	log *zap.Logger
+	pkg *packageCache
+	// catalog 允许测试注入市场目录；nil 时读 config/plugin-market.yaml。
+	catalog func() []market.Entry
+	// marketOn 允许测试注入市场开关；nil 时读站点设置。
+	marketOn func() (bool, error)
+	// signKey 为空表示不签名（未配置 NEXADMIN_MARKET_SIGN_KEY）。
+	signKey ed25519.PrivateKey
+}
+
+// baseView 装配站点级数据（设置、导航、特性、最新新闻）与页脚年份。
+func (h *siteHandler) baseView(ctx context.Context, lang string, postLimit int) (*siteView, error) {
+	data, err := h.svc.SiteData(ctx, postLimit, lang)
+	if err != nil {
+		return nil, err
+	}
+	set := data.Setting
+	v := &siteView{
+		SiteName: set.SiteName, SiteDesc: set.SiteDesc, LogoURL: set.LogoURL,
+		HomeTitle: set.HomeTitle, HomeSubtitle: set.HomeSubtitle,
+		HomeCTALabel: set.HomeCTALabel, HomeCTAHref: set.HomeCTAHref,
+		ContactEmail: set.ContactEmail, ICP: set.ICP, FooterNote: set.FooterNote,
+		SeoKeywords: set.SeoKeywords, MarketEnabled: set.MarketEnabled,
+		Navs: data.Navs, Features: data.Features, Posts: data.Posts,
+		Year: time.Now().Year(),
+		Lang: languageOr(lang), Languages: Languages(),
+	}
+	if v.SiteName == "" {
+		v.SiteName = "NexAdmin"
+	}
+	return v, nil
+}
+
+func (h *siteHandler) render(c *gin.Context, name string, status int, v *siteView) {
+	t, ok := pageTmpl[name]
+	if !ok {
+		c.String(http.StatusInternalServerError, "template %q missing", name)
+		return
+	}
+	v.ensureLang()
+	// canonical / og:url 需要绝对且带语言前缀的地址；Route 保留无前缀路径用于导航。
+	v.BaseURL = baseURL(c)
+	v.Route = stripLangPrefix(c.Request.URL.Path)
+	v.Path = v.Lang.Path(v.Route)
+	v.Query = c.Request.URL.RawQuery
+	var b strings.Builder
+	if err := t.ExecuteTemplate(&b, "layout", v); err != nil {
+		c.String(http.StatusInternalServerError, "render failed")
+		return
+	}
+	c.Data(status, "text/html; charset=utf-8", []byte(b.String()))
+}
+
+func (h *siteHandler) notFound(c *gin.Context, v *siteView) {
+	if v == nil {
+		var err error
+		if v, err = h.baseView(c.Request.Context(), langOf(c).Code, 3); err != nil {
+			c.String(http.StatusInternalServerError, "render failed")
+			return
+		}
+	}
+	v.Title = v.T("notfound.title") + " - " + v.SiteName
+	h.render(c, "notfound", http.StatusNotFound, v)
+}
+
+// GET / —— 官网首页。
+func (h *siteHandler) home(c *gin.Context) {
+	lang := langOf(c)
+	v, err := h.baseView(c.Request.Context(), lang.Code, 3)
+	if err != nil {
+		c.String(http.StatusInternalServerError, "site unavailable")
+		return
+	}
+	// 标题用首页主标题（两行合成一行），比整段站点描述更适合 <title> 与搜索结果。
+	v.Title = homePageTitle(v.SiteName, v.HomeTitle, v.SiteDesc)
+	v.Desc = v.SiteDesc
+	if v.MarketEnabled {
+		v.FeaturedPlugins = marketCards(featuredEntries(h.marketEntries(), 3), h.marketStats(c.Request.Context()), lang.Code)
+	}
+	if l, ok := suggestLanguage(c); ok {
+		v.Suggest, v.SuggestLang = true, l
+		c.Header("Vary", "Accept-Language")
+	}
+	h.render(c, "home", http.StatusOK, v)
+}
+
+// homePageTitle 生成首页 <title>：优先主标题，其次站点描述，最后只有站名。
+func homePageTitle(siteName, homeTitle, siteDesc string) string {
+	if t := strings.Join(strings.Split(strings.TrimSpace(homeTitle), "\n"), " "); t != "" {
+		return siteName + " — " + t
+	}
+	if siteDesc != "" {
+		return siteName + " — " + siteDesc
+	}
+	return siteName
+}
+
+// GET /news —— 新闻列表。
+func (h *siteHandler) newsList(c *gin.Context) {
+	lang := langOf(c)
+	v, err := h.baseView(c.Request.Context(), lang.Code, 20)
+	if err != nil {
+		c.String(http.StatusInternalServerError, "site unavailable")
+		return
+	}
+	v.Title = v.T("news.pageTitleTag") + " - " + v.SiteName
+	v.Desc = v.TF("news.pageDesc", v.SiteName)
+	h.render(c, "news", http.StatusOK, v)
+}
+
+// GET /news/:slug —— 新闻详情。
+func (h *siteHandler) postDetail(c *gin.Context) {
+	lang := langOf(c)
+	p, err := h.svc.PublishedPostBy(c.Request.Context(), c.Param("slug"), lang.Code)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			h.notFound(c, nil)
+			return
+		}
+		c.String(http.StatusInternalServerError, "site unavailable")
+		return
+	}
+	v, err := h.baseView(c.Request.Context(), lang.Code, 0)
+	if err != nil {
+		c.String(http.StatusInternalServerError, "site unavailable")
+		return
+	}
+	v.Title = p.Title + " - " + v.SiteName
+	if p.Summary != "" {
+		v.Desc = p.Summary
+	} else {
+		v.Desc = v.SiteDesc
+	}
+	v.Post = p
+	h.render(c, "post", http.StatusOK, v)
+}
+
+// GET /p/:slug —— 自定义页。
+func (h *siteHandler) pageDetail(c *gin.Context) {
+	lang := langOf(c)
+	p, err := h.svc.PublishedPageBy(c.Request.Context(), c.Param("slug"), lang.Code)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			h.notFound(c, nil)
+			return
+		}
+		c.String(http.StatusInternalServerError, "site unavailable")
+		return
+	}
+	v, err := h.baseView(c.Request.Context(), lang.Code, 0)
+	if err != nil {
+		c.String(http.StatusInternalServerError, "site unavailable")
+		return
+	}
+	v.Title = p.Title + " - " + v.SiteName
+	if p.SeoDesc != "" {
+		v.Desc = p.SeoDesc
+	} else {
+		v.Desc = v.SiteDesc
+	}
+	v.Page = p
+	h.render(c, "page", http.StatusOK, v)
+}
+
+var assetTypes = map[string]string{
+	".css":   "text/css; charset=utf-8",
+	".js":    "application/javascript; charset=utf-8",
+	".svg":   "image/svg+xml",
+	".png":   "image/png",
+	".jpg":   "image/jpeg",
+	".webp":  "image/webp",
+	".ico":   "image/x-icon",
+	".woff2": "font/woff2",
+}
+
+// GET /website-assets/*path —— 服务 go:embed 的静态资源（site.css / site.js 等）；
+// media/<id> 段落转到数据库里的上传图片（logo / 封面）。
+func (h *siteHandler) asset(c *gin.Context) {
+	p := strings.TrimPrefix(c.Param("path"), "/")
+	if p == "" || strings.Contains(p, "..") {
+		c.String(http.StatusNotFound, "not found")
+		return
+	}
+	if rest, ok := strings.CutPrefix(p, "media/"); ok {
+		h.mediaAsset(c, rest)
+		return
+	}
+	sub, err := fs.Sub(staticFS, "static")
+	if err != nil {
+		c.String(http.StatusInternalServerError, "asset unavailable")
+		return
+	}
+	b, err := fs.ReadFile(sub, p)
+	if err != nil {
+		c.String(http.StatusNotFound, "not found")
+		return
+	}
+	ctype := assetTypes[strings.ToLower(path.Ext(p))]
+	if ctype == "" {
+		ctype = "application/octet-stream"
+	}
+	// 文件名带内容版本号（site.css?v=0.6.0），可安全长缓存；插件升级会换版本号。
+	c.Header("Cache-Control", "public, max-age=3600")
+	c.Data(http.StatusOK, ctype, b)
+}
+
+// mediaAsset 服务上传的图片：id 是雪花号不可变（重传生成新 id），可以 immutable。
+func (h *siteHandler) mediaAsset(c *gin.Context, idStr string) {
+	id, err := idgen.Parse(idStr)
+	if err != nil || id <= 0 {
+		c.String(http.StatusNotFound, "not found")
+		return
+	}
+	m, err := h.svc.MediaByID(c.Request.Context(), id)
+	if err != nil {
+		c.String(http.StatusNotFound, "not found")
+		return
+	}
+	c.Header("Cache-Control", "public, max-age=31536000, immutable")
+	c.Data(http.StatusOK, m.Mime, m.Data)
+}
+
+// baseURL 从请求推断站点绝对地址（反代场景尊重 X-Forwarded-Proto）。
+func baseURL(c *gin.Context) string {
+	scheme := "http"
+	if requestHTTPS(c) {
+		scheme = "https"
+	}
+	return scheme + "://" + c.Request.Host
+}
+
+// GET /robots.txt —— 官网开放收录，后台路径不允许抓取。
+func (h *siteHandler) robots(c *gin.Context) {
+	var b strings.Builder
+	b.WriteString("User-agent: *\n")
+	b.WriteString("Allow: /\n")
+	for _, p := range []string{
+		"/login", "/dashboard", "/system", "/content", "/monitor", "/tenant",
+		"/portal", "/jobs", "/message", "/profile", "/about", "/setup", "/api", "/mcp",
+	} {
+		b.WriteString("Disallow: " + p + "\n")
+	}
+	fmt.Fprintf(&b, "Sitemap: %s/sitemap.xml\n", baseURL(c))
+	c.Data(http.StatusOK, "text/plain; charset=utf-8", []byte(b.String()))
+}
+
+// GET /sitemap.xml —— 首页 + 新闻列表 + 已发布新闻/自定义页；每个 URL 带全语言 hreflang。
+func (h *siteHandler) sitemap(c *gin.Context) {
+	entries, err := h.svc.SitemapEntries(c.Request.Context())
+	if err != nil {
+		c.String(http.StatusInternalServerError, "sitemap unavailable")
+		return
+	}
+	set, err := h.svc.Settings(c.Request.Context())
+	if err != nil {
+		c.String(http.StatusInternalServerError, "sitemap unavailable")
+		return
+	}
+	if set.MarketEnabled {
+		entries = append(entries, SitemapEntry{Loc: "/plugins"})
+		for _, e := range h.marketEntries() {
+			entries = append(entries, SitemapEntry{Loc: "/plugins/" + e.ID})
+		}
+	}
+	base := baseURL(c)
+	langs := Languages()
+	def := DefaultLanguage()
+	var b strings.Builder
+	b.WriteString(`<?xml version="1.0" encoding="UTF-8"?>` + "\n")
+	b.WriteString(`<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">` + "\n")
+	for _, e := range entries {
+		b.WriteString("  <url>\n    <loc>" + xmlEscape(base+def.Path(e.Loc)) + "</loc>\n")
+		for _, l := range langs {
+			b.WriteString(`    <xhtml:link rel="alternate" hreflang="` + xmlEscape(l.HTMLLang) + `" href="` +
+				xmlEscape(base+l.Path(e.Loc)) + `"/>` + "\n")
+		}
+		b.WriteString(`    <xhtml:link rel="alternate" hreflang="x-default" href="` + xmlEscape(base+def.Path(e.Loc)) + `"/>` + "\n")
+		if e.Lastmod != nil {
+			b.WriteString("    <lastmod>" + e.Lastmod.UTC().Format("2006-01-02") + "</lastmod>\n")
+		}
+		b.WriteString("  </url>\n")
+	}
+	b.WriteString("</urlset>\n")
+	c.Data(http.StatusOK, "application/xml; charset=utf-8", []byte(b.String()))
+}
+
+// xmlEscape 转义 XML 文本（路径是 slug 安全字符，host 可能带特殊字符）。
+func xmlEscape(s string) string {
+	var b strings.Builder
+	if err := xml.EscapeText(&b, []byte(s)); err != nil {
+		return s
+	}
+	return b.String()
+}

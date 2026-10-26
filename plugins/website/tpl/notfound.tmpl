@@ -1,0 +1,14 @@
+{{define "content"}}
+<section class="section notfound">
+  <div class="container">
+    <p class="fig">404</p>
+    <h1 class="page-title">{{.T "notfound.title"}}</h1>
+    <p class="section-sub">{{.T "notfound.desc"}}</p>
+    <div class="hero-cta">
+      <a class="btn btn-primary" href="{{.Home}}">{{.T "notfound.home"}}</a>
+      <a class="btn btn-ghost" href="{{.URL "/news"}}">{{.T "notfound.news"}}</a>
+      {{if .MarketEnabled}}<a class="btn btn-ghost" href="{{.URL "/plugins"}}">{{.T "notfound.market"}}</a>{{end}}
+    </div>
+  </div>
+</section>
+{{end}}

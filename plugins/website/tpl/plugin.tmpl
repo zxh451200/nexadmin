@@ -1,0 +1,151 @@
+{{define "content"}}
+<article class="section plugin-page">
+  <div class="container">
+    <nav class="crumbs" aria-label="{{.T "plugin.breadcrumb"}}">
+      <a href="{{.URL "/plugins"}}">{{.T "plugin.crumb"}}</a>
+      <span aria-hidden="true">/</span>
+      <span>{{.Plugin.Name}}</span>
+    </nav>
+
+    <header class="plugin-hero" data-reveal>
+      <span class="plugin-icon lg" aria-hidden="true">{{.Plugin.Initial}}</span>
+      <div class="plugin-hero-main">
+        <div class="plugin-tags">
+          <span class="pill {{if .Plugin.Pro}}pro{{end}}">{{if .Plugin.Pro}}{{.T "market.pro"}}{{else}}{{.T "market.free"}}{{end}}</span>
+          <span class="pill">{{.Plugin.CategoryLabel}}</span>
+          <span class="plugin-id">{{.Plugin.ID}} · v{{.Plugin.Version}}</span>
+        </div>
+        <h1 class="page-title">{{.Plugin.Name}}</h1>
+        <p class="plugin-lede">{{.Plugin.Description}}</p>
+        <p class="plugin-byline">{{if .Plugin.Author}}{{.TF "plugin.by" .Plugin.Author}}{{else}}{{.TF "plugin.publisher" .SiteName}}{{end}}</p>
+        <p class="plugin-stats">
+          {{if .Plugin.RatingCount}}<span class="plugin-rating">★ {{.Plugin.RatingAvg}} <small>({{.Plugin.RatingCount}})</small></span>{{else}}<span class="plugin-rating muted">{{.T "plugin.noRating"}}</span>{{end}}
+          <span>{{.TF "plugin.downloads" .Plugin.DownloadsText}}</span>
+        </p>
+      </div>
+    </header>
+
+    {{if .Plugin.Screenshots}}
+    <section class="plugin-shots" aria-label="{{.TF "plugin.shotsAria" .Plugin.Name}}">
+      {{range .Plugin.Screenshots}}<img src="{{.}}" alt="{{$.TF "plugin.shotsAria" $.Plugin.Name}}" loading="lazy">{{end}}
+    </section>
+    {{end}}
+
+    <div class="plugin-layout">
+      <aside class="plugin-aside">
+        <div class="install-card">
+          <a class="btn btn-primary" href="{{.AdminInstallURL}}">{{.T "plugin.install"}}</a>
+          <a class="btn btn-ghost" href="{{.DownloadURL}}" data-download>{{.T "plugin.download"}}</a>
+          <p class="install-hint" data-download-hint hidden role="status" aria-live="polite">{{.T "plugin.downloadHint"}}</p>
+          <p class="install-hint">{{.T "plugin.installHint"}}</p>
+          <dl class="plugin-facts">
+            <div><dt>{{.T "plugin.version"}}</dt><dd>{{.Plugin.Version}}</dd></div>
+            <div><dt>{{.T "plugin.category"}}</dt><dd>{{.Plugin.CategoryLabel}}</dd></div>
+            <div><dt>{{.T "plugin.author"}}</dt><dd>{{if .Plugin.Author}}{{.Plugin.Author}}{{else}}{{.SiteName}}{{end}}</dd></div>
+            <div><dt>{{.T "plugin.license"}}</dt><dd>{{if .Plugin.Pro}}{{.T "plugin.licensePro"}}{{else}}{{.T "plugin.licenseFree"}}{{end}}</dd></div>
+            <div><dt>{{.T "plugin.price"}}</dt><dd>{{if .Plugin.Price}}{{.Plugin.Price}}{{else}}{{.T "market.priceTbd"}}{{end}}</dd></div>
+          </dl>
+          {{if .MarketSourceURL}}<a class="plugin-source" href="{{.MarketSourceURL}}" target="_blank" rel="noopener noreferrer">{{.T "market.source"}}</a>{{end}}
+          <a class="plugin-checksum" href="{{.DownloadURL}}.sha256">{{.T "market.signature"}}</a>
+          {{if .Signed}}
+          <div class="plugin-sign">
+            <span>{{.T "plugin.signatureLabel"}}</span>
+            <a href="{{.SignatureURL}}">.sig</a>
+            <a href="{{.PublicKeyURL}}">{{.T "plugin.publicKey"}}</a>
+          </div>
+          {{end}}
+        </div>
+      </aside>
+
+      <div class="plugin-content">
+        <section class="plugin-block">
+          <h2>{{.T "plugin.installTitle"}}</h2>
+          <ol class="plugin-steps">
+            <li><b>{{.T "plugin.step1b"}}</b><span>{{.T "plugin.step1"}}</span></li>
+            <li><b>{{.T "plugin.step2b"}}</b><span>{{.T "plugin.step2"}}</span></li>
+            <li><b>{{.T "plugin.step3b"}}</b><span>{{.T "plugin.step3"}}</span></li>
+          </ol>
+        </section>
+
+        <section class="plugin-block">
+          <h2>{{.T "plugin.cliTitle"}}</h2>
+          <div class="cmd">
+            <code id="install-cmd">curl -fL {{.BaseURL}}{{.DownloadURL}} -o {{.DownloadFilename}} &amp;&amp; {{.InstallCommand}}</code>
+            <button class="copy-btn" type="button" data-copy="#install-cmd" aria-label="{{.T "plugin.copyAria"}}">{{.T "plugin.copy"}}</button>
+          </div>
+          <p class="plugin-note">{{.T "plugin.note1"}}<code>nexadmin</code>{{.T "plugin.note2"}}<code>go run ./cmd/nexadmin</code>{{.T "plugin.note3"}}<code>plugins/&lt;id&gt;</code>{{.T "plugin.note4"}}<code>web/src/plugins/&lt;id&gt;</code>{{.T "plugin.note5"}}</p>
+        </section>
+
+        <section class="plugin-block">
+          <h2>{{.T "plugin.contentsTitle"}}</h2>
+          <p>{{.T "plugin.contents1"}}<code>plugin.yaml</code>{{.T "plugin.contents2"}}<code>backend/</code>{{.T "plugin.contents3"}}<code>web/</code>{{.T "plugin.contents4"}}<code>plugin remove --purge</code>{{.T "plugin.contents5"}}</p>
+        </section>
+
+        <section class="plugin-block" id="rating">
+          <h2>{{.T "plugin.ratingTitle"}}</h2>
+          <p class="plugin-note">
+            {{if .Plugin.RatingCount}}{{.TF "plugin.ratingSummary" .Plugin.RatingAvg .Plugin.RatingCount}}{{else}}{{.T "plugin.ratingNone"}}{{end}}
+            {{if .MyScore}}{{.TF "plugin.ratingMine" .MyScore}}{{end}}
+          </p>
+          <form class="rating-form" method="post" action="/plugins/{{.Plugin.ID}}/rate">
+            <input type="hidden" name="lang" value="{{.Lang.Code}}">
+            <fieldset>
+              <legend>{{.TF "plugin.ratingLegend" .Plugin.Name}}</legend>
+              <button type="submit" name="score" value="1" class="rating-star{{if ge .MyScore 1}} on{{end}}" aria-label="{{.TF "plugin.starAria" 1}}" title="{{.TF "plugin.starAria" 1}}">★</button>
+              <button type="submit" name="score" value="2" class="rating-star{{if ge .MyScore 2}} on{{end}}" aria-label="{{.TF "plugin.starAria" 2}}" title="{{.TF "plugin.starAria" 2}}">★</button>
+              <button type="submit" name="score" value="3" class="rating-star{{if ge .MyScore 3}} on{{end}}" aria-label="{{.TF "plugin.starAria" 3}}" title="{{.TF "plugin.starAria" 3}}">★</button>
+              <button type="submit" name="score" value="4" class="rating-star{{if ge .MyScore 4}} on{{end}}" aria-label="{{.TF "plugin.starAria" 4}}" title="{{.TF "plugin.starAria" 4}}">★</button>
+              <button type="submit" name="score" value="5" class="rating-star{{if ge .MyScore 5}} on{{end}}" aria-label="{{.TF "plugin.starAria" 5}}" title="{{.TF "plugin.starAria" 5}}">★</button>
+            </fieldset>
+          </form>
+        </section>
+
+        {{if .Plugin.Pro}}
+        <section class="plugin-block plugin-license">
+          <h2>{{.T "plugin.licenseTitle"}}</h2>
+          <p>{{.T "plugin.licenseBody"}}</p>
+          {{if .ContactEmail}}<a class="btn btn-ghost btn-sm" href="mailto:{{.ContactEmail}}?subject={{urlquery (.TF "plugin.licenseSubject" .Plugin.Name)}}">{{.T "plugin.getLicense"}}</a>{{end}}
+        </section>
+        {{end}}
+
+        <section class="plugin-block" id="versions">
+          <h2>{{.T "plugin.versionsTitle"}}{{if .Plugin.ChangelogURL}}<a class="section-more" href="{{.Plugin.ChangelogURL}}" target="_blank" rel="noopener noreferrer">{{.T "plugin.changelog"}}</a>{{end}}</h2>
+          <ol class="version-list">
+            {{range .Plugin.Versions}}
+            <li class="version{{if .Current}} current{{end}}">
+              <div class="version-head">
+                <b>v{{.Version}}</b>
+                {{if .Current}}<span class="tag">{{$.T "plugin.current"}}</span>{{end}}
+                {{if .Date}}<time>{{.Date}}</time>{{end}}
+              </div>
+              {{if .Notes}}<p>{{.Notes}}</p>{{end}}
+              {{if .Available}}
+              <div class="version-links">
+                <a href="{{.DownloadURL}}">{{$.T "plugin.versionDownload"}}</a>
+                {{if .ChecksumURL}}<a href="{{.ChecksumURL}}">SHA-256</a>{{end}}
+                {{if .SignatureURL}}<a href="{{.SignatureURL}}">.sig</a>{{end}}
+              </div>
+              {{else}}<span class="version-unavailable">{{$.T "plugin.versionNoSource"}}</span>{{end}}
+            </li>
+            {{end}}
+          </ol>
+        </section>
+
+        {{if .Related}}
+        <section class="plugin-block">
+          <h2>{{.T "plugin.related"}}</h2>
+          <div class="related-grid">
+            {{range .Related}}
+            <a class="related-card" href="{{$.URL .DetailURL}}">
+              <span class="plugin-icon sm" aria-hidden="true">{{.Initial}}</span>
+              <span class="related-copy"><b>{{.Name}}</b><small>{{.CategoryLabel}} · v{{.Version}}</small></span>
+            </a>
+            {{end}}
+          </div>
+        </section>
+        {{end}}
+      </div>
+    </div>
+  </div>
+</article>
+{{end}}

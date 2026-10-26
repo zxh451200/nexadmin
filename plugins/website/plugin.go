@@ -1,0 +1,160 @@
+// Package website 是 NexAdmin 企业官网插件：匿名公开的官网（根路径服务端渲染，SEO 友好）
+// + 登录墙内的内容管理（站点设置、导航、特性、页面、新闻）。遵守插件约定：只依赖 core/ 与 pkg/，
+// 表前缀 plg_website_，权限码前缀 website:，管理接口路径 /api/v1/plugins/website/...。
+package website
+
+import (
+	"context"
+	"crypto/ed25519"
+	"os"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
+
+	"nexadmin/core"
+	"nexadmin/core/plugin"
+	"nexadmin/core/plugin/market"
+	"nexadmin/core/response"
+)
+
+func init() {
+	plugin.Register(plugin.Plugin{
+		ID: "website", Name: "企业官网", Version: "0.5.0", Edition: plugin.Pro,
+		Module: &module{},
+	})
+}
+
+type module struct {
+	once sync.Once
+	svc  *Service
+}
+
+func (m *module) service(d *core.Deps) *Service {
+	m.once.Do(func() { m.svc = NewService(d.DB) })
+	return m.svc
+}
+
+func (*module) Name() string { return "website" }
+
+// Register 注册管理端与公开官网路由。
+func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
+	h := &handler{svc: m.service(d)}
+
+	g := r.Group("/plugins/website")
+	g.GET("/settings", core.Perm("website:setting"), core.Desc("读取站点设置"), h.getSettings)
+	g.PUT("/settings", core.Perm("website:setting"), core.Desc("更新站点设置"), h.saveSettings)
+
+	g.GET("/navs", core.Perm("website:nav"), core.Desc("导航列表"), h.listNavs)
+	g.POST("/navs", core.Perm("website:nav"), core.Desc("新增导航"), h.createNav)
+	g.PUT("/navs/:id", core.Perm("website:nav"), core.Desc("更新导航"), h.updateNav)
+	g.DELETE("/navs/:id", core.Perm("website:nav"), core.Desc("删除导航"), h.deleteNav)
+
+	g.GET("/features", core.Perm("website:feature"), core.Desc("特性卡片列表"), h.listFeatures)
+	g.POST("/features", core.Perm("website:feature"), core.Desc("新增特性卡片"), h.createFeature)
+	g.PUT("/features/:id", core.Perm("website:feature"), core.Desc("更新特性卡片"), h.updateFeature)
+	g.DELETE("/features/:id", core.Perm("website:feature"), core.Desc("删除特性卡片"), h.deleteFeature)
+
+	g.GET("/pages", core.Perm("website:page"), core.Desc("页面列表"), h.listPages)
+	g.POST("/pages", core.Perm("website:page"), core.Desc("新增页面"), h.createPage)
+	g.PUT("/pages/:id", core.Perm("website:page"), core.Desc("更新页面"), h.updatePage)
+	g.DELETE("/pages/:id", core.Perm("website:page"), core.Desc("删除页面"), h.deletePage)
+
+	g.GET("/posts", core.Perm("website:post"), core.Desc("新闻列表"), h.listPosts)
+	g.POST("/posts", core.Perm("website:post"), core.Desc("新增新闻"), h.createPost)
+	g.PUT("/posts/:id", core.Perm("website:post"), core.Desc("更新新闻"), h.updatePost)
+	g.DELETE("/posts/:id", core.Perm("website:post"), core.Desc("删除新闻"), h.deletePost)
+
+	g.POST("/media", core.Perm("website:setting"), core.Desc("上传 logo/封面图片"), h.uploadMedia)
+	g.GET("/languages", h.listLanguages)
+
+	// 公开官网：注册在根引擎的 RootGroup（带授权闸门）上，匿名可访问。
+	// 热挂载时 RootGroup 为 nil——运行中的引擎不能加根路由，此时只挂管理端 API，
+	// 官网页面在授权导入后重启生效。
+	if d.RootGroup != nil {
+		site := &siteHandler{svc: m.service(d), log: d.Log, pkg: newPackageCache(), signKey: loadMarketSignKey(d.Log)}
+		pub := d.RootGroup.Group("", newIPLimiter(600, time.Minute).Middleware())
+		// 默认语言固定渲染在无前缀路径上；cookie 只影响首页回跳与语言中立端点。
+		pub.Use(LanguageContext(DefaultLanguage()), langNegotiate)
+		downloadLimit := newIPLimiter(30, time.Minute).Middleware()
+		rateLimit := newIPLimiter(20, time.Minute).Middleware()
+
+		// 页面路由按语言各注册一份：默认语言无前缀，其余语言 /<prefix>（不带尾斜杠）。
+		site.registerPages(pub, false)
+		for _, l := range Languages() {
+			if l.Default {
+				continue
+			}
+			g := pub.Group("/" + l.Prefix)
+			g.Use(LanguageMiddleware(l))
+			site.registerPages(g, true)
+		}
+
+		pub.GET("/plugins/index.json", site.marketIndexJSON)
+		pub.GET("/plugins/signing-key.pub", site.marketPublicKey)
+		// 下载会现场拉源码并重打包，比普通页面贵，单独收紧阈值（每 IP 每分钟 30 次）。
+		// 包文件与语言无关，只保留无前缀端点；页面里的下载链接也不会加语言前缀。
+		pub.GET("/plugins/:id/download", downloadLimit, site.marketDownload)
+		pub.GET("/plugins/:id/download.sha256", downloadLimit, site.marketChecksum)
+		pub.GET("/plugins/:id/download.sig", downloadLimit, site.marketSignature)
+		pub.POST("/plugins/:id/rate", rateLimit, site.marketRate)
+		pub.GET("/website-assets/*path", site.asset)
+		pub.GET("/robots.txt", site.robots)
+		pub.GET("/sitemap.xml", site.sitemap)
+	}
+}
+
+// registerPages 注册官网页面路由（每种语言各一份，前缀由外层分组决定）。
+// bareHome 用于语言分组：首页是 /en 而不是 /en/，避免 canonical 与请求路径不一致。
+func (h *siteHandler) registerPages(g *gin.RouterGroup, bareHome bool) {
+	if bareHome {
+		g.GET("", h.home)
+	} else {
+		g.GET("/", h.home)
+	}
+	g.GET("/plugins", h.marketList)
+	g.GET("/plugins/:id", h.marketDetail)
+	g.GET("/news", h.newsList)
+	g.GET("/news/:slug", h.postDetail)
+	g.GET("/p/:slug", h.pageDetail)
+}
+
+// listLanguages 返回官网已配置语言，管理端翻译编辑器据此渲出输入框。
+func (h *handler) listLanguages(c *gin.Context) {
+	out := make([]gin.H, 0, len(languages))
+	for _, l := range Languages() {
+		out = append(out, gin.H{
+			"code": l.Code, "label": l.Label, "htmlLang": l.HTMLLang, "default": l.Default,
+		})
+	}
+	response.OK(c, out)
+}
+
+// loadMarketSignKey 读取 NEXADMIN_MARKET_SIGN_KEY 指向的 ed25519 私钥；未配置则不签名。
+func loadMarketSignKey(log *zap.Logger) ed25519.PrivateKey {
+	path := strings.TrimSpace(os.Getenv("NEXADMIN_MARKET_SIGN_KEY"))
+	if path == "" {
+		return nil
+	}
+	key, err := market.LoadSigningKey(path)
+	if err != nil {
+		if log != nil {
+			log.Error("website: 市场签名私钥加载失败，包下载将不签名", zap.String("path", path), zap.Error(err))
+		}
+		return nil
+	}
+	if log != nil {
+		log.Info("website: 市场包签名已启用", zap.String("kid", plugin.KeyID(key.Public().(ed25519.PublicKey))))
+	}
+	return key
+}
+
+// Start 实现 plugin.Starter：首次启动种入出厂内容（NexAdmin 官网默认文案）。
+func (m *module) Start(ctx context.Context, d *core.Deps) error {
+	svc := m.service(d)
+	ensureSeed(ctx, svc, d.Log)
+	ensureSeedI18n(ctx, svc, d.Log)
+	return nil
+}

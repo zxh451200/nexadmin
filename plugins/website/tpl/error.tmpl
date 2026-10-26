@@ -1,0 +1,13 @@
+{{define "content"}}
+<section class="section notfound">
+  <div class="container">
+    <p class="fig">{{.T "error.fig"}}</p>
+    <h1 class="page-title">{{.T "error.title"}}</h1>
+    <p class="section-sub">{{if .MarketError}}{{.MarketError}}{{else}}{{.T "error.fallback"}}{{end}}</p>
+    <div class="hero-cta">
+      {{if .Plugin}}<a class="btn btn-primary" href="{{.URL .Plugin.DetailURL}}">{{.TF "error.back" .Plugin.Name}}</a>{{end}}
+      <a class="btn btn-ghost" href="{{.URL "/plugins"}}">{{.T "error.market"}}</a>
+    </div>
+  </div>
+</section>
+{{end}}

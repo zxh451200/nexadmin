@@ -1,0 +1,28 @@
+{{define "content"}}
+<section class="section page-head">
+  <div class="container">
+    <p class="fig">{{.T "news.fig"}}</p>
+    <h1 class="page-title">{{.T "news.title"}}</h1>
+  </div>
+</section>
+<section class="section" style="padding-top:0">
+  <div class="container">
+    {{if .Posts}}
+    <div class="post-list">
+      {{range .Posts}}
+      <a class="post-row" href="{{$.URL "/news"}}/{{.Slug}}">
+        <time>{{if .PublishedAt}}{{fmtDate $.Lang .PublishedAt}}{{else}}{{fmtDate $.Lang .UpdatedAt}}{{end}}</time>
+        <div class="post-row-main">
+          <h2>{{.Title}}</h2>
+          {{if .Summary}}<p>{{.Summary}}</p>{{end}}
+        </div>
+        <span class="post-row-arrow" aria-hidden="true">→</span>
+      </a>
+      {{end}}
+    </div>
+    {{else}}
+    <p class="empty">{{.T "news.empty"}}</p>
+    {{end}}
+  </div>
+</section>
+{{end}}

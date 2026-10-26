@@ -1,0 +1,10 @@
+{{define "content"}}
+<article class="section article">
+  <div class="container article-in">
+    <header class="article-head">
+      <h1 class="page-title">{{.Page.Title}}</h1>
+    </header>
+    <div class="article-body">{{safeHTML .Page.Content}}</div>
+  </div>
+</article>
+{{end}}

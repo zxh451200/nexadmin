@@ -1,0 +1,129 @@
+{{define "layout"}}<!doctype html>
+<html lang="{{.Lang.HTMLLang}}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Title}}</title>
+{{if .Desc}}<meta name="description" content="{{.Desc}}">{{end}}
+{{if .SeoKeywords}}<meta name="keywords" content="{{.SeoKeywords}}">{{end}}
+{{if .Noindex}}<meta name="robots" content="noindex">{{end}}
+<link rel="canonical" href="{{.BaseURL}}{{.Path}}">
+{{range .Languages}}<link rel="alternate" hreflang="{{.HTMLLang}}" href="{{$.BaseURL}}{{$.Alternate .}}">{{end}}
+{{range .Languages}}{{if .Default}}<link rel="alternate" hreflang="x-default" href="{{$.BaseURL}}{{$.Alternate .}}">{{end}}{{end}}
+<meta name="theme-color" content="#08090a">
+<link rel="icon" href="/website-assets/favicon.svg" type="image/svg+xml">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="{{.SiteName}}">
+<meta property="og:title" content="{{.Title}}">
+<meta property="og:description" content="{{.Desc}}">
+<meta property="og:url" content="{{.BaseURL}}{{.Path}}">
+<meta property="og:image" content="{{.BaseURL}}/website-assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:locale" content="{{.Lang.OGLocale}}">
+{{range .Languages}}{{if ne .Code $.Lang.Code}}<meta property="og:locale:alternate" content="{{.OGLocale}}">{{end}}{{end}}
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{{.Title}}">
+<meta name="twitter:description" content="{{.Desc}}">
+<meta name="twitter:image" content="{{.BaseURL}}/website-assets/og.png">
+{{if .PluginLD}}<script type="application/ld+json">{{.PluginLD}}</script>{{end}}
+<link rel="stylesheet" href="/website-assets/site.css?v=0.6.0">
+<noscript><style>
+[data-reveal]{opacity:1;transform:none}
+[role="tabpanel"][hidden]{display:block !important}
+@media (max-width:760px){
+  .nav-toggle{display:none !important}
+  .mobile-nav[hidden]{display:block !important;position:static;padding:0 24px 10px;border-bottom:1px solid var(--border)}
+  .mobile-nav nav{display:flex;flex-wrap:wrap;gap:0 18px}
+  .mobile-nav a{padding:8px 0;border:0}
+}
+</style></noscript>
+</head>
+<body>
+<a class="skip-link" href="#main">{{.T "layout.skip"}}</a>
+{{if .Suggest}}
+<div class="lang-banner" data-lang-banner>
+  <div class="container lang-banner-in">
+    <span class="lang-banner-icon" aria-hidden="true">{{icon "globe"}}</span>
+    <span>{{.TF "lang.suggest" .SuggestLang.Label}}</span>
+    <a class="lang-banner-cta" href="{{.Alternate .SuggestLang}}" hreflang="{{.SuggestLang.HTMLLang}}" lang="{{.SuggestLang.HTMLLang}}">{{.TF "lang.suggestCta" .SuggestLang.Label}} →</a>
+    <button class="lang-banner-close" type="button" data-lang-banner-close aria-label="{{.T "lang.close"}}">×</button>
+  </div>
+</div>
+{{end}}
+<header class="topbar" id="top">
+  <div class="container topbar-in">
+    <a class="brand" href="{{.Home}}" aria-label="{{.TF "layout.homeAria" .SiteName}}">
+      {{if .LogoURL}}<img class="brand-logo" src="{{.LogoURL}}" alt="{{.SiteName}}">{{else}}<span class="brand-mark" aria-hidden="true">{{initial .SiteName}}</span>{{end}}
+      <span class="brand-name">{{.SiteName}}</span>
+    </a>
+    <nav class="topnav" aria-label="{{.T "layout.mainNav"}}">
+      {{range .Navs}}<a href="{{$.URL .Href}}"{{if eq .Href $.Route}} aria-current="page"{{end}}>{{.Label}}</a>{{end}}
+      {{if .MarketEnabled}}<a href="{{.URL "/plugins"}}"{{if hasPrefix .Route "/plugins"}} aria-current="page"{{end}}>{{.T "layout.market"}}</a>{{end}}
+    </nav>
+    <div class="topbar-actions">
+      <details class="lang-switch">
+        <summary aria-label="{{.T "layout.lang"}}">{{icon "globe"}}<span>{{.Lang.Short}}</span></summary>
+        <div class="lang-menu">
+          {{range .Languages}}<a href="{{$.Switch .}}" hreflang="{{.HTMLLang}}" lang="{{.HTMLLang}}"{{if eq .Code $.Lang.Code}} aria-current="true"{{end}}>{{.Label}}</a>{{end}}
+        </div>
+      </details>
+      <a class="btn btn-primary btn-sm" href="/login">{{.T "layout.login"}}</a>
+      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="mobile-nav" aria-label="{{.T "layout.openMenu"}}">
+        <span></span><span></span>
+      </button>
+    </div>
+  </div>
+  <div class="mobile-nav" id="mobile-nav" hidden>
+    <nav aria-label="{{.T "layout.mobileNav"}}">
+      {{range .Navs}}<a href="{{$.URL .Href}}"{{if eq .Href $.Route}} aria-current="page"{{end}}>{{.Label}}</a>{{end}}
+      {{if .MarketEnabled}}<a href="{{.URL "/plugins"}}"{{if hasPrefix .Route "/plugins"}} aria-current="page"{{end}}>{{.T "layout.market"}}</a>{{end}}
+      {{range .Languages}}<a href="{{$.Switch .}}" hreflang="{{.HTMLLang}}" lang="{{.HTMLLang}}"{{if eq .Code $.Lang.Code}} aria-current="true"{{end}}>{{.Label}}</a>{{end}}
+      <a href="/login">{{.T "layout.login"}}</a>
+    </nav>
+  </div>
+</header>
+<main id="main">
+{{template "content" .}}
+</main>
+<footer class="site-footer">
+  <div class="container footer-grid">
+    <div class="footer-brand">
+      <a class="brand" href="{{.Home}}">
+        {{if .LogoURL}}<img class="brand-logo" src="{{.LogoURL}}" alt="{{.SiteName}}">{{else}}<span class="brand-mark" aria-hidden="true">{{initial .SiteName}}</span>{{end}}
+        <span class="brand-name">{{.SiteName}}</span>
+      </a>
+      {{if .SiteDesc}}<p class="footer-desc">{{.SiteDesc}}</p>{{end}}
+    </div>
+    <nav class="footer-col" aria-label="{{.T "layout.product"}}">
+      <h4>{{.T "layout.product"}}</h4>
+      <a href="{{.Home}}#features">{{.T "layout.features"}}</a>
+      <a href="{{.Home}}#showcase">{{.T "layout.showcase"}}</a>
+      <a href="{{.Home}}#integrations">{{.T "layout.integrations"}}</a>
+      {{if .MarketEnabled}}<a href="{{.URL "/plugins"}}">{{.T "layout.marketFull"}}</a>{{end}}
+      <a href="{{.Home}}#quickstart">{{.T "layout.quickstart"}}</a>
+    </nav>
+    <nav class="footer-col" aria-label="{{.T "layout.resources"}}">
+      <h4>{{.T "layout.resources"}}</h4>
+      <a href="{{.URL "/news"}}">{{.T "layout.news"}}</a>
+      <a href="{{.URL "/p/about"}}">{{.T "layout.about"}}</a>
+      <a href="/sitemap.xml">{{.T "layout.sitemap"}}</a>
+      <a href="/login">{{.T "layout.admin"}}</a>
+    </nav>
+    <nav class="footer-col" aria-label="{{.T "layout.contact"}}">
+      <h4>{{.T "layout.contact"}}</h4>
+      <a class="footer-status" href="/healthz"><span class="dot" aria-hidden="true"></span>{{.T "layout.status"}}</a>
+      {{if .ContactEmail}}<a href="mailto:{{.ContactEmail}}">{{.T "layout.contactUs"}}</a>{{end}}
+      {{if .ICP}}<a class="footer-icp" href="https://beian.miit.gov.cn/" rel="noopener noreferrer" target="_blank">{{.ICP}}</a>{{end}}
+    </nav>
+  </div>
+  <div class="container footer-mark" aria-hidden="true">{{.SiteName}}</div>
+  <div class="container footer-bottom">
+    <span>© {{.Year}} {{.SiteName}}</span>
+    {{if .FooterNote}}<span class="footer-note">{{.FooterNote}}</span>{{end}}
+  </div>
+</footer>
+<script type="application/json" id="site-i18n">{{.JSStrings}}</script>
+<script src="/website-assets/site.js?v=0.6.0" defer></script>
+</body>
+</html>{{end}}
