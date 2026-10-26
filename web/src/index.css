@@ -118,4 +118,15 @@
     min-height: 100vh;
     min-height: 100dvh;
   }
+  /* 路由入场：新页面挂载时 180ms 淡入 + 4px 上浮（Linear 式短促入场）。
+     keep-alive 缓存页切回时不重挂载、不重播，只有新开页面才有；reduced-motion 由全局规则归零。 */
+  .page-enter {
+    animation: page-enter 0.18s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  @keyframes page-enter {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+  }
 }
