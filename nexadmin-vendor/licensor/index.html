@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>授权签发后台</title>
+<style>
+:root{--bg:#f6f7f9;--fg:#1c2128;--muted:#667085;--card:#fff;--line:#d9dde3;--accent:#2563eb;--accent-fg:#fff;--warn:#b45309;--warn-bg:#fef3c7;--bad:#b42318;--ok:#067647}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1318;--fg:#e6e9ee;--muted:#98a2b3;--card:#171c23;--line:#2b323c;--accent:#4f8cff;--accent-fg:#0b1220;--warn:#fbbf24;--warn-bg:#3a2a07;--bad:#f97066;--ok:#47cd89}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+header,main{max-width:1000px;margin:0 auto;padding:12px 16px}
+header{display:flex;flex-wrap:wrap;gap:8px;align-items:baseline;justify-content:space-between}
+h1{font-size:1.25rem;margin:0}h2{font-size:1.05rem;margin:0 0 12px}
+section{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px}
+.muted{color:var(--muted);font-size:.875rem}
+form{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.wide{grid-column:1/-1}
+label{display:grid;gap:4px;font-size:.875rem;color:var(--muted)}
+input,textarea{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;width:100%}
+textarea{min-height:90px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.8125rem}
+input:focus-visible,textarea:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button,.btn{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:6px;padding:8px 14px;text-decoration:none;display:inline-block}
+button.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.banner{background:var(--warn-bg);color:var(--warn);border-radius:6px;padding:8px 12px;margin-bottom:12px}
+#msg{min-height:1.5em}.err{color:var(--bad)}.ok{color:var(--ok)}
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:640px}
+th,td{text-align:left;padding:8px;border-bottom:1px solid var(--line);vertical-align:top;font-size:.875rem}
+.tag{border-radius:999px;padding:1px 8px;font-size:.75rem;background:var(--warn-bg);color:var(--warn)}
+.tag.expired{background:transparent;color:var(--bad);border:1px solid var(--bad)}
+.tag.revoked{background:var(--bad);color:var(--bg)}
+.mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.8125rem}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<header>
+  <h1>授权签发后台</h1>
+  <span class="muted" id="kidline" role="status"></span>
+</header>
+<main>
+  <section id="login" hidden aria-labelledby="loginh">
+    <h2 id="loginh">输入访问口令</h2>
+    <form id="loginform">
+      <label>口令<input type="password" id="tok" autocomplete="current-password" required></label>
+      <div class="row wide"><button class="primary" type="submit">进入</button><span id="loginmsg" class="err" role="alert"></span></div>
+    </form>
+  </section>
+
+  <div id="app" hidden>
+    <div id="warns"></div>
+    <section aria-labelledby="issueh">
+      <h2 id="issueh">签发授权</h2>
+      <form id="issueform">
+        <label>插件 id<input id="plugin" required pattern="[a-z0-9][a-z0-9\-]*" placeholder="cron" autocomplete="off"></label>
+        <label>客户名<input id="customer" required maxlength="100" autocomplete="off"></label>
+        <label>有效期至<input id="expires" type="date" required></label>
+        <label>域名（可选，逗号分隔，支持 *.example.com）<input id="domains" autocomplete="off"></label>
+        <label class="wide">备注（仅记录，不写入授权）<input id="note" maxlength="500" autocomplete="off"></label>
+        <div class="row wide"><button class="primary" type="submit">生成授权</button><span id="msg" class="muted" role="status"></span></div>
+      </form>
+    </section>
+
+    <section id="result" hidden aria-labelledby="resh">
+      <h2 id="resh">授权内容（.lic）</h2>
+      <label>只在本页展示，关闭后不可再取回；需要时请「按旧记录续期」重新签发
+        <textarea id="lic" readonly rows="10"></textarea></label>
+      <div class="row" style="margin-top:8px"><button id="copy" type="button">复制</button><button id="dl" type="button">下载 .lic</button></div>
+    </section>
+
+    <section aria-labelledby="listh">
+      <h2 id="listh">签发记录</h2>
+      <div class="row" style="margin-bottom:12px">
+        <input id="q" type="search" placeholder="搜索插件 / 客户 / 域名 / 备注" aria-label="搜索记录" style="max-width:320px">
+        <label class="row" style="display:flex"><input type="checkbox" id="onlysoon" style="width:auto"> 只看 30 天内到期</label>
+        <a class="btn" id="csv" href="/api/export.csv">导出 CSV</a>
+        <a class="btn" id="revlist" href="/api/revoked.json" download="license-revoked.json">导出吊销清单</a>
+      </div>
+      <p class="muted">吊销只在这里记一笔，不会联网通知客户：导出清单后，放进客户项目的 config/license-revoked.json（随升级包分发）才会生效。源码交付下买家可以删除清单，这是辅助手段，不是强保护。旧授权没有序列号，不能单独吊销。</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th>签发时间</th><th>插件</th><th>客户</th><th>到期</th><th>域名</th><th>序列号</th><th>kid</th><th>备注</th><th></th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table></div>
+      <p class="muted" id="empty" hidden>暂无记录</p>
+    </section>
+  </div>
+</main>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const H = {"Content-Type": "application/json", "X-Requested-With": "licensor"};
+let records = [], lastLic = "", lastName = "license.lic";
+
+async function api(path, opt) {
+  const r = await fetch(path, Object.assign({credentials: "same-origin", headers: H}, opt));
+  const j = await r.json().catch(() => ({}));
+  if (r.status === 401) { showLogin(); throw new Error(j.error || "未登录"); }
+  if (!r.ok) throw new Error(j.error || "请求失败");
+  return j;
+}
+function showLogin() { $("login").hidden = false; $("app").hidden = true; }
+function el(tag, text, cls) { const e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; }
+function ymd(d) { return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+function day(s) { return s ? s.slice(0, 10) : ""; }
+
+async function boot() {
+  try {
+    const info = await api("/api/info");
+    $("login").hidden = true; $("app").hidden = false;
+    $("kidline").textContent = "签发密钥 kid: " + info.kid;
+    const w = $("warns"); w.replaceChildren();
+    (info.warnings || []).forEach(t => w.append(el("div", "警告：" + t, "banner")));
+    if (!$("expires").value) { const d = new Date(); d.setFullYear(d.getFullYear() + 1); $("expires").value = ymd(d); }
+    await load();
+  } catch (e) { /* 401 已显示登录 */ }
+}
+async function load() { records = (await api("/api/records")).records || []; render(); }
+
+function render() {
+  const q = $("q").value.trim().toLowerCase(), soon = $("onlysoon").checked;
+  const tb = $("rows"); tb.replaceChildren();
+  const list = records.filter(r => (!soon || r.expiring) &&
+    (!q || [r.plugin, r.customer, (r.domains || []).join(","), r.note || "", r.kid, r.serial || ""].join("\n").toLowerCase().includes(q)));
+  $("empty").hidden = list.length > 0;
+  $("csv").href = "/api/export.csv" + (soon ? "?expiring=1" : "");
+  list.forEach(r => {
+    const tr = el("tr");
+    tr.append(el("td", r.issued_at.replace("T", " ").replace("Z", "")), el("td", r.plugin), el("td", r.customer));
+    const exp = el("td", day(r.expires_at) + " ");
+    if (r.revoked) exp.append(el("span", "已吊销", "tag revoked"));
+    if (r.expired) exp.append(el("span", "已到期", "tag expired"));
+    else if (r.expiring) exp.append(el("span", "剩 " + r.days_left + " 天", "tag"));
+    const noteTd = el("td", r.note || "");
+    if (r.revoked) noteTd.append(el("div", "吊销原因：" + r.revoke_reason + "（" + day(r.revoked_at) + "）", "muted"));
+    tr.append(exp, el("td", (r.domains || []).join(", ")), el("td", r.serial || "—", "mono"), el("td", r.kid), noteTd);
+    const act = el("td"), b = el("button", "续期"); b.type = "button"; b.onclick = () => renew(r);
+    const rv = el("button", "吊销"); rv.type = "button"; rv.disabled = !r.serial || r.revoked;
+    rv.title = !r.serial ? "旧授权没有序列号，不能单独吊销" : r.revoked ? "已吊销" : "";
+    rv.onclick = () => revoke(r);
+    act.append(b, document.createTextNode(" "), rv); tr.append(act); tb.append(tr);
+  });
+}
+
+// 按旧记录续期：复用插件/客户/域名/备注，新到期日 = max(旧到期, 今天) + 1 年。
+function renew(r) {
+  $("plugin").value = r.plugin; $("customer").value = r.customer;
+  $("domains").value = (r.domains || []).join(", "); $("note").value = r.note || "";
+  const base = new Date(Math.max(Date.parse(r.expires_at), Date.now()));
+  base.setFullYear(base.getFullYear() + 1); $("expires").value = ymd(base);
+  $("msg").className = "muted"; $("msg").textContent = "已填入旧记录参数，确认后点「生成授权」";
+  $("issueform").scrollIntoView({behavior: "smooth", block: "start"});
+}
+
+// 吊销：只写本地记录；导出清单并随升级包分发后，客户端才会把该授权标为 revoked。
+async function revoke(r) {
+  const reason = prompt("吊销原因（会显示在客户的插件管理页）：\n" + r.plugin + " / " + r.customer + " / " + r.serial);
+  if (reason === null) return;
+  if (!reason.trim()) { alert("原因不能为空"); return; }
+  if (!confirm("确认吊销 " + r.customer + " 的 " + r.plugin + " 授权？\n此操作不可撤销（需要恢复请重新签发新授权）。")) return;
+  try {
+    await api("/api/revoke", {method: "POST", body: JSON.stringify({serial: r.serial, reason: reason.trim()})});
+    $("msg").className = "ok"; $("msg").textContent = "已记录吊销，请导出吊销清单并随升级包分发";
+    await load();
+  } catch (err) { alert(err.message); }
+}
+
+$("loginform").onsubmit = async e => {
+  e.preventDefault(); $("loginmsg").textContent = "";
+  try { await api("/api/login", {method: "POST", body: JSON.stringify({token: $("tok").value})}); $("tok").value = ""; boot(); }
+  catch (err) { $("loginmsg").textContent = err.message; }
+};
+$("issueform").onsubmit = async e => {
+  e.preventDefault(); const m = $("msg"); m.className = "muted"; m.textContent = "签发中…";
+  try {
+    const j = await api("/api/issue", {method: "POST", body: JSON.stringify({
+      plugin: $("plugin").value, customer: $("customer").value, expires: $("expires").value,
+      domains: $("domains").value, note: $("note").value})});
+    lastLic = j.license; lastName = j.record.plugin + ".lic";
+    $("lic").value = lastLic; $("result").hidden = false; $("result").scrollIntoView({behavior: "smooth"});
+    m.className = "ok"; m.textContent = "已签发并记录";
+    await load();
+  } catch (err) { m.className = "err"; m.textContent = err.message; }
+};
+$("copy").onclick = async () => {
+  try { await navigator.clipboard.writeText(lastLic); $("copy").textContent = "已复制"; }
+  catch (e) { $("lic").select(); document.execCommand("copy"); $("copy").textContent = "已复制"; }
+  setTimeout(() => $("copy").textContent = "复制", 1500);
+};
+$("dl").onclick = () => {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([lastLic], {type: "application/json"})); a.download = lastName;
+  a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
+$("q").oninput = render; $("onlysoon").onchange = render;
+boot();
+</script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+{
+  "note": "示例：当前是开发公钥，正式发行前替换为发行方正式公钥（与 core/plugin/pubkey.go / config/license-keys.pub 一致）。kid = sha256(公钥) 前 4 字节十六进制。",
+  "keys": [
+    { "kid": "cd0c218a", "pub": "Z0vlQMyRQ6f4GlrWdKOdJ5laJlIaaKYxzsfS1AXFLtI=", "label": "开发公钥（示例）" }
+  ]
+}
