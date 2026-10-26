@@ -1,4 +1,4 @@
-name: security
+﻿name: security
 
 on:
   push:
@@ -42,7 +42,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
         with:
-          go-version: 1.25.0
+          go-version: 1.27.3
           cache: false
       - name: Install open source gitleaks CLI (no commercial token)
         run: go install github.com/zricethezav/gitleaks/v8@v8.28.0
@@ -61,9 +61,9 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
         with:
-          go-version: 1.25.0
+          go-version: 1.27.3
       - run: go mod download
-      - run: go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
+      - run: go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
       - run: govulncheck -test ./...
 
   go-licenses:
@@ -78,7 +78,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
         with:
-          go-version: 1.25.0
+          go-version: 1.27.3
       - run: go mod download
       - run: go install github.com/google/go-licenses/v2@v2.0.1
       - run: python3 scripts/security/licenses.py go

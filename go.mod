@@ -21,17 +21,17 @@ require (
 	github.com/go-ldap/ldap/v3 v3.4.15
 	github.com/gorilla/websocket v1.5.3
 	github.com/tjfoc/gmsm v1.4.1
-	github.com/xuri/excelize/v2 v2.11.0
+	github.com/xuri/excelize/v2 v2.11.1-0.20260930021559-01a9ff32fb3c
 )
 
 require (
 	github.com/Azure/go-ntlmssp v0.1.1 // indirect
 	github.com/go-asn1-ber/asn1-ber v1.5.8 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/richardlehane/mscfb v1.0.7 // indirect
+	github.com/richardlehane/mscfb v1.0.8 // indirect
 	github.com/richardlehane/msoleps v1.0.6 // indirect
 	github.com/tiendc/go-deepcopy v1.7.2 // indirect
-	github.com/xuri/efp v0.0.1 // indirect
+	github.com/xuri/efp v0.0.2 // indirect
 	github.com/xuri/nfp v0.0.2-0.20250530014748-2ddeb826f9a9 // indirect
 )
 
@@ -55,7 +55,7 @@ require (
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
-	github.com/jackc/pgx/v5 v5.7.2 // indirect
+	github.com/jackc/pgx/v5 v5.9.2 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
