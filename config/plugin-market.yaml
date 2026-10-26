@@ -1,0 +1,186 @@
+# NexAdmin 插件市场目录（真实上架清单）。
+# 数据源唯一：官网 /plugins 与后台「插件市场」都直接读本文件；`plugin market sync` 仅导出 JSON。
+#
+# 发布流程（monorepo 模式，只需 1 个 GitHub 仓库）：
+#   1. 改主仓库里的插件源码 → plugin pack 产出的包同步到 nexadmin-plugins/<id>/（独立 monorepo）
+#   2. monorepo 提交 + 打 tag → repo 字段填账号/仓库，subdir 填插件 id，ref 填 tag
+#   3. 官网与后台即时生效；如需给外部静态站导出 JSON：plugin market sync --docs <目录>
+#
+# 字段：id/repo/edition 必填；subdir 为 monorepo 内插件目录；ref 留空 = 默认分支（建议填 tag）；
+#       url  zip 直链（https://，OSS/自建镜像），设置后安装器优先用它，repo 与 url 二选一；
+#       price 仅为展示；token_env 私有仓库 GitHub token 环境变量。
+# 展示/历史（可选）：
+#       screenshots: [https://... 或 /website-assets/...]
+#       changelog_url: https://...
+#       versions:
+#         - version: 0.9.0
+#           date: 2026-01-02
+#           ref: v0.9.0      # 旧版本要能下载必须填 tag；不填只展示
+#           notes: 首个版本
+#       i18n:                  # 官网本地化展示；键为语言 code，未填字段回退原文
+#         en-US:
+#           name: Scheduled Jobs
+#           description: Five-field cron scheduling…
+# 签名：官网进程设置 NEXADMIN_MARKET_SIGN_KEY=<PKCS8 PEM 私钥> 后，下载提供 .sig 与 /plugins/signing-key.pub；
+#       客户端用 `nexadmin plugin verify --sig <文件> --key <公钥文件> <zip>` 校验。
+# 私有 GitHub：NEXADMIN_MARKET_GITHUB_API 覆盖 API 根地址（GitHub Enterprise）。
+# 注意：edition/version 以各插件 plugin.yaml 为准，下载/安装时交叉校验。
+plugins:
+  - id: assistant
+    name: AI 助手
+    description: 命名会话持久化的 AI 助手，复用平台 AI 配置与审计。
+    category: ai
+    edition: pro
+    version: 1.1.0
+    price: 待定
+    author: NexAdmin
+    repo: your-account/nexadmin-plugins
+    subdir: assistant
+    i18n:
+      en-US:
+        name: AI Assistant
+        description: 'Persistent named sessions built on the platform AI configuration and audit trail.'
+  - id: audit
+    name: 数据变更审计
+    description: 按表开启，记录新增/修改/删除的字段级前后对比，敏感字段脱敏，异步批量写入。面向企业合规。
+    category: security
+    edition: pro
+    version: 1.0.0
+    price: 待定
+    author: NexAdmin
+    repo: your-account/nexadmin-plugins
+    subdir: audit
+    i18n:
+      en-US:
+        name: Data Change Audit
+        description: 'Enable per table and record field-level before/after values for inserts, updates, and deletes. Sensitive fields are masked and writes are batched asynchronously. Built for enterprise compliance.'
+  - id: codegen
+    name: 代码生成器
+    description: 读取业务表结构，按推荐配置生成 Go 模块与前端页面，在线预览、打包 zip 下载。无状态、不建表、不写磁盘。
+    category: devops
+    edition: pro
+    version: 1.0.0
+    price: 待定
+    author: NexAdmin
+    repo: your-account/nexadmin-plugins
+    subdir: codegen
+    i18n:
+      en-US:
+        name: Code Generator
+        description: 'Reads business table schemas and generates Go modules and frontend pages from recommended settings. Preview online and download a zip. Stateless: no tables, no disk writes.'
+  - id: cron
+    name: 定时任务
+    description: 5 段 cron 调度、内置安全处理器、立即执行、失败重试、执行日志，并提供工作台概览卡片。
+    category: devops
+    edition: pro
+    version: 1.0.0
+    price: 待定
+    author: NexAdmin
+    repo: your-account/nexadmin-plugins
+    subdir: cron
+    i18n:
+      en-US:
+        name: Scheduled Jobs
+        description: '5-field cron scheduling, built-in safe handlers, run-now, retries, execution logs, and a dashboard card.'
+    screenshots:
+      - /website-assets/market/cron.jpg
+  - id: formbuilder
+    name: 表单构建器
+    description: 可视化设计表单、版本化发布、登录用户填写、服务端按发布版本重新校验、提交收集与 xlsx 导出。
+    category: business
+    edition: pro
+    version: 1.0.0
+    price: 待定
+    author: NexAdmin
+    repo: your-account/nexadmin-plugins
+    subdir: formbuilder
+    i18n:
+      en-US:
+        name: Form Builder
+        description: 'Design forms visually, publish versions, collect signed-in submissions, revalidate server-side against the published version, and export to xlsx.'
+  - id: i18n-editor
+    name: 多语言在线编辑
+    description: 多语言词条在线编辑、草稿、发布与版本回滚。
+    category: content
+    edition: pro
+    version: 1.0.0
+    price: 待定
+    author: NexAdmin
+    repo: your-account/nexadmin-plugins
+    subdir: i18n-editor
+    i18n:
+      en-US:
+        name: Translation Editor
+        description: 'Edit translation entries online with drafts, publishing, and version rollback.'
+  - id: identity
+    name: 身份源
+    description: 按租户独立的身份源（LDAP/AD 登录、CAS 单点登录），支持测试连接、测试用户登录与自动建号。
+    category: security
+    edition: pro
+    version: 1.0.0
+    price: 待定
+    author: NexAdmin
+    repo: your-account/nexadmin-plugins
+    subdir: identity
+    i18n:
+      en-US:
+        name: Identity Sources
+        description: 'Per-tenant identity sources (LDAP/AD sign-in, CAS SSO) with connection tests, test-user sign-in, and automatic account provisioning.'
+  - id: report
+    name: 报表中心
+    description: 报表中心 + 数据大屏（结构化数据集、参数化查询、租户与数据范围隔离；图表/表格/指标卡；画布式大屏）。
+    category: business
+    edition: pro
+    version: 1.0.0
+    price: 待定
+    author: NexAdmin
+    repo: your-account/nexadmin-plugins
+    subdir: report
+    i18n:
+      en-US:
+        name: Reporting Center
+        description: 'Reports and data walls: structured datasets, parameterized queries, tenant and data-scope isolation, charts, tables, metric cards, and a canvas-style dashboard.'
+  - id: scim
+    name: SCIM 用户同步
+    description: 企业身份平台 SCIM 2.0 用户同步。
+    category: security
+    edition: pro
+    version: 1.0.0
+    price: 待定
+    author: NexAdmin
+    repo: your-account/nexadmin-plugins
+    subdir: scim
+    i18n:
+      en-US:
+        name: SCIM Provisioning
+        description: 'SCIM 2.0 user provisioning for enterprise identity platforms.'
+  - id: security
+    name: 高级安全
+    description: 二次验证 TOTP + 一次性恢复码、强制策略与宽限期、登录 IP 黑白名单。
+    category: security
+    edition: pro
+    version: 1.0.0
+    price: 待定
+    author: NexAdmin
+    repo: your-account/nexadmin-plugins
+    subdir: security
+    i18n:
+      en-US:
+        name: Advanced Security
+        description: 'TOTP two-factor authentication with one-time recovery codes, enforced policies with a grace period, and login IP allow and deny lists.'
+  - id: website
+    name: 企业官网
+    description: 匿名公开官网（服务端渲染、SEO 友好）+ 后台内容管理与官网插件市场入口。
+    category: content
+    edition: pro
+    version: 0.5.0
+    price: 待定
+    author: NexAdmin
+    repo: your-account/nexadmin-plugins
+    subdir: website
+    i18n:
+      en-US:
+        name: Corporate Website
+        description: 'A public, anonymous, server-rendered site with SEO support, admin content management, and a plugin marketplace entry point.'
+    screenshots:
+      - /website-assets/market/website.jpg

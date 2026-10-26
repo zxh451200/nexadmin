@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -91,9 +92,12 @@ func TestUpgradeTransaction(t *testing.T) {
 				if _, err := os.Stat(filepath.Join(root, "core/b.go")); !os.IsNotExist(err) {
 					t.Fatal("added file remains")
 				}
-				st, err := os.Stat(filepath.Join(root, "core/a.go"))
-				if err != nil || st.Mode().Perm() != 0640 {
-					t.Fatal("permissions changed")
+				// Windows 只有只读位，无法表示 0640；POSIX 下才校验权限位。
+				if runtime.GOOS != "windows" {
+					st, err := os.Stat(filepath.Join(root, "core/a.go"))
+					if err != nil || st.Mode().Perm() != 0640 {
+						t.Fatal("permissions changed")
+					}
 				}
 			}
 			raw, _ = os.ReadFile(filepath.Join(root, "internal/modules/user.go"))

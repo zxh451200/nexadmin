@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"nexadmin/core/plugin/market"
 )
 
 // release pack：在模板根目录生成干净的框架源码包（zip，根目录 nexadmin-<framework_version>/），
@@ -172,7 +174,7 @@ func writePackZip(w io.Writer, root, top string, skipAbs ...string) (int, int64,
 	if err != nil {
 		return 0, 0, err
 	}
-	if n > maxZipFiles || total > maxZipTotal {
+	if n > market.MaxZipFiles || total > market.MaxZipTotal {
 		return 0, 0, fmt.Errorf("源码包过大（%d 个文件 / %d 字节），超过 upgrade 解压上限", n, total)
 	}
 	return n, total, zw.Close()

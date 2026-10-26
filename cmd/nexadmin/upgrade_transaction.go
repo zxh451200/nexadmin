@@ -10,6 +10,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"nexadmin/core/plugin/market"
 )
 
 // A test seam for filesystem execution failures; nil in production.
@@ -93,7 +95,7 @@ func upTransaction(root, rootMan, pkgMan, key, value string, plan *upPlan, rec m
 		if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
 			return err
 		}
-		if err := copyFile(src, dst); err != nil {
+		if err := market.CopyFile(src, dst); err != nil {
 			return err
 		}
 		if err := os.Chmod(dst, st.Mode().Perm()); err != nil {
@@ -123,7 +125,7 @@ func upTransaction(root, rootMan, pkgMan, key, value string, plan *upPlan, rec m
 		if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
 			return err
 		}
-		if err := copyFile(original, dst); err != nil {
+		if err := market.CopyFile(original, dst); err != nil {
 			return err
 		}
 		stagedPlan.changes[i].Backup = false
@@ -179,7 +181,7 @@ func upTransaction(root, rootMan, pkgMan, key, value string, plan *upPlan, rec m
 			e.Existed = true
 			e.Mode = st.Mode().Perm()
 			e.Old = filepath.Join(work, fmt.Sprintf("old-%d", i))
-			if err := copyFile(dst, e.Old); err != nil {
+			if err := market.CopyFile(dst, e.Old); err != nil {
 				return err
 			}
 		} else if !errors.Is(err, fs.ErrNotExist) {
@@ -232,7 +234,7 @@ func upTransaction(root, rootMan, pkgMan, key, value string, plan *upPlan, rec m
 		if err := upTxnHook("write", dst); err != nil {
 			return err
 		}
-		if err := copyFile(src, name); err != nil {
+		if err := market.CopyFile(src, name); err != nil {
 			return err
 		}
 		if err := os.Chmod(name, mode); err != nil {

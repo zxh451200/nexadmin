@@ -44,10 +44,16 @@ func main() {
 const usage = `用法:
   nexadmin plugin list
   nexadmin plugin install [--force] <目录或zip>
-  nexadmin plugin remove <id>
+  nexadmin plugin remove [--purge] <id>
   nexadmin plugin keygen [--out .dev-keys/private.pem]
   nexadmin plugin sign --key <私钥> --plugin <id> --customer <名称> --expires <日期> [--domains a.com,b.com] [--serial <序列号,默认随机>] [--out 文件]
   nexadmin plugin revoke --key <私钥> --serial <序列号> --reason <原因> [--plugin <id>] [--list <现有清单>] [--out <清单文件,默认 license-revoked.json>]
+  nexadmin plugin market sync [--docs <目录>]
+                      导出市场目录 JSON（省略 --docs 打印到标准输出；--docs 写入 <目录>/data/plugins.json）
+  nexadmin plugin pack [--out <路径.zip>] <id>
+                      把已安装插件打成发行包（plugin.yaml + backend/ + web/ 的 zip，与 install 输入格式互逆）
+  nexadmin plugin verify --sig <签名文件> --key <公钥文件> <zip>
+                      校验官网市场下载包的 ed25519 签名
   nexadmin upgrade --from <源码包目录或zip> [--to <版本>] [--dry-run] [--manifest .nexadmin.manifest.json] [--allow-dirty]
   nexadmin new <名称> [--out <目录,默认 ../名称>] [--module <go模块路径,默认 名称>] [--with-plugins] [--git]
   nexadmin add module <名称> [--fields "title:string,status:dict(sys_status),sort:int,cover:image,published_at:datetime,owner_id:ref(user)"] [--sortable]
@@ -89,6 +95,12 @@ func run(args []string, out io.Writer) error {
 		return cmdSign(rest, out)
 	case "revoke":
 		return cmdRevoke(rest, out)
+	case "market":
+		return cmdMarket(rest, out)
+	case "pack":
+		return cmdPack(rest, out)
+	case "verify":
+		return cmdVerify(rest, out)
 	}
 	return errors.New(usage)
 }
@@ -103,6 +115,10 @@ func cmdList(out io.Writer) error {
 	root, err := findRoot()
 	if err != nil {
 		return err
+	}
+	disabled := map[string]bool{}
+	for _, id := range plugin.LoadDisabledPlugins(root) {
+		disabled[id] = true
 	}
 	ents, err := os.ReadDir(filepath.Join(root, "plugins"))
 	if err != nil {
@@ -120,7 +136,9 @@ func cmdList(out io.Writer) error {
 			continue
 		}
 		lic := "-"
-		if man.Edition == plugin.Pro {
+		if disabled[man.ID] {
+			lic = "disabled"
+		} else if man.Edition == plugin.Pro {
 			lic = "active"
 			if _, err := plugin.CheckFile(root, man.ID, time.Now()); err != nil {
 				var le *plugin.LicenseError

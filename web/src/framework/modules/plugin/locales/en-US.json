@@ -2,16 +2,36 @@
   "plugin": {
     "menu": "Plugins",
     "btn": {
-      "license": "Import license"
+      "license": "Import license",
+      "install": "Install from market"
     }
   },
   "pluginMgr": {
     "menu": "Plugins",
     "title": "Plugins",
     "description": "Installed plugins with version and license status. Imported licenses take effect immediately, no rebuild needed.",
-    "edition": { "free": "Free", "pro": "Pro" },
-    "status": { "active": "Active", "unlicensed": "Unlicensed", "expired": "Expired", "invalid": "Invalid", "revoked": "Revoked" },
-    "field": { "customer": "Customer", "expiresAt": "Expires", "reason": "Reason", "serial": "Serial" },
+    "tab": {
+      "installed": "Installed",
+      "market": "Marketplace"
+    },
+    "edition": {
+      "free": "Free",
+      "pro": "Pro"
+    },
+    "status": {
+      "active": "Active",
+      "unlicensed": "Unlicensed",
+      "expired": "Expired",
+      "invalid": "Invalid",
+      "revoked": "Revoked",
+      "disabled": "Disabled"
+    },
+    "field": {
+      "customer": "Customer",
+      "expiresAt": "Expires",
+      "reason": "Reason",
+      "serial": "Serial"
+    },
     "expiring": {
       "title": "License expiring soon",
       "item": "{{name}} ({{days}} days left)",
@@ -32,6 +52,37 @@
     "empty": {
       "title": "No plugins installed",
       "desc": "Run the command below in the project root, then rebuild and restart:"
+    },
+    "market": {
+      "search": "Search plugins / repos",
+      "install": "Install",
+      "update": "Reinstall",
+      "remove": "Uninstall",
+      "rebuild": "Rebuild & restart",
+      "installed": "Installed",
+      "empty": "Marketplace catalog is empty: register plugins in config/plugin-market.yaml to enable one-click installs",
+      "remove.confirm": "Uninstall {{name}}? Source files will be removed and the service rebuilt (data tables are kept; use --purge on the CLI to drop them)",
+      "category": {
+        "content": "Content",
+        "collaboration": "Collaboration",
+        "business": "Business",
+        "security": "Security",
+        "devops": "Ops",
+        "ai": "AI"
+      },
+      "job": {
+        "title": "Working",
+        "desc": "Download → install → rebuild → restart. Full log below; keep this page open",
+        "running": "Running…",
+        "restarting": "Service is restarting, waiting for it to come back…",
+        "done": "Done",
+        "failed": "Failed: check the log for details",
+        "empty": "Job submitted, waiting for output…",
+        "close": "Close"
+      },
+      "error": "Failed to load the marketplace catalog. Check config/plugin-market.yaml or try again later",
+      "retry": "Retry",
+      "nomatch": "No matching plugins. Try another keyword or clear the filters"
     }
   }
 }

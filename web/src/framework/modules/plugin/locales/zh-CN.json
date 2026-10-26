@@ -2,16 +2,36 @@
   "plugin": {
     "menu": "插件管理",
     "btn": {
-      "license": "导入授权"
+      "license": "导入授权",
+      "install": "市场安装"
     }
   },
   "pluginMgr": {
     "menu": "插件管理",
     "title": "插件管理",
     "description": "已安装插件的版本与授权状态；授权文件导入后立即生效，无需重新编译",
-    "edition": { "free": "免费", "pro": "专业" },
-    "status": { "active": "有效", "unlicensed": "未授权", "expired": "已过期", "invalid": "无效", "revoked": "已吊销" },
-    "field": { "customer": "客户", "expiresAt": "到期时间", "reason": "原因", "serial": "序列号" },
+    "tab": {
+      "installed": "已安装",
+      "market": "插件市场"
+    },
+    "edition": {
+      "free": "免费",
+      "pro": "专业"
+    },
+    "status": {
+      "active": "有效",
+      "unlicensed": "未授权",
+      "expired": "已过期",
+      "invalid": "无效",
+      "revoked": "已吊销",
+      "disabled": "已停用"
+    },
+    "field": {
+      "customer": "客户",
+      "expiresAt": "到期时间",
+      "reason": "原因",
+      "serial": "序列号"
+    },
     "expiring": {
       "title": "授权即将过期",
       "item": "{{name}}（剩余 {{days}} 天）",
@@ -32,6 +52,37 @@
     "empty": {
       "title": "尚未安装任何插件",
       "desc": "在项目根目录执行以下命令安装插件，然后重新编译并重启："
+    },
+    "market": {
+      "search": "搜索插件 / 仓库",
+      "install": "安装",
+      "update": "重装覆盖",
+      "remove": "卸载",
+      "rebuild": "重建并重启",
+      "installed": "已安装",
+      "empty": "市场目录为空：在 config/plugin-market.yaml 里登记插件后，这里就能一键安装",
+      "remove.confirm": "卸载 {{name}}？将移除源码文件并重建服务（默认保留数据表，可在命令行用 --purge 清库）",
+      "category": {
+        "content": "内容",
+        "collaboration": "协作",
+        "business": "业务",
+        "security": "安全",
+        "devops": "运维",
+        "ai": "AI"
+      },
+      "job": {
+        "title": "正在处理",
+        "desc": "下载 → 安装 → 重建 → 自重启，全过程日志如下；期间请勿关闭页面",
+        "running": "执行中…",
+        "restarting": "服务正在重启，等待恢复后自动刷新…",
+        "done": "已完成",
+        "failed": "失败：请查看日志定位原因",
+        "empty": "任务已提交，等待输出…",
+        "close": "关闭"
+      },
+      "error": "市场目录读取失败，请检查 config/plugin-market.yaml 或稍后重试",
+      "retry": "重试",
+      "nomatch": "没有匹配的插件，换个关键词或清除筛选"
     }
   }
 }

@@ -18,7 +18,8 @@ const (
 	StatusUnlicensed = "unlicensed"
 	StatusExpired    = "expired"
 	StatusInvalid    = "invalid"
-	StatusRevoked    = "revoked" // 序列号在已验签的吊销清单里（见 revoke.go）
+	StatusRevoked    = "revoked"  // 序列号在已验签的吊销清单里（见 revoke.go）
+	StatusDisabled   = "disabled" // 在配置 disabled_plugins 中被停用（free 插件没有授权闸门，用配置开关软停用）
 )
 
 // MaxLicenseSize 是授权文件的大小上限。

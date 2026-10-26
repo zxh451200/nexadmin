@@ -1,8 +1,9 @@
-package main
+package market
 
 import (
 	"archive/zip"
 	"go/format"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -92,7 +93,7 @@ func TestUpdatePluginsFile(t *testing.T) {
 func TestInstallAndRemoveDir(t *testing.T) {
 	root := newRoot(t)
 	pkg := makePkg(t, manifestYAML)
-	id, err := install(root, pkg, false)
+	id, err := Install(root, pkg, false)
 	if err != nil || id != "demo-x" {
 		t.Fatalf("install: %q, %v", id, err)
 	}
@@ -107,13 +108,13 @@ func TestInstallAndRemoveDir(t *testing.T) {
 	if !strings.Contains(read(t, filepath.Join(root, "plugins", "plugins.go")), `_ "nexadmin/plugins/demo-x"`) {
 		t.Fatal("plugins.go not updated")
 	}
-	if _, err := install(root, pkg, false); err == nil {
+	if _, err := Install(root, pkg, false); err == nil {
 		t.Fatal("second install without --force must fail")
 	}
-	if _, err := install(root, pkg, true); err != nil {
+	if _, err := Install(root, pkg, true); err != nil {
 		t.Fatalf("force reinstall: %v", err)
 	}
-	if err := remove(root, "demo-x"); err != nil {
+	if err := Remove(root, "demo-x", false, io.Discard); err != nil {
 		t.Fatal(err)
 	}
 	if read(t, filepath.Join(root, "plugins", "plugins.go")) != pluginsGo {
@@ -122,8 +123,24 @@ func TestInstallAndRemoveDir(t *testing.T) {
 	if exists(filepath.Join(root, "plugins", "demo-x")) || exists(filepath.Join(root, "web", "src", "plugins", "demo-x")) {
 		t.Fatal("files remain after remove")
 	}
-	if err := remove(root, "../etc"); err == nil {
+	if err := Remove(root, "../etc", false, io.Discard); err == nil {
 		t.Fatal("remove must reject illegal id")
+	}
+}
+
+func TestInstalledDetect(t *testing.T) {
+	root := newRoot(t)
+	if Installed(root, "demo-x") {
+		t.Fatal("not installed yet")
+	}
+	if _, err := Install(root, makePkg(t, manifestYAML), false); err != nil {
+		t.Fatal(err)
+	}
+	if !Installed(root, "demo-x") {
+		t.Fatal("should be installed after Install")
+	}
+	if Installed(root, "../evil") || Installed(root, "") {
+		t.Fatal("illegal ids must never be installed")
 	}
 }
 
@@ -134,7 +151,7 @@ func TestInstallRejectsBadManifest(t *testing.T) {
 		"id: Upper\nname: x\nversion: 1\nedition: free\n",
 		"id: ok\nname: x\nversion: 1\nedition: gold\n",
 	} {
-		if _, err := install(root, makePkg(t, y), false); err == nil {
+		if _, err := Install(root, makePkg(t, y), false); err == nil {
 			t.Errorf("manifest should be rejected: %q", y)
 		}
 	}
@@ -172,7 +189,7 @@ func TestZipSlipRejected(t *testing.T) {
 			"backend/plugin.go": "package demo\n",
 			name:                "pwn",
 		})
-		if _, err := install(root, z, false); err == nil {
+		if _, err := Install(root, z, false); err == nil {
 			t.Errorf("zip entry %q must be rejected", name)
 		}
 		if exists(filepath.Join(root, "plugins", "demo-x")) {
@@ -196,11 +213,28 @@ func TestInstallZipOK(t *testing.T) {
 		"demo-x/backend/plugin.go": "package demo\n",
 		"demo-x/web/route.tsx":     "export {}\n",
 	})
-	if id, err := install(root, z, false); err != nil || id != "demo-x" {
+	if id, err := Install(root, z, false); err != nil || id != "demo-x" {
 		t.Fatalf("install zip: %q, %v", id, err)
 	}
 	if !exists(filepath.Join(root, "web", "src", "plugins", "demo-x", "route.tsx")) {
 		t.Fatal("web not installed")
+	}
+	if !HasWeb(z) {
+		t.Fatal("zip with web/ dir must report HasWeb")
+	}
+}
+
+func TestHasWeb(t *testing.T) {
+	backendOnly := makeZip(t, map[string]string{
+		"plugin.yaml":       manifestYAML,
+		"backend/plugin.go": "package demo\n",
+	})
+	if HasWeb(backendOnly) {
+		t.Fatal("backend-only zip must not report HasWeb")
+	}
+	pkg := makePkg(t, manifestYAML)
+	if !HasWeb(pkg) || HasWeb(filepath.Join(pkg, "backend")) {
+		t.Fatal("HasWeb dir detection broken")
 	}
 }
 
@@ -210,7 +244,7 @@ func TestSymlinkRejected(t *testing.T) {
 	if err := os.Symlink("/etc/passwd", filepath.Join(pkg, "backend", "link")); err != nil {
 		t.Skip("symlink unsupported")
 	}
-	if _, err := install(root, pkg, false); err == nil {
+	if _, err := Install(root, pkg, false); err == nil {
 		t.Fatal("symlink in package must be rejected")
 	}
 }
@@ -225,21 +259,21 @@ func TestInstallRequiresNexadmin(t *testing.T) {
 	defer func() { installWarn = old }()
 
 	ok := makePkg(t, manifestYAML+"requires_nexadmin: \">=1.0.0 <2.0.0\"\n")
-	if _, err := install(root, ok, false); err != nil {
+	if _, err := Install(root, ok, false); err != nil {
 		t.Fatalf("满足范围应安装: %v", err)
 	}
-	if err := remove(root, "demo-x"); err != nil {
+	if err := Remove(root, "demo-x", false, io.Discard); err != nil {
 		t.Fatal(err)
 	}
 	bad := makePkg(t, manifestYAML+"requires_nexadmin: \">=2.0.0\"\n")
-	_, err := install(root, bad, false)
+	_, err := Install(root, bad, false)
 	if err == nil || !strings.Contains(err.Error(), ">=2.0.0") || !strings.Contains(err.Error(), "--force") {
 		t.Fatalf("不满足应拒绝并提示 --force: %v", err)
 	}
 	if exists(filepath.Join(root, "plugins", "demo-x")) {
 		t.Fatal("拒绝时不应留下文件")
 	}
-	if _, err := install(root, bad, true); err != nil {
+	if _, err := Install(root, bad, true); err != nil {
 		t.Fatalf("--force 应跳过: %v", err)
 	}
 	if !strings.Contains(warn.String(), "警告") || !strings.Contains(warn.String(), ">=2.0.0") {

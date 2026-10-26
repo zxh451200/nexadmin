@@ -63,6 +63,13 @@ func ParseManifest(raw []byte) (*Manifest, error) {
 	if err := dec.Decode(&m); err != nil {
 		return nil, fmt.Errorf("plugin.yaml 解析失败: %w", err)
 	}
+	// "parent: /" 表示顶级目录（payment/im/website 等自建顶级目录的插件这么写），
+	// 归一化为留空；否则 seed 找不到 code 为 "/" 的父节点会整棵跳过。
+	for i := range m.Menus {
+		if m.Menus[i].Parent == "/" {
+			m.Menus[i].Parent = ""
+		}
+	}
 	if err := m.Validate(); err != nil {
 		return nil, err
 	}

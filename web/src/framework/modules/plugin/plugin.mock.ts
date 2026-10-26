@@ -1,5 +1,5 @@
 import { defineMock, mockError } from '@/framework/request/mock'
-import type { PluginInfo } from './api'
+import type { MarketEntry, MarketJob, PluginInfo } from './api'
 
 const DAY = 86_400_000
 const inDays = (n: number) => new Date(Date.now() + n * DAY).toISOString()
@@ -70,4 +70,112 @@ defineMock([
       return { needRestart: false }
     },
   },
+
+  // ---- 插件市场（mock：目录静态、任务每次轮询推进一段日志） ----
+  {
+    method: 'GET',
+    url: '/plugins/market',
+    handler: (): MarketEntry[] =>
+      catalog.map((e) => {
+        const installed = plugins.some((p) => p.id === e.id)
+        const p = plugins.find((x) => x.id === e.id)
+        return { ...e, installed, installedVersion: installed ? p?.version : undefined, status: installed ? p?.status : undefined }
+      }),
+  },
+  {
+    method: 'POST',
+    url: '/plugins/market/install',
+    handler: ({ body }): { jobId: string } => startMockJob(String(body?.id ?? ''), 'install'),
+  },
+  {
+    method: 'POST',
+    url: '/plugins/market/remove',
+    handler: ({ body }): { jobId: string } => startMockJob(String(body?.id ?? ''), 'remove'),
+  },
+  {
+    method: 'POST',
+    url: '/plugins/market/rebuild',
+    handler: (): { jobId: string } => startMockJob('', 'rebuild'),
+  },
+  { method: 'GET', url: '/plugins/market/jobs/:jobId', handler: ({ params }): MarketJob => pollMockJob(String(params.jobId)) },
 ])
+
+const catalog: Omit<MarketEntry, 'installed'>[] = [
+  {
+    id: 'cron',
+    name: '定时任务',
+    description: 'cron 调度、立即执行、失败重试与执行日志',
+    category: 'devops',
+    edition: 'pro',
+    version: '1.0.0',
+    repo: 'acme/nexadmin-plugin-cron',
+  },
+  {
+    id: 'hello',
+    name: '示例插件',
+    description: 'market demo entry (mock)',
+    category: 'business',
+    edition: 'free',
+    version: '0.3.1',
+    repo: 'acme/nexadmin-plugin-hello',
+  },
+  {
+    id: 'payment',
+    name: '支付中心',
+    description: '支付渠道、订单、退款与回调管理',
+    category: 'business',
+    edition: 'pro',
+    version: '0.1.0',
+    repo: 'acme/nexadmin-plugin-payment',
+  },
+  {
+    id: 'totp',
+    name: '动态口令',
+    description: 'TOTP 两步验证服务端与后台管理',
+    category: 'security',
+    edition: 'free',
+    version: '0.1.0',
+    repo: 'acme/nexadmin-plugin-totp',
+  },
+]
+
+const mockJobs = new Map<string, MarketJob>()
+let mockJobSeq = 0
+
+const MOCK_STEPS: Record<MarketJob['kind'], (id: string) => string[]> = {
+  install: (id) => [
+    `从 GitHub acme/nexadmin-plugin-${id} 拉取插件包…`,
+    '下载完成，开始安装…',
+    `插件 ${id} 已装入源码树，开始重建…`,
+    '$ 构建前端',
+    '$ go mod tidy',
+    '$ go build',
+    '二进制已替换',
+    '2 秒后重启服务…',
+  ],
+  remove: (id) => [`移除插件 ${id}…`, '已移除源码文件', '$ go mod tidy', '$ go build', '2 秒后重启服务…'],
+  rebuild: () => ['$ 构建前端', '$ go mod tidy', '$ go build', '二进制已替换', '2 秒后重启服务…'],
+}
+
+function startMockJob(id: string, kind: MarketJob['kind']): { jobId: string } {
+  mockJobSeq += 1
+  const job: MarketJob = { id: `${kind}-${mockJobSeq}-${id}`, kind, state: 'running', log: [] }
+  mockJobs.set(job.id, job)
+  return { jobId: job.id }
+}
+
+function pollMockJob(jobId: string): MarketJob {
+  const job = mockJobs.get(jobId) ?? mockError(404, 'Not found')
+  const steps = MOCK_STEPS[job.kind](jobId.split('-').pop() ?? '')
+  // 每次轮询吐 2 行，吐完进入 restarting → done
+  const next = Math.min(job.log.length + 2, steps.length)
+  job.log = steps.slice(0, next)
+  if (next < steps.length) {
+    job.state = 'running'
+  } else if (job.state === 'running') {
+    job.state = 'restarting'
+  } else {
+    job.state = 'done'
+  }
+  return { ...job, log: [...job.log] }
+}

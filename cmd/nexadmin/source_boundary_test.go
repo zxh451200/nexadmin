@@ -75,7 +75,8 @@ func TestSourcePackageBoundaryArchive(t *testing.T) {
 func TestSourcePackageBoundarySymlink(t *testing.T) {
 	root := makeTemplate(t)
 	if err := os.Symlink(t.TempDir(), filepath.Join(root, "escape")); err != nil {
-		t.Fatal(err)
+		// Windows 默认无创建符号链接的权限，无法构造该场景。
+		t.Skipf("symlink unavailable: %v", err)
 	}
 	if _, err := copyTemplate(root, filepath.Join(t.TempDir(), "new"), false); err == nil {
 		t.Fatal("new accepted symlink")

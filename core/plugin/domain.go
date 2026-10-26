@@ -51,6 +51,30 @@ func loadHostConfig(root string) hostConfig {
 	return hc
 }
 
+// LoadDisabledPlugins 读取 disabled_plugins 配置（停用的插件 id 列表，见 manager 的 evaluate）。
+// 与 loadHostConfig 同理：core/config 不承载插件段，这里单独读。
+func LoadDisabledPlugins(root string) []string {
+	v := viper.New()
+	v.SetConfigType("yaml")
+	for _, name := range []string{"default.yaml", "config.yaml"} {
+		p := filepath.Join(root, "config", name)
+		if _, err := os.Stat(p); err == nil {
+			v.SetConfigFile(p)
+			_ = v.MergeInConfig()
+		}
+	}
+	v.SetEnvPrefix("NEXADMIN")
+	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	v.AutomaticEnv()
+	var out []string
+	for _, s := range v.GetStringSlice("disabled_plugins") {
+		if s = strings.ToLower(strings.TrimSpace(s)); s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
 // normalizeHost 去掉 scheme / 端口 / 路径并转小写；返回纯主机名。
 func normalizeHost(s string) string {
 	s = strings.TrimSpace(s)

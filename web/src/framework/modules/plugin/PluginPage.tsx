@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { AlertTriangle, KeyRound, Puzzle } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { useSearchParams } from 'react-router-dom'
 import { EmptyState } from '@/framework/components/EmptyState'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { usePermission } from '@/framework/auth/usePermission'
@@ -9,8 +10,10 @@ import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/framework/ui/card'
 import { Skeleton } from '@/framework/ui/skeleton'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/framework/ui/tabs'
 import { daysUntil, isExpiringSoon, usePlugins, type PluginInfo, type PluginStatus } from './api'
 import { LicenseDialog } from './LicenseDialog'
+import MarketTab from './MarketTab'
 
 const STATUS_VARIANT: Record<PluginStatus, 'success' | 'warning' | 'destructive'> = {
   active: 'success',
@@ -18,23 +21,21 @@ const STATUS_VARIANT: Record<PluginStatus, 'success' | 'warning' | 'destructive'
   expired: 'destructive',
   invalid: 'destructive',
   revoked: 'destructive',
+  disabled: 'warning',
 }
 
 const INSTALL_CMD = 'go run ./cmd/nexadmin plugin install <目录或zip>'
 
-export default function PluginPage() {
+function InstalledTab({ onLicense }: { onLicense: (p: PluginInfo) => void }) {
   const { t, i18n } = useTranslation()
   const { has } = usePermission()
   const { data = [], isLoading } = usePlugins()
-  const [target, setTarget] = useState<PluginInfo | null>(null)
   const canLicense = has('plugin:license')
   const expiring = data.filter((p) => isExpiringSoon(p))
   const fmt = (iso?: string | null) => (iso ? new Date(iso).toLocaleDateString(i18n.language) : '—')
 
   return (
-    <PageContainer>
-      <PageHeader title={t('pluginMgr.title')} description={t('pluginMgr.description')} />
-
+    <div className="flex flex-col gap-4">
       {expiring.length > 0 ? (
         <Alert variant="warning">
           <AlertTriangle aria-hidden="true" />
@@ -107,7 +108,7 @@ export default function PluginPage() {
                     ) : null}
                   </dl>
                   {canLicense && p.edition === 'pro' ? (
-                    <Button variant="outline" size="sm" className="mt-auto w-full sm:w-auto sm:self-end" onClick={() => setTarget(p)}>
+                    <Button variant="outline" size="sm" className="mt-auto w-full sm:w-auto sm:self-end" onClick={() => onLicense(p)}>
                       <KeyRound aria-hidden="true" />
                       {t('pluginMgr.license.action')}
                     </Button>
@@ -118,6 +119,46 @@ export default function PluginPage() {
           })}
         </div>
       )}
+    </div>
+  )
+}
+
+export default function PluginPage() {
+  const { t } = useTranslation()
+  const [params, setParams] = useSearchParams()
+  const [target, setTarget] = useState<PluginInfo | null>(null)
+  // 官网插件市场的“一键安装”深链：/system/plugin?tab=market&plugin=<id>
+  const initialTab = params.get('tab') === 'market' ? 'market' : 'installed'
+  const [focus] = useState(() => params.get('plugin') ?? '')
+
+  // 深链只消费一次：清掉 URL 参数，避免刷新/切回标签时再次套用筛选。
+  useEffect(() => {
+    if (!params.has('plugin')) return
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        next.delete('plugin')
+        return next
+      },
+      { replace: true },
+    )
+  }, [params, setParams])
+
+  return (
+    <PageContainer>
+      <PageHeader title={t('pluginMgr.title')} description={t('pluginMgr.description')} />
+      <Tabs defaultValue={initialTab}>
+        <TabsList>
+          <TabsTrigger value="installed">{t('pluginMgr.tab.installed')}</TabsTrigger>
+          <TabsTrigger value="market">{t('pluginMgr.tab.market')}</TabsTrigger>
+        </TabsList>
+        <TabsContent value="installed" className="mt-4 data-[state=inactive]:hidden" forceMount>
+          <InstalledTab onLicense={setTarget} />
+        </TabsContent>
+        <TabsContent value="market" className="mt-4 data-[state=inactive]:hidden" forceMount>
+          <MarketTab focus={focus} />
+        </TabsContent>
+      </Tabs>
 
       <LicenseDialog plugin={target} onOpenChange={(o) => !o && setTarget(null)} />
     </PageContainer>

@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"nexadmin/core/plugin/market"
 )
 
 // newManifest 是新项目的框架清单：保留 framework_version 与路径分区，另记来源模板版本与项目名。
@@ -246,7 +248,7 @@ func newProject(root string, o newOptions, out io.Writer) error {
 }
 
 func touch(p string) error {
-	if exists(p) {
+	if market.Exists(p) {
 		return nil
 	}
 	return os.WriteFile(p, nil, 0o644)

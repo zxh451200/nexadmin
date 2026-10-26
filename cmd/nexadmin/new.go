@@ -12,6 +12,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"nexadmin/core/plugin/market"
 )
 
 const oldModule = "nexadmin"
@@ -48,11 +50,13 @@ func newSkip(rel string, isDir bool, withPlugins bool) bool {
 	}
 	switch rel {
 	case "dist", "web/dist", "backup", ".dev-keys", trashDir, filesRecord, ".env.local",
-		"config/config.yaml", "scripts/derive_check", "scripts/contract_check", "scripts/gen_icons", ".github/workflows/derive.yml":
+		"config/config.yaml", "scripts/derive_check", "scripts/contract_check", "scripts/gen_icons", ".github/workflows/derive.yml",
+		"nexadmin-vendor":
 		return true
 	}
 	if strings.HasPrefix(rel, "scripts/derive_check/") || strings.HasPrefix(rel, "scripts/contract_check/") || strings.HasPrefix(rel, "scripts/gen_icons/") || strings.HasPrefix(rel, "backup/") ||
-		strings.HasPrefix(rel, ".dev-keys/") || strings.HasPrefix(rel, trashDir+"/") {
+		strings.HasPrefix(rel, ".dev-keys/") || strings.HasPrefix(rel, trashDir+"/") ||
+		strings.HasPrefix(rel, "nexadmin-vendor/") { // 发行方私有资料（授权签发后台/文档站源/运营手册），不随框架包下发
 		return true
 	}
 	// data/*、logs/*：只保留 .gitkeep
@@ -112,7 +116,7 @@ func copyTemplate(src, dst string, withPlugins bool) (int, error) {
 			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 				return err
 			}
-			if err := copyFile(p, target); err != nil {
+			if err := market.CopyFile(p, target); err != nil {
 				return err
 			}
 			n++
@@ -132,13 +136,13 @@ func clearPluginImports(src []byte) ([]byte, error) {
 	var paths []string
 	for _, l := range lines {
 		switch strings.TrimSpace(l) {
-		case markBegin:
+		case market.MarkBegin:
 			in = true
-		case markEnd:
+		case market.MarkEnd:
 			in = false
 		default:
 			if in {
-				if m := importRe.FindStringSubmatch(l); m != nil {
+				if m := market.ImportRe.FindStringSubmatch(l); m != nil {
 					paths = append(paths, m[1])
 				}
 			}
@@ -147,12 +151,12 @@ func clearPluginImports(src []byte) ([]byte, error) {
 	out := src
 	var err error
 	for _, p := range paths {
-		if out, err = updatePluginsFile(out, p, false); err != nil {
+		if out, err = market.UpdatePluginsFile(out, p, false); err != nil {
 			return nil, err
 		}
 	}
 	if len(paths) == 0 { // 没有导入也校验一下标记行
-		return updatePluginsFile(src, "", false)
+		return market.UpdatePluginsFile(src, "", false)
 	}
 	return out, nil
 }

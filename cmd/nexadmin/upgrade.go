@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"nexadmin/core/plugin/market"
 	"nexadmin/pkg/vrange"
 )
 
@@ -246,7 +247,7 @@ func upResolveSource(from, manName string) (string, func(), error) {
 		return "", noop, err
 	}
 	cleanup := func() { os.RemoveAll(tmp) } //nolint:errcheck
-	if err := extractZip(from, tmp); err != nil {
+	if err := market.ExtractZip(from, tmp); err != nil {
 		cleanup()
 		return "", noop, err
 	}
@@ -502,7 +503,7 @@ func upPrintPlan(out io.Writer, p *upPlan, dry bool) {
 
 func upBackupName(dst string) string {
 	bak := dst + ".bak"
-	for i := 1; exists(bak); i++ {
+	for i := 1; market.Exists(bak); i++ {
 		bak = fmt.Sprintf("%s.bak.%d", dst, i)
 	}
 	return bak
@@ -551,7 +552,7 @@ func upApply(root string, p *upPlan, rec map[string]string, man *upManifest, now
 		switch c.Kind {
 		case "add", "modify":
 			if c.Backup {
-				if err := copyFile(dst, upBackupName(dst)); err != nil {
+				if err := market.CopyFile(dst, upBackupName(dst)); err != nil {
 					return fmt.Errorf("备份 %s 失败: %w", c.Path, err)
 				}
 			}
@@ -710,8 +711,8 @@ func upgrade(root string, o upOptions, out io.Writer, now time.Time) error {
 		return err
 	}
 	var rw *upRewrite
-	if from, e1 := modulePath(pkg); e1 == nil {
-		if to, e2 := modulePath(root); e2 == nil && from != to {
+	if from, e1 := market.ModulePath(pkg); e1 == nil {
+		if to, e2 := market.ModulePath(root); e2 == nil && from != to {
 			tmp, err := os.MkdirTemp("", "nexadmin-upgrade-rw-")
 			if err != nil {
 				return err

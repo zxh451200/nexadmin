@@ -12,6 +12,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"nexadmin/core/plugin/market"
 )
 
 const (
@@ -79,7 +81,7 @@ func updateModulesFile(src []byte, importPath string) (out []byte, changed bool,
 	}
 	set := map[string]bool{}
 	for _, l := range lines[begin+1 : end] {
-		if m := importRe.FindStringSubmatch(l); m != nil {
+		if m := market.ImportRe.FindStringSubmatch(l); m != nil {
 			set[m[1]] = true
 		}
 	}
@@ -135,7 +137,7 @@ func planAdd(root, mod, name string, fields []Field, sortable bool) (*addPlan, *
 		return nil, nil, err
 	}
 	for _, d := range []string{filepath.Join("internal", "modules", name), filepath.Join("web", "src", "pages", name), filepath.Join("modules", name)} {
-		if exists(filepath.Join(root, d)) {
+		if market.Exists(filepath.Join(root, d)) {
 			return nil, nil, fmt.Errorf("%s 已存在，拒绝覆盖", filepath.ToSlash(d))
 		}
 	}
@@ -152,7 +154,7 @@ func planAdd(root, mod, name string, fields []Field, sortable bool) (*addPlan, *
 		return nil, nil, err
 	}
 	for rel := range files {
-		if exists(filepath.Join(root, filepath.FromSlash(rel))) {
+		if market.Exists(filepath.Join(root, filepath.FromSlash(rel))) {
 			return nil, nil, fmt.Errorf("%s 已存在，拒绝覆盖", rel)
 		}
 	}
@@ -254,7 +256,7 @@ func cmdAdd(args []string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	mod, err := modulePath(root)
+	mod, err := market.ModulePath(root)
 	if err != nil {
 		return err
 	}

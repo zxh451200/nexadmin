@@ -44,6 +44,10 @@ type Options struct {
 	Hosts         []string      // 当前服务的域名；nil = 从配置读取（site.domain(s) / sso.issuer 的 host）
 	AllowDevHosts bool          // 等同配置 license.allow_dev_hosts：localhost / 127.0.0.1 视为匹配
 	CheckEvery    time.Duration // 到期检查间隔，默认 1 小时
+
+	// DisabledPlugins 是停用的插件 id 列表（等同配置 disabled_plugins）：命中的插件完全不挂载，
+	// 插件管理页显示 disabled。nil/空 = 从配置读取。free 插件没有授权闸门，停用走这里。
+	DisabledPlugins []string
 }
 
 // expireSoonWindow 是“即将到期”的提示窗口。
@@ -167,6 +171,9 @@ func newManager(plugins []Plugin, o Options) *Manager {
 	for i, h := range o.Hosts {
 		o.Hosts[i] = normalizeHost(h)
 	}
+	if len(o.DisabledPlugins) == 0 {
+		o.DisabledPlugins = LoadDisabledPlugins(o.Root)
+	}
 	ctx, stop := context.WithCancel(context.Background())
 	m := &Manager{opts: o, entries: map[string]*entry{}, ctx: ctx, stop: stop}
 	m.refreshRevocationsLocked() // 先载入吊销清单，再评估各插件的授权
@@ -234,6 +241,14 @@ func (m *Manager) evaluate(p Plugin) {
 	}
 	e.info.Description = man.Description
 
+	// 配置里停用的插件：不校验授权、不挂载、不迁移，列表里显示 disabled。
+	for _, d := range m.opts.DisabledPlugins {
+		if d == p.ID {
+			e.info.Status, e.info.Reason = StatusDisabled, "已在配置 disabled_plugins 中停用"
+			return
+		}
+	}
+
 	switch p.Edition {
 	case Free:
 		e.info.Status = StatusActive
@@ -285,6 +300,13 @@ func (m *Manager) List() []Info {
 		out = append(out, i)
 	}
 	return out
+}
+
+// Root 返回插件管理使用的项目根目录（市场安装等文件操作需要）。
+func (m *Manager) Root() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.opts.Root
 }
 
 // applyLic 在 applyLicense 之外记录到期时间、授权域名与序列号，做域名校验，最后对照吊销清单。
@@ -467,8 +489,8 @@ func (m *Manager) Routes() (viaApp, dormant []string) {
 	defer m.mu.Unlock()
 	for _, k := range m.order {
 		e := m.entries[k]
-		if e.p.ID != k || e.fatal {
-			continue
+		if e.p.ID != k || e.fatal || e.info.Status == StatusDisabled {
+			continue // 停用的插件连转发路由都不留
 		}
 		if e.viaApp {
 			viaApp = append(viaApp, k)
@@ -500,6 +522,11 @@ func (w *mounted) Register(r *gin.RouterGroup, d *core.Deps) {
 	}
 	if d.Admin != nil {
 		dd.Admin = d.Admin.Group("", gate)
+	}
+	if d.Root != nil {
+		// 根路径插件路由（官网类插件）同样过授权闸门。热挂载（buildSub）不设置：
+		// 运行中的引擎不允许加路由，授权导入后需重启才在根路径生效。
+		dd.RootGroup = d.Root.Group("", gate)
 	}
 	e.p.Module.Register(r.Group("", gate), &dd)
 	m.mu.Lock()
@@ -641,6 +668,9 @@ func (m *Manager) ImportLicense(id, content string) (ImportResult, error) {
 	}
 	if e.p.Edition != Pro {
 		return ImportResult{}, ErrFree
+	}
+	if e.info.Status == StatusDisabled {
+		return ImportResult{}, errors.New("插件已在配置 disabled_plugins 中停用，请先从配置移除再导入授权")
 	}
 	l, err := VerifyKeys([]byte(content), id, m.opts.Now(), m.opts.Keys)
 	if err != nil {

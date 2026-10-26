@@ -204,9 +204,49 @@ go build ./... && go vet ./... && go test ./plugins/<id>/...
 cd web && npx tsc --noEmit && npx eslint src
 ```
 
-覆盖安装使用 `go run ./cmd/nexadmin plugin install --force <目录或zip>`；`--force` 必须在路径之前（安装子命令使用标准 `flag.Parse`，不解析路径之后的选项）。CLI 没有 `plugin pack` 子命令；源码包按上面的 zip 结构制作，`release pack` 打的是框架包。`plugin list` 读取磁盘清单与离线授权，不证明 Go 空导入、迁移和运行时挂载成功；还需核对 `plugins/plugins.go`、启动日志与运行时 `GET /api/v1/plugins`。
+覆盖安装使用 `go run ./cmd/nexadmin plugin install --force <目录或zip>`；`--force` 必须在路径之前（安装子命令使用标准 `flag.Parse`，不解析路径之后的选项）。把已安装插件重新打成发行包：`go run ./cmd/nexadmin plugin pack [--out <路径.zip>] <id>`（产出 `plugin.yaml + backend/ + web/` 的 zip，与 install 输入格式互逆；`--out` 同样要在位置参数之前）。`release pack` 打的是框架包。`plugin list` 读取磁盘清单与离线授权，不证明 Go 空导入、迁移和运行时挂载成功；还需核对 `plugins/plugins.go`、启动日志与运行时 `GET /api/v1/plugins`。
 
-安装命令会拒绝路径穿越的压缩包，并限制解压后的文件数量和总大小。卸载用 `plugin remove <id>`（默认保留数据表）。
+安装命令会拒绝路径穿越的压缩包，并限制解压后的文件数量和总大小。卸载与停用：
+
+- `plugin remove <id>`：删除 `plugins/<id>/`、`web/src/plugins/<id>/` 并从 `plugins.go` 摘掉导入；**数据表与授权文件保留**，重装后数据原样回来。重新编译并重启生效。
+- `plugin remove --purge <id>`：在 remove 之外先连数据库清理——DROP `plg_<id>_%` 前缀的表（平台插件清平台库，`migration_target: tenant` 插件清各租户业务库），并按清单的菜单码删除 `sys_menu` 记录；清单缺失时表仍按前缀清、菜单需手动处理。授权文件保留。数据库清不掉会中止且不删文件，可重试。
+- 临时停用（不删代码不动数据）：`config/config.yaml` 里 `disabled_plugins: [<id>]`，重启后该插件完全不挂载，插件管理页显示"已停用"，`plugin list` 显示 `disabled`；free 插件的软停用就走这里（pro 插件也可用，不必撤授权）。从配置移除并重启即恢复。
+
+### 官网插件市场（website 插件）
+
+`config/plugin-market.yaml` 同时驱动后台「插件市场」与官网：
+
+- `/plugins`：搜索、分类、免费/专业筛选；`/plugins/<id>`：详情、安装方式与授权说明。
+- `/plugins/<id>/download`：服务端按目录的 `url` 直链或 GitHub `repo`/`ref` 拉源码，用 `subdir` 定位插件，校验包内 `plugin.yaml` 的 `id`/`edition`/`version` 后，重打成 `plugin.yaml + backend/ + web/` 的安装包。产物磁盘缓存 6 小时；该路由单独限流（每 IP 每分钟 30 次），响应带 `X-Checksum-SHA256`。
+- `/plugins/<id>/download.sha256`：`sha256sum` 格式的校验文件，与下载产物一一对应，可用 `sha256sum -c` 校验。打包时 zip 时间戳固定为 1980-01-01，同一份源码重复打包字节一致，跨实例校验和可对比。
+- `/plugins/index.json`：机器可读目录（含下载地址、安装命令、源码地址），供脚本与外部工具消费。
+- 详情页的「在后台一键安装」跳转 `/system/plugin?tab=market&plugin=<id>`，登录后直接落在后台市场并筛选到该插件。
+- 目录的 `edition` 必须与插件包一致，否则下载被拒绝；`subdir` 只接受仓库内的相对路径。
+
+官网与后台都直接读这份 YAML，改完即生效；`plugin market sync` 只用于导出 JSON（默认标准输出，`--docs` 写到指定目录），不再驱动官网展示。文档站的插件市场页只保留说明与入口，浏览/下载/安装统一在官网 `/plugins`。
+
+**展示、签名与统计**
+
+- 目录可选字段 `screenshots` / `changelog_url` / `versions`：详情页展示截图与版本历史；旧版本要能下载必须在 `versions` 填 `ref`（GitHub tag），官网用 `?version=` 取对应 tag。
+- 包签名：官网进程设置 `NEXADMIN_MARKET_SIGN_KEY=<PKCS8 PEM 私钥>` 后，下载页提供 `.sig` 与公钥 `/plugins/signing-key.pub`；`nexadmin plugin verify --sig <文件> --key <公钥文件> <zip>` 校验。签名是**市场实例对最终包的 Ed25519 签名**（对 SHA-256 摘要），不是发布者签名；客户站点可以用自己的密钥。
+
+### 官网多语言（website 插件）
+
+官网的语言由 `plugins/website/locales/` 决定，**加语言不改模板、不改路由**：
+
+1. 在 `locales/languages.json` 追加一项：`code`（如 `ja-JP`）、`label`、`short`、`htmlLang`、`ogLocale`、`prefix`（如 `ja`）、`dateFormat`（Go 布局，如 `2006年1月2日`）。
+2. 放一份 `locales/<code>.json`，键与现有字典一致（模板里所有 `.T "key"` 都会被 `TestLocaleDictionariesCoverTemplates` 校验，缺键测试直接失败）。
+3. 重启官网进程。新语言自动获得 `/<prefix>/...` 路由、导航语言切换、`hreflang`、`og:locale:alternate` 与 sitemap 条目。
+
+约定：
+
+- 默认语言（`default: true`，且 `prefix` 必须为空）渲染在无前缀 URL；其余语言渲染在 `/<prefix>`。`?lang=<code>` 会切换并记住 cookie `nex_site_lang`，语言切换链接保留当前筛选参数。
+- 没有语言 cookie 时，默认语言首页会按 `Accept-Language` 给偏好其他语言的访客显示一条可关闭的切换提示；**不自动 302**，避免搜索引擎把同一内容重复收录，响应带 `Vary: Accept-Language`。
+- 后台内容（站点设置、导航、特性、页面、新闻）的译文存在各表的 `i18n_json`：`{"en-US":{"title":"…"}}`。管理端表单底部的「多语言内容」按语言自动生成输入框；未填字段在对应语言页面回退原文。后端只接收已配置语言与白名单字段，富文本翻译同样会 `Sanitize`。
+- 市场目录条目用 `i18n` 映射本地化名称/简介（见上文 YAML 注释）；分类名、`待定/免费` 等占位价、日期格式由语言字典处理。
+- 升级上来的老库由 `ensureSeedI18n` 只补 `i18n_json` 为空且原文仍是出厂文案的行，不覆盖已有译文。
+- 统计：公开下载按次计数；评分为匿名 1-5 星，同一 IP 对同一插件只保留一条、可改分。后台一键安装不计入公开下载量。
+- 私有/自建 GitHub：`NEXADMIN_MARKET_GITHUB_API` 覆盖 API 根地址（GitHub Enterprise）。
 
 ## 8. 提交与审核
 
@@ -257,7 +297,7 @@ cd web && npx tsc --noEmit && npx eslint src
 
 **框架升级后插件会坏吗？** 插件只依赖 `core/` 与 `framework/` 的公开接口。框架遵守「所有权契约」：这些接口发生不兼容变化会在升级说明里提前标注，并在 `requires_nexadmin` 的版本范围里体现。
 
-**怎么发布新版本？** 修改 `plugin.yaml` 的 `version`，追加新的迁移文件，重新打包提交。已发布的迁移文件不能改。
+**怎么发布新版本？** 修改 `plugin.yaml` 的 `version`，追加新的迁移文件，重新打包提交（`plugin pack`）。已发布的迁移文件不能改。上架由发行方维护 `config/plugin-market.yaml`（官网与后台直接读取，立即生效）；客户在后台「插件市场」一键安装，pro 插件由运行期授权闸门控制可用性。
 
 **多实例部署要注意什么？** 插件没有现成的分布式锁可用，后台任务要自己防重复执行，cron 示例用数据库乐观抢占（`UPDATE ... WHERE last_slot < ?` 看影响行数），可以参照。框架层面的多实例要求与已知并发窗口以《部署与运维指南》第 10 节为准。
 

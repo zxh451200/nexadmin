@@ -15,6 +15,7 @@ import (
 	"time"
 
 	coreai "nexadmin/core/ai"
+	"nexadmin/core/plugin/market"
 
 	"gopkg.in/yaml.v3"
 )
@@ -381,7 +382,7 @@ func cmdI18nAdd(root string, args []string, out io.Writer) error {
 	}
 	// 2. 后端：以 core/i18n/locales/en-US.yaml 为底
 	beRel := "config/locales/" + code + ".yaml"
-	if !exists(filepath.Join(root, filepath.FromSlash(beRel))) {
+	if !market.Exists(filepath.Join(root, filepath.FromSlash(beRel))) {
 		base, err := os.ReadFile(filepath.Join(root, "core", "i18n", "locales", "en-US.yaml"))
 		if err != nil {
 			return fmt.Errorf("读取 core/i18n/locales/en-US.yaml: %w", err)
@@ -415,7 +416,7 @@ func cmdI18nAdd(root string, args []string, out io.Writer) error {
 			continue
 		}
 		dst := filepath.ToSlash(filepath.Join(filepath.Dir(rel), code+".json"))
-		if exists(filepath.Join(root, filepath.FromSlash(dst))) {
+		if market.Exists(filepath.Join(root, filepath.FromSlash(dst))) {
 			continue
 		}
 		data, err := markUntranslated(raw)
@@ -424,7 +425,7 @@ func cmdI18nAdd(root string, args []string, out io.Writer) error {
 		}
 		writes = append(writes, i18nWrite{dst, data})
 	}
-	if top := "web/src/locales/" + code + ".json"; !exists(filepath.Join(root, filepath.FromSlash(top))) {
+	if top := "web/src/locales/" + code + ".json"; !market.Exists(filepath.Join(root, filepath.FromSlash(top))) {
 		merged[untranslatedKey] = true
 		data, err := json.MarshalIndent(merged, "", "  ")
 		if err != nil {
