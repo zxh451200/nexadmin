@@ -9,6 +9,8 @@ import { Button } from '@/framework/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/framework/ui/card'
 import { Input } from '@/framework/ui/input'
 import { Skeleton } from '@/framework/ui/skeleton'
+import { Textarea } from '@/framework/ui/textarea'
+import { LicenseDialog } from './LicenseDialog'
 import {
   MARKET_KEY,
   serverAlive,
@@ -18,7 +20,49 @@ import {
   useRebuildServer,
   useRemovePlugin,
   type MarketEntry,
+  type PluginInfo,
 } from './api'
+
+const PENDING_LICENSE = (id: string) => `market-pending-license:${id}`
+
+/** pro 插件安装确认：可顺手粘贴授权文本；服务自重启恢复后自动弹出导入（sessionStorage 跨刷新桥接）。 */
+function InstallDialog({
+  entry,
+  onClose,
+  onConfirm,
+}: {
+  entry: MarketEntry | null
+  onClose: () => void
+  onConfirm: (license: string) => void
+}) {
+  const { t } = useTranslation()
+  const [text, setText] = useState('')
+  useEffect(() => setText(''), [entry?.id])
+  return (
+    <ResponsiveDialog
+      open={!!entry}
+      onOpenChange={(o) => !o && onClose()}
+      title={t('pluginMgr.market.installLicense.title', { name: entry?.name ?? '' })}
+      description={t('pluginMgr.market.installLicense.desc')}
+      footer={
+        <>
+          <Button variant="outline" onClick={onClose}>
+            {t('common.cancel')}
+          </Button>
+          <Button onClick={() => onConfirm(text.trim())}>{t('pluginMgr.market.installLicense.confirm')}</Button>
+        </>
+      }
+    >
+      <Textarea
+        rows={7}
+        className="num break-all"
+        placeholder={t('pluginMgr.market.installLicense.placeholder')}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+      />
+    </ResponsiveDialog>
+  )
+}
 
 /** 安装/移除/重建任务的进度对话框：滚动日志 + 状态推进；触发自重启后等待服务恢复再整页刷新。 */
 function JobDialog({ jobId, onClose }: { jobId: string | null; onClose: () => void }) {
@@ -128,6 +172,25 @@ export default function MarketTab({ focus = '' }: { focus?: string }) {
   const [jobId, setJobId] = useState<string | null>(null)
   const [keyword, setKeyword] = useState(focus)
   const [category, setCategory] = useState('')
+  const [installTarget, setInstallTarget] = useState<MarketEntry | null>(null)
+  const [licenseTarget, setLicenseTarget] = useState<PluginInfo | null>(null)
+  const [licensePrefill, setLicensePrefill] = useState('')
+
+  // 重启恢复后：有待导入授权的插件（sessionStorage 桥）且状态为未授权 → 自动弹出导入。
+  useEffect(() => {
+    if (!data.length) return
+    const pending = data.find(
+      (e) => e.installed && e.status === 'unlicensed' && sessionStorage.getItem(PENDING_LICENSE(e.id)),
+    )
+    if (!pending) return
+    const content = sessionStorage.getItem(PENDING_LICENSE(pending.id)) ?? ''
+    sessionStorage.removeItem(PENDING_LICENSE(pending.id))
+    setLicensePrefill(content)
+    setLicenseTarget({
+      id: pending.id, name: pending.name, version: pending.installedVersion ?? '', edition: pending.edition,
+      status: 'unlicensed', customer: '', expiresAt: null, reason: '',
+    })
+  }, [data])
 
   const categories = useMemo(() => {
     const set = new Set<string>()
@@ -149,6 +212,20 @@ export default function MarketTab({ focus = '' }: { focus?: string }) {
   }, [data, keyword, category])
 
   const onInstall = (e: MarketEntry) => {
+    // pro 插件先过安装确认（可顺手贴授权）；free 直接装。
+    if (e.edition === 'pro') {
+      setInstallTarget(e)
+      return
+    }
+    install.mutate(
+      { id: e.id, force: e.installed },
+      { onSuccess: (res) => setJobId(res.jobId) },
+    )
+  }
+
+  const onInstallConfirm = (e: MarketEntry, license: string) => {
+    if (license) sessionStorage.setItem(PENDING_LICENSE(e.id), license)
+    setInstallTarget(null)
     install.mutate(
       { id: e.id, force: e.installed },
       { onSuccess: (res) => setJobId(res.jobId) },
@@ -282,6 +359,12 @@ export default function MarketTab({ focus = '' }: { focus?: string }) {
       )}
 
       <JobDialog jobId={jobId} onClose={() => setJobId(null)} />
+      <InstallDialog
+        entry={installTarget}
+        onClose={() => setInstallTarget(null)}
+        onConfirm={(license) => installTarget && onInstallConfirm(installTarget, license)}
+      />
+      <LicenseDialog plugin={licenseTarget} initialContent={licensePrefill} onOpenChange={(o) => !o && setLicenseTarget(null)} />
     </div>
   )
 }

@@ -49,6 +49,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("POST /api/login", s.login)
 	mux.HandleFunc("GET /api/info", s.auth(s.info))
 	mux.HandleFunc("POST /api/issue", s.auth(s.issue))
+	mux.HandleFunc("POST /api/issue-bundle", s.auth(s.issueBundle))
 	mux.HandleFunc("GET /api/records", s.auth(s.records))
 	mux.HandleFunc("GET /api/export.csv", s.auth(s.exportCSV))
 	mux.HandleFunc("POST /api/revoke", s.auth(s.revoke))

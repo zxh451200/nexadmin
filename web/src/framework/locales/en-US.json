@@ -237,6 +237,8 @@
       "port": "Server port",
       "engines": "Supported databases"
     },
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
     "testConnection": "Test connection",
     "testOk": "Connected",
     "testFailed": "Connection failed",

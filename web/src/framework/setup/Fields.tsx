@@ -1,5 +1,8 @@
+import { useState } from 'react'
 import { useFormContext } from 'react-hook-form'
 import type { ReactNode } from 'react'
+import { Eye, EyeOff } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/framework/ui/form'
 import { Input } from '@/framework/ui/input'
 import { Switch } from '@/framework/ui/switch'
@@ -37,6 +40,9 @@ interface TextFieldProps {
 
 export function TextField({ name, label, type = 'text', placeholder, autoComplete = 'off', inputMode, description }: TextFieldProps) {
   const { control } = useFormContext()
+  const { t } = useTranslation()
+  const [show, setShow] = useState(false)
+  const isPassword = type === 'password'
   return (
     <FormField
       control={control}
@@ -44,9 +50,33 @@ export function TextField({ name, label, type = 'text', placeholder, autoComplet
       render={({ field }) => (
         <FormItem>
           <FormLabel>{label}</FormLabel>
-          <FormControl>
-            <Input {...field} type={type} placeholder={placeholder} autoComplete={autoComplete} inputMode={inputMode} />
-          </FormControl>
+          {isPassword ? (
+            // 与登录页密码框同款交互：眼睛开关切换明文/密文
+            <div className="relative">
+              <FormControl>
+                <Input
+                  {...field}
+                  type={show ? 'text' : 'password'}
+                  placeholder={placeholder}
+                  autoComplete={autoComplete}
+                  inputMode={inputMode}
+                  className="pe-12"
+                />
+              </FormControl>
+              <button
+                type="button"
+                onClick={() => setShow((s) => !s)}
+                aria-label={show ? t('setup.hidePassword') : t('setup.showPassword')}
+                className="absolute inset-y-0 end-0 flex w-11 items-center justify-center text-muted-foreground hover:text-foreground md:w-9"
+              >
+                {show ? <Eye className="size-4" aria-hidden="true" /> : <EyeOff className="size-4" aria-hidden="true" />}
+              </button>
+            </div>
+          ) : (
+            <FormControl>
+              <Input {...field} type={type} placeholder={placeholder} autoComplete={autoComplete} inputMode={inputMode} />
+            </FormControl>
+          )}
           {description && <FormDescription>{description}</FormDescription>}
           <FormMessage />
         </FormItem>

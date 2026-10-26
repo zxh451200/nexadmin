@@ -52,10 +52,11 @@ function BrandPanel({ name, logoUrl, copyright }: { name: string; logoUrl?: stri
     <div className="relative hidden lg:block lg:w-1/2">
       {/* 斜线底衬：与面板同形状再垫一层纯品牌色。裁剪边缘的抗锯齿像素从
           “半透明渐变 × 页面背景”变成“半透明渐变 × 品牌色”，两层叠加后边缘不透明度
-          接近 1，消除缩放到非整数比例时斜线上出现的深色镶边（阴影线）。 */}
-      <div className="absolute inset-0 bg-primary" style={{ clipPath: 'url(#login-brand-s)' }} aria-hidden="true" />
+          接近 1，消除缩放到非整数比例时斜线上出现的深色镶边（阴影线）。
+          深色下面板不自涂色（.dark .login-brand-underlay 透明），由整页渐变供色。 */}
+      <div className="login-brand-underlay absolute inset-0 bg-primary" style={{ clipPath: 'url(#login-brand-s)' }} aria-hidden="true" />
       <aside
-        className="relative h-full overflow-hidden bg-brand-gradient text-primary-foreground lg:flex lg:flex-col lg:justify-between lg:p-12 xl:p-16"
+        className="login-brand relative h-full overflow-hidden text-primary-foreground lg:flex lg:flex-col lg:justify-between lg:p-12 xl:p-16"
         style={{ clipPath: 'url(#login-brand-s)' }}
       >
       <style>{keyframes}</style>
@@ -190,10 +191,13 @@ export default function LoginPage() {
   const onForgot = data.forgotEnabled ? () => setForgotOpen(true) : undefined
 
   return (
-    <div className="flex min-h-dvh flex-col bg-background lg:flex-row">
+    <div className="relative flex min-h-dvh flex-col bg-background lg:flex-row">
+      {/* 深色：整页铺同一族品牌渐变，斜切线两侧同色（亮色不渲染，保持蓝色斜切面板）。
+          定位元素按 DOM 顺序绘制，后续 BrandPanel 与右栏都带 relative 才能盖住这层。 */}
+      <div className="login-page-bg absolute inset-0 hidden lg:dark:block" aria-hidden="true" />
       <BrandPanel name={name} logoUrl={logoUrl} copyright={copyright} />
 
-      <div className="flex flex-1 flex-col">
+      <div className="relative flex flex-1 flex-col">
         <header className="flex items-center justify-between gap-3 px-5 pt-5 lg:hidden">
           <div className="flex min-w-0 items-center gap-3">
             <div className={`flex size-10 shrink-0 items-center justify-center rounded-xl text-primary-foreground ${logoUrl ? '' : 'bg-brand-gradient glow'}`}>

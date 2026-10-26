@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { useMemo } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { CheckCircle2, Circle, Hexagon, Loader2, XCircle } from 'lucide-react'
+import { CheckCircle2, Circle, Eye, EyeOff, Hexagon, Loader2, XCircle } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { LanguageSwitch } from '@/framework/i18n/LanguageSwitch'
 import { Input } from '@/framework/ui/input'
@@ -63,6 +63,7 @@ export default function SetupWizard() {
   const [statuses, setStatuses] = useState<Record<string, ExecStatus>>({})
   const [error, setError] = useState<string>()
   const [setupToken, setSetupToken] = useState('')
+  const [showToken, setShowToken] = useState(false)
   const executing = useRef(false)
 
   const schema = useMemo(() => buildSchema(t), [t])
@@ -186,9 +187,19 @@ export default function SetupWizard() {
             {phase !== 'done' && (
               <div className="space-y-2">
                 <Label htmlFor="setup-token">{t('setup.tokenLabel')}</Label>
-                <Input id="setup-token" type="password" autoComplete="off" spellCheck={false}
-                  value={setupToken} disabled={locked} onChange={(e) => setSetupToken(e.target.value.trim())}
-                  aria-describedby="setup-token-hint" />
+                <div className="relative">
+                  <Input id="setup-token" type={showToken ? 'text' : 'password'} autoComplete="off" spellCheck={false}
+                    value={setupToken} disabled={locked} onChange={(e) => setSetupToken(e.target.value.trim())}
+                    aria-describedby="setup-token-hint" className="pe-12" />
+                  <button
+                    type="button"
+                    onClick={() => setShowToken((s) => !s)}
+                    aria-label={showToken ? t('setup.hidePassword') : t('setup.showPassword')}
+                    className="absolute inset-y-0 end-0 flex w-11 items-center justify-center text-muted-foreground hover:text-foreground md:w-9"
+                  >
+                    {showToken ? <Eye className="size-4" aria-hidden="true" /> : <EyeOff className="size-4" aria-hidden="true" />}
+                  </button>
+                </div>
                 <p id="setup-token-hint" className="text-xs text-muted-foreground">{t('setup.tokenHint')}</p>
               </div>
             )}

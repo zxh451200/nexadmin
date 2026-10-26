@@ -118,6 +118,23 @@
   .dark .bg-brand-gradient {
     background-image: linear-gradient(135deg, hsl(243 55% 26%) 0%, hsl(236 48% 19%) 55%, hsl(215 55% 14%) 170%);
   }
+  /* 登录页斜切品牌面板专属（不能用 bg-brand-gradient，它被侧边栏/按钮/统计卡等小面积复用）：
+     亮色=原品牌渐变斜切；深色=面板不再自涂色，由整页 .login-page-bg 铺同一族渐变，
+     斜切线两侧颜色连续，消除亮蓝面板与近黑背景的硬拼接。 */
+  .login-brand {
+    background-image: linear-gradient(135deg, hsl(var(--brand-from)) 0%, hsl(var(--primary)) 55%, hsl(var(--brand-to)) 170%);
+  }
+  .dark .login-brand {
+    background-image: none;
+  }
+  .dark .login-brand-underlay {
+    /* 底衬只为亮色斜切边抗锯齿存在；深色无渐变面板，亮 primary 底衬必须隐掉 */
+    background-color: transparent;
+  }
+  .dark .login-page-bg {
+    /* 深色整页底色：靛蓝头部在左，向右下压暗到接近背景色，右半区只留一点冷色倾向 */
+    background-image: linear-gradient(135deg, hsl(243 48% 20%) 0%, hsl(234 40% 11%) 55%, hsl(230 36% 6.5%) 120%);
+  }
   .text-gradient {
     background-image: linear-gradient(90deg, hsl(var(--brand-from)), hsl(var(--brand-to)));
     -webkit-background-clip: text;

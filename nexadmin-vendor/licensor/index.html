@@ -55,7 +55,7 @@ th,td{text-align:left;padding:8px;border-bottom:1px solid var(--line);vertical-a
     <section aria-labelledby="issueh">
       <h2 id="issueh">签发授权</h2>
       <form id="issueform">
-        <label>插件 id<input id="plugin" required pattern="[a-z0-9][a-z0-9\-]*" placeholder="cron" autocomplete="off"></label>
+        <label>插件 id（多个插件用逗号或换行分隔，批量签出 zip 包）<textarea id="plugin" rows="2" required placeholder="cron&#10;audit, codegen" autocomplete="off"></textarea></label>
         <label>客户名<input id="customer" required maxlength="100" autocomplete="off"></label>
         <label>有效期至<input id="expires" type="date" required></label>
         <label>域名（可选，逗号分隔，支持 *.example.com）<input id="domains" autocomplete="off"></label>
@@ -172,11 +172,31 @@ $("loginform").onsubmit = async e => {
   try { await api("/api/login", {method: "POST", body: JSON.stringify({token: $("tok").value})}); $("tok").value = ""; boot(); }
   catch (err) { $("loginmsg").textContent = err.message; }
 };
+function parsePluginIds() {
+  return $("plugin").value.split(/[\s,，、]+/).map(s => s.trim()).filter(Boolean);
+}
 $("issueform").onsubmit = async e => {
   e.preventDefault(); const m = $("msg"); m.className = "muted"; m.textContent = "签发中…";
   try {
+    const ids = parsePluginIds();
+    if (ids.length > 1) {
+      // 批量：服务端返回 zip，直接下载；台账逐插件落记录。
+      const r = await fetch("/api/issue-bundle", Object.assign({credentials: "same-origin", headers: H},
+        {method: "POST", body: JSON.stringify({plugins: ids, customer: $("customer").value,
+          expires: $("expires").value, domains: $("domains").value, note: $("note").value})}));
+      if (r.status === 401) { showLogin(); throw new Error("未登录"); }
+      if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.error || "请求失败"); }
+      const cd = r.headers.get("Content-Disposition") || "";
+      const name = (cd.match(/filename="?([^";]+)"?/) || [])[1] || "licenses.zip";
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(await r.blob()); a.download = name; a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+      m.className = "ok"; m.textContent = "已签发 " + ids.length + " 个插件并打包下载（台账逐条已记录）";
+      await load();
+      return;
+    }
     const j = await api("/api/issue", {method: "POST", body: JSON.stringify({
-      plugin: $("plugin").value, customer: $("customer").value, expires: $("expires").value,
+      plugin: ids[0] || $("plugin").value, customer: $("customer").value, expires: $("expires").value,
       domains: $("domains").value, note: $("note").value})});
     lastLic = j.license; lastName = j.record.plugin + ".lic";
     $("lic").value = lastLic; $("result").hidden = false; $("result").scrollIntoView({behavior: "smooth"});

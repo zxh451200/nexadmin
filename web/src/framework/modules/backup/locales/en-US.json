@@ -1,0 +1,46 @@
+{
+  "backup": {
+    "menu": "Data backup",
+    "title": "Data backup",
+    "description": "Back up the database with the local mysqldump / pg_dump and keep compressed copies. Restore is command-line only (no web entry).",
+    "now": "Back up now",
+    "running": "Backing up…",
+    "started": "Backup started; the list refreshes automatically",
+    "deleteConfirm": "Delete backup \"{{name}}\"? The file is removed from disk as well.",
+    "btn": { "edit": "Manage backups", "download": "Download backup" },
+    "unavailable": { "title": "Cannot back up: dump tool not available on this host" },
+    "card": {
+      "tool": "Dump tool",
+      "toolMissing": "Unavailable",
+      "disk": "Free disk space",
+      "unknown": "Unknown",
+      "schedule": "Scheduled backup",
+      "next": "Next run: {{time}}",
+      "last": "Last successful backup",
+      "never": "None yet",
+      "keep": "Keep {{days}} days / {{copies}} copies"
+    },
+    "col": { "time": "Time", "size": "Size", "source": "Source", "status": "Status", "sha256": "SHA-256 (first 12)" },
+    "source": { "manual": "Manual", "schedule": "Scheduled" },
+    "status": { "running": "Running", "success": "Success", "failed": "Failed" },
+    "empty": {
+      "title": "No backups yet",
+      "restoreHint": "Restore is only available on the server command line: stop the service first; a pre-restore backup is taken automatically and you must confirm."
+    },
+    "settings": {
+      "open": "Settings",
+      "title": "Backup settings",
+      "description": "Schedule and retention are stored in the database and shared by all instances; only one instance runs the job.",
+      "schedule": "Scheduled backup",
+      "scheduleOff": "Off",
+      "scheduleHint": "Runs once a day at a fixed time (application time zone); a missed run is made up once the service is back that day.",
+      "daily": "Daily at {{time}}",
+      "keepDays": "Keep for",
+      "keepCount": "Keep copies",
+      "keepHint": "When both are set, a backup is removed if either rule matches; the newest successful backup is always kept.",
+      "unlimited": "Unlimited",
+      "days": "{{count}} days",
+      "copies": "{{count}} copies"
+    }
+  }
+}

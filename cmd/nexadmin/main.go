@@ -20,6 +20,7 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"flag"
@@ -232,6 +233,7 @@ func cmdSign(args []string, out io.Writer) error {
 	domains := fs.String("domains", "", "授权域名，逗号分隔（可选）")
 	serial := fs.String("serial", "", "授权序列号（吊销清单靠它命中）；默认随机生成")
 	dst := fs.String("out", "", "输出文件（默认打印到标准输出）")
+	ledger := fs.String("ledger", "", "签发台账 issued.json（追加一条记录，保持与 licensor 后台对账一致；默认自动探测 nexadmin-vendor/licensor/data/issued.json）")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -271,13 +273,85 @@ func cmdSign(args []string, out io.Writer) error {
 	}
 	if *dst == "" {
 		_, err = fmt.Fprintln(out, string(raw))
+	} else {
+		err = os.WriteFile(*dst, append(raw, '\n'), 0o600)
+		if err == nil {
+			fmt.Fprintf(out, "授权文件已写入 %s（序列号 %s，请记录；吊销时需要）\n", *dst, *serial)
+		}
+	}
+	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(*dst, append(raw, '\n'), 0o600); err != nil {
-		return err
+	// 台账：与 licensor 后台共用 issued.json，保证续费提醒与分成对账不分叉。
+	if *ledger == "" {
+		if root, rerr := findRoot(); rerr == nil {
+			p := filepath.Join(root, "nexadmin-vendor", "licensor", "data", "issued.json")
+			if _, serr := os.Stat(p); serr == nil {
+				*ledger = p
+			}
+		}
 	}
-	fmt.Fprintf(out, "授权文件已写入 %s（序列号 %s，请记录；吊销时需要）\n", *dst, *serial)
+	if *ledger != "" {
+		if lerr := appendLedger(*ledger, l, plugin.KeyID(priv.Public().(ed25519.PublicKey))); lerr != nil {
+			fmt.Fprintf(out, "警告：写签发台账失败（%v）；请手工把本次签发补进 licensor 的 issued.json\n", lerr)
+		} else {
+			fmt.Fprintf(out, "台账已追加 %s\n", *ledger)
+		}
+	}
 	return nil
+}
+
+// ledgerRecord 与 nexadmin-vendor/licensor 的 store.Record JSON 格式一致（跨模块不能直接引用，复制字段）。
+type ledgerRecord struct {
+	ID        string   `json:"id"`
+	IssuedAt  string   `json:"issued_at"`
+	Plugin    string   `json:"plugin"`
+	Customer  string   `json:"customer"`
+	ExpiresAt string   `json:"expires_at"`
+	Domains   []string `json:"domains,omitempty"`
+	KID       string   `json:"kid"`
+	Note      string   `json:"note,omitempty"`
+	Serial    string   `json:"serial,omitempty"`
+}
+
+// appendLedger 向 issued.json（JSON 数组）原子追加一条记录；文件不存在则创建。
+func appendLedger(path string, l plugin.License, kid string) error {
+	var recs []ledgerRecord
+	if raw, err := os.ReadFile(path); err == nil && len(raw) > 0 {
+		if err := json.Unmarshal(raw, &recs); err != nil {
+			return fmt.Errorf("台账格式不是 JSON 数组: %w", err)
+		}
+	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	recs = append(recs, ledgerRecord{
+		ID: l.Serial, IssuedAt: l.IssuedAt, Plugin: l.Plugin, Customer: l.Customer,
+		ExpiresAt: l.ExpiresAt, Domains: l.Domains, KID: kid, Serial: l.Serial,
+	})
+	nw, err := json.MarshalIndent(recs, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".issued-*.tmp")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name()) //nolint:errcheck
+	if err := tmp.Chmod(0o600); err != nil {
+		tmp.Close() //nolint:errcheck
+		return err
+	}
+	if _, err := tmp.Write(append(nw, '\n')); err != nil {
+		tmp.Close() //nolint:errcheck
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), path)
 }
 
 // cmdRevoke 在现有吊销清单上追加一条并重新签发整份清单。

@@ -62,6 +62,12 @@
       "installed": "Installed",
       "empty": "Marketplace catalog is empty: register plugins in config/plugin-market.yaml to enable one-click installs",
       "remove.confirm": "Uninstall {{name}}? Source files will be removed and the service rebuilt (data tables are kept; use --purge on the CLI to drop them)",
+      "installLicense": {
+        "title": "Install {{name}}",
+        "desc": "Installing rebuilds and restarts the service. Pro plugins need a license: paste it now (offered for import when the service is back) or import later from the Installed tab",
+        "placeholder": "Paste the contents of the .lic file (optional, import later)",
+        "confirm": "Start install"
+      },
       "category": {
         "content": "Content",
         "collaboration": "Collaboration",

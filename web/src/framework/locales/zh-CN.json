@@ -238,6 +238,8 @@
       "port": "服务端口",
       "engines": "支持的数据库"
     },
+    "showPassword": "显示密码",
+    "hidePassword": "隐藏密码",
     "testConnection": "测试连接",
     "testOk": "连接成功",
     "testFailed": "连接失败",

@@ -13,16 +13,25 @@ const MAX_BYTES = 256 * 1024
 interface Props {
   plugin: PluginInfo | null
   onOpenChange: (open: boolean) => void
+  /** 预填的授权文本（市场安装后自动弹导时使用） */
+  initialContent?: string
 }
 
 /** 外层按 plugin 切换 key，使每次打开都是干净状态 */
-export function LicenseDialog({ plugin, onOpenChange }: Props) {
-  return <LicenseDialogBody key={plugin?.id ?? ''} plugin={plugin} onOpenChange={onOpenChange} />
+export function LicenseDialog({ plugin, onOpenChange, initialContent }: Props) {
+  return (
+    <LicenseDialogBody
+      key={plugin?.id ?? ''}
+      plugin={plugin}
+      onOpenChange={onOpenChange}
+      initialContent={initialContent}
+    />
+  )
 }
 
-function LicenseDialogBody({ plugin, onOpenChange }: Props) {
+function LicenseDialogBody({ plugin, onOpenChange, initialContent }: Props) {
   const { t } = useTranslation()
-  const [content, setContent] = useState('')
+  const [content, setContent] = useState(initialContent ?? '')
   const [fileName, setFileName] = useState('')
   const mutation = useImportLicense()
 

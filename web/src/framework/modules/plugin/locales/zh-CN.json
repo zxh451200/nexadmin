@@ -62,6 +62,12 @@
       "installed": "已安装",
       "empty": "市场目录为空：在 config/plugin-market.yaml 里登记插件后，这里就能一键安装",
       "remove.confirm": "卸载 {{name}}？将移除源码文件并重建服务（默认保留数据表，可在命令行用 --purge 清库）",
+      "installLicense": {
+        "title": "安装 {{name}}",
+        "desc": "安装会自动重建并重启服务。pro 插件需要授权：可现在粘贴授权文本（服务恢复后自动弹出导入），也可以装好后再到「已安装」页导入",
+        "placeholder": "粘贴 .lic 文件内容（可留空，稍后导入）",
+        "confirm": "开始安装"
+      },
       "category": {
         "content": "内容",
         "collaboration": "协作",
