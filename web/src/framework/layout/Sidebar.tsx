@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
-import { ChevronDown, Hexagon, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
+import { ChevronDown, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import { Button } from '@/framework/ui/button'
+import { BrandMark } from '@/framework/components/BrandMark'
 import { ScrollArea } from '@/framework/ui/scroll-area'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/framework/ui/tooltip'
 import type { MenuNode } from '@/framework/router/types'
@@ -67,11 +68,12 @@ export function Sidebar({ menu, collapsed = false, onNavigate, onToggleCollapse 
               : nested
                 ? 'text-sidebar-foreground/80'
                 : 'text-sidebar-foreground',
-            collapsed && 'justify-center px-0',
+            // 收起成图标轨时：整行等宽保证图标水平居中；隐藏激活项左侧竖条（那是展开列表的指示器，轨内显得突兀）
+            collapsed && 'w-full justify-center px-0 before:hidden',
           )
         }
       >
-        <DynamicIcon name={item.icon} className="size-5 shrink-0 md:size-4" />
+        <DynamicIcon name={item.icon} className={collapsed ? 'size-5 shrink-0' : 'size-5 shrink-0 md:size-4'} />
         {!collapsed && <span className="truncate">{t(item.title)}</span>}
       </NavLink>
     )
@@ -100,13 +102,7 @@ export function Sidebar({ menu, collapsed = false, onNavigate, onToggleCollapse 
           collapsed && 'justify-center px-0',
         )}
       >
-        {settings?.logoUrl ? (
-          <img src={settings.logoUrl} alt="" className="size-8 shrink-0 rounded-lg object-contain" />
-        ) : (
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-brand-gradient text-primary-foreground glow">
-            <Hexagon className="size-5" aria-hidden="true" />
-          </span>
-        )}
+        <BrandMark name={settings?.siteName || t('layout.appName')} logoUrl={settings?.logoUrl} className="size-8" iconClassName="size-5" />
         {!collapsed && <span className="truncate text-base font-semibold tracking-tight">{settings?.siteName || t('layout.appName')}</span>}
       </NavLink>
 
@@ -157,7 +153,10 @@ export function Sidebar({ menu, collapsed = false, onNavigate, onToggleCollapse 
             type="button"
             variant="ghost"
             size={collapsed ? 'icon' : 'default'}
-            className={cn(collapsed ? 'mx-auto flex' : 'w-full justify-start gap-3 px-3 text-sidebar-foreground')}
+            className={cn(
+              'text-sidebar-foreground hover:bg-sidebar-accent/60',
+              collapsed ? 'mx-auto flex' : 'w-full justify-start gap-3 px-3',
+            )}
             aria-label={collapsed ? t('layout.expandSidebar') : t('layout.collapseSidebar')}
             onClick={onToggleCollapse}
           >

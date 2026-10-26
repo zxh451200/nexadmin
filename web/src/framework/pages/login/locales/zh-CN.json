@@ -19,6 +19,8 @@
     "stepDone": "完成",
     "stepIndicator": "第 {{current}} 步，共 {{total}} 步",
     "verifyDesc": "输入账号绑定的邮箱或手机号，我们将发送验证码。",
+    "verifyDescEmail": "输入账号绑定的邮箱，我们将发送验证码。",
+    "verifyDescPhone": "输入账号绑定的手机号，我们将发送验证码。",
     "resetDesc": "验证码已发送至 {{target}}，请设置新密码。",
     "method": "找回方式",
     "methodEmail": "邮箱",

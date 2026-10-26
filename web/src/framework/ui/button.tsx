@@ -36,15 +36,43 @@ export interface ButtonProps
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant, size, asChild = false, ...props }, ref) => {
     const Comp = asChild ? Slot : 'button'
-    // 纯图标按钮：用 aria-label（或 title）自动显示悬停/聚焦提示，不用每个页面单独包 Tooltip
+    // 纯图标按钮：用 aria-label（或 title）自动显示悬停/聚焦提示，不用每个页面单独包 Tooltip。
+    // 手动控制开关：只认鼠标悬停与键盘聚焦（:focus-visible），按下即关。交给 Radix 自动管理时，
+    // 下拉菜单关闭会把焦点还给触发按钮并重新唤起提示，而指针已不在按钮上、永远等不到移出事件，
+    // 提示就卡住不消失了。
     const hint = size === 'icon' ? (props['aria-label'] ?? props.title) : undefined
+    const [open, setOpen] = React.useState(false)
+    // 浏览器侧 setTimeout 返回 number；@types/node 在场时 ReturnType<typeof setTimeout> 会变成
+    // NodeJS.Timeout，与 window.setTimeout 的返回值冲突，这里显式用 number。
+    const timer = React.useRef<number>()
+    const show = () => {
+      window.clearTimeout(timer.current)
+      timer.current = window.setTimeout(() => setOpen(true), 300)
+    }
+    const hide = () => {
+      window.clearTimeout(timer.current)
+      setOpen(false)
+    }
+    React.useEffect(() => () => window.clearTimeout(timer.current), [])
     if (hint) {
       const rest = { ...props } // 去掉原生 title，避免和自定义提示重复弹出
       delete rest.title
       return (
         <TooltipProvider delayDuration={300}>
-          <Tooltip>
-            <TooltipTrigger asChild>
+          <Tooltip open={open}>
+            <TooltipTrigger
+              asChild
+              onPointerEnter={show}
+              onPointerLeave={hide}
+              onPointerDown={hide}
+              onFocus={(e) => {
+                if (e.currentTarget.matches(':focus-visible')) show()
+              }}
+              onBlur={hide}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') hide()
+              }}
+            >
               <Comp className={cn(buttonVariants({ variant, size, className }))} ref={ref} {...rest} />
             </TooltipTrigger>
             <TooltipContent>{hint}</TooltipContent>

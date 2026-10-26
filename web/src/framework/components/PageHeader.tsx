@@ -28,7 +28,7 @@ export function PageHeader({ title, description, actions, className }: PageHeade
 /** 统一页面内边距与最大宽度；子元素之间纵向间距统一 */
 export function PageContainer({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <div className={cn('mx-auto flex w-full max-w-7xl flex-col gap-3 p-3 md:gap-5 md:p-6', className)}>
+    <div className={cn('page-enter mx-auto flex w-full max-w-7xl flex-col gap-3 p-3 md:gap-5 md:p-6', className)}>
       {children}
     </div>
   )

@@ -90,7 +90,8 @@
 
   --sidebar: 233 45% 4.5%;
   --sidebar-foreground: 225 18% 78%;
-  --sidebar-accent: 238 50% 16%;
+  /* 激活/hover 底色：原 16% 亮度在近黑栏底上几乎不可见（表现为“有的有背景有的没有”），提亮一档 */
+  --sidebar-accent: 238 42% 21%;
   --sidebar-accent-foreground: 230 100% 95%;
   --sidebar-border: 232 25% 12%;
 

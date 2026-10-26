@@ -67,26 +67,26 @@ export default function DashboardPage() {
 
   return (
     <PageContainer>
-      <section className="relative overflow-hidden rounded-2xl bg-brand-gradient p-5 text-primary-foreground shadow-lg md:p-8">
-        {/* 装饰：浅色点阵 + 两团柔光，不影响文字阅读 */}
-        <div aria-hidden="true" className="dot-grid-light pointer-events-none absolute inset-0 opacity-60 [mask-image:linear-gradient(to_bottom_left,black,transparent_70%)]" />
-        <div aria-hidden="true" className="pointer-events-none absolute -end-16 -top-20 size-72 rounded-full bg-primary-foreground/20 blur-3xl" />
-        <div aria-hidden="true" className="pointer-events-none absolute -bottom-24 start-1/3 size-64 rounded-full bg-primary-foreground/10 blur-3xl" />
+      <section className="relative overflow-hidden rounded-2xl border bg-card p-5 shadow-sm md:p-8">
+        {/* 装饰：点阵 + 一团品牌柔光，亮暗主题自适应，不再整块涂品牌渐变 */}
+        <div aria-hidden="true" className="tech-grid pointer-events-none absolute inset-0 opacity-70 [mask-image:linear-gradient(to_bottom_left,black,transparent_70%)]" />
+        <div aria-hidden="true" className="pointer-events-none absolute -end-16 -top-24 size-72 rounded-full bg-primary/10 blur-3xl" />
+        <div aria-hidden="true" className="pointer-events-none absolute -bottom-24 start-1/3 size-64 rounded-full bg-primary/5 blur-3xl" />
         <div className="relative flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div className="min-w-0">
             <h1 className="text-xl font-semibold tracking-tight md:text-3xl">
               {t('dashboard.welcome', { greeting: t(`dashboard.greeting.${greetingKey(now.getHours())}`), name })}
             </h1>
-            <p className="mt-2 text-sm text-primary-foreground/80 md:text-base">{t('dashboard.welcomeSub', { date: dateText })}</p>
+            <p className="mt-2 text-sm text-muted-foreground md:text-base">{t('dashboard.welcomeSub', { date: dateText })}</p>
           </div>
           {data ? (
             <div className="flex flex-wrap gap-2">
-              <div className="rounded-xl bg-primary-foreground/15 px-4 py-2 backdrop-blur">
-                <p className="text-xs text-primary-foreground/80">{t('dashboard.stat.todayLogin')}</p>
+              <div className="rounded-xl border bg-muted/50 px-4 py-2">
+                <p className="text-xs text-muted-foreground">{t('dashboard.stat.todayLogin')}</p>
                 <p className="num text-xl font-semibold">{data.todayLogin.value}</p>
               </div>
-              <div className="rounded-xl bg-primary-foreground/15 px-4 py-2 backdrop-blur">
-                <p className="text-xs text-primary-foreground/80">{t('dashboard.stat.unreadMessages')}</p>
+              <div className="rounded-xl border bg-muted/50 px-4 py-2">
+                <p className="text-xs text-muted-foreground">{t('dashboard.stat.unreadMessages')}</p>
                 <p className="num text-xl font-semibold">{data.unreadMessages.value}</p>
               </div>
             </div>

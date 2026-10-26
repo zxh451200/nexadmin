@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next'
 import { resumeLoginContinuation, useAuth } from '@/framework/auth/useAuth'
 import type { LoginContinuation } from '@/framework/auth/useAuth'
 import type { AuthMethods, LoginChallenge } from '@/framework/auth/types'
+import { BrandMark } from '@/framework/components/BrandMark'
 import { LanguageSwitch } from '@/framework/i18n/LanguageSwitch'
 import { api } from '@/framework/request/http'
 import { ThemeToggle } from '@/framework/theme/ThemeToggle'
@@ -38,12 +39,8 @@ const features: { icon: LucideIcon; title: string; desc: string }[] = [
 const keyframes = `
 @keyframes login-float { 0%,100% { transform: translate3d(0,0,0) rotate(0deg); } 50% { transform: translate3d(0,-18px,0) rotate(8deg); } }
 @keyframes login-float-slow { 0%,100% { transform: translate3d(0,0,0) rotate(0deg); } 50% { transform: translate3d(14px,12px,0) rotate(-10deg); } }
+@keyframes login-orbit { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 `
-
-function Logo({ url, name, className }: { url?: string; name: string; className?: string }) {
-  if (url) return <img src={url} alt={name} className={className} />
-  return <Hexagon className={className} aria-hidden="true" />
-}
 
 function BrandPanel({ name, logoUrl, copyright }: { name: string; logoUrl?: string; copyright: string }) {
   const { t } = useTranslation()
@@ -73,29 +70,32 @@ function BrandPanel({ name, logoUrl, copyright }: { name: string; logoUrl?: stri
       <div className="pointer-events-none absolute -bottom-32 end-0 size-[28rem] rounded-full bg-accent/30 blur-3xl" aria-hidden="true" />
       <div className="pointer-events-none absolute start-1/3 top-1/2 size-64 rounded-full bg-primary/40 blur-3xl" aria-hidden="true" />
 
-      <Hexagon
-        className="pointer-events-none absolute end-16 top-24 size-24 animate-[login-float_14s_ease-in-out_infinite] text-primary-foreground/25 motion-reduce:animate-none"
-        strokeWidth={1}
+      {/* 几何装饰：双层六边形（呼应品牌 logo）+ 轨道环 + 实心小点缀；克制的透明度，保持大留白 */}
+      <div
+        className="pointer-events-none absolute end-12 top-20 size-36 animate-[login-float_14s_ease-in-out_infinite] motion-reduce:animate-none"
         aria-hidden="true"
-      />
+      >
+        <Hexagon className="absolute inset-0 text-primary-foreground/20" strokeWidth={0.6} />
+        <Hexagon className="absolute inset-0 m-auto size-24 text-primary-foreground/[0.13]" strokeWidth={0.6} />
+      </div>
       <Hexagon
-        className="pointer-events-none absolute bottom-40 end-40 size-14 animate-[login-float-slow_18s_ease-in-out_infinite] fill-primary-foreground/10 text-primary-foreground/30 motion-reduce:animate-none"
-        strokeWidth={1}
+        className="pointer-events-none absolute end-52 top-64 size-5 animate-[login-float-slow_18s_ease-in-out_infinite] fill-primary-foreground/20 text-transparent motion-reduce:animate-none"
         aria-hidden="true"
       />
       <div
-        className="pointer-events-none absolute start-12 top-1/2 size-28 animate-[login-float-slow_16s_ease-in-out_infinite] rounded-full border border-primary-foreground/25 motion-reduce:animate-none"
+        className="pointer-events-none absolute bottom-44 end-40 size-20 animate-[login-orbit_20s_linear_infinite] motion-reduce:animate-none"
         aria-hidden="true"
-      />
+      >
+        <div className="absolute inset-0 rounded-full border border-primary-foreground/[0.22]" />
+        <div className="absolute -top-[3px] left-1/2 size-1.5 -translate-x-1/2 rounded-full bg-primary-foreground/60" />
+      </div>
       <div
-        className="pointer-events-none absolute bottom-24 start-1/2 size-16 animate-[login-float_12s_ease-in-out_infinite] rounded-full border-2 border-primary-foreground/20 motion-reduce:animate-none"
+        className="pointer-events-none absolute bottom-28 start-[46%] size-2.5 animate-[login-float_12s_ease-in-out_infinite] rounded-full bg-primary-foreground/35 motion-reduce:animate-none"
         aria-hidden="true"
       />
 
       <div className="relative flex items-center gap-3">
-        <div className={`flex size-10 items-center justify-center rounded-xl ${logoUrl ? '' : 'bg-primary-foreground/15'}`}>
-          <Logo url={logoUrl} name={name} className="size-6 object-contain" />
-        </div>
+        <BrandMark name={name} logoUrl={logoUrl} className="size-10 rounded-xl" iconClassName="size-5" />
         <span className="text-lg font-semibold">{name}</span>
       </div>
 
@@ -200,9 +200,7 @@ export default function LoginPage() {
       <div className="relative flex flex-1 flex-col">
         <header className="flex items-center justify-between gap-3 px-5 pt-5 lg:hidden">
           <div className="flex min-w-0 items-center gap-3">
-            <div className={`flex size-10 shrink-0 items-center justify-center rounded-xl text-primary-foreground ${logoUrl ? '' : 'bg-brand-gradient glow'}`}>
-              <Logo url={logoUrl} name={name} className="size-6 object-contain" />
-            </div>
+            <BrandMark name={name} logoUrl={logoUrl} className="size-10 shrink-0 rounded-xl" iconClassName="size-5" />
             <span className="truncate text-lg font-semibold text-foreground">{name}</span>
           </div>
           <div className="flex shrink-0 items-center gap-1">
@@ -218,9 +216,7 @@ export default function LoginPage() {
 
         <main className="flex flex-1 items-center justify-center px-6 pb-[max(2rem,env(safe-area-inset-bottom))] pt-4 lg:pb-12">
           <div className="w-full max-w-sm">
-            <div className={`mb-8 hidden size-10 items-center justify-center rounded-xl text-primary-foreground lg:flex ${logoUrl ? '' : 'bg-primary'}`}>
-              <Logo url={logoUrl} name={name} className="size-5 object-contain" />
-            </div>
+            <BrandMark name={name} logoUrl={logoUrl} className="mb-8 hidden size-10 rounded-xl lg:flex" iconClassName="size-5" />
             <div className="mb-8">
               <h1 className="text-3xl font-bold tracking-tight text-foreground">
                 {registering ? t('login.register.title') : t('loginPage.welcome')}

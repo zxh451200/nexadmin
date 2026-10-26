@@ -4,8 +4,9 @@ import { useNavigate } from 'react-router-dom'
 import { useMemo } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { CheckCircle2, Circle, Eye, EyeOff, Hexagon, Loader2, XCircle } from 'lucide-react'
+import { CheckCircle2, Circle, Eye, EyeOff, Loader2, XCircle } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { BrandMark } from '@/framework/components/BrandMark'
 import { LanguageSwitch } from '@/framework/i18n/LanguageSwitch'
 import { Input } from '@/framework/ui/input'
 import { Label } from '@/framework/ui/label'
@@ -144,9 +145,7 @@ export default function SetupWizard() {
       </div>
       <main className="glass mx-auto w-full max-w-3xl rounded-xl border border-border p-4 md:p-8">
         <header className="mb-6 flex items-center gap-3">
-          <span className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-            <Hexagon className="size-5" aria-hidden="true" />
-          </span>
+          <BrandMark className="size-10 rounded-xl" iconClassName="size-5" />
           <div className="min-w-0">
             <h1 className="text-xl font-semibold">{t('setup.title')}</h1>
             <p className="text-sm text-muted-foreground">{t('setup.subtitle')}</p>

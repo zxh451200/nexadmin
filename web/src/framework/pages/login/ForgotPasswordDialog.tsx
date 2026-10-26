@@ -3,7 +3,7 @@ import { CheckCircle2, Eye, EyeOff, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
-import { api } from '@/framework/request/http'
+import { api, ApiError } from '@/framework/request/http'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
 import { Label } from '@/framework/ui/label'
@@ -77,8 +77,9 @@ export function ForgotPasswordDialog({ open, onOpenChange, channels }: Props) {
       toast.success(t('forgot.sent'))
       setLeft(res?.cooldown ?? COOLDOWN)
       if (next) setStep(next)
-    } catch {
-      // 错误已统一 toast
+    } catch (e) {
+      // 错误已统一 toast；429（撞上冷却/限流）时同样启动倒计时，避免连点反复吃 429
+      if (e instanceof ApiError && e.status === 429) setLeft((n) => (n > 0 ? n : COOLDOWN))
     } finally {
       setBusy(false)
     }
@@ -110,9 +111,9 @@ export function ForgotPasswordDialog({ open, onOpenChange, channels }: Props) {
         <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
           {t('forgot.cancel')}
         </Button>
-        <Button type="button" disabled={busy} onClick={() => void send(2)}>
+        <Button type="button" disabled={busy || left > 0} onClick={() => void send(2)}>
           {busy && spinner}
-          {t('forgot.sendCode')}
+          {left > 0 ? <span className="num">{t('forgot.resendIn', { count: left })}</span> : t('forgot.sendCode')}
         </Button>
       </>
     ) : step === 2 ? (
@@ -131,8 +132,13 @@ export function ForgotPasswordDialog({ open, onOpenChange, channels }: Props) {
       </Button>
     )
 
+  // 第一步描述跟随可用渠道：单渠道时不再写“邮箱或手机号”
   const description =
-    step === 1 ? t('forgot.verifyDesc') : step === 2 ? t('forgot.resetDesc', { target: target.trim() }) : undefined
+    step === 1
+      ? t(phoneOnly ? 'forgot.verifyDescPhone' : emailOnly ? 'forgot.verifyDescEmail' : 'forgot.verifyDesc')
+      : step === 2
+        ? t('forgot.resetDesc', { target: target.trim() })
+        : undefined
 
   return (
     <ResponsiveDialog

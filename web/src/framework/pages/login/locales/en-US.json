@@ -19,6 +19,8 @@
     "stepDone": "Done",
     "stepIndicator": "Step {{current}} of {{total}}",
     "verifyDesc": "Enter the email or phone number bound to your account. We will send you a code.",
+    "verifyDescEmail": "Enter the email bound to your account. We will send you a code.",
+    "verifyDescPhone": "Enter the phone number bound to your account. We will send you a code.",
     "resetDesc": "A code was sent to {{target}}. Set your new password.",
     "method": "Recovery method",
     "methodEmail": "Email",
