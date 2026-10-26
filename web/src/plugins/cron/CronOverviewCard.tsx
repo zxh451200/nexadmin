@@ -19,9 +19,11 @@ export default function CronOverviewCard() {
   const live = usePageLive()
   const { data, isError } = useQuery({
     queryKey: ['plugin-cron', 'stats'],
-    queryFn: () => api.get<CronStats>('/plugins/cron/stats'),
+    // silent：插件未挂载 / 被停用时接口返回 404「插件未启用」，卡片直接隐藏，不弹全局错误
+    queryFn: () => api.get<CronStats>('/plugins/cron/stats', undefined, { silent: true }),
     refetchInterval: live ? 60_000 : false,
   })
+  if (isError) return null
   const items: Array<{ key: string; value: number; warn?: boolean }> = data
     ? [
         { key: 'total', value: data.total },
@@ -40,11 +42,7 @@ export default function CronOverviewCard() {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        {isError ? (
-          <p role="alert" className="py-4 text-sm text-destructive">
-            {t('plugin_cron.card.loadFailed')}
-          </p>
-        ) : !data ? (
+        {!data ? (
           <Skeleton className="h-24 w-full" />
         ) : (
           <dl className="grid grid-cols-3 gap-2 text-center md:grid-cols-1 md:text-start xl:grid-cols-3 xl:text-center">

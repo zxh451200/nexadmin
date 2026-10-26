@@ -307,4 +307,9 @@ export const queryScreenChart = (screenId: string, chartId: string) =>
   api.post<QueryResult>(`${BASE}/view/screens/${screenId}/charts/${chartId}/query`)
 
 export const useOverview = (refetchMs: number | false) =>
-  useQuery({ queryKey: [...KEY, 'overview'], queryFn: () => api.get<Overview>(`${BASE}/overview`), refetchInterval: refetchMs })
+  // silent：插件未挂载 / 被停用时接口返回 404「插件未启用」，工作台卡片直接隐藏，不弹全局错误
+  useQuery({
+    queryKey: [...KEY, 'overview'],
+    queryFn: () => api.get<Overview>(`${BASE}/overview`, undefined, { silent: true }),
+    refetchInterval: refetchMs,
+  })

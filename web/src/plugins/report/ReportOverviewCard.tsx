@@ -10,6 +10,7 @@ export default function ReportOverviewCard() {
   const { t } = useTranslation()
   const live = usePageLive()
   const { data, isError } = useOverview(live ? 60_000 : false)
+  if (isError) return null // 插件不可用时整卡隐藏
   const items = data
     ? [
         { key: 'reports', value: data.reports },
@@ -27,11 +28,7 @@ export default function ReportOverviewCard() {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        {isError ? (
-          <p role="alert" className="py-4 text-sm text-destructive">
-            {t('plugin_report.card.loadFailed')}
-          </p>
-        ) : !data ? (
+        {!data ? (
           <Skeleton className="h-24 w-full" />
         ) : (
           <dl className="grid grid-cols-2 gap-2 text-center md:grid-cols-1 md:text-start xl:grid-cols-2 xl:text-center">

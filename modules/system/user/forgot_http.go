@@ -17,6 +17,7 @@ import (
 	"nexadmin/core/middleware"
 	"nexadmin/core/notify"
 	"nexadmin/core/response"
+	"nexadmin/modules/internal/session"
 	"nexadmin/modules/internal/smscode"
 	"nexadmin/pkg/idgen"
 	"nexadmin/pkg/mail"
@@ -123,6 +124,7 @@ func (f *forgotService) resetEmail(ctx context.Context, rawEmail, code, newPassw
 		return err
 	}
 	_ = clearLock(ctx, f.cache, u.Username) // 重置后顺带解除登录锁定
+	f.revokeSessions(ctx, u.ID)             // 与个人中心改密同款：被盗会话随重置一并失效
 	_ = f.cache.Del(ctx, cache.Key(ctx, "forgot", "cool", digest(email)))
 	f.alertReset(ctx, email, u.Name, ip, lang, "email")
 	return nil
@@ -163,8 +165,20 @@ func (f *forgotService) resetPhone(ctx context.Context, rawPhone, code, newPassw
 		return err
 	}
 	_ = clearLock(ctx, f.cache, u.Username)
+	f.revokeSessions(ctx, u.ID)
 	f.alertReset(ctx, u.Email, u.Name, ip, lang, "短信")
 	return nil
+}
+
+// revokeSessions 吊销该账号的全部会话（密码重置后旧会话不能再继续用）。
+// 找回密码时操作者本身没有登录态，无需保留任何会话，全部踢掉。
+func (f *forgotService) revokeSessions(ctx context.Context, uid idgen.ID) {
+	if f.sessions == nil {
+		return
+	}
+	if err := f.sessions.KickUser(ctx, uid, ""); err != nil {
+		f.log.Warn("forgot: cannot revoke sessions after reset", zap.Int64("user_id", int64(uid)), zap.Error(err))
+	}
 }
 
 func reqLang(c *gin.Context) string {
@@ -179,6 +193,7 @@ func reqLang(c *gin.Context) string {
 // target 含 @ 走邮件验证码，否则走手机号短信验证码（共用 modules/internal/smscode 的额度与场景隔离）。
 func (m *module) registerForgot(d *core.Deps) {
 	f := newForgotService(gormForgotStore{db: d.DB}, d.Cache, d.Notify, smscode.Shared(d.Config, d.Cache, d.Log), d.Log)
+	f.sessions = session.Shared(d.Cache, d.Config.Auth.RefreshTTL) // 重置成功后吊销该账号全部会话
 	byIP := middleware.RateLimit(d.Cache, d.Log, "forgot_route", middleware.ByIPAndPath(), 60, time.Hour)
 	d.Public.POST("/auth/forgot/send-code", byIP, func(c *gin.Context) {
 		var body struct {

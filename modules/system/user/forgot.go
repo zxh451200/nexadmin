@@ -17,6 +17,7 @@ import (
 	"nexadmin/core/middleware"
 	"nexadmin/core/notify"
 	"nexadmin/core/response"
+	"nexadmin/modules/internal/session"
 	"nexadmin/modules/internal/smscode"
 	"nexadmin/pkg/idgen"
 	"nexadmin/pkg/mail"
@@ -100,6 +101,8 @@ type forgotService struct {
 	ipRst  *middleware.Limiter
 	acct   *middleware.Limiter
 	now    func() time.Time
+	// sessions 用于重置成功后吊销该账号的全部会话；测试里可为 nil（跳过吊销）。
+	sessions *session.Store
 }
 
 func newForgotService(st forgotStore, c cache.Cache, n *notify.Service, sms smsSender, log *zap.Logger) *forgotService {
