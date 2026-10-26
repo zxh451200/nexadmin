@@ -1,27 +1,29 @@
-﻿node_modules/
+node_modules/
 dist/
 bin/
 data/*
 !data/.gitkeep
 logs/*
 !logs/.gitkeep
-backup/
+/backup/
 config/config.yaml
 .env.local
 *.log
-# 鎻掍欢鎺堟潈绉侀挜锛堝紑鍙戠敤锛岀姝㈡彁浜わ級
+
+# 插件授权私钥（开发用，禁止提交）
 .dev-keys/
-# 缂栬瘧浜х墿
+
+# 编译产物
 /nexadmin
 /server
 /cmd/nexadmin/nexadmin
-# 瀹夊叏鎵弿鎻掍欢鐘舵€?.mimosa/
-# Python 瀛楄妭鐮佺紦瀛?__pycache__/
-# 鏈湴宸ュ叿浼氳瘽浜х墿
-.zcode/
-# 本地构建产物与误生成文件  
 *.exe
-$null
-web/$null
+
+# 安全扫描插件状态
 .mimosa/
+
+# Python 字节码缓存
 __pycache__/
+
+# 本地工具会话产物
+.zcode/
