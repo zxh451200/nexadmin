@@ -104,7 +104,7 @@
         <section class="plugin-block plugin-license">
           <h2>{{.T "plugin.licenseTitle"}}</h2>
           <p>{{.T "plugin.licenseBody"}}</p>
-          {{if .ContactEmail}}<a class="btn btn-ghost btn-sm" href="mailto:{{.ContactEmail}}?subject={{urlquery (.TF "plugin.licenseSubject" .Plugin.Name)}}">{{.T "plugin.getLicense"}}</a>{{end}}
+          {{if .ContactEmail}}<a class="btn btn-ghost btn-sm" href="mailto:{{.ContactEmail}}?subject={{urlquery (.TF "plugin.licenseSubject" .Plugin.Name)}}" data-copy-email="{{.ContactEmail}}" title="{{.T "site.js.emailCopy"}}">{{.T "plugin.getLicense"}}</a>{{end}}
         </section>
         {{end}}
 

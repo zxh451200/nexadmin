@@ -1,0 +1,298 @@
+# NexAdmin Features & Permissions
+
+This document lists built-in modules, permission codes and endpoints, login methods, the open platform, the plugin mechanism, roles and data scopes, and tenant quotas & expiry. Sources:
+
+- Routes and permission codes: each module's `module.go` / plugin routes are authoritative; use the framework repo's `scripts/contract_check` to parse and verify. The old statistics of 266 routes and 86 permissions only covered the old three-plugin copies, are outdated, and must not be treated as current totals; the appendix below keeps the built-in and old-plugin comparison, while new plugins are governed by their own source and delivery manifests. Dynamic plugin routes are assembled by the manager from registered plugins.
+- Menus: `modules/system/menu/seed.go` (factory menus; business key = permission code; menu names come from the frontend zh-CN dictionary).
+- Tenant isolation: look at the model's embedded base — `TenantModel` (with `tenant_id`, queries automatically scoped) means "yes", `PlatformModel` means "no (platform-level)".
+- All API paths are under `/api/v1`; only `/healthz` and `/metrics` sit at the root. The full "permission ↔ endpoint" mapping is in the appendix.
+
+2026-10-23 early-stage historical check: fixed the identity directory-sync caller-ID lookup, synchronized identity and assistant standalone-package production files from the main project; `timeout 120s go build ./...` and frontend `timeout 120s npm run typecheck` both passed, and the two plugins' production backend, frontend, manifests and three-engine SQL showed no differences; tests were not run at that time. The same day's closing record notes that the full Go test suite passed, and the identity backend (including tests and three-engine migrations), complete frontend and manifest matched file by file, with bidirectional file-set equality — see the vendor's Delivery Checklist. This pass only reviewed code and corrected documentation; no tests, builds, sync comparisons, SQL, browser, real acceptance or deployment were re-run. The provenance, year, completeness and redistribution licensing of official region data remain an external blocker; existing data is kept.
+
+2026-10-23 closing (identity security hardening): completed verification and frontend gaps after the LDAP/CAS hardening — `go test ./...` went from 3 failures to all passing (new cases in `plugins/identity` covering malformed BER input, malicious server referral floods, response body limits, blank passwords, StartTLS response injection, bind-password non-reuse across address changes, test endpoint no-echo + rate limiting, CAS URL schemes, admin route permission gates, etc.); the directory-sync UI gained the missing `plugin_identity.sync.*` language pack entries (raw keys used to render), stat fields were aligned to the server's actual response (scanned / added / updated / deactivated), and the form gained "confirm allowing plaintext password transmission" and "deactivate accounts missing from the directory" toggles. SQL, real LDAP/AD/CAS, browser or deployment runs are still pending.
+
+## 1. Built-in module list
+
+"Module name" is what goes into `disabled_modules` in the config (the module's `Name()`). "Permission codes" lists only those enforced at the route layer; the super admin (`*`) has everything.
+
+| Module | Menu (path) | Page capabilities | Permission codes | Tenant-scoped |
+| --- | --- | --- | --- | --- |
+| `dashboard` | Dashboard (`/dashboard`) | Aggregated stat cards and trends; the page is composed of "cards" — modules/plugins/business pages drop a `cards.tsx` and cards appear automatically; users reorder, move, show/hide them in "Edit Layout" and layouts are saved per user (`GET/PUT/DELETE /dashboard/layout`, no free placement/resizing); statistics use raw SQL with explicit `tenant_id`, degrading to 0/empty when the owning module is disabled (table absent) | Login only (menu registers `dashboard:view`; endpoints don't enforce; layout endpoints only touch one's own rows; open-platform app subjects get 403; rate rule `ratelimit.dashboard_layout`) | Yes (layout table `sys_dashboard_layout` scoped by tenant + user) |
+| `user` | System → User Management (`/system/user`) | List / detail / create / edit / delete (incl. batch), enable-disable, reset password, unlock, assign roles / departments / posts, xlsx import (with template), sync export, async export (via export center). Also the login provider (password, lockout, phone, third-party login, forgot password) and the setup wizard's admin-creation / initialized check | `user:list` `create` `update` `delete` `export` `import` `resetPwd` `unlock` | Yes |
+| `role` | System → Role Management (`/system/role`) | CRUD, assign menu/button permissions, data scope, "assignable" switch, sort, role options | `role:list` `create` `update` `delete` `assign` | Yes |
+| `menu` | System → Menu Management (`/system/menu`) | Directory/menu/button three levels, icon/sort/route/component/cache/hidden/external link, drag sort; sidebar menus filtered by role (`GET /menus/mine`, login only) | `menu:list` `create` `update` `delete`; the menu-tree endpoint `GET /menus/tree` accepts `menu:list`, `role:list` or `role:assign` | No (platform) |
+| `dept` | System → Department Management (`/system/dept`) | Tree (`parent_id` + materialized path `path`), CRUD, sort; writes limited by data scope; reads return the full tree by default (department dropdowns everywhere depend on it); the department page uses `scene=manage` against `GET /depts/tree`, `GET /depts/:id` — non-super-admin operators with a scope narrower than "all" get the tree clipped (ancestors up to the root kept to preserve structure, marked `readonly:true`, greyed out with no action buttons; out-of-scope detail is 403) | `dept:list` `create` `update` `delete` | Yes |
+| `post` | System → Post Management (`/system/post`) | CRUD, sort, post options | `post:list` `create` `update` `delete` | Yes |
+| `dict` | System → Dictionary Management (`/system/dict`) | Dictionary type & data CRUD, sort; `GET /dicts/:code/items` is login-only, used by frontend dropdowns/tags; built-in dictionary protection: factory types (the `seedTypes` list; the returned `builtin` field is derived, not stored) cannot be deleted or re-coded, and their factory items cannot be deleted or re-valued (409 `dict.builtin`); name / label / sort / style / status remain editable | `dict:list` `create` `update` `delete` | No (platform) |
+| `config` | System → System Parameters (`/system/config`), System Settings (`/system/settings`) | Parameter KV CRUD & cache refresh, upload-limit read/write (page); the settings page has eight sections (site / security / cache / storage / ai / sms / auth / notify) with read/write and connectivity tests; `GET /settings/public` is anonymous — the login page reads site name and logo from it | `config:list` `create` `update` `delete`; `settings:list` `update` | No (platform; `sys_config`, `sys_setting`) |
+| `recycle` | System → Recycle Bin (`/system/recycle`) | Soft-deleted user / notice records, restore and purge | `recycle:list` `restore` `delete` | Yes |
+| `plugin` | System → Plugin Management (`/system/plugin`) | Installed plugins, versions, license state, license import (effective immediately, no restart) | `plugin:list` `plugin:license` | No tables |
+| `backup` | System → Data Backup (`/system/backup`) | Immediate backup, scheduled backups & retention, download, delete; also requires super admin | `backup:list` `edit` `download` | No (platform) |
+| `openapi` | System → Open Platform (`/system/openapi`) | Open-platform apps, event catalog, webhooks & deliveries, API docs; personal access tokens live in Profile | `openapi:list` `edit` | Yes |
+| `sso` | System → App Management (`/system/sso-apps`); top-level → App Portal (`/portal`) | This site as an OIDC Provider: downstream app registration, secret reset, signing-key rotation; the portal lists apps you can enter | `sso:list` `edit`; portal is login-only (registers `sso:portal`) | Yes |
+| `notice` | Content → Notices (`/content/notice`) | Rich-text announcements, publish to all / roles / departments / users, draft → published → revoked, scheduled publish & expiry, pinned, important-notice login popup, read stats; deletes go to the recycle bin; data-scope clipping; non-super-admin publishers with scopes narrower than "all" cannot pick "all users" or platform notices, and specified departments/users must be inside their scope (specified roles unrestricted; rejection copy in i18n `notice.audience_*`) | `notice:list` `create` `update` `delete` `publish`; `notice:platform` (checked in the handler — super admin or holders may publish platform notices) | Yes |
+| `message` | Content → Message Center (`/message`) | Message list, unread count, read / read-all, delete, SSE push; users only touch their own messages | Login only (menu registers `message:list`) | Yes |
+| `file` | Content → File Management (`/content/file`) | Groups, tus resumable upload, preview / download (public & signed links), move, rename, delete; local or S3 storage; limited by tenant storage quota | `file:list` `upload` `delete` | Yes |
+| `exportcenter` | Top-level → Export Center (`/jobs`) | Async task list, cancel, retry, delete, download results; regular users see only their own tasks; admins with `job:all` see all in the tenant | Login only; button permission `job:all` (checked in handler) | Yes |
+| `log` | Monitoring → Operation Logs (`/monitor/oper-log`), Login Logs (`/monitor/login-log`) | Query, delete, operation-log cleanup, export (`GET /oper-logs/export`, `GET /login-logs/export` — xlsx streamed, columns are an explicit whitelist excluding request params / responses / stack traces, row cap `log.export_max_rows`, rate rule `ratelimit.log_export`, each export writes a type=export operation log); both clipped by data scope | `operLog:list` `delete` `export`; `loginLog:list` `delete` `export` (export permissions enforced by server routes) | Yes |
+| `sendlog` | Monitoring → Send Logs (`/monitor/send-log`) | SMS / email / bot delivery results: channel, scene (captcha / notice / phone bind / account notice / security alert / test), recipient, title or template name, status (success / failure / skipped), failure reason, duration; paged + channel / status / time-range / recipient fuzzy filters, detail, batch delete, cleanup by days (min 1). Writes go through `core/notify`'s `Recorder` interface injected when this module registers (`Notify.SetRecorder`; captcha SMS uses `smscode.SetRecorder`), enqueued async, failures logged only; recipients are masked (`138****1234`, `a***@x.com`; bots store the channel name), codes/bodies/keys are not stored, errors masked and truncated to 500 chars; in-app messages are not recorded | `sendlog:list` `delete` | Yes (`sys_send_log`, reads & writes carry explicit `tenant_id`) |
+| `online` | Monitoring → Online Users (`/monitor/online`) | Online session list, force logout; no table — based on session indexes in cache | `online:list` `forceLogout` | Yes |
+| `server-monitor` | Monitoring → Server Monitor (`/monitor/server`) | CPU / memory / disk / network / Go runtime; health details; "frontend errors" tab | `serverMonitor:list` | No tables |
+| `client-error` | The "frontend errors" tab of server monitor | Receives frontend runtime errors (anonymous reporting allowed, IP rate-limited); list query | Reporting is public; list is `serverMonitor:list` | Yes |
+| `cache-monitor` | Monitoring → Cache Monitor (`/monitor/cache`) | redis / valkey INFO & SCAN; the memory driver can only report process memory and uptime, with 0 keys and 0 hit rate | `cacheMonitor:list` | No tables |
+| `api-monitor` | Monitoring → API Monitor (`/monitor/api`) | Per-endpoint QPS, average latency and error rate over the last 30 seconds (status ≥400 counts as error), in-process stats, reset on restart | `apiMonitor:list` | No tables |
+| `tenant` | Tenants → Tenant Management (`/tenant/list`), Tenant Packages (`/tenant/package`) | Tenant CRUD, renewal, enable/disable, usage; package CRUD (menu scope, user / role / storage quotas, AI daily calls); domain binding; tenants can individually disable AI and override daily call counts | `tenant:list` `create` `update` `delete`; `tenantPkg:list` `create` `update` `delete` | No (platform; `sys_tenant`, `sys_tenant_pkg`) |
+| `profile` | Profile (`/profile`, menu hidden by default) | Profile, change password, third-party / phone binding & unbinding, login devices (sessions) management; personal access tokens (`/profile/tokens`) | Login only (registers `profile:view`) | Reuses the user table |
+| `about` | About (`/about`) | Version, build time, database engine, Go version, open-source license list of backend dependencies | `about:view` | No tables |
+| `region` | No menu | Provinces/cities/districts: `GET /regions/tree`, `GET /regions`; data embedded in `core/region` (go:embed), no tables or migrations | Login only | No tables |
+| `ai` | No menu | `GET /ai/status`, `POST /ai/filter` (natural-language filtering), `POST /ai/translate` (translation), `POST /ai/write` (writing/polishing assistance, processing caller-submitted text; frontend entry inside the notice form); entries hidden when no model is configured. Tenants can disable AI (`TENANT_AI_DISABLED`) or be limited by daily call counts (`TENANT_QUOTA_AI`), see §6 | Login only; filtering additionally requires the page's list permission | No tables |
+
+Other:
+
+- The factory menus include a "Help Docs" external link (`https://example.com/docs`, permission `docs:view`), disabled by default — a placeholder.
+- `internal/modules/example` (module name `example`, `GET /example/hello`, `GET /example/ping`, permission `example:ping`) is a sample business module, not part of the framework.
+- The old nine-plugin list is a historical scope: `cron`, `audit`, `codegen`, `security`, `identity`, `formbuilder`, `report`, `scim`, `i18n-editor`; `assistant` source exists as well. The i18n backend, manifest and migrations for multi-language live under `plugins/i18n-editor/`; the source-sync matrix and acceptance conditions are in the vendor's Delivery Checklist. License states change with files and time — run `nexadmin plugin list` on site and verify the runtime `GET /plugins`; never treat an offline list as proof of mounting. Release packs and `nexadmin new` ship without plugins by default.
+- `identity` permission codes in five levels: `identity:list` view sources, `identity:edit` create/update/delete & toggle, `identity:test` test connection / test user login, `identity:sync` directory sync (including sync status query), `identity:match` allowing `matchExisting` (binding external accounts to existing local accounts by username); admin endpoints return 401 anonymously and 403 without permission, both covered by unit tests. The CAS login entry `/plugins/identity/cas/*` is public, with an in-process IP rate limit fallback (600/min) on top of framework rate rules.
+- `identity` has manual LDAP/AD directory sync: `POST /plugins/identity/sources/:id/sync` submits a background job, `GET` on the same path queries status, requiring `identity:sync`, a valid license, an enabled LDAP source and `directorySync.enabled`. Callers are obtained via real `auth.ClaimsFrom(c)`; missing claims or non-positive user IDs refuse submission. Existing closing records state the main-copy backend (including tests and migrations), complete frontend and manifest matched. Enumeration uses RFC 2696 `SearchPaged` with a page cap of `ldapPageSize=100` and a cumulative sync cap of `maxDirectoryEntries=5000`; if the server ignores paging controls, results are accepted within the same search and the run fails past 100 entries; plain `Search` has a hard client cap of 50 entries, which is not this paging-compat path's cap. Overruns, search errors, invalid subjects/accounts or duplicates fail the whole run; after all validations pass, accounts are added/updated one by one — partial failure may leave some accounts written. `deactivateMissing` (default off) only deactivates "accounts bound by this directory but absent this run" after a complete enumeration and full success, aborting when directory results fall below half the bound count; super-admin and built-in role accounts are untouched; deactivated accounts reappearing in the directory are not auto-restored. Manual trigger only — no automatic scheduled sync; real-directory acceptance is still pending.
+- `assistant` routes require `assistant:use`; both the main project and the standalone package backends are 1.1.0, with per-user named-session CRUD capped at 30 per tenant per user; queries carry explicit `tenant_id` and `user_id`. The manifest's migration target is the platform database — the table must not be migrated into tenant databases. Go models and three-engine SQL share the table name `plg_assistant_conversation`; the Go entity ID is a `string` generated by `newID()` using `crypto/rand` (16 bytes hex-encoded to 32 lowercase chars), SQL type `CHAR(32)`; entry validation `validConversationID` checks length and the `0–9`/`a–f` charset, not using `pkg/idgen` or snowflake IDs. PostgreSQL indexes point at that table. The 001 migration was fixed directly during development. sqlmock unit tests cover create, list, read and tenant/user isolation; SQL was never run against a real database, so table existence and persistence are not thereby accepted.
+- Disabling the `user` module also removes the login provider and the setup wizard's admin creation / initialized check (`core` collects these roles from modules) — do not disable it; other modules' disabling is covered by the "missing tables degrade to empty" convention, not individually tested.
+- Data-scope clipping is actually applied to: user list & reads/writes, departments (writes; reads only with `scene=manage`), notices (admin-side clipped by creator, publish targets additionally restricted), operation and login logs (`core/datascope`, `modules/system/user/scope.go`).
+- Operators of audits and background jobs: `core/auth`'s `ContextWithUser` / `UserFromContext` are for attribution only (not claims — they pass no permission checks); `core/job` puts the submitter and `job:<type>` into context when running handlers, and the `audit` plugin's operator resolution order is `WithOperator` → `ClaimsFromContext` → `UserFromContext` → system.
+
+## 2. Login & authentication
+
+### 2.1 Login methods
+
+The login page shows methods per configuration; unconfigured ones are absent without errors (`GET /api/v1/auth/methods` returns `methods`, `providers`, `forgotEnabled`). All three methods issue the same JWT dual-token pair on success.
+
+| Method | Enabled when | Rules (from code) |
+| --- | --- | --- |
+| Password | `auth.methods` contains `password` (default) | After ≥3 consecutive failures for the same username or IP a graphic captcha is required (4 digits, 60s validity, one-time); consecutive wrong passwords up to the limit lock the account — default 5 failures / 15 minutes, adjustable in the settings page `security` section or system params `login.max_retry` / `login.lock_minutes`; when the user doesn't exist a bcrypt comparison is still performed and the response uniformly says "wrong username or password" — the real reason only goes to logs; lockout treats existing and non-existing usernames identically |
+| Phone | `auth.methods` contains `phone` and `sms.provider` is non-empty, otherwise hidden | The phone must already be bound to an account; codes are valid 5 minutes, one SMS per phone per 60 seconds, max 10 per phone per day, max 10 per IP per hour, 5 wrong entries void the code |
+| Third-party quick login | `auth.providers.<name>` fully configured | OAuth2 authorization code flow: WeCom, DingTalk, Feishu, Google (OIDC, code + PKCE), GitHub, generic OIDC (Keycloak, Casdoor, etc.). `state` is one-time and callback URLs are exact-whitelisted; first login matches existing accounts by `match_by`, unmatched accounts are told to "bind an existing account", and `auto_create: true` auto-creates; only verified emails count; binding/unbinding is available in Profile |
+
+Third-party config keys are in the Configuration Reference §3. The frontend callback page is `/login/oauth/<provider>`; `redirect_uris` must be its full URL. Google / GitHub need outbound internet; configure `auth.proxy` on restricted networks.
+
+### 2.2 Tokens & sessions
+
+- Access token (default 30 minutes) and refresh token (default 168 hours), HS256; refreshing revokes the old refresh immediately; logout revokes the current access and its paired refresh; revocation records live in cache, and cache unavailability rejects requests.
+- Optional `auth.single_session: true`: only the latest login's tokens are accepted for the same tenant+user; old access/refresh tokens are rejected, and refresh uses an atomic compare-and-swap so old sessions cannot overwrite new logins. Off by default; multi-instance requires shared Redis and identical configuration.
+- Users of expired / suspended tenants cannot log in, cannot refresh, and their active requests are rejected too (§6).
+- Forgot password (`POST /auth/forgot/send-code`, `/auth/forgot/reset`): available only after the email channel (settings page "Notify channels" SMTP) is configured; codes valid 10 minutes, 60-second cooldown, max 5 attempts, plus per-IP and per-account hourly rate limits.
+- Online sessions are passively registered: logged-in requests record "user + IP + UA" into cache; force logout revokes the token of that session's last-seen entry.
+
+## 3. Open platform
+
+Module `openapi`, menu "System → Open Platform", permissions `openapi:list` (read) / `openapi:edit` (write).
+
+- Personal access tokens (PAT): self-created in Profile by logged-in users; plaintext looks like `nxp_<32 random chars>` and is shown once, only the sha256 is stored; call with `Authorization: Bearer nxp_...` acting as the token owner; tokens cannot call the token management endpoints themselves; creation is rate-limited per user (`ratelimit.pat_create`).
+- App-signed calls: open-platform apps (service accounts) bind role sets, optionally with IP whitelists; requests carry `X-App-Key`, `X-Timestamp`, `X-Nonce`, `X-Signature`. Signature = `hex(HMAC-SHA256(appSecret, METHOD\npath\nnormalizedQuery\nsha256hex(body)\ntimestamp\nnonce))` where `path` is the full URL path (including `/api/v1`, from `EscapedPath`), `timestamp` is Unix seconds with a ±5-minute window, `nonce` is one-time (replays rejected with `nonce already used`; replay detection depends on cache), the signed body is capped at 10MB; query keys are sorted, values of the same key sorted too, and both keys and values are `url.QueryEscape`d before joining with `&`. App secrets are resettable; the database stores `core/secret`-encrypted ciphertext. Validation failures are IP rate-limited (`ratelimit.openapi_sign`).
+- Event catalog: `GET /openapi/events`. Currently 10 events: `user.created` `user.updated` `user.deleted`, `dept.created` `dept.updated` `dept.deleted`, `role.created` `role.updated` `role.deleted`, `notice.published`. Payloads contain only ids, necessary fields and tenant id — no password hashes or secrets. The in-process event bus has a 1024-slot queue; when full, events are dropped with a warning, never blocking business requests.
+- Webhooks: configure a URL (SSRF-protected) and subscribed events; deliveries carry `X-Nex-Event`, `X-Nex-Delivery`, `X-Nex-Timestamp`, `X-Nex-Signature` (`hex(HMAC-SHA256(secret, timestamp + "." + body))`), a 5-second per-attempt timeout, up to 5 attempts (waiting 1 min, 5 min, 30 min, 2 h between), delivery records kept 30 days, with manual retry and test; webhook secrets look like `whsec_...` and are resettable, stored encrypted.
+- API docs: `GET /openapi.json` (OpenAPI 3.0.3, raw JSON, no unified response wrapper) and `GET /openapi/routes` (runtime route list), permission `openapi:list`; disabled modules are absent from docs.
+- MCP entry: `POST /mcp` (permission `mcp:list`), supporting JSON-RPC `initialize`, `ping`, `tools/list`, `tools/call` and notifications; protocol version `2025-03-26`. GET tools are invoked directly; explicitly registered write tools go through server-side confirmation (currently the message module registers `message_mark_read`) — arbitrary write routes or URLs are never exposed. Actual invocations re-run the original route's login, permission and tenant checks; app signatures cannot be reused as user Bearer credentials. `GET /mcp/tools` remains the catalog.
+- MCP sessions: initialization returns `Mcp-Session-Id`, carried on subsequent calls; `DELETE /mcp` deletes the session. Metadata and up to 4 concurrent request slots per session live in the configured cache — multi-instance requires shared Redis / Valkey; the fixed validity is the shorter of 15 minutes and the init credential's remaining lifetime, never extended by activity or credential refresh, and bound to the specific identity and credential. Each instance tracks at most 1024 sessions and 64 concurrent requests; requests cap at 30 seconds, bounded by credential and session expiry. Cache failures reject session requests; re-initialize after credential changes. Protocol and write-confirmation boundaries are in the Features & Permissions document.
+- MCP write confirmation: first a `confirmationId` and browser confirmation URL are returned; the user views it via `GET /mcp/confirmations/:id` and approves with `POST /mcp/confirmations/:id/approve` using the session JWT plus local password, valid 5 minutes. PATs / app signatures cannot approve in the browser; after approval the same tool is called with the same `confirmationId`, re-verified and atomically consumed — a client-sent `confirmed` cannot bypass it. JSON or final single-SSE response wrapping is supported; batch requests, GET long-polling, event replay, progress streams and upstream tool SSE passthrough are not. The above is from static code review; real Redis multi-instance and browser flows are not accepted yet.
+
+## 4. Paid plugin mechanism (summary)
+
+Plugins ship as source packages: install = copy files + recompile; `edition: free` skips license validation, `edition: pro` requires an offline-signed license file (`data/licenses/<id>.lic`, ed25519 signature, payload contains plugin, customer, issue / expiry dates, optional domains).
+
+- Commands: `nexadmin plugin list | install | remove | keygen | sign | revoke` (see the `nexadmin` usage; `sign` / `revoke` are vendor-side issuing and revocation).
+- Validation: checked one by one at startup; only valid ones mount routes and menus; missing / expired / tampered do not mount, with reasons shown on the plugin management page; importing a license hot-mounts without restart. A running re-check happens hourly; expired plugin routes return 403; 30 days before expiry `GET /plugins` carries `expiresSoon`; licenses with `domains` validate the current service domain (exact or `*.example.com`, sources in Configuration Reference §8); `requires_nexadmin` is validated against the framework version at load; the vendor may additionally distribute a signed revocation list `config/license-revoked.json` — licenses whose serial numbers appear are `revoked` (routes return 403, no restart needed after the file changes; an auxiliary measure — buyers can delete the list).
+- Conventions and the development workflow are in `plugin-development.md`. That document's "known limitations" section matches code behavior (domain validation, version-range validation, expiry auto-offline are all implemented).
+
+## 5. Roles & data scopes
+
+### 5.1 RBAC
+
+User → role → menu/button permissions; codes are named `module:action`; the super admin (`*`) short-circuits; permissions are read fresh from the login provider on every request — token snapshots are never trusted. New menus / permission points are visible only to the super admin by default; other roles are granted via "Role Management". Factory roles: `admin` (super admin, built-in, cannot be deleted / disabled / re-coded, cannot be assigned), `operator`, `auditor`, `editor` (disabled by default), `guest`, `secadmin` (demonstrates "cannot be assigned"). The latter five are demo roles with empty menu grants by default.
+
+### 5.2 Data scopes
+
+The role's `data_scope` field:
+
+| Value | Meaning |
+| --- | --- |
+| `all` | All |
+| `deptAndChild` | This department and below (relies on `sys_dept.path` materialized paths; falls back to this department when unavailable) |
+| `dept` | This department |
+| `self` | Self only |
+| `custom` | Custom department set (`sys_role_dept`) |
+
+With multiple roles the scopes union: any `all` role means all; preset scopes take the widest; custom departments merge with expanded preset departments into one set. The super admin is always "all". Operators always see themselves; users under "this department / department and below" without a department are treated as self-only. Scopes apply to reads and writes of users, departments, notices, operation logs and login logs (department read clipping applies only when the department page passes `scene=manage`; non-super-admin publishers with scopes narrower than "all" are also restricted when choosing publish targets).
+
+### 5.3 The three checks for assignable roles
+
+When non-super-admins assign roles to others (create / edit users, import, role options), three checks run independently in order, reporting the first failure (`core/roleassign`):
+
+1. Assignable: `assignable=true`, not the built-in super-admin role, and permissions exclude `*`. Otherwise: "this role cannot be assigned by lower-level admins".
+2. No permission escalation: the role's permission set must be a subset of the operator's current permission union. Otherwise: "the selected role's permissions exceed your own; it cannot be assigned".
+3. No wider data scope: the role's scope cannot be wider than the operator's. Otherwise: "the selected role's data scope is wider than yours; it cannot be assigned". Decision table (row = role scope, column = operator scope; operators with `all` always allow):
+
+| Role \ Operator | All | Dept & below | Dept | Self | Custom (set S) |
+| --- | --- | --- | --- | --- | --- |
+| All | Allow | Deny | Deny | Deny | Deny |
+| Dept & below | Allow | Allow | Deny | Deny | Allow only if S is closed under subordinates (each department's whole subtree is in S) |
+| Dept | Allow | Allow | Allow | Deny | Allow |
+| Self | Allow | Allow | Allow | Allow | Allow |
+| Custom (set R) | Allow | R ⊆ operator-visible departments | R ⊆ {this dept} | Allow only if R is empty | R ⊆ S |
+
+Operator permissions and data scope are read live from the database. The public packages `nexadmin/core/roleassign` and `nexadmin/core/datascope` are available to business modules.
+
+## 6. Tenant quotas & expiry enforcement
+
+Tenants are maintained in "Tenant Management" with state (`active` / `suspended` / `expired`), expiry (empty = never), package, domains, and package-overriding user / role / storage (MB) quotas; a quota of 0 means unlimited. Tenant-level quotas take precedence over the package. The factory seeds 12 demo packages and several demo tenants.
+
+Expiry & suspension:
+
+- State: `suspended` / `expired` are rejected outright; when an expiry date has passed, requests within the grace window (`StateGrace`) pass, beyond it they are rejected. Grace days come from the system param `tenant.grace_days` (default 0); the reminder window from `tenant.expire_warn_days` (default 15, 0 = no reminder).
+- Enforcement points: login, token refresh, and third-party token issuance all validate; logged-in non-super-admin requests (including PATs and app-signed calls) are validated in the per-request tenant middleware, with logout allowed so the frontend can clean up; rejections are HTTP 403 with `reason: TENANT_EXPIRED`. Platform super admins and the default (unmanaged) tenant are unaffected.
+- Reminder: `GET /auth/me` carries `tenantExpireSoon` (expiry and remaining days) within `expire_warn_days` of expiry (including grace).
+- Renewal / state: `PUT /tenants/:id/renew`, `PUT /tenants/:id/status` (permission `tenant:update`); tenant info has a 30-second in-process cache fallback, and modifications broadcast invalidation via `core/cluster`, so other instances usually take effect immediately — worst case 30 seconds if a broadcast is lost (multi-instance details in the Deployment Guide §10).
+
+Quota enforcement (exceeding returns HTTP 403 with a `reason`):
+
+| Quota | Enforced at | reason |
+| --- | --- | --- |
+| Users | Creating users, importing users, third-party auto-creation (tenant row locked with `SELECT ... FOR UPDATE` in the same transaction before counting — concurrent creation cannot exceed) | `TENANT_QUOTA_USERS` ("user count reached the package limit (N)") |
+| Roles | Creating roles (same row-lock pattern) | `TENANT_QUOTA_ROLES` ("role count reached the package limit (N)") |
+| Storage | tus session creation atomically pre-allocates by declared length, checking actual usage plus in-flight reservations; completion / cancellation release them, expired reservations are cleaned by lease (`modules/file/usage.go`) | `TENANT_QUOTA_STORAGE`; gated uploads require the cache to implement `cache.Lease` and are rejected otherwise; multi-instance requires shared cache — real Redis concurrency is not yet accepted |
+| AI switch | Tenants can individually disable AI (`sys_tenant.ai_enabled`); the AI gateway checks on `/ai/*`; platform super admins and the default tenant are exempt | `TENANT_AI_DISABLED` |
+| AI daily calls | Package `ai_daily_quota` (0 = unlimited), overridable per tenant (empty = package, 0 = unlimited); `filter`, `translate` and `write` share one count; platform super admins and the default tenant are exempt | `TENANT_QUOTA_AI` |
+
+Packages can also limit the menu scope: a user's effective permissions are intersected with the permissions of the package's menus (an empty package menu means no limit). Platform-level operations that skip tenant isolation (super admin) bypass quotas.
+
+## Appendix: permission codes ↔ endpoints
+
+Generated from source. Paths omit the `/api/v1` prefix (`/healthz` and `/metrics` are at the root). "Login only" = a valid login is required but no permission code is checked; "public" = no login (some protected by credentials, one-time state, signatures or rate limits). Grouped by module; endpoints sharing a permission code are on one line.
+
+| Module | Permission | Endpoints |
+| --- | --- | --- |
+| about | `about:view` | `GET /about`<br>`GET /about/licenses` |
+| ai | Login only | `GET /ai/status`<br>`POST /ai/filter`<br>`POST /ai/translate`<br>`POST /ai/write` |
+| api-monitor | `apiMonitor:list` | `GET /monitor/api` |
+| cache-monitor | `cacheMonitor:list` | `GET /monitor/cache` |
+| client-error | `serverMonitor:list` | `GET /monitor/client-errors` |
+| client-error | Public | `POST /client-errors` |
+| core | Public | `GET /auth/captcha`<br>`GET /auth/methods`<br>`GET /i18n/languages`<br>`GET /system/status`<br>`GET /healthz`<br>`GET /metrics` (loopback only without a token)<br>`POST /auth/login`<br>`POST /auth/refresh` |
+| core | Login only | `GET /auth/me`<br>`POST /auth/logout` |
+| core | `mcp:list` | `GET /mcp/tools` (returns only invokable route descriptions; original-route auth is never bypassed) |
+| core | `mcp:list`, tool calls additionally check the original route's permission | `POST /mcp` (JSON-RPC, read-only GET tools) |
+| core | Loopback only + `X-Shutdown-Token` (registered only by processes started via `start`; otherwise 404) | `POST /system/shutdown` |
+| core setup wizard | Exists only when uninitialized; loopback, or with `X-Setup-Token` | `GET /setup/env`<br>`POST /setup/execute`<br>`POST /setup/test-cache`<br>`POST /setup/test-db` |
+| dashboard | Login only | `DELETE /dashboard/layout`<br>`GET /dashboard/layout`<br>`GET /dashboard/stats`<br>`PUT /dashboard/layout` |
+| exportcenter | Login only (users touch their own tasks; `job:all` touches all) | `DELETE /jobs/:id`<br>`GET /jobs`<br>`GET /jobs/:id`<br>`GET /jobs/:id/download`<br>`POST /jobs/:id/cancel`<br>`POST /jobs/:id/retry` |
+| file | `file:delete` | `DELETE /file-groups/:id`<br>`DELETE /files`<br>`DELETE /files/:id` |
+| file | `file:upload` | `DELETE /files/upload/:id`<br>`HEAD /files/upload/:id`<br>`PATCH /files/upload/:id`<br>`POST /file-groups`<br>`POST /files`<br>`POST /files/upload`<br>`PUT /file-groups/:id`<br>`PUT /files/:id`<br>`PUT /files/move` |
+| file | `file:list` | `GET /file-groups`<br>`GET /files` |
+| file | Public (public links rely on random strings; private files on expiring signatures) | `GET /files/:id/content`<br>`GET /files/public/:token/:name` |
+| log | `loginLog:delete` | `DELETE /login-logs` |
+| log | `operLog:delete` | `DELETE /oper-logs`<br>`POST /oper-logs/clean` |
+| log | `loginLog:export` | `GET /login-logs/export` |
+| log | `operLog:export` | `GET /oper-logs/export` |
+| log | `loginLog:list` | `GET /login-logs` |
+| log | `operLog:list` | `GET /oper-logs` |
+| message | Login only | `DELETE /messages/:id`<br>`GET /messages`<br>`GET /messages/stream`<br>`GET /messages/unread-count`<br>`PUT /messages/:id/read`<br>`PUT /messages/read-all` |
+| notice | `notice:delete` | `DELETE /notices`<br>`DELETE /notices/:id` |
+| notice | `notice:list` | `GET /notices`<br>`GET /notices/:id`<br>`GET /notices/:id/read-stats` |
+| notice | Login only | `GET /notices/mine`<br>`GET /notices/popup`<br>`POST /notices/:id/read` |
+| notice | `notice:create` | `POST /notices` |
+| notice | `notice:publish` | `POST /notices/:id/publish`<br>`POST /notices/:id/revoke` |
+| notice | `notice:update` | `PUT /notices/:id` |
+| online | `online:forceLogout` | `DELETE /online-users/:id` |
+| online | `online:list` | `GET /online-users` |
+| openapi | `openapi:edit` | `DELETE /openapi/apps/:id`<br>`DELETE /openapi/webhooks/:id`<br>`POST /openapi/apps`<br>`POST /openapi/apps/:id/reset-secret`<br>`POST /openapi/deliveries/:id/retry`<br>`POST /openapi/webhooks`<br>`POST /openapi/webhooks/:id/reset-secret`<br>`POST /openapi/webhooks/:id/test`<br>`PUT /openapi/apps/:id`<br>`PUT /openapi/apps/:id/enabled`<br>`PUT /openapi/webhooks/:id`<br>`PUT /openapi/webhooks/:id/enabled` |
+| openapi | Login only (tokens cannot call these three) | `DELETE /profile/tokens/:id`<br>`GET /profile/tokens`<br>`POST /profile/tokens` |
+| openapi | `openapi:list` | `GET /openapi.json`<br>`GET /openapi/apps`<br>`GET /openapi/deliveries`<br>`GET /openapi/events`<br>`GET /openapi/routes`<br>`GET /openapi/webhooks` |
+| plugin | `plugin:list` | `GET /plugins` |
+| plugin | `plugin:license` (dynamically registered per installed plugin) | `POST /plugins/<id>/license` |
+| plugin | Login only (forwarded to not-yet-mounted plugins; the license gate and the plugin's own `Perm` decide) | `ANY /plugins/<id>/*rest` |
+| profile | Login only | `DELETE /profile/bindings/:key`<br>`DELETE /profile/bindings/phone`<br>`DELETE /profile/sessions/:id`<br>`GET /profile`<br>`GET /profile/bindings`<br>`GET /profile/sessions`<br>`POST /profile/bindings/:key`<br>`POST /profile/bindings/phone`<br>`PUT /profile`<br>`PUT /profile/password` |
+| profile | Public (IP rate-limited, rule `sms_code`) | `POST /auth/sms-code` |
+| recycle | `recycle:delete` | `DELETE /recycle/:id` |
+| recycle | `recycle:list` | `GET /recycle` |
+| recycle | `recycle:restore` | `POST /recycle/:id/restore` |
+| region | Login only | `GET /regions`<br>`GET /regions/tree` |
+| sendlog | `sendlog:delete` | `DELETE /sendlogs`<br>`POST /sendlogs/clean` |
+| sendlog | `sendlog:list` | `GET /sendlogs`<br>`GET /sendlogs/:id` |
+| server-monitor | `serverMonitor:list` | `GET /monitor/health`<br>`GET /monitor/server` |
+| sso | `sso:edit` | `DELETE /sso/apps/:id`<br>`POST /sso/apps`<br>`POST /sso/apps/:id/reset-secret`<br>`POST /sso/keys/rotate`<br>`PUT /sso/apps/:id`<br>`PUT /sso/apps/:id/enabled` |
+| sso | Public (protocol endpoints, protected by client credentials or Bearer; `/oauth/token` failures are IP rate-limited) | `GET /oauth/.well-known/openid-configuration`<br>`GET /oauth/jwks`<br>`GET /oauth/logout`<br>`GET /oauth/org/depts`<br>`GET /oauth/org/users`<br>`GET /oauth/userinfo`<br>`POST /oauth/token`<br>`POST /oauth/userinfo` |
+| sso | Login only | `GET /oauth/authorize/info`<br>`GET /sso/portal`<br>`POST /oauth/authorize` |
+| sso | `sso:list` | `GET /sso/apps`<br>`GET /sso/keys` |
+| backup (also super admin) | `backup:edit` | `DELETE /backups/:id`<br>`POST /backups`<br>`PUT /backups/config` |
+| backup (also super admin) | `backup:list` | `GET /backups`<br>`GET /backups/config`<br>`GET /backups/status` |
+| backup (also super admin) | `backup:download` | `GET /backups/:id/download` |
+| config | `config:delete` | `DELETE /configs`<br>`DELETE /configs/:id` |
+| config | Login only | `GET /config/upload` |
+| config | `config:list` | `GET /configs`<br>`GET /configs/:id`<br>`GET /configs/upload`<br>`GET /configs/upload-types` |
+| config | `settings:list` | `GET /settings` |
+| config | Public | `GET /settings/public` |
+| config | `config:create` | `POST /configs` |
+| config | `config:update` | `POST /configs/refresh-cache`<br>`PUT /configs/:id`<br>`PUT /configs/upload` |
+| config | `settings:update` | `POST /settings/:section/test`<br>`PUT /settings/:section` |
+| dept | `dept:delete` | `DELETE /depts/:id` |
+| dept | `dept:list` | `GET /depts/:id`<br>`GET /depts/tree` |
+| dept | `dept:create` | `POST /depts` |
+| dept | `dept:update` | `PUT /depts/:id`<br>`PUT /depts/sort` |
+| dict | `dict:delete` | `DELETE /dict/data`<br>`DELETE /dict/data/:id`<br>`DELETE /dict/types`<br>`DELETE /dict/types/:id` |
+| dict | `dict:list` | `GET /dict/data`<br>`GET /dict/data/:id`<br>`GET /dict/types`<br>`GET /dict/types/:id` |
+| dict | Login only | `GET /dicts/:code/items` |
+| dict | `dict:create` | `POST /dict/data`<br>`POST /dict/types` |
+| dict | `dict:update` | `PUT /dict/data/:id`<br>`PUT /dict/data/sort`<br>`PUT /dict/types/:id`<br>`PUT /dict/types/sort` |
+| menu | `menu:delete` | `DELETE /menus/:id` |
+| menu | `menu:list` | `GET /menus/:id` |
+| menu | Login only | `GET /menus/mine` |
+| menu | `menu:list` or `role:list` or `role:assign` | `GET /menus/tree` |
+| menu | `menu:create` | `POST /menus` |
+| menu | `menu:update` | `PUT /menus/:id`<br>`PUT /menus/sort`<br>`PUT /menus/:id/move` |
+| post | `post:delete` | `DELETE /posts/:id` |
+| post | `post:list` | `GET /posts`<br>`GET /posts/:id` |
+| post | Login only | `GET /posts/options` |
+| post | `post:create` | `POST /posts` |
+| post | `post:update` | `PUT /posts/:id`<br>`PUT /posts/sort` |
+| role | `role:delete` | `DELETE /roles/:id` |
+| role | `role:list` | `GET /roles`<br>`GET /roles/:id`<br>`GET /roles/:id/menus` |
+| role | Login only | `GET /roles/options` |
+| role | `role:create` | `POST /roles` |
+| role | `role:update` | `PUT /roles/:id`<br>`PUT /roles/sort` |
+| role | `role:assign` | `PUT /roles/:id/menus` |
+| tenant | `tenantPkg:delete` | `DELETE /tenant-packages`<br>`DELETE /tenant-packages/:id` |
+| tenant | `tenant:delete` | `DELETE /tenants`<br>`DELETE /tenants/:id` |
+| tenant | `tenantPkg:list` | `GET /tenant-packages`<br>`GET /tenant-packages/:id` |
+| tenant | `tenant:list` | `GET /tenant-packages/options`<br>`GET /tenants`<br>`GET /tenants/:id`<br>`GET /tenants/:id/usage` |
+| tenant | `tenantPkg:create` | `POST /tenant-packages` |
+| tenant | `tenant:create` | `POST /tenants` |
+| tenant | `tenantPkg:update` | `PUT /tenant-packages/:id` |
+| tenant | `tenant:update` | `PUT /tenants/:id`<br>`PUT /tenants/:id/renew`<br>`PUT /tenants/:id/status` |
+| user | `user:delete` | `DELETE /users`<br>`DELETE /users/:id` |
+| user | Public (third-party login: one-time state + callback whitelist; forgot password: IP / account rate limits) | `GET /auth/oauth/:provider/start`<br>`GET /auth/providers`<br>`POST /auth/forgot/reset`<br>`POST /auth/forgot/send-code`<br>`POST /auth/oauth/:provider/callback`<br>`POST /auth/oauth/bind` |
+| user | `user:list` | `GET /users`<br>`GET /users/:id` |
+| user | `user:export` | `GET /users/export`<br>`GET /users/export-plan`<br>`POST /users/export-async` |
+| user | `user:import` | `GET /users/import-template`<br>`POST /users/import` |
+| user | `user:create` | `POST /users` |
+| user | `user:resetPwd` | `POST /users/:id/reset-password` |
+| user | `user:unlock` | `POST /users/:id/unlock` |
+| user | `user:update` | `PUT /users/:id`<br>`PUT /users/:id/status` |
+| example (sample business module) | Login only | `GET /example/hello` |
+| example (sample business module) | `example:ping` | `GET /example/ping` |
+| audit (plugin, prefix `/plugins/audit`) | `audit:clean` | `DELETE /plugins/audit/logs` |
+| audit (plugin) | `audit:config` | `GET /plugins/audit/config`<br>`PUT /plugins/audit/config` |
+| audit (plugin) | `audit:list` | `GET /plugins/audit/log-tables`<br>`GET /plugins/audit/logs`<br>`GET /plugins/audit/logs/:id` |
+| codegen (plugin, prefix `/plugins/codegen`) | `codegen:list` | `GET /plugins/codegen/tables`<br>`GET /plugins/codegen/tables/:name/columns`<br>`POST /plugins/codegen/preview` |
+| codegen (plugin) | `codegen:download` | `POST /plugins/codegen/download` |
+| cron (plugin, prefix `/plugins/cron`) | `cron:edit` | `DELETE /plugins/cron/jobs/:id`<br>`POST /plugins/cron/jobs`<br>`PUT /plugins/cron/jobs/:id`<br>`PUT /plugins/cron/jobs/:id/enabled` |
+| cron (plugin) | `cron:clean` | `DELETE /plugins/cron/logs` |
+| cron (plugin) | `cron:list` | `GET /plugins/cron/handlers`<br>`GET /plugins/cron/jobs`<br>`GET /plugins/cron/stats` |
+| cron (plugin) | `cron:log` | `GET /plugins/cron/logs`<br>`GET /plugins/cron/logs/:id` |
+| cron (plugin) | `cron:run` | `POST /plugins/cron/jobs/:id/run` |
+| scim (plugin) | `scim:list` | `GET /plugins/scim/tokens` |
+| scim (plugin) | Dedicated SCIM Bearer token (no admin JWT or `scim:list` required) | `GET /plugins/scim/v2/Users`<br>`GET /plugins/scim/v2/Users/:id`<br>`GET /plugins/scim/v2/Groups`<br>`GET /plugins/scim/v2/Groups/:id` |
+| scim (plugin) | `scim:token` | `POST /plugins/scim/tokens`<br>`DELETE /plugins/scim/tokens/:id` |
+| scim (plugin) | Public (Bearer token) | `POST /plugins/scim/v2/Users`<br>`PUT /plugins/scim/v2/Users/:id`<br>`PATCH /plugins/scim/v2/Users/:id`<br>`DELETE /plugins/scim/v2/Users/:id`<br>`POST /plugins/scim/v2/Groups`<br>`PUT /plugins/scim/v2/Groups/:id`<br>`PATCH /plugins/scim/v2/Groups/:id`<br>`DELETE /plugins/scim/v2/Groups/:id` |
+| i18n-editor (plugin) | `i18n-editor:list` | `GET /plugins/i18n-editor/entries`<br>`GET /plugins/i18n-editor/versions` |
+| i18n-editor (plugin) | `i18n-editor:edit` | `PUT /plugins/i18n-editor/entries` |
+| i18n-editor (plugin) | `i18n-editor:publish` | `POST /plugins/i18n-editor/publish`<br>`POST /plugins/i18n-editor/rollback` |
+
+Permission points registered but not enforced at the route layer (menus / buttons): `dashboard:view`, `message:list`, `profile:view`, `docs:view`, `sso:portal`; enforced inside handlers: `notice:platform`, `job:all`.

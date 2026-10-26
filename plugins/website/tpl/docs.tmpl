@@ -1,0 +1,27 @@
+{{define "content"}}
+<div class="docs-grid container">
+  <aside class="docs-side" aria-label="{{.T "docs.title"}}">
+    {{range .DocNav}}
+    <div class="docs-group">
+      <p class="docs-group-title">{{.Title}}</p>
+      <ul>
+        {{range .Items}}<li><a href="{{.URL}}"{{if .Active}} class="active" aria-current="page"{{end}}>{{.Title}}</a></li>{{end}}
+      </ul>
+    </div>
+    {{end}}
+    {{if .Doc.TOC}}
+    <div class="docs-group">
+      <p class="docs-group-title">{{.T "docs.group.toc"}}</p>
+      <ul class="docs-toc">
+        {{range .Doc.TOC}}<li class="toc-h{{.Level}}"><a href="{{.Href}}">{{.Text}}</a></li>{{end}}
+      </ul>
+    </div>
+    {{end}}
+  </aside>
+  <article class="docs-body article-body" data-reveal>
+    <h1>{{.Doc.Title}}</h1>
+    {{.Doc.Content}}
+    <p class="docs-foot">{{.T "docs.footerHint"}} <a href="{{.URL "/news"}}">{{.T "layout.news"}} →</a></p>
+  </article>
+</div>
+{{end}}

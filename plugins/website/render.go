@@ -71,6 +71,7 @@ func mustPage(name string) *template.Template {
 }
 
 var pageTmpl = map[string]*template.Template{
+	"docs":     mustPage("docs"),
 	"home":     mustPage("home"),
 	"plugins":  mustPage("plugins"),
 	"plugin":   mustPage("plugin"),
@@ -139,6 +140,11 @@ type siteView struct {
 	Signed           bool
 	SignatureURL     string
 	PublicKeyURL     string
+
+	// 文档区（/docs，渲染 nexadmin/docs 内嵌的框架使用文档）
+	DocsEnabled bool
+	DocNav      []DocGroup
+	Doc         *DocView
 }
 
 // T 取静态文案；语言缺键时回退英文/默认语言，最后回退 key 本身。
@@ -194,7 +200,7 @@ func (v *siteView) Switch(l Language) string {
 // JSStrings 把前端脚本用到的文案以 JSON 交给 site.js（无内联脚本时也能工作）。
 func (v *siteView) JSStrings() template.JS {
 	m := map[string]string{}
-	for _, k := range []string{"packaging", "packagingHint", "packFailed", "copied", "copyManual", "menuOpen", "menuClose"} {
+	for _, k := range []string{"packaging", "packagingHint", "packFailed", "copied", "copyManual", "menuOpen", "menuClose", "emailCopy", "emailCopied"} {
 		m[k] = v.T("site.js." + k)
 	}
 	b, _ := json.Marshal(m)

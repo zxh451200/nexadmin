@@ -78,6 +78,8 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 		pub := d.RootGroup.Group("", newIPLimiter(600, time.Minute).Middleware())
 		// 默认语言固定渲染在无前缀路径上；cookie 只影响首页回跳与语言中立端点。
 		pub.Use(LanguageContext(DefaultLanguage()), langNegotiate)
+		// 文本资源 gzip：放在最外层，语言页面与静态资源一起受益（zip 下载与图片/字体自动跳过）。
+		pub.Use(gzipFilter())
 		downloadLimit := newIPLimiter(30, time.Minute).Middleware()
 		rateLimit := newIPLimiter(20, time.Minute).Middleware()
 
@@ -92,17 +94,27 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 			site.registerPages(g, true)
 		}
 
+		// 每个 GET 都配上 HEAD：gin 不会把 GET 自动映射到 HEAD，不接的话监控/探活
+		// 工具发 HEAD 会拿到 404 页（net/http 会自动省略 HEAD 响应体）。主下载不接 HEAD（打包昂贵且无意义）。
 		pub.GET("/plugins/index.json", site.marketIndexJSON)
+		pub.HEAD("/plugins/index.json", site.marketIndexJSON)
 		pub.GET("/plugins/signing-key.pub", site.marketPublicKey)
+		pub.HEAD("/plugins/signing-key.pub", site.marketPublicKey)
 		// 下载会现场拉源码并重打包，比普通页面贵，单独收紧阈值（每 IP 每分钟 30 次）。
 		// 包文件与语言无关，只保留无前缀端点；页面里的下载链接也不会加语言前缀。
 		pub.GET("/plugins/:id/download", downloadLimit, site.marketDownload)
+		// sha256 与签名是现成小文本，HEAD 一并接上，供监控探活。
 		pub.GET("/plugins/:id/download.sha256", downloadLimit, site.marketChecksum)
+		pub.HEAD("/plugins/:id/download.sha256", downloadLimit, site.marketChecksum)
 		pub.GET("/plugins/:id/download.sig", downloadLimit, site.marketSignature)
+		pub.HEAD("/plugins/:id/download.sig", downloadLimit, site.marketSignature)
 		pub.POST("/plugins/:id/rate", rateLimit, site.marketRate)
 		pub.GET("/website-assets/*path", site.asset)
+		pub.HEAD("/website-assets/*path", site.asset)
 		pub.GET("/robots.txt", site.robots)
+		pub.HEAD("/robots.txt", site.robots)
 		pub.GET("/sitemap.xml", site.sitemap)
+		pub.HEAD("/sitemap.xml", site.sitemap)
 	}
 }
 
@@ -111,14 +123,26 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 func (h *siteHandler) registerPages(g *gin.RouterGroup, bareHome bool) {
 	if bareHome {
 		g.GET("", h.home)
+		g.HEAD("", h.home)
 	} else {
 		g.GET("/", h.home)
+		g.HEAD("/", h.home)
 	}
 	g.GET("/plugins", h.marketList)
+	g.HEAD("/plugins", h.marketList)
 	g.GET("/plugins/:id", h.marketDetail)
+	g.HEAD("/plugins/:id", h.marketDetail)
 	g.GET("/news", h.newsList)
+	g.HEAD("/news", h.newsList)
 	g.GET("/news/:slug", h.postDetail)
+	g.HEAD("/news/:slug", h.postDetail)
 	g.GET("/p/:slug", h.pageDetail)
+	g.HEAD("/p/:slug", h.pageDetail)
+	// 文档区：渲染 nexadmin/docs 内嵌的框架使用文档，内容中文为主，随语言分组走前缀。
+	g.GET("/docs", h.docsIndex)
+	g.HEAD("/docs", h.docsIndex)
+	g.GET("/docs/:slug", h.docPage)
+	g.HEAD("/docs/:slug", h.docPage)
 }
 
 // listLanguages 返回官网已配置语言，管理端翻译编辑器据此渲出输入框。

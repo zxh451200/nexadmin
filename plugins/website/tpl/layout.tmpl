@@ -10,7 +10,19 @@
 <link rel="canonical" href="{{.BaseURL}}{{.Path}}">
 {{range .Languages}}<link rel="alternate" hreflang="{{.HTMLLang}}" href="{{$.BaseURL}}{{$.Alternate .}}">{{end}}
 {{range .Languages}}{{if .Default}}<link rel="alternate" hreflang="x-default" href="{{$.BaseURL}}{{$.Alternate .}}">{{end}}{{end}}
-<meta name="theme-color" content="#08090a">
+<meta name="theme-color" content="#ffffff">
+<script>
+/* 配色防闪烁：在任何样式渲染前定下 data-scheme（苹果式默认浅色）。 */
+(function () {
+  var scheme = 'light';
+  try { if (localStorage.getItem('nex-site-theme') === 'dark') scheme = 'dark'; } catch (e) { /* ignore */ }
+  document.documentElement.setAttribute('data-scheme', scheme);
+  if (scheme === 'dark') {
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', '#000000');
+  }
+})();
+</script>
 <link rel="icon" href="/website-assets/favicon.svg" type="image/svg+xml">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="{{.SiteName}}">
@@ -27,7 +39,7 @@
 <meta name="twitter:description" content="{{.Desc}}">
 <meta name="twitter:image" content="{{.BaseURL}}/website-assets/og.png">
 {{if .PluginLD}}<script type="application/ld+json">{{.PluginLD}}</script>{{end}}
-<link rel="stylesheet" href="/website-assets/site.css?v=0.6.0">
+<link rel="stylesheet" href="/website-assets/site.css?v=0.9.2">
 <noscript><style>
 [data-reveal]{opacity:1;transform:none}
 [role="tabpanel"][hidden]{display:block !important}
@@ -60,8 +72,13 @@
     <nav class="topnav" aria-label="{{.T "layout.mainNav"}}">
       {{range .Navs}}<a href="{{$.URL .Href}}"{{if eq .Href $.Route}} aria-current="page"{{end}}>{{.Label}}</a>{{end}}
       {{if .MarketEnabled}}<a href="{{.URL "/plugins"}}"{{if hasPrefix .Route "/plugins"}} aria-current="page"{{end}}>{{.T "layout.market"}}</a>{{end}}
+      {{if .DocsEnabled}}<a href="{{.URL "/docs"}}"{{if hasPrefix .Route "/docs"}} aria-current="page"{{end}}>{{.T "layout.docs"}}</a>{{end}}
     </nav>
     <div class="topbar-actions">
+      <button class="theme-toggle" type="button" data-theme-toggle aria-label="{{.T "layout.theme"}}" title="{{.T "layout.theme"}}">
+        <svg class="ico-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+        <svg class="ico-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+      </button>
       <details class="lang-switch">
         <summary aria-label="{{.T "layout.lang"}}">{{icon "globe"}}<span>{{.Lang.Short}}</span></summary>
         <div class="lang-menu">
@@ -78,6 +95,7 @@
     <nav aria-label="{{.T "layout.mobileNav"}}">
       {{range .Navs}}<a href="{{$.URL .Href}}"{{if eq .Href $.Route}} aria-current="page"{{end}}>{{.Label}}</a>{{end}}
       {{if .MarketEnabled}}<a href="{{.URL "/plugins"}}"{{if hasPrefix .Route "/plugins"}} aria-current="page"{{end}}>{{.T "layout.market"}}</a>{{end}}
+      {{if .DocsEnabled}}<a href="{{.URL "/docs"}}"{{if hasPrefix .Route "/docs"}} aria-current="page"{{end}}>{{.T "layout.docs"}}</a>{{end}}
       {{range .Languages}}<a href="{{$.Switch .}}" hreflang="{{.HTMLLang}}" lang="{{.HTMLLang}}"{{if eq .Code $.Lang.Code}} aria-current="true"{{end}}>{{.Label}}</a>{{end}}
       <a href="/login">{{.T "layout.login"}}</a>
     </nav>
@@ -97,23 +115,20 @@
     </div>
     <nav class="footer-col" aria-label="{{.T "layout.product"}}">
       <h4>{{.T "layout.product"}}</h4>
-      <a href="{{.Home}}#features">{{.T "layout.features"}}</a>
-      <a href="{{.Home}}#showcase">{{.T "layout.showcase"}}</a>
-      <a href="{{.Home}}#integrations">{{.T "layout.integrations"}}</a>
+      <a href="{{.Home}}">{{.T "layout.home"}}</a>
       {{if .MarketEnabled}}<a href="{{.URL "/plugins"}}">{{.T "layout.marketFull"}}</a>{{end}}
       <a href="{{.Home}}#quickstart">{{.T "layout.quickstart"}}</a>
+      <a href="/login">{{.T "layout.admin"}}</a>
     </nav>
     <nav class="footer-col" aria-label="{{.T "layout.resources"}}">
       <h4>{{.T "layout.resources"}}</h4>
+      {{if .DocsEnabled}}<a href="{{.URL "/docs"}}">{{.T "layout.docs"}}</a>{{end}}
       <a href="{{.URL "/news"}}">{{.T "layout.news"}}</a>
       <a href="{{.URL "/p/about"}}">{{.T "layout.about"}}</a>
-      <a href="/sitemap.xml">{{.T "layout.sitemap"}}</a>
-      <a href="/login">{{.T "layout.admin"}}</a>
     </nav>
     <nav class="footer-col" aria-label="{{.T "layout.contact"}}">
       <h4>{{.T "layout.contact"}}</h4>
-      <a class="footer-status" href="/healthz"><span class="dot" aria-hidden="true"></span>{{.T "layout.status"}}</a>
-      {{if .ContactEmail}}<a href="mailto:{{.ContactEmail}}">{{.T "layout.contactUs"}}</a>{{end}}
+      {{if .ContactEmail}}<a class="footer-mail" href="mailto:{{.ContactEmail}}" data-copy-email="{{.ContactEmail}}" title="{{.T "site.js.emailCopy"}}">{{.ContactEmail}}</a>{{end}}
       {{if .ICP}}<a class="footer-icp" href="https://beian.miit.gov.cn/" rel="noopener noreferrer" target="_blank">{{.ICP}}</a>{{end}}
     </nav>
   </div>
@@ -124,6 +139,6 @@
   </div>
 </footer>
 <script type="application/json" id="site-i18n">{{.JSStrings}}</script>
-<script src="/website-assets/site.js?v=0.6.0" defer></script>
+<script src="/website-assets/site.js?v=0.9.1" defer></script>
 </body>
 </html>{{end}}

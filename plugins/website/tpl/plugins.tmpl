@@ -77,7 +77,10 @@
         <h2>{{.T "market.submitTitle"}}</h2>
         <p>{{.T "market.submitDesc"}}</p>
       </div>
-      <a class="btn btn-ghost" href="mailto:{{.ContactEmail}}?subject={{urlquery (.T "market.submitSubject")}}">{{.T "market.submitCta"}}</a>
+      <div class="submit-contact">
+        <a class="btn btn-ghost" href="mailto:{{.ContactEmail}}?subject={{urlquery (.T "market.submitSubject")}}" data-copy-email="{{.ContactEmail}}" title="{{.T "site.js.emailCopy"}}">{{.T "market.submitCta"}}</a>
+        <span class="submit-mail">{{.ContactEmail}}</span>
+      </div>
     </div>
     {{end}}
   </div>

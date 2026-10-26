@@ -289,6 +289,12 @@ func (h *siteHandler) sitemap(c *gin.Context) {
 			entries = append(entries, SitemapEntry{Loc: "/plugins/" + e.ID})
 		}
 	}
+	// 文档区也进 sitemap（内容由框架 docs/*.md 渲染，随版本更新）。
+	for _, g := range docGroups {
+		for _, it := range g.Items {
+			entries = append(entries, SitemapEntry{Loc: "/docs/" + it.Slug})
+		}
+	}
 	base := baseURL(c)
 	langs := Languages()
 	def := DefaultLanguage()

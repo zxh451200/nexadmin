@@ -1,8 +1,5 @@
 {{define "content"}}
 <section class="hero">
-  <div class="hero-aura" aria-hidden="true"></div>
-  <div class="hero-spot" aria-hidden="true"></div>
-  <div class="hero-noise" aria-hidden="true"></div>
   <div class="container hero-in">
     <a class="hero-badge" href="{{.URL "/news"}}" data-reveal><span class="dot" aria-hidden="true"></span>{{.T "home.badge"}}<span class="badge-arrow" aria-hidden="true">→</span></a>
     <h1 class="hero-title" data-reveal>
@@ -13,11 +10,11 @@
     {{if .HomeSubtitle}}<p class="hero-sub" data-reveal>{{.HomeSubtitle}}</p>{{end}}
     <div class="hero-cta" data-reveal>
       {{if .HomeCTALabel}}<a class="btn btn-primary" href="{{.URL .HomeCTAHref}}">{{.HomeCTALabel}}</a>{{end}}
-      <a class="btn btn-ghost" href="{{.Home}}#quickstart">{{.T "home.ctaSecondary"}}</a>
+      <a class="hero-link" href="{{.Home}}#quickstart">{{.T "home.ctaSecondary"}}<span class="chev" aria-hidden="true">›</span></a>
     </div>
 
     <div class="hero-visual" data-reveal>
-      <div class="browser" role="img" aria-label="{{.TF "home.browserAria" .SiteName}}">
+      <div class="browser" data-parallax role="img" aria-label="{{.TF "home.browserAria" .SiteName}}">
         <div class="browser-bar"><span class="bdot"></span><span class="bdot"></span><span class="bdot"></span><span class="browser-url">localhost:8080/dashboard</span></div>
         <div class="app">
           <aside class="app-side">
@@ -51,8 +48,8 @@
               <svg class="chart" viewBox="0 0 560 150" preserveAspectRatio="none" aria-hidden="true">
                 <defs>
                   <linearGradient id="areaA" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stop-color="#5E6AD2" stop-opacity=".28"/>
-                    <stop offset="100%" stop-color="#5E6AD2" stop-opacity="0"/>
+                    <stop offset="0%" stop-color="#0071e3" stop-opacity=".24"/>
+                    <stop offset="100%" stop-color="#0071e3" stop-opacity="0"/>
                   </linearGradient>
                 </defs>
                 <path class="grid" d="M0 30h560M0 70h560M0 110h560"/>
@@ -82,6 +79,12 @@
       <li>Go</li><li>Gin</li><li>GORM</li><li>React</li><li>TypeScript</li><li>shadcn/ui</li>
       <li>MySQL</li><li>MariaDB</li><li>PostgreSQL</li><li>Redis / Valkey</li>
     </ul>
+  </div>
+</section>
+
+<section class="statement">
+  <div class="container" data-reveal>
+    <p><b>{{.T "home.statement.strong"}}</b> {{.T "home.statement.rest"}}</p>
   </div>
 </section>
 
@@ -171,7 +174,7 @@
   </div>
 </section>
 
-<section class="section" id="product">
+<section class="section section-dark" id="product">
   <div class="container">
     <header class="section-head" data-reveal>
       <div class="section-copy">
@@ -181,7 +184,7 @@
       </div>
     </header>
     <figure class="shot-frame" data-reveal>
-      <img src="/website-assets/market/dashboard.jpg" alt="{{.TF "home.product.alt" .SiteName}}" loading="lazy">
+      <img src="/website-assets/market/dashboard.jpg" alt="{{.TF "home.product.alt" .SiteName}}" loading="lazy" data-parallax>
       <figcaption>{{.T "home.product.caption"}}</figcaption>
     </figure>
   </div>
