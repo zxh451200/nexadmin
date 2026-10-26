@@ -1,4 +1,4 @@
-# NexAdmin 插件市场目录（真实上架清单）。
+﻿# NexAdmin 插件市场目录（真实上架清单）。
 # 数据源唯一：官网 /plugins 与后台「插件市场」都直接读本文件；`plugin market sync` 仅导出 JSON。
 #
 # 发布流程（monorepo 模式，只需 1 个 GitHub 仓库）：
@@ -34,7 +34,7 @@ plugins:
     version: 1.1.0
     price: 待定
     author: NexAdmin
-    repo: your-account/nexadmin-plugins
+    repo: zxh451200/nexadmin-plugins
     subdir: assistant
     i18n:
       en-US:
@@ -48,7 +48,7 @@ plugins:
     version: 1.0.0
     price: 待定
     author: NexAdmin
-    repo: your-account/nexadmin-plugins
+    repo: zxh451200/nexadmin-plugins
     subdir: audit
     i18n:
       en-US:
@@ -62,7 +62,7 @@ plugins:
     version: 1.0.0
     price: 待定
     author: NexAdmin
-    repo: your-account/nexadmin-plugins
+    repo: zxh451200/nexadmin-plugins
     subdir: codegen
     i18n:
       en-US:
@@ -76,7 +76,7 @@ plugins:
     version: 1.0.0
     price: 待定
     author: NexAdmin
-    repo: your-account/nexadmin-plugins
+    repo: zxh451200/nexadmin-plugins
     subdir: cron
     i18n:
       en-US:
@@ -92,7 +92,7 @@ plugins:
     version: 1.0.0
     price: 待定
     author: NexAdmin
-    repo: your-account/nexadmin-plugins
+    repo: zxh451200/nexadmin-plugins
     subdir: formbuilder
     i18n:
       en-US:
@@ -106,7 +106,7 @@ plugins:
     version: 1.0.0
     price: 待定
     author: NexAdmin
-    repo: your-account/nexadmin-plugins
+    repo: zxh451200/nexadmin-plugins
     subdir: i18n-editor
     i18n:
       en-US:
@@ -120,7 +120,7 @@ plugins:
     version: 1.0.0
     price: 待定
     author: NexAdmin
-    repo: your-account/nexadmin-plugins
+    repo: zxh451200/nexadmin-plugins
     subdir: identity
     i18n:
       en-US:
@@ -134,7 +134,7 @@ plugins:
     version: 1.0.0
     price: 待定
     author: NexAdmin
-    repo: your-account/nexadmin-plugins
+    repo: zxh451200/nexadmin-plugins
     subdir: report
     i18n:
       en-US:
@@ -148,7 +148,7 @@ plugins:
     version: 1.0.0
     price: 待定
     author: NexAdmin
-    repo: your-account/nexadmin-plugins
+    repo: zxh451200/nexadmin-plugins
     subdir: scim
     i18n:
       en-US:
@@ -162,7 +162,7 @@ plugins:
     version: 1.0.0
     price: 待定
     author: NexAdmin
-    repo: your-account/nexadmin-plugins
+    repo: zxh451200/nexadmin-plugins
     subdir: security
     i18n:
       en-US:
@@ -176,7 +176,7 @@ plugins:
     version: 0.5.0
     price: 待定
     author: NexAdmin
-    repo: your-account/nexadmin-plugins
+    repo: zxh451200/nexadmin-plugins
     subdir: website
     i18n:
       en-US:
