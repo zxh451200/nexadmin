@@ -16,6 +16,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -25,6 +26,7 @@ import (
 	"gorm.io/gorm"
 
 	"nexadmin/core/event"
+	"nexadmin/core/plugin"
 	"nexadmin/core/response"
 	"nexadmin/core/tenant"
 )
@@ -212,5 +214,130 @@ func runPluginMigrations(t *testing.T, dir string, db *gorm.DB) {
 		if err := db.Exec(string(raw)).Error; err != nil {
 			t.Fatalf("exec %s/%s: %v", dir, e.Name(), err)
 		}
+	}
+}
+
+// TestITMySQLMigrateBaselineMixed 是 04 号灰度方案 G1 编排的预演：
+// 模拟 mall 改名后的库（plg_payment_* → plg_pay_*，带旧列集），再用真实的
+// core/plugin.RunMigrations 跑 pay 的迁移——验证 runner 的基线语义在真实引擎上
+// 是"按语句"粒度：改名过的 4 张表整组跳过，pay 独有的 9 张表正常创建，
+// 迁移记录入库且可重复执行。这决定 G1 是"先改名后装插件"还是"先装插件后改名"。
+func TestITMySQLMigrateBaselineMixed(t *testing.T) {
+	dsn := os.Getenv("NEXADMIN_IT_MYSQL_DSN")
+	if dsn == "" {
+		t.Skip("NEXADMIN_IT_MYSQL_DSN not set; skipping real-MySQL integration test")
+	}
+	if !strings.Contains(dsn, "multiStatements=true") {
+		if strings.Contains(dsn, "?") {
+			dsn += "&multiStatements=true"
+		} else {
+			dsn += "?multiStatements=true"
+		}
+	}
+	if !strings.Contains(dsn, "parseTime=true") && !strings.Contains(dsn, "parseTime=True") {
+		dsn += "&parseTime=true&loc=UTC"
+	}
+	admin, err := sql.Open("mysql", dsn)
+	if err != nil {
+		t.Fatalf("open admin conn: %v", err)
+	}
+	defer func() { _ = admin.Close() }()
+	if err := admin.Ping(); err != nil {
+		t.Fatalf("mysql not reachable: %v", err)
+	}
+	dbName := fmt.Sprintf("nexadmin_payit_%d", time.Now().UnixNano())
+	if _, err := admin.Exec("CREATE DATABASE `" + dbName + "` CHARACTER SET utf8mb4"); err != nil {
+		t.Fatalf("create throwaway db: %v", err)
+	}
+	t.Cleanup(func() { _, _ = admin.Exec("DROP DATABASE IF EXISTS `" + dbName + "`") })
+
+	gormDSN := strings.Replace(dsn, ")/", ")/"+dbName+"", 1)
+	gdb, err := gorm.Open(mysql.Open(gormDSN), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 1) 模拟 mall 改名后的四张表：沿用 mall 的旧列集（channel、无 subject_id/fee_minor 等）。
+	legacy := []string{
+		`CREATE TABLE plg_pay_order (
+		  id BIGINT NOT NULL, tenant_id BIGINT NOT NULL DEFAULT 0,
+		  payment_no VARCHAR(40) NOT NULL, biz_type VARCHAR(32) NOT NULL, biz_no VARCHAR(64) NOT NULL,
+		  subject VARCHAR(200) NOT NULL, amount_minor BIGINT NOT NULL, refunded_minor BIGINT NOT NULL DEFAULT 0,
+		  currency VARCHAR(8) NOT NULL, channel VARCHAR(32) NOT NULL, channel_txn_id VARCHAR(128) NOT NULL DEFAULT '',
+		  status VARCHAR(24) NOT NULL, fail_reason VARCHAR(200) NOT NULL DEFAULT '',
+		  paid_at DATETIME(3) NULL, expire_at DATETIME(3) NULL,
+		  created_at DATETIME(3) NOT NULL, updated_at DATETIME(3) NOT NULL, PRIMARY KEY (id))`,
+		`CREATE TABLE plg_pay_channel (
+		  id BIGINT NOT NULL, tenant_id BIGINT NOT NULL DEFAULT 0,
+		  code VARCHAR(32) NOT NULL, name VARCHAR(64) NOT NULL, enabled TINYINT(1) NOT NULL DEFAULT 1,
+		  sort INT NOT NULL DEFAULT 0, config_json VARCHAR(512) NOT NULL DEFAULT '',
+		  created_at DATETIME(3) NOT NULL, updated_at DATETIME(3) NOT NULL, PRIMARY KEY (id))`,
+		`CREATE TABLE plg_pay_callback (
+		  id BIGINT NOT NULL, tenant_id BIGINT NOT NULL DEFAULT 0,
+		  channel VARCHAR(32) NOT NULL, payment_no VARCHAR(40) NOT NULL DEFAULT '',
+		  ok TINYINT(1) NOT NULL DEFAULT 0, result VARCHAR(200) NOT NULL DEFAULT '', payload TEXT,
+		  created_at DATETIME(3) NOT NULL, updated_at DATETIME(3) NOT NULL, PRIMARY KEY (id))`,
+		`CREATE TABLE plg_pay_refund (
+		  id BIGINT NOT NULL, tenant_id BIGINT NOT NULL DEFAULT 0,
+		  refund_no VARCHAR(40) NOT NULL, payment_no VARCHAR(40) NOT NULL,
+		  biz_type VARCHAR(32) NOT NULL, biz_no VARCHAR(64) NOT NULL,
+		  amount_minor BIGINT NOT NULL, currency VARCHAR(8) NOT NULL,
+		  reason VARCHAR(200) NOT NULL DEFAULT '', status VARCHAR(16) NOT NULL,
+		  channel_refund_id VARCHAR(128) NOT NULL DEFAULT '', succeeded_at DATETIME(3) NULL,
+		  operator VARCHAR(64) NOT NULL DEFAULT '',
+		  created_at DATETIME(3) NOT NULL, updated_at DATETIME(3) NOT NULL, PRIMARY KEY (id))`,
+	}
+	for _, stmt := range legacy {
+		if err := gdb.Exec(stmt).Error; err != nil {
+			t.Fatalf("create legacy table: %v", err)
+		}
+	}
+
+	// 2) 用真实迁移运行器跑 pay 插件（走 plugins/pay/migrations/mysql + 清单）。
+	repoRoot, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := plugin.RunMigrations(gdb, repoRoot, "pay"); err != nil {
+		t.Fatalf("RunMigrations: %v", err)
+	}
+
+	// 3) 断言混合结果：改名表未被 DDL 触碰（旧列仍在、新列未加），pay 独有 9 表已创建。
+	hasCol := func(table, column string) bool {
+		var n int64
+		if err := gdb.Raw("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE table_schema = ? AND table_name = ? AND column_name = ?",
+			dbName, table, column).Scan(&n).Error; err != nil {
+			t.Fatal(err)
+		}
+		return n > 0
+	}
+	hasTable := func(table string) bool {
+		var n int64
+		if err := gdb.Raw("SELECT COUNT(*) FROM information_schema.TABLES WHERE table_schema = ? AND table_name = ?",
+			dbName, table).Scan(&n).Error; err != nil {
+			t.Fatal(err)
+		}
+		return n > 0
+	}
+	if !hasCol("plg_pay_order", "channel") || hasCol("plg_pay_order", "subject_id") {
+		t.Fatal("renamed plg_pay_order must keep legacy columns and gain none from 001")
+	}
+	for _, tb := range []string{"plg_pay_auth", "plg_pay_reconcile_task", "plg_pay_commission_rule", "plg_pay_settlement", "plg_pay_payout_batch", "plg_pay_outbox", "plg_pay_idem"} {
+		if !hasTable(tb) {
+			t.Fatalf("pay-only table %s should have been created", tb)
+		}
+	}
+	// 迁移记录入库（scope plugin:pay，001 已应用；sys_migration 的文件列叫 version）。
+	var rec int64
+	if err := gdb.Raw("SELECT COUNT(*) FROM sys_migration WHERE scope = ? AND version = ?", "plugin:pay", "001_init.sql").Scan(&rec).Error; err != nil {
+		t.Fatal(err)
+	}
+	if rec != 1 {
+		t.Fatalf("sys_migration rows for plugin:pay/001_init.sql = %d, want 1", rec)
+	}
+
+	// 4) 幂等：再跑一遍零变更。
+	if err := plugin.RunMigrations(gdb, repoRoot, "pay"); err != nil {
+		t.Fatalf("re-run RunMigrations: %v", err)
 	}
 }
