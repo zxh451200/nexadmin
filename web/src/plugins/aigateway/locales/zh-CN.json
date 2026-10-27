@@ -1,0 +1,56 @@
+{
+  "plugin_aigateway": {
+    "title": "AI 网关",
+    "description": "模型密钥集中、多供应商路由与按租户 token 用量台账",
+    "dir": "AI 网关",
+    "menu": "AI 网关",
+    "perm": {
+      "edit": "维护模型配置"
+    },
+    "tabs": {
+      "models": "模型配置",
+      "usage": "用量台账"
+    },
+    "all": "全部",
+    "empty": "暂无数据",
+    "searchPlaceholder": "名称 / 模型标识",
+    "nameRequired": "请填写模型名称",
+    "enabledOn": "启用",
+    "enabledOff": "停用",
+    "kind": {
+      "llm": "对话模型",
+      "embedding": "向量模型",
+      "rerank": "重排模型",
+      "asr": "语音识别",
+      "tts": "语音合成",
+      "ocr": "文字识别"
+    },
+    "fields": {
+      "kind": "种类",
+      "name": "名称",
+      "provider": "供应商",
+      "model": "模型标识",
+      "baseUrl": "接口地址",
+      "apiKey": "API Key",
+      "dimension": "向量维度",
+      "enabled": "启用",
+      "isDefault": "默认",
+      "promptTokens": "输入 tokens",
+      "completionTokens": "输出 tokens",
+      "totalTokens": "合计 tokens",
+      "biz": "调用来源",
+      "createdAt": "创建时间",
+      "updatedAt": "更新时间"
+    },
+    "model": {
+      "create": "接入模型",
+      "edit": "编辑模型",
+      "deleteConfirm": "确认删除模型 {{name}}？",
+      "keyKeep": "留空保持既有密钥",
+      "default": "默认",
+      "ping": "连通性测试",
+      "pingOk": "连通正常（{{ms}}ms）",
+      "pingFail": "连通失败：{{detail}}"
+    }
+  }
+}

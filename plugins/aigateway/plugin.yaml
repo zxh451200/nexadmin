@@ -1,0 +1,28 @@
+id: aigateway
+name: AI 网关
+version: 0.1.0
+description: 模型密钥集中（加密存储、读侧打码）+ 多供应商路由（按 kind 解析默认启用模型）+ 按租户 token 用量台账与事件（收敛方案第 4 步，自 nexRag ragmodel 剥离）；连通性测试带 SSRF 三层防线。
+author: NexAdmin
+edition: pro
+requires_nexadmin: ">=0.1.0"
+migration_target: tenant
+menus:
+  - parent: /
+    type: dir
+    title: plugin_aigateway.dir
+    path: /ai
+    icon: Sparkles
+    sort: 65
+  - parent: /ai
+    type: menu
+    title: plugin_aigateway.menu
+    path: /ai/models
+    component: plugins/aigateway/AiGatewayPage
+    perm: aigateway:list
+    icon: BrainCircuit
+    sort: 1
+    keep_alive: true
+  - parent: aigateway:list
+    type: button
+    title: plugin_aigateway.perm.edit
+    perm: aigateway:edit

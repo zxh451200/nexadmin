@@ -1,0 +1,56 @@
+{
+  "plugin_aigateway": {
+    "title": "AI Gateway",
+    "description": "Centralized model keys, multi-provider routing and per-tenant token usage ledger",
+    "dir": "AI Gateway",
+    "menu": "AI Gateway",
+    "perm": {
+      "edit": "Manage model configs"
+    },
+    "tabs": {
+      "models": "Models",
+      "usage": "Usage"
+    },
+    "all": "All",
+    "empty": "No data",
+    "searchPlaceholder": "Name / model id",
+    "nameRequired": "Model name is required",
+    "enabledOn": "Enabled",
+    "enabledOff": "Disabled",
+    "kind": {
+      "llm": "LLM",
+      "embedding": "Embedding",
+      "rerank": "Rerank",
+      "asr": "ASR",
+      "tts": "TTS",
+      "ocr": "OCR"
+    },
+    "fields": {
+      "kind": "Kind",
+      "name": "Name",
+      "provider": "Provider",
+      "model": "Model ID",
+      "baseUrl": "Base URL",
+      "apiKey": "API Key",
+      "dimension": "Dimension",
+      "enabled": "Enabled",
+      "isDefault": "Default",
+      "promptTokens": "Prompt tokens",
+      "completionTokens": "Completion tokens",
+      "totalTokens": "Total tokens",
+      "biz": "Caller",
+      "createdAt": "Created",
+      "updatedAt": "Updated"
+    },
+    "model": {
+      "create": "Add Model",
+      "edit": "Edit Model",
+      "deleteConfirm": "Delete model {{name}}?",
+      "keyKeep": "Leave empty to keep the existing key",
+      "default": "Default",
+      "ping": "Test connection",
+      "pingOk": "Reachable ({{ms}}ms)",
+      "pingFail": "Unreachable: {{detail}}"
+    }
+  }
+}
