@@ -73,6 +73,24 @@
 - **本轮新增的 pay/crm/aigateway 零命中**。20 条发现全部在既有代码：命令注入 10 条（CLI 工具链：cmd/nexadmin、core/ctl/dbtool、plugin/market/rebuild、vendor 离线件）、硬编码凭据 2 条（nexadmin-vendor/verify-db/run.sh 的 PG 口令）、path-traversal 6 条（modules/file/tus.go ×3、identity/cas_slo、website market/sign 环境变量路径）、SSRF 1 条（scripts/security/licenses.py）。
 - 处置建议：这些属于既有工作流的 backlog，不阻塞本批提交；tus.go 的 3 条与 verify-db/run.sh 的 2 条建议优先人工复核（静态 advisory 需人工确认真实数据流）。
 
+### 4.1 逐条甄别结论（2026-10-28 复核，全部 20 条）
+
+**误报 7 条（已逐一证明，无需改码）**
+
+| 位置 | 证明 |
+|---|---|
+| `modules/file/tus.go:303/319/346` | `loadSession` 第 111 行 `idgen.Parse(id)` 把入参强约束为纯整数字符串（雪花号，`.`/`/`/`%2F` 解码后都过不了 ParseInt），路径拼接无穿越面；122-126 行另有租户+用户归属校验；`drop` 的全部调用点传入的均为已校验或服务端生成的 ID |
+| `plugins/identity/cas_slo.go:51` | 不可信输入（source 查询参数、XML SessionIndex）只经 `sloKnownKey` 的 SHA-256 摘要后才成为缓存 key，无任何路径内容直达 `storage.Open`；且 166-170 行要求 ticket 为本系统登记过的高熵值（validSLOIndex ≥32 位Opaque、≥8 种字符） |
+| `nexadmin-vendor/verify-db/run.sh:64/65` | `PG_PASSWORD="pw-$SUFFIX"` 是每次运行的随机值（时间戳+RANDOM），喂给只绑 127.0.0.1、trap 退出即删的一次性容器，非硬编码凭据 |
+
+**接受/缓议 13 条（属既有工作流，均非远程可利用面）**
+
+- 命令注入 ×10（`cmd/nexadmin/new_cmd.go`、`upgrade.go`、`core/ctl/ctl.go`、`dbtool.go`、`plugin/market/rebuild.go`、vendor 离线件）：均为本地 CLI/运维工具，参数来自操作者命令行而非 HTTP 输入；`cmd/nexadmin`、`core/ctl` 当前与既存 WIP 交织，建议该工作流收尾时统一加参数白名单。
+- path-traversal/污点 ×3（`website/market/sign.go` 环境变量路径 ×2、`user/oauth_http.go`→ctl）：环境变量为操作者设定，信任级别高于请求输入。
+- SSRF ×1（`scripts/security/licenses.py`）：离线license 校验脚本，操作者本地运行。
+
+若后续要让扫描器零噪音，可为 tus.go 增加显式 `^[0-9]+$` 校验（与 idgen.Parse 冗余）并在 CLI 工具侧收敛 exec 参数来源；本轮不改，避免为 appease 扫描器引入冗余代码。
+
 ## 5. 遗留与建议
 
 1. **CI 加 MySQL/PG 服务**并注入 `NEXADMIN_IT_MYSQL_DSN` / `NEXADMIN_IT_PG_DSN` 常跑 IT，防回归。
