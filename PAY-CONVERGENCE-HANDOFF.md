@@ -67,7 +67,13 @@
 - 实库 IT（env 守卫）：MySQL 8（1.46s）与 PostgreSQL 18（1.34s）全绿——迁移实跑、并发退款恰 3/10 成功其余 409、并发重复回调出站箱恰 1 行。MariaDB 无本地实例，部署侧首落库即验。
 - 派生验证：`nexadmin new` → build/vet 全过（本机无 bash，`scripts/derive_check/run.sh` 未跑，手动等效其核心步骤）。
 
-## 4. 遗留与建议
+## 4. 安全扫描（Mimosa deep，提交后补跑）
+
+- Scan `scan-2026-10-27T21-23-11.923Z-81d236454cc6`，seal `sha256:fa918023652fdfd01b653c4ae29dd1cdc78a2ab96bcc5c6167f8252a999b0024`，状态 **inconclusive**（调用图动态派发部分覆盖）。
+- **本轮新增的 pay/crm/aigateway 零命中**。20 条发现全部在既有代码：命令注入 10 条（CLI 工具链：cmd/nexadmin、core/ctl/dbtool、plugin/market/rebuild、vendor 离线件）、硬编码凭据 2 条（nexadmin-vendor/verify-db/run.sh 的 PG 口令）、path-traversal 6 条（modules/file/tus.go ×3、identity/cas_slo、website market/sign 环境变量路径）、SSRF 1 条（scripts/security/licenses.py）。
+- 处置建议：这些属于既有工作流的 backlog，不阻塞本批提交；tus.go 的 3 条与 verify-db/run.sh 的 2 条建议优先人工复核（静态 advisory 需人工确认真实数据流）。
+
+## 5. 遗留与建议
 
 1. **CI 加 MySQL/PG 服务**并注入 `NEXADMIN_IT_MYSQL_DSN` / `NEXADMIN_IT_PG_DSN` 常跑 IT，防回归。
 2. `cmd/tmpquery`（含硬编码本机口令的临时诊断工具，自注"用完即删"）已删除。
