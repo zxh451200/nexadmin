@@ -123,9 +123,6 @@ func (a *App) buildSetup(r *setup.Runner) *gin.Engine {
 // 向导路由在这里根本不注册，所以已初始化后 /setup/* 一律 404。
 func (a *App) buildFull() (*gin.Engine, error) {
 	cfg := a.cfg
-	if err := idgen.Init(int64(cfg.Database.NodeID)); err != nil {
-		return nil, err
-	}
 	// 缓存与 node_id 租约放在连库、迁移之前：迁移 / 补种出厂数据也会生成雪花 ID，要先确认 node_id 没有被别的实例占用。
 	ch, err := cache.New(cfg.Cache)
 	if err != nil {
@@ -133,11 +130,21 @@ func (a *App) buildFull() (*gin.Engine, error) {
 	}
 	a.addCloser(func() { _ = ch.Close() })
 	ch = metrics.WrapCache(ch) // 命中 / 错误计数；仍实现 cache.Counter
-	lease, err := cluster.AcquireNodeLease(context.Background(), ch, cfg.Database.NodeID, a.log)
+	// node_id：>=0 用手工配置（租约校验重复）；-1 自动从 0..1023 抢一个空闲号（需共享缓存）。
+	nodeID := cfg.Database.NodeID
+	var lease *cluster.Lease
+	if nodeID < 0 {
+		lease, nodeID, err = cluster.AcquireAutoNodeLease(context.Background(), ch, a.log)
+	} else {
+		lease, err = cluster.AcquireNodeLease(context.Background(), ch, nodeID, a.log)
+	}
 	if err != nil {
 		return nil, err
 	}
 	a.addCloser(lease.Release) // 后注册先执行：先释放租约，再关缓存
+	if err := idgen.Init(int64(nodeID)); err != nil {
+		return nil, err
+	}
 	bus := cluster.New(ch, a.log)
 	a.addCloser(bus.Close)
 	a.addCloser(cluster.WireTenant(bus))
