@@ -83,13 +83,22 @@ router.go 用补丁剥离单 hunk 提交）。
 | `plugins/identity/cas_slo.go:51` | 不可信输入（source 查询参数、XML SessionIndex）只经 `sloKnownKey` 的 SHA-256 摘要后才成为缓存 key，无任何路径内容直达 `storage.Open`；且 166-170 行要求 ticket 为本系统登记过的高熵值（validSLOIndex ≥32 位Opaque、≥8 种字符） |
 | `nexadmin-vendor/verify-db/run.sh:64/65` | `PG_PASSWORD="pw-$SUFFIX"` 是每次运行的随机值（时间戳+RANDOM），喂给只绑 127.0.0.1、trap 退出即删的一次性容器，非硬编码凭据 |
 
-**接受/缓议 13 条（属既有工作流，均非远程可利用面）**
+**误报追加 7 条（2026-10-28 二次复核，至此 13/20 为误报）**
 
-- 命令注入 ×10（`cmd/nexadmin/new_cmd.go`、`upgrade.go`、`core/ctl/ctl.go`、`dbtool.go`、`plugin/market/rebuild.go`、vendor 离线件）：均为本地 CLI/运维工具，参数来自操作者命令行而非 HTTP 输入；`cmd/nexadmin`、`core/ctl` 当前与既存 WIP 交织，建议该工作流收尾时统一加参数白名单。
-- path-traversal/污点 ×3（`website/market/sign.go` 环境变量路径 ×2、`user/oauth_http.go`→ctl）：环境变量为操作者设定，信任级别高于请求输入。
-- SSRF ×1（`scripts/security/licenses.py`）：离线license 校验脚本，操作者本地运行。
+| 位置 | 证明 |
+|---|---|
+| `cmd/nexadmin/new_cmd.go:100` | `run("init","-q")` / `run("add","-A")` / `run("commit","-q","-m",固定文案)`——参数全为硬编码常量 |
+| `cmd/nexadmin/upgrade.go:152/157` | `git rev-parse` / `git status --porcelain` 固定参数 |
+| `core/ctl/dbtool.go:213/272` | ToolSpec 表固定（pg_dump/pg_restore/mysql/mysqldump），Host/User/库名来自运维配置，argv 数组形态无 shell，可注入面不存在 |
+| `core/plugin/market/rebuild.go:119/121` | 三个调用点全是固定参数（npm run build / go mod tidy / go build 固定 flags），唯一变量是服务器自身安装路径，仅超管后台触发 |
 
-若后续要让扫描器零噪音，可为 tus.go 增加显式 `^[0-9]+$` 校验（与 idgen.Parse 冗余）并在 CLI 工具侧收敛 exec 参数来源；本轮不改，避免为 appease 扫描器引入冗余代码。
+**接受/缓议 7 条（均非远程可利用面，归对应工作流）**
+
+- `core/ctl/ctl.go:112`（含 MEDIUM 链 `user/oauth_http.go`→ctl:97）：部署二进制的启停重启，参数来自部署配置；文件与既存 WIP 交织。
+- `plugins/website/market/sign.go` 环境变量路径 ×2（HIGH LoadSigningKey + MEDIUM）：环境变量为操作者设定。
+- `scripts/security/licenses.py:190` SSRF ×1：离线 license 校验脚本，操作者本地运行。
+
+若后续要让扫描器零噪音，可为 tus.go 增加显式 `^[0-9]+$` 校验（与 idgen.Parse 冗余）；本轮不改，避免为 appease 扫描器引入冗余代码。
 
 ## 5. 遗留与建议
 
