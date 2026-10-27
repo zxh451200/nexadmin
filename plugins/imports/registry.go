@@ -12,12 +12,12 @@ import (
 	"sync"
 )
 
-// Column 是导入模板的一列。
+// Column 是导入模板的一列。json 标签必须小写：前端 ImportColumn 按 key/label/required/example 取值。
 type Column struct {
-	Key      string // 列标识(表头用 Label,数据行按 Key 映射)
-	Label    string // 模板表头(给用户看的中文名)
-	Required bool   // 缺失/空白即该行失败
-	Example  string // 模板里的示例值
+	Key      string `json:"key"`      // 列标识(表头用 Label,数据行按 Key 映射)
+	Label    string `json:"label"`    // 模板表头(给用户看的中文名)
+	Required bool   `json:"required"` // 缺失/空白即该行失败
+	Example  string `json:"example"`  // 模板里的示例值
 }
 
 // Source 是一个可导入的数据源。

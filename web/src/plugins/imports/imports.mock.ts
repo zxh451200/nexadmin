@@ -66,6 +66,12 @@ defineMock([
       return paginate(rows, query)
     },
   },
+  // mock 环境只给 CSV 文本桩；真实 XLSX 由后端生成。排在 /:id 之前，避免被通配路由吃掉。
+  {
+    method: 'GET',
+    url: '/plugins/imports/template',
+    handler: () => '\uFEFF商品标题(必填),价格(元)(必填),币种,库存,SKU编码(重复则更新)\r\n云南小粒咖啡,29.90,CNY,100,SKU-001\r\n',
+  },
   {
     method: 'GET',
     url: '/plugins/imports/:id',
@@ -90,6 +96,14 @@ defineMock([
       }
       jobs = [job, ...jobs]
       return job
+    },
+  },
+  {
+    method: 'DELETE',
+    url: '/plugins/imports/:id',
+    handler: ({ params }) => {
+      jobs = jobs.filter((j) => j.id !== params.id)
+      return { ok: true }
     },
   },
   {

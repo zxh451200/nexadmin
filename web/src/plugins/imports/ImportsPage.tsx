@@ -1,14 +1,22 @@
 import { useRef, useState } from 'react'
-import { FileDown, FileUp, Upload } from 'lucide-react'
+import { ChevronDown, FileDown, FileUp, Trash2, Upload } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
+import { useConfirm } from '@/framework/components/ConfirmDialog'
+import { EmptyState } from '@/framework/components/EmptyState'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/framework/ui/dropdown-menu'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
-import { errorsCSVUrl, templateUrl, useJobs, useRunImport, useSources, type ImportJob } from './api'
+import { downloadErrorsCsv, downloadTemplate, useDeleteImport, useJobs, useRunImport, useSources, type ImportJob } from './api'
 import { formatTime, statusVariant } from './format'
 
 const ALL = '__all'
@@ -23,20 +31,50 @@ export default function ImportsPage() {
   const sources = useSources()
   const jobs = useJobs({ source, status, page, pageSize })
   const run = useRunImport()
+  const remove = useDeleteImport()
+  const confirm = useConfirm()
   const fileRef = useRef<HTMLInputElement | null>(null)
   const [pendingSource, setPendingSource] = useState<string | undefined>()
+  const [files, setFiles] = useState<File[]>([])
 
+  // 无数据源时不渲染导入工具栏，只留空状态说明；台账区保留（历史记录仍可查）
+  const noSources = sources.isSuccess && (sources.data ?? []).length === 0
+
+  // 多选时逐个提交：每个文件一条台账，任何一个失败不影响其余文件
   const submit = async () => {
-    const file = fileRef.current?.files?.[0]
     const src = pendingSource ?? source
-    if (!file || !src) {
+    if (!files.length || !src) {
       toast.error(t('plugin_imports.pickFileFirst'))
       return
     }
+    let ok = 0
+    let fail = 0
+    let last: ImportJob | null = null
+    for (const file of files) {
+      try {
+        last = await run.mutateAsync({ source: src, file })
+        ok++
+      } catch (e) {
+        fail++
+        toast.error(`${file.name}: ${(e as Error).message}`)
+      }
+    }
+    if (files.length > 1) toast.success(t('plugin_imports.batchDone', { ok, fail }))
+    else if (last) toast.success(t('plugin_imports.doneSummary', { ok: last.okRows, fail: last.failRows }))
+    if (fileRef.current) fileRef.current.value = ''
+    setFiles([])
+  }
+
+  const deleteJob = async (j: ImportJob) => {
+    const ok = await confirm({
+      title: t('plugin_imports.delete'),
+      description: t('plugin_imports.deleteConfirm', { name: j.fileName }),
+      destructive: true,
+    })
+    if (!ok) return
     try {
-      const job = await run.mutateAsync({ source: src, file })
-      toast.success(t('plugin_imports.doneSummary', { ok: job.okRows, fail: job.failRows }))
-      if (fileRef.current) fileRef.current.value = ''
+      await remove.mutateAsync(j.id)
+      toast.success(t('common.operateSuccess'))
     } catch (e) {
       toast.error((e as Error).message)
     }
@@ -75,7 +113,14 @@ export default function ImportsPage() {
     <PageContainer>
       <PageHeader title={t('plugin_imports.title')} description={t('plugin_imports.description')} />
 
-      <div className="rounded-lg border bg-card p-4">
+      {noSources ? (
+        <EmptyState
+          icon={<FileUp className="h-6 w-6" aria-hidden="true" />}
+          title={t('plugin_imports.noSourcesTitle')}
+          description={t('plugin_imports.noSources')}
+        />
+      ) : (
+      <div className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-2">
           <Select value={pendingSource ?? ''} onValueChange={setPendingSource}>
             <SelectTrigger className="md:w-56" aria-label={t('plugin_imports.fields.source')}>
@@ -90,18 +135,43 @@ export default function ImportsPage() {
             </SelectContent>
           </Select>
           {pendingSource ? (
-            <Button variant="outline" onClick={() => window.open(templateUrl(pendingSource), '_blank')}>
-              <FileDown aria-hidden="true" />
-              {t('plugin_imports.downloadTemplate')}
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline">
+                  <FileDown aria-hidden="true" />
+                  {t('plugin_imports.downloadTemplate')}
+                  <ChevronDown aria-hidden="true" className="opacity-60" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                <DropdownMenuItem onSelect={() => void downloadTemplate(pendingSource, 'csv')}>
+                  {t('plugin_imports.templateCsv')}
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => void downloadTemplate(pendingSource, 'xlsx')}>
+                  {t('plugin_imports.templateXlsx')}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           ) : null}
           <input
             ref={fileRef}
             type="file"
-            accept=".csv,text/csv"
+            multiple
+            accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             aria-label={t('plugin_imports.fields.file')}
-            className="text-sm"
+            className="sr-only"
+            onChange={(e) => setFiles([...(e.target.files ?? [])])}
           />
+          <Button variant="outline" className="max-w-64" onClick={() => fileRef.current?.click()}>
+            <FileUp aria-hidden="true" />
+            <span className="truncate">
+              {files.length === 0
+                ? t('plugin_imports.fields.file')
+                : files.length === 1
+                  ? files[0].name
+                  : t('plugin_imports.filesSelected', { count: files.length })}
+            </span>
+          </Button>
           <Can perm="imports:run">
             <Button onClick={() => void submit()} disabled={run.isPending}>
               <Upload aria-hidden="true" />
@@ -120,32 +190,35 @@ export default function ImportsPage() {
           </div>
         ) : null}
       </div>
+      )}
 
-      <div className="flex flex-wrap items-center gap-2">
-        <Select value={source ?? ALL} onValueChange={(v) => { setSource(v === ALL ? undefined : v); setPage(1) }}>
-          <SelectTrigger className="md:w-56" aria-label={t('plugin_imports.fields.source')}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_imports.all')}</SelectItem>
-            {(sources.data ?? []).map((s) => (
-              <SelectItem key={s.name} value={s.name}>
-                {s.title}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={status ?? ALL} onValueChange={(v) => { setStatus(v === ALL ? undefined : v); setPage(1) }}>
-          <SelectTrigger className="md:w-40" aria-label={t('plugin_imports.fields.status')}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_imports.all')}</SelectItem>
-            <SelectItem value="done">{t('plugin_imports.status.done')}</SelectItem>
-            <SelectItem value="failed">{t('plugin_imports.status.failed')}</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+      {noSources ? null : (
+        <div className="flex flex-wrap items-center gap-2">
+          <Select value={source ?? ALL} onValueChange={(v) => { setSource(v === ALL ? undefined : v); setPage(1) }}>
+            <SelectTrigger className="md:w-56" aria-label={t('plugin_imports.fields.source')}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>{t('plugin_imports.all')}</SelectItem>
+              {(sources.data ?? []).map((s) => (
+                <SelectItem key={s.name} value={s.name}>
+                  {s.title}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={status ?? ALL} onValueChange={(v) => { setStatus(v === ALL ? undefined : v); setPage(1) }}>
+            <SelectTrigger className="md:w-40" aria-label={t('plugin_imports.fields.status')}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>{t('plugin_imports.all')}</SelectItem>
+              <SelectItem value="done">{t('plugin_imports.status.done')}</SelectItem>
+              <SelectItem value="failed">{t('plugin_imports.status.failed')}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
       <DataTable
         columns={columns}
@@ -163,14 +236,28 @@ export default function ImportsPage() {
           },
         }}
         emptyText={t('plugin_imports.empty')}
-        rowActions={(j) =>
-          j.failRows > 0 ? (
-            <Button variant="ghost" size="sm" onClick={() => window.open(errorsCSVUrl(j.id), '_blank')}>
-              <FileUp aria-hidden="true" />
-              {t('plugin_imports.errorsCsv')}
-            </Button>
-          ) : null
-        }
+        rowActions={(j) => (
+          <div className="flex items-center justify-end gap-1">
+            {j.failRows > 0 ? (
+              <Button variant="ghost" size="sm" onClick={() => void downloadErrorsCsv(j.id)}>
+                <FileDown aria-hidden="true" />
+                {t('plugin_imports.errorsCsv')}
+              </Button>
+            ) : null}
+            <Can perm="imports:run">
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={t('plugin_imports.delete')}
+                title={t('plugin_imports.delete')}
+                disabled={j.status === 'running' || j.status === 'pending' || remove.isPending}
+                onClick={() => void deleteJob(j)}
+              >
+                <Trash2 aria-hidden="true" className="text-destructive" />
+              </Button>
+            </Can>
+          </div>
+        )}
       />
     </PageContainer>
   )

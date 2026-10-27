@@ -128,6 +128,25 @@ func TestTemplateAndParse(t *testing.T) {
 	}
 }
 
+// 模板 XLSX:生成后按同名上传解析,应与 CSV 模板解出同一批行。
+func TestTemplateXLSXRoundTrip(t *testing.T) {
+	src := testSource("t2x", nil)
+	body, err := BuildTemplateXLSX(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(body) < 2 || string(body[:2]) != "PK" {
+		t.Fatalf("not an xlsx (zip) stream: %q", body[:min(8, len(body))])
+	}
+	rows, err := ParseUpload(src, body, "template.xlsx")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 || rows[0]["title"] != "测试商品" || rows[0]["price"] != "9.90" {
+		t.Fatalf("unexpected rows %+v", rows)
+	}
+}
+
 // 表头按 Label 识别(带"(必填)"后缀也认);未知表头列被忽略。
 func TestParseHeaderVariants(t *testing.T) {
 	src := testSource("t3", nil)
@@ -271,4 +290,30 @@ func TestRunAsyncLargeFile(t *testing.T) {
 		t.Fatalf("total = %d, want %d", v.TotalRows, SyncMaxRows+10)
 	}
 	time.Sleep(200 * time.Millisecond) // 给后台协程一点时间
+}
+
+// 删除台账：done 可以删，pending/running 拒绝（后台协程还在写这一行）。
+func TestDeleteJob(t *testing.T) {
+	db, mk := mockDB(t)
+	s := NewService(db, nopLogger{})
+
+	mk.ExpectQuery("SELECT .+plg_imports_job").
+		WillReturnRows(sqlmock.NewRows([]string{"id", "status"}).AddRow(int64(7), StatusDone))
+	mk.ExpectBegin()
+	mk.ExpectExec("DELETE FROM `plg_imports_job`").WillReturnResult(sqlmock.NewResult(0, 1))
+	mk.ExpectCommit()
+	if err := s.DeleteJob(skipCtx(), idgen.ID(7)); err != nil {
+		t.Fatalf("已完成的任务应可删除: %v", err)
+	}
+
+	mk.ExpectQuery("SELECT .+plg_imports_job").
+		WillReturnRows(sqlmock.NewRows([]string{"id", "status"}).AddRow(int64(8), StatusRunning))
+	err := s.DeleteJob(skipCtx(), idgen.ID(8))
+	var respErr *response.Error
+	if !errors.As(err, &respErr) || respErr.Status != http.StatusConflict {
+		t.Fatalf("执行中的任务应被拒绝(409)，got %v", err)
+	}
+	if err := mk.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
 }

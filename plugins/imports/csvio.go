@@ -15,13 +15,10 @@ import (
 
 const utf8BOM = "\uFEFF"
 
-// BuildTemplateCSV 生成导入模板:UTF-8 BOM + 表头(Label)+ 示例行。
-func BuildTemplateCSV(s Source) []byte {
-	var buf bytes.Buffer
-	buf.WriteString(utf8BOM)
-	w := csv.NewWriter(&buf)
-	header := make([]string, len(s.Columns))
-	example := make([]string, len(s.Columns))
+// templateCells 拆出模板的表头与示例行,CSV/XLSX 两种生成共用同一口径。
+func templateCells(s Source) (header, example []string) {
+	header = make([]string, len(s.Columns))
+	example = make([]string, len(s.Columns))
 	for i, c := range s.Columns {
 		label := c.Label
 		if c.Required {
@@ -30,10 +27,76 @@ func BuildTemplateCSV(s Source) []byte {
 		header[i] = label
 		example[i] = c.Example
 	}
+	return header, example
+}
+
+// BuildTemplateCSV 生成导入模板:UTF-8 BOM + 表头(Label)+ 示例行。
+func BuildTemplateCSV(s Source) []byte {
+	var buf bytes.Buffer
+	buf.WriteString(utf8BOM)
+	w := csv.NewWriter(&buf)
+	header, example := templateCells(s)
 	_ = w.Write(header)
 	_ = w.Write(example)
 	w.Flush()
 	return buf.Bytes()
+}
+
+// BuildTemplateXLSX 生成 XLSX 导入模板:表头加粗 + 示例行,列宽按内容自适应(中文按两格计)。
+func BuildTemplateXLSX(s Source) ([]byte, error) {
+	header, example := templateCells(s)
+	f := excelize.NewFile()
+	defer func() { _ = f.Close() }()
+	sheet := f.GetSheetName(0)
+	if err := f.SetSheetRow(sheet, "A1", &header); err != nil {
+		return nil, fmt.Errorf("imports: write xlsx header: %w", err)
+	}
+	if err := f.SetSheetRow(sheet, "A2", &example); err != nil {
+		return nil, fmt.Errorf("imports: write xlsx example: %w", err)
+	}
+	style, err := f.NewStyle(&excelize.Style{Font: &excelize.Font{Bold: true}})
+	if err != nil {
+		return nil, fmt.Errorf("imports: style xlsx header: %w", err)
+	}
+	lastCol, err := excelize.ColumnNumberToName(len(s.Columns))
+	if err != nil {
+		return nil, fmt.Errorf("imports: xlsx column name: %w", err)
+	}
+	if err := f.SetCellStyle(sheet, "A1", lastCol+"1", style); err != nil {
+		return nil, fmt.Errorf("imports: style xlsx header: %w", err)
+	}
+	for i, c := range s.Columns {
+		col, err := excelize.ColumnNumberToName(i + 1)
+		if err != nil {
+			return nil, fmt.Errorf("imports: xlsx column name: %w", err)
+		}
+		width := displayWidth(header[i])
+		if w := displayWidth(c.Example); w > width {
+			width = w
+		}
+		if err := f.SetColWidth(sheet, col, col, float64(width)+4); err != nil {
+			return nil, fmt.Errorf("imports: set xlsx column width: %w", err)
+		}
+	}
+	buf, err := f.WriteToBuffer()
+	if err != nil {
+		return nil, fmt.Errorf("imports: write xlsx: %w", err)
+	}
+	return buf.Bytes(), nil
+}
+
+// displayWidth 估算单元格显示宽度(全角字符按两格),用于模板列宽。
+func displayWidth(text string) int {
+	w := 0
+	for _, r := range text {
+		if r >= 0x1100 && (r <= 0x115F || (r >= 0x2E80 && r <= 0xA4CF) ||
+			(r >= 0xAC00 && r <= 0xD7A3) || (r >= 0xF900 && r <= 0xFAFF) || r >= 0xFE30) {
+			w += 2
+			continue
+		}
+		w++
+	}
+	return w
 }
 
 // ParseUpload 解析上传的 CSV 或 XLSX:容忍 BOM,表头按「去空白的 Label(剥掉"(必填)"后缀)」识别。

@@ -7,19 +7,13 @@ edition: pro
 requires_nexadmin: ">=0.1.0"
 menus:
   - parent: /
-    type: dir
-    title: plugin_imports.dir
-    path: /imports
-    icon: FileUp
-    sort: 64
-  - parent: /imports
     type: menu
     title: plugin_imports.menu
     path: /imports/jobs
     component: plugins/imports/ImportsPage
     perm: imports:list
     icon: FileUp
-    sort: 1
+    sort: 64
     keep_alive: true
   - parent: imports:list
     type: button

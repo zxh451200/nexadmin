@@ -1,5 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { api, tokenStore } from '@/framework/request/http'
+import { api, http, tokenStore } from '@/framework/request/http'
 import type { Page, PageQuery } from '@/framework/request/types'
 
 export interface ImportColumn {
@@ -59,6 +59,14 @@ export function useJobs(query: ImportJobQuery) {
   })
 }
 
+export function useDeleteImport() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.del(`${BASE}/${id}`),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: KEY }),
+  })
+}
+
 export function useRunImport() {
   const qc = useQueryClient()
   return useMutation({
@@ -79,10 +87,34 @@ export function useRunImport() {
   })
 }
 
-export function templateUrl(source: string) {
-  return `/api/v1/plugins/imports/template?source=${encodeURIComponent(source)}`
+export type TemplateFormat = 'csv' | 'xlsx'
+
+function saveBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 0)
 }
 
-export function errorsCSVUrl(id: string) {
-  return `/api/v1/plugins/imports/${id}/errors.csv`
+// 下载接口要带 Bearer 令牌，window.open 拿不到，只能走 axios 取 Blob 再触发保存。
+// 文件名优先取服务端 Content-Disposition（模板格式由服务端决定，避免名实不符）。
+async function download(url: string, params?: Record<string, string>, fallbackName = 'download') {
+  const res = await http.get<unknown>(url, { params, responseType: 'blob' })
+  const disposition = String((res.headers as Record<string, unknown> | undefined)?.['content-disposition'] ?? '')
+  const match = /filename="?([^";]+)"?/i.exec(disposition)
+  const name = match ? match[1] : fallbackName
+  const blob = res.data instanceof Blob ? res.data : new Blob([String(res.data)], { type: 'text/plain;charset=utf-8' })
+  saveBlob(blob, name)
+}
+
+export function downloadTemplate(source: string, format: TemplateFormat) {
+  return download(`${BASE}/template`, { source, format }, `import-template-${source}.${format}`)
+}
+
+export function downloadErrorsCsv(id: string) {
+  return download(`${BASE}/${id}/errors.csv`, undefined, `import-errors-${id}.csv`)
 }

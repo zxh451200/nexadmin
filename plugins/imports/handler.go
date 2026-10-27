@@ -2,7 +2,9 @@ package imports
 
 import (
 	"fmt"
+	"mime"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -14,6 +16,8 @@ import (
 
 // 路由前缀:/api/v1/plugins/imports。权限码:imports:list 查看来源与台账;imports:run 执行导入。
 // 租户级数据(台账按租户隔离),租户隔离自动生效。
+
+const xlsxMIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 type handler struct{ svc *Service }
 
@@ -37,14 +41,37 @@ func (h *handler) sources(c *gin.Context) {
 	response.OK(c, ListSources())
 }
 
-// GET /plugins/imports/template?source=products —— 下载导入模板(CSV,带 BOM 与示例行)。
+// GET /plugins/imports/template?source=products&format=csv|xlsx —— 下载导入模板(表头 + 示例行)。
 func (h *handler) template(c *gin.Context) {
 	src, err := getSource(c.Query("source"))
 	if err != nil {
 		response.Fail(c, response.BadRequest("imports.source_unknown").WithMsg(err.Error()))
 		return
 	}
-	c.Data(200, "text/csv; charset=utf-8", BuildTemplateCSV(src))
+	format := strings.ToLower(strings.TrimSpace(c.Query("format")))
+	if format == "" {
+		format = "csv"
+	}
+	switch format {
+	case "csv":
+		attachment(c, "import-template-"+src.Name+".csv", "text/csv; charset=utf-8", BuildTemplateCSV(src))
+	case "xlsx":
+		body, err := BuildTemplateXLSX(src)
+		if err != nil {
+			response.Fail(c, response.Internal().WithMsg("模板生成失败").Wrap(err))
+			return
+		}
+		attachment(c, "import-template-"+src.Name+".xlsx", xlsxMIME, body)
+	default:
+		response.Fail(c, response.BadRequest("imports.format_unsupported").WithMsg("模板格式只支持 csv 或 xlsx"))
+	}
+}
+
+// attachment 让浏览器把响应存成文件,而不是在新标签页里内联展示 CSV 文本。
+func attachment(c *gin.Context, filename, contentType string, body []byte) {
+	c.Header("Content-Disposition",
+		mime.FormatMediaType("attachment", map[string]string{"filename": filename}))
+	c.Data(200, contentType, body)
 }
 
 // POST /plugins/imports —— multipart:file(文件)+ source(来源标识)。同步执行,返回台账。
@@ -100,6 +127,16 @@ func (h *handler) get(c *gin.Context) {
 	respond(c, v, err)
 }
 
+// DELETE /plugins/imports/:id —— 删除导入台账（不影响已导入的数据）。
+func (h *handler) remove(c *gin.Context) {
+	id, err := idgen.Parse(c.Param("id"))
+	if err != nil || id == 0 {
+		response.Fail(c, response.BadRequest("error.bad_request"))
+		return
+	}
+	respond(c, nil, h.svc.DeleteJob(c.Request.Context(), id))
+}
+
 // GET /plugins/imports/:id/errors.csv —— 错误行报告(行号/列/原因)。
 func (h *handler) errorsCSV(c *gin.Context) {
 	id, err := idgen.Parse(c.Param("id"))
@@ -112,7 +149,7 @@ func (h *handler) errorsCSV(c *gin.Context) {
 		response.Fail(c, err)
 		return
 	}
-	c.Data(200, "text/csv; charset=utf-8", BuildErrorsCSV(errs))
+	attachment(c, fmt.Sprintf("import-errors-%d.csv", int64(id)), "text/csv; charset=utf-8", BuildErrorsCSV(errs))
 }
 
 // Register 注册路由(由 plugin.go 的 module 调用)。
@@ -121,6 +158,8 @@ func (h *handler) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.GET("/sources", core.Perm("imports:list"), h.sources)
 	g.GET("/template", core.Perm("imports:list"), h.template)
 	g.POST("", core.Perm("imports:run"), h.run)
+	// 删除台账沿用「执行导入」权限：能导入的人就能清理自己提交的记录
+	g.DELETE("/:id", core.Perm("imports:run"), h.remove)
 	g.GET("", core.Perm("imports:list"), h.list)
 	g.GET("/:id", core.Perm("imports:list"), h.get)
 	g.GET("/:id/errors.csv", core.Perm("imports:list"), h.errorsCSV)

@@ -340,6 +340,19 @@ func (s *Service) GetJob(ctx context.Context, id idgen.ID) (*JobView, error) {
 	return &v, nil
 }
 
+// DeleteJob 删除一条导入台账（不影响已入库的数据）。
+// 排队中/执行中的任务不允许删：删掉会让后台协程没有目标行可写。
+func (s *Service) DeleteJob(ctx context.Context, id idgen.ID) error {
+	m, _, err := s.jobGet(ctx, id)
+	if err != nil {
+		return err
+	}
+	if m.Status == StatusPending || m.Status == StatusRunning {
+		return response.Conflict("imports.job_running").WithMsg("任务正在执行，完成后才能删除")
+	}
+	return s.db.WithContext(ctx).Delete(&Job{}, "id = ?", int64(id)).Error
+}
+
 // GetJobErrors 取错误明细(供 errors.csv 生成)。
 func (s *Service) GetJobErrors(ctx context.Context, id idgen.ID) ([]RowError, error) {
 	_, errs, err := s.jobGet(ctx, id)
