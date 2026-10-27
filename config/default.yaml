@@ -20,7 +20,7 @@ database:
   user: root
   password: ""
   name: nexadmin
-  node_id: 0          # 雪花 ID 节点号 0-1023，多实例必须各不相同
+  node_id: 0          # 雪花 ID 节点号 0-1023，多实例必须各不相同；配 -1 = 共享缓存下自动抢空闲号（0-1023）
   # 可选 database.isolation（字段及连接示例见 docs/配置参考.md）；不配置即关闭，不自动拆分存量数据。
   # isolation.enabled 默认 false；isolation.auto_migrate 默认 false。
   # 已初始化服务启动时，租户库自动迁移须 app.auto_migrate 与 isolation.auto_migrate 同时为 true；
@@ -31,9 +31,10 @@ cache:
   driver: memory      # memory | redis（Valkey 兼容）
   addr: ""
   password: ""
-languages:
-  - { code: zh-CN, name: 简体中文, dir: ltr, default: true }
-  - { code: en-US, name: English, dir: ltr }
+languages:                # 平台语言清单的种子：首次启动写入 sys_language，之后以表为准（后台「系统设置 → 语言管理」可改）
+  # 日期格式必须加引号，否则 YAML 会把 2006-01-02 解析成日期对象而不是 Go 布局串。
+  - { code: zh-CN, name: 简体中文, dir: ltr, short: 中, htmlLang: zh-CN, ogLocale: zh_CN, prefix: "", dateFormat: "2006-01-02", default: true }
+  - { code: en-US, name: English, dir: ltr, short: EN, htmlLang: en, ogLocale: en_US, prefix: en, dateFormat: "Jan 2, 2006" }
 auth:
   methods: [password]       # password | phone；phone 还需要配置下面的 sms.provider，否则自动隐藏
   single_session: false     # true = 同一用户只保留最后一次登录，旧 access/refresh token 会立即失效
@@ -43,7 +44,7 @@ auth:
   # 在 config/config.yaml 里按需取消注释。密钥务必用 ${ENV} 引用环境变量，不要明文写进仓库。
   # 通用字段（每个 provider 都支持）：
   #   client_id / client_secret   应用凭据，如 client_secret: ${GOOGLE_CLIENT_SECRET}
-  #   redirect_uris               回调地址白名单（精确匹配）= 前端回调页 /login/oauth/<provider> 的完整 URL
+  #   redirect_uris               回调地址白名单（精确匹配）= 前端回调页 /admin/login/oauth/<provider> 的完整 URL
   #   match_by                    首次登录自动匹配已有账号的依据：phone | email | employee_no（空 = 不自动匹配）
   #                               email 只认“已验证”邮箱；employee_no 对应本地用户名；匹配不上提示“绑定已有账号”
   #   auto_create                 匹配不上时自动建号（无密码），默认 false
@@ -54,28 +55,28 @@ auth:
   #     client_id: ${WECOM_CORP_ID}
   #     client_secret: ${WECOM_SECRET}
   #     agent_id: "1000002"
-  #     redirect_uris: [https://admin.example.com/login/oauth/wecom]
+  #     redirect_uris: [https://admin.example.com/admin/login/oauth/wecom]
   #     match_by: phone
   #   dingtalk:                   # 钉钉：client_id=AppKey，client_secret=AppSecret
   #     client_id: ${DINGTALK_APP_KEY}
   #     client_secret: ${DINGTALK_APP_SECRET}
-  #     redirect_uris: [https://admin.example.com/login/oauth/dingtalk]
+  #     redirect_uris: [https://admin.example.com/admin/login/oauth/dingtalk]
   #     match_by: phone
   #   feishu:                     # 飞书：client_id=App ID，client_secret=App Secret
   #     client_id: ${FEISHU_APP_ID}
   #     client_secret: ${FEISHU_APP_SECRET}
-  #     redirect_uris: [https://admin.example.com/login/oauth/feishu]
+  #     redirect_uris: [https://admin.example.com/admin/login/oauth/feishu]
   #     match_by: employee_no
   #   google:                     # Google（标准 OIDC，授权码 + PKCE）；需要服务器能访问 accounts.google.com，受限网络请配 auth.proxy
   #     client_id: ${GOOGLE_CLIENT_ID}
   #     client_secret: ${GOOGLE_CLIENT_SECRET}
-  #     redirect_uris: [https://admin.example.com/login/oauth/google]
+  #     redirect_uris: [https://admin.example.com/admin/login/oauth/google]
   #     match_by: email
   #     allowed_email_domains: [corp.com]
   #   github:                     # GitHub（OAuth2），只取已验证的主邮箱；需要服务器能访问 github.com
   #     client_id: ${GITHUB_CLIENT_ID}
   #     client_secret: ${GITHUB_CLIENT_SECRET}
-  #     redirect_uris: [https://admin.example.com/login/oauth/github]
+  #     redirect_uris: [https://admin.example.com/admin/login/oauth/github]
   #     match_by: email
   #   oidc:                       # 通用 OIDC（Keycloak、Casdoor 等），issuer 需提供 /.well-known/openid-configuration
   #     name: Keycloak            # 登录页展示名
@@ -83,7 +84,7 @@ auth:
   #     client_id: nexadmin
   #     client_secret: ${OIDC_CLIENT_SECRET}
   #     scopes: [openid, email, profile]
-  #     redirect_uris: [https://admin.example.com/login/oauth/oidc]
+  #     redirect_uris: [https://admin.example.com/admin/login/oauth/oidc]
   #     match_by: email
   proxy: ""                 # 访问 Google / GitHub 等外网用的 HTTP(S) 代理，如 http://127.0.0.1:7890；空 = 直连
   jwt_secret: ""            # 空 = 首次启动自动生成并保存到 data/jwt.secret

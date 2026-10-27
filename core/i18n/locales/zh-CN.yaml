@@ -1,4 +1,7 @@
 error:
+  conflict: 操作冲突，请刷新后重试
+  export_too_many: 符合条件的行数超出导出上限，请缩小筛选范围
+  unavailable: 服务暂不可用
   internal: 服务器内部错误
   bad_request: 请求参数不正确
   unauthorized: 未登录或登录已过期
@@ -12,6 +15,7 @@ error:
   mcp_operation_failed: MCP 操作未能完成，请重新发起
   mcp_confirmation_revoked: MCP 确认已因多次校验作废，请重新发起操作
 auth:
+  oauth_failed: 第三方登录失败，请稍后重试或改用其他登录方式
   provider_missing: 登录服务未启用
   invalid_credentials: 用户名或密码错误
   captcha_invalid: 验证码错误或已过期
@@ -55,3 +59,88 @@ recycle:
   source_gone: 源数据已不存在，回收记录已清理
 dict:
   builtin: 内置字典受保护：不能删除，也不能修改字典类型编码或内置字典数据的值
+im:
+  visitor_required: 缺少访客信息
+  sender_invalid: 发送者身份无效
+  content_required: 消息内容不能为空
+  conv_not_found: 会话不存在
+  conv_closed: 会话已结束
+  stream_ticket_invalid: 会话凭据无效或已过期
+  plugin_inactive: 客服插件未启用或授权已失效
+imports:
+  job_not_found: 导入任务不存在
+  actor_required: 缺少操作者身份
+  source_unknown: 未知的数据来源
+  file_required: 请选择要导入的文件
+  file_too_large: 导入文件超出大小限制
+  parse_failed: 文件解析失败，请检查格式
+  no_rows: 文件中没有可导入的数据行
+  too_many_rows: 数据行数超出单次导入上限
+  missing_columns: 文件缺少必需的列
+ldap:
+  host_basedn_required: 请填写 LDAP 地址和 Base DN
+  filter_placeholder_required: 过滤器必须包含 %s 占位符（如 %(uid)s）
+  test_failed: 连接测试失败，请检查地址、账号与加密设置
+pay:
+  PAY_INVALID_AMOUNT: 金额或参数无效
+  PAY_CURRENCY_UNSUPPORTED: 不支持的币种
+  PAY_FX_RATE_MISSING: 外币收款缺少汇率快照
+  PAY_STATE_CONFLICT: 当前资金单状态不允许该操作
+  PAY_EXPIRED: 支付单已过期
+  PAY_REFUND_EXCEEDS: 退款金额超过可退余额
+  PAY_SIGN_INVALID: 回调验签失败
+  PAY_CHANNEL_UNAVAILABLE: 支付渠道不可用或类型未知
+  PAY_CHANNEL_ERROR: 渠道拒绝了该操作
+  PAY_NOT_FOUND: 资金单不存在
+  PAY_TENANT_MISMATCH: 资金单与当前租户不匹配
+  PAY_IDEMPOTENCY_CONFLICT: 幂等键已用于不同的请求体
+  PAY_INTERNAL: 支付中台内部错误
+  plugin_inactive: 支付中台插件未启用或授权已失效
+crm:
+  name_required: 客户名称不能为空
+  title_required: 线索/商机标题不能为空
+  status_invalid: 客户状态无效
+  stage_invalid: 商机阶段无效
+  stage_final: 商机已到终态（won/lost），不允许再改阶段
+  amount_invalid: 金额无效
+  external_invalid: 外部锚点无效（来源必须是 hotel/mall/order/manual 且编号非空）
+  external_taken: 该外部锚点已绑定其他客户
+  customer_in_use: 客户名下还有商机，不能删除
+  not_found: 客户或商机不存在
+  plugin_inactive: 客户主数据插件未启用或授权已失效
+aigateway:
+  kind_invalid: 模型种类无效（llm/embedding/rerank/asr/tts/ocr）
+  name_required: 模型名称不能为空
+  baseurl_blocked: 模型地址被拒绝（仅允许公网 http/https，禁止内网与回环地址）
+  not_found: 模型配置不存在
+  plugin_inactive: AI 网关插件未启用或授权已失效
+ticket:
+  title_content_required: 工单标题和内容不能为空
+  reporter_invalid: 提交人身份无效
+  replier_invalid: 回复人身份无效
+  content_required: 回复内容不能为空
+  not_found: 工单不存在
+  status_invalid: 工单状态无效
+  illegal_transition: 当前状态不允许该操作
+  assignee_invalid: 指派的处理人无效
+  plugin_inactive: 工单插件未启用或授权已失效
+totp:
+  already_enabled: 两步验证已开启
+  not_enrolled: 尚未绑定两步验证，请先扫码绑定
+  not_enabled: 两步验证未开启
+  code_invalid: 动态验证码错误或已过期
+  code_replayed: 动态验证码已使用，请等待下一个
+  kind_invalid: 验证方式无效
+workflow:
+  def_not_found: 流程定义不存在
+  def_json_broken: 流程定义损坏，无法解析
+  def_invalid: 流程定义校验未通过
+  def_required: 缺少流程定义
+  def_not_published: 流程尚未发布，无法发起
+  inst_not_found: 流程实例不存在
+  inst_state_broken: 流程实例状态损坏
+  actor_required: 缺少操作者身份
+  action_rejected: 审批动作被当前节点拒绝
+  withdraw_not_owner: 只有发起人可以撤回该流程
+  plugin_inactive: 工作流插件未启用或授权已失效
+

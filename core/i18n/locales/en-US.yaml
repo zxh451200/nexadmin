@@ -1,4 +1,7 @@
 error:
+  conflict: Operation conflict; refresh and try again
+  export_too_many: Matched rows exceed the export limit; narrow the filters
+  unavailable: Service temporarily unavailable
   internal: Internal server error
   bad_request: Invalid request parameters
   unauthorized: Not signed in or session expired
@@ -12,6 +15,7 @@ error:
   mcp_operation_failed: The MCP operation could not be completed. Please start it again
   mcp_confirmation_revoked: This MCP confirmation was revoked after too many attempts. Please start the operation again
 auth:
+  oauth_failed: Third-party login failed. Try again later or use another method
   provider_missing: Sign-in service is not enabled
   invalid_credentials: Incorrect username or password
   captcha_invalid: Incorrect or expired verification code
@@ -55,3 +59,88 @@ recycle:
   source_gone: The original data no longer exists; the recycle record has been removed
 dict:
   builtin: Built-in dictionaries are protected; they cannot be deleted, and the type code or built-in item values cannot be changed
+im:
+  visitor_required: Missing visitor information
+  sender_invalid: Invalid sender identity
+  content_required: Message content cannot be empty
+  conv_not_found: Conversation not found
+  conv_closed: Conversation is closed
+  stream_ticket_invalid: Invalid or expired stream ticket
+  plugin_inactive: IM plugin is not enabled or its license has lapsed
+imports:
+  job_not_found: Import job not found
+  actor_required: Missing operator identity
+  source_unknown: Unknown data source
+  file_required: Please choose a file to import
+  file_too_large: Import file exceeds the size limit
+  parse_failed: Failed to parse the file; please check its format
+  no_rows: No importable rows found in the file
+  too_many_rows: Row count exceeds the single-import limit
+  missing_columns: The file is missing required columns
+ldap:
+  host_basedn_required: LDAP address and Base DN are required
+  filter_placeholder_required: The filter must contain the %s placeholder (e.g. %(uid)s)
+  test_failed: Connection test failed; check the address, credentials and encryption settings
+pay:
+  PAY_INVALID_AMOUNT: Invalid amount or parameters
+  PAY_CURRENCY_UNSUPPORTED: Unsupported currency
+  PAY_FX_RATE_MISSING: Missing FX rate snapshot for a foreign-currency payment
+  PAY_STATE_CONFLICT: Operation not allowed in the current state
+  PAY_EXPIRED: Payment order has expired
+  PAY_REFUND_EXCEEDS: Refund amount exceeds the refundable balance
+  PAY_SIGN_INVALID: Callback signature verification failed
+  PAY_CHANNEL_UNAVAILABLE: Payment channel unavailable or unknown provider
+  PAY_CHANNEL_ERROR: The channel rejected the operation
+  PAY_NOT_FOUND: Pay order not found
+  PAY_TENANT_MISMATCH: Pay order does not belong to the current tenant
+  PAY_IDEMPOTENCY_CONFLICT: Idempotency key already used with a different request body
+  PAY_INTERNAL: Pay internal error
+  plugin_inactive: Pay plugin is not enabled or its license has lapsed
+crm:
+  name_required: Customer name is required
+  title_required: Lead/opportunity title is required
+  status_invalid: Invalid customer status
+  stage_invalid: Invalid opportunity stage
+  stage_final: Opportunity reached a final stage (won/lost) and cannot move again
+  amount_invalid: Invalid amount
+  external_invalid: Invalid external anchor (source must be hotel/mall/order/manual with a non-empty no)
+  external_taken: The external anchor is already bound to another customer
+  customer_in_use: Customer still has opportunities and cannot be deleted
+  not_found: Customer or opportunity not found
+  plugin_inactive: CRM plugin is not enabled or its license has lapsed
+aigateway:
+  kind_invalid: Invalid model kind (llm/embedding/rerank/asr/tts/ocr)
+  name_required: Model name is required
+  baseurl_blocked: Model base URL rejected (public http/https only; internal and loopback addresses are denied)
+  not_found: Model config not found
+  plugin_inactive: AI gateway plugin is not enabled or its license has lapsed
+ticket:
+  title_content_required: Ticket title and content cannot be empty
+  reporter_invalid: Invalid reporter identity
+  replier_invalid: Invalid replier identity
+  content_required: Reply content cannot be empty
+  not_found: Ticket not found
+  status_invalid: Invalid ticket status
+  illegal_transition: This action is not allowed in the current state
+  assignee_invalid: Invalid assignee
+  plugin_inactive: Ticket plugin is not enabled or its license has lapsed
+totp:
+  already_enabled: Two-factor authentication is already enabled
+  not_enrolled: Two-factor authentication is not enrolled yet; scan the QR code first
+  not_enabled: Two-factor authentication is not enabled
+  code_invalid: Invalid or expired verification code
+  code_replayed: This verification code was already used; wait for the next one
+  kind_invalid: Invalid verification method
+workflow:
+  def_not_found: Workflow definition not found
+  def_json_broken: Workflow definition is corrupted and cannot be parsed
+  def_invalid: Workflow definition failed validation
+  def_required: Missing workflow definition
+  def_not_published: Workflow is not published; it cannot be started
+  inst_not_found: Workflow instance not found
+  inst_state_broken: Workflow instance state is corrupted
+  actor_required: Missing operator identity
+  action_rejected: Rejected by the current approval node
+  withdraw_not_owner: Only the initiator can withdraw this workflow
+  plugin_inactive: Workflow plugin is not enabled or its license has lapsed
+
