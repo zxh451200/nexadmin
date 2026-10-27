@@ -30,17 +30,17 @@
 | `a440ce2` | feat(cluster)：node_id 自动选号（boot.go 的 Migrate -1 分支） |
 | `39596e0` | docs：权限清单/配置参考/i18n 错误码文案/本交接文档 |
 
-### 2.2 尚未提交的部分（与既存 WIP 交织，需人工挑拣）
+### 2.2 尚未提交的部分（与既存 WIP 交织）
 
-| 文件 | 本轮改动（可识别标记） | 交织情况 |
-|---|---|---|
-| `core/router.go` | `buildFull` 里 `AcquireAutoNodeLease` 分支（约 25 行） | 文件总 diff 107 行，其余为既存 WIP |
-| `config/default.yaml` | 仅 `node_id` 注释一行 | 文件总 diff 23 行，其余为 WIP |
-| `docs/功能与权限清单.md` / `docs/配置参考.md` | 本轮条目已在 `39596e0` 提交；如仍有残余 diff 属既存 WIP | — |
+| 文件 | 状态 |
+|---|---|
+| `core/router.go` | ✅ 已解决：node_id 装配的两个 hunk 经 `git apply --cached` 剥离提交（`0e000b3`），文件剩余 diff 全属既存 WIP |
+| `config/default.yaml` | 仅 `node_id` 注释一行是本轮的，其余 22 行为 WIP——默认值仍是 0，不影响行为，可随 WIP 一起提交 |
 
-说明：原计划的"5 个主题提交"在执行中合并为 6 个（IT 测试随 `feat(pay)` 整目录入库；
-`node_id` 的 buildFull 装配在 `core/router.go`，因与 WIP 交织暂未提交——当前已提交树上
-`node_id: -1` 在 migrate 路径可用、server 启动路径待 router.go 挑拣后生效）。
+已提交树上 node_id 自动选号链路完整（cluster + boot + router，`0e000b3`），
+并在独立 worktree 上验证过 HEAD 检出的 build/vet/test 全绿（无 WIP 依赖）。
+原计划的"5 个主题提交"在执行中合并/拆分为 9 个（IT 测试随 `feat(pay)` 整目录入库；
+router.go 用补丁剥离单 hunk 提交）。
 
 ### 2.2 与既存 WIP 交织的文件（提交时会把同文件的 WIP 一起带上）
 
