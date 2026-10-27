@@ -19,15 +19,28 @@
 
 ## 2. 文件清单与提交切分
 
-### 2.1 纯新增/纯本轮改动（可整目录 `git add`，按下面顺序分 5 个提交）
+### 2.1 实际落库的提交（2026-10-28，main，未推送）
 
-1. **feat(pay)**：`git add plugins/pay web/src/plugins/pay plugins/plugins.go core/i18n/locales/zh-CN.yaml core/i18n/locales/en-US.yaml` + `git rm -r plugins/payment web/src/plugins/payment`
-   ⚠️ `plugins/plugins.go` 的 diff 仅为本轮三行（见 2.2）；两个 i18n yaml **混有既存 WIP**，见 2.2。
-2. **feat(crm)**：`git add plugins/crm web/src/plugins/crm`
-3. **feat(aigateway)**：`git add plugins/aigateway web/src/plugins/aigateway`
-4. **test(migrations)**：`git add plugins/migrations_test.go plugins/imports/migrations/mariadb plugins/ticket/migrations/postgres`
-5. **test(it)+fix(pay)+feat(nodelease)**：`git add plugins/pay/it_mysql_test.go plugins/pay/it_pg_test.go core/cluster core/boot.go config/default.yaml docs/配置参考.md docs/功能与权限清单.md`
-   ⚠️ config/default.yaml、docs/两份、plugins/pay/service.go 混有既存 WIP，见 2.2。
+| 提交 | 内容 |
+|---|---|
+| `edb0fc9` | test(migrations)：三引擎一致性门禁 + imports/ticket 两处历史修复 |
+| `7bed542` | feat(crm)：客户主数据插件（20 文件） |
+| `c3b5a95` | feat(aigateway)：AI 网关插件（23 文件） |
+| `d9c19e5` | feat(pay)：支付中台 + payment 移除 + plugins.go 切换（49 文件；**IT 测试文件一并入库**） |
+| `a440ce2` | feat(cluster)：node_id 自动选号（boot.go 的 Migrate -1 分支） |
+| `39596e0` | docs：权限清单/配置参考/i18n 错误码文案/本交接文档 |
+
+### 2.2 尚未提交的部分（与既存 WIP 交织，需人工挑拣）
+
+| 文件 | 本轮改动（可识别标记） | 交织情况 |
+|---|---|---|
+| `core/router.go` | `buildFull` 里 `AcquireAutoNodeLease` 分支（约 25 行） | 文件总 diff 107 行，其余为既存 WIP |
+| `config/default.yaml` | 仅 `node_id` 注释一行 | 文件总 diff 23 行，其余为 WIP |
+| `docs/功能与权限清单.md` / `docs/配置参考.md` | 本轮条目已在 `39596e0` 提交；如仍有残余 diff 属既存 WIP | — |
+
+说明：原计划的"5 个主题提交"在执行中合并为 6 个（IT 测试随 `feat(pay)` 整目录入库；
+`node_id` 的 buildFull 装配在 `core/router.go`，因与 WIP 交织暂未提交——当前已提交树上
+`node_id: -1` 在 migrate 路径可用、server 启动路径待 router.go 挑拣后生效）。
 
 ### 2.2 与既存 WIP 交织的文件（提交时会把同文件的 WIP 一起带上）
 
