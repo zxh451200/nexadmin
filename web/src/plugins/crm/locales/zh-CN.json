@@ -1,0 +1,66 @@
+{
+  "plugin_crm": {
+    "title": "客户主数据",
+    "description": "全生态认同的客户主数据与线索商机台账（external 锚点对齐 member）",
+    "dir": "客户主数据",
+    "menu": "客户主数据",
+    "perm": {
+      "edit": "维护客户",
+      "opp": "维护线索/商机"
+    },
+    "tabs": {
+      "customers": "客户",
+      "opportunities": "线索/商机"
+    },
+    "all": "全部",
+    "empty": "暂无数据",
+    "searchPlaceholder": "客户名称 / 编码 / 锚点",
+    "nameRequired": "请填写客户名称",
+    "titleRequired": "请填写标题",
+    "status": {
+      "active": "在营",
+      "inactive": "停用"
+    },
+    "stage": {
+      "lead": "线索",
+      "qualified": "确认",
+      "proposal": "方案",
+      "negotiate": "谈判",
+      "won": "赢单",
+      "lost": "输单"
+    },
+    "fields": {
+      "name": "客户名称",
+      "code": "客户编码",
+      "level": "等级",
+      "status": "状态",
+      "externalAnchor": "外部锚点",
+      "externalSource": "来源",
+      "externalNo": "外部编号",
+      "owner": "负责人",
+      "phone": "电话",
+      "email": "邮箱",
+      "remark": "备注",
+      "customerId": "所属客户",
+      "title": "标题",
+      "stage": "阶段",
+      "amountMinor": "金额",
+      "expectedAt": "预期成交日",
+      "createdAt": "创建时间"
+    },
+    "customer": {
+      "create": "新建客户",
+      "edit": "编辑客户",
+      "deleteConfirm": "确认删除客户 {{name}}？",
+      "noAnchor": "不绑定外部锚点",
+      "anchorHint": "外部锚点创建后不可修改；hotel/mall 的 member 通过它反查同一个客户 ID。"
+    },
+    "opp": {
+      "create": "新建线索/商机",
+      "edit": "编辑线索/商机",
+      "deleteConfirm": "确认删除「{{title}}」？",
+      "noCustomer": "暂不关联客户",
+      "searchPlaceholder": "标题"
+    }
+  }
+}

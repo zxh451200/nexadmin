@@ -1,0 +1,66 @@
+{
+  "plugin_crm": {
+    "title": "Customer Master",
+    "description": "Ecosystem-wide customer master data and lead/opportunity ledger (external anchor aligns member IDs)",
+    "dir": "Customer Master",
+    "menu": "Customer Master",
+    "perm": {
+      "edit": "Manage customers",
+      "opp": "Manage leads/opportunities"
+    },
+    "tabs": {
+      "customers": "Customers",
+      "opportunities": "Leads / Opportunities"
+    },
+    "all": "All",
+    "empty": "No data",
+    "searchPlaceholder": "Name / code / anchor",
+    "nameRequired": "Customer name is required",
+    "titleRequired": "Title is required",
+    "status": {
+      "active": "Active",
+      "inactive": "Inactive"
+    },
+    "stage": {
+      "lead": "Lead",
+      "qualified": "Qualified",
+      "proposal": "Proposal",
+      "negotiate": "Negotiation",
+      "won": "Won",
+      "lost": "Lost"
+    },
+    "fields": {
+      "name": "Name",
+      "code": "Code",
+      "level": "Level",
+      "status": "Status",
+      "externalAnchor": "External Anchor",
+      "externalSource": "Source",
+      "externalNo": "External No",
+      "owner": "Owner",
+      "phone": "Phone",
+      "email": "Email",
+      "remark": "Remark",
+      "customerId": "Customer",
+      "title": "Title",
+      "stage": "Stage",
+      "amountMinor": "Amount",
+      "expectedAt": "Expected Close",
+      "createdAt": "Created"
+    },
+    "customer": {
+      "create": "New Customer",
+      "edit": "Edit Customer",
+      "deleteConfirm": "Delete customer {{name}}?",
+      "noAnchor": "No external anchor",
+      "anchorHint": "The external anchor cannot be changed after creation; hotel/mall member systems resolve the same customer ID through it."
+    },
+    "opp": {
+      "create": "New Lead / Opportunity",
+      "edit": "Edit Lead / Opportunity",
+      "deleteConfirm": "Delete \"{{title}}\"?",
+      "noCustomer": "No customer yet",
+      "searchPlaceholder": "Title"
+    }
+  }
+}

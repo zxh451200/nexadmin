@@ -1,0 +1,32 @@
+id: crm
+name: 客户主数据
+version: 0.1.0
+description: 全生态认同的客户主数据 + 线索商机台账（两张表 + 事件契约）：external 锚点让 hotel/mall 的 member 认同同一个客户 ID；不做销售自动化。
+author: NexAdmin
+edition: pro
+requires_nexadmin: ">=0.1.0"
+migration_target: tenant
+menus:
+  - parent: /
+    type: dir
+    title: plugin_crm.dir
+    path: /crm
+    icon: Users
+    sort: 70
+  - parent: /crm
+    type: menu
+    title: plugin_crm.menu
+    path: /crm/customers
+    component: plugins/crm/CrmPage
+    perm: crm:list
+    icon: Contact
+    sort: 1
+    keep_alive: true
+  - parent: crm:list
+    type: button
+    title: plugin_crm.perm.edit
+    perm: crm:edit
+  - parent: crm:list
+    type: button
+    title: plugin_crm.perm.opp
+    perm: crm:opp
