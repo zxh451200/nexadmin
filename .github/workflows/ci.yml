@@ -83,3 +83,50 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run lint
+
+  # 实库集成测试（plugins/pay 的 IT：env 守卫，无 DSN 自动跳过）：
+  # 一次性临时库实跑 pay/crm/aigateway 三引擎迁移 + 池>1 并发退款/回调去重。
+  # 在 plugins/pay 变更或全量回归（fallback=./...）时运行。
+  integration:
+    needs: changes
+    if: >-
+      needs.changes.outputs.backend == 'true' &&
+      (contains(fromJSON(needs.changes.outputs.packages), 'nexadmin/plugins/pay') ||
+       contains(fromJSON(needs.changes.outputs.packages), './...'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: it-root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 30
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: it-pg
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version-file: go.mod
+      - name: Real-engine integration tests (migrations + concurrency)
+        env:
+          NEXADMIN_IT_MYSQL_DSN: 'root:it-root@tcp(127.0.0.1:3306)/'
+          NEXADMIN_IT_PG_DSN: 'host=127.0.0.1 port=5432 user=postgres password=it-pg dbname=postgres sslmode=disable'
+        run: go test ./plugins/pay -run 'TestITMySQL|TestITPostgres' -v -count=1 -timeout=180s
