@@ -4,16 +4,18 @@ package plugins
 
 import (
 	// nexadmin:plugins:begin
+	_ "nexadmin/plugins/aigateway"
 	_ "nexadmin/plugins/assistant"
 	_ "nexadmin/plugins/audit"
 	_ "nexadmin/plugins/codegen"
+	_ "nexadmin/plugins/crm"
 	_ "nexadmin/plugins/cron"
 	_ "nexadmin/plugins/formbuilder"
 	_ "nexadmin/plugins/i18n-editor"
 	_ "nexadmin/plugins/identity"
 	_ "nexadmin/plugins/im"
 	_ "nexadmin/plugins/imports"
-	_ "nexadmin/plugins/payment"
+	_ "nexadmin/plugins/pay"
 	_ "nexadmin/plugins/report"
 	_ "nexadmin/plugins/scim"
 	_ "nexadmin/plugins/security"

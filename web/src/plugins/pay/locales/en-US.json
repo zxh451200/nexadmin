@@ -1,0 +1,87 @@
+{
+  "plugin_pay": {
+    "title": "Payment Hub",
+    "description": "Payment orders, refunds, callback audit and channel config (tenant-scoped money facts)",
+    "dir": "Payment Hub",
+    "menu": "Payment Hub",
+    "perm": {
+      "edit": "Close / sync payment orders",
+      "channel": "Manage channels",
+      "refund": "Manual refunds",
+      "auth": "Authorization actions",
+      "settle": "Reconcile & settle"
+    },
+    "tabs": {
+      "orders": "Orders",
+      "refunds": "Refunds",
+      "callbacks": "Callback audit",
+      "channels": "Channels"
+    },
+    "all": "All",
+    "empty": "No data",
+    "searchPlaceholder": "Payment no / biz no",
+    "close": "Close order",
+    "closeConfirm": "Close payment order {{no}}? It can no longer be paid.",
+    "sync": "Sync from channel",
+    "refund": "Refund",
+    "refundConfirm": "Start a refund for {{no}}?",
+    "amountInvalid": "Enter a valid payment no and amount",
+    "configJsonError": "Channel config must be a JSON object",
+    "configKeep": "Leave empty to keep existing config",
+    "configSet": "Configured",
+    "verifyOk": "Signature OK",
+    "verifyFail": "Signature failed",
+    "enabledOn": "Enabled",
+    "enabledOff": "Disabled",
+    "providers": {
+      "mock": "Mock channel"
+    },
+    "status": {
+      "pending": "Pending",
+      "succeeded": "Paid",
+      "failed": "Failed",
+      "closed": "Closed",
+      "refunding": "Refunding",
+      "partially_refunded": "Partially refunded",
+      "refunded": "Refunded"
+    },
+    "refundStatus": {
+      "pending": "Processing",
+      "succeeded": "Refunded",
+      "failed": "Failed"
+    },
+    "fields": {
+      "paymentNo": "Payment No",
+      "bizType": "Biz Type",
+      "bizNo": "Biz No",
+      "subjectId": "Subject",
+      "subject": "Subject",
+      "amount": "Amount",
+      "refunded": "Refunded",
+      "fee": "Fee",
+      "channel": "Channel",
+      "channelCode": "Channel Code",
+      "channelName": "Name",
+      "provider": "Provider",
+      "feeRateBp": "Fee Rate (bp)",
+      "channelTxnId": "Channel Txn ID",
+      "status": "Status",
+      "failReason": "Fail Reason",
+      "createdAt": "Created",
+      "updatedAt": "Updated",
+      "refundNo": "Refund No",
+      "reason": "Reason",
+      "operator": "Operator",
+      "verify": "Signature",
+      "result": "Result",
+      "config": "Credentials (JSON)",
+      "sort": "Sort",
+      "enabled": "Enabled"
+    },
+    "channel": {
+      "create": "New Channel",
+      "edit": "Edit Channel",
+      "deleteConfirm": "Delete channel {{name}}?"
+    }
+  }
+}
