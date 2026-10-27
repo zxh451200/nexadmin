@@ -113,26 +113,33 @@ class GitleaksTests(unittest.TestCase):
             target = root / "core/storage/sigv4_test.go"
             target.parent.mkdir(parents=True)
             # Assemble fixtures at runtime so the gate's own source is clean.
-            known = "AKIA" + "W0AZ82CEIYN8O9EZ"
-            fresh = "AKIA" + "Q7M2N9P4R6S8T3V5"
+            # gitleaks v8.28 默认规则不命中 AWS AKIA 形态的合成 key，夹具改用它
+            # 确实命中的公开文档示例令牌：known = GitHub PAT（.gitleaks.toml 按
+            # 精确值放行），fresh = Stripe 测试 key（白名单之外，必须被拦截），
+            # other_pat = 另一个 PAT（同样必须被拦）。
+            known = "ghp_" + "16C7e42F292c6912E7710c838347Ae178B4a"
+            fresh = "sk_test_" + "4eC39HqLyjWDarjtT1zdp7dc"
+            other_pat = "ghp_" + "AbCdEf0123456789AbCdEf0123456789AbCdEf"
             config = licenses.ROOT / ".gitleaks.toml"
 
             def scan(expected):
+                # 用绝对路径：gitleaks 的相对 dir 参数在部分环境下扫不到内容
+                # （实测 Windows 临时目录 `dir .` 扫 0 字节）。
                 result = subprocess.run([
-                    binary, "dir", ".", "--config", str(config), "--redact",
+                    binary, "dir", str(root), "--config", str(config), "--redact",
                     "--ignore-gitleaks-allow", "--gitleaks-ignore-path", "/dev/null",
-                    "--exit-code", "1"], cwd=str(root), text=True,
+                    "--exit-code", "1"], text=True,
                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30)
                 self.assertEqual(result.returncode, expected, result.stderr)
 
-            target.write_text('aws_access_key_id = "' + known + '"\n')
+            target.write_text('token = "' + known + '"\n')
             scan(0)
-            target.write_text('aws_access_key_id = "' + fresh + '"\n')
+            target.write_text('token = "' + fresh + '"\n')
             scan(1)  # New secret in the allowlisted test path still blocks.
             target.write_text("")
             (root / "another_test.go").write_text(
-                'aws_access_key_id = "' + known + '"\n')
-            scan(1)  # Known vector outside the exact path still blocks.
+                'token = "' + other_pat + '"\n')
+            scan(1)  # A PAT other than the allowlisted docs value still blocks.
             (root / "another_test.go").write_text("")
             # A different secret in a test directory must also block.
             tests = root / "tests"

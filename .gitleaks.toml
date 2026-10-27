@@ -3,13 +3,25 @@ title = "Nexadmin worktree secret policy"
 [extend]
 useDefault = true
 
-[[allowlists]]
-description = "Dependency installations and Git metadata; application tests remain scanned"
-paths = ['''(^|/)node_modules/''', '''(^|/)\.git/''']
+# 路径正则不锚定开头：gitleaks 的报告路径在相对/绝对扫描目标下形态不同
+# （相对 `modules/...`，绝对 `D:/.../modules/...`），统一用 `(^|[\\/])` 前缀 +
+# `$` 后缀，并把分隔符写成 [\\/] 兼容两种平台。
 
 [[allowlists]]
-description = "Public AWS SigV4 documentation vector used only in this signing test"
+description = "Dependency installations and Git metadata; application tests remain scanned"
+paths = ['''(^|[\\/])node_modules[\\/]''', '''(^|[\\/])\.git[\\/]''']
+
+[[allowlists]]
+description = "Local runtime and dev artifacts; gitignored, never present in CI checkouts"
+paths = ['''(^|[\\/])\.mimosa[\\/]''', '''(^|[\\/])\.dev-keys[\\/]''', '''(^|[\\/])data[\\/](run|sso-keys)[\\/]''', '''(^|[\\/])web[\\/]dist[\\/]''']
+
+[[allowlists]]
+description = "Test fixtures and frontend mocks use placeholder keys/tokens by design; enumerated files only so new test files stay scanned"
 condition = "AND"
-paths = ['''^core/storage/sigv4_test\.go$''']
+rules = ['''generic-api-key''', '''curl-auth-header''']
+paths = ['''(^|[\\/])modules[\\/]sendlog[\\/]sanitize_test\.go$''', '''(^|[\\/])modules[\\/]clienterror[\\/]clienterror_test\.go$''', '''(^|[\\/])core[\\/]ai[\\/]filter_test\.go$''', '''(^|[\\/])plugins[\\/]formbuilder[\\/]service_test\.go$''', '''(^|[\\/])plugins[\\/]totp[\\/]service_test\.go$''', '''(^|[\\/])web[\\/]src[\\/]framework[\\/]modules[\\/]openapi[\\/]openapi\.mock\.ts$''', '''(^|[\\/])web[\\/]src[\\/]framework[\\/]modules[\\/]openapi[\\/]api\.ts$''']
+
+[[allowlists]]
+description = "Public GitHub PAT documentation vector (widely published example value; harmless to allow anywhere). gitleaks v8.28 skips files whose path matches an allowlist, so a path-scoped entry would unscan the whole fixture file."
 regexTarget = "secret"
-regexes = ['''^AKIAW0AZ82CEIYN8O9EZ$''', '''^wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY$''']
+regexes = ['''^ghp_16C7e42F292c6912E7710c838347Ae178B4a$''']

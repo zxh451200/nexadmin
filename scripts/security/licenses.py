@@ -120,6 +120,44 @@ def check(records, policy):
     print("License gate passed: {} dependency records".format(len(records)))
 
 
+# 元数据缺失时，允许从包内声明文件兜底识别的 SPDX 标识（整行精确匹配才采信）。
+DOCS_SPDX = {"MIT", "ISC", "0BSD", "MPL-2.0", "Apache-2.0", "BSD-2-Clause",
+             "BSD-3-Clause", "Unlicense", "WTFPL"}
+
+
+def declared_license_from_docs(directory):
+    """lock / node_modules / registry 元数据全部缺失时的最后兜底：读包内
+    LICENSE / README 里作者自行声明的许可证。只采信整行精确的 SPDX 标识，
+    识别不了返回 None（保持缺失，走 fail-closed）。"""
+    if not directory.is_dir():
+        return None
+    for name in ("LICENSE", "LICENSE.md", "LICENCE", "LICENCE.md",
+                 "Readme.md", "README.md"):
+        path = directory / name
+        if not path.is_file():
+            continue
+        try:
+            lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            continue
+        if name.upper().startswith("LICEN"):
+            for line in lines:
+                stripped = line.strip()
+                if stripped.startswith("MIT License"):
+                    return "MIT"
+                if stripped.startswith("Apache License") and "2.0" in stripped:
+                    return "Apache-2.0"
+            continue
+        for index, line in enumerate(lines):
+            if re.fullmatch(r"#+\s*License", line.strip(), re.IGNORECASE):
+                for following in lines[index + 1:]:
+                    if following.strip():
+                        candidate = following.strip()
+                        return candidate if candidate in DOCS_SPDX else None
+                break
+    return None
+
+
 def npm_records(web, offline=False):
     lock = json.loads((web / "package-lock.json").read_text())
     if lock.get("lockfileVersion") not in (2, 3) or not lock.get("packages"):
@@ -154,6 +192,10 @@ def npm_records(web, offline=False):
             if metadata.get("name") != name or metadata.get("version") != version:
                 raise ValueError("registry identity mismatch: " + name)
             license_name = metadata.get("license")
+        # 元数据三处都缺失/未知时兜底读包内声明文件；UNLICENSED 是作者明确
+        # 声明不授权，不属于"缺失"，不兜底。
+        if not license_name or license_name.upper() in {"UNKNOWN", "NOASSERTION", "NONE"}:
+            license_name = declared_license_from_docs(web / location) or license_name
         records.append(("npm", name, version, license_name))
     return records
 
