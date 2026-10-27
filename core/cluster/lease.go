@@ -13,6 +13,7 @@ import (
 
 	"nexadmin/core/cache"
 	"nexadmin/core/metrics"
+	"nexadmin/pkg/idgen"
 )
 
 const (
@@ -36,6 +37,10 @@ func NodeLeaseOK() bool {
 
 // ErrNodeIDInUse 表示 database.node_id 已被另一个存活实例占用。
 var ErrNodeIDInUse = errors.New("cluster: database.node_id is already in use")
+
+// ErrAutoNodeNeedsSharedCache 表示 database.node_id 配了自动选号（-1）但缓存不共享：
+// 没有共享状态就无法保证跨实例不撞号。
+var ErrAutoNodeNeedsSharedCache = errors.New("cluster: auto node_id selection requires a shared cache (redis/valkey)")
 
 // Lease 是 database.node_id 的租约：持有期间别的实例无法用同一个 node_id 启动。
 type Lease struct {
@@ -65,6 +70,44 @@ func leaseKey(nodeID int) string { return cache.GlobalKey("node", strconv.Itoa(n
 // 实例崩溃后租约要等 TTL（30 秒）到期，期间用同一 node_id 重启会被拒绝，错误信息里有说明。
 func AcquireNodeLease(ctx context.Context, c cache.Cache, nodeID int, log *zap.Logger) (*Lease, error) {
 	return acquireLease(ctx, c, nodeID, InstanceID(), nodeLeaseTTL, nodeLeaseRenew, log)
+}
+
+// AcquireAutoNodeLease 在 0..MaxNode 里自动抢占一个空闲 node_id（database.node_id 配 -1 时用），
+// 语义与手工模式完全一致：SET NX 占位 + TTL 续约 + 释放；共享缓存下跨实例、跨服务不撞号。
+// 返回抢到的 node_id 与租约。
+//   - 缓存不共享或不支持 Locker：返回 ErrAutoNodeNeedsSharedCache——没有共享状态就无从保证
+//     跨实例不撞号，宁可拒绝启动也不静默回退（手工模式在 memory 缓存下跳过检查是另一码事：
+//     那是操作者明示了单实例）。
+//   - 0..MaxNode 全被占用：返回 ErrNodeIDInUse。
+func AcquireAutoNodeLease(ctx context.Context, c cache.Cache, log *zap.Logger) (*Lease, int, error) {
+	if log == nil {
+		log = zap.NewNop()
+	}
+	if !cache.IsShared(c) {
+		return nil, 0, ErrAutoNodeNeedsSharedCache
+	}
+	lk, ok := cache.As[cache.Locker](c)
+	if !ok {
+		return nil, 0, ErrAutoNodeNeedsSharedCache
+	}
+	token := InstanceID()
+	for node := 0; node <= int(idgen.MaxNode); node++ {
+		key := leaseKey(node)
+		got, err := lk.SetNX(ctx, key, token, nodeLeaseTTL)
+		if err != nil {
+			return nil, 0, fmt.Errorf("cluster: claim auto node_id %d lease: %w", node, err)
+		}
+		if !got {
+			continue // 被别的实例持有（含未过期的崩溃残留），看下一个
+		}
+		l := &Lease{lk: lk, key: key, token: token, ttl: nodeLeaseTTL, log: log, failLimit: leaseFailLimit,
+			stop: make(chan struct{}), done: make(chan struct{})}
+		healthyLease.Store(l)
+		registerLeaseMetric()
+		go l.loop(nodeLeaseRenew)
+		return l, node, nil
+	}
+	return nil, 0, fmt.Errorf("%w: all %d node ids are held by live instances (TTL %s)", ErrNodeIDInUse, int(idgen.MaxNode)+1, nodeLeaseTTL)
 }
 
 func acquireLease(ctx context.Context, c cache.Cache, nodeID int, token string, ttl, renew time.Duration, log *zap.Logger) (*Lease, error) {

@@ -14,6 +14,8 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"nexadmin/core/cache"
+	"nexadmin/core/cluster"
 	"nexadmin/core/database"
 	"nexadmin/core/migrate"
 	"nexadmin/core/seed"
@@ -233,7 +235,22 @@ func (a *App) Migrate(o MigrateOptions, out io.Writer) error {
 		fmt.Fprintln(out, "系统尚未初始化，无需迁移（初始化向导 / init 会自动建表）")
 		return nil
 	}
-	if err := idgen.Init(int64(a.cfg.Database.NodeID)); err != nil {
+	if a.cfg.Database.NodeID < 0 {
+		// 自动选号：迁移也会生成雪花 ID，需要真实 node_id。走共享缓存抢号（见 buildFull）。
+		// 一次性进程不显式释放租约：进程退出后 TTL（30s）自然过期，避免迁移中段被别的实例抢走同号。
+		ch, err := cache.New(a.cfg.Cache)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = ch.Close() }()
+		var node int
+		if _, node, err = cluster.AcquireAutoNodeLease(context.Background(), ch, log); err != nil {
+			return err
+		}
+		if err := idgen.Init(int64(node)); err != nil {
+			return err
+		}
+	} else if err := idgen.Init(int64(a.cfg.Database.NodeID)); err != nil {
 		return err
 	}
 	db, err := database.Open(a.cfg.Database)

@@ -249,6 +249,67 @@ func newLease(t *testing.T, c cache.Cache, node int, token string, ttl, renew ti
 	return acquireLease(context.Background(), c, node, token, ttl, renew, log)
 }
 
+// 自动选号：跳过被手工占用的号，取第一个空闲者。
+func TestAutoLeasePicksFirstFreeNode(t *testing.T) {
+	c := sharedFake{memCache(t)}
+	// 占住 0 和 1
+	l0, err := newLease(t, c, 0, "inst-0", time.Minute, time.Minute, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	l1, err := newLease(t, c, 1, "inst-1", time.Minute, time.Minute, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	l, node, err := AcquireAutoNodeLease(context.Background(), c, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if node != 2 {
+		t.Fatalf("auto node = %d, want 2 (0 and 1 are held)", node)
+	}
+	// 拿到的租约行为与手工一致：同 node 再抢报冲突
+	if _, err := newLease(t, c, node, "other", time.Minute, time.Minute, nil); !errors.Is(err, ErrNodeIDInUse) {
+		t.Fatalf("auto-claimed node must reject others, got %v", err)
+	}
+	l.Release()
+	l1.Release()
+	l0.Release()
+}
+
+// 自动选号：崩溃实例的 TTL 过期后其号可被复用。
+func TestAutoLeaseReusesExpiredNode(t *testing.T) {
+	c := sharedFake{memCache(t)}
+	lk, _ := cache.As[cache.Locker](c)
+	// 0 号被"崩溃"持有者占着，TTL 很短
+	_, _ = lk.SetNX(context.Background(), leaseKey(0), "dead", 80*time.Millisecond)
+	l, node, err := AcquireAutoNodeLease(context.Background(), c, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if node != 1 { // 0 还活着：取 1
+		t.Fatalf("auto node = %d, want 1 while 0 is live", node)
+	}
+	l.Release()
+	time.Sleep(150 * time.Millisecond)
+	l2, node2, err := AcquireAutoNodeLease(context.Background(), c, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if node2 != 0 { // 0 号的 TTL 已过期：这次轮到它
+		t.Fatalf("auto node = %d, want 0 after expiry", node2)
+	}
+	l2.Release()
+}
+
+// 自动选号：非共享缓存必须拒绝（无法保证跨实例不撞号）。
+func TestAutoLeaseRequiresSharedCache(t *testing.T) {
+	_, _, err := AcquireAutoNodeLease(context.Background(), memCache(t), nil)
+	if !errors.Is(err, ErrAutoNodeNeedsSharedCache) {
+		t.Fatalf("memory cache must reject auto mode, got %v", err)
+	}
+}
+
 func TestLeaseSkippedForMemoryCache(t *testing.T) {
 	l, err := AcquireNodeLease(context.Background(), memCache(t), 3, nil)
 	if err != nil || l != nil {
