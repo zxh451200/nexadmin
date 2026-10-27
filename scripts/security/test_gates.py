@@ -33,12 +33,19 @@ class LicenseGateTests(unittest.TestCase):
             licenses.check([], self.policy)
 
     def test_exception_is_exact_and_requires_reason(self):
-        item = self.policy["exceptions"][0]
+        # 只有 license 不在白名单里的例外才会真正走到例外匹配分支
+        # （白名单命中的依赖在 check() 里短路，测不到例外逻辑）。
+        allowed = set(self.policy["allowed"])
+        index = next((i for i, x in enumerate(self.policy["exceptions"])
+                      if x["license"] not in allowed), None)
+        if index is None:
+            self.skipTest("every exception's license is also allowlisted")
+        item = self.policy["exceptions"][index]
         record = tuple(item[k] for k in ("ecosystem", "name", "version", "license"))
         licenses.check([record], self.policy)
-        for index, value in [(0, "go"), (1, "other"), (2, "99.0.0"), (3, "UNKNOWN")]:
+        for position, value in [(0, "go"), (1, "other"), (2, "99.0.0"), (3, "UNKNOWN")]:
             changed = list(record)
-            changed[index] = value
+            changed[position] = value
             with self.assertRaises(ValueError):
                 licenses.check([tuple(changed)], self.policy)
         with tempfile.TemporaryDirectory() as directory:
@@ -46,7 +53,7 @@ class LicenseGateTests(unittest.TestCase):
             for key, value in [("reason", ""), ("name", "*"), ("version", "*"),
                                ("license", "UNKNOWN")]:
                 invalid = copy.deepcopy(self.policy)
-                invalid["exceptions"][0][key] = value
+                invalid["exceptions"][index][key] = value
                 path.write_text(json.dumps(invalid))
                 with self.assertRaises(ValueError):
                     licenses.load_policy(path)
@@ -144,6 +151,9 @@ class GitleaksTests(unittest.TestCase):
             # A different secret in a test directory must also block.
             tests = root / "tests"
             tests.mkdir()
+            if not shutil.which("openssl"):
+                # 前面的 PAT 夹具已在本机验证；RSA 夹具只在 CI（Linux 自带 openssl）跑。
+                self.skipTest("openssl unavailable locally; RSA fixture skipped")
             key = subprocess.run(["openssl", "genrsa", "-traditional", "2048"],
                                  capture_output=True, text=True, timeout=15, check=True)
             (tests / "private.pem").write_text(key.stdout)
