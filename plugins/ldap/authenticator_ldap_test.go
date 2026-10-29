@@ -10,6 +10,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
@@ -276,5 +277,34 @@ func TestAuthenticateConnectionFailure(t *testing.T) {
 	a := &authenticator{svc: NewService(configDB(t, port, svcPass, 1), nil)}
 	if _, err := a.Authenticate(context.Background(), "alice", userPass); err == nil {
 		t.Fatal("closed port must produce an error")
+	}
+}
+
+func TestTestConnectionAgainstFakeDirectory(t *testing.T) {
+	f := startFakeLDAP(t)
+	svc := NewService(configDB(t, f.port, svcPass, 1), nil)
+	if err := svc.TestConnection(context.Background()); err != nil {
+		t.Fatalf("test connection: %v", err)
+	}
+	if len(f.binds) != 1 || f.binds[0] != svcDN {
+		t.Fatalf("test connection must bind the service account once, got %v", f.binds)
+	}
+}
+
+func TestTestConnectionRequiresHostAndBaseDN(t *testing.T) {
+	// 无配置行 → defaultConfig（host/base_dn 为空）→ 必须在 dial 之前拒绝。
+	sqlDB, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = sqlDB.Close() })
+	db, err := gorm.Open(gormmysql.New(gormmysql.Config{Conn: sqlDB, SkipInitializeWithVersion: true}), &gorm.Config{DisableAutomaticPing: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mock.ExpectQuery("SELECT \\* FROM `plg_ldap_config`").WillReturnError(gorm.ErrRecordNotFound)
+	err = NewService(db, nil).TestConnection(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "ldap.host_basedn_required") {
+		t.Fatalf("missing host/base_dn must be rejected before dialing, got %v", err)
 	}
 }
