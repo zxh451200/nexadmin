@@ -50,12 +50,26 @@ type envelope struct {
 type LicenseError struct {
 	Status string
 	Reason string
+	// ActionHint 是给使用者的下一步建议；展示时拼在 Reason 之后。
+	ActionHint string
 }
 
 func (e *LicenseError) Error() string { return e.Status + ": " + e.Reason }
 
+// Message 返回「原因 + 下一步」，供后台直接展示；没有建议时只返回原因。
+func (e *LicenseError) Message() string {
+	if e.ActionHint == "" {
+		return e.Reason
+	}
+	return e.Reason + "；" + e.ActionHint
+}
+
 func invalid(format string, a ...any) *LicenseError {
-	return &LicenseError{Status: StatusInvalid, Reason: fmt.Sprintf(format, a...)}
+	return &LicenseError{
+		Status:     StatusInvalid,
+		Reason:     fmt.Sprintf(format, a...),
+		ActionHint: "请确认授权文件属于该插件且由受信任的发行方签发；必要时向发行方重新获取",
+	}
 }
 
 // Sign 用私钥签发授权文件文本。
@@ -145,7 +159,8 @@ func VerifyKeys(raw []byte, pluginID string, now time.Time, keys []Key) (*Licens
 		return nil, invalid("expires_at 格式错误")
 	}
 	if !now.Before(exp) {
-		return &l, &LicenseError{Status: StatusExpired, Reason: "授权已于 " + l.ExpiresAt + " 到期"}
+		return &l, &LicenseError{Status: StatusExpired, Reason: "授权已于 " + l.ExpiresAt + " 到期",
+			ActionHint: "请联系发行方续期，然后在插件管理导入新的授权文件"}
 	}
 	return &l, nil
 }
@@ -166,7 +181,8 @@ func checkFile(root, id string, now time.Time, keys []Key) (*License, error) {
 	}
 	raw, err := os.ReadFile(p)
 	if errors.Is(err, os.ErrNotExist) {
-		return nil, &LicenseError{Status: StatusUnlicensed, Reason: "未找到授权文件 data/licenses/" + id + ".lic"}
+		return nil, &LicenseError{Status: StatusUnlicensed, Reason: "未找到授权文件 data/licenses/" + id + ".lic",
+			ActionHint: "请在插件市场购买授权，或改用免费版本"}
 	}
 	if err != nil {
 		return nil, invalid("读取授权文件失败: %v", err)

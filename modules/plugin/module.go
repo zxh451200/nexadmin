@@ -325,7 +325,7 @@ func importLicense(m *plugin.Manager, id string) gin.HandlerFunc {
 		case errors.Is(err, plugin.ErrFree):
 			response.Fail(c, response.BadRequest("error.bad_request").WithMsg("免费插件无需授权"))
 		case errors.As(err, &le):
-			response.Fail(c, response.BadRequest("error.bad_request").WithMsg(le.Reason))
+			response.Fail(c, response.BadRequest("error.bad_request").WithMsg(le.Message()))
 		default:
 			response.Fail(c, err)
 		}

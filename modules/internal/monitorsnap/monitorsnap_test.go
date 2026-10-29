@@ -177,3 +177,19 @@ func TestDownsampleEmptyMarshalsAsArray(t *testing.T) {
 		t.Fatalf("不应出现 null：%s", s)
 	}
 }
+
+// 未装配数据库时三个方法都必须是无副作用 no-op：监控模块在测试/停用装配下仍会启动采样循环。
+func TestNilStoreIsNoop(t *testing.T) {
+	s := NewStore(nil)
+	if err := s.Save(context.Background(), KindServer, time.Now(), Metrics{"cpu": 1}); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	rows, err := s.Query(context.Background(), KindServer, time.Now().Add(-time.Hour), time.Now())
+	if err != nil || rows != nil {
+		t.Fatalf("Query: %v %v", rows, err)
+	}
+	n, err := s.Purge(context.Background(), time.Now())
+	if err != nil || n != 0 {
+		t.Fatalf("Purge: %d %v", n, err)
+	}
+}

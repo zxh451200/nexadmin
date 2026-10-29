@@ -107,7 +107,8 @@ func revokedReason(e RevokedEntry) string {
 }
 
 func revokedError(e RevokedEntry) *LicenseError {
-	return &LicenseError{Status: StatusRevoked, Reason: revokedReason(e)}
+	return &LicenseError{Status: StatusRevoked, Reason: revokedReason(e),
+		ActionHint: "请联系发行方确认吊销原因；如需继续使用，请重新签发授权"}
 }
 
 // SignRevocations 用私钥签发吊销清单文本（与授权文件同一种 envelope）。

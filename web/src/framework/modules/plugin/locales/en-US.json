@@ -88,7 +88,9 @@
         "done": "Done",
         "failed": "Failed: check the log for details",
         "empty": "Job submitted, waiting for output…",
-        "close": "Close"
+        "close": "Close",
+        "freeNote": "Free plugins need no license: they are ready once the build and restart finish.",
+        "proNote": "Pro plugin: if it is still unlicensed after startup, import the license here; restart when prompted."
       },
       "error": "Failed to load the marketplace catalog. Check config/plugin-market.yaml or try again later",
       "retry": "Retry",

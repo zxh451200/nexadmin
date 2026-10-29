@@ -309,3 +309,17 @@ func TestExpiryOffline(t *testing.T) {
 		t.Fatalf("got %+v", i)
 	}
 }
+
+func TestLicenseErrorMessageCarriesAction(t *testing.T) {
+	e := &LicenseError{Status: StatusExpired, Reason: "授权已于 2026-01-02 到期", ActionHint: "请联系发行方续期"}
+	if e.Message() != e.Reason+"；"+e.ActionHint || !strings.Contains(e.Message(), "续期") {
+		t.Fatalf("expired message: %q", e.Message())
+	}
+	if r := revokedError(RevokedEntry{Serial: "abc123", Reason: "退款"}); r.ActionHint == "" || !strings.Contains(r.Message(), "重新签发") {
+		t.Fatalf("revoked message must carry an action: %q", r.Message())
+	}
+	plain := &LicenseError{Status: StatusInvalid, Reason: "x"}
+	if plain.Message() != "x" {
+		t.Fatalf("empty hint must not add punctuation: %q", plain.Message())
+	}
+}

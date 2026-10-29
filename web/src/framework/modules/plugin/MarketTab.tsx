@@ -21,6 +21,7 @@ import {
   useRebuildServer,
   useRemovePlugin,
   type MarketEntry,
+  type PluginEdition,
   type PluginInfo,
 } from './api'
 
@@ -66,7 +67,15 @@ function InstallDialog({
 }
 
 /** 安装/移除/重建任务的进度对话框：滚动日志 + 状态推进；触发自重启后等待服务恢复再整页刷新。 */
-function JobDialog({ jobId, onClose }: { jobId: string | null; onClose: () => void }) {
+function JobDialog({
+  jobId,
+  edition,
+  onClose,
+}: {
+  jobId: string | null
+  edition?: PluginEdition
+  onClose: () => void
+}) {
   const { t } = useTranslation()
   const qc = useQueryClient()
   const { data: job, isError } = useMarketJob(jobId)
@@ -143,6 +152,11 @@ function JobDialog({ jobId, onClose }: { jobId: string | null; onClose: () => vo
     >
       <div className="flex flex-col gap-3">
         {stateNode}
+        {edition ? (
+          <p className="text-xs text-muted-foreground">
+            {t(edition === 'pro' ? 'pluginMgr.market.job.proNote' : 'pluginMgr.market.job.freeNote')}
+          </p>
+        ) : null}
         <div ref={logRef} className="max-h-72 overflow-y-auto rounded-lg border bg-muted/40 p-3 font-mono text-xs leading-relaxed">
           {(job?.log ?? []).map((line, i) => (
             <div key={i} className="whitespace-pre-wrap break-all text-muted-foreground">
@@ -174,6 +188,7 @@ export default function MarketTab({ focus = '' }: { focus?: string }) {
   const remove = useRemovePlugin()
   const rebuild = useRebuildServer()
   const [jobId, setJobId] = useState<string | null>(null)
+  const [jobEdition, setJobEdition] = useState<PluginEdition | null>(null)
   const [keyword, setKeyword] = useState(focus)
   const [category, setCategory] = useState('')
   const [installTarget, setInstallTarget] = useState<MarketEntry | null>(null)
@@ -221,6 +236,7 @@ export default function MarketTab({ focus = '' }: { focus?: string }) {
       setInstallTarget(e)
       return
     }
+    setJobEdition('free')
     install.mutate(
       { id: e.id, force: e.installed },
       { onSuccess: (res) => setJobId(res.jobId) },
@@ -230,6 +246,7 @@ export default function MarketTab({ focus = '' }: { focus?: string }) {
   const onInstallConfirm = (e: MarketEntry, license: string) => {
     if (license) sessionStorage.setItem(PENDING_LICENSE(e.id), license)
     setInstallTarget(null)
+    setJobEdition('pro')
     install.mutate(
       { id: e.id, force: e.installed },
       { onSuccess: (res) => setJobId(res.jobId) },
@@ -238,6 +255,7 @@ export default function MarketTab({ focus = '' }: { focus?: string }) {
 
   const onRemove = (e: MarketEntry) => {
     if (!window.confirm(t('pluginMgr.market.remove.confirm', { name: e.name }))) return
+    setJobEdition(null)
     remove.mutate({ id: e.id }, { onSuccess: (res) => setJobId(res.jobId) })
   }
 
@@ -269,7 +287,10 @@ export default function MarketTab({ focus = '' }: { focus?: string }) {
             variant="outline"
             className="ms-auto"
             disabled={rebuild.isPending}
-            onClick={() => rebuild.mutate(undefined, { onSuccess: (res) => setJobId(res.jobId) })}
+            onClick={() => {
+              setJobEdition(null)
+              rebuild.mutate(undefined, { onSuccess: (res) => setJobId(res.jobId) })
+            }}
           >
             <RefreshCw className={rebuild.isPending ? 'animate-spin' : ''} aria-hidden="true" />
             {t('pluginMgr.market.rebuild')}
@@ -362,7 +383,14 @@ export default function MarketTab({ focus = '' }: { focus?: string }) {
         </div>
       )}
 
-      <JobDialog jobId={jobId} onClose={() => setJobId(null)} />
+      <JobDialog
+        jobId={jobId}
+        edition={jobEdition ?? undefined}
+        onClose={() => {
+          setJobId(null)
+          setJobEdition(null)
+        }}
+      />
       <InstallDialog
         entry={installTarget}
         onClose={() => setInstallTarget(null)}

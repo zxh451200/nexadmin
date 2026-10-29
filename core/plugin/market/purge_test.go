@@ -285,3 +285,38 @@ func TestLoadCatalog(t *testing.T) {
 		}
 	}
 }
+
+// 派生工程模块名与母版不同：安装时必须改写插件源码里的框架 import，否则装完编译不过。
+func TestInstallRewritesFrameworkModuleImports(t *testing.T) {
+	dir := t.TempDir()
+	root := filepath.Join(dir, "app")
+	write(t, filepath.Join(root, "go.mod"), "module example.com/app\n\ngo 1.26\n")
+	write(t, filepath.Join(root, "plugins", "plugins.go"), "package plugins\n\n// nexadmin:plugins:begin\n// nexadmin:plugins:end\n")
+	write(t, filepath.Join(dir, "pkg", "plugin.yaml"), "id: demo\nname: Demo\nversion: 1.0.0\nedition: free\n")
+	write(t, filepath.Join(dir, "pkg", "backend", "plugin.go"), `package demo
+
+import (
+	"nexadmin/core"
+	"nexadmin/pkg/idgen"
+)
+
+const note = "nexadmin/core must stay in strings"
+`)
+	write(t, filepath.Join(dir, "pkg", "backend", "service.go"), "package demo\n\nimport \"nexadmin/core/database\"\n\nvar _ = database.Open\n")
+	if _, err := Install(root, filepath.Join(dir, "pkg"), false); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(filepath.Join(root, "plugins", "demo", "plugin.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(got)
+	for _, want := range []string{`"example.com/app/core"`, `"example.com/app/pkg/idgen"`, `note = "nexadmin/core must stay in strings"`} {
+		if !strings.Contains(s, want) {
+			t.Errorf("missing %q in installed source:\n%s", want, s)
+		}
+	}
+	if strings.Contains(s, `"nexadmin/core"`) || strings.Contains(s, `"nexadmin/pkg/idgen"`) {
+		t.Error("framework imports were not rewritten")
+	}
+}

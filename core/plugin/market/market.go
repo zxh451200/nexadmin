@@ -7,14 +7,19 @@ package market
 
 import (
 	"archive/zip"
+	"bytes"
 	"errors"
 	"fmt"
+	"go/format"
+	"go/parser"
+	"go/token"
 	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"gorm.io/gorm"
@@ -281,6 +286,48 @@ func copyTree(src, dst string) error {
 	})
 }
 
+// rewriteModuleImports 把插件源码里对框架的 import（nexadmin/...）改成目标工程的模块名。
+// 只改 import 声明，不动注释与字符串；module 相同（母版内安装）时直接返回。
+func rewriteModuleImports(dir, module string) error {
+	if module == "" || module == "nexadmin" {
+		return nil
+	}
+	return filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() || !strings.HasSuffix(p, ".go") {
+			return nil
+		}
+		src, err := os.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		fset := token.NewFileSet()
+		file, err := parser.ParseFile(fset, p, src, parser.ParseComments)
+		if err != nil {
+			return fmt.Errorf("解析 %s: %w", p, err)
+		}
+		changed := false
+		for _, imp := range file.Imports {
+			path, err := strconv.Unquote(imp.Path.Value)
+			if err != nil || !strings.HasPrefix(path, "nexadmin/") {
+				continue
+			}
+			imp.Path.Value = strconv.Quote(module + strings.TrimPrefix(path, "nexadmin"))
+			changed = true
+		}
+		if !changed {
+			return nil
+		}
+		var buf bytes.Buffer
+		if err := format.Node(&buf, fset, file); err != nil {
+			return fmt.Errorf("格式化 %s: %w", p, err)
+		}
+		return os.WriteFile(p, buf.Bytes(), 0o644)
+	})
+}
+
 func copyFile(src, dst string) error {
 	in, err := os.Open(src)
 	if err != nil {
@@ -387,6 +434,10 @@ func InstallSub(root, src, sub string, force bool) (string, error) {
 	}
 	defer os.RemoveAll(stageB) //nolint:errcheck
 	if err := copyTree(backend, stageB); err != nil {
+		return "", err
+	}
+	// 插件包按框架母版模块名（nexadmin/...）编写；派生工程模块名不同，安装时按目标 go.mod 改写。
+	if err := rewriteModuleImports(stageB, mod); err != nil {
 		return "", err
 	}
 	if err := copyFile(filepath.Join(dir, plugin.ManifestFile), filepath.Join(stageB, plugin.ManifestFile)); err != nil {

@@ -75,6 +75,9 @@ type dbStore struct{ db *gorm.DB }
 func NewStore(db *gorm.DB) Store { return &dbStore{db: db} }
 
 func (s *dbStore) Save(ctx context.Context, kind string, at time.Time, m Metrics) error {
+	if s.db == nil { // 未装配数据库（测试或模块停用）：记录无处可写，不能 panic
+		return nil
+	}
 	payload, err := json.Marshal(m)
 	if err != nil {
 		return fmt.Errorf("monitorsnap: 序列化 %s 指标失败: %w", kind, err)
@@ -84,6 +87,9 @@ func (s *dbStore) Save(ctx context.Context, kind string, at time.Time, m Metrics
 }
 
 func (s *dbStore) Query(ctx context.Context, kind string, from, to time.Time) ([]Row, error) {
+	if s.db == nil {
+		return nil, nil
+	}
 	var rows []Snapshot
 	err := s.db.WithContext(ctx).Where("kind = ? AND ts >= ? AND ts < ?", kind, from.UTC(), to.UTC()).
 		Order("ts ASC").Find(&rows).Error
@@ -102,6 +108,9 @@ func (s *dbStore) Query(ctx context.Context, kind string, from, to time.Time) ([
 }
 
 func (s *dbStore) Purge(ctx context.Context, before time.Time) (int64, error) {
+	if s.db == nil {
+		return 0, nil
+	}
 	res := s.db.WithContext(ctx).Where("ts < ?", before.UTC()).Delete(&Snapshot{})
 	return res.RowsAffected, res.Error
 }
