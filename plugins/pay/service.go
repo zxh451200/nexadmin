@@ -23,6 +23,18 @@ import (
 type Service struct {
 	db  *gorm.DB
 	log logger
+	// loc 是应用时区：统计按天分桶要用它把 UTC 时间换算成用户看到的自然日。
+	loc *time.Location
+}
+
+// WithTimezone 设置应用时区（非法值退回 UTC）。
+func (s *Service) WithTimezone(tz string) *Service {
+	loc, err := time.LoadLocation(tz)
+	if err != nil || loc == nil {
+		loc = time.UTC
+	}
+	s.loc = loc
+	return s
 }
 
 // logger 是 Service 需要的最小日志面（测试易替换）。
@@ -123,13 +135,13 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Order, *PayParam
 		PaymentNo: "PAY" + formatID(int64(id)),
 		BizType:   in.BizType, BizNo: in.BizNo,
 		SubjectType: truncate(in.SubjectType, 32), SubjectID: truncate(in.SubjectID, 64),
-		Subject: subjectOr(in.Subject),
+		Subject:     subjectOr(in.Subject),
 		AmountMinor: in.AmountMinor, AmountOrigMinor: amountOrig,
 		OrigCurrency: origCur, Currency: in.Currency, FxRateMicro: fx,
 		ChannelCode: ch.Code, Method: truncate(in.Method, 32), Scene: truncate(in.Scene, 32),
 		PayerID: truncate(in.PayerID, 64), PayerOpenID: truncate(in.PayerOpenID, 128),
 		OperatorID: truncate(in.OperatorID, 64), MetadataJSON: meta,
-		Status: StatusPending,
+		Status:   StatusPending,
 		ExpireAt: ptr(time.Now().UTC().Add(time.Duration(in.ExpireSec) * time.Second)),
 	}
 	o.ID = id
@@ -838,9 +850,9 @@ func (s *Service) ListCallbacks(ctx context.Context, q CallbackQuery) ([]Callbac
 
 // RefundQuery 过滤退款列表。
 type RefundQuery struct {
-	Status  string
-	Keyword string
-	Page    int
+	Status   string
+	Keyword  string
+	Page     int
 	PageSize int
 }
 
@@ -947,7 +959,7 @@ func providerWithConfig(ch *Channel) (Provider, map[string]string, error) {
 	return p, cfg, nil
 }
 
-// matchRule 命中抽佣规则：主体精确优先，退回租户默认（subject_id = ''）。无规则返回 nil。
+// matchRule 命中抽佣规则：主体精确优先，退回租户默认（subject_id = ”）。无规则返回 nil。
 func (s *Service) matchRule(db *gorm.DB, ctx context.Context, subjectID, bizType string) (*CommissionRule, error) {
 	var rule CommissionRule
 	err := db.WithContext(ctx).Where(

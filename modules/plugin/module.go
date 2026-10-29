@@ -8,6 +8,7 @@ package plugin
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 
@@ -15,6 +16,8 @@ import (
 	"gorm.io/gorm"
 
 	"nexadmin/core"
+	"nexadmin/core/auth"
+	"nexadmin/core/middleware"
 	"nexadmin/core/plugin"
 	"nexadmin/core/plugin/market"
 	"nexadmin/core/response"
@@ -53,21 +56,52 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	m := plugin.Default()
 	m.Attach(d)
 
-	r.GET("/plugins", core.Perm(PermList), func(c *gin.Context) {
+	r.GET("/plugins", requirePlatformUser, core.Perm(PermList), func(c *gin.Context) {
 		m.ObserveHost(c.Request.Host)
 		response.OK(c, m.List())
 	})
 
-	licPerm := core.Perm(PermLicense)
+	// 已启用（有授权并已挂载）的插件 ID：前端据此隐藏不可用的插件页面、跳过插件语言包加载。
+	// 只回 ID，不含授权细节，所以登录用户都能读，不需要 plugin:list。
+	r.GET("/plugins/active", middleware.RequireLogin(), func(c *gin.Context) {
+		m.ObserveHost(c.Request.Host)
+		response.OK(c, m.ActiveIDs())
+	})
+
 	viaApp, dormant := m.Routes()
+	registerLicenseRoutes(r, d.Public, m, viaApp, dormant)
+	registerMarket(r, m)
+}
+
+func requirePlatformUser(c *gin.Context) {
+	cl := auth.ClaimsFrom(c)
+	if cl == nil {
+		response.Fail(c, response.Unauthorized("error.unauthorized"))
+		return
+	}
+	if !cl.Super || cl.UserID == 0 || (cl.Principal != "" && cl.Principal != auth.PrincipalPAT) {
+		response.Fail(c, response.Forbidden("error.forbidden"))
+		return
+	}
+	c.Next()
+}
+
+func registerLicenseRoutes(r, public *gin.RouterGroup, m *plugin.Manager, viaApp, dormant []string) {
+	licPerm := core.Perm(PermLicense)
 	for _, id := range viaApp {
-		r.POST("/plugins/"+id+"/license", licPerm, importLicense(m, id))
+		r.POST("/plugins/"+id+"/license", requirePlatformUser, licPerm, importLicense(m, id))
+	}
+	if public == nil {
+		public = r
 	}
 	for _, id := range dormant {
 		id := id
 		imp := importLicense(m, id)
-		r.Any("/plugins/"+id+"/*rest", func(c *gin.Context) {
+		public.Any("/plugins/"+id+"/*rest", func(c *gin.Context) {
 			if c.Request.Method == http.MethodPost && c.Param("rest") == "/license" {
+				if requirePlatformUser(c); c.IsAborted() {
+					return
+				}
 				if licPerm(c); c.IsAborted() {
 					return
 				}
@@ -77,8 +111,6 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 			m.Dispatch(c, id)
 		})
 	}
-
-	registerMarket(r, m)
 }
 
 // marketEntry 是市场页的列表项：目录条目 + 安装状态 + 运行期授权状态。
@@ -89,7 +121,18 @@ type marketEntry struct {
 	Status           string `json:"status"` // 运行期状态；未装或未注册为空
 }
 
+type marketActions struct {
+	install func(string, market.Entry, bool) string
+	remove  func(string, string, bool) string
+	rebuild func(string, bool) string
+}
+
 func registerMarket(r *gin.RouterGroup, m *plugin.Manager) {
+	registerMarketWith(r, m, marketActions{startInstall, startRemove, startRebuild})
+}
+
+func registerMarketWith(r *gin.RouterGroup, m *plugin.Manager, actions marketActions) {
+	r = r.Group("", requirePlatformUser)
 	list := core.Perm(PermList)
 	install := core.Perm(PermInstall)
 
@@ -137,7 +180,7 @@ func registerMarket(r *gin.RouterGroup, m *plugin.Manager) {
 			response.Fail(c, response.NotFound("error.not_found").WithMsg("市场目录里没有该插件"))
 			return
 		}
-		response.OK(c, gin.H{"jobId": startInstall(root, entry, in.Force)})
+		response.OK(c, gin.H{"jobId": actions.install(root, entry, in.Force)})
 	})
 
 	r.POST("/plugins/market/remove", install, func(c *gin.Context) {
@@ -148,11 +191,11 @@ func registerMarket(r *gin.RouterGroup, m *plugin.Manager) {
 		if !response.BindJSON(c, &in) {
 			return
 		}
-		response.OK(c, gin.H{"jobId": startRemove(m.Root(), in.ID, in.Purge)})
+		response.OK(c, gin.H{"jobId": actions.remove(m.Root(), in.ID, in.Purge)})
 	})
 
 	r.POST("/plugins/market/rebuild", install, func(c *gin.Context) {
-		response.OK(c, gin.H{"jobId": startRebuild(m.Root(), true)})
+		response.OK(c, gin.H{"jobId": actions.rebuild(m.Root(), true)})
 	})
 
 	r.GET("/plugins/market/jobs/:jobId", list, func(c *gin.Context) {
@@ -167,40 +210,65 @@ func registerMarket(r *gin.RouterGroup, m *plugin.Manager) {
 }
 
 // startInstall 一键安装全流程：下载 → 安装 → 重建 → 自重启。
+// 构建失败时恢复安装前的源码、依赖清单与前端产物，避免留下装了一半、无法回退的源码树。
 func startInstall(root string, e market.Entry, force bool) string {
 	return marketRunner.Run("install", e.ID, func(x *market.Ctx) error {
-		x.Log("从 GitHub %s 拉取插件包…", e.Repo)
-		zipPath, err := market.Download(context.Background(), e)
+		err := market.ChangeSources(root, e.ID, func() error {
+			source := e.Repo
+			if e.URL != "" {
+				source = e.URL
+			}
+			x.Log("从 %s 拉取插件包…", source)
+			zipPath, err := market.Download(context.Background(), e)
+			if err != nil {
+				return err
+			}
+			defer os.Remove(zipPath) //nolint:errcheck
+			withWeb := market.HasWeb(zipPath)
+			x.Log("下载完成，开始安装…")
+			if _, err := market.InstallSub(root, zipPath, e.Subdir, force); err != nil {
+				return err
+			}
+			x.Log("插件 %s 已装入源码树，开始重建…", e.ID)
+			if err := market.Rebuild(context.Background(), root, withWeb, x.LogPlain); err != nil {
+				return fmt.Errorf("重建失败: %w", err)
+			}
+			return nil
+		})
 		if err != nil {
-			return err
-		}
-		defer os.Remove(zipPath) //nolint:errcheck
-		withWeb := market.HasWeb(zipPath)
-		x.Log("下载完成，开始安装…")
-		if _, err := market.InstallSub(root, zipPath, e.Subdir, force); err != nil {
-			return err
-		}
-		x.Log("插件 %s 已装入源码树，开始重建…", e.ID)
-		if err := market.Rebuild(context.Background(), root, withWeb, x.LogPlain); err != nil {
-			x.Log("重建失败：%v（源码已装好，可手动 scripts/build.sh 后重启）", err)
+			x.Log("失败，源码已恢复到安装前状态；可修正后重试")
 			return err
 		}
 		return triggerRestart(root, x)
 	})
 }
 
-// startRemove 移除 → 重建 → 自重启。
+// startRemove 移除 → 重建 → 自重启。purge 已经删库，无法回滚，因此不做源码恢复。
 func startRemove(root, id string, purge bool) string {
 	return marketRunner.Run("remove", id, func(x *market.Ctx) error {
+		change := func() error {
+			if purge {
+				x.Log("清理插件数据表与菜单…")
+			}
+			if err := market.Remove(root, id, purge, ctxWriter{x}); err != nil {
+				return err
+			}
+			x.Log("开始重建…")
+			if err := market.Rebuild(context.Background(), root, true, x.LogPlain); err != nil {
+				return fmt.Errorf("重建失败: %w", err)
+			}
+			return nil
+		}
+		var err error
 		if purge {
-			x.Log("清理插件数据表与菜单…")
+			err = change()
+		} else {
+			err = market.ChangeSources(root, id, change)
 		}
-		if err := market.Remove(root, id, purge, ctxWriter{x}); err != nil {
-			return err
-		}
-		x.Log("开始重建…")
-		if err := market.Rebuild(context.Background(), root, true, x.LogPlain); err != nil {
-			x.Log("重建失败：%v（文件已移除，可手动 scripts/build.sh 后重启）", err)
+		if err != nil {
+			if !purge {
+				x.Log("失败，源码已恢复到移除前状态；可修正后重试")
+			}
 			return err
 		}
 		return triggerRestart(root, x)
@@ -217,12 +285,14 @@ func startRebuild(root string, withWeb bool) string {
 	})
 }
 
-// triggerRestart 尝试自重启；非托管运行形态退化为提示手动重启，任务仍算成功（产物已换好）。
+// triggerRestart 交给独立进程重启。无法自动重启时返回错误，让任务明确失败，
+// 而不是把「产物已换、旧进程仍在」记成重启中或成功。
 func triggerRestart(root string, x *market.Ctx) error {
 	x.MarkRestarting()
 	if err := market.Restart(root, x.LogPlain); err != nil {
 		x.Log("%v", err)
-		x.Log("请手动重启服务生效（二进制已替换完成）。")
+		x.Log("产物已替换完成，但服务未自动重启；请手动重启后核验版本与插件状态。")
+		return err
 	}
 	return nil
 }

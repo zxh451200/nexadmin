@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -39,8 +40,13 @@ func TestS3OverlayWrittenWithStrictPerms(t *testing.T) {
 	if _, err := writeConfig(r.Cfg.UserConfigPath, r.overlay(req, db)); err != nil {
 		t.Fatal(err)
 	}
-	if st, err := os.Stat(r.Cfg.UserConfigPath); err != nil || st.Mode().Perm() != 0o600 {
-		t.Fatalf("config.yaml 权限应为 0600: %v %v", st, err)
+	st, err := os.Stat(r.Cfg.UserConfigPath)
+	if err != nil {
+		t.Fatalf("config.yaml 未写出: %v", err)
+	}
+	// Windows 不实现 POSIX 权限位，0600 断言只在支持的平台上生效；内容断言照常全平台跑。
+	if runtime.GOOS != "windows" && st.Mode().Perm() != 0o600 {
+		t.Fatalf("config.yaml 权限应为 0600: %v", st.Mode())
 	}
 	raw, _ := os.ReadFile(r.Cfg.UserConfigPath)
 	var m map[string]any

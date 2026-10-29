@@ -8,5 +8,19 @@
     "line": "Line",
     "area": "Area",
     "bar": "Bar"
+  },
+  "monitorHistory": {
+    "window": "Time window",
+    "metric": "Metric",
+    "step": "Bucket",
+    "stepMinute": "min",
+    "empty": "No history yet",
+    "emptyHint": "Snapshots are stored every 30 seconds; the curve appears shortly after the service starts. Metrics this platform cannot sample are not offered.",
+    "w1": "1h",
+    "w6": "6h",
+    "w24": "24h",
+    "w168": "7d",
+    "title": "History (persisted)",
+    "stepSecond": "s"
   }
 }

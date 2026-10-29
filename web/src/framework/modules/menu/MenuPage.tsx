@@ -67,6 +67,9 @@ export default function MenuPage() {
     }
   }
 
+  const canDrag = !filter.active
+  const sortColumn: Column<SysMenu> = { key: 'sort', title: t('sysMenu.col.sort'), align: 'end', render: (r) => <span className="num">{r.sort}</span> }
+
   const columns: Column<SysMenu>[] = [
     {
       key: 'title',
@@ -85,16 +88,17 @@ export default function MenuPage() {
     { key: 'type', title: t('sysMenu.col.type'), mobile: 'sub', render: (r) => <DictTag dict="menu_type" value={r.type} /> },
     { key: 'perm', title: t('sysMenu.col.perm') },
     { key: 'path', title: t('sysMenu.col.path') },
-    { key: 'sort', title: t('sysMenu.col.sort'), align: 'end', render: (r) => <span className="num">{r.sort}</span> },
+    // 拖拽可用时排序由拖动承担，再摆一列数字等于两套机制；只在拖拽被筛选禁用时露出来
+    ...(canDrag ? [] : [sortColumn]),
     { key: 'status', title: t('sysMenu.col.status'), render: (r) => <DictTag dict="sys_status" value={r.status} /> },
   ]
 
   return (
     <PageContainer>
-      <PageHeader
-        title={t('sysMenu.menu')}
-        description={t('sysMenu.description')}
-        actions={
+      <PageHeader title={t('sysMenu.menu')} description={t('sysMenu.description')} />
+      <SimpleFilterBar filter={filter} placeholder={t('sysMenu.col.title')} typeDict="menu_type" typePlaceholder={t('sysMenu.col.type')} />
+      <TreeTable<SysMenu>
+        toolbar={
           <Can perm="menu:create">
             <Button type="button" onClick={() => openCreate(null)}>
               <Plus className="me-2 size-4" aria-hidden="true" />
@@ -102,16 +106,15 @@ export default function MenuPage() {
             </Button>
           </Can>
         }
-      />
-      <SimpleFilterBar filter={filter} placeholder={t('sysMenu.col.title')} typeDict="menu_type" typePlaceholder={t('sysMenu.col.type')} />
-      <TreeTable<SysMenu>
         columns={columns}
         data={shown}
         loading={isLoading}
         columnSettingsKey="sysMenu"
         forceExpandAll={filter.active}
         onReorder={filter.active ? undefined : (pid, ids) => sort.mutateAsync({ parentId: pid, ids })}
-        onMove={filter.active ? undefined : (id, parentId) => move.mutateAsync({ id, parentId })}
+        onMove={filter.active ? undefined : (id, parentId, afterId) => move.mutateAsync({ id, parentId, afterId })}
+        // 按钮是最末级：拖到按钮行右侧时当场拦下并说明原因，不等服务端报错
+        blockNest={(_active, target) => (target.type === 'button' ? 'sysMenu.drag.underButton' : null)}
         rowActions={(row) => (
           <>
             {row.type !== 'button' && (

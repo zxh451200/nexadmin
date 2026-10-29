@@ -31,6 +31,7 @@ import (
 	_ "nexadmin/modules/system/config"
 	_ "nexadmin/modules/system/dept"
 	_ "nexadmin/modules/system/dict"
+	_ "nexadmin/modules/system/language"
 	_ "nexadmin/modules/system/menu"
 	_ "nexadmin/modules/system/post"
 	_ "nexadmin/modules/system/role"

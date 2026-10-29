@@ -1,7 +1,7 @@
 {
   "plugin_crm": {
     "title": "客户主数据",
-    "description": "全生态认同的客户主数据与线索商机台账（external 锚点对齐 member）",
+    "description": "免费基础客户主数据与线索商机台账（external 锚点对齐 member），不做销售自动化",
     "dir": "客户主数据",
     "menu": "客户主数据",
     "perm": {

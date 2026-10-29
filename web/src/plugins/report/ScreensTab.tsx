@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/framework/ui/card'
 import { Skeleton } from '@/framework/ui/skeleton'
 import { useDeleteScreen, useScreenList, type Screen, type ScreenBrief } from './api'
 import { ScreenDialog } from './ScreenDialog'
+import { builtinText } from './builtinText'
 
 export function ScreensTab() {
   const { t } = useTranslation()
@@ -31,7 +32,7 @@ export function ScreensTab() {
     }
   }
   const onDelete = async (s: ScreenBrief) => {
-    if (!(await confirm({ destructive: true, description: t('plugin_report.screen.deleteConfirm', { name: s.name }) }))) return
+    if (!(await confirm({ destructive: true, description: t('plugin_report.screen.deleteConfirm', { name: builtinText(t, s.name) }) }))) return
     try {
       await remove.mutateAsync(s.id)
       toast.success(t('common.operateSuccess'))
@@ -63,7 +64,7 @@ export function ScreensTab() {
             <CardHeader className="space-y-1 pb-2">
               <CardTitle className="flex items-center gap-2 text-base">
                 <Monitor className="size-4 text-primary" aria-hidden="true" />
-                <span className="truncate">{s.name}</span>
+                <span className="truncate">{builtinText(t, s.name)}</span>
               </CardTitle>
               <p className="line-clamp-2 min-h-8 text-xs text-muted-foreground">{s.remark || t('plugin_report.screen.noRemark')}</p>
             </CardHeader>

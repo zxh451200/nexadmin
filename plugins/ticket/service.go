@@ -18,6 +18,18 @@ import (
 type Service struct {
 	db  *gorm.DB
 	log logger
+	// loc 是应用时区：统计按天分桶要用它把 UTC 时间换算成用户看到的自然日。
+	loc *time.Location
+}
+
+// WithTimezone 设置应用时区（非法值退回 UTC）。
+func (s *Service) WithTimezone(tz string) *Service {
+	loc, err := time.LoadLocation(tz)
+	if err != nil || loc == nil {
+		loc = time.UTC
+	}
+	s.loc = loc
+	return s
 }
 
 // logger 是最小日志面（便于测试注入空实现）。

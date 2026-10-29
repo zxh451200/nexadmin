@@ -1,6 +1,8 @@
 # NexAdmin 插件开发指南
 
-本文教你从零写一个 NexAdmin 插件，并打包提交到插件市场。全文以官方示例插件「定时任务 cron」为例，它的完整源码在发行包 `nexadmin-plugins/cron/`，边读边对照最快。
+本文教你从零写一个 NexAdmin 插件，并打包提交到插件市场。以首批免费计划中的「定时任务 cron」说明结构：从发行方插件市场或独立插件源码仓库获取其已发布的免费安装包，再对照阅读。框架源码交付包及默认 `nexadmin new` 不附带 cron，也不附带付费 cron 示例。
+
+基础服务免费，可选通用插件免费，业务增强收费。首批免费计划：`cron`、`codegen`、`imports`、`totp`、`ldap`、`maps`、`crm`；其余按 pro 规划。计划不代表所有现有包已经切换 edition，更不代表 LDAP / TOTP 已编译挂载；须核对包清单、Go 注册与运行时状态。免费安装验证见[快速开始](quickstart.md)。
 
 > 适合谁：会写 Go（Gin + GORM）和 React 的开发者。你不需要读懂整个框架，只需要读本文和 cron 示例。
 
@@ -42,7 +44,7 @@ name: 定时任务
 version: 1.0.0
 description: 定时任务（5 段 cron 调度、立即执行、失败重试、执行日志）
 author: NexAdmin
-edition: pro                 # free | pro
+edition: free                # 免费 cron 示例；收费插件使用 pro
 requires_nexadmin: ">=0.1.0"
 
 menus:                       # 安装/挂载时幂等写入 sys_menu
@@ -82,7 +84,7 @@ import (
 
 func init() {
     plugin.Register(plugin.Plugin{
-        ID: "cron", Name: "定时任务", Version: "1.0.0", Edition: plugin.Pro,
+        ID: "cron", Name: "定时任务", Version: "1.0.0", Edition: plugin.Free,
         Module: &module{},
     })
 }
@@ -131,6 +133,8 @@ func (m *module) Start(ctx context.Context, d *core.Deps) error {
 
 注意三种数据库的差异：自增/主键类型、`TEXT` 默认值、布尔类型、`ON UPDATE` 语法。cron 的三份 SQL 是现成的对照。
 
+**迁移只做结构变更，不写 `INSERT`/`UPDATE`/`DELETE`**：runner 会在 `migrate --dry-run` 里逐条警告。出厂数据（菜单、字典、模板）一律由 Seeder 负责；存量库的菜单结构收敛也在 Seeder 里做（见 `modules/system/menu/reconcile.go`），不靠迁移改数据。
+
 ### 4.5 测试
 
 后端至少带一个单测，覆盖你最容易出错的纯逻辑（cron 示例测了表达式解析、下次执行时间、SSRF 拦截）。需要真实数据库的部分如果没法在单测里跑，请在提交说明里写明。
@@ -175,20 +179,21 @@ export const routes: ModuleRoute[] = [
 
 ## 6. 本地开发流程
 
-1. 在框架仓库里按上面的结构建一个目录，或直接复制 `nexadmin-plugins/cron/` 改名。
+1. 先按[快速开始](quickstart.md)派生开发项目，在项目外准备上面的插件安装包结构，或以取得的免费 cron 包为参考；自己的插件须更换 ID、权限码与表前缀，不在框架母版里写业务代码。示例里的 `nexadmin/...` 导入路径应使用派生项目的实际 Go module 路径。
 2. 前端：把 `web/` 放到 `web/src/plugins/<id>/`，`npm run dev`，打开页面用 mock 数据调试。
 3. 后端：把 `backend/` 放到 `plugins/<id>/`，并把包根的 `plugin.yaml` 复制到 `plugins/<id>/plugin.yaml`。目录名必须与清单 `id` 完全一致（如 `i18n-editor` 不能写成 `i18neditor`，Go 的 package 名可以不同）；管理器按 ID 查找清单和 `migrations/`。在 `plugins/plugins.go` 的标记行之间加一行 `_ "nexadmin/plugins/<id>"`（用安装命令会自动加）。
 4. 用开发密钥签一份授权（pro 插件必需），放进 `data/licenses/<id>.lic`：
 
 ```bash
 go run ./cmd/nexadmin plugin keygen            # 首次：生成开发密钥对
+mkdir -p data/licenses                       # sign 不会创建输出父目录
 go run ./cmd/nexadmin plugin sign --key .dev-keys/private.pem \
   --plugin <id> --customer 测试 --expires 2027-12-31 --out data/licenses/<id>.lic
 ```
 
-   注意：开发私钥只在你本机有效。框架内置的公钥是官方的，用你自己生成的私钥签的授权，需要把 `core/plugin/pubkey.go` 里的公钥换成你自己的才能在本地通过校验。**不要把私钥提交到仓库。**
-5. 查看状态：`go run ./cmd/nexadmin plugin list`，状态应为 `active`。
-6. 后台「系统管理 → 插件管理」可以看到插件和授权状态。
+   将 `keygen` 输出的 base64 公钥追加为本地 `config/license-keys.pub` 的独立一行（保留已有公钥，支持 `#` 注释），重启开发进程使其重新载入信任集合。**不修改 `core/plugin/pubkey.go`，不提交私钥，不把开发信任配置或测试授权随正式包分发。** 附加公钥文件受框架升级管理，升级后核对本地开发配置。自签授权只用于隔离的开发环境，不代替购买授权。
+5. 查看磁盘状态：`go run ./cmd/nexadmin plugin list`。free 插件的 `LICENSE` 列为 `-`；pro 开发授权验签成功才显示 `active`。此命令不证明插件已编译或挂载。
+6. 重新构建并启动后，由平台超管在「系统管理 → 插件管理」核对运行时状态、日志与实际接口；普通租户只分配业务使用权限。
 
 ## 7. 打包与安装验证
 
@@ -196,7 +201,7 @@ go run ./cmd/nexadmin plugin sign --key .dev-keys/private.pem \
 zip -r cron-1.0.0.zip cron/        # 目录名 = 插件 id；包内不要带 node_modules、.git、授权文件、密钥
 ```
 
-在一个干净的框架副本里验证安装：
+在一个干净的派生项目里验证安装（使用实际包文件名与插件 ID 替换下例）：
 
 ```bash
 go run ./cmd/nexadmin plugin install cron-1.0.0.zip
@@ -220,7 +225,7 @@ cd web && npx tsc --noEmit && npx eslint src
 - `/plugins/<id>/download`：服务端按目录的 `url` 直链或 GitHub `repo`/`ref` 拉源码，用 `subdir` 定位插件，校验包内 `plugin.yaml` 的 `id`/`edition`/`version` 后，重打成 `plugin.yaml + backend/ + web/` 的安装包。产物磁盘缓存 6 小时；该路由单独限流（每 IP 每分钟 30 次），响应带 `X-Checksum-SHA256`。
 - `/plugins/<id>/download.sha256`：`sha256sum` 格式的校验文件，与下载产物一一对应，可用 `sha256sum -c` 校验。打包时 zip 时间戳固定为 1980-01-01，同一份源码重复打包字节一致，跨实例校验和可对比。
 - `/plugins/index.json`：机器可读目录（含下载地址、安装命令、源码地址），供脚本与外部工具消费。
-- 详情页的「在后台一键安装」跳转 `/system/plugin?tab=market&plugin=<id>`，登录后直接落在后台市场并筛选到该插件。
+- 详情页的「在后台一键安装」跳转 `/admin/system/plugin?tab=market&plugin=<id>`，登录后直接落在后台市场并筛选到该插件。
 - 目录的 `edition` 必须与插件包一致，否则下载被拒绝；`subdir` 只接受仓库内的相对路径。
 
 官网与后台都直接读这份 YAML，改完即生效；`plugin market sync` 只用于导出 JSON（默认标准输出，`--docs` 写到指定目录），不再驱动官网展示。文档站的插件市场页只保留说明与入口，浏览/下载/安装统一在官网 `/plugins`。
@@ -232,17 +237,24 @@ cd web && npx tsc --noEmit && npx eslint src
 
 ### 官网多语言（website 插件）
 
-官网的语言由 `plugins/website/locales/` 决定，**加语言不改模板、不改路由**：
+**平台语言清单以 `sys_language` 为唯一真源**，官网通过 `core.Languages()` 使用它；`config.yaml` 的 `languages` 仅在表为空时播种，不维护另一份 `locales/languages.json`。
 
-1. 在 `locales/languages.json` 追加一项：`code`（如 `ja-JP`）、`label`、`short`、`htmlLang`、`ogLocale`、`prefix`（如 `ja`）、`dateFormat`（Go 布局，如 `2006年1月2日`）。
-2. 放一份 `locales/<code>.json`，键与现有字典一致（模板里所有 `.T "key"` 都会被 `TestLocaleDictionariesCoverTemplates` 校验，缺键测试直接失败）。
-3. 重启官网进程。新语言自动获得 `/<prefix>/...` 路由、导航语言切换、`hreflang`、`og:locale:alternate` 与 sitemap 条目。
+1. 由平台超管在「系统设置 → 高级 → 语言」维护 `code`（如 `ja-JP`）、`name`、`short`、`dir`、`htmlLang`、`ogLocale`、`prefix`、`dateFormat` 与默认语言。
+2. 官网界面字典放在 `plugins/website/locales/<code>.json`，与现有字典保持键一致。字典是源码嵌入资源，修改后必须重新构建并部署二进制，单纯重启旧二进制不会更新。
+3. 语言集合或 URL 前缀变化会改变启动时注册的路由，保存结果的 `needRestart` 会提示重启；重启后再验证导航、`hreflang`、`og:locale:alternate` 与 sitemap。
+
+**技术文档只在 `docs/` 维护，营销内容用官网 CMS。** 技术文档 Markdown 嵌入二进制，修改后也要重新构建与部署；不要复制到 CMS 或旧 VitePress 站点维护第二份正文。文档路径绑定稳定的语言 `Code`，不绑定可编辑的 URL `prefix`：`zh-CN` 使用 `docs/` 中文源文件，英文使用 `docs/en/<slug>.md`，其余语言使用 Code 的小写主段（如 `ja-JP` → `docs/ja/<slug>.md`）。译文带 `title` / `summary` frontmatter；没有译文时回退中文源文，不把缺译误标为已翻译。调整默认语言或 URL 前缀不需要移动文档。新闻、产品介绍与营销页面在 CMS 中编辑、翻译、按语言发布，不需要为内容更新重新构建。
 
 约定：
 
 - 默认语言（`default: true`，且 `prefix` 必须为空）渲染在无前缀 URL；其余语言渲染在 `/<prefix>`。`?lang=<code>` 会切换并记住 cookie `nex_site_lang`，语言切换链接保留当前筛选参数。
 - 没有语言 cookie 时，默认语言首页会按 `Accept-Language` 给偏好其他语言的访客显示一条可关闭的切换提示；**不自动 302**，避免搜索引擎把同一内容重复收录，响应带 `Vary: Accept-Language`。
-- 后台内容（站点设置、导航、特性、页面、新闻）的译文存在各表的 `i18n_json`：`{"en-US":{"title":"…"}}`。管理端表单底部的「多语言内容」按语言自动生成输入框；未填字段在对应语言页面回退原文。后端只接收已配置语言与白名单字段，富文本翻译同样会 `Sanitize`。
+- 后台内容（站点设置、导航、特性、页面、新闻）的译文存在各表的 `i18n_json`：`{"en-US":{"title":"…"}}`；未填字段在对应语言页面回退原文。后端只接收已配置语言与白名单字段，富文本翻译同样会 `Sanitize`。
+- 编辑界面是「整表换语言」：弹窗顶部一个语言下拉决定你在编辑哪一种语言，表单只有一份，**语言数量不影响表单高度**。译文态下每个字段下方给出原文对照，富文本另有可折叠只读原文；`slug`、封面这类不随语言变化的字段置灰并标「共用」。组件在 `web/src/framework/components/i18n/`，二开可直接复用。
+- 可翻译字段的白名单、长度与控件只写在 Go 里（`plugins/website/schema.go` 的 `entityViews`），前端经 `GET /plugins/website/i18n/schema/:entity` 取用；两边漂移由 `TestEntityViewsMatchWhitelist` 拦。给内容加可翻译字段只改这一处，界面不用动代码。
+- 译文文档的解析、清洗、长度裁剪、完成度与按语言发布这套**算法**在 `pkg/i18n`（`Normalize` / `Translatable` / `NormalizePublish` / `Published`）。它不认识具体内容，也不认识语言清单从哪来——调用方实现一个 `Locales`（两方法：`Resolve` / `All`）即可复用。二开项目要做自己的多语言内容时用 `pkg/i18n` + `web/src/framework/components/i18n`，不要另写一套 JSON 约定；界面文案的词条体系（`core/i18n` + i18n-editor 插件）与它是两回事，不要合并。
+- 新闻与页面支持**按语言发布**（`published_json`，只存非默认语言）：缺译的语言发不出去，服务端会把它降为未发布（不信客户端的完成度声明）；未发布语言的直接 URL 返回 404，且不出现在该语言的列表、`hreflang` 与 sitemap 中。该列为空表示从未按语言设置过，所有语言沿用整行 `published`，升级不改变现有可见性。导航/特性/设置没有可下线的 URL，不提供该开关。
+- 批量机翻走插件自有路由 `POST /plugins/website/i18n/translate/<entity>`（按实体各挂自己的编辑权限，不把插件权限写进 `modules/ai`），复用 `core/ai` 网关，只填仍为空的字段。
 - 市场目录条目用 `i18n` 映射本地化名称/简介（见上文 YAML 注释）；分类名、`待定/免费` 等占位价、日期格式由语言字典处理。
 - 升级上来的老库由 `ensureSeedI18n` 只补 `i18n_json` 为空且原文仍是出厂文案的行，不覆盖已有译文。
 - 统计：公开下载按次计数；评分为匿名 1-5 星，同一 IP 对同一插件只保留一条、可改分。后台一键安装不计入公开下载量。
@@ -255,6 +267,7 @@ cd web && npx tsc --noEmit && npx eslint src
 **必须满足**
 - 清单字段完整，`id`、权限码、表名、接口路径前缀都符合约定。
 - 三种数据库的迁移都有，迁移只增不改。
+- 迁移里没有 `INSERT`/`UPDATE`/`DELETE`（runner 会警告）；出厂数据与存量库的菜单结构收敛走 Seeder，不写在迁移里。
 - 没有修改 `core/`、`web/src/framework/` 或任何内置模块，没有 import 内置模块或其他插件。
 - 每个接口都有权限校验；按租户隔离的数据查询带租户条件。
 - 没有硬编码密钥、没有向外部服务上传用户数据；对外请求有 SSRF 防护和超时。
@@ -271,7 +284,7 @@ cd web && npx tsc --noEmit && npx eslint src
 
 1. 作者提交插件包 → 平台审核通过后上架到插件市场。
 2. 买家购买 → 平台用官方私钥签发授权文件（绑定插件、客户名、到期时间，可选绑定域名）。
-3. 买家在「插件管理」导入授权文件，立即生效，无需重新编译。
+3. 由平台超管在「插件管理」导入授权文件；管理器尝试激活已编译插件，检查返回的 `needRestart`、状态与日志。源码安装仍需重新构建；热挂载失败、官网根路径及启动期认证扩展等需重启核验，不能承诺全部授权热激活。
 4. 授权到期后插件自动下线（路由返回 403，状态 `expired`），续费后导入新授权即可恢复。授权被发行方吊销时状态为 `revoked`（见第 11 节）。
 
 作者不需要、也不应该自己实现授权。授权校验在框架统一进行，插件代码里不要出现任何授权相关逻辑。
@@ -280,7 +293,7 @@ cd web && npx tsc --noEmit && npx eslint src
 
 ## 10. 分成与定价（待平台方确定）
 
-以下条款**尚未确定**，由平台方在上线插件市场前补充，此处只列需要明确的项目：
+**正式购买条款尚未发布**。以下只是需要发行方正式确认的事项，不构成价格、退款、分成或知识产权承诺；营销和购买说明通过官网 CMS 维护，技术文档不代替交易条款：
 
 - 作者与平台的分成比例，以及结算周期、结算方式。
 - 定价模式：一次性买断、按年订阅，还是按租户或按实例计价。

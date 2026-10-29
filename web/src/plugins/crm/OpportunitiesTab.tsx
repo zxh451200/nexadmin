@@ -6,9 +6,9 @@ import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { FilterBar } from '@/framework/components/FilterBar'
+import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/framework/ui/dialog'
 import { Input } from '@/framework/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import {
@@ -75,84 +75,85 @@ function OpportunityFormDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>{isNew ? t('plugin_crm.opp.create') : t('plugin_crm.opp.edit')}</DialogTitle>
-        </DialogHeader>
-        <div className="flex flex-col gap-3 text-sm">
+    <ResponsiveDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={isNew ? t('plugin_crm.opp.create') : t('plugin_crm.opp.edit')}
+      footer={
+        <>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            {t('common.cancel')}
+          </Button>
+          <Button onClick={() => void submit()}>{t('common.save')}</Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-3 text-sm">
+        <label className="flex flex-col gap-1">
+          {t('plugin_crm.fields.title')}
+          <Input value={value.title ?? ''} onChange={(e) => set({ title: e.target.value })} />
+        </label>
+        <label className="flex flex-col gap-1">
+          {t('plugin_crm.fields.customerId')}
+          <Select
+            value={String(value.customerId ?? '') || ALL}
+            onValueChange={(v) => set({ customerId: v === ALL ? undefined : Number(v) })}
+          >
+            <SelectTrigger aria-label={t('plugin_crm.fields.customerId')}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>{t('plugin_crm.opp.noCustomer')}</SelectItem>
+              {(data?.list ?? []).map((cu) => (
+                <SelectItem key={cu.id} value={cu.id}>
+                  {cu.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </label>
+        <div className="grid grid-cols-2 gap-3">
           <label className="flex flex-col gap-1">
-            {t('plugin_crm.fields.title')}
-            <Input value={value.title ?? ''} onChange={(e) => set({ title: e.target.value })} />
-          </label>
-          <label className="flex flex-col gap-1">
-            {t('plugin_crm.fields.customerId')}
-            <Select
-              value={String(value.customerId ?? '') || ALL}
-              onValueChange={(v) => set({ customerId: v === ALL ? undefined : Number(v) })}
-            >
-              <SelectTrigger aria-label={t('plugin_crm.fields.customerId')}>
+            {t('plugin_crm.fields.stage')}
+            <Select value={value.stage ?? 'lead'} onValueChange={(v) => set({ stage: v as CrmOpportunityForm['stage'] })}>
+              <SelectTrigger aria-label={t('plugin_crm.fields.stage')}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={ALL}>{t('plugin_crm.opp.noCustomer')}</SelectItem>
-                {(data?.list ?? []).map((cu) => (
-                  <SelectItem key={cu.id} value={cu.id}>
-                    {cu.name}
+                {STAGES.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {t(`plugin_crm.stage.${s}`)}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </label>
-          <div className="grid grid-cols-2 gap-3">
-            <label className="flex flex-col gap-1">
-              {t('plugin_crm.fields.stage')}
-              <Select value={value.stage ?? 'lead'} onValueChange={(v) => set({ stage: v as CrmOpportunityForm['stage'] })}>
-                <SelectTrigger aria-label={t('plugin_crm.fields.stage')}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {STAGES.map((s) => (
-                    <SelectItem key={s} value={s}>
-                      {t(`plugin_crm.stage.${s}`)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </label>
-            <label className="flex flex-col gap-1">
-              {t('plugin_crm.fields.amountMinor')}
-              <Input
-                type="number"
-                value={value.amountMinor ?? 0}
-                min={0}
-                onChange={(e) => set({ amountMinor: Number(e.target.value) || 0 })}
-              />
-            </label>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <label className="flex flex-col gap-1">
-              {t('plugin_crm.fields.expectedAt')}
-              <Input type="date" value={value.expectedAt ?? ''} onChange={(e) => set({ expectedAt: e.target.value })} />
-            </label>
-            <label className="flex flex-col gap-1">
-              {t('plugin_crm.fields.owner')}
-              <Input value={value.owner ?? ''} onChange={(e) => set({ owner: e.target.value })} />
-            </label>
-          </div>
           <label className="flex flex-col gap-1">
-            {t('plugin_crm.fields.remark')}
-            <Input value={value.remark ?? ''} onChange={(e) => set({ remark: e.target.value })} />
+            {t('plugin_crm.fields.amountMinor')}
+            <Input
+              type="number"
+              value={value.amountMinor ?? 0}
+              min={0}
+              onChange={(e) => set({ amountMinor: Number(e.target.value) || 0 })}
+            />
           </label>
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            {t('common.cancel')}
-          </Button>
-          <Button onClick={() => void submit()}>{t('common.save')}</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        <div className="grid grid-cols-2 gap-3">
+          <label className="flex flex-col gap-1">
+            {t('plugin_crm.fields.expectedAt')}
+            <Input type="date" value={value.expectedAt ?? ''} onChange={(e) => set({ expectedAt: e.target.value })} />
+          </label>
+          <label className="flex flex-col gap-1">
+            {t('plugin_crm.fields.owner')}
+            <Input value={value.owner ?? ''} onChange={(e) => set({ owner: e.target.value })} />
+          </label>
+        </div>
+        <label className="flex flex-col gap-1">
+          {t('plugin_crm.fields.remark')}
+          <Input value={value.remark ?? ''} onChange={(e) => set({ remark: e.target.value })} />
+        </label>
+      </div>
+    </ResponsiveDialog>
   )
 }
 
@@ -207,8 +208,9 @@ export function OpportunitiesTab() {
     },
   ]
 
-  return (
-    <div className="flex flex-col gap-4">
+  // 筛选行并入表格工具行：与「列设置」同一行，不再单独占一行（全站统一口径）。
+  const filterToolbar = (
+    <div className="flex flex-wrap items-center gap-2">
       <FilterBar
         onSearch={() => {
           setFilters(draft)
@@ -241,8 +243,23 @@ export function OpportunitiesTab() {
           </SelectContent>
         </Select>
       </FilterBar>
+      <Can perm="crm:opp">
+        <Button
+          onClick={() => {
+            setEditing(null)
+            setFormOpen(true)
+          }}
+        >
+          <Plus aria-hidden="true" />
+          {t('plugin_crm.opp.create')}
+        </Button>
+      </Can>
+    </div>
+  )
 
-      <DataTable
+  return (
+    <>
+    <DataTable
         columns={columns}
         data={data?.list ?? []}
         rowKey="id"
@@ -258,19 +275,7 @@ export function OpportunitiesTab() {
           },
         }}
         emptyText={t('plugin_crm.empty')}
-        toolbar={
-          <Can perm="crm:opp">
-            <Button
-              onClick={() => {
-                setEditing(null)
-                setFormOpen(true)
-              }}
-            >
-              <Plus aria-hidden="true" />
-              {t('plugin_crm.opp.create')}
-            </Button>
-          </Can>
-        }
+        toolbar={filterToolbar}
         rowActions={(o) => (
           <Can perm="crm:opp">
             <Button
@@ -297,6 +302,6 @@ export function OpportunitiesTab() {
         )}
       />
       <OpportunityFormDialog key={editing?.id ?? 'new'} open={formOpen} onOpenChange={setFormOpen} editing={editing} />
-    </div>
+    </>
   )
 }

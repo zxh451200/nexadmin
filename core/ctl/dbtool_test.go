@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -141,7 +142,10 @@ func TestVerifySHA256(t *testing.T) {
 	if got, err := ReadSidecar(p); err != nil || got != sum {
 		t.Fatalf("sidecar round trip: %v %q", err, got)
 	}
-	if fi, _ := os.Stat(SidecarPath(p)); fi.Mode().Perm() != 0o600 {
-		t.Fatalf("sidecar mode %v", fi.Mode().Perm())
+	// Windows 不实现 POSIX 权限位，写 0600 也只会报成 0666；只在该断言有意义平台上检查。
+	if runtime.GOOS != "windows" {
+		if fi, _ := os.Stat(SidecarPath(p)); fi.Mode().Perm() != 0o600 {
+			t.Fatalf("sidecar mode %v", fi.Mode().Perm())
+		}
 	}
 }

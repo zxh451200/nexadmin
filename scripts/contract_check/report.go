@@ -30,6 +30,13 @@ func writeText(w io.Writer, rep *Report) {
 	}
 	fmt.Fprintln(w)
 	writeFields(w, rep.Fields)
+	// E 类：错误 key 缺语言包条目（缺 key 时原文返给用户）。
+	fmt.Fprintf(w, "\nE) 错误 key 缺语言包条目: %d 项（扫描 key 字面量 %d 个）\n", len(rep.E), s.ErrKeys)
+	if len(rep.E) > 0 {
+		for _, e := range rep.E {
+			fmt.Fprintf(w, "  [%s] %s  缺 %s 文案\n", e.Loc, e.Key, e.Lang)
+		}
+	}
 	fmt.Fprintf(w, "\n无法静态解析的条目（需人工核对）: %d\n", len(rep.Unresolved))
 	us := append([]Unresolved{}, rep.Unresolved...)
 	sort.SliceStable(us, func(i, j int) bool {

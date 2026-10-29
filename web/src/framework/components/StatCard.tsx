@@ -6,6 +6,11 @@ import { Card, CardContent } from '@/framework/ui/card'
 import { cn } from '@/lib/utils'
 import { ChartBox } from './ChartBox'
 
+/** 卡片色调：只允许语义令牌，颜色由 tokens.css 的 [data-tone] 给出。 */
+export type StatTone =
+  | 'chart-1' | 'chart-2' | 'chart-3' | 'chart-4' | 'chart-5'
+  | 'success' | 'warning' | 'info' | 'destructive' | 'primary'
+
 export interface StatCardProps {
   title: React.ReactNode
   value: number | string
@@ -19,10 +24,12 @@ export interface StatCardProps {
   spark?: number[]
   /** 0-100，显示一条进度条（如存储用量） */
   progress?: number
+  /** 图标/顶线/进度条/趋势线用的色调，默认 primary */
+  tone?: StatTone
   className?: string
 }
 
-export function StatCard({ title, value, hint, delta, deltaLabel, icon, spark, progress, className }: StatCardProps) {
+export function StatCard({ title, value, hint, delta, deltaLabel, icon, spark, progress, tone = 'primary', className }: StatCardProps) {
   const { t, i18n } = useTranslation()
   const gid = useId().replace(/:/g, '')
   const shown = typeof value === 'number' ? new Intl.NumberFormat(i18n.language).format(value) : value
@@ -32,8 +39,9 @@ export function StatCard({ title, value, hint, delta, deltaLabel, icon, spark, p
 
   return (
     <Card
+      data-tone={tone}
       className={cn(
-        'group relative overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg motion-reduce:transition-none motion-reduce:hover:translate-y-0',
+        'tone-rule group relative overflow-hidden pt-px transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg motion-reduce:transition-none motion-reduce:hover:translate-y-0',
         className,
       )}
     >
@@ -47,7 +55,7 @@ export function StatCard({ title, value, hint, delta, deltaLabel, icon, spark, p
             </p>
           </div>
           {icon ? (
-            <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-brand-gradient text-primary-foreground shadow-sm md:size-11 [&_svg]:size-4 md:[&_svg]:size-5">
+            <div className="tone-chip flex size-9 shrink-0 items-center justify-center rounded-xl shadow-sm transition-colors duration-200 group-hover:shadow-md md:size-11 [&_svg]:size-4 md:[&_svg]:size-5">
               {icon}
             </div>
           ) : null}
@@ -61,7 +69,7 @@ export function StatCard({ title, value, hint, delta, deltaLabel, icon, spark, p
             aria-valuemax={100}
             aria-valuenow={Math.round(Math.min(100, Math.max(0, progress)))}
           >
-            <div className="h-full rounded-full bg-brand-gradient" style={{ width: `${Math.min(100, Math.max(0, progress))}%` }} />
+            <div className="tone-bar h-full rounded-full" style={{ width: `${Math.min(100, Math.max(0, progress))}%` }} />
           </div>
         ) : null}
 
@@ -72,11 +80,11 @@ export function StatCard({ title, value, hint, delta, deltaLabel, icon, spark, p
                 <AreaChart width={width} height={height} data={spark.map((v) => ({ v }))} margin={{ top: 2, right: 0, bottom: 0, left: 0 }}>
                   <defs>
                     <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="hsl(var(--chart-1))" stopOpacity={0.35} />
+                      <stop offset="0%" stopColor="hsl(var(--tone))" stopOpacity={0.35} />
                       <stop offset="100%" stopColor="hsl(var(--chart-1))" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <Area type="monotone" dataKey="v" stroke="hsl(var(--chart-1))" strokeWidth={2} fill={`url(#${gid})`} dot={false} isAnimationActive={false} />
+                  <Area type="monotone" dataKey="v" stroke="hsl(var(--tone))" strokeWidth={2} fill={`url(#${gid})`} dot={false} isAnimationActive={false} />
                 </AreaChart>
               )}
             </ChartBox>

@@ -181,6 +181,72 @@
     background-size: 20px 20px;
   }
 
+  /* ---- 色调（tone）：组件只写 data-tone，颜色一律来自令牌，避免拼动态类名 ---- */
+  [data-tone] {
+    --tone: var(--primary);
+  }
+  [data-tone='chart-1'] { --tone: var(--chart-1); }
+  [data-tone='chart-2'] { --tone: var(--chart-2); }
+  [data-tone='chart-3'] { --tone: var(--chart-3); }
+  [data-tone='chart-4'] { --tone: var(--chart-4); }
+  [data-tone='chart-5'] { --tone: var(--chart-5); }
+  [data-tone='success'] { --tone: var(--success); }
+  [data-tone='warning'] { --tone: var(--warning); }
+  [data-tone='info'] { --tone: var(--info); }
+  [data-tone='destructive'] { --tone: var(--destructive); }
+
+  /* 图标胶囊：色调底 + 同色描边，替代原来清一色的品牌渐变方块 */
+  .tone-chip {
+    background-color: hsl(var(--tone) / 0.14);
+    border: 1px solid hsl(var(--tone) / 0.3);
+    color: hsl(var(--tone));
+  }
+  .dark .tone-chip {
+    background-color: hsl(var(--tone) / 0.2);
+    border-color: hsl(var(--tone) / 0.38);
+  }
+
+  /* 卡片顶边色线：成排 KPI 卡靠它做色彩分区。
+     末端不能淡到透明——否则每张卡右侧三分之一都没有线，冷色（紫/青）在浅底上更看不出来。 */
+  .tone-rule::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 2px;
+    background-image: linear-gradient(90deg, hsl(var(--tone)) 0%, hsl(var(--tone) / 0.5) 100%);
+  }
+
+  /* 色调进度条与迷你趋势线 */
+  .tone-bar {
+    background-image: linear-gradient(90deg, hsl(var(--tone)) 0%, hsl(var(--tone) / 0.55) 100%);
+  }
+
+  /* 色调文字/图标：读最近 [data-tone] 祖先（或自身）给出的 --tone，无色调祖先时退回 primary。
+     侧边栏分组图标用它着色——lucide 图标走 currentColor，只动颜色不动结构。 */
+  .tone-text {
+    color: hsl(var(--tone, var(--primary)));
+  }
+
+  /* 树表展开：新露出的行做一小段淡入 + 位移（收起是瞬间的，行高没有可过渡的容器） */
+  @keyframes tree-row-in {
+    from {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  .tree-row-in {
+    animation: tree-row-in 180ms ease-out both;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .tree-row-in {
+      animation: none;
+    }
+  }
+
   /* 数字：等宽 */
   .num {
     font-family: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;

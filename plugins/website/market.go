@@ -173,9 +173,6 @@ func marketCardOf(e market.Entry, st MarketStat, lang string) marketCard {
 		DownloadsText: formatCount(st.Downloads),
 		RatingCount:   st.RatingCount,
 	}
-	if len(e.Screenshots) > 0 {
-		c.Cover = e.Screenshots[0]
-	}
 	if st.RatingCount > 0 {
 		c.RatingAvg = fmt.Sprintf("%.1f", float64(st.RatingSum)/float64(st.RatingCount))
 	}
@@ -520,7 +517,7 @@ func (h *siteHandler) marketDetail(c *gin.Context) {
 	v.DownloadFilename = marketPackageName(e)
 	v.InstallCommand = marketInstallCommand(e)
 	v.MarketSourceURL = marketSourceURL(e)
-	v.AdminInstallURL = "/login?redirect=" + url.QueryEscape("/system/plugin?tab=market&plugin="+e.ID)
+	v.AdminInstallURL = "/admin/login?redirect=" + url.QueryEscape("/system/plugin?tab=market&plugin="+e.ID)
 	v.PluginLD = pluginJSONLD(le, baseURL(c), c.Request.URL.Path)
 	v.Title = le.Name + " - " + v.T("market.titleTag") + " - " + v.SiteName
 	v.Desc = le.Description

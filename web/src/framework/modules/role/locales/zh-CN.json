@@ -46,8 +46,6 @@
       "description": "角色：{{name}}",
       "success": "权限已保存",
       "empty": "暂无可分配的权限",
-      "expandAll": "展开全部",
-      "collapseAll": "收起全部",
       "selectAll": "全选",
       "clearAll": "清空",
       "selectedCount": "已选 {{count}} 项",

@@ -29,8 +29,13 @@
       "query": "查询",
       "update": "修改",
       "insert": "新增",
+      "create": "新增",
       "delete": "删除",
-      "export": "导出"
+      "export": "导出",
+      "import": "导入",
+      "sort": "排序",
+      "grant": "授权",
+      "other": "其他"
     },
     "todos": "待办事项",
     "todoMessage": "消息",

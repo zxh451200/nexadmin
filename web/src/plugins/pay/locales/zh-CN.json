@@ -2,7 +2,6 @@
   "plugin_pay": {
     "title": "支付中台",
     "description": "支付单、退款、回调审计与渠道配置（资金事实租户级落库）",
-    "dir": "支付中台",
     "menu": "支付中台",
     "perm": {
       "edit": "关闭/补查支付单",
@@ -16,6 +15,11 @@
       "refunds": "退款记录",
       "callbacks": "回调审计",
       "channels": "渠道配置"
+    },
+    "view": {
+      "logs": "日志",
+      "stats": "统计",
+      "label": "视图"
     },
     "all": "全部",
     "empty": "暂无数据",
@@ -82,6 +86,32 @@
       "create": "新建渠道",
       "edit": "编辑渠道",
       "deleteConfirm": "确认删除渠道 {{name}}？"
+    },
+    "stats": {
+      "rangeLabel": "时间范围",
+      "ranges": {
+        "7d": "近 7 天",
+        "30d": "近 30 天",
+        "90d": "近 90 天",
+        "all": "全部"
+      },
+      "orders": "订单数",
+      "paid": "成交笔数",
+      "net": "净额",
+      "refundRate": "退款率",
+      "multiCurrency": "存在多币种：金额按币种分列，未做跨币种相加。",
+      "sampled": "订单量较大，统计基于最近 20000 笔。",
+      "daily": "按天笔数",
+      "byCurrency": "金额（按币种）",
+      "currency": "币种",
+      "gmv": "成交额",
+      "refunded": "退款额",
+      "fee": "手续费",
+      "byChannel": "渠道成交",
+      "channel": "渠道",
+      "byScene": "场景分布",
+      "failReasons": "失败原因 Top",
+      "noFailures": "所选区间没有失败订单"
     }
   }
 }

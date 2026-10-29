@@ -5,7 +5,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { ArrowDown, ArrowUp, Eye, GripVertical, Loader2, RotateCcw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
-import { useSortableSensors } from '@/framework/components/table/use-sortable-sensors'
+import { DragCursorHost, useSortableSensors } from '@/framework/components/table/use-sortable-sensors'
 import { Button } from '@/framework/ui/button'
 import { Switch } from '@/framework/ui/switch'
 import { cn } from '@/lib/utils'
@@ -39,7 +39,8 @@ function EditTile({ card, title, index, total, onMove, onHide }: TileProps) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: card.id })
   const style: CSSProperties = {
     transform: CSS.Transform.toString(transform),
-    transition,
+    // 被拖卡片自身不做补间，否则跟手慢半拍
+    transition: isDragging ? undefined : transition,
     position: isDragging ? 'relative' : undefined,
     zIndex: isDragging ? 10 : undefined,
   }
@@ -190,6 +191,7 @@ export function LayoutEditor({ cards, base, saving, onSave, onExit, onReset }: P
         onDragEnd={onDragEnd}
         accessibility={{ announcements, screenReaderInstructions: { draggable: t('dashboard.layout.dragInstructions') } }}
       >
+        <DragCursorHost />
         <SortableContext items={visibleIds} strategy={rectSortingStrategy}>
           <div className={CARD_GRID}>
             {visibleIds.map((id, i) => (

@@ -171,25 +171,25 @@ export default function BackupPage() {
           Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-32 w-full" />)
         ) : (
           <>
-            <StatCard
+            <StatCard tone="chart-1"
               title={t('backup.card.tool')}
               value={st.available ? (st.tool ?? '-') : t('backup.card.toolMissing')}
               hint={`${st.engine} · v${st.version}`}
               icon={<Wrench aria-hidden="true" />}
             />
-            <StatCard
+            <StatCard tone="chart-2"
               title={t('backup.card.disk')}
               value={st.diskFreeBytes == null ? t('backup.card.unknown') : formatSize(st.diskFreeBytes)}
               hint={st.dir}
               icon={<HardDrive aria-hidden="true" />}
             />
-            <StatCard
+            <StatCard tone="chart-4"
               title={t('backup.card.schedule')}
               value={st.schedule ? t('backup.settings.daily', { time: st.schedule }) : t('backup.settings.scheduleOff')}
               hint={st.nextRunAt ? t('backup.card.next', { time: fmtTime(st.nextRunAt) }) : undefined}
               icon={<CalendarClock aria-hidden="true" />}
             />
-            <StatCard
+            <StatCard tone="chart-5"
               title={t('backup.card.last')}
               value={st.lastSuccessAt ? fmtTime(st.lastSuccessAt) : t('backup.card.never')}
               hint={config.data ? t('backup.card.keep', { days: config.data.keepDays || '∞', copies: config.data.keepCount || '∞' }) : undefined}

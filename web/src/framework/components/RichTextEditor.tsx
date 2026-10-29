@@ -40,7 +40,8 @@ export function RichTextEditor({ value, onChange, placeholder, className, disabl
 
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
+      // 放开到 h6：工具栏只给 h1–h3 按钮，但粘贴/导入进来的 h4–h6 不能被降级成段落。
+      StarterKit.configure({ heading: { levels: [1, 2, 3, 4, 5, 6] } }),
       Underline,
       Link.configure({ openOnClick: false, autolink: true, HTMLAttributes: { rel: 'noopener noreferrer', target: '_blank' } }),
       Image,
@@ -82,7 +83,7 @@ export function RichTextEditor({ value, onChange, placeholder, className, disabl
   if (!editor) return null
 
   return (
-    <div className={cn('nex-richtext-editor overflow-hidden rounded-md border border-input bg-background focus-within:ring-2 focus-within:ring-ring', className)}>
+    <div className={cn('nex-richtext-editor min-w-0 overflow-hidden rounded-md border border-input bg-background focus-within:ring-2 focus-within:ring-ring', className)}>
       {!disabled && <EditorToolbar editor={editor} onMedia={setMedia} />}
       <EditorContent editor={editor} />
       <MediaDialog

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Download, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
@@ -14,8 +15,8 @@ import type { Column } from '@/framework/components/table/types'
 import { Badge, type BadgeProps } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
-import { Label } from '@/framework/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/framework/ui/tabs'
 import { isExportTooMany } from '../oper-log/api'
 import { fmtDateTime, stamp } from '../oper-log/format'
 import { blobExt } from '../user/api'
@@ -29,6 +30,7 @@ import {
   type LoginLogQuery,
   type LoginType,
 } from './api'
+import { LoginStatsPanel } from './StatsPanel'
 
 interface Filters {
   keyword: string
@@ -67,6 +69,10 @@ export default function LoginLogPage() {
   const [applied, setApplied] = useState<Filters>(emptyFilters)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
+  // 视图写进 URL：?view=stats 可以直接分享给同事
+  const [params, setParams] = useSearchParams()
+  const view = params.get('view') === 'stats' ? 'stats' : 'logs'
+  const setView = (v: string) => setParams(v === 'stats' ? { view: v } : {}, { replace: true })
   const [selected, setSelected] = useState<string[]>([])
   const [exporting, setExporting] = useState(false)
 
@@ -133,10 +139,40 @@ export default function LoginLogPage() {
 
   return (
     <PageContainer>
-      <PageHeader
-        title={t('loginLog.menu')}
-        description={t('loginLog.description')}
-        actions={
+      <PageHeader title={t('loginLog.menu')} description={t('loginLog.description')} />
+      {/* 列表与统计分屏：查日志的人不该先滚过九百像素的图表，做复盘的也不该被表格挤走 */}
+      <Tabs value={view} onValueChange={setView}>
+        <TabsList className="w-fit">
+          <TabsTrigger value="logs">{t('loginLog.view.logs')}</TabsTrigger>
+          <TabsTrigger value="stats">{t('loginLog.view.stats')}</TabsTrigger>
+        </TabsList>
+        <TabsContent value="logs">
+          <div className="flex flex-col gap-4">
+      <FilterBar onSearch={search} onReset={reset}>
+        <Input aria-label={t('loginLog.filter.keyword')} className="md:w-56"
+          id="ll-keyword"
+          value={draft.keyword}
+          placeholder={t('loginLog.filter.keywordPlaceholder')}
+          onChange={(e) => setDraft({ ...draft, keyword: e.target.value })}
+        />
+        <Select value={draft.loginType} onValueChange={(v) => setDraft({ ...draft, loginType: v })}>
+          <SelectTrigger className="md:w-40" aria-label={t('loginLog.filter.type')}>
+            <SelectValue placeholder={t('loginLog.filter.type')} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{t('loginLog.filter.allTypes')}</SelectItem>
+            {LOGIN_TYPES.map((k) => (
+              <SelectItem key={k} value={k}>
+                {t(`loginLog.type.${k}`)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <DictSelect dict="login_status" value={draft.status} allLabel={t('loginLog.filter.allStatus')} onChange={(v) => setDraft({ ...draft, status: v })} aria-label={t('loginLog.filter.status')} className="md:w-36" placeholder={t('loginLog.filter.status')} />
+        <DateRangePicker value={draft.range} onChange={(v) => setDraft({ ...draft, range: v })} aria-label={t('loginLog.filter.time')} className="md:w-64" placeholder={t('loginLog.filter.time')} />
+      </FilterBar>
+      <DataTable<LoginLog>
+        toolbar={
           <Can perm="loginLog:export">
             <Button type="button" variant="outline" disabled={exporting} onClick={onExport}>
               <Download className="me-2 size-4" aria-hidden="true" />
@@ -144,43 +180,6 @@ export default function LoginLogPage() {
             </Button>
           </Can>
         }
-      />
-      <FilterBar onSearch={search} onReset={reset}>
-        <div className="flex w-full flex-col gap-1.5 md:w-56">
-          <Label htmlFor="ll-keyword">{t('loginLog.filter.keyword')}</Label>
-          <Input
-            id="ll-keyword"
-            value={draft.keyword}
-            placeholder={t('loginLog.filter.keywordPlaceholder')}
-            onChange={(e) => setDraft({ ...draft, keyword: e.target.value })}
-          />
-        </div>
-        <div className="flex w-full flex-col gap-1.5 md:w-40">
-          <Label>{t('loginLog.filter.type')}</Label>
-          <Select value={draft.loginType} onValueChange={(v) => setDraft({ ...draft, loginType: v })}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{t('loginLog.filter.allTypes')}</SelectItem>
-              {LOGIN_TYPES.map((k) => (
-                <SelectItem key={k} value={k}>
-                  {t(`loginLog.type.${k}`)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex w-full flex-col gap-1.5 md:w-36">
-          <Label>{t('loginLog.filter.status')}</Label>
-          <DictSelect dict="login_status" value={draft.status} onChange={(v) => setDraft({ ...draft, status: v })} />
-        </div>
-        <div className="flex w-full flex-col gap-1.5 md:w-64">
-          <Label>{t('loginLog.filter.time')}</Label>
-          <DateRangePicker value={draft.range} onChange={(v) => setDraft({ ...draft, range: v })} />
-        </div>
-      </FilterBar>
-      <DataTable<LoginLog>
         columns={columns}
         data={data?.list ?? []}
         rowKey="id"
@@ -205,6 +204,12 @@ export default function LoginLogPage() {
           },
         }}
       />
+          </div>
+        </TabsContent>
+        <TabsContent value="stats">
+          <LoginStatsPanel />
+        </TabsContent>
+      </Tabs>
     </PageContainer>
   )
 }

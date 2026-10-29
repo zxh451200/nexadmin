@@ -24,6 +24,7 @@ export interface UploadSettings {
   maxVideoMb: number
   maxFileMb: number
   allowedTypes: string[]
+  imageWebp: boolean
 }
 
 const LIST_KEY = ['sysConfig', 'list'] as const

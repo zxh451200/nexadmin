@@ -2,9 +2,18 @@ import { defineMock, mockError } from '@/framework/request/mock'
 import type { PayCallback, PayChannel, PayOrder, PayRefund } from './api'
 
 const ago = (min: number) => new Date(Date.now() - min * 60_000).toISOString()
+/** 本地日号 YYYY-MM-DD：与后端按应用时区分桶保持一致 */
+const dayKey = (iso: string) => {
+  const d = new Date(iso)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 const payNo = (n: number) => `PAY7420000000000000${String(n).padStart(2, '0')}`
 
+const SETTLED = new Set(['succeeded', 'partially_refunded', 'refunded', 'refunding'])
+
 const mkOrder = (n: number, p: Partial<PayOrder>): PayOrder => {
+  // 按天错开创建时间，让 /orders/stats 的按天趋势有多于一个点
+  const createdAt = ago(24 * 60 * (7 - n))
   const base: PayOrder = {
     id: String(7420000000000000000n + BigInt(n)),
     paymentNo: payNo(n),
@@ -21,19 +30,21 @@ const mkOrder = (n: number, p: Partial<PayOrder>): PayOrder => {
     fxRateMicro: 1000000,
     tenantId: '1',
     status: 'pending',
-    createdAt: ago(60 * (n + 1)),
+    createdAt,
   }
   // 先收成 PayOrder 再叠加 Partial：直接展开 Partial 会让必填字段在类型上变成可空
-  return { ...base, ...p }
+  const o = { ...base, ...p }
+  if (o.paidAt === undefined && SETTLED.has(o.status)) o.paidAt = ago(24 * 60 * (7 - n) - 40)
+  return o
 }
 
 const orders: PayOrder[] = [
-  mkOrder(1, { status: 'succeeded', channelTxnId: 'mock_a1', feeMinor: 77, paidAt: ago(55) }),
-  mkOrder(2, { status: 'pending', expireAt: ago(-30) }),
-  mkOrder(3, { status: 'partially_refunded', refundedMinor: 500, feeMinor: 77, channelTxnId: 'mock_a3', paidAt: ago(160) }),
+  mkOrder(1, { status: 'succeeded', channelTxnId: 'mock_a1', feeMinor: 77 }),
+  mkOrder(2, { status: 'pending', expireAt: ago(24 * 60 * (7 - 2) - 60 * 23) }),
+  mkOrder(3, { status: 'partially_refunded', refundedMinor: 500, feeMinor: 77, channelTxnId: 'mock_a3' }),
   mkOrder(4, { status: 'failed', failReason: 'user closed cashier' }),
   mkOrder(5, { status: 'closed' }),
-  mkOrder(6, { status: 'refunded', refundedMinor: 9900, channelTxnId: 'mock_a6', paidAt: ago(300) }),
+  mkOrder(6, { status: 'refunded', refundedMinor: 9900, channelTxnId: 'mock_a6' }),
 ]
 
 let channels: PayChannel[] = [
@@ -210,6 +221,76 @@ defineMock([
       }
       refunds = [...refunds, r]
       return r
+    },
+  },
+  {
+    // 与真实 /orders/stats 同口径：金额按币种分列，趋势只给笔数，绝不跨币种相加
+    method: 'GET',
+    url: '/plugins/pay/orders/stats',
+    handler: () => {
+      const settled = SETTLED
+      const tally = (keys: (string | undefined)[]) => {
+        const m = new Map<string, number>()
+        keys.forEach((k) => { const key = k && k.trim() ? k : '-'; m.set(key, (m.get(key) ?? 0) + 1) })
+        return [...m].map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value || a.name.localeCompare(b.name)).slice(0, 8)
+      }
+      const curs = new Map<string, { orders: number; paid: number; gmv: number; refunded: number; fee: number }>()
+      const chs = new Map<string, { channel: string; currency: string; paid: number; gmv: number }>()
+      const dayMap = new Map<string, { date: string; orders: number; paid: number }>()
+      orders.forEach((o) => {
+        const c = curs.get(o.currency) ?? { orders: 0, paid: 0, gmv: 0, refunded: 0, fee: 0 }
+        c.orders += 1
+        const key = dayKey(o.createdAt)
+        const dp = dayMap.get(key) ?? { date: key, orders: 0, paid: 0 }
+        dp.orders += 1
+        dayMap.set(key, dp)
+        if (settled.has(o.status)) {
+          c.paid += 1
+          c.gmv += o.amountMinor
+          dp.paid += 1
+          const ck = `${o.channelCode}|${o.currency}`
+          const ch = chs.get(ck) ?? { channel: o.channelCode, currency: o.currency, paid: 0, gmv: 0 }
+          ch.paid += 1
+          ch.gmv += o.amountMinor
+          chs.set(ck, ch)
+        }
+        c.refunded += o.refundedMinor ?? 0
+        c.fee += o.feeMinor ?? 0
+        curs.set(o.currency, c)
+      })
+      // 与后端同口径：窗口取最近 30 天，缺数据的日期补 0，保证横轴连续
+      const series: { date: string; orders: number; paid: number }[] = []
+      for (let i = 30; i >= 0; i--) {
+        const d = new Date()
+        d.setHours(12, 0, 0, 0)
+        d.setDate(d.getDate() - i)
+        const key = dayKey(d.toISOString())
+        series.push(dayMap.get(key) ?? { date: key, orders: 0, paid: 0 })
+      }
+      return {
+        from: series[0].date, to: series[series.length - 1].date,
+        orders: orders.length,
+        paid: orders.filter((o) => settled.has(o.status)).length,
+        sampled: false,
+        days: series,
+        byCurrency: [...curs.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([currency, c]) => ({
+          currency,
+          orders: c.orders,
+          paid: c.paid,
+          gmvMinor: c.gmv,
+          refundedMinor: c.refunded,
+          feeMinor: c.fee,
+          netMinor: c.gmv - c.refunded,
+          refundRate: c.gmv ? Math.round((c.refunded / c.gmv) * 1000) / 10 : 0,
+        })),
+        byChannel: [...chs.values()].sort((a, b) => b.gmv - a.gmv || a.channel.localeCompare(b.channel))
+          .map((c) => ({ channel: c.channel, currency: c.currency, paid: c.paid, gmvMinor: c.gmv })),
+        byStatus: tally(orders.map((o) => o.status)),
+        byScene: tally(orders.map((o) => o.scene)),
+        byMethod: tally(orders.map((o) => o.method)),
+        byBizType: tally(orders.map((o) => o.bizType)),
+        failReasons: tally(orders.filter((o) => !settled.has(o.status)).map((o) => (o as { failReason?: string }).failReason)),
+      }
     },
   },
 ])

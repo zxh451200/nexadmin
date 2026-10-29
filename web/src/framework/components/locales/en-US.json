@@ -15,11 +15,25 @@
     "nextPage": "Next page",
     "goToPage": "Go to page {{page}}",
     "expand": "Expand",
+    "dropToRoot": "Drop here to move to the top level",
+    "maxDepthReached": "Maximum {{count}} levels deep",
     "collapse": "Collapse",
     "expandAll": "Expand all",
     "collapseAll": "Collapse all",
     "batchActions": "Batch actions",
-    "reorderFailed": "Failed to reorder, the original order was restored"
+    "reorderFailed": "Failed to reorder, the original order was restored",
+    "dragHint": "Drag right to nest · drag left to un-nest · drop on the dashed box for top level",
+    "willNest": "Release to nest under this row",
+    "willOutdent": "Release to move up one level",
+    "nestBlocked": "This row cannot contain children",
+    "a11y": {
+      "picked": "Picked up row {{row}}",
+      "over": "Row {{row}} moved over row {{target}}",
+      "overEmpty": "Row {{row}} is not over any row",
+      "dropped": "Row {{row}} dropped at row {{target}}",
+      "droppedEmpty": "Row {{row}} dropped without moving",
+      "cancelled": "Drag cancelled for row {{row}}"
+    }
   },
   "dialog": {
     "confirmTitle": "Please confirm",
@@ -31,5 +45,27 @@
   },
   "formLayout": {
     "requiredHint": "Fields marked with * are required"
+  },
+  "localeForm": {
+    "source": "Source",
+    "sourceLang": "Source text",
+    "sourceOnly": "Source (read-only)",
+    "editingLanguage": "Editing",
+    "switcherAria": "Switch the language you are editing",
+    "pickHint": "Pick the language to edit",
+    "fieldsMissing": "{{count}} missing",
+    "sharedTag": "Shared",
+    "sharedFieldNote": "Not localized — shared by every language",
+    "fillFromSource": "Copy blanks from source",
+    "aiFill": "AI translate blanks",
+    "aiWorking": "Translating…",
+    "aiDone": "Translated {{count}} field(s)",
+    "aiEmpty": "Nothing to translate",
+    "aiFailed": "Translation failed",
+    "machineHint": "Machine translated, not reviewed by a human yet",
+    "machineConfirm": "Mark reviewed",
+    "machineConfirmed": "Marked as reviewed",
+    "publishGroup": "Publish per language",
+    "publishMissing": "Missing: {{fields}}"
   }
 }

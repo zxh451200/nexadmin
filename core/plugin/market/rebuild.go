@@ -83,7 +83,7 @@ func Restart(root string, log func(string)) error {
 	})))
 	log("2 秒后重启服务（等待响应返回）…")
 	time.Sleep(2 * time.Second)
-	if err := c.Restart(); err != nil {
+	if err := c.ScheduleRestart(); err != nil {
 		return fmt.Errorf("自动重启不可用（%v）：%s", err, buf.String())
 	}
 	return nil

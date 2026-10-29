@@ -2,7 +2,6 @@
   "plugin_workflow": {
     "title": "Workflow",
     "description": "Start, track and complete approval flows",
-    "dir": "Workflow",
     "menu": "Approvals",
     "perm": {
       "start": "Start / withdraw",
@@ -12,8 +11,26 @@
     "tabs": {
       "todo": "My todo",
       "done": "My done",
-      "all": "All instances"
+      "all": "All instances",
+      "defs": "Definitions"
     },
+    "defCreate": "New definition",
+    "defEdit": "Edit definition",
+    "defDeleteConfirm": "Delete this definition? Running instances are not affected.",
+    "defNameKeyRequired": "Name and key are required",
+    "defStatus": {
+      "draft": "Draft",
+      "published": "Published",
+      "disabled": "Disabled"
+    },
+    "fields": {
+      "defName": "Name",
+      "defKey": "Key",
+      "status": "Status",
+      "updatedAt": "Updated at"
+    },
+    "fromTemplate": "From template",
+    "fromTemplateBlank": "Blank flow",
     "empty": "No instances",
     "loading": "Loading…",
     "total": "{{count}} in total",

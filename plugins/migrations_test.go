@@ -49,9 +49,9 @@ func parseSchemaSQL(t *testing.T, sqlText string) *engineSchema {
 				if open < 0 || close <= open {
 					continue
 				}
-			cols := splitColumns(rest[open+1 : close])
-			// 唯一性按整行判定：UNIQUE KEY（mysql）与 CONSTRAINT ... UNIQUE（PG 表约束）都含 UNIQUE。
-			unique := strings.Contains(strings.ToUpper(line), "UNIQUE")
+				cols := splitColumns(rest[open+1 : close])
+				// 唯一性按整行判定：UNIQUE KEY（mysql）与 CONSTRAINT ... UNIQUE（PG 表约束）都含 UNIQUE。
+				unique := strings.Contains(strings.ToUpper(line), "UNIQUE")
 				if idxName := firstIdent(strings.TrimSpace(km[2][:open])); idxName != "" {
 					ts.indexes[strings.ToLower(idxName)] = indexDef{columns: cols, unique: unique}
 				}

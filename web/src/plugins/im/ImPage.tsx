@@ -5,10 +5,13 @@ import { toast } from 'sonner'
 import { useQueryClient } from '@tanstack/react-query'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
+import { EmptyState } from '@/framework/components/EmptyState'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
+import { SimpleSelect } from '@/framework/components/SimpleSelect'
 import { useWs } from '@/framework/hooks/useWs'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
+import { Card } from '@/framework/ui/card'
 import { Input } from '@/framework/ui/input'
 import { cn } from '@/lib/utils'
 import { useCloseConv, useConversations, useMessages, useSendReply, openImStream, type ImConversation, type ImMessage } from './api'
@@ -87,35 +90,36 @@ export default function ImPage() {
     <PageContainer>
       <PageHeader title={t('plugin_im.title')} description={t('plugin_im.description')} />
       <div className="grid h-[calc(100vh-14rem)] min-h-96 grid-cols-1 gap-4 md:grid-cols-[22rem_1fr]">
-        <div className="flex min-h-0 flex-col gap-2 rounded-lg border bg-card p-2">
-          <div className="flex items-center gap-2">
+        <Card className="flex min-h-0 flex-col gap-2 p-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Input
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
               placeholder={t('plugin_im.searchPlaceholder')}
               aria-label={t('common.keyword')}
-              className="h-8"
+              className="min-w-32 flex-1"
             />
-            <select
+            <SimpleSelect
               aria-label={t('plugin_im.fields.status')}
-              className="h-8 rounded-md border bg-background px-2 text-sm"
+              className="w-20"
               value={status ?? ALL}
-              onChange={(e) => setStatus(e.target.value === ALL ? undefined : e.target.value)}
-            >
-              <option value={ALL}>{t('plugin_im.all')}</option>
-              <option value="open">{t('plugin_im.status.open')}</option>
-              <option value="closed">{t('plugin_im.status.closed')}</option>
-            </select>
+              onChange={(v) => setStatus(v === ALL ? undefined : v)}
+              options={[
+                { value: ALL, label: t('plugin_im.all') },
+                { value: 'open', label: t('plugin_im.status.open') },
+                { value: 'closed', label: t('plugin_im.status.closed') },
+              ]}
+            />
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
             {(convs.data?.list ?? []).map((c) => (
               <ConvListItem key={c.id} conv={c} active={c.convNo === selected} onSelect={() => setSelected(c.convNo)} />
             ))}
             {!convs.isLoading && (convs.data?.list ?? []).length === 0 ? (
-              <div className="p-4 text-center text-sm text-muted-foreground">{t('plugin_im.empty')}</div>
+              <EmptyState title={t('plugin_im.empty')} className="py-8" />
             ) : null}
           </div>
-        </div>
+        </Card>
 
         <ChatPane
           conv={msgs.data?.conversation}
@@ -181,9 +185,9 @@ function ChatPane({
 
   if (!conv) {
     return (
-      <div className="flex items-center justify-center rounded-lg border bg-card text-sm text-muted-foreground">
+      <Card className="flex items-center justify-center text-sm text-muted-foreground">
         {t('plugin_im.pickConversation')}
-      </div>
+      </Card>
     )
   }
 
@@ -195,7 +199,7 @@ function ChatPane({
   }
 
   return (
-    <div className="flex min-h-0 flex-col rounded-lg border bg-card">
+    <Card className="flex min-h-0 flex-col">
       <div className="flex items-center gap-2 border-b px-4 py-2">
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-medium text-foreground">
@@ -264,6 +268,6 @@ function ChatPane({
           </form>
         </Can>
       ) : null}
-    </div>
+    </Card>
   )
 }

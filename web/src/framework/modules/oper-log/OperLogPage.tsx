@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Download, Eraser, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { AiFilterBox } from '@/framework/components/AiFilterBox'
@@ -17,6 +18,7 @@ import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
 import { Label } from '@/framework/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/framework/ui/tabs'
 import {
   exportOperLogs,
   isExportTooMany,
@@ -30,6 +32,7 @@ import { OperLogDetailDialog } from './OperLogDetailDialog'
 import { blobExt } from '../user/api'
 import { saveBlob } from '../user/csv'
 import { fmtDateTime, stamp } from './format'
+import { OperStatsPanel } from './StatsPanel'
 
 interface Filters {
   keyword: string
@@ -63,6 +66,10 @@ export default function OperLogPage() {
   const [selected, setSelected] = useState<string[]>([])
   const [detail, setDetail] = useState<OperLog | null>(null)
   const [cleanOpen, setCleanOpen] = useState(false)
+  // 视图写进 URL：?view=stats 可直接分享
+  const [params, setParams] = useSearchParams()
+  const view = params.get('view') === 'stats' ? 'stats' : 'logs'
+  const setView = (v: string) => setParams(v === 'stats' ? { view: v } : {}, { replace: true })
   const [cleanDays, setCleanDays] = useState<string>('30')
   const [exporting, setExporting] = useState(false)
 
@@ -132,26 +139,15 @@ export default function OperLogPage() {
 
   return (
     <PageContainer>
-      <PageHeader
-        title={t('operLog.menu')}
-        description={t('operLog.description')}
-        actions={
-          <>
-            <Can perm="operLog:export">
-              <Button type="button" variant="outline" disabled={exporting} onClick={onExport}>
-                <Download className="me-2 size-4" aria-hidden="true" />
-                {t('operLog.action.export')}
-              </Button>
-            </Can>
-            <Can perm="operLog:delete">
-              <Button type="button" variant="outline" onClick={() => setCleanOpen(true)}>
-                <Eraser className="me-2 size-4" aria-hidden="true" />
-                {t('operLog.action.clean')}
-              </Button>
-            </Can>
-          </>
-        }
-      />
+      <PageHeader title={t('operLog.menu')} description={t('operLog.description')} />
+      {/* 列表与统计分屏：查操作记录的人不该先滚过一屏图表 */}
+      <Tabs value={view} onValueChange={setView}>
+        <TabsList className="w-fit">
+          <TabsTrigger value="logs">{t('operLog.view.logs')}</TabsTrigger>
+          <TabsTrigger value="stats">{t('operLog.view.stats')}</TabsTrigger>
+        </TabsList>
+        <TabsContent value="logs">
+          <div className="flex flex-col gap-4">
       <AiFilterBox
         scope="operLog"
         onApply={(f) => {
@@ -168,29 +164,33 @@ export default function OperLogPage() {
         }}
       />
       <FilterBar onSearch={search} onReset={reset}>
-        <div className="flex w-full flex-col gap-1.5 md:w-60">
-          <Label htmlFor="ol-keyword">{t('operLog.filter.keyword')}</Label>
-          <Input
-            id="ol-keyword"
-            value={draft.keyword}
-            placeholder={t('operLog.filter.keywordPlaceholder')}
-            onChange={(e) => setDraft({ ...draft, keyword: e.target.value })}
-          />
-        </div>
-        <div className="flex w-full flex-col gap-1.5 md:w-40">
-          <Label>{t('operLog.filter.type')}</Label>
-          <DictSelect dict="oper_type" value={draft.type} onChange={(v) => setDraft({ ...draft, type: v })} />
-        </div>
-        <div className="flex w-full flex-col gap-1.5 md:w-36">
-          <Label>{t('operLog.filter.status')}</Label>
-          <DictSelect dict="login_status" value={draft.status} onChange={(v) => setDraft({ ...draft, status: v })} />
-        </div>
-        <div className="flex w-full flex-col gap-1.5 md:w-64">
-          <Label>{t('operLog.filter.time')}</Label>
-          <DateRangePicker value={draft.range} onChange={(v) => setDraft({ ...draft, range: v })} />
-        </div>
+        <Input aria-label={t('operLog.filter.keyword')} className="md:w-60"
+          id="ol-keyword"
+          value={draft.keyword}
+          placeholder={t('operLog.filter.keywordPlaceholder')}
+          onChange={(e) => setDraft({ ...draft, keyword: e.target.value })}
+        />
+        <DictSelect dict="oper_type" value={draft.type} onChange={(v) => setDraft({ ...draft, type: v })} aria-label={t('operLog.filter.type')} className="md:w-40" placeholder={t('operLog.filter.type')} />
+        <DictSelect dict="login_status" value={draft.status} onChange={(v) => setDraft({ ...draft, status: v })} aria-label={t('operLog.filter.status')} className="md:w-36" placeholder={t('operLog.filter.status')} />
+        <DateRangePicker value={draft.range} onChange={(v) => setDraft({ ...draft, range: v })} aria-label={t('operLog.filter.time')} className="md:w-64" placeholder={t('operLog.filter.time')} />
       </FilterBar>
       <DataTable<OperLog>
+        toolbar={
+          <>
+            <Can perm="operLog:export">
+              <Button type="button" variant="outline" disabled={exporting} onClick={onExport}>
+                <Download className="me-2 size-4" aria-hidden="true" />
+                {t('operLog.action.export')}
+              </Button>
+            </Can>
+            <Can perm="operLog:delete">
+              <Button type="button" variant="outline" onClick={() => setCleanOpen(true)}>
+                <Eraser className="me-2 size-4" aria-hidden="true" />
+                {t('operLog.action.clean')}
+              </Button>
+            </Can>
+          </>
+        }
         columns={columns}
         data={data?.list ?? []}
         rowKey="id"
@@ -216,6 +216,12 @@ export default function OperLogPage() {
           },
         }}
       />
+          </div>
+        </TabsContent>
+        <TabsContent value="stats">
+          <OperStatsPanel />
+        </TabsContent>
+      </Tabs>
       <OperLogDetailDialog log={detail} onClose={() => setDetail(null)} />
       <ResponsiveDialog
         open={cleanOpen}

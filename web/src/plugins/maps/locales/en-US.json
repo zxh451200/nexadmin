@@ -1,0 +1,33 @@
+{
+  "plugin_maps": {
+    "menu": "Maps",
+    "title": "Map service",
+    "desc": "Free basic map plugin: enable AMap, Baidu or Google as needed. Picking runs in the browser; reverse geocoding goes through the server proxy.",
+    "configTitle": "Provider keys",
+    "configDesc": "Fill in the providers you enable. Server keys stay on the backend; the API only reports whether one exists.",
+    "enabledTag": "Enabled",
+    "keySaved": "Saved — leave blank to keep",
+    "providers": {
+      "amap": "AMap",
+      "baidu": "Baidu Maps",
+      "google": "Google Maps"
+    },
+    "keys": {
+      "amapPublic": "JS API key (web)",
+      "amapServer": "Web service key",
+      "amapHint": "AMap console: create a Web (JS API) key and a Web service key. The former ships to the browser; the latter is only used for server-side reverse geocoding.",
+      "baiduPublic": "Browser AK",
+      "baiduServer": "Server AK",
+      "baiduHint": "Baidu console: apply for a browser AK and a server AK; enable reverse geocoding for the server AK.",
+      "googlePublic": "API key",
+      "googleServer": "Server key (blank = same)",
+      "googleHint": "Google Cloud: enable Maps JavaScript API and Geocoding API. Maps usually fail to load in mainland China; intended for overseas deployments."
+    },
+    "demoTitle": "Picker test",
+    "demoDesc": "Pick an enabled provider, click the map or drag the marker, then confirm. The coordinate system follows the provider (gcj02 / bd09 / wgs84).",
+    "demoLabel": "Location",
+    "notConfigured": "This provider is disabled or missing its browser key. Save the keys and reopen.",
+    "clickHint": "Click the map to pick a location",
+    "confirm": "Confirm"
+  }
+}

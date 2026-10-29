@@ -449,7 +449,7 @@ func TestIdempotencyReplay(t *testing.T) {
 	r := idemRouter(db)
 
 	body := `{"bizNo":"G-1"}`
-	sum := sha256Hex("K1|/plugins/pay/orders|"+body)
+	sum := sha256Hex("K1|/plugins/pay/orders|" + body)
 	stored := `{"code":0,"data":{"bizNo":"G-1"}}`
 	m.ExpectQuery("SELECT \\* FROM `plg_pay_idem` WHERE idem_key = \\?").
 		WillReturnRows(idemRow("K1", sum, stored))

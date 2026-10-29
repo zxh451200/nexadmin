@@ -1,13 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
 import { CircleCheck, Send, UserRoundCheck, XCircle } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
+import { EmptyState } from '@/framework/components/EmptyState'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
+import { SimpleSelect } from '@/framework/components/SimpleSelect'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
+import { Card } from '@/framework/ui/card'
+import { Checkbox } from '@/framework/ui/checkbox'
 import { Input } from '@/framework/ui/input'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/framework/ui/tabs'
 import { cn } from '@/lib/utils'
 import {
   useAssignTicket,
@@ -19,6 +25,7 @@ import {
   type TicketReply,
 } from './api'
 import { formatTime, priorityVariant, statusVariant } from './format'
+import { TicketStatsPanel } from './TicketStatsPanel'
 
 const ALL = '__all'
 
@@ -30,6 +37,10 @@ export default function TicketPage() {
   const [keyword, setKeyword] = useState('')
   const [overdueOnly, setOverdueOnly] = useState(false)
   const [selected, setSelected] = useState<string | undefined>()
+  // 视图写进 URL：?view=stats 可以直接分享给同事
+  const [params, setParams] = useSearchParams()
+  const view = params.get('view') === 'stats' ? 'stats' : 'logs'
+  const setView = (v: string) => setParams(v === 'stats' ? { view: v } : {}, { replace: true })
 
   const tickets = useTickets({
     status, priority, keyword: keyword || undefined, overdue: overdueOnly ? '1' : undefined,
@@ -72,44 +83,51 @@ export default function TicketPage() {
   return (
     <PageContainer>
       <PageHeader title={t('plugin_ticket.title')} description={t('plugin_ticket.description')} />
-      <div className="grid h-[calc(100vh-14rem)] min-h-96 grid-cols-1 gap-4 md:grid-cols-[24rem_1fr]">
-        <div className="flex min-h-0 flex-col gap-2 rounded-lg border bg-card p-2">
-          <div className="flex items-center gap-2">
+      {/* 列表与统计分屏：处理工单的人要先看到队列，做复盘的人也不该被双栏挤走 */}
+      <Tabs value={view} onValueChange={setView}>
+        <TabsList className="w-fit">
+          <TabsTrigger value="logs">{t('plugin_ticket.view.logs')}</TabsTrigger>
+          <TabsTrigger value="stats">{t('plugin_ticket.view.stats')}</TabsTrigger>
+        </TabsList>
+        <TabsContent value="logs">
+          {/* 队列与会话是一体两面：选中哪张单就看哪段对话，整体算「列表」视图，不拆散 */}
+          <div className="grid h-[calc(100vh-14rem)] min-h-96 grid-cols-1 gap-4 md:grid-cols-[24rem_1fr]">
+        <Card className="flex min-h-0 flex-col gap-2 p-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Input
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
               placeholder={t('plugin_ticket.searchPlaceholder')}
               aria-label={t('common.keyword')}
-              className="h-8"
+              className="min-w-32 flex-1"
             />
-            <select
+            <SimpleSelect
               aria-label={t('plugin_ticket.fields.status')}
-              className="h-8 rounded-md border bg-background px-2 text-sm"
+              className="w-20"
               value={status ?? ALL}
-              onChange={(e) => setStatus(e.target.value === ALL ? undefined : e.target.value)}
-            >
-              <option value={ALL}>{t('plugin_ticket.all')}</option>
-              {(['open', 'processing', 'resolved', 'closed'] as const).map((s) => (
-                <option key={s} value={s}>
-                  {t(`plugin_ticket.status.${s}`)}
-                </option>
-              ))}
-            </select>
-            <select
+              onChange={(v) => setStatus(v === ALL ? undefined : v)}
+              options={[
+                { value: ALL, label: t('plugin_ticket.all') },
+                ...(['open', 'processing', 'resolved', 'closed'] as const).map((s) => ({ value: s, label: t(`plugin_ticket.status.${s}`) })),
+              ]}
+            />
+            <SimpleSelect
               aria-label={t('plugin_ticket.fields.priority')}
-              className="h-8 rounded-md border bg-background px-2 text-sm"
+              className="w-20"
               value={priority ?? ALL}
-              onChange={(e) => setPriority(e.target.value === ALL ? undefined : e.target.value)}
-            >
-              <option value={ALL}>{t('plugin_ticket.all')}</option>
-              {(['urgent', 'high', 'normal', 'low'] as const).map((p) => (
-                <option key={p} value={p}>
-                  {t(`plugin_ticket.priority.${p}`)}
-                </option>
-              ))}
-            </select>
-            <label className="flex items-center gap-1 whitespace-nowrap text-xs text-muted-foreground">
-              <input type="checkbox" checked={overdueOnly} onChange={(e) => setOverdueOnly(e.target.checked)} />
+              onChange={(v) => setPriority(v === ALL ? undefined : v)}
+              options={[
+                { value: ALL, label: t('plugin_ticket.all') },
+                ...(['urgent', 'high', 'normal', 'low'] as const).map((p) => ({ value: p, label: t(`plugin_ticket.priority.${p}`) })),
+              ]}
+            />
+            {/* 和两个下拉同高同边框：窄面板里它会被挤到第二行，看起来仍是一个筛选控件，而不是孤零零一个勾选框 */}
+            <label className="flex h-10 items-center gap-2 whitespace-nowrap rounded-md border border-input bg-background px-3 text-base shadow-sm md:h-9 md:text-sm">
+              <Checkbox
+                checked={overdueOnly}
+                onCheckedChange={(v) => setOverdueOnly(v === true)}
+                aria-label={t('plugin_ticket.overdue')}
+              />
               {t('plugin_ticket.overdue')}
             </label>
           </div>
@@ -123,10 +141,10 @@ export default function TicketPage() {
               />
             ))}
             {!tickets.isLoading && (tickets.data?.list ?? []).length === 0 ? (
-              <div className="p-4 text-center text-sm text-muted-foreground">{t('plugin_ticket.empty')}</div>
+              <EmptyState title={t('plugin_ticket.empty')} className="py-8" />
             ) : null}
           </div>
-        </div>
+        </Card>
 
         <TicketThread
           ticket={replies.data?.ticket}
@@ -137,7 +155,12 @@ export default function TicketPage() {
           onSetStatus={onChangeStatus}
           onAssign={(tk) => void onAssign(tk)}
         />
-      </div>
+          </div>
+        </TabsContent>
+        <TabsContent value="stats">
+          <TicketStatsPanel />
+        </TabsContent>
+      </Tabs>
     </PageContainer>
   )
 }
@@ -205,9 +228,9 @@ function TicketThread({
 
   if (!ticket) {
     return (
-      <div className="flex items-center justify-center rounded-lg border bg-card text-sm text-muted-foreground">
+      <Card className="flex items-center justify-center text-sm text-muted-foreground">
         {t('plugin_ticket.pickTicket')}
-      </div>
+      </Card>
     )
   }
 
@@ -219,7 +242,7 @@ function TicketThread({
   }
 
   return (
-    <div className="flex min-h-0 flex-col rounded-lg border bg-card">
+    <Card className="flex min-h-0 flex-col">
       <div className="flex items-center gap-2 border-b px-4 py-2">
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-medium text-foreground">
@@ -332,6 +355,6 @@ function TicketThread({
           {t('plugin_ticket.closedNotice')}
         </div>
       )}
-    </div>
+    </Card>
   )
 }

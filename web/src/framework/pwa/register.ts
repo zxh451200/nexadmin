@@ -1,5 +1,6 @@
 import i18n from 'i18next'
 import { toast } from 'sonner'
+import { ADMIN_BASE } from '@/framework/router/base'
 import { initInstallPrompt, pwaEnabled } from './install'
 
 const SW_URL = '/sw.js'
@@ -47,9 +48,17 @@ export function registerServiceWorker(): void {
   }
 
   window.addEventListener('load', () => {
-    navigator.serviceWorker
-      .register(SW_URL, { scope: '/' })
-      .then((reg) => {
+    void (async () => {
+      try {
+        // 迁移：早期版本把 SW 注册在 / 作用域；后台收敛到 /admin 后注销根作用域注册，
+        // 避免旧 worker 继续控制官网页面并覆盖离线回退。
+        const regs = await navigator.serviceWorker.getRegistrations()
+        await Promise.all(regs.filter((reg) => new URL(reg.scope).pathname === '/').map((reg) => reg.unregister()))
+      } catch {
+        // 迁移失败不阻塞新作用域注册
+      }
+      try {
+        const reg = await navigator.serviceWorker.register(SW_URL, { scope: `${ADMIN_BASE}/` })
         // 已有等待中的新版本（上次访问时下载完成但未激活）
         if (reg.waiting && navigator.serviceWorker.controller) promptUpdate(reg)
         reg.addEventListener('updatefound', () => {
@@ -69,7 +78,9 @@ export function registerServiceWorker(): void {
             void reg.update().catch(() => undefined)
           }
         })
-      })
-      .catch(() => undefined) // 注册失败不影响应用本身
+      } catch {
+        // 注册失败不影响应用本身
+      }
+    })()
   })
 }

@@ -5,8 +5,8 @@
     <h1 class="page-title">{{.T "market.heading"}}</h1>
     <p class="section-sub">{{.T "market.pageDesc"}}</p>
     <div class="market-stats">
-      <span>{{.TF "market.count" .PluginCount}}</span>
-      <span>{{.TF "market.matched" .MarketFiltered}}</span>
+      <span>{{.TN .PluginCount "market.count" .PluginCount}}</span>
+      <span>{{.TN .MarketFiltered "market.matched" .MarketFiltered}}</span>
       <a href="/plugins/index.json">{{.T "market.catalogJson"}}</a>
     </div>
   </div>
@@ -38,7 +38,7 @@
     <div class="plugin-grid">
       {{range .Plugins}}
       <article class="plugin-card" data-reveal>
-        {{if .Cover}}<img class="plugin-cover" src="{{.Cover}}" alt="" loading="lazy">{{else}}<div class="plugin-cover plugin-cover-fallback cat-{{.Category}}" aria-hidden="true"><span>{{.Initial}}</span></div>{{end}}
+        {{if .Cover}}<img class="plugin-cover" src="{{.Cover}}" alt="" loading="lazy">{{end}}
         <header class="plugin-card-head">
           <span class="plugin-icon" aria-hidden="true">{{.Initial}}</span>
           <div class="plugin-title">
@@ -50,7 +50,7 @@
         <p class="plugin-desc">{{.Description}}</p>
         <div class="plugin-stats-line">
           {{if .RatingCount}}<span class="plugin-rating">★ {{.RatingAvg}} <small>({{.RatingCount}})</small></span>{{end}}
-          {{if .Downloads}}<span>{{$.TF "market.downloads" .DownloadsText}}</span>{{end}}
+          {{if .Downloads}}<span>{{$.TN .Downloads "market.downloads" .DownloadsText}}</span>{{end}}
         </div>
         <footer class="plugin-card-foot">
           <span class="plugin-cat">{{.CategoryLabel}}</span>

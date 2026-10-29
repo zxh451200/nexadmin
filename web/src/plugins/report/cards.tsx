@@ -7,7 +7,7 @@ export const cards: DashboardCard[] = [
     id: 'report-overview',
     title: 'plugin_report.card.overview',
     perm: 'report:view',
-    size: 'sm',
+    size: 'md',
     order: 210,
     component: lazy(() => import('./ReportOverviewCard')),
   },

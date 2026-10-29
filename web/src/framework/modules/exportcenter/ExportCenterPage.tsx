@@ -11,7 +11,6 @@ import type { Column } from '@/framework/components/table/types'
 import { usePageLive, useRefreshOnResume } from '@/framework/hooks/use-page-active'
 import { Badge, type BadgeProps } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
-import { Label } from '@/framework/ui/label'
 import { Progress } from '@/framework/ui/progress'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import { fmtDateTime } from '../oper-log/format'
@@ -135,10 +134,48 @@ export default function ExportCenterPage() {
 
   return (
     <PageContainer>
-      <PageHeader
-        title={t('jobs.menu')}
-        description={t('jobs.description')}
-        actions={
+      <PageHeader title={t('jobs.menu')} description={t('jobs.description')} />
+      <FilterBar
+        onSearch={() => {
+          setApplied({ type, status })
+          setPage(1)
+        }}
+        onReset={() => {
+          setType(ALL)
+          setStatus(ALL)
+          setApplied({ type: ALL, status: ALL })
+          setPage(1)
+        }}
+      >
+        <Select value={type} onValueChange={setType}>
+          <SelectTrigger id="job-type" className="md:w-48" aria-label={t('jobs.filter.type')}>
+            <SelectValue placeholder={t('jobs.filter.type')} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>{t('jobs.type.all')}</SelectItem>
+            {JOB_TYPES.map((k) => (
+              <SelectItem key={k} value={k}>
+                {typeLabel(k)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={status} onValueChange={setStatus}>
+          <SelectTrigger id="job-status" className="md:w-48" aria-label={t('jobs.filter.status')}>
+            <SelectValue placeholder={t('jobs.filter.status')} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>{t('jobs.status.all')}</SelectItem>
+            {JOB_STATUSES.map((k) => (
+              <SelectItem key={k} value={k}>
+                {t(`jobs.status.${k}`)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </FilterBar>
+      <DataTable<Job>
+        toolbar={
           <>
             <Can perm="job:all">
               <div className="inline-flex rounded-md border p-0.5" role="group" aria-label={t('jobs.col.owner')}>
@@ -165,53 +202,6 @@ export default function ExportCenterPage() {
             </Button>
           </>
         }
-      />
-      <FilterBar
-        onSearch={() => {
-          setApplied({ type, status })
-          setPage(1)
-        }}
-        onReset={() => {
-          setType(ALL)
-          setStatus(ALL)
-          setApplied({ type: ALL, status: ALL })
-          setPage(1)
-        }}
-      >
-        <div className="flex w-full flex-col gap-1.5 md:w-48">
-          <Label htmlFor="job-type">{t('jobs.filter.type')}</Label>
-          <Select value={type} onValueChange={setType}>
-            <SelectTrigger id="job-type">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>{t('jobs.type.all')}</SelectItem>
-              {JOB_TYPES.map((k) => (
-                <SelectItem key={k} value={k}>
-                  {typeLabel(k)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex w-full flex-col gap-1.5 md:w-48">
-          <Label htmlFor="job-status">{t('jobs.filter.status')}</Label>
-          <Select value={status} onValueChange={setStatus}>
-            <SelectTrigger id="job-status">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>{t('jobs.status.all')}</SelectItem>
-              {JOB_STATUSES.map((k) => (
-                <SelectItem key={k} value={k}>
-                  {t(`jobs.status.${k}`)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </FilterBar>
-      <DataTable<Job>
         columns={columns}
         data={data?.list ?? []}
         rowKey="id"

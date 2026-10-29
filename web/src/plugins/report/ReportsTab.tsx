@@ -11,6 +11,7 @@ import { api } from '@/framework/request/http'
 import { useDeleteReport, useReportList, type Report } from './api'
 import { ReportDialog } from './ReportDialog'
 import { ReportViewer } from './ReportViewer'
+import { builtinText } from './builtinText'
 
 export function ReportsTab() {
   const { t } = useTranslation()
@@ -25,7 +26,7 @@ export function ReportsTab() {
     if (!reports.some((r) => r.id === selected)) setSelected(reports[0]?.id)
   }, [reports, selected])
 
-  const label = (r: Report) => (r.groupName ? `${r.groupName} / ${r.name}` : r.name)
+  const label = (r: Report) => (r.groupName ? `${builtinText(t, r.groupName)} / ${builtinText(t, r.name)}` : builtinText(t, r.name))
   const onEdit = async () => {
     if (!selected) return
     try {
@@ -38,7 +39,7 @@ export function ReportsTab() {
   }
   const onDelete = async () => {
     const cur = reports.find((r) => r.id === selected)
-    if (!cur || !(await confirm({ destructive: true, description: t('plugin_report.report.deleteConfirm', { name: cur.name }) }))) return
+    if (!cur || !(await confirm({ destructive: true, description: t('plugin_report.report.deleteConfirm', { name: builtinText(t, cur.name) }) }))) return
     try {
       await remove.mutateAsync(cur.id)
       toast.success(t('common.operateSuccess'))

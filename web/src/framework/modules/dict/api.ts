@@ -26,6 +26,8 @@ export interface DictDataRow {
   sort: number
   status: string
   remark?: string
+  /** {语言: {label: 译文}}；默认语言不进这里，仍存 label 列 */
+  i18nJson?: string
 }
 
 export type DictTypeInput = Omit<DictTypeRow, 'id' | 'createdAt' | 'builtin'>

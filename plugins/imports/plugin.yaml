@@ -1,19 +1,19 @@
 id: imports
 name: 导入中心
 version: 0.1.0
-description: 通用 CSV 导入:模板下载、表头映射、必填校验、逐行隔离、错误行报告、导入台账;业务模块用 RegisterSource 注册可导入的表。
+description: 免费通用 CSV / XLSX 导入：模板下载、表头映射、必填校验、逐行隔离、错误行报告、导入台账；业务模块用 RegisterSource 注册可导入的表。
 author: NexAdmin
-edition: pro
+edition: free
 requires_nexadmin: ">=0.1.0"
 menus:
-  - parent: /
+  - parent: /io
     type: menu
     title: plugin_imports.menu
     path: /imports/jobs
     component: plugins/imports/ImportsPage
     perm: imports:list
     icon: FileUp
-    sort: 64
+    sort: 20
     keep_alive: true
   - parent: imports:list
     type: button

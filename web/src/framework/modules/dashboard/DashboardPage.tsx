@@ -5,12 +5,13 @@ import { toast } from 'sonner'
 import { useAuth } from '@/framework/auth/useAuth'
 import { usePermission } from '@/framework/auth/usePermission'
 import { PageContainer } from '@/framework/components/PageHeader'
+import { useActivePlugins } from '@/framework/modules/plugin/active'
 import { Button } from '@/framework/ui/button'
 import { Skeleton } from '@/framework/ui/skeleton'
 import { useDashboardLayout, useDashboardStats, useResetDashboardLayout, useSaveDashboardLayout } from './api'
-import { CARD_GRID, CARD_SPAN } from './card-size'
+import { CARD_GRID, CARD_GRID_LOADED, CARD_SPAN } from './card-size'
 import { CardBoundary } from './CardBoundary'
-import { filterCards } from './discover'
+import { discoverCards, filterCards } from './discover'
 import { LayoutEditor } from './LayoutEditor'
 import { mergeLayout } from './layout'
 import type { SavedLayout } from './types'
@@ -31,9 +32,13 @@ export default function DashboardPage() {
   const save = useSaveDashboardLayout()
   const reset = useResetDashboardLayout()
   const [editing, setEditing] = useState(false)
+  const activePlugins = useActivePlugins()
 
-  // 当前用户有权限的卡片，按保存的布局（没有则默认）排序、区分显隐
-  const cards = useMemo(() => filterCards(perms), [perms])
+  // 当前用户有权限的卡片，按保存的布局（没有则默认）排序、区分显隐；未启用插件的卡片不参与
+  const cards = useMemo(
+    () => filterCards(perms, discoverCards(activePlugins.isPending ? undefined : (activePlugins.data ?? null))),
+    [perms, activePlugins.isPending, activePlugins.data],
+  )
   const layout = useMemo(() => mergeLayout(cards, layoutQuery.data), [cards, layoutQuery.data])
   const byId = useMemo(() => new Map(cards.map((c) => [c.id, c])), [cards])
   const hidden = useMemo(() => new Set(layout.hidden), [layout.hidden])
@@ -124,7 +129,7 @@ export default function DashboardPage() {
               <Skeleton className="h-72 w-full md:col-span-2" />
             </div>
           ) : (
-            <div className={CARD_GRID}>
+            <div className={CARD_GRID_LOADED}>
               {visible.map((c) => (
                 <div key={c.id} className={`min-w-0 ${CARD_SPAN[c.size]}`}>
                   <CardBoundary>

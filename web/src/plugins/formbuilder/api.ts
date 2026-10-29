@@ -325,7 +325,8 @@ export function useFillDetail(id?: string) {
 export function useFillStats(opts?: { refetchInterval?: number | false }) {
   return useQuery({
     queryKey: [...KEY, 'fill-stats'],
-    queryFn: () => api.get<{ pending: number }>(`${BASE}/fill/stats`),
+    // silent：插件未安装/未授权时接口返回 404「插件未启用」，工作台卡片直接隐藏，不弹全局错误
+    queryFn: () => api.get<{ pending: number }>(`${BASE}/fill/stats`, undefined, { silent: true }),
     refetchInterval: opts?.refetchInterval,
   })
 }

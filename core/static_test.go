@@ -50,10 +50,13 @@ func TestStaticHandler(t *testing.T) {
 		code         int
 		body, cache  string
 	}{
-		{"GET", "/", 200, "<html>spa</html>", "no-cache"},
-		{"GET", "/index.html", 200, "<html>spa</html>", "no-cache"},
-		{"GET", "/sso/authorize", 200, "<html>spa</html>", "no-cache"}, // 前端路由
-		{"GET", "/users/1/edit", 200, "<html>spa</html>", "no-cache"},
+		{"GET", "/", 404, "json404", ""}, // 后台只占 /admin，根路径归官网
+		{"GET", "/index.html", 404, "json404", ""},
+		{"GET", "/admin", 200, "<html>spa</html>", "no-cache"}, // 后台 SPA
+		{"GET", "/admin/", 200, "<html>spa</html>", "no-cache"},
+		{"GET", "/admin/users/1/edit", 200, "<html>spa</html>", "no-cache"},
+		{"GET", "/sso/authorize", 404, "json404", ""}, // 旧入口由 NoRoute 301 到 /admin
+		{"GET", "/users/1/edit", 404, "json404", ""},
 		{"GET", "/assets/app-1a.js", 200, "console.log(1)", cacheImmutable},
 		{"GET", "/favicon.svg", 200, "<svg/>", cacheShort},
 		{"GET", "/sw.js", 200, "self.skipWaiting()", "no-cache"}, // 长缓存会导致 SW 永远无法更新
@@ -65,7 +68,7 @@ func TestStaticHandler(t *testing.T) {
 		{"GET", "/healthz", 200, "ok", ""},
 		{"GET", "/healthz/x", 404, "json404", ""},
 		{"POST", "/login", 404, "json404", ""},
-		{"GET", "/../etc/passwd", 200, "<html>spa</html>", "no-cache"}, // 清理后仍落在 FS 内
+		{"GET", "/../etc/passwd", 404, "json404", ""}, // 清理后仍不落在后台前缀内
 	}
 	for _, tc := range cases {
 		w := doReq(e, tc.method, tc.path)
@@ -76,8 +79,8 @@ func TestStaticHandler(t *testing.T) {
 			t.Errorf("%s %s Cache-Control = %q，期望 %q", tc.method, tc.path, w.Header().Get("Cache-Control"), tc.cache)
 		}
 	}
-	if w := doReq(e, http.MethodHead, "/login"); w.Code != 200 {
-		t.Errorf("HEAD /login = %d", w.Code)
+	if w := doReq(e, http.MethodHead, "/admin/login"); w.Code != 200 {
+		t.Errorf("HEAD /admin/login = %d", w.Code)
 	}
 }
 

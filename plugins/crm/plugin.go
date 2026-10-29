@@ -1,4 +1,4 @@
-// Package crm 是客户主数据插件（nex 生态收敛方案第 3 步的最小骨架）：
+// Package crm 是免费基础客户主数据插件（nex 生态收敛方案第 3 步的最小骨架）：
 // 客户主数据 + 线索商机两张表 + 事件契约，让 hotel/mall 的 member 认同同一个
 // 客户 ID。只做主数据与商机台账，不做销售自动化（无管线/评分/营销）。
 // 遵守插件规范：只依赖 core/ 与 pkg/，表前缀 plg_crm_，权限码前缀 crm:，
@@ -22,7 +22,7 @@ var _ plugin.Starter = (*module)(nil)
 func init() {
 	event.Register(CatalogInfos()...)
 	plugin.Register(plugin.Plugin{
-		ID: "crm", Name: "客户主数据", Version: "0.1.0", Edition: plugin.Pro,
+		ID: "crm", Name: "客户主数据", Version: "0.1.0", Edition: plugin.Free,
 		Module: &module{},
 	})
 }

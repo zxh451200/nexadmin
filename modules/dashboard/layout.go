@@ -172,7 +172,7 @@ func (s *service) putLayoutHandler(c *gin.Context) {
 	if err != nil {
 		var mbe *http.MaxBytesError
 		if errors.As(err, &mbe) {
-			response.Fail(c, response.New(http.StatusRequestEntityTooLarge, "error.payload_too_large").WithMsg("request body too large"))
+			response.Fail(c, response.New(http.StatusRequestEntityTooLarge, "error.payload_too_large"))
 			return
 		}
 		response.Fail(c, response.BadRequest("error.bad_request").Wrap(err))

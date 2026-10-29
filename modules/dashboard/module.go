@@ -59,13 +59,16 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 type StatValue struct {
 	Value int64   `json:"value"`
 	Delta float64 `json:"delta"`
+	// Comparable=false 表示上期基线太小，百分比没有意义，前端应当隐藏涨跌标签。
+	Comparable bool `json:"comparable"`
 }
 
 type Storage struct {
-	UsedGB  float64 `json:"usedGb"`
-	TotalGB float64 `json:"totalGb"`
-	Percent float64 `json:"percent"`
-	Delta   float64 `json:"delta"`
+	UsedGB     float64 `json:"usedGb"`
+	TotalGB    float64 `json:"totalGb"`
+	Percent    float64 `json:"percent"`
+	Delta      float64 `json:"delta"`
+	Comparable bool    `json:"comparable"`
 }
 
 type LoginPoint struct {
@@ -134,13 +137,15 @@ func (s *service) stats(c *gin.Context) Stats {
 	// 用户总数及近 7 天增长率
 	total := s.count(ctx, "users", "SELECT COUNT(*) FROM sys_user WHERE tenant_id = ? AND deleted_at IS NULL", tid)
 	added := s.count(ctx, "users.added", "SELECT COUNT(*) FROM sys_user WHERE tenant_id = ? AND deleted_at IS NULL AND created_at >= ?", tid, today.AddDate(0, 0, -7).UTC())
-	out.Users = StatValue{Value: total, Delta: pct(total, total-added)}
+	ud, uok := pctOf(total, total-added)
+	out.Users = statValue(total, ud, uok)
 
 	// 今日登录与较昨日变化
 	todayN := s.count(ctx, "login.today", "SELECT COUNT(*) FROM sys_login_log WHERE tenant_id = ? AND "+loginOK+" AND created_at >= ?", tid, today.UTC())
 	yesterdayN := s.count(ctx, "login.yesterday", "SELECT COUNT(*) FROM sys_login_log WHERE tenant_id = ? AND "+loginOK+" AND created_at >= ? AND created_at < ?",
 		tid, today.AddDate(0, 0, -1).UTC(), today.UTC())
-	out.TodayLogin = StatValue{Value: todayN, Delta: pct(todayN, yesterdayN)}
+	ld, lok := pctOf(todayN, yesterdayN)
+	out.TodayLogin = statValue(todayN, ld, lok)
 
 	out.UnreadMessages = StatValue{Value: s.count(ctx, "message.unread", "SELECT COUNT(*) FROM sys_message WHERE tenant_id = ? AND user_id = ? AND read_at IS NULL", tid, uid)}
 	out.Storage = s.storage(ctx, today)
@@ -206,7 +211,8 @@ func (s *service) storage(ctx context.Context, today time.Time) Storage {
 	used := s.count(ctx, "storage.used", "SELECT COALESCE(SUM(size), 0) FROM sys_file WHERE tenant_id = ?", tid)
 	week := s.count(ctx, "storage.week", "SELECT COALESCE(SUM(size), 0) FROM sys_file WHERE tenant_id = ? AND created_at >= ?", tid, today.AddDate(0, 0, -7).UTC())
 	const gb = 1024 * 1024 * 1024
-	st := Storage{UsedGB: round1(float64(used) / gb), TotalGB: round1(float64(diskTotal(s.dataDir)) / gb), Delta: pct(used, used-week)}
+	d, ok := pctOf(used, used-week)
+	st := Storage{UsedGB: round1(float64(used) / gb), TotalGB: round1(float64(diskTotal(s.dataDir)) / gb), Delta: d, Comparable: ok}
 	if st.TotalGB > 0 {
 		st.Percent = round1(float64(used) / gb / st.TotalGB * 100)
 	}
@@ -229,9 +235,16 @@ func (s *service) try(what string, f func() error) {
 func round1(v float64) float64 { return float64(int64(v*10+0.5)) / 10 }
 
 // pct 返回 cur 相对 prev 的变化百分比；prev 为 0 时无法比较，返回 0。
-func pct(cur, prev int64) float64 {
-	if prev <= 0 {
-		return 0
+// minDeltaBaseline：上期样本少于此数时，百分比涨跌只是噪声（1 → 0 就是 -100%）。
+const minDeltaBaseline = 5
+
+func pctOf(cur, prev int64) (float64, bool) {
+	if prev < minDeltaBaseline {
+		return 0, false
 	}
-	return round1(float64(cur-prev) / float64(prev) * 100)
+	return round1(float64(cur-prev) / float64(prev) * 100), true
+}
+
+func statValue(value int64, delta float64, comparable bool) StatValue {
+	return StatValue{Value: value, Delta: delta, Comparable: comparable}
 }

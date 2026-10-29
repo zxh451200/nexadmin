@@ -2,8 +2,11 @@
   "plugin_ticket": {
     "title": "工单中心",
     "description": "售后与请求的提交、跟进与关闭",
-    "dir": "工单中心",
-    "menu": "工单",
+    "menu": "工单中心",
+    "view": {
+      "logs": "工单",
+      "stats": "统计"
+    },
     "perm": {
       "reply": "回复与认领",
       "edit": "状态与改派"
@@ -23,6 +26,10 @@
     "replyPlaceholder": "输入回复，回车发送",
     "send": "回复",
     "closedNotice": "工单已关闭；报告人补充回复会自动重开。",
+    "fields": {
+      "status": "状态",
+      "priority": "优先级"
+    },
     "status": {
       "open": "待处理",
       "processing": "处理中",
@@ -39,6 +46,31 @@
       "reporter": "报告人",
       "agent": "客服",
       "system": "系统"
+    },
+    "stats": {
+      "rangeLabel": "时间范围",
+      "ranges": {
+        "7d": "近 7 天",
+        "30d": "近 30 天",
+        "90d": "近 90 天",
+        "all": "全部"
+      },
+      "total": "工单总数",
+      "pending": "待处理",
+      "unassigned": "未认领",
+      "overdue": "已超时",
+      "sampled": "工单量较大，统计基于最近 20000 张。",
+      "daily": "新建 vs 已解决",
+      "created": "新建",
+      "resolved": "已解决",
+      "firstResponse": "首次响应",
+      "noResponse": "尚无响应",
+      "sla": "SLA 达成（按优先级）",
+      "priority": "优先级",
+      "target": "目标时限",
+      "breached": "违约",
+      "breachRate": "违约率",
+      "byBizType": "业务类型 Top"
     }
   }
 }

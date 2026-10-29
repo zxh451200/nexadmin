@@ -50,6 +50,19 @@ type Options struct {
 	DisabledPlugins []string
 }
 
+// RuntimeRoutes 声明静态路由需求；未实现或返回 true 的插件只在启动时挂载。
+// 返回 false 的插件只能在 /api/v1/plugins/<id>/ 下注册路由，不得修改宿主路由。
+type RuntimeRoutes interface {
+	RequiresRootRoutes() bool
+}
+
+// RestartableStarter 的 Done 必须在 Start 返回后可用，且仅在本轮所有任务退出后关闭。
+// ctx 取消后任务必须停止接收新工作并取消在途工作；未提供退出确认的 Starter 不会再次启动。
+type RestartableStarter interface {
+	Starter
+	Done() <-chan struct{}
+}
+
 // expireSoonWindow 是“即将到期”的提示窗口。
 const expireSoonWindow = 30 * 24 * time.Hour
 
@@ -66,6 +79,9 @@ type Info struct {
 	ExpiresAt   string  `json:"expiresAt"`
 	ExpiresSoon bool    `json:"expiresSoon"` // 有效但 30 天内到期
 	Reason      string  `json:"reason"`
+	NeedRestart bool    `json:"needRestart"`
+	PendingHost bool    `json:"pendingHost"`
+	Stopping    bool    `json:"stopping"`
 }
 
 // ImportResult 是导入授权的结果。
@@ -83,10 +99,20 @@ type entry struct {
 	live   bool                       // viaApp 的路由已注册成功
 	sub    atomic.Pointer[gin.Engine] // 热挂载后的子引擎
 
+	hotSafe   bool
+	mounting  bool
+	startDeps *core.Deps
+	run       *pluginRun
+
 	exp         time.Time // 授权到期时间（零值 = 无授权）
 	domains     []string  // 授权域名（空 = 不限）
 	pendingHost bool      // 授权限定了域名，但当前域名还未知，等第一次带 Host 的请求
 	serial      string    // 授权序列号（空 = 旧授权或无授权，不能被吊销清单命中）
+}
+
+type pluginRun struct {
+	ctx    context.Context
+	cancel context.CancelFunc
 }
 
 // Manager 管理所有已 Register 的插件。
@@ -240,6 +266,9 @@ func (m *Manager) evaluate(p Plugin) {
 		e.info.Version = man.Version
 	}
 	e.info.Description = man.Description
+	if routes, ok := p.Module.(RuntimeRoutes); ok {
+		e.hotSafe = !routes.RequiresRootRoutes()
+	}
 
 	// 配置里停用的插件：不校验授权、不挂载、不迁移，列表里显示 disabled。
 	for _, d := range m.opts.DisabledPlugins {
@@ -302,6 +331,22 @@ func (m *Manager) List() []Info {
 	return out
 }
 
+// ActiveIDs 只返回已挂载且可用的插件，不暴露授权细节。
+func (m *Manager) ActiveIDs() []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.refreshRevocationsLocked()
+	m.expireLocked(m.opts.Now())
+	ids := []string{}
+	for _, id := range m.order {
+		e := m.entries[id]
+		if m.enabledLocked(e) && (e.live || e.sub.Load() != nil) {
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
 // Root 返回插件管理使用的项目根目录（市场安装等文件操作需要）。
 func (m *Manager) Root() string {
 	m.mu.Lock()
@@ -313,12 +358,14 @@ func (m *Manager) Root() string {
 // 调用方需持有 m.mu（或在构造阶段）。
 func (m *Manager) applyLic(e *entry, l *License, err error) {
 	m.applyLic0(e, l, err)
+	e.info.PendingHost = e.pendingHost
 	e.serial = ""
 	if l != nil {
 		e.serial = l.Serial
 	}
 	e.info.Serial = e.serial
 	m.applyRevokedLocked(e)
+	m.syncLifecycleLocked(e)
 }
 
 func (m *Manager) applyLic0(e *entry, l *License, err error) {
@@ -391,10 +438,11 @@ func (m *Manager) observeLocked(host string) {
 		if !e.pendingHost {
 			continue
 		}
-		e.pendingHost = false
+		e.pendingHost, e.info.PendingHost = false, false
 		if e.info.Status == StatusActive && !m.hostsMatch(e.domains, []string{h}) {
 			e.info.Status, e.info.Reason = StatusInvalid, domainMismatch([]string{h}, e.domains)
 		}
+		m.syncLifecycleLocked(e)
 	}
 }
 
@@ -404,6 +452,7 @@ func (m *Manager) expireLocked(now time.Time) bool {
 	for _, e := range m.entries {
 		if e.info.Status == StatusActive && !e.exp.IsZero() && !now.Before(e.exp) {
 			e.info.Status, e.info.Reason = StatusExpired, "授权已于 "+e.info.ExpiresAt+" 到期"
+			m.syncLifecycleLocked(e)
 			m.log().Warn("plugin license expired, routes disabled", zap.String("plugin", e.p.ID))
 			changed = true
 		}
@@ -443,10 +492,9 @@ func (m *Manager) admit(c *gin.Context, e *entry) bool {
 	m.observeLocked(c.Request.Host)
 	m.refreshRevocationsLocked()
 	m.expireLocked(m.opts.Now())
-	st, reason := e.info.Status, e.info.Reason
+	enabled, reason := m.enabledLocked(e), e.info.Reason
 	m.mu.Unlock()
-	switch st {
-	case StatusExpired, StatusInvalid, StatusUnlicensed, StatusRevoked:
+	if !enabled {
 		response.Fail(c, response.Forbidden("error.forbidden").WithMsg(reason))
 		return false
 	}
@@ -470,8 +518,12 @@ func (m *Manager) activeGuard(e *entry) func() bool {
 		defer m.mu.Unlock()
 		m.refreshRevocationsLocked()
 		m.expireLocked(m.opts.Now())
-		return !e.fatal && !e.pendingHost && e.info.Status == StatusActive
+		return m.enabledLocked(e)
 	}
+}
+
+func (m *Manager) enabledLocked(e *entry) bool {
+	return !e.fatal && !e.pendingHost && !e.info.NeedRestart && !e.info.Stopping && e.info.Status == StatusActive && m.ctx.Err() == nil
 }
 
 // Attach 保存框架依赖，热挂载需要它。由“插件管理”模块在 Register 时调用。
@@ -554,31 +606,112 @@ func (m *Manager) prepare(d *core.Deps, e *entry) error {
 	return nil
 }
 
-// start 调用可选的 Starter；panic 与错误只记日志，不影响宿主。
 func (m *Manager) start(e *entry, d *core.Deps) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	e.startDeps = d
+	m.refreshRevocationsLocked()
+	m.expireLocked(m.opts.Now())
+	m.syncLifecycleLocked(e)
+}
+
+// 只在锁内预留一轮；插件回调始终在锁外运行。
+func (m *Manager) syncLifecycleLocked(e *entry) {
 	s, ok := e.p.Module.(Starter)
 	if !ok {
 		return
 	}
-	defer func() {
-		if r := recover(); r != nil {
-			d.Log.Error("plugin Start panic", zap.String("plugin", e.p.ID), zap.Any("panic", r))
+	if !m.enabledLocked(e) {
+		if e.run != nil {
+			e.run.cancel()
+			if _, restartable := s.(RestartableStarter); !restartable {
+				e.info.NeedRestart = true
+			} else {
+				e.info.Stopping = true
+			}
 		}
-	}()
-	if err := s.Start(m.ctx, d); err != nil {
-		d.Log.Error("plugin Start failed", zap.String("plugin", e.p.ID), zap.Error(err))
+		return
 	}
+	if e.run != nil || e.startDeps == nil || (!e.live && e.sub.Load() == nil) {
+		return
+	}
+	ctx, cancel := context.WithCancel(m.ctx)
+	run := &pluginRun{ctx: ctx, cancel: cancel}
+	e.run = run
+	go m.runStarter(e, run, s, e.startDeps)
+}
+
+func (m *Manager) runStarter(e *entry, run *pluginRun, s Starter, d *core.Deps) {
+	if run.ctx.Err() != nil {
+		m.finishRun(e)
+		return
+	}
+	dd := *d
+	guard := m.activeGuard(e)
+	dd.PluginActive = func() bool { return run.ctx.Err() == nil && guard() }
+	var done <-chan struct{}
+	err := func() (err error) {
+		defer func() {
+			if r := recover(); r != nil {
+				err = fmt.Errorf("Start panic: %v", r)
+			}
+		}()
+		if err := s.Start(run.ctx, &dd); err != nil {
+			return err
+		}
+		if rs, ok := s.(RestartableStarter); ok {
+			done = rs.Done()
+			if done == nil {
+				return errors.New("RestartableStarter.Done returned nil")
+			}
+		}
+		return nil
+	}()
+	if err != nil {
+		m.mu.Lock()
+		e.info.NeedRestart = true
+		run.cancel()
+		m.log().Error("plugin Start failed; restart required", zap.String("plugin", e.p.ID), zap.Error(err))
+		m.mu.Unlock()
+		return
+	}
+	<-run.ctx.Done()
+	if done == nil {
+		return // 无退出确认，保留本轮占位，禁止重复启动。
+	}
+	select {
+	case <-done:
+	case <-m.ctx.Done():
+		return
+	}
+	m.finishRun(e)
+}
+
+func (m *Manager) finishRun(e *entry) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	e.run = nil
+	e.info.Stopping = false
+	m.refreshRevocationsLocked()
+	m.expireLocked(m.opts.Now())
+	m.syncLifecycleLocked(e)
 }
 
 type keysCtxKey struct{}
 
-// hotMount 在运行中的进程里挂载插件：gin 不允许给运行中的引擎加路由，
-// 所以插件路由注册到一个独立的子引擎上，由 /plugins/<id>/* 的转发处理（登录、租户、权限仍由主引擎的中间件完成）。
-func (m *Manager) hotMount(e *entry) (err error) {
-	d := m.deps
+// hotMount 只装配声明了 API-only 契约的插件，绝不修改运行中的主引擎。
+func (m *Manager) hotMount(e *entry, d *core.Deps) (err error) {
+	if !e.hotSafe {
+		return errors.New("插件未声明支持热挂载，需要重启")
+	}
 	if d == nil {
 		return errors.New("框架尚未就绪")
 	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("挂载时 panic: %v", r)
+		}
+	}()
 	if err := m.prepare(d, e); err != nil {
 		return err
 	}
@@ -587,6 +720,9 @@ func (m *Manager) hotMount(e *entry) (err error) {
 
 // buildSub 创建子引擎、注册插件路由、调 Starter。
 func (m *Manager) buildSub(e *entry, d *core.Deps) (err error) {
+	if !e.hotSafe {
+		return errors.New("插件未声明支持热挂载，需要重启")
+	}
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("挂载时 panic: %v", r)
@@ -610,15 +746,21 @@ func (m *Manager) buildSub(e *entry, d *core.Deps) (err error) {
 	sub.NoRoute(func(c *gin.Context) { response.Fail(c, response.NotFound("error.not_found")) })
 	grp := sub.Group("/api/v1")
 	dd := *d
+	dd.Root, dd.RootGroup = nil, nil
 	dd.PluginActive = m.activeGuard(e)
-	dd.Public = grp // 热挂载的路由都在登录之后
+	dd.Public = grp
 	dd.Admin = grp.Group("/admin", middleware.RequireSuper(), middleware.SkipTenant())
-	e.p.Module.Register(grp, &dd)
+	e.p.Module.Register(grp.Group("", middleware.RequireLogin()), &dd)
+	for _, route := range sub.Routes() {
+		if !strings.HasPrefix(route.Path, "/api/v1/plugins/"+e.p.ID+"/") {
+			return fmt.Errorf("热挂载路由超出插件命名空间: %s", route.Path)
+		}
+	}
 	if d.APIDoc != nil {
 		d.APIDoc.AddEngine(e.p.Module.Name(), sub) // 热挂载后接口文档立即包含这些路由
 	}
-	m.start(e, &dd)
 	e.sub.Store(sub)
+	m.start(e, &dd)
 	return nil
 }
 
@@ -655,6 +797,7 @@ func (m *Manager) Dispatch(c *gin.Context, id string) {
 	}
 	c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), keysCtxKey{}, keys))
 	sub.HandleContext(c)
+	c.Abort() // HandleContext 替换了 handlers，不能让外层 Next 再执行子路由。
 }
 
 // ImportLicense 校验并保存授权文件，随后尽量立即生效（热挂载）。
@@ -672,11 +815,15 @@ func (m *Manager) ImportLicense(id, content string) (ImportResult, error) {
 	if e.info.Status == StatusDisabled {
 		return ImportResult{}, errors.New("插件已在配置 disabled_plugins 中停用，请先从配置移除再导入授权")
 	}
+	if e.mounting {
+		return ImportResult{}, errors.New("插件正在挂载，请稍后重试")
+	}
 	l, err := VerifyKeys([]byte(content), id, m.opts.Now(), m.opts.Keys)
 	if err != nil {
 		return ImportResult{}, err
 	}
 	m.refreshRevocationsLocked()
+	m.expireLocked(m.opts.Now())
 	if r, ok := m.revBy[l.Serial]; ok && l.Serial != "" { // 已吊销的授权不落盘
 		return ImportResult{}, revokedError(r)
 	}
@@ -687,24 +834,34 @@ func (m *Manager) ImportLicense(id, content string) (ImportResult, error) {
 		return ImportResult{}, fmt.Errorf("保存授权文件失败: %w", err)
 	}
 	if e.fatal {
+		e.info.NeedRestart = true
 		return ImportResult{Plugin: e.info, NeedRestart: true}, nil
 	}
-	if e.viaApp {
-		if e.live || e.info.Status == StatusActive { // 续期：路由已在，只更新授权信息
-			m.applyLic(e, l, nil)
-			return ImportResult{Plugin: e.info}, nil
+	if e.viaApp || e.sub.Load() != nil {
+		if e.viaApp && !e.live {
+			e.info.NeedRestart = true
 		}
+		m.applyLic(e, l, nil)
+		return ImportResult{Plugin: e.info, NeedRestart: e.info.NeedRestart}, nil
+	}
+	if !e.hotSafe || e.info.NeedRestart {
+		e.info.NeedRestart = true
+		m.applyLic(e, l, nil)
 		return ImportResult{Plugin: e.info, NeedRestart: true}, nil
 	}
-	if e.sub.Load() != nil {
-		m.applyLic(e, l, nil)
-		return ImportResult{Plugin: e.info}, nil
-	}
-	if err := m.hotMount(e); err != nil {
+	e.mounting = true
+	d := m.deps
+	m.mu.Unlock()
+	err = m.hotMount(e, d)
+	m.mu.Lock()
+	e.mounting = false
+	if err != nil {
 		m.log().Error("plugin hot mount failed", zap.String("plugin", id), zap.Error(err))
+		e.info.NeedRestart = true
 		e.info.Status, e.info.Reason = StatusInvalid, "授权已保存，但热挂载失败（重启后重试）: "+err.Error()
+		m.syncLifecycleLocked(e)
 		return ImportResult{Plugin: e.info, NeedRestart: true}, nil
 	}
 	m.applyLic(e, l, nil)
-	return ImportResult{Plugin: e.info}, nil
+	return ImportResult{Plugin: e.info, NeedRestart: e.info.NeedRestart}, nil
 }

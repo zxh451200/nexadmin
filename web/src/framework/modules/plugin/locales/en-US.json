@@ -9,7 +9,11 @@
   "pluginMgr": {
     "menu": "Plugins",
     "title": "Plugins",
-    "description": "Installed plugins with version and license status. Imported licenses take effect immediately, no rebuild needed.",
+    "description": "Installed plugins and license status. Plugins supporting hot activation can be enabled online; others require a restart.",
+    "platformOnly": "Only platform super administrators can manage plugins and licenses",
+    "restartRequired": "Restart required",
+    "pendingHost": "Domain verification pending",
+    "stopping": "Waiting for previous workers to exit",
     "tab": {
       "installed": "Installed",
       "market": "Marketplace"
@@ -46,7 +50,7 @@
       "paste": "License text",
       "placeholder": "Paste the contents of the .lic file",
       "tooLarge": "File too large, please check it is a license file",
-      "effective": "License imported and effective immediately",
+      "effective": "License imported",
       "needRestart": "License imported, restart the service to apply"
     },
     "empty": {

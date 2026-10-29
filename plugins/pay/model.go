@@ -53,36 +53,36 @@ func Freezable(status string) bool {
 // 金额一律最小货币单位（minor），汇率 1e-6 定点，费率基点——禁止 float 落库。
 type Order struct {
 	database.TenantModel
-	PaymentNo     string `gorm:"size:40;not null;uniqueIndex:uk_pay_order_no" json:"paymentNo"`
-	BizType       string `gorm:"size:32;not null;uniqueIndex:uk_pay_order_biz,priority:2" json:"bizType"`
-	BizNo         string `gorm:"size:64;not null;uniqueIndex:uk_pay_order_biz,priority:3" json:"bizNo"`
-	SubjectType   string `gorm:"size:32;not null;default:''" json:"subjectType"`
-	SubjectID     string `gorm:"size:64;not null;default:'';index" json:"subjectId"`
-	Subject       string `gorm:"size:200;not null" json:"subject"`
-	AmountMinor   int64  `gorm:"not null" json:"amountMinor"`
-	RefundedMinor int64  `gorm:"not null;default:0" json:"refundedMinor"`
-	FeeMinor      int64  `gorm:"not null;default:0" json:"feeMinor"`
-	Currency      string `gorm:"size:8;not null" json:"currency"`
-	FxRateMicro   int64  `gorm:"not null;default:1000000" json:"fxRateMicro"`
-	AmountOrigMinor int64 `gorm:"not null;default:0" json:"amountOrigMinor"`
-	OrigCurrency  string `gorm:"size:8;not null;default:''" json:"origCurrency"`
-	ChannelCode   string `gorm:"size:32;not null;uniqueIndex:uk_pay_order_channel_txn,priority:1" json:"channelCode"`
-	Method        string `gorm:"size:32;not null;default:''" json:"method"`
-	Scene         string `gorm:"size:32;not null;default:''" json:"scene"`
+	PaymentNo       string `gorm:"size:40;not null;uniqueIndex:uk_pay_order_no" json:"paymentNo"`
+	BizType         string `gorm:"size:32;not null;uniqueIndex:uk_pay_order_biz,priority:2" json:"bizType"`
+	BizNo           string `gorm:"size:64;not null;uniqueIndex:uk_pay_order_biz,priority:3" json:"bizNo"`
+	SubjectType     string `gorm:"size:32;not null;default:''" json:"subjectType"`
+	SubjectID       string `gorm:"size:64;not null;default:'';index" json:"subjectId"`
+	Subject         string `gorm:"size:200;not null" json:"subject"`
+	AmountMinor     int64  `gorm:"not null" json:"amountMinor"`
+	RefundedMinor   int64  `gorm:"not null;default:0" json:"refundedMinor"`
+	FeeMinor        int64  `gorm:"not null;default:0" json:"feeMinor"`
+	Currency        string `gorm:"size:8;not null" json:"currency"`
+	FxRateMicro     int64  `gorm:"not null;default:1000000" json:"fxRateMicro"`
+	AmountOrigMinor int64  `gorm:"not null;default:0" json:"amountOrigMinor"`
+	OrigCurrency    string `gorm:"size:8;not null;default:''" json:"origCurrency"`
+	ChannelCode     string `gorm:"size:32;not null;uniqueIndex:uk_pay_order_channel_txn,priority:1" json:"channelCode"`
+	Method          string `gorm:"size:32;not null;default:''" json:"method"`
+	Scene           string `gorm:"size:32;not null;default:''" json:"scene"`
 	// ChannelTxnID 与渠道号组成唯一索引；NULL 表示渠道侧尚无流水（MySQL/PG 唯一索引都放行多个 NULL）。
-	ChannelTxnID *string `gorm:"size:128;uniqueIndex:uk_pay_order_channel_txn,priority:2" json:"channelTxnId"`
-	PrepayID     string  `gorm:"size:128;not null;default:''" json:"prepayId"`
-	CodeURL      string  `gorm:"size:512;not null;default:''" json:"codeUrl"`
-	GatewayStatus string `gorm:"size:64;not null;default:''" json:"gatewayStatus"`
-	FailReason   string  `gorm:"size:200;not null;default:''" json:"failReason"`
-	PayerID      string  `gorm:"size:64;not null;default:''" json:"payerId"`
-	PayerOpenID  string  `gorm:"size:128;not null;default:''" json:"payerOpenId"`
-	OperatorID   string  `gorm:"size:64;not null;default:''" json:"operatorId"`
-	MetadataJSON string  `gorm:"type:text" json:"-"`
-	Status       string  `gorm:"size:24;not null;index" json:"status"`
-	PaidAt       *time.Time `json:"paidAt,omitempty"`
-	ExpireAt     *time.Time `json:"expireAt,omitempty"`
-	ClosedAt     *time.Time `json:"closedAt,omitempty"`
+	ChannelTxnID  *string    `gorm:"size:128;uniqueIndex:uk_pay_order_channel_txn,priority:2" json:"channelTxnId"`
+	PrepayID      string     `gorm:"size:128;not null;default:''" json:"prepayId"`
+	CodeURL       string     `gorm:"size:512;not null;default:''" json:"codeUrl"`
+	GatewayStatus string     `gorm:"size:64;not null;default:''" json:"gatewayStatus"`
+	FailReason    string     `gorm:"size:200;not null;default:''" json:"failReason"`
+	PayerID       string     `gorm:"size:64;not null;default:''" json:"payerId"`
+	PayerOpenID   string     `gorm:"size:128;not null;default:''" json:"payerOpenId"`
+	OperatorID    string     `gorm:"size:64;not null;default:''" json:"operatorId"`
+	MetadataJSON  string     `gorm:"type:text" json:"-"`
+	Status        string     `gorm:"size:24;not null;index" json:"status"`
+	PaidAt        *time.Time `json:"paidAt,omitempty"`
+	ExpireAt      *time.Time `json:"expireAt,omitempty"`
+	ClosedAt      *time.Time `json:"closedAt,omitempty"`
 }
 
 func (Order) TableName() string { return "plg_pay_order" }
@@ -171,14 +171,14 @@ func (Authorization) TableName() string { return "plg_pay_auth" }
 // Phase 0 渠道金额由入参提供（source=manual），Phase 4 改为渠道账单 API 拉取。
 type ReconcileTask struct {
 	database.TenantModel
-	SubjectID        string `gorm:"size:64;not null;default:'';uniqueIndex:uk_pay_reconcile_task,priority:2" json:"subjectId"`
-	ChannelCode      string `gorm:"size:32;not null;uniqueIndex:uk_pay_reconcile_task,priority:3" json:"channelCode"`
-	BillDate         string `gorm:"size:10;not null;uniqueIndex:uk_pay_reconcile_task,priority:4" json:"billDate"`
-	Status           string `gorm:"size:16;not null" json:"status"`
-	TotalLocalMinor  int64  `gorm:"not null;default:0" json:"totalLocalMinor"`
-	TotalChannelMinor int64 `gorm:"not null;default:0" json:"totalChannelMinor"`
-	DiffCount        int    `gorm:"not null;default:0" json:"diffCount"`
-	Source           string `gorm:"size:16;not null;default:'manual'" json:"source"`
+	SubjectID         string `gorm:"size:64;not null;default:'';uniqueIndex:uk_pay_reconcile_task,priority:2" json:"subjectId"`
+	ChannelCode       string `gorm:"size:32;not null;uniqueIndex:uk_pay_reconcile_task,priority:3" json:"channelCode"`
+	BillDate          string `gorm:"size:10;not null;uniqueIndex:uk_pay_reconcile_task,priority:4" json:"billDate"`
+	Status            string `gorm:"size:16;not null" json:"status"`
+	TotalLocalMinor   int64  `gorm:"not null;default:0" json:"totalLocalMinor"`
+	TotalChannelMinor int64  `gorm:"not null;default:0" json:"totalChannelMinor"`
+	DiffCount         int    `gorm:"not null;default:0" json:"diffCount"`
+	Source            string `gorm:"size:16;not null;default:'manual'" json:"source"`
 }
 
 func (ReconcileTask) TableName() string { return "plg_pay_reconcile_task" }
@@ -187,17 +187,17 @@ func (ReconcileTask) TableName() string { return "plg_pay_reconcile_task" }
 // missing 单边缺失。DiffAmountMinor = local - channel。
 type ReconcileDiff struct {
 	database.TenantModel
-	TaskID            int64      `gorm:"not null;index" json:"taskId"`
-	Kind              string     `gorm:"size:16;not null" json:"kind"`
-	PaymentNo         string     `gorm:"size:40;not null;default:''" json:"paymentNo"`
-	RefundNo          string     `gorm:"size:40;not null;default:''" json:"refundNo"`
-	LocalAmountMinor  int64      `gorm:"not null;default:0" json:"localAmountMinor"`
-	ChannelAmountMinor int64     `gorm:"not null;default:0" json:"channelAmountMinor"`
-	DiffAmountMinor   int64      `gorm:"not null;default:0" json:"diffAmountMinor"`
-	Status            string     `gorm:"size:16;not null;default:'open'" json:"status"`
-	ResolveNote       string     `gorm:"size:500;not null;default:''" json:"resolveNote"`
-	ResolvedBy        string     `gorm:"size:64;not null;default:''" json:"resolvedBy"`
-	ResolvedAt        *time.Time `json:"resolvedAt,omitempty"`
+	TaskID             int64      `gorm:"not null;index" json:"taskId"`
+	Kind               string     `gorm:"size:16;not null" json:"kind"`
+	PaymentNo          string     `gorm:"size:40;not null;default:''" json:"paymentNo"`
+	RefundNo           string     `gorm:"size:40;not null;default:''" json:"refundNo"`
+	LocalAmountMinor   int64      `gorm:"not null;default:0" json:"localAmountMinor"`
+	ChannelAmountMinor int64      `gorm:"not null;default:0" json:"channelAmountMinor"`
+	DiffAmountMinor    int64      `gorm:"not null;default:0" json:"diffAmountMinor"`
+	Status             string     `gorm:"size:16;not null;default:'open'" json:"status"`
+	ResolveNote        string     `gorm:"size:500;not null;default:''" json:"resolveNote"`
+	ResolvedBy         string     `gorm:"size:64;not null;default:''" json:"resolvedBy"`
+	ResolvedAt         *time.Time `json:"resolvedAt,omitempty"`
 }
 
 func (ReconcileDiff) TableName() string { return "plg_pay_reconcile_diff" }
@@ -237,15 +237,15 @@ func (Settlement) TableName() string { return "plg_pay_settlement" }
 // PayoutBatch 是打款批次（人工回执号；渠道自动分账为 Phase 4）。
 type PayoutBatch struct {
 	database.TenantModel
-	BatchNo        string     `gorm:"size:40;not null;uniqueIndex:uk_pay_payout_no" json:"batchNo"`
-	Status         string     `gorm:"size:16;not null;default:'draft'" json:"status"`
-	TotalMinor     int64      `gorm:"not null;default:0" json:"totalMinor"`
-	Currency       string     `gorm:"size:8;not null" json:"currency"`
-	SettlementCount int       `gorm:"not null;default:0" json:"settlementCount"`
-	Method         string     `gorm:"size:32;not null;default:''" json:"method"`
-	Note           string     `gorm:"size:500;not null;default:''" json:"note"`
-	ReceiptNo      string     `gorm:"size:64;not null;default:''" json:"receiptNo"`
-	PaidAt         *time.Time `json:"paidAt,omitempty"`
+	BatchNo         string     `gorm:"size:40;not null;uniqueIndex:uk_pay_payout_no" json:"batchNo"`
+	Status          string     `gorm:"size:16;not null;default:'draft'" json:"status"`
+	TotalMinor      int64      `gorm:"not null;default:0" json:"totalMinor"`
+	Currency        string     `gorm:"size:8;not null" json:"currency"`
+	SettlementCount int        `gorm:"not null;default:0" json:"settlementCount"`
+	Method          string     `gorm:"size:32;not null;default:''" json:"method"`
+	Note            string     `gorm:"size:500;not null;default:''" json:"note"`
+	ReceiptNo       string     `gorm:"size:64;not null;default:''" json:"receiptNo"`
+	PaidAt          *time.Time `json:"paidAt,omitempty"`
 }
 
 func (PayoutBatch) TableName() string { return "plg_pay_payout_batch" }
@@ -264,13 +264,13 @@ func (PayoutItem) TableName() string { return "plg_pay_payout_item" }
 // 进程内总线丢事件（缓冲满）时由 dispatcher 重投。事件载荷里禁放凭据。
 type Outbox struct {
 	database.TenantModel
-	EventID    string     `gorm:"size:40;not null;uniqueIndex:uk_pay_outbox_event" json:"eventId"`
-	EventName  string     `gorm:"size:48;not null" json:"eventName"`
-	Payload    string     `gorm:"type:text" json:"-"`
-	Status     string     `gorm:"size:16;not null;index:idx_pay_outbox_retry,priority:1" json:"status"`
-	Attempts   int        `gorm:"not null;default:0" json:"attempts"`
-	NextRetryAt time.Time `gorm:"not null;index:idx_pay_outbox_retry,priority:2" json:"nextRetryAt"`
-	SentAt     *time.Time `json:"sentAt,omitempty"`
+	EventID     string     `gorm:"size:40;not null;uniqueIndex:uk_pay_outbox_event" json:"eventId"`
+	EventName   string     `gorm:"size:48;not null" json:"eventName"`
+	Payload     string     `gorm:"type:text" json:"-"`
+	Status      string     `gorm:"size:16;not null;index:idx_pay_outbox_retry,priority:1" json:"status"`
+	Attempts    int        `gorm:"not null;default:0" json:"attempts"`
+	NextRetryAt time.Time  `gorm:"not null;index:idx_pay_outbox_retry,priority:2" json:"nextRetryAt"`
+	SentAt      *time.Time `json:"sentAt,omitempty"`
 }
 
 func (Outbox) TableName() string { return "plg_pay_outbox" }

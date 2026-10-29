@@ -1,10 +1,9 @@
 import { useRef, useState } from 'react'
-import { ChevronDown, FileDown, FileUp, Trash2, Upload } from 'lucide-react'
+import { ChevronDown, FileDown, FileUp, Trash2, Upload, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
-import { EmptyState } from '@/framework/components/EmptyState'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
@@ -37,7 +36,7 @@ export default function ImportsPage() {
   const [pendingSource, setPendingSource] = useState<string | undefined>()
   const [files, setFiles] = useState<File[]>([])
 
-  // 无数据源时不渲染导入工具栏，只留空状态说明；台账区保留（历史记录仍可查）
+  // 没有数据源时工具栏照常渲染（来源下拉与「开始导入」置灰），避免页面像坏掉一样
   const noSources = sources.isSuccess && (sources.data ?? []).length === 0
 
   // 多选时逐个提交：每个文件一条台账，任何一个失败不影响其余文件
@@ -65,8 +64,13 @@ export default function ImportsPage() {
     setFiles([])
   }
 
-  const deleteJob = async (j: ImportJob) => {
-    const ok = await confirm({
+  // 选错一个不该逼着重新选整批；同时清掉 input 的值，否则再选同一个文件不触发 change。
+  const dropFile = (idx: number) => {
+    setFiles((prev) => prev.filter((_, i) => i !== idx))
+    if (fileRef.current) fileRef.current.value = ''
+  }
+
+  const deleteJob = async (j: ImportJob) => {    const ok = await confirm({
       title: t('plugin_imports.delete'),
       description: t('plugin_imports.deleteConfirm', { name: j.fileName }),
       destructive: true,
@@ -113,16 +117,9 @@ export default function ImportsPage() {
     <PageContainer>
       <PageHeader title={t('plugin_imports.title')} description={t('plugin_imports.description')} />
 
-      {noSources ? (
-        <EmptyState
-          icon={<FileUp className="h-6 w-6" aria-hidden="true" />}
-          title={t('plugin_imports.noSourcesTitle')}
-          description={t('plugin_imports.noSources')}
-        />
-      ) : (
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-2">
-          <Select value={pendingSource ?? ''} onValueChange={setPendingSource}>
+          <Select value={pendingSource ?? ''} onValueChange={setPendingSource} disabled={noSources}>
             <SelectTrigger className="md:w-56" aria-label={t('plugin_imports.fields.source')}>
               <SelectValue placeholder={t('plugin_imports.fields.source')} />
             </SelectTrigger>
@@ -173,12 +170,34 @@ export default function ImportsPage() {
             </span>
           </Button>
           <Can perm="imports:run">
-            <Button onClick={() => void submit()} disabled={run.isPending}>
+            <Button onClick={() => void submit()} disabled={run.isPending || noSources}>
               <Upload aria-hidden="true" />
               {t('plugin_imports.run')}
             </Button>
           </Can>
         </div>
+        {files.length ? (
+          <ul className="flex flex-wrap gap-1.5">
+            {files.map((f, i) => (
+              <li
+                key={`${f.name}-${i}`}
+                className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/40 py-1 pe-1 ps-2 text-xs"
+              >
+                <span className="max-w-56 truncate">{f.name}</span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="size-6"
+                  aria-label={t('plugin_imports.removeFile', { name: f.name })}
+                  onClick={() => dropFile(i)}
+                >
+                  <X aria-hidden="true" className="size-3.5" />
+                </Button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
         {pendingSource ? (
           <div className="mt-2 flex flex-wrap gap-1.5">
             {(sources.data ?? []).find((s) => s.name === pendingSource)?.columns.map((c) => (
@@ -189,36 +208,34 @@ export default function ImportsPage() {
             ))}
           </div>
         ) : null}
+        {noSources ? <p className="text-xs text-muted-foreground">{t('plugin_imports.noSources')}</p> : null}
       </div>
-      )}
 
-      {noSources ? null : (
-        <div className="flex flex-wrap items-center gap-2">
-          <Select value={source ?? ALL} onValueChange={(v) => { setSource(v === ALL ? undefined : v); setPage(1) }}>
-            <SelectTrigger className="md:w-56" aria-label={t('plugin_imports.fields.source')}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>{t('plugin_imports.all')}</SelectItem>
-              {(sources.data ?? []).map((s) => (
-                <SelectItem key={s.name} value={s.name}>
-                  {s.title}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={status ?? ALL} onValueChange={(v) => { setStatus(v === ALL ? undefined : v); setPage(1) }}>
-            <SelectTrigger className="md:w-40" aria-label={t('plugin_imports.fields.status')}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>{t('plugin_imports.all')}</SelectItem>
-              <SelectItem value="done">{t('plugin_imports.status.done')}</SelectItem>
-              <SelectItem value="failed">{t('plugin_imports.status.failed')}</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      )}
+      <div className="flex flex-wrap items-center gap-2">
+        <Select value={source ?? ALL} onValueChange={(v) => { setSource(v === ALL ? undefined : v); setPage(1) }}>
+          <SelectTrigger className="md:w-56" aria-label={t('plugin_imports.fields.source')}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>{t('plugin_imports.all')}</SelectItem>
+            {(sources.data ?? []).map((s) => (
+              <SelectItem key={s.name} value={s.name}>
+                {s.title}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={status ?? ALL} onValueChange={(v) => { setStatus(v === ALL ? undefined : v); setPage(1) }}>
+          <SelectTrigger className="md:w-40" aria-label={t('plugin_imports.fields.status')}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>{t('plugin_imports.all')}</SelectItem>
+            <SelectItem value="done">{t('plugin_imports.status.done')}</SelectItem>
+            <SelectItem value="failed">{t('plugin_imports.status.failed')}</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
 
       <DataTable
         columns={columns}

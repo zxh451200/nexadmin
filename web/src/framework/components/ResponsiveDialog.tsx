@@ -74,7 +74,8 @@ export function ResponsiveDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={cn('flex max-h-[85dvh] flex-col gap-0 p-0', sizeClass[size])}>
+      {/* 正文自己带滚动区，外层不能再滚一次，否则弹窗右侧会出现两条滚动条 */}
+      <DialogContent className={cn('flex max-h-[85dvh] flex-col gap-0 p-0 !overflow-hidden', sizeClass[size])}>
         <DialogHeader className="shrink-0 p-6 pb-4 text-start">
           <DialogTitle>{title}</DialogTitle>
           {description ? (

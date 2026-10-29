@@ -11,6 +11,7 @@ export default function PendingFormsCard() {
   const { t } = useTranslation()
   const live = usePageLive()
   const { data, isError } = useFillStats({ refetchInterval: live ? 60_000 : false })
+  if (isError) return null // 插件不可用（未启用/未授权）时整卡隐藏
   const pending = data?.pending ?? 0
   return (
     <Card className="transition-shadow hover:glow motion-reduce:transition-none">
@@ -23,11 +24,7 @@ export default function PendingFormsCard() {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        {isError ? (
-          <p role="alert" className="py-4 text-sm text-destructive">
-            {t('plugin_formbuilder.card.loadFailed')}
-          </p>
-        ) : !data ? (
+        {!data ? (
           <Skeleton className="h-16 w-full" />
         ) : (
           <div className="flex flex-col gap-1">

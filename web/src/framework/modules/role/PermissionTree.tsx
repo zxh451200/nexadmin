@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Checkbox } from '@/framework/ui/checkbox'
+import { ExpandAllToggle } from '@/framework/components/ExpandAllToggle'
 import { cn } from '@/lib/utils'
 
 export interface PermissionNode {
@@ -132,12 +133,7 @@ export function PermissionTree({ data, value, onChange, disabled, className }: P
   return (
     <div className={cn('flex flex-col gap-2', className)}>
       <div className="flex flex-wrap items-center gap-2">
-        <Button type="button" variant="outline" size="sm" onClick={() => setExpanded(new Set(allParents))}>
-          {t('role.assign.expandAll')}
-        </Button>
-        <Button type="button" variant="outline" size="sm" onClick={() => setExpanded(new Set())}>
-          {t('role.assign.collapseAll')}
-        </Button>
+        <ExpandAllToggle ids={allParents} expanded={open} onChange={setExpanded} />
         <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => onChange(allIds)}>
           {t('role.assign.selectAll')}
         </Button>

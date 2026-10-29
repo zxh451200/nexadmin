@@ -146,6 +146,8 @@ export default function FormbuilderPage() {
   return (
     <PageContainer>
       <PageHeader title={t('plugin_formbuilder.title')} description={t('plugin_formbuilder.description')} />
+
+      <input ref={fileRef} type="file" accept=".json,application/json" className="hidden" aria-label={t('plugin_formbuilder.import.title')} onChange={(e) => void onImportFile(e.target.files?.[0])} />
       <FilterBar
         onSearch={() => {
           setFilters(draft)
@@ -170,7 +172,7 @@ export default function FormbuilderPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={ALL}>
-              {t('plugin_formbuilder.fields.status')}: {t('plugin_formbuilder.all')}
+              {t('plugin_formbuilder.all')}
             </SelectItem>
             {(['draft', 'published', 'offline'] as const).map((s) => (
               <SelectItem key={s} value={s}>
@@ -180,8 +182,6 @@ export default function FormbuilderPage() {
           </SelectContent>
         </Select>
       </FilterBar>
-
-      <input ref={fileRef} type="file" accept=".json,application/json" className="hidden" aria-label={t('plugin_formbuilder.import.title')} onChange={(e) => void onImportFile(e.target.files?.[0])} />
       <DataTable
         columns={columns}
         data={data?.list ?? []}

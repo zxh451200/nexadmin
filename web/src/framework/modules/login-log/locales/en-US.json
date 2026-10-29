@@ -1,6 +1,10 @@
 {
   "loginLog": {
     "menu": "Login Logs",
+    "view": {
+      "logs": "Logs",
+      "stats": "Analytics"
+    },
     "description": "Sign-in results per account. Failures show a category only; details stay in server logs",
     "col": {
       "username": "Account",
@@ -19,7 +23,8 @@
       "type": "Method",
       "status": "Status",
       "time": "Time range",
-      "allTypes": "All methods"
+      "allTypes": "All methods",
+      "allStatus": "All statuses"
     },
     "type": {
       "password": "Password",
@@ -50,6 +55,26 @@
       "done": "Export complete",
       "tooMany": "Too many rows to export. Narrow the filters (e.g. the time range) or use the Export Center",
       "filename": "login-log"
+    },
+    "stats": {
+      "rangeLabel": "Time range",
+      "ranges": {
+        "7d": "Last 7 days",
+        "30d": "Last 30 days",
+        "90d": "Last 90 days",
+        "all": "All time"
+      },
+      "total": "Logins",
+      "failures": "Failed logins",
+      "types": "Login methods",
+      "reasons": "Failure reasons",
+      "sampled": "High volume: stats cover the most recent 20,000 rows.",
+      "daily": "Daily trend",
+      "hourly": "By hour of day",
+      "topReasons": "Top failure reasons",
+      "topTypes": "Top login methods",
+      "topBrowsers": "Top browsers",
+      "noFailures": "No failed logins in this range"
     }
   }
 }

@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
+import { SimpleSelect } from '@/framework/components/SimpleSelect'
 
 import type { WfDefinition, WfNode } from './api'
 
@@ -18,10 +19,10 @@ const CANVAS_H = 480
 const GRID = 20
 
 const NODE_KINDS = [
-  { kind: 'start', label: '开始', color: 'var(--color-green-500)', icon: '▶' },
-  { kind: 'approval', label: '审批', color: 'var(--color-blue-500)', icon: '✓' },
-  { kind: 'exclusive', label: '网关', color: 'var(--color-amber-500)', icon: '◇' },
-  { kind: 'end', label: '结束', color: 'var(--color-red-500)', icon: '■' },
+  { kind: 'start', label: '开始', color: 'hsl(var(--success))', icon: '▶' },
+  { kind: 'approval', label: '审批', color: 'hsl(var(--primary))', icon: '✓' },
+  { kind: 'exclusive', label: '网关', color: 'hsl(var(--warning))', icon: '◇' },
+  { kind: 'end', label: '结束', color: 'hsl(var(--destructive))', icon: '■' },
 ] as const
 
 interface Positioned {
@@ -38,10 +39,15 @@ interface Props {
 
 // ---------- 辅助 ----------
 
-function defaultY(kind: string, existing: Positioned[]) {
+/**
+ * 竖向找空位：只避让「同一条竖带上」的已有节点。
+ * x 必须由调用方传入——早先这里拿 CANVAS_W/2 当目标 x，结果离中线远的节点永远
+ * 判不出冲突，新节点直接压在旧节点上（开始/结束叠在一起）。
+ */
+function defaultY(kind: string, existing: Positioned[], x: number) {
   const base = kind === 'start' || kind === 'end' ? 60 : kind === 'exclusive' ? 200 : 130
   let y = base
-  while (existing.some((p) => Math.abs(p.y - y) < 20 && Math.abs(p.x - CANVAS_W / 2) < NODE_W)) {
+  while (existing.some((p) => Math.abs(p.y - y) < NODE_H / 2 && Math.abs(p.x - x) < NODE_W)) {
     y += NODE_H + 16
   }
   return y
@@ -72,11 +78,16 @@ export function FlowDesigner({ definition, onChange, readOnly }: Props) {
 
   useEffect(() => {
     const positions = parsePositions(definition)
-    const placed: Positioned[] = definition.nodes.map((node, i) => ({
-      node,
-      x: positions[node.key]?.x ?? 80 + (i % 3) * (NODE_W + 60),
-      y: positions[node.key]?.y ?? defaultY(node.kind, placed),
-    }))
+    // 默认摆位：竖向单列居中，按节点数压缩间距以塞进画布；
+    // 存过坐标（POS_KEY）的定义一律以存量为准。逐个落位是为了配合 defaultY 的避让。
+    const count = Math.max(definition.nodes.length, 1)
+    const gap = Math.min(NODE_H + 40, Math.floor((CANVAS_H - 80) / count))
+    const placed: Positioned[] = []
+    definition.nodes.forEach((node, i) => {
+      const saved = positions[node.key]
+      const x = saved?.x ?? CANVAS_W / 2 - NODE_W / 2
+      placed.push({ node, x, y: saved?.y ?? 48 + i * gap })
+    })
     setNodes(placed)
     setSelected(null)
     setLinkFrom(null)
@@ -142,7 +153,8 @@ export function FlowDesigner({ definition, onChange, readOnly }: Props) {
       node.approvers = []
       node.mode = 'any'
     }
-    persist([...nodes, { node, x: CANVAS_W / 2 - NODE_W / 2, y: defaultY(kind, nodes) }])
+    const addX = CANVAS_W / 2 - NODE_W / 2
+    persist([...nodes, { node, x: addX, y: defaultY(kind, nodes, addX) }])
   }
 
   const removeNode = (key: string) => {
@@ -262,7 +274,7 @@ export function FlowDesigner({ definition, onChange, readOnly }: Props) {
                   height={NODE_H}
                   rx={p.node.kind === 'exclusive' ? NODE_H / 2 : 8}
                   className="fill-background"
-                  stroke={isLinking || isSelected ? 'var(--color-blue-500)' : kind?.color}
+                  stroke={isLinking || isSelected ? 'hsl(var(--primary))' : kind?.color}
                   strokeWidth={isSelected || isLinking ? 2 : 1.5}
                 />
                 <text x={12} y={NODE_H / 2 + 5} fontSize={14} className="fill-current" style={{ color: kind?.color }}>
@@ -300,29 +312,29 @@ export function FlowDesigner({ definition, onChange, readOnly }: Props) {
               </label>
               <label className="flex flex-col gap-0.5">
                 <span className="text-xs text-muted-foreground">模式</span>
-                <select
-                  className="h-8 rounded-md border bg-background px-2"
+                <SimpleSelect
+                  className="w-full"
+                  aria-label="模式"
                   value={selectedNode.mode ?? 'any'}
-                  onChange={(e) => updateNode({ mode: e.target.value })}
-                >
-                  <option value="any">或签（任一通过）</option>
-                  <option value="all">会签（全部通过）</option>
-                </select>
+                  onChange={(v) => updateNode({ mode: v as 'any' | 'all' })}
+                  options={[
+                    { value: 'any', label: '或签（任一通过）' },
+                    { value: 'all', label: '会签（全部通过）' },
+                  ]}
+                />
               </label>
               <label className="flex flex-col gap-0.5">
                 <span className="text-xs text-muted-foreground">超时升级到</span>
-                <select
-                  className="h-8 rounded-md border bg-background px-2"
-                  value={selectedNode.escalateTo ?? ''}
-                  onChange={(e) => updateNode({ escalateTo: e.target.value || undefined })}
-                >
-                  <option value="">不升级</option>
-                  {nodes.filter((n) => n.node.key !== selectedNode.key && n.node.kind === 'approval').map((n) => (
-                    <option key={n.node.key} value={n.node.key}>
-                      {n.node.name}
-                    </option>
-                  ))}
-                </select>
+                <SimpleSelect
+                  className="w-full"
+                  aria-label="超时升级到"
+                  value={selectedNode.escalateTo ?? '__none'}
+                  onChange={(v) => updateNode({ escalateTo: v === '__none' ? undefined : v })}
+                  options={[
+                    { value: '__none', label: '不升级' },
+                    ...nodes.filter((n) => n.node.key !== selectedNode.key && n.node.kind === 'approval').map((n) => ({ value: n.node.key, label: n.node.name })),
+                  ]}
+                />
               </label>
               <label className="flex flex-col gap-0.5">
                 <span className="text-xs text-muted-foreground">超时（分钟，0=不升级）</span>

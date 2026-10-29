@@ -1,4 +1,4 @@
-// Package ldap 是 NexAdmin LDAP/AD 登录适配插件:实现 core/auth 的 ExternalAuthenticator
+// Package ldap 是 NexAdmin 免费基础 LDAP/AD 登录适配插件:实现 core/auth 的 ExternalAuthenticator
 // 扩展点(本地密码失败后按顺序尝试的外部校验器)。配置存 plg_ldap_config(平台级,
 // 密码经 core/secret 加密),管理端可编辑与连通性测试;身份映射/自动建号由框架的用户模块负责。
 // 只依赖 core/ 与 pkg/(+ go-ldap,MIT),表前缀 plg_ldap_,权限码前缀 ldap:。
@@ -18,7 +18,7 @@ var _ = plugin.Starter(nil)
 
 func init() {
 	plugin.Register(plugin.Plugin{
-		ID: "ldap", Name: "LDAP/AD 登录", Version: "0.1.0", Edition: plugin.Pro,
+		ID: "ldap", Name: "LDAP/AD 登录", Version: "0.1.0", Edition: plugin.Free,
 		Module: &module{},
 	})
 }

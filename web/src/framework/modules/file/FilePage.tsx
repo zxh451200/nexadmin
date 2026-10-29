@@ -15,7 +15,6 @@ import { Button } from '@/framework/ui/button'
 import { Card } from '@/framework/ui/card'
 import { Checkbox } from '@/framework/ui/checkbox'
 import { Input } from '@/framework/ui/input'
-import { Label } from '@/framework/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import { Skeleton } from '@/framework/ui/skeleton'
 import { formatSize } from '@/framework/upload/precheck'
@@ -165,40 +164,58 @@ export default function FilePage() {
     </div>
   )
 
+  const filterBar = (
+    <FilterBar onSearch={search} onReset={reset}>
+      <Input value={draft.keyword} placeholder={t('fileMgr.keywordPlaceholder')} className="text-base md:w-44 md:text-sm" onChange={(e) => setDraft((d) => ({ ...d, keyword: e.target.value }))} aria-label={t('common.keyword')} />
+      <Select value={draft.category} onValueChange={(v) => setDraft((d) => ({ ...d, category: v }))}>
+        <SelectTrigger className="md:w-40" aria-label={t('fileMgr.filterType')}>
+          <SelectValue placeholder={t('fileMgr.filterType')} />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">{t('fileMgr.allTypes')}</SelectItem>
+          {CATEGORIES.map((c) => (
+            <SelectItem key={c} value={c}>
+              {t(`fileMgr.kind.${c}`)}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <DateRangePicker value={draft.range} onChange={(range) => setDraft((d) => ({ ...d, range }))} aria-label={t('fileMgr.timeRange')} className="md:w-64" placeholder={t('fileMgr.timeRange')} />
+    </FilterBar>
+  )
+
+  const pageActions = (
+    <>
+      <div role="group" aria-label={t('fileMgr.viewGrid')} className="flex rounded-md border border-border p-0.5">
+        {(['grid', 'list'] as const).map((v) => (
+          <Button
+            key={v}
+            variant={view === v ? 'secondary' : 'ghost'}
+            size="icon"
+            aria-pressed={view === v}
+            aria-label={t(v === 'grid' ? 'fileMgr.viewGrid' : 'fileMgr.viewList')}
+            className="size-11 md:size-8"
+            onClick={() => {
+              setView(v)
+              setPage(1)
+            }}
+          >
+            {v === 'grid' ? <LayoutGrid className="size-4" aria-hidden="true" /> : <List className="size-4" aria-hidden="true" />}
+          </Button>
+        ))}
+      </div>
+      <Can perm="file:upload">
+        <Button onClick={() => setUploadOpen(true)}>
+          <Upload className="me-2 size-4" aria-hidden="true" />
+          {t('fileMgr.upload')}
+        </Button>
+      </Can>
+    </>
+  )
+
   return (
     <PageContainer>
-      <PageHeader
-        title={t('fileMgr.title')}
-        description={t('fileMgr.description')}
-        actions={
-          <>
-            <div role="group" aria-label={t('fileMgr.viewGrid')} className="flex rounded-md border border-border p-0.5">
-              {(['grid', 'list'] as const).map((v) => (
-                <Button
-                  key={v}
-                  variant={view === v ? 'secondary' : 'ghost'}
-                  size="icon"
-                  aria-pressed={view === v}
-                  aria-label={t(v === 'grid' ? 'fileMgr.viewGrid' : 'fileMgr.viewList')}
-                  className="size-11 md:size-8"
-                  onClick={() => {
-                    setView(v)
-                    setPage(1)
-                  }}
-                >
-                  {v === 'grid' ? <LayoutGrid className="size-4" aria-hidden="true" /> : <List className="size-4" aria-hidden="true" />}
-                </Button>
-              ))}
-            </div>
-            <Can perm="file:upload">
-              <Button onClick={() => setUploadOpen(true)}>
-                <Upload className="me-2 size-4" aria-hidden="true" />
-                {t('fileMgr.upload')}
-              </Button>
-            </Can>
-          </>
-        }
-      />
+      <PageHeader title={t('fileMgr.title')} description={t('fileMgr.description')} />
 
       <div className="flex flex-col gap-4 md:flex-row md:items-start">
         <Card className="p-3 md:w-52 md:shrink-0 lg:w-60">
@@ -213,37 +230,15 @@ export default function FilePage() {
         </Card>
 
         <div className="flex min-w-0 flex-1 flex-col gap-4">
-          <FilterBar onSearch={search} onReset={reset}>
-            <div className="flex flex-col gap-1.5 md:w-44">
-              <Label>{t('common.keyword')}</Label>
-              <Input value={draft.keyword} placeholder={t('fileMgr.keywordPlaceholder')} className="text-base md:text-sm" onChange={(e) => setDraft((d) => ({ ...d, keyword: e.target.value }))} />
-            </div>
-            <div className="flex flex-col gap-1.5 md:w-40">
-              <Label>{t('fileMgr.filterType')}</Label>
-              <Select value={draft.category} onValueChange={(v) => setDraft((d) => ({ ...d, category: v }))}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">{t('fileMgr.allTypes')}</SelectItem>
-                  {CATEGORIES.map((c) => (
-                    <SelectItem key={c} value={c}>
-                      {t(`fileMgr.kind.${c}`)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex flex-col gap-1.5 md:w-64">
-              <Label>{t('fileMgr.timeRange')}</Label>
-              <DateRangePicker value={draft.range} onChange={(range) => setDraft((d) => ({ ...d, range }))} />
-            </div>
-          </FilterBar>
+          {filterBar}
+
+          {view === 'grid' ? <div className="flex flex-wrap items-center gap-2">{pageActions}</div> : null}
 
           {batchBar}
 
           {view === 'list' ? (
             <DataTable
+              toolbar={pageActions}
               columns={columns}
               columnSettingsKey="file"
               data={rows}

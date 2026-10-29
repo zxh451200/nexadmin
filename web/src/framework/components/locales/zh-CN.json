@@ -15,11 +15,25 @@
     "nextPage": "下一页",
     "goToPage": "跳转到第 {{page}} 页",
     "expand": "展开",
+    "dropToRoot": "拖到这里移到顶级",
+    "maxDepthReached": "最多 {{count}} 级，不能再往下了",
     "collapse": "收起",
     "expandAll": "全部展开",
     "collapseAll": "全部收起",
     "batchActions": "批量操作",
-    "reorderFailed": "调整顺序失败，已恢复原顺序"
+    "reorderFailed": "调整顺序失败，已恢复原顺序",
+    "dragHint": "向右拖 = 成为子级 · 向左拖 = 升一级 · 拖到虚线框 = 回到顶级",
+    "willNest": "松手后成为这一行的子级",
+    "willOutdent": "松手后升到上一级",
+    "nestBlocked": "这一行下面不能再挂子级",
+    "a11y": {
+      "picked": "已抓起第 {{row}} 行",
+      "over": "第 {{row}} 行移到第 {{target}} 行",
+      "overEmpty": "第 {{row}} 行未落在任何行上",
+      "dropped": "第 {{row}} 行已放到第 {{target}} 行的位置",
+      "droppedEmpty": "第 {{row}} 行已放下，未改变位置",
+      "cancelled": "已取消拖动第 {{row}} 行"
+    }
   },
   "dialog": {
     "confirmTitle": "请确认",
@@ -31,5 +45,27 @@
   },
   "formLayout": {
     "requiredHint": "带 * 号的为必填项"
+  },
+  "localeForm": {
+    "source": "原文",
+    "sourceLang": "原文",
+    "sourceOnly": "原文（只读）",
+    "editingLanguage": "编辑语言",
+    "switcherAria": "切换要编辑的语言",
+    "pickHint": "选择要编辑的语言",
+    "fieldsMissing": "缺 {{count}} 项",
+    "sharedTag": "共用",
+    "sharedFieldNote": "不随语言变化，所有语言共用",
+    "fillFromSource": "从原文复制空白",
+    "aiFill": "AI 翻译空白",
+    "aiWorking": "翻译中…",
+    "aiDone": "已翻译 {{count}} 个字段",
+    "aiEmpty": "没有可翻译的原文",
+    "aiFailed": "翻译失败",
+    "machineHint": "机器翻译，还没人工校对",
+    "machineConfirm": "确认译文",
+    "machineConfirmed": "已标记为人工校对",
+    "publishGroup": "各语言发布",
+    "publishMissing": "缺：{{fields}}"
   }
 }

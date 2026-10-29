@@ -98,6 +98,8 @@
     "skipToContent": "Skip to main content",
     "openMenu": "Open menu",
     "expandSidebar": "Expand sidebar",
+    "expandAllGroups": "Expand all",
+    "collapseAllGroups": "Collapse all",
     "collapseSidebar": "Collapse sidebar",
     "language": "Switch language",
     "notifications": "Notifications",
@@ -191,8 +193,7 @@
     "backHome": "Back to home",
     "boundary": {
       "title": "Something went wrong",
-      "desc": "An unexpected error occurred while rendering this page and it has been reported. You can try again or reload the page.",
-      "retry": "Try again",
+      "desc": "An unexpected error occurred while rendering this page and it has been reported. Reload the page to start over.",
       "reload": "Reload page"
     },
     "403": {
@@ -206,6 +207,11 @@
     "500": {
       "title": "Server error",
       "desc": "The service is temporarily unavailable. Please try again later."
+    },
+    "pluginInactive": {
+      "title": "Plugin not enabled",
+      "desc": "The plugin providing this page is not installed or its license is invalid.",
+      "manage": "Open plugin manager"
     }
   },
   "setup": {
@@ -242,54 +248,6 @@
     "testConnection": "Test connection",
     "testOk": "Connected",
     "testFailed": "Connection failed",
-    "probe": {
-      "s3Button": "Check S3 bucket",
-      "aiButton": "Check AI models endpoint",
-      "running": "Checking…",
-      "cancel": "Cancel check",
-      "tokenHint": "These checks require the setup token from the server console, including for local access. Enter it in the setup token field above.",
-      "s3Scope": "Sends a signed HEAD request to the target bucket only. No bucket creation or object writes. Object read/write and prefix permissions are not verified.",
-      "aiScope": "Only GET /models is called to check connectivity, the endpoint's response to the supplied credentials, and whether the model is listed. No generation request is sent; generation permissions, billing and output quality are not verified. A public models endpoint cannot prove key validity.",
-      "s3Ok": "Bucket HEAD check passed. Object permissions remain unverified.",
-      "aiOk": "Models endpoint responded and the selected model is listed. Generation remains unverified.",
-      "invalid": "Invalid or incomplete configuration, or request too large.",
-      "connection": "Could not connect securely. Check the address, network and TLS configuration.",
-      "timeout": "The check timed out.",
-      "cancelled": "The check was cancelled or timed out.",
-      "denied": "The endpoint rejected authentication or access.",
-      "notFound": "The bucket or endpoint was not found; access policies may also hide it.",
-      "redirect": "Redirect refused. Configure the final endpoint and correct region directly.",
-      "rateLimited": "Checks are limited to one every two seconds. Retry shortly.",
-      "upstreamLimited": "The upstream service is rate limiting requests.",
-      "upstream": "The upstream service returned an unsuccessful status.",
-      "invalidResponse": "The endpoint did not return a valid, bounded OpenAI-compatible models list.",
-      "modelNotListed": "The endpoint responded, but the selected model was not listed. Generation remains unverified.",
-      "modelsUnsupported": "The models endpoint is unavailable or unsupported. Generation remains unverified.",
-      "token": "Setup token missing or invalid, or remote setup is disabled.",
-      "unavailable": "Setup probes are unavailable or initialization has completed."
-    },
-    "probe": {
-      "s3Scope": "Read-only signed HEAD of the target bucket. No bucket creation or object writes. Object read/write and prefix permissions are not checked.",
-      "aiScope": "GET /models only: checks the model list endpoint and whether the configured model is listed. No generation request is sent. Generation, billing and generation authorization are not verified.",
-      "s3Ok": "Bucket HEAD succeeded. Bucket exists and HEAD access is available; object permissions remain unverified.",
-      "aiOk": "Model list endpoint responded and the configured model is listed. Generation is not verified; public endpoints may not validate the supplied key.",
-      "running": "Checking…",
-      "cancel": "Cancel check",
-      "token": "Enter the setup token from the server console above. S3/AI checks require it even for local access.",
-      "disabled": "Setup is complete or this probe is unavailable.",
-      "rateLimited": "Checks are too frequent. Wait at least two seconds and retry.",
-      "invalid": "Invalid configuration or request. Check the endpoint, bucket/model and credentials.",
-      "connection": "Could not connect. Check the deployment address, network and TLS configuration.",
-      "timeout": "The check timed out.",
-      "cancelled": "The check was cancelled.",
-      "denied": "The endpoint rejected authentication or access. Check credentials and permissions.",
-      "notFound": "Bucket or endpoint not found. For AI, the provider may not support /models; generation remains unverified.",
-      "redirect": "Redirect refused to protect credentials. Configure the final endpoint directly.",
-      "upstreamLimited": "The upstream service rate limited the check.",
-      "upstream": "The upstream service returned an unexpected status.",
-      "invalidResponse": "The endpoint did not return a valid, bounded OpenAI model list.",
-      "modelNotListed": "The model list responded, but the configured model is not listed. Generation remains unverified."
-    },
     "probe": {
       "s3Button": "Check S3 bucket",
       "aiButton": "Check AI models endpoint",
@@ -378,5 +336,14 @@
       "usernameFormat": "Start with a letter; letters, digits and underscores only",
       "passwordMismatch": "Passwords do not match"
     }
+  },
+  "map": {
+    "lng": "Longitude",
+    "lat": "Latitude",
+    "address": "Address",
+    "pick": "Pick on map",
+    "pickTitle": "Pick a location",
+    "provider": "Map provider",
+    "noProvider": "No map plugin installed. You can enter coordinates manually; install a map plugin to pick on a map."
   }
 }

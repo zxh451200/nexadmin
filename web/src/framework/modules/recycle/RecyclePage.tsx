@@ -11,7 +11,6 @@ import type { Column } from '@/framework/components/table/types'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
-import { Label } from '@/framework/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import { fmtDateTime } from '../oper-log/format'
 import { RECYCLE_TYPES, usePurge, useRecycleList, useRestore, type RecycleItem, type RecycleType } from './api'
@@ -86,37 +85,31 @@ export default function RecyclePage() {
           setPage(1)
         }}
       >
-        <div className="flex w-full flex-col gap-1.5 md:w-64">
-          <Label htmlFor="rc-keyword">{t('recycle.filter.keyword')}</Label>
-          <Input
-            id="rc-keyword"
-            value={draft}
-            placeholder={t('recycle.filter.keywordPlaceholder')}
-            onChange={(e) => setDraft(e.target.value)}
-          />
-        </div>
-        <div className="flex w-full flex-col gap-1.5 md:w-48">
-          <Label htmlFor="rc-type">{t('recycle.filter.type')}</Label>
-          <Select
-            value={type}
-            onValueChange={(v) => {
-              setType(v)
-              setPage(1)
-            }}
-          >
-            <SelectTrigger id="rc-type">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>{t('recycle.type.all')}</SelectItem>
-              {RECYCLE_TYPES.map((k) => (
-                <SelectItem key={k} value={k}>
-                  {t(`recycle.type.${k}`)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        <Input aria-label={t('recycle.filter.keyword')} className="md:w-64"
+          id="rc-keyword"
+          value={draft}
+          placeholder={t('recycle.filter.keywordPlaceholder')}
+          onChange={(e) => setDraft(e.target.value)}
+        />
+        <Select
+          value={type}
+          onValueChange={(v) => {
+            setType(v)
+            setPage(1)
+          }}
+        >
+          <SelectTrigger id="rc-type" className="md:w-48" aria-label={t('recycle.filter.type')}>
+            <SelectValue placeholder={t('recycle.filter.type')} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>{t('recycle.type.all')}</SelectItem>
+            {RECYCLE_TYPES.map((k) => (
+              <SelectItem key={k} value={k}>
+                {t(`recycle.type.${k}`)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </FilterBar>
       <DataTable<RecycleItem>
         columns={columns}

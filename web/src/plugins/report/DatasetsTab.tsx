@@ -11,6 +11,7 @@ import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
 import { useDatasets, useDeleteDataset, useSources, type Dataset } from './api'
 import { DatasetDialog } from './DatasetDialog'
+import { builtinText } from './builtinText'
 
 export function DatasetsTab() {
   const { t } = useTranslation()
@@ -31,7 +32,7 @@ export function DatasetsTab() {
     setOpen(true)
   }
   const onDelete = async (d: Dataset) => {
-    if (!(await confirm({ destructive: true, description: t('plugin_report.dataset.deleteConfirm', { name: d.name }) }))) return
+    if (!(await confirm({ destructive: true, description: t('plugin_report.dataset.deleteConfirm', { name: builtinText(t, d.name) }) }))) return
     try {
       await remove.mutateAsync(d.id)
       toast.success(t('common.operateSuccess'))
@@ -41,7 +42,7 @@ export function DatasetsTab() {
   }
 
   const columns: Column<Dataset>[] = [
-    { key: 'name', title: t('common.name'), mobile: 'title', render: (d) => <span className="font-medium text-foreground">{d.name}</span> },
+    { key: 'name', title: t('common.name'), mobile: 'title', render: (d) => <span className="font-medium text-foreground">{builtinText(t, d.name)}</span> },
     { key: 'source', title: t('plugin_report.dataset.source'), mobile: 'sub', render: (d) => <Badge variant="outline">{sourceLabel(d.source)}</Badge> },
     { key: 'columns', title: t('plugin_report.dataset.columns'), render: (d) => <span className="num">{d.columns.length}</span> },
     { key: 'filters', title: t('plugin_report.dataset.fixedFilters'), render: (d) => <span className="num">{d.filters.length}</span> },

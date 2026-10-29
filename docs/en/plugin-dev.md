@@ -1,6 +1,13 @@
+---
+title: Plugin Development Guide
+summary: Plugin package layout, manifest, backend and frontend conventions, plus packaging and install checks.
+---
+
 # NexAdmin Plugin Development Guide
 
-This guide walks you through writing a NexAdmin plugin from scratch and submitting it to the plugin marketplace. It uses the official example plugin "Scheduled Jobs (cron)" throughout; its full source ships in the release pack at `nexadmin-plugins/cron/` — reading this alongside that source is the fastest way to learn.
+This guide explains how to build and package a NexAdmin plugin. It uses Scheduled Jobs (cron), part of the initial free plan, to illustrate package structure. Obtain its released free install package from the vendor's marketplace or standalone plugin source repository. Framework source packages and default `nexadmin new` projects do not include cron or a paid cron example.
+
+Base services and optional general-purpose plugins are free; business enhancements are paid. The initial free plan covers `cron`, `codegen`, `imports`, `totp`, `ldap`, `maps` and `crm`; other plugins are planned as pro. This does not mean every existing package has changed edition or that LDAP / TOTP are compiled and mounted. Check manifests, Go registration and runtime state. See the [Quickstart](quickstart.md) for free-plugin verification.
 
 > Who this is for: developers who can write Go (Gin + GORM) and React. You do not need to understand the whole framework — only this document and the cron example.
 
@@ -42,7 +49,7 @@ name: Scheduled Jobs
 version: 1.0.0
 description: Scheduled jobs (5-field cron scheduling, run now, failure retry, run logs)
 author: NexAdmin
-edition: pro                 # free | pro
+edition: free                # free cron example; paid plugins use pro
 requires_nexadmin: ">=0.1.0"
 
 menus:                       # written idempotently into sys_menu on install/mount
@@ -82,7 +89,7 @@ import (
 
 func init() {
     plugin.Register(plugin.Plugin{
-        ID: "cron", Name: "Scheduled Jobs", Version: "1.0.0", Edition: plugin.Pro,
+        ID: "cron", Name: "Scheduled Jobs", Version: "1.0.0", Edition: plugin.Free,
         Module: &module{},
     })
 }
@@ -128,6 +135,8 @@ func (m *module) Start(ctx context.Context, d *core.Deps) error {
 ### 4.4 Database migrations
 
 Place them in `backend/migrations/<engine>/` — **mysql, mariadb and postgres must all be present**, named `001_init.sql`, `002_xxx.sql` and so on, **append-only** (a released migration never changes; changes go into new files). The runtime executes files in name order, records applied versions, and never re-executes.
+
+**Migrations change structure only — no `INSERT`/`UPDATE`/`DELETE`.** The runner warns about every DML statement in `migrate --dry-run`. Seed data (menus, dictionaries, templates) belongs in a Seeder, and reconciling the menu shape of an existing install lives there too (see `modules/system/menu/reconcile.go`).
 
 Watch the engine differences: auto-increment/primary-key types, `TEXT` defaults, boolean types, `ON UPDATE` syntax. cron's three SQL files are a ready comparison.
 
@@ -175,20 +184,21 @@ The sidebar actually comes from the server-side `sys_menu` (i.e. the `menus` in 
 
 ## 6. Local development workflow
 
-1. Create a directory with the structure above in the framework repo, or copy `nexadmin-plugins/cron/` and rename it.
+1. Derive a development project using the [Quickstart](quickstart.md). Prepare the package structure outside that project, or use the free cron package you obtained as a reference. Give your own plugin a new ID, permission prefix and table prefix; do not write business code in the framework template. Replace example `nexadmin/...` imports with the derived project's actual Go module path.
 2. Frontend: put `web/` into `web/src/plugins/<id>/`, run `npm run dev`, and debug the page against mock data.
 3. Backend: put `backend/` into `plugins/<id>/`, and copy the package-root `plugin.yaml` to `plugins/<id>/plugin.yaml`. The directory name must exactly match the manifest `id` (e.g. `i18n-editor`, not `i18neditor`; the Go package name may differ); the manager locates the manifest and `migrations/` by ID. Add `_ "nexadmin/plugins/<id>"` between the marker lines in `plugins/plugins.go` (the install command does this automatically).
 4. Sign a development license (required for pro plugins) and put it in `data/licenses/<id>.lic`:
 
 ```bash
 go run ./cmd/nexadmin plugin keygen            # first time: generate a dev key pair
+mkdir -p data/licenses                       # sign does not create the parent directory
 go run ./cmd/nexadmin plugin sign --key .dev-keys/private.pem \
   --plugin <id> --customer Test --expires 2027-12-31 --out data/licenses/<id>.lic
 ```
 
-   Note: the development private key is only valid on your machine. The framework embeds the official public key — a license signed with your own private key passes local validation only after you replace the public key in `core/plugin/pubkey.go` with yours. **Never commit private keys to the repository.**
-5. Check status: `go run ./cmd/nexadmin plugin list` — the state should be `active`.
-6. The admin "System Management → Plugin Management" shows the plugin and its license state.
+   Append the base64 public key printed by `keygen` as a separate line in local `config/license-keys.pub`, preserving existing keys (`#` comments are supported), then restart the development process to reload its trust set. **Do not modify `core/plugin/pubkey.go`, commit private keys, or ship development trust settings or test licenses in production packages.** The additional-key file is framework-managed during upgrades; recheck local development settings afterward. Self-signed licenses are for isolated development, not a substitute for purchased licenses.
+5. Inspect disk state with `go run ./cmd/nexadmin plugin list`. Free plugins show `-` in the `LICENSE` column; pro development licenses show `active` only after verification. This does not prove compilation or mounting.
+6. Rebuild and start the server, then have a platform super admin verify runtime status, logs and actual endpoints in System Management → Plugin Management. Ordinary tenants receive business-use permissions only.
 
 ## 7. Packaging and install verification
 
@@ -196,7 +206,7 @@ go run ./cmd/nexadmin plugin sign --key .dev-keys/private.pem \
 zip -r cron-1.0.0.zip cron/        # directory name = plugin id; the package must not contain node_modules, .git, license files or keys
 ```
 
-Verify installation in a clean copy of the framework:
+Verify installation in a clean derived project (substitute the actual package filename and plugin ID below):
 
 ```bash
 go run ./cmd/nexadmin plugin install cron-1.0.0.zip
@@ -220,7 +230,7 @@ The install command rejects zip-slip archives and caps the extracted file count 
 - `/plugins/<id>/download`: the server pulls source from the catalog's `url` or the GitHub `repo`/`ref`, locates the plugin via `subdir`, verifies the in-package `plugin.yaml` `id`/`edition`/`version`, and repackages into a `plugin.yaml + backend/ + web/` install bundle. Artifacts are cached on disk for 6 hours; the route has its own rate limit (30 req/min/IP) and responds with `X-Checksum-SHA256`.
 - `/plugins/<id>/download.sha256`: a `sha256sum`-format checksum file matching the download artifact, verifiable with `sha256sum -c`. Zip timestamps are pinned to 1980-01-01 during packaging, so repacking the same source yields identical bytes and checksums are comparable across instances.
 - `/plugins/index.json`: a machine-readable catalog (download URLs, install commands, source URLs) for scripts and external tools.
-- The detail page's "One-click install in admin" links to `/system/plugin?tab=market&plugin=<id>`; after login you land on the admin marketplace filtered to that plugin.
+- The detail page's "One-click install in admin" links to `/admin/system/plugin?tab=market&plugin=<id>`; after login you land on the admin marketplace filtered to that plugin.
 - The catalog's `edition` must match the plugin package, otherwise the download is refused; `subdir` only accepts relative paths inside the repository.
 
 Both the website and the admin read this YAML directly — changes take effect immediately; `plugin market sync` only exports JSON (default stdout, `--docs` writes to a directory) and no longer drives the website display. The docs-site marketplace page keeps only an introduction and links; browsing/downloading/installing all live on the website `/plugins`.
@@ -232,17 +242,24 @@ Both the website and the admin read this YAML directly — changes take effect i
 
 ### Website multi-language (website plugin)
 
-Website languages are decided by `plugins/website/locales/` — **adding a language requires no template or route changes**:
+**`sys_language` is the sole source of truth for platform languages.** The website consumes it through `core.Languages()`; `languages` in `config.yaml` only seeds an empty table. Do not maintain a separate `locales/languages.json` list.
 
-1. Append an entry to `locales/languages.json`: `code` (e.g. `ja-JP`), `label`, `short`, `htmlLang`, `ogLocale`, `prefix` (e.g. `ja`), `dateFormat` (a Go layout, e.g. `2006年1月2日`).
-2. Add `locales/<code>.json` with keys matching the existing dictionaries (every `.T "key"` used by templates is validated by `TestLocaleDictionariesCoverTemplates`; missing keys fail the test).
-3. Restart the website process. The new language automatically gets `/<prefix>/...` routes, the nav language switcher, `hreflang`, `og:locale:alternate` and sitemap entries.
+1. A platform super admin maintains `code` (such as `ja-JP`), `name`, `short`, `dir`, `htmlLang`, `ogLocale`, `prefix`, `dateFormat` and the default language in System Settings → Advanced → Languages.
+2. Website UI dictionaries live in `plugins/website/locales/<code>.json`, with matching keys across languages. These are embedded source assets: rebuild and deploy the binary after changes. Restarting an old binary cannot update its dictionaries.
+3. Changes to the language set or URL prefixes affect routes registered at startup; the save response reports `needRestart`. Restart, then verify navigation, `hreflang`, `og:locale:alternate` and the sitemap.
+
+**Maintain technical documentation only in `docs/`; use the website CMS for marketing content.** Markdown is embedded in the binary and requires a rebuild and deployment after edits. Do not duplicate technical documentation in the CMS or the retired VitePress site. Document paths use stable language `Code`, not the editable URL `prefix`: `zh-CN` reads the Chinese source files in `docs/`, English reads `docs/en/<slug>.md`, and other languages use the lowercase primary subtag of Code (e.g. `ja-JP` → `docs/ja/<slug>.md`). Translations carry `title` / `summary` frontmatter; missing translations fall back to the Chinese source, not a claim of completed translation. Changing the default language or URL prefix does not move files. News, product descriptions and marketing pages are edited, translated and published per language in the CMS without rebuilding for content changes.
 
 Conventions:
 
 - The default language (`default: true`, and its `prefix` must be empty) renders on prefix-less URLs; other languages render under `/<prefix>`. `?lang=<code>` switches and remembers cookie `nex_site_lang`; language-switch links keep current filter parameters.
 - Without a language cookie, the default-language homepage shows a dismissible switch hint (based on `Accept-Language`) to visitors preferring other languages; **it never auto-302s**, avoiding duplicate search indexing, and responses carry `Vary: Accept-Language`.
-- Admin content (site settings, navs, features, pages, posts) stores translations in each table's `i18n_json`: `{"en-US":{"title":"…"}}`. The admin form's "Multilingual content" generates inputs per language automatically; unfilled fields fall back to the source text on that language's pages. The backend only accepts configured languages and whitelisted fields, and rich-text translations are sanitized too.
+- Admin content (site settings, navs, features, pages, posts) stores translations in each table's `i18n_json`: `{"en-US":{"title":"…"}}`; empty fields fall back to the source text on that language's pages. The backend only accepts configured languages and whitelisted fields, and rich-text translations are sanitized too.
+- The editor uses **whole-form locale switching**: one dropdown at the top of the dialog decides which language you are editing, there is a single form instance, and **the number of languages never changes the form height**. In translation mode each field shows its source text underneath, rich text gets a collapsible read-only source panel, and locale-independent fields (slug, cover) are disabled and tagged "shared". The components live in `web/src/framework/components/i18n/` and are reusable from derived projects.
+- The translatable field whitelist, length limits and widgets exist only in Go (`entityViews` in `plugins/website/schema.go`); the frontend reads them from `GET /plugins/website/i18n/schema/:entity`. `TestEntityViewsMatchWhitelist` catches drift between the two. Adding a translatable field means changing that one place — no UI code.
+- The **algorithms** — parsing the translation document, sanitising, length clamping, completeness and per-language publishing — live in `pkg/i18n` (`Normalize` / `Translatable` / `NormalizePublish` / `Published`). They know nothing about specific content or where the language list comes from: implement `Locales` (two methods, `Resolve` / `All`) and you can reuse them. Derived projects adding their own translatable content should use `pkg/i18n` plus `web/src/framework/components/i18n` rather than inventing a second JSON convention. The UI-string catalogue (`core/i18n` + the i18n-editor plugin) is a different thing — do not merge the two.
+- Posts and pages support **per-language publishing** (`published_json`, non-default languages only): a language with missing translations cannot be published — the server downgrades it rather than trusting the client's completeness claim — and its direct URL returns 404 while staying out of that language's listings, `hreflang` and the sitemap. An empty column means publishing has never been configured per language, so every language follows the row's `published` flag and an upgrade changes no existing visibility. Navs, features and settings have no URL to take offline and therefore expose no such switch.
+- Batch machine translation goes through a plugin-owned route, `POST /plugins/website/i18n/translate/<entity>` (each entity keeps its own edit permission instead of teaching `modules/ai` about plugin codes), reuses the `core/ai` gateway, and only fills fields that are still blank.
 - Market catalog entries use `i18n` maps to localize name/description (see the YAML comments above); category names, placeholder prices like `TBD/Free`, and date formats come from the language dictionary.
 - Upgraded legacy databases: `ensureSeedI18n` only backfills rows whose `i18n_json` is empty and whose source text still matches the factory copy; existing translations are never overwritten.
 - Stats: public downloads are counted per download; ratings are anonymous 1–5 stars, one row per IP per plugin, re-ratable. Admin one-click installs do not count as public downloads.
@@ -271,7 +288,7 @@ Attach a one-pager: feature introduction, screenshots, supported databases, veri
 
 1. The author submits the plugin package → after platform review it is listed in the plugin marketplace.
 2. The buyer purchases → the platform signs a license file with its private key (bound to the plugin, customer name, expiry, optionally domains).
-3. The buyer imports the license file in "Plugin Management"; it takes effect immediately, no recompile.
+3. A platform super admin imports the license in Plugin Management. The manager attempts to activate compiled plugins; inspect `needRestart`, state and logs. Source installation still requires rebuilding. Failed hot mounts, website root routes and startup-time authentication extensions require restart verification; not all licenses can be hot-activated.
 4. When the license expires the plugin automatically goes offline (routes return 403, state `expired`); after renewal, importing the new license restores it. A license revoked by the vendor is in state `revoked` (see §11).
 
 Authors do not need to — and should not — implement licensing themselves. Validation is centralized in the framework; plugin code must not contain any license logic.
@@ -280,7 +297,7 @@ Authors do not need to — and should not — implement licensing themselves. Va
 
 ## 10. Revenue share and pricing (to be decided by the platform)
 
-The following terms are **undecided** and will be filled in by the platform before the marketplace launches. Items to define:
+**Formal purchase terms have not been published.** The following are items for the vendor to formally confirm, not commitments on prices, refunds, revenue shares or IP. Marketing and purchase information belongs in the website CMS; technical documentation does not replace transaction terms:
 
 - Author/platform revenue share, settlement cycle and method.
 - Pricing model: one-time purchase, annual subscription, or per-tenant/per-instance pricing.

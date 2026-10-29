@@ -67,13 +67,16 @@ export function OptionList({
                 disabled={o.disabled}
                 onClick={() => onSelect(o.value)}
                 className={cn(
-                  'flex min-h-11 w-full items-center gap-2 rounded-sm px-2 text-start text-base hover:bg-muted focus-visible:bg-muted focus-visible:outline-none md:min-h-8 md:text-sm',
-                  'disabled:pointer-events-none disabled:opacity-50',
-                  selected && 'bg-muted/60',
+                  // 与 SelectItem 同尺寸同视觉：勾选在右、ps-2/pe-8、hover 用 accent
+                  'relative flex min-h-11 w-full items-center rounded-sm py-1.5 ps-2 pe-8 text-start text-base',
+                  'hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground focus-visible:outline-none',
+                  'disabled:pointer-events-none disabled:opacity-50 md:min-h-0 md:text-sm',
                 )}
               >
-                <Check className={cn('size-4 shrink-0 text-primary', selected ? 'opacity-100' : 'opacity-0')} aria-hidden="true" />
                 <span className="min-w-0 flex-1 truncate">{o.node ?? o.label}</span>
+                <span className="absolute end-2 flex size-3.5 items-center justify-center">
+                  {selected ? <Check className="size-4" aria-hidden="true" /> : null}
+                </span>
               </button>
             </li>
           )

@@ -122,6 +122,47 @@ func defaultRaw() []rawSource {
 			{Name: "os", Label: "操作系统", Type: TypeString},
 			{Name: "created_at", Label: "登录时间", Type: TypeTime},
 		}},
+		// 以下四张表是 2026-10 的按需放宽：都带 tenant_id，且只列「可聚合、无标识符、无自由文本」的列。
+		// 判断准则：管理员在对应列表页本来就能看到这些字段；凡是可能带个人信息、请求体、异常堆栈、渠道密钥的列一律不列。
+		{Table: "sys_oper_log", Label: "操作日志", TenantColumn: "tenant_id", UsernameColumn: "operator", ScopeRequired: true, Columns: []rawColumn{
+			// 不列 operator/ip/location/params/response/error_stack：账号与来源属个人信息，后三者是请求体与堆栈
+			{Name: "module", Label: "模块", Type: TypeString},
+			{Name: "type", Label: "动作", Type: TypeString},
+			{Name: "method", Label: "方法", Type: TypeString},
+			{Name: "url", Label: "路由", Type: TypeString},
+			{Name: "status", Label: "结果", Type: TypeString},
+			{Name: "cost_ms", Label: "耗时(ms)", Type: TypeNumber},
+			{Name: "created_at", Label: "操作时间", Type: TypeTime},
+		}},
+		{Table: "sys_send_log", Label: "发送日志", TenantColumn: "tenant_id", Columns: []rawColumn{
+			// 不列 recipient/subject/error：收件人是个人信息，标题与错误信息是自由文本
+			{Name: "channel", Label: "渠道", Type: TypeString},
+			{Name: "scene", Label: "场景", Type: TypeString},
+			{Name: "status", Label: "结果", Type: TypeString},
+			{Name: "duration_ms", Label: "耗时(ms)", Type: TypeNumber},
+			{Name: "created_at", Label: "发送时间", Type: TypeTime},
+		}},
+		{Table: "sys_client_error", Label: "前端错误", TenantColumn: "tenant_id", UsernameColumn: "username", ScopeRequired: true, Columns: []rawColumn{
+			// 不列 message/stack/ua/username/fingerprint：错误文本与 UA 可能夹带用户输入
+			{Name: "route", Label: "路由", Type: TypeString},
+			{Name: "version", Label: "版本", Type: TypeString},
+			{Name: "hit_count", Label: "出现次数", Type: TypeNumber},
+			{Name: "last_seen_at", Label: "最近出现", Type: TypeTime},
+			{Name: "created_at", Label: "首次出现", Type: TypeTime},
+		}},
+		{Table: "plg_pay_order", Label: "支付单", TenantColumn: "tenant_id", Columns: []rawColumn{
+			// 金额列按币种分列统计，报表里必须把 currency 一起选上；付款人 id/open id/metadata 一律不列
+			{Name: "amount_minor", Label: "金额(分)", Type: TypeNumber},
+			{Name: "refunded_minor", Label: "已退金额(分)", Type: TypeNumber},
+			{Name: "fee_minor", Label: "手续费(分)", Type: TypeNumber},
+			{Name: "currency", Label: "币种", Type: TypeString},
+			{Name: "channel_code", Label: "渠道", Type: TypeString},
+			{Name: "method", Label: "支付方式", Type: TypeString},
+			{Name: "scene", Label: "场景", Type: TypeString},
+			{Name: "status", Label: "状态", Type: TypeString},
+			{Name: "paid_at", Label: "支付时间", Type: TypeTime},
+			{Name: "created_at", Label: "创建时间", Type: TypeTime},
+		}},
 	}
 }
 

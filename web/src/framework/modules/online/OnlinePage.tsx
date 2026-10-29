@@ -11,7 +11,6 @@ import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import type { Column } from '@/framework/components/table/types'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
-import { Label } from '@/framework/ui/label'
 import { fmtDateTime } from '../oper-log/format'
 import { useForceLogout, useOnlineList, type OnlineUser } from './api'
 
@@ -56,16 +55,7 @@ export default function OnlinePage() {
 
   return (
     <PageContainer>
-      <PageHeader
-        title={t('online.menu')}
-        description={t('online.description')}
-        actions={
-          <Button type="button" variant="outline" disabled={isFetching} onClick={() => refetch()}>
-            <RefreshCw className="me-2 size-4" aria-hidden="true" />
-            {t('common.refresh')}
-          </Button>
-        }
-      />
+      <PageHeader title={t('online.menu')} description={t('online.description')} />
       <FilterBar
         onSearch={() => {
           setKeyword(draft.trim())
@@ -77,17 +67,20 @@ export default function OnlinePage() {
           setPage(1)
         }}
       >
-        <div className="flex w-full flex-col gap-1.5 md:w-64">
-          <Label htmlFor="ou-keyword">{t('online.filter.keyword')}</Label>
-          <Input
-            id="ou-keyword"
-            value={draft}
-            placeholder={t('online.filter.keywordPlaceholder')}
-            onChange={(e) => setDraft(e.target.value)}
-          />
-        </div>
+        <Input aria-label={t('online.filter.keyword')} className="md:w-64"
+          id="ou-keyword"
+          value={draft}
+          placeholder={t('online.filter.keywordPlaceholder')}
+          onChange={(e) => setDraft(e.target.value)}
+        />
       </FilterBar>
       <DataTable<OnlineUser>
+        toolbar={
+          <Button type="button" variant="outline" disabled={isFetching} onClick={() => refetch()}>
+            <RefreshCw className="me-2 size-4" aria-hidden="true" />
+            {t('common.refresh')}
+          </Button>
+        }
         columns={columns}
         data={data?.list ?? []}
         rowKey="id"

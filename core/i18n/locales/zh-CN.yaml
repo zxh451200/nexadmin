@@ -12,6 +12,15 @@ error:
   unknown: 未知错误
   ai_tenant_disabled: 当前租户已被平台关闭 AI 功能，请联系平台管理员
   ai_quota_exceeded: 今日 AI 调用次数已达租户上限（%d 次），请明天再试或联系平台管理员
+  ai_disabled: AI 功能未启用
+  ai_rate_limited: AI 请求过于频繁，请稍后再试
+  ai_input_too_long: 输入内容过长，请缩短后重试
+  ai_timeout: AI 响应超时，请稍后再试
+  ai_bad_output: AI 返回的结果无法解析，请重试
+  ai_unavailable: AI 服务暂时不可用
+  payload_too_large: 请求体过大
+  too_many: 进行中的任务过多，请等待完成后再试
+  invalid_param: 参数不合法
   mcp_operation_failed: MCP 操作未能完成，请重新发起
   mcp_confirmation_revoked: MCP 确认已因多次校验作废，请重新发起操作
 auth:
@@ -143,4 +152,9 @@ workflow:
   action_rejected: 审批动作被当前节点拒绝
   withdraw_not_owner: 只有发起人可以撤回该流程
   plugin_inactive: 工作流插件未启用或授权已失效
+formbuilder:
+  head_id: 提交ID
+  head_submitter: 提交人
+  head_time: 提交时间
+  head_version: 版本
 

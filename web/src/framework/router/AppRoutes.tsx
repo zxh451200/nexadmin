@@ -7,7 +7,9 @@ import { AppLayout } from '@/framework/layout/AppLayout'
 import ForbiddenPage from '@/framework/pages/ForbiddenPage'
 import LoginPage from '@/framework/pages/LoginPage'
 import NotFoundPage from '@/framework/pages/NotFoundPage'
+import PluginInactivePage from '@/framework/pages/PluginInactivePage'
 import { Skeleton } from '@/framework/ui/skeleton'
+import { useActivePlugins } from '@/framework/modules/plugin/active'
 import { allRoutes, buildMenuTree } from './discover'
 import type { ModuleRoute } from './types'
 
@@ -28,7 +30,14 @@ function Fallback() {
 
 function Guarded({ route }: { route: ModuleRoute }) {
   const perms = useAuth((s) => s.perms)
+  const active = useActivePlugins()
   if (!checkPerm(perms, route.perm)) return <ForbiddenPage />
+  // 插件页：先确认插件已启用，再渲染页面本身（否则未启用插件的页面会发出一串必然 404 的请求）。
+  // active.data 为 null 表示问不到（mock / 旧后端 / 网络错误），按未知处理，不拦。
+  if (route.plugin) {
+    if (active.isPending) return <Fallback />
+    if (active.data && !active.data.includes(route.plugin)) return <PluginInactivePage />
+  }
   const Component = route.component
   return (
     <Suspense fallback={<Fallback />}>

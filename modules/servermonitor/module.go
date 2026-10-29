@@ -15,6 +15,7 @@ import (
 	"nexadmin/core/metrics"
 	"nexadmin/core/plugin"
 	"nexadmin/core/response"
+	"nexadmin/modules/internal/monitorsnap"
 )
 
 func init() { core.RegisterBuiltin(module{}) }
@@ -30,7 +31,14 @@ func (module) Name() string { return "server-monitor" }
 
 func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	s := &sampler{}
+	store := monitorsnap.NewStore(d.DB)
+	stop := make(chan struct{})
+	if d.OnClose != nil {
+		d.OnClose(func() { close(stop) })
+	}
+	go monitorsnap.Loop(stop, store, monitorsnap.KindServer, s.metrics, d.Log)
 	r.GET("/monitor/server", core.Perm(PermList), func(c *gin.Context) { response.OK(c, s.snapshot()) })
+	r.GET("/monitor/server/history", core.Perm(PermList), monitorsnap.HandleHistory(store, monitorsnap.KindServer))
 	h := &healthRunner{d: d}
 	r.GET("/monitor/health", core.Perm(PermList), func(c *gin.Context) { response.OK(c, h.run(c.Request.Context())) })
 	metrics.SetPluginSource(func() []metrics.PluginState {
@@ -108,6 +116,37 @@ type rawSample struct {
 type sampler struct {
 	mu   sync.Mutex
 	last *rawSample
+}
+
+// metrics 是给历史落库用的扁平采样，只取可平均的数值。
+// 非 Linux 读不到 /proc：系统级指标不落 0（否则历史图是一条假平线），只留 Go 运行时。
+func (s *sampler) metrics() monitorsnap.Metrics {
+	snap := s.snapshot()
+	m := monitorsnap.Metrics{
+		"goroutines": float64(snap.Runtime.Goroutines),
+		"heapMb":     snap.Runtime.HeapMB,
+		"gcPauseMs":  snap.Runtime.GCPauseMs,
+	}
+	if sysSupported {
+		m["cpuUsage"] = snap.CPU.Usage
+		m["load1"] = snap.CPU.Load1
+		if snap.Memory.TotalGB > 0 {
+			m["memUsedPct"] = snap.Memory.UsedGB / snap.Memory.TotalGB * 100
+		}
+		m["netInKbps"] = snap.Network.InKbps
+		m["netOutKbps"] = snap.Network.OutKbps
+		maxUsed := 0.0
+		for _, dk := range snap.Disks {
+			if dk.TotalGB <= 0 {
+				continue
+			}
+			if p := dk.UsedGB / dk.TotalGB * 100; p > maxUsed {
+				maxUsed = p
+			}
+		}
+		m["diskUsedPct"] = maxUsed
+	}
+	return m
 }
 
 func (s *sampler) snapshot() Snapshot {

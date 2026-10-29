@@ -7,9 +7,11 @@
       "system": "System",
       "content": "Content",
       "monitor": "Monitoring",
-      "tenant": "Tenants"
+      "tenant": "Tenants",
+      "io": "Import & Export"
     },
     "btn": {
+      "list": "View",
       "create": "Create",
       "update": "Update",
       "delete": "Delete",
@@ -64,6 +66,9 @@
     "confirm": {
       "delete": "Delete menu \"{{name}}\"?",
       "deleteCascade": "Delete menu \"{{name}}\"? Its {{count}} descendant menus/buttons will also be deleted. This cannot be undone."
+    },
+    "drag": {
+      "underButton": "Buttons cannot have child menus"
     }
   }
 }

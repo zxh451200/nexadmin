@@ -1,4 +1,5 @@
 import { api } from '@/framework/request/http'
+import { ADMIN_BASE } from '@/framework/router/base'
 
 const PENDING_KEY = 'nexadmin.oauth.pending'
 
@@ -11,7 +12,7 @@ export interface OAuthPending {
 
 /** 第三方授权完成后浏览器跳回的前端页面；必须出现在服务端 auth.providers.<name>.redirect_uris 白名单里 */
 export function oauthRedirectUri(provider: string) {
-  return `${window.location.origin}/login/oauth/${provider}`
+  return `${window.location.origin}${ADMIN_BASE}/login/oauth/${provider}`
 }
 
 export function readPending(): OAuthPending | null {

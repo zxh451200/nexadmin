@@ -27,7 +27,7 @@ export const routes: ModuleRoute[] = [
     menu: { title: 'plugin_website.menu.pages', icon: 'FileText', order: 68, group: 'system' },
   },
   {
-    path: 'website/posts',
+    path: 'website/news',
     component: lazy(() => import('./PostPage')),
     perm: 'website:post',
     menu: { title: 'plugin_website.menu.posts', icon: 'Newspaper', order: 69, group: 'system' },

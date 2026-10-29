@@ -90,11 +90,11 @@ export function DatasetDialog({ open, onOpenChange, editing }: Props) {
       >
         <FormGrid>
           <div className="flex flex-col gap-2">
-            <Label htmlFor="ds-name">{t('common.name')}</Label>
+            <Label htmlFor="ds-name" required>{t('common.name')}</Label>
             <Input id="ds-name" value={form.name} maxLength={100} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           </div>
           <div className="flex flex-col gap-2">
-            <Label htmlFor="ds-source">{t('plugin_report.dataset.source')}</Label>
+            <Label htmlFor="ds-source" required>{t('plugin_report.dataset.source')}</Label>
             <Select value={form.source} onValueChange={(v) => setForm({ ...form, source: v, columns: [], filters: [] })}>
               <SelectTrigger id="ds-source">
                 <SelectValue placeholder={t('common.pleaseSelect')} />
@@ -110,7 +110,10 @@ export function DatasetDialog({ open, onOpenChange, editing }: Props) {
           </div>
           <FormGridFull>
             <fieldset className="flex flex-col gap-2">
-              <legend className="mb-1 text-sm font-medium">{t('plugin_report.dataset.columns')}</legend>
+              <legend className="mb-1 text-sm font-medium">
+                {t('plugin_report.dataset.columns')}
+                <span aria-hidden="true" className="ms-0.5 text-destructive">*</span>
+              </legend>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3">
                 {(src?.columns ?? []).map((c) => (
                   <label key={c.name} className="flex min-h-10 items-center gap-2 rounded-md border border-border px-3 text-sm">

@@ -196,7 +196,7 @@ func (h *asyncHandler) create(c *gin.Context) {
 	})
 	switch {
 	case errors.Is(err, job.ErrTooMany):
-		response.Fail(c, response.New(429, "error.too_many").WithMsg("进行中的导出任务过多，请等待完成后再试"))
+		response.Fail(c, response.New(429, "error.too_many"))
 		return
 	case err != nil:
 		response.Fail(c, err)

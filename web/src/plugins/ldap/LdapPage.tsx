@@ -6,6 +6,7 @@ import { api } from '@/framework/request/http'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
+import { Card } from '@/framework/ui/card'
 import { Input } from '@/framework/ui/input'
 import { Switch } from '@/framework/ui/switch'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -58,7 +59,7 @@ export default function LdapPage() {
   return (
     <PageContainer>
       <PageHeader title={t('plugin_ldap.title')} description={t('plugin_ldap.description')} />
-      <div className="max-w-lg space-y-3 rounded-lg border bg-card p-6">
+      <Card className="max-w-lg space-y-3 p-6">
         <div className="flex items-center gap-2">
           <Plug className="size-5 text-muted-foreground" aria-hidden="true" />
           <span className="text-sm font-medium">{t('plugin_ldap.enabled')}</span>
@@ -117,7 +118,7 @@ export default function LdapPage() {
           </Button>
           <Badge variant={cur.enabled ? 'success' : 'secondary'}>{cur.enabled ? t('plugin_ldap.on') : t('plugin_ldap.off')}</Badge>
         </div>
-      </div>
+      </Card>
     </PageContainer>
   )
 }

@@ -1,0 +1,56 @@
+{
+  "plugin_media": {
+    "menu": "Media optimizer",
+    "title": "Media optimizer",
+    "desc": "Generate WebP copies for existing public images. Originals are kept; browsers that support WebP get the smaller file.",
+    "stats": {
+      "total": "Public images",
+      "done": "With WebP",
+      "pending": "Pending"
+    },
+    "col": {
+      "name": "File",
+      "size": "Size",
+      "createdAt": "Created",
+      "state": "Status"
+    },
+    "action": {
+      "all": "Generate all",
+      "one": "Generate"
+    },
+    "state": {
+      "working": "Working",
+      "done": "Done",
+      "error": "Failed"
+    },
+    "saved": "Saved {{size}} this run",
+    "skippedOne": "{{name}} is already optimized or cannot be converted; skipped",
+    "someFailed": "{{count}} file(s) failed, you can retry",
+    "allDone": "All done",
+    "empty": "Nothing to optimize",
+    "note": "Conversion runs in the browser; originals are never overwritten. Requires the file upload permission. GIF / SVG are skipped.",
+    "tab": {
+      "images": "Images",
+      "videos": "Videos"
+    },
+    "video": {
+      "configTitle": "Video hosting (Cloudflare Stream)",
+      "configDesc": "Videos upload straight to the provider; nothing is stored or transcoded locally. ABR and CDN come from the provider.",
+      "enabled": "Enable video hosting",
+      "accountId": "Account ID",
+      "subdomain": "Playback subdomain (the part after customer-)",
+      "token": "API token",
+      "tokenSaved": "Saved — leave blank to keep",
+      "upload": "Upload video",
+      "uploader": "Uploaded by",
+      "actions": "Actions",
+      "play": "Play",
+      "open": "Open in new tab",
+      "empty": "No videos yet",
+      "deleteConfirm": "Delete the record for “{{name}}”? The asset on the provider side must be removed in its console.",
+      "copyLink": "Copy MP4 link",
+      "copied": "Link copied — paste it into the editor's Insert video dialog",
+      "noDownload": "Playback subdomain is missing; no direct link yet"
+    }
+  }
+}

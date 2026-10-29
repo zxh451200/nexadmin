@@ -5,6 +5,7 @@ const KEY_IMAGE = 'upload.max_size_image_mb'
 const KEY_VIDEO = 'upload.max_size_video_mb'
 const KEY_FILE = 'upload.max_size_file_mb'
 const KEY_TYPES = 'upload.allowed_types'
+const KEY_WEBP = 'upload.webp_variant'
 
 const DEFAULT_TYPES = [
   'image/jpeg',
@@ -65,6 +66,7 @@ const seed: ConfigRow[] = [
   row(12, '视频上传大小上限(MB)', KEY_VIDEO, '0', 'number', true, '0 或留空表示不限制'),
   row(13, '普通文件上传大小上限(MB)', KEY_FILE, '0', 'number', true, '0 或留空表示不限制'),
   row(14, '允许上传的文件类型', KEY_TYPES, DEFAULT_TYPES.join(','), 'string', true, '逗号分隔的 MIME 或扩展名'),
+  row(15, '为图片生成 WebP 副本', KEY_WEBP, 'false', 'boolean', true, '原图保留，按 Accept 优先下发 WebP'),
 ]
 
 // eslint-disable-next-line prefer-const
@@ -87,6 +89,7 @@ defineMock([
       maxVideoMb: num(KEY_VIDEO),
       maxFileMb: num(KEY_FILE),
       allowedTypes: (find(KEY_TYPES)?.value ?? '').split(',').filter(Boolean),
+      imageWebp: (find(KEY_WEBP)?.value ?? 'false') === 'true',
     }),
   },
   {
@@ -98,6 +101,7 @@ defineMock([
       maxVideoMb: num(KEY_VIDEO),
       maxFileMb: num(KEY_FILE),
       allowedTypes: (find(KEY_TYPES)?.value ?? '').split(',').filter(Boolean),
+      imageWebp: (find(KEY_WEBP)?.value ?? 'false') === 'true',
     }),
   },
   {
@@ -110,11 +114,13 @@ defineMock([
         maxVideoMb: v(body?.maxVideoMb),
         maxFileMb: v(body?.maxFileMb),
         allowedTypes: Array.isArray(body?.allowedTypes) ? body.allowedTypes : [],
+        imageWebp: !!body?.imageWebp,
       }
       put(KEY_IMAGE, String(next.maxImageMb))
       put(KEY_VIDEO, String(next.maxVideoMb))
       put(KEY_FILE, String(next.maxFileMb))
       put(KEY_TYPES, next.allowedTypes.join(','))
+      put(KEY_WEBP, String(next.imageWebp))
       return next
     },
   },

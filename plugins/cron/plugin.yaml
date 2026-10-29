@@ -1,9 +1,9 @@
 id: cron
 name: 定时任务
 version: 1.0.0
-description: 定时任务（5 段 cron 调度、内置安全处理器、立即执行、失败重试、执行日志）。官方示例付费插件。
+description: 免费定时任务插件：5 段 cron 调度、内置安全处理器、立即执行、失败重试、执行日志，并提供工作台概览卡片。
 author: NexAdmin
-edition: pro
+edition: free
 requires_nexadmin: ">=0.1.0"
 
 # 安装时写入 sys_menu（字段与内置菜单一致；parent 写父节点 code，目录用其 path）。

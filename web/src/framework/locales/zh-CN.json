@@ -98,6 +98,8 @@
     "skipToContent": "跳到主要内容",
     "openMenu": "打开菜单",
     "expandSidebar": "展开侧边栏",
+    "expandAllGroups": "全部展开",
+    "collapseAllGroups": "全部收起",
     "collapseSidebar": "收起侧边栏",
     "language": "切换语言",
     "notifications": "通知",
@@ -192,8 +194,7 @@
     "backHome": "返回首页",
     "boundary": {
       "title": "页面出错了",
-      "desc": "页面渲染时发生了意外错误，错误信息已自动上报。你可以重试，或刷新页面。",
-      "retry": "重试",
+      "desc": "页面渲染时发生了意外错误，错误信息已自动上报。刷新页面即可重新加载。",
       "reload": "刷新页面"
     },
     "403": {
@@ -207,6 +208,11 @@
     "500": {
       "title": "服务器错误",
       "desc": "服务暂时不可用，请稍后重试。"
+    },
+    "pluginInactive": {
+      "title": "插件未启用",
+      "desc": "该页面所属的插件未安装或授权已失效，暂时无法使用。",
+      "manage": "去插件管理"
     }
   },
   "setup": {
@@ -243,54 +249,6 @@
     "testConnection": "测试连接",
     "testOk": "连接成功",
     "testFailed": "连接失败",
-    "probe": {
-      "s3Button": "检查 S3 存储桶",
-      "aiButton": "检查 AI 模型列表接口",
-      "running": "正在探测…",
-      "cancel": "取消探测",
-      "tokenHint": "这些探测即使在本机也需要服务端控制台的初始化令牌，请在上方初始化令牌输入框中填写。",
-      "s3Scope": "仅对目标 bucket 发送签名 HEAD 请求，不建桶、不写对象。未验证对象读写权限或前缀权限。",
-      "aiScope": "仅调用 GET /models，检查连接、接口对所填凭据的响应及模型是否列出。不发送生成请求，未验证生成权限、计费或输出质量；公开的模型列表接口不能证明密钥有效。",
-      "s3Ok": "Bucket HEAD 检查通过；对象权限尚未验证。",
-      "aiOk": "模型列表接口响应正常，且已列出所选模型；生成能力尚未验证。",
-      "invalid": "配置不完整、不合法，或请求体过大。",
-      "connection": "无法安全连接，请检查地址、网络及 TLS 配置。",
-      "timeout": "探测超时。",
-      "cancelled": "探测已取消或超时。",
-      "denied": "接口拒绝了鉴权或访问。",
-      "notFound": "未找到存储桶或接口，也可能被访问策略隐藏。",
-      "redirect": "已拒绝重定向，请直接配置最终地址及正确区域。",
-      "rateLimited": "探测限制为每两秒一次，请稍后重试。",
-      "upstreamLimited": "上游服务正在限流。",
-      "upstream": "上游服务返回了失败状态。",
-      "invalidResponse": "接口未返回合法且大小受限的 OpenAI 兼容模型列表。",
-      "modelNotListed": "接口已响应，但未列出所选模型；生成能力尚未验证。",
-      "modelsUnsupported": "模型列表接口不可用或不受支持；生成能力尚未验证。",
-      "token": "初始化令牌缺失或无效，或远程初始化未启用。",
-      "unavailable": "初始化探测不可用，或系统已完成初始化。"
-    },
-    "probe": {
-      "s3Scope": "只发送签名 HEAD 检查目标桶；不建桶、不写对象，不检查对象读写及前缀权限。",
-      "aiScope": "仅 GET /models：检查模型列表接口及配置的模型是否在列表中；不发送生成请求，不验证生成能力、计费或生成权限。",
-      "s3Ok": "桶 HEAD 检查成功：桶存在且可执行 HEAD；对象权限尚未验证。",
-      "aiOk": "模型列表接口响应正常且包含配置模型。未验证生成；公开接口可能不会验证所填密钥。",
-      "running": "正在探测…",
-      "cancel": "取消探测",
-      "token": "请在上方填写服务端控制台的初始化令牌；本机 S3/AI 探测也需要令牌。",
-      "disabled": "初始化已完成或探测接口不可用。",
-      "rateLimited": "探测过于频繁，请至少等待两秒后重试。",
-      "invalid": "配置或请求无效，请检查地址、桶/模型及凭据。",
-      "connection": "无法连接，请检查部署地址、网络及 TLS 配置。",
-      "timeout": "探测超时。",
-      "cancelled": "探测已取消。",
-      "denied": "服务拒绝鉴权或访问，请检查凭据和权限。",
-      "notFound": "桶或接口不存在；AI 服务也可能不支持 /models，生成能力未验证。",
-      "redirect": "为保护凭据已拒绝重定向，请直接配置最终服务地址。",
-      "upstreamLimited": "上游服务对探测进行了限流。",
-      "upstream": "上游服务返回了非预期状态。",
-      "invalidResponse": "接口未返回有效且大小受限的 OpenAI 模型列表。",
-      "modelNotListed": "模型列表接口有响应，但未列出配置的模型；生成能力未验证。"
-    },
     "probe": {
       "s3Button": "检查 S3 存储桶",
       "aiButton": "检查 AI 模型接口",
@@ -379,5 +337,14 @@
       "usernameFormat": "以字母开头，只能包含字母、数字、下划线",
       "passwordMismatch": "两次输入的密码不一致"
     }
+  },
+  "map": {
+    "lng": "经度",
+    "lat": "纬度",
+    "address": "地址",
+    "pick": "地图选点",
+    "pickTitle": "在地图上选点",
+    "provider": "地图厂商",
+    "noProvider": "未安装地图插件；可以先直接填写经纬度，装了插件后即可在地图上选点。"
   }
 }

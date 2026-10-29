@@ -33,11 +33,25 @@ export interface RegionNode {
   children?: RegionNode[]
 }
 
+/**
+ * 一门语言的完整档案，与 core 的 sys_language 同构：全站只有这一份语言清单，
+ * 界面文案、公开站路由、字典标签、导出表头都读它。
+ */
 export interface LanguageInfo {
   code: string
   name: string
   dir: 'ltr' | 'rtl'
-  default?: boolean
+  default: boolean
+  /** 紧凑展示名（列表徽标一类） */
+  short?: string
+  /** 写进 <html lang> 与 hreflang；缺省等于 code */
+  htmlLang?: string
+  /** 写进 og:locale；缺省由 code 推导（en-US → en_US） */
+  ogLocale?: string
+  /** 公开站的 URL 路径前缀；默认语言为空 */
+  prefix?: string
+  /** Go 布局串 */
+  dateFormat?: string
 }
 
 export interface UploadConfig {

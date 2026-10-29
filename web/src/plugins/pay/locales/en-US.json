@@ -2,7 +2,6 @@
   "plugin_pay": {
     "title": "Payment Hub",
     "description": "Payment orders, refunds, callback audit and channel config (tenant-scoped money facts)",
-    "dir": "Payment Hub",
     "menu": "Payment Hub",
     "perm": {
       "edit": "Close / sync payment orders",
@@ -16,6 +15,11 @@
       "refunds": "Refunds",
       "callbacks": "Callback audit",
       "channels": "Channels"
+    },
+    "view": {
+      "logs": "Logs",
+      "stats": "Analytics",
+      "label": "View"
     },
     "all": "All",
     "empty": "No data",
@@ -82,6 +86,32 @@
       "create": "New Channel",
       "edit": "Edit Channel",
       "deleteConfirm": "Delete channel {{name}}?"
+    },
+    "stats": {
+      "rangeLabel": "Time range",
+      "ranges": {
+        "7d": "Last 7 days",
+        "30d": "Last 30 days",
+        "90d": "Last 90 days",
+        "all": "All time"
+      },
+      "orders": "Orders",
+      "paid": "Paid orders",
+      "net": "Net amount",
+      "refundRate": "Refund rate",
+      "multiCurrency": "Multiple currencies: amounts are listed per currency, never summed across.",
+      "sampled": "High volume: stats cover the most recent 20,000 orders.",
+      "daily": "Orders per day",
+      "byCurrency": "Amounts by currency",
+      "currency": "Currency",
+      "gmv": "GMV",
+      "refunded": "Refunded",
+      "fee": "Fees",
+      "byChannel": "By channel",
+      "channel": "Channel",
+      "byScene": "By scene",
+      "failReasons": "Top failure reasons",
+      "noFailures": "No failed orders in this range"
     }
   }
 }

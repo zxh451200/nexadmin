@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils'
 import { useAuth } from '@/framework/auth/useAuth'
 import { LanguageSwitch } from '@/framework/i18n/LanguageSwitch'
 import { api } from '@/framework/request/http'
+import { useActivePlugins } from '@/framework/modules/plugin/active'
 import { buildMenuFromServer, buildMenuTree, findMenuTrail, type ServerMenu } from '@/framework/router/discover'
 import { ThemeToggle } from '@/framework/theme/ThemeToggle'
 import { Avatar, AvatarFallback, AvatarImage } from '@/framework/ui/avatar'
@@ -146,9 +147,12 @@ export function AppLayout() {
     staleTime: 60_000,
     retry: false,
   })
+  // 插件失效（过期 / 吊销 / 未授权）时，它的菜单项也一并隐藏，不留点了就报错的入口
+  const { data: activePlugins } = useActivePlugins()
+  const activeSet = useMemo(() => (activePlugins ? new Set(activePlugins) : null), [activePlugins])
   const menu = useMemo(
-    () => (serverMenu ? buildMenuFromServer(serverMenu, perms) : isError ? buildMenuTree(perms) : []),
-    [serverMenu, isError, perms],
+    () => (serverMenu ? buildMenuFromServer(serverMenu, perms, undefined, activeSet) : isError ? buildMenuTree(perms, undefined, activeSet) : []),
+    [serverMenu, isError, perms, activeSet],
   )
   const activeKey = resolveTab(menu, location.pathname).path
   const refresh = useCallback(() => setRefreshes((r) => ({ ...r, [activeKey]: (r[activeKey] ?? 0) + 1 })), [activeKey])

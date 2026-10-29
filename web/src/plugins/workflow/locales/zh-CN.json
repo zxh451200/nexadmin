@@ -2,7 +2,6 @@
   "plugin_workflow": {
     "title": "工作流",
     "description": "审批流程的发起、待办与流转历史",
-    "dir": "工作流",
     "menu": "审批中心",
     "perm": {
       "start": "发起/撤回",
@@ -12,8 +11,26 @@
     "tabs": {
       "todo": "我的待办",
       "done": "我已办",
-      "all": "全部实例"
+      "all": "全部实例",
+      "defs": "流程定义"
     },
+    "defCreate": "新建流程定义",
+    "defEdit": "编辑流程定义",
+    "defDeleteConfirm": "确认删除该流程定义？已启动的实例不受影响。",
+    "defNameKeyRequired": "请填写名称和标识",
+    "defStatus": {
+      "draft": "草稿",
+      "published": "已发布",
+      "disabled": "已停用"
+    },
+    "fields": {
+      "defName": "名称",
+      "defKey": "标识",
+      "status": "状态",
+      "updatedAt": "更新时间"
+    },
+    "fromTemplate": "从模板创建",
+    "fromTemplateBlank": "空白流程",
     "empty": "暂无流程",
     "loading": "加载中…",
     "total": "共 {{count}} 条",

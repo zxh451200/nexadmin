@@ -23,6 +23,9 @@ type File struct {
 	Visibility  string   `gorm:"column:visibility;size:10"`
 	Token       string   `gorm:"column:token;size:32"`
 	Uploader    string   `gorm:"column:uploader;size:100"`
+	// VariantOf 非 0 表示这是原文件的派生副本（如 WebP）：不计入列表、随原文件删除，
+	// 可见性继承原文件，永远不会比原文件更公开。
+	VariantOf idgen.ID `gorm:"column:variant_of"`
 }
 
 func (File) TableName() string { return "sys_file" }

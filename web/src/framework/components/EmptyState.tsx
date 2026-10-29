@@ -21,8 +21,8 @@ export function EmptyState({ icon, title, description, action, className }: Empt
       <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
         {icon ?? <Inbox className="h-6 w-6" aria-hidden="true" />}
       </div>
-      <p className="text-sm font-medium text-foreground">{title ?? t('common.empty')}</p>
-      {description ? <p className="max-w-sm text-sm text-muted-foreground">{description}</p> : null}
+      <div className="text-sm font-medium text-foreground">{title ?? t('common.empty')}</div>
+      {description ? <div className="max-w-sm text-sm text-muted-foreground">{description}</div> : null}
       {action ? <div className="mt-2">{action}</div> : null}
     </div>
   )

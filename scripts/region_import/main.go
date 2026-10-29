@@ -62,8 +62,8 @@ type manifest struct {
 
 type options struct {
 	input, output, format, sourceURL, version, date, license, authorization string
-	direct, childless                                                    string
-	sample                                                               bool
+	direct, childless                                                       string
+	sample                                                                  bool
 }
 
 var mainland = map[string]bool{

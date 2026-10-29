@@ -5,13 +5,15 @@ import type { SavedLayout } from './types'
 export interface StatValue {
   value: number
   delta?: number
+  /** 上期基线太小时后端返回 false：百分比没有意义，隐藏涨跌标签。 */
+  comparable?: boolean
 }
 
 export interface DashboardStats {
   users: StatValue
   todayLogin: StatValue
   unreadMessages: StatValue
-  storage: { usedGb: number; totalGb: number; percent: number; delta?: number }
+  storage: { usedGb: number; totalGb: number; percent: number; delta?: number; comparable?: boolean }
   loginTrend: Array<{ date: string; logins: number; failures: number }>
   requestTrend: Array<{ date: string; requests: number; errors: number }>
   operTypes: Array<{ type: string; value: number }>

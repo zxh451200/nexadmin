@@ -1,4 +1,4 @@
-// Package imports 是 NexAdmin 导入中心插件:通用 CSV 导入(模板下载、表头映射、
+// Package imports 是 NexAdmin 免费导入中心插件:通用 CSV / XLSX 导入(模板下载、表头映射、
 // 必填校验、逐行隔离、错误行报告、导入台账)。业务模块通过 registry.go 的
 // RegisterSource 注册「可导入的表」,插件负责其余一切。
 // 只依赖 core/ 与 pkg/ (+x/text 转码),表前缀 plg_imports_,权限码前缀 imports:,
@@ -23,7 +23,7 @@ var _ plugin.Starter = (*module)(nil)
 func init() {
 	event.Register(CatalogInfos()...)
 	plugin.Register(plugin.Plugin{
-		ID: "imports", Name: "导入中心", Version: "0.1.0", Edition: plugin.Pro,
+		ID: "imports", Name: "导入中心", Version: "0.1.0", Edition: plugin.Free,
 		Module: &module{},
 	})
 }

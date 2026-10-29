@@ -1,8 +1,11 @@
 {
   "dept": {
     "menu": "Departments",
-    "description": "Manage the org structure. Drag to reorder within the same parent.",
-    "readonlyHint": "Outside your data scope; shown only to keep the hierarchy",
+    "description": "Manage the org structure: department tree and positions. Drag to reorder within the same parent.",
+    "tabs": {
+      "tree": "Departments",
+      "post": "Positions"
+    },    "readonlyHint": "Outside your data scope; shown only to keep the hierarchy",
     "col": {
       "name": "Name",
       "leader": "Leader",

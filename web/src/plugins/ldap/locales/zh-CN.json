@@ -1,8 +1,7 @@
 {
   "plugin_ldap": {
     "title": "LDAP/AD 登录",
-    "description": "企业目录登录:本地密码失败后自动尝试 LDAP 校验",
-    "dir": "LDAP 登录",
+    "description": "免费基础 LDAP/AD 登录：本地密码失败后自动尝试 LDAP 校验；插件需按需安装",
     "menu": "LDAP 配置",
     "enabled": "启用 LDAP 登录",
     "host": "LDAP 服务器地址",

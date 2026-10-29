@@ -14,6 +14,9 @@ import (
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 
+	"nexadmin/core/config"
+	corei18n "nexadmin/core/i18n"
+	"nexadmin/core/middleware"
 	"nexadmin/core/response"
 	"nexadmin/pkg/idgen"
 )
@@ -232,39 +235,49 @@ func TestSortRewritesInSteps(t *testing.T) {
 }
 
 func TestItems(t *testing.T) {
-	dataCols := []string{"id", "dict_label", "label_en", "dict_value", "tag"}
+	dataCols := []string{"id", "dict_label", "label_en", "i18n_json", "dict_value", "tag"}
 	t.Run("字典不存在或停用返回空数组", func(t *testing.T) {
 		s, mock := setup(t)
 		mock.ExpectQuery("FROM `sys_dict_type` WHERE code = \\? AND status = \\?").WithArgs("gender", "1", 1).
 			WillReturnRows(sqlmock.NewRows([]string{"id"}))
-		got, err := s.Items(bg, "gender", false)
+		got, err := s.Items(bg, "gender", "zh-CN")
 		if err != nil || got == nil || len(got) != 0 {
 			t.Fatalf("got=%v err=%v", got, err)
 		}
 	})
+	// 第二行只有默认语言（没有 label_en、也没有 i18n_json），用来验"缺译回落原文"。
 	rows := func() *sqlmock.Rows {
-		return sqlmock.NewRows(dataCols).AddRow(1, "男", "Male", "1", "info").AddRow(2, "女", "", "2", "")
+		return sqlmock.NewRows(dataCols).
+			AddRow(1, "男", "Male", `{"ja-JP":{"label":"男性"}}`, "1", "info").
+			AddRow(2, "女", "", "", "2", "")
 	}
 	for _, tc := range []struct {
-		english bool
-		want    []string
-	}{{false, []string{"男", "女"}}, {true, []string{"Male", "女"}}} { // 英文缺 label_en 时回落中文
-		s, mock := setup(t)
-		mock.ExpectQuery("FROM `sys_dict_type` WHERE code = \\? AND status = \\?").WillReturnRows(typeRow(9, "gender", "1"))
-		mock.ExpectQuery("FROM `sys_dict_data` WHERE type_id = \\? AND status = \\? ORDER BY sort, id").
-			WithArgs(int64(9), "1").WillReturnRows(rows())
-		got, err := s.Items(bg, "gender", tc.english)
-		if err != nil || len(got) != 2 {
-			t.Fatalf("got=%v err=%v", got, err)
-		}
-		for i, w := range tc.want {
-			if got[i].Label != w {
-				t.Errorf("english=%v 第 %d 项标签=%q 期望 %q", tc.english, i, got[i].Label, w)
+		name string
+		lang string
+		want []string
+	}{
+		{"默认语言读原文", "zh-CN", []string{"男", "女"}},
+		{"英文走 i18n_json 优先，缺译回落到老列 label_en", "en-US", []string{"Male", "女"}},
+		{"第三种语言靠 i18n_json，不再只有中英两种", "ja-JP", []string{"男性", "女"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, mock := setup(t)
+			mock.ExpectQuery("FROM `sys_dict_type` WHERE code = \\? AND status = \\?").WillReturnRows(typeRow(9, "gender", "1"))
+			mock.ExpectQuery("FROM `sys_dict_data` WHERE type_id = \\? AND status = \\? ORDER BY sort, id").
+				WithArgs(int64(9), "1").WillReturnRows(rows())
+			got, err := s.Items(bg, "gender", tc.lang)
+			if err != nil || len(got) != 2 {
+				t.Fatalf("got=%v err=%v", got, err)
 			}
-		}
-		if got[0].Value != "1" || got[0].Tag != "info" {
-			t.Errorf("值/标签色不对: %+v", got[0])
-		}
+			for i, w := range tc.want {
+				if got[i].Label != w {
+					t.Errorf("lang=%s 第 %d 项标签=%q 期望 %q", tc.lang, i, got[i].Label, w)
+				}
+			}
+			if got[0].Value != "1" || got[0].Tag != "info" {
+				t.Errorf("值/标签色不对: %+v", got[0])
+			}
+		})
 	}
 }
 
@@ -295,7 +308,14 @@ func TestListDataBadTypeID(t *testing.T) {
 func router(s *Service) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	h := &Handler{svc: s}
+	// 语言由生产中间件协商后放进 request context；Items 现在从这里取语言，
+	// 测试必须走同一条链路，否则测的不是真实行为。
+	b, err := corei18n.New([]config.Language{{Code: "zh-CN", Default: true}, {Code: "en-US"}}, "zh-CN", "none")
+	if err != nil {
+		panic(err)
+	}
 	r := gin.New()
+	r.Use(middleware.I18n(b))
 	r.POST("/dict/types", h.CreateType)
 	r.DELETE("/dict/types", h.DeleteTypes)
 	r.DELETE("/dict/types/:id", h.DeleteType)

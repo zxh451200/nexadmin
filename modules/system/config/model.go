@@ -61,6 +61,8 @@ const (
 	KeyUploadVideo = "upload.max_size_video_mb"
 	KeyUploadFile  = "upload.max_size_file_mb"
 	KeyUploadTypes = "upload.allowed_types"
+	// KeyUploadWebp 开启后，图片上传会额外生成一份 WebP 副本（原图保留，按 Accept 下发）。
+	KeyUploadWebp = "upload.webp_variant"
 )
 
 // UploadSettings 是上传限制（前端 UploadSettings）。
@@ -69,6 +71,7 @@ type UploadSettings struct {
 	MaxVideoMb   float64  `json:"maxVideoMb"`
 	MaxFileMb    float64  `json:"maxFileMb"`
 	AllowedTypes []string `json:"allowedTypes"`
+	ImageWebp    bool     `json:"imageWebp"`
 }
 
 // TypeOption 是 GET /configs/upload-types 的返回项。

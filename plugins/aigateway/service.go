@@ -244,9 +244,9 @@ func (s *Service) RecordUsage(ctx context.Context, in UsageInput) {
 
 // UsageQuery 过滤用量列表。
 type UsageQuery struct {
-	Kind    string
-	BizType string
-	Page    int
+	Kind     string
+	BizType  string
+	Page     int
 	PageSize int
 }
 
@@ -283,7 +283,7 @@ type UsageSummaryRow struct {
 func (s *Service) UsageSummary(ctx context.Context) ([]UsageSummaryRow, error) {
 	var rows []UsageSummaryRow
 	err := s.db.WithContext(ctx).Model(&Usage{}).
-		Select("kind, COUNT(*) AS calls, COALESCE(SUM(prompt_tokens),0) AS prompt_tokens, "+
+		Select("kind, COUNT(*) AS calls, COALESCE(SUM(prompt_tokens),0) AS prompt_tokens, " +
 			"COALESCE(SUM(completion_tokens),0) AS completion_tokens, COALESCE(SUM(total_tokens),0) AS total_tokens").
 		Group("kind").Find(&rows).Error
 	return rows, err

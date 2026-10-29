@@ -40,6 +40,8 @@ type Summary struct {
 	B              int `json:"b"`
 	C              int `json:"c"`
 	Unresolved     int `json:"unresolved"`
+	ErrKeys        int `json:"errKeys"`    // 扫描到的错误 key 字面量数
+	ErrMissing     int `json:"errMissing"` // 缺语言包条目的（key,语言）数
 }
 
 // Report 是完整核对结果。
@@ -51,6 +53,8 @@ type Report struct {
 	Fields     FieldReport  `json:"fields"`
 	Unresolved []Unresolved `json:"unresolved"`
 	Perms      []string     `json:"perms"`
+	// E 是 response 错误 key 缺语言包条目的清单（缺 key 时原文会返给用户）；非空与 A 同级阻断。
+	E []ErrKeyIssue `json:"e,omitempty"`
 }
 
 // Check 扫描仓库并生成报告。
@@ -62,7 +66,15 @@ func Check(root string) (*Report, error) {
 	be := scanBackend(root)
 	calls, fu := frontCalls(files)
 	mocks, mu := frontMocks(files)
-	return build(be, calls, mocks, append(fu, mu...), checkFields(root, files)), nil
+	keys, keyCount, err := checkErrorKeys(root)
+	if err != nil {
+		return nil, fmt.Errorf("核对错误文案 key 失败: %w", err)
+	}
+	rep := build(be, calls, mocks, append(fu, mu...), checkFields(root, files))
+	rep.E = keys
+	rep.Summary.ErrKeys = keyCount
+	rep.Summary.ErrMissing = len(keys)
+	return rep, nil
 }
 
 func build(be *BackendScan, calls, mocks []Call, fu []Unresolved, fields FieldReport) *Report {

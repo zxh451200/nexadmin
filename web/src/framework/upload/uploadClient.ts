@@ -10,6 +10,8 @@ export const UPLOAD_ENDPOINT = '/api/v1/files/upload'
 export interface UploadOptions {
   kind?: UploadKind
   visibility?: UploadVisibility
+  /** 非空表示这次上传是原文件的派生副本（如 WebP），服务端据此挂到原文件下 */
+  variantOf?: string
   onProgress?: (percent: number) => void
   signal?: AbortSignal
 }
@@ -52,14 +54,24 @@ function mockUpload(file: File, opts: UploadOptions): Promise<UploadedFile> {
 }
 
 function tusUpload(file: File, opts: UploadOptions): Promise<UploadedFile> {
+  return uploadToTus(UPLOAD_ENDPOINT, file, opts)
+}
+
+/** 直传到任意 tus 端点（例如外部流媒体的一次性上传地址）；与我们的上传共用进度与取消语义。 */
+export function uploadToTus(endpoint: string, file: File, opts: UploadOptions): Promise<UploadedFile> {
+  if (MOCK_ENABLED) return mockUpload(file, opts)
   return new Promise((resolve, reject) => {
     if (opts.signal?.aborted) return reject(abortError())
+    // 只有自家上传端点才带访问令牌：外部端点（如流媒体的一次性直传地址）自带授权，
+    // 把我们的 Bearer 发过去等于泄露会话。
+    const own = endpoint === UPLOAD_ENDPOINT
     const uppy = new Uppy({ autoProceed: false }).use(Tus, {
-      endpoint: UPLOAD_ENDPOINT,
+      endpoint,
       chunkSize: CHUNK_SIZE,
       retryDelays: [0, 1000, 3000, 5000],
       removeFingerprintOnSuccess: true,
       headers: (): Record<string, string> => {
+        if (!own) return {}
         const token = tokenStore.access
         return token ? { Authorization: `Bearer ${token}` } : {}
       },
@@ -71,7 +83,9 @@ function tusUpload(file: File, opts: UploadOptions): Promise<UploadedFile> {
         name: file.name,
         type: file.type,
         data: file,
-        meta: { filename: file.name, filetype: file.type, visibility: opts.visibility ?? 'private', kind: opts.kind ?? 'file' },
+        meta: own
+          ? { filename: file.name, filetype: file.type, visibility: opts.visibility ?? 'private', kind: opts.kind ?? 'file', ...(opts.variantOf ? { variantof: opts.variantOf } : {}) }
+          : { filename: file.name, filetype: file.type },
       })
     } catch (e) {
       cleanup()

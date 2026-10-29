@@ -15,6 +15,8 @@ import (
 	_ "nexadmin/plugins/identity"
 	_ "nexadmin/plugins/im"
 	_ "nexadmin/plugins/imports"
+	_ "nexadmin/plugins/maps"
+	_ "nexadmin/plugins/media"
 	_ "nexadmin/plugins/pay"
 	_ "nexadmin/plugins/report"
 	_ "nexadmin/plugins/scim"

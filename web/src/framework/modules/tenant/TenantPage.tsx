@@ -234,18 +234,7 @@ export default function TenantPage() {
 
   return (
     <PageContainer>
-      <PageHeader
-        title={t('tenant.title')}
-        description={t('tenant.description')}
-        actions={
-          <Can perm="tenant:create">
-            <Button type="button" onClick={() => openForm(null)}>
-              <Plus className="me-2 h-4 w-4" aria-hidden="true" />
-              {t('common.add')}
-            </Button>
-          </Can>
-        }
-      />
+      <PageHeader title={t('tenant.title')} description={t('tenant.description')} />
 
       <FilterBar
         onSearch={() => {
@@ -276,6 +265,14 @@ export default function TenantPage() {
       </FilterBar>
 
       <DataTable<TenantRow>
+        toolbar={
+          <Can perm="tenant:create">
+            <Button type="button" onClick={() => openForm(null)}>
+              <Plus className="me-2 h-4 w-4" aria-hidden="true" />
+              {t('common.add')}
+            </Button>
+          </Can>
+        }
         columns={columns}
         data={data?.list ?? []}
         rowKey="id"

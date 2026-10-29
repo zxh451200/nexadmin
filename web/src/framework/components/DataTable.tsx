@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { closestCenter, DndContext, type DragEndEvent } from '@dnd-kit/core'
+import { DndContext, DragOverlay, type DragEndEvent, type DragStartEvent } from '@dnd-kit/core'
 import { arrayMove, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { useCompactLayout } from './table/use-compact-layout'
+import { useOverflowX } from './table/use-overflow-x'
 import { Button } from '@/framework/ui/button'
 import { Checkbox } from '@/framework/ui/checkbox'
 import { Skeleton } from '@/framework/ui/skeleton'
@@ -12,11 +13,11 @@ import { cn } from '@/lib/utils'
 import { EmptyState } from './EmptyState'
 import { ColumnSettings } from './table/ColumnSettings'
 import { MobileCardContent } from './table/MobileCard'
-import { SortableHandle, SortableItem } from './table/SortableItem'
+import { DragChip, SortableHandle, SortableItem } from './table/SortableItem'
 import { TablePagination } from './table/TablePagination'
 import { alignClass, renderCell, type Column, type PaginationProps } from './table/types'
 import { useColumnSettings } from './table/use-column-settings'
-import { restrictToVertical, useSortableSensors } from './table/use-sortable-sensors'
+import { pointerFirstCollision, restrictToVertical, useDragCursor, useEdgeAutoScroll, useSortableSensors } from './table/use-sortable-sensors'
 
 export type { Column, PaginationProps } from './table/types'
 
@@ -99,7 +100,38 @@ export function DataTable<T>({
   const rows = override ?? data
   const ids = useMemo(() => rows.map(getKey), [rows, getKey])
 
+  // 浮层内容：起拖时取该行第一列的单元格，宽度取被拖行的实际宽度
+  const [dragChip, setDragChip] = useState<{ label: ReactNode; width: number } | null>(null)
+  useDragCursor(!!dragChip)
+  useEdgeAutoScroll(!!dragChip, () => scrollRef.current)
+  // 拖动排序用行号播报（dnd-kit 默认是英文，且会念出内部 id）
+  const a11y = useMemo(() => {
+    const rowNo = (id: unknown) => Math.max(1, ids.indexOf(String(id)) + 1)
+    return {
+      announcements: {
+        onDragStart: ({ active }: { active: { id: string | number } }) => t('dataTable.a11y.picked', { row: rowNo(active.id) }),
+        onDragOver: ({ active, over }: { active: { id: string | number }; over: { id: string | number } | null }) =>
+          over ? t('dataTable.a11y.over', { row: rowNo(active.id), target: rowNo(over.id) }) : t('dataTable.a11y.overEmpty', { row: rowNo(active.id) }),
+        onDragEnd: ({ active, over }: { active: { id: string | number }; over: { id: string | number } | null }) =>
+          over ? t('dataTable.a11y.dropped', { row: rowNo(active.id), target: rowNo(over.id) }) : t('dataTable.a11y.droppedEmpty', { row: rowNo(active.id) }),
+        onDragCancel: ({ active }: { active: { id: string | number } }) => t('dataTable.a11y.cancelled', { row: rowNo(active.id) }),
+      },
+    }
+  }, [t, ids])
+
+  const onDragStart = (e: DragStartEvent) => {
+    const id = String(e.active.id)
+    const row = rows.find((r) => getKey(r) === id)
+    const first = visibleColumns[0] ?? columns[0]
+    setDragChip({
+      label: row && first ? renderCell(first, row, 0) : null,
+      width: Math.round(e.active.rect.current.initial?.width ?? 0),
+    })
+  }
+  const onDragCancel = () => setDragChip(null)
+
   const onDragEnd = async (e: DragEndEvent) => {
+    setDragChip(null)
     if (!sortable || !e.over || e.active.id === e.over.id) return
     const from = ids.indexOf(String(e.active.id))
     const to = ids.indexOf(String(e.over.id))
@@ -139,6 +171,9 @@ export function DataTable<T>({
       : {}
 
   const colSpan = visibleColumns.length + (sortEnabled ? 1 : 0) + (selection ? 1 : 0) + (rowActions ? 1 : 0)
+  // 只有表格真的横向溢出时才吸附操作列，避免窄表里出现一块游离的白色块
+  const { ref: scrollRef, overflowing } = useOverflowX<HTMLDivElement>()
+  const pinActions = overflowing && !!rowActions
   const empty = !loading && rows.length === 0
   const emptyNode = <EmptyState title={emptyText} />
 
@@ -147,7 +182,9 @@ export function DataTable<T>({
 
   const desktop = (
     <div className="card-edge overflow-hidden rounded-xl border border-border bg-card">
-      <Table>
+      {/* 列多时横向滚动，不许把最后一列（操作）裁掉 */}
+      <div ref={scrollRef} className="overflow-x-auto">
+        <Table>
         <TableHeader>
           <TableRow>
             {sortEnabled ? (
@@ -170,7 +207,15 @@ export function DataTable<T>({
               </TableHead>
             ))}
             {rowActions ? (
-              <TableHead className="text-end">{t('common.actions')}</TableHead>
+              // 操作列吸在右侧：宽表格横向滚动时也始终可见
+              <TableHead
+                className={cn(
+                  'text-end',
+                  pinActions && 'sticky end-0 z-20 bg-muted shadow-[inset_1px_0_0_hsl(var(--border))]',
+                )}
+              >
+                {t('common.actions')}
+              </TableHead>
             ) : null}
           </TableRow>
         </TableHeader>
@@ -194,7 +239,7 @@ export function DataTable<T>({
           {!loading
             ? rows.map((row, index) => {
                 const id = getKey(row)
-                const cls = cn(onRowClick && 'cursor-pointer', selected.includes(id) && 'bg-muted/50')
+                const cls = cn('group', onRowClick && 'cursor-pointer', selected.includes(id) && 'bg-muted/50')
                 const cells = (
                   <>
                     {sortEnabled ? (
@@ -217,7 +262,14 @@ export function DataTable<T>({
                       </TableCell>
                     ))}
                     {rowActions ? (
-                      <TableCell className="whitespace-nowrap text-end" onClick={(e) => e.stopPropagation()}>
+                      <TableCell
+                        className={cn(
+                          'whitespace-nowrap text-end',
+                          pinActions &&
+                            'sticky end-0 z-10 bg-card shadow-[inset_1px_0_0_hsl(var(--border))] group-hover:bg-muted',
+                        )}
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <div className="flex items-center justify-end gap-1">{rowActions(row)}</div>
                       </TableCell>
                     ) : null}
@@ -236,6 +288,7 @@ export function DataTable<T>({
             : null}
         </TableBody>
       </Table>
+      </div>
     </div>
   )
 
@@ -333,13 +386,19 @@ export function DataTable<T>({
       {sortEnabled ? (
         <DndContext
           sensors={sensors}
-          collisionDetection={closestCenter}
+          collisionDetection={pointerFirstCollision}
           modifiers={[restrictToVertical]}
+          accessibility={a11y}
+          onDragStart={onDragStart}
           onDragEnd={onDragEnd}
+          onDragCancel={onDragCancel}
         >
           <SortableContext items={ids} strategy={verticalListSortingStrategy}>
             {list}
           </SortableContext>
+          <DragOverlay dropAnimation={null}>
+            {dragChip?.label ? <DragChip width={dragChip.width}>{dragChip.label}</DragChip> : null}
+          </DragOverlay>
         </DndContext>
       ) : (
         list

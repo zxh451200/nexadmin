@@ -1,6 +1,12 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMemo } from 'react'
 import { api, http } from '@/framework/request/http'
+import { useLanguages as usePlatformLanguages } from '@/framework/i18n/useLanguages'
+import type { EntitySchema, LocaleOption } from '@/framework/components/i18n'
 import type { Page, PageQuery } from '@/framework/request/types'
+
+/** 后端 entityViews 的键；新增内容类型时同步。 */
+export type I18nEntity = 'setting' | 'nav' | 'feature' | 'page' | 'post'
 
 export interface SiteSettings {
   id: string
@@ -24,6 +30,8 @@ export type SiteSettingsForm = Omit<SiteSettings, 'id' | 'updatedAt'>
 
 export interface NavItem {
   id: string
+  /** 上级导航 ID；"0" = 顶级（雪花 ID 用字符串避免丢精度） */
+  parentId: string
   label: string
   href: string
   sort: number
@@ -32,11 +40,19 @@ export interface NavItem {
 }
 
 export interface NavForm {
+  parentId: string
   label: string
   href: string
   sort: number
   enabled: boolean
   i18nJson: string
+}
+
+/** 拖拽排序：一次提交同一层内的完整顺序。 */
+export interface NavOrderItem {
+  id: string
+  parentId: string
+  sort: number
 }
 
 export interface FeatureItem {
@@ -66,6 +82,8 @@ export interface SitePage {
   content: string
   published: boolean
   i18nJson: string
+  /** 非默认语言发布态；空 = 所有语言沿用 published */
+  publishedJson: string
   updatedAt: string
 }
 
@@ -76,6 +94,7 @@ export interface PageForm {
   content: string
   published: boolean
   i18nJson: string
+  publishedJson: string
 }
 
 export interface SitePost {
@@ -84,10 +103,13 @@ export interface SitePost {
   title: string
   coverUrl: string
   summary: string
+  seoDesc: string
   content: string
   published: boolean
   publishedAt?: string | null
   i18nJson: string
+  /** 非默认语言发布态；空 = 所有语言沿用 published */
+  publishedJson: string
   updatedAt: string
 }
 
@@ -96,38 +118,71 @@ export interface PostForm {
   title: string
   coverUrl: string
   summary: string
+  seoDesc: string
   content: string
   published: boolean
   i18nJson: string
+  publishedJson: string
 }
 
 export interface ContentQuery extends PageQuery {
   status?: string
+  /** 语言码：筛「该语言完全没有译文」的条目（不是缺某个字段，那看列表里的 done/total 徽标） */
+  missing?: string
 }
 
-/** 官网已配置的语言（/plugins/website/languages），翻译编辑器据此自动生成输入框。 */
-export interface SiteLanguage {
-  code: string
-  label: string
-  htmlLang: string
-  default: boolean
+/** 特性卡片内置图标：名称 + SVG 内部标记。路径以后端 iconPaths 为准，前端不另存一份。 */
+export interface FeatureIcon {
+  name: string
+  paths: string
 }
-
-/** 特性卡片可选的内置图标名（模板内置集，未知名渲染默认圆点）。 */
-export const FEATURE_ICONS = [
-  'building', 'shield', 'key', 'plug', 'file', 'chart', 'globe', 'puzzle',
-  'terminal', 'zap', 'layers', 'box', 'users', 'bell', 'lock', 'code',
-] as const
 
 const BASE = '/plugins/website'
 const KEY = ['plugin_website'] as const
 
-export function useLanguages() {
+/** 图标集随插件发布变化极少，按 Infinity 缓存，切页面回来不闪空列表。 */
+export function useFeatureIcons() {
   return useQuery({
-    queryKey: [...KEY, 'languages'],
-    queryFn: () => api.get<SiteLanguage[]>(`${BASE}/languages`),
+    queryKey: [...KEY, 'feature-icons'],
+    queryFn: () => api.get<FeatureIcon[]>(`${BASE}/feature-icons`),
     staleTime: Infinity,
   })
+}
+
+/** 翻译表单的字段元数据：白名单与长度只在 Go 里有一份，界面据此渲染。 */
+export function useI18nSchema(entity: I18nEntity) {
+  return useQuery({
+    queryKey: [...KEY, 'i18n-schema', entity],
+    queryFn: () => api.get<EntitySchema>(`${BASE}/i18n/schema/${entity}`),
+    staleTime: Infinity,
+  })
+}
+
+/**
+ * 批量机翻：同一批必须同一种格式（Format 是请求级的），所以纯文本与富文本分两批。
+ * 只回译文、不落库——写库仍走各自的 save 接口，由后端统一清洗。
+ */
+export async function translateContent(
+  entity: I18nEntity, texts: string[], from: string, to: string, format: 'text' | 'html',
+): Promise<string[]> {
+  const res = await api.post<{ texts: string[] }>(`${BASE}/i18n/translate/${entity}`, { texts, from, to, format })
+  return res.texts ?? []
+}
+
+/**
+ * 内容语言就是平台语言清单（sys_language，见 modules/system/language）：
+ * 官网不再单独维护一份，否则「后台有哪些语言」和「官网有哪些语言」会各自跑偏。
+ * label 取 name，整成框架 locale 表单需要的最小形状。
+ */
+export function useLanguages() {
+  const { languages, isLoading } = usePlatformLanguages()
+  // 必须 memo：LocaleFormProvider 的 context 以 locales 为依赖，
+  // 每次渲染都新建数组会让整棵表单子树无谓重渲染。
+  const data = useMemo<LocaleOption[]>(
+    () => languages.map((l) => ({ code: l.code, label: l.name, default: l.default, prefix: l.prefix })),
+    [languages],
+  )
+  return { data, isLoading }
 }
 
 export function useSettings() {
@@ -167,6 +222,16 @@ export function useSaveNav() {
     mutationFn: ({ id, data }: { id?: string; data: NavForm }) =>
       id ? api.put<NavItem>(`${BASE}/navs/${id}`, data) : api.post<NavItem>(`${BASE}/navs`, data),
     onSuccess: () => void qc.invalidateQueries({ queryKey: [...KEY, 'navs'] }),
+  })
+}
+
+/** 拖拽排序 / 改上级：后端在一个事务里批量写 sort 与 parentId。 */
+export function useReorderNavs() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (items: NavOrderItem[]) => api.put<null>(`${BASE}/navs/reorder`, { items }),
+    // 失败时 TreeTable 会回滚乐观数据并 toast，这里只保证最终与库一致
+    onSettled: () => void qc.invalidateQueries({ queryKey: [...KEY, 'navs'] }),
   })
 }
 

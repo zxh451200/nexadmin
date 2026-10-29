@@ -5,7 +5,6 @@ import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { DataTable } from '@/framework/components/DataTable'
 import { DictTag } from '@/framework/components/DictTag'
-import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { SimpleFilterBar } from '@/framework/components/SimpleFilterBar'
 import { matchText, useClientFilter } from '@/framework/components/table/use-client-filter'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
@@ -22,7 +21,7 @@ function flatten(nodes: DeptNode[], map = new Map<string, string>()) {
   return map
 }
 
-export default function PostPage() {
+export function PostSection() {
   const { t } = useTranslation()
   const confirm = useConfirm()
   const { data = [], isLoading } = usePostList()
@@ -65,11 +64,11 @@ export default function PostPage() {
   ]
 
   return (
-    <PageContainer>
-      <PageHeader
-        title={t('post.menu')}
-        description={t('post.description')}
-        actions={
+    <div className="flex flex-col gap-3">
+      <p className="text-sm text-muted-foreground">{t('post.description')}</p>
+      <SimpleFilterBar filter={filter} placeholder={t('post.col.name')} />
+      <DataTable<SysPost>
+        toolbar={
           <Can perm="post:create">
             <Button type="button" onClick={() => openEdit(null)}>
               <Plus className="me-2 size-4" aria-hidden="true" />
@@ -77,9 +76,6 @@ export default function PostPage() {
             </Button>
           </Can>
         }
-      />
-      <SimpleFilterBar filter={filter} placeholder={t('post.col.name')} />
-      <DataTable<SysPost>
         columns={columns}
         data={shown}
         rowKey="id"
@@ -103,6 +99,6 @@ export default function PostPage() {
         )}
       />
       <PostFormDialog open={dialogOpen} onOpenChange={setDialogOpen} editing={editing} count={data.length} />
-    </PageContainer>
+    </div>
   )
 }

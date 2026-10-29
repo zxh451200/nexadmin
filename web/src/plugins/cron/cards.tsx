@@ -7,7 +7,7 @@ export const cards: DashboardCard[] = [
     id: 'cron-overview',
     title: 'plugin_cron.card.overview',
     perm: 'cron:list',
-    size: 'sm',
+    size: 'md',
     order: 200,
     component: lazy(() => import('./CronOverviewCard')),
   },

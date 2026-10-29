@@ -31,11 +31,20 @@ const (
 // sw.js 位于站点根，默认作用域即 "/"，无需 Service-Worker-Allowed 头。
 var noCacheFiles = map[string]bool{"sw.js": true, "manifest.webmanifest": true, "offline.html": true}
 
+// AdminPrefix 是后台 SPA 的固定路径前缀。后台独占该前缀，官网接管其余路径：
+// 只有 /admin 与 /admin/* 会回退到 index.html，未注册的其它路径交给官网 404。
+const AdminPrefix = "/admin"
+
+// IsAdminPath 判断请求是否落在后台前缀下（/admin 本身或 /admin/...）。
+func IsAdminPath(p string) bool {
+	return p == AdminPrefix || strings.HasPrefix(p, AdminPrefix+"/")
+}
+
 // staticHandler 返回 NoRoute 用的静态资源处理器：
 //   - /api/ 下与非 GET/HEAD 请求不处理（返回 false），交给原有 JSON 404 / 503；
 //   - /healthz 及其子路径不回退（子路径一律 404，/healthz 本身是注册路由不会走到这里）；
 //   - 命中文件直接返回；带扩展名但不存在的资源（如 /assets/x.js）返回 404，避免把 HTML 当 JS 缓存；
-//   - 其余路径（/login、/sso/authorize 等前端路由）回退 index.html。
+//   - 只有后台路径（/admin、/admin/*）回退 index.html，其余未知路径返回 false 由上层决定（官网 404）。
 //
 // 缓存：assets/ 下是 vite 带 hash 的产物 → immutable；index.html 与其他文件 → no-cache / 短缓存。
 func staticHandler(fsys fs.FS) func(c *gin.Context) bool { return staticHandlerWith(fsys, nil) }
@@ -44,6 +53,19 @@ func staticHandler(fsys fs.FS) func(c *gin.Context) bool { return staticHandlerW
 type SiteInfo struct{ Name, LogoURL string }
 
 var siteSource atomic.Pointer[func(ctx context.Context) (SiteInfo, error)]
+
+// siteNotFound 由官网插件登记：核心把未注册、非 /admin、非 /api 的页面请求交给它渲染 404。
+var siteNotFound atomic.Pointer[func(*gin.Context) bool]
+
+// SetSiteNotFoundHandler 登记官网 404 渲染器；fn 返回 true 表示已写出响应。
+// 传 nil 取消。后台只占 AdminPrefix，因此其余未知路径归官网。
+func SetSiteNotFoundHandler(fn func(*gin.Context) bool) {
+	if fn == nil {
+		siteNotFound.Store(nil)
+		return
+	}
+	siteNotFound.Store(&fn)
+}
 
 // SetPublicSiteSource 由设置模块登记公开站点信息来源（core 不 import 模块）；传 nil 取消。
 // ctx 已带请求所属租户。没人登记（或查询失败）时 /manifest.webmanifest 回落到 web/public 里的静态文件。
@@ -147,8 +169,11 @@ func staticHandlerWith(fsys fs.FS, site func(c *gin.Context) (SiteInfo, bool)) f
 		}
 		name := strings.TrimPrefix(path.Clean("/"+p), "/")
 		if name == "" || name == "index.html" {
-			serveIndex(c)
-			return true
+			if IsAdminPath(p) {
+				serveIndex(c)
+				return true
+			}
+			return false
 		}
 		if name == "manifest.webmanifest" && site != nil {
 			if info, ok := site(c); ok {
@@ -184,7 +209,10 @@ func staticHandlerWith(fsys fs.FS, site func(c *gin.Context) (SiteInfo, bool)) f
 			name == "favicon.ico" || name == "robots.txt" || name == "manifest.webmanifest" { // 缺失的静态资源
 			return false
 		}
-		serveIndex(c)
-		return true
+		if IsAdminPath(p) {
+			serveIndex(c)
+			return true
+		}
+		return false
 	}
 }

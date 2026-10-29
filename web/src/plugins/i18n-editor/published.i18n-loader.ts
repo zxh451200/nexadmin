@@ -2,6 +2,7 @@ import { QueryClient, QueryObserver } from '@tanstack/react-query'
 import type { i18n } from 'i18next'
 import { useAuth } from '@/framework/auth/useAuth'
 import { createResourceOverlay } from '@/framework/i18n/dynamic'
+import { fetchActivePlugins } from '@/framework/modules/plugin/active'
 import { api, ApiError, tokenStore } from '@/framework/request/http'
 
 interface Published {
@@ -52,7 +53,18 @@ export function start(instance: i18n) {
     stops.forEach((stop) => stop())
     stops = []
     const epoch = ++generation
-    const tenant = useAuth.getState().user!.tenantId!
+    void loadPublished(epoch)
+  }
+
+  async function loadPublished(epoch: number) {
+    // 插件未启用时直接跳过：否则每次进入后台都会打出若干个必然 404 的请求。
+    // actives 为 null 表示问不到（旧后端 / 网络错误），保持原有行为继续加载。
+    const actives = await fetchActivePlugins()
+    if (epoch !== generation) return
+    if (actives && !actives.includes('i18n-editor')) return
+    const user = useAuth.getState().user
+    if (!user) return
+    const tenant = user.tenantId!
     const languages = [...new Set([instance.language, ...instance.languages])]
     const namespaces = typeof instance.options.ns === 'string' ? [instance.options.ns] : instance.options.ns || ['translation']
     for (const lang of languages) for (const namespace of namespaces) {

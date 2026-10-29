@@ -106,9 +106,10 @@ func TestDynamicManifestOnlyForManifestPathAndGET(t *testing.T) {
 		t.Errorf("POST 不处理, got %d", w.Code)
 	}
 	w = httptest.NewRecorder()
-	e.ServeHTTP(w, httptest.NewRequest("GET", "/", nil))
+	w = httptest.NewRecorder()
+	e.ServeHTTP(w, httptest.NewRequest("GET", "/admin", nil))
 	if !strings.Contains(w.Body.String(), "<html/>") {
-		t.Error("其它路径不受影响")
+		t.Error("后台路径仍应回退 index.html")
 	}
 }
 

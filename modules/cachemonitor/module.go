@@ -19,6 +19,7 @@ import (
 	"nexadmin/core"
 	"nexadmin/core/cache"
 	"nexadmin/core/response"
+	"nexadmin/modules/internal/monitorsnap"
 )
 
 func init() { core.RegisterBuiltin(module{}) }
@@ -47,9 +48,30 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 		m.cli = redis.NewClient(&redis.Options{Addr: d.Config.Cache.Addr, Password: d.Config.Cache.Password})
 		m.log = d.Log
 	}
+	store := monitorsnap.NewStore(d.DB)
+	stop := make(chan struct{})
+	if d.OnClose != nil {
+		d.OnClose(func() { close(stop) })
+	}
+	go monitorsnap.Loop(stop, store, monitorsnap.KindCache, m.metrics, d.Log)
 	r.GET("/monitor/cache", core.Perm(PermList), func(c *gin.Context) {
 		response.OK(c, m.snapshot(c.Request.Context()))
 	})
+	r.GET("/monitor/cache/history", core.Perm(PermList), monitorsnap.HandleHistory(store, monitorsnap.KindCache))
+}
+
+// metrics 是给历史落库用的扁平采样：memory 驱动没有键数与命中率，只落进程内存，
+// 不去伪造 0；valkey 驱动才补 keys/hitRate/qps/connections。
+func (m *monitor) metrics() monitorsnap.Metrics {
+	snap := m.snapshot(context.Background())
+	m1 := monitorsnap.Metrics{"usedMemoryMb": snap.UsedMemoryMB}
+	if snap.Driver != "memory" {
+		m1["keys"] = float64(snap.Keys)
+		m1["hitRate"] = snap.HitRate
+		m1["qps"] = snap.QPS
+		m1["connections"] = float64(snap.Connections)
+	}
+	return m1
 }
 
 // 以下结构与前端 CacheSnapshot 一致。

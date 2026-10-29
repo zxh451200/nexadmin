@@ -1,4 +1,4 @@
-﻿package user
+package user
 
 import (
 	"context"
@@ -138,4 +138,3 @@ func TestForgotPhoneResetWithoutEmailNoAlert(t *testing.T) {
 		t.Fatalf("unexpected alert mail, mails=%d", len(e.mb.all()))
 	}
 }
-

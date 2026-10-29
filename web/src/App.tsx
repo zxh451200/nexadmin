@@ -5,6 +5,7 @@ import { I18nextProvider } from 'react-i18next'
 import { AppErrorBoundary } from '@/framework/components/ErrorBoundary'
 import i18n from '@/framework/i18n/init'
 import { AppRoutes } from '@/framework/router/AppRoutes'
+import { ADMIN_BASE } from '@/framework/router/base'
 import { SetupGate } from '@/framework/setup/SetupGate'
 import { ThemeProvider } from '@/framework/theme/ThemeProvider'
 import { Toaster } from '@/framework/ui/sonner'
@@ -25,7 +26,7 @@ export default function App() {
       <ThemeProvider>
         <QueryClientProvider client={queryClient}>
           <TooltipProvider delayDuration={200}>
-            <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+            <BrowserRouter basename={ADMIN_BASE} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
               <AppErrorBoundary>
                 <SetupGate>
                   <AppRoutes />

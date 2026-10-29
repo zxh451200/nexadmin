@@ -2,7 +2,7 @@
   "plugin_codegen": {
     "menu": "代码生成器",
     "title": "代码生成器",
-    "description": "读取业务表结构，按推荐配置生成 Go 模块与前端页面；先预览，再打包 zip 下载",
+    "description": "免费代码生成器：读取业务表结构，按推荐配置生成 Go 模块与前端页面；先预览，再打包 zip 下载",
     "btn": { "download": "下载代码包" },
     "steps": { "table": "1. 选择表", "config": "2. 配置列", "preview": "3. 预览与下载" },
     "tables": { "name": "表名", "search": "按表名搜索", "empty": "没有可生成的业务表", "select": "选择" },

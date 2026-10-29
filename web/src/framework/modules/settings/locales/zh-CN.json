@@ -2,8 +2,15 @@
   "settings": {
     "menu": "系统设置",
     "title": "系统设置",
-    "description": "站点、缓存、存储、AI、短信与登录方式配置",
+    "description": "站点、安全、存储与集成、语言与高级参数的集中配置",
     "testConnection": "测试连接",
+    "sectionNav": "设置分区",
+    "groups": {
+      "site": "站点",
+      "security": "安全与登录",
+      "integration": "存储与集成",
+      "advanced": "高级"
+    },
     "tabs": {
       "site": "站点信息",
       "security": "登录安全",
@@ -12,7 +19,9 @@
       "ai": "AI 模型",
       "sms": "短信",
       "notify": "通知渠道",
-      "auth": "登录方式"
+      "auth": "登录方式",
+      "language": "语言",
+      "params": "参数"
     },
     "test": {
       "ok": "连接测试成功",

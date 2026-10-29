@@ -13,7 +13,8 @@ import { Textarea } from '@/framework/ui/textarea'
 import { LicenseDialog } from './LicenseDialog'
 import {
   MARKET_KEY,
-  serverAlive,
+  pageInstanceId,
+  serverState,
   useInstallPlugin,
   useMarket,
   useMarketJob,
@@ -79,11 +80,14 @@ function JobDialog({ jobId, onClose }: { jobId: string | null; onClose: () => vo
   }, [jobId, job, isError])
 
   // 服务恢复后刷新整页（菜单/路由/已装列表都变了，整页重载最干净）。
+  // 必须确认实例标识已变化：旧进程还没退出时 /system/status 同样返回 200。
   useEffect(() => {
     if (!waitingRestart) return
     let stop = false
     const tick = async () => {
-      if (await serverAlive()) {
+      const status = await serverState()
+      const before = await pageInstanceId()
+      if (status.alive && (!before || !status.instanceId || status.instanceId !== before)) {
         window.location.reload()
         return
       }

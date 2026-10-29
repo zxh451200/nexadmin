@@ -5,9 +5,9 @@ import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/framework/ui/dialog'
 import { Input } from '@/framework/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import { Switch } from '@/framework/ui/switch'
@@ -63,71 +63,72 @@ function ChannelFormDialog({ open, onOpenChange, editing, providers }: Props) {
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>{isNew ? t('plugin_pay.channel.create') : t('plugin_pay.channel.edit')}</DialogTitle>
-        </DialogHeader>
-        <div className="flex flex-col gap-3">
-          <label className="flex flex-col gap-1 text-sm">
-            {t('plugin_pay.fields.channelCode')}
-            <Input value={code} disabled={!isNew} onChange={(e) => setCode(e.target.value)} placeholder="wx01" />
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            {t('plugin_pay.fields.provider')}
-            <Select value={provider} onValueChange={setProvider} disabled={!isNew}>
-              <SelectTrigger aria-label={t('plugin_pay.fields.provider')}>
-                <SelectValue placeholder={t('plugin_pay.fields.provider')} />
-              </SelectTrigger>
-              <SelectContent>
-                {providers.map((p) => (
-                  <SelectItem key={p} value={p}>
-                    {t(`plugin_pay.providers.${p}`, { defaultValue: p })}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            {t('plugin_pay.fields.channelName')}
-            <Input value={name} onChange={(e) => setName(e.target.value)} />
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            {t('plugin_pay.fields.feeRateBp')}
-            <Input
-              type="number"
-              value={feeRateBp}
-              min={0}
-              max={9999}
-              onChange={(e) => setFeeRateBp(Number(e.target.value) || 0)}
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            {t('plugin_pay.fields.sort')}
-            <Input type="number" value={sort} onChange={(e) => setSort(Number(e.target.value) || 0)} />
-          </label>
-          <label className="flex items-center justify-between text-sm">
-            {t('plugin_pay.fields.enabled')}
-            <Switch checked={enabled} onCheckedChange={setEnabled} />
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            {t('plugin_pay.fields.config')}
-            <Input
-              value={config}
-              onChange={(e) => setConfig(e.target.value)}
-              className="font-mono"
-              placeholder={isNew ? '{"secret":"..."}' : t('plugin_pay.configKeep')}
-            />
-          </label>
-        </div>
-        <DialogFooter>
+    <ResponsiveDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={isNew ? t('plugin_pay.channel.create') : t('plugin_pay.channel.edit')}
+      footer={
+        <>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             {t('common.cancel')}
           </Button>
           <Button onClick={() => void submit()}>{t('common.save')}</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-3">
+        <label className="flex flex-col gap-1 text-sm">
+          {t('plugin_pay.fields.channelCode')}
+          <Input value={code} disabled={!isNew} onChange={(e) => setCode(e.target.value)} placeholder="wx01" />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          {t('plugin_pay.fields.provider')}
+          <Select value={provider} onValueChange={setProvider} disabled={!isNew}>
+            <SelectTrigger aria-label={t('plugin_pay.fields.provider')}>
+              <SelectValue placeholder={t('plugin_pay.fields.provider')} />
+            </SelectTrigger>
+            <SelectContent>
+              {providers.map((p) => (
+                <SelectItem key={p} value={p}>
+                  {t(`plugin_pay.providers.${p}`, { defaultValue: p })}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          {t('plugin_pay.fields.channelName')}
+          <Input value={name} onChange={(e) => setName(e.target.value)} />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          {t('plugin_pay.fields.feeRateBp')}
+          <Input
+            type="number"
+            value={feeRateBp}
+            min={0}
+            max={9999}
+            onChange={(e) => setFeeRateBp(Number(e.target.value) || 0)}
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          {t('plugin_pay.fields.sort')}
+          <Input type="number" value={sort} onChange={(e) => setSort(Number(e.target.value) || 0)} />
+        </label>
+        <label className="flex items-center justify-between text-sm">
+          {t('plugin_pay.fields.enabled')}
+          <Switch checked={enabled} onCheckedChange={setEnabled} />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          {t('plugin_pay.fields.config')}
+          <Input
+            value={config}
+            onChange={(e) => setConfig(e.target.value)}
+            className="font-mono"
+            placeholder={isNew ? '{"secret":"..."}' : t('plugin_pay.configKeep')}
+          />
+        </label>
+      </div>
+    </ResponsiveDialog>
   )
 }
 

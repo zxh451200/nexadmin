@@ -20,7 +20,6 @@ const EXACT: Record<string, string> = {
   cropperjs: 'MIT',
   'date-fns': 'MIT',
   i18next: 'MIT',
-  'i18next-browser-languagedetector': 'MIT',
   react: 'MIT',
   'react-day-picker': 'MIT',
   'react-dom': 'MIT',

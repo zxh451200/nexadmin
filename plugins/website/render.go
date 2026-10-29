@@ -38,6 +38,13 @@ var iconPaths = map[string]string{
 
 var defaultIcon = `<circle cx="12" cy="12" r="3"/>`
 
+// featureIconOrder 是管理端图标下拉的展示顺序；键集合必须与 iconPaths 完全一致（有测试兜底），
+// 下拉的预览由 /plugins/website/feature-icons 直接读 iconPaths，避免前端另存一份路径后与官网走样。
+var featureIconOrder = []string{
+	"building", "shield", "key", "plug", "file", "chart", "globe", "puzzle",
+	"terminal", "zap", "layers", "box", "users", "bell", "lock", "code",
+}
+
 var tplFuncs = template.FuncMap{
 	// safeHTML 只用于落库前已经过 htmlsafe.Sanitize 的富文本内容。
 	"safeHTML": func(s string) template.HTML { return template.HTML(s) },
@@ -71,15 +78,16 @@ func mustPage(name string) *template.Template {
 }
 
 var pageTmpl = map[string]*template.Template{
-	"docs":     mustPage("docs"),
-	"home":     mustPage("home"),
-	"plugins":  mustPage("plugins"),
-	"plugin":   mustPage("plugin"),
-	"news":     mustPage("news"),
-	"post":     mustPage("post"),
-	"page":     mustPage("page"),
-	"notfound": mustPage("notfound"),
-	"error":    mustPage("error"),
+	"docs":       mustPage("docs"),
+	"docs-index": mustPage("docs-index"),
+	"home":       mustPage("home"),
+	"plugins":    mustPage("plugins"),
+	"plugin":     mustPage("plugin"),
+	"news":       mustPage("news"),
+	"post":       mustPage("post"),
+	"page":       mustPage("page"),
+	"notfound":   mustPage("notfound"),
+	"error":      mustPage("error"),
 }
 
 // siteView 是模板数据。公共字段来自站点设置与导航；Title/Desc 用于 <title> 与 meta。
@@ -103,6 +111,7 @@ type siteView struct {
 	Features     []Feature
 	Title        string
 	Desc         string
+	OGImage      string // 绝对地址；空 = 用站点默认分享图
 	Noindex      bool
 	Posts        []Post
 	Post         *Post
@@ -145,6 +154,9 @@ type siteView struct {
 	DocsEnabled bool
 	DocNav      []DocGroup
 	Doc         *DocView
+	DocCards    []DocCard
+	DocPrev     *DocLink
+	DocNext     *DocLink
 }
 
 // T 取静态文案；语言缺键时回退英文/默认语言，最后回退 key 本身。
@@ -152,6 +164,31 @@ func (v *siteView) T(key string) string { return tr(v.Lang.Code, key) }
 
 // TF 是带参数的文案（字典里用 %s / %d）。
 func (v *siteView) TF(key string, args ...any) string { return trf(v.Lang.Code, key, args...) }
+
+// TN 是按数量选单复数的文案：n==1 用 <key>.one，其余用 <key>.other。
+// 中文两种写法相同；新增有单复数规则的语言时按该语言字典补齐即可。
+func (v *siteView) TN(n any, key string, args ...any) string {
+	one := false
+	switch x := n.(type) {
+	case int:
+		one = x == 1
+	case int64:
+		one = x == 1
+	case float64:
+		one = x == 1
+	}
+	l := languageOr(v.Lang.Code)
+	k := key + ".other"
+	if one {
+		k = key + ".one"
+	}
+	if d := dicts[l.Code]; d != nil {
+		if _, ok := d[k]; !ok {
+			k = key
+		}
+	}
+	return trf(l.Code, k, args...)
+}
 
 // Home 返回当前语言首页。
 func (v *siteView) Home() string { return v.Lang.Home() }

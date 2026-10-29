@@ -3,8 +3,10 @@ import { DndContext, PointerSensor, useDraggable, useSensor, useSensors, type Dr
 import { CSS } from '@dnd-kit/utilities'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
+import { DragCursorHost } from '@/framework/components/table/use-sortable-sensors'
 import type { ScreenItem } from './api'
 import { canPlace, clampItem, GRID_COLS, GRID_ROWS } from './chartData'
+import { builtinText } from './builtinText'
 
 const ROW = 24
 
@@ -70,7 +72,7 @@ function CanvasItem({ item, name, selected, cellW, onSelect, onChange, onRemove 
       )}
       style={{ insetInlineStart: item.x * cellW + 2, top: item.y * ROW + 2, width: item.w * cellW - 4, height: item.h * ROW - 4, transform: CSS.Translate.toString(transform) }}
     >
-      <span className="truncate bg-muted px-2 py-1 font-medium">{item.title || name}</span>
+      <span className="truncate bg-muted px-2 py-1 font-medium">{builtinText(t, item.title || name)}</span>
       <span className="num m-auto text-muted-foreground">
         {item.w} × {item.h}
       </span>
@@ -131,6 +133,7 @@ export function EditorCanvas({ items, names, selected, onSelect, onChange, onRej
 
   return (
     <DndContext sensors={sensors} onDragEnd={onDragEnd}>
+      <DragCursorHost />
       <div
         ref={ref}
         dir="ltr"

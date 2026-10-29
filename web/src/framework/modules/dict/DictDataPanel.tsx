@@ -16,6 +16,7 @@ import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/framework/ui/form'
 import { Input } from '@/framework/ui/input'
+import { useLanguages } from '@/framework/i18n/useLanguages'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import { Textarea } from '@/framework/ui/textarea'
 import {
@@ -40,6 +41,28 @@ type FormValues = z.infer<typeof schema>
 
 const empty: FormValues = { label: '', value: '', tag: 'default', sort: 0, status: '1', remark: '' }
 
+/** i18nJson → {语言: label}；坏数据当没有，不能因为一条脏数据让表单打不开。 */
+function labelsOf(raw?: string): Record<string, string> {
+  if (!raw) return {}
+  try {
+    const doc = JSON.parse(raw) as Record<string, { label?: string } | undefined>
+    const out: Record<string, string> = {}
+    for (const [code, fields] of Object.entries(doc)) if (fields?.label) out[code] = fields.label
+    return out
+  } catch {
+    return {}
+  }
+}
+
+/** {语言: label} → i18nJson；留空的语言不写，全空存空串（服务端按未翻译处理）。 */
+function buildI18nJSON(map: Record<string, string>): string {
+  const doc: Record<string, { label: string }> = {}
+  for (const [code, label] of Object.entries(map)) {
+    if (label.trim()) doc[code] = { label: label.trim() }
+  }
+  return Object.keys(doc).length ? JSON.stringify(doc) : ''
+}
+
 interface Props {
   type: DictTypeRow | null
   /** 手机上返回类型列表 */
@@ -57,6 +80,11 @@ export function DictDataPanel({ type, onBack }: Props) {
   const sort = useSortDictData()
 
   const form = useForm<FormValues>({ resolver: zodResolver(schema), defaultValues: empty })
+  // 译文按语言存在 i18nJson 里（与内容侧同一份契约）；这里只需要 label 一个短字段，
+  // 用不到内容表单那套语言切换/发布/AI，所以就地渲染每个非默认语言一个输入框。
+  const [i18n, setI18n] = useState<Record<string, string>>({})
+  const { languages } = useLanguages()
+  const extraLangs = languages.filter((l) => !l.default)
   useEffect(() => {
     if (!open) return
     if (editing) {
@@ -68,8 +96,10 @@ export function DictDataPanel({ type, onBack }: Props) {
         status: editing.status,
         remark: editing.remark ?? '',
       })
+      setI18n(labelsOf(editing.i18nJson))
     } else {
       form.reset({ ...empty, sort: (data.length + 1) * 10 })
+      setI18n({})
     }
   }, [open, editing, form, data.length])
 
@@ -81,7 +111,7 @@ export function DictDataPanel({ type, onBack }: Props) {
   const submit = form.handleSubmit(async (values) => {
     if (!type) return
     try {
-      await save.mutateAsync({ id: editing?.id, body: { ...values, typeId: type.id } })
+      await save.mutateAsync({ id: editing?.id, body: { ...values, typeId: type.id, i18nJson: buildI18nJSON(i18n) } })
       toast.success(t('common.operateSuccess'))
       setOpen(false)
     } catch (e) {
@@ -197,6 +227,27 @@ export function DictDataPanel({ type, onBack }: Props) {
                   </FormItem>
                 )}
               />
+              {extraLangs.length ? (
+                <FormGridFull>
+                  <div className="flex flex-col gap-2">
+                    <span className="text-sm font-medium leading-none">{t('dict.data.translations')}</span>
+                    {extraLangs.map((l) => (
+                      <div key={l.code} className="flex flex-col gap-1">
+                        <label className="text-xs text-muted-foreground" htmlFor={`dict-label-${l.code}`}>
+                          {l.name}
+                        </label>
+                        <Input
+                          id={`dict-label-${l.code}`}
+                          maxLength={100}
+                          value={i18n[l.code] ?? ''}
+                          placeholder={t('dict.data.translationPlaceholder')}
+                          onChange={(e) => setI18n((prev) => ({ ...prev, [l.code]: e.target.value }))}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </FormGridFull>
+              ) : null}
               <FormField
                 control={form.control}
                 name="value"

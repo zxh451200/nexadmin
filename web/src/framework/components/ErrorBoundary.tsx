@@ -4,16 +4,15 @@ import { useLocation } from 'react-router-dom'
 import { reportClientError } from '@/framework/request/client-error'
 import { Button } from '@/framework/ui/button'
 
-function Fallback({ onRetry }: { onRetry: () => void }) {
+function Fallback() {
   const { t } = useTranslation()
   return (
     <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3 p-6 text-center" role="alert">
       <h1 className="text-xl font-semibold text-foreground">{t('error.boundary.title')}</h1>
       <p className="max-w-md text-sm text-muted-foreground">{t('error.boundary.desc')}</p>
       <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
-        <Button type="button" variant="outline" onClick={onRetry}>
-          {t('error.boundary.retry')}
-        </Button>
+        {/* 只留整页刷新：渲染期错误基本都是确定性的，单纯重置状态会当场再崩一次，
+            切到别的标签再回来本身也会自动重试（见 resetKey）。 */}
         <Button type="button" onClick={() => window.location.reload()}>
           {t('error.boundary.reload')}
         </Button>
@@ -49,7 +48,7 @@ class Boundary extends Component<Props, State> {
   }
 
   render() {
-    if (this.state.failed) return <Fallback onRetry={() => this.setState({ failed: false })} />
+    if (this.state.failed) return <Fallback />
     return this.props.children
   }
 }

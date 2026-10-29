@@ -14,6 +14,7 @@ import (
 	"nexadmin/core"
 	"nexadmin/core/auth"
 	"nexadmin/core/cache"
+	"nexadmin/core/i18n"
 	"nexadmin/core/middleware"
 	"nexadmin/core/notify"
 	"nexadmin/core/response"
@@ -181,12 +182,13 @@ func (f *forgotService) revokeSessions(ctx context.Context, uid idgen.ID) {
 	}
 }
 
+// reqLang 取框架协商好的语言码，而不是自己拆 Accept-Language 头。
+// 协商结果必然是平台清单（sys_language）里的码，邮件模板因此能收到真正可判定的语言。
 func reqLang(c *gin.Context) string {
-	l := c.GetHeader("Accept-Language")
-	if i := strings.IndexAny(l, ",;"); i >= 0 {
-		l = l[:i]
+	if l := i18n.Lang(c.Request.Context()); l != "" {
+		return l
 	}
-	return strings.TrimSpace(l)
+	return core.DefaultLanguage().Code
 }
 
 // registerForgot 注册匿名接口 POST /auth/forgot/send-code 与 /auth/forgot/reset。

@@ -1,6 +1,6 @@
 {
   "jobs": {
-    "menu": "Export center",
+    "menu": "Export Center",
     "description": "Large exports are generated in the background and can be downloaded here. Result files are kept for 7 days",
     "col": {
       "type": "Task type",

@@ -2,7 +2,7 @@
   "plugin_cron": {
     "menu": "定时任务",
     "title": "定时任务",
-    "description": "按 cron 表达式调度内置处理器，支持失败重试、立即执行与执行日志",
+    "description": "免费定时任务插件：按 cron 表达式调度内置处理器，支持失败重试、立即执行与执行日志",
     "tabs": { "jobs": "任务", "logs": "执行日志" },
     "card": { "overview": "定时任务概览", "total": "任务总数", "enabled": "已启用", "failed24h": "近 24 小时失败", "loadFailed": "数据加载失败" },
     "btn": { "edit": "编辑任务", "run": "立即执行", "log": "查看日志", "clean": "清理日志" },

@@ -51,6 +51,8 @@ func (h *siteHandler) baseView(ctx context.Context, lang string, postLimit int) 
 		Navs: data.Navs, Features: data.Features, Posts: data.Posts,
 		Year: time.Now().Year(),
 		Lang: languageOr(lang), Languages: Languages(),
+		// 文档随二进制内嵌，始终可用；顶层导航与移动菜单都展示入口。
+		DocsEnabled: true,
 	}
 	if v.SiteName == "" {
 		v.SiteName = "NexAdmin"
@@ -153,13 +155,35 @@ func (h *siteHandler) postDetail(c *gin.Context) {
 		return
 	}
 	v.Title = p.Title + " - " + v.SiteName
-	if p.Summary != "" {
+	switch {
+	case p.SeoDesc != "":
+		v.Desc = p.SeoDesc
+	case p.Summary != "":
 		v.Desc = p.Summary
-	} else {
+	default:
 		v.Desc = v.SiteDesc
 	}
 	v.Post = p
+	// og:image 只认绝对 URL；文章设了封面就用封面，否则模板回退站点默认图。
+	v.OGImage = absURL(v.BaseURL, p.CoverURL)
+	// hreflang、og:locale:alternate 与语言切换器都遍历 v.Languages：未发布的语言不能出现在这里。
+	v.Languages = visibleLanguages(p.Published, p.PublishedJSON)
 	h.render(c, "post", http.StatusOK, v)
+}
+
+// absURL 把站内相对路径补成绝对地址：og:image / twitter:image 只认绝对 URL，
+// 相对路径在多数平台上会被忽略。已是 http(s) 或协议相对的地址原样返回。
+func absURL(base, u string) string {
+	if u == "" {
+		return ""
+	}
+	if strings.HasPrefix(u, "http://") || strings.HasPrefix(u, "https://") || strings.HasPrefix(u, "//") {
+		return u
+	}
+	if !strings.HasPrefix(u, "/") {
+		u = "/" + u
+	}
+	return strings.TrimSuffix(base, "/") + u
 }
 
 // GET /p/:slug —— 自定义页。
@@ -186,6 +210,7 @@ func (h *siteHandler) pageDetail(c *gin.Context) {
 		v.Desc = v.SiteDesc
 	}
 	v.Page = p
+	v.Languages = visibleLanguages(p.Published, p.PublishedJSON)
 	h.render(c, "page", http.StatusOK, v)
 }
 
@@ -256,15 +281,36 @@ func baseURL(c *gin.Context) string {
 	return scheme + "://" + c.Request.Host
 }
 
+// notFoundPage 供核心在未注册路径上渲染官网 404（后台只占 /admin）。
+func (h *siteHandler) notFoundPage(c *gin.Context) bool {
+	m := c.Request.Method
+	if m != http.MethodGet && m != http.MethodHead {
+		return false
+	}
+	v, err := h.baseView(c.Request.Context(), languageForPath(c.Request.URL.Path).Code, 0)
+	if err != nil {
+		return false
+	}
+	h.notFound(c, v)
+	return true
+}
+
+// languageForPath 按路径前缀识别语言；未注册的 /en/... 也能渲染英文 404。
+func languageForPath(p string) Language {
+	for _, l := range languages {
+		if l.Prefix != "" && (p == "/"+l.Prefix || strings.HasPrefix(p, "/"+l.Prefix+"/")) {
+			return l
+		}
+	}
+	return DefaultLanguage()
+}
+
 // GET /robots.txt —— 官网开放收录，后台路径不允许抓取。
 func (h *siteHandler) robots(c *gin.Context) {
 	var b strings.Builder
 	b.WriteString("User-agent: *\n")
 	b.WriteString("Allow: /\n")
-	for _, p := range []string{
-		"/login", "/dashboard", "/system", "/content", "/monitor", "/tenant",
-		"/portal", "/jobs", "/message", "/profile", "/about", "/setup", "/api", "/mcp",
-	} {
+	for _, p := range []string{"/admin", "/api", "/mcp", "/healthz"} {
 		b.WriteString("Disallow: " + p + "\n")
 	}
 	fmt.Fprintf(&b, "Sitemap: %s/sitemap.xml\n", baseURL(c))
@@ -290,6 +336,7 @@ func (h *siteHandler) sitemap(c *gin.Context) {
 		}
 	}
 	// 文档区也进 sitemap（内容由框架 docs/*.md 渲染，随版本更新）。
+	entries = append(entries, SitemapEntry{Loc: "/docs"})
 	for _, g := range docGroups {
 		for _, it := range g.Items {
 			entries = append(entries, SitemapEntry{Loc: "/docs/" + it.Slug})
@@ -303,7 +350,8 @@ func (h *siteHandler) sitemap(c *gin.Context) {
 	b.WriteString(`<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">` + "\n")
 	for _, e := range entries {
 		b.WriteString("  <url>\n    <loc>" + xmlEscape(base+def.Path(e.Loc)) + "</loc>\n")
-		for _, l := range langs {
+		// 只为该 URL 真正已发布的语言写 alternate：挂一个会 404 的地址等于自己制造索引错误。
+		for _, l := range e.visibleLocales(langs) {
 			b.WriteString(`    <xhtml:link rel="alternate" hreflang="` + xmlEscape(l.HTMLLang) + `" href="` +
 				xmlEscape(base+l.Path(e.Loc)) + `"/>` + "\n")
 		}

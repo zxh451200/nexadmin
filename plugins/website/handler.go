@@ -6,13 +6,18 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"nexadmin/core/ai"
 	"nexadmin/core/response"
 	"nexadmin/pkg/idgen"
 )
 
 // 管理端接口。路由在 plugin.go 注册；这里只做参数绑定与调用服务层。
 
-type handler struct{ svc *Service }
+type handler struct {
+	svc *Service
+	// gw 是 AI 翻译网关，可为 nil（AI 未配置）；只有机翻接口用到它。
+	gw *ai.Gateway
+}
 
 func respond(c *gin.Context, data any, err error) {
 	if err != nil {
@@ -81,6 +86,15 @@ func (h *handler) updateNav(c *gin.Context) {
 	respond(c, row, err)
 }
 
+// PUT /plugins/website/navs/reorder
+func (h *handler) reorderNavs(c *gin.Context) {
+	var f NavOrderForm
+	if !response.BindJSON(c, &f) {
+		return
+	}
+	respond(c, nil, h.svc.ReorderNavs(c.Request.Context(), f.Items))
+}
+
 // DELETE /plugins/website/navs/:id
 func (h *handler) deleteNav(c *gin.Context) {
 	id, ok := parseID(c)
@@ -96,6 +110,16 @@ func (h *handler) deleteNav(c *gin.Context) {
 func (h *handler) listFeatures(c *gin.Context) {
 	rows, err := h.svc.ListFeatures(c.Request.Context())
 	respond(c, rows, err)
+}
+
+// GET /plugins/website/feature-icons
+// 名称 + SVG 内部标记：管理端下拉据此渲染预览，与官网 template icon 函数共用 iconPaths。
+func (h *handler) listFeatureIcons(c *gin.Context) {
+	out := make([]gin.H, 0, len(featureIconOrder))
+	for _, name := range featureIconOrder {
+		out = append(out, gin.H{"name": name, "paths": iconPaths[name]})
+	}
+	response.OK(c, out)
 }
 
 // POST /plugins/website/features
@@ -135,7 +159,10 @@ func (h *handler) deleteFeature(c *gin.Context) {
 
 func contentQuery(c *gin.Context) ContentQuery {
 	page, size := response.ParsePage(c)
-	return ContentQuery{Keyword: c.Query("keyword"), Status: c.Query("status"), Page: page, PageSize: size}
+	return ContentQuery{
+		Keyword: c.Query("keyword"), Status: c.Query("status"), Missing: c.Query("missing"),
+		Page: page, PageSize: size,
+	}
 }
 
 // GET /plugins/website/pages?keyword=&status=&page=&pageSize=

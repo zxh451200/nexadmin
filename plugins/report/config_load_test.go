@@ -65,14 +65,14 @@ report:
 	}
 	// 配置文件缺失 / 损坏 -> 回落到默认白名单，不 panic。
 	reg, _ = loadRegistry(&config.Config{UserConfigPath: filepath.Join(t.TempDir(), "none.yaml")}, nil)
-	if len(reg.List()) != 3 {
+	if len(reg.List()) != len(defaultRaw()) {
 		t.Fatalf("missing file should use defaults, got %d", len(reg.List()))
 	}
 	if err := os.WriteFile(path, []byte("report: [unclosed"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	reg, _ = loadRegistry(&config.Config{UserConfigPath: path}, nil)
-	if len(reg.List()) != 3 {
+	if len(reg.List()) != len(defaultRaw()) {
 		t.Fatalf("broken file should use defaults, got %d", len(reg.List()))
 	}
 }

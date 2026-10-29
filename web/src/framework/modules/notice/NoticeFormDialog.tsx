@@ -5,7 +5,6 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { z } from 'zod'
 import { Can } from '@/framework/auth/Can'
-import { AiTranslateButton } from '@/framework/components/AiTranslateButton'
 import { AiWriteButton } from '@/framework/components/AiWriteButton'
 import { DateTimePicker } from '@/framework/components/DateTimePicker'
 import { DictSelect } from '@/framework/components/DictSelect'
@@ -163,14 +162,6 @@ export function NoticeFormDialog({ open, onOpenChange, editing }: Props) {
                           getText={() => form.getValues('title')}
                           onResult={(text) => form.setValue('title', text.slice(0, 100), { shouldDirty: true, shouldValidate: true })}
                         />
-                        <AiTranslateButton
-                          format="text"
-                          getText={() => form.getValues('title')}
-                          onResult={(tr) => {
-                            const cur = form.getValues('title').trim()
-                            form.setValue('title', `${cur} / ${tr}`, { shouldDirty: true, shouldValidate: true })
-                          }}
-                        />
                       </div>
                     </div>
                     <FormControl>
@@ -222,14 +213,6 @@ export function NoticeFormDialog({ open, onOpenChange, editing }: Props) {
                           getText={() => form.getValues('content')}
                           getBrief={() => form.getValues('title')}
                           onResult={(html) => form.setValue('content', html, { shouldDirty: true, shouldValidate: true })}
-                        />
-                        <AiTranslateButton
-                          format="html"
-                          getText={() => form.getValues('content')}
-                          onResult={(tr) => {
-                            const cur = form.getValues('content')
-                            form.setValue('content', `${cur}<hr/>${tr}`, { shouldDirty: true, shouldValidate: true })
-                          }}
                         />
                       </div>
                     </div>

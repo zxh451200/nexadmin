@@ -120,9 +120,11 @@ func (r *Reinit) BuildPlan(ctx context.Context) (*Plan, error) {
 }
 
 // displayDir 把备份目录写成便于阅读的样子：相对路径加 "./"，绝对路径原样。
+// 以 "/" 开头的路径（Linux 部署里 config 的常见写法）在 Windows 上 filepath.IsAbs 会判 false，
+// 但它对显示而言已经是限定路径，不能再拼 "./"。
 func displayDir(dir string) string {
 	d := filepath.ToSlash(filepath.Clean(dir))
-	if filepath.IsAbs(dir) {
+	if filepath.IsAbs(dir) || strings.HasPrefix(d, "/") {
 		return d
 	}
 	return "./" + d

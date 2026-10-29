@@ -3,6 +3,7 @@ import { Download, Lock, Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
+import { EmptyState } from '@/framework/components/EmptyState'
 import { Badge, type BadgeProps } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
@@ -107,7 +108,7 @@ export function DocsTab() {
           <Skeleton className="h-10 w-full" />
         </div>
       ) : groups.length === 0 ? (
-        <p className="py-10 text-center text-sm text-muted-foreground">{t('openapi.docs.empty')}</p>
+        <EmptyState title={t('openapi.docs.empty')} />
       ) : (
         groups.map(([module, rows]) => (
           <section key={module} className="overflow-hidden rounded-lg border border-border">
@@ -126,7 +127,12 @@ export function DocsTab() {
                     <MethodBadge method={r.method} />
                     <code className="min-w-0 flex-1 font-mono text-xs break-all text-foreground">{r.path}</code>
                     {r.perm ? <code className="font-mono text-xs text-muted-foreground">{r.perm}</code> : null}
-                    {r.auth ? <Lock className="h-3.5 w-3.5 text-muted-foreground" aria-label={t(`openapi.docs.auth.${authKey(r)}`)} /> : null}
+                    {r.auth ? (
+                      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                        <Lock className="h-3.5 w-3.5" aria-hidden="true" />
+                        {t(`openapi.docs.auth.${authKey(r)}`)}
+                      </span>
+                    ) : null}
                   </button>
                 </li>
               ))}

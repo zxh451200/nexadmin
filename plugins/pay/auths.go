@@ -79,7 +79,7 @@ func (s *Service) CreateAuth(ctx context.Context, in CreateAuthInput) (*Authoriz
 	}
 	now := time.Now().UTC()
 	a := &Authorization{
-		AuthNo: "AUTH" + formatID(int64(id)),
+		AuthNo:  "AUTH" + formatID(int64(id)),
 		BizType: in.BizType, BizNo: in.BizNo,
 		SubjectID: truncate(in.SubjectID, 64), ChannelCode: ch.Code, Method: truncate(in.Method, 32),
 		Status: AuthAuthorized, AmountMinor: in.AmountMinor, Currency: in.Currency,

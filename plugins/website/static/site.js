@@ -8,6 +8,7 @@
   var i18n = {};
   var winHandlers = [];
   var swapped = false;
+  var revealObserver = null;
 
   function onWin(target, type, fn, opts) {
     target.addEventListener(type, fn, opts);
@@ -64,7 +65,7 @@
   // ---- 配色切换（事件委托：换页后的新按钮也直接生效） ----
   function applyThemeMeta(scheme) {
     var meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', scheme === 'light' ? '#ffffff' : '#000000');
+    if (meta) meta.setAttribute('content', scheme === 'light' ? '#f7f8f8' : '#08090a');
   }
   document.addEventListener('click', function (e) {
     var btn = e.target.closest('[data-theme-toggle]');
@@ -74,6 +75,32 @@
     root.setAttribute('data-scheme', next);
     try { localStorage.setItem('nex-site-theme', next); } catch (err) { /* ignore */ }
     applyThemeMeta(next);
+  });
+
+  // ---- 多级导航：箭头按钮切换展开（桌面悬停由 CSS 负责，触屏靠这里） ----
+  function closeNavItems(except) {
+    document.querySelectorAll('.topnav .nav-item.is-open').forEach(function (n) {
+      if (n === except) return;
+      n.classList.remove('is-open');
+      var b = n.querySelector('[data-nav-toggle]');
+      if (b) b.setAttribute('aria-expanded', 'false');
+    });
+  }
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest('[data-nav-toggle]');
+    if (btn) {
+      var item = btn.closest('.nav-item');
+      if (!item) return;
+      var open = !item.classList.contains('is-open');
+      closeNavItems(item);
+      item.classList.toggle('is-open', open);
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      return;
+    }
+    if (!e.target.closest('.topnav .nav-item')) closeNavItems(null);
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closeNavItems(null);
   });
 
   // ---- 复制安装命令 / 复制邮箱（委托） ----
@@ -144,7 +171,6 @@
     var root = document.documentElement;
     if (root.getAttribute('data-swapping') === '1') return;
     root.setAttribute('data-swapping', '1');
-    root.classList.add('lang-swapping');
     var scrollY = window.scrollY;
     fetch(url).then(function (res) {
       if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -163,7 +189,6 @@
       window.scrollTo(0, scrollY);
       initSite();
       root.removeAttribute('data-swapping');
-      root.classList.remove('lang-swapping');
     }).catch(function () {
       location.href = url;
     });
@@ -187,6 +212,7 @@
   function initSite() {
     i18n = readI18n();
     clearWinHandlers();
+    if (revealObserver) { revealObserver.disconnect(); revealObserver = null; }
 
     var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     var fine = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
@@ -219,6 +245,7 @@
           }
         });
       }, { rootMargin: '0px 0px -8% 0px', threshold: 0.05 });
+      revealObserver = io;
       els.forEach(function (el, i) {
         // 同屏元素轻微错峰，形成一次整体入场而不是齐步走。
         el.style.setProperty('--reveal-delay', (i % 4) * 60 + 'ms');
@@ -272,15 +299,130 @@
       mnav.addEventListener('click', function (e) {
         if (e.target.closest('a')) setMenu(false);
       });
-      document.addEventListener('keydown', function (e) {
+      onWin(document, 'keydown', function (e) {
         if (e.key === 'Escape' && !mnav.hidden) {
           setMenu(false);
           toggle.focus();
         }
       });
       onWin(window, 'resize', function () {
-        if (window.innerWidth > 760 && !mnav.hidden) setMenu(false);
+        if (window.innerWidth > 900 && !mnav.hidden) setMenu(false);
       }, { passive: true });
+    }
+
+    // 文档导航 / 章节目录：原生 details 保证无脚本时仍可用，窄屏默认折叠。
+    document.querySelectorAll('[data-docs-disclosure]').forEach(function (box) {
+      var media = window.matchMedia('(max-width: ' + box.getAttribute('data-docs-disclosure') + 'px)');
+      var summary = box.querySelector('summary');
+      var syncDisclosure = function () {
+        if (media.matches && box.contains(document.activeElement)) summary.focus();
+        box.open = !media.matches;
+      };
+      syncDisclosure();
+      onWin(media, 'change', syncDisclosure);
+      box.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && box.open) {
+          box.open = false;
+          summary.focus();
+        }
+      });
+    });
+
+    // 本地全文搜索：索引来自当前语言的公开文档正文，不过滤或隐藏原有目录。
+    var docsInput = document.querySelector('[data-docs-search]');
+    var docsIndex = document.getElementById('docs-search-index');
+    var docsResults = document.getElementById('docs-search-results');
+    if (docsInput && docsIndex && docsResults) {
+      var docsStatus = docsResults.querySelector('[data-docs-search-status]');
+      var docsList = docsResults.querySelector('[data-docs-search-list]');
+      var entries = null;
+      try {
+        entries = JSON.parse(docsIndex.textContent);
+        if (!Array.isArray(entries)) entries = null;
+      } catch (err) { /* 输入后显示不可用提示，仍保留目录 */ }
+
+      // 只创建文本节点和 mark，不把用户输入或正文片段作为 HTML 拼接。
+      var appendMatch = function (target, text, terms) {
+        var lower = text.toLowerCase();
+        var pos = 0;
+        while (pos < text.length) {
+          var at = -1, size = 0;
+          terms.forEach(function (term) {
+            var hit = lower.indexOf(term, pos);
+            if (hit >= 0 && (at < 0 || hit < at || (hit === at && term.length > size))) {
+              at = hit;
+              size = term.length;
+            }
+          });
+          if (at < 0) { target.appendChild(document.createTextNode(text.slice(pos))); break; }
+          target.appendChild(document.createTextNode(text.slice(pos, at)));
+          var mark = document.createElement('mark');
+          mark.textContent = text.slice(at, at + size);
+          target.appendChild(mark);
+          pos = at + size;
+        }
+      };
+      var docSearch = function () {
+        var query = docsInput.value.trim().toLowerCase();
+        docsList.replaceChildren();
+        docsStatus.textContent = '';
+        docsResults.hidden = !query;
+        if (!query) return;
+        if (!entries) {
+          docsStatus.textContent = docsStatus.getAttribute('data-unavailable');
+          return;
+        }
+        var terms = query.split(/\s+/);
+        var matches = entries.filter(function (entry) {
+          var full = (entry.title + ' ' + entry.summary + ' ' + entry.text).toLowerCase();
+          return terms.every(function (term) { return full.indexOf(term) >= 0; });
+        });
+        matches.forEach(function (entry) {
+          var item = document.createElement('li');
+          var link = document.createElement('a');
+          link.href = entry.url;
+          var title = document.createElement('span');
+          title.className = 'docs-result-title';
+          title.lang = entry.language;
+          appendMatch(title, entry.title, terms);
+          link.appendChild(title);
+          var lower = entry.text.toLowerCase();
+          var first = -1;
+          terms.forEach(function (term) {
+            var hit = lower.indexOf(term);
+            if (hit >= 0 && (first < 0 || hit < first)) first = hit;
+          });
+          var start = Math.max(0, first - 55);
+          var snippet = (start ? '…' : '') + entry.text.slice(start, start + 200);
+          if (start + 200 < entry.text.length) snippet += '…';
+          var excerpt = document.createElement('span');
+          excerpt.className = 'docs-result-excerpt';
+          excerpt.lang = entry.language;
+          appendMatch(excerpt, snippet, terms);
+          link.appendChild(excerpt);
+          if (entry.isFallback) {
+            var note = document.createElement('small');
+            note.textContent = docsList.getAttribute('data-fallback');
+            link.appendChild(note);
+          }
+          item.appendChild(link);
+          docsList.appendChild(item);
+        });
+        var count = docsStatus.getAttribute(matches.length === 1 ? 'data-count-one' : 'data-count-other');
+        docsStatus.textContent = matches.length ? count.replace('{count}', String(matches.length)) : docsStatus.getAttribute('data-empty');
+      };
+      docsInput.addEventListener('input', docSearch);
+      docsInput.addEventListener('keydown', function (e) {
+        if (e.isComposing) return;
+        if (e.key === 'Escape') {
+          docsInput.value = '';
+          docSearch();
+        } else if (e.key === 'Enter' || e.key === 'ArrowDown') {
+          var first = docsList.querySelector('a');
+          if (first) { e.preventDefault(); first.focus(); }
+        }
+      });
+      docSearch();
     }
 
     // 选项卡：同步 aria-selected 与 hidden，方向键 / Home / End 切换。
@@ -309,7 +451,39 @@
         });
       });
       select(0);
+      var tour = list.closest('.product-tour');
+      if (tour) tour.classList.add('is-ready');
     });
+
+    var imageDialog = document.querySelector('.image-dialog');
+    if (imageDialog && typeof imageDialog.showModal === 'function') {
+      var imageCanvas = imageDialog.querySelector('.image-dialog-canvas');
+      var dialogImage = imageCanvas.querySelector('img');
+      var sizeButton = imageDialog.querySelector('[data-image-size]');
+      document.querySelectorAll('[data-image-preview]').forEach(function (button) {
+        button.hidden = false;
+        button.addEventListener('click', function () {
+          var scheme = document.documentElement.getAttribute('data-scheme');
+          var image = button.closest('figure').querySelector(scheme === 'light' ? '.shot-light' : '.shot-dark');
+          dialogImage.src = image.currentSrc || image.src;
+          dialogImage.alt = image.alt;
+          imageDialog.querySelector('h2').textContent = image.alt;
+          imageCanvas.classList.remove('is-original');
+          sizeButton.setAttribute('aria-pressed', 'false');
+          imageDialog.showModal();
+          imageCanvas.scrollTo(0, 0);
+        });
+      });
+      sizeButton.addEventListener('click', function () {
+        var original = imageCanvas.classList.toggle('is-original');
+        sizeButton.setAttribute('aria-pressed', original ? 'true' : 'false');
+      });
+      imageDialog.addEventListener('click', function (event) {
+        if (event.target !== imageDialog) return;
+        var rect = imageDialog.getBoundingClientRect();
+        if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) imageDialog.close();
+      });
+    }
 
     // 插件包下载：走 fetch 拿 blob，页面内提示“正在打包”，失败不把用户带到 502 页。
     var downloadBtn = document.querySelector('[data-download]');
@@ -359,8 +533,13 @@
 
     if (reduced) return;
 
-    // 滚动视差：按元素在视口中的位置写入 --py（±12px），只动 transform；rAF 节流、视口外跳过。
+    // 滚动视差：按元素在视口中的位置写入 --py（默认 ±12px），只动 transform；rAF 节流、视口外跳过。
+    // data-parallax 的值可以给一个像素幅度（如 "34"）：越靠前的装饰件幅度越大，才有前后层次。
     var pEls = Array.prototype.slice.call(document.querySelectorAll('[data-parallax]'));
+    var pAmp = function (el) {
+      var v = parseFloat(el.getAttribute('data-parallax'));
+      return isFinite(v) && v > 0 ? v : 12;
+    };
     if (pEls.length) {
       var pTicking = false;
       var pUpdate = function () {
@@ -370,7 +549,7 @@
           var r = el.getBoundingClientRect();
           if (r.bottom < -120 || r.top > vh + 120) return;
           var p = (r.top + r.height / 2 - vh / 2) / (vh / 2 + r.height / 2);
-          el.style.setProperty('--py', (p * 12).toFixed(1) + 'px');
+          el.style.setProperty('--py', (p * pAmp(el)).toFixed(1) + 'px');
         });
       };
       var pOnScroll = function () {
@@ -384,24 +563,6 @@
       pUpdate();
     }
 
-    // Hero 光晕跟随鼠标：只更新 CSS 变量，绘制交给 .hero-spot 的渐变。
-    var hero = document.querySelector('.hero');
-    if (hero && fine) {
-      var spotPending = false, sx = 0, sy = 0;
-      var applySpot = function () {
-        spotPending = false;
-        var r = hero.getBoundingClientRect();
-        hero.style.setProperty('--mx', (sx - r.left) + 'px');
-        hero.style.setProperty('--my', (sy - r.top) + 'px');
-      };
-      hero.addEventListener('mousemove', function (e) {
-        sx = e.clientX; sy = e.clientY;
-        if (!spotPending) {
-          spotPending = true;
-          requestAnimationFrame(applySpot);
-        }
-      }, { passive: true });
-    }
 
     // 产品示意窗口随鼠标轻微 3D 倾斜。
     var visual = document.querySelector('.hero-visual');
@@ -425,6 +586,50 @@
       visual.addEventListener('mouseleave', function () {
         browser.style.setProperty('--rx', '0deg');
         browser.style.setProperty('--ry', '0deg');
+      });
+    }
+
+    // 滚动漂移：data-drift 元素按视口进度写入 --dy（±16px），只动 transform。
+    var dEls = Array.prototype.slice.call(document.querySelectorAll('[data-drift]'));
+    if (dEls.length) {
+      var dTicking = false;
+      var dUpdate = function () {
+        dTicking = false;
+        var vh = window.innerHeight;
+        dEls.forEach(function (el) {
+          var r = el.getBoundingClientRect();
+          if (r.bottom < -160 || r.top > vh + 160) return;
+          var p = (r.top + r.height / 2 - vh / 2) / (vh / 2 + r.height / 2);
+          el.style.setProperty('--dy', (p * 16).toFixed(1) + 'px');
+        });
+      };
+      var dOnScroll = function () {
+        if (!dTicking) { dTicking = true; requestAnimationFrame(dUpdate); }
+      };
+      onWin(window, 'scroll', dOnScroll, { passive: true });
+      onWin(window, 'resize', dOnScroll, { passive: true });
+      dUpdate();
+    }
+
+    // 磁吸主按钮：桌面细指针时，按钮朝光标方向轻微位移（±5px），离开回弹。
+    if (fine) {
+      document.querySelectorAll('.btn-primary').forEach(function (btn) {
+        var raf = false, mx = 0, my = 0;
+        var apply = function () {
+          raf = false;
+          btn.style.setProperty('--mag-x', mx.toFixed(1) + 'px');
+          btn.style.setProperty('--mag-y', my.toFixed(1) + 'px');
+        };
+        btn.addEventListener('mousemove', function (e) {
+          var r = btn.getBoundingClientRect();
+          mx = Math.max(-5, Math.min(5, (e.clientX - r.left - r.width / 2) * 0.18));
+          my = Math.max(-5, Math.min(5, (e.clientY - r.top - r.height / 2) * 0.3));
+          if (!raf) { raf = true; requestAnimationFrame(apply); }
+        }, { passive: true });
+        btn.addEventListener('mouseleave', function () {
+          mx = 0; my = 0;
+          if (!raf) { raf = true; requestAnimationFrame(apply); }
+        });
       });
     }
 

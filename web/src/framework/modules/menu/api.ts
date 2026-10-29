@@ -70,7 +70,8 @@ export function countDescendants(node: SysMenu): number {
 export function useMoveMenu() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, parentId }: { id: string; parentId: string | null }) => api.put<null>(`/menus/${id}/move`, { parentId }),
+    mutationFn: ({ id, parentId, afterId }: { id: string; parentId: string | null; afterId?: string }) =>
+      api.put<null>(`/menus/${id}/move`, { parentId, ...(afterId === undefined ? {} : { afterId }) }),
     onSettled: () => qc.invalidateQueries({ queryKey: ['sysMenu'] }),
   })
 }

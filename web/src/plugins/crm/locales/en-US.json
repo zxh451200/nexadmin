@@ -1,7 +1,7 @@
 {
   "plugin_crm": {
     "title": "Customer Master",
-    "description": "Ecosystem-wide customer master data and lead/opportunity ledger (external anchor aligns member IDs)",
+    "description": "Free basic customer master data and lead/opportunity ledger (external anchor aligns member IDs), without sales automation",
     "dir": "Customer Master",
     "menu": "Customer Master",
     "perm": {

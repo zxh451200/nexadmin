@@ -25,23 +25,42 @@ export function SortableItem({ id, as = 'div', className, children, ...rest }: I
     useSortable({ id })
   const style: CSSProperties = {
     transform: CSS.Transform.toString(transform),
-    transition,
+    // 正在拖的那一行不做补间动画，否则它自己也在缓动，跟手会慢半拍
+    transition: isDragging ? undefined : transition,
     position: isDragging ? 'relative' : undefined,
     zIndex: isDragging ? 10 : undefined,
   }
-  const cls = cn(isDragging && 'bg-muted shadow-md', className)
+  // 浮层（DragOverlay）才是跟着手走的那个；原地的那行压暗，表示「这是被拖走的原件」
+  const cls = cn(isDragging && 'opacity-45', className)
   return (
     <Ctx.Provider value={{ attributes, listeners, setActivatorNodeRef }}>
       {as === 'tr' ? (
-        <TableRow ref={setNodeRef} style={style} className={cls} {...rest}>
+        <TableRow ref={setNodeRef} style={style} className={cls} data-sortable-id={id} {...rest}>
           {children}
         </TableRow>
       ) : (
-        <div ref={setNodeRef} style={style} className={cls} {...rest}>
+        <div ref={setNodeRef} style={style} className={cls} data-sortable-id={id} {...rest}>
           {children}
         </div>
       )}
     </Ctx.Provider>
+  )
+}
+
+/**
+ * 拖动时跟随光标的浮层。表格行必须用浮层：行在 `overflow-x-auto` 的滚动容器里，
+ * 浏览器会把纵向溢出也算作裁剪（overflow-x:auto 会让 overflow-y 变成 auto），
+ * 直接 transform 整行会被容器裁掉、还会撑出滚动条——这就是「拖起来发涩」的主因。
+ */
+export function DragChip({ width, children }: { width: number; children: ReactNode }) {
+  return (
+    <div
+      className="flex h-9 items-center gap-2 rounded-md border border-border bg-background px-3 text-sm shadow-lg"
+      style={{ width: width > 0 ? width : '16rem' }}
+    >
+      <GripVertical className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      <span className="min-w-0 flex-1 truncate">{children}</span>
+    </div>
   )
 }
 

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	corei18n "nexadmin/core/i18n"
 	"nexadmin/pkg/excel"
 	"nexadmin/pkg/idgen"
 )
@@ -270,9 +271,15 @@ func exportColumns(defs map[int]*Definition, versions []int) []exportCol {
 	return cols
 }
 
-var exportHead = map[string][4]string{
-	"zh-CN": {"提交ID", "提交人", "提交时间", "版本"},
-	"en-US": {"Submission ID", "Submitter", "Submitted at", "Version"},
+// exportFixedCols 是导出表头里由框架固定的前四列，词条在 core/i18n/locales 的
+// formbuilder 命名空间下。加一门语言只需补四个键（或放进部署级 config/locales），
+// 不用像旧的 map[string][4]string 那样改 Go 代码——那种写法字面上只认两种语言，
+// 第三种会掉进兜底分支拿到简体中文，而英文其实是写死在第二行的。
+var exportFixedCols = [...]string{
+	"formbuilder.head_id",
+	"formbuilder.head_submitter",
+	"formbuilder.head_time",
+	"formbuilder.head_version",
 }
 
 // WriteExport 把符合条件的提交写成 xlsx（最新的在前），最多 maxRows 行，超过则返回 errExportTooLarge 且不应使用已写内容。
@@ -299,11 +306,10 @@ func (s *Service) WriteExport(ctx context.Context, w io.Writer, q SubQuery, maxR
 		order = append(order, v.Version)
 	}
 	cols := exportColumns(defs, order)
-	head, ok := exportHead[lang]
-	if !ok {
-		head = exportHead["zh-CN"]
+	header := make([]string, 0, len(exportFixedCols)+len(cols))
+	for _, key := range exportFixedCols {
+		header = append(header, corei18n.T(corei18n.WithLang(ctx, lang), key))
 	}
-	header := append([]string{}, head[:]...)
 	for _, c := range cols {
 		header = append(header, c.Title)
 	}

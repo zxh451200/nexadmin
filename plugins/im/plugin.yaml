@@ -7,19 +7,13 @@ edition: pro
 requires_nexadmin: ">=0.1.0"
 menus:
   - parent: /
-    type: dir
-    title: plugin_im.dir
-    path: /im
-    icon: MessagesSquare
-    sort: 61
-  - parent: /im
     type: menu
     title: plugin_im.menu
     path: /im/conversations
     component: plugins/im/ImPage
     perm: im:list
     icon: MessagesSquare
-    sort: 1
+    sort: 61
     keep_alive: true
   - parent: im:list
     type: button

@@ -14,15 +14,33 @@
     },
     "nav": {
       "title": "导航管理",
-      "desc": "官网顶栏导航项",
+      "desc": "官网顶栏导航项，支持多级（最多 3 级）与同层拖拽排序",
       "create": "新建导航",
       "edit": "编辑导航",
       "required": "请填写名称与链接",
-      "deleteConfirm": "确认删除导航「{{name}}」？"
+      "deleteConfirm": "确认删除导航「{{name}}」？",
+      "parent": "上级导航",
+      "topLevel": "顶级（无上级）",
+      "addChild": "新增子导航",
+      "deleteCascadeConfirm": "确认删除导航「{{name}}」及其 {{count}} 个子导航？",
+      "hrefTarget": "链接目标",
+      "hrefHome": "首页",
+      "hrefNews": "动态列表",
+      "hrefPlugins": "插件市场",
+      "hrefDocs": "文档中心",
+      "hrefPage": "页面",
+      "hrefCustom": "自定义链接…",
+      "errNoSlash": "链接要写成完整路径或完整网址。",
+      "errNoSlashHint": "站内路径以 / 开头（如 /p/about），外部网址以 https:// 开头。",
+      "errUnknownPath": "官网没有「{{path}}」这个页面。",
+      "errUnknownHint1": "站内页面请用上面的「链接目标」下拉选择。",
+      "errUnknownHint2": "需要新页面时，先在「页面管理」创建，再回来选「页面 · 标题」。",
+      "errPageMissing": "页面 /p/{{slug}} 还不存在。",
+      "errPageMissingHint": "先在「页面管理」里创建这个 slug 的页面，再回来选它。"
     },
     "feature": {
       "title": "特性管理",
-      "desc": "首页能力网格的卡片",
+      "desc": "首页「其余出厂能力」索引里的条目",
       "create": "新建特性",
       "edit": "编辑特性",
       "required": "请填写标题",
@@ -74,6 +92,10 @@
       "slug": "slug",
       "seoDesc": "SEO 描述",
       "coverUrl": "封面图地址",
+      "coverPlaceholder": "粘贴图片地址，或点上传",
+      "coverUpload": "上传封面",
+      "coverHint": "建议 1200×630，上传后按此比例裁剪；也用于社交分享预览图",
+      "coverInvalid": "地址要写全：https:// 开头，或以 / 开头的站内路径",
       "summary": "摘要",
       "content": "正文",
       "published": "发布状态",
@@ -82,7 +104,8 @@
     },
     "hint": {
       "homeTitle": "两行标题请用换行分隔，末行渲染为渐变文字",
-      "logoUrl": "图片 URL 或点击右侧按钮上传（PNG / JPEG / WebP / GIF，≤2MB）；留空使用内置字母标志"
+      "logoUrl": "图片 URL 或点击右侧按钮上传（PNG / JPEG / WebP / GIF，≤2MB）；留空使用内置字母标志",
+      "navHref": "站内页面直接选；外部链接或页内锚点选「自定义链接」，外部地址需以 https:// 开头。"
     },
     "logo": {
       "upload": "上传",
@@ -102,8 +125,17 @@
       "enabledHint": "关闭后官网不再展示插件市场入口与相关页面；后台「插件管理 → 插件市场」不受影响。"
     },
     "i18n": {
-      "title": "多语言内容",
-      "hint": "按语言填写译文；留空的字段在该语言页面回退到上面的原文。新增语言后这里会自动出现。"
+      "status": "译文",
+      "statusHint": "已翻译 {{done}}/{{total}} 个字段",
+      "machineShort": "待校对",
+      "machineHint": "机器翻译，还没人工校对过",
+      "switchHint": "切换语言后整张表单换成该语言的内容",
+      "focusLang": "编辑 {{lang}} 译文",
+      "filterLabel": "缺译",
+      "filterNoTranslation": "{{lang}}：无译文"
+    },
+    "languages": {
+      "manageHint": "要增加或删改语言，请到「系统设置 → 语言管理」：官网与后台界面共用同一份语言清单。改完需重启服务，公开站才会按新前缀注册页面路由。"
     }
   }
 }

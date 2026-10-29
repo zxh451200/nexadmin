@@ -11,18 +11,18 @@ export default function TodosCard() {
   const { data } = useDashboardStats()
   const fmtTime = (s: string) => new Date(s).toLocaleString(i18n.language, { hour12: false, month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
   return (
-    <Card className="transition-shadow hover:glow motion-reduce:transition-none">
+    <Card className="flex h-full flex-col transition-shadow hover:glow motion-reduce:transition-none">
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2 text-base font-medium">
           <Bell className="size-4 text-primary" aria-hidden="true" />
           {t('dashboard.todos')}
         </CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex flex-1 flex-col">
         {!data ? (
           <Skeleton className="h-48 w-full" />
         ) : data.todos.length === 0 ? (
-          <p className="py-8 text-center text-sm text-muted-foreground">{t('dashboard.noTodos')}</p>
+          <p className="grid flex-1 place-items-center py-8 text-center text-sm text-muted-foreground">{t('dashboard.noTodos')}</p>
         ) : (
           <ul className="divide-y divide-border">
             {data.todos.map((todo) => (

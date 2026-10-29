@@ -125,10 +125,10 @@ export default function SsoAppsPage() {
 
   return (
     <PageContainer>
-      <PageHeader
-        title={t('sso.title')}
-        description={t('sso.description')}
-        actions={
+      <PageHeader title={t('sso.title')} description={t('sso.description')} />
+
+      <DataTable
+        toolbar={
           <>
             <Button variant="outline" onClick={() => setKeysOpen(true)}>
               <KeyRound aria-hidden="true" />
@@ -142,9 +142,6 @@ export default function SsoAppsPage() {
             </Can>
           </>
         }
-      />
-
-      <DataTable
         columns={columns}
         columnSettingsKey="ssoApps"
         data={data ?? []}

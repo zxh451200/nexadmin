@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Activity, AlertTriangle, Timer } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { ChartCard } from '@/framework/components/ChartCard'
+import { MetricHistory } from '@/framework/components/MetricHistory'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { StatCard } from '@/framework/components/StatCard'
@@ -83,15 +84,15 @@ export default function ApiMonitorPage() {
           Array.from({ length: 3 }, (_, i) => <Skeleton key={i} className="h-32 w-full" />)
         ) : (
           <>
-            <StatCard
+            <StatCard tone="chart-1"
               title={t('apiMonitor.card.qps')}
               value={latest.qps}
               hint="req/s"
               spark={history.map((h) => h.qps)}
               icon={<Activity aria-hidden="true" />}
             />
-            <StatCard title={t('apiMonitor.card.avgMs')} value={latest.avgMs} hint="ms" icon={<Timer aria-hidden="true" />} />
-            <StatCard
+            <StatCard tone="warning" title={t('apiMonitor.card.avgMs')} value={latest.avgMs} hint="ms" icon={<Timer aria-hidden="true" />} />
+            <StatCard tone="destructive"
               title={t('apiMonitor.card.errorRate')}
               value={`${latest.errorRate.toFixed(2)}%`}
               progress={Math.min(100, latest.errorRate * 10)}
@@ -112,12 +113,25 @@ export default function ApiMonitorPage() {
         />
       </ChartCard>
 
+      <MetricHistory
+        kind="api"
+        title={t('monitorHistory.title')}
+        labels={{
+          qps: t('apiMonitor.card.qps'),
+          avgMs: t('apiMonitor.card.avgMs'),
+          errorRate: t('apiMonitor.card.errorRate'),
+        }}
+      />
+
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <p className="text-base font-medium">{t('apiMonitor.top.title')}</p>
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="am-sort">{t('apiMonitor.top.sortBy')}</Label>
+          {/* 常驻选择器不是筛选框：值一直在，标签不能靠占位符传达，所以内联在控件左侧 */}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-1.5">
+              <Label htmlFor="am-sort" className="text-xs font-normal text-muted-foreground">
+                {t('apiMonitor.top.sortBy')}
+              </Label>
               <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortKey)}>
                 <SelectTrigger id="am-sort" className="w-36">
                   <SelectValue />
@@ -131,8 +145,10 @@ export default function ApiMonitorPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="am-top">{t('apiMonitor.top.count')}</Label>
+            <div className="flex items-center gap-1.5">
+              <Label htmlFor="am-top" className="text-xs font-normal text-muted-foreground">
+                {t('apiMonitor.top.count')}
+              </Label>
               <Select value={top} onValueChange={setTop}>
                 <SelectTrigger id="am-top" className="w-28">
                   <SelectValue />

@@ -2,8 +2,7 @@
   "plugin_ticket": {
     "title": "Ticket Center",
     "description": "Submit, follow up and close after-sales requests",
-    "dir": "Ticket Center",
-    "menu": "Tickets",
+    "menu": "Ticket Center",
     "perm": {
       "reply": "Reply & claim",
       "edit": "Status & assignment"
@@ -23,6 +22,10 @@
     "replyPlaceholder": "Type a reply, Enter to send",
     "send": "Reply",
     "closedNotice": "Ticket is closed; a reply from the reporter reopens it.",
+    "fields": {
+      "status": "Status",
+      "priority": "Priority"
+    },
     "status": {
       "open": "Open",
       "processing": "Processing",
@@ -39,6 +42,35 @@
       "reporter": "Reporter",
       "agent": "Agent",
       "system": "System"
+    },
+    "stats": {
+      "rangeLabel": "Time range",
+      "ranges": {
+        "7d": "Last 7 days",
+        "30d": "Last 30 days",
+        "90d": "Last 90 days",
+        "all": "All time"
+      },
+      "total": "Tickets",
+      "pending": "Awaiting action",
+      "unassigned": "Unassigned",
+      "overdue": "Overdue",
+      "sampled": "High volume: stats cover the most recent 20,000 tickets.",
+      "daily": "Created vs resolved",
+      "created": "Created",
+      "resolved": "Resolved",
+      "firstResponse": "First response",
+      "noResponse": "No response yet",
+      "sla": "SLA by priority",
+      "priority": "Priority",
+      "target": "Target",
+      "breached": "Breached",
+      "breachRate": "Breach rate",
+      "byBizType": "Top business types"
+    },
+    "view": {
+      "logs": "Tickets",
+      "stats": "Analytics"
     }
   }
 }

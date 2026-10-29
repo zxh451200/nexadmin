@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"nexadmin/core/plugin/market"
+	pi18n "nexadmin/pkg/i18n"
 )
 
 var templateKeyRe = regexp.MustCompile(`\.TF? "([^"]+)"`)
@@ -31,7 +32,8 @@ func TestLocaleDictionariesCoverTemplates(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(used) < 200 {
+	// 下限只是「扫描没坏」的探针，不是文案数量红线：正则失效时这里会掉到几十。
+	if len(used) < 150 {
 		t.Fatalf("只扫描到 %d 个模板 key，扫描规则可能失效", len(used))
 	}
 	for _, l := range Languages() {
@@ -58,6 +60,8 @@ func TestLocaleDictionariesCoverTemplates(t *testing.T) {
 		"market.priceTbd", "market.priceFree", "market.all", "market.free", "market.pro",
 		"error.msg", "error.titleTag", "market.metaDesc", "market.titleTag",
 		"news.pageDesc", "news.pageTitleTag", "plugin.rateInvalid", "plugin.rateFailed",
+		// 动态拼接的文档分组名
+		"docs.group.dev", "docs.group.ref",
 	} {
 		for _, l := range Languages() {
 			if strings.TrimSpace(dicts[l.Code][key]) == "" {
@@ -166,9 +170,9 @@ func TestViewURLAndSwitch(t *testing.T) {
 
 	for in, want := range map[string]string{
 		"#features":                  "/en#features",
+		"/admin/login":               "/admin/login",
 		"/plugins":                   "/en/plugins",
 		"/news":                      "/en/news",
-		"/login":                     "/login",
 		"/website-assets/site.css":   "/website-assets/site.css",
 		"/plugins/cron/download":     "/plugins/cron/download",
 		"/plugins/cron/download.sig": "/plugins/cron/download.sig",
@@ -193,34 +197,52 @@ func TestViewURLAndSwitch(t *testing.T) {
 	}
 }
 
-func TestNormalizeI18nJSON(t *testing.T) {
-	raw := `{
-		"en-US": {"title":"  English title  ","content":"<p>hi</p><script>alert(1)</script>","unknown":"x"},
-		"fr-FR": {"title":"bonjour"},
-		"zh-CN": {"title":"不应覆盖默认语言"}
-	}`
-	out, err := normalizeI18nJSON(raw, map[string]i18nField{
-		"title":   {Max: 20},
-		"content": {Sanitize: true},
-	})
+// pkg/i18n 的算法自己有用例（pkg/i18n/i18n_test.go）。这里只测官网这一侧的接缝：
+// siteLocales 适配得不对，译文会被整批丢掉或存成错误的语言键，而 pkg 的测试照样全绿。
+func TestSiteLocalesAdapter(t *testing.T) {
+	l, ok := (siteLocales{}).Resolve("en-US")
+	if !ok || l.Code != "en-US" || l.Default {
+		t.Errorf("Resolve(en-US) = %+v %v", l, ok)
+	}
+	// 语基别名必须可解析：前端传 "en" 时译文不该被当成未知语言丢掉。
+	if l, ok := (siteLocales{}).Resolve("en"); !ok || l.Code != "en-US" {
+		t.Errorf("Resolve(en) 未命中 en-US: %+v %v", l, ok)
+	}
+	if l, ok := (siteLocales{}).Resolve("zh-CN"); !ok || !l.Default {
+		t.Errorf("Resolve(zh-CN) 应命中且为默认语言: %+v %v", l, ok)
+	}
+	if _, ok := (siteLocales{}).Resolve("kk-KK"); ok {
+		t.Error("未配置的语言不该命中")
+	}
+	all := (siteLocales{}).All()
+	if len(all) != len(Languages()) {
+		t.Errorf("All() 条数 = %d, want %d", len(all), len(Languages()))
+	}
+	def := 0
+	for _, x := range all {
+		if x.Default {
+			def++
+		}
+	}
+	if def != 1 {
+		t.Errorf("All() 里默认语言有 %d 个, want 1", def)
+	}
+}
+
+// 端到端接缝：通过真实适配器走一遍 pkg 的归一化，语基键要被规范成清单里的码。
+func TestNormalizeThroughSiteLocales(t *testing.T) {
+	out, err := pi18n.Normalize(`{"en":{"title":"T","summary":"  "},"zh-CN":{"title":"不应存"},"xx-YY":{"title":"x"}}`,
+		siteLocales{}, pi18n.Fields{"title": {Max: 20}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{`"en-US"`, `"title":"English title"`, `"content"`} {
-		if !strings.Contains(out, want) {
-			t.Errorf("normalized missing %s: %s", want, out)
-		}
+	if !strings.Contains(out, `"en-US"`) {
+		t.Errorf("语基键未规范成清单码: %s", out)
 	}
-	for _, bad := range []string{"fr-FR", "unknown", "zh-CN", "<script"} {
+	for _, bad := range []string{"zh-CN", "xx-YY", "不应存", "summary"} {
 		if strings.Contains(out, bad) {
-			t.Errorf("normalized kept %q: %s", bad, out)
+			t.Errorf("结果里不该有 %q: %s", bad, out)
 		}
-	}
-	if _, err := normalizeI18nJSON("{not json", postI18nFields); err == nil {
-		t.Error("invalid JSON should fail")
-	}
-	if out, err := normalizeI18nJSON("", postI18nFields); err != nil || out != "" {
-		t.Errorf("empty should stay empty: %q %v", out, err)
 	}
 }
 
@@ -275,7 +297,8 @@ func TestRenderEnglishHome(t *testing.T) {
 		`property="og:url" content="http://localhost:8080/en"`,
 		`rel="canonical" href="http://localhost:8080/en"`,
 		`property="og:locale" content="en_US"`,
-		"Ready on day one, not next quarter",
+		"The shared core,",
+		"built in.",
 		"Capabilities",
 		"Skip to main content",
 		"Plugin marketplace",
@@ -287,9 +310,59 @@ func TestRenderEnglishHome(t *testing.T) {
 			t.Errorf("English home missing %q", want)
 		}
 	}
-	for _, zh := range []string{"装好就有，不用等排期", "跳到主要内容", "主导航"} {
+	for _, zh := range []string{"公共部分", "出厂即具备。", "跳到主要内容", "主导航"} {
 		if strings.Contains(out, zh) {
 			t.Errorf("English home still contains Chinese static copy %q", zh)
+		}
+	}
+}
+
+func TestPluralTranslations(t *testing.T) {
+	en, _ := LanguageByCode("en-US")
+	v := &siteView{Lang: en}
+	cases := []struct {
+		n    any
+		key  string
+		args []any
+		want string
+	}{
+		{1, "market.count", []any{1}, "1 plugin"},
+		{3, "market.count", []any{3}, "3 plugins"},
+		{1, "market.matched", []any{1}, "1 match"},
+		{2, "market.matched", []any{2}, "2 matches"},
+		{1, "market.downloads", []any{"1"}, "1 download"},
+		{5, "market.downloads", []any{"5"}, "5 downloads"},
+		{1, "plugin.downloads", []any{"1"}, "1 download"},
+		{1, "plugin.ratingSummary", []any{"5.0", 1}, "5.0 out of 5 from 1 rating."},
+		{2, "plugin.ratingSummary", []any{"4.5", 2}, "4.5 out of 5 from 2 ratings."},
+		{1, "plugin.ratingMine", []any{1}, "You rated 1 star. You can rate again."},
+		{4, "plugin.ratingMine", []any{4}, "You rated 4 stars. You can rate again."},
+		{1, "plugin.starAria", []any{1}, "1 star"},
+		{5, "plugin.starAria", []any{5}, "5 stars"},
+	}
+	for _, c := range cases {
+		if got := v.TN(c.n, c.key, c.args...); got != c.want {
+			t.Errorf("TN(%v,%q) = %q, want %q", c.n, c.key, got, c.want)
+		}
+	}
+	zh := &siteView{Lang: DefaultLanguage()}
+	if got := zh.TN(1, "market.count", 1); got != "1 个插件" {
+		t.Errorf("zh TN = %q", got)
+	}
+	// 每种语言都要有单复数两套键。
+	for _, l := range Languages() {
+		for _, key := range []string{
+			"market.count", "market.matched", "market.downloads", "plugin.downloads",
+			"plugin.ratingSummary", "plugin.ratingMine", "plugin.starAria",
+		} {
+			for _, suffix := range []string{".one", ".other"} {
+				if strings.TrimSpace(dicts[l.Code][key+suffix]) == "" {
+					t.Errorf("语言 %s 缺少 %s%s", l.Code, key, suffix)
+				}
+			}
+		}
+		if strings.TrimSpace(dicts[l.Code]["plugin.downloadsNone"]) == "" {
+			t.Errorf("语言 %s 缺少 plugin.downloadsNone", l.Code)
 		}
 	}
 }

@@ -5,6 +5,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"nexadmin/core"
+	corei18n "nexadmin/core/i18n"
 	"nexadmin/core/response"
 	"nexadmin/pkg/idgen"
 )
@@ -198,10 +200,15 @@ func (h *Handler) SortData(c *gin.Context) {
 	}
 }
 
-// Items GET /dicts/:code/items —— 前端下拉/标签取数，只要登录；Accept-Language 为 en* 时返回英文标签。
+// Items GET /dicts/:code/items —— 前端下拉/标签取数，只要登录；标签按请求语言返回。
 func (h *Handler) Items(c *gin.Context) {
-	english := strings.HasPrefix(strings.ToLower(c.GetHeader("Accept-Language")), "en")
-	list, err := h.svc.Items(c.Request.Context(), c.Param("code"), english)
+	// 语言由中间件按 ?lang / cookie / Accept-Language 协商好放在 ctx 里，
+	// 这里不再自己切 Accept-Language 前缀——那等于只认英文，第三种语言永远拿默认文案。
+	lang := corei18n.Lang(c.Request.Context())
+	if lang == "" {
+		lang = core.DefaultLanguage().Code
+	}
+	list, err := h.svc.Items(c.Request.Context(), c.Param("code"), lang)
 	if err != nil {
 		response.Fail(c, err)
 		return

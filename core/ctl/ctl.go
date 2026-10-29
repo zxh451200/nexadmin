@@ -131,7 +131,7 @@ func (c *Ctl) Start() error {
 	}
 	fmt.Fprintf(c.Out, "已启动（pid %d，端口 %d），日志: logs/\n", cmd.Process.Pid, port)
 	if st := c.State(); !st.Initialized {
-		fmt.Fprintf(c.Out, "系统尚未初始化\n  向导地址:   http://localhost:%d/setup\n  初始化令牌: %s\n", port, SetupToken(c.ConsoleLog()))
+		fmt.Fprintf(c.Out, "系统尚未初始化\n  向导地址:   http://localhost:%d/admin/setup\n  初始化令牌: %s\n", port, SetupToken(c.ConsoleLog()))
 	}
 	return nil
 }
@@ -175,6 +175,37 @@ func (c *Ctl) Restart() error {
 		return err
 	}
 	return c.Start()
+}
+
+// ScheduleRestart 由独立进程执行重启，避免关停宿主时一并终止重启任务。
+func (c *Ctl) ScheduleRestart() error { return c.scheduleRestart(exec.Command) }
+
+func (c *Ctl) scheduleRestart(command func(string, ...string) *exec.Cmd) error {
+	p, err := ReadPid(c.pidPath())
+	if err != nil {
+		return fmt.Errorf("当前服务不是由 start 托管，请手动重启: %w", err)
+	}
+	if p.PID != os.Getpid() || p.Port != c.Cfg.Server.Port || !TokenOK(p.Token, os.Getenv(TokenEnv)) {
+		return fmt.Errorf("pid 文件与当前服务身份不一致，拒绝自动重启")
+	}
+	if err := os.MkdirAll("logs", 0o755); err != nil {
+		return err
+	}
+	logPath := filepath.Join("logs", "nexadmin-restart.out")
+	logf, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		return err
+	}
+	defer logf.Close()
+	cmd := command(c.Exe, "restart")
+	cmd.Stdout, cmd.Stderr = logf, logf
+	detach(cmd)
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("启动重启进程失败: %w", err)
+	}
+	go func() { _ = cmd.Wait() }()
+	fmt.Fprintf(c.Out, "已交给独立进程重启；启动结果见 %s\n", logPath)
+	return nil
 }
 
 // Status 打印运行状态、pid、监听地址、是否已初始化。

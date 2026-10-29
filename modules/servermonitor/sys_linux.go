@@ -12,6 +12,9 @@ import (
 	"time"
 )
 
+// sysSupported 标记本平台能读到 /proc 系统指标（CPU/内存/磁盘/网络）。
+const sysSupported = true
+
 func readRaw() rawSample {
 	s := rawSample{at: time.Now()}
 	// /proc/stat 第一行：cpu user nice system idle iowait irq softirq steal ...

@@ -10,17 +10,16 @@
 <link rel="canonical" href="{{.BaseURL}}{{.Path}}">
 {{range .Languages}}<link rel="alternate" hreflang="{{.HTMLLang}}" href="{{$.BaseURL}}{{$.Alternate .}}">{{end}}
 {{range .Languages}}{{if .Default}}<link rel="alternate" hreflang="x-default" href="{{$.BaseURL}}{{$.Alternate .}}">{{end}}{{end}}
-<meta name="theme-color" content="#ffffff">
+<meta name="theme-color" content="#08090a">
 <script>
-/* 配色防闪烁：在任何样式渲染前定下 data-scheme（苹果式默认浅色）。 */
+/* 配色防闪烁：默认深色（与 Linear 一致），访客可切到浅色并记住。 */
 (function () {
-  var scheme = 'light';
-  try { if (localStorage.getItem('nex-site-theme') === 'dark') scheme = 'dark'; } catch (e) { /* ignore */ }
+  var scheme = 'dark';
+  try { if (localStorage.getItem('nex-site-theme') === 'light') scheme = 'light'; } catch (e) { /* ignore */ }
   document.documentElement.setAttribute('data-scheme', scheme);
-  if (scheme === 'dark') {
-    var meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', '#000000');
-  }
+  document.documentElement.classList.add('js');
+  var meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', scheme === 'light' ? '#f7f8f8' : '#08090a');
 })();
 </script>
 <link rel="icon" href="/website-assets/favicon.svg" type="image/svg+xml">
@@ -29,21 +28,21 @@
 <meta property="og:title" content="{{.Title}}">
 <meta property="og:description" content="{{.Desc}}">
 <meta property="og:url" content="{{.BaseURL}}{{.Path}}">
-<meta property="og:image" content="{{.BaseURL}}/website-assets/og.png">
-<meta property="og:image:width" content="1200">
-<meta property="og:image:height" content="630">
+<meta property="og:image" content="{{if .OGImage}}{{.OGImage}}{{else}}{{.BaseURL}}/website-assets/og.png{{end}}">
+{{if not .OGImage}}<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">{{end}}
 <meta property="og:locale" content="{{.Lang.OGLocale}}">
 {{range .Languages}}{{if ne .Code $.Lang.Code}}<meta property="og:locale:alternate" content="{{.OGLocale}}">{{end}}{{end}}
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="{{.Title}}">
 <meta name="twitter:description" content="{{.Desc}}">
-<meta name="twitter:image" content="{{.BaseURL}}/website-assets/og.png">
+<meta name="twitter:image" content="{{if .OGImage}}{{.OGImage}}{{else}}{{.BaseURL}}/website-assets/og.png{{end}}">
 {{if .PluginLD}}<script type="application/ld+json">{{.PluginLD}}</script>{{end}}
-<link rel="stylesheet" href="/website-assets/site.css?v=0.9.2">
+<link rel="stylesheet" href="/website-assets/site.css?v=0.9.34">
 <noscript><style>
-[data-reveal]{opacity:1;transform:none}
+[data-reveal],.tl{opacity:1;transform:none}
 [role="tabpanel"][hidden]{display:block !important}
-@media (max-width:760px){
+@media (max-width:900px){
   .nav-toggle{display:none !important}
   .mobile-nav[hidden]{display:block !important;position:static;padding:0 24px 10px;border-bottom:1px solid var(--border)}
   .mobile-nav nav{display:flex;flex-wrap:wrap;gap:0 18px}
@@ -70,7 +69,24 @@
       <span class="brand-name">{{.SiteName}}</span>
     </a>
     <nav class="topnav" aria-label="{{.T "layout.mainNav"}}">
-      {{range .Navs}}<a href="{{$.URL .Href}}"{{if eq .Href $.Route}} aria-current="page"{{end}}>{{.Label}}</a>{{end}}
+      {{range .Navs}}{{if .Children}}
+      <div class="nav-item has-sub">
+        <a href="{{$.URL .Href}}"{{if eq .Href $.Route}} aria-current="page"{{end}}>{{.Label}}</a>
+        <button class="nav-caret" type="button" data-nav-toggle aria-expanded="false" aria-label="{{$.TF "layout.subNav" .Label}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
+        <ul class="nav-sub">
+          {{range .Children}}
+          <li{{if .Children}} class="has-sub"{{end}}>
+            <a href="{{$.URL .Href}}"{{if eq .Href $.Route}} aria-current="page"{{end}}>{{.Label}}</a>
+            {{if .Children}}
+            <ul class="nav-sub nav-sub-3">
+              {{range .Children}}<li><a href="{{$.URL .Href}}"{{if eq .Href $.Route}} aria-current="page"{{end}}>{{.Label}}</a></li>{{end}}
+            </ul>
+            {{end}}
+          </li>
+          {{end}}
+        </ul>
+      </div>
+      {{else}}<a href="{{$.URL .Href}}"{{if eq .Href $.Route}} aria-current="page"{{end}}>{{.Label}}</a>{{end}}{{end}}
       {{if .MarketEnabled}}<a href="{{.URL "/plugins"}}"{{if hasPrefix .Route "/plugins"}} aria-current="page"{{end}}>{{.T "layout.market"}}</a>{{end}}
       {{if .DocsEnabled}}<a href="{{.URL "/docs"}}"{{if hasPrefix .Route "/docs"}} aria-current="page"{{end}}>{{.T "layout.docs"}}</a>{{end}}
     </nav>
@@ -85,7 +101,7 @@
           {{range .Languages}}<a href="{{$.Switch .}}" hreflang="{{.HTMLLang}}" lang="{{.HTMLLang}}"{{if eq .Code $.Lang.Code}} aria-current="true"{{end}}>{{.Label}}</a>{{end}}
         </div>
       </details>
-      <a class="btn btn-primary btn-sm" href="/login">{{.T "layout.login"}}</a>
+      <a class="btn btn-primary btn-sm" href="/admin/login">{{.T "layout.login"}}</a>
       <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="mobile-nav" aria-label="{{.T "layout.openMenu"}}">
         <span></span><span></span>
       </button>
@@ -93,11 +109,27 @@
   </div>
   <div class="mobile-nav" id="mobile-nav" hidden>
     <nav aria-label="{{.T "layout.mobileNav"}}">
-      {{range .Navs}}<a href="{{$.URL .Href}}"{{if eq .Href $.Route}} aria-current="page"{{end}}>{{.Label}}</a>{{end}}
+      {{range .Navs}}
+      <a href="{{$.URL .Href}}"{{if eq .Href $.Route}} aria-current="page"{{end}}>{{.Label}}</a>
+      {{if .Children}}
+      <ul class="mobile-sub">
+        {{range .Children}}
+        <li>
+          <a href="{{$.URL .Href}}"{{if eq .Href $.Route}} aria-current="page"{{end}}>{{.Label}}</a>
+          {{if .Children}}
+          <ul class="mobile-sub">
+            {{range .Children}}<li><a href="{{$.URL .Href}}"{{if eq .Href $.Route}} aria-current="page"{{end}}>{{.Label}}</a></li>{{end}}
+          </ul>
+          {{end}}
+        </li>
+        {{end}}
+      </ul>
+      {{end}}
+      {{end}}
       {{if .MarketEnabled}}<a href="{{.URL "/plugins"}}"{{if hasPrefix .Route "/plugins"}} aria-current="page"{{end}}>{{.T "layout.market"}}</a>{{end}}
       {{if .DocsEnabled}}<a href="{{.URL "/docs"}}"{{if hasPrefix .Route "/docs"}} aria-current="page"{{end}}>{{.T "layout.docs"}}</a>{{end}}
       {{range .Languages}}<a href="{{$.Switch .}}" hreflang="{{.HTMLLang}}" lang="{{.HTMLLang}}"{{if eq .Code $.Lang.Code}} aria-current="true"{{end}}>{{.Label}}</a>{{end}}
-      <a href="/login">{{.T "layout.login"}}</a>
+      <a href="/admin/login">{{.T "layout.login"}}</a>
     </nav>
   </div>
 </header>
@@ -117,14 +149,22 @@
       <h4>{{.T "layout.product"}}</h4>
       <a href="{{.Home}}">{{.T "layout.home"}}</a>
       {{if .MarketEnabled}}<a href="{{.URL "/plugins"}}">{{.T "layout.marketFull"}}</a>{{end}}
-      <a href="{{.Home}}#quickstart">{{.T "layout.quickstart"}}</a>
-      <a href="/login">{{.T "layout.admin"}}</a>
+      <a href="/admin/login">{{.T "layout.admin"}}</a>
+    </nav>
+    <nav class="footer-col" aria-label="{{.T "layout.docs"}}">
+      <h4>{{.T "layout.docs"}}</h4>
+      <a href="{{.URL "/docs"}}">{{.T "layout.docsCenter"}}</a>
+      <a href="{{.URL "/docs/features"}}">{{.T "layout.docsFeatures"}}</a>
+      <a href="{{.URL "/docs/config"}}">{{.T "layout.docsConfig"}}</a>
+      <a href="{{.URL "/docs/deploy"}}">{{.T "layout.docsDeploy"}}</a>
+      <a href="{{.URL "/docs/plugin-dev"}}">{{.T "layout.docsPlugin"}}</a>
+      <a href="{{.URL "/docs/dev-guide"}}">{{.T "layout.docsDev"}}</a>
     </nav>
     <nav class="footer-col" aria-label="{{.T "layout.resources"}}">
       <h4>{{.T "layout.resources"}}</h4>
-      {{if .DocsEnabled}}<a href="{{.URL "/docs"}}">{{.T "layout.docs"}}</a>{{end}}
       <a href="{{.URL "/news"}}">{{.T "layout.news"}}</a>
       <a href="{{.URL "/p/about"}}">{{.T "layout.about"}}</a>
+      <a href="{{.Home}}#quickstart">{{.T "layout.quickstart"}}</a>
     </nav>
     <nav class="footer-col" aria-label="{{.T "layout.contact"}}">
       <h4>{{.T "layout.contact"}}</h4>
@@ -132,13 +172,12 @@
       {{if .ICP}}<a class="footer-icp" href="https://beian.miit.gov.cn/" rel="noopener noreferrer" target="_blank">{{.ICP}}</a>{{end}}
     </nav>
   </div>
-  <div class="container footer-mark" aria-hidden="true">{{.SiteName}}</div>
   <div class="container footer-bottom">
     <span>© {{.Year}} {{.SiteName}}</span>
     {{if .FooterNote}}<span class="footer-note">{{.FooterNote}}</span>{{end}}
   </div>
 </footer>
 <script type="application/json" id="site-i18n">{{.JSStrings}}</script>
-<script src="/website-assets/site.js?v=0.9.1" defer></script>
+<script src="/website-assets/site.js?v=0.9.34" defer></script>
 </body>
 </html>{{end}}

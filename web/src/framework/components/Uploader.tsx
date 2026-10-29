@@ -5,11 +5,13 @@ import { ImagePlus, Plus, Upload, VideoIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { DragCursorHost } from './table/use-sortable-sensors'
 import { ImageCropDialog, type CropConfig } from './ImageCropDialog'
 import { FileTile, PendingTile, tileSize, type PendingItem } from '@/framework/upload/UploaderTiles'
 import { isAbortError, uploadFile } from '@/framework/upload/uploadClient'
 import { precheckFile, useUploadConfig } from '@/framework/upload/precheck'
 import { captureVideoPoster } from '@/framework/upload/videoPoster'
+import { toWebp, webpName } from '@/framework/upload/toWebp'
 import type { UploadedFile, UploadKind, UploadVisibility } from '@/framework/upload/types'
 
 export type { UploadedFile } from '@/framework/upload/types'
@@ -74,6 +76,15 @@ export function Uploader({ kind, multiple, maxCount, crop, visibility = 'private
       try {
         const posterP = kind === 'video' ? captureVideoPoster(item.file) : Promise.resolve(null)
         const up = await uploadFile(item.file, { kind, visibility, signal: ctrl.signal, onProgress: (p) => patch(item.uid, { progress: p }) })
+        // 原图已落库；再传一份 WebP 副本（服务端按 Accept 优先下发）。任何一步失败都只影响省流量，不影响可用性。
+        if (kind === 'image' && cfg?.imageWebp) {
+          const webp = await toWebp(item.file).catch(() => null)
+          if (webp && webp.size < up.size) {
+            await uploadFile(new File([webp], webpName(item.file.name), { type: 'image/webp' }), {
+              kind: 'image', visibility, variantOf: up.id, signal: ctrl.signal,
+            }).catch(() => null)
+          }
+        }
         const blob = await posterP
         if (blob) {
           const poster = await uploadFile(new File([blob], `${item.file.name}.jpg`, { type: 'image/jpeg' }), { kind: 'image', visibility: 'public', signal: ctrl.signal }).catch(() => null)
@@ -90,7 +101,7 @@ export function Uploader({ kind, multiple, maxCount, crop, visibility = 'private
         toast.error(t('uploader.failed'))
       }
     },
-    [kind, visibility, patch, drop, t],
+    [kind, visibility, patch, drop, t, cfg?.imageWebp],
   )
 
   const start = useCallback(
@@ -155,6 +166,7 @@ export function Uploader({ kind, multiple, maxCount, crop, visibility = 'private
   return (
     <div className={cn('w-full', className)}>
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+        <DragCursorHost />
         <SortableContext items={value.map((f) => f.id)} strategy={kind === 'image' ? rectSortingStrategy : verticalListSortingStrategy}>
           <div className={cn(kind === 'image' ? 'flex flex-wrap gap-3' : 'flex flex-col gap-2')}>
             {value.map((f) => (

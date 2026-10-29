@@ -1,0 +1,25 @@
+{
+  "language": {
+    "menu": "Languages",
+    "desc": "The single source of truth for languages: admin UI, public-site routes, dictionary labels and export headers all read this list.",
+    "hint": "Restart the service after adding or removing a language or changing a path prefix — public-site routes are registered at startup.",
+    "add": "Add language",
+    "remove": "Remove language",
+    "default": "Default",
+    "defaultTag": "Default language",
+    "saved": "Saved",
+    "savedRestart": "Saved — restart the service for the public site to pick it up",
+    "prefixRoot": "The default language serves the root path, so its prefix must be empty",
+    "prefixHint": "Public-site path prefix, e.g. ja; leave empty to derive it from the language base tag",
+    "derivedHint": "Derived from the language code when left empty",
+    "dateFormatHint": "A Go layout string, e.g. 2006-01-02 or 2006年1月2日",
+    "fields": {
+      "code": "Language code",
+      "name": "Display name",
+      "prefix": "Path prefix",
+      "htmlLang": "<html lang> / hreflang",
+      "ogLocale": "og:locale",
+      "dateFormat": "Date format"
+    }
+  }
+}

@@ -178,6 +178,8 @@ func parseLimit(c *gin.Context) int {
 func (h *handler) Register(r *gin.RouterGroup, d *core.Deps) {
 	g := r.Group("/plugins/ticket")
 	g.GET("/tickets", core.Perm("ticket:list"), h.list)
+	// 统计与列表同一组筛选条件；注册在 /tickets/:no 之前，静态段优先匹配。
+	g.GET("/tickets/stats", core.Perm("ticket:list"), h.Stats)
 	g.GET("/tickets/:no/replies", core.Perm("ticket:list"), h.replies)
 	g.POST("/tickets/:no/replies", core.Perm("ticket:reply"), h.adminReply)
 	g.POST("/tickets/:no/status", core.Perm("ticket:edit"), h.setStatus)

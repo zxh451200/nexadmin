@@ -1,8 +1,7 @@
 {
   "plugin_totp": {
     "title": "两步验证",
-    "description": "绑定验证器 App,登录时要求输入动态码",
-    "dir": "个人",
+    "description": "免费基础两步验证：绑定验证器 App，登录时要求输入动态码；插件需按需安装",
     "menu": "两步验证",
     "statusLabel": "当前状态",
     "on": "已启用",

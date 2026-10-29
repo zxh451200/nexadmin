@@ -13,6 +13,7 @@ import { Button } from '@/framework/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/framework/ui/card'
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/framework/ui/form'
 import { Input } from '@/framework/ui/input'
+import { Switch } from '@/framework/ui/switch'
 import { useSaveUploadSettings, useUploadSettings } from './api'
 
 const size = z.string().trim().regex(/^\d*(\.\d+)?$/)
@@ -21,6 +22,7 @@ const schema = z.object({
   maxVideoMb: size,
   maxFileMb: size,
   allowedTypes: z.array(z.string()),
+  imageWebp: z.boolean(),
 })
 type FormValues = z.infer<typeof schema>
 
@@ -32,7 +34,7 @@ export function UploadLimitCard() {
   const save = useSaveUploadSettings()
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { maxImageMb: '', maxVideoMb: '', maxFileMb: '', allowedTypes: [] },
+    defaultValues: { maxImageMb: '', maxVideoMb: '', maxFileMb: '', allowedTypes: [], imageWebp: false },
   })
 
   useEffect(() => {
@@ -42,6 +44,7 @@ export function UploadLimitCard() {
         maxVideoMb: show(data.maxVideoMb),
         maxFileMb: show(data.maxFileMb),
         allowedTypes: data.allowedTypes,
+        imageWebp: data.imageWebp,
       })
     }
   }, [data, form])
@@ -56,6 +59,7 @@ export function UploadLimitCard() {
         maxVideoMb: Number(v.maxVideoMb) || 0,
         maxFileMb: Number(v.maxFileMb) || 0,
         allowedTypes: v.allowedTypes,
+        imageWebp: v.imageWebp,
       })
       toast.success(t('common.operateSuccess'))
     } catch (e) {
@@ -115,6 +119,24 @@ export function UploadLimitCard() {
                         />
                       </FormControl>
                       <FormDescription>{t('sysConfig.upload.allowedTypesHint')}</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </FormGridFull>
+              <FormGridFull>
+                <FormField
+                  control={form.control}
+                  name="imageWebp"
+                  render={({ field }) => (
+                    <FormItem>
+                      <div className="flex items-center justify-between gap-3">
+                        <FormLabel>{t('sysConfig.upload.webp')}</FormLabel>
+                        <FormControl>
+                          <Switch checked={field.value} onCheckedChange={field.onChange} />
+                        </FormControl>
+                      </div>
+                      <FormDescription>{t('sysConfig.upload.webpHint')}</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}

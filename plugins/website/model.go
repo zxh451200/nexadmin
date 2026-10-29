@@ -1,6 +1,9 @@
 package website
 
 import (
+	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"nexadmin/core/database"
@@ -25,18 +28,46 @@ type Setting struct {
 	MarketEnabled bool   `gorm:"not null;default:true" json:"marketEnabled"` // 官网插件市场入口开关
 	// I18nJSON 是非默认语言的字段译文：{"en-US":{"homeTitle":"…"}}；空 = 全部回退原文。
 	I18nJSON string `gorm:"type:text" json:"i18nJson"`
+	// SeedVersion 记录出厂内容补种进度：升级后只补一次新增的出厂条目，不复活管理员删掉的内容。
+	SeedVersion int `gorm:"not null;default:1" json:"-"`
 }
 
 func (Setting) TableName() string { return "plg_website_setting" }
 
-// Nav 是顶部导航项。
+// Nav 是顶部导航项，ParentID 支持最多 3 级。
 type Nav struct {
 	database.PlatformModel
-	Label    string `gorm:"size:64;not null" json:"label"`
-	Href     string `gorm:"size:255;not null" json:"href"`
-	Sort     int    `json:"sort"`
-	Enabled  bool   `json:"enabled"`
-	I18nJSON string `gorm:"type:text" json:"i18nJson"`
+	// ParentID 是上级导航 ID，0 = 顶级；JSON 里按字符串传输（雪花 ID 超出 JS 安全整数）。
+	ParentID NavParentID `gorm:"index:idx_plg_website_nav_parent;not null;default:0" json:"parentId"`
+	Label    string      `gorm:"size:64;not null" json:"label"`
+	Href     string      `gorm:"size:255;not null" json:"href"`
+	Sort     int         `json:"sort"`
+	Enabled  bool        `json:"enabled"`
+	I18nJSON string      `gorm:"type:text" json:"i18nJson"`
+	// Children 只在公开页装配树时填充，不入库。
+	Children []Nav `gorm:"-" json:"children,omitempty"`
+}
+
+// NavParentID 是导航上级引用：落库仍是 uint64，JSON 用字符串避免大 ID 在浏览器丢精度；
+// 输入兼容 "0" / 0 / null。
+type NavParentID uint64
+
+func (p NavParentID) MarshalJSON() ([]byte, error) {
+	return []byte(`"` + strconv.FormatUint(uint64(p), 10) + `"`), nil
+}
+
+func (p *NavParentID) UnmarshalJSON(b []byte) error {
+	s := strings.Trim(strings.TrimSpace(string(b)), `"`)
+	if s == "" || s == "null" {
+		*p = 0
+		return nil
+	}
+	v, err := strconv.ParseUint(s, 10, 64)
+	if err != nil {
+		return fmt.Errorf("导航上级 ID 非法：%s", s)
+	}
+	*p = NavParentID(v)
+	return nil
 }
 
 func (Nav) TableName() string { return "plg_website_nav" }
@@ -63,6 +94,9 @@ type Page struct {
 	Content   string `gorm:"type:mediumtext" json:"content"`
 	Published bool   `json:"published"`
 	I18nJSON  string `gorm:"type:text" json:"i18nJson"`
+	// PublishedJSON 是非默认语言的发布态：{"en-US":true,"ja-JP":false}；
+	// 空 = 该行的 published 对所有语言生效（升级前保存的内容不会因新规则突然下线）。
+	PublishedJSON string `gorm:"type:text" json:"publishedJson"`
 }
 
 func (Page) TableName() string { return "plg_website_page" }
@@ -74,10 +108,13 @@ type Post struct {
 	Title       string     `gorm:"size:200;not null" json:"title"`
 	CoverURL    string     `gorm:"size:255;not null" json:"coverUrl"`
 	Summary     string     `gorm:"size:500;not null" json:"summary"`
+	SeoDesc     string     `gorm:"size:300;not null" json:"seoDesc"`
 	Content     string     `gorm:"type:mediumtext" json:"content"`
 	Published   bool       `json:"published"`
 	PublishedAt *time.Time `json:"publishedAt,omitempty"`
 	I18nJSON    string     `gorm:"type:text" json:"i18nJson"`
+	// PublishedJSON 是非默认语言的发布态，语义同 Page；默认语言沿用 published 列。
+	PublishedJSON string `gorm:"type:text" json:"publishedJson"`
 }
 
 func (Post) TableName() string { return "plg_website_post" }

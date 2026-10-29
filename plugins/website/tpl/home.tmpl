@@ -1,7 +1,25 @@
 {{define "content"}}
 <section class="hero">
+  <!-- 弧带从界面背后穿过，不遮挡标题；窄屏隐藏，减少动态效果时保持静止。 -->
+  <svg class="hero-arc" viewBox="0 0 1200 700" preserveAspectRatio="none" aria-hidden="true" focusable="false"
+       data-parallax="34">
+    <defs>
+      <linearGradient id="heroArcGrad" x1="0" y1="1" x2="1" y2="0">
+        <stop offset="0" style="stop-color: var(--hero-arc-deep)"></stop>
+        <stop offset="0.45" style="stop-color: var(--hero-arc-mid)"></stop>
+        <stop offset="1" style="stop-color: var(--hero-arc-tip)"></stop>
+      </linearGradient>
+      <filter id="heroArcShadow" x="-25%" y="-25%" width="150%" height="150%">
+        <feDropShadow dx="0" dy="28" stdDeviation="28" flood-color="rgba(10, 12, 40, 0.45)"></feDropShadow>
+      </filter>
+    </defs>
+    <path d="M-70 706 C 180 320, 620 150, 1270 300" fill="none" stroke="url(#heroArcGrad)" stroke-width="56"
+          stroke-linecap="round" filter="url(#heroArcShadow)"></path>
+    <path d="M-70 706 C 180 320, 620 150, 1270 300" fill="none" stroke="rgba(255,255,255,0.14)"
+          stroke-width="9" stroke-linecap="round" transform="translate(0 -14)"></path>
+  </svg>
   <div class="container hero-in">
-    <a class="hero-badge" href="{{.URL "/news"}}" data-reveal><span class="dot" aria-hidden="true"></span>{{.T "home.badge"}}<span class="badge-arrow" aria-hidden="true">→</span></a>
+    <a class="hero-badge" href="{{.URL "/news"}}" data-reveal>{{.T "home.badge"}}<span class="badge-arrow" aria-hidden="true">→</span></a>
     <h1 class="hero-title" data-reveal>
       {{- range $i, $line := titleLines .HomeTitle}}
       {{- if $i}}<br>{{end}}<span class="title-line">{{$line}}</span>
@@ -10,64 +28,22 @@
     {{if .HomeSubtitle}}<p class="hero-sub" data-reveal>{{.HomeSubtitle}}</p>{{end}}
     <div class="hero-cta" data-reveal>
       {{if .HomeCTALabel}}<a class="btn btn-primary" href="{{.URL .HomeCTAHref}}">{{.HomeCTALabel}}</a>{{end}}
-      <a class="hero-link" href="{{.Home}}#quickstart">{{.T "home.ctaSecondary"}}<span class="chev" aria-hidden="true">›</span></a>
+      <a class="btn btn-ghost" href="{{.Home}}#product">{{.T "home.ctaSecondary"}}</a>
     </div>
 
     <div class="hero-visual" data-reveal>
-      <div class="browser" data-parallax role="img" aria-label="{{.TF "home.browserAria" .SiteName}}">
-        <div class="browser-bar"><span class="bdot"></span><span class="bdot"></span><span class="bdot"></span><span class="browser-url">localhost:8080/dashboard</span></div>
-        <div class="app">
-          <aside class="app-side">
-            <div class="app-side-brand"><span class="brand-mark sm" aria-hidden="true">{{initial .SiteName}}</span>{{.SiteName}}</div>
-            <div class="app-search">{{.T "home.mock.search"}}<span class="kbd">Ctrl K</span></div>
-            <nav class="app-menu">
-              <span class="app-group">{{.T "home.mock.overview"}}</span>
-              <a class="app-item active" href="#dashboard">{{.T "home.mock.dashboard"}}</a>
-              <span class="app-group">{{.T "home.mock.system"}}</span>
-              <a class="app-item" href="#users">{{.T "home.mock.users"}}</a>
-              <a class="app-item" href="#roles">{{.T "home.mock.roles"}}</a>
-              <a class="app-item" href="#plugins">{{.T "home.mock.plugins"}}</a>
-              <span class="app-group">{{.T "home.mock.content"}}</span>
-              <a class="app-item" href="#notice">{{.T "home.mock.notice"}}</a>
-              <a class="app-item" href="#monitor">{{.T "home.mock.monitor"}}</a>
-              <span class="app-group">{{.T "home.mock.tenant"}}</span>
-              <a class="app-item" href="#tenant">{{.T "home.mock.tenantMgmt"}}</a>
-              <a class="app-item" href="#portal">{{.T "home.mock.portal"}}</a>
-            </nav>
-          </aside>
-          <div class="app-main">
-            <div class="app-head"><h2>{{.T "home.mock.dashboard"}}</h2><span class="app-avatar" aria-hidden="true">A</span></div>
-            <div class="stat-grid">
-              <div class="stat"><span class="stat-label">{{.T "home.mock.usersTotal"}}</span><span class="stat-value">1,284</span><span class="stat-delta up">{{.T "home.mock.weekDelta"}}</span></div>
-              <div class="stat"><span class="stat-label">{{.T "home.mock.online"}}</span><span class="stat-value">96</span><span class="stat-delta">{{.T "home.mock.live"}}</span></div>
-              <div class="stat"><span class="stat-label">{{.T "home.mock.requests"}}</span><span class="stat-value">45.2k</span><span class="stat-delta">{{.T "home.mock.errorRate"}}</span></div>
-              <div class="stat"><span class="stat-label">{{.T "home.mock.storage"}}</span><span class="stat-value">38%</span><span class="stat-bar" aria-hidden="true"><i style="width:38%"></i></span></div>
-            </div>
-            <div class="panel chart-panel">
-              <div class="panel-head"><span>{{.T "home.mock.trend"}}</span><span class="legend"><i class="lg-a"></i>{{.T "home.mock.request"}}<i class="lg-b"></i>{{.T "home.mock.error"}}</span></div>
-              <svg class="chart" viewBox="0 0 560 150" preserveAspectRatio="none" aria-hidden="true">
-                <defs>
-                  <linearGradient id="areaA" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stop-color="#0071e3" stop-opacity=".24"/>
-                    <stop offset="100%" stop-color="#0071e3" stop-opacity="0"/>
-                  </linearGradient>
-                </defs>
-                <path class="grid" d="M0 30h560M0 70h560M0 110h560"/>
-                <path class="area" fill="url(#areaA)" d="M0 96C40 88 62 52 92 60s56 44 88 28 58-56 90-40 60 48 90 36 60-56 90-44 66 40 110 20V150H0z"/>
-                <path class="line-a" pathLength="1" d="M0 96C40 88 62 52 92 60s56 44 88 28 58-56 90-40 60 48 90 36 60-56 90-44 66 40 110 20"/>
-                <path class="line-b" pathLength="1" d="M0 128c40-2 62-8 92-6s56 10 88 4 58-12 90-8 60 12 90 8 60-10 90-6 66 8 110 2"/>
-              </svg>
-            </div>
-            <div class="panel table-panel">
-              <div class="panel-head"><span>{{.T "home.mock.recent"}}</span><a class="panel-more" href="#login-logs">{{.T "home.mock.all"}}</a></div>
-              <div class="row"><span class="pill ok">{{.T "home.mock.password"}}</span><span class="row-main">admin · 10.0.8.21</span><span class="row-time">{{.TF "home.mock.minutesAgo" 1}}</span></div>
-              <div class="row"><span class="pill ok">GitHub</span><span class="row-main">zxh · 10.0.6.4</span><span class="row-time">{{.TF "home.mock.minutesAgo" 3}}</span></div>
-              <div class="row"><span class="pill bad">{{.T "home.mock.sms"}}</span><span class="row-main">138****1234 · {{.T "home.mock.codeExpired"}}</span><span class="row-time">{{.TF "home.mock.minutesAgo" 8}}</span></div>
-            </div>
-          </div>
-        </div>
+      <div class="hero-stage">
+        <figure class="hero-shot" data-parallax>
+          <button class="image-open" type="button" data-image-preview hidden aria-label="{{.TF "home.preview.openAria" (.TF "home.heroShotAlt" .SiteName)}}">{{.T "home.preview.open"}} <span aria-hidden="true">↗</span></button>
+          <img class="shot-dark" src="/website-assets/market/dashboard-dark.jpg?v=0.9.28" alt="{{.TF "home.heroShotAlt" .SiteName}}" width="1440" height="900" decoding="async">
+          <img class="shot-light" src="/website-assets/market/dashboard-light.jpg?v=0.9.28" alt="{{.TF "home.heroShotAlt" .SiteName}}" width="1440" height="900" decoding="async">
+        </figure>
+        <span class="hero-mark hero-mark--tl" aria-hidden="true"></span>
+        <span class="hero-mark hero-mark--tr" aria-hidden="true"></span>
+        <span class="hero-mark hero-mark--bl" aria-hidden="true"></span>
+        <span class="hero-mark hero-mark--br" aria-hidden="true"></span>
+        <p class="hero-caption"><span class="hero-caption-dot" aria-hidden="true"></span>{{.T "home.heroShotNote"}}</p>
       </div>
-      <p class="visual-caption">{{.T "home.mock.caption"}}</p>
     </div>
   </div>
 </section>
@@ -75,131 +51,66 @@
 <section class="tech">
   <div class="container" data-reveal>
     <p class="tech-title">{{.T "home.tech.title"}}</p>
-    <ul class="tech-list">
-      <li>Go</li><li>Gin</li><li>GORM</li><li>React</li><li>TypeScript</li><li>shadcn/ui</li>
-      <li>MySQL</li><li>MariaDB</li><li>PostgreSQL</li><li>Redis / Valkey</li>
-    </ul>
+    <div class="tech-marquee">
+      <div class="tech-track">
+        <ul class="tech-list">
+          <li>Go</li><li>Gin</li><li>GORM</li><li>React</li><li>TypeScript</li><li>shadcn/ui</li>
+          <li>MySQL</li><li>MariaDB</li><li>PostgreSQL</li><li>Redis / Valkey</li>
+        </ul>
+        <ul class="tech-list" aria-hidden="true">
+          <li>Go</li><li>Gin</li><li>GORM</li><li>React</li><li>TypeScript</li><li>shadcn/ui</li>
+          <li>MySQL</li><li>MariaDB</li><li>PostgreSQL</li><li>Redis / Valkey</li>
+        </ul>
+      </div>
+    </div>
   </div>
 </section>
 
 <section class="statement">
-  <div class="container" data-reveal>
-    <p><b>{{.T "home.statement.strong"}}</b> {{.T "home.statement.rest"}}</p>
+  <div class="container statement-in" data-reveal>
+    <p class="fig">{{.T "home.statement.fig"}}</p>
+    <p class="statement-copy"><span class="stmt-lead">{{.T "home.statement.strong"}}</span><span class="stmt-sub">{{.T "home.statement.rest"}}</span></p>
   </div>
 </section>
 
-{{if .Features}}
-<section class="section" id="features">
+<section class="section editorial" id="features">
   <div class="container">
-    <header class="section-head" data-reveal>
-      <div class="section-copy">
-        <p class="fig">{{.T "home.features.fig"}}</p>
-        <h2>{{.T "home.features.title"}}</h2>
-        <p class="section-sub">{{.T "home.features.sub"}}</p>
+    <header class="editorial-head" data-reveal>
+      <div class="editorial-title">
+        <h2>{{range $i, $line := titleLines (.T "home.editorial.platform.title")}}{{if $i}}<br>{{end}}{{$line}}{{end}}</h2>
+      </div>
+      <div class="editorial-lead">
+        <p>{{.T "home.editorial.platform.sub"}}</p>
+        <a class="learn-more" href="{{.URL "/docs/features"}}">{{.T "home.editorial.platform.link"}}<span aria-hidden="true">→</span></a>
       </div>
     </header>
-    <div class="feature-grid">
-      {{range .Features}}
-      <article class="feature" data-reveal>
-        <span class="feature-icon">{{icon .Icon}}</span>
-        <h3>{{.Title}}</h3>
-        <p>{{.Description}}</p>
-      </article>
-      {{end}}
-    </div>
-  </div>
-</section>
-{{end}}
-
-<section class="section" id="showcase">
-  <div class="container">
-    <header class="section-head" data-reveal>
-      <div class="section-copy">
-        <p class="fig">{{.T "home.showcase.fig"}}</p>
-        <h2>{{.T "home.showcase.title"}}</h2>
-        <p class="section-sub">{{.T "home.showcase.sub"}}</p>
-      </div>
-    </header>
-    <div class="tabs" role="tablist" aria-label="{{.T "home.showcase.tabsAria"}}" data-tabs>
-      <button class="tab" type="button" role="tab" id="tab-perm" aria-controls="panel-perm" aria-selected="true">{{.T "home.showcase.tabPerm"}}</button>
-      <button class="tab" type="button" role="tab" id="tab-open" aria-controls="panel-open" aria-selected="false" tabindex="-1">{{.T "home.showcase.tabOpen"}}</button>
-      <button class="tab" type="button" role="tab" id="tab-obs" aria-controls="panel-obs" aria-selected="false" tabindex="-1">{{.T "home.showcase.tabObs"}}</button>
-    </div>
-    <div class="showcase-body" data-reveal>
-      <div class="showcase-panel" role="tabpanel" id="panel-perm" aria-labelledby="tab-perm">
-        <div class="mock">
-          <div class="mock-head"><span>{{.T "home.perm.head"}}</span><span class="mock-chip">{{.T "home.perm.chip"}}</span></div>
-          <div class="mock-table">
-            <div class="mock-tr mock-th"><span>{{.T "home.perm.role"}}</span><span>{{.T "home.perm.codes"}}</span><span>{{.T "home.perm.scope"}}</span></div>
-            <div class="mock-tr"><span>{{.T "home.perm.super"}}</span><span class="mono">*:*</span><span class="scope scope-all">{{.T "home.perm.all"}}</span></div>
-            <div class="mock-tr"><span>{{.T "home.perm.ops"}}</span><span class="mono">user:list · user:edit</span><span class="scope">{{.T "home.perm.dept"}}</span></div>
-            <div class="mock-tr"><span>{{.T "home.perm.auditor"}}</span><span class="mono">audit:list</span><span class="scope">{{.T "home.perm.self"}}</span></div>
-          </div>
-          <p class="mock-note">{{.T "home.perm.note"}}</p>
-        </div>
-      </div>
-      <div class="showcase-panel" role="tabpanel" id="panel-open" aria-labelledby="tab-open" hidden>
-        <div class="mock">
-          <div class="mock-head"><span>{{.T "home.open.head"}}</span><span class="mock-chip">OpenAPI · Webhook · MCP</span></div>
-          <div class="mock-code">
-            <div><span class="k">POST</span><span class="mono">/api/v1/profile/tokens</span><span class="ok">201</span><span class="dim">{{.T "home.open.token"}}</span></div>
-            <div><span class="k">POST</span><span class="mono">/api/v1/openapi/webhooks</span><span class="ok">202</span><span class="dim">{{.T "home.open.hmac"}}</span></div>
-            <div><span class="k">GET</span><span class="mono">/api/v1/openapi/events</span><span class="ok">200</span><span class="dim">{{.T "home.open.events"}}</span></div>
-            <div><span class="k">GET</span><span class="mono">/api/v1/openapi.json</span><span class="ok">200</span><span class="dim">{{.T "home.open.docs"}}</span></div>
-          </div>
-          <p class="mock-note">{{.T "home.open.note"}}</p>
-        </div>
-      </div>
-      <div class="showcase-panel" role="tabpanel" id="panel-obs" aria-labelledby="tab-obs" hidden>
-        <div class="mock">
-          <div class="mock-head"><span>{{.T "home.obs.head"}}</span><span class="mock-chip">/metrics · Prometheus</span></div>
-          <div class="svc-list">
-            <div class="svc"><span class="dot" aria-hidden="true"></span><span>{{.T "home.obs.gateway"}}</span><span class="svc-lat">42 ms</span>
-              <svg class="spark" viewBox="0 0 140 26" aria-hidden="true"><path d="M0 19L12 15L24 17L36 10L48 13L60 7L72 11L84 5L96 9L108 4L120 8L132 6L140 3"/></svg>
-            </div>
-            <div class="svc"><span class="dot" aria-hidden="true"></span><span>{{.T "home.obs.db"}}</span><span class="svc-lat">8 ms</span>
-              <svg class="spark" viewBox="0 0 140 26" aria-hidden="true"><path d="M0 12L12 13L24 11L36 12L48 9L60 10L72 8L84 11L96 9L108 10L120 7L132 8L140 6"/></svg>
-            </div>
-            <div class="svc"><span class="dot" aria-hidden="true"></span><span>{{.T "home.obs.cache"}}</span><span class="svc-lat">1 ms</span>
-              <svg class="spark" viewBox="0 0 140 26" aria-hidden="true"><path d="M0 8L12 7L24 8L36 6L48 7L60 5L72 6L84 5L96 6L108 4L120 5L132 4L140 5"/></svg>
-            </div>
-            <div class="svc"><span class="dot warn" aria-hidden="true"></span><span>{{.T "home.obs.fe"}}</span><span class="svc-lat">0.4%</span>
-              <svg class="spark" viewBox="0 0 140 26" aria-hidden="true"><path d="M0 18L12 20L24 14L36 17L48 12L60 16L72 10L84 15L96 11L108 14L120 9L132 12L140 8"/></svg>
-            </div>
-          </div>
-          <p class="mock-note">{{.T "home.obs.note"}}</p>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<section class="section section-dark" id="product">
-  <div class="container">
-    <header class="section-head" data-reveal>
-      <div class="section-copy">
-        <p class="fig">{{.T "home.product.fig"}}</p>
-        <h2>{{.T "home.product.title"}}</h2>
-        <p class="section-sub">{{.T "home.product.sub"}}</p>
-      </div>
-    </header>
-    <figure class="shot-frame" data-reveal>
-      <img src="/website-assets/market/dashboard.jpg" alt="{{.TF "home.product.alt" .SiteName}}" loading="lazy" data-parallax>
-      <figcaption>{{.T "home.product.caption"}}</figcaption>
+    <figure class="stage-shot" data-reveal data-parallax>
+      <img class="shot-dark" src="/website-assets/market/role-dark.jpg?v=0.9.28" alt="{{.T "home.editorial.platform.cap"}}" width="1440" height="704" loading="lazy" decoding="async">
+      <img class="shot-light" src="/website-assets/market/role-light.jpg?v=0.9.28" alt="{{.T "home.editorial.platform.cap"}}" width="1440" height="704" loading="lazy" decoding="async">
+      <button class="image-open" type="button" data-image-preview hidden aria-label="{{.TF "home.preview.openAria" (.T "home.editorial.platform.cap")}}">{{.T "home.preview.open"}} <span aria-hidden="true">↗</span></button>
+        <figcaption>{{.T "home.editorial.platform.cap"}}</figcaption>
     </figure>
   </div>
 </section>
 
-<section class="section" id="integrations">
+<section class="section editorial" id="extension">
   <div class="container">
-    <header class="section-head" data-reveal>
-      <div class="section-copy">
-        <p class="fig">{{.T "home.intg.fig"}}</p>
-        <h2>{{.T "home.intg.title"}}</h2>
-        <p class="section-sub">{{.T "home.intg.sub"}}</p>
+    <header class="editorial-head" data-reveal>
+      <div class="editorial-title">
+        <h2>{{range $i, $line := titleLines (.T "home.editorial.extension.title")}}{{if $i}}<br>{{end}}{{$line}}{{end}}</h2>
       </div>
-      <a class="section-more" href="{{.Home}}#features">{{.T "home.intg.more"}}</a>
+      <div class="editorial-lead">
+        <p>{{.T "home.editorial.extension.sub"}}</p>
+        <a class="learn-more" href="{{.URL "/docs/plugin-dev"}}">{{.T "home.editorial.extension.link"}}<span aria-hidden="true">→</span></a>
+      </div>
     </header>
+    <figure class="stage-shot" data-reveal data-parallax>
+      <img class="shot-dark" src="/website-assets/market/pluginmarket-dark.jpg?v=0.9.28" alt="{{.T "home.editorial.extension.cap"}}" width="1440" height="900" loading="lazy" decoding="async">
+      <img class="shot-light" src="/website-assets/market/pluginmarket-light.jpg?v=0.9.28" alt="{{.T "home.editorial.extension.cap"}}" width="1440" height="900" loading="lazy" decoding="async">
+      <button class="image-open" type="button" data-image-preview hidden aria-label="{{.TF "home.preview.openAria" (.T "home.editorial.extension.cap")}}">{{.T "home.preview.open"}} <span aria-hidden="true">↗</span></button>
+        <figcaption>{{.T "home.editorial.extension.cap"}}</figcaption>
+    </figure>
+    <h3 class="intg-head" data-reveal>{{.T "home.editorial.intg.head"}}</h3>
     <ul class="intg-grid" data-reveal>
       <li><span class="intg-mark" aria-hidden="true">{{icon "code"}}</span><span class="intg-name">{{.T "home.intg.github"}}</span><span class="intg-kind">{{.T "home.intg.kindOauth"}}</span></li>
       <li><span class="intg-mark" aria-hidden="true">{{icon "users"}}</span><span class="intg-name">{{.T "home.intg.wecom"}}</span><span class="intg-kind">{{.T "home.intg.kindScan"}}</span></li>
@@ -214,21 +125,85 @@
   </div>
 </section>
 
+{{if .Features}}
+<section class="section cap-index" id="capabilities">
+  <div class="container">
+    <div class="cap-head" data-reveal>
+      <p class="fig">{{.T "home.cap.fig"}}</p>
+      <a class="section-more" href="{{.URL "/docs/features"}}">{{.T "home.cap.more"}}</a>
+    </div>
+    <div class="cap-grid">
+      {{range .Features}}
+      <article class="cap" data-reveal>
+        <span class="cap-icon" aria-hidden="true">{{icon .Icon}}</span>
+        <h3>{{.Title}}</h3>
+        <p>{{.Description}}</p>
+      </article>
+      {{end}}
+    </div>
+  </div>
+</section>
+{{end}}
+
+<section class="section" id="product">
+  <div class="container">
+    <header class="section-head home-head" data-reveal>
+      <div class="section-copy">
+        <h2>{{.T "home.product.title"}}</h2>
+      </div>
+      <div class="section-side">
+        <p class="section-sub">{{.T "home.product.sub"}}</p>
+      </div>
+    </header>
+    <div class="product-tour" data-reveal>
+      <div class="product-toolbar">
+        <p class="product-note">{{.T "home.product.shots.head"}}</p>
+        <div class="product-tabs" role="tablist" aria-label="{{.T "home.product.tabs"}}" data-tabs>
+          <button id="tab-user" type="button" role="tab" aria-controls="panel-user" aria-selected="true">{{.T "home.product.tab.user"}}</button>
+          <button id="tab-menu" type="button" role="tab" aria-controls="panel-menu" aria-selected="false" tabindex="-1">{{.T "home.product.tab.menu"}}</button>
+          <button id="tab-siteset" type="button" role="tab" aria-controls="panel-siteset" aria-selected="false" tabindex="-1">{{.T "home.product.tab.siteset"}}</button>
+        </div>
+      </div>
+      <div class="shots">
+      <figure class="shot" id="panel-user" role="tabpanel" aria-labelledby="tab-user" tabindex="0">
+        <img class="shot-dark" src="/website-assets/market/user-dark.jpg?v=0.9.28" alt="{{.T "home.product.shot.user"}}" width="1440" height="900" loading="lazy" decoding="async">
+        <img class="shot-light" src="/website-assets/market/user-light.jpg?v=0.9.28" alt="{{.T "home.product.shot.user"}}" width="1440" height="900" loading="lazy" decoding="async">
+        <button class="image-open" type="button" data-image-preview hidden aria-label="{{.TF "home.preview.openAria" (.T "home.product.shot.user")}}">{{.T "home.preview.open"}} <span aria-hidden="true">↗</span></button>
+        <figcaption>{{.T "home.product.shot.user"}}</figcaption>
+      </figure>
+      <figure class="shot" id="panel-menu" role="tabpanel" aria-labelledby="tab-menu" tabindex="0">
+        <img class="shot-dark" src="/website-assets/market/menu-dark.jpg?v=0.9.28" alt="{{.T "home.product.shot.menu"}}" width="1440" height="900" loading="lazy" decoding="async">
+        <img class="shot-light" src="/website-assets/market/menu-light.jpg?v=0.9.28" alt="{{.T "home.product.shot.menu"}}" width="1440" height="900" loading="lazy" decoding="async">
+        <button class="image-open" type="button" data-image-preview hidden aria-label="{{.TF "home.preview.openAria" (.T "home.product.shot.menu")}}">{{.T "home.preview.open"}} <span aria-hidden="true">↗</span></button>
+        <figcaption>{{.T "home.product.shot.menu"}}</figcaption>
+      </figure>
+      <figure class="shot" id="panel-siteset" role="tabpanel" aria-labelledby="tab-siteset" tabindex="0">
+        <img class="shot-dark" src="/website-assets/market/siteset-dark.jpg?v=0.9.28" alt="{{.T "home.product.shot.siteset"}}" width="1440" height="900" loading="lazy" decoding="async">
+        <img class="shot-light" src="/website-assets/market/siteset-light.jpg?v=0.9.28" alt="{{.T "home.product.shot.siteset"}}" width="1440" height="900" loading="lazy" decoding="async">
+        <button class="image-open" type="button" data-image-preview hidden aria-label="{{.TF "home.preview.openAria" (.T "home.product.shot.siteset")}}">{{.T "home.preview.open"}} <span aria-hidden="true">↗</span></button>
+        <figcaption>{{.T "home.product.shot.siteset"}}</figcaption>
+      </figure>
+      </div>
+    </div>
+  </div>
+</section>
+
 {{if and .MarketEnabled .FeaturedPlugins}}
 <section class="section" id="market">
   <div class="container">
-    <header class="section-head" data-reveal>
+    <header class="section-head home-head" data-reveal>
       <div class="section-copy">
-        <p class="fig">{{.T "home.market.fig"}}</p>
         <h2>{{.T "home.market.title"}}</h2>
-        <p class="section-sub">{{.T "home.market.sub"}}</p>
       </div>
-      <a class="section-more" href="{{.URL "/plugins"}}">{{.T "home.market.more"}}</a>
+      <div class="section-side">
+        <p class="section-sub">{{.T "home.market.sub"}}</p>
+        <a class="section-more" href="{{.URL "/plugins"}}">{{.T "home.market.more"}}</a>
+      </div>
     </header>
     <div class="plugin-grid">
       {{range .FeaturedPlugins}}
       <article class="plugin-card" data-reveal>
-        {{if .Cover}}<img class="plugin-cover" src="{{.Cover}}" alt="" loading="lazy">{{else}}<div class="plugin-cover plugin-cover-fallback cat-{{.Category}}" aria-hidden="true"><span>{{.Initial}}</span></div>{{end}}
+        {{if .Cover}}<img class="plugin-cover" src="{{.Cover}}" alt="" loading="lazy">{{end}}
         <header class="plugin-card-head">
           <span class="plugin-icon" aria-hidden="true">{{.Initial}}</span>
           <div class="plugin-title">
@@ -240,7 +215,7 @@
         <p class="plugin-desc">{{.Description}}</p>
         <div class="plugin-stats-line">
           {{if .RatingCount}}<span class="plugin-rating">★ {{.RatingAvg}} <small>({{.RatingCount}})</small></span>{{end}}
-          {{if .Downloads}}<span>{{$.TF "market.downloads" .DownloadsText}}</span>{{end}}
+          {{if .Downloads}}<span>{{$.TN .Downloads "market.downloads" .DownloadsText}}</span>{{end}}
         </div>
         <footer class="plugin-card-foot">
           <span class="plugin-cat">{{.CategoryLabel}}</span>
@@ -254,22 +229,25 @@
 {{end}}
 
 {{if .Posts}}
-<section class="section section-alt" id="news">
+<section class="section" id="news">
   <div class="container">
-    <header class="section-head" data-reveal>
+    <header class="section-head home-head" data-reveal>
       <div class="section-copy">
-        <p class="fig">{{.T "home.news.fig"}}</p>
         <h2>{{.T "home.news.title"}}</h2>
       </div>
-      <a class="section-more" href="{{.URL "/news"}}">{{.T "home.news.more"}}</a>
+      <div class="section-side">
+        <a class="section-more" href="{{.URL "/news"}}">{{.T "home.news.more"}}</a>
+      </div>
     </header>
-    <div class="post-grid">
+    <div class="home-posts">
       {{range .Posts}}
-      <a class="post-card" href="{{$.URL "/news"}}/{{.Slug}}" data-reveal>
-        {{if .CoverURL}}<img class="post-cover" src="{{.CoverURL}}" alt="" loading="lazy">{{end}}
+      <a class="home-post" href="{{$.URL "/news"}}/{{.Slug}}" data-reveal>
         <time class="post-date">{{if .PublishedAt}}{{fmtDate $.Lang .PublishedAt}}{{else}}{{fmtDate $.Lang .UpdatedAt}}{{end}}</time>
-        <h3>{{.Title}}</h3>
-        {{if .Summary}}<p>{{.Summary}}</p>{{end}}
+        <div class="home-post-text">
+          <h3>{{.Title}}</h3>
+          {{if .Summary}}<p>{{.Summary}}</p>{{end}}
+        </div>
+        <span class="home-post-arrow" aria-hidden="true">→</span>
       </a>
       {{end}}
     </div>
@@ -280,7 +258,6 @@
 <section class="section" id="quickstart">
   <div class="container qs-grid">
     <div class="qs-copy" data-reveal>
-      <p class="fig">{{.T "home.qs.fig"}}</p>
       <h2>{{.T "home.qs.title"}}</h2>
       <p class="section-sub">{{.T "home.qs.sub"}}</p>
       <ol class="qs-steps">
@@ -306,7 +283,6 @@
 
 <section class="quote">
   <div class="container quote-in" data-reveal>
-    <p class="fig">{{.T "home.quote.fig"}}</p>
     <blockquote>{{.T "home.quote.body"}}</blockquote>
     <p class="quote-by">{{.T "home.quote.by"}}</p>
   </div>
@@ -322,4 +298,13 @@
     </div>
   </div>
 </section>
+<dialog class="image-dialog" aria-labelledby="image-dialog-title">
+  <div class="image-dialog-bar">
+    <h2 id="image-dialog-title"></h2>
+    <button type="button" class="btn btn-ghost btn-sm" data-image-size aria-pressed="false">{{.T "home.preview.original"}}</button>
+    <form method="dialog"><button type="submit" class="btn btn-primary btn-sm" autofocus>{{.T "home.preview.close"}}</button></form>
+  </div>
+  <p class="image-dialog-hint">{{.T "home.preview.hint"}}</p>
+  <div class="image-dialog-canvas" tabindex="0" role="region" aria-label="{{.T "home.preview.region"}}"><img alt=""></div>
+</dialog>
 {{end}}

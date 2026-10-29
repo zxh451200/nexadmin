@@ -58,7 +58,7 @@ export default function AboutPage() {
       <PageHeader title={t('about.title')} description={t('about.description')} />
 
       <Card>
-        <CardContent className="pt-6">
+        <CardContent className="p-4 md:p-6">
           {about.isLoading ? (
             <Skeleton className="h-20 w-full" />
           ) : (

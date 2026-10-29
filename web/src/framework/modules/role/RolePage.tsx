@@ -87,10 +87,12 @@ export default function RolePage() {
 
   return (
     <PageContainer>
-      <PageHeader
-        title={t('role.title')}
-        description={t('role.description')}
-        actions={
+      <PageHeader title={t('role.title')} description={t('role.description')} />
+
+      <SimpleFilterBar filter={filter} placeholder={t('role.col.name')} />
+
+      <DataTable<Role>
+        toolbar={
           <Can perm="role:create">
             <Button type="button" onClick={() => openForm(null)}>
               <Plus className="me-2 h-4 w-4" aria-hidden="true" />
@@ -98,11 +100,6 @@ export default function RolePage() {
             </Button>
           </Can>
         }
-      />
-
-      <SimpleFilterBar filter={filter} placeholder={t('role.col.name')} />
-
-      <DataTable<Role>
         columns={columns}
         columnSettingsKey="role"
         data={shown}

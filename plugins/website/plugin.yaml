@@ -52,7 +52,7 @@ menus:
   - parent: /website
     type: menu
     title: plugin_website.menu.posts
-    path: /website/posts
+    path: /website/news
     component: plugins/website/PostPage
     perm: website:post
     icon: Newspaper

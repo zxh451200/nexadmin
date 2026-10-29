@@ -1,6 +1,10 @@
 {
   "operLog": {
     "menu": "Operation Logs",
+    "view": {
+      "logs": "Logs",
+      "stats": "Analytics"
+    },
     "description": "Audit trail of create, update and delete operations in the admin",
     "col": {
       "module": "Module",
@@ -51,6 +55,32 @@
       "done": "Export complete",
       "tooMany": "Too many rows to export. Narrow the filters (e.g. the time range) or use the Export Center",
       "filename": "operation-log"
+    },
+    "stats": {
+      "rangeLabel": "Time range",
+      "ranges": {
+        "7d": "Last 7 days",
+        "30d": "Last 30 days",
+        "90d": "Last 90 days",
+        "all": "All time"
+      },
+      "total": "Operations",
+      "failures": "Failed operations",
+      "p95": "P95 latency",
+      "slowest": "Slowest endpoint",
+      "sampled": "High volume: stats cover the most recent 20,000 rows.",
+      "daily": "Daily trend",
+      "hourly": "By hour of day",
+      "topModules": "Top modules",
+      "topTypes": "Top operation types",
+      "topOperators": "Top operators",
+      "slowestUrls": "Slowest endpoints",
+      "col": {
+        "url": "Endpoint",
+        "method": "Method",
+        "count": "Calls",
+        "avgMs": "Avg time"
+      }
     }
   }
 }

@@ -1,0 +1,48 @@
+{{define "content"}}
+<div class="docs-shell docs-shell-index">
+  <aside class="docs-side" aria-label="{{.T "docs.title"}}">
+    <label class="docs-search">
+      <span class="sr-only">{{.T "docs.search"}}</span>
+      <input type="search" data-docs-search placeholder="{{.T "docs.search"}}" autocomplete="off" aria-controls="docs-search-results" aria-describedby="docs-search-hint">
+    </label>
+    <p class="docs-search-hint" id="docs-search-hint">{{.T "docs.search.hint"}}</p>
+    <details class="docs-disclosure" data-docs-disclosure="760">
+      <summary>{{.T "docs.title"}}</summary>
+      <nav aria-label="{{.T "docs.title"}}">
+        {{range .DocNav}}
+        <div class="docs-group">
+          <p class="docs-group-title">{{.Title}}</p>
+          <ul>
+            {{range .Items}}<li><a href="{{.URL}}" lang="{{.Language}}"{{if .Active}} class="active" aria-current="page"{{end}}>{{.Title}}</a></li>{{end}}
+          </ul>
+        </div>
+        {{end}}
+      </nav>
+    </details>
+  </aside>
+
+  <section class="docs-index-in docs-main">
+    <div id="docs-search-index" hidden>{{.DocSearchIndexJSON}}</div>
+    <section class="docs-search-results" id="docs-search-results" aria-labelledby="docs-search-title" hidden>
+      <h2 id="docs-search-title">{{.T "docs.search.results"}}</h2>
+      <p data-docs-search-status role="status" aria-live="polite" aria-atomic="true" data-count-one="{{.T "docs.search.count.one"}}" data-count-other="{{.T "docs.search.count.other"}}" data-empty="{{.T "docs.search.empty"}}" data-unavailable="{{.T "docs.search.unavailable"}}"></p>
+      <ul data-docs-search-list data-fallback="{{.T "docs.sourceLabel"}}"></ul>
+    </section>
+    <header class="docs-index-head" data-reveal>
+      <h1>{{.T "docs.index.title"}}</h1>
+      <p class="section-sub">{{.T "docs.desc"}}</p>
+    </header>
+
+    <div class="docs-cards">
+      {{range .DocCards}}
+      <a class="docs-card" href="{{.URL}}" data-reveal>
+        <span class="docs-card-group">{{.Group}}</span>
+        <h2 lang="{{.Language}}">{{.Title}}</h2>
+        <p lang="{{.Language}}">{{.Summary}}</p>
+        <span class="docs-card-arrow" aria-hidden="true">→</span>
+      </a>
+      {{end}}
+    </div>
+  </section>
+</div>
+{{end}}

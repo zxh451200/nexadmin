@@ -14,15 +14,33 @@
     },
     "nav": {
       "title": "Navigation",
-      "desc": "Top navigation items of the public site",
+      "desc": "Top navigation of the public site; supports nesting (up to 3 levels) and drag to reorder",
       "create": "New link",
       "edit": "Edit link",
       "required": "Label and href are required",
-      "deleteConfirm": "Delete navigation \"{{name}}\"?"
+      "deleteConfirm": "Delete navigation \"{{name}}\"?",
+      "parent": "Parent",
+      "topLevel": "Top level",
+      "addChild": "Add child link",
+      "deleteCascadeConfirm": "Delete \"{{name}}\" and its {{count}} child links?",
+      "hrefTarget": "Link target",
+      "hrefHome": "Home",
+      "hrefNews": "News list",
+      "hrefPlugins": "Plugin marketplace",
+      "hrefDocs": "Documentation",
+      "hrefPage": "Page",
+      "hrefCustom": "Custom link…",
+      "errNoSlash": "Enter a full site path or a full URL.",
+      "errNoSlashHint": "Site paths start with / (e.g. /p/about); external URLs start with https://.",
+      "errUnknownPath": "The site has no page at “{{path}}”.",
+      "errUnknownHint1": "Pick an existing page from the “Link target” list above.",
+      "errUnknownHint2": "To add a page, create it under “Pages” first, then pick it here.",
+      "errPageMissing": "Page /p/{{slug}} does not exist yet.",
+      "errPageMissingHint": "Create a page with this slug under “Pages”, then pick it here."
     },
     "feature": {
       "title": "Features",
-      "desc": "Cards in the home capability grid",
+      "desc": "Items in the “Also built in” index on the home page",
       "create": "New feature",
       "edit": "Edit feature",
       "required": "Title is required",
@@ -74,6 +92,10 @@
       "slug": "Slug",
       "seoDesc": "SEO description",
       "coverUrl": "Cover URL",
+      "coverPlaceholder": "Paste an image URL, or click Upload",
+      "coverUpload": "Upload cover",
+      "coverHint": "1200×630 recommended; uploads are cropped to that ratio and used as the social preview image",
+      "coverInvalid": "Use a full URL (https://…) or a site path starting with /",
       "summary": "Summary",
       "content": "Content",
       "published": "Published",
@@ -82,7 +104,8 @@
     },
     "hint": {
       "homeTitle": "Use a line break for two lines; the last line renders as gradient text",
-      "logoUrl": "Image URL, or upload with the button (PNG/JPEG/WebP/GIF, ≤2MB); leave empty for the built-in letter mark"
+      "logoUrl": "Image URL, or upload with the button (PNG/JPEG/WebP/GIF, ≤2MB); leave empty for the built-in letter mark",
+      "navHref": "Pick a site page here. Choose “Custom link” for an external URL (must start with https://) or an in-page anchor."
     },
     "logo": {
       "upload": "Upload",
@@ -102,8 +125,17 @@
       "enabledHint": "When off, the public site hides all marketplace links and pages. The admin marketplace is unaffected."
     },
     "i18n": {
-      "title": "Translations",
-      "hint": "Fill in each language. Empty fields fall back to the source text above. New languages appear here automatically."
+      "status": "Translations",
+      "statusHint": "{{done}} of {{total}} fields translated",
+      "machineShort": "unreviewed",
+      "machineHint": "Machine translated, not reviewed by a human yet",
+      "switchHint": "Switching language rebinds the whole form to that language",
+      "focusLang": "Edit {{lang}} translation",
+      "filterLabel": "Untranslated",
+      "filterNoTranslation": "{{lang}}: none"
+    },
+    "languages": {
+      "manageHint": "To add or change languages, go to System settings → Languages: the site and the admin UI share one language list. Restart the server afterwards so the public site registers routes for the new prefixes."
     }
   }
 }

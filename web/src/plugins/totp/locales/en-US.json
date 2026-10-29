@@ -1,8 +1,7 @@
 {
   "plugin_totp": {
     "title": "Two-Factor Auth",
-    "description": "Bind an authenticator app for login verification",
-    "dir": "Personal",
+    "description": "Free basic two-factor authentication: bind an authenticator app for login verification. Install the plugin separately as needed.",
     "menu": "Two-Factor Auth",
     "statusLabel": "Current status",
     "on": "Enabled",

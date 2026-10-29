@@ -4,6 +4,7 @@ package seed
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -59,6 +60,19 @@ func (menuRow) TableName() string { return "sys_menu" }
 func Menus(db *gorm.DB, items []MenuItem) (int, error) {
 	if len(items) == 0 {
 		return 0, nil
+	}
+	// 业务键防线：Code 是升级对账的唯一依据（设计文档 §5），空 Code 的条目无法幂等补齐，
+	// 在这里直接拒绝（而不是静默跳过埋下“升级后菜单丢失”的坑）。
+	seen := map[string]bool{}
+	for _, it := range items {
+		if it.Code == "" {
+			return 0, fmt.Errorf("seed: MenuItem 缺少业务键 Code（title=%q path=%q）——出厂数据必须带稳定业务键",
+				it.Title, it.Path)
+		}
+		if seen[it.Code] {
+			return 0, fmt.Errorf("seed: MenuItem 业务键 Code 重复: %q", it.Code)
+		}
+		seen[it.Code] = true
 	}
 	codes := make([]string, 0, len(items)*2)
 	for _, it := range items {
@@ -135,6 +149,9 @@ type Report struct {
 	mu      sync.Mutex
 	menus   int
 	skipped []string
+	// 结构对账（菜单历史形状收敛）：检查了几项、实际改了几行。
+	recChecked int
+	recFixed   int
 }
 
 type reportKey struct{}
@@ -183,4 +200,22 @@ func (r *Report) Skipped() []string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return append([]string(nil), r.skipped...)
+}
+
+// AddReconcile 记录一次结构对账的结果；nil 安全。
+func (r *Report) AddReconcile(checked, fixed int) {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	r.recChecked += checked
+	r.recFixed += fixed
+	r.mu.Unlock()
+}
+
+// Reconciled 返回结构对账检查了几项、实际改了几行（0,0 表示没跑过）。
+func (r *Report) Reconciled() (checked, fixed int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.recChecked, r.recFixed
 }

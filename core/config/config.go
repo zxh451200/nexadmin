@@ -246,11 +246,23 @@ func (r RateLimit) Rule(name string) Rule {
 	return Rule{}
 }
 
+// Language 是一门语言的完整档案。config.yaml 里的 languages 只是首次启动的种子，
+// 落库后以 sys_language 为准（见 core/i18n 的清单同步）；除前三项外都可缺省，由种子推导。
 type Language struct {
 	Code    string `mapstructure:"code" json:"code"`
 	Name    string `mapstructure:"name" json:"name"`
 	Dir     string `mapstructure:"dir" json:"dir"`
-	Default bool   `mapstructure:"default" json:"default,omitempty"`
+	Default bool   `mapstructure:"default" json:"default"`
+	// Short 是紧凑展示名（列表徽标一类）。
+	Short string `mapstructure:"short" json:"short,omitempty"`
+	// HTMLLang 写进 <html lang> 与 hreflang；缺省等于 Code。
+	HTMLLang string `mapstructure:"htmlLang" json:"htmlLang,omitempty"`
+	// OGLocale 写进 og:locale；缺省由 Code 推导（en-US → en_US）。
+	OGLocale string `mapstructure:"ogLocale" json:"ogLocale,omitempty"`
+	// Prefix 是公开站的 URL 路径前缀；默认语言必须为空，其余语言必须非空。
+	Prefix string `mapstructure:"prefix" json:"prefix,omitempty"`
+	// DateFormat 是 Go 布局串；缺省为 "2006-01-02"。
+	DateFormat string `mapstructure:"dateFormat" json:"dateFormat,omitempty"`
 }
 
 type Auth struct {

@@ -1,0 +1,17 @@
+id: media
+name: 媒体优化
+version: 0.1.0
+description: 存量图片批量补生成 WebP 副本（浏览器端转码、原图保留、按 Accept 下发）；视频沿用原片直传与 Range 播放。
+author: NexAdmin
+edition: pro
+requires_nexadmin: ">=0.1.0"
+menus:
+  - parent: /content
+    type: menu
+    title: plugin_media.menu
+    path: /content/media
+    component: plugins/media/MediaOptimizePage
+    perm: media:optimize
+    icon: ImageDown
+    sort: 31
+    keep_alive: true

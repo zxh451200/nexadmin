@@ -76,7 +76,7 @@ func (h *handler) discovery(c *gin.Context) {
 	origin, base := endpoints(iss)
 	c.JSON(http.StatusOK, gin.H{
 		"issuer":                                iss,
-		"authorization_endpoint":                origin + "/sso/authorize",
+		"authorization_endpoint":                origin + "/admin/sso/authorize",
 		"token_endpoint":                        base + "/token",
 		"userinfo_endpoint":                     base + "/userinfo",
 		"jwks_uri":                              base + "/jwks",

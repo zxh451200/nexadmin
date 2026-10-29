@@ -1,0 +1,56 @@
+{
+  "plugin_media": {
+    "menu": "媒体优化",
+    "title": "媒体优化",
+    "desc": "为存量公开图片补生成 WebP 副本：原图保留，支持 WebP 的浏览器自动拿更小的那份。",
+    "stats": {
+      "total": "公开图片",
+      "done": "已有 WebP",
+      "pending": "待生成"
+    },
+    "col": {
+      "name": "文件",
+      "size": "大小",
+      "createdAt": "创建时间",
+      "state": "状态"
+    },
+    "action": {
+      "all": "生成全部",
+      "one": "生成"
+    },
+    "state": {
+      "working": "生成中",
+      "done": "已完成",
+      "error": "失败"
+    },
+    "saved": "本次节省 {{size}}",
+    "skippedOne": "{{name}} 已是高压缩图或不支持转换，已跳过",
+    "someFailed": "{{count}} 个文件失败，可重试",
+    "allDone": "处理完成",
+    "empty": "没有需要处理的图片",
+    "note": "转码在浏览器里完成，原图永不覆盖；需要「文件上传」权限。GIF / SVG 不转换。",
+    "tab": {
+      "images": "图片",
+      "videos": "视频"
+    },
+    "video": {
+      "configTitle": "视频托管（Cloudflare Stream）",
+      "configDesc": "视频直传厂商，本站不落原片、不转码；自适应码率与 CDN 由厂商提供。",
+      "enabled": "启用视频托管",
+      "accountId": "Account ID",
+      "subdomain": "播放子域（customer- 后面那段）",
+      "token": "API Token",
+      "tokenSaved": "已保存，留空保持不变",
+      "upload": "上传视频",
+      "uploader": "上传人",
+      "actions": "操作",
+      "play": "播放",
+      "open": "新窗口打开",
+      "empty": "还没有视频",
+      "deleteConfirm": "删除「{{name}}」的台账记录？厂商侧的文件需要在控制台清理。",
+      "copyLink": "复制 MP4 直链",
+      "copied": "直链已复制，可粘贴到富文本「插入视频」",
+      "noDownload": "未配置播放子域，暂时拿不到直链"
+    }
+  }
+}

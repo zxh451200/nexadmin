@@ -53,3 +53,32 @@ export function useDeleteLoginLogs() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['loginLog'] }),
   })
 }
+
+/** 登录日志统计（与后端 /login-logs/stats 一一对应） */
+export interface NameValue { name: string; value: number }
+export interface StatsDay { date: string; total: number; failures: number }
+export interface StatsHour { hour: number; value: number }
+
+export interface LoginStats {
+  from: string
+  to: string
+  total: number
+  failures: number
+  sampled: boolean
+  days: StatsDay[]
+  hours: StatsHour[]
+  failReasons: NameValue[]
+  types: NameValue[]
+  browsers: NameValue[]
+  os: NameValue[]
+}
+
+export type LoginStatsFilter = Pick<LoginLogQuery, 'keyword' | 'status' | 'loginType' | 'startDate' | 'endDate'>
+
+export function useLoginStats(filter: LoginStatsFilter) {
+  return useQuery({
+    queryKey: ['loginLog', 'stats', filter],
+    queryFn: () => api.get<LoginStats>('/login-logs/stats', { ...filter }),
+    placeholderData: keepPreviousData,
+  })
+}

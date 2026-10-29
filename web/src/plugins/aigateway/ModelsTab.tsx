@@ -6,9 +6,9 @@ import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { FilterBar } from '@/framework/components/FilterBar'
+import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/framework/ui/dialog'
 import { Input } from '@/framework/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import { Switch } from '@/framework/ui/switch'
@@ -81,84 +81,85 @@ function ModelFormDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>{isNew ? t('plugin_aigateway.model.create') : t('plugin_aigateway.model.edit')}</DialogTitle>
-        </DialogHeader>
-        <div className="flex flex-col gap-3 text-sm">
-          <div className="grid grid-cols-2 gap-3">
-            <label className="flex flex-col gap-1">
-              {t('plugin_aigateway.fields.kind')}
-              <Select value={value.kind ?? 'llm'} onValueChange={(v) => set({ kind: v as AiKind })} disabled={!isNew}>
-                <SelectTrigger aria-label={t('plugin_aigateway.fields.kind')}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {AI_KINDS.map((k) => (
-                    <SelectItem key={k} value={k}>
-                      {t(`plugin_aigateway.kind.${k}`)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </label>
-            <label className="flex flex-col gap-1">
-              {t('plugin_aigateway.fields.name')}
-              <Input value={value.name ?? ''} onChange={(e) => set({ name: e.target.value })} />
-            </label>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <label className="flex flex-col gap-1">
-              {t('plugin_aigateway.fields.provider')}
-              <Input value={value.provider ?? ''} onChange={(e) => set({ provider: e.target.value })} placeholder="openai / qwen / ..." />
-            </label>
-            <label className="flex flex-col gap-1">
-              {t('plugin_aigateway.fields.model')}
-              <Input value={value.model ?? ''} onChange={(e) => set({ model: e.target.value })} placeholder="gpt-4o / bge-m3" />
-            </label>
-          </div>
-          <label className="flex flex-col gap-1">
-            {t('plugin_aigateway.fields.baseUrl')}
-            <Input value={value.baseUrl ?? ''} onChange={(e) => set({ baseUrl: e.target.value })} placeholder="https://api.openai.com/v1" />
-          </label>
-          <label className="flex flex-col gap-1">
-            {t('plugin_aigateway.fields.apiKey')}
-            <Input
-              value={value.apiKey ?? ''}
-              onChange={(e) => set({ apiKey: e.target.value })}
-              placeholder={isNew ? 'sk-...' : t('plugin_aigateway.model.keyKeep')}
-            />
-          </label>
-          {value.kind === 'embedding' && (
-            <label className="flex flex-col gap-1">
-              {t('plugin_aigateway.fields.dimension')}
-              <Input
-                type="number"
-                value={value.dimension ?? 0}
-                onChange={(e) => set({ dimension: Number(e.target.value) || 0 })}
-              />
-            </label>
-          )}
-          <div className="flex items-center justify-between">
-            <label className="flex items-center justify-between gap-2 text-sm">
-              {t('plugin_aigateway.fields.enabled')}
-              <Switch checked={value.enabled ?? true} onCheckedChange={(v) => set({ enabled: v })} />
-            </label>
-            <label className="flex items-center justify-between gap-2 text-sm">
-              {t('plugin_aigateway.fields.isDefault')}
-              <Switch checked={value.isDefault ?? false} onCheckedChange={(v) => set({ isDefault: v })} />
-            </label>
-          </div>
-        </div>
-        <DialogFooter>
+    <ResponsiveDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={isNew ? t('plugin_aigateway.model.create') : t('plugin_aigateway.model.edit')}
+      footer={
+        <>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             {t('common.cancel')}
           </Button>
           <Button onClick={() => void submit()}>{t('common.save')}</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-3 text-sm">
+        <div className="grid grid-cols-2 gap-3">
+          <label className="flex flex-col gap-1">
+            {t('plugin_aigateway.fields.kind')}
+            <Select value={value.kind ?? 'llm'} onValueChange={(v) => set({ kind: v as AiKind })} disabled={!isNew}>
+              <SelectTrigger aria-label={t('plugin_aigateway.fields.kind')}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {AI_KINDS.map((k) => (
+                  <SelectItem key={k} value={k}>
+                    {t(`plugin_aigateway.kind.${k}`)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </label>
+          <label className="flex flex-col gap-1">
+            {t('plugin_aigateway.fields.name')}
+            <Input value={value.name ?? ''} onChange={(e) => set({ name: e.target.value })} />
+          </label>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <label className="flex flex-col gap-1">
+            {t('plugin_aigateway.fields.provider')}
+            <Input value={value.provider ?? ''} onChange={(e) => set({ provider: e.target.value })} placeholder="openai / qwen / ..." />
+          </label>
+          <label className="flex flex-col gap-1">
+            {t('plugin_aigateway.fields.model')}
+            <Input value={value.model ?? ''} onChange={(e) => set({ model: e.target.value })} placeholder="gpt-4o / bge-m3" />
+          </label>
+        </div>
+        <label className="flex flex-col gap-1">
+          {t('plugin_aigateway.fields.baseUrl')}
+          <Input value={value.baseUrl ?? ''} onChange={(e) => set({ baseUrl: e.target.value })} placeholder="https://api.openai.com/v1" />
+        </label>
+        <label className="flex flex-col gap-1">
+          {t('plugin_aigateway.fields.apiKey')}
+          <Input
+            value={value.apiKey ?? ''}
+            onChange={(e) => set({ apiKey: e.target.value })}
+            placeholder={isNew ? 'sk-...' : t('plugin_aigateway.model.keyKeep')}
+          />
+        </label>
+        {value.kind === 'embedding' && (
+          <label className="flex flex-col gap-1">
+            {t('plugin_aigateway.fields.dimension')}
+            <Input
+              type="number"
+              value={value.dimension ?? 0}
+              onChange={(e) => set({ dimension: Number(e.target.value) || 0 })}
+            />
+          </label>
+        )}
+        <div className="flex items-center justify-between">
+          <label className="flex items-center justify-between gap-2 text-sm">
+            {t('plugin_aigateway.fields.enabled')}
+            <Switch checked={value.enabled ?? true} onCheckedChange={(v) => set({ enabled: v })} />
+          </label>
+          <label className="flex items-center justify-between gap-2 text-sm">
+            {t('plugin_aigateway.fields.isDefault')}
+            <Switch checked={value.isDefault ?? false} onCheckedChange={(v) => set({ isDefault: v })} />
+          </label>
+        </div>
+      </div>
+    </ResponsiveDialog>
   )
 }
 
@@ -265,7 +266,6 @@ export function ModelsTab() {
           </SelectContent>
         </Select>
       </FilterBar>
-
       <DataTable
         columns={columns}
         data={data?.list ?? []}

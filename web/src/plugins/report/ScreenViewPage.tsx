@@ -9,6 +9,7 @@ import { Skeleton } from '@/framework/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { useScreen } from './api'
 import { ScreenCanvas } from './ScreenCanvas'
+import { builtinText } from './builtinText'
 
 /**
  * 数据大屏展示页：深色大屏主题 + 全屏。
@@ -67,7 +68,7 @@ export default function ScreenViewPage() {
             <ArrowLeft aria-hidden="true" />
           </Button>
         ) : null}
-        <h1 className="min-w-0 flex-1 truncate text-lg font-semibold tracking-tight md:text-2xl">{screen.config.title || screen.name}</h1>
+        <h1 className="min-w-0 flex-1 truncate text-lg font-semibold tracking-tight md:text-2xl">{builtinText(t, screen.config.title || screen.name)}</h1>
         <span className="hidden text-xs text-muted-foreground md:inline">
           {refreshSec > 0 ? t('plugin_report.screen.autoRefresh', { sec: refreshSec }) : t('plugin_report.screen.noRefresh')}
         </span>

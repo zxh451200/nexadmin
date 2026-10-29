@@ -1,8 +1,10 @@
 import type { DictItem } from '@/framework/request/types'
 
 export interface DictSeedItem extends DictItem {
-  /** 英文标签，界面语言为 en* 时使用 */
+  /** 英文标签，界面语言为 en* 时使用（老字段，真实数据里正在被 i18nJson 取代） */
   labelEn?: string
+  /** 与后端同一份契约：{"ja-JP":{"label":"…"}}，优先于 labelEn */
+  i18nJson?: string
 }
 
 export interface DictSeedType {
@@ -22,7 +24,8 @@ export const dictSeed: Record<string, DictSeedType> = {
     name: '性别',
     items: [
       { value: '0', label: '未知', labelEn: 'Unknown', tag: 'default' },
-      { value: '1', label: '男', labelEn: 'Male', tag: 'info' },
+      // 第三条语言用 i18nJson 演示：mock 与后端同一条取值链（i18nJson → labelEn → label）
+      { value: '1', label: '男', labelEn: 'Male', i18nJson: '{"ja-JP":{"label":"男性"},"en-US":{"label":"Male"}}', tag: 'info' },
       { value: '2', label: '女', labelEn: 'Female', tag: 'warning' },
     ],
   },

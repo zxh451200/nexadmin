@@ -45,19 +45,19 @@ type PayParams struct {
 
 // ChannelStatus 是 Query 的结果；Paid/Failed 都为 false 表示渠道侧仍未定。
 type ChannelStatus struct {
-	Paid         bool
-	Failed       bool
-	ChannelTxnID string
+	Paid          bool
+	Failed        bool
+	ChannelTxnID  string
 	GatewayStatus string
-	Reason       string
+	Reason        string
 }
 
 // RefundRequest 是 Refund 的入参。
 type RefundRequest struct {
-	RefundNo    string
-	PaymentNo   string
+	RefundNo     string
+	PaymentNo    string
 	ChannelTxnID string
-	AmountMinor int64
+	AmountMinor  int64
 }
 
 // RefundResult 是渠道退款结果；OK=false 且 Pending=false 表示渠道拒绝（落 failed），
@@ -78,14 +78,14 @@ type CallbackInput struct {
 
 // CallbackResult 是验签解析后的回调结论。RefundNo 非空时是退款回执。
 type CallbackResult struct {
-	PaymentNo    string
-	RefundNo     string
-	Paid         bool
-	Failed       bool
-	RefundOK     bool
-	ChannelTxnID string
+	PaymentNo     string
+	RefundNo      string
+	Paid          bool
+	Failed        bool
+	RefundOK      bool
+	ChannelTxnID  string
 	GatewayStatus string
-	Reason       string
+	Reason        string
 }
 
 var (

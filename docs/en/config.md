@@ -1,3 +1,8 @@
+---
+title: Configuration Reference
+summary: Config loading rules plus every section's keys, defaults, and runtime switches.
+---
+
 # NexAdmin Configuration Reference
 
 This document lists every configuration key of `config/default.yaml`. Content comes from `config/default.yaml`, `core/config/config.go`, `core/config/providers.go` and consumer code; the table draft was expanded from default.yaml by script and the description column manually checked against code.
@@ -8,7 +13,7 @@ This document lists every configuration key of `config/default.yaml`. Content co
 - Merge style: maps merge key by key; lists are replaced wholesale (`disabled_modules`, `languages`, `auth.methods`, `server.cors_origins`, `server.trusted_proxies` must be written in full).
 - Paths are relative to the process working directory: config, `data/`, `logs/`, `config/locales/` and `migrations/` are all found from the current directory, so the service must start from the project root (or an equivalent layout). The `data/` and `config/locales/` directory names are fixed with no config keys.
 - Environment variable shape: prefix `NEXADMIN_`, key upper-cased, `.` → `_`. Examples: `server.port` → `NEXADMIN_SERVER_PORT`, `database.password` → `NEXADMIN_DATABASE_PASSWORD`, `ratelimit.login.limit` → `NEXADMIN_RATELIMIT_LOGIN_LIMIT`, `ratelimit.pat_create.window` → `NEXADMIN_RATELIMIT_PAT_CREATE_WINDOW`.
-- Env var types verified: integers, booleans, durations (`45m`, `2h`), comma-separated lists (`NEXADMIN_DISABLED_MODULES=post,notice`, `NEXADMIN_SERVER_CORS_ORIGINS=https://a.com,https://b.com`, `NEXADMIN_AUTH_METHODS=password,phone`). `languages` (an object list) and `auth.providers` (a map) via env: unverified — prefer `config.yaml`.
+- Environment variable types: integers, booleans, durations (`45m`, `2h`), comma-separated lists (`NEXADMIN_DISABLED_MODULES=post,notice`, `NEXADMIN_SERVER_CORS_ORIGINS=https://a.com,https://b.com`, `NEXADMIN_AUTH_METHODS=password,phone`). `languages` (an object list) and `auth.providers` (a map) via env: unverified — prefer `config.yaml`.
 - `${ENV}` references: string fields of `auth.providers.*` expand `${NAME}` from environment variables, yielding an empty string when unset (that provider counts as unconfigured); `storage.s3.*` string fields expand too, but unset variables fail with `config: environment variable NAME is not set`. Other keys do not expand `${}`.
 - Startup validation (`core/config`'s `validate`): `app.env` must be `dev` / `production`; `server.port` 1–65535; `database.type` must be `mysql` / `mariadb` / `postgres`; `database.node_id` 0–1023; `cache.driver` must be `memory` / `redis` and redis requires `cache.addr`; `languages` cannot be empty; `auth.access_ttl` and `auth.refresh_ttl` must be positive; `storage.driver` must be `local` / `s3` and s3 requires endpoint, bucket, access_key, secret_key; `backup.schedule` is empty or `HH:MM`; `backup.keep_days` and `backup.keep_count` cannot be negative. Failures look like `config: server.port 99999 out of range`.
 
@@ -79,7 +84,7 @@ MCP session metadata and four concurrency slots per session live in the configur
 
 | Key | Type | Default | Purpose | When to change |
 | --- | --- | --- | --- | --- |
-| `languages` | list | `zh-CN` (default), `en-US` | Language list, each `{code, name, dir, default}`; `dir` is `ltr` / `rtl`; the language switcher, backend negotiation and `GET /api/v1/i18n/languages` all read it. The wizard writes the chosen default back | Adding or removing languages (`nexadmin i18n add` recommended) |
+| `languages` | list | `zh-CN` (default), `en-US` | Seeds only an empty `sys_language`; entries may contain `code, name, dir, default, short, htmlLang, ogLocale, prefix, dateFormat`. Once populated, `sys_language` governs switching, negotiation and the website; YAML does not overwrite it | Platform super admins maintain initialized systems through System Settings → Advanced → Languages. Language-set or prefix changes require restart; source dictionaries and Markdown require rebuilding |
 | `auth.methods` | list | `[password]` | Login methods: `password`, `phone`. `phone` additionally requires `sms.provider`, otherwise hidden | Enabling phone login |
 | `auth.providers` | map | `{}` | Third-party login keyed by `wecom` / `dingtalk` / `feishu` / `google` / `github` / `oidc`; missing `client_id` / `client_secret` / `redirect_uris` counts as unconfigured — hidden from the login page without errors. `wecom` also needs `agent_id`; `oidc` needs `issuer`, or all of `auth_url`, `token_url`, `jwks_url`. Fields in 3.1 | Enabling third-party login |
 | `auth.proxy` | string | empty | HTTP(S) proxy for outbound requests (third-party login, SMS etc.); empty = direct | When the server cannot reach Google / GitHub |
@@ -101,7 +106,7 @@ Tencent Cloud SMS: `sms.tencent.secret_id`, `secret_key`, `sdk_app_id`, `sign_na
 | Field | Description |
 | --- | --- |
 | `client_id` / `client_secret` | App credentials; WeCom client_id = CorpID, client_secret = app Secret; DingTalk AppKey / AppSecret; Feishu App ID / App Secret. Use `${ENV}` references — never plaintext in the repo |
-| `redirect_uris` | Callback whitelist, exact match, equal to the frontend callback page `/login/oauth/<provider>` full URL |
+| `redirect_uris` | Callback whitelist, exact match, equal to the frontend callback page `/admin/login/oauth/<provider>` full URL |
 | `match_by` | Basis for first-login auto-matching: `phone` / `email` / `employee_no`, empty = no auto-match. `email` requires a verified email; `employee_no` maps to the local username; unmatched accounts are told to "bind an existing account" |
 | `auto_create` | Auto-create the account (passwordless) when unmatched, default `false` |
 | `default_role` | Role code granted on `auto_create`, `guest` when empty; built-in roles are never auto-granted |
@@ -193,7 +198,7 @@ The following keys are read by their owning modules directly from `config/defaul
 
 ## 10. Settings page vs configuration file
 
-The "System Settings" page (`/system/settings`) stores eight sections — `site`, `security`, `cache`, `storage`, `ai`, `sms`, `auth`, `notify` — in the `sys_setting` table (platform-level, not per-tenant). Verified precedence:
+System Settings (full admin URL `/admin/system/settings`) has ten UI sections: `site`, `security`, `cache`, `storage`, `ai`, `sms`, `auth`, `notify`, `language` and `params`. The first eight use the settings API / `sys_setting`; languages use `/languages` / `sys_language`, and parameters use `/configs` / `sys_config`. Do not pass the latter two to `/settings/:section`. Reserve this platform-global configuration for platform super admins; see [Features & Permissions](features.md) for navigation groups and API boundaries. Runtime precedence and limitations:
 
 - `ai`: the settings section wins; never saved, falls back to `ai.*`.
 - Login security (consecutive failures, lock minutes): settings `security` section → system params `login.max_retry` / `login.lock_minutes` → default 5 failures / 15 minutes.

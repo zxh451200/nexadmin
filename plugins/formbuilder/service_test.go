@@ -4,12 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"nexadmin/core/config"
+	corei18n "nexadmin/core/i18n"
 	"nexadmin/core/response"
 	"nexadmin/core/tenant"
 	"nexadmin/pkg/idgen"
@@ -20,6 +23,20 @@ var (
 	ctxT2 = tenant.With(context.Background(), 2)
 	admin = Actor{ID: 1, Username: "admin", Super: true}
 )
+
+// TestMain 装载全局词条目录：生产里由 core 启动时装，测试里自己装一份，
+// 否则写 xlsx 表头时 T(ctx, key) 只会返回 key 本身。
+func TestMain(m *testing.M) {
+	b, err := corei18n.New([]config.Language{{Code: "zh-CN", Default: true}, {Code: "en-US", Default: false}}, "zh-CN", "none")
+	if err != nil {
+		panic(err)
+	}
+	prev := corei18n.Default()
+	corei18n.SetDefault(b)
+	code := m.Run()
+	corei18n.SetDefault(prev)
+	os.Exit(code)
+}
 
 func user(id int64) Actor { return Actor{ID: idgen.ID(id), Username: fmt.Sprintf("u%d", id)} }
 

@@ -49,10 +49,10 @@ defineMock([
     method: 'GET',
     url: '/dashboard/stats',
     handler: () => ({
-      users: { value: 12846, delta: 4.2 },
-      todayLogin: { value: 421, delta: 12.8 },
-      unreadMessages: { value: 7, delta: -18.5 },
-      storage: { usedGb: 183.6, totalGb: 500, percent: 36.7, delta: 2.1 },
+      users: { value: 12846, delta: 4.2, comparable: true },
+      todayLogin: { value: 421, delta: 12.8, comparable: true },
+      unreadMessages: { value: 7, delta: -18.5, comparable: true },
+      storage: { usedGb: 183.6, totalGb: 500, percent: 36.7, delta: 2.1, comparable: true },
       loginTrend: Array.from({ length: 7 }, (_, i) => ({ date: ymd(day(6 - i)), logins: logins[i], failures: failures[i] })),
       requestTrend: Array.from({ length: 7 }, (_, i) => ({ date: ymd(day(6 - i)), requests: requests[i], errors: errors[i] })),
       operTypes: [

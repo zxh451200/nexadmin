@@ -8,19 +8,13 @@ requires_nexadmin: ">=0.1.0"
 migration_target: tenant
 menus:
   - parent: /
-    type: dir
-    title: plugin_pay.dir
-    path: /pay
-    icon: Wallet
-    sort: 60
-  - parent: /pay
     type: menu
     title: plugin_pay.menu
     path: /pay/orders
     component: plugins/pay/PayPage
     perm: pay:list
     icon: CreditCard
-    sort: 1
+    sort: 60
     keep_alive: true
   - parent: pay:list
     type: button

@@ -129,7 +129,7 @@ func (s *Server) WriteApproved(c *gin.Context, id, toolName string) error {
 // POST /api/v1/mcp/confirmations/:id/approve -> {confirmationId,status,digest,expiresAt}
 // input: ApproveInput. Requires mcp:list, same user/tenant, session JWT AND
 // local password reauthentication. PAT/app signatures are never accepted.
-// Browser route: /mcp/confirmations/:id (relative URL; frontend owns rendering).
+// Browser route: /admin/mcp/confirmations/:id (后台 SPA 路径；frontend owns rendering).
 type ApproveInput struct {
 	Digest   string `json:"digest"`
 	Password string `json:"password"`
@@ -397,7 +397,7 @@ func (s *Server) write(c *gin.Context, req request, t apidoc.Tool, raw json.RawM
 		return
 	}
 	s.audit("requested", v)
-	data := gin.H{"confirmationId": v.ID, "confirmationUrl": "/mcp/confirmations/" + v.ID,
+	data := gin.H{"confirmationId": v.ID, "confirmationUrl": "/admin/mcp/confirmations/" + v.ID,
 		"digest": v.Digest, "expiresAt": v.ExpiresAt, "status": v.Status}
 	text, _ := json.Marshal(data)
 	result(c, req.ID, gin.H{"content": []any{gin.H{"type": "text", "text": string(text)}}, "structuredContent": data, "isError": false})

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Button } from '@/framework/ui/button'
+import { Card } from '@/framework/ui/card'
 import { useConfig, useSaveConfig, type AuditConfig } from './api'
 import { TableMultiSelect } from './TableMultiSelect'
 
@@ -21,7 +22,7 @@ function ScopeForm({ config }: { config: AuditConfig }) {
   }
 
   return (
-    <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-4 md:p-6">
+    <Card className="flex flex-col gap-4 p-4 md:p-6">
       <div className="flex flex-col gap-1">
         <h2 className="text-base font-semibold text-foreground" id="audit-scope-label">
           {t('plugin_audit.scope.title')}
@@ -36,7 +37,7 @@ function ScopeForm({ config }: { config: AuditConfig }) {
           {save.isPending ? t('common.loading') : t('common.save')}
         </Button>
       </div>
-    </div>
+    </Card>
   )
 }
 

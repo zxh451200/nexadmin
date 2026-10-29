@@ -45,20 +45,22 @@ var ourKey = regexp.MustCompile(`^\d+/\d{8}/\d+(\.[a-z0-9]{1,9})?$`)
 
 // session 是一次上传的状态，持久化在 data/uploads/tmp/<id>.json。
 type session struct {
-	ID         string    `json:"id"`
-	TenantID   string    `json:"tenantId"`
-	UserID     string    `json:"userId"`
-	Username   string    `json:"username"`
-	Length     int64     `json:"length"`
-	Offset     int64     `json:"offset"`
-	Name       string    `json:"name"`
-	Type       string    `json:"type"`
-	Kind       string    `json:"kind"`
-	Visibility string    `json:"visibility"`
-	Verified   bool      `json:"verified"`
-	Reserved   bool      `json:"reserved"`
-	Completed  bool      `json:"completed"`
-	CreatedAt  time.Time `json:"createdAt"`
+	ID         string `json:"id"`
+	TenantID   string `json:"tenantId"`
+	UserID     string `json:"userId"`
+	Username   string `json:"username"`
+	Length     int64  `json:"length"`
+	Offset     int64  `json:"offset"`
+	Name       string `json:"name"`
+	Type       string `json:"type"`
+	Kind       string `json:"kind"`
+	Visibility string `json:"visibility"`
+	// VariantOf 非 0 表示这是原文件 id 的派生副本（如 WebP），可见性继承原文件。
+	VariantOf idgen.ID  `json:"variantOf"`
+	Verified  bool      `json:"verified"`
+	Reserved  bool      `json:"reserved"`
+	Completed bool      `json:"completed"`
+	CreatedAt time.Time `json:"createdAt"`
 }
 
 type tusHandler struct {
@@ -259,6 +261,20 @@ func (h *tusHandler) Create(c *gin.Context) {
 		response.Fail(c, response.Unauthorized("error.unauthorized"))
 		return
 	}
+	// 派生文件（WebP 副本）：只能挂在当前租户自己的图片下，且本身必须是图片。
+	var variantOf idgen.ID
+	if raw := strings.TrimSpace(meta["variantof"]); raw != "" {
+		var parent File
+		if err := h.svc.db.WithContext(ctx).First(&parent, "id = ?", raw).Error; err != nil {
+			response.Fail(c, response.NotFound("error.not_found"))
+			return
+		}
+		if parent.Category != "image" || parent.VariantOf != 0 || kind != "image" {
+			response.Fail(c, badRequest("只有图片可以生成派生副本"))
+			return
+		}
+		variantOf = parent.ID
+	}
 	id, err := idgen.Next()
 	if err != nil {
 		response.Fail(c, err)
@@ -266,7 +282,8 @@ func (h *tusHandler) Create(c *gin.Context) {
 	}
 	s := &session{
 		ID: id.String(), TenantID: tid.String(), UserID: cl.UserID.String(), Username: cl.Username,
-		Length: length, Name: name, Type: declared, Kind: kind, Visibility: normVisibility(meta["visibility"]), CreatedAt: time.Now().UTC(),
+		Length: length, Name: name, Type: declared, Kind: kind, Visibility: normVisibility(meta["visibility"]),
+		VariantOf: variantOf, CreatedAt: time.Now().UTC(),
 	}
 	if err := h.svc.reserveStorage(ctx, s); err != nil {
 		response.Fail(c, err)
@@ -470,6 +487,16 @@ func (h *tusHandler) finish(c *gin.Context, s *session, f *os.File) error {
 	rel := finalRel(s.TenantID, s.ID, s.Name, time.Now())
 	ctx := c.Request.Context()
 	category := classify(s.Type, s.Name)
+	visibility := s.Visibility
+	if s.VariantOf != 0 {
+		// 副本的可见性跟随原文件，客户端传什么都不算数；在落盘前解析，失败时临时文件仍可续传。
+		var parent File
+		if err := h.svc.db.WithContext(ctx).First(&parent, "id = ?", s.VariantOf).Error; err != nil {
+			h.drop(s.ID)
+			return err
+		}
+		visibility = parent.Visibility
+	}
 	hash := hex.EncodeToString(sum.Sum(nil))
 	tmp := h.svc.store.tmpPath(s.ID)
 	blobs := h.svc.store.blobs
@@ -492,7 +519,7 @@ func (h *tusHandler) finish(c *gin.Context, s *session, f *os.File) error {
 	}
 	rec := File{
 		Name: s.Name, StoragePath: rel, MimeType: s.Type, Category: category, Size: s.Length,
-		Hash: hash, Visibility: s.Visibility, Token: randomToken(), Uploader: s.Username,
+		Hash: hash, Visibility: visibility, Token: randomToken(), Uploader: s.Username, VariantOf: s.VariantOf,
 	}
 	rec.ID, rec.TenantID = id, tid
 	if err := h.svc.db.WithContext(ctx).Create(&rec).Error; err != nil {

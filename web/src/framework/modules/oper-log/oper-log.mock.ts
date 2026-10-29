@@ -82,6 +82,37 @@ function filtered(query: Record<string, unknown>): OperLog[] {
   return list
 }
 
+/** 与后端 stats 同口径的 mock 侧聚合（仅开发态使用；分位数取最近秩） */
+const pctOf = (xs: number[], q: number) => {
+  if (!xs.length) return 0
+  const s = [...xs].sort((a, b) => a - b)
+  return s[Math.min(s.length - 1, Math.max(0, Math.ceil(s.length * q) - 1))]
+}
+const avgOf = (xs: number[]) => (xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length) : 0)
+const tally = (keys: string[]) => {
+  const m = new Map<string, number>()
+  keys.forEach((k) => m.set(k || '-', (m.get(k) ?? 0) + 1))
+  return [...m].map(([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value || a.name.localeCompare(b.name))
+    .slice(0, 8)
+}
+const hourBuckets = (stamps: string[]) => {
+  const hours = Array.from({ length: 24 }, (_, hour) => ({ hour, value: 0 }))
+  stamps.forEach((s) => { hours[new Date(s).getHours()].value += 1 })
+  return hours
+}
+const dayBuckets = (stamps: string[], failed: (s: string) => boolean) => {
+  const m = new Map<string, { date: string; total: number; failures: number }>()
+  stamps.forEach((s) => {
+    const key = localDate(s)
+    const cur = m.get(key) ?? { date: key, total: 0, failures: 0 }
+    cur.total += 1
+    if (failed(s)) cur.failures += 1
+    m.set(key, cur)
+  })
+  return [...m.values()].sort((a, b) => a.date.localeCompare(b.date))
+}
+
 const csvCell = (v: string) => (/[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v)
 
 defineMock([
@@ -93,6 +124,41 @@ defineMock([
       const pageSize = Math.max(1, Number(query.pageSize) || 10)
       const list = filtered(query)
       return { list: list.slice((page - 1) * pageSize, page * pageSize), total: list.length, page, pageSize }
+    },
+  },
+  {
+    // 与真实 /oper-logs/stats 同构：分桶与分位在服务端算，mock 也照同样口径复现一遍
+    method: 'GET',
+    url: '/oper-logs/stats',
+    handler: ({ query }) => {
+      const list = filtered(query)
+      const stamps = list.map((r) => r.createdAt)
+      const costs = list.map((r) => r.costMs)
+      const byUrl = new Map<string, { url: string; method: string; sum: number; count: number }>()
+      list.forEach((r) => {
+        const cur = byUrl.get(r.url) ?? { url: r.url, method: r.method, sum: 0, count: 0 }
+        cur.sum += r.costMs
+        cur.count += 1
+        byUrl.set(r.url, cur)
+      })
+      return {
+        from: String(query.startDate ?? ''),
+        to: String(query.endDate ?? ''),
+        total: list.length,
+        failures: list.filter((r) => r.status !== 'success').length,
+        sampled: false,
+        days: dayBuckets(stamps, (s) => list.some((r) => r.createdAt === s && r.status !== 'success')),
+        hours: hourBuckets(stamps),
+        topModules: tally(list.map((r) => r.module)),
+        topTypes: tally(list.map((r) => r.type)),
+        methods: tally(list.map((r) => r.method)),
+        topOperators: tally(list.map((r) => r.operator)),
+        latency: { avg: avgOf(costs), p50: pctOf(costs, 0.5), p95: pctOf(costs, 0.95), p99: pctOf(costs, 0.99), max: costs.length ? Math.max(...costs) : 0 },
+        slowest: [...byUrl.values()]
+          .map((u) => ({ url: u.url, method: u.method, avgMs: Math.round(u.sum / u.count), count: u.count }))
+          .sort((a, b) => b.avgMs - a.avgMs || a.url.localeCompare(b.url))
+          .slice(0, 8),
+      }
     },
   },
   {

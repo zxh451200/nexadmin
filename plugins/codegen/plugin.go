@@ -1,4 +1,4 @@
-// Package codegen 是 NexAdmin 官方付费插件「代码生成器」：读取当前库的业务表结构，
+// Package codegen 是 NexAdmin 官方免费插件「代码生成器」：读取当前库的业务表结构，
 // 在内存里按 nexadmin add module 的约定渲染 Go 模块 + 前端页面，预览或打包为 zip 下载。
 // 无状态、不建表、不写磁盘。遵守插件约定：只依赖 core/ 与 pkg/，权限码前缀 codegen:，
 // 接口路径 /api/v1/plugins/codegen/...。
@@ -13,7 +13,7 @@ import (
 
 func init() {
 	plugin.Register(plugin.Plugin{
-		ID: "codegen", Name: "代码生成器", Version: "1.0.0", Edition: plugin.Pro,
+		ID: "codegen", Name: "代码生成器", Version: "1.0.0", Edition: plugin.Free,
 		Module: &module{},
 	})
 }

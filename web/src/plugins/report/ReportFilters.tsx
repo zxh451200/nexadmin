@@ -1,8 +1,10 @@
 import { useTranslation } from 'react-i18next'
 import { DateRangePicker } from '@/framework/components/DateRangePicker'
 import { Button } from '@/framework/ui/button'
+import { Card } from '@/framework/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import { useFilterOptions, type FilterValues, type ReportFilter } from './api'
+import { builtinText } from './builtinText'
 
 const ALL = '__all'
 
@@ -12,7 +14,7 @@ function SelectFilter({ reportId, f, value, onChange }: { reportId: string; f: R
   if (f.multiple) {
     const picked = Array.isArray(value) ? (value as (string | number)[]) : []
     return (
-      <div role="group" aria-label={f.label} className="flex flex-wrap items-center gap-1.5">
+      <div role="group" aria-label={builtinText(t, f.label)} className="flex flex-wrap items-center gap-1.5">
         {options.map((o) => {
           const on = picked.includes(o)
           return (
@@ -26,11 +28,11 @@ function SelectFilter({ reportId, f, value, onChange }: { reportId: string; f: R
   }
   return (
     <Select value={typeof value === 'string' && value ? value : ALL} onValueChange={(v) => onChange(v === ALL ? '' : v)}>
-      <SelectTrigger className="md:w-44" aria-label={f.label}>
+      <SelectTrigger className="md:w-44" aria-label={builtinText(t, f.label)}>
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value={ALL}>{t('plugin_report.report.allOption', { label: f.label })}</SelectItem>
+        <SelectItem value={ALL}>{t('plugin_report.report.allOption', { label: builtinText(t, f.label) })}</SelectItem>
         {options.map((o) => (
           <SelectItem key={String(o)} value={String(o)}>
             {String(o)}
@@ -54,10 +56,10 @@ export function ReportFilters({ reportId, filters, values, onChange }: Props) {
   if (filters.length === 0) return null
   const set = (k: string, v: unknown) => onChange({ ...values, [k]: v })
   return (
-    <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card p-3">
+    <Card className="flex flex-wrap items-center gap-3 p-3">
       {filters.map((f) => (
         <div key={f.key} className="flex flex-wrap items-center gap-2">
-          <span className="text-sm text-muted-foreground">{f.label}</span>
+          <span className="text-sm text-muted-foreground">{builtinText(t, f.label)}</span>
           {f.type === 'dateRange' ? (
             <DateRangePicker
               className="md:w-64"
@@ -72,6 +74,6 @@ export function ReportFilters({ reportId, filters, values, onChange }: Props) {
       <Button variant="ghost" size="sm" className="ms-auto" onClick={() => onChange({})}>
         {t('common.reset')}
       </Button>
-    </div>
+    </Card>
   )
 }

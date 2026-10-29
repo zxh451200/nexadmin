@@ -6,9 +6,9 @@ import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { FilterBar } from '@/framework/components/FilterBar'
+import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/framework/ui/dialog'
 import { Input } from '@/framework/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import { useCreateRefund, useRefunds, type PayRefund, type RefundQuery } from './api'
@@ -85,7 +85,6 @@ export function RefundsTab() {
           </SelectContent>
         </Select>
       </FilterBar>
-
       <DataTable
         columns={columns}
         data={data?.list ?? []}
@@ -153,26 +152,13 @@ function RefundDialog({
     if (await onSubmit(paymentNo.trim(), minor, reason)) onClose()
   }
   return (
-    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="sm:max-w-sm">
-        <DialogHeader>
-          <DialogTitle>{t('plugin_pay.refund')}</DialogTitle>
-        </DialogHeader>
-        <div className="flex flex-col gap-3 text-sm">
-          <label className="flex flex-col gap-1">
-            {t('plugin_pay.fields.paymentNo')}
-            <Input value={paymentNo} onChange={(e) => setPaymentNo(e.target.value)} placeholder="PAY..." />
-          </label>
-          <label className="flex flex-col gap-1">
-            {t('plugin_pay.fields.amount')}
-            <Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} />
-          </label>
-          <label className="flex flex-col gap-1">
-            {t('plugin_pay.fields.reason')}
-            <Input value={reason} onChange={(e) => setReason(e.target.value)} />
-          </label>
-        </div>
-        <DialogFooter>
+    <ResponsiveDialog
+      open={open}
+      onOpenChange={(v) => !v && onClose()}
+      title={t('plugin_pay.refund')}
+      size="sm"
+      footer={
+        <>
           <Button variant="outline" onClick={onClose}>
             {t('common.cancel')}
           </Button>
@@ -180,8 +166,23 @@ function RefundDialog({
             <RotateCcw aria-hidden="true" />
             {t('plugin_pay.refund')}
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-3 text-sm">
+        <label className="flex flex-col gap-1">
+          {t('plugin_pay.fields.paymentNo')}
+          <Input value={paymentNo} onChange={(e) => setPaymentNo(e.target.value)} placeholder="PAY..." />
+        </label>
+        <label className="flex flex-col gap-1">
+          {t('plugin_pay.fields.amount')}
+          <Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} />
+        </label>
+        <label className="flex flex-col gap-1">
+          {t('plugin_pay.fields.reason')}
+          <Input value={reason} onChange={(e) => setReason(e.target.value)} />
+        </label>
+      </div>
+    </ResponsiveDialog>
   )
 }

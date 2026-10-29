@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Database, Gauge, KeyRound, Zap } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { ChartCard } from '@/framework/components/ChartCard'
+import { MetricHistory } from '@/framework/components/MetricHistory'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { StatCard } from '@/framework/components/StatCard'
@@ -78,21 +79,21 @@ export default function CacheMonitorPage() {
           Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-32 w-full" />)
         ) : (
           <>
-            <StatCard
+            <StatCard tone="chart-1"
               title={t('cacheMonitor.card.memory')}
               value={latest.usedMemoryMb.toFixed(0)}
               hint={`/ ${latest.maxMemoryMb} MB`}
               progress={(latest.usedMemoryMb / latest.maxMemoryMb) * 100}
               icon={<Database aria-hidden="true" />}
             />
-            <StatCard title={t('cacheMonitor.card.keys')} value={latest.keys} icon={<KeyRound aria-hidden="true" />} />
-            <StatCard
+            <StatCard tone="chart-2" title={t('cacheMonitor.card.keys')} value={latest.keys} icon={<KeyRound aria-hidden="true" />} />
+            <StatCard tone="success"
               title={t('cacheMonitor.card.hitRate')}
               value={`${latest.hitRate.toFixed(1)}%`}
               progress={latest.hitRate}
               icon={<Gauge aria-hidden="true" />}
             />
-            <StatCard
+            <StatCard tone="chart-5"
               title={t('cacheMonitor.card.qps')}
               value={latest.qps}
               hint="ops/s"
@@ -118,6 +119,18 @@ export default function CacheMonitorPage() {
           />
         </ChartCard>
       </div>
+
+      <MetricHistory
+        kind="cache"
+        title={t('monitorHistory.title')}
+        labels={{
+          hitRate: t('cacheMonitor.series.hit'),
+          qps: t('cacheMonitor.series.qps'),
+          keys: t('cacheMonitor.card.keys'),
+          usedMemoryMb: t('cacheMonitor.card.memory'),
+          connections: t('cacheMonitor.info.connections'),
+        }}
+      />
 
       <div className="grid grid-cols-1 gap-3 md:gap-4 lg:grid-cols-3">
         <ChartCard title={t('cacheMonitor.chart.commands')} className="lg:col-span-2">
@@ -154,10 +167,14 @@ export default function CacheMonitorPage() {
         </Card>
       </div>
 
-      <div>
-        <p className="mb-2 text-base font-medium">{t('cacheMonitor.prefix.title')}</p>
-        <DataTable<CachePrefix> columns={prefixColumns} data={latest?.prefixes ?? []} rowKey="prefix" loading={!latest} pagination={false} />
-      </div>
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base font-medium">{t('cacheMonitor.prefix.title')}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <DataTable<CachePrefix> columns={prefixColumns} data={latest?.prefixes ?? []} rowKey="prefix" loading={!latest} pagination={false} />
+        </CardContent>
+      </Card>
     </PageContainer>
   )
 }

@@ -1,6 +1,11 @@
+---
+title: Deployment & Operations
+summary: Builds, single-host and container deployments, upgrades, backups, and day-two operations.
+---
+
 # NexAdmin Deployment & Operations Guide
 
-For deployment and operations staff. Content comes from `scripts/`, `deploy/`, `core/ctl`, `core/setup`, `core/migrate` and `cmd/server` code and scripts. The 2026-10-23 pass only statically read code and corrected the documentation — no application commands, tests, builds, SQL or real acceptance were run; statements like "verified on this machine" below are historical records and do not mean the current code has been re-verified. A passing build does not mean real database, Redis multi-instance, browser or identity-source flows were accepted — steps involving those still need separate acceptance.
+For deployment and operations staff: builds, initialization, migrations and ongoing maintenance. Begin with the [Quickstart](quickstart.md). This is not an environment acceptance report: real databases, Redis multi-instance deployments, browsers, identity sources and deployment paths still require the checks in §14. A passing build does not replace acceptance.
 
 Convention: unless stated otherwise, commands run from the project root (the directory containing `config/` and `migrations/`). The program locates `config/default.yaml`, `config/config.yaml`, `data/`, `logs/` and `migrations/` relative to the current working directory.
 
@@ -8,8 +13,8 @@ Convention: unless stated otherwise, commands run from the project root (the dir
 
 - Single binary: `scripts/build.sh` uses `-tags embedweb` to embed the frontend build `web/dist` into `nexadmin-server`; one port serves `/api/v1`, `/healthz`, `/metrics` and the frontend pages (frontend routes fall back to `index.html`; hashed `/assets/` files are cached immutable; `sw.js`, `manifest.webmanifest` and `offline.html` are not cached).
 - Building without `embedweb` (`go run ./cmd/server`, `go build ./cmd/server`): no frontend hosting; unmatched paths return a JSON 404. This is dev mode, with vite running separately.
-- Dev mode: `go run ./cmd/server` starts the backend (`app.env=dev` logs to the console, CORS allows any origin); `cd web && npm run dev` starts the frontend on port 5173 with `/api` proxied to `http://127.0.0.1:8080`. `web/.env.development` sets `VITE_MOCK=true`; frontend code loads mock data only when `VITE_MOCK === 'true'` (determined centrally in `web/src/framework/env.ts`); an unset variable means off, so dev mode relies on `.env.development` explicitly setting `true` and production builds rely on `.env.production`'s `false` (a missing entry never turns mocks on). To hit the real backend, override per Vite convention with an environment variable: `VITE_MOCK=false npm run dev` (untested).
-- Files needed at runtime: `nexadmin-server`, `config/default.yaml`, `migrations/` (`framework/` and `business/`). `config/config.yaml`, `data/` and `logs/` are created by the wizard or at runtime. Verified: an empty directory containing only `config/default.yaml` can start the uninitialized service; after initialization, a missing `migrations/framework` errors out (see §13).
+- Dev mode: `go run ./cmd/server` starts the backend (`app.env=dev` logs to the console, CORS allows any origin); `cd web && npm run dev` starts the frontend on port 5173 with `/api` proxied to `http://127.0.0.1:8080`; the admin SPA lives under the fixed `/admin` prefix (open `http://localhost:5173/admin/` in dev, while `/` is server-rendered by the public site). `web/.env.development` sets `VITE_MOCK=true`; frontend code loads mock data only when `VITE_MOCK === 'true'` (determined centrally in `web/src/framework/env.ts`); an unset variable means off, so dev mode relies on `.env.development` explicitly setting `true` and production builds rely on `.env.production`'s `false` (a missing entry never turns mocks on). To hit the real backend, override per Vite convention with an environment variable: `VITE_MOCK=false npm run dev`; validate real-API integration in the target environment.
+- Files needed at runtime: `nexadmin-server`, `config/default.yaml`, `migrations/` (`framework/` and `business/`). `config/config.yaml`, `data/` and `logs/` are created by the wizard or at runtime. Do not omit `migrations/framework`, required after initialization. Installed plugins also need their manifests and migration directories deployed. See §13 for missing-file errors.
 - Foreground: `./nexadmin-server` (Ctrl+C or SIGTERM for graceful exit, waiting up to 10 seconds). Background: `start | stop | restart | status` (§4). For production, prefer systemd or container orchestration.
 
 ## 2. Build & packaging
@@ -20,11 +25,11 @@ Convention: unless stated otherwise, commands run from the project root (the dir
 sh scripts/build.sh
 ```
 
-Script content (checked line by line): reads `framework_version` from `.nexadmin.manifest.json` (exits if missing) → `cd web && npm ci && npm run build` → `go build -trimpath -tags embedweb -ldflags "-s -w -X main.version=<version>" -o bin/nexadmin-server ./cmd/server`. No make required.
+Script content: reads `framework_version` from `.nexadmin.manifest.json` (exits if missing) → `cd web && npm ci && npm run build` → `go build -trimpath -tags embedweb -ldflags "-s -w -X main.version=<version>" -o bin/nexadmin-server ./cmd/server`. No make required.
 
-Prerequisites: Go (`go.mod` declares `go 1.25.0`), Node and npm (the Dockerfile uses `node:22-alpine`).
+Prerequisites: Go (`go.mod` declares `go 1.26.0`), Node and npm (the Dockerfile uses `node:22-alpine`).
 
-Verification: `npm run build` (`tsc --noEmit && vite build`) and the same-flag `go build -tags embedweb` ran locally; the binary's `version` prints `0.1.0`, and after startup `/` returned `text/html`. `npm ci` needs network and was not run locally.
+After building, check `bin/nexadmin-server version` and open `/admin/` to verify the embedded SPA. Initial dependency installation with `npm ci` needs network access; release matching source and build artifacts together.
 
 ### 2.2 scripts/build.bat (Windows)
 
@@ -38,7 +43,7 @@ Build context is the project root:
 docker build -f deploy/Dockerfile -t nexadmin:latest .
 ```
 
-Multi-stage: `node:22-alpine` builds the frontend → `golang:1.25-alpine` builds with `CGO_ENABLED=0 go build -tags embedweb` → `alpine:3.20` runs. Runtime image points (checked line by line):
+Multi-stage: `node:22-alpine` builds the frontend → `golang:1.25-alpine` builds with `CGO_ENABLED=0 go build -tags embedweb` → `alpine:3.20` runs. Runtime image points:
 
 - Non-root user `nexadmin` (uid/gid 10001); working directory `/app`.
 - Binary `/app/nexadmin-server`; `/app/migrations` ships with the image; default config at `/app/defaults/default.yaml`.
@@ -47,7 +52,7 @@ Multi-stage: `node:22-alpine` builds the frontend → `golang:1.25-alpine` build
 - Volumes: `/app/config`, `/app/data`, `/app/logs`; exposes 8080; `HEALTHCHECK` uses `wget` against `http://127.0.0.1:8080/healthz` (unchanged).
 - Backup directory: the image creates and grants `/app/data/backup` (writable by `nexadmin`, inside the data volume) and sets `ENV NEXADMIN_BACKUP_DIR=/app/data/backup`. Note the environment variable takes precedence over `config.yaml` — to change the directory, change this variable (or override in compose), not just `config.yaml`'s `backup.dir`. The backup page, `reinit` and `restore` all use the same directory.
 
-Verification: package names come from the Alpine 3.20 package index (`mariadb-client` contains `/usr/bin/mysqldump`, `/usr/bin/mysql`; `postgresql16-client` exists); the image itself was not built or verified live.
+Image builds and real runtime behavior still need validation. The current Dockerfile's `golang:1.25-alpine` base is older than the Go 1.26 requirement in `go.mod`; it is not a matched offline toolchain. Deployment maintainers must align versions and validate the build before release.
 
 ### 2.4 deploy/docker-compose.example.yml
 
@@ -59,11 +64,11 @@ docker compose -f deploy/docker-compose.example.yml --profile cache up -d   # al
 docker compose -f deploy/docker-compose.example.yml run --rm app init --config /app/config/init.yaml
 ```
 
-File content (checked line by line): services `app` (`context: ..`, `dockerfile: deploy/Dockerfile`, port `8080:8080`), `postgres` (`postgres:16` with a `pg_isready` health check, `app` depends on it being healthy), `valkey` (`valkey/valkey:8`, only started with `--profile cache`, password `VALKEY_PASSWORD`, default `change-me`). The `app` environment: `NEXADMIN_APP_ENV=production`, `NEXADMIN_DATABASE_TYPE=postgres`, `..._HOST=postgres`, `..._PORT=5432`, `..._USER=nexadmin`, `..._PASSWORD=${POSTGRES_PASSWORD}`, `..._NAME=nexadmin`, plus `NEXADMIN_BACKUP_DIR=/app/data/backup` (already the image default, spelled out for visibility); the file also has a commented-out `NEXADMIN_SERVER_TRUSTED_PROXIES` example which must be configured when a reverse proxy sits in front (§11.1). When using valkey, add `NEXADMIN_CACHE_DRIVER=redis`, `NEXADMIN_CACHE_ADDR=valkey:6379` and `NEXADMIN_CACHE_PASSWORD` yourself (the file's comments only mention the first two; the password entry comes from the config key `cache.password` and valkey's `--requirepass`). Four named volumes `nexadmin_config`, `nexadmin_data`, `nexadmin_backup`, `nexadmin_logs` map to `/app/config`, `/app/data`, `/app/data/backup` (backups get their own volume, mounted as a subdirectory inside the data volume for easy copying off), `/app/logs`.
+File content: services `app` (`context: ..`, `dockerfile: deploy/Dockerfile`, port `8080:8080`), `postgres` (`postgres:16` with a `pg_isready` health check, `app` depends on it being healthy), `valkey` (`valkey/valkey:8`, only started with `--profile cache`, password `VALKEY_PASSWORD`, default `change-me`). The `app` environment: `NEXADMIN_APP_ENV=production`, `NEXADMIN_DATABASE_TYPE=postgres`, `..._HOST=postgres`, `..._PORT=5432`, `..._USER=nexadmin`, `..._PASSWORD=${POSTGRES_PASSWORD}`, `..._NAME=nexadmin`, plus `NEXADMIN_BACKUP_DIR=/app/data/backup` (already the image default, spelled out for visibility); the file also has a commented-out `NEXADMIN_SERVER_TRUSTED_PROXIES` example which must be configured when a reverse proxy sits in front (§11.1). When using valkey, add `NEXADMIN_CACHE_DRIVER=redis`, `NEXADMIN_CACHE_ADDR=valkey:6379` and `NEXADMIN_CACHE_PASSWORD` yourself (the file's comments only mention the first two; the password entry comes from the config key `cache.password` and valkey's `--requirepass`). Four named volumes `nexadmin_config`, `nexadmin_data`, `nexadmin_backup`, `nexadmin_logs` map to `/app/config`, `/app/data`, `/app/data/backup` (backups get their own volume, mounted as a subdirectory inside the data volume for easy copying off), `/app/logs`.
 
 `init --config /app/config/init.yaml` requires that file to already exist in the `nexadmin_config` volume (format in §3.2). The sample `postgres` / `valkey` passwords and image versions must be replaced and pinned in production.
 
-Verification: the local Docker has neither the `compose` subcommand nor a daemon — `docker compose config` and the image build could not run; only manual review was done.
+Before deployment, inspect the expanded configuration with `docker compose -f deploy/docker-compose.example.yml config`, then validate image builds, volume permissions, initialization and restart. Container acceptance is still required.
 
 ### 2.5 deploy/nexadmin.service (systemd)
 
@@ -80,7 +85,7 @@ Environment file `/etc/nexadmin/nexadmin.env` (mode 0600, owned by root), e.g. `
 
 Note (not verified live): the `backup` directory must exist beforehand, otherwise that `ReadWritePaths` entry fails unit startup (systemd namespace error) — hence the `mkdir` above includes it. The default `backup.dir=./backup` resolves under `WorkingDirectory` to `/opt/nexadmin/backup`, exactly this writable directory; changing `backup.dir` requires a matching `ReadWritePaths` change. Database clients must be installed on the host yourself (e.g. `apt install mariadb-client postgresql-client`) — the unit does not. `migrations/` must sit at `/opt/nexadmin/migrations` (under the working directory).
 
-Verification: the local `systemd-analyze verify` was too old to recognize `ProtectKernelTunables` etc., so verification was incomplete; the unit has never started under systemd.
+Real systemd validation is still required: run `systemd-analyze verify` on the target system and check directive compatibility, writable directories and service lifecycle.
 
 ## 3. Initialization
 
@@ -88,15 +93,15 @@ Verification: the local `systemd-analyze verify` was too old to recognize `Prote
 
 While uninitialized, the service starts normally but only exposes the wizard and status endpoints:
 
-- Business APIs uniformly return HTTP 503, `{"code":503,"message":"System not initialized","data":null,"reason":"NOT_INITIALIZED"}` (verified locally). `/healthz`, `/metrics`, `GET /api/v1/system/status` (returning `{"initialized":false}`), `GET /api/v1/i18n/languages` and `/api/v1/setup/*` are available.
+- Business APIs uniformly return HTTP 503, `{"code":503,"message":"System not initialized","data":null,"reason":"NOT_INITIALIZED"}`. `/healthz`, `/metrics`, `GET /api/v1/system/status` (returning `{"initialized":false}`), `GET /api/v1/i18n/languages` and `/api/v1/setup/*` are available.
 - The console (for background starts, `logs/nexadmin.out`) prints the wizard URL and a one-time initialization token. `start`'s output carries it too.
 - Only the local machine may access the wizard by default. "Local" requires the TCP peer to be a loopback address with no `X-Forwarded-For`, `X-Real-IP`, `Forwarded` or `X-Forwarded-Host` forwarding headers; requests forwarded by same-machine nginx count as proxied. Remote or proxied initialization requires `setup.allow_remote: true` plus the one-time console token entered on the page, or `X-Setup-Token` from an API client. Direct local access without forwarding headers needs no token.
-- The wizard has 6 steps: environment check → database → cache → admin & site → optional config → confirm & execute. Database and cache support connection tests; S3 and AI provide inputs without dedicated probes.
+- The wizard has 6 steps: environment check → database → cache → admin & site → optional config → confirm & execute. Database, cache, S3 and AI have dedicated probe endpoints; a successful connection test does not replace end-to-end integration acceptance.
 - Executing `POST /api/v1/setup/execute` runs in order: `writeConfig` (writes `config/config.yaml`, mode 0600) → `migrate` → `seed` → `createAdmin` → `writeMark` (writes `data/.initialized`). Any failure rolls back the written `config.yaml` and parameters can be retried; only one initialization runs at a time. The page receives real per-stage progress via POST SSE, while plain API clients keep JSON compatibility. Reverse proxies must pass SSE through immediately.
 - The remote-init token lives only in component memory and is cleared on success — never in browser storage.
 - Password recovery depends on the account's bound email / phone being **unique** among enabled accounts: when one email (or phone) matches multiple enabled accounts, the anti-enumeration policy treats them all as "not found" and none can use code-based recovery — an admin must reset the password instead. Note that entry points (admin user creation, Excel import, profile binding) currently only validate format without strong uniqueness enforcement — uniqueness must be guaranteed administratively.
 - Admin validation: username `^[A-Za-z][A-Za-z0-9_]{2,31}$`; the password has **no strength rules** — non-empty and at most 72 bytes (bcrypt reads only the first 72 bytes, so longer input is rejected; backend `passwordAcceptable`); site name non-empty and ≤60 characters; timezone must be a valid IANA name; language must be in `languages`. The site name is written to the settings page "Site" section (`sys_setting`'s `site.siteName`, written in the `seed` step, re-runnable) — the login page, top bar and PWA manifest display it; it is also written to `config.yaml`'s `app.name`, but that entry is only for logs / default naming and the pages don't read it.
-- During initialization each module's `Seed` writes, besides factory data like menus, dictionaries, params and roles, demo data: demo users (created without a password field — by code reading they cannot log in with a password, untested), departments, posts, notices, messages, logs, demo tenants and packages, factory roles (`operator`, `auditor`, `editor`, `guest`, `secadmin`). These rows are "insert if absent, never touch if present", and `Seed` runs only during initialization, not on every start (each start only tops up `StartupSeeder` items like menus). Clean up demo data as needed before go-live (the exact list is in each module's `Seed`, not verified table by table).
+- During initialization each module's `Seed` writes, besides factory data like menus, dictionaries, params and roles, demo data: demo users (validate their login state separately; do not assume a usable default password), departments, posts, notices, messages, logs, demo tenants and packages, factory roles (`operator`, `auditor`, `editor`, `guest`, `secadmin`). These rows are "insert if absent, never touch if present", and `Seed` runs only during initialization, not on every start (each start only tops up `StartupSeeder` items like menus). Clean up demo data as needed before go-live (the exact list is in each module's `Seed`, not verified table by table).
 - After initialization the wizard routes are not registered at all in an initialized process — `/api/v1/setup/*` becomes unavailable; the service switches to full routes in place without restart.
 - The "is initialized" check (`setup.IsInitialized`): `data/.initialized` exists → initialized; `config/config.yaml` missing → uninitialized; otherwise connect to the database and look for an admin — connection or read failures count as initialized (only a reachable database with zero tables counts as uninitialized, which is the case right after `reinit`).
 
@@ -133,7 +138,7 @@ optional:                 # the whole section may be omitted
   # aiEnabled / aiBaseUrl / aiApiKey / aiModel
 ```
 
-Behavior (validation and failure paths tested locally without a database):
+Validation and failure behavior:
 
 - Prints `writeConfig` / `migrate` / `seed` / `createAdmin` / `writeMark` status step by step, never printing passwords; any failure exits non-zero with `init failed at <step>: <reason>` and rolls back the written `config/config.yaml`.
 - Empty or over-72-byte admin password: `init failed at writeConfig: admin password must be 1-72 bytes` (no strength rules; fragments equal to the password are masked as `***` in error text).
@@ -154,7 +159,7 @@ Behavior (validation and failure paths tested locally without a database):
 
 ### 4.2 nexadmin-server subcommands
 
-Usage below is checked against `cmd/server/main.go`'s parsing and calls (usage itself not run this round):
+Server subcommands (defined by `cmd/server/main.go`):
 
 | Command | Purpose |
 | --- | --- |
@@ -171,7 +176,7 @@ Usage below is checked against `cmd/server/main.go`'s parsing and calls (usage i
 | `restore <backup file> [--yes] [--dry-run] [--sha256 <value>] [--platform-only]` | Single platform-database restore; isolation mode requires explicit platform-only (§7) |
 | `reinit [--dry-run] [--platform-only]` | Factory reset; isolation mode requires explicit platform-only, shared resources still cleaned (§8) |
 
-The full `start` → `status` → `restart` → `stop` → `status` cycle was tested locally without a database, plus `migrate --dry-run` (uninitialized prints `system not initialized, nothing to migrate (the wizard / init creates tables)`), `reinit --dry-run` (without `config/config.yaml` prints `no config/config.yaml — never initialized, no factory reset needed`), and `restore --dry-run` (unreachable database prints `cannot reach the database, aborted`).
+During deployment acceptance, check foreground and background lifecycle separately, including PID files, logs, listening ports and initialization state. Do not use `stop` for processes launched by another supervisor.
 
 ## 5. Database migrations
 
@@ -185,7 +190,7 @@ The migration runner (`core/migrate`) executes three classes under one rule set;
 | `business` | `migrations/business/<engine>/` | Business migrations; a missing directory means none |
 | `plugin:<id>` | The plugin's own migration directory | Only licensed and mounted plugins |
 
-- `<engine>` is `mysql`, `mariadb` or `postgres`; MariaDB falls back to the `mysql` directory when it has no dedicated one. The framework directory currently has 24 files per engine; the business directory gets `mysql`, `mariadb`, `postgres` from `nexadmin add module`.
+- `<engine>` is `mysql`, `mariadb` or `postgres`; MariaDB falls back to the `mysql` directory when it has no dedicated one. Use the release's actual migration files rather than a fixed file count; the business directory gets `mysql`, `mariadb`, `postgres` from `nexadmin add module`.
 - Within a scope, files run in name order, skipping files already recorded; scope order is framework → business → plugins.
 - SQL is split on semicolons; `--` comment lines are ignored — do not put semicolons inside string literals in migration files.
 - PostgreSQL wraps each file in a transaction with full rollback on failure; MySQL / MariaDB DDL cannot roll back — statements run one by one, and failure reports `executed N/M statements, statement N+1 failed, file not recorded, repair manually first`.
@@ -211,7 +216,7 @@ The above describes platform migrations. With `database.isolation.enabled`, tena
 
 `--mark-applied` refuses: files missing on disk, records already in the version table (`already recorded, refusing duplicate mark`), and records with checksum mismatches. Marking logs the operator (system user@host) and time. `--mark-applied` and `--unmark` cannot be combined. When uninitialized, all `migrate` variants print "nothing to migrate".
 
-Migration commands (`migrate`, `--status`, etc.) need a real database; locally only the uninitialized outputs were tested, the rest is code-checked and not verified live.
+Migration commands (`migrate`, `--status`, etc.) need a real database. Validate execution, failure recovery and repeat runs on the target engine; uninitialized "nothing to migrate" output is not acceptance.
 
 ### 5.3 Checksum rules
 
@@ -269,13 +274,13 @@ Execution order and safeguards (`core/ctl/restore.go`):
 5. Interactive `confirm restore? [y/N]` — only `y` continues; with `app.env=production` the database name must also be typed; `--yes` skips (automation).
 6. A "pre-restore backup" runs first (`nexadmin-pre-restore-<engine>-v<version>-<time>.sql.gz` into `backup.dir`), aborting on failure; then the import. Import failure reports `the database may be partially restored; pre-restore backup at <path>, use restore to roll back`.
 
-The restore flow depends on a real database and client tools and was not verified live (this machine lacks them).
+The restore flow depends on a real database and client tools and still requires a recovery drill on the target engine.
 
-### 7.3 Platform & tenant bundle (statically reviewed only, never executed)
+### 7.3 Platform & tenant bundle
 
 `backup --output <new dir>` exports the platform and all tenant databases per configuration; the parent directory must exist, the output directory must not, and paths cannot contain `..` or symlinks. Output contains each database's `.sql.gz`, `.sha256` and `manifest.json` (targets, sizes, sha256; no connection credentials or password env names). Backups are sequential independent dumps — **not an atomic cross-database snapshot**; for a consistent point in time, operations should pause relevant writes. Failures keep a partial directory which must not be treated as a fully recoverable bundle.
 
-Command shapes below are for documentation only and were not executed this round (`123` should be a configured canonical tenant ID):
+Command examples (`123` must be replaced with a configured canonical tenant ID; validate the flow in a test environment first):
 
 ```text
 nexadmin-server backup --output /absolute/existing-parent/new-bundle
@@ -301,12 +306,12 @@ nexadmin-server reinit
 Requires `config/config.yaml` to exist, otherwise: `no config/config.yaml — never initialized, no factory reset needed`. Flow (`core/ctl/reinit*.go`):
 
 - First a read-only manifest: whether the service is running (only `start`-started ones auto-stop), the database's actual engine / host / name / table count / estimated rows / size, the count of cache keys prefixed `nex:*` (memory cache is skipped), and `data/uploads` file count and size; any unreadable item aborts.
-- By default a backup is taken with local `mysqldump` / `pg_dump`, identical in format to the backup page: into `backup.dir` (the same directory as the backup page and `restore`, no longer hard-coded `./backup`), named `nexadmin-reinit-<engine>-v<framework version>-<yyyymmdd-hhmmss>.sql.gz`, gzip-compressed with a `.sha256` sidecar, directory 0700, files 0600. So it can be fed directly to `restore` (whether `restore` recognizes it depends on the `.sql.gz` suffix, `SafeBackupName` naming and sha256 — unit-tested with a fake `mysqldump`); missing tools note "not backed up" in the manifest and you decide whether to continue. `--dry-run` lists only, without backing up or executing.
+- By default a backup is taken with local `mysqldump` / `pg_dump`, identical in format to the backup page: into `backup.dir` (the same directory as the backup page and `restore`, no longer hard-coded `./backup`), named `nexadmin-reinit-<engine>-v<framework version>-<yyyymmdd-hhmmss>.sql.gz`, gzip-compressed with a `.sha256` sidecar, directory 0700, files 0600. So it can be fed directly to `restore` (whether `restore` recognizes it depends on the `.sql.gz` suffix, `SafeBackupName` naming and sha256); missing tools note "not backed up" in the manifest and you decide whether to continue. `--dry-run` lists only, without backing up or executing.
 - Confirmation defaults to N; only `y` executes; `app.env=production` also requires the database name.
 - Execution: stop the service → drop all tables → clean cache `nex:*` → delete `data/uploads` → delete `data/.initialized` → auto-start, hinting that the wizard's database settings reuse the old values. Completed steps are not rolled back on later failure — fix and re-run.
 - Untouched: `config/config.yaml`, `internal/`, `migrations/business/`, logs, files in remote object storage (manual cleanup), `data/secret.key`, `data/jwt.secret`.
 
-The full reinit flow depends on a real database; locally only `--dry-run`'s refusal without `config/config.yaml` was tested — the rest is unverified. Backup naming, gzip + sha256 format and `restore` recognition have unit tests (with a fake `mysqldump` on PATH); real `mysqldump` / `pg_dump` export and import are unverified.
+The full reinit flow and real `mysqldump` / `pg_dump` export/import still require isolated-environment acceptance. Backup-format unit tests do not prove recoverability; rehearse restoration and verify complete backups first.
 
 ## 9. Monitoring
 
@@ -322,7 +327,7 @@ The full reinit flow depends on a real database; locally only `--dry-run`'s refu
 - Non-empty `token`: every source must carry `Authorization: Bearer <token>`, compared constant-time; missing or wrong returns 401 with `WWW-Authenticate`.
 - `enabled=false`: the route is not registered.
 
-Metrics (names from code; the first 11 were observed locally while uninitialized): `nexadmin_http_requests_total{method,route,status}`, `nexadmin_http_request_duration_seconds` (histogram), `nexadmin_http_requests_in_flight`, `nexadmin_cache_requests_total`, `nexadmin_cache_errors_total`, `go_goroutines`, `go_memstats_alloc_bytes`, `go_memstats_heap_inuse_bytes`, `go_memstats_sys_bytes`, `go_gc_cycles_total`, `go_gc_pause_seconds_total`; after initialization also `nexadmin_db_connections_{open,in_use,idle,max_open}`, `nexadmin_db_wait_total`, `nexadmin_db_wait_seconds_total`, `nexadmin_migrations_pending`, `nexadmin_migrations_check_ok`, `nexadmin_job_queue_length`, `nexadmin_plugin_licensed` (the latter depend on their modules; post-init output not verified live).
+Metrics (names from code): `nexadmin_http_requests_total{method,route,status}`, `nexadmin_http_request_duration_seconds` (histogram), `nexadmin_http_requests_in_flight`, `nexadmin_cache_requests_total`, `nexadmin_cache_errors_total`, `go_goroutines`, `go_memstats_alloc_bytes`, `go_memstats_heap_inuse_bytes`, `go_memstats_sys_bytes`, `go_gc_cycles_total`, `go_gc_pause_seconds_total`; after initialization also `nexadmin_db_connections_{open,in_use,idle,max_open}`, `nexadmin_db_wait_total`, `nexadmin_db_wait_seconds_total`, `nexadmin_migrations_pending`, `nexadmin_migrations_check_ok`, `nexadmin_job_queue_length`, `nexadmin_plugin_licensed` (the latter depend on their modules; post-init output not verified live).
 
 ### 9.3 Health details
 
@@ -330,6 +335,7 @@ Metrics (names from code; the first 11 were observed locally while uninitialized
 
 - `GET /api/v1/monitor/health`: concurrently checks `db`, `cache`, `storage`, `migrations`, `plugins`, `disk` — each with a 3-second timeout, overall state = worst (`ok` < `warn` < `fail`). Rules: database slower than 500ms, cache slower than 200ms, storage slower than 1500ms → `warn`; pending migrations → `warn`; plugin licenses expired / invalid / expiring within 30 days → `warn`; the partition with the highest disk usage ≥85% → `warn`, ≥95% → `fail`.
 - `GET /api/v1/monitor/server`: CPU, memory, disk, network, Go runtime (Linux reads `/proc`; other systems only runtime).
+- `GET /api/v1/monitor/{server,cache,api}/history?hours=6`: real history trends. Each monitor module runs a collector that writes one flat metric set per 30s into `sys_monitor_snapshot` (`kind` + `ts` + JSON `payload`), kept 7 days and purged hourly. Queries take `hours` (1-168, default 6) and average into <=300 buckets in Go; `stepSeconds` is the actual bucket width. Metrics a platform cannot sample are not stored as 0 (non-Linux keeps only the Go runtime, the memory driver only process memory), so the history dropdown never shows a fake flat line.
 - Also cache monitor (`cacheMonitor:list`, `cache-monitor`) and API monitor (`apiMonitor:list`, `api-monitor`: per-endpoint QPS / latency / error rate over the last 30 seconds, in-process, reset on restart).
 
 ### 9.4 Frontend error reporting
@@ -355,10 +361,10 @@ Each item below comes from code or code comments:
   - Storage quota is atomically pre-allocated at tus session creation by declared length (`modules/file/usage.go`), checked as actual usage plus in-flight reservations, released on completion / cancellation, with leases cleaning expired reservations. Gated uploads require the cache to support `cache.Lease` and are rejected otherwise; multi-instance must share Redis/Valkey — memory suits single instance only. Real shared-cache concurrency acceptance is still pending.
 - Remaining concurrency windows and limits (noted in code comments):
   - Online sessions now use "one key per session + a sorted-set index" — no more read-modify-write of the whole index, so concurrent logins lose no sessions and force-logout only affects the target. Residual windows: the same session registered by two instances simultaneously — last writer wins (losing only display fields: last-active time / token jti, corrected at next registration); while cleaning expired index entries, a concurrent re-registration may have an entry mistakenly deleted, briefly missing from the list until that session's next registration; caches without sorted-set support fall back to in-process storage, invisible across instances (built-in memory / redis both support it).
-  - In-app message SSE and tenant-change invalidation events cross instances via `core/cluster`'s broadcast bus (redis Pub/Sub with auto-reconnect and full resync; memory cache keeps it local). This path has only been verified on fakes and miniredis, not on real multi-instance + redis.
+  - In-app message SSE and tenant-change invalidation events cross instances via `core/cluster`'s broadcast bus (redis Pub/Sub with auto-reconnect and full resync; memory cache keeps it local). This path still requires real multi-instance Redis acceptance, including disconnection and reconnection.
   - Tenant info (expiry, quotas) still has a 30-second in-process cache fallback, but modifications broadcast invalidation so other instances usually take effect immediately — worst case 30 seconds if a broadcast is lost.
   - Rate limits fail open on cache errors (with alerts); token validation is the opposite — cache unavailability rejects.
-- Unverified: overall behavior in real multi-instance topologies; the `cache.GetDel` / `cache.Incr` Lua scripts and quota `FOR UPDATE` row locks were verified only against memory cache / sqlmock for statement shape and order (this machine has no database or redis).
+- Still requires acceptance: overall real multi-instance behavior, atomic `cache.GetDel` / `cache.Incr` Lua execution, quota `FOR UPDATE` row locks, and consistency during network failures. Fakes and unit tests do not replace real database and shared-cache checks.
 
 ## 11. Security checklist
 
@@ -395,12 +401,12 @@ The service has two kinds of "address", used differently:
 Proxy configuration essentials:
 
 - Uploads are 5MB chunks (frontend `CHUNK_SIZE = 5MB`, tus `PATCH`); body limits like nginx `client_max_body_size` must not be smaller than the chunk, and disabling request buffering on upload paths is recommended. Application-layer size / type limits come from the "System Parameters" upload limits (effective within seconds after saving, up to 5 seconds later on multi-instance); unset items fall back to `config.yaml`'s `upload.max_size_*` (see Configuration Reference).
-- In-app message SSE (`GET /api/v1/messages/stream`) already sends `X-Accel-Buffering: no`; proxy read timeouts should be long enough — after disconnects the frontend reconnects automatically and degrades to polling (per the design doc, not separately verified).
+- In-app message SSE (`GET /api/v1/messages/stream`) already sends `X-Accel-Buffering: no`; proxy read timeouts should be long enough — verify frontend reconnection, fallback behavior and message delivery after disconnects.
 - Forward `Host`: tenant domain binding and plugin-license domain checks both read the request Host.
 
 ## 12. Upgrades
 
-For the full framework and derived-project upgrade flow see the Secondary Development Guide §1. Operations essentials:
+For the full framework and derived-project upgrade flow see the Customization Guide §1. Operations essentials:
 
 ```
 nexadmin upgrade --from <new-version source dir or zip> --dry-run    # list changes only; dirty workspaces warn in dry-run
@@ -409,7 +415,7 @@ go mod tidy && (cd web && npm install)                               # after mer
 sh scripts/build.sh                                                  # rebuild
 ```
 
-(`nexadmin` means `go run ./cmd/nexadmin`, or a self-compiled `cmd/nexadmin`. `upgrade --from ... --dry-run --allow-dirty` was tested locally on a demo project created with `nexadmin new`, printing `summary: added 0, modified 0, deleted 0, unchanged 958, WARN 0`.)
+`nexadmin` means `go run ./cmd/nexadmin` or a separately built CLI from `cmd/nexadmin`. Inspect the dry-run file list before upgrading; do not use `--allow-dirty` instead of protecting local changes.
 
 Server-side actions after upgrade:
 
@@ -421,14 +427,14 @@ Server-side actions after upgrade:
 
 ## 13. Troubleshooting
 
-Only error texts confirmable from code or local runs are listed. "Verified" means reproduced locally; the rest comes from reading code.
+Common error patterns are listed below. Exact wording can vary by version, operating system and language; diagnose with the accompanying startup logs.
 
 | Symptom / error | Cause | Fix |
 | --- | --- | --- |
-| `config: read config/default.yaml: open config/default.yaml: no such file or directory` (verified) | Not started from the project root, or missing `config/default.yaml` | Run from the project root; for systemd check `WorkingDirectory` |
-| `config: server.port 99999 out of range`, `config: app.env must be dev or production, got "prod"` (verified) | Config validation failure (env vars trigger it too) | Fix the config. Other validation copy is in the Configuration Reference §1 |
-| `listen tcp :8080: bind: address already in use` (verified; Go standard library text, not this project's copy) | Port occupied | Change `server.port` or stop the occupant; run `nexadmin-server status` first to see if it's your own instance |
-| `database: connect mysql 127.0.0.1:3306: dial tcp ...: connection refused` (verified); PostgreSQL: `database: connect postgres host:port: ...` | Database unreachable: address / port / credentials / firewall / database down | Check `database.*`; `restore` and `reinit` report `cannot reach the database, aborted` |
+| `config: read config/default.yaml: open config/default.yaml: no such file or directory` | Not started from the project root, or missing `config/default.yaml` | Run from the project root; for systemd check `WorkingDirectory` |
+| `config: server.port 99999 out of range`, `config: app.env must be dev or production, got "prod"` | Config validation failure (env vars trigger it too) | Fix the config. Other validation copy is in the Configuration Reference §1 |
+| `listen tcp :8080: bind: address already in use` (Go standard library error) | Port occupied | Change `server.port` or stop the occupant; run `nexadmin-server status` first to see if it's your own instance |
+| `database: connect mysql 127.0.0.1:3306: dial tcp ...: connection refused`; PostgreSQL: `database: connect postgres host:port: ...` | Database unreachable: address / port / credentials / firewall / database down | Check `database.*`; `restore` and `reinit` report `cannot reach the database, aborted` |
 | `database: unsupported type "x" (want mysql, mariadb or postgres)` / `database: invalid database name "x" (letters, digits, underscore only)` | Invalid engine or database name | Database names allow letters, digits, underscore only |
 | After losing `data/`, startup errors on the database instead of entering the wizard | See §3.1: without `data/.initialized` but with `config/config.yaml` present, it connects to look for an admin — unreachable counts as "initialized", then full-route assembly fails on the database (better to misjudge as initialized than uninitialized) | Restore database connectivity; if an admin really exists, just restore the marker file |
 | `migration file modified after execution (violates append-only), refusing to start: framework/xxx.sql, .... Restore these files...` | An executed migration's content changed (including hand-editing framework files or overwriting with a different version) | Restore the file; write new changes into a new numbered SQL; check `migrate --status` for `CHECKSUM mismatch` files |
@@ -440,7 +446,7 @@ Only error texts confirmable from code or local runs are listed. "Verified" mean
 | `auth: auth.jwt_secret must be at least 32 characters` | Explicit JWT secret too short | At least 32 characters, or leave empty to auto-generate |
 | `secret: key from <source> must be 32 bytes encoded as hex (64 chars) or base64` | `NEXADMIN_SECRET_KEY` malformed | 32 bytes as hex (64 chars) or base64 |
 | `core: duplicate module name "xxx"` | Business module or plugin named like a built-in | Rename the business module's `Name()` (and its permission-code and table prefixes) |
-| Business APIs return HTTP 503 with `reason: NOT_INITIALIZED` (verified) | System uninitialized | Use the wizard or `init --config` |
+| Business APIs return HTTP 503 with `reason: NOT_INITIALIZED` | System uninitialized | Use the wizard or `init --config` |
 | After login APIs return HTTP 403 with `reason: TENANT_EXPIRED` | Tenant expired / suspended (beyond grace) | Renew or enable in Tenant Management; tenant info has a 30-second cache fallback, and changes broadcast invalidation across instances (§10), effective within 30 seconds at most |
 | HTTP 429 with `Retry-After` | Rate limit hit | See Configuration Reference §6; behind a proxy see §11.1 |
 | `service is running but was not started by start (no pid file); stop it with Ctrl+C in its terminal` | A foreground process has no pid file | Ctrl+C in its terminal |
@@ -448,19 +454,16 @@ Only error texts confirmable from code or local runs are listed. "Verified" mean
 | `process exited (<reason>), see logs/nexadmin.out` / `timed out waiting for service start` | A `start`-launched background process failed or wasn't ready within 20 seconds | Read `logs/nexadmin.out` |
 | `service is running, restore refused; run stop first (restore overwrites live data)` | `restore` without stopping first | `stop` first |
 | `cannot find <backup>.sha256 — integrity cannot be verified; provide --sha256 <value> manually, aborted` | Backup missing its sidecar checksum | Restore the `.sha256` or use `--sha256` |
-| `mysqldump / mariadb-dump not found on this machine; install the database client and add it to PATH` | Client tools needed by backup / reinit missing from PATH | Install clients; container images don't include them by default |
+| `mysqldump / mariadb-dump not found on this machine; install the database client and add it to PATH` | Client tools needed by backup / reinit missing from PATH | Install clients on bare hosts; the repository Dockerfile includes them, but custom images must be checked separately |
 | Startup log `file module disabled: storage init failed` | File module storage init failed (e.g. S3 config, unset `${ENV}`) | Read the error on the same line; the file module's routes were not registered |
 
-## 14. Verification notes
+## 14. Pre-production verification requirements
 
-| Item | State |
-| --- | --- |
-| Subcommand list and usage | Verified locally (`nexadmin-server <unknown>` prints usage; `version`, `status`, `start`, `restart`, `stop`, `init`, `migrate --dry-run/--status`, `reinit --dry-run`, `restore --dry-run` all run) |
-| Uninitialized mode: `/healthz`, `/metrics`, `/api/v1/system/status`, business 503, `setup/env` | Verified locally |
-| Frontend build + `-tags embedweb` build + static serving | Verified locally (`npm ci` not run) |
-| `nexadmin new`, `add module`, `upgrade --dry-run`, `release check`, `release pack` (refuses with FAIL), `plugin list`, `i18n check` | Verified locally |
-| Env override rules (int / bool / duration / comma list / nested keys) | Verified locally |
-| Successful init, real migration runs, backup, restore, full reinit, multi-instance behavior | Not verified live (no database / redis / client tools) |
-| Dockerfile build, compose, systemd unit | Manually reviewed only, not run |
-| `deploy/` `.sh` / `.command` / `.bat` scripts, `scripts/build.bat` | Content read only, never run (scripts without a terminal try to open one); their `nexadmin-server` subcommands were verified |
-| `docker compose` commands | The local Docker lacks the `compose` subcommand — the commands themselves could not be checked |
+The following still need acceptance in the target environment; builds, mocks and unit tests are not sufficient:
+
+- Empty-database initialization, migrations and seeds for each of the three engines, upgrades and repeat-start idempotency.
+- Real dump / import, pre-restore backups, partial bundle failures, and coordinated recovery of keys and uploads. Rehearse destructive reinit only in an isolated test environment.
+- One-time credentials, rate limits, concurrent quotas, message SSE and invalidation broadcasts across instances sharing Redis / Valkey.
+- Docker images, Compose, systemd, Windows/macOS lifecycle scripts and file permissions. Deployment examples are not validated installations.
+- Browser setup and login, rejection of non-super-admin calls to platform-global management APIs, tenant isolation, plugin installation and license lifecycle. LDAP/AD/CAS integrations require real services.
+- For website deployments, check light/dark themes, language switching and documentation pages. Edit technical documents only in `docs/`; rebuild and deploy after embedded Markdown or source-dictionary changes. Use the CMS for marketing pages; restart after changes to the `sys_language` language set or route prefixes.

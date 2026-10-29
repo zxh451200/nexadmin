@@ -45,7 +45,7 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 type Handler struct{ svc *Service }
 
 func tooLarge() *response.Error {
-	return response.New(http.StatusRequestEntityTooLarge, "error.payload_too_large").WithMsg("request body too large")
+	return response.New(http.StatusRequestEntityTooLarge, "error.payload_too_large")
 }
 
 // Report POST /client-errors

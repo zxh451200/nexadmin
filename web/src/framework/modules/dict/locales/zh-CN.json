@@ -28,7 +28,9 @@
       "selectType": "请先在左侧选择一个字典类型",
       "create": "新增字典数据",
       "edit": "编辑字典数据",
-      "deleteConfirm": "确定删除字典数据“{{name}}”吗？"
+      "deleteConfirm": "确定删除字典数据“{{name}}”吗？",
+      "translations": "其他语言",
+      "translationPlaceholder": "留空则回退原文"
     }
   }
 }

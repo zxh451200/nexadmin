@@ -16,4 +16,6 @@ export interface UploadConfig {
   maxVideoMb: number
   maxFileMb: number
   allowedTypes: string[]
+  /** 开启后图片会额外上传一份 WebP 副本（原图保留，服务端按 Accept 下发） */
+  imageWebp?: boolean
 }

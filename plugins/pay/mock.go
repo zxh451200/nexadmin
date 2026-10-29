@@ -53,12 +53,12 @@ func (mockProvider) Refund(_ context.Context, req RefundRequest, _ map[string]st
 
 // mockCallbackBody 是 mock 渠道回调的报文格式。
 type mockCallbackBody struct {
-	PaymentNo     string `json:"paymentNo"`
-	RefundNo      string `json:"refundNo,omitempty"`
-	Result        string `json:"result"` // success | fail
-	ChannelTxnID  string `json:"channelTxnId"`
+	PaymentNo       string `json:"paymentNo"`
+	RefundNo        string `json:"refundNo,omitempty"`
+	Result          string `json:"result"` // success | fail
+	ChannelTxnID    string `json:"channelTxnId"`
 	ChannelRefundID string `json:"channelRefundId,omitempty"`
-	Timestamp     int64  `json:"timestamp"`
+	Timestamp       int64  `json:"timestamp"`
 }
 
 // SignMockCallback 用渠道密钥生成 mock 回调签名（收银台处理器与测试共用）。

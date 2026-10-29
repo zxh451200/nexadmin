@@ -2,7 +2,6 @@
   "plugin_im": {
     "title": "在线客服",
     "description": "访客与坐席的会话消息",
-    "dir": "在线客服",
     "menu": "消息中心",
     "perm": {
       "reply": "回复消息",
@@ -18,6 +17,9 @@
     "closeConfirm": "确认关闭会话 {{no}}？关闭后访客不能再发消息。",
     "replyPlaceholder": "输入回复，回车发送",
     "send": "发送",
+    "fields": {
+      "status": "状态"
+    },
     "status": {
       "open": "进行中",
       "closed": "已关闭"

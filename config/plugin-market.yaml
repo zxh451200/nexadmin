@@ -25,6 +25,10 @@
 #       客户端用 `nexadmin plugin verify --sig <文件> --key <公钥文件> <zip>` 校验。
 # 私有 GitHub：NEXADMIN_MARKET_GITHUB_API 覆盖 API 根地址（GitHub Enterprise）。
 # 注意：edition/version 以各插件 plugin.yaml 为准，下载/安装时交叉校验。
+# Free 分层发布待办：cron/codegen/imports/totp/ldap/maps/crm 的本地声明已改为 free，
+#   但未验证/发布远端免费包；当前无固定 ref，安装仍读取远端默认分支。
+#   发布时同步这 7 个源码包并核对包内 edition/version，再固定新的 ref；旧 pro 包会被拒绝。
+#   totp/ldap 未默认编译，用户需按需安装；不要因免费分层自动叠加安全/身份钩子。
 plugins:
   - id: assistant
     name: AI 助手
@@ -56,34 +60,48 @@ plugins:
         description: 'Enable per table and record field-level before/after values for inserts, updates, and deletes. Sensitive fields are masked and writes are batched asynchronously. Built for enterprise compliance.'
   - id: codegen
     name: 代码生成器
-    description: 读取业务表结构，按推荐配置生成 Go 模块与前端页面，在线预览、打包 zip 下载。无状态、不建表、不写磁盘。
+    description: 免费代码生成器：读取业务表结构，按推荐配置生成 Go 模块与前端页面，在线预览、打包 zip 下载。无状态、不建表、不写磁盘。
     category: devops
-    edition: pro
+    edition: free
     version: 1.0.0
-    price: 待定
+    price: 免费
     author: NexAdmin
     repo: zxh451200/nexadmin-plugins
     subdir: codegen
     i18n:
       en-US:
         name: Code Generator
-        description: 'Reads business table schemas and generates Go modules and frontend pages from recommended settings. Preview online and download a zip. Stateless: no tables, no disk writes.'
+        description: 'Free code generator: reads business table schemas and generates Go modules and frontend pages from recommended settings. Preview online and download a zip. Stateless: no tables, no disk writes.'
+  - id: crm
+    name: 客户主数据
+    description: 免费基础客户主数据 + 线索商机台账（两张表 + 事件契约）：external 锚点让 hotel/mall 的 member 认同同一个客户 ID；不做销售自动化。
+    category: business
+    edition: free
+    version: 0.1.0
+    price: 免费
+    author: NexAdmin
+    repo: zxh451200/nexadmin-plugins
+    subdir: crm
+    i18n:
+      en-US:
+        name: Customer Master
+        description: 'Free basic customer master data and lead/opportunity ledger with two tables and an event contract. External anchors align hotel/mall members to one customer ID; no sales automation.'
   - id: cron
     name: 定时任务
-    description: 5 段 cron 调度、内置安全处理器、立即执行、失败重试、执行日志，并提供工作台概览卡片。
+    description: 免费定时任务插件：5 段 cron 调度、内置安全处理器、立即执行、失败重试、执行日志，并提供工作台概览卡片。
     category: devops
-    edition: pro
+    edition: free
     version: 1.0.0
-    price: 待定
+    price: 免费
     author: NexAdmin
     repo: zxh451200/nexadmin-plugins
     subdir: cron
     i18n:
       en-US:
         name: Scheduled Jobs
-        description: '5-field cron scheduling, built-in safe handlers, run-now, retries, execution logs, and a dashboard card.'
+        description: 'Free scheduled jobs: 5-field cron scheduling, built-in safe handlers, run-now, retries, execution logs, and a dashboard card.'
     screenshots:
-      - /website-assets/market/cron.jpg
+      - /website-assets/market/cron.jpg?v=0.9.4
   - id: formbuilder
     name: 表单构建器
     description: 可视化设计表单、版本化发布、登录用户填写、服务端按发布版本重新校验、提交收集与 xlsx 导出。
@@ -126,6 +144,48 @@ plugins:
       en-US:
         name: Identity Sources
         description: 'Per-tenant identity sources (LDAP/AD sign-in, CAS SSO) with connection tests, test-user sign-in, and automatic account provisioning.'
+  - id: imports
+    name: 导入中心
+    description: 免费通用 CSV / XLSX 导入：模板下载、表头映射、必填校验、逐行隔离、错误行报告、导入台账；业务模块用 RegisterSource 注册可导入的表。
+    category: devops
+    edition: free
+    version: 0.1.0
+    price: 免费
+    author: NexAdmin
+    repo: zxh451200/nexadmin-plugins
+    subdir: imports
+    i18n:
+      en-US:
+        name: Import Center
+        description: 'Free CSV / XLSX imports with templates, header mapping, required-field validation, per-row isolation, error reports and an import ledger. Business modules register import sources through RegisterSource.'
+  - id: ldap
+    name: LDAP/AD 登录
+    description: 免费基础 LDAP/AD 登录适配：本地密码失败后尝试 LDAP 校验，支持 LDAPS/StartTLS、服务账号、自定义过滤器与属性映射；身份映射/自动建号由框架用户模块完成，需按需安装。
+    category: security
+    edition: free
+    version: 0.1.0
+    price: 免费
+    author: NexAdmin
+    repo: zxh451200/nexadmin-plugins
+    subdir: ldap
+    i18n:
+      en-US:
+        name: LDAP/AD Login
+        description: 'Free basic LDAP/AD login after local password failure, with LDAPS/StartTLS, service accounts, custom filters and attribute mapping. The framework handles identity mapping and account provisioning. Install separately as needed.'
+  - id: maps
+    name: 地图服务
+    description: 免费基础地图插件：高德 / 百度 / 谷歌，三家按需启用；地图选点在前端，逆地理编码走后端代理（服务端 Key 不下发）。
+    category: devops
+    edition: free
+    version: 0.1.0
+    price: 免费
+    author: NexAdmin
+    repo: zxh451200/nexadmin-plugins
+    subdir: maps
+    i18n:
+      en-US:
+        name: Map Service
+        description: 'Free basic map plugin: enable AMap, Baidu or Google as needed. Picking runs in the browser; reverse geocoding uses the backend proxy without exposing server keys.'
   - id: report
     name: 报表中心
     description: 报表中心 + 数据大屏（结构化数据集、参数化查询、租户与数据范围隔离；图表/表格/指标卡；画布式大屏）。
@@ -168,6 +228,20 @@ plugins:
       en-US:
         name: Advanced Security
         description: 'TOTP two-factor authentication with one-time recovery codes, enforced policies with a grace period, and login IP allow and deny lists.'
+  - id: totp
+    name: 两步验证
+    description: 免费基础两步验证（RFC 6238，兼容 Google Authenticator）：绑定验证器、登录二次验证、步长防重放，通过 LoginGate 接入；需按需安装。
+    category: security
+    edition: free
+    version: 0.1.0
+    price: 免费
+    author: NexAdmin
+    repo: zxh451200/nexadmin-plugins
+    subdir: totp
+    i18n:
+      en-US:
+        name: Two-Factor Authentication
+        description: 'Free basic RFC 6238 TOTP compatible with Google Authenticator: enrollment, login verification and time-step replay protection via LoginGate. Install separately as needed.'
   - id: website
     name: 企业官网
     description: 匿名公开官网（服务端渲染、SEO 友好）+ 后台内容管理与官网插件市场入口。
@@ -183,4 +257,4 @@ plugins:
         name: Corporate Website
         description: 'A public, anonymous, server-rendered site with SEO support, admin content management, and a plugin marketplace entry point.'
     screenshots:
-      - /website-assets/market/website.jpg
+      - /website-assets/market/website.jpg?v=0.9.4

@@ -20,8 +20,15 @@ func (module) Name() string { return "menu" }
 // Seed 实现 setup.Seeder：种入出厂菜单（按 code 幂等）。
 func (module) Seed(db *gorm.DB) error { return seedMenus(db) }
 
-// SeedOnStartup 实现 setup.StartupSeeder：每次启动补上新版本新增的出厂菜单（存量库升级后重启即可见）。
-func (module) SeedOnStartup(db *gorm.DB) error { return seedMenus(db) }
+// SeedOnStartup 实现 setup.StartupSeeder：每次启动补上新版本新增的出厂菜单（存量库升级后重启即可见），
+// 随后把「已知的历史形状」收敛一次（见 reconcile.go）：播种只补不改，老库的结构调整只能在这里做。
+func (module) SeedOnStartup(db *gorm.DB) error {
+	if err := seedMenus(db); err != nil {
+		return err
+	}
+	_, _, err := reconcileMenuShape(db)
+	return err
+}
 
 // Register 注册路由。固定路径写在 /:id 之前。
 func (module) Register(r *gin.RouterGroup, d *core.Deps) {

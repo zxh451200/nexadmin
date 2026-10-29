@@ -1,6 +1,10 @@
 {
   "operLog": {
     "menu": "操作日志",
+    "view": {
+      "logs": "日志",
+      "stats": "统计"
+    },
     "description": "记录后台的新增、修改、删除等操作，便于审计与排查",
     "col": {
       "module": "模块",
@@ -51,6 +55,32 @@
       "done": "已导出到文件",
       "tooMany": "导出行数超过上限，请缩小筛选范围（如时间范围），或使用导出中心",
       "filename": "操作日志"
+    },
+    "stats": {
+      "rangeLabel": "时间范围",
+      "ranges": {
+        "7d": "近 7 天",
+        "30d": "近 30 天",
+        "90d": "近 90 天",
+        "all": "全部"
+      },
+      "total": "操作总数",
+      "failures": "失败操作",
+      "p95": "耗时 P95",
+      "slowest": "最慢接口均值",
+      "sampled": "数据量较大，统计基于最近 20000 条明细。",
+      "daily": "按天趋势",
+      "hourly": "时段分布",
+      "topModules": "模块 Top",
+      "topTypes": "操作类型 Top",
+      "topOperators": "操作人 Top",
+      "slowestUrls": "最慢接口 Top",
+      "col": {
+        "url": "接口",
+        "method": "方法",
+        "count": "次数",
+        "avgMs": "平均耗时"
+      }
     }
   }
 }

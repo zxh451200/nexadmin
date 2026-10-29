@@ -1,5 +1,8 @@
+import { buildHistory, historyHours } from '@/framework/request/history-mock'
 import { defineMock } from '@/framework/request/mock'
 import type { ApiSnapshot, ApiStat } from './api'
+
+const r2 = (v: number) => Math.round(v * 100) / 100
 
 const walk = (v: number, step: number, min: number, max: number) => Math.min(max, Math.max(min, v + (Math.random() - 0.5) * step))
 
@@ -39,5 +42,18 @@ defineMock([
       const errorRate = Number((state.reduce((a, s) => a + s.errorRate * s.qps, 0) / qps).toFixed(2))
       return { ts: Date.now(), qps, avgMs, errorRate, apis: state.map((s) => ({ ...s })) }
     },
+  },
+  {
+    method: 'GET',
+    url: '/monitor/api/history',
+    handler: (ctx) =>
+      buildHistory(historyHours(ctx.query), (i) => {
+        const wave = Math.sin(i / 6)
+        return {
+          qps: Math.round(520 + wave * 140),
+          avgMs: r2(46 + wave * 12),
+          errorRate: r2(Math.max(0.05, 1.4 + wave * 0.8)),
+        }
+      }),
   },
 ])

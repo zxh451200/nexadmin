@@ -20,6 +20,7 @@ import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalList
 import { CSS } from '@dnd-kit/utilities'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
+import { DragCursorHost } from '@/framework/components/table/use-sortable-sensors'
 import type { FieldType, FormField } from './api'
 import { fieldProblems } from './schema'
 
@@ -68,6 +69,7 @@ export function FieldCanvas({ fields, selected, onSelect, onMove }: Props) {
   }
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+      <DragCursorHost />
       <SortableContext items={fields.map((f) => f.key)} strategy={verticalListSortingStrategy}>
         <ul className="flex flex-col gap-2">
           {fields.map((f, i) => (
@@ -87,7 +89,7 @@ function CanvasRow({ field, selected, onSelect }: { field: FormField; selected: 
   return (
     <li
       ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
+      style={{ transform: CSS.Transform.toString(transform), transition: isDragging ? undefined : transition }}
       className={cn(
         'flex items-center gap-1 rounded-lg border bg-card text-card-foreground',
         selected ? 'border-primary ring-1 ring-primary' : 'border-border',

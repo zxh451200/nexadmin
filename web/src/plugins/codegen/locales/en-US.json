@@ -2,7 +2,7 @@
   "plugin_codegen": {
     "menu": "Code Generator",
     "title": "Code Generator",
-    "description": "Read a business table, generate a Go module and frontend pages from a recommended config, preview them, then download a zip",
+    "description": "Free code generator: read a business table, generate a Go module and frontend pages from a recommended config, preview them, then download a zip",
     "btn": { "download": "Download package" },
     "steps": { "table": "1. Pick a table", "config": "2. Configure columns", "preview": "3. Preview & download" },
     "tables": { "name": "Table", "search": "Search by table name", "empty": "No business tables to generate from", "select": "Select" },

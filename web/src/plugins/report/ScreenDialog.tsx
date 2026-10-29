@@ -102,7 +102,7 @@ export function ScreenDialog({ open, onOpenChange, editing }: Props) {
       >
         <FormGrid cols={3}>
           <div className="flex flex-col gap-2">
-            <Label htmlFor="sc-name">{t('common.name')}</Label>
+            <Label htmlFor="sc-name" required>{t('common.name')}</Label>
             <Input id="sc-name" value={form.name} maxLength={100} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           </div>
           <div className="flex flex-col gap-2">

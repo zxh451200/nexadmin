@@ -28,7 +28,9 @@
       "selectType": "Select a dictionary type on the left first",
       "create": "New dictionary item",
       "edit": "Edit dictionary item",
-      "deleteConfirm": "Delete dictionary item \"{{name}}\"?"
+      "deleteConfirm": "Delete dictionary item \"{{name}}\"?",
+      "translations": "Other languages",
+      "translationPlaceholder": "Leave empty to fall back to the source"
     }
   }
 }

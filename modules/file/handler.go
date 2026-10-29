@@ -190,6 +190,9 @@ func (h *Handler) ServePublic(c *gin.Context) {
 	var f File
 	err := h.svc.db.WithContext(tenant.Skip(c.Request.Context())).
 		First(&f, "token = ? AND visibility = ? AND storage_path <> ''", c.Param("token"), "public").Error
+	if err == nil {
+		f = h.negotiateVariant(c, f)
+	}
 	h.serve(c, f, err, true)
 }
 
@@ -207,7 +210,45 @@ func (h *Handler) ServeSigned(c *gin.Context) {
 	}
 	var f File
 	err = h.svc.db.WithContext(tenant.Skip(c.Request.Context())).First(&f, "id = ? AND storage_path <> ''", id).Error
+	if err == nil {
+		f = h.negotiateVariant(c, f)
+	}
 	h.serve(c, f, err, false)
+}
+
+// negotiateVariant 在客户端接受 WebP 且原图有衍生副本时，用副本替换（URL 不变）。
+// 副本不存在、原图就是副本、或客户端不支持时原样返回。
+func (h *Handler) negotiateVariant(c *gin.Context, f File) File {
+	if f.Category != "image" || f.VariantOf != 0 || !acceptsWebP(c.GetHeader("Accept")) {
+		return f
+	}
+	var v File
+	err := h.svc.db.WithContext(tenant.Skip(c.Request.Context())).
+		First(&v, "variant_of = ? AND mime_type = ? AND storage_path <> ''", f.ID, "image/webp").Error
+	if err != nil {
+		return f
+	}
+	v.Name = f.Name
+	return v
+}
+
+// acceptsWebP 只认显式声明 image/webp 的客户端（浏览器的 Accept 都带）；
+// q=0 表示明确拒绝，不能当成接受。
+func acceptsWebP(accept string) bool {
+	for _, part := range strings.Split(accept, ",") {
+		fields := strings.Split(part, ";")
+		if !strings.EqualFold(strings.TrimSpace(fields[0]), "image/webp") {
+			continue
+		}
+		for _, p := range fields[1:] {
+			q := strings.ReplaceAll(strings.ToLower(strings.TrimSpace(p)), " ", "")
+			if q == "q=0" || q == "q=0.0" || q == "q=0.00" || q == "q=0.000" {
+				return false
+			}
+		}
+		return true
+	}
+	return false
 }
 
 func (h *Handler) serve(c *gin.Context, f File, findErr error, public bool) {
@@ -253,6 +294,10 @@ func (h *Handler) serve(c *gin.Context, f File, findErr error, public bool) {
 		}
 		if attachment {
 			hd.Set("Content-Disposition", dispositionAttachment(f.Name))
+		}
+		if f.Category == "image" && !attachment {
+			// 同一个 URL 会按 Accept 返回原图或 WebP 副本，缓存必须按请求头区分。
+			hd.Set("Vary", "Accept")
 		}
 	}
 

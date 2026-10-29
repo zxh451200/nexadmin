@@ -1,25 +1,19 @@
 id: ldap
 name: LDAP/AD 登录
 version: 0.1.0
-description: 企业目录登录适配:本地密码失败后尝试 LDAP 校验(go-ldap),支持 ldaps/StartTLS、服务账号、自定义过滤器与属性映射;身份映射/自动建号由框架用户模块完成。
+description: 免费基础 LDAP/AD 登录适配：本地密码失败后尝试 LDAP 校验，支持 LDAPS/StartTLS、服务账号、自定义过滤器与属性映射；身份映射/自动建号由框架用户模块完成，需按需安装。
 author: NexAdmin
-edition: pro
+edition: free
 requires_nexadmin: ">=0.1.0"
 menus:
   - parent: /
-    type: dir
-    title: plugin_ldap.dir
-    path: /ldap
-    icon: Server
-    sort: 65
-  - parent: /ldap
     type: menu
     title: plugin_ldap.menu
     path: /ldap/config
     component: plugins/ldap/LdapPage
     perm: ldap:list
     icon: Server
-    sort: 1
+    sort: 65
     keep_alive: true
   - parent: ldap:list
     type: button

@@ -193,11 +193,21 @@ func (r *Runner) validate(req *executeReq) (config.Database, error) {
 
 // overlay 生成要写入 config/config.yaml 的覆盖项。
 func (r *Runner) overlay(req *executeReq, dbCfg config.Database) map[string]any {
+	// 必须写全字段：viper 合并时列表是整体替换，只写 code/name/dir 会把
+	// default.yaml 里的 short / htmlLang / ogLocale / prefix / dateFormat 全部抹掉，
+	// 而 short 是语言切换器的显示文字、dateFormat 决定公开站的日期长相。
 	langs := make([]map[string]any, 0, len(r.Cfg.Languages))
 	for _, l := range r.Cfg.Languages {
-		m := map[string]any{"code": l.Code, "name": l.Name, "dir": l.Dir}
-		if l.Code == req.Admin.Language {
-			m["default"] = true
+		m := map[string]any{
+			"code":       l.Code,
+			"name":       l.Name,
+			"dir":        l.Dir,
+			"short":      l.Short,
+			"htmlLang":   l.HTMLLang,
+			"ogLocale":   l.OGLocale,
+			"prefix":     l.Prefix,
+			"dateFormat": l.DateFormat,
+			"default":    l.Code == req.Admin.Language,
 		}
 		langs = append(langs, m)
 	}

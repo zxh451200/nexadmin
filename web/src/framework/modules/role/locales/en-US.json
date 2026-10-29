@@ -46,8 +46,6 @@
       "description": "Role: {{name}}",
       "success": "Permissions saved",
       "empty": "No permissions available",
-      "expandAll": "Expand all",
-      "collapseAll": "Collapse all",
       "selectAll": "Select all",
       "clearAll": "Clear",
       "selectedCount": "{{count}} selected",

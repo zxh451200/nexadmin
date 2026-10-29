@@ -5,6 +5,7 @@ import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
+import { Card } from '@/framework/ui/card'
 import { Input } from '@/framework/ui/input'
 import { Label } from '@/framework/ui/label'
 import { fmtDateTime } from '../oper-log/format'
@@ -137,13 +138,13 @@ export function BindingsTab() {
     }
   }
 
-  const row = 'flex flex-col gap-3 rounded-lg border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between'
+  const row = 'flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between'
 
   return (
     <div className="flex max-w-2xl flex-col gap-6">
       <section className="flex flex-col gap-3">
         <h3 className="text-sm font-medium text-foreground">{t('profile.bindings.phoneTitle')}</h3>
-        <div className={row}>
+        <Card className={row}>
           <div className="min-w-0">
             <p className="text-sm text-foreground">
               {data?.phone ? t('profile.bindings.phoneBound', { phone: data.phone }) : t('profile.bindings.phoneUnbound')}
@@ -159,12 +160,12 @@ export function BindingsTab() {
               </Button>
             ) : null}
           </div>
-        </div>
+        </Card>
       </section>
       <section className="flex flex-col gap-3">
         <h3 className="text-sm font-medium text-foreground">{t('profile.bindings.thirdParty')}</h3>
         {(data?.providers ?? []).map((p) => (
-          <div key={p.key} className={row}>
+          <Card key={p.key} className={row}>
             <div className="flex min-w-0 flex-col gap-1">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium text-foreground">{p.name}</span>
@@ -187,7 +188,7 @@ export function BindingsTab() {
                 {t('profile.bindings.bind')}
               </Button>
             )}
-          </div>
+          </Card>
         ))}
       </section>
       <PhoneDialog open={phoneOpen} onOpenChange={setPhoneOpen} />

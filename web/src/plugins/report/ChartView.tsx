@@ -1,12 +1,15 @@
 import { useMemo, useState } from 'react'
-import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, Tooltip, XAxis, YAxis } from 'recharts'
+import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, Sector, Tooltip, XAxis, YAxis } from 'recharts'
+import type { PieSectorDataItem } from 'recharts/types/polar/Pie'
 import { useTranslation } from 'react-i18next'
 import { ChartBox } from '@/framework/components/ChartBox'
+import { useLegendToggle } from '@/framework/components/useLegendToggle'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { Skeleton } from '@/framework/ui/skeleton'
 import { cn } from '@/lib/utils'
 import type { ChartConfig, ChartType, QueryResult } from './api'
 import { colorAt, fmtCell, toCartesian, toMetric, toPie } from './chartData'
+import { builtinText } from './builtinText'
 
 export interface ChartViewProps {
   type: ChartType
@@ -35,7 +38,7 @@ function TableChart({ result, height }: { result: QueryResult; height: number })
   const [pageSize, setPageSize] = useState(10)
   const columns: Column<Row>[] = result.columns.map((c, i) => ({
     key: c.key,
-    title: c.label,
+    title: builtinText(t, c.label),
     align: c.kind === 'measure' ? 'end' : undefined,
     mobile: i === 0 ? 'title' : undefined,
     render: (r) => <span className={cn(c.type === 'number' && 'num')}>{fmtCell(r[c.key], i18n.language)}</span>,
@@ -69,6 +72,9 @@ export function ChartView({ type, result, config, height, loading, error, classN
   const cart = useMemo(() => (result && (type === 'bar' || type === 'line') ? toCartesian(result) : null), [result, type])
   const pie = useMemo(() => (result && type === 'pie' ? toPie(result) : []), [result, type])
   const metric = useMemo(() => (result && type === 'metric' ? toMetric(result) : null), [result, type])
+  // Recharts 默认只弹 Tooltip；hover 时把被指到的那一片推出来一圈，否则图表"点不动"。
+  const [activeSlice, setActiveSlice] = useState<number>()
+  const { hidden, formatter } = useLegendToggle()
 
   if (loading && !result) return <Skeleton className={cn('w-full', className)} style={{ height }} />
   if (error && !result) {
@@ -89,10 +95,10 @@ export function ChartView({ type, result, config, height, loading, error, classN
   if (type === 'metric' && metric) {
     return (
       <div className={cn('flex flex-col items-center justify-center gap-1', className)} style={{ height }}>
-        <span className="text-sm text-muted-foreground">{metric.label}</span>
+        <span className="text-sm text-muted-foreground">{builtinText(t, metric.label)}</span>
         <span className="num text-4xl font-semibold tracking-tight" style={{ color: colorAt(config.colors, 0) }}>
           {metric.value == null ? '-' : new Intl.NumberFormat(i18n.language).format(metric.value)}
-          {config.unit ? <span className="ms-1 text-base font-normal text-muted-foreground">{config.unit}</span> : null}
+          {config.unit ? <span className="ms-1 text-base font-normal text-muted-foreground">{builtinText(t, config.unit)}</span> : null}
         </span>
       </div>
     )
@@ -110,7 +116,19 @@ export function ChartView({ type, result, config, height, loading, error, classN
         if (type === 'pie') {
           return (
             <PieChart width={width} height={h}>
-              <Pie data={pie} dataKey="value" nameKey="name" innerRadius="45%" outerRadius="75%" stroke="hsl(var(--card))" paddingAngle={2}>
+              <Pie
+                data={pie}
+                dataKey="value"
+                nameKey="name"
+                innerRadius="45%"
+                outerRadius="75%"
+                stroke="hsl(var(--card))"
+                paddingAngle={2}
+                activeIndex={activeSlice}
+                activeShape={(p: PieSectorDataItem) => <Sector {...p} outerRadius={Number(p.outerRadius) + 6} />}
+                onMouseEnter={(_, i) => setActiveSlice(i)}
+                onMouseLeave={() => setActiveSlice(undefined)}
+              >
                 {pie.map((p, i) => (
                   <Cell key={p.name} fill={colorAt(config.colors, i)} />
                 ))}
@@ -128,21 +146,21 @@ export function ChartView({ type, result, config, height, loading, error, classN
             <XAxis dataKey="x" tick={axis} tickLine={false} axisLine={false} tickMargin={8} />
             <YAxis tick={axis} tickLine={false} axisLine={false} width={44} tickFormatter={(v) => compact(Number(v))} />
             <Tooltip {...tip} cursor={{ fill: 'hsl(var(--muted) / 0.5)' }} />
-            {series.length > 1 ? <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12 }} /> : null}
+            {series.length > 1 ? <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12 }} formatter={formatter} /> : null}
           </>
         )
         return type === 'bar' ? (
           <BarChart {...common}>
             {parts}
             {series.map((s, i) => (
-              <Bar key={s.key} dataKey={s.key} name={s.label} fill={colorAt(config.colors, i)} stackId={config.stacked ? 'a' : undefined} radius={[6, 6, 0, 0]} maxBarSize={32} />
+              <Bar key={s.key} dataKey={s.key} name={builtinText(t, s.label)} fill={colorAt(config.colors, i)} stackId={config.stacked ? 'a' : undefined} radius={[6, 6, 0, 0]} maxBarSize={32} hide={hidden.has(s.key)} />
             ))}
           </BarChart>
         ) : (
           <LineChart {...common}>
             {parts}
             {series.map((s, i) => (
-              <Line key={s.key} dataKey={s.key} name={s.label} type="monotone" stroke={colorAt(config.colors, i)} strokeWidth={2} dot={false} />
+              <Line key={s.key} dataKey={s.key} name={builtinText(t, s.label)} type="monotone" stroke={colorAt(config.colors, i)} strokeWidth={2} dot={false} hide={hidden.has(s.key)} />
             ))}
           </LineChart>
         )

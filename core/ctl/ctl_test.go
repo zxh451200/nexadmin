@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -128,6 +129,82 @@ func TestStopWhenNotRunningCleansStalePid(t *testing.T) {
 	if _, err := os.Stat(c.pidPath()); !os.IsNotExist(err) {
 		t.Fatal("stale pid file should be removed")
 	}
+}
+
+func TestScheduleRestartRejectsOtherProcess(t *testing.T) {
+	cfg := &config.Config{DataDir: t.TempDir()}
+	cfg.Server.Port = 8080
+	t.Setenv(TokenEnv, "current-service")
+	c := New(cfg, "unused", &bytes.Buffer{})
+	for _, p := range []PidFile{
+		{PID: os.Getpid() + 1, Port: 8080, Token: "current-service"},
+		{PID: os.Getpid(), Port: 8081, Token: "current-service"},
+		{PID: os.Getpid(), Port: 8080, Token: "different-service"},
+	} {
+		if err := WritePid(c.pidPath(), p); err != nil {
+			t.Fatal(err)
+		}
+		if err := c.scheduleRestart(func(string, ...string) *exec.Cmd {
+			t.Fatal("must not start or stop any process when service identity differs")
+			return nil
+		}); err == nil {
+			t.Fatalf("accepted mismatched service: %+v", p)
+		}
+	}
+}
+
+func TestScheduleRestartUsesIndependentProcess(t *testing.T) {
+	t.Chdir(t.TempDir())
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	_ = listener.(*net.TCPListener).SetDeadline(time.Now().Add(10 * time.Second))
+	t.Setenv("NEXADMIN_TEST_RESTART_CHILD", listener.Addr().String())
+	t.Setenv(TokenEnv, "current-service")
+	cfg := &config.Config{DataDir: t.TempDir()}
+	cfg.Server.Port = 8080
+	var out bytes.Buffer
+	c := New(cfg, os.Args[0], &out)
+	if err := WritePid(c.pidPath(), PidFile{PID: os.Getpid(), Port: 8080, Token: "current-service"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.scheduleRestart(func(exe string, args ...string) *exec.Cmd {
+		if exe != os.Args[0] || len(args) != 1 || args[0] != "restart" {
+			t.Fatalf("unexpected restart command: %s %v", exe, args)
+		}
+		return exec.Command(exe, "-test.run=^TestScheduledRestartChild$", "--", args[0])
+	}); err != nil {
+		t.Fatal(err)
+	}
+	conn, err := listener.Accept()
+	if err != nil {
+		t.Fatalf("restart helper did not run: %v; %s", err, out.String())
+	}
+	defer conn.Close()
+	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	var childPID int
+	var command string
+	if _, err := fmt.Fscanf(conn, "%d %s", &childPID, &command); err != nil {
+		t.Fatal(err)
+	}
+	if childPID == os.Getpid() || command != "restart" {
+		t.Fatalf("restart must execute outside the service: pid=%d command=%s", childPID, command)
+	}
+}
+
+func TestScheduledRestartChild(t *testing.T) {
+	addr := os.Getenv("NEXADMIN_TEST_RESTART_CHILD")
+	if addr == "" {
+		return
+	}
+	conn, err := net.DialTimeout("tcp", addr, 5*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	_, _ = fmt.Fprintf(conn, "%d %s\n", os.Getpid(), os.Args[len(os.Args)-1])
 }
 
 // ---- reinit：接口抽象 + 假实现 ----

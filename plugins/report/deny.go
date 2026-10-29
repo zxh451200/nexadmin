@@ -28,9 +28,15 @@ func idSegments(s string) []string {
 	return parts
 }
 
-// sysAllowedTables 是 sys_ 前缀下唯一放行的内置表（登录日志，用于登录趋势统计）。
-// 它写死在代码里，配置无法再追加；其余 sys_ 表一律拒绝。
-var sysAllowedTables = map[string]bool{"sys_login_log": true}
+// sysAllowedTables 是 sys_ 前缀下唯一放行的内置表：登录日志、操作日志、发送日志、前端错误聚合。
+// 四张表都带 tenant_id、都只暴露「不含标识符与自由文本」的列（sources.go 逐列声明）；
+// 名单写死在代码里，配置无法再追加；其余 sys_ 表一律拒绝。
+var sysAllowedTables = map[string]bool{
+	"sys_login_log":    true,
+	"sys_oper_log":     true,
+	"sys_send_log":     true,
+	"sys_client_error": true,
+}
 
 // deniedTableExact 是明确点名拒绝的表（即使将来 sys_ 前缀规则被误改，这些表也不会放开）。
 var deniedTableExact = map[string]bool{

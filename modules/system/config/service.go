@@ -258,7 +258,7 @@ func num(v string) float64 {
 
 // Upload 读取上传限制。
 func (s *Service) Upload(ctx context.Context) (*UploadSettings, error) {
-	m, err := s.values(ctx, KeyUploadImage, KeyUploadVideo, KeyUploadFile, KeyUploadTypes)
+	m, err := s.values(ctx, KeyUploadImage, KeyUploadVideo, KeyUploadFile, KeyUploadTypes, KeyUploadWebp)
 	if err != nil {
 		return nil, err
 	}
@@ -268,8 +268,9 @@ func (s *Service) Upload(ctx context.Context) (*UploadSettings, error) {
 			types = append(types, t)
 		}
 	}
+	webp, hasWebp := m[KeyUploadWebp]
 	return &UploadSettings{MaxImageMb: num(m[KeyUploadImage]), MaxVideoMb: num(m[KeyUploadVideo]),
-		MaxFileMb: num(m[KeyUploadFile]), AllowedTypes: types}, nil
+		MaxFileMb: num(m[KeyUploadFile]), AllowedTypes: types, ImageWebp: boolConfigValue(webp, hasWebp, false)}, nil
 }
 
 // SaveUpload 保存上传限制，写回对应的四个参数行（缺失则补建）。
@@ -283,6 +284,7 @@ func (s *Service) SaveUpload(ctx context.Context, in UploadSettings) (*UploadSet
 		{KeyUploadVideo, "视频上传大小上限(MB)", strconv.FormatFloat(in.MaxVideoMb, 'f', -1, 64), TypeNumber},
 		{KeyUploadFile, "普通文件上传大小上限(MB)", strconv.FormatFloat(in.MaxFileMb, 'f', -1, 64), TypeNumber},
 		{KeyUploadTypes, "允许上传的文件类型", strings.Join(in.AllowedTypes, ","), TypeString},
+		{KeyUploadWebp, "为图片生成 WebP 副本", strconv.FormatBool(in.ImageWebp), TypeBoolean},
 	}
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		for _, it := range items {

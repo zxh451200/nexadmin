@@ -102,3 +102,52 @@ export function useAssignTicket() {
     onSuccess: invalidate,
   })
 }
+
+/** 工单统计（与后端 /plugins/ticket/tickets/stats 一一对应） */
+export interface StatsNameValue { name: string; value: number }
+export interface StatsDay { date: string; created: number; resolved: number }
+export interface PrioritySla {
+  priority: string
+  targetMinutes: number
+  total: number
+  breached: number
+  breachRate: number
+}
+export interface TicketStats {
+  from: string
+  to: string
+  total: number
+  open: number
+  processing: number
+  resolved: number
+  closed: number
+  unassigned: number
+  overdue: number
+  sampled: boolean
+  days: StatsDay[]
+  byStatus: StatsNameValue[]
+  byPriority: StatsNameValue[]
+  byBizType: StatsNameValue[]
+  byAssignee: StatsNameValue[]
+  firstResponse: { responded: number; noResponse: number; avgMinutes: number; p50Minutes: number; p90Minutes: number }
+  slaByPriority: PrioritySla[]
+}
+
+export interface TicketStatsFilter {
+  status?: string
+  priority?: string
+  bizType?: string
+  keyword?: string
+  overdue?: string
+  startDate?: string
+  endDate?: string
+}
+
+/** 统计与列表共用筛选条件，两边的数才对得上 */
+export function useTicketStats(filter: TicketStatsFilter) {
+  return useQuery({
+    queryKey: ['ticket', 'stats', filter],
+    queryFn: () => api.get<TicketStats>(`${BASE}/tickets/stats`, filter),
+    placeholderData: keepPreviousData,
+  })
+}

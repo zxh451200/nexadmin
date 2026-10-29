@@ -77,3 +77,37 @@ export function useCleanOperLogs() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['operLog'] }),
   })
 }
+
+/** 日志统计（后端 /stats 接口的响应；分桶与分位都在服务端算好，前端只做呈现） */
+export interface NameValue { name: string; value: number }
+export interface StatsDay { date: string; total: number; failures: number }
+export interface StatsHour { hour: number; value: number }
+export interface StatsLatency { avg: number; p50: number; p95: number; p99: number; max: number }
+export interface StatsUrl { url: string; method: string; avgMs: number; count: number }
+
+export interface OperStats {
+  from: string
+  to: string
+  total: number
+  failures: number
+  sampled: boolean
+  days: StatsDay[]
+  hours: StatsHour[]
+  topModules: NameValue[]
+  topTypes: NameValue[]
+  methods: NameValue[]
+  topOperators: NameValue[]
+  latency: StatsLatency
+  slowest: StatsUrl[]
+}
+
+/** 统计与列表共用筛选条件，保证「统计卡上的数」与「列表里看到的数」同源 */
+export type StatsFilter = Pick<OperLogQuery, 'keyword' | 'status' | 'type' | 'startDate' | 'endDate'>
+
+export function useOperStats(filter: StatsFilter) {
+  return useQuery({
+    queryKey: ['operLog', 'stats', filter],
+    queryFn: () => api.get<OperStats>('/oper-logs/stats', { ...filter }),
+    placeholderData: keepPreviousData,
+  })
+}

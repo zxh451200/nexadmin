@@ -31,7 +31,7 @@ cache:
   driver: memory      # memory | redis（Valkey 兼容）
   addr: ""
   password: ""
-languages:                # 平台语言清单的种子：首次启动写入 sys_language，之后以表为准（后台「系统设置 → 语言管理」可改）
+languages:                # 平台语言清单的种子：首次启动写入 sys_language，之后以表为准（后台「系统设置 → 高级 → 语言」可改）
   # 日期格式必须加引号，否则 YAML 会把 2006-01-02 解析成日期对象而不是 Go 布局串。
   - { code: zh-CN, name: 简体中文, dir: ltr, short: 中, htmlLang: zh-CN, ogLocale: zh_CN, prefix: "", dateFormat: "2006-01-02", default: true }
   - { code: en-US, name: English, dir: ltr, short: EN, htmlLang: en, ogLocale: en_US, prefix: en, dateFormat: "Jan 2, 2006" }

@@ -20,7 +20,7 @@
         <p class="plugin-byline">{{if .Plugin.Author}}{{.TF "plugin.by" .Plugin.Author}}{{else}}{{.TF "plugin.publisher" .SiteName}}{{end}}</p>
         <p class="plugin-stats">
           {{if .Plugin.RatingCount}}<span class="plugin-rating">★ {{.Plugin.RatingAvg}} <small>({{.Plugin.RatingCount}})</small></span>{{else}}<span class="plugin-rating muted">{{.T "plugin.noRating"}}</span>{{end}}
-          <span>{{.TF "plugin.downloads" .Plugin.DownloadsText}}</span>
+          <span>{{if .Plugin.Downloads}}{{.TN .Plugin.Downloads "plugin.downloads" .Plugin.DownloadsText}}{{else}}{{.T "plugin.downloadsNone"}}{{end}}</span>
         </p>
       </div>
     </header>
@@ -84,18 +84,18 @@
         <section class="plugin-block" id="rating">
           <h2>{{.T "plugin.ratingTitle"}}</h2>
           <p class="plugin-note">
-            {{if .Plugin.RatingCount}}{{.TF "plugin.ratingSummary" .Plugin.RatingAvg .Plugin.RatingCount}}{{else}}{{.T "plugin.ratingNone"}}{{end}}
-            {{if .MyScore}}{{.TF "plugin.ratingMine" .MyScore}}{{end}}
+            {{if .Plugin.RatingCount}}{{.TN .Plugin.RatingCount "plugin.ratingSummary" .Plugin.RatingAvg .Plugin.RatingCount}}{{else}}{{.T "plugin.ratingNone"}}{{end}}
+            {{if .MyScore}}{{.TN .MyScore "plugin.ratingMine" .MyScore}}{{end}}
           </p>
           <form class="rating-form" method="post" action="/plugins/{{.Plugin.ID}}/rate">
             <input type="hidden" name="lang" value="{{.Lang.Code}}">
             <fieldset>
               <legend>{{.TF "plugin.ratingLegend" .Plugin.Name}}</legend>
-              <button type="submit" name="score" value="1" class="rating-star{{if ge .MyScore 1}} on{{end}}" aria-label="{{.TF "plugin.starAria" 1}}" title="{{.TF "plugin.starAria" 1}}">★</button>
-              <button type="submit" name="score" value="2" class="rating-star{{if ge .MyScore 2}} on{{end}}" aria-label="{{.TF "plugin.starAria" 2}}" title="{{.TF "plugin.starAria" 2}}">★</button>
-              <button type="submit" name="score" value="3" class="rating-star{{if ge .MyScore 3}} on{{end}}" aria-label="{{.TF "plugin.starAria" 3}}" title="{{.TF "plugin.starAria" 3}}">★</button>
-              <button type="submit" name="score" value="4" class="rating-star{{if ge .MyScore 4}} on{{end}}" aria-label="{{.TF "plugin.starAria" 4}}" title="{{.TF "plugin.starAria" 4}}">★</button>
-              <button type="submit" name="score" value="5" class="rating-star{{if ge .MyScore 5}} on{{end}}" aria-label="{{.TF "plugin.starAria" 5}}" title="{{.TF "plugin.starAria" 5}}">★</button>
+              <button type="submit" name="score" value="1" class="rating-star{{if ge .MyScore 1}} on{{end}}" aria-label="{{.TN 1 "plugin.starAria" 1}}" title="{{.TN 1 "plugin.starAria" 1}}">★</button>
+              <button type="submit" name="score" value="2" class="rating-star{{if ge .MyScore 2}} on{{end}}" aria-label="{{.TN 2 "plugin.starAria" 2}}" title="{{.TN 2 "plugin.starAria" 2}}">★</button>
+              <button type="submit" name="score" value="3" class="rating-star{{if ge .MyScore 3}} on{{end}}" aria-label="{{.TN 3 "plugin.starAria" 3}}" title="{{.TN 3 "plugin.starAria" 3}}">★</button>
+              <button type="submit" name="score" value="4" class="rating-star{{if ge .MyScore 4}} on{{end}}" aria-label="{{.TN 4 "plugin.starAria" 4}}" title="{{.TN 4 "plugin.starAria" 4}}">★</button>
+              <button type="submit" name="score" value="5" class="rating-star{{if ge .MyScore 5}} on{{end}}" aria-label="{{.TN 5 "plugin.starAria" 5}}" title="{{.TN 5 "plugin.starAria" 5}}">★</button>
             </fieldset>
           </form>
         </section>

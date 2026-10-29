@@ -36,8 +36,8 @@ func modelView(m *Model) ModelView {
 
 // PingResult 是连通性测试结果。
 type PingResult struct {
-	OK       bool   `json:"ok"`
-	Status   int    `json:"status"`
-	LatencyMs int64 `json:"latencyMs"`
-	Detail   string `json:"detail,omitempty"`
+	OK        bool   `json:"ok"`
+	Status    int    `json:"status"`
+	LatencyMs int64  `json:"latencyMs"`
+	Detail    string `json:"detail,omitempty"`
 }

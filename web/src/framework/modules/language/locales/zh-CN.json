@@ -1,0 +1,25 @@
+{
+  "language": {
+    "menu": "语言管理",
+    "desc": "全站唯一的语言清单：后台界面、公开站路由、字典标签与导出表头都读这一份。",
+    "hint": "新增或删除语言、改路径前缀后要重启服务，公开站才会按新前缀注册页面路由。",
+    "add": "添加语言",
+    "remove": "删除语言",
+    "default": "默认",
+    "defaultTag": "默认语言",
+    "saved": "已保存",
+    "savedRestart": "已保存，重启服务后公开站生效",
+    "prefixRoot": "默认语言挂根路径，前缀必须为空",
+    "prefixHint": "公开站路径前缀，如 /ja；留空则按语基自动推导",
+    "derivedHint": "留空时按语言代码自动推导",
+    "dateFormatHint": "Go 布局串，例如 2006-01-02 或 2006年1月2日",
+    "fields": {
+      "code": "语言代码",
+      "name": "显示名称",
+      "prefix": "路径前缀",
+      "htmlLang": "<html lang> / hreflang",
+      "ogLocale": "og:locale",
+      "dateFormat": "日期格式"
+    }
+  }
+}

@@ -6,6 +6,9 @@ export interface ModuleRoute {
   path: string // 无前导斜杠，如 'system/user'
   component: LazyExoticComponent<ComponentType> | ComponentType
   perm?: string // 需要的权限点，如 'user:list'
+  // 该页面所属插件 ID（由 route.tsx 所在目录推断，见 discover/merge）：插件未启用时守卫直接拦截，
+  // 不再渲染页面（否则页面会发出一串必然 404 的插件接口请求）。
+  plugin?: string
   hidden?: boolean // true 则不进菜单
   menu?: { title: string; icon?: string; order?: number; group?: MenuGroupKey } // title 为 i18n key；icon 为 lucide 图标名
   // true = 沉浸式全屏页：有鉴权但无布局壳（侧边栏/顶栏不渲染），数据大屏、三维场景等用；

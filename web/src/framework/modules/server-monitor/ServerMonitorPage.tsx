@@ -14,6 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/framework/ui/tabs'
 import type { DiskInfo, ServerSnapshot } from './api'
 import { ClientErrorsTab } from './ClientErrorsTab'
 import { HealthCard } from './HealthCard'
+import { MetricHistory } from '@/framework/components/MetricHistory'
 
 const INTERVALS = ['3000', '10000', '30000', '0'] as const
 
@@ -121,28 +122,28 @@ export default function ServerMonitorPage() {
               Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-32 w-full" />)
             ) : (
               <>
-                <StatCard
+                <StatCard tone="chart-1"
                   title={t('serverMonitor.card.cpu')}
                   value={`${latest.cpu.usage.toFixed(1)}%`}
                   hint={`${latest.cpu.cores} ${t('serverMonitor.cores')}`}
                   progress={latest.cpu.usage}
                   icon={<Cpu aria-hidden="true" />}
                 />
-                <StatCard
+                <StatCard tone="chart-2"
                   title={t('serverMonitor.card.memory')}
                   value={latest.memory.usedGb.toFixed(1)}
                   hint={`/ ${latest.memory.totalGb} GB`}
                   progress={(latest.memory.usedGb / latest.memory.totalGb) * 100}
                   icon={<MemoryStick aria-hidden="true" />}
                 />
-                <StatCard
+                <StatCard tone="chart-4"
                   title={t('serverMonitor.card.disk')}
                   value={diskUsed.toFixed(0)}
                   hint={`/ ${diskTotal.toFixed(0)} GB`}
                   progress={diskTotal ? (diskUsed / diskTotal) * 100 : 0}
                   icon={<HardDrive aria-hidden="true" />}
                 />
-                <StatCard
+                <StatCard tone="chart-5"
                   title={t('serverMonitor.card.uptime')}
                   value={formatUptime(latest.info.uptimeSec, t('serverMonitor.unit.d'), t('serverMonitor.unit.h'), t('serverMonitor.unit.m'))}
                   hint={`${t('serverMonitor.card.load')} ${latest.cpu.load1.toFixed(2)}`}
@@ -198,6 +199,22 @@ export default function ServerMonitorPage() {
             </ChartCard>
           </div>
 
+          <MetricHistory
+            kind="server"
+            title={t('monitorHistory.title')}
+            labels={{
+              cpuUsage: t('serverMonitor.series.cpu'),
+              memUsedPct: t('serverMonitor.series.mem'),
+              diskUsedPct: t('serverMonitor.card.disk'),
+              load1: t('serverMonitor.card.load'),
+              netInKbps: t('serverMonitor.series.in'),
+              netOutKbps: t('serverMonitor.series.out'),
+              goroutines: t('serverMonitor.series.goroutines'),
+              heapMb: t('serverMonitor.series.heap'),
+              gcPauseMs: t('serverMonitor.series.gc'),
+            }}
+          />
+
           <div className="grid grid-cols-1 gap-3 md:gap-4 lg:grid-cols-3">
             <Card className="lg:col-span-1">
               <CardHeader className="pb-2">
@@ -218,10 +235,14 @@ export default function ServerMonitorPage() {
                 )}
               </CardContent>
             </Card>
-            <div className="lg:col-span-2">
-              <p className="mb-2 text-base font-medium">{t('serverMonitor.disk.title')}</p>
-              <DataTable<DiskInfo> columns={diskColumns} data={disks} rowKey="mount" loading={!latest} pagination={false} />
-            </div>
+            <Card className="lg:col-span-2">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-medium">{t('serverMonitor.disk.title')}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <DataTable<DiskInfo> columns={diskColumns} data={disks} rowKey="mount" loading={!latest} pagination={false} />
+              </CardContent>
+            </Card>
           </div>
         </TabsContent>
         <TabsContent value="clientErrors" className="mt-0">

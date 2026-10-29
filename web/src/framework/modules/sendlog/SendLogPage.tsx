@@ -12,7 +12,6 @@ import type { Column } from '@/framework/components/table/types'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
-import { Label } from '@/framework/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import { fmtDateTime } from '../oper-log/format'
 import {
@@ -121,10 +120,44 @@ export default function SendLogPage() {
 
   return (
     <PageContainer>
-      <PageHeader
-        title={t('sendlog.menu')}
-        description={t('sendlog.description')}
-        actions={
+      <PageHeader title={t('sendlog.menu')} description={t('sendlog.description')} />
+      <FilterBar onSearch={search} onReset={reset}>
+        <Input aria-label={t('sendlog.filter.recipient')} className="md:w-64"
+          id="sl-recipient"
+          value={draft.recipient}
+          placeholder={t('sendlog.filter.recipientPlaceholder')}
+          onChange={(e) => setDraft({ ...draft, recipient: e.target.value })}
+        />
+        <Select value={draft.channel} onValueChange={(v) => setDraft({ ...draft, channel: v })}>
+          <SelectTrigger className="md:w-40" aria-label={t('sendlog.filter.channel')}>
+            <SelectValue placeholder={t('sendlog.filter.channel')} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{t('sendlog.filter.allChannels')}</SelectItem>
+            {SEND_CHANNELS.map((k) => (
+              <SelectItem key={k} value={k}>
+                {t(`sendlog.channel.${k}`)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={draft.status} onValueChange={(v) => setDraft({ ...draft, status: v })}>
+          <SelectTrigger className="md:w-40" aria-label={t('sendlog.filter.status')}>
+            <SelectValue placeholder={t('sendlog.filter.status')} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{t('sendlog.filter.allStatuses')}</SelectItem>
+            {SEND_STATUSES.map((k) => (
+              <SelectItem key={k} value={k}>
+                {t(`sendlog.status.${k}`)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <DateRangePicker value={draft.range} onChange={(v) => setDraft({ ...draft, range: v })} aria-label={t('sendlog.filter.time')} className="md:w-64" placeholder={t('sendlog.filter.time')} />
+      </FilterBar>
+      <DataTable<SendLog>
+        toolbar={
           <Can perm="sendlog:delete">
             <Button type="button" variant="outline" onClick={() => setCleanOpen(true)}>
               <Eraser className="me-2 size-4" aria-hidden="true" />
@@ -132,55 +165,6 @@ export default function SendLogPage() {
             </Button>
           </Can>
         }
-      />
-      <FilterBar onSearch={search} onReset={reset}>
-        <div className="flex w-full flex-col gap-1.5 md:w-64">
-          <Label htmlFor="sl-recipient">{t('sendlog.filter.recipient')}</Label>
-          <Input
-            id="sl-recipient"
-            value={draft.recipient}
-            placeholder={t('sendlog.filter.recipientPlaceholder')}
-            onChange={(e) => setDraft({ ...draft, recipient: e.target.value })}
-          />
-        </div>
-        <div className="flex w-full flex-col gap-1.5 md:w-40">
-          <Label>{t('sendlog.filter.channel')}</Label>
-          <Select value={draft.channel} onValueChange={(v) => setDraft({ ...draft, channel: v })}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{t('sendlog.filter.allChannels')}</SelectItem>
-              {SEND_CHANNELS.map((k) => (
-                <SelectItem key={k} value={k}>
-                  {t(`sendlog.channel.${k}`)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex w-full flex-col gap-1.5 md:w-40">
-          <Label>{t('sendlog.filter.status')}</Label>
-          <Select value={draft.status} onValueChange={(v) => setDraft({ ...draft, status: v })}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{t('sendlog.filter.allStatuses')}</SelectItem>
-              {SEND_STATUSES.map((k) => (
-                <SelectItem key={k} value={k}>
-                  {t(`sendlog.status.${k}`)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex w-full flex-col gap-1.5 md:w-64">
-          <Label>{t('sendlog.filter.time')}</Label>
-          <DateRangePicker value={draft.range} onChange={(v) => setDraft({ ...draft, range: v })} />
-        </div>
-      </FilterBar>
-      <DataTable<SendLog>
         columns={columns}
         data={data?.list ?? []}
         rowKey="id"

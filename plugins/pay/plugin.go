@@ -49,7 +49,7 @@ func (m *module) service(d *core.Deps) *Service {
 		if l == nil {
 			l = zap.NewNop()
 		}
-		m.svc = NewService(d.DB, zapLog{l})
+		m.svc = NewService(d.DB, zapLog{l}).WithTimezone(d.Config.App.Timezone)
 		SetDefault(m.svc)
 	})
 	return m.svc
@@ -65,6 +65,8 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	// 订单
 	g.POST("/orders", idempotency(d.DB), core.Perm("pay:edit"), h.createOrder)
 	g.GET("/orders", core.Perm("pay:list"), h.listOrders)
+	// 统计注册在 /orders/:no 之前，静态段优先匹配。
+	g.GET("/orders/stats", core.Perm("pay:list"), h.Stats)
 	g.GET("/orders/by-biz", core.Perm("pay:list"), h.orderByBiz)
 	g.GET("/orders/:no", core.Perm("pay:list"), h.getOrder)
 	g.POST("/orders/:no/close", core.Perm("pay:edit"), h.closeOrder)

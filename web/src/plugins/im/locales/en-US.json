@@ -2,7 +2,6 @@
   "plugin_im": {
     "title": "Live Chat",
     "description": "Conversations between visitors and agents",
-    "dir": "Live Chat",
     "menu": "Messages",
     "perm": {
       "reply": "Reply to messages",
@@ -18,6 +17,9 @@
     "closeConfirm": "Close conversation {{no}}? The visitor can no longer send messages.",
     "replyPlaceholder": "Type a reply, Enter to send",
     "send": "Send",
+    "fields": {
+      "status": "Status"
+    },
     "status": {
       "open": "Open",
       "closed": "Closed"

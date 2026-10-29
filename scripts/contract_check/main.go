@@ -92,7 +92,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 			return 2
 		}
 	}
-	if len(rep.A) > 0 && !*warnOnly {
+	// A（前端调用了但后端没有）与 E（错误 key 缺语言包）同级的阻断；--warn-only 一起降级。
+	if (len(rep.A) > 0 || len(rep.E) > 0) && !*warnOnly {
 		return 1
 	}
 	return 0

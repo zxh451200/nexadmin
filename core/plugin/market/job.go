@@ -116,7 +116,7 @@ func (r *Runner) MarkRestarting(id string) {
 func (r *Runner) finish(id, state string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if j, ok := r.jobs[id]; ok && j.State == "running" {
+	if j, ok := r.jobs[id]; ok && (j.State == "running" || j.State == "restarting" && state == "failed") {
 		j.State = state
 	}
 }

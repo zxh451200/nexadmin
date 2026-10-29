@@ -78,14 +78,16 @@ func buildSeed() []seedItem {
 	b.btns(sysMenu, "menu", crud...)
 	dept := b.menu(system, "dept.menu", "/system/dept", "dept/DeptPage", "dept:list", "Network", 40)
 	b.btns(dept, "dept", crud...)
-	post := b.menu(system, "post.menu", "/system/post", "post/PostPage", "post:list", "BriefcaseBusiness", 50)
-	b.btns(post, "post", crud...)
+	// 岗位已并进部门管理的第二个标签：不再单列菜单，权限点挂到部门下面才授得出去。
+	b.btns(dept, "post", append([]string{"list"}, crud...)...)
 	dict := b.menu(system, "dict.menu", "/system/dict", "dict/DictPage", "dict:list", "BookA", 60)
 	b.btns(dict, "dict", crud...)
-	config := b.menu(system, "sysConfig.menu", "/system/config", "config/ConfigPage", "config:list", "Settings", 70)
-	b.btns(config, "config", crud...)
-	settings := b.menu(system, "settings.menu", "/system/settings", "settings/SettingsPage", "settings:list", "SlidersHorizontal", 80)
+	settings := b.menu(system, "settings.menu", "/system/settings", "settings/SettingsPage", "settings:list", "Settings", 80)
 	b.btns(settings, "settings", "update")
+	// 语言与高级参数已并成「系统设置」里的分区：侧栏不再单列，但权限点仍要授得出去，
+	// 所以它们的查看/修改按钮挂到系统设置下面（旧地址由前端路由重定向到对应分区）。
+	b.btns(settings, "config", append([]string{"list"}, crud...)...)
+	b.btns(settings, "language", "list", "update")
 	recycle := b.menu(system, "recycle.menu", "/system/recycle", "recycle/RecyclePage", "recycle:list", "Trash2", 90)
 	b.btns(recycle, "recycle", "restore", "delete")
 
@@ -119,31 +121,90 @@ func buildSeed() []seedItem {
 	b.menu("", "sysMenu.docs", "https://example.com/docs", "", "docs:view", "BookOpen", 70, noCache,
 		func(m *Menu) { m.External, m.Status = true, "0" })
 
-	// 单点登录（追加在末尾，避免挪动上面菜单的出厂 ID）。
-	ssoApps := b.menu(system, "sso.menu", "/system/sso-apps", "sso/SsoAppsPage", "sso:list", "AppWindow", 110)
-	b.btns(ssoApps, "sso", "edit")
-	b.menu("", "sso.portal.menu", "/portal", "sso/PortalPage", "", "LayoutGrid", 15, noCache)
-
 	// 数据备份（系统管理下）。
 	backup := b.menu(system, "backup.menu", "/system/backup", "backup/BackupPage", "backup:list", "DatabaseBackup", 140, noCache)
 	b.add(backup, Menu{Type: typeButton, Title: "backup.btn.edit", Perm: "backup:edit", Sort: 10})
 	b.add(backup, Menu{Type: typeButton, Title: "backup.btn.download", Perm: "backup:download", Sort: 20})
 
-	// 导出中心：顶级菜单，登录即可（无权限码）；管理员“全部任务”用按钮权限 job:all。
-	jobs := b.add("", Menu{Type: typeMenu, Code: "menu:jobs", Title: "jobs.menu", Icon: "Download", Path: "/jobs",
-		Component: "exportcenter/ExportCenterPage", Sort: 16})
+	// 导入导出：导出中心（内置免费）与导入中心（plugins/imports，授权后才挂载）同组，
+	// 两者原来各占一个顶级项、相距很远，看着像两个不相干的功能。
+	ioDir := b.dir("sysMenu.dir.io", "ArrowLeftRight", "/io", 16)
+	// 导出中心：登录即可（无权限码）；管理员“全部任务”用按钮权限 job:all。
+	jobs := b.add(ioDir, Menu{Type: typeMenu, Code: "menu:jobs", Title: "jobs.menu", Icon: "Download", Path: "/jobs",
+		Component: "exportcenter/ExportCenterPage", Sort: 10})
 	b.add(jobs, Menu{Type: typeButton, Title: "jobs.btn.all", Perm: "job:all", Sort: 10})
 
 	// 开放平台（系统管理下；追加在末尾，不挪动已有出厂 ID）。
 	openapi := b.menu(system, "openapi.menu", "/system/openapi", "openapi/OpenApiPage", "openapi:list", "Webhook", 130)
 	b.btns(openapi, "openapi", "edit")
+
+	// 单点登录（必须排在所有既有菜单之后：出厂 ID 由 add 顺序决定，插在中间会顶掉后面条目的 ID）。
+	ssoApps := b.menu(system, "sso.menu", "/system/sso-apps", "sso/SsoAppsPage", "sso:list", "AppWindow", 110)
+	b.btns(ssoApps, "sso", "edit")
+	b.menu("", "sso.portal.menu", "/portal", "sso/PortalPage", "", "LayoutGrid", 15, noCache,
+		func(m *Menu) { m.Code = "menu:portal" }) // 无权限码的顶级菜单必须显式业务键，否则整批出厂数据被 seed 拒绝（同 menu:jobs）
+
+	// 语言清单是平台级真源（sys_language）：官网、字典、导出、后台界面文案都读它。
+	// 管理页现在是「系统设置 → 高级 → 语言」的一个分区，权限点挂在 settings 下（见上）。
 	return b.items
+}
+
+// 出厂菜单号段：新装时 ID = factoryIDBase + 定义顺序（与前端 mock、租户套餐的菜单号一致）。
+const (
+	factoryIDBase = int64(1850000000000000000)
+	factoryIDSpan = int64(100000)
+)
+
+// reserveFreeIDs 在写库前给新条目让号：出厂 ID 由定义顺序决定，一旦有人把新菜单插在
+// buildSeed 中间，后面所有条目的提议 ID 都会顺移并撞上存量库里已有的行（启动直接失败）。
+// 这里只把「不在存量中、且提议 ID 已被别的 code 占用」的新条目顺延到号段尾部空号；
+// 存量条目的 ID 一律不动，因此套餐与角色引用仍然有效。新装（表里没数据）时行为完全不变。
+func reserveFreeIDs(db *gorm.DB, items []seedItem) error {
+	type idCode struct {
+		ID   int64
+		Code string
+	}
+	var taken []idCode
+	if err := db.Table("sys_menu").Select("id", "code").
+		Where("id >= ? AND id < ?", factoryIDBase, factoryIDBase+factoryIDSpan).
+		Scan(&taken).Error; err != nil {
+		return err
+	}
+	owner := make(map[int64]string, len(taken))
+	existing := make(map[string]bool, len(taken))
+	for _, r := range taken {
+		owner[r.ID] = r.Code
+		existing[r.Code] = true
+	}
+	// 让号只用号段后半的「重定位区」：绝不去占后面条目自己的顺序号，
+	// 否则一个撞号会连锁把后面所有条目都推走。
+	next := factoryIDBase + factoryIDSpan/2
+	for i := range items {
+		it := &items[i]
+		if it.m.Code == "" || existing[it.m.Code] {
+			continue // 已存在：seeder 会跳过，不改它的 ID
+		}
+		if holder, hit := owner[int64(it.m.ID)]; hit && holder != it.m.Code {
+			for {
+				if _, busy := owner[next]; !busy {
+					break
+				}
+				next++
+			}
+			it.m.ID = idgen.ID(next)
+		}
+		owner[int64(it.m.ID)] = it.m.Code
+	}
+	return nil
 }
 
 // seedMenus 幂等补齐出厂菜单（新装与每次启动共用）：按 code 判断，已存在（哪怕被改过）一律不动；
 // 父节点按 code 解析实际 ID；已齐全时只有一次查询。返回新增条数由 seed.Report 汇总。
 func seedMenus(db *gorm.DB) error {
 	items := buildSeed()
+	if err := reserveFreeIDs(db, items); err != nil {
+		return err
+	}
 	rows := make([]seed.MenuItem, len(items))
 	for i, it := range items {
 		m := it.m

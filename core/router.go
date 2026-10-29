@@ -2,6 +2,8 @@ package core
 
 import (
 	"context"
+	"fmt"
+	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -86,7 +88,8 @@ func (a *App) commonRoutes(e *gin.Engine, api *gin.RouterGroup, probes []*health
 	a.registerMetricsRoute(e)
 	a.registerShutdown(e)
 	api.GET("/system/status", func(c *gin.Context) {
-		response.OK(c, gin.H{"initialized": a.initialized.Load()})
+		// instanceId 每次进程启动不同：市场自重启后，前端据此确认等到的是新进程而不是尚未退出的旧进程。
+		response.OK(c, gin.H{"initialized": a.initialized.Load(), "instanceId": InstanceID()})
 	})
 	api.GET("/i18n/languages", func(c *gin.Context) {
 		response.OK(c, i18n.Default().Languages())
@@ -110,8 +113,17 @@ func (a *App) buildSetup(r *setup.Runner) *gin.Engine {
 		if serve(c) {
 			return
 		}
-		if strings.HasPrefix(c.Request.URL.Path, "/api/") {
+		p := c.Request.URL.Path
+		if p == "/api" || strings.HasPrefix(p, "/api/") {
 			response.Fail(c, response.NotInitialized())
+			return
+		}
+		if redirectLegacyAdmin(c) {
+			return
+		}
+		// 向导阶段官网还没起来：根路径直接去后台向导。
+		if p == "/" {
+			c.Redirect(http.StatusFound, AdminPrefix+"/")
 			return
 		}
 		response.Fail(c, response.NotFound("error.not_found"))
@@ -154,6 +166,11 @@ func (a *App) buildFull() (*gin.Engine, error) {
 	}
 	a.addCloser(func() { _ = database.Close(db) })
 	if err := a.prepareData(db); err != nil { // 迁移 + 补种出厂数据，升级后重启即可用
+		return nil, err
+	}
+	// 语言清单以 sys_language 为准（首次启动用 config.yaml 播种）：必须早于模块注册，
+	// 官网要按清单里的前缀注册公开站路由。
+	if err := a.reloadLanguages(db); err != nil {
 		return nil, err
 	}
 	a.registerMetricSources(db)
@@ -234,9 +251,28 @@ func (a *App) buildFull() (*gin.Engine, error) {
 	if err != nil {
 		return nil, err
 	}
+	// 路由冲突聚合报错：gin 对重复 method+path 是当场 panic 的，逐模块 recover 后收集，
+	// 全部模块注册完一次性列出所有冲突（模块名 + 冲突详情），而不是第一个就把后面的全部掩盖。
+	var routeConflicts []string
 	for _, m := range mods {
 		m := m
-		deps.APIDoc.Track(m.Name(), m, func() { m.Register(protected, deps) })
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					s := fmt.Sprint(r)
+					if strings.Contains(s, "handlers are already registered") {
+						routeConflicts = append(routeConflicts, fmt.Sprintf("模块 %q: %s", m.Name(), s))
+						return
+					}
+					panic(r) // 非路由冲突的 panic 不是重复注册问题，原样抛出
+				}
+			}()
+			deps.APIDoc.Track(m.Name(), m, func() { m.Register(protected, deps) })
+		}()
+	}
+	if len(routeConflicts) > 0 {
+		return nil, fmt.Errorf("路由注册冲突：多个模块注册了相同的 method+path，共 %d 处（替代内置模块前先在 disabled_modules 停用原模块，见二次开发指南 3.1 节）:\n  %s",
+			len(routeConflicts), strings.Join(routeConflicts, "\n  "))
 	}
 
 	serve := staticHandlerWith(a.static, func(c *gin.Context) (SiteInfo, bool) {
@@ -259,7 +295,60 @@ func (a *App) buildFull() (*gin.Engine, error) {
 		if serve(c) {
 			return
 		}
+		p := c.Request.URL.Path
+		if p == "/api" || strings.HasPrefix(p, "/api/") {
+			response.Fail(c, response.NotFound("error.not_found"))
+			return
+		}
+		if redirectLegacyAdmin(c) {
+			return
+		}
+		// 后台只占 /admin：其余页面路径先交给官网渲染 404，官网未启用时根路径回后台。
+		if h := siteNotFound.Load(); h != nil && isPageRequest(c) && (*h)(c) {
+			return
+		}
+		if p == "/" {
+			c.Redirect(http.StatusFound, AdminPrefix+"/")
+			return
+		}
 		response.Fail(c, response.NotFound("error.not_found"))
 	})
 	return e, nil
+}
+
+// legacyAdminPaths 是后台收敛到 AdminPrefix 之前的入口路径；旧书签与第三方回调 301 到新地址。
+// 这些是收敛前后台客户端路由的顶层段；旧书签与服务端历史链接统一 301 到 /admin 下。
+var legacyAdminPaths = []string{
+	"/login", "/setup", "/sso", "/mcp", "/403",
+	"/dashboard", "/system", "/content", "/monitor", "/tenant",
+	"/portal", "/jobs", "/message", "/profile", "/about",
+}
+
+// isPageRequest 只处理浏览器页面导航，API/资源请求不走官网 404。
+func isPageRequest(c *gin.Context) bool {
+	m := c.Request.Method
+	if m != http.MethodGet && m != http.MethodHead {
+		return false
+	}
+	return c.Request.URL.Path != "" && !strings.HasPrefix(c.Request.URL.Path, "/api")
+}
+
+// redirectLegacyAdmin 把旧后台入口跳到 /admin 前缀下（保留查询串），返回是否已处理。
+func redirectLegacyAdmin(c *gin.Context) bool {
+	m := c.Request.Method
+	if m != http.MethodGet && m != http.MethodHead {
+		return false
+	}
+	p := c.Request.URL.Path
+	for _, prefix := range legacyAdminPaths {
+		if p == prefix || strings.HasPrefix(p, prefix+"/") {
+			target := AdminPrefix + p
+			if q := c.Request.URL.RawQuery; q != "" {
+				target += "?" + q
+			}
+			c.Redirect(http.StatusMovedPermanently, target)
+			return true
+		}
+	}
+	return false
 }

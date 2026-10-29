@@ -3,10 +3,24 @@ import { Input } from '@/framework/ui/input'
 import { Label } from '@/framework/ui/label'
 
 /** 属性面板里的一行：label 在上，控件在下 */
-export function Field({ id, label, hint, children }: { id: string; label: ReactNode; hint?: ReactNode; children: ReactNode }) {
+export function Field({
+  id,
+  label,
+  hint,
+  required,
+  children,
+}: {
+  id: string
+  label: ReactNode
+  hint?: ReactNode
+  required?: boolean
+  children: ReactNode
+}) {
   return (
     <div className="flex flex-col gap-1.5">
-      <Label htmlFor={id}>{label}</Label>
+      <Label htmlFor={id} required={required}>
+        {label}
+      </Label>
       {children}
       {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
     </div>

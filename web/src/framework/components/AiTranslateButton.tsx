@@ -16,7 +16,13 @@ export interface AiTranslateButtonProps {
   className?: string
 }
 
-/** AI 翻译助手：选目标语言（排除当前语言）后调用 /ai/translate。未启用 AI 时不渲染 */
+/**
+ * AI 翻译助手：选目标语言（排除当前语言）后调用 /ai/translate。未启用 AI 时不渲染。
+ *
+ * onResult 拿到的是「译文本身」：把它拼进原文字段（`原 / 译文`）是给单列字段硬塞双语的旧写法，
+ * 已经不再使用。多语言内容请走框架的语言表单（framework/components/i18n），
+ * 译文落到 i18n_json 文档里，每个语言各自一列，公开侧才能按语言取用与发布。
+ */
 export function AiTranslateButton({ getText, format, onResult, className }: AiTranslateButtonProps) {
   const { t, i18n } = useTranslation()
   const { enabled } = useAiStatus()

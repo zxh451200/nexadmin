@@ -132,7 +132,7 @@ func NewRunner(cfg *config.Config, hooks Hooks, log *zap.Logger, onDone func() e
 // PrintBanner 在控制台打印醒目的未初始化提示、向导地址和一次性令牌。
 func (r *Runner) PrintBanner(w io.Writer) {
 	fmt.Fprintf(w, "\n================ NexAdmin 尚未初始化 ================\n")
-	fmt.Fprintf(w, "  向导地址:   http://localhost:%d/setup\n", r.Cfg.Server.Port)
+	fmt.Fprintf(w, "  向导地址:   http://localhost:%d/admin/setup\n", r.Cfg.Server.Port)
 	fmt.Fprintf(w, "  初始化令牌: %s\n", r.Token)
 	if r.Cfg.Setup.AllowRemote {
 		fmt.Fprintf(w, "  已允许远程初始化：远程访问需在请求头 X-Setup-Token 携带上述令牌\n")

@@ -1,0 +1,33 @@
+{
+  "plugin_maps": {
+    "menu": "地图服务",
+    "title": "地图服务",
+    "desc": "免费基础地图插件：高德 / 百度 / 谷歌三家按需启用；地图选点在前端，逆地理编码走后端代理。",
+    "configTitle": "厂商 Key",
+    "configDesc": "启用哪家就填哪家；服务端 Key 只保存在后端，接口只回「有没有」。",
+    "enabledTag": "已启用",
+    "keySaved": "已保存，留空保持不变",
+    "providers": {
+      "amap": "高德地图",
+      "baidu": "百度地图",
+      "google": "Google 地图"
+    },
+    "keys": {
+      "amapPublic": "JS API Key（Web 端）",
+      "amapServer": "Web 服务 Key",
+      "amapHint": "高德开放平台：创建「Web 端(JS API)」与「Web 服务」两个 Key；前者下发浏览器，后者只用于服务端逆地理。",
+      "baiduPublic": "浏览器端 AK",
+      "baiduServer": "服务端 AK",
+      "baiduHint": "百度地图开放平台：分别申请「浏览器端」与「服务端」AK；逆地理编码需要在控制台开通对应服务。",
+      "googlePublic": "API Key",
+      "googleServer": "服务端 Key（留空同上）",
+      "googleHint": "Google Cloud：启用 Maps JavaScript API 与 Geocoding API；中国大陆网络通常无法加载地图，仅适合出海场景。"
+    },
+    "demoTitle": "选点测试",
+    "demoDesc": "选一家已启用的厂商，点地图或拖标记，确认后回填坐标与地址；坐标系随厂商（gcj02 / bd09 / wgs84）。",
+    "demoLabel": "位置",
+    "notConfigured": "该厂商未启用或缺少浏览器 Key；保存配置后重新打开即可选点。",
+    "clickHint": "点击地图选择位置",
+    "confirm": "确定"
+  }
+}

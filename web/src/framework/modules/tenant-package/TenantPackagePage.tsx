@@ -164,18 +164,7 @@ export default function TenantPackagePage() {
 
   return (
     <PageContainer>
-      <PageHeader
-        title={t('tenantPkg.title')}
-        description={t('tenantPkg.description')}
-        actions={
-          <Can perm="tenantPkg:create">
-            <Button type="button" onClick={() => openForm(null)}>
-              <Plus className="me-2 h-4 w-4" aria-hidden="true" />
-              {t('common.add')}
-            </Button>
-          </Can>
-        }
-      />
+      <PageHeader title={t('tenantPkg.title')} description={t('tenantPkg.description')} />
 
       <FilterBar
         onSearch={() => {
@@ -206,6 +195,14 @@ export default function TenantPackagePage() {
       </FilterBar>
 
       <DataTable<TenantPackageRow>
+        toolbar={
+          <Can perm="tenantPkg:create">
+            <Button type="button" onClick={() => openForm(null)}>
+              <Plus className="me-2 h-4 w-4" aria-hidden="true" />
+              {t('common.add')}
+            </Button>
+          </Can>
+        }
         columns={columns}
         data={data?.list ?? []}
         rowKey="id"

@@ -1,17 +1,20 @@
 import { useState } from 'react'
 import { RefreshCw, Ban } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { FilterBar } from '@/framework/components/FilterBar'
+import { Segmented } from '@/framework/components/Segmented'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import { useChannels, useCloseOrder, useOrders, useSyncOrder, type OrderQuery, type PayOrder } from './api'
 import { formatMoney, formatTime, payStatusVariant } from './format'
+import { PayStatsPanel } from './PayStatsPanel'
 
 const ALL = '__all'
 
@@ -32,6 +35,10 @@ export function OrdersTab() {
   const [filters, setFilters] = useState<OrderQuery>({})
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
+  // 视图写进 URL：?view=stats 可以直接分享给同事
+  const [params, setParams] = useSearchParams()
+  const view = params.get('view') === 'stats' ? 'stats' : 'logs'
+  const setView = (v: string) => setParams(v === 'stats' ? { view: v } : {}, { replace: true })
 
   const { data, isLoading } = useOrders({ ...filters, page, pageSize })
   const { data: channels = [] } = useChannels()
@@ -97,6 +104,18 @@ export function OrdersTab() {
 
   return (
     <div className="flex flex-col gap-4">
+      {/* 外层「支付中台」已经是标签页，这里用轻量分段控件，别再叠一条 tab 条 */}
+      <Segmented
+        ariaLabel={t('plugin_pay.view.label')}
+        value={view}
+        onChange={setView}
+        options={[
+          { value: 'logs', label: t('plugin_pay.view.logs') },
+          { value: 'stats', label: t('plugin_pay.view.stats') },
+        ]}
+      />
+      {view === 'stats' ? <PayStatsPanel /> : (
+        <div className="flex flex-col gap-4">
       <FilterBar
         onSearch={() => {
           setFilters(draft)
@@ -120,7 +139,7 @@ export function OrdersTab() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_pay.fields.status')}: {t('plugin_pay.all')}</SelectItem>
+            <SelectItem value={ALL}>{t('plugin_pay.all')}</SelectItem>
             {STATUSES.map((s) => (
               <SelectItem key={s} value={s}>
                 {t(`plugin_pay.status.${s}`)}
@@ -133,7 +152,7 @@ export function OrdersTab() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_pay.fields.channel')}: {t('plugin_pay.all')}</SelectItem>
+            <SelectItem value={ALL}>{t('plugin_pay.all')}</SelectItem>
             {channels.map((c) => (
               <SelectItem key={c.code} value={c.code}>
                 {c.name}
@@ -142,7 +161,6 @@ export function OrdersTab() {
           </SelectContent>
         </Select>
       </FilterBar>
-
       <DataTable
         columns={columns}
         data={data?.list ?? []}
@@ -180,6 +198,8 @@ export function OrdersTab() {
           ) : null
         }
       />
+        </div>
+      )}
     </div>
   )
 }

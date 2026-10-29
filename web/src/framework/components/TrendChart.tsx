@@ -4,6 +4,9 @@ import { useTranslation } from 'react-i18next'
 import { useIsMobile } from '@/framework/hooks/use-mobile'
 import { cn } from '@/lib/utils'
 import { ChartBox } from './ChartBox'
+import { EmptyState } from './EmptyState'
+import { Segmented } from './Segmented'
+import { useLegendToggle } from './useLegendToggle'
 
 export type TrendType = 'line' | 'area' | 'bar'
 
@@ -45,6 +48,7 @@ export function TrendChart({ data, series, xKey, type = 'line', switchable = tru
   const isMobile = useIsMobile()
   const height = isMobile ? Math.min(heightProp, 200) : heightProp // 手机上图表矮一些，一屏能多看几张
   const [kind, setKind] = useState<TrendType>(type)
+  const { hidden, formatter } = useLegendToggle()
   const uid = useId().replace(/:/g, '')
   const gid = (i: number) => `tc-${uid}-${i}`
 
@@ -64,7 +68,7 @@ export function TrendChart({ data, series, xKey, type = 'line', switchable = tru
       </defs>
       <CartesianGrid strokeDasharray="4 4" stroke="hsl(var(--border))" strokeOpacity={0.7} vertical={false} />
       <XAxis dataKey={xKey} tick={axis} tickLine={false} axisLine={false} tickMargin={8} />
-      <YAxis tick={axis} tickLine={false} axisLine={false} width={44} tickFormatter={(v) => compact(Number(v))} />
+      <YAxis allowDecimals={false} tick={axis} tickLine={false} axisLine={false} width={44} tickFormatter={(v) => compact(Number(v))} />
       <Tooltip
         cursor={{ stroke: 'hsl(var(--primary))', strokeOpacity: 0.35, strokeDasharray: '4 4', fill: 'hsl(var(--muted) / 0.5)' }}
         contentStyle={tooltipStyle}
@@ -72,33 +76,24 @@ export function TrendChart({ data, series, xKey, type = 'line', switchable = tru
         itemStyle={{ color: 'hsl(var(--foreground))' }}
         formatter={(v: unknown) => (typeof v === 'number' ? new Intl.NumberFormat(i18n.language).format(v) : (v as React.ReactNode))}
       />
-      {series.length > 1 && <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />}
+      {series.length > 1 && <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12, paddingTop: 8 }} formatter={formatter} />}
     </>
   )
 
   return (
     <div className={cn('w-full', className)}>
       {switchable && (
-        <div role="group" aria-label={t('charts.chartType')} className="mb-3 ms-auto flex w-fit gap-0.5 rounded-full bg-muted p-1">
-          {TYPES.map((k) => (
-            <button
-              key={k}
-              type="button"
-              aria-pressed={kind === k}
-              onClick={() => setKind(k)}
-              className={cn(
-                'inline-flex h-8 items-center rounded-full px-3.5 text-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none md:h-7',
-                kind === k ? 'bg-background font-medium text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
-              )}
-            >
-              {t(`charts.${k}`)}
-            </button>
-          ))}
-        </div>
+        <Segmented
+          ariaLabel={t('charts.chartType')}
+          className="mb-3 ms-auto"
+          value={kind}
+          onChange={(v) => setKind(v as TrendType)}
+          options={TYPES.map((k) => ({ value: k, label: t(`charts.${k}`) }))}
+        />
       )}
       {data.length === 0 ? (
-        <div className="flex items-center justify-center text-sm text-muted-foreground" style={{ height }}>
-          {t('common.empty')}
+        <div className="flex items-center justify-center" style={{ height }}>
+          <EmptyState className="py-0" />
         </div>
       ) : (
         <ChartBox height={height}>
@@ -107,7 +102,7 @@ export function TrendChart({ data, series, xKey, type = 'line', switchable = tru
               <BarChart {...common} width={width} height={h} barGap={4}>
                 {parts}
                 {series.map((s, i) => (
-                  <Bar key={s.key} dataKey={s.key} name={s.label} fill={`url(#${gid(i)})`} radius={[6, 6, 0, 0]} maxBarSize={28} />
+                  <Bar key={s.key} dataKey={s.key} name={s.label} fill={`url(#${gid(i)})`} radius={[6, 6, 0, 0]} maxBarSize={28} hide={hidden.has(s.key)} />
                 ))}
               </BarChart>
             ) : kind === 'area' ? (
@@ -124,6 +119,7 @@ export function TrendChart({ data, series, xKey, type = 'line', switchable = tru
                     strokeWidth={2.5}
                     dot={false}
                     activeDot={{ r: 5, strokeWidth: 2, stroke: 'hsl(var(--card))' }}
+                    hide={hidden.has(s.key)}
                   />
                 ))}
               </AreaChart>
@@ -140,6 +136,7 @@ export function TrendChart({ data, series, xKey, type = 'line', switchable = tru
                     strokeWidth={2.5}
                     dot={false}
                     activeDot={{ r: 5, strokeWidth: 2, stroke: 'hsl(var(--card))' }}
+                    hide={hidden.has(s.key)}
                   />
                 ))}
               </LineChart>

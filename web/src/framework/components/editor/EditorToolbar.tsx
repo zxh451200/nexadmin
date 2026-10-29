@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import type { Editor } from '@tiptap/react'
 import {
-  AlignCenter, AlignJustify, AlignLeft, AlignRight, Bold, Code2, Heading1, Heading2, Heading3, Highlighter, ImageIcon, Italic, Link2, List, ListOrdered,
-  Palette, Quote, Redo2, Strikethrough, Table2, Underline as UnderlineIcon, Undo2, VideoIcon,
+  AlignCenter, AlignJustify, AlignLeft, AlignRight, Bold, Code, Code2, Eraser, Heading1, Heading2, Heading3, Highlighter, ImageIcon, Italic, Link2, List, ListOrdered,
+  Minus, Palette, Quote, Redo2, Strikethrough, Table2, Underline as UnderlineIcon, Undo2, VideoIcon,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
@@ -129,13 +129,16 @@ export function EditorToolbar({ editor, onMedia }: ToolbarProps) {
       <Btn label={t('editor.italic')} active={editor.isActive('italic')} onClick={() => c().toggleItalic().run()}><Italic className={ic} aria-hidden="true" /></Btn>
       <Btn label={t('editor.underline')} active={editor.isActive('underline')} onClick={() => c().toggleUnderline().run()}><UnderlineIcon className={ic} aria-hidden="true" /></Btn>
       <Btn label={t('editor.strike')} active={editor.isActive('strike')} onClick={() => c().toggleStrike().run()}><Strikethrough className={ic} aria-hidden="true" /></Btn>
+      <Btn label={t('editor.inlineCode')} active={editor.isActive('code')} onClick={() => c().toggleCode().run()}><Code className={ic} aria-hidden="true" /></Btn>
       <ColorBtn label={t('editor.textColor')} icon={<Palette className={ic} aria-hidden="true" />} onPick={(col) => c().setColor(col).run()} onClear={() => c().unsetColor().run()} />
       <ColorBtn label={t('editor.highlight')} icon={<Highlighter className={ic} aria-hidden="true" />} onPick={(col) => c().toggleHighlight({ color: col }).run()} onClear={() => c().unsetHighlight().run()} />
+      <Btn label={t('editor.clearFormat')} onClick={() => c().unsetAllMarks().clearNodes().run()}><Eraser className={ic} aria-hidden="true" /></Btn>
       {sep}
       <Btn label={t('editor.bulletList')} active={editor.isActive('bulletList')} onClick={() => c().toggleBulletList().run()}><List className={ic} aria-hidden="true" /></Btn>
       <Btn label={t('editor.orderedList')} active={editor.isActive('orderedList')} onClick={() => c().toggleOrderedList().run()}><ListOrdered className={ic} aria-hidden="true" /></Btn>
       <Btn label={t('editor.quote')} active={editor.isActive('blockquote')} onClick={() => c().toggleBlockquote().run()}><Quote className={ic} aria-hidden="true" /></Btn>
       <Btn label={t('editor.codeBlock')} active={editor.isActive('codeBlock')} onClick={() => c().toggleCodeBlock().run()}><Code2 className={ic} aria-hidden="true" /></Btn>
+      <Btn label={t('editor.horizontalRule')} onClick={() => c().setHorizontalRule().run()}><Minus className={ic} aria-hidden="true" /></Btn>
       {sep}
       <Btn label={t('editor.alignLeft')} active={editor.isActive({ textAlign: 'left' })} onClick={() => c().setTextAlign('left').run()}><AlignLeft className={ic} aria-hidden="true" /></Btn>
       <Btn label={t('editor.alignCenter')} active={editor.isActive({ textAlign: 'center' })} onClick={() => c().setTextAlign('center').run()}><AlignCenter className={ic} aria-hidden="true" /></Btn>
@@ -153,8 +156,11 @@ export function EditorToolbar({ editor, onMedia }: ToolbarProps) {
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuItem onSelect={() => c().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}>{t('editor.insertTable')}</DropdownMenuItem>
+          <DropdownMenuItem disabled={!editor.can().addColumnBefore()} onSelect={() => c().addColumnBefore().run()}>{t('editor.addColumnBefore')}</DropdownMenuItem>
           <DropdownMenuItem disabled={!editor.can().addColumnAfter()} onSelect={() => c().addColumnAfter().run()}>{t('editor.addColumn')}</DropdownMenuItem>
+          <DropdownMenuItem disabled={!editor.can().addRowBefore()} onSelect={() => c().addRowBefore().run()}>{t('editor.addRowBefore')}</DropdownMenuItem>
           <DropdownMenuItem disabled={!editor.can().addRowAfter()} onSelect={() => c().addRowAfter().run()}>{t('editor.addRow')}</DropdownMenuItem>
+          <DropdownMenuItem disabled={!editor.can().toggleHeaderRow()} onSelect={() => c().toggleHeaderRow().run()}>{t('editor.toggleHeaderRow')}</DropdownMenuItem>
           <DropdownMenuItem disabled={!editor.can().deleteColumn()} onSelect={() => c().deleteColumn().run()}>{t('editor.deleteColumn')}</DropdownMenuItem>
           <DropdownMenuItem disabled={!editor.can().deleteRow()} onSelect={() => c().deleteRow().run()}>{t('editor.deleteRow')}</DropdownMenuItem>
           <DropdownMenuItem disabled={!editor.can().mergeOrSplit()} onSelect={() => c().mergeOrSplit().run()}>{t('editor.mergeSplit')}</DropdownMenuItem>

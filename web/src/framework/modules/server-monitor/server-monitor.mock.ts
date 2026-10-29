@@ -1,5 +1,8 @@
+import { buildHistory, historyHours } from '@/framework/request/history-mock'
 import { defineMock } from '@/framework/request/mock'
 import type { ClientErrorRow, HealthCheck, HealthSnapshot, ServerSnapshot } from './api'
+
+const r2 = (v: number) => Math.round(v * 100) / 100
 
 const MIN = 60000
 const errId = (n: number) => (1850000000000000000n + BigInt(n)).toString()
@@ -114,5 +117,26 @@ defineMock([
       list.sort((a, b) => b.lastSeenAt.localeCompare(a.lastSeenAt))
       return { list: list.slice((page - 1) * pageSize, page * pageSize), total: list.length, page, pageSize }
     },
+  },
+  {
+    // 与真实 /monitor/server/history 同口径：桶宽由窗口决定，指标为区间均值
+    method: 'GET',
+    url: '/monitor/server/history',
+    handler: (ctx) =>
+      buildHistory(historyHours(ctx.query), (i, at) => {
+        const wave = Math.sin(i / 7) * 12
+        const busy = 35 + wave + Math.sin(new Date(at).getHours() / 3.8) * 18
+        return {
+          cpuUsage: r2(Math.max(2, Math.min(96, busy))),
+          memUsedPct: r2(Math.max(10, Math.min(92, 54 + wave * 0.6))),
+          diskUsedPct: r2(61 + i * 0.02),
+          load1: r2(Math.max(0.1, busy / 22)),
+          netInKbps: Math.round(340 + wave * 18),
+          netOutKbps: Math.round(180 + wave * 9),
+          goroutines: Math.round(120 + wave * 6),
+          heapMb: r2(86 + wave * 2.4),
+          gcPauseMs: r2(Math.max(0.05, 0.8 + wave * 0.08)),
+        }
+      }),
   },
 ])

@@ -45,7 +45,7 @@ func (m *module) service(d *core.Deps) *Service {
 		if l == nil {
 			l = zap.NewNop()
 		}
-		m.svc = NewService(d.DB, zapLog{l})
+		m.svc = NewService(d.DB, zapLog{l}).WithTimezone(d.Config.App.Timezone)
 		SetDefault(m.svc)
 	})
 	return m.svc

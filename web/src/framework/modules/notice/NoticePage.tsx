@@ -129,18 +129,7 @@ export default function NoticePage() {
 
   return (
     <PageContainer>
-      <PageHeader
-        title={t('notice.title')}
-        description={t('notice.description')}
-        actions={
-          <Can perm="notice:create">
-            <Button onClick={() => openForm(null)}>
-              <Plus aria-hidden="true" />
-              {t('notice.create')}
-            </Button>
-          </Can>
-        }
-      />
+      <PageHeader title={t('notice.title')} description={t('notice.description')} />
 
       <AiFilterBox
         scope="notice"
@@ -177,6 +166,14 @@ export default function NoticePage() {
       </FilterBar>
 
       <DataTable
+        toolbar={
+          <Can perm="notice:create">
+            <Button onClick={() => openForm(null)}>
+              <Plus aria-hidden="true" />
+              {t('notice.create')}
+            </Button>
+          </Can>
+        }
         columns={columns}
         data={data?.list ?? []}
         rowKey="id"

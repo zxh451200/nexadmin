@@ -16,6 +16,26 @@ func TestMain(m *testing.M) {
 	m.Run()
 }
 
+// 出厂内容版本必须与默认设置一致；新增出厂条目时改 seedVersion 并补迁移。
+func TestSeedVersionCurrent(t *testing.T) {
+	if got := defaultSetting().SeedVersion; got != seedVersion {
+		t.Fatalf("defaultSetting.SeedVersion = %d, seedVersion = %d", got, seedVersion)
+	}
+	seen := map[string]bool{}
+	for _, p := range defaultPosts() {
+		if seen[p.Slug] {
+			t.Errorf("duplicate factory post slug %q", p.Slug)
+		}
+		seen[p.Slug] = true
+		if p.Published && p.I18nJSON == "" {
+			t.Errorf("factory post %q missing English translation", p.Slug)
+		}
+	}
+	if !seen["upgrade-without-fork"] {
+		t.Error("third factory post missing")
+	}
+}
+
 func TestValidateSlug(t *testing.T) {
 	for _, s := range []string{"about", "hello-nexadmin", "v0-1-release", "a"} {
 		if err := ValidateSlug(s); err != nil {
@@ -52,6 +72,26 @@ func TestIconFunc(t *testing.T) {
 	}
 }
 
+// 管理端下拉按 featureIconOrder 渲染名称与 iconPaths 里的路径：两份清单必须一一对应，
+// 否则选择器会出现没图的空项，或漏掉可在官网使用的图标。
+func TestFeatureIconOrderMatchesPaths(t *testing.T) {
+	seen := map[string]bool{}
+	for _, name := range featureIconOrder {
+		if seen[name] {
+			t.Errorf("duplicate icon %q in featureIconOrder", name)
+		}
+		seen[name] = true
+		if _, ok := iconPaths[name]; !ok {
+			t.Errorf("featureIconOrder has %q but iconPaths does not", name)
+		}
+	}
+	for name := range iconPaths {
+		if !seen[name] {
+			t.Errorf("iconPaths has %q but featureIconOrder does not", name)
+		}
+	}
+}
+
 func testView() *siteView {
 	now := time.Now()
 	post := Post{
@@ -84,7 +124,7 @@ func TestRenderPages(t *testing.T) {
 		v    func() *siteView
 		want []string
 	}{
-		{"home", testView, []string{"为生产级后台系统", "而生的全栈框架", "多租户", "sh scripts/build.sh", "localhost:8080/dashboard"}},
+		{"home", testView, []string{"为生产级后台系统", "而生的全栈框架", "多租户", "sh scripts/build.sh", "market/dashboard-dark.jpg"}},
 		{"news", testView, []string{"你好 NexAdmin", "hello"}},
 		{"post", func() *siteView {
 			v := testView()
@@ -121,6 +161,55 @@ func TestRenderPages(t *testing.T) {
 	}
 }
 
+func TestHomeProductTour(t *testing.T) {
+	for _, lang := range Languages() {
+		t.Run(lang.Code, func(t *testing.T) {
+			v := testView()
+			v.Lang = lang
+			v.HomeCTAHref = "/docs/dev-guide"
+			var b strings.Builder
+			if err := pageTmpl["home"].ExecuteTemplate(&b, "layout", v); err != nil {
+				t.Fatal(err)
+			}
+			out := b.String()
+			for _, want := range []string{
+				`href="` + v.URL(v.HomeCTAHref) + `"`,
+				`href="` + v.Home() + `#product"`,
+				`role="tablist"`,
+				`<dialog class="image-dialog" aria-labelledby="image-dialog-title">`,
+				`data-image-size aria-pressed="false"`,
+				`<form method="dialog">`,
+				`width="1440" height="704" loading="lazy"`,
+			} {
+				if !strings.Contains(out, want) {
+					t.Errorf("product tour missing %q", want)
+				}
+			}
+			for _, name := range []string{"user", "menu", "siteset"} {
+				for _, want := range []string{
+					`id="tab-` + name + `" type="button" role="tab" aria-controls="panel-` + name + `"`,
+					`id="panel-` + name + `" role="tabpanel" aria-labelledby="tab-` + name + `" tabindex="0"`,
+				} {
+					if !strings.Contains(out, want) {
+						t.Errorf("product tour missing %q", want)
+					}
+				}
+				for _, scheme := range []string{"dark", "light"} {
+					if !strings.Contains(out, "market/"+name+"-"+scheme+".jpg") {
+						t.Errorf("%s missing %s screenshot", name, scheme)
+					}
+				}
+			}
+			if got := strings.Count(out, "data-image-preview hidden"); got != 6 {
+				t.Errorf("progressively enhanced screenshot controls = %d, want 6", got)
+			}
+			if strings.Contains(out, "home.preview.") || strings.Contains(out, "home.product.tab.") {
+				t.Error("product tour has untranslated labels")
+			}
+		})
+	}
+}
+
 // 渲染必须做上下文转义：标题里的 HTML 不能原样进页面。
 func TestRenderEscapes(t *testing.T) {
 	v := testView()
@@ -152,14 +241,35 @@ func TestLayoutMetaAndFallbacks(t *testing.T) {
 		`aria-controls="mobile-nav"`,
 		`id="mobile-nav"`,
 		`<noscript>`,
-		`data-tabs`,
-		`id="showcase"`,
-		`id="integrations"`,
-		`footer-mark`,
+		`class="editorial-head"`,
+		`class="stage-shot"`,
+		`id="capabilities"`,
+		`class="intg-grid"`,
+		`class="shots"`,
+		`<footer`,
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("layout missing %q", want)
 		}
+	}
+
+	// 页脚是改版最频繁的区域：断言结构与内容（站名），不绑定某一版的 class 名，
+	// 否则每次视觉调整都会把用例打红，反而掩盖真正的结构缺失。
+	start := strings.Index(out, "<footer")
+	if start < 0 {
+		t.Fatal("layout missing footer block")
+	}
+	rest := out[start:]
+	end := strings.Index(rest, "</footer>")
+	if end < 0 {
+		t.Fatal("footer block not closed")
+	}
+	footer := rest[:end]
+	if !strings.Contains(footer, v.SiteName) {
+		t.Errorf("footer missing site name %q", v.SiteName)
+	}
+	if !strings.Contains(footer, "<nav") {
+		t.Error("footer missing link columns")
 	}
 }
 
@@ -241,5 +351,66 @@ func TestMediaValidation(t *testing.T) {
 	}
 	if mediaMimes[http.DetectContentType([]byte("plain text, not an image"))] {
 		t.Error("text content should not be accepted as image")
+	}
+}
+
+// 公共导航只能指向官网路由、站内锚点或完整外部地址；裸路径与后台路由要拒，
+// 否则浏览器把 "xx" 拼成 /xx，服务端 SPA 回退会把后台外壳返回给访客。
+func TestNavHrefValid(t *testing.T) {
+	cases := []struct {
+		href string
+		want bool
+	}{
+		{"/", true},
+		{"/en", true},
+		{"/news", true},
+		{"/news/hello", true},
+		{"/plugins", true},
+		{"/plugins/cron", true},
+		{"/docs", true},
+		{"/docs/dev-guide", true},
+		{"/p/about", true},
+		{"/en/docs/dev-guide", true},
+		{"/news?page=2", true},
+		{"/docs/dev-guide#toc", true},
+		{"#features", true},
+		{"https://linear.app", true},
+		{"mailto:hi@example.com", true},
+		{"xx", false},
+		{"news", false},
+		{"/users", false},
+		{"/login", false},
+		{"/p/", false},
+		{"/plugins-admin", false},
+		{"javascript:alert(1)", false},
+		{"", false},
+	}
+	for _, c := range cases {
+		if got := navHrefValid(c.href); got != c.want {
+			t.Errorf("navHrefValid(%q) = %v, want %v", c.href, got, c.want)
+		}
+	}
+}
+
+// 导航里的 /p/{slug} 要能取出 slug；语言前缀与查询串不影响。
+func TestNavPageSlug(t *testing.T) {
+	cases := []struct {
+		href string
+		slug string
+		ok   bool
+	}{
+		{"/p/about", "about", true},
+		{"/en/p/about", "about", true},
+		{"/p/about?from=nav", "about", true},
+		{"/p/about#top", "about", true},
+		{"/news", "", false},
+		{"/p/", "", false},
+		{"https://x.example/p/about", "", false},
+	}
+	for _, c := range cases {
+		slug, ok := navPageSlug(c.href)
+		if slug != c.slug || ok != c.ok {
+			t.Errorf("navPageSlug(%q) = (%q,%v), want (%q,%v)", c.href, slug, ok, c.slug, c.ok)
+		}
 	}
 }

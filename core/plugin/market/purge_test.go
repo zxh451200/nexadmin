@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	gormmysql "gorm.io/driver/mysql"
+	gormpg "gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
@@ -67,6 +69,76 @@ func TestPurgePluginTables(t *testing.T) {
 func TestPurgePluginTablesGuards(t *testing.T) {
 	if _, err := purgePluginTables(nil, "sqlite", "demo", nil); err == nil {
 		t.Error("unknown engine should error")
+	}
+}
+
+func TestPurgePluginDatabaseClearsOnlyOwnMigrations(t *testing.T) {
+	for _, engine := range []string{"mysql", "mariadb", "postgres"} {
+		for _, failDrop := range []bool{false, true} {
+			name := engine
+			if failDrop {
+				name += "/failed-drop"
+			}
+			t.Run(name, func(t *testing.T) {
+				sqlDB, mock, err := sqlmock.New()
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { _ = sqlDB.Close() })
+				var dial gorm.Dialector = gormmysql.New(gormmysql.Config{Conn: sqlDB, SkipInitializeWithVersion: true})
+				if engine == "postgres" {
+					dial = gormpg.New(gormpg.Config{Conn: sqlDB})
+				}
+				db, err := gorm.Open(dial, &gorm.Config{DisableAutomaticPing: true})
+				if err != nil {
+					t.Fatal(err)
+				}
+				if engine == "postgres" {
+					mock.ExpectQuery("SELECT pg_try_advisory_lock").WithArgs(int64(0x6e65786d6967)).WillReturnRows(sqlmock.NewRows([]string{"locked"}).AddRow(true))
+					mock.ExpectBegin()
+					mock.ExpectQuery("SELECT tablename FROM pg_tables").WithArgs("plg\\_demo\\_%").WillReturnRows(sqlmock.NewRows([]string{"tablename"}).AddRow("plg_demo_order"))
+				} else {
+					mock.ExpectQuery("SELECT VERSION").WillReturnRows(sqlmock.NewRows([]string{"version"}).AddRow("10.11-" + engine))
+					mock.ExpectQuery("SELECT CONCAT").WillReturnRows(sqlmock.NewRows([]string{"name"}).AddRow("nexadmin_migrate_test"))
+					mock.ExpectQuery("SELECT GET_LOCK").WithArgs("nexadmin_migrate_test").WillReturnRows(sqlmock.NewRows([]string{"locked"}).AddRow(1))
+					mock.ExpectQuery("SELECT table_name FROM information_schema").WithArgs("plg\\_demo\\_%").WillReturnRows(sqlmock.NewRows([]string{"table_name"}).AddRow("plg_demo_order"))
+				}
+				drop := mock.ExpectExec("DROP TABLE IF EXISTS .plg_demo_order.")
+				if failDrop {
+					drop.WillReturnError(errors.New("drop refused"))
+				} else {
+					drop.WillReturnResult(sqlmock.NewResult(0, 0))
+					mock.ExpectQuery("SELECT COUNT.*information_schema.tables").WithArgs("sys_migration").WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+					mock.ExpectExec("DELETE FROM sys_migration WHERE scope = ").WithArgs("plugin:demo").WillReturnResult(sqlmock.NewResult(0, 1))
+					mock.ExpectQuery("SELECT COUNT.*information_schema.tables").WithArgs("sys_plugin_migration").WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+					mock.ExpectExec("DELETE FROM sys_plugin_migration WHERE plugin_id = ").WithArgs("demo").WillReturnResult(sqlmock.NewResult(0, 1))
+				}
+				if engine == "postgres" {
+					if failDrop {
+						mock.ExpectRollback()
+					} else {
+						mock.ExpectCommit()
+					}
+					mock.ExpectExec("SELECT pg_advisory_unlock").WithArgs(int64(0x6e65786d6967)).WillReturnResult(sqlmock.NewResult(0, 1))
+				} else {
+					mock.ExpectExec("SELECT RELEASE_LOCK").WithArgs("nexadmin_migrate_test").WillReturnResult(sqlmock.NewResult(0, 1))
+				}
+				var out strings.Builder
+				n, err := purgePluginDatabase(db, "demo", &out)
+				if (err != nil) != failDrop || (!failDrop && n != 1) {
+					t.Fatalf("dropped=%d err=%v", n, err)
+				}
+				if err := mock.ExpectationsWereMet(); err != nil {
+					t.Fatal(err)
+				}
+			})
+		}
+	}
+}
+
+func TestPurgePluginDatabaseRejectsInvalidID(t *testing.T) {
+	if _, err := purgePluginDatabase(nil, "../demo", nil); err == nil {
+		t.Fatal("invalid plugin ID must be rejected before accessing the database")
 	}
 }
 

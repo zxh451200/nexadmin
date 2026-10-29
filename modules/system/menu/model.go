@@ -96,4 +96,7 @@ type sortInput struct {
 // moveInput 是跨父级移动菜单的请求体。
 type moveInput struct {
 	ParentID string `json:"parentId"`
+	// AfterID 指定插到哪个同级之后：空串=插到最前，省略=沿用旧行为追加到末尾。
+	// 拖拽落点是一条插入线，能力上必须能表达「插在第 N 行后面」，否则只能追加到组尾。
+	AfterID *string `json:"afterId"`
 }

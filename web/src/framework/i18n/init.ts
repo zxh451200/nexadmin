@@ -65,7 +65,7 @@ export function loadLanguages(): Promise<LanguageInfo[]> {
   if (languagesCache) return Promise.resolve(languagesCache)
   languagesPromise ??= api
     .get<LanguageInfo[]>('/i18n/languages', undefined, { silent: true })
-    .catch((): LanguageInfo[] => Object.keys(i18n.options.resources ?? {}).map((code) => ({ code, name: code, dir: languageDir(code) })))
+    .catch((): LanguageInfo[] => Object.keys(i18n.options.resources ?? {}).map((code) => ({ code, name: code, dir: languageDir(code), default: false })))
     .then((list) => {
       languagesCache = list
       const def = list.find((l) => l.default)?.code

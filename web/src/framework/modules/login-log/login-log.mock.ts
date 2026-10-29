@@ -62,6 +62,31 @@ function filtered(query: Record<string, unknown>): LoginLog[] {
 
 const csvCell = (v: string) => (/[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v)
 
+/** 与后端 stats 同口径的 mock 侧聚合（仅开发态使用；分位数取最近秩） */
+const tally = (keys: string[]) => {
+  const m = new Map<string, number>()
+  keys.forEach((k) => m.set(k || '-', (m.get(k) ?? 0) + 1))
+  return [...m].map(([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value || a.name.localeCompare(b.name))
+    .slice(0, 8)
+}
+const hourBuckets = (stamps: string[]) => {
+  const hours = Array.from({ length: 24 }, (_, hour) => ({ hour, value: 0 }))
+  stamps.forEach((s) => { hours[new Date(s).getHours()].value += 1 })
+  return hours
+}
+const dayBuckets = (stamps: string[], failed: (s: string) => boolean) => {
+  const m = new Map<string, { date: string; total: number; failures: number }>()
+  stamps.forEach((s) => {
+    const key = localDate(s)
+    const cur = m.get(key) ?? { date: key, total: 0, failures: 0 }
+    cur.total += 1
+    if (failed(s)) cur.failures += 1
+    m.set(key, cur)
+  })
+  return [...m.values()].sort((a, b) => a.date.localeCompare(b.date))
+}
+
 defineMock([
   {
     method: 'GET',
@@ -71,6 +96,30 @@ defineMock([
       const pageSize = Math.max(1, Number(query.pageSize) || 10)
       const list = filtered(query)
       return { list: list.slice((page - 1) * pageSize, page * pageSize), total: list.length, page, pageSize }
+    },
+  },
+  {
+    // 与真实 /login-logs/stats 同构：失败原因只统计失败行，其余按全量分桶
+    method: 'GET',
+    url: '/login-logs/stats',
+    handler: ({ query }) => {
+      const list = filtered(query)
+      const failed = list.filter((r) => r.status !== 'success')
+      const stamps = list.map((r) => r.createdAt)
+      const failStamps = new Set(failed.map((r) => r.createdAt))
+      return {
+        from: String(query.startDate ?? ''),
+        to: String(query.endDate ?? ''),
+        total: list.length,
+        failures: failed.length,
+        sampled: false,
+        days: dayBuckets(stamps, (s) => failStamps.has(s)),
+        hours: hourBuckets(stamps),
+        failReasons: tally(failed.map((r) => r.failReason ?? '')),
+        types: tally(list.map((r) => r.loginType)),
+        browsers: tally(list.map((r) => r.browser ?? '')),
+        os: tally(list.map((r) => r.os ?? '')),
+      }
     },
   },
   {

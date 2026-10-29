@@ -1,4 +1,4 @@
-// Package totp 是 NexAdmin 两步验证(TOTP/MFA)插件:实现 core/auth 的 LoginGate 扩展点。
+// Package totp 是 NexAdmin 免费基础两步验证(TOTP/MFA)插件:实现 core/auth 的 LoginGate 扩展点。
 // 用户在个人设置里绑定验证器(RFC 6238,兼容 Google Authenticator 等),启用后登录要求
 // 输入 6 位动态码;步长防重放(core 保证挑战次数/TTL/IP 绑定,本插件保证 TOTP 同码防重放)。
 // 只依赖 core/ 与 pkg/,表前缀 plg_totp_,接口路径 /api/v1/plugins/totp/...。
@@ -16,7 +16,7 @@ var _ = plugin.Starter(nil)
 
 func init() {
 	plugin.Register(plugin.Plugin{
-		ID: "totp", Name: "两步验证", Version: "0.1.0", Edition: plugin.Pro,
+		ID: "totp", Name: "两步验证", Version: "0.1.0", Edition: plugin.Free,
 		Module: &module{},
 	})
 }

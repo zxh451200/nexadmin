@@ -16,6 +16,7 @@
           <h2>{{.Title}}</h2>
           {{if .Summary}}<p>{{.Summary}}</p>{{end}}
         </div>
+        {{if .CoverURL}}<img class="post-row-cover" src="{{.CoverURL}}" alt="" loading="lazy">{{end}}
         <span class="post-row-arrow" aria-hidden="true">→</span>
       </a>
       {{end}}

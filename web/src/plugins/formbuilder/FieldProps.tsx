@@ -73,8 +73,8 @@ export function FieldProps({ field: f, index, total, refs, usedKeys, onChange, o
         </div>
       </div>
 
-      <Field id={`${id}-title`} label={t('plugin_formbuilder.prop.title')}>
-        <Input id={`${id}-title`} value={f.title} maxLength={MaxTitle} aria-invalid={!f.title.trim() || undefined} onChange={(e) => patch({ title: e.target.value })} />
+      <Field id={`${id}-title`} label={t('plugin_formbuilder.prop.title')} required>
+        <Input id={`${id}-title`} required value={f.title} maxLength={MaxTitle} aria-invalid={!f.title.trim() || undefined} onChange={(e) => patch({ title: e.target.value })} />
       </Field>
       <Field id={`${id}-desc`} label={t('plugin_formbuilder.prop.description')}>
         <Textarea id={`${id}-desc`} rows={2} maxLength={1000} value={f.description ?? ''} onChange={(e) => patch({ description: e.target.value || undefined })} />

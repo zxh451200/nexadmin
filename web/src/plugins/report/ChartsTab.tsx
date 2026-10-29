@@ -11,6 +11,7 @@ import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
 import { useCharts, useDatasetOptions, useDeleteChart, type Chart } from './api'
 import { ChartDialog } from './ChartDialog'
+import { builtinText } from './builtinText'
 
 export function ChartsTab() {
   const { t } = useTranslation()
@@ -30,7 +31,7 @@ export function ChartsTab() {
     setOpen(true)
   }
   const onDelete = async (c: Chart) => {
-    if (!(await confirm({ destructive: true, description: t('plugin_report.chart.deleteConfirm', { name: c.name }) }))) return
+    if (!(await confirm({ destructive: true, description: t('plugin_report.chart.deleteConfirm', { name: builtinText(t, c.name) }) }))) return
     try {
       await remove.mutateAsync(c.id)
       toast.success(t('common.operateSuccess'))
@@ -40,9 +41,9 @@ export function ChartsTab() {
   }
 
   const columns: Column<Chart>[] = [
-    { key: 'name', title: t('common.name'), mobile: 'title', render: (c) => <span className="font-medium text-foreground">{c.name}</span> },
+    { key: 'name', title: t('common.name'), mobile: 'title', render: (c) => <span className="font-medium text-foreground">{builtinText(t, c.name)}</span> },
     { key: 'type', title: t('plugin_report.chart.type'), mobile: 'sub', render: (c) => <Badge variant="outline">{t(`plugin_report.type.${c.type}`)}</Badge> },
-    { key: 'dataset', title: t('plugin_report.chart.dataset'), render: (c) => <span>{datasets.find((d) => d.id === c.datasetId)?.name ?? '-'}</span> },
+    { key: 'dataset', title: t('plugin_report.chart.dataset'), render: (c) => <span>{builtinText(t, datasets.find((d) => d.id === c.datasetId)?.name) || '-'}</span> },
     {
       key: 'shape',
       title: t('plugin_report.chart.shape'),

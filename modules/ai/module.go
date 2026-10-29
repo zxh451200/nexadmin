@@ -30,8 +30,8 @@ type module struct{}
 
 func (module) Name() string { return "ai" }
 
-// Register 注册 /ai/*。/ai/status 登录即可；筛选要求对应页面的列表权限；写作辅助要求公告的新增或修改权限；
-// 翻译要求有翻译助手入口的页面之一的编辑权限（公告 / 字典 / 语言包编辑）。AI 不放大权限，
+// Register 注册 /ai/*。/ai/status 登录即可；筛选要求对应页面的列表权限；写作辅助要求公告或官网内容的编辑权限；
+// 翻译要求有翻译助手入口的页面之一的编辑权限（公告 / 字典 / 语言包编辑 / 官网内容）。AI 不放大权限，
 // 也不能让没有编辑权限的账号白白消耗租户的每日配额。
 func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	loc, err := time.LoadLocation(d.Config.App.Timezone)
@@ -112,9 +112,12 @@ type handler struct {
 var scopePerm = map[string]string{"user": "user:list", "notice": "notice:list", "operLog": "operLog:list"}
 
 // 写作辅助与翻译所需的业务权限（满足任意一个即可）。权限码以各模块 core.Perm 注册的为准。
+// 官网内容都是多语言字段（新闻/页面/特性/导航/站点文案），能编辑该内容即能用 AI 起草与翻译，不额外放大权限。
+var websiteEditPerms = []string{"website:post", "website:page", "website:feature", "website:nav", "website:setting"}
+
 var (
-	writePerms     = []string{"notice:create", "notice:update"}
-	translatePerms = []string{"notice:create", "notice:update", "dict:create", "dict:update", "i18n-editor:edit"}
+	writePerms     = append([]string{"notice:create", "notice:update"}, websiteEditPerms...)
+	translatePerms = append([]string{"notice:create", "notice:update", "dict:create", "dict:update", "i18n-editor:edit"}, websiteEditPerms...)
 )
 
 // allowedAny 判断当前用户是否拥有任意一个权限点；超管直通。
@@ -257,7 +260,7 @@ func fail(c *gin.Context, err error) {
 	var e *response.Error
 	switch {
 	case errors.Is(err, coreai.ErrDisabled):
-		e = response.New(http.StatusServiceUnavailable, "error.ai_disabled").WithMsg("AI is not enabled")
+		e = response.New(http.StatusServiceUnavailable, "error.ai_disabled")
 		e.Reason = "AI_DISABLED"
 	case errors.Is(err, coreai.ErrTenantDisabled):
 		e = response.Forbidden("error.ai_tenant_disabled")
@@ -272,17 +275,17 @@ func fail(c *gin.Context, err error) {
 		e.Reason = tn.ReasonQuotaAI
 	case errors.Is(err, coreai.ErrRateLimited):
 		c.Header("Retry-After", "60")
-		e = response.New(http.StatusTooManyRequests, "error.ai_rate_limited").WithMsg("Too many AI requests, please try again later")
+		e = response.New(http.StatusTooManyRequests, "error.ai_rate_limited")
 	case errors.Is(err, coreai.ErrInputTooLong):
-		e = response.BadRequest("error.bad_request").WithMsg("Input is too long")
+		e = response.BadRequest("error.ai_input_too_long")
 	case errors.Is(err, coreai.ErrBadInput):
 		e = response.BadRequest("error.bad_request")
 	case errors.Is(err, coreai.ErrTimeout):
-		e = response.New(http.StatusGatewayTimeout, "error.ai_timeout").WithMsg("AI service timed out, please try again")
+		e = response.New(http.StatusGatewayTimeout, "error.ai_timeout")
 	case errors.Is(err, coreai.ErrBadOutput):
-		e = response.New(http.StatusBadGateway, "error.ai_bad_output").WithMsg("AI returned an unusable result, please try again")
+		e = response.New(http.StatusBadGateway, "error.ai_bad_output")
 	case errors.Is(err, coreai.ErrUpstream):
-		e = response.New(http.StatusBadGateway, "error.ai_unavailable").WithMsg("AI service is temporarily unavailable")
+		e = response.New(http.StatusBadGateway, "error.ai_unavailable")
 	default:
 		response.Fail(c, err) // 配置读取失败等：500，细节只进日志
 		return

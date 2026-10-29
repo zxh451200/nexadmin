@@ -1,8 +1,7 @@
 {
   "plugin_ldap": {
     "title": "LDAP/AD Login",
-    "description": "Directory login: LDAP is tried after local password fails",
-    "dir": "LDAP Login",
+    "description": "Free basic LDAP/AD login: LDAP is tried after local password fails. Install the plugin separately as needed.",
     "menu": "LDAP Config",
     "enabled": "Enable LDAP login",
     "host": "LDAP server",

@@ -20,7 +20,9 @@ import (
 	"gorm.io/gorm"
 
 	"nexadmin/core"
+	"nexadmin/core/ctl"
 	"nexadmin/core/database"
+	"nexadmin/core/migrate"
 	"nexadmin/core/plugin"
 )
 
@@ -496,6 +498,9 @@ func purgePluginData(root, id string, out io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("读取配置失败: %w", err)
 	}
+	if ctl.New(cfg, "", io.Discard).State().Running {
+		return errors.New("彻底清理插件前必须停止服务并备份数据库；请停服后通过 plugin remove --purge 执行")
+	}
 	db, err := database.Open(cfg.Database)
 	if err != nil {
 		return fmt.Errorf("连接数据库失败（未初始化？）: %w", err)
@@ -521,7 +526,7 @@ func purgePluginData(root, id string, out io.Writer) error {
 
 	total := 0
 	for i, t := range targets {
-		n, err := purgePluginTables(t, cfg.Database.Type, id, out)
+		n, err := purgePluginDatabase(t, id, out)
 		if err != nil {
 			return fmt.Errorf("清理表失败（目标 %d/%d）: %w", i+1, len(targets), err)
 		}
@@ -543,6 +548,62 @@ func purgePluginData(root, id string, out io.Writer) error {
 		fmt.Fprintf(out, "（清单缺失，菜单未清理，可在菜单管理里手动处理）")
 	}
 	fmt.Fprintln(out)
+	return nil
+}
+
+func purgePluginDatabase(db *gorm.DB, id string, out io.Writer) (int, error) {
+	if !plugin.ValidID(id) {
+		return 0, fmt.Errorf("非法的插件 id %q", id)
+	}
+	store, err := migrate.NewGormStore(db)
+	if err != nil {
+		return 0, err
+	}
+	unlock, ok, err := store.TryLock()
+	if err != nil {
+		return 0, err
+	}
+	if !ok {
+		return 0, errors.New("数据库正在迁移，不能清理插件")
+	}
+	defer unlock()
+	dropped := 0
+	run := func(tx *gorm.DB) error {
+		var err error
+		dropped, err = purgePluginTables(tx, store.Engine(), id, out)
+		if err != nil {
+			return err
+		}
+		return forgetPluginMigrations(tx, store.Engine(), id)
+	}
+	if store.Atomic() {
+		err = db.Transaction(run)
+	} else {
+		err = run(db)
+	}
+	return dropped, err
+}
+
+func forgetPluginMigrations(db *gorm.DB, engine, id string) error {
+	for _, record := range []struct{ table, column, value string }{
+		{migrate.Table, "scope", migrate.ScopePrefix + id},
+		{"sys_plugin_migration", "plugin_id", id},
+	} {
+		var count int64
+		query := "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?"
+		if engine == "postgres" {
+			query = "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = ?"
+		}
+		if err := db.Raw(query, record.table).Scan(&count).Error; err != nil {
+			return err
+		}
+		if count == 0 {
+			continue
+		}
+		if err := db.Exec("DELETE FROM "+record.table+" WHERE "+record.column+" = ?", record.value).Error; err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

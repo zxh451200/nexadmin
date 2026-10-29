@@ -9,7 +9,11 @@
   "pluginMgr": {
     "menu": "插件管理",
     "title": "插件管理",
-    "description": "已安装插件的版本与授权状态；授权文件导入后立即生效，无需重新编译",
+    "description": "已安装插件的版本与授权状态；支持热挂载的插件可在线启用，其余情况按提示重启",
+    "platformOnly": "仅平台超级管理员可管理插件和授权",
+    "restartRequired": "需重启生效",
+    "pendingHost": "等待域名校验",
+    "stopping": "等待旧任务退出",
     "tab": {
       "installed": "已安装",
       "market": "插件市场"
@@ -46,7 +50,7 @@
       "paste": "授权文本",
       "placeholder": "粘贴 .lic 文件内容",
       "tooLarge": "文件过大，请确认是授权文件",
-      "effective": "授权已导入并立即生效",
+      "effective": "授权已导入",
       "needRestart": "授权已导入，需重启服务后生效"
     },
     "empty": {

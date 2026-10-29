@@ -7,7 +7,7 @@ export const cards: DashboardCard[] = [
     id: 'formbuilder-pending',
     title: 'plugin_formbuilder.card.pending',
     perm: 'formbuilder:fill',
-    size: 'sm',
+    size: 'md',
     order: 220,
     component: lazy(() => import('./PendingFormsCard')),
   },

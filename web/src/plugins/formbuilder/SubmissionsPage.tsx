@@ -134,13 +134,12 @@ export default function SubmissionsPage() {
       <PageHeader
         title={meta?.name ?? t('plugin_formbuilder.btn.submission')}
         description={t('plugin_formbuilder.submissions.description')}
-        actions={
-          <Button variant="outline" onClick={back}>
-            <ArrowLeft aria-hidden="true" />
-            {t('common.back')}
-          </Button>
-        }
       />
+      {data?.truncated ? (
+        <p role="status" className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning">
+          {t('plugin_formbuilder.submissions.truncated')}
+        </p>
+      ) : null}
       <FilterBar
         onSearch={() => {
           setFilters(draft)
@@ -158,7 +157,7 @@ export default function SubmissionsPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={ALL}>
-              {t('plugin_formbuilder.fields.version')}: {t('plugin_formbuilder.all')}
+              {t('plugin_formbuilder.all')}
             </SelectItem>
             {(meta?.versions ?? []).map((v) => (
               <SelectItem key={v} value={String(v)}>
@@ -199,11 +198,6 @@ export default function SubmissionsPage() {
         />
         <DateRangePicker value={draft.range} onChange={(range) => setDraft((d) => ({ ...d, range }))} placeholder={t('plugin_formbuilder.submissions.submittedAt')} />
       </FilterBar>
-      {data?.truncated ? (
-        <p role="status" className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning">
-          {t('plugin_formbuilder.submissions.truncated')}
-        </p>
-      ) : null}
       <DataTable
         columns={columns}
         data={data?.list ?? []}
@@ -221,16 +215,22 @@ export default function SubmissionsPage() {
         }}
         emptyText={t('plugin_formbuilder.submissions.empty')}
         toolbar={
-          <Can perm="formbuilder:export">
-            <Button variant="outline" onClick={() => void onExport()}>
-              <Download aria-hidden="true" />
-              {t('plugin_formbuilder.submissions.exportXlsx')}
+          <>
+            <Button variant="outline" onClick={back}>
+              <ArrowLeft aria-hidden="true" />
+              {t('common.back')}
             </Button>
-            <Button variant="outline" disabled={exportJob.isPending} onClick={() => void onExportJob()}>
-              <FileDown aria-hidden="true" />
-              {t('plugin_formbuilder.submissions.exportJob')}
-            </Button>
-          </Can>
+            <Can perm="formbuilder:export">
+              <Button variant="outline" onClick={() => void onExport()}>
+                <Download aria-hidden="true" />
+                {t('plugin_formbuilder.submissions.exportXlsx')}
+              </Button>
+              <Button variant="outline" disabled={exportJob.isPending} onClick={() => void onExportJob()}>
+                <FileDown aria-hidden="true" />
+                {t('plugin_formbuilder.submissions.exportJob')}
+              </Button>
+            </Can>
+          </>
         }
         rowActions={(r) => (
           <>

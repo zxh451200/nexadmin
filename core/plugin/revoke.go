@@ -300,6 +300,7 @@ func (m *Manager) reapplyRevocationsLocked() {
 func (m *Manager) markRevokedLocked(e *entry, r RevokedEntry) {
 	prev := e.info.Status
 	e.info.Status, e.info.Reason = StatusRevoked, revokedReason(r)
+	m.syncLifecycleLocked(e)
 	if prev != StatusRevoked {
 		m.warnLocked("plugin license revoked, routes disabled",
 			zap.String("plugin", e.p.ID), zap.String("serial", r.Serial), zap.String("reason", r.Reason))

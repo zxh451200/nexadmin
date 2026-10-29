@@ -7,19 +7,13 @@ edition: pro
 requires_nexadmin: ">=0.1.0"
 menus:
   - parent: /
-    type: dir
-    title: plugin_workflow.dir
-    path: /workflow
-    icon: GitBranch
-    sort: 63
-  - parent: /workflow
     type: menu
     title: plugin_workflow.menu
     path: /workflow/center
     component: plugins/workflow/WorkflowPage
     perm: workflow:list
     icon: GitBranch
-    sort: 1
+    sort: 63
     keep_alive: true
   - parent: workflow:list
     type: button

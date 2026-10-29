@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -138,12 +139,34 @@ func AllowedRedirect(pc config.ProviderConf, redirect string) bool {
 	if redirect == "" {
 		return false
 	}
+	want := []string{redirect}
+	// 后台收敛到 /admin 前缀后，旧白名单里的 /login/oauth/... 仍然有效：
+	// 发起授权时任一形态命中即视为同一回调（回调落地后由服务端 301 到 /admin）。
+	if strings.Contains(redirect, adminPrefix+"/login/oauth/") {
+		want = append(want, withoutAdminPrefix(redirect))
+	} else if strings.Contains(redirect, "/login/oauth/") {
+		want = append(want, withAdminPrefix(redirect))
+	}
 	for _, u := range pc.RedirectURIs {
-		if u == redirect {
-			return true
+		for _, w := range want {
+			if u == w {
+				return true
+			}
 		}
 	}
 	return false
+}
+
+const adminPrefix = "/admin"
+
+// withAdminPrefix 给 /login/oauth/... 回调补上 /admin 前缀。
+func withAdminPrefix(u string) string {
+	return strings.Replace(u, "/login/oauth/", adminPrefix+"/login/oauth/", 1)
+}
+
+// withoutAdminPrefix 去掉 /admin 前缀，用于兼容旧配置。
+func withoutAdminPrefix(u string) string {
+	return strings.Replace(u, adminPrefix+"/login/oauth/", "/login/oauth/", 1)
 }
 
 func stateKey(state string) string {

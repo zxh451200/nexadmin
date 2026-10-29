@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/framework/request/http'
+import { clearActivePluginsCache } from './active'
 
 export type PluginEdition = 'free' | 'pro'
 export type PluginStatus = 'active' | 'unlicensed' | 'expired' | 'invalid' | 'revoked' | 'disabled'
@@ -23,6 +24,9 @@ export interface PluginInfo {
   /** ISO 时间；免费插件或未授权时为空 */
   expiresAt?: string | null
   reason?: string
+  needRestart?: boolean
+  pendingHost?: boolean
+  stopping?: boolean
 }
 
 const KEY = ['plugins', 'list'] as const
@@ -36,7 +40,10 @@ export function useImportLicense() {
   return useMutation({
     mutationFn: ({ id, content }: { id: string; content: string }) =>
       api.post<{ needRestart: boolean }>(`/plugins/${encodeURIComponent(id)}/license`, { content }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+    onSuccess: () => {
+      clearActivePluginsCache()
+      return qc.invalidateQueries({ queryKey: ['plugins'] })
+    },
   })
 }
 
@@ -130,12 +137,26 @@ export function useRebuildServer() {
   })
 }
 
-/** 服务是否已恢复（自重启等待用）；任何错误都视为未恢复。 */
-export async function serverAlive(): Promise<boolean> {
+export interface SystemStatus {
+  initialized: boolean
+  /** 每次进程启动不同；旧后端没有该字段 */
+  instanceId?: string
+}
+
+/** 服务状态；任何错误都视为未恢复。 */
+export async function serverState(): Promise<{ alive: boolean; instanceId?: string }> {
   try {
-    await api.get('/system/status')
-    return true
+    const s = await api.get<SystemStatus>('/system/status', undefined, { silent: true })
+    return { alive: true, instanceId: s.instanceId }
   } catch {
-    return false
+    return { alive: false }
   }
+}
+
+// 打开页面即记录，而不是等到重启后才取：否则可能把新进程误当成基线。
+const pageInstance = serverState().then((s) => (s.alive ? (s.instanceId ?? null) : null))
+
+/** 页面打开时所在进程的实例标识；重启后只有标识变化才算新进程就绪。 */
+export function pageInstanceId(): Promise<string | null> {
+  return pageInstance
 }

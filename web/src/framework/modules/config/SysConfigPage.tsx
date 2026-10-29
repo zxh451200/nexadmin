@@ -11,7 +11,6 @@ import { DataTable, type Column } from '@/framework/components/DataTable'
 import { DictTag } from '@/framework/components/DictTag'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { FormGrid, FormGridFull, FormLayout } from '@/framework/components/FormLayout'
-import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Button } from '@/framework/ui/button'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/framework/ui/form'
@@ -46,7 +45,7 @@ type FormValues = z.infer<typeof schema>
 const empty: FormValues = { name: '', key: '', value: '', type: 'string', isPublic: false, remark: '' }
 const ALL = 'all'
 
-export default function SysConfigPage() {
+export function ParamsSection() {
   const { t } = useTranslation()
   const confirm = useConfirm()
   const [page, setPage] = useState(1)
@@ -139,28 +138,8 @@ export default function SysConfigPage() {
   ]
 
   return (
-    <PageContainer>
-      <PageHeader
-        title={t('sysConfig.title')}
-        description={t('sysConfig.description')}
-        actions={
-          <>
-            <Can perm="config:update">
-              <Button type="button" variant="outline" onClick={refreshCache} disabled={refresh.isPending}>
-                <RefreshCw className="me-2 h-4 w-4" aria-hidden="true" />
-                {t('sysConfig.refreshCache')}
-              </Button>
-            </Can>
-            <Can perm="config:create">
-              <Button type="button" onClick={() => openForm(null)}>
-                <Plus className="me-2 h-4 w-4" aria-hidden="true" />
-                {t('common.add')}
-              </Button>
-            </Can>
-          </>
-        }
-      />
-
+    <div className="flex flex-col gap-4">
+      <p className="text-sm text-muted-foreground">{t('sysConfig.description')}</p>
       <UploadLimitCard />
 
       <FilterBar
@@ -198,6 +177,22 @@ export default function SysConfigPage() {
       </FilterBar>
 
       <DataTable<ConfigRow>
+        toolbar={
+          <>
+            <Can perm="config:update">
+              <Button type="button" variant="outline" onClick={refreshCache} disabled={refresh.isPending}>
+                <RefreshCw className="me-2 h-4 w-4" aria-hidden="true" />
+                {t('sysConfig.refreshCache')}
+              </Button>
+            </Can>
+            <Can perm="config:create">
+              <Button type="button" onClick={() => openForm(null)}>
+                <Plus className="me-2 h-4 w-4" aria-hidden="true" />
+                {t('common.add')}
+              </Button>
+            </Can>
+          </>
+        }
         columns={columns}
         data={data?.list ?? []}
         rowKey="id"
@@ -365,6 +360,6 @@ export default function SysConfigPage() {
           </FormLayout>
         </Form>
       </ResponsiveDialog>
-    </PageContainer>
+    </div>
   )
 }

@@ -58,7 +58,9 @@ export function AiWriteButton({ target, format, getText, getBrief, onResult, cla
     let text = mode === 'polish' ? before : plain
     if (mode === 'write' && !text) text = (getBrief ? htmlToText(getBrief()) : '').trim()
     if (!text.trim()) {
-      toast.warning(t(target === 'body' && mode === 'write' ? 'ai.write.emptyBody' : 'ai.write.empty'))
+      // 两个菜单项缺的东西不一样：起草缺「要点」，润色缺「内容」。
+      // 共用一句会让来回点的人以为点串了；固定 id 让重复点击替换同一条提示而不是叠一摞。
+      toast.warning(t(mode === 'polish' ? 'ai.write.emptyPolish' : 'ai.write.emptyDraft'), { id: 'ai-write-empty' })
       return
     }
     setLoading(true)

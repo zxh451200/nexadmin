@@ -1,6 +1,10 @@
 {
   "loginLog": {
     "menu": "登录日志",
+    "view": {
+      "logs": "日志",
+      "stats": "统计"
+    },
     "description": "记录账号的登录结果；失败原因只显示分类，详细原因仅保存在服务端日志",
     "col": {
       "username": "账号",
@@ -19,7 +23,8 @@
       "type": "登录方式",
       "status": "状态",
       "time": "时间范围",
-      "allTypes": "全部方式"
+      "allTypes": "全部方式",
+      "allStatus": "全部状态"
     },
     "type": {
       "password": "账号密码",
@@ -50,6 +55,26 @@
       "done": "已导出到文件",
       "tooMany": "导出行数超过上限，请缩小筛选范围（如时间范围），或使用导出中心",
       "filename": "登录日志"
+    },
+    "stats": {
+      "rangeLabel": "时间范围",
+      "ranges": {
+        "7d": "近 7 天",
+        "30d": "近 30 天",
+        "90d": "近 90 天",
+        "all": "全部"
+      },
+      "total": "登录总数",
+      "failures": "登录失败",
+      "types": "登录方式数",
+      "reasons": "失败原因数",
+      "sampled": "数据量较大，统计基于最近 20000 条明细。",
+      "daily": "按天趋势",
+      "hourly": "时段分布",
+      "topReasons": "失败原因 Top",
+      "topTypes": "登录方式 Top",
+      "topBrowsers": "浏览器 Top",
+      "noFailures": "所选区间没有失败登录"
     }
   }
 }

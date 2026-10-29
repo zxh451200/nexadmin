@@ -1,4 +1,4 @@
-// Package cron 是 NexAdmin 官方示例付费插件「定时任务」：任务 CRUD、5 段 cron 调度、
+// Package cron 是 NexAdmin 官方免费插件「定时任务」：任务 CRUD、5 段 cron 调度、
 // 立即执行、失败重试、执行日志。遵守设计文档 §19：只依赖 core/ 与 pkg/，
 // 表前缀 plg_cron_，权限码前缀 cron:，接口路径 /api/v1/plugins/cron/...。
 package cron
@@ -18,7 +18,7 @@ var _ plugin.Starter = (*module)(nil)
 
 func init() {
 	plugin.Register(plugin.Plugin{
-		ID: "cron", Name: "定时任务", Version: "1.0.0", Edition: plugin.Pro,
+		ID: "cron", Name: "定时任务", Version: "1.0.0", Edition: plugin.Free,
 		Module: &module{},
 	})
 }

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { EmptyState } from '@/framework/components/EmptyState'
 import { Badge } from '@/framework/ui/badge'
+import { cardSurface } from '@/framework/ui/card'
 import { cn } from '@/lib/utils'
 import type { GenFile, GenOutput } from './api'
 
@@ -31,7 +32,7 @@ export function PreviewStep({ output }: Props) {
 
   return (
     <div className="flex flex-col gap-4">
-      <ul className="flex flex-col gap-1 rounded-lg border border-border bg-card p-3 text-sm text-muted-foreground">
+      <ul className={cn(cardSurface, 'flex flex-col gap-1 p-3 text-sm text-muted-foreground')}>
         {output.notes.map((n) => (
           <li key={n.code}>
             {t(`plugin_codegen.notes.${n.code}`)}
@@ -48,7 +49,7 @@ export function PreviewStep({ output }: Props) {
           onRowClick={(f) => setCurrent(f.path)}
           emptyText={t('plugin_codegen.preview.empty')}
         />
-        <section className="min-w-0 overflow-hidden rounded-lg border border-border bg-card" aria-label={t('plugin_codegen.preview.viewer')}>
+        <section className={cn(cardSurface, 'min-w-0 overflow-hidden')} aria-label={t('plugin_codegen.preview.viewer')}>
           {file ? (
             <>
               <header className="flex items-center gap-2 border-b border-border bg-muted/50 px-3 py-2">

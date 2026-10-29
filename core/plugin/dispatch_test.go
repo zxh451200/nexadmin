@@ -5,11 +5,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
 	"nexadmin/core"
+	"nexadmin/core/auth"
 )
 
 type hotModule struct{ started chan struct{} }
@@ -28,8 +30,9 @@ func (h hotModule) Start(context.Context, *core.Deps) error { close(h.started); 
 func TestHotMountDispatch(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	hm := hotModule{started: make(chan struct{})}
-	m := newManager(nil, Options{})
-	e := &entry{p: Plugin{ID: "cron", Edition: Pro, Module: hm}}
+	m := newManager(nil, Options{Root: t.TempDir()})
+	t.Cleanup(m.stop)
+	e := &entry{p: Plugin{ID: "cron", Edition: Pro, Module: hm}, hotSafe: true, info: Info{Status: StatusActive}}
 	m.entries["cron"] = e
 	d := &core.Deps{Log: zap.NewNop()}
 	if err := m.buildSub(e, d); err != nil {
@@ -37,12 +40,16 @@ func TestHotMountDispatch(t *testing.T) {
 	}
 	select {
 	case <-hm.started:
-	default:
+	case <-time.After(time.Second):
 		t.Fatal("Starter was not called")
 	}
 
 	root := gin.New()
-	api := root.Group("/api/v1", func(c *gin.Context) { c.Set("user", "alice"); c.Next() })
+	api := root.Group("/api/v1", func(c *gin.Context) {
+		c.Set("user", "alice")
+		auth.SetClaims(c, &auth.Claims{UserID: 1})
+		c.Next()
+	})
 	api.GET("/plugins", func(c *gin.Context) { c.String(200, "list") })
 	api.POST("/plugins/other/license", func(c *gin.Context) { c.String(200, "other-license") })
 	api.Any("/plugins/cron/*rest", func(c *gin.Context) { m.Dispatch(c, "cron") })

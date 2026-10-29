@@ -22,17 +22,19 @@ type Type struct {
 func (Type) TableName() string { return "sys_dict_type" }
 
 // Data 对应表 sys_dict_data，JSON 字段与前端 DictDataRow 一致。
-// 列名 dict_label / dict_value 避开各引擎的关键字；LabelEn 供 GET /dicts/:code/items 按语言返回，不出现在管理接口里。
+// 列名 dict_label / dict_value 避开各引擎的关键字。
+// 译文走 i18n_json（统一契约 pkg/i18n）；LabelEn 是升级前的老列，只读不写，作为英文兜底。
 type Data struct {
 	database.PlatformModel
-	TypeID  idgen.ID `gorm:"not null" json:"typeId"`
-	Label   string   `gorm:"column:dict_label;size:100;not null" json:"label"`
-	LabelEn string   `gorm:"size:100;not null" json:"-"`
-	Value   string   `gorm:"column:dict_value;size:100;not null" json:"value"`
-	Tag     string   `gorm:"size:20;not null" json:"tag"` // default|success|warning|destructive|info
-	Sort    int      `gorm:"not null" json:"sort"`
-	Status  string   `gorm:"size:1;not null" json:"status"`
-	Remark  string   `gorm:"size:500;not null" json:"remark,omitempty"`
+	TypeID   idgen.ID `gorm:"not null" json:"typeId"`
+	Label    string   `gorm:"column:dict_label;size:100;not null" json:"label"`
+	LabelEn  string   `gorm:"size:100;not null" json:"-"`
+	I18nJSON string   `gorm:"type:text" json:"i18nJson"`
+	Value    string   `gorm:"column:dict_value;size:100;not null" json:"value"`
+	Tag      string   `gorm:"size:20;not null" json:"tag"` // default|success|warning|destructive|info
+	Sort     int      `gorm:"not null" json:"sort"`
+	Status   string   `gorm:"size:1;not null" json:"status"`
+	Remark   string   `gorm:"size:500;not null" json:"remark,omitempty"`
 }
 
 // TableName 指定表名。
@@ -49,13 +51,14 @@ type TypeInput struct {
 
 // DataInput 是字典数据的新增/修改请求体。
 type DataInput struct {
-	TypeID idgen.ID `json:"typeId" binding:"required"`
-	Label  string   `json:"label" binding:"required,max=100"`
-	Value  string   `json:"value" binding:"required,max=100"`
-	Tag    string   `json:"tag" binding:"omitempty,oneof=default success warning destructive info"`
-	Sort   int      `json:"sort"`
-	Status string   `json:"status" binding:"omitempty,oneof=0 1"`
-	Remark string   `json:"remark" binding:"max=500"`
+	TypeID   idgen.ID `json:"typeId" binding:"required"`
+	Label    string   `json:"label" binding:"required,max=100"`
+	I18nJSON string   `json:"i18nJson"`
+	Value    string   `json:"value" binding:"required,max=100"`
+	Tag      string   `json:"tag" binding:"omitempty,oneof=default success warning destructive info"`
+	Sort     int      `json:"sort"`
+	Status   string   `json:"status" binding:"omitempty,oneof=0 1"`
+	Remark   string   `json:"remark" binding:"max=500"`
 }
 
 // ListQuery 是两个列表接口共用的查询参数（typeId 仅字典数据用）。

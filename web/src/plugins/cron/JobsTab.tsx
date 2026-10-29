@@ -125,7 +125,7 @@ export function JobsTab({ onViewLogs }: Props) {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_cron.fields.handler')}: {t('plugin_cron.all')}</SelectItem>
+            <SelectItem value={ALL}>{t('plugin_cron.all')}</SelectItem>
             {handlers.map((h) => (
               <SelectItem key={h.name} value={h.name}>
                 {handlerLabel(h.name)}
@@ -138,13 +138,12 @@ export function JobsTab({ onViewLogs }: Props) {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_cron.fields.enabled')}: {t('plugin_cron.all')}</SelectItem>
+            <SelectItem value={ALL}>{t('plugin_cron.all')}</SelectItem>
             <SelectItem value="1">{t('plugin_cron.enabledOn')}</SelectItem>
             <SelectItem value="0">{t('plugin_cron.enabledOff')}</SelectItem>
           </SelectContent>
         </Select>
       </FilterBar>
-
       <DataTable
         columns={columns}
         data={data?.list ?? []}

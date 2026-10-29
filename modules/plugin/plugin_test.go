@@ -18,6 +18,7 @@ import (
 
 	"nexadmin/core"
 	"nexadmin/core/auth"
+	"nexadmin/core/middleware"
 	coreplugin "nexadmin/core/plugin"
 	"nexadmin/core/response"
 )
@@ -26,6 +27,7 @@ const (
 	proID    = "demo-pro"
 	otherID  = "demo-other"
 	freeID   = "demo-free"
+	hotID    = "demo-hot"
 	noPlugin = "demo-missing"
 )
 
@@ -48,7 +50,7 @@ func mount(t *testing.T) *coreplugin.Manager {
 		if err != nil {
 			t.Fatal(err)
 		}
-		for id, ed := range map[string]string{proID: "pro", otherID: "pro", freeID: "pro"} {
+		for id, ed := range map[string]string{proID: "pro", otherID: "pro", freeID: "pro", hotID: "pro"} {
 			dir := filepath.Join(root, "plugins", id)
 			if err := os.MkdirAll(dir, 0o755); err != nil {
 				t.Fatal(err)
@@ -66,6 +68,7 @@ func mount(t *testing.T) *coreplugin.Manager {
 		coreplugin.Register(coreplugin.Plugin{ID: proID, Version: "1.0.0", Edition: coreplugin.Pro, Module: fakeModule{}})
 		coreplugin.Register(coreplugin.Plugin{ID: otherID, Version: "1.0.0", Edition: coreplugin.Pro, Module: fakeModule{}})
 		coreplugin.Register(coreplugin.Plugin{ID: freeID, Version: "1.0.0", Edition: coreplugin.Free, Module: fakeModule{}})
+		coreplugin.Register(coreplugin.Plugin{ID: hotID, Version: "1.0.0", Edition: coreplugin.Pro, Module: httpPlugin{}})
 		coreplugin.Mount(nil, coreplugin.Options{
 			Root: root, Keys: []coreplugin.Key{{KID: coreplugin.KeyID(pub), Pub: pub}}, Hosts: []string{},
 		})
@@ -159,7 +162,7 @@ func api(t *testing.T, cl *auth.Claims, method, path, body string) *httptest.Res
 	if cl != nil {
 		g.Use(func(c *gin.Context) { auth.SetClaims(c, cl) })
 	}
-	module{}.Register(g, &core.Deps{})
+	module{}.Register(g.Group("", middleware.RequireLogin()), &core.Deps{Public: g})
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(method, "/api/v1"+path, bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -168,7 +171,7 @@ func api(t *testing.T, cl *auth.Claims, method, path, body string) *httptest.Res
 }
 
 func TestPermissionBoundaries(t *testing.T) {
-	super := &auth.Claims{Super: true}
+	super := &auth.Claims{UserID: 1, Super: true}
 	listOnly := &auth.Claims{Principal: auth.PrincipalApp, Perms: []string{PermList}}
 	none := &auth.Claims{Principal: auth.PrincipalApp}
 	licenseURL := "/plugins/" + proID + "/license"
@@ -189,8 +192,8 @@ func TestPermissionBoundaries(t *testing.T) {
 			t.Errorf("导入 %d", w.Code)
 		}
 	})
-	t.Run("只有 plugin:list：能看列表，不能导入授权", func(t *testing.T) {
-		if w := api(t, listOnly, http.MethodGet, "/plugins", ""); w.Code != http.StatusOK {
+	t.Run("应用即使有 plugin:list 也不能读取授权详情", func(t *testing.T) {
+		if w := api(t, listOnly, http.MethodGet, "/plugins", ""); w.Code != http.StatusForbidden {
 			t.Errorf("列表 %d", w.Code)
 		}
 		if w := api(t, listOnly, http.MethodPost, licenseURL, `{"content":"x"}`); w.Code != http.StatusForbidden {

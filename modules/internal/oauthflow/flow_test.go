@@ -273,3 +273,19 @@ func TestBindTokenTriesAndExpiry(t *testing.T) {
 		t.Fatal("expired token must be invalid")
 	}
 }
+
+// 后台收敛到 /admin 后，客户端发送带前缀的回调地址；旧配置里的无前缀白名单仍然放行，
+// 反向也兼容（新白名单 + 旧客户端）。
+func TestRedirectWhitelistAcceptsAdminPrefix(t *testing.T) {
+	legacy := "https://admin.example.com/login/oauth/oidc"
+	prefixed := "https://admin.example.com/admin/login/oauth/oidc"
+	if !AllowedRedirect(config.ProviderConf{RedirectURIs: []string{legacy}}, prefixed) {
+		t.Error("legacy whitelist should accept admin-prefixed redirect")
+	}
+	if !AllowedRedirect(config.ProviderConf{RedirectURIs: []string{prefixed}}, legacy) {
+		t.Error("admin-prefixed whitelist should accept legacy redirect")
+	}
+	if AllowedRedirect(config.ProviderConf{RedirectURIs: []string{prefixed}}, "https://evil.example.com/admin/login/oauth/oidc") {
+		t.Error("host mismatch must still be rejected")
+	}
+}

@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react'
 import { Pencil, Plus, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
+import { usePermission } from '@/framework/auth/usePermission'
 import { DictTag } from '@/framework/components/DictTag'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { SimpleFilterBar } from '@/framework/components/SimpleFilterBar'
@@ -11,12 +13,18 @@ import { TreeTable } from '@/framework/components/TreeTable'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import type { Column } from '@/framework/components/table/types'
 import { Button } from '@/framework/ui/button'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/framework/ui/tabs'
+import { PostSection } from '@/framework/modules/post/PostPage'
 import { countDescendants, isTrimmed, useDeleteDept, useDeptTree, useSortDepts, type SysDept } from './api'
 import { DeptFormDialog } from './DeptFormDialog'
 
 export default function DeptPage() {
   const { t } = useTranslation()
   const confirm = useConfirm()
+  const { has } = usePermission()
+  const [params, setParams] = useSearchParams()
+  const tab = params.get('tab') === 'post' ? 'post' : 'dept'
+  const setTab = (v: string) => setParams(v === 'post' ? { tab: 'post' } : {}, { replace: true })
   const { data = [], isLoading } = useDeptTree()
   // 被数据范围裁剪的树只含部分同级，整体排序会得到 409，裁剪时不提供拖动排序
   const trimmed = useMemo(() => isTrimmed(data), [data])
@@ -63,6 +71,9 @@ export default function DeptPage() {
     }
   }
 
+  const canDrag = !(filter.active || trimmed)
+  const sortColumn: Column<SysDept> = { key: 'sort', title: t('dept.col.sort'), align: 'end', render: (r) => <span className="num">{r.sort}</span> }
+
   const columns: Column<SysDept>[] = [
     {
       key: 'name',
@@ -73,16 +84,24 @@ export default function DeptPage() {
     { key: 'leaderName', title: t('dept.col.leader'), mobile: 'sub' },
     { key: 'phone', title: t('dept.col.phone') },
     { key: 'email', title: t('dept.col.email') },
-    { key: 'sort', title: t('dept.col.sort'), align: 'end', render: (r) => <span className="num">{r.sort}</span> },
+    // 拖拽可用时排序由拖动承担，再摆一列数字等于两套机制；只在拖拽被筛选禁用时露出来
+    ...(canDrag ? [] : [sortColumn]),
     { key: 'status', title: t('dept.col.status'), render: (r) => <DictTag dict="sys_status" value={r.status} /> },
   ]
 
   return (
     <PageContainer>
-      <PageHeader
-        title={t('dept.menu')}
-        description={t('dept.description')}
-        actions={
+      <PageHeader title={t('dept.menu')} description={t('dept.description')} />
+      <Tabs value={tab} onValueChange={setTab}>
+        {/* 岗位是三五条的查找表，和部门同属组织架构：并成一个页面，少一个一级菜单 */}
+        <TabsList className="w-fit">
+          <TabsTrigger value="dept">{t('dept.tabs.tree')}</TabsTrigger>
+          {has('post:list') ? <TabsTrigger value="post">{t('dept.tabs.post')}</TabsTrigger> : null}
+        </TabsList>
+        <TabsContent value="dept">
+      <SimpleFilterBar filter={filter} placeholder={t('dept.col.name')} />
+      <TreeTable<SysDept>
+        toolbar={
           <Can perm="dept:create">
             <Button type="button" onClick={() => openCreate(null)}>
               <Plus className="me-2 size-4" aria-hidden="true" />
@@ -90,9 +109,6 @@ export default function DeptPage() {
             </Button>
           </Can>
         }
-      />
-      <SimpleFilterBar filter={filter} placeholder={t('dept.col.name')} />
-      <TreeTable<SysDept>
         columns={columns}
         data={shown}
         loading={isLoading}
@@ -129,6 +145,11 @@ export default function DeptPage() {
         defaultParentId={parentId}
         tree={data}
       />
+        </TabsContent>
+        <TabsContent value="post">
+          <PostSection />
+        </TabsContent>
+      </Tabs>
     </PageContainer>
   )
 }

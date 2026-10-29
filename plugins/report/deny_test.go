@@ -11,7 +11,7 @@ func TestDeniedTableVariants(t *testing.T) {
 		"sys_user", "SYS_USER", "Sys_User", " sys_user ", "`sys_user`", `"sys_user"`, "[sys_user]", "'sys_user'",
 		"public.sys_user", `"public"."sys_user"`, "`db`.`SYS_CONFIG`", "dbo.[sys_config]",
 		"sys_config", "sys_setting", "sys_pat", "sys_openapi_app", "sys_webhook", "sys_sso_app", "sys_tenant",
-		"sys_role", "sys_menu", "sys_oper_log", "sys_file", "sys_user_identity",
+		"sys_role", "sys_menu", "sys_file", "sys_user_identity", "sys_oper_log_backup",
 		"plg_report_dataset", "PLG_REPORT_SCREEN",
 		"information_schema.columns", "pg_catalog.pg_shadow", "pg_user", "mysql.user", "performance_schema.users",
 		"sqlite_master", "gorm_migrations", "schema_migrations", "app_secrets", "oauth_tokens", "user_credentials",
@@ -22,7 +22,7 @@ func TestDeniedTableVariants(t *testing.T) {
 			t.Errorf("deniedTable(%q) = false, want true", s)
 		}
 	}
-	for _, s := range []string{"plg_cron_job", "plg_cron_log", "sys_login_log", "biz_order", "SYS_LOGIN_LOG"} {
+	for _, s := range []string{"plg_cron_job", "plg_cron_log", "sys_login_log", "sys_oper_log", "sys_send_log", "sys_client_error", "biz_order", "SYS_LOGIN_LOG"} {
 		// SYS_LOGIN_LOG 归一化后是被放行的 sys_login_log；严格标识符校验会另外拒绝大写（见 TestIdentStrict）。
 		if deniedTable(s) {
 			t.Errorf("deniedTable(%q) = true, want false", s)
@@ -73,7 +73,7 @@ func TestDefaultSourcesAreValidAndSafe(t *testing.T) {
 	if len(warned) > 0 {
 		t.Fatalf("default sources rejected: %v", warned)
 	}
-	want := []string{"plg_cron_job", "plg_cron_log", "sys_login_log"}
+	want := []string{"plg_cron_job", "plg_cron_log", "plg_pay_order", "sys_client_error", "sys_login_log", "sys_oper_log", "sys_send_log"}
 	got := reg.List()
 	if len(got) != len(want) {
 		t.Fatalf("default sources = %d, want %d", len(got), len(want))
@@ -120,31 +120,31 @@ func okSrc() rawSource {
 func TestConfigCannotBypassDenyList(t *testing.T) {
 	mut := func(f func(*rawSource)) rawSource { s := okSrc(); f(&s); return s }
 	cases := map[string]rawSource{
-		"sys_user":            mut(func(s *rawSource) { s.Table = "sys_user" }),
-		"sys_user upper":      mut(func(s *rawSource) { s.Table = "SYS_USER" }),
-		"sys_user backtick":   mut(func(s *rawSource) { s.Table = "`sys_user`" }),
-		"sys_user schema":     mut(func(s *rawSource) { s.Table = "public.sys_user" }),
-		"sys_config":          mut(func(s *rawSource) { s.Table = "sys_config" }),
-		"sys_oper_log":        mut(func(s *rawSource) { s.Table = "sys_oper_log" }), // sys_ 里只有 sys_login_log 被硬编码放行
-		"own table":           mut(func(s *rawSource) { s.Table = "plg_report_dataset" }),
-		"information_schema":  mut(func(s *rawSource) { s.Table = "information_schema" }),
-		"password column":     mut(func(s *rawSource) { s.Columns = append(s.Columns, rawColumn{Name: "password", Type: TypeString}) }),
-		"hash column":         mut(func(s *rawSource) { s.Columns = append(s.Columns, rawColumn{Name: "password_hash", Type: TypeString}) }),
-		"token column":        mut(func(s *rawSource) { s.Columns = append(s.Columns, rawColumn{Name: "refresh_token", Type: TypeString}) }),
-		"secret column":       mut(func(s *rawSource) { s.Columns = append(s.Columns, rawColumn{Name: "app_secret", Type: TypeString}) }),
-		"upper column":        mut(func(s *rawSource) { s.Columns = append(s.Columns, rawColumn{Name: "Status", Type: TypeString}) }),
-		"quoted column":       mut(func(s *rawSource) { s.Columns = append(s.Columns, rawColumn{Name: "`status`", Type: TypeString}) }),
-		"qualified column":    mut(func(s *rawSource) { s.Columns = append(s.Columns, rawColumn{Name: "t.status", Type: TypeString}) }),
-		"injection column":    mut(func(s *rawSource) { s.Columns = append(s.Columns, rawColumn{Name: "a;drop table x", Type: TypeString}) }),
-		"unknown type":        mut(func(s *rawSource) { s.Columns[0].Type = "blob" }),
-		"no tenant column":    mut(func(s *rawSource) { s.TenantColumn = "" }),
-		"tenant selectable":   mut(func(s *rawSource) { s.Columns = append(s.Columns, rawColumn{Name: "tenant_id", Type: TypeNumber}) }),
-		"global with tenant":  mut(func(s *rawSource) { s.Global = true }),
-		"bad tenant column":   mut(func(s *rawSource) { s.TenantColumn = "tenant_id or 1=1" }),
-		"bad owner column":    mut(func(s *rawSource) { s.OwnerColumn = "created_by`" }),
-		"denied owner column": mut(func(s *rawSource) { s.OwnerColumn = "api_token" }),
-		"no columns":          mut(func(s *rawSource) { s.Columns = nil }),
-		"duplicate column":    mut(func(s *rawSource) { s.Columns = append(s.Columns, s.Columns[0]) }),
+		"sys_user":             mut(func(s *rawSource) { s.Table = "sys_user" }),
+		"sys_user upper":       mut(func(s *rawSource) { s.Table = "SYS_USER" }),
+		"sys_user backtick":    mut(func(s *rawSource) { s.Table = "`sys_user`" }),
+		"sys_user schema":      mut(func(s *rawSource) { s.Table = "public.sys_user" }),
+		"sys_config":           mut(func(s *rawSource) { s.Table = "sys_config" }),
+		"sys_webhook_delivery": mut(func(s *rawSource) { s.Table = "sys_webhook_delivery" }), // 投递记录带回调地址，仍未放行
+		"own table":            mut(func(s *rawSource) { s.Table = "plg_report_dataset" }),
+		"information_schema":   mut(func(s *rawSource) { s.Table = "information_schema" }),
+		"password column":      mut(func(s *rawSource) { s.Columns = append(s.Columns, rawColumn{Name: "password", Type: TypeString}) }),
+		"hash column":          mut(func(s *rawSource) { s.Columns = append(s.Columns, rawColumn{Name: "password_hash", Type: TypeString}) }),
+		"token column":         mut(func(s *rawSource) { s.Columns = append(s.Columns, rawColumn{Name: "refresh_token", Type: TypeString}) }),
+		"secret column":        mut(func(s *rawSource) { s.Columns = append(s.Columns, rawColumn{Name: "app_secret", Type: TypeString}) }),
+		"upper column":         mut(func(s *rawSource) { s.Columns = append(s.Columns, rawColumn{Name: "Status", Type: TypeString}) }),
+		"quoted column":        mut(func(s *rawSource) { s.Columns = append(s.Columns, rawColumn{Name: "`status`", Type: TypeString}) }),
+		"qualified column":     mut(func(s *rawSource) { s.Columns = append(s.Columns, rawColumn{Name: "t.status", Type: TypeString}) }),
+		"injection column":     mut(func(s *rawSource) { s.Columns = append(s.Columns, rawColumn{Name: "a;drop table x", Type: TypeString}) }),
+		"unknown type":         mut(func(s *rawSource) { s.Columns[0].Type = "blob" }),
+		"no tenant column":     mut(func(s *rawSource) { s.TenantColumn = "" }),
+		"tenant selectable":    mut(func(s *rawSource) { s.Columns = append(s.Columns, rawColumn{Name: "tenant_id", Type: TypeNumber}) }),
+		"global with tenant":   mut(func(s *rawSource) { s.Global = true }),
+		"bad tenant column":    mut(func(s *rawSource) { s.TenantColumn = "tenant_id or 1=1" }),
+		"bad owner column":     mut(func(s *rawSource) { s.OwnerColumn = "created_by`" }),
+		"denied owner column":  mut(func(s *rawSource) { s.OwnerColumn = "api_token" }),
+		"no columns":           mut(func(s *rawSource) { s.Columns = nil }),
+		"duplicate column":     mut(func(s *rawSource) { s.Columns = append(s.Columns, s.Columns[0]) }),
 	}
 	for name, rs := range cases {
 		if _, err := buildSource(rs); err == nil {

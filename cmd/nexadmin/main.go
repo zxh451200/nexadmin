@@ -55,6 +55,8 @@ const usage = `用法:
                       把已安装插件打成发行包（plugin.yaml + backend/ + web/ 的 zip，与 install 输入格式互逆）
   nexadmin plugin verify --sig <签名文件> --key <公钥文件> <zip>
                       校验官网市场下载包的 ed25519 签名
+  nexadmin plugin lint <插件目录（含 plugin.yaml）>
+                      上架前自检：清单校验、迁移三方言齐全、菜单权限码前缀
   nexadmin upgrade --from <源码包目录或zip> [--to <版本>] [--dry-run] [--manifest .nexadmin.manifest.json] [--allow-dirty]
   nexadmin new <名称> [--out <目录,默认 ../名称>] [--module <go模块路径,默认 名称>] [--with-plugins] [--git]
   nexadmin add module <名称> [--fields "title:string,status:dict(sys_status),sort:int,cover:image,published_at:datetime,owner_id:ref(user)"] [--sortable]
@@ -102,6 +104,8 @@ func run(args []string, out io.Writer) error {
 		return cmdPack(rest, out)
 	case "verify":
 		return cmdVerify(rest, out)
+	case "lint":
+		return cmdLint(rest, out)
 	}
 	return errors.New(usage)
 }

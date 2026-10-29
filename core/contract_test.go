@@ -17,6 +17,8 @@ func contractGolden(t *testing.T, name, got string) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Windows 检出会把 golden 转成 CRLF：比较前归一化，内容仍严格一致才通过。
+	want = []byte(strings.ReplaceAll(string(want), "\r\n", "\n"))
 	if string(want) != got {
 		t.Fatalf("contract %s changed; update reviewed golden and framework version\n%s", name, got)
 	}

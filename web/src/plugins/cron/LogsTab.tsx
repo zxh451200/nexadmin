@@ -182,7 +182,7 @@ export function LogsTab({ jobId, onJobChange }: Props) {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_cron.fields.job')}: {t('plugin_cron.all')}</SelectItem>
+            <SelectItem value={ALL}>{t('plugin_cron.all')}</SelectItem>
             {(jobs?.list ?? []).map((j) => (
               <SelectItem key={j.id} value={j.id}>
                 {j.name}
@@ -195,7 +195,7 @@ export function LogsTab({ jobId, onJobChange }: Props) {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_cron.fields.status')}: {t('plugin_cron.all')}</SelectItem>
+            <SelectItem value={ALL}>{t('plugin_cron.all')}</SelectItem>
             {STATUSES.map((s) => (
               <SelectItem key={s} value={s}>
                 {t(`plugin_cron.status.${s}`)}
@@ -204,7 +204,6 @@ export function LogsTab({ jobId, onJobChange }: Props) {
           </SelectContent>
         </Select>
       </FilterBar>
-
       <DataTable
         columns={columns}
         data={data?.list ?? []}

@@ -12,6 +12,9 @@ import (
 // 管理端改过的内容不会被 seed 覆盖（只在空表时写入）。每种内容都带 en-US 出厂译文；
 // 老版本升级上来的库由 ensureSeedI18n 只补空白译文（已有译文不动）。
 
+// seedVersion 是当前出厂内容版本：新增出厂条目时 +1，并在 ensureSeedBackfill 里补种。
+const seedVersion = 4
+
 func enText(fields map[string]string) string {
 	return i18nJSON(map[string]map[string]string{"en-US": fields})
 }
@@ -28,6 +31,7 @@ func defaultSetting() Setting {
 		SeoKeywords:   "NexAdmin,后台管理框架,Gin,React,多租户,RBAC,插件,开源",
 		FooterNote:    "框架区源码以 MIT 许可开源；业务与插件代码归各自作者。",
 		MarketEnabled: true,
+		SeedVersion:   seedVersion,
 		I18nJSON: enText(map[string]string{
 			"siteDesc":     "A source-delivered admin framework: Gin + GORM on the backend, React + shadcn/ui on the frontend, shipped as a single production binary.",
 			"homeTitle":    "The full-stack framework" + "\n" + "built for production admin",
@@ -41,7 +45,7 @@ func defaultSetting() Setting {
 
 func defaultNavs() []Nav {
 	return []Nav{
-		{Label: "能力", Href: "#features", Sort: 10, Enabled: true, I18nJSON: enText(map[string]string{"label": "Capabilities"})},
+		{Label: "首页", Href: "/", Sort: 5, Enabled: true, I18nJSON: enText(map[string]string{"label": "Home"})},
 		{Label: "动态", Href: "/news", Sort: 20, Enabled: true, I18nJSON: enText(map[string]string{"label": "News"})},
 		{Label: "关于", Href: "/p/about", Sort: 30, Enabled: true, I18nJSON: enText(map[string]string{"label": "About"})},
 	}
@@ -260,6 +264,56 @@ func ensureSeedI18n(ctx context.Context, s *Service, log *zap.Logger) {
 			}
 		}
 	}
+}
+
+// ensureSeedBackfill 给升级上来的库补种新增的出厂新闻（目前是第 3 篇）。
+// 只在 seed_version 落后时执行一次：管理员之后删掉的条目不会被反复复活。
+func ensureSeedBackfill(ctx context.Context, s *Service, log *zap.Logger) {
+	warn := func(what string, err error) {
+		if err != nil && log != nil {
+			log.Warn("website: seed backfill failed", zap.String("step", what), zap.Error(err))
+		}
+	}
+	set, err := s.Settings(ctx)
+	if err != nil {
+		warn("settings", err)
+		return
+	}
+	if set.SeedVersion >= seedVersion {
+		return
+	}
+	// v3：顶层导航加「首页」，并把出厂的「能力」改名为「产品」（管理员改过则不动）。
+	var homes int64
+	if err := s.db.WithContext(ctx).Model(&Nav{}).Where("href = ?", "/").Count(&homes).Error; err == nil && homes == 0 {
+		home := defaultNavs()[0]
+		home.ID = 0
+		warn("nav home", s.db.WithContext(ctx).Create(&home).Error)
+	}
+	var feat Nav
+	if err := s.db.WithContext(ctx).Where("href = ? AND label IN ?", "#features", []string{"能力", "产品"}).First(&feat).Error; err == nil {
+		// 首页内锚点导航没有意义：删掉出厂的「#features」项（管理员改过名称的保留）。
+		warn("nav remove-anchor", s.db.WithContext(ctx).Delete(&Nav{}, "id = ?", int64(feat.ID)).Error)
+	}
+	now := time.Now().UTC()
+	for _, p := range defaultPosts() {
+		var n int64
+		if err := s.db.WithContext(ctx).Model(&Post{}).Where("slug = ?", p.Slug).Count(&n).Error; err != nil {
+			warn("count "+p.Slug, err)
+			continue
+		}
+		if n > 0 {
+			continue
+		}
+		p.ID = 0
+		if p.Published && p.PublishedAt == nil {
+			p.PublishedAt = &now
+		}
+		if err := s.db.WithContext(ctx).Create(&p).Error; err != nil {
+			warn("insert "+p.Slug, err)
+		}
+	}
+	warn("seed_version", s.db.WithContext(ctx).Model(&Setting{}).Where("id = ?", int64(set.ID)).
+		Update("seed_version", seedVersion).Error)
 }
 
 func labelOfDefaultNav(href string) string {

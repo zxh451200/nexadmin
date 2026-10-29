@@ -31,6 +31,9 @@ func (module) Seed(db *gorm.DB) error {
 func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	svc := NewService(d.DB, d.Config.App.Timezone, d.Log).WithExportMaxRows(d.Config.Log.ExportMaxRows)
 	defaultSvc.Store(svc)
+	// 注入 core 的操作日志提供方：业务模块用 d.OperLogMiddleware(module, action) 挂中间件，
+	// 无需关心本模块的注册时序，也不需要 import 本包（见 core/operlog.go）。
+	core.SetOperationLogProvider(operLogProvider{svc: svc})
 	h := &Handler{svc: svc}
 	auth.RegisterPerm("operLog:export")
 	auth.RegisterPerm("loginLog:export")
@@ -38,11 +41,13 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	exportLimit := middleware.RateLimitRule(d.Cache, d.Log, d.Config.RateLimit, "log_export", middleware.ByUser())
 
 	r.GET("/oper-logs", core.Perm("operLog:list"), h.ListOper)
+	r.GET("/oper-logs/stats", core.Perm("operLog:list"), h.StatsOper)
 	r.GET("/oper-logs/export", core.Perm("operLog:export"), exportLimit, h.ExportOper)
 	r.DELETE("/oper-logs", core.Perm("operLog:delete"), h.DeleteOper)
 	r.POST("/oper-logs/clean", core.Perm("operLog:delete"), h.CleanOper)
 
 	r.GET("/login-logs", core.Perm("loginLog:list"), h.ListLogin)
+	r.GET("/login-logs/stats", core.Perm("loginLog:list"), h.StatsLogin)
 	r.GET("/login-logs/export", core.Perm("loginLog:export"), exportLimit, h.ExportLogin)
 	r.DELETE("/login-logs", core.Perm("loginLog:delete"), h.DeleteLogin)
 }

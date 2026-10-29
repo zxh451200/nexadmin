@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { ExternalLink, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -6,41 +6,69 @@ import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { FilterBar } from '@/framework/components/FilterBar'
+import {
+  LocaleFormActions,
+  LocaleFormProvider,
+  LocalizedField,
+  LocaleSwitcher,
+  SharedFieldShell,
+  useLocaleForm,
+  useSharedField,
+  type TranslateBatch,
+} from '@/framework/components/i18n'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
-import { RichTextEditor } from '@/framework/components/RichTextEditor'
+import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/framework/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/framework/ui/dialog'
 import { Input } from '@/framework/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import { Switch } from '@/framework/ui/switch'
-import TranslationsEditor from './TranslationsEditor'
-import { useDeletePage, usePages, useSavePage, type ContentQuery, type SitePage } from './api'
+import TranslationStatus from './TranslationStatus'
+import {
+  translateContent,
+  useDeletePage,
+  useI18nSchema,
+  useLanguages,
+  usePages,
+  useSavePage,
+  type ContentQuery,
+  type SitePage,
+} from './api'
 
 const ALL = '__all'
 
-function PageFormDialog({
-  onOpenChange, editing,
-}: {
-  onOpenChange: (v: boolean) => void
-  editing: SitePage | null
-}) {
+/**
+ * 表单主体：整份表单只有一套，切语言换的是数据源。
+ * title/seoDesc/content 归 LocaleFormProvider，slug 这类共用字段留在本地 state。
+ * 弹窗外壳也由本组件渲染：底部按钮要用这里的 submit 与 state，必须留在 Provider 内。
+ */
+function PageFormBody({ onOpenChange, editing }: { onOpenChange: (v: boolean) => void; editing: SitePage | null }) {
   const { t } = useTranslation()
   const save = useSavePage()
+  const lf = useLocaleForm()
+  const { disabled: sharedDisabled } = useSharedField()
   const [slug, setSlug] = useState(editing?.slug ?? '')
-  const [title, setTitle] = useState(editing?.title ?? '')
-  const [seoDesc, setSeoDesc] = useState(editing?.seoDesc ?? '')
-  const [content, setContent] = useState(editing?.content ?? '')
-  const [published, setPublished] = useState(editing?.published ?? false)
-  const [i18nJson, setI18nJson] = useState(editing?.i18nJson ?? '')
 
   const submit = async () => {
-    if (!title.trim() || !slug.trim()) {
+    const base = lf.baseValues()
+    if (!(base.title ?? '').trim() || !slug.trim()) {
       toast.error(t('plugin_website.page.required'))
       return
     }
     try {
-      await save.mutateAsync({ id: editing?.id, data: { slug, title, seoDesc, content, published, i18nJson } })
+      await save.mutateAsync({
+        id: editing?.id,
+        data: {
+          slug,
+          published: lf.publishedOf(lf.defaultLocale),
+          ...lf.serialize(),
+          // 行上的裸列永远存原文
+          title: base.title ?? '',
+          seoDesc: base.seoDesc ?? '',
+          content: base.content ?? '',
+        },
+      })
       toast.success(t('common.operateSuccess'))
       onOpenChange(false)
     } catch {
@@ -49,51 +77,92 @@ function PageFormDialog({
   }
 
   return (
-    <Dialog open onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
-        <DialogHeader>
-          <DialogTitle>{editing ? t('plugin_website.page.edit') : t('plugin_website.page.create')}</DialogTitle>
-        </DialogHeader>
-        <div className="flex flex-col gap-3">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="flex flex-col gap-1 text-sm">
-              {t('plugin_website.fields.pageTitle')}
-              <Input value={title} onChange={(e) => setTitle(e.target.value)} />
-            </label>
-            <label className="flex flex-col gap-1 text-sm">
-              {t('plugin_website.fields.slug')}
-              <Input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="about" className="font-mono" />
-              <span className="text-xs text-muted-foreground">/p/{slug || '…'}</span>
-            </label>
-          </div>
-          <label className="flex flex-col gap-1 text-sm">
-            {t('plugin_website.fields.seoDesc')}
-            <Input value={seoDesc} onChange={(e) => setSeoDesc(e.target.value)} />
-          </label>
-          <div className="flex min-h-40 flex-col gap-1 text-sm">
-            {t('plugin_website.fields.content')}
-            <RichTextEditor value={content} onChange={setContent} />
-          </div>
-          <TranslationsEditor
-            value={i18nJson}
-            onChange={setI18nJson}
-            fields={[
-              { key: 'title', label: t('plugin_website.fields.pageTitle') },
-              { key: 'seoDesc', label: t('plugin_website.fields.seoDesc') },
-              { key: 'content', label: t('plugin_website.fields.content'), rich: true },
-            ]}
-          />
-          <label className="flex items-center justify-between text-sm">
-            {t('plugin_website.fields.published')}
-            <Switch checked={published} onCheckedChange={setPublished} />
-          </label>
-        </div>
-        <DialogFooter>
+    <ResponsiveDialog
+      open
+      onOpenChange={onOpenChange}
+      title={editing ? t('plugin_website.page.edit') : t('plugin_website.page.create')}
+      size="lg"
+      className="space-y-4"
+      footer={
+        <>
           <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
           <Button onClick={() => void submit()}>{t('common.save')}</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </>
+      }
+    >
+      <div className="flex items-center justify-between gap-2 pb-1">
+        <LocaleSwitcher />
+        <span className="text-xs text-muted-foreground">{t('plugin_website.i18n.switchHint')}</span>
+      </div>
+      <div className="flex flex-col gap-3">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <LocalizedField fieldKey="title" required />
+          <SharedFieldShell labelKey="plugin_website.fields.slug" required>
+            <Input
+              required
+              value={slug}
+              disabled={sharedDisabled}
+              onChange={(e) => setSlug(e.target.value)}
+              placeholder="about"
+              className="font-mono"
+            />
+            <span className="text-xs text-muted-foreground">/p/{slug || '…'}</span>
+          </SharedFieldShell>
+        </div>
+        <LocalizedField fieldKey="seoDesc" />
+        <LocalizedField fieldKey="content" className="min-h-40" />
+        <LocaleFormActions />
+        <label className="flex items-center justify-between text-sm">
+          {t('plugin_website.fields.published')}
+          <Switch
+            checked={lf.publishedOf(lf.defaultLocale)}
+            onCheckedChange={(on) => lf.setPublishedOf(lf.defaultLocale, on)}
+          />
+        </label>
+      </div>
+    </ResponsiveDialog>
+  )
+}
+
+function PageFormDialog({
+  onOpenChange, editing,
+}: {
+  onOpenChange: (v: boolean) => void
+  editing: SitePage | null
+}) {
+  const { t } = useTranslation()
+  const { data: languages = [] } = useLanguages()
+  const { data: schema } = useI18nSchema('page')
+  const defaultLocale = languages.find((l) => l.default)?.code ?? ''
+  const translate = useCallback<TranslateBatch>(
+    (texts, to, format) => translateContent('page', texts, defaultLocale, to, format),
+    [defaultLocale],
+  )
+
+  // schema 与语言清单是表单的前提，没到货前不给渲染——否则会闪出一个没有字段的空表单。
+  if (!schema || !defaultLocale) {
+    return (
+      <Dialog open onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-3xl">
+          <DialogHeader><DialogTitle>{t('common.loading')}</DialogTitle></DialogHeader>
+        </DialogContent>
+      </Dialog>
+    )
+  }
+
+  return (
+    <LocaleFormProvider
+      schema={schema}
+      locales={languages}
+      defaultLocale={defaultLocale}
+      base={{ title: editing?.title ?? '', seoDesc: editing?.seoDesc ?? '', content: editing?.content ?? '' }}
+      i18nJson={editing?.i18nJson}
+      publishedJson={editing?.publishedJson}
+      sourcePublished={editing?.published ?? false}
+      translate={translate}
+    >
+      <PageFormBody onOpenChange={onOpenChange} editing={editing} />
+    </LocaleFormProvider>
   )
 }
 
@@ -123,21 +192,18 @@ export default function PagePage() {
   const columns: Column<SitePage>[] = [
     { key: 'title', title: t('plugin_website.fields.pageTitle'), mobile: 'title', render: (r) => <span className="font-medium text-foreground">{r.title}</span> },
     { key: 'slug', title: t('plugin_website.fields.slug'), mobile: 'sub', render: (r) => <span className="font-mono text-xs">/p/{r.slug}</span> },
+    { key: 'i18n', title: t('plugin_website.i18n.status'), render: (r) => <TranslationStatus value={r.i18nJson} fields={['title', 'seoDesc', 'content']} /> },
     { key: 'published', title: t('plugin_website.fields.published'), render: (r) => (r.published ? <Badge variant="success">{t('plugin_website.publishedOn')}</Badge> : <Badge variant="outline">{t('plugin_website.publishedOff')}</Badge>) },
     {
       key: 'link',
       title: '',
       align: 'end',
       render: (r) => (r.published ? (
-        <a
-          className="inline-flex text-muted-foreground transition-colors hover:text-foreground"
-          href={`/p/${r.slug}`}
-          target="_blank"
-          rel="noreferrer"
-          aria-label={t('plugin_website.viewSite')}
-        >
-          <ExternalLink aria-hidden="true" size={15} />
-        </a>
+        <Button asChild variant="ghost" size="icon" aria-label={t('plugin_website.viewSite')}>
+          <a href={`/p/${r.slug}`} target="_blank" rel="noreferrer">
+            <ExternalLink aria-hidden="true" />
+          </a>
+        </Button>
       ) : null),
     },
   ]
@@ -161,7 +227,7 @@ export default function PagePage() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_website.fields.published')}: {t('plugin_website.all')}</SelectItem>
+            <SelectItem value={ALL}>{t('plugin_website.all')}</SelectItem>
             <SelectItem value="published">{t('plugin_website.publishedOn')}</SelectItem>
             <SelectItem value="draft">{t('plugin_website.publishedOff')}</SelectItem>
           </SelectContent>

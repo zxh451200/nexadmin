@@ -37,7 +37,8 @@ export function FileTile({
   const { t } = useTranslation()
   const cat = fileCategory(file)
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: file.id, disabled: !sortable })
-  const style = { transform: CSS.Transform.toString(transform), transition }
+  // 被拖图块自身不做补间，否则跟手慢半拍
+  const style = { transform: CSS.Transform.toString(transform), transition: isDragging ? undefined : transition }
 
   const handle = sortable && (
     <button

@@ -154,6 +154,10 @@ func (a *App) prepareData(db *gorm.DB) error {
 	if n := rep.Menus(); n > 0 {
 		a.log.Info(fmt.Sprintf("新增 %d 个菜单，请到角色管理分配", n))
 	}
+	// 结构对账每次都打一行（含「修正 0 项」）：空操作与「这段代码没跑」必须能区分。
+	if checked, fixed := rep.Reconciled(); checked > 0 {
+		a.log.Info(fmt.Sprintf("菜单结构对账：检查 %d 项，修正 %d 项", checked, fixed))
+	}
 	if sk := rep.Skipped(); len(sk) > 0 {
 		a.log.Warn("部分出厂菜单的父节点不存在，已跳过", zap.Strings("menus", sk))
 	}

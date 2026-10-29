@@ -1,8 +1,8 @@
 {
   "sysConfig": {
-    "menu": "System config",
-    "title": "System config",
-    "description": "System-level settings operators can change without a release",
+    "menu": "Advanced parameters",
+    "title": "Advanced parameters",
+    "description": "Key/value parameter table and upload limits; changes apply immediately. Use System Settings for everyday configuration",
     "name": "Name",
     "key": "Key",
     "value": "Value",
@@ -30,7 +30,9 @@
       "unlimited": "No limit",
       "unlimitedWarning": "Upload size is unlimited; the disk may fill up",
       "allowedTypes": "Allowed file types",
-      "allowedTypesHint": "Only the listed types can be uploaded"
+      "allowedTypesHint": "Only the listed types can be uploaded",
+      "webp": "Generate WebP copies of images",
+      "webpHint": "The original is kept; a WebP copy is stored alongside and served to browsers that support it. GIF / SVG are not converted."
     }
   }
 }

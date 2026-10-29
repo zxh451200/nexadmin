@@ -16,6 +16,7 @@ import (
 
 	"nexadmin/core/response"
 	"nexadmin/pkg/htmlsafe"
+	pi18n "nexadmin/pkg/i18n"
 	"nexadmin/pkg/idgen"
 )
 
@@ -85,7 +86,7 @@ func (s *Service) SaveSettings(ctx context.Context, f SettingForm) (*Setting, er
 	row.ContactEmail = trimLen(f.ContactEmail, 128)
 	row.ICP = trimLen(f.ICP, 128)
 	row.FooterNote = trimLen(f.FooterNote, 300)
-	i18n, err := normalizeI18nJSON(f.I18nJSON, settingI18nFields)
+	i18n, err := pi18n.Normalize(f.I18nJSON, siteLocales{}, settingI18nFields)
 	if err != nil {
 		return nil, response.BadRequest("error.bad_request").WithMsg(err.Error())
 	}
@@ -107,11 +108,74 @@ func (s *Service) ListNavs(ctx context.Context) ([]Nav, error) {
 	return rows, err
 }
 
+// navHrefValid 判断导航链接是否落在官网能服务的地址上：站内锚点、绝对外部链接，
+// 或官网注册的页面路由（可带语言前缀、查询串与锚点）。
+// 裸路径（"xx"）与后台客户端路由（/users 等）都不合法——后者会让访客落进后台 SPA 外壳。
+func navHrefValid(href string) bool {
+	href = strings.TrimSpace(href)
+	if href == "" {
+		return false
+	}
+	if strings.HasPrefix(href, "#") {
+		return true
+	}
+	lower := strings.ToLower(href)
+	for _, scheme := range []string{"http://", "https://", "mailto:", "tel:"} {
+		if strings.HasPrefix(lower, scheme) {
+			return true
+		}
+	}
+	if !strings.HasPrefix(href, "/") {
+		return false
+	}
+	p := href
+	if i := strings.IndexAny(p, "?#"); i >= 0 {
+		p = p[:i]
+	}
+	p = stripLangPrefix(p)
+	if p == "" || p == "/" {
+		return true
+	}
+	for _, prefix := range []string{"/news", "/plugins", "/docs"} {
+		if p == prefix || strings.HasPrefix(p, prefix+"/") {
+			return true
+		}
+	}
+	return strings.HasPrefix(p, "/p/") && len(p) > len("/p/")
+}
+
+// navPageSlug 取出站内页面链接里的 slug（/p/about、/en/p/about?x=1 都可）。
+func navPageSlug(href string) (string, bool) {
+	p := strings.TrimSpace(href)
+	if i := strings.IndexAny(p, "?#"); i >= 0 {
+		p = p[:i]
+	}
+	slug, ok := strings.CutPrefix(stripLangPrefix(p), "/p/")
+	if !ok || slug == "" {
+		return "", false
+	}
+	return slug, true
+}
+
 func (s *Service) SaveNav(ctx context.Context, id idgen.ID, f ItemForm) (*Nav, error) {
 	f.Label = trimLen(f.Label, 64)
 	f.Href = trimLen(f.Href, 255)
 	if f.Label == "" || f.Href == "" {
 		return nil, response.BadRequest("error.bad_request").WithMsg("导航需要名称与链接")
+	}
+	if !navHrefValid(f.Href) {
+		return nil, response.BadRequest("error.bad_request").
+			WithMsg(fmt.Sprintf("官网没有这个页面：%s。站内页面请从下拉选择；自定义页面请先在「页面管理」创建；外部链接请填写完整 https:// 地址。", f.Href))
+	}
+	if slug, ok := navPageSlug(f.Href); ok {
+		var n int64
+		if err := s.db.WithContext(ctx).Model(&Page{}).Where("slug = ?", slug).Count(&n).Error; err != nil {
+			return nil, err
+		}
+		if n == 0 {
+			return nil, response.BadRequest("error.bad_request").
+				WithMsg(fmt.Sprintf("页面 /p/%s 还不存在，请先在「页面管理」创建，再把它设为导航。", slug))
+		}
 	}
 	var row Nav
 	if id != 0 {
@@ -121,19 +185,83 @@ func (s *Service) SaveNav(ctx context.Context, id idgen.ID, f ItemForm) (*Nav, e
 	} else {
 		row = Nav{}
 	}
-	i18n, err := normalizeI18nJSON(f.I18nJSON, navI18nFields)
+	var all []Nav
+	if err := s.db.WithContext(ctx).Select("id", "parent_id").Find(&all).Error; err != nil {
+		return nil, err
+	}
+	// 官网导航是平台级数据（无 tenant_id），父级存在性校验即等价于「同一租户」。
+	parents := navParentMap(all)
+	level, err := navDepth(parents, uint64(row.ID), uint64(f.ParentID))
+	if err != nil {
+		return nil, err
+	}
+	// 挂到新父级后整棵子树会整体下移，深度上限要按子树层数一起判断。
+	if id != 0 && level+navSubtreeHeight(parents, uint64(id))-1 > navMaxDepth {
+		return nil, navBadRequest(fmt.Sprintf("导航最多支持 %d 级", navMaxDepth))
+	}
+	i18n, err := pi18n.Normalize(f.I18nJSON, siteLocales{}, navI18nFields)
 	if err != nil {
 		return nil, response.BadRequest("error.bad_request").WithMsg(err.Error())
 	}
-	row.Label, row.Href, row.Sort, row.Enabled, row.I18nJSON = f.Label, f.Href, f.Sort, f.Enabled, i18n
+	row.ParentID, row.Label, row.Href = f.ParentID, f.Label, f.Href
+	row.Sort, row.Enabled, row.I18nJSON = f.Sort, f.Enabled, i18n
 	if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
 		return nil, err
 	}
 	return &row, nil
 }
 
+// DeleteNav 级联删除自身与全部后代，避免留下孤儿节点。
 func (s *Service) DeleteNav(ctx context.Context, id idgen.ID) error {
-	return s.db.WithContext(ctx).Delete(&Nav{}, "id = ?", int64(id)).Error
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var rows []Nav
+		if err := tx.Select("id", "parent_id").Find(&rows).Error; err != nil {
+			return err
+		}
+		ids := navSubtreeIDs(navParentMap(rows), uint64(id))
+		if len(ids) == 0 {
+			return nil
+		}
+		list := make([]int64, len(ids))
+		for i, v := range ids {
+			list[i] = int64(v)
+		}
+		return tx.Delete(&Nav{}, "id IN ?", list).Error
+	})
+}
+
+// ReorderNavs 在一个事务内批量写入 parentId / sort（拖拽排序与改上级共用）。
+// sort 为 0 时按 items 顺序补 10、20…，兼容只传 id 的调用方。
+func (s *Service) ReorderNavs(ctx context.Context, items []NavOrderItem) error {
+	if len(items) == 0 {
+		return nil
+	}
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var rows []Nav
+		if err := tx.Select("id", "parent_id").Find(&rows).Error; err != nil {
+			return err
+		}
+		parents := navParentMap(rows)
+		for i := range items {
+			if _, ok := parents[uint64(items[i].ID)]; !ok {
+				return navBadRequest("导航不存在")
+			}
+			if items[i].Sort == 0 {
+				items[i].Sort = (i + 1) * 10
+			}
+			parents[uint64(items[i].ID)] = uint64(items[i].ParentID)
+		}
+		if err := validateNavParents(parents); err != nil {
+			return err
+		}
+		for _, it := range items {
+			if err := tx.Model(&Nav{}).Where("id = ?", int64(it.ID)).
+				Updates(map[string]any{"parent_id": it.ParentID, "sort": it.Sort}).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 // ---- 特性卡片 ----
@@ -159,7 +287,7 @@ func (s *Service) SaveFeature(ctx context.Context, id idgen.ID, f FeatureForm) (
 	} else {
 		row = Feature{}
 	}
-	i18n, err := normalizeI18nJSON(f.I18nJSON, featureI18nFields)
+	i18n, err := pi18n.Normalize(f.I18nJSON, siteLocales{}, featureI18nFields)
 	if err != nil {
 		return nil, response.BadRequest("error.bad_request").WithMsg(err.Error())
 	}
@@ -178,8 +306,11 @@ func (s *Service) DeleteFeature(ctx context.Context, id idgen.ID) error {
 
 // ContentQuery 是页面/新闻的列表查询。
 type ContentQuery struct {
-	Keyword  string
-	Status   string // "" | "published" | "draft"
+	Keyword string
+	Status  string // "" | "published" | "draft"
+	// Missing 是语言码：筛「该语言完全没有译文」的条目。不是「缺某个字段」，
+	// 那种细粒度要靠译文 JSON 里的键判断，跨引擎不通用，交给界面上的 done/total 徽标。
+	Missing  string
 	Page     int
 	PageSize int
 }
@@ -193,6 +324,13 @@ func contentTx(tx *gorm.DB, q ContentQuery) *gorm.DB {
 		tx = tx.Where("published = ?", true)
 	case "draft":
 		tx = tx.Where("published = ?", false)
+	}
+	if code := strings.TrimSpace(q.Missing); code != "" {
+		// 只接受已配置的语言，并且用规范 code 去匹配：拼出来的是 LIKE 的**参数值**，
+		// 走占位符绑定，不进 SQL 文本；未知 code 就当没有这个筛选。
+		if l, ok := LanguageByCode(code); ok {
+			tx = tx.Where("i18n_json IS NULL OR i18n_json = '' OR i18n_json NOT LIKE ?", "%\""+l.Code+"\":%")
+		}
 	}
 	return tx
 }
@@ -228,12 +366,18 @@ func (s *Service) SavePage(ctx context.Context, id idgen.ID, f PageForm) (*Page,
 	} else {
 		row = Page{}
 	}
-	i18n, err := normalizeI18nJSON(f.I18nJSON, pageI18nFields)
+	i18n, err := pi18n.Normalize(f.I18nJSON, siteLocales{}, pageI18nFields)
 	if err != nil {
 		return nil, response.BadRequest("error.bad_request").WithMsg(err.Error())
 	}
 	row.Slug, row.Title, row.SeoDesc = f.Slug, f.Title, f.SeoDesc
 	row.Content, row.Published, row.I18nJSON = htmlsafe.Sanitize(f.Content), f.Published, i18n
+	pub, err := pi18n.NormalizePublish(f.PublishedJSON, f.Published, pi18n.ParseDoc(i18n),
+		map[string]string{"title": row.Title, "seoDesc": row.SeoDesc, "content": row.Content}, siteLocales{}, pageI18nFields)
+	if err != nil {
+		return nil, response.BadRequest("error.bad_request").WithMsg(err.Error())
+	}
+	row.PublishedJSON = pub
 	if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
 		return nil, err
 	}
@@ -261,6 +405,7 @@ func (s *Service) SavePost(ctx context.Context, id idgen.ID, f PostForm) (*Post,
 	f.Slug = strings.TrimSpace(f.Slug)
 	f.Title = trimLen(f.Title, 200)
 	f.Summary = trimLen(f.Summary, 500)
+	f.SeoDesc = trimLen(f.SeoDesc, 300)
 	f.CoverURL = trimLen(f.CoverURL, 255)
 	if err := ValidateSlug(f.Slug); err != nil {
 		return nil, err
@@ -277,12 +422,18 @@ func (s *Service) SavePost(ctx context.Context, id idgen.ID, f PostForm) (*Post,
 		row = Post{}
 	}
 	wasPublished := row.Published
-	i18n, err := normalizeI18nJSON(f.I18nJSON, postI18nFields)
+	i18n, err := pi18n.Normalize(f.I18nJSON, siteLocales{}, postI18nFields)
 	if err != nil {
 		return nil, response.BadRequest("error.bad_request").WithMsg(err.Error())
 	}
-	row.Slug, row.Title, row.CoverURL, row.Summary = f.Slug, f.Title, f.CoverURL, f.Summary
+	row.Slug, row.Title, row.CoverURL, row.Summary, row.SeoDesc = f.Slug, f.Title, f.CoverURL, f.Summary, f.SeoDesc
 	row.Content, row.Published, row.I18nJSON = htmlsafe.Sanitize(f.Content), f.Published, i18n
+	pub, err := pi18n.NormalizePublish(f.PublishedJSON, f.Published, pi18n.ParseDoc(i18n),
+		map[string]string{"title": row.Title, "summary": row.Summary, "seoDesc": row.SeoDesc, "content": row.Content}, siteLocales{}, postI18nFields)
+	if err != nil {
+		return nil, response.BadRequest("error.bad_request").WithMsg(err.Error())
+	}
+	row.PublishedJSON = pub
 	if f.Published && (!wasPublished || row.PublishedAt == nil) {
 		now := time.Now().UTC()
 		row.PublishedAt = &now
@@ -302,7 +453,7 @@ func (s *Service) DeletePost(ctx context.Context, id idgen.ID) error {
 // SiteData 汇总渲染官网所需的全部启用内容。
 type SiteData struct {
 	Setting  *Setting
-	Navs     []Nav
+	Navs     []Nav // 已组好的导航树：父级不可见的节点连同子树已丢弃
 	Features []Feature
 	Posts    []Post // 最新已发布新闻（首页取 3 条，列表页取 20 条）
 }
@@ -317,9 +468,19 @@ func (s *Service) SiteData(ctx context.Context, postLimit int, lang string) (*Si
 	if err := s.db.WithContext(ctx).Where("enabled = ?", true).Order("sort, id").Find(&navs).Error; err != nil {
 		return nil, err
 	}
+	// 历史数据里可能有裸路径或后台路由（保存早于校验），公开站不渲染官网服务不了的链接。
+	kept := navs[:0]
+	for _, n := range navs {
+		if navHrefValid(n.Href) {
+			kept = append(kept, n)
+		}
+	}
+	navs = kept
 	for i := range navs {
 		navs[i].localize(lang)
 	}
+	// Navs 是树：父级不可见的节点整棵丢弃，模板只按一级遍历。
+	navs = buildNavTree(navs)
 	var features []Feature
 	if err := s.db.WithContext(ctx).Where("enabled = ?", true).Order("sort, id").Find(&features).Error; err != nil {
 		return nil, err
@@ -328,9 +489,31 @@ func (s *Service) SiteData(ctx context.Context, postLimit int, lang string) (*Si
 		features[i].localize(lang)
 	}
 	var posts []Post
+	// 按语言发布不是 SQL 谓词，只能先取一个有界窗口再在 Go 里筛。
+	// 多取一些，保证筛完仍够 postLimit 条（数据充足时），也不会漏掉整页。
+	window := postLimit
+	if len(Languages()) > 1 {
+		window = postLimit * 4
+		if window < 60 {
+			window = 60
+		}
+	}
 	if err := s.db.WithContext(ctx).Where("published = ?", true).
-		Order("published_at DESC").Limit(postLimit).Find(&posts).Error; err != nil {
+		Order("published_at DESC").Limit(window).Find(&posts).Error; err != nil {
 		return nil, err
+	}
+	if len(Languages()) > 1 {
+		kept := make([]Post, 0, postLimit)
+		for _, p := range posts {
+			if !pi18n.Published(p.Published, p.PublishedJSON, lang, siteLocales{}) {
+				continue
+			}
+			kept = append(kept, p)
+			if len(kept) == postLimit {
+				break
+			}
+		}
+		posts = kept
 	}
 	for i := range posts {
 		posts[i].localize(lang)
@@ -342,16 +525,30 @@ func (s *Service) SiteData(ctx context.Context, postLimit int, lang string) (*Si
 func (s *Service) PublishedPostBy(ctx context.Context, slug, lang string) (*Post, error) {
 	var row Post
 	err := s.db.WithContext(ctx).Where("slug = ? AND published = ?", slug, true).First(&row).Error
+	if err != nil {
+		return &row, err
+	}
+	// 整行已发布不等于每种语言都已发布：该语言未发布就当作不存在，让它走 404，
+	// 而不是把一篇中文页挂在 /ja/ 下面。
+	if !pi18n.Published(row.Published, row.PublishedJSON, lang, siteLocales{}) {
+		return nil, gorm.ErrRecordNotFound
+	}
 	row.localize(lang)
-	return &row, err
+	return &row, nil
 }
 
 // PublishedPageBy 取一篇已发布的自定义页。
 func (s *Service) PublishedPageBy(ctx context.Context, slug, lang string) (*Page, error) {
 	var row Page
 	err := s.db.WithContext(ctx).Where("slug = ? AND published = ?", slug, true).First(&row).Error
+	if err != nil {
+		return &row, err
+	}
+	if !pi18n.Published(row.Published, row.PublishedJSON, lang, siteLocales{}) {
+		return nil, gorm.ErrRecordNotFound
+	}
 	row.localize(lang)
-	return &row, err
+	return &row, nil
 }
 
 // ---- 媒体（logo / 封面小图） ----
@@ -398,6 +595,37 @@ func (s *Service) MediaByID(ctx context.Context, id idgen.ID) (*Media, error) {
 type SitemapEntry struct {
 	Loc     string
 	Lastmod *time.Time
+	// Locales 是该 URL 已发布的语言码；nil = 语言完备（首页、列表、文档这类不随内容缺译的页）。
+	// 内容页必须给出，否则 sitemap 会为未发布的语言生成一条其实 404 的 alternate。
+	Locales []string
+}
+
+// visibleLocales 把 Locales 还原成配置顺序的 Language 列表；nil 表示不过滤。
+func (e SitemapEntry) visibleLocales(all []Language) []Language {
+	if e.Locales == nil {
+		return all
+	}
+	set := make(map[string]bool, len(e.Locales))
+	for _, c := range e.Locales {
+		set[c] = true
+	}
+	out := make([]Language, 0, len(e.Locales))
+	for _, l := range all {
+		if set[l.Code] {
+			out = append(out, l)
+		}
+	}
+	return out
+}
+
+// publishedLocales 汇总这条内容实际已发布的语言码。
+func publishedLocales(published bool, publishedJSON string) []string {
+	vis := visibleLanguages(published, publishedJSON)
+	codes := make([]string, 0, len(vis))
+	for _, l := range vis {
+		codes = append(codes, l.Code)
+	}
+	return codes
 }
 
 // SitemapEntries 汇总官网全部已发布页面（首页、新闻列表、新闻、自定义页）。
@@ -405,11 +633,11 @@ func (s *Service) SitemapEntries(ctx context.Context) ([]SitemapEntry, error) {
 	out := []SitemapEntry{{Loc: "/"}, {Loc: "/news"}}
 	var posts []Post
 	if err := s.db.WithContext(ctx).Where("published = ?", true).
-		Select("slug", "published_at", "updated_at").Order("published_at DESC").Limit(1000).Find(&posts).Error; err != nil {
+		Select("slug", "published_at", "updated_at", "published_json").Order("published_at DESC").Limit(1000).Find(&posts).Error; err != nil {
 		return nil, err
 	}
 	for _, p := range posts {
-		e := SitemapEntry{Loc: "/news/" + p.Slug, Lastmod: p.PublishedAt}
+		e := SitemapEntry{Loc: "/news/" + p.Slug, Lastmod: p.PublishedAt, Locales: publishedLocales(p.Published, p.PublishedJSON)}
 		if e.Lastmod == nil {
 			e.Lastmod = &p.UpdatedAt
 		}
@@ -417,11 +645,14 @@ func (s *Service) SitemapEntries(ctx context.Context) ([]SitemapEntry, error) {
 	}
 	var pages []Page
 	if err := s.db.WithContext(ctx).Where("published = ?", true).
-		Select("slug", "updated_at").Order("updated_at DESC").Limit(1000).Find(&pages).Error; err != nil {
+		Select("slug", "updated_at", "published_json").Order("updated_at DESC").Limit(1000).Find(&pages).Error; err != nil {
 		return nil, err
 	}
 	for _, p := range pages {
-		out = append(out, SitemapEntry{Loc: "/p/" + p.Slug, Lastmod: &p.UpdatedAt})
+		out = append(out, SitemapEntry{
+			Loc: "/p/" + p.Slug, Lastmod: &p.UpdatedAt,
+			Locales: publishedLocales(p.Published, p.PublishedJSON),
+		})
 	}
 	return out, nil
 }

@@ -17,23 +17,29 @@
 - 国际化（zh-CN、en-US，可增语言）、PWA、移动端适配
 - 源码插件体系（离线签名授权，支持离线吊销清单）；CLI：`plugin` / `new` / `add module` / `i18n` / `upgrade` / `release`（`check`、`pack`）
 
-## 10 分钟上手
+## 快速开始
 
-前置：Go 1.26、Node（Dockerfile 用 node:22）、一个空的 MySQL / MariaDB / PostgreSQL 库。
+完整流程：[中文 Quickstart](docs/quickstart.md) · [English Quickstart](docs/en/quickstart.md)。业务开发先派生项目，不要直接改框架母版。
 
+前置：Go 1.26+、Node 22 与 npm、一个空的 MySQL / MariaDB / PostgreSQL 数据库。以下为 Linux / macOS 或 Git Bash 命令：
+
+```bash
+# 在框架母版根目录运行；myapp 目标目录须不存在或为空
+go run ./cmd/nexadmin new myapp --out ../myapp --module example.com/myapp
+cd ../myapp
+sh scripts/build.sh
+./bin/nexadmin-server start
 ```
-sh scripts/build.sh              # 前端 npm ci + npm run build，再 go build -tags embedweb，产物 bin/nexadmin-server
-./bin/nexadmin-server start      # 在项目根目录运行；未初始化时打印向导地址和初始化令牌
-```
 
-浏览器打开 `http://localhost:8080/setup`，按向导 4 步（环境检查 → 数据库 → 管理员与站点 → 确认执行），完成后跳转 `/login` 用刚设置的超管账号登录。停止：`./bin/nexadmin-server stop`。
+打开 `http://localhost:8080/admin/setup`，按六步向导初始化并创建超管，随后在 `/admin/login` 登录。状态与停止：`./bin/nexadmin-server status`、`./bin/nexadmin-server stop`。Windows 原生命令见 Quickstart。
 
-开发模式：`go run ./cmd/server` 起后端，`cd web && npm run dev` 起前端（端口 5173，`/api` 代理到 8080）。`web/.env.development` 里 `VITE_MOCK=true`，用 mock 数据而不连后端（前端仅当 `VITE_MOCK=true` 才启用 mock，未设置即关闭）。
+开发时另开后端 `go run ./cmd/server` 和前端 `npm --prefix web run dev`，后台入口 `http://localhost:5173/admin/`。母版及默认派生项目的 `.env.development` 启用 mock；真实联调用 `VITE_MOCK=false npm --prefix web run dev`。生产构建关闭 mock。`new` 默认不带任何插件，官网也须另装并按其要求启用。
 
 ## 文档索引
 
 | 文档 | 内容 |
 | --- | --- |
+| [docs/quickstart.md](docs/quickstart.md) · [English](docs/en/quickstart.md) | 派生 → 构建 → 初始化 → 开发 → 插件验证与启停 |
 | [docs/部署与运维指南.md](docs/部署与运维指南.md) | 构建、部署、初始化、迁移、备份恢复、监控、安全清单、故障排查 |
 | [docs/配置参考.md](docs/配置参考.md) | `config/default.yaml` 全部配置键、环境变量写法 |
 | [docs/功能与权限清单.md](docs/功能与权限清单.md) | 内置模块、权限码、登录方式、开放平台、角色与租户规则 |
@@ -56,7 +62,8 @@ sh scripts/build.sh              # 前端 npm ci + npm run build，再 go build 
 
 所有权的权威来源是 `.nexadmin.manifest.json`。
 
-## 许可与支持
+## 获取、许可与支持
 
-- 许可证：[MIT](LICENSE)（`core/`、`modules/`、`pkg/`、`cmd/`、`web/src/framework/` 等框架区源码；业务与插件代码归各自作者）
-- 技术支持与联系方式：待补充
+- 基础服务免费；首批可选免费插件计划为 cron、codegen、imports、totp、ldap、maps、crm，其余业务增强插件按 pro 规划。以实际发布包的清单与注册信息核对交付状态，框架包不默认附带插件。
+- 正式购买条款尚未发布，本文不承诺价格、退款、分成或知识产权条款。源码许可请直接阅读随交付物提供的 [LICENSE](LICENSE)，不从免费/pro 分类推导插件的具体许可范围。
+- 先查上述文档和启动日志；反馈问题时提供版本、复现步骤与脱敏日志。支持渠道以取得源码的发行渠道所公布信息为准，此处不提供未经确认的联系方式。

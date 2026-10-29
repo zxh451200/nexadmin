@@ -6,9 +6,9 @@ import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { FilterBar } from '@/framework/components/FilterBar'
+import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/framework/ui/dialog'
 import { Input } from '@/framework/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import {
@@ -76,96 +76,97 @@ function CustomerFormDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>{isNew ? t('plugin_crm.customer.create') : t('plugin_crm.customer.edit')}</DialogTitle>
-        </DialogHeader>
-        <div className="flex flex-col gap-3 text-sm">
-          <label className="flex flex-col gap-1">
-            {t('plugin_crm.fields.name')}
-            <Input value={value.name ?? ''} onChange={(e) => set({ name: e.target.value })} />
-          </label>
-          <div className="grid grid-cols-2 gap-3">
-            <label className="flex flex-col gap-1">
-              {t('plugin_crm.fields.code')}
-              <Input value={value.code ?? ''} onChange={(e) => set({ code: e.target.value })} />
-            </label>
-            <label className="flex flex-col gap-1">
-              {t('plugin_crm.fields.level')}
-              <Input value={value.level ?? ''} onChange={(e) => set({ level: e.target.value })} />
-            </label>
-          </div>
-          <label className="flex flex-col gap-1">
-            {t('plugin_crm.fields.status')}
-            <Select value={value.status ?? 'active'} onValueChange={(v) => set({ status: v as CrmCustomerForm['status'] })}>
-              <SelectTrigger aria-label={t('plugin_crm.fields.status')}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="active">{t('plugin_crm.status.active')}</SelectItem>
-                <SelectItem value="inactive">{t('plugin_crm.status.inactive')}</SelectItem>
-              </SelectContent>
-            </Select>
-          </label>
-          <div className="grid grid-cols-2 gap-3">
-            <label className="flex flex-col gap-1">
-              {t('plugin_crm.fields.externalSource')}
-              <Select
-                value={value.externalSource ?? ALL}
-                onValueChange={(v) => set({ externalSource: v === ALL ? undefined : v })}
-                disabled={!isNew}
-              >
-                <SelectTrigger aria-label={t('plugin_crm.fields.externalSource')}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL}>{t('plugin_crm.customer.noAnchor')}</SelectItem>
-                  {SOURCES.map((s) => (
-                    <SelectItem key={s} value={s}>
-                      {s}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </label>
-            <label className="flex flex-col gap-1">
-              {t('plugin_crm.fields.externalNo')}
-              <Input
-                value={value.externalNo ?? ''}
-                disabled={!isNew}
-                onChange={(e) => set({ externalNo: e.target.value })}
-              />
-            </label>
-          </div>
-          <p className="text-xs text-muted-foreground">{t('plugin_crm.customer.anchorHint')}</p>
-          <div className="grid grid-cols-2 gap-3">
-            <label className="flex flex-col gap-1">
-              {t('plugin_crm.fields.owner')}
-              <Input value={value.owner ?? ''} onChange={(e) => set({ owner: e.target.value })} />
-            </label>
-            <label className="flex flex-col gap-1">
-              {t('plugin_crm.fields.phone')}
-              <Input value={value.phone ?? ''} onChange={(e) => set({ phone: e.target.value })} />
-            </label>
-          </div>
-          <label className="flex flex-col gap-1">
-            {t('plugin_crm.fields.email')}
-            <Input value={value.email ?? ''} onChange={(e) => set({ email: e.target.value })} />
-          </label>
-          <label className="flex flex-col gap-1">
-            {t('plugin_crm.fields.remark')}
-            <Input value={value.remark ?? ''} onChange={(e) => set({ remark: e.target.value })} />
-          </label>
-        </div>
-        <DialogFooter>
+    <ResponsiveDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={isNew ? t('plugin_crm.customer.create') : t('plugin_crm.customer.edit')}
+      footer={
+        <>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             {t('common.cancel')}
           </Button>
           <Button onClick={() => void submit()}>{t('common.save')}</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-3 text-sm">
+        <label className="flex flex-col gap-1">
+          {t('plugin_crm.fields.name')}
+          <Input value={value.name ?? ''} onChange={(e) => set({ name: e.target.value })} />
+        </label>
+        <div className="grid grid-cols-2 gap-3">
+          <label className="flex flex-col gap-1">
+            {t('plugin_crm.fields.code')}
+            <Input value={value.code ?? ''} onChange={(e) => set({ code: e.target.value })} />
+          </label>
+          <label className="flex flex-col gap-1">
+            {t('plugin_crm.fields.level')}
+            <Input value={value.level ?? ''} onChange={(e) => set({ level: e.target.value })} />
+          </label>
+        </div>
+        <label className="flex flex-col gap-1">
+          {t('plugin_crm.fields.status')}
+          <Select value={value.status ?? 'active'} onValueChange={(v) => set({ status: v as CrmCustomerForm['status'] })}>
+            <SelectTrigger aria-label={t('plugin_crm.fields.status')}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="active">{t('plugin_crm.status.active')}</SelectItem>
+              <SelectItem value="inactive">{t('plugin_crm.status.inactive')}</SelectItem>
+            </SelectContent>
+          </Select>
+        </label>
+        <div className="grid grid-cols-2 gap-3">
+          <label className="flex flex-col gap-1">
+            {t('plugin_crm.fields.externalSource')}
+            <Select
+              value={value.externalSource ?? ALL}
+              onValueChange={(v) => set({ externalSource: v === ALL ? undefined : v })}
+              disabled={!isNew}
+            >
+              <SelectTrigger aria-label={t('plugin_crm.fields.externalSource')}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>{t('plugin_crm.customer.noAnchor')}</SelectItem>
+                {SOURCES.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {s}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </label>
+          <label className="flex flex-col gap-1">
+            {t('plugin_crm.fields.externalNo')}
+            <Input
+              value={value.externalNo ?? ''}
+              disabled={!isNew}
+              onChange={(e) => set({ externalNo: e.target.value })}
+            />
+          </label>
+        </div>
+        <p className="text-xs text-muted-foreground">{t('plugin_crm.customer.anchorHint')}</p>
+        <div className="grid grid-cols-2 gap-3">
+          <label className="flex flex-col gap-1">
+            {t('plugin_crm.fields.owner')}
+            <Input value={value.owner ?? ''} onChange={(e) => set({ owner: e.target.value })} />
+          </label>
+          <label className="flex flex-col gap-1">
+            {t('plugin_crm.fields.phone')}
+            <Input value={value.phone ?? ''} onChange={(e) => set({ phone: e.target.value })} />
+          </label>
+        </div>
+        <label className="flex flex-col gap-1">
+          {t('plugin_crm.fields.email')}
+          <Input value={value.email ?? ''} onChange={(e) => set({ email: e.target.value })} />
+        </label>
+        <label className="flex flex-col gap-1">
+          {t('plugin_crm.fields.remark')}
+          <Input value={value.remark ?? ''} onChange={(e) => set({ remark: e.target.value })} />
+        </label>
+      </div>
+    </ResponsiveDialog>
   )
 }
 
@@ -236,8 +237,9 @@ export function CustomersTab() {
     },
   ]
 
-  return (
-    <div className="flex flex-col gap-4">
+  // 筛选行并入表格工具行：与「列设置」同一行，不再单独占一行（全站统一口径）。
+  const filterToolbar = (
+    <div className="flex flex-wrap items-center gap-2">
       <FilterBar
         onSearch={() => {
           setFilters(draft)
@@ -270,36 +272,39 @@ export function CustomersTab() {
           </SelectContent>
         </Select>
       </FilterBar>
+      <Can perm="crm:edit">
+        <Button
+          onClick={() => {
+            setEditing(null)
+            setFormOpen(true)
+          }}
+        >
+          <Plus aria-hidden="true" />
+          {t('plugin_crm.customer.create')}
+        </Button>
+      </Can>
+    </div>
+  )
 
-      <DataTable
-        columns={columns}
-        data={data?.list ?? []}
-        rowKey="id"
-        loading={isLoading}
-        columnSettingsKey="plugin-crm-customers"
-        pagination={{
-          page,
-          pageSize,
-          total: data?.total ?? 0,
-          onChange: (p, s) => {
-            setPage(p)
-            setPageSize(s)
-          },
-        }}
-        emptyText={t('plugin_crm.empty')}
-        toolbar={
-          <Can perm="crm:edit">
-            <Button
-              onClick={() => {
-                setEditing(null)
-                setFormOpen(true)
-              }}
-            >
-              <Plus aria-hidden="true" />
-              {t('plugin_crm.customer.create')}
-            </Button>
-          </Can>
-        }
+  return (
+    <>
+    <DataTable
+      columns={columns}
+      data={data?.list ?? []}
+      rowKey="id"
+      loading={isLoading}
+      columnSettingsKey="plugin-crm-customers"
+      pagination={{
+        page,
+        pageSize,
+        total: data?.total ?? 0,
+        onChange: (p, s) => {
+          setPage(p)
+          setPageSize(s)
+        },
+      }}
+      emptyText={t('plugin_crm.empty')}
+      toolbar={filterToolbar}
         rowActions={(cu) => (
           <Can perm="crm:edit">
             <Button
@@ -326,6 +331,6 @@ export function CustomersTab() {
         )}
       />
       <CustomerFormDialog key={editing?.id ?? 'new'} open={formOpen} onOpenChange={setFormOpen} editing={editing} />
-    </div>
+    </>
   )
 }

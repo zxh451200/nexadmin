@@ -24,13 +24,17 @@
         :root { --bg: #0b1020; --fg: #eef0f6; --muted: #a3a9bd; --primary: #5b61f5; --on-primary: #fff; }
       }
       * { box-sizing: border-box; }
-      body { margin: 0; min-height: 100dvh; display: grid; place-items: center; padding: 24px; background: var(--bg); color: var(--fg);
+      /* 顶部固定留白而不是垂直居中：视口高度一变（地址栏收放、DevTools 开关、窗口缩放），
+         居中的整块内容会上下漂移；锚定到顶部后文字位置恒定。overflow 禁滚，避免滚动条带来水平位移。 */
+      body { margin: 0; overflow: hidden; background: var(--bg); color: var(--fg);
         font: 16px/1.6 system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
-      main { max-width: 26rem; text-align: center; }
+      main { width: 100%; max-width: 26rem; margin: 0 auto; padding: 160px 24px 24px; text-align: center; }
+      @media (max-width: 600px) { main { padding-top: 96px; } }
       h1 { margin: 0 0 8px; font-size: 1.5rem; }
       p { margin: 0 0 8px; color: var(--muted); }
-      button { margin-top: 24px; min-height: 44px; padding: 0 28px; border: 0; border-radius: 8px; cursor: pointer;
-        background: var(--primary); color: var(--on-primary); font: inherit; font-weight: 600; }
+      /* 固定宽度：重试 → 连接中… → 仍未连接 文案变长时按钮不再左右跳 */
+      button { margin-top: 24px; min-width: 9rem; min-height: 44px; padding: 0 20px; border: 0; border-radius: 8px; cursor: pointer;
+        background: var(--primary); color: var(--on-primary); font: inherit; font-weight: 600; white-space: nowrap; }
       button:focus-visible { outline: 3px solid var(--fg); outline-offset: 2px; }
       html[data-lang="zh"] [data-en] { display: none; }
       html[data-lang="en"] [data-zh] { display: none; }

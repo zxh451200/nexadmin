@@ -17,7 +17,6 @@ import (
 	"nexadmin/core"
 	"nexadmin/core/plugin"
 	"nexadmin/core/plugin/market"
-	"nexadmin/core/response"
 )
 
 func init() {
@@ -41,7 +40,13 @@ func (*module) Name() string { return "website" }
 
 // Register 注册管理端与公开官网路由。
 func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
-	h := &handler{svc: m.service(d)}
+	h := &handler{svc: m.service(d), gw: newAIGateway(d)}
+
+	// 语言清单来自平台（sys_language，core 在迁移后已加载）：官网不再自持一份。
+	// 公开站路由随后按它注册，所以改动清单要重启才生效。
+	if err := LoadLanguages(core.Languages()); err != nil && d.Log != nil {
+		d.Log.Warn("website: 平台语言清单应用失败，沿用内置语言", zap.Error(err))
+	}
 
 	g := r.Group("/plugins/website")
 	g.GET("/settings", core.Perm("website:setting"), core.Desc("读取站点设置"), h.getSettings)
@@ -49,10 +54,12 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 
 	g.GET("/navs", core.Perm("website:nav"), core.Desc("导航列表"), h.listNavs)
 	g.POST("/navs", core.Perm("website:nav"), core.Desc("新增导航"), h.createNav)
+	g.PUT("/navs/reorder", core.Perm("website:nav"), core.Desc("导航拖拽排序"), h.reorderNavs)
 	g.PUT("/navs/:id", core.Perm("website:nav"), core.Desc("更新导航"), h.updateNav)
 	g.DELETE("/navs/:id", core.Perm("website:nav"), core.Desc("删除导航"), h.deleteNav)
 
 	g.GET("/features", core.Perm("website:feature"), core.Desc("特性卡片列表"), h.listFeatures)
+	g.GET("/feature-icons", core.Perm("website:feature"), core.Desc("特性卡片可选图标"), h.listFeatureIcons)
 	g.POST("/features", core.Perm("website:feature"), core.Desc("新增特性卡片"), h.createFeature)
 	g.PUT("/features/:id", core.Perm("website:feature"), core.Desc("更新特性卡片"), h.updateFeature)
 	g.DELETE("/features/:id", core.Perm("website:feature"), core.Desc("删除特性卡片"), h.deleteFeature)
@@ -68,7 +75,14 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.DELETE("/posts/:id", core.Perm("website:post"), core.Desc("删除新闻"), h.deletePost)
 
 	g.POST("/media", core.Perm("website:setting"), core.Desc("上传 logo/封面图片"), h.uploadMedia)
-	g.GET("/languages", h.listLanguages)
+	// 语言清单的管理接口在框架（/api/v1/languages，见 modules/system/language）：
+	// 官网不再重复提供一份，否则又变成两份互不可见的清单。
+	// 翻译表单的字段元数据由后端下发：白名单在 Go 里，前端不再抄一份。
+	g.GET("/i18n/schema/:entity", h.i18nSchema)
+	// 机翻按实体各挂自己的编辑权限，避免把插件权限码写进 core 的 translatePerms。
+	for _, e := range translateRoutes {
+		g.POST("/i18n/translate/"+e.entity, core.Perm(e.perm), core.Desc("机翻官网内容译文"), h.makeTranslator(e.entity))
+	}
 
 	// 公开官网：注册在根引擎的 RootGroup（带授权闸门）上，匿名可访问。
 	// 热挂载时 RootGroup 为 nil——运行中的引擎不能加根路由，此时只挂管理端 API，
@@ -85,6 +99,8 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 
 		// 页面路由按语言各注册一份：默认语言无前缀，其余语言 /<prefix>（不带尾斜杠）。
 		site.registerPages(pub, false)
+		// 后台只占 /admin：未注册的页面路径由官网渲染 404，而不是落进后台 SPA。
+		core.SetSiteNotFoundHandler(site.notFoundPage)
 		for _, l := range Languages() {
 			if l.Default {
 				continue
@@ -145,17 +161,6 @@ func (h *siteHandler) registerPages(g *gin.RouterGroup, bareHome bool) {
 	g.HEAD("/docs/:slug", h.docPage)
 }
 
-// listLanguages 返回官网已配置语言，管理端翻译编辑器据此渲出输入框。
-func (h *handler) listLanguages(c *gin.Context) {
-	out := make([]gin.H, 0, len(languages))
-	for _, l := range Languages() {
-		out = append(out, gin.H{
-			"code": l.Code, "label": l.Label, "htmlLang": l.HTMLLang, "default": l.Default,
-		})
-	}
-	response.OK(c, out)
-}
-
 // loadMarketSignKey 读取 NEXADMIN_MARKET_SIGN_KEY 指向的 ed25519 私钥；未配置则不签名。
 func loadMarketSignKey(log *zap.Logger) ed25519.PrivateKey {
 	path := strings.TrimSpace(os.Getenv("NEXADMIN_MARKET_SIGN_KEY"))
@@ -179,6 +184,7 @@ func loadMarketSignKey(log *zap.Logger) ed25519.PrivateKey {
 func (m *module) Start(ctx context.Context, d *core.Deps) error {
 	svc := m.service(d)
 	ensureSeed(ctx, svc, d.Log)
+	ensureSeedBackfill(ctx, svc, d.Log)
 	ensureSeedI18n(ctx, svc, d.Log)
 	return nil
 }

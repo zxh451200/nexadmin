@@ -325,7 +325,7 @@ export function onOAuthBound(fn: (provider: string) => void) {
 
 /** 登记一次性 state 并返回授权地址（演示里授权页就是回调页本身，带上 code 和 state） */
 export function mockOAuthStart(provider: string, redirect: string, purpose: 'login' | 'bind') {
-  if (redirect !== `${window.location.origin}/login/oauth/${provider}`) mockError(400, '回调地址不在允许范围内')
+  if (redirect !== `${window.location.origin}/admin/login/oauth/${provider}`) mockError(400, '回调地址不在允许范围内')
   const s = loadOAuth()
   const state = Math.random().toString(36).slice(2)
   s.states[state] = { provider, purpose }

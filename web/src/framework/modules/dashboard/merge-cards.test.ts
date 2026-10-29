@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { isValidCardId, mergeCards } from './merge-cards.ts'
+import { dropInactivePluginCards, isValidCardId, mergeCards } from './merge-cards.ts'
 import type { DashboardCard } from './types'
 
 const card = (id: string, tag: string): DashboardCard => ({ id, title: tag, size: 'sm', component: (() => null) as never })
@@ -39,4 +39,25 @@ test('不合法的 id 被忽略', () => {
   assert.deepEqual(out.map((c) => c.id), ['ok-1_a.b'])
   assert.equal(isValidCardId('a'.repeat(64)), true)
   assert.equal(isValidCardId(''), false)
+})
+
+const cardFiles = () => ({
+  '/src/framework/modules/dashboard/cards.tsx': { cards: [card('fw-a', 'fw')] },
+  '/src/pages/biz/cards.tsx': { cards: [card('page-a', 'page')] },
+  '/src/plugins/report/cards.tsx': { cards: [card('report-a', 'report')] },
+  '/src/plugins/cron/cards.tsx': { cards: [card('cron-a', 'cron')] },
+})
+
+test('未启用插件的卡片被剔除，框架与用户页面卡片不受影响', () => {
+  const out = mergeCards(dropInactivePluginCards(cardFiles(), ['cron']))
+  assert.deepEqual(out.map((c) => c.id).sort(), ['cron-a', 'fw-a', 'page-a'])
+})
+
+test('名单为空 = 一张插件卡片都不挂（含查询未回来的时候）', () => {
+  const out = mergeCards(dropInactivePluginCards(cardFiles(), []))
+  assert.deepEqual(out.map((c) => c.id).sort(), ['fw-a', 'page-a'])
+})
+
+test('问不到启用名单（mock / 旧后端）时保持原样', () => {
+  assert.deepEqual(mergeCards(dropInactivePluginCards(cardFiles(), null)).length, 4)
 })

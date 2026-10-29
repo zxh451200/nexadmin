@@ -36,6 +36,7 @@ func (*module) Name() string { return "report" }
 // Register 注册路由。r 已经是 /api/v1 且默认要求登录。
 func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	reg, set := loadRegistry(d.Config, d.Log)
+	seedBuiltins(d.DB, d.Log)
 	registerRoutes(r, newHandler(NewService(d.DB, d.Log, reg, set), d.DB))
 }
 

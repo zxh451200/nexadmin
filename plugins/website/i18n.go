@@ -8,11 +8,10 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
 
-	"nexadmin/pkg/htmlsafe"
+	pi18n "nexadmin/pkg/i18n"
 )
 
 // 官网多语言：语言元数据 + 静态文案字典 + 数据库内容翻译都在这里。
@@ -51,65 +50,81 @@ func mustLoadLocales() {
 	if err != nil {
 		panic("website: 缺少 locales/languages.json: " + err.Error())
 	}
-	if err := json.Unmarshal(raw, &languages); err != nil {
+	var fileLangs []Language
+	if err := json.Unmarshal(raw, &fileLangs); err != nil {
 		panic("website: locales/languages.json 解析失败: " + err.Error())
 	}
-	if len(languages) == 0 {
-		panic("website: 至少需要一种语言")
+	if err := applyLanguages(fileLangs); err != nil {
+		panic("website: " + err.Error())
 	}
-	seenCode := map[string]bool{}
-	seenPrefix := map[string]bool{}
-	for _, l := range languages {
-		if l.Code == "" || l.HTMLLang == "" {
-			panic("website: 语言缺少 code/htmlLang")
-		}
-		if seenCode[l.Code] {
-			panic("website: 语言 code 重复: " + l.Code)
-		}
-		seenCode[l.Code] = true
-		if l.Prefix != "" {
-			if seenPrefix[l.Prefix] || strings.ContainsAny(l.Prefix, "/?#") {
-				panic("website: 语言 prefix 非法或重复: " + l.Prefix)
-			}
-			seenPrefix[l.Prefix] = true
-		} else if !l.Default {
-			panic("website: 非默认语言必须配置 prefix: " + l.Code)
-		}
-		if l.Default {
-			if defaultLang.Code != "" {
-				panic("website: 默认语言只能有一个")
-			}
-			defaultLang = l
-		}
-		if l.DateFormat == "" {
-			l.DateFormat = "2006-01-02"
-		}
-		langByCode[l.Code] = l
-		langByAlias[strings.ToLower(l.Code)] = l
-		if l.Prefix != "" {
-			langByAlias[strings.ToLower(l.Prefix)] = l
-		}
-		langByAlias[strings.ToLower(l.HTMLLang)] = l
-		if base, _, ok := strings.Cut(l.Code, "-"); ok {
-			if _, exists := langByAlias[strings.ToLower(base)]; !exists {
-				langByAlias[strings.ToLower(base)] = l
-			}
-		}
+}
 
-		dictRaw, err := localeFS.ReadFile("locales/" + l.Code + ".json")
+// applyLanguages 用给定清单重建全局语言表与字典。
+// 清单已由 core 校验并补全（见 core.NormalizeLanguages / sys_language），
+// 官网不再重复实现一套规则——两份校验规则正是过去两边清单能各自跑偏的原因。
+// 缺 locales/<code>.json 的语言回退默认语言字典：界面文案显示默认语言，内容翻译仍可单独录入。
+func applyLanguages(list []Language) error {
+	var def Language
+	for _, l := range list {
+		if l.Default {
+			def = l
+		}
+	}
+	if def.Code == "" {
+		return fmt.Errorf("语言清单里没有默认语言")
+	}
+	defaultDict, err := readDict(def.Code)
+	if err != nil {
+		return fmt.Errorf("默认语言字典缺失: %v", err)
+	}
+
+	nextDicts := make(map[string]map[string]string, len(list))
+	nextByCode := make(map[string]Language, len(list))
+	nextByAlias := make(map[string]Language, len(list))
+	for _, l := range list {
+		d, err := readDict(l.Code)
 		if err != nil {
-			panic("website: 缺少语言字典 locales/" + l.Code + ".json")
+			d = defaultDict
 		}
-		var d map[string]string
-		if err := json.Unmarshal(dictRaw, &d); err != nil {
-			panic("website: 语言字典解析失败 " + l.Code + ": " + err.Error())
+		nextDicts[l.Code] = d
+		nextByCode[l.Code] = l
+		nextByAlias[strings.ToLower(l.Code)] = l
+		if l.Prefix != "" {
+			nextByAlias[strings.ToLower(l.Prefix)] = l
 		}
-		dicts[l.Code] = d
+		nextByAlias[strings.ToLower(l.HTMLLang)] = l
+		if base, _, ok := strings.Cut(l.Code, "-"); ok {
+			if _, exists := nextByAlias[strings.ToLower(base)]; !exists {
+				nextByAlias[strings.ToLower(base)] = l
+			}
+		}
 	}
-	if defaultLang.Code == "" {
-		panic("website: 必须有一个 default 语言")
-	}
+
+	languages = list
+	defaultLang = def
+	dicts = nextDicts
+	langByCode = nextByCode
+	langByAlias = nextByAlias
 	localeLoaded = true
+	return nil
+}
+
+func readDict(code string) (map[string]string, error) {
+	raw, err := localeFS.ReadFile("locales/" + code + ".json")
+	if err != nil {
+		return nil, err
+	}
+	var d map[string]string
+	if err := json.Unmarshal(raw, &d); err != nil {
+		return nil, err
+	}
+	return d, nil
+}
+
+// HasDict 报告内置字典是否存在（后台据���提示「界面文案将回退默认语言」）。
+func HasDict(code string) bool {
+	_, err := localeFS.ReadFile("locales/" + code + ".json")
+	return err == nil
 }
 
 // Languages 返回全部语言（副本，调用方可安全排序/修改）。
@@ -377,13 +392,13 @@ func (l Language) Path(p string) string {
 // nonLocalizedPaths 是不做语言前缀的站内路径：静态资源、后台 SPA、协议端点与包下载。
 func isNonLocalizedPath(p string) bool {
 	path, _, _ := strings.Cut(p, "?")
-	for _, pre := range []string{"/website-assets/", "/api/"} {
+	for _, pre := range []string{"/website-assets/", "/api/", "/admin"} {
 		if strings.HasPrefix(path, pre) {
 			return true
 		}
 	}
 	switch path {
-	case "/login", "/healthz", "/sitemap.xml", "/robots.txt", "/plugins/index.json", "/plugins/signing-key.pub":
+	case "/healthz", "/sitemap.xml", "/robots.txt", "/plugins/index.json", "/plugins/signing-key.pub":
 		return true
 	}
 	if strings.HasPrefix(path, "/plugins/") {
@@ -419,144 +434,89 @@ func formatDate(l Language, v any) string {
 }
 
 // ---- 数据库内容翻译 ----
+//
+// 译文文档、字段白名单、完成度与按语言发布的算法都在 pkg/i18n；
+// 这里只剩官网自己的两件事：把本站语言表适配成 pkg 要的 Locales，
+// 以及每类内容「哪些字段可翻译」的清单。
 
-// translationFor 取某语言的字段表；为空或损坏时返回 nil（调用方保留原文）。
-func translationFor(raw, code string) map[string]string {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return nil
+// siteLocales 把官网运行期语言表适配成 pkg/i18n 的 Locales 视图。
+type siteLocales struct{}
+
+func (siteLocales) All() []pi18n.Language {
+	all := Languages()
+	out := make([]pi18n.Language, 0, len(all))
+	for _, l := range all {
+		out = append(out, pi18n.Language{Code: l.Code, Default: l.Default})
 	}
-	var all map[string]map[string]string
-	if err := json.Unmarshal([]byte(raw), &all); err != nil {
-		return nil
-	}
-	if tr, ok := all[code]; ok {
-		return tr
-	}
-	if base, _, found := strings.Cut(code, "-"); found {
-		if tr, ok := all[base]; ok {
-			return tr
-		}
-	}
-	return nil
+	return out
 }
 
-func pick(tr map[string]string, field, base string) string {
-	if v, ok := tr[field]; ok && v != "" {
-		return v
+func (siteLocales) Resolve(code string) (pi18n.Language, bool) {
+	l, ok := LanguageByCode(code)
+	if !ok {
+		return pi18n.Language{}, false
 	}
-	return base
+	return pi18n.Language{Code: l.Code, Default: l.Default}, true
+}
+
+// translations 取某语言的字段译文（含语基回退）；nil 表示整篇回退原文。
+func translations(raw, code string) map[string]string {
+	return pi18n.ParseDoc(raw).For(code)
 }
 
 func (set *Setting) localize(code string) {
-	tr := translationFor(set.I18nJSON, code)
-	set.SiteDesc = pick(tr, "siteDesc", set.SiteDesc)
-	set.HomeTitle = pick(tr, "homeTitle", set.HomeTitle)
-	set.HomeSubtitle = pick(tr, "homeSubtitle", set.HomeSubtitle)
-	set.HomeCTALabel = pick(tr, "homeCtaLabel", set.HomeCTALabel)
-	set.SeoKeywords = pick(tr, "seoKeywords", set.SeoKeywords)
-	set.FooterNote = pick(tr, "footerNote", set.FooterNote)
+	tr := translations(set.I18nJSON, code)
+	set.SiteDesc = pi18n.Pick(tr, "siteDesc", set.SiteDesc)
+	set.HomeTitle = pi18n.Pick(tr, "homeTitle", set.HomeTitle)
+	set.HomeSubtitle = pi18n.Pick(tr, "homeSubtitle", set.HomeSubtitle)
+	set.HomeCTALabel = pi18n.Pick(tr, "homeCtaLabel", set.HomeCTALabel)
+	set.SeoKeywords = pi18n.Pick(tr, "seoKeywords", set.SeoKeywords)
+	set.FooterNote = pi18n.Pick(tr, "footerNote", set.FooterNote)
 }
 
 func (n *Nav) localize(code string) {
-	n.Label = pick(translationFor(n.I18nJSON, code), "label", n.Label)
+	n.Label = pi18n.Pick(translations(n.I18nJSON, code), "label", n.Label)
 }
 
 func (f *Feature) localize(code string) {
-	tr := translationFor(f.I18nJSON, code)
-	f.Title = pick(tr, "title", f.Title)
-	f.Description = pick(tr, "description", f.Description)
+	tr := translations(f.I18nJSON, code)
+	f.Title = pi18n.Pick(tr, "title", f.Title)
+	f.Description = pi18n.Pick(tr, "description", f.Description)
 }
 
 func (p *Post) localize(code string) {
-	tr := translationFor(p.I18nJSON, code)
-	p.Title = pick(tr, "title", p.Title)
-	p.Summary = pick(tr, "summary", p.Summary)
-	p.Content = pick(tr, "content", p.Content)
+	tr := translations(p.I18nJSON, code)
+	p.Title = pi18n.Pick(tr, "title", p.Title)
+	p.Summary = pi18n.Pick(tr, "summary", p.Summary)
+	p.SeoDesc = pi18n.Pick(tr, "seoDesc", p.SeoDesc)
+	p.Content = pi18n.Pick(tr, "content", p.Content)
 }
 
 func (p *Page) localize(code string) {
-	tr := translationFor(p.I18nJSON, code)
-	p.Title = pick(tr, "title", p.Title)
-	p.SeoDesc = pick(tr, "seoDesc", p.SeoDesc)
-	p.Content = pick(tr, "content", p.Content)
+	tr := translations(p.I18nJSON, code)
+	p.Title = pi18n.Pick(tr, "title", p.Title)
+	p.SeoDesc = pi18n.Pick(tr, "seoDesc", p.SeoDesc)
+	p.Content = pi18n.Pick(tr, "content", p.Content)
 }
 
-// i18nField 是某种内容允许翻译的字段：Max=0 表示不限长度，Sanitize 表示富文本。
-type i18nField struct {
-	Max      int
-	Sanitize bool
-}
-
+// 各内容的可翻译字段白名单：Max=0 表示不限长度，Rich 表示按富文本清洗后入库。
+// 这是官网的内容模型，所以留在插件里；算法在 pkg/i18n。
 var (
-	settingI18nFields = map[string]i18nField{
+	settingI18nFields = pi18n.Fields{
 		"siteDesc": {Max: 300}, "homeTitle": {Max: 200}, "homeSubtitle": {Max: 500},
 		"homeCtaLabel": {Max: 64}, "seoKeywords": {Max: 300}, "footerNote": {Max: 300},
 	}
-	navI18nFields     = map[string]i18nField{"label": {Max: 64}}
-	featureI18nFields = map[string]i18nField{
+	navI18nFields     = pi18n.Fields{"label": {Max: 64}}
+	featureI18nFields = pi18n.Fields{
 		"title": {Max: 128}, "description": {Max: 500},
 	}
-	pageI18nFields = map[string]i18nField{
-		"title": {Max: 200}, "seoDesc": {Max: 300}, "content": {Sanitize: true},
+	pageI18nFields = pi18n.Fields{
+		"title": {Max: 200}, "seoDesc": {Max: 300}, "content": {Rich: true},
 	}
-	postI18nFields = map[string]i18nField{
-		"title": {Max: 200}, "summary": {Max: 500}, "content": {Sanitize: true},
+	postI18nFields = pi18n.Fields{
+		"title": {Max: 200}, "summary": {Max: 500}, "seoDesc": {Max: 300}, "content": {Rich: true},
 	}
 )
-
-// normalizeI18nJSON 校验并收窄翻译 JSON：只保留已配置语言与白名单字段，
-// 统一裁剪长度、清洗富文本；未知语言/字段直接丢弃，避免脏数据进库。
-func normalizeI18nJSON(raw string, fields map[string]i18nField) (string, error) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return "", nil
-	}
-	if len(raw) > 512<<10 {
-		return "", fmt.Errorf("翻译内容过大")
-	}
-	var in map[string]map[string]string
-	if err := json.Unmarshal([]byte(raw), &in); err != nil {
-		return "", fmt.Errorf("翻译 JSON 格式不正确")
-	}
-	out := map[string]map[string]string{}
-	for code, vals := range in {
-		l, ok := LanguageByCode(code)
-		if !ok || l.Default {
-			// 默认语言的正文就是原文，不必重复存译文。
-			continue
-		}
-		dst := map[string]string{}
-		for key, spec := range fields {
-			v, ok := vals[key]
-			if !ok {
-				continue
-			}
-			if spec.Sanitize {
-				v = htmlsafe.Sanitize(v)
-			} else {
-				v = strings.TrimSpace(v)
-			}
-			if spec.Max > 0 && utf8.RuneCountInString(v) > spec.Max {
-				v = string([]rune(v)[:spec.Max])
-			}
-			if v != "" {
-				dst[key] = v
-			}
-		}
-		if len(dst) > 0 {
-			out[l.Code] = dst
-		}
-	}
-	if len(out) == 0 {
-		return "", nil
-	}
-	b, err := json.Marshal(out)
-	if err != nil {
-		return "", err
-	}
-	return string(b), nil
-}
 
 // i18nJSON 只用于 seed/backfill 的编译期常量，序列化不会失败。
 func i18nJSON(fields map[string]map[string]string) string {
@@ -565,4 +525,23 @@ func i18nJSON(fields map[string]map[string]string) string {
 	}
 	b, _ := json.Marshal(fields)
 	return string(b)
+}
+
+// ---- 按语言发布 ----
+//
+// 判定算法在 pkg/i18n（Translatable / NormalizePublish / Published），官网只提供语言表与字段白名单。
+// 闸门必须在服务端：只在前端禁用开关的话，直接写接口就能把「伪装成日语的中文页」放回索引。
+
+// visibleLanguages 返回这条内容已发布的语言，顺序沿用配置顺序。
+// 详情页的 hreflang、og:locale:alternate 和语言切换器都遍历它：未发布的语言不能出现在
+// 这些位置，否则等于告诉搜索引擎「这个中文页还有个日语版」，而那个地址其实 404。
+func visibleLanguages(published bool, publishedJSON string) []Language {
+	all := Languages()
+	out := make([]Language, 0, len(all))
+	for _, l := range all {
+		if pi18n.Published(published, publishedJSON, l.Code, siteLocales{}) {
+			out = append(out, l)
+		}
+	}
+	return out
 }

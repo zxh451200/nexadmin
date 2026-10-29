@@ -9,6 +9,7 @@ import (
 
 	"nexadmin/core"
 	"nexadmin/core/response"
+	"nexadmin/modules/internal/monitorsnap"
 	"nexadmin/pkg/apistat"
 )
 
@@ -34,6 +35,15 @@ type snapshot struct {
 // 所以排在本模块之前注册的路由（含 core 的 /auth/*）不在统计内；要全覆盖需要 core 在引擎上挂 apistat.Middleware。
 func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	apistat.Install(r, d.Public)
+	store := monitorsnap.NewStore(d.DB)
+	stop := make(chan struct{})
+	if d.OnClose != nil {
+		d.OnClose(func() { close(stop) })
+	}
+	go monitorsnap.Loop(stop, store, monitorsnap.KindAPI, func() monitorsnap.Metrics {
+		s := apistat.Default.Snapshot()
+		return monitorsnap.Metrics{"qps": s.QPS, "avgMs": s.AvgMs, "errorRate": s.ErrorRate}
+	}, d.Log)
 	r.GET("/monitor/api", core.Perm(PermList), func(c *gin.Context) {
 		s := apistat.Default.Snapshot()
 		if s.APIs == nil {
@@ -41,4 +51,5 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 		}
 		response.OK(c, snapshot{TS: time.Now().UnixMilli(), QPS: s.QPS, AvgMs: s.AvgMs, ErrorRate: s.ErrorRate, APIs: s.APIs})
 	})
+	r.GET("/monitor/api/history", core.Perm(PermList), monitorsnap.HandleHistory(store, monitorsnap.KindAPI))
 }

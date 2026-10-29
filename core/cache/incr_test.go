@@ -60,15 +60,16 @@ func TestIncrHelperSetsTTLOnCreateOnly(t *testing.T) {
 	m := newMemory()
 	defer m.Close()
 	ctx := context.Background()
-	if _, err := Incr(m, ctx, "k", 80*time.Millisecond); err != nil {
+	// TTL 余量放大三倍以上：慢机器/CI 上 sleep 抖动不应让 key 在第二次自增前过期。
+	if _, err := Incr(m, ctx, "k", 500*time.Millisecond); err != nil {
 		t.Fatal(err)
 	}
-	time.Sleep(50 * time.Millisecond)
-	if n, _ := Incr(m, ctx, "k", 80*time.Millisecond); n != 2 {
+	time.Sleep(150 * time.Millisecond)
+	if n, _ := Incr(m, ctx, "k", 500*time.Millisecond); n != 2 {
 		t.Fatalf("n=%d", n)
 	}
-	time.Sleep(50 * time.Millisecond) // 距创建 100ms：自增不延长 TTL，key 已过期
-	if n, _ := Incr(m, ctx, "k", 80*time.Millisecond); n != 1 {
+	time.Sleep(400 * time.Millisecond) // 距创建 550ms：自增不延长 TTL，key 已过期
+	if n, _ := Incr(m, ctx, "k", 500*time.Millisecond); n != 1 {
 		t.Fatalf("过期后应从 1 重新计数，得到 %d", n)
 	}
 }

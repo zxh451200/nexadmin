@@ -15,7 +15,6 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/framework/ui/avatar'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
-import { Label } from '@/framework/ui/label'
 import { Switch } from '@/framework/ui/switch'
 import {
   blobExt,
@@ -185,10 +184,32 @@ export default function UserPage() {
 
   return (
     <PageContainer>
-      <PageHeader
-        title={t('user.title')}
-        description={t('user.description')}
-        actions={
+      <PageHeader title={t('user.title')} description={t('user.description')} />
+
+      <AiFilterBox
+        scope="user"
+        onApply={(f) => {
+          const next: UserFilters = { keyword: f.keyword, status: f.status, gender: f.gender, createdFrom: f.createdFrom, createdTo: f.createdTo }
+          setDraft({ keyword: next.keyword, status: next.status })
+          setApplied(next)
+          setPage(1)
+          setSelected([])
+        }}
+      />
+
+      <FilterBar onSearch={search} onReset={reset}>
+        <Input aria-label={t('user.keyword')} className="md:w-64"
+          id="user-keyword"
+          value={draft.keyword ?? ''}
+          placeholder={t('user.keywordPlaceholder')}
+          onChange={(e) => setDraft((d) => ({ ...d, keyword: e.target.value }))}
+        />
+        <DictSelect dict="sys_status" value={draft.status ?? ''} onChange={(v) => setDraft((d) => ({ ...d, status: v || undefined }))} aria-label={t('common.status')} className="md:w-40" placeholder={t('common.status')} />
+        <TreeSelect url="/depts/tree" value={draft.deptId ?? ''} onChange={(v) => setDraft((d) => ({ ...d, deptId: v || undefined }))} aria-label={t('user.dept')} className="md:w-56" placeholder={t('user.dept')} />
+      </FilterBar>
+
+      <DataTable<User>
+        toolbar={
           <>
             <Can perm="user:import">
               <Button type="button" variant="outline" onClick={() => setImportOpen(true)}>
@@ -210,40 +231,6 @@ export default function UserPage() {
             </Can>
           </>
         }
-      />
-
-      <AiFilterBox
-        scope="user"
-        onApply={(f) => {
-          const next: UserFilters = { keyword: f.keyword, status: f.status, gender: f.gender, createdFrom: f.createdFrom, createdTo: f.createdTo }
-          setDraft({ keyword: next.keyword, status: next.status })
-          setApplied(next)
-          setPage(1)
-          setSelected([])
-        }}
-      />
-
-      <FilterBar onSearch={search} onReset={reset}>
-        <div className="flex flex-col gap-1.5 md:w-64">
-          <Label htmlFor="user-keyword">{t('user.keyword')}</Label>
-          <Input
-            id="user-keyword"
-            value={draft.keyword ?? ''}
-            placeholder={t('user.keywordPlaceholder')}
-            onChange={(e) => setDraft((d) => ({ ...d, keyword: e.target.value }))}
-          />
-        </div>
-        <div className="flex flex-col gap-1.5 md:w-40">
-          <Label>{t('common.status')}</Label>
-          <DictSelect dict="sys_status" value={draft.status ?? ''} onChange={(v) => setDraft((d) => ({ ...d, status: v || undefined }))} />
-        </div>
-        <div className="flex flex-col gap-1.5 md:w-56">
-          <Label>{t('user.dept')}</Label>
-          <TreeSelect url="/depts/tree" value={draft.deptId ?? ''} onChange={(v) => setDraft((d) => ({ ...d, deptId: v || undefined }))} />
-        </div>
-      </FilterBar>
-
-      <DataTable<User>
         columns={columns}
         data={list.data?.list ?? []}
         rowKey="id"

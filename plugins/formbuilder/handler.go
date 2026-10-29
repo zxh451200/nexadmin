@@ -10,7 +10,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"nexadmin/core"
 	"nexadmin/core/auth"
+	corei18n "nexadmin/core/i18n"
 	"nexadmin/core/response"
 	"nexadmin/pkg/idgen"
 )
@@ -322,11 +324,16 @@ func (h *handler) deleteSubmission(c *gin.Context) {
 
 const xlsxContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
+// langOf 返回导出用的语言码。
+//
+// 之前这里只看 Accept-Language 是不是以 "en" 开头——那是写死的二元判断，
+// 第三门语言永远拿到中文表头。现在用框架协商好的语言：core/middleware.I18n 已经
+// 按平台清单（sys_language）解析过并放进 ctx，协商结果必然是清单里的码。
 func langOf(c *gin.Context) string {
-	if strings.HasPrefix(strings.ToLower(c.GetHeader("Accept-Language")), "en") {
-		return "en-US"
+	if l := corei18n.Lang(c.Request.Context()); l != "" {
+		return l
 	}
-	return "zh-CN"
+	return core.DefaultLanguage().Code
 }
 
 // GET /forms/:id/export  同步导出（最多 MaxSyncExport 行，更多请用 export-job）

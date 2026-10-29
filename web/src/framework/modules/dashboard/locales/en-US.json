@@ -29,8 +29,13 @@
       "query": "Query",
       "update": "Update",
       "insert": "Create",
+      "create": "Create",
       "delete": "Delete",
-      "export": "Export"
+      "export": "Export",
+      "import": "Import",
+      "sort": "Sort",
+      "grant": "Grant",
+      "other": "Other"
     },
     "todos": "To-do",
     "todoMessage": "Message",

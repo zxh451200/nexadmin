@@ -12,6 +12,15 @@ error:
   unknown: Unknown error
   ai_tenant_disabled: AI is turned off for your tenant. Please contact the platform administrator
   ai_quota_exceeded: Your tenant has reached its daily AI call limit (%d). Please try again tomorrow or contact the platform administrator
+  ai_disabled: AI is not enabled
+  ai_rate_limited: Too many AI requests; please try again later
+  ai_input_too_long: The input is too long; please shorten it and try again
+  ai_timeout: The AI service timed out; please try again
+  ai_bad_output: The AI returned an unusable result; please try again
+  ai_unavailable: The AI service is temporarily unavailable
+  payload_too_large: The request body is too large
+  too_many: Too many tasks in progress; wait for them to finish
+  invalid_param: Invalid parameter
   mcp_operation_failed: The MCP operation could not be completed. Please start it again
   mcp_confirmation_revoked: This MCP confirmation was revoked after too many attempts. Please start the operation again
 auth:
@@ -143,4 +152,9 @@ workflow:
   action_rejected: Rejected by the current approval node
   withdraw_not_owner: Only the initiator can withdraw this workflow
   plugin_inactive: Workflow plugin is not enabled or its license has lapsed
+formbuilder:
+  head_id: Submission ID
+  head_submitter: Submitter
+  head_time: Submitted at
+  head_version: Version
 

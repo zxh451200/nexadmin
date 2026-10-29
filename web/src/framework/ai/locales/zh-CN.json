@@ -28,8 +28,8 @@
         "friendly": "亲切",
         "concise": "简洁"
       },
-      "empty": "请先填写要点或待润色的内容",
-      "emptyBody": "请先填写正文要点，或填写标题作为要点",
+      "emptyDraft": "没有可起草的内容：先写几个要点",
+      "emptyPolish": "没有可润色的内容：先填写内容",
       "done": "AI 已生成内容",
       "undo": "撤销",
       "failed": "AI 写作失败，请稍后重试",

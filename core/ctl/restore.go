@@ -103,7 +103,7 @@ func (r *Restore) Run(ctx context.Context, o RestoreOptions) error {
 	} else {
 		fmt.Fprintf(r.Out, "  2. 服务已停止\n")
 	}
-	fmt.Fprintf(r.Out, "  3. 恢复前备份  用 %s 把当前库备份到 ./%s/（失败则中止）\n", r.Pre.Tool(), filepath.ToSlash(dir))
+	fmt.Fprintf(r.Out, "  3. 恢复前备份  用 %s 把当前库备份到 %s/（失败则中止）\n", r.Pre.Tool(), displayDir(dir))
 	fmt.Fprintf(r.Out, "  4. 覆盖数据库  %s://%s:%d/%s\n       当前共 %d 张表，%s，%s；备份中包含的表会被删除后重建，备份里没有的表保留\n",
 		info.Engine, info.Host, info.Port, info.Name, len(info.Tables), humanRows(info.Rows), humanBytes(info.Bytes))
 	fmt.Fprintf(r.Out, "     使用 %s 导入\n", r.Tool.Tool())

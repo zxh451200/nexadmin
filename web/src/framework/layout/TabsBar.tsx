@@ -118,7 +118,7 @@ export function TabsBar({ menu, onRefresh }: TabsBarProps) {
                 className={cn(
                   'group/tab flex h-8 shrink-0 items-center rounded-full ps-3 text-sm transition-colors',
                   active
-                    ? 'bg-background font-medium text-primary shadow-sm'
+                    ? 'bg-background font-medium text-primary shadow-sm ring-1 ring-border'
                     : 'text-muted-foreground hover:bg-background/60 hover:text-foreground',
                   pinned && 'pe-3',
                 )}

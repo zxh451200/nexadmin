@@ -3,6 +3,7 @@ package menu
 import (
 	"context"
 	"errors"
+	"sort"
 	"strings"
 	"unicode/utf8"
 
@@ -353,6 +354,36 @@ func (s *service) moveLocked(ctx context.Context, id idgen.ID, in moveInput) err
 			return bad("按钮下不能再建子菜单")
 		}
 	}
+	if in.AfterID != nil {
+		// 插到指定同级之后：先算出目标父级的完整顺序，再整体重编号，
+		// 否则插入点两侧的 sort 只能靠调值硬挤，连续拖几次就会重复。
+		var sibs []Menu
+		for _, row := range rows {
+			if row.ID != id && row.ParentID == pid {
+				sibs = append(sibs, row)
+			}
+		}
+		sort.Slice(sibs, func(i, j int) bool {
+			if sibs[i].Sort != sibs[j].Sort {
+				return sibs[i].Sort < sibs[j].Sort
+			}
+			return sibs[i].ID < sibs[j].ID
+		})
+		order := placeAfter(sibs, id, strings.TrimSpace(*in.AfterID))
+		return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+			for i, sid := range order {
+				upd := map[string]any{"sort": (i + 1) * 10}
+				if sid == id {
+					upd["parent_id"] = int64(pid)
+				}
+				if err := tx.Model(&Menu{}).Where("id = ?", int64(sid)).Updates(upd).Error; err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+	}
+
 	maxSort := 0
 	for _, row := range rows {
 		if row.ID != id && row.ParentID == pid && row.Sort > maxSort {
@@ -362,4 +393,25 @@ func (s *service) moveLocked(ctx context.Context, id idgen.ID, in moveInput) err
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		return tx.Model(&Menu{}).Where("id = ?", int64(id)).Updates(map[string]any{"parent_id": int64(pid), "sort": maxSort + 10}).Error
 	})
+}
+
+// placeAfter 把 id 插到 afterID 之后（afterID 为空=插到最前；找不到该同级=追加到末尾），
+// 返回目标父级下的完整顺序（含 id）。siblings 不含 id，且已按 sort 升序。
+func placeAfter(siblings []Menu, id idgen.ID, afterID string) []idgen.ID {
+	out := make([]idgen.ID, 0, len(siblings)+1)
+	placed := afterID == ""
+	if placed {
+		out = append(out, id)
+	}
+	for _, s := range siblings {
+		out = append(out, s.ID)
+		if s.ID.String() == afterID {
+			out = append(out, id)
+			placed = true
+		}
+	}
+	if !placed {
+		out = append(out, id)
+	}
+	return out
 }

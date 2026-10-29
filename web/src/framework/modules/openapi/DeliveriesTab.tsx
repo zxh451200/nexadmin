@@ -8,7 +8,6 @@ import { FilterBar } from '@/framework/components/FilterBar'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Badge, type BadgeProps } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
-import { Label } from '@/framework/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import { fmtDateTime } from '../oper-log/format'
 import { DELIVERY_STATUSES, useDeliveries, useRetryDelivery, useWebhooks, type Delivery, type DeliveryStatus } from './api'
@@ -114,38 +113,32 @@ export function DeliveriesTab() {
   return (
     <div className="flex flex-col gap-4">
       <FilterBar onSearch={search} onReset={reset}>
-        <div className="flex w-full flex-col gap-1.5 md:w-56">
-          <Label>{t('openapi.deliveries.filter.webhook')}</Label>
-          <Select value={draft.webhookId} onValueChange={(v) => setDraft({ ...draft, webhookId: v })}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>{t('openapi.deliveries.filter.allWebhooks')}</SelectItem>
-              {(webhooks ?? []).map((w) => (
-                <SelectItem key={w.id} value={w.id}>
-                  {w.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex w-full flex-col gap-1.5 md:w-40">
-          <Label>{t('openapi.deliveries.filter.status')}</Label>
-          <Select value={draft.status} onValueChange={(v) => setDraft({ ...draft, status: v })}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>{t('openapi.deliveries.filter.allStatus')}</SelectItem>
-              {DELIVERY_STATUSES.map((s) => (
-                <SelectItem key={s} value={s}>
-                  {t(`openapi.deliveries.status.${s}`)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        <Select value={draft.webhookId} onValueChange={(v) => setDraft({ ...draft, webhookId: v })}>
+          <SelectTrigger className="md:w-56" aria-label={t('openapi.deliveries.filter.webhook')}>
+            <SelectValue placeholder={t('openapi.deliveries.filter.webhook')} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>{t('openapi.deliveries.filter.allWebhooks')}</SelectItem>
+            {(webhooks ?? []).map((w) => (
+              <SelectItem key={w.id} value={w.id}>
+                {w.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={draft.status} onValueChange={(v) => setDraft({ ...draft, status: v })}>
+          <SelectTrigger className="md:w-40" aria-label={t('openapi.deliveries.filter.status')}>
+            <SelectValue placeholder={t('openapi.deliveries.filter.status')} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>{t('openapi.deliveries.filter.allStatus')}</SelectItem>
+            {DELIVERY_STATUSES.map((s) => (
+              <SelectItem key={s} value={s}>
+                {t(`openapi.deliveries.status.${s}`)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </FilterBar>
 
       <DataTable

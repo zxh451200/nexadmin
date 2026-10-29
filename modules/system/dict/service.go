@@ -7,9 +7,35 @@ import (
 
 	"gorm.io/gorm"
 
+	"nexadmin/core"
 	"nexadmin/core/response"
+	pi18n "nexadmin/pkg/i18n"
 	"nexadmin/pkg/idgen"
 )
+
+// dictLabelFields 是字典项唯一可翻译的字段。
+var dictLabelFields = pi18n.Fields{"label": {Max: 100}}
+
+// platformLocales 把框架语言清单（sys_language）适配成 pkg/i18n 需要的形状：
+// 契约层不认识任何具体表，语言清单归调用方所有。
+type platformLocales struct{}
+
+func (platformLocales) Resolve(code string) (pi18n.Language, bool) {
+	l, ok := core.LanguageByCode(code)
+	if !ok {
+		return pi18n.Language{}, false
+	}
+	return pi18n.Language{Code: l.Code, Default: l.Default}, true
+}
+
+func (platformLocales) All() []pi18n.Language {
+	ls := core.Languages()
+	out := make([]pi18n.Language, 0, len(ls))
+	for _, l := range ls {
+		out = append(out, pi18n.Language{Code: l.Code, Default: l.Default})
+	}
+	return out
+}
 
 // Service 封装字典的数据访问与业务规则。
 type Service struct{ db *gorm.DB }
@@ -205,7 +231,11 @@ func (s *Service) CreateData(ctx context.Context, in DataInput) (*Data, error) {
 	if err := s.checkData(ctx, in, 0); err != nil {
 		return nil, err
 	}
-	d := &Data{TypeID: in.TypeID, Label: in.Label, Value: in.Value, Tag: tagOr(in.Tag),
+	i18nJSON, err := pi18n.Normalize(in.I18nJSON, platformLocales{}, dictLabelFields)
+	if err != nil {
+		return nil, err
+	}
+	d := &Data{TypeID: in.TypeID, Label: in.Label, I18nJSON: i18nJSON, Value: in.Value, Tag: tagOr(in.Tag),
 		Sort: in.Sort, Status: statusOr(in.Status), Remark: in.Remark}
 	return d, s.db.WithContext(ctx).Create(d).Error
 }
@@ -229,8 +259,12 @@ func (s *Service) UpdateData(ctx context.Context, id idgen.ID, in DataInput) (*D
 	if err := s.checkData(ctx, in, id); err != nil {
 		return nil, err
 	}
+	i18nJSON, err := pi18n.Normalize(in.I18nJSON, platformLocales{}, dictLabelFields)
+	if err != nil {
+		return nil, err
+	}
 	err = s.db.WithContext(ctx).Model(&Data{}).Where("id = ?", int64(id)).Updates(map[string]any{
-		"type_id": int64(in.TypeID), "dict_label": in.Label, "dict_value": in.Value, "tag": tagOr(in.Tag),
+		"type_id": int64(in.TypeID), "dict_label": in.Label, "i18n_json": i18nJSON, "dict_value": in.Value, "tag": tagOr(in.Tag),
 		"sort": in.Sort, "status": statusOr(in.Status), "remark": in.Remark,
 	}).Error
 	if err != nil {
@@ -273,8 +307,10 @@ func (s *Service) SortData(ctx context.Context, ids []idgen.ID) error {
 	return sortIDs(s.db.WithContext(ctx), &Data{}, ids)
 }
 
-// Items 返回某字典下启用的数据（前端下拉/标签渲染）；英文界面优先用 label_en。
-func (s *Service) Items(ctx context.Context, code string, english bool) ([]Item, error) {
+// Items 返回某字典下启用的数据（前端下拉/标签渲染），标签按请求语言取：
+// 先查 i18n_json 里这门语言的译文，没有则回退默认语言的 dict_label；
+// 老数据的 label_en 在没有 i18n_json 时当英文兜底（升级前写进去的译文不能丢）。
+func (s *Service) Items(ctx context.Context, code, lang string) ([]Item, error) {
 	var t Type
 	err := s.db.WithContext(ctx).Where("code = ? AND status = ?", code, "1").First(&t).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -289,13 +325,25 @@ func (s *Service) Items(ctx context.Context, code string, english bool) ([]Item,
 	}
 	out := make([]Item, 0, len(rows))
 	for _, r := range rows {
-		label := r.Label
-		if english && r.LabelEn != "" {
-			label = r.LabelEn
-		}
+		label := dictLabelOf(r, lang)
 		out = append(out, Item{Value: r.Value, Label: label, Tag: r.Tag})
 	}
 	return out, nil
+}
+
+// dictLabelOf 按语言取一条字典数据的标签。
+// 顺序：i18n_json 里这门语言的 label → 老列 label_en（仅英文）→ 默认语言的 dict_label。
+func dictLabelOf(r Data, lang string) string {
+	if v, ok := pi18n.ParseDoc(r.I18nJSON).For(lang)["label"]; ok && v != "" {
+		return v
+	}
+	if r.LabelEn != "" && lang != "" {
+		base, _, _ := strings.Cut(strings.ToLower(lang), "-")
+		if base == "en" {
+			return r.LabelEn
+		}
+	}
+	return r.Label
 }
 
 func toInt64(ids []idgen.ID) []int64 {

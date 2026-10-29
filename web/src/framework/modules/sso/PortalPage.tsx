@@ -2,7 +2,9 @@ import { LayoutGrid } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { EmptyState } from '@/framework/components/EmptyState'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
+import { cardSurface } from '@/framework/ui/card'
 import { Skeleton } from '@/framework/ui/skeleton'
+import { cn } from '@/lib/utils'
 import { isHttpUrl, usePortalApps, type PortalApp } from './api'
 
 function AppLogo({ app }: { app: PortalApp }) {
@@ -27,8 +29,7 @@ function AppCard({ app }: { app: PortalApp }) {
       {app.description ? <span className="line-clamp-2 w-full text-xs text-muted-foreground">{app.description}</span> : null}
     </>
   )
-  const cls =
-    'card-edge flex min-h-11 flex-col items-center gap-2 rounded-lg border bg-card p-4 text-center transition-shadow duration-200'
+  const cls = cn(cardSurface, 'flex min-h-11 flex-col items-center gap-2 p-4 text-center')
   if (!isHttpUrl(app.homeUrl)) return <div className={`${cls} opacity-60`}>{body}</div>
   return (
     <a

@@ -7,19 +7,13 @@ edition: pro
 requires_nexadmin: ">=0.1.0"
 menus:
   - parent: /
-    type: dir
-    title: plugin_ticket.dir
-    path: /ticket
-    icon: Inbox
-    sort: 62
-  - parent: /ticket
     type: menu
     title: plugin_ticket.menu
     path: /ticket/tickets
     component: plugins/ticket/TicketPage
     perm: ticket:list
     icon: Inbox
-    sort: 1
+    sort: 62
     keep_alive: true
   - parent: ticket:list
     type: button

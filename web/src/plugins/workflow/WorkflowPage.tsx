@@ -4,11 +4,13 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
+import { EmptyState } from '@/framework/components/EmptyState'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
+import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
+import { SimpleSelect } from '@/framework/components/SimpleSelect'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/framework/ui/dialog'
 import { Input } from '@/framework/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/framework/ui/tabs'
 import { cn } from '@/lib/utils'
@@ -109,7 +111,7 @@ function InstanceList({
         </button>
       ))}
       {!instances.isLoading && rows.length === 0 ? (
-        <div className="p-4 text-center text-sm text-muted-foreground">{t('plugin_workflow.empty')}</div>
+        <EmptyState title={t('plugin_workflow.empty')} className="py-8" />
       ) : null}
       {(instances.data?.total ?? 0) > (page * pageSize) || page > 1 ? (
         <div className="flex items-center justify-between border-t px-4 py-2 text-xs text-muted-foreground">
@@ -238,6 +240,7 @@ function DefEditor({
   const [name, setName] = useState(def?.name ?? '')
   const [key, setKey] = useState(def?.key ?? '')
   const [status, setStatus] = useState(def?.status ?? 'draft')
+  const [templateKey, setTemplateKey] = useState('__blank')
   const [definition, setDefinition] = useState<WfDefinition>(
     def?.definition ?? templates[0]?.definition ?? { key: '', name: '', start: 'start', nodes: [], edges: [] },
   )
@@ -260,68 +263,78 @@ function DefEditor({
   }
 
   return (
-    <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="h-[90vh] max-w-4xl overflow-y-auto sm:max-w-4xl">
-        <DialogHeader>
-          <DialogTitle>{def ? t('plugin_workflow.defEdit') : t('plugin_workflow.defCreate')}</DialogTitle>
-        </DialogHeader>
-        <div className="mb-3 flex flex-wrap items-end gap-3">
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-xs text-muted-foreground">{t('plugin_workflow.fields.defName')}</span>
-            <Input value={name} onChange={(e) => setName(e.target.value)} className="w-56" />
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-xs text-muted-foreground">{t('plugin_workflow.fields.defKey')}</span>
-            <Input value={key} onChange={(e) => setKey(e.target.value)} disabled={!!def} className="w-44 font-mono" />
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-xs text-muted-foreground">{t('plugin_workflow.fields.status')}</span>
-            <select
-              className="h-8 rounded-md border bg-background px-2 text-sm"
-              value={status}
-              onChange={(e) => setStatus(e.target.value as 'draft' | 'published' | 'disabled')}
-            >
-              <option value="draft">{t('plugin_workflow.defStatus.draft')}</option>
-              <option value="published">{t('plugin_workflow.defStatus.published')}</option>
-              <option value="disabled">{t('plugin_workflow.defStatus.disabled')}</option>
-            </select>
-          </label>
-          {!def && templates.length > 0 ? (
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="text-xs text-muted-foreground">{t('plugin_workflow.fromTemplate')}</span>
-              <select
-                className="h-8 rounded-md border bg-background px-2 text-sm"
-                defaultValue=""
-                onChange={(e) => {
-                  const tpl = templates.find((tp) => tp.key === e.target.value)
-                  if (tpl) {
-                    setKey(tpl.definition.key)
-                    setName(tpl.name)
-                    setDefinition(tpl.definition)
-                  }
-                }}
-              >
-                <option value="">{t('plugin_workflow.fromTemplateBlank')}</option>
-                {templates.map((tp) => (
-                  <option key={tp.key} value={tp.key}>
-                    {tp.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : null}
-        </div>
-        <FlowDesigner definition={definition} onChange={setDefinition} />
-        <DialogFooter>
+    <ResponsiveDialog
+      open
+      onOpenChange={(v) => !v && onClose()}
+      title={def ? t('plugin_workflow.defEdit') : t('plugin_workflow.defCreate')}
+      size="xl"
+      className="space-y-4"
+      footer={
+        <>
           <Button variant="outline" onClick={onClose}>
             {t('common.cancel')}
           </Button>
           <Button onClick={() => void submit()} disabled={save.isPending}>
             {t('common.save')}
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </>
+      }
+    >
+      <div className="mb-3 flex flex-wrap items-end gap-3">
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="text-xs text-muted-foreground">
+            {t('plugin_workflow.fields.defName')}
+            <span aria-hidden="true" className="ms-0.5 text-destructive">*</span>
+          </span>
+          <Input required value={name} onChange={(e) => setName(e.target.value)} className="w-56" />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="text-xs text-muted-foreground">
+            {t('plugin_workflow.fields.defKey')}
+            <span aria-hidden="true" className="ms-0.5 text-destructive">*</span>
+          </span>
+          <Input required value={key} onChange={(e) => setKey(e.target.value)} disabled={!!def} className="w-44 font-mono" />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="text-xs text-muted-foreground">{t('plugin_workflow.fields.status')}</span>
+          <SimpleSelect
+            className="w-32"
+            aria-label={t('plugin_workflow.fields.status')}
+            value={status}
+            onChange={(v) => setStatus(v as 'draft' | 'published' | 'disabled')}
+            options={[
+              { value: 'draft', label: t('plugin_workflow.defStatus.draft') },
+              { value: 'published', label: t('plugin_workflow.defStatus.published') },
+              { value: 'disabled', label: t('plugin_workflow.defStatus.disabled') },
+            ]}
+          />
+        </label>
+        {!def && templates.length > 0 ? (
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="text-xs text-muted-foreground">{t('plugin_workflow.fromTemplate')}</span>
+            <SimpleSelect
+              className="w-40"
+              aria-label={t('plugin_workflow.fromTemplate')}
+              value={templateKey}
+              onChange={(v) => {
+                setTemplateKey(v)
+                const tpl = templates.find((tp) => tp.key === v)
+                if (tpl) {
+                  setKey(tpl.definition.key)
+                  setName(tpl.name)
+                  setDefinition(tpl.definition)
+                }
+              }}
+              options={[
+                { value: '__blank', label: t('plugin_workflow.fromTemplateBlank') },
+                ...templates.map((tp) => ({ value: tp.key, label: tp.name })),
+              ]}
+            />
+          </label>
+        ) : null}
+      </div>
+      <FlowDesigner definition={definition} onChange={setDefinition} />
+    </ResponsiveDialog>
   )
 }
 
@@ -388,7 +401,7 @@ function InstanceDrawer({ id, onClose }: { id?: string; onClose: () => void }) {
             </div>
           ))}
           {!detail.isLoading && (inst?.history.length ?? 0) === 0 ? (
-            <div className="p-4 text-center text-sm text-muted-foreground">{t('plugin_workflow.empty')}</div>
+            <EmptyState title={t('plugin_workflow.empty')} className="py-8" />
           ) : null}
         </div>
 

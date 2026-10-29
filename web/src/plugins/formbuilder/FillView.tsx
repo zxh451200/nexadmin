@@ -6,7 +6,10 @@ import { EmptyState } from '@/framework/components/EmptyState'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { ApiError } from '@/framework/request/http'
 import { Alert, AlertDescription, AlertTitle } from '@/framework/ui/alert'
+import { cardSurface } from '@/framework/ui/card'
+import { cn } from '@/lib/utils'
 import { Button } from '@/framework/ui/button'
+import { Card } from '@/framework/ui/card'
 import { Skeleton } from '@/framework/ui/skeleton'
 import { useFillDetail, useSubmit, type SubmitResult } from './api'
 import { FormRenderer } from './FormRenderer'
@@ -100,7 +103,7 @@ export function FillView({ id }: { id: string }) {
   if (done) {
     return (
       <PageContainer>
-        <div className="mx-auto flex w-full max-w-2xl flex-col items-center gap-4 rounded-lg border border-border bg-card px-4 py-12 text-center">
+        <Card className="mx-auto flex w-full max-w-2xl flex-col items-center gap-4 px-4 py-12 text-center">
           <CheckCircle2 className="size-10 text-success" aria-hidden="true" />
           <h1 className="text-lg font-semibold" role="status">
             {t('plugin_formbuilder.fill.submitted')}
@@ -114,7 +117,7 @@ export function FillView({ id }: { id: string }) {
               </Button>
             ) : null}
           </div>
-        </div>
+        </Card>
       </PageContainer>
     )
   }
@@ -138,7 +141,7 @@ export function FillView({ id }: { id: string }) {
           e.preventDefault()
           void onSubmit()
         }}
-        className="mx-auto flex w-full max-w-2xl flex-col gap-5 rounded-lg border border-border bg-card p-4 md:p-6 [&_input]:text-base [&_textarea]:text-base md:[&_input]:text-sm md:[&_textarea]:text-sm"
+        className={cn(cardSurface, 'mx-auto flex w-full max-w-2xl flex-col gap-5 p-4 md:p-6 [&_input]:text-base [&_textarea]:text-base md:[&_input]:text-sm md:[&_textarea]:text-sm')}
       >
         {closed ? (
           <Alert variant="warning">

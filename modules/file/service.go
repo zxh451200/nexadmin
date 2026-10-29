@@ -135,7 +135,7 @@ func (s *Service) ListGroups(ctx context.Context) ([]GroupItem, error) {
 		GroupID idgen.ID
 		N       int64
 	}
-	if err := s.db.WithContext(ctx).Model(&File{}).Select("group_id, COUNT(*) AS n").Group("group_id").Scan(&counts).Error; err != nil {
+	if err := s.db.WithContext(ctx).Model(&File{}).Where("variant_of = 0").Select("group_id, COUNT(*) AS n").Group("group_id").Scan(&counts).Error; err != nil {
 		return nil, err
 	}
 	byGroup := map[idgen.ID]int64{}
@@ -199,7 +199,7 @@ func notFoundOr(err error) error {
 
 // List 分页查询文件。
 func (s *Service) List(ctx context.Context, q listQuery, page, pageSize int) ([]FileItem, int64, error) {
-	tx := s.db.WithContext(ctx).Model(&File{})
+	tx := s.db.WithContext(ctx).Model(&File{}).Where("variant_of = 0")
 	switch q.GroupID {
 	case "":
 	case "none":
@@ -292,6 +292,10 @@ func (s *Service) Register(ctx context.Context, username string, req registerReq
 					if err := tx.Model(&f).Updates(patch).Error; err != nil {
 						return err
 					}
+					// 副本可见性跟着原文件走：原文件转私有后，副本绝不能还公开着。
+					if err := tx.Model(&File{}).Where("variant_of = ?", f.ID).Update("visibility", vis).Error; err != nil {
+						return err
+					}
 					if err := tx.First(&f, "id = ?", id).Error; err != nil {
 						return err
 					}
@@ -364,6 +368,12 @@ func (s *Service) Update(ctx context.Context, id idgen.ID, req updateReq) (FileI
 		if err := s.db.WithContext(ctx).Model(&f).Updates(patch).Error; err != nil {
 			return FileItem{}, err
 		}
+		if req.Visibility != nil {
+			// 副本可见性跟着原文件走，避免原图转私有后副本仍可公开访问。
+			if err := s.db.WithContext(ctx).Model(&File{}).Where("variant_of = ?", f.ID).Update("visibility", *req.Visibility).Error; err != nil {
+				return FileItem{}, err
+			}
+		}
 		if err := s.db.WithContext(ctx).First(&f, "id = ?", id).Error; err != nil {
 			return FileItem{}, err
 		}
@@ -390,11 +400,23 @@ func (s *Service) Delete(ctx context.Context, ids []idgen.ID) error {
 	if err := s.db.WithContext(ctx).Where("id IN ?", ids).Find(&rows).Error; err != nil {
 		return err
 	}
-	if err := s.db.WithContext(ctx).Where("id IN ?", ids).Delete(&File{}).Error; err != nil {
+	// 派生副本跟着原文件一起走，避免留下没有入口的孤儿对象。
+	var variants []File
+	if err := s.db.WithContext(ctx).Where("variant_of IN ?", ids).Find(&variants).Error; err != nil {
+		return err
+	}
+	gone := make([]idgen.ID, 0, len(rows)+len(variants))
+	for _, f := range rows {
+		gone = append(gone, f.ID)
+	}
+	for _, f := range variants {
+		gone = append(gone, f.ID)
+	}
+	if err := s.db.WithContext(ctx).Where("id IN ?", gone).Delete(&File{}).Error; err != nil {
 		return err
 	}
 	var freed int64
-	for _, f := range rows {
+	for _, f := range append(rows, variants...) {
 		if f.StoragePath == "" {
 			continue
 		}

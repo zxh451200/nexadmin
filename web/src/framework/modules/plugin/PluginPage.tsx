@@ -91,6 +91,9 @@ function InstalledTab({ onLicense }: { onLicense: (p: PluginInfo) => void }) {
                 <CardContent className="flex flex-1 flex-col gap-3">
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge variant={STATUS_VARIANT[p.status]}>{t(`pluginMgr.status.${p.status}`)}</Badge>
+                    {p.needRestart ? <Badge variant="warning">{t('pluginMgr.restartRequired')}</Badge> : null}
+                    {p.pendingHost ? <Badge variant="warning">{t('pluginMgr.pendingHost')}</Badge> : null}
+                    {p.stopping ? <Badge variant="warning">{t('pluginMgr.stopping')}</Badge> : null}
                     {soon ? <Badge variant="warning">{t('pluginMgr.expiring.badge', { days: daysUntil(p.expiresAt) })}</Badge> : null}
                   </div>
                   <dl className="divide-y divide-border text-sm">
@@ -124,6 +127,20 @@ function InstalledTab({ onLicense }: { onLicense: (p: PluginInfo) => void }) {
 }
 
 export default function PluginPage() {
+  const { t } = useTranslation()
+  const { isSuper } = usePermission()
+  if (!isSuper) {
+    return (
+      <PageContainer>
+        <PageHeader title={t('pluginMgr.title')} />
+        <EmptyState title={t('pluginMgr.platformOnly')} />
+      </PageContainer>
+    )
+  }
+  return <PlatformPluginPage />
+}
+
+function PlatformPluginPage() {
   const { t } = useTranslation()
   const [params, setParams] = useSearchParams()
   const [target, setTarget] = useState<PluginInfo | null>(null)

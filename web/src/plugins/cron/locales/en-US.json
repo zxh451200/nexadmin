@@ -2,7 +2,7 @@
   "plugin_cron": {
     "menu": "Scheduled jobs",
     "title": "Scheduled jobs",
-    "description": "Schedule built-in handlers with cron expressions, with retries, run-now and execution logs",
+    "description": "Free scheduled jobs: schedule built-in handlers with cron expressions, with retries, run-now and execution logs",
     "tabs": { "jobs": "Jobs", "logs": "Execution logs" },
     "card": { "overview": "Cron overview", "total": "Total jobs", "enabled": "Enabled", "failed24h": "Failed in 24h", "loadFailed": "Failed to load data" },
     "btn": { "edit": "Edit job", "run": "Run now", "log": "View logs", "clean": "Clean logs" },

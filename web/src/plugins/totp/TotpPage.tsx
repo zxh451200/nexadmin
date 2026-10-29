@@ -8,6 +8,7 @@ import { api } from '@/framework/request/http'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
+import { Card } from '@/framework/ui/card'
 import { Input } from '@/framework/ui/input'
 
 interface TotpStatus { enrolled: boolean; enabled: boolean }
@@ -40,7 +41,7 @@ export default function TotpPage() {
   return (
     <PageContainer>
       <PageHeader title={t('plugin_totp.title')} description={t('plugin_totp.description')} />
-      <div className="max-w-md space-y-4 rounded-lg border bg-card p-6">
+      <Card className="max-w-md space-y-4 p-6">
         <div className="flex items-center gap-2">
           <ShieldCheck className="size-5 text-muted-foreground" aria-hidden="true" />
           <span className="text-sm font-medium">{t('plugin_totp.statusLabel')}</span>
@@ -78,7 +79,7 @@ export default function TotpPage() {
             </Button>
           </div>
         )}
-      </div>
+      </Card>
     </PageContainer>
   )
 }

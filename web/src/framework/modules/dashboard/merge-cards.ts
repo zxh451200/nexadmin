@@ -14,6 +14,22 @@ export function cardRank(file: string): number {
 }
 
 /**
+ * 剔除未启用插件的卡片模块（路径形如 /src/plugins/<id>/cards.tsx）：
+ * 插件没挂载时它的接口根本不存在，卡片挂上去只会发 404。
+ * activeIds = null 表示「问不到」（mock / 旧后端），保持原样。纯函数，便于单测。
+ */
+export function dropInactivePluginCards<T>(files: Record<string, T>, activeIds: string[] | null): Record<string, T> {
+  if (activeIds === null) return files
+  const allowed = new Set(activeIds)
+  return Object.fromEntries(
+    Object.entries(files).filter(([file]) => {
+      const plugin = /^\/src\/plugins\/([^/]+)\/cards\.tsx$/.exec(file)
+      return !plugin || allowed.has(plugin[1])
+    }),
+  )
+}
+
+/**
  * 合并各 cards.tsx 导出的卡片：按来源优先级升序处理，同 id 后者覆盖前者。
  * 因此用户页面里声明与内置卡片相同的 id，就能替换该卡片，无需改框架文件。id 不合法的卡片被忽略。
  * 纯函数，不依赖 Vite，便于单测。

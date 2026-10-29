@@ -2,8 +2,15 @@
   "settings": {
     "menu": "System Settings",
     "title": "System Settings",
-    "description": "Site, cache, storage, AI, SMS and sign-in configuration",
+    "description": "Site, security, storage and integrations, languages and advanced parameters in one place",
     "testConnection": "Test connection",
+    "sectionNav": "Settings sections",
+    "groups": {
+      "site": "Site",
+      "security": "Security & sign-in",
+      "integration": "Storage & integrations",
+      "advanced": "Advanced"
+    },
     "tabs": {
       "site": "Site",
       "security": "Sign-in security",
@@ -12,7 +19,9 @@
       "ai": "AI model",
       "sms": "SMS",
       "notify": "Notifications",
-      "auth": "Sign-in"
+      "auth": "Sign-in",
+      "language": "Languages",
+      "params": "Parameters"
     },
     "test": {
       "ok": "Connection test succeeded",

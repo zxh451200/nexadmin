@@ -28,8 +28,8 @@
         "friendly": "Friendly",
         "concise": "Concise"
       },
-      "empty": "Enter key points or the text to polish first",
-      "emptyBody": "Enter key points in the body, or a title to use as the key points",
+      "emptyDraft": "Nothing to draft from: write a few key points first",
+      "emptyPolish": "Nothing to polish: fill in some content first",
       "done": "AI generated the text",
       "undo": "Undo",
       "failed": "AI writing failed, please try again later",

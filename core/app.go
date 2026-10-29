@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -101,6 +102,9 @@ func WithDomainLookup(l tenant.DomainLookup) Option { return func(a *App) { a.lo
 func WithAuth(p auth.Provider) Option { return func(a *App) { a.provider = p } }
 
 var builtin []Module
+var processInstanceID = ctl.NewToken()
+
+func InstanceID() string { return processInstanceID }
 
 // RegisterBuiltin 由框架内置模块（modules/*）和业务模块（internal/modules/*）在 init() 里调用。
 // 模块名全局唯一，重名启动失败；停用某个模块用 config 的 disabled_modules（按 Name() 匹配）。
@@ -284,6 +288,19 @@ func (a *App) Run() error {
 	select {
 	case err := <-errc:
 		a.closeAll()
+		// 监听失败（十有八九是端口被占用）时给出可操作的指引，而不是裸的 net/http 错误。
+		if errors.Is(err, net.ErrClosed) {
+			return err
+		}
+		var oe *net.OpError
+		if errors.As(err, &oe) && oe.Op == "listen" {
+			log.Error("server listen failed",
+				zap.Int("port", a.cfg.Server.Port),
+				zap.String("port_source", "config.yaml 的 server.port（可用环境变量 NEXADMIN_SERVER_PORT 覆盖）"),
+				zap.Error(err))
+			return fmt.Errorf("监听端口 %d 失败：端口可能已被其他进程占用。可修改 config/config.yaml 的 server.port，或设置环境变量 NEXADMIN_SERVER_PORT 后重试（原始错误：%w）",
+				a.cfg.Server.Port, err)
+		}
 		return err
 	case <-ctx.Done():
 	case <-a.stopc:

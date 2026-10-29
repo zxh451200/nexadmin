@@ -30,6 +30,10 @@
         } catch (e) {}
       })()
     </script>
+    <script>
+      // 后台固定挂在 /admin 下；Vite 开发服务器直接打开根路径时跳到 SPA 入口（生产环境根路径由官网接管）。
+      if (location.pathname === '/' || location.pathname === '/index.html') location.replace('/admin/')
+    </script>
   </head>
   <body>
     <div id="root"></div>

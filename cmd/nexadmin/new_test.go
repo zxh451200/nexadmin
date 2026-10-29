@@ -311,7 +311,14 @@ func TestEnvFilesPartition(t *testing.T) {
 		}
 	}
 	gi, err := os.ReadFile(filepath.Join("..", "..", ".gitignore"))
-	if err != nil || !strings.Contains("\n"+string(gi), "\n.env.local\n") {
-		t.Errorf(".gitignore 应忽略 .env.local: %v", err)
+	if err != nil {
+		t.Errorf("读 .gitignore 失败: %v", err)
+	} else {
+		// Windows 上 core.autocrlf=true 会把签出的文本变成 CRLF，
+		// 这里只关心「有没有这条规则」，先归一化行尾再比对。
+		text := strings.ReplaceAll(string(gi), "\r\n", "\n")
+		if !strings.Contains("\n"+text, "\n.env.local\n") {
+			t.Error(".gitignore 应忽略 .env.local")
+		}
 	}
 }

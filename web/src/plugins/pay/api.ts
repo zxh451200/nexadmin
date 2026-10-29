@@ -198,3 +198,52 @@ export function useCreateRefund() {
     onSuccess: invalidate,
   })
 }
+
+/** 支付统计（与后端 /plugins/pay/orders/stats 一一对应）。
+ *  金额一律以「分」为单位随币种输出：后端不跨币种求和，前端也不许相加。 */
+export interface StatsNameValue { name: string; value: number }
+export interface PayDayPoint { date: string; orders: number; paid: number }
+export interface CurrencyTotals {
+  currency: string
+  orders: number
+  paid: number
+  gmvMinor: number
+  refundedMinor: number
+  feeMinor: number
+  netMinor: number
+  refundRate: number
+}
+export interface ChannelTotals { channel: string; currency: string; paid: number; gmvMinor: number }
+export interface PayStats {
+  from: string
+  to: string
+  orders: number
+  paid: number
+  sampled: boolean
+  days: PayDayPoint[]
+  byCurrency: CurrencyTotals[]
+  byChannel: ChannelTotals[]
+  byStatus: StatsNameValue[]
+  byScene: StatsNameValue[]
+  byMethod: StatsNameValue[]
+  byBizType: StatsNameValue[]
+  failReasons: StatsNameValue[]
+}
+
+export interface PayStatsFilter {
+  status?: string
+  bizType?: string
+  channelCode?: string
+  scene?: string
+  keyword?: string
+  startDate?: string
+  endDate?: string
+}
+
+export function usePayStats(filter: PayStatsFilter) {
+  return useQuery({
+    queryKey: ['pay', 'stats', filter],
+    queryFn: () => api.get<PayStats>(`${BASE}/orders/stats`, filter),
+    placeholderData: keepPreviousData,
+  })
+}
