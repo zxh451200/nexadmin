@@ -301,16 +301,31 @@ Authors do not need to — and should not — implement licensing themselves. Va
 
 > License validation guards against casual piracy and file sharing, not determined cracking — with source delivery, a capable buyer can remove the check. Real protection comes from contracts, upgrade services and support. Authors should put value into continuous updates and service.
 
-## 10. Revenue share and pricing (to be decided by the platform)
+## 10. Revenue share and pricing (draft, not an offer)
 
-**Formal purchase terms have not been published.** The following are items for the vendor to formally confirm, not commitments on prices, refunds, revenue shares or IP. Marketing and purchase information belongs in the website CMS; technical documentation does not replace transaction terms:
+> **All prices and percentages below are structural examples used to fix the terms format. They are not an offer or a commitment.** The vendor publishes formal pricing, refund, revenue-share and IP terms before listing; until then the published purchase page prevails, and these numbers must not be quoted to customers.
 
-- Author/platform revenue share, settlement cycle and method.
-- Pricing model: one-time purchase, annual subscription, or per-tenant/per-instance pricing.
-- Refund and dispute rules.
-- Author update obligations (e.g. adaptation deadlines after framework major versions) and the consequences of missing them.
+**Pricing model**: per instance, annual subscription, including framework-compatible updates and technical support for that year. Multi-tenant, source buy-out and OEM distribution are quoted separately.
+
+**Tier examples**
+
+| Tier | Typical characteristics | Example price (CNY / instance / year) |
+| --- | --- | --- |
+| Tool | A single assistive capability, no external service dependency | 486 |
+| Integration | Connects to external systems or includes an admin console | 1,094 |
+| Suite | Multi-role collaboration with a complete business flow | 1,742 |
+
+Per-plugin example list prices live in the vendor's purchase-page draft. Tier prices serve pricing discussions; list prices serve display, so the two are not interchangeable.
+
+**Terms the vendor must confirm**
+
+- Author/platform revenue share, settlement cycle and method (placeholder: `[TBD: __%]`).
+- Refund and dispute rules (placeholder: `[TBD: __ days]`).
+- Author update obligations, e.g. adaptation deadlines after framework major versions and the consequences of missing them.
 - Whether buyers keep using and receiving updates after an author delists a plugin.
 - IP ownership and license terms of plugins.
+
+**Version and price changes**: issued licenses keep their price for the paid term; renewals use the price published at renewal time. Increases do not apply retroactively.
 
 ## 11. FAQ
 
