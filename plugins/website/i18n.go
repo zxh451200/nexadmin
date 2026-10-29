@@ -265,9 +265,17 @@ func langNegotiate(c *gin.Context) {
 	if q := strings.TrimSpace(c.Query("lang")); q != "" {
 		if l, ok := LanguageByCode(q); ok {
 			setLangCookie(c, l.Code)
+			route := stripLangPrefix(c.Request.URL.Path)
+			// 默认语言的无前缀路径就地渲染，不经 302 回跳：回跳要把语言交给 cookie，
+			// 而 cookie 写不进去或被并发覆盖时，下一条 "/" 会按旧 cookie 把访客送去
+			// /en——点了中文「首页」却看到英文正是这条路。URL 已点明语言就别再问 cookie。
+			if l.Default && route == c.Request.URL.Path {
+				c.Next()
+				return
+			}
 			vals := c.Request.URL.Query()
 			vals.Del("lang")
-			target := l.Path(stripLangPrefix(c.Request.URL.Path))
+			target := l.Path(route)
 			if enc := vals.Encode(); enc != "" {
 				target += "?" + enc
 			}

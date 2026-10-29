@@ -1,13 +1,11 @@
 // NexAdmin 官网默认模板脚本：滚动进场、导航状态、主题/语言切换与交互微效果。无外部依赖。
-// 语言切换走 fetch 无刷新换页：整站脚本只注册一次文档级委托，页面级绑定集中在 initSite，
-// 换页后重新执行 initSite 即可，不需要重新加载脚本。
+// 语言切换是整页跳转：语言由服务端决定并落 cookie，前端不做无刷新换页。
 (function () {
   'use strict';
 
-  // ---- 模块级状态（跨换页存活） ----
+  // ---- 模块级状态 ----
   var i18n = {};
   var winHandlers = [];
-  var swapped = false;
   var revealObserver = null;
 
   function onWin(target, type, fn, opts) {
@@ -162,53 +160,7 @@
     }
   });
 
-  // ---- 语言切换：fetch 无刷新换页，失败回退整页跳转 ----
-  function swapPage(url) {
-    if (!window.fetch || !window.DOMParser || !(window.history && window.history.pushState)) {
-      location.href = url;
-      return;
-    }
-    var root = document.documentElement;
-    if (root.getAttribute('data-swapping') === '1') return;
-    root.setAttribute('data-swapping', '1');
-    var scrollY = window.scrollY;
-    fetch(url).then(function (res) {
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      return res.text();
-    }).then(function (text) {
-      var doc = new DOMParser().parseFromString(text, 'text/html');
-      if (!doc.body || !doc.getElementById('main')) throw new Error('unexpected document');
-      var lang = doc.documentElement.getAttribute('lang');
-      var newHead = document.adoptNode(doc.head);
-      var newBody = document.adoptNode(doc.body);
-      document.head.parentNode.replaceChild(newHead, document.head);
-      document.body.parentNode.replaceChild(newBody, document.body);
-      if (lang) root.setAttribute('lang', lang);
-      swapped = true;
-      window.history.pushState({}, '', url);
-      window.scrollTo(0, scrollY);
-      initSite();
-      root.removeAttribute('data-swapping');
-    }).catch(function () {
-      location.href = url;
-    });
-  }
-  // pushState 之后的浏览器前进/后退不做增量处理，直接整页加载目标状态。
-  window.addEventListener('popstate', function () {
-    if (swapped) location.reload();
-  });
-  document.addEventListener('click', function (e) {
-    var a = e.target.closest('a[hreflang]');
-    if (!a) return;
-    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-    if (a.getAttribute('aria-current') === 'true') { e.preventDefault(); return; }
-    var href = a.getAttribute('href') || '';
-    if (href.charAt(0) !== '/') return;
-    e.preventDefault();
-    swapPage(href);
-  });
-
-  // ---- 页面级绑定：换页后整体重来一遍 ----
+  // ---- 页面级绑定 ----
   function initSite() {
     i18n = readI18n();
     clearWinHandlers();

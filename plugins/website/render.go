@@ -190,8 +190,16 @@ func (v *siteView) TN(n any, key string, args ...any) string {
 	return trf(l.Code, k, args...)
 }
 
-// Home 返回当前语言首页。
-func (v *siteView) Home() string { return v.Lang.Home() }
+// Home 返回当前语言的首页链接。
+// 默认语言的首页是无前缀的 "/"，它同时是语言中立入口：服务端会按 cookie 把访客送回
+// 上次选择的语言（langNegotiate）。所以站内链接必须显式带 ?lang=——否则访客正在读
+// 中文深链、浏览器却存着旧的英文 cookie 时，点「首页」会被送去英文站。
+func (v *siteView) Home() string {
+	if v.Lang.Default {
+		return "/?lang=" + url.QueryEscape(v.Lang.Code)
+	}
+	return v.Lang.Home()
+}
 
 // URL 给站内页面链接加语言前缀；锚点回到当前语言首页，外部链接与下载/后台端点保持原样。
 func (v *siteView) URL(href string) string {
@@ -199,12 +207,20 @@ func (v *siteView) URL(href string) string {
 		return ""
 	}
 	if strings.HasPrefix(href, "#") {
+		// 已在首页时锚点保持同页跳转，不必绕一次语言入口。
+		if v.Route == "/" {
+			return href
+		}
 		return v.Home() + href
 	}
 	if !strings.HasPrefix(href, "/") || isNonLocalizedPath(href) {
 		return href
 	}
-	return v.Lang.Path(href)
+	// 根路径对默认语言是语言中立入口，必须显式声明语言（见 Home）。
+	if p := v.Lang.Path(href); p != "/" {
+		return p
+	}
+	return v.Home()
 }
 
 // Alternate 返回同一页面在另一语言下的规范地址（不含 query，供 hreflang / og:locale:alternate）。

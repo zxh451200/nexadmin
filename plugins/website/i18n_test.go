@@ -2,10 +2,14 @@ package website
 
 import (
 	"io/fs"
+	"net/http"
+	"net/http/httptest"
 	"regexp"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/gin-gonic/gin"
 
 	"nexadmin/core/plugin/market"
 	pi18n "nexadmin/pkg/i18n"
@@ -183,6 +187,29 @@ func TestViewURLAndSwitch(t *testing.T) {
 			t.Errorf("URL(%q) = %q, want %q", in, got, want)
 		}
 	}
+	// 默认语言的根路径是语言中立入口，站内链接必须自带 ?lang=，否则会按 cookie 回跳到别的语言。
+	zh := &siteView{Lang: def, Route: "/news", Languages: Languages()}
+	for in, want := range map[string]string{
+		"/":        "/?lang=zh-CN",
+		"/news":    "/news",
+		"#faq":     "/?lang=zh-CN#faq",
+		"/en":      "/en",
+		"/en/docs": "/en/docs",
+	} {
+		if got := zh.URL(in); got != want {
+			t.Errorf("zh URL(%q) = %q, want %q", in, got, want)
+		}
+	}
+	if got := zh.Home(); got != "/?lang=zh-CN" {
+		t.Errorf("zh Home() = %q", got)
+	}
+	// 锚点在首页就是同页跳转，不该再经过一次语言入口。
+	if got := (&siteView{Lang: def, Route: "/"}).URL("#faq"); got != "#faq" {
+		t.Errorf("home anchor URL = %q", got)
+	}
+	if got := v.URL("/"); got != "/en" {
+		t.Errorf("en URL(/) = %q", got)
+	}
 	if got := v.Alternate(def); got != "/plugins" {
 		t.Errorf("Alternate(default) = %q", got)
 	}
@@ -194,6 +221,89 @@ func TestViewURLAndSwitch(t *testing.T) {
 	}
 	if got := v.Switch(en); got != "/en/plugins?q=cron" {
 		t.Errorf("Switch(en) = %q", got)
+	}
+}
+
+// 访客在读中文页、浏览器却存着旧的英文 cookie（例如之前点过英文建议条）：
+// 点「首页」必须留在中文站，而不是被 cookie 回跳到 /en。
+func TestStaleEnglishCookieKeepsChineseHomeLinks(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	pub := r.Group("")
+	pub.Use(LanguageContext(DefaultLanguage()), langNegotiate)
+	h := &siteHandler{}
+	pub.GET("/", func(c *gin.Context) { h.render(c, "home", http.StatusOK, testView()) })
+	pub.GET("/docs", func(c *gin.Context) {
+		h.render(c, "docs-index", http.StatusOK, testDocsView(t, DefaultLanguage(), ""))
+	})
+	en, _ := LanguageByCode("en-US")
+	eng := pub.Group("/en")
+	eng.Use(LanguageMiddleware(en))
+	eng.GET("/docs", func(c *gin.Context) {
+		h.render(c, "docs-index", http.StatusOK, testDocsView(t, en, ""))
+	})
+	get := func(path string, cookie *http.Cookie) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		if cookie != nil {
+			req.AddCookie(cookie)
+		}
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		return w
+	}
+	stale := &http.Cookie{Name: langCookie, Value: "en-US"}
+
+	// 中文深链照旧渲染中文，且页内每个首页链接都声明了中文。
+	w := get("/docs", stale)
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET /docs: %d", w.Code)
+	}
+	body := w.Body.String()
+	if strings.Contains(body, `href="/"`) {
+		t.Error("中文页仍存在语言中立的首页链接，带旧英文 cookie 的访客会在点它时被送去 /en")
+	}
+	if n := strings.Count(body, `href="/?lang=zh-CN"`); n < 2 {
+		t.Errorf("首页链接（导航/品牌/页脚）应显式带 ?lang=zh-CN，只找到 %d 个", n)
+	}
+
+	// 点「首页」：语言在 URL 里就直接就地渲染，不再 302 到 "/" 去读 cookie。
+	// 原来的 302 依赖 Set-Cookie 写成功；cookie 被拒写/被并发覆盖时，下一条 "/"
+	// 会按旧 cookie 把人送去 /en——点中文首页却看到英文就是这么来的。
+	w = get("/?lang=zh-CN", stale)
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET /?lang=zh-CN: %d（不该再回跳）", w.Code)
+	}
+	if got := w.Header().Get("Content-Language"); got != "zh-CN" {
+		t.Errorf("Content-Language = %q, want zh-CN", got)
+	}
+	if !strings.Contains(w.Body.String(), `lang="zh-CN"`) {
+		t.Error("GET /?lang=zh-CN 应就地渲染中文首页")
+	}
+	if !strings.Contains(w.Header().Get("Set-Cookie"), langCookie+"=zh-CN") {
+		t.Errorf("切换后应把语言 cookie 改成中文: %q", w.Header().Get("Set-Cookie"))
+	}
+
+	// 非默认语言：语言只落在 URL 前缀上，同样不经过 cookie。
+	w = get("/?lang=en-US", nil)
+	if w.Code != http.StatusFound || w.Header().Get("Location") != "/en" {
+		t.Errorf("GET /?lang=en-US: %d → %q", w.Code, w.Header().Get("Location"))
+	}
+	// 带前缀的英文页被点名切回默认语言：回到无前缀路径（不在 /en 下渲染中文）。
+	w = get("/en/docs?lang=zh-CN", nil)
+	if w.Code != http.StatusFound || w.Header().Get("Location") != "/docs" {
+		t.Errorf("GET /en/docs?lang=zh-CN: %d → %q", w.Code, w.Header().Get("Location"))
+	}
+
+	// 不带 ?lang= 的根路径仍按「记住的语言」回跳：所以首页链接必须显式带语言。
+	w = get("/", stale)
+	if w.Code != http.StatusFound || w.Header().Get("Location") != "/en" {
+		t.Errorf("GET / 带旧英文 cookie: %d → %q", w.Code, w.Header().Get("Location"))
+	}
+
+	// 回跳后的 "/" 以中文渲染，不再把访客送去英文站。
+	w = get("/", &http.Cookie{Name: langCookie, Value: "zh-CN"})
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `lang="zh-CN"`) {
+		t.Errorf("GET / 应渲染中文首页: %d", w.Code)
 	}
 }
 
