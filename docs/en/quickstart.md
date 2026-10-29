@@ -106,12 +106,12 @@ sh scripts/build.sh
 ./bin/nexadmin-server start
 ```
 
-#### Method 2: Web Interface (recommended for production)
+#### Method 2: Web Interface (requires a writable source tree and build toolchain)
 
 If you've started development mode (`go run ./cmd/server`), you can directly visit `http://localhost:8080/admin/system/plugin` → Plugin Marketplace tab:
 
 1. Find the "Scheduled Jobs" card (marked "Free")
-2. Click the「Install」button
+2. Click the "Install" button
 3. Wait for the progress bar to show "Installation complete" (auto-compiles and restarts)
 4. Refresh the page; you'll see cron's status as "Active"
 
@@ -130,7 +130,7 @@ If you've started development mode (`go run ./cmd/server`), you can directly vis
 **Installation flow:**
 
 1. **Purchase license**: Contact vendor to get `.lic` file
-2. **Install plugin**: First follow the above「install plugin」steps to install source code
+2. **Install plugin**: First follow the "install plugin" steps above to install source code
 3. **Import license**: In Plugin Management → select the corresponding pro plugin → paste license content
 4. **Check status**: If it prompts `needRestart=true`, execute `./bin/nexadmin-server restart`
 
@@ -148,9 +148,15 @@ If you've started development mode (`go run ./cmd/server`), you can directly vis
 | Question | Answer |
 |---|---|
 | Q: Why does my plugin prompt a restart needed? | A: This plugin uses root routes or auth extensions which must be loaded at server startup, requiring restart. Other plugins activate immediately after license import. |
-| Q: How do I know what's free vs paid? | A: In Plugin Marketplace, free plugins show「免费」, Pro plugins show「待定」or specific pricing. |
+| Q: How do I know what's free vs paid? | A: In Plugin Marketplace, free plugins are labeled "Free", Pro plugins show "TBD" or a specific price. |
 | Q: Can I transfer licenses? | A: Each license binds a customer name and domain. For domain changes, contact vendor to reissue. |
 | Q: Is there a trial version? | A: Currently auto-trial isn't provided. For Pro evaluation, contact vendor for temporary license. |
+
+## 6. Licensing, disabling and service lifecycle
+
+Free plugins need no `.lic`. For pro plugins, a platform super admin imports the license in Plugin Management; the file is stored at `data/licenses/<id>.lic`. Source installation still needs a build, and license import only activates compiled plugins: when it returns `needRestart=true`, restart as instructed. Not every plugin can be hot-activated. Domain binding, expiry and the `requires_nexadmin` range must all match.
+
+**Formal purchase terms have not been published.** This guide sets no prices, refund rules, revenue shares or IP terms; free / pro is a runtime classification, not a legal license grant.
 
 ```bash
 ./bin/nexadmin-server status
@@ -161,7 +167,7 @@ If you've started development mode (`go run ./cmd/server`), you can directly vis
 
 These commands manage processes launched by `start`. Stop foreground `go run` with Ctrl+C, and manage systemd / containers through their supervisors. On Windows use `bin\nexadmin-server.exe`.
 
-To temporarily disable a plugin, add its ID to the complete `disabled_plugins` list in user configuration `config/config.yaml`, then restart. Remove the ID and restart to restore it. `plugin remove <id>` deletes source and the registration import, requiring a rebuild and restart; database tables and license files remain. Do not use the table-dropping `--purge` option for ordinary disabling.
+To temporarily disable a plugin, add its ID to the complete `disabled_plugins` list in user configuration `config/config.yaml`, then restart. Remove the ID and restart to restore it. `plugin remove <id>` deletes source and the registration import, requiring a rebuild and restart; database tables and license files remain. Do not use the table-dropping `--purge` option for ordinary disabling; `--purge` also clears plugin tables and migration records, so stop the service and back up the database first.
 
 ## 7. Documentation and release checks
 

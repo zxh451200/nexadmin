@@ -106,7 +106,7 @@ sh scripts/build.sh
 ./bin/nexadmin-server start
 ```
 
-#### 方式二：通过 Web 界面（推荐生产环境）
+#### 方式二：通过 Web 界面（需要源码树与构建工具链）
 
 如果你已经启动了开发模式（`go run ./cmd/server`），可以直接访问 `http://localhost:8080/admin/system/plugin` → 「插件市场」标签页：
 
@@ -152,6 +152,12 @@ sh scripts/build.sh
 | Q: 授权可以转让吗？ | A: 每个授权绑定一个客户名称和域名，原则上不可转让。如需更换域名，请联系发行方重发授权。 |
 | Q: 试用版怎么搞？ | A: 目前暂不提供自动试用机制。如果需要评估 Pro 功能，请联系发行方获取临时授权。 |
 
+## 6. 授权、停用与日常启停
+
+免费插件不需要 `.lic`；pro 插件由平台超管在「插件管理」导入授权，文件保存在 `data/licenses/<id>.lic`。源码安装仍需构建，授权导入只激活已编译的插件：返回 `needRestart=true` 时按提示重启，不承诺所有插件都能热激活。域名绑定、有效期与 `requires_nexadmin` 版本范围必须同时满足。
+
+**正式购买条款尚未发布**：本文不设定价格、退款、分成或知识产权条款；免费 / pro 只是运行期分类，不是法律许可声明。
+
 ```bash
 ./bin/nexadmin-server status
 ./bin/nexadmin-server stop
@@ -161,7 +167,7 @@ sh scripts/build.sh
 
 这些启停命令管理由 `start` 拉起的进程；前台 `go run` 用 Ctrl+C，systemd / 容器用其管理器。Windows 对应 `bin\nexadmin-server.exe`。
 
-临时停用插件：在用户配置 `config/config.yaml` 的 `disabled_plugins` 完整列表中加入其 ID，然后重启；移除 ID 并重启恢复。`plugin remove <id>` 删除源码与注册导入，需重新构建并重启，保留数据库表与授权文件；不要将会清表的 `--purge` 当成普通停用。
+临时停用插件：在用户配置 `config/config.yaml` 的 `disabled_plugins` 完整列表中加入其 ID，然后重启；移除 ID 并重启恢复。`plugin remove <id>` 删除源码与注册导入，需重新构建并重启，保留数据库表与授权文件；不要将会清表的 `--purge` 当成普通停用。`--purge` 会连同插件表与迁移记录一起清理，必须先停服并备份数据库。
 
 ## 7. 文档与上线检查
 

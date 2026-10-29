@@ -286,10 +286,16 @@ Attach a one-pager: feature introduction, screenshots, supported databases, veri
 
 ## 9. Licensing and sales workflow
 
+**Free plugins** (`edition: free`, e.g. cron / codegen / imports / totp / ldap / maps / crm) do not validate a license. Customers install the source, rebuild and restart; no `.lic` is needed.
+
+**Pro plugins** (`edition: pro`):
+
 1. The author submits the plugin package → after platform review it is listed in the plugin marketplace.
 2. The buyer purchases → the platform signs a license file with its private key (bound to the plugin, customer name, expiry, optionally domains).
-3. A platform super admin imports the license in Plugin Management. The manager attempts to activate compiled plugins; inspect `needRestart`, state and logs. Source installation still requires rebuilding. Failed hot mounts, website root routes and startup-time authentication extensions require restart verification; not all licenses can be hot-activated.
+3. After the customer installs and builds the source, a platform super admin imports the license in Plugin Management. The manager tries to activate compiled plugins: `needRestart=true` means restart as instructed; `needRestart=false` means it is already live.
 4. When the license expires the plugin automatically goes offline (routes return 403, state `expired`); after renewal, importing the new license restores it. A license revoked by the vendor is in state `revoked` (see §11).
+
+**What does `needRestart` mean?** It means the plugin needs a restart to become fully available. This is typical when a plugin registers pages at the site root (for example the website plugin) or participates in startup-time authentication/identity extensions. The framework will not mutate the live router just to claim "immediate activation", so it reports the restart honestly.
 
 Authors do not need to — and should not — implement licensing themselves. Validation is centralized in the framework; plugin code must not contain any license logic.
 
@@ -324,4 +330,5 @@ Authors do not need to — and should not — implement licensing themselves. Va
 - `requires_nexadmin` is validated: when mounting (and in `nexadmin plugin install`), the framework version is checked against it; unsatisfied means no mounting (state `invalid`, even a valid license won't help), and `plugin install --force` skips it. Empty values, or an unknown framework version (dev builds without a version), pass through; an unparsable range counts as unsatisfied.
 - Licenses are not checked online — only offline revocation exists: the vendor signs a revocation list `config/license-revoked.json` via `plugin revoke` (or export from the license admin) and distributes it with upgrade packages; after signature verification the framework marks licenses whose serial numbers appear in the list as `revoked` (routes return 403, reason shown on the plugin management page); file changes need no restart. This is an auxiliary measure, not strong protection: with source delivery, buyers can delete the list or remove the check. Old licenses without serial numbers cannot be individually revoked. Keep license validity windows short and renew on time; if the vendor's private key leaks or wholesale revocation is needed, remove the corresponding public key from the key set (`config/license-keys.pub` or the built-in list) — all licenses signed by that key become invalid.
 - Multiple public keys are supported: validation uses the built-in key plus appended keys from `config/license-keys.pub` (one base64 per line, `#` starts a comment); the license file's `kid` selects which key (old license files without `kid` try all keys in turn). To rotate keys, append the new key first and remove the old one after old licenses expire — no source changes needed. The built-in key is the development key and must be replaced before official release (`nexadmin release check` blocks on it).
+- A plugin's routes can mount immediately on license import only after it declares the API-only hot-mount contract. The official plugins do not each declare it yet, so rely on the returned `needRestart` and restart when required. The declaration implements `plugin.RuntimeRoutes` with `RequiresRootRoutes() bool` returning `false`, and all routes must live under `/api/v1/plugins/<id>/`.
 - Plugin migrations, menu writes and hot-mounting are not fully verified against real databases yet — state your verification scope in the submission notes.
