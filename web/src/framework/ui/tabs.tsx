@@ -4,18 +4,21 @@ import { cn } from '@/lib/utils'
 
 const Tabs = TabsPrimitive.Root
 
+/**
+ * 分段控件外观的唯一样式源：Tabs 与 components/Segmented、顶部标签条共用同一口径。
+ * 手写切换控件不要另起一套圆角/底色，否则同一个产品里会出现两种「选中」。
+ */
+export const segmentedListClass =
+  'inline-flex h-auto w-fit max-w-full items-center justify-start gap-0.5 overflow-x-auto overflow-y-hidden rounded-lg border bg-transparent p-0.5 text-muted-foreground'
+
+export const segmentedItemClass =
+  'inline-flex min-h-10 items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-3.5 py-1.5 text-sm font-medium transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm md:min-h-8'
+
 const TabsList = React.forwardRef<
   React.ElementRef<typeof TabsPrimitive.List>,
   React.ComponentPropsWithoutRef<typeof TabsPrimitive.List>
 >(({ className, ...props }, ref) => (
-  <TabsPrimitive.List
-    ref={ref}
-    className={cn(
-      'inline-flex h-auto max-w-full items-center justify-start gap-1 overflow-x-auto overflow-y-hidden rounded-xl bg-muted/70 p-1 text-muted-foreground',
-      className,
-    )}
-    {...props}
-  />
+  <TabsPrimitive.List ref={ref} className={cn(segmentedListClass, className)} {...props} />
 ))
 TabsList.displayName = TabsPrimitive.List.displayName
 
@@ -26,9 +29,9 @@ const TabsTrigger = React.forwardRef<
   <TabsPrimitive.Trigger
     ref={ref}
     className={cn(
-      // 选中态与顶部标签条（framework/layout/TabsBar）同一口径：白底胶囊 + 品牌色字 + 1px 描边 + 轻阴影。
+      // 选中态与顶部标签条（framework/layout/TabsBar）同一口径：填满品牌色的胶囊 + 浅阴影，未选中是纯文字。
       // 两处必须一起改——只改一处就会出现「有的 tab 有样式、有的没有」。
-      'inline-flex min-h-10 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-4 py-1.5 text-sm font-medium transition-all hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border md:min-h-9',
+      segmentedItemClass,
       className,
     )}
     {...props}

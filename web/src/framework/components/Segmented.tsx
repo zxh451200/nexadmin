@@ -1,9 +1,14 @@
 import type { ReactNode } from 'react'
 import { cn } from '@/lib/utils'
+import { segmentedItemClass, segmentedListClass } from '@/framework/ui/tabs'
 
 export interface SegmentedOption {
   value: string
   label: ReactNode
+  /** label 只有图标时必须给，读屏靠它 */
+  ariaLabel?: string
+  /** 图标按钮等需要改尺寸时用，与条目基础样式合并 */
+  className?: string
 }
 
 export interface SegmentedProps {
@@ -16,27 +21,23 @@ export interface SegmentedProps {
 }
 
 /**
- * 分段控件：两三个互斥选项的行内切换（图表类型、视图切换等）。
+ * 分段控件：两三个互斥选项的行内切换（图表类型、视图切换、日志/统计等）。
  *
- * 和 Tabs 的分工：Tabs 是带面板的导航（tablist/tab/tabpanel 语义，内容区跟着换），
- * 分段控件只是一个紧凑开关，不承担导航语义。以前图表上方那份是手写的，
- * 需要同样外观的地方应该复用这里，而不是再抄一遍圆角胶囊。
+ * 外观与 Tabs、顶部标签条同一口径（样式常量在 ui/tabs.tsx），只是语义是紧凑开关、
+ * 不承担导航面板职责。别在这里另起一套圆角/底色，否则同一产品会出现两种「选中」。
  */
 export function Segmented({ value, onChange, options, ariaLabel, className }: SegmentedProps) {
   return (
-    <div role="group" aria-label={ariaLabel} className={cn('flex w-fit gap-0.5 rounded-full bg-muted p-1', className)}>
+    <div role="group" aria-label={ariaLabel} className={cn(segmentedListClass, className)}>
       {options.map((o) => (
         <button
           key={o.value}
           type="button"
           aria-pressed={value === o.value}
+          aria-label={o.ariaLabel}
+          data-state={value === o.value ? 'active' : 'inactive'}
           onClick={() => onChange(o.value)}
-          className={cn(
-            'inline-flex h-8 items-center rounded-full px-3.5 text-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none md:h-7',
-            value === o.value
-              ? 'bg-background font-medium text-foreground shadow-sm'
-              : 'text-muted-foreground hover:text-foreground',
-          )}
+          className={cn(segmentedItemClass, o.className)}
         >
           {o.label}
         </button>
