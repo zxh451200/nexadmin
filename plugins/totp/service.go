@@ -11,27 +11,33 @@ import (
 
 	"nexadmin/core/response"
 	"nexadmin/core/secret"
+	"nexadmin/core/tenant"
 	"nexadmin/pkg/idgen"
 )
 
 // TOTPSecret 是某个用户的两步验证密钥(租户级,一行一用户)。
 // secret 经 core/secret 加密落库;last_step 是重放防护(命中步长必须严格递增)。
 type TOTPSecret struct {
-	databaseID
-	UserID    uint64 `gorm:"column:user_id;uniqueIndex:uk_plg_totp_user" json:"userId"`
-	SecretEnc string `gorm:"column:secret_enc" json:"-"`
-	Enabled   bool   `gorm:"column:enabled" json:"enabled"`
-	LastStep  int64  `gorm:"column:last_step" json:"-"`
+	ID        idgen.ID `gorm:"primaryKey;autoIncrement:false" json:"-"`
+	TenantID  uint64   `gorm:"column:tenant_id" json:"-"`
+	UserID    uint64   `gorm:"column:user_id;uniqueIndex:uk_plg_totp_user" json:"userId"`
+	SecretEnc string   `gorm:"column:secret_enc" json:"-"`
+	Enabled   bool     `gorm:"column:enabled" json:"enabled"`
+	LastStep  int64    `gorm:"column:last_step" json:"-"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
 
-// databaseID 是租户级表的最小主键集(TenantModel 等价物,避免插件内复制框架类型)。
-type databaseID struct {
-	ID        idgen.ID `gorm:"primaryKey;autoIncrement:false"`
-	TenantID  uint64   `gorm:"column:tenant_id;index"`
-	CreatedAt time.Time
-	UpdatedAt time.Time
+// BeforeCreate 生成主键：真实迁移表的 id 是 NOT NULL 且无默认值。
+func (m *TOTPSecret) BeforeCreate(*gorm.DB) error {
+	if m.ID == 0 {
+		id, err := idgen.Next()
+		if err != nil {
+			return err
+		}
+		m.ID = id
+	}
+	return nil
 }
 
 func (TOTPSecret) TableName() string { return "plg_totp_secret" }
@@ -90,12 +96,15 @@ func (s *Service) EnrollStart(ctx context.Context, uid uint64, account, issuer s
 		return "", "", eerr
 	}
 	m := TOTPSecret{UserID: uid, SecretEnc: enc, Enabled: false, LastStep: 0}
+	if tid, ok := tenant.From(ctx); ok {
+		m.TenantID = uint64(tid)
+	}
 	m.ID, gerr = idgen.Next()
 	if gerr != nil {
 		return "", "", gerr
 	}
 	if err := s.db.WithContext(ctx).
-		Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "user_id"}},
+		Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "tenant_id"}, {Name: "user_id"}},
 			DoUpdates: clause.Assignments(map[string]any{
 				"secret_enc": enc, "enabled": false, "last_step": 0, "updated_at": time.Now().UTC(),
 			})}).Create(&m).Error; err != nil {

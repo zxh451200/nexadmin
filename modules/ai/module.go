@@ -24,7 +24,17 @@ import (
 	settings "nexadmin/modules/system/config"
 )
 
-func init() { core.RegisterBuiltin(module{}) }
+func init() {
+	core.RegisterBuiltin(module{})
+	// 插件只依赖 core：通过工厂拿到与内置接口同一套限流、租户策略与配额装配。
+	core.SetAIGatewayFactory(func(d *core.Deps) *coreai.Gateway {
+		loc, err := time.LoadLocation(d.Config.App.Timezone)
+		if err != nil {
+			loc = time.UTC
+		}
+		return NewGateway(d, loc)
+	})
+}
 
 type module struct{}
 

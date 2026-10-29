@@ -23,9 +23,6 @@ import (
 	"nexadmin/core/mcp"
 	"nexadmin/core/plugin"
 	"nexadmin/core/tenant"
-	moduleai "nexadmin/modules/ai"
-	"nexadmin/modules/message"
-	"nexadmin/modules/notice"
 )
 
 const (
@@ -43,12 +40,8 @@ type module struct{}
 func (*module) Name() string { return "assistant" }
 
 func (*module) Register(r *gin.RouterGroup, d *core.Deps) {
-	loc, err := time.LoadLocation(d.Config.App.Timezone)
-	if err != nil {
-		loc = time.UTC
-	}
-	s := &service{db: d.DB, cache: d.Cache, gw: moduleai.NewGateway(d, loc), mcp: d.MCP,
-		messages: message.NewService(d.DB, notice.NewService(d.DB))}
+	s := &service{db: d.DB, cache: d.Cache, gw: core.AIGateway(d), mcp: d.MCP,
+		messages: core.MessageCenterOf(d)}
 	g := r.Group("/plugins/assistant", core.Perm("assistant:use"))
 	g.GET("/session", s.session)
 	g.POST("/run", s.run)
@@ -65,7 +58,7 @@ type service struct {
 	db       *gorm.DB
 	cache    cache.Cache
 	gw       *coreai.Gateway
-	messages *message.Service
+	messages core.MessageCenter
 	mcp      *mcp.Server
 }
 
@@ -558,6 +551,9 @@ func (s *service) Execute(ctx context.Context, who coreai.Caller, call coreai.To
 	// Same business authorization as /messages/unread-count: logged-in identity,
 	// tenant-scoped GORM context, recipient-only queries, announcement audience.
 	cl := auth.ClaimsFromContext(ctx)
+	if s.messages == nil {
+		return nil, errors.New("unread counts unavailable")
+	}
 	counts, err := s.messages.Unread(ctx, cl.UserID)
 	if err != nil {
 		return nil, errors.New("unread counts unavailable")

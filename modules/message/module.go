@@ -20,7 +20,20 @@ import (
 	"nexadmin/pkg/idgen"
 )
 
-func init() { core.RegisterBuiltin(module{}) }
+func init() {
+	core.RegisterBuiltin(module{})
+	core.SetMessageCenterFactory(func(d *core.Deps) core.MessageCenter {
+		return messageCenter{svc: NewService(d.DB, notice.NewService(d.DB))}
+	})
+}
+
+// messageCenter 把内置消息服务适配成 core.MessageCenter，插件无需 import 本模块。
+type messageCenter struct{ svc *Service }
+
+func (c messageCenter) Unread(ctx context.Context, uid idgen.ID) (core.UnreadCount, error) {
+	n, err := c.svc.Unread(ctx, uid)
+	return core.UnreadCount{Messages: n.Messages, Notices: n.Notices}, err
+}
 
 type module struct{}
 
