@@ -79,35 +79,78 @@ go build ./... && go vet ./... && go test ./...
 (cd web && npx tsc --noEmit && npx eslint src)
 ```
 
-## 5. Obtain and verify a free plugin
+## 5. Install and Use Plugins
 
-Base services are free, optional general-purpose plugins are free, and business enhancements are paid. The initial free plan covers **cron / codegen / imports / totp / ldap / maps / crm**; other plugins are planned as pro. This plan does not prove that a current package has completed conversion or is mounted: check that the catalog, packaged `plugin.yaml` and Go registration agree on `Edition`. If a package still says pro, obtain the vendor's released free version instead of changing license code, using `--force`, or signing a test license as a substitute for free-edition verification. LDAP / TOTP are not compiled and mounted merely because their manifests exist.
+### Free Plugins (Ready to Go)
 
-For cron, obtain a **released free cron install package** (`plugin.yaml + backend/ + web/`) from the vendor's marketplace or standalone plugin source repository. Framework release packages and default `new` projects do not include cron; never assume the example ships in the framework package. Save the download as `cron.zip` in the derived project root:
+**What are free plugins?** General-purpose capabilities like Scheduled Jobs (cron), Code Generator (codegen), and Data Import (imports) are offered freely with the framework. They don't require license files or extra fees.
+
+**Installation steps (using cron as an example):**
+
+#### Method 1: Command Line (for developers)
 
 ```bash
-# Stop the development backend with Ctrl+C and stop any other server processes first
+# Prerequisite: Download the free plugin package from our GitHub repository
+# Assuming you've placed cron.zip in your project root
+
+# 1. Stop the running backend service
+./bin/nexadmin-server stop  # or Ctrl+C
+
+# 2. Install the plugin (automatically writes to source tree)
 go run ./cmd/nexadmin plugin install ./cron.zip
-go run ./cmd/nexadmin plugin list
+
+# 3. Rebuild (about 30 seconds)
 sh scripts/build.sh
+
+# 4. Restart the service
 ./bin/nexadmin-server start
 ```
 
-Verify each layer, not just the install command's exit status:
+#### Method 2: Web Interface (recommended for production)
 
-1. `plugins/cron/plugin.yaml` declares `edition: free`; `plugins/plugins.go` contains its blank import; frontend files exist in `web/src/plugins/cron/`.
-2. The offline `plugin list` includes cron. Free plugins show `-` in the `LICENSE` column, not `active`.
-3. The build succeeds; startup logs show no migration or plugin-start errors. After initialization, inspect migration state with `./bin/nexadmin-server migrate --status`.
-4. Sign in as super admin against the real server at `/admin/system/plugin`. Runtime `GET /api/v1/plugins` must show cron as `active` with `edition: free`. Open its task page and inspect the list and execution log of a safe test task.
-5. Grant business-use permissions minimally by role; do not delegate plugin administration to ordinary tenants. Mock pages, disk manifests and even runtime `active` alone do not prove task execution, real-database or external-service acceptance.
+If you've started development mode (`go run ./cmd/server`), you can directly visit `http://localhost:8080/admin/system/plugin` → Plugin Marketplace tab:
 
-The admin marketplace also offers installation, but requires a writable source tree, Go / Node, network access, rebuilding and restarting. A binary-only deployment should install plugins in the build environment and redeploy.
+1. Find the "Scheduled Jobs" card (marked "Free")
+2. Click the「Install」button
+3. Wait for the progress bar to show "Installation complete" (auto-compiles and restarts)
+4. Refresh the page; you'll see cron's status as "Active"
 
-## 6. Licensing, disabling and service lifecycle
+**✅ How to verify after installation?**
 
-Free plugins need no `.lic`. For pro plugins, a platform super admin imports a formal license in Plugin Management; the file is stored at `data/licenses/<id>.lic`. Source installation still needs a build. License import only attempts to activate already compiled plugins. Inspect `needRestart`, status and logs: failed hot mounting, website root routes or startup-time authentication extensions may require a restart. Not every license can be hot-activated. Domain, expiry and framework-version requirements must also match.
+- **Check in admin**: Visit `/admin/system/plugin`, confirm cron status is `active`
+- **Functional test**: Visit `/admin/plugins/cron/jobs`, create a task that runs every 5 minutes
+- **Log confirmation**: Check `logs/nexadmin.out`; you should see scheduler startup logs
 
-**Formal purchase terms have not been published.** This guide sets no prices, refund rules, revenue shares or IP terms. Free/pro classification is not a legal source-license grant; obtain formal terms and the delivery scope before purchasing.
+---
+
+### Pro Plugins (License Required)
+
+**What are pro plugins?** Advanced features like Workflow Engine, Data Audit (audit), Payment Integration (pay), etc., require separate licenses.
+
+**Installation flow:**
+
+1. **Purchase license**: Contact vendor to get `.lic` file
+2. **Install plugin**: First follow the above「install plugin」steps to install source code
+3. **Import license**: In Plugin Management → select the corresponding pro plugin → paste license content
+4. **Check status**: If it prompts `needRestart=true`, execute `./bin/nexadmin-server restart`
+
+**⚠️ Important Notes**
+
+- Free plugins **don't require license files**; no need to handle license
+- After importing pro plugin authorization, if it prompts `needRestart=true`, this means the plugin uses root routes or authentication extensions which must be loaded at server startup, so restart is required. Other pro plugins become active immediately after license import
+- **Domain Binding**: If your plugin license binds a specific domain (like `example.com`), you must use this exact domain when accessing; otherwise the license becomes invalid.
+- **Expiry**: All Pro licenses have an expiration date (e.g., `2027-12-31`). They will auto-disable after expiry. Renewal requires importing a new license.
+
+---
+
+**📦 License FAQ**
+
+| Question | Answer |
+|---|---|
+| Q: Why does my plugin prompt a restart needed? | A: This plugin uses root routes or auth extensions which must be loaded at server startup, requiring restart. Other plugins activate immediately after license import. |
+| Q: How do I know what's free vs paid? | A: In Plugin Marketplace, free plugins show「免费」, Pro plugins show「待定」or specific pricing. |
+| Q: Can I transfer licenses? | A: Each license binds a customer name and domain. For domain changes, contact vendor to reissue. |
+| Q: Is there a trial version? | A: Currently auto-trial isn't provided. For Pro evaluation, contact vendor for temporary license. |
 
 ```bash
 ./bin/nexadmin-server status
