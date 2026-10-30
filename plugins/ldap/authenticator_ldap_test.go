@@ -6,9 +6,16 @@ package ldap
 import (
 	"bytes"
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/binary"
 	"errors"
 	"io"
+	"math/big"
 	"net"
 	"strings"
 	"testing"
@@ -29,9 +36,10 @@ const (
 )
 
 type fakeLDAP struct {
-	ln    net.Listener
-	port  int
-	binds []string
+	ln      net.Listener
+	port    int
+	binds   []string
+	tlsCert *tls.Certificate
 }
 
 func startFakeLDAP(t *testing.T) *fakeLDAP {
@@ -67,6 +75,17 @@ func (f *fakeLDAP) handle(c net.Conn) {
 		}
 		msgID := intFrom(children[0].val)
 		switch children[1].tag {
+		case 0x77: // ExtendedRequest（StartTLS）
+			if f.tlsCert == nil {
+				return
+			}
+			_, _ = c.Write(message(msgID, extendedResponse()))
+			tc := tls.Server(c, &tls.Config{Certificates: []tls.Certificate{*f.tlsCert}, MinVersion: tls.VersionTLS12})
+			_ = tc.SetDeadline(time.Now().Add(3 * time.Second))
+			if err := tc.Handshake(); err != nil {
+				return
+			}
+			c = tc
 		case 0x60: // BindRequest
 			parts := splitTLV(children[1].val)
 			if len(parts) < 3 {
@@ -213,11 +232,19 @@ func searchEntry() []byte {
 	return enc(0x64, bytes.Join([][]byte{str(0x04, userDN), attrs}, nil))
 }
 
+func extendedResponse() []byte {
+	return enc(0x78, bytes.Join([][]byte{encInt(0x0A, 0), str(0x04, ""), str(0x04, "")}, nil))
+}
+
 func searchDone() []byte {
 	return enc(0x65, bytes.Join([][]byte{encInt(0x0A, 0), str(0x04, ""), str(0x04, "")}, nil))
 }
 
 func configDB(t *testing.T, port int, bindPass string, calls int) *gorm.DB {
+	return configDBWith(t, port, bindPass, false, calls)
+}
+
+func configDBWith(t *testing.T, port int, bindPass string, startTLS bool, calls int) *gorm.DB {
 	t.Helper()
 	sqlDB, mock, err := sqlmock.New()
 	if err != nil {
@@ -232,7 +259,7 @@ func configDB(t *testing.T, port int, bindPass string, calls int) *gorm.DB {
 		"attr_username", "attr_email", "attr_nickname", "match_existing", "auto_create", "default_role", "timeout_ms", "created_at", "updated_at"}
 	for i := 0; i < calls; i++ {
 		mock.ExpectQuery("SELECT \\* FROM `plg_ldap_config`").WillReturnRows(sqlmock.NewRows(cols).AddRow(
-			1, true, "127.0.0.1", port, false, false, svcDN, bindPass, "dc=example,dc=com", "(uid=%s)",
+			1, true, "127.0.0.1", port, false, startTLS, svcDN, bindPass, "dc=example,dc=com", "(uid=%s)",
 			"uid", "mail", "cn", false, false, "", 3000, time.Now(), time.Now(),
 		))
 	}
@@ -307,4 +334,40 @@ func TestTestConnectionRequiresHostAndBaseDN(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "ldap.host_basedn_required") {
 		t.Fatalf("missing host/base_dn must be rejected before dialing, got %v", err)
 	}
+}
+
+// StartTLS 只信任系统根证书：自签证书必须被拒绝，不能静默跳过校验。
+func TestStartTLSRejectsSelfSignedCertificate(t *testing.T) {
+	f := startFakeLDAP(t)
+	f.tlsCert = selfSignedCert(t)
+	a := &authenticator{svc: NewService(configDBWith(t, f.port, svcPass, true, 1), nil)}
+	_, err := a.Authenticate(context.Background(), "alice", userPass)
+	if err == nil || errors.Is(err, auth.ErrExternalRejected) {
+		t.Fatalf("self-signed StartTLS must fail as a transport error, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "starttls") {
+		t.Fatalf("expected starttls error, got %v", err)
+	}
+}
+
+func selfSignedCert(t *testing.T) *tls.Certificate {
+	t.Helper()
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmpl := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject:      pkix.Name{CommonName: "fake-ldap"},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Now().Add(time.Hour),
+		IPAddresses:  []net.IP{net.ParseIP("127.0.0.1")},
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &tls.Certificate{Certificate: [][]byte{der}, PrivateKey: key}
 }
