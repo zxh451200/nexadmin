@@ -111,6 +111,12 @@ im:
   conv_closed: 会话已结束
   stream_ticket_invalid: 会话凭据无效或已过期
   plugin_inactive: 客服插件未启用或授权已失效
+  claimed: 会话已被其他坐席认领
+  rating_invalid: 评分需在 1~5 之间
+  rating_not_closed: 会话结束后才能评价
+  rating_exists: 该会话已评价过
+  quick_reply_required: 快捷回复的标题和内容不能为空
+  quick_reply_not_found: 快捷回复不存在
 imports:
   job_not_found: 导入任务不存在
   actor_required: 缺少操作者身份
@@ -127,6 +133,16 @@ imports:
   missing_columns_detail: "文件缺少必需的列：%s"
   job_running: "任务正在执行，完成后才能删除"
   required_empty: 必填列为空
+  required_suffix: "(必填)"
+  source:
+    crm_customers:
+      title: 客户导入
+      name: 客户名称
+      phone: 手机号
+      email: 邮箱
+      level: 客户等级
+      owner: 负责人
+      remark: 备注
 ldap:
   host_basedn_required: 请填写 LDAP 地址和 Base DN
   filter_placeholder_required: 过滤器必须包含 %s 占位符（如 %(uid)s）

@@ -111,6 +111,12 @@ im:
   conv_closed: Conversation is closed
   stream_ticket_invalid: Invalid or expired stream ticket
   plugin_inactive: IM plugin is not enabled or its license has lapsed
+  claimed: The conversation has been claimed by another agent
+  rating_invalid: Rating must be between 1 and 5
+  rating_not_closed: The conversation can be rated only after it is closed
+  rating_exists: This conversation has already been rated
+  quick_reply_required: Quick reply title and content are required
+  quick_reply_not_found: Quick reply not found
 imports:
   job_not_found: Import job not found
   actor_required: Missing operator identity
@@ -127,6 +133,16 @@ imports:
   missing_columns_detail: "The file is missing required columns: %s"
   job_running: "The job is running; it can be deleted once it finishes."
   required_empty: Required column is empty
+  required_suffix: "(required)"
+  source:
+    crm_customers:
+      title: Customer import
+      name: Customer name
+      phone: Phone
+      email: Email
+      level: Level
+      owner: Owner
+      remark: Remark
 ldap:
   host_basedn_required: LDAP address and Base DN are required
   filter_placeholder_required: The filter must contain the %s placeholder (e.g. %(uid)s)

@@ -56,6 +56,18 @@ type Module interface {
 	Register(r *gin.RouterGroup, d *Deps)
 }
 
+// Unwrapper 由「包装模块」实现：插件管理器把插件模块包一层 mounted 再交给内核，
+// 按接口发现扩展点（如导入中心的 ImportSources）时必须先拆包，否则插件的实现永远看不见。
+type Unwrapper interface{ Unwrap() Module }
+
+// UnwrapModule 拆掉包装返回被包装的模块；不是包装模块时原样返回。
+func UnwrapModule(m Module) Module {
+	if u, ok := m.(Unwrapper); ok {
+		return u.Unwrap()
+	}
+	return m
+}
+
 // Deps 是框架交给模块的依赖。
 type Deps struct {
 	Config *config.Config

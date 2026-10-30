@@ -10,25 +10,16 @@ import (
 	"fmt"
 	"sort"
 	"sync"
+
+	"nexadmin/pkg/importspec"
 )
 
-// Column 是导入模板的一列。json 标签必须小写：前端 ImportColumn 按 key/label/required/example 取值。
-type Column struct {
-	Key      string `json:"key"`      // 列标识(表头用 Label,数据行按 Key 映射)
-	Label    string `json:"label"`    // 模板表头(给用户看的中文名)
-	Required bool   `json:"required"` // 缺失/空白即该行失败
-	Example  string `json:"example"`  // 模板里的示例值
-}
-
-// Source 是一个可导入的数据源。
-// Handler 逐行回调:row 是 key→值(已去空白),返回 error 即该行失败(错误进报告,不影响其它行)。
-// Handler 内部自行处理落库(建议逐行独立提交,避免一行失败整批回滚)。
-type Source struct {
-	Name    string // 唯一标识(如 "products")
-	Title   string // 显示名(如 "商品导入")
-	Columns []Column
-	Handler func(ctx context.Context, rowIndex int, row map[string]string) error
-}
+// 类型别名：契约本体在 pkg/importspec（提供方只依赖中立包，不反向依赖本插件）。
+type (
+	Column         = importspec.Column
+	Source         = importspec.Source
+	SourceProvider = importspec.Provider
+)
 
 // RowError 是一行导入失败的记录。
 type RowError struct {
@@ -81,12 +72,13 @@ type SourceMeta struct {
 	Columns []Column `json:"columns"`
 }
 
-// ListSources 列出全部已注册导入源(按名称排序)。
-func ListSources() []SourceMeta {
+// ListSources 列出全部已注册导入源(按名称排序),标题与列名按请求语言渲染。
+func ListSources(ctx context.Context) []SourceMeta {
 	mu.RLock()
 	defer mu.RUnlock()
 	out := make([]SourceMeta, 0, len(sources))
 	for _, s := range sources {
+		s = localize(ctx, s)
 		out = append(out, SourceMeta{Name: s.Name, Title: s.Title, Columns: append([]Column(nil), s.Columns...)})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })

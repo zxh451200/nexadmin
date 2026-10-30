@@ -118,7 +118,7 @@ func TestRunRowIsolation(t *testing.T) {
 // 模板 CSV:表头 + 示例行,Excel 可直接打开(BOM)。
 func TestTemplateAndParse(t *testing.T) {
 	src := testSource("t2", nil)
-	tpl := BuildTemplateCSV(src)
+	tpl := BuildTemplateCSV(context.Background(), src)
 	rows, err := ParseUpload(src, tpl, "template.csv")
 	if err != nil {
 		t.Fatal(err)
@@ -131,7 +131,7 @@ func TestTemplateAndParse(t *testing.T) {
 // 模板 XLSX:生成后按同名上传解析,应与 CSV 模板解出同一批行。
 func TestTemplateXLSXRoundTrip(t *testing.T) {
 	src := testSource("t2x", nil)
-	body, err := BuildTemplateXLSX(src)
+	body, err := BuildTemplateXLSX(context.Background(), src)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -582,6 +582,9 @@ type mounted struct {
 
 func (w *mounted) Name() string { return w.e.p.Module.Name() }
 
+// Unwrap 暴露被包装的插件模块：按接口发现扩展点（core.UnwrapModule）时用。
+func (w *mounted) Unwrap() core.Module { return w.e.p.Module }
+
 func (w *mounted) Register(r *gin.RouterGroup, d *core.Deps) {
 	m, e := w.m, w.e
 	m.Attach(d) // 迁移与菜单已由 core 在启动时统一完成（见 MigrationSources / SeedOnStartup）

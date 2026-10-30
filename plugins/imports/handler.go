@@ -38,7 +38,7 @@ func actor(c *gin.Context) string {
 
 // GET /plugins/imports/sources —— 已注册导入源(来源下拉 + 列说明)。
 func (h *handler) sources(c *gin.Context) {
-	response.OK(c, ListSources())
+	response.OK(c, ListSources(c.Request.Context()))
 }
 
 // GET /plugins/imports/template?source=products&format=csv|xlsx —— 下载导入模板(表头 + 示例行)。
@@ -54,9 +54,9 @@ func (h *handler) template(c *gin.Context) {
 	}
 	switch format {
 	case "csv":
-		attachment(c, "import-template-"+src.Name+".csv", "text/csv; charset=utf-8", BuildTemplateCSV(src))
+		attachment(c, "import-template-"+src.Name+".csv", "text/csv; charset=utf-8", BuildTemplateCSV(c.Request.Context(), src))
 	case "xlsx":
-		body, err := BuildTemplateXLSX(src)
+		body, err := BuildTemplateXLSX(c.Request.Context(), src)
 		if err != nil {
 			response.Fail(c, response.New(http.StatusInternalServerError, "imports.template_failed").Wrap(err))
 			return

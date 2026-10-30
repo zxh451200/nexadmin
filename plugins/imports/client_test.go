@@ -27,6 +27,26 @@ type plainModule struct{}
 func (plainModule) Name() string                          { return "plain" }
 func (plainModule) Register(*gin.RouterGroup, *core.Deps) {}
 
+// wrappedProvider 模拟插件管理器交给内核的包装模块：默认看不见被包装模块的接口方法。
+type wrappedProvider struct{ inner core.Module }
+
+func (w wrappedProvider) Name() string                          { return w.inner.Name() }
+func (w wrappedProvider) Register(*gin.RouterGroup, *core.Deps) {}
+func (w wrappedProvider) Unwrap() core.Module                   { return w.inner }
+
+// 插件模块在内核里是包了一层的：必须拆包后再断言，否则插件实现的来源永远不会被收集。
+func TestCollectUnwrapsPluginModules(t *testing.T) {
+	mods := []core.Module{wrappedProvider{inner: fakeProvider{name: "collect-wrapped", sources: []Source{{
+		Name: "collect-wrapped.rows", Title: "W",
+		Columns: []Column{{Key: "k", Label: "K"}},
+		Handler: func(context.Context, int, map[string]string) error { return nil },
+	}}}}}
+	collect(mods, nil, nil)
+	if _, err := getSource("collect-wrapped.rows"); err != nil {
+		t.Fatalf("包装模块里的来源未被收集: %v", err)
+	}
+}
+
 func TestCollectRegistersProviderSources(t *testing.T) {
 	called := 0
 	var warned []string

@@ -5,6 +5,7 @@ package imports
 
 import (
 	"bytes"
+	"context"
 	"encoding/csv"
 	"fmt"
 	"strings"
@@ -16,13 +17,15 @@ import (
 const utf8BOM = "\uFEFF"
 
 // templateCells 拆出模板的表头与示例行,CSV/XLSX 两种生成共用同一口径。
-func templateCells(s Source) (header, example []string) {
+func templateCells(ctx context.Context, s Source) (header, example []string) {
+	s = localize(ctx, s)
+	suffix := requiredSuffix(ctx)
 	header = make([]string, len(s.Columns))
 	example = make([]string, len(s.Columns))
 	for i, c := range s.Columns {
 		label := c.Label
 		if c.Required {
-			label += "(必填)"
+			label += suffix
 		}
 		header[i] = label
 		example[i] = c.Example
@@ -31,11 +34,11 @@ func templateCells(s Source) (header, example []string) {
 }
 
 // BuildTemplateCSV 生成导入模板:UTF-8 BOM + 表头(Label)+ 示例行。
-func BuildTemplateCSV(s Source) []byte {
+func BuildTemplateCSV(ctx context.Context, s Source) []byte {
 	var buf bytes.Buffer
 	buf.WriteString(utf8BOM)
 	w := csv.NewWriter(&buf)
-	header, example := templateCells(s)
+	header, example := templateCells(ctx, s)
 	_ = w.Write(header)
 	_ = w.Write(example)
 	w.Flush()
@@ -43,8 +46,8 @@ func BuildTemplateCSV(s Source) []byte {
 }
 
 // BuildTemplateXLSX 生成 XLSX 导入模板:表头加粗 + 示例行,列宽按内容自适应(中文按两格计)。
-func BuildTemplateXLSX(s Source) ([]byte, error) {
-	header, example := templateCells(s)
+func BuildTemplateXLSX(ctx context.Context, s Source) ([]byte, error) {
+	header, example := templateCells(ctx, s)
 	f := excelize.NewFile()
 	defer func() { _ = f.Close() }()
 	sheet := f.GetSheetName(0)
@@ -147,19 +150,12 @@ func parseCSV(s Source, content []byte) ([]map[string]string, error) {
 
 // mapHeaderToRows 把「第一行表头 + 后续数据行」映射为 key→值 切片(公共逻辑)。
 func mapHeaderToRows(s Source, records [][]string) ([]map[string]string, error) {
-	labelToKey := map[string]string{}
-	for _, c := range s.Columns {
-		labelToKey[strings.TrimSpace(strings.TrimSuffix(strings.TrimSuffix(c.Label, "(必填)"), "(必填)"))] = c.Key
-	}
+	labelToKey := labelIndex(s)
 	header := records[0]
 	keys := make([]string, len(header))
 	for i, h := range header {
 		h = strings.TrimPrefix(strings.TrimSpace(h), utf8BOM)
-		if k, ok := labelToKey[h]; ok {
-			keys[i] = k
-		} else if k, ok := labelToKey[strings.TrimSuffix(h, "(必填)")]; ok {
-			keys[i] = k
-		}
+		keys[i] = labelToKey[h]
 	}
 	rows := make([]map[string]string, 0, len(records)-1)
 	for i, rec := range records[1:] {

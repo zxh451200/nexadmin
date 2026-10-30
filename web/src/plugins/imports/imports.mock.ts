@@ -5,14 +5,15 @@ const ago = (min: number) => new Date(Date.now() - min * 60_000).toISOString()
 
 const SOURCES: ImportSourceMeta[] = [
   {
-    name: 'products',
-    title: '商品导入',
+    name: 'crm_customers',
+    title: '客户导入',
     columns: [
-      { key: 'title', label: '商品标题', required: true, example: '云南小粒咖啡' },
-      { key: 'price', label: '价格(元)', required: true, example: '29.90' },
-      { key: 'currency', label: '币种', required: false, example: 'CNY' },
-      { key: 'stock', label: '库存', required: false, example: '100' },
-      { key: 'sku_code', label: 'SKU编码(重复则更新)', required: false, example: 'SKU-001' },
+      { key: 'name', label: '客户名称', required: true, example: '张三' },
+      { key: 'phone', label: '手机号', required: false, example: '13800138000' },
+      { key: 'email', label: '邮箱', required: false, example: 'zhangsan@example.com' },
+      { key: 'level', label: '客户等级', required: false, example: 'VIP' },
+      { key: 'owner', label: '负责人', required: false, example: '王五' },
+      { key: 'remark', label: '备注', required: false, example: '' },
     ],
   },
 ]
@@ -20,24 +21,24 @@ const SOURCES: ImportSourceMeta[] = [
 let jobs: ImportJob[] = [
   {
     id: '7450000000000000001',
-    source: 'products',
-    fileName: 'products-2025Q3.csv',
+    source: 'crm_customers',
+    fileName: 'customers-2025Q3.csv',
     totalRows: 120,
     okRows: 116,
     failRows: 4,
     status: 'done',
     durationMs: 860,
     errors: [
-      { row: 23, key: 'title', message: '必填列为空' },
-      { row: 57, key: 'price', message: '价格格式非法' },
+      { row: 23, key: 'name', message: '必填列为空' },
+      { row: 57, key: 'email', message: '邮箱格式非法' },
     ],
     createdBy: 'admin',
     createdAt: ago(60 * 5),
   },
   {
     id: '7450000000000000002',
-    source: 'products',
-    fileName: 'products-suppliers.csv',
+    source: 'crm_customers',
+    fileName: 'customers-hotels.csv',
     totalRows: 30,
     okRows: 30,
     failRows: 0,
@@ -83,14 +84,14 @@ defineMock([
     handler: () => {
       const job: ImportJob = {
         id: String(7450000000000010000n + BigInt(jobs.length + 1)),
-        source: 'products',
+        source: 'crm_customers',
         fileName: 'upload.csv',
         totalRows: 3,
         okRows: 2,
         failRows: 1,
         status: 'done',
         durationMs: 95,
-        errors: [{ row: 2, key: 'title', message: '必填列为空' }],
+        errors: [{ row: 2, key: 'name', message: '必填列为空' }],
         createdBy: 'admin',
         createdAt: new Date().toISOString(),
       }
