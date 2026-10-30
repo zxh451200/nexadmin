@@ -167,6 +167,7 @@ ldap:
   host_basedn_required: 请填写 LDAP 地址和 Base DN
   filter_placeholder_required: 过滤器必须包含 %s 占位符（如 %(uid)s）
   test_failed: 连接测试失败，请检查地址、账号与加密设置
+  ca_invalid: CA 证书格式不正确，请粘贴 PEM 格式的证书内容
 pay:
   PAY_INVALID_AMOUNT: 金额或参数无效
   PAY_CURRENCY_UNSUPPORTED: 不支持的币种

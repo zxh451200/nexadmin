@@ -167,6 +167,7 @@ ldap:
   host_basedn_required: LDAP address and Base DN are required
   filter_placeholder_required: The filter must contain the %s placeholder (e.g. %(uid)s)
   test_failed: Connection test failed; check the address, credentials and encryption settings
+  ca_invalid: Invalid CA certificate; paste the certificate content in PEM format
 pay:
   PAY_INVALID_AMOUNT: Invalid amount or parameters
   PAY_CURRENCY_UNSUPPORTED: Unsupported currency
