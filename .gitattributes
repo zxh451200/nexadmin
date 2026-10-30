@@ -1,0 +1,10 @@
+* text=auto
+
+# 这些格式在 CRLF 下会咬人：gofmt 会报假红、sh 会带 \r 执行失败、
+# SQL 与 YAML 的解析对行尾敏感。仓库里存的就是 LF，这里把它钉住，
+# 免得 Windows 侧 core.autocrlf=true 每次 checkout 又把工作树写成 CRLF。
+*.go text eol=lf
+*.sh text eol=lf
+*.sql text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
