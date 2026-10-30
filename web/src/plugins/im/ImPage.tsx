@@ -179,13 +179,13 @@ export default function ImPage() {
 
   const toggleNotify = async () => {
     if (!('Notification' in window)) {
-      toast.error(t('plugin_im.notifyUnsupported'))
+      toast.error(t('plugin_im.notify.unsupported'))
       return
     }
     if (Notification.permission !== 'granted') {
       const perm = await Notification.requestPermission()
       if (perm !== 'granted') {
-        toast.error(t('plugin_im.notifyDenied'))
+        toast.error(t('plugin_im.notify.denied'))
         return
       }
     }
