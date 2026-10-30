@@ -29,6 +29,8 @@
     var closedBox = root.querySelector('[data-chat-closed]');
     var closedTitle = root.querySelector('[data-chat-closed-title]');
     var ratingBox = root.querySelector('[data-chat-rating]');
+    var ratingTitle = root.querySelector('[data-chat-rating-title]');
+    var starsBox = root.querySelector('[data-chat-stars]');
     var stars = Array.prototype.slice.call(root.querySelectorAll('[data-rate]'));
     var ratingComment = root.querySelector('[data-chat-rating-comment]');
     var ratingSubmit = root.querySelector('[data-chat-rating-submit]');
@@ -172,6 +174,20 @@
       return m.content || '';
     }
 
+    function fileLink(att, url) {
+      var file = document.createElement('a');
+      file.className = 'chat-file';
+      file.href = url;
+      file.target = '_blank';
+      file.rel = 'noreferrer';
+      file.appendChild(document.createTextNode(att.name || 'file'));
+      var size = document.createElement('span');
+      size.className = 'chat-file-meta';
+      size.textContent = fmtSize(att.size);
+      file.appendChild(size);
+      return file;
+    }
+
     function addMessage(m) {
       if (!m || !m.seq || st.seen[m.seq]) return;
       st.seen[m.seq] = 1;
@@ -202,20 +218,14 @@
             img.src = url;
             img.alt = att.name || '';
             img.loading = 'lazy';
+            // 取图失败时退回文件名链接，气泡里不会剩一块空白
+            img.addEventListener('error', function () {
+              if (link.parentNode) link.parentNode.replaceChild(fileLink(att, url), link);
+            });
             link.appendChild(img);
             bubble.appendChild(link);
           } else {
-            var file = document.createElement('a');
-            file.className = 'chat-file';
-            file.href = url;
-            file.target = '_blank';
-            file.rel = 'noreferrer';
-            file.appendChild(document.createTextNode(att.name || 'file'));
-            var size = document.createElement('span');
-            size.className = 'chat-file-meta';
-            size.textContent = fmtSize(att.size);
-            file.appendChild(size);
-            bubble.appendChild(file);
+            bubble.appendChild(fileLink(att, url));
           }
         }
         if (m.content) bubble.appendChild(document.createTextNode(m.content));
@@ -249,6 +259,20 @@
       if (ratingSubmit) ratingSubmit.disabled = n <= 0;
     }
 
+    // 已评价的会话保留星级（只读），只收起提问文案与评价表单；
+    // 未评价时相反：星级可点，感谢文案不出现。
+    function paintRating() {
+      var rated = st.rating > 0;
+      if (ratingBox) ratingBox.hidden = st.open;
+      if (starsBox) starsBox.classList.toggle('is-readonly', rated);
+      stars.forEach(function (btn) { btn.disabled = rated; });
+      if (ratingTitle) ratingTitle.hidden = rated;
+      if (ratingComment) ratingComment.hidden = rated;
+      if (ratingSubmit) ratingSubmit.hidden = rated;
+      if (thanks) thanks.hidden = !rated;
+      renderStars(rated ? st.rating : st.score);
+    }
+
     function applyConv(conv) {
       if (!conv) return;
       st.open = conv.status === 'open';
@@ -260,10 +284,8 @@
           ? t('chatClosedAuto', '会话因长时间无消息结束')
           : t('chatClosedTitle', '会话已结束');
       }
-      if (ratingBox) ratingBox.hidden = st.open || st.rating > 0;
-      if (thanks) thanks.hidden = st.open || st.rating === 0;
+      paintRating();
       if (typingEl) typingEl.hidden = true;
-      renderStars(st.rating || st.score);
     }
 
     function markRead() {
@@ -396,9 +418,7 @@
       }).catch(function (err) {
         if (err && err.status === 409) {
           st.rating = st.score;
-          renderStars(st.rating);
-          if (ratingBox) ratingBox.hidden = true;
-          if (thanks) thanks.hidden = false;
+          paintRating();
         } else {
           addLocalNote(t('chatRateFailed', '评价提交失败，请稍后再试'));
         }
@@ -539,6 +559,7 @@
     if (newBtn) newBtn.addEventListener('click', startNew);
     stars.forEach(function (btn) {
       btn.addEventListener('click', function () {
+        if (st.rating > 0) return;
         st.score = Number(btn.getAttribute('data-rate')) || 0;
         renderStars(st.score);
       });

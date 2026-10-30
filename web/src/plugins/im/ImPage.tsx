@@ -39,6 +39,7 @@ import {
   useSetTags,
   useTransferConv,
   type ImAgent,
+  type ImAttachment,
   type ImSettings,
   type ImConversation,
   type ImMessage,
@@ -425,6 +426,38 @@ function RatingStars({ value, className }: { value: number; className?: string }
   )
 }
 
+function FileAttachment({ att, url }: { att: ImAttachment; url: string }) {
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noreferrer"
+      className="flex max-w-full items-center gap-2 underline underline-offset-2"
+    >
+      <FileText aria-hidden="true" className="size-4 shrink-0" />
+      <span className="truncate">{att.name}</span>
+      <span className="shrink-0 text-[11px] opacity-70">{formatSize(att.size)}</span>
+    </a>
+  )
+}
+
+// 图片取不到时退回文件名链接，气泡里不会剩一块空白。
+function ImageAttachment({ att, url }: { att: ImAttachment; url: string }) {
+  const [failed, setFailed] = useState(false)
+  if (failed) return <FileAttachment att={att} url={url} />
+  return (
+    <a href={url} target="_blank" rel="noreferrer" className="block">
+      <img
+        src={url}
+        alt={att.name}
+        loading="lazy"
+        onError={() => setFailed(true)}
+        className="max-h-60 max-w-full min-w-20 rounded-md object-contain"
+      />
+    </a>
+  )
+}
+
 function ChatPane({
   conv,
   messages,
@@ -633,20 +666,9 @@ function ChatPane({
                 </div>
                 {att ? (
                   att.mime.startsWith('image/') ? (
-                    <a href={attUrl} target="_blank" rel="noreferrer" className="block">
-                      <img src={attUrl} alt={att.name} loading="lazy" className="max-h-60 max-w-full rounded-md object-contain" />
-                    </a>
+                    <ImageAttachment att={att} url={attUrl} />
                   ) : (
-                    <a
-                      href={attUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex max-w-full items-center gap-2 underline underline-offset-2"
-                    >
-                      <FileText aria-hidden="true" className="size-4 shrink-0" />
-                      <span className="truncate">{att.name}</span>
-                      <span className="shrink-0 text-[11px] opacity-70">{formatSize(att.size)}</span>
-                    </a>
+                    <FileAttachment att={att} url={attUrl} />
                   )
                 ) : null}
                 {m.content ? <div className="whitespace-pre-wrap break-words">{m.content}</div> : null}

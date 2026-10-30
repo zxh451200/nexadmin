@@ -2275,7 +2275,7 @@ html[data-scheme="light"] .hero-arc { opacity: 0.32; }
 .chat-attach:hover { background: var(--hover); color: var(--text); }
 .chat-attach:disabled { opacity: 0.5; cursor: not-allowed; }
 .chat-attach svg { width: 18px; height: 18px; }
-.chat-image { display: block; max-width: 100%; max-height: 220px; border-radius: 8px; }
+.chat-image { display: block; max-width: 100%; max-height: 220px; min-width: 80px; min-height: 60px; object-fit: contain; border-radius: 8px; }
 .chat-file { display: flex; align-items: center; gap: 6px; color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 .chat-file-meta { font-size: 11px; opacity: 0.7; }
 .chat-send {
@@ -2333,6 +2333,9 @@ html[data-scheme="light"] .hero-arc { opacity: 0.32; }
 }
 .chat-stars button:hover { background: var(--hover); }
 .chat-stars button.is-on { color: var(--accent-2); }
+/* 已评价的星级只读展示：保留可见的分，收掉交互态 */
+.chat-stars.is-readonly button { cursor: default; }
+.chat-stars.is-readonly button:hover { background: transparent; }
 .chat-rating textarea {
   width: 100%;
   resize: none;

@@ -234,7 +234,7 @@
     <div class="chat-closed" data-chat-closed hidden>
       <p class="chat-closed-title" data-chat-closed-title>{{.T "chat.closedTitle"}}</p>
       <div class="chat-rating" data-chat-rating hidden>
-        <p class="chat-rating-title">{{.T "chat.rateTitle"}}</p>
+        <p class="chat-rating-title" data-chat-rating-title>{{.T "chat.rateTitle"}}</p>
         <div class="chat-stars" data-chat-stars role="group" aria-label="{{.T "chat.rateTitle"}}">
           <button type="button" data-rate="1" aria-label="1">★</button>
           <button type="button" data-rate="2" aria-label="2">★</button>
@@ -242,10 +242,10 @@
           <button type="button" data-rate="4" aria-label="4">★</button>
           <button type="button" data-rate="5" aria-label="5">★</button>
         </div>
+        <p class="chat-thanks" data-chat-thanks hidden>{{.T "chat.rateThanks"}}</p>
         <textarea data-chat-rating-comment rows="2" maxlength="500" placeholder="{{.T "chat.rateComment"}}" aria-label="{{.T "chat.rateComment"}}"></textarea>
         <button type="button" class="chat-new" data-chat-rating-submit disabled>{{.T "chat.rateSubmit"}}</button>
       </div>
-      <p class="chat-thanks" data-chat-thanks hidden>{{.T "chat.rateThanks"}}</p>
       <button type="button" class="chat-new" data-chat-new>{{.T "chat.startNew"}}</button>
     </div>
   </section>
