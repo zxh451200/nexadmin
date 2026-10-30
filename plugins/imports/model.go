@@ -19,6 +19,8 @@ type Job struct {
 	// ErrorJSON 是最多 500 条 RowError 的 JSON;超出 MaxErrors 的错误只计数不存明细。
 	ErrorJSON string `gorm:"column:error_json;type:text" json:"-"`
 	CreatedBy string `gorm:"column:created_by" json:"createdBy"`
+	// Lang 是提交时的界面语言：异步执行没有请求上下文，行错误文案按它翻译。
+	Lang string `gorm:"column:lang;size:16;not null" json:"-"`
 }
 
 func (Job) TableName() string { return "plg_imports_job" }

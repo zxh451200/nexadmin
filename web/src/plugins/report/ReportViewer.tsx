@@ -85,6 +85,9 @@ export function ReportViewer({ reportId }: { reportId: string }) {
 
   return (
     <div className="flex flex-col gap-4">
+      <h2 className="text-base font-semibold">
+        {report.groupName ? `${builtinText(t, report.groupName)} / ${builtinText(t, report.name)}` : builtinText(t, report.name)}
+      </h2>
       <ReportFilters reportId={reportId} filters={report.config.filters} values={values} onChange={setValues} />
       {groups.length === 0 ? <EmptyState title={t('plugin_report.report.noCharts')} /> : null}
       {groups.map((g) => (

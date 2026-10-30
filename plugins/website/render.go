@@ -314,6 +314,7 @@ func (v *siteView) JSStrings() template.JS {
 	for _, k := range []string{
 		"packaging", "packagingHint", "packFailed", "copied", "copyManual", "menuOpen", "menuClose", "emailCopy", "emailCopied",
 		"contactSending", "contactSent", "contactFailed", "contactRate", "contactErrName", "contactErrEmail", "contactErrContent",
+		"chatErrSend", "chatErrLoad", "chatClosed", "chatGuest", "chatAgent",
 	} {
 		m[k] = v.T("site.js." + k)
 	}

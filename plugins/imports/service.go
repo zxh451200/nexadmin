@@ -10,6 +10,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"nexadmin/core/i18n"
 	"nexadmin/core/response"
 	"nexadmin/core/tenant"
 	"nexadmin/pkg/idgen"
@@ -194,7 +195,7 @@ func (s *Service) runSync(ctx context.Context, src Source, rows []map[string]str
 		return nil, err
 	}
 	m := Job{
-		Source: src.Name, FileName: truncate(fileName, 200),
+		Source: src.Name, FileName: truncate(fileName, 200), Lang: i18n.Lang(ctx),
 		TotalRows: len(rows), OkRows: okRows, FailRows: failRows,
 		Status: StatusDone, DurationMs: time.Since(start).Milliseconds(),
 		ErrorJSON: string(raw), CreatedBy: truncate(actor, 64),
@@ -213,7 +214,7 @@ func (s *Service) runAsync(ctx context.Context, src Source, rows []map[string]st
 	m := Job{
 		Source: src.Name, FileName: truncate(fileName, 200),
 		TotalRows: len(rows),
-		Status:    StatusPending, CreatedBy: truncate(actor, 64),
+		Status:    StatusPending, CreatedBy: truncate(actor, 64), Lang: i18n.Lang(ctx),
 	}
 	if err := s.db.WithContext(ctx).Create(&m).Error; err != nil {
 		return nil, err
@@ -230,6 +231,9 @@ func (s *Service) processAsync(src Source, m *Job, rows []map[string]string, act
 	ctx := context.Background()
 	if m.TenantID != 0 {
 		ctx = tenant.With(ctx, m.TenantID)
+	}
+	if m.Lang != "" {
+		ctx = i18n.WithLang(ctx, m.Lang)
 	}
 	const batch = 500
 	start := time.Now()
@@ -248,7 +252,7 @@ func (s *Service) processAsync(src Source, m *Job, rows []map[string]string, act
 		if bad != "" {
 			failRows++
 			if len(errs) < MaxErrors {
-				errs = append(errs, RowError{Row: i + 1, Key: bad, Message: "必填列为空"})
+				errs = append(errs, RowError{Row: i + 1, Key: bad, Message: i18n.T(ctx, "imports.required_empty")})
 			}
 			continue
 		}
@@ -301,7 +305,7 @@ func (s *Service) processRows(ctx context.Context, src Source, rows []map[string
 		if bad != "" {
 			failRows++
 			if len(errs) < MaxErrors {
-				errs = append(errs, RowError{Row: i + 1, Key: bad, Message: "必填列为空"})
+				errs = append(errs, RowError{Row: i + 1, Key: bad, Message: i18n.T(ctx, "imports.required_empty")})
 			}
 			continue
 		}

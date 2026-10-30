@@ -176,9 +176,6 @@ func TestHomeProductTour(t *testing.T) {
 				`href="` + v.URL(v.HomeCTAHref) + `"`,
 				`class="hero-link" href="#quickstart"`,
 				`class="product-facts"`,
-				`<dialog class="image-dialog" aria-labelledby="image-dialog-title">`,
-				`data-image-size aria-pressed="false"`,
-				`<form method="dialog">`,
 				`market/dashboard-dark.jpg`,
 				`market/dashboard-light.jpg`,
 			} {
@@ -194,13 +191,10 @@ func TestHomeProductTour(t *testing.T) {
 					}
 				}
 			}
-			if got := strings.Count(out, "<img "); got != 3 {
-				t.Errorf("home images = %d, want 3 (hero dark/light + dialog slot)", got)
+			if got := strings.Count(out, "<img "); got != 2 {
+				t.Errorf("home images = %d, want 2 (hero dark/light)", got)
 			}
-			if got := strings.Count(out, "data-image-preview hidden"); got != 1 {
-				t.Errorf("enlarge control belongs to the hero only = %d, want 1", got)
-			}
-			if strings.Contains(out, "home.preview.") || strings.Contains(out, "home.product.tab.") || strings.Contains(out, "home.editorial.platform.summary") {
+			if strings.Contains(out, "home.product.tab.") || strings.Contains(out, "home.editorial.platform.summary") {
 				t.Error("home has untranslated labels")
 			}
 		})

@@ -2,12 +2,12 @@ import { useTranslation } from 'react-i18next'
 import { z } from 'zod'
 import { Info, TriangleAlert } from 'lucide-react'
 import { Can } from '@/framework/auth/Can'
-import { Uploader, type UploadedFile } from '@/framework/components/Uploader'
+import { ImageUrlField } from '@/framework/components/ImageUrlField'
 import { FormGrid, FormGridFull } from '@/framework/components/FormLayout'
 import { useLanguages } from '@/framework/i18n/useLanguages'
 import { Alert, AlertDescription } from '@/framework/ui/alert'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/framework/ui/card'
-import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/framework/ui/form'
+import { FormField, FormItem, FormLabel, FormMessage } from '@/framework/ui/form'
 import { ATTEMPT_OPTIONS, IDLE_MINUTE_OPTIONS, LOCK_MINUTE_OPTIONS, SESSION_HOUR_OPTIONS, type AllSettings } from './api'
 import { RadioField, SelectField, SwitchField, TextField } from './fields'
 import { UploadLimitCard } from '@/framework/modules/config/UploadLimitCard'
@@ -42,20 +42,20 @@ export function SiteSection({ value }: { value: AllSettings['site'] }) {
             <FormField
               control={form.control}
               name="logoUrl"
-              render={({ field }) => {
-                const files: UploadedFile[] = field.value
-                  ? [{ id: 'site-logo', url: field.value, name: 'logo', size: 0, type: 'image/*' }]
-                  : []
-                return (
-                  <FormItem>
-                    <FormLabel>{t('settings.site.logo')}</FormLabel>
-                    <FormControl>
-                      <Uploader kind="image" visibility="public" value={files} onChange={(l) => field.onChange(l[0]?.url ?? '')} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )
-              }}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('settings.site.logo')}</FormLabel>
+                  <ImageUrlField
+                    value={field.value}
+                    onChange={field.onChange}
+                    title={t('settings.site.logoUpload')}
+                    hint={t('settings.site.logoUploadHint')}
+                    placeholder={t('settings.site.logoPlaceholder')}
+                    previewClassName="h-16 w-40"
+                  />
+                  <FormMessage />
+                </FormItem>
+              )}
             />
           </FormGridFull>
           <FormGridFull>

@@ -30,8 +30,8 @@ type Setting struct {
 	FooterNote    string `gorm:"size:300;not null" json:"footerNote"`
 	// 社交图标与友情链接是页脚列表：JSON 数组文本（[]SocialLink / []FriendLink）。
 	// 走文本列而不是 JSON 列，三库行为一致；对外由 settingView 展开成数组。
-	SocialsJSON     string `gorm:"type:text" json:"-"`
-	FriendLinksJSON string `gorm:"type:text" json:"-"`
+	SocialsJSON     string `gorm:"column:socials;type:text" json:"-"`
+	FriendLinksJSON string `gorm:"column:friend_links;type:text" json:"-"`
 	MarketEnabled   bool   `gorm:"not null;default:true" json:"marketEnabled"` // 官网插件市场入口开关
 	// I18nJSON 是非默认语言的字段译文：{"en-US":{"homeTitle":"…"}}；空 = 全部回退原文。
 	I18nJSON string `gorm:"type:text" json:"i18nJson"`

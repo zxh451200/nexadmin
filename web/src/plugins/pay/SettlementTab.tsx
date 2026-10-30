@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CheckCircle2, Plus } from 'lucide-react'
+import { CheckCircle2, Pencil, Plus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
@@ -108,7 +108,7 @@ function RulesPanel() {
                 setOpen(true)
               }}
             >
-              <CheckCircle2 aria-hidden="true" />
+              <Pencil aria-hidden="true" />
             </Button>
           </Can>
         )}

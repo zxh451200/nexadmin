@@ -126,6 +126,7 @@ imports:
   too_many_rows_limit: "The current limit is %d rows; please split the file and import it in batches."
   missing_columns_detail: "The file is missing required columns: %s"
   job_running: "The job is running; it can be deleted once it finishes."
+  required_empty: Required column is empty
 ldap:
   host_basedn_required: LDAP address and Base DN are required
   filter_placeholder_required: The filter must contain the %s placeholder (e.g. %(uid)s)

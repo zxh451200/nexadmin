@@ -117,8 +117,13 @@ func bindRun(c *gin.Context) (runBody, bool) {
 }
 
 func (h *handler) viewReports(c *gin.Context) {
-	list, _, err := h.svc.ListReports(c.Request.Context(), "", 1, 200)
-	respond(c, list, err)
+	kw, page, size := h.keywordPage(c)
+	list, total, err := h.svc.ListReports(c.Request.Context(), kw, page, size)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.Page(c, list, total, page, size)
 }
 
 func (h *handler) viewReport(c *gin.Context) { h.getReport(c) }

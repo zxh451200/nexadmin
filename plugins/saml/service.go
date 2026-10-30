@@ -233,9 +233,12 @@ func (s *Service) provider(m *Source, base string) (*saml.ServiceProvider, error
 		EntityID:    base + "/api/v1/auth/saml/" + id + "/metadata",
 		AcsURL:      u("/api/v1/auth/saml/" + id + "/acs"),
 		MetadataURL: u("/api/v1/auth/saml/" + id + "/metadata"),
-		Key:         key,
-		Certificate: cert,
-		IDPMetadata: &meta,
+		// SLO：登出需要 IdP 侧能回 LogoutResponse 到本端点。
+		SloURL:         u("/api/v1/auth/saml/" + id + "/slo"),
+		LogoutBindings: []string{saml.HTTPRedirectBinding, saml.HTTPPostBinding},
+		Key:            key,
+		Certificate:    cert,
+		IDPMetadata:    &meta,
 	}
 	return sp, nil
 }

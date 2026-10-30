@@ -3,14 +3,19 @@
 package main
 
 import (
+	"bytes"
+	"compress/flate"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/xml"
 	"flag"
 	"fmt"
 	"html/template"
+	"io"
 	"log"
 	"math/big"
 	"net/http"
@@ -19,7 +24,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/beevik/etree"
 	"github.com/crewjam/saml"
+	dsig "github.com/russellhaering/goxmldsig"
+)
+
+var (
+	idpKey   *rsa.PrivateKey
+	idpCerts [][]byte
 )
 
 type spCache struct {
@@ -118,17 +130,23 @@ func main() {
 	}
 	metaURL, ssoURL := *baseURL, *baseURL
 	metaURL.Path, ssoURL.Path = "/metadata", "/sso"
+	sloURL := *baseURL
+	sloURL.Path = "/slo"
+	idpKey, idpCerts = key, [][]byte{der}
+	sps := &spCache{m: map[string]*saml.EntityDescriptor{}}
 	idp := &saml.IdentityProvider{
 		Key: key, Certificate: cert,
 		MetadataURL:             metaURL,
 		SSOURL:                  ssoURL,
-		ServiceProviderProvider: &spCache{m: map[string]*saml.EntityDescriptor{}},
+		LogoutURL:               sloURL,
+		ServiceProviderProvider: sps,
 		SessionProvider:         sessions{user: *user},
 	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/metadata", idp.ServeMetadata)
 	mux.HandleFunc("/sso", idp.ServeSSO)
+	mux.HandleFunc("/slo", handleSLO(sps, metaURL.String()))
 	mux.HandleFunc("/login", func(w http.ResponseWriter, r *http.Request) {
 		ret := r.FormValue("return")
 		if r.Method == http.MethodPost {
@@ -150,4 +168,87 @@ func main() {
 
 	log.Printf("dev SAML IdP on %s (metadata %s/metadata, SSO %s/sso)", *addr, *base, *base)
 	log.Fatal(http.ListenAndServe(*addr, mux))
+}
+
+// handleSLO 处理 SP 的 LogoutRequest，返回签名的 LogoutResponse（HTTP-Redirect）。
+func handleSLO(sps *spCache, idpEntityID string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm()
+		raw, err := base64.StdEncoding.DecodeString(r.FormValue("SAMLRequest"))
+		if err != nil {
+			http.Error(w, "bad SAMLRequest", http.StatusBadRequest)
+			return
+		}
+		if r.Method == http.MethodGet {
+			if b, ierr := inflate(raw); ierr == nil {
+				raw = b
+			}
+		}
+		var req saml.LogoutRequest
+		if err := xml.Unmarshal(raw, &req); err != nil || req.Issuer == nil {
+			http.Error(w, "bad LogoutRequest", http.StatusBadRequest)
+			return
+		}
+		meta, err := sps.GetServiceProvider(r, req.Issuer.Value)
+		if err != nil || len(meta.SPSSODescriptors) == 0 || len(meta.SPSSODescriptors[0].SingleLogoutServices) == 0 {
+			http.Error(w, "unknown SP", http.StatusBadRequest)
+			return
+		}
+		dest := meta.SPSSODescriptors[0].SingleLogoutServices[0].Location
+		resp := saml.LogoutResponse{
+			ID: newID(), InResponseTo: req.ID, Version: "2.0", IssueInstant: time.Now().UTC(),
+			Destination: dest, Issuer: &saml.Issuer{Value: idpEntityID},
+			Status: saml.Status{StatusCode: saml.StatusCode{Value: saml.StatusSuccess}},
+		}
+		ctx, err := dsig.NewSigningContext(idpKey, idpCerts)
+		if err != nil {
+			http.Error(w, "sign", http.StatusInternalServerError)
+			return
+		}
+		signed, err := ctx.SignEnveloped(resp.Element())
+		if err != nil {
+			http.Error(w, "sign", http.StatusInternalServerError)
+			return
+		}
+		var buf bytes.Buffer
+		doc := etree.NewDocument()
+		doc.SetRoot(signed)
+		if _, err := doc.WriteTo(&buf); err != nil {
+			http.Error(w, "xml", http.StatusInternalServerError)
+			return
+		}
+		packed, _ := deflate(buf.Bytes())
+		target := dest + "?SAMLResponse=" + url.QueryEscape(base64.StdEncoding.EncodeToString(packed))
+		if rs := r.FormValue("RelayState"); rs != "" {
+			target += "&RelayState=" + url.QueryEscape(rs)
+		}
+		http.Redirect(w, r, target, http.StatusFound)
+	}
+}
+
+func newID() string {
+	var b [16]byte
+	_, _ = rand.Read(b[:])
+	return hex.EncodeToString(b[:])
+}
+
+func deflate(raw []byte) ([]byte, error) {
+	var buf bytes.Buffer
+	w, err := flate.NewWriter(&buf, flate.DefaultCompression)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := w.Write(raw); err != nil {
+		return nil, err
+	}
+	if err := w.Close(); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func inflate(raw []byte) ([]byte, error) {
+	r := flate.NewReader(bytes.NewReader(raw))
+	defer r.Close()
+	return io.ReadAll(r)
 }

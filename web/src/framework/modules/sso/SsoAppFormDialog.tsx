@@ -7,8 +7,8 @@ import { z } from 'zod'
 import { FormGrid, FormGridFull, FormLayout } from '@/framework/components/FormLayout'
 import { RemoteSelect } from '@/framework/components/RemoteSelect'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
+import { ImageUrlField } from '@/framework/components/ImageUrlField'
 import { SwitchField } from '@/framework/components/SwitchField'
-import { Uploader, type UploadedFile } from '@/framework/components/Uploader'
 import { Button } from '@/framework/ui/button'
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/framework/ui/form'
 import { Input } from '@/framework/ui/input'
@@ -68,8 +68,6 @@ const toValues = (a?: SsoApp | null): FormValues =>
         allowOrgRead: a.allowOrgRead ?? false,
       }
     : emptyValues
-
-const logoFiles = (url: string): UploadedFile[] => (url ? [{ id: 'logo', url, name: 'logo', size: 0, type: 'image/*' }] : [])
 
 interface Props {
   open: boolean
@@ -175,22 +173,15 @@ export function SsoAppFormDialog({ open, onOpenChange, editing, onCreated }: Pro
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>{t('sso.fields.logo')}</FormLabel>
-                    <FormControl>
-                      <Uploader
-                        kind="image"
-                        visibility="public"
-                        crop={{ aspect: 1 }}
-                        value={logoFiles(field.value)}
-                        onChange={(files) => field.onChange(files[0]?.url ?? '')}
-                      />
-                    </FormControl>
-                    <Input
+                    <ImageUrlField
                       value={field.value}
-                      onChange={(e) => field.onChange(e.target.value)}
-                      onBlur={field.onBlur}
-                      inputMode="url"
+                      onChange={field.onChange}
+                      title={t('sso.form.logoUpload')}
+                      hint={t('sso.form.logoUploadHint')}
                       placeholder={t('sso.form.logoUrlPlaceholder')}
                       aria-label={t('sso.form.logoUrl')}
+                      crop={{ aspect: 1 }}
+                      previewClassName="size-24"
                     />
                     <FormMessage />
                   </FormItem>

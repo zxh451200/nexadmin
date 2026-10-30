@@ -225,10 +225,10 @@ export const queryChart = (id: string) => api.post<QueryResult>(`${BASE}/charts/
 
 // ---- 报表 ----
 /** 本租户的报表列表（查看与管理共用，不含图表详情） */
-export const useReportList = () =>
+export const useReportList = (q: PageQuery = {}) =>
   useQuery({
-    queryKey: [...KEY, 'reports'],
-    queryFn: () => api.get<Report[]>(`${BASE}/view/reports`),
+    queryKey: [...KEY, 'reports', q],
+    queryFn: () => api.get<Page<Report>>(`${BASE}/view/reports`, q),
     placeholderData: keepPreviousData,
   })
 
@@ -248,8 +248,12 @@ export function useSaveReport() {
   })
 }
 export function useDeleteReport() {
-  const invalidate = useInvalidate()
-  return useMutation({ mutationFn: (id: string) => api.del(`${BASE}/reports/${id}`), onSuccess: invalidate })
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.del(`${BASE}/reports/${id}`),
+    // 只失效列表：被删报表的详情/图表查询仍挂在查看器上，整域失效会让它们对已删 id 立刻重取并 404
+    onSuccess: () => qc.invalidateQueries({ queryKey: [...KEY, 'reports'] }),
+  })
 }
 
 export const queryReportChart = (reportId: string, chartId: string, filters: FilterValues) =>

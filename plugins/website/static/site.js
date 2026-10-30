@@ -164,6 +164,7 @@
   function initSite() {
     i18n = readI18n();
     initContactForm();
+    initChat();
     clearWinHandlers();
     if (revealObserver) { revealObserver.disconnect(); revealObserver = null; }
 
@@ -405,36 +406,6 @@
       });
       select(0);
     });
-
-    var imageDialog = document.querySelector('.image-dialog');
-    if (imageDialog && typeof imageDialog.showModal === 'function') {
-      var imageCanvas = imageDialog.querySelector('.image-dialog-canvas');
-      var dialogImage = imageCanvas.querySelector('img');
-      var sizeButton = imageDialog.querySelector('[data-image-size]');
-      document.querySelectorAll('[data-image-preview]').forEach(function (button) {
-        button.hidden = false;
-        button.addEventListener('click', function () {
-          var scheme = document.documentElement.getAttribute('data-scheme');
-          var image = button.closest('figure').querySelector(scheme === 'light' ? '.shot-light' : '.shot-dark');
-          dialogImage.src = image.currentSrc || image.src;
-          dialogImage.alt = image.alt;
-          imageDialog.querySelector('h2').textContent = image.alt;
-          imageCanvas.classList.remove('is-original');
-          sizeButton.setAttribute('aria-pressed', 'false');
-          imageDialog.showModal();
-          imageCanvas.scrollTo(0, 0);
-        });
-      });
-      sizeButton.addEventListener('click', function () {
-        var original = imageCanvas.classList.toggle('is-original');
-        sizeButton.setAttribute('aria-pressed', original ? 'true' : 'false');
-      });
-      imageDialog.addEventListener('click', function (event) {
-        if (event.target !== imageDialog) return;
-        var rect = imageDialog.getBoundingClientRect();
-        if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) imageDialog.close();
-      });
-    }
 
     // 插件包下载：走 fetch 拿 blob，页面内提示“正在打包”，失败不把用户带到 502 页。
     var downloadBtn = document.querySelector('[data-download]');
@@ -680,6 +651,285 @@
         })
         .then(function () { if (submit) submit.disabled = false; });
     });
+  }
+
+  // ---- 在线客服挂件：先探测 im 插件是否挂载，再按需开会话、发消息、增量拉取 ----
+  function initChat() {
+    var root = document.querySelector('[data-chat]');
+    if (!root || root.getAttribute('data-chat-ready') === '1' || !window.fetch) return;
+    root.setAttribute('data-chat-ready', '1');
+
+    var base = '/api/v1/plugins/im/visitor';
+    var launcher = root.querySelector('[data-chat-open]');
+    var panel = root.querySelector('[data-chat-panel]');
+    var log = root.querySelector('[data-chat-log]');
+    var empty = root.querySelector('[data-chat-empty]');
+    var form = root.querySelector('[data-chat-form]');
+    var input = root.querySelector('[data-chat-input]');
+    var sendBtn = root.querySelector('[data-chat-send]');
+    var st = { convNo: '', lastSeq: 0, open: false, sending: false, pulling: false, polling: 0, es: null, seen: {} };
+
+    function store(key, value) {
+      try {
+        if (value === undefined) return window.localStorage.getItem(key);
+        window.localStorage.setItem(key, value);
+        return value;
+      } catch (e) { return null; }
+    }
+    function visitorToken() {
+      var t = store('nex_chat_token');
+      if (!t) {
+        t = (window.crypto && window.crypto.randomUUID)
+          ? window.crypto.randomUUID()
+          : 'v-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 12);
+        store('nex_chat_token', t);
+      }
+      return t;
+    }
+    function guestName() {
+      var n = store('nex_chat_name');
+      if (!n) {
+        n = msg('chatGuest', '访客') + ' ' + (1000 + Math.floor(Math.random() * 9000));
+        store('nex_chat_name', n);
+      }
+      return n;
+    }
+    function genNo() {
+      var g = parseInt(store('nex_chat_gen') || '0', 10);
+      if (!isFinite(g) || g < 0) g = 0;
+      return g === 0 ? 'web' : 'web-' + g;
+    }
+    function newGeneration() {
+      var g = parseInt(store('nex_chat_gen') || '0', 10);
+      if (!isFinite(g) || g < 0) g = 0;
+      store('nex_chat_gen', String(g + 1));
+      st.convNo = '';
+      st.lastSeq = 0;
+      st.open = false;
+      st.seen = {};
+      log.textContent = '';
+      if (empty) { empty.hidden = false; log.appendChild(empty); }
+    }
+
+    function api(path, opt) {
+      var init = Object.assign({ credentials: 'same-origin', headers: { Accept: 'application/json' } }, opt || {});
+      if (init.body) init.headers = Object.assign({ 'Content-Type': 'application/json' }, init.headers);
+      return fetch(base + path, init).then(function (res) {
+        return res.json().catch(function () { return {}; }).then(function (body) {
+          if (!res.ok) {
+            var err = new Error((body && body.message) || 'HTTP ' + res.status);
+            err.status = res.status;
+            throw err;
+          }
+          return body ? body.data : null;
+        });
+      });
+    }
+
+    function ensureConv() {
+      if (st.convNo) return Promise.resolve(st.convNo);
+      return api('/conversations', {
+        method: 'POST',
+        body: JSON.stringify({
+          visitorToken: visitorToken(),
+          visitorName: guestName(),
+          bizType: 'website',
+          bizNo: genNo(),
+          subject: (document.title || '').slice(0, 200)
+        })
+      }).then(function (conv) {
+        st.convNo = conv.convNo;
+        st.lastSeq = 0;
+        st.open = conv.status === 'open';
+        return st.convNo;
+      });
+    }
+
+    function fmtTime(iso) {
+      try { return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; }
+    }
+    function atBottom() { return log.scrollHeight - log.scrollTop - log.clientHeight < 60; }
+    function addMessage(m) {
+      if (!m || !m.seq || st.seen[m.seq]) return;
+      st.seen[m.seq] = 1;
+      var stick = atBottom();
+      var from = m.senderType === 'visitor' ? 'visitor' : (m.senderType === 'system' ? 'system' : 'agent');
+      if (empty) empty.hidden = true;
+      if (from === 'system') {
+        var note = document.createElement('p');
+        note.className = 'chat-note';
+        note.textContent = m.content;
+        log.appendChild(note);
+      } else {
+        var row = document.createElement('div');
+        row.className = 'chat-msg';
+        row.setAttribute('data-from', from);
+        var bubble = document.createElement('div');
+        bubble.className = 'chat-bubble';
+        bubble.textContent = m.content;
+        var meta = document.createElement('span');
+        meta.className = 'chat-meta';
+        var who = from === 'agent' ? (m.senderName || msg('chatAgent', '客服')) + ' · ' : '';
+        meta.textContent = who + fmtTime(m.createdAt);
+        row.appendChild(bubble);
+        row.appendChild(meta);
+        log.appendChild(row);
+      }
+      if (stick) log.scrollTop = log.scrollHeight;
+    }
+    function addLocalNote(text) {
+      if (!text) return;
+      if (empty) empty.hidden = true;
+      var note = document.createElement('p');
+      note.className = 'chat-note';
+      note.textContent = text;
+      log.appendChild(note);
+      log.scrollTop = log.scrollHeight;
+    }
+
+    function pull() {
+      if (!st.convNo || st.pulling) return Promise.resolve();
+      st.pulling = true;
+      return api('/conversations/' + encodeURIComponent(st.convNo) + '/messages?since=' + st.lastSeq + '&limit=50')
+        .then(function (data) {
+          (data.messages || []).forEach(function (m) {
+            if (m.seq > st.lastSeq) st.lastSeq = m.seq;
+            addMessage(m);
+          });
+          if (data.conversation) st.open = data.conversation.status === 'open';
+        })
+        .catch(function (err) {
+          if (err && err.status === 404) { st.convNo = ''; }
+        })
+        .then(function () { st.pulling = false; }, function () { st.pulling = false; });
+    }
+
+    function startPolling() {
+      if (st.polling) return;
+      st.polling = window.setInterval(function () {
+        if (st.open && !document.hidden) pull();
+      }, 5000);
+    }
+    function stopRealtime() {
+      if (st.es) { st.es.close(); st.es = null; }
+      if (st.polling) { window.clearInterval(st.polling); st.polling = 0; }
+    }
+    function startRealtime() {
+      stopRealtime();
+      startPolling();
+      if (!window.EventSource || !st.convNo) return;
+      try {
+        st.es = new EventSource(base + '/stream/' + encodeURIComponent(st.convNo));
+      } catch (e) { st.es = null; return; }
+      st.es.onmessage = function (e) {
+        try {
+          var m = JSON.parse(e.data);
+          if (m && m.seq) {
+            if (m.seq > st.lastSeq) st.lastSeq = m.seq;
+            addMessage(m);
+            return;
+          }
+        } catch (err) { /* 非消息事件，回落拉取 */ }
+        pull();
+      };
+      st.es.onerror = function () {
+        if (st.es) { st.es.close(); st.es = null; }
+      };
+    }
+
+    function openPanel() {
+      if (!panel) return;
+      panel.hidden = false;
+      root.classList.add('chat-open');
+      if (launcher) launcher.setAttribute('aria-expanded', 'true');
+      ensureConv()
+        .then(function () { return pull(); })
+        .then(function () { startRealtime(); })
+        .catch(function () { addLocalNote(msg('chatErrLoad', '客服连接不上，请刷新页面再试')); });
+      if (input) window.setTimeout(function () { input.focus(); }, 30);
+    }
+    function closePanel() {
+      if (!panel) return;
+      panel.hidden = true;
+      root.classList.remove('chat-open');
+      if (launcher) {
+        launcher.setAttribute('aria-expanded', 'false');
+        launcher.focus();
+      }
+      stopRealtime();
+    }
+
+    function send() {
+      if (!input || st.sending) return;
+      var text = String(input.value || '').trim();
+      if (!text) return;
+      st.sending = true;
+      if (sendBtn) sendBtn.disabled = true;
+      var payload = { senderId: visitorToken(), senderName: guestName(), content: text };
+      var post = function () {
+        return ensureConv().then(function () {
+          return api('/conversations/' + encodeURIComponent(st.convNo) + '/messages', {
+            method: 'POST',
+            body: JSON.stringify(payload)
+          });
+        });
+      };
+      post()
+        .catch(function (err) {
+          if (err && err.status === 409) {
+            newGeneration();
+            addLocalNote(msg('chatClosed', '会话已结束，发送新消息会开启新会话'));
+            return post();
+          }
+          throw err;
+        })
+        .then(function (m) {
+          input.value = '';
+          input.style.height = '';
+          if (m && m.seq) {
+            if (m.seq > st.lastSeq) st.lastSeq = m.seq;
+            addMessage(m);
+          }
+          return pull();
+        })
+        .catch(function () { addLocalNote(msg('chatErrSend', '发送失败，请稍后重试')); })
+        .then(function () {
+          st.sending = false;
+          if (sendBtn) sendBtn.disabled = false;
+        });
+    }
+
+    if (launcher) launcher.addEventListener('click', openPanel);
+    var closeBtn = root.querySelector('[data-chat-close]');
+    if (closeBtn) closeBtn.addEventListener('click', closePanel);
+    if (panel) {
+      panel.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') closePanel();
+      });
+    }
+    if (form) {
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        send();
+      });
+    }
+    if (input) {
+      input.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+          e.preventDefault();
+          send();
+        }
+      });
+      input.addEventListener('input', function () {
+        input.style.height = 'auto';
+        input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+      });
+    }
+
+    // 探测：整组路由 404 表示没装 im 插件，挂件保持隐藏。
+    fetch(base + '/status', { headers: { Accept: 'application/json' }, credentials: 'same-origin' })
+      .then(function (res) { if (res.ok) root.hidden = false; })
+      .catch(function () { /* 网络不可用时保持隐藏 */ });
   }
 
   window.__siteInit = initSite;

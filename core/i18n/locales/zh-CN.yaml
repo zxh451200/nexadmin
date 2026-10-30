@@ -126,6 +126,7 @@ imports:
   too_many_rows_limit: "当前上限 %d 行,请拆分文件后分批导入"
   missing_columns_detail: "文件缺少必需的列：%s"
   job_running: "任务正在执行，完成后才能删除"
+  required_empty: 必填列为空
 ldap:
   host_basedn_required: 请填写 LDAP 地址和 Base DN
   filter_placeholder_required: 过滤器必须包含 %s 占位符（如 %(uid)s）

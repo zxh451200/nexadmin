@@ -38,11 +38,16 @@ func (r *revokingIssuer) RevokeSession(_ context.Context, cl *auth.Claims) error
 
 func sloService(t *testing.T) (*Service, *revokingIssuer, cache.Cache) {
 	t.Helper()
+	return sloServiceMeta(t, sloMetadata)
+}
+
+func sloServiceMeta(t *testing.T, idpMetadata string) (*Service, *revokingIssuer, cache.Cache) {
+	t.Helper()
 	certPEM, keyEnc, err := newSPKeyPair()
 	if err != nil {
 		t.Fatal(err)
 	}
-	src := Source{Name: "corp", Enabled: true, IdPMetadata: sloMetadata, SPCert: certPEM, SPKeyEnc: keyEnc,
+	src := Source{Name: "corp", Enabled: true, IdPMetadata: idpMetadata, SPCert: certPEM, SPKeyEnc: keyEnc,
 		AttrUsername: "uid", AttrEmail: "mail", AttrNickname: "displayName"}
 	src.ID = 123
 

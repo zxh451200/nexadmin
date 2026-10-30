@@ -88,9 +88,11 @@ function TestConnection({ url, payload }: { url: string; payload: unknown }) {
   const key = JSON.stringify(payload)
 
   useEffect(() => {
-    generation.current++
+    // 取 ref 对象本身（它是不变的），cleanup 里再读 .current 才不会拿到别处的值
+    const gen = generation
+    gen.current++
     setResult(null)
-    return () => { generation.current++ }
+    return () => { gen.current++ }
   }, [key, token])
 
   const run = async () => {

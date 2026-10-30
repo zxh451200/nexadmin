@@ -27,6 +27,8 @@
     "codeInvalid": "语言代码格式不对，如 zh-CN、ja-JP",
     "codeDup": "语言代码重复",
     "prefixInvalid": "路径前缀只能用字母、数字和连字符",
-    "removeDefaultBlocked": "默认语言不能删除，先把别的语言设为默认"
+    "removeDefaultBlocked": "默认语言不能删除，先把别的语言设为默认",
+    "reorder": "拖动调整顺序",
+    "restoredDraft": "已恢复上次未保存的修改"
   }
 }

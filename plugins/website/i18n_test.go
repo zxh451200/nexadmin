@@ -51,7 +51,7 @@ func TestLocaleDictionariesCoverTemplates(t *testing.T) {
 			}
 		}
 		// 脚本文案不在模板里，单独校验。
-		for _, key := range []string{"packaging", "packagingHint", "packFailed", "copied", "copyManual", "menuOpen", "menuClose"} {
+		for _, key := range []string{"packaging", "packagingHint", "packFailed", "copied", "copyManual", "menuOpen", "menuClose", "chatErrSend", "chatErrLoad", "chatClosed", "chatGuest", "chatAgent"} {
 			if strings.TrimSpace(d["site.js."+key]) == "" {
 				t.Errorf("语言 %s 缺少脚本文案 site.js.%s", l.Code, key)
 			}

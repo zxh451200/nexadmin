@@ -49,6 +49,8 @@
       "rolesHint": "不选表示所有登录用户可见",
       "logoUrl": "Logo 地址",
       "logoUrlPlaceholder": "或直接填写 Logo 图片地址",
+      "logoUpload": "上传 Logo",
+      "logoUploadHint": "建议 1:1 正方形；透明背景的 PNG 或 SVG 效果最好。",
       "homeUrl": "应用地址",
       "homeUrlHint": "应用中心点击卡片后在新标签页打开",
       "urlInvalid": "请输入以 http(s):// 开头的完整地址",

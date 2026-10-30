@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '@/framework/auth/useAuth'
 import { usePermission } from '@/framework/auth/usePermission'
@@ -98,7 +98,8 @@ function Chat({ conversationId }: { conversationId: string }) {
   const alive = useRef(true)
   const generation = useRef(0)
   const bottom = useRef<HTMLDivElement>(null)
-  const refresh = async () => {
+  // 轮询回调要稳定：依赖会话 id 即可，否则 effect 每次渲染都会重建定时器。
+  const refresh = useCallback(async () => {
     const version = generation.current
     try {
       const next = await assistantApi.session(conversationId)
@@ -109,7 +110,7 @@ function Chat({ conversationId }: { conversationId: string }) {
     } catch {
       if (alive.current && version === generation.current) setError(true)
     }
-  }
+  }, [conversationId])
   useEffect(() => {
     alive.current = true
     void refresh()
@@ -122,7 +123,7 @@ function Chat({ conversationId }: { conversationId: string }) {
     }
     timer = setTimeout(() => { void poll() }, 1500)
     return () => { stopped = true; alive.current = false; clearTimeout(timer) }
-  }, [])
+  }, [refresh])
   useEffect(() => { bottom.current?.scrollIntoView({ block: 'nearest' }) }, [snapshot?.session.messages])
   const running = snapshot?.session.status === 'running'
   const awaitingConfirmation = snapshot?.session.status === 'awaiting_confirmation'

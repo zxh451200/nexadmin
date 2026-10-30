@@ -206,7 +206,16 @@ defineMock([
   // ---- 报表 ----
   { method: 'GET', url: `${B}/reports`, handler: ({ query }) => page([...reports].reverse().filter((r) => !kw(query) || r.name.toLowerCase().includes(kw(query))), query) },
   { method: 'GET', url: `${B}/reports/:id`, handler: ({ params }) => withCharts(need(reports, params.id)) },
-  { method: 'GET', url: `${B}/view/reports`, handler: () => reports.map((r) => ({ ...r, config: { items: [], filters: [] } })) },
+  {
+    method: 'GET',
+    url: `${B}/view/reports`,
+    handler: ({ query }) => {
+      const rows = [...reports]
+        .filter((r) => !kw(query) || r.name.toLowerCase().includes(kw(query)))
+        .map((r) => ({ ...r, config: { items: [], filters: [] } }))
+      return page(rows, query)
+    },
+  },
   { method: 'GET', url: `${B}/view/reports/:id`, handler: ({ params }) => withCharts(need(reports, params.id)) },
   {
     method: 'POST',

@@ -27,6 +27,8 @@
     "codeInvalid": "Invalid language code, e.g. zh-CN, ja-JP",
     "codeDup": "Duplicate language code",
     "prefixInvalid": "Path prefix may only contain letters, digits and hyphens",
-    "removeDefaultBlocked": "The default language cannot be removed — make another language the default first"
+    "removeDefaultBlocked": "The default language cannot be removed — make another language the default first",
+    "reorder": "Drag to reorder",
+    "restoredDraft": "Restored your unsaved changes"
   }
 }

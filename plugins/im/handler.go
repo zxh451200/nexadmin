@@ -103,6 +103,12 @@ func (h *handler) open(c *gin.Context) {
 	respond(c, convView(conv), err)
 }
 
+// GET /plugins/im/visitor/status —— 官网客服挂件探测本实例是否装了在线客服。
+// 插件未挂载时整组路由 404，挂件据此静默隐藏，不需要额外的编译期开关。
+func (h *handler) visitorStatus(c *gin.Context) {
+	response.OK(c, gin.H{"ok": true})
+}
+
 // GET /plugins/im/conversations/:no/messages?since=0&limit=50 —— 访客轮询。
 func (h *handler) visitorMessages(c *gin.Context) {
 	conv, rows, err := h.svc.Messages(c.Request.Context(), c.Param("no"), parseSince(c), parseLimit(c))
@@ -153,6 +159,8 @@ func (h *handler) Register(r *gin.RouterGroup, d *core.Deps) {
 	// 路径带 /visitor 前缀，与坐席接口分开——同一个 engine 上两组 (protected 与 Public)
 	// 不能注册相同的 method+path，否则 gin 在 addRoute 时 panic。
 	p := d.Public.Group("/plugins/im/visitor")
+	p.GET("/status",
+		middleware.RateLimit(d.Cache, d.Log, "im-status", middleware.ByIP(), 120, time.Minute), h.visitorStatus)
 	p.POST("/conversations",
 		middleware.RateLimit(d.Cache, d.Log, "im-open", middleware.ByIP(), 30, time.Minute), h.open)
 	p.GET("/conversations/:no/messages",

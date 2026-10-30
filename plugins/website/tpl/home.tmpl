@@ -34,7 +34,6 @@
     <div class="hero-visual" data-reveal>
       <div class="hero-stage">
         <figure class="hero-shot" data-parallax>
-          <button class="image-open" type="button" data-image-preview hidden aria-label="{{.TF "home.preview.openAria" (.TF "home.heroShotAlt" .SiteName)}}">{{.T "home.preview.open"}}</button>
           <img class="shot-dark" src="/website-assets/market/dashboard-dark.jpg?v={{assetV "market/dashboard-dark.jpg"}}" alt="{{.TF "home.heroShotAlt" .SiteName}}" width="1440" height="900" decoding="async">
           <img class="shot-light" src="/website-assets/market/dashboard-light.jpg?v={{assetV "market/dashboard-light.jpg"}}" alt="{{.TF "home.heroShotAlt" .SiteName}}" width="1440" height="900" decoding="async">
         </figure>
@@ -259,13 +258,4 @@
     </div>
   </div>
 </section>
-<dialog class="image-dialog" aria-labelledby="image-dialog-title">
-  <div class="image-dialog-bar">
-    <h2 id="image-dialog-title"></h2>
-    <button type="button" class="btn btn-ghost btn-sm" data-image-size aria-pressed="false">{{.T "home.preview.original"}}</button>
-    <form method="dialog"><button type="submit" class="btn btn-primary btn-sm" autofocus>{{.T "home.preview.close"}}</button></form>
-  </div>
-  <p class="image-dialog-hint">{{.T "home.preview.hint"}}</p>
-  <div class="image-dialog-canvas" tabindex="0" role="region" aria-label="{{.T "home.preview.region"}}"><img alt=""></div>
-</dialog>
 {{end}}
