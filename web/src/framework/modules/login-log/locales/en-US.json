@@ -34,7 +34,11 @@
       "feishu": "Feishu",
       "google": "Google",
       "github": "GitHub",
-      "oidc": "OIDC"
+      "oidc": "OIDC",
+      "ldap": "LDAP / AD",
+      "cas": "CAS SSO",
+      "saml": "SAML SSO",
+      "2fa": "Two-factor"
     },
     "reason": {
       "credentials": "Incorrect account or password",

@@ -34,7 +34,11 @@
       "feishu": "飞书",
       "google": "Google",
       "github": "GitHub",
-      "oidc": "OIDC"
+      "oidc": "OIDC",
+      "ldap": "LDAP / AD",
+      "cas": "CAS 单点登录",
+      "saml": "SAML 单点登录",
+      "2fa": "两步验证"
     },
     "reason": {
       "credentials": "账号或密码错误",

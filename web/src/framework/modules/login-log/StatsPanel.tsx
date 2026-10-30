@@ -42,6 +42,9 @@ export function LoginStatsPanel() {
   }
 
   const failRate = data.total > 0 ? (data.failures / data.total) * 100 : 0
+  // Top-N 的名字是后端返回的 login_type / fail_reason 原值，上屏前换成字典里的说法
+  const typeItems = data.types.map((x) => ({ ...x, name: t(`loginLog.type.${x.name}`, { defaultValue: x.name }) }))
+  const reasonItems = data.failReasons.map((x) => ({ ...x, name: t(`loginLog.reason.${x.name}`, { defaultValue: x.name }) }))
   const hours = data.hours.map((h) => ({ hour: `${String(h.hour).padStart(2, '0')}:00`, value: h.value }))
   // TrendChart 收的是宽松记录数组，这里显式转一份，不把业务接口类型透传给图表
   const days: Record<string, unknown>[] = data.days.map((d) => ({ date: d.date, total: d.total, failures: d.failures }))
@@ -93,12 +96,12 @@ export function LoginStatsPanel() {
       <div className="grid gap-4 lg:grid-cols-3">
         <ChartCard title={t('loginLog.stats.topReasons')}>
           <div data-tone="destructive">
-            <RankBars items={data.failReasons} emptyText={t('loginLog.stats.noFailures')} />
+            <RankBars items={reasonItems} emptyText={t('loginLog.stats.noFailures')} />
           </div>
         </ChartCard>
         <ChartCard title={t('loginLog.stats.topTypes')}>
           <div data-tone="chart-2">
-            <RankBars items={data.types} />
+            <RankBars items={typeItems} />
           </div>
         </ChartCard>
         <ChartCard title={t('loginLog.stats.topBrowsers')}>

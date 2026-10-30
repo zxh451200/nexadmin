@@ -3,8 +3,11 @@ import { api, http } from '@/framework/request/http'
 import type { Page } from '@/framework/request/types'
 import { asBlob, exportRequest } from '../oper-log/api'
 
-export const LOGIN_TYPES = ['password', 'phone', 'wecom', 'dingtalk', 'feishu', 'google', 'github', 'oidc'] as const
+/** 已知的登录方式：内置两种 + 各登录插件写进 login_type 的门名（ldap / cas / saml / 2fa） */
+export const LOGIN_TYPES = ['password', 'phone', 'wecom', 'dingtalk', 'feishu', 'google', 'github', 'oidc', 'ldap', 'cas', 'saml', '2fa'] as const
 export type LoginType = (typeof LOGIN_TYPES)[number]
+/** 登录方式是开放集合：任何插件的 authenticator 名都会落到 login_type，没词条时按原值显示 */
+export type LoginTypeValue = LoginType | (string & {})
 
 /** 失败原因只给分类，不暴露细节（防账号枚举） */
 export type FailReason = 'credentials' | 'captcha' | 'locked' | 'disabled' | 'blocked' | 'other'
@@ -12,7 +15,7 @@ export type FailReason = 'credentials' | 'captcha' | 'locked' | 'disabled' | 'bl
 export interface LoginLog {
   id: string
   username: string
-  loginType: LoginType
+  loginType: LoginTypeValue
   ip: string
   location?: string
   browser?: string

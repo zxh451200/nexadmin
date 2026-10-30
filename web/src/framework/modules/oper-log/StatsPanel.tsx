@@ -7,6 +7,7 @@ import { StatCard } from '@/framework/components/StatCard'
 import { TrendChart } from '@/framework/components/TrendChart'
 import { Skeleton } from '@/framework/ui/skeleton'
 import { RankBars } from '@/framework/components/RankBars'
+import { useDictItems } from '@/framework/components/pickers/useDictItems'
 import { useOperStats, type StatsFilter } from './api'
 
 const RANGES = ['7d', '30d', '90d', 'all'] as const
@@ -32,6 +33,8 @@ export function OperStatsPanel() {
     return { startDate: ymd(start), endDate: ymd(new Date()) }
   }, [range])
   const { data, isPending } = useOperStats(filter)
+  // 操作类型是字典值（列表页也用 DictTag 显示），Top-N 里的原值要先换成字典标签才不是 "create/update"
+  const { data: operTypes = [] } = useDictItems('oper_type')
 
   if (isPending || !data) {
     return (
@@ -42,6 +45,8 @@ export function OperStatsPanel() {
   }
 
   const failRate = data.total > 0 ? (data.failures / data.total) * 100 : 0
+  const typeLabel = new Map(operTypes.map((i) => [i.value, i.label]))
+  const topTypes = data.topTypes.map((x) => ({ ...x, name: typeLabel.get(x.name) ?? x.name }))
   const slowest = data.slowest[0]
   const hours = data.hours.map((h) => ({ hour: `${String(h.hour).padStart(2, '0')}:00`, value: h.value }))
   // TrendChart 收的是宽松记录数组，这里显式转一份，不把业务接口类型透传给图表
@@ -107,7 +112,7 @@ export function OperStatsPanel() {
         </ChartCard>
         <ChartCard title={t('operLog.stats.topTypes')}>
           <div data-tone="chart-2">
-            <RankBars items={data.topTypes} />
+            <RankBars items={topTypes} />
           </div>
         </ChartCard>
         <ChartCard title={t('operLog.stats.topOperators')}>

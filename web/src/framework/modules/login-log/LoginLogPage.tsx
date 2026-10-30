@@ -60,6 +60,10 @@ const TYPE_VARIANT: Record<LoginType, BadgeProps['variant']> = {
   google: 'outline',
   github: 'default',
   oidc: 'secondary',
+  ldap: 'outline',
+  cas: 'outline',
+  saml: 'outline',
+  '2fa': 'info',
 }
 
 export default function LoginLogPage() {
@@ -122,7 +126,7 @@ export default function LoginLogPage() {
       key: 'loginType',
       title: t('loginLog.col.type'),
       mobile: 'sub',
-      render: (r) => <Badge variant={TYPE_VARIANT[r.loginType]}>{t(`loginLog.type.${r.loginType}`)}</Badge>,
+      render: (r) => <Badge variant={TYPE_VARIANT[r.loginType as LoginType]}>{t(`loginLog.type.${r.loginType}`, { defaultValue: r.loginType })}</Badge>,
     },
     { key: 'ip', title: t('loginLog.col.ip'), render: (r) => <span className="num">{r.ip}</span> },
     { key: 'location', title: t('loginLog.col.location') },
@@ -132,7 +136,7 @@ export default function LoginLogPage() {
     {
       key: 'failReason',
       title: t('loginLog.col.reason'),
-      render: (r) => (r.failReason ? t(`loginLog.reason.${r.failReason}`) : <span className="text-muted-foreground">-</span>),
+      render: (r) => (r.failReason ? t(`loginLog.reason.${r.failReason}`, { defaultValue: r.failReason }) : <span className="text-muted-foreground">-</span>),
     },
     { key: 'createdAt', title: t('loginLog.col.time'), render: (r) => <span className="num">{fmtDateTime(r.createdAt, i18n.language)}</span> },
   ]
