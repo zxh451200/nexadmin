@@ -13,6 +13,7 @@ import { Input } from '@/framework/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import { useChannels, useDeleteChannel, useProviders, useSaveChannel, type PayChannel, type PayChannelForm, type PayProvider } from './api'
 import { formatBp, formatTime } from './format'
+import { ListErrorBanner } from './ListErrorBanner'
 
 interface Props {
   open: boolean
@@ -216,7 +217,7 @@ function ChannelFormDialog({ open, onOpenChange, editing, providers }: Props) {
 export function ChannelsTab() {
   const { t, i18n } = useTranslation()
   const confirm = useConfirm()
-  const { data: channels = [], isLoading } = useChannels()
+  const { data: channels = [], isLoading, isError, refetch } = useChannels()
   const { data: providers = [] } = useProviders()
   const remove = useDeleteChannel()
   const [formOpen, setFormOpen] = useState(false)
@@ -249,6 +250,7 @@ export function ChannelsTab() {
 
   return (
     <div className="flex flex-col gap-4">
+      {isError ? <ListErrorBanner onRetry={() => void refetch()} /> : null}
       <DataTable
         columns={columns}
         data={channels}

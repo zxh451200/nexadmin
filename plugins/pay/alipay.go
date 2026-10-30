@@ -63,9 +63,9 @@ func (p alipayProvider) Create(ctx context.Context, req PayRequest, cfg map[stri
 	switch method {
 	case "", "native", "qr", "scan", "precreate", "offline":
 		res, err := p.call(ctx, cfg, key, "alipay.trade.precreate", map[string]string{
-			"out_trade_no": req.PaymentNo,
-			"total_amount": amount,
-			"subject":      truncate(req.Subject, 256),
+			"out_trade_no":    req.PaymentNo,
+			"total_amount":    amount,
+			"subject":         truncate(req.Subject, 256),
 			"timeout_express": expireExpress(req.ExpireAt, 30*time.Minute),
 		}, map[string]string{"notify_url": notify})
 		if err != nil {
@@ -140,8 +140,8 @@ func (p alipayProvider) Refund(ctx context.Context, req RefundRequest, cfg map[s
 		return nil, channelConfigError("alipay", "应用私钥不可用："+err.Error())
 	}
 	biz := map[string]string{
-		"out_trade_no":  req.PaymentNo,
-		"refund_amount": yuanOf(req.AmountMinor),
+		"out_trade_no":   req.PaymentNo,
+		"refund_amount":  yuanOf(req.AmountMinor),
 		"out_request_no": alipayRefundKey(req),
 	}
 	res, err := p.call(ctx, cfg, key, "alipay.trade.refund", biz, nil)

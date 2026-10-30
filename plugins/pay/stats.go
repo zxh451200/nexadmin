@@ -10,11 +10,13 @@ package pay
 
 import (
 	"context"
+	"encoding/json"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 
 	"nexadmin/core/response"
 )
@@ -36,6 +38,27 @@ type StatsQuery struct {
 	Keyword     string
 	StartDate   string
 	EndDate     string
+	// All 忽略起始时间，从最早一笔开始统计；受 statsScanLimit 采样上限约束。
+	All bool
+}
+
+// StatsFacets 是筛选下拉的可选值：只按时间窗口与渠道收敛，不受其它结构筛选影响，
+// 否则选了业务类型之后，其它类型就从下拉里消失了。
+type StatsFacets struct {
+	BizTypes []string `json:"bizTypes"`
+	Scenes   []string `json:"scenes"`
+}
+
+// MarshalJSON 让空 facets 也输出 []：前端直接 map，nil 会变成 null。
+func (f StatsFacets) MarshalJSON() ([]byte, error) {
+	type plain StatsFacets
+	if f.BizTypes == nil {
+		f.BizTypes = []string{}
+	}
+	if f.Scenes == nil {
+		f.Scenes = []string{}
+	}
+	return json.Marshal(plain(f))
 }
 
 // CurrencyTotals 是单一币种下的金额汇总（分）。
@@ -86,6 +109,7 @@ type PayStats struct {
 	ByMethod    []NameValue      `json:"byMethod"`
 	ByBizType   []NameValue      `json:"byBizType"`
 	FailReasons []NameValue      `json:"failReasons"`
+	Facets      StatsFacets      `json:"facets"`
 }
 
 // payStatRow 是统计用的窄投影：不带 metadata/subject 等长字段。
@@ -113,15 +137,37 @@ func settled(status string) bool { return settledStatus[status] }
 
 // Stats 汇总支付订单。
 func (s *Service) Stats(ctx context.Context, q StatsQuery) (PayStats, error) {
-	db := s.db.WithContext(ctx).Model(&Order{})
+	loc := s.loc
+	if loc == nil {
+		loc = time.UTC
+	}
+	from, to := statsWindow(q, loc)
+	// 时间与渠道是公共范围；结构筛选只收窄主体统计，不参与 facets 取值，
+	// 否则选了业务类型之后，其它类型就从下拉里消失了。
+	scope := func() *gorm.DB {
+		tx := s.db.WithContext(ctx).Model(&Order{}).Where("created_at < ?", to.UTC())
+		if !from.IsZero() {
+			tx = tx.Where("created_at >= ?", from.UTC())
+		}
+		if q.ChannelCode != "" {
+			tx = tx.Where("channel_code = ?", q.ChannelCode)
+		}
+		return tx
+	}
+	var bizTypes, scenes []string
+	if err := scope().Distinct().Order("biz_type").Pluck("biz_type", &bizTypes).Error; err != nil {
+		return PayStats{}, err
+	}
+	if err := scope().Distinct().Order("scene").Pluck("scene", &scenes).Error; err != nil {
+		return PayStats{}, err
+	}
+
+	db := scope()
 	if q.Status != "" {
 		db = db.Where("status = ?", q.Status)
 	}
 	if q.BizType != "" {
 		db = db.Where("biz_type = ?", q.BizType)
-	}
-	if q.ChannelCode != "" {
-		db = db.Where("channel_code = ?", q.ChannelCode)
 	}
 	if q.Scene != "" {
 		db = db.Where("scene = ?", q.Scene)
@@ -130,22 +176,51 @@ func (s *Service) Stats(ctx context.Context, q StatsQuery) (PayStats, error) {
 		like := "%" + escapeLike(kw) + "%"
 		db = db.Where("payment_no LIKE ? OR biz_no LIKE ?", like, like)
 	}
-	loc := s.loc
-	if loc == nil {
-		loc = time.UTC
-	}
-	from, to := statsWindow(q, loc)
-	q.StartDate, q.EndDate = from.Format("2006-01-02"), to.AddDate(0, 0, -1).Format("2006-01-02")
-	db = db.Where("created_at >= ? AND created_at < ?", from.UTC(), to.UTC())
 
 	var rows []payStatRow
 	if err := db.Select("created_at", "paid_at", "status", "currency", "amount_minor", "refunded_minor", "fee_minor", "channel_code", "method", "scene", "biz_type", "fail_reason").
 		Order("created_at DESC").Limit(statsScanLimit + 1).Find(&rows).Error; err != nil {
 		return PayStats{}, err
 	}
-	st := aggregatePay(rows, loc, from, to)
-	st.From, st.To = q.StartDate, q.EndDate
+	chartFrom := chartWindow(from, to)
+	st := aggregatePay(rows, loc, chartFrom, to)
+	st.From, st.To = statsFromLabel(rows, from, chartFrom, loc), to.AddDate(0, 0, -1).Format("2006-01-02")
+	st.Facets = StatsFacets{BizTypes: nonEmpty(bizTypes), Scenes: nonEmpty(scenes)}
 	return st, nil
+}
+
+// chartWindow 是趋势图的起始日：全量历史只画最近 statsMaxDays 天，避免横轴被拉到十年。
+func chartWindow(from, to time.Time) time.Time {
+	if from.IsZero() || to.Sub(from) > statsMaxDays*24*time.Hour {
+		return to.AddDate(0, 0, -statsMaxDays)
+	}
+	return from
+}
+
+// statsFromLabel 是响应里的起始日：固定窗口用窗口起点，全量历史用最早一笔样本。
+func statsFromLabel(rows []payStatRow, from, chartFrom time.Time, loc *time.Location) string {
+	if !from.IsZero() {
+		return from.Format("2006-01-02")
+	}
+	if len(rows) > 0 {
+		return rows[len(rows)-1].CreatedAt.In(loc).Format("2006-01-02")
+	}
+	return chartFrom.Format("2006-01-02")
+}
+
+// nonEmpty 去掉空值并去重，避免筛选下拉出现空白选项。
+func nonEmpty(vals []string) []string {
+	out := make([]string, 0, len(vals))
+	seen := make(map[string]bool, len(vals))
+	for _, v := range vals {
+		v = strings.TrimSpace(v)
+		if v == "" || seen[v] {
+			continue
+		}
+		seen[v] = true
+		out = append(out, v)
+	}
+	return out
 }
 
 func escapeLike(s string) string {
@@ -156,6 +231,9 @@ func statsWindow(q StatsQuery, loc *time.Location) (time.Time, time.Time) {
 	to := time.Now().In(loc)
 	if e, err := time.ParseInLocation("2006-01-02", q.EndDate, loc); err == nil {
 		to = e.AddDate(0, 0, 1)
+	}
+	if q.All {
+		return time.Time{}, to
 	}
 	from := to.AddDate(0, 0, -statsDefaultDays)
 	if st, err := time.ParseInLocation("2006-01-02", q.StartDate, loc); err == nil {
@@ -196,7 +274,7 @@ func aggregatePay(rows []payStatRow, loc *time.Location, from, to time.Time) Pay
 		incName(scene, r.Scene)
 		incName(method, r.Method)
 		incName(biz, r.BizType)
-		if !settled(r.Status) {
+		if r.Status == StatusFailed {
 			incName(fails, r.FailReason) // 空原因归到占位符 -，不静默丢掉一条失败
 		}
 		key := r.CreatedAt.In(loc).Format("2006-01-02")
@@ -342,6 +420,7 @@ func (h *handler) Stats(c *gin.Context) {
 		Keyword:     c.Query("keyword"),
 		StartDate:   c.Query("startDate"),
 		EndDate:     c.Query("endDate"),
+		All:         c.Query("all") == "1" || strings.EqualFold(c.Query("all"), "true"),
 	}
 	st, err := h.svc.Stats(c.Request.Context(), q)
 	if err != nil {

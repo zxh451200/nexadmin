@@ -1,7 +1,7 @@
 {
   "plugin_pay": {
     "title": "Payment Hub",
-    "description": "Payment orders, refunds, callback audit and channel config (tenant-scoped money facts)",
+    "description": "Payment orders, refunds, callbacks, channels, authorizations, reconciliation and settlements (tenant-scoped money facts)",
     "menu": "Payment Hub",
     "perm": {
       "edit": "Close / sync payment orders",
@@ -14,7 +14,10 @@
       "orders": "Orders",
       "refunds": "Refunds",
       "callbacks": "Callback audit",
-      "channels": "Channels"
+      "channels": "Channels",
+      "authorizations": "Authorizations",
+      "reconcile": "Reconciliation",
+      "settle": "Settlement & Payouts"
     },
     "view": {
       "logs": "Logs",
@@ -101,7 +104,26 @@
       "result": "Result",
       "config": "Credentials (JSON)",
       "sort": "Sort",
-      "enabled": "Enabled"
+      "enabled": "Enabled",
+      "method": "Method",
+      "scene": "Scene",
+      "gatewayStatus": "Gateway status",
+      "payer": "Payer",
+      "payUrl": "Pay URL",
+      "paidAt": "Paid at",
+      "expireAt": "Expires at",
+      "closedAt": "Closed at",
+      "metadata": "Metadata",
+      "payload": "Callback payload",
+      "authNo": "Authorization No",
+      "captured": "Captured",
+      "expiresAt": "Valid until",
+      "cardLast4": "Card last 4",
+      "validDays": "Valid days",
+      "currency": "Currency",
+      "remark": "Remark",
+      "billDate": "Bill date",
+      "batchNo": "Batch No"
     },
     "channel": {
       "create": "New Channel",
@@ -121,9 +143,17 @@
         "7d": "Last 7 days",
         "30d": "Last 30 days",
         "90d": "Last 90 days",
-        "180d": "Last 6 months"
+        "180d": "Last 6 months",
+        "all": "All time"
       },
       "refresh": "Refresh",
+      "autoRefresh": "Auto refresh",
+      "exportCsv": "Export CSV",
+      "dimension": "Dimension",
+      "name": "Name",
+      "count": "Count",
+      "overview": "Overview",
+      "drillDown": "View matching payment orders",
       "loadFailed": "Failed to load analytics",
       "retry": "Retry",
       "stale": "Refresh failed; showing the previous result",
@@ -150,6 +180,105 @@
       "byBizType": "By biz type",
       "failReasons": "Top failure reasons",
       "noFailures": "No failed orders in this range"
+    },
+    "drillApplied": "Filtered from analytics",
+    "loadFailed": "Failed to load the list; data may be stale",
+    "retry": "Retry",
+    "authStatus": {
+      "authorized": "Authorized",
+      "partial_captured": "Partially captured",
+      "captured": "Captured",
+      "voided": "Voided",
+      "expired": "Expired"
+    },
+    "auth": {
+      "searchPlaceholder": "Authorization no / biz no",
+      "create": "New authorization",
+      "capture": "Capture",
+      "void": "Void",
+      "voidConfirm": "Void authorization {{no}}?",
+      "invalid": "Select a channel and enter a valid amount",
+      "invalidCapture": "Enter an amount within the remaining balance",
+      "subjectPlaceholder": "Optional: subject ID",
+      "pickChannel": "Select channel",
+      "noChannel": "No channel available. Create one under Channels first.",
+      "remaining": "Available to capture: {{amount}}"
+    },
+    "reconcileStatus": {
+      "open": "Open",
+      "closed": "Closed"
+    },
+    "diffKind": {
+      "long": "Long",
+      "short": "Short",
+      "missing": "Missing"
+    },
+    "diffStatus": {
+      "open": "Open",
+      "resolved": "Resolved",
+      "ignored": "Ignored"
+    },
+    "reconcile": {
+      "allSubjects": "All subjects",
+      "localTotal": "Local",
+      "channelTotal": "Channel",
+      "diffCount": "Diffs",
+      "run": "Run reconciliation",
+      "diffs": "Differences",
+      "invalid": "Select a channel and bill date",
+      "subjectOptional": "Optional: subject ID",
+      "channelAmounts": "Channel amounts",
+      "addRow": "Add row",
+      "emptyHint": "Leave empty if the channel has no transactions; local payments will all be marked missing.",
+      "noDiff": "No differences in this run",
+      "localShort": "Local",
+      "channelShort": "Channel",
+      "diffShort": "Diff",
+      "notePlaceholder": "Note (optional)",
+      "note": "Note",
+      "resolve": "Mark resolved",
+      "ignore": "Ignore"
+    },
+    "settle": {
+      "viewLabel": "Settlement view",
+      "settlements": "Settlements",
+      "rules": "Commission rules",
+      "payouts": "Payout batches",
+      "defaultSubject": "Tenant default",
+      "fixedFee": "Fixed fee",
+      "ruleStatus": {
+        "active": "Active",
+        "disabled": "Disabled"
+      },
+      "ruleCreate": "New commission rule",
+      "ruleEdit": "Edit commission rule",
+      "invalidRule": "Business type is required",
+      "confirmHint": "Confirm settlement {{period}}? It can be paid after confirmation.",
+      "period": "Period",
+      "commission": "Commission",
+      "generate": "Generate settlement",
+      "confirm": "Confirm settlement",
+      "invalidPeriod": "Select a valid period",
+      "periodStart": "Start date",
+      "periodEnd": "End date",
+      "settlementCount": "Settlements",
+      "payoutMethod": "Payout method",
+      "receiptNo": "Receipt No",
+      "payoutCreate": "New payout batch",
+      "markPaid": "Mark paid",
+      "pickSettlement": "Select at least one confirmed settlement",
+      "pickSettlementHint": "Only confirmed settlements are listed; each settlement can belong to one batch.",
+      "noConfirmed": "No confirmed settlements to pay",
+      "receiptRequired": "Enter the payout receipt number"
+    },
+    "settlementStatus": {
+      "draft": "Draft",
+      "confirmed": "Confirmed",
+      "paid": "Paid"
+    },
+    "payoutStatus": {
+      "draft": "Draft",
+      "paid": "Paid"
     }
   }
 }

@@ -1,6 +1,7 @@
 package pay
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -34,6 +35,28 @@ func idParam(c *gin.Context, name string) (int64, bool) {
 		return 0, false
 	}
 	return id, true
+}
+
+// int64List 接受 JSON 数组里的字符串或数字：雪花 ID 超过 JS 安全整数，
+// 管理端以字符串回传才不丢精度。
+type int64List []int64
+
+func (l *int64List) UnmarshalJSON(b []byte) error {
+	var raw []json.RawMessage
+	if err := json.Unmarshal(b, &raw); err != nil {
+		return err
+	}
+	out := make([]int64, 0, len(raw))
+	for _, r := range raw {
+		s := strings.Trim(string(r), `"`)
+		v, err := strconv.ParseInt(s, 10, 64)
+		if err != nil {
+			return err
+		}
+		out = append(out, v)
+	}
+	*l = out
+	return nil
 }
 
 // ---- orders ----
@@ -84,7 +107,8 @@ func (h *handler) listOrders(c *gin.Context) {
 	page, size := response.ParsePage(c)
 	rows, total, err := h.svc.ListOrders(c.Request.Context(), OrderQuery{
 		Keyword: c.Query("keyword"), Status: c.Query("status"), Channel: c.Query("channelCode"),
-		SubjectID: c.Query("subjectId"), Page: page, PageSize: size,
+		SubjectID: c.Query("subjectId"), BizType: c.Query("bizType"), Scene: c.Query("scene"),
+		FailReason: c.Query("failReason"), Page: page, PageSize: size,
 	})
 	if err != nil {
 		response.Fail(c, err)
@@ -449,15 +473,15 @@ func (h *handler) confirmSettlement(c *gin.Context) {
 // POST /plugins/pay/payouts —— 契约 createPayoutBatch。
 func (h *handler) createPayout(c *gin.Context) {
 	var f struct {
-		SettlementIDs []int64 `json:"settlementIds"`
-		Method        string  `json:"method"`
-		Note          string  `json:"note"`
+		SettlementIDs int64List `json:"settlementIds"`
+		Method        string    `json:"method"`
+		Note          string    `json:"note"`
 	}
 	if !response.BindJSON(c, &f) {
 		return
 	}
 	batch, err := h.svc.CreatePayout(c.Request.Context(), CreatePayoutInput{
-		SettlementIDs: f.SettlementIDs, Method: f.Method, Note: f.Note,
+		SettlementIDs: []int64(f.SettlementIDs), Method: f.Method, Note: f.Note,
 	})
 	respond(c, batch, err)
 }

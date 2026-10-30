@@ -1,7 +1,7 @@
 {
   "plugin_pay": {
     "title": "支付中台",
-    "description": "支付单、退款、回调审计与渠道配置（资金事实租户级落库）",
+    "description": "支付单、退款、回调、渠道、预授权、对账与结算打款（资金事实租户级落库）",
     "menu": "支付中台",
     "perm": {
       "edit": "关闭/补查支付单",
@@ -14,7 +14,10 @@
       "orders": "支付单",
       "refunds": "退款记录",
       "callbacks": "回调审计",
-      "channels": "渠道配置"
+      "channels": "渠道配置",
+      "authorizations": "预授权",
+      "reconcile": "对账",
+      "settle": "结算与打款"
     },
     "view": {
       "logs": "日志",
@@ -101,7 +104,26 @@
       "result": "处理结果",
       "config": "渠道凭据（JSON）",
       "sort": "排序",
-      "enabled": "启用"
+      "enabled": "启用",
+      "method": "支付方式",
+      "scene": "支付场景",
+      "gatewayStatus": "渠道状态",
+      "payer": "付款人",
+      "payUrl": "支付链接",
+      "paidAt": "支付时间",
+      "expireAt": "过期时间",
+      "closedAt": "关闭时间",
+      "metadata": "扩展信息",
+      "payload": "回调报文",
+      "authNo": "预授权号",
+      "captured": "已请款",
+      "expiresAt": "有效期至",
+      "cardLast4": "卡号后四位",
+      "validDays": "有效期（天）",
+      "currency": "币种",
+      "remark": "备注",
+      "billDate": "账单日期",
+      "batchNo": "批次号"
     },
     "channel": {
       "create": "新建渠道",
@@ -121,9 +143,17 @@
         "7d": "近 7 天",
         "30d": "近 30 天",
         "90d": "近 90 天",
-        "180d": "近半年"
+        "180d": "近半年",
+        "all": "全部"
       },
       "refresh": "刷新",
+      "autoRefresh": "自动刷新",
+      "exportCsv": "导出 CSV",
+      "dimension": "维度",
+      "name": "名称",
+      "count": "笔数",
+      "overview": "概览",
+      "drillDown": "查看匹配的支付单",
       "loadFailed": "统计加载失败",
       "retry": "重试",
       "stale": "刷新失败，当前显示的是上一次结果",
@@ -150,6 +180,105 @@
       "byBizType": "业务类型",
       "failReasons": "失败原因 Top",
       "noFailures": "所选区间没有失败订单"
+    },
+    "drillApplied": "已按统计条件筛选",
+    "loadFailed": "列表加载失败，当前显示的数据可能不是最新",
+    "retry": "重试",
+    "authStatus": {
+      "authorized": "已授权",
+      "partial_captured": "部分请款",
+      "captured": "已请款",
+      "voided": "已撤销",
+      "expired": "已过期"
+    },
+    "auth": {
+      "searchPlaceholder": "预授权号 / 业务单号",
+      "create": "新建预授权",
+      "capture": "请款",
+      "void": "撤销",
+      "voidConfirm": "确认撤销预授权 {{no}}？",
+      "invalid": "请选择渠道并填写有效金额",
+      "invalidCapture": "请填写不超过剩余额度的金额",
+      "subjectPlaceholder": "可选：主体 ID",
+      "pickChannel": "选择渠道",
+      "noChannel": "还没有可用渠道，请先在「渠道配置」新建",
+      "remaining": "可请款余额：{{amount}}"
+    },
+    "reconcileStatus": {
+      "open": "待处理",
+      "closed": "已完成"
+    },
+    "diffKind": {
+      "long": "长款",
+      "short": "短款",
+      "missing": "单边缺失"
+    },
+    "diffStatus": {
+      "open": "待处理",
+      "resolved": "已解决",
+      "ignored": "已忽略"
+    },
+    "reconcile": {
+      "allSubjects": "全部主体",
+      "localTotal": "本地金额",
+      "channelTotal": "渠道金额",
+      "diffCount": "差异数",
+      "run": "发起对账",
+      "diffs": "差异明细",
+      "invalid": "请选择渠道和账单日期",
+      "subjectOptional": "可选：主体 ID",
+      "channelAmounts": "渠道账单金额",
+      "addRow": "添加一笔",
+      "emptyHint": "留空表示渠道侧没有任何成交，本地已收款会全部记为单边缺失。",
+      "noDiff": "本次对账没有差异",
+      "localShort": "本地",
+      "channelShort": "渠道",
+      "diffShort": "差异",
+      "notePlaceholder": "处置说明（可选）",
+      "note": "处置说明",
+      "resolve": "标记已解决",
+      "ignore": "忽略"
+    },
+    "settle": {
+      "viewLabel": "结算视图",
+      "settlements": "结算单",
+      "rules": "佣金规则",
+      "payouts": "打款批次",
+      "defaultSubject": "租户默认",
+      "fixedFee": "固定费",
+      "ruleStatus": {
+        "active": "启用",
+        "disabled": "停用"
+      },
+      "ruleCreate": "新建佣金规则",
+      "ruleEdit": "编辑佣金规则",
+      "invalidRule": "请填写业务类型",
+      "confirmHint": "确认结算单 {{period}}？确认后才能打款。",
+      "period": "账期",
+      "commission": "佣金",
+      "generate": "生成结算单",
+      "confirm": "确认结算单",
+      "invalidPeriod": "请选择有效账期",
+      "periodStart": "开始日期",
+      "periodEnd": "结束日期",
+      "settlementCount": "结算单数",
+      "payoutMethod": "打款方式",
+      "receiptNo": "回执号",
+      "payoutCreate": "新建打款批次",
+      "markPaid": "标记已打款",
+      "pickSettlement": "请选择至少一张已确认结算单",
+      "pickSettlementHint": "只列出「已确认」的结算单；一张结算单只能进一个批次。",
+      "noConfirmed": "没有可打款的已确认结算单",
+      "receiptRequired": "请填写打款回执号"
+    },
+    "settlementStatus": {
+      "draft": "草稿",
+      "confirmed": "已确认",
+      "paid": "已打款"
+    },
+    "payoutStatus": {
+      "draft": "待打款",
+      "paid": "已打款"
     }
   }
 }

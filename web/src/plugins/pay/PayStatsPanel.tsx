@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { BadgePercent, CircleDollarSign, Receipt, RefreshCw, TrendingUp } from 'lucide-react'
+import { BadgePercent, CircleDollarSign, Download, Receipt, RefreshCw, TrendingUp } from 'lucide-react'
 import { ChartCard } from '@/framework/components/ChartCard'
 import { RankBars } from '@/framework/components/RankBars'
 import { SimpleSelect } from '@/framework/components/SimpleSelect'
@@ -8,42 +8,48 @@ import { StatCard } from '@/framework/components/StatCard'
 import { TrendChart } from '@/framework/components/TrendChart'
 import { Button } from '@/framework/ui/button'
 import { Skeleton } from '@/framework/ui/skeleton'
-import { useChannels, usePayStats, type PayStatsFilter } from './api'
+import { Switch } from '@/framework/ui/switch'
+import { useChannels, usePayStats, type OrderQuery, type PayStatsFilter } from './api'
 
-// 后端窗口上限 182 天（statsMaxDays），「近半年」是能如实兑现的最大档位，
-// 不要再放一个名不副实的「全部」。
-const RANGES = ['7d', '30d', '90d', '180d'] as const
+// 后端窗口上限 182 天；「全部」是另开的无下限统计（受 2 万笔采样上限约束并如实标 sampled）。
+const RANGES = ['7d', '30d', '90d', '180d', 'all'] as const
 type RangeKey = (typeof RANGES)[number]
-const ALL_CHANNELS = '__all'
+const ALL = '__all'
+const STATUSES = ['pending', 'succeeded', 'failed', 'closed', 'refunding', 'partially_refunded', 'refunded'] as const
 
 /** 本地日期，不用 toISOString：那会把边界按 UTC 平移一天 */
 const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
 /** 分 → 元。金额始终带币种显示，绝不把不同币种加在一起。 */
 const money = (minor: number) => (minor / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+const csvMoney = (minor: number) => (minor / 100).toFixed(2)
+const csvCell = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v)
+const pick = (v: string) => (v === ALL ? undefined : v)
 
 /**
  * 支付统计面板：成交概览 + 按天笔数 + 分币种金额表 + 渠道成交 + 结构排行。
  *
- * 时间窗自己管，不跟列表筛选联动：列表筛的是"看哪几笔"，统计看的是"这段时间的成色"，
- * 共用一套条件时用户分不清 KPI 算的是当前筛选还是全局。
+ * 时间窗、渠道与结构筛选都在这里管，不跟订单列表联动；唯一的方向是「下钻」：
+ * 点渠道/状态/场景/业务类型/失败原因，把同一组条件带进订单列表看明细。
  */
-export function PayStatsPanel() {
+export function PayStatsPanel({ onDrillDown }: { onDrillDown?: (patch: Partial<OrderQuery>) => void }) {
   const { t } = useTranslation()
   const [range, setRange] = useState<RangeKey>('7d')
-  const [channel, setChannel] = useState(ALL_CHANNELS)
+  const [channel, setChannel] = useState(ALL)
+  const [bizType, setBizType] = useState(ALL)
+  const [scene, setScene] = useState(ALL)
+  const [status, setStatus] = useState(ALL)
+  const [auto, setAuto] = useState(false)
   const { data: channels = [] } = useChannels()
   const filter = useMemo<PayStatsFilter>(() => {
+    const base: PayStatsFilter = { channelCode: pick(channel), bizType: pick(bizType), scene: pick(scene), status: pick(status) }
+    if (range === 'all') return { ...base, all: true }
     const days = Number(range.slice(0, -1))
     const start = new Date()
     start.setDate(start.getDate() - days + 1)
-    return {
-      startDate: ymd(start),
-      endDate: ymd(new Date()),
-      channelCode: channel === ALL_CHANNELS ? undefined : channel,
-    }
-  }, [range, channel])
-  const { data, isFetching, isError, refetch } = usePayStats(filter)
+    return { ...base, startDate: ymd(start), endDate: ymd(new Date()) }
+  }, [range, channel, bizType, scene, status])
+  const { data, isFetching, isError, refetch } = usePayStats(filter, { refetchInterval: auto ? 60_000 : false })
 
   if (!data) {
     if (isError) {
@@ -67,31 +73,126 @@ export function PayStatsPanel() {
   const days: Record<string, unknown>[] = data.days.map((d) => ({ date: d.date, orders: d.orders, paid: d.paid }))
   // 主币种按成交额取，不按字典序：多币种时 KPI 不能默认显示排在最前面的那个币种。
   const primary = [...data.byCurrency].sort((a, b) => b.gmvMinor - a.gmvMinor || b.orders - a.orders)[0]
-  const byStatus = data.byStatus.map((s) => ({ name: t(`plugin_pay.status.${s.name}`, { defaultValue: s.name }), value: s.value }))
+  const statusLabel = (s: string) => t(`plugin_pay.status.${s}`, { defaultValue: s })
+  const byStatus = data.byStatus.map((s) => ({ name: statusLabel(s.name), value: s.value }))
   const byMethod = data.byMethod.map((m) => ({ name: t(`plugin_pay.method.${m.name}`, { defaultValue: m.name }), value: m.value }))
   // 后端用 "-" 表示「失败但没记原因」，直接上屏会像一类业务原因。
   const failReasons = data.failReasons.map((r) => ({ ...r, name: r.name === '-' ? t('plugin_pay.stats.noReason') : r.name }))
+  const rawStatus = new Map(data.byStatus.map((s) => [statusLabel(s.name), s.name]))
+  const rawFailReason = new Map(data.failReasons.map((r) => [r.name === '-' ? t('plugin_pay.stats.noReason') : r.name, r.name]))
+  const withSelected = (opts: string[], selected: string) =>
+    selected !== ALL && !opts.includes(selected) ? [selected, ...opts] : opts
+  const bizOptions = withSelected(data.facets?.bizTypes ?? [], bizType)
+  const sceneOptions = withSelected(data.facets?.scenes ?? [], scene)
+  const drill = (patch: Partial<OrderQuery>) => onDrillDown?.(patch)
+  const drillable = !!onDrillDown
+
+  const onExport = () => {
+    const rows: string[][] = [[
+      t('plugin_pay.stats.dimension'), t('plugin_pay.stats.name'), t('plugin_pay.stats.currency'),
+      t('plugin_pay.stats.orders'), t('plugin_pay.stats.paid'), t('plugin_pay.stats.gmv'),
+      t('plugin_pay.stats.refunded'), t('plugin_pay.stats.fee'), t('plugin_pay.stats.net'), t('plugin_pay.stats.count'),
+    ]]
+    for (const c of data.byCurrency) {
+      rows.push([
+        t('plugin_pay.stats.overview'), c.currency, c.currency, String(c.orders), String(c.paid),
+        csvMoney(c.gmvMinor), csvMoney(c.refundedMinor), csvMoney(c.feeMinor), csvMoney(c.netMinor), '',
+      ])
+    }
+    for (const c of data.byChannel) {
+      rows.push([t('plugin_pay.stats.channel'), c.channel, c.currency, '', String(c.paid), csvMoney(c.gmvMinor), '', '', '', ''])
+    }
+    const rank = (title: string, items: { name: string; value: number }[]) => {
+      for (const i of items) rows.push([title, i.name, '', '', '', '', '', '', '', String(i.value)])
+    }
+    rank(t('plugin_pay.stats.byStatus'), byStatus)
+    rank(t('plugin_pay.stats.byScene'), data.byScene)
+    rank(t('plugin_pay.stats.byMethod'), byMethod)
+    rank(t('plugin_pay.stats.byBizType'), data.byBizType)
+    rank(t('plugin_pay.stats.failReasons'), failReasons)
+    const csv = '\uFEFF' + rows.map((r) => r.map(csvCell).join(',')).join('\r\n')
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `pay-stats-${data.from || 'all'}-${data.to}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-sm font-medium">{t('plugin_pay.stats.rangeLabel')}</p>
-          <p className="num text-xs text-muted-foreground">
-            {data.from} ~ {data.to} · {t('plugin_pay.stats.orders')} {data.orders.toLocaleString()}
-          </p>
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm font-medium">{t('plugin_pay.stats.rangeLabel')}</p>
+            <p className="num text-xs text-muted-foreground">
+              {data.from} ~ {data.to} · {t('plugin_pay.stats.orders')} {data.orders.toLocaleString()}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Switch checked={auto} onCheckedChange={setAuto} aria-label={t('plugin_pay.stats.autoRefresh')} />
+              {t('plugin_pay.stats.autoRefresh')}
+            </label>
+            <Button variant="outline" size="sm" onClick={onExport}>
+              <Download aria-hidden="true" />
+              {t('plugin_pay.stats.exportCsv')}
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              aria-label={t('plugin_pay.stats.refresh')}
+              disabled={isFetching}
+              onClick={() => void refetch()}
+            >
+              <RefreshCw aria-hidden="true" className={isFetching ? 'animate-spin' : undefined} />
+            </Button>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <SimpleSelect
-            aria-label={t('plugin_pay.stats.channel')}
-            className="w-40"
-            value={channel}
-            onChange={setChannel}
-            options={[
-              { value: ALL_CHANNELS, label: t('plugin_pay.all') },
-              ...channels.map((c) => ({ value: c.code, label: c.name })),
-            ]}
-          />
+          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            {t('plugin_pay.stats.channel')}
+            <SimpleSelect
+              className="w-40"
+              aria-label={t('plugin_pay.stats.channel')}
+              value={channel}
+              onChange={setChannel}
+              options={[{ value: ALL, label: t('plugin_pay.all') }, ...channels.map((c) => ({ value: c.code, label: c.name }))]}
+            />
+          </label>
+          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            {t('plugin_pay.fields.bizType')}
+            <SimpleSelect
+              className="w-36"
+              aria-label={t('plugin_pay.fields.bizType')}
+              value={bizType}
+              onChange={setBizType}
+              options={[{ value: ALL, label: t('plugin_pay.all') }, ...bizOptions.map((v) => ({ value: v, label: v }))]}
+            />
+          </label>
+          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            {t('plugin_pay.fields.scene')}
+            <SimpleSelect
+              className="w-32"
+              aria-label={t('plugin_pay.fields.scene')}
+              value={scene}
+              onChange={setScene}
+              options={[{ value: ALL, label: t('plugin_pay.all') }, ...sceneOptions.map((v) => ({ value: v, label: v }))]}
+            />
+          </label>
+          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            {t('plugin_pay.fields.status')}
+            <SimpleSelect
+              className="w-32"
+              aria-label={t('plugin_pay.fields.status')}
+              value={status}
+              onChange={setStatus}
+              options={[
+                { value: ALL, label: t('plugin_pay.all') },
+                ...STATUSES.map((s) => ({ value: s, label: statusLabel(s) })),
+              ]}
+            />
+          </label>
           <SimpleSelect
             aria-label={t('plugin_pay.stats.rangeLabel')}
             className="w-32"
@@ -99,15 +200,6 @@ export function PayStatsPanel() {
             onChange={(v) => setRange(v as RangeKey)}
             options={RANGES.map((r) => ({ value: r, label: t(`plugin_pay.stats.ranges.${r}`) }))}
           />
-          <Button
-            variant="outline"
-            size="icon"
-            aria-label={t('plugin_pay.stats.refresh')}
-            disabled={isFetching}
-            onClick={() => void refetch()}
-          >
-            <RefreshCw aria-hidden="true" className={isFetching ? 'animate-spin' : undefined} />
-          </Button>
         </div>
       </div>
 
@@ -206,7 +298,12 @@ export function PayStatsPanel() {
                     </thead>
                     <tbody>
                       {data.byChannel.map((c) => (
-                        <tr key={`${c.channel}-${c.currency}`} className="border-t border-border/60">
+                        <tr
+                          key={`${c.channel}-${c.currency}`}
+                          title={drillable ? t('plugin_pay.stats.drillDown') : undefined}
+                          onClick={drillable ? () => drill({ channelCode: c.channel }) : undefined}
+                          className={`border-t border-border/60${drillable ? ' cursor-pointer hover:bg-muted/50' : ''}`}
+                        >
                           <td className="max-w-0 truncate py-1.5 pr-2" title={c.channel}>{c.channel}</td>
                           <td className="num py-1.5 text-right">{c.paid.toLocaleString()}</td>
                           <td className="num py-1.5 text-right">{money(c.gmvMinor)} {c.currency}</td>
@@ -227,17 +324,32 @@ export function PayStatsPanel() {
           <div className="grid items-start gap-4 lg:grid-cols-3">
             <ChartCard title={t('plugin_pay.stats.byScene')}>
               <div data-tone="chart-2">
-                <RankBars items={data.byScene} emptyText={t('plugin_pay.empty')} />
+                <RankBars
+                  items={data.byScene}
+                  emptyText={t('plugin_pay.empty')}
+                  onSelect={drillable ? (name) => drill({ scene: name }) : undefined}
+                />
               </div>
             </ChartCard>
             <ChartCard title={t('plugin_pay.stats.failReasons')}>
               <div data-tone="destructive">
-                <RankBars items={failReasons} emptyText={t('plugin_pay.stats.noFailures')} />
+                <RankBars
+                  items={failReasons}
+                  emptyText={t('plugin_pay.stats.noFailures')}
+                  onSelect={drillable ? (name) => {
+                    const raw = rawFailReason.get(name)
+                    drill(raw && raw !== '-' ? { status: 'failed', failReason: raw } : { status: 'failed' })
+                  } : undefined}
+                />
               </div>
             </ChartCard>
             <ChartCard title={t('plugin_pay.stats.byStatus')}>
               <div data-tone="chart-1">
-                <RankBars items={byStatus} emptyText={t('plugin_pay.empty')} />
+                <RankBars
+                  items={byStatus}
+                  emptyText={t('plugin_pay.empty')}
+                  onSelect={drillable ? (name) => drill({ status: rawStatus.get(name) }) : undefined}
+                />
               </div>
             </ChartCard>
           </div>
@@ -250,7 +362,11 @@ export function PayStatsPanel() {
             </ChartCard>
             <ChartCard title={t('plugin_pay.stats.byBizType')}>
               <div data-tone="chart-4">
-                <RankBars items={data.byBizType} emptyText={t('plugin_pay.empty')} />
+                <RankBars
+                  items={data.byBizType}
+                  emptyText={t('plugin_pay.empty')}
+                  onSelect={drillable ? (name) => drill({ bizType: name }) : undefined}
+                />
               </div>
             </ChartCard>
           </div>

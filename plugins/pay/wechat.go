@@ -301,7 +301,7 @@ func (wechatProvider) VerifyCallback(in CallbackInput, cfg map[string]string) (*
 		}
 		return &CallbackResult{
 			PaymentNo: rf.OutTradeNo, RefundNo: rf.OutRefundNo,
-			RefundOK: ev.EventType == "REFUND.SUCCESS" && rf.RefundStatus == "SUCCESS",
+			RefundOK:    ev.EventType == "REFUND.SUCCESS" && rf.RefundStatus == "SUCCESS",
 			AmountMinor: rf.Amount.Refund, ChannelTxnID: rf.RefundID,
 			GatewayStatus: rf.RefundStatus,
 		}, nil

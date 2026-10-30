@@ -32,10 +32,10 @@ type PayRequest struct {
 	Currency    string
 	Method      string // native/qr=扫码；page=电脑网站；wap/h5=手机网站；jsapi=公众号；app=APP
 	Scene       string
-	PayerOpenID string // 微信 JSAPI 必填（公众号/小程序 openid）
-	ClientIP    string // 微信 H5 下单需要付款方 IP
-	ReturnURL   string // 支付完成后回到业务前端的地址（可为空）
-	NotifyURL   string // 渠道异步回调地址；真实网关必须是完整 URL（见 channels.notify_url）
+	PayerOpenID string    // 微信 JSAPI 必填（公众号/小程序 openid）
+	ClientIP    string    // 微信 H5 下单需要付款方 IP
+	ReturnURL   string    // 支付完成后回到业务前端的地址（可为空）
+	NotifyURL   string    // 渠道异步回调地址；真实网关必须是完整 URL（见 channels.notify_url）
 	ExpireAt    time.Time // 支付单过期时间，渠道可据此设置 timeout_express / time_expire
 }
 

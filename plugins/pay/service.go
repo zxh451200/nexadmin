@@ -840,12 +840,15 @@ func (s *Service) ListChannels(ctx context.Context, subjectID string, enabledOnl
 
 // OrderQuery 过滤支付单列表。
 type OrderQuery struct {
-	Keyword   string // 支付单号 / 业务单号模糊
-	Status    string
-	Channel   string
-	SubjectID string
-	Page      int
-	PageSize  int
+	Keyword    string // 支付单号 / 业务单号模糊
+	Status     string
+	Channel    string
+	SubjectID  string
+	BizType    string
+	Scene      string
+	FailReason string
+	Page       int
+	PageSize   int
 }
 
 // ListOrders 分页列出支付单。
@@ -863,6 +866,15 @@ func (s *Service) ListOrders(ctx context.Context, q OrderQuery) ([]Order, int64,
 	}
 	if q.SubjectID != "" {
 		db = db.Where("subject_id = ?", q.SubjectID)
+	}
+	if q.BizType != "" {
+		db = db.Where("biz_type = ?", q.BizType)
+	}
+	if q.Scene != "" {
+		db = db.Where("scene = ?", q.Scene)
+	}
+	if q.FailReason != "" {
+		db = db.Where("fail_reason = ?", q.FailReason)
 	}
 	var total int64
 	if err := db.Count(&total).Error; err != nil {

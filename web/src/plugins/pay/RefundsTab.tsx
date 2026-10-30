@@ -13,6 +13,7 @@ import { Input } from '@/framework/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import { useCreateRefund, useRefunds, type PayRefund, type RefundQuery } from './api'
 import { formatMoney, formatTime, refundStatusVariant } from './format'
+import { ListErrorBanner } from './ListErrorBanner'
 
 const ALL = '__all'
 
@@ -25,7 +26,7 @@ export function RefundsTab() {
   const [pageSize, setPageSize] = useState(10)
   const [formOpen, setFormOpen] = useState(false)
 
-  const { data, isLoading } = useRefunds({ ...filters, page, pageSize })
+  const { data, isLoading, isError, refetch } = useRefunds({ ...filters, page, pageSize })
   const create = useCreateRefund()
 
   const columns: Column<PayRefund>[] = [
@@ -53,6 +54,7 @@ export function RefundsTab() {
 
   return (
     <div className="flex flex-col gap-4">
+      {isError ? <ListErrorBanner onRetry={() => void refetch()} /> : null}
       <FilterBar
         onSearch={() => {
           setFilters(draft)

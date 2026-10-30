@@ -45,13 +45,18 @@ const (
 // billDateRe 账期/账单日期：YYYY-MM-DD。
 var billDateRe = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
 
-// nextDay 返回 date 的次日（YYYY-MM-DD）。date 已由 billDateRe 校验。
-func nextDay(date string) string {
-	t, err := time.ParseInLocation("2006-01-02", date, time.UTC)
-	if err != nil {
-		return date
+// dayBounds 把业务自然日换算成 UTC 查询边界：应用时区的当天 00:00 至次日 00:00。
+// 数据库时间列存 UTC；直接用 "date 00:00:00" 比会漏掉东八区 0–8 点支付的单。
+func (s *Service) dayBounds(date string) (time.Time, time.Time, error) {
+	loc := s.loc
+	if loc == nil {
+		loc = time.UTC
 	}
-	return t.AddDate(0, 0, 1).Format("2006-01-02")
+	start, err := time.ParseInLocation("2006-01-02", date, loc)
+	if err != nil {
+		return time.Time{}, time.Time{}, err
+	}
+	return start.UTC(), start.AddDate(0, 0, 1).UTC(), nil
 }
 
 // ChannelAmountEntry 是对账入参里的一行渠道金额（临时人工录入通道）。
@@ -68,11 +73,15 @@ func (s *Service) RunReconcileTask(ctx context.Context, channelCode, billDate, s
 	if channelCode == "" || !billDateRe.MatchString(billDate) {
 		return nil, response.BadRequest(errInvalidAmount)
 	}
+	startAt, endAt, err := s.dayBounds(billDate)
+	if err != nil {
+		return nil, response.BadRequest(errInvalidAmount)
+	}
 	local := map[string]int64{}
 	db := s.db.WithContext(ctx).Model(&Order{}).
 		Where("channel_code = ? AND status IN ?", channelCode,
 			[]string{StatusSucceeded, StatusPartiallyRefunded, StatusRefunded}).
-		Where("paid_at >= ? AND paid_at < ?", billDate+" 00:00:00", nextDay(billDate)+" 00:00:00")
+		Where("paid_at >= ? AND paid_at < ?", startAt, endAt)
 	if subjectID != "" {
 		db = db.Where("subject_id = ?", subjectID)
 	}
@@ -92,7 +101,7 @@ func (s *Service) RunReconcileTask(ctx context.Context, channelCode, billDate, s
 	}
 
 	var task ReconcileTask
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// 同键已有 open 任务则复用（重跑刷新差异）；closed 任务撞同键报冲突。
 		err := tx.Where("channel_code = ? AND bill_date = ? AND subject_id = ?", channelCode, billDate, subjectID).
 			Take(&task).Error
@@ -549,26 +558,42 @@ func (s *Service) ListPayouts(ctx context.Context, status string) ([]PayoutBatch
 
 // settlementOrders 取账期内已成功收款单（供结算汇总）。
 func (s *Service) settlementOrders(ctx context.Context, subjectID, periodStart, periodEnd string) ([]Order, error) {
+	startAt, _, err := s.dayBounds(periodStart)
+	if err != nil {
+		return nil, err
+	}
+	_, endAt, err := s.dayBounds(periodEnd)
+	if err != nil {
+		return nil, err
+	}
 	db := s.db.WithContext(ctx).Model(&Order{}).
 		Where("status IN ?", []string{StatusSucceeded, StatusPartiallyRefunded, StatusRefunded}).
-		Where("paid_at >= ? AND paid_at < ?", periodStart+" 00:00:00", nextDay(periodEnd)+" 00:00:00")
+		Where("paid_at >= ? AND paid_at < ?", startAt, endAt)
 	if subjectID != "" {
 		db = db.Where("subject_id = ?", subjectID)
 	}
 	var rows []Order
-	err := db.Order("id").Limit(10000).Find(&rows).Error
+	err = db.Order("id").Limit(10000).Find(&rows).Error
 	return rows, err
 }
 
 // settlementRefunds 取账期内成功的退款单（供结算汇总）。
 func (s *Service) settlementRefunds(ctx context.Context, subjectID, periodStart, periodEnd string) ([]Refund, error) {
+	startAt, _, err := s.dayBounds(periodStart)
+	if err != nil {
+		return nil, err
+	}
+	_, endAt, err := s.dayBounds(periodEnd)
+	if err != nil {
+		return nil, err
+	}
 	db := s.db.WithContext(ctx).Model(&Refund{}).
 		Where("status = ?", RefundSucceeded).
-		Where("succeeded_at >= ? AND succeeded_at < ?", periodStart+" 00:00:00", nextDay(periodEnd)+" 00:00:00")
+		Where("succeeded_at >= ? AND succeeded_at < ?", startAt, endAt)
 	if subjectID != "" {
 		db = db.Where("subject_id = ?", subjectID)
 	}
 	var rows []Refund
-	err := db.Order("id").Limit(10000).Find(&rows).Error
+	err = db.Order("id").Limit(10000).Find(&rows).Error
 	return rows, err
 }

@@ -59,6 +59,7 @@ type OrderView struct {
 	TenantID        idgen.ID          `json:"tenantId"`
 	SubjectType     string            `json:"subjectType"`
 	SubjectID       string            `json:"subjectId"`
+	Subject         string            `json:"subject"`
 	PaymentNo       string            `json:"paymentNo"`
 	BizType         string            `json:"bizType"`
 	BizNo           string            `json:"bizNo"`
@@ -92,7 +93,7 @@ type OrderView struct {
 func orderView(o *Order, params *PayParams) OrderView {
 	v := OrderView{
 		ID: o.ID, TenantID: o.TenantID, SubjectType: o.SubjectType, SubjectID: o.SubjectID,
-		PaymentNo: o.PaymentNo, BizType: o.BizType, BizNo: o.BizNo,
+		Subject: o.Subject, PaymentNo: o.PaymentNo, BizType: o.BizType, BizNo: o.BizNo,
 		ChannelCode: o.ChannelCode, Method: o.Method, Scene: o.Scene, Status: o.Status,
 		AmountMinor: o.AmountMinor, RefundedMinor: o.RefundedMinor, FeeMinor: o.FeeMinor,
 		Currency: o.Currency, FxRateMicro: o.FxRateMicro,
@@ -168,6 +169,8 @@ type AuthView struct {
 	SubjectID     string     `json:"subjectId"`
 	BizType       string     `json:"bizType"`
 	BizNo         string     `json:"bizNo"`
+	ChannelCode   string     `json:"channelCode"`
+	Method        string     `json:"method"`
 	PaymentNo     string     `json:"paymentNo,omitempty"`
 	Status        string     `json:"status"`
 	AmountMinor   int64      `json:"amountMinor"`
@@ -176,18 +179,21 @@ type AuthView struct {
 	FxRateMicro   int64      `json:"fxRateMicro"`
 	ChannelAuthNo string     `json:"channelAuthNo,omitempty"`
 	CardLast4     string     `json:"cardLast4,omitempty"`
+	Remark        string     `json:"remark,omitempty"`
 	ExpiresAt     *time.Time `json:"expiresAt,omitempty"`
 	VoidedAt      *time.Time `json:"voidedAt,omitempty"`
+	CreatedAt     time.Time  `json:"createdAt"`
 }
 
 func authView(a *Authorization) AuthView {
 	return AuthView{
 		ID: a.ID, TenantID: a.TenantID, AuthNo: a.AuthNo, SubjectID: a.SubjectID,
-		BizType: a.BizType, BizNo: a.BizNo, PaymentNo: a.PaymentNo, Status: a.Status,
+		BizType: a.BizType, BizNo: a.BizNo, ChannelCode: a.ChannelCode, Method: a.Method,
+		PaymentNo: a.PaymentNo, Status: a.Status,
 		AmountMinor: a.AmountMinor, CapturedMinor: a.CapturedMinor,
 		Currency: a.Currency, FxRateMicro: a.FxRateMicro,
-		ChannelAuthNo: a.ChannelAuthNo, CardLast4: a.CardLast4,
-		ExpiresAt: a.ExpiresAt, VoidedAt: a.VoidedAt,
+		ChannelAuthNo: a.ChannelAuthNo, CardLast4: a.CardLast4, Remark: a.Remark,
+		ExpiresAt: a.ExpiresAt, VoidedAt: a.VoidedAt, CreatedAt: a.CreatedAt,
 	}
 }
 

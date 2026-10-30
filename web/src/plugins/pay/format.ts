@@ -13,8 +13,15 @@ export function formatTime(iso: string | null | undefined, lang: string): string
       }).format(d)
 }
 
+const moneyFormatter = new Intl.NumberFormat(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
+/** 只有金额、没有币种时使用（对账/结算等跨单汇总场景）。 */
+export function formatAmount(minor: number): string {
+  return moneyFormatter.format(minor / 100)
+}
+
 export function formatMoney(minor: number, currency: string): string {
-  return `${currency} ${(minor / 100).toFixed(2)}`
+  return `${currency} ${formatAmount(minor)}`
 }
 
 export function formatBp(bp: number): string {

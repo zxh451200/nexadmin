@@ -99,14 +99,16 @@ func TestPayTopNamesAndFailReasons(t *testing.T) {
 		{CreatedAt: at("2026-10-21 01:00:00"), Status: StatusFailed, Currency: "CNY", FailReason: "", ChannelCode: "wechat"},
 		{CreatedAt: at("2026-10-21 01:10:00"), Status: StatusFailed, Currency: "CNY", FailReason: "timeout", ChannelCode: "wechat"},
 		{CreatedAt: at("2026-10-21 01:20:00"), Status: StatusSucceeded, Currency: "CNY", AmountMinor: 5, FailReason: "ignored", ChannelCode: "wechat"},
+		{CreatedAt: at("2026-10-21 01:30:00"), Status: StatusPending, Currency: "CNY", ChannelCode: "wechat"},
+		{CreatedAt: at("2026-10-21 01:40:00"), Status: StatusClosed, Currency: "CNY", FailReason: "closed-ignored", ChannelCode: "wechat"},
 	}
 	st := aggregatePay(rows, locUTC, from, to)
 	if len(st.FailReasons) != 2 || st.FailReasons[0] != (NameValue{"-", 1}) {
 		t.Errorf("空失败原因应归到占位符 -：%+v", st.FailReasons)
 	}
 	for _, r := range st.FailReasons {
-		if r.Name == "ignored" {
-			t.Errorf("已成交订单的 fail_reason 不该进失败原因榜：%+v", st.FailReasons)
+		if r.Name == "ignored" || r.Name == "closed-ignored" {
+			t.Errorf("非失败订单的 fail_reason 不该进失败原因榜：%+v", st.FailReasons)
 		}
 	}
 	if got := topNames(map[string]int64{"b": 5, "a": 5, "c": 9}, 2); len(got) != 2 || got[0].Name != "c" || got[1].Name != "a" {
@@ -141,5 +143,43 @@ func TestAggregatePayEmptyMarshalsAsArrays(t *testing.T) {
 	}
 	if strings.Contains(s, "null") {
 		t.Errorf("空聚合不应出现 null：%s", s)
+	}
+}
+
+// 全量历史：窗口不设下限，趋势图只画最近 statsMaxDays 天，展示起始日取最早一笔样本。
+func TestPayStatsAllWindow(t *testing.T) {
+	from, to := statsWindow(StatsQuery{All: true, EndDate: "2026-10-20"}, locUTC)
+	if !from.IsZero() {
+		t.Fatalf("all 不应有起始下限，得到 %v", from)
+	}
+	if got := to.Format("2006-01-02"); got != "2026-10-21" {
+		t.Fatalf("to 应为 endDate 次日，得到 %s", got)
+	}
+	chartFrom := chartWindow(from, to)
+	if d := int(to.Sub(chartFrom).Hours() / 24); d != statsMaxDays {
+		t.Fatalf("趋势起点应压到 %d 天，得到 %d", statsMaxDays, d)
+	}
+	early := time.Date(2024, 1, 2, 8, 0, 0, 0, time.UTC)
+	// 生产查询按 created_at DESC，最后一行是最早样本。
+	rows := []payStatRow{{CreatedAt: early.Add(48 * time.Hour)}, {CreatedAt: early}}
+	if got := statsFromLabel(rows, from, chartFrom, locUTC); got != "2024-01-02" {
+		t.Fatalf("全量起始日应取最早样本，得到 %s", got)
+	}
+	if got := statsFromLabel(nil, from, chartFrom, locUTC); got != chartFrom.Format("2006-01-02") {
+		t.Fatalf("空样本应退回趋势起点，得到 %s", got)
+	}
+	fixed := to.AddDate(0, 0, -7)
+	if got := statsFromLabel(nil, fixed, chartFrom, locUTC); got != fixed.Format("2006-01-02") {
+		t.Fatalf("固定窗口应回显窗口起点，得到 %s", got)
+	}
+}
+
+func TestStatsFacetsDropEmptyAndDuplicates(t *testing.T) {
+	got := strings.Join(nonEmpty([]string{"trade_group", "", "trade_group", " refund ", "agent"}), ",")
+	if got != "trade_group,refund,agent" {
+		t.Fatalf("facets=%s，期望 trade_group,refund,agent", got)
+	}
+	if empty := nonEmpty(nil); empty == nil || len(empty) != 0 {
+		t.Fatalf("空 facets 必须是空切片而不是 nil：%#v", empty)
 	}
 }
