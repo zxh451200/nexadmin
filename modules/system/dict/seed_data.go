@@ -43,6 +43,7 @@ var seedTypes = []seedType{
 		{"business", "业务消息", "Business", "success"},
 		{"security", "安全提醒", "Security", "destructive"},
 		{"todo", "待办提醒", "To-do", "warning"},
+		{"im", "在线客服", "Live chat", "warning"},
 	}},
 	{Code: "oper_type", Name: "操作类型", Remark: "", Disabled: false, Items: []seedItem{
 		{"create", "新增", "Create", "success"},

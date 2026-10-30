@@ -84,6 +84,8 @@ export default function ImportsPage() {
     }
   }
 
+  const sourceTitle = (name: string) => (sources.data ?? []).find((s) => s.name === name)?.title ?? name
+
   const columns: Column<ImportJob>[] = [
     {
       key: 'fileName',
@@ -92,7 +94,8 @@ export default function ImportsPage() {
       render: (j) => (
         <div>
           <span className="font-medium text-foreground">{j.fileName || '—'}</span>
-          <div className="text-xs text-muted-foreground">{j.source}</div>
+          {/* 台账里存的是来源标识（crm_customers），上屏要换成来源的显示名 */}
+          <div className="text-xs text-muted-foreground">{sourceTitle(j.source)}</div>
         </div>
       ),
     },

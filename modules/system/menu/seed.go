@@ -121,6 +121,10 @@ func buildSeed() []seedItem {
 	b.menu("", "sysMenu.docs", "https://example.com/docs", "", "docs:view", "BookOpen", 70, noCache,
 		func(m *Menu) { m.External, m.Status = true, "0" })
 
+	// 追加在末尾：已发出的 ID 不因中间插入而平移；sort 控制侧栏顺序。
+	tenantSelf := b.menu(tenantDir, "tenantSelf.menu", "/tenant/self", "tenantSelf/TenantSelfPage", "tenantSelf:view", "Building2", 30)
+	b.btns(tenantSelf, "tenantSelf", "update")
+
 	// 数据备份（系统管理下）。
 	backup := b.menu(system, "backup.menu", "/system/backup", "backup/BackupPage", "backup:list", "DatabaseBackup", 140, noCache)
 	b.add(backup, Menu{Type: typeButton, Title: "backup.btn.edit", Perm: "backup:edit", Sort: 10})

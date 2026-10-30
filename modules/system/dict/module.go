@@ -80,6 +80,15 @@ func (module) Seed(db *gorm.DB) error {
 			d := Data{TypeID: t.ID, Label: it.Label, LabelEn: it.LabelEn, Value: it.Value, Tag: it.Tag,
 				Sort: (j + 1) * 10, Status: "1", Remark: it.LabelEn}
 			d.ID, d.CreatedAt, d.UpdatedAt = dataSeedID(n), now, now
+			// 固定 ID 按全局序号推算：往字典里新增一项会把后面所有项的序号挤开，
+			// 新项的 ID 可能已被老项占用。撞了就交给雪花生成，别让启动种子直接失败。
+			var taken int64
+			if err := db.Model(&Data{}).Where("id = ?", int64(d.ID)).Count(&taken).Error; err != nil {
+				return err
+			}
+			if taken > 0 {
+				d.ID = 0
+			}
 			if err := db.Create(&d).Error; err != nil {
 				return err
 			}

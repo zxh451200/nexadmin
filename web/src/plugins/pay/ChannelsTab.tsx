@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { JsonInput } from '@/framework/components/JsonInput'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { SwitchRow } from '@/framework/components/SwitchField'
 import { Badge } from '@/framework/ui/badge'
@@ -199,15 +200,16 @@ function ChannelFormDialog({ open, onOpenChange, editing, providers }: Props) {
             ))}
           </div>
         ) : (
-          <label className="flex flex-col gap-1 text-sm">
-            {t('plugin_pay.fields.config')}
-            <Input
+          <div className="flex flex-col gap-1 text-sm">
+            <label htmlFor="pay-channel-config">{t('plugin_pay.fields.config')}</label>
+            <JsonInput
+              id="pay-channel-config"
               value={configJson}
-              onChange={(e) => setConfigJson(e.target.value)}
-              className="font-mono"
+              onChange={setConfigJson}
+              rows={3}
               placeholder={isNew ? '{"secret":"..."}' : t('plugin_pay.configKeep')}
             />
-          </label>
+          </div>
         )}
       </div>
     </ResponsiveDialog>

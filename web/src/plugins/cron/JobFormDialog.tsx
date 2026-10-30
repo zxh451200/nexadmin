@@ -5,13 +5,14 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { z } from 'zod'
 import { FormGrid, FormGridFull, FormLayout } from '@/framework/components/FormLayout'
+import { JsonInput } from '@/framework/components/JsonInput'
+import { isJsonObjectText } from '@/framework/components/json'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { SwitchField } from '@/framework/components/SwitchField'
 import { Button } from '@/framework/ui/button'
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/framework/ui/form'
 import { Input } from '@/framework/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
-import { Textarea } from '@/framework/ui/textarea'
 import { useHandlers, useSaveJob, type CronJob, type CronJobForm } from './api'
 import { CRON_PRESETS, CUSTOM_PRESET, parseCron, presetKeyOf } from './cron'
 import { formatTime } from './format'
@@ -24,15 +25,7 @@ function buildSchema(t: (k: string) => string) {
       if (!r.ok) ctx.addIssue({ code: 'custom', message: t(`plugin_cron.errors.${r.code}`) })
     }),
     handler: z.string().min(1, t('common.required')),
-    params: z.string().refine((v) => {
-      if (!v.trim()) return true
-      try {
-        const o: unknown = JSON.parse(v)
-        return !!o && typeof o === 'object' && !Array.isArray(o)
-      } catch {
-        return false
-      }
-    }, t('plugin_cron.errors.paramsJson')),
+    params: z.string().refine(isJsonObjectText, t('plugin_cron.errors.paramsJson')),
     enabled: z.boolean(),
     retryCount: z.number().int().min(0, t('plugin_cron.errors.retryRange')).max(10, t('plugin_cron.errors.retryRange')),
   })
@@ -235,12 +228,11 @@ export function JobFormDialog({ open, onOpenChange, editing }: Props) {
                   <FormItem>
                     <FormLabel>{t('plugin_cron.fields.params')}</FormLabel>
                     <FormControl>
-                      <Textarea {...field} rows={4} className="font-mono" spellCheck={false} placeholder="{}" />
+                      <JsonInput {...field} optional rows={3} placeholder="{}" />
                     </FormControl>
                     <FormDescription>
                       {handler ? t(`plugin_cron.hints.${handler}`, { defaultValue: t('plugin_cron.hints.params') }) : t('plugin_cron.hints.params')}
                     </FormDescription>
-                    <FormMessage />
                   </FormItem>
                 )}
               />
