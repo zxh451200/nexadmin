@@ -11,6 +11,7 @@ import { DataTable, type Column } from '@/framework/components/DataTable'
 import { DictTag } from '@/framework/components/DictTag'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { FormGrid, FormGridFull, FormLayout } from '@/framework/components/FormLayout'
+import { JsonInput } from '@/framework/components/JsonInput'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { SwitchField } from '@/framework/components/SwitchField'
 import { Button } from '@/framework/ui/button'
@@ -327,7 +328,7 @@ export function ParamsSection() {
                             />
                           </div>
                         ) : type === 'json' ? (
-                          <Textarea rows={4} className="num" {...field} />
+                          <JsonInput {...field} objectOnly={false} rows={4} />
                         ) : (
                           <Input {...field} type={type === 'number' ? 'number' : 'text'} />
                         )}

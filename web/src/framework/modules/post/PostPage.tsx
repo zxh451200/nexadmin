@@ -3,6 +3,7 @@ import { Pencil, Plus, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
+import { usePermission } from '@/framework/auth/usePermission'
 import { DataTable } from '@/framework/components/DataTable'
 import { DictTag } from '@/framework/components/DictTag'
 import { SimpleFilterBar } from '@/framework/components/SimpleFilterBar'
@@ -25,7 +26,10 @@ export function PostSection() {
   const { t } = useTranslation()
   const confirm = useConfirm()
   const { data = [], isLoading } = usePostList()
-  const { data: depts = [] } = useDeptNodes()
+  const { has } = usePermission()
+  // 没有 dept:list 时不请求部门树（否则岗位页一进来就吃 403），所属部门列退化为「-」
+  const canDept = has('dept:list')
+  const { data: depts = [] } = useDeptNodes(canDept)
   const del = useDeletePost()
   const sort = useSortPosts()
 
@@ -82,7 +86,7 @@ export function PostSection() {
         loading={isLoading}
         pagination={false}
         columnSettingsKey="post"
-        sortable={filter.active ? undefined : { onReorder: (ids) => sort.mutateAsync(ids) }}
+        sortable={filter.active || !has('post:update') ? undefined : { onReorder: (ids) => sort.mutateAsync(ids) }}
         rowActions={(row) => (
           <>
             <Can perm="post:update">

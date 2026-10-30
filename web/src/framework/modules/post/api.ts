@@ -25,9 +25,9 @@ export interface DeptNode {
   children?: DeptNode[]
 }
 
-/** 仅用于把部门 ID 显示为名称；不依赖 dept 模块 */
-export function useDeptNodes() {
-  return useQuery({ queryKey: ['post', 'deptTree'], queryFn: () => api.get<DeptNode[]>('/depts/tree') })
+/** 仅用于把部门 ID 显示为名称；没有 dept:list 时不请求（否则 403 弹一脸），列退化为「-」 */
+export function useDeptNodes(enabled = true) {
+  return useQuery({ queryKey: ['post', 'deptTree'], queryFn: () => api.get<DeptNode[]>('/depts/tree'), enabled })
 }
 
 export function useCreatePost() {

@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+import { usePermission } from '@/framework/auth/usePermission'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { SwitchField } from '@/framework/components/SwitchField'
 import { FormGrid, FormGridFull, FormLayout } from '@/framework/components/FormLayout'
@@ -32,6 +33,8 @@ interface FormValues {
 
 export function PostFormDialog({ open, onOpenChange, editing, count }: PostFormDialogProps) {
   const { t } = useTranslation()
+  // 部门下拉读的是 /depts/tree：没有 dept:list 时不摆出来，免得点开就吃一个 403
+  const canDept = usePermission().has('dept:list')
   const create = useCreatePost()
   const update = useUpdatePost()
 
@@ -139,19 +142,21 @@ export function PostFormDialog({ open, onOpenChange, editing, count }: PostFormD
                 </FormItem>
               )}
             />
-            <FormField
-              control={form.control}
-              name="deptId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('post.field.dept')}</FormLabel>
-                  <FormControl>
-                    <TreeSelect url="/depts/tree" value={field.value} onChange={(v) => field.onChange(v ?? '')} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {canDept ? (
+              <FormField
+                control={form.control}
+                name="deptId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('post.field.dept')}</FormLabel>
+                    <FormControl>
+                      <TreeSelect url="/depts/tree" value={field.value} onChange={(v) => field.onChange(v ?? '')} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            ) : null}
             <FormGridFull>
               <SwitchField control={form.control} name="status" label={t('post.field.status')} valueOn="1" valueOff="0" />
             </FormGridFull>
