@@ -60,6 +60,8 @@ export default function BackupPage() {
   const fmtTime = (s: string) => new Date(s).toLocaleString(i18n.language, { hour12: false })
   // 引擎 id（mysql/mariadb/postgres）不直接显示，展示成产品名
   const engineName = st ? t(`backup.engine.${st.engine}`, { defaultValue: st.engine }) : ''
+  // 说明里的工具名只取当前引擎会用的那套，与下方“缺少导出工具”告警保持一致
+  const dumpTools = st ? t(`backup.tools.${st.engine}`, { defaultValue: 'mysqldump / mariadb-dump' }) : ''
   // 保留策略：0 表示不限制，与设置弹窗同一套说法
   const keepHint = (() => {
     const c = config.data
@@ -154,7 +156,7 @@ export default function BackupPage() {
     <PageContainer>
       <PageHeader
         title={t('backup.title')}
-        description={t('backup.description')}
+        description={st ? t('backup.description', { tools: dumpTools }) : undefined}
         actions={
           <Can perm="backup:edit">
             <Button variant="outline" onClick={() => setSettingsOpen(true)}>

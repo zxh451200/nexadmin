@@ -2,7 +2,8 @@
   "backup": {
     "menu": "数据备份",
     "title": "数据备份",
-    "description": "用本机 mysqldump / mariadb-dump / pg_dump 备份数据库并压缩保存；恢复请使用命令行（网页不提供恢复入口）",
+    "description": "用本机 {{tools}} 备份数据库并压缩保存；恢复请使用命令行（网页不提供恢复入口）",
+    "tools": { "mysql": "mysqldump / mariadb-dump", "mariadb": "mysqldump / mariadb-dump", "postgres": "pg_dump" },
     "now": "立即备份",
     "running": "备份中…",
     "started": "已开始备份，完成后会自动刷新",

@@ -2,7 +2,8 @@
   "backup": {
     "menu": "Data backup",
     "title": "Data backup",
-    "description": "Back up the database with the local mysqldump / mariadb-dump / pg_dump and keep compressed copies. Restore is command-line only (no web entry).",
+    "description": "Back up the database with the local {{tools}} and keep compressed copies. Restore is command-line only (no web entry).",
+    "tools": { "mysql": "mysqldump / mariadb-dump", "mariadb": "mysqldump / mariadb-dump", "postgres": "pg_dump" },
     "now": "Back up now",
     "running": "Backing up…",
     "started": "Backup started; the list refreshes automatically",
