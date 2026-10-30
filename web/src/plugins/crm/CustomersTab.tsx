@@ -23,8 +23,12 @@ import {
 import { formatTime } from './format'
 
 const ALL = '__all'
+const NO_LEVEL = '__none'
 
 const SOURCES = ['hotel', 'mall', 'order', 'manual'] as const
+
+// 等级是收口过的三档；历史/导入数据里的其它值在编辑时仍原样保留。
+const LEVELS = ['A', 'B', 'C'] as const
 
 function CustomerFormDialog({
   open,
@@ -38,28 +42,32 @@ function CustomerFormDialog({
   const { t } = useTranslation()
   const save = useSaveCustomer()
   const isNew = !editing
-  const [draft, setDraft] = useState<Partial<CrmCustomerForm>>({})
+  // 由父组件按 id 重挂载，初始值直接取自编辑对象。
+  const [draft, setDraft] = useState<Partial<CrmCustomerForm>>(() =>
+    editing
+      ? {
+          name: editing.name,
+          code: editing.code,
+          level: editing.level,
+          status: editing.status,
+          externalSource: editing.externalSource ?? '',
+          externalNo: editing.externalNo ?? '',
+          owner: editing.owner,
+          phone: editing.phone,
+          email: editing.email,
+          remark: editing.remark,
+        }
+      : {},
+  )
 
-  // 打开时用编辑对象初始化（key 由父组件控制重挂载）。
-  const value: Partial<CrmCustomerForm> = editing
-    ? {
-        name: editing.name,
-        code: editing.code,
-        level: editing.level,
-        status: editing.status,
-        externalSource: editing.externalSource ?? '',
-        externalNo: editing.externalNo ?? '',
-        owner: editing.owner,
-        phone: editing.phone,
-        email: editing.email,
-        remark: editing.remark,
-      }
-    : draft
+  const value = draft
 
-  const set = (patch: Partial<CrmCustomerForm>) => {
-    if (editing) return
-    setDraft((d) => ({ ...d, ...patch }))
-  }
+  const set = (patch: Partial<CrmCustomerForm>) => setDraft((d) => ({ ...d, ...patch }))
+
+  const levelOptions: string[] =
+    value.level && !LEVELS.includes(value.level as (typeof LEVELS)[number])
+      ? [...LEVELS, value.level]
+      : [...LEVELS]
 
   const submit = async () => {
     const data = { ...value, name: (value.name ?? '').trim() } as CrmCustomerForm
@@ -102,13 +110,31 @@ function CustomerFormDialog({
         <div className="grid grid-cols-2 gap-3">
           <label className="flex flex-col gap-1">
             {t('plugin_crm.fields.code')}
-            <Input value={value.code ?? ''} onChange={(e) => set({ code: e.target.value })} />
+            <Input
+              maxLength={64}
+              value={value.code ?? ''}
+              placeholder={t('plugin_crm.customer.codePlaceholder')}
+              onChange={(e) => set({ code: e.target.value })}
+            />
           </label>
           <label className="flex flex-col gap-1">
             {t('plugin_crm.fields.level')}
-            <Input value={value.level ?? ''} onChange={(e) => set({ level: e.target.value })} />
+            <Select value={value.level || NO_LEVEL} onValueChange={(v) => set({ level: v === NO_LEVEL ? '' : v })}>
+              <SelectTrigger aria-label={t('plugin_crm.fields.level')}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NO_LEVEL}>{t('plugin_crm.level.none')}</SelectItem>
+                {levelOptions.map((lv) => (
+                  <SelectItem key={lv} value={lv}>
+                    {t(`plugin_crm.level.${lv}`, { defaultValue: lv })}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
         </div>
+        <p className="text-xs text-muted-foreground">{t('plugin_crm.customer.codeHint')}</p>
         <label className="flex flex-col gap-1">
           {t('plugin_crm.fields.status')}
           <Select value={value.status ?? 'active'} onValueChange={(v) => set({ status: v as CrmCustomerForm['status'] })}>
@@ -335,7 +361,12 @@ export function CustomersTab() {
           </Can>
         )}
       />
-      <CustomerFormDialog key={editing?.id ?? 'new'} open={formOpen} onOpenChange={setFormOpen} editing={editing} />
+      <CustomerFormDialog
+        key={formOpen ? (editing?.id ?? 'new') : 'closed'}
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        editing={editing}
+      />
     </div>
   )
 }

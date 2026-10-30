@@ -92,10 +92,12 @@ defineMock([
         )
         if (clash) return clash // 锚点幂等
       }
+      const id = String(7430000000000000000n + BigInt(customers.length + 1))
       const c: CrmCustomer = {
-        id: String(7430000000000000000n + BigInt(customers.length + 1)),
+        id,
         name: body.name,
-        code: body.code ?? '',
+        // 与后端一致：编码留空时由 ID 派生。
+        code: String(body.code ?? '').trim() || `C-${BigInt(id).toString(36).toUpperCase()}`,
         level: body.level ?? '',
         status: body.status ?? 'active',
         externalSource: body.externalSource || null,
@@ -116,7 +118,8 @@ defineMock([
     handler: ({ params, body }) => {
       const c = customers.find((x) => x.id === params.id) ?? mockError(404, 'not found')
       c.name = body.name
-      c.code = body.code ?? c.code
+      // 与后端一致：更新时编码留空表示沿用原编码。
+      c.code = String(body.code ?? '').trim() || c.code
       c.level = body.level ?? c.level
       c.status = body.status ?? c.status
       c.owner = body.owner ?? c.owner

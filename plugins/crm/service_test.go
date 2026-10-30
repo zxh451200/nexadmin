@@ -86,9 +86,18 @@ func TestResolveByExternalCreates(t *testing.T) {
 	s := NewService(db, nopLogger{})
 
 	events := make(chan event.Event, 4)
+	// 总线是进程级异步的，别的用例也会发同名事件：只收自己那条，且永不阻塞派发协程。
 	event.Subscribe(event.SubscriberFunc(func(e event.Event) {
-		if e.Name == EventCustomerCreated {
-			events <- e
+		if e.Name != EventCustomerCreated {
+			return
+		}
+		raw, _ := json.Marshal(e.Data)
+		if !strings.Contains(string(raw), `"externalNo":"10086"`) {
+			return
+		}
+		select {
+		case events <- e:
+		default:
 		}
 	}))
 
@@ -110,6 +119,10 @@ func TestResolveByExternalCreates(t *testing.T) {
 	}
 	if c.ExternalSource == nil || *c.ExternalSource != "mall" {
 		t.Fatalf("external anchor not persisted: %+v", c)
+	}
+	// 编码留空时按 ID 派生，自动建档的会员也有稳定编码。
+	if !strings.HasPrefix(c.Code, "C-") || c.Code == "C-" {
+		t.Fatalf("auto code not generated: %q", c.Code)
 	}
 	select {
 	case ev := <-events:

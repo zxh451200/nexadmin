@@ -31,7 +31,7 @@ func (m *module) ImportSources(db *gorm.DB) []importspec.Source {
 			{Key: "name", Label: "客户名称", LabelKey: "imports.source.crm_customers.name", Required: true, Example: "张三"},
 			{Key: "phone", Label: "手机号", LabelKey: "imports.source.crm_customers.phone", Example: "13800138000"},
 			{Key: "email", Label: "邮箱", LabelKey: "imports.source.crm_customers.email", Example: "zhangsan@example.com"},
-			{Key: "level", Label: "客户等级", LabelKey: "imports.source.crm_customers.level", Example: "VIP"},
+			{Key: "level", Label: "客户等级", LabelKey: "imports.source.crm_customers.level", Example: "A"},
 			{Key: "owner", Label: "负责人", LabelKey: "imports.source.crm_customers.owner", Example: "王五"},
 			{Key: "remark", Label: "备注", LabelKey: "imports.source.crm_customers.remark"},
 		},

@@ -3,12 +3,19 @@ package crm
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 
 	"gorm.io/gorm"
 
 	"nexadmin/core/response"
 	"nexadmin/pkg/idgen"
+)
+
+// 编码/等级的上限与列宽一致。
+const (
+	codeMaxLen  = 64
+	levelMaxLen = 16
 )
 
 // Service 是 crm 业务层。宿主模块（hotel/mall 的 member）通过 client.go 对接。
@@ -42,7 +49,10 @@ type CustomerInput struct {
 }
 
 func (in *CustomerInput) normalize() error {
-	in.Name, in.Code = strings.TrimSpace(in.Name), strings.TrimSpace(in.Code)
+	in.Name = strings.TrimSpace(in.Name)
+	in.Code = truncate(strings.TrimSpace(in.Code), codeMaxLen)
+	// 等级是短档位（A/B/C），统一大写，避免 "a" 与 "A" 各算一档。
+	in.Level = truncate(strings.ToUpper(strings.TrimSpace(in.Level)), levelMaxLen)
 	in.ExternalSource, in.ExternalNo = strings.TrimSpace(in.ExternalSource), strings.TrimSpace(in.ExternalNo)
 	if in.Name == "" {
 		return response.BadRequest("crm.name_required")
@@ -89,6 +99,14 @@ func (s *Service) CreateCustomer(ctx context.Context, in CustomerInput) (*Custom
 		Owner: truncate(in.Owner, 64), Phone: truncate(in.Phone, 32),
 		Email: truncate(in.Email, 128), Remark: truncate(in.Remark, 500),
 	}
+	if c.Code == "" {
+		// 先取 ID 再算编码：编码由 ID 派生，建库前就定下来，不需要回写一次。
+		id, err := idgen.Next()
+		if err != nil {
+			return nil, err
+		}
+		c.ID, c.Code = id, customerCode(id)
+	}
 	if in.ExternalSource != "" {
 		src, no := in.ExternalSource, in.ExternalNo
 		c.ExternalSource, c.ExternalNo = &src, &no
@@ -120,6 +138,10 @@ func (s *Service) UpdateCustomer(ctx context.Context, id idgen.ID, in CustomerIn
 			return nil, response.NotFound("crm.not_found")
 		}
 		return nil, err
+	}
+	// 清空编码视为"沿用原编码"：导入按手机号更新时不会把手工编码冲掉。
+	if in.Code == "" {
+		in.Code = c.Code
 	}
 	updates := map[string]any{
 		"name": in.Name, "code": in.Code, "level": in.Level, "status": in.Status,
@@ -413,4 +435,10 @@ func truncate(s string, n int) string {
 		return s[:n]
 	}
 	return s
+}
+
+// customerCode 由雪花 ID 派生客户编码（C- 前缀 + 36 进制）：ID 全局唯一且不可变，
+// 编码因此天然唯一、稳定，生成时也不用查库或抢序列号。
+func customerCode(id idgen.ID) string {
+	return "C-" + strings.ToUpper(strconv.FormatInt(int64(id), 36))
 }

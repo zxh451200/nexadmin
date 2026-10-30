@@ -22,6 +22,12 @@
       "active": "Active",
       "inactive": "Inactive"
     },
+    "level": {
+      "A": "A (key)",
+      "B": "B (normal)",
+      "C": "C (watch)",
+      "none": "Not set"
+    },
     "stage": {
       "lead": "Lead",
       "qualified": "Qualified",
@@ -60,6 +66,8 @@
       "edit": "Edit Customer",
       "deleteConfirm": "Delete customer {{name}}?",
       "noAnchor": "No external system",
+      "codePlaceholder": "Auto-generated if empty",
+      "codeHint": "Leave the code empty to auto-generate one (C- prefix); it is only used for list display and search. You can also enter your own code. Level is for display only.",
       "anchorHint": "Pick the external system and enter its customer number so the member resolves to the same customer; it cannot be changed after creation."
     },
     "opp": {
