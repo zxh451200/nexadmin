@@ -47,6 +47,16 @@
   "formLayout": {
     "requiredHint": "带 * 号的为必填项"
   },
+  "jsonInput": {
+    "format": "格式化",
+    "minify": "压缩",
+    "expand": "全屏",
+    "expandTitle": "编辑 JSON",
+    "done": "完成",
+    "required": "请输入 JSON 内容",
+    "notObject": "必须是 JSON 对象：用 { } 包住键值对，不能是数组或单个值",
+    "syntax": "第 {{line}} 行第 {{column}} 列有语法错误，请检查引号、逗号与括号是否配对"
+  },
   "localeForm": {
     "source": "原文",
     "sourceLang": "原文",

@@ -11,37 +11,40 @@ import {
 } from 'react-hook-form'
 import { cn } from '@/lib/utils'
 import { Label } from '@/framework/ui/label'
+import { computeRequiredKeys, valuesSignature, type ResolverLike } from './required-keys'
 
 type RequiredKeys = Set<string> | null
 const RequiredContext = React.createContext<RequiredKeys>(null)
 
 /**
- * 由 zod schema 推出必填字段：拿当前值跑一遍 resolver，报错的键即视为必填。
+ * 由 zod schema 推出必填字段，判据见 ./required-keys.ts：清空该字段仍报错才算必填。
  * 星号因此完全跟着校验规则走，新增/调整字段不用再逐处补 required。
  */
 function useRequiredKeys(props: Record<string, unknown>): RequiredKeys {
   const [keys, setKeys] = React.useState<RequiredKeys>(null)
   const control = props.control as { _options?: { resolver?: unknown } } | undefined
-  const getValues = props.getValues as (() => unknown) | undefined
-  const resolver = control?._options?.resolver as
-    | ((values: unknown, ctx: unknown, opts: unknown) => Promise<{ errors?: Record<string, unknown> }>)
-    | undefined
+  const getValues = props.getValues as (() => Record<string, unknown>) | undefined
+  const resolver = control?._options?.resolver as ResolverLike | undefined
+  const signature = React.useRef<string>()
+  const seq = React.useRef(0)
 
+  // 不写依赖数组：resolver 每次渲染都是新函数，靠签名判断「值真的变了才算」。
+  // 结果用请求序号认领，不能用 cleanup 取消——弹窗挂载期间的其它重渲染会把首屏那次结果丢掉，
+  // 必填星号就要等到用户输入后才出现。
   React.useEffect(() => {
     if (typeof resolver !== 'function') return
-    let cancelled = false
     const values = typeof getValues === 'function' ? getValues() : {}
-    Promise.resolve(resolver(values, undefined, { fields: {}, shouldUseNativeValidation: false, criteriaMode: 'firstError' }))
-      .then((result) => {
-        if (!cancelled) setKeys(new Set(Object.keys(result?.errors ?? {})))
-      })
-      .catch(() => {
-        if (!cancelled) setKeys(new Set())
-      })
-    return () => {
-      cancelled = true
+    const next = valuesSignature(values)
+    if (next === signature.current) return
+    signature.current = next
+    const ticket = ++seq.current
+    const apply = (result: Set<string>) => {
+      if (ticket === seq.current) setKeys(result)
     }
-  }, [resolver, getValues])
+    computeRequiredKeys(resolver, values)
+      .then(apply)
+      .catch(() => apply(new Set()))
+  })
 
   return keys
 }

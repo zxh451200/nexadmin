@@ -47,6 +47,16 @@
   "formLayout": {
     "requiredHint": "Fields marked with * are required"
   },
+  "jsonInput": {
+    "format": "Format",
+    "minify": "Minify",
+    "expand": "Expand",
+    "expandTitle": "Edit JSON",
+    "done": "Done",
+    "required": "Enter JSON content",
+    "notObject": "Must be a JSON object wrapped in { }; arrays and single values are not accepted",
+    "syntax": "Syntax error at line {{line}}, column {{column}}. Check quotes, commas and brackets."
+  },
   "localeForm": {
     "source": "Source",
     "sourceLang": "Source text",
