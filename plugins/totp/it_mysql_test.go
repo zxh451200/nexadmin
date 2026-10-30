@@ -17,6 +17,7 @@ import (
 	"gorm.io/gorm"
 
 	"nexadmin/core/migrate"
+	"nexadmin/core/tenant"
 	"nexadmin/pkg/idgen"
 )
 
@@ -57,7 +58,8 @@ func TestITMySQLBindAndGate(t *testing.T) {
 		}
 	}
 	svc := NewService(db)
-	ctx := context.Background()
+	// 表有 tenant_id：绑定与校验必须带租户上下文，否则租户过滤器会拒绝查询。
+	ctx := tenant.With(context.Background(), 1)
 	if err := idgen.Init(1); err != nil {
 		t.Fatal(err)
 	}
@@ -74,8 +76,8 @@ func TestITMySQLBindAndGate(t *testing.T) {
 	if err := svc.Confirm(ctx, 7, code); err != nil {
 		t.Fatalf("confirm: %v", err)
 	}
-	if !svc.IsEnrolledAndEnabled(ctx, 7) {
-		t.Fatal("user should be enrolled and enabled")
+	if ok, err := svc.EnrolledAndEnabled(ctx, 7); err != nil || !ok {
+		t.Fatalf("user should be enrolled and enabled: ok=%v err=%v", ok, err)
 	}
 
 	// 与绑定同一步长的码已被 Confirm 记为 last_step，必须按重放拒绝。

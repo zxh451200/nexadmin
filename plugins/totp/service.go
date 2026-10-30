@@ -143,9 +143,9 @@ func (s *Service) Disable(ctx context.Context, uid uint64, code string) error {
 }
 
 // VerifyForGate 是 LoginGate.Verify 的校验核心:码有效且步长严格递增(防重放)。
-// 门回调没有请求 ctx,用 context.Background() 直连(TenantModel 的 tenant_id 在绑定行上已固化)。
-func (s *Service) VerifyForGate(_ context.Context, uid uint64, code string) error {
-	row, sec, err := s.rowByUser(context.Background(), uid)
+// 必须传入带租户的 ctx：表有 tenant_id，租户过滤器在无租户上下文会拒绝查询。
+func (s *Service) VerifyForGate(ctx context.Context, uid uint64, code string) error {
+	row, sec, err := s.rowByUser(ctx, uid)
 	if err != nil {
 		return response.BadRequest("totp.not_enrolled")
 	}
@@ -159,14 +159,21 @@ func (s *Service) VerifyForGate(_ context.Context, uid uint64, code string) erro
 	if step <= row.LastStep {
 		return response.BadRequest("totp.code_replayed")
 	}
-	return s.db.WithContext(context.Background()).Model(&TOTPSecret{}).Where("id = ?", int64(row.ID)).
+	return s.db.WithContext(ctx).Model(&TOTPSecret{}).Where("id = ?", int64(row.ID)).
 		Update("last_step", step).Error
 }
 
-// IsEnrolledAndEnabled 报告用户是否已启用两步验证(gate Check 用)。
-func (s *Service) IsEnrolledAndEnabled(_ context.Context, uid uint64) bool {
-	row, _, err := s.rowByUser(context.Background(), uid)
-	return err == nil && row.Enabled
+// EnrolledAndEnabled 报告用户是否已启用两步验证。
+// 查询错误必须原样返回，由 gate 拒绝登录（fail closed），不能当成「未绑定」放行。
+func (s *Service) EnrolledAndEnabled(ctx context.Context, uid uint64) (bool, error) {
+	row, _, err := s.rowByUser(ctx, uid)
+	if errors.Is(err, errNotEnrolled) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return row.Enabled, nil
 }
 
 // secretEncrypt/secretDecrypt 包装 core/secret:测试环境没有默认密钥时退化为明文/原样。
