@@ -19,6 +19,7 @@ import (
 	"gorm.io/gorm"
 
 	"nexadmin/core/auth"
+	"nexadmin/core/cache"
 	"nexadmin/core/secret"
 )
 
@@ -30,9 +31,12 @@ type Issuer interface {
 type Service struct {
 	db     *gorm.DB
 	issuer Issuer
+	cache  cache.Cache
 }
 
-func NewService(db *gorm.DB, issuer Issuer) *Service { return &Service{db: db, issuer: issuer} }
+func NewService(db *gorm.DB, issuer Issuer, c cache.Cache) *Service {
+	return &Service{db: db, issuer: issuer, cache: c}
+}
 
 type SourceForm struct {
 	Name          string `json:"name"`

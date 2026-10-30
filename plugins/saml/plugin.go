@@ -21,7 +21,7 @@ type module struct{}
 func (*module) Name() string { return "saml" }
 
 func (*module) Register(r *gin.RouterGroup, d *core.Deps) {
-	s := NewService(d.DB, d.Auth)
+	s := NewService(d.DB, d.Auth, d.Cache)
 
 	admin := r.Group("/plugins/saml")
 	admin.GET("/sources", core.Perm("saml:list"), s.listSources)

@@ -1,9 +1,12 @@
 package saml
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/xml"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/crewjam/saml"
 	"github.com/gin-gonic/gin"
@@ -12,6 +15,12 @@ import (
 	"nexadmin/core/response"
 	"nexadmin/pkg/idgen"
 )
+
+func newRelay() string {
+	var b [16]byte
+	_, _ = rand.Read(b[:])
+	return hex.EncodeToString(b[:])
+}
 
 // baseURL 从请求推导站点基址（反向代理场景采信 X-Forwarded-Proto 的首个值）。
 func baseURL(c *gin.Context) string {
@@ -78,7 +87,14 @@ func (s *Service) login(c *gin.Context) {
 		response.Fail(c, err)
 		return
 	}
-	u, err := req.Redirect("", sp)
+	relay := newRelay()
+	if s.cache != nil {
+		if err := s.cache.Set(c.Request.Context(), "saml:req:"+relay, req.ID, 10*time.Minute); err != nil {
+			response.Fail(c, err)
+			return
+		}
+	}
+	u, err := req.Redirect(relay, sp)
 	if err != nil {
 		response.Fail(c, err)
 		return
@@ -102,9 +118,28 @@ func (s *Service) acs(c *gin.Context) {
 		response.Fail(c, response.BadRequest("error.bad_request").WithMsg(err.Error()))
 		return
 	}
-	assertion, err := sp.ParseResponse(c.Request, nil)
+	// 库从 req.PostForm 读取 SAMLResponse：必须先解析表单，否则真实 IdP 回调一律失败。
+	if err := c.Request.ParseForm(); err != nil {
+		response.Fail(c, response.BadRequest("error.bad_request").WithMsg("SAML 回调表单解析失败"))
+		return
+	}
+	// SP-initiated：按 RelayState 找回本次 AuthnRequest ID，库才会接受 InResponseTo。
+	// 找不到（含 IdP-initiated）时传空，带 InResponseTo 的响应会被拒绝（fail closed）。
+	var possibleIDs []string
+	if relay := c.Request.PostForm.Get("RelayState"); relay != "" && s.cache != nil {
+		if id, err := s.cache.Get(c.Request.Context(), "saml:req:"+relay); err == nil && id != "" {
+			possibleIDs = []string{id}
+			_ = s.cache.Del(c.Request.Context(), "saml:req:"+relay)
+		}
+	}
+	assertion, err := sp.ParseResponse(c.Request, possibleIDs)
 	if err != nil {
-		response.Fail(c, response.BadRequest("error.bad_request").WithMsg("SAML 响应校验失败: "+err.Error()))
+		msg := "SAML 响应校验失败"
+		// 底层原因（签名/受众/时限）对配置排障必要；不包含断言原文。
+		if ivr, ok := err.(*saml.InvalidResponseError); ok && ivr.PrivateErr != nil {
+			msg += ": " + ivr.PrivateErr.Error()
+		}
+		response.Fail(c, response.BadRequest("error.bad_request").WithMsg(msg))
 		return
 	}
 	if assertion.Subject == nil || assertion.Subject.NameID == nil {
