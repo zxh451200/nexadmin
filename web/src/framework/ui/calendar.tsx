@@ -1,15 +1,25 @@
 import * as React from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { DayPicker } from 'react-day-picker'
+import { format, type Locale } from 'date-fns'
 import { cn } from '@/lib/utils'
 import { buttonVariants } from '@/framework/ui/button'
 
 export type CalendarProps = React.ComponentProps<typeof DayPicker>
 
+/** 中文按「2026年10月」读法，其余语言沿用 date-fns 的「October 2026」 */
+function formatCaption(date: Date, options?: { locale?: Locale }) {
+  const locale = options?.locale
+  return locale?.code?.toLowerCase().startsWith('zh')
+    ? `${date.getFullYear()}年${date.getMonth() + 1}月`
+    : format(date, 'LLLL yyyy', { locale })
+}
+
 function Calendar({ className, classNames, showOutsideDays = true, ...props }: CalendarProps) {
   return (
     <DayPicker
       showOutsideDays={showOutsideDays}
+      formatters={{ formatCaption }}
       className={cn('p-3', className)}
       classNames={{
         months: 'flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0',

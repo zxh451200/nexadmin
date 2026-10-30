@@ -18,9 +18,11 @@ export interface DatePickerProps {
   id?: string
   fromDate?: Date
   toDate?: Date
+  /** 无可见标签的场景（如筛选栏）给读屏用的名称 */
+  ariaLabel?: string
 }
 
-export function DatePicker({ value, onChange, allowClear = true, placeholder, disabled, className, id, fromDate, toDate: to }: DatePickerProps) {
+export function DatePicker({ value, onChange, allowClear = true, placeholder, disabled, className, id, fromDate, toDate: to, ariaLabel }: DatePickerProps) {
   const { t, i18n } = useTranslation()
   const [open, setOpen] = useState(false)
   const date = toDate(value)
@@ -37,6 +39,7 @@ export function DatePicker({ value, onChange, allowClear = true, placeholder, di
           id={id}
           className={className}
           disabled={disabled}
+          aria-label={ariaLabel}
           placeholder={placeholder ?? t('picker.selectDate')}
           hasValue={!!date}
           allowClear={allowClear}

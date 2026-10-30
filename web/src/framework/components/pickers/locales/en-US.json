@@ -17,6 +17,8 @@
     "selectDate": "Select a date",
     "selectDateTime": "Select date and time",
     "selectDateRange": "Select a date range",
-    "time": "Time"
+    "time": "Time",
+    "hour": "Hour",
+    "minute": "Minute"
   }
 }

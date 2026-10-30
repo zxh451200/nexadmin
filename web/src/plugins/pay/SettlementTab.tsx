@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { CheckCircle2, Pencil, Plus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { parseISO } from 'date-fns'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { DatePicker } from '@/framework/components/DatePicker'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Segmented } from '@/framework/components/Segmented'
 import { Badge } from '@/framework/ui/badge'
@@ -342,11 +344,11 @@ function GenerateDialog({ onClose }: { onClose: () => void }) {
         <div className="grid grid-cols-2 gap-3">
           <label className="flex flex-col gap-1">
             {t('plugin_pay.settle.periodStart')}
-            <Input type="date" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} />
+            <DatePicker value={periodStart} onChange={setPeriodStart} allowClear={false} toDate={periodEnd ? parseISO(periodEnd) : undefined} />
           </label>
           <label className="flex flex-col gap-1">
             {t('plugin_pay.settle.periodEnd')}
-            <Input type="date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} />
+            <DatePicker value={periodEnd} onChange={setPeriodEnd} allowClear={false} fromDate={periodStart ? parseISO(periodStart) : undefined} />
           </label>
         </div>
       </div>

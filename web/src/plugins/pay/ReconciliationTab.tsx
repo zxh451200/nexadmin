@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { DatePicker } from '@/framework/components/DatePicker'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Badge } from '@/framework/ui/badge'
@@ -78,12 +79,12 @@ export function ReconciliationTab() {
           setFilters({})
         }}
       >
-        <Input
+        <DatePicker
           className="md:w-44"
-          type="date"
           value={draft.billDate ?? ''}
-          onChange={(e) => setDraft((d) => ({ ...d, billDate: e.target.value || undefined }))}
-          aria-label={t('plugin_pay.fields.billDate')}
+          onChange={(v) => setDraft((d) => ({ ...d, billDate: v || undefined }))}
+          placeholder={t('plugin_pay.fields.billDate')}
+          ariaLabel={t('plugin_pay.fields.billDate')}
         />
         <Select value={draft.channelCode ?? ALL} onValueChange={(v) => setDraft((d) => ({ ...d, channelCode: v === ALL ? undefined : v }))}>
           <SelectTrigger className="md:w-40" aria-label={t('plugin_pay.fields.channel')}>
@@ -202,7 +203,7 @@ function RunReconcileDialog({ onClose }: { onClose: () => void }) {
           </label>
           <label className="flex flex-col gap-1">
             {t('plugin_pay.fields.billDate')}
-            <Input type="date" value={billDate} onChange={(e) => setBillDate(e.target.value)} />
+            <DatePicker value={billDate} onChange={setBillDate} allowClear={false} />
           </label>
           <label className="flex flex-col gap-1">
             {t('plugin_pay.fields.subject')}

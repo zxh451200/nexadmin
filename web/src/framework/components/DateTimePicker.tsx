@@ -6,6 +6,7 @@ import { Button } from '@/framework/ui/button'
 import { Calendar } from '@/framework/ui/calendar'
 import { PickerShell } from './pickers/PickerShell'
 import { PickerTrigger } from './pickers/PickerTrigger'
+import { TimeField } from './pickers/TimeField'
 import { dateLocale, fmtDateTime, toDate } from './pickers/dates'
 
 export interface DateTimePickerProps {
@@ -67,17 +68,9 @@ export function DateTimePicker({ value, onChange, allowClear = true, placeholder
         <Calendar mode="single" selected={draftDay} defaultMonth={draftDay} onSelect={setDraftDay} locale={dateLocale(i18n.language)} initialFocus />
       </div>
       <div className="flex items-center gap-2 border-t border-border p-3">
-        <label className="shrink-0 text-sm text-muted-foreground" htmlFor="nex-time">
-          {t('picker.time')}
-        </label>
-        <input
-          id="nex-time"
-          type="time"
-          value={time}
-          onChange={(e) => setTime(e.target.value)}
-          className="num h-11 min-w-0 flex-1 rounded-md border border-input bg-background px-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:h-9 md:text-sm"
-        />
-        <Button type="button" size="sm" disabled={!draftDay} onClick={confirm}>
+        <span className="shrink-0 text-sm text-muted-foreground">{t('picker.time')}</span>
+        <TimeField value={time} onChange={setTime} />
+        <Button type="button" size="sm" className="ms-auto" disabled={!draftDay} onClick={confirm}>
           {t('common.confirm')}
         </Button>
       </div>

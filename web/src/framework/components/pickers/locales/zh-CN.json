@@ -17,6 +17,8 @@
     "selectDate": "请选择日期",
     "selectDateTime": "请选择日期时间",
     "selectDateRange": "请选择日期范围",
-    "time": "时间"
+    "time": "时间",
+    "hour": "小时",
+    "minute": "分钟"
   }
 }
