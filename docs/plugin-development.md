@@ -158,7 +158,7 @@ func (m *module) ImportSources(db *gorm.DB) []importspec.Source {
 
 约定：
 
-- 来源在导入中心挂载时自动收集（插件模块在内核里被包了一层，收集前会 `core.UnwrapModule` 拆包）；重名会记 warning 并跳过，不会 panic。
+- 来源在导入中心挂载时自动收集（插件模块在内核里被包了一层，收集前会 `core.UnwrapModule` 拆包）；重名会记 warning 并跳过，不会 panic。框架内置模块同样可以实现这个接口（不会反向依赖插件），出厂已带两个：`crm_customers`（`plugins/crm/import.go`）与 `dict_data`（`modules/system/dict/importsource.go`）。
 - `Label` 是兜底表头，`TitleKey`/`LabelKey` 有值时按请求语言渲染来源名与模板表头；解析上传文件时**所有已配置语言的表头都认**，所以用户切了语言再上传自己下载的模板也不会丢列。新增语言记得同步补 key。
 - `Handler` 只处理一行，返回 error 即该行失败并写进错误报告，其它行继续。报告里是给人看的文本，别把 `crm.name_required` 这种 i18n key 原样返回——自己 `i18n.T(ctx, key)` 翻译后再返回。
 - 大文件走后台协程，跑在 `context.Background()` 上（租户与语言从台账行还原），落库要用传入的 `ctx`，不要缓存请求级状态。

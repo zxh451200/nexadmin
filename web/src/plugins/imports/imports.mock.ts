@@ -16,6 +16,19 @@ const SOURCES: ImportSourceMeta[] = [
       { key: 'remark', label: '备注', required: false, example: '' },
     ],
   },
+  {
+    name: 'dict_data',
+    title: '字典数据导入',
+    columns: [
+      { key: 'type_code', label: '字典类型编码', required: true, example: 'sys_common_status' },
+      { key: 'label', label: '标签', required: true, example: '成功' },
+      { key: 'value', label: '值', required: true, example: '1' },
+      { key: 'tag', label: '标签样式', required: false, example: 'success' },
+      { key: 'sort', label: '排序', required: false, example: '10' },
+      { key: 'status', label: '状态(1启用 0停用)', required: false, example: '1' },
+      { key: 'remark', label: '备注', required: false, example: '' },
+    ],
+  },
 ]
 
 let jobs: ImportJob[] = [

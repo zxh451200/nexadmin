@@ -163,7 +163,7 @@ func (m *module) ImportSources(db *gorm.DB) []importspec.Source {
 
 Rules:
 
-- Sources are collected when the Import Center mounts. Plugin modules reach the core wrapped, and the collector unwraps them first (`core.UnwrapModule`). A duplicate name logs a warning and is skipped; it never panics.
+- Sources are collected when the Import Center mounts. Plugin modules reach the core wrapped, and the collector unwraps them first (`core.UnwrapModule`). A duplicate name logs a warning and is skipped; it never panics. Built-in modules may implement the same interface (no reverse dependency on the plugin); two ship out of the box: `crm_customers` (`plugins/crm/import.go`) and `dict_data` (`modules/system/dict/importsource.go`).
 - `Label` is the fallback header. When `TitleKey`/`LabelKey` are set, the source name and template headers render in the request language, and parsing accepts the headers of **every configured language** — so a template downloaded in one language still imports after switching. Add the keys when you add a language.
 - `Handler` handles exactly one row; returning an error marks that row failed (other rows continue). The report is read by humans, so translate before returning — `i18n.T(ctx, key)`, never a bare key such as `crm.name_required`.
 - Large files run on a background goroutine with `context.Background()` (tenant and language restored from the job row). Use the `ctx` you are given and never cache request-scoped state.

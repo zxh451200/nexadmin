@@ -59,6 +59,8 @@ tenant:
   domain_reserved: 该域名为保留域名，不能绑定
   domain_taken: 域名已被其他租户绑定
   admin_invalid: 租户管理员账号、密码或邮箱不符合要求
+  contact_email_invalid: 联系邮箱格式不正确
+  logo_invalid: Logo 地址必须是站内路径或 http(s) 链接
   context_required: "缺少租户上下文"
   expire_invalid: "到期时间格式不正确"
   package_in_use: "套餐仍被租户使用，不能删除"
@@ -151,11 +153,20 @@ imports:
       level: 客户等级
       owner: 负责人
       remark: 备注
+    dict_data:
+      title: 字典数据导入
+      type_code: 字典类型编码
+      label: 标签
+      value: 值
+      tag: 标签样式
+      sort: 排序
+      status: 状态(1启用 0停用)
+      remark: 备注
+      sort_invalid: 排序必须是整数
 ldap:
   host_basedn_required: 请填写 LDAP 地址和 Base DN
   filter_placeholder_required: 过滤器必须包含 %s 占位符（如 %(uid)s）
   test_failed: 连接测试失败，请检查地址、账号与加密设置
-  ca_invalid: CA 证书格式不正确，请粘贴 PEM 格式的证书内容
 pay:
   PAY_INVALID_AMOUNT: 金额或参数无效
   PAY_CURRENCY_UNSUPPORTED: 不支持的币种
