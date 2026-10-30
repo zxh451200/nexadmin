@@ -92,6 +92,19 @@ function reorderTree<T extends { id: string; children?: T[] }>(nodes: T[], paren
   })
 }
 
+/** 最近的可滚动祖先（按轴）：起拖后它一滚，快照坐标就和屏幕对不上了 */
+function findScroller(el: HTMLElement | null, axis: 'x' | 'y'): HTMLElement | null {
+  let node = el
+  while (node) {
+    const cs = getComputedStyle(node)
+    const overflow = axis === 'y' ? cs.overflowY : cs.overflowX
+    const over = axis === 'y' ? node.scrollHeight > node.clientHeight + 1 : node.scrollWidth > node.clientWidth + 1
+    if (/(auto|scroll)/.test(overflow) && over) return node
+    node = node.parentElement
+  }
+  return null
+}
+
 export function TreeTable<T extends { id: string; children?: T[] }>({
   columns,
   data,
@@ -266,6 +279,10 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
   /** 拖动开始时快照一次行坐标：排序动画会改行位置，实时读 DOM 会「套住自己」来回跳 */
   type RowBox = { top: number; bottom: number; left: number; right: number; handleLeft: number }
   const [rects, setRects] = useState<Map<string, RowBox>>(() => new Map())
+  // 起拖后页面/表格被滚动多远：快照坐标是起拖那一刻的屏幕坐标，落点命中要按这个位移换算回去，
+  // 否则长树一旦触发边缘自动滚动，指针还停在原处、行已经跑走，落点就指错行。
+  const [scrollShift, setScrollShift] = useState({ x: 0, y: 0 })
+  const scrollBase = useRef<{ v: HTMLElement | null; h: HTMLElement | null; vTop: number; vLeft: number; hLeft: number; winX: number; winY: number } | null>(null)
 
   const snapshotRects = () => {
     const next = new Map<string, RowBox>()
@@ -277,7 +294,43 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
       next.set(id, { top: r.top, bottom: r.bottom, left: r.left, right: r.right, handleLeft: handle?.left ?? r.left + 8 })
     }
     setRects(next)
+    const v = findScroller(rootRef.current, 'y')
+    const h = findScroller(rootRef.current, 'x')
+    scrollBase.current = {
+      v, h,
+      vTop: v?.scrollTop ?? 0,
+      vLeft: v?.scrollLeft ?? 0,
+      hLeft: h?.scrollLeft ?? 0,
+      winX: window.scrollX,
+      winY: window.scrollY,
+    }
+    setScrollShift({ x: 0, y: 0 })
   }
+
+  useEffect(() => {
+    if (!dragId) return
+    const base = scrollBase.current
+    if (!base) return
+    let raf = 0
+    const update = () => {
+      const y = (base.v ? base.v.scrollTop - base.vTop : 0) + (window.scrollY - base.winY)
+      const x =
+        (base.v ? base.v.scrollLeft - base.vLeft : 0) +
+        (base.h && base.h !== base.v ? base.h.scrollLeft - base.hLeft : 0) +
+        (window.scrollX - base.winX)
+      setScrollShift((prev) => (prev.x === x && prev.y === y ? prev : { x, y }))
+    }
+    // scroll 不冒泡，用捕获阶段收所有祖先的滚动（含边缘自动滚动写 scrollTop 触发的那次）
+    const onScroll = () => {
+      cancelAnimationFrame(raf)
+      raf = requestAnimationFrame(update)
+    }
+    window.addEventListener('scroll', onScroll, true)
+    return () => {
+      window.removeEventListener('scroll', onScroll, true)
+      cancelAnimationFrame(raf)
+    }
+  }, [dragId])
 
   /** 某节点（连着它已展开的后代）最后一行的底边 */
   const subtreeBottom = (id: string) => {
@@ -313,13 +366,15 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
     const active = dragId
     const activeNode = findNode(tree, active)
     if (!activeNode) return null
+    // 快照坐标是起拖那一刻的屏幕坐标：滚了多少就补多少，指针才和行对得上
+    const pointY = pointer.y + scrollShift.y
 
     // 指针落在谁的快照行里（跳过自己；越过首尾时贴到首行/末行）
     let overId: string | null = null
     let box: RowBox | null = null
     for (const [id, r] of rects) {
       if (id === active) continue
-      if (pointer.y >= r.top && pointer.y <= r.bottom) {
+      if (pointY >= r.top && pointY <= r.bottom) {
         overId = id
         box = r
         break
@@ -331,7 +386,7 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
       const entries = [...rects.entries()].filter(([id]) => id !== active)
       if (!entries.length) return null
       const mid = (r: RowBox) => (r.top + r.bottom) / 2
-      entries.sort((a, b) => Math.abs(pointer.y - mid(a[1])) - Math.abs(pointer.y - mid(b[1])))
+      entries.sort((a, b) => Math.abs(pointY - mid(a[1])) - Math.abs(pointY - mid(b[1])))
       const pick = entries[0]
       overId = pick[0]
       box = pick[1]
@@ -415,7 +470,7 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
         afterId,
       })
     }
-    const edge = pointer.y < box.top + (box.bottom - box.top) / 2 ? 'before' : 'after'
+    const edge = pointY < box.top + (box.bottom - box.top) / 2 ? 'before' : 'after'
     if (overParent === activeParent) {
       return plan({
         y: edge === 'before' ? box.top : box.bottom,
@@ -439,7 +494,7 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
       edge,
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dragId, pointer, rects, tree, expanded, onMove, onReorder, blockNest, maxDepth])
+  }, [dragId, pointer, rects, scrollShift, tree, expanded, onMove, onReorder, blockNest, maxDepth])
 
   const onDragStart = (e: DragStartEvent) => {
     const id = String(e.active.id)
@@ -911,7 +966,8 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
                 <div
                   data-drop-line="1"
                   className="pointer-events-none fixed z-[60]"
-                  style={{ left: drop.left, top: drop.y - 1, width: drop.width }}
+                  {/* 快照坐标 → 屏幕坐标：减去起拖后滚过的距离 */}
+                  style={{ left: drop.left - scrollShift.x, top: drop.y - 1 - scrollShift.y, width: drop.width }}
                   role="status"
                   aria-live="polite"
                 >
