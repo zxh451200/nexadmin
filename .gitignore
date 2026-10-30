@@ -27,3 +27,4 @@ __pycache__/
 
 # 本地工具会话产物
 .zcode/
+.tmp/
