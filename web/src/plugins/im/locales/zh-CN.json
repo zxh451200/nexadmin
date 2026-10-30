@@ -15,19 +15,77 @@
     "searchPlaceholder": "会话号 / 访客 / 摘要",
     "close": "关闭会话",
     "closeConfirm": "确认关闭会话 {{no}}？关闭后访客不能再发消息。",
-    "replyPlaceholder": "输入回复，回车发送",
+    "replyPlaceholder": "输入回复，回车发送，Shift+回车换行",
     "send": "发送",
+    "attach": "发送图片或文件",
+    "uploadFailed": "附件上传失败",
+    "transfer": "转接",
+    "transferTitle": "转接到坐席",
+    "transferHint": "选择接收该会话的坐席",
+    "transferEmpty": "没有可转接的坐席（需要「回复消息」权限）",
+    "loadMore": "加载更多会话",
+    "loadOlder": "加载更早消息",
+    "claim": "认领",
+    "release": "释放",
+    "read": "已读",
+    "unread": "未读",
+    "visitorTyping": "访客正在输入…",
+    "newVisitorMessage": "收到一条新访客消息",
+    "closedByAgent": "会话已结束，访客再发消息会开启新会话",
+    "closedByAuto": "会话因长时间无消息被自动结束",
+    "ratingPending": "访客尚未评价",
     "fields": {
-      "status": "状态"
+      "status": "状态",
+      "assignee": "归属"
     },
     "status": {
       "open": "进行中",
       "closed": "已关闭"
     },
+    "assignee": {
+      "all": "全部坐席",
+      "me": "我的会话",
+      "unassigned": "未分配",
+      "ownedBy": "归属 {{name}}"
+    },
+    "tags": {
+      "action": "标签",
+      "placeholder": "逗号分隔，最多 10 个，如：退款,物流"
+    },
+    "notify": {
+      "on": "已开启桌面提醒",
+      "off": "开启桌面提醒",
+      "unsupported": "当前浏览器不支持桌面通知",
+      "denied": "未获得通知权限，可在浏览器设置里开启"
+    },
+    "quickReply": {
+      "title": "快捷回复",
+      "manage": "管理快捷回复",
+      "empty": "还没有快捷回复",
+      "name": "标题，如：问候",
+      "content": "回复内容"
+    },
     "senders": {
       "visitor": "访客",
       "agent": "客服",
       "system": "系统"
+    },
+    "system": {
+      "conv_closed": "会话已结束"
+    },
+    "settings": {
+      "action": "客服设置",
+      "title": "客服设置",
+      "hint": "工作时间之外访客仍可留言；主动邀请只在服务时间内触发。",
+      "businessHours": "启用工作时间",
+      "start": "开始时间",
+      "end": "结束时间",
+      "workdays": "工作日",
+      "daysShort": "一,二,三,四,五,六,日",
+      "timezone": "时区",
+      "offlineText": "离线提示（留空使用默认文案）",
+      "inviteDelay": "主动邀请延迟（秒，0 = 关闭）",
+      "inviteText": "邀请文案（留空使用默认文案）"
     }
   }
 }

@@ -18,6 +18,8 @@ const convs: ImConversation[] = [
     lastMsgAt: ago(3),
     createdAt: ago(30),
     unread: 2,
+    visitorReadSeq: 0,
+    rating: 0,
   },
   {
     id: '2',
@@ -32,6 +34,8 @@ const convs: ImConversation[] = [
     lastMsgAt: ago(48),
     createdAt: ago(50),
     unread: 0,
+    visitorReadSeq: 0,
+    rating: 0,
   },
   {
     id: '3',
@@ -46,21 +50,24 @@ const convs: ImConversation[] = [
     lastMsgAt: ago(60 * 26),
     createdAt: ago(60 * 27),
     unread: 0,
+    visitorReadSeq: 0,
+    rating: 4,
   },
 ]
 
 const messages: Record<string, ImMessage[]> = {
   IM7420000000000000001: [
-    { id: '11', seq: 1, senderType: 'visitor', senderId: 'anon-1', senderName: '微信用户 8127', content: '你好，我想问下订单 G-20250601001', createdAt: ago(10) },
-    { id: '12', seq: 2, senderType: 'visitor', senderId: 'anon-1', senderName: '微信用户 8127', content: '请问这个订单什么时候发货？', createdAt: ago(3) },
+    { id: '11', seq: 1, senderType: 'visitor', senderId: 'anon-1', senderName: '微信用户 8127', content: '你好，我想问下订单 G-20250601001', kind: 'text', createdAt: ago(10) },
+    { id: '12', seq: 2, senderType: 'visitor', senderId: 'anon-1', senderName: '微信用户 8127', content: '请问这个订单什么时候发货？', kind: 'text', createdAt: ago(3) },
   ],
   IM7420000000000000002: [
-    { id: '21', seq: 1, senderType: 'visitor', senderId: 'anon-2', senderName: '游客 3391', content: '支持货到付款吗？', createdAt: ago(48) },
-    { id: '22', seq: 2, senderType: 'agent', senderId: '7', senderName: 'admin', content: '您好，目前仅支持在线支付。', createdAt: ago(47) },
+    { id: '21', seq: 1, senderType: 'visitor', senderId: 'anon-2', senderName: '游客 3391', content: '支持货到付款吗？', kind: 'text', createdAt: ago(48) },
+    { id: '22', seq: 2, senderType: 'agent', senderId: '7', senderName: 'admin', content: '您好，目前仅支持在线支付。', kind: 'text', createdAt: ago(47) },
   ],
   IM7420000000000000003: [
-    { id: '31', seq: 1, senderType: 'visitor', senderId: 'anon-3', senderName: '会员 Alice', content: '退款已经三天了还没到账', createdAt: ago(60 * 26.5) },
-    { id: '32', seq: 3, senderType: 'agent', senderId: '7', senderName: 'admin', content: '已加急处理，预计 1-2 个工作日到账。', createdAt: ago(60 * 26) },
+    { id: '31', seq: 1, senderType: 'visitor', senderId: 'anon-3', senderName: '会员 Alice', content: '退款已经三天了还没到账', kind: 'text', createdAt: ago(60 * 26.5) },
+    { id: '32', seq: 3, senderType: 'agent', senderId: '7', senderName: 'admin', content: '已加急处理，预计 1-2 个工作日到账。', kind: 'text', createdAt: ago(60 * 26) },
+    { id: '33', seq: 4, senderType: 'system', senderId: '', senderName: '', content: '', kind: 'system', meta: '{"code":"conv_closed"}', createdAt: ago(60 * 25.5) },
   ],
 }
 
@@ -91,7 +98,7 @@ defineMock([
       const conv = find(params.no)
       if (!conv) throw new Error('not found')
       if (conv.status === 'open') conv.unread = 0
-      return { conversation: conv, messages: messages[params.no] ?? [] }
+      return { conversation: conv, messages: messages[params.no] ?? [], hasMore: false }
     },
   },
   {
@@ -109,6 +116,7 @@ defineMock([
         senderId: '7',
         senderName: 'admin',
         content: String(body.content ?? ''),
+        kind: 'text',
         createdAt: new Date().toISOString(),
       }
       messages[params.no] = [...(messages[params.no] ?? []), m]
@@ -124,7 +132,81 @@ defineMock([
       const conv = find(params.no)
       if (!conv) throw new Error('not found')
       conv.status = 'closed'
+      conv.closedAt = new Date().toISOString()
       return conv
     },
+  },
+  {
+    method: 'POST',
+    url: '/plugins/im/conversations/:no/claim',
+    handler: ({ params }) => {
+      const conv = find(params.no)
+      if (!conv) throw new Error('not found')
+      conv.assigneeId = '1'
+      conv.assigneeName = 'admin'
+      return conv
+    },
+  },
+  {
+    method: 'POST',
+    url: '/plugins/im/conversations/:no/release',
+    handler: ({ params }) => {
+      const conv = find(params.no)
+      if (!conv) throw new Error('not found')
+      conv.assigneeId = ''
+      conv.assigneeName = ''
+      return conv
+    },
+  },
+  {
+    method: 'PUT',
+    url: '/plugins/im/conversations/:no/tags',
+    handler: ({ params, body }) => {
+      const conv = find(params.no)
+      if (!conv) throw new Error('not found')
+      conv.tags = String(body.tags ?? '')
+      return conv
+    },
+  },
+  {
+    method: 'GET',
+    url: '/plugins/im/settings',
+    handler: () => ({
+      businessHours: false,
+      hoursStart: '09:00',
+      hoursEnd: '18:00',
+      workdays: [1, 2, 3, 4, 5],
+      timezone: 'Asia/Shanghai',
+      offlineText: '',
+      inviteDelay: 0,
+      inviteText: '',
+    }),
+  },
+  {
+    method: 'GET',
+    url: '/plugins/im/agents',
+    handler: () => [
+      { id: '1', username: 'admin', nickname: '管理员' },
+      { id: '2', username: 'agent2', nickname: '客服二号' },
+    ],
+  },
+  {
+    method: 'POST',
+    url: '/plugins/im/conversations/:no/transfer',
+    handler: ({ params, body }) => {
+      const conv = find(params.no)
+      if (!conv) throw new Error('not found')
+      conv.assigneeId = String(body.assigneeId ?? '')
+      conv.assigneeName = String(body.assigneeName ?? '')
+      return conv
+    },
+  },
+  {
+    method: 'GET',
+    url: '/plugins/im/quick-replies',
+    handler: () => [
+      { id: '1', title: '问候', content: '您好，很高兴为您服务，请问有什么可以帮您？', sort: 0 },
+      { id: '2', title: '稍等', content: '稍等，我帮您确认一下。', sort: 1 },
+    ],
   },
 ])

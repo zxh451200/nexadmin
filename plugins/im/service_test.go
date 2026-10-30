@@ -3,6 +3,7 @@ package im
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -118,6 +119,7 @@ func TestSendAllocatesSeqAndPublishes(t *testing.T) {
 		WillReturnRows(convRow("IM1001", StatusOpen, 3, 3))
 	m.ExpectExec("INSERT INTO `plg_im_message`").WillReturnResult(sqlmock.NewResult(1, 1))
 	m.ExpectExec("UPDATE `plg_im_conversation`").WillReturnResult(sqlmock.NewResult(1, 1))
+	m.ExpectExec("UPDATE `plg_im_conversation`").WillReturnResult(sqlmock.NewResult(1, 1))
 	m.ExpectCommit()
 	m.ExpectQuery("SELECT \\* FROM `plg_im_conversation` WHERE conv_no = \\?").
 		WillReturnRows(convRow("IM1001", StatusOpen, 4, 3))
@@ -176,9 +178,12 @@ func TestMessagesSinceCursor(t *testing.T) {
 		WithArgs(int64(1001), int64(3), 50).
 		WillReturnRows(msgRows(4, 5))
 
-	_, rows, err := s.Messages(context.Background(), "IM1001", 3, 50)
+	_, rows, hasMore, err := s.Messages(context.Background(), "IM1001", MessageQuery{Since: 3, Limit: 50})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if hasMore {
+		t.Fatal("hasMore should be false when fewer rows than limit")
 	}
 	if len(rows) != 2 || rows[0].Seq != 4 || rows[1].Seq != 5 {
 		t.Fatalf("unexpected rows %+v", rows)
@@ -196,15 +201,19 @@ func TestCloseTransition(t *testing.T) {
 	m.ExpectBegin()
 	m.ExpectQuery("SELECT \\* FROM `plg_im_conversation` WHERE conv_no = \\?").
 		WillReturnRows(convRow("IM1001", StatusOpen, 3, 3))
+	m.ExpectExec("INSERT INTO `plg_im_message`").WillReturnResult(sqlmock.NewResult(1, 1))
 	m.ExpectExec("UPDATE `plg_im_conversation`").WillReturnResult(sqlmock.NewResult(1, 1))
 	m.ExpectCommit()
 
-	c, err := s.Close(context.Background(), "IM1001")
+	c, sysMsg, err := s.Close(context.Background(), "IM1001", "7")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if c.Status != StatusClosed {
 		t.Fatalf("status = %s, want closed", c.Status)
+	}
+	if sysMsg.Kind != KindSystem || sysMsg.SenderType != SenderSystem || sysMsg.Seq != 4 {
+		t.Fatalf("unexpected system message %+v", sysMsg)
 	}
 	if err := m.ExpectationsWereMet(); err != nil {
 		t.Fatal(err)
@@ -217,7 +226,7 @@ func TestCloseTransition(t *testing.T) {
 	m2.ExpectQuery("SELECT \\* FROM `plg_im_conversation` WHERE conv_no = \\?").
 		WillReturnRows(convRow("IM1001", StatusClosed, 3, 3))
 	m2.ExpectRollback()
-	if _, err := s2.Close(context.Background(), "IM1001"); err == nil {
+	if _, _, err := s2.Close(context.Background(), "IM1001", "7"); err == nil {
 		t.Fatal("second close should conflict")
 	}
 }
@@ -233,5 +242,63 @@ func TestPreview(t *testing.T) {
 	}
 	if got := preview(string(long)); len(got) != 120 {
 		t.Fatalf("len = %d, want 120", len(got))
+	}
+}
+
+// Messages without cursors returns the latest page (DESC), re-ordered ascending.
+func TestMessagesLatestWindow(t *testing.T) {
+	db, m := mockDB(t)
+	s := NewService(db, nopLogger{})
+
+	m.ExpectQuery("SELECT .* FROM .plg_im_conversation. WHERE conv_no = .").
+		WillReturnRows(convRow("IM1001", StatusOpen, 6, 6))
+	m.ExpectQuery("SELECT .* FROM .plg_im_message. WHERE conv_id = . ORDER BY seq DESC LIMIT .").
+		WithArgs(int64(1001), 3).
+		WillReturnRows(msgRows(6, 5, 4))
+
+	_, rows, hasMore, err := s.Messages(context.Background(), "IM1001", MessageQuery{Limit: 3})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasMore || len(rows) != 3 || rows[0].Seq != 4 || rows[2].Seq != 6 {
+		t.Fatalf("unexpected latest window rows=%+v hasMore=%v", rows, hasMore)
+	}
+	if err := m.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// before=seq pages older messages (DESC), also re-ordered ascending.
+func TestMessagesBeforeCursor(t *testing.T) {
+	db, m := mockDB(t)
+	s := NewService(db, nopLogger{})
+
+	m.ExpectQuery("SELECT .* FROM .plg_im_conversation. WHERE conv_no = .").
+		WillReturnRows(convRow("IM1001", StatusOpen, 20, 20))
+	m.ExpectQuery("SELECT .* FROM .plg_im_message. WHERE conv_id = . AND seq < . ORDER BY seq DESC LIMIT .").
+		WithArgs(int64(1001), int64(15), 10).
+		WillReturnRows(msgRows(14, 13, 12))
+
+	_, rows, _, err := s.Messages(context.Background(), "IM1001", MessageQuery{Before: 15, Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 3 || rows[0].Seq != 12 || rows[2].Seq != 14 {
+		t.Fatalf("unexpected page rows %+v", rows)
+	}
+	if err := m.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// normalizeTags dedupes, trims, caps to 10 and keeps Chinese input.
+func TestNormalizeTags(t *testing.T) {
+	got := normalizeTags(" 退款，退款, 物流 ; 发票 ,, ")
+	if got != "退款,物流,发票" {
+		t.Fatalf("tags = %q", got)
+	}
+	many := normalizeTags("a,b,c,d,e,f,g,h,i,j,k,l")
+	if len(strings.Split(many, ",")) != 10 {
+		t.Fatalf("tags should cap at 10, got %q", many)
 	}
 }

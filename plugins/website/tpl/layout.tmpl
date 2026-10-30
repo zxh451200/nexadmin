@@ -215,19 +215,43 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
       </button>
     </header>
+    <p class="chat-offline" data-chat-offline hidden>{{.T "chat.offline"}}</p>
     <div class="chat-log" data-chat-log role="log" aria-live="polite" aria-relevant="additions">
       <p class="chat-empty" data-chat-empty>{{.T "chat.empty"}}</p>
     </div>
+    <p class="chat-typing" data-chat-typing hidden>{{.T "chat.typing"}}</p>
     <form class="chat-form" data-chat-form>
+      <button class="chat-attach" type="button" data-chat-attach aria-label="{{.T "chat.attach"}}" title="{{.T "chat.attach"}}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.4 11.05l-8.49 8.49a5 5 0 0 1-7.07-7.07l8.49-8.49a3 3 0 0 1 4.24 4.24l-8.49 8.49a1 1 0 0 1-1.41-1.41l7.78-7.78"/></svg>
+      </button>
+      <input type="file" data-chat-file hidden accept="image/png,image/jpeg,image/gif,image/webp,application/pdf,text/plain,.zip,.docx,.xlsx,.pptx">
       <label class="sr-only" for="chat-input">{{.T "chat.inputLabel"}}</label>
       <textarea id="chat-input" data-chat-input rows="1" maxlength="2000" placeholder="{{.T "chat.placeholder"}}" aria-label="{{.T "chat.placeholder"}}"></textarea>
       <button class="chat-send" type="submit" data-chat-send aria-label="{{.T "chat.send"}}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/></svg>
       </button>
     </form>
+    <div class="chat-closed" data-chat-closed hidden>
+      <p class="chat-closed-title" data-chat-closed-title>{{.T "chat.closedTitle"}}</p>
+      <div class="chat-rating" data-chat-rating hidden>
+        <p class="chat-rating-title">{{.T "chat.rateTitle"}}</p>
+        <div class="chat-stars" data-chat-stars role="group" aria-label="{{.T "chat.rateTitle"}}">
+          <button type="button" data-rate="1" aria-label="1">★</button>
+          <button type="button" data-rate="2" aria-label="2">★</button>
+          <button type="button" data-rate="3" aria-label="3">★</button>
+          <button type="button" data-rate="4" aria-label="4">★</button>
+          <button type="button" data-rate="5" aria-label="5">★</button>
+        </div>
+        <textarea data-chat-rating-comment rows="2" maxlength="500" placeholder="{{.T "chat.rateComment"}}" aria-label="{{.T "chat.rateComment"}}"></textarea>
+        <button type="button" class="chat-new" data-chat-rating-submit disabled>{{.T "chat.rateSubmit"}}</button>
+      </div>
+      <p class="chat-thanks" data-chat-thanks hidden>{{.T "chat.rateThanks"}}</p>
+      <button type="button" class="chat-new" data-chat-new>{{.T "chat.startNew"}}</button>
+    </div>
   </section>
 </div>
 <script type="application/json" id="site-i18n">{{.JSStrings}}</script>
+<script src="/website-assets/chat-widget.js?v={{assetV "chat-widget.js"}}" defer></script>
 <script src="/website-assets/site.js?v={{assetV "site.js"}}" defer></script>
 </body>
 </html>{{end}}

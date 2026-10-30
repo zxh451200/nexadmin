@@ -117,6 +117,14 @@ im:
   rating_exists: 该会话已评价过
   quick_reply_required: 快捷回复的标题和内容不能为空
   quick_reply_not_found: 快捷回复不存在
+  attachment_unavailable: 附件存储未配置
+  attachment_required: 请选择要上传的文件
+  attachment_too_large: 文件超出大小限制
+  attachment_type: 不支持的文件类型
+  attachment_invalid: 附件不存在或不属于该会话
+  attachment_used: 附件已发送过
+  agent_required: 请选择要转接的坐席
+  settings_invalid: 设置不合法（时间、时区或工作日）
 imports:
   job_not_found: 导入任务不存在
   actor_required: 缺少操作者身份
@@ -147,6 +155,7 @@ ldap:
   host_basedn_required: 请填写 LDAP 地址和 Base DN
   filter_placeholder_required: 过滤器必须包含 %s 占位符（如 %(uid)s）
   test_failed: 连接测试失败，请检查地址、账号与加密设置
+  ca_invalid: CA 证书格式不正确，请粘贴 PEM 格式的证书内容
 pay:
   PAY_INVALID_AMOUNT: 金额或参数无效
   PAY_CURRENCY_UNSUPPORTED: 不支持的币种

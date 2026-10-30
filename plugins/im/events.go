@@ -8,8 +8,8 @@ import (
 	"nexadmin/core/event"
 )
 
-// 事件目录条目与载荷。宿主可订阅 im.message.created 做站内通知、机器人应答等；
-// 会话是平台级（无租户），openapi webhook 分发器不会外发，集成走进程内订阅。
+// 事件目录条目与载荷。插件自身订阅 im.message.created 给坐席写站内信（见 notify.go）；
+// 宿主也可订阅它做机器人应答等扩展。会话是平台级（无租户），openapi webhook 分发器不会外发，集成走进程内订阅。
 const EventMessageCreated = "im.message.created"
 
 // CatalogInfos 是插件声明的事件目录条目（plugin.go init 时调用 event.Register）。

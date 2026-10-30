@@ -315,6 +315,7 @@ func (v *siteView) JSStrings() template.JS {
 		"packaging", "packagingHint", "packFailed", "copied", "copyManual", "menuOpen", "menuClose", "emailCopy", "emailCopied",
 		"contactSending", "contactSent", "contactFailed", "contactRate", "contactErrName", "contactErrEmail", "contactErrContent",
 		"chatErrSend", "chatErrLoad", "chatClosed", "chatGuest", "chatAgent",
+		"chatClosedTitle", "chatClosedAuto", "chatNewNote", "chatRateFailed", "chatUploadFailed", "chatInviteDefault",
 	} {
 		m[k] = v.T("site.js." + k)
 	}

@@ -1,8 +1,8 @@
 {
   "plugin_im": {
-    "title": "Live Chat",
+    "title": "Live chat",
     "description": "Conversations between visitors and agents",
-    "menu": "Messages",
+    "menu": "Message center",
     "perm": {
       "reply": "Reply to messages",
       "edit": "Close conversations"
@@ -12,22 +12,80 @@
     "noMessages": "No messages yet",
     "loading": "Loading…",
     "pickConversation": "Pick a conversation on the left to reply",
-    "searchPlaceholder": "Conv no / visitor / preview",
+    "searchPlaceholder": "Conversation no. / visitor / preview",
     "close": "Close conversation",
-    "closeConfirm": "Close conversation {{no}}? The visitor can no longer send messages.",
-    "replyPlaceholder": "Type a reply, Enter to send",
+    "closeConfirm": "Close conversation {{no}}? The visitor will not be able to send messages afterwards.",
+    "replyPlaceholder": "Type a reply, Enter to send, Shift+Enter for a new line",
     "send": "Send",
+    "attach": "Send an image or file",
+    "uploadFailed": "Attachment upload failed",
+    "transfer": "Transfer",
+    "transferTitle": "Transfer to an agent",
+    "transferHint": "Choose who will take over this conversation",
+    "transferEmpty": "No agents available (requires the reply permission)",
+    "loadMore": "Load more conversations",
+    "loadOlder": "Load earlier messages",
+    "claim": "Claim",
+    "release": "Release",
+    "read": "Read",
+    "unread": "Unread",
+    "visitorTyping": "Visitor is typing…",
+    "newVisitorMessage": "New visitor message",
+    "closedByAgent": "Conversation closed; a new message from the visitor starts a new one",
+    "closedByAuto": "Conversation closed automatically after being idle",
+    "ratingPending": "Not rated yet",
     "fields": {
-      "status": "Status"
+      "status": "Status",
+      "assignee": "Assignee"
     },
     "status": {
       "open": "Open",
       "closed": "Closed"
     },
+    "assignee": {
+      "all": "All agents",
+      "me": "My conversations",
+      "unassigned": "Unassigned",
+      "ownedBy": "Assigned to {{name}}"
+    },
+    "tags": {
+      "action": "Tags",
+      "placeholder": "Comma separated, up to 10, e.g. refund,logistics"
+    },
+    "notify": {
+      "on": "Desktop alerts on",
+      "off": "Enable desktop alerts",
+      "unsupported": "This browser does not support desktop notifications",
+      "denied": "Notification permission was not granted; enable it in browser settings"
+    },
+    "quickReply": {
+      "title": "Quick replies",
+      "manage": "Manage quick replies",
+      "empty": "No quick replies yet",
+      "name": "Title, e.g. Greeting",
+      "content": "Reply content"
+    },
     "senders": {
       "visitor": "Visitor",
       "agent": "Agent",
       "system": "System"
+    },
+    "system": {
+      "conv_closed": "Conversation closed"
+    },
+    "settings": {
+      "action": "Chat settings",
+      "title": "Live chat settings",
+      "hint": "Visitors can still leave messages outside business hours; proactive invites only fire during business hours.",
+      "businessHours": "Enable business hours",
+      "start": "Start",
+      "end": "End",
+      "workdays": "Workdays",
+      "daysShort": "Mon,Tue,Wed,Thu,Fri,Sat,Sun",
+      "timezone": "Timezone",
+      "offlineText": "Offline notice (leave blank for default)",
+      "inviteDelay": "Proactive invite delay (seconds, 0 = off)",
+      "inviteText": "Invite message (leave blank for default)"
     }
   }
 }

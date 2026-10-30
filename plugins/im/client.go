@@ -49,13 +49,13 @@ func Open(ctx context.Context, in OpenInput) (*ConversationView, error) {
 	return &v, nil
 }
 
-// Messages 增量拉取会话消息。
+// Messages 增量拉取会话消息（sinceSeq=0 时返回最近的一页）。
 func Messages(ctx context.Context, convNo string, sinceSeq, limit int) (*ConversationView, []Message, error) {
 	s := current()
 	if s == nil {
 		return nil, nil, responseUnavailable()
 	}
-	c, rows, err := s.Messages(ctx, convNo, int64(sinceSeq), limit)
+	c, rows, _, err := s.Messages(ctx, convNo, MessageQuery{Since: int64(sinceSeq), Limit: limit})
 	if err != nil {
 		return nil, nil, err
 	}
