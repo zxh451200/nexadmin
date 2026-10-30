@@ -74,7 +74,7 @@ plugins:
         description: 'Free code generator: read an existing business table or define a new one in the wizard; generate a Go module, frontend pages and migrations for all three engines. Preview online and download a zip. Stateless: no tables, no disk writes.'
   - id: crm
     name: 客户主数据
-    description: 免费基础客户主数据 + 线索商机台账（两张表 + 事件契约）：external 锚点让 hotel/mall 的 member 认同同一个客户 ID；不做销售自动化。
+    description: 免费基础客户主数据 + 线索商机台账：让酒店、商城等外部系统的会员对应到同一个客户；不做销售自动化。
     category: business
     edition: free
     version: 0.1.0

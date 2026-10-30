@@ -1,7 +1,7 @@
 {
   "plugin_crm": {
     "title": "Customer Master",
-    "description": "Customer master data and lead/opportunity ledger; members from hotel, mall and other systems can resolve to the same customer, without sales automation",
+    "description": "Free Customer master data and lead/opportunity ledger; members from hotel, mall and other systems can resolve to the same customer, without sales automation",
     "dir": "Customer Master",
     "menu": "Customer Master",
     "perm": {
