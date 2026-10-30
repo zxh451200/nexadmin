@@ -197,7 +197,7 @@ export default function FilePage() {
           ))}
         </SelectContent>
       </Select>
-      <DateRangePicker value={draft.range} onChange={(range) => setDraft((d) => ({ ...d, range }))} aria-label={t('fileMgr.timeRange')} className="md:w-64" placeholder={t('fileMgr.timeRange')} />
+      <DateRangePicker value={draft.range} onChange={(range) => setDraft((d) => ({ ...d, range }))} ariaLabel={t('fileMgr.timeRange')} className="md:w-64" placeholder={t('fileMgr.timeRange')} />
     </FilterBar>
   )
 

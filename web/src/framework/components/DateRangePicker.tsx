@@ -23,9 +23,11 @@ export interface DateRangePickerProps {
   disabled?: boolean
   className?: string
   id?: string
+  /** 无可见标签的场景（如筛选栏）给读屏用的名称 */
+  ariaLabel?: string
 }
 
-export function DateRangePicker({ value, onChange, allowClear = true, placeholder, disabled, className, id }: DateRangePickerProps) {
+export function DateRangePicker({ value, onChange, allowClear = true, placeholder, disabled, className, id, ariaLabel }: DateRangePickerProps) {
   const { t, i18n } = useTranslation()
   const isMobile = useIsMobile()
   const [open, setOpen] = useState(false)
@@ -50,6 +52,7 @@ export function DateRangePicker({ value, onChange, allowClear = true, placeholde
           id={id}
           className={className}
           disabled={disabled}
+          aria-label={ariaLabel}
           placeholder={placeholder ?? t('picker.selectDateRange')}
           hasValue={!!from}
           allowClear={allowClear}

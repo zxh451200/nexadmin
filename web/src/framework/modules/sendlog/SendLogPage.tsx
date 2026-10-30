@@ -155,7 +155,7 @@ export default function SendLogPage() {
             ))}
           </SelectContent>
         </Select>
-        <DateRangePicker value={draft.range} onChange={(v) => setDraft({ ...draft, range: v })} aria-label={t('sendlog.filter.time')} className="md:w-64" placeholder={t('sendlog.filter.time')} />
+        <DateRangePicker value={draft.range} onChange={(v) => setDraft({ ...draft, range: v })} ariaLabel={t('sendlog.filter.time')} className="md:w-64" placeholder={t('sendlog.filter.time')} />
       </FilterBar>
       <DataTable<SendLog>
         toolbar={

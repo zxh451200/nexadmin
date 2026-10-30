@@ -173,7 +173,7 @@ export default function LoginLogPage() {
           </SelectContent>
         </Select>
         <DictSelect dict="login_status" value={draft.status} allLabel={t('loginLog.filter.allStatus')} onChange={(v) => setDraft({ ...draft, status: v })} aria-label={t('loginLog.filter.status')} className="md:w-36" placeholder={t('loginLog.filter.status')} />
-        <DateRangePicker value={draft.range} onChange={(v) => setDraft({ ...draft, range: v })} aria-label={t('loginLog.filter.time')} className="md:w-64" placeholder={t('loginLog.filter.time')} />
+        <DateRangePicker value={draft.range} onChange={(v) => setDraft({ ...draft, range: v })} ariaLabel={t('loginLog.filter.time')} className="md:w-64" placeholder={t('loginLog.filter.time')} />
       </FilterBar>
       <DataTable<LoginLog>
         toolbar={

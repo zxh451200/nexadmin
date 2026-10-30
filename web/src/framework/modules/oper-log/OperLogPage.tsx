@@ -173,7 +173,7 @@ export default function OperLogPage() {
         />
         <DictSelect dict="oper_type" value={draft.type} onChange={(v) => setDraft({ ...draft, type: v })} aria-label={t('operLog.filter.type')} className="md:w-40" placeholder={t('operLog.filter.type')} />
         <DictSelect dict="login_status" value={draft.status} onChange={(v) => setDraft({ ...draft, status: v })} aria-label={t('operLog.filter.status')} className="md:w-36" placeholder={t('operLog.filter.status')} />
-        <DateRangePicker value={draft.range} onChange={(v) => setDraft({ ...draft, range: v })} aria-label={t('operLog.filter.time')} className="md:w-64" placeholder={t('operLog.filter.time')} />
+        <DateRangePicker value={draft.range} onChange={(v) => setDraft({ ...draft, range: v })} ariaLabel={t('operLog.filter.time')} className="md:w-64" placeholder={t('operLog.filter.time')} />
       </FilterBar>
       <DataTable<OperLog>
         toolbar={

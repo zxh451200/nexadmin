@@ -19,9 +19,11 @@ export interface DateTimePickerProps {
   disabled?: boolean
   className?: string
   id?: string
+  /** 无可见标签的场景（如筛选栏）给读屏用的名称 */
+  ariaLabel?: string
 }
 
-export function DateTimePicker({ value, onChange, allowClear = true, placeholder, disabled, className, id }: DateTimePickerProps) {
+export function DateTimePicker({ value, onChange, allowClear = true, placeholder, disabled, className, id, ariaLabel }: DateTimePickerProps) {
   const { t, i18n } = useTranslation()
   const [open, setOpen] = useState(false)
   const date = toDate(value)
@@ -55,6 +57,7 @@ export function DateTimePicker({ value, onChange, allowClear = true, placeholder
           id={id}
           className={className}
           disabled={disabled}
+          aria-label={ariaLabel}
           placeholder={placeholder ?? t('picker.selectDateTime')}
           hasValue={!!date}
           allowClear={allowClear}
