@@ -62,7 +62,12 @@ func TestLiveTenantProvisioningAndSelf(t *testing.T) {
 	if os.Getenv("NEXADMIN_LIVE_CLEANUP") == "1" && strings.HasSuffix(cfg.Name, "_live") {
 		t.Cleanup(func() {
 			_ = database.Close(db)
-			admin, err := database.Open(cfg)
+			// PostgreSQL 不能在连着目标库的会话里删它，先切到 postgres 维护库。
+			adminCfg := cfg
+			if cfg.Type == "postgres" {
+				adminCfg.Name = "postgres"
+			}
+			admin, err := database.Open(adminCfg)
 			if err != nil {
 				t.Logf("cleanup open: %v", err)
 				return
@@ -107,7 +112,7 @@ func TestLiveTenantProvisioningAndSelf(t *testing.T) {
 			t.Fatal(err)
 		}
 		if err := db.Exec(`INSERT INTO sys_menu (id, parent_id, code, type, title, icon, path, component, perm, sort, keep_alive, hidden, external, status, created_at, updated_at)
-			VALUES (?, 0, ?, 'menu', ?, '', '/x', '', ?, 10, 1, 0, 0, '1', ?, ?)`, int64(mid), perm, perm, perm, now, now).Error; err != nil {
+			VALUES (?, 0, ?, 'menu', ?, '', '/x', '', ?, 10, TRUE, FALSE, FALSE, '1', ?, ?)`, int64(mid), perm, perm, perm, now, now).Error; err != nil {
 			t.Fatalf("seed menu %s: %v", perm, err)
 		}
 	}
