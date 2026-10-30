@@ -214,7 +214,7 @@ func TestEndToEndSPInitiatedLogin(t *testing.T) {
 	}
 	if issuer.got.Method != "saml" || issuer.got.Identity.Username != "alice" ||
 		issuer.got.Identity.Email != "alice@example.com" || issuer.got.Identity.Nickname != "Alice" ||
-		issuer.got.Identity.Subject != "alice" || issuer.got.Identity.ProviderKey != "saml:123" || !issuer.got.Identity.AutoCreate {
+		issuer.got.Identity.Subject != "123:alice" || issuer.got.Identity.ProviderKey != "" || !issuer.got.Identity.AutoCreate {
 		t.Fatalf("LoginAs request: %+v", issuer.got)
 	}
 	if !strings.Contains(string(body), "accessToken") {

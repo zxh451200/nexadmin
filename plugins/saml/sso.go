@@ -151,10 +151,11 @@ func (s *Service) acs(c *gin.Context) {
 	if username == "" {
 		username = subject
 	}
+	// ProviderKey 留空：框架只接受 ldap-<数字> 或旧 ldap/cas 键，自定义键会被拒。
+	// 多源隔离靠 Subject 前缀（源 ID），绑定键仍是 (saml, "<源ID>:<NameID>")。
 	out, err := s.issuer.LoginAs(c.Request.Context(), auth.LoginAsRequest{
 		Identity: auth.ExternalIdentity{
-			ProviderKey:   "saml:" + m.ID.String(),
-			Subject:       subject,
+			Subject:       m.ID.String() + ":" + subject,
 			Username:      username,
 			Email:         attr(assertion, m.AttrEmail),
 			Nickname:      attr(assertion, m.AttrNickname),
