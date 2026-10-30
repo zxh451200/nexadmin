@@ -2,13 +2,30 @@ package ldap
 
 import (
 	"crypto/tls"
+	"crypto/x509"
+	"errors"
+	"strings"
 	"time"
 )
 
-// tlsConfig 是 LDAPS/StartTLS 的 TLS 配置:P0 走系统根证书;
-// 自签名 CA 的场景在 P1 加「信任 CA 上传」配置项。
-func tlsConfig() *tls.Config {
-	return &tls.Config{MinVersion: tls.VersionTLS12, InsecureSkipVerify: false}
+// tlsConfig 构造 LDAPS/StartTLS 配置：配置了 CA 时只信任该 CA（内网自签），否则用系统根证书。
+func tlsConfig(caPEM, serverName string) (*tls.Config, error) {
+	cfg := &tls.Config{MinVersion: tls.VersionTLS12, ServerName: serverName}
+	if strings.TrimSpace(caPEM) == "" {
+		return cfg, nil
+	}
+	pool := x509.NewCertPool()
+	if !pool.AppendCertsFromPEM([]byte(caPEM)) {
+		return nil, errors.New("ldap: CA 证书无法解析（需要 PEM 格式）")
+	}
+	cfg.RootCAs = pool
+	return cfg, nil
+}
+
+// validCACert 在保存配置时提前校验，避免到登录时才失败。
+func validCACert(caPEM string) bool {
+	pool := x509.NewCertPool()
+	return pool.AppendCertsFromPEM([]byte(caPEM))
 }
 
 // 配置项默认值。

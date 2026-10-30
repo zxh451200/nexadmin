@@ -12,6 +12,8 @@
     "test": "Test connection",
     "testOk": "LDAP connection OK",
     "on": "Enabled",
-    "off": "Disabled"
+    "off": "Disabled",
+    "caCert": "CA certificate (PEM, optional)",
+    "caCertHint": "Leave empty to use system roots; paste your internal CA certificate(s) for self-signed LDAP."
   }
 }

@@ -13,6 +13,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/binary"
+	"encoding/pem"
 	"errors"
 	"io"
 	"math/big"
@@ -245,6 +246,10 @@ func configDB(t *testing.T, port int, bindPass string, calls int) *gorm.DB {
 }
 
 func configDBWith(t *testing.T, port int, bindPass string, startTLS bool, calls int) *gorm.DB {
+	return configDBCA(t, port, bindPass, startTLS, "", calls)
+}
+
+func configDBCA(t *testing.T, port int, bindPass string, startTLS bool, caCert string, calls int) *gorm.DB {
 	t.Helper()
 	sqlDB, mock, err := sqlmock.New()
 	if err != nil {
@@ -256,11 +261,11 @@ func configDBWith(t *testing.T, port int, bindPass string, startTLS bool, calls 
 		t.Fatal(err)
 	}
 	cols := []string{"id", "enabled", "host", "port", "use_tls", "start_tls", "bind_dn", "bind_password", "base_dn", "user_filter",
-		"attr_username", "attr_email", "attr_nickname", "match_existing", "auto_create", "default_role", "timeout_ms", "created_at", "updated_at"}
+		"attr_username", "attr_email", "attr_nickname", "match_existing", "auto_create", "default_role", "timeout_ms", "ca_cert", "created_at", "updated_at"}
 	for i := 0; i < calls; i++ {
 		mock.ExpectQuery("SELECT \\* FROM `plg_ldap_config`").WillReturnRows(sqlmock.NewRows(cols).AddRow(
 			1, true, "127.0.0.1", port, false, startTLS, svcDN, bindPass, "dc=example,dc=com", "(uid=%s)",
-			"uid", "mail", "cn", false, false, "", 3000, time.Now(), time.Now(),
+			"uid", "mail", "cn", false, false, "", 3000, caCert, time.Now(), time.Now(),
 		))
 	}
 	return db
@@ -370,4 +375,32 @@ func selfSignedCert(t *testing.T) *tls.Certificate {
 		t.Fatal(err)
 	}
 	return &tls.Certificate{Certificate: [][]byte{der}, PrivateKey: key}
+}
+
+// 配置了内网自签 CA 后，StartTLS 必须能正常握手（此前的正向用例因只信任系统根证书无法覆盖）。
+func TestStartTLSTrustsConfiguredCA(t *testing.T) {
+	f := startFakeLDAP(t)
+	f.tlsCert = selfSignedCert(t)
+	caPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: f.tlsCert.Certificate[0]})
+	a := &authenticator{svc: NewService(configDBCA(t, f.port, svcPass, true, string(caPEM), 1), nil)}
+	id, err := a.Authenticate(context.Background(), "alice", userPass)
+	if err != nil {
+		t.Fatalf("StartTLS with trusted CA: %v", err)
+	}
+	if id.Subject != userDN {
+		t.Fatalf("identity: %+v", id)
+	}
+}
+
+func TestTLSConfigCAValidation(t *testing.T) {
+	if _, err := tlsConfig("not a pem", "127.0.0.1"); err == nil {
+		t.Fatal("invalid PEM must be rejected at dial time")
+	}
+	cfg, err := tlsConfig("", "127.0.0.1")
+	if err != nil || cfg.RootCAs != nil {
+		t.Fatalf("empty CA must use system roots: %+v %v", cfg, err)
+	}
+	if validCACert("not a pem") {
+		t.Fatal("validCACert must reject invalid PEM")
+	}
 }

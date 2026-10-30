@@ -47,6 +47,8 @@ type LdapConfig struct {
 	AutoCreate    bool   `gorm:"column:auto_create" json:"autoCreate"`       // 允许自动建号
 	DefaultRole   string `gorm:"column:default_role" json:"defaultRole"`
 	TimeoutMS     int    `gorm:"column:timeout_ms" json:"timeoutMs"`
+	// CACert 是信任的 CA 证书（PEM，可多张）。空 = 使用系统根证书。
+	CACert string `gorm:"column:ca_cert;type:text" json:"caCert"`
 	// BindPasswordPlain 是运行时解密结果,永不落库、永不序列化。
 	BindPasswordPlain string `gorm:"-" json:"-"`
 }
@@ -84,6 +86,7 @@ type LdapConfigForm struct {
 	AutoCreate    bool   `json:"autoCreate"`
 	DefaultRole   string `json:"defaultRole"`
 	TimeoutMS     int    `json:"timeoutMs"`
+	CACert        string `json:"caCert"`
 }
 
 // defaultConfig 返回带默认值的空配置。
@@ -130,6 +133,10 @@ func (s *Service) ConfigSave(ctx context.Context, f LdapConfigForm) (*ConfigView
 	f.BaseDN = strings.TrimSpace(f.BaseDN)
 	f.BindDN = strings.TrimSpace(f.BindDN)
 	f.UserFilter = strings.TrimSpace(f.UserFilter)
+	f.CACert = strings.TrimSpace(f.CACert)
+	if f.CACert != "" && !validCACert(f.CACert) {
+		return nil, response.BadRequest("ldap.ca_invalid")
+	}
 	if f.Enabled && (f.Host == "" || f.BaseDN == "") {
 		return nil, response.BadRequest("ldap.host_basedn_required")
 	}
@@ -161,7 +168,7 @@ func (s *Service) ConfigSave(ctx context.Context, f LdapConfigForm) (*ConfigView
 		BindDN: f.BindDN, BaseDN: f.BaseDN, UserFilter: f.UserFilter,
 		AttrUsername: f.AttrUsername, AttrEmail: f.AttrEmail, AttrNickname: f.AttrNickname,
 		MatchExisting: f.MatchExisting, AutoCreate: f.AutoCreate, DefaultRole: f.DefaultRole,
-		TimeoutMS: f.TimeoutMS,
+		TimeoutMS: f.TimeoutMS, CACert: f.CACert,
 	}
 	m.ID = 1
 	if f.BindPassword != "" {

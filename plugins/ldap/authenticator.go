@@ -77,7 +77,11 @@ func dial(cfg *LdapConfig) (*ldap.Conn, error) {
 	var conn *ldap.Conn
 	var err error
 	if cfg.UseTLS {
-		conn, err = ldap.DialURL("ldaps://"+addr, ldap.DialWithTLSConfig(tlsConfig()))
+		tc, terr := tlsConfig(cfg.CACert, cfg.Host)
+		if terr != nil {
+			return nil, terr
+		}
+		conn, err = ldap.DialURL("ldaps://"+addr, ldap.DialWithTLSConfig(tc))
 	} else {
 		conn, err = ldap.Dial("tcp", addr)
 	}
@@ -85,7 +89,12 @@ func dial(cfg *LdapConfig) (*ldap.Conn, error) {
 		return nil, err
 	}
 	if !cfg.UseTLS && cfg.StartTLS {
-		if err = conn.StartTLS(tlsConfig()); err != nil {
+		tc, terr := tlsConfig(cfg.CACert, cfg.Host)
+		if terr != nil {
+			_ = conn.Close()
+			return nil, terr
+		}
+		if err = conn.StartTLS(tc); err != nil {
 			_ = conn.Close()
 			return nil, fmt.Errorf("ldap: starttls: %w", err)
 		}

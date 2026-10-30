@@ -9,6 +9,7 @@ import { Button } from '@/framework/ui/button'
 import { Card } from '@/framework/ui/card'
 import { Input } from '@/framework/ui/input'
 import { Switch } from '@/framework/ui/switch'
+import { Textarea } from '@/framework/ui/textarea'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 interface LdapConfig {
@@ -27,6 +28,7 @@ interface LdapConfig {
   autoCreate: boolean
   defaultRole: string
   timeoutMs: number
+  caCert: string
   hasBindPassword: boolean
 }
 
@@ -85,6 +87,17 @@ export default function LdapPage() {
         <label className="flex flex-col gap-1 text-sm">
           Bind Password
           <Input type="password" value={bindPassword} onChange={(e) => setBindPassword(e.target.value)} placeholder={config.data?.hasBindPassword ? t('plugin_ldap.pwKeep') : ''} />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          {t('plugin_ldap.caCert')}
+          <Textarea
+            rows={4}
+            className="font-mono text-xs"
+            value={val('caCert')}
+            onChange={(e) => set('caCert', e.target.value)}
+            placeholder={'-----BEGIN CERTIFICATE-----'}
+          />
+          <span className="text-xs text-muted-foreground">{t('plugin_ldap.caCertHint')}</span>
         </label>
         <label className="flex flex-col gap-1 text-sm">
           Base DN <Input value={val('baseDN')} onChange={(e) => set('baseDN', e.target.value)} />
