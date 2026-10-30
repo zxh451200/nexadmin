@@ -11,6 +11,7 @@
       "io": "Import & Export"
     },
     "btn": {
+      "edit": "Edit",
       "list": "View",
       "create": "Create",
       "update": "Update",
