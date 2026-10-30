@@ -3,8 +3,10 @@ package saml
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"encoding/xml"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -88,8 +90,13 @@ func (s *Service) login(c *gin.Context) {
 		return
 	}
 	relay := newRelay()
+	redirect := safeRedirect(c.Query("redirect"))
 	if s.cache != nil {
-		if err := s.cache.Set(c.Request.Context(), "saml:req:"+relay, req.ID, 10*time.Minute); err != nil {
+		val := req.ID
+		if redirect != "" {
+			val += "|" + redirect
+		}
+		if err := s.cache.Set(c.Request.Context(), "saml:req:"+relay, val, 10*time.Minute); err != nil {
 			response.Fail(c, err)
 			return
 		}
@@ -126,9 +133,14 @@ func (s *Service) acs(c *gin.Context) {
 	// SP-initiated：按 RelayState 找回本次 AuthnRequest ID，库才会接受 InResponseTo。
 	// 找不到（含 IdP-initiated）时传空，带 InResponseTo 的响应会被拒绝（fail closed）。
 	var possibleIDs []string
+	redirect := ""
 	if relay := c.Request.PostForm.Get("RelayState"); relay != "" && s.cache != nil {
-		if id, err := s.cache.Get(c.Request.Context(), "saml:req:"+relay); err == nil && id != "" {
-			possibleIDs = []string{id}
+		if v, err := s.cache.Get(c.Request.Context(), "saml:req:"+relay); err == nil && v != "" {
+			parts := strings.SplitN(v, "|", 2)
+			possibleIDs = []string{parts[0]}
+			if len(parts) == 2 {
+				redirect = safeRedirect(parts[1])
+			}
 			_ = s.cache.Del(c.Request.Context(), "saml:req:"+relay)
 		}
 	}
@@ -176,45 +188,132 @@ func (s *Service) acs(c *gin.Context) {
 		_ = s.cache.Set(c.Request.Context(), sloKey(out.User.TenantID, m.ID, out.User.ID),
 			assertion.Subject.NameID.Value, 7*24*time.Hour)
 	}
-	response.OK(c, out.Payload())
+	payload := out.Payload()
+	if redirect != "" && s.cache != nil {
+		code := newRelay()
+		if b, err := json.Marshal(map[string]any{"payload": payload, "sourceId": m.ID.String()}); err == nil {
+			if err := s.cache.Set(c.Request.Context(), "saml:code:"+code, string(b), time.Minute); err == nil {
+				sep := "?"
+				if strings.Contains(redirect, "?") {
+					sep = "&"
+				}
+				c.Redirect(http.StatusFound, redirect+sep+"samlCode="+url.QueryEscape(code))
+				return
+			}
+		}
+	}
+	response.OK(c, payload)
 }
 
-// logout 是 SP 发起的单点登出：吊销本地令牌并 302 到 IdP 的 SLO 端点。
-func (s *Service) logout(c *gin.Context) {
-	cl := auth.ClaimsFrom(c)
-	if cl == nil {
-		response.Fail(c, response.Unauthorized("error.unauthorized"))
+// publicSources 返回本租户已启用的 SAML 源（登录页入口用，只含 id/name）。
+func (s *Service) publicSources(c *gin.Context) {
+	list, err := s.List(c.Request.Context())
+	if err != nil {
+		response.Fail(c, err)
 		return
 	}
-	m, ok := s.sourceOrFail(c)
-	if !ok {
+	out := make([]gin.H, 0, len(list))
+	for _, m := range list {
+		if m.Enabled {
+			out = append(out, gin.H{"id": m.ID.String(), "name": m.Name})
+		}
+	}
+	response.OK(c, out)
+}
+
+// exchange 用一次性 code 换登录结果（ACS 重定向前端时使用，避免 token 出现在 URL）。
+func (s *Service) exchange(c *gin.Context) {
+	var f struct {
+		Code string `json:"code" binding:"required"`
+	}
+	if !response.BindJSON(c, &f) {
 		return
 	}
 	if s.cache == nil {
 		response.Fail(c, response.Unavailable("auth.provider_missing"))
 		return
 	}
+	key := "saml:code:" + f.Code
+	raw, err := s.cache.Get(c.Request.Context(), key)
+	if err != nil || raw == "" {
+		response.Fail(c, response.BadRequest("error.bad_request").WithMsg("交换码无效或已过期"))
+		return
+	}
+	_ = s.cache.Del(c.Request.Context(), key)
+	var v struct {
+		Payload  map[string]any `json:"payload"`
+		SourceID string         `json:"sourceId"`
+	}
+	if json.Unmarshal([]byte(raw), &v) != nil || v.Payload == nil {
+		response.Fail(c, response.BadRequest("error.bad_request").WithMsg("交换码内容无效"))
+		return
+	}
+	v.Payload["samlSourceId"] = v.SourceID
+	response.OK(c, v.Payload)
+}
+
+// safeRedirect 只允许站内绝对路径，防开放重定向。
+func safeRedirect(p string) string {
+	p = strings.TrimSpace(p)
+	if p == "" || !strings.HasPrefix(p, "/") || strings.HasPrefix(p, "//") || strings.ContainsAny(p, "\r\n") {
+		return ""
+	}
+	return p
+}
+
+// logout 是 SP 发起的单点登出：吊销本地令牌并 302 到 IdP 的 SLO 端点。
+func (s *Service) logout(c *gin.Context) {
+	if u, ok := s.logoutURL(c); ok {
+		c.Redirect(http.StatusFound, u)
+	}
+}
+
+// logoutJSON 同 logout，但返回跳转地址（前端带 token 调用后自行跳转）。
+func (s *Service) logoutJSON(c *gin.Context) {
+	if u, ok := s.logoutURL(c); ok {
+		response.OK(c, gin.H{"redirect": u})
+	}
+}
+
+func (s *Service) logoutURL(c *gin.Context) (string, bool) {
+	cl := auth.ClaimsFrom(c)
+	if cl == nil {
+		response.Fail(c, response.Unauthorized("error.unauthorized"))
+		return "", false
+	}
+	m, ok := s.sourceOrFail(c)
+	if !ok {
+		return "", false
+	}
+	if s.cache == nil {
+		response.Fail(c, response.Unavailable("auth.provider_missing"))
+		return "", false
+	}
 	key := sloKey(cl.TenantID, m.ID, cl.UserID)
 	nameID, err := s.cache.Get(c.Request.Context(), key)
 	if err != nil || nameID == "" {
 		response.Fail(c, response.BadRequest("error.bad_request").WithMsg("当前会话不是通过该 SAML 源登录的"))
-		return
+		return "", false
 	}
 	sp, err := s.provider(m, baseURL(c))
 	if err != nil {
 		response.Fail(c, response.BadRequest("error.bad_request").WithMsg(err.Error()))
-		return
+		return "", false
 	}
-	u, err := sp.MakeRedirectLogoutRequest(nameID, newRelay())
+	relay := newRelay()
+	if next := safeRedirect(c.Query("next")); next != "" {
+		_ = s.cache.Set(c.Request.Context(), "saml:next:"+relay, next, 10*time.Minute)
+	}
+	u, err := sp.MakeRedirectLogoutRequest(nameID, relay)
 	if err != nil {
 		response.Fail(c, err)
-		return
+		return "", false
 	}
 	_ = s.cache.Del(c.Request.Context(), key)
 	if r, ok := s.issuer.(SessionRevoker); ok {
 		_ = r.RevokeSession(c.Request.Context(), cl)
 	}
-	c.Redirect(http.StatusFound, u.String())
+	return u.String(), true
 }
 
 // slo 接收 IdP 的 LogoutResponse（SP 发起登出的回执），校验后确认完成。
@@ -231,6 +330,19 @@ func (s *Service) slo(c *gin.Context) {
 	if err := sp.ValidateLogoutResponseRequest(c.Request); err != nil {
 		response.Fail(c, response.BadRequest("error.bad_request").WithMsg("SLO 回执校验失败: "+err.Error()))
 		return
+	}
+	// 完成回执后回到发起登出的前端页面（next 在白名单校验后写入缓存）。
+	relay := c.Query("RelayState")
+	if relay == "" {
+		_ = c.Request.ParseForm()
+		relay = c.Request.PostForm.Get("RelayState")
+	}
+	if relay != "" && s.cache != nil {
+		if next, err := s.cache.Get(c.Request.Context(), "saml:next:"+relay); err == nil && next != "" {
+			_ = s.cache.Del(c.Request.Context(), "saml:next:"+relay)
+			c.Redirect(http.StatusFound, next)
+			return
+		}
 	}
 	response.OK(c, gin.H{"ok": true})
 }

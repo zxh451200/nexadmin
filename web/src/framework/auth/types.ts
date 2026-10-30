@@ -26,6 +26,8 @@ export interface LoginResult {
   accessToken: string
   refreshToken: string
   user: AuthUser
+  /** 通过 SAML 单点登录时带回的来源 id（登出时据此跳 IdP 的 SLO）；其他登录方式为空 */
+  samlSourceId?: string
 }
 
 /** 服务端要求二次验证时的短期挑战（不含令牌）：一次性、绑定 IP、有时效与尝试上限 */

@@ -16,6 +16,7 @@
     "empty": "No identity source configured yet",
     "btn": {
       "edit": "Edit"
-    }
+    },
+    "ssoLogin": "Enterprise SSO"
   }
 }

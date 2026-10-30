@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Hexagon, Languages, Sparkles, Users } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { resumeLoginContinuation, useAuth } from '@/framework/auth/useAuth'
+import { loginPanels, resumeLoginContinuation, useAuth } from '@/framework/auth/useAuth'
 import type { LoginContinuation } from '@/framework/auth/useAuth'
 import type { AuthMethods, LoginChallenge } from '@/framework/auth/types'
 import { BrandMark } from '@/framework/components/BrandMark'
@@ -254,6 +254,9 @@ export default function LoginPage() {
                 )}
 
                 <SocialLogin providers={data.providers} redirect={redirect} />
+                {loginPanels.map((Panel, i) => (
+                  <Panel key={i} />
+                ))}
                 {data.registerEnabled ? (
                   <p className="mt-6 text-center text-sm text-muted-foreground">
                     {t('login.register.noAccount')}{' '}

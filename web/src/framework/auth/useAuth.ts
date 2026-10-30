@@ -1,11 +1,23 @@
+import type { ComponentType } from 'react'
 import { create } from 'zustand'
 import { clearPwaRuntimeCache } from '@/framework/pwa/register'
 import { api, setUnauthorizedHandler, tokenStore } from '@/framework/request/http'
-import type { AuthUser, ChallengeResult, LoginPayload, LoginResult, LoginStep } from './types'
+import type { AuthUser, ChallengeResult, LoginChallenge, LoginPayload, LoginResult, LoginStep } from './types'
 
-export interface LoginContinuation extends ChallengeResult {
+/** 插件回调交接：challenge 为空表示已完成登录（令牌已写入），非空表示仍需二次验证 */
+export interface LoginContinuation {
+  challenge: LoginChallenge | null
   next: string
 }
+
+// 插件可以把自己的登录入口（如企业 SSO）挂到登录页，框架不感知具体接口。
+const loginPanelComponents: ComponentType[] = []
+export function registerLoginPanel(c: ComponentType) {
+  if (!loginPanelComponents.includes(c)) loginPanelComponents.push(c)
+}
+export const loginPanels = loginPanelComponents
+
+const SAML_SOURCE_KEY = 'nexadmin.samlSource'
 
 // 插件提供回调交接，框架登录页不依赖具体插件或其接口路径。
 const loginContinuations = new Map<string, () => Promise<LoginContinuation> | null>()
@@ -48,6 +60,8 @@ export const useAuth = create<AuthState>((set, get) => ({
   acceptLogin: (res) => {
     if ('challenge' in res) return res
     tokenStore.set(res.accessToken, res.refreshToken)
+    if (res.samlSourceId) sessionStorage.setItem(SAML_SOURCE_KEY, res.samlSourceId)
+    else sessionStorage.removeItem(SAML_SOURCE_KEY)
     set({ token: res.accessToken, user: res.user, perms: res.user.perms })
     return { user: res.user }
   },
@@ -62,11 +76,33 @@ export const useAuth = create<AuthState>((set, get) => ({
     return res.user
   },
   logout: async () => {
+    // SAML 会话：先让后端吊销并拿到 IdP 的 SLO 跳转地址，再清本地并整页跳转。
+    const samlId = sessionStorage.getItem(SAML_SOURCE_KEY)
+    if (samlId) {
+      try {
+        const base = import.meta.env.BASE_URL || '/'
+        const next = base.endsWith('/') ? base + 'login' : base + '/login'
+        const r = await api.post<{ redirect: string }>(
+          `/plugins/saml/sources/${encodeURIComponent(samlId)}/logout?next=${encodeURIComponent(next)}`,
+          undefined,
+          { silent: true },
+        )
+        sessionStorage.removeItem(SAML_SOURCE_KEY)
+        tokenStore.clear()
+        clearPwaRuntimeCache()
+        set({ token: null, user: null, perms: [] })
+        window.location.href = r.redirect
+        return
+      } catch {
+        // 回落本地登出
+      }
+    }
     try {
       await api.post('/auth/logout', undefined, { silent: true })
     } catch {
       // 忽略：本地登录态照常清理
     }
+    sessionStorage.removeItem(SAML_SOURCE_KEY)
     tokenStore.clear()
     clearPwaRuntimeCache()
     set({ token: null, user: null, perms: [] })
