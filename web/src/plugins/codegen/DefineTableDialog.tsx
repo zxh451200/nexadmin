@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
@@ -29,6 +29,16 @@ interface Row {
 function blankRow(): Row {
   seq += 1
   return { id: seq, name: '', kind: 'string', length: '255', required: false, comment: '' }
+}
+
+/** 字段行的一列：手机上在控件上方显示列名，桌面上只是网格单元 */
+function Col({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-1">
+      <span className="text-xs text-muted-foreground md:hidden">{label}</span>
+      {children}
+    </div>
+  )
 }
 
 interface Props {
@@ -107,12 +117,12 @@ export function DefineTableDialog({ open, onOpenChange, pending, onSubmit }: Pro
         </div>
       }
     >
-      <div className="flex flex-col gap-4">
-        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_10rem]">
-          <div className="flex flex-col gap-2">
+      <div className="space-y-4">
+        <div className="grid items-start gap-3 md:grid-cols-[minmax(0,1fr)_12rem]">
+          <div className="flex flex-col gap-1.5">
             <Label htmlFor="codegen-def-name">{t('plugin_codegen.define.name')}</Label>
-            <div className="flex items-center gap-2">
-              <span className="font-mono text-sm text-muted-foreground">biz_</span>
+            <div className="flex h-10 items-center rounded-md border border-input bg-background ps-3 shadow-sm transition-[color,box-shadow,border-color] focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/40 md:h-9">
+              <span className="me-1.5 border-e border-input pe-2 font-mono text-sm text-muted-foreground">biz_</span>
               <Input
                 id="codegen-def-name"
                 value={name}
@@ -120,11 +130,12 @@ export function DefineTableDialog({ open, onOpenChange, pending, onSubmit }: Pro
                 placeholder="product"
                 maxLength={44}
                 autoComplete="off"
+                className="h-full flex-1 rounded-none border-0 bg-transparent px-1.5 shadow-none focus-visible:ring-0"
               />
             </div>
             <p className="text-xs text-muted-foreground">{t('plugin_codegen.define.nameHint')}</p>
           </div>
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-1.5">
             <Label htmlFor="codegen-def-migration">{t('plugin_codegen.define.migration')}</Label>
             <Input
               id="codegen-def-migration"
@@ -138,14 +149,21 @@ export function DefineTableDialog({ open, onOpenChange, pending, onSubmit }: Pro
           </div>
         </div>
 
-        <div className="flex flex-col gap-2 md:flex-row md:gap-6">
-          <div className="flex items-center gap-2">
-            <Checkbox id="codegen-def-tenant" checked={tenant} onCheckedChange={(v) => setTenant(v === true)} />
-            <Label htmlFor="codegen-def-tenant">{t('plugin_codegen.define.tenant')}</Label>
-          </div>
-          <div className="flex items-center gap-2">
-            <Checkbox id="codegen-def-soft-delete" checked={softDelete} onCheckedChange={(v) => setSoftDelete(v === true)} />
-            <Label htmlFor="codegen-def-soft-delete">{t('plugin_codegen.define.softDelete')}</Label>
+        <div className="flex flex-col gap-2 rounded-lg border bg-muted/30 px-3 py-2.5">
+          <Label>{t('plugin_codegen.define.options')}</Label>
+          <div className="flex flex-wrap gap-x-6 gap-y-1">
+            <label className="flex min-h-9 cursor-pointer items-center gap-2">
+              <Checkbox id="codegen-def-tenant" checked={tenant} onCheckedChange={(v) => setTenant(v === true)} />
+              <Label htmlFor="codegen-def-tenant" className="cursor-pointer font-normal">
+                {t('plugin_codegen.define.tenant')}
+              </Label>
+            </label>
+            <label className="flex min-h-9 cursor-pointer items-center gap-2">
+              <Checkbox id="codegen-def-soft-delete" checked={softDelete} onCheckedChange={(v) => setSoftDelete(v === true)} />
+              <Label htmlFor="codegen-def-soft-delete" className="cursor-pointer font-normal">
+                {t('plugin_codegen.define.softDelete')}
+              </Label>
+            </label>
           </div>
         </div>
 
@@ -157,83 +175,96 @@ export function DefineTableDialog({ open, onOpenChange, pending, onSubmit }: Pro
               {t('plugin_codegen.define.addField')}
             </Button>
           </div>
-          <div className="divide-y divide-border rounded-lg border border-border">
-            <div className="hidden gap-2 px-3 py-2 text-xs text-muted-foreground md:grid md:grid-cols-[minmax(0,1fr)_7rem_5rem_minmax(0,1fr)_4rem_auto]">
+          <div className="overflow-hidden rounded-lg border">
+            <div className="hidden gap-2 border-b bg-muted/50 px-3 py-2 text-xs font-medium text-muted-foreground md:grid md:grid-cols-[minmax(0,1fr)_7rem_5.5rem_minmax(0,1fr)_4rem_2.25rem]">
               <span>{t('plugin_codegen.define.fieldName')}</span>
               <span>{t('plugin_codegen.define.fieldType')}</span>
               <span>{t('plugin_codegen.define.fieldLength')}</span>
               <span>{t('plugin_codegen.define.fieldComment')}</span>
               <span className="text-center">{t('plugin_codegen.define.fieldRequired')}</span>
-              <span className="w-9" />
+              <span />
             </div>
-            {rows.map((r) => (
-              <div key={r.id} className="grid gap-2 px-3 py-2 md:grid-cols-[minmax(0,1fr)_7rem_5rem_minmax(0,1fr)_4rem_auto] md:items-center">
-                <Input
-                  value={r.name}
-                  onChange={(e) => patch(r.id, { name: e.target.value.trim().toLowerCase() })}
-                  placeholder={t('plugin_codegen.define.fieldName')}
-                  aria-label={t('plugin_codegen.define.fieldName')}
-                  maxLength={48}
-                  autoComplete="off"
-                />
-                <Select
-                  value={r.kind}
-                  onValueChange={(v) =>
-                    patch(r.id, {
-                      kind: v as FieldKind,
-                      required: REQUIRABLE.includes(v as FieldKind) ? r.required : false,
-                      length: v === 'string' ? r.length || '255' : '',
-                    })
-                  }
+            <div className="divide-y divide-border">
+              {rows.map((r) => (
+                <div
+                  key={r.id}
+                  className="grid gap-2 p-3 transition-colors hover:bg-accent/40 md:grid-cols-[minmax(0,1fr)_7rem_5.5rem_minmax(0,1fr)_4rem_2.25rem] md:items-center"
                 >
-                  <SelectTrigger aria-label={t('plugin_codegen.define.fieldType')}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {KINDS.map((k) => (
-                      <SelectItem key={k} value={k}>
-                        {t(`plugin_codegen.define.kinds.${k}`)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Input
-                  type="number"
-                  value={r.length}
-                  onChange={(e) => patch(r.id, { length: e.target.value })}
-                  placeholder="255"
-                  aria-label={t('plugin_codegen.define.fieldLength')}
-                  disabled={r.kind !== 'string'}
-                  min={1}
-                  max={4000}
-                />
-                <Input
-                  value={r.comment}
-                  onChange={(e) => patch(r.id, { comment: e.target.value })}
-                  placeholder={t('plugin_codegen.define.fieldComment')}
-                  aria-label={t('plugin_codegen.define.fieldComment')}
-                  maxLength={200}
-                />
-                <div className="flex items-center gap-2 md:justify-center">
-                  <Checkbox
-                    checked={r.required}
-                    disabled={!REQUIRABLE.includes(r.kind)}
-                    onCheckedChange={(v) => patch(r.id, { required: v === true })}
-                    aria-label={t('plugin_codegen.define.fieldRequired')}
-                  />
-                  <span className="text-xs text-muted-foreground md:hidden">{t('plugin_codegen.define.fieldRequired')}</span>
+                  <Col label={t('plugin_codegen.define.fieldName')}>
+                    <Input
+                      value={r.name}
+                      onChange={(e) => patch(r.id, { name: e.target.value.trim().toLowerCase() })}
+                      placeholder={t('plugin_codegen.define.fieldName')}
+                      aria-label={t('plugin_codegen.define.fieldName')}
+                      maxLength={48}
+                      autoComplete="off"
+                    />
+                  </Col>
+                  <Col label={t('plugin_codegen.define.fieldType')}>
+                    <Select
+                      value={r.kind}
+                      onValueChange={(v) =>
+                        patch(r.id, {
+                          kind: v as FieldKind,
+                          required: REQUIRABLE.includes(v as FieldKind) ? r.required : false,
+                          length: v === 'string' ? r.length || '255' : '',
+                        })
+                      }
+                    >
+                      <SelectTrigger aria-label={t('plugin_codegen.define.fieldType')}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {KINDS.map((k) => (
+                          <SelectItem key={k} value={k}>
+                            {t(`plugin_codegen.define.kinds.${k}`)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Col>
+                  <Col label={t('plugin_codegen.define.fieldLength')}>
+                    <Input
+                      type="number"
+                      value={r.length}
+                      onChange={(e) => patch(r.id, { length: e.target.value })}
+                      placeholder="255"
+                      aria-label={t('plugin_codegen.define.fieldLength')}
+                      disabled={r.kind !== 'string'}
+                      min={1}
+                      max={4000}
+                    />
+                  </Col>
+                  <Col label={t('plugin_codegen.define.fieldComment')}>
+                    <Input
+                      value={r.comment}
+                      onChange={(e) => patch(r.id, { comment: e.target.value })}
+                      placeholder={t('plugin_codegen.define.fieldComment')}
+                      aria-label={t('plugin_codegen.define.fieldComment')}
+                      maxLength={200}
+                    />
+                  </Col>
+                  <div className="flex items-center gap-2 md:justify-center">
+                    <Checkbox
+                      checked={r.required}
+                      disabled={!REQUIRABLE.includes(r.kind)}
+                      onCheckedChange={(v) => patch(r.id, { required: v === true })}
+                      aria-label={t('plugin_codegen.define.fieldRequired')}
+                    />
+                    <span className="text-xs text-muted-foreground md:hidden">{t('plugin_codegen.define.fieldRequired')}</span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => remove(r.id)}
+                    disabled={rows.length <= 1}
+                    aria-label={t('plugin_codegen.define.removeField')}
+                  >
+                    <Trash2 aria-hidden="true" />
+                  </Button>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => remove(r.id)}
-                  disabled={rows.length <= 1}
-                  aria-label={t('plugin_codegen.define.removeField')}
-                >
-                  <Trash2 aria-hidden="true" />
-                </Button>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </section>
 

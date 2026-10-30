@@ -26,6 +26,7 @@
       "nameHint": "The biz_ prefix is added automatically; the module name defaults to the name without it",
       "migration": "Migration number",
       "migrationHint": "Use the next number in your project's migrations/business",
+      "options": "Extra system columns",
       "tenant": "Multi-tenant (adds tenant_id, tenant-scoped)",
       "softDelete": "Soft delete (adds deleted_at; deletes only mark rows)",
       "fields": "Fields",

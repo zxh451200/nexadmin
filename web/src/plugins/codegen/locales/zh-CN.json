@@ -26,6 +26,7 @@
       "nameHint": "自动加 biz_ 前缀；模块名默认取去掉前缀后的名字",
       "migration": "迁移编号",
       "migrationHint": "填你项目 migrations/business 里的下一个编号",
+      "options": "附加系统列",
       "tenant": "多租户（加 tenant_id，按租户隔离）",
       "softDelete": "软删除（加 deleted_at，删除只打标记）",
       "fields": "字段",
