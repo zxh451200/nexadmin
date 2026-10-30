@@ -1,0 +1,21 @@
+{
+  "plugin_saml": {
+    "title": "SAML 单点登录",
+    "description": "企业 IdP 单点登录（SAML 2.0 SP）：导入 IdP 元数据，把 ACS 与 SP 元数据交给 IdP 配置。",
+    "menu": "SAML 单点登录",
+    "add": "新建身份源",
+    "edit": "编辑身份源",
+    "name": "名称",
+    "enabled": "启用",
+    "idpMetadata": "IdP 元数据（XML）",
+    "autoCreate": "自动建号",
+    "matchExisting": "绑定同名本地账号",
+    "defaultRole": "默认角色",
+    "on": "已启用",
+    "off": "未启用",
+    "empty": "还没有配置身份源",
+    "btn": {
+      "edit": "编辑"
+    }
+  }
+}

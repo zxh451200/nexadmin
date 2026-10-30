@@ -18,6 +18,7 @@ require (
 )
 
 require (
+	github.com/crewjam/saml v0.5.1
 	github.com/go-ldap/ldap/v3 v3.4.15
 	github.com/gorilla/websocket v1.5.3
 	github.com/tjfoc/gmsm v1.4.1
@@ -29,11 +30,15 @@ require (
 require (
 	github.com/Azure/go-ntlmssp v0.1.1 // indirect
 	github.com/alecthomas/chroma/v2 v2.27.0 // indirect
+	github.com/beevik/etree v1.5.0 // indirect
 	github.com/dlclark/regexp2/v2 v2.2.1 // indirect
 	github.com/go-asn1-ber/asn1-ber v1.5.8 // indirect
 	github.com/google/uuid v1.6.0 // indirect
+	github.com/jonboulle/clockwork v0.2.2 // indirect
+	github.com/mattermost/xml-roundtrip-validator v0.1.0 // indirect
 	github.com/richardlehane/mscfb v1.0.8 // indirect
 	github.com/richardlehane/msoleps v1.0.6 // indirect
+	github.com/russellhaering/goxmldsig v1.4.0 // indirect
 	github.com/tiendc/go-deepcopy v1.7.2 // indirect
 	github.com/xuri/efp v0.0.2 // indirect
 	github.com/xuri/nfp v0.0.2-0.20250530014748-2ddeb826f9a9 // indirect

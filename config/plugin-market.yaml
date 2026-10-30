@@ -200,6 +200,20 @@ plugins:
       en-US:
         name: Reporting Center
         description: 'Reports and data walls: structured datasets, parameterized queries, tenant and data-scope isolation, charts, tables, metric cards, and a canvas-style dashboard.'
+  - id: saml
+    name: SAML 单点登录
+    description: 企业 IdP 单点登录（SAML 2.0 SP）：导入 IdP 元数据、SP 元数据与 ACS、属性映射、自动建号/绑定。
+    category: identity
+    edition: pro
+    version: 0.1.0
+    price: 待定
+    author: NexAdmin
+    repo: zxh451200/nexadmin-plugins
+    subdir: saml
+    i18n:
+      en-US:
+        name: SAML Single Sign-On
+        description: 'Enterprise IdP sign-in (SAML 2.0 SP): import IdP metadata, map attributes, auto-create or link accounts.'
   - id: scim
     name: SCIM 用户同步
     description: 企业身份平台 SCIM 2.0 用户同步。

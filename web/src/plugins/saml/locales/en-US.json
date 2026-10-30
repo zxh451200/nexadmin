@@ -1,0 +1,21 @@
+{
+  "plugin_saml": {
+    "title": "SAML single sign-on",
+    "description": "Enterprise IdP sign-in (SAML 2.0 SP): import IdP metadata and hand the ACS/SP metadata to the IdP.",
+    "menu": "SAML SSO",
+    "add": "New identity source",
+    "edit": "Edit identity source",
+    "name": "Name",
+    "enabled": "Enabled",
+    "idpMetadata": "IdP metadata (XML)",
+    "autoCreate": "Auto-create users",
+    "matchExisting": "Link same-name local account",
+    "defaultRole": "Default role",
+    "on": "Enabled",
+    "off": "Disabled",
+    "empty": "No identity source configured yet",
+    "btn": {
+      "edit": "Edit"
+    }
+  }
+}

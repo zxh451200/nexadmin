@@ -1,0 +1,22 @@
+id: saml
+name: SAML 单点登录
+version: 0.1.0
+description: 企业 IdP 单点登录（SAML 2.0 SP）：导入 IdP 元数据、SP 元数据与 ACS、属性映射、自动建号/绑定。官方专业版插件。
+author: NexAdmin
+edition: pro
+requires_nexadmin: ">=0.1.0"
+menus:
+  - parent: /system
+    type: menu
+    title: plugin_saml.menu
+    path: /system/saml
+    component: plugins/saml/SamlPage
+    perm: saml:list
+    icon: KeyRound
+    sort: 115
+    keep_alive: true
+  - parent: saml:list
+    type: button
+    title: plugin_saml.btn.edit
+    perm: saml:edit
+    sort: 10
