@@ -121,3 +121,15 @@ func (s *Service) CheckSort(ctx context.Context, sc *datascope.Scope, in SortInp
 	}
 	return nil
 }
+
+// CheckMove 校验移动：目标父级在范围内，且被移动的整棵子树都在范围内。
+func (s *Service) CheckMove(ctx context.Context, sc *datascope.Scope, id idgen.ID, in MoveInput) error {
+	if !sc.Limited() {
+		return nil
+	}
+	parent := nz(in.ParentID)
+	if parent != nil && !sc.HasDept(int64(*parent)) {
+		return forbidden(ctx, 1)
+	}
+	return s.checkSubtree(ctx, sc, id)
+}

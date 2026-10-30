@@ -23,7 +23,8 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	h := &Handler{svc: NewService(d.DB)}
 	g := r.Group("/depts")
 	g.GET("/tree", core.Perm("dept:list"), h.Tree)
-	g.PUT("/sort", core.Perm("dept:update"), h.Sort) // 固定路径先于 /:id
+	g.PUT("/sort", core.Perm("dept:update"), h.Sort)     // 固定路径先于 /:id
+	g.PUT("/:id/move", core.Perm("dept:update"), h.Move) // 跨父级移动（拖拽）
 	g.GET("/:id", core.Perm("dept:list"), h.Get)
 	g.POST("", core.Perm("dept:create"), h.Create)
 	g.PUT("/:id", core.Perm("dept:update"), h.Update)

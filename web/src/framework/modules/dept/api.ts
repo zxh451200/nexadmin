@@ -21,10 +21,11 @@ export interface SysDept {
 export type SysDeptInput = Omit<SysDept, 'id' | 'children' | 'createdAt' | 'updatedAt' | 'leaderName' | 'readonly'>
 
 /** 部门管理页专用：scene=manage，后端按操作者数据范围裁剪；各下拉仍用完整树（不带 scene）。 */
-export function useDeptTree() {
+export function useDeptTree(enabled = true) {
   return useQuery({
     queryKey: ['dept', 'tree', 'manage'],
     queryFn: () => api.get<SysDept[]>('/depts/tree', { scene: 'manage' }),
+    enabled,
   })
 }
 
@@ -61,6 +62,15 @@ export function useSortDepts() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (v: { parentId: string | null; ids: string[] }) => api.put<null>('/depts/sort', v),
+    onSettled: () => qc.invalidateQueries({ queryKey: ['dept'] }),
+  })
+}
+
+export function useMoveDept() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, parentId, afterId }: { id: string; parentId: string | null; afterId?: string }) =>
+      api.put<null>(`/depts/${id}/move`, { parentId, ...(afterId === undefined ? {} : { afterId }) }),
     onSettled: () => qc.invalidateQueries({ queryKey: ['dept'] }),
   })
 }

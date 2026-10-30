@@ -3,6 +3,7 @@ package dept
 import (
 	"context"
 	"errors"
+	"sort"
 	"strings"
 
 	"gorm.io/gorm"
@@ -263,4 +264,121 @@ func (s *Service) Sort(ctx context.Context, in SortInput) error {
 		}
 		return nil
 	})
+}
+
+// Move 把部门移到另一个上级下（拖拽跨层级），并按 afterId 落到目标同级的精确位置。
+// 上级变化时在同一事务里重写整棵子树的 path；插入点用整组重编号，避免连续拖拽后 sort 重复。
+func (s *Service) Move(ctx context.Context, id idgen.ID, in MoveInput) error {
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		d, err := get(tx, id)
+		if err != nil {
+			return err
+		}
+		parent := nz(in.ParentID)
+		parentPath := "/"
+		if parent != nil {
+			if *parent == id {
+				return bad("dept.parent_self_or_child")
+			}
+			p, err := get(tx, *parent)
+			if err != nil {
+				if isNotFoundErr(err) {
+					return bad("dept.parent_not_found")
+				}
+				return err
+			}
+			if strings.HasPrefix(p.Path, d.Path) { // 新上级在自己的子树里
+				return bad("dept.parent_self_or_child")
+			}
+			parentPath = p.Path
+		}
+		newPath := parentPath + id.String() + "/"
+		if newPath != d.Path {
+			var subs []Dept
+			if err := tx.Where("path LIKE ? AND id <> ?", d.Path+"%", int64(id)).Find(&subs).Error; err != nil {
+				return err
+			}
+			for _, sub := range subs {
+				np := rebasePath(sub.Path, d.Path, newPath)
+				if err := tx.Model(&Dept{}).Where("id = ?", int64(sub.ID)).Update("path", np).Error; err != nil {
+					return err
+				}
+			}
+		}
+		sibQuery := func() *gorm.DB {
+			q := tx.Model(&Dept{}).Where("id <> ?", int64(id))
+			if parent == nil {
+				return q.Where("parent_id IS NULL")
+			}
+			return q.Where("parent_id = ?", int64(*parent))
+		}
+		var sibs []Dept
+		if err := sibQuery().Find(&sibs).Error; err != nil {
+			return err
+		}
+		sort.Slice(sibs, func(i, j int) bool {
+			if sibs[i].Sort != sibs[j].Sort {
+				return sibs[i].Sort < sibs[j].Sort
+			}
+			return sibs[i].ID < sibs[j].ID
+		})
+		moved := map[string]any{"path": newPath}
+		if parent == nil {
+			moved["parent_id"] = nil
+		} else {
+			moved["parent_id"] = int64(*parent)
+		}
+		if in.AfterID == nil {
+			maxSort := 0
+			for _, s := range sibs {
+				if s.Sort > maxSort {
+					maxSort = s.Sort
+				}
+			}
+			moved["sort"] = maxSort + 10
+			return tx.Model(&Dept{}).Where("id = ?", int64(id)).Updates(moved).Error
+		}
+		for i, sid := range placeAfter(sibs, id, strings.TrimSpace(*in.AfterID)) {
+			upd := map[string]any{"sort": (i + 1) * 10}
+			if sid == id {
+				for k, v := range moved {
+					upd[k] = v
+				}
+			}
+			if err := tx.Model(&Dept{}).Where("id = ?", int64(sid)).Updates(upd).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	d, err := s.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+	event.Publish(ctx, event.DeptUpdated, deptEvent(d))
+	return nil
+}
+
+// placeAfter 把 id 插到 afterID 之后（afterID 为空=插到最前；找不到该同级=追加到末尾），
+// 返回目标上级下的完整顺序（含 id）。siblings 不含 id，且已按 sort 升序。
+func placeAfter(siblings []Dept, id idgen.ID, afterID string) []idgen.ID {
+	out := make([]idgen.ID, 0, len(siblings)+1)
+	placed := afterID == ""
+	if placed {
+		out = append(out, id)
+	}
+	for _, s := range siblings {
+		out = append(out, s.ID)
+		if s.ID.String() == afterID {
+			out = append(out, id)
+			placed = true
+		}
+	}
+	if !placed {
+		out = append(out, id)
+	}
+	return out
 }

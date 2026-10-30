@@ -43,3 +43,10 @@ type SortInput struct {
 	ParentID *idgen.ID  `json:"parentId"`
 	IDs      []idgen.ID `json:"ids" binding:"required"`
 }
+
+// MoveInput 是拖拽移动部门的请求体（可跨层级）。
+type MoveInput struct {
+	ParentID *idgen.ID `json:"parentId"`
+	// AfterID 指定插到哪个同级之后：空串=插到最前，省略=追加到末尾。
+	AfterID *string `json:"afterId"`
+}

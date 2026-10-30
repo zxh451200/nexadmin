@@ -5,7 +5,7 @@ export type MenuGroupKey = 'dashboard' | 'system' | 'content' | 'monitor' | 'ten
 export interface ModuleRoute {
   path: string // 无前导斜杠，如 'system/user'
   component: LazyExoticComponent<ComponentType> | ComponentType
-  perm?: string // 需要的权限点，如 'user:list'
+  perm?: string | string[] // 需要的权限点，如 'user:list'；数组默认「任一命中」即可进（合并页用）
   // 该页面所属插件 ID（由 route.tsx 所在目录推断，见 discover/merge）：插件未启用时守卫直接拦截，
   // 不再渲染页面（否则页面会发出一串必然 404 的插件接口请求）。
   plugin?: string

@@ -161,3 +161,28 @@ func (h *Handler) Sort(c *gin.Context) {
 	}
 	response.OK(c, nil)
 }
+
+// Move PUT /depts/:id/move 跨父级移动部门（拖拽到下级）。
+func (h *Handler) Move(c *gin.Context) {
+	id, ok := pathID(c)
+	if !ok {
+		return
+	}
+	var in MoveInput
+	if !response.BindJSON(c, &in) {
+		return
+	}
+	sc, ok := h.scope(c)
+	if !ok {
+		return
+	}
+	if err := h.svc.CheckMove(c.Request.Context(), sc, id, in); err != nil {
+		response.Fail(c, err)
+		return
+	}
+	if err := h.svc.Move(c.Request.Context(), id, in); err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, nil)
+}

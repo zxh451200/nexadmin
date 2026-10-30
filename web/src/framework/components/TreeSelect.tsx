@@ -111,20 +111,20 @@ export function TreeSelect({
               <button
                 type="button"
                 aria-label={isOpen ? t('picker.collapse') : t('picker.expand')}
-                className="inline-flex size-11 shrink-0 items-center justify-center text-muted-foreground md:size-8"
+                className="inline-flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:bg-muted focus-visible:outline-none md:size-6"
                 onClick={() => toggle(v)}
               >
-                <ChevronRight className={cn('size-4 transition-transform motion-reduce:transition-none rtl:rotate-180', isOpen && 'rotate-90 rtl:rotate-90')} aria-hidden="true" />
+                <ChevronRight className={cn('size-3.5 transition-transform motion-reduce:transition-none rtl:rotate-180', isOpen && 'rotate-90 rtl:rotate-90')} aria-hidden="true" />
               </button>
             ) : (
-              <span className="size-11 shrink-0 md:size-8" aria-hidden="true" />
+              <span className="size-7 shrink-0 md:size-6" aria-hidden="true" />
             )}
             <button
               type="button"
               disabled={isDisabled?.(n as Record<string, unknown>)}
               onClick={() => pick(v)}
               className={cn(
-                'flex min-h-11 flex-1 items-center gap-2 rounded-sm px-2 text-start text-base hover:bg-muted focus-visible:bg-muted focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 md:min-h-8 md:text-sm',
+                'flex min-h-8 flex-1 items-center gap-2 rounded-sm px-2 text-start text-sm hover:bg-muted focus-visible:bg-muted focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 md:min-h-8',
                 isSel && 'bg-muted/60',
               )}
             >

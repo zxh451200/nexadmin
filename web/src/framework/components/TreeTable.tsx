@@ -54,6 +54,8 @@ export interface TreeTableProps<T extends { id: string; children?: T[] }> {
 const INDENT = ['ps-0', 'ps-6', 'ps-12', 'ps-[4.5rem]', 'ps-24', 'ps-[7.5rem]', 'ps-36', 'ps-[10.5rem]', 'ps-48']
 /** 横向位移超过多少像素视为「改变层级」而不是排序 */
 const NEST_OFFSET = 24
+/** 一层缩进的宽度（与 INDENT 的步进一致）：往左拖过几档缩进就升几级 */
+const INDENT_STEP = 24
 /** 落点线从手柄列右侧起画：手柄 36px 是抓取区，线端圆点压在它下面会贴住六点手柄 */
 const DROP_LINE_INSET = 48
 /** 横向跟手打五折：位移看得见（这就是「往右拖=降级」的手势反馈），又不至于把行甩出滚动容器 */
@@ -277,13 +279,19 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
     setRects(next)
   }
 
+  /** 某节点（连着它已展开的后代）最后一行的底边 */
+  const subtreeBottom = (id: string) => {
+    const node = findNode(tree, id)
+    if (!node) return null
+    const deepest = (n: T): T => (isOpen(n) && n.children?.length ? deepest(n.children[n.children.length - 1]) : n)
+    return rects.get(deepest(node).id)?.bottom ?? null
+  }
+
   /** 某个父级子树最后一行的底边：append 进去时会落在它下面（用快照坐标） */
   const appendAnchor = (parentId: string | null) => {
     const list = parentId === null ? tree : (findNode(tree, parentId)?.children ?? [])
     if (!list.length) return null
-    const deepest = (n: T): T => (isOpen(n) && n.children?.length ? deepest(n.children[n.children.length - 1]) : n)
-    const last = deepest(list[list.length - 1])
-    return rects.get(last.id)?.bottom ?? null
+    return subtreeBottom(list[list.length - 1].id)
   }
 
   type DropPlan = {
@@ -345,7 +353,7 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
       edge?: 'before' | 'after'
       reason?: string
     }): DropPlan => {
-      const left = (o.indentBase ?? firstHandle) + DROP_LINE_INSET + Math.max(0, o.depth) * 24
+      const left = (o.indentBase ?? firstHandle) + DROP_LINE_INSET + Math.max(0, o.depth) * INDENT_STEP
       return {
         y: o.y,
         left,
@@ -381,18 +389,30 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
       return plan({ y, indentBase: box.handleLeft, depth, mode: reason ? 'blocked' : 'move', parentId: overId, afterId, reason: reason ?? undefined })
     }
     if (dx < -NEST_OFFSET && onMove && activeParent !== null) {
-      // 升一级：插到原父级后面（位置精确，不是甩到祖父末尾）
-      const grand = parentOf(tree, activeParent) ?? null
-      const y = appendAnchor(grand)
+      // 往左拖过几档缩进就升几级：一次拖拽能从第 3 级直接回到第 1 级，
+      // 落点插到升上去那一级的祖先之后，位置精确，不是甩到祖父末尾。
+      const activeDepth = depthOf(tree, active) ?? 0
+      const ancestors: string[] = []
+      let cur: string = active
+      for (let i = 0; i < activeDepth; i++) {
+        const p = parentOf(tree, cur)
+        if (p === null || p === undefined) break
+        ancestors.push(p)
+        cur = p
+      }
+      if (!ancestors.length) return null
+      const levels = Math.min(ancestors.length, 1 + Math.floor((-dx - NEST_OFFSET) / INDENT_STEP))
+      const afterId = ancestors[levels - 1] as string
+      const parentId = levels < ancestors.length ? (ancestors[levels] ?? null) : null
+      const y = subtreeBottom(afterId)
       if (y === null) return null
-      const depth = grand === null ? 0 : (depthOf(tree, grand) ?? 0) + 1
       return plan({
         y,
-        indentBase: grand === null ? null : (rects.get(grand)?.handleLeft ?? null),
-        depth,
+        indentBase: parentId === null ? null : (rects.get(parentId)?.handleLeft ?? null),
+        depth: parentId === null ? 0 : (depthOf(tree, parentId) ?? 0) + 1,
         mode: 'move',
-        parentId: grand,
-        afterId: activeParent,
+        parentId,
+        afterId,
       })
     }
     const edge = pointer.y < box.top + (box.bottom - box.top) / 2 ? 'before' : 'after'
@@ -546,6 +566,8 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
     const overId = plan?.overId ?? (e.over ? String(e.over.id) : null)
     if (!overId) return
     const parentId = parentOf(tree, overId) ?? null
+    // 跨父级只能靠 onMove 表达：没有 onMove 时不能把外来的 id 塞进别组的排序请求（服务端必 409）
+    if (parentId !== (parentOf(tree, active) ?? null)) return
     const list = siblingsOf(tree, parentId)
     if (!list) return
     const ids = list.map((n) => n.id).filter((id) => id !== active)
