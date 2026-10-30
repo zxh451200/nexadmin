@@ -83,6 +83,8 @@ go build ./... && go vet ./... && go test ./...
 
 ### Free Plugins (Ready to Go)
 
+**Default build scope**: the framework master and official release packages compile `totp` (two-factor) by default; `ldap` and the other free plugins are installed on demand. They do not conflict: LDAP verifies the password, TOTP asks for a code after login succeeds. Do not enable both `ldap` and `identity` directory sources at the same time — both register external authenticators, only one takes effect, which looks like "configured but not working".
+
 **What are free plugins?** General-purpose capabilities like Scheduled Jobs (cron), Code Generator (codegen), and Data Import (imports) are offered freely with the framework. They don't require license files or extra fees.
 
 **Installation steps (using cron as an example):**

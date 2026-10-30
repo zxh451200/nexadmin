@@ -22,6 +22,7 @@ import (
 	_ "nexadmin/plugins/scim"
 	_ "nexadmin/plugins/security"
 	_ "nexadmin/plugins/ticket"
+	_ "nexadmin/plugins/totp"
 	_ "nexadmin/plugins/website"
 	_ "nexadmin/plugins/workflow"
 	// nexadmin:plugins:end
