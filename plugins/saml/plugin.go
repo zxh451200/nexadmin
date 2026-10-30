@@ -29,9 +29,12 @@ func (*module) Register(r *gin.RouterGroup, d *core.Deps) {
 	admin.PUT("/sources/:id", core.Perm("saml:edit"), s.updateSource)
 	admin.DELETE("/sources/:id", core.Perm("saml:edit"), s.deleteSource)
 	admin.GET("/sources/:id/urls", core.Perm("saml:list"), s.sourceURLs)
+	admin.GET("/sources/:id/logout", s.logout)
 
 	pub := d.Public.Group("/auth/saml")
 	pub.GET("/:id/metadata", s.metadata)
 	pub.GET("/:id/login", s.login)
 	pub.POST("/:id/acs", s.acs)
+	pub.GET("/:id/slo", s.slo)
+	pub.POST("/:id/slo", s.slo)
 }

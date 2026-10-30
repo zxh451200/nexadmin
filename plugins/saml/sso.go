@@ -171,7 +171,68 @@ func (s *Service) acs(c *gin.Context) {
 		response.Fail(c, err)
 		return
 	}
+	// 保存 NameID 供 SP 发起登出使用（需二次验证的挑战阶段还没有本地用户，跳过）。
+	if out.User != nil && s.cache != nil && assertion.Subject.NameID.Value != "" {
+		_ = s.cache.Set(c.Request.Context(), sloKey(out.User.TenantID, m.ID, out.User.ID),
+			assertion.Subject.NameID.Value, 7*24*time.Hour)
+	}
 	response.OK(c, out.Payload())
+}
+
+// logout 是 SP 发起的单点登出：吊销本地令牌并 302 到 IdP 的 SLO 端点。
+func (s *Service) logout(c *gin.Context) {
+	cl := auth.ClaimsFrom(c)
+	if cl == nil {
+		response.Fail(c, response.Unauthorized("error.unauthorized"))
+		return
+	}
+	m, ok := s.sourceOrFail(c)
+	if !ok {
+		return
+	}
+	if s.cache == nil {
+		response.Fail(c, response.Unavailable("auth.provider_missing"))
+		return
+	}
+	key := sloKey(cl.TenantID, m.ID, cl.UserID)
+	nameID, err := s.cache.Get(c.Request.Context(), key)
+	if err != nil || nameID == "" {
+		response.Fail(c, response.BadRequest("error.bad_request").WithMsg("当前会话不是通过该 SAML 源登录的"))
+		return
+	}
+	sp, err := s.provider(m, baseURL(c))
+	if err != nil {
+		response.Fail(c, response.BadRequest("error.bad_request").WithMsg(err.Error()))
+		return
+	}
+	u, err := sp.MakeRedirectLogoutRequest(nameID, newRelay())
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	_ = s.cache.Del(c.Request.Context(), key)
+	if r, ok := s.issuer.(SessionRevoker); ok {
+		_ = r.RevokeSession(c.Request.Context(), cl)
+	}
+	c.Redirect(http.StatusFound, u.String())
+}
+
+// slo 接收 IdP 的 LogoutResponse（SP 发起登出的回执），校验后确认完成。
+func (s *Service) slo(c *gin.Context) {
+	m, ok := s.sourceOrFail(c)
+	if !ok {
+		return
+	}
+	sp, err := s.provider(m, baseURL(c))
+	if err != nil {
+		response.Fail(c, response.BadRequest("error.bad_request").WithMsg(err.Error()))
+		return
+	}
+	if err := sp.ValidateLogoutResponseRequest(c.Request); err != nil {
+		response.Fail(c, response.BadRequest("error.bad_request").WithMsg("SLO 回执校验失败: "+err.Error()))
+		return
+	}
+	response.OK(c, gin.H{"ok": true})
 }
 
 // ---- 管理接口 ----

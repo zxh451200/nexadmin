@@ -21,11 +21,22 @@ import (
 	"nexadmin/core/auth"
 	"nexadmin/core/cache"
 	"nexadmin/core/secret"
+	"nexadmin/pkg/idgen"
 )
 
 // Issuer 是 ACS 完成断言校验后签发登录态的最小依赖（*auth.Service 满足）。
 type Issuer interface {
 	LoginAs(ctx context.Context, req auth.LoginAsRequest) (*auth.LoginOutcome, error)
+}
+
+// SessionRevoker 是可选的本地会话吊销能力（*auth.Service 满足）；SLO 时调用。
+type SessionRevoker interface {
+	RevokeSession(ctx context.Context, cl *auth.Claims) error
+}
+
+// sloKey 保存「本地用户在某 SAML 源上的 NameID」，供 SP 发起登出时构造 LogoutRequest。
+func sloKey(tid, srcID, uid idgen.ID) string {
+	return "saml:slo:" + tid.String() + ":" + srcID.String() + ":" + uid.String()
 }
 
 type Service struct {
