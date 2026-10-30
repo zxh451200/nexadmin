@@ -22,9 +22,13 @@ func (s *Service) readSub(uid idgen.ID) *gorm.DB {
 	return s.db.Table("sys_notice_read").Select("notice_id").Where("user_id = ?", int64(uid))
 }
 
+func (s *Service) dismissSub(uid idgen.ID) *gorm.DB {
+	return s.db.Table("sys_notice_dismiss").Select("notice_id").Where("user_id = ?", int64(uid))
+}
+
 // visible 是“对 uid 可见的公告”：已发布、已到发布时间、未过期、属于本租户或是平台公告，
 // 并且发布范围覆盖该用户（全员 / 指定用户 / 指定部门 / 指定角色），
-// 且在该用户最近一次“清空我的公告”之后发布。
+// 且在该用户最近一次“清空我的公告”之后发布、也没被该用户单独删掉。
 func (s *Service) visible(ctx context.Context, uid idgen.ID) *gorm.DB {
 	tid, _ := tenant.From(ctx)
 	now := time.Now().UTC()
@@ -45,7 +49,7 @@ func (s *Service) visible(ctx context.Context, uid idgen.ID) *gorm.DB {
 	if c := s.clearedRow(ctx, uid); c != nil {
 		q = q.Where("COALESCE(published_at, created_at) > ?", c.ClearedAt)
 	}
-	return q
+	return q.Where("id NOT IN (?)", s.dismissSub(uid))
 }
 
 // Clear 清空“我的公告”：公告本身不动，只记住当前时间点，之前发布的公告不再出现在
@@ -134,6 +138,31 @@ func (s *Service) Mine(ctx context.Context, uid idgen.ID, keyword, typ string, u
 			Read: isRead[int64(n.ID)], PublishedAt: n.PublishedAt, Attachments: attachmentsJSON(n.Attachments)})
 	}
 	return out, total, nil
+}
+
+// Dismiss 把一条公告从自己的消息中心移除（幂等）：公告本身不删，其他人的列表不受影响。
+// 只能移除自己可见的公告。
+func (s *Service) Dismiss(ctx context.Context, uid, id idgen.ID) error {
+	var visible int64
+	if err := s.visible(ctx, uid).Where("id = ?", int64(id)).Count(&visible).Error; err != nil {
+		return err
+	}
+	if visible == 0 {
+		return response.NotFound("error.not_found")
+	}
+	exists := func() bool {
+		var c int64
+		s.db.WithContext(ctx).Model(&Dismiss{}).Where("notice_id = ? AND user_id = ?", int64(id), int64(uid)).Count(&c)
+		return c > 0
+	}
+	if exists() {
+		return nil
+	}
+	err := s.db.WithContext(ctx).Create(&Dismiss{NoticeID: id, UserID: uid}).Error
+	if err != nil && exists() { // 并发重复提交，唯一索引兜底
+		return nil
+	}
+	return err
 }
 
 // MarkRead 标记已读（幂等）。只能标记自己可见的公告。

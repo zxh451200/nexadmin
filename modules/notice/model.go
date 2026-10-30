@@ -75,6 +75,15 @@ type Clear struct {
 
 func (Clear) TableName() string { return "sys_notice_clear" }
 
+// Dismiss 对应 sys_notice_dismiss：用户把某条公告从自己的消息中心移除，公告本身与其他用户不受影响。
+type Dismiss struct {
+	database.TenantModel
+	UserID   idgen.ID `gorm:"not null"`
+	NoticeID idgen.ID `gorm:"not null"`
+}
+
+func (Dismiss) TableName() string { return "sys_notice_dismiss" }
+
 // attachmentsJSON 保证附件始终是合法 JSON 数组。
 func attachmentsJSON(s string) json.RawMessage {
 	if strings.TrimSpace(s) == "" || !json.Valid([]byte(s)) {

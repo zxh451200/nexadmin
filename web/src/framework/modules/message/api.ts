@@ -110,6 +110,15 @@ export function useClearNotices() {
   })
 }
 
+/** 只把这条公告从我的消息中心移除，公告本身与其他人不受影响 */
+export function useDeleteNotice() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (id: string) => api.del(`/notices/mine/${id}`),
+    onSuccess: invalidate,
+  })
+}
+
 export function useReadNotice() {
   const invalidate = useInvalidate()
   return useMutation({

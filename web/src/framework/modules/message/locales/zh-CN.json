@@ -11,6 +11,7 @@
     "clearNotices": "清空公告",
     "clearMessagesConfirm": "将删除你收到的全部消息（含未读），删除后不可恢复。确定清空吗？",
     "clearNoticesConfirm": "将清空消息中心里的全部公告，之后新发布的公告仍会正常显示。确定清空吗？",
+    "deleteNoticeConfirm": "这条公告会从你的消息中心移除，公告本身与其他人的列表不受影响。确定删除吗？",
     "unread": "未读",
     "pinned": "置顶",
     "goLink": "前往查看",

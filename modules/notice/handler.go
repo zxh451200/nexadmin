@@ -202,6 +202,13 @@ func (h *Handler) ClearMine(c *gin.Context) {
 	respond(c, nil, h.svc.Clear(c.Request.Context(), auth.ClaimsFrom(c).UserID))
 }
 
+// DismissMine DELETE /notices/mine/:id：把一条公告从我的消息中心移除（公告本身不删）
+func (h *Handler) DismissMine(c *gin.Context) {
+	if id, ok := paramID(c); ok {
+		respond(c, nil, h.svc.Dismiss(c.Request.Context(), auth.ClaimsFrom(c).UserID, id))
+	}
+}
+
 // MarkRead POST /notices/:id/read
 func (h *Handler) MarkRead(c *gin.Context) {
 	if id, ok := paramID(c); ok {

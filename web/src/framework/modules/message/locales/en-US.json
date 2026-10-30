@@ -11,6 +11,7 @@
     "clearNotices": "Clear notices",
     "clearMessagesConfirm": "All messages you received, including unread ones, will be deleted. This cannot be undone. Clear them?",
     "clearNoticesConfirm": "All notices in the message center will be cleared for you. Notices published later still appear. Clear them?",
+    "deleteNoticeConfirm": "This notice will be removed from your message center only; the notice and everyone else's list stay unchanged. Delete it?",
     "unread": "Unread",
     "pinned": "Pinned",
     "goLink": "Open link",

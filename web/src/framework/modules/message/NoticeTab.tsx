@@ -9,7 +9,7 @@ import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { RichTextView } from '@/framework/components/RichTextView'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
-import { useClearNotices, useMyNotices, useReadNotice, type MyNotice } from './api'
+import { useClearNotices, useDeleteNotice, useMyNotices, useReadNotice, type MyNotice } from './api'
 import { formatTime } from './format'
 
 export function NoticeTab() {
@@ -21,6 +21,19 @@ export function NoticeTab() {
   const { data, isLoading } = useMyNotices({ page, pageSize })
   const readNotice = useReadNotice()
   const clear = useClearNotices()
+  const remove = useDeleteNotice()
+
+  const onDelete = async (n: MyNotice) => {
+    if (!(await confirm({ destructive: true, description: t('message.deleteNoticeConfirm') }))) return
+    try {
+      await remove.mutateAsync(n.id)
+      if (detail?.id === n.id) setDetail(null)
+      if (data?.list.length === 1 && page > 1) setPage(page - 1)
+      toast.success(t('common.operateSuccess'))
+    } catch {
+      toast.error(t('common.operateFailed'))
+    }
+  }
 
   const onClear = async () => {
     if (!(await confirm({ destructive: true, description: t('message.clearNoticesConfirm') }))) return
@@ -96,6 +109,12 @@ export function NoticeTab() {
             setPageSize(s)
           },
         }}
+        rowActions={(n) => (
+          <Button variant="ghost" size="sm" className="text-destructive" onClick={() => onDelete(n)}>
+            <Trash2 aria-hidden="true" />
+            {t('common.delete')}
+          </Button>
+        )}
       />
 
       <ResponsiveDialog

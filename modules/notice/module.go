@@ -30,6 +30,7 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	r.GET("/notices/popup", touch, h.Popup)
 	r.GET("/notices/mine", h.Mine)
 	r.DELETE("/notices/mine", h.ClearMine)
+	r.DELETE("/notices/mine/:id", h.DismissMine)
 	r.POST("/notices/:id/read", h.MarkRead)
 
 	// 管理端
