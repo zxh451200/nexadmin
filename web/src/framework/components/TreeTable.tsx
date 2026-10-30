@@ -966,7 +966,6 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
                 <div
                   data-drop-line="1"
                   className="pointer-events-none fixed z-[60]"
-                  {/* 快照坐标 → 屏幕坐标：减去起拖后滚过的距离 */}
                   style={{ left: drop.left - scrollShift.x, top: drop.y - 1 - scrollShift.y, width: drop.width }}
                   role="status"
                   aria-live="polite"
