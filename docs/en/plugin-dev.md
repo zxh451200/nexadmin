@@ -144,6 +144,31 @@ Watch the engine differences: auto-increment/primary-key types, `TEXT` defaults,
 
 The backend needs at least one unit test covering your most error-prone pure logic (the cron example tests expression parsing, next-run calculation and SSRF blocking). If parts that need a real database cannot run in unit tests, say so in the submission notes.
 
+### 4.6 Providing import sources (optional)
+
+If your plugin owns master data worth bulk-importing, implement `Provider` from `pkg/importspec` and it shows up in the Import Center — **you do not depend on the imports plugin itself**:
+
+```go
+func (m *module) ImportSources(db *gorm.DB) []importspec.Source {
+    svc := NewService(db, zapLog{zap.NewNop()}) // your plugin's logger adapter
+    return []importspec.Source{{
+        Name: "crm_customers", Title: "客户导入", TitleKey: "imports.source.crm_customers.title",
+        Columns: []importspec.Column{
+            {Key: "name", Label: "客户名称", LabelKey: "imports.source.crm_customers.name", Required: true, Example: "张三"},
+        },
+        Handler: func(ctx context.Context, row int, vals map[string]string) error { /* persist one row */ },
+    }}
+}
+```
+
+Rules:
+
+- Sources are collected when the Import Center mounts. Plugin modules reach the core wrapped, and the collector unwraps them first (`core.UnwrapModule`). A duplicate name logs a warning and is skipped; it never panics.
+- `Label` is the fallback header. When `TitleKey`/`LabelKey` are set, the source name and template headers render in the request language, and parsing accepts the headers of **every configured language** — so a template downloaded in one language still imports after switching. Add the keys when you add a language.
+- `Handler` handles exactly one row; returning an error marks that row failed (other rows continue). The report is read by humans, so translate before returning — `i18n.T(ctx, key)`, never a bare key such as `crm.name_required`.
+- Large files run on a background goroutine with `context.Background()` (tenant and language restored from the job row). Use the `ctx` you are given and never cache request-scoped state.
+- Match by a business key and update-then-insert, so importing the same file twice does not duplicate rows — see `plugins/crm/import.go`.
+
 ## 5. Frontend
 
 The frontend directory matches built-in modules exactly; after install it lives at `web/src/plugins/<id>/`, and its routes, mocks and i18n copy are discovered automatically — **no framework file changes needed**.

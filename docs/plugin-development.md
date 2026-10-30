@@ -139,6 +139,31 @@ func (m *module) Start(ctx context.Context, d *core.Deps) error {
 
 后端至少带一个单测，覆盖你最容易出错的纯逻辑（cron 示例测了表达式解析、下次执行时间、SSRF 拦截）。需要真实数据库的部分如果没法在单测里跑，请在提交说明里写明。
 
+### 4.6 给导入中心提供数据源（可选）
+
+插件里有值得批量导入的主数据时，实现 `pkg/importspec` 的 `Provider` 即可挂进「导入中心」，**不需要依赖导入中心插件本身**：
+
+```go
+func (m *module) ImportSources(db *gorm.DB) []importspec.Source {
+    svc := NewService(db, zapLog{zap.NewNop()}) // 用插件自己的日志适配
+    return []importspec.Source{{
+        Name: "crm_customers", Title: "客户导入", TitleKey: "imports.source.crm_customers.title",
+        Columns: []importspec.Column{
+            {Key: "name", Label: "客户名称", LabelKey: "imports.source.crm_customers.name", Required: true, Example: "张三"},
+        },
+        Handler: func(ctx context.Context, row int, vals map[string]string) error { /* 逐行落库 */ },
+    }}
+}
+```
+
+约定：
+
+- 来源在导入中心挂载时自动收集（插件模块在内核里被包了一层，收集前会 `core.UnwrapModule` 拆包）；重名会记 warning 并跳过，不会 panic。
+- `Label` 是兜底表头，`TitleKey`/`LabelKey` 有值时按请求语言渲染来源名与模板表头；解析上传文件时**所有已配置语言的表头都认**，所以用户切了语言再上传自己下载的模板也不会丢列。新增语言记得同步补 key。
+- `Handler` 只处理一行，返回 error 即该行失败并写进错误报告，其它行继续。报告里是给人看的文本，别把 `crm.name_required` 这种 i18n key 原样返回——自己 `i18n.T(ctx, key)` 翻译后再返回。
+- 大文件走后台协程，跑在 `context.Background()` 上（租户与语言从台账行还原），落库要用传入的 `ctx`，不要缓存请求级状态。
+- 按业务键做「命中就更新、未命中就新建」，让同一份文件重复导入不翻倍——参考 `plugins/crm/import.go`。
+
 ## 5. 前端
 
 前端目录的结构和内置模块完全一致，安装后位于 `web/src/plugins/<id>/`，路由、mock、i18n 文案会被自动发现，**不需要改框架任何文件**。
