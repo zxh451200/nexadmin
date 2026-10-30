@@ -3,6 +3,7 @@ import { Pencil, Plus, ShieldCheck, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
+import { usePermission } from '@/framework/auth/usePermission'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { DictTag } from '@/framework/components/DictTag'
@@ -19,6 +20,7 @@ const iconBtn = 'h-11 w-11 md:h-9 md:w-9'
 
 export default function RolePage() {
   const { t } = useTranslation()
+  const { has } = usePermission()
   const confirm = useConfirm()
   const list = useRoleList()
   const del = useDeleteRole()
@@ -106,7 +108,7 @@ export default function RolePage() {
         rowKey="id"
         loading={list.isLoading}
         pagination={false}
-        sortable={filter.active ? undefined : { onReorder: (ids) => sort.mutateAsync(ids) }}
+        sortable={filter.active || !has('role:update') ? undefined : { onReorder: (ids) => sort.mutateAsync(ids) }}
         rowActions={(r) => (
           <>
             <Can perm="role:assign">

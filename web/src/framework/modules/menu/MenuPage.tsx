@@ -4,6 +4,7 @@ import { Pencil, Plus, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
+import { usePermission } from '@/framework/auth/usePermission'
 import { DictTag } from '@/framework/components/DictTag'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { SimpleFilterBar } from '@/framework/components/SimpleFilterBar'
@@ -17,6 +18,7 @@ import { MenuFormDialog } from './MenuFormDialog'
 
 export default function MenuPage() {
   const { t } = useTranslation()
+  const { has } = usePermission()
   const confirm = useConfirm()
   const { data = [], isLoading } = useMenuTree()
   const del = useDeleteMenu()
@@ -67,7 +69,7 @@ export default function MenuPage() {
     }
   }
 
-  const canDrag = !filter.active
+  const canDrag = has('menu:update') && !filter.active
   const sortColumn: Column<SysMenu> = { key: 'sort', title: t('sysMenu.col.sort'), align: 'end', render: (r) => <span className="num">{r.sort}</span> }
 
   const columns: Column<SysMenu>[] = [
@@ -111,8 +113,8 @@ export default function MenuPage() {
         loading={isLoading}
         columnSettingsKey="sysMenu"
         forceExpandAll={filter.active}
-        onReorder={filter.active ? undefined : (pid, ids) => sort.mutateAsync({ parentId: pid, ids })}
-        onMove={filter.active ? undefined : (id, parentId, afterId) => move.mutateAsync({ id, parentId, afterId })}
+        onReorder={canDrag ? (pid, ids) => sort.mutateAsync({ parentId: pid, ids }) : undefined}
+        onMove={canDrag ? (id, parentId, afterId) => move.mutateAsync({ id, parentId, afterId }) : undefined}
         // 按钮是最末级：拖到按钮行右侧时当场拦下并说明原因，不等服务端报错
         blockNest={(_active, target) => (target.type === 'button' ? 'sysMenu.drag.underButton' : null)}
         rowActions={(row) => (

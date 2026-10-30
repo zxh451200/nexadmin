@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { z } from 'zod'
 import { Can } from '@/framework/auth/Can'
+import { usePermission } from '@/framework/auth/usePermission'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { DictSelect } from '@/framework/components/DictSelect'
@@ -43,6 +44,7 @@ interface Props {
 
 export function DictTypePanel({ selectedId, onSelect, onDeleted }: Props) {
   const { t } = useTranslation()
+  const { has } = usePermission()
   const confirm = useConfirm()
   const [input, setInput] = useState('')
   const [keyword, setKeyword] = useState('')
@@ -142,7 +144,7 @@ export function DictTypePanel({ selectedId, onSelect, onDeleted }: Props) {
         loading={isLoading}
         pagination={false}
         onRowClick={onSelect}
-        sortable={keyword ? undefined : { onReorder: (ids) => sort.mutateAsync(ids) }}
+        sortable={keyword || !has('dict:update') ? undefined : { onReorder: (ids) => sort.mutateAsync(ids) }}
         rowActions={(row) => (
           <>
             <Can perm="dict:update">

@@ -3,6 +3,7 @@ import { Pencil, Plus, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
+import { usePermission } from '@/framework/auth/usePermission'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import {
   LocaleFormActions,
@@ -367,6 +368,7 @@ function NavFormDialog({
 
 export default function NavPage() {
   const { t } = useTranslation()
+  const { has } = usePermission()
   const confirm = useConfirm()
   // 预取字段 schema：点「新建/编辑」时直接命中缓存，不再先闪一个加载弹窗。
   useI18nSchema('nav')
@@ -426,14 +428,20 @@ export default function NavPage() {
         columnSettingsKey="plugin-website-navs"
         emptyText={t('plugin_website.empty')}
         // 同层拖动后整组重排；失败时 TreeTable 回滚乐观数据并 toast
-        onReorder={(pid, ids) =>
-          reorder.mutateAsync(ids.map((id, i) => ({ id, parentId: pid ?? '0', sort: (i + 1) * 10 })))
+        onReorder={
+          has('website:nav')
+            ? (pid, ids) => reorder.mutateAsync(ids.map((id, i) => ({ id, parentId: pid ?? '0', sort: (i + 1) * 10 })))
+            : undefined
         }
         // 跨级拖动（右移降为子级 / 左移升一级 / 拖到顶部区域回顶级）：整棵树重排后一次提交
-        onMove={async (id, parentId, afterId) => {
-          const next = moveNavNode(tree, id, parentId ?? '0', afterId)
-          await reorder.mutateAsync(flattenNavTree(next))
-        }}
+        onMove={
+          has('website:nav')
+            ? async (id, parentId, afterId) => {
+                const next = moveNavNode(tree, id, parentId ?? '0', afterId)
+                await reorder.mutateAsync(flattenNavTree(next))
+              }
+            : undefined
+        }
         toolbar={
           <Can perm="website:nav">
             <Button onClick={() => openCreate()}>
