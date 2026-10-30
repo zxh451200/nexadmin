@@ -47,6 +47,7 @@
     },
     "hints": {
       "publishAt": "Leave empty to take effect immediately after publishing",
+      "expireAt": "Leave empty to keep it active indefinitely",
       "popup": "Shown after login; clicking \"Got it\" marks it as read",
       "platform": "Visible to every tenant; platform admins only"
     },

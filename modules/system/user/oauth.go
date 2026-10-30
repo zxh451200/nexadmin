@@ -26,7 +26,7 @@ func (identityRow) TableName() string { return "sys_user_identity" }
 // errOAuthFailed 是第三方登录一切失败的统一回复：state 无效、换取身份失败、域名不允许、账号停用、匹配歧义……
 // 外部看不出具体原因（防枚举、防探测）；真实原因只写服务端日志。
 func errOAuthFailed() error {
-	return response.BadRequest("auth.oauth_failed").WithMsg("第三方登录失败，请重试")
+	return response.BadRequest("user.oauth_failed")
 }
 
 var errOAuthConflict = errors.New("oauth: identity already linked")

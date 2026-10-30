@@ -49,7 +49,15 @@ function ChartCard({ reportId, chart, values }: { reportId: string; chart?: Char
       </CardHeader>
       <CardContent>
         {chart ? (
-          <ChartView type={chart.type} result={q.data} config={chart.config} height={chart.type === 'table' ? 320 : 260} loading={q.isLoading} error={q.isError} />
+          <ChartView
+            type={chart.type}
+            result={q.data}
+            config={chart.config}
+            height={chart.type === 'table' ? 320 : chart.type === 'metric' ? 96 : 260}
+            showMetricLabel={chart.type !== 'metric'}
+            loading={q.isLoading}
+            error={q.isError}
+          />
         ) : (
           <p className="py-8 text-center text-sm text-muted-foreground">{t('plugin_report.report.chartDeleted')}</p>
         )}
@@ -83,11 +91,15 @@ export function ReportViewer({ reportId }: { reportId: string }) {
         <section key={g.name} className="flex flex-col gap-3" aria-label={builtinText(t, g.name) || undefined}>
           {g.name ? <h2 className="text-sm font-medium text-muted-foreground">{builtinText(t, g.name)}</h2> : null}
           <div className="grid grid-cols-1 gap-3 md:grid-cols-12">
-            {g.items.map((it) => (
-              <div key={it.chartId} className={cn('min-w-0', SPAN[it.span] ?? 'md:col-span-12')}>
-                <ChartCard reportId={reportId} chart={report.charts?.find((c) => c.id === it.chartId)} values={values} />
-              </div>
-            ))}
+            {g.items.map((it) => {
+              const chart = report.charts?.find((c) => c.id === it.chartId)
+              return (
+                // 指标卡只有一行数字：别被同一行的图表拉成大空白块
+                <div key={it.chartId} className={cn('min-w-0', SPAN[it.span] ?? 'md:col-span-12', chart?.type === 'metric' && 'self-start')}>
+                  <ChartCard reportId={reportId} chart={chart} values={values} />
+                </div>
+              )
+            })}
           </div>
         </section>
       ))}

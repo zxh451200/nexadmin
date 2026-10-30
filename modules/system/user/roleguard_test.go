@@ -1,7 +1,6 @@
 package user
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
@@ -98,14 +97,14 @@ func TestGuardUserWrite(t *testing.T) {
 		in    parsedInput
 		setup func(m sqlmock.Sqlmock)
 		deny  bool
-		why   string
+		why   string // 期望的错误 key
 	}{
 		{"创建：范围内部门、无角色", me, nil, parsedInput{dept: 50},
 			func(m sqlmock.Sqlmock) { expectResolve(m, "dept", 50) }, false, ""},
 		{"创建：范围外部门被拒", me, nil, parsedInput{dept: 60},
-			func(m sqlmock.Sqlmock) { expectResolve(m, "dept", 50) }, true, "部门"},
+			func(m sqlmock.Sqlmock) { expectResolve(m, "dept", 50) }, true, "user.dept_out_of_scope"},
 		{"创建：受限操作者不填部门被拒", me, nil, parsedInput{},
-			func(m sqlmock.Sqlmock) { expectResolve(m, "dept", 50) }, true, "部门"},
+			func(m sqlmock.Sqlmock) { expectResolve(m, "dept", 50) }, true, "user.dept_out_of_scope"},
 		{"创建：deptAndChild 子部门放行", me, nil, parsedInput{dept: 51},
 			func(m sqlmock.Sqlmock) { expectResolve(m, "deptAndChild", 50, 50, 51) }, false, ""},
 		{"创建：范围=全部时任意部门放行", me, nil, parsedInput{dept: 60},
@@ -113,11 +112,11 @@ func TestGuardUserWrite(t *testing.T) {
 		{"创建：三道校验全部满足放行", me, nil, parsedInput{dept: 50, roles: []idgen.ID{5}},
 			assign(roleSpec{id: 5, dataScope: "dept", perms: []string{"user:list"}}, []string{"user:list", "user:update"}, "dept"), false, ""},
 		{"创建：角色不可分配被拒", me, nil, parsedInput{dept: 50, roles: []idgen.ID{5}},
-			assign(roleSpec{id: 5, notAssign: true, perms: []string{"user:list"}}, []string{"user:list"}, "dept"), true, "不允许被下级管理员分配"},
+			assign(roleSpec{id: 5, notAssign: true, perms: []string{"user:list"}}, []string{"user:list"}, "dept"), true, "user.role_not_assignable"},
 		{"创建：权限超出自身被拒（提权）", me, nil, parsedInput{dept: 50, roles: []idgen.ID{5}},
-			assign(roleSpec{id: 5, perms: []string{"user:list", "role:assign"}}, []string{"user:list"}, "dept"), true, "权限超出"},
+			assign(roleSpec{id: 5, perms: []string{"user:list", "role:assign"}}, []string{"user:list"}, "dept"), true, "user.role_perms_exceeded"},
 		{"创建：数据范围更宽被拒", me, nil, parsedInput{dept: 50, roles: []idgen.ID{5}},
-			assign(roleSpec{id: 5, dataScope: "deptAndChild", perms: []string{"user:list"}}, []string{"user:list"}, "dept"), true, "数据范围"},
+			assign(roleSpec{id: 5, dataScope: "deptAndChild", perms: []string{"user:list"}}, []string{"user:list"}, "dept"), true, "user.role_scope_exceeded"},
 		{"创建：自定义范围不是子集被拒", me, nil, parsedInput{dept: 50, roles: []idgen.ID{5}},
 			func(m sqlmock.Sqlmock) {
 				expectResolve(m, "dept", 50)
@@ -125,15 +124,15 @@ func TestGuardUserWrite(t *testing.T) {
 				m.ExpectQuery("FROM sys_role_menu AS rm").WillReturnRows(sqlmock.NewRows([]string{"role_id", "perm"}))
 				m.ExpectQuery("FROM `sys_role_dept`").WillReturnRows(sqlmock.NewRows([]string{"role_id", "dept_id"}).AddRow(5, 50).AddRow(5, 99))
 				expectOperator(m, nil, "dept", 50)
-			}, true, "数据范围"},
+			}, true, "user.role_scope_exceeded"},
 		{"创建：分配内置超管角色被拒", me, nil, parsedInput{dept: 50, roles: []idgen.ID{5}},
-			assign(roleSpec{id: 5, builtin: true}, []string{"user:list"}, "dept"), true, "不允许被下级管理员分配"},
+			assign(roleSpec{id: 5, builtin: true}, []string{"user:list"}, "dept"), true, "user.role_not_assignable"},
 		{"超管豁免部门与角色", actor{ID: 1, Super: true}, nil, parsedInput{dept: 60, roles: []idgen.ID{5}},
 			func(m sqlmock.Sqlmock) {}, false, ""},
 		{"修改他人：部门与角色不变，无需校验", me, other, parsedInput{dept: 50, roles: []idgen.ID{5}},
 			func(m sqlmock.Sqlmock) { expectHeld(m, 5) }, false, ""},
 		{"修改他人：把用户移出范围被拒", me, other, parsedInput{dept: 60},
-			func(m sqlmock.Sqlmock) { expectHeld(m); expectResolve(m, "dept", 50) }, true, "部门"},
+			func(m sqlmock.Sqlmock) { expectHeld(m); expectResolve(m, "dept", 50) }, true, "user.dept_out_of_scope"},
 		{"修改他人：移到范围内其他部门放行", me, other, parsedInput{dept: 51},
 			func(m sqlmock.Sqlmock) { expectHeld(m); expectResolve(m, "deptAndChild", 50, 50, 51) }, false, ""},
 		{"修改他人：新增不可分配的角色被拒，已有角色不受影响", me, other, parsedInput{dept: 50, roles: []idgen.ID{5, 6}},
@@ -141,15 +140,15 @@ func TestGuardUserWrite(t *testing.T) {
 				expectHeld(m, 5)
 				expectRole(m, roleSpec{id: 6, notAssign: true})
 				expectOperator(m, []string{"user:list"}, "dept", 50)
-			}, true, "不允许被下级管理员分配"},
+			}, true, "user.role_not_assignable"},
 		{"修改自己：资料不变放行", me, self, parsedInput{dept: 50, roles: []idgen.ID{5}},
 			func(m sqlmock.Sqlmock) { expectHeld(m, 5) }, false, ""},
 		{"修改自己：改部门被拒（扩大范围）", me, self, parsedInput{dept: 1, roles: []idgen.ID{5}},
-			func(m sqlmock.Sqlmock) { expectHeld(m, 5) }, true, "自己"},
+			func(m sqlmock.Sqlmock) { expectHeld(m, 5) }, true, "user.self_dept_role_immutable"},
 		{"修改自己：加角色被拒（自我提权）", me, self, parsedInput{dept: 50, roles: []idgen.ID{5, 6}},
-			func(m sqlmock.Sqlmock) { expectHeld(m, 5) }, true, "自己"},
+			func(m sqlmock.Sqlmock) { expectHeld(m, 5) }, true, "user.self_dept_role_immutable"},
 		{"修改自己：去掉角色也被拒", me, self, parsedInput{dept: 50},
-			func(m sqlmock.Sqlmock) { expectHeld(m, 5) }, true, "自己"},
+			func(m sqlmock.Sqlmock) { expectHeld(m, 5) }, true, "user.self_dept_role_immutable"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -160,8 +159,8 @@ func TestGuardUserWrite(t *testing.T) {
 			if forbidden != tc.deny || (!tc.deny && err != nil) {
 				t.Fatalf("err=%v，期望拒绝=%v", err, tc.deny)
 			}
-			if tc.why != "" && !strings.Contains(re.Msg, tc.why) {
-				t.Errorf("原因 %q 应包含 %q", re.Msg, tc.why)
+			if tc.why != "" && re.Key != tc.why {
+				t.Errorf("原因 key 应为 %q，得到 %q", tc.why, re.Key)
 			}
 			if err := mock.ExpectationsWereMet(); err != nil {
 				t.Error(err)
@@ -296,9 +295,9 @@ func TestImportRejectsUnassignableRole(t *testing.T) {
 		role roleSpec
 		why  string
 	}{
-		{"不可分配", roleSpec{id: 5, notAssign: true}, "不允许被下级管理员分配"},
-		{"权限超出", roleSpec{id: 5, perms: []string{"role:assign"}}, "权限超出"},
-		{"数据范围更宽", roleSpec{id: 5, dataScope: "deptAndChild"}, "数据范围"},
+		{"不可分配", roleSpec{id: 5, notAssign: true}, "user.role_not_assignable"},
+		{"权限超出", roleSpec{id: 5, perms: []string{"role:assign"}}, "user.role_perms_exceeded"},
+		{"数据范围更宽", roleSpec{id: 5, dataScope: "deptAndChild"}, "user.role_scope_exceeded"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s, mock, ctx := newScopeSvc(t)
@@ -314,8 +313,8 @@ func TestImportRejectsUnassignableRole(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if res.Success != 0 || len(res.Failed) != 1 || !strings.Contains(res.Failed[0].Reason, tc.why) {
-				t.Fatalf("结果 = %+v，期望失败原因含 %q", res, tc.why)
+			if want := errText(tc.why); res.Success != 0 || len(res.Failed) != 1 || res.Failed[0].Reason != want {
+				t.Fatalf("结果 = %+v，期望失败原因为 %q", res, want)
 			}
 			if err := mock.ExpectationsWereMet(); err != nil {
 				t.Error(err)

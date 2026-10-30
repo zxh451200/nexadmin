@@ -98,7 +98,7 @@ export default function DeptPage() {
           <TabsTrigger value="dept">{t('dept.tabs.tree')}</TabsTrigger>
           {has('post:list') ? <TabsTrigger value="post">{t('dept.tabs.post')}</TabsTrigger> : null}
         </TabsList>
-        <TabsContent value="dept">
+        <TabsContent value="dept" className="flex flex-col gap-3 md:gap-5">
       <SimpleFilterBar filter={filter} placeholder={t('dept.col.name')} />
       <TreeTable<SysDept>
         toolbar={

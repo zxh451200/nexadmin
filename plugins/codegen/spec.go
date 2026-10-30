@@ -27,14 +27,16 @@ func (f Field) LabelZh() string {
 
 // Spec 是一次生成的全部输入（已校验）。
 type Spec struct {
-	GoModule string
-	Module   string
-	Pascal   string
-	Plural   string
-	Table    string
-	Shape    string
-	Tenant   bool
-	Fields   []Field // 模型字段：不含 id / tenant_id（以及嵌入基座已有的 created_at / updated_at）
+	GoModule   string
+	Module     string
+	Pascal     string
+	Plural     string
+	Table      string
+	Shape      string
+	Tenant     bool
+	SoftDelete bool
+	Fields     []Field // 模型字段：不含 id / tenant_id（以及嵌入基座已有的 created_at / updated_at）
+	Migrations []File  // 新建表模式附带的三引擎迁移；已有表模式为空
 }
 
 func goType(k Kind) string {
@@ -134,7 +136,7 @@ func buildSpec(a *Analysis, goModule, module string, cfg []ColumnConfig) (*Spec,
 	}
 
 	s := &Spec{GoModule: goModule, Module: module, Pascal: Pascal(module), Plural: Plural(module),
-		Table: a.Table, Shape: a.Shape, Tenant: a.Tenant}
+		Table: a.Table, Shape: a.Shape, Tenant: a.Tenant, SoftDelete: a.SoftDelete}
 	for _, col := range a.Cols {
 		if !col.Supported || col.System {
 			continue

@@ -21,7 +21,7 @@ import (
 
 func init() {
 	plugin.Register(plugin.Plugin{
-		ID: "website", Name: "企业官网", Version: "0.5.0", Edition: plugin.Pro,
+		ID: "website", Name: "企业官网", Version: "0.6.0", Edition: plugin.Pro,
 		Module: &module{},
 	})
 }
@@ -51,6 +51,11 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	g := r.Group("/plugins/website")
 	g.GET("/settings", core.Perm("website:setting"), core.Desc("读取站点设置"), h.getSettings)
 	g.PUT("/settings", core.Perm("website:setting"), core.Desc("更新站点设置"), h.saveSettings)
+
+	g.GET("/messages", core.Perm("website:message"), core.Desc("留言列表"), h.listMessages)
+	g.GET("/messages/unread", core.Perm("website:message"), core.Desc("未读留言数"), h.unreadMessages)
+	g.PUT("/messages/:id/read", core.Perm("website:message"), core.Desc("标记留言已读"), h.setMessageRead)
+	g.DELETE("/messages/:id", core.Perm("website:message"), core.Desc("删除留言"), h.deleteMessage)
 
 	g.GET("/navs", core.Perm("website:nav"), core.Desc("导航列表"), h.listNavs)
 	g.POST("/navs", core.Perm("website:nav"), core.Desc("新增导航"), h.createNav)
@@ -89,6 +94,8 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	// 官网页面在授权导入后重启生效。
 	if d.RootGroup != nil {
 		site := &siteHandler{svc: m.service(d), log: d.Log, pkg: newPackageCache(), signKey: loadMarketSignKey(d.Log)}
+		// 留言是匿名写入口：比普通页面更紧的阈值（每 IP 每分钟 5 条），和页面浏览分开计数。
+		site.contactLimit = newIPLimiter(5, time.Minute).Middleware()
 		pub := d.RootGroup.Group("", newIPLimiter(600, time.Minute).Middleware())
 		// 默认语言固定渲染在无前缀路径上；cookie 只影响首页回跳与语言中立端点。
 		pub.Use(LanguageContext(DefaultLanguage()), langNegotiate)
@@ -154,6 +161,12 @@ func (h *siteHandler) registerPages(g *gin.RouterGroup, bareHome bool) {
 	g.HEAD("/news/:slug", h.postDetail)
 	g.GET("/p/:slug", h.pageDetail)
 	g.HEAD("/p/:slug", h.pageDetail)
+	// 在线留言：GET 是联系页，POST 是同一个地址的投稿入口（无 JS 也能直接表单提交）。
+	g.GET("/contact", h.contact)
+	g.HEAD("/contact", h.contact)
+	if h.contactLimit != nil {
+		g.POST("/contact", h.contactLimit, h.contactSubmit)
+	}
 	// 文档区：渲染 nexadmin/docs 内嵌的框架使用文档，内容中文为主，随语言分组走前缀。
 	g.GET("/docs", h.docsIndex)
 	g.HEAD("/docs", h.docsIndex)

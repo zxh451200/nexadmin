@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -57,9 +58,9 @@ func TestManagerRejectsUnsatisfiedRequires(t *testing.T) {
 			t.Fatal(err)
 		}
 		m := newManager([]Plugin{{ID: "cron", Edition: Free, Module: fakeModule{}}}, Options{Root: root, FrameworkVersion: fw, Hosts: []string{"x.test"}})
-		return m.List()[0]
+		return m.List(context.Background())[0]
 	}
-	if i := mk(">=2.0.0", "1.0.0"); i.Status != StatusInvalid || !strings.Contains(i.Reason, ">=2.0.0") || i.Name != "cron" {
+	if i := mk(">=2.0.0", "1.0.0"); i.Status != StatusInvalid || i.ReasonKey != "plugin.reason.unsatisfied" || i.Name != "cron" {
 		t.Errorf("不满足应 invalid 并带原因: %+v", i)
 	}
 	if i := mk(">=1.0.0", "1.2.0"); i.Status != StatusActive {

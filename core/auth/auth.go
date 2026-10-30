@@ -83,6 +83,9 @@ type Claims struct {
 	Super           bool            `json:"su,omitempty"`
 	Kind            string          `json:"knd"`
 	RID             string          `json:"rid,omitempty"`
+	// SessionStart 是本次会话首次登录的时间（Unix 秒）。刷新轮换原样带走，作为「最长会话」的锚点，
+	// 避免每次刷新都把计时重新推后（那样等于永不过期）。
+	SessionStart    int64           `json:"sst,omitempty"`
 	ExternalSession ExternalSession `json:"ext,omitempty"`
 	// Principal / Perms 不进 JWT，只由开放平台中间件为个人访问令牌（PrincipalPAT）与签名调用的应用（PrincipalApp）填充。
 	// PrincipalApp 没有对应的用户，权限直接取 Perms（见 middleware.Perm）。
@@ -114,6 +117,17 @@ const (
 	kindRefresh = "refresh"
 )
 
+// SessionPolicy 是运行时可调的会话时限；字段为 0 时沿用配置里的默认值。
+//   - IdleTTL：refresh token 的有效期 = 闲置多久没操作就要重新登录（每次刷新滑动续期）
+//   - MaxLifetime：从首次登录算起的最长会话，到点必须重新登录（与是否活跃无关）
+type SessionPolicy struct {
+	AccessTTL   time.Duration
+	IdleTTL     time.Duration
+	MaxLifetime time.Duration
+}
+
+type sessionPolicyFunc func() SessionPolicy
+
 // Service 负责签发、校验、吊销令牌。
 type Service struct {
 	secret        []byte
@@ -122,6 +136,7 @@ type Service struct {
 	cache         cache.Cache
 	singleSession bool
 	provider      atomic.Pointer[Provider]
+	policy        atomic.Pointer[sessionPolicyFunc]
 
 	x       extState      // 登录扩展点注册表（见 extend.go）；零值可用
 	chTTL   time.Duration // 二次验证挑战有效期（0 = 默认）
@@ -171,6 +186,35 @@ func loadOrCreateSecret(path string) (string, error) {
 // SetProvider 注册登录提供者。
 func (s *Service) SetProvider(p Provider) { s.provider.Store(&p) }
 
+// SetSessionPolicyProvider 注册「当前会话时限」的来源（通常是设置页里的安全设置），
+// 签发与刷新时调用，改了立即生效；传 nil 恢复为只读配置。
+func (s *Service) SetSessionPolicyProvider(fn func() SessionPolicy) {
+	if fn == nil {
+		s.policy.Store(nil)
+		return
+	}
+	f := sessionPolicyFunc(fn)
+	s.policy.Store(&f)
+}
+
+// sessionPolicy 合并注册的运行时时限与配置默认值：0 表示该维度沿用配置（最长会话除外，0 = 不设上限）。
+func (s *Service) sessionPolicy() SessionPolicy {
+	p := SessionPolicy{AccessTTL: s.accessTTL, IdleTTL: s.refreshTTL}
+	fp := s.policy.Load()
+	if fp == nil {
+		return p
+	}
+	q := (*fp)()
+	if q.AccessTTL > 0 {
+		p.AccessTTL = q.AccessTTL
+	}
+	if q.IdleTTL > 0 {
+		p.IdleTTL = q.IdleTTL
+	}
+	p.MaxLifetime = q.MaxLifetime
+	return p
+}
+
 // Provider 返回登录提供者，未注册返回 nil。
 func (s *Service) Provider() Provider {
 	if p := s.provider.Load(); p != nil {
@@ -189,19 +233,38 @@ func newJTI() string {
 func (s *Service) IssuePair(u *User) (Pair, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	return s.issuePair(ctx, u, "")
+	return s.issuePair(ctx, u, "", 0)
 }
 
 func singleSessionKey(u *User) string {
 	return cache.GlobalKey("auth", "single-session", u.TenantID.String(), u.ID.String())
 }
 
-func (s *Service) issuePair(ctx context.Context, u *User, previousRefresh string) (Pair, error) {
+func (s *Service) issuePair(ctx context.Context, u *User, previousRefresh string, sessionStart int64) (Pair, error) {
 	session := externalSessionFrom(ctx)
 	if err := s.checkExternalSession(ctx, session); err != nil {
 		return Pair{}, err
 	}
 	now := time.Now()
+	pol := s.sessionPolicy()
+	// 首次登录从此刻起算；续期沿用令牌里带来的起点（秒级精度，只会更早到期，不会延长）。
+	startedAt := now
+	if sessionStart > 0 {
+		startedAt = time.Unix(sessionStart, 0)
+	}
+	accessTTL, refreshTTL := pol.AccessTTL, pol.IdleTTL
+	// 最长会话是绝对上限：access / refresh 的有效期都不能越过它，否则刷新会无限续命。
+	if pol.MaxLifetime > 0 {
+		left := startedAt.Add(pol.MaxLifetime).Sub(now)
+		if left <= 0 {
+			return Pair{}, ErrInvalidToken
+		}
+		accessTTL = min(accessTTL, left)
+		refreshTTL = min(refreshTTL, left)
+	}
+	if sessionStart <= 0 {
+		sessionStart = startedAt.Unix()
+	}
 	rid := newJTI()
 	accessJTI := newJTI()
 	mk := func(kind, jti, pair string, ttl time.Duration) (string, error) {
@@ -211,16 +274,17 @@ func (s *Service) issuePair(ctx context.Context, u *User, previousRefresh string
 		}
 		cl := Claims{
 			UserID: u.ID, TenantID: u.TenantID, Username: u.Username, Super: u.Super, Kind: kind, RID: pair,
+			SessionStart:     sessionStart,
 			ExternalSession:  session,
 			RegisteredClaims: jwt.RegisteredClaims{ID: jti, IssuedAt: jwt.NewNumericDate(now), ExpiresAt: jwt.NewNumericDate(exp)},
 		}
 		return jwt.NewWithClaims(jwt.SigningMethodHS256, cl).SignedString(s.secret)
 	}
-	access, err := mk(kindAccess, accessJTI, rid, s.accessTTL)
+	access, err := mk(kindAccess, accessJTI, rid, accessTTL)
 	if err != nil {
 		return Pair{}, err
 	}
-	refresh, err := mk(kindRefresh, rid, "", s.refreshTTL)
+	refresh, err := mk(kindRefresh, rid, "", refreshTTL)
 	if err != nil {
 		return Pair{}, err
 	}
@@ -229,7 +293,7 @@ func (s *Service) issuePair(ctx context.Context, u *User, previousRefresh string
 		if !ok {
 			return Pair{}, errors.New("auth: single_session requires atomic cache.Lease")
 		}
-		ttl := max(s.accessTTL, s.refreshTTL)
+		ttl := max(accessTTL, refreshTTL)
 		if err := leases.UpdateLeases(ctx, singleSessionKey(u), ttl, func(entries map[string]cache.LeaseEntry) error {
 			// Compare and replace in one atomic operation: a refresh cannot
 			// reclaim the account after a newer login has replaced it.
@@ -241,8 +305,8 @@ func (s *Service) issuePair(ctx context.Context, u *User, previousRefresh string
 			for key := range entries {
 				delete(entries, key)
 			}
-			entries[kindAccess+":"+accessJTI] = cache.LeaseEntry{Until: now.Add(s.accessTTL)}
-			entries[kindRefresh+":"+rid] = cache.LeaseEntry{Until: now.Add(s.refreshTTL)}
+			entries[kindAccess+":"+accessJTI] = cache.LeaseEntry{Until: now.Add(accessTTL)}
+			entries[kindRefresh+":"+rid] = cache.LeaseEntry{Until: now.Add(refreshTTL)}
 			return nil
 		}); err != nil {
 			return Pair{}, err
@@ -364,7 +428,7 @@ func (s *Service) Refresh(ctx context.Context, refreshToken string) (Pair, error
 	if err := s.revoke(ctx, cl.ID, time.Until(cl.ExpiresAt.Time)); err != nil {
 		return Pair{}, err
 	}
-	return s.issuePair(WithExternalSession(ctx, cl.ExternalSession), u, cl.ID)
+	return s.issuePair(WithExternalSession(ctx, cl.ExternalSession), u, cl.ID, cl.SessionStart)
 }
 
 // RevokeSession 登出：吊销当前 access 及其配对的 refresh。

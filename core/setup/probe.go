@@ -29,14 +29,14 @@ func (r *Runner) probeGuard(c *gin.Context) {
 	}
 	// Require the setup token even on loopback for outbound credentialed probes.
 	if r.Token == "" || subtle.ConstantTimeCompare([]byte(c.GetHeader("X-Setup-Token")), []byte(r.Token)) != 1 {
-		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"code": 403, "message": "setup.token_invalid"})
+		response.Fail(c, response.Forbidden("setup.token_invalid"))
 		return
 	}
 	r.probeMu.Lock()
 	if time.Now().Before(r.probeNext) {
 		r.probeMu.Unlock()
 		c.Header("Retry-After", "2")
-		c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"code": 429, "message": "setup.probe.rateLimited"})
+		response.Fail(c, response.New(http.StatusTooManyRequests, "setup.probe_rate_limited"))
 		return
 	}
 	r.probeNext = time.Now().Add(2 * time.Second)
@@ -48,12 +48,12 @@ func (r *Runner) probeGuard(c *gin.Context) {
 func bindProbe(c *gin.Context, req *optionalReq) bool {
 	dec := json.NewDecoder(c.Request.Body)
 	if err := dec.Decode(req); err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": 400, "message": "setup.probe.invalid"})
+		response.Fail(c, response.BadRequest("setup.probe_invalid"))
 		return false
 	}
 	var extra any
 	if err := dec.Decode(&extra); err != io.EOF {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": 400, "message": "setup.probe.invalid"})
+		response.Fail(c, response.BadRequest("setup.probe_invalid"))
 		return false
 	}
 	return true

@@ -335,7 +335,7 @@ func TestTestEndpointsDoNotLeakNetworkDetailsAndAreRateLimited(t *testing.T) {
 		}
 	}
 	// 服务端诊断文本不回显
-	msg := e.svc.safeMessage("bind", &ldapError{Code: 49, Msg: "internal host ad-prod-07.corp.local said no"})
+	msg := e.svc.safeMessage(context.Background(), "bind", &ldapError{Code: 49, Msg: "internal host ad-prod-07.corp.local said no"})
 	if strings.Contains(msg, "ad-prod") || !strings.Contains(msg, "49") {
 		t.Fatalf("directory diagnostic leaked or code lost: %q", msg)
 	}

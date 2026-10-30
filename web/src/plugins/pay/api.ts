@@ -50,6 +50,7 @@ export interface PayChannel {
   scene?: string
   subjectId?: string
   feeRateBp: number
+  notifyUrl?: string
   enabled: boolean
   sort: number
   hasConfig: boolean
@@ -64,9 +65,25 @@ export interface PayChannelForm {
   scene?: string
   subjectId?: string
   feeRateBp?: number
+  notifyUrl?: string
   enabled: boolean
   sort: number
   config?: Record<string, string>
+}
+
+/** 渠道凭据字段（后端 Provider.ConfigSchema）：前端据此后渲染表单，不要求商户手写 JSON。 */
+export interface PayProviderField {
+  key: string
+  type: 'text' | 'password' | 'url' | 'select'
+  required: boolean
+  secret: boolean
+  options?: string[]
+  placeholder?: string
+}
+
+export interface PayProvider {
+  name: string
+  fields: PayProviderField[]
 }
 
 export interface PayCallback {
@@ -132,7 +149,7 @@ export function useChannels() {
 export function useProviders() {
   return useQuery({
     queryKey: [...KEY, 'providers'],
-    queryFn: () => api.get<string[]>(`${BASE}/providers`),
+    queryFn: () => api.get<PayProvider[]>(`${BASE}/providers`),
     staleTime: 5 * 60_000,
   })
 }
@@ -242,7 +259,8 @@ export interface PayStatsFilter {
 
 export function usePayStats(filter: PayStatsFilter) {
   return useQuery({
-    queryKey: ['pay', 'stats', filter],
+    // 挂在 KEY 下：关单/退款/同步后既有失效逻辑会一并刷新统计，不留旧数。
+    queryKey: [...KEY, 'stats', filter],
     queryFn: () => api.get<PayStats>(`${BASE}/orders/stats`, filter),
     placeholderData: keepPreviousData,
   })

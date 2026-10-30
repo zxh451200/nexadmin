@@ -9,7 +9,7 @@
     "all": "全部",
     "empty": "暂无导入记录",
     "noSourcesTitle": "暂无可导入的数据源",
-    "noSources": "当前没有可导入的数据源：需要业务模块先注册导入表（imports.RegisterSource），这里才会出现来源和模板。",
+    "noSources": "当前还没有可导入的数据表。开发为某个模块接入导入后，这里会出现可选的来源与模板。",
     "pickFileFirst": "请选择数据来源和文件",
     "doneSummary": "导入完成:成功 {{ok}} 行,失败 {{fail}} 行",
     "downloadTemplate": "下载模板",

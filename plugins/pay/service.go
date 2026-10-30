@@ -69,6 +69,7 @@ type CreateInput struct {
 	Scene           string
 	PayerID         string
 	PayerOpenID     string
+	ClientIP        string
 	OperatorID      string
 	ReturnURL       string
 	ExpireSec       int
@@ -109,7 +110,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Order, *PayParam
 	var existing Order
 	err = s.db.WithContext(ctx).Where("biz_type = ? AND biz_no = ?", in.BizType, in.BizNo).Take(&existing).Error
 	if err == nil {
-		params, perr := s.payParams(ctx, &existing, in.ReturnURL)
+		params, perr := s.payParams(ctx, &existing, in.ReturnURL, in.ClientIP)
 		if perr != nil {
 			return nil, nil, perr
 		}
@@ -149,7 +150,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Order, *PayParam
 		// 并发同键命中唯一索引：读回胜者。
 		var dup Order
 		if take := s.db.WithContext(ctx).Where("biz_type = ? AND biz_no = ?", in.BizType, in.BizNo).Take(&dup).Error; take == nil {
-			params, perr := s.payParams(ctx, &dup, in.ReturnURL)
+			params, perr := s.payParams(ctx, &dup, in.ReturnURL, in.ClientIP)
 			if perr != nil {
 				return nil, nil, perr
 			}
@@ -157,7 +158,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Order, *PayParam
 		}
 		return nil, nil, err
 	}
-	params, err := s.payParams(ctx, o, in.ReturnURL)
+	params, err := s.payParams(ctx, o, in.ReturnURL, in.ClientIP)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -165,19 +166,33 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Order, *PayParam
 }
 
 // payParams 向渠道请求拉起参数。Provider.Create 必须按 paymentNo 幂等。
-func (s *Service) payParams(ctx context.Context, o *Order, returnURL string) (*PayParams, error) {
+func (s *Service) payParams(ctx context.Context, o *Order, returnURL, clientIP string) (*PayParams, error) {
 	if o.Status != StatusPending {
 		return &PayParams{}, nil
 	}
-	p, cfg, err := s.channelOf(ctx, o.ChannelCode)
+	ch, err := s.loadChannel(ctx, o.ChannelCode)
 	if err != nil {
 		return nil, err
 	}
-	return p.Create(ctx, PayRequest{
+	p, cfg, err := providerWithConfig(ch)
+	if err != nil {
+		return nil, err
+	}
+	// 渠道自定义的回调地址优先（真实网关要求完整 URL）；mock 收银台用站点内相对路径。
+	notify := strings.TrimSpace(ch.NotifyURL)
+	if notify == "" {
+		notify = channelNotifyURL(o.ChannelCode)
+	}
+	req := PayRequest{
 		PaymentNo: o.PaymentNo, Subject: o.Subject, AmountMinor: o.AmountMinor,
 		Currency: o.Currency, Method: o.Method, Scene: o.Scene,
-		ReturnURL: returnURL, NotifyURL: channelNotifyURL(o.ChannelCode),
-	}, cfg)
+		PayerOpenID: o.PayerOpenID, ClientIP: clientIP,
+		ReturnURL: returnURL, NotifyURL: notify,
+	}
+	if o.ExpireAt != nil {
+		req.ExpireAt = *o.ExpireAt
+	}
+	return p.Create(ctx, req, cfg)
 }
 
 // HandleCallback 处理一笔渠道回调（或 mock 收银台触发）：
@@ -210,7 +225,9 @@ func (s *Service) HandleCallback(ctx context.Context, in CallbackInput) (*Order,
 		if changed {
 			result = ResultAccepted
 		} else if rerr == nil && r != nil && r.Status != RefundPending {
-			result = "ignored_state_" + r.Status
+			result = ResultIgnoredStatePrefix + r.Status
+		} else if errors.Is(rerr, errCallbackAmount) {
+			result = ResultAmountMismatch
 		} else if isNotFound(rerr) {
 			result = ResultOrderMissing
 		}
@@ -225,7 +242,9 @@ func (s *Service) HandleCallback(ctx context.Context, in CallbackInput) (*Order,
 	if changed {
 		result = ResultAccepted
 	} else if err == nil && o != nil && o.Status != StatusPending {
-		result = "ignored_state_" + o.Status
+		result = ResultIgnoredStatePrefix + o.Status
+	} else if errors.Is(err, errCallbackAmount) {
+		result = ResultAmountMismatch
 	} else if isNotFound(err) {
 		result = ResultOrderMissing
 	}
@@ -238,6 +257,24 @@ func (s *Service) HandleCallback(ctx context.Context, in CallbackInput) (*Order,
 
 // transition 把 pending 支付单翻转为 succeeded/failed：行锁 + 状态位，任何其他
 // 当前状态原样放行（幂等）。事件（出站箱 + 进程内总线）只在翻转发生时发。
+// CallbackAck 返回渠道要求的回调应答体（支付宝/易支付要纯文本 success，微信要 JSON）。
+// 未声明应答格式的渠道返回 ok=false，走统一 JSON 响应。
+func (s *Service) CallbackAck(ctx context.Context, channelCode string) (contentType, body string, ok bool) {
+	ch, err := s.loadChannelGlobal(ctx, channelCode)
+	if err != nil {
+		return "", "", false
+	}
+	p, err := LookupProvider(ch.Provider)
+	if err != nil {
+		return "", "", false
+	}
+	if a, isAck := p.(AckProvider); isAck {
+		ct, b := a.CallbackAck()
+		return ct, b, true
+	}
+	return "", "", false
+}
+
 func (s *Service) transition(ctx context.Context, res *CallbackResult) (*Order, bool, error) {
 	var o Order
 	var ev *EventData
@@ -255,6 +292,9 @@ func (s *Service) transition(ctx context.Context, res *CallbackResult) (*Order, 
 		}
 		if o.Status != StatusPending {
 			return nil
+		}
+		if res.AmountMinor > 0 && res.AmountMinor != o.AmountMinor {
+			return callbackAmountMismatch()
 		}
 		now := time.Now().UTC()
 		updates := map[string]any{}
@@ -328,6 +368,9 @@ func (s *Service) transitionRefund(ctx context.Context, res *CallbackResult) (*R
 		}
 		if r.Status != RefundPending {
 			return nil
+		}
+		if res.AmountMinor > 0 && res.AmountMinor != r.AmountMinor {
+			return callbackAmountMismatch()
 		}
 		now := time.Now().UTC()
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
@@ -493,13 +536,19 @@ func (s *Service) CreateRefund(ctx context.Context, in RefundInput) (*Refund, er
 		out.ID = id
 		// 事务内的一切读必须走 tx：s.db 会从池里另取一条连接，并发退款时
 		// 持锁事务等第 N+1 条连接、其他事务等行锁，互相卡死到锁超时（实库压测踩中）。
-		p, cfg, err := channelOfDB(tx, o.ChannelCode)
+		ch, p, cfg, err := channelOfDB(tx, o.ChannelCode)
 		if err != nil {
 			return err
 		}
+		notify := strings.TrimSpace(ch.NotifyURL)
+		if notify == "" {
+			notify = channelNotifyURL(ch.Code)
+		}
 		res, err := p.Refund(ctx, RefundRequest{
 			RefundNo: out.RefundNo, PaymentNo: o.PaymentNo, ChannelTxnID: txnIDOf(&o),
-			AmountMinor: in.AmountMinor,
+			AmountMinor: in.AmountMinor, OrderAmountMinor: o.AmountMinor,
+			IdempotencyKey: refundIdempotencyKey(o.PaymentNo, in.BizType, in.BizNo),
+			NotifyURL:      notify,
 		}, cfg)
 		if err != nil {
 			return err
@@ -543,7 +592,9 @@ func (s *Service) CreateRefund(ctx context.Context, in RefundInput) (*Refund, er
 	}
 	s.emit(ctx, ev)
 	if rejected != "" {
-		return &out, response.Conflict(errRefundRejected).WithMsg(rejected)
+		// 渠道给出的拒绝原因只进日志与退款单的 FailReason，不回给调用方。
+		s.logWarn("pay: refund rejected by channel", "reason", rejected)
+		return &out, response.Conflict(errRefundRejected)
 	}
 	return &out, nil
 }
@@ -681,8 +732,16 @@ func (s *Service) UpsertChannel(ctx context.Context, in SaveChannelInput) (*Chan
 	case !channelCodeRe.MatchString(in.Code):
 		return nil, response.BadRequest(errChannelInvalid)
 	}
-	if _, err := LookupProvider(in.Provider); err != nil {
+	p, err := LookupProvider(in.Provider)
+	if err != nil {
 		return nil, response.BadRequest(errChannelUnknownProvider)
+	}
+	// 必填凭据在保存时就拦住，而不是等商户第一次下单才发现缺 appId/私钥。
+	// 编辑且未提交新凭据时沿用既有密文（不回显、无法在此校验）。
+	if len(in.Config) > 0 || in.ID == 0 {
+		if err := requireProviderConfig(p, in.Config); err != nil {
+			return nil, err
+		}
 	}
 	if in.FeeRateBp < 0 || in.FeeRateBp > 9999 {
 		return nil, response.BadRequest(errChannelInvalid)
@@ -702,7 +761,7 @@ func (s *Service) UpsertChannel(ctx context.Context, in SaveChannelInput) (*Chan
 	}
 
 	var ch Channel
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// code 全局唯一：先跨租户查重，给出明确冲突而不是等唯一索引报错。
 		var clash Channel
 		err := tx.WithContext(tenant.Skip(ctx)).Where("code = ?", in.Code).Take(&clash).Error
@@ -936,15 +995,19 @@ func (s *Service) channelOf(ctx context.Context, code string) (Provider, map[str
 }
 
 // channelOfDB 同 channelOf，但走传入的 db（事务内必须用它，禁止另取池连接）。
-func channelOfDB(db *gorm.DB, code string) (Provider, map[string]string, error) {
+func channelOfDB(db *gorm.DB, code string) (*Channel, Provider, map[string]string, error) {
 	var ch Channel
 	if err := db.Where("code = ?", code).Take(&ch).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, nil, response.NotFound(errChannelNotFound)
+			return nil, nil, nil, response.NotFound(errChannelNotFound)
 		}
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	return providerWithConfig(&ch)
+	p, cfg, err := providerWithConfig(&ch)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return &ch, p, cfg, nil
 }
 
 func providerWithConfig(ch *Channel) (Provider, map[string]string, error) {

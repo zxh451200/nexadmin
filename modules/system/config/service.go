@@ -75,22 +75,27 @@ func toCoreLimits(u UploadSettings) core.UploadLimits {
 // NewService 创建服务。
 func NewService(db *gorm.DB) *Service { return &Service{db: db} }
 
-func bad(msg string) error { return response.BadRequest("error.bad_request").WithMsg(msg) }
+func bad(key string, args ...any) error { return response.BadRequest(key, args...) }
+
+// badErr 是「用户能看懂的固定文案 + 只进日志的内部错误」：Wrap 的 err 不返回前端。
+func badErr(key string, err error, args ...any) error {
+	return response.BadRequest(key, args...).Wrap(err)
+}
 
 // validateValue 按参数类型校验值：number 必须是数字，boolean 必须是 true/false，json 必须是合法 JSON。
 func validateValue(typ, v string) error {
 	switch typ {
 	case TypeNumber:
 		if _, err := strconv.ParseFloat(strings.TrimSpace(v), 64); err != nil {
-			return bad("参数值不是有效数字")
+			return bad("config.value_not_number")
 		}
 	case TypeBoolean:
 		if v != "true" && v != "false" {
-			return bad("布尔参数值只能是 true 或 false")
+			return bad("config.value_not_boolean")
 		}
 	case TypeJSON:
 		if !json.Valid([]byte(v)) {
-			return bad("参数值不是有效 JSON")
+			return bad("config.value_not_json")
 		}
 	}
 	return nil
@@ -147,7 +152,7 @@ func (s *Service) Create(ctx context.Context, in Input) (*Config, error) {
 	if taken, err := s.keyTaken(ctx, in.Key, 0); err != nil {
 		return nil, err
 	} else if taken {
-		return nil, response.Conflict("error.conflict").WithMsg("参数键已存在")
+		return nil, response.Conflict("config.key_exists")
 	}
 	c := &Config{Name: in.Name, Key: in.Key, Value: in.Value, Type: in.Type, IsPublic: in.IsPublic, Remark: in.Remark}
 	err := s.db.WithContext(ctx).Create(c).Error
@@ -166,7 +171,7 @@ func (s *Service) Update(ctx context.Context, id idgen.ID, in Input) (*Config, e
 	if taken, err := s.keyTaken(ctx, in.Key, id); err != nil {
 		return nil, err
 	} else if taken {
-		return nil, response.Conflict("error.conflict").WithMsg("参数键已存在")
+		return nil, response.Conflict("config.key_exists")
 	}
 	err := s.db.WithContext(ctx).Model(&Config{}).Where("id = ?", int64(id)).Updates(map[string]any{
 		"name": in.Name, "config_key": in.Key, "config_value": in.Value, "config_type": in.Type,

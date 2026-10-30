@@ -103,7 +103,7 @@ func (h *handler) defXML(c *gin.Context) {
 	}
 	xml, err := ExportXML(v.Definition)
 	if err != nil {
-		response.Fail(c, response.BadRequest("workflow.def_invalid").WithMsg(err.Error()))
+		response.Fail(c, response.BadRequest("workflow.def_invalid").Wrap(err))
 		return
 	}
 	c.Data(200, "application/xml; charset=utf-8", []byte(xml))

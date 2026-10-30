@@ -94,21 +94,20 @@ func RevocationsPath(root string) string {
 	return filepath.Join(root, filepath.FromSlash(RevokedFile))
 }
 
-func revokedReason(e RevokedEntry) string {
-	s := "授权已被发行方吊销（序列号 " + e.Serial
+func revokedReason(e RevokedEntry) (string, []any) {
+	detail := ""
 	if e.RevokedAt != "" {
-		s += "，" + e.RevokedAt
+		detail += "，" + e.RevokedAt
 	}
-	s += "）"
 	if e.Reason != "" {
-		s += "：" + e.Reason
+		detail += "：" + e.Reason
 	}
-	return s
+	return "license.revoked", []any{e.Serial, detail}
 }
 
 func revokedError(e RevokedEntry) *LicenseError {
-	return &LicenseError{Status: StatusRevoked, Reason: revokedReason(e),
-		ActionHint: "请联系发行方确认吊销原因；如需继续使用，请重新签发授权"}
+	key, args := revokedReason(e)
+	return &LicenseError{Status: StatusRevoked, Key: key, Args: args}
 }
 
 // SignRevocations 用私钥签发吊销清单文本（与授权文件同一种 envelope）。
@@ -132,16 +131,16 @@ func SignRevocations(priv ed25519.PrivateKey, r Revocations) ([]byte, error) {
 // VerifyRevocations 校验吊销清单：签名（kid 选钥规则同授权）-> 载荷格式 -> 类型 -> 条目合法性。
 // 任何一步失败都返回错误，调用方应当整份忽略。
 func VerifyRevocations(raw []byte, keys []Key) (*Revocations, error) {
-	payload, lerr := openEnvelope(raw, keys, MaxRevocationSize, "吊销清单")
+	payload, lerr := openEnvelope(raw, keys, MaxRevocationSize, "license.revocation")
 	if lerr != nil {
-		return nil, errors.New(lerr.Reason)
+		return nil, errors.New(lerr.Key)
 	}
 	var r Revocations
 	if err := json.Unmarshal(payload, &r); err != nil {
-		return nil, errors.New("吊销清单载荷格式错误")
+		return nil, errors.New("license.revocation.payload_invalid")
 	}
 	if r.Type != revocationsType {
-		return nil, errors.New("吊销清单类型不符")
+		return nil, errors.New("license.revocation.wrong_type")
 	}
 	if r.Seq < 0 {
 		return nil, errors.New("吊销清单 seq 非法")
@@ -300,7 +299,8 @@ func (m *Manager) reapplyRevocationsLocked() {
 // markRevokedLocked 把插件标为 revoked（授权的其它字段保留，便于页面展示客户与到期时间）。
 func (m *Manager) markRevokedLocked(e *entry, r RevokedEntry) {
 	prev := e.info.Status
-	e.info.Status, e.info.Reason = StatusRevoked, revokedReason(r)
+	key, args := revokedReason(r)
+	e.info.Status, e.info.ReasonKey, e.info.ReasonArgs, e.info.Reason = StatusRevoked, key, args, ""
 	m.syncLifecycleLocked(e)
 	if prev != StatusRevoked {
 		m.warnLocked("plugin license revoked, routes disabled",

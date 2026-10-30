@@ -3,6 +3,7 @@ import { api, http } from '@/framework/request/http'
 
 export type Kind = 'string' | 'text' | 'int' | 'float' | 'bool' | 'date' | 'datetime' | 'id' | ''
 export type Control = 'input' | 'textarea' | 'number' | 'switch' | 'date' | 'datetime'
+export type FieldKind = 'string' | 'text' | 'int' | 'float' | 'bool' | 'date' | 'datetime'
 
 export interface TableInfo {
   name: string
@@ -40,21 +41,40 @@ export interface TableSchema {
 }
 
 export interface GenRequest {
-  table: string
+  table?: string
   module: string
   goModule?: string
   columns: ColumnConfig[]
+  define?: TableDef
+}
+
+/** 新建表的一列。length 只对 string 生效；required 只对可判空的类型生效。 */
+export interface FieldDef {
+  name: string
+  kind: FieldKind
+  length?: number
+  required: boolean
+  comment?: string
+}
+
+/** 新建表定义：生成物附带 mysql / mariadb / postgres 三份迁移，插件本身不建表。 */
+export interface TableDef {
+  name: string
+  tenant: boolean
+  softDelete: boolean
+  migration: string
+  fields: FieldDef[]
 }
 
 export interface GenFile {
   path: string
   content: string
-  lang: 'go' | 'ts' | 'tsx' | 'json'
+  lang: 'go' | 'ts' | 'tsx' | 'json' | 'sql'
 }
 
 export interface GenNote {
-  code: 'import_line' | 'api_prefix' | 'null_zero'
-  value: string
+  code: 'import_line' | 'api_prefix' | 'null_zero' | 'migration'
+  value?: string
 }
 
 export interface GenOutput {
@@ -81,6 +101,13 @@ export function useColumns(table?: string) {
     queryKey: [...KEY, 'columns', table],
     queryFn: () => api.get<TableSchema>(`${BASE}/tables/${encodeURIComponent(table ?? '')}/columns`),
     enabled: !!table,
+  })
+}
+
+/** 已有表与新建表共用：新建表时返回按定义合成的列与推荐配置。 */
+export function useSchema() {
+  return useMutation({
+    mutationFn: (req: { table: string } | { define: TableDef }) => api.post<TableSchema>(`${BASE}/schema`, req),
   })
 }
 

@@ -3,6 +3,7 @@
 package servermonitor
 
 import (
+	"context"
 	"net"
 	"os"
 	"runtime"
@@ -42,7 +43,7 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	h := &healthRunner{d: d}
 	r.GET("/monitor/health", core.Perm(PermList), func(c *gin.Context) { response.OK(c, h.run(c.Request.Context())) })
 	metrics.SetPluginSource(func() []metrics.PluginState {
-		list := plugin.Default().List()
+		list := plugin.Default().List(context.Background())
 		out := make([]metrics.PluginState, 0, len(list))
 		for _, p := range list {
 			out = append(out, metrics.PluginState{ID: p.ID, Active: p.Status == plugin.StatusActive})

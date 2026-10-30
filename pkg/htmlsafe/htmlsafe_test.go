@@ -145,3 +145,38 @@ func TestDeepNestingIsCapped(t *testing.T) {
 		t.Fatal("unbalanced output")
 	}
 }
+
+// iframe 只服务视频嵌入：平台白名单内的保留，其余整块丢弃（含任意 http 与伪协议）。
+func TestSanitizeIframeEmbeds(t *testing.T) {
+	keep := []struct{ in, want string }{
+		{`<iframe src="https://www.youtube.com/embed/abc123" title="v" frameborder="0" allowfullscreen></iframe>`,
+			`<iframe src="https://www.youtube.com/embed/abc123" title="v" frameborder="0" allowfullscreen></iframe>`},
+		{`<iframe src="https://player.bilibili.com/player.html?bvid=BV1xx411c7mD&page=1" allow="autoplay; fullscreen"></iframe>`,
+			`<iframe src="https://player.bilibili.com/player.html?bvid=BV1xx411c7mD&amp;page=1" allow="autoplay; fullscreen"></iframe>`},
+		{`<iframe src="https://www.youtube-nocookie.com/embed/abc123"></iframe>`,
+			`<iframe src="https://www.youtube-nocookie.com/embed/abc123"></iframe>`},
+		{`<iframe src="https://customer-abc123.cloudflarestream.com/vid-12345678/iframe"></iframe>`,
+			`<iframe src="https://customer-abc123.cloudflarestream.com/vid-12345678/iframe"></iframe>`},
+	}
+	for _, c := range keep {
+		if got := Sanitize(c.in); got != c.want {
+			t.Errorf("keep: got %q want %q", got, c.want)
+		}
+	}
+
+	drop := []string{
+		`<iframe src="https://evil.example/embed/abc">x</iframe>`,
+		`<iframe src="https://www.youtube.com/watch?v=abc"></iframe>`,
+		`<iframe src="http://www.youtube.com/embed/abc"></iframe>`,
+		`<iframe src="javascript:alert(1)"></iframe>`,
+		`<iframe src="//www.youtube.com/embed/abc"></iframe>`,
+		`<iframe></iframe>`,
+		`<iframe src="https://customer-abc123.cloudflarestream.com/vid-12345678/manifest/video.m3u8"></iframe>`,
+		`<iframe src="https://evil.cloudflarestream.com/vid-12345678/iframe"></iframe>`,
+	}
+	for _, in := range drop {
+		if got := Sanitize(in); strings.Contains(got, "iframe") {
+			t.Errorf("drop: %q -> %q", in, got)
+		}
+	}
+}

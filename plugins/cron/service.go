@@ -253,7 +253,7 @@ type JobView struct {
 	NextRunAt *time.Time `json:"nextRunAt"`
 }
 
-func badReq(msg string) error { return response.BadRequest("error.bad_request").WithMsg(msg) }
+func badReq(key string, args ...any) error { return response.BadRequest(key, args...) }
 
 func (f *JobForm) normalize() error {
 	f.Name = strings.TrimSpace(f.Name)
@@ -261,24 +261,24 @@ func (f *JobForm) normalize() error {
 	f.Handler = strings.TrimSpace(f.Handler)
 	f.Params = strings.TrimSpace(f.Params)
 	if n := utf8.RuneCountInString(f.Name); n < 1 || n > 100 {
-		return badReq("name must be 1-100 characters")
+		return badReq("cron.name_invalid")
 	}
 	if _, err := ParseCron(f.CronExpr); err != nil {
-		return badReq(err.Error())
+		return response.BadRequest("cron.cron_expr_invalid").Wrap(err)
 	}
 	spec, ok := lookupHandler(f.Handler)
 	if !ok {
-		return badReq(fmt.Sprintf("unknown handler %q", f.Handler))
+		return badReq("cron.handler_unknown", f.Handler)
 	}
 	if f.RetryCount < 0 || f.RetryCount > maxRetryCount {
-		return badReq(fmt.Sprintf("retryCount must be 0-%d", maxRetryCount))
+		return badReq("cron.retry_count_invalid", maxRetryCount)
 	}
 	if len(f.Params) > 4<<10 {
-		return badReq("params too long")
+		return badReq("cron.params_too_long")
 	}
 	if spec.Validate != nil {
 		if err := spec.Validate(f.Params); err != nil {
-			return badReq(err.Error())
+			return response.BadRequest("cron.params_invalid").Wrap(err)
 		}
 	}
 	return nil
@@ -396,7 +396,7 @@ func (s *Service) RunNow(ctx context.Context, id idgen.ID) (*Log, error) {
 	}
 	row, err := s.dispatch(*j, TriggerManual)
 	if errors.Is(err, errAlreadyRunning) {
-		return nil, response.Conflict("error.conflict").WithMsg("job is already running")
+		return nil, response.Conflict("cron.job_running")
 	}
 	return row, err
 }
@@ -418,7 +418,7 @@ func (s *Service) ListLogs(ctx context.Context, q LogQuery) ([]Log, int64, error
 	if q.JobID != "" {
 		jid, err := idgen.Parse(q.JobID)
 		if err != nil {
-			return nil, 0, badReq("invalid jobId")
+			return nil, 0, badReq("cron.job_id_invalid")
 		}
 		tx = tx.Where("job_id = ?", jid)
 	}

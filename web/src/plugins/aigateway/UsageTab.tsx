@@ -44,17 +44,9 @@ export function UsageTab() {
     },
   ]
 
-  return (
-    <div className="flex flex-col gap-4">
-      {summary.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {summary.map((s) => (
-            <Badge key={s.kind} variant="outline" className="num">
-              {t(`plugin_aigateway.kind.${s.kind}`, { defaultValue: s.kind })}: {s.totalTokens}
-            </Badge>
-          ))}
-        </div>
-      )}
+  // 筛选行并入表格工具行（全站统一口径）：与「列设置」同一行，不再单独占一行。
+  const filterToolbar = (
+    <div className="flex flex-wrap items-center gap-2">
       <FilterBar
         onSearch={() => {
           setFilters(draft)
@@ -87,6 +79,20 @@ export function UsageTab() {
           </SelectContent>
         </Select>
       </FilterBar>
+    </div>
+  )
+
+  return (
+    <div className="flex flex-col gap-4">
+      {summary.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {summary.map((s) => (
+            <Badge key={s.kind} variant="outline" className="num">
+              {t(`plugin_aigateway.kind.${s.kind}`, { defaultValue: s.kind })}: {s.totalTokens}
+            </Badge>
+          ))}
+        </div>
+      )}
       <DataTable
         columns={columns}
         data={data?.list ?? []}
@@ -103,6 +109,7 @@ export function UsageTab() {
           },
         }}
         emptyText={t('plugin_aigateway.empty')}
+        toolbar={filterToolbar}
       />
     </div>
   )

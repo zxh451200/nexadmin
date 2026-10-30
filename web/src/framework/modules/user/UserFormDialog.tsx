@@ -10,6 +10,7 @@ import { FormGrid, FormGridFull, FormLayout } from '@/framework/components/FormL
 import { RegionSelect } from '@/framework/components/RegionSelect'
 import { RemoteSelect } from '@/framework/components/RemoteSelect'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
+import { SwitchField } from '@/framework/components/SwitchField'
 import { TreeSelect } from '@/framework/components/TreeSelect'
 import { Uploader } from '@/framework/components/Uploader'
 import { api } from '@/framework/request/http'
@@ -17,7 +18,6 @@ import type { UploadedFile } from '@/framework/upload/types'
 import { Button } from '@/framework/ui/button'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/framework/ui/form'
 import { Input } from '@/framework/ui/input'
-import { Switch } from '@/framework/ui/switch'
 import { Textarea } from '@/framework/ui/textarea'
 import { useCreateUser, useUpdateUser, type User, type UserInput } from './api'
 
@@ -270,21 +270,9 @@ export function UserFormDialog({ open, onOpenChange, user }: UserFormDialogProps
                 </FormItem>
               )}
             />
-            <FormField
-              control={form.control}
-              name="enabled"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('user.form.status')}</FormLabel>
-                  <div className="flex min-h-11 items-center md:min-h-9">
-                    <FormControl>
-                      <Switch checked={field.value} onCheckedChange={field.onChange} />
-                    </FormControl>
-                  </div>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <FormGridFull>
+              <SwitchField control={form.control} name="enabled" label={t('user.form.status')} />
+            </FormGridFull>
             <FormGridFull>
               <FormField
                 control={form.control}

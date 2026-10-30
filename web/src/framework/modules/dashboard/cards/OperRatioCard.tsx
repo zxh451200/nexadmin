@@ -4,6 +4,7 @@ import type { PieSectorDataItem } from 'recharts/types/polar/Pie'
 import { useTranslation } from 'react-i18next'
 import { ChartBox } from '@/framework/components/ChartBox'
 import { ChartCard } from '@/framework/components/ChartCard'
+import { useLegendToggle } from '@/framework/components/useLegendToggle'
 import { Skeleton } from '@/framework/ui/skeleton'
 import { useDashboardStats } from '../api'
 
@@ -12,6 +13,14 @@ export default function OperRatioCard() {
   const { data } = useDashboardStats()
   // Recharts 默认只弹 Tooltip，扇区本身不动；hover 时把那一片推出来一圈。
   const [active, setActive] = useState<number>()
+  // 图例点击切显隐；饼图各扇区共用 dataKey，按名称取 key，并把隐藏项置 0 而不是删掉数据（否则图例点不回来）。
+  const sliceNames = (data?.operTypes ?? []).map((o) => t(`dashboard.oper.${o.type}`, { defaultValue: o.type }))
+  const { hidden, formatter } = useLegendToggle((value) => String(value ?? ''), sliceNames)
+  const slices = (data?.operTypes ?? []).map((o, i) => ({
+    name: t(`dashboard.oper.${o.type}`, { defaultValue: o.type }),
+    value: hidden.has(t(`dashboard.oper.${o.type}`, { defaultValue: o.type })) ? 0 : o.value,
+    color: `hsl(var(--chart-${(i % 5) + 1}))`,
+  }))
   return (
     <ChartCard title={t('dashboard.operRatio')}>
       {data ? (
@@ -19,7 +28,7 @@ export default function OperRatioCard() {
           {({ width, height }) => (
             <PieChart width={width} height={height}>
               <Pie
-                data={data.operTypes.map((o) => ({ name: t(`dashboard.oper.${o.type}`, { defaultValue: o.type }), value: o.value }))}
+                data={slices}
                 dataKey="value"
                 nameKey="name"
                 innerRadius="55%"
@@ -31,15 +40,15 @@ export default function OperRatioCard() {
                 onMouseEnter={(_, i) => setActive(i)}
                 onMouseLeave={() => setActive(undefined)}
               >
-                {data.operTypes.map((o, i) => (
-                  <Cell key={o.type} fill={`hsl(var(--chart-${(i % 5) + 1}))`} />
+                {slices.map((o) => (
+                  <Cell key={o.name} fill={o.color} />
                 ))}
               </Pie>
               <Tooltip
                 contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, color: 'hsl(var(--foreground))', fontSize: 12 }}
                 itemStyle={{ color: 'hsl(var(--foreground))' }}
               />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
+              <Legend wrapperStyle={{ fontSize: 12 }} formatter={formatter} />
             </PieChart>
           )}
         </ChartBox>

@@ -57,6 +57,7 @@
       "title": "No plugins installed",
       "desc": "Run the command below in the project root, then rebuild and restart:"
     },
+    "installCmd": "go run ./cmd/nexadmin plugin install <dir or zip>",
     "market": {
       "search": "Search plugins / repos",
       "install": "Install",

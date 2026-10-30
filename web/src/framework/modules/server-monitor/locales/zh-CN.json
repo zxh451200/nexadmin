@@ -61,7 +61,6 @@
       "anonymous": "未登录",
       "col": { "time": "最近出现", "count": "次数", "message": "错误信息", "route": "路由", "user": "用户" },
       "detail": {
-        "open": "详情",
         "title": "错误详情",
         "firstSeen": "首次出现",
         "lastSeen": "最近出现",

@@ -1,7 +1,6 @@
 package website
 
 import (
-	"fmt"
 	"sort"
 
 	"nexadmin/core/response"
@@ -11,8 +10,8 @@ import (
 
 const navMaxDepth = 3
 
-func navBadRequest(msg string) error {
-	return response.BadRequest("error.bad_request").WithMsg(msg)
+func navBadRequest(key string, args ...any) error {
+	return response.BadRequest(key, args...)
 }
 
 // navDepth 计算把节点 id 挂到 parentID 下后的层级；id=0 表示新建节点。
@@ -22,19 +21,19 @@ func navDepth(parents map[uint64]uint64, id, parentID uint64) (int, error) {
 	seen := make(map[uint64]bool)
 	for cur := parentID; cur != 0; {
 		if cur == id {
-			return 0, navBadRequest("不能把导航挂到自己或其子导航下")
+			return 0, navBadRequest("website.nav_self_parent")
 		}
 		if seen[cur] {
-			return 0, navBadRequest("导航层级存在循环引用")
+			return 0, navBadRequest("website.nav_cycle")
 		}
 		seen[cur] = true
 		parent, ok := parents[cur]
 		if !ok {
-			return 0, navBadRequest("上级导航不存在")
+			return 0, navBadRequest("website.nav_parent_missing")
 		}
 		level++
 		if level > navMaxDepth {
-			return 0, navBadRequest(fmt.Sprintf("导航最多支持 %d 级", navMaxDepth))
+			return 0, navBadRequest("website.nav_depth_exceeded", navMaxDepth)
 		}
 		cur = parent
 	}

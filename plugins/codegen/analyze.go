@@ -112,10 +112,11 @@ func classify(c RawColumn) Kind {
 
 // Analysis 是对一张表的分析结果，供推荐配置与渲染共用。
 type Analysis struct {
-	Table  string
-	Shape  string
-	Tenant bool
-	Cols   []ColumnInfo
+	Table      string
+	Shape      string
+	Tenant     bool
+	SoftDelete bool
+	Cols       []ColumnInfo
 }
 
 // analyze 校验表结构并给出默认推荐配置。不满足生成前提的表返回错误。
@@ -183,8 +184,12 @@ func analyze(table string, raw []RawColumn) (*Analysis, error) {
 		if !c.Supported {
 			continue
 		}
-		if c.Name == "id" || c.Name == "tenant_id" || (a.Shape != ShapePlain && (c.Name == "created_at" || c.Name == "updated_at")) {
+		soft := c.Name == "deleted_at" && (c.Kind == KindDateTime || c.Kind == KindDate)
+		if c.Name == "id" || c.Name == "tenant_id" || (a.Shape != ShapePlain && (c.Name == "created_at" || c.Name == "updated_at")) || soft {
 			c.System = true
+			if soft {
+				a.SoftDelete = true
+			}
 			continue
 		}
 		p, cm := Pascal(c.Name), Camel(c.Name)
@@ -252,14 +257,24 @@ func (a *Analysis) schema() TableSchema {
 	return TableSchema{Table: a.Table, Shape: a.Shape, Tenant: a.Tenant, SuggestedModule: suggestModule(a.Table), Columns: a.Cols}
 }
 
-// suggestModule 由表名推荐模块名：去掉下划线；不合法则返回空串让用户自己填。
+// suggestModule 由表名推荐模块名：去掉 biz_ 前缀与下划线；不合法时退回全名，仍不合法则返回空串让用户自己填。
 func suggestModule(table string) string {
-	m := strings.ReplaceAll(table, "_", "")
+	if m, ok := moduleCandidate(strings.TrimPrefix(table, bizPrefix)); ok {
+		return m
+	}
+	if m, ok := moduleCandidate(table); ok {
+		return m
+	}
+	return ""
+}
+
+func moduleCandidate(name string) (string, bool) {
+	m := strings.ReplaceAll(name, "_", "")
 	if len(m) > 31 {
 		m = m[:31]
 	}
 	if ValidModule(m) != nil {
-		return ""
+		return "", false
 	}
-	return m
+	return m, true
 }

@@ -17,7 +17,7 @@ import (
 const maxDepth = 64
 
 // dropWithContent 的标签连同内容整体丢弃（含未闭合时直到输入结尾）。
-var dropWithContent = set("script", "style", "iframe", "frame", "frameset", "object", "embed", "applet", "form",
+var dropWithContent = set("script", "style", "frame", "frameset", "object", "embed", "applet", "form",
 	"svg", "math", "noscript", "template", "textarea", "title", "head", "xmp", "plaintext", "noembed", "noframes",
 	"select", "button", "canvas", "audio", "link", "meta", "base")
 
@@ -30,7 +30,7 @@ var allowedTags = set(
 	"ul", "ol", "li", "blockquote", "pre", "code",
 	"table", "thead", "tbody", "tfoot", "tr", "th", "td", "caption", "colgroup", "col",
 	"strong", "b", "em", "i", "u", "s", "del", "ins", "sub", "sup", "mark", "small",
-	"a", "img", "video", "source", "figure", "figcaption",
+	"a", "img", "video", "source", "figure", "figcaption", "iframe",
 )
 
 func set(names ...string) map[string]bool {
@@ -77,6 +77,21 @@ func Sanitize(in string) string {
 			}
 			if !allowedTags[name] {
 				continue // 解包：丢标签，留内容
+			}
+			// iframe 只服务视频嵌入：src 不在平台白名单里的整块丢弃，避免留下空框或任意站外页面。
+			if name == "iframe" {
+				src := ""
+				for _, a := range t.Attr {
+					if strings.EqualFold(a.Key, "src") {
+						src = a.Val
+					}
+				}
+				if !safeEmbedURL(src) {
+					if tt == xhtml.StartTagToken {
+						skipElement(z, name)
+					}
+					continue
+				}
 			}
 			if voidTags[name] {
 				writeStart(&out, name, t.Attr, true)

@@ -12,6 +12,8 @@ export interface UploadOptions {
   visibility?: UploadVisibility
   /** 非空表示这次上传是原文件的派生副本（如 WebP），服务端据此挂到原文件下 */
   variantOf?: string
+  /** 直传外部端点时需要附加的请求头（如 Bunny 的签名头） */
+  headers?: Record<string, string>
   onProgress?: (percent: number) => void
   signal?: AbortSignal
 }
@@ -71,7 +73,8 @@ export function uploadToTus(endpoint: string, file: File, opts: UploadOptions): 
       retryDelays: [0, 1000, 3000, 5000],
       removeFingerprintOnSuccess: true,
       headers: (): Record<string, string> => {
-        if (!own) return {}
+        // 外部端点带调用方给的签名头；自家端点带登录令牌，绝不把令牌发给第三方。
+        if (!own) return { ...(opts.headers ?? {}) }
         const token = tokenStore.access
         return token ? { Authorization: `Bearer ${token}` } : {}
       },

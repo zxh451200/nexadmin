@@ -7,10 +7,10 @@ import { z } from 'zod'
 import { FormGrid, FormGridFull, FormLayout } from '@/framework/components/FormLayout'
 import { RemoteSelect } from '@/framework/components/RemoteSelect'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
+import { SwitchField } from '@/framework/components/SwitchField'
 import { Button } from '@/framework/ui/button'
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/framework/ui/form'
 import { Input } from '@/framework/ui/input'
-import { Switch } from '@/framework/ui/switch'
 import { Textarea } from '@/framework/ui/textarea'
 import { isValidIpOrCidr, splitLines, useSaveOpenApp, type OpenApp, type OpenAppCreated, type OpenAppForm } from './api'
 
@@ -157,18 +157,7 @@ export function AppFormDialog({ open, onOpenChange, editing, onCreated }: Props)
               />
             </FormGridFull>
             <FormGridFull>
-              <FormField
-                control={form.control}
-                name="enabled"
-                render={({ field }) => (
-                  <FormItem className="flex min-h-11 items-center justify-between gap-3 rounded-md border border-border p-3">
-                    <FormLabel className="m-0">{t('openapi.apps.fields.enabled')}</FormLabel>
-                    <FormControl>
-                      <Switch checked={field.value} onCheckedChange={field.onChange} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
+              <SwitchField control={form.control} name="enabled" label={t('openapi.apps.fields.enabled')} />
             </FormGridFull>
           </FormGrid>
         </FormLayout>

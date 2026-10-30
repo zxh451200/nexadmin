@@ -168,7 +168,7 @@ func TestDBErrorsAreNotEchoed(t *testing.T) {
 	if !errors.As(err, &re) {
 		t.Fatalf("err = %v", err)
 	}
-	if re.Status != 500 || re.Msg != "查询失败，请稍后重试" || strings.Contains(re.Msg, "plg_cron") || strings.Contains(re.Msg, "SELECT") {
+	if re.Status != 500 || re.Key != "report.query_failed" || re.Msg != "" || strings.Contains(re.Msg, "plg_cron") || strings.Contains(re.Msg, "SELECT") {
 		t.Fatalf("response error leaks details: %+v", re)
 	}
 }

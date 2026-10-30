@@ -46,7 +46,7 @@ type Viewer struct {
 func tenantOf(ctx context.Context) (int64, error) {
 	id, ok := tenant.From(ctx)
 	if !ok || id == 0 {
-		return 0, response.Forbidden("error.forbidden").WithMsg("缺少租户上下文")
+		return 0, response.Forbidden("tenant.context_required")
 	}
 	return int64(id), nil
 }
@@ -77,7 +77,7 @@ func dbErr(err error) error {
 }
 
 func notFound() *response.Error {
-	return response.NotFound("error.not_found").WithMsg("记录不存在")
+	return response.NotFound("report.record_not_found")
 }
 
 func likeEscape(s string) string {
@@ -90,7 +90,7 @@ func parseIDs(ss []string) ([]idgen.ID, *response.Error) {
 	for _, s := range ss {
 		id, err := idgen.Parse(s)
 		if err != nil || id == 0 {
-			return nil, specErr("ID 无效")
+			return nil, specErr("report.id_invalid")
 		}
 		if !seen[id] {
 			seen[id] = true

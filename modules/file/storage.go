@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"mime"
 	"net/http"
@@ -15,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"nexadmin/core/response"
 	"nexadmin/core/storage"
 )
 
@@ -185,7 +185,7 @@ func checkContent(kind, declared, name string, head []byte) (string, error) {
 		if looksSVG(head) {
 			return "image/svg+xml", nil
 		}
-		return "", errors.New("文件内容不是图片")
+		return "", response.New(http.StatusUnsupportedMediaType, "file.content_not_image")
 	case "video":
 		if strings.HasPrefix(base, "video/") || base == "application/ogg" {
 			return base, nil
@@ -197,11 +197,11 @@ func checkContent(kind, declared, name string, head []byte) (string, error) {
 			}
 			return "video/quicktime", nil
 		}
-		return "", errors.New("文件内容不是视频")
+		return "", response.New(http.StatusUnsupportedMediaType, "file.content_not_video")
 	}
 	// 普通文件：不允许把 HTML/脚本当文档存进来（同域下会变成 XSS）
 	if base == "text/html" {
-		return "", errors.New("不允许上传 HTML 文件")
+		return "", response.New(http.StatusUnsupportedMediaType, "file.html_forbidden")
 	}
 	if strings.HasPrefix(base, "image/") || strings.HasPrefix(base, "video/") || base == "application/pdf" {
 		return base, nil

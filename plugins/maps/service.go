@@ -143,7 +143,7 @@ func (s *service) SaveConfig(ctx context.Context, in configReq) (ConfigView, err
 		}
 		next[p] = ProviderConfig{Enabled: req.Enabled, PublicKey: pub, ServerKey: server}
 		if req.Enabled && (pub == "" || server == "") {
-			return ConfigView{}, badRequest("启用前需要填写该厂商的浏览器 Key 与服务端 Key")
+			return ConfigView{}, badRequest("maps.key_required")
 		}
 	}
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -168,7 +168,7 @@ func (s *service) SaveConfig(ctx context.Context, in configReq) (ConfigView, err
 // Regeo 逆地理编码：按厂商分派；坐标校验在入口统一做。
 func (s *service) Regeo(ctx context.Context, provider Provider, lng, lat float64) (string, error) {
 	if math.IsNaN(lng) || math.IsNaN(lat) || lng < -180 || lng > 180 || lat < -90 || lat > 90 {
-		return "", badRequest("经纬度不合法")
+		return "", badRequest("maps.coords_invalid")
 	}
 	cfg, err := s.Config(ctx)
 	if err != nil {
@@ -176,7 +176,7 @@ func (s *service) Regeo(ctx context.Context, provider Provider, lng, lat float64
 	}
 	pc := cfg[provider]
 	if !pc.Enabled || pc.ServerKey == "" {
-		return "", badRequest("该地图厂商未启用或缺少服务端 Key")
+		return "", badRequest("maps.not_enabled")
 	}
 	switch provider {
 	case ProviderAMap:
@@ -186,7 +186,7 @@ func (s *service) Regeo(ctx context.Context, provider Provider, lng, lat float64
 	case ProviderGoogle:
 		return s.google.Regeo(ctx, pc.ServerKey, lng, lat)
 	}
-	return "", badRequest("未知的地图厂商")
+	return "", badRequest("maps.provider_unknown")
 }
 
 // ---- 各厂商 Web 服务客户端；baseURL 可替换，测试用假上游 ----

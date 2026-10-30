@@ -251,6 +251,7 @@ func (a *App) buildFull() (*gin.Engine, error) {
 	if err != nil {
 		return nil, err
 	}
+	deps.Modules = mods
 	// 路由冲突聚合报错：gin 对重复 method+path 是当场 panic 的，逐模块 recover 后收集，
 	// 全部模块注册完一次性列出所有冲突（模块名 + 冲突详情），而不是第一个就把后面的全部掩盖。
 	var routeConflicts []string

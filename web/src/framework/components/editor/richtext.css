@@ -36,6 +36,8 @@
 .nex-richtext pre code { background: transparent; padding: 0; }
 .nex-richtext hr { border: 0; border-block-start: 1px solid hsl(var(--border)); margin-block: 1.25em; }
 .nex-richtext img, .nex-richtext video { max-width: 100%; height: auto; border-radius: 0.5rem; }
+/* 视频嵌入（B 站 / YouTube）：固定 16:9，不随内容宽度变形 */
+.nex-richtext iframe { width: 100%; aspect-ratio: 16 / 9; height: auto; border: 0; border-radius: 0.5rem; }
 .nex-richtext mark { border-radius: 0.2em; padding-inline: 0.1em; }
 .nex-richtext table { border-collapse: collapse; width: 100%; table-layout: fixed; display: block; overflow-x: auto; }
 .nex-richtext th, .nex-richtext td {

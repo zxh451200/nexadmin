@@ -41,8 +41,9 @@ func defaultSettings() map[string]map[string]any {
 	oidc := provider()
 	oidc["issuer"] = ""
 	return map[string]map[string]any{
-		"site":     {"siteName": "NexAdmin", "logoUrl": "/icon.svg", "copyright": "© 2026 NexAdmin", "defaultLanguage": "zh-CN", "watermark": false},
-		"security": {"maxAttempts": "5", "lockMinutes": "15"},
+		"site": {"siteName": "NexAdmin", "logoUrl": "/icon.svg", "copyright": "© 2026 NexAdmin", "defaultLanguage": "zh-CN", "watermark": false},
+		// idleMinutes / maxHours：闲置自动退出、最长会话（0 = 不限制）；登录与刷新时实时生效
+		"security": {"maxAttempts": "5", "lockMinutes": "15", "idleMinutes": "120", "maxHours": "12"},
 		"cache":    {"type": "memory", "address": "", "password": ""},
 		"storage":  {"type": "local", "endpoint": "", "bucket": "", "region": "", "accessKey": "", "secretKey": ""},
 		"ai":       {"enabled": true, "baseUrl": "https://api.example.com/v1", "apiKey": "", "model": "qwen-plus", "timeoutSec": 30, "maxTokens": 2048, "redact": true},
@@ -274,7 +275,7 @@ func (s *Service) SaveSection(ctx context.Context, name string, body map[string]
 	if name == "storage" {
 		// 文件存储只读 config/config.yaml 的 storage.*（向导 / init --config 写入）；这里保存的值没有任何地方会读，
 		// 让它“保存成功”却不生效比拒绝更糟，所以明确拒绝。
-		return nil, response.BadRequest("error.bad_request").WithMsg("文件存储由 config/config.yaml 的 storage.* 决定，设置页只读；请改配置文件后重启")
+		return nil, response.BadRequest("config.storage_readonly")
 	}
 	cur, err := s.section(ctx, name)
 	if err != nil {
@@ -396,13 +397,13 @@ func (s *Service) validateAI(ctx context.Context, cur, body, merged map[string]a
 	next := trimURL(merged["baseUrl"])
 	if next != "" {
 		if err := coreai.ValidateBaseURL(ctx, next, s.aiAllowPrivate, s.aiResolver); err != nil {
-			return bad("AI 地址不合法：仅支持 http/https，且不能指向链路本地、云元数据地址（默认也不能指向私网 / 回环，需部署方开启 ai.allow_private_base_url）")
+			return bad("config.ai.base_url_invalid")
 		}
 	}
 	if next != trimURL(cur["baseUrl"]) {
 		key, present := body["apiKey"].(string)
 		if !present || key == secretMask {
-			return bad("修改 AI 地址时必须同时重新填写 API Key")
+			return bad("config.ai.apikey_required")
 		}
 	}
 	return nil

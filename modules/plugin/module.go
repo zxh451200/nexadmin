@@ -58,7 +58,7 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 
 	r.GET("/plugins", requirePlatformUser, core.Perm(PermList), func(c *gin.Context) {
 		m.ObserveHost(c.Request.Host)
-		response.OK(c, m.List())
+		response.OK(c, m.List(c.Request.Context()))
 	})
 
 	// 已启用（有授权并已挂载）的插件 ID：前端据此隐藏不可用的插件页面、跳过插件语言包加载。
@@ -144,7 +144,7 @@ func registerMarketWith(r *gin.RouterGroup, m *plugin.Manager, actions marketAct
 			return
 		}
 		byID := map[string]plugin.Info{}
-		for _, p := range m.List() {
+		for _, p := range m.List(c.Request.Context()) {
 			byID[p.ID] = p
 		}
 		out := make([]marketEntry, 0, len(entries))
@@ -177,7 +177,7 @@ func registerMarketWith(r *gin.RouterGroup, m *plugin.Manager, actions marketAct
 		}
 		entry, ok := market.FindEntry(entries, in.ID)
 		if !ok {
-			response.Fail(c, response.NotFound("error.not_found").WithMsg("市场目录里没有该插件"))
+			response.Fail(c, response.NotFound("plugin.market_not_found"))
 			return
 		}
 		response.OK(c, gin.H{"jobId": actions.install(root, entry, in.Force)})
@@ -319,13 +319,14 @@ func importLicense(m *plugin.Manager, id string) gin.HandlerFunc {
 		var le *plugin.LicenseError
 		switch {
 		case err == nil:
+			plugin.LocalizeInfo(c.Request.Context(), &res.Plugin)
 			response.OK(c, res)
 		case errors.Is(err, plugin.ErrNotFound):
-			response.Fail(c, response.NotFound("error.not_found").WithMsg("插件不存在"))
+			response.Fail(c, response.NotFound("plugin.not_found"))
 		case errors.Is(err, plugin.ErrFree):
-			response.Fail(c, response.BadRequest("error.bad_request").WithMsg("免费插件无需授权"))
+			response.Fail(c, response.BadRequest("plugin.free_no_license"))
 		case errors.As(err, &le):
-			response.Fail(c, response.BadRequest("error.bad_request").WithMsg(le.Message()))
+			response.Fail(c, response.BadRequest(le.Key, le.Args...))
 		default:
 			response.Fail(c, err)
 		}

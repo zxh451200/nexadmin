@@ -178,5 +178,5 @@ func TooManyRequests(c *gin.Context, retry time.Duration) {
 		secs = 1
 	}
 	c.Header("Retry-After", strconv.Itoa(secs))
-	response.Fail(c, response.New(http.StatusTooManyRequests, "error.too_many_requests").WithMsg("请求过于频繁，请稍后再试"))
+	response.Fail(c, response.New(http.StatusTooManyRequests, "error.rate_limited"))
 }

@@ -56,7 +56,7 @@ func NewService(st store, log *zap.Logger) *Service {
 func tenantOf(ctx context.Context) (idgen.ID, error) {
 	id, ok := tenant.From(ctx)
 	if !ok || tenant.Skipped(ctx) || id == 0 {
-		return 0, response.BadRequest("error.bad_request").WithMsg("tenant is required")
+		return 0, response.BadRequest("tenant.context_required")
 	}
 	return id, nil
 }
@@ -129,14 +129,14 @@ func (s *Service) Save(ctx context.Context, id idgen.ID, f SourceForm) (*SourceV
 		if n, err := s.st.count(ctx, tid); err != nil {
 			return nil, err
 		} else if n >= maxSourcesPerTenant {
-			return nil, badReq("too many identity sources")
+			return nil, badReq("identity.source_limit")
 		}
 		src = &Source{Type: strings.ToLower(strings.TrimSpace(f.Type))}
 		src.TenantID = tid
 	} else if src, err = s.load(ctx, id); err != nil {
 		return nil, err
 	} else if t := strings.ToLower(strings.TrimSpace(f.Type)); t != "" && t != src.Type {
-		return nil, badReq("type cannot be changed")
+		return nil, badReq("identity.type_immutable")
 	}
 	cfg, err := s.prepareConfig(ctx, src, f.Config)
 	if err != nil {
@@ -161,7 +161,7 @@ func (s *Service) prepareConfig(ctx context.Context, src *Source, raw json.RawMe
 	case TypeLDAP:
 		var c LDAPConfig
 		if err := json.Unmarshal(raw, &c); err != nil {
-			return "", badReq("invalid config")
+			return "", badReq("identity.config_invalid")
 		}
 		pw := c.BindPassword
 		if err := c.normalize(); err != nil {
@@ -175,7 +175,7 @@ func (s *Service) prepareConfig(ctx context.Context, src *Source, raw json.RawMe
 			c.BindPassword = "" // 匿名搜索，不留口令
 		case pw != "":
 			if len(pw) > maxLoginPass {
-				return "", badReq("bind password too long")
+				return "", badReq("identity.bind_password_too_long")
 			}
 			enc, err := secret.Encrypt(pw) // 未初始化主密钥时失败：宁可拒绝保存，也不落明文
 			if err != nil {
@@ -185,12 +185,12 @@ func (s *Service) prepareConfig(ctx context.Context, src *Source, raw json.RawMe
 		default:
 			old, _ := src.ldapConfigOrZero()
 			if old.BindPassword == "" {
-				return "", badReq("bind password is required when bindDn is set")
+				return "", badReq("identity.bind_password_required")
 			}
 			// 沿用旧口令只在“口令的去向”不变时成立：改了地址 / 服务账号 / 信任的 CA / 传输方式，
 			// 否则有编辑权限但不知道口令的人可以把旧口令发到自己的服务器。
 			if old.URL != c.URL || old.BindDN != c.BindDN || old.CACert != c.CACert || old.StartTLS != c.StartTLS {
-				return "", badReq("bind password must be re-entered when url, bindDn, caCert or startTls changes")
+				return "", badReq("identity.bind_password_reenter")
 			}
 			c.BindPassword = old.BindPassword
 		}
@@ -199,7 +199,7 @@ func (s *Service) prepareConfig(ctx context.Context, src *Source, raw json.RawMe
 	case TypeCAS:
 		var c CASConfig
 		if err := json.Unmarshal(raw, &c); err != nil {
-			return "", badReq("invalid config")
+			return "", badReq("identity.config_invalid")
 		}
 		if err := c.normalize(); err != nil {
 			return "", err
@@ -210,7 +210,7 @@ func (s *Service) prepareConfig(ctx context.Context, src *Source, raw json.RawMe
 		b, _ := json.Marshal(c)
 		return string(b), nil
 	}
-	return "", badReq("type must be ldap or cas")
+	return "", badReq("identity.type_invalid")
 }
 
 func (s *Source) ldapConfigOrZero() (LDAPConfig, bool) {
@@ -287,7 +287,7 @@ func matchAllowed(ctx context.Context) bool {
 // requireMatchPerm：结果配置开启了 matchExisting 时（无论是新开还是沿用），调用者必须拥有 identity:match。
 func requireMatchPerm(ctx context.Context, matchExisting bool) error {
 	if matchExisting && !matchAllowed(ctx) {
-		return response.Forbidden("error.forbidden").WithMsg("matchExisting requires the " + permMatch + " permission")
+		return response.Forbidden("identity.match_perm_required", permMatch)
 	}
 	return nil
 }

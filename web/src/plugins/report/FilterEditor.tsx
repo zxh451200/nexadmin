@@ -25,7 +25,7 @@ export function FilterEditor({ columns, value, onChange, max = 10 }: Props) {
         const col = colOf(f.column)
         const ops = col ? opsFor(col.type) : []
         return (
-          <div key={i} className="grid grid-cols-1 gap-2 rounded-md border border-border p-2 md:grid-cols-[1fr_8rem_1fr_auto]">
+          <div key={i} className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_8rem_1fr_auto]">
             <Select
               value={f.column}
               onValueChange={(v) => {

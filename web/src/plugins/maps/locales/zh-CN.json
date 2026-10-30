@@ -27,6 +27,8 @@
     "demoDesc": "选一家已启用的厂商，点地图或拖标记，确认后回填坐标与地址；坐标系随厂商（gcj02 / bd09 / wgs84）。",
     "demoLabel": "位置",
     "notConfigured": "该厂商未启用或缺少浏览器 Key；保存配置后重新打开即可选点。",
+    "googleLoadFailed": "Google 地图脚本加载失败；中国大陆网络通常无法直接访问。",
+    "googleGlobalMissing": "Google 地图脚本已加载但全局对象缺失，请检查 Key 是否允许当前域名。",
     "clickHint": "点击地图选择位置",
     "confirm": "确定"
   }

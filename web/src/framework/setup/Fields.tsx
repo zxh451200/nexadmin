@@ -5,9 +5,9 @@ import { Eye, EyeOff } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/framework/ui/form'
 import { Input } from '@/framework/ui/input'
-import { Switch } from '@/framework/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import { TimezoneSelect } from '@/framework/components/TimezoneSelect'
+import { SwitchField as SharedSwitchField } from '@/framework/components/SwitchField'
 
 export function TimezoneField({ name, label }: { name: string; label: string }) {
   const { control } = useFormContext()
@@ -87,23 +87,7 @@ export function TextField({ name, label, type = 'text', placeholder, autoComplet
 
 export function SwitchField({ name, label, description }: { name: string; label: string; description?: string }) {
   const { control } = useFormContext()
-  return (
-    <FormField
-      control={control}
-      name={name}
-      render={({ field }) => (
-        <FormItem className="flex items-center justify-between gap-4 rounded-lg border border-border p-3">
-          <div className="min-w-0 space-y-0.5">
-            <FormLabel>{label}</FormLabel>
-            {description && <FormDescription>{description}</FormDescription>}
-          </div>
-          <FormControl>
-            <Switch checked={!!field.value} onCheckedChange={field.onChange} />
-          </FormControl>
-        </FormItem>
-      )}
-    />
-  )
+  return <SharedSwitchField control={control} name={name} label={label} description={description} />
 }
 
 interface SelectFieldProps {

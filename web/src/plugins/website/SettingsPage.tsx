@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Upload } from 'lucide-react'
+import { Plus, Trash2, Upload } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import {
@@ -13,10 +13,11 @@ import {
   type TranslateBatch,
 } from '@/framework/components/i18n'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
+import { SwitchRow } from '@/framework/components/SwitchField'
 import { Skeleton } from '@/framework/ui/skeleton'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
-import { Switch } from '@/framework/ui/switch'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import {
   translateContent,
   uploadMedia,
@@ -24,12 +25,23 @@ import {
   useLanguages,
   useSaveSettings,
   useSettings,
+  type FriendLink,
   type SiteSettingsForm,
+  type SocialLink,
+  type SocialPlatform,
 } from './api'
 
 /** 不随语言变化的字段：留在页面本地 state，译文态下置灰。 */
-type SharedTextKey = 'siteName' | 'logoUrl' | 'homeCtaHref' | 'contactEmail' | 'icp'
-type SharedSettings = Pick<SiteSettingsForm, SharedTextKey | 'marketEnabled'>
+type SharedTextKey =
+  | 'siteName' | 'logoUrl' | 'homeCtaHref' | 'contactEmail'
+  | 'contactPhone' | 'qrCodeUrl' | 'qrCodeCaption' | 'icp'
+type SharedSettings = Pick<SiteSettingsForm, SharedTextKey | 'marketEnabled'> & {
+  socials: SocialLink[]
+  friendLinks: FriendLink[]
+}
+
+/** 社交平台下拉的顺序与文案；值集合与后端 socialPlatforms 一致。 */
+const SOCIAL_PLATFORMS: SocialPlatform[] = ['github', 'x', 'linkedin', 'youtube', 'wechat', 'weibo', 'bilibili', 'rss', 'mail']
 
 /** 可翻译字段：归 LocaleFormProvider，与后端 setting schema 同源。 */
 type LocalizedKey = 'siteDesc' | 'homeTitle' | 'homeSubtitle' | 'homeCtaLabel' | 'seoKeywords' | 'footerNote'
@@ -50,6 +62,8 @@ function SettingsFormBody({
   const { disabled: sharedDisabled } = useSharedField()
   const [uploading, setUploading] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+  const [uploadingQr, setUploadingQr] = useState(false)
+  const qrRef = useRef<HTMLInputElement>(null)
 
   const set = (key: SharedTextKey, v: string) => onSharedChange({ ...shared, [key]: v })
 
@@ -67,6 +81,33 @@ function SettingsFormBody({
       if (fileRef.current) fileRef.current.value = ''
     }
   }
+
+  const onPickQr = async (file: File | undefined) => {
+    if (!file) return
+    setUploadingQr(true)
+    try {
+      const res = await uploadMedia(file)
+      set('qrCodeUrl', res.url)
+      toast.success(t('plugin_website.qr.uploaded'))
+    } catch {
+      toast.error(t('common.operateFailed'))
+    } finally {
+      setUploadingQr(false)
+      if (qrRef.current) qrRef.current.value = ''
+    }
+  }
+
+  const patchSocial = (i: number, patch: Partial<SocialLink>) =>
+    onSharedChange({ ...shared, socials: shared.socials.map((s, idx) => (idx === i ? { ...s, ...patch } : s)) })
+  const addSocial = () => onSharedChange({ ...shared, socials: [...shared.socials, { platform: 'github', url: '' }] })
+  const removeSocial = (i: number) =>
+    onSharedChange({ ...shared, socials: shared.socials.filter((_, idx) => idx !== i) })
+
+  const patchFriend = (i: number, patch: Partial<FriendLink>) =>
+    onSharedChange({ ...shared, friendLinks: shared.friendLinks.map((l, idx) => (idx === i ? { ...l, ...patch } : l)) })
+  const addFriend = () => onSharedChange({ ...shared, friendLinks: [...shared.friendLinks, { name: '', url: '' }] })
+  const removeFriend = (i: number) =>
+    onSharedChange({ ...shared, friendLinks: shared.friendLinks.filter((_, idx) => idx !== i) })
 
   const submit = async () => {
     const base = lf.baseValues()
@@ -109,18 +150,13 @@ function SettingsFormBody({
         <LocaleSwitcher />
         <span className="text-xs text-muted-foreground">{t('plugin_website.i18n.switchHint')}</span>
       </div>
-      <div className="flex items-start justify-between gap-4 border-b pb-4">
-        <div className="flex flex-col gap-1">
-          <span className="text-sm font-medium">{t('plugin_website.market.enabled')}</span>
-          <span className="text-xs text-muted-foreground">{t('plugin_website.market.enabledHint')}</span>
-        </div>
-        <Switch
-          checked={shared.marketEnabled}
-          disabled={sharedDisabled}
-          onCheckedChange={(v) => onSharedChange({ ...shared, marketEnabled: v })}
-          aria-label={t('plugin_website.market.enabled')}
-        />
-      </div>
+      <SwitchRow
+        label={t('plugin_website.market.enabled')}
+        description={t('plugin_website.market.enabledHint')}
+        checked={shared.marketEnabled}
+        disabled={sharedDisabled}
+        onCheckedChange={(v) => onSharedChange({ ...shared, marketEnabled: v })}
+      />
       {sharedInput('siteName')}
       {localizedField('siteDesc')}
       <SharedFieldShell labelKey="plugin_website.fields.logoUrl">
@@ -160,8 +196,113 @@ function SettingsFormBody({
       {sharedInput('homeCtaHref')}
       {localizedField('seoKeywords')}
       {sharedInput('contactEmail')}
+      {sharedInput('contactPhone')}
+      <SharedFieldShell labelKey="plugin_website.fields.qrCodeUrl">
+        <div className="flex items-center gap-2">
+          <Input
+            value={shared.qrCodeUrl}
+            disabled={sharedDisabled}
+            onChange={(e) => set('qrCodeUrl', e.target.value)}
+            placeholder={t('plugin_website.placeholder.qrCodeUrl', { defaultValue: '' })}
+          />
+          {shared.qrCodeUrl && (
+            <img
+              src={shared.qrCodeUrl}
+              alt=""
+              className="size-9 shrink-0 rounded-md border bg-background object-contain"
+              onError={(e) => { e.currentTarget.style.visibility = 'hidden' }}
+            />
+          )}
+          <Button type="button" variant="outline" disabled={uploadingQr || sharedDisabled} onClick={() => qrRef.current?.click()}>
+            <Upload aria-hidden="true" />
+            {uploadingQr ? t('plugin_website.logo.uploading') : t('plugin_website.qr.upload')}
+          </Button>
+        </div>
+        <span className="text-xs text-muted-foreground">{t('plugin_website.hint.qrCodeUrl')}</span>
+      </SharedFieldShell>
+      {sharedInput('qrCodeCaption')}
       {sharedInput('icp')}
       {localizedField('footerNote')}
+      <div className="flex flex-col gap-2">
+        <span className="text-sm font-medium">{t('plugin_website.settings.socials')}</span>
+        <span className="text-xs text-muted-foreground">{t('plugin_website.hint.socials')}</span>
+        {shared.socials.map((s, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <Select
+              value={s.platform}
+              disabled={sharedDisabled}
+              onValueChange={(v) => patchSocial(i, { platform: v as SocialPlatform })}
+            >
+              <SelectTrigger className="w-32 shrink-0" aria-label={t('plugin_website.settings.socialPlatform')}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {SOCIAL_PLATFORMS.map((p) => (
+                  <SelectItem key={p} value={p}>{t(`plugin_website.social.${p}`)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Input
+              value={s.url}
+              disabled={sharedDisabled}
+              onChange={(e) => patchSocial(i, { url: e.target.value })}
+              placeholder={t('plugin_website.placeholder.socialUrl', { defaultValue: '' })}
+              aria-label={t(`plugin_website.social.${s.platform}`)}
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              disabled={sharedDisabled}
+              aria-label={t('common.delete')}
+              onClick={() => removeSocial(i)}
+            >
+              <Trash2 className="size-4" aria-hidden="true" />
+            </Button>
+          </div>
+        ))}
+        <Button type="button" variant="outline" size="sm" className="w-fit" disabled={sharedDisabled} onClick={addSocial}>
+          <Plus className="size-4" aria-hidden="true" />
+          {t('plugin_website.settings.addSocial')}
+        </Button>
+      </div>
+      <div className="flex flex-col gap-2">
+        <span className="text-sm font-medium">{t('plugin_website.settings.friendLinks')}</span>
+        <span className="text-xs text-muted-foreground">{t('plugin_website.hint.friendLinks')}</span>
+        {shared.friendLinks.map((l, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <Input
+              className="w-40 shrink-0"
+              value={l.name}
+              disabled={sharedDisabled}
+              onChange={(e) => patchFriend(i, { name: e.target.value })}
+              placeholder={t('plugin_website.placeholder.friendName', { defaultValue: '' })}
+              aria-label={t('plugin_website.settings.friendName')}
+            />
+            <Input
+              value={l.url}
+              disabled={sharedDisabled}
+              onChange={(e) => patchFriend(i, { url: e.target.value })}
+              placeholder={t('plugin_website.placeholder.friendUrl', { defaultValue: '' })}
+              aria-label={t('plugin_website.settings.friendUrl')}
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              disabled={sharedDisabled}
+              aria-label={t('common.delete')}
+              onClick={() => removeFriend(i)}
+            >
+              <Trash2 className="size-4" aria-hidden="true" />
+            </Button>
+          </div>
+        ))}
+        <Button type="button" variant="outline" size="sm" className="w-fit" disabled={sharedDisabled} onClick={addFriend}>
+          <Plus className="size-4" aria-hidden="true" />
+          {t('plugin_website.settings.addFriendLink')}
+        </Button>
+      </div>
       {/* 文件选择器不放进任何 label 里，避免点标签文字误开文件弹窗 */}
       <input
         ref={fileRef}
@@ -169,6 +310,13 @@ function SettingsFormBody({
         accept="image/png,image/jpeg,image/webp,image/gif"
         className="hidden"
         onChange={(e) => void onPickLogo(e.target.files?.[0])}
+      />
+      <input
+        ref={qrRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/gif"
+        className="hidden"
+        onChange={(e) => void onPickQr(e.target.files?.[0])}
       />
       {/* 语言清单已归平台管理（系统设置 → 语言管理），这里只给入口提示，不再复制一份编辑器 */}
       <p className="text-xs text-muted-foreground">{t('plugin_website.languages.manageHint')}</p>
@@ -199,8 +347,13 @@ export default function SettingsPage() {
         logoUrl: data.logoUrl,
         homeCtaHref: data.homeCtaHref,
         contactEmail: data.contactEmail,
+        contactPhone: data.contactPhone,
+        qrCodeUrl: data.qrCodeUrl,
+        qrCodeCaption: data.qrCodeCaption,
         icp: data.icp,
         marketEnabled: data.marketEnabled,
+        socials: data.socials ?? [],
+        friendLinks: data.friendLinks ?? [],
       })
     }
   }, [data, shared])

@@ -16,6 +16,8 @@ import Placeholder from '@tiptap/extension-placeholder'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import { Video } from './editor/video'
+import { Embed } from './editor/embed'
+import { normalizeEmbedUrl } from './editor/sanitize'
 import { sanitizeHtml } from './editor/sanitize'
 import { EditorToolbar } from './editor/EditorToolbar'
 import { MediaDialog } from './editor/MediaDialog'
@@ -46,6 +48,7 @@ export function RichTextEditor({ value, onChange, placeholder, className, disabl
       Link.configure({ openOnClick: false, autolink: true, HTMLAttributes: { rel: 'noopener noreferrer', target: '_blank' } }),
       Image,
       Video,
+      Embed,
       Table.configure({ resizable: false }),
       TableRow,
       TableHeader,
@@ -89,9 +92,15 @@ export function RichTextEditor({ value, onChange, placeholder, className, disabl
       <MediaDialog
         kind={media}
         onClose={() => setMedia(null)}
-        onInsert={(kind, file) => {
-          if (kind === 'image') editor.chain().focus().setImage({ src: file.url, alt: file.name }).run()
-          else editor.chain().focus().setVideo({ src: file.url, poster: file.posterUrl }).run()
+        onInsert={(kind, file, alt) => {
+          if (kind === 'image') {
+            editor.chain().focus().setImage({ src: file.url, alt: alt || file.name }).run()
+          } else {
+            // B 站/YouTube 链接规范成嵌入地址；其它地址仍按原生 <video> 插入。
+            const embed = normalizeEmbedUrl(file.url)
+            if (embed) editor.chain().focus().setEmbed({ src: embed }).run()
+            else editor.chain().focus().setVideo({ src: file.url, poster: file.posterUrl }).run()
+          }
           setMedia(null)
         }}
       />

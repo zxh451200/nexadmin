@@ -171,8 +171,8 @@ func TestCheckDelete(t *testing.T) {
 		if !ok {
 			t.Fatal("期望 403")
 		}
-		if !strings.Contains(re.Msg, "2 个") {
-			t.Errorf("应报告数量 2：%q", re.Msg)
+		if re.Key != "datascope.forbidden_batch" || len(re.Args) != 2 || re.Args[1] != 2 {
+			t.Errorf("应报告数量 2：key=%q args=%v", re.Key, re.Args)
 		}
 	})
 	t.Run("范围外部门拒绝", func(t *testing.T) {

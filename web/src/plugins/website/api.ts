@@ -8,6 +8,19 @@ import type { Page, PageQuery } from '@/framework/request/types'
 /** 后端 entityViews 的键；新增内容类型时同步。 */
 export type I18nEntity = 'setting' | 'nav' | 'feature' | 'page' | 'post'
 
+/** 页脚社交图标可选平台；键集合与后端 socialPlatforms 一致。 */
+export type SocialPlatform = 'github' | 'x' | 'linkedin' | 'youtube' | 'wechat' | 'weibo' | 'bilibili' | 'rss' | 'mail'
+
+export interface SocialLink {
+  platform: SocialPlatform
+  url: string
+}
+
+export interface FriendLink {
+  name: string
+  url: string
+}
+
 export interface SiteSettings {
   id: string
   siteName: string
@@ -19,6 +32,13 @@ export interface SiteSettings {
   homeCtaHref: string
   seoKeywords: string
   contactEmail: string
+  contactPhone: string
+  qrCodeUrl: string
+  qrCodeCaption: string
+  /** 页脚社交图标（后端 JSON 数组展开） */
+  socials: SocialLink[]
+  /** 页脚友情链接 */
+  friendLinks: FriendLink[]
   icp: string
   footerNote: string
   marketEnabled: boolean
@@ -121,6 +141,8 @@ export interface PostForm {
   seoDesc: string
   content: string
   published: boolean
+  /** 只在发布时生效；不传则由服务端按「首次发布写当前时间」处理 */
+  publishedAt?: string
   i18nJson: string
   publishedJson: string
 }
@@ -314,5 +336,50 @@ export function useDeletePost() {
   return useMutation({
     mutationFn: (id: string) => api.del(`${BASE}/posts/${id}`),
     onSuccess: () => void qc.invalidateQueries({ queryKey: [...KEY, 'posts'] }),
+  })
+}
+
+/** 官网「在线留言」：匿名投稿，后台只读/标记/删除。 */
+export interface SiteMessage {
+  id: string
+  name: string
+  email: string
+  phone: string
+  content: string
+  ip: string
+  ua: string
+  read: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface MessageQuery {
+  page: number
+  pageSize: number
+  keyword?: string
+  unread?: boolean
+}
+
+export function useMessages(query: MessageQuery) {
+  return useQuery({
+    queryKey: [...KEY, 'messages', query],
+    queryFn: () => api.get<Page<SiteMessage>>(`${BASE}/messages`, { ...query, unread: query.unread ? 1 : undefined }),
+    placeholderData: keepPreviousData,
+  })
+}
+
+export function useSetMessageRead() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, read }: { id: string; read: boolean }) => api.put<null>(`${BASE}/messages/${id}/read`, { read }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: [...KEY, 'messages'] }),
+  })
+}
+
+export function useDeleteMessage() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.del(`${BASE}/messages/${id}`),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: [...KEY, 'messages'] }),
   })
 }

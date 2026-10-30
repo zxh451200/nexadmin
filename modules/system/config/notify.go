@@ -2,7 +2,6 @@ package config
 
 import (
 	"context"
-	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
@@ -76,25 +75,25 @@ func normalizeNotify(m map[string]any) (map[string]any, error) {
 	st := parseNotify(m)
 	if st.Mail.Host != "" {
 		if _, err := notify.NewMailClient(st.Mail); err != nil {
-			return nil, bad("邮件配置无效：" + err.Error())
+			return nil, badErr("config.notify.mail_invalid", err)
 		}
 	}
 	list, _ := m["robots"].([]any)
 	if len(list) > 20 {
-		return nil, bad("机器人最多 20 个")
+		return nil, bad("config.notify.too_many_robots")
 	}
 	seen := map[string]bool{}
 	robots := make([]any, 0, len(list))
 	for _, rs := range st.Robots {
 		if !robotName.MatchString(rs.Name) {
-			return nil, bad("机器人名称只能包含字母、数字、汉字、下划线和连字符，长度 1-32")
+			return nil, bad("config.notify.robot_name_invalid")
 		}
 		if seen[rs.Name] {
-			return nil, bad("机器人名称重复：" + rs.Name)
+			return nil, bad("config.notify.robot_duplicated", rs.Name)
 		}
 		seen[rs.Name] = true
 		if _, err := notify.NewRobotClient(rs); err != nil {
-			return nil, bad(fmt.Sprintf("机器人 %s 配置无效：%v", rs.Name, err))
+			return nil, badErr("config.notify.robot_invalid", err, rs.Name)
 		}
 		robots = append(robots, map[string]any{
 			"name": rs.Name, "type": strings.ToLower(rs.Type), "url": rs.URL, "secretKey": rs.Secret, "markdown": rs.Markdown,

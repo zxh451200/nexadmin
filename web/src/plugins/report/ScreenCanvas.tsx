@@ -39,7 +39,7 @@ interface Props {
 
 /**
  * 大屏画布（只读）：24 列栅格，组件按 JSON 里的 x/y/w/h 摆放。
- * 手机上退化为按位置顺序的单列堆叠。颜色全部来自语义 token，深色效果由外层容器的 .dark 提供。
+ * 手机上退化为按位置顺序的单列堆叠。颜色全部来自语义 token，亮/暗跟应用主题走。
  */
 export function ScreenCanvas({ screen, refreshMs }: Props) {
   const isMobile = useIsMobile()

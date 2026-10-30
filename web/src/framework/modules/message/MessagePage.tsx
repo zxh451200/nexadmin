@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/framework/ui/tabs'
@@ -17,11 +19,16 @@ function CountDot({ n }: { n: number }) {
 export default function MessagePage() {
   const { t } = useTranslation()
   const { data } = useUnreadCount()
+  // 顶栏铃铛点公告会带 ?tab=notices 进来；keep-alive 复用时也要跟着 URL 切。
+  const [params] = useSearchParams()
+  const fromUrl = params.get('tab') === 'notices' ? 'notices' : 'messages'
+  const [tab, setTab] = useState(fromUrl)
+  useEffect(() => setTab(fromUrl), [fromUrl])
 
   return (
     <PageContainer>
       <PageHeader title={t('message.title')} description={t('message.description')} />
-      <Tabs defaultValue="messages" className="flex flex-col gap-4">
+      <Tabs value={tab} onValueChange={setTab} className="flex flex-col gap-4">
         <TabsList className="w-full justify-start md:w-fit">
           <TabsTrigger value="messages" className="flex-1 md:flex-none">
             {t('message.tabMessages')}

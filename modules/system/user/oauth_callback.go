@@ -82,7 +82,7 @@ func (h *oauthHandler) completeBind(c *gin.Context, key string, rec *oauthflow.S
 	}
 	if err := linkIdentity(c.Request.Context(), h.d.DB, cl.UserID, id); err != nil {
 		if errors.Is(err, errOAuthConflict) {
-			response.Fail(c, response.Conflict("error.bad_request").WithMsg("该第三方账号已绑定到其他用户，或你已绑定过此平台"))
+			response.Fail(c, response.Conflict("user.oauth_already_bound"))
 			return
 		}
 		response.Fail(c, err)
@@ -110,7 +110,7 @@ func (h *oauthHandler) bind(c *gin.Context) {
 	}
 	id, err := h.flow.LookupBindToken(ctx, req.BindToken)
 	if errors.Is(err, oauthflow.ErrBindToken) {
-		response.Fail(c, response.BadRequest("auth.oauth_failed").WithMsg("绑定已失效，请重新使用第三方登录"))
+		response.Fail(c, response.BadRequest("user.bind_expired"))
 		return
 	}
 	if err != nil {
@@ -141,7 +141,7 @@ func (h *oauthHandler) bind(c *gin.Context) {
 	// 账号密码已通过：原子消费令牌（多实例下并发的两次绑定只有一个成功），再写入绑定。
 	if id, err = h.flow.ConsumeBindToken(ctx, req.BindToken); err != nil {
 		if errors.Is(err, oauthflow.ErrBindToken) {
-			response.Fail(c, response.BadRequest("auth.oauth_failed").WithMsg("绑定已失效，请重新使用第三方登录"))
+			response.Fail(c, response.BadRequest("user.bind_expired"))
 			return
 		}
 		response.Fail(c, err)

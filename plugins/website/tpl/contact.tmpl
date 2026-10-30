@@ -1,0 +1,77 @@
+{{define "content"}}
+<section class="section contact-page">
+  <div class="container contact-grid">
+    <div class="contact-intro">
+      <p class="eyebrow">{{.T "contact.eyebrow"}}</p>
+      <h1 class="page-title">{{.T "contact.title"}}</h1>
+      <p class="contact-lede">{{.TF "contact.lede" .SiteName}}</p>
+
+      <ul class="contact-channels">
+        {{if .ContactEmail}}
+        <li>
+          <span class="contact-ico" aria-hidden="true">{{icon "mail"}}</span>
+          <div>
+            <span class="contact-label">{{.T "contact.email"}}</span>
+            <a href="mailto:{{.ContactEmail}}">{{.ContactEmail}}</a>
+          </div>
+        </li>
+        {{end}}
+        {{if .ContactPhone}}
+        <li>
+          <span class="contact-ico" aria-hidden="true">{{icon "phone"}}</span>
+          <div>
+            <span class="contact-label">{{.T "contact.phone"}}</span>
+            <a href="tel:{{.ContactPhone}}">{{.ContactPhone}}</a>
+          </div>
+        </li>
+        {{end}}
+      </ul>
+
+      {{if .Socials}}
+      <ul class="footer-social contact-social" aria-label="{{.T "layout.social"}}">
+        {{range .Socials}}<li><a href="{{.URL}}" target="_blank" rel="noopener noreferrer nofollow" aria-label="{{$.SocialLabel .Platform}}" title="{{$.SocialLabel .Platform}}">{{socialIcon .Platform}}</a></li>{{end}}
+      </ul>
+      {{end}}
+
+      {{if .QRCodeURL}}
+      <figure class="footer-qr contact-qr">
+        <img src="{{.QRCodeURL}}" alt="{{if .QRCodeCaption}}{{.QRCodeCaption}}{{else}}{{.T "layout.qrAlt"}}{{end}}" loading="lazy" width="96" height="96">
+        {{if .QRCodeCaption}}<figcaption>{{.QRCodeCaption}}</figcaption>{{end}}
+      </figure>
+      {{end}}
+    </div>
+
+    <form class="contact-form" method="post" action="{{.URL "/contact"}}" data-contact-form novalidate>
+      <h2 class="contact-form-title">{{.T "contact.formTitle"}}</h2>
+      <p class="contact-form-hint">{{.T "contact.formHint"}}</p>
+
+      <p class="contact-status" data-contact-status role="status" aria-live="polite"{{if and (not .ContactSent) (not .ContactError)}} hidden{{end}}>
+        {{if .ContactSent}}<span class="contact-status-ok">{{.T "contact.sent"}}</span>{{end}}
+        {{if .ContactError}}<span class="contact-status-err">{{.ContactError}}</span>{{end}}
+      </p>
+
+      <label class="field">
+        <span class="field-label">{{.T "contact.name"}}</span>
+        <input name="name" required maxlength="64" autocomplete="name">
+      </label>
+      <label class="field">
+        <span class="field-label">{{.T "contact.email"}}</span>
+        <input name="email" type="email" required maxlength="128" autocomplete="email">
+      </label>
+      <label class="field">
+        <span class="field-label">{{.T "contact.phoneOpt"}}</span>
+        <input name="phone" type="tel" maxlength="32" autocomplete="tel">
+      </label>
+      <label class="field">
+        <span class="field-label">{{.T "contact.message"}}</span>
+        <textarea name="content" rows="5" required minlength="5" maxlength="2000"></textarea>
+      </label>
+      <label class="contact-hp" aria-hidden="true">
+        <span>Company</span>
+        <input name="company" tabindex="-1" autocomplete="off">
+      </label>
+      <button class="btn btn-primary" type="submit">{{.T "contact.send"}}</button>
+    </form>
+  </div>
+</section>
+{{end}}

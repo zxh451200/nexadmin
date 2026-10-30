@@ -89,7 +89,7 @@ function RuleRow({ rule, refs, onChange, onRemove }: { rule: Leaf; refs: FormFie
   const target = refs.find((f) => f.key === rule.field)
   const ops = target ? OPS_BY_TYPE[target.type] : []
   return (
-    <div className="flex flex-col gap-2 rounded-md border border-border p-2 md:flex-row md:items-start">
+    <div className="flex flex-col gap-2 md:flex-row md:items-start">
       <Select
         value={rule.field}
         onValueChange={(k) => {

@@ -4,12 +4,16 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"net/mail"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -37,10 +41,10 @@ var reservedSlugs = map[string]bool{"news": true, "p": true}
 func ValidateSlug(s string) error {
 	s = strings.TrimSpace(s)
 	if !slugReg.MatchString(s) {
-		return response.BadRequest("error.bad_request").WithMsg("slug 只能是小写字母、数字与连字符，长度 1-64")
+		return response.BadRequest("website.slug_invalid")
 	}
 	if reservedSlugs[s] || strings.HasPrefix(s, "-") || strings.HasSuffix(s, "-") {
-		return response.BadRequest("error.bad_request").WithMsg("slug 不可用：" + s)
+		return response.BadRequest("website.slug_reserved", s)
 	}
 	return nil
 }
@@ -48,6 +52,133 @@ func ValidateSlug(s string) error {
 func trimLen(s string, max int) string {
 	s = strings.TrimSpace(s)
 	return s[:min(len(s), max)]
+}
+
+// trimRunes 按字符限长：trimLen 按字节切会把中文切出半个码点，用户投稿必须按字符截断。
+func trimRunes(s string, max int) string {
+	s = strings.TrimSpace(s)
+	if utf8.RuneCountInString(s) <= max {
+		return s
+	}
+	return string([]rune(s)[:max])
+}
+
+// ---- 页脚列表（社交图标 / 友情链接） ----
+
+const (
+	maxSocialLinks = 12
+	maxFriendLinks = 20
+)
+
+// socialPlatforms 是页脚社交图标的可选值，必须与 render.go 的 socialIconPaths 键一致（有测试兜底）。
+var socialPlatforms = []string{"github", "x", "linkedin", "youtube", "wechat", "weibo", "bilibili", "rss", "mail"}
+
+func validSocialPlatform(p string) bool {
+	for _, v := range socialPlatforms {
+		if v == p {
+			return true
+		}
+	}
+	return false
+}
+
+// footerURLValid：页脚链接只能是站内路径/锚点或 http(s) 外部地址；社交还允许 mailto。
+func footerURLValid(raw string, allowMailto bool) bool {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return false
+	}
+	switch strings.ToLower(u.Scheme) {
+	case "http", "https":
+		return u.Host != ""
+	case "mailto":
+		return allowMailto && (u.Opaque != "" || u.Path != "")
+	case "":
+		return strings.HasPrefix(u.Path, "/") || strings.HasPrefix(u.Path, "#")
+	}
+	return false
+}
+
+// parseSocials / parseFriendLinks 读库里的 JSON 文本；脏数据当作空列表，不能让页脚整页挂掉。
+func parseSocials(raw string) []SocialLink {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	var out []SocialLink
+	if err := json.Unmarshal([]byte(raw), &out); err != nil {
+		return nil
+	}
+	return out
+}
+
+func parseFriendLinks(raw string) []FriendLink {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	var out []FriendLink
+	if err := json.Unmarshal([]byte(raw), &out); err != nil {
+		return nil
+	}
+	return out
+}
+
+func normalizeSocials(in []SocialLink) (string, error) {
+	out := make([]SocialLink, 0, len(in))
+	for _, s := range in {
+		p, u := strings.TrimSpace(s.Platform), strings.TrimSpace(s.URL)
+		if p == "" && u == "" {
+			continue
+		}
+		if !validSocialPlatform(p) || !footerURLValid(u, true) {
+			return "", response.BadRequest("website.social_invalid")
+		}
+		out = append(out, SocialLink{Platform: p, URL: u})
+	}
+	if len(out) > maxSocialLinks {
+		return "", response.BadRequest("website.social_too_many", maxSocialLinks)
+	}
+	b, err := json.Marshal(out)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
+}
+
+func normalizeFriendLinks(in []FriendLink) (string, error) {
+	out := make([]FriendLink, 0, len(in))
+	for _, l := range in {
+		name, u := trimRunes(l.Name, 64), strings.TrimSpace(l.URL)
+		if name == "" && u == "" {
+			continue
+		}
+		if name == "" || !footerURLValid(u, false) {
+			return "", response.BadRequest("website.friend_link_invalid")
+		}
+		out = append(out, FriendLink{Name: name, URL: u})
+	}
+	if len(out) > maxFriendLinks {
+		return "", response.BadRequest("website.friend_link_too_many", maxFriendLinks)
+	}
+	b, err := json.Marshal(out)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
+}
+
+// settingView 是管理端设置响应：两个 JSON 文本列展开成数组，前端不用二次解析。
+type settingView struct {
+	Setting
+	Socials     []SocialLink `json:"socials"`
+	FriendLinks []FriendLink `json:"friendLinks"`
+}
+
+func newSettingView(row *Setting) settingView {
+	return settingView{
+		Setting:     *row,
+		Socials:     parseSocials(row.SocialsJSON),
+		FriendLinks: parseFriendLinks(row.FriendLinksJSON),
+	}
 }
 
 // ---- 站点设置（单行） ----
@@ -84,11 +215,26 @@ func (s *Service) SaveSettings(ctx context.Context, f SettingForm) (*Setting, er
 	row.HomeCTAHref = trimLen(f.HomeCTAHref, 255)
 	row.SeoKeywords = trimLen(f.SeoKeywords, 300)
 	row.ContactEmail = trimLen(f.ContactEmail, 128)
+	row.ContactPhone = trimLen(f.ContactPhone, 64)
+	row.QRCodeURL = trimLen(f.QRCodeURL, 255)
+	row.QRCodeCaption = trimLen(f.QRCodeCaption, 128)
 	row.ICP = trimLen(f.ICP, 128)
 	row.FooterNote = trimLen(f.FooterNote, 300)
+	if row.QRCodeURL != "" && !footerURLValid(row.QRCodeURL, false) {
+		return nil, response.BadRequest("website.qr_url_invalid")
+	}
+	socials, err := normalizeSocials(f.Socials)
+	if err != nil {
+		return nil, err
+	}
+	friends, err := normalizeFriendLinks(f.FriendLinks)
+	if err != nil {
+		return nil, err
+	}
+	row.SocialsJSON, row.FriendLinksJSON = socials, friends
 	i18n, err := pi18n.Normalize(f.I18nJSON, siteLocales{}, settingI18nFields)
 	if err != nil {
-		return nil, response.BadRequest("error.bad_request").WithMsg(err.Error())
+		return nil, response.BadRequest("website.i18n_invalid").Wrap(err)
 	}
 	row.I18nJSON = i18n
 	if f.MarketEnabled != nil {
@@ -136,7 +282,7 @@ func navHrefValid(href string) bool {
 	if p == "" || p == "/" {
 		return true
 	}
-	for _, prefix := range []string{"/news", "/plugins", "/docs"} {
+	for _, prefix := range []string{"/news", "/plugins", "/docs", "/contact"} {
 		if p == prefix || strings.HasPrefix(p, prefix+"/") {
 			return true
 		}
@@ -161,11 +307,10 @@ func (s *Service) SaveNav(ctx context.Context, id idgen.ID, f ItemForm) (*Nav, e
 	f.Label = trimLen(f.Label, 64)
 	f.Href = trimLen(f.Href, 255)
 	if f.Label == "" || f.Href == "" {
-		return nil, response.BadRequest("error.bad_request").WithMsg("导航需要名称与链接")
+		return nil, response.BadRequest("website.nav_required")
 	}
 	if !navHrefValid(f.Href) {
-		return nil, response.BadRequest("error.bad_request").
-			WithMsg(fmt.Sprintf("官网没有这个页面：%s。站内页面请从下拉选择；自定义页面请先在「页面管理」创建；外部链接请填写完整 https:// 地址。", f.Href))
+		return nil, response.BadRequest("website.nav_href_invalid", f.Href)
 	}
 	if slug, ok := navPageSlug(f.Href); ok {
 		var n int64
@@ -173,8 +318,7 @@ func (s *Service) SaveNav(ctx context.Context, id idgen.ID, f ItemForm) (*Nav, e
 			return nil, err
 		}
 		if n == 0 {
-			return nil, response.BadRequest("error.bad_request").
-				WithMsg(fmt.Sprintf("页面 /p/%s 还不存在，请先在「页面管理」创建，再把它设为导航。", slug))
+			return nil, response.BadRequest("website.nav_page_missing", slug)
 		}
 	}
 	var row Nav
@@ -197,11 +341,11 @@ func (s *Service) SaveNav(ctx context.Context, id idgen.ID, f ItemForm) (*Nav, e
 	}
 	// 挂到新父级后整棵子树会整体下移，深度上限要按子树层数一起判断。
 	if id != 0 && level+navSubtreeHeight(parents, uint64(id))-1 > navMaxDepth {
-		return nil, navBadRequest(fmt.Sprintf("导航最多支持 %d 级", navMaxDepth))
+		return nil, navBadRequest("website.nav_depth_exceeded", navMaxDepth)
 	}
 	i18n, err := pi18n.Normalize(f.I18nJSON, siteLocales{}, navI18nFields)
 	if err != nil {
-		return nil, response.BadRequest("error.bad_request").WithMsg(err.Error())
+		return nil, response.BadRequest("website.i18n_invalid").Wrap(err)
 	}
 	row.ParentID, row.Label, row.Href = f.ParentID, f.Label, f.Href
 	row.Sort, row.Enabled, row.I18nJSON = f.Sort, f.Enabled, i18n
@@ -244,7 +388,7 @@ func (s *Service) ReorderNavs(ctx context.Context, items []NavOrderItem) error {
 		parents := navParentMap(rows)
 		for i := range items {
 			if _, ok := parents[uint64(items[i].ID)]; !ok {
-				return navBadRequest("导航不存在")
+				return navBadRequest("website.nav_not_found")
 			}
 			if items[i].Sort == 0 {
 				items[i].Sort = (i + 1) * 10
@@ -277,7 +421,7 @@ func (s *Service) SaveFeature(ctx context.Context, id idgen.ID, f FeatureForm) (
 	f.Description = trimLen(f.Description, 500)
 	f.Icon = trimLen(f.Icon, 64)
 	if f.Title == "" {
-		return nil, response.BadRequest("error.bad_request").WithMsg("特性需要标题")
+		return nil, response.BadRequest("website.feature_title_required")
 	}
 	var row Feature
 	if id != 0 {
@@ -289,7 +433,7 @@ func (s *Service) SaveFeature(ctx context.Context, id idgen.ID, f FeatureForm) (
 	}
 	i18n, err := pi18n.Normalize(f.I18nJSON, siteLocales{}, featureI18nFields)
 	if err != nil {
-		return nil, response.BadRequest("error.bad_request").WithMsg(err.Error())
+		return nil, response.BadRequest("website.i18n_invalid").Wrap(err)
 	}
 	row.Icon, row.Title, row.Description, row.Sort, row.Enabled, row.I18nJSON = f.Icon, f.Title, f.Description, f.Sort, f.Enabled, i18n
 	if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
@@ -356,7 +500,7 @@ func (s *Service) SavePage(ctx context.Context, id idgen.ID, f PageForm) (*Page,
 		return nil, err
 	}
 	if f.Title == "" {
-		return nil, response.BadRequest("error.bad_request").WithMsg("页面需要标题")
+		return nil, response.BadRequest("website.page_title_required")
 	}
 	var row Page
 	if id != 0 {
@@ -368,14 +512,14 @@ func (s *Service) SavePage(ctx context.Context, id idgen.ID, f PageForm) (*Page,
 	}
 	i18n, err := pi18n.Normalize(f.I18nJSON, siteLocales{}, pageI18nFields)
 	if err != nil {
-		return nil, response.BadRequest("error.bad_request").WithMsg(err.Error())
+		return nil, response.BadRequest("website.i18n_invalid").Wrap(err)
 	}
 	row.Slug, row.Title, row.SeoDesc = f.Slug, f.Title, f.SeoDesc
 	row.Content, row.Published, row.I18nJSON = htmlsafe.Sanitize(f.Content), f.Published, i18n
 	pub, err := pi18n.NormalizePublish(f.PublishedJSON, f.Published, pi18n.ParseDoc(i18n),
 		map[string]string{"title": row.Title, "seoDesc": row.SeoDesc, "content": row.Content}, siteLocales{}, pageI18nFields)
 	if err != nil {
-		return nil, response.BadRequest("error.bad_request").WithMsg(err.Error())
+		return nil, response.BadRequest("website.i18n_invalid").Wrap(err)
 	}
 	row.PublishedJSON = pub
 	if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
@@ -411,7 +555,7 @@ func (s *Service) SavePost(ctx context.Context, id idgen.ID, f PostForm) (*Post,
 		return nil, err
 	}
 	if f.Title == "" {
-		return nil, response.BadRequest("error.bad_request").WithMsg("新闻需要标题")
+		return nil, response.BadRequest("website.post_title_required")
 	}
 	var row Post
 	if id != 0 {
@@ -424,19 +568,26 @@ func (s *Service) SavePost(ctx context.Context, id idgen.ID, f PostForm) (*Post,
 	wasPublished := row.Published
 	i18n, err := pi18n.Normalize(f.I18nJSON, siteLocales{}, postI18nFields)
 	if err != nil {
-		return nil, response.BadRequest("error.bad_request").WithMsg(err.Error())
+		return nil, response.BadRequest("website.i18n_invalid").Wrap(err)
 	}
 	row.Slug, row.Title, row.CoverURL, row.Summary, row.SeoDesc = f.Slug, f.Title, f.CoverURL, f.Summary, f.SeoDesc
 	row.Content, row.Published, row.I18nJSON = htmlsafe.Sanitize(f.Content), f.Published, i18n
 	pub, err := pi18n.NormalizePublish(f.PublishedJSON, f.Published, pi18n.ParseDoc(i18n),
 		map[string]string{"title": row.Title, "summary": row.Summary, "seoDesc": row.SeoDesc, "content": row.Content}, siteLocales{}, postI18nFields)
 	if err != nil {
-		return nil, response.BadRequest("error.bad_request").WithMsg(err.Error())
+		return nil, response.BadRequest("website.i18n_invalid").Wrap(err)
 	}
 	row.PublishedJSON = pub
-	if f.Published && (!wasPublished || row.PublishedAt == nil) {
-		now := time.Now().UTC()
-		row.PublishedAt = &now
+	if f.Published {
+		switch {
+		case f.PublishedAt != nil:
+			// 手动指定：回填历史文章的真实发布时间，或修正误发时间。
+			t := f.PublishedAt.UTC()
+			row.PublishedAt = &t
+		case !wasPublished || row.PublishedAt == nil:
+			now := time.Now().UTC()
+			row.PublishedAt = &now
+		}
 	}
 	if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
 		return nil, err
@@ -564,14 +715,14 @@ var mediaMimes = map[string]bool{
 // 类型按内容嗅探判定（http.DetectContentType），不信任扩展名。
 func (s *Service) SaveMedia(ctx context.Context, data []byte) (*Media, error) {
 	if len(data) == 0 {
-		return nil, response.BadRequest("error.bad_request").WithMsg("文件为空")
+		return nil, response.BadRequest("website.file_empty")
 	}
 	if len(data) > mediaMaxBytes {
-		return nil, response.BadRequest("error.bad_request").WithMsg("图片不能超过 2MB")
+		return nil, response.BadRequest("website.image_too_large")
 	}
 	mime := http.DetectContentType(data)
 	if !mediaMimes[mime] {
-		return nil, response.BadRequest("error.bad_request").WithMsg("只支持 PNG / JPEG / WebP / GIF 图片")
+		return nil, response.BadRequest("website.image_type_unsupported")
 	}
 	m := Media{Mime: mime, Size: len(data), Data: data}
 	if err := s.db.WithContext(ctx).Create(&m).Error; err != nil {
@@ -739,4 +890,87 @@ func bumpMarketStat(db *gorm.DB, pluginID string, downloads, sum, count int64) e
 			"updated_at":   time.Now(),
 		}),
 	}).Create(&row).Error
+}
+
+// ---- 在线留言 ----
+
+// emailReg 比 net/mail 严格一档：ParseAddress 接受 a@b 这种无域名后缀的地址。
+var emailReg = regexp.MustCompile(`^[^\s@]+@[^\s@]+\.[^\s@]+$`)
+
+// CreateMessage 保存一条匿名留言。限流与蜜罐在 HTTP 层，这里只校验内容。
+func (s *Service) CreateMessage(ctx context.Context, f ContactForm, ip, ua string) (*Message, error) {
+	name := trimRunes(f.Name, 64)
+	email := trimRunes(f.Email, 128)
+	phone := trimRunes(f.Phone, 32)
+	content := trimRunes(f.Content, 2000)
+	if name == "" {
+		return nil, response.BadRequest("website.contact_name_required")
+	}
+	if _, err := mail.ParseAddress(email); err != nil || !emailReg.MatchString(email) {
+		return nil, response.BadRequest("website.contact_email_invalid")
+	}
+	if utf8.RuneCountInString(content) < 5 {
+		return nil, response.BadRequest("website.contact_content_short")
+	}
+	row := &Message{
+		Name: name, Email: email, Phone: phone, Content: content,
+		IP: trimLen(ip, 64), UA: trimLen(ua, 255),
+	}
+	if err := s.db.WithContext(ctx).Create(row).Error; err != nil {
+		return nil, err
+	}
+	return row, nil
+}
+
+// ListMessages 是后台留言列表：按时间倒序，可按未读与关键字筛。
+func (s *Service) ListMessages(ctx context.Context, q MessageQuery) ([]Message, int64, error) {
+	tx := s.db.WithContext(ctx).Model(&Message{})
+	if q.Unread {
+		tx = tx.Where("is_read = ?", false)
+	}
+	if kw := strings.TrimSpace(q.Keyword); kw != "" {
+		like := "%" + kw + "%"
+		tx = tx.Where("name LIKE ? OR email LIKE ? OR content LIKE ?", like, like, like)
+	}
+	var total int64
+	if err := tx.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	var rows []Message
+	if err := tx.Order("created_at DESC, id DESC").
+		Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Find(&rows).Error; err != nil {
+		return nil, 0, err
+	}
+	return rows, total, nil
+}
+
+// UnreadMessages 返回未读数（后台页签角标用）。
+func (s *Service) UnreadMessages(ctx context.Context) (int64, error) {
+	var n int64
+	err := s.db.WithContext(ctx).Model(&Message{}).Where("is_read = ?", false).Count(&n).Error
+	return n, err
+}
+
+// SetMessageRead 标记已读/未读；留言不存在时返回 404（而不是静默成功）。
+func (s *Service) SetMessageRead(ctx context.Context, id idgen.ID, read bool) error {
+	res := s.db.WithContext(ctx).Model(&Message{}).Where("id = ?", int64(id)).Update("is_read", read)
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return response.NotFound("website.message_not_found")
+	}
+	return nil
+}
+
+// DeleteMessage 删除一条留言。
+func (s *Service) DeleteMessage(ctx context.Context, id idgen.ID) error {
+	res := s.db.WithContext(ctx).Delete(&Message{}, "id = ?", int64(id))
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return response.NotFound("website.message_not_found")
+	}
+	return nil
 }

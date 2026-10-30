@@ -17,14 +17,16 @@ import {
   type TranslateBatch,
 } from '@/framework/components/i18n'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
+import { DateTimePicker } from '@/framework/components/DateTimePicker'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
+import { SwitchRow } from '@/framework/components/SwitchField'
 import { Uploader, type UploadedFile } from '@/framework/components/Uploader'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/framework/ui/dialog'
 import { Input } from '@/framework/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
-import { Switch } from '@/framework/ui/switch'
+import { EditorSchemaGate } from './EditorSchemaGate'
 import TranslationStatus from './TranslationStatus'
 import {
   translateContent,
@@ -53,6 +55,7 @@ function PostFormBody({ onOpenChange, editing }: { onOpenChange: (v: boolean) =>
   const [coverUrl, setCoverUrl] = useState(editing?.coverUrl ?? '')
   const [coverOpen, setCoverOpen] = useState(false)
   const [coverFiles, setCoverFiles] = useState<UploadedFile[]>([])
+  const [publishedAt, setPublishedAt] = useState(editing?.publishedAt ?? '')
   // slug 是所有语言共用的，但每门语言有各自的路径前缀；提示按当前编辑的语言拼。
   const pathPrefix = lf.locales.find((l) => l.code === lf.active)?.prefix
   const articlePath = `${pathPrefix ? `/${pathPrefix}` : ''}/news/${slug || '…'}`
@@ -76,6 +79,8 @@ function PostFormBody({ onOpenChange, editing }: { onOpenChange: (v: boolean) =>
           slug,
           coverUrl,
           published: lf.publishedOf(lf.defaultLocale),
+          // 只有发布态才有发布时间；空串表示交给服务端按「首次发布写当前时间」处理
+          publishedAt: lf.publishedOf(lf.defaultLocale) && publishedAt ? publishedAt : undefined,
           ...lf.serialize(),
           // 行上的裸列永远存原文
           title: base.title ?? '',
@@ -155,13 +160,22 @@ function PostFormBody({ onOpenChange, editing }: { onOpenChange: (v: boolean) =>
         <LocalizedField fieldKey="seoDesc" />
         <LocalizedField fieldKey="content" className="min-h-40" />
         <LocaleFormActions />
-        <label className="flex items-center justify-between text-sm">
-          {t('plugin_website.fields.published')}
-          <Switch
-            checked={lf.publishedOf(lf.defaultLocale)}
-            onCheckedChange={(on) => lf.setPublishedOf(lf.defaultLocale, on)}
-          />
-        </label>
+        <SwitchRow
+          label={t('plugin_website.fields.published')}
+          checked={lf.publishedOf(lf.defaultLocale)}
+          onCheckedChange={(on) => lf.setPublishedOf(lf.defaultLocale, on)}
+        />
+        {/* 发布时间：只在发布时生效，留空则由服务端在首次发布时写当前时间 */}
+        {lf.publishedOf(lf.defaultLocale) ? (
+          <SharedFieldShell labelKey="plugin_website.fields.publishedAt">
+            <DateTimePicker
+              value={publishedAt}
+              allowClear
+              onChange={(v) => setPublishedAt(v)}
+              placeholder={t('plugin_website.fields.publishedAtHint')}
+            />
+          </SharedFieldShell>
+        ) : null}
       </div>
       <Dialog open={coverOpen} onOpenChange={setCoverOpen}>
         <DialogContent className="w-[calc(100vw-1.5rem)] max-w-md">
@@ -196,9 +210,8 @@ function PostFormDialog({
   editing: SitePost | null
   initialLocale?: string
 }) {
-  const { t } = useTranslation()
   const { data: languages = [] } = useLanguages()
-  const { data: schema } = useI18nSchema('post')
+  const { data: schema, isError, refetch } = useI18nSchema('post')
   const defaultLocale = languages.find((l) => l.default)?.code ?? ''
   // 传输函数交给框架组件：它不认识插件路由，只负责按格式分批调用。
   const translate = useCallback<TranslateBatch>(
@@ -208,13 +221,7 @@ function PostFormDialog({
 
   // schema 与语言清单是表单的前提，没到货前不给渲染——否则会闪出一个没有字段的空表单。
   if (!schema || !defaultLocale) {
-    return (
-      <Dialog open onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-3xl">
-          <DialogHeader><DialogTitle>{t('common.loading')}</DialogTitle></DialogHeader>
-        </DialogContent>
-      </Dialog>
-    )
+    return <EditorSchemaGate onOpenChange={onOpenChange} error={isError} onRetry={() => void refetch()} />
   }
 
   return (
@@ -237,6 +244,8 @@ function PostFormDialog({
 export default function PostPage() {
   const { t } = useTranslation()
   const confirm = useConfirm()
+  // 预取字段 schema：点「新建/编辑」时直接命中缓存，不再先闪一个加载弹窗。
+  useI18nSchema('post')
   const { data: languages = [] } = useLanguages()
   const [draft, setDraft] = useState<ContentQuery>({})
   const [filters, setFilters] = useState<ContentQuery>({})

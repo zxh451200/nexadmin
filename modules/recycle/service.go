@@ -61,7 +61,7 @@ func (s *Service) entry(ctx context.Context, id idgen.ID) (*recbin.Entry, string
 	}
 	table, ok := recbin.Tables[e.Type]
 	if !ok {
-		return nil, "", response.BadRequest("error.bad_request").WithMsg("该类型暂不支持还原或彻底删除")
+		return nil, "", response.BadRequest("recycle.type_unsupported")
 	}
 	return &e, table, nil
 }
@@ -87,7 +87,7 @@ func (s *Service) Restore(ctx context.Context, id idgen.ID) error {
 		res := tx.Exec("UPDATE "+table+" SET deleted_at = NULL WHERE id = ? AND tenant_id = ? AND deleted_at IS NOT NULL", int64(e.RefID), int64(e.TenantID))
 		if res.Error != nil {
 			// 多半是唯一约束冲突（同名用户已被重新创建）
-			return response.Conflict("error.bad_request").WithMsg("还原失败，可能与现有数据重复").Wrap(res.Error)
+			return response.Conflict("recycle.restore_conflict").Wrap(res.Error)
 		}
 		gone = res.RowsAffected == 0
 		return tx.Delete(&recbin.Entry{}, "id = ?", int64(e.ID)).Error

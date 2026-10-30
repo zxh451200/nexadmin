@@ -51,7 +51,7 @@ func limitBody(c *gin.Context) {
 func actorOf(c *gin.Context) (Actor, bool) {
 	cl := auth.ClaimsFrom(c)
 	if cl == nil || cl.UserID == 0 {
-		response.Fail(c, forbidden("需要用户身份"))
+		response.Fail(c, forbidden("formbuilder.actor_required"))
 		return Actor{}, false
 	}
 	return Actor{ID: cl.UserID, Username: cl.Username, Super: cl.Super}, true
@@ -128,7 +128,7 @@ func (h *handler) importForm(c *gin.Context) {
 	limitBody(c)
 	raw, err := io.ReadAll(c.Request.Body)
 	if err != nil {
-		response.Fail(c, bad("请求体过大或读取失败"))
+		response.Fail(c, bad("formbuilder.body_unreadable"))
 		return
 	}
 	v, err := h.svc.ImportDefinition(c.Request.Context(), h.ctxActor(c), raw)

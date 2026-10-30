@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/json"
@@ -106,7 +107,7 @@ func TestEvaluateAndImport(t *testing.T) {
 	}, Options{Root: root, PublicKey: pub, Now: func() time.Time { return now }})
 
 	got := map[string]string{}
-	for _, i := range m.List() {
+	for _, i := range m.List(context.Background()) {
 		got[i.ID] = i.Status
 	}
 	want := map[string]string{"freebie": StatusActive, "cron": StatusUnlicensed, "mismatch": StatusInvalid, "nomanifest": StatusInvalid}
@@ -139,13 +140,13 @@ func TestEvaluateAndImport(t *testing.T) {
 	}
 	m2 := newManager([]Plugin{{ID: "cron", Edition: Pro, Module: fakeModule{}}},
 		Options{Root: root, PublicKey: pub, Now: func() time.Time { return now }})
-	if i := m2.List()[0]; i.Status != StatusActive || i.Customer != "acme" {
+	if i := m2.List(context.Background())[0]; i.Status != StatusActive || i.Customer != "acme" {
 		t.Fatalf("got %+v", i)
 	}
 	// 过期后重新评估为 expired。
 	m3 := newManager([]Plugin{{ID: "cron", Edition: Pro, Module: fakeModule{}}},
 		Options{Root: root, PublicKey: pub, Now: func() time.Time { return now.Add(2 * time.Hour) }})
-	if i := m3.List()[0]; i.Status != StatusExpired {
+	if i := m3.List(context.Background())[0]; i.Status != StatusExpired {
 		t.Fatalf("got %+v", i)
 	}
 }

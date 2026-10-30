@@ -3,7 +3,6 @@ package log
 import (
 	"context"
 	"net/http"
-	"strings"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
@@ -97,8 +96,8 @@ func TestCheckIDs(t *testing.T) {
 		if !ok {
 			t.Fatal("期望 403")
 		}
-		if !strings.Contains(re.Msg, "2 个") || strings.Contains(re.Msg, "222") {
-			t.Errorf("提示应报数量且不含 id：%q", re.Msg)
+		if re.Key != "datascope.forbidden_batch" || len(re.Args) != 2 || re.Args[1] != 2 {
+			t.Errorf("提示应报数量且不含 id：key=%q args=%v", re.Key, re.Args)
 		}
 	})
 	t.Run("login 范围外拒绝", func(t *testing.T) {
@@ -141,8 +140,8 @@ func TestCheckCleanOper(t *testing.T) {
 		s, mock := newSvc(t)
 		mock.ExpectQuery("SELECT count\\(\\*\\) FROM `sys_oper_log` WHERE .*NOT \\(").WillReturnRows(countRows(7))
 		re, ok := isForbidden(s.CheckCleanOper(ctx, limited, 0))
-		if !ok || !strings.Contains(re.Msg, "7 个") {
-			t.Fatalf("期望 403 且报 7：%v %v", ok, re)
+		if !ok || re.Key != "datascope.forbidden_batch" || len(re.Args) != 2 || re.Args[1] != 7 {
+			t.Fatalf("期望 403 且报 7：%v key=%q args=%v", ok, re.Key, re.Args)
 		}
 	})
 	t.Run("超管豁免", func(t *testing.T) {

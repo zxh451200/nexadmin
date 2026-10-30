@@ -49,7 +49,7 @@ func (s *Service) checkIDs(ctx context.Context, sc *datascope.Scope, model any, 
 		return err
 	}
 	if denied := len(uniq) - int(n); denied > 0 {
-		return datascope.Forbidden("日志", denied)
+		return datascope.Forbidden(ctx, "datascope.resource.log", denied)
 	}
 	return nil
 }
@@ -75,7 +75,7 @@ func (s *Service) CheckCleanOper(ctx context.Context, sc *datascope.Scope, days 
 		return err
 	}
 	if n > 0 {
-		return datascope.Forbidden("日志", int(n))
+		return datascope.Forbidden(ctx, "datascope.resource.log", int(n))
 	}
 	return nil
 }

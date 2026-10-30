@@ -32,4 +32,10 @@ export const routes: ModuleRoute[] = [
     perm: 'website:post',
     menu: { title: 'plugin_website.menu.posts', icon: 'Newspaper', order: 69, group: 'system' },
   },
+  {
+    path: 'website/messages',
+    component: lazy(() => import('./MessagePage')),
+    perm: 'website:message',
+    menu: { title: 'plugin_website.menu.messages', icon: 'Inbox', order: 70, group: 'system' },
+  },
 ]

@@ -87,8 +87,8 @@ func (h *handler) makeTranslator(entity string) gin.HandlerFunc {
 			Texts: f.Texts, From: f.From, To: f.To, Format: f.Format,
 		})
 		if err != nil {
-			// 上游原因（配额、模型报错）对运营是可操作的，原样透出。
-			response.Fail(c, response.New(502, "error.unavailable").WithMsg(err.Error()))
+			// 上游原因（配额、模型报错）只进日志：响应给调用方的是可读的通用文案。
+			response.Fail(c, response.New(502, "website.translate_failed").Wrap(err))
 			return
 		}
 		response.OK(c, gin.H{"entity": entity, "texts": out})

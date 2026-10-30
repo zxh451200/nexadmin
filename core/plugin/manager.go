@@ -18,6 +18,7 @@ import (
 	"go.uber.org/zap"
 
 	"nexadmin/core"
+	"nexadmin/core/i18n"
 	"nexadmin/core/middleware"
 	"nexadmin/core/response"
 	"nexadmin/core/seed"
@@ -79,9 +80,12 @@ type Info struct {
 	ExpiresAt   string  `json:"expiresAt"`
 	ExpiresSoon bool    `json:"expiresSoon"` // 有效但 30 天内到期
 	Reason      string  `json:"reason"`
-	NeedRestart bool    `json:"needRestart"`
-	PendingHost bool    `json:"pendingHost"`
-	Stopping    bool    `json:"stopping"`
+	// ReasonKey/ReasonArgs 是 Reason 的字典来源；List(ctx) 会按语言填好 Reason 再返回。
+	ReasonKey   string `json:"-"`
+	ReasonArgs  []any  `json:"-"`
+	NeedRestart bool   `json:"needRestart"`
+	PendingHost bool   `json:"pendingHost"`
+	Stopping    bool   `json:"stopping"`
 }
 
 // ImportResult 是导入授权的结果。
@@ -214,7 +218,7 @@ func (m *Manager) evaluate(p Plugin) {
 	e := &entry{p: p, info: Info{ID: p.ID, Name: p.Name, Version: p.Version, Edition: p.Edition}}
 	if _, dup := m.entries[p.ID]; dup {
 		e.fatal = true
-		e.info.Status, e.info.Reason = StatusInvalid, "插件 id 重复注册"
+		e.info.Status, e.info.ReasonKey = StatusInvalid, "plugin.reason.duplicate_id"
 		m.order = append(m.order, p.ID+"#dup")
 		m.entries[p.ID+"#dup"] = e
 		return
@@ -222,21 +226,21 @@ func (m *Manager) evaluate(p Plugin) {
 	m.order = append(m.order, p.ID)
 	m.entries[p.ID] = e
 
-	bad := func(format string, a ...any) {
+	bad := func(key string, a ...any) {
 		e.fatal = true
-		e.info.Status, e.info.Reason = StatusInvalid, fmt.Sprintf(format, a...)
+		e.info.Status, e.info.ReasonKey, e.info.ReasonArgs = StatusInvalid, key, a
 	}
 	if !ValidID(p.ID) {
-		bad("插件 id %q 不合法", p.ID)
+		bad("plugin.reason.invalid_id", p.ID)
 		return
 	}
 	if p.Module == nil {
-		bad("未提供 Module")
+		bad("plugin.reason.no_module")
 		return
 	}
 	man, err := LoadManifest(filepath.Join(m.opts.Root, "plugins", p.ID))
 	if err != nil {
-		bad("%v", err)
+		bad("plugin.reason.manifest", err.Error())
 		return
 	}
 	e.man = man
@@ -256,7 +260,7 @@ func (m *Manager) evaluate(p Plugin) {
 		if e.info.Version == "" {
 			e.info.Version = man.Version
 		}
-		bad("%v", err)
+		bad("plugin.reason.unsatisfied", err.Error())
 		return
 	}
 	if e.info.Name == "" {
@@ -273,7 +277,7 @@ func (m *Manager) evaluate(p Plugin) {
 	// 配置里停用的插件：不校验授权、不挂载、不迁移，列表里显示 disabled。
 	for _, d := range m.opts.DisabledPlugins {
 		if d == p.ID {
-			e.info.Status, e.info.Reason = StatusDisabled, "已在配置 disabled_plugins 中停用"
+			e.info.Status, e.info.ReasonKey = StatusDisabled, "plugin.reason.disabled_by_config"
 			return
 		}
 	}
@@ -285,7 +289,7 @@ func (m *Manager) evaluate(p Plugin) {
 		l, err := checkFile(m.opts.Root, p.ID, m.opts.Now(), m.opts.Keys)
 		m.applyLic(e, l, err)
 	default:
-		bad("未知的 edition %q", p.Edition)
+		bad("plugin.reason.unknown_edition", p.Edition)
 	}
 }
 
@@ -296,15 +300,15 @@ func applyLicense(e *entry, l *License, err error) {
 		e.info.Customer, e.info.ExpiresAt = l.Customer, l.ExpiresAt
 	}
 	if err == nil {
-		e.info.Status, e.info.Reason = StatusActive, ""
+		e.info.Status, e.info.Reason, e.info.ReasonKey, e.info.ReasonArgs = StatusActive, "", "", nil
 		return
 	}
 	var le *LicenseError
 	if errors.As(err, &le) {
-		e.info.Status, e.info.Reason = le.Status, le.Reason
+		e.info.Status, e.info.ReasonKey, e.info.ReasonArgs, e.info.Reason = le.Status, le.Key, le.Args, ""
 		return
 	}
-	e.info.Status, e.info.Reason = StatusInvalid, err.Error()
+	e.info.Status, e.info.Reason, e.info.ReasonKey, e.info.ReasonArgs = StatusInvalid, err.Error(), "", nil
 }
 
 func (m *Manager) log() *zap.Logger {
@@ -314,8 +318,8 @@ func (m *Manager) log() *zap.Logger {
 	return zap.NewNop()
 }
 
-// List 返回所有插件的状态。
-func (m *Manager) List() []Info {
+// List 返回所有插件的状态；Reason 按 ctx 的语言填好。
+func (m *Manager) List(ctx context.Context) []Info {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	now := m.opts.Now()
@@ -326,6 +330,7 @@ func (m *Manager) List() []Info {
 		e := m.entries[k]
 		i := e.info
 		i.ExpiresSoon = i.Status == StatusActive && !e.exp.IsZero() && e.exp.Sub(now) <= expireSoonWindow
+		LocalizeInfo(ctx, &i)
 		out = append(out, i)
 	}
 	return out
@@ -386,12 +391,20 @@ func (m *Manager) applyLic0(e *entry, l *License, err error) {
 		return
 	}
 	if !m.hostsMatch(e.domains, hosts) {
-		e.info.Status, e.info.Reason = StatusInvalid, domainMismatch(hosts, e.domains)
+		key, args := domainMismatch(hosts, e.domains)
+		e.info.Status, e.info.ReasonKey, e.info.ReasonArgs, e.info.Reason = StatusInvalid, key, args, ""
 	}
 }
 
-func domainMismatch(hosts, domains []string) string {
-	return fmt.Sprintf("授权域名不匹配：当前域名 %s 不在授权域名 %s 内", strings.Join(hosts, ","), strings.Join(domains, ","))
+func domainMismatch(hosts, domains []string) (string, []any) {
+	return "plugin.reason.domain_mismatch", []any{strings.Join(hosts, ","), strings.Join(domains, ",")}
+}
+
+// LocalizeInfo 按请求语言把 ReasonKey 翻成 Reason（没 key 时保留原始文本）。
+func LocalizeInfo(ctx context.Context, in *Info) {
+	if in.ReasonKey != "" {
+		in.Reason = i18n.T(ctx, in.ReasonKey, in.ReasonArgs...)
+	}
 }
 
 // hostsLocked 返回当前服务的域名：配置里的优先，否则是第一次请求观察到的。
@@ -440,7 +453,8 @@ func (m *Manager) observeLocked(host string) {
 		}
 		e.pendingHost, e.info.PendingHost = false, false
 		if e.info.Status == StatusActive && !m.hostsMatch(e.domains, []string{h}) {
-			e.info.Status, e.info.Reason = StatusInvalid, domainMismatch([]string{h}, e.domains)
+			key, args := domainMismatch([]string{h}, e.domains)
+			e.info.Status, e.info.ReasonKey, e.info.ReasonArgs, e.info.Reason = StatusInvalid, key, args, ""
 		}
 		m.syncLifecycleLocked(e)
 	}
@@ -451,7 +465,7 @@ func (m *Manager) expireLocked(now time.Time) bool {
 	changed := false
 	for _, e := range m.entries {
 		if e.info.Status == StatusActive && !e.exp.IsZero() && !now.Before(e.exp) {
-			e.info.Status, e.info.Reason = StatusExpired, "授权已于 "+e.info.ExpiresAt+" 到期"
+			e.info.Status, e.info.ReasonKey, e.info.ReasonArgs, e.info.Reason = StatusExpired, "plugin.reason.expired", []any{e.info.ExpiresAt}, ""
 			m.syncLifecycleLocked(e)
 			m.log().Warn("plugin license expired, routes disabled", zap.String("plugin", e.p.ID))
 			changed = true
@@ -492,10 +506,16 @@ func (m *Manager) admit(c *gin.Context, e *entry) bool {
 	m.observeLocked(c.Request.Host)
 	m.refreshRevocationsLocked()
 	m.expireLocked(m.opts.Now())
-	enabled, reason := m.enabledLocked(e), e.info.Reason
+	enabled := m.enabledLocked(e)
+	info := e.info
 	m.mu.Unlock()
 	if !enabled {
-		response.Fail(c, response.Forbidden("error.forbidden").WithMsg(reason))
+		LocalizeInfo(c.Request.Context(), &info)
+		if info.ReasonKey != "" {
+			response.Fail(c, response.Forbidden(info.ReasonKey, info.ReasonArgs...))
+		} else {
+			response.Fail(c, response.Forbidden("error.forbidden").WithMsg(info.Reason))
+		}
 		return false
 	}
 	return true
@@ -778,14 +798,15 @@ func (m *Manager) Dispatch(c *gin.Context, id string) {
 		if e != nil {
 			m.mu.Lock()
 			m.refreshRevocationsLocked()
-			st, reason := e.info.Status, e.info.Reason
+			st, info := e.info.Status, e.info
 			m.mu.Unlock()
 			if st == StatusRevoked {
-				response.Fail(c, response.Forbidden("error.forbidden").WithMsg(reason))
+				LocalizeInfo(c.Request.Context(), &info)
+				response.Fail(c, response.Forbidden(info.ReasonKey, info.ReasonArgs...))
 				return
 			}
 		}
-		response.Fail(c, response.NotFound("error.not_found").WithMsg("插件未启用"))
+		response.Fail(c, response.NotFound("plugin.disabled"))
 		return
 	}
 	if !m.admit(c, e) {
@@ -828,7 +849,8 @@ func (m *Manager) ImportLicense(id, content string) (ImportResult, error) {
 		return ImportResult{}, revokedError(r)
 	}
 	if hosts := m.hostsLocked(); len(l.Domains) > 0 && len(hosts) > 0 && !m.hostsMatch(l.Domains, hosts) {
-		return ImportResult{}, invalid("%s", domainMismatch(hosts, l.Domains))
+		key, args := domainMismatch(hosts, l.Domains)
+		return ImportResult{}, invalid(key, args...)
 	}
 	if err := writeLicense(m.opts.Root, id, []byte(content)); err != nil {
 		return ImportResult{}, fmt.Errorf("保存授权文件失败: %w", err)
@@ -858,7 +880,7 @@ func (m *Manager) ImportLicense(id, content string) (ImportResult, error) {
 	if err != nil {
 		m.log().Error("plugin hot mount failed", zap.String("plugin", id), zap.Error(err))
 		e.info.NeedRestart = true
-		e.info.Status, e.info.Reason = StatusInvalid, "授权已保存，但热挂载失败（重启后重试）: "+err.Error()
+		e.info.Status, e.info.ReasonKey, e.info.ReasonArgs, e.info.Reason = StatusInvalid, "plugin.reason.hot_mount_failed", []any{err.Error()}, ""
 		m.syncLifecycleLocked(e)
 		return ImportResult{Plugin: e.info, NeedRestart: true}, nil
 	}

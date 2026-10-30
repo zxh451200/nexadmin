@@ -111,6 +111,8 @@ var docGroups = []docGroup{
 			Summary: "配置文件加载规则与各分区的键、默认值和运行期开关。"},
 		{Slug: "deploy", File: "部署与运维指南.md", Title: "部署与运维指南",
 			Summary: "构建、单机/容器部署、升级、备份与日常运维。"},
+		{Slug: "media", File: "媒体能力接入.md", Title: "媒体能力接入",
+			Summary: "图片 WebP、视频托管与嵌入、地图选点的开关、接入方式与排障。"},
 	}},
 }
 

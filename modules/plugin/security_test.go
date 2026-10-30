@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http/httptest"
 	"os"
@@ -63,7 +64,7 @@ func TestLicensePlatformIdentityBothRouteModes(t *testing.T) {
 	for _, dormant := range []bool{false, true} {
 		t.Run(map[bool]string{false: "via-app", true: "dormant"}[dormant], func(t *testing.T) {
 			before, _ := os.ReadFile(file)
-			beforeInfo := m.List()
+			beforeInfo := m.List(context.Background())
 			for name, cl := range securityClaims() {
 				t.Run(name, func(t *testing.T) {
 					e, public := securityAPI(cl)
@@ -85,7 +86,7 @@ func TestLicensePlatformIdentityBothRouteModes(t *testing.T) {
 				t.Fatal("forbidden import changed the license file")
 			}
 			a, _ := json.Marshal(beforeInfo)
-			b, _ := json.Marshal(m.List())
+			b, _ := json.Marshal(m.List(context.Background()))
 			if !bytes.Equal(a, b) {
 				t.Fatal("forbidden import changed plugin state")
 			}

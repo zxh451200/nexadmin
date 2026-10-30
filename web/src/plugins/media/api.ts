@@ -16,18 +16,24 @@ export interface PendingImage {
   createdAt: string
 }
 
+export type VideoProvider = 'cloudflare' | 'bunny' | 'aliyun' | 'tencent'
+
 export interface VideoConfigView {
   enabled: boolean
-  accountId: string
-  subdomain: string
-  hasToken: boolean
+  provider: VideoProvider
+  keyA: string
+  keyC: string
+  hasKeyB: boolean
+  /** false = 该厂商只支持登记已有视频，前端隐藏上传 */
+  canUpload: boolean
 }
 
 export interface VideoConfigInput {
   enabled: boolean
-  accountId: string
-  token: string
-  subdomain: string
+  provider: VideoProvider
+  keyA: string
+  keyB: string
+  keyC: string
 }
 
 export interface VideoItem {
@@ -76,7 +82,10 @@ export function useVideos(page: number, pageSize: number) {
 
 /** 申请一次性直传地址；文件直传厂商，不经过本站存储。 */
 export function createVideoUpload(name: string) {
-  return api.post<{ uploadUrl: string; videoId: string; playbackUrl: string }>('/plugins/media/video/upload', { name, size: 0 })
+  return api.post<{ uploadUrl: string; headers: Record<string, string>; videoId: string; playbackUrl: string }>(
+    '/plugins/media/video/upload',
+    { name, size: 0 },
+  )
 }
 
 export function saveVideo(body: { videoId: string; name: string; size: number }) {

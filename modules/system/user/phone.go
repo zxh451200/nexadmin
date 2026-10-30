@@ -59,7 +59,7 @@ func maskedPhone(p string) string {
 // phoneLogin 手机号 + 短信验证码登录。手机号未绑定、账号不存在/停用/锁定、验证码错误或过期，一律返回同一条提示，
 // 且都会先消耗一次验证码校验，外部无法据此判断某手机号是否绑定了账号。
 func (m *module) phoneLogin(ctx context.Context, d *core.Deps, req auth.LoginRequest) (*auth.User, error) {
-	invalid := response.BadRequest("auth.invalid_credentials").WithMsg("手机号或验证码错误")
+	invalid := response.BadRequest("user.phone_code_invalid")
 	cfg := d.Config
 	sc := smscode.Shared(cfg, d.Cache, d.Log)
 	if !phoneEnabled(cfg.Auth.Methods) || !sc.Enabled() {

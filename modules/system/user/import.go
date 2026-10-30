@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/csv"
 	"errors"
-	"fmt"
 	"io"
 	"strings"
 
@@ -14,7 +13,6 @@ import (
 
 	"nexadmin/core/i18n"
 	"nexadmin/core/response"
-	"nexadmin/core/tenant"
 	"nexadmin/pkg/excel"
 	"nexadmin/pkg/idgen"
 )
@@ -72,7 +70,7 @@ func parseImportCSV(r io.Reader) ([]importRow, error) {
 		return nil, err
 	}
 	if len(raw) > importMaxBytes {
-		return nil, bad("文件不能超过 2MB")
+		return nil, bad("user.import.file_too_large_2mb")
 	}
 	raw = bytes.TrimPrefix(raw, []byte("\xef\xbb\xbf"))
 	cr := csv.NewReader(bytes.NewReader(raw))
@@ -86,9 +84,9 @@ func parseImportCSV(r io.Reader) ([]importRow, error) {
 		}
 		if err != nil {
 			if line == 1 {
-				return nil, bad("无法解析文件，请使用模板（CSV，UTF-8）")
+				return nil, bad("user.import.parse_csv_failed")
 			}
-			return nil, bad(fmt.Sprintf("第 %d 行格式错误", line))
+			return nil, bad("user.import.line_invalid", line)
 		}
 		recs = append(recs, rawRec{Line: line, Cells: rec})
 	}
@@ -98,7 +96,7 @@ func parseImportCSV(r io.Reader) ([]importRow, error) {
 // buildImportRows 把原始行（第一行为表头）按表头名映射成 importRow，跳过全空行。CSV 与 xlsx 共用。
 func buildImportRows(recs []rawRec) ([]importRow, error) {
 	if len(recs) == 0 {
-		return nil, bad("文件为空")
+		return nil, bad("user.import.file_empty")
 	}
 	col := map[string]int{}
 	for i, h := range recs[0].Cells {
@@ -109,7 +107,7 @@ func buildImportRows(recs []rawRec) ([]importRow, error) {
 		}
 	}
 	if _, ok := col["username"]; !ok {
-		return nil, bad("缺少“账号”列，请使用导入模板")
+		return nil, bad("user.import.missing_username_column")
 	}
 	var rows []importRow
 	for _, rr := range recs[1:] {
@@ -126,7 +124,7 @@ func buildImportRows(recs []rawRec) ([]importRow, error) {
 			continue
 		}
 		if len(rows) >= importMaxRows {
-			return nil, bad(fmt.Sprintf("一次最多导入 %d 行", importMaxRows))
+			return nil, bad("user.import.too_many_rows", importMaxRows)
 		}
 		rows = append(rows, row)
 	}
@@ -159,9 +157,9 @@ func parseImportXLSX(r io.ReaderAt, size int64) ([]importRow, error) {
 
 func xlsxError(err error) error {
 	if errors.Is(err, excel.ErrTooLarge) {
-		return bad("Excel 文件内容超出限制（行数、列数或解压后体积过大）")
+		return bad("user.import.xlsx_too_large")
 	}
-	return bad("无法解析 Excel 文件，请使用导入模板（.xlsx）")
+	return bad("user.import.xlsx_parse_failed")
 }
 
 // importLookups 是名称 -> ID 的映射（key 为小写名称；角色同时认编码）。
@@ -180,12 +178,12 @@ func splitNames(s string) []string {
 	return out
 }
 
-func mapNames(raw, what string, m map[string]idgen.ID) ([]string, error) {
+func mapNames(raw string, m map[string]idgen.ID, notFoundKey string) ([]string, *rowReason) {
 	var ids []string
 	for _, n := range splitNames(raw) {
 		id, ok := m[strings.ToLower(n)]
 		if !ok {
-			return nil, fmt.Errorf("%s“%s”不存在", what, n)
+			return nil, &rowReason{key: notFoundKey, args: []any{n}}
 		}
 		ids = append(ids, id.String())
 	}
@@ -204,10 +202,17 @@ func genderCode(s string) (string, bool) {
 	return "", false
 }
 
+// rowReason 是行级失败原因：i18n key + 占位符参数。翻译发生在 importUsers（有 ctx 的汇总处），
+// 这样报告里的文本跟随请求语言。
+type rowReason struct {
+	key  string
+	args []any
+}
+
 type plannedRow struct {
 	row    int
 	in     userInput
-	reason string // 非空 = 该行校验失败，不入库
+	reason *rowReason // 非空 = 该行校验失败，不入库
 }
 
 // planImport 逐行校验（必填、格式、文件内账号唯一、部门/角色/岗位名称映射），不访问数据库。
@@ -216,43 +221,43 @@ func planImport(rows []importRow, lk importLookups) []plannedRow {
 	out := make([]plannedRow, 0, len(rows))
 	for _, r := range rows {
 		p := plannedRow{row: r.Row}
-		fail := func(msg string) { p.reason = msg }
+		fail := func(key string, args ...any) { p.reason = &rowReason{key: key, args: args} }
 		in := userInput{Username: r.Username, Nickname: r.Nickname, Phone: r.Phone, Email: r.Email, Remark: r.Remark, Status: statusOn}
 		gender, ok := genderCode(r.Gender)
 		switch {
 		case r.Username == "":
-			fail("账号不能为空")
+			fail("user.username_required")
 		case !ok:
-			fail("性别应为 男/女/未知")
+			fail("user.import.gender_invalid")
 		}
-		if p.reason == "" {
+		if p.reason == nil {
 			in.Gender = gender
 			if first, dup := seen[strings.ToLower(r.Username)]; dup {
-				fail(fmt.Sprintf("账号与第 %d 行重复", first))
+				fail("user.import.username_duplicate", first)
 			}
 		}
-		if p.reason == "" && r.Dept != "" {
+		if p.reason == nil && r.Dept != "" {
 			id, ok := lk.depts[strings.ToLower(r.Dept)]
 			if !ok {
-				fail(fmt.Sprintf("部门“%s”不存在", r.Dept))
+				fail("user.import.dept_not_found", r.Dept)
 			}
 			in.DeptID = id.String()
 		}
-		if p.reason == "" {
-			var err error
-			if in.RoleIDs, err = mapNames(r.Roles, "角色", lk.roles); err != nil {
-				fail(err.Error())
-			} else if in.PostIDs, err = mapNames(r.Posts, "岗位", lk.posts); err != nil {
-				fail(err.Error())
+		if p.reason == nil {
+			var reason *rowReason
+			if in.RoleIDs, reason = mapNames(r.Roles, lk.roles, "user.import.role_not_found"); reason != nil {
+				p.reason = reason
+			} else if in.PostIDs, reason = mapNames(r.Posts, lk.posts, "user.import.post_not_found"); reason != nil {
+				p.reason = reason
 			}
 		}
-		if p.reason == "" {
+		if p.reason == nil {
 			if _, err := (&userInput{Username: in.Username, Nickname: in.Nickname, Phone: in.Phone, Email: in.Email,
 				Gender: in.Gender, Status: in.Status, Remark: in.Remark}).check(); err != nil {
-				fail(reasonOf(err))
+				p.reason = rowReasonOf(err)
 			}
 		}
-		if p.reason == "" {
+		if p.reason == nil {
 			seen[strings.ToLower(r.Username)] = r.Row
 		}
 		p.in = in
@@ -261,12 +266,13 @@ func planImport(rows []importRow, lk importLookups) []plannedRow {
 	return out
 }
 
-func reasonOf(err error) string {
+// rowReasonOf 把行级校验错误转成 key + 参数：响应错误带 i18n key 时原样透传，否则落到通用原因。
+func rowReasonOf(err error) *rowReason {
 	var e *response.Error
-	if errors.As(err, &e) && e.Msg != "" {
-		return e.Msg
+	if errors.As(err, &e) && e.Key != "" {
+		return &rowReason{key: e.Key, args: e.Args}
 	}
-	return "导入失败"
+	return &rowReason{key: "user.import.failed"}
 }
 
 // loadLookups 读取当前租户的部门/角色/岗位名称表。
@@ -317,24 +323,21 @@ func (s *service) importUsers(ctx context.Context, rows []importRow, log *zap.Lo
 	}
 	res := &importResult{Failed: []importFailure{}}
 	for _, p := range planImport(rows, lk) {
-		if p.reason != "" {
-			res.Failed = append(res.Failed, importFailure{Row: p.row, Reason: p.reason})
+		if p.reason != nil {
+			res.Failed = append(res.Failed, importFailure{Row: p.row, Reason: i18n.T(ctx, p.reason.key, p.reason.args...)})
 			continue
 		}
 		if _, err := s.create(ctx, p.in, me); err != nil {
 			var e *response.Error
-			if errors.As(err, &e) && e.Msg != "" {
-				res.Failed = append(res.Failed, importFailure{Row: p.row, Reason: e.Msg})
-				continue
-			}
-			if errors.As(err, &e) && e.Reason == tenant.ReasonQuotaUsers { // 超出套餐用户数：该行及之后的行都会因此失败
+			if errors.As(err, &e) && e.Key != "" {
+				// 含「超出套餐用户数」等可预期错误：按当前语言取文案，不做行内重试。
 				res.Failed = append(res.Failed, importFailure{Row: p.row, Reason: i18n.T(ctx, e.Key, e.Args...)})
 				continue
 			}
 			if log != nil {
 				log.Warn("user import: row failed", zap.Int("row", p.row), zap.Error(err))
 			}
-			res.Failed = append(res.Failed, importFailure{Row: p.row, Reason: "写入失败"})
+			res.Failed = append(res.Failed, importFailure{Row: p.row, Reason: i18n.T(ctx, "user.import.write_failed")})
 			continue
 		}
 		res.Success++
@@ -368,7 +371,7 @@ func (h *handler) importTemplate(c *gin.Context) {
 func (h *handler) importFile(c *gin.Context) {
 	fh, err := c.FormFile("file")
 	if err != nil {
-		response.Fail(c, bad("请选择要导入的文件"))
+		response.Fail(c, bad("imports.file_required"))
 		return
 	}
 	f, err := fh.Open()

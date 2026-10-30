@@ -27,21 +27,21 @@ type hookForm struct {
 func (f *hookForm) normalize() *response.Error {
 	f.Name = strings.TrimSpace(f.Name)
 	if f.Name == "" || utf8.RuneCountInString(f.Name) > 100 {
-		return badReq("name is required (max 100)")
+		return response.BadRequest("openapi.name_required")
 	}
 	f.URL = strings.TrimSpace(f.URL)
 	if len(f.URL) > 500 {
-		return badReq("url too long (max 500)")
+		return response.BadRequest("openapi.url_too_long")
 	}
 	if _, err := validateURLStatic(f.URL); err != nil {
-		return badReq(err.Error())
+		return response.BadRequest("openapi.url_invalid").Wrap(err)
 	}
 	seen := map[string]bool{}
 	evs := []string{}
 	for _, e := range f.Events {
 		e = strings.TrimSpace(e)
 		if !event.Known(e) {
-			return badReq("unknown event: " + e)
+			return response.BadRequest("openapi.unknown_event", e)
 		}
 		if !seen[e] {
 			seen[e] = true
@@ -49,7 +49,7 @@ func (f *hookForm) normalize() *response.Error {
 		}
 	}
 	if len(evs) == 0 {
-		return badReq("at least one event is required")
+		return response.BadRequest("openapi.event_required")
 	}
 	f.Events = evs
 	return nil
@@ -189,7 +189,7 @@ func (h *handler) hookSetEnabled(c *gin.Context) {
 		return
 	}
 	if b.Enabled == nil {
-		response.Fail(c, badReq("enabled is required"))
+		response.Fail(c, response.BadRequest("openapi.enabled_required"))
 		return
 	}
 	w, ok := h.findHook(c, id)
@@ -269,14 +269,14 @@ func (h *handler) deliveryList(c *gin.Context) {
 	if v := strings.TrimSpace(c.Query("webhookId")); v != "" {
 		id, err := idgen.Parse(v)
 		if err != nil {
-			response.Fail(c, badReq("invalid webhookId"))
+			response.Fail(c, response.BadRequest("openapi.webhook_id_invalid"))
 			return
 		}
 		q = q.Where("webhook_id = ?", int64(id))
 	}
 	if st := strings.TrimSpace(c.Query("status")); st != "" {
 		if st != StatusSuccess && st != StatusFailed && st != StatusPending {
-			response.Fail(c, badReq("status must be success, failed or pending"))
+			response.Fail(c, response.BadRequest("openapi.delivery_status_invalid"))
 			return
 		}
 		q = q.Where("status = ?", st)
@@ -315,7 +315,7 @@ func (h *handler) deliveryRetry(c *gin.Context) {
 		return
 	}
 	if d.Status != StatusFailed {
-		response.Fail(c, response.Conflict("error.conflict").WithMsg("only failed deliveries can be retried"))
+		response.Fail(c, response.Conflict("openapi.retry_only_failed"))
 		return
 	}
 	now := time.Now().UTC()
@@ -326,7 +326,7 @@ func (h *handler) deliveryRetry(c *gin.Context) {
 		return
 	}
 	if res.RowsAffected == 0 {
-		response.Fail(c, response.Conflict("error.conflict").WithMsg("delivery state changed"))
+		response.Fail(c, response.Conflict("openapi.delivery_state_changed"))
 		return
 	}
 	d.Status, d.Attempts, d.NextAttemptAt, d.ErrorMsg = StatusPending, 0, now, ""

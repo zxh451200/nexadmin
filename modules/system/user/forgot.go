@@ -115,11 +115,11 @@ func newForgotService(st forgotStore, c cache.Cache, n *notify.Service, sms smsS
 }
 
 func tooMany() error {
-	return response.New(429, "error.bad_request").WithMsg("操作过于频繁，请稍后再试")
+	return response.New(429, "user.too_many_attempts")
 }
 
 func badCode() error {
-	return response.BadRequest("error.bad_request").WithMsg("验证码错误或已过期")
+	return response.BadRequest("auth.captcha_invalid")
 }
 
 func digest(parts ...string) string {
@@ -139,7 +139,7 @@ func triesKey(ctx context.Context, email, salt string) string {
 func normEmail(raw string) (string, error) {
 	a, err := mail.ParseAddress(raw)
 	if err != nil {
-		return "", response.BadRequest("error.bad_request").WithMsg("邮箱格式不正确")
+		return "", response.BadRequest("user.email_invalid")
 	}
 	return strings.ToLower(a), nil
 }
@@ -158,10 +158,10 @@ func (f *forgotService) sendCode(ctx context.Context, rawTarget, ip, lang string
 func (f *forgotService) sendPhoneCode(ctx context.Context, rawPhone, ip string) error {
 	phone := normalizePhone(rawPhone)
 	if phone == "" {
-		return response.BadRequest("error.bad_request").WithMsg("手机号格式不正确")
+		return response.BadRequest("user.phone_invalid")
 	}
 	if f.sms == nil || !f.sms.Enabled() {
-		return response.Unavailable("auth.provider_missing").WithMsg("短信服务未启用")
+		return response.Unavailable("sms.disabled")
 	}
 	u, err := f.store.byPhone(ctx, phone)
 	if err != nil {
@@ -176,7 +176,7 @@ func (f *forgotService) sendEmailCode(ctx context.Context, rawEmail, ip, lang st
 		return err
 	}
 	if !f.notify.MailConfigured(ctx) {
-		return response.Unavailable("auth.provider_missing").WithMsg("邮件服务未启用")
+		return response.Unavailable("mail.disabled")
 	}
 	if ok, _ := f.ipSend.Hit(ctx, ip); !ok {
 		return tooMany()

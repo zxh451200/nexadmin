@@ -81,7 +81,7 @@ func TestRevokedLicenseHit(t *testing.T) {
 
 	m := newCron(root, pub)
 	i := cronInfo(m)
-	if i.Status != StatusRevoked || !strings.Contains(i.Reason, "chargeback") || i.Serial != "aaaa11112222" {
+	if i.Status != StatusRevoked || i.ReasonKey != "license.revoked" || len(i.ReasonArgs) != 2 || !strings.Contains(i.ReasonArgs[1].(string), "chargeback") || i.Serial != "aaaa11112222" {
 		t.Fatalf("got %+v", i)
 	}
 	if i.Customer != "acme" {

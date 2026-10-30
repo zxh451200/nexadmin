@@ -39,7 +39,7 @@ func (s *Service) CheckIDs(ctx context.Context, sc *datascope.Scope, ids ...idge
 		return err
 	}
 	if denied := len(uniq) - int(n); denied > 0 {
-		return datascope.Forbidden("公告", denied)
+		return datascope.Forbidden(ctx, "datascope.resource.notice", denied)
 	}
 	return nil
 }

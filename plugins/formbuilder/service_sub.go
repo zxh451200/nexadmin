@@ -23,7 +23,7 @@ const (
 	maxFilterValLen = 200
 )
 
-var errExportTooLarge = bad("导出的行数超过上限，请缩小筛选范围")
+var errExportTooLarge = bad("formbuilder.export_too_large")
 
 // SubRow 是提交列表/详情里的一行。
 type SubRow struct {
@@ -124,10 +124,10 @@ func (s *Service) ListSubmissions(ctx context.Context, q SubQuery) (*SubPage, er
 
 func checkFilter(q SubQuery) error {
 	if q.Field != "" && !keyRe.MatchString(q.Field) {
-		return bad("筛选字段不合法")
+		return bad("formbuilder.filter_field_invalid")
 	}
 	if len([]rune(q.Value)) > maxFilterValLen || len([]rune(q.Username)) > 64 {
-		return bad("筛选条件过长")
+		return bad("formbuilder.filter_too_long")
 	}
 	return nil
 }

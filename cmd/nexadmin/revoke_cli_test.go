@@ -68,7 +68,7 @@ func TestRevokeCLI(t *testing.T) {
 	}
 	_, err = plugin.CheckFile(root, "cron", time.Now())
 	var le *plugin.LicenseError
-	if err == nil || !asLicErr(err, &le) || le.Status != plugin.StatusRevoked || !strings.Contains(le.Reason, "退款") {
+	if err == nil || !asLicErr(err, &le) || le.Status != plugin.StatusRevoked || le.Key != "license.revoked" || len(le.Args) != 2 || !strings.Contains(le.Args[1].(string), "退款") {
 		t.Fatalf("want revoked, got %v", err)
 	}
 

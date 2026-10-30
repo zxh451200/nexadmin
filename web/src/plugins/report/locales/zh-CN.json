@@ -203,6 +203,8 @@
       "exitFull": "退出全屏",
       "addChart": "添加图表",
       "add": "添加到画布",
+      "noCharts": "还没有图表，请先在「图表」页新建",
+      "allChartsAdded": "全部图表都已在画布中",
       "noSpace": "画布上没有足够的空位",
       "rejected": "该位置超出画布或与其他组件重叠",
       "editorHint": "拖拽移动，右下角手柄缩放；也可用方向键移动（Shift+方向键缩放，Delete 删除）。",
@@ -259,6 +261,7 @@
         "times": "次",
         "jobs": "个"
       }
-    }
+    },
+    "filteredBy": "已筛选：{{name}}"
   }
 }

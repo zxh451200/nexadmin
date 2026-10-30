@@ -38,13 +38,13 @@ func (h *handler) SaveConfig(c *gin.Context) {
 func (h *handler) Regeo(c *gin.Context) {
 	provider := Provider(c.Query("provider"))
 	if provider != ProviderAMap && provider != ProviderBaidu && provider != ProviderGoogle {
-		response.Fail(c, badRequest("provider 只能是 amap / baidu / google"))
+		response.Fail(c, badRequest("maps.provider_invalid"))
 		return
 	}
 	lng, err1 := strconv.ParseFloat(c.Query("lng"), 64)
 	lat, err2 := strconv.ParseFloat(c.Query("lat"), 64)
 	if err1 != nil || err2 != nil {
-		response.Fail(c, badRequest("经纬度不合法"))
+		response.Fail(c, badRequest("maps.coords_invalid"))
 		return
 	}
 	addr, err := h.svc.Regeo(c.Request.Context(), provider, lng, lat)
@@ -55,6 +55,6 @@ func (h *handler) Regeo(c *gin.Context) {
 	response.OK(c, gin.H{"address": addr})
 }
 
-func badRequest(msg string) error {
-	return response.BadRequest("error.bad_request").WithMsg(msg)
+func badRequest(key string, args ...any) *response.Error {
+	return response.BadRequest(key, args...)
 }

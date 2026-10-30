@@ -99,7 +99,7 @@ func (f *forgotService) resetEmail(ctx context.Context, rawEmail, code, newPassw
 		return err
 	}
 	if newPassword == "" || len(newPassword) > 72 { // 不设强度规则；bcrypt 只取前 72 字节，故限 72
-		return bad("密码长度为 1-72 字节")
+		return bad("profile.password_length")
 	}
 	if len(code) != 6 {
 		return badCode()
@@ -134,16 +134,16 @@ func (f *forgotService) resetEmail(ctx context.Context, rawEmail, code, newPassw
 func (f *forgotService) resetPhone(ctx context.Context, rawPhone, code, newPassword, ip, lang string) error {
 	phone := normalizePhone(rawPhone)
 	if phone == "" {
-		return bad("手机号格式不正确")
+		return bad("user.phone_invalid")
 	}
 	if newPassword == "" || len(newPassword) > 72 {
-		return bad("密码长度为 1-72 字节")
+		return bad("profile.password_length")
 	}
 	if len(code) != 6 {
 		return badCode()
 	}
 	if f.sms == nil || !f.sms.Enabled() {
-		return response.Unavailable("auth.provider_missing").WithMsg("短信服务未启用")
+		return response.Unavailable("sms.disabled")
 	}
 	if ok, _ := f.ipRst.Hit(ctx, ip); !ok {
 		return tooMany()

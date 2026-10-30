@@ -3,7 +3,6 @@ package identity
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net"
 	"net/url"
 	"regexp"
@@ -73,13 +72,13 @@ func (c LDAPConfig) validateDirectory() error {
 	}
 	d := c.DirectorySync
 	if d.SubjectAttr != "entryUUID" && d.SubjectAttr != "objectGUID" {
-		return badReq("directorySync.subjectAttr must be entryUUID or objectGUID")
+		return badReq("identity.subject_attr_invalid")
 	}
 	if d.Filter == "" || len(d.Filter) > 500 || strings.Contains(d.Filter, userPlaceholder) {
-		return badReq("directorySync.filter must be an explicit enumeration filter without {username}")
+		return badReq("identity.directory_filter_invalid")
 	}
 	if _, err := compileFilter(d.Filter); err != nil {
-		return badReq("invalid directorySync.filter")
+		return badReq("identity.directory_filter_broken")
 	}
 	return nil
 }
@@ -98,7 +97,7 @@ func (c LDAPConfig) timeout() time.Duration {
 	return time.Duration(min(t, maxTimeout)) * time.Second
 }
 
-func badReq(msg string) error { return response.BadRequest("error.bad_request").WithMsg(msg) }
+func badReq(key string, args ...any) error { return response.BadRequest(key, args...) }
 
 func validRole(r string) bool {
 	return len(r) <= 64 && utf8.ValidString(r) && !strings.EqualFold(r, "super") && !strings.ContainsFunc(r, func(c rune) bool { return c < 0x20 || c == 0x7f })
@@ -114,29 +113,29 @@ type GroupRoleMapping struct {
 
 func validateGroupMappings(ms []GroupRoleMapping, required bool) error {
 	if len(ms) > 100 || (required && len(ms) == 0) {
-		return badReq("groupRoleMappings: max 100 entries; requireMappedGroup requires mappings")
+		return badReq("identity.group_mappings_too_many")
 	}
 	groups, total := map[string]bool{}, 0
 	for _, m := range ms {
 		if strings.TrimSpace(m.ExternalGroup) == "" || len(m.ExternalGroup) > 2048 || !utf8.ValidString(m.ExternalGroup) ||
 			strings.ContainsFunc(m.ExternalGroup, func(r rune) bool { return r < 0x20 || r == 0x7f }) || groups[m.ExternalGroup] {
-			return badReq("externalGroup must be unique, nonempty, max 2048 bytes, without control characters")
+			return badReq("identity.external_group_invalid")
 		}
 		groups[m.ExternalGroup] = true
 		if len(m.RoleCodes) == 0 || len(m.RoleCodes) > 100 {
-			return badReq("roleCodes must have 1-100 entries")
+			return badReq("identity.role_codes_count_invalid")
 		}
 		seen := map[string]bool{}
 		for _, code := range m.RoleCodes {
 			if code == "" || code != strings.TrimSpace(code) || !validRole(code) || seen[code] {
-				return badReq("roleCodes must be unique valid codes; super is forbidden")
+				return badReq("identity.role_codes_invalid")
 			}
 			seen[code] = true
 		}
 		total += len(m.RoleCodes)
 	}
 	if total > 1000 {
-		return badReq("groupRoleMappings: max 1000 role codes")
+		return badReq("identity.role_codes_too_many")
 	}
 	return nil
 }
@@ -172,25 +171,25 @@ func normalizeCommon(timeout *int, caCert, role *string, attrs ...*string) error
 		*timeout = defaultTimeout
 	}
 	if *timeout > maxTimeout {
-		return badReq(fmt.Sprintf("timeoutSec must be 1-%d", maxTimeout))
+		return badReq("identity.timeout_invalid", maxTimeout)
 	}
 	*caCert = strings.TrimSpace(*caCert)
 	if len(*caCert) > maxCACertBytes {
-		return badReq("caCert too long")
+		return badReq("identity.ca_cert_too_long")
 	}
 	if *caCert != "" {
 		if _, err := newTLSConfig("x", *caCert); err != nil {
-			return badReq(err.Error())
+			return response.BadRequest("identity.ca_cert_invalid").Wrap(err)
 		}
 	}
 	*role = strings.TrimSpace(*role)
 	if !validRole(*role) {
-		return badReq("invalid defaultRole")
+		return badReq("identity.default_role_invalid")
 	}
 	for _, a := range attrs {
 		*a = strings.TrimSpace(*a)
 		if *a != "" && !attrNameRe.MatchString(*a) {
-			return badReq("invalid attribute name")
+			return badReq("identity.attr_name_invalid")
 		}
 	}
 	return nil
@@ -201,7 +200,7 @@ func (c *LDAPConfig) normalize() error {
 	c.URL = strings.TrimSpace(c.URL)
 	scheme, host, port, err := parseLDAPURL(c.URL)
 	if err != nil {
-		return badReq(err.Error())
+		return response.BadRequest("identity.ldap_url_invalid").Wrap(err)
 	}
 	if err := checkConfiguredHost(host); err != nil {
 		return err
@@ -213,18 +212,18 @@ func (c *LDAPConfig) normalize() error {
 	if scheme == "ldaps" || c.StartTLS {
 		c.AllowPlaintext = false
 	} else if !c.AllowPlaintext {
-		return badReq("ldap:// without StartTLS sends passwords in cleartext: enable startTls, use ldaps://, or explicitly confirm allowPlaintext")
+		return badReq("identity.plaintext_forbidden")
 	}
 	c.BindDN, c.BaseDN = strings.TrimSpace(c.BindDN), strings.TrimSpace(c.BaseDN)
 	if c.BaseDN == "" || len(c.BaseDN) > 500 || len(c.BindDN) > 500 {
-		return badReq("baseDn is required (max 500 characters)")
+		return badReq("identity.basedn_required")
 	}
 	c.UserFilter = strings.TrimSpace(c.UserFilter)
 	if !strings.Contains(c.UserFilter, userPlaceholder) || len(c.UserFilter) > 500 {
-		return badReq("userFilter must contain " + userPlaceholder)
+		return badReq("identity.user_filter_placeholder", userPlaceholder)
 	}
 	if _, err := compileFilter(buildUserFilter(c.UserFilter, "probe")); err != nil {
-		return badReq("userFilter is not a valid LDAP filter")
+		return badReq("identity.user_filter_invalid")
 	}
 	if strings.TrimSpace(c.AttrUsername) == "" {
 		c.AttrUsername = "uid"
@@ -291,14 +290,14 @@ type CASConfig struct {
 func parseHTTPBase(raw, what string) (*url.URL, error) {
 	u, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" {
-		return nil, badReq(what + " must be an http(s) URL")
+		return nil, badReq("identity.url_scheme_invalid", what)
 	}
 	if u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.Opaque != "" || strings.ContainsAny(u.Host, " \t\r\n") {
-		return nil, badReq(what + " must not contain credentials, query or fragment")
+		return nil, badReq("identity.url_parts_invalid", what)
 	}
 	if p := u.Port(); p != "" {
 		if n, err := strconv.Atoi(p); err != nil || n < 1 || n > 65535 {
-			return nil, badReq(what + " has an invalid port")
+			return nil, badReq("identity.url_port_invalid", what)
 		}
 	}
 	u.Path = strings.TrimRight(u.Path, "/")
@@ -324,11 +323,11 @@ func (c *CASConfig) normalize() error {
 		return err
 	}
 	if bu.Path != "" {
-		return badReq("serviceBaseUrl must not have a path")
+		return badReq("identity.service_base_path_invalid")
 	}
 	// 票据校验响应决定“谁登录了”，明文 HTTP 下网络攻击者可伪造任意身份：只允许 https（本机回环地址仅用于开发联调）。
 	if su.Scheme != "https" && !isLoopbackHost(su.Hostname()) {
-		return badReq("serverUrl must use https")
+		return badReq("identity.server_url_https_required")
 	}
 	if err := checkConfiguredHost(su.Hostname()); err != nil {
 		return err
@@ -340,7 +339,7 @@ func (c *CASConfig) normalize() error {
 	case "2":
 		c.Version = "2"
 	default:
-		return badReq("version must be 2 or 3")
+		return badReq("identity.cas_version_invalid")
 	}
 	if strings.TrimSpace(c.AttrGroups) == "" {
 		c.AttrGroups = "groups"
@@ -386,7 +385,7 @@ func plainBindPassword(stored string) (string, error) {
 func validDisplayName(name string) (string, error) {
 	name = strings.TrimSpace(name)
 	if n := utf8.RuneCountInString(name); n < 1 || n > 100 {
-		return "", badReq("name must be 1-100 characters")
+		return "", badReq("identity.name_invalid")
 	}
 	return name, nil
 }

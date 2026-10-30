@@ -3,11 +3,12 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { FormGrid, FormGridFull } from '@/framework/components/FormLayout'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
+import { SwitchRow } from '@/framework/components/SwitchField'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
 import { Label } from '@/framework/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
-import { Switch } from '@/framework/ui/switch'
+import { Textarea } from '@/framework/ui/textarea'
 import { useSaveRule, type IpRule, type IpRuleForm, type RuleAction, type RuleScope } from './api'
 
 const empty: IpRuleForm = { action: 'deny', cidr: '', scope: 'all', remark: '', enabled: true }
@@ -107,16 +108,11 @@ export function RuleFormDialog({ open, onOpenChange, editing }: Props) {
         <FormGridFull>
           <div className="flex flex-col gap-2">
             <Label htmlFor="sec-rule-remark">{t('plugin_security.ip.remark')}</Label>
-            <Input id="sec-rule-remark" value={v.remark} onChange={(e) => setV((s) => ({ ...s, remark: e.target.value }))} maxLength={200} />
+            <Textarea id="sec-rule-remark" rows={3} value={v.remark} onChange={(e) => setV((s) => ({ ...s, remark: e.target.value }))} maxLength={200} />
           </div>
         </FormGridFull>
         <FormGridFull>
-          <div className="flex items-center justify-between gap-3 rounded-md border border-border p-3">
-            <Label htmlFor="sec-rule-enabled" className="m-0">
-              {t('plugin_security.ip.enabled')}
-            </Label>
-            <Switch id="sec-rule-enabled" checked={v.enabled} onCheckedChange={(c) => setV((s) => ({ ...s, enabled: c }))} />
-          </div>
+          <SwitchRow label={t('plugin_security.ip.enabled')} checked={v.enabled} onCheckedChange={(c) => setV((s) => ({ ...s, enabled: c }))} />
         </FormGridFull>
         {error ? (
           <FormGridFull>

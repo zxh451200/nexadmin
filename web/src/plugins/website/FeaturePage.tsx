@@ -22,9 +22,9 @@ import { PickerShell } from '@/framework/components/pickers/PickerShell'
 import { PickerTrigger } from '@/framework/components/pickers/PickerTrigger'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/framework/ui/dialog'
 import { Input } from '@/framework/ui/input'
 import { Switch } from '@/framework/ui/switch'
+import { EditorSchemaGate } from './EditorSchemaGate'
 import TranslationStatus from './TranslationStatus'
 import {
   translateContent,
@@ -200,9 +200,8 @@ function FeatureFormDialog({
   onOpenChange: (v: boolean) => void
   editing: FeatureItem | null
 }) {
-  const { t } = useTranslation()
   const { data: languages = [] } = useLanguages()
-  const { data: schema } = useI18nSchema('feature')
+  const { data: schema, isError, refetch } = useI18nSchema('feature')
   const defaultLocale = languages.find((l) => l.default)?.code ?? ''
   const translate = useCallback<TranslateBatch>(
     (texts, to, format) => translateContent('feature', texts, defaultLocale, to, format),
@@ -211,13 +210,7 @@ function FeatureFormDialog({
 
   // schema 与语言清单是表单的前提，没到货前不给渲染——否则会闪出一个没有字段的空表单。
   if (!schema || !defaultLocale) {
-    return (
-      <Dialog open onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader><DialogTitle>{t('common.loading')}</DialogTitle></DialogHeader>
-        </DialogContent>
-      </Dialog>
-    )
+    return <EditorSchemaGate onOpenChange={onOpenChange} error={isError} onRetry={() => void refetch()} />
   }
 
   return (
@@ -237,6 +230,8 @@ function FeatureFormDialog({
 export default function FeaturePage() {
   const { t } = useTranslation()
   const confirm = useConfirm()
+  // 预取字段 schema：点「新建/编辑」时直接命中缓存，不再先闪一个加载弹窗。
+  useI18nSchema('feature')
   const { data: features = [], isLoading } = useFeatures()
   const { data: icons = [] } = useFeatureIcons()
   const remove = useDeleteFeature()

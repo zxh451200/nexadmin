@@ -129,7 +129,7 @@ func (s *Service) passGates(ctx context.Context, u *User, meta LoginMeta, from i
 		return &LoginOutcome{Challenge: ch}, nil
 	}
 	s.Decorate(ctx, u)
-	pair, err := s.issuePair(ctx, u, "")
+	pair, err := s.issuePair(ctx, u, "", 0)
 	if err != nil {
 		return nil, err
 	}

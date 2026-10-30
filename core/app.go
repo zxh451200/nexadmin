@@ -83,6 +83,9 @@ type Deps struct {
 	APIDoc *apidoc.Doc
 	// MCP is the router-owned server; confirmations must use its original dispatch chain.
 	MCP *mcp.Server
+	// Modules 是本次启动启用的模块（已按 disabled_modules 过滤），供插件按接口发现业务侧扩展
+	// （例如导入中心收集实现了 imports.SourceProvider 的模块）。只暴露 Module 接口。
+	Modules []Module
 	// PluginActive 由插件管理器在传给插件的 Deps 副本中注入，实时判断当前插件是否可用。
 	// 非 HTTP 扩展点应在执行前及成功返回前检查；Register / Start 装配期间不要调用。
 	// nil 表示手工装配时未提供 guard，插件可保留原有行为；生产管理器始终注入。

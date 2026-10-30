@@ -6,13 +6,13 @@ import (
 	"crypto/x509"
 	"errors"
 	"net"
-	"strconv"
 	"strings"
 	"time"
 
 	"go.uber.org/zap"
 
 	"nexadmin/core/auth"
+	"nexadmin/core/i18n"
 	"nexadmin/core/middleware"
 	"nexadmin/core/response"
 	"nexadmin/pkg/idgen"
@@ -87,11 +87,14 @@ func callerID(ctx context.Context) idgen.ID {
 	return 0
 }
 
-var errTestRate = response.New(429, "error.too_many_requests").WithMsg("too many connection tests, try again in a minute")
+var errTestRate = response.New(429, "identity.test_rate_limited")
 
 // safeMessage 把底层错误归类成固定文案：目录 / CAS 服务器返回的诊断文本、IP:端口、证书细节只进服务端日志，
 // 不回给调用方，避免测试接口被用来探测内网拓扑或读取内部服务的响应内容。
-func (s *Service) safeMessage(stage string, err error) string {
+// msgKey 按请求语言取文案。
+func msgKey(key string, args ...any) string { return i18n.T(context.Background(), key, args...) }
+
+func (s *Service) safeMessage(ctx context.Context, stage string, err error) string {
 	s.log.Warn("identity: test failed", zap.String("stage", stage), zap.Error(err))
 	var le *ldapError
 	var ne net.Error
@@ -100,23 +103,23 @@ func (s *Service) safeMessage(stage string, err error) string {
 	var he x509.HostnameError
 	switch {
 	case errors.Is(err, errBlockedHost):
-		return "the address is not allowed: loopback, private, link-local and metadata ranges are blocked (operators can enable identity.allow_private_hosts)"
+		return msgKey("identity.test.host_blocked")
 	case errors.Is(err, errPlaintextNotAllowed):
-		return "cleartext ldap:// is not allowed: enable StartTLS, use ldaps://, or confirm allowPlaintext"
+		return msgKey("identity.test.plaintext_blocked")
 	case errors.As(err, &le):
-		return "the directory rejected the request (result code " + strconv.Itoa(le.Code) + ")"
+		return msgKey("identity.test.directory_rejected", le.Code)
 	case errors.Is(err, context.DeadlineExceeded), errors.As(err, &ne) && ne.Timeout():
-		return "the server did not respond in time"
+		return msgKey("identity.test.timeout")
 	case errors.As(err, &ce), errors.As(err, &ua), errors.As(err, &he), strings.Contains(err.Error(), "TLS"):
-		return "TLS negotiation or certificate verification failed"
+		return msgKey("identity.test.tls_failed")
 	case errors.Is(err, errBER), errors.Is(err, errCASResponse), strings.Contains(err.Error(), "unexpected"):
-		return "the server sent an invalid response"
+		return msgKey("identity.test.invalid_response")
 	case errors.Is(err, errCASStatus):
-		return "the CAS server returned an unexpected HTTP status"
+		return msgKey("identity.test.cas_status")
 	case errors.As(err, &ne):
-		return "could not connect to the server"
+		return msgKey("identity.test.connect_failed")
 	}
-	return "the operation failed (see server log)"
+	return msgKey("identity.test.failed")
 }
 
 // TestConnection 检查身份源是否可用：LDAP 为 连接 -> 服务账号 bind -> 搜索 BaseDN；CAS 为请求 serviceValidate 并解析响应。
@@ -133,24 +136,24 @@ func (s *Service) TestConnection(ctx context.Context, id idgen.ID) (*TestResult,
 	case TypeLDAP:
 		cfg, err := src.ldapConfig()
 		if err != nil {
-			return &TestResult{Stage: "connect", Message: "stored configuration is invalid"}, nil
+			return &TestResult{Stage: "connect", Message: msgKey("identity.test.config_invalid")}, nil
 		}
 		return s.testLDAP(ctx, cfg), nil
 	case TypeCAS:
 		cfg, err := src.casConfig()
 		if err != nil {
-			return &TestResult{Stage: "connect", Message: "stored configuration is invalid"}, nil
+			return &TestResult{Stage: "connect", Message: msgKey("identity.test.config_invalid")}, nil
 		}
 		return s.testCAS(ctx, cfg), nil
 	}
-	return nil, badReq("unsupported source type")
+	return nil, badReq("identity.source_type_unsupported")
 }
 
 func (s *Service) testLDAP(ctx context.Context, cfg LDAPConfig) *TestResult {
 	a := &ldapAuthenticator{svc: s, dial: s.dial}
 	sess, err := a.dial(ctx, cfg)
 	if err != nil {
-		return &TestResult{Stage: "connect", Message: s.safeMessage("connect", err)}
+		return &TestResult{Stage: "connect", Message: s.safeMessage(ctx, "connect", err)}
 	}
 	defer func() { _ = sess.Close() }()
 	if cfg.BindDN != "" {
@@ -162,11 +165,11 @@ func (s *Service) testLDAP(ctx context.Context, cfg LDAPConfig) *TestResult {
 			err = sess.Bind(cfg.BindDN, pw)
 		}
 		if err != nil {
-			return &TestResult{Stage: "bind", Message: s.safeMessage("bind", err)}
+			return &TestResult{Stage: "bind", Message: s.safeMessage(ctx, "bind", err)}
 		}
 	}
 	if _, err := sess.Search(cfg.BaseDN, scopeBase, "(objectClass=*)", []string{"1.1"}, 1); err != nil {
-		return &TestResult{Stage: "search", Message: s.safeMessage("search", err)}
+		return &TestResult{Stage: "search", Message: s.safeMessage(ctx, "search", err)}
 	}
 	res := &TestResult{OK: true}
 	if cfg.cleartext() {
@@ -182,17 +185,17 @@ func (s *Service) TestLogin(ctx context.Context, id idgen.ID, username, password
 		return nil, err
 	}
 	if src.Type != TypeLDAP {
-		return nil, badReq("only LDAP sources support user login test")
+		return nil, badReq("identity.login_test_ldap_only")
 	}
 	if !validLoginInput(username, password) {
-		return nil, response.BadRequest("error.bad_request").WithMsg("username and password are required")
+		return nil, response.BadRequest("identity.credentials_required")
 	}
 	if !s.allowTest(src.TenantID, callerID(ctx)) {
 		return nil, errTestRate
 	}
 	cfg, err := src.ldapConfig()
 	if err != nil {
-		return &TestResult{Stage: "connect", Message: "stored configuration is invalid"}, nil
+		return &TestResult{Stage: "connect", Message: msgKey("identity.test.config_invalid")}, nil
 	}
 	a := &ldapAuthenticator{svc: s, dial: s.dial}
 	u, err := a.verify(ctx, cfg, username, password)
@@ -204,5 +207,5 @@ func (s *Service) TestLogin(ctx context.Context, id idgen.ID, username, password
 	case errors.Is(err, errBadCredentials):
 		return &TestResult{Stage: "login", Message: "invalid credentials"}, nil
 	}
-	return &TestResult{Stage: "connect", Message: s.safeMessage("connect", err)}, nil
+	return &TestResult{Stage: "connect", Message: s.safeMessage(ctx, "connect", err)}, nil
 }

@@ -28,13 +28,13 @@ type parsedInput struct {
 	roles []idgen.ID
 }
 
-func parseIDs(raw []string, what string) ([]idgen.ID, error) {
+func parseIDs(raw []string, idErrKey string) ([]idgen.ID, error) {
 	seen := map[idgen.ID]bool{}
 	var out []idgen.ID
 	for _, s := range raw {
 		id, err := idgen.Parse(s)
 		if err != nil {
-			return nil, bad(what + " ID 不正确")
+			return nil, bad(idErrKey)
 		}
 		if !seen[id] {
 			seen[id] = true
@@ -48,49 +48,49 @@ func parseIDs(raw []string, what string) ([]idgen.ID, error) {
 func (in *userInput) check() (p parsedInput, err error) {
 	in.Username, in.Nickname = strings.TrimSpace(in.Username), strings.TrimSpace(in.Nickname)
 	if !usernameRe.MatchString(in.Username) {
-		return p, bad("账号为 2-64 位字母、数字或 _ . @ -")
+		return p, bad("user.username_invalid")
 	}
 	if in.Nickname == "" {
 		in.Nickname = in.Username
 	}
 	if utf8.RuneCountInString(in.Nickname) > 64 {
-		return p, bad("昵称不超过 64 个字符")
+		return p, bad("user.nickname_too_long")
 	}
 	if in.Phone = strings.TrimSpace(in.Phone); in.Phone != "" && !phoneRe.MatchString(in.Phone) {
-		return p, bad("手机号格式不正确")
+		return p, bad("user.phone_invalid")
 	}
 	if in.Email = strings.TrimSpace(in.Email); in.Email != "" && (len(in.Email) > 100 || !emailRe.MatchString(in.Email)) {
-		return p, bad("邮箱格式不正确")
+		return p, bad("user.email_invalid")
 	}
 	if len(in.Avatar) > 500 || utf8.RuneCountInString(in.Remark) > 500 {
-		return p, bad("头像地址或备注过长")
+		return p, bad("user.avatar_remark_too_long")
 	}
 	switch in.Gender {
 	case "":
 		in.Gender = "0"
 	case "0", "1", "2":
 	default:
-		return p, bad("性别不正确")
+		return p, bad("user.gender_invalid")
 	}
 	switch in.Status {
 	case "":
 		in.Status = statusOn
 	case statusOn, statusOff:
 	default:
-		return p, bad("状态不正确")
+		return p, bad("user.status_invalid")
 	}
 	if !regionRe.MatchString(in.Region.Province) || !regionRe.MatchString(in.Region.City) || !regionRe.MatchString(in.Region.District) {
-		return p, bad("地区编码不正确")
+		return p, bad("user.region_invalid")
 	}
 	if strings.TrimSpace(in.DeptID) != "" {
 		if p.dept, err = idgen.Parse(in.DeptID); err != nil {
-			return p, bad("部门 ID 不正确")
+			return p, bad("user.dept_id_invalid")
 		}
 	}
-	if p.posts, err = parseIDs(in.PostIDs, "岗位"); err != nil {
+	if p.posts, err = parseIDs(in.PostIDs, "user.post_id_invalid"); err != nil {
 		return p, err
 	}
-	p.roles, err = parseIDs(in.RoleIDs, "角色")
+	p.roles, err = parseIDs(in.RoleIDs, "user.role_id_invalid")
 	return p, err
 }
 
@@ -116,7 +116,7 @@ func (s *service) checkRoles(ctx context.Context, roles []idgen.ID) error {
 		return err
 	}
 	if int(n) != len(roles) {
-		return bad("所选角色不存在")
+		return bad("user.roles_not_found")
 	}
 	return nil
 }
@@ -156,7 +156,7 @@ func (s *service) create(ctx context.Context, in userInput, me actor) (*userDTO,
 	if taken, err := s.usernameTaken(ctx, in.Username, 0); err != nil {
 		return nil, err
 	} else if taken {
-		return nil, bad("账号已存在")
+		return nil, bad("user.username_exists")
 	}
 	if err := s.checkRoles(ctx, p.roles); err != nil {
 		return nil, err
@@ -218,13 +218,13 @@ func (s *service) update(ctx context.Context, id idgen.ID, in userInput, me acto
 		return nil, err
 	}
 	if in.Status != statusOn && (u.IsSuper || u.ID == me.ID) {
-		return nil, bad("超级管理员和自己不能被停用")
+		return nil, bad("user.super_self_cannot_disable")
 	}
 	if in.Username != u.Username {
 		if taken, err := s.usernameTaken(ctx, in.Username, id); err != nil {
 			return nil, err
 		} else if taken {
-			return nil, bad("账号已存在")
+			return nil, bad("user.username_exists")
 		}
 	}
 	if err := s.checkRoles(ctx, p.roles); err != nil {

@@ -2,7 +2,7 @@
   "sysConfig": {
     "menu": "Advanced parameters",
     "title": "Advanced parameters",
-    "description": "Key/value parameter table and upload limits; changes apply immediately. Use System Settings for everyday configuration",
+    "description": "Key/value parameters; changes apply immediately, no release needed",
     "name": "Name",
     "key": "Key",
     "value": "Value",
@@ -33,6 +33,52 @@
       "allowedTypesHint": "Only the listed types can be uploaded",
       "webp": "Generate WebP copies of images",
       "webpHint": "The original is kept; a WebP copy is stored alongside and served to browsers that support it. GIF / SVG are not converted."
+    },
+    "item": {
+      "site_copyright": {
+        "name": "Copyright notice",
+        "remark": "Shown in the footer"
+      },
+      "user_default_password": {
+        "name": "Initial user password",
+        "remark": "Used when creating users and resetting passwords"
+      },
+      "user_register_enabled": {
+        "name": "Open registration",
+        "remark": ""
+      },
+      "login_captcha_enabled": {
+        "name": "Login captcha",
+        "remark": "On: a captcha is required for every sign-in. Off: only required after repeated failures"
+      },
+      "login_max_retry": {
+        "name": "Max sign-in attempts",
+        "remark": ""
+      },
+      "login_lock_minutes": {
+        "name": "Account lock duration (minutes)",
+        "remark": ""
+      },
+      "security_ip_whitelist": {
+        "name": "IP allowlist",
+        "remark": "Applies to platform administrator endpoints only"
+      },
+      "upload_max_size_image_mb": {
+        "name": "Max image upload size (MB)",
+        "remark": "0 or empty means unlimited"
+      },
+      "upload_max_size_video_mb": {
+        "name": "Max video upload size (MB)",
+        "remark": "0 or empty means unlimited"
+      },
+      "upload_max_size_file_mb": {
+        "name": "Max file upload size (MB)",
+        "remark": "0 or empty means unlimited"
+      },
+      "upload_allowed_types": {
+        "name": "Allowed upload types",
+        "remark": "Comma-separated MIME types or extensions"
+      }
     }
   }
 }

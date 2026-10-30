@@ -34,9 +34,18 @@ var (
 )
 
 // UnavailableError 表示本机缺少导出工具（或连接参数不安全）。
-type UnavailableError struct{ Reason string }
+// Err 保留原始错误，handler 据此区分“缺工具”（可本地化）与其他原因。
+type UnavailableError struct {
+	Reason string
+	Err    error
+}
+
+// ErrIsolationUnsupported 表示独立租户库模式不支持页面上发起的单库备份（handler 按 key 返回文案）。
+var ErrIsolationUnsupported = errors.New("独立租户数据库模式请使用命令行多库备份；此页面的单库备份不能覆盖租户业务数据")
 
 func (e *UnavailableError) Error() string { return e.Reason }
+
+func (e *UnavailableError) Unwrap() error { return e.Err }
 
 // Dumper 隔离“真正调用外部工具”的部分；生产用 toolDumper，单测用假实现。
 type Dumper interface {
@@ -52,7 +61,7 @@ type toolDumper struct {
 
 func (d toolDumper) Check() (string, error) {
 	if d.cfg.Isolation.Enabled {
-		return "", errors.New("独立租户数据库模式请使用命令行多库备份；此页面的单库备份不能覆盖租户业务数据")
+		return "", ErrIsolationUnsupported
 	}
 	t, err := ctl.DumpTool(d.cfg, d.look)
 	if err != nil {
@@ -198,17 +207,24 @@ func (s *Service) SaveSetting(ctx context.Context, in ConfigInput) (Setting, err
 // ---- 状态 ----
 
 // ToolStatus 是导出工具的可用性；找不到工具时 Available=false 并带原因。
+// Missing 只给缺的工具名，页面按当前语言拼整句，Reason 留给日志与命令行。
 type ToolStatus struct {
-	Available bool   `json:"available"`
-	Tool      string `json:"tool,omitempty"`
-	Reason    string `json:"reason,omitempty"`
+	Available bool     `json:"available"`
+	Tool      string   `json:"tool,omitempty"`
+	Missing   []string `json:"missing,omitempty"`
+	Reason    string   `json:"reason,omitempty"`
 }
 
 // ToolStatus 探测导出工具。
 func (s *Service) ToolStatus() ToolStatus {
 	tool, err := s.dumper.Check()
 	if err != nil {
-		return ToolStatus{Available: false, Reason: err.Error()}
+		st := ToolStatus{Available: false, Reason: err.Error()}
+		var tm *ctl.ToolMissingError
+		if errors.As(err, &tm) {
+			st.Missing = tm.Names
+		}
+		return st
 	}
 	return ToolStatus{Available: true, Tool: tool}
 }

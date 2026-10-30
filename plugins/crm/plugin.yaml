@@ -1,7 +1,7 @@
 id: crm
 name: 客户主数据
 version: 0.1.0
-description: 免费基础客户主数据 + 线索商机台账（两张表 + 事件契约）：external 锚点让 hotel/mall 的 member 认同同一个客户 ID；不做销售自动化。
+description: 免费基础客户主数据 + 线索商机台账：让酒店、商城等外部系统的会员对应到同一个客户；不做销售自动化。
 author: NexAdmin
 edition: free
 requires_nexadmin: ">=0.1.0"

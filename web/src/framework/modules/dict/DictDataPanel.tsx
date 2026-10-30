@@ -214,19 +214,21 @@ export function DictDataPanel({ type, onBack }: Props) {
         <Form {...form}>
           <FormLayout id="dict-data-form" onSubmit={submit}>
             <FormGrid>
-              <FormField
-                control={form.control}
-                name="label"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t('dict.data.label')}</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <FormGridFull>
+                <FormField
+                  control={form.control}
+                  name="label"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('dict.data.label')}</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </FormGridFull>
               {extraLangs.length ? (
                 <FormGridFull>
                   <div className="flex flex-col gap-2">

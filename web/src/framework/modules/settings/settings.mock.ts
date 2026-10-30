@@ -14,7 +14,7 @@ const defaults = (): AllSettings => ({
     defaultLanguage: 'zh-CN',
     watermark: false,
   },
-  security: { maxAttempts: '5', lockMinutes: '15' },
+  security: { maxAttempts: '5', lockMinutes: '15', idleMinutes: '120', maxHours: '12' },
   cache: { type: 'memory', address: '', password: '' },
   storage: { type: 'local', endpoint: '', bucket: '', region: '', accessKey: '', secretKey: '' },
   ai: { enabled: true, baseUrl: 'https://api.example.com/v1', apiKey: '', model: 'qwen-plus', timeoutSec: 30, redact: true },

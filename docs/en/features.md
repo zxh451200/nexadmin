@@ -299,7 +299,7 @@ Generated from source. Paths omit the `/api/v1` prefix (`/healthz` and `/metrics
 | audit (plugin, prefix `/plugins/audit`) | `audit:clean` | `DELETE /plugins/audit/logs` |
 | audit (plugin) | `audit:config` | `GET /plugins/audit/config`<br>`PUT /plugins/audit/config` |
 | audit (plugin) | `audit:list` | `GET /plugins/audit/log-tables`<br>`GET /plugins/audit/logs`<br>`GET /plugins/audit/logs/:id` |
-| codegen (plugin, prefix `/plugins/codegen`) | `codegen:list` | `GET /plugins/codegen/tables`<br>`GET /plugins/codegen/tables/:name/columns`<br>`POST /plugins/codegen/preview` |
+| codegen (plugin, prefix `/plugins/codegen`) | `codegen:list` | `GET /plugins/codegen/tables`<br>`GET /plugins/codegen/tables/:name/columns`<br>`POST /plugins/codegen/schema`<br>`POST /plugins/codegen/preview` |
 | codegen (plugin) | `codegen:download` | `POST /plugins/codegen/download` |
 | cron (plugin, prefix `/plugins/cron`) | `cron:edit` | `DELETE /plugins/cron/jobs/:id`<br>`POST /plugins/cron/jobs`<br>`PUT /plugins/cron/jobs/:id`<br>`PUT /plugins/cron/jobs/:id/enabled` |
 | cron (plugin) | `cron:clean` | `DELETE /plugins/cron/logs` |

@@ -3,7 +3,6 @@ package notice
 import (
 	"context"
 	"net/http"
-	"strings"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
@@ -65,8 +64,8 @@ func TestNoticeCheckIDs(t *testing.T) {
 		s, mock := newScopeSvc(t)
 		mock.ExpectQuery("SELECT count\\(\\*\\) FROM `sys_notice`").WillReturnRows(cnt(1))
 		re, ok := forbiddenErr(s.CheckIDs(ctx, limited, idgen.ID(901), idgen.ID(902), idgen.ID(903)))
-		if !ok || !strings.Contains(re.Msg, "2 个") || strings.Contains(re.Msg, "902") {
-			t.Fatalf("提示应报数量且不含 id：%v", re)
+		if !ok || re.Key != "datascope.forbidden_batch" || len(re.Args) != 2 || re.Args[1] != 2 {
+			t.Fatalf("提示应报数量且不含 id：ok=%v key=%q args=%v", ok, re.Key, re.Args)
 		}
 	})
 	t.Run("超管/全部豁免不查询", func(t *testing.T) {

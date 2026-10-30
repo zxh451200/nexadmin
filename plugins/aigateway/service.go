@@ -76,7 +76,7 @@ func (in *ModelInput) normalize() error {
 	if in.BaseURL != "" {
 		// 保存前做不联网的 SSRF 静态校验（连通性测试时再解析域名兜底）。
 		if _, err := validateURLStatic(in.BaseURL); err != nil {
-			return response.BadRequest("aigateway.baseurl_blocked").WithMsg(err.Error())
+			return response.BadRequest("aigateway.baseurl_blocked").Wrap(err)
 		}
 	}
 	return nil

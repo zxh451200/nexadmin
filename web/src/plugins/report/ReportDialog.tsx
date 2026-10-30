@@ -9,7 +9,9 @@ import { Input } from '@/framework/ui/input'
 import { Label } from '@/framework/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import { Switch } from '@/framework/ui/switch'
+import { Textarea } from '@/framework/ui/textarea'
 import { useChartOptions, useDatasetOptions, useSaveReport, type Report, type ReportFilter, type ReportForm } from './api'
+import { builtinText } from './builtinText'
 
 const SPANS = [3, 4, 6, 8, 12]
 const blank = (): ReportForm => ({ name: '', groupName: '', remark: '', config: { items: [], filters: [] } })
@@ -84,10 +86,6 @@ export function ReportDialog({ open, onOpenChange, editing }: Props) {
             <Label htmlFor="rp-group">{t('plugin_report.report.group')}</Label>
             <Input id="rp-group" value={form.groupName} maxLength={64} onChange={(e) => setForm({ ...form, groupName: e.target.value })} />
           </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="rp-remark">{t('common.remark')}</Label>
-            <Input id="rp-remark" value={form.remark} maxLength={255} onChange={(e) => setForm({ ...form, remark: e.target.value })} />
-          </div>
           <FormGridFull>
             <fieldset className="flex flex-col gap-2">
               <legend className="mb-1 text-sm font-medium">{t('plugin_report.report.items')}</legend>
@@ -100,7 +98,7 @@ export function ReportDialog({ open, onOpenChange, editing }: Props) {
                     <SelectContent>
                       {charts.map((c) => (
                         <SelectItem key={c.id} value={c.id}>
-                          {c.name}
+                          {builtinText(t, c.name)}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -134,7 +132,7 @@ export function ReportDialog({ open, onOpenChange, editing }: Props) {
               <legend className="mb-1 text-sm font-medium">{t('plugin_report.report.filters')}</legend>
               <p className="text-xs text-muted-foreground">{t('plugin_report.report.filtersHint')}</p>
               {cfg.filters.map((f, i) => (
-                <div key={i} className="grid grid-cols-1 gap-2 rounded-md border border-border p-2 md:grid-cols-[1fr_9rem_1fr_1fr_auto]">
+                <div key={i} className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_9rem_1fr_1fr_auto]">
                   <Input aria-label={t('plugin_report.report.filterLabel')} placeholder={t('plugin_report.report.filterLabel')} maxLength={50} value={f.label} onChange={(e) => setFilter(i, { label: e.target.value })} />
                   <Select value={f.type} onValueChange={(v) => setFilter(i, { type: v as ReportFilter['type'], column: '' })}>
                     <SelectTrigger aria-label={t('plugin_report.report.filterType')}>
@@ -152,7 +150,7 @@ export function ReportDialog({ open, onOpenChange, editing }: Props) {
                     <SelectContent>
                       {datasets.map((d) => (
                         <SelectItem key={d.id} value={d.id}>
-                          {d.name}
+                          {builtinText(t, d.name)}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -182,6 +180,12 @@ export function ReportDialog({ open, onOpenChange, editing }: Props) {
                 {t('plugin_report.report.addFilter')}
               </Button>
             </fieldset>
+          </FormGridFull>
+          <FormGridFull>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="rp-remark">{t('common.remark')}</Label>
+              <Textarea id="rp-remark" rows={3} value={form.remark} maxLength={255} onChange={(e) => setForm({ ...form, remark: e.target.value })} />
+            </div>
           </FormGridFull>
         </FormGrid>
       </FormLayout>

@@ -2,11 +2,11 @@ import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { ChartCard } from './ChartCard'
+import { Segmented } from './Segmented'
 import { TrendChart } from './TrendChart'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import { Skeleton } from '@/framework/ui/skeleton'
 import { api } from '@/framework/request/http'
-import { cn } from '@/lib/utils'
 
 export interface MetricPoint {
   ts: number
@@ -85,22 +85,12 @@ export function MetricHistory({
       title={title + step}
       actions={
         <div className="flex flex-wrap items-center justify-end gap-2">
-          <div className="flex items-center gap-1" role="group" aria-label={t('monitorHistory.window')}>
-            {WINDOWS.map((w) => (
-              <button
-                key={w}
-                type="button"
-                onClick={() => setHours(w)}
-                aria-pressed={hours === w}
-                className={cn(
-                  'inline-flex h-8 items-center rounded-full px-2.5 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none md:h-7',
-                  hours === w ? 'bg-background font-medium text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
-                )}
-              >
-                {t(`monitorHistory.${windowKey[w]}`)}
-              </button>
-            ))}
-          </div>
+          <Segmented
+            ariaLabel={t('monitorHistory.window')}
+            value={String(hours)}
+            onChange={(v) => setHours(Number(v))}
+            options={WINDOWS.map((w) => ({ value: String(w), label: t(`monitorHistory.${windowKey[w]}`) }))}
+          />
           {keys.length > 0 ? (
             <Select value={active} onValueChange={(v) => setPicked(String(v))}>
               <SelectTrigger className="h-8 w-[9.5rem] text-xs md:h-7" aria-label={t('monitorHistory.metric')}>

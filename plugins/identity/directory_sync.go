@@ -96,12 +96,12 @@ func directorySubject(e ldapEntry, attr string) (string, error) {
 }
 
 func directoryLicense() error {
-	for _, p := range plugin.Default().List() {
+	for _, p := range plugin.Default().List(context.Background()) {
 		if p.ID == "identity" && p.Status == plugin.StatusActive {
 			return nil
 		}
 	}
-	return response.Forbidden("auth.login_denied").WithMsg("identity Pro license is not active")
+	return response.Forbidden("identity.license_inactive")
 }
 
 func (s *Service) directoryDB() (*gorm.DB, error) {
@@ -115,7 +115,7 @@ func (s *Service) directoryDB() (*gorm.DB, error) {
 func directoryConfig(src *Source) (LDAPConfig, error) {
 	c, err := src.ldapConfig()
 	if err != nil || !src.Enabled || !c.scopedDirectory() {
-		return c, badReq("sync requires an enabled LDAP source with directorySync.enabled")
+		return c, badReq("identity.sync_source_required")
 	}
 	return c, c.validateDirectory()
 }
@@ -158,7 +158,7 @@ func (s *Service) submitDirectory(ctx context.Context, id, owner idgen.ID) (idge
 	}
 	m := job.Default()
 	if m == nil || !m.Ready() || s.auth == nil {
-		return 0, badReq("directory sync runner unavailable")
+		return 0, badReq("identity.sync_unavailable")
 	}
 	src, err := s.load(ctx, id)
 	if err != nil {
@@ -228,7 +228,7 @@ func (s *Service) directoryStatus(ctx context.Context, id idgen.ID) (*DirectoryS
 	}
 	m := job.Default()
 	if m == nil {
-		return nil, badReq("directory sync runner unavailable")
+		return nil, badReq("identity.sync_unavailable")
 	}
 	j, err := m.Get(ctx, job.Actor{Admin: true}, run.JobID)
 	if errors.Is(err, job.ErrNotFound) {

@@ -398,7 +398,7 @@ func TestPayloadSizeLimit(t *testing.T) {
 	for i := 0; i < 8; i++ {
 		data[fmt.Sprintf("t%d", i)] = strings.Repeat("字", MaxTextRunes) // 每个 30000 字节
 	}
-	if _, err := s.Submit(ctxT1, user(1), id, SubmitInput{Data: data}); status(err) != 400 || !strings.Contains(err.Error(), "过大") {
+	if _, err := s.Submit(ctxT1, user(1), id, SubmitInput{Data: data}); status(err) != 400 || !strings.Contains(err.Error(), "formbuilder.submit_too_large") {
 		t.Fatalf("超过 MaxDataBytes 应拒绝: %v", err)
 	}
 }

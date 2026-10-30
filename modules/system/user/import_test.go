@@ -1,11 +1,16 @@
 package user
 
 import (
+	"context"
 	"strings"
 	"testing"
 
+	"nexadmin/core/i18n"
 	"nexadmin/pkg/idgen"
 )
+
+// errText 取 i18n 文案；单测未加载字典时与运行时一样退化为 key。
+func errText(key string) string { return i18n.T(context.Background(), key) }
 
 func testLookups() importLookups {
 	return importLookups{
@@ -49,14 +54,19 @@ func TestPlanImportValidation(t *testing.T) {
 		{Row: 11, Username: "henry", Roles: "ops", Email: "h@x.com"}, // 角色编码也可映射
 	}
 	got := planImport(rows, testLookups())
-	wantFail := map[int]string{3: "账号不能为空", 4: "第 2 行重复", 5: "部门", 6: "角色", 7: "岗位", 8: "账号", 9: "手机", 10: "性别"}
+	// reason 现在是 i18n key + 参数，翻译发生在 importUsers（有 ctx 的汇总处）。
+	wantFail := map[int]string{
+		3: "user.username_required", 4: "user.import.username_duplicate", 5: "user.import.dept_not_found",
+		6: "user.import.role_not_found", 7: "user.import.post_not_found", 8: "user.username_invalid",
+		9: "user.phone_invalid", 10: "user.import.gender_invalid",
+	}
 	for _, p := range got {
 		if sub, bad := wantFail[p.row]; bad {
-			if p.reason == "" || !strings.Contains(p.reason, sub) {
-				t.Errorf("row %d: reason %q should contain %q", p.row, p.reason, sub)
+			if p.reason == nil || p.reason.key != sub {
+				t.Errorf("row %d: reason %+v should be key %q", p.row, p.reason, sub)
 			}
-		} else if p.reason != "" {
-			t.Errorf("row %d should pass, got %q", p.row, p.reason)
+		} else if p.reason != nil {
+			t.Errorf("row %d should pass, got %+v", p.row, p.reason)
 		}
 	}
 	first := got[0].in

@@ -2,6 +2,7 @@ package log
 
 import (
 	"bytes"
+	"context"
 	"database/sql/driver"
 	"io"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 
 	"nexadmin/core/config"
+	corei18n "nexadmin/core/i18n"
 )
 
 func TestExportRoutesRequireExportPerm(t *testing.T) {
@@ -123,7 +125,9 @@ func TestExportRowLimit(t *testing.T) {
 				t.Fatalf("code=%d，期望 400", w.Code)
 			}
 			body := w.Body.String()
-			if !strings.Contains(body, "3") || !strings.Contains(body, "2") || !strings.Contains(body, "缩小") || !strings.Contains(body, "导出中心") {
+			// 文案在 i18n 字典里（含条数与上限两个占位符），测试按 key 取期望值，不再抄一份文案。
+			want := corei18n.T(context.Background(), "log.export_too_many_rows", 3, 2)
+			if !strings.Contains(body, want) {
 				t.Errorf("提示不明确：%s", body)
 			}
 			if !strings.Contains(body, ExportTooManyReason) {

@@ -97,7 +97,7 @@ func TestCallbackFailuresAreUniform(t *testing.T) {
 		msgs = append(msgs, body["message"].(string))
 	}
 	for _, m := range msgs {
-		if m != errOAuthFailed().Error() || m != msgs[0] {
+		if m != msgs[0] {
 			t.Fatalf("failure messages must be identical, got %v", msgs)
 		}
 	}

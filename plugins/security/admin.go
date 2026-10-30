@@ -42,17 +42,17 @@ func (s *Service) SavePolicy(ctx context.Context, op User, f PolicyForm) (*Polic
 	switch f.Mode {
 	case ModeOptional, ModeAll, ModeRoles:
 	default:
-		return nil, badReq("invalid mode")
+		return nil, badReq("security.mode_invalid")
 	}
 	if f.GraceDays < minGrace || f.GraceDays > maxGrace {
-		return nil, badReq("graceDays must be between 1 and 90")
+		return nil, badReq("security.grace_days_invalid")
 	}
 	seen := map[string]bool{}
 	var roles []string
 	for _, r := range f.Roles {
 		r = strings.TrimSpace(r)
 		if !roleCodeRe.MatchString(r) {
-			return nil, badReq("invalid role code")
+			return nil, badReq("security.role_code_invalid")
 		}
 		if !seen[r] {
 			seen[r] = true
@@ -60,10 +60,10 @@ func (s *Service) SavePolicy(ctx context.Context, op User, f PolicyForm) (*Polic
 		}
 	}
 	if f.Mode == ModeRoles && len(roles) == 0 {
-		return nil, badReq("select at least one role")
+		return nil, badReq("security.roles_required")
 	}
 	if len(roles) > 50 {
-		return nil, badReq("too many roles")
+		return nil, badReq("security.roles_too_many")
 	}
 	if f.Mode != ModeRoles {
 		roles = nil
@@ -139,7 +139,7 @@ func (s *Service) ResetUser(ctx context.Context, op User, uid idgen.ID) error {
 		}
 		if target.Super {
 			s.audit(ctx, op, "reset_2fa_denied", row.Username, "userId="+uid.String()+" target is a super admin")
-			return response.Forbidden("error.forbidden").WithMsg("only a super admin can reset a super admin's two-factor authentication")
+			return response.Forbidden("security.reset_super_forbidden")
 		}
 	}
 	lg := &LogRow{OperatorID: op.ID, OperatorName: clip(op.Name, 100), Action: "reset_2fa", Target: clip(row.Username, 100),
@@ -269,17 +269,17 @@ func (s *Service) ListRules(ctx context.Context, tid idgen.ID) ([]IPRule, error)
 
 func (s *Service) validateRule(f RuleForm) (string, error) {
 	if f.Action != ActionAllow && f.Action != ActionDeny {
-		return "", badReq("action must be allow or deny")
+		return "", badReq("security.action_invalid")
 	}
 	if f.Scope != ScopeAll && f.Scope != ScopeSuper {
-		return "", badReq("scope must be all or super")
+		return "", badReq("security.scope_invalid")
 	}
 	if len([]rune(f.Remark)) > 200 {
-		return "", badReq("remark too long")
+		return "", badReq("security.remark_too_long")
 	}
 	p, err := normalizeCIDR(f.CIDR)
 	if err != nil {
-		return "", badReq("invalid IP or CIDR")
+		return "", badReq("security.cidr_invalid")
 	}
 	return p.String(), nil
 }
@@ -295,7 +295,7 @@ func (s *Service) guard(ctx context.Context, op User, current, candidate []IPRul
 				zap.String("operator", op.Name), zap.String("ip", op.IP))
 			return nil
 		}
-		e := response.Conflict("error.conflict").WithMsg("this change would lock out your current IP (" + op.IP + ")")
+		e := response.Conflict("security.self_lockout", op.IP)
 		e.Reason = "SECURITY_SELF_LOCKOUT"
 		return e
 	}
@@ -323,7 +323,7 @@ func (s *Service) SaveRule(ctx context.Context, op User, id idgen.ID, f RuleForm
 			continue
 		}
 		if r.Action == rule.Action && r.CIDR == rule.CIDR && r.Scope == rule.Scope {
-			return nil, response.Conflict("error.conflict").WithMsg("the same rule already exists")
+			return nil, response.Conflict("security.rule_exists")
 		}
 		cand = append(cand, r)
 	}
@@ -332,7 +332,7 @@ func (s *Service) SaveRule(ctx context.Context, op User, id idgen.ID, f RuleForm
 	}
 	if id == 0 {
 		if len(cur) >= maxRules {
-			return nil, badReq("too many rules")
+			return nil, badReq("security.rules_too_many")
 		}
 		cand = append(cand, rule)
 	}

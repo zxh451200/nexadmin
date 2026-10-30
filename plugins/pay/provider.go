@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 )
 
 // Provider 是支付渠道抽象。真实渠道（微信/支付宝/Stripe）按市场实现后用
@@ -29,10 +30,13 @@ type PayRequest struct {
 	Subject     string
 	AmountMinor int64
 	Currency    string
-	Method      string
+	Method      string // native/qr=扫码；page=电脑网站；wap/h5=手机网站；jsapi=公众号；app=APP
 	Scene       string
+	PayerOpenID string // 微信 JSAPI 必填（公众号/小程序 openid）
+	ClientIP    string // 微信 H5 下单需要付款方 IP
 	ReturnURL   string // 支付完成后回到业务前端的地址（可为空）
-	NotifyURL   string // 渠道异步回调地址（可为空，渠道实现自行拼默认值）
+	NotifyURL   string // 渠道异步回调地址；真实网关必须是完整 URL（见 channels.notify_url）
+	ExpireAt    time.Time // 支付单过期时间，渠道可据此设置 timeout_express / time_expire
 }
 
 // PayParams 是渠道返回的拉起支付参数；PayURL 为空表示用 Params 自行组装。
@@ -58,6 +62,12 @@ type RefundRequest struct {
 	PaymentNo    string
 	ChannelTxnID string
 	AmountMinor  int64
+	// OrderAmountMinor 是原支付单金额，微信退款接口要求带上；其他渠道可忽略。
+	OrderAmountMinor int64
+	// IdempotencyKey 是渠道侧的退款幂等号（out_request_no / out_refund_no）。
+	// 由支付单号与业务幂等键确定性派生：即使本地事务回滚后重试，也不会重复退款。
+	IdempotencyKey string
+	NotifyURL      string // 退款结果异步通知地址（可为空）
 }
 
 // RefundResult 是渠道退款结果；OK=false 且 Pending=false 表示渠道拒绝（落 failed），
@@ -78,12 +88,14 @@ type CallbackInput struct {
 
 // CallbackResult 是验签解析后的回调结论。RefundNo 非空时是退款回执。
 type CallbackResult struct {
-	PaymentNo     string
-	RefundNo      string
-	Paid          bool
-	Failed        bool
-	RefundOK      bool
-	ChannelTxnID  string
+	PaymentNo    string
+	RefundNo     string
+	Paid         bool
+	Failed       bool
+	RefundOK     bool
+	AmountMinor  int64 // 渠道回调里的金额（分）；>0 时服务层会与本地单据核对
+	ChannelTxnID string
+	// GatewayStatus 是渠道原始状态串（trade_status / trade_state），写进单据便于排障。
 	GatewayStatus string
 	Reason        string
 }

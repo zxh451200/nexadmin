@@ -54,6 +54,8 @@ export interface TreeTableProps<T extends { id: string; children?: T[] }> {
 const INDENT = ['ps-0', 'ps-6', 'ps-12', 'ps-[4.5rem]', 'ps-24', 'ps-[7.5rem]', 'ps-36', 'ps-[10.5rem]', 'ps-48']
 /** 横向位移超过多少像素视为「改变层级」而不是排序 */
 const NEST_OFFSET = 24
+/** 落点线从手柄列右侧起画：手柄 36px 是抓取区，线端圆点压在它下面会贴住六点手柄 */
+const DROP_LINE_INSET = 48
 /** 横向跟手打五折：位移看得见（这就是「往右拖=降级」的手势反馈），又不至于把行甩出滚动容器 */
 const dampX: Modifier = ({ transform }) => ({ ...transform, x: transform.x * 0.5 })
 
@@ -293,6 +295,8 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
     afterId?: string
     edge?: 'before' | 'after'
     overId: string
+    /** 落点所在的层级（0=顶级），用于在指示器上直接标出"会放到第几级" */
+    depth: number
     reason?: string
   }
 
@@ -341,7 +345,7 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
       edge?: 'before' | 'after'
       reason?: string
     }): DropPlan => {
-      const left = (o.indentBase ?? firstHandle) + Math.max(0, o.depth) * 24
+      const left = (o.indentBase ?? firstHandle) + DROP_LINE_INSET + Math.max(0, o.depth) * 24
       return {
         y: o.y,
         left,
@@ -351,6 +355,7 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
         afterId: o.afterId,
         edge: o.edge,
         overId: overId!,
+        depth: o.depth,
         reason: o.reason,
       }
     }
@@ -871,9 +876,14 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
           onDragCancel={onDragCancel}
         >
           {list}
-          <DragOverlay dropAnimation={null}>
-            {dragChip?.label ? <DragChip width={dragChip.width}>{dragChip.label}</DragChip> : null}
-          </DragOverlay>
+          {/* 浮层挂到 body：页面里任何带 transform 的祖先都会让 position:fixed 改按它计算，
+              表现就是拖拽时浮层离指针很远（偏一个侧栏/顶栏的距离）。 */}
+          {createPortal(
+            <DragOverlay dropAnimation={null}>
+              {dragChip?.label ? <DragChip width={dragChip.width}>{dragChip.label}</DragChip> : null}
+            </DragOverlay>,
+            document.body,
+          )}
           {dragId && drop
             ? createPortal(
                 <div
@@ -883,13 +893,39 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
                   role="status"
                   aria-live="polite"
                 >
-                  <div className={cn('relative h-0.5 rounded-full', drop.mode === 'blocked' ? 'bg-destructive' : 'bg-primary')}>
+                  {/* 落位线：3px + 外发光；两端各一个大圆点，被拖的浮层盖住一端时另一端仍能看见。
+                      右侧再标一句「会放到第几级」——树形拖拽最容易搞不清的就是落点的层级。 */}
+                  <div
+                    className={cn(
+                      'relative h-[3px] rounded-full',
+                      drop.mode === 'blocked'
+                        ? 'bg-destructive shadow-[0_0_10px_rgba(220,38,38,0.45)]'
+                        : 'bg-primary shadow-[0_0_10px_rgba(46,52,234,0.45)]',
+                    )}
+                  >
                     <span
                       className={cn(
-                        'absolute -start-1 -top-[3px] size-2 rounded-full',
+                        'absolute -start-2 -top-[5px] size-[13px] rounded-full ring-2 ring-background',
                         drop.mode === 'blocked' ? 'bg-destructive' : 'bg-primary',
                       )}
                     />
+                    <span
+                      className={cn(
+                        'absolute -end-2 -top-[5px] size-[13px] rounded-full ring-2 ring-background',
+                        drop.mode === 'blocked' ? 'bg-destructive' : 'bg-primary',
+                      )}
+                    />
+                    {/* 落点层级一律标出来（顶级也标「第 1 级」）：树形拖拽最容易搞不清的就是会落到第几级 */}
+                    <span
+                      className={cn(
+                        'absolute start-4 -top-[11px] whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-medium shadow-sm',
+                        drop.mode === 'blocked'
+                          ? 'bg-destructive text-white'
+                          : 'bg-primary text-primary-foreground',
+                      )}
+                    >
+                      {t('dataTable.dropLevel', { level: drop.depth + 1 })}
+                    </span>
                   </div>
                   {drop.mode === 'blocked' && drop.reason ? (
                     <div className="mt-1 text-xs font-medium text-destructive">{t(drop.reason, { count: maxDepth })}</div>

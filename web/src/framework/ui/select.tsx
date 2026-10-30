@@ -1,6 +1,7 @@
 import * as React from 'react'
 import * as SelectPrimitive from '@radix-ui/react-select'
 import { Check, ChevronDown, ChevronUp } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 
 const Select = SelectPrimitive.Root
@@ -58,33 +59,52 @@ SelectScrollDownButton.displayName = SelectPrimitive.ScrollDownButton.displayNam
 const SelectContent = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Content>
->(({ className, children, position = 'popper', ...props }, ref) => (
-  <SelectPrimitive.Portal>
-    <SelectPrimitive.Content
-      ref={ref}
-      className={cn(
-        'relative z-50 max-h-96 min-w-[8rem] overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
-        position === 'popper' &&
-          'data-[side=bottom]:translate-y-1 data-[side=top]:-translate-y-1',
-        className,
-      )}
-      position={position}
-      {...props}
-    >
-      <SelectScrollUpButton />
-      <SelectPrimitive.Viewport
+>(({ className, children, position = 'popper', ...props }, ref) => {
+  const { t } = useTranslation()
+  const viewportRef = React.useRef<HTMLDivElement | null>(null)
+  const [empty, setEmpty] = React.useState(false)
+  const checkEmpty = React.useCallback((node: HTMLDivElement | null) => {
+    viewportRef.current = node
+    if (node) setEmpty(!node.querySelector('[role="option"]'))
+  }, [])
+
+  // 选项可能来自片段、条件渲染或子组件，只能按渲染结果判断；没有空态时
+  // 零选项的下拉只弹出一条空白细条（与 OptionList 的空态保持一致）。
+  // Viewport 比本组件晚挂载一帧，所以挂载时用回调 ref 判断，之后随 children 变化重判。
+  React.useEffect(() => checkEmpty(viewportRef.current), [checkEmpty, children])
+
+  return (
+    <SelectPrimitive.Portal>
+      <SelectPrimitive.Content
+        ref={ref}
         className={cn(
-          'p-1',
+          'relative z-50 max-h-96 min-w-[8rem] overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
           position === 'popper' &&
-            'h-[var(--radix-select-trigger-height)] w-full min-w-[var(--radix-select-trigger-width)]',
+            'data-[side=bottom]:translate-y-1 data-[side=top]:-translate-y-1',
+          className,
         )}
+        position={position}
+        {...props}
       >
-        {children}
-      </SelectPrimitive.Viewport>
-      <SelectScrollDownButton />
-    </SelectPrimitive.Content>
-  </SelectPrimitive.Portal>
-))
+        <SelectScrollUpButton />
+        <SelectPrimitive.Viewport
+          ref={checkEmpty}
+          className={cn(
+            'p-1',
+            position === 'popper' &&
+              'h-[var(--radix-select-trigger-height)] w-full min-w-[var(--radix-select-trigger-width)]',
+          )}
+        >
+          {children}
+          {empty ? (
+            <div className="px-2 py-1 text-center text-sm text-muted-foreground">{t('common.empty')}</div>
+          ) : null}
+        </SelectPrimitive.Viewport>
+        <SelectScrollDownButton />
+      </SelectPrimitive.Content>
+    </SelectPrimitive.Portal>
+  )
+})
 SelectContent.displayName = SelectPrimitive.Content.displayName
 
 const SelectLabel = React.forwardRef<

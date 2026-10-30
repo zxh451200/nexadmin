@@ -23,8 +23,6 @@ type appForm struct {
 	AllowOrgRead *bool    `json:"allowOrgRead"`
 }
 
-func badReq(msg string) *response.Error { return response.BadRequest("error.bad_request").WithMsg(msg) }
-
 // validRedirectURI：绝对 http(s) 地址，无 fragment、无用户信息、无通配符。
 func validRedirectURI(s string) bool {
 	if s == "" || len(s) > 500 || strings.ContainsAny(s, "*# \t\r\n") {
@@ -38,14 +36,14 @@ func validRedirectURI(s string) bool {
 func (f *appForm) normalize() *response.Error {
 	f.Name = strings.TrimSpace(f.Name)
 	if f.Name == "" || len([]rune(f.Name)) > 100 {
-		return badReq("name is required (max 100)")
+		return response.BadRequest("sso.name_required")
 	}
 	seen := map[string]bool{}
 	uris := []string{}
 	for _, u := range f.RedirectURIs {
 		u = strings.TrimSpace(u)
 		if !validRedirectURI(u) {
-			return badReq("invalid redirect uri: " + u)
+			return response.BadRequest("sso.redirect_uri_invalid", u)
 		}
 		if !seen[u] {
 			seen[u] = true
@@ -53,21 +51,21 @@ func (f *appForm) normalize() *response.Error {
 		}
 	}
 	if len(uris) == 0 || len(uris) > 20 {
-		return badReq("1-20 redirect uris are required")
+		return response.BadRequest("sso.redirect_uri_required")
 	}
 	f.RedirectURIs = uris
 	f.HomeURL = strings.TrimSpace(f.HomeURL)
 	if f.HomeURL != "" && !validRedirectURI(f.HomeURL) {
-		return badReq("invalid homeUrl")
+		return response.BadRequest("sso.home_url_invalid")
 	}
 	if len(f.Logo) > 500 || len(f.Description) > 500 {
-		return badReq("logo/description too long")
+		return response.BadRequest("sso.logo_description_too_long")
 	}
 	roles := []string{}
 	for _, r := range f.RoleIDs {
 		id, err := idgen.Parse(strings.TrimSpace(r))
 		if err != nil || id == 0 {
-			return badReq("invalid role id")
+			return response.BadRequest("sso.role_invalid")
 		}
 		roles = append(roles, id.String())
 	}
@@ -212,7 +210,7 @@ func (h *handler) setEnabled(c *gin.Context) {
 		return
 	}
 	if b.Enabled == nil {
-		response.Fail(c, badReq("enabled is required"))
+		response.Fail(c, response.BadRequest("sso.enabled_required"))
 		return
 	}
 	a, ok := h.find(c, id)

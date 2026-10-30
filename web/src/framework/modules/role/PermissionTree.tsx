@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { ChevronRight } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Checkbox } from '@/framework/ui/checkbox'
 import { ExpandAllToggle } from '@/framework/components/ExpandAllToggle'
+import { usePersistedSet } from '@/framework/hooks/use-persisted-set'
 import { cn } from '@/lib/utils'
 
 export interface PermissionNode {
@@ -57,16 +58,12 @@ function normalize(nodes: PermissionNode[], set: Set<string>): boolean {
 /** 勾选父节点联动全部子孙；子孙全选时父节点为选中，部分选中时为半选 */
 export function PermissionTree({ data, value, onChange, disabled, className }: PermissionTreeProps) {
   const { t } = useTranslation()
-  const [expanded, setExpanded] = useState<Set<string> | null>(null)
+  // 展开的节点记在 localStorage：默认展开一级目录，之后按用户自己收放的来
+  const { value: open, toggle: toggleOpen, replace: setExpanded } = usePersistedSet(
+    'nex-perm-tree-expanded',
+    data.filter(hasKids).map((n) => n.id),
+  )
   const selected = useMemo(() => new Set(value), [value])
-
-  const open = expanded ?? new Set(data.filter(hasKids).map((n) => n.id))
-  const toggleOpen = (id: string) => {
-    const next = new Set(open)
-    if (next.has(id)) next.delete(id)
-    else next.add(id)
-    setExpanded(next)
-  }
   const allParents = useMemo(() => {
     const out: string[] = []
     const walk = (ns: PermissionNode[]) =>

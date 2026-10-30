@@ -49,11 +49,11 @@ func reportView(r ReportDef) ReportView {
 // checkReport 校验并规范化报表配置（图表/数据集必须属于本租户，筛选器列必须在数据集里）。
 func (s *Service) checkReport(ctx context.Context, f *ReportForm) (string, error) {
 	if badText(f.Name, 100, true) || badText(f.GroupName, maxGroupLen, false) || badText(f.Remark, 255, false) {
-		return "", specErr("名称不能为空，分组/备注长度超限")
+		return "", specErr("report.name_and_remark_invalid")
 	}
 	c := &f.Config
 	if len(c.Items) > maxReportItems || len(c.Filters) > maxReportFilter {
-		return "", specErr("报表内容过多")
+		return "", specErr("report.report_items_too_many")
 	}
 	ids := make([]string, len(c.Items))
 	for i, it := range c.Items {
@@ -70,7 +70,7 @@ func (s *Service) checkReport(ctx context.Context, f *ReportForm) (string, error
 	for i := range c.Items {
 		id, _ := idgen.Parse(c.Items[i].ChartID)
 		if !have[id] {
-			return "", specErr("引用的图表不存在")
+			return "", specErr("report.chart_not_found")
 		}
 		it := &c.Items[i]
 		it.ChartID = id.String()
@@ -78,22 +78,22 @@ func (s *Service) checkReport(ctx context.Context, f *ReportForm) (string, error
 			it.Span = 12
 		}
 		if it.Span < 1 || it.Span > 12 || badText(it.Group, maxGroupLen, false) {
-			return "", specErr("图表宽度或分组无效")
+			return "", specErr("report.chart_layout_invalid")
 		}
 	}
 	keys := map[string]bool{}
 	for i := range c.Filters {
 		fl := &c.Filters[i]
 		if !filterKeyRe.MatchString(fl.Key) || keys[fl.Key] || badText(fl.Label, 50, true) {
-			return "", specErr("筛选器标识或名称无效")
+			return "", specErr("report.filter_ident_invalid")
 		}
 		keys[fl.Key] = true
 		if fl.Type != "dateRange" && fl.Type != "select" {
-			return "", specErr("筛选器类型无效")
+			return "", specErr("report.filter_type_invalid")
 		}
 		dsID, err := idgen.Parse(fl.DatasetID)
 		if err != nil || dsID == 0 {
-			return "", specErr("筛选器需要绑定数据集")
+			return "", specErr("report.filter_dataset_required")
 		}
 		ds, cfg, err := s.loadDataset(ctx, dsID)
 		if err != nil {
@@ -113,7 +113,7 @@ func (s *Service) checkReport(ctx context.Context, f *ReportForm) (string, error
 			return "", errNotAllowed
 		}
 		if fl.Type == "dateRange" && col.Type != TypeTime {
-			return "", specErr("日期范围筛选器只能绑定时间字段")
+			return "", specErr("report.filter_date_time_only")
 		}
 		if fl.Type == "dateRange" {
 			fl.Multiple = false

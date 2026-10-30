@@ -1,13 +1,14 @@
 package htmlsafe
 
 import (
+	"net/url"
 	"regexp"
 	"strings"
 
 	xhtml "golang.org/x/net/html"
 )
 
-var boolAttrs = set("controls", "muted", "loop")
+var boolAttrs = set("controls", "muted", "loop", "allowfullscreen")
 
 // 每个标签允许的属性。a 的 rel/target、style、class 另有专门处理。
 var tagAttrs = map[string]map[string]bool{
@@ -19,15 +20,17 @@ var tagAttrs = map[string]map[string]bool{
 	"th":     set("colspan", "rowspan"),
 	"col":    set("span"),
 	"ol":     set("start"),
+	"iframe": set("src", "title", "width", "height", "allow", "allowfullscreen", "frameborder", "referrerpolicy"),
 }
 
 var (
-	reDigits    = regexp.MustCompile(`^[0-9]{1,5}$`)
-	reSize      = regexp.MustCompile(`^[0-9]{1,5}%?$`)
-	reMIME      = regexp.MustCompile(`^[A-Za-z0-9.+-]+/[A-Za-z0-9.+-]+$`)
-	reClass     = regexp.MustCompile(`^(ql|language)-[A-Za-z0-9_+-]+$`)
-	reScheme    = regexp.MustCompile(`^([A-Za-z][A-Za-z0-9+.-]*):`)
-	reDataImage = regexp.MustCompile(`^(?i:data:image/(png|jpe?g|gif|webp|bmp);base64,)[A-Za-z0-9+/]+={0,2}$`)
+	reDigits     = regexp.MustCompile(`^[0-9]{1,5}$`)
+	reSize       = regexp.MustCompile(`^[0-9]{1,5}%?$`)
+	reMIME       = regexp.MustCompile(`^[A-Za-z0-9.+-]+/[A-Za-z0-9.+-]+$`)
+	reClass      = regexp.MustCompile(`^(ql|language)-[A-Za-z0-9_+-]+$`)
+	reScheme     = regexp.MustCompile(`^([A-Za-z][A-Za-z0-9+.-]*):`)
+	reDataImage  = regexp.MustCompile(`^(?i:data:image/(png|jpe?g|gif|webp|bmp);base64,)[A-Za-z0-9+/]+={0,2}$`)
+	reEmbedAllow = regexp.MustCompile(`^[A-Za-z;= -]{0,200}$`)
 )
 
 // cleanAttrs 按标签白名单过滤并规范属性；同名属性只取第一个（与浏览器一致）。
@@ -62,8 +65,24 @@ func cleanAttrs(tag string, attrs []xhtml.Attribute) []xhtml.Attribute {
 				out = append(out, xhtml.Attribute{Key: key, Val: strings.TrimSpace(val)})
 			}
 		case "src", "poster":
-			if safeMediaURL(tag, key, val) {
+			ok := safeMediaURL(tag, key, val)
+			if tag == "iframe" && key == "src" {
+				ok = safeEmbedURL(val)
+			}
+			if ok {
 				out = append(out, xhtml.Attribute{Key: key, Val: strings.TrimSpace(val)})
+			}
+		case "allow":
+			if reEmbedAllow.MatchString(val) {
+				out = append(out, xhtml.Attribute{Key: key, Val: val})
+			}
+		case "frameborder":
+			if strings.TrimSpace(val) == "0" {
+				out = append(out, xhtml.Attribute{Key: key, Val: "0"})
+			}
+		case "referrerpolicy":
+			if v := strings.ToLower(strings.TrimSpace(val)); v == "no-referrer" || v == "strict-origin-when-cross-origin" {
+				out = append(out, xhtml.Attribute{Key: key, Val: v})
 			}
 		case "target":
 			if val == "_blank" {
@@ -95,6 +114,27 @@ func cleanAttrs(tag string, attrs []xhtml.Attribute) []xhtml.Attribute {
 		out = append(out, xhtml.Attribute{Key: "rel", Val: "noopener noreferrer"})
 	}
 	return out
+}
+
+// safeEmbedURL 只允许已知视频平台的 https 嵌入地址（iframe 的唯一用途）。
+// 白名单是主机+路径，避免把任意站点嵌进正文（钓鱼/点击劫持/凭据泄露）。
+func safeEmbedURL(v string) bool {
+	u, err := url.Parse(strings.TrimSpace(v))
+	if err != nil || u.Scheme != "https" || u.User != nil {
+		return false
+	}
+	host := strings.ToLower(u.Hostname())
+	switch host {
+	case "www.youtube.com", "www.youtube-nocookie.com":
+		return strings.HasPrefix(u.Path, "/embed/")
+	case "player.bilibili.com":
+		return u.Path == "/player.html"
+	}
+	// Cloudflare Stream 的 iframe 播放器：customer-<code>.cloudflarestream.com/<uid>/iframe
+	if strings.HasPrefix(host, "customer-") && strings.HasSuffix(host, ".cloudflarestream.com") {
+		return strings.HasSuffix(u.Path, "/iframe") && len(strings.Split(strings.Trim(u.Path, "/"), "/")) == 2
+	}
+	return false
 }
 
 // safeMediaURL：img 的 src 额外允许受控的 data:image（不含 svg）；video/source/poster 只允许 http(s) 和相对路径。

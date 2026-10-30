@@ -25,7 +25,7 @@ func (s *Service) Start(ctx context.Context, source string, by idgen.ID) (*Recor
 			rec.Status, rec.Error = StatusFailed, clipErr(err.Error())
 			_ = s.db.WithContext(ctx).Create(rec).Error
 		}
-		return nil, &UnavailableError{Reason: err.Error()}
+		return nil, &UnavailableError{Reason: err.Error(), Err: err}
 	}
 
 	s.mu.Lock()

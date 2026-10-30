@@ -68,6 +68,10 @@
     }
   }
 
+  /* 主内容区常驻滚动条槽：切换页面时内容区宽度不变，避免整块左右跳 */
+  #main-content {
+    scrollbar-gutter: stable;
+  }
   /* 细滚动条 */
   * {
     scrollbar-width: thin;

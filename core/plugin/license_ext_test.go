@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/json"
@@ -143,7 +144,7 @@ func licenseRoot(t *testing.T, priv ed25519.PrivateKey, domains []string, expire
 	return root
 }
 
-func cronInfo(m *Manager) Info { return m.List()[0] }
+func cronInfo(m *Manager) Info { return m.List(context.Background())[0] }
 
 func TestDomainValidation(t *testing.T) {
 	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
@@ -167,7 +168,7 @@ func TestDomainValidation(t *testing.T) {
 	})
 	t.Run("mismatch", func(t *testing.T) {
 		i := cronInfo(mk([]string{"*.acme.com"}, Options{Hosts: []string{"other.com"}}))
-		if i.Status != StatusInvalid || !strings.Contains(i.Reason, "授权域名不匹配") {
+		if i.Status != StatusInvalid || i.ReasonKey != "plugin.reason.domain_mismatch" {
 			t.Fatalf("got %+v", i)
 		}
 	})
@@ -210,7 +211,7 @@ func TestDomainValidation(t *testing.T) {
 			t.Fatalf("pending should stay active until host known: %+v", i)
 		}
 		m.ObserveHost("evil.com:80")
-		if i := cronInfo(m); i.Status != StatusInvalid || !strings.Contains(i.Reason, "授权域名不匹配") {
+		if i := cronInfo(m); i.Status != StatusInvalid || i.ReasonKey != "plugin.reason.domain_mismatch" {
 			t.Fatalf("got %+v", i)
 		}
 		m.ObserveHost("admin.acme.com") // 只有第一次生效
@@ -281,7 +282,7 @@ func TestExpiryOffline(t *testing.T) {
 	cur = exp.Add(time.Second)
 	m.checkExpiry()
 	i := cronInfo(m)
-	if i.Status != StatusExpired || i.ExpiresSoon || !strings.Contains(i.Reason, "到期") {
+	if i.Status != StatusExpired || i.ExpiresSoon || i.ReasonKey != "plugin.reason.expired" {
 		t.Fatalf("got %+v", i)
 	}
 	if get() != http.StatusForbidden {
@@ -311,15 +312,11 @@ func TestExpiryOffline(t *testing.T) {
 }
 
 func TestLicenseErrorMessageCarriesAction(t *testing.T) {
-	e := &LicenseError{Status: StatusExpired, Reason: "授权已于 2026-01-02 到期", ActionHint: "请联系发行方续期"}
-	if e.Message() != e.Reason+"；"+e.ActionHint || !strings.Contains(e.Message(), "续期") {
-		t.Fatalf("expired message: %q", e.Message())
+	e := &LicenseError{Status: StatusExpired, Key: "license.expired", Args: []any{"2026-01-02"}}
+	if e.Key == "" || len(e.Args) != 1 || !strings.HasPrefix(e.Error(), StatusExpired+": ") {
+		t.Fatalf("expired error must carry a dictionary key: %+v", e)
 	}
-	if r := revokedError(RevokedEntry{Serial: "abc123", Reason: "退款"}); r.ActionHint == "" || !strings.Contains(r.Message(), "重新签发") {
-		t.Fatalf("revoked message must carry an action: %q", r.Message())
-	}
-	plain := &LicenseError{Status: StatusInvalid, Reason: "x"}
-	if plain.Message() != "x" {
-		t.Fatalf("empty hint must not add punctuation: %q", plain.Message())
+	if r := revokedError(RevokedEntry{Serial: "abc123", Reason: "退款"}); r.Key != "license.revoked" || len(r.Args) != 2 || !strings.Contains(r.Args[1].(string), "退款") {
+		t.Fatalf("revoked error must carry serial and detail: %+v", r)
 	}
 }

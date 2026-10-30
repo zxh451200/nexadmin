@@ -17,6 +17,7 @@ import (
 	"gorm.io/gorm"
 
 	"nexadmin/core/plugin/market"
+	"nexadmin/core/response"
 	"nexadmin/pkg/idgen"
 )
 
@@ -33,6 +34,8 @@ type siteHandler struct {
 	marketOn func() (bool, error)
 	// signKey 为空表示不签名（未配置 NEXADMIN_MARKET_SIGN_KEY）。
 	signKey ed25519.PrivateKey
+	// contactLimit 是在线留言的 IP 限流中间件（每种语言分组共用同一实例，计数不分裂）。
+	contactLimit gin.HandlerFunc
 }
 
 // baseView 装配站点级数据（设置、导航、特性、最新新闻）与页脚年份。
@@ -46,7 +49,10 @@ func (h *siteHandler) baseView(ctx context.Context, lang string, postLimit int) 
 		SiteName: set.SiteName, SiteDesc: set.SiteDesc, LogoURL: set.LogoURL,
 		HomeTitle: set.HomeTitle, HomeSubtitle: set.HomeSubtitle,
 		HomeCTALabel: set.HomeCTALabel, HomeCTAHref: set.HomeCTAHref,
-		ContactEmail: set.ContactEmail, ICP: set.ICP, FooterNote: set.FooterNote,
+		ContactEmail: set.ContactEmail, ContactPhone: set.ContactPhone,
+		QRCodeURL: set.QRCodeURL, QRCodeCaption: set.QRCodeCaption,
+		Socials: parseSocials(set.SocialsJSON), FriendLinks: parseFriendLinks(set.FriendLinksJSON),
+		ICP: set.ICP, FooterNote: set.FooterNote,
 		SeoKeywords: set.SeoKeywords, MarketEnabled: set.MarketEnabled,
 		Navs: data.Navs, Features: data.Features, Posts: data.Posts,
 		Year: time.Now().Year(),
@@ -214,6 +220,97 @@ func (h *siteHandler) pageDetail(c *gin.Context) {
 	h.render(c, "page", http.StatusOK, v)
 }
 
+// GET /contact —— 联系页：联系方式 + 在线留言。
+func (h *siteHandler) contact(c *gin.Context) {
+	lang := langOf(c)
+	v, err := h.baseView(c.Request.Context(), lang.Code, 0)
+	if err != nil {
+		c.String(http.StatusInternalServerError, "site unavailable")
+		return
+	}
+	v.Title = v.T("contact.titleTag") + " - " + v.SiteName
+	v.Desc = v.TF("contact.desc", v.SiteName)
+	v.ContactSent = c.Query("sent") == "1"
+	v.ContactError = contactErrorText(v, c.Query("error"))
+	h.render(c, "contact", http.StatusOK, v)
+}
+
+// contactErrorText 把无 JS 整页提交回跳的错误码翻成站点文案；未知码给通用失败。
+func contactErrorText(v *siteView, code string) string {
+	switch code {
+	case "":
+		return ""
+	case "name":
+		return v.T("contact.err.name")
+	case "email":
+		return v.T("contact.err.email")
+	case "content":
+		return v.T("contact.err.content")
+	case "rate":
+		return v.T("contact.err.rate")
+	}
+	return v.T("contact.err.fail")
+}
+
+// POST /contact —— 在线留言。fetch 提交回 JSON；无 JS 的整页表单提交 303 回联系页带结果。
+func (h *siteHandler) contactSubmit(c *gin.Context) {
+	var f ContactForm
+	if err := c.ShouldBind(&f); err != nil {
+		h.contactFail(c, http.StatusBadRequest, "fail")
+		return
+	}
+	// 蜜罐命中：静默成功，不给机器人任何反馈。
+	if strings.TrimSpace(f.Company) != "" {
+		h.contactOK(c)
+		return
+	}
+	if _, err := h.svc.CreateMessage(c.Request.Context(), f, c.ClientIP(), c.Request.UserAgent()); err != nil {
+		var be *response.Error
+		if errors.As(err, &be) {
+			h.contactFail(c, be.Status, contactErrorCode(be.Key))
+			return
+		}
+		if h.log != nil {
+			h.log.Warn("website: 留言保存失败", zap.Error(err))
+		}
+		h.contactFail(c, http.StatusInternalServerError, "fail")
+		return
+	}
+	h.contactOK(c)
+}
+
+func contactErrorCode(key string) string {
+	switch key {
+	case "website.contact_name_required":
+		return "name"
+	case "website.contact_email_invalid":
+		return "email"
+	case "website.contact_content_short":
+		return "content"
+	}
+	return "fail"
+}
+
+func wantsJSON(c *gin.Context) bool {
+	return strings.Contains(c.GetHeader("Accept"), "application/json")
+}
+
+func (h *siteHandler) contactOK(c *gin.Context) {
+	if wantsJSON(c) {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+		return
+	}
+	c.Redirect(http.StatusSeeOther, langOf(c).Path("/contact")+"?sent=1")
+}
+
+func (h *siteHandler) contactFail(c *gin.Context, status int, code string) {
+	if wantsJSON(c) {
+		c.JSON(status, gin.H{"ok": false, "error": code})
+		return
+	}
+	c.Redirect(http.StatusSeeOther, langOf(c).Path("/contact")+"?error="+code)
+}
+
 var assetTypes = map[string]string{
 	".css":   "text/css; charset=utf-8",
 	".js":    "application/javascript; charset=utf-8",
@@ -336,7 +433,7 @@ func (h *siteHandler) sitemap(c *gin.Context) {
 		}
 	}
 	// 文档区也进 sitemap（内容由框架 docs/*.md 渲染，随版本更新）。
-	entries = append(entries, SitemapEntry{Loc: "/docs"})
+	entries = append(entries, SitemapEntry{Loc: "/docs"}, SitemapEntry{Loc: "/contact"})
 	for _, g := range docGroups {
 		for _, it := range g.Items {
 			entries = append(entries, SitemapEntry{Loc: "/docs/" + it.Slug})

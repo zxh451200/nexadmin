@@ -18,9 +18,9 @@ type Service struct{ db *gorm.DB }
 // NewService 创建服务。
 func NewService(db *gorm.DB) *Service { return &Service{db: db} }
 
-func bad(msg string) error      { return response.BadRequest("error.bad_request").WithMsg(msg) }
-func notFound() error           { return response.NotFound("error.not_found") }
-func isNotFound(err error) bool { return errors.Is(err, gorm.ErrRecordNotFound) }
+func bad(key string, args ...any) error { return response.BadRequest(key, args...) }
+func notFound() error                   { return response.NotFound("error.not_found") }
+func isNotFound(err error) bool         { return errors.Is(err, gorm.ErrRecordNotFound) }
 
 // nz 把 0 值 ID 视为未填（前端可能提交 "" 或 null）。
 func nz(p *idgen.ID) *idgen.ID {
@@ -101,7 +101,7 @@ func (s *Service) Create(ctx context.Context, in Input) (*Dept, error) {
 		p, err := get(db, *parent)
 		if err != nil {
 			if isNotFoundErr(err) {
-				return nil, bad("上级部门不存在")
+				return nil, bad("dept.parent_not_found")
 			}
 			return nil, err
 		}
@@ -147,17 +147,17 @@ func (s *Service) Update(ctx context.Context, id idgen.ID, in Input) (*Dept, err
 			parentPath := "/"
 			if parent != nil {
 				if *parent == id {
-					return bad("上级部门不能是自己或其下级")
+					return bad("dept.parent_self_or_child")
 				}
 				p, err := get(tx, *parent)
 				if err != nil {
 					if isNotFoundErr(err) {
-						return bad("上级部门不存在")
+						return bad("dept.parent_not_found")
 					}
 					return err
 				}
 				if strings.HasPrefix(p.Path, d.Path) { // 新上级在自己的子树里
-					return bad("上级部门不能是自己或其下级")
+					return bad("dept.parent_self_or_child")
 				}
 				parentPath = p.Path
 			}
@@ -249,12 +249,12 @@ func (s *Service) Sort(ctx context.Context, in SortInput) error {
 		seen := map[int64]bool{}
 		for _, id := range in.IDs {
 			if !set[int64(id)] || seen[int64(id)] {
-				return response.Conflict("error.conflict").WithMsg("列表已变化，请刷新")
+				return response.Conflict("error.stale_list")
 			}
 			seen[int64(id)] = true
 		}
 		if len(seen) != len(have) {
-			return response.Conflict("error.conflict").WithMsg("列表已变化，请刷新")
+			return response.Conflict("error.stale_list")
 		}
 		for i, id := range in.IDs {
 			if err := tx.Model(&Dept{}).Where("id = ?", int64(id)).Update("sort", (i+1)*10).Error; err != nil {

@@ -17,6 +17,7 @@
     "expand": "Expand",
     "dropToRoot": "Drop here to move to the top level",
     "maxDepthReached": "Maximum {{count}} levels deep",
+    "dropLevel": "Level {{level}}",
     "collapse": "Collapse",
     "expandAll": "Expand all",
     "collapseAll": "Collapse all",

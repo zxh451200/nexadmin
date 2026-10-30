@@ -18,7 +18,7 @@ func (s *service) remove(ctx context.Context, ids []idgen.ID, me actor) error {
 	}
 	for _, id := range ids {
 		if id == me.ID {
-			return bad("不能删除自己")
+			return bad("user.delete_self_forbidden")
 		}
 	}
 	if err := s.ensureInScope(ctx, me, ids...); err != nil {
@@ -30,7 +30,7 @@ func (s *service) remove(ctx context.Context, ids []idgen.ID, me actor) error {
 		return err
 	}
 	if supers > 0 {
-		return bad("超级管理员不能删除")
+		return bad("user.super_delete_forbidden")
 	}
 	if !me.Super { // 持有内置超管角色的账号只有超管能删
 		var held int64
@@ -40,7 +40,7 @@ func (s *service) remove(ctx context.Context, ids []idgen.ID, me actor) error {
 			return err
 		}
 		if held > 0 {
-			return forbiddenRole("无权操作超级管理员账号")
+			return forbiddenRole("user.super_operate_forbidden")
 		}
 	}
 	err := db.Transaction(func(tx *gorm.DB) error {
@@ -70,7 +70,7 @@ func (s *service) remove(ctx context.Context, ids []idgen.ID, me actor) error {
 // setStatus 启用/停用用户。超级管理员和自己不能停用。
 func (s *service) setStatus(ctx context.Context, id idgen.ID, status string, me actor) error {
 	if status != statusOn && status != statusOff {
-		return bad("状态不正确")
+		return bad("user.status_invalid")
 	}
 	if err := s.ensureInScope(ctx, me, id); err != nil {
 		return err
@@ -83,7 +83,7 @@ func (s *service) setStatus(ctx context.Context, id idgen.ID, status string, me 
 		return err
 	}
 	if status == statusOff && (u.IsSuper || u.ID == me.ID) {
-		return bad("超级管理员和自己不能被停用")
+		return bad("user.super_self_cannot_disable")
 	}
 	if err := s.db.WithContext(ctx).Model(&User{}).Where("id = ?", int64(id)).Update("status", status).Error; err != nil {
 		return err
@@ -96,7 +96,7 @@ func (s *service) setStatus(ctx context.Context, id idgen.ID, status string, me 
 // resetPassword 重置密码。不设强度规则，只要求非空；bcrypt 只取前 72 字节，所以上限 72。
 func (s *service) resetPassword(ctx context.Context, id idgen.ID, password string, me actor) error {
 	if password == "" || len(password) > 72 {
-		return bad("密码长度为 1-72 字节")
+		return bad("profile.password_length")
 	}
 	if err := s.ensureInScope(ctx, me, id); err != nil {
 		return err

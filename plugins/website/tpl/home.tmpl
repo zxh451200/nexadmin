@@ -1,6 +1,6 @@
 {{define "content"}}
 <section class="hero">
-  <!-- 弧带从界面背后穿过，不遮挡标题；窄屏隐藏，减少动态效果时保持静止。 -->
+  <!-- 弧带固定在界面卡背后，不穿过标题；窄屏隐藏，减少动态效果时静止。 -->
   <svg class="hero-arc" viewBox="0 0 1200 700" preserveAspectRatio="none" aria-hidden="true" focusable="false"
        data-parallax="34">
     <defs>
@@ -28,15 +28,15 @@
     {{if .HomeSubtitle}}<p class="hero-sub" data-reveal>{{.HomeSubtitle}}</p>{{end}}
     <div class="hero-cta" data-reveal>
       {{if .HomeCTALabel}}<a class="btn btn-primary" href="{{.URL .HomeCTAHref}}">{{.HomeCTALabel}}</a>{{end}}
-      <a class="btn btn-ghost" href="{{.Home}}#product">{{.T "home.ctaSecondary"}}</a>
+      <a class="hero-link" href="#quickstart"><span aria-hidden="true">→</span>{{.T "home.heroQuickstart"}}</a>
     </div>
 
     <div class="hero-visual" data-reveal>
       <div class="hero-stage">
         <figure class="hero-shot" data-parallax>
-          <button class="image-open" type="button" data-image-preview hidden aria-label="{{.TF "home.preview.openAria" (.TF "home.heroShotAlt" .SiteName)}}">{{.T "home.preview.open"}} <span aria-hidden="true">↗</span></button>
-          <img class="shot-dark" src="/website-assets/market/dashboard-dark.jpg?v=0.9.28" alt="{{.TF "home.heroShotAlt" .SiteName}}" width="1440" height="900" decoding="async">
-          <img class="shot-light" src="/website-assets/market/dashboard-light.jpg?v=0.9.28" alt="{{.TF "home.heroShotAlt" .SiteName}}" width="1440" height="900" decoding="async">
+          <button class="image-open" type="button" data-image-preview hidden aria-label="{{.TF "home.preview.openAria" (.TF "home.heroShotAlt" .SiteName)}}">{{.T "home.preview.open"}}</button>
+          <img class="shot-dark" src="/website-assets/market/dashboard-dark.jpg?v={{assetV "market/dashboard-dark.jpg"}}" alt="{{.TF "home.heroShotAlt" .SiteName}}" width="1440" height="900" decoding="async">
+          <img class="shot-light" src="/website-assets/market/dashboard-light.jpg?v={{assetV "market/dashboard-light.jpg"}}" alt="{{.TF "home.heroShotAlt" .SiteName}}" width="1440" height="900" decoding="async">
         </figure>
         <span class="hero-mark hero-mark--tl" aria-hidden="true"></span>
         <span class="hero-mark hero-mark--tr" aria-hidden="true"></span>
@@ -73,43 +73,27 @@
   </div>
 </section>
 
-<section class="section editorial" id="features">
+<section class="section pillars" id="features">
   <div class="container">
-    <header class="editorial-head" data-reveal>
-      <div class="editorial-title">
-        <h2>{{range $i, $line := titleLines (.T "home.editorial.platform.title")}}{{if $i}}<br>{{end}}{{$line}}{{end}}</h2>
-      </div>
-      <div class="editorial-lead">
+    <div class="pillar" data-reveal>
+      <h2>{{range $i, $line := titleLines (.T "home.editorial.platform.title")}}{{if $i}}<br>{{end}}{{$line}}{{end}}</h2>
+      <div class="pillar-body">
         <p>{{.T "home.editorial.platform.sub"}}</p>
         <a class="learn-more" href="{{.URL "/docs/features"}}">{{.T "home.editorial.platform.link"}}<span aria-hidden="true">→</span></a>
       </div>
-    </header>
-    <figure class="stage-shot" data-reveal data-parallax>
-      <img class="shot-dark" src="/website-assets/market/role-dark.jpg?v=0.9.28" alt="{{.T "home.editorial.platform.cap"}}" width="1440" height="704" loading="lazy" decoding="async">
-      <img class="shot-light" src="/website-assets/market/role-light.jpg?v=0.9.28" alt="{{.T "home.editorial.platform.cap"}}" width="1440" height="704" loading="lazy" decoding="async">
-      <button class="image-open" type="button" data-image-preview hidden aria-label="{{.TF "home.preview.openAria" (.T "home.editorial.platform.cap")}}">{{.T "home.preview.open"}} <span aria-hidden="true">↗</span></button>
-        <figcaption>{{.T "home.editorial.platform.cap"}}</figcaption>
-    </figure>
-  </div>
-</section>
-
-<section class="section editorial" id="extension">
-  <div class="container">
-    <header class="editorial-head" data-reveal>
-      <div class="editorial-title">
-        <h2>{{range $i, $line := titleLines (.T "home.editorial.extension.title")}}{{if $i}}<br>{{end}}{{$line}}{{end}}</h2>
-      </div>
-      <div class="editorial-lead">
+    </div>
+    <div class="pillar" id="extension" data-reveal>
+      <h2>{{range $i, $line := titleLines (.T "home.editorial.extension.title")}}{{if $i}}<br>{{end}}{{$line}}{{end}}</h2>
+      <div class="pillar-body">
         <p>{{.T "home.editorial.extension.sub"}}</p>
         <a class="learn-more" href="{{.URL "/docs/plugin-dev"}}">{{.T "home.editorial.extension.link"}}<span aria-hidden="true">→</span></a>
       </div>
-    </header>
-    <figure class="stage-shot" data-reveal data-parallax>
-      <img class="shot-dark" src="/website-assets/market/pluginmarket-dark.jpg?v=0.9.28" alt="{{.T "home.editorial.extension.cap"}}" width="1440" height="900" loading="lazy" decoding="async">
-      <img class="shot-light" src="/website-assets/market/pluginmarket-light.jpg?v=0.9.28" alt="{{.T "home.editorial.extension.cap"}}" width="1440" height="900" loading="lazy" decoding="async">
-      <button class="image-open" type="button" data-image-preview hidden aria-label="{{.TF "home.preview.openAria" (.T "home.editorial.extension.cap")}}">{{.T "home.preview.open"}} <span aria-hidden="true">↗</span></button>
-        <figcaption>{{.T "home.editorial.extension.cap"}}</figcaption>
-    </figure>
+    </div>
+  </div>
+</section>
+
+<section class="section integrations" id="integrations">
+  <div class="container">
     <h3 class="intg-head" data-reveal>{{.T "home.editorial.intg.head"}}</h3>
     <ul class="intg-grid" data-reveal>
       <li><span class="intg-mark" aria-hidden="true">{{icon "code"}}</span><span class="intg-name">{{.T "home.intg.github"}}</span><span class="intg-kind">{{.T "home.intg.kindOauth"}}</span></li>
@@ -153,38 +137,15 @@
       </div>
       <div class="section-side">
         <p class="section-sub">{{.T "home.product.sub"}}</p>
+        <a class="section-more" href="/admin/login">{{.T "layout.login"}}</a>
       </div>
     </header>
-    <div class="product-tour" data-reveal>
-      <div class="product-toolbar">
-        <p class="product-note">{{.T "home.product.shots.head"}}</p>
-        <div class="product-tabs" role="tablist" aria-label="{{.T "home.product.tabs"}}" data-tabs>
-          <button id="tab-user" type="button" role="tab" aria-controls="panel-user" aria-selected="true">{{.T "home.product.tab.user"}}</button>
-          <button id="tab-menu" type="button" role="tab" aria-controls="panel-menu" aria-selected="false" tabindex="-1">{{.T "home.product.tab.menu"}}</button>
-          <button id="tab-siteset" type="button" role="tab" aria-controls="panel-siteset" aria-selected="false" tabindex="-1">{{.T "home.product.tab.siteset"}}</button>
-        </div>
-      </div>
-      <div class="shots">
-      <figure class="shot" id="panel-user" role="tabpanel" aria-labelledby="tab-user" tabindex="0">
-        <img class="shot-dark" src="/website-assets/market/user-dark.jpg?v=0.9.28" alt="{{.T "home.product.shot.user"}}" width="1440" height="900" loading="lazy" decoding="async">
-        <img class="shot-light" src="/website-assets/market/user-light.jpg?v=0.9.28" alt="{{.T "home.product.shot.user"}}" width="1440" height="900" loading="lazy" decoding="async">
-        <button class="image-open" type="button" data-image-preview hidden aria-label="{{.TF "home.preview.openAria" (.T "home.product.shot.user")}}">{{.T "home.preview.open"}} <span aria-hidden="true">↗</span></button>
-        <figcaption>{{.T "home.product.shot.user"}}</figcaption>
-      </figure>
-      <figure class="shot" id="panel-menu" role="tabpanel" aria-labelledby="tab-menu" tabindex="0">
-        <img class="shot-dark" src="/website-assets/market/menu-dark.jpg?v=0.9.28" alt="{{.T "home.product.shot.menu"}}" width="1440" height="900" loading="lazy" decoding="async">
-        <img class="shot-light" src="/website-assets/market/menu-light.jpg?v=0.9.28" alt="{{.T "home.product.shot.menu"}}" width="1440" height="900" loading="lazy" decoding="async">
-        <button class="image-open" type="button" data-image-preview hidden aria-label="{{.TF "home.preview.openAria" (.T "home.product.shot.menu")}}">{{.T "home.preview.open"}} <span aria-hidden="true">↗</span></button>
-        <figcaption>{{.T "home.product.shot.menu"}}</figcaption>
-      </figure>
-      <figure class="shot" id="panel-siteset" role="tabpanel" aria-labelledby="tab-siteset" tabindex="0">
-        <img class="shot-dark" src="/website-assets/market/siteset-dark.jpg?v=0.9.28" alt="{{.T "home.product.shot.siteset"}}" width="1440" height="900" loading="lazy" decoding="async">
-        <img class="shot-light" src="/website-assets/market/siteset-light.jpg?v=0.9.28" alt="{{.T "home.product.shot.siteset"}}" width="1440" height="900" loading="lazy" decoding="async">
-        <button class="image-open" type="button" data-image-preview hidden aria-label="{{.TF "home.preview.openAria" (.T "home.product.shot.siteset")}}">{{.T "home.preview.open"}} <span aria-hidden="true">↗</span></button>
-        <figcaption>{{.T "home.product.shot.siteset"}}</figcaption>
-      </figure>
-      </div>
-    </div>
+    <!-- 首屏已经展示过工作台截图，这里不再重复贴图，用文字列出真实存在的三块界面 -->
+    <ul class="product-facts" data-reveal>
+      <li><h3>{{.T "home.product.shot.user"}}</h3></li>
+      <li><h3>{{.T "home.product.shot.menu"}}</h3></li>
+      <li><h3>{{.T "home.product.shot.siteset"}}</h3></li>
+    </ul>
   </div>
 </section>
 
@@ -203,7 +164,7 @@
     <div class="plugin-grid">
       {{range .FeaturedPlugins}}
       <article class="plugin-card" data-reveal>
-        {{if .Cover}}<img class="plugin-cover" src="{{.Cover}}" alt="" loading="lazy">{{end}}
+        <!-- 去掉封面图，只用图标和色块 -->
         <header class="plugin-card-head">
           <span class="plugin-icon" aria-hidden="true">{{.Initial}}</span>
           <div class="plugin-title">
@@ -293,7 +254,7 @@
     <h2>{{.T "home.cta.title"}}</h2>
     <p>{{.T "home.cta.sub"}}</p>
     <div class="hero-cta">
-      <a class="btn btn-primary" href="{{.Home}}#quickstart">{{.T "home.cta.primary"}}</a>
+      <a class="btn btn-primary" href="{{.URL "#quickstart"}}">{{.T "home.cta.primary"}}</a>
       <a class="btn btn-ghost" href="{{.URL "/p/about"}}">{{.T "home.cta.secondary"}}</a>
     </div>
   </div>

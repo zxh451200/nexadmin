@@ -25,18 +25,18 @@ func (h *Handler) SendSMS(c *gin.Context) {
 		return
 	}
 	if !phoneRe.MatchString(in.Phone) {
-		response.Fail(c, response.BadRequest("error.bad_request").WithMsg("手机号格式不正确"))
+		response.Fail(c, response.BadRequest("user.phone_invalid"))
 		return
 	}
 	ctx := c.Request.Context()
 	if !h.sms.Enabled() {
-		response.Fail(c, response.Unavailable("auth.provider_missing").WithMsg("短信服务未启用"))
+		response.Fail(c, response.Unavailable("sms.disabled"))
 		return
 	}
 	deliver := true
 	if auth.ClaimsFrom(c) == nil { // 匿名：手机号登录场景
 		if !h.phoneLoginOn() {
-			response.Fail(c, response.Unavailable("auth.provider_missing").WithMsg("短信服务未启用"))
+			response.Fail(c, response.Unavailable("sms.disabled"))
 			return
 		}
 		ok, err := h.auth.VerifyCaptcha(ctx, in.CaptchaKey, in.Captcha, c.ClientIP())
@@ -88,7 +88,7 @@ func (h *Handler) BindProvider(c *gin.Context) {
 		response.Fail(c, err)
 		return
 	} else if bound {
-		response.Fail(c, response.Conflict("error.bad_request").WithMsg("已绑定该账号，如需更换请先解绑"))
+		response.Fail(c, response.Conflict("profile.already_bound"))
 		return
 	}
 	u, err := h.flow.Start(ctx, key, in.Redirect, oauthflow.PurposeBind, uidOf(c))
@@ -98,7 +98,7 @@ func (h *Handler) BindProvider(c *gin.Context) {
 	case errors.Is(err, oauthflow.ErrNotConfigured):
 		response.Fail(c, response.NotFound("error.not_found"))
 	case errors.Is(err, oauthflow.ErrRedirect):
-		response.Fail(c, response.BadRequest("error.bad_request").WithMsg("回调地址不在允许范围内"))
+		response.Fail(c, response.BadRequest("auth.redirect_uri_invalid"))
 	default:
 		response.Fail(c, err)
 	}

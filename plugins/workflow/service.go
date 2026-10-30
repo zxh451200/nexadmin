@@ -127,7 +127,8 @@ type DefForm struct {
 // DefSave 新增（id=0）或更新定义；定义必须先通过引擎 Validate。每次保存 version+1。
 func (s *Service) DefSave(ctx context.Context, id idgen.ID, f DefForm) (*DefView, error) {
 	if errs := Validate(f.Definition); len(errs) > 0 {
-		return nil, response.BadRequest("workflow.def_invalid").WithMsg(strings.Join(errs, "；"))
+		s.logWarn("workflow: definition validation failed", "errors", strings.Join(errs, "；"))
+		return nil, response.BadRequest("workflow.def_invalid")
 	}
 	raw, err := json.Marshal(f.Definition)
 	if err != nil {
@@ -446,7 +447,7 @@ func (s *Service) InstStart(ctx context.Context, f StartInput, actor string) (*I
 
 	inst, err := Start(definition, f.Vars, actor, time.Now().UTC())
 	if err != nil {
-		return nil, response.BadRequest("workflow.def_invalid").WithMsg(err.Error())
+		return nil, response.BadRequest("workflow.def_invalid").Wrap(err)
 	}
 	raw, err := json.Marshal(inst)
 	if err != nil {
@@ -486,7 +487,7 @@ func (s *Service) instAct(ctx context.Context, id idgen.ID, actor string, apply 
 	}
 	before := inst.Status
 	if err := apply(definition, inst, time.Now().UTC()); err != nil {
-		return nil, response.BadRequest("workflow.action_rejected").WithMsg(err.Error())
+		return nil, response.BadRequest("workflow.action_rejected").Wrap(err)
 	}
 	raw, err := json.Marshal(inst)
 	if err != nil {

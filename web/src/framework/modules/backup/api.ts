@@ -20,10 +20,12 @@ export interface BackupRecord {
   createdAt: string
 }
 
-/** GET /backups/status；available=false 时 reason 是页面要显示的原因（如本机没有 mysqldump） */
+/** GET /backups/status；available=false 时 missing 是缺的工具名，页面按语言拼整句，reason 仅作兜底 */
 export interface BackupStatusInfo {
   available: boolean
   tool?: string
+  /** 本机找不到的导出工具，如 ['mysqldump', 'mariadb-dump'] */
+  missing?: string[]
   reason?: string
   engine: string
   version: string

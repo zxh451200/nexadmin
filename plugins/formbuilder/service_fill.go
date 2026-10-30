@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"regexp"
 	"strconv"
 	"time"
 
 	"go.uber.org/zap"
 
+	"nexadmin/core/i18n"
+	"nexadmin/core/response"
 	"nexadmin/pkg/idgen"
 )
 
@@ -59,10 +60,10 @@ func (s *Service) ImportDefinition(ctx context.Context, actor Actor, raw []byte)
 		return nil, errDefInvalid
 	}
 	if env.Format != EnvelopeFormat {
-		return nil, bad("不是 NexAdmin 表单定义文件")
+		return nil, bad("formbuilder.import_not_envelope")
 	}
 	if env.SchemaVersion != EnvelopeSchemaVersion {
-		return nil, bad(fmt.Sprintf("不支持的文件版本 %d", env.SchemaVersion))
+		return nil, bad("formbuilder.import_version_unsupported", env.SchemaVersion)
 	}
 	if env.Definition.Fields == nil {
 		env.Definition.Fields = []Field{}
@@ -264,7 +265,7 @@ func (s *Service) publishedForm(ctx context.Context, actor Actor, id idgen.ID) (
 		return nil, err
 	}
 	if !ok {
-		return nil, forbidden("您不在该表单的填写范围内")
+		return nil, forbidden("formbuilder.audience_denied")
 	}
 	return f, nil
 }
@@ -286,7 +287,7 @@ type SubmitResult struct {
 // Submit 提交一份填写。校验依据永远是"已发布版本"的定义，而不是草稿，也不信任客户端传来的任何版本号。
 func (s *Service) Submit(ctx context.Context, actor Actor, id idgen.ID, in SubmitInput) (*SubmitResult, error) {
 	if in.IdemKey != "" && !idemRe.MatchString(in.IdemKey) {
-		return nil, bad("幂等 key 不合法")
+		return nil, bad("formbuilder.idem_key_invalid")
 	}
 	f, err := s.publishedForm(ctx, actor, id)
 	if err != nil {
@@ -301,15 +302,15 @@ func (s *Service) Submit(ctx context.Context, actor Actor, id idgen.ID, in Submi
 		return nil, err
 	}
 	if dl := def.Settings.Deadline; dl != nil && !s.now().Before(*dl) {
-		return nil, conflict("表单已过截止时间")
+		return nil, conflict("formbuilder.closed_deadline")
 	}
 	clean, ferrs := ValidateSubmission(def, in.Data)
 	if len(ferrs) > 0 {
-		return nil, fieldErrors(def, ferrs)
+		return nil, fieldErrors(ctx, def, ferrs)
 	}
 	raw, err := json.Marshal(clean)
 	if err != nil || len(raw) > MaxDataBytes {
-		return nil, bad(fmt.Sprintf("提交内容过大（上限 %d 字节）", MaxDataBytes))
+		return nil, bad("formbuilder.submit_too_large", MaxDataBytes)
 	}
 	sid, err := s.newID()
 	if err != nil {
@@ -332,15 +333,15 @@ func (s *Service) Submit(ctx context.Context, actor Actor, id idgen.ID, in Submi
 	case err == nil:
 		return &SubmitResult{ID: sub.ID, Version: ver.Version, Message: def.Settings.SuccessMessage}, nil
 	case errors.Is(err, errStoreFull):
-		return nil, conflict("提交名额已满")
+		return nil, conflict("formbuilder.quota_full")
 	case errors.Is(err, errStoreNotPublished):
-		return nil, conflict("表单当前未开放填写")
+		return nil, conflict("formbuilder.not_open")
 	case errors.Is(err, errStoreDuplicate):
 		old, ferr := s.store.FindByDedupe(ctx, id, dedupe)
 		if ferr == nil && in.IdemKey != "" && old.IdemKey == in.IdemKey && old.UserID == actor.ID {
 			return &SubmitResult{ID: old.ID, Version: old.Version, Message: def.Settings.SuccessMessage, Replayed: true}, nil
 		}
-		return nil, conflict("您已提交过该表单")
+		return nil, conflict("formbuilder.duplicate")
 	}
 	return nil, err
 }
@@ -354,15 +355,17 @@ func clip(s string, n int) string {
 }
 
 // fieldErrors 把字段错误合成一条可读的 400（最多列出 5 条，以字段标题而不是 key 展示）。
-func fieldErrors(def *Definition, errs []FieldError) error {
+// 字段标题是用户数据，原样拼接；外层前缀、分隔符、截断提示、字段级原因（按请求语言翻译）与
+// 字段名/错误的连接方式走字典。
+func fieldErrors(ctx context.Context, def *Definition, errs []FieldError) error {
 	titles := make(map[string]string, len(def.Fields))
 	for _, f := range def.Fields {
 		titles[f.Key] = f.Title
 	}
-	msg := "提交内容校验未通过："
+	msg := i18n.T(ctx, "formbuilder.errors_prefix")
 	for i, e := range errs {
 		if i == 5 {
-			msg += fmt.Sprintf("……（共 %d 项）", len(errs))
+			msg += i18n.T(ctx, "formbuilder.errors_truncated", len(errs))
 			break
 		}
 		name := titles[e.Key]
@@ -370,9 +373,14 @@ func fieldErrors(def *Definition, errs []FieldError) error {
 			name = e.Key
 		}
 		if i > 0 {
-			msg += "；"
+			msg += i18n.T(ctx, "formbuilder.errors_separator")
 		}
-		msg += name + " " + e.Msg
+		reason := i18n.T(ctx, e.MsgKey, e.Args...)
+		if name == "" {
+			msg += reason
+			continue
+		}
+		msg += i18n.T(ctx, "formbuilder.field_error_join", name, reason)
 	}
-	return bad(msg)
+	return response.BadRequest("error.bad_request").WithMsg(msg)
 }

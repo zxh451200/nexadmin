@@ -7,13 +7,13 @@ import { toast } from 'sonner'
 import { z } from 'zod'
 import { Can } from '@/framework/auth/Can'
 import { FormGrid, FormGridFull, FormLayout } from '@/framework/components/FormLayout'
+import { SwitchField } from '@/framework/components/SwitchField'
 import { RemoteSelect } from '@/framework/components/RemoteSelect'
 import { Alert, AlertDescription } from '@/framework/ui/alert'
 import { Button } from '@/framework/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/framework/ui/card'
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/framework/ui/form'
 import { Input } from '@/framework/ui/input'
-import { Switch } from '@/framework/ui/switch'
 import { useSaveUploadSettings, useUploadSettings } from './api'
 
 const size = z.string().trim().regex(/^\d*(\.\d+)?$/)
@@ -91,8 +91,10 @@ export function UploadLimitCard() {
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {unlimited ? (
-          <Alert>
-            <TriangleAlert className="h-4 w-4 text-warning" aria-hidden="true" />
+          // 这是“能保存但风险高”的提醒，用 warning（琥珀）而不是 destructive（红）：
+          // 红色在后台里代表错误/阻断，会让用户以为不限制就存不了。
+          <Alert variant="warning">
+            <TriangleAlert className="h-4 w-4" aria-hidden="true" />
             <AlertDescription>{t('sysConfig.upload.unlimitedWarning')}</AlertDescription>
           </Alert>
         ) : null}
@@ -125,22 +127,7 @@ export function UploadLimitCard() {
                 />
               </FormGridFull>
               <FormGridFull>
-                <FormField
-                  control={form.control}
-                  name="imageWebp"
-                  render={({ field }) => (
-                    <FormItem>
-                      <div className="flex items-center justify-between gap-3">
-                        <FormLabel>{t('sysConfig.upload.webp')}</FormLabel>
-                        <FormControl>
-                          <Switch checked={field.value} onCheckedChange={field.onChange} />
-                        </FormControl>
-                      </div>
-                      <FormDescription>{t('sysConfig.upload.webpHint')}</FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                <SwitchField control={form.control} name="imageWebp" label={t('sysConfig.upload.webp')} description={t('sysConfig.upload.webpHint')} />
               </FormGridFull>
             </FormGrid>
             <Can perm="config:update">

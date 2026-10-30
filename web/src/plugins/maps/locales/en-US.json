@@ -27,6 +27,8 @@
     "demoDesc": "Pick an enabled provider, click the map or drag the marker, then confirm. The coordinate system follows the provider (gcj02 / bd09 / wgs84).",
     "demoLabel": "Location",
     "notConfigured": "This provider is disabled or missing its browser key. Save the keys and reopen.",
+    "googleLoadFailed": "Failed to load the Google Maps script. Networks in mainland China usually cannot reach it directly.",
+    "googleGlobalMissing": "The Google Maps script loaded but its global object is missing. Check that the key allows this domain.",
     "clickHint": "Click the map to pick a location",
     "confirm": "Confirm"
   }

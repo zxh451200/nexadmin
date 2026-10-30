@@ -23,9 +23,16 @@ type Setting struct {
 	HomeCTAHref   string `gorm:"size:255;not null" json:"homeCtaHref"`
 	SeoKeywords   string `gorm:"size:300;not null" json:"seoKeywords"`
 	ContactEmail  string `gorm:"size:128;not null" json:"contactEmail"`
-	ICP           string `gorm:"size:128;not null" json:"icp"` // 备案号，空 = 页脚不显示
+	ContactPhone  string `gorm:"size:64;not null" json:"contactPhone"`   // 页脚与联系页的电话，空 = 不显示
+	QRCodeURL     string `gorm:"size:255;not null" json:"qrCodeUrl"`     // 页脚二维码（公众号/客服），空 = 不显示
+	QRCodeCaption string `gorm:"size:128;not null" json:"qrCodeCaption"` // 二维码下的说明文字
+	ICP           string `gorm:"size:128;not null" json:"icp"`           // 备案号，空 = 页脚不显示
 	FooterNote    string `gorm:"size:300;not null" json:"footerNote"`
-	MarketEnabled bool   `gorm:"not null;default:true" json:"marketEnabled"` // 官网插件市场入口开关
+	// 社交图标与友情链接是页脚列表：JSON 数组文本（[]SocialLink / []FriendLink）。
+	// 走文本列而不是 JSON 列，三库行为一致；对外由 settingView 展开成数组。
+	SocialsJSON     string `gorm:"type:text" json:"-"`
+	FriendLinksJSON string `gorm:"type:text" json:"-"`
+	MarketEnabled   bool   `gorm:"not null;default:true" json:"marketEnabled"` // 官网插件市场入口开关
 	// I18nJSON 是非默认语言的字段译文：{"en-US":{"homeTitle":"…"}}；空 = 全部回退原文。
 	I18nJSON string `gorm:"type:text" json:"i18nJson"`
 	// SeedVersion 记录出厂内容补种进度：升级后只补一次新增的出厂条目，不复活管理员删掉的内容。
@@ -33,6 +40,33 @@ type Setting struct {
 }
 
 func (Setting) TableName() string { return "plg_website_setting" }
+
+// SocialLink 是页脚的社交图标（Platform 取自 render.go 的 socialIconPaths 键）与外部主页地址。
+type SocialLink struct {
+	Platform string `json:"platform"`
+	URL      string `json:"url"`
+}
+
+// FriendLink 是页脚的友情链接。
+type FriendLink struct {
+	Name string `json:"name"`
+	URL  string `json:"url"`
+}
+
+// Message 是官网「在线留言」：匿名投稿，平台级保存，后台只读不改正文。
+type Message struct {
+	database.PlatformModel
+	Name    string `gorm:"size:64;not null" json:"name"`
+	Email   string `gorm:"size:128;not null" json:"email"`
+	Phone   string `gorm:"size:32;not null" json:"phone"`
+	Content string `gorm:"size:2000;not null" json:"content"`
+	IP      string `gorm:"size:64;not null" json:"ip"`
+	UA      string `gorm:"size:255;not null" json:"ua"`
+	// read 是 MySQL 保留字，列名写成 is_read，避免手写 SQL 到处加引号。
+	Read bool `gorm:"column:is_read;not null;default:false" json:"read"`
+}
+
+func (Message) TableName() string { return "plg_website_message" }
 
 // Nav 是顶部导航项，ParentID 支持最多 3 级。
 type Nav struct {

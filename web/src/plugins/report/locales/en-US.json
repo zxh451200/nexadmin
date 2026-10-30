@@ -203,6 +203,8 @@
       "exitFull": "Exit full screen",
       "addChart": "Add a chart",
       "add": "Add to canvas",
+      "noCharts": "No charts yet — create one on the Charts tab first",
+      "allChartsAdded": "All charts are already on the canvas",
       "noSpace": "Not enough free space on the canvas",
       "rejected": "That position is outside the canvas or overlaps another component",
       "editorHint": "Drag to move and use the bottom-end handle to resize. Arrow keys move (Shift+arrows resize, Delete removes).",
@@ -259,6 +261,7 @@
         "times": "times",
         "jobs": "jobs"
       }
-    }
+    },
+    "filteredBy": "Filtered: {{name}}"
   }
 }

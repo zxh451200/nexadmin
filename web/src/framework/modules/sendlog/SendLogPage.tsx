@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable } from '@/framework/components/DataTable'
+import { DetailAction } from '@/framework/components/DetailAction'
 import { DateRangePicker, type DateRangeValue } from '@/framework/components/DateRangePicker'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
@@ -171,6 +172,7 @@ export default function SendLogPage() {
         loading={isLoading}
         columnSettingsKey="sendlog"
         onRowClick={setDetail}
+        rowActions={(l) => <DetailAction onClick={() => setDetail(l)} />}
         selection={{ selected, onChange: setSelected }}
         batchActions={(ids) => (
           <Can perm="sendlog:delete">

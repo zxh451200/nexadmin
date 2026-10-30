@@ -1,11 +1,14 @@
 package website
 
 import (
+	"crypto/sha256"
 	"embed"
+	"encoding/hex"
 	"encoding/json"
 	"html/template"
 	"net/url"
 	"strings"
+	"sync"
 	"unicode"
 )
 
@@ -14,6 +17,25 @@ var tplFS embed.FS
 
 //go:embed static
 var staticFS embed.FS
+
+// assetVersion 返回内嵌静态资源的内容哈希（前 8 字节十六进制），模板拿它当 ?v=。
+// 原来 ?v= 是手写的字面量，改完 CSS 忘了改它，浏览器就一直用缓存；
+// 内容哈希让地址随文件内容自动变化，不需要手动硬刷新。
+// 文件不存在时返回空串（地址退化成不带版本，至少不会 404）。
+var assetCache sync.Map // name -> string
+
+func assetVersion(name string) string {
+	if v, ok := assetCache.Load(name); ok {
+		return v.(string)
+	}
+	sum := ""
+	if b, err := staticFS.ReadFile("static/" + name); err == nil {
+		h := sha256.Sum256(b)
+		sum = hex.EncodeToString(h[:8])
+	}
+	assetCache.Store(name, sum)
+	return sum
+}
 
 // 图标集：特性卡片 Icon 字段引用这些名字；未知名渲染默认圆点。
 // 24×24 线性风格（stroke），由本插件自行绘制。
@@ -34,6 +56,21 @@ var iconPaths = map[string]string{
 	"bell":     `<path d="M6 9a6 6 0 1 1 12 0c0 5 2 6 2 6H4s2-1 2-6M10 19a2 2 0 0 0 4 0"/>`,
 	"lock":     `<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>`,
 	"code":     `<path d="M8 6l-6 6 6 6M16 6l6 6-6 6M13 4l-2 16"/>`,
+	"mail":     `<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3.5 7l8.5 6 8.5-6"/>`,
+	"phone":    `<path d="M6.5 3h3l1.5 4-2 1.5a12 12 0 0 0 6.5 6.5l1.5-2 4 1.5v3a2.5 2.5 0 0 1-2.7 2.5A16.5 16.5 0 0 1 4 5.7 2.5 2.5 0 0 1 6.5 3z"/>`,
+}
+
+// socialIconPaths 是页脚社交图标：键集合必须与 service.go 的 socialPlatforms 一致（有测试兜底）。
+var socialIconPaths = map[string]string{
+	"github":   `<path d="M9 19c-4 1.5-4-2.5-6-3m12 6v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6.2 0C6.5 3.8 5.4 4.1 5.4 4.1a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4 10.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V22"/>`,
+	"x":        `<path d="M4 4l16 16M20 4L4 20"/>`,
+	"linkedin": `<rect x="3" y="3" width="18" height="18" rx="3"/><path d="M7.5 10.5v6M7.5 7.6v.01M11.5 16.5v-3.4a2 2 0 0 1 4 0v3.4"/>`,
+	"youtube":  `<rect x="2.5" y="5.5" width="19" height="13" rx="3.5"/><path d="M10.5 9.5l4.5 2.5-4.5 2.5z"/>`,
+	"wechat":   `<path d="M9 7.5c-3.3 0-6 2.1-6 4.7 0 1.5.8 2.8 2.1 3.6L4.6 18l2.4-1.1c.4.1.9.1 1.3.1"/><path d="M15.5 10c3 0 5.5 1.9 5.5 4.3 0 1.3-.7 2.5-1.9 3.3l.4 2-2.2-1.1c-.5.1-1 .2-1.6.2-3 0-5.5-1.9-5.5-4.3S12.5 10 15.5 10z"/>`,
+	"weibo":    `<circle cx="10.5" cy="15.5" r="5.5"/><path d="M16.5 8.5a4 4 0 0 1 4 4"/><path d="M18.5 4.5a8 8 0 0 1 4 8"/>`,
+	"bilibili": `<rect x="3" y="7" width="18" height="12.5" rx="3"/><path d="M7.5 3l3 4M16.5 3l-3 4M9 11v3M15 11v3"/>`,
+	"rss":      `<circle cx="6" cy="18" r="1.5"/><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/>`,
+	"mail":     `<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3.5 7l8.5 6 8.5-6"/>`,
 }
 
 var defaultIcon = `<circle cx="12" cy="12" r="3"/>`
@@ -42,16 +79,25 @@ var defaultIcon = `<circle cx="12" cy="12" r="3"/>`
 // 下拉的预览由 /plugins/website/feature-icons 直接读 iconPaths，避免前端另存一份路径后与官网走样。
 var featureIconOrder = []string{
 	"building", "shield", "key", "plug", "file", "chart", "globe", "puzzle",
-	"terminal", "zap", "layers", "box", "users", "bell", "lock", "code",
+	"terminal", "zap", "layers", "box", "users", "bell", "lock", "code", "mail", "phone",
 }
 
 var tplFuncs = template.FuncMap{
+	// assetV 给静态资源做内容哈希缓存键（见 assetVersion）。
+	"assetV": assetVersion,
 	// safeHTML 只用于落库前已经过 htmlsafe.Sanitize 的富文本内容。
 	"safeHTML": func(s string) template.HTML { return template.HTML(s) },
 	"icon": func(name string) template.HTML {
 		p, ok := iconPaths[name]
 		if !ok {
 			p = defaultIcon
+		}
+		return template.HTML(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">` + p + `</svg>`)
+	},
+	"socialIcon": func(platform string) template.HTML {
+		p, ok := socialIconPaths[platform]
+		if !ok {
+			p = socialIconPaths["rss"]
 		}
 		return template.HTML(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">` + p + `</svg>`)
 	},
@@ -86,6 +132,7 @@ var pageTmpl = map[string]*template.Template{
 	"news":       mustPage("news"),
 	"post":       mustPage("post"),
 	"page":       mustPage("page"),
+	"contact":    mustPage("contact"),
 	"notfound":   mustPage("notfound"),
 	"error":      mustPage("error"),
 }
@@ -100,6 +147,11 @@ type siteView struct {
 	HomeCTALabel string
 	HomeCTAHref  string
 	ContactEmail string
+	ContactPhone string
+	QRCodeURL    string
+	QRCodeCaption string
+	Socials      []SocialLink
+	FriendLinks  []FriendLink
 	ICP          string
 	FooterNote   string
 	SeoKeywords  string
@@ -117,6 +169,9 @@ type siteView struct {
 	Post         *Post
 	Page         *Page
 	Year         int
+	// 联系页的提交结果：无 JS 的整页提交回跳后由模板渲染提示。
+	ContactSent  bool
+	ContactError string
 
 	Lang      Language
 	Languages []Language
@@ -161,6 +216,9 @@ type siteView struct {
 
 // T 取静态文案；语言缺键时回退英文/默认语言，最后回退 key 本身。
 func (v *siteView) T(key string) string { return tr(v.Lang.Code, key) }
+
+// SocialLabel 是社交图标的读屏/悬停名称。
+func (v *siteView) SocialLabel(platform string) string { return v.T("social." + platform) }
 
 // TF 是带参数的文案（字典里用 %s / %d）。
 func (v *siteView) TF(key string, args ...any) string { return trf(v.Lang.Code, key, args...) }
@@ -253,7 +311,10 @@ func (v *siteView) Switch(l Language) string {
 // JSStrings 把前端脚本用到的文案以 JSON 交给 site.js（无内联脚本时也能工作）。
 func (v *siteView) JSStrings() template.JS {
 	m := map[string]string{}
-	for _, k := range []string{"packaging", "packagingHint", "packFailed", "copied", "copyManual", "menuOpen", "menuClose", "emailCopy", "emailCopied"} {
+	for _, k := range []string{
+		"packaging", "packagingHint", "packFailed", "copied", "copyManual", "menuOpen", "menuClose", "emailCopy", "emailCopied",
+		"contactSending", "contactSent", "contactFailed", "contactRate", "contactErrName", "contactErrEmail", "contactErrContent",
+	} {
 		m[k] = v.T("site.js." + k)
 	}
 	b, _ := json.Marshal(m)

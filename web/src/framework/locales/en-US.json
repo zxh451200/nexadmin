@@ -26,6 +26,7 @@
     "loading": "Loading confirmation…"
   },
   "common": {
+    "detail": "Details",
     "search": "Search",
     "reset": "Reset",
     "confirm": "Confirm",
@@ -106,7 +107,10 @@
     "notificationsUnread": "Notifications, {{count}} unread",
     "messageCenter": "Message center",
     "unreadSummary": "Messages {{messages}} · Notices {{notices}}",
-    "noMessages": "No messages",
+    "noMessages": "No messages or notices",
+    "kindMessage": "Message",
+    "kindNotice": "Notice",
+    "noticeUnread": "{{count}} unread notice(s)",
     "viewAll": "View all",
     "announcement": "System announcement",
     "gotIt": "Got it",
@@ -180,6 +184,7 @@
     "otpInvalid": "Enter a 6-digit code",
     "otpFailed": "Verification failed. Please try again",
     "otpSubmit": "Verify and sign in",
+    "totpInlineLabel": "Enter the 6-digit code from your authenticator app",
     "recoveryCode": "Recovery code",
     "recoveryCodePlaceholder": "Enter a recovery code",
     "recoveryCodeInvalid": "Enter a valid recovery code",
@@ -345,5 +350,18 @@
     "pickTitle": "Pick a location",
     "provider": "Map provider",
     "noProvider": "No map plugin installed. You can enter coordinates manually; install a map plugin to pick on a map."
+  },
+  "validation": {
+    "required": "This field is required",
+    "invalidType": "Invalid value (expected {{expected}})",
+    "tooSmall": "Must be at least {{minimum}} characters",
+    "tooBig": "Must be at most {{maximum}} characters",
+    "pickAtLeast": "Pick at least {{minimum}}",
+    "email": "Enter a valid email address",
+    "url": "Enter a valid URL",
+    "pattern": "Invalid format"
+  },
+  "pwa": {
+    "staleBuild": "A newer build is available. Refresh to apply."
   }
 }

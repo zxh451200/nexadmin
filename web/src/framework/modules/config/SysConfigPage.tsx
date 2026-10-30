@@ -12,6 +12,7 @@ import { DictTag } from '@/framework/components/DictTag'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { FormGrid, FormGridFull, FormLayout } from '@/framework/components/FormLayout'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
+import { SwitchField } from '@/framework/components/SwitchField'
 import { Button } from '@/framework/ui/button'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/framework/ui/form'
 import { Input } from '@/framework/ui/input'
@@ -26,7 +27,6 @@ import {
   useSaveConfig,
   type ConfigRow,
 } from './api'
-import { UploadLimitCard } from './UploadLimitCard'
 
 const schema = z.object({
   name: z.string().trim().min(1).max(50),
@@ -120,13 +120,22 @@ export function ParamsSection() {
     }
   }
 
+  // 出厂参数目录的名称/说明按参数键取词条（双语）；管理员新建或改过文案的行回落到库里文本。
+  const cfgText = (key: string, field: 'name' | 'remark', fallback?: string | null) =>
+    t(`sysConfig.item.${key.replaceAll('.', '_')}.${field}`, { defaultValue: fallback ?? '' })
+
   const columns: Column<ConfigRow>[] = [
-    { key: 'name', title: t('sysConfig.name'), mobile: 'title' },
+    { key: 'name', title: t('sysConfig.name'), mobile: 'title', render: (r) => cfgText(r.key, 'name', r.name) },
     { key: 'key', title: t('sysConfig.key'), mobile: 'sub', render: (r) => <span className="num break-all">{r.key}</span> },
     {
       key: 'value',
       title: t('sysConfig.value'),
-      render: (r) => <span className="num line-clamp-2 max-w-64 break-all">{r.value}</span>,
+      // 值可能很长（JSON / 白名单），列表里截两行，悬停看全文
+      render: (r) => (
+        <span className="num line-clamp-2 max-w-64 break-all" title={r.value}>
+          {r.value}
+        </span>
+      ),
     },
     { key: 'type', title: t('sysConfig.type'), render: (r) => t(`sysConfig.types.${r.type}`) },
     {
@@ -134,13 +143,12 @@ export function ParamsSection() {
       title: t('sysConfig.isPublic'),
       render: (r) => <DictTag dict="yes_no" value={r.isPublic ? '1' : '0'} />,
     },
-    { key: 'remark', title: t('common.remark'), mobile: 'hidden' },
+    { key: 'remark', title: t('common.remark'), mobile: 'hidden', render: (r) => cfgText(r.key, 'remark', r.remark) },
   ]
 
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm text-muted-foreground">{t('sysConfig.description')}</p>
-      <UploadLimitCard />
 
       <FilterBar
         onSearch={() => {
@@ -300,21 +308,9 @@ export function ParamsSection() {
                   </FormItem>
                 )}
               />
-              <FormField
-                control={form.control}
-                name="isPublic"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t('sysConfig.isPublic')}</FormLabel>
-                    <FormControl>
-                      <div className="flex min-h-11 items-center md:min-h-9">
-                        <Switch checked={field.value} onCheckedChange={field.onChange} />
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <FormGridFull>
+                <SwitchField control={form.control} name="isPublic" label={t('sysConfig.isPublic')} />
+              </FormGridFull>
               <FormGridFull>
                 <FormField
                   control={form.control}

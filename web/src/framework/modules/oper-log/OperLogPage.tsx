@@ -7,6 +7,7 @@ import { Can } from '@/framework/auth/Can'
 import { AiFilterBox } from '@/framework/components/AiFilterBox'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable } from '@/framework/components/DataTable'
+import { DetailAction } from '@/framework/components/DetailAction'
 import { DateRangePicker, type DateRangeValue } from '@/framework/components/DateRangePicker'
 import { DictSelect } from '@/framework/components/DictSelect'
 import { DictTag } from '@/framework/components/DictTag'
@@ -197,6 +198,7 @@ export default function OperLogPage() {
         loading={isLoading}
         columnSettingsKey="operLog"
         onRowClick={setDetail}
+        rowActions={(l) => <DetailAction onClick={() => setDetail(l)} />}
         selection={{ selected, onChange: setSelected }}
         batchActions={(ids) => (
           <Can perm="operLog:delete">

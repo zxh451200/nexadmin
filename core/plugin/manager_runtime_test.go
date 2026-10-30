@@ -215,7 +215,7 @@ func TestStarterExpiryRenewalWaitsForExit(t *testing.T) {
 		}
 	}
 	noRound(t, p) // Start itself is still in flight.
-	if !m.List()[0].Stopping || len(m.ActiveIDs()) != 0 || m.activeGuard(m.entries["cron"])() {
+	if !m.List(context.Background())[0].Stopping || len(m.ActiveIDs()) != 0 || m.activeGuard(m.entries["cron"])() {
 		t.Fatal("a canceled worker awaiting exit must not be advertised as active")
 	}
 	close(block)
@@ -228,7 +228,7 @@ func TestStarterExpiryRenewalWaitsForExit(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		m.checkExpiry()
 		m.ObserveHost("example.com")
-		_ = m.List()
+		_ = m.List(context.Background())
 	}
 	noRound(t, p)
 }
@@ -242,7 +242,7 @@ func TestStarterRevocationAndRestoration(t *testing.T) {
 	startTestWorker(m)
 	first := receiveRound(t, p)
 	writeRev(t, root, mustRevoke(t, priv, nil, "aaaa11112222", "test"))
-	if m.List()[0].Status != StatusRevoked || first.ctx.Err() != context.Canceled {
+	if m.List(context.Background())[0].Status != StatusRevoked || first.ctx.Err() != context.Canceled {
 		t.Fatal("revocation must cancel the worker")
 	}
 	clear, err := SignRevocations(priv, Revocations{Seq: 2})

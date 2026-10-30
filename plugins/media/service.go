@@ -45,12 +45,9 @@ type fileRow struct {
 	CreatedAt time.Time `gorm:"column:created_at"`
 }
 
-type service struct {
-	db       *gorm.DB
-	provider streamProvider
-}
+type service struct{ db *gorm.DB }
 
-func newService(db *gorm.DB) *service { return &service{db: db, provider: newCloudflareStream()} }
+func newService(db *gorm.DB) *service { return &service{db: db} }
 
 // scoped 给裸表查询补租户条件：GORM 的自动隔离只对模型生效，这里直接查 sys_file。
 func (s *service) scoped(ctx context.Context) *gorm.DB {

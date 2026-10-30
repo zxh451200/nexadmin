@@ -6,10 +6,12 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
 	"nexadmin/core/auth"
+	"nexadmin/core/ctl"
 	"nexadmin/core/response"
 	logmod "nexadmin/modules/log"
 	"nexadmin/pkg/idgen"
@@ -35,15 +37,28 @@ func paramID(c *gin.Context) (idgen.ID, bool) {
 // fail 把业务错误映射成 HTTP 响应。
 func fail(c *gin.Context, err error) {
 	var un *UnavailableError
+	var tm *ctl.ToolMissingError
 	switch {
+	case errors.As(err, &tm):
+		// 缺工具是可预期状态：文案按当前语言从字典取，工具名作为参数
+		e := response.Unavailable("error.backup_tool_missing", strings.Join(tm.Names, " / "))
+		e.Reason = "BACKUP_TOOL_MISSING"
+		response.Fail(c, e)
 	case errors.As(err, &un):
-		e := response.Unavailable("error.unavailable").WithMsg(un.Reason)
+		// Reason 来自底层工具/连接校验（可能是动态中文），只进日志；给用户的是本地化文案。
+		e := response.Unavailable("error.unavailable")
+		if errors.Is(err, ErrIsolationUnsupported) {
+			e = response.Unavailable("backup.isolation_unsupported")
+		}
+		e = e.Wrap(un)
 		e.Reason = "BACKUP_TOOL_MISSING"
 		response.Fail(c, e)
 	case errors.Is(err, ErrNotFound):
-		response.Fail(c, response.NotFound("error.not_found").WithMsg(err.Error()))
-	case errors.Is(err, ErrBusy), errors.Is(err, ErrNotReady):
-		response.Fail(c, response.Conflict("error.conflict").WithMsg(err.Error()))
+		response.Fail(c, response.NotFound("error.not_found").Wrap(err))
+	case errors.Is(err, ErrBusy):
+		response.Fail(c, response.Conflict("backup.busy").Wrap(err))
+	case errors.Is(err, ErrNotReady):
+		response.Fail(c, response.Conflict("backup.not_ready").Wrap(err))
 	default:
 		response.Fail(c, err)
 	}
@@ -53,7 +68,7 @@ func fail(c *gin.Context, err error) {
 func superOnly() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if cl := auth.ClaimsFrom(c); cl == nil || !cl.Super {
-			response.Fail(c, response.Forbidden("error.forbidden").WithMsg("数据库备份是平台级功能，仅超级管理员可用"))
+			response.Fail(c, response.Forbidden("backup.super_only"))
 			return
 		}
 		c.Next()
@@ -109,7 +124,7 @@ func (h *Handler) PutConfig(c *gin.Context) {
 		return
 	}
 	if err := in.Validate(); err != nil {
-		response.Fail(c, response.BadRequest("error.bad_request").WithMsg(err.Error()))
+		response.Fail(c, response.BadRequest("backup.config_invalid").Wrap(err))
 		return
 	}
 	set, err := h.svc.SaveSetting(c.Request.Context(), in)
@@ -165,18 +180,18 @@ func (h *Handler) Download(c *gin.Context) {
 	}
 	path, err := h.svc.Path(rec)
 	if err != nil {
-		response.Fail(c, response.BadRequest("error.bad_request").WithMsg(err.Error()))
+		response.Fail(c, response.BadRequest("backup.file_invalid").Wrap(err))
 		return
 	}
 	f, err := os.Open(path)
 	if err != nil {
-		response.Fail(c, response.NotFound("error.not_found").WithMsg("备份文件不存在（可能已被手工删除）"))
+		response.Fail(c, response.NotFound("backup.file_missing").Wrap(err))
 		return
 	}
 	defer f.Close()
 	st, err := f.Stat()
 	if err != nil || !st.Mode().IsRegular() {
-		response.Fail(c, response.NotFound("error.not_found").WithMsg("备份文件不可读"))
+		response.Fail(c, response.NotFound("backup.file_unreadable"))
 		return
 	}
 	writeDownloadAudit(c, rec)

@@ -8,7 +8,7 @@ const images: PendingImage[] = [
   { id: '7600000000000000002', name: 'cover-photo.jpg', type: 'image/jpeg', size: 512440, url: '/icon-192.png', createdAt: ago(9) },
 ]
 
-let config: VideoConfigView = { enabled: true, accountId: 'demo-account', subdomain: 'demo', hasToken: true }
+let config: VideoConfigView = { enabled: true, provider: 'cloudflare', keyA: 'demo-account', keyC: 'demo', hasKeyB: true, canUpload: true }
 
 let videos: VideoItem[] = [
   {
@@ -41,9 +41,11 @@ defineMock([
     handler: ({ body }): VideoConfigView => {
       config = {
         enabled: !!body?.enabled,
-        accountId: String(body?.accountId ?? ''),
-        subdomain: String(body?.subdomain ?? ''),
-        hasToken: config.hasToken || !!body?.token,
+        provider: (['bunny', 'aliyun', 'tencent'].includes(String(body?.provider)) ? body?.provider : 'cloudflare') as VideoConfigView['provider'],
+        keyA: String(body?.keyA ?? ''),
+        keyC: String(body?.keyC ?? ''),
+        hasKeyB: config.hasKeyB || !!body?.keyB,
+        canUpload: (body?.provider === 'aliyun' || body?.provider === 'tencent') ? false : true,
       }
       return config
     },
@@ -53,6 +55,7 @@ defineMock([
     url: '/plugins/media/video/upload',
     handler: ({ body }) => ({
       uploadUrl: 'https://upload.example/tus/mock',
+      headers: {},
       videoId: 'vid-87654321',
       playbackUrl: `https://customer-demo.cloudflarestream.com/vid-87654321/iframe?name=${encodeURIComponent(String(body?.name ?? ''))}`,
     }),

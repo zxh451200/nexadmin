@@ -1,7 +1,6 @@
 package openapi
 
 import (
-	"errors"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -23,12 +22,10 @@ type handler struct {
 	wk  *worker
 }
 
-func badReq(msg string) *response.Error { return response.BadRequest("error.bad_request").WithMsg(msg) }
-
 func parseID(c *gin.Context) (idgen.ID, bool) {
 	id, err := idgen.Parse(c.Param("id"))
 	if err != nil || id == 0 {
-		response.Fail(c, badReq("invalid id"))
+		response.Fail(c, response.BadRequest("openapi.invalid_id"))
 		return 0, false
 	}
 	return id, true
@@ -66,7 +63,7 @@ func self(c *gin.Context) (*auth.Claims, bool) {
 		return nil, false
 	}
 	if cl.Principal != "" {
-		response.Fail(c, response.Forbidden("error.forbidden").WithMsg("tokens cannot manage tokens"))
+		response.Fail(c, response.Forbidden("openapi.token_manage_forbidden"))
 		return nil, false
 	}
 	return cl, true
@@ -106,11 +103,11 @@ func parseExpiry(s *string, now time.Time) (*time.Time, error) {
 		}
 	}
 	if err != nil {
-		return nil, errors.New("expiresAt must be an RFC3339 time")
+		return nil, response.BadRequest("openapi.expires_at_invalid")
 	}
 	t = t.UTC()
 	if !t.After(now) {
-		return nil, errors.New("expiresAt must be in the future")
+		return nil, response.BadRequest("openapi.expires_at_past")
 	}
 	return &t, nil
 }
@@ -131,16 +128,16 @@ func (h *handler) tokenCreate(c *gin.Context) {
 	}
 	f.Name = strings.TrimSpace(f.Name)
 	if f.Name == "" || utf8.RuneCountInString(f.Name) > 100 {
-		response.Fail(c, badReq("name is required (max 100)"))
+		response.Fail(c, response.BadRequest("openapi.name_required"))
 		return
 	}
 	if f.Scope != "read" && f.Scope != "write" {
-		response.Fail(c, badReq("scope must be read or write"))
+		response.Fail(c, response.BadRequest("openapi.scope_invalid"))
 		return
 	}
 	exp, err := parseExpiry(f.ExpiresAt, time.Now())
 	if err != nil {
-		response.Fail(c, badReq(err.Error()))
+		response.Fail(c, err)
 		return
 	}
 	ctx := c.Request.Context()
@@ -150,7 +147,7 @@ func (h *handler) tokenCreate(c *gin.Context) {
 		return
 	}
 	if n >= maxTokensPerUser {
-		response.Fail(c, response.Conflict("error.conflict").WithMsg("too many tokens, delete unused ones first"))
+		response.Fail(c, response.Conflict("openapi.token_limit"))
 		return
 	}
 	plain, hash, prefix := coreoa.NewPATToken()

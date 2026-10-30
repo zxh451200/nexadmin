@@ -118,7 +118,7 @@ func TestScopeHelpers(t *testing.T) {
 	if _, args, ok := (&Scope{UserID: 100}).UsernameCond("operator"); !ok || len(args) != 1 {
 		t.Errorf("仅本人时 UsernameCond 只绑本人：%v %v", args, ok)
 	}
-	if e := Forbidden("日志", 3); e.Status != http.StatusForbidden || e.Msg == "" {
+	if e := Forbidden(context.Background(), "datascope.resource.log", 3); e.Status != http.StatusForbidden || e.Key != "datascope.forbidden_batch" || len(e.Args) != 2 || e.Args[1] != 3 {
 		t.Errorf("Forbidden = %+v", e)
 	}
 }

@@ -83,8 +83,6 @@ func (s *Service) currentLimits(ctx context.Context) Limits {
 	return s.limits(ctx)
 }
 
-func badRequest(msg string) error { return response.BadRequest("error.bad_request").WithMsg(msg) }
-
 // ---------- 展示转换 ----------
 
 func (s *Service) toItem(f File) FileItem {
@@ -153,7 +151,7 @@ func (s *Service) ListGroups(ctx context.Context) ([]GroupItem, error) {
 func (s *Service) CreateGroup(ctx context.Context, name string) (GroupItem, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
-		return GroupItem{}, badRequest("分组名称不能为空")
+		return GroupItem{}, response.BadRequest("file.group_name_required")
 	}
 	g := Group{Name: name}
 	if err := s.db.WithContext(ctx).Create(&g).Error; err != nil {
@@ -166,7 +164,7 @@ func (s *Service) CreateGroup(ctx context.Context, name string) (GroupItem, erro
 func (s *Service) RenameGroup(ctx context.Context, id idgen.ID, name string) (GroupItem, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
-		return GroupItem{}, badRequest("分组名称不能为空")
+		return GroupItem{}, response.BadRequest("file.group_name_required")
 	}
 	var g Group
 	if err := s.db.WithContext(ctx).First(&g, "id = ?", id).Error; err != nil {
@@ -207,7 +205,7 @@ func (s *Service) List(ctx context.Context, q listQuery, page, pageSize int) ([]
 	default:
 		gid, err := idgen.Parse(q.GroupID)
 		if err != nil {
-			return nil, 0, badRequest("分组参数不正确")
+			return nil, 0, response.BadRequest("file.group_id_invalid")
 		}
 		tx = tx.Where("group_id = ?", gid)
 	}
@@ -271,7 +269,7 @@ func (s *Service) Register(ctx context.Context, username string, req registerReq
 	if ok, err := s.groupExists(ctx, req.GroupID); err != nil {
 		return nil, err
 	} else if !ok {
-		return nil, badRequest("分组不存在")
+		return nil, response.BadRequest("file.group_not_found")
 	}
 	vis := normVisibility(req.Visibility)
 	var out []File
@@ -306,11 +304,11 @@ func (s *Service) Register(ctx context.Context, username string, req registerReq
 					return err
 				}
 			} else if strings.Contains(rf.URL, "/files/upload/") {
-				return badRequest("上传文件不存在")
+				return response.BadRequest("file.upload_not_found")
 			}
 			if strings.TrimSpace(rf.URL) == "" || !externalURLOK(rf.URL) ||
 				(rf.PosterURL != "" && !externalURLOK(rf.PosterURL)) {
-				return badRequest("文件地址不合法")
+				return response.BadRequest("file.url_invalid")
 			}
 			f := File{
 				GroupID: req.GroupID, Name: name, URL: rf.URL, PosterURL: rf.PosterURL, MimeType: rf.Type,
@@ -346,13 +344,13 @@ func (s *Service) Update(ctx context.Context, id idgen.ID, req updateReq) (FileI
 	patch := map[string]any{}
 	if req.Name != nil {
 		if strings.TrimSpace(*req.Name) == "" {
-			return FileItem{}, badRequest("文件名不能为空")
+			return FileItem{}, response.BadRequest("file.name_required")
 		}
 		patch["name"] = cleanName(*req.Name)
 	}
 	if req.Visibility != nil {
 		if *req.Visibility != "public" && *req.Visibility != "private" {
-			return FileItem{}, badRequest("可见性只能是 public 或 private")
+			return FileItem{}, response.BadRequest("file.visibility_invalid")
 		}
 		patch["visibility"] = *req.Visibility
 	}
@@ -360,7 +358,7 @@ func (s *Service) Update(ctx context.Context, id idgen.ID, req updateReq) (FileI
 		if ok, err := s.groupExists(ctx, *req.GroupID); err != nil {
 			return FileItem{}, err
 		} else if !ok {
-			return FileItem{}, badRequest("分组不存在")
+			return FileItem{}, response.BadRequest("file.group_not_found")
 		}
 		patch["group_id"] = *req.GroupID
 	}
@@ -386,7 +384,7 @@ func (s *Service) Move(ctx context.Context, ids []idgen.ID, groupID idgen.ID) er
 	if ok, err := s.groupExists(ctx, groupID); err != nil {
 		return err
 	} else if !ok {
-		return badRequest("分组不存在")
+		return response.BadRequest("file.group_not_found")
 	}
 	return s.db.WithContext(ctx).Model(&File{}).Where("id IN ?", ids).Update("group_id", groupID).Error
 }

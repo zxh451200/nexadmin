@@ -71,7 +71,7 @@ func startError(err error) error {
 	case errors.Is(err, oauthflow.ErrNotConfigured):
 		return response.NotFound("error.not_found")
 	case errors.Is(err, oauthflow.ErrRedirect):
-		return response.BadRequest("error.bad_request").WithMsg("回调地址不在允许范围内")
+		return response.BadRequest("auth.redirect_uri_invalid")
 	}
 	return err
 }

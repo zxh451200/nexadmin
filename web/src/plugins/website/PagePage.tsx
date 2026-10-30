@@ -18,12 +18,12 @@ import {
 } from '@/framework/components/i18n'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
+import { SwitchRow } from '@/framework/components/SwitchField'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/framework/ui/dialog'
 import { Input } from '@/framework/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
-import { Switch } from '@/framework/ui/switch'
+import { EditorSchemaGate } from './EditorSchemaGate'
 import TranslationStatus from './TranslationStatus'
 import {
   translateContent,
@@ -112,13 +112,11 @@ function PageFormBody({ onOpenChange, editing }: { onOpenChange: (v: boolean) =>
         <LocalizedField fieldKey="seoDesc" />
         <LocalizedField fieldKey="content" className="min-h-40" />
         <LocaleFormActions />
-        <label className="flex items-center justify-between text-sm">
-          {t('plugin_website.fields.published')}
-          <Switch
-            checked={lf.publishedOf(lf.defaultLocale)}
-            onCheckedChange={(on) => lf.setPublishedOf(lf.defaultLocale, on)}
-          />
-        </label>
+        <SwitchRow
+          label={t('plugin_website.fields.published')}
+          checked={lf.publishedOf(lf.defaultLocale)}
+          onCheckedChange={(on) => lf.setPublishedOf(lf.defaultLocale, on)}
+        />
       </div>
     </ResponsiveDialog>
   )
@@ -130,9 +128,8 @@ function PageFormDialog({
   onOpenChange: (v: boolean) => void
   editing: SitePage | null
 }) {
-  const { t } = useTranslation()
   const { data: languages = [] } = useLanguages()
-  const { data: schema } = useI18nSchema('page')
+  const { data: schema, isError, refetch } = useI18nSchema('page')
   const defaultLocale = languages.find((l) => l.default)?.code ?? ''
   const translate = useCallback<TranslateBatch>(
     (texts, to, format) => translateContent('page', texts, defaultLocale, to, format),
@@ -141,13 +138,7 @@ function PageFormDialog({
 
   // schema 与语言清单是表单的前提，没到货前不给渲染——否则会闪出一个没有字段的空表单。
   if (!schema || !defaultLocale) {
-    return (
-      <Dialog open onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-3xl">
-          <DialogHeader><DialogTitle>{t('common.loading')}</DialogTitle></DialogHeader>
-        </DialogContent>
-      </Dialog>
-    )
+    return <EditorSchemaGate onOpenChange={onOpenChange} error={isError} onRetry={() => void refetch()} />
   }
 
   return (
@@ -169,6 +160,8 @@ function PageFormDialog({
 export default function PagePage() {
   const { t } = useTranslation()
   const confirm = useConfirm()
+  // 预取字段 schema：点「新建/编辑」时直接命中缓存，不再先闪一个加载弹窗。
+  useI18nSchema('page')
   const [draft, setDraft] = useState<ContentQuery>({})
   const [filters, setFilters] = useState<ContentQuery>({})
   const [page, setPage] = useState(1)

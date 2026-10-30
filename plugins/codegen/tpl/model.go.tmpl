@@ -9,6 +9,9 @@ import (
 [[- if .UsesDatabase]]
 	"[[.GoModule]]/core/database"
 [[- end]]
+[[- if .SoftDelete]]
+	"gorm.io/gorm"
+[[- end]]
 	"[[.GoModule]]/pkg/idgen"
 )
 
@@ -23,6 +26,9 @@ type [[.Pascal]] struct {
 [[- if .Tenant]]
 	TenantID idgen.ID `gorm:"column:tenant_id;not null"`
 [[- end]]
+[[- end]]
+[[- if .SoftDelete]]
+	DeletedAt gorm.DeletedAt `gorm:"column:deleted_at;index"`
 [[- end]]
 [[- range .Fields]]
 	[[.Pascal]] [[.GoType]] `gorm:"column:[[.Name]]"`[[if .Comment]] // [[.Comment]][[end]]

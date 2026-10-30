@@ -107,7 +107,7 @@ func newService(st store, c cache.Cache, log *zap.Logger) *Service {
 	return s
 }
 
-func badReq(msg string) *response.Error { return response.BadRequest("error.bad_request").WithMsg(msg) }
+func badReq(key string, args ...any) *response.Error { return response.BadRequest(key, args...) }
 
 func (s *Service) k(parts ...string) string {
 	return cache.GlobalKey(append([]string{"security"}, parts...)...)
@@ -477,7 +477,7 @@ type SetupResult struct {
 // requireSession 拒绝 PAT / 应用签名：二次验证的绑定、关闭、换码只允许浏览器会话。
 func requireSession(u User) error {
 	if u.Principal != "" {
-		return response.Forbidden("error.forbidden").WithMsg("two-factor settings cannot be changed with a token or app signature")
+		return response.Forbidden("security.session_required")
 	}
 	return nil
 }
@@ -498,7 +498,7 @@ func (s *Service) Setup(ctx context.Context, u User, password string) (*SetupRes
 		return nil, err
 	}
 	if row != nil && row.Enabled {
-		return nil, response.Conflict("error.conflict").WithMsg("two-factor authentication is already enabled")
+		return nil, response.Conflict("security.already_enabled")
 	}
 	if s.reauth == nil {
 		return nil, response.Unavailable("auth.provider_missing")
@@ -526,7 +526,7 @@ func (s *Service) Setup(ctx context.Context, u User, password string) (*SetupRes
 
 func (s *Service) invalid(err error) error {
 	if errors.Is(err, errInvalidCode) {
-		return badReq("invalid verification code")
+		return badReq("security.code_invalid")
 	}
 	return err
 }
@@ -542,12 +542,12 @@ func (s *Service) Enable(ctx context.Context, u User, code string) ([]string, er
 		return nil, err
 	}
 	if row == nil || row.Enabled || row.SecretEnc == "" {
-		return nil, badReq("no pending setup, start setup first")
+		return nil, badReq("security.setup_missing")
 	}
 	// setup 与 enable 必须是同一会话：别的会话（比如被盗的另一个令牌）不能替你把待确认密钥确认掉。
 	bound, err := s.cache.Get(ctx, s.setupKey(u.TID, u.ID))
 	if errors.Is(err, cache.ErrNotFound) || (err == nil && bound != u.Session) {
-		return nil, badReq("setup expired or started in another session, start setup again")
+		return nil, badReq("security.setup_expired")
 	}
 	if err != nil {
 		return nil, err
@@ -591,7 +591,7 @@ func (s *Service) Disable(ctx context.Context, u User, kind, code string) error 
 		return err
 	}
 	if pol.requires(u.Roles) && !u.Super {
-		return response.Forbidden("error.forbidden").WithMsg("two-factor authentication is required by policy")
+		return response.Forbidden("security.policy_required")
 	}
 	if err := s.verifyAny(ctx, u.TID, u.ID, kind, code); err != nil {
 		return s.invalid(err)

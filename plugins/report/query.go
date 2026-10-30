@@ -98,7 +98,7 @@ func (r *Registry) Target(table string, cols []string) (*Target, error) {
 		return nil, errNotAllowed
 	}
 	if len(cols) == 0 {
-		return nil, specErr("数据集至少选择一列")
+		return nil, specErr("report.dataset_columns_required")
 	}
 	tg := &Target{Src: src, cols: map[string]Column{}}
 	for _, name := range cols {
@@ -122,12 +122,13 @@ func (t *Target) Columns() []Column {
 	return out
 }
 
-func specErr(msg string) *response.Error {
-	return response.BadRequest("error.bad_request").WithMsg(msg)
+// specErr 用 i18n key 构造 400；调用点只传 key，文案由词典提供。
+func specErr(key string) *response.Error {
+	return response.BadRequest(key)
 }
 
 // errNotAllowed 故意不指明是哪个标识符、也不说明是被拒绝列表还是白名单拦下的。
-var errNotAllowed = specErr("数据源或字段不可用")
+var errNotAllowed = specErr("report.source_or_column_unavailable")
 
 // ResultCol 描述结果列。
 type ResultCol struct {
@@ -202,16 +203,16 @@ func (e *Engine) build(ctx context.Context, tg *Target, sp Spec, env Env) (*gorm
 	}
 	src := tg.Src
 	if env.TenantID == 0 && !src.Global {
-		return nil, nil, response.Forbidden("error.forbidden").WithMsg("缺少租户上下文")
+		return nil, nil, response.Forbidden("tenant.context_required")
 	}
 	if env.Scope == nil {
-		return nil, nil, response.Forbidden("error.forbidden").WithMsg("缺少数据范围")
+		return nil, nil, response.Forbidden("datascope.required")
 	}
 	if len(sp.Dimensions) > maxDims || len(sp.Measures) > maxMeasures || len(sp.Filters) > maxFilters || len(sp.OrderBy) > maxOrder {
-		return nil, nil, specErr("查询配置超出数量限制")
+		return nil, nil, specErr("report.query_too_many_items")
 	}
 	if len(sp.Dimensions)+len(sp.Measures) == 0 {
-		return nil, nil, specErr("至少选择一个维度或度量")
+		return nil, nil, specErr("report.axis_required")
 	}
 
 	q := quoteFor(e.db)
@@ -229,7 +230,7 @@ func (e *Engine) build(ctx context.Context, tg *Target, sp Spec, env Env) (*gorm
 		if d.Bucket != "" {
 			f, ok := bucketFmt[d.Bucket]
 			if !ok || c.Type != TypeTime {
-				return nil, nil, specErr("时间分桶无效")
+				return nil, nil, specErr("report.time_bucket_invalid")
 			}
 			if dialect == "postgres" {
 				expr = fmt.Sprintf("to_char(%s, '%s')", expr, f[1])
@@ -245,7 +246,7 @@ func (e *Engine) build(ctx context.Context, tg *Target, sp Spec, env Env) (*gorm
 	for i, m := range sp.Measures {
 		fn, ok := aggSQL[m.Agg]
 		if !ok {
-			return nil, nil, specErr("聚合方式无效")
+			return nil, nil, specErr("report.aggregate_invalid")
 		}
 		arg := "*"
 		label := m.Label
@@ -257,11 +258,11 @@ func (e *Engine) build(ctx context.Context, tg *Target, sp Spec, env Env) (*gorm
 			switch m.Agg {
 			case "sum", "avg":
 				if c.Type != TypeNumber {
-					return nil, nil, specErr("该聚合只支持数值列")
+					return nil, nil, specErr("report.aggregate_numeric_only")
 				}
 			case "min", "max":
 				if c.Type != TypeNumber && c.Type != TypeTime {
-					return nil, nil, specErr("该聚合只支持数值或时间列")
+					return nil, nil, specErr("report.aggregate_numeric_or_time_only")
 				}
 			}
 			arg = q(c.Name)
@@ -269,7 +270,7 @@ func (e *Engine) build(ctx context.Context, tg *Target, sp Spec, env Env) (*gorm
 				label = c.Label
 			}
 		} else if m.Agg != "count" {
-			return nil, nil, specErr("该聚合需要指定列")
+			return nil, nil, specErr("report.aggregate_column_required")
 		}
 		key := "m" + strconv.Itoa(i)
 		sel = append(sel, clause.Column{Name: fn + "(" + arg + ") AS " + q(key), Raw: true})
@@ -295,7 +296,7 @@ func (e *Engine) build(ctx context.Context, tg *Target, sp Spec, env Env) (*gorm
 		scopeCond, scopeArgs, scoped = env.Scope.UsernameCond(q(src.UsernameCol))
 	default:
 		if env.Scope.Limited() && src.ScopeRequired {
-			return nil, nil, response.Forbidden("error.forbidden").WithMsg("该数据源需要数据范围，当前账号无权查看")
+			return nil, nil, response.Forbidden("report.datascope_denied")
 		}
 	}
 	if scoped {
@@ -322,7 +323,7 @@ func (e *Engine) build(ctx context.Context, tg *Target, sp Spec, env Env) (*gorm
 	for _, o := range sp.OrderBy {
 		m := orderRefRe.FindStringSubmatch(o.Ref)
 		if m == nil {
-			return nil, nil, specErr("排序字段无效")
+			return nil, nil, specErr("report.order_field_invalid")
 		}
 		n, _ := strconv.Atoi(m[2])
 		pos := 0
@@ -332,7 +333,7 @@ func (e *Engine) build(ctx context.Context, tg *Target, sp Spec, env Env) (*gorm
 			pos = len(sp.Dimensions) + n + 1
 		}
 		if pos == 0 {
-			return nil, nil, specErr("排序字段无效")
+			return nil, nil, specErr("report.order_field_invalid")
 		}
 		ob = append(ob, clause.OrderByColumn{Column: clause.Column{Name: strconv.Itoa(pos), Raw: true}, Desc: o.Desc})
 	}
@@ -345,7 +346,7 @@ func (e *Engine) build(ctx context.Context, tg *Target, sp Spec, env Env) (*gorm
 
 	limit := sp.Limit
 	if limit < 0 {
-		return nil, nil, specErr("limit 无效")
+		return nil, nil, specErr("report.limit_invalid")
 	}
 	if limit == 0 {
 		limit = DefaultLimit
@@ -369,14 +370,14 @@ func (t *Target) filterSQL(f Filter, q func(string) string) (string, []any, erro
 	}
 	op, ok := opSQL[f.Op]
 	if !ok {
-		return "", nil, specErr("操作符不被允许")
+		return "", nil, specErr("report.filter_operator_not_allowed")
 	}
 	col := q(c.Name)
 	switch f.Op {
 	case "in":
 		list, ok := f.Value.([]any)
 		if !ok || len(list) == 0 || len(list) > maxInValues {
-			return "", nil, specErr("in 需要 1 到 100 个值")
+			return "", nil, specErr("report.filter_in_values_invalid")
 		}
 		vals := make([]any, len(list))
 		for i, v := range list {
@@ -390,10 +391,10 @@ func (t *Target) filterSQL(f Filter, q func(string) string) (string, []any, erro
 	case "between":
 		list, ok := f.Value.([]any)
 		if !ok || len(list) != 2 {
-			return "", nil, specErr("between 需要两个值")
+			return "", nil, specErr("report.filter_between_two_values")
 		}
 		if c.Type != TypeNumber && c.Type != TypeTime {
-			return "", nil, specErr("between 只支持数值或时间列")
+			return "", nil, specErr("report.filter_between_numeric_or_time_only")
 		}
 		lo, err := coerce(c, list[0])
 		if err != nil {
@@ -406,21 +407,21 @@ func (t *Target) filterSQL(f Filter, q func(string) string) (string, []any, erro
 		return col + " BETWEEN ? AND ?", []any{lo, hi}, nil
 	case "like":
 		if c.Type != TypeString {
-			return "", nil, specErr("like 只支持文本列")
+			return "", nil, specErr("report.filter_like_text_only")
 		}
 		s, ok := f.Value.(string)
 		if !ok || len(s) > maxStrLen {
-			return "", nil, specErr("like 值无效")
+			return "", nil, specErr("report.filter_like_value_invalid")
 		}
 		esc := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(s)
 		return col + " LIKE ?", []any{"%" + esc + "%"}, nil
 	case ">", "<", ">=", "<=":
 		if c.Type != TypeNumber && c.Type != TypeTime {
-			return "", nil, specErr("比较操作只支持数值或时间列")
+			return "", nil, specErr("report.filter_compare_numeric_or_time_only")
 		}
 	}
 	if _, isList := f.Value.([]any); isList {
-		return "", nil, specErr("该操作符需要单个值")
+		return "", nil, specErr("report.filter_operator_single_value")
 	}
 	v, err := coerce(c, f.Value)
 	if err != nil {
@@ -443,7 +444,7 @@ func parseTime(s string) (time.Time, bool) {
 
 // coerce 按列类型把 JSON 值转成强类型参数；类型不符一律拒绝，绝不原样透传。
 func coerce(c Column, v any) (any, error) {
-	bad := specErr("过滤值类型不匹配")
+	bad := specErr("report.filter_value_type_mismatch")
 	switch c.Type {
 	case TypeString:
 		s, ok := v.(string)
@@ -557,10 +558,10 @@ func (e *Engine) Run(ctx context.Context, tg *Target, sp Spec, env Env) (*Result
 // execErr 把执行错误收敛成不含 SQL/库细节的响应；原始错误通过 Wrap 只进日志。
 func (e *Engine) execErr(ctx context.Context, err error) error {
 	if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		return response.New(http.StatusGatewayTimeout, "error.internal").WithMsg("查询超时，请缩小范围后重试").Wrap(err)
+		return response.New(http.StatusGatewayTimeout, "report.query_timeout").Wrap(err)
 	}
 	e.log.Warn("report: query failed", zap.Error(err))
-	return response.Internal().WithMsg("查询失败，请稍后重试").Wrap(err)
+	return response.New(http.StatusInternalServerError, "report.query_failed").Wrap(err)
 }
 
 func convertValue(v any, typ string) any {

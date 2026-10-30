@@ -102,7 +102,7 @@ func (h *handler) fail(c *gin.Context, err error) {
 	case errors.Is(err, job.ErrNotFound):
 		response.Fail(c, response.NotFound("error.not_found"))
 	case errors.Is(err, job.ErrBadState):
-		response.Fail(c, response.Conflict("error.conflict").WithMsg("当前状态不允许该操作"))
+		response.Fail(c, response.Conflict("exportcenter.job_bad_state"))
 	case errors.Is(err, job.ErrTooMany):
 		response.Fail(c, response.New(http.StatusTooManyRequests, "error.too_many"))
 	default:

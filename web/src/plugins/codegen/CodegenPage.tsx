@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { ArrowLeft, ArrowRight, Download } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Database, Download, Plus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
+import { EmptyState } from '@/framework/components/EmptyState'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
@@ -16,36 +17,45 @@ import {
   useColumns,
   useDownload,
   usePreview,
+  useSchema,
   useTables,
   type ColumnConfig,
   type GenOutput,
   type GenRequest,
+  type TableDef,
   type TableInfo,
+  type TableSchema,
 } from './api'
 import { ColumnsStep } from './ColumnsStep'
+import { DefineTableDialog } from './DefineTableDialog'
 import { PreviewStep } from './PreviewStep'
 
 type Step = 'table' | 'config' | 'preview'
+type Source = { kind: 'table'; name: string } | { kind: 'define'; def: TableDef }
 
 export default function CodegenPage() {
   const { t } = useTranslation()
   const [step, setStep] = useState<Step>('table')
   const [draft, setDraft] = useState('')
   const [keyword, setKeyword] = useState('')
-  const [table, setTable] = useState<string | undefined>()
+  const [source, setSource] = useState<Source>()
+  const [defined, setDefined] = useState<TableSchema>()
   const [module, setModule] = useState('')
   const [goModule, setGoModule] = useState('')
   const [cfg, setCfg] = useState<ColumnConfig[]>([])
   const [output, setOutput] = useState<GenOutput | undefined>()
   const [doneOpen, setDoneOpen] = useState(false)
+  const [defineOpen, setDefineOpen] = useState(false)
 
   const tables = useTables()
-  const schema = useColumns(table)
+  const schema = useColumns(source?.kind === 'table' ? source.name : undefined)
+  const defineSchema = useSchema()
   const preview = usePreview()
   const download = useDownload()
 
+  const loaded = source?.kind === 'define' ? defined : source?.kind === 'table' ? schema.data : undefined
+
   // 换表或重新读到列：重置为服务端给出的推荐配置，并丢弃旧的预览
-  const loaded = schema.data
   useEffect(() => {
     if (!loaded) return
     setCfg(loaded.columns.map((c) => c.config))
@@ -55,9 +65,14 @@ export default function CodegenPage() {
 
   const moduleError = module && !MODULE_RE.test(module) ? t('plugin_codegen.errors.module') : undefined
   const goModuleError = goModule && !GO_MODULE_RE.test(goModule) ? t('plugin_codegen.errors.goModule') : undefined
-  const canPreview = !!table && !!loaded && !!module && !moduleError && !goModuleError
+  const canPreview = !!source && !!loaded && !!module && !moduleError && !goModuleError
 
-  const request = (): GenRequest => ({ table: table ?? '', module, goModule: goModule || undefined, columns: cfg })
+  const request = (): GenRequest => {
+    const base = { module, goModule: goModule || undefined, columns: cfg }
+    return source?.kind === 'define'
+      ? { ...base, define: source.def }
+      : { ...base, table: source?.kind === 'table' ? source.name : '' }
+  }
 
   const onPreview = async () => {
     try {
@@ -78,7 +93,25 @@ export default function CodegenPage() {
     }
   }
 
-  const rows = (tables.data ?? []).filter((x) => x.name.includes(keyword.trim().toLowerCase()))
+  const onDefine = async (def: TableDef) => {
+    try {
+      const sc = await defineSchema.mutateAsync({ define: def })
+      setSource({ kind: 'define', def })
+      setDefined(sc)
+      setDefineOpen(false)
+      setStep('config')
+    } catch {
+      // 错误提示由请求层统一弹出
+    }
+  }
+
+  const pickTable = (name: string) => {
+    setSource({ kind: 'table', name })
+    setStep('config')
+  }
+
+  const allTables = tables.data ?? []
+  const rows = allTables.filter((x) => x.name.includes(keyword.trim().toLowerCase()))
   const tableColumns: Column<TableInfo>[] = [
     { key: 'name', title: t('plugin_codegen.tables.name'), mobile: 'title', render: (r) => <span className="font-mono text-sm">{r.name}</span> },
   ]
@@ -89,7 +122,7 @@ export default function CodegenPage() {
       <Tabs value={step} onValueChange={(v) => setStep(v as Step)} className="flex flex-col gap-4">
         <TabsList>
           <TabsTrigger value="table">{t('plugin_codegen.steps.table')}</TabsTrigger>
-          <TabsTrigger value="config" disabled={!table}>
+          <TabsTrigger value="config" disabled={!source}>
             {t('plugin_codegen.steps.config')}
           </TabsTrigger>
           <TabsTrigger value="preview" disabled={!output}>
@@ -98,60 +131,94 @@ export default function CodegenPage() {
         </TabsList>
 
         <TabsContent value="table" className="m-0 flex flex-col gap-4">
-          <FilterBar
-            onSearch={() => setKeyword(draft)}
-            onReset={() => {
-              setDraft('')
-              setKeyword('')
-            }}
-          >
-            <Input
-              className="md:w-56"
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              placeholder={t('plugin_codegen.tables.search')}
-              aria-label={t('plugin_codegen.tables.search')}
+          {tables.isError ? (
+            <EmptyState
+              icon={<Database aria-hidden="true" />}
+              title={t('plugin_codegen.tables.loadFailed')}
+              description={t('plugin_codegen.tables.loadFailedHint')}
+              action={
+                <Button variant="outline" onClick={() => void tables.refetch()}>
+                  {t('plugin_codegen.tables.retry')}
+                </Button>
+              }
             />
-          </FilterBar>
-          <DataTable
-            columns={tableColumns}
-            data={rows}
-            rowKey="name"
-            loading={tables.isLoading}
-            pagination={false}
-            emptyText={t('plugin_codegen.tables.empty')}
-            onRowClick={(r) => {
-              setTable(r.name)
-              setStep('config')
-            }}
-            rowActions={(r) => (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setTable(r.name)
-                  setStep('config')
+          ) : !tables.isLoading && allTables.length === 0 ? (
+            <EmptyState
+              icon={<Database aria-hidden="true" />}
+              title={t('plugin_codegen.tables.emptyTitle')}
+              description={t('plugin_codegen.tables.emptyHint')}
+              action={
+                <div className="flex flex-wrap justify-center gap-2">
+                  <Button onClick={() => setDefineOpen(true)}>
+                    <Plus aria-hidden="true" />
+                    {t('plugin_codegen.tables.new')}
+                  </Button>
+                  <Button variant="outline" onClick={() => void tables.refetch()}>
+                    {t('plugin_codegen.tables.refresh')}
+                  </Button>
+                </div>
+              }
+            />
+          ) : (
+            <>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm text-muted-foreground">{t('plugin_codegen.tables.hint')}</p>
+                <Button onClick={() => setDefineOpen(true)}>
+                  <Plus aria-hidden="true" />
+                  {t('plugin_codegen.tables.new')}
+                </Button>
+              </div>
+              <FilterBar
+                onSearch={() => setKeyword(draft)}
+                onReset={() => {
+                  setDraft('')
+                  setKeyword('')
                 }}
               >
-                {t('plugin_codegen.tables.select')}
-              </Button>
-            )}
-          />
+                <Input
+                  className="md:w-56"
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  placeholder={t('plugin_codegen.tables.search')}
+                  aria-label={t('plugin_codegen.tables.search')}
+                />
+              </FilterBar>
+              <DataTable
+                columns={tableColumns}
+                data={rows}
+                rowKey="name"
+                loading={tables.isLoading}
+                pagination={false}
+                emptyText={t('plugin_codegen.tables.empty')}
+                onRowClick={(r) => pickTable(r.name)}
+                rowActions={(r) => (
+                  <Button variant="outline" size="sm" onClick={() => pickTable(r.name)}>
+                    {t('plugin_codegen.tables.select')}
+                  </Button>
+                )}
+              />
+            </>
+          )}
         </TabsContent>
 
         <TabsContent value="config" className="m-0 flex flex-col gap-4">
           {loaded ? (
-            <ColumnsStep
-              schema={loaded}
-              cfg={cfg}
-              onCfgChange={setCfg}
-              module={module}
-              onModuleChange={setModule}
-              goModule={goModule}
-              onGoModuleChange={setGoModule}
-              moduleError={moduleError}
-              goModuleError={goModuleError}
-            />
+            <div className="flex flex-col gap-3">
+              {source?.kind === 'define' ? (
+                <p className="text-xs text-muted-foreground">{t('plugin_codegen.define.pendingHint', { table: loaded.table })}</p>
+              ) : null}
+              <ColumnsStep
+                schema={loaded}
+                cfg={cfg}
+                onCfgChange={setCfg}
+                module={module}
+                onModuleChange={setModule}
+                goModule={goModule}
+                onGoModuleChange={setGoModule}
+                moduleError={moduleError}
+                goModuleError={goModuleError}
+              />
+            </div>
           ) : (
             <p className="text-sm text-muted-foreground">{schema.isError ? t('plugin_codegen.errors.load') : t('common.loading')}</p>
           )}
@@ -183,6 +250,8 @@ export default function CodegenPage() {
           </div>
         </TabsContent>
       </Tabs>
+
+      <DefineTableDialog open={defineOpen} onOpenChange={setDefineOpen} pending={defineSchema.isPending} onSubmit={onDefine} />
 
       <ResponsiveDialog
         open={doneOpen}

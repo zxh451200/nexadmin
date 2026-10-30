@@ -68,14 +68,14 @@ func (s *Service) casSourceFor(ctx context.Context, tid idgen.ID, raw string) (*
 			return nil, cfg, err
 		}
 		if len(list) != 1 {
-			return nil, cfg, badReq("source is required")
+			return nil, cfg, badReq("identity.source_required")
 		}
 		cfg, err = list[0].casConfig()
 		return &list[0], cfg, err
 	}
 	id, err := idgen.Parse(raw)
 	if err != nil || id == 0 {
-		return nil, cfg, badReq("invalid source")
+		return nil, cfg, badReq("identity.source_invalid")
 	}
 	src, err := s.st.get(ctx, tid, id)
 	if err != nil {

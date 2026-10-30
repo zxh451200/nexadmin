@@ -43,8 +43,8 @@ type Service struct{ db *gorm.DB }
 // NewService 创建服务。
 func NewService(db *gorm.DB) *Service { return &Service{db: db} }
 
-func conflict(msg string) error { return response.Conflict("error.conflict").WithMsg(msg) }
-func notFound() error           { return response.NotFound("error.not_found") }
+func conflict(key string, args ...any) error { return response.Conflict(key, args...) }
+func notFound() error                        { return response.NotFound("error.not_found") }
 
 // builtinErr 内置字典保护：409 + i18n dict.builtin。
 func builtinErr() error { return response.Conflict("dict.builtin") }
@@ -121,7 +121,7 @@ func (s *Service) CreateType(ctx context.Context, in TypeInput) (*Type, error) {
 	if taken, err := s.typeCodeTaken(ctx, in.Code, 0); err != nil {
 		return nil, err
 	} else if taken {
-		return nil, conflict("字典编码已存在")
+		return nil, conflict("dict.code_exists")
 	}
 	t := &Type{Name: in.Name, Code: in.Code, Sort: in.Sort, Status: statusOr(in.Status), Remark: in.Remark}
 	t.Builtin = isBuiltinType(t.Code)
@@ -140,7 +140,7 @@ func (s *Service) UpdateType(ctx context.Context, id idgen.ID, in TypeInput) (*T
 	if taken, err := s.typeCodeTaken(ctx, in.Code, id); err != nil {
 		return nil, err
 	} else if taken {
-		return nil, conflict("字典编码已存在")
+		return nil, conflict("dict.code_exists")
 	}
 	err = s.db.WithContext(ctx).Model(&Type{}).Where("id = ?", int64(id)).Updates(map[string]any{
 		"name": in.Name, "code": in.Code, "sort": in.Sort, "status": statusOr(in.Status), "remark": in.Remark,
@@ -212,7 +212,7 @@ func (s *Service) GetData(ctx context.Context, id idgen.ID) (*Data, error) {
 // checkData 校验所属类型存在、同类型下值唯一。
 func (s *Service) checkData(ctx context.Context, in DataInput, exclude idgen.ID) error {
 	if _, err := s.GetType(ctx, in.TypeID); err != nil {
-		return response.BadRequest("error.bad_request").WithMsg("字典类型不存在")
+		return response.BadRequest("dict.type_not_found")
 	}
 	var n int64
 	err := s.db.WithContext(ctx).Model(&Data{}).
@@ -221,7 +221,7 @@ func (s *Service) checkData(ctx context.Context, in DataInput, exclude idgen.ID)
 		return err
 	}
 	if n > 0 {
-		return conflict("字典值已存在")
+		return conflict("dict.value_exists")
 	}
 	return nil
 }

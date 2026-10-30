@@ -7,11 +7,11 @@ import { z } from 'zod'
 import { FormGrid, FormGridFull, FormLayout } from '@/framework/components/FormLayout'
 import { RemoteSelect } from '@/framework/components/RemoteSelect'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
+import { SwitchField } from '@/framework/components/SwitchField'
 import { Uploader, type UploadedFile } from '@/framework/components/Uploader'
 import { Button } from '@/framework/ui/button'
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/framework/ui/form'
 import { Input } from '@/framework/ui/input'
-import { Switch } from '@/framework/ui/switch'
 import { Textarea } from '@/framework/ui/textarea'
 import { isHttpUrl, isValidRedirectUri, useSaveSsoApp, type SsoApp, type SsoAppCreated, type SsoAppForm } from './api'
 
@@ -229,35 +229,10 @@ export function SsoAppFormDialog({ open, onOpenChange, editing, onCreated }: Pro
               />
             </FormGridFull>
             <FormGridFull>
-              <FormField
-                control={form.control}
-                name="enabled"
-                render={({ field }) => (
-                  <FormItem className="flex min-h-11 items-center justify-between gap-3 rounded-md border border-border p-3">
-                    <FormLabel className="m-0">{t('sso.fields.enabled')}</FormLabel>
-                    <FormControl>
-                      <Switch checked={field.value} onCheckedChange={field.onChange} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
+              <SwitchField control={form.control} name="enabled" label={t('sso.fields.enabled')} />
             </FormGridFull>
             <FormGridFull>
-              <FormField
-                control={form.control}
-                name="allowOrgRead"
-                render={({ field }) => (
-                  <FormItem className="flex flex-col gap-1 rounded-md border border-border p-3">
-                    <div className="flex min-h-11 items-center justify-between gap-3">
-                      <FormLabel className="m-0">{t('sso.fields.allowOrgRead')}</FormLabel>
-                      <FormControl>
-                        <Switch checked={field.value} onCheckedChange={field.onChange} />
-                      </FormControl>
-                    </div>
-                    <FormDescription>{t('sso.form.allowOrgReadHint')}</FormDescription>
-                  </FormItem>
-                )}
-              />
+              <SwitchField control={form.control} name="allowOrgRead" label={t('sso.fields.allowOrgRead')} description={t('sso.form.allowOrgReadHint')} />
             </FormGridFull>
           </FormGrid>
         </FormLayout>

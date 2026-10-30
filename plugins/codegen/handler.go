@@ -31,6 +31,16 @@ func (h *handler) columns(c *gin.Context) {
 	respond(c, v, err)
 }
 
+// POST /plugins/codegen/schema：已有表给 table，新建表给 define。
+func (h *handler) schema(c *gin.Context) {
+	var req SchemaRequest
+	if !response.BindJSON(c, &req) {
+		return
+	}
+	v, err := h.svc.Schema(c.Request.Context(), req)
+	respond(c, v, err)
+}
+
 // POST /plugins/codegen/preview
 func (h *handler) preview(c *gin.Context) {
 	var req GenRequest

@@ -50,14 +50,14 @@ func (s *Service) Sources() []*Source { return s.reg.List() }
 // checkDataset 校验表单并解析出查询目标。
 func (s *Service) checkDataset(f DatasetForm) (*Target, DatasetConfig, error) {
 	if badText(f.Name, 100, true) || badText(f.Remark, 255, false) {
-		return nil, DatasetConfig{}, specErr("名称不能为空且不超过 100 字")
+		return nil, DatasetConfig{}, specErr("report.name_invalid")
 	}
 	tg, err := s.reg.Target(f.Source, f.Columns)
 	if err != nil {
 		return nil, DatasetConfig{}, err
 	}
 	if len(f.Filters) > maxFilters {
-		return nil, DatasetConfig{}, specErr("固定过滤条件过多")
+		return nil, DatasetConfig{}, specErr("report.fixed_filters_too_many")
 	}
 	// 固定过滤条件用同一套校验（列必须在所选列里、操作符白名单、值类型）。
 	probe := Spec{Dimensions: []Dim{{Column: f.Columns[0]}}, Filters: f.Filters, Limit: 1}
@@ -190,7 +190,7 @@ func (s *Service) DeleteDataset(ctx context.Context, id idgen.ID) error {
 		return dbErr(err)
 	}
 	if n > 0 {
-		return conflict("数据集仍被图表使用，无法删除")
+		return conflict("report.dataset_in_use")
 	}
 	tx, _ = s.scoped(ctx)
 	return dbErr(tx.Where("id = ?", id).Delete(&Dataset{}).Error)

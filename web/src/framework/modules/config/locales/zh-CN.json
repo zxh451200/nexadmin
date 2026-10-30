@@ -2,7 +2,7 @@
   "sysConfig": {
     "menu": "高级参数",
     "title": "高级参数",
-    "description": "键值对参数表与上传限制；改完即时生效，无需发版。日常配置请用「系统设置」",
+    "description": "键值对参数表，改完即时生效、无需发版",
     "name": "参数名称",
     "key": "参数键",
     "value": "参数值",
@@ -33,6 +33,52 @@
       "allowedTypesHint": "仅列表中的类型允许上传",
       "webp": "为图片生成 WebP 副本",
       "webpHint": "原图保留，额外保存一份 WebP 副本；支持 WebP 的浏览器自动取更小的那份。GIF / SVG 不转换。"
+    },
+    "item": {
+      "site_copyright": {
+        "name": "版权信息",
+        "remark": "页脚展示"
+      },
+      "user_default_password": {
+        "name": "用户初始密码",
+        "remark": "新建用户及重置密码时使用"
+      },
+      "user_register_enabled": {
+        "name": "开放注册",
+        "remark": ""
+      },
+      "login_captcha_enabled": {
+        "name": "登录验证码",
+        "remark": "开启=登录必须先过图形验证码；关闭=连续失败达到阈值后才要求"
+      },
+      "login_max_retry": {
+        "name": "登录最大重试次数",
+        "remark": ""
+      },
+      "login_lock_minutes": {
+        "name": "账号锁定时长(分钟)",
+        "remark": ""
+      },
+      "security_ip_whitelist": {
+        "name": "IP 白名单",
+        "remark": "仅超管端生效"
+      },
+      "upload_max_size_image_mb": {
+        "name": "图片上传大小上限(MB)",
+        "remark": "0 或留空表示不限制"
+      },
+      "upload_max_size_video_mb": {
+        "name": "视频上传大小上限(MB)",
+        "remark": "0 或留空表示不限制"
+      },
+      "upload_max_size_file_mb": {
+        "name": "普通文件上传大小上限(MB)",
+        "remark": "0 或留空表示不限制"
+      },
+      "upload_allowed_types": {
+        "name": "允许上传的文件类型",
+        "remark": "逗号分隔的 MIME 或扩展名"
+      }
     }
   }
 }

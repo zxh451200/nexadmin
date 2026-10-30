@@ -61,7 +61,6 @@
       "anonymous": "Not signed in",
       "col": { "time": "Last seen", "count": "Count", "message": "Message", "route": "Route", "user": "User" },
       "detail": {
-        "open": "Details",
         "title": "Error details",
         "firstSeen": "First seen",
         "lastSeen": "Last seen",

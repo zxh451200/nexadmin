@@ -5,11 +5,11 @@ import { z } from 'zod'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
+import { SwitchField } from '@/framework/components/SwitchField'
 import { FormGrid, FormGridFull, FormLayout } from '@/framework/components/FormLayout'
 import { TreeSelect } from '@/framework/components/TreeSelect'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
-import { Switch } from '@/framework/ui/switch'
 import { Textarea } from '@/framework/ui/textarea'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/framework/ui/form'
 import { useCreatePost, useUpdatePost, type SysPost } from './api'
@@ -152,18 +152,9 @@ export function PostFormDialog({ open, onOpenChange, editing, count }: PostFormD
                 </FormItem>
               )}
             />
-            <FormField
-              control={form.control}
-              name="status"
-              render={({ field }) => (
-                <FormItem className="flex items-center justify-between gap-3">
-                  <FormLabel>{t('post.field.status')}</FormLabel>
-                  <FormControl>
-                    <Switch checked={field.value === '1'} onCheckedChange={(c) => field.onChange(c ? '1' : '0')} />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
+            <FormGridFull>
+              <SwitchField control={form.control} name="status" label={t('post.field.status')} valueOn="1" valueOff="0" />
+            </FormGridFull>
             <FormGridFull>
               <FormField
                 control={form.control}

@@ -23,7 +23,7 @@ func Sort(ctx context.Context, db *gorm.DB, model any, ids []idgen.ID, scope fun
 		return err
 	}
 	if len(ids) != len(have) {
-		return response.Conflict("error.conflict").WithMsg("列表已变化，请刷新")
+		return response.Conflict("error.stale_list")
 	}
 	allowed := make(map[int64]struct{}, len(have))
 	for _, id := range have {
@@ -33,20 +33,20 @@ func Sort(ctx context.Context, db *gorm.DB, model any, ids []idgen.ID, scope fun
 	for _, id := range ids {
 		n := int64(id)
 		if _, ok := allowed[n]; !ok {
-			return response.Conflict("error.conflict").WithMsg("列表已变化，请刷新")
+			return response.Conflict("error.stale_list")
 		}
 		if _, ok := seen[n]; ok {
-			return response.Conflict("error.conflict").WithMsg("列表已变化，请刷新")
+			return response.Conflict("error.stale_list")
 		}
 		seen[n] = struct{}{}
 	}
 	if len(seen) != len(have) {
-		return response.Conflict("error.conflict").WithMsg("列表已变化，请刷新")
+		return response.Conflict("error.stale_list")
 	}
 	for i, id := range ids {
 		u := q.Model(model).Where("id = ?", int64(id)).Update("sort", (i+1)*10)
 		if errors.Is(u.Error, gorm.ErrRecordNotFound) {
-			return response.Conflict("error.conflict").WithMsg("列表已变化，请刷新")
+			return response.Conflict("error.stale_list")
 		}
 		if u.Error != nil {
 			return u.Error

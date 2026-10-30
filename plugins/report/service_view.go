@@ -28,7 +28,7 @@ func runtimeFilters(cfg ReportConfig, datasetID idgen.ID, vals map[string]any) (
 		case "dateRange":
 			arr, ok := v.([]any)
 			if !ok || len(arr) != 2 {
-				return nil, specErr("日期范围需要起止两个值")
+				return nil, specErr("report.date_range_two_values")
 			}
 			from, _ := arr[0].(string)
 			to, _ := arr[1].(string)
@@ -49,7 +49,7 @@ func runtimeFilters(cfg ReportConfig, datasetID idgen.ID, vals map[string]any) (
 					continue
 				}
 				if !f.Multiple && len(x) > 1 {
-					return nil, specErr("该筛选器不支持多选")
+					return nil, specErr("report.filter_multi_unsupported")
 				}
 				out = append(out, Filter{Column: f.Column, Op: "in", Value: x})
 			case string:
@@ -145,7 +145,7 @@ func (s *Service) ExportReportChart(ctx context.Context, w func(ExportFile) io.W
 		return err
 	}
 	if ch.Type != ChartTable {
-		return specErr("只有表格图表可以导出")
+		return specErr("report.export_table_only")
 	}
 	return writeXLSX(w(ExportFile{Name: ch.Name, Truncated: res.Truncated}), ch.Name, res)
 }

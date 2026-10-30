@@ -1,6 +1,6 @@
 /* NexAdmin 最小 Service Worker：只缓存应用壳，不碰任何接口与带凭据的请求。
  * 改动本文件即触发浏览器更新；需要强制刷新壳缓存时同步递增 VERSION。 */
-const VERSION = 'v8'
+const VERSION = 'v9'
 const SHELL_CACHE = 'nex-shell-' + VERSION
 const RUNTIME_CACHE = 'nex-runtime-' + VERSION
 const SHELL_URLS = ['/offline.html', '/manifest.webmanifest', '/icon.svg', '/icon-maskable.svg', '/icon-192.png', '/icon-512.png']

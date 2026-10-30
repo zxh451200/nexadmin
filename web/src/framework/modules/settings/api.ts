@@ -75,10 +75,16 @@ export interface SecuritySettings {
   maxAttempts: string
   /** 锁定分钟数 */
   lockMinutes: string
+  /** 闲置多少分钟自动退出（0 = 不限制，沿用 auth.refresh_ttl） */
+  idleMinutes: string
+  /** 从登录起最长会话小时数（0 = 不限制） */
+  maxHours: string
 }
 
 export const ATTEMPT_OPTIONS = ['3', '5', '10'] as const
 export const LOCK_MINUTE_OPTIONS = ['5', '15', '30', '60'] as const
+export const IDLE_MINUTE_OPTIONS = ['15', '30', '60', '120', '240', '0'] as const
+export const SESSION_HOUR_OPTIONS = ['8', '12', '24', '72', '0'] as const
 
 export type MailSecurity = 'none' | 'starttls' | 'ssl'
 export const ROBOT_TYPES = ['dingtalk', 'feishu', 'wecom'] as const

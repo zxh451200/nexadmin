@@ -9,9 +9,9 @@ import { FormGrid, FormGridFull, FormLayout } from '@/framework/components/FormL
 import { DictSelect } from '@/framework/components/DictSelect'
 import { TreeSelect } from '@/framework/components/TreeSelect'
 import { IconPicker } from '@/framework/components/IconPicker'
+import { SwitchField } from '@/framework/components/SwitchField'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
-import { Switch } from '@/framework/ui/switch'
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/framework/ui/form'
 import { useCreateMenu, useUpdateMenu, type MenuType, type SysMenu } from './api'
 
@@ -330,51 +330,25 @@ export function MenuFormDialog({ open, onOpenChange, editing, defaultParentId, t
                 </FormItem>
               )}
             />
-            {type === 'menu' && (
-              <SwitchField form={form} name="keepAlive" label={t('sysMenu.field.keepAlive')} />
+            {type !== 'button' && (
+              <FormGridFull>
+                <div className="divide-y divide-border rounded-lg border border-border">
+                  {type === 'menu' && (
+                    <SwitchField control={form.control} name="keepAlive" label={t('sysMenu.field.keepAlive')} bare className="p-3" />
+                  )}
+                  <SwitchField control={form.control} name="hidden" label={t('sysMenu.field.hidden')} bare className="p-3" />
+                  {type === 'menu' && (
+                    <SwitchField control={form.control} name="external" label={t('sysMenu.field.external')} bare className="p-3" />
+                  )}
+                </div>
+              </FormGridFull>
             )}
-            {type !== 'button' && <SwitchField form={form} name="hidden" label={t('sysMenu.field.hidden')} />}
-            {type === 'menu' && <SwitchField form={form} name="external" label={t('sysMenu.field.external')} />}
-            <FormField
-              control={form.control}
-              name="status"
-              render={({ field }) => (
-                <FormItem className="flex items-center justify-between gap-3 md:flex-col md:items-start md:justify-start">
-                  <FormLabel>{t('sysMenu.field.status')}</FormLabel>
-                  <FormControl>
-                    <Switch checked={field.value === '1'} onCheckedChange={(c) => field.onChange(c ? '1' : '0')} />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
+            <FormGridFull>
+              <SwitchField control={form.control} name="status" label={t('sysMenu.field.status')} valueOn="1" valueOff="0" />
+            </FormGridFull>
           </FormGrid>
         </FormLayout>
       </Form>
     </ResponsiveDialog>
-  )
-}
-
-function SwitchField({
-  form,
-  name,
-  label,
-}: {
-  form: ReturnType<typeof useForm<FormValues>>
-  name: 'keepAlive' | 'hidden' | 'external'
-  label: string
-}) {
-  return (
-    <FormField
-      control={form.control}
-      name={name}
-      render={({ field }) => (
-        <FormItem className="flex items-center justify-between gap-3 md:flex-col md:items-start md:justify-start">
-          <FormLabel>{label}</FormLabel>
-          <FormControl>
-            <Switch checked={field.value} onCheckedChange={field.onChange} />
-          </FormControl>
-        </FormItem>
-      )}
-    />
   )
 }

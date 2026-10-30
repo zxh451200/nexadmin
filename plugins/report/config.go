@@ -115,11 +115,11 @@ func badText(s string, max int, required bool) bool {
 // validateColors 校验颜色 token。
 func validateColors(cs []string) *response.Error {
 	if len(cs) > 12 {
-		return specErr("颜色数量过多")
+		return specErr("report.color_too_many")
 	}
 	for _, c := range cs {
 		if !colorTokens[c] {
-			return specErr("颜色必须使用语义 token")
+			return specErr("report.color_token_required")
 		}
 	}
 	return nil
@@ -131,22 +131,22 @@ func validateChartShape(typ string, sp Spec) *response.Error {
 	switch typ {
 	case ChartBar, ChartLine:
 		if nd < 1 || nm < 1 {
-			return specErr("柱状图/折线图需要至少 1 个维度和 1 个度量")
+			return specErr("report.chart_axes_required")
 		}
 	case ChartPie:
 		if nd != 1 || nm != 1 {
-			return specErr("饼图需要 1 个维度和 1 个度量")
+			return specErr("report.pie_axes_required")
 		}
 	case ChartMetric:
 		if nd != 0 || nm != 1 {
-			return specErr("指标卡需要 1 个度量，且不能有维度")
+			return specErr("report.metric_measure_required")
 		}
 	case ChartTable:
 		if nd+nm < 1 {
-			return specErr("表格至少需要 1 列")
+			return specErr("report.table_columns_required")
 		}
 	default:
-		return specErr("图表类型无效")
+		return specErr("report.chart_type_invalid")
 	}
 	return nil
 }
@@ -154,18 +154,18 @@ func validateChartShape(typ string, sp Spec) *response.Error {
 // validateScreenItems 校验画布布局：坐标/尺寸都落在栅格内，且组件两两不重叠。
 func validateScreenItems(items []ScreenItem) *response.Error {
 	if len(items) > maxScreenItems {
-		return specErr("大屏组件过多")
+		return specErr("report.screen_widgets_too_many")
 	}
 	for i, a := range items {
 		if a.ChartID == "" || a.W < 1 || a.H < 1 || a.X < 0 || a.Y < 0 || a.X+a.W > gridCols || a.Y+a.H > gridMaxRows {
-			return specErr("大屏布局超出画布")
+			return specErr("report.screen_layout_overflow")
 		}
 		if badText(a.Title, 100, false) {
-			return specErr("组件标题过长")
+			return specErr("report.widget_title_too_long")
 		}
 		for _, b := range items[:i] {
 			if a.X < b.X+b.W && b.X < a.X+a.W && a.Y < b.Y+b.H && b.Y < a.Y+a.H {
-				return specErr("大屏组件不能重叠")
+				return specErr("report.screen_widgets_overlap")
 			}
 		}
 	}

@@ -9,6 +9,7 @@ import (
 
 	"nexadmin/core"
 	"nexadmin/core/apidoc"
+	"nexadmin/core/auth"
 	"nexadmin/core/job"
 )
 
@@ -26,6 +27,10 @@ func (*module) Name() string { return "user" }
 // Register 注册路由。固定路径写在 /:id 之前。
 func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	m.deps.Store(d)
+	// 会话时限（闲置退出 / 最长会话）以设置页为准，登录与刷新时实时读取，管理员改完即时生效
+	if d.Auth != nil {
+		d.Auth.SetSessionPolicyProvider(func() auth.SessionPolicy { return sessionPolicy(d.DB) })
+	}
 	m.registerOAuth(d.Public, d) // /auth/providers、/auth/oauth/*（第三方快捷登录）
 	m.registerLoginVerify(d)     // POST /auth/login/verify（二次验证换令牌；无 LoginGate 注册时没有挑战，端点恒返回统一错误）
 	h := &handler{svc: &service{db: d.DB, cache: d.Cache, notify: d.Notify}, log: d.Log}

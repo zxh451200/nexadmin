@@ -5,12 +5,12 @@ import { z } from 'zod'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
-import { FormGrid, FormLayout } from '@/framework/components/FormLayout'
+import { SwitchField } from '@/framework/components/SwitchField'
+import { FormGrid, FormGridFull, FormLayout } from '@/framework/components/FormLayout'
 import { RemoteSelect } from '@/framework/components/RemoteSelect'
 import { TreeSelect } from '@/framework/components/TreeSelect'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
-import { Switch } from '@/framework/ui/switch'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/framework/ui/form'
 import { useCreateDept, useUpdateDept, type SysDept } from './api'
 
@@ -226,18 +226,9 @@ export function DeptFormDialog({ open, onOpenChange, editing, defaultParentId, t
                 </FormItem>
               )}
             />
-            <FormField
-              control={form.control}
-              name="status"
-              render={({ field }) => (
-                <FormItem className="flex items-center justify-between gap-3 md:flex-col md:items-start md:justify-start">
-                  <FormLabel>{t('dept.field.status')}</FormLabel>
-                  <FormControl>
-                    <Switch checked={field.value === '1'} onCheckedChange={(c) => field.onChange(c ? '1' : '0')} />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
+            <FormGridFull>
+              <SwitchField control={form.control} name="status" label={t('dept.field.status')} valueOn="1" valueOff="0" />
+            </FormGridFull>
           </FormGrid>
         </FormLayout>
       </Form>

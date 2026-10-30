@@ -12,7 +12,9 @@ import (
 // 用户表单、用户筛选与角色“自定义数据范围”的部门下拉都依赖完整的部门树；只有部门管理页带 scene=manage 时才裁剪
 // （见 TreeScoped/GetScoped）。
 
-func forbidden(n int) error { return datascope.Forbidden("部门", n) }
+func forbidden(ctx context.Context, n int) error {
+	return datascope.Forbidden(ctx, "datascope.resource.dept", n)
+}
 
 // subtreeIDs 返回 id 及其全部下级部门；id 不存在时返回 nil。
 func (s *Service) subtreeIDs(ctx context.Context, id idgen.ID) ([]int64, error) {
@@ -42,7 +44,7 @@ func (s *Service) CheckCreate(ctx context.Context, sc *datascope.Scope, in Input
 		return nil
 	}
 	if !parentOK(sc, nz(in.ParentID)) {
-		return forbidden(1)
+		return forbidden(ctx, 1)
 	}
 	return nil
 }
@@ -53,12 +55,12 @@ func (s *Service) CheckUpdate(ctx context.Context, sc *datascope.Scope, id idgen
 		return nil
 	}
 	if !sc.HasDept(int64(id)) {
-		return forbidden(1)
+		return forbidden(ctx, 1)
 	}
 	d, err := get(s.db.WithContext(ctx), id)
 	if err != nil {
 		if isNotFoundErr(err) {
-			return forbidden(1)
+			return forbidden(ctx, 1)
 		}
 		return err
 	}
@@ -67,7 +69,7 @@ func (s *Service) CheckUpdate(ctx context.Context, sc *datascope.Scope, id idgen
 		return nil
 	}
 	if !parentOK(sc, parent) {
-		return forbidden(1)
+		return forbidden(ctx, 1)
 	}
 	return s.checkSubtree(ctx, sc, id)
 }
@@ -86,7 +88,7 @@ func (s *Service) checkSubtree(ctx context.Context, sc *datascope.Scope, id idge
 		return err
 	}
 	if len(ids) == 0 {
-		return forbidden(1)
+		return forbidden(ctx, 1)
 	}
 	denied := 0
 	for _, v := range ids {
@@ -95,7 +97,7 @@ func (s *Service) checkSubtree(ctx context.Context, sc *datascope.Scope, id idge
 		}
 	}
 	if denied > 0 {
-		return forbidden(denied)
+		return forbidden(ctx, denied)
 	}
 	return nil
 }
@@ -115,7 +117,7 @@ func (s *Service) CheckSort(ctx context.Context, sc *datascope.Scope, in SortInp
 		}
 	}
 	if denied > 0 {
-		return forbidden(denied)
+		return forbidden(ctx, denied)
 	}
 	return nil
 }

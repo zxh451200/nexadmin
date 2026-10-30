@@ -49,27 +49,15 @@ type envelope struct {
 // LicenseError 带着对应的插件状态（unlicensed / expired / invalid）和人能读懂的原因。
 type LicenseError struct {
 	Status string
-	Reason string
-	// ActionHint 是给使用者的下一步建议；展示时拼在 Reason 之后。
-	ActionHint string
+	// Key 是 i18n 字典里的整句（含下一步建议），Args 是模板参数；返回给前端时按请求语言翻译。
+	Key  string
+	Args []any
 }
 
-func (e *LicenseError) Error() string { return e.Status + ": " + e.Reason }
+func (e *LicenseError) Error() string { return e.Status + ": " + e.Key }
 
-// Message 返回「原因 + 下一步」，供后台直接展示；没有建议时只返回原因。
-func (e *LicenseError) Message() string {
-	if e.ActionHint == "" {
-		return e.Reason
-	}
-	return e.Reason + "；" + e.ActionHint
-}
-
-func invalid(format string, a ...any) *LicenseError {
-	return &LicenseError{
-		Status:     StatusInvalid,
-		Reason:     fmt.Sprintf(format, a...),
-		ActionHint: "请确认授权文件属于该插件且由受信任的发行方签发；必要时向发行方重新获取",
-	}
+func invalid(key string, a ...any) *LicenseError {
+	return &LicenseError{Status: StatusInvalid, Key: key, Args: a}
 }
 
 // Sign 用私钥签发授权文件文本。
@@ -89,17 +77,17 @@ func Sign(priv ed25519.PrivateKey, l License) ([]byte, error) {
 // Verify 校验授权文件文本：签名 -> 载荷 -> 插件名 -> 有效期。失败时返回 *LicenseError。
 func Verify(raw []byte, pluginID string, now time.Time, pub ed25519.PublicKey) (*License, error) {
 	if len(pub) != ed25519.PublicKeySize {
-		return nil, invalid("框架未内置有效的授权公钥")
+		return nil, invalid("license.public_key_missing")
 	}
 	return VerifyKeys(raw, pluginID, now, []Key{{KID: KeyID(pub), Pub: pub}})
 }
 
 // openEnvelope 做授权文件 / 吊销清单共用的外层校验：大小 -> 公钥 -> 信封格式 -> kid 选钥 -> 验签，
-// 返回已验签的载荷原始字节。what 是错误信息里的名词（如“授权文件”“吊销清单”）。
+// 返回已验签的载荷原始字节。what 是字典里该类文件的 key 前缀（license.file / license.revocation）。
 // 授权与吊销清单使用同一套公钥集合与 kid 规则：带 kid 时只用 kid 相同的公钥，没有 kid 时依次尝试全部公钥。
 func openEnvelope(raw []byte, keys []Key, maxSize int, what string) ([]byte, *LicenseError) {
 	if len(raw) == 0 || len(raw) > maxSize {
-		return nil, invalid("%s为空或过大", what)
+		return nil, invalid(what + ".empty")
 	}
 	valid := keys[:0:0]
 	for _, k := range keys {
@@ -108,16 +96,16 @@ func openEnvelope(raw []byte, keys []Key, maxSize int, what string) ([]byte, *Li
 		}
 	}
 	if len(valid) == 0 {
-		return nil, invalid("框架未内置有效的授权公钥")
+		return nil, invalid("license.public_key_missing")
 	}
 	var env envelope
 	if err := json.Unmarshal(raw, &env); err != nil {
-		return nil, invalid("%s格式错误", what)
+		return nil, invalid(what + ".bad_format")
 	}
 	payload, err1 := base64.StdEncoding.DecodeString(env.Payload)
 	sig, err2 := base64.StdEncoding.DecodeString(env.Signature)
 	if err1 != nil || err2 != nil || len(sig) != ed25519.SignatureSize {
-		return nil, invalid("%s格式错误", what)
+		return nil, invalid(what + ".bad_format")
 	}
 	cands := valid
 	if env.KID != "" {
@@ -128,7 +116,7 @@ func openEnvelope(raw []byte, keys []Key, maxSize int, what string) ([]byte, *Li
 			}
 		}
 		if len(cands) == 0 {
-			return nil, invalid("%s的签发密钥 %q 不在框架内置公钥中", what, env.KID)
+			return nil, invalid(what+".unknown_kid", env.KID)
 		}
 	}
 	for _, k := range cands {
@@ -136,31 +124,30 @@ func openEnvelope(raw []byte, keys []Key, maxSize int, what string) ([]byte, *Li
 			return payload, nil
 		}
 	}
-	return nil, invalid("签名校验失败，%s被篡改或不是官方签发", what)
+	return nil, invalid(what + ".signature")
 }
 
 // VerifyKeys 同 Verify，但接受一组公钥：授权文件带 kid 时只用 kid 相同的公钥；
 // 没有 kid（旧文件）时依次尝试全部公钥。
 // 本函数只判断签名、插件名与有效期；是否被吊销由 Manager / CheckFile 结合吊销清单另行判定（见 revoke.go）。
 func VerifyKeys(raw []byte, pluginID string, now time.Time, keys []Key) (*License, error) {
-	payload, lerr := openEnvelope(raw, keys, MaxLicenseSize, "授权文件")
+	payload, lerr := openEnvelope(raw, keys, MaxLicenseSize, "license.file")
 	if lerr != nil {
 		return nil, lerr
 	}
 	var l License
 	if err := json.Unmarshal(payload, &l); err != nil {
-		return nil, invalid("授权载荷格式错误")
+		return nil, invalid("license.payload_invalid")
 	}
 	if l.Plugin != pluginID {
-		return nil, invalid("授权文件属于插件 %q，不能用于 %q", l.Plugin, pluginID)
+		return nil, invalid("license.wrong_plugin", l.Plugin, pluginID)
 	}
 	exp, err := time.Parse(time.RFC3339, l.ExpiresAt)
 	if err != nil {
-		return nil, invalid("expires_at 格式错误")
+		return nil, invalid("license.expires_at_invalid")
 	}
 	if !now.Before(exp) {
-		return &l, &LicenseError{Status: StatusExpired, Reason: "授权已于 " + l.ExpiresAt + " 到期",
-			ActionHint: "请联系发行方续期，然后在插件管理导入新的授权文件"}
+		return &l, &LicenseError{Status: StatusExpired, Key: "license.expired", Args: []any{l.ExpiresAt}}
 	}
 	return &l, nil
 }
@@ -177,15 +164,14 @@ func LicensePath(root, id string) (string, error) {
 func checkFile(root, id string, now time.Time, keys []Key) (*License, error) {
 	p, err := LicensePath(root, id)
 	if err != nil {
-		return nil, invalid("%v", err)
+		return nil, invalid("license.id_invalid", id)
 	}
 	raw, err := os.ReadFile(p)
 	if errors.Is(err, os.ErrNotExist) {
-		return nil, &LicenseError{Status: StatusUnlicensed, Reason: "未找到授权文件 data/licenses/" + id + ".lic",
-			ActionHint: "请在插件市场购买授权，或改用免费版本"}
+		return nil, &LicenseError{Status: StatusUnlicensed, Key: "license.unlicensed", Args: []any{id}}
 	}
 	if err != nil {
-		return nil, invalid("读取授权文件失败: %v", err)
+		return nil, invalid("license.read_failed", err)
 	}
 	return VerifyKeys(raw, id, now, keys)
 }

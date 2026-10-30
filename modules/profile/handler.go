@@ -88,7 +88,7 @@ func (h *Handler) BindPhone(c *gin.Context) {
 		return
 	}
 	if !phoneRe.MatchString(in.Phone) {
-		response.Fail(c, response.BadRequest("error.bad_request").WithMsg("手机号格式不正确"))
+		response.Fail(c, response.BadRequest("user.phone_invalid"))
 		return
 	}
 	// 校验与发送同场景（notify.SceneBindPhone）：场景隔离的验证码 key 要求两侧一致
@@ -134,7 +134,7 @@ func (h *Handler) KickSession(c *gin.Context) {
 		return
 	}
 	if sid == session.Current(c) {
-		response.Fail(c, response.BadRequest("error.bad_request").WithMsg("不能在此下线当前会话，请直接退出登录"))
+		response.Fail(c, response.BadRequest("session.kick_self"))
 		return
 	}
 	_, found, err := h.sessions.Kick(c.Request.Context(), sid, uidOf(c))

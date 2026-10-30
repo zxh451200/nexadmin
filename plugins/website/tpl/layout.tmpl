@@ -38,7 +38,7 @@
 <meta name="twitter:description" content="{{.Desc}}">
 <meta name="twitter:image" content="{{if .OGImage}}{{.OGImage}}{{else}}{{.BaseURL}}/website-assets/og.png{{end}}">
 {{if .PluginLD}}<script type="application/ld+json">{{.PluginLD}}</script>{{end}}
-<link rel="stylesheet" href="/website-assets/site.css?v=0.9.34">
+<link rel="stylesheet" href="/website-assets/site.css?v={{assetV "site.css"}}">
 <noscript><style>
 [data-reveal],.tl{opacity:1;transform:none}
 [role="tabpanel"][hidden]{display:block !important}
@@ -137,7 +137,7 @@
 {{template "content" .}}
 </main>
 <footer class="site-footer">
-  <div class="container footer-grid">
+  <div class="container footer-grid{{if .FriendLinks}} footer-grid-wide{{end}}">
     <div class="footer-brand">
       <a class="brand" href="{{.Home}}">
         {{if .LogoURL}}<img class="brand-logo" src="{{.LogoURL}}" alt="{{.SiteName}}">{{else}}<span class="brand-mark" aria-hidden="true">{{initial .SiteName}}</span>{{end}}
@@ -164,11 +164,30 @@
       <h4>{{.T "layout.resources"}}</h4>
       <a href="{{.URL "/news"}}">{{.T "layout.news"}}</a>
       <a href="{{.URL "/p/about"}}">{{.T "layout.about"}}</a>
-      <a href="{{.Home}}#quickstart">{{.T "layout.quickstart"}}</a>
+      <a href="{{.URL "#quickstart"}}">{{.T "layout.quickstart"}}</a>
     </nav>
+    {{if .FriendLinks}}
+    <nav class="footer-col" aria-label="{{.T "layout.friends"}}">
+      <h4>{{.T "layout.friends"}}</h4>
+      {{range .FriendLinks}}<a href="{{.URL}}" target="_blank" rel="noopener noreferrer nofollow">{{.Name}}</a>{{end}}
+    </nav>
+    {{end}}
     <nav class="footer-col" aria-label="{{.T "layout.contact"}}">
       <h4>{{.T "layout.contact"}}</h4>
+      <a href="{{.URL "/contact"}}">{{.T "layout.contactUs"}}</a>
       {{if .ContactEmail}}<a class="footer-mail" href="mailto:{{.ContactEmail}}" data-copy-email="{{.ContactEmail}}" title="{{.T "site.js.emailCopy"}}">{{.ContactEmail}}</a>{{end}}
+      {{if .ContactPhone}}<a class="footer-tel" href="tel:{{.ContactPhone}}">{{.ContactPhone}}</a>{{end}}
+      {{if .Socials}}
+      <ul class="footer-social" aria-label="{{.T "layout.social"}}">
+        {{range .Socials}}<li><a href="{{.URL}}" target="_blank" rel="noopener noreferrer nofollow" aria-label="{{$.SocialLabel .Platform}}" title="{{$.SocialLabel .Platform}}">{{socialIcon .Platform}}</a></li>{{end}}
+      </ul>
+      {{end}}
+      {{if .QRCodeURL}}
+      <figure class="footer-qr">
+        <img src="{{.QRCodeURL}}" alt="{{if .QRCodeCaption}}{{.QRCodeCaption}}{{else}}{{.T "layout.qrAlt"}}{{end}}" loading="lazy" width="96" height="96">
+        {{if .QRCodeCaption}}<figcaption>{{.QRCodeCaption}}</figcaption>{{end}}
+      </figure>
+      {{end}}
       {{if .ICP}}<a class="footer-icp" href="https://beian.miit.gov.cn/" rel="noopener noreferrer" target="_blank">{{.ICP}}</a>{{end}}
     </nav>
   </div>
@@ -178,6 +197,6 @@
   </div>
 </footer>
 <script type="application/json" id="site-i18n">{{.JSStrings}}</script>
-<script src="/website-assets/site.js?v=0.9.34" defer></script>
+<script src="/website-assets/site.js?v={{assetV "site.js"}}" defer></script>
 </body>
 </html>{{end}}

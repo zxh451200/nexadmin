@@ -12,8 +12,8 @@ import { ScreenCanvas } from './ScreenCanvas'
 import { builtinText } from './builtinText'
 
 /**
- * 数据大屏展示页：深色大屏主题 + 全屏。
- * 深色主题用外层容器的 `dark` 类让框架 token 在局部切到暗色变量，不写任何硬编码颜色。
+ * 数据大屏展示页：跟随应用当前主题 + 全屏。
+ * 颜色全部走语义 token，不写硬编码颜色，也不在容器上强制 dark，亮/暗与后台设置一致。
  * 全屏 = 浏览器 Fullscreen API（尽力而为）+ 固定铺满的覆盖层兜底（API 不可用或被拒绝时仍然铺满视口）。
  * 自动刷新：间隔来自大屏配置，页面不在前台（切走标签 / 浏览器标签页隐藏）时暂停，回到前台立即补刷一次。
  */
@@ -59,7 +59,7 @@ export default function ScreenViewPage() {
   return (
     <div
       ref={boxRef}
-      className={cn('dark bg-background text-foreground', full ? 'fixed inset-0 z-50 overflow-auto p-4' : 'min-h-full p-3 md:p-5')}
+      className={cn('bg-background text-foreground', full ? 'fixed inset-0 z-50 overflow-auto p-4' : 'min-h-full p-3 md:p-5')}
       data-testid="screen-root"
     >
       <div className="mb-3 flex flex-wrap items-center gap-2">

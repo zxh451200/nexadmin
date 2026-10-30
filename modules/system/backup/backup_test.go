@@ -127,11 +127,15 @@ func TestToolMissingReportsUnavailableWithReason(t *testing.T) {
 	if st.Available || !strings.Contains(st.Reason, "mysqldump") {
 		t.Fatalf("want available=false with reason naming mysqldump, got %+v", st)
 	}
+	// 缺哪几个工具要单独给出来，页面据此按语言拼文案
+	if len(st.Missing) != 2 || st.Missing[0] != "mysqldump" || st.Missing[1] != "mariadb-dump" {
+		t.Fatalf("want missing tool names, got %+v", st)
+	}
 	b, _ := json.Marshal(st)
 	var m map[string]any
 	_ = json.Unmarshal(b, &m)
-	if m["available"] != false || m["reason"] == "" || m["reason"] == nil {
-		t.Fatalf("JSON must carry available:false and reason, got %s", b)
+	if m["available"] != false || m["reason"] == "" || m["reason"] == nil || m["missing"] == nil {
+		t.Fatalf("JSON must carry available:false, reason and missing, got %s", b)
 	}
 	// 立即备份在工具缺失时直接拒绝，不会创建记录或文件（db 为 nil，访问即 panic）
 	_, err := s.Start(context.Background(), SourceManual, 1)

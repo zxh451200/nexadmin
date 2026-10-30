@@ -7,11 +7,11 @@ import { z } from 'zod'
 import { DictSelect } from '@/framework/components/DictSelect'
 import { FormGrid, FormGridFull, FormLayout } from '@/framework/components/FormLayout'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
+import { SwitchField } from '@/framework/components/SwitchField'
 import { TreeSelect } from '@/framework/components/TreeSelect'
 import { Button } from '@/framework/ui/button'
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/framework/ui/form'
 import { Input } from '@/framework/ui/input'
-import { Switch } from '@/framework/ui/switch'
 import { Textarea } from '@/framework/ui/textarea'
 import { useCreateRole, useUpdateRole, type Role, type RoleInput } from './api'
 
@@ -167,39 +167,18 @@ export function RoleFormDialog({ open, onOpenChange, role, nextSort }: RoleFormD
                 </FormItem>
               )}
             />
-            <FormField
-              control={form.control}
-              name="enabled"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('role.form.status')}</FormLabel>
-                  <div className="flex min-h-11 items-center md:min-h-9">
-                    <FormControl>
-                      <Switch checked={field.value} onCheckedChange={field.onChange} disabled={role?.builtin} />
-                    </FormControl>
-                  </div>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="assignable"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('role.form.assignable')}</FormLabel>
-                  <div className="flex min-h-11 items-center md:min-h-9">
-                    <FormControl>
-                      <Switch checked={field.value} onCheckedChange={field.onChange} disabled={role?.builtin} aria-describedby="role-assignable-hint" />
-                    </FormControl>
-                  </div>
-                  <p id="role-assignable-hint" className="text-xs text-muted-foreground">
-                    {role?.builtin ? t('role.form.assignableBuiltin') : t('role.form.assignableHint')}
-                  </p>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <FormGridFull>
+              <SwitchField control={form.control} name="enabled" label={t('role.form.status')} disabled={role?.builtin} />
+            </FormGridFull>
+            <FormGridFull>
+              <SwitchField
+                control={form.control}
+                name="assignable"
+                label={t('role.form.assignable')}
+                description={role?.builtin ? t('role.form.assignableBuiltin') : t('role.form.assignableHint')}
+                disabled={role?.builtin}
+              />
+            </FormGridFull>
             <FormGridFull>
               <FormField
                 control={form.control}

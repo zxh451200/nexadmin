@@ -10,12 +10,13 @@
       <summary>{{.T "docs.title"}}</summary>
       <nav aria-label="{{.T "docs.title"}}">
         {{range .DocNav}}
-        <div class="docs-group">
-          <p class="docs-group-title">{{.Title}}</p>
+        {{$open := false}}{{range .Items}}{{if .Active}}{{$open = true}}{{end}}{{end}}
+        <details class="docs-group"{{if $open}} open{{end}}>
+          <summary class="docs-group-title">{{.Title}}</summary>
           <ul>
             {{range .Items}}<li><a href="{{.URL}}" lang="{{.Language}}"{{if .Active}} class="active" aria-current="page"{{end}}>{{.Title}}</a></li>{{end}}
           </ul>
-        </div>
+        </details>
         {{end}}
       </nav>
     </details>

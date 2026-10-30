@@ -19,7 +19,7 @@ type Service struct{ db *gorm.DB }
 func NewService(db *gorm.DB) *Service { return &Service{db: db} }
 
 func errDupCode() error {
-	return response.BadRequest("error.bad_request").WithMsg("岗位编码已存在")
+	return response.BadRequest("post.code_exists")
 }
 
 func statusOr(s string) string {

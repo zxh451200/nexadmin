@@ -163,6 +163,7 @@
   // ---- 页面级绑定 ----
   function initSite() {
     i18n = readI18n();
+    initContactForm();
     clearWinHandlers();
     if (revealObserver) { revealObserver.disconnect(); revealObserver = null; }
 
@@ -403,8 +404,6 @@
         });
       });
       select(0);
-      var tour = list.closest('.product-tour');
-      if (tour) tour.classList.add('is-ready');
     });
 
     var imageDialog = document.querySelector('.image-dialog');
@@ -518,13 +517,13 @@
 
     // 产品示意窗口随鼠标轻微 3D 倾斜。
     var visual = document.querySelector('.hero-visual');
-    var browser = document.querySelector('.hero-visual .browser');
+    var browser = document.querySelector('.hero-shot');
     if (visual && browser && fine) {
       var tiltPending = false, tx = 0, ty = 0;
       var applyTilt = function () {
         tiltPending = false;
-        browser.style.setProperty('--ry', (tx * 2.4).toFixed(2) + 'deg');
-        browser.style.setProperty('--rx', (-ty * 2.4).toFixed(2) + 'deg');
+        browser.style.setProperty('--ry', (tx * 1.8).toFixed(2) + 'deg');
+        browser.style.setProperty('--rx', (-ty * 1.5).toFixed(2) + 'deg');
       };
       visual.addEventListener('mousemove', function (e) {
         var r = visual.getBoundingClientRect();
@@ -627,6 +626,60 @@
       }, { threshold: 0.4 });
       stats.forEach(function (el) { statIO.observe(el); });
     }
+  }
+
+  // ---- 在线留言：fetch 提交并就地反馈；脚本不可用时表单整页 POST，服务端 303 回联系页带结果 ----
+  function initContactForm() {
+    var form = document.querySelector('[data-contact-form]');
+    if (!form || !window.fetch || !window.FormData) return;
+    var status = form.querySelector('[data-contact-status]');
+    var submit = form.querySelector('button[type="submit"]');
+    var show = function (text, ok) {
+      if (!status) return;
+      status.hidden = false;
+      status.className = 'contact-status ' + (ok ? 'contact-status-ok' : 'contact-status-err');
+      status.textContent = text;
+    };
+    var errText = function (code) {
+      if (code === 'name') return msg('contactErrName', '请填写称呼');
+      if (code === 'email') return msg('contactErrEmail', '请填写有效的邮箱地址');
+      if (code === 'content') return msg('contactErrContent', '留言内容至少 5 个字');
+      if (code === 'rate') return msg('contactRate', '发送太频繁，请稍后再试');
+      return msg('contactFailed', '发送失败，请稍后重试');
+    };
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var fd = new FormData(form);
+      var name = String(fd.get('name') || '').trim();
+      var email = String(fd.get('email') || '').trim();
+      var content = String(fd.get('content') || '').trim();
+      if (!name) { show(errText('name'), false); return; }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { show(errText('email'), false); return; }
+      if (content.length < 5) { show(errText('content'), false); return; }
+      if (submit) submit.disabled = true;
+      show(msg('contactSending', '正在发送…'), true);
+      fetch(form.action, {
+        method: 'POST',
+        headers: { Accept: 'application/json' },
+        body: new URLSearchParams(fd),
+        credentials: 'same-origin'
+      })
+        .then(function (res) {
+          if (res.status === 429) throw { code: 'rate' };
+          return res.json().catch(function () { return { ok: false, error: 'fail' }; }).then(function (body) {
+            if (!res.ok || !body || !body.ok) throw { code: body && body.error };
+            return body;
+          });
+        })
+        .then(function () {
+          form.reset();
+          show(msg('contactSent', '已收到，我们会尽快回复'), true);
+        })
+        .catch(function (err) {
+          show(errText(err && err.code), false);
+        })
+        .then(function () { if (submit) submit.disabled = false; });
+    });
   }
 
   window.__siteInit = initSite;

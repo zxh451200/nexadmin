@@ -159,7 +159,7 @@ export default function ImportsPage() {
             className="sr-only"
             onChange={(e) => setFiles([...(e.target.files ?? [])])}
           />
-          <Button variant="outline" className="max-w-64" onClick={() => fileRef.current?.click()}>
+          <Button variant="outline" className="max-w-64" onClick={() => fileRef.current?.click()} disabled={noSources}>
             <FileUp aria-hidden="true" />
             <span className="truncate">
               {files.length === 0

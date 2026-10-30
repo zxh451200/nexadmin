@@ -9,6 +9,7 @@ import { Checkbox } from '@/framework/ui/checkbox'
 import { Input } from '@/framework/ui/input'
 import { Label } from '@/framework/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
+import { Textarea } from '@/framework/ui/textarea'
 import { previewDataset, useSaveDataset, useSources, type Dataset, type DatasetForm } from './api'
 import { ChartView } from './ChartView'
 import { emptyChartConfig } from './chartData'
@@ -145,7 +146,7 @@ export function DatasetDialog({ open, onOpenChange, editing }: Props) {
           <FormGridFull>
             <div className="flex flex-col gap-2">
               <Label htmlFor="ds-remark">{t('common.remark')}</Label>
-              <Input id="ds-remark" value={form.remark} maxLength={255} onChange={(e) => setForm({ ...form, remark: e.target.value })} />
+              <Textarea id="ds-remark" rows={3} value={form.remark} maxLength={255} onChange={(e) => setForm({ ...form, remark: e.target.value })} />
             </div>
           </FormGridFull>
         </FormGrid>

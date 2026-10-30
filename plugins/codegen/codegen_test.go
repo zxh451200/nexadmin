@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"go/ast"
 	"go/format"
 	"go/parser"
@@ -64,6 +65,7 @@ func newFake() *fakeReader {
 			"plain_note": {
 				{Name: "id", TypeName: "bigint", PrimaryKey: true},
 				{Name: "name", TypeName: "varchar", Length: 50},
+				{Name: "deleted_at", TypeName: "datetime", Nullable: true},
 			},
 			"dict_tag": {
 				{Name: "id", TypeName: "int8", PrimaryKey: true},
@@ -358,6 +360,7 @@ func TestHandlersAndPermissions(t *testing.T) {
 	e := gin.New()
 	e.GET("/tables", h.tables)
 	e.GET("/tables/:name/columns", h.columns)
+	e.POST("/schema", h.schema)
 	e.POST("/preview", h.preview)
 	e.POST("/download", h.download)
 
@@ -377,8 +380,20 @@ func TestHandlersAndPermissions(t *testing.T) {
 	if w := do("GET", "/tables/sys_user/columns", ""); w.Code == 200 {
 		t.Error("framework table columns served")
 	}
+	if w := do("POST", "/schema", `{"table":"demo_item"}`); w.Code != 200 || !strings.Contains(w.Body.String(), `"shape":"tenant"`) {
+		t.Errorf("schema: %d %s", w.Code, w.Body.String())
+	}
+	if w := do("POST", "/schema", `{"define":{"name":"product","tenant":true,"fields":[{"name":"title","kind":"string","required":true}]}}`); w.Code != 200 || !strings.Contains(w.Body.String(), `"table":"biz_product"`) {
+		t.Errorf("defined schema: %d %s", w.Code, w.Body.String())
+	}
 	if w := do("POST", "/preview", `{"table":"plain_note","module":"note"}`); w.Code != 200 || !strings.Contains(w.Body.String(), "internal/modules/note/model.go") {
 		t.Errorf("preview: %d %s", w.Code, w.Body.String())
+	}
+	if w := do("POST", "/preview", `{"define":{"name":"product","fields":[{"name":"title","kind":"string"}]},"module":"product"}`); w.Code != 200 || !strings.Contains(w.Body.String(), "migrations/business/postgres/") {
+		t.Errorf("defined preview: %d %s", w.Code, w.Body.String())
+	}
+	if w := do("POST", "/preview", `{"define":{"name":"product","fields":[]},"module":"product"}`); w.Code == 200 {
+		t.Error("preview accepted a definition without fields")
 	}
 	if w := do("POST", "/preview", `{"table":"plain_note","module":"x\"y"}`); w.Code == 200 {
 		t.Error("preview accepted bad module")
@@ -397,8 +412,8 @@ func TestHandlersAndPermissions(t *testing.T) {
 	r := gin.New()
 	(&module{}).Register(r.Group("/api/v1"), &core.Deps{})
 	routes := r.Routes()
-	if len(routes) != 4 {
-		t.Fatalf("registered %d routes, want 4", len(routes))
+	if len(routes) != 5 {
+		t.Fatalf("registered %d routes, want 5", len(routes))
 	}
 	for _, rt := range routes {
 		req := httptest.NewRequest(rt.Method, strings.ReplaceAll(rt.Path, ":name", "demo_item"), strings.NewReader(`{}`))
@@ -435,11 +450,17 @@ func TestGeneratedCodeCompiles(t *testing.T) {
 	for _, tc := range []struct {
 		table, module string
 		cols          []ColumnConfig
+		def           *TableDef
 	}{
-		{"demo_item", "demo", nil}, {"plain_note", "note", nil}, {"dict_tag", "tag", nil}, {"tenant_note", "tnote", nil},
-		{"demo_item", "demotwo", allq},
+		{"demo_item", "demo", nil, nil}, {"plain_note", "note", nil, nil}, {"dict_tag", "tag", nil, nil},
+		{"tenant_note", "tnote", nil, nil}, {"demo_item", "demotwo", allq, nil},
+		{"", "softprod", nil, &TableDef{Name: "soft_product", Tenant: true, SoftDelete: true, Fields: []FieldDef{
+			{Name: "title", Kind: KindString, Length: 80, Required: true},
+			{Name: "qty", Kind: KindInt},
+			{Name: "published_at", Kind: KindDateTime},
+		}}},
 	} {
-		out, err := svc().Generate(context.Background(), GenRequest{Table: tc.table, Module: tc.module, GoModule: "nexadmin", Columns: tc.cols})
+		out, err := svc().Generate(context.Background(), GenRequest{Table: tc.table, Define: tc.def, Module: tc.module, GoModule: "nexadmin", Columns: tc.cols})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -462,6 +483,148 @@ func TestGeneratedCodeCompiles(t *testing.T) {
 		cmd.Dir = root
 		if b, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("go %s generated code failed: %v\n%s", verb, err, b)
+		}
+	}
+}
+
+func generatedFiles(out *Output) map[string]string {
+	m := map[string]string{}
+	for _, f := range out.Files {
+		m[f.Path] = f.Content
+	}
+	return m
+}
+
+// TestDefineTableAndMigrations 覆盖向导新建表：表名加前缀、列推荐、软删、三引擎迁移与提示。
+func TestDefineTableAndMigrations(t *testing.T) {
+	def := &TableDef{
+		Name: "biz_product", Tenant: true, SoftDelete: true, Migration: "7",
+		Fields: []FieldDef{
+			{Name: "title", Kind: KindString, Length: 80, Required: true, Comment: "商品标题"},
+			{Name: "qty", Kind: KindInt},
+			{Name: "price", Kind: KindFloat},
+			{Name: "on_sale", Kind: KindBool},
+			{Name: "published_at", Kind: KindDateTime},
+		},
+	}
+	sc, err := svc().Schema(context.Background(), SchemaRequest{Define: def})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sc.Table != "biz_product" || sc.Shape != ShapeTenant || !sc.Tenant || sc.SuggestedModule != "product" {
+		t.Fatalf("schema = %+v", sc)
+	}
+	var deleted *ColumnInfo
+	for i := range sc.Columns {
+		if sc.Columns[i].Name == "deleted_at" {
+			deleted = &sc.Columns[i]
+		}
+	}
+	if deleted == nil || !deleted.System || deleted.Config.Form || deleted.Config.List {
+		t.Fatalf("deleted_at = %+v", deleted)
+	}
+
+	out, err := svc().Generate(context.Background(), GenRequest{Define: def, Module: "product"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Files) != 15 {
+		t.Errorf("files = %d, want 15 (12 module + 3 migrations)", len(out.Files))
+	}
+	files := generatedFiles(out)
+	for _, engine := range migrationEngines {
+		p := "migrations/business/" + engine + "/007_biz_product.sql"
+		if !strings.Contains(files[p], "CREATE TABLE biz_product") || !strings.Contains(files[p], "tenant_id BIGINT NOT NULL") {
+			t.Errorf("%s missing table DDL: %q", p, files[p])
+		}
+	}
+	for _, s := range []string{"VARCHAR(80) NOT NULL", "INT NOT NULL DEFAULT 0", "DOUBLE NOT NULL DEFAULT 0",
+		"TINYINT(1) NOT NULL DEFAULT 0", "DATETIME(3) NOT NULL", "deleted_at DATETIME(3) NULL", "idx_biz_product_tenant"} {
+		if !strings.Contains(files["migrations/business/mysql/007_biz_product.sql"], s) {
+			t.Errorf("mysql migration missing %q", s)
+		}
+	}
+	for _, s := range []string{"TIMESTAMP(3)", "BOOLEAN NOT NULL DEFAULT FALSE", "DOUBLE PRECISION", "INTEGER NOT NULL DEFAULT 0"} {
+		if !strings.Contains(files["migrations/business/postgres/007_biz_product.sql"], s) {
+			t.Errorf("postgres migration missing %q", s)
+		}
+	}
+	for _, s := range []string{"database.TenantModel", "gorm.DeletedAt", `"gorm.io/gorm"`, `TableName() string { return "biz_product" }`} {
+		if !strings.Contains(files["internal/modules/product/model.go"], s) {
+			t.Errorf("model missing %q", s)
+		}
+	}
+	if n := out.Notes[len(out.Notes)-1]; n.Code != "migration" || n.Value != "migrations/business/mysql/007_biz_product.sql" {
+		t.Errorf("last note = %+v", n)
+	}
+	for _, f := range out.Files {
+		if !validOutPath(f.Path) {
+			t.Errorf("unsafe path %q", f.Path)
+		}
+	}
+}
+
+func TestDefineValidation(t *testing.T) {
+	valid := FieldDef{Name: "title", Kind: KindString}
+	many := make([]FieldDef, 0, maxDefFields+1)
+	for i := 0; i <= maxDefFields; i++ {
+		many = append(many, FieldDef{Name: fmt.Sprintf("f%d", i), Kind: KindString})
+	}
+	bad := map[string]*TableDef{
+		"no name":         {Fields: []FieldDef{valid}},
+		"no fields":       {Name: "product"},
+		"reserved field":  {Name: "product", Fields: []FieldDef{{Name: "id", Kind: KindInt}}},
+		"duplicate field": {Name: "product", Fields: []FieldDef{valid, valid}},
+		"bad kind":        {Name: "product", Fields: []FieldDef{{Name: "title", Kind: "blob"}}},
+		"length on int":   {Name: "product", Fields: []FieldDef{{Name: "qty", Kind: KindInt, Length: 4}}},
+		"required bool":   {Name: "product", Fields: []FieldDef{{Name: "on_sale", Kind: KindBool, Required: true}}},
+		"length too long": {Name: "product", Fields: []FieldDef{{Name: "title", Kind: KindString, Length: maxVarchar + 1}}},
+		"too many fields": {Name: "product", Fields: many},
+		"bad migration":   {Name: "product", Migration: "abc", Fields: []FieldDef{valid}},
+		"zero migration":  {Name: "product", Migration: "0", Fields: []FieldDef{valid}},
+		"bad name":        {Name: "Product X", Fields: []FieldDef{valid}},
+	}
+	for name, def := range bad {
+		if _, err := svc().Schema(context.Background(), SchemaRequest{Define: def}); err == nil {
+			t.Errorf("%s accepted", name)
+		}
+	}
+	if _, err := svc().Generate(context.Background(), GenRequest{Module: "product"}); err == nil {
+		t.Error("request without table or define accepted")
+	}
+	if _, err := svc().Generate(context.Background(), GenRequest{Table: "demo_item", Define: &TableDef{Name: "p", Fields: []FieldDef{valid}}, Module: "product"}); err == nil {
+		t.Error("table + define accepted")
+	}
+}
+
+// TestExistingSoftDeleteAndModuleSuggestion 已有表带 deleted_at 时按软删列处理，推荐模块名去掉 biz_ 前缀。
+func TestExistingSoftDeleteAndModuleSuggestion(t *testing.T) {
+	sc, err := svc().Columns(context.Background(), "plain_note")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sc.SuggestedModule != "plainnote" {
+		t.Errorf("suggestedModule = %q, want plainnote", sc.SuggestedModule)
+	}
+	var system bool
+	for _, c := range sc.Columns {
+		if c.Name == "deleted_at" {
+			system = c.System && !c.Config.Form && !c.Config.List
+		}
+	}
+	if !system {
+		t.Error("deleted_at should be a system column")
+	}
+	out, err := svc().Generate(context.Background(), GenRequest{Table: "plain_note", Module: "note"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(generatedFiles(out)["internal/modules/note/model.go"], "gorm.DeletedAt") {
+		t.Error("existing deleted_at should generate gorm.DeletedAt")
+	}
+	for in, want := range map[string]string{"biz_article": "article", "biz_demo_product": "demoproduct", "biz_user": "bizuser", "demo_item": "demoitem"} {
+		if got := suggestModule(in); got != want {
+			t.Errorf("suggestModule(%q) = %q, want %q", in, got, want)
 		}
 	}
 }

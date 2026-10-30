@@ -32,24 +32,24 @@ func sniffImport(filename string, size int64, f io.ReaderAt) (string, error) {
 	switch strings.ToLower(filepath.Ext(filename)) {
 	case ".xlsx":
 		if !isZip {
-			return "", bad("文件内容不是有效的 .xlsx，请使用导入模板")
+			return "", bad("user.import.not_xlsx")
 		}
 		if size > importMaxXLSXBytes {
-			return "", bad("文件不能超过 5MB")
+			return "", bad("user.import.file_too_large_5mb")
 		}
 		return "xlsx", nil
 	case ".csv":
 		if isZip || isOLE || bytes.IndexByte(head, 0) >= 0 {
-			return "", bad("文件内容与扩展名不符：.csv 需为 UTF-8 文本")
+			return "", bad("user.import.csv_encoding_invalid")
 		}
 		if size > importMaxBytes {
-			return "", bad("文件不能超过 2MB")
+			return "", bad("user.import.file_too_large_2mb")
 		}
 		return "csv", nil
 	case ".xls":
-		return "", bad("不支持旧版 .xls，请另存为 .xlsx 后再导入")
+		return "", bad("user.import.legacy_xls_unsupported")
 	}
-	return "", bad("仅支持 .xlsx 或 .csv 文件")
+	return "", bad("user.import.format_only_xlsx_csv")
 }
 
 // writeImportTemplateXLSX 写导入模板：第一个 sheet 是表头 + 示例行（性别列带下拉），第二个 sheet 是填写说明。

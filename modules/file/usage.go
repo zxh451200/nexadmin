@@ -69,7 +69,7 @@ func (s *Service) reserveStorage(ctx context.Context, upload *session) error {
 	}
 	leases, ok := cache.As[cache.Lease](s.cache)
 	if !ok {
-		return response.Unavailable("error.internal").WithMsg("当前缓存不支持原子租户上传预占，无法执行受限上传")
+		return response.Unavailable("file.cache_lease_unsupported")
 	}
 	until := upload.CreatedAt.Add(sessionMaxAge)
 	if !time.Now().Before(until) {
@@ -125,7 +125,7 @@ func (s *Service) releaseStorage(upload *session) error {
 	}
 	leases, ok := cache.As[cache.Lease](s.cache)
 	if !ok {
-		return response.Unavailable("error.internal").WithMsg("当前缓存不支持原子租户上传预占，无法释放预占")
+		return response.Unavailable("file.cache_lease_release_unsupported")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

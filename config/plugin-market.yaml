@@ -60,10 +60,10 @@ plugins:
         description: 'Enable per table and record field-level before/after values for inserts, updates, and deletes. Sensitive fields are masked and writes are batched asynchronously. Built for enterprise compliance.'
   - id: codegen
     name: 代码生成器
-    description: 免费代码生成器：读取业务表结构，按推荐配置生成 Go 模块与前端页面，在线预览、打包 zip 下载。无状态、不建表、不写磁盘。
+    description: 免费代码生成器：读取已有业务表，或在向导里定义新表；按推荐配置生成 Go 模块、前端页面与三引擎迁移，在线预览、打包 zip 下载。无状态、不建表、不写磁盘。
     category: devops
     edition: free
-    version: 1.0.0
+    version: 1.1.0
     price: 免费
     author: NexAdmin
     repo: zxh451200/nexadmin-plugins
@@ -71,7 +71,7 @@ plugins:
     i18n:
       en-US:
         name: Code Generator
-        description: 'Free code generator: reads business table schemas and generates Go modules and frontend pages from recommended settings. Preview online and download a zip. Stateless: no tables, no disk writes.'
+        description: 'Free code generator: read an existing business table or define a new one in the wizard; generate a Go module, frontend pages and migrations for all three engines. Preview online and download a zip. Stateless: no tables, no disk writes.'
   - id: crm
     name: 客户主数据
     description: 免费基础客户主数据 + 线索商机台账（两张表 + 事件契约）：external 锚点让 hotel/mall 的 member 认同同一个客户 ID；不做销售自动化。
@@ -247,7 +247,7 @@ plugins:
     description: 匿名公开官网（服务端渲染、SEO 友好）+ 后台内容管理与官网插件市场入口。
     category: content
     edition: pro
-    version: 0.5.0
+    version: 0.6.0
     price: 待定
     author: NexAdmin
     repo: zxh451200/nexadmin-plugins

@@ -114,59 +114,73 @@ function LinkBtn({ editor }: { editor: Editor }) {
 export function EditorToolbar({ editor, onMedia }: ToolbarProps) {
   const { t } = useTranslation()
   const c = () => editor.chain().focus()
+  // 分组只用于换行：整组不拆开，避免窄容器下按钮组被挤进横向滚动条。
+  const group = 'flex shrink-0 items-center gap-0.5'
   const sep = <span className="mx-1 h-6 w-px shrink-0 bg-border" aria-hidden="true" />
   const ic = 'size-4'
   return (
-    <div role="toolbar" aria-label={t('editor.toolbar')} className="flex items-center gap-0.5 overflow-x-auto border-b border-border bg-muted/40 p-1">
-      <Btn label={t('editor.undo')} disabled={!editor.can().undo()} onClick={() => c().undo().run()}><Undo2 className={ic} aria-hidden="true" /></Btn>
-      <Btn label={t('editor.redo')} disabled={!editor.can().redo()} onClick={() => c().redo().run()}><Redo2 className={ic} aria-hidden="true" /></Btn>
+    <div role="toolbar" aria-label={t('editor.toolbar')} className="flex flex-wrap items-center gap-y-0.5 border-b border-border bg-muted/40 p-1">
+      <div className={group}>
+        <Btn label={t('editor.undo')} disabled={!editor.can().undo()} onClick={() => c().undo().run()}><Undo2 className={ic} aria-hidden="true" /></Btn>
+        <Btn label={t('editor.redo')} disabled={!editor.can().redo()} onClick={() => c().redo().run()}><Redo2 className={ic} aria-hidden="true" /></Btn>
+      </div>
       {sep}
-      <Btn label={t('editor.h1')} active={editor.isActive('heading', { level: 1 })} onClick={() => c().toggleHeading({ level: 1 }).run()}><Heading1 className={ic} aria-hidden="true" /></Btn>
-      <Btn label={t('editor.h2')} active={editor.isActive('heading', { level: 2 })} onClick={() => c().toggleHeading({ level: 2 }).run()}><Heading2 className={ic} aria-hidden="true" /></Btn>
-      <Btn label={t('editor.h3')} active={editor.isActive('heading', { level: 3 })} onClick={() => c().toggleHeading({ level: 3 }).run()}><Heading3 className={ic} aria-hidden="true" /></Btn>
+      <div className={group}>
+        <Btn label={t('editor.h1')} active={editor.isActive('heading', { level: 1 })} onClick={() => c().toggleHeading({ level: 1 }).run()}><Heading1 className={ic} aria-hidden="true" /></Btn>
+        <Btn label={t('editor.h2')} active={editor.isActive('heading', { level: 2 })} onClick={() => c().toggleHeading({ level: 2 }).run()}><Heading2 className={ic} aria-hidden="true" /></Btn>
+        <Btn label={t('editor.h3')} active={editor.isActive('heading', { level: 3 })} onClick={() => c().toggleHeading({ level: 3 }).run()}><Heading3 className={ic} aria-hidden="true" /></Btn>
+      </div>
       {sep}
-      <Btn label={t('editor.bold')} active={editor.isActive('bold')} onClick={() => c().toggleBold().run()}><Bold className={ic} aria-hidden="true" /></Btn>
-      <Btn label={t('editor.italic')} active={editor.isActive('italic')} onClick={() => c().toggleItalic().run()}><Italic className={ic} aria-hidden="true" /></Btn>
-      <Btn label={t('editor.underline')} active={editor.isActive('underline')} onClick={() => c().toggleUnderline().run()}><UnderlineIcon className={ic} aria-hidden="true" /></Btn>
-      <Btn label={t('editor.strike')} active={editor.isActive('strike')} onClick={() => c().toggleStrike().run()}><Strikethrough className={ic} aria-hidden="true" /></Btn>
-      <Btn label={t('editor.inlineCode')} active={editor.isActive('code')} onClick={() => c().toggleCode().run()}><Code className={ic} aria-hidden="true" /></Btn>
-      <ColorBtn label={t('editor.textColor')} icon={<Palette className={ic} aria-hidden="true" />} onPick={(col) => c().setColor(col).run()} onClear={() => c().unsetColor().run()} />
-      <ColorBtn label={t('editor.highlight')} icon={<Highlighter className={ic} aria-hidden="true" />} onPick={(col) => c().toggleHighlight({ color: col }).run()} onClear={() => c().unsetHighlight().run()} />
-      <Btn label={t('editor.clearFormat')} onClick={() => c().unsetAllMarks().clearNodes().run()}><Eraser className={ic} aria-hidden="true" /></Btn>
+      <div className={group}>
+        <Btn label={t('editor.bold')} active={editor.isActive('bold')} onClick={() => c().toggleBold().run()}><Bold className={ic} aria-hidden="true" /></Btn>
+        <Btn label={t('editor.italic')} active={editor.isActive('italic')} onClick={() => c().toggleItalic().run()}><Italic className={ic} aria-hidden="true" /></Btn>
+        <Btn label={t('editor.underline')} active={editor.isActive('underline')} onClick={() => c().toggleUnderline().run()}><UnderlineIcon className={ic} aria-hidden="true" /></Btn>
+        <Btn label={t('editor.strike')} active={editor.isActive('strike')} onClick={() => c().toggleStrike().run()}><Strikethrough className={ic} aria-hidden="true" /></Btn>
+        <Btn label={t('editor.inlineCode')} active={editor.isActive('code')} onClick={() => c().toggleCode().run()}><Code className={ic} aria-hidden="true" /></Btn>
+        <ColorBtn label={t('editor.textColor')} icon={<Palette className={ic} aria-hidden="true" />} onPick={(col) => c().setColor(col).run()} onClear={() => c().unsetColor().run()} />
+        <ColorBtn label={t('editor.highlight')} icon={<Highlighter className={ic} aria-hidden="true" />} onPick={(col) => c().toggleHighlight({ color: col }).run()} onClear={() => c().unsetHighlight().run()} />
+        <Btn label={t('editor.clearFormat')} onClick={() => c().unsetAllMarks().clearNodes().run()}><Eraser className={ic} aria-hidden="true" /></Btn>
+      </div>
       {sep}
-      <Btn label={t('editor.bulletList')} active={editor.isActive('bulletList')} onClick={() => c().toggleBulletList().run()}><List className={ic} aria-hidden="true" /></Btn>
-      <Btn label={t('editor.orderedList')} active={editor.isActive('orderedList')} onClick={() => c().toggleOrderedList().run()}><ListOrdered className={ic} aria-hidden="true" /></Btn>
-      <Btn label={t('editor.quote')} active={editor.isActive('blockquote')} onClick={() => c().toggleBlockquote().run()}><Quote className={ic} aria-hidden="true" /></Btn>
-      <Btn label={t('editor.codeBlock')} active={editor.isActive('codeBlock')} onClick={() => c().toggleCodeBlock().run()}><Code2 className={ic} aria-hidden="true" /></Btn>
-      <Btn label={t('editor.horizontalRule')} onClick={() => c().setHorizontalRule().run()}><Minus className={ic} aria-hidden="true" /></Btn>
+      <div className={group}>
+        <Btn label={t('editor.bulletList')} active={editor.isActive('bulletList')} onClick={() => c().toggleBulletList().run()}><List className={ic} aria-hidden="true" /></Btn>
+        <Btn label={t('editor.orderedList')} active={editor.isActive('orderedList')} onClick={() => c().toggleOrderedList().run()}><ListOrdered className={ic} aria-hidden="true" /></Btn>
+        <Btn label={t('editor.quote')} active={editor.isActive('blockquote')} onClick={() => c().toggleBlockquote().run()}><Quote className={ic} aria-hidden="true" /></Btn>
+        <Btn label={t('editor.codeBlock')} active={editor.isActive('codeBlock')} onClick={() => c().toggleCodeBlock().run()}><Code2 className={ic} aria-hidden="true" /></Btn>
+        <Btn label={t('editor.horizontalRule')} onClick={() => c().setHorizontalRule().run()}><Minus className={ic} aria-hidden="true" /></Btn>
+      </div>
       {sep}
-      <Btn label={t('editor.alignLeft')} active={editor.isActive({ textAlign: 'left' })} onClick={() => c().setTextAlign('left').run()}><AlignLeft className={ic} aria-hidden="true" /></Btn>
-      <Btn label={t('editor.alignCenter')} active={editor.isActive({ textAlign: 'center' })} onClick={() => c().setTextAlign('center').run()}><AlignCenter className={ic} aria-hidden="true" /></Btn>
-      <Btn label={t('editor.alignRight')} active={editor.isActive({ textAlign: 'right' })} onClick={() => c().setTextAlign('right').run()}><AlignRight className={ic} aria-hidden="true" /></Btn>
-      <Btn label={t('editor.alignJustify')} active={editor.isActive({ textAlign: 'justify' })} onClick={() => c().setTextAlign('justify').run()}><AlignJustify className={ic} aria-hidden="true" /></Btn>
+      <div className={group}>
+        <Btn label={t('editor.alignLeft')} active={editor.isActive({ textAlign: 'left' })} onClick={() => c().setTextAlign('left').run()}><AlignLeft className={ic} aria-hidden="true" /></Btn>
+        <Btn label={t('editor.alignCenter')} active={editor.isActive({ textAlign: 'center' })} onClick={() => c().setTextAlign('center').run()}><AlignCenter className={ic} aria-hidden="true" /></Btn>
+        <Btn label={t('editor.alignRight')} active={editor.isActive({ textAlign: 'right' })} onClick={() => c().setTextAlign('right').run()}><AlignRight className={ic} aria-hidden="true" /></Btn>
+        <Btn label={t('editor.alignJustify')} active={editor.isActive({ textAlign: 'justify' })} onClick={() => c().setTextAlign('justify').run()}><AlignJustify className={ic} aria-hidden="true" /></Btn>
+      </div>
       {sep}
-      <LinkBtn editor={editor} />
-      <Btn label={t('editor.insertImage')} onClick={() => onMedia('image')}><ImageIcon className={ic} aria-hidden="true" /></Btn>
-      <Btn label={t('editor.insertVideo')} onClick={() => onMedia('video')}><VideoIcon className={ic} aria-hidden="true" /></Btn>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button type="button" variant="ghost" size="icon" aria-label={t('editor.table')} title={t('editor.table')} className={cn('shrink-0', editor.isActive('table') && 'bg-muted text-primary')}>
-            <Table2 className={ic} aria-hidden="true" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem onSelect={() => c().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}>{t('editor.insertTable')}</DropdownMenuItem>
-          <DropdownMenuItem disabled={!editor.can().addColumnBefore()} onSelect={() => c().addColumnBefore().run()}>{t('editor.addColumnBefore')}</DropdownMenuItem>
-          <DropdownMenuItem disabled={!editor.can().addColumnAfter()} onSelect={() => c().addColumnAfter().run()}>{t('editor.addColumn')}</DropdownMenuItem>
-          <DropdownMenuItem disabled={!editor.can().addRowBefore()} onSelect={() => c().addRowBefore().run()}>{t('editor.addRowBefore')}</DropdownMenuItem>
-          <DropdownMenuItem disabled={!editor.can().addRowAfter()} onSelect={() => c().addRowAfter().run()}>{t('editor.addRow')}</DropdownMenuItem>
-          <DropdownMenuItem disabled={!editor.can().toggleHeaderRow()} onSelect={() => c().toggleHeaderRow().run()}>{t('editor.toggleHeaderRow')}</DropdownMenuItem>
-          <DropdownMenuItem disabled={!editor.can().deleteColumn()} onSelect={() => c().deleteColumn().run()}>{t('editor.deleteColumn')}</DropdownMenuItem>
-          <DropdownMenuItem disabled={!editor.can().deleteRow()} onSelect={() => c().deleteRow().run()}>{t('editor.deleteRow')}</DropdownMenuItem>
-          <DropdownMenuItem disabled={!editor.can().mergeOrSplit()} onSelect={() => c().mergeOrSplit().run()}>{t('editor.mergeSplit')}</DropdownMenuItem>
-          <DropdownMenuItem disabled={!editor.can().deleteTable()} onSelect={() => c().deleteTable().run()}>{t('editor.deleteTable')}</DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <div className={group}>
+        <LinkBtn editor={editor} />
+        <Btn label={t('editor.insertImage')} onClick={() => onMedia('image')}><ImageIcon className={ic} aria-hidden="true" /></Btn>
+        <Btn label={t('editor.insertVideo')} onClick={() => onMedia('video')}><VideoIcon className={ic} aria-hidden="true" /></Btn>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button type="button" variant="ghost" size="icon" aria-label={t('editor.table')} title={t('editor.table')} className={cn('shrink-0', editor.isActive('table') && 'bg-muted text-primary')}>
+              <Table2 className={ic} aria-hidden="true" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={() => c().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}>{t('editor.insertTable')}</DropdownMenuItem>
+            <DropdownMenuItem disabled={!editor.can().addColumnBefore()} onSelect={() => c().addColumnBefore().run()}>{t('editor.addColumnBefore')}</DropdownMenuItem>
+            <DropdownMenuItem disabled={!editor.can().addColumnAfter()} onSelect={() => c().addColumnAfter().run()}>{t('editor.addColumn')}</DropdownMenuItem>
+            <DropdownMenuItem disabled={!editor.can().addRowBefore()} onSelect={() => c().addRowBefore().run()}>{t('editor.addRowBefore')}</DropdownMenuItem>
+            <DropdownMenuItem disabled={!editor.can().addRowAfter()} onSelect={() => c().addRowAfter().run()}>{t('editor.addRow')}</DropdownMenuItem>
+            <DropdownMenuItem disabled={!editor.can().toggleHeaderRow()} onSelect={() => c().toggleHeaderRow().run()}>{t('editor.toggleHeaderRow')}</DropdownMenuItem>
+            <DropdownMenuItem disabled={!editor.can().deleteColumn()} onSelect={() => c().deleteColumn().run()}>{t('editor.deleteColumn')}</DropdownMenuItem>
+            <DropdownMenuItem disabled={!editor.can().deleteRow()} onSelect={() => c().deleteRow().run()}>{t('editor.deleteRow')}</DropdownMenuItem>
+            <DropdownMenuItem disabled={!editor.can().mergeOrSplit()} onSelect={() => c().mergeOrSplit().run()}>{t('editor.mergeSplit')}</DropdownMenuItem>
+            <DropdownMenuItem disabled={!editor.can().deleteTable()} onSelect={() => c().deleteTable().run()}>{t('editor.deleteTable')}</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
     </div>
   )
 }

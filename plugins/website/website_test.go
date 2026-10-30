@@ -174,37 +174,34 @@ func TestHomeProductTour(t *testing.T) {
 			out := b.String()
 			for _, want := range []string{
 				`href="` + v.URL(v.HomeCTAHref) + `"`,
-				`href="` + v.Home() + `#product"`,
-				`role="tablist"`,
+				`class="hero-link" href="#quickstart"`,
+				`class="product-facts"`,
 				`<dialog class="image-dialog" aria-labelledby="image-dialog-title">`,
 				`data-image-size aria-pressed="false"`,
 				`<form method="dialog">`,
-				`width="1440" height="704" loading="lazy"`,
+				`market/dashboard-dark.jpg`,
+				`market/dashboard-light.jpg`,
 			} {
 				if !strings.Contains(out, want) {
-					t.Errorf("product tour missing %q", want)
+					t.Errorf("home missing %q", want)
 				}
 			}
-			for _, name := range []string{"user", "menu", "siteset"} {
-				for _, want := range []string{
-					`id="tab-` + name + `" type="button" role="tab" aria-controls="panel-` + name + `"`,
-					`id="panel-` + name + `" role="tabpanel" aria-labelledby="tab-` + name + `" tabindex="0"`,
-				} {
-					if !strings.Contains(out, want) {
-						t.Errorf("product tour missing %q", want)
-					}
-				}
+			// 首页只留首屏那张真实界面：其余截图已改为文字，避免整页堆图。
+			for _, name := range []string{"user", "menu", "siteset", "role", "pluginmarket"} {
 				for _, scheme := range []string{"dark", "light"} {
-					if !strings.Contains(out, "market/"+name+"-"+scheme+".jpg") {
-						t.Errorf("%s missing %s screenshot", name, scheme)
+					if strings.Contains(out, "market/"+name+"-"+scheme+".jpg") {
+						t.Errorf("%s-%s screenshot should not be on the home page", name, scheme)
 					}
 				}
 			}
-			if got := strings.Count(out, "data-image-preview hidden"); got != 6 {
-				t.Errorf("progressively enhanced screenshot controls = %d, want 6", got)
+			if got := strings.Count(out, "<img "); got != 3 {
+				t.Errorf("home images = %d, want 3 (hero dark/light + dialog slot)", got)
 			}
-			if strings.Contains(out, "home.preview.") || strings.Contains(out, "home.product.tab.") {
-				t.Error("product tour has untranslated labels")
+			if got := strings.Count(out, "data-image-preview hidden"); got != 1 {
+				t.Errorf("enlarge control belongs to the hero only = %d, want 1", got)
+			}
+			if strings.Contains(out, "home.preview.") || strings.Contains(out, "home.product.tab.") || strings.Contains(out, "home.editorial.platform.summary") {
+				t.Error("home has untranslated labels")
 			}
 		})
 	}
@@ -241,11 +238,10 @@ func TestLayoutMetaAndFallbacks(t *testing.T) {
 		`aria-controls="mobile-nav"`,
 		`id="mobile-nav"`,
 		`<noscript>`,
-		`class="editorial-head"`,
-		`class="stage-shot"`,
+		`class="pillar"`,
 		`id="capabilities"`,
 		`class="intg-grid"`,
-		`class="shots"`,
+		`class="product-facts"`,
 		`<footer`,
 	} {
 		if !strings.Contains(out, want) {

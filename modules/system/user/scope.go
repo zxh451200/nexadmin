@@ -2,9 +2,9 @@ package user
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
+	"nexadmin/core/datascope"
 	"nexadmin/core/response"
 	"nexadmin/pkg/idgen"
 )
@@ -97,18 +97,14 @@ func (s *service) ensureInScope(ctx context.Context, me actor, ids ...idgen.ID) 
 		return err
 	}
 	if denied := len(uniq) - int(n); denied > 0 {
-		return outOfScope(denied)
+		return outOfScope(ctx, denied)
 	}
 	return nil
 }
 
 // outOfScope 是越权错误；批量时带上不可操作的数量。
-func outOfScope(n int) *response.Error {
-	msg := "无权操作该用户（超出数据范围）"
-	if n > 1 {
-		msg = fmt.Sprintf("所选用户中有 %d 个超出数据范围或不存在，已整批拒绝", n)
-	}
-	return response.Forbidden("error.forbidden").WithMsg(msg)
+func outOfScope(ctx context.Context, n int) *response.Error {
+	return datascope.Forbidden(ctx, "datascope.resource.user", n)
 }
 
 // getScoped 读取单个用户详情，越权与不存在对受限操作者表现一致（403），见 ensureInScope。

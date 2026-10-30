@@ -16,14 +16,14 @@ import {
 } from '@/framework/components/i18n'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
+import { SwitchRow } from '@/framework/components/SwitchField'
 import { SimpleSelect, type SimpleSelectOption } from '@/framework/components/SimpleSelect'
 import { TreeTable } from '@/framework/components/TreeTable'
 import type { Column } from '@/framework/components/table/types'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/framework/ui/dialog'
 import { Input } from '@/framework/ui/input'
-import { Switch } from '@/framework/ui/switch'
+import { EditorSchemaGate } from './EditorSchemaGate'
 import TranslationStatus from './TranslationStatus'
 import {
   translateContent,
@@ -316,9 +316,7 @@ function NavFormBody({
             onChange={(e) => setSort(Number(e.target.value) || 0)}
           />
         </SharedFieldShell>
-        <SharedFieldShell labelKey="plugin_website.fields.enabled" className="flex-row items-center justify-between">
-          <Switch checked={enabled} disabled={sharedDisabled} onCheckedChange={setEnabled} />
-        </SharedFieldShell>
+        <SwitchRow label={t('plugin_website.fields.enabled')} checked={enabled} disabled={sharedDisabled} onCheckedChange={setEnabled} />
         <LocaleFormActions />
       </div>
     </ResponsiveDialog>
@@ -334,9 +332,8 @@ function NavFormDialog({
   defaultParentId: string
   pages: SitePage[]
 }) {
-  const { t } = useTranslation()
   const { data: languages = [] } = useLanguages()
-  const { data: schema } = useI18nSchema('nav')
+  const { data: schema, isError, refetch } = useI18nSchema('nav')
   const defaultLocale = languages.find((l) => l.default)?.code ?? ''
   const translate = useCallback<TranslateBatch>(
     (texts, to, format) => translateContent('nav', texts, defaultLocale, to, format),
@@ -345,13 +342,7 @@ function NavFormDialog({
 
   // schema 与语言清单是表单的前提，没到货前不给渲染——否则会闪出一个没有字段的空表单。
   if (!schema || !defaultLocale) {
-    return (
-      <Dialog open onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader><DialogTitle>{t('common.loading')}</DialogTitle></DialogHeader>
-        </DialogContent>
-      </Dialog>
-    )
+    return <EditorSchemaGate onOpenChange={onOpenChange} error={isError} onRetry={() => void refetch()} />
   }
 
   return (
@@ -377,6 +368,8 @@ function NavFormDialog({
 export default function NavPage() {
   const { t } = useTranslation()
   const confirm = useConfirm()
+  // 预取字段 schema：点「新建/编辑」时直接命中缓存，不再先闪一个加载弹窗。
+  useI18nSchema('nav')
   const { data: navs = [], isLoading } = useNavs()
   const { data: pagesData } = usePages({ page: 1, pageSize: 100 })
   const remove = useDeleteNav()

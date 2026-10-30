@@ -20,6 +20,13 @@
       "htmlLang": "<html lang> / hreflang",
       "ogLocale": "og:locale",
       "dateFormat": "日期格式"
-    }
+    },
+    "setDefault": "设为默认",
+    "removeConfirm": "删除语言「{{name}}」？保存后该语言的公开站页面会一并下线。",
+    "advanced": "高级：hreflang / og:locale / 日期格式",
+    "codeInvalid": "语言代码格式不对，如 zh-CN、ja-JP",
+    "codeDup": "语言代码重复",
+    "prefixInvalid": "路径前缀只能用字母、数字和连字符",
+    "removeDefaultBlocked": "默认语言不能删除，先把别的语言设为默认"
   }
 }

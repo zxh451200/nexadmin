@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, Sector, Tooltip, XAxis, YAxis } from 'recharts'
 import type { PieSectorDataItem } from 'recharts/types/polar/Pie'
 import { useTranslation } from 'react-i18next'
@@ -19,6 +19,8 @@ export interface ChartViewProps {
   loading?: boolean
   error?: boolean
   className?: string
+  /** 指标图外部已有标题时关掉内部标签，避免标题重复 */
+  showMetricLabel?: boolean
 }
 
 const axis = { fontSize: 12, fill: 'hsl(var(--muted-foreground))' }
@@ -47,6 +49,7 @@ function TableChart({ result, height }: { result: QueryResult; height: number })
   return (
     <div className="overflow-auto" style={{ maxHeight: Math.max(height, 160) }}>
       <DataTable
+        bare
         columns={columns}
         data={rows}
         rowKey={(r) => String(result.rows.indexOf(r))}
@@ -66,7 +69,7 @@ function TableChart({ result, height }: { result: QueryResult; height: number })
   )
 }
 
-export function ChartView({ type, result, config, height, loading, error, className }: ChartViewProps) {
+export function ChartView({ type, result, config, height, loading, error, className, showMetricLabel = true }: ChartViewProps) {
   const { t, i18n } = useTranslation()
   const compact = (n: number) => new Intl.NumberFormat(i18n.language, { notation: 'compact', maximumFractionDigits: 1 }).format(n)
   const cart = useMemo(() => (result && (type === 'bar' || type === 'line') ? toCartesian(result) : null), [result, type])
@@ -74,7 +77,23 @@ export function ChartView({ type, result, config, height, loading, error, classN
   const metric = useMemo(() => (result && type === 'metric' ? toMetric(result) : null), [result, type])
   // Recharts 默认只弹 Tooltip；hover 时把被指到的那一片推出来一圈，否则图表"点不动"。
   const [activeSlice, setActiveSlice] = useState<number>()
-  const { hidden, formatter } = useLegendToggle()
+  const cartKeys = useMemo(() => cart?.series.map((s) => s.key) ?? [], [cart])
+  const pieNames = useMemo(() => pie.map((p) => p.name), [pie])
+  const { hidden, formatter } = useLegendToggle(undefined, cartKeys)
+  // 饼图按扇区名切显隐：三项共用 dataKey，只能拿图例文字当 key。
+  // 注意不能把数据行删掉——图例条目也来自 data，删了就没法再点回来；置 0 即可隐藏扇区。
+  const { hidden: hiddenSlices, formatter: sliceFormatter } = useLegendToggle((value) => String(value ?? ''), pieNames)
+  // 单系列柱状图：点柱子按该分类筛选（其它柱淡出），再点一次或点标签上的 × 取消。
+  const [picked, setPicked] = useState<string | null>(null)
+  const visiblePie = useMemo(
+    () => pie.map((p) => (hiddenSlices.has(p.name) ? { ...p, value: 0 } : p)),
+    [pie, hiddenSlices],
+  )
+
+  useEffect(() => {
+    setPicked(null)
+    setActiveSlice(undefined)
+  }, [result])
 
   if (loading && !result) return <Skeleton className={cn('w-full', className)} style={{ height }} />
   if (error && !result) {
@@ -95,7 +114,7 @@ export function ChartView({ type, result, config, height, loading, error, classN
   if (type === 'metric' && metric) {
     return (
       <div className={cn('flex flex-col items-center justify-center gap-1', className)} style={{ height }}>
-        <span className="text-sm text-muted-foreground">{builtinText(t, metric.label)}</span>
+        {showMetricLabel ? <span className="text-sm text-muted-foreground">{builtinText(t, metric.label)}</span> : null}
         <span className="num text-4xl font-semibold tracking-tight" style={{ color: colorAt(config.colors, 0) }}>
           {metric.value == null ? '-' : new Intl.NumberFormat(i18n.language).format(metric.value)}
           {config.unit ? <span className="ms-1 text-base font-normal text-muted-foreground">{builtinText(t, config.unit)}</span> : null}
@@ -111,13 +130,24 @@ export function ChartView({ type, result, config, height, loading, error, classN
   }
 
   return (
-    <ChartBox height={height} className={className}>
+    <div className={cn('relative', className)}>
+      {picked && type === 'bar' ? (
+        <button
+          type="button"
+          onClick={() => setPicked(null)}
+          className="absolute end-1 top-0 z-10 flex items-center gap-1 rounded-full border border-border bg-card px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground"
+        >
+          {t('plugin_report.filteredBy', { name: picked })}
+          <span aria-hidden="true">×</span>
+        </button>
+      ) : null}
+    <ChartBox height={height}>
       {({ width, height: h }) => {
         if (type === 'pie') {
           return (
             <PieChart width={width} height={h}>
               <Pie
-                data={pie}
+                data={visiblePie}
                 dataKey="value"
                 nameKey="name"
                 innerRadius="45%"
@@ -129,12 +159,18 @@ export function ChartView({ type, result, config, height, loading, error, classN
                 onMouseEnter={(_, i) => setActiveSlice(i)}
                 onMouseLeave={() => setActiveSlice(undefined)}
               >
-                {pie.map((p, i) => (
-                  <Cell key={p.name} fill={colorAt(config.colors, i)} />
+                {visiblePie.map((p) => (
+                  <Cell key={p.name} fill={colorAt(config.colors, pie.findIndex((o) => o.name === p.name))} />
                 ))}
               </Pie>
               <Tooltip {...tip} />
-              <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12 }} />
+              <Legend
+                iconType="circle"
+                iconSize={8}
+                wrapperStyle={{ fontSize: 12 }}
+                formatter={sliceFormatter}
+                inactiveColor="hsl(var(--muted-foreground))"
+              />
             </PieChart>
           )
         }
@@ -146,15 +182,52 @@ export function ChartView({ type, result, config, height, loading, error, classN
             <XAxis dataKey="x" tick={axis} tickLine={false} axisLine={false} tickMargin={8} />
             <YAxis tick={axis} tickLine={false} axisLine={false} width={44} tickFormatter={(v) => compact(Number(v))} />
             <Tooltip {...tip} cursor={{ fill: 'hsl(var(--muted) / 0.5)' }} />
-            {series.length > 1 ? <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12 }} formatter={formatter} /> : null}
+            {series.length > 1 ? (
+              <Legend
+                iconType="circle"
+                iconSize={8}
+                wrapperStyle={{ fontSize: 12 }}
+                formatter={formatter}
+                inactiveColor="hsl(var(--muted-foreground))"
+              />
+            ) : null}
           </>
         )
         return type === 'bar' ? (
           <BarChart {...common}>
             {parts}
-            {series.map((s, i) => (
-              <Bar key={s.key} dataKey={s.key} name={builtinText(t, s.label)} fill={colorAt(config.colors, i)} stackId={config.stacked ? 'a' : undefined} radius={[6, 6, 0, 0]} maxBarSize={32} hide={hidden.has(s.key)} />
-            ))}
+            {series.map((s, i) => {
+              // 单系列柱状图：点柱子按该分类筛选（其它柱淡出），再点一次取消。
+              const single = series.length === 1
+              return (
+                <Bar
+                  key={s.key}
+                  dataKey={s.key}
+                  name={builtinText(t, s.label)}
+                  fill={colorAt(config.colors, i)}
+                  stackId={config.stacked ? 'a' : undefined}
+                  radius={[6, 6, 0, 0]}
+                  maxBarSize={32}
+                  hide={hidden.has(s.key)}
+                  className={single ? 'cursor-pointer' : undefined}
+                  // Bar 的回调给的是这一根柱子的数值信息，分类名要从同一索引的原始数据里取
+                  onClick={
+                    single
+                      ? (_: unknown, index: number) => {
+                          const key = String(cart?.data?.[index]?.x ?? '')
+                          setPicked((cur) => (cur === key ? null : key))
+                        }
+                      : undefined
+                  }
+                >
+                  {single
+                    ? (cart?.data ?? []).map((row) => (
+                        <Cell key={String(row.x)} fill={colorAt(config.colors, i)} fillOpacity={picked && picked !== String(row.x) ? 0.25 : 1} />
+                      ))
+                    : null}
+                </Bar>
+              )
+            })}
           </BarChart>
         ) : (
           <LineChart {...common}>
@@ -165,6 +238,7 @@ export function ChartView({ type, result, config, height, loading, error, classN
           </LineChart>
         )
       }}
-    </ChartBox>
+      </ChartBox>
+    </div>
   )
 }

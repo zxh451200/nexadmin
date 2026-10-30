@@ -48,6 +48,29 @@
       "approved": "已通过",
       "rejected": "已驳回",
       "cancelled": "已撤回"
+    },
+    "designer": {
+      "nodeStart": "开始",
+      "nodeApproval": "审批",
+      "nodeGateway": "网关",
+      "nodeEnd": "结束",
+      "linkingHint": "点击目标节点完成连线（Esc 取消）",
+      "countersignBadge": "会签",
+      "removeEdge": "点击删除连线",
+      "connectFrom": "从这里连线",
+      "nodeName": "节点名称",
+      "approvers": "审批人 ID（逗号分隔）",
+      "mode": "模式",
+      "modeAny": "或签（任一通过）",
+      "modeAll": "会签（全部通过）",
+      "escalateTo": "超时升级到",
+      "noEscalate": "不升级",
+      "timeoutMinutes": "超时（分钟，0 = 不升级）",
+      "deleteNode": "删除节点",
+      "edgeConditions": "出边条件",
+      "edgeWhen": "条件（可空）",
+      "propsTitle": "节点属性",
+      "propsEmpty": "点选画布上的节点，在这里编辑它的名称、审批人与出边条件"
     }
   }
 }

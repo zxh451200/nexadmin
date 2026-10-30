@@ -58,7 +58,7 @@ func (h *Handler) Kick(c *gin.Context) {
 		return
 	}
 	if sid == session.Current(c) {
-		response.Fail(c, response.BadRequest("error.bad_request").WithMsg("不能强制下线当前会话，请直接退出登录"))
+		response.Fail(c, response.BadRequest("session.kick_self"))
 		return
 	}
 	_, found, err := h.store.Kick(c.Request.Context(), sid, 0)

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { DataTable } from '@/framework/components/DataTable'
+import { DetailAction } from '@/framework/components/DetailAction'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import type { Column } from '@/framework/components/table/types'
@@ -86,11 +87,7 @@ export function ClientErrorsTab() {
         rowKey="id"
         loading={isLoading}
         onRowClick={setDetail}
-        rowActions={(r) => (
-          <Button type="button" variant="ghost" size="sm" onClick={() => setDetail(r)}>
-            {t('serverMonitor.clientErrors.detail.open')}
-          </Button>
-        )}
+        rowActions={(r) => <DetailAction onClick={() => setDetail(r)} />}
         pagination={{
           page,
           pageSize,

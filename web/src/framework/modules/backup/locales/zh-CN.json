@@ -2,37 +2,43 @@
   "backup": {
     "menu": "数据备份",
     "title": "数据备份",
-    "description": "用本机 mysqldump / pg_dump 备份数据库并压缩保存；恢复请使用命令行（网页不提供恢复入口）",
+    "description": "用本机 mysqldump / mariadb-dump / pg_dump 备份数据库并压缩保存；恢复请使用命令行（网页不提供恢复入口）",
     "now": "立即备份",
     "running": "备份中…",
     "started": "已开始备份，完成后会自动刷新",
     "deleteConfirm": "确定要删除备份「{{name}}」吗？文件会从磁盘上一并删除。",
     "btn": { "edit": "备份管理", "download": "下载备份" },
-    "unavailable": { "title": "无法备份：本机缺少导出工具" },
+    "unavailable": {
+      "title": "无法备份：缺少导出工具",
+      "detail": "本机未找到 {{tools}}，请安装导出工具并加入 PATH"
+    },
     "card": {
       "tool": "导出工具",
-      "toolMissing": "不可用",
+      "toolMissing": "未安装",
       "disk": "磁盘剩余",
       "unknown": "未知",
+      "dir": "目录：{{dir}}",
       "schedule": "定时备份",
       "next": "下次执行：{{time}}",
       "last": "最近成功备份",
       "never": "暂无",
-      "keep": "保留 {{days}} 天 / {{copies}} 份"
+      "keep": "保留：{{days}} / {{copies}}",
+      "keepAll": "保留：不限制"
     },
+    "engine": { "mysql": "MySQL", "mariadb": "MariaDB", "postgres": "PostgreSQL" },
     "col": { "time": "时间", "size": "大小", "source": "来源", "status": "状态", "sha256": "SHA-256（前 12 位）" },
     "source": { "manual": "手动", "schedule": "定时" },
     "status": { "running": "进行中", "success": "成功", "failed": "失败" },
     "empty": {
       "title": "还没有备份",
-      "restoreHint": "恢复只能在服务器上用命令行完成：先停止服务，校验通过后会自动再做一份“恢复前备份”，并要求确认。"
+      "restoreHint": "先停止服务再执行下面命令；校验通过后会自动做一份“恢复前备份”，并要求确认。"
     },
     "settings": {
       "open": "设置",
       "title": "备份设置",
       "description": "定时与保留策略保存在数据库里，多实例共用；到点时只会有一个实例执行。",
       "schedule": "定时备份",
-      "scheduleOff": "关闭",
+      "scheduleOff": "未开启",
       "scheduleHint": "每天固定时刻执行（按应用时区）；当天错过的会在服务恢复后补跑一次。",
       "daily": "每天 {{time}}",
       "keepDays": "保留天数",

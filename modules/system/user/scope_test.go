@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"strings"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
@@ -72,22 +71,22 @@ func isForbidden(err error) (*response.Error, bool) {
 func TestEnsureInScope(t *testing.T) {
 	me := actor{ID: operatorID}
 	cases := []struct {
-		name   string
-		scope  string
-		ids    []idgen.ID
-		hits   int
-		denied bool
-		msgHas string
+		name    string
+		scope   string
+		ids     []idgen.ID
+		hits    int
+		denied  bool
+		wantKey string // 期望的错误 key
 	}{
 		{"dept 范围内", "dept", []idgen.ID{1}, 1, false, ""},
-		{"dept 范围外", "dept", []idgen.ID{1}, 0, true, "超出数据范围"},
+		{"dept 范围外", "dept", []idgen.ID{1}, 0, true, "datascope.forbidden"},
 		{"deptAndChild 范围内", "deptAndChild", []idgen.ID{1}, 1, false, ""},
 		{"deptAndChild 范围外", "deptAndChild", []idgen.ID{1}, 0, true, ""},
 		{"custom 范围内", "custom", []idgen.ID{1}, 1, false, ""},
 		{"custom 范围外", "custom", []idgen.ID{1}, 0, true, ""},
 		{"self 仅本人：他人被拒", "self", []idgen.ID{1}, 0, true, ""},
 		{"批量全部在范围内", "dept", []idgen.ID{1, 2, 3}, 3, false, ""},
-		{"批量有越权整批拒绝并给出数量", "dept", []idgen.ID{1, 2, 3}, 1, true, "2 个"},
+		{"批量有越权整批拒绝并给出数量", "dept", []idgen.ID{1, 2, 3}, 1, true, "datascope.forbidden_batch"},
 		{"批量重复 id 去重后计数", "dept", []idgen.ID{1, 1, 2}, 2, false, ""},
 		{"不存在的 id 与越权同样 403", "dept", []idgen.ID{999}, 0, true, ""},
 	}
@@ -101,8 +100,8 @@ func TestEnsureInScope(t *testing.T) {
 			if tc.denied != forbidden || (!tc.denied && err != nil) {
 				t.Fatalf("denied=%v 期望 %v，err=%v", forbidden, tc.denied, err)
 			}
-			if tc.msgHas != "" && !strings.Contains(re.Msg, tc.msgHas) {
-				t.Errorf("提示 %q 应包含 %q", re.Msg, tc.msgHas)
+			if tc.wantKey != "" && re.Key != tc.wantKey {
+				t.Errorf("提示 key 应为 %q，得到 %q", tc.wantKey, re.Key)
 			}
 			if err := mock.ExpectationsWereMet(); err != nil {
 				t.Error(err)

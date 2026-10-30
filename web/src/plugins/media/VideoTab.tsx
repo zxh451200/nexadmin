@@ -6,16 +6,17 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
+import { SwitchRow } from '@/framework/components/SwitchField'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/framework/ui/card'
 import { Input } from '@/framework/ui/input'
 import { Label } from '@/framework/ui/label'
 import { Progress } from '@/framework/ui/progress'
-import { Switch } from '@/framework/ui/switch'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import { formatSize } from '@/framework/upload/precheck'
 import { uploadToTus } from '@/framework/upload/uploadClient'
-import { createVideoUpload, deleteVideo, saveVideo, useSaveVideoConfig, useVideoConfig, useVideos, type VideoItem } from './api'
+import { createVideoUpload, deleteVideo, saveVideo, useSaveVideoConfig, useVideoConfig, useVideos, type VideoItem, type VideoProvider } from './api'
 
 const PAGE_SIZE = 10
 
@@ -27,13 +28,17 @@ export function VideoTab() {
   const save = useSaveVideoConfig()
   const [page, setPage] = useState(1)
   const list = useVideos(page, PAGE_SIZE)
-  const [form, setForm] = useState({ enabled: false, accountId: '', token: '', subdomain: '' })
+  const [form, setForm] = useState({ enabled: false, provider: 'cloudflare' as VideoProvider, keyA: '', keyB: '', keyC: '' })
   const [progress, setProgress] = useState<number | null>(null)
   const [playing, setPlaying] = useState<VideoItem | null>(null)
+  const [regOpen, setRegOpen] = useState(false)
+  const [regId, setRegId] = useState('')
+  const [regName, setRegName] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
+  const canUpload = cfg.data?.canUpload ?? false
 
   useEffect(() => {
-    if (cfg.data) setForm({ enabled: cfg.data.enabled, accountId: cfg.data.accountId, token: '', subdomain: cfg.data.subdomain })
+    if (cfg.data) setForm({ enabled: cfg.data.enabled, provider: cfg.data.provider, keyA: cfg.data.keyA, keyB: '', keyC: cfg.data.keyC })
   }, [cfg.data])
 
   const onSaveConfig = async () => {
@@ -52,6 +57,7 @@ export function VideoTab() {
       const target = await createVideoUpload(file.name)
       await uploadToTus(target.uploadUrl, file, {
         kind: 'video',
+        headers: target.headers,
         onProgress: setProgress,
       })
       await saveVideo({ videoId: target.videoId, name: file.name, size: file.size })
@@ -61,6 +67,21 @@ export function VideoTab() {
       toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
     } finally {
       setProgress(null)
+    }
+  }
+
+  const onRegister = async () => {
+    const videoId = regId.trim()
+    if (!videoId) return
+    try {
+      await saveVideo({ videoId, name: regName.trim() || videoId, size: 0 })
+      await qc.invalidateQueries({ queryKey: ['media', 'video', 'assets'] })
+      setRegOpen(false)
+      setRegId('')
+      setRegName('')
+      toast.success(t('common.operateSuccess'))
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
     }
   }
 
@@ -135,29 +156,46 @@ export function VideoTab() {
           <CardDescription>{t('plugin_media.video.configDesc')}</CardDescription>
         </CardHeader>
         <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div className="flex items-center justify-between gap-3 md:col-span-2">
-            <Label htmlFor="video-enabled">{t('plugin_media.video.enabled')}</Label>
-            <Switch id="video-enabled" checked={form.enabled} onCheckedChange={(v) => setForm((f) => ({ ...f, enabled: v }))} />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="video-account">{t('plugin_media.video.accountId')}</Label>
-            <Input id="video-account" value={form.accountId} onChange={(e) => setForm((f) => ({ ...f, accountId: e.target.value }))} />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="video-subdomain">{t('plugin_media.video.subdomain')}</Label>
-            <Input id="video-subdomain" value={form.subdomain} onChange={(e) => setForm((f) => ({ ...f, subdomain: e.target.value }))} />
+          <div className="md:col-span-2">
+            <SwitchRow bare label={t('plugin_media.video.enabled')} checked={form.enabled} onCheckedChange={(v) => setForm((f) => ({ ...f, enabled: v }))} />
           </div>
           <div className="flex flex-col gap-1.5 md:col-span-2">
-            <Label htmlFor="video-token">{t('plugin_media.video.token')}</Label>
-            <Input
-              id="video-token"
-              type="password"
-              autoComplete="new-password"
-              value={form.token}
-              placeholder={cfg.data?.hasToken ? t('plugin_media.video.tokenSaved') : ''}
-              onChange={(e) => setForm((f) => ({ ...f, token: e.target.value }))}
-            />
+            <Label htmlFor="video-provider">{t('plugin_media.video.provider')}</Label>
+            <Select value={form.provider} onValueChange={(v) => setForm((f) => ({ ...f, provider: v as VideoProvider }))}>
+              <SelectTrigger id="video-provider" className="md:w-64" aria-label={t('plugin_media.video.provider')}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="cloudflare">{t('plugin_media.video.providers.cloudflare')}</SelectItem>
+                <SelectItem value="bunny">{t('plugin_media.video.providers.bunny')}</SelectItem>
+                <SelectItem value="aliyun">{t('plugin_media.video.providers.aliyun')}</SelectItem>
+                <SelectItem value="tencent">{t('plugin_media.video.providers.tencent')}</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="video-key-a">{t(`plugin_media.video.fields.${form.provider}.a`)}</Label>
+            <Input id="video-key-a" value={form.keyA} onChange={(e) => setForm((f) => ({ ...f, keyA: e.target.value }))} />
+          </div>
+          {canUpload || form.provider === 'cloudflare' || form.provider === 'bunny' ? (
+            <>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="video-key-c">{t(`plugin_media.video.fields.${form.provider}.c`)}</Label>
+                <Input id="video-key-c" value={form.keyC} onChange={(e) => setForm((f) => ({ ...f, keyC: e.target.value }))} />
+              </div>
+              <div className="flex flex-col gap-1.5 md:col-span-2">
+                <Label htmlFor="video-key-b">{t(`plugin_media.video.fields.${form.provider}.b`)}</Label>
+                <Input
+                  id="video-key-b"
+                  type="password"
+                  autoComplete="new-password"
+                  value={form.keyB}
+                  placeholder={cfg.data?.hasKeyB ? t('plugin_media.video.keySaved') : ''}
+                  onChange={(e) => setForm((f) => ({ ...f, keyB: e.target.value }))}
+                />
+              </div>
+            </>
+          ) : null}
           <div className="md:col-span-2">
             <Button onClick={() => void onSaveConfig()} disabled={save.isPending}>
               {t('common.save')}
@@ -166,7 +204,7 @@ export function VideoTab() {
         </CardContent>
       </Card>
 
-      <input
+      {canUpload ? <input
         ref={fileRef}
         type="file"
         accept="video/*"
@@ -177,7 +215,7 @@ export function VideoTab() {
           e.target.value = ''
           void onPick(f)
         }}
-      />
+      /> : null}
 
       {progress !== null ? (
         <div className="flex items-center gap-3">
@@ -188,10 +226,18 @@ export function VideoTab() {
 
       <DataTable<VideoItem>
         toolbar={
-          <Button onClick={() => fileRef.current?.click()} disabled={!cfg.data?.enabled || progress !== null}>
-            <Upload aria-hidden="true" />
-            {t('plugin_media.video.upload')}
-          </Button>
+          <>
+            {canUpload ? (
+              <Button onClick={() => fileRef.current?.click()} disabled={!cfg.data?.enabled || progress !== null}>
+                <Upload aria-hidden="true" />
+                {t('plugin_media.video.upload')}
+              </Button>
+            ) : null}
+            <Button variant={canUpload ? 'outline' : 'default'} onClick={() => setRegOpen(true)} disabled={!cfg.data?.enabled}>
+              <Link2 aria-hidden="true" />
+              {t('plugin_media.video.register')}
+            </Button>
+          </>
         }
         columns={columns}
         data={list.data?.list ?? []}
@@ -201,6 +247,34 @@ export function VideoTab() {
         pagination={{ page, pageSize: PAGE_SIZE, total: list.data?.total ?? 0, onChange: setPage }}
         emptyText={t('plugin_media.video.empty')}
       />
+
+      <ResponsiveDialog
+        open={regOpen}
+        onOpenChange={setRegOpen}
+        title={t('plugin_media.video.registerTitle')}
+        description={t('plugin_media.video.registerDesc')}
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setRegOpen(false)}>
+              {t('common.cancel')}
+            </Button>
+            <Button onClick={() => void onRegister()} disabled={!regId.trim()}>
+              {t('plugin_media.video.registerAction')}
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="reg-id">{t('plugin_media.video.videoId')}</Label>
+            <Input id="reg-id" value={regId} onChange={(e) => setRegId(e.target.value)} className="font-mono" placeholder="vid-12345678 / fileId" />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="reg-name">{t('plugin_media.video.videoName')}</Label>
+            <Input id="reg-name" value={regName} onChange={(e) => setRegName(e.target.value)} />
+          </div>
+        </div>
+      </ResponsiveDialog>
 
       <ResponsiveDialog
         open={!!playing}

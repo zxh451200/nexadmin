@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { ChevronDown, ChevronsDownUp, ChevronsUpDown, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -8,6 +8,7 @@ import { BrandMark } from '@/framework/components/BrandMark'
 import { ScrollArea } from '@/framework/ui/scroll-area'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/framework/ui/tooltip'
 import type { MenuNode } from '@/framework/router/types'
+import { usePersistedSet } from '@/framework/hooks/use-persisted-set'
 import { DynamicIcon } from './DynamicIcon'
 import { usePublicSettings } from './Watermark'
 
@@ -25,14 +26,6 @@ function groupTone(key: string) {
 }
 
 
-function loadClosed(): string[] {
-  try {
-    return JSON.parse(localStorage.getItem(GROUPS_KEY) ?? '[]') as string[]
-  } catch {
-    return []
-  }
-}
-
 interface SidebarProps {
   menu: MenuNode[]
   collapsed?: boolean
@@ -45,38 +38,20 @@ interface SidebarProps {
 export function Sidebar({ menu, collapsed = false, onNavigate, onToggleCollapse }: SidebarProps) {
   const { t } = useTranslation()
   const { pathname } = useLocation()
-  const [closed, setClosed] = useState<string[]>(loadClosed)
+  // 收起的目录记在 localStorage，刷新、切页、重进后台都保持
+  const { has: isClosed, toggle: toggleGroup, remove: openGroup, replace: setClosed } = usePersistedSet(GROUPS_KEY)
   const { data: settings } = usePublicSettings()
 
-  const toggleGroup = (key: string) =>
-    setClosed((prev) => {
-      const next = prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
-      try {
-        localStorage.setItem(GROUPS_KEY, JSON.stringify(next))
-      } catch {
-        // 存储不可用时仅本次生效
-      }
-      return next
-    })
-
-  // 当前页面所在的一级目录自动展开，避免选中项藏在收起的目录里
+  // 当前页面所在的一级目录自动展开（并写回记忆），避免选中项藏在收起的目录里
   useEffect(() => {
     const g = menu.find((m) => m.children?.some((c) => c.path && (pathname === c.path || pathname.startsWith(c.path + '/'))))
-    if (g) setClosed((prev) => (prev.includes(g.key) ? prev.filter((k) => k !== g.key) : prev))
-  }, [pathname, menu])
+    if (g) openGroup(g.key)
+  }, [pathname, menu, openGroup])
 
   // 有可折叠的一级目录时，提供「全部展开 / 全部收起」（跟随所有目录的当前状态切换）
   const groupKeys = menu.filter((g) => g.title && (g.children?.length ?? 0) > 0).map((g) => g.key)
-  const allClosed = groupKeys.length > 0 && groupKeys.every((k) => closed.includes(k))
-  const toggleAllGroups = () => {
-    const next = allClosed ? [] : groupKeys
-    setClosed(next)
-    try {
-      localStorage.setItem(GROUPS_KEY, JSON.stringify(next))
-    } catch {
-      // 存储不可用时仅本次生效
-    }
-  }
+  const allClosed = groupKeys.length > 0 && groupKeys.every((k) => isClosed(k))
+  const toggleAllGroups = () => setClosed(allClosed ? [] : groupKeys)
 
   const renderItem = (item: MenuNode, nested: boolean, tone?: string) => {
     const link = (
@@ -148,7 +123,7 @@ export function Sidebar({ menu, collapsed = false, onNavigate, onToggleCollapse 
         <nav aria-label={t('layout.navigation')} className="space-y-1 p-2">
           {menu.map((group, gi) => {
             const bare = !group.title // 顶级单项（如工作台）：没有分组标题，直接是一级菜单
-            const open = !closed.includes(group.key)
+            const open = !isClosed(group.key)
 
             // 图标模式：所有菜单只显示图标，分组之间用细线隔开（图标轨也按分组着色，收展开两套观感一致）
             if (collapsed) {

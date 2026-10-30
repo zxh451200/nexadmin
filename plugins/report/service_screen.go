@@ -72,10 +72,10 @@ func (s *Service) Roles(ctx context.Context) ([]RoleOption, error) {
 
 func (s *Service) checkScreen(ctx context.Context, f *ScreenForm) (string, []idgen.ID, error) {
 	if badText(f.Name, 100, true) || badText(f.Remark, 255, false) || badText(f.Config.Title, 100, false) {
-		return "", nil, specErr("名称不能为空且不超过 100 字")
+		return "", nil, specErr("report.name_invalid")
 	}
 	if r := f.Config.RefreshSec; r != 0 && (r < 5 || r > 3600) {
-		return "", nil, specErr("刷新间隔需为 0（不刷新）或 5 到 3600 秒")
+		return "", nil, specErr("report.screen_refresh_interval_invalid")
 	}
 	if e := validateScreenItems(f.Config.Items); e != nil {
 		return "", nil, e
@@ -95,7 +95,7 @@ func (s *Service) checkScreen(ctx context.Context, f *ScreenForm) (string, []idg
 	for i := range f.Config.Items {
 		id, _ := idgen.Parse(f.Config.Items[i].ChartID)
 		if !have[id] {
-			return "", nil, specErr("引用的图表不存在")
+			return "", nil, specErr("report.chart_not_found")
 		}
 		f.Config.Items[i].ChartID = id.String()
 	}
@@ -113,7 +113,7 @@ func (s *Service) checkScreen(ctx context.Context, f *ScreenForm) (string, []idg
 			return "", nil, dbErr(err)
 		}
 		if len(got) != len(roles) {
-			return "", nil, specErr("角色不存在")
+			return "", nil, specErr("report.role_not_found")
 		}
 	}
 	raw, err := encodeJSON(f.Config)

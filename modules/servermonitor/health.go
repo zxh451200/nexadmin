@@ -254,7 +254,7 @@ func (h *healthRunner) checks() map[string]checkFn {
 			n, err := metrics.PendingMigrations()
 			return migrationsCheck(n, err)
 		},
-		"plugins": func(context.Context) Check { return pluginsCheck(plugin.Default().List()) },
+		"plugins": func(ctx context.Context) Check { return pluginsCheck(plugin.Default().List(ctx)) },
 		"disk":    func(context.Context) Check { return diskCheck(readDisks()) },
 	}
 }

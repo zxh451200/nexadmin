@@ -13,6 +13,7 @@
     "confirm": "Confirm",
     "confirmed": "Two-factor auth enabled",
     "disabled": "Two-factor auth disabled",
+    "disable": "Disable two-factor auth",
     "codeWrong": "Wrong code, try again"
   }
 }

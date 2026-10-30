@@ -1,6 +1,10 @@
 package website
 
-import "nexadmin/pkg/idgen"
+import (
+	"time"
+
+	"nexadmin/pkg/idgen"
+)
 
 // 管理端表单（JSON 绑定）。
 
@@ -15,8 +19,15 @@ type SettingForm struct {
 	HomeCTAHref  string `json:"homeCtaHref"`
 	SeoKeywords  string `json:"seoKeywords"`
 	ContactEmail string `json:"contactEmail"`
-	ICP          string `json:"icp"`
-	FooterNote   string `json:"footerNote"`
+	ContactPhone string `json:"contactPhone"`
+	QRCodeURL    string `json:"qrCodeUrl"`
+	// QRCodeCaption 是二维码下方的一行说明（如「微信公众号」）。
+	QRCodeCaption string `json:"qrCodeCaption"`
+	// Socials / FriendLinks 是页脚列表：写库前由服务层做白名单与长度校验。
+	Socials     []SocialLink `json:"socials"`
+	FriendLinks []FriendLink `json:"friendLinks"`
+	ICP         string       `json:"icp"`
+	FooterNote  string       `json:"footerNote"`
 	// 指针：旧客户端不传该字段时保持原值，避免误关市场。
 	MarketEnabled *bool `json:"marketEnabled"`
 	// I18nJSON 是非默认语言译文；服务层按白名单语言/字段清洗后入库。
@@ -44,6 +55,24 @@ type NavOrderItem struct {
 // NavOrderForm 是一次批量排序请求。
 type NavOrderForm struct {
 	Items []NavOrderItem `json:"items"`
+}
+
+// ContactForm 是公开站「在线留言」的投稿表单（JSON 与表单编码两种提交都绑到它）。
+type ContactForm struct {
+	Name    string `json:"name" form:"name"`
+	Email   string `json:"email" form:"email"`
+	Phone   string `json:"phone" form:"phone"`
+	Content string `json:"content" form:"content"`
+	// Company 是蜜罐：真人看不到这个字段，填了就是机器人（静默丢弃，不告诉对方）。
+	Company string `json:"company" form:"company"`
+}
+
+// MessageQuery 是后台留言列表的筛选。
+type MessageQuery struct {
+	Page     int
+	PageSize int
+	Keyword  string
+	Unread   bool
 }
 
 // FeatureForm 是特性卡片表单。
@@ -77,7 +106,10 @@ type PostForm struct {
 	SeoDesc   string `json:"seoDesc"`
 	Content   string `json:"content"`
 	Published bool   `json:"published"`
-	I18nJSON  string `json:"i18nJson"`
+	// PublishedAt 只在发布时生效：给了就按它记（回填历史文章、修正误发），
+	// 不给则沿用「首次发布写当前时间」的默认行为。
+	PublishedAt *time.Time `json:"publishedAt"`
+	I18nJSON    string     `json:"i18nJson"`
 	// PublishedJSON 是非默认语言发布态；服务层会剔除缺译语言的 true。
 	PublishedJSON string `json:"publishedJson"`
 }

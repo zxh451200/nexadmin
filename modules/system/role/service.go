@@ -26,7 +26,7 @@ type service struct{ db *gorm.DB }
 
 var codeRe = regexp.MustCompile(`^[A-Za-z0-9_.:-]+$`)
 
-func bad(msg string) *response.Error { return response.BadRequest("error.bad_request").WithMsg(msg) }
+func bad(key string, args ...any) *response.Error { return response.BadRequest(key, args...) }
 
 func notFound() *response.Error { return response.NotFound("error.not_found") }
 
@@ -145,27 +145,27 @@ func (s *service) get(ctx context.Context, id idgen.ID) (*roleDTO, error) {
 func (in *roleInput) check() ([]idgen.ID, error) {
 	in.Name, in.Code = strings.TrimSpace(in.Name), strings.TrimSpace(in.Code)
 	if n := utf8.RuneCountInString(in.Name); n < 1 || n > 64 {
-		return nil, bad("角色名称不能为空且不超过 64 个字符")
+		return nil, bad("role.name_invalid")
 	}
 	if len(in.Code) < 1 || len(in.Code) > 64 || !codeRe.MatchString(in.Code) {
-		return nil, bad("角色编码只能包含字母、数字、下划线、点、冒号和连字符，且不超过 64 位")
+		return nil, bad("role.code_invalid")
 	}
 	if utf8.RuneCountInString(in.Remark) > 500 {
-		return nil, bad("备注不超过 500 个字符")
+		return nil, bad("role.remark_too_long")
 	}
 	switch in.Status {
 	case "":
 		in.Status = statusOn
 	case statusOn, statusOff:
 	default:
-		return nil, bad("状态不正确")
+		return nil, bad("role.status_invalid")
 	}
 	switch in.DataScope {
 	case "":
 		in.DataScope = scopeSelf
 	case scopeAll, scopeCustom, scopeDept, scopeDeptAndChild, scopeSelf:
 	default:
-		return nil, bad("数据范围不正确")
+		return nil, bad("role.datascope_invalid")
 	}
 	if in.DataScope != scopeCustom {
 		return nil, nil
@@ -175,7 +175,7 @@ func (in *roleInput) check() ([]idgen.ID, error) {
 	for _, raw := range in.DeptIDs {
 		id, err := idgen.Parse(raw)
 		if err != nil {
-			return nil, bad("部门 ID 不正确")
+			return nil, bad("role.dept_invalid")
 		}
 		if !seen[id] {
 			seen[id] = true
@@ -236,7 +236,7 @@ func (s *service) create(ctx context.Context, in roleInput) (*roleDTO, error) {
 	if taken, err := s.codeTaken(ctx, in.Code, 0); err != nil {
 		return nil, err
 	} else if taken {
-		return nil, bad("角色编码已存在")
+		return nil, bad("role.code_exists")
 	}
 	r := &Role{Name: in.Name, Code: in.Code, Sort: in.Sort, Status: in.Status, DataScope: in.DataScope, Remark: in.Remark,
 		Assignable: in.Assignable == nil || *in.Assignable}
@@ -266,12 +266,12 @@ func (s *service) update(ctx context.Context, id idgen.ID, in roleInput) (*roleD
 		return nil, err
 	}
 	if r.Builtin && (in.Code != r.Code || in.Status != statusOn) {
-		return nil, bad("内置角色不可修改编码或停用")
+		return nil, bad("role.builtin_code_immutable")
 	}
 	if taken, err := s.codeTaken(ctx, in.Code, id); err != nil {
 		return nil, err
 	} else if taken {
-		return nil, bad("角色编码已存在")
+		return nil, bad("role.code_exists")
 	}
 	r.Name, r.Code, r.Sort, r.Status, r.DataScope, r.Remark = in.Name, in.Code, in.Sort, in.Status, in.DataScope, in.Remark
 	if in.Assignable != nil {
@@ -300,7 +300,7 @@ func (s *service) remove(ctx context.Context, id idgen.ID) error {
 		return err
 	}
 	if r.Builtin {
-		return bad("内置角色不可删除")
+		return bad("role.builtin_delete_forbidden")
 	}
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// 仍有（未删除的）用户持有该角色时拒绝；sys_user_role 无租户列，角色已在上面按租户校验过归属。
@@ -336,7 +336,7 @@ func (s *service) sort(ctx context.Context, ids []string) error {
 	for _, raw := range ids {
 		id, err := idgen.Parse(raw)
 		if err != nil {
-			return bad("角色 ID 不正确")
+			return bad("role.id_invalid")
 		}
 		parsed = append(parsed, id)
 	}
@@ -376,7 +376,7 @@ func (s *service) assignMenus(ctx context.Context, id idgen.ID, menuIDs []string
 	for _, raw := range menuIDs {
 		m, err := idgen.Parse(raw)
 		if err != nil {
-			return bad("菜单 ID 不正确")
+			return bad("role.menu_id_invalid")
 		}
 		if !seen[int64(m)] {
 			seen[int64(m)] = true

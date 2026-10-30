@@ -20,8 +20,6 @@ type Service struct {
 	cfg *config.Config
 }
 
-func badReq(msg string) error { return response.BadRequest("error.bad_request").WithMsg(msg) }
-
 func (s *Service) me(ctx context.Context, uid idgen.ID) (*userRow, error) {
 	var u userRow
 	err := s.db.WithContext(ctx).Where("id = ? AND deleted_at IS NULL", int64(uid)).First(&u).Error
@@ -69,13 +67,13 @@ func (s *Service) ChangePassword(ctx context.Context, uid idgen.ID, oldPw, newPw
 		return err
 	}
 	if u.Password == "" || !auth.CheckPassword(u.Password, oldPw) {
-		return badReq("旧密码不正确")
+		return response.BadRequest("profile.old_password_invalid")
 	}
 	if oldPw == newPw {
-		return badReq("新密码不能与旧密码相同")
+		return response.BadRequest("profile.password_same")
 	}
 	if !validNewPassword(newPw) {
-		return badReq("密码长度为 1-72 字节")
+		return response.BadRequest("profile.password_length")
 	}
 	hash, err := auth.HashPassword(newPw)
 	if err != nil {
@@ -168,7 +166,7 @@ func (s *Service) SetPhone(ctx context.Context, uid idgen.ID, phone string) erro
 			return err
 		}
 		if n > 0 {
-			return response.Conflict("error.bad_request").WithMsg("该手机号已被其他账号绑定")
+			return response.Conflict("profile.phone_taken")
 		}
 	}
 	return s.db.WithContext(ctx).Model(&userRow{}).Where("id = ?", int64(uid)).
@@ -203,7 +201,7 @@ func (s *Service) UnbindProvider(ctx context.Context, uid idgen.ID, key string) 
 		return nil
 	}
 	if !canUnbind(u.Password != "", others) {
-		return badReq("这是你唯一的登录方式，请先设置密码或绑定其他账号后再解绑")
+		return response.BadRequest("profile.last_login_method")
 	}
 	return s.db.WithContext(ctx).Where("user_id = ? AND provider = ?", int64(uid), key).Delete(&identityModel{}).Error
 }

@@ -26,6 +26,7 @@
     "loading": "正在加载确认信息…"
   },
   "common": {
+    "detail": "详情",
     "search": "搜索",
     "reset": "重置",
     "confirm": "确定",
@@ -106,7 +107,10 @@
     "notificationsUnread": "通知，{{count}} 条未读",
     "messageCenter": "消息中心",
     "unreadSummary": "消息 {{messages}} · 公告 {{notices}}",
-    "noMessages": "暂无消息",
+    "noMessages": "暂无消息和公告",
+    "kindMessage": "消息",
+    "kindNotice": "公告",
+    "noticeUnread": "{{count}} 条公告未读",
     "viewAll": "查看全部",
     "announcement": "系统公告",
     "gotIt": "我知道了",
@@ -346,5 +350,18 @@
     "pickTitle": "在地图上选点",
     "provider": "地图厂商",
     "noProvider": "未安装地图插件；可以先直接填写经纬度，装了插件后即可在地图上选点。"
+  },
+  "validation": {
+    "required": "此项为必填",
+    "invalidType": "格式不正确（需要 {{expected}}）",
+    "tooSmall": "不能少于 {{minimum}} 个字符",
+    "tooBig": "不能超过 {{maximum}} 个字符",
+    "pickAtLeast": "至少选择 {{minimum}} 项",
+    "email": "邮箱格式不正确",
+    "url": "链接格式不正确",
+    "pattern": "格式不符合要求"
+  },
+  "pwa": {
+    "staleBuild": "后台已更新到新版本，刷新后生效"
   }
 }

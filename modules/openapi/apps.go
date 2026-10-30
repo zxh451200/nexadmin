@@ -46,17 +46,17 @@ type appForm struct {
 func (f *appForm) normalize() *response.Error {
 	f.Name = strings.TrimSpace(f.Name)
 	if f.Name == "" || utf8.RuneCountInString(f.Name) > 100 {
-		return badReq("name is required (max 100)")
+		return response.BadRequest("openapi.name_required")
 	}
 	if utf8.RuneCountInString(f.Description) > 500 {
-		return badReq("description too long (max 500)")
+		return response.BadRequest("openapi.description_too_long")
 	}
 	seen := map[string]bool{}
 	roles := []string{}
 	for _, r := range f.RoleIDs {
 		id, err := idgen.Parse(strings.TrimSpace(r))
 		if err != nil || id == 0 {
-			return badReq("invalid role id")
+			return response.BadRequest("openapi.role_invalid")
 		}
 		if !seen[id.String()] {
 			seen[id.String()] = true
@@ -64,7 +64,7 @@ func (f *appForm) normalize() *response.Error {
 		}
 	}
 	if len(roles) > 50 {
-		return badReq("too many roles (max 50)")
+		return response.BadRequest("openapi.role_limit")
 	}
 	f.RoleIDs = roles
 	ips := []string{}
@@ -75,7 +75,7 @@ func (f *appForm) normalize() *response.Error {
 		}
 		norm, ok := coreoa.ParseAllowEntry(s)
 		if !ok {
-			return badReq("invalid ip or cidr: " + s)
+			return response.BadRequest("openapi.ip_invalid", s)
 		}
 		if !seenIP[norm] {
 			seenIP[norm] = true
@@ -83,7 +83,7 @@ func (f *appForm) normalize() *response.Error {
 		}
 	}
 	if len(ips) > 50 {
-		return badReq("too many ip entries (max 50)")
+		return response.BadRequest("openapi.ip_limit")
 	}
 	f.IPAllow = ips
 	return nil
@@ -97,7 +97,7 @@ func (h *handler) checkRoles(c *gin.Context, roles []string) *response.Error {
 	ctx := c.Request.Context()
 	tid, ok := tenant.From(ctx)
 	if !ok {
-		return badReq("tenant required")
+		return response.BadRequest("tenant.context_required")
 	}
 	ids := make([]int64, 0, len(roles))
 	for _, r := range roles {
@@ -110,7 +110,7 @@ func (h *handler) checkRoles(c *gin.Context, roles []string) *response.Error {
 		return response.Internal().Wrap(err)
 	}
 	if int(n) != len(ids) {
-		return badReq("roles not found or built-in roles are not allowed")
+		return response.BadRequest("openapi.roles_invalid")
 	}
 	return nil
 }
@@ -254,7 +254,7 @@ func (h *handler) appSetEnabled(c *gin.Context) {
 		return
 	}
 	if b.Enabled == nil {
-		response.Fail(c, badReq("enabled is required"))
+		response.Fail(c, response.BadRequest("openapi.enabled_required"))
 		return
 	}
 	a, ok := h.findApp(c, id)

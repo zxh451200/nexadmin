@@ -4,12 +4,12 @@ package datascope
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"gorm.io/gorm"
 
 	"nexadmin/core/auth"
+	"nexadmin/core/i18n"
 	"nexadmin/core/response"
 	"nexadmin/pkg/idgen"
 )
@@ -160,13 +160,14 @@ func (s *Scope) UsernameCond(col string) (string, []any, bool) {
 }
 
 // Forbidden 是统一的越权错误：受限操作者对范围外与不存在的目标得到同样的 403，防止枚举。
-// n>1 时只报数量，不指明具体 id。
-func Forbidden(what string, n int) *response.Error {
-	msg := "无权操作该" + what + "（超出数据范围）"
+// resource 是资源名词的 i18n key（如 datascope.resource.log）；n>1 时只报数量，不指明具体 id。
+// 名词按请求语言翻好后作为参数，整句交给 response 在返回时翻译。
+func Forbidden(ctx context.Context, resource string, n int) *response.Error {
+	noun := i18n.T(ctx, resource)
 	if n > 1 {
-		msg = fmt.Sprintf("所选%s中有 %d 个超出数据范围或不存在，已整批拒绝", what, n)
+		return response.Forbidden("datascope.forbidden_batch", noun, n)
 	}
-	return response.Forbidden("error.forbidden").WithMsg(msg)
+	return response.Forbidden("datascope.forbidden", noun)
 }
 
 // FromClaims 按令牌解析范围。无令牌 -> 401；开放平台“应用”主体没有用户身份，权限已由其授权的权限点限定，按全部处理；

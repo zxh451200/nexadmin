@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { Eraser, Eye } from 'lucide-react'
+import { Eraser } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { DetailAction } from '@/framework/components/DetailAction'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Badge } from '@/framework/ui/badge'
@@ -228,11 +229,7 @@ export function LogsTab({ jobId, onJobChange }: Props) {
             </Button>
           </Can>
         }
-        rowActions={(l) => (
-          <Button variant="ghost" size="icon" aria-label={t('plugin_cron.logDetail')} onClick={() => setDetail(l.id)}>
-            <Eye aria-hidden="true" />
-          </Button>
-        )}
+        rowActions={(l) => <DetailAction onClick={() => setDetail(l.id)} />}
       />
 
       <LogDetailDialog id={detail} onClose={() => setDetail(null)} />

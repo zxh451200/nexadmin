@@ -60,12 +60,12 @@ func (h *handler) CreateVideoUpload(c *gin.Context) {
 	if !response.BindJSON(c, &in) {
 		return
 	}
-	uploadURL, videoID, playback, err := h.svc.CreateVideoUpload(c.Request.Context(), in.Name)
+	uploadURL, headers, videoID, playback, err := h.svc.CreateVideoUpload(c.Request.Context(), in.Name)
 	if err != nil {
 		response.Fail(c, err)
 		return
 	}
-	response.OK(c, gin.H{"uploadUrl": uploadURL, "videoId": videoID, "playbackUrl": playback})
+	response.OK(c, gin.H{"uploadUrl": uploadURL, "headers": headers, "videoId": videoID, "playbackUrl": playback})
 }
 
 // SaveVideo POST /plugins/media/video/assets —— 直传完成后登记台账。

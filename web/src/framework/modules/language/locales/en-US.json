@@ -20,6 +20,13 @@
       "htmlLang": "<html lang> / hreflang",
       "ogLocale": "og:locale",
       "dateFormat": "Date format"
-    }
+    },
+    "setDefault": "Set as default",
+    "removeConfirm": "Remove language \"{{name}}\"? After saving, its public pages go away too.",
+    "advanced": "Advanced: hreflang / og:locale / date format",
+    "codeInvalid": "Invalid language code, e.g. zh-CN, ja-JP",
+    "codeDup": "Duplicate language code",
+    "prefixInvalid": "Path prefix may only contain letters, digits and hyphens",
+    "removeDefaultBlocked": "The default language cannot be removed — make another language the default first"
   }
 }

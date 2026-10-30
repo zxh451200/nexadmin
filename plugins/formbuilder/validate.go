@@ -81,13 +81,13 @@ func patternCost(re *syntax.Regexp, nodes *int) (int, error) {
 func ValidateDefinition(d *Definition) error {
 	name := strings.TrimSpace(d.Name)
 	if name == "" || utf8.RuneCountInString(name) > 100 {
-		return bad("表单名称必填，且不超过 100 个字符")
+		return bad("formbuilder.name_invalid")
 	}
 	if utf8.RuneCountInString(d.Description) > 500 {
-		return bad("表单说明不超过 500 个字符")
+		return bad("formbuilder.description_too_long")
 	}
 	if len(d.Fields) > MaxFields {
-		return bad(fmt.Sprintf("字段数量不能超过 %d", MaxFields))
+		return bad("formbuilder.fields_too_many", MaxFields)
 	}
 	if err := validateSettings(&d.Settings); err != nil {
 		return err
@@ -97,18 +97,18 @@ func ValidateDefinition(d *Definition) error {
 	for i := range d.Fields {
 		f := &d.Fields[i]
 		if !keyRe.MatchString(f.Key) {
-			return bad(fmt.Sprintf("字段标识 %q 不合法（字母开头，字母数字下划线，最长 %d）", f.Key, MaxKeyLen))
+			return bad("formbuilder.field_key_invalid", f.Key, MaxKeyLen)
 		}
 		if _, dup := seen[f.Key]; dup {
-			return bad(fmt.Sprintf("字段标识 %q 重复", f.Key))
+			return bad("formbuilder.field_key_dup", f.Key)
 		}
 		seen[f.Key] = struct{}{}
 		if err := validateFieldDef(f); err != nil {
-			return bad(fmt.Sprintf("字段 %s：%s", f.Key, err.Error()))
+			return bad("formbuilder.field_invalid", f.Key, err.Error())
 		}
 		if f.ShowIf != nil {
 			if err := validateCond(f.ShowIf, earlier); err != nil {
-				return bad(fmt.Sprintf("字段 %s 的显隐条件：%s", f.Key, err.Error()))
+				return bad("formbuilder.field_showif_invalid", f.Key, err.Error())
 			}
 		}
 		if f.hasValue() {
@@ -124,10 +124,10 @@ func ValidateDefinition(d *Definition) error {
 
 func validateSettings(s *Settings) error {
 	if s.MaxSubmissions < 0 || s.MaxSubmissions > MaxSubmissionCap {
-		return bad("提交次数上限不合法")
+		return bad("formbuilder.max_submissions_invalid")
 	}
 	if utf8.RuneCountInString(s.SuccessMessage) > 500 {
-		return bad("提交后提示不超过 500 个字符")
+		return bad("formbuilder.success_msg_too_long")
 	}
 	return nil
 }

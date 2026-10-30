@@ -7,6 +7,7 @@ import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable } from '@/framework/components/DataTable'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
+import { Segmented } from '@/framework/components/Segmented'
 import type { Column } from '@/framework/components/table/types'
 import { usePageLive, useRefreshOnResume } from '@/framework/hooks/use-page-active'
 import { Badge, type BadgeProps } from '@/framework/ui/badge'
@@ -178,23 +179,18 @@ export default function ExportCenterPage() {
         toolbar={
           <>
             <Can perm="job:all">
-              <div className="inline-flex rounded-md border p-0.5" role="group" aria-label={t('jobs.col.owner')}>
-                {[false, true].map((v) => (
-                  <Button
-                    key={String(v)}
-                    type="button"
-                    size="sm"
-                    variant={all === v ? 'default' : 'ghost'}
-                    aria-pressed={all === v}
-                    onClick={() => {
-                      setAll(v)
-                      setPage(1)
-                    }}
-                  >
-                    {t(v ? 'jobs.scope.all' : 'jobs.scope.mine')}
-                  </Button>
-                ))}
-              </div>
+              <Segmented
+                ariaLabel={t('jobs.col.owner')}
+                value={all ? 'all' : 'mine'}
+                onChange={(v) => {
+                  setAll(v === 'all')
+                  setPage(1)
+                }}
+                options={[
+                  { value: 'mine', label: t('jobs.scope.mine') },
+                  { value: 'all', label: t('jobs.scope.all') },
+                ]}
+              />
             </Can>
             <Button type="button" variant="outline" onClick={() => void refetch()}>
               <RefreshCw className="me-2 size-4" aria-hidden="true" />

@@ -74,12 +74,13 @@ func Authenticate(o Options) gin.HandlerFunc {
 	}
 }
 
-func unauthorized(c *gin.Context, msg string) {
-	response.Fail(c, response.Unauthorized("error.unauthorized").WithMsg(msg))
+// unauthorized / forbidden 收 i18n key（openapi.*）与可选参数，按请求语言翻译；调用方不传成品文案。
+func unauthorized(c *gin.Context, key string, args ...any) {
+	response.Fail(c, response.Unauthorized(key, args...))
 }
 
-func forbidden(c *gin.Context, msg string) {
-	response.Fail(c, response.Forbidden("error.forbidden").WithMsg(msg))
+func forbidden(c *gin.Context, key string, args ...any) {
+	response.Fail(c, response.Forbidden(key, args...))
 }
 
 func ipKey(c *gin.Context) string { return "ip:" + c.ClientIP() }
@@ -93,11 +94,12 @@ func (a *authn) blocked(c *gin.Context) bool {
 	return false
 }
 
-func (a *authn) fail(c *gin.Context, msg string) {
+// fail 记录一次失败并返回 401；key 是 openapi 文案字典的 key。
+func (a *authn) fail(c *gin.Context, key string) {
 	if a.Limiter != nil {
 		a.Limiter.Fail(c.Request.Context(), ipKey(c))
 	}
-	unauthorized(c, msg)
+	unauthorized(c, key)
 }
 
 // relPath 返回去掉 /api/v1 前缀并规整后的请求路径，用于禁用清单匹配。
@@ -153,7 +155,7 @@ func (a *authn) pat(c *gin.Context, token string) {
 	}
 	ctx := c.Request.Context()
 	if !IsPATFormat(token) {
-		a.fail(c, "invalid token")
+		a.fail(c, "openapi.invalid_token")
 		return
 	}
 	rec, err := a.Store.PATByHash(ctx, HashToken(token))
@@ -163,7 +165,7 @@ func (a *authn) pat(c *gin.Context, token string) {
 	}
 	now := a.Now()
 	if rec == nil || (rec.ExpiresAt != nil && !now.Before(*rec.ExpiresAt)) {
-		a.fail(c, "invalid or expired token")
+		a.fail(c, "openapi.token_expired")
 		return
 	}
 	owner, err := a.Store.OwnerOf(ctx, rec.UserID)
@@ -172,19 +174,19 @@ func (a *authn) pat(c *gin.Context, token string) {
 		return
 	}
 	if owner == nil || owner.TenantID != rec.TenantID { // 所有者被停用/删除 -> 令牌失效
-		a.fail(c, "invalid or expired token")
+		a.fail(c, "openapi.token_expired")
 		return
 	}
 	if rec.Scope != "write" {
 		switch c.Request.Method {
 		case http.MethodGet, http.MethodHead, http.MethodOptions:
 		default:
-			forbidden(c, "token scope is read-only")
+			forbidden(c, "openapi.token_scope_readonly")
 			return
 		}
 	}
 	if patForbidden(relPath(c)) {
-		forbidden(c, "personal access tokens cannot be used for this endpoint")
+		forbidden(c, "openapi.pat_endpoint_forbidden")
 		return
 	}
 	auth.SetClaims(c, &auth.Claims{
@@ -212,17 +214,17 @@ func (a *authn) app(c *gin.Context) {
 	nonce := strings.TrimSpace(c.GetHeader("X-Nonce"))
 	sig := strings.TrimSpace(c.GetHeader("X-Signature"))
 	if key == "" || tsRaw == "" || nonce == "" || sig == "" || len(nonce) > 128 || len(key) > 64 {
-		a.fail(c, "missing or malformed signature headers")
+		a.fail(c, "openapi.signature_headers_invalid")
 		return
 	}
 	ts, err := strconv.ParseInt(tsRaw, 10, 64)
 	if err != nil {
-		a.fail(c, "invalid timestamp")
+		a.fail(c, "openapi.timestamp_invalid")
 		return
 	}
 	now := a.Now()
 	if d := now.Sub(time.Unix(ts, 0)); d > TimestampWindow || d < -TimestampWindow {
-		a.fail(c, "timestamp out of range")
+		a.fail(c, "openapi.timestamp_out_of_range")
 		return
 	}
 	app, err := a.Store.AppByKey(ctx, key)
@@ -231,7 +233,7 @@ func (a *authn) app(c *gin.Context) {
 		return
 	}
 	if app == nil || !app.Enabled {
-		a.fail(c, "invalid signature") // 不区分应用不存在/已停用/签名错误，避免枚举
+		a.fail(c, "openapi.signature_invalid") // 不区分应用不存在/已停用/签名错误，避免枚举
 		return
 	}
 	plain, err := secret.Decrypt(app.SecretEnc)
@@ -245,28 +247,28 @@ func (a *authn) app(c *gin.Context) {
 		return
 	}
 	if tooBig {
-		response.Fail(c, response.New(http.StatusRequestEntityTooLarge, "error.bad_request").WithMsg("signed request body too large"))
+		response.Fail(c, response.New(http.StatusRequestEntityTooLarge, "error.payload_too_large"))
 		return
 	}
 	if !VerifySignature(plain, c.Request.Method, c.Request.URL.EscapedPath(), c.Request.URL.RawQuery, body, tsRaw, nonce, sig) {
-		a.fail(c, "invalid signature")
+		a.fail(c, "openapi.signature_invalid")
 		return
 	}
 	if !IPAllowed(app.IPList(), c.ClientIP()) {
-		a.fail(c, "ip not allowed")
+		a.fail(c, "openapi.ip_not_allowed")
 		return
 	}
 	replay, err := a.replayed(ctx, app.ID.String(), nonce)
 	if err != nil {
-		response.Fail(c, response.Unavailable("auth.provider_missing").WithMsg("replay protection unavailable").Wrap(err))
+		response.Fail(c, response.Unavailable("openapi.replay_unavailable").Wrap(err))
 		return
 	}
 	if replay {
-		a.fail(c, "nonce already used")
+		a.fail(c, "openapi.nonce_reused")
 		return
 	}
 	if appForbidden(relPath(c)) {
-		forbidden(c, "app credentials cannot be used for this endpoint")
+		forbidden(c, "openapi.app_endpoint_forbidden")
 		return
 	}
 	perms, err := a.Store.AppPerms(ctx, app)

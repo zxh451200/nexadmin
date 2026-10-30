@@ -15,7 +15,7 @@ var provisionActor = actor{Super: true, Provision: true}
 
 func (p userProvisioner) ProvisionUser(ctx context.Context, in core.ProvisionUserInput) (core.ProvisionedUser, error) {
 	if in.Username == "" {
-		return core.ProvisionedUser{}, bad("username is required")
+		return core.ProvisionedUser{}, bad("user.username_required")
 	}
 	status := in.Status
 	if status == "" {

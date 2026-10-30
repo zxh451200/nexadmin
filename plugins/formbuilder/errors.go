@@ -7,17 +7,15 @@ import (
 	"nexadmin/core/response"
 )
 
-func bad(msg string) *response.Error { return response.BadRequest("error.bad_request").WithMsg(msg) }
+func bad(key string, args ...any) *response.Error { return response.BadRequest(key, args...) }
 
-func conflict(msg string) *response.Error { return response.Conflict("error.bad_request").WithMsg(msg) }
+func conflict(key string, args ...any) *response.Error { return response.Conflict(key, args...) }
 
-func forbidden(msg string) *response.Error {
-	return response.Forbidden("error.forbidden").WithMsg(msg)
-}
+func forbidden(key string, args ...any) *response.Error { return response.Forbidden(key, args...) }
 
 var (
-	errDefTooLarge = bad("表单定义过大")
-	errDefInvalid  = bad("表单定义不是合法的 JSON")
+	errDefTooLarge = bad("formbuilder.def_too_large")
+	errDefInvalid  = bad("formbuilder.def_invalid")
 	errNotFound    = response.NotFound("error.not_found")
 
 	// 存储层语义错误（service 负责翻译成用户可见的响应）。

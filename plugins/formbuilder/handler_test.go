@@ -12,6 +12,7 @@ import (
 
 	"nexadmin/core/auth"
 	"nexadmin/core/config"
+	corei18n "nexadmin/core/i18n"
 	"nexadmin/core/middleware"
 	"nexadmin/core/tenant"
 	"nexadmin/pkg/idgen"
@@ -195,7 +196,9 @@ func TestSubmitOverHTTP(t *testing.T) {
 	e := testEngine(t, s, map[idgen.ID][]string{7: {"formbuilder:fill"}})
 	path := "/api/v1/plugins/formbuilder/fill/forms/" + id.String() + "/submit"
 
-	if w := call(e, "POST", path, "7", `{"data":{"a":""}}`); w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "必填") {
+	// 文案走字典：断言与运行时相同的取词结果（测试未合并新词条时即 key 本身）
+	required := corei18n.T(context.Background(), "formbuilder.required")
+	if w := call(e, "POST", path, "7", `{"data":{"a":""}}`); w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), required) {
 		t.Fatalf("必填校验: %d %s", w.Code, w.Body.String())
 	}
 	if w := call(e, "POST", path, "7", `{"data":`); w.Code != http.StatusBadRequest {

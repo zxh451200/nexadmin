@@ -5,12 +5,14 @@ import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { DatePicker } from '@/framework/components/DatePicker'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
+import { Textarea } from '@/framework/ui/textarea'
 import {
   useCustomers,
   useDeleteOpportunity,
@@ -141,7 +143,7 @@ function OpportunityFormDialog({
         <div className="grid grid-cols-2 gap-3">
           <label className="flex flex-col gap-1">
             {t('plugin_crm.fields.expectedAt')}
-            <Input type="date" value={value.expectedAt ?? ''} onChange={(e) => set({ expectedAt: e.target.value })} />
+            <DatePicker value={value.expectedAt} onChange={(v) => set({ expectedAt: v })} />
           </label>
           <label className="flex flex-col gap-1">
             {t('plugin_crm.fields.owner')}
@@ -150,7 +152,7 @@ function OpportunityFormDialog({
         </div>
         <label className="flex flex-col gap-1">
           {t('plugin_crm.fields.remark')}
-          <Input value={value.remark ?? ''} onChange={(e) => set({ remark: e.target.value })} />
+          <Textarea rows={3} maxLength={500} value={value.remark ?? ''} onChange={(e) => set({ remark: e.target.value })} />
         </label>
       </div>
     </ResponsiveDialog>
@@ -208,9 +210,8 @@ export function OpportunitiesTab() {
     },
   ]
 
-  // 筛选行并入表格工具行：与「列设置」同一行，不再单独占一行（全站统一口径）。
-  const filterToolbar = (
-    <div className="flex flex-wrap items-center gap-2">
+  return (
+    <div className="flex flex-col gap-4">
       <FilterBar
         onSearch={() => {
           setFilters(draft)
@@ -243,23 +244,7 @@ export function OpportunitiesTab() {
           </SelectContent>
         </Select>
       </FilterBar>
-      <Can perm="crm:opp">
-        <Button
-          onClick={() => {
-            setEditing(null)
-            setFormOpen(true)
-          }}
-        >
-          <Plus aria-hidden="true" />
-          {t('plugin_crm.opp.create')}
-        </Button>
-      </Can>
-    </div>
-  )
-
-  return (
-    <>
-    <DataTable
+      <DataTable
         columns={columns}
         data={data?.list ?? []}
         rowKey="id"
@@ -275,7 +260,19 @@ export function OpportunitiesTab() {
           },
         }}
         emptyText={t('plugin_crm.empty')}
-        toolbar={filterToolbar}
+        toolbar={
+          <Can perm="crm:opp">
+            <Button
+              onClick={() => {
+                setEditing(null)
+                setFormOpen(true)
+              }}
+            >
+              <Plus aria-hidden="true" />
+              {t('plugin_crm.opp.create')}
+            </Button>
+          </Can>
+        }
         rowActions={(o) => (
           <Can perm="crm:opp">
             <Button
@@ -302,6 +299,6 @@ export function OpportunitiesTab() {
         )}
       />
       <OpportunityFormDialog key={editing?.id ?? 'new'} open={formOpen} onOpenChange={setFormOpen} editing={editing} />
-    </>
+    </div>
   )
 }

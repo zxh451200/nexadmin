@@ -1,7 +1,7 @@
 {
   "plugin_crm": {
     "title": "客户主数据",
-    "description": "免费基础客户主数据与线索商机台账（external 锚点对齐 member），不做销售自动化",
+    "description": "统一维护客户资料与线索/商机；酒店、商城等系统的会员可对应到同一个客户，不做销售自动化",
     "dir": "客户主数据",
     "menu": "客户主数据",
     "perm": {
@@ -14,9 +14,10 @@
     },
     "all": "全部",
     "empty": "暂无数据",
-    "searchPlaceholder": "客户名称 / 编码 / 锚点",
+    "searchPlaceholder": "客户名称 / 编码 / 外部编号",
     "nameRequired": "请填写客户名称",
     "titleRequired": "请填写标题",
+    "externalNoRequired": "请填写对方系统的客户编号",
     "status": {
       "active": "在营",
       "inactive": "停用"
@@ -29,13 +30,19 @@
       "won": "赢单",
       "lost": "输单"
     },
+    "source": {
+      "hotel": "酒店系统",
+      "mall": "商城系统",
+      "order": "订单系统",
+      "manual": "手工指定编号"
+    },
     "fields": {
       "name": "客户名称",
       "code": "客户编码",
       "level": "等级",
       "status": "状态",
-      "externalAnchor": "外部锚点",
-      "externalSource": "来源",
+      "externalAnchor": "外部来源",
+      "externalSource": "外部来源",
       "externalNo": "外部编号",
       "owner": "负责人",
       "phone": "电话",
@@ -52,8 +59,8 @@
       "create": "新建客户",
       "edit": "编辑客户",
       "deleteConfirm": "确认删除客户 {{name}}？",
-      "noAnchor": "不绑定外部锚点",
-      "anchorHint": "外部锚点创建后不可修改；hotel/mall 的 member 通过它反查同一个客户 ID。"
+      "noAnchor": "不关联外部系统",
+      "anchorHint": "选择外部系统并填写对方系统的客户编号后，该会员会对应到同一个客户；创建后不可修改。"
     },
     "opp": {
       "create": "新建线索/商机",

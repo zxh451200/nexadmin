@@ -3,6 +3,7 @@
 // SVG 内部使用 CSS 变量（语义 token），在浅色/深色主题下自动适配。
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
@@ -19,10 +20,10 @@ const CANVAS_H = 480
 const GRID = 20
 
 const NODE_KINDS = [
-  { kind: 'start', label: '开始', color: 'hsl(var(--success))', icon: '▶' },
-  { kind: 'approval', label: '审批', color: 'hsl(var(--primary))', icon: '✓' },
-  { kind: 'exclusive', label: '网关', color: 'hsl(var(--warning))', icon: '◇' },
-  { kind: 'end', label: '结束', color: 'hsl(var(--destructive))', icon: '■' },
+  { kind: 'start', labelKey: 'plugin_workflow.designer.nodeStart', color: 'hsl(var(--success))', icon: '▶' },
+  { kind: 'approval', labelKey: 'plugin_workflow.designer.nodeApproval', color: 'hsl(var(--primary))', icon: '✓' },
+  { kind: 'exclusive', labelKey: 'plugin_workflow.designer.nodeGateway', color: 'hsl(var(--warning))', icon: '◇' },
+  { kind: 'end', labelKey: 'plugin_workflow.designer.nodeEnd', color: 'hsl(var(--destructive))', icon: '■' },
 ] as const
 
 interface Positioned {
@@ -70,6 +71,7 @@ function edgePath(a: Positioned, b: Positioned) {
 // ---------- 组件 ----------
 
 export function FlowDesigner({ definition, onChange, readOnly }: Props) {
+  const { t } = useTranslation()
   const [nodes, setNodes] = useState<Positioned[]>([])
   const [selected, setSelected] = useState<string | null>(null)
   const [linkFrom, setLinkFrom] = useState<string | null>(null)
@@ -89,29 +91,56 @@ export function FlowDesigner({ definition, onChange, readOnly }: Props) {
       placed.push({ node, x, y: saved?.y ?? 48 + i * gap })
     })
     setNodes(placed)
-    setSelected(null)
-    setLinkFrom(null)
+    // 拖动会经 persist 重建 definition（新对象），这里若无条件清空选中，点一下节点面板就消失。
+    // 只在节点真的没了的时候才清。
+    const alive = new Set(placed.map((p) => p.node.key))
+    setSelected((cur) => (cur && alive.has(cur) ? cur : null))
+    setLinkFrom((cur) => (cur && alive.has(cur) ? cur : null))
   }, [definition])
+
+  // Esc 取消连线：画布提示文案承诺了这个行为，得真的接上。
+  // 必须用捕获阶段并 stopPropagation：Radix 的 Dialog 在 document 上监听 Esc 并关闭弹窗，
+  // 冒泡阶段处理会被它先吃掉——取消连线会把整个编辑器关掉。
+  useEffect(() => {
+    if (!linkFrom) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      e.preventDefault()
+      e.stopPropagation()
+      setLinkFrom(null)
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [linkFrom])
 
   const persist = useCallback(
     (updated: Positioned[]) => {
       setNodes(updated)
       if (readOnly) return
-      onChange({
-        ...definition,
-        nodes: updated.map((p) => p.node),
-        edges: definition.edges.filter(
-          (e) => updated.some((p) => p.node.key === e.from) && updated.some((p) => p.node.key === e.to),
+      onChange(
+        // 坐标必须一起写回：否则父级 definition 里没有 _positions，重渲染时节点按默认位重排，
+        // 拖动松手就弹回原位。
+        withPositions(
+          {
+            ...definition,
+            nodes: updated.map((p) => p.node),
+            edges: definition.edges.filter(
+              (e) => updated.some((p) => p.node.key === e.from) && updated.some((p) => p.node.key === e.to),
+            ),
+          },
+          updated,
         ),
-      })
+      )
     },
     [definition, onChange, readOnly],
   )
 
+  // SVG 用 viewBox 跟随容器缩放，指针坐标要按实际渲染宽度换算回画布单位。
   const svgPoint = (e: React.MouseEvent) => {
     const rect = svgRef.current?.getBoundingClientRect()
-    if (!rect) return { x: 0, y: 0 }
-    return { x: e.clientX - rect.left, y: e.clientY - rect.top }
+    if (!rect || rect.width === 0) return { x: 0, y: 0 }
+    const scale = rect.width / CANVAS_W
+    return { x: (e.clientX - rect.left) / scale, y: (e.clientY - rect.top) / scale }
   }
 
   const onMouseDown = (key: string, e: React.MouseEvent) => {
@@ -147,8 +176,8 @@ export function FlowDesigner({ definition, onChange, readOnly }: Props) {
     while (nodes.some((n) => n.node.key === key)) {
       key = `${kind}_${i++}`
     }
-    const labels: Record<string, string> = { start: '开始', approval: '审批', exclusive: '网关', end: '结束' }
-    const node: WfNode = { key, name: labels[kind] ?? kind, kind: kind as WfNode['kind'] }
+    const meta = NODE_KINDS.find((k) => k.kind === kind)
+    const node: WfNode = { key, name: meta ? t(meta.labelKey) : kind, kind: kind as WfNode['kind'] }
     if (kind === 'approval') {
       node.approvers = []
       node.mode = 'any'
@@ -192,10 +221,10 @@ export function FlowDesigner({ definition, onChange, readOnly }: Props) {
   }
 
   return (
-    <div className="flex gap-4">
-      <div className="flex-1">
+    <div className="flex min-w-0 flex-col gap-4 xl:flex-row">
+      <div className="min-w-0 flex-1">
         {!readOnly ? (
-          <div className="mb-2 flex gap-2">
+          <div className="mb-2 flex flex-wrap gap-2">
             {NODE_KINDS.map((k) => (
               <button
                 key={k.kind}
@@ -204,140 +233,162 @@ export function FlowDesigner({ definition, onChange, readOnly }: Props) {
                 onClick={() => addNode(k.kind)}
               >
                 <span className="fill-current" style={{ color: k.color }}>{k.icon}</span>
-                {k.label}
+                {t(k.labelKey)}
               </button>
             ))}
           </div>
         ) : null}
-        <svg
-          ref={svgRef}
-          width={CANVAS_W}
-          height={CANVAS_H}
-          className="rounded border bg-muted/30"
-          onMouseMove={onMouseMove}
-          onMouseUp={onMouseUp}
-          onMouseLeave={onMouseUp}
-        >
-          <defs>
-            <pattern id="wf-grid" width={GRID} height={GRID} patternUnits="userSpaceOnUse">
-              <circle cx={1} cy={1} r={0.5} className="fill-border" />
-            </pattern>
-            <marker id="wf-arrow" markerWidth={8} markerHeight={6} refX={8} refY={3} orient="auto">
-              <path d="M0,0 L8,3 L0,6" className="fill-muted-foreground" />
-            </marker>
-          </defs>
-          <rect width={CANVAS_W} height={CANVAS_H} fill="url(#wf-grid)" />
+        {/* 画布按容器缩放；窄屏保底 600px 宽并在自己的框内横向平移，避免节点文字缩到看不清。 */}
+        <div className="overflow-x-auto">
+          <svg
+            ref={svgRef}
+            viewBox={`0 0 ${CANVAS_W} ${CANVAS_H}`}
+            style={{ maxWidth: CANVAS_W, minWidth: 600 }}
+            className="block h-auto w-full rounded border bg-muted/30"
+            onMouseMove={onMouseMove}
+            onMouseUp={onMouseUp}
+            onMouseLeave={onMouseUp}
+          >
+            <defs>
+              <pattern id="wf-grid" width={GRID} height={GRID} patternUnits="userSpaceOnUse">
+                <circle cx={1} cy={1} r={0.5} className="fill-border" />
+              </pattern>
+              <marker id="wf-arrow" markerWidth={8} markerHeight={6} refX={8} refY={3} orient="auto">
+                <path d="M0,0 L8,3 L0,6" className="fill-muted-foreground" />
+              </marker>
+            </defs>
+            {/* 点画布空白处取消选中/取消连线：否则属性面板会一直停在最后一个点上 */}
+            <rect
+              width={CANVAS_W}
+              height={CANVAS_H}
+              fill="url(#wf-grid)"
+              onClick={() => {
+                setSelected(null)
+                setLinkFrom(null)
+              }}
+            />
 
-          {definition.edges.map((e, i) => {
-            const from = nodes.find((n) => n.node.key === e.from)
-            const to = nodes.find((n) => n.node.key === e.to)
-            if (!from || !to) return null
-            const midX = (centerOf(from).cx + centerOf(to).cx) / 2
-            const midY = (centerOf(from).cy + centerOf(to).cy) / 2
-            return (
-              <g key={i}>
-                <path d={edgePath(from, to)} className="stroke-muted-foreground" fill="none" strokeWidth={1.5} markerEnd="url(#wf-arrow)" />
-                {e.when ? (
-                  <text x={midX} y={midY - 6} textAnchor="middle" className="fill-muted-foreground text-[10px]">
-                    {e.when}
+            {definition.edges.map((e, i) => {
+              const from = nodes.find((n) => n.node.key === e.from)
+              const to = nodes.find((n) => n.node.key === e.to)
+              if (!from || !to) return null
+              const midX = (centerOf(from).cx + centerOf(to).cx) / 2
+              const midY = (centerOf(from).cy + centerOf(to).cy) / 2
+              return (
+                <g key={i}>
+                  <path d={edgePath(from, to)} className="stroke-muted-foreground" fill="none" strokeWidth={1.5} markerEnd="url(#wf-arrow)" />
+                  {e.when ? (
+                    <text x={midX} y={midY - 6} textAnchor="middle" className="fill-muted-foreground text-[10px]">
+                      {e.when}
+                    </text>
+                  ) : null}
+                  {!readOnly ? (
+                    <circle cx={midX} cy={midY} r={8} fill="transparent" className="cursor-pointer hover:fill-destructive/20" onClick={() => removeEdge(i)}>
+                      <title>{t('plugin_workflow.designer.removeEdge')}</title>
+                    </circle>
+                  ) : null}
+                </g>
+              )
+            })}
+
+            {linkFrom ? (
+              <text x={10} y={16} className="fill-primary text-xs">
+                {t('plugin_workflow.designer.linkingHint')}
+              </text>
+            ) : null}
+
+            {nodes.map((p) => {
+              const kind = NODE_KINDS.find((k) => k.kind === p.node.kind)
+              const isSelected = selected === p.node.key
+              const isLinking = linkFrom === p.node.key
+              return (
+                <g
+                  key={p.node.key}
+                  transform={`translate(${p.x},${p.y})`}
+                  className={readOnly ? '' : 'cursor-move'}
+                  onMouseDown={(e) => onMouseDown(p.node.key, e)}
+                  onClick={() => completeLink(p.node.key)}
+                >
+                  <rect
+                    width={NODE_W}
+                    height={NODE_H}
+                    rx={p.node.kind === 'exclusive' ? NODE_H / 2 : 8}
+                    className="fill-background"
+                    stroke={isLinking || isSelected ? 'hsl(var(--primary))' : kind?.color}
+                    strokeWidth={isSelected || isLinking ? 2 : 1.5}
+                  />
+                  <text x={12} y={NODE_H / 2 + 5} fontSize={14} className="fill-current" style={{ color: kind?.color }}>
+                    {kind?.icon}
                   </text>
-                ) : null}
-                {!readOnly ? (
-                  <circle cx={midX} cy={midY} r={8} fill="transparent" className="cursor-pointer hover:fill-destructive/20" onClick={() => removeEdge(i)}>
-                    <title>点击删除连线</title>
-                  </circle>
-                ) : null}
-              </g>
-            )
-          })}
-
-          {linkFrom ? (
-            <text x={10} y={16} className="fill-primary text-xs">
-              点击目标节点完成连线（Esc 取消）
-            </text>
-          ) : null}
-
-          {nodes.map((p) => {
-            const kind = NODE_KINDS.find((k) => k.kind === p.node.kind)
-            const isSelected = selected === p.node.key
-            const isLinking = linkFrom === p.node.key
-            return (
-              <g
-                key={p.node.key}
-                transform={`translate(${p.x},${p.y})`}
-                className={readOnly ? '' : 'cursor-move'}
-                onMouseDown={(e) => onMouseDown(p.node.key, e)}
-                onClick={() => completeLink(p.node.key)}
-              >
-                <rect
-                  width={NODE_W}
-                  height={NODE_H}
-                  rx={p.node.kind === 'exclusive' ? NODE_H / 2 : 8}
-                  className="fill-background"
-                  stroke={isLinking || isSelected ? 'hsl(var(--primary))' : kind?.color}
-                  strokeWidth={isSelected || isLinking ? 2 : 1.5}
-                />
-                <text x={12} y={NODE_H / 2 + 5} fontSize={14} className="fill-current" style={{ color: kind?.color }}>
-                  {kind?.icon}
-                </text>
-                <text x={30} y={NODE_H / 2 + 5} fontSize={12} className="fill-foreground">
-                  {p.node.name || p.node.key}
-                </text>
-                {p.node.mode === 'all' ? (
-                  <text x={NODE_W - 24} y={NODE_H / 2 + 5} fontSize={10} className="fill-muted-foreground">
-                    会签
+                  <text x={30} y={NODE_H / 2 + 5} fontSize={12} className="fill-foreground">
+                    {p.node.name || p.node.key}
                   </text>
-                ) : null}
-              </g>
-            )
-          })}
-        </svg>
+                  {p.node.mode === 'all' ? (
+                    <text x={NODE_W - 24} y={NODE_H / 2 + 5} fontSize={10} className="fill-muted-foreground">
+                      {t('plugin_workflow.designer.countersignBadge')}
+                    </text>
+                  ) : null}
+                </g>
+              )
+            })}
+          </svg>
+        </div>
       </div>
 
       {selectedNode && !readOnly ? (
-        <div className="w-56 space-y-2 rounded border bg-card p-3 text-sm">
-          <div className="font-medium">{selectedNode.name || selectedNode.key}</div>
+        <div className="w-full shrink-0 space-y-2 rounded border bg-card p-3 text-sm xl:w-56">
+          <div className="flex items-center justify-between gap-2">
+            <span className="min-w-0 truncate font-medium">{selectedNode.name || selectedNode.key}</span>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 shrink-0 px-2 text-xs"
+              onClick={() => setLinkFrom(selectedNode.key)}
+            >
+              {t('plugin_workflow.designer.connectFrom')}
+            </Button>
+          </div>
           {selectedNode.kind === 'approval' ? (
             <>
               <label className="flex flex-col gap-0.5">
-                <span className="text-xs text-muted-foreground">节点名称</span>
+                <span className="text-xs text-muted-foreground">{t('plugin_workflow.designer.nodeName')}</span>
                 <Input value={selectedNode.name} onChange={(e) => updateNode({ name: e.target.value })} />
               </label>
               <label className="flex flex-col gap-0.5">
-                <span className="text-xs text-muted-foreground">审批人 ID（逗号分隔）</span>
+                <span className="text-xs text-muted-foreground">{t('plugin_workflow.designer.approvers')}</span>
                 <Input
                   value={(selectedNode.approvers ?? []).join(',')}
                   onChange={(e) => updateNode({ approvers: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })}
                 />
               </label>
               <label className="flex flex-col gap-0.5">
-                <span className="text-xs text-muted-foreground">模式</span>
+                <span className="text-xs text-muted-foreground">{t('plugin_workflow.designer.mode')}</span>
                 <SimpleSelect
                   className="w-full"
-                  aria-label="模式"
+                  aria-label={t('plugin_workflow.designer.mode')}
                   value={selectedNode.mode ?? 'any'}
                   onChange={(v) => updateNode({ mode: v as 'any' | 'all' })}
                   options={[
-                    { value: 'any', label: '或签（任一通过）' },
-                    { value: 'all', label: '会签（全部通过）' },
+                    { value: 'any', label: t('plugin_workflow.designer.modeAny') },
+                    { value: 'all', label: t('plugin_workflow.designer.modeAll') },
                   ]}
                 />
               </label>
               <label className="flex flex-col gap-0.5">
-                <span className="text-xs text-muted-foreground">超时升级到</span>
+                <span className="text-xs text-muted-foreground">{t('plugin_workflow.designer.escalateTo')}</span>
                 <SimpleSelect
                   className="w-full"
-                  aria-label="超时升级到"
+                  aria-label={t('plugin_workflow.designer.escalateTo')}
                   value={selectedNode.escalateTo ?? '__none'}
                   onChange={(v) => updateNode({ escalateTo: v === '__none' ? undefined : v })}
                   options={[
-                    { value: '__none', label: '不升级' },
+                    { value: '__none', label: t('plugin_workflow.designer.noEscalate') },
                     ...nodes.filter((n) => n.node.key !== selectedNode.key && n.node.kind === 'approval').map((n) => ({ value: n.node.key, label: n.node.name })),
                   ]}
                 />
               </label>
               <label className="flex flex-col gap-0.5">
-                <span className="text-xs text-muted-foreground">超时（分钟，0=不升级）</span>
+                <span className="text-xs text-muted-foreground">{t('plugin_workflow.designer.timeoutMinutes')}</span>
                 <Input
                   type="number"
                   value={selectedNode.timeoutMinutes ?? 0}
@@ -348,12 +399,12 @@ export function FlowDesigner({ definition, onChange, readOnly }: Props) {
           ) : null}
           {selectedNode.kind !== 'start' && selectedNode.kind !== 'end' ? (
             <Button variant="destructive" size="sm" onClick={() => removeNode(selectedNode.key)}>
-              删除节点
+              {t('plugin_workflow.designer.deleteNode')}
             </Button>
           ) : null}
 
           <div className="mt-2 space-y-1 border-t pt-2">
-            <div className="text-xs text-muted-foreground">出边条件</div>
+            <div className="text-xs text-muted-foreground">{t('plugin_workflow.designer.edgeConditions')}</div>
             {definition.edges.map((e, i) =>
               e.from === selectedNode.key ? (
                 <div key={i} className="flex items-center gap-1">
@@ -361,13 +412,21 @@ export function FlowDesigner({ definition, onChange, readOnly }: Props) {
                   <Input
                     className="h-6 w-24 text-xs"
                     value={e.when ?? ''}
-                    placeholder="条件(可空)"
+                    placeholder={t('plugin_workflow.designer.edgeWhen')}
                     onChange={(ev) => updateEdgeWhen(i, ev.target.value)}
                   />
                 </div>
               ) : null,
             )}
           </div>
+        </div>
+      ) : null}
+      {/* 未选中节点时也保留同宽面板：否则画布会随选中/取消左右跳一下，
+          而且用户看不出「这里其实可以编辑」——固定常驻，只换内容。 */}
+      {!selectedNode && !readOnly ? (
+        <div className="w-full shrink-0 space-y-2 rounded border border-dashed bg-card p-3 text-sm xl:w-56">
+          <div className="font-medium">{t('plugin_workflow.designer.propsTitle')}</div>
+          <p className="text-xs leading-5 text-muted-foreground">{t('plugin_workflow.designer.propsEmpty')}</p>
         </div>
       ) : null}
     </div>

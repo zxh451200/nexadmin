@@ -24,8 +24,6 @@ const STATUS_VARIANT: Record<PluginStatus, 'success' | 'warning' | 'destructive'
   disabled: 'warning',
 }
 
-const INSTALL_CMD = 'go run ./cmd/nexadmin plugin install <目录或zip>'
-
 function InstalledTab({ onLicense }: { onLicense: (p: PluginInfo) => void }) {
   const { t, i18n } = useTranslation()
   const { has } = usePermission()
@@ -33,6 +31,9 @@ function InstalledTab({ onLicense }: { onLicense: (p: PluginInfo) => void }) {
   const canLicense = has('plugin:license')
   const expiring = data.filter((p) => isExpiringSoon(p))
   const fmt = (iso?: string | null) => (iso ? new Date(iso).toLocaleDateString(i18n.language) : '—')
+  // 插件名与简介在后端是固定中文，内置插件在自己的语言包里给了译名；未收录的第三方插件回落到后端文案。
+  const shownName = (p: PluginInfo) => t(`plugin_${p.id.replaceAll('-', '_')}.title`, { defaultValue: p.name })
+  const shownDesc = (p: PluginInfo) => (p.description ? t(`plugin_${p.id.replaceAll('-', '_')}.description`, { defaultValue: p.description }) : '')
 
   return (
     <div className="flex flex-col gap-4">
@@ -43,7 +44,7 @@ function InstalledTab({ onLicense }: { onLicense: (p: PluginInfo) => void }) {
             <AlertTitle>{t('pluginMgr.expiring.title')}</AlertTitle>
             <AlertDescription>
               {expiring
-                .map((p) => t('pluginMgr.expiring.item', { name: p.name, days: daysUntil(p.expiresAt) }))
+                .map((p) => t('pluginMgr.expiring.item', { name: shownName(p), days: daysUntil(p.expiresAt) }))
                 .join(t('pluginMgr.expiring.sep'))}
             </AlertDescription>
           </div>
@@ -63,7 +64,7 @@ function InstalledTab({ onLicense }: { onLicense: (p: PluginInfo) => void }) {
               icon={<Puzzle className="h-6 w-6" aria-hidden="true" />}
               title={t('pluginMgr.empty.title')}
               description={t('pluginMgr.empty.desc')}
-              action={<code className="block max-w-full break-all rounded-md bg-muted px-3 py-2 text-start text-xs text-foreground">{INSTALL_CMD}</code>}
+              action={<code className="block max-w-full break-all rounded-md bg-muted px-3 py-2 text-start text-xs text-foreground">{t('pluginMgr.installCmd')}</code>}
             />
           </CardContent>
         </Card>
@@ -80,13 +81,13 @@ function InstalledTab({ onLicense }: { onLicense: (p: PluginInfo) => void }) {
               <Card key={p.id} className="flex flex-col">
                 <CardHeader className="pb-2">
                   <CardTitle className="flex flex-wrap items-center gap-2 text-base font-medium">
-                    <span className="min-w-0 truncate">{p.name}</span>
+                    <span className="min-w-0 truncate">{shownName(p)}</span>
                     <span className="num text-xs font-normal text-muted-foreground">v{p.version}</span>
                     <Badge variant={p.edition === 'pro' ? 'info' : 'secondary'} className="ms-auto">
                       {t(`pluginMgr.edition.${p.edition}`)}
                     </Badge>
                   </CardTitle>
-                  {p.description ? <p className="line-clamp-2 text-sm text-muted-foreground">{p.description}</p> : null}
+                  {p.description ? <p className="line-clamp-2 text-sm text-muted-foreground">{shownDesc(p)}</p> : null}
                 </CardHeader>
                 <CardContent className="flex flex-1 flex-col gap-3">
                   <div className="flex flex-wrap items-center gap-2">

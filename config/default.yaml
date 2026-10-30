@@ -89,6 +89,8 @@ auth:
   proxy: ""                 # 访问 Google / GitHub 等外网用的 HTTP(S) 代理，如 http://127.0.0.1:7890；空 = 直连
   jwt_secret: ""            # 空 = 首次启动自动生成并保存到 data/jwt.secret
   access_ttl: 30m
+  # refresh_ttl 是「闲置退出」的回退值：后台「设置 → 安全」里的 idleMinutes 优先（0 = 沿用本值）。
+  # 最长会话（maxHours）同样在设置页里改；两者都是登录/刷新时实时读取，不用重启。
   refresh_ttl: 168h
 sms:                        # 短信通道（手机号登录、绑定手机号）。provider 为空时 auth.methods 自动不含 phone
   provider: ""              # 空 = 不启用 | log = 验证码打印到日志，仅开发用（生产启用会在启动时警告）| webhook | aliyun | tencent

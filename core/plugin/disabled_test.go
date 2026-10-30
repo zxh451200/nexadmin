@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"os"
@@ -25,7 +26,7 @@ func TestDisabledPlugin(t *testing.T) {
 
 	m := newManager([]Plugin{{ID: "cron", Edition: Pro, Module: fakeModule{}}},
 		Options{Root: root, PublicKey: pub, Now: func() time.Time { return now }, DisabledPlugins: []string{"cron"}})
-	list := m.List()
+	list := m.List(context.Background())
 	if len(list) != 1 || list[0].Status != StatusDisabled {
 		t.Fatalf("want disabled, got %+v", list)
 	}
@@ -53,7 +54,7 @@ func TestDisabledPlugin(t *testing.T) {
 		{ID: "other", Edition: Free, Module: fakeModule{}},
 	}, Options{Root: root, PublicKey: pub, Now: func() time.Time { return now }, DisabledPlugins: []string{"nope"}})
 	got := map[string]string{}
-	for _, i := range m2.List() {
+	for _, i := range m2.List(context.Background()) {
 		got[i.ID] = i.Status
 	}
 	if got["cron"] != StatusUnlicensed || got["other"] != StatusActive {

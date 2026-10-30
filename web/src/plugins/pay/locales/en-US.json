@@ -31,14 +31,34 @@
     "refundConfirm": "Start a refund for {{no}}?",
     "amountInvalid": "Enter a valid payment no and amount",
     "configJsonError": "Channel config must be a JSON object",
+    "configRequired": "Fill required fields: {{fields}}",
     "configKeep": "Leave empty to keep existing config",
+    "notifyUrlHint": "Full callback URL of this site; defaults to the current origin",
     "configSet": "Configured",
     "verifyOk": "Signature OK",
     "verifyFail": "Signature failed",
     "enabledOn": "Enabled",
     "enabledOff": "Disabled",
     "providers": {
-      "mock": "Mock channel"
+      "mock": "Mock channel",
+      "alipay": "Alipay",
+      "wechat": "WeChat Pay",
+      "epay": "Epay"
+    },
+    "configFields": {
+      "appId": "App ID",
+      "privateKey": "App private key",
+      "alipayPublicKey": "Alipay public key",
+      "sellerId": "Seller PID",
+      "gateway": "Gateway URL",
+      "mchId": "Merchant ID",
+      "serialNo": "API cert serial no.",
+      "apiV3Key": "APIv3 key",
+      "platformPublicKey": "Platform public key",
+      "platformPublicKeyId": "Platform public key ID",
+      "pid": "Merchant ID",
+      "key": "Merchant key",
+      "payType": "Pay type"
     },
     "status": {
       "pending": "Pending",
@@ -67,6 +87,7 @@
       "channelCode": "Channel Code",
       "channelName": "Name",
       "provider": "Provider",
+      "notifyUrl": "Notify URL",
       "feeRateBp": "Fee Rate (bp)",
       "channelTxnId": "Channel Txn ID",
       "status": "Status",
@@ -87,14 +108,28 @@
       "edit": "Edit Channel",
       "deleteConfirm": "Delete channel {{name}}?"
     },
+    "method": {
+      "native": "QR code",
+      "page": "Desktop web",
+      "wap": "Mobile web",
+      "jsapi": "Official account",
+      "app": "App"
+    },
     "stats": {
       "rangeLabel": "Time range",
       "ranges": {
         "7d": "Last 7 days",
         "30d": "Last 30 days",
         "90d": "Last 90 days",
-        "all": "All time"
+        "180d": "Last 6 months"
       },
+      "refresh": "Refresh",
+      "loadFailed": "Failed to load analytics",
+      "retry": "Retry",
+      "stale": "Refresh failed; showing the previous result",
+      "emptyInRange": "No payment orders in this range",
+      "successRate": "success rate",
+      "noReason": "No reason given",
       "orders": "Orders",
       "paid": "Paid orders",
       "net": "Net amount",
@@ -110,6 +145,9 @@
       "byChannel": "By channel",
       "channel": "Channel",
       "byScene": "By scene",
+      "byStatus": "By status",
+      "byMethod": "By method",
+      "byBizType": "By biz type",
       "failReasons": "Top failure reasons",
       "noFailures": "No failed orders in this range"
     }

@@ -22,7 +22,7 @@ type service struct {
 	notify *notify.Service // 可为空：账号通知邮件（设置页开关，默认关）
 }
 
-func bad(msg string) *response.Error { return response.BadRequest("error.bad_request").WithMsg(msg) }
+func bad(key string, args ...any) *response.Error { return response.BadRequest(key, args...) }
 
 func notFound() *response.Error { return response.NotFound("error.not_found") }
 
@@ -70,21 +70,21 @@ func (s *service) filtered(ctx context.Context, q listQuery, me actor) (*gorm.DB
 	if q.DeptID != "" {
 		id, err := idgen.Parse(q.DeptID)
 		if err != nil {
-			return nil, bad("部门 ID 不正确")
+			return nil, bad("user.dept_id_invalid")
 		}
 		tx = tx.Where("dept_id = ?", int64(id))
 	}
 	if q.CreatedFrom != "" {
 		t, err := time.Parse("2006-01-02", q.CreatedFrom)
 		if err != nil {
-			return nil, bad("创建时间格式应为 YYYY-MM-DD")
+			return nil, bad("user.created_at_invalid")
 		}
 		tx = tx.Where("created_at >= ?", t)
 	}
 	if q.CreatedTo != "" {
 		t, err := time.Parse("2006-01-02", q.CreatedTo)
 		if err != nil {
-			return nil, bad("创建时间格式应为 YYYY-MM-DD")
+			return nil, bad("user.created_at_invalid")
 		}
 		tx = tx.Where("created_at < ?", t.AddDate(0, 0, 1))
 	}

@@ -21,8 +21,21 @@ import (
 //   - 操作者改自己的资料时，部门与角色必须保持不变，不能自我提权或扩大范围；
 //   - 更新用户时只校验“新增”的角色，保留用户已有的角色不受影响。
 
-func forbiddenRole(msg string) *response.Error {
-	return response.Forbidden("error.forbidden").WithMsg(msg)
+func forbiddenRole(key string, args ...any) *response.Error {
+	return response.Forbidden(key, args...)
+}
+
+// roleDenyKey 把 roleassign 给出的中文原因映射成 i18n key（文案与该包中的原文一致）。
+func roleDenyKey(reason string) string {
+	switch reason {
+	case roleassign.ReasonNotAssignable:
+		return "user.role_not_assignable"
+	case roleassign.ReasonPerms:
+		return "user.role_perms_exceeded"
+	case roleassign.ReasonScope:
+		return "user.role_scope_exceeded"
+	}
+	return "error.forbidden"
 }
 
 // guardRoles 校验操作者能否分配这些角色（三道校验，任一不满足即 403 并说明原因）。
@@ -35,7 +48,7 @@ func (s *service) guardRoles(ctx context.Context, me actor, roles []idgen.ID) er
 		return err
 	}
 	if len(loaded) != len(roles) { // 不在本租户的角色按不可分配处理
-		return forbiddenRole(roleassign.ReasonNotAssignable)
+		return forbiddenRole(roleDenyKey(roleassign.ReasonNotAssignable))
 	}
 	op, err := roleassign.LoadOperator(ctx, s.db, me.ID, me.Super)
 	if err != nil {
@@ -43,7 +56,7 @@ func (s *service) guardRoles(ctx context.Context, me actor, roles []idgen.ID) er
 	}
 	for _, r := range loaded {
 		if reason := op.Check(r); reason != "" {
-			return forbiddenRole(reason)
+			return forbiddenRole(roleDenyKey(reason))
 		}
 	}
 	return nil
@@ -89,7 +102,7 @@ func (s *service) guardUserWrite(ctx context.Context, me actor, cur *User, p par
 		}
 		if cur.ID == me.ID { // 改自己的资料：部门与角色必须原样
 			if p.dept != cur.DeptID || !sameIDs(p.roles, have) {
-				return forbiddenRole("不能修改自己的部门或角色")
+				return forbiddenRole("user.self_dept_role_immutable")
 			}
 			return nil
 		}
@@ -100,7 +113,7 @@ func (s *service) guardUserWrite(ctx context.Context, me actor, cur *User, p par
 			return err
 		}
 		if sc.Limited() && (p.dept == 0 || !sc.HasDept(int64(p.dept))) {
-			return forbiddenRole("所选部门超出你的数据范围")
+			return forbiddenRole("user.dept_out_of_scope")
 		}
 	}
 	held := make(map[idgen.ID]bool, len(have))
@@ -138,7 +151,7 @@ func (s *service) guardTarget(ctx context.Context, me actor, u *User) error {
 	if !me.Provision && u.ID == me.ID {
 		return nil
 	}
-	deny := forbiddenRole("无权操作超级管理员账号")
+	deny := forbiddenRole("user.super_operate_forbidden")
 	protected, err := isProtectedUser(ctx, s.db, u)
 	if err != nil {
 		return err

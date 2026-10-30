@@ -115,7 +115,45 @@ defineMock([
     url: '/plugins/pay/channels',
     handler: () => channels,
   },
-  { method: 'GET', url: '/plugins/pay/providers', handler: () => ['mock'] },
+  {
+    method: 'GET',
+    url: '/plugins/pay/providers',
+    // 与后端 ProviderInfos 同形：预览里也要看到真实渠道的凭据表单。
+    handler: () => [
+      { name: 'mock', fields: [] },
+      {
+        name: 'alipay',
+        fields: [
+          { key: 'appId', type: 'text', required: true, secret: false, placeholder: '2021000000000000' },
+          { key: 'privateKey', type: 'password', required: true, secret: true, placeholder: '应用私钥（PKCS8，PEM 或纯 Base64）' },
+          { key: 'alipayPublicKey', type: 'password', required: true, secret: true, placeholder: '支付宝公钥或公钥证书（PEM / 纯 Base64）' },
+          { key: 'sellerId', type: 'text', required: false, secret: false, placeholder: '可选：校验回调的 seller_id' },
+          { key: 'gateway', type: 'url', required: false, secret: false, placeholder: 'https://openapi.alipay.com/gateway.do' },
+        ],
+      },
+      {
+        name: 'wechat',
+        fields: [
+          { key: 'appId', type: 'text', required: true, secret: false, placeholder: 'wx0000000000000000' },
+          { key: 'mchId', type: 'text', required: true, secret: false, placeholder: '1900000001' },
+          { key: 'serialNo', type: 'text', required: true, secret: false, placeholder: '商户 API 证书序列号' },
+          { key: 'privateKey', type: 'password', required: true, secret: true, placeholder: 'apiclient_key.pem（PEM）' },
+          { key: 'apiV3Key', type: 'password', required: true, secret: true, placeholder: 'APIv3 密钥（32 位）' },
+          { key: 'platformPublicKey', type: 'password', required: true, secret: true, placeholder: '微信支付公钥（PEM）' },
+          { key: 'platformPublicKeyId', type: 'text', required: true, secret: false, placeholder: 'PUB_KEY_ID_0000000000000000' },
+        ],
+      },
+      {
+        name: 'epay',
+        fields: [
+          { key: 'gateway', type: 'url', required: true, secret: false, placeholder: 'https://pay.example.com' },
+          { key: 'pid', type: 'text', required: true, secret: false, placeholder: '商户 ID' },
+          { key: 'key', type: 'password', required: true, secret: true, placeholder: '商户密钥' },
+          { key: 'payType', type: 'select', required: true, secret: false, options: ['alipay', 'wxpay', 'qqpay'] },
+        ],
+      },
+    ],
+  },
   {
     method: 'GET',
     url: '/plugins/pay/callbacks',
@@ -227,8 +265,15 @@ defineMock([
     // 与真实 /orders/stats 同口径：金额按币种分列，趋势只给笔数，绝不跨币种相加
     method: 'GET',
     url: '/plugins/pay/orders/stats',
-    handler: () => {
+    handler: ({ query }) => {
       const settled = SETTLED
+      const start = String(query.startDate ?? '')
+      const end = String(query.endDate ?? '')
+      const channelCode = String(query.channelCode ?? '')
+      const scoped = orders.filter((o) => {
+        const d = dayKey(o.createdAt)
+        return (!start || d >= start) && (!end || d <= end) && (!channelCode || o.channelCode === channelCode)
+      })
       const tally = (keys: (string | undefined)[]) => {
         const m = new Map<string, number>()
         keys.forEach((k) => { const key = k && k.trim() ? k : '-'; m.set(key, (m.get(key) ?? 0) + 1) })
@@ -237,7 +282,7 @@ defineMock([
       const curs = new Map<string, { orders: number; paid: number; gmv: number; refunded: number; fee: number }>()
       const chs = new Map<string, { channel: string; currency: string; paid: number; gmv: number }>()
       const dayMap = new Map<string, { date: string; orders: number; paid: number }>()
-      orders.forEach((o) => {
+      scoped.forEach((o) => {
         const c = curs.get(o.currency) ?? { orders: 0, paid: 0, gmv: 0, refunded: 0, fee: 0 }
         c.orders += 1
         const key = dayKey(o.createdAt)
@@ -258,19 +303,18 @@ defineMock([
         c.fee += o.feeMinor ?? 0
         curs.set(o.currency, c)
       })
-      // 与后端同口径：窗口取最近 30 天，缺数据的日期补 0，保证横轴连续
+      // 与后端同口径：按请求窗口补齐日期（缺数据补 0）；没给窗口时退回最近 30 天
       const series: { date: string; orders: number; paid: number }[] = []
-      for (let i = 30; i >= 0; i--) {
-        const d = new Date()
-        d.setHours(12, 0, 0, 0)
-        d.setDate(d.getDate() - i)
-        const key = dayKey(d.toISOString())
+      const cursor = start ? new Date(`${start}T12:00:00`) : new Date(Date.now() - 30 * 86_400_000)
+      const stop = end ? new Date(`${end}T12:00:00`) : new Date()
+      for (let i = 0; i < 180 && cursor <= stop; i++, cursor.setDate(cursor.getDate() + 1)) {
+        const key = dayKey(cursor.toISOString())
         series.push(dayMap.get(key) ?? { date: key, orders: 0, paid: 0 })
       }
       return {
-        from: series[0].date, to: series[series.length - 1].date,
-        orders: orders.length,
-        paid: orders.filter((o) => settled.has(o.status)).length,
+        from: series[0]?.date ?? start, to: series[series.length - 1]?.date ?? end,
+        orders: scoped.length,
+        paid: scoped.filter((o) => settled.has(o.status)).length,
         sampled: false,
         days: series,
         byCurrency: [...curs.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([currency, c]) => ({
@@ -285,11 +329,11 @@ defineMock([
         })),
         byChannel: [...chs.values()].sort((a, b) => b.gmv - a.gmv || a.channel.localeCompare(b.channel))
           .map((c) => ({ channel: c.channel, currency: c.currency, paid: c.paid, gmvMinor: c.gmv })),
-        byStatus: tally(orders.map((o) => o.status)),
-        byScene: tally(orders.map((o) => o.scene)),
-        byMethod: tally(orders.map((o) => o.method)),
-        byBizType: tally(orders.map((o) => o.bizType)),
-        failReasons: tally(orders.filter((o) => !settled.has(o.status)).map((o) => (o as { failReason?: string }).failReason)),
+        byStatus: tally(scoped.map((o) => o.status)),
+        byScene: tally(scoped.map((o) => o.scene)),
+        byMethod: tally(scoped.map((o) => o.method)),
+        byBizType: tally(scoped.map((o) => o.bizType)),
+        failReasons: tally(scoped.filter((o) => !settled.has(o.status)).map((o) => (o as { failReason?: string }).failReason)),
       }
     },
   },

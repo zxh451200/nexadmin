@@ -47,7 +47,7 @@ func (p exportParams) query() SubQuery {
 func (s *Service) SubmitExportJob(ctx context.Context, actor Actor, q SubQuery, lang string) (map[string]any, error) {
 	m := job.Default()
 	if m == nil {
-		return nil, response.Unavailable("error.internal").WithMsg("导出中心未启用，请使用直接导出")
+		return nil, response.Unavailable("formbuilder.export_center_disabled")
 	}
 	if err := checkFilter(q); err != nil {
 		return nil, err
@@ -67,7 +67,7 @@ func (s *Service) SubmitExportJob(ctx context.Context, actor Actor, q SubQuery, 
 	j, err := m.Submit(ctx, job.Submit{Type: JobType, Owner: actor.ID, Params: p})
 	switch {
 	case errors.Is(err, job.ErrTooMany):
-		return nil, response.New(429, "error.bad_request").WithMsg("进行中的导出任务过多，请等待完成后再试")
+		return nil, response.New(429, "formbuilder.export_too_many")
 	case err != nil:
 		return nil, err
 	}

@@ -9,7 +9,7 @@
     "all": "All",
     "empty": "No imports yet",
     "noSourcesTitle": "No import sources yet",
-    "noSources": "No import sources yet — a business module must register one (imports.RegisterSource) before sources and templates appear here.",
+    "noSources": "No importable data tables yet. Once a module is wired for import, its sources and templates show up here.",
     "pickFileFirst": "Pick a source and files first",
     "doneSummary": "Import finished: {{ok}} ok, {{fail}} failed",
     "downloadTemplate": "Download template",

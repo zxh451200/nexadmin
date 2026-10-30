@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { ArrowLeft, Download, Eye, FileDown, Trash2 } from 'lucide-react'
+import { ArrowLeft, Download, FileDown, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { DetailAction } from '@/framework/components/DetailAction'
 import { DateRangePicker, type DateRangeValue } from '@/framework/components/DateRangePicker'
 import { EmptyState } from '@/framework/components/EmptyState'
 import { FilterBar } from '@/framework/components/FilterBar'
@@ -234,9 +235,7 @@ export default function SubmissionsPage() {
         }
         rowActions={(r) => (
           <>
-            <Button variant="ghost" size="icon" aria-label={t('plugin_formbuilder.submissions.detail')} title={t('plugin_formbuilder.submissions.detail')} onClick={() => setDetailId(r.id)}>
-              <Eye aria-hidden="true" />
-            </Button>
+            <DetailAction onClick={() => setDetailId(r.id)} />
             <Button variant="ghost" size="icon" className="text-destructive" aria-label={t('common.delete')} title={t('common.delete')} onClick={() => void onDelete(r)}>
               <Trash2 aria-hidden="true" />
             </Button>

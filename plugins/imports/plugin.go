@@ -53,8 +53,13 @@ func (m *module) service(d *core.Deps) *Service {
 
 func (*module) Name() string { return "imports" }
 
-// Register 注册路由。
+// Register 注册路由，并收集实现了 SourceProvider 的业务模块。
 func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
+	collect(d.Modules, d.DB, func(msg string, err error) {
+		if d.Log != nil {
+			d.Log.Sugar().Warnw(msg, "err", err.Error())
+		}
+	})
 	h := &handler{svc: m.service(d)}
 	h.Register(r, d)
 }

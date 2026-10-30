@@ -58,6 +58,17 @@ export default function BackupPage() {
   const rows = list.data?.list ?? []
   const hasRunning = (st?.running ?? false) || rows.some((r) => r.status === 'running')
   const fmtTime = (s: string) => new Date(s).toLocaleString(i18n.language, { hour12: false })
+  // 引擎 id（mysql/mariadb/postgres）不直接显示，展示成产品名
+  const engineName = st ? t(`backup.engine.${st.engine}`, { defaultValue: st.engine }) : ''
+  // 保留策略：0 表示不限制，与设置弹窗同一套说法
+  const keepHint = (() => {
+    const c = config.data
+    if (!c) return undefined
+    if (!c.keepDays && !c.keepCount) return t('backup.card.keepAll')
+    const days = c.keepDays ? t('backup.settings.days', { count: c.keepDays }) : t('backup.settings.unlimited')
+    const copies = c.keepCount ? t('backup.settings.copies', { count: c.keepCount }) : t('backup.settings.unlimited')
+    return t('backup.card.keep', { days, copies })
+  })()
 
   const backupNow = async () => {
     try {
@@ -162,7 +173,9 @@ export default function BackupPage() {
         <Alert variant="destructive">
           <CircleAlert className="size-4" aria-hidden="true" />
           <AlertTitle>{t('backup.unavailable.title')}</AlertTitle>
-          <AlertDescription>{st.reason}</AlertDescription>
+          <AlertDescription>
+            {st.missing?.length ? t('backup.unavailable.detail', { tools: st.missing.join(' / ') }) : st.reason}
+          </AlertDescription>
         </Alert>
       ) : null}
 
@@ -174,13 +187,13 @@ export default function BackupPage() {
             <StatCard tone="chart-1"
               title={t('backup.card.tool')}
               value={st.available ? (st.tool ?? '-') : t('backup.card.toolMissing')}
-              hint={`${st.engine} · v${st.version}`}
+              hint={engineName}
               icon={<Wrench aria-hidden="true" />}
             />
             <StatCard tone="chart-2"
               title={t('backup.card.disk')}
               value={st.diskFreeBytes == null ? t('backup.card.unknown') : formatSize(st.diskFreeBytes)}
-              hint={st.dir}
+              hint={t('backup.card.dir', { dir: st.dir })}
               icon={<HardDrive aria-hidden="true" />}
             />
             <StatCard tone="chart-4"
@@ -192,7 +205,7 @@ export default function BackupPage() {
             <StatCard tone="chart-5"
               title={t('backup.card.last')}
               value={st.lastSuccessAt ? fmtTime(st.lastSuccessAt) : t('backup.card.never')}
-              hint={config.data ? t('backup.card.keep', { days: config.data.keepDays || '∞', copies: config.data.keepCount || '∞' }) : undefined}
+              hint={keepHint}
               icon={<DatabaseBackup aria-hidden="true" />}
             />
           </>

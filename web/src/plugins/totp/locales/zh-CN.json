@@ -13,6 +13,7 @@
     "confirm": "确认绑定",
     "confirmed": "两步验证已启用",
     "disabled": "两步验证已关闭",
+    "disable": "停用两步验证",
     "codeWrong": "验证码错误,请重试"
   }
 }

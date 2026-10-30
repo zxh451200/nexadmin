@@ -19,15 +19,15 @@ func (s *Service) Save(ctx context.Context, id idgen.ID, f Form, by idgen.ID, al
 		return nil, response.Forbidden("error.forbidden")
 	}
 	if f.Scope != ScopeAll && len(f.TargetIDs) == 0 {
-		return nil, badReq("请选择发布对象")
+		return nil, response.BadRequest("notice.audience_required")
 	}
 	publishAt, ok1 := parseTime(f.PublishAt)
 	expireAt, ok2 := parseTime(f.ExpireAt)
 	if !ok1 || !ok2 {
-		return nil, badReq("时间格式不正确")
+		return nil, response.BadRequest("notice.time_invalid")
 	}
 	if publishAt != nil && expireAt != nil && !expireAt.After(*publishAt) {
-		return nil, badReq("到期时间必须晚于发布时间")
+		return nil, response.BadRequest("notice.expire_before_publish")
 	}
 
 	n := Notice{Status: StatusDraft, CreatedBy: by}
@@ -76,11 +76,11 @@ func (s *Service) Publish(ctx context.Context, id idgen.ID) (*View, error) {
 		return nil, err
 	}
 	if n.Status == StatusPublished {
-		return nil, badReq("公告已发布")
+		return nil, response.BadRequest("notice.already_published")
 	}
 	targets := s.targetIDs(ctx, id)
 	if n.Scope != ScopeAll && len(targets) == 0 {
-		return nil, badReq("请选择发布对象")
+		return nil, response.BadRequest("notice.audience_required")
 	}
 	var total int64
 	if err := s.recipients(ctx, n, targets).Count(&total).Error; err != nil {
@@ -108,7 +108,7 @@ func (s *Service) Revoke(ctx context.Context, id idgen.ID) (*View, error) {
 		return nil, err
 	}
 	if n.Status != StatusPublished {
-		return nil, badReq("只有已发布的公告可以撤回")
+		return nil, response.BadRequest("notice.revoke_only_published")
 	}
 	if err := s.db.WithContext(ctx).Model(&Notice{}).Where("id = ?", int64(id)).Update("status", StatusRevoked).Error; err != nil {
 		return nil, err

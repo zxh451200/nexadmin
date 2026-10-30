@@ -11,6 +11,7 @@ import { Button } from '@/framework/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/framework/ui/dropdown-menu'
 import { Label } from '@/framework/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
+import { cn } from '@/lib/utils'
 import { FileThumb } from './FileThumb'
 import { useFileGroups, type FileItem } from './api'
 
@@ -99,16 +100,18 @@ interface MenuProps {
   onToggleVisibility: (f: FileItem) => void
   onMove: (f: FileItem) => void
   onDelete: (f: FileItem) => void
+  /** 缩略图上的浮层触发器需要自带底色，否则压在图片上看不清 */
+  triggerClassName?: string
 }
 
-export function FileActionsMenu({ file, onPreview, onToggleVisibility, onMove, onDelete }: MenuProps) {
+export function FileActionsMenu({ file, onPreview, onToggleVisibility, onMove, onDelete, triggerClassName }: MenuProps) {
   const { t } = useTranslation()
   const { has } = usePermission()
   const isPublic = file.visibility === 'public'
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" aria-label={t('common.more')} className="size-11 md:size-8" onClick={(e) => e.stopPropagation()}>
+        <Button variant="ghost" size="icon" aria-label={t('common.more')} className={cn('size-11 md:size-8', triggerClassName)} onClick={(e) => e.stopPropagation()}>
           <MoreHorizontal className="size-4" aria-hidden="true" />
         </Button>
       </DropdownMenuTrigger>

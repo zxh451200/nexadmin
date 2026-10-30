@@ -48,6 +48,29 @@
       "approved": "Approved",
       "rejected": "Rejected",
       "cancelled": "Withdrawn"
+    },
+    "designer": {
+      "nodeStart": "Start",
+      "nodeApproval": "Approval",
+      "nodeGateway": "Gateway",
+      "nodeEnd": "End",
+      "linkingHint": "Click a target node to finish the connection (Esc to cancel)",
+      "countersignBadge": "All",
+      "removeEdge": "Click to delete this connection",
+      "connectFrom": "Connect from here",
+      "nodeName": "Node name",
+      "approvers": "Approver IDs (comma separated)",
+      "mode": "Mode",
+      "modeAny": "Any one (single approval wins)",
+      "modeAll": "All (everyone must approve)",
+      "escalateTo": "Escalate on timeout to",
+      "noEscalate": "No escalation",
+      "timeoutMinutes": "Timeout (minutes, 0 = no escalation)",
+      "deleteNode": "Delete node",
+      "edgeConditions": "Outgoing conditions",
+      "edgeWhen": "Condition (optional)",
+      "propsTitle": "Node properties",
+      "propsEmpty": "Select a node on the canvas to edit its name, approvers and outgoing conditions"
     }
   }
 }

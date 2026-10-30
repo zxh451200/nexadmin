@@ -95,7 +95,7 @@ function Robots({ form }: { form: UseFormReturn<any> }) { // eslint-disable-line
       </div>
       {fields.length === 0 ? <p className="text-sm text-muted-foreground">{t('settings.notify.noRobots')}</p> : null}
       {fields.map((f, i) => (
-        <div key={f.id} className="flex flex-col gap-3 rounded-lg border border-border p-3">
+        <div key={f.id} className="flex flex-col gap-3 rounded-lg bg-muted/40 p-3">
           <FormGrid>
             <TextField control={form.control} name={`robots.${i}.name`} label={t('settings.notify.robotName')} />
             <SelectField
@@ -113,7 +113,7 @@ function Robots({ form }: { form: UseFormReturn<any> }) { // eslint-disable-line
               description={t('settings.notify.robotSecretHint')}
             />
           </FormGrid>
-          <SwitchField control={form.control} name={`robots.${i}.markdown`} label={t('settings.notify.markdown')} />
+          <SwitchField control={form.control} name={`robots.${i}.markdown`} label={t('settings.notify.markdown')} bare />
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Button type="button" variant="ghost" onClick={() => remove(i)}>
               <Trash2 className="me-2 h-4 w-4" aria-hidden="true" />

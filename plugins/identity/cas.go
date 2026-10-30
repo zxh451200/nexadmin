@@ -295,12 +295,12 @@ func (s *Service) testCAS(ctx context.Context, cfg CASConfig) *TestResult {
 	// 不带 ticket 的请求：正常的 CAS 服务器会返回 INVALID_REQUEST 的 authenticationFailure XML，借此确认地址和协议版本。
 	body, err := s.casFetch(ctx, cfg, casValidatePath(cfg), url.Values{"service": {cfg.ServiceBaseURL + "/"}, "ticket": {"ST-connectivity-test"}})
 	if err != nil {
-		return &TestResult{Stage: "connect", Message: s.safeMessage("connect", err)}
+		return &TestResult{Stage: "connect", Message: s.safeMessage(ctx, "connect", err)}
 	}
 	if _, err := parseCASResponse(body); err != nil {
 		var cf *casFailure
 		if !errors.As(err, &cf) {
-			return &TestResult{Stage: "validate", Message: s.safeMessage("validate", fmt.Errorf("%w: %v", errCASResponse, err))}
+			return &TestResult{Stage: "validate", Message: s.safeMessage(ctx, "validate", fmt.Errorf("%w: %v", errCASResponse, err))}
 		}
 	}
 	return &TestResult{OK: true}

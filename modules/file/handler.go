@@ -25,7 +25,7 @@ type Handler struct{ svc *Service }
 func parseID(c *gin.Context) (idgen.ID, bool) {
 	id, err := idgen.Parse(c.Param("id"))
 	if err != nil {
-		response.Fail(c, badRequest("ID 不正确"))
+		response.Fail(c, response.BadRequest("file.id_invalid"))
 		return 0, false
 	}
 	return id, true
@@ -167,13 +167,13 @@ func (h *Handler) DeleteMany(c *gin.Context) {
 		}
 		id, err := idgen.Parse(s)
 		if err != nil {
-			response.Fail(c, badRequest("ids 中有不正确的 ID"))
+			response.Fail(c, response.BadRequest("file.ids_invalid"))
 			return
 		}
 		ids = append(ids, id)
 	}
 	if len(ids) == 0 || len(ids) > 500 {
-		response.Fail(c, badRequest("ids 不能为空，且一次最多 500 个"))
+		response.Fail(c, response.BadRequest("file.ids_limit"))
 		return
 	}
 	if err := h.svc.Delete(c.Request.Context(), ids); err != nil {

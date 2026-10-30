@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
 	"gorm.io/gorm"
 
 	"nexadmin/core/response"
+	"nexadmin/core/tenant"
 	"nexadmin/pkg/idgen"
 )
 
@@ -136,7 +136,7 @@ func (s *Service) Run(ctx context.Context, in RunInput, actor string) (*JobView,
 	}
 	src, err := getSource(strings.TrimSpace(in.Source))
 	if err != nil {
-		return nil, response.BadRequest("imports.source_unknown").WithMsg(err.Error())
+		return nil, response.BadRequest("imports.source_unknown").Wrap(err)
 	}
 	if len(in.Content) == 0 {
 		return nil, response.BadRequest("imports.file_required")
@@ -147,14 +147,13 @@ func (s *Service) Run(ctx context.Context, in RunInput, actor string) (*JobView,
 
 	rows, perr := ParseUpload(src, in.Content, in.FileName)
 	if perr != nil {
-		return nil, response.BadRequest("imports.parse_failed").WithMsg(perr.Error())
+		return nil, response.BadRequest("imports.parse_failed").Wrap(perr)
 	}
 	if len(rows) == 0 {
 		return nil, response.BadRequest("imports.no_rows")
 	}
 	if len(rows) > AsyncMaxRows {
-		return nil, response.BadRequest("imports.too_many_rows").WithMsg(
-			"当前上限 " + strconv.Itoa(AsyncMaxRows) + " 行,请拆分文件后分批导入")
+		return nil, response.BadRequest("imports.too_many_rows_limit", AsyncMaxRows)
 	}
 
 	// 表头必须覆盖全部必填列(缺列时整批失败,提示补列,而不是静默丢数据)。
@@ -175,7 +174,7 @@ func (s *Service) Run(ctx context.Context, in RunInput, actor string) (*JobView,
 		}
 	}
 	if len(missing) > 0 {
-		return nil, response.BadRequest("imports.missing_columns").WithMsg(strings.Join(missing, "、"))
+		return nil, response.BadRequest("imports.missing_columns_detail", strings.Join(missing, "、"))
 	}
 
 	fileName := truncate(strings.TrimSpace(in.FileName), 200)
@@ -225,9 +224,13 @@ func (s *Service) runAsync(ctx context.Context, src Source, rows []map[string]st
 }
 
 // processAsync 在后台协程里按批次处理行,每批更新一次台账(前端可感知进度)。
-// 不使用请求 ctx(请求可能已断开),改用 context.Background()。
+// 不使用请求 ctx(请求可能已断开),改用 context.Background();但租户必须从台账行还原,
+// 否则租户表会在默认租户下读写(小文件走同步路径没这个问题,大文件会写错租户)。
 func (s *Service) processAsync(src Source, m *Job, rows []map[string]string, actor string) {
 	ctx := context.Background()
+	if m.TenantID != 0 {
+		ctx = tenant.With(ctx, m.TenantID)
+	}
 	const batch = 500
 	start := time.Now()
 	s.db.WithContext(ctx).Model(&Job{}).Where("id = ?", int64(m.ID)).Update("status", StatusRunning)
@@ -348,7 +351,7 @@ func (s *Service) DeleteJob(ctx context.Context, id idgen.ID) error {
 		return err
 	}
 	if m.Status == StatusPending || m.Status == StatusRunning {
-		return response.Conflict("imports.job_running").WithMsg("任务正在执行，完成后才能删除")
+		return response.Conflict("imports.job_running")
 	}
 	return s.db.WithContext(ctx).Delete(&Job{}, "id = ?", int64(id)).Error
 }

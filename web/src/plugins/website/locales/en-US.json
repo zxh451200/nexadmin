@@ -6,11 +6,48 @@
       "nav": "Navigation",
       "features": "Features",
       "pages": "Pages",
-      "posts": "News"
+      "posts": "News",
+      "messages": "Messages"
     },
     "settings": {
       "title": "Site settings",
-      "desc": "Site name, home copy and footer; changes go live immediately"
+      "desc": "Site name, home copy, contact details and footer; changes go live immediately",
+      "socials": "Social icons",
+      "socialPlatform": "Platform",
+      "addSocial": "Add social link",
+      "friendLinks": "Friend links",
+      "friendName": "Site name",
+      "friendUrl": "URL",
+      "addFriendLink": "Add friend link"
+    },
+    "social": {
+      "github": "GitHub",
+      "x": "X (Twitter)",
+      "linkedin": "LinkedIn",
+      "youtube": "YouTube",
+      "wechat": "WeChat",
+      "weibo": "Weibo",
+      "bilibili": "Bilibili",
+      "rss": "RSS",
+      "mail": "Email"
+    },
+    "message": {
+      "title": "Messages",
+      "desc": "Messages submitted through the contact page. Opening one marks it as read.",
+      "status": "Status",
+      "read": "Read",
+      "unread": "Unread",
+      "name": "Name",
+      "contact": "Contact",
+      "content": "Message",
+      "createdAt": "Time",
+      "detailTitle": "Message details",
+      "markRead": "Mark as read",
+      "markUnread": "Mark as unread",
+      "deleteConfirm": "Delete the message from “{{name}}”?",
+      "searchPlaceholder": "Search name, email or content",
+      "onlyUnread": "Unread only",
+      "empty": "No messages yet"
     },
     "nav": {
       "title": "Navigation",
@@ -66,6 +103,13 @@
     "empty": "No data",
     "searchPlaceholder": "Title / slug",
     "viewSite": "View on site",
+    "editor": {
+      "preparing": "Preparing the form…",
+      "preparingHint": "Loading the field schema and language list.",
+      "loadFailed": "The form can't open right now",
+      "loadFailedHint": "The field schema request failed. Retry, or check your network and permissions.",
+      "retry": "Retry"
+    },
     "enabledOn": "Enabled",
     "enabledOff": "Disabled",
     "publishedOn": "Published",
@@ -80,6 +124,9 @@
       "homeCtaHref": "CTA link",
       "seoKeywords": "SEO keywords",
       "contactEmail": "Contact email",
+      "contactPhone": "Contact phone",
+      "qrCodeUrl": "QR code image",
+      "qrCodeCaption": "QR code caption",
       "icp": "ICP filing no.",
       "footerNote": "Footer note",
       "navLabel": "Label",
@@ -100,11 +147,16 @@
       "content": "Content",
       "published": "Published",
       "sort": "Sort",
-      "enabled": "Enabled"
+      "enabled": "Enabled",
+      "publishedAt": "Publish time",
+      "publishedAtHint": "Left empty, it is recorded automatically when published"
     },
     "hint": {
       "homeTitle": "Use a line break for two lines; the last line renders as gradient text",
       "logoUrl": "Image URL, or upload with the button (PNG/JPEG/WebP/GIF, ≤2MB); leave empty for the built-in letter mark",
+      "qrCodeUrl": "Shown in the footer and on the contact page; leave empty to hide the QR code",
+      "socials": "Social icons in the footer and on the contact page; up to 12, https:// or mailto:",
+      "friendLinks": "The “Links” column in the footer; up to 20, hidden when empty",
       "navHref": "Pick a site page here. Choose “Custom link” for an external URL (must start with https://) or an in-page anchor."
     },
     "logo": {
@@ -112,12 +164,22 @@
       "uploading": "Uploading…",
       "uploaded": "Uploaded — remember to save"
     },
+    "qr": {
+      "upload": "Upload QR code",
+      "uploaded": "QR code uploaded — remember to save"
+    },
     "placeholder": {
       "siteName": "NexAdmin",
       "siteDesc": "One-line intro used in title and search snippets",
       "homeTitle": "A full-stack framework\nbuilt for production admin systems",
       "homeCtaHref": "#quickstart",
       "contactEmail": "team@example.com",
+      "contactPhone": "010-88886666",
+      "qrCodeUrl": "Upload a QR image or paste its URL",
+      "qrCodeCaption": "WeChat official account",
+      "socialUrl": "https://… or mailto:…",
+      "friendName": "e.g. Vite",
+      "friendUrl": "https://…",
       "icp": "e.g. 京ICP备00000000号"
     },
     "market": {

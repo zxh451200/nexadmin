@@ -1,14 +1,16 @@
 import { useTranslation } from 'react-i18next'
 import { z } from 'zod'
 import { Info, TriangleAlert } from 'lucide-react'
+import { Can } from '@/framework/auth/Can'
 import { Uploader, type UploadedFile } from '@/framework/components/Uploader'
 import { FormGrid, FormGridFull } from '@/framework/components/FormLayout'
 import { useLanguages } from '@/framework/i18n/useLanguages'
 import { Alert, AlertDescription } from '@/framework/ui/alert'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/framework/ui/card'
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/framework/ui/form'
-import { ATTEMPT_OPTIONS, LOCK_MINUTE_OPTIONS, type AllSettings } from './api'
+import { ATTEMPT_OPTIONS, IDLE_MINUTE_OPTIONS, LOCK_MINUTE_OPTIONS, SESSION_HOUR_OPTIONS, type AllSettings } from './api'
 import { RadioField, SelectField, SwitchField, TextField } from './fields'
+import { UploadLimitCard } from '@/framework/modules/config/UploadLimitCard'
 import { SectionCard } from './SectionCard'
 
 const str = z.string().trim()
@@ -73,6 +75,8 @@ export function SiteSection({ value }: { value: AllSettings['site'] }) {
 const securitySchema = z.object({
   maxAttempts: z.enum(ATTEMPT_OPTIONS),
   lockMinutes: z.enum(LOCK_MINUTE_OPTIONS),
+  idleMinutes: z.enum(IDLE_MINUTE_OPTIONS),
+  maxHours: z.enum(SESSION_HOUR_OPTIONS),
 })
 
 export function SecuritySection({ value }: { value: AllSettings['security'] }) {
@@ -94,6 +98,26 @@ export function SecuritySection({ value }: { value: AllSettings['security'] }) {
             label={t('settings.security.lockMinutes')}
             description={t('settings.security.lockMinutesHint')}
             options={LOCK_MINUTE_OPTIONS.map((v) => ({ value: v, label: t('settings.security.minutes', { count: Number(v) }) }))}
+          />
+          <SelectField
+            control={form.control}
+            name="idleMinutes"
+            label={t('settings.security.idleMinutes')}
+            description={t('settings.security.idleMinutesHint')}
+            options={IDLE_MINUTE_OPTIONS.map((v) => ({
+              value: v,
+              label: v === '0' ? t('settings.security.unlimited') : t('settings.security.minutes', { count: Number(v) }),
+            }))}
+          />
+          <SelectField
+            control={form.control}
+            name="maxHours"
+            label={t('settings.security.maxHours')}
+            description={t('settings.security.maxHoursHint')}
+            options={SESSION_HOUR_OPTIONS.map((v) => ({
+              value: v,
+              label: v === '0' ? t('settings.security.unlimited') : t('settings.security.hours', { count: Number(v) }),
+            }))}
           />
         </FormGrid>
       )}
@@ -141,21 +165,27 @@ export function CacheSection({ value }: { value: AllSettings['cache'] }) {
 export function StorageSection({ value }: { value: AllSettings['storage'] }) {
   const { t } = useTranslation()
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{t('settings.storage.title')}</CardTitle>
-        <CardDescription>{t('settings.storage.description')}</CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
-        <Alert variant="info">
-          <Info aria-hidden="true" />
-          <AlertDescription>{t('settings.storage.readonlyHint')}</AlertDescription>
-        </Alert>
-        <p className="text-sm text-muted-foreground">
-          {t('settings.storage.type')}：{value.type === 's3' ? t('settings.storage.s3') : t('settings.storage.local')}
-        </p>
-      </CardContent>
-    </Card>
+    <div className="flex flex-col gap-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>{t('settings.storage.title')}</CardTitle>
+          <CardDescription>{t('settings.storage.description')}</CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          <Alert variant="info">
+            <Info aria-hidden="true" />
+            <AlertDescription>{t('settings.storage.readonlyHint')}</AlertDescription>
+          </Alert>
+          <p className="text-sm text-muted-foreground">
+            {t('settings.storage.type')}：{value.type === 's3' ? t('settings.storage.s3') : t('settings.storage.local')}
+          </p>
+        </CardContent>
+      </Card>
+      {/* 上传限制是文件存储策略的一部分，和「参数」这种键值表不是一类东西，搬到这里更符合直觉 */}
+      <Can perm="config:list">
+        <UploadLimitCard />
+      </Can>
+    </div>
   )
 }
 

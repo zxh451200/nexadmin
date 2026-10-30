@@ -8,7 +8,9 @@ import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
 import { Label } from '@/framework/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
+import { Textarea } from '@/framework/ui/textarea'
 import { CHART_TYPES, previewChart, useDatasetOptions, useSaveChart, type Chart, type ChartForm, type ChartType } from './api'
+import { builtinText } from './builtinText'
 import { ChartSpecEditor } from './ChartSpecEditor'
 import { ChartView } from './ChartView'
 import { emptyChartConfig, shapeError } from './chartData'
@@ -105,7 +107,7 @@ export function ChartDialog({ open, onOpenChange, editing }: Props) {
               <SelectContent>
                 {datasets.map((d) => (
                   <SelectItem key={d.id} value={d.id}>
-                    {d.name}
+                    {builtinText(t, d.name)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -137,6 +139,12 @@ export function ChartDialog({ open, onOpenChange, editing }: Props) {
                 {t(`plugin_report.chart.${shape}`)}
               </p>
             ) : null}
+          </FormGridFull>
+          <FormGridFull>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="ch-remark">{t('common.remark')}</Label>
+              <Textarea id="ch-remark" rows={3} value={form.remark} maxLength={255} onChange={(e) => setForm({ ...form, remark: e.target.value })} />
+            </div>
           </FormGridFull>
         </FormGrid>
         {snap ? (

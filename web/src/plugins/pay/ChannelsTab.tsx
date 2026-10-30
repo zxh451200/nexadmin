@@ -6,19 +6,19 @@ import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
+import { SwitchRow } from '@/framework/components/SwitchField'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
-import { Switch } from '@/framework/ui/switch'
-import { useChannels, useDeleteChannel, useProviders, useSaveChannel, type PayChannel, type PayChannelForm } from './api'
+import { useChannels, useDeleteChannel, useProviders, useSaveChannel, type PayChannel, type PayChannelForm, type PayProvider } from './api'
 import { formatBp, formatTime } from './format'
 
 interface Props {
   open: boolean
   onOpenChange: (v: boolean) => void
   editing: PayChannel | null
-  providers: string[]
+  providers: PayProvider[]
 }
 
 function ChannelFormDialog({ open, onOpenChange, editing, providers }: Props) {
@@ -31,27 +31,54 @@ function ChannelFormDialog({ open, onOpenChange, editing, providers }: Props) {
   const [feeRateBp, setFeeRateBp] = useState(editing?.feeRateBp ?? 0)
   const [enabled, setEnabled] = useState(editing?.enabled ?? true)
   const [sort, setSort] = useState(editing?.sort ?? 0)
-  const [config, setConfig] = useState('{}')
+  const [notifyUrl, setNotifyUrl] = useState(editing?.notifyUrl ?? '')
+  const [notifyTouched, setNotifyTouched] = useState(false)
+  const [configValues, setConfigValues] = useState<Record<string, string>>({})
+  const [configJson, setConfigJson] = useState('{}')
+
+  const schema = providers.find((p) => p.name === (editing?.provider ?? provider))?.fields ?? []
+  const fieldLabel = (key: string) => t(`plugin_pay.configFields.${key}`, { defaultValue: key })
+
+  // 新建时按渠道编码带上本站的完整回调地址；真实网关不接受相对路径。
+  const onCodeChange = (v: string) => {
+    setCode(v)
+    if (isNew && !notifyTouched) {
+      setNotifyUrl(v.trim() ? `${window.location.origin}/api/v1/plugins/pay/notify/${v.trim()}` : '')
+    }
+  }
 
   const submit = async () => {
-    let parsed: Record<string, string> = {}
-    try {
-      parsed = JSON.parse(config || '{}')
-    } catch {
-      toast.error(t('plugin_pay.configJsonError'))
-      return
-    }
     const data: PayChannelForm = {
       code: editing?.code ?? code.trim(),
       name,
       provider: editing?.provider ?? provider,
       feeRateBp,
+      notifyUrl: notifyUrl.trim(),
       enabled,
       sort,
     }
-    // 编辑时未改配置就不回传，保留既有密文；新建必须给配置（mock 渠道要 secret）。
-    if (!editing || Object.keys(parsed).length > 0) {
-      data.config = parsed
+    if (schema.length > 0) {
+      const filled = Object.fromEntries(
+        Object.entries(configValues)
+          .map(([k, v]) => [k, v.trim()])
+          .filter(([, v]) => v),
+      )
+      const missing = schema.filter((f) => f.required && !filled[f.key])
+      if (missing.length > 0) {
+        toast.error(t('plugin_pay.configRequired', { fields: missing.map((f) => fieldLabel(f.key)).join(', ') }))
+        return
+      }
+      // 编辑时全空＝沿用既有密文；只改部分字段会让其余必填项丢失，必须整表重填。
+      if (!editing || Object.keys(filled).length > 0) data.config = filled
+    } else {
+      let parsed: Record<string, string> = {}
+      try {
+        parsed = JSON.parse(configJson || '{}')
+      } catch {
+        toast.error(t('plugin_pay.configJsonError'))
+        return
+      }
+      if (!editing || Object.keys(parsed).length > 0) data.config = parsed
     }
     try {
       await save.mutateAsync(data)
@@ -79,18 +106,25 @@ function ChannelFormDialog({ open, onOpenChange, editing, providers }: Props) {
       <div className="flex flex-col gap-3">
         <label className="flex flex-col gap-1 text-sm">
           {t('plugin_pay.fields.channelCode')}
-          <Input value={code} disabled={!isNew} onChange={(e) => setCode(e.target.value)} placeholder="wx01" />
+          <Input value={code} disabled={!isNew} onChange={(e) => onCodeChange(e.target.value)} placeholder="wx01" />
         </label>
         <label className="flex flex-col gap-1 text-sm">
           {t('plugin_pay.fields.provider')}
-          <Select value={provider} onValueChange={setProvider} disabled={!isNew}>
+          <Select
+            value={provider}
+            onValueChange={(v) => {
+              setProvider(v)
+              setConfigValues({})
+            }}
+            disabled={!isNew}
+          >
             <SelectTrigger aria-label={t('plugin_pay.fields.provider')}>
               <SelectValue placeholder={t('plugin_pay.fields.provider')} />
             </SelectTrigger>
             <SelectContent>
               {providers.map((p) => (
-                <SelectItem key={p} value={p}>
-                  {t(`plugin_pay.providers.${p}`, { defaultValue: p })}
+                <SelectItem key={p.name} value={p.name}>
+                  {t(`plugin_pay.providers.${p.name}`, { defaultValue: p.name })}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -114,19 +148,66 @@ function ChannelFormDialog({ open, onOpenChange, editing, providers }: Props) {
           {t('plugin_pay.fields.sort')}
           <Input type="number" value={sort} onChange={(e) => setSort(Number(e.target.value) || 0)} />
         </label>
-        <label className="flex items-center justify-between text-sm">
-          {t('plugin_pay.fields.enabled')}
-          <Switch checked={enabled} onCheckedChange={setEnabled} />
-        </label>
+        <SwitchRow label={t('plugin_pay.fields.enabled')} checked={enabled} onCheckedChange={setEnabled} />
         <label className="flex flex-col gap-1 text-sm">
-          {t('plugin_pay.fields.config')}
+          {t('plugin_pay.fields.notifyUrl')}
           <Input
-            value={config}
-            onChange={(e) => setConfig(e.target.value)}
-            className="font-mono"
-            placeholder={isNew ? '{"secret":"..."}' : t('plugin_pay.configKeep')}
+            value={notifyUrl}
+            onChange={(e) => {
+              setNotifyUrl(e.target.value)
+              setNotifyTouched(true)
+            }}
+            placeholder={t('plugin_pay.notifyUrlHint')}
           />
         </label>
+        {schema.length > 0 ? (
+          <div className="flex flex-col gap-3">
+            {editing && <p className="text-xs text-muted-foreground">{t('plugin_pay.configKeep')}</p>}
+            {schema.map((f) => (
+              <label key={f.key} className="flex flex-col gap-1 text-sm">
+                <span>
+                  {fieldLabel(f.key)}
+                  {f.required && <span className="text-destructive"> *</span>}
+                </span>
+                {f.type === 'select' ? (
+                  <Select
+                    value={configValues[f.key] || undefined}
+                    onValueChange={(v) => setConfigValues((s) => ({ ...s, [f.key]: v }))}
+                  >
+                    <SelectTrigger aria-label={fieldLabel(f.key)}>
+                      <SelectValue placeholder={f.placeholder ?? fieldLabel(f.key)} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {f.options?.map((opt) => (
+                        <SelectItem key={opt} value={opt}>
+                          {opt}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input
+                    type={f.secret ? 'password' : 'text'}
+                    autoComplete={f.secret ? 'new-password' : 'off'}
+                    value={configValues[f.key] ?? ''}
+                    onChange={(e) => setConfigValues((s) => ({ ...s, [f.key]: e.target.value }))}
+                    placeholder={f.placeholder ?? fieldLabel(f.key)}
+                  />
+                )}
+              </label>
+            ))}
+          </div>
+        ) : (
+          <label className="flex flex-col gap-1 text-sm">
+            {t('plugin_pay.fields.config')}
+            <Input
+              value={configJson}
+              onChange={(e) => setConfigJson(e.target.value)}
+              className="font-mono"
+              placeholder={isNew ? '{"secret":"..."}' : t('plugin_pay.configKeep')}
+            />
+          </label>
+        )}
       </div>
     </ResponsiveDialog>
   )
@@ -207,7 +288,8 @@ export function ChannelsTab() {
           </Can>
         )}
       />
-      <ChannelFormDialog open={formOpen} onOpenChange={setFormOpen} editing={editing} providers={providers} />
+      {/* 每次打开重新挂载：表单状态按当前编辑对象初始化，避免沿用上一次的草稿。 */}
+      {formOpen && <ChannelFormDialog open={formOpen} onOpenChange={setFormOpen} editing={editing} providers={providers} />}
     </div>
   )
 }

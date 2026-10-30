@@ -18,8 +18,6 @@ type Service struct{ db *gorm.DB }
 
 func NewService(db *gorm.DB) *Service { return &Service{db: db} }
 
-func badReq(msg string) error { return response.BadRequest("error.bad_request").WithMsg(msg) }
-
 func ids64(ids []idgen.ID) []int64 {
 	out := make([]int64, len(ids))
 	for i, v := range ids {

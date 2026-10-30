@@ -19,9 +19,9 @@ type Service struct{ db *gorm.DB }
 // NewService 创建服务。
 func NewService(db *gorm.DB) *Service { return &Service{db: db} }
 
-func bad(msg string) error      { return response.BadRequest("error.bad_request").WithMsg(msg) }
-func conflict(msg string) error { return response.Conflict("error.conflict").WithMsg(msg) }
-func notFound() error           { return response.NotFound("error.not_found") }
+func bad(key string, args ...any) error      { return response.BadRequest(key, args...) }
+func conflict(key string, args ...any) error { return response.Conflict(key, args...) }
+func notFound() error                        { return response.NotFound("error.not_found") }
 
 func statusOr(s, def string) string {
 	if s == "" {
@@ -50,7 +50,7 @@ func parseExpire(s string) (time.Time, error) {
 	}
 	t, err := time.Parse(time.RFC3339Nano, s)
 	if err != nil {
-		return time.Time{}, bad("到期时间格式不正确")
+		return time.Time{}, bad("tenant.expire_invalid")
 	}
 	return t.UTC(), nil
 }
@@ -142,7 +142,7 @@ func (s *Service) DeletePackages(ctx context.Context, ids []idgen.ID) error {
 		return err
 	}
 	if used > 0 {
-		return conflict("套餐仍被租户使用，不能删除")
+		return conflict("tenant.package_in_use")
 	}
 	return s.db.WithContext(ctx).Where("id IN ?", raw).Delete(&Package{}).Error
 }
@@ -190,7 +190,7 @@ func (s *Service) GetTenant(ctx context.Context, id idgen.ID) (*Tenant, error) {
 // check 校验套餐存在，规整并校验域名（大小写不敏感、格式、保留域名），并确保域名未被其他租户占用。
 func (s *Service) check(ctx context.Context, in *TenantInput, exclude idgen.ID) error {
 	if _, err := s.GetPackage(ctx, in.PackageID); err != nil {
-		return bad("租户套餐不存在")
+		return bad("tenant.package_not_found")
 	}
 	d, err := NormalizeDomain(in.Domain)
 	if err != nil {
@@ -309,7 +309,7 @@ func (s *Service) SetStatus(ctx context.Context, id idgen.ID, status string) (*T
 		return nil, err
 	}
 	if status != StatusActive && status != StatusSuspended && status != StatusExpired {
-		return nil, bad("租户状态不正确")
+		return nil, bad("tenant.status_invalid")
 	}
 	if err := s.db.WithContext(ctx).Model(&Tenant{}).Where("id = ?", int64(id)).Update("status", status).Error; err != nil {
 		return nil, err

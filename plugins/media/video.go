@@ -14,10 +14,11 @@ import (
 var videoIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{8,64}$`)
 
 const (
-	keyEnabled   = "video.enabled"
-	keyAccountID = "video.account_id"
-	keyToken     = "video.token"
-	keySubdomain = "video.subdomain"
+	keyEnabled  = "video.enabled"
+	keyProvider = "video.provider"
+	keyKeyA     = "video.key_a"
+	keyKeyB     = "video.key_b"
+	keyKeyC     = "video.key_c"
 )
 
 func (s *service) settings(ctx context.Context) (map[string]string, error) {
@@ -38,42 +39,53 @@ func (s *service) VideoConfig(ctx context.Context) (VideoConfig, error) {
 	if err != nil {
 		return VideoConfig{}, err
 	}
+	provider := m[keyProvider]
+	if provider == "" {
+		provider = ProviderCloudflare
+	}
 	return VideoConfig{
-		Enabled:   m[keyEnabled] == "true",
-		AccountID: m[keyAccountID],
-		Token:     m[keyToken],
-		Subdomain: m[keySubdomain],
+		Enabled: m[keyEnabled] == "true", Provider: provider,
+		KeyA: m[keyKeyA], KeyB: m[keyKeyB], KeyC: m[keyKeyC],
 	}, nil
 }
 
-// SaveVideoConfig 保存配置；token 留空表示沿用旧值（前端永远不回显令牌）。
+// SaveVideoConfig 保存配置；KeyB（密钥）留空表示沿用旧值，前端永远不回显。
 func (s *service) SaveVideoConfig(ctx context.Context, in configReq) (VideoConfigView, error) {
 	cur, err := s.VideoConfig(ctx)
 	if err != nil {
 		return VideoConfigView{}, err
 	}
-	token := strings.TrimSpace(in.Token)
-	if token == "" {
-		token = cur.Token
+	provider := strings.TrimSpace(in.Provider)
+	if provider == "" {
+		provider = ProviderCloudflare
 	}
-	next := VideoConfig{
-		Enabled:   in.Enabled,
-		AccountID: strings.TrimSpace(in.AccountID),
-		Token:     token,
-		Subdomain: strings.TrimSpace(in.Subdomain),
+	if _, err := providerFor(provider); err != nil {
+		return VideoConfigView{}, badRequest("media.provider_invalid").Wrap(err)
 	}
-	if next.Enabled && (next.AccountID == "" || next.Token == "" || next.Subdomain == "") {
-		return VideoConfigView{}, response.BadRequest("error.bad_request").WithMsg("启用前需要填写 Account ID、API Token 和播放子域")
+	secret := strings.TrimSpace(in.KeyB)
+	if secret == "" {
+		secret = cur.KeyB
+	}
+	next := VideoConfig{Enabled: in.Enabled, Provider: provider, KeyA: strings.TrimSpace(in.KeyA), KeyB: secret, KeyC: strings.TrimSpace(in.KeyC)}
+	if next.Enabled {
+		impl, err := providerFor(provider)
+		if err != nil {
+			return VideoConfigView{}, badRequest("media.provider_invalid").Wrap(err)
+		}
+		if impl.SupportsUpload() {
+			if next.KeyA == "" || next.KeyB == "" || next.KeyC == "" {
+				return VideoConfigView{}, badRequest("media.upload_credentials_required")
+			}
+		} else if next.KeyA == "" {
+			return VideoConfigView{}, badRequest("media.playback_domain_required")
+		}
 	}
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		for k, v := range map[string]string{
-			keyEnabled:   boolText(next.Enabled),
-			keyAccountID: next.AccountID,
-			keyToken:     next.Token,
-			keySubdomain: next.Subdomain,
+			keyEnabled: boolText(next.Enabled), keyProvider: next.Provider,
+			keyKeyA: next.KeyA, keyKeyB: next.KeyB, keyKeyC: next.KeyC,
 		} {
-			row := setting{Key: k, Value: v}
-			if err := tx.Save(&row).Error; err != nil {
+			if err := tx.Save(&setting{Key: k, Value: v}).Error; err != nil {
 				return err
 			}
 		}
@@ -93,53 +105,68 @@ func boolText(b bool) string {
 }
 
 func view(c VideoConfig) VideoConfigView {
-	return VideoConfigView{Enabled: c.Enabled, AccountID: c.AccountID, Subdomain: c.Subdomain, HasToken: c.Token != ""}
+	canUpload := false
+	if impl, err := providerFor(c.Provider); err == nil {
+		canUpload = impl.SupportsUpload()
+	}
+	return VideoConfigView{
+		Enabled: c.Enabled, Provider: c.Provider, KeyA: c.KeyA, KeyC: c.KeyC,
+		HasKeyB: c.KeyB != "", CanUpload: canUpload,
+	}
 }
 
-// CreateVideoUpload 申请一次性直传地址：浏览器把文件直传给厂商，不经过本机存储。
-func (s *service) CreateVideoUpload(ctx context.Context, name string) (uploadURL, videoID, playback string, err error) {
+// CreateVideoUpload 申请直传参数：浏览器把文件直传给厂商，不经过本机存储。
+func (s *service) CreateVideoUpload(ctx context.Context, name string) (uploadURL string, headers map[string]string, videoID, playback string, err error) {
 	cfg, err := s.VideoConfig(ctx)
 	if err != nil {
-		return "", "", "", err
+		return "", nil, "", "", err
 	}
 	if !cfg.Enabled {
-		return "", "", "", response.BadRequest("error.bad_request").WithMsg("视频托管未启用")
+		return "", nil, "", "", badRequest("media.disabled")
 	}
 	name = strings.TrimSpace(name)
 	if name == "" {
-		return "", "", "", response.BadRequest("error.bad_request").WithMsg("缺少文件名")
+		return "", nil, "", "", badRequest("media.name_required")
 	}
-	uploadURL, videoID, err = s.provider.CreateDirectUpload(ctx, cfg, name)
+	provider, err := providerFor(cfg.Provider)
 	if err != nil {
-		return "", "", "", err
+		return "", nil, "", "", err
 	}
-	return uploadURL, videoID, s.provider.PlaybackURL(cfg, videoID), nil
+	uploadURL, headers, videoID, err = provider.CreateUpload(ctx, cfg, name)
+	if err != nil {
+		return "", nil, "", "", err
+	}
+	return uploadURL, headers, videoID, provider.PlaybackURL(cfg, videoID), nil
 }
 
-// SaveVideo 记录一条视频台账；播放地址由服务端按 videoId 拼，不信客户端。
+// SaveVideo 记录一条视频台账；播放/下载地址由服务端按 videoId 推导，不信客户端。
 func (s *service) SaveVideo(ctx context.Context, username string, req videoSaveReq) (VideoItem, error) {
 	if !videoIDPattern.MatchString(req.VideoID) {
-		return VideoItem{}, response.BadRequest("error.bad_request").WithMsg("videoId 不合法")
+		return VideoItem{}, badRequest("media.video_id_invalid")
 	}
 	cfg, err := s.VideoConfig(ctx)
 	if err != nil {
 		return VideoItem{}, err
 	}
 	if !cfg.Enabled {
-		return VideoItem{}, response.BadRequest("error.bad_request").WithMsg("视频托管未启用")
+		return VideoItem{}, badRequest("media.disabled")
+	}
+	provider, err := providerFor(cfg.Provider)
+	if err != nil {
+		return VideoItem{}, err
 	}
 	row := Video{
-		Name: strings.TrimSpace(req.Name), Size: max(req.Size, 0), Provider: s.provider.Name(),
-		VideoID: req.VideoID, Playback: s.provider.PlaybackURL(cfg, req.VideoID),
+		Name: strings.TrimSpace(req.Name), Size: max(req.Size, 0), Provider: provider.Name(),
+		VideoID: req.VideoID, Playback: provider.PlaybackURL(cfg, req.VideoID),
 		Status: "ready", UploadedBy: username,
 	}
 	if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
 		return VideoItem{}, err
 	}
-	return toVideoItem(row, s.provider.DownloadURL(cfg, row.VideoID)), nil
+	return toVideoItem(row, provider.DownloadURL(cfg, row.VideoID)), nil
 }
 
-// Videos 按创建时间倒序返回视频台账。
+// Videos 按创建时间倒序返回视频台账；播放地址按每条记录自己的厂商推导。
 func (s *service) Videos(ctx context.Context, page, pageSize int) ([]VideoItem, int64, error) {
 	tx := s.db.WithContext(ctx).Model(&Video{})
 	var total int64
@@ -156,12 +183,16 @@ func (s *service) Videos(ctx context.Context, page, pageSize int) ([]VideoItem, 
 	}
 	out := make([]VideoItem, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, toVideoItem(r, s.provider.DownloadURL(cfg, r.VideoID)))
+		download := ""
+		if p, err := providerFor(r.Provider); err == nil {
+			download = p.DownloadURL(cfg, r.VideoID)
+		}
+		out = append(out, toVideoItem(r, download))
 	}
 	return out, total, nil
 }
 
-// DeleteVideo 删台账（厂商侧的资产需要在控制台清理；插件不持有其密钥作用域之外的删除权）。
+// DeleteVideo 删台账（厂商侧资产需要在控制台清理）。
 func (s *service) DeleteVideo(ctx context.Context, id string) error {
 	var row Video
 	if err := s.db.WithContext(ctx).First(&row, "id = ?", id).Error; err != nil {
@@ -178,4 +209,8 @@ func toVideoItem(v Video, download string) VideoItem {
 		ID: v.ID.String(), Name: v.Name, Size: v.Size, Provider: v.Provider, VideoID: v.VideoID,
 		Playback: v.Playback, Download: download, Status: v.Status, Uploader: v.UploadedBy, CreatedAt: v.CreatedAt.UTC(),
 	}
+}
+
+func badRequest(key string, args ...any) *response.Error {
+	return response.BadRequest(key, args...)
 }

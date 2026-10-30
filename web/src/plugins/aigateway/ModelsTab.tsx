@@ -7,11 +7,11 @@ import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
+import { SwitchRow } from '@/framework/components/SwitchField'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
-import { Switch } from '@/framework/ui/switch'
 import {
   AI_KINDS,
   useDeleteModel,
@@ -148,15 +148,9 @@ function ModelFormDialog({
             />
           </label>
         )}
-        <div className="flex items-center justify-between">
-          <label className="flex items-center justify-between gap-2 text-sm">
-            {t('plugin_aigateway.fields.enabled')}
-            <Switch checked={value.enabled ?? true} onCheckedChange={(v) => set({ enabled: v })} />
-          </label>
-          <label className="flex items-center justify-between gap-2 text-sm">
-            {t('plugin_aigateway.fields.isDefault')}
-            <Switch checked={value.isDefault ?? false} onCheckedChange={(v) => set({ isDefault: v })} />
-          </label>
+        <div className="flex flex-col gap-3">
+          <SwitchRow label={t('plugin_aigateway.fields.enabled')} checked={value.enabled ?? true} onCheckedChange={(v) => set({ enabled: v })} />
+          <SwitchRow label={t('plugin_aigateway.fields.isDefault')} checked={value.isDefault ?? false} onCheckedChange={(v) => set({ isDefault: v })} />
         </div>
       </div>
     </ResponsiveDialog>
@@ -232,8 +226,9 @@ export function ModelsTab() {
     },
   ]
 
-  return (
-    <div className="flex flex-col gap-4">
+  // 筛选行并入表格工具行（全站统一口径）：与「列设置」同一行，不再单独占一行。
+  const filterToolbar = (
+    <div className="flex flex-wrap items-center gap-2">
       <FilterBar
         onSearch={() => {
           setFilters(draft)
@@ -266,7 +261,23 @@ export function ModelsTab() {
           </SelectContent>
         </Select>
       </FilterBar>
-      <DataTable
+      <Can perm="aigateway:edit">
+        <Button
+          onClick={() => {
+            setEditing(null)
+            setFormOpen(true)
+          }}
+        >
+          <Plus aria-hidden="true" />
+          {t('plugin_aigateway.model.create')}
+        </Button>
+      </Can>
+    </div>
+  )
+
+  return (
+    <>
+    <DataTable
         columns={columns}
         data={data?.list ?? []}
         rowKey="id"
@@ -282,19 +293,7 @@ export function ModelsTab() {
           },
         }}
         emptyText={t('plugin_aigateway.empty')}
-        toolbar={
-          <Can perm="aigateway:edit">
-            <Button
-              onClick={() => {
-                setEditing(null)
-                setFormOpen(true)
-              }}
-            >
-              <Plus aria-hidden="true" />
-              {t('plugin_aigateway.model.create')}
-            </Button>
-          </Can>
-        }
+        toolbar={filterToolbar}
         rowActions={(m) => (
           <Can perm="aigateway:edit">
             <div className="flex items-center">
@@ -326,6 +325,6 @@ export function ModelsTab() {
         )}
       />
       <ModelFormDialog key={editing?.id ?? 'new'} open={formOpen} onOpenChange={setFormOpen} editing={editing} />
-    </div>
+    </>
   )
 }

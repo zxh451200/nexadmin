@@ -30,23 +30,23 @@ let sdk: Promise<GoogleNS> | null = null
 let sdkKey = ''
 
 /** Google Maps JS API：坐标系是 WGS-84（与 OSM/GPS 一致）。 */
-function loadGoogle(key: string): Promise<GoogleNS> {
+function loadGoogle(key: string, lang: string): Promise<GoogleNS> {
   if (window.google?.maps && sdkKey === key) return Promise.resolve(window.google)
   if (sdk && sdkKey === key) return sdk
   sdkKey = key
   sdk = new Promise<GoogleNS>((resolve, reject) => {
     const script = document.createElement('script')
     script.async = true
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&v=weekly&language=zh-CN`
-    script.onload = () => (window.google?.maps ? resolve(window.google) : reject(new Error('Google Maps: global missing')))
-    script.onerror = () => reject(new Error('Google Maps: load failed（中国大陆网络通常无法访问）'))
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&v=weekly&language=${encodeURIComponent(lang)}`
+    script.onload = () => (window.google?.maps ? resolve(window.google) : reject(new Error('google-global-missing')))
+    script.onerror = () => reject(new Error('google-load-failed'))
     document.head.appendChild(script)
   })
   return sdk
 }
 
 export function GooglePicker({ value, onChange, height = 420 }: MapPickerProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const cfg = useMapsConfig()
   const pc = cfg.data?.google
   const elRef = useRef<HTMLDivElement | null>(null)
@@ -61,7 +61,7 @@ export function GooglePicker({ value, onChange, height = 420 }: MapPickerProps) 
     let disposed = false
     void (async () => {
       try {
-        const g = await loadGoogle(key)
+        const g = await loadGoogle(key, i18n.language.startsWith('zh') ? 'zh-CN' : 'en')
         if (disposed || !elRef.current) return
         const center = { lat: sel?.lat ?? 39.90923, lng: sel?.lng ?? 116.397428 }
         const map = new g.maps.Map(elRef.current, { center, zoom: 12 })
@@ -79,7 +79,11 @@ export function GooglePicker({ value, onChange, height = 420 }: MapPickerProps) 
           marker.setPosition({ lat, lng })
         })
       } catch (e) {
-        if (!disposed) setError(e instanceof Error ? e.message : String(e))
+        if (disposed) return
+        const code = e instanceof Error ? e.message : ''
+        if (code === 'google-load-failed') setError(t('plugin_maps.googleLoadFailed'))
+        else if (code === 'google-global-missing') setError(t('plugin_maps.googleGlobalMissing'))
+        else setError(String(e))
       }
     })()
     return () => {

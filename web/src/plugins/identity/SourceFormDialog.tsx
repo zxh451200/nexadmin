@@ -6,11 +6,11 @@ import { toast } from 'sonner'
 import { z } from 'zod'
 import { FormGrid, FormGridFull, FormLayout } from '@/framework/components/FormLayout'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
+import { SwitchField as SharedSwitchField } from '@/framework/components/SwitchField'
 import { Button } from '@/framework/ui/button'
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/framework/ui/form'
 import { Input } from '@/framework/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
-import { Switch } from '@/framework/ui/switch'
 import { Textarea } from '@/framework/ui/textarea'
 import { useSaveSource, type CasConfig, type IdentitySource, type LdapConfig, type SourceForm } from './api'
 
@@ -200,24 +200,8 @@ function TextField({ control, name, label, hint, type, mono, placeholder, autoCo
   )
 }
 
-function SwitchField({ control, name, label, hint }: { control: Control<FormValues>; name: 'startTls' | 'allowPlaintext' | 'matchExisting' | 'autoCreate' | 'enabled' | 'requireMappedGroup' | 'syncEnabled' | 'syncDeactivate'; label: string; hint?: string }) {
-  return (
-    <FormField
-      control={control}
-      name={name}
-      render={({ field }) => (
-        <FormItem className="flex items-center justify-between gap-3 rounded-md border border-border p-3">
-          <div className="min-w-0">
-            <FormLabel className="m-0">{label}</FormLabel>
-            {hint ? <FormDescription className="mt-1">{hint}</FormDescription> : null}
-          </div>
-          <FormControl>
-            <Switch checked={field.value} onCheckedChange={field.onChange} aria-label={label} />
-          </FormControl>
-        </FormItem>
-      )}
-    />
-  )
+function SwitchField({ control, name, label, hint, bare }: { control: Control<FormValues>; name: 'startTls' | 'allowPlaintext' | 'matchExisting' | 'autoCreate' | 'enabled' | 'requireMappedGroup' | 'syncEnabled' | 'syncDeactivate'; label: string; hint?: string; bare?: boolean }) {
+  return <SharedSwitchField control={control} name={name} label={label} description={hint} bare={bare} />
 }
 
 interface Props {
@@ -303,10 +287,16 @@ export function SourceFormDialog({ open, onOpenChange, editing }: Props) {
             <TextField control={c} name="name" label={p('name')} placeholder={t('common.pleaseInput')} />
             {type === 'ldap' ? (
               <>
-                <TextField control={c} name="url" label={p('url')} hint={h('url')} mono placeholder="ldaps://ldap.example.com:636" />
-                <SwitchField control={c} name="startTls" label={p('startTls')} hint={h('startTls')} />
+                <FormGridFull>
+                  <TextField control={c} name="url" label={p('url')} hint={h('url')} mono placeholder="ldaps://ldap.example.com:636" />
+                </FormGridFull>
+                <FormGridFull>
+                  <SwitchField control={c} name="startTls" label={p('startTls')} hint={h('startTls')} />
+                </FormGridFull>
                 {cleartext ? (
-                  <SwitchField control={c} name="allowPlaintext" label={p('allowPlaintext')} hint={h('allowPlaintext')} />
+                  <FormGridFull>
+                    <SwitchField control={c} name="allowPlaintext" label={p('allowPlaintext')} hint={h('allowPlaintext')} />
+                  </FormGridFull>
                 ) : null}
                 <TextField control={c} name="bindDn" label={p('bindDn')} hint={h('bindDn')} mono />
                 <TextField
@@ -321,10 +311,10 @@ export function SourceFormDialog({ open, onOpenChange, editing }: Props) {
                 <TextField control={c} name="baseDn" label={p('baseDn')} mono />
                 <TextField control={c} name="userFilter" label={p('userFilter')} hint={h('userFilter')} mono />
                 <FormGridFull>
-                  <fieldset className="space-y-3 rounded-md border border-border p-3">
+                  <fieldset className="space-y-3 rounded-md bg-muted/40 p-3">
                     <legend className="px-1 text-sm font-medium">{t('plugin_identity.sync.title')}</legend>
                     <p className="text-sm text-muted-foreground">{t('plugin_identity.sync.explanation')}</p>
-                    <SwitchField control={c} name="syncEnabled" label={t('plugin_identity.sync.enable')} />
+                    <SwitchField control={c} name="syncEnabled" label={t('plugin_identity.sync.enable')} bare />
                     <TextField control={c} name="syncFilter" label={t('plugin_identity.sync.filter')} hint={t('plugin_identity.sync.filterHint')} mono />
                     <FormField control={c} name="syncSubjectAttr" render={({ field }) => (
                       <FormItem>
@@ -341,7 +331,7 @@ export function SourceFormDialog({ open, onOpenChange, editing }: Props) {
                       </FormItem>
                     )} />
                     {syncEnabled ? (
-                      <SwitchField control={c} name="syncDeactivate" label={t('plugin_identity.sync.deactivateMissing')} hint={t('plugin_identity.sync.deactivateHint')} />
+                      <SwitchField control={c} name="syncDeactivate" label={t('plugin_identity.sync.deactivateMissing')} hint={t('plugin_identity.sync.deactivateHint')} bare />
                     ) : null}
                   </fieldset>
                 </FormGridFull>
@@ -383,11 +373,11 @@ export function SourceFormDialog({ open, onOpenChange, editing }: Props) {
               <TextField control={c} name="attrGroups" label={p('attrGroups')} hint={h('attrGroups')} mono placeholder={type === 'ldap' ? 'memberOf' : 'groups'} />
             </FormGridFull>
             <FormGridFull>
-              <fieldset className="space-y-3 rounded-md border border-border p-3">
+              <fieldset className="space-y-3 rounded-md bg-muted/40 p-3">
                 <legend className="px-1 text-sm font-medium">{p('groupRoleMappings')}</legend>
                 <p className="text-sm text-muted-foreground">{h('groupRoleMappings')}</p>
                 {mappings.fields.map((mapping, index) => (
-                  <div key={mapping.id} className="grid gap-3 rounded-md border border-border p-3 sm:grid-cols-2">
+                  <div key={mapping.id} className="grid gap-3 rounded-md bg-background p-3 sm:grid-cols-2">
                     <TextField control={c} name={`groupRoleMappings.${index}.externalGroup`} label={p('group')} mono />
                     <FormField
                       control={c}

@@ -5,7 +5,6 @@ import { FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessa
 import { Input } from '@/framework/ui/input'
 import { RadioGroup, RadioGroupItem } from '@/framework/ui/radio-group'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
-import { Switch } from '@/framework/ui/switch'
 import { Textarea } from '@/framework/ui/textarea'
 
 // 表单字段较多且结构各异，这里统一放宽 control / name 类型
@@ -76,25 +75,8 @@ export function TextareaField({ control, name, label, description, placeholder }
   )
 }
 
-export function SwitchField({ control, name, label, description }: Base) {
-  return (
-    <FormField
-      control={control}
-      name={name}
-      render={({ field }) => (
-        <FormItem className="flex flex-row items-center justify-between gap-4 rounded-lg border border-border p-3">
-          <div className="min-w-0 space-y-0.5">
-            <FormLabel>{label}</FormLabel>
-            {description ? <FormDescription>{description}</FormDescription> : null}
-          </div>
-          <FormControl>
-            <Switch checked={!!field.value} onCheckedChange={field.onChange} />
-          </FormControl>
-        </FormItem>
-      )}
-    />
-  )
-}
+// 全站共用一个开关字段形态，这里只做转出，避免各处再各写一套
+export { SwitchField } from '@/framework/components/SwitchField'
 
 export function CheckField({ control, name, label }: Omit<Base, 'description'>) {
   return (

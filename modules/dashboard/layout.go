@@ -65,21 +65,17 @@ func (r *layoutRow) BeforeCreate(tx *gorm.DB) error {
 	return nil
 }
 
-func layoutInvalid(msg string) *response.Error {
-	return response.BadRequest("error.bad_request").WithMsg(msg)
-}
-
 func validateIDs(name string, ids []string) error {
 	if len(ids) > maxLayoutItems {
-		return layoutInvalid(name + ": too many items")
+		return response.BadRequest("dashboard.too_many_items", name)
 	}
 	seen := make(map[string]struct{}, len(ids))
 	for _, id := range ids {
 		if len(id) > maxLayoutIDLen || !layoutIDRe.MatchString(id) {
-			return layoutInvalid(name + ": invalid card id")
+			return response.BadRequest("dashboard.invalid_card_id", name)
 		}
 		if _, dup := seen[id]; dup {
-			return layoutInvalid(name + ": duplicate card id")
+			return response.BadRequest("dashboard.duplicate_card_id", name)
 		}
 		seen[id] = struct{}{}
 	}

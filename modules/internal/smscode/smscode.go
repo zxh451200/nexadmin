@@ -119,12 +119,12 @@ func sceneOf(ctx context.Context) string {
 func (s *Service) Enabled() bool { return s != nil && s.prov != nil }
 
 func tooMany() error {
-	return response.New(429, "error.bad_request").WithMsg("发送过于频繁，请稍后再试")
+	return response.New(429, "sms.too_frequent")
 }
 
 // ErrBadCode 的文案不区分“没发过”“过期”“输错”“已作废”。
 func badCode() error {
-	return response.BadRequest("error.bad_request").WithMsg("验证码错误或已过期")
+	return response.BadRequest("auth.captcha_invalid")
 }
 
 func digest(parts ...string) string {
@@ -156,7 +156,7 @@ func triesKey(ctx context.Context, phone, salt string) string {
 // 用于登录场景下手机号未绑定任何账号 —— 对外表现与成功发送一致，避免枚举账号，也不浪费短信费用。
 func (s *Service) Send(ctx context.Context, phone, ip string, deliver bool) error {
 	if !s.Enabled() {
-		return response.Unavailable("auth.provider_missing").WithMsg("短信服务未启用")
+		return response.Unavailable("sms.disabled")
 	}
 	ph := digest(phone)
 	// 冷却原子化：对冷却 key 做 Incr（首次创建时 TTL=Cooldown），结果 ==1 才放行，并发请求只有一个能拿到。
@@ -212,7 +212,7 @@ func (s *Service) Send(ctx context.Context, phone, ip string, deliver bool) erro
 	if err != nil {
 		_ = s.cache.Del(ctx, codeKey(ctx, phone)) // 没发出去的验证码不留着
 		s.log.Error("send sms failed", zap.String("phone", sms.MaskPhone(phone)), zap.Error(err))
-		return response.Unavailable("auth.provider_missing").WithMsg("短信发送失败，请稍后再试")
+		return response.Unavailable("sms.send_failed").Wrap(err)
 	}
 	sent = true
 	return nil

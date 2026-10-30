@@ -78,14 +78,16 @@ export function GroupPanel({ value, onChange }: Props) {
         </button>
         {editable && (
           <Can perm="file:upload">
-            <Button variant="ghost" size="icon" aria-label={t('fileMgr.renameGroup')} className="size-11 shrink-0 md:size-8" onClick={() => setEditing({ id: editable.id, name: editable.name })}>
-              <Pencil className="size-3.5" aria-hidden="true" />
-            </Button>
-            <Can perm="file:delete">
-              <Button variant="ghost" size="icon" aria-label={t('fileMgr.deleteGroup')} className="size-11 shrink-0 text-destructive md:size-8" onClick={() => void del(editable)}>
-                <Trash2 className="size-3.5" aria-hidden="true" />
+            <div className="flex shrink-0 items-center opacity-0 transition-opacity focus-within:opacity-100 group-hover/item:opacity-100 motion-reduce:transition-none [@media(hover:none)]:opacity-100">
+              <Button variant="ghost" size="icon" aria-label={t('fileMgr.renameGroup')} className="size-11 shrink-0 md:size-8" onClick={() => setEditing({ id: editable.id, name: editable.name })}>
+                <Pencil className="size-3.5" aria-hidden="true" />
               </Button>
-            </Can>
+              <Can perm="file:delete">
+                <Button variant="ghost" size="icon" aria-label={t('fileMgr.deleteGroup')} className="size-11 shrink-0 text-destructive md:size-8" onClick={() => void del(editable)}>
+                  <Trash2 className="size-3.5" aria-hidden="true" />
+                </Button>
+              </Can>
+            </div>
           </Can>
         )}
       </li>
@@ -134,10 +136,21 @@ export function GroupPanel({ value, onChange }: Props) {
           {addBtn}
         </div>
       ) : (
-        <nav aria-label={t('fileMgr.groups')} className="flex flex-col gap-2">
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="text-sm font-medium text-muted-foreground">{t('fileMgr.groups')}</h2>
-            {addBtn}
+        <nav aria-label={t('fileMgr.groups')} className="flex flex-col gap-1.5">
+          <div className="flex items-center justify-between gap-2 ps-1">
+            <h2 className="text-xs font-medium text-muted-foreground">{t('fileMgr.groups')}</h2>
+            <Can perm="file:upload">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-11 shrink-0 md:size-7"
+                aria-label={t('fileMgr.addGroup')}
+                title={t('fileMgr.addGroup')}
+                onClick={() => setEditing({ name: '' })}
+              >
+                <Plus className="size-4" aria-hidden="true" />
+              </Button>
+            </Can>
           </div>
           <ul className="flex flex-col gap-0.5">
             {item(GROUP_ALL, t('fileMgr.allFiles'), undefined)}

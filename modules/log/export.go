@@ -2,7 +2,6 @@ package log
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"mime"
 	"net/http"
@@ -64,8 +63,7 @@ func statusText(st string) string {
 // checkExportSize 先数一遍行数：超过上限直接拒绝，此时响应还没开始写，可以返回明确的 JSON 错误。
 func (s *Service) checkExportSize(n int64) error {
 	if max := s.exportMax(); n > int64(max) {
-		e := response.BadRequest("error.export_too_many").WithMsg(
-			fmt.Sprintf("匹配到 %d 条日志，超过导出上限 %d 条，请缩小筛选范围（如时间范围）后重试，或使用导出中心", n, max))
+		e := response.BadRequest("log.export_too_many_rows", n, max)
 		e.Reason = ExportTooManyReason // 前端据此显示本地化提示
 		return e
 	}
@@ -182,7 +180,7 @@ type exportFn func(ctx context.Context, q Query, open func() io.Writer) (int, er
 // export 是两个导出接口共用的 HTTP 流程：校验 format → 数据范围 → 导出 → 记操作日志。
 func (h *Handler) export(c *gin.Context, module, filePrefix string, run exportFn) {
 	if f := c.Query("format"); f != "" && f != "xlsx" {
-		response.Fail(c, response.BadRequest("error.bad_request").WithMsg("format 仅支持 xlsx"))
+		response.Fail(c, response.BadRequest("log.export_format_invalid"))
 		return
 	}
 	q := query(c)

@@ -40,8 +40,8 @@ type Note struct {
 
 const maxTotalBytes = 4 << 20
 
-// 输出路径白名单：只允许 internal/modules/<name>/... 与 web/src/pages/<name>/...，不含 .. 与隐藏文件。
-var outPathRe = regexp.MustCompile(`^(internal/modules|web/src/pages)/[a-z][a-z0-9]{0,30}(/[A-Za-z0-9][A-Za-z0-9._-]*)+$`)
+// 输出路径白名单：只允许 internal/modules/<name>/...、web/src/pages/<name>/... 与 migrations/business/<engine>/<编号>_<表名>.sql。
+var outPathRe = regexp.MustCompile(`^((internal/modules|web/src/pages)/[a-z][a-z0-9]{0,30}(/[A-Za-z0-9][A-Za-z0-9._-]*)+|migrations/business/(mysql|mariadb|postgres)/[0-9]{3,4}_[a-z][a-z0-9_]{0,47}\.sql)$`)
 
 func validOutPath(p string) bool {
 	return outPathRe.MatchString(p) && !strings.Contains(p, "..") && path.Clean(p) == p
@@ -259,11 +259,20 @@ func Render(s *Spec) (*Output, error) {
 			return nil, err
 		}
 	}
+	for _, m := range s.Migrations {
+		if err := add(m.Path, m.Lang, []byte(m.Content)); err != nil {
+			return nil, err
+		}
+	}
 	sort.Slice(out.Files, func(i, j int) bool { return out.Files[i].Path < out.Files[j].Path })
 	out.Notes = []Note{
 		{Code: "import_line", Value: fmt.Sprintf("_ \"%s/internal/modules/%s\"", s.GoModule, s.Module)},
 		{Code: "api_prefix", Value: "/api/v1/" + s.Plural},
-		{Code: "null_zero"},
+	}
+	if len(s.Migrations) > 0 {
+		out.Notes = append(out.Notes, Note{Code: "migration", Value: s.Migrations[0].Path})
+	} else {
+		out.Notes = append(out.Notes, Note{Code: "null_zero"})
 	}
 	return out, nil
 }

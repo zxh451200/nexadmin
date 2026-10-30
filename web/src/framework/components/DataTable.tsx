@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { DndContext, DragOverlay, type DragEndEvent, type DragStartEvent } from '@dnd-kit/core'
@@ -39,6 +40,8 @@ export interface DataTableProps<T> {
   columnSettingsKey?: string
   emptyText?: ReactNode
   className?: string
+  /** 嵌在已有卡片/分区里时用：不再自带边框与投影，避免"卡片里再画一圈" */
+  bare?: boolean
 }
 
 function SelectBox({
@@ -75,6 +78,7 @@ export function DataTable<T>({
   columnSettingsKey,
   emptyText,
   className,
+  bare,
 }: DataTableProps<T>) {
   const { t } = useTranslation()
   const { ref: rootRef, compact: isMobile, phone } = useCompactLayout()
@@ -181,7 +185,7 @@ export function DataTable<T>({
   const settingsNode = columnSettingsKey && !isMobile ? <ColumnSettings columns={columns} hidden={hidden} onToggle={toggle} onReset={reset} /> : null
 
   const desktop = (
-    <div className="card-edge overflow-hidden rounded-xl border border-border bg-card">
+    <div className={cn('overflow-hidden', bare ? 'bg-transparent' : 'card-edge rounded-xl border border-border bg-card')}>
       {/* 列多时横向滚动，不许把最后一列（操作）裁掉 */}
       <div ref={scrollRef} className="overflow-x-auto">
         <Table>
@@ -316,7 +320,9 @@ export function DataTable<T>({
             const cls = cn(
               dense
                 ? 'rounded-lg border border-border bg-card px-2 py-1 transition-colors hover:bg-muted/50'
-                : 'card-edge rounded-xl border border-border bg-card px-3 py-2.5',
+                : bare
+                  ? 'border-b border-border/60 px-3 py-2.5 transition-colors last:border-0 hover:bg-muted/50'
+                  : 'card-edge rounded-xl border border-border bg-card px-3 py-2.5',
               selected.includes(id) && 'bg-muted/50',
             )
             const body = (
@@ -396,9 +402,14 @@ export function DataTable<T>({
           <SortableContext items={ids} strategy={verticalListSortingStrategy}>
             {list}
           </SortableContext>
-          <DragOverlay dropAnimation={null}>
-            {dragChip?.label ? <DragChip width={dragChip.width}>{dragChip.label}</DragChip> : null}
-          </DragOverlay>
+          {/* 浮层挂到 body：页面里任何带 transform 的祖先都会让 position:fixed 改按它计算，
+              表现就是拖拽时浮层离指针很远（偏一个侧栏/顶栏的距离）。 */}
+          {createPortal(
+            <DragOverlay dropAnimation={null}>
+              {dragChip?.label ? <DragChip width={dragChip.width}>{dragChip.label}</DragChip> : null}
+            </DragOverlay>,
+            document.body,
+          )}
         </DndContext>
       ) : (
         list

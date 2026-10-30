@@ -34,13 +34,9 @@
       "videos": "Videos"
     },
     "video": {
-      "configTitle": "Video hosting (Cloudflare Stream)",
+      "configTitle": "Video hosting",
       "configDesc": "Videos upload straight to the provider; nothing is stored or transcoded locally. ABR and CDN come from the provider.",
       "enabled": "Enable video hosting",
-      "accountId": "Account ID",
-      "subdomain": "Playback subdomain (the part after customer-)",
-      "token": "API token",
-      "tokenSaved": "Saved — leave blank to keep",
       "upload": "Upload video",
       "uploader": "Uploaded by",
       "actions": "Actions",
@@ -50,7 +46,35 @@
       "deleteConfirm": "Delete the record for “{{name}}”? The asset on the provider side must be removed in its console.",
       "copyLink": "Copy MP4 link",
       "copied": "Link copied — paste it into the editor's Insert video dialog",
-      "noDownload": "Playback subdomain is missing; no direct link yet"
+      "noDownload": "Playback subdomain is missing; no direct link yet",
+      "provider": "Provider",
+      "providers": {
+        "cloudflare": "Cloudflare Stream",
+        "bunny": "Bunny Stream",
+        "aliyun": "Alibaba Cloud VOD",
+        "tencent": "Tencent Cloud VOD"
+      },
+      "fields": {
+        "cloudflare": {
+          "a": "Account ID",
+          "b": "API token",
+          "c": "Playback subdomain (after customer-)"
+        },
+        "bunny": {
+          "a": "Library ID",
+          "b": "API key",
+          "c": "Pull zone subdomain (the xxx in xxx.b-cdn.net)"
+        },
+        "aliyun.a": "Playback domain (with https://)",
+        "tencent.a": "Playback domain (with https://)"
+      },
+      "keySaved": "Saved — leave blank to keep",
+      "register": "Register existing video",
+      "registerTitle": "Register an existing video",
+      "registerDesc": "Paste the video ID from the cloud console. The playback URL is derived from the domain + ID; nothing is uploaded or transcoded here.",
+      "registerAction": "Register",
+      "videoId": "Video ID",
+      "videoName": "Display name"
     }
   }
 }

@@ -2,6 +2,7 @@ package pay
 
 import (
 	"errors"
+	"net/http"
 	"strconv"
 	"strings"
 
@@ -312,9 +313,9 @@ func (h *handler) deleteChannel(c *gin.Context) {
 	respond(c, nil, h.svc.DeleteChannel(c.Request.Context(), idgen.ID(id)))
 }
 
-// GET /plugins/pay/providers —— 已注册渠道类型（前端建渠道下拉用，契约外附加）。
+// GET /plugins/pay/providers —— 已注册渠道类型与凭据字段（前端建渠道表单用，契约外附加）。
 func (h *handler) providers(c *gin.Context) {
-	response.OK(c, ProviderNames())
+	response.OK(c, ProviderInfos())
 }
 
 // ---- callbacks ----
@@ -486,9 +487,10 @@ func (h *handler) markPayoutPaid(c *gin.Context) {
 // ---- public ----
 
 // POST /plugins/pay/notify/:channelCode —— 契约 handleChannelNotify。
-// 匿名、必验签、成败都落审计、重复回调不重复发事件。返回 200 JSON 即视为接收；
-// 各渠道对 ack 报文的要求由该渠道的 Provider 实现负责适配。
+// 匿名、必验签、成败都落审计、重复回调不重复发事件。成功应答按渠道要求回
+// （支付宝/易支付必须纯文本 success，微信要 JSON）；失败仍回错误响应，让渠道自己重试。
 func (h *handler) notify(c *gin.Context) {
+	code := c.Param("channelCode")
 	body, err := c.GetRawData()
 	if err != nil {
 		response.Fail(c, response.BadRequest("error.bad_request"))
@@ -499,10 +501,15 @@ func (h *handler) notify(c *gin.Context) {
 		headers[strings.ToLower(k)] = c.Request.Header.Get(k)
 	}
 	o, err := h.svc.HandleCallback(c.Request.Context(), CallbackInput{
-		Channel: c.Param("channelCode"), Body: body, Headers: headers,
+		Channel: code, Body: body, Headers: headers,
 	})
 	if err != nil {
 		response.Fail(c, err)
+		return
+	}
+	// 答错格式等于告诉渠道「没收到」：支付宝会重试 24 小时，微信会判失败。
+	if ct, ack, ok := h.svc.CallbackAck(c.Request.Context(), code); ok {
+		c.Data(http.StatusOK, ct, []byte(ack))
 		return
 	}
 	if o == nil {

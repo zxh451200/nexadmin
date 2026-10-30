@@ -1,7 +1,7 @@
 {
   "plugin_crm": {
     "title": "Customer Master",
-    "description": "Free basic customer master data and lead/opportunity ledger (external anchor aligns member IDs), without sales automation",
+    "description": "Customer master data and lead/opportunity ledger; members from hotel, mall and other systems can resolve to the same customer, without sales automation",
     "dir": "Customer Master",
     "menu": "Customer Master",
     "perm": {
@@ -14,9 +14,10 @@
     },
     "all": "All",
     "empty": "No data",
-    "searchPlaceholder": "Name / code / anchor",
+    "searchPlaceholder": "Customer name / code / external no",
     "nameRequired": "Customer name is required",
     "titleRequired": "Title is required",
+    "externalNoRequired": "Enter the customer number from the external system",
     "status": {
       "active": "Active",
       "inactive": "Inactive"
@@ -29,13 +30,19 @@
       "won": "Won",
       "lost": "Lost"
     },
+    "source": {
+      "hotel": "Hotel system",
+      "mall": "Mall system",
+      "order": "Order system",
+      "manual": "Manual ID"
+    },
     "fields": {
       "name": "Name",
       "code": "Code",
       "level": "Level",
       "status": "Status",
-      "externalAnchor": "External Anchor",
-      "externalSource": "Source",
+      "externalAnchor": "External source",
+      "externalSource": "External source",
       "externalNo": "External No",
       "owner": "Owner",
       "phone": "Phone",
@@ -52,8 +59,8 @@
       "create": "New Customer",
       "edit": "Edit Customer",
       "deleteConfirm": "Delete customer {{name}}?",
-      "noAnchor": "No external anchor",
-      "anchorHint": "The external anchor cannot be changed after creation; hotel/mall member systems resolve the same customer ID through it."
+      "noAnchor": "No external system",
+      "anchorHint": "Pick the external system and enter its customer number so the member resolves to the same customer; it cannot be changed after creation."
     },
     "opp": {
       "create": "New Lead / Opportunity",

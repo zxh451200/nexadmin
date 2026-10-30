@@ -34,13 +34,9 @@
       "videos": "视频"
     },
     "video": {
-      "configTitle": "视频托管（Cloudflare Stream）",
+      "configTitle": "视频托管",
       "configDesc": "视频直传厂商，本站不落原片、不转码；自适应码率与 CDN 由厂商提供。",
       "enabled": "启用视频托管",
-      "accountId": "Account ID",
-      "subdomain": "播放子域（customer- 后面那段）",
-      "token": "API Token",
-      "tokenSaved": "已保存，留空保持不变",
       "upload": "上传视频",
       "uploader": "上传人",
       "actions": "操作",
@@ -50,7 +46,35 @@
       "deleteConfirm": "删除「{{name}}」的台账记录？厂商侧的文件需要在控制台清理。",
       "copyLink": "复制 MP4 直链",
       "copied": "直链已复制，可粘贴到富文本「插入视频」",
-      "noDownload": "未配置播放子域，暂时拿不到直链"
+      "noDownload": "未配置播放子域，暂时拿不到直链",
+      "provider": "托管厂商",
+      "providers": {
+        "cloudflare": "Cloudflare Stream",
+        "bunny": "Bunny Stream",
+        "aliyun": "阿里云 VOD",
+        "tencent": "腾讯云 VOD"
+      },
+      "fields": {
+        "cloudflare": {
+          "a": "Account ID",
+          "b": "API Token",
+          "c": "播放子域（customer- 后面那段）"
+        },
+        "bunny": {
+          "a": "Library ID",
+          "b": "API Key",
+          "c": "Pull Zone 子域（xxx.b-cdn.net 的 xxx）"
+        },
+        "aliyun.a": "播放域名（含 https://）",
+        "tencent.a": "播放域名（含 https://）"
+      },
+      "keySaved": "已保存，留空保持不变",
+      "register": "登记已有视频",
+      "registerTitle": "登记已有视频",
+      "registerDesc": "粘贴云厂商控制台里的视频 ID；播放地址按「播放域名 + ID」推导，不做上传/转码。",
+      "registerAction": "登记",
+      "videoId": "视频 ID",
+      "videoName": "显示名称"
     }
   }
 }

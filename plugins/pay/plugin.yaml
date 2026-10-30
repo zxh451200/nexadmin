@@ -1,7 +1,7 @@
 id: pay
 name: 支付中台
 version: 0.1.0
-description: 资金事实中台（02-openapi-pay-v1.yaml）：支付单状态机、渠道抽象与回调验签、退款（含 refunding 与异步回执）、预授权、对账、结算打款、plg_pay_outbox 资金事件出站箱、请求级 Idempotency-Key；业务系统通过进程内 API 对接，P0 内置 mock 渠道。
+description: 资金事实中台（02-openapi-pay-v1.yaml）：支付单状态机、渠道抽象与回调验签、退款（含 refunding 与异步回执）、预授权、对账、结算打款、plg_pay_outbox 资金事件出站箱、请求级 Idempotency-Key；内置支付宝（RSA2）、微信支付（APIv3）、易支付与 mock 渠道，凭据按字段表单配置并加密入库；业务系统通过进程内 API 对接。
 author: NexAdmin
 edition: pro
 requires_nexadmin: ">=0.1.0"

@@ -6,11 +6,48 @@
       "nav": "导航管理",
       "features": "特性管理",
       "pages": "页面管理",
-      "posts": "新闻管理"
+      "posts": "新闻管理",
+      "messages": "留言管理"
     },
     "settings": {
       "title": "站点设置",
-      "desc": "站点名称、首页文案与页脚信息；保存后官网即时生效"
+      "desc": "站点名称、首页文案、联系与页脚信息；保存后官网即时生效",
+      "socials": "社交图标",
+      "socialPlatform": "平台",
+      "addSocial": "添加社交链接",
+      "friendLinks": "友情链接",
+      "friendName": "站点名称",
+      "friendUrl": "链接地址",
+      "addFriendLink": "添加友情链接"
+    },
+    "social": {
+      "github": "GitHub",
+      "x": "X（推特）",
+      "linkedin": "LinkedIn",
+      "youtube": "YouTube",
+      "wechat": "微信",
+      "weibo": "微博",
+      "bilibili": "哔哩哔哩",
+      "rss": "RSS",
+      "mail": "邮箱"
+    },
+    "message": {
+      "title": "留言管理",
+      "desc": "官网「联系我们」页收到的在线留言；打开详情即标记已读",
+      "status": "状态",
+      "read": "已读",
+      "unread": "未读",
+      "name": "称呼",
+      "contact": "联系方式",
+      "content": "留言内容",
+      "createdAt": "时间",
+      "detailTitle": "留言详情",
+      "markRead": "标为已读",
+      "markUnread": "标为未读",
+      "deleteConfirm": "确认删除「{{name}}」的留言？",
+      "searchPlaceholder": "搜索称呼、邮箱或内容",
+      "onlyUnread": "只看未读",
+      "empty": "暂无留言"
     },
     "nav": {
       "title": "导航管理",
@@ -66,6 +103,13 @@
     "empty": "暂无数据",
     "searchPlaceholder": "标题 / slug",
     "viewSite": "在官网查看",
+    "editor": {
+      "preparing": "正在准备表单…",
+      "preparingHint": "读取字段定义与语言清单，请稍等。",
+      "loadFailed": "表单暂时打不开",
+      "loadFailedHint": "字段定义没取到，请重试；若仍失败，检查网络或页面权限。",
+      "retry": "重试"
+    },
     "enabledOn": "启用",
     "enabledOff": "停用",
     "publishedOn": "已发布",
@@ -80,6 +124,9 @@
       "homeCtaHref": "主按钮链接",
       "seoKeywords": "SEO 关键词",
       "contactEmail": "联系邮箱",
+      "contactPhone": "联系电话",
+      "qrCodeUrl": "二维码图片",
+      "qrCodeCaption": "二维码说明",
       "icp": "备案号",
       "footerNote": "页脚备注",
       "navLabel": "名称",
@@ -100,11 +147,16 @@
       "content": "正文",
       "published": "发布状态",
       "sort": "排序",
-      "enabled": "启用"
+      "enabled": "启用",
+      "publishedAt": "发布时间",
+      "publishedAtHint": "留空则发布时自动记录"
     },
     "hint": {
       "homeTitle": "两行标题请用换行分隔，末行渲染为渐变文字",
       "logoUrl": "图片 URL 或点击右侧按钮上传（PNG / JPEG / WebP / GIF，≤2MB）；留空使用内置字母标志",
+      "qrCodeUrl": "展示在页脚与联系页；留空则不显示二维码",
+      "socials": "页脚与联系页的社交图标；最多 12 个，支持 https:// 与 mailto:",
+      "friendLinks": "页脚「友情链接」列；最多 20 个，留空则不显示该列",
       "navHref": "站内页面直接选；外部链接或页内锚点选「自定义链接」，外部地址需以 https:// 开头。"
     },
     "logo": {
@@ -112,12 +164,22 @@
       "uploading": "上传中…",
       "uploaded": "图片已上传，记得保存设置"
     },
+    "qr": {
+      "upload": "上传二维码",
+      "uploaded": "二维码已上传，记得保存设置"
+    },
     "placeholder": {
       "siteName": "NexAdmin",
       "siteDesc": "一句话介绍，会用于标题与搜索摘要",
       "homeTitle": "为生产级后台系统\n而生的全栈框架",
       "homeCtaHref": "#quickstart",
       "contactEmail": "team@example.com",
+      "contactPhone": "010-88886666",
+      "qrCodeUrl": "上传公众号/客服二维码，或粘贴图片地址",
+      "qrCodeCaption": "微信公众号",
+      "socialUrl": "https://… 或 mailto:…",
+      "friendName": "例如 Vite",
+      "friendUrl": "https://…",
       "icp": "京ICP备00000000号"
     },
     "market": {

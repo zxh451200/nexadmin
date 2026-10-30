@@ -31,6 +31,7 @@
     "insertVideo": "插入视频",
     "mediaHint": "选择文件后将自动插入到光标位置",
     "videoUrl": "或粘贴视频地址（MP4 直链）",
+    "videoUrlPlaceholder": "https://… .mp4 或 B 站 / YouTube 视频链接",
     "insertUrl": "插入地址",
     "urlInvalid": "请填写 http(s) 地址",
     "table": "表格",
@@ -43,6 +44,8 @@
     "addRowBefore": "上方插入行",
     "toggleHeaderRow": "切换表头行",
     "mergeSplit": "合并/拆分单元格",
-    "deleteTable": "删除表格"
+    "deleteTable": "删除表格",
+    "imageAlt": "图片描述（alt）",
+    "imageAltHint": "给读屏和搜索看的一句话；留空则用文件名"
   }
 }

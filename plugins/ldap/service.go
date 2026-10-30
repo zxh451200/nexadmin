@@ -194,16 +194,16 @@ func (s *Service) TestConnection(ctx context.Context) error {
 	}
 	conn, derr := dial(cfg)
 	if derr != nil {
-		return response.BadRequest("ldap.test_failed").WithMsg(derr.Error())
+		return response.BadRequest("ldap.test_failed").Wrap(derr)
 	}
 	defer func() { _ = conn.Close() }()
 	if cfg.BindDN != "" {
 		if berr := conn.Bind(cfg.BindDN, cfg.BindPasswordPlain); berr != nil {
-			return response.BadRequest("ldap.test_failed").WithMsg("service bind: " + berr.Error())
+			return response.BadRequest("ldap.test_failed").Wrap(berr)
 		}
 	}
 	if _, serr := conn.Search(ldapSearch(cfg, "e2e-probe")); serr != nil {
-		return response.BadRequest("ldap.test_failed").WithMsg("search: " + serr.Error())
+		return response.BadRequest("ldap.test_failed").Wrap(serr)
 	}
 	return nil
 }

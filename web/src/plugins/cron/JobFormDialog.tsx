@@ -6,11 +6,11 @@ import { toast } from 'sonner'
 import { z } from 'zod'
 import { FormGrid, FormGridFull, FormLayout } from '@/framework/components/FormLayout'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
+import { SwitchField } from '@/framework/components/SwitchField'
 import { Button } from '@/framework/ui/button'
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/framework/ui/form'
 import { Input } from '@/framework/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
-import { Switch } from '@/framework/ui/switch'
 import { Textarea } from '@/framework/ui/textarea'
 import { useHandlers, useSaveJob, type CronJob, type CronJobForm } from './api'
 import { CRON_PRESETS, CUSTOM_PRESET, parseCron, presetKeyOf } from './cron'
@@ -247,18 +247,7 @@ export function JobFormDialog({ open, onOpenChange, editing }: Props) {
             </FormGridFull>
 
             <FormGridFull>
-              <FormField
-                control={form.control}
-                name="enabled"
-                render={({ field }) => (
-                  <FormItem className="flex items-center justify-between gap-3 rounded-md border border-border p-3">
-                    <FormLabel className="m-0">{t('plugin_cron.fields.enabled')}</FormLabel>
-                    <FormControl>
-                      <Switch checked={field.value} onCheckedChange={field.onChange} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
+              <SwitchField control={form.control} name="enabled" label={t('plugin_cron.fields.enabled')} />
             </FormGridFull>
           </FormGrid>
         </FormLayout>

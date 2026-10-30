@@ -11,7 +11,7 @@ import (
 	"nexadmin/pkg/idgen"
 )
 
-func conflict(msg string) *response.Error { return response.Conflict("error.conflict").WithMsg(msg) }
+func conflict(key string) *response.Error { return response.Conflict(key) }
 
 // ChartForm 是创建/更新图表的请求体。
 type ChartForm struct {
@@ -83,11 +83,11 @@ func fullSpec(ds *DatasetConfig, c ChartConfig, runtime []Filter) Spec {
 
 func (s *Service) checkChart(ctx context.Context, f ChartForm) (idgen.ID, string, error) {
 	if badText(f.Name, 100, true) || badText(f.Remark, 255, false) {
-		return 0, "", specErr("名称不能为空且不超过 100 字")
+		return 0, "", specErr("report.name_invalid")
 	}
 	dsID, err := idgen.Parse(f.DatasetID)
 	if err != nil || dsID == 0 {
-		return 0, "", specErr("请选择数据集")
+		return 0, "", specErr("report.dataset_required")
 	}
 	cfg, tg, err := s.datasetTarget(ctx, dsID)
 	if err != nil {
@@ -100,7 +100,7 @@ func (s *Service) checkChart(ctx context.Context, f ChartForm) (idgen.ID, string
 		return 0, "", e
 	}
 	if badText(f.Config.Unit, 16, false) {
-		return 0, "", specErr("单位过长")
+		return 0, "", specErr("report.unit_too_long")
 	}
 	if err := s.eng.ValidateSpec(tg, fullSpec(cfg, f.Config, nil)); err != nil {
 		return 0, "", err

@@ -49,8 +49,8 @@ func (h *handler) save(c *gin.Context) {
 	before := core.Languages()
 	list, err := core.SaveLanguageList(h.deps.DB, h.deps.Config, f.Languages)
 	if err != nil {
-		// 校验原因（哪个码非法、哪个前缀撞了）对操作者是可操作的，原样透出。
-		response.Fail(c, response.BadRequest("error.bad_request").WithMsg(err.Error()))
+		// 校验原因（哪个码非法、哪个前缀撞了）只进日志，响应给通用文案。
+		response.Fail(c, response.BadRequest("language.save_failed").Wrap(err))
 		return
 	}
 	response.OK(c, gin.H{"languages": list, "needRestart": routesChanged(before, list)})

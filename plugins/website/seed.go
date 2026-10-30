@@ -13,7 +13,7 @@ import (
 // 老版本升级上来的库由 ensureSeedI18n 只补空白译文（已有译文不动）。
 
 // seedVersion 是当前出厂内容版本：新增出厂条目时 +1，并在 ensureSeedBackfill 里补种。
-const seedVersion = 4
+const seedVersion = 5
 
 func enText(fields map[string]string) string {
 	return i18nJSON(map[string]map[string]string{"en-US": fields})
@@ -48,7 +48,18 @@ func defaultNavs() []Nav {
 		{Label: "首页", Href: "/", Sort: 5, Enabled: true, I18nJSON: enText(map[string]string{"label": "Home"})},
 		{Label: "动态", Href: "/news", Sort: 20, Enabled: true, I18nJSON: enText(map[string]string{"label": "News"})},
 		{Label: "关于", Href: "/p/about", Sort: 30, Enabled: true, I18nJSON: enText(map[string]string{"label": "About"})},
+		{Label: "联系", Href: "/contact", Sort: 40, Enabled: true, I18nJSON: enText(map[string]string{"label": "Contact"})},
 	}
+}
+
+// defaultNavByHref 取出厂导航里指向 href 的那一条。
+func defaultNavByHref(href string) (Nav, bool) {
+	for _, n := range defaultNavs() {
+		if n.Href == href {
+			return n, true
+		}
+	}
+	return Nav{}, false
 }
 
 func defaultFeatures() []Feature {
@@ -310,6 +321,14 @@ func ensureSeedBackfill(ctx context.Context, s *Service, log *zap.Logger) {
 		}
 		if err := s.db.WithContext(ctx).Create(&p).Error; err != nil {
 			warn("insert "+p.Slug, err)
+		}
+	}
+	// v5：新增「联系」页（在线留言），补一条出厂导航。只在升级时补一次，管理员删掉后不再复活。
+	var contactNavs int64
+	if err := s.db.WithContext(ctx).Model(&Nav{}).Where("href = ?", "/contact").Count(&contactNavs).Error; err == nil && contactNavs == 0 {
+		if n, ok := defaultNavByHref("/contact"); ok {
+			n.ID = 0
+			warn("nav contact", s.db.WithContext(ctx).Create(&n).Error)
 		}
 	}
 	warn("seed_version", s.db.WithContext(ctx).Model(&Setting{}).Where("id = ?", int64(set.ID)).

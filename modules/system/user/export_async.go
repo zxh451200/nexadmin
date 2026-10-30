@@ -177,7 +177,7 @@ func (h *asyncHandler) plan(c *gin.Context) {
 func (h *asyncHandler) create(c *gin.Context) {
 	m := job.Default()
 	if m == nil {
-		response.Fail(c, response.Unavailable("error.unavailable").WithMsg("导出中心未启用"))
+		response.Fail(c, response.Unavailable("user.export_center_disabled"))
 		return
 	}
 	q := filterQuery(c)

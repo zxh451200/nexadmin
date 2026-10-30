@@ -3,7 +3,6 @@ package formbuilder
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"strconv"
 	"time"
 
@@ -92,16 +91,16 @@ func parseAudience(raw string) Audience {
 
 // normalizeAudience 校验并规范化可见范围：数量上限、ID 格式、去重。
 func normalizeAudience(a Audience) (Audience, error) {
-	clean := func(in []string, what string) ([]string, error) {
+	clean := func(in []string, tooManyKey, invalidKey string) ([]string, error) {
 		if len(in) > MaxAudience {
-			return nil, bad(fmt.Sprintf("%s最多 %d 个", what, MaxAudience))
+			return nil, bad(tooManyKey, MaxAudience)
 		}
 		seen := map[int64]struct{}{}
 		out := make([]string, 0, len(in))
 		for _, s := range in {
 			id, err := idgen.Parse(s)
 			if err != nil || id <= 0 {
-				return nil, bad(what + "里有不合法的 ID")
+				return nil, bad(invalidKey)
 			}
 			if _, dup := seen[int64(id)]; dup {
 				continue
@@ -111,11 +110,11 @@ func normalizeAudience(a Audience) (Audience, error) {
 		}
 		return out, nil
 	}
-	roles, err := clean(a.Roles, "角色")
+	roles, err := clean(a.Roles, "formbuilder.audience_roles_too_many", "formbuilder.audience_roles_invalid")
 	if err != nil {
 		return a, err
 	}
-	users, err := clean(a.Users, "用户")
+	users, err := clean(a.Users, "formbuilder.audience_users_too_many", "formbuilder.audience_users_invalid")
 	if err != nil {
 		return a, err
 	}
@@ -206,7 +205,7 @@ func (s *Service) Publish(ctx context.Context, actor Actor, id idgen.ID) (*FormD
 		return nil, err
 	}
 	if f.PublishedVersion >= MaxVersions {
-		return nil, conflict(fmt.Sprintf("发布版本数已达上限 %d", MaxVersions))
+		return nil, conflict("formbuilder.version_limit", MaxVersions)
 	}
 	def, err := decodeDefinition([]byte(f.DraftDef))
 	if err != nil {
@@ -216,7 +215,7 @@ func (s *Service) Publish(ctx context.Context, actor Actor, id idgen.ID) (*FormD
 		return nil, err
 	}
 	if len(def.Fields) == 0 {
-		return nil, bad("表单至少需要一个字段")
+		return nil, bad("formbuilder.fields_required")
 	}
 	if err := ValidateDefinition(def); err != nil {
 		return nil, err
@@ -232,7 +231,7 @@ func (s *Service) Publish(ctx context.Context, actor Actor, id idgen.ID) (*FormD
 	}
 	if err := s.store.Publish(ctx, id, v, meta); err != nil {
 		if err == errStoreConflict {
-			return nil, conflict("表单已被他人修改或发布，请刷新后重试")
+			return nil, conflict("formbuilder.publish_conflict")
 		}
 		return nil, err
 	}
@@ -247,15 +246,15 @@ func (s *Service) snapshotDicts(ctx context.Context, def *Definition) error {
 			continue
 		}
 		if !dictRe.MatchString(f.DictType) {
-			return bad(fmt.Sprintf("字段 %s 的字典类型不合法", f.Key))
+			return bad("formbuilder.dict_type_invalid", f.Key)
 		}
 		items, err := s.dir.DictItems(ctx, f.DictType)
 		if err != nil {
 			s.log.Warn("formbuilder: read dict", zap.String("dict", f.DictType), zap.Error(err))
-			return bad(fmt.Sprintf("读取字典 %s 失败", f.DictType))
+			return bad("formbuilder.dict_read_failed", f.DictType)
 		}
 		if len(items) == 0 || len(items) > MaxOptions {
-			return bad(fmt.Sprintf("字典 %s 没有可用项，或超过 %d 项", f.DictType, MaxOptions))
+			return bad("formbuilder.dict_options_invalid", f.DictType, MaxOptions)
 		}
 		f.Options = items
 	}
@@ -273,7 +272,7 @@ func (s *Service) SetOnline(ctx context.Context, id idgen.ID, online bool) (*For
 	}
 	if err := s.store.SetStatus(ctx, id, from, to); err != nil {
 		if err == errStoreConflict {
-			return nil, conflict("当前状态不允许此操作")
+			return nil, conflict("formbuilder.status_conflict")
 		}
 		return nil, err
 	}

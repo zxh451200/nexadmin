@@ -49,9 +49,10 @@ export function StatCard({ title, value, hint, delta, deltaLabel, icon, spark, p
         <div className="flex items-start justify-between gap-2 md:gap-3">
           <div className="min-w-0">
             <p className="truncate text-xs text-muted-foreground md:text-sm">{title}</p>
-            <p className="mt-1 flex items-baseline gap-1.5">
-              <span className="num truncate text-xl font-semibold tracking-tight md:text-3xl">{shown}</span>
-              {hint ? <span className="num shrink-0 text-xs text-muted-foreground md:text-sm">{hint}</span> : null}
+            <p className="mt-1 flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+              {/* 主数值优先占位：hint 放不下时整段折到下一行，而不是把数值截成「不…」。 */}
+              <span className="num max-w-full truncate text-xl font-semibold tracking-tight md:text-3xl">{shown}</span>
+              {hint ? <span className="num min-w-0 max-w-full truncate text-xs text-muted-foreground md:text-sm">{hint}</span> : null}
             </p>
           </div>
           {icon ? (

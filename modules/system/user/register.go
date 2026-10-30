@@ -67,14 +67,14 @@ func selfRegister(ctx context.Context, d *core.Deps, username, password, captcha
 		return nil, err
 	}
 	if !ok {
-		return nil, bad("验证码错误或已过期")
+		return nil, bad("auth.captcha_invalid")
 	}
 	username = strings.TrimSpace(username)
 	if !registerNameRe.MatchString(username) {
-		return nil, bad("账号需以字母开头，3-32 位，仅限字母、数字、下划线")
+		return nil, bad("user.register_username_invalid")
 	}
 	if password == "" || len(password) > 72 { // 不设强度规则；bcrypt 只取前 72 字节，故限 72
-		return nil, bad("密码长度为 1-72 字节")
+		return nil, bad("profile.password_length")
 	}
 
 	// 注册进当前请求解析到的租户；Public 组没解析到（理论不会）则按默认租户。
@@ -88,7 +88,7 @@ func selfRegister(ctx context.Context, d *core.Deps, username, password, captcha
 		return nil, err
 	}
 	if n > 0 {
-		return nil, bad("账号已存在")
+		return nil, bad("user.username_exists")
 	}
 
 	hash, err := auth.HashPassword(password)
@@ -106,7 +106,7 @@ func selfRegister(ctx context.Context, d *core.Deps, username, password, captcha
 		}
 		if err := tx.Create(u).Error; err != nil {
 			if isDup(err) { // 并发注册同名：唯一索引兜底
-				return bad("账号已存在")
+				return bad("user.username_exists")
 			}
 			return err
 		}
@@ -148,7 +148,7 @@ func registerRoleIDs(ctx context.Context, tx *gorm.DB, codes []string) ([]idgen.
 		return nil, err
 	}
 	if len(ids) != len(cleaned) {
-		return nil, bad("注册默认角色配置无效，请联系管理员")
+		return nil, bad("user.register_role_invalid")
 	}
 	return ids, nil
 }

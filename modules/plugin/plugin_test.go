@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"bytes"
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/json"
@@ -18,6 +19,8 @@ import (
 
 	"nexadmin/core"
 	"nexadmin/core/auth"
+	"nexadmin/core/config"
+	corei18n "nexadmin/core/i18n"
 	"nexadmin/core/middleware"
 	coreplugin "nexadmin/core/plugin"
 	"nexadmin/core/response"
@@ -69,6 +72,10 @@ func mount(t *testing.T) *coreplugin.Manager {
 		coreplugin.Register(coreplugin.Plugin{ID: otherID, Version: "1.0.0", Edition: coreplugin.Pro, Module: fakeModule{}})
 		coreplugin.Register(coreplugin.Plugin{ID: freeID, Version: "1.0.0", Edition: coreplugin.Free, Module: fakeModule{}})
 		coreplugin.Register(coreplugin.Plugin{ID: hotID, Version: "1.0.0", Edition: coreplugin.Pro, Module: httpPlugin{}})
+		// 错误文案走 i18n key，测试里装上内置字典才能拿到中文（默认语言 zh-CN）。
+		if b, err := corei18n.New([]config.Language{{Code: "zh-CN", Default: true}, {Code: "en-US"}}, "zh-CN", ""); err == nil {
+			corei18n.SetDefault(b)
+		}
 		coreplugin.Mount(nil, coreplugin.Options{
 			Root: root, Keys: []coreplugin.Key{{KID: coreplugin.KeyID(pub), Pub: pub}}, Hosts: []string{},
 		})
@@ -121,7 +128,8 @@ func TestImportLicenseErrorMapping(t *testing.T) {
 		{"缺少 content", proID, `{}`, http.StatusBadRequest, ""},
 		{"非法 JSON", proID, `{`, http.StatusBadRequest, ""},
 		{"插件不存在", noPlugin, content("x"), http.StatusNotFound, "插件不存在"},
-		{"免费插件无需授权", freeID, content("x"), http.StatusBadRequest, "免费插件无需授权"},
+		// 文案已迁到 i18n 字典，按 key 取期望值，避免测试里再抄一份文案。
+		{"免费插件无需授权", freeID, content("x"), http.StatusBadRequest, corei18n.T(context.Background(), "plugin.free_no_license")},
 		{"授权文件格式错误", proID, content("not a license"), http.StatusBadRequest, ""},
 		{"授权属于别的插件", proID, content(signLicense(t, otherID, time.Now().Add(time.Hour))), http.StatusBadRequest, otherID},
 		{"授权已过期", proID, content(signLicense(t, proID, time.Now().Add(-time.Hour))), http.StatusBadRequest, "到期"},
@@ -146,7 +154,7 @@ func TestRejectedLicenseDoesNotActivate(t *testing.T) {
 	if w := post(importLicense(m, proID), string(b)); w.Code != http.StatusBadRequest {
 		t.Fatalf("code=%d", w.Code)
 	}
-	for _, info := range m.List() {
+	for _, info := range m.List(context.Background()) {
 		if info.ID == proID && info.Status == coreplugin.StatusActive {
 			t.Fatal("被拒绝的授权不应使插件生效")
 		}

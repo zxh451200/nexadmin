@@ -31,7 +31,7 @@ func (s *service) mutateTree(ctx context.Context, fn func(*service) error) error
 	})
 }
 
-func bad(msg string) *response.Error { return response.BadRequest("error.bad_request").WithMsg(msg) }
+func bad(key string, args ...any) *response.Error { return response.BadRequest(key, args...) }
 
 func notFound() *response.Error { return response.NotFound("error.not_found") }
 
@@ -128,27 +128,27 @@ func tooLong(s string, n int) bool { return utf8.RuneCountInString(s) > n }
 func (in *menuInput) check() (idgen.ID, error) {
 	in.Title = strings.TrimSpace(in.Title)
 	if in.Type != typeDir && in.Type != typeMenu && in.Type != typeButton {
-		return 0, bad("菜单类型不正确")
+		return 0, bad("menu.type_invalid")
 	}
 	if in.Title == "" || tooLong(in.Title, 100) {
-		return 0, bad("菜单标题不能为空且不超过 100 个字符")
+		return 0, bad("menu.title_invalid")
 	}
 	if tooLong(in.Icon, 64) || tooLong(in.Perm, 100) || tooLong(in.Path, 255) || tooLong(in.Component, 255) {
-		return 0, bad("字段过长")
+		return 0, bad("menu.field_too_long")
 	}
 	switch in.Status {
 	case "":
 		in.Status = statusOn
 	case "0", "1":
 	default:
-		return 0, bad("状态不正确")
+		return 0, bad("menu.status_invalid")
 	}
 	if strings.TrimSpace(in.ParentID) == "" {
 		return 0, nil
 	}
 	pid, err := idgen.Parse(in.ParentID)
 	if err != nil {
-		return 0, bad("上级菜单不正确")
+		return 0, bad("menu.parent_invalid")
 	}
 	return pid, nil
 }
@@ -168,12 +168,12 @@ func (s *service) checkParent(ctx context.Context, pid idgen.ID) error {
 	if err != nil {
 		var re *response.Error
 		if errors.As(err, &re) {
-			return bad("上级菜单不存在")
+			return bad("menu.parent_not_found")
 		}
 		return err
 	}
 	if p.Type == typeButton {
-		return bad("按钮下不能再建子菜单")
+		return bad("menu.child_under_button")
 	}
 	return nil
 }
@@ -233,7 +233,7 @@ func (s *service) updateLocked(ctx context.Context, id idgen.ID, in menuInput) (
 			return nil, err
 		}
 		if pid == id || descendants(rows, id)[pid] {
-			return nil, bad("上级菜单不能是自己或其下级")
+			return nil, bad("menu.parent_self_or_child")
 		}
 		if err := s.checkParent(ctx, pid); err != nil {
 			return nil, err
@@ -278,7 +278,7 @@ func (s *service) sortLocked(ctx context.Context, in sortInput) error {
 	if strings.TrimSpace(in.ParentID) != "" {
 		var err error
 		if pid, err = idgen.Parse(in.ParentID); err != nil {
-			return bad("上级菜单不正确")
+			return bad("menu.parent_invalid")
 		}
 	}
 	rows, err := s.list(ctx)
@@ -296,13 +296,13 @@ func (s *service) sortLocked(ctx context.Context, in sortInput) error {
 	for _, raw := range in.IDs {
 		id, err := idgen.Parse(raw)
 		if err != nil || !group[id] || seen[id] {
-			return response.Conflict("error.bad_request").WithMsg("列表已变化，请刷新")
+			return response.Conflict("error.stale_list")
 		}
 		seen[id] = true
 		ids = append(ids, id)
 	}
 	if len(ids) != len(group) {
-		return response.Conflict("error.bad_request").WithMsg("列表已变化，请刷新")
+		return response.Conflict("error.stale_list")
 	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		for i, id := range ids {
@@ -324,7 +324,7 @@ func (s *service) moveLocked(ctx context.Context, id idgen.ID, in moveInput) err
 	if strings.TrimSpace(in.ParentID) != "" {
 		var err error
 		if pid, err = idgen.Parse(in.ParentID); err != nil {
-			return bad("上级菜单不正确")
+			return bad("menu.parent_invalid")
 		}
 	}
 	rows, err := s.list(ctx)
@@ -343,15 +343,15 @@ func (s *service) moveLocked(ctx context.Context, id idgen.ID, in moveInput) err
 		return notFound()
 	}
 	if pid == id || descendants(rows, id)[pid] {
-		return bad("上级菜单不能是自己或其下级")
+		return bad("menu.parent_self_or_child")
 	}
 	if pid != 0 {
 		parent := byID[pid]
 		if parent == nil {
-			return bad("上级菜单不存在")
+			return bad("menu.parent_not_found")
 		}
 		if parent.Type == typeButton {
-			return bad("按钮下不能再建子菜单")
+			return bad("menu.child_under_button")
 		}
 	}
 	if in.AfterID != nil {

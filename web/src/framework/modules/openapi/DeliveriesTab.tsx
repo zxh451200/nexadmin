@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { Eye, RotateCw } from 'lucide-react'
+import { RotateCw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { DetailAction } from '@/framework/components/DetailAction'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Badge, type BadgeProps } from '@/framework/ui/badge'
@@ -159,9 +160,7 @@ export function DeliveriesTab() {
         }}
         rowActions={(d) => (
           <>
-            <Button variant="ghost" size="icon" aria-label={t('openapi.deliveries.detail')} onClick={() => setDetail(d)}>
-              <Eye aria-hidden="true" />
-            </Button>
+            <DetailAction onClick={() => setDetail(d)} />
             {d.status === 'failed' ? (
               <Can perm="openapi:edit">
                 <Button variant="ghost" size="icon" aria-label={t('openapi.deliveries.retry')} disabled={retry.isPending} onClick={() => void onRetry(d)}>

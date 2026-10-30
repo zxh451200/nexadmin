@@ -48,7 +48,7 @@ export function TrendChart({ data, series, xKey, type = 'line', switchable = tru
   const isMobile = useIsMobile()
   const height = isMobile ? Math.min(heightProp, 200) : heightProp // 手机上图表矮一些，一屏能多看几张
   const [kind, setKind] = useState<TrendType>(type)
-  const { hidden, formatter } = useLegendToggle()
+  const { hidden, formatter } = useLegendToggle(undefined, series.map((s) => s.key))
   const uid = useId().replace(/:/g, '')
   const gid = (i: number) => `tc-${uid}-${i}`
 
@@ -76,7 +76,16 @@ export function TrendChart({ data, series, xKey, type = 'line', switchable = tru
         itemStyle={{ color: 'hsl(var(--foreground))' }}
         formatter={(v: unknown) => (typeof v === 'number' ? new Intl.NumberFormat(i18n.language).format(v) : (v as React.ReactNode))}
       />
-      {series.length > 1 && <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12, paddingTop: 8 }} formatter={formatter} />}
+      {series.length > 1 && (
+        <Legend
+          iconType="circle"
+          iconSize={8}
+          wrapperStyle={{ fontSize: 12, paddingTop: 8 }}
+          formatter={formatter}
+          // 默认 #ccc 在白卡上等于隐形，关掉的系列得留得下可点回来的痕迹
+          inactiveColor="hsl(var(--muted-foreground))"
+        />
+      )}
     </>
   )
 

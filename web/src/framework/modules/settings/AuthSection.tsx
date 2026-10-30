@@ -43,34 +43,39 @@ export function AuthSection({ value }: { value: AllSettings['auth'] }) {
             </div>
           </fieldset>
 
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-2">
             <h3 className="text-sm font-medium text-foreground">{t('settings.auth.thirdParty')}</h3>
-            {PROVIDER_KEYS.map((key) => {
-              const enabled = form.watch(`providers.${key}.enabled`)
-              return (
-                <div key={key} className="flex flex-col gap-3 rounded-lg border border-border p-3">
-                  <SwitchField control={form.control} name={`providers.${key}.enabled`} label={t(`settings.auth.providers.${key}`)} />
-                  {enabled ? (
-                    <FormGrid>
-                      <TextField control={form.control} name={`providers.${key}.clientId`} label="Client ID" />
-                      <TextField control={form.control} name={`providers.${key}.clientSecret`} label="Client Secret" type="password" />
-                      {key === 'oidc' ? (
-                        <FormGridFull>
-                          <TextField
-                            control={form.control}
-                            name="providers.oidc.issuer"
-                            label="Issuer"
-                            type="url"
-                            inputMode="url"
-                            placeholder="https://idp.example.com"
-                          />
-                        </FormGridFull>
-                      ) : null}
-                    </FormGrid>
-                  ) : null}
-                </div>
-              )
-            })}
+            {/* 平铺列表 + 分隔线：外层已经有卡片，再给每一行套边框会变成「卡片套卡片」 */}
+            <div className="divide-y divide-border border-y border-border">
+              {PROVIDER_KEYS.map((key) => {
+                const enabled = form.watch(`providers.${key}.enabled`)
+                return (
+                  <div key={key} className="flex flex-col gap-3 py-3">
+                    <SwitchField control={form.control} name={`providers.${key}.enabled`} label={t(`settings.auth.providers.${key}`)} bare />
+                    {enabled ? (
+                      <div className="rounded-md bg-muted/40 p-3">
+                        <FormGrid>
+                          <TextField control={form.control} name={`providers.${key}.clientId`} label="Client ID" />
+                          <TextField control={form.control} name={`providers.${key}.clientSecret`} label="Client Secret" type="password" />
+                          {key === 'oidc' ? (
+                            <FormGridFull>
+                              <TextField
+                                control={form.control}
+                                name="providers.oidc.issuer"
+                                label="Issuer"
+                                type="url"
+                                inputMode="url"
+                                placeholder="https://idp.example.com"
+                              />
+                            </FormGridFull>
+                          ) : null}
+                        </FormGrid>
+                      </div>
+                    ) : null}
+                  </div>
+                )
+              })}
+            </div>
           </div>
 
           <FormGrid>

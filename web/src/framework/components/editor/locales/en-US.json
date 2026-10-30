@@ -31,6 +31,7 @@
     "insertVideo": "Insert video",
     "mediaHint": "The file is inserted at the cursor once uploaded",
     "videoUrl": "Or paste a video URL (MP4)",
+    "videoUrlPlaceholder": "https://... .mp4, Bilibili or YouTube link",
     "insertUrl": "Insert URL",
     "urlInvalid": "Enter an http(s) URL",
     "table": "Table",
@@ -43,6 +44,8 @@
     "addRowBefore": "Insert row above",
     "toggleHeaderRow": "Toggle header row",
     "mergeSplit": "Merge / split cells",
-    "deleteTable": "Delete table"
+    "deleteTable": "Delete table",
+    "imageAlt": "Image description (alt)",
+    "imageAltHint": "Read by screen readers and search engines; falls back to the file name"
   }
 }

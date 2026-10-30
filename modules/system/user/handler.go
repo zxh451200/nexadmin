@@ -62,7 +62,7 @@ func (h *handler) export(c *gin.Context) {
 		h.exportXLSX(c)
 		return
 	default:
-		response.Fail(c, bad("format 仅支持 xlsx"))
+		response.Fail(c, bad("user.export_format_invalid"))
 		return
 	}
 	list, err := h.svc.export(c.Request.Context(), queryOf(c), me(c))
@@ -141,7 +141,7 @@ func (h *handler) removeMany(c *gin.Context) {
 		}
 		id, err := idgen.Parse(raw)
 		if err != nil {
-			response.Fail(c, bad("用户 ID 不正确"))
+			response.Fail(c, bad("user.id_invalid"))
 			return
 		}
 		ids = append(ids, id)

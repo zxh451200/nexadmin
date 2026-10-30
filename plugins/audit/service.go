@@ -79,7 +79,7 @@ func (s *Service) SaveConfig(ctx context.Context, tables []string, by string) (*
 	}
 	clean, bad := CleanSelection(tables, avail)
 	if len(bad) > 0 {
-		return nil, response.BadRequest("error.bad_request").WithMsg("tables not auditable: " + strings.Join(bad, ","))
+		return nil, response.BadRequest("audit.tables_not_auditable", strings.Join(bad, ","))
 	}
 	raw, _ := json.Marshal(clean)
 	if clean == nil {

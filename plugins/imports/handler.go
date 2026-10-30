@@ -45,7 +45,7 @@ func (h *handler) sources(c *gin.Context) {
 func (h *handler) template(c *gin.Context) {
 	src, err := getSource(c.Query("source"))
 	if err != nil {
-		response.Fail(c, response.BadRequest("imports.source_unknown").WithMsg(err.Error()))
+		response.Fail(c, response.BadRequest("imports.source_unknown").Wrap(err))
 		return
 	}
 	format := strings.ToLower(strings.TrimSpace(c.Query("format")))
@@ -58,12 +58,12 @@ func (h *handler) template(c *gin.Context) {
 	case "xlsx":
 		body, err := BuildTemplateXLSX(src)
 		if err != nil {
-			response.Fail(c, response.Internal().WithMsg("模板生成失败").Wrap(err))
+			response.Fail(c, response.New(http.StatusInternalServerError, "imports.template_failed").Wrap(err))
 			return
 		}
 		attachment(c, "import-template-"+src.Name+".xlsx", xlsxMIME, body)
 	default:
-		response.Fail(c, response.BadRequest("imports.format_unsupported").WithMsg("模板格式只支持 csv 或 xlsx"))
+		response.Fail(c, response.BadRequest("imports.format_unsupported"))
 	}
 }
 

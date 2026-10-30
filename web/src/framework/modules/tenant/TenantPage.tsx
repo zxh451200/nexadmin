@@ -14,15 +14,15 @@ import { DatePicker } from '@/framework/components/DatePicker'
 import { DictSelect } from '@/framework/components/DictSelect'
 import { DictTag } from '@/framework/components/DictTag'
 import { FilterBar } from '@/framework/components/FilterBar'
-import { FormGrid, FormLayout, FormSection } from '@/framework/components/FormLayout'
+import { FormGrid, FormGridFull, FormLayout, FormSection } from '@/framework/components/FormLayout'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { RemoteSelect } from '@/framework/components/RemoteSelect'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
+import { SwitchField } from '@/framework/components/SwitchField'
 import { api } from '@/framework/request/http'
 import { Button } from '@/framework/ui/button'
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/framework/ui/form'
 import { Input } from '@/framework/ui/input'
-import { Switch } from '@/framework/ui/switch'
 import {
   useDeleteTenants,
   useRenewTenant,
@@ -396,23 +396,27 @@ export default function TenantPage() {
                     </FormItem>
                   )}
                 />
-                <FormField
-                  control={form.control}
-                  name="status"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t('common.status')}</FormLabel>
-                      <FormControl>
-                        <DictSelect dict="tenant_status" value={field.value} onChange={field.onChange} allowClear={false} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                <FormGridFull>
+                  <FormField
+                    control={form.control}
+                    name="status"
+                    render={({ field }) => (
+                      <FormItem>
+                        <div className="flex items-center justify-between gap-3">
+                          <FormLabel>{t('common.status')}</FormLabel>
+                          <FormControl>
+                            <DictSelect className="w-56" dict="tenant_status" value={field.value} onChange={field.onChange} allowClear={false} />
+                          </FormControl>
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </FormGridFull>
               </FormGrid>
             </FormSection>
             <FormSection title={t('tenant.quotaInfo')}>
-              <FormGrid>
+              <FormGrid cols={3}>
                 <FormField
                   control={form.control}
                   name="maxUsers"
@@ -479,30 +483,20 @@ export default function TenantPage() {
               </FormGrid>
             </FormSection>
             <FormSection title={t('tenant.aiInfo')}>
+              <SwitchField control={form.control} name="aiEnabled" label={t('tenant.aiEnabled')} description={t('tenant.aiEnabledHint')} />
               <FormField
                 control={form.control}
-                name="aiEnabled"
+                name="aiDailyQuota"
                 render={({ field }) => (
-                  <FormItem className="flex items-center justify-between gap-3">
-                    <div>
-                      <FormLabel>{t('tenant.aiEnabled')}</FormLabel>
-                      <FormDescription>{t('tenant.aiEnabledHint')}</FormDescription>
-                    </div>
-                    <FormControl>
-                      <Switch checked={field.value} onCheckedChange={field.onChange} aria-label={t('tenant.aiEnabled')} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-              <FormGrid>
-                <FormField
-                  control={form.control}
-                  name="aiDailyQuota"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t('tenantPkg.aiDailyQuota')}</FormLabel>
+                  <FormItem>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <FormLabel>{t('tenantPkg.aiDailyQuota')}</FormLabel>
+                        <FormDescription>{t('tenant.quotaHint')}</FormDescription>
+                      </div>
                       <FormControl>
                         <Input
+                          className="w-40"
                           type="number"
                           inputMode="numeric"
                           min={0}
@@ -511,46 +505,33 @@ export default function TenantPage() {
                           onChange={(e) => field.onChange(e.target.value === '' || Number.isNaN(e.target.valueAsNumber) ? null : e.target.valueAsNumber)}
                         />
                       </FormControl>
-                      <FormDescription>{t('tenant.quotaHint')}</FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </FormGrid>
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </FormSection>
             <FormSection title={t('tenant.adminInfo')}>
               {isNew ? (
-                <FormField
-                  control={form.control}
-                  name="createAdmin"
-                  render={({ field }) => (
-                    <FormItem className="flex items-center justify-between gap-3">
-                      <div>
-                        <FormLabel>{t('tenant.createAdmin')}</FormLabel>
-                        <FormDescription>{t('tenant.createAdminHint')}</FormDescription>
-                      </div>
-                      <FormControl>
-                        <Switch checked={field.value} onCheckedChange={field.onChange} aria-label={t('tenant.createAdmin')} />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
+                <SwitchField control={form.control} name="createAdmin" label={t('tenant.createAdmin')} description={t('tenant.createAdminHint')} />
               ) : null}
               {!isNew || createAdmin ? (
                 <FormGrid>
-                  <FormField
-                    control={form.control}
-                    name="adminUsername"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t('tenant.adminUsername')}</FormLabel>
-                        <FormControl>
-                          <Input {...field} disabled={!isNew} autoComplete="off" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  <FormGridFull>
+                    <FormField
+                      control={form.control}
+                      name="adminUsername"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t('tenant.adminUsername')}</FormLabel>
+                          <FormControl>
+                            <Input {...field} disabled={!isNew} autoComplete="off" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </FormGridFull>
                   {isNew ? (
                     <>
                       <FormField

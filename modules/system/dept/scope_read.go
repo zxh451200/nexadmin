@@ -58,11 +58,11 @@ func (s *Service) TreeScoped(ctx context.Context, sc *datascope.Scope) ([]*Dept,
 // GetScoped 读取单个部门；受限操作者对范围外（含仅作为祖先保留的只读节点）与不存在的部门得到同样的 403。
 func (s *Service) GetScoped(ctx context.Context, sc *datascope.Scope, id idgen.ID) (*Dept, error) {
 	if sc.Limited() && !sc.HasDept(int64(id)) {
-		return nil, forbidden(1)
+		return nil, forbidden(ctx, 1)
 	}
 	d, err := s.Get(ctx, id)
 	if err != nil && sc.Limited() && isNotFoundErr(err) {
-		return nil, forbidden(1)
+		return nil, forbidden(ctx, 1)
 	}
 	return d, err
 }

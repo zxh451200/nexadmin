@@ -11,6 +11,7 @@ import { DictSelect } from '@/framework/components/DictSelect'
 import { FormGrid, FormGridFull, FormLayout } from '@/framework/components/FormLayout'
 import { RemoteSelect } from '@/framework/components/RemoteSelect'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
+import { SwitchField } from '@/framework/components/SwitchField'
 import { RichTextEditor } from '@/framework/components/RichTextEditor'
 import { TreeSelect } from '@/framework/components/TreeSelect'
 import { Uploader } from '@/framework/components/Uploader'
@@ -18,7 +19,6 @@ import { Button } from '@/framework/ui/button'
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/framework/ui/form'
 import { Input } from '@/framework/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
-import { Switch } from '@/framework/ui/switch'
 import { useSaveNotice, type Notice, type NoticeForm, type NoticeScope } from './api'
 
 const SCOPES: NoticeScope[] = ['all', 'role', 'dept', 'user']
@@ -224,130 +224,100 @@ export function NoticeFormDialog({ open, onOpenChange, editing }: Props) {
                 )}
               />
             </FormGridFull>
-            <FormField
-              control={form.control}
-              name="scope"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('notice.fields.scope')}</FormLabel>
-                  <Select
-                    value={field.value}
-                    onValueChange={(v) => {
-                      field.onChange(v)
-                      form.setValue('targetIds', [], { shouldValidate: false })
-                    }}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {SCOPES.map((s) => (
-                        <SelectItem key={s} value={s}>
-                          {t(`notice.scope.${s}`)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <FormGridFull>
+              <FormGrid cols={3}>
+                <FormField
+                  control={form.control}
+                  name="scope"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('notice.fields.scope')}</FormLabel>
+                      <Select
+                        value={field.value}
+                        onValueChange={(v) => {
+                          field.onChange(v)
+                          form.setValue('targetIds', [], { shouldValidate: false })
+                        }}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {SCOPES.map((s) => (
+                            <SelectItem key={s} value={s}>
+                              {t(`notice.scope.${s}`)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="publishAt"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('notice.fields.publishAt')}</FormLabel>
+                      <FormControl>
+                        <DateTimePicker value={field.value} onChange={field.onChange} />
+                      </FormControl>
+                      <FormDescription>{t('notice.hints.publishAt')}</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="expireAt"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('notice.fields.expireAt')}</FormLabel>
+                      <FormControl>
+                        <DateTimePicker value={field.value} onChange={field.onChange} />
+                      </FormControl>
+                      <FormDescription>{t('notice.hints.expireAt')}</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </FormGrid>
+            </FormGridFull>
             {scope !== 'all' ? (
-              <FormField
-                control={form.control}
-                name="targetIds"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t(`notice.targets.${scope}`)}</FormLabel>
-                    <FormControl>
-                      {scope === 'role' ? (
-                        <RemoteSelect url="/roles/options" multiple value={field.value} onChange={field.onChange} />
-                      ) : scope === 'dept' ? (
-                        <TreeSelect url="/depts/tree" multiple value={field.value} onChange={field.onChange} />
-                      ) : (
-                        <RemoteSelect url="/users" labelKey="nickname" multiple value={field.value} onChange={field.onChange} />
-                      )}
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            ) : null}
-            <FormField
-              control={form.control}
-              name="publishAt"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('notice.fields.publishAt')}</FormLabel>
-                  <FormControl>
-                    <DateTimePicker value={field.value} onChange={field.onChange} />
-                  </FormControl>
-                  <FormDescription>{t('notice.hints.publishAt')}</FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="expireAt"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('notice.fields.expireAt')}</FormLabel>
-                  <FormControl>
-                    <DateTimePicker value={field.value} onChange={field.onChange} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="pinned"
-              render={({ field }) => (
-                <FormItem className="flex min-h-11 items-center justify-between gap-3 rounded-md border border-border p-3">
-                  <FormLabel className="m-0">{t('notice.fields.pinned')}</FormLabel>
-                  <FormControl>
-                    <Switch checked={field.value} onCheckedChange={field.onChange} />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="popup"
-              render={({ field }) => (
-                <FormItem className="flex min-h-11 items-center justify-between gap-3 rounded-md border border-border p-3">
-                  <div className="min-w-0">
-                    <FormLabel className="m-0">{t('notice.fields.popup')}</FormLabel>
-                    <FormDescription>{t('notice.hints.popup')}</FormDescription>
-                  </div>
-                  <FormControl>
-                    <Switch checked={field.value} onCheckedChange={field.onChange} />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
-            <Can perm="notice:platform">
               <FormGridFull>
                 <FormField
                   control={form.control}
-                  name="platform"
+                  name="targetIds"
                   render={({ field }) => (
-                    <FormItem className="flex min-h-11 items-center justify-between gap-3 rounded-md border border-border p-3">
-                      <div className="min-w-0">
-                        <FormLabel className="m-0">{t('notice.fields.platform')}</FormLabel>
-                        <FormDescription>{t('notice.hints.platform')}</FormDescription>
-                      </div>
+                    <FormItem>
+                      <FormLabel>{t(`notice.targets.${scope}`)}</FormLabel>
                       <FormControl>
-                        <Switch checked={field.value} onCheckedChange={field.onChange} />
+                        {scope === 'role' ? (
+                          <RemoteSelect url="/roles/options" multiple value={field.value} onChange={field.onChange} />
+                        ) : scope === 'dept' ? (
+                          <TreeSelect url="/depts/tree" multiple value={field.value} onChange={field.onChange} />
+                        ) : (
+                          <RemoteSelect url="/users" labelKey="nickname" multiple value={field.value} onChange={field.onChange} />
+                        )}
                       </FormControl>
+                      <FormMessage />
                     </FormItem>
                   )}
                 />
               </FormGridFull>
-            </Can>
+            ) : null}
+            <FormGridFull>
+              <div className="divide-y divide-border rounded-lg border border-border">
+                <SwitchField control={form.control} name="pinned" label={t('notice.fields.pinned')} bare className="p-3" />
+                <SwitchField control={form.control} name="popup" label={t('notice.fields.popup')} description={t('notice.hints.popup')} bare className="p-3" />
+                <Can perm="notice:platform">
+                  <SwitchField control={form.control} name="platform" label={t('notice.fields.platform')} description={t('notice.hints.platform')} bare className="p-3" />
+                </Can>
+              </div>
+            </FormGridFull>
             <FormGridFull>
               <FormField
                 control={form.control}

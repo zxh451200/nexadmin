@@ -11,6 +11,7 @@ import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
+import { Textarea } from '@/framework/ui/textarea'
 import {
   useCustomers,
   useDeleteCustomer,
@@ -64,6 +65,10 @@ function CustomerFormDialog({
     const data = { ...value, name: (value.name ?? '').trim() } as CrmCustomerForm
     if (!data.name) {
       toast.error(t('plugin_crm.nameRequired'))
+      return
+    }
+    if (data.externalSource && !data.externalNo?.trim()) {
+      toast.error(t('plugin_crm.externalNoRequired'))
       return
     }
     try {
@@ -121,7 +126,9 @@ function CustomerFormDialog({
             {t('plugin_crm.fields.externalSource')}
             <Select
               value={value.externalSource ?? ALL}
-              onValueChange={(v) => set({ externalSource: v === ALL ? undefined : v })}
+              onValueChange={(v) =>
+                set(v === ALL ? { externalSource: undefined, externalNo: '' } : { externalSource: v, externalNo: value.externalNo })
+              }
               disabled={!isNew}
             >
               <SelectTrigger aria-label={t('plugin_crm.fields.externalSource')}>
@@ -131,17 +138,20 @@ function CustomerFormDialog({
                 <SelectItem value={ALL}>{t('plugin_crm.customer.noAnchor')}</SelectItem>
                 {SOURCES.map((s) => (
                   <SelectItem key={s} value={s}>
-                    {s}
+                    {t(`plugin_crm.source.${s}`, { defaultValue: s })}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </label>
           <label className="flex flex-col gap-1">
-            {t('plugin_crm.fields.externalNo')}
+            <span>
+              {t('plugin_crm.fields.externalNo')}
+              {value.externalSource ? <span className="text-destructive"> *</span> : null}
+            </span>
             <Input
               value={value.externalNo ?? ''}
-              disabled={!isNew}
+              disabled={!isNew || !value.externalSource}
               onChange={(e) => set({ externalNo: e.target.value })}
             />
           </label>
@@ -163,7 +173,7 @@ function CustomerFormDialog({
         </label>
         <label className="flex flex-col gap-1">
           {t('plugin_crm.fields.remark')}
-          <Input value={value.remark ?? ''} onChange={(e) => set({ remark: e.target.value })} />
+          <Textarea rows={3} maxLength={500} value={value.remark ?? ''} onChange={(e) => set({ remark: e.target.value })} />
         </label>
       </div>
     </ResponsiveDialog>
@@ -213,7 +223,7 @@ export function CustomersTab() {
       render: (cu) =>
         cu.externalSource ? (
           <Badge variant="outline">
-            {cu.externalSource}/{cu.externalNo}
+            {t(`plugin_crm.source.${cu.externalSource}`, { defaultValue: cu.externalSource })}/{cu.externalNo}
           </Badge>
         ) : (
           <span className="text-muted-foreground">-</span>
@@ -237,9 +247,8 @@ export function CustomersTab() {
     },
   ]
 
-  // 筛选行并入表格工具行：与「列设置」同一行，不再单独占一行（全站统一口径）。
-  const filterToolbar = (
-    <div className="flex flex-wrap items-center gap-2">
+  return (
+    <div className="flex flex-col gap-4">
       <FilterBar
         onSearch={() => {
           setFilters(draft)
@@ -266,29 +275,13 @@ export function CustomersTab() {
             <SelectItem value={ALL}>{t('plugin_crm.all')}</SelectItem>
             {SOURCES.map((s) => (
               <SelectItem key={s} value={s}>
-                {s}
+                {t(`plugin_crm.source.${s}`, { defaultValue: s })}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
       </FilterBar>
-      <Can perm="crm:edit">
-        <Button
-          onClick={() => {
-            setEditing(null)
-            setFormOpen(true)
-          }}
-        >
-          <Plus aria-hidden="true" />
-          {t('plugin_crm.customer.create')}
-        </Button>
-      </Can>
-    </div>
-  )
-
-  return (
-    <>
-    <DataTable
+      <DataTable
       columns={columns}
       data={data?.list ?? []}
       rowKey="id"
@@ -304,7 +297,19 @@ export function CustomersTab() {
         },
       }}
       emptyText={t('plugin_crm.empty')}
-      toolbar={filterToolbar}
+      toolbar={
+        <Can perm="crm:edit">
+          <Button
+            onClick={() => {
+              setEditing(null)
+              setFormOpen(true)
+            }}
+          >
+            <Plus aria-hidden="true" />
+            {t('plugin_crm.customer.create')}
+          </Button>
+        </Can>
+      }
         rowActions={(cu) => (
           <Can perm="crm:edit">
             <Button
@@ -331,6 +336,6 @@ export function CustomersTab() {
         )}
       />
       <CustomerFormDialog key={editing?.id ?? 'new'} open={formOpen} onOpenChange={setFormOpen} editing={editing} />
-    </>
+    </div>
   )
 }

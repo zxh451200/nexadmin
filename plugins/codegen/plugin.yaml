@@ -1,7 +1,7 @@
 id: codegen
 name: 代码生成器
-version: 1.0.0
-description: 免费代码生成器：读取业务表结构，按推荐配置生成 Go 模块与前端页面，在线预览、打包 zip 下载。无状态、不建表、不写磁盘。
+version: 1.1.0
+description: 免费代码生成器：读取已有业务表，或在向导里定义新表；按推荐配置生成 Go 模块、前端页面与三引擎迁移，在线预览、打包 zip 下载。无状态、不建表、不写磁盘。
 author: NexAdmin
 edition: free
 requires_nexadmin: ">=0.1.0"

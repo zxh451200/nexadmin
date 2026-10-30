@@ -87,10 +87,10 @@ func checkConfiguredHost(host string) error {
 		return nil
 	}
 	if strings.EqualFold(host, "localhost") || strings.HasSuffix(strings.ToLower(host), ".localhost") {
-		return badReq("host is not allowed: loopback and private addresses are disabled (identity.allow_private_hosts)")
+		return badReq("identity.host_blocked")
 	}
 	if ip := net.ParseIP(strings.Trim(host, "[]")); ip != nil && blockedIP(ip) {
-		return badReq("host is not allowed: loopback and private addresses are disabled (identity.allow_private_hosts)")
+		return badReq("identity.host_blocked")
 	}
 	return nil
 }

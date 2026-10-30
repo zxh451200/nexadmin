@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -188,7 +187,7 @@ func tusHeaders(c *gin.Context) bool {
 	c.Header("Tus-Resumable", tusVersion)
 	if c.GetHeader("Tus-Resumable") != tusVersion {
 		c.Header("Tus-Version", tusVersion)
-		response.Fail(c, response.New(http.StatusPreconditionFailed, "error.bad_request").WithMsg("不支持的 Tus-Resumable 版本"))
+		response.Fail(c, response.New(http.StatusPreconditionFailed, "file.tus_version_unsupported"))
 		return false
 	}
 	return true
@@ -233,7 +232,7 @@ func (h *tusHandler) Create(c *gin.Context) {
 	ctx := c.Request.Context()
 	length, err := strconv.ParseInt(c.GetHeader("Upload-Length"), 10, 64)
 	if err != nil || length <= 0 {
-		response.Fail(c, badRequest("缺少有效的 Upload-Length"))
+		response.Fail(c, response.BadRequest("file.tus_length_required"))
 		return
 	}
 	meta := parseMetadata(c.GetHeader("Upload-Metadata"))
@@ -248,11 +247,11 @@ func (h *tusHandler) Create(c *gin.Context) {
 	}
 	lim := h.svc.currentLimits(ctx)
 	if mb := limitFor(lim, kind); mb > 0 && float64(length) > mb*1024*1024 {
-		response.Fail(c, response.New(http.StatusRequestEntityTooLarge, "error.bad_request").WithMsg(fmt.Sprintf("文件超过大小上限 %g MB", mb)))
+		response.Fail(c, response.New(http.StatusRequestEntityTooLarge, "file.too_large", mb))
 		return
 	}
 	if !typeAllowed(lim.AllowedTypes, declared, name) {
-		response.Fail(c, response.New(http.StatusUnsupportedMediaType, "error.bad_request").WithMsg("不允许上传该类型的文件"))
+		response.Fail(c, response.New(http.StatusUnsupportedMediaType, "file.type_not_allowed"))
 		return
 	}
 	cl := auth.ClaimsFrom(c)
@@ -270,7 +269,7 @@ func (h *tusHandler) Create(c *gin.Context) {
 			return
 		}
 		if parent.Category != "image" || parent.VariantOf != 0 || kind != "image" {
-			response.Fail(c, badRequest("只有图片可以生成派生副本"))
+			response.Fail(c, response.BadRequest("file.variant_image_only"))
 			return
 		}
 		variantOf = parent.ID
@@ -357,7 +356,7 @@ func (h *tusHandler) Patch(c *gin.Context) {
 		return
 	}
 	if c.GetHeader("Content-Type") != "application/offset+octet-stream" {
-		response.Fail(c, response.New(http.StatusUnsupportedMediaType, "error.bad_request").WithMsg("Content-Type 必须是 application/offset+octet-stream"))
+		response.Fail(c, response.New(http.StatusUnsupportedMediaType, "file.tus_content_type_invalid"))
 		return
 	}
 	s, err := h.loadSession(c, c.Param("id"))
@@ -391,7 +390,7 @@ func (h *tusHandler) Patch(c *gin.Context) {
 	}
 	offset, perr := strconv.ParseInt(c.GetHeader("Upload-Offset"), 10, 64)
 	if perr != nil || offset != s.Offset {
-		response.Fail(c, response.Conflict("error.bad_request").WithMsg("Upload-Offset 与服务端已收字节数不一致"))
+		response.Fail(c, response.Conflict("file.tus_offset_mismatch"))
 		return
 	}
 	f, err := os.OpenFile(h.svc.store.tmpPath(s.ID), os.O_RDWR, 0o600)
@@ -423,14 +422,14 @@ func (h *tusHandler) Patch(c *gin.Context) {
 	}
 	if tooMuch {
 		_ = h.drop(s.ID)
-		response.Fail(c, response.New(http.StatusRequestEntityTooLarge, "error.bad_request").WithMsg("上传数据超过声明的长度"))
+		response.Fail(c, response.New(http.StatusRequestEntityTooLarge, "file.tus_length_exceeded"))
 		return
 	}
 	// 够 512 字节就先验头，类型不对尽早拒绝
 	if !s.Verified && s.Offset >= min(sniffLen, s.Length) {
 		if err := h.verify(s, f); err != nil {
 			h.drop(s.ID)
-			response.Fail(c, response.New(http.StatusUnsupportedMediaType, "error.bad_request").WithMsg(err.Error()))
+			response.Fail(c, unsupportedContent(err))
 			return
 		}
 		_ = h.saveSession(s)
@@ -446,6 +445,16 @@ func (h *tusHandler) Patch(c *gin.Context) {
 	}
 	c.Header("Upload-Offset", strconv.FormatInt(s.Offset, 10))
 	c.Status(http.StatusNoContent)
+}
+
+// unsupportedContent 把内容校验失败统一成 415：checkContent 给出带 i18n key 的错误直接用，
+// 其他错误（读文件失败等）用通用文案，原始错误只进日志。
+func unsupportedContent(err error) *response.Error {
+	var e *response.Error
+	if errors.As(err, &e) {
+		return e
+	}
+	return response.New(http.StatusUnsupportedMediaType, "file.content_invalid").Wrap(err)
 }
 
 // verify 读文件头做真实类型校验，通过后记录 MIME。
@@ -465,12 +474,12 @@ func (h *tusHandler) verify(s *session, f *os.File) error {
 // finish 上传完成：校验、哈希、移到正式目录、写 sys_file。
 func (h *tusHandler) finish(c *gin.Context, s *session, f *os.File) error {
 	if time.Since(s.CreatedAt) >= sessionMaxAge {
-		return badRequest("上传已过期，请重新创建上传")
+		return response.BadRequest("file.upload_expired")
 	}
 	if !s.Verified {
 		if err := h.verify(s, f); err != nil {
 			h.drop(s.ID)
-			return response.New(http.StatusUnsupportedMediaType, "error.bad_request").WithMsg(err.Error())
+			return unsupportedContent(err)
 		}
 	}
 	sum := sha256.New()

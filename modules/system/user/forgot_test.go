@@ -144,7 +144,7 @@ func TestForgotNoEnumeration(t *testing.T) {
 	if len(sent) != 1 || sent[0].To[0] != "alice@example.org" {
 		t.Fatalf("only the existing account gets mail, got %+v", sent)
 	}
-	if err := e.f.reset(ctx, "ghost@example.org", "123456", "Passw0rd!!", "1.1.1.1", ""); status(err) != 400 || !strings.Contains(err.Error(), "验证码") {
+	if err := e.f.reset(ctx, "ghost@example.org", "123456", "Passw0rd!!", "1.1.1.1", ""); status(err) != 400 || err.Error() != badCode().Error() {
 		t.Fatalf("unknown account reset must fail like a wrong code, got %v", err)
 	}
 }
