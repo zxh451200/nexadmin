@@ -42,7 +42,7 @@ function ChartCard({ reportId, chart, values }: { reportId: string; chart?: Char
       <CardHeader className="flex-row items-center justify-between gap-2 space-y-0 pb-2">
         <CardTitle className="truncate text-base font-medium">{builtinText(t, chart?.name) || t('plugin_report.report.chartDeleted')}</CardTitle>
         {chart?.type === 'table' ? (
-          <Button variant="ghost" size="sm" disabled={exporting} onClick={() => void onExport()}>
+          <Button variant="ghost" size="sm" disabled={exporting || !q.data} onClick={() => void onExport()}>
             <Download aria-hidden="true" />
             {t('plugin_report.report.export')}
           </Button>
