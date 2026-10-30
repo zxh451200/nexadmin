@@ -8,9 +8,11 @@ import { Switch } from '@/framework/ui/switch'
 import { cn } from '@/lib/utils'
 import type { Agg, Bucket, ChartConfig, ChartType, SourceCol } from './api'
 import { aggsFor, colorVar, COLOR_TOKENS } from './chartData'
+import { builtinText, fieldText } from './builtinText'
 import { FilterEditor } from './FilterEditor'
 
 interface Props {
+  table?: string
   type: ChartType
   columns: SourceCol[]
   value: ChartConfig
@@ -20,10 +22,10 @@ interface Props {
 const NONE = '__none'
 const BUCKETS: Bucket[] = ['day', 'month', 'year']
 
-export function ChartSpecEditor({ type, columns, value, onChange }: Props) {
+export function ChartSpecEditor({ table, type, columns, value, onChange }: Props) {
   const { t } = useTranslation()
   const colOf = (n?: string) => columns.find((c) => c.name === n)
-  const label = (c: SourceCol) => t(`plugin_report.field.${c.name}`, { defaultValue: c.label })
+  const label = (c: SourceCol) => fieldText(t, table, c.name, c.label)
   const patch = (p: Partial<ChartConfig>) => onChange({ ...value, ...p })
   const maxDims = type === 'metric' ? 0 : type === 'pie' ? 1 : 2
   const maxMeas = type === 'metric' || type === 'pie' ? 1 : 6
@@ -140,7 +142,7 @@ export function ChartSpecEditor({ type, columns, value, onChange }: Props) {
 
       <section className="flex flex-col gap-2">
         <Label>{t('plugin_report.chart.filters')}</Label>
-        <FilterEditor columns={columns} value={value.filters} onChange={(filters) => patch({ filters })} />
+        <FilterEditor table={table} columns={columns} value={value.filters} onChange={(filters) => patch({ filters })} />
       </section>
 
       <section className="grid grid-cols-1 gap-3 md:grid-cols-3">
@@ -177,7 +179,7 @@ export function ChartSpecEditor({ type, columns, value, onChange }: Props) {
         </div>
         <div className="flex flex-col gap-2">
           <Label htmlFor="chart-unit">{t('plugin_report.chart.unit')}</Label>
-          <Input id="chart-unit" maxLength={16} value={value.unit ?? ''} onChange={(e) => patch({ unit: e.target.value })} />
+          <Input id="chart-unit" maxLength={16} value={builtinText(t, value.unit)} onChange={(e) => patch({ unit: e.target.value })} />
         </div>
       </section>
 

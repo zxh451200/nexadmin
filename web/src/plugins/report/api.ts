@@ -69,9 +69,13 @@ export interface ResultCol {
   label: string
   kind: 'dim' | 'measure'
   type: ColType
+  /** 结果列来自白名单的哪一列（维度=分组列，度量=被聚合列）；列名按「表+列」查字典才不串义 */
+  field?: string
 }
 export interface QueryResult {
   columns: ResultCol[]
+  /** 查询命中的白名单表名，列标题据此取字典 */
+  source?: string
   rows: Record<string, string | number | boolean | null>[]
   truncated: boolean
 }
@@ -266,17 +270,26 @@ export const useFilterOptions = (reportId: string, key: string) =>
     staleTime: STALE,
   })
 
-/** 导出表格图表：真实后端返回 xlsx 文件(Blob)；mock 阶段没有二进制，返回结果集 JSON，这里退化成 CSV 文本 */
+/**
+ * 导出表格图表：真实后端返回 xlsx 文件(Blob)；mock 阶段没有二进制，返回结果集 JSON，这里退化成 CSV 文本。
+ * labels 是前端按当前语言渲染好的表名与列标题：内置图表存的是 i18n 键、列名来自白名单元数据，
+ * 服务端词典里没有这些词条，直接落文件就会把键名当表头导出。
+ */
 export async function exportReportChart(
   reportId: string,
   chartId: string,
   filters: FilterValues,
+  labels?: { name?: string; headers?: string[] },
 ): Promise<{ blob: Blob; truncated: boolean; ext: 'xlsx' | 'csv' }> {
-  const res = await http.post<unknown>(`${BASE}/view/reports/${reportId}/charts/${chartId}/export`, { filters }, { responseType: 'blob', timeout: 60_000 })
+  const res = await http.post<unknown>(
+    `${BASE}/view/reports/${reportId}/charts/${chartId}/export`,
+    { filters, name: labels?.name ?? '', headers: labels?.headers ?? [] },
+    { responseType: 'blob', timeout: 60_000 },
+  )
   if (res.data instanceof Blob) return { blob: res.data, truncated: String(res.headers?.['x-report-truncated'] ?? '') === '1', ext: 'xlsx' }
   const body = res.data as QueryResult
   const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`
-  const lines = [body.columns.map((c) => esc(c.label)).join(','), ...body.rows.map((r) => body.columns.map((c) => esc(r[c.key])).join(','))]
+  const lines = [body.columns.map((c, i) => esc(labels?.headers?.[i] || c.label)).join(','), ...body.rows.map((r) => body.columns.map((c) => esc(r[c.key])).join(','))]
   return { blob: new Blob(['\uFEFF', lines.join('\n')], { type: 'text/csv;charset=utf-8' }), truncated: !!body.truncated, ext: 'csv' }
 }
 

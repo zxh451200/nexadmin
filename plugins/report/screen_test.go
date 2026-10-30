@@ -44,7 +44,7 @@ func TestExportRowCapAndChartMembership(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"d0"}).AddRow("a").AddRow("b").AddRow("c").AddRow("d"))
 	var buf bytes.Buffer
 	var got ExportFile
-	err := svc.ExportReportChart(tctx(7), func(f ExportFile) ioWriter { got = f; return &buf }, 3, 11, nil, allViewer())
+	err := svc.ExportReportChart(tctx(7), func(f ExportFile) ioWriter { got = f; return &buf }, 3, 11, nil, allViewer(), ExportLabels{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +71,7 @@ func TestExportOnlyTableCharts(t *testing.T) {
 		`{"columns":["status"],"filters":[]}`)
 	mock.ExpectQuery("SELECT `status` AS `d0`,COUNT\\(\\*\\) AS `m0` FROM `plg_cron_log`").WillReturnRows(sqlmock.NewRows([]string{"d0", "m0"}))
 	var buf bytes.Buffer
-	err := svc.ExportReportChart(tctx(7), func(ExportFile) ioWriter { return &buf }, 3, 11, nil, allViewer())
+	err := svc.ExportReportChart(tctx(7), func(ExportFile) ioWriter { return &buf }, 3, 11, nil, allViewer(), ExportLabels{})
 	if !isStatus(err, 400) || buf.Len() != 0 {
 		t.Fatalf("err = %v, wrote %d bytes", err, buf.Len())
 	}

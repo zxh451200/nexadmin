@@ -4,9 +4,11 @@ import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import type { Filter, SourceCol } from './api'
+import { fieldText } from './builtinText'
 import { formatFilterValue, opsFor, parseFilterValue } from './chartData'
 
 interface Props {
+  table?: string
   columns: SourceCol[]
   value: Filter[]
   onChange: (next: Filter[]) => void
@@ -14,7 +16,7 @@ interface Props {
 }
 
 /** 过滤条件编辑器：列、操作符都从白名单元数据里选，值是文本（in 用逗号、between 用 ~ 分隔）。没有任何自由 SQL 输入。 */
-export function FilterEditor({ columns, value, onChange, max = 10 }: Props) {
+export function FilterEditor({ table, columns, value, onChange, max = 10 }: Props) {
   const { t } = useTranslation()
   const colOf = (name: string) => columns.find((c) => c.name === name)
   const set = (i: number, patch: Partial<Filter>) => onChange(value.map((f, j) => (j === i ? { ...f, ...patch } : f)))
@@ -39,7 +41,7 @@ export function FilterEditor({ columns, value, onChange, max = 10 }: Props) {
               <SelectContent>
                 {columns.map((c) => (
                   <SelectItem key={c.name} value={c.name}>
-                    {t(`plugin_report.field.${c.name}`, { defaultValue: c.label })}
+                    {fieldText(t, table, c.name, c.label)}
                   </SelectItem>
                 ))}
               </SelectContent>

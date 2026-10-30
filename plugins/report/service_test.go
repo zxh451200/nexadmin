@@ -185,7 +185,7 @@ func TestWriteXLSX(t *testing.T) {
 		Rows:    []map[string]any{{"d0": "=HYPERLINK(\"http://x\")", "m0": int64(3)}, {"d0": nil, "m0": 2.5}},
 	}
 	var buf bytes.Buffer
-	if err := writeXLSX(&buf, "图表/1", res); err != nil {
+	if err := writeXLSX(&buf, "图表1", nil, res); err != nil {
 		t.Fatal(err)
 	}
 	if !bytes.HasPrefix(buf.Bytes(), []byte("PK")) || buf.Len() < 200 {

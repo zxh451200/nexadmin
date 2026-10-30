@@ -103,6 +103,9 @@ func (h *handler) roles(c *gin.Context) {
 // runBody 是查询/导出/候选值请求体：只有筛选器 key -> 值，没有列名、操作符、SQL。
 type runBody struct {
 	Filters map[string]any `json:"filters"`
+	// Name / Headers 只在导出时用：前端按当前语言渲染好的表名与列标题（词典在前端，服务端翻不出来）。
+	Name    string   `json:"name"`
+	Headers []string `json:"headers"`
 }
 
 func bindRun(c *gin.Context) (runBody, bool) {
@@ -183,7 +186,7 @@ func (h *handler) viewReportExport(c *gin.Context) {
 		}
 		c.Status(http.StatusOK)
 		return c.Writer
-	}, rid, cid, b.Filters, v)
+	}, rid, cid, b.Filters, v, ExportLabels{Name: b.Name, Headers: b.Headers})
 	if err != nil && !c.Writer.Written() {
 		response.Fail(c, err)
 	}

@@ -77,7 +77,11 @@
     "source": {
       "plg_cron_job": "Scheduled jobs",
       "plg_cron_log": "Scheduled job runs",
-      "sys_login_log": "Login log"
+      "sys_login_log": "Login log",
+      "sys_oper_log": "Operation log",
+      "sys_send_log": "Delivery log",
+      "sys_client_error": "Client errors",
+      "plg_pay_order": "Payment orders"
     },
     "field": {
       "name": "Name",
@@ -97,7 +101,69 @@
       "login_type": "Login type",
       "fail_reason": "Failure reason",
       "browser": "Browser",
-      "os": "OS"
+      "os": "OS",
+      "plg_cron_job": {
+        "name": "Job name",
+        "handler": "Handler",
+        "enabled": "Enabled",
+        "retry_count": "Retries",
+        "last_status": "Last status",
+        "last_run_at": "Last run",
+        "created_at": "Created at"
+      },
+      "plg_cron_log": {
+        "job_name": "Job name",
+        "handler": "Handler",
+        "trigger_type": "Trigger",
+        "status": "Status",
+        "attempts": "Attempts",
+        "cost_ms": "Duration (ms)",
+        "started_at": "Started at",
+        "finished_at": "Finished at"
+      },
+      "sys_login_log": {
+        "login_type": "Login type",
+        "status": "Result",
+        "fail_reason": "Failure reason",
+        "browser": "Browser",
+        "os": "OS",
+        "created_at": "Login time"
+      },
+      "sys_oper_log": {
+        "module": "Module",
+        "type": "Action",
+        "method": "HTTP method",
+        "url": "Route",
+        "status": "Result",
+        "cost_ms": "Duration (ms)",
+        "created_at": "Operation time"
+      },
+      "sys_send_log": {
+        "channel": "Channel",
+        "scene": "Scene",
+        "status": "Result",
+        "duration_ms": "Duration (ms)",
+        "created_at": "Send time"
+      },
+      "sys_client_error": {
+        "route": "Route",
+        "version": "Version",
+        "hit_count": "Occurrences",
+        "last_seen_at": "Last seen",
+        "created_at": "First seen"
+      },
+      "plg_pay_order": {
+        "amount_minor": "Amount (minor unit)",
+        "refunded_minor": "Refunded (minor unit)",
+        "fee_minor": "Fee (minor unit)",
+        "currency": "Currency",
+        "channel_code": "Channel",
+        "method": "Payment method",
+        "scene": "Scene",
+        "status": "Status",
+        "paid_at": "Paid at",
+        "created_at": "Created at"
+      }
     },
     "filter": {
       "add": "Add condition",

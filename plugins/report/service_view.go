@@ -138,8 +138,16 @@ type ExportFile struct {
 	Truncated bool
 }
 
+// ExportLabels 是前端按当前语言渲染好的表名与列标题。
+// 内置图表的名字、以及部分列标题在库里/元数据里是 i18n 键或中文兜底，服务端词典没有这些词条，
+// 不带上就会把 plugin_report.builtin.chart.xxx 直接导出成 sheet 名和表头。
+type ExportLabels struct {
+	Name    string
+	Headers []string
+}
+
 // ExportReportChart 把报表里的表格图表导出为 xlsx（行数受 MaxRows 限制，最多 5000）。
-func (s *Service) ExportReportChart(ctx context.Context, w func(ExportFile) io.Writer, reportID, chartID idgen.ID, vals map[string]any, v Viewer) error {
+func (s *Service) ExportReportChart(ctx context.Context, w func(ExportFile) io.Writer, reportID, chartID idgen.ID, vals map[string]any, v Viewer, labels ExportLabels) error {
 	ch, res, err := s.reportChart(ctx, reportID, chartID, vals, v, s.set.MaxRows)
 	if err != nil {
 		return err
@@ -147,13 +155,67 @@ func (s *Service) ExportReportChart(ctx context.Context, w func(ExportFile) io.W
 	if ch.Type != ChartTable {
 		return specErr("report.export_table_only")
 	}
-	return writeXLSX(w(ExportFile{Name: ch.Name, Truncated: res.Truncated}), ch.Name, res)
+	name := cleanExportText(labels.Name, 60)
+	if name == "" {
+		name = cleanExportText(ch.Name, 60)
+	}
+	sheet := cleanSheetName(name)
+	if sheet == "" {
+		sheet = "Sheet1"
+	}
+	return writeXLSX(w(ExportFile{Name: name, Truncated: res.Truncated}), sheet, pickHeaders(labels.Headers, res), res)
 }
 
-func writeXLSX(out io.Writer, sheet string, res *Result) error {
+// pickHeaders 只在数量与结果列一致时采用前端给的标题（对不上就整体退回元数据文案，避免错位）。
+func pickHeaders(given []string, res *Result) []string {
+	if len(given) != len(res.Columns) {
+		return nil
+	}
+	out := make([]string, len(given))
+	for i, g := range given {
+		out[i] = cleanExportText(g, 64)
+		if out[i] == "" {
+			out[i] = res.Columns[i].Label
+		}
+	}
+	return out
+}
+
+// cleanExportText 去掉控制字符并按字符限长。
+func cleanExportText(s string, max int) string {
+	var b strings.Builder
+	for _, r := range s {
+		if r < 0x20 || r == 0x7f {
+			continue
+		}
+		b.WriteRune(r)
+	}
+	out := strings.TrimSpace(b.String())
+	if rs := []rune(out); len(rs) > max {
+		out = string(rs[:max])
+	}
+	return out
+}
+
+// cleanSheetName 满足 Excel 工作表名限制：不含 []:*?/\，最长 31 字符。
+func cleanSheetName(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if strings.ContainsRune("[]:*?/\\", r) {
+			continue
+		}
+		b.WriteRune(r)
+	}
+	return cleanExportText(b.String(), 31)
+}
+
+func writeXLSX(out io.Writer, sheet string, headers []string, res *Result) error {
 	header := make([]string, len(res.Columns))
 	for i, c := range res.Columns {
 		header[i] = c.Label
+		if i < len(headers) && headers[i] != "" {
+			header[i] = headers[i]
+		}
 	}
 	xw := excel.NewWriter(out) // 默认的公式注入防护：文本单元格一律按字符串写入
 	sh, err := xw.NewSheet(sheet, excel.SheetOptions{Header: header})

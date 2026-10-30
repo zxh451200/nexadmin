@@ -136,11 +136,15 @@ type ResultCol struct {
 	Label string `json:"label"`
 	Kind  string `json:"kind"` // dim | measure
 	Type  string `json:"type"` // string | number | time | bool
+	// Field 是这一列来自白名单的哪一列（维度=分组列，度量=被聚合列）。
+	// 列名按「表+列」查前端字典才不会串义（method 在操作日志是 HTTP 方法、在支付单是支付方式）。
+	Field string `json:"field,omitempty"`
 }
 
 // Result 是查询结果。Rows 的键是 ResultCol.Key。
 type Result struct {
 	Columns   []ResultCol      `json:"columns"`
+	Source    string           `json:"source,omitempty"` // 命中的白名单表名，前端据此取列标题
 	Rows      []map[string]any `json:"rows"`
 	Truncated bool             `json:"truncated"`
 }
@@ -241,7 +245,7 @@ func (e *Engine) build(ctx context.Context, tg *Target, sp Spec, env Env) (*gorm
 		}
 		key := "d" + strconv.Itoa(i)
 		sel = append(sel, clause.Column{Name: expr + " AS " + q(key), Raw: true})
-		cols = append(cols, ResultCol{Key: key, Label: c.Label, Kind: "dim", Type: typ})
+		cols = append(cols, ResultCol{Key: key, Label: c.Label, Field: c.Name, Kind: "dim", Type: typ})
 	}
 	for i, m := range sp.Measures {
 		fn, ok := aggSQL[m.Agg]
@@ -274,7 +278,7 @@ func (e *Engine) build(ctx context.Context, tg *Target, sp Spec, env Env) (*gorm
 		}
 		key := "m" + strconv.Itoa(i)
 		sel = append(sel, clause.Column{Name: fn + "(" + arg + ") AS " + q(key), Raw: true})
-		cols = append(cols, ResultCol{Key: key, Label: label, Kind: "measure", Type: TypeNumber})
+		cols = append(cols, ResultCol{Key: key, Label: label, Field: m.Column, Kind: "measure", Type: TypeNumber})
 	}
 
 	tx := e.db.WithContext(ctx).Table(src.Table)
@@ -529,7 +533,7 @@ func (e *Engine) Run(ctx context.Context, tg *Target, sp Spec, env Env) (*Result
 	}
 	defer rows.Close()
 
-	res := &Result{Columns: pl.cols, Rows: []map[string]any{}}
+	res := &Result{Columns: pl.cols, Source: tg.Src.Table, Rows: []map[string]any{}}
 	vals := make([]any, len(pl.cols))
 	ptrs := make([]any, len(pl.cols))
 	for i := range vals {

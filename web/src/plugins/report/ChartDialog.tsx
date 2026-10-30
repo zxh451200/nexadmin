@@ -10,7 +10,7 @@ import { Label } from '@/framework/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import { Textarea } from '@/framework/ui/textarea'
 import { CHART_TYPES, previewChart, useDatasetOptions, useSaveChart, type Chart, type ChartForm, type ChartType } from './api'
-import { builtinText } from './builtinText'
+import { builtinText, revertBuiltin } from './builtinText'
 import { ChartSpecEditor } from './ChartSpecEditor'
 import { ChartView } from './ChartView'
 import { emptyChartConfig, shapeError } from './chartData'
@@ -57,7 +57,7 @@ export function ChartDialog({ open, onOpenChange, editing }: Props) {
   const submit = async () => {
     if (!valid) return
     try {
-      await save.mutateAsync({ id: editing?.id, data: { ...form, name: form.name.trim() } })
+      await save.mutateAsync({ id: editing?.id, data: { ...form, name: revertBuiltin(t, editing?.name, form.name.trim()) } })
       toast.success(t('common.operateSuccess'))
       onOpenChange(false)
     } catch {
@@ -96,7 +96,7 @@ export function ChartDialog({ open, onOpenChange, editing }: Props) {
         <FormGrid cols={3}>
           <div className="flex flex-col gap-2">
             <Label htmlFor="ch-name">{t('common.name')}</Label>
-            <Input id="ch-name" value={form.name} maxLength={100} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            <Input id="ch-name" value={builtinText(t, form.name)} maxLength={100} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="ch-ds">{t('plugin_report.chart.dataset')}</Label>
@@ -130,7 +130,7 @@ export function ChartDialog({ open, onOpenChange, editing }: Props) {
           </div>
           <FormGridFull>
             {ds ? (
-              <ChartSpecEditor type={form.type} columns={cols} value={form.config} onChange={(config) => setForm({ ...form, config })} />
+              <ChartSpecEditor table={ds.source} type={form.type} columns={cols} value={form.config} onChange={(config) => setForm({ ...form, config })} />
             ) : (
               <p className="text-sm text-muted-foreground">{t('plugin_report.chart.pickDataset')}</p>
             )}

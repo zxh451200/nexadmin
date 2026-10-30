@@ -12,7 +12,7 @@ import { ChartView } from './ChartView'
 import { saveBlob } from './download'
 import { ReportFilters } from './ReportFilters'
 import { useChartResult } from './useChartResult'
-import { builtinText } from './builtinText'
+import { builtinText, columnText } from './builtinText'
 
 const SPAN: Record<number, string> = {
   1: 'md:col-span-1', 2: 'md:col-span-2', 3: 'md:col-span-3', 4: 'md:col-span-4', 5: 'md:col-span-5', 6: 'md:col-span-6',
@@ -26,8 +26,9 @@ function ChartCard({ reportId, chart, values }: { reportId: string; chart?: Char
   const onExport = async () => {
     if (!chart) return
     setExporting(true)
+    const headers = q.data ? q.data.columns.map((c) => columnText(t, q.data?.source, c)) : undefined
     try {
-      const { blob, truncated, ext } = await exportReportChart(reportId, chart.id, values)
+      const { blob, truncated, ext } = await exportReportChart(reportId, chart.id, values, { name: builtinText(t, chart.name), headers })
       saveBlob(blob, `${builtinText(t, chart.name)}.${ext}`)
       if (truncated) toast.warning(t('plugin_report.report.exportTruncated'))
     } catch {

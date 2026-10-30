@@ -9,7 +9,7 @@ import { Skeleton } from '@/framework/ui/skeleton'
 import { cn } from '@/lib/utils'
 import type { ChartConfig, ChartType, QueryResult } from './api'
 import { colorAt, fmtCell, toCartesian, toMetric, toPie } from './chartData'
-import { builtinText } from './builtinText'
+import { builtinText, columnText } from './builtinText'
 
 export interface ChartViewProps {
   type: ChartType
@@ -40,7 +40,7 @@ function TableChart({ result, height }: { result: QueryResult; height: number })
   const [pageSize, setPageSize] = useState(10)
   const columns: Column<Row>[] = result.columns.map((c, i) => ({
     key: c.key,
-    title: builtinText(t, c.label),
+    title: columnText(t, result.source, c),
     align: c.kind === 'measure' ? 'end' : undefined,
     mobile: i === 0 ? 'title' : undefined,
     render: (r) => <span className={cn(c.type === 'number' && 'num')}>{fmtCell(r[c.key], i18n.language)}</span>,
@@ -111,10 +111,15 @@ export function ChartView({ type, result, config, height, loading, error, classN
     )
   }
   if (type === 'table') return <TableChart result={result} height={height} />
+  // 度量列名可能是内置键（builtinText）也可能是白名单元数据里的列（fieldText），按结果列的 field/source 取字典
+  const colText = (key: string, label: string) => {
+    const c = result.columns.find((x) => x.key === key)
+    return c ? columnText(t, result.source, c) : builtinText(t, label)
+  }
   if (type === 'metric' && metric) {
     return (
       <div className={cn('flex flex-col items-center justify-center gap-1', className)} style={{ height }}>
-        {showMetricLabel ? <span className="text-sm text-muted-foreground">{builtinText(t, metric.label)}</span> : null}
+        {showMetricLabel ? <span className="text-sm text-muted-foreground">{colText('m0', metric.label)}</span> : null}
         <span className="num text-4xl font-semibold tracking-tight" style={{ color: colorAt(config.colors, 0) }}>
           {metric.value == null ? '-' : new Intl.NumberFormat(i18n.language).format(metric.value)}
           {config.unit ? <span className="ms-1 text-base font-normal text-muted-foreground">{builtinText(t, config.unit)}</span> : null}
@@ -203,7 +208,7 @@ export function ChartView({ type, result, config, height, loading, error, classN
                 <Bar
                   key={s.key}
                   dataKey={s.key}
-                  name={builtinText(t, s.label)}
+                  name={colText(s.key, s.label)}
                   fill={colorAt(config.colors, i)}
                   stackId={config.stacked ? 'a' : undefined}
                   radius={[6, 6, 0, 0]}
@@ -233,7 +238,7 @@ export function ChartView({ type, result, config, height, loading, error, classN
           <LineChart {...common}>
             {parts}
             {series.map((s, i) => (
-              <Line key={s.key} dataKey={s.key} name={builtinText(t, s.label)} type="monotone" stroke={colorAt(config.colors, i)} strokeWidth={2} dot={false} hide={hidden.has(s.key)} />
+              <Line key={s.key} dataKey={s.key} name={colText(s.key, s.label)} type="monotone" stroke={colorAt(config.colors, i)} strokeWidth={2} dot={false} hide={hidden.has(s.key)} />
             ))}
           </LineChart>
         )
