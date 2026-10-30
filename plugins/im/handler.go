@@ -38,6 +38,15 @@ func respond(c *gin.Context, data any, err error) {
 	response.OK(c, data)
 }
 
+// respondConv 是会话响应的空指针安全版本：服务层出错时 conv 为 nil，不能先解引用。
+func respondConv(c *gin.Context, conv *Conversation, err error) {
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, convView(conv))
+}
+
 func convView(c *Conversation) ConversationView {
 	return ConversationView{Conversation: *c}
 }
@@ -129,20 +138,20 @@ func (h *handler) adminSend(c *gin.Context) {
 func (h *handler) close(c *gin.Context) {
 	id, _ := agentOf(c)
 	conv, _, err := h.svc.Close(c.Request.Context(), c.Param("no"), id)
-	respond(c, convView(conv), err)
+	respondConv(c, conv, err)
 }
 
 // POST /plugins/im/conversations/:no/claim —— 认领（首次回复也会自动认领）。
 func (h *handler) claim(c *gin.Context) {
 	id, name := agentOf(c)
 	conv, err := h.svc.Claim(c.Request.Context(), c.Param("no"), id, name)
-	respond(c, convView(conv), err)
+	respondConv(c, conv, err)
 }
 
 // POST /plugins/im/conversations/:no/release —— 释放认领。
 func (h *handler) release(c *gin.Context) {
 	conv, err := h.svc.Release(c.Request.Context(), c.Param("no"))
-	respond(c, convView(conv), err)
+	respondConv(c, conv, err)
 }
 
 // PUT /plugins/im/conversations/:no/tags  {"tags":"退款,物流"}。
@@ -154,7 +163,7 @@ func (h *handler) tags(c *gin.Context) {
 		return
 	}
 	conv, err := h.svc.SetTags(c.Request.Context(), c.Param("no"), f.Tags)
-	respond(c, convView(conv), err)
+	respondConv(c, conv, err)
 }
 
 // POST /plugins/im/conversations/:no/typing —— 坐席"正在输入"（不落库）。
@@ -224,7 +233,7 @@ func (h *handler) open(c *gin.Context) {
 	f.UA = c.Request.UserAgent()
 	f.Ref = c.Request.Referer()
 	conv, err := h.svc.Open(c.Request.Context(), f)
-	respond(c, convView(conv), err)
+	respondConv(c, conv, err)
 }
 
 // GET /plugins/im/visitor/status —— 挂件探测本实例是否装了在线客服，并带回服务时间与邀请配置。
@@ -309,7 +318,7 @@ func (h *handler) visitorRate(c *gin.Context) {
 		return
 	}
 	conv, err := h.svc.Rate(c.Request.Context(), c.Param("no"), f.Score, f.Comment)
-	respond(c, convView(conv), err)
+	respondConv(c, conv, err)
 }
 
 func messageQuery(c *gin.Context) MessageQuery {
@@ -478,5 +487,5 @@ func (h *handler) transfer(c *gin.Context) {
 		return
 	}
 	conv, err := h.svc.Transfer(c.Request.Context(), c.Param("no"), f.AssigneeID, f.AssigneeName)
-	respond(c, convView(conv), err)
+	respondConv(c, conv, err)
 }
