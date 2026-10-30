@@ -353,7 +353,7 @@ type MenuNode struct {
 }
 
 // platformPermPrefixes 是不受套餐菜单限制的平台级权限前缀：工作台、个人中心、关于、消息、导出中心。
-var platformPermPrefixes = []string{"dashboard:", "profile:", "about:", "message:", "job:"}
+var platformPermPrefixes = []string{"dashboard:", "profile:", "about:", "message:", "job:", "tenantSelf:"}
 
 // PlatformPerm 报告权限码是否属于平台级（不受套餐菜单限制）。
 func PlatformPerm(perm string) bool {

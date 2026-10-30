@@ -43,6 +43,11 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	t.PUT("/:id", core.Perm("tenant:update"), h.UpdateTenant)
 	t.DELETE("/:id", core.Perm("tenant:delete"), h.DeleteTenant)
 	t.DELETE("", core.Perm("tenant:delete"), h.DeleteTenants)
+
+	// 租户自助：登录即可访问，只暴露调用者自己租户的资料与用量。
+	self := r.Group("/tenant-self")
+	self.GET("", core.Perm("tenantSelf:view"), h.Self)
+	self.PUT("", core.Perm("tenantSelf:update"), h.UpdateSelf)
 }
 
 // 种子 ID 与前端 mock 一致：套餐 7400000000010000000+序号，租户 7500000000010000000+序号。

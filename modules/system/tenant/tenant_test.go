@@ -119,6 +119,19 @@ func expectCreatePrelude(mock sqlmock.Sqlmock) {
 	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `sys_tenant`").WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
 }
 
+// expectSeedBase 覆盖开通初始化：根部门、默认岗位、普通员工角色与基础菜单。
+func expectSeedBase(mock sqlmock.Sqlmock) {
+	empty := func() *sqlmock.Rows { return sqlmock.NewRows([]string{"count"}).AddRow(0) }
+	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `sys_dept`").WillReturnRows(empty())
+	mock.ExpectExec("INSERT INTO `sys_dept`").WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `sys_post`").WillReturnRows(empty())
+	mock.ExpectExec("INSERT INTO `sys_post`").WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectQuery("FROM `sys_role` WHERE tenant_id = \\? AND code = \\?").WillReturnRows(sqlmock.NewRows([]string{"id"}))
+	mock.ExpectExec("INSERT INTO `sys_role`").WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectQuery("FROM `sys_menu`").WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(3))
+	mock.ExpectExec("INSERT INTO `sys_role_menu`").WillReturnResult(sqlmock.NewResult(1, 1))
+}
+
 func TestCreateTenantWithAdminCommits(t *testing.T) {
 	s, mock := newSvc(t)
 	expectCreatePrelude(mock)
@@ -131,6 +144,7 @@ func TestCreateTenantWithAdminCommits(t *testing.T) {
 		"acme_admin", pwdIsHashed{}, sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), "root@acme.dev", sqlmock.AnyArg(), sqlmock.AnyArg(),
 		"1", sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectExec("INSERT INTO `sys_user_role`").WillReturnResult(sqlmock.NewResult(1, 1))
+	expectSeedBase(mock)
 	mock.ExpectCommit()
 
 	got, err := s.CreateTenant(tctx, adminInput())
@@ -201,6 +215,7 @@ func TestCreateTenantReusesExistingAdminRole(t *testing.T) {
 	mock.ExpectQuery("FROM `sys_role`").WillReturnRows(sqlmock.NewRows([]string{"id", "tenant_id", "code"}).AddRow(77, 1, "admin"))
 	mock.ExpectExec("INSERT INTO `sys_user`").WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectExec("INSERT INTO `sys_user_role`").WithArgs(sqlmock.AnyArg(), int64(77)).WillReturnResult(sqlmock.NewResult(1, 1))
+	expectSeedBase(mock)
 	mock.ExpectCommit()
 	if _, err := s.CreateTenant(tctx, adminInput()); err != nil {
 		t.Fatal(err)

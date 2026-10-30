@@ -134,6 +134,10 @@ add(base({ parentId: jobsMenu, type: 'button', title: 'jobs.btn.all', perm: 'job
 const sendlog = menu(monitor, 'sendlog.menu', '/monitor/send-log', 'sendlog/SendLogPage', 'sendlog:list', 'Send', 70)
 btns(sendlog, 'sendlog', ['delete'])
 
+// 我的租户（租户管理员自助；追加在末尾，不挪动已有出厂 ID）
+const tenantSelf = menu(tenantDir, 'tenantSelf.menu', '/tenant/self', 'tenantSelf/TenantSelfPage', 'tenantSelf:view', 'Building2', 30)
+btns(tenantSelf, 'tenantSelf', ['update'])
+
 const bySort = (a: SysMenu, b: SysMenu) => a.sort - b.sort || a.id.localeCompare(b.id)
 
 function buildTree(list: SysMenu[], parentId: string | null): SysMenu[] {

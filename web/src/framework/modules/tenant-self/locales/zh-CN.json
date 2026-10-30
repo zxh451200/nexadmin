@@ -1,0 +1,56 @@
+{
+  "tenantSelf": {
+    "menu": "我的租户",
+    "title": "我的租户",
+    "description": "查看套餐、额度与用量，维护企业资料与品牌",
+    "unmanaged": "当前账号不隶属任何租户",
+    "unmanagedDesc": "平台超级管理员不隶属于租户；请使用租户管理员账号查看本页。",
+    "daysLeft": "剩余 {{count}} 天",
+    "expiredDays": "已过期 {{count}} 天",
+    "unlimited": "不限制",
+    "disabled": "已关闭",
+    "aiPerDay": "每天 {{count}} 次",
+    "status": {
+      "active": "正常",
+      "suspended": "已停用",
+      "expired": "已过期"
+    },
+    "usage": {
+      "users": "成员",
+      "storage": "存储",
+      "roles": "角色"
+    },
+    "info": {
+      "title": "租户信息",
+      "name": "租户名称",
+      "domain": "域名",
+      "pkg": "套餐",
+      "expire": "到期时间",
+      "ai": "AI 每日额度",
+      "status": "状态"
+    },
+    "trend": {
+      "title": "近 30 天用量",
+      "empty": "还没有足够的历史数据",
+      "emptyDesc": "每天首次打开本页会记录一次，明天起这里会显示成员与角色的变化。"
+    },
+    "profile": {
+      "title": "企业资料",
+      "desc": "企业名称与 Logo 会用于登录页和侧栏品牌展示；留空则沿用平台设置。",
+      "companyName": "企业名称",
+      "contactName": "联系人",
+      "contactPhone": "联系电话",
+      "contactEmail": "联系邮箱",
+      "logo": "Logo",
+      "logoHint": "支持站内路径（/uploads/...）或 http(s) 图片地址",
+      "save": "保存",
+      "saved": "已保存",
+      "saveFailed": "保存失败，请稍后重试",
+      "reset": "重置"
+    },
+    "errors": {
+      "email": "邮箱格式不正确",
+      "logo": "Logo 地址必须是站内路径或 http(s) 链接"
+    }
+  }
+}

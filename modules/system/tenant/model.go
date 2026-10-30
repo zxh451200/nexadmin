@@ -79,6 +79,12 @@ type Tenant struct {
 	ExpireAt      time.Time `gorm:"not null" json:"expireAt"`
 	Status        string    `gorm:"size:16;not null" json:"status"`
 	AdminUsername string    `gorm:"size:64;not null" json:"adminUsername"`
+	// 企业资料与租户独立品牌：logo 留空时沿用平台站点设置。
+	CompanyName  string `gorm:"size:200;not null" json:"companyName"`
+	ContactName  string `gorm:"size:100;not null" json:"contactName"`
+	ContactPhone string `gorm:"size:40;not null" json:"contactPhone"`
+	ContactEmail string `gorm:"size:200;not null" json:"contactEmail"`
+	LogoURL      string `gorm:"size:500;not null" json:"logoUrl"`
 	// 租户级额度覆盖：nil = 沿用套餐，0 = 不限制。
 	MaxUsers     *int   `json:"maxUsers"`
 	MaxRoles     *int   `json:"maxRoles"`
@@ -123,7 +129,62 @@ type TenantInput struct {
 	// AiEnabled 为空表示保持现状（新建时默认开启）；AiDailyQuota 为空表示沿用套餐，0 表示不限制。
 	AiEnabled    *bool `json:"aiEnabled"`
 	AiDailyQuota *int  `json:"aiDailyQuota" binding:"omitempty,min=0"`
+	// 企业资料与品牌（可选）。
+	CompanyName  string `json:"companyName" binding:"max=200"`
+	ContactName  string `json:"contactName" binding:"max=100"`
+	ContactPhone string `json:"contactPhone" binding:"max=40"`
+	ContactEmail string `json:"contactEmail" binding:"max=200"`
+	LogoURL      string `json:"logoUrl" binding:"max=500"`
 }
+
+// SelfInput 是租户管理员在“我的租户”里可自行修改的字段；名称/域名/套餐/额度/到期仍由平台管理。
+type SelfInput struct {
+	CompanyName  string `json:"companyName" binding:"max=200"`
+	ContactName  string `json:"contactName" binding:"max=100"`
+	ContactPhone string `json:"contactPhone" binding:"max=40"`
+	ContactEmail string `json:"contactEmail" binding:"max=200"`
+	LogoURL      string `json:"logoUrl" binding:"max=500"`
+}
+
+// Self 是 GET /tenant-self 的返回：租户资料 + 有效额度/用量 + 近 30 天用量切片。
+type Self struct {
+	Name         string    `json:"name"`
+	Domain       string    `json:"domain"`
+	Status       string    `json:"status"`
+	PackageName  string    `json:"packageName"`
+	ExpireAt     time.Time `json:"expireAt"`
+	DaysLeft     int       `json:"daysLeft"`
+	CompanyName  string    `json:"companyName"`
+	ContactName  string    `json:"contactName"`
+	ContactPhone string    `json:"contactPhone"`
+	ContactEmail string    `json:"contactEmail"`
+	LogoURL      string    `json:"logoUrl"`
+	AiEnabled    bool      `json:"aiEnabled"`
+	AiDailyQuota int       `json:"aiDailyQuota"`
+	Usage        Usage     `json:"usage"`
+	Trend        []Point   `json:"trend"`
+}
+
+// Point 是某天的用量切片。
+type Point struct {
+	Day       string `json:"day"`
+	Users     int64  `json:"users"`
+	Roles     int64  `json:"roles"`
+	StorageMB int64  `json:"storageMB"`
+}
+
+// UsageDaily 对应 sys_tenant_usage_daily（平台级表，显式带 tenant_id）。
+type UsageDaily struct {
+	database.PlatformModel
+	TenantID  idgen.ID `gorm:"not null" json:"tenantId"`
+	Day       string   `gorm:"size:10;not null" json:"day"`
+	Users     int64    `gorm:"not null" json:"users"`
+	Roles     int64    `gorm:"not null" json:"roles"`
+	StorageMB int64    `gorm:"not null" json:"storageMB"`
+}
+
+// TableName 指定表名。
+func (UsageDaily) TableName() string { return "sys_tenant_usage_daily" }
 
 // ListQuery 是 GET /tenants 与 GET /tenant-packages 的查询参数。
 type ListQuery struct {

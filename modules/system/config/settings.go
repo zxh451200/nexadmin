@@ -12,6 +12,7 @@ import (
 	coreai "nexadmin/core/ai"
 	"nexadmin/core/response"
 	"nexadmin/core/secret"
+	ctenant "nexadmin/core/tenant"
 )
 
 // 设置页的分区，顺序与前端 AllSettings 一致。
@@ -333,7 +334,24 @@ func (s *Service) Public(ctx context.Context) (*PublicSettings, error) {
 	}
 	str := func(k string) string { v, _ := site[k].(string); return v }
 	wm, _ := site["watermark"].(bool)
-	return &PublicSettings{SiteName: str("siteName"), LogoURL: str("logoUrl"), Copyright: str("copyright"), Watermark: wm}, nil
+	out := &PublicSettings{SiteName: str("siteName"), LogoURL: str("logoUrl"), Copyright: str("copyright"), Watermark: wm}
+	// 按域名/请求头解析到租户时，租户自己的名称与 logo 覆盖平台站点设置。
+	var t struct {
+		Name    string `gorm:"column:name"`
+		LogoURL string `gorm:"column:logo_url"`
+	}
+	if id, ok := ctenant.From(ctx); ok && id != ctenant.DefaultID {
+		err := s.db.WithContext(ctx).Table("sys_tenant").Select("name, logo_url").Where("id = ?", int64(id)).Take(&t).Error
+		if err == nil {
+			if strings.TrimSpace(t.Name) != "" {
+				out.SiteName = strings.TrimSpace(t.Name)
+			}
+			if strings.TrimSpace(t.LogoURL) != "" {
+				out.LogoURL = strings.TrimSpace(t.LogoURL)
+			}
+		}
+	}
+	return out, nil
 }
 
 // TestResult 是连接测试结果（前端 TestResult），reason 对应 settings.test.reason.* 文案。

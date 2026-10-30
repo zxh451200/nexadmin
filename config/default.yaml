@@ -170,6 +170,7 @@ ratelimit:                  # 固定窗口限流；计数放 cache（redis 多�
   client_error: { limit: 30, window: 1m }  # 按 IP；前端错误上报 POST /api/v1/client-errors，超限 429
   dashboard_layout: { limit: 30, window: 1m }  # 按用户；工作台布局 /api/v1/dashboard/layout，超限 429
   log_export:   { limit: 10, window: 1m }  # 按用户；操作日志 / 登录日志导出，超限 429
+  tenant_api:   { limit: 0,  window: 1m }  # 按租户；后台全部接口的总量上限（0 = 不限流），用于隔离单个租户的流量
   mcp:          { limit: 120, window: 1m } # 按用户；POST /api/v1/mcp，超限 429
   mcp_confirm:  { limit: 5,   window: 10m } # 按用户+确认 ID；MCP 写确认密码失败次数，超限作废该确认
 metrics:                    # Prometheus 文本格式指标，挂在根路径 /metrics（不在 /api/v1 下）

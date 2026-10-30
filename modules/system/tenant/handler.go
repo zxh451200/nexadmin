@@ -196,3 +196,20 @@ func (h *Handler) DeleteTenants(c *gin.Context) {
 		result(c, nil, h.svc.DeleteTenants(c.Request.Context(), ids))
 	}
 }
+
+// ---- 我的租户（租户管理员自助） ----
+
+// Self GET /tenant-self：调用者所在租户的资料、额度用量与近 30 天趋势。
+func (h *Handler) Self(c *gin.Context) {
+	v, err := h.svc.Self(c.Request.Context())
+	result(c, v, err)
+}
+
+// UpdateSelf PUT /tenant-self：租户自行维护企业资料、联系人与 logo。
+func (h *Handler) UpdateSelf(c *gin.Context) {
+	var in SelfInput
+	if response.BindJSON(c, &in) {
+		v, err := h.svc.UpdateSelf(c.Request.Context(), in)
+		result(c, v, err)
+	}
+}

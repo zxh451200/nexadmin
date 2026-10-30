@@ -1,0 +1,60 @@
+{
+  "tenantSelf": {
+    "menu": "My tenant",
+    "title": "My tenant",
+    "description": "View your plan, quotas and usage, and maintain company details and branding",
+    "unmanaged": "This account does not belong to a tenant",
+    "unmanagedDesc": "Platform super admins are not part of a tenant. Sign in as a tenant administrator to use this page.",
+    "daysLeft": "{{count}} days left",
+    "daysLeft_one": "{{count}} day left",
+    "daysLeft_other": "{{count}} days left",
+    "expiredDays": "Expired {{count}} days ago",
+    "unlimited": "Unlimited",
+    "disabled": "Disabled",
+    "aiPerDay": "{{count}} calls / day",
+    "aiPerDay_one": "{{count}} call / day",
+    "aiPerDay_other": "{{count}} calls / day",
+    "status": {
+      "active": "Active",
+      "suspended": "Suspended",
+      "expired": "Expired"
+    },
+    "usage": {
+      "users": "Members",
+      "storage": "Storage",
+      "roles": "Roles"
+    },
+    "info": {
+      "title": "Tenant details",
+      "name": "Tenant name",
+      "domain": "Domain",
+      "pkg": "Plan",
+      "expire": "Expires",
+      "ai": "AI daily quota",
+      "status": "Status"
+    },
+    "trend": {
+      "title": "Usage over the last 30 days",
+      "empty": "Not enough history yet",
+      "emptyDesc": "A point is recorded the first time this page opens each day. The trend appears from tomorrow."
+    },
+    "profile": {
+      "title": "Company details",
+      "desc": "The company name and logo appear on the sign-in page and sidebar. Leave a field empty to use the platform branding.",
+      "companyName": "Company name",
+      "contactName": "Contact",
+      "contactPhone": "Phone",
+      "contactEmail": "Email",
+      "logo": "Logo",
+      "logoHint": "A site path (/uploads/...) or an http(s) image URL",
+      "save": "Save",
+      "saved": "Saved",
+      "saveFailed": "Could not save. Please try again.",
+      "reset": "Reset"
+    },
+    "errors": {
+      "email": "Invalid email",
+      "logo": "The logo must be a site path or an http(s) link"
+    }
+  }
+}

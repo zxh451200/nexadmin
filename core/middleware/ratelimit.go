@@ -16,6 +16,7 @@ import (
 	"nexadmin/core/cache"
 	"nexadmin/core/config"
 	"nexadmin/core/response"
+	"nexadmin/core/tenant"
 )
 
 // KeyFunc 从请求里取限流维度（IP、IP+路径、用户…）；返回空串表示这个请求不参与限流。
@@ -36,6 +37,16 @@ func ByUser() KeyFunc {
 			return "u:" + strconv.FormatInt(int64(cl.UserID), 10)
 		}
 		return "ip:" + c.ClientIP()
+	}
+}
+
+// ByTenant 按请求所在租户限流（一个租户一个配额桶，隔离“一家把带宽吃满”）；解析不到租户时放行。
+func ByTenant() KeyFunc {
+	return func(c *gin.Context) string {
+		if id, ok := tenant.From(c.Request.Context()); ok {
+			return "t:" + strconv.FormatInt(int64(id), 10)
+		}
+		return ""
 	}
 }
 

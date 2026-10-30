@@ -247,6 +247,8 @@ func (a *App) buildFull() (*gin.Engine, error) {
 	deps.APIDoc.Describe(coreAPIDocs()...)
 	deps.OnClose = a.addCloser
 	protected := api.Group("", middleware.RequireLogin())
+	// 按租户限流（ratelimit.tenant_api，limit=0 即关闭）：单个租户打满接口时不再拖累其它租户。
+	protected.Use(middleware.RateLimitRule(ch, a.log, cfg.RateLimit, "tenant_api", middleware.ByTenant()))
 	mods, err := a.activeModules()
 	if err != nil {
 		return nil, err

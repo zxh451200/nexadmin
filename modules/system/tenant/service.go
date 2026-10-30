@@ -217,6 +217,9 @@ func (s *Service) CreateTenant(ctx context.Context, in TenantInput) (*Tenant, er
 	if err := s.check(ctx, &in, 0); err != nil {
 		return nil, err
 	}
+	if err := validateTenantProfile(in.CompanyName, in.ContactEmail, in.LogoURL); err != nil {
+		return nil, err
+	}
 	var plan *adminPlan
 	if in.CreateAdmin {
 		if plan, err = newAdminPlan(in); err != nil {
@@ -229,7 +232,10 @@ func (s *Service) CreateTenant(ctx context.Context, in TenantInput) (*Tenant, er
 	t := &Tenant{Name: in.Name, Domain: in.Domain, PackageID: in.PackageID, ExpireAt: exp,
 		Status: statusOr(in.Status, StatusActive), AdminUsername: in.AdminUsername,
 		MaxUsers: in.MaxUsers, MaxRoles: in.MaxRoles, MaxStorageMb: in.MaxStorageMb,
-		AiEnabled: in.AiEnabled == nil || *in.AiEnabled, AiDailyQuota: in.AiDailyQuota}
+		AiEnabled: in.AiEnabled == nil || *in.AiEnabled, AiDailyQuota: in.AiDailyQuota,
+		CompanyName: strings.TrimSpace(in.CompanyName), ContactName: strings.TrimSpace(in.ContactName),
+		ContactPhone: strings.TrimSpace(in.ContactPhone), ContactEmail: strings.TrimSpace(in.ContactEmail),
+		LogoURL: strings.TrimSpace(in.LogoURL)}
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(t).Error; err != nil {
 			return err
