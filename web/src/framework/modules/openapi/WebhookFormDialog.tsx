@@ -7,6 +7,7 @@ import { z } from 'zod'
 import { FormGrid, FormGridFull, FormLayout } from '@/framework/components/FormLayout'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { SwitchField } from '@/framework/components/SwitchField'
+import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Checkbox } from '@/framework/ui/checkbox'
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/framework/ui/form'
@@ -55,40 +56,44 @@ function EventPicker({ events, value, onChange }: { events: OpenEvent[]; value: 
   }
 
   return (
-    <div className="divide-y divide-border rounded-lg border border-border">
+    <div className="overflow-hidden rounded-lg border border-border">
       {groups.map(([group, list]) => {
         const label = t(`openapi.eventGroup.${group}`, { defaultValue: group })
         const picked = list.filter((e) => value.includes(e.name)).length
         const all = picked === list.length
         return (
-          <fieldset key={group} className="p-2">
+          <fieldset key={group} className="min-w-0 border-b border-border last:border-b-0">
             <legend className="sr-only">{label}</legend>
-            <div className="flex items-center gap-2 px-2 py-1.5">
+            <div className="flex items-center gap-2 bg-muted/50 px-3 py-2">
               <Checkbox
                 checked={all ? true : picked > 0 ? 'indeterminate' : false}
                 onCheckedChange={(c) => toggleGroup(list, c === true)}
                 aria-label={label}
               />
               <span className="text-sm font-medium text-foreground">{label}</span>
-              <span className="num ms-auto text-xs text-muted-foreground">
+              <Badge variant="secondary" className="num ms-auto px-1.5 py-0 text-[11px] font-medium text-muted-foreground">
                 {picked}/{list.length}
-              </span>
+              </Badge>
             </div>
-            <div className="grid grid-cols-1 gap-x-2 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-1 p-2 md:grid-cols-2">
               {list.map((e) => {
                 const on = value.includes(e.name)
                 return (
                   <label
                     key={e.name}
                     className={cn(
-                      'flex min-h-11 cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-colors md:min-h-9',
+                      'flex min-h-11 cursor-pointer items-start gap-2.5 rounded-md border border-transparent px-2.5 py-1.5 transition-colors md:min-h-0',
                       on ? 'bg-primary/5' : 'hover:bg-accent/60',
                     )}
                   >
-                    <Checkbox checked={on} onCheckedChange={(c) => toggle(e.name, c === true)} />
-                    <code className="shrink-0 font-mono text-xs text-foreground">{e.name}</code>
-                    <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground" title={e.description}>
-                      {e.description}
+                    <Checkbox checked={on} onCheckedChange={(c) => toggle(e.name, c === true)} className="mt-0.5" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm text-foreground" title={e.description || e.name}>
+                        {e.description || e.name}
+                      </span>
+                      {e.description ? (
+                        <code className="block truncate font-mono text-[11px] text-muted-foreground">{e.name}</code>
+                      ) : null}
                     </span>
                   </label>
                 )
