@@ -175,6 +175,7 @@
       "homeCtaHref": "#quickstart",
       "contactEmail": "team@example.com",
       "contactPhone": "010-88886666",
+      "logoUrl": "https://… 或点击右侧按钮上传",
       "qrCodeUrl": "上传公众号/客服二维码，或粘贴图片地址",
       "qrCodeCaption": "微信公众号",
       "socialUrl": "https://… 或 mailto:…",

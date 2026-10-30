@@ -175,6 +175,7 @@
       "homeCtaHref": "#quickstart",
       "contactEmail": "team@example.com",
       "contactPhone": "010-88886666",
+      "logoUrl": "https://… or upload with the button on the right",
       "qrCodeUrl": "Upload a QR image or paste its URL",
       "qrCodeCaption": "WeChat official account",
       "socialUrl": "https://… or mailto:…",
