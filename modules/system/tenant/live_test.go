@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"testing"
+	"time"
 
 	"go.uber.org/zap"
 
@@ -56,6 +58,25 @@ func TestLiveTenantProvisioningAndSelf(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
+	// 可选清理：仅当显式设置 NEXADMIN_LIVE_CLEANUP=1 且库名以 _live 结尾时删库，避免误删。
+	if os.Getenv("NEXADMIN_LIVE_CLEANUP") == "1" && strings.HasSuffix(cfg.Name, "_live") {
+		t.Cleanup(func() {
+			_ = database.Close(db)
+			admin, err := database.Open(cfg)
+			if err != nil {
+				t.Logf("cleanup open: %v", err)
+				return
+			}
+			stmt := "DROP DATABASE `" + cfg.Name + "`"
+			if cfg.Type == "postgres" {
+				stmt = `DROP DATABASE "` + cfg.Name + `"`
+			}
+			if err := admin.Exec(stmt).Error; err != nil {
+				t.Logf("cleanup drop: %v", err)
+			}
+			_ = database.Close(admin)
+		})
+	}
 	sources, err := migrate.DefaultSources()
 	if err != nil {
 		t.Fatal(err)
@@ -70,6 +91,27 @@ func TestLiveTenantProvisioningAndSelf(t *testing.T) {
 	}
 	t.Logf("migrated %d files", len(res.Applied))
 
+	// 出厂菜单由应用启动时的 Seed 写入，migrate 只建表；这里补三条平台级菜单，
+	// 否则开通初始化按权限码查不到菜单（真实安装不会缺）。
+	now := time.Now().UTC()
+	for _, perm := range []string{"dashboard:view", "profile:view", "about:view"} {
+		var n int64
+		if err := db.WithContext(ctenant.Skip(ctx)).Table("sys_menu").Where("perm = ?", perm).Count(&n).Error; err != nil {
+			t.Fatal(err)
+		}
+		if n > 0 {
+			continue
+		}
+		mid, err := idgen.Next()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := db.Exec(`INSERT INTO sys_menu (id, parent_id, code, type, title, icon, path, component, perm, sort, keep_alive, hidden, external, status, created_at, updated_at)
+			VALUES (?, 0, ?, 'menu', ?, '', '/x', '', ?, 10, 1, 0, 0, '1', ?, ?)`, int64(mid), perm, perm, perm, now, now).Error; err != nil {
+			t.Fatalf("seed menu %s: %v", perm, err)
+		}
+	}
+
 	svc := tenant.NewService(db)
 	ctenant.SetSource(svc)
 	sid, err := idgen.Next()
@@ -83,7 +125,7 @@ func TestLiveTenantProvisioningAndSelf(t *testing.T) {
 		t.Fatal(err)
 	}
 	in := tenant.TenantInput{
-		Name: "live-tenant-" + suffix, Domain: "live-" + suffix + ".example.com", PackageID: pkg.ID,
+		Name: "live-tenant-" + suffix, Domain: "live-" + suffix + ".nexadmin.dev", PackageID: pkg.ID,
 		ExpireAt: "2027-01-01", Status: tenant.StatusActive, CreateAdmin: true,
 		AdminUsername: "live_admin_" + suffix, AdminPassword: "Live-Pass-123",
 		CompanyName: "企业甲", ContactEmail: "a@example.com", LogoURL: "/uploads/a.png",
