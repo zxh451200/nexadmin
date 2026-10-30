@@ -11,7 +11,7 @@ import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Button } from '@/framework/ui/button'
 import { Label } from '@/framework/ui/label'
 import { Switch } from '@/framework/ui/switch'
-import { useDeleteMessage, useMarkRead, useMessageList, useReadAll, type Message } from './api'
+import { useClearMessages, useDeleteMessage, useMarkRead, useMessageList, useReadAll, type Message } from './api'
 import { formatTime } from './format'
 
 export function MessageTab({ unread }: { unread: number }) {
@@ -33,6 +33,7 @@ export function MessageTab({ unread }: { unread: number }) {
   const markRead = useMarkRead()
   const readAll = useReadAll()
   const remove = useDeleteMessage()
+  const clear = useClearMessages()
 
   const open = (m: Message) => {
     setDetail(m)
@@ -53,6 +54,18 @@ export function MessageTab({ unread }: { unread: number }) {
     try {
       await remove.mutateAsync(m.id)
       if (detail?.id === m.id) setDetail(null)
+      toast.success(t('common.operateSuccess'))
+    } catch {
+      toast.error(t('common.operateFailed'))
+    }
+  }
+
+  const onClear = async () => {
+    if (!(await confirm({ destructive: true, description: t('message.clearMessagesConfirm') }))) return
+    try {
+      await clear.mutateAsync()
+      setDetail(null)
+      setPage(1)
       toast.success(t('common.operateSuccess'))
     } catch {
       toast.error(t('common.operateFailed'))
@@ -115,10 +128,21 @@ export function MessageTab({ unread }: { unread: number }) {
             <Label htmlFor="message-only-unread">{t('message.onlyUnread')}</Label>
           </div>
         </div>
-        <Button variant="outline" onClick={onReadAll} disabled={unread === 0 || readAll.isPending}>
-          <CheckCheck aria-hidden="true" />
-          {t('message.readAll')}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={onReadAll} disabled={unread === 0 || readAll.isPending}>
+            <CheckCheck aria-hidden="true" />
+            {t('message.readAll')}
+          </Button>
+          <Button
+            variant="outline"
+            className="text-destructive"
+            onClick={onClear}
+            disabled={!data?.total || clear.isPending}
+          >
+            <Trash2 aria-hidden="true" />
+            {t('message.clearMessages')}
+          </Button>
+        </div>
       </div>
 
       <DataTable

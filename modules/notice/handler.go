@@ -197,6 +197,11 @@ func (h *Handler) Mine(c *gin.Context) {
 	response.Page(c, list, total, page, size)
 }
 
+// ClearMine DELETE /notices/mine：清空“我的公告”（只影响当前用户，公告本身不动）
+func (h *Handler) ClearMine(c *gin.Context) {
+	respond(c, nil, h.svc.Clear(c.Request.Context(), auth.ClaimsFrom(c).UserID))
+}
+
 // MarkRead POST /notices/:id/read
 func (h *Handler) MarkRead(c *gin.Context) {
 	if id, ok := paramID(c); ok {

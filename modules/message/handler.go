@@ -58,6 +58,11 @@ func (h *Handler) MarkRead(c *gin.Context) {
 	response.Fail(c, response.BadRequest("error.bad_request"))
 }
 
+// Clear DELETE /messages
+func (h *Handler) Clear(c *gin.Context) {
+	done(c, nil, h.svc.ClearAll(c.Request.Context(), uidOf(c)))
+}
+
 // Delete DELETE /messages/:id
 func (h *Handler) Delete(c *gin.Context) {
 	if id, err := idgen.Parse(c.Param("id")); err == nil {

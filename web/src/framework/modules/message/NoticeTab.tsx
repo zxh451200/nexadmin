@@ -1,22 +1,38 @@
 import { useState } from 'react'
-import { Download, Paperclip } from 'lucide-react'
+import { Download, Paperclip, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
+import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { DictTag } from '@/framework/components/DictTag'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { RichTextView } from '@/framework/components/RichTextView'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
-import { useMyNotices, useReadNotice, type MyNotice } from './api'
+import { useClearNotices, useMyNotices, useReadNotice, type MyNotice } from './api'
 import { formatTime } from './format'
 
 export function NoticeTab() {
   const { t, i18n } = useTranslation()
+  const confirm = useConfirm()
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [detail, setDetail] = useState<MyNotice | null>(null)
   const { data, isLoading } = useMyNotices({ page, pageSize })
   const readNotice = useReadNotice()
+  const clear = useClearNotices()
+
+  const onClear = async () => {
+    if (!(await confirm({ destructive: true, description: t('message.clearNoticesConfirm') }))) return
+    try {
+      await clear.mutateAsync()
+      setDetail(null)
+      setPage(1)
+      toast.success(t('common.operateSuccess'))
+    } catch {
+      toast.error(t('common.operateFailed'))
+    }
+  }
 
   const open = (n: MyNotice) => {
     setDetail(n)
@@ -51,7 +67,19 @@ export function NoticeTab() {
   ]
 
   return (
-    <>
+    <div className="flex flex-col gap-4">
+      <div className="flex justify-end">
+        <Button
+          variant="outline"
+          className="text-destructive"
+          onClick={onClear}
+          disabled={!data?.total || clear.isPending}
+        >
+          <Trash2 aria-hidden="true" />
+          {t('message.clearNotices')}
+        </Button>
+      </div>
+
       <DataTable
         columns={columns}
         data={data?.list ?? []}
@@ -116,6 +144,6 @@ export function NoticeTab() {
           </div>
         ) : null}
       </ResponsiveDialog>
-    </>
+    </div>
   )
 }

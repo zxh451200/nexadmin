@@ -117,6 +117,15 @@ func (s *Service) Delete(ctx context.Context, uid, id idgen.ID) error {
 	return res.Error
 }
 
+// ClearAll 清空自己的全部消息（含未读）。
+func (s *Service) ClearAll(ctx context.Context, uid idgen.ID) error {
+	res := s.db.WithContext(ctx).Where("user_id = ?", int64(uid)).Delete(&Message{})
+	if res.Error == nil {
+		defaultHub.poke(ctx, uid)
+	}
+	return res.Error
+}
+
 // Send 给多个收件人各插入一条消息，并立即通过 SSE 提醒在线的收件人。
 // 业务模块发消息时调用（ctx 里要有租户）。
 func (s *Service) Send(ctx context.Context, to []idgen.ID, category, title, content, link string) error {

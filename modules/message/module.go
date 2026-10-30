@@ -73,6 +73,7 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 			}
 			return svc.ValidateMarkRead(ctx, uid, id)
 		})
+	g.DELETE("/messages", h.Clear)
 	g.DELETE("/messages/:id", h.Delete)
 
 	go cleanupLoop(d.DB, d.Log, d.Config.Message.RetentionDays)

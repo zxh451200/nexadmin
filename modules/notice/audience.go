@@ -23,7 +23,8 @@ func (s *Service) readSub(uid idgen.ID) *gorm.DB {
 }
 
 // visible 是“对 uid 可见的公告”：已发布、已到发布时间、未过期、属于本租户或是平台公告，
-// 并且发布范围覆盖该用户（全员 / 指定用户 / 指定部门 / 指定角色）。
+// 并且发布范围覆盖该用户（全员 / 指定用户 / 指定部门 / 指定角色），
+// 且在该用户最近一次“清空我的公告”之后发布。
 func (s *Service) visible(ctx context.Context, uid idgen.ID) *gorm.DB {
 	tid, _ := tenant.From(ctx)
 	now := time.Now().UTC()
@@ -31,7 +32,7 @@ func (s *Service) visible(ctx context.Context, uid idgen.ID) *gorm.DB {
 	byTarget := func(cond string, arg any) *gorm.DB {
 		return s.db.Table("sys_notice_target").Select("notice_id").Where(cond, arg)
 	}
-	return s.db.WithContext(tenant.Skip(ctx)).Model(&Notice{}).
+	q := s.db.WithContext(tenant.Skip(ctx)).Model(&Notice{}).
 		Where("status = ?", StatusPublished).
 		Where("(publish_at IS NULL OR publish_at <= ?)", now).
 		Where("(expire_at IS NULL OR expire_at > ?)", now).
@@ -41,6 +42,35 @@ func (s *Service) visible(ctx context.Context, uid idgen.ID) *gorm.DB {
 			ScopeUser, byTarget("target_id = ?", int64(uid)),
 			ScopeDept, byTarget("target_id = ?", dept),
 			ScopeRole, byTarget("target_id IN ?", roles))
+	if c := s.clearedRow(ctx, uid); c != nil {
+		q = q.Where("COALESCE(published_at, created_at) > ?", c.ClearedAt)
+	}
+	return q
+}
+
+// Clear 清空“我的公告”：公告本身不动，只记住当前时间点，之前发布的公告不再出现在
+// 该用户的列表、未读数与登录弹窗里；之后发布的新公告照常可见。
+func (s *Service) Clear(ctx context.Context, uid idgen.ID) error {
+	now := time.Now().UTC()
+	if c := s.clearedRow(ctx, uid); c != nil {
+		return s.db.WithContext(ctx).Model(&Clear{}).Where("id = ?", int64(c.ID)).Update("cleared_at", now).Error
+	}
+	err := s.db.WithContext(ctx).Create(&Clear{UserID: uid, ClearedAt: now}).Error
+	if err != nil { // 并发首次清空：唯一索引兜底，退化为更新
+		if c := s.clearedRow(ctx, uid); c != nil {
+			return s.db.WithContext(ctx).Model(&Clear{}).Where("id = ?", int64(c.ID)).Update("cleared_at", now).Error
+		}
+	}
+	return err
+}
+
+// clearedRow 是用户的清空记录；从未清空返回 nil。
+func (s *Service) clearedRow(ctx context.Context, uid idgen.ID) *Clear {
+	var row Clear
+	if err := s.db.WithContext(ctx).Where("user_id = ?", int64(uid)).Limit(1).Find(&row).Error; err != nil || row.ID == 0 {
+		return nil
+	}
+	return &row
 }
 
 // Popup 登录弹窗：重要且未读的公告，置顶优先，最多 2 条。

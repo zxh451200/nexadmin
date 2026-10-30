@@ -66,6 +66,15 @@ type Read struct {
 
 func (Read) TableName() string { return "sys_notice_read" }
 
+// Clear 对应 sys_notice_clear：用户“清空我的公告”的时间点，之前发布的公告对该用户隐身。
+type Clear struct {
+	database.TenantModel
+	UserID    idgen.ID `gorm:"not null"`
+	ClearedAt time.Time
+}
+
+func (Clear) TableName() string { return "sys_notice_clear" }
+
 // attachmentsJSON 保证附件始终是合法 JSON 数组。
 func attachmentsJSON(s string) json.RawMessage {
 	if strings.TrimSpace(s) == "" || !json.Valid([]byte(s)) {

@@ -88,6 +88,14 @@ defineMock([
   },
   {
     method: 'DELETE',
+    url: '/messages',
+    handler: () => {
+      items = []
+      return null
+    },
+  },
+  {
+    method: 'DELETE',
     url: '/messages/:id',
     handler: ({ params }) => {
       items = items.filter((m) => m.id !== params.id)

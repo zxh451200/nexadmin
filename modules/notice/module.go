@@ -29,6 +29,7 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	// 登录用户：弹窗、我的公告、标记已读
 	r.GET("/notices/popup", touch, h.Popup)
 	r.GET("/notices/mine", h.Mine)
+	r.DELETE("/notices/mine", h.ClearMine)
 	r.POST("/notices/:id/read", h.MarkRead)
 
 	// 管理端

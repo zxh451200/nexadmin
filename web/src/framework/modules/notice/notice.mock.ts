@@ -182,7 +182,13 @@ export function isVisible(n: Notice): boolean {
   return true
 }
 
-export const visibleNotices = () => items.filter(isVisible)
+/** 当前用户「清空我的公告」的时间点（mock 内存态） */
+let clearedAt: string | null = null
+
+export const visibleNotices = () =>
+  items
+    .filter(isVisible)
+    .filter((n) => !clearedAt || new Date(n.publishedAt ?? n.createdAt).getTime() > new Date(clearedAt).getTime())
 export const unreadNoticeCount = () => visibleNotices().filter((n) => !readByMe.has(n.id)).length
 
 const byTime = (a: Notice, b: Notice) =>
@@ -301,6 +307,14 @@ defineMock([
         readByMe.add(cur.id)
         items = items.map((x) => (x.id === cur.id ? { ...x, readCount: Math.min(x.totalCount, x.readCount + 1) } : x))
       }
+      return null
+    },
+  },
+  {
+    method: 'DELETE',
+    url: '/notices/mine',
+    handler: () => {
+      clearedAt = new Date().toISOString()
       return null
     },
   },

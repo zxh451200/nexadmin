@@ -94,6 +94,22 @@ export function useDeleteMessage() {
   })
 }
 
+export function useClearMessages() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: () => api.del('/messages'),
+    onSuccess: invalidate,
+  })
+}
+
+export function useClearNotices() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: () => api.del('/notices/mine'),
+    onSuccess: invalidate,
+  })
+}
+
 export function useReadNotice() {
   const invalidate = useInvalidate()
   return useMutation({
