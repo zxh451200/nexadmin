@@ -5,6 +5,5 @@ package modules
 import (
 	// nexadmin:modules:begin
 	_ "nexadmin/internal/modules/example"
-	_ "nexadmin/internal/modules/importer"
 	// nexadmin:modules:end
 )

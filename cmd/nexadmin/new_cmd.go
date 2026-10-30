@@ -123,6 +123,7 @@ func cmdNew(args []string, out io.Writer) error {
 	fl.StringVar(&o.Out, "out", "", "输出目录（默认 ../<名称>）")
 	fl.StringVar(&o.Module, "module", "", "Go 模块路径（默认 <名称>）")
 	fl.BoolVar(&o.WithPlugins, "with-plugins", false, "连同已安装的插件一起带上")
+	fl.BoolVar(&o.WithoutTotp, "without-totp", false, "不默认带上 totp（两步验证）插件")
 	fl.BoolVar(&o.Git, "git", false, "在新目录 git init 并提交初始版本")
 	// 允许名称写在选项前后：先取出第一个非选项参数
 	var pos []string
@@ -138,7 +139,7 @@ func cmdNew(args []string, out io.Writer) error {
 		rest = fl.Args()[1:]
 	}
 	if len(pos) != 1 {
-		return errors.New("用法: nexadmin new <名称> [--out <目录>] [--module <go模块路径>] [--with-plugins] [--git]")
+		return errors.New("用法: nexadmin new <名称> [--out <目录>] [--module <go模块路径>] [--with-plugins] [--without-totp] [--git]")
 	}
 	o.Name = pos[0]
 	root, err := findRoot()
@@ -204,6 +205,26 @@ func newProject(root string, o newOptions, out io.Writer) error {
 		}
 		if err := os.WriteFile(p, nw, 0o644); err != nil {
 			return err
+		}
+		// 两步验证是安全基线：默认随项目交付；--without-totp 可关闭。
+		if !o.WithoutTotp {
+			copied, err := copyDefaultPlugin(root, dst, "totp")
+			if err != nil {
+				return fmt.Errorf("复制默认插件 totp 失败: %w", err)
+			}
+			if copied {
+				raw, err := os.ReadFile(p)
+				if err != nil {
+					return err
+				}
+				nw, err := market.UpdatePluginsFile(raw, oldModule+"/plugins/totp", true)
+				if err != nil {
+					return err
+				}
+				if err := os.WriteFile(p, nw, 0o644); err != nil {
+					return err
+				}
+			}
 		}
 	}
 	nGo, err := rewriteModulePath(dst, o.Module)

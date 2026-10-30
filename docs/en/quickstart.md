@@ -16,7 +16,7 @@ go run ./cmd/nexadmin new myapp --out ../myapp --module example.com/myapp
 cd ../myapp
 ```
 
-Replace the name, output directory and Go module path. The destination must be absent or empty and outside the template directory. By default, this neither initializes Git nor commits, and **includes no plugins**. Do not add `--with-plugins` just to start business development with the template's development plugins and state.
+Replace the name, output directory and Go module path. The destination must be absent or empty and outside the template directory. By default, this neither initializes Git nor commits and includes **no plugins other than `totp`** (two-factor, part of the security baseline); pass `--without-totp` if you do not need MFA. Do not add `--with-plugins` just to start business development with the template's development plugins and state.
 
 Read the generated `AGENTS.md` and `.nexadmin.manifest.json`. Put backend business code in `internal/`, pages in `web/src/pages/`, migrations in `migrations/business/`, and configuration overrides in `config/config.yaml`. See the [Customization Guide](dev-guide.md) for upgrade boundaries.
 
@@ -83,7 +83,7 @@ go build ./... && go vet ./... && go test ./...
 
 ### Free Plugins (Ready to Go)
 
-**Default build scope**: the framework master and official release packages compile `totp` (two-factor) by default; `ldap` and the other free plugins are installed on demand. They do not conflict: LDAP verifies the password, TOTP asks for a code after login succeeds. Do not enable both `ldap` and `identity` directory sources at the same time — both register external authenticators, only one takes effect, which looks like "configured but not working".
+**Default build scope**: the framework master and official release packages compile `totp` (two-factor) by default, and `nexadmin new` includes it; `ldap` and the other free plugins are installed on demand. They do not conflict: LDAP verifies the password, TOTP asks for a code after login succeeds. Do not enable both `ldap` and `identity` directory sources at the same time — both register external authenticators, only one takes effect, which looks like "configured but not working".
 
 **What are free plugins?** General-purpose capabilities like Scheduled Jobs (cron), Code Generator (codegen), and Data Import (imports) are offered freely with the framework. They don't require license files or extra fees.
 

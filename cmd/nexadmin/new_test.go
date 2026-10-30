@@ -22,7 +22,7 @@ func wfile(t *testing.T, root, rel, content string) {
 	}
 }
 
-const tplPlugins = "package plugins\n\nimport (\n\t// nexadmin:plugins:begin\n\t_ \"nexadmin/plugins/cron\"\n\t// nexadmin:plugins:end\n)\n"
+const tplPlugins = "package plugins\n\nimport (\n\t// nexadmin:plugins:begin\n\t_ \"nexadmin/plugins/cron\"\n\t_ \"nexadmin/plugins/totp\"\n\t// nexadmin:plugins:end\n)\n"
 
 func makeTemplate(t *testing.T) string {
 	t.Helper()
@@ -33,8 +33,11 @@ func makeTemplate(t *testing.T) string {
 	wfile(t, r, "cmd/server/main.go", "package main\n\nimport _ \"nexadmin/plugins\"\n\nfunc main() {}\n")
 	wfile(t, r, "plugins/plugins.go", tplPlugins)
 	wfile(t, r, "plugins/cron/cron.go", "package cron\n")
+	wfile(t, r, "plugins/totp/plugin.go", "package totp\n\nimport \"nexadmin/core\"\n\nvar _ = core.Perm\n")
+	wfile(t, r, "plugins/totp/migrations/mysql/001_init.sql", "CREATE TABLE plg_totp_secret (id BIGINT);\n")
 	wfile(t, r, "web/src/plugins/.gitkeep", "")
 	wfile(t, r, "web/src/plugins/cron/index.ts", "x")
+	wfile(t, r, "web/src/plugins/totp/route.tsx", "export {}\n")
 	wfile(t, r, "web/package.json", "{\n  \"name\": \"nexadmin-web\",\n  \"dependencies\": {\"name\": \"x\"}\n}\n")
 	wfile(t, r, "web/node_modules/m/i.js", "x")
 	wfile(t, r, "web/dist/i.html", "x")
@@ -103,7 +106,34 @@ func TestNewExcludes(t *testing.T) {
 	}
 	pl := readStr(t, dst, "plugins/plugins.go")
 	if strings.Contains(pl, "cron") || !strings.Contains(pl, "nexadmin:plugins:begin") || !strings.Contains(pl, "nexadmin:plugins:end") {
-		t.Errorf("plugins.go 应清空导入并保留标记行:\n%s", pl)
+		t.Errorf("plugins.go 应清空非默认插件导入并保留标记行:\n%s", pl)
+	}
+	// 两步验证是安全基线：默认随项目交付，import 已按目标模块名改写。
+	for _, rel := range []string{"plugins/totp/plugin.go", "web/src/plugins/totp/route.tsx"} {
+		if !has(dst, rel) {
+			t.Errorf("默认应带上 %s", rel)
+		}
+	}
+	if !strings.Contains(pl, `_ "example.com/demo/plugins/totp"`) {
+		t.Errorf("plugins.go 应保留并改写 totp 导入:\n%s", pl)
+	}
+	if src := readStr(t, dst, "plugins/totp/plugin.go"); !strings.Contains(src, `"example.com/demo/core"`) {
+		t.Errorf("totp 源码 import 未改写:\n%s", src)
+	}
+}
+
+func TestNewWithoutTotp(t *testing.T) {
+	dst, _, err := newTo(t, makeTemplate(t), newOptions{Module: "example.com/demo", WithoutTotp: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, rel := range []string{"plugins/totp", "web/src/plugins/totp"} {
+		if has(dst, rel) {
+			t.Errorf("--without-totp 不应带上 %s", rel)
+		}
+	}
+	if pl := readStr(t, dst, "plugins/plugins.go"); strings.Contains(pl, "totp") {
+		t.Errorf("--without-totp 不应保留 totp 导入:\n%s", pl)
 	}
 }
 

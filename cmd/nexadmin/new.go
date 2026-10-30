@@ -28,6 +28,7 @@ type newOptions struct {
 	Out         string
 	Module      string
 	WithPlugins bool
+	WithoutTotp bool
 	Git         bool
 }
 
@@ -75,6 +76,23 @@ func newSkip(rel string, isDir bool, withPlugins bool) bool {
 		}
 	}
 	return false
+}
+
+// copyDefaultPlugin 复制默认随项目交付的插件（plugins/<id> 与 web/src/plugins/<id>）。
+// 最小模板可能不带该插件，此时返回 false 且不写导入。
+func copyDefaultPlugin(root, dst, id string) (bool, error) {
+	copied := false
+	for _, rel := range []string{filepath.Join("plugins", id), filepath.Join("web", "src", "plugins", id)} {
+		src := filepath.Join(root, rel)
+		if st, err := os.Stat(src); err != nil || !st.IsDir() {
+			continue
+		}
+		if _, err := copyTemplate(src, filepath.Join(dst, rel), true); err != nil {
+			return false, err
+		}
+		copied = true
+	}
+	return copied, nil
 }
 
 // copyTemplate 把 src 拷到 dst（保留文件权限，拒绝非常规文件），返回拷贝的文件数。

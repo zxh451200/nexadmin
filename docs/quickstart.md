@@ -16,7 +16,7 @@ go run ./cmd/nexadmin new myapp --out ../myapp --module example.com/myapp
 cd ../myapp
 ```
 
-把名称、输出目录与 Go module 路径替换成自己的值。输出目录须不存在或为空，且不能在母版目录内部。默认不初始化 Git、不提交，也**不带任何插件**；不要为开始业务开发加 `--with-plugins` 搬入母版的开发插件与状态。
+把名称、输出目录与 Go module 路径替换成自己的值。输出目录须不存在或为空，且不能在母版目录内部。默认不初始化 Git、不提交；除 `totp`（两步验证，安全基线）外**不带其他插件**，不需要 MFA 可加 `--without-totp`；不要为开始业务开发加 `--with-plugins` 搬入母版的开发插件与状态。
 
 先读生成项目的 `AGENTS.md` 与 `.nexadmin.manifest.json`。业务后端放 `internal/`，页面放 `web/src/pages/`，迁移放 `migrations/business/`，配置只覆盖 `config/config.yaml`；升级边界见[二次开发指南](二次开发指南.md)。
 
@@ -83,7 +83,7 @@ go build ./... && go vet ./... && go test ./...
 
 ### 免费版插件（立即生效）
 
-**默认编译范围**：框架母版与官方发行包默认编译 `totp`（两步验证）；`ldap` 及其余免费插件按需安装。二者不冲突：LDAP 校验密码，TOTP 在登录成功后要求动态码。但不要同时启用 `ldap` 与 `identity` 的目录登录源——两者都注册外部认证器，只会有一个生效，容易出现「配了却不生效」。
+**默认编译范围**：框架母版与官方发行包默认编译 `totp`（两步验证），`nexadmin new` 也会带上它；`ldap` 及其余免费插件按需安装。二者不冲突：LDAP 校验密码，TOTP 在登录成功后要求动态码。但不要同时启用 `ldap` 与 `identity` 的目录登录源——两者都注册外部认证器，只会有一个生效，容易出现「配了却不生效」。
 
 **什么是免费插件？** 定时任务 (cron)、代码生成器 (codegen)、数据导入 (imports) 等通用能力都免费提供，随框架一起开源。它们不需要授权文件，也不需要额外费用。
 
