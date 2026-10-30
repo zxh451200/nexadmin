@@ -185,14 +185,6 @@ function DefList() {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
-        <Can perm="workflow:edit">
-          <Button onClick={() => setEditing('new')}>
-            <Plus aria-hidden="true" />
-            {t('plugin_workflow.defCreate')}
-          </Button>
-        </Can>
-      </div>
       <DataTable
         columns={columns}
         data={defs.data?.list ?? []}
@@ -201,6 +193,14 @@ function DefList() {
         columnSettingsKey="plugin-workflow-defs"
         pagination={{ page, pageSize, total: defs.data?.total ?? 0, onChange: setPage }}
         emptyText={t('plugin_workflow.empty')}
+        toolbar={
+          <Can perm="workflow:edit">
+            <Button onClick={() => setEditing('new')}>
+              <Plus aria-hidden="true" />
+              {t('plugin_workflow.defCreate')}
+            </Button>
+          </Can>
+        }
         rowActions={(d) => (
           <Can perm="workflow:edit">
             <Button variant="ghost" size="icon" aria-label={t('common.edit')} onClick={() => setEditing(d)}>
