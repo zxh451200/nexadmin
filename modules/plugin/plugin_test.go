@@ -224,3 +224,50 @@ func TestPermissionBoundaries(t *testing.T) {
 		}
 	})
 }
+
+// 已安装列表带上市场目录里的分类，供前端按分类筛选；目录写坏时列表照常返回，只是没有分类。
+func TestListCarriesCatalogCategory(t *testing.T) {
+	m := mount(t)
+	dir := filepath.Join(m.Root(), "config")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	catalog := filepath.Join(dir, "plugin-market.yaml")
+	super := &auth.Claims{UserID: 1, Super: true}
+
+	read := func() map[string]string {
+		w := api(t, super, http.MethodGet, "/plugins", "")
+		if w.Code != http.StatusOK {
+			t.Fatalf("code=%d %s", w.Code, w.Body.String())
+		}
+		var body struct {
+			Data []struct {
+				ID       string `json:"id"`
+				Category string `json:"category"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+			t.Fatalf("解析响应失败: %v", err)
+		}
+		out := map[string]string{}
+		for _, p := range body.Data {
+			out[p.ID] = p.Category
+		}
+		return out
+	}
+
+	if err := os.WriteFile(catalog, []byte("plugins: [\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(); got[proID] != "" {
+		t.Errorf("目录损坏时应无分类，得到 %q", got[proID])
+	}
+
+	valid := "plugins:\n  - id: " + proID + "\n    name: demo-pro\n    edition: pro\n    repo: acme/demo-pro\n    category: security\n"
+	if err := os.WriteFile(catalog, []byte(valid), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(); got[proID] != "security" {
+		t.Errorf("分类应为 security，得到 %q", got[proID])
+	}
+}

@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { CheckCircle2, Download, ExternalLink, Loader2, RefreshCw, Search, Store, Trash2, XCircle } from 'lucide-react'
+import { CheckCircle2, Download, ExternalLink, Loader2, RefreshCw, Store, Trash2, XCircle } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { usePermission } from '@/framework/auth/usePermission'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/framework/ui/card'
-import { Input } from '@/framework/ui/input'
 import { Skeleton } from '@/framework/ui/skeleton'
 import { Textarea } from '@/framework/ui/textarea'
+import { PluginFilterBar } from './FilterBar'
 import { LicenseDialog } from './LicenseDialog'
 import {
   MARKET_KEY,
@@ -261,42 +261,30 @@ export default function MarketTab({ focus = '' }: { focus?: string }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative w-64 max-w-full">
-          <Search className="absolute start-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-          <Input
-            className="ps-8"
-            placeholder={t('pluginMgr.market.search')}
-            value={keyword}
-            onChange={(e) => setKeyword(e.target.value)}
-          />
-        </div>
-        {categories.map((c) => (
-          <Button
-            key={c}
-            size="sm"
-            variant={category === c ? 'default' : 'outline'}
-            onClick={() => setCategory(category === c ? '' : c)}
-          >
-            {t(`pluginMgr.market.category.${c}`, c)}
-          </Button>
-        ))}
-        {canInstall ? (
-          <Button
-            size="sm"
-            variant="outline"
-            className="ms-auto"
-            disabled={rebuild.isPending}
-            onClick={() => {
-              setJobEdition(null)
-              rebuild.mutate(undefined, { onSuccess: (res) => setJobId(res.jobId) })
-            }}
-          >
-            <RefreshCw className={rebuild.isPending ? 'animate-spin' : ''} aria-hidden="true" />
-            {t('pluginMgr.market.rebuild')}
-          </Button>
-        ) : null}
-      </div>
+      <PluginFilterBar
+        keyword={keyword}
+        onKeyword={setKeyword}
+        placeholder={t('pluginMgr.market.search')}
+        category={category}
+        onCategory={setCategory}
+        categories={categories}
+        trailing={
+          canInstall ? (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={rebuild.isPending}
+              onClick={() => {
+                setJobEdition(null)
+                rebuild.mutate(undefined, { onSuccess: (res) => setJobId(res.jobId) })
+              }}
+            >
+              <RefreshCw className={rebuild.isPending ? 'animate-spin' : ''} aria-hidden="true" />
+              {t('pluginMgr.market.rebuild')}
+            </Button>
+          ) : null
+        }
+      />
 
       {isLoading ? (
         <div className="grid grid-cols-1 gap-3 md:gap-4 lg:grid-cols-2 xl:grid-cols-3">

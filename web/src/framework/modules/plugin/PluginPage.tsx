@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { AlertTriangle, KeyRound, Puzzle } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { AlertTriangle, KeyRound, Puzzle, Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 import { EmptyState } from '@/framework/components/EmptyState'
@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/framework/ui/card'
 import { Skeleton } from '@/framework/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/framework/ui/tabs'
 import { daysUntil, isExpiringSoon, usePlugins, type PluginInfo, type PluginStatus } from './api'
+import { PluginFilterBar } from './FilterBar'
 import { LicenseDialog } from './LicenseDialog'
 import MarketTab from './MarketTab'
 
@@ -24,16 +25,44 @@ const STATUS_VARIANT: Record<PluginStatus, 'success' | 'warning' | 'destructive'
   disabled: 'warning',
 }
 
+/** 市场目录未登记（第三方/手工安装）的已安装插件，单独归到「其他」分类。 */
+const OTHER_CATEGORY = '_other'
+
 function InstalledTab({ onLicense }: { onLicense: (p: PluginInfo) => void }) {
   const { t, i18n } = useTranslation()
   const { has } = usePermission()
   const { data = [], isLoading } = usePlugins()
   const canLicense = has('plugin:license')
+  const [keyword, setKeyword] = useState('')
+  const [category, setCategory] = useState('')
   const expiring = data.filter((p) => isExpiringSoon(p))
   const fmt = (iso?: string | null) => (iso ? new Date(iso).toLocaleDateString(i18n.language) : '—')
   // 插件名与简介在后端是固定中文，内置插件在自己的语言包里给了译名；未收录的第三方插件回落到后端文案。
   const shownName = (p: PluginInfo) => t(`plugin_${p.id.replaceAll('-', '_')}.title`, { defaultValue: p.name })
   const shownDesc = (p: PluginInfo) => (p.description ? t(`plugin_${p.id.replaceAll('-', '_')}.description`, { defaultValue: p.description }) : '')
+
+  const categories = useMemo(() => {
+    const set = new Set<string>()
+    data.forEach((p) => set.add(p.category || OTHER_CATEGORY))
+    return Array.from(set)
+  }, [data])
+
+  const list = useMemo(() => {
+    const kw = keyword.trim().toLowerCase()
+    return data.filter((p) => {
+      if (category && (p.category || OTHER_CATEGORY) !== category) return false
+      if (!kw) return true
+      const translated = t(`plugin_${p.id.replaceAll('-', '_')}.title`, { defaultValue: p.name })
+      return [p.name, translated, p.id, p.description ?? ''].some((s) => s.toLowerCase().includes(kw))
+    })
+  }, [data, keyword, category, t])
+
+  const filtering = !!keyword.trim() || !!category
+
+  const clearFilters = () => {
+    setKeyword('')
+    setCategory('')
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -49,6 +78,17 @@ function InstalledTab({ onLicense }: { onLicense: (p: PluginInfo) => void }) {
             </AlertDescription>
           </div>
         </Alert>
+      ) : null}
+
+      {!isLoading && data.length > 0 ? (
+        <PluginFilterBar
+          keyword={keyword}
+          onKeyword={setKeyword}
+          placeholder={t('pluginMgr.searchInstalled')}
+          category={category}
+          onCategory={setCategory}
+          categories={categories}
+        />
       ) : null}
 
       {isLoading ? (
@@ -68,9 +108,21 @@ function InstalledTab({ onLicense }: { onLicense: (p: PluginInfo) => void }) {
             />
           </CardContent>
         </Card>
+      ) : list.length === 0 ? (
+        <Card>
+          <CardContent className="py-10 text-center text-sm text-muted-foreground">
+            <Search className="mx-auto mb-3 h-6 w-6" aria-hidden="true" />
+            <p>{t('pluginMgr.market.nomatch')}</p>
+            {filtering ? (
+              <Button className="mt-3" size="sm" variant="outline" onClick={clearFilters}>
+                {t('pluginMgr.clearFilters')}
+              </Button>
+            ) : null}
+          </CardContent>
+        </Card>
       ) : (
         <div className="grid grid-cols-1 gap-3 md:gap-4 lg:grid-cols-2 xl:grid-cols-3">
-          {data.map((p) => {
+          {list.map((p) => {
             const soon = isExpiringSoon(p)
             const rows: [string, string][] = [
               [t('pluginMgr.field.customer'), p.customer || '—'],

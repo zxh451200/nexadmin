@@ -18,6 +18,8 @@ export interface PluginInfo {
   edition: PluginEdition
   description?: string
   status: PluginStatus
+  /** 市场目录里的分类；目录未登记该插件时为空 */
+  category?: string
   customer?: string
   /** 授权序列号；旧授权没有，无序列号的授权不能被吊销清单单独吊销 */
   serial?: string

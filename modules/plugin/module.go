@@ -58,7 +58,7 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 
 	r.GET("/plugins", requirePlatformUser, core.Perm(PermList), func(c *gin.Context) {
 		m.ObserveHost(c.Request.Host)
-		response.OK(c, m.List(c.Request.Context()))
+		response.OK(c, listPlugins(c.Request.Context(), m))
 	})
 
 	// 已启用（有授权并已挂载）的插件 ID：前端据此隐藏不可用的插件页面、跳过插件语言包加载。
@@ -111,6 +111,28 @@ func registerLicenseRoutes(r, public *gin.RouterGroup, m *plugin.Manager, viaApp
 			m.Dispatch(c, id)
 		})
 	}
+}
+
+// installedEntry 是已安装插件列表项：插件信息 + 市场目录里的分类。
+// 分类只用于界面筛选，目录缺失或写坏时留空，不影响授权管理。
+type installedEntry struct {
+	plugin.Info
+	Category string `json:"category"`
+}
+
+func listPlugins(ctx context.Context, m *plugin.Manager) []installedEntry {
+	infos := m.List(ctx)
+	categories := map[string]string{}
+	if entries, err := market.LoadCatalog(m.Root()); err == nil {
+		for _, e := range entries {
+			categories[e.ID] = e.Category
+		}
+	}
+	out := make([]installedEntry, 0, len(infos))
+	for _, p := range infos {
+		out = append(out, installedEntry{Info: p, Category: categories[p.ID]})
+	}
+	return out
 }
 
 // marketEntry 是市场页的列表项：目录条目 + 安装状态 + 运行期授权状态。

@@ -58,6 +58,8 @@
       "desc": "Run the command below in the project root, then rebuild and restart:"
     },
     "installCmd": "go run ./cmd/nexadmin plugin install <dir or zip>",
+    "searchInstalled": "Search name / ID",
+    "clearFilters": "Clear filters",
     "market": {
       "search": "Search plugins / repos",
       "install": "Install",
@@ -78,8 +80,10 @@
         "collaboration": "Collaboration",
         "business": "Business",
         "security": "Security",
+        "identity": "Identity",
         "devops": "Ops",
-        "ai": "AI"
+        "ai": "AI",
+        "_other": "Other"
       },
       "job": {
         "title": "Working",
