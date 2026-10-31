@@ -10,20 +10,27 @@ import (
 // 错误 key 即契约的 PAY_* 错误码（02-openapi-pay-v1.yaml ApiError.errorCode），
 // 文案单住 core/i18n/locales；HTTP 状态码沿用框架 response 口径。
 const (
-	errBizRequired            = "pay.PAY_INVALID_AMOUNT"
-	errInvalidAmount          = "pay.PAY_INVALID_AMOUNT"
-	errCurrencyUnsupported    = "pay.PAY_CURRENCY_UNSUPPORTED"
-	errFxRateMissing          = "pay.PAY_FX_RATE_MISSING"
-	errStateConflict          = "pay.PAY_STATE_CONFLICT"
-	errExpired                = "pay.PAY_EXPIRED"
-	errRefundExceeds          = "pay.PAY_REFUND_EXCEEDS"
-	errSignInvalid            = "pay.PAY_SIGN_INVALID"
-	errChannelUnavailable     = "pay.PAY_CHANNEL_UNAVAILABLE"
-	errChannelError           = "pay.PAY_CHANNEL_ERROR"
-	errNotFound               = "pay.PAY_NOT_FOUND"
-	errTenantMismatch         = "pay.PAY_TENANT_MISMATCH"
-	errIdempotencyConflict    = "pay.PAY_IDEMPOTENCY_CONFLICT"
-	errInternal               = "pay.PAY_INTERNAL"
+	errBizRequired         = "pay.PAY_INVALID_AMOUNT"
+	errInvalidAmount       = "pay.PAY_INVALID_AMOUNT"
+	errCurrencyUnsupported = "pay.PAY_CURRENCY_UNSUPPORTED"
+	errFxRateMissing       = "pay.PAY_FX_RATE_MISSING"
+	errStateConflict       = "pay.PAY_STATE_CONFLICT"
+	errExpired             = "pay.PAY_EXPIRED"
+	errRefundExceeds       = "pay.PAY_REFUND_EXCEEDS"
+	errSignInvalid         = "pay.PAY_SIGN_INVALID"
+	errChannelUnavailable  = "pay.PAY_CHANNEL_UNAVAILABLE"
+	errChannelError        = "pay.PAY_CHANNEL_ERROR"
+	errNotFound            = "pay.PAY_NOT_FOUND"
+	errTenantMismatch      = "pay.PAY_TENANT_MISMATCH"
+	errIdempotencyConflict = "pay.PAY_IDEMPOTENCY_CONFLICT"
+	errInternal            = "pay.PAY_INTERNAL"
+	// errCapabilityUnsupported 是渠道能力缺口（不支持退款查询/预授权/账单/代付/该币种
+	// 或该下单方式）。必须与「渠道拒绝了这笔操作」分开：前者是配置与产品签约问题，
+	// 用户要看的是「换渠道或去渠道侧签约」，后者才是业务重试。
+	errCapabilityUnsupported = "pay.PAY_CAPABILITY_UNSUPPORTED"
+	// errNotifyStale 是回调携带的业务时间超前于本地时钟：验签虽过，但报文可能是
+	// 伪造/时钟异常，拒绝入账留人工核对。
+	errNotifyStale            = "pay.PAY_NOTIFY_STALE"
 	errNotRefundable          = errStateConflict
 	errNotClosable            = errStateConflict
 	errRefundRejected         = errChannelError
@@ -52,6 +59,8 @@ const (
 	ResultSignInvalid    = "sign_invalid"
 	ResultOrderMissing   = "order_not_found"
 	ResultAmountMismatch = "amount_mismatch"
+	// ResultStale 是回调业务时间超前于本地时钟（伪造或时钟漂移），拒不入账。
+	ResultStale = "stale_notify"
 	// ResultIgnoredStatePrefix 后面拼资金单状态，例如 ignored_state_paid。
 	ResultIgnoredStatePrefix = "ignored_state_"
 )

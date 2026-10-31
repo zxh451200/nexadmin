@@ -198,6 +198,8 @@ pay:
   PAY_TENANT_MISMATCH: Pay order does not belong to the current tenant
   PAY_IDEMPOTENCY_CONFLICT: Idempotency key already used with a different request body
   PAY_INTERNAL: Pay internal error
+  PAY_CAPABILITY_UNSUPPORTED: This channel does not support the operation or currency; switch channel or sign up for the product on the channel side
+  PAY_NOTIFY_STALE: Callback timestamp is ahead of the server clock and was rejected; check server time and channel settings
   plugin_inactive: Pay plugin is not enabled or its license has lapsed
 crm:
   name_required: Customer name is required

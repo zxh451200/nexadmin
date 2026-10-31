@@ -126,6 +126,12 @@ type Refund struct {
 	FailReason      string     `gorm:"size:200;not null;default:''" json:"failReason"`
 	OperatorID      string     `gorm:"size:64;not null;default:''" json:"operatorId"`
 	SucceededAt     *time.Time `json:"succeededAt,omitempty"`
+	// IdempotencyKey 是发给渠道的退款幂等号；补偿查询必须带同一个号，渠道才认得出是同一笔。
+	IdempotencyKey string `gorm:"size:80;not null;default:''" json:"-"`
+	// 退款长期停在 pending 时（回调丢失）由 SyncStuckRefunds 主动查渠道收敛；
+	// 这两个字段是它的节流与留痕，不是业务状态。
+	SyncAttempts int        `gorm:"not null;default:0" json:"syncAttempts"`
+	LastSyncAt   *time.Time `json:"lastSyncAt,omitempty"`
 }
 
 func (Refund) TableName() string { return "plg_pay_refund" }
@@ -137,7 +143,10 @@ type Callback struct {
 	PaymentNo   string `gorm:"size:40;not null;default:'';index:idx_pay_callback_no,priority:2" json:"paymentNo"`
 	OK          bool   `json:"ok"`
 	Result      string `gorm:"size:32;not null;default:''" json:"result"`
-	Payload     string `gorm:"type:text" json:"-"`
+	// NotifyID 是渠道给这条通知的流水号，只做取证与排障检索，不做唯一约束
+	// （渠道会用同一个号重试几十小时，唯一索引会把一次配置修复变成永久丢单）。
+	NotifyID string `gorm:"size:128;not null;default:'';index:idx_pay_callback_notify" json:"notifyId"`
+	Payload  string `gorm:"type:text" json:"-"`
 }
 
 func (Callback) TableName() string { return "plg_pay_callback" }
@@ -146,29 +155,33 @@ func (Callback) TableName() string { return "plg_pay_callback" }
 // 只存卡号末四位，禁存卡号（pkg/mask BankCard 口径）。
 type Authorization struct {
 	database.TenantModel
-	AuthNo        string     `gorm:"size:40;not null;uniqueIndex:uk_pay_auth_no" json:"authNo"`
-	BizType       string     `gorm:"size:32;not null;uniqueIndex:uk_pay_auth_biz,priority:2" json:"bizType"`
-	BizNo         string     `gorm:"size:64;not null;uniqueIndex:uk_pay_auth_biz,priority:3" json:"bizNo"`
-	SubjectID     string     `gorm:"size:64;not null;default:''" json:"subjectId"`
-	ChannelCode   string     `gorm:"size:32;not null" json:"channelCode"`
-	Method        string     `gorm:"size:32;not null;default:''" json:"method"`
-	Status        string     `gorm:"size:20;not null;index" json:"status"`
-	AmountMinor   int64      `gorm:"not null" json:"amountMinor"`
-	CapturedMinor int64      `gorm:"not null;default:0" json:"capturedMinor"`
-	Currency      string     `gorm:"size:8;not null" json:"currency"`
-	FxRateMicro   int64      `gorm:"not null;default:1000000" json:"fxRateMicro"`
-	ChannelAuthNo string     `gorm:"size:128;not null;default:''" json:"channelAuthNo"`
-	CardLast4     string     `gorm:"size:8;not null;default:''" json:"cardLast4"`
-	Remark        string     `gorm:"size:500;not null;default:''" json:"remark"`
-	PaymentNo     string     `gorm:"size:40;not null;default:''" json:"paymentNo"`
-	ExpiresAt     *time.Time `json:"expiresAt,omitempty"`
-	VoidedAt      *time.Time `json:"voidedAt,omitempty"`
+	AuthNo        string `gorm:"size:40;not null;uniqueIndex:uk_pay_auth_no" json:"authNo"`
+	BizType       string `gorm:"size:32;not null;uniqueIndex:uk_pay_auth_biz,priority:2" json:"bizType"`
+	BizNo         string `gorm:"size:64;not null;uniqueIndex:uk_pay_auth_biz,priority:3" json:"bizNo"`
+	SubjectID     string `gorm:"size:64;not null;default:''" json:"subjectId"`
+	ChannelCode   string `gorm:"size:32;not null" json:"channelCode"`
+	Method        string `gorm:"size:32;not null;default:''" json:"method"`
+	Status        string `gorm:"size:20;not null;index" json:"status"`
+	AmountMinor   int64  `gorm:"not null" json:"amountMinor"`
+	CapturedMinor int64  `gorm:"not null;default:0" json:"capturedMinor"`
+	Currency      string `gorm:"size:8;not null" json:"currency"`
+	FxRateMicro   int64  `gorm:"not null;default:1000000" json:"fxRateMicro"`
+	ChannelAuthNo string `gorm:"size:128;not null;default:''" json:"channelAuthNo"`
+	// PayerID 是渠道侧买家标识（支付宝 buyer_id / buyer_logon_id）。真实渠道冻结
+	// 必须有它；mock 渠道可空。禁止存卡号以外的任何敏感凭据。
+	PayerID    string     `gorm:"size:128;not null;default:''" json:"payerId"`
+	CardLast4  string     `gorm:"size:8;not null;default:''" json:"cardLast4"`
+	Remark     string     `gorm:"size:500;not null;default:''" json:"remark"`
+	PaymentNo  string     `gorm:"size:40;not null;default:''" json:"paymentNo"`
+	FailReason string     `gorm:"size:200;not null;default:''" json:"failReason"`
+	ExpiresAt  *time.Time `json:"expiresAt,omitempty"`
+	VoidedAt   *time.Time `json:"voidedAt,omitempty"`
 }
 
 func (Authorization) TableName() string { return "plg_pay_auth" }
 
 // ReconcileTask 是一次对账任务（源自 nexHotel biz_reconcile_task 骨架）。
-// Phase 0 渠道金额由入参提供（source=manual），Phase 4 改为渠道账单 API 拉取。
+// source=manual 渠道金额由入参提供；source=channel 由 BillProvider 下载渠道账单。
 type ReconcileTask struct {
 	database.TenantModel
 	SubjectID         string `gorm:"size:64;not null;default:'';uniqueIndex:uk_pay_reconcile_task,priority:2" json:"subjectId"`
@@ -179,6 +192,11 @@ type ReconcileTask struct {
 	TotalChannelMinor int64  `gorm:"not null;default:0" json:"totalChannelMinor"`
 	DiffCount         int    `gorm:"not null;default:0" json:"diffCount"`
 	Source            string `gorm:"size:16;not null;default:'manual'" json:"source"`
+	// BillDigest 是渠道账单原文的 SHA-256（账单本体不落库，可达数 MB）；
+	// BillRows 是解析出的行数，用来区分「账单为空」与「解析失败」。
+	BillDigest string `gorm:"size:64;not null;default:''" json:"billDigest"`
+	BillRows   int    `gorm:"not null;default:0" json:"billRows"`
+	FailReason string `gorm:"size:200;not null;default:''" json:"failReason"`
 }
 
 func (ReconcileTask) TableName() string { return "plg_pay_reconcile_task" }
@@ -234,7 +252,8 @@ type Settlement struct {
 
 func (Settlement) TableName() string { return "plg_pay_settlement" }
 
-// PayoutBatch 是打款批次（人工回执号；渠道自动分账为 Phase 4）。
+// PayoutBatch 是打款批次：渠道支持代付（PayoutProvider）时走渠道转账，
+// 不支持时保留人工回执号（ReceiptNo）路径；两条路径都在此留痕。
 type PayoutBatch struct {
 	database.TenantModel
 	BatchNo         string     `gorm:"size:40;not null;uniqueIndex:uk_pay_payout_no" json:"batchNo"`
@@ -245,6 +264,9 @@ type PayoutBatch struct {
 	Method          string     `gorm:"size:32;not null;default:''" json:"method"`
 	Note            string     `gorm:"size:500;not null;default:''" json:"note"`
 	ReceiptNo       string     `gorm:"size:64;not null;default:''" json:"receiptNo"`
+	ChannelCode     string     `gorm:"size:32;not null;default:''" json:"channelCode"`
+	ChannelBatchNo  string     `gorm:"size:128;not null;default:''" json:"channelBatchNo"`
+	FailReason      string     `gorm:"size:200;not null;default:''" json:"failReason"`
 	PaidAt          *time.Time `json:"paidAt,omitempty"`
 }
 
@@ -253,15 +275,21 @@ func (PayoutBatch) TableName() string { return "plg_pay_payout_batch" }
 // PayoutItem 是批次明细；SettlementID 唯一，保证一张结算单只进一个批次。
 type PayoutItem struct {
 	database.TenantModel
-	BatchID      int64 `gorm:"not null;index" json:"batchId"`
-	SettlementID int64 `gorm:"not null;uniqueIndex:uk_pay_payout_item_settlement" json:"settlementId"`
-	NetMinor     int64 `gorm:"not null;default:0" json:"netMinor"`
+	BatchID      int64  `gorm:"not null;index" json:"batchId"`
+	SettlementID int64  `gorm:"not null;uniqueIndex:uk_pay_payout_item_settlement" json:"settlementId"`
+	NetMinor     int64  `gorm:"not null;default:0" json:"netMinor"`
+	ReceiverID   string `gorm:"size:128;not null;default:''" json:"receiverId"`
+	Status       string `gorm:"size:16;not null;default:'pending'" json:"status"`
+	ChannelNo    string `gorm:"size:128;not null;default:''" json:"channelNo"`
+	FailReason   string `gorm:"size:200;not null;default:''" json:"failReason"`
 }
 
 func (PayoutItem) TableName() string { return "plg_pay_payout_item" }
 
 // Outbox 是资金事件的持久化出站箱：与状态翻转同事务落库，随后进程内发布；
 // 进程内总线丢事件（缓冲满）时由 dispatcher 重投。事件载荷里禁放凭据。
+// 超过重试上限或载荷不可解析的行进 dead（死信），不再被 dispatcher 取走，
+// 由管理端人工重投或确认丢弃——静默标 sent 等于把丢事件伪装成投递成功。
 type Outbox struct {
 	database.TenantModel
 	EventID     string     `gorm:"size:40;not null;uniqueIndex:uk_pay_outbox_event" json:"eventId"`
@@ -269,8 +297,10 @@ type Outbox struct {
 	Payload     string     `gorm:"type:text" json:"-"`
 	Status      string     `gorm:"size:16;not null;index:idx_pay_outbox_retry,priority:1" json:"status"`
 	Attempts    int        `gorm:"not null;default:0" json:"attempts"`
+	LastError   string     `gorm:"size:500;not null;default:''" json:"lastError"`
 	NextRetryAt time.Time  `gorm:"not null;index:idx_pay_outbox_retry,priority:2" json:"nextRetryAt"`
 	SentAt      *time.Time `json:"sentAt,omitempty"`
+	DeadAt      *time.Time `json:"deadAt,omitempty"`
 }
 
 func (Outbox) TableName() string { return "plg_pay_outbox" }

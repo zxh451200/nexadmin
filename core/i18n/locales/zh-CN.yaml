@@ -198,6 +198,8 @@ pay:
   PAY_TENANT_MISMATCH: 资金单与当前租户不匹配
   PAY_IDEMPOTENCY_CONFLICT: 幂等键已用于不同的请求体
   PAY_INTERNAL: 支付中台内部错误
+  PAY_CAPABILITY_UNSUPPORTED: 该渠道不支持此操作或币种，请换渠道或在渠道侧签约该产品
+  PAY_NOTIFY_STALE: 回调时间超前于服务器时钟，已拒绝入账，请核对服务器时间与渠道配置
   plugin_inactive: 支付中台插件未启用或授权已失效
 crm:
   name_required: 客户名称不能为空
