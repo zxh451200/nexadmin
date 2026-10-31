@@ -20,6 +20,8 @@ export interface PluginInfo {
   status: PluginStatus
   /** 市场目录里的分类；目录未登记该插件时为空 */
   category?: string
+  /** 随二进制编译进来、不是本机安装的插件；false 表示本机通过市场/CLI 装过 */
+  bundled?: boolean
   customer?: string
   /** 授权序列号；旧授权没有，无序列号的授权不能被吊销清单单独吊销 */
   serial?: string

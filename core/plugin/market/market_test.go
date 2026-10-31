@@ -108,6 +108,9 @@ func TestInstallAndRemoveDir(t *testing.T) {
 	if !strings.Contains(read(t, filepath.Join(root, "plugins", "plugins.go")), `_ "nexadmin/plugins/demo-x"`) {
 		t.Fatal("plugins.go not updated")
 	}
+	if entries, err := LoadLedger(root); err != nil || len(entries) != 1 || entries[0].ID != "demo-x" || entries[0].Version == "" {
+		t.Fatalf("install must record the ledger: %v %v", entries, err)
+	}
 	if _, err := Install(root, pkg, false); err == nil {
 		t.Fatal("second install without --force must fail")
 	}
@@ -122,6 +125,9 @@ func TestInstallAndRemoveDir(t *testing.T) {
 	}
 	if exists(filepath.Join(root, "plugins", "demo-x")) || exists(filepath.Join(root, "web", "src", "plugins", "demo-x")) {
 		t.Fatal("files remain after remove")
+	}
+	if entries, err := LoadLedger(root); err != nil || len(entries) != 0 {
+		t.Fatalf("remove must clear the ledger: %v %v", entries, err)
 	}
 	if err := Remove(root, "../etc", false, io.Discard); err == nil {
 		t.Fatal("remove must reject illegal id")

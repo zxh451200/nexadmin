@@ -55,7 +55,17 @@
     },
     "empty": {
       "title": "尚未安装任何插件",
-      "desc": "在项目根目录执行以下命令安装插件，然后重新编译并重启："
+      "desc": "在项目根目录执行以下命令安装插件，然后重新编译并重启：",
+      "installed": {
+        "title": "还没有安装任何插件",
+        "desc": "内置插件开箱即用；更多能力请到「插件市场」安装。",
+        "action": "去插件市场"
+      }
+    },
+    "group": {
+      "installed": "已安装",
+      "bundled": "内置插件",
+      "bundledCount": "{{count}} 个"
     },
     "installCmd": "go run ./cmd/nexadmin plugin install <目录或 zip>",
     "searchInstalled": "搜索插件名称 / ID",

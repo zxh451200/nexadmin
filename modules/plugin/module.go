@@ -13,6 +13,7 @@ import (
 	"os"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"nexadmin/core"
@@ -118,6 +119,9 @@ func registerLicenseRoutes(r, public *gin.RouterGroup, m *plugin.Manager, viaApp
 type installedEntry struct {
 	plugin.Info
 	Category string `json:"category"`
+	// Bundled 表示随二进制编译进来、不是本机通过市场/CLI 安装的插件。
+	// 后台据此把「已安装」与「内置」分开列：全新项目已安装为空，内置插件照常可用。
+	Bundled bool `json:"bundled"`
 }
 
 func listPlugins(ctx context.Context, m *plugin.Manager) []installedEntry {
@@ -128,9 +132,23 @@ func listPlugins(ctx context.Context, m *plugin.Manager) []installedEntry {
 			categories[e.ID] = e.Category
 		}
 	}
+	ledger, err := market.LoadLedger(m.Root())
+	if err != nil {
+		// 台账损坏按「全部内置」处理：宁可少列，也不把内置插件误标成用户安装。
+		zap.L().Warn("plugin: 读取安装台账失败", zap.Error(err))
+	}
+	return classifyInstalled(infos, categories, ledger)
+}
+
+// classifyInstalled 把注册表里的插件分成「用户装过」与「内置」两类。
+func classifyInstalled(infos []plugin.Info, categories map[string]string, ledger []market.LedgerEntry) []installedEntry {
+	userInstalled := make(map[string]bool, len(ledger))
+	for _, e := range ledger {
+		userInstalled[e.ID] = true
+	}
 	out := make([]installedEntry, 0, len(infos))
 	for _, p := range infos {
-		out = append(out, installedEntry{Info: p, Category: categories[p.ID]})
+		out = append(out, installedEntry{Info: p, Category: categories[p.ID], Bundled: !userInstalled[p.ID]})
 	}
 	return out
 }

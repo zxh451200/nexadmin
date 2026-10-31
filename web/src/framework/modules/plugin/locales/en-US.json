@@ -55,7 +55,17 @@
     },
     "empty": {
       "title": "No plugins installed",
-      "desc": "Run the command below in the project root, then rebuild and restart:"
+      "desc": "Run the command below in the project root, then rebuild and restart:",
+      "installed": {
+        "title": "No plugins installed yet",
+        "desc": "Built-in plugins work out of the box; install more from the market.",
+        "action": "Browse the market"
+      }
+    },
+    "group": {
+      "installed": "Installed",
+      "bundled": "Built-in",
+      "bundledCount": "{{count}}"
     },
     "installCmd": "go run ./cmd/nexadmin plugin install <dir or zip>",
     "searchInstalled": "Search name / ID",

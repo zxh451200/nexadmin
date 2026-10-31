@@ -473,6 +473,9 @@ func InstallSub(root, src, sub string, force bool) (string, error) {
 	if err := os.WriteFile(goFile, newGo, 0o644); err != nil {
 		return "", err
 	}
+	if err := AddLedger(root, man.ID, man.Version); err != nil {
+		return "", fmt.Errorf("写入安装台账失败: %w", err)
+	}
 	return man.ID, nil
 }
 
@@ -518,6 +521,10 @@ func Remove(root, id string, purge bool, out io.Writer) error {
 		}
 	}
 	if !installed {
+		// 文件已不在（可能手工删过）：数据库已按需清理，台账里若还记着也一并清掉。
+		if err := RemoveLedger(root, id); err != nil {
+			return fmt.Errorf("更新安装台账失败: %w", err)
+		}
 		fmt.Fprintf(out, "插件 %s 未安装，仅清理了数据库。\n", id)
 		return nil
 	}
@@ -529,6 +536,9 @@ func Remove(root, id string, purge bool, out io.Writer) error {
 	}
 	if err := os.RemoveAll(dstWeb); err != nil {
 		return err
+	}
+	if err := RemoveLedger(root, id); err != nil {
+		return fmt.Errorf("更新安装台账失败: %w", err)
 	}
 	if purge {
 		fmt.Fprintf(out, "插件 %s 已移除并清理数据库（表已 DROP、菜单已删除；授权文件 data/licenses/%s.lic 保留，重装可复用）。请重新编译并重启。\n", id, id)
