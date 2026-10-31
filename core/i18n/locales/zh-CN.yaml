@@ -225,6 +225,7 @@ ticket:
   not_found: 工单不存在
   status_invalid: 工单状态无效
   illegal_transition: 当前状态不允许该操作
+  group_disabled: 分组已停用，不能转入
   assignee_invalid: 指派的处理人无效
   plugin_inactive: 工单插件未启用或授权已失效
 totp:

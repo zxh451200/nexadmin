@@ -9,13 +9,15 @@ import (
 )
 
 // 事件目录条目与载荷。宿主可订阅做通知（如新工单提醒、解决后回访）；
-// 工单是平台级（无租户），openapi webhook 分发器不会外发，集成走进程内订阅。
+// 事件租户取自请求上下文，后台清扫器按负责人所属租户发布 ticket.overdue，
+// 因此 openapi webhook 能按租户收到这些事件。
 const (
 	EventCreated  = "ticket.created"
 	EventReplied  = "ticket.replied"
 	EventResolved = "ticket.resolved"
 	EventClosed   = "ticket.closed"
 	EventRated    = "ticket.rated"
+	EventOverdue  = "ticket.overdue"
 )
 
 // CatalogInfos 是插件声明的事件目录条目（plugin.go init 时调用 event.Register）。
@@ -26,22 +28,25 @@ func CatalogInfos() []event.Info {
 		{Name: EventResolved, Description: "工单已标记解决"},
 		{Name: EventClosed, Description: "工单已关闭"},
 		{Name: EventRated, Description: "工单已评价"},
+		{Name: EventOverdue, Description: "工单已超时（SLA 违约）"},
 	}
 }
 
 // EventData 是 ticket.* 事件的载荷：只带定位字段与预览（前 120 字）。
 type EventData struct {
-	TicketNo   string    `json:"ticketNo"`
-	BizType    string    `json:"bizType,omitempty"`
-	BizNo      string    `json:"bizNo,omitempty"`
-	Status     string    `json:"status"`
-	Priority   string    `json:"priority"`
-	Title      string    `json:"title"`
-	SenderType string    `json:"senderType"`
-	SenderName string    `json:"senderName,omitempty"`
-	Seq        int64     `json:"seq,omitempty"`
-	Preview    string    `json:"preview,omitempty"`
-	Rating     int       `json:"rating,omitempty"`
+	TicketNo   string `json:"ticketNo"`
+	BizType    string `json:"bizType,omitempty"`
+	BizNo      string `json:"bizNo,omitempty"`
+	Status     string `json:"status"`
+	Priority   string `json:"priority"`
+	Title      string `json:"title"`
+	SenderType string `json:"senderType"`
+	SenderName string `json:"senderName,omitempty"`
+	Seq        int64  `json:"seq,omitempty"`
+	Preview    string `json:"preview,omitempty"`
+	Rating     int    `json:"rating,omitempty"`
+	// SLAKind 仅 ticket.overdue 使用：response=首响超时，resolution=解决超时。
+	SLAKind    string    `json:"slaKind,omitempty"`
 	OccurredAt time.Time `json:"occurredAt"`
 }
 

@@ -225,6 +225,7 @@ ticket:
   not_found: Ticket not found
   status_invalid: Invalid ticket status
   illegal_transition: This action is not allowed in the current state
+  group_disabled: This group is disabled and cannot receive tickets
   assignee_invalid: Invalid assignee
   plugin_inactive: Ticket plugin is not enabled or its license has lapsed
 totp:

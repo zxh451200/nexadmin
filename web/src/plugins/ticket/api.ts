@@ -1,5 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { api } from '@/framework/request/http'
+import { api, tokenStore } from '@/framework/request/http'
 import type { Page, PageQuery } from '@/framework/request/types'
 
 export type TicketStatus = 'open' | 'processing' | 'pending' | 'resolved' | 'closed'
@@ -19,6 +19,8 @@ export interface Ticket {
   reporterName: string
   creatorId?: string
   creatorName?: string
+  groupId?: string
+  groupName?: string
   assigneeId: string
   assigneeName: string
   firstReplyAt?: string | null
@@ -30,9 +32,12 @@ export interface Ticket {
   slaPausedAt?: string | null
   resolvedAt?: string | null
   closedAt?: string | null
+  resolutionDueAt?: string | null
+  resolutionOverdue?: boolean
   rating?: number | null
   ratingComment?: string
   ratedAt?: string | null
+  tags?: string[]
   createdAt: string
 }
 
@@ -57,11 +62,26 @@ export interface TicketQueryParams extends PageQuery {
   assigneeId?: string
   unassigned?: string
   mine?: string
+  groupId?: string
+  tag?: string
 }
 
 export interface RepliesResult {
   ticket: Ticket
   replies: TicketReply[]
+  attachments?: TicketAttachment[]
+}
+
+export interface TicketAttachment {
+  id: string
+  token: string
+  uploaderType: string
+  uploaderName: string
+  internal: boolean
+  name: string
+  mime: string
+  size: number
+  createdAt: string
 }
 
 export interface CreateTicketInput {
@@ -101,6 +121,56 @@ export interface CannedInput {
   sort?: number
 }
 
+export interface GroupMember {
+  id?: string
+  groupId: string
+  userId: string
+  userName: string
+}
+
+export interface TicketGroup {
+  id: string
+  name: string
+  description: string
+  autoAssign: boolean
+  enabled: boolean
+  sort: number
+  members?: GroupMember[]
+}
+
+export interface GroupInput {
+  name: string
+  description: string
+  autoAssign: boolean
+  enabled: boolean
+  sort: number
+}
+
+export interface TicketRule {
+  id: string
+  name: string
+  enabled: boolean
+  sort: number
+  matchPriority: string
+  matchBizType: string
+  matchKeyword: string
+  setPriority: string
+  setGroupId: string
+  note: string
+}
+
+export interface RuleInput {
+  name: string
+  enabled: boolean
+  sort: number
+  matchPriority: string
+  matchBizType: string
+  matchKeyword: string
+  setPriority: string
+  setGroupId: number
+  note: string
+}
+
 const BASE = '/plugins/ticket'
 const KEY = ['plugin_ticket'] as const
 
@@ -120,6 +190,34 @@ export function useReplies(ticketNo?: string) {
     enabled: !!ticketNo,
     refetchInterval: 3000,
   })
+}
+
+export function useUploadAttachment() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: ({ ticketNo, file, internal }: { ticketNo: string; file: File; internal?: boolean }) => {
+      const fd = new FormData()
+      fd.append('file', file)
+      if (internal) fd.append('internal', '1')
+      return api.post<TicketAttachment>(`${BASE}/tickets/${ticketNo}/attachments`, fd)
+    },
+    onSuccess: invalidate,
+  })
+}
+
+/** 附件下载要带登录头，不能直接用 <a href>；取回 blob 后触发浏览器下载。 */
+export async function downloadAttachment(ticketNo: string, att: TicketAttachment) {
+  const res = await fetch(`${BASE}/tickets/${ticketNo}/attachments/${att.token}`, {
+    headers: tokenStore.access ? { Authorization: `Bearer ${tokenStore.access}` } : undefined,
+  })
+  if (!res.ok) throw new Error('download failed')
+  const blob = await res.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = att.name
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 function useInvalidate() {
@@ -204,6 +302,137 @@ export function useDeleteCanned() {
   })
 }
 
+export function useGroups() {
+  return useQuery({
+    queryKey: [...KEY, 'groups'],
+    queryFn: () => api.get<TicketGroup[]>(`${BASE}/groups`),
+  })
+}
+
+export function useCreateGroup() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (input: GroupInput) => api.post<TicketGroup>(`${BASE}/groups`, input),
+    onSuccess: invalidate,
+  })
+}
+
+export function useUpdateGroup() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: ({ id, ...input }: GroupInput & { id: string }) => api.put<TicketGroup>(`${BASE}/groups/${id}`, input),
+    onSuccess: invalidate,
+  })
+}
+
+export function useDeleteGroup() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (id: string) => api.del<unknown>(`${BASE}/groups/${id}`),
+    onSuccess: invalidate,
+  })
+}
+
+export function useSetGroupMembers() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: ({ id, userIds }: { id: string; userIds: string[] }) =>
+      api.put<TicketGroup>(`${BASE}/groups/${id}/members`, { userIds: userIds.map(Number) }),
+    onSuccess: invalidate,
+  })
+}
+
+export function useAssignGroup() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: ({ ticketNo, groupId }: { ticketNo: string; groupId: number }) =>
+      api.post<Ticket>(`${BASE}/tickets/${ticketNo}/group`, { groupId }),
+    onSuccess: invalidate,
+  })
+}
+
+export function useRules() {
+  return useQuery({
+    queryKey: [...KEY, 'rules'],
+    queryFn: () => api.get<TicketRule[]>(`${BASE}/rules`),
+  })
+}
+
+/** 规则条件可用的业务类型候选：已有工单用过的 + 既有规则写过的，去重排序 */
+export function useBizTypes() {
+  return useQuery({
+    queryKey: [...KEY, 'biz-types'],
+    queryFn: () => api.get<string[]>(`${BASE}/biz-types`),
+  })
+}
+
+export function useCreateRule() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (input: RuleInput) => api.post<TicketRule>(`${BASE}/rules`, input),
+    onSuccess: invalidate,
+  })
+}
+
+export function useUpdateRule() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: ({ id, ...input }: RuleInput & { id: string }) => api.put<TicketRule>(`${BASE}/rules/${id}`, input),
+    onSuccess: invalidate,
+  })
+}
+
+export function useDeleteRule() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (id: string) => api.del<unknown>(`${BASE}/rules/${id}`),
+    onSuccess: invalidate,
+  })
+}
+
+export function useTicketTags() {
+  return useQuery({
+    queryKey: [...KEY, 'tags'],
+    queryFn: () => api.get<string[]>(`${BASE}/tags`),
+  })
+}
+
+export function useSetTicketTags() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: ({ ticketNo, tags }: { ticketNo: string; tags: string[] }) =>
+      api.put<Ticket>(`${BASE}/tickets/${ticketNo}/tags`, { tags }),
+    onSuccess: invalidate,
+  })
+}
+
+/** SLA 策略（与后端 /plugins/ticket/sla 一一对应） */
+export interface SLATarget {
+  firstMinutes: number
+  resolutionMinutes: number
+}
+export interface SLASetting {
+  workdays: number[]
+  startMinute: number
+  endMinute: number
+  targets: Record<string, SLATarget>
+}
+
+export function useSLA() {
+  return useQuery({
+    queryKey: [...KEY, 'sla'],
+    queryFn: () => api.get<SLASetting>(`${BASE}/sla`),
+  })
+}
+
+export function useSaveSLA() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (input: SLASetting) => api.put<SLASetting>(`${BASE}/sla`, input),
+    onSuccess: invalidate,
+  })
+}
+
 /** 工单统计（与后端 /plugins/ticket/tickets/stats 一一对应） */
 export interface StatsNameValue { name: string; value: number }
 export interface StatsDay { date: string; created: number; resolved: number }
@@ -213,6 +442,9 @@ export interface PrioritySla {
   total: number
   breached: number
   breachRate: number
+  resolutionTargetMinutes: number
+  resolutionBreached: number
+  resolutionBreachRate: number
 }
 export interface FirstResponseStats {
   responded: number

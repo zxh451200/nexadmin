@@ -6,6 +6,7 @@ package ticket
 
 import (
 	"context"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"nexadmin/core"
 	"nexadmin/core/event"
 	"nexadmin/core/plugin"
+	"nexadmin/core/storage"
 )
 
 // 建表由运行时执行 plugins/ticket/migrations/<引擎>/*.sql（安装时 CLI 拷贝），插件自己不做迁移。
@@ -54,6 +56,14 @@ func (m *module) service(d *core.Deps) *Service {
 			}
 			m.svc.WithNotify(d.Notify, lang)
 		}
+		// 附件：沿用框架 storage（local/S3），目录与其他上传隔离。
+		if d.Config != nil {
+			if st, err := storage.New(d.Config.Storage, filepath.Join(d.Config.DataDir, "uploads", "ticket")); err != nil {
+				l.Sugar().Warnw("ticket: attachment storage disabled", "err", err.Error())
+			} else {
+				m.svc.SetStorage(st)
+			}
+		}
 		SetDefault(m.svc)
 	})
 	return m.svc
@@ -63,7 +73,8 @@ func (*module) Name() string { return "ticket" }
 
 // Register 注册路由。
 func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
-	h := &handler{svc: m.service(d)}
+	svc := m.service(d)
+	h := &handler{svc: svc, store: svc.Storage()}
 	h.Register(r, d)
 }
 

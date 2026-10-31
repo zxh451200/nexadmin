@@ -46,4 +46,7 @@ func TestViewPageEscapesPrefill(t *testing.T) {
 	if !strings.Contains(body, "服务评价") || !strings.Contains(body, "/rating") {
 		t.Fatal("view page should render the CSAT block and rating endpoint")
 	}
+	if !strings.Contains(body, "附件") || !strings.Contains(body, "/attachments/") {
+		t.Fatal("view page should render the attachments block and download/upload endpoints")
+	}
 }

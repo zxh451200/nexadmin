@@ -1,7 +1,10 @@
 package ticket
 
 import (
+	"strings"
 	"time"
+
+	"gorm.io/gorm"
 
 	"nexadmin/core/database"
 	"nexadmin/pkg/idgen"
@@ -60,6 +63,8 @@ type Ticket struct {
 	// CreatorID/CreatorName 是后台代客建单的坐席；访客自建为 0/空。
 	CreatorID    idgen.ID `gorm:"not null;default:0" json:"creatorId"`
 	CreatorName  string   `gorm:"size:64" json:"creatorName"`
+	GroupID      idgen.ID `gorm:"not null;default:0" json:"groupId"`
+	GroupName    string   `gorm:"size:64" json:"groupName"`
 	AssigneeID   idgen.ID `gorm:"not null;default:0" json:"assigneeId"` // 0 = 未认领
 	AssigneeName string   `gorm:"size:64" json:"assigneeName"`
 	// ReplySeq 是回复的单调序号（回帖时行锁下 +1），客户端用 since=seq 增量拉取。
@@ -82,6 +87,25 @@ type Ticket struct {
 	Rating        *int       `json:"rating,omitempty"`
 	RatingComment string     `gorm:"size:500;not null;default:''" json:"ratingComment"`
 	RatedAt       *time.Time `json:"ratedAt,omitempty"`
+	// Tags 以逗号包裹存储（,vip,refund,），对外用 TagList 数组。
+	Tags    string   `gorm:"size:255;not null;default:''" json:"-"`
+	TagList []string `gorm:"-" json:"tags"`
+}
+
+// AfterFind 把存储串拆回标签数组，所有读路径（列表/详情/刷新）都自动生效。
+func (t *Ticket) AfterFind(*gorm.DB) error {
+	t.TagList = splitTags(t.Tags)
+	return nil
+}
+
+func splitTags(raw string) []string {
+	out := make([]string, 0, 4)
+	for _, part := range strings.Split(raw, ",") {
+		if part = strings.TrimSpace(part); part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
 }
 
 func (Ticket) TableName() string { return "plg_ticket" }

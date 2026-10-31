@@ -1,7 +1,7 @@
 id: ticket
 name: 工单中心
 version: 0.1.0
-description: 工单生命周期（open → processing ⇄ pending → resolved → closed，报告人回复自动重开）、优先级、认领改派、内部备注、快捷回复、SLA 停表与超时标记、ticket.* 事件；访客公开 API 可由宿主前台接入。
+description: 工单生命周期（open → processing ⇄ pending → resolved → closed，报告人回复自动重开）、优先级、分组队列与自动分派、自动化规则、认领改派、内部备注与附件、快捷回复、SLA 停表与首响/解决双时限、ticket.* 事件；访客公开 API 可由宿主前台接入。
 author: NexAdmin
 edition: pro
 requires_nexadmin: ">=0.1.0"

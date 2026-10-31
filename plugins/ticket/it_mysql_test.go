@@ -22,7 +22,10 @@ import (
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 
+	"nexadmin/core/event"
 	"nexadmin/core/notify"
+	"nexadmin/core/storage"
+	"nexadmin/pkg/idgen"
 )
 
 type fakeSender struct {
@@ -102,6 +105,28 @@ func TestITMySQLTicketOps(t *testing.T) {
 		t.Fatalf("open gorm: %v", err)
 	}
 	runTicketMigrations(t, gdb)
+
+	// 极简用户表：让负责人姓名/租户反查在真库上成立（真实项目由框架迁移提供）。
+	for _, stmt := range []string{
+		`CREATE TABLE sys_user (
+			id BIGINT NOT NULL,
+			tenant_id BIGINT NOT NULL,
+			username VARCHAR(64) NOT NULL DEFAULT '',
+			nickname VARCHAR(64) NOT NULL DEFAULT '',
+			status VARCHAR(2) NOT NULL DEFAULT '1',
+			is_super TINYINT(1) NOT NULL DEFAULT 0,
+			deleted_at DATETIME(3) NULL,
+			PRIMARY KEY (id)
+		)`,
+		`INSERT INTO sys_user (id, tenant_id, username, nickname, status) VALUES
+			(9, 1, 'agent9', 'Agent9', '1'),
+			(11, 1, 'alice', 'Alice', '1'),
+			(12, 1, 'bob', 'Bob', '1')`,
+	} {
+		if err := gdb.Exec(stmt).Error; err != nil {
+			t.Fatalf("seed sys_user: %v", err)
+		}
+	}
 
 	ctx := context.Background()
 	sender := &fakeSender{}
@@ -208,6 +233,17 @@ func TestITMySQLTicketOps(t *testing.T) {
 	if tk.Status != StatusProcessing || tk.ResolvedAt != nil {
 		t.Fatalf("reopen after resolved: %+v", tk)
 	}
+	if tk.Rating != nil {
+		t.Fatalf("rating should be cleared on reopen: %+v", tk.Rating)
+	}
+	// 再次解决并重新评价：重开清掉旧评价后允许二次评价
+	tk, err = svc.SetStatus(ctx, no, StatusResolved, "alice")
+	must(err)
+	ratedAgain, err := svc.Rate(ctx, no, RateInput{Score: 5})
+	must(err)
+	if ratedAgain.Rating == nil || *ratedAgain.Rating != 5 {
+		t.Fatalf("re-rating after reopen failed: %+v", ratedAgain)
+	}
 
 	// 快捷回复 CRUD
 	canned, err := svc.CreateCanned(ctx, CannedInput{Title: "refund", Content: "refund submitted"})
@@ -276,7 +312,271 @@ func TestITMySQLTicketOps(t *testing.T) {
 	if st.Total == 0 || st.Pending != 1 || st.Days == nil || st.ByStatus == nil || st.SlaByPrio == nil {
 		t.Fatalf("unexpected stats: %+v", st)
 	}
-	if st.Satisfaction.Rated != 1 || st.Satisfaction.AvgScore != 4 || len(st.Satisfaction.ByScore) != 5 {
+	if st.Satisfaction.Rated != 1 || st.Satisfaction.AvgScore != 5 || len(st.Satisfaction.ByScore) != 5 {
 		t.Fatalf("unexpected satisfaction stats: %+v", st.Satisfaction)
+	}
+
+	// 分组与自动分派：组内成员按未完结单最少优先，并列取较小 user_id
+	group, err := svc.CreateGroup(ctx, GroupInput{Name: "售后一组", AutoAssign: true, Enabled: true})
+	must(err)
+	view, err := svc.SetGroupMembers(ctx, group.ID, []idgen.ID{11, 12})
+	must(err)
+	if len(view.Members) != 2 {
+		t.Fatalf("group members: %+v", view.Members)
+	}
+	makeTicket := func(title string) *Ticket {
+		row, err := svc.Create(ctx, CreateInput{Title: title, Content: "x", ReporterType: ReplierReporter})
+		must(err)
+		return row
+	}
+	a := makeTicket("auto a")
+	if a.GroupID != group.ID || int64(a.AssigneeID) != 11 {
+		t.Fatalf("first auto assign: %+v", a)
+	}
+	b := makeTicket("auto b")
+	if int64(b.AssigneeID) != 12 {
+		t.Fatalf("second auto assign should pick the other member: %+v", b)
+	}
+	c := makeTicket("auto c")
+	if int64(c.AssigneeID) != 11 {
+		t.Fatalf("tie should pick the smaller user id: %+v", c)
+	}
+
+	// 改名要同步工单上的冗余组名；停用后不能转入，但存量工单仍可移出
+	if _, err := svc.UpdateGroup(ctx, group.ID, GroupInput{Name: "售后一组（改名）", AutoAssign: true, Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	var renamed Ticket
+	if err := gdb.Where("ticket_no = ?", a.TicketNo).Take(&renamed).Error; err != nil {
+		t.Fatal(err)
+	}
+	if renamed.GroupName != "售后一组（改名）" {
+		t.Fatalf("rename should sync ticket group_name, got %q", renamed.GroupName)
+	}
+	if _, err := svc.UpdateGroup(ctx, group.ID, GroupInput{Name: "售后一组（改名）", AutoAssign: true, Enabled: false}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.AssignGroup(ctx, c.TicketNo, group.ID); err == nil || err.Error() != "ticket.group_disabled" {
+		t.Fatalf("disabled group should reject moving in with ticket.group_disabled, got %v", err)
+	}
+	if _, err := svc.CreateRule(ctx, RuleInput{Name: "指向停用组", Enabled: true, MatchKeyword: "x", SetGroupID: group.ID}); err == nil || err.Error() != "ticket.group_disabled" {
+		t.Fatalf("rule should not target a disabled group, got %v", err)
+	}
+
+	moved, err := svc.AssignGroup(ctx, c.TicketNo, 0)
+	must(err)
+	if moved.GroupID != 0 || moved.GroupName != "" {
+		t.Fatalf("move out of group: %+v", moved)
+	}
+	must(svc.DeleteGroup(ctx, group.ID))
+	var members int64
+	if err := gdb.Model(&GroupMember{}).Where("group_id = ?", int64(group.ID)).Count(&members).Error; err != nil {
+		t.Fatal(err)
+	}
+	if members != 0 {
+		t.Fatalf("group members should be deleted, got %d", members)
+	}
+	var kept Ticket
+	if err := gdb.Where("ticket_no = ?", a.TicketNo).Take(&kept).Error; err != nil {
+		t.Fatal(err)
+	}
+	if kept.GroupID != 0 || kept.GroupName != "" {
+		t.Fatalf("ticket should fall back to no group: %+v", kept)
+	}
+
+	// 自动化规则：高优先 → 升级为紧急 + 转组 + 内部备注；停用后不再生效
+	ruleGroup, err := svc.CreateGroup(ctx, GroupInput{Name: "规则组", AutoAssign: true, Enabled: true})
+	must(err)
+	_, err = svc.SetGroupMembers(ctx, ruleGroup.ID, []idgen.ID{11})
+	must(err)
+	rule, err := svc.CreateRule(ctx, RuleInput{
+		Name: "高优先转组", Enabled: true, MatchPriority: PriorityHigh,
+		SetPriority: PriorityUrgent, SetGroupID: ruleGroup.ID, Note: "自动规则已处理",
+	})
+	must(err)
+	applied, err := svc.Create(ctx, CreateInput{
+		Title: "urgent order", Content: "x", Priority: PriorityHigh, ReporterType: ReplierReporter,
+	})
+	must(err)
+	if applied.Priority != PriorityUrgent || applied.GroupID != ruleGroup.ID || int64(applied.AssigneeID) != 11 {
+		t.Fatalf("rule actions not applied: %+v", applied)
+	}
+	_, allRows2, err := svc.Replies(ctx, applied.TicketNo, 0, 100, true)
+	must(err)
+	noteFound := false
+	for _, row := range allRows2 {
+		if row.Internal && strings.Contains(row.Content, "自动规则已处理") {
+			noteFound = true
+		}
+	}
+	if !noteFound {
+		t.Fatalf("rule note missing: %+v", allRows2)
+	}
+	if _, err := svc.UpdateRule(ctx, rule.ID, RuleInput{
+		Name: "高优先转组", Enabled: false, MatchPriority: PriorityHigh,
+		SetPriority: PriorityUrgent, SetGroupID: ruleGroup.ID, Note: "自动规则已处理",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// 关掉组的自动分派，避免默认分派把“规则未生效”的断言带偏
+	if _, err := svc.UpdateGroup(ctx, ruleGroup.ID, GroupInput{Name: "规则组", Enabled: true, AutoAssign: false}); err != nil {
+		t.Fatal(err)
+	}
+	notApplied, err := svc.Create(ctx, CreateInput{
+		Title: "normal high", Content: "x", Priority: PriorityHigh, ReporterType: ReplierReporter,
+	})
+	must(err)
+	if notApplied.Priority != PriorityHigh || notApplied.GroupID != 0 {
+		t.Fatalf("disabled rule still applied: %+v", notApplied)
+	}
+	// 删除分组要清掉规则里对它的引用：只剩转组这一个动作的规则顺带停用，有其他动作的保持启用
+	groupOnly, err := svc.CreateRule(ctx, RuleInput{Name: "只转组", Enabled: true, MatchKeyword: "vip", SetGroupID: ruleGroup.ID})
+	must(err)
+	withNote, err := svc.CreateRule(ctx, RuleInput{
+		Name: "转组加备注", Enabled: true, MatchKeyword: "vip", SetGroupID: ruleGroup.ID, Note: "已登记",
+	})
+	must(err)
+	must(svc.DeleteGroup(ctx, ruleGroup.ID))
+	afterDelete, err := svc.ListRules(ctx)
+	must(err)
+	if len(afterDelete) != 3 {
+		t.Fatalf("rules should survive group deletion, got %+v", afterDelete)
+	}
+	seenGroupOnly, seenNote := false, false
+	for _, r := range afterDelete {
+		if r.SetGroupID != 0 {
+			t.Fatalf("dangling group reference kept: %+v", r)
+		}
+		if r.ID == groupOnly.ID {
+			seenGroupOnly = !r.Enabled
+		}
+		if r.ID == withNote.ID {
+			seenNote = r.Enabled && r.Note == "已登记"
+		}
+	}
+	if !seenGroupOnly || !seenNote {
+		t.Fatalf("group deletion did not adjust rules: %+v", afterDelete)
+	}
+	must(svc.DeleteRule(ctx, groupOnly.ID))
+	must(svc.DeleteRule(ctx, withNote.ID))
+	must(svc.DeleteRule(ctx, rule.ID))
+	remaining, err := svc.ListRules(ctx)
+	must(err)
+	if len(remaining) != 0 {
+		t.Fatalf("rule should be deleted, got %+v", remaining)
+	}
+
+	// 规则条件的业务类型候选：由已用过的工单类型与既有规则派生，去重且不含空值
+	bizTicket, err := svc.Create(ctx, CreateInput{Title: "biz order", Content: "x", BizType: "order", ReporterType: ReplierReporter})
+	must(err)
+	if bizTicket.BizType != "order" {
+		t.Fatalf("ticket biz type: %+v", bizTicket)
+	}
+	if _, err := svc.Create(ctx, CreateInput{Title: "biz order 2", Content: "x", BizType: "order", ReporterType: ReplierReporter}); err != nil {
+		t.Fatal(err)
+	}
+	refundRule, err := svc.CreateRule(ctx, RuleInput{Name: "退款规则", Enabled: true, MatchBizType: "refund", Note: "退款待跟进"})
+	must(err)
+	options, err := svc.BizTypeOptions(ctx)
+	must(err)
+	if len(options) != 2 || options[0] != "order" || options[1] != "refund" {
+		t.Fatalf("biz type options should be derived and sorted, got %+v", options)
+	}
+	must(svc.DeleteRule(ctx, refundRule.ID))
+
+	// 附件登记与可见性：内部附件对访客不可见
+	store, err := storage.NewLocal(t.TempDir())
+	must(err)
+	svc.SetStorage(store)
+	attTicket := makeTicket("with attachments")
+	publicAtt, err := svc.SaveAttachment(ctx, attTicket.TicketNo, ReplierReporter, "visitor", false, "photo.png", "image/png", 1234, "202610/aaa.png")
+	must(err)
+	internalAtt, err := svc.SaveAttachment(ctx, attTicket.TicketNo, ReplierAgent, "alice", true, "note.txt", "text/plain", 12, "202610/bbb.txt")
+	must(err)
+	visitorAtts, err := svc.ListAttachments(ctx, attTicket.TicketNo, false)
+	must(err)
+	if len(visitorAtts) != 1 || visitorAtts[0].Token != publicAtt.Token {
+		t.Fatalf("visitor attachments: %+v", visitorAtts)
+	}
+	allAtts, err := svc.ListAttachments(ctx, attTicket.TicketNo, true)
+	must(err)
+	if len(allAtts) != 2 {
+		t.Fatalf("agent attachments: %+v", allAtts)
+	}
+	if _, err := svc.AttachmentByToken(ctx, attTicket.TicketNo, internalAtt.Token, false); err == nil {
+		t.Fatal("visitor must not resolve internal attachment")
+	}
+	if _, err := svc.AttachmentByToken(ctx, attTicket.TicketNo, internalAtt.Token, true); err != nil {
+		t.Fatalf("agent should resolve internal attachment: %v", err)
+	}
+	if attTicket.TicketNo == "" || publicAtt.Name != "photo.png" {
+		t.Fatalf("attachment metadata unexpected: %+v", publicAtt)
+	}
+
+	// 标签：规范化存储、按边界筛选
+	tagged, err := svc.SetTags(ctx, attTicket.TicketNo, []string{"vip", "refund", "vip"})
+	must(err)
+	if len(tagged.TagList) != 2 || tagged.TagList[0] != "vip" {
+		t.Fatalf("tags not normalized: %+v", tagged.TagList)
+	}
+	tags, err := svc.ListTags(ctx)
+	must(err)
+	if len(tags) != 2 {
+		t.Fatalf("distinct tags: %+v", tags)
+	}
+	filtered, total, err := svc.ListTickets(ctx, TicketQuery{Tag: "vip", Page: 1, PageSize: 10})
+	must(err)
+	if total != 1 || len(filtered) != 1 || filtered[0].TicketNo != attTicket.TicketNo {
+		t.Fatalf("tag filter: total=%d rows=%+v", total, filtered)
+	}
+	if _, total, err = svc.ListTickets(ctx, TicketQuery{Tag: "vi", Page: 1, PageSize: 10}); err != nil || total != 0 {
+		t.Fatalf("partial tag should not match: total=%d err=%v", total, err)
+	}
+	cleared, err := svc.SetTags(ctx, attTicket.TicketNo, nil)
+	must(err)
+	if len(cleared.TagList) != 0 {
+		t.Fatalf("tags not cleared: %+v", cleared.TagList)
+	}
+
+	// ticket.overdue 按负责人租户发布，openapi webhook 可订阅
+	events := make(chan event.Event, 16)
+	event.Subscribe(event.SubscriberFunc(func(e event.Event) {
+		if e.Name == EventOverdue {
+			events <- e
+		}
+	}))
+	overdueTk := makeTicket("sla overdue")
+	if _, err := svc.Assign(ctx, overdueTk.TicketNo, 11, "", 0); err != nil {
+		t.Fatal(err)
+	}
+	pastDue := time.Now().UTC().Add(-2 * time.Hour)
+	if err := gdb.Model(&Ticket{}).Where("ticket_no = ?", overdueTk.TicketNo).
+		Updates(map[string]any{"due_at": pastDue, "overdue": false, "status": StatusOpen}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.MarkOverdue(ctx, time.Now().UTC()); err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	deadline := time.After(3 * time.Second)
+loop:
+	for {
+		select {
+		case ev := <-events:
+			data, ok := ev.Data.(EventData)
+			if !ok || data.TicketNo != overdueTk.TicketNo {
+				continue
+			}
+			if ev.TenantID != 1 || data.SLAKind != "response" {
+				t.Fatalf("unexpected overdue event: tenant=%d data=%+v", ev.TenantID, data)
+			}
+			found = true
+			break loop
+		case <-deadline:
+			break loop
+		}
+	}
+	if !found {
+		t.Fatal("ticket.overdue event not published")
 	}
 }

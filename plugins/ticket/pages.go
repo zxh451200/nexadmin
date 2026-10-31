@@ -53,22 +53,26 @@ a{color:#1d4ed8}
 `
 
 type pageStrings struct {
-	Required    string            `json:"required"`
-	Submitting  string            `json:"submitting"`
-	Failed      string            `json:"failed"`
-	Success     string            `json:"success"`
-	NotFound    string            `json:"notFound"`
-	NoReplies   string            `json:"noReplies"`
-	Reporter    string            `json:"reporter"`
-	RateTitle   string            `json:"rateTitle"`
-	RateHint    string            `json:"rateHint"`
-	RateComment string            `json:"rateComment"`
-	RateSubmit  string            `json:"rateSubmit"`
-	RateThanks  string            `json:"rateThanks"`
-	RatedLabel  string            `json:"ratedLabel"`
-	RateFailed  string            `json:"rateFailed"`
-	Status      map[string]string `json:"status"`
-	Priority    map[string]string `json:"priority"`
+	Required     string            `json:"required"`
+	Submitting   string            `json:"submitting"`
+	Failed       string            `json:"failed"`
+	Success      string            `json:"success"`
+	NotFound     string            `json:"notFound"`
+	NoReplies    string            `json:"noReplies"`
+	Reporter     string            `json:"reporter"`
+	RateTitle    string            `json:"rateTitle"`
+	RateHint     string            `json:"rateHint"`
+	RateComment  string            `json:"rateComment"`
+	RateSubmit   string            `json:"rateSubmit"`
+	RateThanks   string            `json:"rateThanks"`
+	RatedLabel   string            `json:"ratedLabel"`
+	RateFailed   string            `json:"rateFailed"`
+	AttTitle     string            `json:"attTitle"`
+	AttAdd       string            `json:"attAdd"`
+	AttUploading string            `json:"attUploading"`
+	AttFailed    string            `json:"attFailed"`
+	Status       map[string]string `json:"status"`
+	Priority     map[string]string `json:"priority"`
 }
 
 var formTmpl = template.Must(template.New("form").Parse(`<!doctype html>
@@ -174,6 +178,7 @@ var viewTmpl = template.Must(template.New("view").Parse(`<!doctype html>
     <h2 id="ttl"></h2>
     <p id="meta" class="muted"></p>
     <div id="replies" class="card"></div>
+    <div id="atts" class="card" hidden></div>
     <div id="rate" class="card"></div>
   </section>
   <p id="msg" role="status"></p>
@@ -242,6 +247,52 @@ function renderRating(tk, no) {
   box.appendChild(submit);
   box.appendChild(msg);
 }
+function renderAttachments(tk, no, atts) {
+  const box = document.getElementById('atts');
+  box.innerHTML = '';
+  box.hidden = false;
+  box.appendChild(el('h2', S.attTitle));
+  if (!atts.length) {
+    box.appendChild(el('p', S.noReplies, 'muted'));
+  }
+  atts.forEach((a) => {
+    const p = el('p');
+    const link = document.createElement('a');
+    link.href = API + '/tickets/' + encodeURIComponent(no) + '/attachments/' + encodeURIComponent(a.token);
+    link.textContent = a.name + ' (' + Math.max(1, Math.round(a.size / 1024)) + ' KB)';
+    p.appendChild(link);
+    box.appendChild(p);
+  });
+  if (tk.status === 'closed') return;
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/png,image/jpeg,image/gif,image/webp,application/pdf,text/plain,.zip,.docx,.xlsx,.pptx';
+  const btn = el('button', S.attAdd);
+  btn.type = 'button';
+  const note = el('p', '');
+  btn.onclick = async () => {
+    const f = input.files && input.files[0];
+    if (!f) return;
+    btn.disabled = true;
+    note.className = 'muted';
+    note.textContent = S.attUploading;
+    try {
+      const fd = new FormData();
+      fd.append('file', f);
+      const res = await fetch(API + '/tickets/' + encodeURIComponent(no) + '/attachments', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok || data.code !== 0) throw new Error(data.message || S.attFailed);
+      load(no);
+    } catch (err) {
+      note.textContent = (err && err.message) || S.attFailed;
+      note.className = 'err';
+      btn.disabled = false;
+    }
+  };
+  box.appendChild(input);
+  box.appendChild(btn);
+  box.appendChild(note);
+}
 async function load(no) {
   msg.textContent = ''; out.hidden = true;
   try {
@@ -263,6 +314,7 @@ async function load(no) {
       box.appendChild(item);
     });
     renderRating(tk, no);
+    renderAttachments(tk, no, data.data.attachments || []);
     out.hidden = false;
   } catch (err) {
     msg.textContent = (err && err.message) || S.notFound;
@@ -311,6 +363,7 @@ func pageDict(en bool) pageStrings {
 			RateTitle: "Rate your support", RateHint: "How did we do?",
 			RateComment: "Anything to add? (optional)", RateSubmit: "Submit rating",
 			RateThanks: "Thanks for your feedback.", RatedLabel: "Your rating", RateFailed: "Rating failed, please try again.",
+			AttTitle: "Attachments", AttAdd: "Upload file", AttUploading: "Uploading…", AttFailed: "Upload failed, please try again.",
 			Status:   map[string]string{"open": "Open", "processing": "Processing", "pending": "Waiting on customer", "resolved": "Resolved", "closed": "Closed"},
 			Priority: map[string]string{"low": "Low", "normal": "Normal", "high": "High", "urgent": "Urgent"},
 		}
@@ -322,6 +375,7 @@ func pageDict(en bool) pageStrings {
 		RateTitle: "服务评价", RateHint: "问题解决得怎么样？",
 		RateComment: "补充说明（可选）", RateSubmit: "提交评价",
 		RateThanks: "感谢你的评价。", RatedLabel: "你的评价", RateFailed: "评价提交失败，请稍后重试。",
+		AttTitle: "附件", AttAdd: "上传附件", AttUploading: "上传中…", AttFailed: "上传失败，请稍后重试。",
 		Status:   map[string]string{"open": "待处理", "processing": "处理中", "pending": "待客户回复", "resolved": "已解决", "closed": "已关闭"},
 		Priority: map[string]string{"low": "低", "normal": "普通", "high": "高", "urgent": "紧急"},
 	}

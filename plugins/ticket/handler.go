@@ -10,13 +10,17 @@ import (
 	"nexadmin/core/auth"
 	"nexadmin/core/middleware"
 	"nexadmin/core/response"
+	"nexadmin/core/storage"
 	"nexadmin/pkg/idgen"
 )
 
 // 路由前缀：/api/v1/plugins/ticket。权限码：ticket:list 查看；ticket:reply 回复/认领；ticket:edit 状态与改派。
 // 访客公开接口挂在 d.Public（无登录），按 IP 限流；工单号是不可枚举的雪花 ID，充当能力令牌。
 
-type handler struct{ svc *Service }
+type handler struct {
+	svc   *Service
+	store storage.Storage
+}
 
 func respond(c *gin.Context, data any, err error) {
 	if err != nil {
@@ -34,7 +38,7 @@ func (h *handler) list(c *gin.Context) {
 	uid, _ := claimsOperator(c)
 	q := TicketQuery{
 		Status: c.Query("status"), Priority: c.Query("priority"), BizType: c.Query("bizType"),
-		Keyword: c.Query("keyword"), Overdue: c.Query("overdue"),
+		Keyword: c.Query("keyword"), Overdue: c.Query("overdue"), Tag: c.Query("tag"),
 		Unassigned: c.Query("unassigned") == "1",
 		Page:       page, PageSize: size,
 	}
@@ -44,6 +48,11 @@ func (h *handler) list(c *gin.Context) {
 	if v := c.Query("assigneeId"); v != "" {
 		if id, err := strconv.ParseInt(v, 10, 64); err == nil {
 			q.AssigneeID = idgen.ID(id)
+		}
+	}
+	if v := c.Query("groupId"); v != "" {
+		if id, err := strconv.ParseInt(v, 10, 64); err == nil {
+			q.GroupID = idgen.ID(id)
 		}
 	}
 	list, total, err := h.svc.ListTickets(c.Request.Context(), q)
@@ -61,7 +70,12 @@ func (h *handler) replies(c *gin.Context) {
 		response.Fail(c, err)
 		return
 	}
-	response.OK(c, gin.H{"ticket": t, "replies": rows})
+	atts, err := h.svc.ListAttachments(c.Request.Context(), c.Param("no"), true)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, gin.H{"ticket": t, "replies": rows, "attachments": atts})
 }
 
 // POST /plugins/ticket/tickets/:no/replies  {"content":"...","internal":false} —— 坐席回复/内部备注。
@@ -152,7 +166,12 @@ func (h *handler) visitorGet(c *gin.Context) {
 		response.Fail(c, err)
 		return
 	}
-	response.OK(c, gin.H{"ticket": t, "replies": rows})
+	atts, err := h.svc.ListAttachments(c.Request.Context(), c.Param("no"), false)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, gin.H{"ticket": t, "replies": rows, "attachments": atts})
 }
 
 // POST /plugins/ticket/tickets/:no/replies —— 访客补充回复（resolved/closed 自动重开）。
@@ -274,6 +293,149 @@ func (h *handler) saveSLA(c *gin.Context) {
 	respond(c, st, err)
 }
 
+// GET /plugins/ticket/groups —— 分组与成员。
+func (h *handler) listGroups(c *gin.Context) {
+	rows, err := h.svc.ListGroups(c.Request.Context())
+	respond(c, rows, err)
+}
+
+// POST /plugins/ticket/groups {"name","description","autoAssign","enabled","sort"}
+func (h *handler) createGroup(c *gin.Context) {
+	var f GroupInput
+	if !response.BindJSON(c, &f) {
+		return
+	}
+	g, err := h.svc.CreateGroup(c.Request.Context(), f)
+	respond(c, g, err)
+}
+
+// PUT /plugins/ticket/groups/:id
+func (h *handler) updateGroup(c *gin.Context) {
+	id, ok := pathID(c)
+	if !ok {
+		return
+	}
+	var f GroupInput
+	if !response.BindJSON(c, &f) {
+		return
+	}
+	g, err := h.svc.UpdateGroup(c.Request.Context(), id, f)
+	respond(c, g, err)
+}
+
+// DELETE /plugins/ticket/groups/:id
+func (h *handler) deleteGroup(c *gin.Context) {
+	id, ok := pathID(c)
+	if !ok {
+		return
+	}
+	respond(c, gin.H{"id": id}, h.svc.DeleteGroup(c.Request.Context(), id))
+}
+
+// PUT /plugins/ticket/groups/:id/members {"userIds":[1,2]}
+func (h *handler) setGroupMembers(c *gin.Context) {
+	id, ok := pathID(c)
+	if !ok {
+		return
+	}
+	var f struct {
+		UserIDs []int64 `json:"userIds"`
+	}
+	if !response.BindJSON(c, &f) {
+		return
+	}
+	ids := make([]idgen.ID, 0, len(f.UserIDs))
+	for _, uid := range f.UserIDs {
+		if uid > 0 {
+			ids = append(ids, idgen.ID(uid))
+		}
+	}
+	view, err := h.svc.SetGroupMembers(c.Request.Context(), id, ids)
+	respond(c, view, err)
+}
+
+// POST /plugins/ticket/tickets/:no/group {"groupId":0} —— 0 表示移出分组。
+func (h *handler) assignGroup(c *gin.Context) {
+	var f struct {
+		GroupID int64 `json:"groupId"`
+	}
+	if !response.BindJSON(c, &f) {
+		return
+	}
+	t, err := h.svc.AssignGroup(c.Request.Context(), c.Param("no"), idgen.ID(f.GroupID))
+	respond(c, t, err)
+}
+
+// GET /plugins/ticket/rules —— 自动化规则列表。
+func (h *handler) listRules(c *gin.Context) {
+	rows, err := h.svc.ListRules(c.Request.Context())
+	respond(c, rows, err)
+}
+
+// GET /plugins/ticket/biz-types —— 规则条件可用的业务类型候选（由已有工单与既有规则派生）。
+func (h *handler) listBizTypes(c *gin.Context) {
+	rows, err := h.svc.BizTypeOptions(c.Request.Context())
+	respond(c, rows, err)
+}
+
+// POST /plugins/ticket/rules
+func (h *handler) createRule(c *gin.Context) {
+	var f RuleInput
+	if !response.BindJSON(c, &f) {
+		return
+	}
+	r, err := h.svc.CreateRule(c.Request.Context(), f)
+	respond(c, r, err)
+}
+
+// PUT /plugins/ticket/rules/:id
+func (h *handler) updateRule(c *gin.Context) {
+	id, ok := pathID(c)
+	if !ok {
+		return
+	}
+	var f RuleInput
+	if !response.BindJSON(c, &f) {
+		return
+	}
+	r, err := h.svc.UpdateRule(c.Request.Context(), id, f)
+	respond(c, r, err)
+}
+
+// DELETE /plugins/ticket/rules/:id
+func (h *handler) deleteRule(c *gin.Context) {
+	id, ok := pathID(c)
+	if !ok {
+		return
+	}
+	respond(c, gin.H{"id": id}, h.svc.DeleteRule(c.Request.Context(), id))
+}
+
+// GET /plugins/ticket/tags —— 使用中的标签（筛选与建议）。
+func (h *handler) listTags(c *gin.Context) {
+	rows, err := h.svc.ListTags(c.Request.Context())
+	respond(c, rows, err)
+}
+
+// PUT /plugins/ticket/tickets/:no/tags {"tags":["vip","refund"]}
+func (h *handler) setTags(c *gin.Context) {
+	var f TagsInput
+	if !response.BindJSON(c, &f) {
+		return
+	}
+	t, err := h.svc.SetTags(c.Request.Context(), c.Param("no"), f.Tags)
+	respond(c, t, err)
+}
+
+func pathID(c *gin.Context) (idgen.ID, bool) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || id <= 0 {
+		response.Fail(c, response.BadRequest("error.bad_request"))
+		return 0, false
+	}
+	return idgen.ID(id), true
+}
+
 // claimsOperator 取当前坐席的 ID 与显示名；未登录时返回 0/agent（调用方自行拒绝）。
 func claimsOperator(c *gin.Context) (idgen.ID, string) {
 	cl := auth.ClaimsFrom(c)
@@ -310,6 +472,8 @@ func (h *handler) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.POST("/tickets/:no/replies", core.Perm("ticket:reply"), d.OperLogMiddleware("ticket", "reply"), h.adminReply)
 	g.POST("/tickets/:no/status", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "update"), h.setStatus)
 	g.POST("/tickets/:no/assign", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "update"), h.assign)
+	g.POST("/tickets/:no/attachments", core.Perm("ticket:reply"), h.uploadAdmin)
+	g.GET("/tickets/:no/attachments/:token", core.Perm("ticket:list"), h.downloadAdmin)
 
 	g.GET("/canned", core.Perm("ticket:list"), h.listCanned)
 	g.POST("/canned", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "create"), h.createCanned)
@@ -318,6 +482,22 @@ func (h *handler) Register(r *gin.RouterGroup, d *core.Deps) {
 
 	g.GET("/sla", core.Perm("ticket:list"), h.getSLA)
 	g.PUT("/sla", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "update"), h.saveSLA)
+
+	g.GET("/groups", core.Perm("ticket:list"), h.listGroups)
+	g.POST("/groups", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "create"), h.createGroup)
+	g.PUT("/groups/:id", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "update"), h.updateGroup)
+	g.DELETE("/groups/:id", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "delete"), h.deleteGroup)
+	g.PUT("/groups/:id/members", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "update"), h.setGroupMembers)
+	g.POST("/tickets/:no/group", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "update"), h.assignGroup)
+
+	g.GET("/rules", core.Perm("ticket:list"), h.listRules)
+	g.GET("/biz-types", core.Perm("ticket:list"), h.listBizTypes)
+	g.POST("/rules", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "create"), h.createRule)
+	g.PUT("/rules/:id", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "update"), h.updateRule)
+	g.DELETE("/rules/:id", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "delete"), h.deleteRule)
+
+	g.GET("/tags", core.Perm("ticket:list"), h.listTags)
+	g.PUT("/tickets/:no/tags", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "update"), h.setTags)
 
 	// 访客公开接口：限流按 IP；路径带 /visitor 前缀与坐席接口分开——同一个 engine 上
 	// protected 与 Public 两组不能注册相同的 method+path，否则 gin 在 addRoute 时 panic。
@@ -330,6 +510,10 @@ func (h *handler) Register(r *gin.RouterGroup, d *core.Deps) {
 		middleware.RateLimit(d.Cache, d.Log, "ticket-reply", middleware.ByIP(), 30, time.Minute), h.visitorReply)
 	p.POST("/tickets/:no/rating",
 		middleware.RateLimit(d.Cache, d.Log, "ticket-rate", middleware.ByIP(), 10, time.Minute), h.visitorRate)
+	p.POST("/tickets/:no/attachments",
+		middleware.RateLimit(d.Cache, d.Log, "ticket-upload", middleware.ByIP(), 20, time.Minute), h.uploadVisitor)
+	p.GET("/tickets/:no/attachments/:token",
+		middleware.RateLimit(d.Cache, d.Log, "ticket-download", middleware.ByIP(), 120, time.Minute), h.downloadVisitor)
 
 	// 客户自助页挂在根路径：页面本身不需要登录，提交/查询仍走上面的公开 JSON 接口。
 	d.Root.GET("/ticket/new",

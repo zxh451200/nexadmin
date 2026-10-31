@@ -1,5 +1,5 @@
 import { defineMock } from '@/framework/request/mock'
-import type { CannedReply, Ticket, TicketReply } from './api'
+import type { CannedReply, SLASetting, Ticket, TicketAttachment, TicketGroup, TicketReply, TicketRule } from './api'
 
 const ago = (min: number) => new Date(Date.now() - min * 60_000).toISOString()
 
@@ -25,6 +25,8 @@ const mkTicket = (n: number, p: Partial<Ticket>): Ticket => ({
   reporterId: 'anon-1',
   reporterName: '微信用户 8127',
   creatorName: '',
+  groupId: '',
+  groupName: '',
   assigneeId: '0',
   assigneeName: '',
   firstReplyAt: null,
@@ -34,6 +36,8 @@ const mkTicket = (n: number, p: Partial<Ticket>): Ticket => ({
   overdue: false,
   rating: null,
   ratingComment: '',
+  tags: [],
+  resolutionOverdue: false,
   createdAt: at(n, 0),
   ...p,
 })
@@ -43,13 +47,16 @@ const tickets: Ticket[] = [
     status: 'pending',
     priority: 'high',
     creatorName: 'admin',
+    groupId: '901',
+    groupName: '售后一组',
     assigneeId: '7',
     assigneeName: 'admin',
     firstReplyAt: at(1, 50),
     lastPreview: '已收到，正在处理',
     slaPausedAt: at(1, 50),
+    tags: ['vip', '售后'],
   }),
-  mkTicket(2, { priority: 'urgent', overdue: true, lastPreview: '急：商品破损' }),
+  mkTicket(2, { priority: 'urgent', overdue: true, lastPreview: '急：商品破损', groupId: '902', groupName: '退款组', tags: ['refund'] }),
   mkTicket(3, { status: 'resolved', lastPreview: '问题已解决，请确认', resolvedAt: at(3, 95), rating: 5, ratingComment: '处理很快，感谢' }),
   mkTicket(4, { status: 'closed', priority: 'low', lastPreview: '感谢反馈', resolvedAt: at(4, 120), rating: 4 }),
   mkTicket(5, { bizType: '', bizNo: '', title: '咨询发票开具' }),
@@ -87,7 +94,83 @@ const canned: CannedReply[] = [
   { id: '802', title: '需要更多信息', content: '麻烦提供一下订单号和问题截图，方便我们定位。', sort: 1 },
 ]
 
+const attachments: Record<string, TicketAttachment[]> = {
+  TK743000000000000001: [
+    {
+      id: 'a1',
+      token: 'att-public-1',
+      uploaderType: 'reporter',
+      uploaderName: '微信用户 8127',
+      internal: false,
+      name: 'damage.jpg',
+      mime: 'image/jpeg',
+      size: 182734,
+      createdAt: at(1, 15),
+    },
+    {
+      id: 'a2',
+      token: 'att-internal-1',
+      uploaderType: 'agent',
+      uploaderName: 'admin',
+      internal: true,
+      name: 'warehouse.txt',
+      mime: 'text/plain',
+      size: 128,
+      createdAt: at(1, 55),
+    },
+  ],
+}
+
+const sla: SLASetting = {
+  workdays: [1, 2, 3, 4, 5, 6, 7],
+  startMinute: 0,
+  endMinute: 1440,
+  targets: {
+    urgent: { firstMinutes: 120, resolutionMinutes: 480 },
+    high: { firstMinutes: 480, resolutionMinutes: 1440 },
+    normal: { firstMinutes: 1440, resolutionMinutes: 4320 },
+    low: { firstMinutes: 4320, resolutionMinutes: 10080 },
+  },
+}
+
+const groups: TicketGroup[] = [
+  {
+    id: '901',
+    name: '售后一组',
+    description: '白天班',
+    autoAssign: true,
+    enabled: true,
+    sort: 0,
+    members: [
+      { groupId: '901', userId: '7', userName: 'admin' },
+      { groupId: '901', userId: '8', userName: '李工' },
+    ],
+  },
+  { id: '902', name: '退款组', description: '', autoAssign: false, enabled: true, sort: 1, members: [] },
+]
+
+const rules: TicketRule[] = [
+  {
+    id: '701',
+    name: '紧急单进退款组',
+    enabled: true,
+    sort: 0,
+    matchPriority: 'urgent',
+    matchBizType: '',
+    matchKeyword: '',
+    setPriority: '',
+    setGroupId: '902',
+    note: '',
+  },
+]
+
 const find = (no: string) => tickets.find((x) => x.ticketNo === no)
+// 规则只能指向启用的分组：与后端 checkRuleGroup 一致，停用或不存在的组都拒绝写入
+const assertRuleGroup = (gid: string) => {
+  if (!gid || gid === '0') return
+  const group = groups.find((g) => g.id === gid)
+  if (!group || !group.enabled) throw new Error('group unavailable')
+}
 const nextId = () => String(7432000000000000000n + BigInt(Date.now() % 1_000_000))
 
 defineMock([
@@ -106,6 +189,8 @@ defineMock([
       if (String(query.unassigned ?? '') === '1') rows = rows.filter((tk) => !tk.assigneeId || tk.assigneeId === '0')
       else if (String(query.mine ?? '') === '1') rows = rows.filter((tk) => tk.assigneeId === '7')
       else if (query.assigneeId) rows = rows.filter((tk) => tk.assigneeId === String(query.assigneeId))
+      if (query.groupId) rows = rows.filter((tk) => tk.groupId === String(query.groupId))
+      if (query.tag) rows = rows.filter((tk) => (tk.tags ?? []).includes(String(query.tag)))
       const page = Number(query.page ?? 1) || 1
       const pageSize = Number(query.pageSize ?? 20) || 20
       const start = (page - 1) * pageSize
@@ -127,6 +212,46 @@ defineMock([
         creatorName: 'admin',
         lastPreview: String(body.content ?? ''),
       })
+      // 自动化规则先跑：改优先级/转组/加内部备注
+      const notes: string[] = []
+      rules
+        .filter((r) => r.enabled)
+        .forEach((r) => {
+          const hit =
+            (!r.matchPriority || r.matchPriority === tk.priority) &&
+            (!r.matchBizType || r.matchBizType === tk.bizType) &&
+            (!r.matchKeyword || tk.title.toLowerCase().includes(r.matchKeyword.toLowerCase()))
+          if (!hit) return
+          if (r.setPriority) tk.priority = r.setPriority as Ticket['priority']
+          if (r.setGroupId && r.setGroupId !== '0') {
+            const group = groups.find((g) => g.id === r.setGroupId)
+            if (group && group.enabled) {
+              tk.groupId = group.id
+              tk.groupName = group.name
+              if (group.autoAssign && (!tk.assigneeId || tk.assigneeId === '0')) {
+                const member = group.members?.[0]
+                if (member) {
+                  tk.assigneeId = member.userId
+                  tk.assigneeName = member.userName
+                }
+              }
+            }
+          }
+          if (r.note) notes.push(r.note)
+        })
+      // 规则没分到组时，再走默认自动分派组
+      if (!tk.groupId) {
+        const auto = groups.find((g) => g.enabled && g.autoAssign)
+        if (auto) {
+          tk.groupId = auto.id
+          tk.groupName = auto.name
+          const member = auto.members?.[0]
+          if (member) {
+            tk.assigneeId = member.userId
+            tk.assigneeName = member.userName
+          }
+        }
+      }
       tickets.unshift(tk)
       replies[tk.ticketNo] = [
         {
@@ -139,6 +264,21 @@ defineMock([
           createdAt: tk.createdAt,
         },
       ]
+      notes.forEach((note, idx) => {
+        replies[tk.ticketNo] = [
+          ...(replies[tk.ticketNo] ?? []),
+          {
+            id: nextId(),
+            seq: 2 + idx,
+            replierType: 'system',
+            replierId: '',
+            replierName: 'rule',
+            content: note,
+            internal: true,
+            createdAt: new Date().toISOString(),
+          },
+        ]
+      })
       return tk
     },
   },
@@ -180,7 +320,28 @@ defineMock([
     handler: ({ params }) => {
       const tk = find(params.no)
       if (!tk) throw new Error('not found')
-      return { ticket: tk, replies: replies[params.no] ?? [] }
+      return { ticket: tk, replies: replies[params.no] ?? [], attachments: attachments[params.no] ?? [] }
+    },
+  },
+  {
+    method: 'POST',
+    url: '/plugins/ticket/tickets/:no/attachments',
+    handler: ({ params, body }) => {
+      const tk = find(params.no)
+      if (!tk) throw new Error('not found')
+      const row: TicketAttachment = {
+        id: nextId(),
+        token: `mock-att-${Date.now()}`,
+        uploaderType: 'agent',
+        uploaderName: 'admin',
+        internal: body?.internal === '1' || body?.internal === true,
+        name: String(body?.fileName ?? body?.name ?? 'attachment.png'),
+        mime: 'image/png',
+        size: Number(body?.size ?? 1024),
+        createdAt: new Date().toISOString(),
+      }
+      attachments[params.no] = [...(attachments[params.no] ?? []), row]
+      return row
     },
   },
   {
@@ -206,6 +367,11 @@ defineMock([
       if (!internal) {
         tk.lastPreview = r.content
         tk.lastReplierType = 'agent'
+        if (tk.status === 'resolved' || tk.status === 'closed') {
+          tk.rating = null
+          tk.ratingComment = ''
+          tk.ratedAt = null
+        }
         tk.status = 'pending'
         tk.slaPausedAt = r.createdAt
         if (tk.assigneeId === '0') {
@@ -229,6 +395,9 @@ defineMock([
         tk.slaPausedAt = null
         tk.resolvedAt = null
         tk.closedAt = null
+        tk.rating = null
+        tk.ratingComment = ''
+        tk.ratedAt = null
       }
       if (tk.status === 'resolved') tk.resolvedAt = new Date().toISOString()
       if (tk.status === 'closed') tk.closedAt = new Date().toISOString()
@@ -267,6 +436,215 @@ defineMock([
     method: 'GET',
     url: '/plugins/ticket/canned',
     handler: () => canned,
+  },
+  {
+    method: 'GET',
+    url: '/plugins/ticket/tags',
+    handler: () => {
+      const counts = new Map<string, number>()
+      tickets.forEach((tk) => (tk.tags ?? []).forEach((tag) => counts.set(tag, (counts.get(tag) ?? 0) + 1)))
+      return [...counts.entries()]
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+        .map(([name]) => name)
+    },
+  },
+  {
+    method: 'PUT',
+    url: '/plugins/ticket/tickets/:no/tags',
+    handler: ({ params, body }) => {
+      const tk = find(params.no)
+      if (!tk) throw new Error('not found')
+      const tags: string[] = []
+      const seen = new Set<string>()
+      if (Array.isArray(body.tags)) {
+        for (const raw of body.tags as unknown[]) {
+          const tag = String(raw).trim()
+          if (tag && !seen.has(tag)) {
+            seen.add(tag)
+            tags.push(tag)
+          }
+        }
+      }
+      tk.tags = tags.slice(0, 10)
+      return tk
+    },
+  },
+  {
+    method: 'GET',
+    url: '/plugins/ticket/rules',
+    handler: () => rules,
+  },
+  {
+    method: 'GET',
+    url: '/plugins/ticket/biz-types',
+    handler: () =>
+      [...new Set([...tickets.map((tk) => tk.bizType), ...rules.map((r) => r.matchBizType)])]
+        .filter((v) => v)
+        .sort(),
+  },
+  {
+    method: 'POST',
+    url: '/plugins/ticket/rules',
+    handler: ({ body }) => {
+      const setGroupId = String(body.setGroupId ?? '0')
+      assertRuleGroup(setGroupId)
+      const row: TicketRule = {
+        id: nextId(),
+        name: String(body.name ?? ''),
+        enabled: body.enabled !== false,
+        sort: Number(body.sort ?? rules.length),
+        matchPriority: String(body.matchPriority ?? ''),
+        matchBizType: String(body.matchBizType ?? ''),
+        matchKeyword: String(body.matchKeyword ?? ''),
+        setPriority: String(body.setPriority ?? ''),
+        setGroupId,
+        note: String(body.note ?? ''),
+      }
+      rules.push(row)
+      return row
+    },
+  },
+  {
+    method: 'PUT',
+    url: '/plugins/ticket/rules/:id',
+    handler: ({ params, body }) => {
+      const row = rules.find((r) => r.id === params.id)
+      if (!row) throw new Error('not found')
+      const setGroupId = String(body.setGroupId ?? '0')
+      assertRuleGroup(setGroupId)
+      row.name = String(body.name ?? row.name)
+      row.enabled = body.enabled !== false
+      row.sort = Number(body.sort ?? row.sort)
+      row.matchPriority = String(body.matchPriority ?? '')
+      row.matchBizType = String(body.matchBizType ?? '')
+      row.matchKeyword = String(body.matchKeyword ?? '')
+      row.setPriority = String(body.setPriority ?? '')
+      row.setGroupId = setGroupId
+      row.note = String(body.note ?? '')
+      return row
+    },
+  },
+  {
+    method: 'DELETE',
+    url: '/plugins/ticket/rules/:id',
+    handler: ({ params }) => {
+      const idx = rules.findIndex((r) => r.id === params.id)
+      if (idx >= 0) rules.splice(idx, 1)
+      return { id: params.id }
+    },
+  },
+  {
+    method: 'GET',
+    url: '/plugins/ticket/groups',
+    handler: () => groups,
+  },
+  {
+    method: 'POST',
+    url: '/plugins/ticket/groups',
+    handler: ({ body }) => {
+      const row: TicketGroup = {
+        id: nextId(),
+        name: String(body.name ?? ''),
+        description: String(body.description ?? ''),
+        autoAssign: body.autoAssign === true,
+        enabled: body.enabled !== false,
+        sort: Number(body.sort ?? groups.length),
+        members: [],
+      }
+      groups.push(row)
+      return row
+    },
+  },
+  {
+    method: 'PUT',
+    url: '/plugins/ticket/groups/:id',
+    handler: ({ params, body }) => {
+      const row = groups.find((g) => g.id === params.id)
+      if (!row) throw new Error('not found')
+      row.name = String(body.name ?? row.name)
+      row.description = String(body.description ?? row.description)
+      row.autoAssign = body.autoAssign === true
+      row.enabled = body.enabled !== false
+      row.sort = Number(body.sort ?? row.sort)
+      // 改名同步工单上的冗余组名（与后端一致）
+      tickets.forEach((tk) => {
+        if (tk.groupId === row.id) tk.groupName = row.name
+      })
+      return row
+    },
+  },
+  {
+    method: 'DELETE',
+    url: '/plugins/ticket/groups/:id',
+    handler: ({ params }) => {
+      const idx = groups.findIndex((g) => g.id === params.id)
+      if (idx >= 0) groups.splice(idx, 1)
+      tickets.forEach((tk) => {
+        if (tk.groupId === params.id) {
+          tk.groupId = ''
+          tk.groupName = ''
+        }
+      })
+      // 规则里对该组的引用一并清掉；只剩转组这一个动作的规则顺带停用（与后端一致）
+      rules.forEach((r) => {
+        if (r.setGroupId !== params.id) return
+        r.setGroupId = '0'
+        if (!r.setPriority && !r.note) r.enabled = false
+      })
+      return { id: params.id }
+    },
+  },
+  {
+    method: 'PUT',
+    url: '/plugins/ticket/groups/:id/members',
+    handler: ({ params, body }) => {
+      const row = groups.find((g) => g.id === params.id)
+      if (!row) throw new Error('not found')
+      const ids: string[] = Array.isArray(body.userIds) ? body.userIds.map(String) : []
+      row.members = ids.map((uid) => ({
+        groupId: row.id,
+        userId: uid,
+        userName: uid === '7' ? 'admin' : `用户 ${uid}`,
+      }))
+      return row
+    },
+  },
+  {
+    method: 'POST',
+    url: '/plugins/ticket/tickets/:no/group',
+    handler: ({ params, body }) => {
+      const tk = find(params.no)
+      if (!tk) throw new Error('not found')
+      const gid = String(body.groupId ?? '0')
+      const group = groups.find((g) => g.id === gid)
+      if (group && !group.enabled) throw new Error('group disabled')
+      tk.groupId = group ? group.id : ''
+      tk.groupName = group ? group.name : ''
+      if (group?.autoAssign && (!tk.assigneeId || tk.assigneeId === '0')) {
+        const member = group.members?.[0]
+        if (member) {
+          tk.assigneeId = member.userId
+          tk.assigneeName = member.userName
+        }
+      }
+      return tk
+    },
+  },
+  {
+    method: 'GET',
+    url: '/plugins/ticket/sla',
+    handler: () => sla,
+  },
+  {
+    method: 'PUT',
+    url: '/plugins/ticket/sla',
+    handler: ({ body }) => {
+      sla.workdays = Array.isArray(body.workdays) ? [...body.workdays] : sla.workdays
+      sla.startMinute = Number(body.startMinute ?? sla.startMinute)
+      sla.endMinute = Number(body.endMinute ?? sla.endMinute)
+      sla.targets = body.targets ?? sla.targets
+      return sla
+    },
   },
   {
     method: 'POST',
@@ -396,10 +774,13 @@ defineMock([
           .sort((a, b) => a[0].localeCompare(b[0]))
           .map(([priority, v]) => ({
             priority,
-            targetMinutes: slaMin[priority] ?? slaMin.normal,
+            targetMinutes: sla.targets[priority]?.firstMinutes ?? slaMin[priority] ?? slaMin.normal,
             total: v.total,
             breached: v.breached,
             breachRate: v.total ? Math.round((v.breached / v.total) * 1000) / 10 : 0,
+            resolutionTargetMinutes: sla.targets[priority]?.resolutionMinutes ?? 1440,
+            resolutionBreached: 0,
+            resolutionBreachRate: 0,
           })),
       }
     },

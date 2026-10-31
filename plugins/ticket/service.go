@@ -14,6 +14,7 @@ import (
 
 	"nexadmin/core/notify"
 	"nexadmin/core/response"
+	"nexadmin/core/storage"
 	"nexadmin/core/tenant"
 	"nexadmin/pkg/idgen"
 )
@@ -29,6 +30,8 @@ type Service struct {
 	lang     string
 	// sla 是进程内缓存的 SLA 策略（插件启动时载入，保存时刷新）。
 	sla atomic.Pointer[SLASetting]
+	// store 是附件存储（local/S3）；未配置时为 nil，附件接口返回服务不可用。
+	store storage.Storage
 }
 
 // msgSender 是 core/notify 的最小面（测试注入假实现）。
@@ -149,6 +152,9 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Ticket, error) {
 	if err != nil {
 		return nil, err
 	}
+	// 自动化规则先跑；规则没分到组时再走默认自动分派；最后发事件与新单提醒。
+	s.applyRules(ctx, t)
+	s.autoAssignGroup(ctx, t)
 	s.publish(ctx, EventCreated, t, EventData{
 		SenderType: in.ReporterType, SenderName: in.ReporterName, Seq: 1, Preview: preview(in.Content),
 	})
@@ -178,7 +184,7 @@ func (s *Service) Reply(ctx context.Context, ticketNo string, in ReplyInput) (*T
 		return nil, nil, response.BadRequest("ticket.replier_invalid")
 	case in.Content == "":
 		return nil, nil, response.BadRequest("ticket.content_required")
-	case in.Internal && in.ReplierType != ReplierAgent:
+	case in.Internal && in.ReplierType == ReplierReporter:
 		return nil, nil, response.BadRequest("error.forbidden")
 	}
 	in.Content = truncate(in.Content, 2000)
@@ -243,6 +249,9 @@ func (s *Service) Reply(ctx context.Context, ticketNo string, in ReplyInput) (*T
 				updates["overdue"] = false
 				updates["resolution_due_at"] = businessDue(now, target.ResolutionMinutes, sla, loc)
 				updates["resolution_overdue"] = false
+				updates["rating"] = nil
+				updates["rating_comment"] = ""
+				updates["rated_at"] = nil
 			} else if t.ResolutionDueAt == nil {
 				updates["resolution_due_at"] = businessDue(now, target.ResolutionMinutes, sla, loc)
 			}
@@ -265,6 +274,9 @@ func (s *Service) Reply(ctx context.Context, ticketNo string, in ReplyInput) (*T
 				updates["sla_paused_at"] = nil
 				updates["overdue"] = false
 				updates["resolution_overdue"] = false
+				updates["rating"] = nil
+				updates["rating_comment"] = ""
+				updates["rated_at"] = nil
 				updates["due_at"] = businessDue(now, target.FirstMinutes, sla, loc)
 				updates["resolution_due_at"] = businessDue(now, target.ResolutionMinutes, sla, loc)
 			}
@@ -358,6 +370,9 @@ func (s *Service) SetStatus(ctx context.Context, ticketNo, to, operator string) 
 				updates["sla_paused_at"] = nil
 				updates["overdue"] = false
 				updates["resolution_overdue"] = false
+				updates["rating"] = nil
+				updates["rating_comment"] = ""
+				updates["rated_at"] = nil
 				updates["due_at"] = businessDue(now, target.FirstMinutes, sla, loc)
 				updates["resolution_due_at"] = businessDue(now, target.ResolutionMinutes, sla, loc)
 			}
@@ -489,6 +504,8 @@ type TicketQuery struct {
 	// AssigneeID > 0 只看该负责人；Unassigned 只看未分配（优先于 AssigneeID）。
 	AssigneeID idgen.ID
 	Unassigned bool
+	GroupID    idgen.ID
+	Tag        string
 	Page       int
 	PageSize   int
 }
@@ -512,6 +529,12 @@ func (s *Service) ListTickets(ctx context.Context, q TicketQuery) ([]Ticket, int
 		db = db.Where("assignee_id = ?", 0)
 	} else if q.AssigneeID != 0 {
 		db = db.Where("assignee_id = ?", int64(q.AssigneeID))
+	}
+	if q.GroupID != 0 {
+		db = db.Where("group_id = ?", int64(q.GroupID))
+	}
+	if tag := strings.TrimSpace(q.Tag); tag != "" {
+		db = db.Where("tags LIKE ?", "%,"+tag+",%")
 	}
 	if kw := strings.TrimSpace(q.Keyword); kw != "" {
 		like := "%" + kw + "%"
@@ -547,6 +570,7 @@ func (s *Service) MarkOverdue(ctx context.Context, now time.Time) (int64, error)
 		}
 		total += res.RowsAffected
 		s.notifyOverdue(ctx, respRows, "response")
+		s.publishOverdueEvents(ctx, respRows, "response")
 	}
 	resRows, err := s.findOverdueCandidates(ctx, true, now)
 	if err != nil {
@@ -559,6 +583,7 @@ func (s *Service) MarkOverdue(ctx context.Context, now time.Time) (int64, error)
 		}
 		total += res.RowsAffected
 		s.notifyOverdue(ctx, resRows, "resolution")
+		s.publishOverdueEvents(ctx, resRows, "resolution")
 	}
 	return total, nil
 }
@@ -866,6 +891,46 @@ func (s *Service) queryAgents(ctx context.Context, tid idgen.ID) ([]agentContact
 		Where("u.is_super = ? OR u.id IN (?)", true, holders).
 		Find(&rows).Error
 	return rows, err
+}
+
+// publishOverdueEvents 把超时工单按负责人所属租户发布 ticket.overdue，
+// 让 openapi webhook 与进程内订阅都能收到（清扫器自身没有租户上下文）。
+func (s *Service) publishOverdueEvents(ctx context.Context, rows []Ticket, kind string) {
+	if len(rows) == 0 {
+		return
+	}
+	ids := make([]int64, 0, len(rows))
+	for _, t := range rows {
+		if t.AssigneeID != 0 {
+			ids = append(ids, int64(t.AssigneeID))
+		}
+	}
+	if len(ids) == 0 {
+		return
+	}
+	var contacts []struct {
+		ID       idgen.ID `gorm:"column:id"`
+		TenantID idgen.ID `gorm:"column:tenant_id"`
+	}
+	if err := s.db.WithContext(tenant.Skip(ctx)).Table("sys_user").
+		Select("id, tenant_id").Where("id IN ?", ids).Scan(&contacts).Error; err != nil {
+		s.logWarn("ticket: resolve overdue assignee tenants failed", "err", err.Error())
+		return
+	}
+	tenantOf := make(map[idgen.ID]idgen.ID, len(contacts))
+	for _, c := range contacts {
+		tenantOf[c.ID] = c.TenantID
+	}
+	for _, t := range rows {
+		if t.AssigneeID == 0 {
+			continue
+		}
+		tid := tenantOf[t.AssigneeID]
+		if tid == 0 {
+			continue
+		}
+		s.publish(tenant.With(ctx, tid), EventOverdue, &t, EventData{SenderType: ReplierSystem, SLAKind: kind})
+	}
 }
 
 // notifyOverdue 超时提醒：清扫器没有租户上下文，按负责人反查所属租户后逐租户发送。
