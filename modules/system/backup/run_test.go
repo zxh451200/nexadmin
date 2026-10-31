@@ -38,6 +38,9 @@ func mockService(t *testing.T) (*Service, sqlmock.Sqlmock) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := idgen.Init(1); err != nil { // Start 要建雪花 ID 的备份记录
+		t.Fatal(err)
+	}
 	t.Cleanup(func() { _ = sqlDB.Close() })
 	db, err := gorm.Open(mysql.New(mysql.Config{Conn: sqlDB, SkipInitializeWithVersion: true}),
 		&gorm.Config{DisableAutomaticPing: true, Logger: logger.Default.LogMode(logger.Silent)})
@@ -62,7 +65,9 @@ func svcOn(db *gorm.DB, dir string) *Service {
 func TestStartWinsInsertsRunning(t *testing.T) {
 	s, mock := mockService(t)
 	mock.MatchExpectationsInOrder(true)
+	mock.ExpectBegin()
 	mock.ExpectExec("INSERT INTO `sys_backup_setting`").WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
 	mock.ExpectBegin()
 	mock.ExpectQuery("SELECT .* FROM `sys_backup_setting` WHERE .* FOR UPDATE").
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(settingID))
@@ -83,7 +88,9 @@ func TestStartWinsInsertsRunning(t *testing.T) {
 func TestStartBusyRollbackNoInsert(t *testing.T) {
 	s, mock := mockService(t)
 	mock.MatchExpectationsInOrder(true)
+	mock.ExpectBegin()
 	mock.ExpectExec("INSERT INTO `sys_backup_setting`").WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
 	mock.ExpectBegin()
 	mock.ExpectQuery("SELECT .* FROM `sys_backup_setting` WHERE .* FOR UPDATE").
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(settingID))
@@ -105,14 +112,18 @@ func TestTwoInstancesOnlyOneStarts(t *testing.T) {
 	s2 := svcOn(s1.db, t.TempDir()) // 第二个实例：共享同一库/mock，独立 mu/running
 	mock.MatchExpectationsInOrder(true)
 	// 实例 1：count=0 → 插入 → 提交
+	mock.ExpectBegin()
 	mock.ExpectExec("INSERT INTO `sys_backup_setting`").WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
 	mock.ExpectBegin()
 	mock.ExpectQuery("FOR UPDATE").WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(settingID))
 	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `sys_backup`").WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
 	mock.ExpectExec("INSERT INTO `sys_backup`").WillReturnResult(sqlmock.NewResult(7, 1))
 	mock.ExpectCommit()
 	// 实例 2：行锁后读到刚插入的 running（count=1）→ 回滚，不再插入
+	mock.ExpectBegin()
 	mock.ExpectExec("INSERT INTO `sys_backup_setting`").WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
 	mock.ExpectBegin()
 	mock.ExpectQuery("FOR UPDATE").WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(settingID))
 	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `sys_backup`").WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
@@ -138,15 +149,21 @@ func TestScheduledBusyReleasesDayClaim(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"id", "schedule", "keep_days", "keep_count", "last_run_date"}).
 			AddRow(settingID, "03:30", 7, 3, ""))
 	// 抢日期（rows=1）
+	mock.ExpectBegin()
 	mock.ExpectExec("UPDATE `sys_backup_setting` SET `last_run_date`").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
 	// Start：确保哨兵行 → 事务 → count=1（别的实例在跑）→ 回滚
+	mock.ExpectBegin()
 	mock.ExpectExec("INSERT INTO `sys_backup_setting`").WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
 	mock.ExpectBegin()
 	mock.ExpectQuery("FOR UPDATE").WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(settingID))
 	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `sys_backup`").WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
 	mock.ExpectRollback()
 	// 释放当天抢占
+	mock.ExpectBegin()
 	mock.ExpectExec("UPDATE `sys_backup_setting` SET `last_run_date`").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
 
 	s.Tick(context.Background())
 	if err := mock.ExpectationsWereMet(); err != nil {
@@ -162,7 +179,9 @@ func TestScheduledClaimLoserDoesNotStart(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"id", "schedule", "keep_days", "keep_count", "last_run_date"}).
 			AddRow(settingID, "03:30", 7, 3, ""))
 	// 抢日期失败：rows=0
+	mock.ExpectBegin()
 	mock.ExpectExec("UPDATE `sys_backup_setting` SET `last_run_date`").WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectCommit()
 	// 之后再无任何查询/写入。
 
 	s.Tick(context.Background())
