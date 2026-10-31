@@ -44,7 +44,8 @@ export function ScreensTab() {
   return (
     <div className="flex flex-col gap-4">
       <Can perm="report:screen">
-        <div className="flex justify-end">
+        {/* 与报表/图表/数据集三个标签页一致：新建按钮放在内容区左上，不靠右 */}
+        <div className="flex">
           <Button
             onClick={() => {
               setEditing(null)

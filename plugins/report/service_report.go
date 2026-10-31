@@ -199,6 +199,20 @@ func (s *Service) ListReports(ctx context.Context, keyword string, page, size in
 	return out, total, nil
 }
 
+// ListReportGroups 返回本租户已用过的报表分组（去重、去掉空值）。
+// 分组不单独建表：报表弹窗的下拉选项由这里派生，输入一个新名字并保存即成为新选项。
+func (s *Service) ListReportGroups(ctx context.Context) ([]string, error) {
+	tx, err := s.scoped(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := []string{}
+	if err := tx.Model(&ReportDef{}).Where("group_name <> ?", "").Distinct().Order("group_name").Pluck("group_name", &out).Error; err != nil {
+		return nil, dbErr(err)
+	}
+	return out, nil
+}
+
 // DeleteReport 删除报表。
 func (s *Service) DeleteReport(ctx context.Context, id idgen.ID) error {
 	if _, err := s.loadReport(ctx, id); err != nil {

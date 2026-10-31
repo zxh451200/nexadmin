@@ -66,6 +66,7 @@ func registerRoutes(r *gin.RouterGroup, h *handler) {
 	// 报表页
 	g.GET("/report-options/datasets", core.Perm("report:report"), h.datasetOptions)
 	g.GET("/report-options/charts", core.Perm("report:report"), h.chartOptions)
+	g.GET("/report-options/groups", core.Perm("report:report"), h.groupOptions)
 	g.GET("/reports", core.Perm("report:report"), h.listReports)
 	g.POST("/reports", core.Perm("report:report"), h.saveReport(0))
 	g.GET("/reports/:id", core.Perm("report:report"), h.getReport)

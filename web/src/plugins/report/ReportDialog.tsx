@@ -10,8 +10,9 @@ import { Label } from '@/framework/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import { Switch } from '@/framework/ui/switch'
 import { Textarea } from '@/framework/ui/textarea'
-import { useChartOptions, useDatasetOptions, useSaveReport, type Report, type ReportFilter, type ReportForm } from './api'
+import { useChartOptions, useDatasetOptions, useReportGroups, useSaveReport, type Report, type ReportFilter, type ReportForm } from './api'
 import { builtinText, fieldText, revertBuiltin } from './builtinText'
+import { GroupSelect } from './GroupSelect'
 
 const SPANS = [3, 4, 6, 8, 12]
 const blank = (): ReportForm => ({ name: '', groupName: '', remark: '', config: { items: [], filters: [] } })
@@ -26,6 +27,7 @@ export function ReportDialog({ open, onOpenChange, editing }: Props) {
   const { t } = useTranslation()
   const { data: charts = [] } = useChartOptions('report', open)
   const { data: datasets = [] } = useDatasetOptions('report', open)
+  const { data: groups = [] } = useReportGroups(open)
   const save = useSaveReport()
   const [form, setForm] = useState<ReportForm>(blank)
 
@@ -34,6 +36,8 @@ export function ReportDialog({ open, onOpenChange, editing }: Props) {
   }, [open, editing])
 
   const cfg = form.config
+  // 小节名不建表：选项就是本报表里已经用过的小节
+  const sectionOptions = [...new Set(cfg.items.map((it) => it.group).filter(Boolean))]
   const setCfg = (p: Partial<ReportForm['config']>) => setForm({ ...form, config: { ...cfg, ...p } })
   const setItem = (i: number, p: Partial<ReportForm['config']['items'][number]>) => setCfg({ items: cfg.items.map((x, j) => (j === i ? { ...x, ...p } : x)) })
   const setFilter = (i: number, p: Partial<ReportFilter>) => setCfg({ filters: cfg.filters.map((x, j) => (j === i ? { ...x, ...p } : x)) })
@@ -83,18 +87,28 @@ export function ReportDialog({ open, onOpenChange, editing }: Props) {
           void submit()
         }}
       >
-        <FormGrid cols={3}>
+        {/* 只有名称/分组两个常规字段，交给 FormGrid 的 auto 判定走单列纵向；写死三列会空出三分之一并让两列错位 */}
+        <FormGrid>
           <div className="flex flex-col gap-2">
             <Label htmlFor="rp-name">{t('common.name')}</Label>
             <Input id="rp-name" value={builtinText(t, form.name)} maxLength={100} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           </div>
           <div className="flex flex-col gap-2">
-            <Label htmlFor="rp-group">{t('plugin_report.report.group')}</Label>
-            <Input id="rp-group" value={builtinText(t, form.groupName)} maxLength={64} onChange={(e) => setForm({ ...form, groupName: e.target.value })} />
+            <Label htmlFor="rp-group">{t('plugin_report.report.groupField')}</Label>
+            <GroupSelect
+              id="rp-group"
+              label={t('plugin_report.report.groupField')}
+              value={form.groupName}
+              onChange={(v) => setForm({ ...form, groupName: v })}
+              options={groups}
+              display={(v) => builtinText(t, v)}
+              newLabel={t('plugin_report.report.newGroup')}
+            />
           </div>
           <FormGridFull>
             <fieldset className="flex flex-col gap-2">
               <legend className="mb-1 text-sm font-medium">{t('plugin_report.report.items')}</legend>
+              <p className="text-xs text-muted-foreground">{t('plugin_report.report.sectionHint')}</p>
               {cfg.items.map((it, i) => (
                 <div key={i} className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_10rem_7rem_auto]">
                   <Select value={it.chartId} onValueChange={(v) => setItem(i, { chartId: v })}>
@@ -109,7 +123,14 @@ export function ReportDialog({ open, onOpenChange, editing }: Props) {
                       ))}
                     </SelectContent>
                   </Select>
-                  <Input aria-label={t('plugin_report.report.group')} placeholder={t('plugin_report.report.group')} maxLength={64} value={it.group} onChange={(e) => setItem(i, { group: e.target.value })} />
+                  <GroupSelect
+                    label={t('plugin_report.report.section')}
+                    value={it.group}
+                    onChange={(v) => setItem(i, { group: v })}
+                    options={sectionOptions}
+                    display={(v) => builtinText(t, v)}
+                    newLabel={t('plugin_report.report.newSection')}
+                  />
                   <Select value={String(it.span)} onValueChange={(v) => setItem(i, { span: Number(v) })}>
                     <SelectTrigger aria-label={t('plugin_report.report.span')}>
                       <SelectValue />

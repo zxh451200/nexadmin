@@ -205,6 +205,7 @@ defineMock([
   },
   // ---- 报表 ----
   { method: 'GET', url: `${B}/reports`, handler: ({ query }) => page([...reports].reverse().filter((r) => !kw(query) || r.name.toLowerCase().includes(kw(query))), query) },
+  { method: 'GET', url: `${B}/report-options/groups`, handler: () => [...new Set(reports.map((r) => r.groupName).filter(Boolean))].sort() },
   { method: 'GET', url: `${B}/reports/:id`, handler: ({ params }) => withCharts(need(reports, params.id)) },
   {
     method: 'GET',

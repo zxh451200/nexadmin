@@ -108,14 +108,12 @@ export function ScreenDialog({ open, onOpenChange, editing }: Props) {
           void submit()
         }}
       >
-        <FormGrid cols={3}>
+        {/* 只有名称/自动刷新两个常规字段：大屏标题不再单独维护，查看页回退用名称。
+            存量大屏若设置过 config.title，仍按它显示（保存时原样带回，不覆盖）。 */}
+        <FormGrid>
           <div className="flex flex-col gap-2">
             <Label htmlFor="sc-name" required>{t('common.name')}</Label>
             <Input id="sc-name" value={builtinText(t, form.name)} maxLength={100} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="sc-title">{t('plugin_report.screen.title')}</Label>
-            <Input id="sc-title" value={builtinText(t, form.config.title)} maxLength={100} onChange={(e) => setForm({ ...form, config: { ...form.config, title: e.target.value } })} />
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="sc-refresh">{t('plugin_report.screen.refresh')}</Label>

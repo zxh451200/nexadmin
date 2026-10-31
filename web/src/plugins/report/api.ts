@@ -212,6 +212,15 @@ export const useChartOptions = (scope: 'report' | 'screen', enabled = true) =>
     enabled,
   })
 
+/** 已用过的报表分组（去重）：分组不建表，下拉选项从这里派生 */
+export const useReportGroups = (enabled = true) =>
+  useQuery({
+    queryKey: [...KEY, 'report-groups'],
+    queryFn: () => api.get<string[]>(`${BASE}/report-options/groups`),
+    staleTime: STALE,
+    enabled,
+  })
+
 export function useSaveChart() {
   const invalidate = useInvalidate()
   return useMutation({

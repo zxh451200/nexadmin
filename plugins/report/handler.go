@@ -185,6 +185,12 @@ func (h *handler) chartOptions(c *gin.Context) {
 	respond(c, list, err)
 }
 
+// groupOptions GET /report-options/groups —— 已用过的报表分组，供报表弹窗做下拉。
+func (h *handler) groupOptions(c *gin.Context) {
+	list, err := h.svc.ListReportGroups(c.Request.Context())
+	respond(c, list, err)
+}
+
 func (h *handler) getChart(c *gin.Context) {
 	if id, ok := pathID(c, "id"); ok {
 		v, err := h.svc.GetChart(c.Request.Context(), id)
