@@ -22,6 +22,7 @@ NexAdmin 框架母版：后端 Gin + GORM、前端 React + shadcn/ui，生产构
 5. 文案一律走 i18n：前端 `web/src/locales/{zh-CN,en-US}.json` 双份同步；后端错误 key 写 `config/locales/<lang>.yaml`。
 6. 前端只用语义 token 与 framework 组件（DataTable/FormLayout/ResponsiveDialog 等），移动优先，逻辑方向类（ms-/me-/ps-/pe-）。
 7. `plugins/website`（官网）与 `plugins/` 其他插件同样受以上约束；官网文档区渲染 `docs/*.md`（含 `docs/en/` 译文），改文档重新构建即更新。
+8. 临时验证代码写到仓库外（如 `D:\tmp`），不要在仓库根建 `scratch_*` 包：Go 把仓库里每个目录都当包编译，一条在途的 scratch 会让所有会话的 `go build ./...` / `go test ./...` 一起红（2026-10-31 实见过 `scratch_ticketcheck/`）。
 
 ## 3. 完成标准
 
