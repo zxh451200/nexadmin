@@ -16,6 +16,11 @@ import { Button } from '@/framework/ui/button'
 import { countDescendants, useDeleteMenu, useMenuTree, useMoveMenu, useSortMenus, type SysMenu } from './api'
 import { MenuFormDialog } from './MenuFormDialog'
 
+// 按钮是权限点，不是导航项：默认不混进菜单列表，类型筛选选「按钮」时才列出来维护
+function withoutButtons(nodes: SysMenu[]): SysMenu[] {
+  return nodes.filter((n) => n.type !== 'button').map((n) => (n.children?.length ? { ...n, children: withoutButtons(n.children) } : n))
+}
+
 export default function MenuPage() {
   const { t } = useTranslation()
   const { has } = usePermission()
@@ -32,15 +37,17 @@ export default function MenuPage() {
   const tr = (s: string) => t(s, { defaultValue: s })
 
   const filter = useClientFilter()
+  const showingButtons = filter.applied.type === 'button'
+  const visible = useMemo(() => (showingButtons ? data : withoutButtons(data)), [data, showingButtons])
   const shown = useMemo(() => {
-    if (!filter.active) return data
+    if (!filter.active) return visible
     const f = filter.applied
     return filterTree(
-      data,
+      visible,
       (n) =>
         matchText(f.keyword, t(n.title, { defaultValue: n.title }), n.perm, n.path) && (!f.type || n.type === f.type) && (!f.status || n.status === f.status),
     )
-  }, [data, filter.active, filter.applied, t])
+  }, [visible, filter.active, filter.applied, t])
 
   const openCreate = (pid: string | null) => {
     setEditing(null)

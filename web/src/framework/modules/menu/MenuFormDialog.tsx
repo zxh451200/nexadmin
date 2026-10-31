@@ -216,6 +216,7 @@ export function MenuFormDialog({ open, onOpenChange, editing, defaultParentId, t
                   <FormControl>
                     <DictSelect dict="menu_type" value={field.value} onChange={(v) => field.onChange(v || 'dir')} allowClear={false} />
                   </FormControl>
+                  <FormDescription>{t('sysMenu.field.typeHint')}</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}

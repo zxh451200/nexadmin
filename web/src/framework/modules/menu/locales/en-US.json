@@ -2,7 +2,7 @@
   "sysMenu": {
     "menu": "Menus",
     "docs": "Documentation",
-    "description": "Manage directories, menus and button permissions. Drag to reorder within the same parent.",
+    "description": "Manage directories and menus; drag to reorder within the same parent. Buttons are permission points — filter by type “Button” to view them.",
     "dir": {
       "system": "System",
       "content": "Content",
@@ -14,6 +14,7 @@
       "edit": "Edit",
       "list": "View",
       "create": "Create",
+      "sync": "Sync",
       "update": "Update",
       "delete": "Delete",
       "export": "Export",
@@ -38,6 +39,7 @@
     },
     "field": {
       "type": "Type",
+      "typeHint": "Buttons are permission points for role assignment; they are hidden from the menu list unless you filter by type “Button”.",
       "parent": "Parent",
       "parentPlaceholder": "Top level (no parent)",
       "title": "Title",

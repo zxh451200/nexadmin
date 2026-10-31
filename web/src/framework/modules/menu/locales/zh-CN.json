@@ -2,7 +2,7 @@
   "sysMenu": {
     "menu": "菜单管理",
     "docs": "帮助文档",
-    "description": "维护目录、菜单与按钮权限，同一父级下可拖动排序",
+    "description": "维护目录与菜单，同一父级下可拖动排序；按钮是权限点，选类型「按钮」时查看",
     "dir": {
       "system": "系统管理",
       "content": "内容管理",
@@ -14,6 +14,7 @@
       "edit": "编辑",
       "list": "查看",
       "create": "新增",
+      "sync": "同步",
       "update": "修改",
       "delete": "删除",
       "export": "导出",
@@ -38,6 +39,7 @@
     },
     "field": {
       "type": "菜单类型",
+      "typeHint": "按钮是权限点，只参与角色授权，默认不出现在菜单列表",
       "parent": "上级菜单",
       "parentPlaceholder": "顶级（无上级）",
       "title": "标题",
