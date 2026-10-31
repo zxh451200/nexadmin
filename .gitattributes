@@ -9,5 +9,9 @@
 *.yaml text eol=lf
 *.yml text eol=lf
 
+# 契约用例是逐字节比对 golden 的（core/response、core 的 TestContract*），
+# Windows 侧 checkout 写成 CRLF 就让干净克隆必红，这里一起钉成 LF。
+*.golden text eol=lf
+
 # Windows 批处理必须 CRLF：cmd.exe 把纯 LF 的相邻行当一行执行。
 *.cmd text eol=crlf
