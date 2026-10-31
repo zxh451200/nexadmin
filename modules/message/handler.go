@@ -25,11 +25,12 @@ func done(c *gin.Context, data any, err error) {
 	response.OK(c, data)
 }
 
-// List GET /messages?unread=1&category=&keyword=
+// List GET /messages?unread=1&category=&keyword=&from=2026-10-01&to=2026-10-31
 func (h *Handler) List(c *gin.Context) {
 	page, size := response.ParsePage(c)
 	q := ListQuery{Unread: c.Query("unread") == "1" || c.Query("unread") == "true", Category: c.Query("category"),
-		Keyword: strings.TrimSpace(c.Query("keyword")), Page: page, PageSize: size}
+		Keyword: strings.TrimSpace(c.Query("keyword")), From: strings.TrimSpace(c.Query("from")), To: strings.TrimSpace(c.Query("to")),
+		Page: page, PageSize: size}
 	list, total, err := h.svc.List(c.Request.Context(), uidOf(c), q)
 	if err != nil {
 		response.Fail(c, err)

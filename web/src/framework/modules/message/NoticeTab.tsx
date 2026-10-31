@@ -4,21 +4,53 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { DictSelect } from '@/framework/components/DictSelect'
 import { DictTag } from '@/framework/components/DictTag'
+import { FilterBar } from '@/framework/components/FilterBar'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { RichTextView } from '@/framework/components/RichTextView'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
+import { Input } from '@/framework/ui/input'
+import { Label } from '@/framework/ui/label'
+import { Switch } from '@/framework/ui/switch'
 import { useClearNotices, useDeleteNotice, useMyNotices, useReadNotice, type MyNotice } from './api'
 import { formatTime } from './format'
+
+interface Filters {
+  keyword: string
+  type: string
+  onlyUnread: boolean
+}
+
+const emptyFilters: Filters = { keyword: '', type: '', onlyUnread: false }
 
 export function NoticeTab() {
   const { t, i18n } = useTranslation()
   const confirm = useConfirm()
+  const [draft, setDraft] = useState<Filters>(emptyFilters)
+  const [applied, setApplied] = useState<Filters>(emptyFilters)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [detail, setDetail] = useState<MyNotice | null>(null)
-  const { data, isLoading } = useMyNotices({ page, pageSize })
+
+  const search = () => {
+    setApplied(draft)
+    setPage(1)
+  }
+  const reset = () => {
+    setDraft(emptyFilters)
+    setApplied(emptyFilters)
+    setPage(1)
+  }
+
+  const { data, isLoading } = useMyNotices({
+    page,
+    pageSize,
+    keyword: applied.keyword.trim() || undefined,
+    type: applied.type || undefined,
+    unread: applied.onlyUnread ? '1' : undefined,
+  })
   const readNotice = useReadNotice()
   const clear = useClearNotices()
   const remove = useDeleteNotice()
@@ -81,13 +113,28 @@ export function NoticeTab() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex justify-end">
-        <Button
-          variant="outline"
-          className="text-destructive"
-          onClick={onClear}
-          disabled={!data?.total || clear.isPending}
-        >
+      <FilterBar onSearch={search} onReset={reset}>
+        <Input
+          className="md:w-56"
+          value={draft.keyword}
+          onChange={(e) => setDraft((d) => ({ ...d, keyword: e.target.value }))}
+          placeholder={t('message.noticeKeywordPlaceholder')}
+          aria-label={t('common.keyword')}
+        />
+        <DictSelect
+          className="md:w-44"
+          dict="notice_type"
+          placeholder={t('message.fields.type')}
+          value={draft.type}
+          onChange={(v) => setDraft((d) => ({ ...d, type: v ?? '' }))}
+        />
+        <div className="flex min-h-11 items-center gap-2">
+          <Switch id="notice-only-unread" checked={draft.onlyUnread} onCheckedChange={(v) => setDraft((d) => ({ ...d, onlyUnread: v }))} />
+          <Label htmlFor="notice-only-unread">{t('message.onlyUnread')}</Label>
+        </div>
+      </FilterBar>
+      <div className="flex flex-wrap md:justify-end">
+        <Button variant="outline" className="text-destructive" onClick={onClear} disabled={!data?.total || clear.isPending}>
           <Trash2 aria-hidden="true" />
           {t('message.clearNotices')}
         </Button>
@@ -99,7 +146,7 @@ export function NoticeTab() {
         rowKey="id"
         loading={isLoading}
         onRowClick={open}
-        emptyText={t('message.emptyNotices')}
+        emptyText={applied.keyword || applied.type || applied.onlyUnread ? t('message.emptyFiltered') : t('message.emptyNotices')}
         pagination={{
           page,
           pageSize,

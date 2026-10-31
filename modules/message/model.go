@@ -42,6 +42,9 @@ type ListQuery struct {
 	Unread   bool
 	Category string
 	Keyword  string
+	// From / To 是 '2006-01-02' 的收件时间区间（含首尾两天）；留空不限。
+	From     string
+	To       string
 	Page     int
 	PageSize int
 }

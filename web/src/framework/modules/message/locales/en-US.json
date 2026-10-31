@@ -19,6 +19,10 @@
     "deleteConfirm": "Delete this message?",
     "emptyMessages": "No messages",
     "emptyNotices": "No notices",
+    "emptyFiltered": "No records match these filters",
+    "keywordPlaceholder": "Search title or content",
+    "noticeKeywordPlaceholder": "Search notice titles",
+    "timeRange": "Time range",
     "fields": {
       "title": "Title",
       "category": "Category",

@@ -23,7 +23,7 @@ import (
 func init() {
 	core.RegisterBuiltin(module{})
 	core.SetMessageCenterFactory(func(d *core.Deps) core.MessageCenter {
-		return messageCenter{svc: NewService(d.DB, notice.NewService(d.DB))}
+		return messageCenter{svc: NewService(d.DB, notice.NewService(d.DB), d.Config.App.Timezone)}
 	})
 }
 
@@ -46,7 +46,7 @@ func (module) Seed(db *gorm.DB) error { return seed(db) }
 // message:list 仅登记给菜单/角色模块展示（消息中心页面入口用）。
 func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	auth.RegisterPerm("message:list")
-	svc := NewService(d.DB, notice.NewService(d.DB))
+	svc := NewService(d.DB, notice.NewService(d.DB), d.Config.App.Timezone)
 	// 站内渠道：向 core/notify 注册（notify 不 import message）；本模块被停用时不会注册，站内发送即为空操作。
 	d.Notify.Register(notify.ChannelInApp, notify.ChannelFunc(func(ctx context.Context, _ string, m notify.Msg, to []notify.Recipient) error {
 		ids := make([]idgen.ID, 0, len(to))

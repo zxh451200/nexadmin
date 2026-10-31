@@ -19,6 +19,10 @@
     "deleteConfirm": "确定删除这条消息吗？",
     "emptyMessages": "暂无消息",
     "emptyNotices": "暂无公告",
+    "emptyFiltered": "没有符合筛选条件的记录",
+    "keywordPlaceholder": "搜索标题或内容",
+    "noticeKeywordPlaceholder": "搜索公告标题",
+    "timeRange": "时间范围",
     "fields": {
       "title": "标题",
       "category": "分类",

@@ -59,6 +59,9 @@ defineMock([
       if (query.category) rows = rows.filter((m) => m.category === query.category)
       const kw = String(query.keyword ?? '').trim().toLowerCase()
       if (kw) rows = rows.filter((m) => `${m.title} ${m.content}`.toLowerCase().includes(kw))
+      // 时间范围按当天整天算（含首尾），与服务端 app.timezone 的解释一致
+      if (query.from) rows = rows.filter((m) => new Date(m.createdAt) >= new Date(`${query.from}T00:00:00`))
+      if (query.to) rows = rows.filter((m) => new Date(m.createdAt) < new Date(`${query.to}T00:00:00`))
       // 未读优先，其后按时间倒序
       rows.sort(
         (a, b) =>

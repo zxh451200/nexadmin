@@ -17,9 +17,18 @@ import (
 type Service struct {
 	db      *gorm.DB
 	notices *notice.Service
+	loc     *time.Location
 }
 
-func NewService(db *gorm.DB, n *notice.Service) *Service { return &Service{db: db, notices: n} }
+// NewService 建服务。tz 是站点时区（app.timezone）：用户选的「某一天」按它解释，
+// 再换算成 UTC 比较（created_at 落库是 UTC），否则非 UTC 站点会错开几小时。
+func NewService(db *gorm.DB, n *notice.Service, tz string) *Service {
+	loc, err := time.LoadLocation(tz)
+	if err != nil || tz == "" {
+		loc = time.UTC
+	}
+	return &Service{db: db, notices: n, loc: loc}
+}
 
 func (s *Service) own(ctx context.Context, uid idgen.ID) *gorm.DB {
 	return s.db.WithContext(ctx).Model(&Message{}).Where("user_id = ?", int64(uid))
@@ -38,6 +47,12 @@ func (s *Service) List(ctx context.Context, uid idgen.ID, q ListQuery) ([]View, 
 		r := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 		like := "%" + r.Replace(q.Keyword) + "%"
 		tx = tx.Where("(title LIKE ? OR content LIKE ?)", like, like)
+	}
+	if t, err := time.ParseInLocation("2006-01-02", q.From, s.loc); err == nil {
+		tx = tx.Where("created_at >= ?", t.UTC())
+	}
+	if t, err := time.ParseInLocation("2006-01-02", q.To, s.loc); err == nil {
+		tx = tx.Where("created_at < ?", t.AddDate(0, 0, 1).UTC())
 	}
 	tx = tx.Session(&gorm.Session{})
 	var total int64

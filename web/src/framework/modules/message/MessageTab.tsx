@@ -5,30 +5,55 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { DateRangePicker, type DateRangeValue } from '@/framework/components/DateRangePicker'
 import { DictSelect } from '@/framework/components/DictSelect'
 import { DictTag } from '@/framework/components/DictTag'
+import { FilterBar } from '@/framework/components/FilterBar'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Button } from '@/framework/ui/button'
+import { Input } from '@/framework/ui/input'
 import { Label } from '@/framework/ui/label'
 import { Switch } from '@/framework/ui/switch'
 import { useClearMessages, useDeleteMessage, useMarkRead, useMessageList, useReadAll, type Message } from './api'
 import { formatTime } from './format'
 
+interface Filters {
+  keyword: string
+  category: string
+  onlyUnread: boolean
+  range: DateRangeValue
+}
+
+const emptyFilters: Filters = { keyword: '', category: '', onlyUnread: false, range: {} }
+
 export function MessageTab({ unread }: { unread: number }) {
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const confirm = useConfirm()
-  const [category, setCategory] = useState('')
-  const [onlyUnread, setOnlyUnread] = useState(false)
+  const [draft, setDraft] = useState<Filters>(emptyFilters)
+  const [applied, setApplied] = useState<Filters>(emptyFilters)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [detail, setDetail] = useState<Message | null>(null)
 
+  const search = () => {
+    setApplied(draft)
+    setPage(1)
+  }
+  const reset = () => {
+    setDraft(emptyFilters)
+    setApplied(emptyFilters)
+    setPage(1)
+  }
+
   const { data, isLoading } = useMessageList({
     page,
     pageSize,
-    category: category || undefined,
-    unread: onlyUnread ? '1' : undefined,
+    keyword: applied.keyword.trim() || undefined,
+    category: applied.category || undefined,
+    unread: applied.onlyUnread ? '1' : undefined,
+    from: applied.range.from,
+    to: applied.range.to,
   })
   const markRead = useMarkRead()
   const readAll = useReadAll()
@@ -104,45 +129,42 @@ export function MessageTab({ unread }: { unread: number }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center">
-          <DictSelect
-            className="md:w-44"
-            dict="message_category"
-            placeholder={t('message.fields.category')}
-            value={category}
-            onChange={(v) => {
-              setCategory(v ?? '')
-              setPage(1)
-            }}
-          />
-          <div className="flex min-h-11 items-center gap-2">
-            <Switch
-              id="message-only-unread"
-              checked={onlyUnread}
-              onCheckedChange={(v) => {
-                setOnlyUnread(v)
-                setPage(1)
-              }}
-            />
-            <Label htmlFor="message-only-unread">{t('message.onlyUnread')}</Label>
-          </div>
+      <FilterBar onSearch={search} onReset={reset}>
+        <Input
+          className="md:w-56"
+          value={draft.keyword}
+          onChange={(e) => setDraft((d) => ({ ...d, keyword: e.target.value }))}
+          placeholder={t('message.keywordPlaceholder')}
+          aria-label={t('common.keyword')}
+        />
+        <DictSelect
+          className="md:w-44"
+          dict="message_category"
+          placeholder={t('message.fields.category')}
+          value={draft.category}
+          onChange={(v) => setDraft((d) => ({ ...d, category: v ?? '' }))}
+        />
+        <DateRangePicker
+          className="md:w-64"
+          value={draft.range}
+          onChange={(range) => setDraft((d) => ({ ...d, range }))}
+          placeholder={t('message.timeRange')}
+          ariaLabel={t('message.timeRange')}
+        />
+        <div className="flex min-h-11 items-center gap-2">
+          <Switch id="message-only-unread" checked={draft.onlyUnread} onCheckedChange={(v) => setDraft((d) => ({ ...d, onlyUnread: v }))} />
+          <Label htmlFor="message-only-unread">{t('message.onlyUnread')}</Label>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={onReadAll} disabled={unread === 0 || readAll.isPending}>
-            <CheckCheck aria-hidden="true" />
-            {t('message.readAll')}
-          </Button>
-          <Button
-            variant="outline"
-            className="text-destructive"
-            onClick={onClear}
-            disabled={!data?.total || clear.isPending}
-          >
-            <Trash2 aria-hidden="true" />
-            {t('message.clearMessages')}
-          </Button>
-        </div>
+      </FilterBar>
+      <div className="flex flex-wrap gap-2 md:justify-end">
+        <Button variant="outline" onClick={onReadAll} disabled={unread === 0 || readAll.isPending}>
+          <CheckCheck aria-hidden="true" />
+          {t('message.readAll')}
+        </Button>
+        <Button variant="outline" className="text-destructive" onClick={onClear} disabled={!data?.total || clear.isPending}>
+          <Trash2 aria-hidden="true" />
+          {t('message.clearMessages')}
+        </Button>
       </div>
 
       <DataTable
@@ -151,7 +173,7 @@ export function MessageTab({ unread }: { unread: number }) {
         rowKey="id"
         loading={isLoading}
         onRowClick={open}
-        emptyText={t('message.emptyMessages')}
+        emptyText={applied.keyword || applied.category || applied.onlyUnread || applied.range.from || applied.range.to ? t('message.emptyFiltered') : t('message.emptyMessages')}
         pagination={{
           page,
           pageSize,

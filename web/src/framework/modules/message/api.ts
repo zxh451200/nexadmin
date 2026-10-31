@@ -34,6 +34,18 @@ export interface MessageQuery extends PageQuery {
   /** '1' 仅未读 */
   unread?: string
   category?: string
+  keyword?: string
+  /** 'yyyy-MM-dd'，含当天 */
+  from?: string
+  /** 'yyyy-MM-dd'，含当天 */
+  to?: string
+}
+
+export interface NoticeQuery extends PageQuery {
+  /** '1' 仅未读 */
+  unread?: string
+  type?: string
+  keyword?: string
 }
 
 const KEY = ['message'] as const
@@ -53,7 +65,7 @@ export function useUnreadCount() {
   })
 }
 
-export function useMyNotices(query: PageQuery) {
+export function useMyNotices(query: NoticeQuery) {
   return useQuery({
     queryKey: [...KEY, 'notices', query],
     queryFn: () => api.get<Page<MyNotice>>('/notices/mine', query),
