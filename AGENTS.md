@@ -35,6 +35,10 @@ cd web && npx tsc --noEmit && npx eslint src
 
 涉及迁移时补跑 `nexadmin-server migrate --dry-run`；涉及官网时截图验证浅色/深色两套主题。
 
+Windows 上若 `TestContract*` 报 "contract changed" 而自己没动契约，那是 golden 被 checkout 成 CRLF：
+`rm core/testdata/contracts/*.golden && git checkout -- core/testdata/contracts` 重新按 LF 检出即可，
+**不要重写 golden**（`.gitattributes` 已把 `*.golden` 钉成 `eol=lf`，新克隆不会再有这个问题）。
+
 ## 4. 常用命令
 
 | 命令 | 用途 |
