@@ -18,5 +18,10 @@ func coreAPIDocs() []apidoc.Operation {
 			"phone":      apidoc.Str("手机号（type=phone）"),
 			"code":       apidoc.Str("短信验证码（type=phone）"),
 		}),
+	}, {
+		Method:      "POST",
+		Path:        "/ws/ticket",
+		Summary:     "换取 WebSocket 入场票",
+		Description: "需登录。返回一次性 ticket（15 秒有效），用 ws://…/ws?ticket=… 建连；访问令牌不出现在握手 URL。",
 	}}
 }

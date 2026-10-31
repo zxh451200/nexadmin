@@ -1,8 +1,8 @@
 package im
 
 // SSE 实时推送。鉴权说明：EventSource 带不了 Authorization 头，坐席先用
-// POST /stream-ticket 换一张 30 秒一次性流票拼在流 URL 上；访客侧以不可枚举的
-// 会话号作能力令牌直接订阅。断线时前端回落到增量轮询（既有 GET messages）。
+// POST /stream-ticket 换一张 30 秒一次性流票拼在流 URL 上；访客侧用创建会话时拿到的
+// 访客令牌（?visitorToken=）校验归属。断线时前端回落到增量轮询（既有 GET messages）。
 
 import (
 	"fmt"
@@ -30,9 +30,17 @@ func (h *handler) adminStream(c *gin.Context) {
 	h.serveStream(c, c.Param("no"))
 }
 
-// GET /plugins/im/visitor/stream/:no —— 访客实时流。
+// GET /plugins/im/visitor/stream/:no?visitorToken=... —— 访客实时流。
 func (h *handler) visitorStream(c *gin.Context) {
-	h.serveStream(c, c.Param("no"))
+	conv, err := h.svc.Conversation(c.Request.Context(), c.Param("no"))
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	if !h.checkVisitor(c, conv) {
+		return
+	}
+	h.serveStream(c, conv.ConvNo)
 }
 
 func (h *handler) serveStream(c *gin.Context, convNo string) {

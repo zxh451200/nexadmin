@@ -2,13 +2,19 @@ package backup
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"go.uber.org/zap"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"nexadmin/core/ctl"
 	"nexadmin/pkg/idgen"
 )
+
+// errBusyAbort 仅在事务内用于中止并回滚：抢占失败（已有 running）时不留任何写入。
+var errBusyAbort = errors.New("backup: busy")
 
 // Start 立即开始一次备份（异步执行），返回 status=running 的记录；页面轮询列表看结果。
 // 工具不可用返回 *UnavailableError（定时来源会额外留一条失败记录，页面上能看到原因）；
@@ -37,23 +43,44 @@ func (s *Service) Start(ctx context.Context, source string, by idgen.ID) (*Recor
 	s.mu.Unlock()
 	release := func() { s.mu.Lock(); s.running = false; s.mu.Unlock() }
 
-	// 其他实例正在备份（记录里有未超时的 running）也算忙
-	var n int64
-	if err := s.db.WithContext(ctx).Model(&Record{}).Where("status = ? AND created_at > ?", StatusRunning, now.Add(-staleAfter)).Count(&n).Error; err != nil {
+	// 跨实例互斥：把「查 running 再 Create」放进同一个事务，先对 sys_backup_setting 主行
+	// 取 FOR UPDATE 行锁（哨兵行，所有实例共用一行），再加锁内 count + 插入。并发实例会阻塞在
+	// 行锁上，直到本轮事务提交后再执行，届时必然看到刚写入的 running，只有一个能建出记录。
+	if err := s.EnsureSetting(ctx); err != nil {
 		release()
 		return nil, err
 	}
-	if n > 0 {
+	cutoff := now.Add(-staleAfter)
+	var conflict bool
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var st Setting
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", settingID).Take(&st).Error; err != nil {
+			return err
+		}
+		var n int64
+		if err := tx.Model(&Record{}).Where("status = ? AND created_at > ?", StatusRunning, cutoff).Count(&n).Error; err != nil {
+			return err
+		}
+		if n > 0 {
+			conflict = true
+			return errBusyAbort
+		}
+		rec.Status = StatusRunning
+		return tx.Create(rec).Error
+	})
+	if err != nil {
 		release()
-		return nil, ErrBusy
-	}
-	rec.Status = StatusRunning
-	if err := s.db.WithContext(ctx).Create(rec).Error; err != nil {
-		release()
+		if conflict {
+			return nil, ErrBusy
+		}
 		return nil, err
 	}
 	go func() {
 		defer release()
+		if s.executeFn != nil {
+			s.executeFn(rec)
+			return
+		}
 		s.execute(rec)
 	}()
 	return rec, nil
@@ -129,6 +156,21 @@ func (s *Service) Tick(ctx context.Context) {
 		return // 出错或已被其他实例抢占
 	}
 	if _, err := s.Start(ctx, SourceSchedule, 0); err != nil {
+		// 先抢日期再启动，崩溃窗口下最多丢当天一次备份（不会出现并发重复整库导出），比反过来更安全。
+		// 但启动因瞬时冲突（别的实例在跑）而失败时必须释放抢占，否则整天都不会再补跑；
+		// 工具缺失是持续状态，保留抢占，每天只留一条失败记录，避免每 30s 重试刷屏。
+		if errors.Is(err, ErrBusy) {
+			s.releaseDayClaim(ctx, today)
+		}
 		s.log.Warn("backup: scheduled backup not started", zap.Error(err))
+	}
+}
+
+// releaseDayClaim 撤销本轮对当天配额的抢占（仅当仍是今天时），让后续 tick 可重试。
+func (s *Service) releaseDayClaim(ctx context.Context, today string) {
+	if err := s.db.WithContext(ctx).Model(&Setting{}).
+		Where("id = ? AND last_run_date = ?", settingID, today).
+		Update("last_run_date", "").Error; err != nil {
+		s.log.Warn("backup: release day claim failed", zap.Error(err))
 	}
 }

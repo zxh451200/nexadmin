@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 
 	"nexadmin/core/auth"
 	"nexadmin/core/ctl"
@@ -194,7 +195,7 @@ func (h *Handler) Download(c *gin.Context) {
 		response.Fail(c, response.NotFound("backup.file_unreadable"))
 		return
 	}
-	writeDownloadAudit(c, rec)
+	h.writeDownloadAudit(c, rec)
 	hd := c.Writer.Header()
 	hd.Set("Content-Type", "application/gzip")
 	hd.Set("Content-Disposition", `attachment; filename="`+rec.FileName+`"`)
@@ -204,15 +205,27 @@ func (h *Handler) Download(c *gin.Context) {
 	http.ServeContent(c.Writer, c.Request, rec.FileName, st.ModTime(), f)
 }
 
-func writeDownloadAudit(c *gin.Context, rec *Record) {
-	s := logmod.Default()
+// writeDownloadAudit 同步写下载操作日志（模块被停用时跳过）。
+// 同步而非 goroutine：备份下载是低频、仅超管的重操作，多一次 INSERT 的延迟可忽略，
+// 却保证审计在下载真正开始前就已落库、进程退出也不会丢，且不再有失控的并发写。
+// 写失败不阻断合法下载，但要记日志，不能静默丢弃。ctx 脱离请求取消，避免客户端断开丢掉这条审计。
+func (h *Handler) writeDownloadAudit(c *gin.Context, rec *Record) {
 	cl := auth.ClaimsFrom(c)
-	if s == nil || cl == nil {
+	if cl == nil {
 		return
+	}
+	write := h.svc.auditWrite
+	if write == nil {
+		s := logmod.Default()
+		if s == nil {
+			return // 日志模块被停用
+		}
+		write = s.WriteOper
 	}
 	l := &logmod.OperLog{Module: auditModule, Type: "download", Operator: cl.Username, IP: c.ClientIP(), Status: logmod.StatusSuccess,
 		Method: c.Request.Method, URL: c.Request.URL.Path, Params: `{"id":` + strconv.Quote(rec.ID.String()) + `,"file":` + strconv.Quote(rec.FileName) + `}`}
 	l.TenantID = cl.TenantID
-	ctx := context.WithoutCancel(c.Request.Context())
-	go func() { _ = s.WriteOper(ctx, l) }()
+	if err := write(context.WithoutCancel(c.Request.Context()), l); err != nil && h.svc.log != nil {
+		h.svc.log.Warn("backup: download audit write failed", zap.String("file", rec.FileName), zap.Error(err))
+	}
 }

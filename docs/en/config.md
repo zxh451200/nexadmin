@@ -177,7 +177,14 @@ Fixed-window rate limiting: the same key allows at most `limit` requests per `wi
 | `metrics.enabled` | bool | `true` | Mounts `/metrics` at the root (Prometheus text format, outside `/api/v1`, no login); `false` skips registration | Disable when metrics are unneeded |
 | `metrics.token` | string | empty | Empty: loopback-only access, and any request with `X-Forwarded-For` / `X-Real-IP` is refused (403); non-empty: every source must send `Authorization: Bearer <token>` (constant-time compare, missing or wrong returns 401) | Required for remote Prometheus scraping or exposure via a reverse proxy |
 
-## 8. Keys read by code but absent from default.yaml
+## 8. region (region data sync)
+
+| Key | Type | Default | Purpose | When to change |
+| --- | --- | --- | --- | --- |
+| `region.source_url` | string | `https://raw.githubusercontent.com/mumuy/data_location/master/list.json` | Default source for syncing region data; pre-fills the field under Settings → Region data. HTTPS only, private/loopback addresses are rejected at dial time. Empty = built-in snapshot only | Point it at your own mirror when the default source is unreachable |
+| `region.source_license` | string | `MIT` | License declared by that source; recorded with each synced snapshot for provenance | Change it when switching to another source |
+
+## 9. Keys read by code but absent from default.yaml
 
 The following keys are read by their owning modules directly from `config/default.yaml`, `config/config.yaml` and environment variables (same `NEXADMIN_` rules), bypassing `core/config` validation:
 
@@ -188,7 +195,7 @@ The following keys are read by their owning modules directly from `config/defaul
 | `license.allow_dev_hosts` | `core/plugin` | When `true`, license domain checks treat `localhost`, `127.0.0.1`, `::1` and `*.localhost` as matches (local development) |
 | `identity.allow_private_hosts` | `plugins/identity` | Default `false`: LDAP addresses and CAS `serverUrl` refuse loopback / private / link-local / CGNAT / cloud-metadata addresses (literal check on save, all A/AAAA resolved before connect and actual IPs re-checked at connect). Internal directory and CAS deployments are naturally on private networks — set explicitly to `true` to connect. Env `NEXADMIN_IDENTITY_ALLOW_PRIVATE_HOSTS`; hot-mounting grants but never withdraws it |
 
-## 9. Environment-variable-only items
+## 10. Environment-variable-only items
 
 | Variable | Purpose |
 | --- | --- |
@@ -196,9 +203,9 @@ The following keys are read by their owning modules directly from `config/defaul
 | `NEXADMIN_MIGRATIONS_DIR` | Points to the `migrations/framework` directory; business migrations sit beside it in `business`. Unset, it searches the current directory and ancestors, then the executable's directory and ancestors for `migrations/framework` |
 | `NEXADMIN_SHUTDOWN_TOKEN` | Internal: `start` uses it to pass the shutdown token to the background process, which clears it after reading. Do not set manually |
 
-## 10. Settings page vs configuration file
+## 11. Settings page vs configuration file
 
-System Settings (full admin URL `/admin/system/settings`) has ten UI sections: `site`, `security`, `cache`, `storage`, `ai`, `sms`, `auth`, `notify`, `language` and `params`. The first eight use the settings API / `sys_setting`; languages use `/languages` / `sys_language`, and parameters use `/configs` / `sys_config`. Do not pass the latter two to `/settings/:section`. Reserve this platform-global configuration for platform super admins; see [Features & Permissions](features.md) for navigation groups and API boundaries. Runtime precedence and limitations:
+System Settings (full admin URL `/admin/system/settings`) has thirteen UI sections: `site`, `security`, `auth`, `ldap`, `sso`, `storage`, `ai`, `sms`, `notify`, `maps`, `cache`, `language` and `params`. The `site`, `security`, `auth`, `storage`, `ai`, `sms`, `notify` and `cache` sections use `/settings` / `sys_setting`; LDAP uses `/plugins/ldap/*`, SSO uses `/sso/*`, maps use `/plugins/maps/*`, languages use `/languages` / `sys_language`, and parameters use `/configs` / `sys_config`. Do not pass the other five to `/settings/:section`. Reserve this platform-global configuration for platform super admins; see [Features & Permissions](features.md) for navigation groups and API boundaries. Runtime precedence and limitations:
 
 - `ai`: the settings section wins; never saved, falls back to `ai.*`.
 - Login security (consecutive failures, lock minutes): settings `security` section → system params `login.max_retry` / `login.lock_minutes` → default 5 failures / 15 minutes.

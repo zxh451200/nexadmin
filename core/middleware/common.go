@@ -29,6 +29,15 @@ func Recovery(log *zap.Logger) gin.HandlerFunc {
 	}
 }
 
+// NoStore 给 API 响应加 Cache-Control: no-store：登录态接口返回 PII，不能被浏览器或中间代理复用。
+// 文件下载等需要缓存的 handler 会在自己内部覆盖这个头。
+func NoStore() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Header("Cache-Control", "no-store")
+		c.Next()
+	}
+}
+
 // Logger 记录每个请求；handler 通过 c.Error 附带的错误一并记录（不返回给调用方）。
 func Logger(log *zap.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {

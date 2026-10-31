@@ -11,6 +11,7 @@ NexAdmin 框架母版：后端 Gin + GORM、前端 React + shadcn/ui，生产构
 
 - **框架区**：`core/`（框架内核）、`modules/`（内置业务模块）、`pkg/`、`cmd/`（server 与 nexadmin CLI）、`web/src/framework/`、`migrations/framework/`、`docs/`、`deploy/`、`scripts/`。
 - **插件**：`plugins/`（源码插件，随框架编译；规范见 `docs/plugin-development.md`）。
+- **独立 module**：`flowlite/`（工作流内核，Apache-2.0，零框架依赖，可单独发布；根 `go.mod` 用 `replace` 指向本地目录）。
 
 ## 2. 在本仓库工作的规则
 
@@ -28,6 +29,7 @@ NexAdmin 框架母版：后端 Gin + GORM、前端 React + shadcn/ui，生产构
 
 ```
 go build ./... && go vet ./... && go test ./...
+cd flowlite && go build ./... && go vet ./... && go test ./...
 cd web && npx tsc --noEmit && npx eslint src
 ```
 

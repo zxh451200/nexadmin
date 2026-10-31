@@ -3,6 +3,7 @@ package log
 import (
 	"context"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -17,19 +18,32 @@ import (
 //	log.Default().WriteOper(ctx, &log.OperLog{...})   // 操作日志
 //	log.Default().WriteLogin(ctx, &log.LoginLog{...}) // 登录日志（失败只写分类，细节进服务端日志）
 //
-// 写入时 ctx 里需要租户（或在记录上显式设置 TenantID）。
+// 写入时 ctx 里需要租户（或在记录上显式设置 TenantID）。操作日志经 rec 的有界队列异步落库
+// （见 recorder.go）；未启动队列的手工构造 Service 保持原有的直写语义。
 type Service struct {
 	db  *gorm.DB
 	loc *time.Location
 	log *zap.Logger
 
 	exportMaxRows int // log.export_max_rows；<=0 用默认值（见 export.go）
+
+	mu        sync.Mutex         // 保护下面两个字段（队列的启停）
+	rec       *operRecorder      // 操作日志异步队列；nil = 未启用，走直写
+	cancelRun context.CancelFunc // 取消冲刷协程的 ctx
 }
 
 var defaultSvc atomic.Pointer[Service]
 
 // Default 返回模块注册后可用的 Service；模块被停用时为 nil，调用方需判空。
 func Default() *Service { return defaultSvc.Load() }
+
+// adoptAsDefault 把 s 设为全局 Default，并排空、停掉被它取代的旧 Service 的冲刷协程：
+// 重复装配（向导激活、单测多次建引擎）若不做这一步，旧队列的协程会一直泄漏。
+func (s *Service) adoptAsDefault() {
+	if prev := defaultSvc.Swap(s); prev != nil && prev != s {
+		prev.stopOperQueue()
+	}
+}
 
 // NewService 创建 Service；tz 是应用时区（用于解释日期筛选），非法时按 UTC。
 func NewService(db *gorm.DB, tz string, log *zap.Logger) *Service {

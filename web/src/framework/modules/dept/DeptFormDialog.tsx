@@ -13,6 +13,7 @@ import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/framework/ui/form'
 import { useCreateDept, useUpdateDept, type SysDept } from './api'
+import { resolveUserLabel } from '../user/api'
 
 export interface DeptFormDialogProps {
   open: boolean
@@ -98,6 +99,12 @@ export function DeptFormDialog({ open, onOpenChange, editing, defaultParentId, t
   }, [open, editing, defaultParentId, tree, form])
 
   const blocked = useMemo(() => (editing ? collectIds(editing) : new Set<string>()), [editing])
+  // 编辑态负责人回显：dept.leaderName 是写入时冗余的（负责人变更后会被清空），有值时直接传入
+  // 避免等首页结果；缺名时由 resolveLabel 走 GET /users/:id 兜底，不再显示原始 id
+  const leaderInitial = useMemo(
+    () => (editing?.leaderId && editing.leaderName ? [{ value: editing.leaderId, label: editing.leaderName }] : undefined),
+    [editing],
+  )
   const pending = create.isPending || update.isPending
 
   const onSubmit = form.handleSubmit(async (v) => {
@@ -181,7 +188,14 @@ export function DeptFormDialog({ open, onOpenChange, editing, defaultParentId, t
                 <FormItem>
                   <FormLabel>{t('dept.field.leader')}</FormLabel>
                   <FormControl>
-                    <RemoteSelect url="/users" labelKey="nickname" value={field.value} onChange={(v) => field.onChange(v ?? '')} />
+                    <RemoteSelect
+                      url="/users"
+                      labelKey="nickname"
+                      value={field.value}
+                      onChange={(v) => field.onChange(v ?? '')}
+                      initialOptions={leaderInitial}
+                      resolveLabel={resolveUserLabel}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

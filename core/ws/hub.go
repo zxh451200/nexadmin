@@ -11,8 +11,9 @@
 //	服务端 → 客户端  {"type":"message","topic":"im:CONV123","data":{...}}  主题推送
 //	服务端 → 客户端  {"type":"error","data":{"message":"..."}}     错误通知
 //
-// 鉴权：握手 URL 带 ?token=<accessToken>（浏览器 WebSocket API 不能设 Header，
-// 与 EventSource 同样的约束）；JWT 解析失败返回 401 并拒绝升级。
+// 鉴权：浏览器先用 POST /api/v1/ws/ticket 换一张一次性入场票，握手 URL 只带 ?ticket=（访问令牌不进 URL），
+// 非浏览器客户端可以改带 Authorization 头；票据或令牌无效时返回 401 并拒绝升级。
+// 主题归属：匿名连接只能订阅 public: 前缀；其余主题由业务模块登记的 TopicGuard 判定。
 // 多实例：Publish 经 cluster.Bus 广播，每个实例只推给本地持有的连接。
 package ws
 
@@ -131,17 +132,19 @@ func (h *Hub) Unsubscribe(connID, topic string) {
 // Publish 向主题的全部本地订阅者投递；无订阅者的主题静默丢弃（多实例下由
 // cluster.Bus 保证其它实例的订阅者也能收到）。
 func (h *Hub) Publish(topic string, data any) {
+	// 连接可能随时断开并在另一协程里从 conns 删除，必须在锁内取快照，不能解锁后再查 map。
 	h.mu.RLock()
-	connIDs := make([]string, 0, len(h.topics[topic]))
+	targets := make([]*Conn, 0, len(h.topics[topic]))
 	for id := range h.topics[topic] {
-		connIDs = append(connIDs, id)
+		if c := h.conns[id]; c != nil {
+			targets = append(targets, c)
+		}
 	}
 	h.mu.RUnlock()
 
 	frame := Frame{Type: "message", Topic: topic, Data: data}
-	for _, id := range connIDs {
-		c, ok := h.conns[id]
-		if !ok || c.IsClosed() {
+	for _, c := range targets {
+		if c.IsClosed() {
 			continue
 		}
 		select {
@@ -154,20 +157,19 @@ func (h *Hub) Publish(topic string, data any) {
 // PublishToUser 向指定用户的全部活跃连接投递（通知类场景）。
 func (h *Hub) PublishToUser(userID string, data any) {
 	h.mu.RLock()
-	var connIDs []string
-	for id, c := range h.conns {
+	var targets []*Conn
+	for _, c := range h.conns {
 		if c.UserID == userID {
-			connIDs = append(connIDs, id)
+			targets = append(targets, c)
 		}
 	}
 	h.mu.RUnlock()
 
-	for _, id := range connIDs {
-		c := h.conns[id]
-		if c == nil || c.IsClosed() {
+	frame := Frame{Type: "message", Topic: "user:" + userID, Data: data}
+	for _, c := range targets {
+		if c.IsClosed() {
 			continue
 		}
-		frame := Frame{Type: "message", Topic: "user:" + userID, Data: data}
 		select {
 		case c.Send <- frame:
 		default:

@@ -1,0 +1,26 @@
+{
+  "region": {
+    "settingsTitle": "Region data",
+    "title": "Region data",
+    "desc": "The region picker uses the data shipped with the framework. After administrative changes, sync a newer dataset from a source.",
+    "cardDesc": "Syncing replaces the region list for all tenants; region codes stored in existing records are untouched.",
+    "builtin": "Built-in",
+    "synced": "Synced",
+    "counts": "Records",
+    "countsValue": "{{provinces}} provinces / {{prefectures}} prefectures / {{counties}} counties",
+    "dataDate": "Data date",
+    "source": "Source",
+    "license": "License",
+    "syncedAt": "Synced at",
+    "syncedBy": "Synced by",
+    "sourceLabel": "Source URL",
+    "sourceHint": "Defaults to region.source_url in config.yaml; you can point it at a mirror here. HTTPS only, private networks are rejected. Content may be a flat code → name object or a three-level tree.",
+    "sync": "Sync now",
+    "syncing": "Syncing…",
+    "reset": "Restore built-in data",
+    "syncDone": "Synced: {{added}} added, {{renamed}} renamed, {{removed}} removed",
+    "syncRemoved": "{{n}} regions no longer exist in the new data; existing records keep their codes",
+    "confirmReset": "Restore the built-in data? The synced snapshot will be deleted.",
+    "resetDone": "Built-in data restored"
+  }
+}

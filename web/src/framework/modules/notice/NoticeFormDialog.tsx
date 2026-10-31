@@ -20,6 +20,7 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { Input } from '@/framework/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import { useSaveNotice, type Notice, type NoticeForm, type NoticeScope } from './api'
+import { resolveUserLabel } from '../user/api'
 
 const SCOPES: NoticeScope[] = ['all', 'role', 'dept', 'user']
 
@@ -300,7 +301,7 @@ export function NoticeFormDialog({ open, onOpenChange, editing }: Props) {
                         ) : scope === 'dept' ? (
                           <TreeSelect url="/depts/tree" multiple value={field.value} onChange={field.onChange} />
                         ) : (
-                          <RemoteSelect url="/users" labelKey="nickname" multiple value={field.value} onChange={field.onChange} />
+                          <RemoteSelect url="/users" labelKey="nickname" multiple value={field.value} onChange={field.onChange} resolveLabel={resolveUserLabel} />
                         )}
                       </FormControl>
                       <FormMessage />

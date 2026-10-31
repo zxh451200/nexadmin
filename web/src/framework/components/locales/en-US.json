@@ -50,12 +50,24 @@
   "jsonInput": {
     "format": "Format",
     "minify": "Minify",
+    "repair": "Repair",
+    "repairing": "Repairing…",
+    "repaired": "Repaired to valid JSON. Please review the content.",
+    "repairPartial": "Format repaired, but the content still doesn't meet the requirements",
+    "repairFailed": "Automatic repair failed. Check quotes and brackets manually.",
     "expand": "Expand",
     "expandTitle": "Edit JSON",
     "done": "Done",
     "required": "Enter JSON content",
     "notObject": "Must be a JSON object wrapped in { }; arrays and single values are not accepted",
-    "syntax": "Syntax error at line {{line}}, column {{column}}. Check quotes, commas and brackets."
+    "syntax": "Syntax error at line {{line}}, column {{column}}. Check quotes, commas and brackets.",
+    "syntaxReason": {
+      "fullWidth": "Line {{line}}, column {{column}}: full-width quotes or punctuation found. Use straight quotes, commas and colons.",
+      "singleQuote": "Line {{line}}, column {{column}}: JSON keys and strings must use double quotes, not single quotes.",
+      "comment": "Line {{line}}, column {{column}}: JSON does not support comments. Remove // or /* */.",
+      "trailingComma": "Line {{line}}, column {{column}}: no trailing comma after the last item. Remove it.",
+      "unclosed": "Line {{line}}, column {{column}}: brackets are not closed or mismatched. Check { } [ ]."
+    }
   },
   "localeForm": {
     "source": "Source",

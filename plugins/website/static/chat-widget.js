@@ -111,7 +111,7 @@
     }
 
     function api(path, opt) {
-      var init = Object.assign({ credentials: 'same-origin', headers: { Accept: 'application/json' } }, opt || {});
+      var init = Object.assign({ credentials: 'same-origin', headers: { Accept: 'application/json', 'X-Visitor-Token': visitorToken() } }, opt || {});
       if (init.body) init.headers = Object.assign({ 'Content-Type': 'application/json' }, init.headers);
       return fetch(base + path, init).then(parseResponse);
     }
@@ -123,7 +123,7 @@
         method: 'POST',
         body: form,
         credentials: 'same-origin',
-        headers: { Accept: 'application/json' }
+        headers: { Accept: 'application/json', 'X-Visitor-Token': visitorToken() }
       }).then(parseResponse);
     }
 
@@ -171,6 +171,9 @@
         try { code = (JSON.parse(m.meta) || {}).code || ''; } catch (e) { code = ''; }
       }
       if (code === 'conv_closed') return t('chatClosedTitle', '会话已结束');
+      if (code === 'conv_reopened') return t('chatReopened', '会话已重新开启');
+      if (code === 'conv_merged_into') return t('chatMergedInto', '会话已合并，发送新消息将开启新会话');
+      if (code === 'message_recalled') return t('chatRecalled', '消息已撤回');
       return m.content || '';
     }
 
@@ -352,7 +355,7 @@
       startPolling();
       if (!window.EventSource || !st.convNo) return;
       try {
-        st.es = new EventSource(base + '/stream/' + encodeURIComponent(st.convNo));
+        st.es = new EventSource(base + '/stream/' + encodeURIComponent(st.convNo) + '?visitorToken=' + encodeURIComponent(visitorToken()));
       } catch (e) { st.es = null; return; }
       st.es.onmessage = function (e) {
         var data = null;

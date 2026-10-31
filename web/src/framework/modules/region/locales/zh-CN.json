@@ -1,0 +1,26 @@
+{
+  "region": {
+    "settingsTitle": "省市区数据",
+    "title": "省市区数据",
+    "desc": "省市区选择器使用框架内置数据；行政区划调整后，可以从数据源同步一份新数据。",
+    "cardDesc": "同步会替换所有租户看到的省市区列表；已有业务记录里的区划代码不受影响。",
+    "builtin": "内置数据",
+    "synced": "已同步",
+    "counts": "数据条数",
+    "countsValue": "{{provinces}} 省级 / {{prefectures}} 地级 / {{counties}} 县级",
+    "dataDate": "数据日期",
+    "source": "数据源",
+    "license": "许可协议",
+    "syncedAt": "同步时间",
+    "syncedBy": "同步人",
+    "sourceLabel": "数据源地址",
+    "sourceHint": "默认地址来自 config.yaml 的 region.source_url，这里可以临时换成镜像。只接受 HTTPS，且不能指向内网；内容支持「代码 → 名称」的扁平表或三级树 JSON。",
+    "sync": "立即同步",
+    "syncing": "同步中…",
+    "reset": "恢复内置数据",
+    "syncDone": "已同步：新增 {{added}} 条，改名 {{renamed}} 条，移除 {{removed}} 条",
+    "syncRemoved": "有 {{n}} 条区划在新数据里不存在，历史记录仍保留原代码",
+    "confirmReset": "恢复随包发布的内置数据？已同步的快照会被删除。",
+    "resetDone": "已恢复内置数据"
+  }
+}

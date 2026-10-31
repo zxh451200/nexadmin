@@ -10,6 +10,8 @@ export interface SecretTarget {
   clientId: string
   /** 仅创建 / 重置后有值；纯查看接入信息时为空 */
   clientSecret?: string
+  /** 应用开启了组织通讯录读取：额外给拉取用户 / 部门的端点 */
+  orgRead?: boolean
 }
 
 function Row({ label, value, mono = true }: { label: string; value: string; mono?: boolean }) {
@@ -72,6 +74,16 @@ export function SecretDialog({ target, onOpenChange }: Props) {
             <Row label={t('sso.access.authorization')} value={ep.authorization} />
             <Row label={t('sso.access.token')} value={ep.token} />
           </section>
+          {target.orgRead ? (
+            <section className="flex flex-col gap-3">
+              <div className="border-b border-border pb-2">
+                <h3 className="text-sm font-semibold text-foreground">{t('sso.access.orgSection')}</h3>
+                <p className="mt-1 text-xs text-muted-foreground">{t('sso.access.orgHint')}</p>
+              </div>
+              <Row label={t('sso.access.orgUsers')} value={ep.orgUsers} />
+              <Row label={t('sso.access.orgDepts')} value={ep.orgDepts} />
+            </section>
+          ) : null}
         </div>
       ) : null}
     </ResponsiveDialog>

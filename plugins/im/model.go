@@ -50,6 +50,8 @@ type Conversation struct {
 	RatedAt       *time.Time `json:"ratedAt,omitempty"`
 	// Tags 是逗号分隔的标签（去重、最多 10 个），列表按 LIKE 过滤。
 	Tags string `gorm:"size:255;not null;default:''" json:"tags,omitempty"`
+	// Note 是坐席内部备注（仅后台可见，不发访客），用于交接与质检。
+	Note string `gorm:"size:500;not null;default:''" json:"note,omitempty"`
 	// 访客来源：仅记录最近一次打开会话时的 IP / UA / 来源页，用于坐席判断上下文。
 	VisitorIP  string `gorm:"size:45;not null;default:''" json:"visitorIp,omitempty"`
 	VisitorUA  string `gorm:"size:255;not null;default:''" json:"visitorUa,omitempty"`
@@ -71,7 +73,9 @@ type Message struct {
 	Content    string    `gorm:"size:2000;not null" json:"content"`
 	Kind       string    `gorm:"size:16;not null" json:"kind"`
 	Meta       string    `gorm:"type:text" json:"meta,omitempty"`
-	CreatedAt  time.Time `json:"createdAt"`
+	// RecalledAt 是消息被撤回的时间；撤回后正文清空、kind 改为 system 并用 meta.code 标识。
+	RecalledAt *time.Time `json:"recalledAt,omitempty"`
+	CreatedAt  time.Time  `json:"createdAt"`
 }
 
 // Kind 取值：普通文本（默认）与系统提示。系统提示内容为空，由 meta.code 决定前端文案。

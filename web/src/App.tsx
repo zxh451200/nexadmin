@@ -1,9 +1,9 @@
-import { useState } from 'react'
 import { BrowserRouter } from 'react-router-dom'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { I18nextProvider } from 'react-i18next'
 import { AppErrorBoundary } from '@/framework/components/ErrorBoundary'
 import i18n from '@/framework/i18n/init'
+import { queryClient } from '@/framework/query/client'
 import { AppRoutes } from '@/framework/router/AppRoutes'
 import { ADMIN_BASE } from '@/framework/router/base'
 import { SetupGate } from '@/framework/setup/SetupGate'
@@ -12,15 +12,6 @@ import { Toaster } from '@/framework/ui/sonner'
 import { TooltipProvider } from '@/framework/ui/tooltip'
 
 export default function App() {
-  const [queryClient] = useState(
-    () =>
-      new QueryClient({
-        defaultOptions: {
-          queries: { retry: 1, refetchOnWindowFocus: false, staleTime: 30_000 },
-        },
-      }),
-  )
-
   return (
     <I18nextProvider i18n={i18n}>
       <ThemeProvider>

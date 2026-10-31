@@ -1,8 +1,7 @@
-package workflow
+package engine
 
 import (
-	"encoding/xml"
-	"strings"
+	"errors"
 	"testing"
 	"time"
 )
@@ -68,20 +67,43 @@ func TestValidateOK(t *testing.T) {
 
 func TestValidateErrors(t *testing.T) {
 	cases := map[string]func(Definition) Definition{
-		"缺流程key":  func(d Definition) Definition { d.Key = ""; return d },
-		"缺结束节点":   func(d Definition) Definition { d.Nodes = d.Nodes[:3]; return d },
-		"开始节点类型错": func(d Definition) Definition { d.Nodes[0].Kind = KindApproval; return d },
-		"节点key重复": func(d Definition) Definition { d.Nodes = append(d.Nodes, d.Nodes[1]); return d },
-		"连线终点不存在": func(d Definition) Definition { d.Edges = append(d.Edges, Edge{From: "n1", To: "ghost"}); return d },
-		"升级目标不存在": func(d Definition) Definition { d.Nodes[1].EscalateTo = "ghost"; return d },
-		"审批模式非法":  func(d Definition) Definition { d.Nodes[1].Mode = "xor"; return d },
+		"缺流程key":   func(d Definition) Definition { d.Key = ""; return d },
+		"缺结束节点":    func(d Definition) Definition { d.Nodes = d.Nodes[:3]; return d },
+		"开始节点类型错":  func(d Definition) Definition { d.Nodes[0].Kind = KindApproval; return d },
+		"节点key重复":  func(d Definition) Definition { d.Nodes = append(d.Nodes, d.Nodes[1]); return d },
+		"连线终点不存在":  func(d Definition) Definition { d.Edges = append(d.Edges, Edge{From: "n1", To: "ghost"}); return d },
+		"升级目标不存在":  func(d Definition) Definition { d.Nodes[1].EscalateTo = "ghost"; return d },
+		"升级目标不是审批": func(d Definition) Definition { d.Nodes[1].EscalateTo = "end"; return d },
+		"审批模式非法":   func(d Definition) Definition { d.Nodes[1].Mode = "xor"; return d },
+		"审批人含空值":   func(d Definition) Definition { d.Nodes[1].Approvers = []string{"u1", " "}; return d },
 		"排他网关缺默认边": func(Definition) Definition {
 			d := branchDef()
 			d.Edges[3].When = "amount<=10000"
 			return d
 		},
 		"节点不可达": func(d Definition) Definition {
-			d.Nodes = append(d.Nodes, Node{Key: "orphan", Kind: KindApproval})
+			d.Nodes = append(d.Nodes, Node{Key: "orphan", Kind: KindEnd})
+			return d
+		},
+		"结束节点有出边": func(d Definition) Definition {
+			d.Edges = append(d.Edges, Edge{From: "end", To: "n1"})
+			return d
+		},
+		"开始节点有入边": func(d Definition) Definition {
+			d.Edges = append(d.Edges, Edge{From: "n2", To: "start"})
+			return d
+		},
+		"非结束节点无出边": func(d Definition) Definition {
+			d.Edges = d.Edges[:2]
+			return d
+		},
+		"重复连线": func(d Definition) Definition {
+			d.Edges = append(d.Edges, Edge{From: "start", To: "n1"})
+			return d
+		},
+		"多个开始节点": func(d Definition) Definition {
+			d.Nodes = append(d.Nodes, Node{Key: "start2", Kind: KindStart})
+			d.Edges = append(d.Edges, Edge{From: "start2", To: "n1"})
 			return d
 		},
 	}
@@ -103,6 +125,9 @@ func TestStartStopsAtFirstApproval(t *testing.T) {
 	if len(inst.Done) != 1 || inst.Done[0] != "start" {
 		t.Fatalf("Done = %v", inst.Done)
 	}
+	if inst.Revision != 1 {
+		t.Fatalf("Revision = %d, want 1", inst.Revision)
+	}
 }
 
 func TestApproveAnyThenAll(t *testing.T) {
@@ -114,6 +139,9 @@ func TestApproveAnyThenAll(t *testing.T) {
 	}
 	if len(inst.Current) != 1 || inst.Current[0] != "n2" {
 		t.Fatalf("进入 n2 失败: %v", inst.Current)
+	}
+	if inst.Revision != 2 {
+		t.Fatalf("Revision = %d, want 2", inst.Revision)
 	}
 	if err := Approve(seqDef(), inst, "u2", "", now); err != nil {
 		t.Fatalf("n2 u2 通过失败: %v", err)
@@ -134,8 +162,15 @@ func TestApproveAnyThenAll(t *testing.T) {
 
 func TestNonApproverRejected(t *testing.T) {
 	inst := mustStart(t, seqDef(), nil)
-	if err := Approve(seqDef(), inst, "stranger", "", time.Now()); err == nil {
+	err := Approve(seqDef(), inst, "stranger", "", time.Now())
+	if err == nil {
 		t.Fatal("非审批人应被拒绝")
+	}
+	if !errors.Is(err, ErrNotApprover) {
+		t.Fatalf("错误类型 = %v, want ErrNotApprover", err)
+	}
+	if err := Reject(seqDef(), inst, "stranger", "", time.Now()); !errors.Is(err, ErrNotApprover) {
+		t.Fatalf("非审批人驳回的错误类型 = %v, want ErrNotApprover", err)
 	}
 }
 
@@ -151,8 +186,8 @@ func TestRejectTerminates(t *testing.T) {
 	if inst.Status != StatusRejected {
 		t.Fatalf("状态 = %s", inst.Status)
 	}
-	if err := Approve(seqDef(), inst, "u2", "", now); err == nil {
-		t.Fatal("结束后不应还能审批")
+	if err := Approve(seqDef(), inst, "u2", "", now); !errors.Is(err, ErrNotRunning) {
+		t.Fatalf("结束后应返回 ErrNotRunning，实际 %v", err)
 	}
 }
 
@@ -198,6 +233,9 @@ func TestRollbackClearsVotes(t *testing.T) {
 	if _, ok := inst.Votes["n1"]; ok {
 		t.Fatal("回退后应清除 n1 的投票")
 	}
+	if err := Rollback(def, inst, "u2", "end", "", now); err == nil {
+		t.Fatal("回退到结束节点应报错")
+	}
 	if err := Approve(def, inst, "u1", "", now); err != nil {
 		t.Fatalf("回退后重新审批失败: %v", err)
 	}
@@ -215,8 +253,21 @@ func TestEscalateMovesToTarget(t *testing.T) {
 	if len(inst.Current) != 1 || inst.Current[0] != "n2" {
 		t.Fatalf("Current = %v", inst.Current)
 	}
-	if err := Escalate(branchDef(), inst, "system", "", time.Now()); err == nil {
-		t.Fatal("未配置升级目标的节点应报错")
+	if err := Escalate(branchDef(), mustStart(t, branchDef(), nil), "system", "", time.Now()); !errors.Is(err, ErrNoEscalateTarget) {
+		t.Fatalf("未配置升级目标应返回 ErrNoEscalateTarget，实际 %v", err)
+	}
+}
+
+func TestWithdraw(t *testing.T) {
+	inst := mustStart(t, seqDef(), nil)
+	if err := Withdraw(inst, "u1", "不需要了", time.Now()); err != nil {
+		t.Fatalf("撤回失败: %v", err)
+	}
+	if inst.Status != StatusCancelled {
+		t.Fatalf("状态 = %s", inst.Status)
+	}
+	if err := Withdraw(inst, "u1", "", time.Now()); !errors.Is(err, ErrNotRunning) {
+		t.Fatalf("重复撤回应返回 ErrNotRunning，实际 %v", err)
 	}
 }
 
@@ -264,37 +315,9 @@ func TestEvalCondition(t *testing.T) {
 	}
 }
 
-func TestExportXML(t *testing.T) {
-	out, err := ExportXML(branchDef())
-	if err != nil {
-		t.Fatalf("导出失败: %v", err)
-	}
-	for _, want := range []string{"<bpmn:startEvent", "<bpmn:userTask", "<bpmn:exclusiveGateway", "<bpmn:endEvent", "conditionExpression", "amount&gt;10000", "bpmn:process"} {
-		if !strings.Contains(out, want) {
-			t.Errorf("XML 缺少 %q:\n%s", want, out)
-		}
-	}
-	var parsed struct {
-		XMLName xml.Name
-		Process struct {
-			ID string `xml:"id,attr"`
-		} `xml:"process"`
-	}
-	if err := xml.Unmarshal([]byte(out), &parsed); err != nil {
-		t.Fatalf("XML 不可解析: %v", err)
-	}
-	if parsed.Process.ID != "d2" {
-		t.Fatalf("process id = %q", parsed.Process.ID)
-	}
-	if _, err := ExportXML(Definition{Key: "bad"}); err == nil {
-		t.Fatal("非法定义导出应报错")
-	}
-}
-
-// TestApproveNoApprovers 审批节点未配置审批人时，任意用户表态即完成。
-// 回归：此前 Approve/Reject 用 contains(approvers, actor) 拦截，空 approvers 时恒 false，
-// 导致该节点永久卡死、satisfied 的 len==0 分支成为死代码。
-func TestApproveNoApprovers(t *testing.T) {
+// TestAnyoneWhenNoApprovers 审批节点未配置审批人时是「公开任务」：同意与驳回口径一致。
+// 回归：旧实现 Approve 放行空审批人、Reject 却严格匹配，导致公开任务永远驳不回。
+func TestAnyoneWhenNoApprovers(t *testing.T) {
 	def := Definition{
 		Key: "d3", Name: "无审批人", Start: "start",
 		Nodes: []Node{
@@ -304,11 +327,44 @@ func TestApproveNoApprovers(t *testing.T) {
 		},
 		Edges: []Edge{{From: "start", To: "a"}, {From: "a", To: "end"}},
 	}
-	inst := mustStart(t, def, nil)
-	if err := Approve(def, inst, "anyone", "同意", time.Now()); err != nil {
-		t.Fatalf("无审批人节点应放行任意审批人，实际报错: %v", err)
+	approved := mustStart(t, def, nil)
+	if err := Approve(def, approved, "anyone", "同意", time.Now()); err != nil {
+		t.Fatalf("公开任务应放行任意审批人，实际报错: %v", err)
 	}
-	if inst.Status != StatusApproved {
-		t.Fatalf("应自动流转通过，实际 status=%s current=%v", inst.Status, inst.Current)
+	if approved.Status != StatusApproved {
+		t.Fatalf("应自动流转通过，实际 status=%s current=%v", approved.Status, approved.Current)
+	}
+
+	rejected := mustStart(t, def, nil)
+	if err := Reject(def, rejected, "anyone", "不同意", time.Now()); err != nil {
+		t.Fatalf("公开任务应允许任意人驳回，实际报错: %v", err)
+	}
+	if rejected.Status != StatusRejected {
+		t.Fatalf("状态 = %s, want rejected", rejected.Status)
+	}
+}
+
+func TestPendingTasksAndActiveApprover(t *testing.T) {
+	def := seqDef()
+	inst := mustStart(t, def, nil)
+	tasks := PendingTasks(def, inst)
+	if len(tasks) != 1 || tasks[0].Assignee != "u1" || tasks[0].NodeKey != "n1" {
+		t.Fatalf("PendingTasks = %+v", tasks)
+	}
+	if tasks[0].NodeName != "保管员" {
+		t.Fatalf("NodeName = %q", tasks[0].NodeName)
+	}
+	if !IsActiveApprover(def, inst, "u1") {
+		t.Fatal("u1 应是当前审批人")
+	}
+	if IsActiveApprover(def, inst, "u2") {
+		t.Fatal("u2 不是当前审批人")
+	}
+	if err := Approve(def, inst, "u1", "", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	tasks = PendingTasks(def, inst)
+	if len(tasks) != 2 {
+		t.Fatalf("会签节点应有 2 条待办，实际 %+v", tasks)
 	}
 }

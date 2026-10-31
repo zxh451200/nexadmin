@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
+	"nexadmin/core/cache"
 	"nexadmin/core/cluster"
 	"nexadmin/core/response"
 	"nexadmin/core/storage"
@@ -26,10 +28,12 @@ type Service struct {
 	hub   *hub
 	store storage.Storage
 	bus   *cluster.Bus
+	cache cache.Cache
 }
 
 // logger 是最小日志面（便于测试注入空实现）。
 type logger interface {
+	Info(msg string, keysAndValues ...any)
 	Warn(msg string, keysAndValues ...any)
 	Error(msg string, keysAndValues ...any)
 }
@@ -45,6 +49,9 @@ func (s *Service) Storage() storage.Storage { return s.store }
 
 // SetBus 注入跨实例事件总线；nil 安全（单实例 / 缓存不支持发布订阅时只走进程内推送）。
 func (s *Service) SetBus(b *cluster.Bus) { s.bus = b }
+
+// SetCache 注入缓存：坐席在线状态（心跳）与跨实例共享的短 TTL 键都用它。
+func (s *Service) SetCache(c cache.Cache) { s.cache = c }
 
 // busKind 是 IM 跨实例广播的事件种类。
 const busKind = "im.push"
@@ -113,6 +120,15 @@ func (s *Service) Open(ctx context.Context, in OpenInput) (*Conversation, error)
 	).Take(&existing).Error
 	if err == nil {
 		s.refreshVisitor(ctx, &existing, in)
+		// 已结束的会话再被打开 = 访客重新开口：复用同一行重新开启（biz 三元组唯一），
+		// 结算上一轮的评分与归属，并留一条「会话已重新开启」的系统提示。
+		if existing.Status != StatusOpen {
+			if rerr := s.reopen(ctx, &existing); rerr != nil {
+				return nil, rerr
+			}
+			s.publishControl(existing.ConvNo, map[string]any{"type": "reopened"})
+			s.autoAssign(ctx, &existing)
+		}
 		return &existing, nil
 	}
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
@@ -140,7 +156,82 @@ func (s *Service) Open(ctx context.Context, in OpenInput) (*Conversation, error)
 		}
 		return nil, err
 	}
+	s.sendWelcome(ctx, c)
+	s.autoAssign(ctx, c)
 	return c, nil
+}
+
+// sendWelcome 在新会话里落一条欢迎语（以客服身份发送），失败只记日志、不影响开会话。
+func (s *Service) sendWelcome(ctx context.Context, c *Conversation) {
+	text := strings.TrimSpace(s.Settings(ctx).WelcomeText)
+	if text == "" {
+		return
+	}
+	id, err := idgen.Next()
+	if err != nil {
+		return
+	}
+	now := time.Now().UTC()
+	m := Message{ConvID: c.ID, Seq: c.MsgSeq + 1, SenderType: SenderAgent, Content: truncate(text, 2000), Kind: KindText, CreatedAt: now}
+	m.ID = id
+	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&m).Error; err != nil {
+			return err
+		}
+		return tx.Model(&Conversation{}).Where("id = ?", int64(c.ID)).Updates(map[string]any{
+			"msg_seq": m.Seq, "last_msg_at": now, "last_preview": preview(text),
+		}).Error
+	})
+	if err != nil {
+		if s.log != nil {
+			s.log.Warn("im: send welcome message failed", "convNo", c.ConvNo, "err", err.Error())
+		}
+		return
+	}
+	c.MsgSeq = m.Seq
+	c.LastMsgAt = &now
+	c.LastPreview = preview(text)
+}
+
+// reopen 把已结束的会话重新开启：清掉上一轮的结束信息、评分与归属，
+// 追加一条系统提示并推进序号。并发打开时以行锁保证只开一次。
+func (s *Service) reopen(ctx context.Context, c *Conversation) error {
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var cur Conversation
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("id = ?", int64(c.ID)).Take(&cur).Error; err != nil {
+			return err
+		}
+		if cur.Status == StatusOpen {
+			*c = cur
+			return nil
+		}
+		now := time.Now().UTC()
+		id, err := idgen.Next()
+		if err != nil {
+			return err
+		}
+		meta, _ := json.Marshal(map[string]string{"code": "conv_reopened"})
+		m := Message{ConvID: cur.ID, Seq: cur.MsgSeq + 1, SenderType: SenderSystem, Kind: KindSystem, Meta: string(meta), CreatedAt: now}
+		m.ID = id
+		if err := tx.Create(&m).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&Conversation{}).Where("id = ?", int64(cur.ID)).Updates(map[string]any{
+			"status": StatusOpen, "closed_at": nil, "closed_by": "",
+			"rating": 0, "rating_comment": "", "rated_at": nil,
+			"assignee_id": "", "assignee_name": "",
+			"msg_seq": m.Seq, "last_msg_at": now, "last_preview": "",
+		}).Error; err != nil {
+			return err
+		}
+		cur.Status, cur.ClosedAt, cur.ClosedBy = StatusOpen, nil, ""
+		cur.Rating, cur.RatingComment, cur.RatedAt = 0, "", nil
+		cur.AssigneeID, cur.AssigneeName = "", ""
+		cur.MsgSeq, cur.LastMsgAt, cur.LastPreview = m.Seq, &now, ""
+		*c = cur
+		return nil
+	})
 }
 
 // refreshVisitor 在有新信息时刷新访客名与来源；没有变化就不写库（挂件每次打开都会走这里）。
@@ -200,6 +291,12 @@ func (s *Service) Send(ctx context.Context, convNo string, in SendInput) (*Messa
 		return nil, response.BadRequest("im.content_required")
 	}
 	in.Content = truncate(in.Content, 2000)
+	// 访客消息过一遍敏感词（坐席回复不替换，避免误伤内部话术）。
+	if in.SenderType == SenderVisitor && in.Content != "" {
+		if words := s.Settings(ctx).BannedWords; len(words) > 0 {
+			in.Content = maskBanned(in.Content, words)
+		}
+	}
 	in.SenderName = truncate(strings.TrimSpace(in.SenderName), 64)
 	kind := KindText
 	if in.SenderType == SenderSystem {
@@ -392,8 +489,8 @@ type ConversationView struct {
 	Unread int64 `json:"unread"`
 }
 
-// ListConversations 坐席会话列表：按最后消息时间倒序，附带每个会话的访客未读数。
-func (s *Service) ListConversations(ctx context.Context, q ConversationQuery) ([]ConversationView, int64, error) {
+// convFilter 构造列表与导出共用的筛选条件（标签、关键字、坐席、状态）。
+func (s *Service) convFilter(ctx context.Context, q ConversationQuery) *gorm.DB {
 	db := s.db.WithContext(ctx).Model(&Conversation{})
 	if q.Status != "" {
 		db = db.Where("status = ?", q.Status)
@@ -413,6 +510,22 @@ func (s *Service) ListConversations(ctx context.Context, q ConversationQuery) ([
 		like := "%" + kw + "%"
 		db = db.Where("conv_no LIKE ? OR visitor_name LIKE ? OR last_preview LIKE ?", like, like, like)
 	}
+	return db
+}
+
+// ExportConversations 按与列表相同的筛选条件取导出数据（不含未读数），上限 limit。
+func (s *Service) ExportConversations(ctx context.Context, q ConversationQuery, limit int) ([]Conversation, error) {
+	if limit <= 0 {
+		limit = 5000
+	}
+	var rows []Conversation
+	err := s.convFilter(ctx, q).Order("COALESCE(last_msg_at, created_at) DESC").Limit(limit).Find(&rows).Error
+	return rows, err
+}
+
+// ListConversations 坐席会话列表：按最后消息时间倒序，附带每个会话的访客未读数。
+func (s *Service) ListConversations(ctx context.Context, q ConversationQuery) ([]ConversationView, int64, error) {
+	db := s.convFilter(ctx, q)
 	var total int64
 	if err := db.Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -565,6 +678,136 @@ func (s *Service) SetTags(ctx context.Context, convNo, raw string) (*Conversatio
 		return nil, response.NotFound("im.conv_not_found")
 	}
 	return &c, nil
+}
+
+// SetNote 覆盖会话的内部备注（只给坐席看，不推给访客）；空串表示清空。
+func (s *Service) SetNote(ctx context.Context, convNo, note string) (*Conversation, error) {
+	if err := s.db.WithContext(ctx).Model(&Conversation{}).Where("conv_no = ?", strings.TrimSpace(convNo)).
+		Update("note", truncate(strings.TrimSpace(note), 500)).Error; err != nil {
+		return nil, err
+	}
+	var c Conversation
+	if err := s.db.WithContext(ctx).Where("conv_no = ?", strings.TrimSpace(convNo)).Take(&c).Error; err != nil {
+		return nil, response.NotFound("im.conv_not_found")
+	}
+	return &c, nil
+}
+
+// DeleteResult 是删除会话的结果：实际删掉的会话数与消息数，以及被跳过的会话号。
+type DeleteResult struct {
+	Deleted  int      `json:"deleted"`
+	Messages int64    `json:"messages"`
+	Skipped  []string `json:"skipped"`
+}
+
+// 批量删除时用于区分「跳过」的原因，不直接暴露给用户。
+var (
+	errConvMissing   = errors.New("im: conversation not found")
+	errConvNotClosed = errors.New("im: conversation not closed")
+)
+
+// DeleteConversation 物理删除一个已结束的会话及其消息、附件（含存储对象）。
+// 进行中的会话拒绝删除：访客可能正在聊，直接抹掉会让对面突然断流。
+func (s *Service) DeleteConversation(ctx context.Context, convNo string) (DeleteResult, error) {
+	res, err := s.deleteOne(ctx, strings.TrimSpace(convNo))
+	switch {
+	case errors.Is(err, errConvNotClosed):
+		return res, response.Conflict("im.conv_open")
+	case errors.Is(err, errConvMissing):
+		return res, response.NotFound("im.conv_not_found")
+	}
+	return res, err
+}
+
+// DeleteConversations 批量删除（只删已结束的），不存在的/进行中的记入 Skipped，单次上限 200。
+func (s *Service) DeleteConversations(ctx context.Context, nos []string) (DeleteResult, error) {
+	out := DeleteResult{Skipped: []string{}}
+	for i, no := range nos {
+		if i >= 200 {
+			break
+		}
+		res, err := s.deleteOne(ctx, strings.TrimSpace(no))
+		switch {
+		case err == nil:
+			out.Deleted++
+			out.Messages += res.Messages
+		case errors.Is(err, errConvMissing), errors.Is(err, errConvNotClosed):
+			out.Skipped = append(out.Skipped, strings.TrimSpace(no))
+		default:
+			return out, err
+		}
+	}
+	return out, nil
+}
+
+// PurgeConversations 清理结束时间早于 cutoff 的会话（保留期清理），单轮最多 limit 个，
+// 返回扫描数、删除数。存储对象删除失败只留孤儿文件，不影响行删除。
+func (s *Service) PurgeConversations(ctx context.Context, cutoff time.Time, limit int) (scanned, deleted int, err error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	var nos []string
+	if err := s.db.WithContext(ctx).Model(&Conversation{}).
+		Where("status = ? AND closed_at IS NOT NULL AND closed_at < ?", StatusClosed, cutoff).
+		Order("closed_at ASC").Limit(limit).Pluck("conv_no", &nos).Error; err != nil {
+		return 0, 0, err
+	}
+	for _, no := range nos {
+		res, derr := s.deleteOne(ctx, no)
+		if derr != nil {
+			if s.log != nil {
+				s.log.Warn("im: purge conversation failed", "convNo", no, "err", derr.Error())
+			}
+			continue
+		}
+		deleted += res.Deleted
+	}
+	return len(nos), deleted, nil
+}
+
+// deleteOne 在一个事务里删掉会话、消息与附件行，事务外再删存储对象。
+func (s *Service) deleteOne(ctx context.Context, convNo string) (DeleteResult, error) {
+	var out DeleteResult
+	if convNo == "" {
+		return out, errConvMissing
+	}
+	var keys []string
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var c Conversation
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("conv_no = ?", convNo).Take(&c).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return errConvMissing
+			}
+			return err
+		}
+		if c.Status != StatusClosed {
+			return errConvNotClosed
+		}
+		if err := tx.Model(&Attachment{}).Where("conv_id = ?", int64(c.ID)).Pluck("storage_key", &keys).Error; err != nil {
+			return err
+		}
+		res := tx.Where("conv_id = ?", int64(c.ID)).Delete(&Message{})
+		if res.Error != nil {
+			return res.Error
+		}
+		out.Messages = res.RowsAffected
+		if err := tx.Where("conv_id = ?", int64(c.ID)).Delete(&Attachment{}).Error; err != nil {
+			return err
+		}
+		return tx.Where("id = ?", int64(c.ID)).Delete(&Conversation{}).Error
+	})
+	if err != nil {
+		return out, err
+	}
+	out.Deleted = 1
+	if s.store != nil {
+		for _, key := range keys {
+			if err := s.store.Delete(ctx, key); err != nil && s.log != nil {
+				s.log.Warn("im: delete conversation attachment failed", "convNo", convNo, "key", key, "err", err.Error())
+			}
+		}
+	}
+	return out, nil
 }
 
 // Rate 由访客给已结束的会话打 1~5 分（一次性）。
@@ -797,6 +1040,8 @@ type Agent struct {
 	ID       idgen.ID `json:"id"`
 	Username string   `json:"username"`
 	Nickname string   `json:"nickname"`
+	// Online 来自心跳（TTL 90 秒），用于转接列表与自动分配。
+	Online bool `json:"online"`
 }
 
 // Agents 返回当前租户内能回复会话的坐席（按用户名排序）。
@@ -816,7 +1061,122 @@ func (s *Service) Agents(ctx context.Context) ([]Agent, error) {
 	if err := q.Order("u.username ASC").Limit(200).Scan(&out).Error; err != nil {
 		return nil, err
 	}
+	ids := make([]string, len(out))
+	for i := range out {
+		ids[i] = strconv.FormatInt(int64(out[i].ID), 10)
+	}
+	online := s.onlineMap(ctx, ids)
+	for i := range out {
+		out[i].Online = online[ids[i]]
+	}
 	return out, nil
+}
+
+// presenceTTL 是在线状态的存活时间：前端每 60 秒心跳一次，90 秒没心跳即视为离线。
+const presenceTTL = 90 * time.Second
+
+func presenceKey(userID string) string { return "im:presence:" + userID }
+
+// Heartbeat 记录坐席在线。
+func (s *Service) Heartbeat(ctx context.Context, userID string) {
+	if s.cache == nil || strings.TrimSpace(userID) == "" {
+		return
+	}
+	_ = s.cache.Set(ctx, presenceKey(userID), "1", presenceTTL)
+}
+
+// onlineMap 批量查在线状态；没有缓存时视为全部在线（单实例部署也无需心跳）。
+func (s *Service) onlineMap(ctx context.Context, ids []string) map[string]bool {
+	out := make(map[string]bool, len(ids))
+	if s.cache == nil {
+		for _, id := range ids {
+			out[id] = true
+		}
+		return out
+	}
+	for _, id := range ids {
+		ok, err := s.cache.Exists(ctx, presenceKey(id))
+		out[id] = err == nil && ok
+	}
+	return out
+}
+
+// autoAssign 新会话按设置分给在线且手上进行中会话最少的坐席；没有在线坐席就排队。
+func (s *Service) autoAssign(ctx context.Context, c *Conversation) {
+	if !s.Settings(ctx).AutoAssign {
+		return
+	}
+	id, name, err := s.pickAgent(ctx)
+	if err != nil || id == "" {
+		return
+	}
+	res := s.db.WithContext(ctx).Model(&Conversation{}).Where("id = ? AND assignee_id = ''", int64(c.ID)).
+		Updates(map[string]any{"assignee_id": id, "assignee_name": name})
+	if res.Error != nil || res.RowsAffected == 0 {
+		return
+	}
+	c.AssigneeID, c.AssigneeName = id, name
+	s.publishControl(c.ConvNo, map[string]any{"type": "assigned", "assigneeId": id, "assigneeName": name})
+}
+
+// pickAgent 在在线坐席里挑进行中会话最少的一个（并列时按用户名序，取第一个）。
+func (s *Service) pickAgent(ctx context.Context) (string, string, error) {
+	agents, err := s.Agents(ctx)
+	if err != nil {
+		return "", "", err
+	}
+	type loadRow struct {
+		AssigneeID string
+		N          int64
+	}
+	var loads []loadRow
+	if err := s.db.WithContext(ctx).Model(&Conversation{}).Select("assignee_id, COUNT(*) AS n").
+		Where("status = ? AND assignee_id <> ''", StatusOpen).Group("assignee_id").Scan(&loads).Error; err != nil {
+		return "", "", err
+	}
+	load := make(map[string]int64, len(loads))
+	for _, l := range loads {
+		load[l.AssigneeID] = l.N
+	}
+	bestID, bestName, bestLoad := "", "", int64(1<<62)
+	for _, a := range agents {
+		if !a.Online {
+			continue
+		}
+		id := strconv.FormatInt(int64(a.ID), 10)
+		if load[id] < bestLoad {
+			name := a.Nickname
+			if name == "" {
+				name = a.Username
+			}
+			bestID, bestName, bestLoad = id, name, load[id]
+		}
+	}
+	return bestID, bestName, nil
+}
+
+// AssignNext 坐席心跳后按先后领走一个排队中的会话（仅自动分配开启时），返回领取的会话号。
+func (s *Service) AssignNext(ctx context.Context, agentID, agentName string) (string, error) {
+	agentID = strings.TrimSpace(agentID)
+	if agentID == "" || !s.Settings(ctx).AutoAssign {
+		return "", nil
+	}
+	var c Conversation
+	err := s.db.WithContext(ctx).Where("status = ? AND assignee_id = ''", StatusOpen).
+		Order("created_at ASC").Take(&c).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", nil
+		}
+		return "", err
+	}
+	res := s.db.WithContext(ctx).Model(&Conversation{}).Where("id = ? AND assignee_id = ''", int64(c.ID)).
+		Updates(map[string]any{"assignee_id": agentID, "assignee_name": truncate(strings.TrimSpace(agentName), 64)})
+	if res.Error != nil || res.RowsAffected == 0 {
+		return "", res.Error
+	}
+	s.publishControl(c.ConvNo, map[string]any{"type": "assigned", "assigneeId": agentID, "assigneeName": truncate(agentName, 64)})
+	return c.ConvNo, nil
 }
 
 // Transfer 把会话转给指定坐席（覆盖原归属），并通知双方刷新。
@@ -840,4 +1200,356 @@ func (s *Service) Transfer(ctx context.Context, convNo, userID, userName string)
 	}
 	s.publishControl(c.ConvNo, map[string]any{"type": "assigned", "assigneeId": c.AssigneeID, "assigneeName": c.AssigneeName})
 	return &c, nil
+}
+
+// ---- 统计 ----
+
+// statsLimit 是一次统计最多纳入的会话数：超过就截断并标记 truncated，避免长窗口拖垮接口。
+const statsLimit = 5000
+
+type StatsDaily struct {
+	Date    string `json:"date"`
+	Created int    `json:"created"`
+	Closed  int    `json:"closed"`
+}
+
+type StatsAgent struct {
+	ID        string  `json:"id"`
+	Name      string  `json:"name"`
+	Online    bool    `json:"online"`
+	Assigned  int     `json:"assigned"`
+	Closed    int     `json:"closed"`
+	AvgRating float64 `json:"avgRating"`
+}
+
+// Stats 是统计看板的数据：窗口内的会话数、结束数、首响、满意度、按天趋势与坐席工作量。
+type Stats struct {
+	Days                int          `json:"days"`
+	Total               int          `json:"total"`
+	Closed              int          `json:"closed"`
+	Open                int          `json:"open"`
+	AvgRating           float64      `json:"avgRating"`
+	RatingCount         int          `json:"ratingCount"`
+	AvgFirstResponseSec int64        `json:"avgFirstResponseSec"`
+	FirstResponseCount  int          `json:"firstResponseCount"`
+	Truncated           bool         `json:"truncated"`
+	Daily               []StatsDaily `json:"daily"`
+	Agents              []StatsAgent `json:"agents"`
+}
+
+// Stats 聚合窗口内的会话；首响按「访客第一条消息 → 坐席第一条回复」计算。
+func (s *Service) Stats(ctx context.Context, days int) (*Stats, error) {
+	if days < 1 {
+		days = 7
+	}
+	if days > 90 {
+		days = 90
+	}
+	now := time.Now()
+	start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).AddDate(0, 0, -(days - 1))
+	out := &Stats{Days: days, Agents: []StatsAgent{}}
+	daily := make([]StatsDaily, days)
+	for i := 0; i < days; i++ {
+		daily[i] = StatsDaily{Date: start.AddDate(0, 0, i).Format("2006-01-02")}
+	}
+	dayIdx := func(t time.Time) int {
+		d := int(t.In(start.Location()).Sub(start) / (24 * time.Hour))
+		if d < 0 || d >= days {
+			return -1
+		}
+		return d
+	}
+
+	var convs []Conversation
+	if err := s.db.WithContext(ctx).Where("created_at >= ?", start).Order("id ASC").Limit(statsLimit + 1).Find(&convs).Error; err != nil {
+		return nil, err
+	}
+	if len(convs) > statsLimit {
+		convs = convs[:statsLimit]
+		out.Truncated = true
+	}
+
+	ratingSum, ratingCount := 0, 0
+	agentRating := map[string]int{}
+	agentRatingN := map[string]int{}
+	perAgent := map[string]*StatsAgent{}
+	for _, c := range convs {
+		out.Total++
+		if c.Status == StatusClosed {
+			out.Closed++
+		} else {
+			out.Open++
+		}
+		if i := dayIdx(c.CreatedAt); i >= 0 {
+			daily[i].Created++
+		}
+		if c.ClosedAt != nil {
+			if i := dayIdx(*c.ClosedAt); i >= 0 {
+				daily[i].Closed++
+			}
+		}
+		if c.Rating > 0 {
+			ratingSum += c.Rating
+			ratingCount++
+		}
+		if c.AssigneeID != "" {
+			st := perAgent[c.AssigneeID]
+			if st == nil {
+				st = &StatsAgent{ID: c.AssigneeID, Name: c.AssigneeName}
+				perAgent[c.AssigneeID] = st
+			}
+			st.Assigned++
+			if c.Status == StatusClosed {
+				st.Closed++
+			}
+			if c.Rating > 0 {
+				agentRating[c.AssigneeID] += c.Rating
+				agentRatingN[c.AssigneeID]++
+			}
+		}
+	}
+	if ratingCount > 0 {
+		out.AvgRating = float64(ratingSum) / float64(ratingCount)
+	}
+	out.RatingCount = ratingCount
+	out.Daily = daily
+
+	// 首响：按会话取访客首条与坐席首条的最早时间，再算差（跳过坐席先开口的会话）。
+	type firstRow struct {
+		ConvID idgen.ID
+		At     time.Time
+	}
+	firsts := func(sender string) (map[idgen.ID]time.Time, error) {
+		var rows []firstRow
+		err := s.db.WithContext(ctx).Raw(
+			`SELECT m.conv_id AS conv_id, MIN(m.created_at) AS at FROM plg_im_message m
+			 JOIN plg_im_conversation c ON c.id = m.conv_id
+			 WHERE c.created_at >= ? AND m.sender_type = ? GROUP BY m.conv_id`, start, sender).Scan(&rows).Error
+		if err != nil {
+			return nil, err
+		}
+		out := make(map[idgen.ID]time.Time, len(rows))
+		for _, r := range rows {
+			out[r.ConvID] = r.At
+		}
+		return out, nil
+	}
+	visitorFirst, err := firsts(SenderVisitor)
+	if err != nil {
+		return nil, err
+	}
+	agentFirst, err := firsts(SenderAgent)
+	if err != nil {
+		return nil, err
+	}
+	var sumSec, n int64
+	for id, vt := range visitorFirst {
+		at, ok := agentFirst[id]
+		if !ok || at.Before(vt) {
+			continue
+		}
+		sumSec += int64(at.Sub(vt).Seconds())
+		n++
+	}
+	if n > 0 {
+		out.AvgFirstResponseSec = sumSec / n
+	}
+	out.FirstResponseCount = int(n)
+
+	agents, err := s.Agents(ctx)
+	if err != nil {
+		// 坐席名单只用于补全名字与在线状态，取不到不影响统计主体。
+		if s.log != nil {
+			s.log.Warn("im: load agents for stats failed", "err", err.Error())
+		}
+		agents = nil
+	}
+	for _, a := range agents {
+		id := strconv.FormatInt(int64(a.ID), 10)
+		st := perAgent[id]
+		if st == nil {
+			st = &StatsAgent{ID: id}
+			perAgent[id] = st
+		}
+		if st.Name == "" {
+			st.Name = a.Nickname
+		}
+		if st.Name == "" {
+			st.Name = a.Username
+		}
+		st.Online = a.Online
+	}
+	for id, st := range perAgent {
+		if agentRatingN[id] > 0 {
+			st.AvgRating = float64(agentRating[id]) / float64(agentRatingN[id])
+		}
+		out.Agents = append(out.Agents, *st)
+	}
+	sort.Slice(out.Agents, func(i, j int) bool {
+		if out.Agents[i].Assigned != out.Agents[j].Assigned {
+			return out.Agents[i].Assigned > out.Agents[j].Assigned
+		}
+		return out.Agents[i].Name < out.Agents[j].Name
+	})
+	return out, nil
+}
+
+// ---- 撤回 / 合并 ----
+
+// recallWindow 是坐席可撤回自己消息的时间窗口。
+const recallWindow = 2 * time.Minute
+
+// Recall 撤回坐席自己在窗口内发的一条消息：正文清空、改为 system + meta 标识、推控制帧。
+func (s *Service) Recall(ctx context.Context, convNo string, seq int64, userID string) (*Message, error) {
+	convNo = strings.TrimSpace(convNo)
+	if convNo == "" || seq <= 0 {
+		return nil, response.BadRequest("error.bad_request")
+	}
+	var (
+		out  Message
+		conv Conversation
+	)
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("conv_no = ?", convNo).Take(&conv).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return response.NotFound("im.conv_not_found")
+			}
+			return err
+		}
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("conv_id = ? AND seq = ?", int64(conv.ID), seq).Take(&out).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return response.NotFound("im.message_not_found")
+			}
+			return err
+		}
+		if out.SenderType != SenderAgent || out.SenderID != userID {
+			return response.Conflict("im.message_not_recallable")
+		}
+		if out.RecalledAt != nil || time.Since(out.CreatedAt) > recallWindow {
+			return response.Conflict("im.message_not_recallable")
+		}
+		now := time.Now().UTC()
+		meta, _ := json.Marshal(map[string]string{"code": "message_recalled"})
+		if err := tx.Model(&Message{}).Where("id = ?", int64(out.ID)).Updates(map[string]any{
+			"content": "", "kind": KindSystem, "meta": string(meta), "recalled_at": now,
+		}).Error; err != nil {
+			return err
+		}
+		// 撤回的是最后一条：列表摘要不能再显示原文。
+		if seq == conv.MsgSeq {
+			return tx.Model(&Conversation{}).Where("id = ?", int64(conv.ID)).Update("last_preview", "").Error
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	out.Content, out.Kind = "", KindSystem
+	out.RecalledAt = &conv.CreatedAt
+	out.Meta = `{"code":"message_recalled"}`
+	s.publishControl(conv.ConvNo, map[string]any{"type": "recalled", "seq": seq})
+	return &out, nil
+}
+
+// MergeResult 是合并结果：目标会话号与被搬过去的消息数。
+type MergeResult struct {
+	Target string `json:"target"`
+	Moved  int64  `json:"moved"`
+}
+
+// Merge 把源会话的消息与附件并入目标会话：源会话结束并留一条指向目标的系统提示。
+// 目标必须是进行中的会话；两个会话按会话号定序加锁，避免反向并发合并时死锁。
+func (s *Service) Merge(ctx context.Context, fromNo, toNo, agentID string) (*MergeResult, error) {
+	fromNo, toNo = strings.TrimSpace(fromNo), strings.TrimSpace(toNo)
+	if fromNo == "" || toNo == "" || fromNo == toNo {
+		return nil, response.BadRequest("error.bad_request")
+	}
+	var moved int64
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		first, second := fromNo, toNo
+		if first > second {
+			first, second = second, first
+		}
+		var a, b Conversation
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("conv_no = ?", first).Take(&a).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return response.NotFound("im.conv_not_found")
+			}
+			return err
+		}
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("conv_no = ?", second).Take(&b).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return response.NotFound("im.conv_not_found")
+			}
+			return err
+		}
+		src, target := a, b
+		if first == fromNo {
+			src, target = a, b
+		} else {
+			src, target = b, a
+		}
+		if target.Status != StatusOpen {
+			return response.Conflict("im.conv_closed")
+		}
+		offset := target.MsgSeq
+		res := tx.Exec("UPDATE plg_im_message SET conv_id = ?, seq = seq + ? WHERE conv_id = ?",
+			int64(target.ID), offset, int64(src.ID))
+		if res.Error != nil {
+			return res.Error
+		}
+		moved = res.RowsAffected
+		if err := tx.Exec("UPDATE plg_im_attachment SET conv_id = ? WHERE conv_id = ?",
+			int64(target.ID), int64(src.ID)).Error; err != nil {
+			return err
+		}
+		now := time.Now().UTC()
+		mergedMeta, _ := json.Marshal(map[string]string{"code": "conv_merged", "from": src.ConvNo})
+		sysID, err := idgen.Next()
+		if err != nil {
+			return err
+		}
+		newSeq := offset + src.MsgSeq + 1
+		sys := Message{ConvID: target.ID, Seq: newSeq, SenderType: SenderSystem, Kind: KindSystem, Meta: string(mergedMeta), CreatedAt: now}
+		sys.ID = sysID
+		if err := tx.Create(&sys).Error; err != nil {
+			return err
+		}
+		lastAt := target.LastMsgAt
+		previewText := target.LastPreview
+		if src.LastMsgAt != nil && (lastAt == nil || src.LastMsgAt.After(*lastAt)) {
+			lastAt, previewText = src.LastMsgAt, src.LastPreview
+		}
+		if err := tx.Model(&Conversation{}).Where("id = ?", int64(target.ID)).Updates(map[string]any{
+			"msg_seq": newSeq, "last_msg_at": lastAt, "last_preview": previewText,
+		}).Error; err != nil {
+			return err
+		}
+		// 源会话：结束 + 系统提示（告诉访客去哪儿了）
+		intoMeta, _ := json.Marshal(map[string]string{"code": "conv_merged_into", "to": target.ConvNo})
+		intoID, err := idgen.Next()
+		if err != nil {
+			return err
+		}
+		srcSeq := src.MsgSeq + 1
+		note := Message{ConvID: src.ID, Seq: srcSeq, SenderType: SenderSystem, Kind: KindSystem, Meta: string(intoMeta), CreatedAt: now}
+		note.ID = intoID
+		if err := tx.Create(&note).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&Conversation{}).Where("id = ?", int64(src.ID)).Updates(map[string]any{
+			"status": StatusClosed, "closed_at": now, "closed_by": "merge",
+			"msg_seq": srcSeq, "last_msg_at": now, "last_preview": "",
+		}).Error; err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	s.publishControl(toNo, map[string]any{"type": "merged", "from": fromNo})
+	s.publishControl(fromNo, map[string]any{"type": "closed", "closedBy": "merge"})
+	return &MergeResult{Target: toNo, Moved: moved}, nil
 }

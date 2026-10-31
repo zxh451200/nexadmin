@@ -293,6 +293,7 @@ func (a *App) Run() error {
 		Addr:              ":" + strconv.Itoa(a.cfg.Server.Port),
 		Handler:           a,
 		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       2 * time.Minute,
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

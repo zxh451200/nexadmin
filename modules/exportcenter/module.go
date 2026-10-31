@@ -20,6 +20,7 @@ import (
 	"nexadmin/core/job"
 	"nexadmin/core/metrics"
 	"nexadmin/core/storage"
+	"nexadmin/pkg/idgen"
 )
 
 func init() { core.RegisterBuiltin(module{}) }
@@ -42,7 +43,8 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	cfg := d.Config
 	m := job.New(job.Options{
 		Store: job.NewGormStore(d.DB), Files: files, Log: d.Log,
-		Node:    fmt.Sprintf("node-%d", cfg.Database.NodeID), // 重启恢复只处理本节点遗留的 running，多实例 node_id 必须各不相同
+		// 用实际选中的节点号（node_id=-1 时由集群租约自动分配），不能用配置里的 -1。
+		Node:    fmt.Sprintf("node-%d", idgen.Node()), // 重启恢复只处理本节点遗留的 running，多实例节点号必须各不相同
 		Workers: cfg.Job.Workers, KeepDays: cfg.Job.KeepDays, MaxPerUser: cfg.Job.MaxPerUser,
 	})
 	job.SetDefault(m)

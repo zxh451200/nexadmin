@@ -66,6 +66,7 @@ Export the same `path` as a built-in page from `web/src/pages/<any-dir>/route.ts
 
 - Implemented in `web/src/framework/router/merge.ts` (called by `discover.ts`); test: `cd web && node --test src/framework/router/merge.test.ts`, plus `npx tsc --noEmit`.
 - This overrides the whole page. The actual sidebar comes from server-side `sys_menu`; maintain menu titles, icons and order through Menu Management, not only the route's `menu` declaration.
+- A pure configuration page can declare `settings` metadata (`{ key, group, title, component }`) to appear as a System Settings section, with the legacy path redirecting via `<Navigate>` to `/system/settings?tab=<key>`; see `plugins/ldap/route.tsx`.
 - Posts are now the second tab in Department Management; legacy `system/post` only redirects. This example uses the still-independent user page.
 
 ```tsx

@@ -76,12 +76,17 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.DELETE("/messages", h.Clear)
 	g.DELETE("/messages/:id", h.Delete)
 
-	go cleanupLoop(d.DB, d.Log, d.Config.Message.RetentionDays)
+	// 每日清理随优雅关闭退出（与 apimonitor/clienterror 同口径：OnClose 关闭 stop 通道）。
+	stop := make(chan struct{})
+	if d.OnClose != nil {
+		d.OnClose(func() { close(stop) })
+	}
+	go cleanupLoop(stop, d.DB, d.Log, d.Config.Message.RetentionDays)
 }
 
 // cleanupLoop 每天清理一次超过保留期的已读消息（message.retention_days，<=0 表示不清理）。
-// 模块没有关闭钩子，goroutine 随进程退出。
-func cleanupLoop(db *gorm.DB, log *zap.Logger, days int) {
+// 启动即跑一次，之后每 24 小时一次；stop 关闭（进程优雅关闭）时立即退出，不再排下一次。
+func cleanupLoop(stop <-chan struct{}, db *gorm.DB, log *zap.Logger, days int) {
 	if days <= 0 {
 		return
 	}
@@ -94,7 +99,14 @@ func cleanupLoop(db *gorm.DB, log *zap.Logger, days int) {
 		}
 	}
 	run()
-	for range time.Tick(24 * time.Hour) {
-		run()
+	tick := time.NewTicker(24 * time.Hour)
+	defer tick.Stop()
+	for {
+		select {
+		case <-stop:
+			return
+		case <-tick.C:
+			run()
+		}
 	}
 }

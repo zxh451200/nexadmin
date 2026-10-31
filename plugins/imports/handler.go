@@ -1,7 +1,9 @@
 package imports
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"mime"
 	"net/http"
 	"strings"
@@ -76,26 +78,38 @@ func attachment(c *gin.Context, filename, contentType string, body []byte) {
 
 // POST /plugins/imports —— multipart:file(文件)+ source(来源标识)。同步执行,返回台账。
 func (h *handler) run(c *gin.Context) {
+	// 先卡住整个请求体，避免超大 multipart 在拒绝前被写到磁盘临时目录。
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, MaxBytes+(1<<20))
 	fh, err := c.FormFile("file")
 	if err != nil {
-		response.Fail(c, response.BadRequest("imports.file_required"))
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			response.Fail(c, response.BadRequest("imports.file_too_large"))
+		} else {
+			response.Fail(c, response.BadRequest("imports.file_required"))
+		}
 		return
 	}
 	source := c.PostForm("source")
+	if fh.Size > MaxBytes {
+		response.Fail(c, response.BadRequest("imports.file_too_large"))
+		return
+	}
 	f, err := fh.Open()
 	if err != nil {
 		response.Fail(c, response.BadRequest("imports.file_required"))
 		return
 	}
 	defer func() { _ = f.Close() }()
-	content := make([]byte, 0, fh.Size)
-	buf := make([]byte, 64*1024)
-	for {
-		n, rerr := f.Read(buf)
-		content = append(content, buf[:n]...)
-		if rerr != nil {
-			break
-		}
+	// 服务层还有一次大小校验；这里先按上限截断读取，避免超大文件在拒绝前就被读进内存。
+	content, err := io.ReadAll(io.LimitReader(f, MaxBytes+1))
+	if err != nil {
+		response.Fail(c, response.BadRequest("imports.file_required"))
+		return
+	}
+	if len(content) > MaxBytes {
+		response.Fail(c, response.BadRequest("imports.file_too_large"))
+		return
 	}
 	v, err := h.svc.Run(c.Request.Context(), RunInput{
 		Source: source, FileName: fh.Filename, Content: content,

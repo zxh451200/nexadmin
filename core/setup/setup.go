@@ -79,6 +79,7 @@ func MarkerPath(cfg *config.Config) string { return filepath.Join(cfg.DataDir, "
 // IsInitialized 判断系统是否已初始化。原则：宁可错判为已初始化，也不错判为未初始化。
 //   - 标记文件存在 -> 已初始化
 //   - config/config.yaml 不存在 -> 全新安装，什么都没配置过，未初始化
+//   - 配置的库不存在 -> 未初始化（init / 向导可以把它建出来）
 //   - 否则探测数据库：连不上、读不到、没有管理员检查器 -> 按已初始化处理；连得上且没有管理员 -> 未初始化
 func IsInitialized(cfg *config.Config, checker AdminChecker, log *zap.Logger) bool {
 	if _, err := os.Stat(MarkerPath(cfg)); err == nil {
@@ -93,6 +94,12 @@ func IsInitialized(cfg *config.Config, checker AdminChecker, log *zap.Logger) bo
 	}
 	db, err := database.Open(cfg.Database)
 	if err != nil {
+		// 库不存在是确定的「未初始化」：init --config 与向导都带「库不存在则自动创建」，
+		// 若不放过这种情况，全新库永远进不到建库那一步。连不上、口令错等仍按已初始化处理。
+		if exists, eerr := database.DatabaseExists(context.Background(), cfg.Database); eerr == nil && !exists {
+			log.Warn("setup: configured database does not exist, treating system as uninitialized", zap.Error(err))
+			return false
+		}
 		log.Error("setup: cannot reach database, treating system as initialized", zap.Error(err))
 		return true
 	}

@@ -96,14 +96,9 @@ func (h *handler) defXML(c *gin.Context) {
 	if !ok {
 		return
 	}
-	v, err := h.svc.DefGet(c.Request.Context(), id)
+	xml, err := h.svc.DefXML(c.Request.Context(), id)
 	if err != nil {
 		response.Fail(c, err)
-		return
-	}
-	xml, err := ExportXML(v.Definition)
-	if err != nil {
-		response.Fail(c, response.BadRequest("workflow.def_invalid").Wrap(err))
 		return
 	}
 	c.Data(200, "application/xml; charset=utf-8", []byte(xml))
@@ -141,7 +136,8 @@ func (h *handler) instList(c *gin.Context) {
 	page, size := response.ParsePage(c)
 	list, total, err := h.svc.InstList(c.Request.Context(), InstQuery{
 		Keyword: c.Query("keyword"), Status: c.Query("status"), BizType: c.Query("bizType"),
-		Todo: c.Query("todo"), Done: c.Query("done"), Page: page, PageSize: size,
+		Todo: c.Query("todo"), Done: c.Query("done"), Mine: c.Query("mine"),
+		Page: page, PageSize: size,
 	}, actor(c))
 	if err != nil {
 		response.Fail(c, err)

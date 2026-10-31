@@ -85,6 +85,20 @@ export function fetchUsersForExport(filters: UserFilters) {
   return api.get<User[]>('/users/export', filters)
 }
 
+/**
+ * RemoteSelect 的 resolveLabel 扩展点实现：按 id 走 GET /users/:id 取展示名（nickname 优先）。
+ * 列表接口（GET /users）不支持按 id 精确取回，详情接口是现成能力；失败（已删除/无权限/超时）
+ * 返回 undefined 由组件回退显示原值，silent 避免回显失败弹全局错误 toast。
+ */
+export async function resolveUserLabel(id: string, signal: AbortSignal): Promise<string | undefined> {
+  try {
+    const u = await api.get<User>(`/users/${id}`, undefined, { signal, silent: true })
+    return u?.nickname || u?.username || undefined
+  } catch {
+    return undefined
+  }
+}
+
 /** 由 Content-Type 推断下载文件扩展名：mock 阶段返回 CSV 文本，真实后端返回 .xlsx */
 export function blobExt(blob: Blob): 'csv' | 'xlsx' {
   return blob.type.includes('csv') ? 'csv' : 'xlsx'

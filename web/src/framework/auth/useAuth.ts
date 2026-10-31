@@ -1,7 +1,9 @@
 import type { ComponentType } from 'react'
 import { create } from 'zustand'
 import { clearPwaRuntimeCache } from '@/framework/pwa/register'
-import { api, setUnauthorizedHandler, tokenStore } from '@/framework/request/http'
+import { queryClient } from '@/framework/query/client'
+import { ACCESS_KEY, api, setUnauthorizedHandler, tokenStore } from '@/framework/request/http'
+import { emitSessionCleared } from './session-events'
 import type { AuthUser, ChallengeResult, LoginChallenge, LoginPayload, LoginResult, LoginStep } from './types'
 
 /** 插件回调交接：challenge 为空表示已完成登录（令牌已写入），非空表示仍需二次验证 */
@@ -18,6 +20,14 @@ export function registerLoginPanel(c: ComponentType) {
 export const loginPanels = loginPanelComponents
 
 const SAML_SOURCE_KEY = 'nexadmin.samlSource'
+
+/** 清掉所有与账号绑定的本地状态；React Query 缓存必须一起清，否则换账号后仍会渲染上一账号的数据。 */
+function clearLocalSession() {
+  tokenStore.clear()
+  clearPwaRuntimeCache()
+  queryClient.clear()
+  emitSessionCleared()
+}
 
 // 插件提供回调交接，框架登录页不依赖具体插件或其接口路径。
 const loginContinuations = new Map<string, () => Promise<LoginContinuation> | null>()
@@ -88,8 +98,7 @@ export const useAuth = create<AuthState>((set, get) => ({
           { silent: true },
         )
         sessionStorage.removeItem(SAML_SOURCE_KEY)
-        tokenStore.clear()
-        clearPwaRuntimeCache()
+        clearLocalSession()
         set({ token: null, user: null, perms: [] })
         window.location.href = r.redirect
         return
@@ -103,8 +112,7 @@ export const useAuth = create<AuthState>((set, get) => ({
       // 忽略：本地登录态照常清理
     }
     sessionStorage.removeItem(SAML_SOURCE_KEY)
-    tokenStore.clear()
-    clearPwaRuntimeCache()
+    clearLocalSession()
     set({ token: null, user: null, perms: [] })
   },
   fetchMe: async () => {
@@ -113,10 +121,16 @@ export const useAuth = create<AuthState>((set, get) => ({
     return user
   },
   reset: () => {
-    tokenStore.clear()
-    clearPwaRuntimeCache()
+    clearLocalSession()
     set({ token: null, user: null, perms: [] })
   },
 }))
 
 setUnauthorizedHandler(() => useAuth.getState().reset())
+
+// 其它标签页登出后本页立即失效。storage 事件只在其它标签页触发，不会形成循环。
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (e) => {
+    if (e.key === ACCESS_KEY && !e.newValue && useAuth.getState().token) useAuth.getState().reset()
+  })
+}

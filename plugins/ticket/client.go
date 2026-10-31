@@ -44,13 +44,13 @@ func Create(ctx context.Context, in CreateInput) (*Ticket, error) {
 	return s.Create(ctx, in)
 }
 
-// Replies 增量拉取工单回复。
+// Replies 增量拉取工单回复（宿主视角，含内部备注）。
 func Replies(ctx context.Context, ticketNo string, since, limit int) (*Ticket, []TicketReply, error) {
 	s := current()
 	if s == nil {
 		return nil, nil, responseUnavailable()
 	}
-	return s.Replies(ctx, ticketNo, since, limit)
+	return s.Replies(ctx, ticketNo, since, limit, true)
 }
 
 // Reply 由宿主服务端代发回复（如系统备注用 ReplierSystem）。

@@ -15,7 +15,7 @@ declare module 'axios' {
   }
 }
 
-const ACCESS_KEY = 'nex-access-token'
+export const ACCESS_KEY = 'nex-access-token'
 const REFRESH_KEY = 'nex-refresh-token'
 
 export const tokenStore = {

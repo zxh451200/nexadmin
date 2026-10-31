@@ -58,5 +58,13 @@ export function sanitizeHtml(html: string): string {
     const src = f.getAttribute('src') ?? ''
     if (!EMBED_SRC.some((re) => re.test(src))) f.remove()
   })
+  // 新窗口打开的外链补 noopener/noreferrer：历史内容可能只写了 target。
+  tpl.content.querySelectorAll('a[target="_blank"]').forEach((a) => {
+    const rel = (a.getAttribute('rel') ?? '').split(/\s+/).filter(Boolean)
+    for (const token of ['noopener', 'noreferrer']) {
+      if (!rel.includes(token)) rel.push(token)
+    }
+    a.setAttribute('rel', rel.join(' '))
+  })
   return tpl.innerHTML
 }

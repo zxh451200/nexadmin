@@ -176,5 +176,8 @@ ratelimit:                  # 固定窗口限流；计数放 cache（redis 多�
 metrics:                    # Prometheus 文本格式指标，挂在根路径 /metrics（不在 /api/v1 下）
   enabled: true             # 默认开启，但 token 为空时只允许回环地址（127.0.0.1 / ::1）访问
   token: ""                 # 非空 = 必须带 Authorization: Bearer <token>（任何来源地址都要），常量时间比较
+region:                     # 省市区数据（系统设置 → 省市区数据）：在线同步的默认数据源
+  source_url: "https://raw.githubusercontent.com/mumuy/data_location/master/list.json"  # 只接受 HTTPS；空 = 只能用内置数据
+  source_license: "MIT"     # 该数据源声明的许可证，随同步快照记录，仅用于展示与溯源；换成别的源时按对方许可改
 secret:                     # 静态加密（core/secret）：业务敏感字段落库加密的主密钥来自 NEXADMIN_SECRET_KEY 或 data/secret.key
   algorithm: aes-gcm        # aes-gcm（默认，enc:v1:）| sm4-gcm（国密 SM4-GCM，enc:v2:；切换后旧 v1 密文仍可解，新写入用 v2）

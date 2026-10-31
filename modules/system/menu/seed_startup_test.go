@@ -41,11 +41,12 @@ func expectIDScan(mock sqlmock.Sqlmock) {
 }
 
 // expectReconcileNoop 补上 SeedOnStartup 末尾的结构对账事务（菜单历史形状收敛走 Seeder，不走迁移）。
-// 两个目录都查不到 → 只读不写，正好表达「这台库里没有要收敛的形状」。
+// 三个锚点都查不到、三个设置分区菜单也已隐藏 → 只读不写，正好表达「这台库没有要收敛的形状」。
 func expectReconcileNoop(mock sqlmock.Sqlmock) {
 	mock.ExpectBegin()
 	mock.ExpectQuery("FROM sys_menu WHERE code = .*type = 'dir'").WillReturnRows(sqlmock.NewRows([]string{"id"}))
 	mock.ExpectQuery("FROM sys_menu WHERE code = .*type = 'dir'").WillReturnRows(sqlmock.NewRows([]string{"id"}))
+	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM sys_menu WHERE code IN`).WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
 	mock.ExpectCommit()
 }
 

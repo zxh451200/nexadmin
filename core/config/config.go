@@ -105,6 +105,13 @@ type Config struct {
 		Enabled bool   `mapstructure:"enabled"`
 		Token   string `mapstructure:"token"`
 	} `mapstructure:"metrics"`
+	// Region 是省市区数据（modules/region）：在线同步的默认数据源，页面上的「立即同步」预填它。
+	Region struct {
+		// SourceURL 默认拉取的 HTTPS 地址；空则只能用随包发布的内置数据。
+		SourceURL string `mapstructure:"source_url"`
+		// SourceLicense 是该数据源声明的许可证，同步时随快照一起记录，仅用于展示与溯源。
+		SourceLicense string `mapstructure:"source_license"`
+	} `mapstructure:"region"`
 	// Secret 是静态加密（core/secret）：主密钥来自 NEXADMIN_SECRET_KEY 或 data/secret.key。
 	// algorithm 默认 aes-gcm；sm4-gcm 为国密选项（新密文 enc:v2:，旧 v1 密文仍可解）。
 	Secret struct {

@@ -65,6 +65,8 @@
     "selected": "已选 {{count}} 项",
     "operateSuccess": "操作成功",
     "operateFailed": "操作失败",
+    "loadFailed": "加载失败，请检查网络后重试",
+    "retry": "重试",
     "deleteConfirm": "确定要删除吗？此操作不可恢复。",
     "required": "此项必填",
     "optional": "选填",

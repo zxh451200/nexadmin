@@ -1,7 +1,7 @@
 id: ticket
 name: 工单中心
 version: 0.1.0
-description: 工单生命周期（open → processing → resolved → closed，报告人回复自动重开）、优先级、认领改派、ticket.* 事件；访客公开 API 可由宿主前台接入。
+description: 工单生命周期（open → processing ⇄ pending → resolved → closed，报告人回复自动重开）、优先级、认领改派、内部备注、快捷回复、SLA 停表与超时标记、ticket.* 事件；访客公开 API 可由宿主前台接入。
 author: NexAdmin
 edition: pro
 requires_nexadmin: ">=0.1.0"
@@ -23,3 +23,7 @@ menus:
     type: button
     title: plugin_ticket.perm.edit
     perm: ticket:edit
+  - parent: ticket:list
+    type: button
+    title: plugin_ticket.perm.create
+    perm: ticket:create

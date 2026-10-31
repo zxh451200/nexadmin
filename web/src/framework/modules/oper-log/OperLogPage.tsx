@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { AiFilterBox } from '@/framework/components/AiFilterBox'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
+import { pageAfterDelete } from '@/framework/hooks/page-fallback'
 import { DataTable } from '@/framework/components/DataTable'
 import { DetailAction } from '@/framework/components/DetailAction'
 import { DateRangePicker, type DateRangeValue } from '@/framework/components/DateRangePicker'
@@ -93,7 +94,10 @@ export default function OperLogPage() {
   const onDelete = async (ids: string[]) => {
     if (!(await confirm({ destructive: true, description: t('operLog.confirm.delete', { count: ids.length }) }))) return
     try {
+      const rows = data?.list ?? []
+      const removed = rows.filter((r) => ids.includes(r.id)).length
       await del.mutateAsync(ids)
+      setPage(pageAfterDelete(page, rows.length, removed))
       setSelected([])
       toast.success(t('common.operateSuccess'))
     } catch (e) {

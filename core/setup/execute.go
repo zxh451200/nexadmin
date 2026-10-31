@@ -86,7 +86,8 @@ func (r *Runner) runProgress(parent context.Context, req *executeReq, emit func(
 		return fail(0, verr)
 	}
 
-	ctx, cancel := context.WithTimeout(tenant.Skip(parent), 5*time.Minute)
+	// 初始化是不可回滚的多步写入（建库/DDL/种数据）：浏览器中途断开不能把它取消在半路。
+	ctx, cancel := context.WithTimeout(tenant.Skip(context.WithoutCancel(parent)), 5*time.Minute)
 	defer cancel()
 
 	// 1. writeConfig

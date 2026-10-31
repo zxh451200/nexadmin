@@ -11,9 +11,10 @@ import (
 // reconcileMenuShape 修「已知的历史形状」——不是新增出厂数据，所以不进迁移：
 // 本仓库的规则是迁移只做结构变更，菜单这类出厂数据由 Seeder 负责（core/migrate 会警告 DML）。
 //
-// 两处形状：
+// 三处形状：
 //  1. 导出中心（menu:jobs）与导入中心（imports:list）曾经各占一个顶级项，现在同属 dir:/io；
-//  2. 支付中台曾经是「目录 dir:/pay + 同名子项」，现在子项直接在一级。
+//  2. 支付中台曾经是「目录 dir:/pay + 同名子项」，现在子项直接在一级；
+//  3. LDAP 配置、单点登录应用、地图服务曾各占一个侧栏项，现在并进「系统设置」的分区。
 //
 // 播种只补不改（core/seed 按 code 判断，已存在的一律不动），所以老库必须在这里收敛一次。
 // 条件只匹配「坏形状」本身（顶级 / 挂在旧目录下），管理员自己挪过位置的菜单不会被拽回来；
@@ -65,6 +66,24 @@ func reconcileMenuShape(db *gorm.DB) (checked, fixed int, err error) {
 				}
 				fixed++
 			}
+		}
+
+		// LDAP 配置、单点登录应用、地图服务已并进「系统设置」的分区：老库里它们还是侧栏可见的独立菜单。
+		// 只隐藏、不删行也不改父节点：权限点与角色授权仍引用这些行；挂到设置菜单下会让角色分配
+		// 自动带上祖先节点，等于顺手授予 settings:list。条件匹配「仍可见」的旧形状，收敛后不再写库。
+		checked += 3
+		var visible int64
+		if e := tx.Raw(`SELECT COUNT(*) FROM sys_menu WHERE code IN (?, ?, ?) AND hidden = 0`,
+			"ldap:list", "sso:list", "maps:config").Scan(&visible).Error; e != nil {
+			return e
+		}
+		if visible > 0 {
+			res := tx.Exec(`UPDATE sys_menu SET hidden = 1 WHERE code IN (?, ?, ?) AND hidden = 0`,
+				"ldap:list", "sso:list", "maps:config")
+			if res.Error != nil {
+				return res.Error
+			}
+			fixed += int(res.RowsAffected)
 		}
 		return nil
 	})

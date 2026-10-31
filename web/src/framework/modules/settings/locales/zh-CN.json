@@ -125,6 +125,14 @@
         "github": "GitHub",
         "oidc": "OIDC"
       },
+      "providerHints": {
+        "wecom": "需在企业微信后台创建自建应用，填写 CorpID 与 Secret",
+        "dingtalk": "需在钉钉开放平台创建应用，填写 AppKey 与 AppSecret",
+        "feishu": "需在飞书开放平台创建应用，填写 App ID 与 App Secret",
+        "google": "需在 Google Cloud Console 创建 OAuth 客户端",
+        "github": "需创建 GitHub OAuth App 并配置回调地址",
+        "oidc": "对接任意标准 OpenID Connect 身份提供方，填写 Issuer"
+      },
       "matchBy": "账号匹配方式",
       "matchByHint": "第三方登录后按此字段匹配已有用户",
       "matchPhone": "手机号",

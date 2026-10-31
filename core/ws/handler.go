@@ -3,6 +3,7 @@ package ws
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -34,21 +35,43 @@ func NewHandler(h *Hub, a *auth.Service) *Handler {
 	return &Handler{hub: h, auth: a}
 }
 
+// identify 解析这条连接的身份：浏览器用一次性入场票（?ticket=，由 POST /api/v1/ws/ticket 换取），
+// 不能设头的场景之外也可以直接带 Authorization 头。访问令牌不再从查询参数读取——
+// 握手 URL 会进反代日志与浏览器网络面板，长寿命令牌出现在那里等于外泄。
+func (h *Handler) identify(c *gin.Context) (*auth.Claims, error) {
+	if h.auth == nil {
+		return nil, nil
+	}
+	if tk := strings.TrimSpace(c.Query("ticket")); tk != "" {
+		cl, err := h.auth.RedeemWSTicket(c.Request.Context(), tk)
+		if errors.Is(err, auth.ErrInvalidToken) {
+			return nil, response.Unauthorized("error.unauthorized")
+		}
+		if err != nil {
+			// 缓存故障不能伪装成认证失败，否则运维只能看到一个 401。
+			return nil, response.Unavailable("error.unavailable").Wrap(err)
+		}
+		return cl, nil
+	}
+	if tok := strings.TrimPrefix(c.GetHeader("Authorization"), "Bearer "); tok != "" {
+		cl, err := h.auth.ParseAccess(c.Request.Context(), tok)
+		if err != nil {
+			return nil, response.Unauthorized("error.unauthorized")
+		}
+		return cl, nil
+	}
+	return nil, nil
+}
+
 // Handle 处理 GET /ws 升级请求：?token=<accessToken> 鉴权 → 升级 → 注册连接 →
 // 进入读写循环。读循环处理 subscribe / unsubscribe / ping；写循环消费出站队列。
 func (h *Handler) Handle(c *gin.Context) {
-	// WebSocket API 不能设 Authorization 头，token 走查询参数（与 EventSource 流票同约束）。
-	token := c.Query("token")
-	if token == "" {
-		token = strings.TrimPrefix(c.GetHeader("Authorization"), "Bearer ")
+	cl, err := h.identify(c)
+	if err != nil {
+		response.Fail(c, err)
+		return
 	}
-	if h.auth != nil && token != "" {
-		if _, err := h.auth.ParseAccess(c.Request.Context(), token); err != nil {
-			response.Fail(c, response.Unauthorized("error.unauthorized"))
-			return
-		}
-	}
-	// token 为空时仍允许连接（公开主题，如访客 IM），订阅控制由业务侧在 topic 层做。
+	// 匿名连接只能订阅 public: 前缀的公开主题；业务主题的归属由 TopicGuard 判定。
 
 	wsConn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
@@ -57,10 +80,8 @@ func (h *Handler) Handle(c *gin.Context) {
 	}
 	connID := randomID()
 	userID := ""
-	if h.auth != nil && token != "" {
-		if cl, perr := h.auth.ParseAccess(c.Request.Context(), token); perr == nil {
-			userID = cl.UserID.String()
-		}
+	if cl != nil {
+		userID = cl.UserID.String()
 	}
 	conn := h.hub.Register(connID, userID, nil)
 	defer func() {
@@ -105,9 +126,15 @@ func (h *Handler) Handle(c *gin.Context) {
 		}
 		switch f.Type {
 		case TypeSubscribe:
-			if f.Topic != "" {
-				h.hub.Subscribe(connID, f.Topic)
+			if f.Topic == "" {
+				continue
 			}
+			if !AllowTopic(cl, f.Topic) {
+				_ = wsConn.SetWriteDeadline(time.Now().Add(WriteWait))
+				_ = wsConn.WriteJSON(Frame{Type: TypeError, Topic: f.Topic, Data: map[string]any{"message": "topic not allowed"}})
+				continue
+			}
+			h.hub.Subscribe(connID, f.Topic)
 		case TypeUnsubscribe:
 			if f.Topic != "" {
 				h.hub.Unsubscribe(connID, f.Topic)

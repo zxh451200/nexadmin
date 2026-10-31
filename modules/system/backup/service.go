@@ -16,6 +16,7 @@ import (
 
 	"nexadmin/core/config"
 	"nexadmin/core/ctl"
+	logmod "nexadmin/modules/log"
 	"nexadmin/pkg/idgen"
 )
 
@@ -94,6 +95,9 @@ type Service struct {
 	now     func() time.Time
 	loc     *time.Location
 	free    func(dir string) (int64, bool)
+
+	executeFn  func(*Record)                                // 测试缝：非 nil 时用它替换异步导出主体
+	auditWrite func(context.Context, *logmod.OperLog) error // 测试缝：非 nil 时用它替换日志模块落库
 
 	mu      sync.Mutex
 	running bool

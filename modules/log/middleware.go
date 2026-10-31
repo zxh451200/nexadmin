@@ -10,7 +10,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 
 	"nexadmin/core/auth"
 )
@@ -37,7 +36,8 @@ func (w *bodyTap) Write(b []byte) (int, error) {
 //
 //	r.POST("/users", core.Perm("user:create"), log.Default().Middleware("用户管理", "create"), h.Create)
 //
-// 请求结束后异步写入；密码、令牌类字段会被打码；HTTP 状态 >= 400 记为失败，并附上内部错误。
+// 请求结束后入队，由队列的冲刷协程异步写入；密码、令牌类字段会被打码；HTTP 状态 >= 400 记为失败，并附上内部错误。
+// 入队是非阻塞的：队列满时丢弃并计数告警，不占 DB 连接、不拖慢接口，也不随并发无限起协程。
 func (s *Service) Middleware(module, typ string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
@@ -61,12 +61,9 @@ func (s *Service) Middleware(module, typ string) gin.HandlerFunc {
 		if c.Writer.Status() >= 400 {
 			l.Status, l.ErrorStack = StatusFailed, clip(c.Errors.String())
 		}
+		// 入队前就脱离取消：排队期间请求结束/客户端断连不该让已发生的写操作丢掉审计。
 		ctx := context.WithoutCancel(c.Request.Context())
-		go func() {
-			if err := s.WriteOper(ctx, l); err != nil && s.log != nil {
-				s.log.Warn("log: write oper log failed", zap.Error(err))
-			}
-		}()
+		s.enqueue(ctx, l)
 	}
 }
 

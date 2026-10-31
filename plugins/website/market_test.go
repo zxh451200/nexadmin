@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"strings"
 	"testing"
 
@@ -352,6 +353,78 @@ func TestMarketDownloadHandler(t *testing.T) {
 	wantLine := wantSum + "  " + marketPackageName(e) + "\n"
 	if w2.Body.String() != wantLine {
 		t.Errorf("checksum body = %q, want %q", w2.Body.String(), wantLine)
+	}
+}
+
+// 官网端点必须能直接喂给安装器的完整性校验：后台一键安装时目录条目不必人工填 checksum，
+// 期望值就是现成的 /download.sha256；包体被换掉（哪怕一个字节）就必须装不上。
+func TestWebsiteChecksumFeedsMarketVerify(t *testing.T) {
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	for name, content := range map[string]string{
+		"repo/cron/plugin.yaml":       "id: cron\nname: 定时任务\nversion: 0.0.0-dltest\nedition: pro\n",
+		"repo/cron/backend/plugin.go": "package cron\n",
+	} {
+		w, err := zw.Create(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := w.Write([]byte(content)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write(buf.Bytes())
+	}))
+	t.Cleanup(upstream.Close)
+	old := market.GitHubBaseURL
+	market.GitHubBaseURL = upstream.URL
+	t.Cleanup(func() { market.GitHubBaseURL = old })
+
+	e := market.Entry{ID: "cron", Name: "定时任务", Version: "0.0.0-dltest", Edition: plugin.Pro,
+		Repo: "acme/plugins", Subdir: "cron"}
+	cache := newPackageCache()
+	cache.dir = t.TempDir()
+	h := &siteHandler{pkg: cache, catalog: func() []market.Entry { return []market.Entry{e} },
+		marketOn: func() (bool, error) { return true, nil }}
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.GET("/plugins/:id/download", h.marketDownload)
+	r.GET("/plugins/:id/download.sha256", h.marketChecksum)
+	site := httptest.NewServer(r)
+	t.Cleanup(site.Close)
+
+	// 有数据可对：安装器取侧文件后校验通过。
+	p, err := market.Download(context.Background(), market.Entry{ID: "cron", URL: site.URL + "/plugins/cron/download"})
+	if err != nil {
+		t.Fatalf("market.Download against the website endpoints: %v", err)
+	}
+	os.Remove(p) //nolint:errcheck
+
+	// 缓存投毒/镜像被换：包体多一个字节，侧文件仍是原包的记录 —— 必须拒绝。
+	tamper := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+		for k, v := range rec.Header() {
+			w.Header()[k] = v
+		}
+		body := rec.Body.Bytes()
+		if !strings.HasSuffix(req.URL.Path, "/download.sha256") {
+			body = append(bytes.Clone(body), 'x')
+			// 多写一个字节：长度声明交给 net/http，否则客户端只会看到截断响应。
+			w.Header().Del("Content-Length")
+		}
+		w.WriteHeader(rec.Code)
+		_, _ = w.Write(body)
+	}))
+	t.Cleanup(tamper.Close)
+	if _, err := market.Download(context.Background(), market.Entry{ID: "cron", URL: tamper.URL + "/plugins/cron/download"}); err == nil {
+		t.Fatal("tampered package accepted although the checksum endpoint describes the original")
+	} else if !strings.Contains(err.Error(), "SHA-256") {
+		t.Errorf("want checksum mismatch, got %v", err)
 	}
 }
 

@@ -9,16 +9,22 @@
     },
     "perm": {
       "reply": "回复与认领",
-      "edit": "状态与改派"
+      "edit": "状态与改派",
+      "create": "代客建单"
     },
     "all": "全部",
     "empty": "暂无工单",
+    "emptyFiltered": "没有符合筛选条件的工单",
     "overdue": "已超时",
     "loading": "加载中…",
     "pickTicket": "选择左侧工单查看与处理",
     "searchPlaceholder": "工单号 / 标题 / 摘要",
     "assign": "认领",
     "assignee": "负责人",
+    "assigneeFilter": "负责人筛选",
+    "assigneeAll": "全部负责人",
+    "assigneeUnassigned": "未分配",
+    "assigneeMine": "只看我的",
     "claim": "开始处理",
     "resolve": "标记解决",
     "close": "关闭工单",
@@ -33,6 +39,7 @@
     "status": {
       "open": "待处理",
       "processing": "处理中",
+      "pending": "待客户回复",
       "resolved": "已解决",
       "closed": "已关闭"
     },
@@ -47,6 +54,64 @@
       "agent": "客服",
       "system": "系统"
     },
+    "actions": {
+      "processing": "开始处理",
+      "resume": "继续处理",
+      "pending": "待客户回复",
+      "reopen": "重新打开",
+      "transfer": "转派",
+      "assignToMe": "认领给我",
+      "setPriority": "改优先级",
+      "clearSelection": "取消选择"
+    },
+    "transfer": {
+      "title": "转派工单",
+      "description": "选择要接手的同事；搜索依赖用户列表权限，没有该权限的账号看不到候选人。",
+      "placeholder": "搜索同事",
+      "confirm": "转派"
+    },
+    "create": {
+      "title": "新建工单",
+      "description": "代客户登记一张工单；报告人填写客户信息。",
+      "titleField": "标题",
+      "contentField": "描述",
+      "reporterName": "报告人",
+      "reporterNamePlaceholder": "客户姓名 / 昵称",
+      "reporterId": "客户标识",
+      "reporterIdPlaceholder": "会员 ID、手机号等（可选）",
+      "bizType": "业务类型",
+      "bizNo": "业务单号",
+      "required": "请填写标题和描述",
+      "submit": "创建"
+    },
+    "internal": {
+      "label": "内部备注",
+      "hint": "仅坐席可见，访客不会看到",
+      "badge": "内部"
+    },
+    "canned": {
+      "label": "快捷回复",
+      "manage": "管理快捷回复",
+      "empty": "还没有快捷回复，先建一条常用话术。",
+      "title": "标题",
+      "content": "内容",
+      "add": "新增",
+      "save": "保存",
+      "cancelEdit": "取消编辑",
+      "deleteConfirm": "删除快捷回复「{{title}}」？",
+      "titlePlaceholder": "如：退款已受理",
+      "contentPlaceholder": "插入到回复框的话术"
+    },
+    "bulk": {
+      "done": "已处理 {{updated}} 张，跳过 {{skipped}} 张",
+      "closeConfirm": "确认关闭选中的 {{count}} 张工单？报告人回复会自动重开。",
+      "resolve": "标记解决",
+      "close": "关闭"
+    },
+    "createdBy": "创建人",
+    "rating": {
+      "badge": "满意度 {{score}}/5"
+    },
     "stats": {
       "rangeLabel": "时间范围",
       "ranges": {
@@ -57,6 +122,7 @@
       },
       "total": "工单总数",
       "pending": "待处理",
+      "awaitingCustomer": "待客户回复",
       "unassigned": "未认领",
       "overdue": "已超时",
       "sampled": "工单量较大，统计基于最近 20000 张。",
@@ -64,13 +130,18 @@
       "created": "新建",
       "resolved": "已解决",
       "firstResponse": "首次响应",
+      "resolution": "解决时长",
+      "resolvedCount": "已解决",
+      "satisfaction": "满意度",
+      "ratedCount": "条评价",
       "noResponse": "尚无响应",
       "sla": "SLA 达成（按优先级）",
       "priority": "优先级",
       "target": "目标时限",
       "breached": "违约",
       "breachRate": "违约率",
-      "byBizType": "业务类型 Top"
+      "byBizType": "业务类型 Top",
+      "byAssignee": "负责人分布"
     }
   }
 }

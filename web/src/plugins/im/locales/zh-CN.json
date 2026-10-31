@@ -2,7 +2,7 @@
   "plugin_im": {
     "title": "在线客服",
     "description": "访客与坐席的会话消息",
-    "menu": "消息中心",
+    "menu": "在线客服",
     "perm": {
       "reply": "回复消息",
       "edit": "关闭会话"
@@ -52,6 +52,48 @@
       "action": "标签",
       "placeholder": "逗号分隔，最多 10 个，如：退款,物流"
     },
+    "note": {
+      "action": "备注",
+      "label": "备注",
+      "placeholder": "内部备注，仅坐席可见"
+    },
+    "online": "在线",
+    "offline": "离线",
+    "recall": { "action": "撤回" },
+    "recallFailed": "撤回失败：只能撤回自己 2 分钟内发出的消息",
+    "merge": {
+      "action": "合并会话",
+      "title": "合并会话",
+      "hint": "把会话 {{no}} 的消息并到目标会话，本会话随之结束",
+      "target": "目标会话号",
+      "warning": "目标必须是进行中的会话；合并后无法拆分。"
+    },
+    "stats": {
+      "action": "统计",
+      "title": "客服统计",
+      "hint": "按会话创建时间统计；首响为访客第一条消息到坐席首次回复",
+      "days": "近 {{count}} 天",
+      "total": "会话数",
+      "openHint": "进行中 {{count}}",
+      "closed": "已结束",
+      "firstResponse": "平均首响",
+      "samples": "样本 {{count}}",
+      "rating": "满意度",
+      "createdSeries": "新建会话",
+      "closedSeries": "结束会话",
+      "agents": "坐席工作量",
+      "assignedShort": "分配 {{count}}",
+      "closedShort": "结束 {{count}}",
+      "noAgents": "暂无坐席数据",
+      "truncated": "窗口内会话超过 {{count}} 个，统计只包含最近的部分"
+    },
+    "export": "导出",
+    "exportFailed": "导出失败",
+    "delete": {
+      "action": "删除会话",
+      "title": "删除会话",
+      "confirm": "删除会话 {{no}}？该会话的消息与附件会一并删除，且无法恢复。"
+    },
     "notify": {
       "on": "已开启桌面提醒",
       "off": "开启桌面提醒",
@@ -71,7 +113,11 @@
       "system": "系统"
     },
     "system": {
-      "conv_closed": "会话已结束"
+      "conv_closed": "会话已结束",
+      "conv_reopened": "会话已重新开启",
+      "message_recalled": "消息已撤回",
+      "conv_merged": "已并入其他会话",
+      "conv_merged_into": "会话已合并到其他会话"
     },
     "settings": {
       "action": "客服设置",
@@ -85,7 +131,13 @@
       "timezone": "时区",
       "offlineText": "离线提示（留空使用默认文案）",
       "inviteDelay": "主动邀请延迟（秒，0 = 关闭）",
-      "inviteText": "邀请文案（留空使用默认文案）"
+      "inviteText": "邀请文案（留空使用默认文案）",
+      "welcomeText": "欢迎语（访客首次打开会话时自动发送，留空不发送）",
+      "bannedWords": "敏感词（每行一个，命中后替换为 ***，只过滤访客消息）",
+      "autoAssign": "自动分配会话",
+      "autoAssignHint": "新会话分给在线且进行中会话最少的坐席；没人在线时排队，坐席上线后按先后领取",
+      "retentionDays": "会话保留天数（0 = 永久保留）",
+      "retentionHint": "只清理已结束的会话，消息与附件一并删除；每小时检查一次"
     }
   }
 }

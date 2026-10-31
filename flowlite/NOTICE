@@ -1,0 +1,13 @@
+flowlite
+Copyright 2026 the flowlite authors
+
+This product includes software developed at NexAdmin.
+
+The BPMN 2.0 XML element names used by this project are defined by the OMG BPMN 2.0
+specification. This project is an independent implementation and is not affiliated
+with, endorsed by, or certified by the Object Management Group. "BPMN" is a trademark
+of the Object Management Group; it is used here only to describe interoperability.
+
+No third-party source code is vendored in this repository. Optional front-end
+integration with bpmn-js (MIT, https://github.com/bpmn-io/bpmn-js) is a downstream
+dependency, not a bundled component.

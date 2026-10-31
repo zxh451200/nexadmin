@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/nexadmin/flowlite/runtime"
 	"nexadmin/core/event"
 	"nexadmin/pkg/idgen"
 )
@@ -24,8 +25,7 @@ func CatalogInfos() []event.Info {
 	}
 }
 
-// EventData 是 workflow.* 事件载荷。InstID/DefKey/BizType/BusinessKey 用于宿主定位业务单据；
-// Approvers 是当前所有待审批审批人的并集（宿主可据此推送通知）。
+// EventData 是 workflow.* 事件载荷。
 type EventData struct {
 	InstID      idgen.ID  `json:"instId"`
 	DefKey      string    `json:"defKey"`
@@ -40,38 +40,37 @@ type EventData struct {
 	OccurredAt  time.Time `json:"occurredAt"`
 }
 
-// publish 统一出口：def 可为 nil（此时不算待审批人）。
-func (s *Service) publish(ctx context.Context, name string, m *Inst, def *Definition, inst *Instance, actor, comment string) {
+// handleEvent 把运行时事件桥接到框架事件总线。
+func (s *Service) handleEvent(ctx context.Context, ev runtime.Event) {
+	var name string
+	switch ev.Name {
+	case runtime.EventStarted:
+		name = EventStarted
+	case runtime.EventTodo:
+		name = EventTodo
+	case runtime.EventCompleted:
+		name = EventCompleted
+	default:
+		// task_sync_failed / escalate_failed 等内部告警只记日志，不对外发布。
+		s.warn("workflow: "+ev.Name, "instId", instIDOf(ev))
+		return
+	}
+	instID, _ := idgen.Parse(ev.Inst.ID)
 	data := EventData{
-		InstID: m.ID, DefKey: m.DefKey, Title: m.Title,
-		BizType: m.BizType, BusinessKey: m.BusinessKey, Status: m.Status,
-		Actor: actor, Comment: comment, OccurredAt: time.Now().UTC(),
+		InstID: instID, DefKey: ev.Inst.DefKey, Title: ev.Inst.Title,
+		BizType: ev.Inst.BizType, BusinessKey: ev.Inst.BusinessKey, Status: ev.Inst.Status,
+		Actor: ev.Actor, Comment: ev.Comment, OccurredAt: ev.At,
 	}
-	if inst != nil {
-		data.Current = dedup(inst.Current)
-		if def != nil {
-			idx := nodeMap(*def)
-			seen := map[string]bool{}
-			for _, key := range dedup(inst.Current) {
-				n, ok := idx[key]
-				if !ok || n.Kind != KindApproval {
-					continue
-				}
-				for _, a := range effectiveApprovers(n, inst) {
-					if !seen[a] {
-						seen[a] = true
-						data.Approvers = append(data.Approvers, a)
-					}
-				}
-			}
-		}
+	if ev.State != nil {
+		data.Current = ev.State.Current
 	}
+	data.Approvers = ev.Approvers
 	event.Publish(ctx, name, data)
 }
 
-// todoEvent 在实例到达审批节点时发 workflow.todo（仍运行中才发）。
-func (s *Service) todoEvent(ctx context.Context, m *Inst, def *Definition, inst *Instance, actor string) {
-	if inst != nil && inst.Status == StatusRunning {
-		s.publish(ctx, EventTodo, m, def, inst, actor, "")
+func instIDOf(ev runtime.Event) string {
+	if ev.Inst == nil {
+		return ""
 	}
+	return ev.Inst.ID
 }

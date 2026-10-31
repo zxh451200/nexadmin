@@ -126,6 +126,22 @@ im:
   attachment_invalid: 附件不存在或不属于该会话
   attachment_used: 附件已发送过
   agent_required: 请选择要转接的坐席
+  message_not_found: 消息不存在
+  message_not_recallable: 只能撤回自己 2 分钟内发出的消息
+  conv_open: 会话还在进行中，结束之后才能删除
+  status_open: 进行中
+  status_closed: 已结束
+  export_sheet: 会话记录
+  export_conv_no: 会话号
+  export_visitor: 访客
+  export_biz: 业务对象
+  export_assignee: 坐席
+  export_status: 状态
+  export_tags: 标签
+  export_note: 备注
+  export_rating: 满意度
+  export_created_at: 开始时间
+  export_closed_at: 结束时间
   settings_invalid: 设置不合法（时间、时区或工作日）
 imports:
   job_not_found: 导入任务不存在
@@ -229,6 +245,11 @@ workflow:
   actor_required: 缺少操作者身份
   action_rejected: 审批动作被当前节点拒绝
   withdraw_not_owner: 只有发起人可以撤回该流程
+  not_approver: 你不是该节点的审批人
+  inst_not_running: 流程已结束，不能继续操作
+  no_active_task: 当前没有可操作的审批节点
+  escalate_target_missing: 当前节点未配置升级目标
+  concurrent_update: 该流程刚被他人处理，请刷新后重试
   plugin_inactive: 工作流插件未启用或授权已失效
 formbuilder:
   head_id: 提交ID
@@ -378,6 +399,11 @@ plugin:
   disabled: "插件未启用"
   market_not_found: "市场目录里没有该插件"
   free_no_license: "免费插件无需授权"
+  market.checksum_mismatch: "插件包 %s 的 SHA-256 与目录声明不一致（期望 %s，实际 %s），已拒绝安装并删除下载文件"
+  market.checksum_invalid: "目录条目 %s 的 checksum %q 不是合法的 SHA-256（应为 64 位十六进制），已拒绝安装"
+  market.checksum_unavailable: "无法获取插件包 %s 的 SHA-256 校验文件 %s（%v），已拒绝安装"
+  market.checksum_missing: "插件包 %s 没有可用的 SHA-256 校验值，已按 %s 拒绝安装；请在目录条目里补 checksum/checksum_url，或改用官网下载端点"
+  market.checksum_unverified: "插件包 %s（来源 %s）没有可用的 SHA-256 校验值，安装内容未经完整性校验；建议补 checksum/checksum_url 或改用官网下载端点，严格模式可设 %s=1"
   reason.duplicate_id: "插件 id 重复注册"
   reason.invalid_id: "插件 id \"%s\" 不合法"
   reason.no_module: "未提供 Module"
@@ -503,6 +529,12 @@ log:
   export_format_invalid: "format 仅支持 xlsx"
 exportcenter:
   job_bad_state: "当前状态不允许该操作"
+region:
+  source_insecure: "数据源地址不可用（只接受 HTTPS，且不能包含账号密码）：%s"
+  source_unreachable: "拉取数据源失败：%s"
+  source_too_large: "数据源超过 %dMB 上限"
+  data_invalid: "数据源内容不可用：%s"
+  source_missing: "还没有配置数据源：请在系统设置里填写地址，或在 config.yaml 的 region.source_url 里配置"
 dashboard:
   too_many_items: "%s 的卡片数量过多"
   invalid_card_id: "%s 中有不合法的卡片 ID"

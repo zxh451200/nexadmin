@@ -9,6 +9,7 @@ import { toast } from 'sonner'
 import { z } from 'zod'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
+import { pageAfterDelete } from '@/framework/hooks/page-fallback'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { DatePicker } from '@/framework/components/DatePicker'
 import { DictSelect } from '@/framework/components/DictSelect'
@@ -162,7 +163,7 @@ export default function TenantPage() {
       const payload =
         isNew && body.createAdmin
           ? body
-          : { ...body, createAdmin: false, adminPassword: undefined, adminEmail: undefined, adminUsername: isNew ? '' : body.adminUsername }
+          : { ...body, createAdmin: false, adminPassword: undefined, adminEmail: undefined, adminUsername: isNew ? '' : (editing?.adminUsername ?? '') }
       await save.mutateAsync({ id: editing?.id, body: payload })
       toast.success(t('common.operateSuccess'))
       setOpen(false)
@@ -201,7 +202,10 @@ export default function TenantPage() {
   const remove = async (ids: string[]) => {
     if (!(await confirm({ destructive: true, description: t('tenant.deleteConfirm', { count: ids.length }) }))) return
     try {
+      const rows = data?.list ?? []
+      const removed = rows.filter((r) => ids.includes(r.id)).length
       await del.mutateAsync(ids)
+      setPage(pageAfterDelete(page, rows.length, removed))
       toast.success(t('common.operateSuccess'))
       setSelected((s) => s.filter((id) => !ids.includes(id)))
     } catch (e) {
@@ -343,7 +347,7 @@ export default function TenantPage() {
         <Form {...form}>
           <FormLayout id="tenant-form" onSubmit={submit}>
             <FormSection title={t('tenant.basicInfo')}>
-              <FormGrid>
+              <FormGrid cols={2}>
                 <FormField
                   control={form.control}
                   name="name"
@@ -402,12 +406,10 @@ export default function TenantPage() {
                     name="status"
                     render={({ field }) => (
                       <FormItem>
-                        <div className="flex items-center justify-between gap-3">
-                          <FormLabel>{t('common.status')}</FormLabel>
-                          <FormControl>
-                            <DictSelect className="w-56" dict="tenant_status" value={field.value} onChange={field.onChange} allowClear={false} />
-                          </FormControl>
-                        </div>
+                        <FormLabel>{t('common.status')}</FormLabel>
+                        <FormControl>
+                          <DictSelect dict="tenant_status" value={field.value} onChange={field.onChange} allowClear={false} />
+                        </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -415,7 +417,7 @@ export default function TenantPage() {
                 </FormGridFull>
               </FormGrid>
             </FormSection>
-            <FormSection title={t('tenant.quotaInfo')}>
+            <FormSection title={t('tenant.quotaInfo')} description={t('tenant.quotaHint')}>
               <FormGrid cols={3}>
                 <FormField
                   control={form.control}
@@ -433,7 +435,6 @@ export default function TenantPage() {
                           onChange={(e) => field.onChange(e.target.value === '' || Number.isNaN(e.target.valueAsNumber) ? null : e.target.valueAsNumber)}
                         />
                       </FormControl>
-                      <FormDescription>{t('tenant.quotaHint')}</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -454,7 +455,6 @@ export default function TenantPage() {
                           onChange={(e) => field.onChange(e.target.value === '' || Number.isNaN(e.target.valueAsNumber) ? null : e.target.valueAsNumber)}
                         />
                       </FormControl>
-                      <FormDescription>{t('tenant.quotaHint')}</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -475,7 +475,6 @@ export default function TenantPage() {
                           onChange={(e) => field.onChange(e.target.value === '' || Number.isNaN(e.target.valueAsNumber) ? null : e.target.valueAsNumber)}
                         />
                       </FormControl>
-                      <FormDescription>{t('tenant.quotaHint')}</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -513,27 +512,25 @@ export default function TenantPage() {
             </FormSection>
             <FormSection title={t('tenant.adminInfo')}>
               {isNew ? (
-                <SwitchField control={form.control} name="createAdmin" label={t('tenant.createAdmin')} description={t('tenant.createAdminHint')} />
-              ) : null}
-              {!isNew || createAdmin ? (
-                <FormGrid>
-                  <FormGridFull>
-                    <FormField
-                      control={form.control}
-                      name="adminUsername"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t('tenant.adminUsername')}</FormLabel>
-                          <FormControl>
-                            <Input {...field} disabled={!isNew} autoComplete="off" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </FormGridFull>
-                  {isNew ? (
-                    <>
+                <>
+                  <SwitchField control={form.control} name="createAdmin" label={t('tenant.createAdmin')} description={t('tenant.createAdminHint')} />
+                  {createAdmin ? (
+                    <FormGrid>
+                      <FormGridFull>
+                        <FormField
+                          control={form.control}
+                          name="adminUsername"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>{t('tenant.adminUsername')}</FormLabel>
+                              <FormControl>
+                                <Input {...field} autoComplete="off" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </FormGridFull>
                       <FormField
                         control={form.control}
                         name="adminPassword"
@@ -561,10 +558,24 @@ export default function TenantPage() {
                           </FormItem>
                         )}
                       />
-                    </>
+                    </FormGrid>
                   ) : null}
-                </FormGrid>
-              ) : null}
+                </>
+              ) : (
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-sm font-medium text-foreground">{t('tenant.adminUsername')}</span>
+                  {editing?.adminUsername ? (
+                    <div className="flex items-center rounded-md border border-border bg-muted/40 px-3 py-2">
+                      <code className="font-mono text-sm text-foreground">{editing.adminUsername}</code>
+                    </div>
+                  ) : (
+                    <div className="flex items-center rounded-md border border-dashed border-border px-3 py-2 text-sm text-muted-foreground">
+                      {t('tenant.adminNone')}
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">{t('tenant.adminLockedHint')}</p>
+                </div>
+              )}
             </FormSection>
           </FormLayout>
         </Form>

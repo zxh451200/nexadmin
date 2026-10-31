@@ -30,7 +30,7 @@ export function clearPending() {
 
 /** 只允许站内相对路径，防开放重定向 */
 export function safeNext(raw: string | undefined | null) {
-  return raw && raw.startsWith('/') && !raw.startsWith('//') && !raw.startsWith('/login') ? raw : '/'
+  return raw && raw.startsWith('/') && !raw.startsWith('//') && !raw.startsWith('/login') && !/[\\\u0000-\u0020\u007f]/.test(raw) ? raw : '/'
 }
 
 function go(authUrl: string, pending: OAuthPending) {

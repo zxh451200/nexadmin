@@ -44,6 +44,22 @@ test('isJsonObjectText 允许留空、拒绝数组与非法 JSON', () => {
   assert.equal(isJsonObjectText('{"a" 1}'), false)
 })
 
+test('checkJsonText 按原因给出可操作的修复提示', () => {
+  const reason = (text: string) => {
+    const r = checkJsonText(text)
+    return r.ok ? '' : r.kind === 'syntax' ? (r.reason ?? '') : r.kind
+  }
+  assert.equal(reason("{'a':1}"), 'singleQuote')
+  assert.equal(reason('{“a”:1}'), 'fullWidth')
+  assert.equal(reason('{"a":1,}'), 'trailingComma')
+  assert.equal(reason('{"a":[1,2}'), 'unclosed')
+  assert.equal(reason('{"a":1'), 'unclosed')
+  assert.equal(reason('{\n// c\n"a":1}'), 'comment')
+  // 字符串内容里的撇号 / 全角引号合法，不能被误判
+  assert.equal(reason('{"a":"it\'s"}'), '')
+  assert.equal(reason('{"a":"“ok”"}'), '')
+})
+
 test('formatJsonText 格式化与压缩，非法输入返回 null', () => {
   assert.equal(formatJsonText('{"a":1,"b":[2]}'), '{\n  "a": 1,\n  "b": [\n    2\n  ]\n}')
   assert.equal(formatJsonText('{ "a" : 1 }', 0), '{"a":1}')

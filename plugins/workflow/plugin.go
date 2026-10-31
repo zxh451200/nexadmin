@@ -24,7 +24,7 @@ var _ plugin.Starter = (*module)(nil)
 func init() {
 	event.Register(CatalogInfos()...)
 	plugin.Register(plugin.Plugin{
-		ID: "workflow", Name: "工作流", Version: "0.1.0", Edition: plugin.Pro,
+		ID: "workflow", Name: "工作流", Version: "0.2.0", Edition: plugin.Pro,
 		Module: &module{},
 	})
 }
@@ -73,7 +73,7 @@ func (m *module) Start(ctx context.Context, d *core.Deps) error {
 				return
 			case <-t.C:
 				if n, err := s.SweepEscalate(ctx, time.Now().UTC()); err != nil {
-					s.logWarn("workflow: sweep escalate failed", "err", err.Error())
+					s.warn("workflow: sweep escalate failed", "err", err.Error())
 				} else if n > 0 && d.Log != nil {
 					d.Log.Sugar().Infow("workflow: auto escalated", "count", n)
 				}

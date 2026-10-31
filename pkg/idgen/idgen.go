@@ -105,6 +105,16 @@ func Init(node int64) error {
 	return nil
 }
 
+// Node 返回当前进程实际使用的节点号（自动选号后也返回真实值）；未初始化时返回 0。
+func Node() int64 {
+	defMu.RLock()
+	defer defMu.RUnlock()
+	if defGen == nil {
+		return 0
+	}
+	return defGen.node
+}
+
 // Next 用默认生成器生成 ID。
 func Next() (ID, error) {
 	defMu.RLock()

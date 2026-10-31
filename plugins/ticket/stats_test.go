@@ -21,29 +21,43 @@ func TestAggregateTicketsQueueAndDays(t *testing.T) {
 	from, to := at("2026-10-21 00:00:00"), at("2026-10-24 00:00:00")
 	rows := []ticketStatRow{
 		{CreatedAt: at("2026-10-21 02:00:00"), Status: StatusOpen, Priority: PriorityUrgent, BizType: "order", AssigneeID: 0},
-		{CreatedAt: at("2026-10-22 03:00:00"), Status: StatusResolved, Priority: PriorityNormal, BizType: "order", AssigneeID: 7, AssigneeName: "坐席A", FirstReplyAt: ptr(at("2026-10-22 04:00:00"))},
-		{CreatedAt: at("2026-10-22 05:00:00"), Status: StatusClosed, Priority: PriorityNormal, BizType: "refund", AssigneeID: 8, AssigneeName: "坐席B", FirstReplyAt: ptr(at("2026-10-22 09:00:00"))},
+		{CreatedAt: at("2026-10-22 03:00:00"), ResolvedAt: ptr(at("2026-10-22 06:00:00")), Status: StatusResolved, Priority: PriorityNormal, BizType: "order", AssigneeID: 7, AssigneeName: "坐席A", FirstReplyAt: ptr(at("2026-10-22 04:00:00")), Rating: ptr(5)},
+		{CreatedAt: at("2026-10-22 05:00:00"), ResolvedAt: ptr(at("2026-10-23 01:00:00")), Status: StatusClosed, Priority: PriorityNormal, BizType: "refund", AssigneeID: 8, AssigneeName: "坐席B", FirstReplyAt: ptr(at("2026-10-22 09:00:00")), Rating: ptr(3)},
+		{CreatedAt: at("2026-10-22 06:00:00"), Status: StatusPending, Priority: PriorityHigh, BizType: "order", AssigneeID: 9, AssigneeName: "坐席C"},
 	}
-	st := aggregateTickets(rows, utcLoc, from, to)
-	if st.Total != 3 || st.Open != 1 || st.Resolved != 1 || st.Closed != 1 {
+	st := aggregateTickets(rows, utcLoc, from, to, DefaultSLA())
+	if st.Total != 4 || st.Open != 1 || st.Pending != 1 || st.Resolved != 1 || st.Closed != 1 {
 		t.Fatalf("状态计数错误：%+v", st)
 	}
 	if st.Unassigned != 1 {
 		t.Errorf("未认领应为 1，得到 %d", st.Unassigned)
 	}
-	// 窗口 21~23 三天：22 有两张新建、两张已解决（resolved+closed 都计入解决）。
+	// 窗口 21~23 三天：22 有三张新建；已解决按 resolved_at 分桶，22/23 各一张。
 	if len(st.Days) != 3 {
 		t.Fatalf("按天应补齐空白天：%+v", st.Days)
 	}
-	if st.Days[1].Created != 2 || st.Days[1].Resolved != 2 {
-		t.Errorf("10-22 分桶错误：%+v", st.Days[1])
+	if st.Days[1].Created != 3 || st.Days[1].Resolved != 1 || st.Days[2].Resolved != 1 {
+		t.Errorf("10-22/10-23 分桶错误：%+v %+v", st.Days[1], st.Days[2])
 	}
-	if st.FirstResponse.Responded != 2 || st.FirstResponse.NoResponse != 1 {
+	if st.FirstResponse.Responded != 2 || st.FirstResponse.NoResponse != 2 {
 		t.Errorf("首响计数错误：%+v", st.FirstResponse)
 	}
 	// 首响 60 与 240 分钟 → 均值 150，p50 取最近秩 60。
 	if st.FirstResponse.AvgMinutes != 150 || st.FirstResponse.P50Minutes != 60 {
 		t.Errorf("首响分布错误：%+v", st.FirstResponse)
+	}
+	// 解决时长：180 与 1200 分钟 → 均值 690，p50=180，p90=1200。
+	if st.Resolution.Resolved != 2 || st.Resolution.AvgMinutes != 690 ||
+		st.Resolution.P50Minutes != 180 || st.Resolution.P90Minutes != 1200 {
+		t.Errorf("解决时长分布错误：%+v", st.Resolution)
+	}
+	// 满意度：5 分与 3 分各一条 → 平均 4.0，分布固定 1~5 五档。
+	if st.Satisfaction.Rated != 2 || st.Satisfaction.AvgScore != 4 || len(st.Satisfaction.ByScore) != 5 {
+		t.Errorf("满意度汇总错误：%+v", st.Satisfaction)
+	}
+	if st.Satisfaction.ByScore[4].Value != 1 || st.Satisfaction.ByScore[2].Value != 1 ||
+		st.Satisfaction.ByScore[0].Value != 0 {
+		t.Errorf("满意度分布错误：%+v", st.Satisfaction.ByScore)
 	}
 	if st.ByStatus[0] != (NameValue{StatusClosed, 1}) {
 		t.Errorf("状态排行错误：%+v", st.ByStatus)
@@ -60,7 +74,7 @@ func TestAggregateTicketsSlaBreach(t *testing.T) {
 		{CreatedAt: at("2026-10-21 03:00:00"), Status: StatusOpen, Priority: PriorityHigh, DueAt: ptr(future)},
 		{CreatedAt: at("2026-10-21 04:00:00"), Status: StatusProcessing, Priority: PriorityHigh, DueAt: ptr(past), FirstReplyAt: ptr(at("2026-10-21 04:30:00"))},
 	}
-	st := aggregateTickets(rows, utcLoc, at("2026-10-21 00:00:00"), at("2026-10-22 00:00:00"))
+	st := aggregateTickets(rows, utcLoc, at("2026-10-21 00:00:00"), at("2026-10-22 00:00:00"), DefaultSLA())
 	if st.Overdue != 1 {
 		t.Errorf("overdue 计数应只数标记位：%+v", st)
 	}
@@ -77,6 +91,12 @@ func TestAggregateTicketsSlaBreach(t *testing.T) {
 	if row.TargetMinutes != int64(SLAFor(PriorityHigh).Minutes()) {
 		t.Errorf("目标时限应取 SLAFor，得到 %d", row.TargetMinutes)
 	}
+	if row.ResolutionTargetMinutes != 1440 {
+		t.Errorf("解决目标时限应取策略默认值 1440，得到 %d", row.ResolutionTargetMinutes)
+	}
+	if row.ResolutionBreached != 0 {
+		t.Errorf("没有解决时限数据时不应算违约：%+v", row)
+	}
 }
 
 func TestAggregateTicketsSampledCapsEveryBucket(t *testing.T) {
@@ -84,7 +104,7 @@ func TestAggregateTicketsSampledCapsEveryBucket(t *testing.T) {
 	for i := range rows {
 		rows[i] = ticketStatRow{CreatedAt: at("2026-10-21 01:00:00"), Status: StatusOpen, Priority: PriorityLow}
 	}
-	st := aggregateTickets(rows, utcLoc, at("2026-10-21 00:00:00"), at("2026-10-22 00:00:00"))
+	st := aggregateTickets(rows, utcLoc, at("2026-10-21 00:00:00"), at("2026-10-22 00:00:00"), DefaultSLA())
 	if !st.Sampled {
 		t.Fatal("超过上限必须标 sampled")
 	}
@@ -129,7 +149,7 @@ func TestTicketPickAndTopN(t *testing.T) {
 func TestAggregateTicketsHonoursLocation(t *testing.T) {
 	cst := time.FixedZone("CST", 8*3600)
 	rows := []ticketStatRow{{CreatedAt: at("2026-10-21 17:00:00"), Status: StatusOpen, Priority: PriorityNormal}}
-	st := aggregateTickets(rows, cst, at("2026-10-21 00:00:00"), at("2026-10-23 00:00:00"))
+	st := aggregateTickets(rows, cst, at("2026-10-21 00:00:00"), at("2026-10-23 00:00:00"), DefaultSLA())
 	var found bool
 	for _, d := range st.Days {
 		if d.Date == "2026-10-22" && d.Created == 1 {
@@ -158,12 +178,12 @@ func TestStatsWindowDefaultAndCap(t *testing.T) {
 // 同 pay：空聚合要给出 []，否则前端的 slaByPriority.map / RankBars 直接读到 null 崩页。
 func TestAggregateTicketsEmptyMarshalsAsArrays(t *testing.T) {
 	from, to := at("2026-10-21 00:00:00"), at("2026-10-24 00:00:00")
-	raw, err := json.Marshal(aggregateTickets(nil, utcLoc, from, to))
+	raw, err := json.Marshal(aggregateTickets(nil, utcLoc, from, to, DefaultSLA()))
 	if err != nil {
 		t.Fatalf("序列化失败：%v", err)
 	}
 	s := string(raw)
-	for _, want := range []string{`"slaByPriority":[]`, `"byStatus":[]`, `"byAssignee":[]`, `"days":[`} {
+	for _, want := range []string{`"slaByPriority":[]`, `"byStatus":[]`, `"byAssignee":[]`, `"days":[`, `"byScore":[`} {
 		if !strings.Contains(s, want) {
 			t.Errorf("空聚合应为 %s，实际：%s", want, s)
 		}

@@ -15,6 +15,7 @@ const (
 	EventReplied  = "ticket.replied"
 	EventResolved = "ticket.resolved"
 	EventClosed   = "ticket.closed"
+	EventRated    = "ticket.rated"
 )
 
 // CatalogInfos 是插件声明的事件目录条目（plugin.go init 时调用 event.Register）。
@@ -24,6 +25,7 @@ func CatalogInfos() []event.Info {
 		{Name: EventReplied, Description: "工单有新回复"},
 		{Name: EventResolved, Description: "工单已标记解决"},
 		{Name: EventClosed, Description: "工单已关闭"},
+		{Name: EventRated, Description: "工单已评价"},
 	}
 }
 
@@ -39,6 +41,7 @@ type EventData struct {
 	SenderName string    `json:"senderName,omitempty"`
 	Seq        int64     `json:"seq,omitempty"`
 	Preview    string    `json:"preview,omitempty"`
+	Rating     int       `json:"rating,omitempty"`
 	OccurredAt time.Time `json:"occurredAt"`
 }
 

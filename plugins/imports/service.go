@@ -148,6 +148,9 @@ func (s *Service) Run(ctx context.Context, in RunInput, actor string) (*JobView,
 
 	rows, perr := ParseUpload(src, in.Content, in.FileName)
 	if perr != nil {
+		if errors.Is(perr, ErrTooManyRows) {
+			return nil, response.BadRequest("imports.too_many_rows_limit", AsyncMaxRows)
+		}
 		return nil, response.BadRequest("imports.parse_failed").Wrap(perr)
 	}
 	if len(rows) == 0 {

@@ -61,6 +61,9 @@ auth:
 backup:
   keep_days: 30
   keep_count: 10
+region:
+  source_url: https://example.com/from-file.json
+  source_license: MIT
 languages:
   - code: zh-CN
     name: 简体中文
@@ -85,6 +88,7 @@ database:
 		"NEXADMIN_AUTH_REFRESH_TTL":       "240h",
 		"NEXADMIN_BACKUP_KEEP_DAYS":       "7",
 		"NEXADMIN_BACKUP_KEEP_COUNT":      "3",
+		"NEXADMIN_REGION_SOURCE_URL":      "https://example.com/from-env.json",
 	})
 	defer cleanup()
 
@@ -126,6 +130,12 @@ database:
 	}
 	if cfg.Backup.KeepDays != 7 || cfg.Backup.KeepCount != 3 {
 		t.Errorf("backup.* env override: got %d/%d", cfg.Backup.KeepDays, cfg.Backup.KeepCount)
+	}
+	if cfg.Region.SourceURL != "https://example.com/from-env.json" {
+		t.Errorf("region.source_url env override: got %q", cfg.Region.SourceURL)
+	}
+	if cfg.Region.SourceLicense != "MIT" {
+		t.Errorf("region.source_license 应从文件读到 MIT，得到 %q", cfg.Region.SourceLicense)
 	}
 }
 

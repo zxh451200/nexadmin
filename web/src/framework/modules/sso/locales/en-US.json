@@ -1,6 +1,7 @@
 {
   "sso": {
     "menu": "App management",
+    "settingsTitle": "Single sign-on",
     "title": "App management",
     "description": "Manage downstream apps connected to single sign-on (SSO), their callback URLs and visibility",
     "create": "Add app",
@@ -54,7 +55,7 @@
       "homeUrl": "App URL",
       "homeUrlHint": "Opened in a new tab when the card is clicked in the app center",
       "urlInvalid": "Enter a full URL starting with http(s)://",
-      "allowOrgReadHint": "When on, the app can use client_credentials (scope org.read) to get a token and read this tenant's users and departments (/oauth/org/users, /oauth/org/depts). Turning it off invalidates issued tokens immediately."
+      "allowOrgReadHint": "Read-only sync of this tenant's users and departments, for apps such as mail or OA; turning it off invalidates issued tokens immediately."
     },
     "secret": {
       "title": "App secret",
@@ -69,7 +70,11 @@
       "issuer": "Issuer",
       "discovery": "Discovery URL",
       "authorization": "Authorization endpoint",
-      "token": "Token endpoint"
+      "token": "Token endpoint",
+      "orgSection": "Org directory (read-only)",
+      "orgHint": "Get a client_credentials token (scope org.read), then fetch this tenant's data",
+      "orgUsers": "Users",
+      "orgDepts": "Departments"
     },
     "portal": {
       "menu": "App center",

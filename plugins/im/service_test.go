@@ -46,6 +46,7 @@ func mockDB(t *testing.T) (*gorm.DB, sqlmock.Sqlmock) {
 
 type nopLogger struct{}
 
+func (nopLogger) Info(string, ...any)  {}
 func (nopLogger) Warn(string, ...any)  {}
 func (nopLogger) Error(string, ...any) {}
 

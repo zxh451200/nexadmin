@@ -134,7 +134,12 @@ type Manager struct {
 	revBy        map[string]RevokedEntry
 	revSeq       int64
 	revFP        string
-	pendingWarns []pendingWarn // Attach 之前产生的告警，Attach 时补发
+	revSrc       revocationSource // 吊销清单的探测/读取，可注入以便单测；默认读磁盘
+	revPending   string           // 正在锁外验签的清单指纹（"" = 无），用于让并发 admit 等待生效结果
+	revPendingCh chan struct{}    // revPending 完成（成功或忽略）后关闭，唤醒等待者
+	pendingWarns []pendingWarn    // Attach 之前产生的告警，Attach 时补发
+
+	closeOnce sync.Once // 把插件 ctx 取消登记进框架关闭钩子，只做一次
 }
 
 var (
@@ -160,8 +165,12 @@ func Mount(app *core.App, opts ...Options) *Manager {
 		o = opts[0]
 	}
 	m := newManager(registered(), o)
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	m.ctx, m.stop = ctx, stop
+	// 在基础 ctx 之上叠加信号取消：收到 SIGINT/SIGTERM 时 m.ctx 取消（原有行为），
+	// m.stop 同时取消信号 ctx 与基础 ctx，供框架关闭钩子（见 Attach）在程序内关闭时调用。
+	sigCtx, stopSig := signal.NotifyContext(m.ctx, os.Interrupt, syscall.SIGTERM)
+	base := m.stop
+	m.ctx = sigCtx
+	m.stop = sync.OnceFunc(func() { stopSig(); base() })
 	for _, id := range m.order {
 		if e := m.entries[id]; e.info.Status == StatusActive {
 			e.viaApp = true
@@ -171,7 +180,7 @@ func Mount(app *core.App, opts ...Options) *Manager {
 	curMu.Lock()
 	cur = m
 	curMu.Unlock()
-	go m.watch(ctx, m.opts.CheckEvery)
+	go m.watch(m.ctx, m.opts.CheckEvery)
 	return m
 }
 
@@ -204,8 +213,8 @@ func newManager(plugins []Plugin, o Options) *Manager {
 	if len(o.DisabledPlugins) == 0 {
 		o.DisabledPlugins = LoadDisabledPlugins(o.Root)
 	}
-	ctx, stop := context.WithCancel(context.Background())
-	m := &Manager{opts: o, entries: map[string]*entry{}, ctx: ctx, stop: stop}
+	ctx, cancel := context.WithCancel(context.Background())
+	m := &Manager{opts: o, entries: map[string]*entry{}, ctx: ctx, stop: sync.OnceFunc(cancel), revSrc: &osRevocationSource{path: RevocationsPath(o.Root)}}
 	m.refreshRevocationsLocked() // 先载入吊销清单，再评估各插件的授权
 	for _, p := range plugins {
 		m.evaluate(p)
@@ -519,14 +528,50 @@ func (m *Manager) watch(ctx context.Context, every time.Duration) {
 
 // admit 判断请求能否进入插件路由：先用请求域名判定待定的域名授权，再检查吊销清单与到期；
 // 状态为 expired / invalid / unlicensed / revoked 时返回 403。
+// 文件探测与验签都在 m.mu 之外完成，只在需要应用结果时短暂加锁；一个清单版本只由首个 admit
+// 验签，其余并发 admit 等待其生效结果，保证吊销仍能即时生效（不因移出锁而放行刚被吊销的插件）。
 func (m *Manager) admit(c *gin.Context, e *entry) bool {
-	m.mu.Lock()
-	m.observeLocked(c.Request.Host)
-	m.refreshRevocationsLocked()
-	m.expireLocked(m.opts.Now())
-	enabled := m.enabledLocked(e)
-	info := e.info
-	m.mu.Unlock()
+	fp, size, serr := m.revSrc.probe()
+	var enabled bool
+	var info Info
+	for {
+		m.mu.Lock()
+		m.observeLocked(c.Request.Host)
+		switch {
+		case serr != nil:
+			m.handleRevocationMissingLocked()
+			m.expireLocked(m.opts.Now())
+			enabled, info = m.enabledLocked(e), e.info
+			m.mu.Unlock()
+		case fp == m.revFP:
+			// 已是最新版本；若正有别的 admit 在验签同一版本，则等它应用完再看结果。
+			wait := m.revWaitLocked(fp)
+			if wait == nil {
+				m.expireLocked(m.opts.Now())
+				enabled, info = m.enabledLocked(e), e.info
+				m.mu.Unlock()
+			} else {
+				m.mu.Unlock()
+				<-wait
+				continue
+			}
+		default:
+			// 首个发现清单变化的 admit 认领本轮验签。
+			m.revFP = fp
+			ch := make(chan struct{})
+			m.revPending, m.revPendingCh = fp, ch
+			m.mu.Unlock()
+			rev, fail, verr := m.verifyRevocationOutside(size)
+			m.mu.Lock()
+			m.applyRevocationLocked(rev, fail, verr)
+			m.expireLocked(m.opts.Now())
+			enabled, info = m.enabledLocked(e), e.info
+			m.revPending, m.revPendingCh = "", nil
+			m.mu.Unlock()
+			close(ch)
+		}
+		break
+	}
 	if !enabled {
 		LocalizeInfo(c.Request.Context(), &info)
 		if info.ReasonKey != "" {
@@ -537,6 +582,22 @@ func (m *Manager) admit(c *gin.Context, e *entry) bool {
 		return false
 	}
 	return true
+}
+
+// verifyRevocationOutside 在 m.mu 之外做文件读取与验签（两者都不改 m 的状态，可安全并发）。
+func (m *Manager) verifyRevocationOutside(size int64) (*Revocations, revFail, error) {
+	if size > MaxRevocationSize {
+		return nil, revTooLarge, nil
+	}
+	raw, err := m.revSrc.read()
+	if err != nil {
+		return nil, revUnreadable, err
+	}
+	rev, err := VerifyRevocations(raw, m.opts.Keys)
+	if err != nil {
+		return nil, revVerify, err
+	}
+	return rev, revOK, nil
 }
 
 // gate 是挂在插件路由组上的中间件。
@@ -570,6 +631,12 @@ func (m *Manager) Attach(d *core.Deps) {
 	m.deps = d
 	m.flushWarnsLocked()
 	m.mu.Unlock()
+	// 把插件 worker 的 ctx 取消接到框架关闭钩子上：App.closeAll（程序内关闭，如向导切换）
+	// 时也会取消 m.ctx，让插件 worker 在库/缓存被关闭前收到取消并 drain。收到 SIGTERM 的取消
+	// 走 m.ctx 本身（signal.NotifyContext），两条链路都指向同一个 m.ctx，互不冲突。
+	if d != nil && d.OnClose != nil {
+		m.closeOnce.Do(func() { d.OnClose(m.stop) })
+	}
 }
 
 // Routes 返回需要在路由上预留位置的插件：viaApp 的插件路由自己注册，授权接口单独挂；

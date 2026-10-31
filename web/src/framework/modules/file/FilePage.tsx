@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { usePermission } from '@/framework/auth/usePermission'
+import { pageAfterDelete } from '@/framework/hooks/page-fallback'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DateRangePicker, type DateRangeValue } from '@/framework/components/DateRangePicker'
@@ -86,7 +87,9 @@ export default function FilePage() {
   const remove = async (ids: string[]) => {
     if (!(await confirm({ description: t('fileMgr.deleteConfirm', { count: ids.length }), destructive: true }))) return
     try {
+      const removed = rows.filter((r) => ids.includes(r.id)).length
       await del.mutateAsync(ids)
+      setPage(pageAfterDelete(page, rows.length, removed))
       setSelected((s) => s.filter((x) => !ids.includes(x)))
       toast.success(t('common.operateSuccess'))
     } catch {

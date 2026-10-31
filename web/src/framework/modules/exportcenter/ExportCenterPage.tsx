@@ -14,6 +14,7 @@ import { Badge, type BadgeProps } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Progress } from '@/framework/ui/progress'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
+import { cn } from '@/lib/utils'
 import { fmtDateTime } from '../oper-log/format'
 import {
   downloadJobFile,
@@ -51,6 +52,7 @@ export default function ExportCenterPage() {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [busy, setBusy] = useState<string | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
 
   // 有进行中的任务且页面可见时才轮询；切到别的标签或浏览器标签页隐藏时暂停，恢复时立即刷新一次
   const { data, isLoading, refetch } = useJobList(
@@ -77,6 +79,16 @@ export default function ExportCenterPage() {
       toast.error(errMsg(e, t('common.operateFailed')))
     } finally {
       setBusy(null)
+    }
+  }
+
+  // 仅手动刷新时转圈；自动轮询每 2 秒一次，跟着转会一直抖
+  const onRefresh = async () => {
+    setRefreshing(true)
+    try {
+      await refetch()
+    } finally {
+      setRefreshing(false)
     }
   }
 
@@ -192,8 +204,8 @@ export default function ExportCenterPage() {
                 ]}
               />
             </Can>
-            <Button type="button" variant="outline" onClick={() => void refetch()}>
-              <RefreshCw className="me-2 size-4" aria-hidden="true" />
+            <Button type="button" variant="outline" disabled={refreshing} onClick={() => void onRefresh()}>
+              <RefreshCw className={cn('me-2 size-4', refreshing && 'animate-spin')} aria-hidden="true" />
               {t('jobs.action.refresh')}
             </Button>
           </>

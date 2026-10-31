@@ -231,37 +231,85 @@ func (m *Manager) flushWarnsLocked() {
 	m.pendingWarns = nil
 }
 
+// ---- 文件探测（可注入以便单测把 IO 移出锁的观察） ----
+
+// revocationSource 抽象对吊销清单文件的探测与读取；默认实现打磁盘。
+// probe 只做一次 stat 元数据，返回指纹（mtime-size，或不存在时 err 非 nil）与字节大小；
+// read 读取内容。二者都不触碰 Manager 状态，因此可在 m.mu 之外调用。
+type revocationSource interface {
+	probe() (fp string, size int64, err error)
+	read() ([]byte, error)
+}
+
+type osRevocationSource struct{ path string }
+
+func (s *osRevocationSource) probe() (string, int64, error) {
+	fi, err := os.Stat(s.path)
+	if err != nil {
+		return "", 0, err
+	}
+	return fmt.Sprintf("%d-%d", fi.ModTime().UnixNano(), fi.Size()), fi.Size(), nil
+}
+
+func (s *osRevocationSource) read() ([]byte, error) { return os.ReadFile(s.path) }
+
+// revFail 表示锁外验签的失败类别，供 apply 时选对应的告警文案。
+type revFail int
+
+const (
+	revOK revFail = iota
+	revTooLarge
+	revUnreadable
+	revVerify
+)
+
 // refreshRevocationsLocked 检查吊销清单文件是否变化（一次 stat，文件没变就直接返回），
 // 变化则重新读取、验签，并把结果应用到所有插件。随定时检查、插件列表读取与请求前检查调用，不需要重启。
-// 调用方需持有 m.mu（或在构造阶段）。
+// 调用方需持有 m.mu（或在构造阶段）。注意请求闸门 admit 走的是把 IO 移出锁的独立路径，不经这里。
 func (m *Manager) refreshRevocationsLocked() {
-	path := RevocationsPath(m.opts.Root)
-	fi, err := os.Stat(path)
+	fp, size, err := m.revSrc.probe()
 	if err != nil {
-		if m.revFP != "" && m.revFP != "missing" {
-			m.warnLocked("plugin revocation list is gone; keeping the last verified list until restart", zap.String("file", RevokedFile))
-		}
-		if m.revFP != "" {
-			m.revFP = "missing"
-		}
+		m.handleRevocationMissingLocked()
 		return
 	}
-	fp := fmt.Sprintf("%d-%d", fi.ModTime().UnixNano(), fi.Size())
 	if fp == m.revFP {
 		return
 	}
 	m.revFP = fp // 先记下指纹：无效的清单只告警一次，文件再变化才会重新处理
-	if fi.Size() > MaxRevocationSize {
+	rev, fail, verr := m.verifyRevocationOutside(size)
+	m.applyRevocationLocked(rev, fail, verr)
+}
+
+// handleRevocationMissingLocked 处理清单文件消失：沿用内存中已验证的清单，只在从“有”变“无”时告警一次。
+// 启动时就没有文件则保持空指纹，等有文件再加载。调用方需持有 m.mu。
+func (m *Manager) handleRevocationMissingLocked() {
+	if m.revFP != "" && m.revFP != "missing" {
+		m.warnLocked("plugin revocation list is gone; keeping the last verified list until restart", zap.String("file", RevokedFile))
+	}
+	if m.revFP != "" {
+		m.revFP = "missing"
+	}
+}
+
+// revWaitLocked 返回正在验签 fp 这一版本的等待通道（无在途验签则返回 nil）。调用方需持有 m.mu。
+func (m *Manager) revWaitLocked(fp string) chan struct{} {
+	if m.revPending == fp && m.revPendingCh != nil {
+		return m.revPendingCh
+	}
+	return nil
+}
+
+// applyRevocationLocked 把一次验签结果落到内存：失败按类别告警（沿用已验证清单），
+// 版本回退忽略，否则采信新清单并重算各插件的吊销状态。调用方需持有 m.mu。
+func (m *Manager) applyRevocationLocked(rev *Revocations, fail revFail, err error) {
+	switch fail {
+	case revTooLarge:
 		m.warnLocked("plugin revocation list ignored: too large", zap.String("file", RevokedFile))
 		return
-	}
-	raw, err := os.ReadFile(path)
-	if err != nil {
+	case revUnreadable:
 		m.warnLocked("plugin revocation list ignored: unreadable", zap.String("file", RevokedFile), zap.Error(err))
 		return
-	}
-	rev, err := VerifyRevocations(raw, m.opts.Keys)
-	if err != nil {
+	case revVerify:
 		m.warnLocked("plugin revocation list ignored: verification failed (tampered or not signed by a trusted key)",
 			zap.String("file", RevokedFile), zap.Error(err))
 		return

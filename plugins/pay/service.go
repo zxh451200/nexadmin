@@ -653,6 +653,9 @@ func (s *Service) Close(ctx context.Context, paymentNo string) (*Order, error) {
 		}
 		var err error
 		ev, err = closeOrderRow(tx, &o, time.Now().UTC())
+		if err == nil && ev == nil {
+			return response.Conflict(errNotClosable)
+		}
 		return err
 	})
 	if err != nil {
@@ -664,9 +667,14 @@ func (s *Service) Close(ctx context.Context, paymentNo string) (*Order, error) {
 
 // closeOrderRow 关单并落事件出站箱（同一事务），返回提交后要发布的事件。
 func closeOrderRow(tx *gorm.DB, o *Order, now time.Time) (*EventData, error) {
-	if err := tx.Model(&Order{}).Where("id = ? AND status = ?", int64(o.ID), StatusPending).
-		Updates(map[string]any{"status": StatusClosed, "closed_at": now, "updated_at": now}).Error; err != nil {
-		return nil, err
+	res := tx.Model(&Order{}).Where("id = ? AND status = ?", int64(o.ID), StatusPending).
+		Updates(map[string]any{"status": StatusClosed, "closed_at": now, "updated_at": now})
+	if res.Error != nil {
+		return nil, res.Error
+	}
+	if res.RowsAffected == 0 {
+		// 条件更新落空：并发回调已把单子改为 paid/closed 等状态，不能再发 closed 事件。
+		return nil, nil
 	}
 	o.Status = StatusClosed
 	o.ClosedAt = &now
@@ -696,6 +704,9 @@ func (s *Service) CloseExpired(ctx context.Context, now time.Time) (int64, error
 		})
 		if err != nil {
 			return n, err
+		}
+		if ev == nil {
+			continue // 已被并发的支付回调改为非 pending，跳过
 		}
 		s.emit(ctx, ev)
 		n++

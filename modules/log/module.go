@@ -2,6 +2,7 @@ package log
 
 import (
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"nexadmin/core"
@@ -30,7 +31,17 @@ func (module) Seed(db *gorm.DB) error {
 // 列表接口的 pageSize 上限（5000）只服务于页面分页，不再承担导出。
 func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	svc := NewService(d.DB, d.Config.App.Timezone, d.Log).WithExportMaxRows(d.Config.Log.ExportMaxRows)
-	defaultSvc.Store(svc)
+	svc.adoptAsDefault()
+	// 操作日志队列随模块注册启动，并登记优雅关闭：core 的 closers 逆序执行，本钩子晚于
+	// 连接池登记，所以排空时连接池还在。OnClose 为 nil（手工装配）时不启动，沿用直写。
+	if d.OnClose != nil {
+		svc.startOperQueue()
+		d.OnClose(func() {
+			if n := svc.stopOperQueue(); n > 0 {
+				d.Log.Warn("log: oper log records still queued at shutdown", zap.Int("records", n))
+			}
+		})
+	}
 	// 注入 core 的操作日志提供方：业务模块用 d.OperLogMiddleware(module, action) 挂中间件，
 	// 无需关心本模块的注册时序，也不需要 import 本包（见 core/operlog.go）。
 	core.SetOperationLogProvider(operLogProvider{svc: svc})

@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
+import { SESSION_CLEARED_EVENT } from '@/framework/auth/session-events'
 import { findMenuTrail } from '@/framework/router/discover'
 import type { MenuNode } from '@/framework/router/types'
 
@@ -66,3 +67,8 @@ export const useTabs = create<TabsState>()(
     { name: 'nex-tabs', storage: createJSONStorage(() => sessionStorage), version: 1 },
   ),
 )
+
+// 登出/会话失效时收起所有标签，避免换账号后残留上一账号的页签。
+if (typeof window !== 'undefined') {
+  window.addEventListener(SESSION_CLEARED_EVENT, () => useTabs.getState().closeAll())
+}

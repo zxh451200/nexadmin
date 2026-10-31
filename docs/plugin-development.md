@@ -204,6 +204,17 @@ export const routes: ModuleRoute[] = [
 
 真正显示在侧边栏的菜单来自服务端的 `sys_menu`（即 `plugin.yaml` 的 `menus`），所以 `path` 和 `plugin.yaml` 里的 `path` 要一致。
 
+如果页面只是某个配置项，可以把它做成「系统设置」的一个分区，而不是独立侧栏入口：路由声明 `settings`（`component` 指向不带 `PageContainer` / `PageHeader` 的分区组件），`plugin.yaml` 的菜单行保持原父节点并设 `hidden: true`，旧地址 `<Navigate>` 到 `/system/settings?tab=<key>`。不要为了「归到设置下」把菜单挂到 `settings:list` 父节点：角色分配会自下而上补齐祖先，等于顺手授予 `settings:list`。权限点仍由该菜单行提供，角色授权不受影响。参考 `plugins/ldap/route.tsx` 与 `plugins/maps/route.tsx`：
+
+```tsx
+{
+  path: 'system/map',
+  component: () => <Navigate to="/system/settings?tab=maps" replace />,
+  perm: 'maps:config',
+  settings: { key: 'maps', group: 'integration', title: 'plugin_maps.menu', order: 100, component: lazy(() => import('./MapSettingsPage').then((m) => ({ default: m.MapSection }))) },
+}
+```
+
 ### 5.2 约定
 
 - **i18n**：命名空间固定为 `plugin_<id>`，在 `locales/zh-CN.json` 和 `en-US.json` 里同步写，顶层 key 就是 `plugin_cron`。动态拼接的 key（如 `` t(`plugin_cron.type.${v}`) ``）要保证每个取值都有文案。
@@ -277,6 +288,23 @@ cd web && npx tsc --noEmit && npx eslint src
 - 目录可选字段 `screenshots` / `changelog_url` / `versions`：详情页展示截图与版本历史；旧版本要能下载必须在 `versions` 填 `ref`（GitHub tag），官网用 `?version=` 取对应 tag。
 - 包签名：官网进程设置 `NEXADMIN_MARKET_SIGN_KEY=<PKCS8 PEM 私钥>` 后，下载页提供 `.sig` 与公钥 `/plugins/signing-key.pub`；`nexadmin plugin verify --sig <文件> --key <公钥文件> <zip>` 校验。签名是**市场实例对最终包的 Ed25519 签名**（对 SHA-256 摘要），不是发布者签名；客户站点可以用自己的密钥。
 
+**下载完整性校验（安装前、解压之前）**
+
+市场安装紧接着就把下载内容交给 `go build` / `npm build`，等于在构建机上执行来路不明的源码，所以 `market.Download` 在**解压之前**必须确认字节与目录声明一致（实现见 `core/plugin/market/verify.go`）。校验来源按优先级：
+
+| 校验来源 | 生效条件 | 取不到校验值时 |
+| --- | --- | --- |
+| 目录条目 `checksum`（包 zip 的 SHA-256，64 位十六进制；`versions[].checksum` 覆盖对应旧版本） | 填了就必须匹配 | ——（值本身不合法直接拒绝） |
+| 目录条目 `checksum_url`（`sha256sum` 格式校验文件直链，http(s)） | 填了就必须匹配 | 拉不到或解析不出 SHA-256 一律拒绝安装 |
+| 官网侧文件（`url` 指向 `<站点>/plugins/<id>/download` 时自动取 `<同路径>.sha256`） | 取到就必须匹配，无需人工填字段 | 侧文件 404 视作“无校验值”，退回默认策略 |
+| 三者都没有（GitHub `repo` zipball、无侧文件的普通直链） | —— | 默认策略：放行并写显式告警（`NEXADMIN_MARKET_REQUIRE_CHECKSUM=1` 改为拒绝） |
+
+- 默认选“告警放行”的理由：`repo` 且 `ref` 留空的条目跟随默认分支，字节每次推送都变，本质上无法预先固定校验值；直接拒绝会让现网的一键安装全部失败。放行不等于安全——它只是把“这个包没被完整性校验过”写进告警日志，而不是假装校验通过。对完整性有要求部署把 `NEXADMIN_MARKET_REQUIRE_CHECKSUM=1` 打开，或给条目补 `checksum`/`checksum_url`、把下载改走官网端点。
+- 校验失败即拒绝安装：**不解压、不写 `plugins/`、不动 `plugins.go`**，下载的临时 zip 当场删除；没有 `--force` 之类的绕过口子（`--force` 只放宽清单与已安装检查）。错误文案走 i18n（`plugin.market.checksum_*`，`core/i18n/locales/{zh-CN,en-US}.yaml` 同步维护）。
+- SHA-256 只回答“下载到的字节是不是我打算核对的那个包”，防的是传输与缓存被换、目录与包不一致。校验值与包来自同一下载通道时它**不能证明发布者身份**；来源认证仍是 Ed25519 签名（`.sig` + 固定公钥），两者互补，不要拿 SHA-256 当签名用。
+- 产出侧与消费侧分开：官网 `/plugins/<id>/download` 自己拉上游源码重打包（`market.Package`）时不校验——它正是产出 `.sha256` 的一侧，没有期望值可对；校验只在客户端 `Download` 上做。
+- `nexadmin plugin install <本地 zip>` 没有目录条目可比对，包的可信度由提供文件的人负责；需要校验先 `nexadmin plugin verify`。
+
 ### 官网多语言（website 插件）
 
 **平台语言清单以 `sys_language` 为唯一真源**，官网通过 `core.Languages()` 使用它；`config.yaml` 的 `languages` 仅在表为空时播种，不维护另一份 `locales/languages.json`。
@@ -301,6 +329,7 @@ cd web && npx tsc --noEmit && npx eslint src
 - 升级上来的老库由 `ensureSeedI18n` 只补 `i18n_json` 为空且原文仍是出厂文案的行，不覆盖已有译文。
 - 统计：公开下载按次计数；评分为匿名 1-5 星，同一 IP 对同一插件只保留一条、可改分。后台一键安装不计入公开下载量。
 - 私有/自建 GitHub：`NEXADMIN_MARKET_GITHUB_API` 覆盖 API 根地址（GitHub Enterprise）。
+- 完整性校验：默认「有校验值就强制校验、取不到则告警放行」；`NEXADMIN_MARKET_REQUIRE_CHECKSUM=1` 改为拒绝任何取不到校验值的安装（见上文「下载完整性校验」）。
 
 ## 8. 提交与审核
 

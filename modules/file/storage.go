@@ -192,7 +192,7 @@ func checkContent(kind, declared, name string, head []byte) (string, error) {
 		}
 		// mov 等 ftyp 封装 Go 嗅探不识别，单独放行
 		if len(head) >= 12 && string(head[4:8]) == "ftyp" {
-			if declared != "" {
+			if safeDeclaredMIME(declared) {
 				return declared, nil
 			}
 			return "video/quicktime", nil
@@ -206,13 +206,31 @@ func checkContent(kind, declared, name string, head []byte) (string, error) {
 	if strings.HasPrefix(base, "image/") || strings.HasPrefix(base, "video/") || base == "application/pdf" {
 		return base, nil
 	}
-	if declared != "" {
+	// 客户端声明的类型只在安全可用时采信：HTML/SVG/脚本会被同域直出成页面。
+	if safeDeclaredMIME(declared) {
 		return declared, nil
 	}
-	if byExt := mime.TypeByExtension(filepath.Ext(name)); byExt != "" {
+	if byExt := mime.TypeByExtension(filepath.Ext(name)); byExt != "" && safeDeclaredMIME(byExt) {
 		return byExt, nil
 	}
 	return base, nil
+}
+
+// safeDeclaredMIME 判断客户端声明类型能否直接作为响应类型：页面/脚本类一律不采信。
+func safeDeclaredMIME(v string) bool {
+	if v == "" {
+		return false
+	}
+	m, _, err := mime.ParseMediaType(v)
+	if err != nil || m == "" {
+		return false
+	}
+	switch strings.ToLower(m) {
+	case "text/html", "application/xhtml+xml", "image/svg+xml",
+		"application/javascript", "text/javascript", "application/x-javascript", "application/ecmascript":
+		return false
+	}
+	return true
 }
 
 func looksSVG(head []byte) bool {

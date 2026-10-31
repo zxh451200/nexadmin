@@ -9,7 +9,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 
-import { tokenStore } from '@/framework/request/http'
+import { api } from '@/framework/request/http'
 
 export type WsStatus = 'connecting' | 'open' | 'closed' | 'error'
 
@@ -33,14 +33,35 @@ function setStatus(s: WsStatus) {
   statusListeners.forEach((fn) => fn(s))
 }
 
-function connect() {
+let connectInFlight = false
+
+// 建连前先换一张一次性入场票：WebSocket 的握手 URL 会进反代日志与浏览器网络面板，
+// 长寿命访问令牌不能出现在那里。
+async function connect() {
   if (wsInstance && (wsInstance.readyState === WebSocket.OPEN || wsInstance.readyState === WebSocket.CONNECTING)) {
     return
   }
-  const token = tokenStore.access ?? ''
-  const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const url = `${proto}//${window.location.host}/ws?token=${encodeURIComponent(token)}`
+  if (connectInFlight) {
+    return
+  }
+  connectInFlight = true
   setStatus('connecting')
+  let ticket = ''
+  try {
+    ticket = (await api.post<{ ticket: string }>('/ws/ticket', undefined, { silent: true })).ticket
+  } catch {
+    // 换票失败多半是登录态失效；http 层会统一清会话并跳登录，这里只按退避重试。
+    connectInFlight = false
+    setStatus('error')
+    scheduleReconnect()
+    return
+  }
+  connectInFlight = false
+  if (wsInstance && (wsInstance.readyState === WebSocket.OPEN || wsInstance.readyState === WebSocket.CONNECTING)) {
+    return
+  }
+  const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  const url = `${proto}//${window.location.host}/ws?ticket=${encodeURIComponent(ticket)}`
   try {
     wsInstance = new WebSocket(url)
   } catch {
@@ -93,8 +114,8 @@ function scheduleReconnect() {
   if (reconnectTimer) return
   reconnectTimer = window.setTimeout(() => {
     reconnectTimer = null
-    connect()
     reconnectDelay = Math.min(reconnectDelay * 2, 30_000)
+    void connect()
   }, reconnectDelay)
 }
 
@@ -117,7 +138,7 @@ export function useWs() {
   useEffect(() => {
     const listener = (s: WsStatus) => setStatusState(s)
     statusListeners.add(listener)
-    connect()
+    void connect()
     return () => {
       statusListeners.delete(listener)
       // 最后一个组件卸载时断开(无订阅者的连接没有意义)

@@ -59,7 +59,13 @@ export function TicketStatsPanel() {
       </div>
       <div className="grid gap-3 md:grid-cols-2 md:gap-4 xl:grid-cols-4">
         <StatCard tone="chart-1" title={t('plugin_ticket.stats.total')} value={data.total} icon={<Inbox aria-hidden="true" />} />
-        <StatCard tone="chart-2" title={t('plugin_ticket.stats.pending')} value={pending} hint={`${data.open} / ${data.processing}`} icon={<CircleDashed aria-hidden="true" />} />
+        <StatCard
+          tone="chart-2"
+          title={t('plugin_ticket.stats.pending')}
+          value={pending}
+          hint={`${data.pending} ${t('plugin_ticket.stats.awaitingCustomer')}`}
+          icon={<CircleDashed aria-hidden="true" />}
+        />
         <StatCard tone="warning" title={t('plugin_ticket.stats.unassigned')} value={data.unassigned} icon={<UserRoundX aria-hidden="true" />} />
         <StatCard tone="destructive" title={t('plugin_ticket.stats.overdue')} value={data.overdue} icon={<ShieldAlert aria-hidden="true" />} />
       </div>
@@ -78,6 +84,14 @@ export function TicketStatsPanel() {
             ]}
           />
         </ChartCard>
+        <ChartCard title={t('plugin_ticket.stats.byAssignee')}>
+          <div data-tone="chart-5">
+            <RankBars items={data.byAssignee} />
+          </div>
+        </ChartCard>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
         <ChartCard title={t('plugin_ticket.stats.firstResponse')}>
           <div className="grid grid-cols-3 gap-3 py-4 text-center">
             <div>
@@ -93,36 +107,61 @@ export function TicketStatsPanel() {
               <p className="mt-1 text-xs text-muted-foreground">{t('plugin_ticket.stats.noResponse')}</p>
             </div>
           </div>
-          <div data-tone="chart-5">
-            <RankBars items={data.byAssignee} />
+        </ChartCard>
+        <ChartCard title={t('plugin_ticket.stats.resolution')}>
+          <div className="grid grid-cols-3 gap-3 py-4 text-center">
+            <div>
+              <p className="num text-2xl font-semibold">{minutes(data.resolution.p50Minutes)}</p>
+              <p className="mt-1 text-xs text-muted-foreground">P50</p>
+            </div>
+            <div>
+              <p className="num text-2xl font-semibold">{minutes(data.resolution.p90Minutes)}</p>
+              <p className="mt-1 text-xs text-muted-foreground">P90</p>
+            </div>
+            <div>
+              <p className="num text-2xl font-semibold">{data.resolution.resolved.toLocaleString()}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{t('plugin_ticket.stats.resolvedCount')}</p>
+            </div>
           </div>
         </ChartCard>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <ChartCard title={t('plugin_ticket.stats.sla')} className="lg:col-span-2">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="text-left text-muted-foreground">
-                <th className="font-medium">{t('plugin_ticket.stats.priority')}</th>
-                <th className="text-right font-medium">{t('plugin_ticket.stats.target')}</th>
-                <th className="text-right font-medium">{t('plugin_ticket.stats.total')}</th>
-                <th className="text-right font-medium">{t('plugin_ticket.stats.breached')}</th>
-                <th className="text-right font-medium">{t('plugin_ticket.stats.breachRate')}</th>
+      <ChartCard title={t('plugin_ticket.stats.sla')}>
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-left text-muted-foreground">
+              <th className="font-medium">{t('plugin_ticket.stats.priority')}</th>
+              <th className="text-right font-medium">{t('plugin_ticket.stats.target')}</th>
+              <th className="text-right font-medium">{t('plugin_ticket.stats.total')}</th>
+              <th className="text-right font-medium">{t('plugin_ticket.stats.breached')}</th>
+              <th className="text-right font-medium">{t('plugin_ticket.stats.breachRate')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.slaByPriority.map((r) => (
+              <tr key={r.priority} className="border-t border-border/60">
+                <td className="py-1.5">{r.priority}</td>
+                <td className="num py-1.5 text-right">{minutes(r.targetMinutes)}</td>
+                <td className="num py-1.5 text-right">{r.total.toLocaleString()}</td>
+                <td className="num py-1.5 text-right">{r.breached.toLocaleString()}</td>
+                <td className={`num py-1.5 text-right ${r.breachRate > 0 ? 'text-destructive' : 'text-muted-foreground'}`}>{r.breachRate}%</td>
               </tr>
-            </thead>
-            <tbody>
-              {data.slaByPriority.map((r) => (
-                <tr key={r.priority} className="border-t border-border/60">
-                  <td className="py-1.5">{r.priority}</td>
-                  <td className="num py-1.5 text-right">{minutes(r.targetMinutes)}</td>
-                  <td className="num py-1.5 text-right">{r.total.toLocaleString()}</td>
-                  <td className="num py-1.5 text-right">{r.breached.toLocaleString()}</td>
-                  <td className={`num py-1.5 text-right ${r.breachRate > 0 ? 'text-destructive' : 'text-muted-foreground'}`}>{r.breachRate}%</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+            ))}
+          </tbody>
+        </table>
+      </ChartCard>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <ChartCard title={t('plugin_ticket.stats.satisfaction')}>
+          <div className="flex items-baseline gap-2 py-2">
+            <p className="num text-3xl font-semibold">{data.satisfaction.avgScore.toFixed(1)}</p>
+            <span className="text-xs text-muted-foreground">
+              / 5 · {data.satisfaction.rated.toLocaleString()} {t('plugin_ticket.stats.ratedCount')}
+            </span>
+          </div>
+          <div data-tone="chart-4">
+            <RankBars items={data.satisfaction.byScore} />
+          </div>
         </ChartCard>
         <ChartCard title={t('plugin_ticket.stats.byBizType')}>
           <div data-tone="chart-3">

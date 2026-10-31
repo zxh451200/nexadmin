@@ -16,10 +16,11 @@ import (
 
 // Version 是市场目录里的一条版本历史。Ref 为空表示不提供该版本的下载源。
 type Version struct {
-	Version string `json:"version" yaml:"version"`
-	Date    string `json:"date"    yaml:"date"`  // YYYY-MM-DD，展示用
-	Ref     string `json:"ref"     yaml:"ref"`   // GitHub tag/分支
-	Notes   string `json:"notes"   yaml:"notes"` // 一句话变更
+	Version  string `json:"version"  yaml:"version"`
+	Date     string `json:"date"     yaml:"date"`     // YYYY-MM-DD，展示用
+	Ref      string `json:"ref"      yaml:"ref"`      // GitHub tag/分支
+	Notes    string `json:"notes"    yaml:"notes"`    // 一句话变更
+	Checksum string `json:"checksum" yaml:"checksum"` // 可选：该版本包的 SHA-256；填了就覆盖条目的 checksum
 }
 
 // catalogFile 是市场目录文件的位置（项目根下）。
@@ -32,7 +33,8 @@ type EntryText struct {
 }
 
 // Entry 是市场目录里的一条插件记录。展示用字段（名称/简介/分类/版本）写在目录里，
-// 安装时会与插件包内 plugin.yaml 交叉校验（id/edition 必须一致），目录造假装不进错误的包。
+// 安装时会与插件包内 plugin.yaml 交叉校验（id/edition 必须一致），目录造假装不进错误的包；
+// 字节是否就是目录声称的那个包，由 checksum/checksum_url/官网侧文件保证（见 verify.go）。
 type Entry struct {
 	ID          string         `json:"id"          yaml:"id"`
 	Name        string         `json:"name"        yaml:"name"`
@@ -44,10 +46,16 @@ type Entry struct {
 	Ref         string         `json:"ref"         yaml:"ref"`    // tag 或分支；空 = 默认分支
 	Subdir      string         `json:"subdir"      yaml:"subdir"` // monorepo 里本插件所在子目录（如 cron）；单插件仓库留空
 	URL         string         `json:"url"         yaml:"url"`    // 可选 zip 直链（OSS/自建镜像）；设置后优先于 GitHub
-	Homepage    string         `json:"homepage"    yaml:"homepage"`
-	TokenEnv    string         `json:"tokenEnv"    yaml:"token_env"` // 私有仓库可选：从该环境变量读 GitHub token
-	Price       string         `json:"price"       yaml:"price"`     // 展示用："待定"、"¥299"、"免费"；静态导出时原样输出
-	Author      string         `json:"author"      yaml:"author"`
+	// 完整性校验（可选，见 verify.go）：checksum 是包 zip 的 SHA-256（64 位十六进制）；
+	// checksumUrl 是 sha256sum 格式校验文件的直链。两者都填以 checksum 为准。
+	// 都不填时，官网 /plugins/<id>/download 直链会自动去取同目录的 download.sha256；
+	// 仍取不到校验值则按默认策略处理（显式告警放行，NEXADMIN_MARKET_REQUIRE_CHECKSUM=1 改为拒绝）。
+	Checksum    string `json:"checksum"    yaml:"checksum"`
+	ChecksumURL string `json:"checksumUrl" yaml:"checksum_url"`
+	Homepage    string `json:"homepage"    yaml:"homepage"`
+	TokenEnv    string `json:"tokenEnv"    yaml:"token_env"` // 私有仓库可选：从该环境变量读 GitHub token
+	Price       string `json:"price"       yaml:"price"`     // 展示用："待定"、"¥299"、"免费"；静态导出时原样输出
+	Author      string `json:"author"      yaml:"author"`
 	// 截图（http(s) 或站内 /...）、更新日志、版本历史；旧版本要能下载必须在 Versions 里填 ref。
 	Screenshots  []string  `json:"screenshots"  yaml:"screenshots"`
 	ChangelogURL string    `json:"changelogUrl" yaml:"changelog_url"`
@@ -114,6 +122,12 @@ func LoadCatalog(root string) ([]Entry, error) {
 		if e.URL != "" && !(strings.HasPrefix(e.URL, "https://") || strings.HasPrefix(e.URL, "http://")) {
 			return nil, fmt.Errorf("%s 第 %d 条：%q 的 url 必须是 http(s) 直链", catalogFile, i+1, e.ID)
 		}
+		if e.Checksum != "" && !ValidChecksum(e.Checksum) {
+			return nil, fmt.Errorf("%s 第 %d 条：%q 的 checksum 必须是 64 位十六进制的 SHA-256", catalogFile, i+1, e.ID)
+		}
+		if e.ChecksumURL != "" && !(strings.HasPrefix(e.ChecksumURL, "https://") || strings.HasPrefix(e.ChecksumURL, "http://")) {
+			return nil, fmt.Errorf("%s 第 %d 条：%q 的 checksum_url 必须是 http(s) 直链", catalogFile, i+1, e.ID)
+		}
 		if e.Edition != plugin.Free && e.Edition != plugin.Pro {
 			return nil, fmt.Errorf("%s 第 %d 条：%q 的 edition 必须是 free 或 pro", catalogFile, i+1, e.ID)
 		}
@@ -141,6 +155,9 @@ func LoadCatalog(root string) ([]Entry, error) {
 			seenVer[v.Version] = true
 			if v.Ref != "" && !validRef(v.Ref) {
 				return nil, fmt.Errorf("%s 第 %d 条：版本 %q 的 ref %q 非法", catalogFile, i+1, v.Version, v.Ref)
+			}
+			if v.Checksum != "" && !ValidChecksum(v.Checksum) {
+				return nil, fmt.Errorf("%s 第 %d 条：版本 %q 的 checksum 必须是 64 位十六进制的 SHA-256", catalogFile, i+1, v.Version)
 			}
 			if v.Date != "" {
 				if _, err := time.Parse("2006-01-02", v.Date); err != nil {
@@ -177,6 +194,11 @@ func EntryForVersion(e Entry, version string) (Entry, bool) {
 		}
 		e.Version = v.Version
 		e.Ref = v.Ref
+		if v.Checksum != "" {
+			// 每个版本的字节内容不同，校验值必须跟着版本走：版本级优先于条目级。
+			e.Checksum = v.Checksum
+			e.ChecksumURL = ""
+		}
 		return e, true
 	}
 	return Entry{}, false

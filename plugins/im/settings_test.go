@@ -74,3 +74,20 @@ func TestNormalizeSettings(t *testing.T) {
 		t.Fatalf("defaults not applied: %+v", st)
 	}
 }
+
+// 敏感词：去空去重（大小写不敏感）、命中替换为等字符数的 *。
+func TestMaskBanned(t *testing.T) {
+	words := normalizeWords([]string{" 发票 ", "Invoice", "invoice", ""})
+	if len(words) != 2 || words[0] != "发票" || words[1] != "Invoice" {
+		t.Fatalf("normalize = %v", words)
+	}
+	if got := maskBanned("我要发票和 INVOICE，谢谢", words); got != "我要**和 *******，谢谢" {
+		t.Fatalf("mask = %q", got)
+	}
+	if got := maskBanned("正常消息", words); got != "正常消息" {
+		t.Fatalf("untouched = %q", got)
+	}
+	if got := maskBanned("发票", nil); got != "发票" {
+		t.Fatalf("no words = %q", got)
+	}
+}

@@ -2,7 +2,7 @@
   "plugin_im": {
     "title": "Live chat",
     "description": "Conversations between visitors and agents",
-    "menu": "Message center",
+    "menu": "Live chat",
     "perm": {
       "reply": "Reply to messages",
       "edit": "Close conversations"
@@ -52,6 +52,48 @@
       "action": "Tags",
       "placeholder": "Comma separated, up to 10, e.g. refund,logistics"
     },
+    "note": {
+      "action": "Note",
+      "label": "Note",
+      "placeholder": "Internal note, visible to agents only"
+    },
+    "online": "Online",
+    "offline": "Offline",
+    "recall": { "action": "Recall" },
+    "recallFailed": "Recall failed: you can only recall your own messages sent in the last 2 minutes",
+    "merge": {
+      "action": "Merge conversation",
+      "title": "Merge conversation",
+      "hint": "Merge {{no}} into another conversation and close this one",
+      "target": "Target conversation no.",
+      "warning": "The target must be an open conversation; a merge cannot be undone."
+    },
+    "stats": {
+      "action": "Stats",
+      "title": "Live chat stats",
+      "hint": "Counted by conversation creation time; first response = visitor's first message to the agent's first reply",
+      "days": "Last {{count}} days",
+      "total": "Conversations",
+      "openHint": "{{count}} open",
+      "closed": "Closed",
+      "firstResponse": "Avg. first response",
+      "samples": "{{count}} samples",
+      "rating": "Rating",
+      "createdSeries": "Created",
+      "closedSeries": "Closed",
+      "agents": "Agent workload",
+      "assignedShort": "Assigned {{count}}",
+      "closedShort": "Closed {{count}}",
+      "noAgents": "No agent data yet",
+      "truncated": "More than {{count}} conversations in this window; only the most recent are counted"
+    },
+    "export": "Export",
+    "exportFailed": "Export failed",
+    "delete": {
+      "action": "Delete conversation",
+      "title": "Delete conversation",
+      "confirm": "Delete conversation {{no}}? Its messages and attachments will be deleted too, and this cannot be undone."
+    },
     "notify": {
       "on": "Desktop alerts on",
       "off": "Enable desktop alerts",
@@ -71,7 +113,11 @@
       "system": "System"
     },
     "system": {
-      "conv_closed": "Conversation closed"
+      "conv_closed": "Conversation closed",
+      "conv_reopened": "Conversation reopened",
+      "message_recalled": "Message recalled",
+      "conv_merged": "Merged into another conversation",
+      "conv_merged_into": "Conversation merged into another one"
     },
     "settings": {
       "action": "Chat settings",
@@ -85,7 +131,13 @@
       "timezone": "Timezone",
       "offlineText": "Offline notice (leave blank for default)",
       "inviteDelay": "Proactive invite delay (seconds, 0 = off)",
-      "inviteText": "Invite message (leave blank for default)"
+      "inviteText": "Invite message (leave blank for default)",
+      "welcomeText": "Welcome message (sent automatically when a visitor opens the first conversation; leave blank to disable)",
+      "bannedWords": "Banned words (one per line; matches in visitor messages are replaced with ***)",
+      "autoAssign": "Auto-assign conversations",
+      "autoAssignHint": "New conversations go to the online agent with the fewest open chats; with nobody online they queue and are claimed in order as agents come online",
+      "retentionDays": "Keep closed conversations for (days, 0 = forever)",
+      "retentionHint": "Only closed conversations are purged, together with their messages and attachments; checked hourly"
     }
   }
 }

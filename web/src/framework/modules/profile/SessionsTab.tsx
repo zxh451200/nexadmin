@@ -26,7 +26,9 @@ export function SessionsTab() {
     }
   }
 
-  const columns: Column<LoginSession>[] = [
+  // 后端目前不返回归属地；没有数据时不要展示一列空白。
+  const hasLocation = data.some((r) => !!r.location)
+  const allColumns: Column<LoginSession>[] = [
     {
       key: 'device',
       title: t('profile.sessions.device'),
@@ -44,6 +46,7 @@ export function SessionsTab() {
     { key: 'loginAt', title: t('profile.sessions.loginAt'), render: (r) => <span className="num">{fmtDateTime(r.loginAt, i18n.language)}</span> },
     { key: 'lastActiveAt', title: t('profile.sessions.lastActive'), render: (r) => <span className="num">{fmtDateTime(r.lastActiveAt, i18n.language)}</span> },
   ]
+  const columns = allColumns.filter((c) => c.key !== 'location' || hasLocation)
 
   return (
     <div className="flex flex-col gap-3">

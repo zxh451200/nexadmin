@@ -46,6 +46,14 @@ func (m *module) service(d *core.Deps) *Service {
 			l = zap.NewNop()
 		}
 		m.svc = NewService(d.DB, zapLog{l}).WithTimezone(d.Config.App.Timezone)
+		// 站内信：转派与访客回复提醒负责人；未注入时业务照常。
+		if d.Notify != nil {
+			lang := ""
+			if d.Config != nil {
+				lang = d.Config.DefaultLanguage()
+			}
+			m.svc.WithNotify(d.Notify, lang)
+		}
 		SetDefault(m.svc)
 	})
 	return m.svc
@@ -59,9 +67,14 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	h.Register(r, d)
 }
 
-// Start 实现 plugin.Starter：启动 SLA 清扫（每分钟把过期未响应工单标记 overdue）。
+// Start 实现 plugin.Starter：载入 SLA 策略，并启动清扫（每分钟标记首响/解决超时）。
 func (m *module) Start(ctx context.Context, d *core.Deps) error {
 	s := m.service(d)
+	if st, err := s.LoadSLA(ctx); err != nil {
+		s.logWarn("ticket: load SLA policy failed, using defaults", "err", err.Error())
+	} else {
+		s.SetSLA(st)
+	}
 	go func() {
 		t := time.NewTicker(time.Minute)
 		defer t.Stop()

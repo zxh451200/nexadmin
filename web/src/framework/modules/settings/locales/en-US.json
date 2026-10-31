@@ -125,6 +125,14 @@
         "github": "GitHub",
         "oidc": "OIDC"
       },
+      "providerHints": {
+        "wecom": "Create a self-built app in WeCom, then fill in its CorpID and Secret",
+        "dingtalk": "Create an app on the DingTalk Open Platform, then fill in AppKey and AppSecret",
+        "feishu": "Create an app on the Feishu Open Platform, then fill in App ID and App Secret",
+        "google": "Create an OAuth client in Google Cloud Console",
+        "github": "Create a GitHub OAuth App and configure its callback URL",
+        "oidc": "Connect any standard OpenID Connect provider; fill in the Issuer"
+      },
       "matchBy": "Account matching",
       "matchByHint": "Existing users are matched by this field after third-party sign-in",
       "matchPhone": "Phone",

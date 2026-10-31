@@ -7,7 +7,6 @@ import { Can } from '@/framework/auth/Can'
 import { usePermission } from '@/framework/auth/usePermission'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
-import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { api } from '@/framework/request/http'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
@@ -18,7 +17,8 @@ import { KeyRotationDialog } from './KeyRotationDialog'
 import { SecretDialog, type SecretTarget } from './SecretDialog'
 import { SsoAppFormDialog } from './SsoAppFormDialog'
 
-export default function SsoAppsPage() {
+/** 单点登录应用：作为「系统设置 → 安全与登录」的一个分区渲染，旧地址 /system/sso-apps 重定向到 ?tab=sso。 */
+export function SsoSection() {
   const { t } = useTranslation()
   const confirm = useConfirm()
   const { has } = usePermission()
@@ -62,7 +62,7 @@ export default function SsoAppsPage() {
     if (!(await confirm({ destructive: true, title: t('sso.resetSecret'), description: t('sso.resetConfirm', { name: a.name }) }))) return
     try {
       const res = await reset.mutateAsync(a.id)
-      setSecret({ name: a.name, clientId: a.clientId, clientSecret: res.clientSecret })
+      setSecret({ name: a.name, clientId: a.clientId, clientSecret: res.clientSecret, orgRead: a.allowOrgRead })
     } catch {
       toast.error(t('common.operateFailed'))
     }
@@ -124,9 +124,7 @@ export default function SsoAppsPage() {
   ]
 
   return (
-    <PageContainer>
-      <PageHeader title={t('sso.title')} description={t('sso.description')} />
-
+    <>
       <DataTable
         toolbar={
           <>
@@ -155,7 +153,7 @@ export default function SsoAppsPage() {
               variant="ghost"
               size="icon"
               aria-label={t('sso.access.action')}
-              onClick={() => setSecret({ name: a.name, clientId: a.clientId })}
+              onClick={() => setSecret({ name: a.name, clientId: a.clientId, orgRead: a.allowOrgRead })}
             >
               <Info aria-hidden="true" />
             </Button>
@@ -178,10 +176,10 @@ export default function SsoAppsPage() {
         open={formOpen}
         onOpenChange={setFormOpen}
         editing={editing}
-        onCreated={(app) => setSecret({ name: app.name, clientId: app.clientId, clientSecret: app.clientSecret })}
+        onCreated={(app) => setSecret({ name: app.name, clientId: app.clientId, clientSecret: app.clientSecret, orgRead: app.allowOrgRead })}
       />
       <SecretDialog target={secret} onOpenChange={(o) => !o && setSecret(null)} />
       <KeyRotationDialog open={keysOpen} onOpenChange={setKeysOpen} />
-    </PageContainer>
+    </>
   )
 }

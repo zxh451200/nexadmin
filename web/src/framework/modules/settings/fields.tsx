@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react'
 import type { Control, FieldValues } from 'react-hook-form'
-import { Checkbox } from '@/framework/ui/checkbox'
 import { FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/framework/ui/form'
 import { Input } from '@/framework/ui/input'
 import { RadioGroup, RadioGroupItem } from '@/framework/ui/radio-group'
@@ -77,23 +76,6 @@ export function TextareaField({ control, name, label, description, placeholder }
 
 // 全站共用一个开关字段形态，这里只做转出，避免各处再各写一套
 export { SwitchField } from '@/framework/components/SwitchField'
-
-export function CheckField({ control, name, label }: Omit<Base, 'description'>) {
-  return (
-    <FormField
-      control={control}
-      name={name}
-      render={({ field }) => (
-        <FormItem className="flex min-h-10 flex-row items-center gap-2 space-y-0">
-          <FormControl>
-            <Checkbox checked={!!field.value} onCheckedChange={(c) => field.onChange(c === true)} />
-          </FormControl>
-          <FormLabel className="flex min-h-10 cursor-pointer items-center font-normal">{label}</FormLabel>
-        </FormItem>
-      )}
-    />
-  )
-}
 
 export function SelectField({ control, name, label, description, options }: Base & { options: Opt[] }) {
   return (

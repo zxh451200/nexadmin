@@ -209,6 +209,17 @@ export const routes: ModuleRoute[] = [
 
 The sidebar actually comes from the server-side `sys_menu` (i.e. the `menus` in `plugin.yaml`), so the `path` here must match the `path` in `plugin.yaml`.
 
+If the page is just a configuration block, make it a System Settings section instead of a standalone sidebar entry: declare `settings` on the route (`component` points to a section component without `PageContainer` / `PageHeader`), keep the `plugin.yaml` menu at its original parent with `hidden: true`, and redirect the legacy path with `<Navigate>` to `/system/settings?tab=<key>`. Do not reparent the menu under `settings:list` just to "put it under settings": role assignment fills in ancestors, which silently grants `settings:list`. The menu row still supplies the permission code, so role grants are unaffected. See `plugins/ldap/route.tsx` and `plugins/maps/route.tsx`:
+
+```tsx
+{
+  path: 'system/map',
+  component: () => <Navigate to="/system/settings?tab=maps" replace />,
+  perm: 'maps:config',
+  settings: { key: 'maps', group: 'integration', title: 'plugin_maps.menu', order: 100, component: lazy(() => import('./MapSettingsPage').then((m) => ({ default: m.MapSection }))) },
+}
+```
+
 ### 5.2 Conventions
 
 - **i18n**: the namespace is fixed to `plugin_<id>`, written in both `locales/zh-CN.json` and `en-US.json` with the top-level key `plugin_cron`. Dynamically composed keys (e.g. `` t(`plugin_cron.type.${v}`) ``) must have copy for every value.
@@ -282,6 +293,23 @@ Both the website and the admin read this YAML directly — changes take effect i
 - Optional catalog fields `screenshots` / `changelog_url` / `versions`: the detail page shows screenshots and version history; for old versions to be downloadable, `versions` must carry a `ref` (GitHub tag), and the website fetches the matching tag via `?version=`.
 - Package signing: after the website process sets `NEXADMIN_MARKET_SIGN_KEY=<PKCS8 PEM private key>`, the download page offers `.sig` and the public key at `/plugins/signing-key.pub`; verify with `nexadmin plugin verify --sig <file> --key <pubkey file> <zip>`. The signature is **the marketplace instance's Ed25519 signature over the final package** (over the SHA-256 digest), not the author's; customer sites can use their own keys.
 
+**Download integrity verification (before install, before extraction)**
+
+Market installs hand the downloaded bytes straight to `go build` / `npm build`, i.e. they execute unverified source on the build host. `market.Download` therefore confirms the bytes against the catalog declaration **before extracting** (implementation: `core/plugin/market/verify.go`). Verification sources, in priority order:
+
+| Source | When it applies | When no checksum is available |
+| --- | --- | --- |
+| Catalog field `checksum` (SHA-256 of the package zip, 64 hex digits; `versions[].checksum` overrides it for a pinned old version) | declared → must match | —— (a malformed value is refused outright) |
+| Catalog field `checksum_url` (direct link to a `sha256sum`-format file, http(s)) | declared → must match | failing to fetch or parse it refuses the install |
+| Website sidecar (`url` pointing at `<site>/plugins/<id>/download` automatically fetches the same path + `.sha256`) | fetched → must match; no manual field needed | a 404 sidecar counts as "no checksum" and falls back to the default policy |
+| None of the three (GitHub `repo` zipball, plain direct link without a sidecar) | —— | default policy: install with an explicit warning; `NEXADMIN_MARKET_REQUIRE_CHECKSUM=1` turns it into a refusal |
+
+- The default is "warn and continue" because a `repo` entry with an empty `ref` follows the default branch, whose bytes change on every push, so it cannot carry a pinned checksum; refusing outright would break every one-click install in existing deployments. Continuing is not "safe" — it only records honestly in the warning log that the package was never integrity-checked, instead of pretending verification passed. Strict deployments set `NEXADMIN_MARKET_REQUIRE_CHECKSUM=1`, add `checksum`/`checksum_url` to the entry, or route downloads through the website endpoint.
+- A verification failure refuses the install: **no extraction, nothing written under `plugins/`, `plugins.go` untouched**, and the temporary zip is deleted on the spot. There is no bypass switch (`--force` only relaxes manifest and already-installed checks). Messages are localized through i18n (`plugin.market.checksum_*`, kept in sync in `core/i18n/locales/{zh-CN,en-US}.yaml`).
+- SHA-256 only answers "are these the bytes I meant to check" — it guards against transport/cache substitution and against a catalog that no longer matches the package. When the checksum comes from the same download channel as the package, it **does not authenticate the publisher**; that remains the job of the Ed25519 signature (`.sig` plus a pinned public key). The two are complementary; do not treat a checksum as a signature.
+- Producer and consumer stay separate: the website's own `/plugins/<id>/download` fetch (`market.Package`) does not verify anything — it is the side that *produces* the `.sha256`, so there is nothing to compare against. Verification happens only in the client-side `Download`.
+- `nexadmin plugin install <local zip>` has no catalog entry to compare with, so the operator supplying the file owns its trustworthiness; verify it first with `nexadmin plugin verify`.
+
 ### Website multi-language (website plugin)
 
 **`sys_language` is the sole source of truth for platform languages.** The website consumes it through `core.Languages()`; `languages` in `config.yaml` only seeds an empty table. Do not maintain a separate `locales/languages.json` list.
@@ -306,6 +334,7 @@ Conventions:
 - Upgraded legacy databases: `ensureSeedI18n` only backfills rows whose `i18n_json` is empty and whose source text still matches the factory copy; existing translations are never overwritten.
 - Stats: public downloads are counted per download; ratings are anonymous 1–5 stars, one row per IP per plugin, re-ratable. Admin one-click installs do not count as public downloads.
 - Private/self-hosted GitHub: `NEXADMIN_MARKET_GITHUB_API` overrides the API root (GitHub Enterprise).
+- Integrity verification: by default "verify whenever a checksum is available, warn and continue when none is"; `NEXADMIN_MARKET_REQUIRE_CHECKSUM=1` turns "no checksum available" into a refusal (see "Download integrity verification" above).
 
 ## 8. Submission and review
 

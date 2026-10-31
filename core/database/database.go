@@ -141,6 +141,32 @@ func EnsureDatabase(ctx context.Context, cfg config.Database) error {
 	return db.Exec(`CREATE DATABASE "` + cfg.Name + `" ENCODING 'UTF8'`).Error
 }
 
+// DatabaseExists 报告配置的库是否存在：用服务器级连接查目录表，不建库、不改任何东西。
+// 用途是把「库不存在」与「连不上 / 口令错」区分开——前者是确定的未初始化，后者必须继续 fail-closed。
+func DatabaseExists(ctx context.Context, cfg config.Database) (bool, error) {
+	if !identRe.MatchString(cfg.Name) {
+		return false, fmt.Errorf("database: invalid database name %q (letters, digits, underscore only)", cfg.Name)
+	}
+	kind, err := Normalize(cfg.Type)
+	if err != nil {
+		return false, err
+	}
+	db, err := openRaw(cfg, "", logger.Silent)
+	if err != nil {
+		return false, err
+	}
+	defer Close(db)
+	var n int64
+	q := "SELECT COUNT(*) FROM information_schema.schemata WHERE schema_name = ?"
+	if kind != "mysql" {
+		q = "SELECT COUNT(*) FROM pg_database WHERE datname = ?"
+	}
+	if err := db.WithContext(ctx).Raw(q, cfg.Name).Scan(&n).Error; err != nil {
+		return false, err
+	}
+	return n > 0, nil
+}
+
 // Probe 测试连接并返回服务器版本。serverLevel=true 时不连具体库（库可能还不存在）。
 func Probe(ctx context.Context, cfg config.Database, serverLevel bool) (string, error) {
 	name := cfg.Name

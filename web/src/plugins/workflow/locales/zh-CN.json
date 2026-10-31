@@ -11,9 +11,17 @@
     "tabs": {
       "todo": "我的待办",
       "done": "我已办",
+      "mine": "我发起的",
       "all": "全部实例",
       "defs": "流程定义"
     },
+    "startAction": "发起流程",
+    "startTitle": "发起流程",
+    "startDesc": "选择已发布的流程，填写标题后提交给第一审批人。",
+    "startSubmit": "提交",
+    "startNoPublished": "还没有已发布的流程定义，请先在「流程定义」里创建并发布。",
+    "startSuccess": "已发起：{{title}}",
+    "startBizHint": "业务类型与业务键用于把实例挂到业务单据上；同一业务键重复发起会复用运行中的实例。",
     "defCreate": "新建流程定义",
     "defEdit": "编辑流程定义",
     "defDeleteConfirm": "确认删除该流程定义？已启动的实例不受影响。",
@@ -27,10 +35,34 @@
       "defName": "名称",
       "defKey": "标识",
       "status": "状态",
-      "updatedAt": "更新时间"
+      "updatedAt": "更新时间",
+      "definition": "流程定义",
+      "title": "标题",
+      "titlePlaceholder": "例如：张三的请假申请",
+      "bizType": "业务类型",
+      "businessKey": "业务键",
+      "businessKeyPlaceholder": "例如：L-2026-001"
     },
     "fromTemplate": "从模板创建",
     "fromTemplateBlank": "空白流程",
+    "searchPlaceholder": "搜索标题 / 流程标识 / 业务键",
+    "statusAll": "全部状态",
+    "currentApprovers": "待审批人",
+    "defVersion": "定义版本",
+    "flowTitle": "流程进度",
+    "pendingTitle": "当前待办",
+    "historyTitle": "流转历史",
+    "anyone": "任意审批人",
+    "notMyTurn": "你不是当前节点的审批人，只能查看。",
+    "countersign": "加签",
+    "countersignDone": "已加签 {{count}} 人",
+    "countersignSubmit": "确认加签（{{count}}）",
+    "rollback": "回退",
+    "rollbackTo": "回退到",
+    "rollbackConfirm": "确认把流程回退到所选节点？该节点及其之后的审批记录将被清除。",
+    "rejectConfirm": "确认驳回该流程？驳回后流程结束。",
+    "escalateConfirm": "确认把流程升级到更高审批节点？",
+    "approversPlaceholder": "选择审批人",
     "empty": "暂无流程",
     "loading": "加载中…",
     "total": "共 {{count}} 条",
@@ -49,7 +81,19 @@
       "rejected": "已驳回",
       "cancelled": "已撤回"
     },
+    "flow": {
+      "empty": "没有可展示的流程图",
+      "summary": "当前停留在：{{nodes}}",
+      "summaryEnded": "流程已结束",
+      "current": "当前节点",
+      "done": "已办",
+      "pending": "未到达"
+    },
     "designer": {
+      "canvasLabel": "BPMN 流程建模画布",
+      "importFailed": "流程图解析失败",
+      "emptyDiagram": "请先画出流程",
+      "propsHint": "只支持开始、结束、用户任务、排他网关；并行网关与子流程暂不支持。",
       "nodeStart": "开始",
       "nodeApproval": "审批",
       "nodeGateway": "网关",
@@ -59,7 +103,7 @@
       "removeEdge": "点击删除连线",
       "connectFrom": "从这里连线",
       "nodeName": "节点名称",
-      "approvers": "审批人 ID（逗号分隔）",
+      "approvers": "审批人",
       "mode": "模式",
       "modeAny": "或签（任一通过）",
       "modeAll": "会签（全部通过）",
@@ -70,7 +114,17 @@
       "edgeConditions": "出边条件",
       "edgeWhen": "条件（可空）",
       "propsTitle": "节点属性",
-      "propsEmpty": "点选画布上的节点，在这里编辑它的名称、审批人与出边条件"
-    }
+      "propsEmpty": "点选画布上的用户任务，这里可以设置审批人、或签会签、升级目标与超时"
+    },
+    "actions": {
+      "start": "发起",
+      "approve": "同意",
+      "reject": "驳回",
+      "countersign": "加签",
+      "rollback": "回退",
+      "escalate": "升级",
+      "withdraw": "撤回"
+    },
+    "unknownUser": "未知用户"
   }
 }

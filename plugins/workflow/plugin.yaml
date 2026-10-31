@@ -1,7 +1,7 @@
 id: workflow
 name: 工作流
-version: 0.1.0
-description: 自研 BPMN 2.0 子集：开始 → 审批（或签/会签）→ 排他网关 → 结束，加签/回退/撤回/超时自动升级/BPMN XML 导出；workflow.* 事件供宿主推送通知。
+version: 0.2.0
+description: 嵌入式 BPMN 2.0 子集（内核抽为独立 Apache-2.0 module flowlite）：开始 → 审批（或签/会签/加签）→ 排他网关 → 结束，回退/撤回/超时自动升级；定义快照跟随实例、乐观锁防并发覆盖；bpmn-js 建模、BPMN XML 双向；workflow.* 事件供宿主推送通知。依赖框架自带的 flowlite 模块，宿主需随框架升级交付，不能只拷贝插件目录。
 author: NexAdmin
 edition: pro
 requires_nexadmin: ">=0.1.0"

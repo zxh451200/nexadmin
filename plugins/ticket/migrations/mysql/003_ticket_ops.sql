@@ -1,0 +1,19 @@
+-- 工单坐席协作：待客户回复（SLA 停表）、内部备注、解决/关闭时间、创建人、快捷回复。只增不改。
+ALTER TABLE plg_ticket ADD COLUMN sla_paused_at DATETIME(3) NULL;
+ALTER TABLE plg_ticket ADD COLUMN resolved_at DATETIME(3) NULL;
+ALTER TABLE plg_ticket ADD COLUMN closed_at DATETIME(3) NULL;
+ALTER TABLE plg_ticket ADD COLUMN creator_id BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE plg_ticket ADD COLUMN creator_name VARCHAR(64) NOT NULL DEFAULT '';
+ALTER TABLE plg_ticket_reply ADD COLUMN is_internal TINYINT(1) NOT NULL DEFAULT 0;
+CREATE INDEX idx_plg_ticket_assignee ON plg_ticket (assignee_id, status, last_reply_at);
+
+CREATE TABLE plg_ticket_canned (
+  id BIGINT NOT NULL,
+  title VARCHAR(100) NOT NULL,
+  content VARCHAR(2000) NOT NULL,
+  sort INT NOT NULL DEFAULT 0,
+  created_at DATETIME(3) NOT NULL,
+  updated_at DATETIME(3) NOT NULL,
+  PRIMARY KEY (id)
+);
+CREATE INDEX idx_plg_ticket_canned_sort ON plg_ticket_canned (sort, id);

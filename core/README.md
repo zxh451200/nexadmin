@@ -21,7 +21,7 @@
 | `database` | GORM 引擎创建（mysql/mariadb/postgres）、连接池、isolation（租户独立库路由） | 由框架调用；业务代码只拿 `d.DB` | `database/` |
 | `tenant` | 租户解析链（header/域名/登录态）、`WithTenant` context、默认租户 | 查询已由 `TenantModel` 自动带租户；特殊场景 `tenant.With(ctx, id)` | `tenant/` |
 | `datascope` | 数据范围裁剪（all/deptAndChild/dept/self/custom） | 参考 `modules/notice/scope.go` | `datascope/` |
-| `region` | 省市区数据（go:embed，无表） | `GET /regions/tree` | `region/` |
+| `region` | 省市区数据：随包内置完整三级树（go:embed），运行时可切换成同步下来的快照 | `GET /regions/tree`；同步接口见 `modules/region` | `region/` |
 | `secret` | 静态加密（AES-256-GCM，主密钥 `data/secret.key` / `NEXADMIN_SECRET_KEY`） | 存第三方密钥等敏感值 | `secret/secret.go` |
 
 ## 认证与安全
@@ -33,7 +33,7 @@
 | `roleassign` | 角色分配三道校验（可分配/权限不越权/数据范围不更宽） | 参考 `modules/system/user/roleguard.go` | `roleassign/` |
 | `mcp` | MCP 工具入口（JSON-RPC，只读直调、写走确认流程） | 只读工具自动发现；见功能清单 MCP 节 | `mcp/` |
 | `cluster` | 多实例广播总线（redis Pub/Sub）与 node_id 租约 | 租户修改失效广播、job 去重 | `cluster/` |
-| `ws` | WebSocket 入口（`/ws`，鉴权由中间件链负责） | 前端实时通道 | `ws/` |
+| `ws` | WebSocket 入口（`/ws`，浏览器先用 `POST /api/v1/ws/ticket` 换一次性入场票，访问令牌不进握手 URL；主题归属由各模块登记的 TopicGuard 判定） | 前端实时通道 | `ws/` |
 
 ## 业务支撑
 

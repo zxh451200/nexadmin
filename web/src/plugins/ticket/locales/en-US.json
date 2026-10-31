@@ -3,18 +3,28 @@
     "title": "Ticket Center",
     "description": "Submit, follow up and close after-sales requests",
     "menu": "Ticket Center",
+    "view": {
+      "logs": "Tickets",
+      "stats": "Analytics"
+    },
     "perm": {
       "reply": "Reply & claim",
-      "edit": "Status & assignment"
+      "edit": "Status & assignment",
+      "create": "Create on behalf"
     },
     "all": "All",
     "empty": "No tickets",
+    "emptyFiltered": "No tickets match these filters",
     "overdue": "Overdue",
     "loading": "Loading…",
     "pickTicket": "Pick a ticket on the left to work on",
     "searchPlaceholder": "Ticket no / title / preview",
     "assign": "Claim",
     "assignee": "Assignee",
+    "assigneeFilter": "Assignee filter",
+    "assigneeAll": "All assignees",
+    "assigneeUnassigned": "Unassigned",
+    "assigneeMine": "Only mine",
     "claim": "Start processing",
     "resolve": "Mark resolved",
     "close": "Close ticket",
@@ -29,6 +39,7 @@
     "status": {
       "open": "Open",
       "processing": "Processing",
+      "pending": "Waiting on customer",
       "resolved": "Resolved",
       "closed": "Closed"
     },
@@ -43,6 +54,64 @@
       "agent": "Agent",
       "system": "System"
     },
+    "actions": {
+      "processing": "Start processing",
+      "resume": "Resume",
+      "pending": "Waiting on customer",
+      "reopen": "Reopen",
+      "transfer": "Transfer",
+      "assignToMe": "Assign to me",
+      "setPriority": "Set priority",
+      "clearSelection": "Clear selection"
+    },
+    "transfer": {
+      "title": "Transfer ticket",
+      "description": "Choose a teammate to take over. Search needs the user-list permission; accounts without it see no candidates.",
+      "placeholder": "Search teammates",
+      "confirm": "Transfer"
+    },
+    "create": {
+      "title": "New ticket",
+      "description": "Create a ticket on behalf of a customer; fill in the customer as reporter.",
+      "titleField": "Title",
+      "contentField": "Description",
+      "reporterName": "Reporter",
+      "reporterNamePlaceholder": "Customer name / nickname",
+      "reporterId": "Customer ID",
+      "reporterIdPlaceholder": "Member ID, phone, etc. (optional)",
+      "bizType": "Business type",
+      "bizNo": "Business no",
+      "required": "Title and description are required",
+      "submit": "Create"
+    },
+    "internal": {
+      "label": "Internal note",
+      "hint": "Agents only; visitors never see notes",
+      "badge": "Internal"
+    },
+    "canned": {
+      "label": "Canned reply",
+      "manage": "Manage canned replies",
+      "empty": "No canned replies yet. Add your first snippet.",
+      "title": "Title",
+      "content": "Content",
+      "add": "Add",
+      "save": "Save",
+      "cancelEdit": "Cancel edit",
+      "deleteConfirm": "Delete canned reply \"{{title}}\"?",
+      "titlePlaceholder": "e.g. Refund accepted",
+      "contentPlaceholder": "Text inserted into the reply box"
+    },
+    "bulk": {
+      "done": "Updated {{updated}}, skipped {{skipped}}",
+      "closeConfirm": "Close {{count}} selected tickets? A reply from the reporter reopens them.",
+      "resolve": "Mark resolved",
+      "close": "Close"
+    },
+    "createdBy": "Created by",
+    "rating": {
+      "badge": "CSAT {{score}}/5"
+    },
     "stats": {
       "rangeLabel": "Time range",
       "ranges": {
@@ -53,6 +122,7 @@
       },
       "total": "Tickets",
       "pending": "Awaiting action",
+      "awaitingCustomer": "Waiting on customer",
       "unassigned": "Unassigned",
       "overdue": "Overdue",
       "sampled": "High volume: stats cover the most recent 20,000 tickets.",
@@ -60,17 +130,18 @@
       "created": "Created",
       "resolved": "Resolved",
       "firstResponse": "First response",
+      "resolution": "Resolution time",
+      "resolvedCount": "Resolved",
+      "satisfaction": "Satisfaction",
+      "ratedCount": "ratings",
       "noResponse": "No response yet",
       "sla": "SLA by priority",
       "priority": "Priority",
       "target": "Target",
       "breached": "Breached",
       "breachRate": "Breach rate",
-      "byBizType": "Top business types"
-    },
-    "view": {
-      "logs": "Tickets",
-      "stats": "Analytics"
+      "byBizType": "Top business types",
+      "byAssignee": "By assignee"
     }
   }
 }

@@ -21,6 +21,12 @@ export interface RegionSelectProps {
 
 const KEYS = ['province', 'city', 'district'] as const
 
+// 直辖市与省直辖县级市没有地级这一层，选中省级后只需再选一级，第三列不该空着出现。
+function widthFor(path: RegionNode[], level: number): number {
+  if (path.length === 0) return level
+  return path[0].children?.some((c) => c.children?.length) ? level : Math.min(level, 2)
+}
+
 function toValue(path: RegionNode[]): RegionValue {
   return { province: path[0]?.code, city: path[1]?.code, district: path[2]?.code }
 }
@@ -40,7 +46,7 @@ export function RegionSelect({ level = 3, value, onChange, allowClear = true, pl
     setOpen(o)
     if (o) {
       setDraft(current)
-      setStep(Math.min(current.length, level - 1))
+      setStep(Math.max(0, Math.min(current.length, widthFor(current, level) - 1)))
       setSearch('')
     }
   }
@@ -64,7 +70,9 @@ export function RegionSelect({ level = 3, value, onChange, allowClear = true, pl
       for (const n of nodes) {
         const p = [...path, n]
         const isLeaf = p.length >= level || !n.children?.length
-        if (isLeaf && (n.name.toLowerCase().includes(kw) || n.pinyin.toLowerCase().includes(kw))) out.push(p)
+        // ü 在数据里写作 v（输入法习惯），按拼音搜索时 u 的写法也要能命中
+        const hay = `${n.pinyin} ${n.pinyin.replace(/v/g, 'u')}`
+        if (isLeaf && (n.name.toLowerCase().includes(kw) || hay.includes(kw))) out.push(p)
         if (!isLeaf && n.children) walk(n.children, p)
         if (out.length >= 50) return
       }
@@ -73,7 +81,7 @@ export function RegionSelect({ level = 3, value, onChange, allowClear = true, pl
     return out
   }, [kw, tree, level])
 
-  const columns = [tree, draft[0]?.children ?? [], draft[1]?.children ?? []].slice(0, level)
+  const columns = [tree, draft[0]?.children ?? [], draft[1]?.children ?? []].slice(0, widthFor(draft, level))
 
   const list = (depth: number) => (
     <ul role="listbox" className="max-h-72 overflow-y-auto p-1">
@@ -168,7 +176,7 @@ export function RegionSelect({ level = 3, value, onChange, allowClear = true, pl
           {list(step)}
         </div>
       ) : (
-        <div className="grid divide-x divide-border rtl:divide-x-reverse" style={{ gridTemplateColumns: `repeat(${level}, minmax(0, 1fr))` }}>
+        <div className="grid divide-x divide-border rtl:divide-x-reverse" style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(0, 1fr))` }}>
           {columns.map((_, i) => (
             <div key={KEYS[i]}>{list(i)}</div>
           ))}

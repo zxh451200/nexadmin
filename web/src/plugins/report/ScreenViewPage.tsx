@@ -32,12 +32,18 @@ export default function ScreenViewPage() {
     document.addEventListener('fullscreenchange', onChange)
     return () => document.removeEventListener('fullscreenchange', onChange)
   }, [])
+  const exit = useCallback(async () => {
+    setFull(false)
+    if (document.fullscreenElement) await document.exitFullscreen().catch(() => undefined)
+  }, [])
   useEffect(() => {
     if (!full) return
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && void exit()
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') void exit()
+    }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  })
+  }, [full, exit])
 
   const enter = useCallback(async () => {
     setFull(true)
@@ -47,10 +53,6 @@ export default function ScreenViewPage() {
       // 浏览器拒绝时保留覆盖层模式
     }
   }, [])
-  async function exit() {
-    setFull(false)
-    if (document.fullscreenElement) await document.exitFullscreen().catch(() => undefined)
-  }
 
   if (!id || isError) return <EmptyState title={t('plugin_report.screen.notFound')} action={<Button onClick={() => navigate(-1)}>{t('common.back')}</Button>} />
   if (isLoading || !screen) return <Skeleton className="m-4 h-96" />

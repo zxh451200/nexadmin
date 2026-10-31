@@ -25,6 +25,10 @@ import (
 const (
 	autoCloseIdle  = 24 * time.Hour
 	autoCloseEvery = 10 * time.Minute
+	// retentionEvery 是保留期清理的巡检间隔：保留天数按天计，一小时一次足够。
+	retentionEvery = time.Hour
+	// retentionBatch 是单轮最多清理的会话数，避免一次扫太多拖慢库。
+	retentionBatch = 200
 )
 
 // 建表由运行时执行 plugins/im/migrations/<引擎>/*.sql（安装时 CLI 拷贝），插件自己不做迁移。
@@ -33,7 +37,7 @@ var _ plugin.Starter = (*module)(nil)
 func init() {
 	event.Register(CatalogInfos()...)
 	plugin.Register(plugin.Plugin{
-		ID: "im", Name: "在线客服", Version: "0.4.0", Edition: plugin.Pro,
+		ID: "im", Name: "在线客服", Version: "0.6.0", Edition: plugin.Pro,
 		Module: &module{},
 	})
 }
@@ -41,13 +45,15 @@ func init() {
 // zapLog 把 *zap.Logger 适配成 Service 需要的最小日志面。
 type zapLog struct{ l *zap.Logger }
 
+func (z zapLog) Info(msg string, kv ...any)  { z.l.Sugar().Infow(msg, kv...) }
 func (z zapLog) Warn(msg string, kv ...any)  { z.l.Sugar().Warnw(msg, kv...) }
 func (z zapLog) Error(msg string, kv ...any) { z.l.Sugar().Errorw(msg, kv...) }
 
 type module struct {
-	once sync.Once
-	sub  sync.Once
-	svc  *Service
+	once    sync.Once
+	sub     sync.Once
+	wsGuard sync.Once
+	svc     *Service
 }
 
 func (m *module) service(d *core.Deps) *Service {
@@ -68,6 +74,7 @@ func (*module) Name() string { return "im" }
 func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	svc := m.service(d)
 	svc.SetBus(d.Bus)
+	svc.SetCache(d.Cache)
 	if d.Config != nil {
 		st, err := storage.New(d.Config.Storage, filepath.Join(d.Config.DataDir, "uploads", "im"))
 		if err != nil {
@@ -79,6 +86,7 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 		}
 	}
 	h := &handler{svc: svc, tickets: newStreamTicket(30 * time.Second), cache: d.Cache, store: svc.Storage()}
+	m.wsGuard.Do(func() { registerWSTopicGuard(svc, d.Auth) })
 	h.Register(r, d)
 }
 
@@ -89,6 +97,7 @@ func (m *module) Start(ctx context.Context, d *core.Deps) error {
 	m.sub.Do(func() {
 		d.Bus.On(busKind, svc.Deliver, nil)
 		go autoCloseLoop(ctx, svc)
+		go retentionLoop(ctx, svc)
 		n := newNotifier(ctx, d)
 		if n == nil {
 			return
@@ -97,6 +106,48 @@ func (m *module) Start(ctx context.Context, d *core.Deps) error {
 		go n.run()
 	})
 	return nil
+}
+
+// retentionLoop 按设置里的保留天数清理已结束会话（retentionDays=0 = 永久保留）。
+// 每次运行都记一条「检查了多少、删了多少」的日志：只记删除数时，0 与「没轮到」无法区分。
+func retentionLoop(ctx context.Context, svc *Service) {
+	purge := func() {
+		cctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+		defer cancel()
+		days := svc.Settings(cctx).RetentionDays
+		if days <= 0 {
+			return
+		}
+		cutoff := time.Now().AddDate(0, 0, -days)
+		scanned, deleted, err := svc.PurgeConversations(cctx, cutoff, retentionBatch)
+		if svc.log == nil {
+			return
+		}
+		if err != nil {
+			svc.log.Warn("im: purge conversations failed", "err", err.Error())
+			return
+		}
+		svc.log.Info("im: purge conversations", "retentionDays", days, "scanned", scanned, "deleted", deleted)
+	}
+	// 启动后稍等再跑第一轮，避免与建库/初始化抢资源。
+	first := time.NewTimer(5 * time.Minute)
+	defer first.Stop()
+	select {
+	case <-ctx.Done():
+		return
+	case <-first.C:
+		purge()
+	}
+	t := time.NewTicker(retentionEvery)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			purge()
+		}
+	}
 }
 
 // autoCloseLoop 定期关闭超过 autoCloseIdle 没有新消息的会话；随插件 ctx 退出。

@@ -149,34 +149,26 @@ export function DefineTableDialog({ open, onOpenChange, pending, onSubmit }: Pro
           </div>
         </div>
 
-        <div className="flex flex-col gap-2 rounded-lg border bg-muted/30 px-3 py-2.5">
-          <Label>{t('plugin_codegen.define.options')}</Label>
-          <div className="flex flex-wrap gap-x-6 gap-y-1">
-            <label className="flex min-h-9 cursor-pointer items-center gap-2">
-              <Checkbox id="codegen-def-tenant" checked={tenant} onCheckedChange={(v) => setTenant(v === true)} />
-              <Label htmlFor="codegen-def-tenant" className="cursor-pointer font-normal">
-                {t('plugin_codegen.define.tenant')}
-              </Label>
-            </label>
-            <label className="flex min-h-9 cursor-pointer items-center gap-2">
-              <Checkbox id="codegen-def-soft-delete" checked={softDelete} onCheckedChange={(v) => setSoftDelete(v === true)} />
-              <Label htmlFor="codegen-def-soft-delete" className="cursor-pointer font-normal">
-                {t('plugin_codegen.define.softDelete')}
-              </Label>
-            </label>
-          </div>
-        </div>
-
         <section className="flex flex-col gap-2">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <Label>{t('plugin_codegen.define.fields')}</Label>
-            <Button variant="outline" size="sm" onClick={() => setRows((cur) => [...cur, blankRow()])}>
-              <Plus aria-hidden="true" />
-              {t('plugin_codegen.define.addField')}
-            </Button>
-          </div>
-          <div className="overflow-hidden rounded-lg border">
-            <div className="hidden gap-2 border-b bg-muted/50 px-3 py-2 text-xs font-medium text-muted-foreground md:grid md:grid-cols-[minmax(0,1fr)_7rem_5.5rem_minmax(0,1fr)_4rem_2.25rem]">
+          <Label>{t('plugin_codegen.define.fields')}</Label>
+          {/* 不再给字段表套一层带边框的盒子：弹窗本身已是容器，再套一层就是三层面板叠在一起。
+              分隔靠 divide-y 和一条列头底线，和框架里的内嵌表格同一种做法。 */}
+          <div className="flex flex-col">
+            {/* 表级选项放进表格标题带：附加系统列本质就是给这张表加列，和列头一起读更顺 */}
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-b pb-2.5">
+              <span className="text-xs font-medium text-muted-foreground">{t('plugin_codegen.define.options')}</span>
+              <label className="flex min-h-6 cursor-pointer flex-wrap items-center gap-2">
+                <Checkbox id="codegen-def-tenant" checked={tenant} onCheckedChange={(v) => setTenant(v === true)} />
+                <span className="text-sm text-foreground">{t('plugin_codegen.define.tenant')}</span>
+                <span className="text-xs text-muted-foreground">{t('plugin_codegen.define.tenantHint')}</span>
+              </label>
+              <label className="flex min-h-6 cursor-pointer flex-wrap items-center gap-2">
+                <Checkbox id="codegen-def-soft-delete" checked={softDelete} onCheckedChange={(v) => setSoftDelete(v === true)} />
+                <span className="text-sm text-foreground">{t('plugin_codegen.define.softDelete')}</span>
+                <span className="text-xs text-muted-foreground">{t('plugin_codegen.define.softDeleteHint')}</span>
+              </label>
+            </div>
+            <div className="hidden gap-2 border-b py-2 text-xs font-medium text-muted-foreground md:grid md:grid-cols-[minmax(0,1fr)_7rem_5.5rem_minmax(0,1fr)_4rem_2.25rem]">
               <span>{t('plugin_codegen.define.fieldName')}</span>
               <span>{t('plugin_codegen.define.fieldType')}</span>
               <span>{t('plugin_codegen.define.fieldLength')}</span>
@@ -188,13 +180,12 @@ export function DefineTableDialog({ open, onOpenChange, pending, onSubmit }: Pro
               {rows.map((r) => (
                 <div
                   key={r.id}
-                  className="grid gap-2 p-3 transition-colors hover:bg-accent/40 md:grid-cols-[minmax(0,1fr)_7rem_5.5rem_minmax(0,1fr)_4rem_2.25rem] md:items-center"
+                  className="grid gap-2 py-2.5 transition-colors hover:bg-accent/40 md:grid-cols-[minmax(0,1fr)_7rem_5.5rem_minmax(0,1fr)_4rem_2.25rem] md:items-center"
                 >
                   <Col label={t('plugin_codegen.define.fieldName')}>
                     <Input
                       value={r.name}
                       onChange={(e) => patch(r.id, { name: e.target.value.trim().toLowerCase() })}
-                      placeholder={t('plugin_codegen.define.fieldName')}
                       aria-label={t('plugin_codegen.define.fieldName')}
                       maxLength={48}
                       autoComplete="off"
@@ -239,7 +230,6 @@ export function DefineTableDialog({ open, onOpenChange, pending, onSubmit }: Pro
                     <Input
                       value={r.comment}
                       onChange={(e) => patch(r.id, { comment: e.target.value })}
-                      placeholder={t('plugin_codegen.define.fieldComment')}
                       aria-label={t('plugin_codegen.define.fieldComment')}
                       maxLength={200}
                     />
@@ -259,12 +249,21 @@ export function DefineTableDialog({ open, onOpenChange, pending, onSubmit }: Pro
                     onClick={() => remove(r.id)}
                     disabled={rows.length <= 1}
                     aria-label={t('plugin_codegen.define.removeField')}
+                    title={t('plugin_codegen.define.removeField')}
                   >
                     <Trash2 aria-hidden="true" />
                   </Button>
                 </div>
               ))}
             </div>
+            <button
+              type="button"
+              onClick={() => setRows((cur) => [...cur, blankRow()])}
+              className="mt-1 flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent/40 hover:text-foreground"
+            >
+              <Plus className="size-4" aria-hidden="true" />
+              {t('plugin_codegen.define.addField')}
+            </button>
           </div>
         </section>
 

@@ -71,6 +71,16 @@ func (s *Service) flushOutbox(ctx context.Context) error {
 	now := time.Now().UTC()
 	for i := range rows {
 		row := &rows[i]
+		// 先抢占：多实例会同时扫到同一条 pending，用 next_retry_at 当租约，只有抢到的实例投递。
+		claim := s.db.WithContext(ctx).Model(&Outbox{}).
+			Where("id = ? AND status = ? AND next_retry_at <= ?", int64(row.ID), OutboxPending, now).
+			Update("next_retry_at", now.Add(outboxLease))
+		if claim.Error != nil {
+			return claim.Error
+		}
+		if claim.RowsAffected != 1 {
+			continue
+		}
 		var data EventData
 		if err := json.Unmarshal([]byte(row.Payload), &data); err != nil {
 			s.logWarn("pay: poison outbox payload", "eventId", row.EventID, "err", err.Error())
@@ -90,6 +100,9 @@ func (s *Service) flushOutbox(ctx context.Context) error {
 	}
 	return nil
 }
+
+// outboxLease 是投递期间的占位时长；进程崩溃时租约到期后其它实例自动接手。
+const outboxLease = time.Minute
 
 // outboxBackoff 指数退避：1s, 2s, 4s … 封顶 10 分钟。
 func outboxBackoff(attempts int) time.Duration {

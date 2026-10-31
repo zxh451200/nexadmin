@@ -126,6 +126,22 @@ im:
   attachment_invalid: Attachment not found or not part of this conversation
   attachment_used: This attachment has already been sent
   agent_required: Please choose an agent to transfer to
+  message_not_found: Message not found
+  message_not_recallable: You can only recall your own messages sent in the last 2 minutes
+  conv_open: The conversation is still open; close it before deleting
+  status_open: Open
+  status_closed: Closed
+  export_sheet: Conversations
+  export_conv_no: Conversation no.
+  export_visitor: Visitor
+  export_biz: Business object
+  export_assignee: Agent
+  export_status: Status
+  export_tags: Tags
+  export_note: Note
+  export_rating: Rating
+  export_created_at: Started at
+  export_closed_at: Closed at
   settings_invalid: Invalid settings (time, timezone or workdays)
 imports:
   job_not_found: Import job not found
@@ -229,6 +245,11 @@ workflow:
   actor_required: Missing operator identity
   action_rejected: Rejected by the current approval node
   withdraw_not_owner: Only the initiator can withdraw this workflow
+  not_approver: You are not an approver of the current node
+  inst_not_running: The workflow has finished and cannot be advanced
+  no_active_task: There is no approval node to act on
+  escalate_target_missing: The current node has no escalation target
+  concurrent_update: Someone else just updated this workflow; refresh and try again
   plugin_inactive: Workflow plugin is not enabled or its license has lapsed
 formbuilder:
   head_id: Submission ID
@@ -378,6 +399,11 @@ plugin:
   disabled: "Plugin is not enabled."
   market_not_found: "This plugin is not in the marketplace catalog."
   free_no_license: "Free plugins do not require a license."
+  market.checksum_mismatch: "The SHA-256 of plugin package %s does not match the catalog declaration (expected %s, got %s). Installation was refused and the download deleted."
+  market.checksum_invalid: "Catalog entry %s declares an invalid checksum %q (expected 64 hexadecimal digits). Installation was refused."
+  market.checksum_unavailable: "Could not fetch the SHA-256 checksum file for plugin package %s from %s (%v). Installation was refused."
+  market.checksum_missing: "Plugin package %s has no available SHA-256 checksum, so installation was refused (%s). Declare checksum/checksum_url in the catalog, or use the website download endpoint."
+  market.checksum_unverified: "Plugin package %s (from %s) has no available SHA-256 checksum, so its contents were not integrity-checked before the build. Declare checksum/checksum_url, use the website download endpoint, or set %s=1 to refuse unverified installs."
   reason.duplicate_id: "Duplicate plugin ID registered"
   reason.invalid_id: "Invalid plugin ID \"%s\""
   reason.no_module: "Plugin module is missing"
@@ -503,6 +529,12 @@ log:
   export_format_invalid: "format only supports xlsx."
 exportcenter:
   job_bad_state: "This action is not allowed in the current state."
+region:
+  source_insecure: "The data source URL is not usable (HTTPS only, no credentials): %s"
+  source_unreachable: "Failed to fetch the data source: %s"
+  source_too_large: "The data source exceeds the %dMB limit."
+  data_invalid: "The data source content is unusable: %s"
+  source_missing: "No data source configured: set it in Settings or region.source_url in config.yaml"
 dashboard:
   too_many_items: "%s contains too many cards."
   invalid_card_id: "%s contains an invalid card ID."

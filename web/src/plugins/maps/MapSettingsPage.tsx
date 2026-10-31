@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { LocationField, type GeoPoint } from '@/framework/map'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
@@ -19,7 +18,8 @@ const EMPTY: MapsConfigInput = {
 
 const ORDER: MapProviderId[] = ['amap', 'baidu', 'google']
 
-export default function MapSettingsPage() {
+/** 地图服务：作为「系统设置 → 存储与集成」的一个分区渲染，旧地址 /system/map 重定向到 ?tab=maps。 */
+export function MapSection() {
   const { t } = useTranslation()
   const cfg = useMapsConfig()
   const save = useSaveMapsConfig()
@@ -48,9 +48,7 @@ export default function MapSettingsPage() {
   }
 
   return (
-    <PageContainer>
-      <PageHeader title={t('plugin_maps.title')} description={t('plugin_maps.desc')} />
-
+    <div className="flex flex-col gap-4">
       <Card>
         <CardHeader>
           <CardTitle className="text-base">{t('plugin_maps.configTitle')}</CardTitle>
@@ -107,6 +105,6 @@ export default function MapSettingsPage() {
           {point ? <pre className="num overflow-x-auto rounded-md bg-muted p-3 text-xs">{JSON.stringify(point, null, 2)}</pre> : null}
         </CardContent>
       </Card>
-    </PageContainer>
+    </div>
   )
 }

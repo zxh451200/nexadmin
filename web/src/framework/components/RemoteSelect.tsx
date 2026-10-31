@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useInfiniteQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/framework/ui/button'
@@ -23,6 +23,14 @@ export interface RemoteSelectProps {
   disabled?: boolean
   className?: string
   id?: string
+  /** 调用方已持有的行数据（如编辑态的 name/nickname），优先用于回显，避免显示原始 id */
+  initialOptions?: Option[]
+  /**
+   * 已选项在已加载结果与 initialOptions 里都未命中时，按 id 解析展示名的扩展点。
+   * 同一批 id 只拉一次；组件卸载或值变化会通过 AbortSignal 取消并丢弃过期响应。
+   * 失败（如用户已删除）静默回退显示原值。
+   */
+  resolveLabel?: (id: string, signal: AbortSignal) => Promise<string | null | undefined>
 }
 
 type Row = Record<string, unknown>
@@ -41,13 +49,21 @@ export function RemoteSelect({
   disabled,
   className,
   id,
+  initialOptions,
+  resolveLabel,
 }: RemoteSelectProps) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
   const keyword = useDebounce(search, 300)
   const labelCache = useRef(new Map<string, string>())
+  const [resolvedLabels, setResolvedLabels] = useState<Record<string, string>>({})
   const selected = toArray(value)
+  // 调用方已持有的回显数据（过滤掉空 label，避免整屏显示空白）；memo 化以稳定 effect 依赖
+  const initialMap = useMemo(
+    () => new Map((initialOptions ?? []).filter((o) => o.label).map((o) => [o.value, o.label])),
+    [initialOptions],
+  )
 
   const q = useInfiniteQuery({
     queryKey: ['remote-select', url, params, keyword, pageSize],
@@ -67,6 +83,42 @@ export function RemoteSelect({
     labelCache.current.set(v, label)
     return { value: v, label }
   })
+
+  // 回显兜底：已选项在「已加载结果 / 调用方 initialOptions / 已解析缓存」里都未命中时，
+  // 用 resolveLabel 按 id 拉一次名称。selectedKey 是稳定字符串（值数组每次渲染都是新引用，
+  // join 后才能作依赖），值不变则同一批 id 只发一次请求；卸载/值变化时 abort 并丢弃过期响应。
+  const selectedKey = selected.join('\u0000')
+  useEffect(() => {
+    if (!resolveLabel) return
+    const missing = selectedKey
+      .split('\u0000')
+      .filter((v) => v && !labelCache.current.get(v) && !resolvedLabels[v] && !initialMap.get(v))
+    if (!missing.length) return
+    const ac = new AbortController()
+    let stale = false
+    void Promise.all(
+      missing.map((v) =>
+        resolveLabel(v, ac.signal)
+          .then((label) => (label && label.trim() ? { value: v, label: String(label) } : null))
+          .catch(() => null),
+      ),
+    ).then((entries) => {
+      if (stale) return
+      const found = entries.filter((e): e is { value: string; label: string } => e !== null)
+      if (!found.length) return
+      setResolvedLabels((prev) => {
+        const next = { ...prev }
+        for (const e of found) next[e.value] = e.label
+        return next
+      })
+    })
+    return () => {
+      stale = true
+      ac.abort()
+    }
+  }, [selectedKey, resolveLabel, resolvedLabels, initialMap])
+
+  const labelOf = (v: string) => labelCache.current.get(v) ?? resolvedLabels[v] ?? initialMap.get(v) ?? v
 
   const pick = (v: string) => {
     if (multiple) {
@@ -92,7 +144,7 @@ export function RemoteSelect({
           hasValue={selected.length > 0}
           allowClear={allowClear}
           onClear={() => onChange?.(multiple ? [] : '')}
-          display={selected.map((v) => labelCache.current.get(v) ?? v).join(', ')}
+          display={selected.map(labelOf).join(', ')}
         />
       }
     >

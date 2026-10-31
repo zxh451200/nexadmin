@@ -3,6 +3,7 @@ import { Download, KeyRound, LockOpen, Pencil, Plus, Trash2, Upload } from 'luci
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
+import { pageAfterDelete } from '@/framework/hooks/page-fallback'
 import { useAsyncJob } from '@/framework/hooks/use-async-job'
 import { AiFilterBox } from '@/framework/components/AiFilterBox'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
@@ -77,7 +78,10 @@ export default function UserPage() {
   const remove = async (ids: string[], description: string) => {
     if (!(await confirm({ destructive: true, description }))) return
     try {
+      const rows = list.data?.list ?? []
+      const removed = rows.filter((r) => ids.includes(r.id)).length
       await del.mutateAsync(ids)
+      setPage(pageAfterDelete(page, rows.length, removed))
       setSelected((s) => s.filter((x) => !ids.includes(x)))
       toast.success(t('common.operateSuccess'))
     } catch (e) {

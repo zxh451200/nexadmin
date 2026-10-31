@@ -178,5 +178,7 @@ export function buildEndpoints(origin: string) {
     discovery: `${issuer}/.well-known/openid-configuration`,
     authorization: `${site}/sso/authorize`,
     token: `${issuer}/token`,
+    orgUsers: `${issuer}/org/users`,
+    orgDepts: `${issuer}/org/depts`,
   }
 }

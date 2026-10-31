@@ -202,7 +202,7 @@ func (a *App) buildFull() (*gin.Engine, error) {
 	ws.SetDefault(wsHub)
 	e.GET("/ws", ws.NewHandler(wsHub, svc).Handle)
 	api := e.Group(contractAPIPrefix)
-	api.Use(middleware.ParseToken(svc), openapi.Authenticate(openapi.Options{
+	api.Use(middleware.NoStore(), middleware.ParseToken(svc), openapi.Authenticate(openapi.Options{
 		Store: openapi.GormStore{DB: db}, Cache: ch, Log: a.log,
 		Limiter: middleware.NewLimiter(ch, a.log, "openapi-sign", cfg.RateLimit.Rule("openapi_sign").Limit, cfg.RateLimit.Rule("openapi_sign").Window),
 	}), middleware.Tenant(resolver), middleware.RuntimeTenant(), mcp.EnforceDispatchIdentity())
@@ -247,6 +247,16 @@ func (a *App) buildFull() (*gin.Engine, error) {
 	deps.APIDoc.Describe(coreAPIDocs()...)
 	deps.OnClose = a.addCloser
 	protected := api.Group("", middleware.RequireLogin())
+	// WS 入场票：浏览器 WebSocket 设不了 Authorization 头，而访问令牌不该出现在握手 URL 里，
+	// 所以先用带令牌的正常请求换一张 15 秒、用后即废的票。
+	protected.POST("/ws/ticket", func(c *gin.Context) {
+		ticket, ttl, err := svc.IssueWSTicket(c.Request.Context(), auth.ClaimsFrom(c))
+		if err != nil {
+			response.Fail(c, err)
+			return
+		}
+		response.OK(c, gin.H{"ticket": ticket, "ttl": ttl})
+	})
 	// 按租户限流（ratelimit.tenant_api，limit=0 即关闭）：单个租户打满接口时不再拖累其它租户。
 	protected.Use(middleware.RateLimitRule(ch, a.log, cfg.RateLimit, "tenant_api", middleware.ByTenant()))
 	mods, err := a.activeModules()

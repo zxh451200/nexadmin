@@ -7,7 +7,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/csv"
+	"errors"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/xuri/excelize/v2"
@@ -15,6 +17,9 @@ import (
 )
 
 const utf8BOM = "\uFEFF"
+
+// ErrTooManyRows 表示数据行超过异步导入的硬上限（由服务层转成明确的用户提示）。
+var ErrTooManyRows = errors.New("imports: too many rows")
 
 // templateCells 拆出模板的表头与示例行,CSV/XLSX 两种生成共用同一口径。
 func templateCells(ctx context.Context, s Source) (header, example []string) {
@@ -113,16 +118,39 @@ func ParseUpload(s Source, content []byte, fileName string) ([]map[string]string
 
 // parseXLSX 解析 XLSX 第一张工作表(第一行为表头)。
 func parseXLSX(s Source, content []byte) ([]map[string]string, error) {
-	f, err := excelize.OpenReader(bytes.NewReader(content))
+	// 压缩包解压与工作表 XML 都要有上限：输入 20MB 的 xlsx 解压后可以膨胀到 GB 级。
+	f, err := excelize.OpenReader(bytes.NewReader(content), excelize.Options{
+		UnzipSizeLimit:    256 << 20,
+		UnzipXMLSizeLimit: 64 << 20,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("imports: open xlsx: %w", err)
 	}
 	defer func() { _ = f.Close() }()
-	rows, err := f.GetRows(f.GetSheetName(0))
-	if err != nil || len(rows) < 1 {
+	iter, err := f.Rows(f.GetSheetName(0))
+	if err != nil {
+		return nil, fmt.Errorf("imports: open sheet: %w", err)
+	}
+	defer func() { _ = iter.Close() }()
+	// 多读一行用于判断是否超限，不把整张表读进内存。
+	records := make([][]string, 0, 64)
+	for len(records) <= AsyncMaxRows && iter.Next() {
+		cols, cerr := iter.Columns()
+		if cerr != nil {
+			return nil, fmt.Errorf("imports: read xlsx: %w", cerr)
+		}
+		records = append(records, cols)
+	}
+	if err := iter.Error(); err != nil {
+		return nil, fmt.Errorf("imports: read xlsx: %w", err)
+	}
+	if len(records) < 1 {
 		return nil, fmt.Errorf("imports: empty xlsx")
 	}
-	return mapHeaderToRows(s, rows)
+	if len(records) > AsyncMaxRows {
+		return nil, ErrTooManyRows
+	}
+	return mapHeaderToRows(s, records)
 }
 
 // parseCSV 解析 CSV:容忍 BOM,表头按 Label 识别。
@@ -136,11 +164,22 @@ func parseCSV(s Source, content []byte) ([]map[string]string, error) {
 		}
 		content = bytes.TrimPrefix(decoded, []byte(utf8BOM))
 	}
-	r := csv.NewReader(strings.NewReader(string(content)))
+	r := csv.NewReader(bytes.NewReader(content))
 	r.FieldsPerRecord = -1 // 列数不齐的行交给逐列校验报错,而不是整体失败
-	records, err := r.ReadAll()
-	if err != nil {
-		return nil, fmt.Errorf("imports: parse csv: %w", err)
+	// 逐行读并在硬上限处停下，避免超大 CSV 先把全部记录读进内存。
+	records := make([][]string, 0, 64)
+	for len(records) <= AsyncMaxRows {
+		rec, rerr := r.Read()
+		if rerr == io.EOF {
+			break
+		}
+		if rerr != nil {
+			return nil, fmt.Errorf("imports: parse csv: %w", rerr)
+		}
+		records = append(records, rec)
+	}
+	if len(records) > AsyncMaxRows {
+		return nil, ErrTooManyRows
 	}
 	if len(records) < 1 {
 		return nil, fmt.Errorf("imports: empty csv")

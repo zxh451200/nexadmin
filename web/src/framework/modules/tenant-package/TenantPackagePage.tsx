@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 import { z } from 'zod'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
+import { pageAfterDelete } from '@/framework/hooks/page-fallback'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { DictSelect } from '@/framework/components/DictSelect'
 import { DictTag } from '@/framework/components/DictTag'
@@ -105,7 +106,10 @@ export default function TenantPackagePage() {
   const remove = async (ids: string[]) => {
     if (!(await confirm({ destructive: true, description: t('tenantPkg.deleteConfirm', { count: ids.length }) }))) return
     try {
+      const rows = data?.list ?? []
+      const removed = rows.filter((r) => ids.includes(r.id)).length
       await del.mutateAsync(ids)
+      setPage(pageAfterDelete(page, rows.length, removed))
       toast.success(t('common.operateSuccess'))
       setSelected((s) => s.filter((id) => !ids.includes(id)))
     } catch (e) {

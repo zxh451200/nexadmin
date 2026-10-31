@@ -1,0 +1,32 @@
+/* bpmn-js 画布的最小主题适配：只调整边框/背景/字体，颜色全部走主题变量。 */
+.wf-bpmn .djs-container {
+  background: hsl(var(--card));
+}
+.wf-bpmn .djs-palette {
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+  border-radius: 0.5rem;
+}
+.wf-bpmn .djs-palette .entry:hover {
+  background: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
+  border-radius: 0.25rem;
+}
+.wf-bpmn .djs-popup {
+  background: hsl(var(--popover));
+  color: hsl(var(--popover-foreground));
+  border: 1px solid hsl(var(--border));
+}
+.wf-bpmn .djs-popup .entry:hover {
+  background: hsl(var(--accent));
+}
+.wf-bpmn .djs-context-pad .entry:hover {
+  background: hsl(var(--accent));
+}
+.wf-bpmn[data-readonly='true'] .djs-palette,
+.wf-bpmn[data-readonly='true'] .djs-context-pad {
+  display: none;
+}
+.wf-bpmn .djs-outline {
+  stroke: hsl(var(--primary));
+}

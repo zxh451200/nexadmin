@@ -36,8 +36,16 @@ export interface WfDef {
   status: 'draft' | 'published' | 'disabled'
   version: number
   definition: WfDefinition
+  /** 建模器保存的 BPMN XML（历史定义由后端现场生成） */
+  xml?: string
   createdAt: string
   updatedAt: string
+}
+
+export interface WfPending {
+  nodeKey: string
+  nodeName: string
+  assignee: string
 }
 
 export interface WfEvent {
@@ -52,16 +60,22 @@ export interface WfInst {
   id: string
   defId: string
   defKey: string
+  defVersion: number
   title: string
   bizType: string
   businessKey: string
   submitter: string
   status: WfStatus
+  revision: number
   current: string[]
   done: string[]
   vars: Record<string, string>
   votes: Record<string, Record<string, string>>
   history: WfEvent[]
+  /** 当前待办（会签节点会有多人） */
+  pending: WfPending[]
+  /** 发起时的定义快照，用于画流程图 */
+  definition?: WfDefinition
   createdAt: string
   updatedAt: string
 }
@@ -69,6 +83,8 @@ export interface WfInst {
 export interface WfQuery extends PageQuery {
   status?: string
   bizType?: string
+  /** started = 我发起的 */
+  mine?: string
 }
 
 export interface DefQuery extends PageQuery {
@@ -79,6 +95,7 @@ export interface WfTemplate {
   key: string
   name: string
   definition: WfDefinition
+  xml?: string
 }
 
 const BASE = '/plugins/workflow'
@@ -125,8 +142,13 @@ function useInvalidate() {
 export function useSaveDef() {
   const invalidate = useInvalidate()
   return useMutation({
-    mutationFn: ({ id, data }: { id?: string; data: { key: string; name: string; status: string; definition: WfDefinition } }) =>
-      id ? api.put<WfDef>(`${BASE}/defs/${id}`, data) : api.post<WfDef>(`${BASE}/defs`, data),
+    mutationFn: ({
+      id,
+      data,
+    }: {
+      id?: string
+      data: { key: string; name: string; status: string; definition: WfDefinition; xml?: string }
+    }) => (id ? api.put<WfDef>(`${BASE}/defs/${id}`, data) : api.post<WfDef>(`${BASE}/defs`, data)),
     onSuccess: invalidate,
   })
 }

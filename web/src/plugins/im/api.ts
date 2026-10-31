@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { api } from '@/framework/request/http'
+import { api, http } from '@/framework/request/http'
 import type { Page, PageQuery } from '@/framework/request/types'
 
 export type ConvStatus = 'open' | 'closed'
@@ -32,6 +32,8 @@ export interface ImConversation {
   visitorIp?: string
   visitorUa?: string
   visitorRef?: string
+  /** 内部备注：只给坐席看，不会发给访客 */
+  note?: string
 }
 
 export interface ImMessage {
@@ -44,6 +46,8 @@ export interface ImMessage {
   kind: MessageKind
   /** 系统消息的机器可读载荷，如 {"code":"conv_closed"} */
   meta?: string
+  /** 撤回时间；撤回后 content 为空、kind 为 system */
+  recalledAt?: string | null
   createdAt: string
 }
 
@@ -71,6 +75,8 @@ export interface ImAgent {
   id: string
   username: string
   nickname: string
+  /** 心跳在线（90 秒内收到过心跳） */
+  online: boolean
 }
 
 export interface ImSettings {
@@ -82,6 +88,36 @@ export interface ImSettings {
   offlineText: string
   inviteDelay: number
   inviteText: string
+  /** 访客首次打开会话时自动发出的第一条消息；空 = 不发欢迎语 */
+  welcomeText: string
+  /** 已结束会话的保留天数；0 = 永久保留 */
+  retentionDays: number
+  /** 敏感词：访客消息命中后替换为 *** */
+  bannedWords: string[]
+  /** 新会话自动分给在线且最闲的坐席；没人在线时排队，坐席上线后按先后领走 */
+  autoAssign: boolean
+}
+
+/** 会话统计：窗口内的总量、首响、满意度、按天趋势与坐席工作量 */
+export interface ImStats {
+  days: number
+  total: number
+  closed: number
+  open: number
+  avgRating: number
+  ratingCount: number
+  avgFirstResponseSec: number
+  firstResponseCount: number
+  truncated: boolean
+  daily: { date: string; created: number; closed: number }[]
+  agents: { id: string; name: string; online: boolean; assigned: number; closed: number; avgRating: number }[]
+}
+
+/** 删除会话的结果：删除数与因「进行中/不存在」被跳过的会话号 */
+export interface DeleteConvResult {
+  deleted: number
+  messages: number
+  skipped: string[]
 }
 
 export interface ImQuickReply {
@@ -348,6 +384,42 @@ export function useSetTags() {
   })
 }
 
+export function useSetNote() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: ({ convNo, note }: { convNo: string; note: string }) =>
+      api.put<ImConversation>(`${BASE}/conversations/${convNo}/note`, { note }),
+    onSuccess: invalidate,
+  })
+}
+
+/** 超管删除单个会话（仅已结束的）；后端会级联删除消息、附件与存储文件。 */
+export function useDeleteConv() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (convNo: string) => api.del<DeleteConvResult>(`${BASE}/conversations/${convNo}`),
+    onSuccess: invalidate,
+  })
+}
+
+/** 按当前筛选条件导出会话记录（xlsx，最多 5000 条）。 */
+export async function exportConversations(query: ConvQuery): Promise<void> {
+  const res = await http.get<unknown>(`${BASE}/conversations-export`, { params: query, responseType: 'blob' })
+  const blob =
+    res.data instanceof Blob
+      ? res.data
+      : new Blob([String(res.data)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '')
+  a.href = url
+  a.download = `im-conversations-${stamp}.xlsx`
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
 /** 输入中提示：不等待结果、失败静默。 */
 export function sendTyping(convNo: string) {
   void api.post(`${BASE}/conversations/${convNo}/typing`, undefined, { silent: true }).catch(() => undefined)
@@ -377,6 +449,40 @@ export function useDeleteQuickReply() {
   const invalidate = useInvalidate()
   return useMutation({
     mutationFn: (id: string) => api.del(`${BASE}/quick-replies/${id}`),
+    onSuccess: invalidate,
+  })
+}
+
+/** 坐席心跳：记录在线（90 秒 TTL），开启自动分配时后端会顺带领走一个排队会话。 */
+export function heartbeatPresence(): Promise<{ ok: boolean; assigned: string }> {
+  return api.post<{ ok: boolean; assigned: string }>(`${BASE}/presence/heartbeat`, undefined, { silent: true })
+}
+
+export function useImStats(days: number, enabled = true) {
+  return useQuery({
+    queryKey: [...KEY, 'stats', days],
+    queryFn: () => api.get<ImStats>(`${BASE}/stats`, { days }),
+    enabled,
+    staleTime: 30_000,
+  })
+}
+
+/** 撤回本人 2 分钟内发出的消息。 */
+export function useRecallMessage() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: ({ convNo, seq }: { convNo: string; seq: number }) =>
+      api.post<ImMessage>(`${BASE}/conversations/${convNo}/messages/${seq}/recall`),
+    onSuccess: invalidate,
+  })
+}
+
+/** 把当前会话合并进目标会话（目标必须是进行中）。 */
+export function useMergeConv() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: ({ convNo, target }: { convNo: string; target: string }) =>
+      api.post<{ target: string; moved: number }>(`${BASE}/conversations/${convNo}/merge`, { target }),
     onSuccess: invalidate,
   })
 }

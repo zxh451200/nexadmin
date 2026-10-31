@@ -159,8 +159,17 @@ func (s *Service) VerifyForGate(ctx context.Context, uid uint64, code string) er
 	if step <= row.LastStep {
 		return response.BadRequest("totp.code_replayed")
 	}
-	return s.db.WithContext(ctx).Model(&TOTPSecret{}).Where("id = ?", int64(row.ID)).
-		Update("last_step", step).Error
+	// 条件更新做原子比较交换：并发提交同一验证码时只有一个请求能把 last_step 推进。
+	res := s.db.WithContext(ctx).Model(&TOTPSecret{}).
+		Where("id = ? AND last_step < ?", int64(row.ID), step).
+		Update("last_step", step)
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected != 1 {
+		return response.BadRequest("totp.code_replayed")
+	}
+	return nil
 }
 
 // EnrolledAndEnabled 报告用户是否已启用两步验证。

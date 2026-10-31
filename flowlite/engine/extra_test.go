@@ -1,6 +1,7 @@
-package workflow
+package engine
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -62,16 +63,16 @@ func TestStartRejectsInvalidDefinition(t *testing.T) {
 	if err == nil || inst != nil {
 		t.Fatalf("非法定义应被 Start 拒绝：inst=%v err=%v", inst, err)
 	}
-	if !strings.Contains(err.Error(), "流程定义非法") {
-		t.Fatalf("错误文案不符：%v", err)
+	if !errors.Is(err, ErrInvalidDefinition) {
+		t.Fatalf("错误类型不符：%v", err)
 	}
 }
 
 // TestAutoAdvanceUnknownNodeErrors autoAdvance 遇到定义中不存在的节点时报错。
 func TestAutoAdvanceUnknownNodeErrors(t *testing.T) {
 	inst := &Instance{Current: []string{"ghost"}, Votes: map[string]Vote{}, Vars: map[string]string{}}
-	if err := autoAdvance(seqDef(), inst); err == nil || !strings.Contains(err.Error(), "节点不存在") {
-		t.Fatalf("未知节点应报错，实际 %v", err)
+	if err := autoAdvance(seqDef(), inst); err == nil || !errors.Is(err, ErrUnknownNode) {
+		t.Fatalf("未知节点应报 ErrUnknownNode，实际 %v", err)
 	}
 }
 
@@ -82,8 +83,8 @@ func TestAutoAdvanceExclusiveNoMatchingBranch(t *testing.T) {
 		Edges: []Edge{{From: "g", To: "x", When: "flag==yes"}},
 	}
 	inst := &Instance{Current: []string{"g"}, Votes: map[string]Vote{}, Vars: map[string]string{}}
-	if err := autoAdvance(def, inst); err == nil || !strings.Contains(err.Error(), "没有可用分支") {
-		t.Fatalf("无命中分支应报错，实际 %v", err)
+	if err := autoAdvance(def, inst); err == nil || !errors.Is(err, ErrNoBranch) {
+		t.Fatalf("无命中分支应报 ErrNoBranch，实际 %v", err)
 	}
 }
 
@@ -154,8 +155,8 @@ func TestRejectErrors(t *testing.T) {
 	}
 	noName := Definition{Nodes: []Node{{Key: "a", Kind: KindApproval, Approvers: []string{"u1"}}}}
 	err := Reject(noName, runningInst("a"), "stranger", "", now)
-	if err == nil || !strings.Contains(err.Error(), "不是节点「a」") {
-		t.Fatalf("非审批人驳回应报错并回退到 key，实际 %v", err)
+	if !errors.Is(err, ErrNotApprover) {
+		t.Fatalf("非审批人驳回应报 ErrNotApprover，实际 %v", err)
 	}
 }
 
@@ -349,7 +350,7 @@ func TestValidateEmptyKeyAndExclusiveNoOutEdge(t *testing.T) {
 	if !hasErr(errs, "存在 key 为空的节点") {
 		t.Fatalf("应报空 key 节点：%v", errs)
 	}
-	if !hasErr(errs, "排他网关 g2 没有出边") {
+	if !hasErr(errs, "g2 没有出边") {
 		t.Fatalf("应报排他网关无出边：%v", errs)
 	}
 }

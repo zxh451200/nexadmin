@@ -31,6 +31,12 @@ func Skip(ctx context.Context) context.Context {
 	return context.WithValue(ctx, skipKey{}, true)
 }
 
+// Unskip 返回一个恢复租户隔离的 context。后台任务常常「用 Skip 全局扫描，再按实例切回租户」，
+// 而 With 只写入租户 ID、不会覆盖 skip 标记；直接 With(Skip(ctx), id) 会让写入落到 tenant_id=0。
+func Unskip(ctx context.Context) context.Context {
+	return context.WithValue(ctx, skipKey{}, false)
+}
+
 // Skipped 报告当前 context 是否跳过租户隔离。
 func Skipped(ctx context.Context) bool {
 	v, _ := ctx.Value(skipKey{}).(bool)

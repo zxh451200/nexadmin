@@ -2,24 +2,24 @@ package workflow
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
-	"time"
 
-	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/gin-gonic/gin"
-	"gorm.io/driver/mysql"
-	"gorm.io/gorm"
 
-	"nexadmin/core/event"
+	"github.com/nexadmin/flowlite/runtime"
+	"github.com/nexadmin/flowlite/store/memory"
 	"nexadmin/core/response"
-	"nexadmin/core/tenant"
 	"nexadmin/pkg/idgen"
 )
 
-// skipCtx 是无租户上下文的测试 ctx(TenantModel 写入时 tenant_id=0,查询不加过滤)。
-func skipCtx() context.Context { return tenant.Skip(context.Background()) }
+type nopLogger struct{}
+
+func (nopLogger) Warn(string, ...any)  {}
+func (nopLogger) Error(string, ...any) {}
 
 func TestMain(m *testing.M) {
 	if err := idgen.Init(1); err != nil {
@@ -29,58 +29,44 @@ func TestMain(m *testing.M) {
 	m.Run()
 }
 
-var testNow = time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC)
-
-func mockDB(t *testing.T) (*gorm.DB, sqlmock.Sqlmock) {
+// memService 用内存存储构造适配层，验证业务语义而不依赖数据库。
+func memService(t *testing.T) *Service {
 	t.Helper()
-	sqlDB, m, err := sqlmock.New()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = sqlDB.Close() })
-	db, err := gorm.Open(mysql.New(mysql.Config{Conn: sqlDB, SkipInitializeWithVersion: true}), &gorm.Config{
-		DisableAutomaticPing: true,
-		NowFunc:              func() time.Time { return testNow },
+	b := memory.New()
+	b.SetIDGenerator(func(string) string {
+		id, err := idgen.Next()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return strconv.FormatInt(int64(id), 10)
 	})
+	rt := runtime.New(b.Defs, b.Insts, b.Tasks, b.Actions)
+	return newWithRuntime(rt, nopLogger{})
+}
+
+const sampleXML = `<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+  xmlns:flowlite="urn:flowlite:engine:1.0" id="Definitions_1" targetNamespace="urn:flowlite:engine:1.0">
+  <bpmn:process id="leave" name="请假审批" isExecutable="true">
+    <bpmn:startEvent id="start" name="开始" />
+    <bpmn:userTask id="manager" name="主管审批" flowlite:approvers="alice" />
+    <bpmn:userTask id="hr" name="HR 会签" flowlite:approvers="bob,carol" flowlite:mode="all" />
+    <bpmn:endEvent id="end" name="结束" />
+    <bpmn:sequenceFlow id="f1" sourceRef="start" targetRef="manager" />
+    <bpmn:sequenceFlow id="f2" sourceRef="manager" targetRef="hr" />
+    <bpmn:sequenceFlow id="f3" sourceRef="hr" targetRef="end" />
+  </bpmn:process>
+</bpmn:definitions>`
+
+func ctxOf() context.Context { return context.Background() }
+
+func savePublished(t *testing.T, s *Service) *DefView {
+	t.Helper()
+	v, err := s.DefSave(ctxOf(), 0, DefForm{Key: "leave", Name: "请假审批", Status: DefPublished, XML: sampleXML})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("保存定义失败: %v", err)
 	}
-	return db, m
-}
-
-type nopLogger struct{}
-
-func (nopLogger) Warn(string, ...any)  {}
-func (nopLogger) Error(string, ...any) {}
-
-const defJSON = `{"key":"d1","name":"两级会签","start":"start","nodes":[` +
-	`{"key":"start","name":"开始","kind":"start"},` +
-	`{"key":"n1","name":"保管员","kind":"approval","approvers":["u1"],"mode":"any","escalateTo":"n2"},` +
-	`{"key":"n2","name":"科长","kind":"approval","approvers":["u2","u3"],"mode":"all"},` +
-	`{"key":"end","name":"结束","kind":"end"}],` +
-	`"edges":[{"from":"start","to":"n1"},{"from":"n1","to":"n2"},{"from":"n2","to":"end"}]}`
-
-func defRowWithStatus(status string) *sqlmock.Rows {
-	return sqlmock.NewRows([]string{
-		"id", "tenant_id", "def_key", "name", "status", "version", "definition", "created_at", "updated_at",
-	}).AddRow(1001, 1, "d1", "两级会签", status, 1, defJSON, testNow, testNow)
-}
-
-func defRow() *sqlmock.Rows { return defRowWithStatus(DefPublished) }
-
-func instRow(no int64, status string, stateJSON string) *sqlmock.Rows {
-	return sqlmock.NewRows([]string{
-		"id", "tenant_id", "def_id", "def_key", "title", "biz_type", "business_key",
-		"submitter", "status", "state_json", "created_at", "updated_at",
-	}).AddRow(no, 1, 1001, "d1", "E2E 审批", "test", "B-1",
-		"u0", status, stateJSON, testNow, testNow)
-}
-
-func startedState() string {
-	// Start 后 token 停在 n1。
-	return `{"defKey":"d1","status":"running","current":["n1"],"done":["start"],` +
-		`"votes":{},"extraApprovers":{},"vars":{},` +
-		`"history":[{"at":"2025-06-01T00:00:00Z","node":"start","actor":"u0","action":"start"}]}`
+	return v
 }
 
 func TestTemplatesValid(t *testing.T) {
@@ -91,267 +77,226 @@ func TestTemplatesValid(t *testing.T) {
 	}
 }
 
-// 发起：读已发布定义 → 幂等检查 → 引擎 Start → 落库 → 发 started + todo 事件。
-func TestInstStartPublishes(t *testing.T) {
-	db, m := mockDB(t)
-	s := NewService(db, nopLogger{})
+func TestDefSaveFromXML(t *testing.T) {
+	s := memService(t)
+	v := savePublished(t, s)
+	if v.Version != 1 || v.Key != "leave" {
+		t.Fatalf("定义 = %+v", v)
+	}
+	if len(v.Definition.Nodes) != 4 {
+		t.Fatalf("节点数 = %d", len(v.Definition.Nodes))
+	}
+	if v.Definition.Nodes[1].Approvers[0] != "alice" {
+		t.Fatalf("审批人未解析: %+v", v.Definition.Nodes[1])
+	}
 
-	events := make(chan event.Event, 8)
-	event.Subscribe(event.SubscriberFunc(func(e event.Event) {
-		if strings.HasPrefix(e.Name, "workflow.") {
-			events <- e
-		}
-	}))
-
-	m.ExpectQuery("SELECT \\* FROM `plg_workflow_def`").WillReturnRows(defRow())
-	m.ExpectQuery("SELECT \\* FROM `plg_workflow_inst`").WillReturnError(gorm.ErrRecordNotFound)
-	m.ExpectBegin()
-	m.ExpectExec("INSERT INTO `plg_workflow_inst`").WillReturnResult(sqlmock.NewResult(1, 1))
-	m.ExpectCommit()
-
-	v, err := s.InstStart(skipCtx(), StartInput{
-		DefID: "1001", Title: "E2E 审批", BizType: "test", BusinessKey: "B-1",
-	}, "u0")
+	// 建模器保存的 XML 必须原样保留，导出时不再重新生成（避免丢布局）。
+	xml, err := s.DefXML(ctxOf(), v.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if v.Status != StatusRunning || len(v.Current) != 1 || v.Current[0] != "n1" {
-		t.Fatalf("unexpected instance %+v", v)
+	if !strings.Contains(xml, `flowlite:approvers="alice"`) {
+		t.Fatalf("导出 XML 丢失扩展属性:\n%s", xml)
 	}
-	gotStarted, gotTodo := false, false
-	for i := 0; i < 2; i++ {
-		select {
-		case ev := <-events:
-			switch ev.Name {
-			case EventStarted:
-				gotStarted = true
-			case EventTodo:
-				gotTodo = true
-				if data, ok := ev.Data.(EventData); ok && len(data.Approvers) != 1 {
-					t.Fatalf("todo approvers = %v", data.Approvers)
-				}
-			}
-		case <-time.After(2 * time.Second):
-			t.Fatal("events not published")
-		}
-	}
-	if !gotStarted || !gotTodo {
-		t.Fatalf("started=%v todo=%v", gotStarted, gotTodo)
-	}
-	if err := m.ExpectationsWereMet(); err != nil {
-		t.Fatal(err)
-	}
-}
 
-// 未发布的定义拒绝发起（不触库写路径）。
-func TestInstStartRequiresPublished(t *testing.T) {
-	db, m := mockDB(t)
-	s := NewService(db, nopLogger{})
-
-	m.ExpectQuery("SELECT \\* FROM `plg_workflow_def`").WillReturnRows(defRowWithStatus(DefDraft))
-
-	_, err := s.InstStart(skipCtx(), StartInput{DefID: "1001"}, "u0")
-	e, ok := err.(*response.Error)
-	if !ok || e.Status != http.StatusConflict {
-		t.Fatalf("want 409, got %v", err)
-	}
-}
-
-// 同业务键已有运行中实例 → 幂等返回既有实例，不落新单。
-func TestInstStartIdempotentByBiz(t *testing.T) {
-	db, m := mockDB(t)
-	s := NewService(db, nopLogger{})
-
-	m.ExpectQuery("SELECT \\* FROM `plg_workflow_def`").WillReturnRows(defRow())
-	m.ExpectQuery("SELECT \\* FROM `plg_workflow_inst`").WillReturnRows(instRow(2005, StatusRunning, startedState()))
-
-	v, err := s.InstStart(skipCtx(), StartInput{
-		DefID: "1001", BizType: "test", BusinessKey: "B-1",
-	}, "u0")
+	// 更新：版本 +1，ID 不变。
+	v2, err := s.DefSave(ctxOf(), v.ID, DefForm{Key: "leave", Name: "请假审批 v2", Status: DefPublished, XML: sampleXML})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if v.ID != 2005 {
-		t.Fatalf("should return existing inst 2005, got %v", v.ID)
+	if v2.ID != v.ID || v2.Version != 2 {
+		t.Fatalf("更新后 = %+v", v2)
 	}
-	if err := m.ExpectationsWereMet(); err != nil {
-		t.Fatal(err)
+	list, total, err := s.DefList(ctxOf(), DefQuery{Page: 1, PageSize: 20})
+	if err != nil || total != 1 || len(list) != 1 {
+		t.Fatalf("定义列表 = %d %v", total, err)
 	}
 }
 
-// 或签：u1 同意后推进到会签节点 n2；非审批人被拒（事务回滚）。
-func TestApproveAndReject(t *testing.T) {
-	db, m := mockDB(t)
-	s := NewService(db, nopLogger{})
-
-	// instAct 顺序：查实例（无事务）→ 查定义 → 事务内保存
-	m.ExpectQuery("SELECT \\* FROM `plg_workflow_inst` WHERE id = \\?").WillReturnRows(instRow(2001, StatusRunning, startedState()))
-	m.ExpectQuery("SELECT \\* FROM `plg_workflow_def` WHERE id = \\?").WillReturnRows(defRow())
-	m.ExpectBegin()
-	m.ExpectExec("UPDATE `plg_workflow_inst`").WillReturnResult(sqlmock.NewResult(1, 1))
-	m.ExpectCommit()
-
-	v, err := s.InstApprove(skipCtx(), 2001, "u1", "同意")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if v.Status != StatusRunning || len(v.Current) != 1 || v.Current[0] != "n2" {
-		t.Fatalf("after approve: %+v", v)
-	}
-
-	m.ExpectQuery("SELECT \\* FROM `plg_workflow_inst` WHERE id = \\?").WillReturnRows(instRow(2001, StatusRunning, startedState()))
-	m.ExpectQuery("SELECT \\* FROM `plg_workflow_def` WHERE id = \\?").WillReturnRows(defRow())
-	m.ExpectBegin()
-	m.ExpectRollback()
-	_, err = s.InstApprove(skipCtx(), 2001, "u9", "越权")
+func TestDefSaveRejectsInvalidXML(t *testing.T) {
+	s := memService(t)
+	_, err := s.DefSave(ctxOf(), 0, DefForm{Key: "bad", Name: "坏流程", XML: `<bpmn:definitions><bpmn:process id="bad"></bpmn:process></bpmn:definitions>`})
 	e, ok := err.(*response.Error)
 	if !ok || e.Status != http.StatusBadRequest {
 		t.Fatalf("want 400, got %v", err)
 	}
 }
 
-// 会签：u2 同意后 n2 未完成；u3 也同意才 approved。
-func TestCountersignAll(t *testing.T) {
-	db, m := mockDB(t)
-	s := NewService(db, nopLogger{})
+func TestInstanceLifecycle(t *testing.T) {
+	s := memService(t)
+	def := savePublished(t, s)
+	ctx := ctxOf()
 
-	state := `{"defKey":"d1","status":"running","current":["n2"],"done":["start","n1"],` +
-		`"votes":{"n1":{"u1":"approve"}},"extraApprovers":{},"vars":{},"history":[]}`
-	m.ExpectQuery("SELECT \\* FROM `plg_workflow_inst` WHERE id = \\?").WillReturnRows(instRow(2002, StatusRunning, state))
-	m.ExpectQuery("SELECT \\* FROM `plg_workflow_def` WHERE id = \\?").WillReturnRows(defRow())
-	m.ExpectBegin()
-	m.ExpectExec("UPDATE `plg_workflow_inst`").WillReturnResult(sqlmock.NewResult(1, 1))
-	m.ExpectCommit()
+	inst, err := s.InstStart(ctx, StartInput{DefID: idText(def.ID), Title: "张三请假", BizType: "leave", BusinessKey: "L-1"}, "alice")
+	if err != nil {
+		t.Fatalf("发起失败: %v", err)
+	}
+	if inst.Status != StatusRunning || len(inst.Current) != 1 || inst.Current[0] != "manager" {
+		t.Fatalf("发起后 = %s %v", inst.Status, inst.Current)
+	}
+	if len(inst.Pending) != 1 || inst.Pending[0].Assignee != "alice" {
+		t.Fatalf("待办 = %+v", inst.Pending)
+	}
+	if inst.Definition == nil || len(inst.Definition.Nodes) != 4 {
+		t.Fatal("实例视图必须带发起时的定义快照")
+	}
 
-	v, err := s.InstApprove(skipCtx(), 2002, "u2", "")
+	// 幂等：同业务键再次发起返回同一实例。
+	again, err := s.InstStart(ctx, StartInput{DefID: idText(def.ID), BizType: "leave", BusinessKey: "L-1"}, "alice")
+	if err != nil || again.ID != inst.ID {
+		t.Fatalf("幂等发起 = %v %v", again, err)
+	}
+
+	todo, total, err := s.InstList(ctx, InstQuery{Todo: "1", Page: 1, PageSize: 20}, "alice")
+	if err != nil || total != 1 || todo[0].ID != inst.ID {
+		t.Fatalf("我的待办 = %d %v", total, err)
+	}
+
+	if _, err := s.InstApprove(ctx, inst.ID, "bob", ""); err == nil {
+		t.Fatal("非当前审批人不应该能审批")
+	} else if e, ok := err.(*response.Error); !ok || e.Status != http.StatusForbidden {
+		t.Fatalf("非审批人错误 = %v", err)
+	}
+
+	if _, err := s.InstApprove(ctx, inst.ID, "alice", "同意"); err != nil {
+		t.Fatalf("主管审批失败: %v", err)
+	}
+	todo, total, _ = s.InstList(ctx, InstQuery{Todo: "1", Page: 1, PageSize: 20}, "bob")
+	if total != 1 || todo[0].Current[0] != "hr" {
+		t.Fatalf("会签待办 = %d %+v", total, todo)
+	}
+
+	if _, err := s.InstApprove(ctx, inst.ID, "bob", ""); err != nil {
+		t.Fatal(err)
+	}
+	out, err := s.InstApprove(ctx, inst.ID, "carol", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if v.Status != StatusRunning {
-		t.Fatalf("会签未齐应仍 running, got %s", v.Status)
+	if out.Status != StatusApproved {
+		t.Fatalf("状态 = %s", out.Status)
 	}
-	full := `{"defKey":"d1","status":"running","current":["n2"],"done":["start","n1"],` +
-		`"votes":{"n1":{"u1":"approve"},"n2":{"u2":"approve"}},"extraApprovers":{},"vars":{},"history":[]}`
-	m.ExpectQuery("SELECT \\* FROM `plg_workflow_inst` WHERE id = \\?").WillReturnRows(instRow(2002, StatusRunning, full))
-	m.ExpectQuery("SELECT \\* FROM `plg_workflow_def` WHERE id = \\?").WillReturnRows(defRow())
-	m.ExpectBegin()
-	m.ExpectExec("UPDATE `plg_workflow_inst`").WillReturnResult(sqlmock.NewResult(1, 1))
-	m.ExpectCommit()
 
-	v, err = s.InstApprove(skipCtx(), 2002, "u3", "")
-	if err != nil {
-		t.Fatal(err)
+	// 已结束：待办清空，我已办与我发起可查。
+	if _, total, _ := s.InstList(ctx, InstQuery{Todo: "1", Page: 1, PageSize: 20}, "carol"); total != 0 {
+		t.Fatalf("结束后仍有待办 %d", total)
 	}
-	if v.Status != StatusApproved {
-		t.Fatalf("会签齐后应 approved, got %s", v.Status)
+	done, total, err := s.InstList(ctx, InstQuery{Done: "1", Page: 1, PageSize: 20}, "bob")
+	if err != nil || total != 1 || done[0].ID != inst.ID {
+		t.Fatalf("我已办 = %d %v", total, err)
+	}
+	mine, total, err := s.InstList(ctx, InstQuery{Mine: "started", Page: 1, PageSize: 20}, "alice")
+	if err != nil || total != 1 || mine[0].ID != inst.ID {
+		t.Fatalf("我发起 = %d %v", total, err)
+	}
+
+	// 已结束再审批返回 409 而不是 500。
+	if _, err := s.InstApprove(ctx, inst.ID, "carol", ""); err == nil {
+		t.Fatal("已结束实例不应能审批")
+	} else if e, ok := err.(*response.Error); !ok || e.Status != http.StatusConflict {
+		t.Fatalf("已结束错误 = %v", err)
 	}
 }
 
-// 回退：把 token 退回 n1，清除下游投票。
-func TestRollback(t *testing.T) {
-	db, m := mockDB(t)
-	s := NewService(db, nopLogger{})
-
-	state := `{"defKey":"d1","status":"running","current":["n2"],"done":["start","n1"],` +
-		`"votes":{"n1":{"u1":"approve"}},"extraApprovers":{},"vars":{},"history":[]}`
-	m.ExpectQuery("SELECT \\* FROM `plg_workflow_inst` WHERE id = \\?").WillReturnRows(instRow(2003, StatusRunning, state))
-	m.ExpectQuery("SELECT \\* FROM `plg_workflow_def` WHERE id = \\?").WillReturnRows(defRow())
-	m.ExpectBegin()
-	m.ExpectExec("UPDATE `plg_workflow_inst`").WillReturnResult(sqlmock.NewResult(1, 1))
-	m.ExpectCommit()
-
-	v, err := s.InstRollback(skipCtx(), 2003, "u2", "n1", "材料不齐,退回")
+func TestInstanceCountersignRollbackWithdraw(t *testing.T) {
+	s := memService(t)
+	def := savePublished(t, s)
+	ctx := ctxOf()
+	inst, err := s.InstStart(ctx, StartInput{DefID: idText(def.ID), Title: "操作"}, "alice")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(v.Current) != 1 || v.Current[0] != "n1" {
-		t.Fatalf("rollback target = %v", v.Current)
+
+	if _, err := s.InstCountersign(ctx, inst.ID, "alice", "dave", "请一起看"); err != nil {
+		t.Fatalf("加签失败: %v", err)
 	}
-	if v.Votes["n1"] != nil {
-		t.Fatal("回退后应清除 n1 的投票")
+	got, err := s.InstGet(ctx, inst.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Pending) != 2 {
+		t.Fatalf("加签后待办 = %+v", got.Pending)
+	}
+
+	if _, err := s.InstRollback(ctx, inst.ID, "alice", "manager", "重审"); err != nil {
+		t.Fatalf("回退失败: %v", err)
+	}
+
+	if _, err := s.InstWithdraw(ctx, inst.ID, "bob", ""); err == nil {
+		t.Fatal("非提交人不应能撤回")
+	} else if e, ok := err.(*response.Error); !ok || e.Status != http.StatusForbidden {
+		t.Fatalf("越权撤回 = %v", err)
+	}
+	out, err := s.InstWithdraw(ctx, inst.ID, "alice", "不需要了")
+	if err != nil || out.Status != StatusCancelled {
+		t.Fatalf("撤回 = %v %v", out, err)
 	}
 }
 
-// 撤回：仅提交人可撤。
-func TestWithdrawOwnerOnly(t *testing.T) {
-	db, m := mockDB(t)
-	s := NewService(db, nopLogger{})
-
-	m.ExpectQuery("SELECT \\* FROM `plg_workflow_inst` WHERE id = \\?").WillReturnRows(instRow(2004, StatusRunning, startedState()))
-	_, err := s.InstWithdraw(skipCtx(), 2004, "u9", "不是我的")
-	e, ok := err.(*response.Error)
-	if !ok || e.Status != http.StatusForbidden {
-		t.Fatalf("want 403, got %v", err)
-	}
-
-	// instWithdraw 先 instGet（查提交人），通过后 instAct 再走一遍（查实例 + 定义 + 事务保存）
-	m.ExpectQuery("SELECT \\* FROM `plg_workflow_inst` WHERE id = \\?").WillReturnRows(instRow(2004, StatusRunning, startedState()))
-	m.ExpectQuery("SELECT \\* FROM `plg_workflow_inst` WHERE id = \\?").WillReturnRows(instRow(2004, StatusRunning, startedState()))
-	m.ExpectQuery("SELECT \\* FROM `plg_workflow_def` WHERE id = \\?").WillReturnRows(defRow())
-	m.ExpectBegin()
-	m.ExpectExec("UPDATE `plg_workflow_inst`").WillReturnResult(sqlmock.NewResult(1, 1))
-	m.ExpectCommit()
-
-	v, err := s.InstWithdraw(skipCtx(), 2004, "u0", "撤回")
+func TestDefinitionSnapshotIsPinned(t *testing.T) {
+	s := memService(t)
+	def := savePublished(t, s)
+	ctx := ctxOf()
+	inst, err := s.InstStart(ctx, StartInput{DefID: idText(def.ID), Title: "改流程"}, "alice")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if v.Status != StatusCancelled {
-		t.Fatalf("status = %s", v.Status)
+
+	// 把流程改成「主管审批后直接结束」，删除会签节点。
+	changed := Definition{
+		Key: "leave", Name: "请假审批", Start: "start",
+		Nodes: []Node{
+			{Key: "start", Kind: KindStart},
+			{Key: "manager", Name: "主管审批", Kind: KindApproval, Approvers: []string{"alice"}},
+			{Key: "end", Kind: KindEnd},
+		},
+		Edges: []Edge{{From: "start", To: "manager"}, {From: "manager", To: "end"}},
+	}
+	if _, err := s.DefSave(ctx, def.ID, DefForm{Key: "leave", Name: "请假审批", Status: DefPublished, Definition: changed}); err != nil {
+		t.Fatal(err)
+	}
+	out, err := s.InstApprove(ctx, inst.ID, "alice", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Current) != 1 || out.Current[0] != "hr" {
+		t.Fatalf("在途实例必须按快照执行，Current = %v", out.Current)
 	}
 }
 
-// 超时清扫：n1 配置 TimeoutMinutes=1 且实例超过时限 → 自动升级到 n2（未配置则跳过）。
-func TestSweepEscalate(t *testing.T) {
-	db, m := mockDB(t)
-	s := NewService(db, nopLogger{})
-
-	// 断言清扫时不是「一路跳过租户」：扫描可以 Skip，但推进实例的写操作必须带实例所属租户。
-	var actTenant idgen.ID
-	var actSkipped bool
-	db.Callback().Update().Before("gorm:update").Register("test:escalation_tenant", func(tx *gorm.DB) {
-		actTenant, _ = tenant.From(tx.Statement.Context)
-		actSkipped = tenant.Skipped(tx.Statement.Context)
-	})
-
-	old := time.Now().UTC().Add(-2 * time.Minute)
-	staleDef := `{"key":"d1","name":"超时升级","start":"start","nodes":[` +
-		`{"key":"start","name":"开始","kind":"start"},` +
-		`{"key":"n1","name":"一审","kind":"approval","approvers":["u1"],"mode":"any","escalateTo":"n2","timeoutMinutes":1},` +
-		`{"key":"n2","name":"二审","kind":"approval","approvers":["u2"],"mode":"any"},` +
-		`{"key":"end","name":"结束","kind":"end"}],` +
-		`"edges":[{"from":"start","to":"n1"},{"from":"n1","to":"n2"},{"from":"n2","to":"end"}]}`
-	staleInst := `{"defKey":"d1","status":"running","current":["n1"],"done":["start"],"votes":{},"extraApprovers":{},"vars":{},"history":[]}`
-	staleRows := func() *sqlmock.Rows {
-		return sqlmock.NewRows([]string{
-			"id", "tenant_id", "def_id", "def_key", "title", "biz_type", "business_key",
-			"submitter", "status", "state_json", "created_at", "updated_at",
-		}).AddRow(3001, 1, 1002, "d1", "超时单", "test", "B-2", "u0", StatusRunning, staleInst, old, old)
-	}
-	defRows := func() *sqlmock.Rows {
-		return sqlmock.NewRows([]string{
-			"id", "tenant_id", "def_key", "name", "status", "version", "definition", "created_at", "updated_at",
-		}).AddRow(1002, 1, "d1", "超时升级", DefPublished, 1, staleDef, old, old)
-	}
-
-	m.ExpectQuery("SELECT \\* FROM `plg_workflow_inst`").WillReturnRows(staleRows())
-	m.ExpectQuery("SELECT \\* FROM `plg_workflow_def`").WillReturnRows(defRows())
-	// SweepEscalate 调 InstEscalate → instAct: SELECT inst + SELECT def + 事务保存
-	m.ExpectQuery("SELECT \\* FROM `plg_workflow_inst` WHERE id = \\?").WillReturnRows(staleRows())
-	m.ExpectQuery("SELECT \\* FROM `plg_workflow_def` WHERE id = \\?").WillReturnRows(defRows())
-	m.ExpectBegin()
-	m.ExpectExec("UPDATE `plg_workflow_inst`").WillReturnResult(sqlmock.NewResult(1, 1))
-	m.ExpectCommit()
-
-	// 生产环境由 plugin.Starter 传入没有租户的进程 ctx，清扫器内部需自行 tenant.Skip。
-	n, err := s.SweepEscalate(context.Background(), time.Now().UTC())
+func TestDefJSONStillSupported(t *testing.T) {
+	s := memService(t)
+	def, err := json.Marshal(seqDefinition())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n != 1 {
-		t.Fatalf("escalated %d, want 1", n)
+	_ = def
+	v, err := s.DefSave(ctxOf(), 0, DefForm{Key: "d1", Name: "两级", Status: DefPublished, Definition: seqDefinition()})
+	if err != nil {
+		t.Fatalf("JSON 定义保存失败: %v", err)
 	}
-	if actTenant != 1 || actSkipped {
-		t.Fatalf("escalation ran with tenant=%d skipped=%v, want tenant=1 skipped=false", actTenant, actSkipped)
+	xml, err := s.DefXML(ctxOf(), v.ID)
+	if err != nil {
+		t.Fatalf("无 XML 时应由引擎生成: %v", err)
+	}
+	if !strings.Contains(xml, "<bpmn:userTask") {
+		t.Fatalf("生成的 XML 不合法:\n%s", xml)
+	}
+}
+
+func seqDefinition() Definition {
+	return Definition{
+		Key: "d1", Name: "两级会签", Start: "start",
+		Nodes: []Node{
+			{Key: "start", Name: "开始", Kind: KindStart},
+			{Key: "n1", Name: "保管员", Kind: KindApproval, Approvers: []string{"u1"}, Mode: ModeAny, EscalateTo: "n2"},
+			{Key: "n2", Name: "科长", Kind: KindApproval, Approvers: []string{"u2", "u3"}, Mode: ModeAll},
+			{Key: "end", Name: "结束", Kind: KindEnd},
+		},
+		Edges: []Edge{
+			{From: "start", To: "n1"},
+			{From: "n1", To: "n2"},
+			{From: "n2", To: "end"},
+		},
 	}
 }

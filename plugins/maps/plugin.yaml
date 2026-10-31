@@ -6,6 +6,8 @@ author: NexAdmin
 edition: free
 requires_nexadmin: ">=0.1.0"
 menus:
+  # 已并进「系统设置 → 存储与集成 → 地图服务」：只隐藏菜单行，侧栏不单列。
+  # 不挂到 settings:list 下——角色分配会自动带上祖先节点，等于顺手授予 settings:list。
   - parent: /system
     type: menu
     title: plugin_maps.menu
@@ -15,3 +17,4 @@ menus:
     icon: MapPinned
     sort: 80
     keep_alive: true
+    hidden: true

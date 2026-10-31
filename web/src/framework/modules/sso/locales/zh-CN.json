@@ -1,6 +1,7 @@
 {
   "sso": {
     "menu": "应用管理",
+    "settingsTitle": "单点登录",
     "title": "应用管理",
     "description": "管理接入统一登录（SSO）的下游应用、回调地址与可见范围",
     "create": "新增应用",
@@ -54,7 +55,7 @@
       "homeUrl": "应用地址",
       "homeUrlHint": "应用中心点击卡片后在新标签页打开",
       "urlInvalid": "请输入以 http(s):// 开头的完整地址",
-      "allowOrgReadHint": "勾选后，该应用可用 client_credentials（scope 为 org.read）换取令牌，只读拉取本租户的用户与部门通讯录（/oauth/org/users、/oauth/org/depts）。取消勾选后已签发的令牌立即失效。"
+      "allowOrgReadHint": "只读同步本租户的用户与部门，供邮箱、OA 等应用拉取通讯录；关闭后已签发的令牌立即失效。"
     },
     "secret": {
       "title": "应用密钥",
@@ -69,7 +70,11 @@
       "issuer": "Issuer",
       "discovery": "Discovery 地址",
       "authorization": "授权端点",
-      "token": "令牌端点"
+      "token": "令牌端点",
+      "orgSection": "组织通讯录（只读）",
+      "orgHint": "先用 client_credentials 换取令牌（scope 为 org.read），再拉取本租户的数据",
+      "orgUsers": "用户通讯录",
+      "orgDepts": "部门通讯录"
     },
     "portal": {
       "menu": "应用中心",

@@ -77,7 +77,7 @@ export default function OnlinePage() {
       <DataTable<OnlineUser>
         toolbar={
           <Button type="button" variant="outline" disabled={isFetching} onClick={() => refetch()}>
-            <RefreshCw className="me-2 size-4" aria-hidden="true" />
+            <RefreshCw className={isFetching ? 'me-2 size-4 animate-spin' : 'me-2 size-4'} aria-hidden="true" />
             {t('common.refresh')}
           </Button>
         }

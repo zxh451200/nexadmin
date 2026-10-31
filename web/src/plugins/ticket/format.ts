@@ -12,8 +12,9 @@ export function formatTime(iso: string | null | undefined, lang: string): string
       }).format(d)
 }
 
-export function statusVariant(s: string): 'success' | 'destructive' | 'info' | 'secondary' {
+export function statusVariant(s: string): 'success' | 'destructive' | 'info' | 'warning' | 'secondary' {
   if (s === 'processing') return 'info'
+  if (s === 'pending') return 'warning'
   if (s === 'resolved') return 'success'
   if (s === 'open') return 'destructive'
   return 'secondary'

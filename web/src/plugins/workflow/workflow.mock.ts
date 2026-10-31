@@ -1,9 +1,9 @@
 import { defineMock } from '@/framework/request/mock'
-import type { WfInst } from './api'
+import type { WfDefinition, WfInst } from './api'
 
 const ago = (min: number) => new Date(Date.now() - min * 60_000).toISOString()
 
-const def = {
+const def: WfDefinition = {
   key: 'expense_approval',
   name: '费用报销审批',
   start: 'start',
@@ -20,7 +20,20 @@ const def = {
   ],
 }
 
-const insts: WfInst[] = [
+const defXml = `<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:flowlite="urn:flowlite:engine:1.0" id="Definitions_mock" targetNamespace="urn:flowlite:engine:1.0">
+  <bpmn:process id="expense_approval" name="费用报销审批" isExecutable="true">
+    <bpmn:startEvent id="start" name="开始" />
+    <bpmn:userTask id="lead" name="主管审批" flowlite:approvers="1" flowlite:escalateTo="director" flowlite:timeoutMinutes="1440" />
+    <bpmn:userTask id="director" name="总监审批" flowlite:approvers="1" />
+    <bpmn:endEvent id="end" name="结束" />
+    <bpmn:sequenceFlow id="f1" sourceRef="start" targetRef="lead" />
+    <bpmn:sequenceFlow id="f2" sourceRef="lead" targetRef="director" />
+    <bpmn:sequenceFlow id="f3" sourceRef="director" targetRef="end" />
+  </bpmn:process>
+</bpmn:definitions>`
+
+const insts: WfInst[] = ([
   {
     id: '7440000000000000001',
     defId: '1',
@@ -36,7 +49,7 @@ const insts: WfInst[] = [
     votes: { lead: { '1': 'approve' } },
     history: [
       { at: ago(300), node: 'start', actor: '1800000000000000001', action: 'start' },
-      { at: ago(120), node: 'lead', actor: '1', action: 'approve', comment: '金额无误' },
+      { at: ago(120), node: 'lead', actor: '1800000000000000001', action: 'approve', comment: '金额无误' },
     ],
     createdAt: ago(300),
     updatedAt: ago(120),
@@ -56,8 +69,8 @@ const insts: WfInst[] = [
     votes: { lead: { '1': 'approve' }, director: { '1': 'approve' } },
     history: [
       { at: ago(600), node: 'start', actor: '1800000000000000001', action: 'start' },
-      { at: ago(500), node: 'lead', actor: '1', action: 'approve' },
-      { at: ago(480), node: 'director', actor: '1', action: 'approve' },
+      { at: ago(500), node: 'lead', actor: '1800000000000000001', action: 'approve' },
+      { at: ago(480), node: 'director', actor: '1800000000000000001', action: 'approve' },
     ],
     createdAt: ago(600),
     updatedAt: ago(480),
@@ -77,12 +90,21 @@ const insts: WfInst[] = [
     votes: { lead: { '1': 'reject' } },
     history: [
       { at: ago(900), node: 'start', actor: '1800000000000000002', action: 'start' },
-      { at: ago(800), node: 'lead', actor: '1', action: 'reject', comment: '超出季度预算' },
+      { at: ago(800), node: 'lead', actor: '1800000000000000001', action: 'reject', comment: '超出季度预算' },
     ],
     createdAt: ago(900),
     updatedAt: ago(800),
   },
-]
+] as unknown as Omit<WfInst, 'revision' | 'defVersion' | 'pending' | 'definition'>[]).map((x) => ({
+  ...x,
+  revision: 1,
+  defVersion: 3,
+  definition: def,
+  pending:
+    x.status === 'running'
+      ? [{ nodeKey: x.current[0] ?? '', nodeName: '总监审批', assignee: '1790000000000000001' }]
+      : [],
+}))
 
 defineMock([
   {
@@ -97,6 +119,7 @@ defineMock([
           status: 'published',
           version: 3,
           definition: def,
+          xml: defXml,
           createdAt: ago(60 * 24 * 30),
           updatedAt: ago(60 * 24 * 2),
         },
@@ -107,7 +130,7 @@ defineMock([
     }),
   },
   { method: 'GET', url: '/plugins/workflow/templates', handler: () => [
-    { key: 'general_two_step', name: '两级审批(或签+超时升级)', definition: def },
+    { key: 'general_two_step', name: '两级审批(或签+超时升级)', definition: def, xml: defXml },
   ] },
   {
     method: 'GET',
@@ -116,9 +139,45 @@ defineMock([
       let rows = insts
       if (query.status) rows = rows.filter((x) => x.status === query.status)
       if (query.bizType) rows = rows.filter((x) => x.bizType === query.bizType)
-      if (query.todo === '1') rows = rows.filter((x) => x.status === 'running' && x.current.includes('director'))
+      if (query.keyword) {
+        const kw = String(query.keyword).toLowerCase()
+        rows = rows.filter((x) => [x.title, x.defKey, x.businessKey].some((v) => v?.toLowerCase().includes(kw)))
+      }
+      if (query.mine === 'started') rows = rows.filter((x) => x.submitter === '1')
+      if (query.todo === '1') rows = rows.filter((x) => x.status === 'running' && x.pending.some((p) => !p.assignee || p.assignee === '1790000000000000001'))
       if (query.done === '1') rows = rows.filter((x) => x.history.some((e) => e.actor === '1'))
-      return { list: rows, total: rows.length, page: 1, pageSize: rows.length }
+      const page = Number(query.page ?? 1)
+      const pageSize = Number(query.pageSize ?? 20)
+      return { list: rows.slice((page - 1) * pageSize, page * pageSize), total: rows.length, page, pageSize }
+    },
+  },
+  {
+    method: 'POST',
+    url: '/plugins/workflow/instances',
+    handler: ({ body }) => {
+      const x: WfInst = {
+        id: `mock-${Date.now()}`,
+        defId: String(body.defId ?? '1'),
+        defKey: def.key,
+        defVersion: 3,
+        title: String(body.title ?? ''),
+        bizType: String(body.bizType ?? ''),
+        businessKey: String(body.businessKey ?? ''),
+        submitter: '1',
+        status: 'running',
+        revision: 1,
+        current: ['lead'],
+        done: ['start'],
+        vars: {},
+        votes: {},
+        history: [{ at: new Date().toISOString(), node: 'start', actor: '1800000000000000001', action: 'start' }],
+        pending: [{ nodeKey: 'lead', nodeName: '主管审批', assignee: '1790000000000000001' }],
+        definition: def,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }
+      insts.unshift(x)
+      return x
     },
   },
   {
@@ -132,7 +191,7 @@ defineMock([
     handler: ({ params, body }) => {
       const x = insts.find((i) => i.id === params.id)
       if (!x) throw new Error('not found')
-      x.history.push({ at: new Date().toISOString(), node: x.current[0] ?? '', actor: '1', action: 'approve', comment: String(body.comment ?? '') })
+      x.history.push({ at: new Date().toISOString(), node: x.current[0] ?? '', actor: '1800000000000000001', action: 'approve', comment: String(body.comment ?? '') })
       const idx = x.current.indexOf(x.current[0])
       if (idx >= 0) x.current.splice(idx, 1)
       if (x.current.length === 0) {
@@ -149,7 +208,7 @@ defineMock([
     handler: ({ params, body }) => {
       const x = insts.find((i) => i.id === params.id)
       if (!x) throw new Error('not found')
-      x.history.push({ at: new Date().toISOString(), node: x.current[0] ?? '', actor: '1', action: 'reject', comment: String(body.comment ?? '') })
+      x.history.push({ at: new Date().toISOString(), node: x.current[0] ?? '', actor: '1800000000000000001', action: 'reject', comment: String(body.comment ?? '') })
       x.current = []
       x.status = 'rejected'
       x.updatedAt = new Date().toISOString()
@@ -163,6 +222,31 @@ defineMock([
       const x = insts.find((i) => i.id === params.id)
       if (!x) throw new Error('not found')
       x.status = 'cancelled'
+      x.updatedAt = new Date().toISOString()
+      return x
+    },
+  },
+  {
+    method: 'POST',
+    url: '/plugins/workflow/instances/:id/countersign',
+    handler: ({ params, body }) => {
+      const x = insts.find((i) => i.id === params.id)
+      if (!x) throw new Error('not found')
+      x.pending.push({ nodeKey: x.current[0] ?? '', nodeName: '加签审批', assignee: String(body.approver ?? '') })
+      x.history.push({ at: new Date().toISOString(), node: x.current[0] ?? '', actor: '1800000000000000001', action: 'countersign', comment: String(body.comment ?? '') })
+      x.updatedAt = new Date().toISOString()
+      return x
+    },
+  },
+  {
+    method: 'POST',
+    url: '/plugins/workflow/instances/:id/rollback',
+    handler: ({ params, body }) => {
+      const x = insts.find((i) => i.id === params.id)
+      if (!x) throw new Error('not found')
+      x.current = [String(body.toNode ?? 'lead')]
+      x.status = 'running'
+      x.history.push({ at: new Date().toISOString(), node: String(body.toNode ?? ''), actor: '1800000000000000001', action: 'rollback', comment: String(body.comment ?? '') })
       x.updatedAt = new Date().toISOString()
       return x
     },

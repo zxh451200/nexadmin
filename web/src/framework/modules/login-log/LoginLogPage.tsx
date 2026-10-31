@@ -5,6 +5,7 @@ import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
+import { pageAfterDelete } from '@/framework/hooks/page-fallback'
 import { DataTable } from '@/framework/components/DataTable'
 import { DateRangePicker, type DateRangeValue } from '@/framework/components/DateRangePicker'
 import { DictSelect } from '@/framework/components/DictSelect'
@@ -98,7 +99,10 @@ export default function LoginLogPage() {
   const onDelete = async (ids: string[]) => {
     if (!(await confirm({ destructive: true, description: t('loginLog.confirm.delete', { count: ids.length }) }))) return
     try {
+      const rows = data?.list ?? []
+      const removed = rows.filter((r) => ids.includes(r.id)).length
       await del.mutateAsync(ids)
+      setPage(pageAfterDelete(page, rows.length, removed))
       setSelected([])
       toast.success(t('common.operateSuccess'))
     } catch (e) {

@@ -62,11 +62,11 @@ const messages: Record<string, ImMessage[]> = {
   ],
   IM7420000000000000002: [
     { id: '21', seq: 1, senderType: 'visitor', senderId: 'anon-2', senderName: '游客 3391', content: '支持货到付款吗？', kind: 'text', createdAt: ago(48) },
-    { id: '22', seq: 2, senderType: 'agent', senderId: '7', senderName: 'admin', content: '您好，目前仅支持在线支付。', kind: 'text', createdAt: ago(47) },
+    { id: '22', seq: 2, senderType: 'agent', senderId: '1', senderName: 'admin', content: '您好，目前仅支持在线支付。', kind: 'text', createdAt: ago(47) },
   ],
   IM7420000000000000003: [
     { id: '31', seq: 1, senderType: 'visitor', senderId: 'anon-3', senderName: '会员 Alice', content: '退款已经三天了还没到账', kind: 'text', createdAt: ago(60 * 26.5) },
-    { id: '32', seq: 3, senderType: 'agent', senderId: '7', senderName: 'admin', content: '已加急处理，预计 1-2 个工作日到账。', kind: 'text', createdAt: ago(60 * 26) },
+    { id: '32', seq: 3, senderType: 'agent', senderId: '1', senderName: 'admin', content: '已加急处理，预计 1-2 个工作日到账。', kind: 'text', createdAt: ago(60 * 26) },
     { id: '33', seq: 4, senderType: 'system', senderId: '', senderName: '', content: '', kind: 'system', meta: '{"code":"conv_closed"}', createdAt: ago(60 * 25.5) },
   ],
 }
@@ -113,7 +113,7 @@ defineMock([
         id: String(seq),
         seq,
         senderType: 'agent',
-        senderId: '7',
+        senderId: '1',
         senderName: 'admin',
         content: String(body.content ?? ''),
         kind: 'text',
@@ -169,6 +169,46 @@ defineMock([
     },
   },
   {
+    method: 'PUT',
+    url: '/plugins/im/conversations/:no/note',
+    handler: ({ params, body }) => {
+      const conv = find(params.no)
+      if (!conv) throw new Error('not found')
+      conv.note = String(body.note ?? '')
+      return conv
+    },
+  },
+  {
+    method: 'DELETE',
+    url: '/plugins/im/conversations/:no',
+    handler: ({ params }) => {
+      const idx = convs.findIndex((c) => c.convNo === params.no)
+      if (idx < 0) throw new Error('not found')
+      if (convs[idx].status !== 'closed') throw new Error('conversation open')
+      convs.splice(idx, 1)
+      return { deleted: 1, messages: 0, skipped: [] }
+    },
+  },
+  {
+    method: 'POST',
+    url: '/plugins/im/conversations-delete',
+    handler: ({ body }) => {
+      const nos = Array.isArray(body.nos) ? body.nos.map(String) : []
+      const skipped: string[] = []
+      let deleted = 0
+      for (const no of nos) {
+        const idx = convs.findIndex((c) => c.convNo === no)
+        if (idx < 0 || convs[idx].status !== 'closed') {
+          skipped.push(no)
+          continue
+        }
+        convs.splice(idx, 1)
+        deleted += 1
+      }
+      return { deleted, messages: 0, skipped }
+    },
+  },
+  {
     method: 'GET',
     url: '/plugins/im/settings',
     handler: () => ({
@@ -180,15 +220,82 @@ defineMock([
       offlineText: '',
       inviteDelay: 0,
       inviteText: '',
+      welcomeText: '',
+      retentionDays: 0,
+      bannedWords: [],
+      autoAssign: false,
     }),
   },
   {
     method: 'GET',
     url: '/plugins/im/agents',
     handler: () => [
-      { id: '1', username: 'admin', nickname: '管理员' },
-      { id: '2', username: 'agent2', nickname: '客服二号' },
+      { id: '1', username: 'admin', nickname: '管理员', online: true },
+      { id: '2', username: 'agent2', nickname: '客服二号', online: false },
     ],
+  },
+  {
+    method: 'POST',
+    url: '/plugins/im/presence/heartbeat',
+    handler: () => ({ ok: true, assigned: '' }),
+  },
+  {
+    method: 'GET',
+    url: '/plugins/im/stats',
+    handler: () => {
+      const days = 7
+      const daily = Array.from({ length: days }, (_, i) => {
+        const d = new Date(Date.now() - (days - 1 - i) * 86400_000)
+        return { date: d.toISOString().slice(0, 10), created: (i * 3) % 5, closed: (i * 2) % 4 }
+      })
+      return {
+        days,
+        total: convs.length,
+        closed: convs.filter((c) => c.status === 'closed').length,
+        open: convs.filter((c) => c.status === 'open').length,
+        avgRating: 4,
+        ratingCount: 1,
+        avgFirstResponseSec: 90,
+        firstResponseCount: 2,
+        truncated: false,
+        daily,
+        agents: [
+          { id: '1', name: '管理员', online: true, assigned: 2, closed: 1, avgRating: 4 },
+          { id: '2', name: '客服二号', online: false, assigned: 0, closed: 0, avgRating: 0 },
+        ],
+      }
+    },
+  },
+  {
+    method: 'POST',
+    url: '/plugins/im/conversations/:no/messages/:seq/recall',
+    handler: ({ params }) => {
+      const list = messages[params.no] ?? []
+      const m = list.find((x) => x.seq === Number(params.seq))
+      if (!m) throw new Error('not found')
+      m.kind = 'system'
+      m.meta = '{"code":"message_recalled"}'
+      m.content = ''
+      const conv = find(params.no)
+      if (conv && conv.lastMsgAt === m.createdAt) conv.lastPreview = ''
+      return m
+    },
+  },
+  {
+    method: 'POST',
+    url: '/plugins/im/conversations/:no/merge',
+    handler: ({ params, body }) => {
+      const conv = find(params.no)
+      const target = find(String(body.target ?? ''))
+      if (!conv) throw new Error('not found')
+      if (!target || target.status !== 'open') throw new Error('target not open')
+      conv.status = 'closed'
+      conv.closedAt = new Date().toISOString()
+      conv.closedBy = 'merge'
+      const moved = (messages[params.no] ?? []).length
+      messages[params.no] = []
+      return { target: target.convNo, moved }
+    },
   },
   {
     method: 'POST',

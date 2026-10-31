@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"gorm.io/gorm"
 
@@ -39,6 +40,14 @@ type Settings struct {
 	OfflineText   string `json:"offlineText"`
 	InviteDelay   int    `json:"inviteDelay"` // 秒；0 = 不主动邀请
 	InviteText    string `json:"inviteText"`
+	// WelcomeText 是访客首次打开会话时自动发出的第一条消息（空 = 不发欢迎语）。
+	WelcomeText string `json:"welcomeText"`
+	// RetentionDays 是已结束会话的保留天数（0 = 永久保留，不自动清理）。
+	RetentionDays int `json:"retentionDays"`
+	// BannedWords 是敏感词：访客消息命中后替换为 ***，坐席消息不过滤。
+	BannedWords []string `json:"bannedWords"`
+	// AutoAssign 开启后，新会话自动分给在线且手上会话最少的坐席；没有在线坐席时排队，坐席上线后按先后领走。
+	AutoAssign bool `json:"autoAssign"`
 }
 
 // DefaultSettings 是未配置时的行为：7×24 在线、不主动邀请。
@@ -88,8 +97,14 @@ func (s *Service) SaveSettings(ctx context.Context, in Settings) (*Settings, err
 	if in.InviteDelay < 0 || in.InviteDelay > 600 {
 		return nil, response.BadRequest("im.settings_invalid")
 	}
+	// 保留天数上限 10 年：超过基本等于「永久保留」，直接用 0 表达更清楚。
+	if in.RetentionDays < 0 || in.RetentionDays > 3650 {
+		return nil, response.BadRequest("im.settings_invalid")
+	}
 	in.OfflineText = truncate(strings.TrimSpace(in.OfflineText), 500)
 	in.InviteText = truncate(strings.TrimSpace(in.InviteText), 500)
+	in.WelcomeText = truncate(strings.TrimSpace(in.WelcomeText), 500)
+	in.BannedWords = normalizeWords(in.BannedWords)
 	raw, err := json.Marshal(in)
 	if err != nil {
 		return nil, err
@@ -173,6 +188,45 @@ func normalizeSettings(st *Settings) {
 	}
 	sort.Ints(days)
 	st.Workdays = days
+}
+
+// normalizeWords 去空、去重（不区分大小写），每词截到 32 字，最多 100 个。
+func normalizeWords(words []string) []string {
+	seen := map[string]bool{}
+	out := make([]string, 0, len(words))
+	for _, w := range words {
+		w = truncate(strings.TrimSpace(w), 32)
+		if w == "" || seen[strings.ToLower(w)] {
+			continue
+		}
+		seen[strings.ToLower(w)] = true
+		out = append(out, w)
+		if len(out) == 100 {
+			break
+		}
+	}
+	return out
+}
+
+// maskBanned 把命中敏感词的片段替换成等字符数的 *（大小写不敏感，中文按字数算）。
+func maskBanned(text string, words []string) string {
+	lower := strings.ToLower(text)
+	for _, w := range words {
+		w = strings.ToLower(strings.TrimSpace(w))
+		if w == "" {
+			continue
+		}
+		for {
+			i := strings.Index(lower, w)
+			if i < 0 {
+				break
+			}
+			stars := strings.Repeat("*", utf8.RuneCountInString(text[i:i+len(w)]))
+			text = text[:i] + stars + text[i+len(w):]
+			lower = strings.ToLower(text)
+		}
+	}
+	return text
 }
 
 func containsWeekday(days []int, d int) bool {

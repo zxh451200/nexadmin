@@ -50,12 +50,24 @@
   "jsonInput": {
     "format": "格式化",
     "minify": "压缩",
+    "repair": "修复",
+    "repairing": "修复中…",
+    "repaired": "已修复为合法 JSON，请核对内容",
+    "repairPartial": "格式已修复，但内容仍不符合要求",
+    "repairFailed": "自动修复失败，请手动检查引号与括号",
     "expand": "全屏",
     "expandTitle": "编辑 JSON",
     "done": "完成",
     "required": "请输入 JSON 内容",
     "notObject": "必须是 JSON 对象：用 { } 包住键值对，不能是数组或单个值",
-    "syntax": "第 {{line}} 行第 {{column}} 列有语法错误，请检查引号、逗号与括号是否配对"
+    "syntax": "第 {{line}} 行第 {{column}} 列有语法错误，请检查引号、逗号与括号是否配对",
+    "syntaxReason": {
+      "fullWidth": "第 {{line}} 行第 {{column}} 列：检测到中文/全角引号或标点，请换成英文半角的 \" \"、, 和 :",
+      "singleQuote": "第 {{line}} 行第 {{column}} 列：JSON 的键和字符串必须用双引号，不能使用单引号",
+      "comment": "第 {{line}} 行第 {{column}} 列：JSON 不支持注释，请删除 // 或 /* */",
+      "trailingComma": "第 {{line}} 行第 {{column}} 列：最后一项后面不能有逗号，请删掉多余的逗号",
+      "unclosed": "第 {{line}} 行第 {{column}} 列：括号没有闭合或配对，请检查 { } [ ]"
+    }
   },
   "localeForm": {
     "source": "原文",

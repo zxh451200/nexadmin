@@ -37,7 +37,9 @@ func Package(ctx context.Context, e Entry, dst string) error {
 			return fmt.Errorf("市场条目的 subdir %q 不能是绝对路径或包含 ..", e.Subdir)
 		}
 	}
-	src, err := Download(ctx, e)
+	// 打包是“产出校验值”的一侧（官网 /download 与 /download.sha256 都由它生成），
+	// 这里只取上游源码，不做完整性校验；校验发生在消费侧的 Download。
+	src, _, err := downloadSource(ctx, e)
 	if err != nil {
 		return err
 	}

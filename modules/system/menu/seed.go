@@ -88,6 +88,8 @@ func buildSeed() []seedItem {
 	// 所以它们的查看/修改按钮挂到系统设置下面（旧地址由前端路由重定向到对应分区）。
 	b.btns(settings, "config", append([]string{"list"}, crud...)...)
 	b.btns(settings, "language", "list", "update")
+	// 省市区数据同步在「系统设置」里，权限点同样挂在设置页下面。
+	b.btns(settings, "region", "sync")
 	recycle := b.menu(system, "recycle.menu", "/system/recycle", "recycle/RecyclePage", "recycle:list", "Trash2", 90)
 	b.btns(recycle, "recycle", "restore", "delete")
 
@@ -142,8 +144,12 @@ func buildSeed() []seedItem {
 	openapi := b.menu(system, "openapi.menu", "/system/openapi", "openapi/OpenApiPage", "openapi:list", "Webhook", 130)
 	b.btns(openapi, "openapi", "edit")
 
-	// 单点登录（必须排在所有既有菜单之后：出厂 ID 由 add 顺序决定，插在中间会顶掉后面条目的 ID）。
-	ssoApps := b.menu(system, "sso.menu", "/system/sso-apps", "sso/SsoAppsPage", "sso:list", "AppWindow", 110)
+	// 单点登录应用已并进「系统设置 → 安全与登录 → 单点登录」：侧栏不再单列，只隐藏菜单行。
+	// 不能改挂到设置菜单下——角色分配会自动带上祖先节点，等于顺手授予了 settings:list。
+	// 菜单行保留在原处，权限点与角色授权仍引用它（旧地址由前端路由重定向到对应分区）。
+	// 必须排在所有既有菜单之后：出厂 ID 由 add 顺序决定，插在中间会顶掉后面条目的 ID。
+	ssoApps := b.menu(system, "sso.menu", "/system/sso-apps", "sso/SsoAppsPage", "sso:list", "AppWindow", 110,
+		func(m *Menu) { m.Hidden = true })
 	b.btns(ssoApps, "sso", "edit")
 	b.menu("", "sso.portal.menu", "/portal", "sso/PortalPage", "", "LayoutGrid", 15, noCache,
 		func(m *Menu) { m.Code = "menu:portal" }) // 无权限码的顶级菜单必须显式业务键，否则整批出厂数据被 seed 拒绝（同 menu:jobs）

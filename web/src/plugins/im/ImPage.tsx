@@ -1,11 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { ArrowRightLeft, Ban, Bell, BellOff, ChevronUp, FileText, Lock, MessageSquare, Paperclip, Pencil, Send, Settings2, Star, Tag, Trash2, UserMinus, UserPlus } from 'lucide-react'
+import { ArrowRightLeft, Ban, BarChart3, Bell, BellOff, ChevronUp, Download, FileText, Lock, Merge, MessageSquare, Paperclip, Pencil, Send, Settings2, Star, StickyNote, Tag, Trash2, Undo2, UserMinus, UserPlus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
+import { useAuth } from '@/framework/auth/useAuth'
+import { usePermission } from '@/framework/auth/usePermission'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { EmptyState } from '@/framework/components/EmptyState'
+import { StatCard } from '@/framework/components/StatCard'
+import { TrendChart } from '@/framework/components/TrendChart'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { SimpleSelect } from '@/framework/components/SimpleSelect'
@@ -20,6 +24,8 @@ import { Switch } from '@/framework/ui/switch'
 import { Textarea } from '@/framework/ui/textarea'
 import { cn } from '@/lib/utils'
 import {
+  exportConversations,
+  heartbeatPresence,
   imAttachmentUrl,
   messageAttachment,
   openImStream,
@@ -28,14 +34,19 @@ import {
   useAgents,
   useChatSession,
   useImSettings,
+  useImStats,
+  useMergeConv,
   useSaveImSettings,
   useClaimConv,
   useCloseConv,
   useConversations,
+  useDeleteConv,
   useDeleteQuickReply,
   useQuickReplies,
+  useRecallMessage,
   useSaveQuickReply,
   useSendReply,
+  useSetNote,
   useSetTags,
   useTransferConv,
   type ImAgent,
@@ -94,6 +105,7 @@ function notifyDesktop(title: string, body: string) {
 export default function ImPage() {
   const { t } = useTranslation()
   const confirm = useConfirm()
+  const { isSuper } = usePermission()
   const [params] = useSearchParams()
   // 站内信深链：/im/conversations?conv=IMxxx 直接打开对应会话。
   const linkedConv = params.get('conv') || undefined
@@ -105,6 +117,7 @@ export default function ImPage() {
   const [typing, setTyping] = useState(false)
   const [pageSize, setPageSize] = useState(50)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [statsOpen, setStatsOpen] = useState(false)
   const [notifyOn, setNotifyOn] = useState(() => localStorage.getItem(NOTIFY_KEY) === '1')
 
   const convs = useConversations({
@@ -119,13 +132,39 @@ export default function ImPage() {
   const close = useCloseConv()
   const claim = useClaimConv()
   const setTags = useSetTags()
+  const setNote = useSetNote()
+  const deleteConv = useDeleteConv()
+  const recall = useRecallMessage()
+  const merge = useMergeConv()
   const transfer = useTransferConv()
   const [uploading, setUploading] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const refresh = chat.refresh
 
   useEffect(() => {
     if (linkedConv) setSelected(linkedConv)
   }, [linkedConv])
+
+  // 坐席在线心跳：60 秒一次；开启自动分配时后端会顺手把最早的排队会话分给我。
+  // refetch 放进 ref：心跳定时器不需要随列表对象每次渲染重建。
+  const refetchRef = useRef(convs.refetch)
+  refetchRef.current = convs.refetch
+  useEffect(() => {
+    let stopped = false
+    const beat = () => {
+      heartbeatPresence()
+        .then((r) => {
+          if (!stopped && r?.assigned) void refetchRef.current()
+        })
+        .catch(() => undefined)
+    }
+    beat()
+    const timer = window.setInterval(beat, 60_000)
+    return () => {
+      stopped = true
+      window.clearInterval(timer)
+    }
+  }, [])
 
   // 实时推送双通道：优先 WebSocket（框架 hub，主题 im:<convNo>），
   // WS 不可用降级 SSE，都断时退回慢轮询。
@@ -265,6 +304,69 @@ export default function ImPage() {
     }
   }
 
+  const onSaveNote = async (c: ImConversation, note: string) => {
+    try {
+      await setNote.mutateAsync({ convNo: c.convNo, note })
+      await refresh()
+      toast.success(t('common.operateSuccess'))
+      return true
+    } catch {
+      toast.error(t('common.operateFailed'))
+      return false
+    }
+  }
+
+  // 删除是超管专属、且只对已结束的会话开放：消息与附件会一并删除，不可恢复。
+  const onDeleteConv = async (c: ImConversation) => {
+    if (!(await confirm({ destructive: true, title: t('plugin_im.delete.title'), description: t('plugin_im.delete.confirm', { no: c.convNo }) }))) return
+    try {
+      await deleteConv.mutateAsync(c.convNo)
+      if (selected === c.convNo) setSelected(undefined)
+      toast.success(t('common.operateSuccess'))
+    } catch {
+      toast.error(t('common.operateFailed'))
+    }
+  }
+
+  const onExport = async () => {
+    setExporting(true)
+    try {
+      await exportConversations({
+        status,
+        keyword: keyword || undefined,
+        assignee: assignee === 'all' ? undefined : assignee,
+        page: 1,
+        pageSize: 0,
+      })
+    } catch {
+      toast.error(t('plugin_im.exportFailed'))
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  const onRecall = async (c: ImConversation, m: ImMessage) => {
+    try {
+      await recall.mutateAsync({ convNo: c.convNo, seq: m.seq })
+      await refresh()
+    } catch {
+      toast.error(t('plugin_im.recallFailed'))
+    }
+  }
+
+  const onMerge = async (c: ImConversation, target: string) => {
+    try {
+      const res = await merge.mutateAsync({ convNo: c.convNo, target })
+      await convs.refetch()
+      setSelected(res.target)
+      toast.success(t('common.operateSuccess'))
+      return true
+    } catch {
+      toast.error(t('common.operateFailed'))
+      return false
+    }
+  }
+
   const list = convs.data?.list ?? []
   const total = convs.data?.total ?? 0
 
@@ -274,12 +376,22 @@ export default function ImPage() {
         title={t('plugin_im.title')}
         description={t('plugin_im.description')}
         actions={
-          <Can perm="im:edit">
-            <Button variant="outline" size="sm" onClick={() => setSettingsOpen(true)}>
-              <Settings2 aria-hidden="true" />
-              <span className="max-sm:sr-only">{t('plugin_im.settings.action')}</span>
+          <>
+            <Button variant="outline" size="sm" onClick={() => setStatsOpen(true)}>
+              <BarChart3 aria-hidden="true" />
+              <span className="max-sm:sr-only">{t('plugin_im.stats.action')}</span>
             </Button>
-          </Can>
+            <Button variant="outline" size="sm" onClick={() => void onExport()} disabled={exporting}>
+              <Download aria-hidden="true" />
+              <span className="max-sm:sr-only">{t('plugin_im.export')}</span>
+            </Button>
+            <Can perm="im:edit">
+              <Button variant="outline" size="sm" onClick={() => setSettingsOpen(true)}>
+                <Settings2 aria-hidden="true" />
+                <span className="max-sm:sr-only">{t('plugin_im.settings.action')}</span>
+              </Button>
+            </Can>
+          </>
         }
       />
       <div className="grid h-[calc(100vh-14rem)] min-h-96 grid-cols-1 gap-4 md:grid-cols-[22rem_1fr]">
@@ -357,10 +469,16 @@ export default function ImPage() {
           onClaim={(c, release) => void onClaim(c, release)}
           onTransfer={(c, agent) => void onTransfer(c, agent)}
           onSaveTags={onSaveTags}
+          onSaveNote={onSaveNote}
+          onDelete={(c) => void onDeleteConv(c)}
+          onRecall={onRecall}
+          onMerge={onMerge}
+          canDelete={isSuper}
         />
       </div>
 
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+      <StatsDialog open={statsOpen} onOpenChange={setStatsOpen} />
     </PageContainer>
   )
 }
@@ -474,6 +592,11 @@ function ChatPane({
   onClaim,
   onTransfer,
   onSaveTags,
+  onSaveNote,
+  onDelete,
+  onRecall,
+  onMerge,
+  canDelete,
 }: {
   conv?: ImConversation
   messages: ImMessage[]
@@ -490,10 +613,19 @@ function ChatPane({
   onClaim: (conv: ImConversation, release: boolean) => void
   onTransfer: (conv: ImConversation, agent: ImAgent) => void
   onSaveTags: (conv: ImConversation, tags: string) => Promise<boolean>
+  onSaveNote: (conv: ImConversation, note: string) => Promise<boolean>
+  onDelete: (conv: ImConversation) => void
+  onRecall: (conv: ImConversation, msg: ImMessage) => void
+  onMerge: (conv: ImConversation, target: string) => Promise<boolean>
+  /** 只有超管能删除会话（已结束的） */
+  canDelete: boolean
 }) {
   const { t, i18n } = useTranslation()
+  const userId = useAuth((s) => s.user?.id)
   const [draft, setDraft] = useState('')
   const [tagDraft, setTagDraft] = useState<string | null>(null)
+  const [noteDraft, setNoteDraft] = useState<string | null>(null)
+  const [mergeOpen, setMergeOpen] = useState(false)
   const [transferOpen, setTransferOpen] = useState(false)
   const bottomRef = useRef<HTMLDivElement | null>(null)
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
@@ -502,8 +634,10 @@ function ChatPane({
 
   useEffect(() => {
     setTagDraft(null)
+    setNoteDraft(null)
     setDraft('')
     setTransferOpen(false)
+    setMergeOpen(false)
   }, [conv?.convNo])
 
   useEffect(() => {
@@ -575,6 +709,20 @@ function ChatPane({
               <span className="max-sm:sr-only">{t('plugin_im.tags.action')}</span>
             </Button>
           </Can>
+          <Can perm="im:edit">
+            <Button variant="ghost" size="sm" onClick={() => setNoteDraft(conv.note || '')}>
+              <StickyNote aria-hidden="true" />
+              <span className="max-sm:sr-only">{t('plugin_im.note.action')}</span>
+            </Button>
+          </Can>
+          {conv.status === 'open' ? (
+            <Can perm="im:edit">
+              <Button variant="ghost" size="sm" onClick={() => setMergeOpen(true)}>
+                <Merge aria-hidden="true" />
+                <span className="max-sm:sr-only">{t('plugin_im.merge.action')}</span>
+              </Button>
+            </Can>
+          ) : null}
           {conv.status === 'open' ? (
             <Can perm="im:edit">
               <Button variant="outline" size="sm" onClick={() => onClose(conv)}>
@@ -585,6 +733,12 @@ function ChatPane({
           ) : (
             <Badge variant="secondary">{t('plugin_im.status.closed')}</Badge>
           )}
+          {canDelete && conv.status === 'closed' ? (
+            <Button variant="ghost" size="sm" className="text-destructive" onClick={() => onDelete(conv)}>
+              <Trash2 aria-hidden="true" />
+              <span className="max-sm:sr-only">{t('plugin_im.delete.action')}</span>
+            </Button>
+          ) : null}
         </div>
       </div>
 
@@ -598,6 +752,36 @@ function ChatPane({
                 {tag}
               </Badge>
             ))}
+        </div>
+      ) : null}
+
+      {conv.note && noteDraft === null ? (
+        <div className="border-b px-4 py-1.5 text-xs text-muted-foreground">
+          <span className="font-medium text-foreground">{t('plugin_im.note.label')}</span>：{conv.note}
+        </div>
+      ) : null}
+
+      {noteDraft !== null ? (
+        <div className="flex items-center gap-2 border-b px-4 py-2">
+          <Input
+            value={noteDraft}
+            maxLength={500}
+            onChange={(e) => setNoteDraft(e.target.value)}
+            placeholder={t('plugin_im.note.placeholder')}
+            aria-label={t('plugin_im.note.placeholder')}
+            autoFocus
+          />
+          <Button
+            size="sm"
+            onClick={() => {
+              void onSaveNote(conv, noteDraft).then((ok) => ok && setNoteDraft(null))
+            }}
+          >
+            {t('common.save')}
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setNoteDraft(null)}>
+            {t('common.cancel')}
+          </Button>
         </div>
       ) : null}
 
@@ -672,6 +856,17 @@ function ChatPane({
                   )
                 ) : null}
                 {m.content ? <div className="whitespace-pre-wrap break-words">{m.content}</div> : null}
+                {mine && !m.recalledAt && m.senderId && m.senderId === userId &&
+                Date.now() - new Date(m.createdAt).getTime() < 120_000 ? (
+                  <button
+                    type="button"
+                    onClick={() => onRecall(conv, m)}
+                    className="mt-0.5 flex items-center gap-0.5 text-[11px] opacity-70 hover:opacity-100"
+                  >
+                    <Undo2 aria-hidden="true" className="size-3" />
+                    {t('plugin_im.recall.action')}
+                  </button>
+                ) : null}
               </div>
             </div>
           )
@@ -767,7 +962,65 @@ function ChatPane({
           onTransfer(conv, agent)
         }}
       />
+      <MergeDialog open={mergeOpen} onOpenChange={setMergeOpen} conv={conv} onConfirm={onMerge} />
     </Card>
+  )
+}
+
+/** 合并会话：填写目标会话号，把当前会话的消息并进去，当前会话随之结束。 */
+function MergeDialog({
+  open,
+  onOpenChange,
+  conv,
+  onConfirm,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  conv: ImConversation
+  onConfirm: (conv: ImConversation, target: string) => Promise<boolean>
+}) {
+  const { t } = useTranslation()
+  const [target, setTarget] = useState('')
+  const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    if (open) setTarget('')
+  }, [open])
+  const submit = async () => {
+    const to = target.trim()
+    if (!to) return
+    setBusy(true)
+    const ok = await onConfirm(conv, to)
+    setBusy(false)
+    if (ok) onOpenChange(false)
+  }
+  return (
+    <ResponsiveDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={t('plugin_im.merge.title')}
+      description={t('plugin_im.merge.hint', { no: conv.convNo })}
+      size="sm"
+      footer={
+        <>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+            {t('common.cancel')}
+          </Button>
+          <Button onClick={() => void submit()} disabled={busy || !target.trim()}>
+            {t('common.confirm')}
+          </Button>
+        </>
+      }
+    >
+      <Input
+        value={target}
+        onChange={(e) => setTarget(e.target.value)}
+        placeholder="IM..."
+        aria-label={t('plugin_im.merge.target')}
+        className="font-mono"
+        autoFocus
+      />
+      <p className="mt-2 text-xs text-muted-foreground">{t('plugin_im.merge.warning')}</p>
+    </ResponsiveDialog>
   )
 }
 
@@ -801,7 +1054,14 @@ function TransferDialog({
             className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-2 text-start text-sm transition-colors hover:bg-accent disabled:opacity-50"
             onClick={() => onPick(agent)}
           >
-            <span className="truncate">{agent.nickname || agent.username}</span>
+            <span className="flex min-w-0 items-center gap-2">
+              <span
+                className={cn('size-2 shrink-0 rounded-full', agent.online ? 'bg-success' : 'bg-muted-foreground/40')}
+                aria-hidden="true"
+              />
+              <span className="truncate">{agent.nickname || agent.username}</span>
+              <span className="sr-only">{agent.online ? t('plugin_im.online') : t('plugin_im.offline')}</span>
+            </span>
             <span className="shrink-0 text-xs text-muted-foreground">{agent.username}</span>
           </button>
         ))}
@@ -1028,6 +1288,15 @@ function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (
               aria-label={t('plugin_im.settings.businessHours')}
             />
           </label>
+          <label className="flex items-center justify-between gap-3 text-sm">
+            <span>{t('plugin_im.settings.autoAssign')}</span>
+            <Switch
+              checked={form.autoAssign}
+              onCheckedChange={(checked) => setForm({ ...form, autoAssign: checked })}
+              aria-label={t('plugin_im.settings.autoAssign')}
+            />
+          </label>
+          <p className="-mt-2 text-xs text-muted-foreground">{t('plugin_im.settings.autoAssignHint')}</p>
           <div className="grid grid-cols-2 gap-3">
             <label className="flex flex-col gap-1 text-xs text-muted-foreground">
               {t('plugin_im.settings.start')}
@@ -1081,6 +1350,143 @@ function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (
             {t('plugin_im.settings.inviteText')}
             <Textarea rows={2} value={form.inviteText} onChange={(e) => setForm({ ...form, inviteText: e.target.value })} />
           </label>
+          <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+            {t('plugin_im.settings.welcomeText')}
+            <Textarea
+              rows={2}
+              maxLength={500}
+              value={form.welcomeText}
+              onChange={(e) => setForm({ ...form, welcomeText: e.target.value })}
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+            {t('plugin_im.settings.bannedWords')}
+            <Textarea
+              rows={3}
+              value={(form.bannedWords ?? []).join('\n')}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  bannedWords: e.target.value
+                    .split('\n')
+                    .map((w) => w.trim())
+                    .filter(Boolean),
+                })
+              }
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+            {t('plugin_im.settings.retentionDays')}
+            <Input
+              type="number"
+              min={0}
+              max={3650}
+              value={form.retentionDays}
+              onChange={(e) => setForm({ ...form, retentionDays: Number(e.target.value) || 0 })}
+            />
+            <span>{t('plugin_im.settings.retentionHint')}</span>
+          </label>
+        </div>
+      )}
+    </ResponsiveDialog>
+  )
+}
+
+/** 秒数转「1m 20s」；0 显示占位符。 */
+function fmtDuration(sec: number): string {
+  if (!sec) return '—'
+  if (sec < 60) return `${sec}s`
+  const m = Math.floor(sec / 60)
+  if (m < 60) return `${m}m ${sec % 60}s`
+  const h = Math.floor(m / 60)
+  return `${h}h ${m % 60}m`
+}
+
+/** 统计看板：窗口内总量、首响、满意度、按天趋势与坐席工作量。 */
+function StatsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+  const { t } = useTranslation()
+  const [days, setDays] = useState(7)
+  const stats = useImStats(days, open)
+  const s = stats.data
+  return (
+    <ResponsiveDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={t('plugin_im.stats.title')}
+      description={t('plugin_im.stats.hint')}
+      size="xl"
+      footer={
+        <Button onClick={() => onOpenChange(false)}>{t('common.close')}</Button>
+      }
+    >
+      {!s ? (
+        <div className="py-8 text-center text-sm text-muted-foreground">{t('plugin_im.loading')}</div>
+      ) : (
+        <div className="flex flex-col gap-4">
+          <div className="flex gap-2">
+            {[7, 30, 90].map((d) => (
+              <Button
+                key={d}
+                type="button"
+                size="sm"
+                variant={days === d ? 'secondary' : 'outline'}
+                aria-pressed={days === d}
+                onClick={() => setDays(d)}
+              >
+                {t('plugin_im.stats.days', { count: d })}
+              </Button>
+            ))}
+          </div>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <StatCard title={t('plugin_im.stats.total')} value={s.total} hint={t('plugin_im.stats.openHint', { count: s.open })} />
+            <StatCard title={t('plugin_im.stats.closed')} value={s.closed} />
+            <StatCard
+              title={t('plugin_im.stats.firstResponse')}
+              value={fmtDuration(s.avgFirstResponseSec)}
+              hint={t('plugin_im.stats.samples', { count: s.firstResponseCount })}
+            />
+            <StatCard
+              title={t('plugin_im.stats.rating')}
+              value={s.ratingCount ? s.avgRating.toFixed(1) : '—'}
+              hint={t('plugin_im.stats.samples', { count: s.ratingCount })}
+            />
+          </div>
+          <Card className="p-3">
+            <TrendChart
+              data={s.daily}
+              xKey="date"
+              type="bar"
+              switchable={false}
+              height={220}
+              series={[
+                { key: 'created', label: t('plugin_im.stats.createdSeries') },
+                { key: 'closed', label: t('plugin_im.stats.closedSeries') },
+              ]}
+            />
+          </Card>
+          <section className="flex flex-col gap-2">
+            <h3 className="text-sm font-semibold text-foreground">{t('plugin_im.stats.agents')}</h3>
+            <div className="divide-y divide-border rounded-md border border-border">
+              {s.agents.map((a) => (
+                <div key={a.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-sm">
+                  <span
+                    className={cn('size-2 shrink-0 rounded-full', a.online ? 'bg-success' : 'bg-muted-foreground/40')}
+                    aria-hidden="true"
+                  />
+                  <span className="min-w-0 flex-1 truncate">{a.name || a.id}</span>
+                  <span className="text-xs text-muted-foreground">{t('plugin_im.stats.assignedShort', { count: a.assigned })}</span>
+                  <span className="text-xs text-muted-foreground">{t('plugin_im.stats.closedShort', { count: a.closed })}</span>
+                  <span className="text-xs text-muted-foreground">
+                    ★ {a.avgRating ? a.avgRating.toFixed(1) : '—'}
+                  </span>
+                </div>
+              ))}
+              {s.agents.length === 0 ? (
+                <div className="px-3 py-4 text-center text-xs text-muted-foreground">{t('plugin_im.stats.noAgents')}</div>
+              ) : null}
+            </div>
+          </section>
+          {s.truncated ? <p className="text-xs text-warning">{t('plugin_im.stats.truncated', { count: 5000 })}</p> : null}
         </div>
       )}
     </ResponsiveDialog>
