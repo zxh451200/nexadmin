@@ -181,7 +181,7 @@ export function SsoAppFormDialog({ open, onOpenChange, editing, onCreated }: Pro
                       placeholder={t('sso.form.logoUrlPlaceholder')}
                       aria-label={t('sso.form.logoUrl')}
                       crop={{ aspect: 1 }}
-                      previewClassName="size-24"
+                      previewClassName="size-20"
                     />
                     <FormMessage />
                   </FormItem>

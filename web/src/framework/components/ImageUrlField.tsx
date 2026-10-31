@@ -18,7 +18,7 @@ export interface ImageUrlFieldProps {
   placeholder?: string
   crop?: CropConfig
   disabled?: boolean
-  /** 预览图尺寸类，默认 h-24 w-40 */
+  /** 预览框尺寸类，默认正方形——logo 一律完整显示，不裁切 */
   previewClassName?: string
   'aria-label'?: string
 }
@@ -35,7 +35,7 @@ export function ImageUrlField({
   placeholder,
   crop,
   disabled,
-  previewClassName = 'h-24 w-40',
+  previewClassName = 'size-24',
   'aria-label': ariaLabel,
 }: ImageUrlFieldProps) {
   const { t } = useTranslation()
@@ -63,7 +63,7 @@ export function ImageUrlField({
           </Button>
         ) : null}
       </div>
-      {value ? <img src={value} alt="" loading="lazy" className={cn('rounded-md border border-border object-cover', previewClassName)} /> : null}
+      {value ? <img src={value} alt="" loading="lazy" className={cn('rounded-md border border-border bg-muted/40 object-contain p-1', previewClassName)} /> : null}
       <ResponsiveDialog open={open} onOpenChange={setOpen} size="md" title={title} description={hint}>
         <Uploader
           kind="image"

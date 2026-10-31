@@ -171,7 +171,7 @@ function SettingsFormBody({
             <img
               src={shared.logoUrl}
               alt=""
-              className="h-9 w-9 shrink-0 rounded-md border object-cover"
+              className="h-9 w-9 shrink-0 rounded-md border bg-muted/40 object-contain p-0.5"
               onError={(e) => { e.currentTarget.style.visibility = 'hidden' }}
             />
           )}
