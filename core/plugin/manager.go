@@ -352,6 +352,24 @@ func (m *Manager) ActiveIDs() []string {
 	return ids
 }
 
+// MenuVisible 报告属于插件 id 的侧边栏菜单是否该显示。未注册的 id 返回 true（沿用现状：
+// 不在二进制里的插件菜单仍按库里的数据展示）；已注册的与 ActiveIDs（/plugins/active）同一判据——
+// 授权有效且已挂载。否则停用 / 过期 / 吊销之后，侧栏会留一个点进去 403 的入口。
+func (m *Manager) MenuVisible(id string) bool {
+	if !ValidID(id) {
+		return true
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	e, ok := m.entries[id]
+	if !ok {
+		return true
+	}
+	m.refreshRevocationsLocked()
+	m.expireLocked(m.opts.Now())
+	return m.enabledLocked(e) && (e.live || e.sub.Load() != nil)
+}
+
 // Root 返回插件管理使用的项目根目录（市场安装等文件操作需要）。
 func (m *Manager) Root() string {
 	m.mu.Lock()

@@ -12,6 +12,7 @@ import (
 
 	"nexadmin/core/auth"
 	"nexadmin/core/database"
+	"nexadmin/core/plugin"
 	"nexadmin/core/response"
 	"nexadmin/pkg/idgen"
 )
@@ -80,19 +81,43 @@ func (s *service) tree(ctx context.Context) ([]*menuDTO, error) {
 	return buildTree(rows, func(*Menu) bool { return true }, false), nil
 }
 
+// pluginMenuVisible 报告插件菜单是否该出现在侧边栏。默认与 /plugins/active 同源，测试可替换。
+var pluginMenuVisible = func(id string) bool { return plugin.Default().MenuVisible(id) }
+
+// pluginOfComponent 从 "plugins/<id>/XxxPage" 提取插件 id。
+func pluginOfComponent(component string) (string, bool) {
+	rest, ok := strings.CutPrefix(component, "plugins/")
+	if !ok {
+		return "", false
+	}
+	id, _, ok := strings.Cut(rest, "/")
+	if !ok || id == "" {
+		return "", false
+	}
+	return id, true
+}
+
+// mineKeep 是侧边栏的保留条件：启用的目录/菜单、持有权限码、且所属插件当前可挂载。
+// 插件菜单按 component 归属判断，目录节点没有 component，由 pruneDir 剔除空目录。
+func mineKeep(perms []string) func(*Menu) bool {
+	return func(m *Menu) bool {
+		if m.Status != statusOn || m.Type == typeButton {
+			return false
+		}
+		if id, ok := pluginOfComponent(m.Component); ok && !pluginMenuVisible(id) {
+			return false
+		}
+		return m.Type == typeDir || m.Perm == "" || auth.HasPerm(perms, m.Perm)
+	}
+}
+
 // mine 返回侧边栏菜单：只含启用的目录和菜单，菜单需持有其权限码，空目录自动剔除。
 func (s *service) mine(ctx context.Context, perms []string) ([]*menuDTO, error) {
 	rows, err := s.list(ctx)
 	if err != nil {
 		return nil, err
 	}
-	keep := func(m *Menu) bool {
-		if m.Status != statusOn || m.Type == typeButton {
-			return false
-		}
-		return m.Type == typeDir || m.Perm == "" || auth.HasPerm(perms, m.Perm)
-	}
-	return buildTree(rows, keep, true), nil
+	return buildTree(rows, mineKeep(perms), true), nil
 }
 
 func (s *service) get(ctx context.Context, id idgen.ID) (*Menu, error) {
