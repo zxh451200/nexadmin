@@ -8,3 +8,6 @@
 *.sql text eol=lf
 *.yaml text eol=lf
 *.yml text eol=lf
+
+# Windows 批处理必须 CRLF：cmd.exe 把纯 LF 的相邻行当一行执行。
+*.cmd text eol=crlf
