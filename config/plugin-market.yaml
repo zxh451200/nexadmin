@@ -25,9 +25,9 @@
 #       客户端用 `nexadmin plugin verify --sig <文件> --key <公钥文件> <zip>` 校验。
 # 私有 GitHub：NEXADMIN_MARKET_GITHUB_API 覆盖 API 根地址（GitHub Enterprise）。
 # 注意：edition/version 以各插件 plugin.yaml 为准，下载/安装时交叉校验。
-# Free 分层发布待办：cron/codegen/imports/totp/ldap/maps/crm 的本地声明已改为 free，
-#   但未验证/发布远端免费包；当前无固定 ref，安装仍读取远端默认分支。
-#   发布时同步这 7 个源码包并核对包内 edition/version，再固定新的 ref；旧 pro 包会被拒绝。
+# 发布状态（2026-10-31 核对）：17 条目录全部已同步到 zxh451200/nexadmin-plugins 的对应 subdir，
+#   包内 edition/version 与这里一致；ref 留空 = 跟随默认分支，要锁版本时再打 tag 并填 ref。
+#   free 7 个：codegen/cron/crm/imports/ldap/maps/totp；pro 10 个：其余。
 #   totp/ldap 未默认编译，用户需按需安装；不要因免费分层自动叠加安全/身份钩子。
 plugins:
   - id: assistant
