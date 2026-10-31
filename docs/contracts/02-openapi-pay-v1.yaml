@@ -1,0 +1,1663 @@
+openapi: 3.0.3
+info:
+  title: NexAdmin 支付中台（插件 pay）接口契约
+  version: 1.0.0
+  description: |
+    资金事实中台的对外接口面。插件形态下所有路径挂在 `/api/v1/plugins/pay` 前缀下；
+    本文件的 path 段就是浏览器/宿主看到的完整路径（不带前缀的 `/pay/*` 写法已废弃）。
+
+    三条不可协商的资金纪律（渠道实现必须满足，见 `plugins/pay/provider.go`）：
+    1. 金额由服务端订单决定，接口绝不接受客户端传来的金额用于入账；
+    2. 回调必须验签并按该渠道的时间戳语义做防重放；
+    3. 同一资金单的重复回调/重复查询必须幂等。
+
+    通用应答信封：`{ code, message, data, reason? }`，`code=0` 为成功；
+    失败时 `code` 等于 HTTP 状态码，`message` 是 i18n 后的文案，机器判断请用
+    `ApiError.errorCode`（即 `PAY_*`，与 HTTP 状态码一起返回）。
+    分页应答的 `data` 是 `{ list, total, page, pageSize }`。
+    ID 字段是雪花 ID（int64），超过 JS 安全整数，序列化按字符串处理。
+
+servers:
+  - url: /api/v1/plugins/pay
+    description: 管理端与公开回调（本插件的全部路由都在这个前缀下）
+
+tags:
+  - name: orders
+    description: 支付单与收银参数
+  - name: refunds
+    description: 退款（含异步回执与渠道补查）
+  - name: authorizations
+    description: 资金预授权（冻结/请款/撤销）
+  - name: channels
+    description: 渠道实例、渠道类型与能力矩阵
+  - name: callbacks
+    description: 回调审计
+  - name: reconcile
+    description: 对账（本地录入 / 渠道账单）
+  - name: settlement
+    description: 抽佣、结算与打款
+  - name: outbox
+    description: 资金事件出站箱（投递台账与死信处置）
+  - name: public
+    description: 渠道网关回调与 mock 收银台（无需登录）
+
+security:
+  - bearerAuth: []
+
+paths:
+  /orders:
+    post:
+      tags: [orders]
+      summary: 创建（或幂等取回）一笔支付单
+      operationId: createPayOrder
+      x-permission: pay:edit
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [bizType, bizNo, amountMinor, channelCode]
+              properties:
+                bizType: { type: string, maxLength: 32 }
+                bizNo: { type: string, maxLength: 64 }
+                subjectType: { type: string }
+                subjectId: { type: string }
+                subject: { type: string, maxLength: 200 }
+                amountMinor: { type: integer, format: int64, minimum: 1, description: 最小货币单位（分），禁止小数 }
+                currency: { type: string, maxLength: 8, default: CNY, description: 收款币种；渠道能力矩阵不支持时直接报 PAY_CURRENCY_UNSUPPORTED }
+                amountOrigMinor: { type: integer, format: int64, description: 外币原单金额（配合 fxRateMicro） }
+                origCurrency: { type: string, maxLength: 8 }
+                fxRateMicro: { type: integer, format: int64, description: 汇率 ×1e6 定点；外币收款必填 }
+                channelCode: { type: string, maxLength: 32 }
+                method: { type: string, description: native/qr/page/wap/h5/jsapi/app/micropay；渠道不支持时报 PAY_CAPABILITY_UNSUPPORTED }
+                scene: { type: string }
+                payerId: { type: string }
+                payerOpenId: { type: string, description: 微信 JSAPI 必填 }
+                operatorId: { type: string }
+                returnUrl: { type: string }
+                expireSec: { type: integer, minimum: 60, maximum: 7200, default: 900 }
+                metadata:
+                  type: object
+                  additionalProperties: { type: string }
+      responses:
+        '200':
+          description: 建单成功，或命中同 (bizType,bizNo) 的既有单（幂等取回）
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        allOf:
+                          - $ref: '#/components/schemas/OrderView'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/IdempotencyConflict' }
+    get:
+      tags: [orders]
+      summary: 支付单分页列表
+      operationId: listPayOrders
+      x-permission: pay:list
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - { name: status, in: query, schema: { type: string, enum: [pending, succeeded, failed, closed, refunding, partially_refunded, refunded] } }
+        - { name: keyword, in: query, schema: { type: string }, description: 支付单号 / 业务单号 / 主题 模糊匹配 }
+        - { name: channelCode, in: query, schema: { type: string } }
+        - { name: bizType, in: query, schema: { type: string } }
+        - { name: subjectId, in: query, schema: { type: string } }
+      responses:
+        '200':
+          description: 分页列表
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        allOf:
+                          - $ref: '#/components/schemas/PageOfOrderView'
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /orders/by-biz:
+    get:
+      tags: [orders]
+      summary: 按业务幂等键查支付单（收款侧主查询入口）
+      description: pending 状态会顺带向渠道补查一次，回调丢失时在这里收敛。
+      operationId: getPayOrderByBiz
+      x-permission: pay:list
+      parameters:
+        - { name: bizType, in: query, required: true, schema: { type: string } }
+        - { name: bizNo, in: query, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: 资金单
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/OrderView' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /orders/stats:
+    get:
+      tags: [orders]
+      summary: 资金台账统计（趋势 + 多维排行）
+      operationId: getPayOrderStats
+      x-permission: pay:list
+      parameters:
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+        - { name: granularity, in: query, schema: { type: string, enum: [day, hour], default: day } }
+        - { name: channelCode, in: query, schema: { type: string } }
+        - { name: bizType, in: query, schema: { type: string } }
+        - { name: subjectId, in: query, schema: { type: string } }
+      responses:
+        '200':
+          description: 统计结果（金额一律最小货币单位整数）
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/StatsView' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /orders/{paymentNo}:
+    get:
+      tags: [orders]
+      summary: 按支付单号取单（pending 时补查渠道）
+      operationId: getPayOrder
+      x-permission: pay:list
+      parameters:
+        - $ref: '#/components/parameters/PaymentNo'
+      responses:
+        '200':
+          description: 资金单
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/OrderView' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /orders/{paymentNo}/close:
+    post:
+      tags: [orders]
+      summary: 关闭一笔 pending 支付单
+      operationId: closePayOrder
+      x-permission: pay:edit
+      parameters:
+        - $ref: '#/components/parameters/PaymentNo'
+      responses:
+        '200':
+          description: 已关闭
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/OrderView' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /orders/{paymentNo}/sync:
+    post:
+      tags: [orders]
+      summary: 主动向渠道补查支付结果
+      description: 只在 pending 上生效；渠道侧已支付但回调丢失时在此收敛并补发事件。天然幂等，不要求 Idempotency-Key。
+      operationId: syncPayOrder
+      x-permission: pay:edit
+      parameters:
+        - $ref: '#/components/parameters/PaymentNo'
+      responses:
+        '200':
+          description: 补查后的资金单
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/OrderView' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '502': { $ref: '#/components/responses/ChannelError' }
+
+  /refunds:
+    post:
+      tags: [refunds]
+      summary: 发起退款（支持部分退款）
+      description: |
+        Σrefund ≤ amount 在行锁事务内校验。同步渠道立即返回结论；异步渠道受理退款单落
+        pending、支付单进 refunding，等渠道回执或 `/refunds/{refundNo}/sync` 补查收敛。
+        渠道拒绝时退款单落 failed 并返回 409（原因在 FailReason，不进响应体）。
+      operationId: createRefund
+      x-permission: pay:refund
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [paymentNo, bizType, bizNo, amountMinor]
+              properties:
+                paymentNo: { type: string }
+                bizType: { type: string, description: 退款侧幂等键 }
+                bizNo: { type: string, description: 退款侧幂等键 }
+                amountMinor: { type: integer, format: int64, minimum: 1 }
+                reason: { type: string, maxLength: 200 }
+                operatorId: { type: string }
+      responses:
+        '200':
+          description: 退款单
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/RefundView' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/IdempotencyConflict' }
+    get:
+      tags: [refunds]
+      summary: 退款单分页列表
+      operationId: listRefunds
+      x-permission: pay:list
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - { name: status, in: query, schema: { type: string, enum: [pending, succeeded, failed] } }
+        - { name: keyword, in: query, schema: { type: string } }
+      responses:
+        '200':
+          description: 分页列表
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/PageOfRefundView' }
+
+  /refunds/{refundNo}:
+    get:
+      tags: [refunds]
+      summary: 按退款单号取退款单
+      operationId: getRefund
+      x-permission: pay:list
+      parameters:
+        - { name: refundNo, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: 退款单
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/RefundView' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /authorizations:
+    post:
+      tags: [authorizations]
+      summary: 冻结一笔资金预授权
+      description: |
+        渠道必须在能力矩阵里声明 `auth=true` 才会受理，否则报 PAY_CAPABILITY_UNSUPPORTED——
+        中台不再伪造渠道授权号（历史版本会写一个 mockauth_* 冒充渠道受理）。
+        渠道冻结失败时不落「已冻结」单。
+      operationId: createAuthorization
+      x-permission: pay:auth
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [bizType, bizNo, amountMinor, channelCode]
+              properties:
+                bizType: { type: string }
+                bizNo: { type: string }
+                subjectId: { type: string }
+                channelCode: { type: string }
+                method: { type: string }
+                amountMinor: { type: integer, format: int64, minimum: 1 }
+                currency: { type: string, default: CNY }
+                fxRateMicro: { type: integer, format: int64 }
+                payerId: { type: string, description: 渠道侧买家标识；真实渠道冻结通常需要 }
+                cardLast4: { type: string, maxLength: 8, description: 只允许末四位，禁存卡号 }
+                validDays: { type: integer, minimum: 1, maximum: 30, default: 7 }
+                remark: { type: string, maxLength: 500 }
+      responses:
+        '200':
+          description: 预授权单
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/AuthView' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '422': { $ref: '#/components/responses/IdempotencyConflict' }
+    get:
+      tags: [authorizations]
+      summary: 预授权分页列表
+      operationId: listAuthorizations
+      x-permission: pay:list
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - { name: status, in: query, schema: { type: string, enum: [authorized, partial_captured, captured, voided, expired] } }
+        - { name: keyword, in: query, schema: { type: string } }
+      responses:
+        '200':
+          description: 分页列表
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/PageOfAuthView' }
+
+  /authorizations/{authNo}:
+    get:
+      tags: [authorizations]
+      summary: 按授权单号取预授权
+      operationId: getAuthorization
+      x-permission: pay:list
+      parameters:
+        - { name: authNo, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: 预授权单
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/AuthView' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /authorizations/{authNo}/capture:
+    post:
+      tags: [authorizations]
+      summary: 请款（支持部分请款）
+      description: 请款会生成一张收款单并走与直收相同的事件管线（pay.succeeded + pay.auth.captured）。
+      operationId: captureAuthorization
+      x-permission: pay:auth
+      parameters:
+        - { name: authNo, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amountMinor, bizType, bizNo]
+              properties:
+                amountMinor: { type: integer, format: int64, minimum: 1 }
+                bizType: { type: string }
+                bizNo: { type: string }
+                operatorId: { type: string }
+      responses:
+        '200':
+          description: 请款后的预授权单
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/AuthView' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /authorizations/{authNo}/void:
+    post:
+      tags: [authorizations]
+      summary: 撤销预授权剩余额度
+      operationId: voidAuthorization
+      x-permission: pay:auth
+      parameters:
+        - { name: authNo, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: 已撤销
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/AuthView' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /channels:
+    get:
+      tags: [channels]
+      summary: 渠道实例列表（凭据不回显，只回 hasConfig）
+      operationId: listChannels
+      x-permission: pay:list
+      parameters:
+        - { name: subjectId, in: query, schema: { type: string } }
+        - { name: enabled, in: query, schema: { type: boolean } }
+      responses:
+        '200':
+          description: 渠道实例
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/ChannelView' }
+    post:
+      tags: [channels]
+      summary: 按 code 新建或更新渠道实例
+      description: config 按渠道类型的 ConfigSchema 字段填写；加密后入库，任何读接口只回显 hasConfig。
+      operationId: upsertChannel
+      x-permission: pay:channel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChannelForm' }
+      responses:
+        '200':
+          description: 保存后的渠道实例
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/ChannelView' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /channels/{id}:
+    delete:
+      tags: [channels]
+      summary: 删除渠道实例
+      operationId: deleteChannel
+      x-permission: pay:channel
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string }, description: 渠道实例 ID（雪花 ID 字符串） }
+      responses:
+        '200':
+          description: 已删除
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Envelope' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /providers:
+    get:
+      tags: [channels]
+      summary: 已注册渠道类型与各自的凭据字段表单
+      operationId: listProviders
+      x-permission: pay:list
+      responses:
+        '200':
+          description: 渠道类型清单
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/ProviderInfo' }
+
+  /capabilities:
+    get:
+      tags: [channels]
+      summary: 渠道能力矩阵（币种 / 下单方式 / 可选能力）
+      description: |
+        前端据此禁用不支持的币种、支付方式与「退款查询 / 预授权 / 渠道账单 / 代付」按钮；
+        服务端仍独立判一次——能力缺口一律报 PAY_CAPABILITY_UNSUPPORTED。
+        未显式声明能力的渠道按最小集返回（只 CNY、四个可选能力全 false）。
+      operationId: listChannelCapabilities
+      x-permission: pay:list
+      responses:
+        '200':
+          description: 每个渠道类型一行
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/ProviderCapabilityView' }
+
+  /callbacks:
+    get:
+      tags: [callbacks]
+      summary: 回调审计分页列表（验签成败都留痕）
+      operationId: listCallbacks
+      x-permission: pay:list
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - { name: channelCode, in: query, schema: { type: string } }
+        - { name: paymentNo, in: query, schema: { type: string } }
+        - { name: result, in: query, schema: { type: string, enum: [accepted, duplicate, sign_invalid, order_not_found, amount_mismatch, stale_notify] }, description: 以 ignored_state_ 开头的取值表示「按状态机幂等忽略」 }
+      responses:
+        '200':
+          description: 分页列表
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/PageOfCallbackView' }
+
+  /reconcile/tasks:
+    get:
+      tags: [reconcile]
+      summary: 对账任务列表
+      operationId: listReconcileTasks
+      x-permission: pay:settle
+      parameters:
+        - { name: billDate, in: query, schema: { type: string, format: date } }
+        - { name: channelCode, in: query, schema: { type: string } }
+        - { name: status, in: query, schema: { type: string, enum: [open, closed] } }
+      responses:
+        '200':
+          description: 任务列表
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/ReconcileTask' }
+    post:
+      tags: [reconcile]
+      summary: 生成对账任务并产出差异
+      description: |
+        `source=manual`（缺省，向后兼容）：渠道金额由 channelAmounts 入参提供。
+        `source=channel`：向渠道下载该账期账单（渠道须在能力矩阵声明 `bill=true`），
+        任务落 `billDigest`/`billRows`；下载或解析失败一律报错并留 `failReason`，
+        绝不回退成人工来源、也绝不把「解析出 0 行」当成对平。
+      operationId: runReconcileTask
+      x-permission: pay:settle
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [channelCode, billDate]
+              properties:
+                channelCode: { type: string }
+                billDate: { type: string, format: date }
+                subjectId: { type: string }
+                source: { type: string, enum: [manual, channel], default: manual }
+                channelAmounts:
+                  type: array
+                  description: 仅 source=manual 使用
+                  items:
+                    type: object
+                    properties:
+                      paymentNo: { type: string }
+                      amountMinor: { type: integer, format: int64 }
+      responses:
+        '200':
+          description: 对账任务（含差异计数）
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/ReconcileTask' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '502': { $ref: '#/components/responses/ChannelError' }
+
+  /reconcile/tasks/{id}/diffs:
+    get:
+      tags: [reconcile]
+      summary: 对账差异明细
+      operationId: listReconcileDiffs
+      x-permission: pay:settle
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: 差异行
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/ReconcileDiff' }
+
+  /reconcile/diffs/{id}/resolve:
+    post:
+      tags: [reconcile]
+      summary: 处置一条对账差异
+      operationId: resolveReconcileDiff
+      x-permission: pay:settle
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action: { type: string, enum: [resolved, ignored] }
+                note: { type: string, maxLength: 500 }
+      responses:
+        '200':
+          description: 处置后的差异行
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/ReconcileDiff' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /commission-rules:
+    get:
+      tags: [settlement]
+      summary: 抽佣规则列表
+      operationId: listCommissionRules
+      x-permission: pay:settle
+      responses:
+        '200':
+          description: 规则列表
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/CommissionRule' }
+    post:
+      tags: [settlement]
+      summary: 新建或更新抽佣规则
+      description: 命中优先级为「主体精确 > 租户默认（subjectId 空）」。费率用基点（bps），禁止小数。
+      operationId: upsertCommissionRule
+      x-permission: pay:settle
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CommissionRule' }
+      responses:
+        '200':
+          description: 保存后的规则
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/CommissionRule' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /settlements:
+    get:
+      tags: [settlement]
+      summary: 结算单列表
+      operationId: listSettlements
+      x-permission: pay:settle
+      parameters:
+        - { name: subjectId, in: query, schema: { type: string } }
+        - { name: status, in: query, schema: { type: string, enum: [draft, confirmed, paid] } }
+      responses:
+        '200':
+          description: 结算单
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/Settlement' }
+
+  /settlements/generate:
+    post:
+      tags: [settlement]
+      summary: 生成账期结算单
+      operationId: generateSettlements
+      x-permission: pay:settle
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [periodStart, periodEnd]
+              properties:
+                subjectId: { type: string }
+                periodStart: { type: string, format: date }
+                periodEnd: { type: string, format: date }
+      responses:
+        '200':
+          description: 生成的结算单（金额生成后不随订单变化，后发退款进下期）
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/Settlement' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /settlements/{id}/confirm:
+    post:
+      tags: [settlement]
+      summary: 确认结算单（打款前置）
+      operationId: confirmSettlement
+      x-permission: pay:settle
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: 已确认
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/Settlement' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /payouts:
+    get:
+      tags: [settlement]
+      summary: 打款批次列表
+      operationId: listPayouts
+      x-permission: pay:settle
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [draft, processing, paid, failed] } }
+      responses:
+        '200':
+          description: 批次
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/PayoutBatch' }
+    post:
+      tags: [settlement]
+      summary: 创建打款批次
+      operationId: createPayoutBatch
+      x-permission: pay:settle
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [settlementIds]
+              properties:
+                settlementIds:
+                  type: array
+                  minItems: 1
+                  items: { type: string }
+                  description: 雪花 ID 以字符串回传，避免 JS 精度丢失
+                method: { type: string }
+                note: { type: string, maxLength: 500 }
+      responses:
+        '200':
+          description: 批次（一张结算单只能进一个批次）
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/PayoutBatch' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /payouts/{id}/mark-paid:
+    post:
+      tags: [settlement]
+      summary: 人工回执路径：录入回执号把批次置为已打款
+      operationId: markPayoutPaid
+      x-permission: pay:settle
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [receiptNo]
+              properties:
+                receiptNo: { type: string, maxLength: 64 }
+      responses:
+        '200':
+          description: 已打款
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/PayoutBatch' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /outbox:
+    get:
+      tags: [outbox]
+      summary: 资金事件出站箱分页列表（载荷只在详情回显）
+      operationId: listOutbox
+      x-permission: pay:list
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - { name: status, in: query, schema: { type: string, enum: [pending, sent, dead, discarded] } }
+        - { name: keyword, in: query, schema: { type: string } }
+      responses:
+        '200':
+          description: 分页列表
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/PageOfOutboxView' }
+
+  /outbox/counts:
+    get:
+      tags: [outbox]
+      summary: 各状态出站箱行数（dead 用于告警徽标）
+      operationId: getOutboxCounts
+      x-permission: pay:list
+      responses:
+        '200':
+          description: 计数
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/OutboxCounts' }
+
+  /outbox/{eventId}:
+    get:
+      tags: [outbox]
+      summary: 出站箱单条详情（含事件载荷）
+      operationId: getOutbox
+      x-permission: pay:list
+      parameters:
+        - { name: eventId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: 单条记录
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/OutboxView' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /outbox/{eventId}/retry:
+    post:
+      tags: [outbox]
+      summary: 人工重投一条死信
+      description: 只接受 dead 状态；已投递或已丢弃的行返回 409，避免把重放资金事件当成随手可用的按钮。
+      operationId: retryOutbox
+      x-permission: pay:outbox
+      parameters:
+        - { name: eventId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: 重新入队后的记录
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/OutboxView' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /outbox/{eventId}/discard:
+    post:
+      tags: [outbox]
+      summary: 人工确认丢弃一条死信（必须留原因）
+      operationId: discardOutbox
+      x-permission: pay:outbox
+      parameters:
+        - { name: eventId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [note]
+              properties:
+                note: { type: string, maxLength: 500 }
+      responses:
+        '200':
+          description: 已丢弃
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/OutboxView' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /notify/{channelCode}:
+    post:
+      tags: [public]
+      summary: 渠道网关异步回调
+      description: |
+        匿名接口：定位靠全局唯一的渠道 code，安全性全靠验签。成败都落回调审计；
+        重复回调不重复发事件、不报错。成功时按渠道要求应答
+        （支付宝/易支付回纯文本 `success`，微信回 `{"code":"SUCCESS"}`）——
+        答错格式等于告诉渠道「没收到」。失败回非 2xx，让渠道按自己的策略重试。
+      operationId: handleChannelNotify
+      security: []
+      parameters:
+        - { name: channelCode, in: path, required: true, schema: { type: string, pattern: '^[a-z0-9][a-z0-9-]{1,31}$' } }
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              additionalProperties: { type: string }
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200':
+          description: 渠道要求的成功应答体
+          content:
+            text/plain:
+              schema: { type: string, example: success }
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code: { type: string, example: SUCCESS }
+                  message: { type: string }
+        '400':
+          description: 验签失败或时间窗超限（渠道应继续重试）
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+
+  /mock/cashier:
+    get:
+      tags: [public]
+      summary: mock 渠道收银台（联调用，真实渠道不走这里）
+      operationId: getMockCashier
+      security: []
+      responses:
+        '200':
+          description: 收银台页面
+          content:
+            text/html:
+              schema: { type: string }
+
+  /mock/cashier/confirm:
+    post:
+      tags: [public]
+      summary: mock 收银台确认支付（等价于一条已验签的支付成功通知）
+      operationId: confirmMockCashier
+      security: []
+      responses:
+        '200':
+          description: 已受理
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Envelope' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: 管理端接口需要登录态；带 `x-permission` 的操作还要对应权限点（角色未授予时 403）。
+
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: |
+        请求级幂等键。键相同且请求体相同 → 重放首次响应并带 `X-Idempotent-Replayed: true`；
+        键相同但请求体不同 → 422 PAY_IDEMPOTENCY_CONFLICT。业务键 (bizType,bizNo) 的幂等
+        由唯一索引兜底，两者互补。
+      schema: { type: string, maxLength: 64 }
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+    PageSize:
+      name: pageSize
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 200, default: 10 }
+    PaymentNo:
+      name: paymentNo
+      in: path
+      required: true
+      schema: { type: string }
+
+  responses:
+    BadRequest:
+      description: 参数或凭据不合法（含 PAY_CAPABILITY_UNSUPPORTED、PAY_CURRENCY_UNSUPPORTED）
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+    Unauthorized:
+      description: 未登录
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+    Forbidden:
+      description: 缺少权限点
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+    NotFound:
+      description: 资金单不存在（PAY_NOT_FOUND）
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+    Conflict:
+      description: 当前状态不允许该操作（PAY_STATE_CONFLICT / PAY_REFUND_EXCEEDS / PAY_CHANNEL_ERROR）
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+    IdempotencyConflict:
+      description: 同一 Idempotency-Key 用于不同请求体（PAY_IDEMPOTENCY_CONFLICT）
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+    ChannelError:
+      description: 渠道侧拒绝或网关不可达（PAY_CHANNEL_ERROR / PAY_CHANNEL_UNAVAILABLE）
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+
+  schemas:
+    Envelope:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: integer, description: 0 = 成功；失败时等于 HTTP 状态码 }
+        message: { type: string, description: 已按请求语言 i18n 的文案 }
+        data: { description: 业务数据，失败时省略 }
+        reason: { type: string, description: 机器可识别原因，可省略 }
+
+    ApiError:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: integer }
+        message: { type: string }
+        errorCode:
+          type: string
+          description: |
+            契约错误码（`PAY_*`）。文案在 core/i18n/locales/<lang>.yaml 的 pay 段；
+            新增取值必须同时进代码、字典与本枚举。
+          enum:
+            - PAY_INVALID_AMOUNT
+            - PAY_CURRENCY_UNSUPPORTED
+            - PAY_FX_RATE_MISSING
+            - PAY_STATE_CONFLICT
+            - PAY_EXPIRED
+            - PAY_REFUND_EXCEEDS
+            - PAY_SIGN_INVALID
+            - PAY_CHANNEL_UNAVAILABLE
+            - PAY_CHANNEL_ERROR
+            - PAY_NOT_FOUND
+            - PAY_TENANT_MISMATCH
+            - PAY_IDEMPOTENCY_CONFLICT
+            - PAY_CAPABILITY_UNSUPPORTED
+            - PAY_NOTIFY_STALE
+            - PAY_INTERNAL
+
+    Amount:
+      type: integer
+      format: int64
+      description: 最小货币单位（人民币为分）。禁止小数与 float 落库；汇率按 1e-6 定点，费率按基点。
+
+    OrderStatus:
+      type: string
+      enum: [pending, succeeded, failed, closed, refunding, partially_refunded, refunded]
+      description: |
+        状态机：pending → succeeded | failed | closed；succeeded → refunding →
+        partially_refunded | refunded。旧值 `paid` 不再写入。
+
+    RefundStatus:
+      type: string
+      enum: [pending, succeeded, failed]
+
+    AuthStatus:
+      type: string
+      enum: [authorized, partial_captured, captured, voided, expired]
+
+    Capabilities:
+      type: object
+      description: 渠道真实能力。未显式声明的渠道按最小集返回。
+      properties:
+        currencies:
+          type: array
+          items: { type: string }
+          description: 可直接收款的币种；只 CNY 的渠道就是国内支付宝/微信/易支付
+        methods:
+          type: array
+          items: { type: string }
+          description: 支持的下单方式取值（native/qr/page/wap/h5/jsapi/app/micropay）
+        refundQuery: { type: boolean, description: 能否主动向渠道查退款结果 }
+        auth: { type: boolean, description: 是否支持资金预授权（需商户在渠道侧签约该产品） }
+        bill: { type: boolean, description: 能否下载渠道账单（对账 source=channel） }
+        payout: { type: boolean, description: 能否向收款方代付/转账 }
+
+    OrderView:
+      type: object
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        subjectType: { type: string }
+        subjectId: { type: string }
+        subject: { type: string }
+        paymentNo: { type: string }
+        bizType: { type: string }
+        bizNo: { type: string }
+        channelCode: { type: string }
+        method: { type: string }
+        scene: { type: string }
+        status: { $ref: '#/components/schemas/OrderStatus' }
+        amountMinor: { $ref: '#/components/schemas/Amount' }
+        refundedMinor: { $ref: '#/components/schemas/Amount' }
+        feeMinor: { $ref: '#/components/schemas/Amount' }
+        currency: { type: string }
+        fxRateMicro: { type: integer, format: int64 }
+        amountOrigMinor: { $ref: '#/components/schemas/Amount' }
+        origCurrency: { type: string }
+        channelTxnId: { type: string }
+        prepayId: { type: string }
+        codeUrl: { type: string }
+        gatewayStatus: { type: string, description: 渠道原始状态串，排障用 }
+        failReason: { type: string }
+        payerId: { type: string }
+        operatorId: { type: string }
+        metadata:
+          type: object
+          additionalProperties: { type: string }
+        payUrl: { type: string, description: 拉起支付：跳转类 }
+        payParams:
+          type: object
+          additionalProperties: { type: string }
+          description: 拉起支付：JSAPI/APP 类需要的签名参数包
+        paidAt: { type: string, format: date-time }
+        expireAt: { type: string, format: date-time }
+        closedAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+
+    RefundView:
+      type: object
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        refundNo: { type: string }
+        paymentNo: { type: string }
+        subjectId: { type: string }
+        bizType: { type: string }
+        bizNo: { type: string }
+        status: { $ref: '#/components/schemas/RefundStatus' }
+        amountMinor: { $ref: '#/components/schemas/Amount' }
+        feeRefundMinor: { $ref: '#/components/schemas/Amount' }
+        currency: { type: string }
+        fxRateMicro: { type: integer, format: int64 }
+        channelRefundId: { type: string }
+        reason: { type: string }
+        failReason: { type: string }
+        operatorId: { type: string }
+        succeededAt: { type: string, format: date-time }
+        syncAttempts:
+          type: integer
+          description: 已向渠道补查的次数（回调丢失时由补查路径或 sweeper 递增）
+        lastSyncAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+
+    AuthView:
+      type: object
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        authNo: { type: string }
+        subjectId: { type: string }
+        bizType: { type: string }
+        bizNo: { type: string }
+        channelCode: { type: string }
+        method: { type: string }
+        paymentNo: { type: string, description: 最近一次请款生成的收款单号 }
+        status: { $ref: '#/components/schemas/AuthStatus' }
+        amountMinor: { $ref: '#/components/schemas/Amount' }
+        capturedMinor: { $ref: '#/components/schemas/Amount' }
+        currency: { type: string }
+        fxRateMicro: { type: integer, format: int64 }
+        channelAuthNo:
+          type: string
+          description: 渠道真实授权号；中台不再伪造
+        payerId: { type: string }
+        cardLast4: { type: string, description: 只存末四位 }
+        remark: { type: string }
+        failReason: { type: string }
+        expiresAt: { type: string, format: date-time }
+        voidedAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+
+    CallbackView:
+      type: object
+      properties:
+        id: { type: string }
+        channelCode: { type: string }
+        paymentNo: { type: string }
+        notifyId:
+          type: string
+          description: 渠道给这条通知的流水号；仅取证与排障检索，不做唯一约束（渠道会用同一个号重试几十小时）
+        ok: { type: boolean }
+        result:
+          type: string
+          enum: [accepted, duplicate, sign_invalid, order_not_found, amount_mismatch, stale_notify]
+          description: 处置结论；以 ignored_state_ 开头的取值表示按状态机幂等忽略
+        payload: { type: string, description: 原始报文（截断，不含凭据） }
+        createdAt: { type: string, format: date-time }
+
+    OutboxView:
+      type: object
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        eventId: { type: string }
+        eventName: { type: string }
+        status: { type: string, enum: [pending, sent, dead, discarded] }
+        attempts: { type: integer }
+        lastError: { type: string, description: 最后一次投递失败的原因（死信必看） }
+        nextRetryAt: { type: string, format: date-time }
+        sentAt: { type: string, format: date-time }
+        deadAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+        payload:
+          type: string
+          description: 事件载荷 JSON，只在详情接口回显
+          x-addedIn: ['1.0.0']
+
+    OutboxCounts:
+      type: object
+      properties:
+        pending: { type: integer, format: int64 }
+        dead: { type: integer, format: int64, description: 死信条数 >0 应当告警 }
+        sent: { type: integer, format: int64 }
+        discarded: { type: integer, format: int64 }
+
+    ChannelForm:
+      type: object
+      required: [code, name, provider]
+      properties:
+        code: { type: string, pattern: '^[a-z0-9][a-z0-9-]{1,31}$', description: 全局唯一（公开回调只带 code） }
+        name: { type: string }
+        provider: { type: string, description: 渠道类型，取值见 /providers }
+        method: { type: string }
+        scene: { type: string }
+        subjectId: { type: string, description: 空 = 租户级共享渠道；非空 = 主体专属 }
+        feeRateBp: { type: integer, format: int64, description: 费率基点 }
+        notifyUrl: { type: string, description: 渠道异步回调地址，真实网关必须填完整 URL }
+        enabled: { type: boolean, default: true }
+        sort: { type: integer }
+        config:
+          type: object
+          additionalProperties: { type: string }
+          description: 按该渠道类型 ConfigSchema 的字段填写；入库前加密，读接口不回显
+
+    ChannelView:
+      type: object
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        code: { type: string }
+        name: { type: string }
+        provider: { type: string }
+        method: { type: string }
+        scene: { type: string }
+        subjectId: { type: string }
+        feeRateBp: { type: integer, format: int64 }
+        notifyUrl: { type: string }
+        enabled: { type: boolean }
+        sort: { type: integer }
+        hasConfig: { type: boolean, description: 是否已配置凭据（凭据本身永不回显） }
+        updatedAt: { type: string, format: date-time }
+
+    ConfigField:
+      type: object
+      properties:
+        key: { type: string }
+        type: { type: string, enum: [text, password, url, select] }
+        required: { type: boolean }
+        secret: { type: boolean, description: true 时前端按密码框渲染且永不回显 }
+        options:
+          type: array
+          items: { type: string }
+        placeholder: { type: string }
+
+    ProviderInfo:
+      type: object
+      properties:
+        name: { type: string }
+        fields:
+          type: array
+          items: { $ref: '#/components/schemas/ConfigField' }
+
+    ProviderCapabilityView:
+      type: object
+      properties:
+        provider: { type: string }
+        capabilities: { $ref: '#/components/schemas/Capabilities' }
+
+    ReconcileTask:
+      type: object
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        subjectId: { type: string }
+        channelCode: { type: string }
+        billDate: { type: string, format: date }
+        status: { type: string, enum: [open, closed] }
+        totalLocalMinor: { $ref: '#/components/schemas/Amount' }
+        totalChannelMinor: { $ref: '#/components/schemas/Amount' }
+        diffCount: { type: integer }
+        source:
+          type: string
+          enum: [manual, channel]
+          description: manual = 渠道金额由入参提供；channel = 已下载渠道账单
+        billDigest:
+          type: string
+          description: 账单原文 SHA-256（账单本体可达数 MB，不落库）
+        billRows:
+          type: integer
+          description: 解析出的账单行数；0 行与「下载失败」是两种不同结论
+        failReason: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    ReconcileDiff:
+      type: object
+      properties:
+        id: { type: string }
+        taskId: { type: string }
+        kind:
+          type: string
+          enum: [long, short, missing]
+          description: long 渠道多于本地（长款）；short 渠道少于本地（短款）；missing 单边缺失
+        paymentNo: { type: string }
+        refundNo: { type: string }
+        localAmountMinor: { $ref: '#/components/schemas/Amount' }
+        channelAmountMinor: { $ref: '#/components/schemas/Amount' }
+        diffAmountMinor:
+          allOf: [{ $ref: '#/components/schemas/Amount' }]
+          description: 固定口径 local − channel（可为负）
+        status: { type: string, enum: [open, resolved, ignored] }
+        resolveNote: { type: string }
+        resolvedBy: { type: string }
+        resolvedAt: { type: string, format: date-time }
+
+    CommissionRule:
+      type: object
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        subjectId: { type: string, description: 空 = 租户默认规则 }
+        bizType: { type: string }
+        rateBp: { type: integer, format: int64, description: 基点费率（150 = 1.5%） }
+        fixedMinor: { $ref: '#/components/schemas/Amount' }
+        currency: { type: string, default: CNY }
+        status: { type: string, enum: [active, disabled] }
+
+    Settlement:
+      type: object
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        subjectId: { type: string }
+        periodStart: { type: string, format: date }
+        periodEnd: { type: string, format: date }
+        grossMinor: { $ref: '#/components/schemas/Amount' }
+        commissionMinor: { $ref: '#/components/schemas/Amount' }
+        refundMinor: { $ref: '#/components/schemas/Amount' }
+        feeMinor: { $ref: '#/components/schemas/Amount' }
+        netMinor: { $ref: '#/components/schemas/Amount', description: 生成后不随订单变化；后发退款进下期 }
+        orderCount: { type: integer, format: int64 }
+        currency: { type: string }
+        status: { type: string, enum: [draft, confirmed, paid] }
+        createdAt: { type: string, format: date-time }
+
+    PayoutBatch:
+      type: object
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        batchNo: { type: string }
+        status: { type: string, enum: [draft, processing, paid, failed] }
+        totalMinor: { $ref: '#/components/schemas/Amount' }
+        currency: { type: string }
+        settlementCount: { type: integer }
+        method: { type: string }
+        note: { type: string }
+        receiptNo: { type: string, description: 人工回执号（人工路径） }
+        channelCode: { type: string, description: 代付渠道（渠道路径） }
+        channelBatchNo: { type: string, description: 渠道批次号 }
+        failReason: { type: string }
+        paidAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+
+    StatsView:
+      type: object
+      description: 资金统计；金额一律最小货币单位整数，币种维度单列。
+      properties:
+        totals:
+          type: object
+          properties:
+            orderCount: { type: integer, format: int64 }
+            grossMinor: { $ref: '#/components/schemas/Amount' }
+            refundedMinor: { $ref: '#/components/schemas/Amount' }
+            feeMinor: { $ref: '#/components/schemas/Amount' }
+            successRate: { type: number, format: double }
+        trend:
+          type: array
+          items:
+            type: object
+            properties:
+              date: { type: string, format: date }
+              count: { type: integer, format: int64 }
+              grossMinor: { $ref: '#/components/schemas/Amount' }
+              refundedMinor: { $ref: '#/components/schemas/Amount' }
+        rank:
+          type: array
+          description: 维度排行（渠道 / 支付方式 / 业务类型 / 币种 / 失败原因 / 状态 / 主体）
+          items:
+            type: object
+            properties:
+              dimension: { type: string }
+              key: { type: string }
+              count: { type: integer, format: int64 }
+              amountMinor: { $ref: '#/components/schemas/Amount' }
+
+    PageOfOrderView:
+      allOf:
+        - $ref: '#/components/schemas/PageMeta'
+        - type: object
+          properties:
+            list:
+              type: array
+              items: { $ref: '#/components/schemas/OrderView' }
+    PageOfRefundView:
+      allOf:
+        - $ref: '#/components/schemas/PageMeta'
+        - type: object
+          properties:
+            list:
+              type: array
+              items: { $ref: '#/components/schemas/RefundView' }
+    PageOfAuthView:
+      allOf:
+        - $ref: '#/components/schemas/PageMeta'
+        - type: object
+          properties:
+            list:
+              type: array
+              items: { $ref: '#/components/schemas/AuthView' }
+    PageOfCallbackView:
+      allOf:
+        - $ref: '#/components/schemas/PageMeta'
+        - type: object
+          properties:
+            list:
+              type: array
+              items: { $ref: '#/components/schemas/CallbackView' }
+    PageOfOutboxView:
+      allOf:
+        - $ref: '#/components/schemas/PageMeta'
+        - type: object
+          properties:
+            list:
+              type: array
+              items: { $ref: '#/components/schemas/OutboxView' }
+    PageMeta:
+      type: object
+      properties:
+        total: { type: integer, format: int64 }
+        page: { type: integer }
+        pageSize: { type: integer, maximum: 200 }
+
+    EventPayload:
+      type: object
+      description: 资金事件载荷（进程内总线 pay.*，也用于 webhook 投递）。禁放凭据。
+      properties:
+        paymentNo: { type: string }
+        refundNo: { type: string }
+        bizType: { type: string }
+        bizNo: { type: string }
+        subjectId: { type: string }
+        channelCode: { type: string }
+        amountMinor: { $ref: '#/components/schemas/Amount' }
+        refundedMinor: { $ref: '#/components/schemas/Amount' }
+        feeMinor: { $ref: '#/components/schemas/Amount' }
+        currency: { type: string }
+        fxRateMicro: { type: integer, format: int64 }
+        channelTxnId: { type: string }
+        status: { type: string }
+        paidAt: { type: string, format: date-time }
+        metadata:
+          type: object
+          additionalProperties: { type: string }
+
+    EventData:
+      type: object
+      description: 事件信封；出站箱 payload 列里存的就是它的 JSON。
+      properties:
+        eventId: { type: string }
+        eventName:
+          type: string
+          enum: [pay.succeeded, pay.failed, pay.closed, pay.refund.succeeded, pay.refund.failed, pay.auth.captured]
+        tenantId: { type: string }
+        occurredAt: { type: string, format: date-time }
+        payload: { $ref: '#/components/schemas/EventPayload' }

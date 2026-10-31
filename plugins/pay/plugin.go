@@ -86,8 +86,16 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.POST("/channels", core.Perm("pay:channel"), h.upsertChannel)
 	g.DELETE("/channels/:id", core.Perm("pay:channel"), h.deleteChannel)
 	g.GET("/providers", core.Perm("pay:list"), h.providers)
+	g.GET("/capabilities", core.Perm("pay:list"), h.capabilities)
 	// 回调审计
 	g.GET("/callbacks", core.Perm("pay:list"), h.listCallbacks)
+	// 资金事件出站箱（投递台账与死信处置）
+	g.GET("/outbox", core.Perm("pay:list"), h.listOutbox)
+	// 静态段注册在 /outbox/:eventId 之前（与 /orders/stats 同一套匹配约定）。
+	g.GET("/outbox/counts", core.Perm("pay:list"), h.outboxCounts)
+	g.GET("/outbox/:eventId", core.Perm("pay:list"), h.getOutbox)
+	g.POST("/outbox/:eventId/retry", core.Perm("pay:outbox"), h.retryOutbox)
+	g.POST("/outbox/:eventId/discard", core.Perm("pay:outbox"), h.discardOutbox)
 	// 对账
 	g.GET("/reconcile/tasks", core.Perm("pay:settle"), h.listReconcileTasks)
 	g.POST("/reconcile/tasks", core.Perm("pay:settle"), h.runReconcileTask)
