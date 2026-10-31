@@ -51,9 +51,12 @@ type stubAuth struct {
 	completeErr error
 	cancelRes   *AuthResult
 	cancelErr   error
+	queryRes    *AuthResult
+	queryErr    error
 	freezeCalls int
 	captCalls   int
 	cancelCalls int
+	queryCalls  int
 }
 
 func (p *stubAuth) Name() string               { return p.name }
@@ -71,7 +74,11 @@ func (p *stubAuth) CancelAuth(_ context.Context, _ AuthCancelRequest, _ map[stri
 	return p.cancelRes, p.cancelErr
 }
 func (p *stubAuth) QueryAuth(_ context.Context, _ string, _ map[string]string) (*AuthResult, error) {
-	return &AuthResult{}, nil
+	p.queryCalls++
+	if p.queryRes == nil && p.queryErr == nil {
+		return &AuthResult{}, nil
+	}
+	return p.queryRes, p.queryErr
 }
 
 // countingLogger 计 Warn 条数，验证 no-op 留痕「查了 N 笔、翻了 M 笔」。
@@ -381,12 +388,17 @@ func TestAuthFreezeAndCapture(t *testing.T) {
 		completeRes: &AuthResult{Status: "success"}}
 	RegisterProvider(sp)
 
-	// CreateAuth：幂等预检（空）→ pickChannel → Freeze → INSERT 授权（standalone 写，隐式事务包裹）。
-	m.ExpectQuery("SELECT \\* FROM `plg_pay_auth` WHERE biz_type").WillReturnRows(emptyAuthRows())
+	// CreateAuth 的真实顺序：pickChannel → 幂等预检（空）→ INSERT authorizing 占位
+	// → Freeze → UPDATE 回填。占位行排在渠道调用之前，sqlmock 的顺序期望就是它的闸：
+	// 谁把顺序改回「先冻结再插入」，这条用例立刻红（并发同键会各冻结一次）。
 	m.ExpectQuery("SELECT \\* FROM `plg_pay_channel` WHERE code").
 		WillReturnRows(channelRow("auth-flow", sp.name, `{"k":"v"}`))
+	m.ExpectQuery("SELECT \\* FROM `plg_pay_auth` WHERE biz_type").WillReturnRows(emptyAuthRows())
 	m.ExpectBegin()
 	m.ExpectExec("INSERT INTO `plg_pay_auth`").WillReturnResult(sqlmock.NewResult(2001, 1))
+	m.ExpectCommit()
+	m.ExpectBegin()
+	m.ExpectExec("UPDATE `plg_pay_auth`").WillReturnResult(sqlmock.NewResult(1, 1))
 	m.ExpectCommit()
 
 	a, err := s.CreateAuth(tenantCtx, CreateAuthInput{
@@ -523,7 +535,7 @@ func TestAuthUnsupportedChannel(t *testing.T) {
 		freezeRes: &AuthResult{ChannelAuthNo: "chan", Status: "success"}}
 	RegisterProvider(sp)
 
-	m.ExpectQuery("SELECT \\* FROM `plg_pay_auth` WHERE biz_type").WillReturnRows(emptyAuthRows())
+	// 能力门禁排在幂等预检之前：不支持预授权的渠道连占位行都不该建。
 	m.ExpectQuery("SELECT \\* FROM `plg_pay_channel` WHERE code").
 		WillReturnRows(channelRow("c-noauth", sp.name, `{"k":"v"}`))
 
@@ -542,29 +554,101 @@ func TestAuthUnsupportedChannel(t *testing.T) {
 	}
 }
 
-// 渠道冻结失败：原样上抛且不落「已冻结」单（无 INSERT 期望，任何 INSERT 都会让 mock 报未预期写）。
-func TestAuthFreezeFailureNoRow(t *testing.T) {
+// 渠道冻结明确失败：错误原样上抛，占位行落 failed + 原因（钱没冻住，业务可换单重试），
+// 绝不留在 authorized 上。
+func TestAuthFreezeFailureMarksRowFailed(t *testing.T) {
 	db, m := mockDB(t)
 	s := NewService(db, nopLog())
 	sp := &stubAuth{name: "stubauth-fail", caps: Capabilities{Auth: true},
 		freezeErr: response.New(http.StatusBadGateway, errChannelError).WithMsg("stubauth-fail: declined")}
 	RegisterProvider(sp)
 
-	m.ExpectQuery("SELECT \\* FROM `plg_pay_auth` WHERE biz_type").WillReturnRows(emptyAuthRows())
 	m.ExpectQuery("SELECT \\* FROM `plg_pay_channel` WHERE code").
 		WillReturnRows(channelRow("c-fail", sp.name, `{"k":"v"}`))
+	m.ExpectQuery("SELECT \\* FROM `plg_pay_auth` WHERE biz_type").WillReturnRows(emptyAuthRows())
+	m.ExpectBegin()
+	m.ExpectExec("INSERT INTO `plg_pay_auth`").WillReturnResult(sqlmock.NewResult(2002, 1))
+	m.ExpectCommit()
+	m.ExpectBegin()
+	m.ExpectExec("UPDATE `plg_pay_auth`").
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	m.ExpectCommit()
 
 	a, err := s.CreateAuth(tenantCtx, CreateAuthInput{
 		BizType: "preauth", BizNo: "PA-F", ChannelCode: "c-fail", AmountMinor: 100, Currency: "CNY", PayerID: "b",
 	})
 	if err == nil || a != nil {
-		t.Fatalf("freeze failure must return error and no row: a=%v err=%v", a, err)
+		t.Fatalf("freeze failure must return error and no auth: a=%v err=%v", a, err)
 	}
 	if sp.freezeCalls != 1 {
 		t.Fatalf("Freeze calls = %d, want 1", sp.freezeCalls)
 	}
 	if err := m.ExpectationsWereMet(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// 预授权残留补查：停在 authorizing 的占位行只能问渠道。渠道确认过 → 回填 authorized；
+// 渠道明确查无此单 → 落 failed（钱没冻住，业务可换单重试）；拿不到结论 → 原样留着。
+func TestReconcileStuckAuths(t *testing.T) {
+	cases := []struct {
+		name     string
+		queryRes *AuthResult
+		queryErr error
+		want     string // adopted / failed / unresolved
+	}{
+		{"渠道确认", &AuthResult{ChannelAuthNo: "chan_real", Status: "AUTHORIZED"}, nil, "adopted"},
+		{"渠道查无", nil, response.NotFound(errNotFound), "failed"},
+		{"渠道仍在处理", &AuthResult{Status: "processing"}, nil, "unresolved"},
+		{"渠道报错", nil, response.New(http.StatusBadGateway, errChannelError), "unresolved"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			db, m := mockDB(t)
+			lg := &countingLogger{}
+			s := NewService(db, lg)
+			sp := &stubAuth{name: "stubauth-recon-" + c.want, caps: Capabilities{Auth: true},
+				queryRes: c.queryRes, queryErr: c.queryErr}
+			RegisterProvider(sp)
+
+			rows := authRow(AuthAuthorizing, 1000, 0, sp.name, "")
+			m.ExpectQuery("SELECT \\* FROM `plg_pay_auth` WHERE status").WillReturnRows(rows)
+			m.ExpectQuery("SELECT \\* FROM `plg_pay_channel` WHERE code").
+				WillReturnRows(channelRow(sp.name, sp.name, `{"k":"v"}`))
+			if c.want != "unresolved" {
+				m.ExpectBegin()
+				m.ExpectExec("UPDATE `plg_pay_auth`").WillReturnResult(sqlmock.NewResult(1, 1))
+				m.ExpectCommit()
+			}
+
+			got, err := s.ReconcileStuckAuths(tenantCtx, time.Now().UTC())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.Checked != 1 {
+				t.Fatalf("checked = %d, want 1（残留必须被清点数）", got.Checked)
+			}
+			switch c.want {
+			case "adopted":
+				if got.Adopted != 1 {
+					t.Fatalf("adopted = %d, want 1", got.Adopted)
+				}
+			case "failed":
+				if got.Failed != 1 {
+					t.Fatalf("failed = %d, want 1", got.Failed)
+				}
+			default:
+				if got.Unresolved != 1 {
+					t.Fatalf("unresolved = %d, want 1", got.Unresolved)
+				}
+			}
+			if sp.queryCalls != 1 {
+				t.Fatalf("QueryAuth calls = %d, want 1", sp.queryCalls)
+			}
+			if err := m.ExpectationsWereMet(); err != nil {
+				t.Fatal(err)
+			}
+		})
 	}
 }
 
@@ -576,6 +660,8 @@ func TestAuthIdempotentExisting(t *testing.T) {
 		freezeRes: &AuthResult{ChannelAuthNo: "chan", Status: "success"}}
 	RegisterProvider(sp)
 
+	m.ExpectQuery("SELECT \\* FROM `plg_pay_channel` WHERE code").
+		WillReturnRows(channelRow("auth-idem", sp.name, `{"k":"v"}`))
 	m.ExpectQuery("SELECT \\* FROM `plg_pay_auth` WHERE biz_type").
 		WillReturnRows(authRow(AuthAuthorized, 1000, 0, "auth-idem", "chan_pre"))
 

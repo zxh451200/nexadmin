@@ -30,12 +30,18 @@ const (
 )
 
 // 预授权状态（AuthStatus）。
+//
+// authorizing 是「冻结权租约」：同 (biz_type,biz_no) 先落一张 authorizing 行，
+// 只有拿到这张行的请求才能去渠道冻结——「查一下没有→调渠道→再插入」会让并发请求
+// 各冻结一次，客户的钱被冻两遍。failed 表示渠道明确拒绝过，可同键重试再抢租约。
 const (
+	AuthAuthorizing     = "authorizing"
 	AuthAuthorized      = "authorized"
 	AuthPartialCaptured = "partial_captured"
 	AuthCaptured        = "captured"
 	AuthVoided          = "voided"
 	AuthExpired         = "expired"
+	AuthFailed          = "failed"
 )
 
 // Settleable 报告支付单是否处于可退款状态。

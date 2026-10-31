@@ -375,12 +375,16 @@ func (h *handler) listReconcileTasks(c *gin.Context) {
 	respond(c, rows, err)
 }
 
-// POST /plugins/pay/reconcile/tasks —— 契约 runReconcileTask（Phase 0 渠道金额入参提供）。
+// POST /plugins/pay/reconcile/tasks —— 契约 runReconcileTask。
+// source 缺省 manual（渠道金额由入参提供，保持向后兼容）；source=channel 时改走
+// BillProvider 下载渠道账单，此时 channelAmounts 一律忽略——渠道账单是资金事实的来源，
+// 不接受调用方在旁边补一份「渠道金额」。
 func (h *handler) runReconcileTask(c *gin.Context) {
 	var f struct {
 		ChannelCode    string `json:"channelCode"`
 		BillDate       string `json:"billDate"`
 		SubjectID      string `json:"subjectId"`
+		Source         string `json:"source"`
 		ChannelAmounts []struct {
 			PaymentNo   string `json:"paymentNo"`
 			AmountMinor int64  `json:"amountMinor"`
@@ -389,11 +393,17 @@ func (h *handler) runReconcileTask(c *gin.Context) {
 	if !response.BindJSON(c, &f) {
 		return
 	}
+	ctx := c.Request.Context()
+	if strings.EqualFold(strings.TrimSpace(f.Source), ReconcileSourceChannel) {
+		task, err := h.svc.RunChannelReconcileTask(ctx, f.ChannelCode, f.BillDate, f.SubjectID)
+		respond(c, task, err)
+		return
+	}
 	entries := make([]ChannelAmountEntry, len(f.ChannelAmounts))
 	for i, e := range f.ChannelAmounts {
 		entries[i] = ChannelAmountEntry{PaymentNo: e.PaymentNo, AmountMinor: e.AmountMinor}
 	}
-	task, err := h.svc.RunReconcileTask(c.Request.Context(), f.ChannelCode, f.BillDate, f.SubjectID, entries)
+	task, err := h.svc.RunReconcileTask(ctx, f.ChannelCode, f.BillDate, f.SubjectID, entries)
 	respond(c, task, err)
 }
 
@@ -508,6 +518,35 @@ func (h *handler) markPayoutPaid(c *gin.Context) {
 	}
 	batch, err := h.svc.MarkPayoutPaid(c.Request.Context(), id, f.ReceiptNo)
 	respond(c, batch, err)
+}
+
+// POST /plugins/pay/payouts/:id/pay —— 契约 payPayoutBatch：走渠道代付。
+// 请求体只给渠道，金额/币种/收款方一律取自批次与结算单（铁律①：不接受客户端金额）。
+// 渠道不支持代付时报 PAY_CAPABILITY_UNSUPPORTED，人工回执路径（mark-paid）保持可用。
+func (h *handler) payPayout(c *gin.Context) {
+	id, ok := idParam(c, "id")
+	if !ok {
+		return
+	}
+	var f struct {
+		ChannelCode string `json:"channelCode"`
+	}
+	if !response.BindJSON(c, &f) {
+		return
+	}
+	batch, err := h.svc.PayPayoutViaChannel(c.Request.Context(), id, f.ChannelCode)
+	respond(c, batch, err)
+}
+
+// GET /plugins/pay/payouts/:id/items —— 批次内逐笔代付结论。
+// 一笔失败不影响其余笔，所以「批次 partial」必须能下钻到是哪几笔失败、为什么失败。
+func (h *handler) listPayoutItems(c *gin.Context) {
+	id, ok := idParam(c, "id")
+	if !ok {
+		return
+	}
+	rows, err := h.svc.ListPayoutItems(c.Request.Context(), id)
+	respond(c, rows, err)
 }
 
 // ---- public ----

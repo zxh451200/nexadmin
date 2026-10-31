@@ -71,11 +71,11 @@ type CreateAuthInput struct {
 
 // CreateAuth 冻结一笔预授权。
 //
-// 真路径：渠道支持 Auth（实现 AuthProvider 且声明 caps.Auth）时先调 Freeze，
-// 用渠道返回的 ChannelAuthNo 落库；渠道报错原样上抛，且「不落已冻结单」——
-// 渠道没确认冻结就不能在本地凭空造一张 authorized 单。渠道不支持 Auth 时返回
-// capabilityUnsupported，绝不伪造渠道号。幂等：同 bizType+bizNo 命中已有单先返回，
-// 不因重试重复冻结。
+// 顺序是「先占位、再冻结、再回填」：先按 (biz_type,biz_no) 唯一索引落一张 authorizing
+// 行抢到冻结权，才去打渠道；渠道报错原样上抛并把该行落 failed，渠道受理但未确认
+// （含没回授权号）时保持 authorizing 交给 ReconcileStuckAuths 补查——
+// 任何情况下都不会凭空造一张 authorized 单，也不会伪造渠道授权号。
+// 幂等：同 bizType+bizNo 命中已有单（含并发抢输）直接返回该行，不重复冻结。
 func (s *Service) CreateAuth(ctx context.Context, in CreateAuthInput) (*Authorization, error) {
 	in.BizType, in.BizNo = strings.TrimSpace(in.BizType), strings.TrimSpace(in.BizNo)
 	in.Currency = strings.ToUpper(strings.TrimSpace(in.Currency))
@@ -104,16 +104,7 @@ func (s *Service) CreateAuth(ctx context.Context, in CreateAuthInput) (*Authoriz
 		in.ValidDays = 30
 	}
 
-	// 幂等预检：同 bizType+bizNo 已有单先返回（不调渠道，不重复冻结）。
-	var existing Authorization
-	err := s.db.WithContext(ctx).Where("biz_type = ? AND biz_no = ?", in.BizType, in.BizNo).Take(&existing).Error
-	if err == nil {
-		return &existing, nil
-	}
-	if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, err
-	}
-
+	// 渠道与能力先判：不支持预授权就不建行、不打渠道。
 	ch, err := s.pickChannel(ctx, in.ChannelCode)
 	if err != nil {
 		return nil, err
@@ -127,52 +118,199 @@ func (s *Service) CreateAuth(ctx context.Context, in CreateAuthInput) (*Authoriz
 		return nil, capabilityUnsupported(p.Name(), "预授权")
 	}
 
-	id, err := idgen.Next()
+	a, claimed, err := s.claimAuth(ctx, in, ch.Code)
 	if err != nil {
 		return nil, err
 	}
+	if !claimed {
+		return a, nil
+	}
+	if err := s.freezeAuth(ctx, a, ch, ap, cfg); err != nil {
+		return nil, err
+	}
+	return a, nil
+}
+
+// claimAuth 抢这张预授权的「冻结权」：先用唯一索引 (biz_type,biz_no) 落一行
+// authorizing，抢到的人才去打渠道。
+//
+// 顺序不能反：先查一下没有 → 调渠道冻结 → 再插入，两个并发请求会双双通过预检，
+// 各自向渠道冻结一次，客户的钱被冻两遍，而本地两条记录看起来都完全正常。
+// 抢不到的人读回胜者原样返回（幂等语义：同业务键同一张单），绝不重复冻结。
+func (s *Service) claimAuth(ctx context.Context, in CreateAuthInput, channelCode string) (*Authorization, bool, error) {
+	var existing Authorization
+	err := s.db.WithContext(ctx).Where("biz_type = ? AND biz_no = ?", in.BizType, in.BizNo).Take(&existing).Error
+	switch {
+	case err == nil:
+		return &existing, false, nil
+	case !errors.Is(err, gorm.ErrRecordNotFound):
+		return nil, false, err
+	}
+	id, err := idgen.Next()
+	if err != nil {
+		return nil, false, err
+	}
 	now := time.Now().UTC()
-	authNo := "AUTH" + formatID(int64(id))
-	expireAt := now.AddDate(0, 0, in.ValidDays)
+	a := &Authorization{
+		AuthNo:  "AUTH" + formatID(int64(id)),
+		BizType: in.BizType, BizNo: in.BizNo,
+		SubjectID: truncate(in.SubjectID, 64), ChannelCode: channelCode, Method: truncate(in.Method, 32),
+		Status: AuthAuthorizing, AmountMinor: in.AmountMinor, Currency: in.Currency,
+		FxRateMicro: in.FxRateMicro, PayerID: truncate(in.PayerID, 128),
+		CardLast4: truncate(in.CardLast4, 8), Remark: truncate(in.Remark, 500),
+		ExpiresAt: ptr(now.AddDate(0, 0, in.ValidDays)),
+	}
+	a.ID = id
+	if err := s.db.WithContext(ctx).Create(a).Error; err != nil {
+		// 并发同键命中唯一索引：读回胜者；读不到才把原始错误抛出去。
+		var dup Authorization
+		if take := s.db.WithContext(ctx).Where("biz_type = ? AND biz_no = ?", in.BizType, in.BizNo).Take(&dup).Error; take == nil {
+			return &dup, false, nil
+		}
+		return nil, false, err
+	}
+	return a, true, nil
+}
+
+// freezeAuth 用占位行去渠道冻结，并按渠道结论回写：
+// 成功 → authorized + 渠道真实授权号；明确报错 → failed + 原因（钱没冻住，业务可换单重试）；
+// 受理但未确认（含渠道没回授权号）→ 保持 authorizing，等 ReconcileStuckAuths 补查，
+// 绝不把「渠道没答完」写成本地终态。
+func (s *Service) freezeAuth(ctx context.Context, a *Authorization, ch *Channel, ap AuthProvider, cfg map[string]string) error {
 	notify := strings.TrimSpace(ch.NotifyURL)
 	if notify == "" {
 		notify = channelNotifyURL(ch.Code)
 	}
-
-	// 先渠道冻结：渠道报错即原样上抛（渠道拒绝=PAY_CHANNEL_ERROR，缺凭据由渠道层给明确信息），
-	// 且此时尚未落库，不会产生「假已冻结」单。
 	res, err := ap.Freeze(ctx, AuthFreezeRequest{
-		AuthNo: authNo, AmountMinor: in.AmountMinor, Currency: in.Currency,
-		Subject: subjectOr("预授权 " + in.BizNo), PayerID: truncate(in.PayerID, 128),
-		NotifyURL: notify, ExpireAt: expireAt, Remark: truncate(in.Remark, 500),
+		AuthNo: a.AuthNo, AmountMinor: a.AmountMinor, Currency: a.Currency,
+		Subject: subjectOr("预授权 " + a.BizNo), PayerID: a.PayerID,
+		NotifyURL: notify, ExpireAt: timeOf(a.ExpiresAt), Remark: a.Remark,
 	}, cfg)
 	if err != nil {
-		return nil, err
+		s.markAuthFailed(ctx, a, err)
+		return err
 	}
-	if res == nil || authStatusInProgress(res.Status) {
-		// 渠道受理但未确认冻结：不落 authorized（避免假成功），调用方可用同一 authNo 重试。
-		s.logWarn("pay: auth freeze not confirmed", "authNo", authNo, "status", freezeStatus(res))
-		return nil, response.Conflict(errStateConflict)
+	if res == nil || strings.TrimSpace(res.ChannelAuthNo) == "" || authStatusInProgress(res.Status) {
+		s.logWarn("pay: auth freeze not confirmed by channel", "authNo", a.AuthNo,
+			"provider", ch.Provider, "status", freezeStatus(res))
+		return response.Conflict(errStateConflict)
 	}
+	authNo := truncate(res.ChannelAuthNo, 128)
+	if err := s.db.WithContext(ctx).Model(&Authorization{}).
+		Where("id = ? AND status = ?", int64(a.ID), AuthAuthorizing).
+		Updates(map[string]any{"status": AuthAuthorized, "channel_auth_no": authNo}).Error; err != nil {
+		return err
+	}
+	a.Status, a.ChannelAuthNo = AuthAuthorized, authNo
+	return nil
+}
 
-	a := &Authorization{
-		AuthNo: authNo, BizType: in.BizType, BizNo: in.BizNo,
-		SubjectID: truncate(in.SubjectID, 64), ChannelCode: ch.Code, Method: truncate(in.Method, 32),
-		Status: AuthAuthorized, AmountMinor: in.AmountMinor, Currency: in.Currency,
-		FxRateMicro: in.FxRateMicro, ChannelAuthNo: truncate(res.ChannelAuthNo, 128),
-		PayerID: truncate(in.PayerID, 128), CardLast4: truncate(in.CardLast4, 8),
-		Remark: truncate(in.Remark, 500), ExpiresAt: ptr(expireAt),
+// markAuthFailed 把渠道明确拒绝的占位行落成 failed 并留原因。只从 authorizing 迁移，
+// 避免覆盖并发补查已经回填的结论。
+func (s *Service) markAuthFailed(ctx context.Context, a *Authorization, cause error) {
+	reason := "预授权冻结失败"
+	if cause != nil {
+		reason = truncate(cause.Error(), 200)
 	}
-	a.ID = id
-	if err := s.db.WithContext(ctx).Create(a).Error; err != nil {
-		// 并发同键命中唯一索引：读回胜者（本次冻结为渠道侧冗余，由对账兜底，见回票）。
-		var dup Authorization
-		if take := s.db.WithContext(ctx).Where("biz_type = ? AND biz_no = ?", in.BizType, in.BizNo).Take(&dup).Error; take == nil {
-			return &dup, nil
+	if err := s.db.WithContext(ctx).Model(&Authorization{}).
+		Where("id = ? AND status = ?", int64(a.ID), AuthAuthorizing).
+		Updates(map[string]any{"status": AuthFailed, "fail_reason": reason}).Error; err != nil {
+		s.logWarn("pay: mark auth failed error", "authNo", a.AuthNo, "err", err.Error())
+	}
+	s.logWarn("pay: auth freeze rejected", "authNo", a.AuthNo, "reason", reason)
+}
+
+// AuthReconcileSummary 是 authorizing 残留补查一轮的可数结果。
+type AuthReconcileSummary struct {
+	Checked    int `json:"checked"`
+	Adopted    int `json:"adopted"`
+	Failed     int `json:"failed"`
+	Unresolved int `json:"unresolved"`
+}
+
+// authStaleAfter 是「占位行多久没结论才算残留」：小于这个窗口留给在途请求自己收尾。
+const authStaleAfter = 2 * time.Minute
+
+// ReconcileStuckAuths 补查停在 authorizing 的预授权（进程崩溃或渠道受理未回执）：
+// 渠道确认过 → 回填 authorized + 真实授权号；渠道明确查无此单（404 语义）→ 落 failed，
+// 让业务知道「钱没冻住」可以换单重试；两边都拿不到结论 → 原样留着，下轮再查。
+func (s *Service) ReconcileStuckAuths(ctx context.Context, now time.Time) (AuthReconcileSummary, error) {
+	var out AuthReconcileSummary
+	var rows []Authorization
+	err := s.db.WithContext(tenant.Skip(ctx)).
+		Where("status = ? AND updated_at <= ?", AuthAuthorizing, now.Add(-authStaleAfter)).
+		Order("id").Limit(50).Find(&rows).Error
+	if err != nil {
+		return out, err
+	}
+	for i := range rows {
+		a := &rows[i]
+		out.Checked++
+		p, ch, cfg, perr := s.authChannelOf(tenant.Skip(ctx), a.ChannelCode)
+		if perr != nil {
+			out.Unresolved++
+			s.logWarn("pay: auth reconcile channel unresolved", "authNo", a.AuthNo, "err", perr.Error())
+			continue
 		}
-		return nil, err
+		ap, canAuth := p.(AuthProvider)
+		if !canAuth || !ProviderCaps(p).Auth {
+			// 渠道配置被改成不支持预授权：本地这张 authorizing 无法再确认，留人工核对。
+			out.Unresolved++
+			s.logWarn("pay: auth reconcile channel no longer supports auth", "authNo", a.AuthNo, "provider", ch.Provider)
+			continue
+		}
+		res, qerr := ap.QueryAuth(ctx, a.AuthNo, cfg)
+		switch {
+		case qerr == nil && res != nil && strings.TrimSpace(res.ChannelAuthNo) != "" && !authStatusInProgress(res.Status):
+			if err := s.applyAuthConfirmed(ctx, a, truncate(res.ChannelAuthNo, 128)); err != nil {
+				out.Unresolved++
+				s.logWarn("pay: auth adopt failed", "authNo", a.AuthNo, "err", err.Error())
+				continue
+			}
+			out.Adopted++
+		case isNotFound(qerr):
+			// 渠道查无此单：冻结请求根本没落到渠道，落 failed 让业务重试。
+			s.markAuthFailed(ctx, a, qerr)
+			a.Status = AuthFailed
+			out.Failed++
+		default:
+			out.Unresolved++
+			s.logWarn("pay: auth reconcile unresolved", "authNo", a.AuthNo,
+				"status", freezeStatus(res), "err", errText(qerr))
+		}
 	}
-	return a, nil
+	if out.Checked > 0 {
+		s.logInfo("pay: stuck auths reconciled", "checked", out.Checked, "adopted", out.Adopted,
+			"failed", out.Failed, "unresolved", out.Unresolved)
+	}
+	return out, nil
+}
+
+// applyAuthConfirmed 把占位行回填为已冻结（只从 authorizing 迁移）。
+func (s *Service) applyAuthConfirmed(ctx context.Context, a *Authorization, channelAuthNo string) error {
+	if err := s.db.WithContext(tenant.Skip(ctx)).Model(&Authorization{}).
+		Where("id = ? AND status = ?", int64(a.ID), AuthAuthorizing).
+		Updates(map[string]any{"status": AuthAuthorized, "channel_auth_no": channelAuthNo}).Error; err != nil {
+		return err
+	}
+	a.Status, a.ChannelAuthNo = AuthAuthorized, channelAuthNo
+	return nil
+}
+
+// errText 把 error 转成日志用的字符串（nil 安全）。
+func errText(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
+}
+
+// timeOf 安全解 *time.Time（nil 按零值，渠道会用自己的默认有效期）。
+func timeOf(t *time.Time) time.Time {
+	if t == nil {
+		return time.Time{}
+	}
+	return *t
 }
 
 // freezeStatus 安全取冻结结论状态串（res 可能为 nil）。

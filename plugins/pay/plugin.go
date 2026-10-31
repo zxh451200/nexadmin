@@ -111,6 +111,9 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.GET("/payouts", core.Perm("pay:settle"), h.listPayouts)
 	g.POST("/payouts", core.Perm("pay:settle"), h.createPayout)
 	g.POST("/payouts/:id/mark-paid", core.Perm("pay:settle"), h.markPayoutPaid)
+	// 渠道代付（能力矩阵 payout=true 的渠道）与批次内逐笔结论
+	g.POST("/payouts/:id/pay", core.Perm("pay:settle"), h.payPayout)
+	g.GET("/payouts/:id/items", core.Perm("pay:settle"), h.listPayoutItems)
 
 	// 公开路由：渠道网关回调（验签兜底）与 mock 收银台。
 	p := d.Public.Group("/plugins/pay")
@@ -153,6 +156,23 @@ func (s *Service) runSweeper(ctx context.Context) {
 			} else if summary.Checked > 0 {
 				s.logInfo("pay: stuck refunds swept", "checked", summary.Checked,
 					"flipped", summary.Flipped, "notFound", summary.NotFound, "failed", summary.Failed)
+			}
+			// 预授权残留补查：停在 authorizing 的占位行（进程崩溃或渠道受理未回执）
+			// 只能问渠道才知道钱到底冻没冻，本地猜不得。
+			auths, err := s.ReconcileStuckAuths(tenant.Skip(ctx), now)
+			if err != nil {
+				s.logWarn("pay: reconcile stuck auths failed", "err", err.Error())
+			} else if auths.Checked > 0 {
+				s.logInfo("pay: stuck auths swept", "checked", auths.Checked,
+					"adopted", auths.Adopted, "failed", auths.Failed, "unresolved", auths.Unresolved)
+			}
+			// 代付终局补查：停在 initiated 的转账笔只有渠道能给终局。
+			payouts, err := s.SweepStuckPayouts(tenant.Skip(ctx), now)
+			if err != nil {
+				s.logWarn("pay: sweep stuck payouts failed", "err", err.Error())
+			} else if payouts.Batches > 0 {
+				s.logInfo("pay: stuck payouts swept", "batches", payouts.Batches,
+					"resolved", payouts.Resolved, "unresolved", payouts.Unresolved)
 			}
 		}
 	}

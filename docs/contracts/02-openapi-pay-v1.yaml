@@ -948,6 +948,65 @@ paths:
                       data: { $ref: '#/components/schemas/PayoutBatch' }
         '409': { $ref: '#/components/responses/Conflict' }
 
+  /payouts/{id}/pay:
+    post:
+      tags: [settlement]
+      summary: 渠道代付路径：向渠道发起批次内逐笔转账
+      description: |
+        渠道须在能力矩阵声明 `payout=true`，否则报 PAY_CAPABILITY_UNSUPPORTED（人工回执路径 mark-paid 仍可用）。
+        一笔失败不影响其余笔，批次聚合为 paid / partial / failed；重复调用同一批次不重复打款
+        （以 PayoutItem 状态 + 条件更新做认领闸门）。金额、币种、收款方一律取自批次与结算单，
+        请求体不接受金额。
+      operationId: payPayoutBatch
+      x-permission: pay:settle
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [channelCode]
+              properties:
+                channelCode: { type: string }
+      responses:
+        '200':
+          description: 发起后的批次
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/PayoutBatch' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '502': { $ref: '#/components/responses/ChannelError' }
+
+  /payouts/{id}/items:
+    get:
+      tags: [settlement]
+      summary: 批次内逐笔代付结论
+      description: 批次为 partial/failed 时必须能下钻到是哪几笔失败、为什么失败。
+      operationId: listPayoutItems
+      x-permission: pay:settle
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: 明细行
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/PayoutItem' }
+
   /outbox:
     get:
       tags: [outbox]
@@ -1257,7 +1316,10 @@ components:
 
     AuthStatus:
       type: string
-      enum: [authorized, partial_captured, captured, voided, expired]
+      enum: [authorizing, authorized, partial_captured, captured, voided, expired, failed]
+      description: |
+        authorizing = 已按 (bizType,bizNo) 唯一索引占位、正在等渠道冻结结论；
+        failed = 渠道明确拒绝冻结（钱没冻住，可换单重试）。两者都不是「已冻结」。
 
     Capabilities:
       type: object
@@ -1555,6 +1617,18 @@ components:
         currency: { type: string }
         status: { type: string, enum: [draft, confirmed, paid] }
         createdAt: { type: string, format: date-time }
+
+    PayoutItem:
+      type: object
+      properties:
+        id: { type: string }
+        batchId: { type: string }
+        settlementId: { type: string }
+        netMinor: { $ref: '#/components/schemas/Amount' }
+        receiverId: { type: string, description: 收款方标识（取自结算单主体，不接受请求传入） }
+        status: { type: string, enum: [pending, initiated, success, failed], description: initiated = 已向渠道发起、结论未回 }
+        channelNo: { type: string, description: 渠道单笔回执号 }
+        failReason: { type: string }
 
     PayoutBatch:
       type: object
