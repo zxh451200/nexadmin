@@ -156,6 +156,23 @@ func (m *module) ImportSources(db *gorm.DB) []importspec.Source {
 }
 ```
 
+上面两个 key 要在后端语言包里补上，否则来源名和模板表头只显示代码里的中文兜底。位置是 `core/i18n/locales/<lang>.yaml` 的 `imports.source.<来源名>`（`imports` 块已存在，只在 `source:` 下加新来源），`zh-CN.yaml` 与 `en-US.yaml` 各一份、键路径一致：
+
+```yaml
+imports:
+  source:
+    crm_customers:
+      title: 客户导入   # Source.Name 对应的来源名（下拉与台账的来源列）
+      name: 客户名称    # 每列一个键，键名 = Column.Key
+      phone: 手机号
+      remark: 备注
+```
+
+- `imports.source.<Source.Name>.title` 对应 `TitleKey`，其余每个 `Column.Key` 对应同名 `LabelKey`；列键不用加 `title.` 之类前缀。
+- 两处声明要一致：`Source{Name: "crm_customers"}` ↔ `imports.source.crm_customers`，`Column{Key: "name"}` ↔ `imports.source.crm_customers.name`。写错不会报错，只会退回 `Title`/`Label` 兜底文案，排查时先看 YAML 的层级。
+- `TitleKey`/`LabelKey` 留空即始终用兜底文案（等同于只支持中文），只在来源确实只有一种语言时才省略。
+- 行内业务错误的文案（如 `dict_data.sort_invalid`）也放在同一个 `imports.source.<来源名>` 块下，由 `Handler` 自己 `i18n.T(ctx, key)` 翻译后返回。
+
 约定：
 
 - 来源在导入中心挂载时自动收集（插件模块在内核里被包了一层，收集前会 `core.UnwrapModule` 拆包）；重名会记 warning 并跳过，不会 panic。框架内置模块同样可以实现这个接口（不会反向依赖插件），出厂已带两个：`crm_customers`（`plugins/crm/import.go`）与 `dict_data`（`modules/system/dict/importsource.go`）。

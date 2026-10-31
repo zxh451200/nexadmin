@@ -161,6 +161,23 @@ func (m *module) ImportSources(db *gorm.DB) []importspec.Source {
 }
 ```
 
+Add those two keys to the backend locale packs, otherwise the source name and template headers fall back to the Chinese strings in code. They live under `imports.source.<source name>` in `core/i18n/locales/<lang>.yaml` (the `imports` block already exists — just add the source under `source:`), with identical key paths in `zh-CN.yaml` and `en-US.yaml`:
+
+```yaml
+imports:
+  source:
+    crm_customers:
+      title: Customer import   # source name for Source.Name (dropdown and job list)
+      name: Customer name      # one key per column, named after Column.Key
+      phone: Phone
+      remark: Remark
+```
+
+- `imports.source.<Source.Name>.title` backs `TitleKey`; every `Column.Key` backs the `LabelKey` of the same name. Column keys take no extra prefix such as `title.`.
+- Keep the two declarations in sync: `Source{Name: "crm_customers"}` ↔ `imports.source.crm_customers`, and `Column{Key: "name"}` ↔ `imports.source.crm_customers.name`. A mismatch does not error — it silently falls back to `Title`/`Label`, so check the YAML nesting first when debugging.
+- Leaving `TitleKey`/`LabelKey` empty always uses the fallback text (effectively Chinese-only). Omit them only when the source truly has a single language.
+- Per-row business error texts (e.g. `dict_data.sort_invalid`) live in the same `imports.source.<source name>` block; the `Handler` translates them with `i18n.T(ctx, key)` before returning.
+
 Rules:
 
 - Sources are collected when the Import Center mounts. Plugin modules reach the core wrapped, and the collector unwraps them first (`core.UnwrapModule`). A duplicate name logs a warning and is skipped; it never panics. Built-in modules may implement the same interface (no reverse dependency on the plugin); two ship out of the box: `crm_customers` (`plugins/crm/import.go`) and `dict_data` (`modules/system/dict/importsource.go`).
