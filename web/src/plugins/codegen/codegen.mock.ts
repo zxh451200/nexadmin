@@ -210,7 +210,7 @@ function generate(req: GenRequest): GenOutput {
       content: `package ${req.module}\n\ntype ${P} struct {\n\tdatabase.TenantModel\n${req.define?.softDelete ? '\tDeletedAt gorm.DeletedAt\n' : ''}${cols.map((c) => `\t${pascal(c.name)} ${goType(c.kind)} \`gorm:"column:${c.name}"\``).join('\n')}\n}\n\nfunc (${P}) TableName() string { return "${sc.table}" }\n`,
     },
     { path: `${be}/service.go`, lang: 'go', content: `package ${req.module}\n\n// Service: list / get / save / delete for ${sc.table}\n` },
-    { path: `${be}/handler.go`, lang: 'go', content: `package ${req.module}\n\n// Handler: HTTP layer for /${req.module}s\n` },
+    { path: `${be}/handler.go`, lang: 'go', content: `package ${req.module}\n\nimport (\n\t"strconv"\n\t"strings"\n\n\t"github.com/gin-gonic/gin"\n\n\t"nexadmin/core/response"\n)\n\n// Handler 是 HTTP 层，只做参数解析和响应。\ntype Handler struct{ svc *Service }\n\nfunc NewHandler(svc *Service) *Handler { return &Handler{svc: svc} }\n\nfunc (h *Handler) list(c *gin.Context) {\n\tpage, _ := strconv.Atoi(c.DefaultQuery("page", "1"))\n\titems, total, err := h.svc.List(c.Request.Context(), page, 20)\n\tif err != nil {\n\t\tresponse.Fail(c, err)\n\t\treturn\n\t}\n\tresponse.OK(c, map[string]any{"items": items, "total": total})\n}\n\nfunc (h *Handler) save(c *gin.Context) {\n\tif strings.TrimSpace(c.Param("id")) == "" {\n\t\tresponse.Fail(c, response.BadRequest("error.bad_request"))\n\t\treturn\n\t}\n\tresponse.OK(c, nil)\n}\n` },
     {
       path: `${be}/module.go`, lang: 'go',
       content: `package ${req.module}\n\nfunc init() { core.RegisterBuiltin(module{}) }\n\n// routes guarded by core.Perm("${req.module}:list|edit|delete")\n`,
@@ -225,7 +225,7 @@ function generate(req: GenRequest): GenOutput {
       content: `export interface ${P} {\n  id: string\n${cols.map((c) => `  ${camel(c.name)}: ${tsType(c.kind)}`).join('\n')}\n}\n`,
     },
     { path: `${fe}/${req.module}.mock.ts`, lang: 'ts', content: `// mock data for /${req.module}s\n` },
-    { path: `${fe}/${P}Page.tsx`, lang: 'tsx', content: `// list page: DataTable + FilterBar (${cols.filter((c) => c.config.list).length} columns, ${cols.filter((c) => c.config.query).length} filters)\n` },
+    { path: `${fe}/${P}Page.tsx`, lang: 'tsx', content: `import { useState } from 'react'\nimport { Plus } from 'lucide-react'\nimport { useTranslation } from 'react-i18next'\nimport { DataTable, type Column } from '@/framework/components/DataTable'\nimport { PageHeader } from '@/framework/components/PageHeader'\nimport { Button } from '@/framework/ui/button'\nimport { use${P}List, type ${P} } from './api'\n\nexport function ${P}Page() {\n  const { t } = useTranslation()\n  const [page, setPage] = useState(1)\n  const list = use${P}List({ page })\n\n  const columns: Column<${P}>[] = [\n    { key: 'id', title: t('${req.module}.field.id'), mobile: 'title' },\n    { key: 'createdAt', title: t('${req.module}.field.createdAt') },\n  ]\n\n  return (\n    <div className="flex flex-col gap-4">\n      <PageHeader\n        title={t('${req.module}.title')}\n        action={\n          <Button>\n            <Plus aria-hidden="true" />\n            {t('common.create')}\n          </Button>\n        }\n      />\n      <DataTable columns={columns} data={list.data?.items ?? []} rowKey="id" loading={list.isPending} />\n    </div>\n  )\n}\n` },
     { path: `${fe}/${P}FormDialog.tsx`, lang: 'tsx', content: `// form dialog: ResponsiveDialog + FormLayout (${form.length} fields)\n` },
     {
       path: `${fe}/locales/zh-CN.json`, lang: 'json',

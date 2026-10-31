@@ -91,7 +91,12 @@
       "empty": "No files were generated",
       "viewer": "Code viewer",
       "readonly": "Read-only",
-      "pick": "Pick a file on the left"
+      "pick": "Pick a file on the left",
+      "copy": "Copy code",
+      "copied": "Copied",
+      "copyFailed": "Copy failed",
+      "download": "Download this file",
+      "downloaded": "File downloaded"
     },
     "notes": {
       "import_line": "Add one blank import to internal/modules/modules.go; rebuild and restart to seed the menu:",

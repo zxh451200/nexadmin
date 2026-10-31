@@ -115,7 +115,7 @@ export function usePreview() {
   return useMutation({ mutationFn: (req: GenRequest) => api.post<GenOutput>(`${BASE}/preview`, req) })
 }
 
-function saveBlob(blob: Blob, filename: string) {
+export function saveBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url

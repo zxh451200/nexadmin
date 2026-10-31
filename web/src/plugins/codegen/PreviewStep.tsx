@@ -1,12 +1,15 @@
 import { useState } from 'react'
-import { FileCode2 } from 'lucide-react'
+import { Check, Copy, Download, FileCode2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { EmptyState } from '@/framework/components/EmptyState'
 import { Badge } from '@/framework/ui/badge'
+import { Button } from '@/framework/ui/button'
 import { cardSurface } from '@/framework/ui/card'
 import { cn } from '@/lib/utils'
-import type { GenFile, GenOutput } from './api'
+import { saveBlob, type GenFile, type GenOutput } from './api'
+import { CodeView } from './CodeView'
 
 interface Props {
   output: GenOutput
@@ -16,7 +19,26 @@ interface Props {
 export function PreviewStep({ output }: Props) {
   const { t } = useTranslation()
   const [current, setCurrent] = useState<string | undefined>()
+  const [copied, setCopied] = useState(false)
   const file: GenFile | undefined = output.files.find((f) => f.path === current) ?? output.files[0]
+
+  const copy = async () => {
+    if (!file) return
+    try {
+      await navigator.clipboard.writeText(file.content)
+      setCopied(true)
+      toast.success(t('plugin_codegen.preview.copied'))
+      window.setTimeout(() => setCopied(false), 1500)
+    } catch {
+      toast.error(t('plugin_codegen.preview.copyFailed'))
+    }
+  }
+
+  const downloadFile = () => {
+    if (!file) return
+    saveBlob(new Blob([file.content], { type: 'text/plain;charset=utf-8' }), file.path.split('/').pop() ?? file.path)
+    toast.success(t('plugin_codegen.preview.downloaded'))
+  }
 
   const columns: Column<GenFile>[] = [
     {
@@ -53,13 +75,21 @@ export function PreviewStep({ output }: Props) {
           {file ? (
             <>
               <header className="flex items-center gap-2 border-b border-border bg-muted/50 px-3 py-2">
-                <FileCode2 className="size-4 text-muted-foreground" aria-hidden="true" />
-                <span className="truncate font-mono text-xs">{file.path}</span>
-                <Badge variant="secondary" className="ms-auto">{t('plugin_codegen.preview.readonly')}</Badge>
+                <FileCode2 className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                <span className="min-w-0 truncate font-mono text-xs">{file.path}</span>
+                <div className="ms-auto flex shrink-0 items-center gap-0.5">
+                  <Badge variant="secondary" className="me-1 hidden sm:inline-flex">
+                    {t('plugin_codegen.preview.readonly')}
+                  </Badge>
+                  <Button type="button" variant="ghost" size="icon" className="size-8" title={t('plugin_codegen.preview.copy')} aria-label={t('plugin_codegen.preview.copy')} onClick={() => void copy()}>
+                    {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
+                  </Button>
+                  <Button type="button" variant="ghost" size="icon" className="size-8" title={t('plugin_codegen.preview.download')} aria-label={t('plugin_codegen.preview.download')} onClick={downloadFile}>
+                    <Download aria-hidden="true" />
+                  </Button>
+                </div>
               </header>
-              <pre dir="ltr" tabIndex={0} className="max-h-[60dvh] overflow-auto p-3 text-start font-mono text-xs leading-relaxed text-foreground">
-                <code>{file.content}</code>
-              </pre>
+              <CodeView content={file.content} lang={file.lang} />
             </>
           ) : (
             <EmptyState title={t('plugin_codegen.preview.pick')} />
