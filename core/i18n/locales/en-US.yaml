@@ -701,6 +701,7 @@ menu:
   parent_not_found: "The parent menu does not exist."
   parent_self_or_child: "The parent menu cannot be the menu itself or one of its descendants."
   child_under_button: "You cannot create a child menu under a button."
+  button_needs_parent: "A button is a permission point and must sit under a menu."
 license:
   public_key_missing: "No valid built-in license public key"
   file.empty: "The license file is empty or too large"

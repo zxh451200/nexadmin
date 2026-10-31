@@ -71,7 +71,8 @@
       "deleteCascade": "确定删除菜单「{{name}}」吗？其下 {{count}} 个下级菜单/按钮将一并删除，此操作不可恢复。"
     },
     "drag": {
-      "underButton": "按钮下不能再建子菜单"
+      "underButton": "按钮下不能再建子菜单",
+      "buttonToRoot": "按钮是权限点，必须挂在某个菜单下"
     }
   }
 }

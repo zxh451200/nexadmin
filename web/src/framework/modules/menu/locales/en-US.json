@@ -71,7 +71,8 @@
       "deleteCascade": "Delete menu \"{{name}}\"? Its {{count}} descendant menus/buttons will also be deleted. This cannot be undone."
     },
     "drag": {
-      "underButton": "Buttons cannot have child menus"
+      "underButton": "Buttons cannot have child menus",
+      "buttonToRoot": "A button is a permission point and must sit under a menu"
     }
   }
 }

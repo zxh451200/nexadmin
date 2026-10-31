@@ -33,10 +33,11 @@ export interface TreeTableProps<T extends { id: string; children?: T[] }> {
    */
   onMove?: (id: string, parentId: string | null, afterId?: string) => void | Promise<unknown>
   /**
-   * 拖到目标行右侧时先问一句「能不能挂到它下面」，返回 i18n key 就拦截并提示。
-   * 用于「按钮不能有子菜单」这类只有页面知道的规则，省掉一次必然失败的服务端往返。
+   * 落点前先问一句「这样放允许吗」，返回 i18n key 就拦截并提示。
+   * target 是悬停行；拖到顶级（回到根那一组）时传 null。
+   * 用于「按钮不能有子菜单」「按钮不能脱离父菜单」这类只有页面知道的规则，省掉一次必然失败的服务端往返。
    */
-  blockNest?: (active: T, target: T) => string | null
+  blockNest?: (active: T, target: T | null) => string | null
   /** 最大层级（根 = 1）；给了就在拖拽阶段拦截，不让用户拖出必然失败的层级 */
   maxDepth?: number
   defaultExpandAll?: boolean
@@ -444,13 +445,15 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
       const parentId = levels < ancestors.length ? (ancestors[levels] ?? null) : null
       const y = subtreeBottom(afterId)
       if (y === null) return null
+      const rootReason = parentId === null ? (blockNest?.(activeNode, null) ?? null) : null
       return plan({
         y,
         indentBase: parentId === null ? null : (rects.get(parentId)?.handleLeft ?? null),
         depth: parentId === null ? 0 : (depthOf(tree, parentId) ?? 0) + 1,
-        mode: 'move',
+        mode: rootReason ? 'blocked' : 'move',
         parentId,
         afterId,
+        reason: rootReason ?? undefined,
       })
     }
     const edge = pointY < box.top + (box.bottom - box.top) / 2 ? 'before' : 'after'
@@ -467,14 +470,16 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
     }
     // 跨组但没横向位移：插到悬停行的前/后（同样是位置精确，不是追加到组尾）
     if (!onMove) return null
+    const groupReason = overParent === null ? (blockNest?.(activeNode, null) ?? null) : null
     return plan({
       y: edge === 'before' ? box.top : box.bottom,
       indentBase: box.handleLeft,
       depth: depthOf(tree, overId) ?? 0,
-      mode: 'move',
+      mode: groupReason ? 'blocked' : 'move',
       parentId: overParent,
       afterId: afterIdAt(edge, overParent),
       edge,
+      reason: groupReason ?? undefined,
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dragId, pointer, rects, scrollShift, tree, expanded, onMove, onReorder, blockNest, maxDepth])
@@ -562,6 +567,14 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
     const pid = parentOf(tree, id) ?? null
     if (pid === null) return
     const grand = parentOf(tree, pid) ?? null
+    if (grand === null) {
+      const node = findNode(tree, id)
+      const reason = node ? (blockNest?.(node, null) ?? null) : null
+      if (reason) {
+        toast.error(t(reason, { count: maxDepth }))
+        return
+      }
+    }
     await moveTo(id, grand, pid)
   }
 

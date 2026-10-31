@@ -122,8 +122,11 @@ export default function MenuPage() {
         forceExpandAll={filter.active}
         onReorder={canDrag ? (pid, ids) => sort.mutateAsync({ parentId: pid, ids }) : undefined}
         onMove={canDrag ? (id, parentId, afterId) => move.mutateAsync({ id, parentId, afterId }) : undefined}
-        // 按钮是最末级：拖到按钮行右侧时当场拦下并说明原因，不等服务端报错
-        blockNest={(_active, target) => (target.type === 'button' ? 'sysMenu.drag.underButton' : null)}
+        // 按钮是最末级，也不能脱离父菜单：拖到按钮行右侧或拖回顶级时当场拦下并说明原因，不等服务端报错
+        blockNest={(active, target) => {
+          if (target === null) return active.type === 'button' ? 'sysMenu.drag.buttonToRoot' : null
+          return target.type === 'button' ? 'sysMenu.drag.underButton' : null
+        }}
         rowActions={(row) => (
           <>
             {row.type !== 'button' && (

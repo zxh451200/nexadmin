@@ -701,6 +701,7 @@ menu:
   parent_not_found: "上级菜单不存在"
   parent_self_or_child: "上级菜单不能是自己或其下级"
   child_under_button: "按钮下不能再建子菜单"
+  button_needs_parent: "按钮是权限点，必须挂在某个菜单下"
 license:
   public_key_missing: "框架未内置有效的授权公钥"
   file.empty: "授权文件为空或过大"

@@ -144,13 +144,22 @@ func (in *menuInput) check() (idgen.ID, error) {
 		return 0, bad("menu.status_invalid")
 	}
 	if strings.TrimSpace(in.ParentID) == "" {
-		return 0, nil
+		return 0, checkButtonParent(in.Type, 0)
 	}
 	pid, err := idgen.Parse(in.ParentID)
 	if err != nil {
 		return 0, bad("menu.parent_invalid")
 	}
 	return pid, nil
+}
+
+// checkButtonParent 按钮是权限点，离开父菜单就成了孤儿行：既进不了侧栏，
+// 也没法在角色授权树里定位到它属于哪个功能。新增、修改和拖拽共用这条判定。
+func checkButtonParent(typ string, pid idgen.ID) error {
+	if typ == typeButton && pid == 0 {
+		return bad("menu.button_needs_parent")
+	}
+	return nil
 }
 
 func (in *menuInput) apply(m *Menu, pid idgen.ID) {
@@ -341,6 +350,9 @@ func (s *service) moveLocked(ctx context.Context, id idgen.ID, in moveInput) err
 	}
 	if current == nil {
 		return notFound()
+	}
+	if err := checkButtonParent(current.Type, pid); err != nil {
+		return err
 	}
 	if pid == id || descendants(rows, id)[pid] {
 		return bad("menu.parent_self_or_child")
