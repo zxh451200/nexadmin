@@ -129,7 +129,10 @@ type RefundView struct {
 	FailReason      string     `json:"failReason,omitempty"`
 	OperatorID      string     `json:"operatorId,omitempty"`
 	SucceededAt     *time.Time `json:"succeededAt,omitempty"`
-	CreatedAt       time.Time  `json:"createdAt"`
+	// 补查留痕：pending 卡在退款中时，管理端要能看到「查过几次、最后一次什么时候」。
+	SyncAttempts int        `json:"syncAttempts"`
+	LastSyncAt   *time.Time `json:"lastSyncAt,omitempty"`
+	CreatedAt    time.Time  `json:"createdAt"`
 }
 
 func refundView(r *Refund) RefundView {
@@ -140,7 +143,36 @@ func refundView(r *Refund) RefundView {
 		Currency: r.Currency, FxRateMicro: r.FxRateMicro,
 		ChannelRefundID: r.ChannelRefundID, Reason: r.Reason, FailReason: r.FailReason,
 		OperatorID: r.OperatorID, SucceededAt: r.SucceededAt, CreatedAt: r.CreatedAt,
+		SyncAttempts: r.SyncAttempts, LastSyncAt: r.LastSyncAt,
 	}
+}
+
+// OutboxView 是资金事件出站箱视图；载荷只在详情里回显（列表不带，避免整页塞 JSON）。
+type OutboxView struct {
+	ID          idgen.ID   `json:"id"`
+	TenantID    idgen.ID   `json:"tenantId"`
+	EventID     string     `json:"eventId"`
+	EventName   string     `json:"eventName"`
+	Status      string     `json:"status"`
+	Attempts    int        `json:"attempts"`
+	LastError   string     `json:"lastError,omitempty"`
+	NextRetryAt time.Time  `json:"nextRetryAt"`
+	SentAt      *time.Time `json:"sentAt,omitempty"`
+	DeadAt      *time.Time `json:"deadAt,omitempty"`
+	CreatedAt   time.Time  `json:"createdAt"`
+	Payload     string     `json:"payload,omitempty"`
+}
+
+func outboxView(o *Outbox, withPayload bool) OutboxView {
+	v := OutboxView{
+		ID: o.ID, TenantID: o.TenantID, EventID: o.EventID, EventName: o.EventName,
+		Status: o.Status, Attempts: o.Attempts, LastError: o.LastError,
+		NextRetryAt: o.NextRetryAt, SentAt: o.SentAt, DeadAt: o.DeadAt, CreatedAt: o.CreatedAt,
+	}
+	if withPayload {
+		v.Payload = o.Payload
+	}
+	return v
 }
 
 // CallbackView 是回调审计视图（payload 已截断，入库前不含凭据字段——由渠道实现保证）。
@@ -148,6 +180,7 @@ type CallbackView struct {
 	ID          idgen.ID  `json:"id"`
 	ChannelCode string    `json:"channelCode"`
 	PaymentNo   string    `json:"paymentNo"`
+	NotifyID    string    `json:"notifyId,omitempty"`
 	OK          bool      `json:"ok"`
 	Result      string    `json:"result"`
 	Payload     string    `json:"payload,omitempty"`
@@ -156,8 +189,8 @@ type CallbackView struct {
 
 func callbackView(c *Callback) CallbackView {
 	return CallbackView{
-		ID: c.ID, ChannelCode: c.ChannelCode, PaymentNo: c.PaymentNo, OK: c.OK,
-		Result: c.Result, Payload: c.Payload, CreatedAt: c.CreatedAt,
+		ID: c.ID, ChannelCode: c.ChannelCode, PaymentNo: c.PaymentNo, NotifyID: c.NotifyID,
+		OK: c.OK, Result: c.Result, Payload: c.Payload, CreatedAt: c.CreatedAt,
 	}
 }
 
@@ -178,8 +211,10 @@ type AuthView struct {
 	Currency      string     `json:"currency"`
 	FxRateMicro   int64      `json:"fxRateMicro"`
 	ChannelAuthNo string     `json:"channelAuthNo,omitempty"`
+	PayerID       string     `json:"payerId,omitempty"`
 	CardLast4     string     `json:"cardLast4,omitempty"`
 	Remark        string     `json:"remark,omitempty"`
+	FailReason    string     `json:"failReason,omitempty"`
 	ExpiresAt     *time.Time `json:"expiresAt,omitempty"`
 	VoidedAt      *time.Time `json:"voidedAt,omitempty"`
 	CreatedAt     time.Time  `json:"createdAt"`
@@ -192,9 +227,17 @@ func authView(a *Authorization) AuthView {
 		PaymentNo: a.PaymentNo, Status: a.Status,
 		AmountMinor: a.AmountMinor, CapturedMinor: a.CapturedMinor,
 		Currency: a.Currency, FxRateMicro: a.FxRateMicro,
-		ChannelAuthNo: a.ChannelAuthNo, CardLast4: a.CardLast4, Remark: a.Remark,
+		ChannelAuthNo: a.ChannelAuthNo, PayerID: a.PayerID, CardLast4: a.CardLast4,
+		Remark: a.Remark, FailReason: a.FailReason,
 		ExpiresAt: a.ExpiresAt, VoidedAt: a.VoidedAt, CreatedAt: a.CreatedAt,
 	}
+}
+
+// ProviderCapabilityView 是「渠道类型 → 能力矩阵」的一行，前端据此禁用币种/
+// 支付方式与退款查询、预授权、对账、代付按钮；服务端仍独立判一次（前端只是体验）。
+type ProviderCapabilityView struct {
+	Provider     string       `json:"provider"`
+	Capabilities Capabilities `json:"capabilities"`
 }
 
 // ---- core/secret 包装：测试环境没有默认密钥时退化为明文/原样 ----

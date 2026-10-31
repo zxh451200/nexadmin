@@ -28,9 +28,9 @@ const (
 	// 或该下单方式）。必须与「渠道拒绝了这笔操作」分开：前者是配置与产品签约问题，
 	// 用户要看的是「换渠道或去渠道侧签约」，后者才是业务重试。
 	errCapabilityUnsupported = "pay.PAY_CAPABILITY_UNSUPPORTED"
-	// errNotifyStale 是回调携带的业务时间超前于本地时钟：验签虽过，但报文可能是
-	// 伪造/时钟异常，拒绝入账留人工核对。
-	errNotifyStale            = "pay.PAY_NOTIFY_STALE"
+	// errNotifyStaleKey 对应哨兵错误 errNotifyStale（见下方 var）：Provider 报
+	// 「回调业务时间超前本地时钟」，HandleCallback 把它回成这个 i18n key。
+	errNotifyStaleKey         = "pay.PAY_NOTIFY_STALE"
 	errNotRefundable          = errStateConflict
 	errNotClosable            = errStateConflict
 	errRefundRejected         = errChannelError
@@ -72,6 +72,12 @@ const (
 )
 
 var errMockPending = errors.New("mock: pending")
+
+// errNotifyStale 是「回调携带的业务时间超前本地时钟超过允许窗口」的哨兵：
+// Provider 在 VerifyCallback 里用 fmt.Errorf("...: %w", errNotifyStale) 报，
+// HandleCallback 用 errors.Is 区分，好把审计结果记成 stale_notify 而不是 sign_invalid，
+// 也让排障方向从「渠道伪造通知」转到「服务器时钟或渠道时间配置」。
+var errNotifyStale = errors.New("pay: notify timestamp outside allowed window")
 
 // errCallbackAmount 是「回调金额与资金单不一致」的哨兵：调用方用 errors.Is 区分，
 // 好把回调审计结果记成 ResultAmountMismatch，而不是和其它失败混在一起。

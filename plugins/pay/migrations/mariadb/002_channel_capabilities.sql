@@ -9,7 +9,7 @@ ALTER TABLE plg_pay_refund ADD COLUMN last_sync_at TIMESTAMP NULL;
 
 -- 回调：渠道给这条通知的流水号，只做取证与排障检索，不做唯一约束。
 ALTER TABLE plg_pay_callback ADD COLUMN notify_id VARCHAR(128) NOT NULL DEFAULT '';
-CREATE INDEX idx_pay_callback_notify ON plg_pay_callback (channel_code, notify_id);
+CREATE INDEX idx_pay_callback_notify ON plg_pay_callback (notify_id);
 
 -- 预授权：真实渠道冻结需要渠道侧买家标识；失败原因用于「渠道拒绝」与「本地状态」区分。
 ALTER TABLE plg_pay_auth ADD COLUMN payer_id VARCHAR(128) NOT NULL DEFAULT '';

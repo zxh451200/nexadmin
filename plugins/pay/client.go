@@ -109,3 +109,46 @@ func CaptureAuth(ctx context.Context, authNo string, in CaptureAuthInput) (*Auth
 	v := authView(a)
 	return &v, nil
 }
+
+// VoidAuth 撤销预授权剩余额度。渠道不支持预授权时返回 PAY_CAPABILITY_UNSUPPORTED，
+// 不会伪造一个「已撤销」。
+func VoidAuth(ctx context.Context, authNo string) (*AuthView, error) {
+	s := current()
+	if s == nil {
+		return nil, responseUnavailable()
+	}
+	a, err := s.VoidAuth(ctx, authNo)
+	if err != nil {
+		return nil, err
+	}
+	v := authView(a)
+	return &v, nil
+}
+
+// QueryAuth 按授权单号取预授权（宿主侧兜底：事件丢失时用它核对终态）。
+func QueryAuth(ctx context.Context, authNo string) (*AuthView, error) {
+	s := current()
+	if s == nil {
+		return nil, responseUnavailable()
+	}
+	a, err := s.QueryAuth(ctx, authNo)
+	if err != nil {
+		return nil, err
+	}
+	v := authView(a)
+	return &v, nil
+}
+
+// Close 关闭一笔 pending 支付单（业务侧订单取消时同步作废资金单）。
+func Close(ctx context.Context, paymentNo string) (*OrderView, error) {
+	s := current()
+	if s == nil {
+		return nil, responseUnavailable()
+	}
+	o, err := s.Close(ctx, paymentNo)
+	if err != nil {
+		return nil, err
+	}
+	v := orderView(o, nil)
+	return &v, nil
+}

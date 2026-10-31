@@ -36,3 +36,7 @@ menus:
     type: button
     title: plugin_pay.perm.settle
     perm: pay:settle
+  - parent: pay:list
+    type: button
+    title: plugin_pay.perm.outbox
+    perm: pay:outbox

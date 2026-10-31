@@ -6,6 +6,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"nexadmin/core/response"
 )
 
 // Provider 是支付渠道抽象。真实渠道（微信/支付宝/易支付）按市场实现后用
@@ -308,9 +310,12 @@ func (c Capabilities) supportsMethod(method string) bool {
 	return false
 }
 
-// capabilityUnsupported 是渠道能力缺口的统一错误：调用方不必各自拼文案。
+// capabilityUnsupported 是渠道能力缺口的统一错误：主文案走 i18n（字典里那条
+// PAY_CAPABILITY_UNSUPPORTED），具体是哪个渠道缺哪项能力用 Wrap 挂进 Err 只进日志——
+// WithMsg 会顶掉 i18n 文案，前端就变成不可翻译的中文串了。
 func capabilityUnsupported(provider, what string) error {
-	return channelConfigError(provider, "该渠道不支持"+what)
+	return response.BadRequest(errCapabilityUnsupported).
+		Wrap(fmt.Errorf("%s: 不支持%s", provider, what))
 }
 
 // CallbackResult 是验签解析后的回调结论。RefundNo 非空时是退款回执。

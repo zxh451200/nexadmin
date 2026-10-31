@@ -124,6 +124,23 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Order, *PayParam
 	if err != nil {
 		return nil, nil, err
 	}
+	// 下单方式与币种先按渠道能力矩阵判，再建单：支付单的 (biz_type, biz_no) 是唯一索引，
+	// 先落一行「永远付不了款」的 pending 会把业务侧的重试路径一起堵死。
+	// 只对在能力矩阵里显式声明过方式的渠道判罚（CapabilityProvider 是显式声明）：
+	// 没声明的渠道仍由它自己的 cnyOnly 等渠道内检查兜底，避免矩阵缺省误杀既有流程。
+	// 这里的错误码是契约里的 PAY_*，可 i18n；渠道内检查的 WithMsg 文案不可翻译。
+	if p, perr := LookupProvider(ch.Provider); perr == nil {
+		if cp, isCaps := p.(CapabilityProvider); isCaps {
+			caps := cp.Capabilities()
+			if !caps.supportsMethod(in.Method) {
+				return nil, nil, capabilityUnsupported(ch.Provider, "支付方式 "+in.Method)
+			}
+			if !caps.supportsCurrency(in.Currency) {
+				return nil, nil, response.BadRequest(errCurrencyUnsupported).
+					Wrap(fmt.Errorf("%s: 不支持币种 %s", ch.Provider, in.Currency))
+			}
+		}
+	}
 	id, err := idgen.Next()
 	if err != nil {
 		return nil, nil, err
@@ -216,8 +233,16 @@ func (s *Service) HandleCallback(ctx context.Context, in CallbackInput) (*Order,
 	res, verr := p.VerifyCallback(in, cfg)
 	payload := truncate(string(in.Body), 4000)
 	if verr != nil {
-		s.recordCallback(ctx, ch.TenantID, ch.Code, "", false, ResultSignInvalid, payload)
-		return nil, response.BadRequest(errSignInvalid)
+		// 时钟异常（时间窗超限）与验签失败都留审计，但必须分开：前者通常是服务器时钟
+		// 或渠道配置问题，混进 sign_invalid 会把排障方向带歪成「渠道伪造通知」。
+		result, errKey := ResultSignInvalid, errSignInvalid
+		if errors.Is(verr, errNotifyStale) {
+			result, errKey = ResultStale, errNotifyStaleKey
+		}
+		s.recordCallback(ctx, callbackAuditRow{
+			TenantID: ch.TenantID, Channel: ch.Code, Result: result, Payload: payload,
+		})
+		return nil, response.BadRequest(errKey)
 	}
 	if res.RefundNo != "" {
 		r, changed, rerr := s.transitionRefund(ctx, res)
@@ -231,7 +256,10 @@ func (s *Service) HandleCallback(ctx context.Context, in CallbackInput) (*Order,
 		} else if isNotFound(rerr) {
 			result = ResultOrderMissing
 		}
-		s.recordCallback(ctx, ch.TenantID, ch.Code, res.PaymentNo, true, result, payload)
+		s.recordCallback(ctx, callbackAuditRow{
+			TenantID: ch.TenantID, Channel: ch.Code, PaymentNo: res.PaymentNo,
+			NotifyID: res.NotifyID, OK: true, Result: result, Payload: payload,
+		})
 		if rerr != nil {
 			return nil, rerr
 		}
@@ -248,7 +276,10 @@ func (s *Service) HandleCallback(ctx context.Context, in CallbackInput) (*Order,
 	} else if isNotFound(err) {
 		result = ResultOrderMissing
 	}
-	s.recordCallback(ctx, ch.TenantID, ch.Code, res.PaymentNo, true, result, payload)
+	s.recordCallback(ctx, callbackAuditRow{
+		TenantID: ch.TenantID, Channel: ch.Code, PaymentNo: res.PaymentNo,
+		NotifyID: res.NotifyID, OK: true, Result: result, Payload: payload,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -525,6 +556,7 @@ func (s *Service) CreateRefund(ctx context.Context, in RefundInput) (*Refund, er
 		if err != nil {
 			return err
 		}
+		idem := refundIdempotencyKey(o.PaymentNo, in.BizType, in.BizNo)
 		out = Refund{
 			RefundNo: "RF" + formatID(int64(id)), PaymentNo: o.PaymentNo,
 			SubjectID: o.SubjectID, BizType: in.BizType, BizNo: in.BizNo,
@@ -532,6 +564,9 @@ func (s *Service) CreateRefund(ctx context.Context, in RefundInput) (*Refund, er
 			Currency: o.Currency, FxRateMicro: o.FxRateMicro,
 			Reason: truncate(in.Reason, 200), OperatorID: truncate(in.OperatorID, 64),
 			Status: RefundPending,
+			// 发给渠道的幂等号必须落库：回调丢失后的补偿查询要带同一个号，
+			// 渠道才认得出这是同一笔退款（否则查出来是「查无此退款」）。
+			IdempotencyKey: truncate(idem, 80),
 		}
 		out.ID = id
 		// 事务内的一切读必须走 tx：s.db 会从池里另取一条连接，并发退款时
@@ -547,7 +582,7 @@ func (s *Service) CreateRefund(ctx context.Context, in RefundInput) (*Refund, er
 		res, err := p.Refund(ctx, RefundRequest{
 			RefundNo: out.RefundNo, PaymentNo: o.PaymentNo, ChannelTxnID: txnIDOf(&o),
 			AmountMinor: in.AmountMinor, OrderAmountMinor: o.AmountMinor,
-			IdempotencyKey: refundIdempotencyKey(o.PaymentNo, in.BizType, in.BizNo),
+			IdempotencyKey: idem,
 			NotifyURL:      notify,
 		}, cfg)
 		if err != nil {
@@ -1069,17 +1104,30 @@ func (s *Service) matchRule(db *gorm.DB, ctx context.Context, subjectID, bizType
 	return &rule, nil
 }
 
+// callbackAuditRow 是一条回调审计的落库内容。用结构体而不是八个位置参数：
+// 审计字段会随渠道能力增加（notify_id 等），位置参数每加一个要动全部调用点。
+type callbackAuditRow struct {
+	TenantID  idgen.ID
+	Channel   string
+	PaymentNo string
+	NotifyID  string
+	OK        bool
+	Result    string
+	Payload   string
+}
+
 // recordCallback 落回调审计；失败只告警不阻断（审计不应反过来挡资金链路）。
-// 审计行落在渠道所属租户下；tenantID 为 0（渠道都没找到）时不落库。
-func (s *Service) recordCallback(ctx context.Context, tenantID idgen.ID, channel, paymentNo string, ok bool, result, payload string) {
-	if tenantID == 0 {
+// 审计行落在渠道所属租户下；TenantID 为 0（渠道都没找到）时不落库。
+func (s *Service) recordCallback(ctx context.Context, a callbackAuditRow) {
+	if a.TenantID == 0 {
 		return
 	}
 	row := Callback{
-		ChannelCode: channel, PaymentNo: truncate(paymentNo, 40),
-		OK: ok, Result: truncate(result, 32), Payload: payload,
+		ChannelCode: a.Channel, PaymentNo: truncate(a.PaymentNo, 40),
+		NotifyID: truncate(a.NotifyID, 128),
+		OK:       a.OK, Result: truncate(a.Result, 32), Payload: a.Payload,
 	}
-	row.TenantID = tenantID
+	row.TenantID = a.TenantID
 	if err := s.db.WithContext(tenant.Skip(ctx)).Create(&row).Error; err != nil {
 		s.logWarn("pay: save callback log failed", "err", err.Error())
 	}
