@@ -235,6 +235,7 @@ func (h *handler) createAuth(c *gin.Context) {
 		Method      string `json:"method"`
 		AmountMinor int64  `json:"amountMinor"`
 		Currency    string `json:"currency"`
+		PayerID     string `json:"payerId"`
 		CardLast4   string `json:"cardLast4"`
 		ValidDays   int    `json:"validDays"`
 		Remark      string `json:"remark"`
@@ -245,7 +246,8 @@ func (h *handler) createAuth(c *gin.Context) {
 	a, err := h.svc.CreateAuth(c.Request.Context(), CreateAuthInput{
 		BizType: f.BizType, BizNo: f.BizNo, SubjectID: f.SubjectID, ChannelCode: f.ChannelCode,
 		Method: f.Method, AmountMinor: f.AmountMinor, Currency: f.Currency,
-		CardLast4: f.CardLast4, ValidDays: f.ValidDays, Remark: f.Remark,
+		// 渠道侧买家标识：支付宝资金授权必须有它，缺失时渠道会明确拒绝（不伪造冻结）。
+		PayerID: f.PayerID, CardLast4: f.CardLast4, ValidDays: f.ValidDays, Remark: f.Remark,
 	})
 	if a != nil {
 		respond(c, authView(a), err)

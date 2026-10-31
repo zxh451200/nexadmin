@@ -1139,6 +1139,14 @@ func (s *Service) logWarn(msg string, keysAndValues ...any) {
 	}
 }
 
+// logInfo 记「做过并且有结果」的运维事件（补查了几笔、翻了几笔）。
+// 幂等/补偿类钩子必须无条件留一条这样的日志，否则「跳过了」和「根本没跑」长得一样。
+func (s *Service) logInfo(msg string, keysAndValues ...any) {
+	if s.log != nil {
+		s.log.Info(msg, keysAndValues...)
+	}
+}
+
 // isNotFound 判定框架 404 语义错误（回调审计区分 order_not_found 与 duplicate 用）。
 func isNotFound(err error) bool {
 	var re *response.Error

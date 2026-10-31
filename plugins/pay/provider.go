@@ -3,6 +3,7 @@ package pay
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -279,6 +280,28 @@ func capsOf(providerName string) (Capabilities, error) {
 	return ProviderCaps(p), nil
 }
 
+// payMethodCanonical 把各渠道宽松接受的下单方式别名归一到契约里的规范值。
+// 能力门禁比较的是规范值：渠道的 Create 往往接受一串别名（scan/precreate/offline…），
+// 而能力矩阵只声明规范名，直接拿原始串去比会把合法请求误拒。
+var payMethodCanonical = map[string]string{
+	"native": "native", "qr": "native", "scan": "native", "precreate": "native", "offline": "native",
+	"page": "page", "web": "page", "pc": "page",
+	"wap": "wap", "h5": "wap", "mweb": "wap",
+	"jsapi": "jsapi", "mp": "jsapi", "mini": "jsapi", "miniprogram": "jsapi",
+	"app":      "app",
+	"micropay": "micropay", "facepay": "micropay", "barcode": "micropay",
+	"auth_code": "micropay", "authcode": "micropay",
+}
+
+// normalizePayMethod 归一单个下单方式取值；未知取值原样返回（小写去空格）。
+func normalizePayMethod(method string) string {
+	m := strings.ToLower(strings.TrimSpace(method))
+	if v, ok := payMethodCanonical[m]; ok {
+		return v
+	}
+	return m
+}
+
 // supportsCurrency 报告渠道是否收款该币种；空币种按 CNY 处理（与下单口径一致）。
 func (c Capabilities) supportsCurrency(currency string) bool {
 	currency = strings.ToUpper(strings.TrimSpace(currency))
@@ -297,17 +320,38 @@ func (c Capabilities) supportsCurrency(currency string) bool {
 }
 
 // supportsMethod 报告渠道是否支持该下单方式；空方式表示由渠道自决，放行。
+// 两侧都先归一：渠道声明 "h5"、请求写 "wap" 必须算命中。
 func (c Capabilities) supportsMethod(method string) bool {
-	method = strings.ToLower(strings.TrimSpace(method))
-	if method == "" || len(c.Methods) == 0 {
+	want := normalizePayMethod(method)
+	if want == "" || len(c.Methods) == 0 {
 		return true
 	}
 	for _, v := range c.Methods {
-		if strings.EqualFold(strings.TrimSpace(v), method) {
+		if normalizePayMethod(v) == want {
 			return true
 		}
 	}
 	return false
+}
+
+// canonicalMethods 返回去重后的规范方式列表，给能力矩阵接口展示用
+// （前端下拉要的是规范名，不是渠道各自接受的别名串）。
+func (c Capabilities) canonicalMethods() []string {
+	seen := map[string]bool{}
+	out := make([]string, 0, len(c.Methods))
+	for _, v := range c.Methods {
+		m := normalizePayMethod(v)
+		if m == "" || seen[m] {
+			continue
+		}
+		seen[m] = true
+		out = append(out, m)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	sort.Strings(out)
+	return out
 }
 
 // capabilityUnsupported 是渠道能力缺口的统一错误：主文案走 i18n（字典里那条

@@ -323,6 +323,32 @@ paths:
                       data: { $ref: '#/components/schemas/RefundView' }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  /refunds/{refundNo}/sync:
+    post:
+      tags: [refunds]
+      summary: 向渠道补查退款结果（回调丢失时的补偿路径）
+      description: |
+        用退款单落库的渠道幂等号去查，结论沿用回调那一条翻转路径（金额核对 + 行锁 + 事件）。
+        渠道不支持退款查询时报 PAY_CAPABILITY_UNSUPPORTED；渠道查无此退款时保持 pending
+        并累计 syncAttempts，绝不猜结论。
+      operationId: syncRefund
+      x-permission: pay:edit
+      parameters:
+        - { name: refundNo, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: 补查后的退款单
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/RefundView' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /authorizations:
     post:
       tags: [authorizations]

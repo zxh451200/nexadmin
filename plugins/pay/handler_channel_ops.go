@@ -28,12 +28,24 @@ func (h *handler) capabilities(c *gin.Context) {
 		if caps.Currencies == nil {
 			caps.Currencies = []string{"CNY"}
 		}
-		if caps.Methods == nil {
-			caps.Methods = []string{}
-		}
+		// 下发规范化的方式名：渠道各自接受一串别名（scan/precreate/mini/mweb…），
+		// 前端下拉要的是归一后的取值，否则同一能力会有多种写法在字典里漂着。
+		caps.Methods = caps.canonicalMethods()
 		out = append(out, ProviderCapabilityView{Provider: n, Capabilities: caps})
 	}
 	response.OK(c, out)
+}
+
+// POST /plugins/pay/refunds/:no/sync —— 主动向渠道查退款结果。
+// 回调丢失时退款单会一直停在 pending；这条路径用落库的渠道幂等号去查，结论沿用
+// 回调那一条翻转路径（金额核对 + 行锁 + 事件），不另写一套。
+func (h *handler) syncRefund(c *gin.Context) {
+	r, err := h.svc.SyncRefund(c.Request.Context(), c.Param("no"))
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, refundView(r))
 }
 
 // GET /plugins/pay/outbox —— 出站箱分页列表（载荷只在详情接口回显）。

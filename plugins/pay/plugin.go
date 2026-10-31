@@ -75,6 +75,7 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.POST("/refunds", idempotency(d.DB), core.Perm("pay:refund"), h.createRefund)
 	g.GET("/refunds", core.Perm("pay:list"), h.listRefunds)
 	g.GET("/refunds/:no", core.Perm("pay:list"), h.getRefund)
+	g.POST("/refunds/:no/sync", core.Perm("pay:edit"), h.syncRefund)
 	// 预授权
 	g.POST("/authorizations", idempotency(d.DB), core.Perm("pay:auth"), h.createAuth)
 	g.GET("/authorizations", core.Perm("pay:list"), h.listAuths)
@@ -127,7 +128,8 @@ func (m *module) Start(ctx context.Context, d *core.Deps) error {
 	return nil
 }
 
-// runSweeper 每分钟清扫：过期 pending 支付单置 closed，过期预授权置 expired。
+// runSweeper 每分钟清扫：过期 pending 支付单置 closed，过期预授权置 expired，
+// 卡住不动的退款单主动向渠道补查一次（回调丢失时退款不能永远停在 refunding）。
 func (s *Service) runSweeper(ctx context.Context) {
 	t := time.NewTicker(time.Minute)
 	defer t.Stop()
@@ -143,6 +145,21 @@ func (s *Service) runSweeper(ctx context.Context) {
 			if _, err := s.ExpireAuths(tenant.Skip(ctx), now); err != nil {
 				s.logWarn("pay: expire auths failed", "err", err.Error())
 			}
+			// 退款补查：只处理 10 分钟前发起、仍未收到回执的退款单，单轮上限 50 笔；
+			// 服务层另有节流，同一笔不会每分钟打一次渠道。
+			summary, err := s.SyncStuckRefunds(tenant.Skip(ctx), now, refundSweepOlderThan, refundSweepLimit)
+			if err != nil {
+				s.logWarn("pay: sync stuck refunds failed", "err", err.Error())
+			} else if summary.Checked > 0 {
+				s.logInfo("pay: stuck refunds swept", "checked", summary.Checked,
+					"flipped", summary.Flipped, "notFound", summary.NotFound, "failed", summary.Failed)
+			}
 		}
 	}
 }
+
+// 退款补查清扫的口径：卡住多久算卡住、单轮最多查多少笔。
+const (
+	refundSweepOlderThan = 10 * time.Minute
+	refundSweepLimit     = 50
+)
