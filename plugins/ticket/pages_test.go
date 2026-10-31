@@ -49,4 +49,15 @@ func TestViewPageEscapesPrefill(t *testing.T) {
 	if !strings.Contains(body, "附件") || !strings.Contains(body, "/attachments/") {
 		t.Fatal("view page should render the attachments block and download/upload endpoints")
 	}
+	// 客户看得到处理进度（提交与状态变化），也拿得到评价接口；两者都靠同一个公开响应。
+	if !strings.Contains(body, "处理进度") || !strings.Contains(body, "data.data.activities") {
+		t.Fatal("view page should render the customer-visible activity trail")
+	}
+	prog := servePage(t, h.viewPage, "/ticket/view?lang=en")
+	if !strings.Contains(prog, "Progress") || !strings.Contains(prog, "\"timelineStat\":\"Status changed to\"") {
+		t.Fatalf("en progress strings missing: %s", prog)
+	}
+	if strings.Contains(prog, "提交工单") {
+		t.Fatal("英文页夹带中文进度文案")
+	}
 }

@@ -2,12 +2,14 @@ package workflow
 
 import (
 	"database/sql"
+	"fmt"
 	"net"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	mysqldrv "github.com/go-sql-driver/mysql"
 	"gorm.io/gorm"
@@ -35,7 +37,9 @@ func setupWorkflowDB(t *testing.T) *gorm.DB {
 	}
 	port, _ := strconv.Atoi(portStr)
 	if cfgDSN.DBName == "" {
-		t.Fatal("DSN 必须带库名")
+		// 允许服务端 DSN（不带库名）：与 ticket/pay/ldap/totp 的 IT 同一口径，
+		// 自动开一个库名含 _it 的一次性库，跑完由下面的 cleanup 删掉。
+		cfgDSN.DBName = fmt.Sprintf("nexadmin_workflow_it_%d", time.Now().UnixNano())
 	}
 	disposable := strings.Contains(cfgDSN.DBName, "_it") || strings.Contains(cfgDSN.DBName, "test")
 	if disposable {

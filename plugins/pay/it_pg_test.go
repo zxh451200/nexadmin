@@ -40,7 +40,6 @@ func TestITPostgresMigrationsAndConcurrency(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open admin conn: %v", err)
 	}
-	defer func() { _ = admin.Close() }()
 	if err := admin.Ping(); err != nil {
 		t.Fatalf("postgres not reachable: %v", err)
 	}
@@ -49,12 +48,23 @@ func TestITPostgresMigrationsAndConcurrency(t *testing.T) {
 	if _, err := admin.Exec(`CREATE DATABASE ` + quoteIdent(dbName)); err != nil {
 		t.Fatalf("create throwaway db: %v", err)
 	}
+	var gdb *gorm.DB
+	// 收尾顺序：关业务连接池 → 删库 → 关管理连接。admin.Close() 放 defer 会先于 t.Cleanup 执行，
+	// DROP 报 "sql: database is closed" 且错误被吞掉，每跑一次就在实例上留一个临时库。
 	t.Cleanup(func() {
-		_, _ = admin.Exec(`DROP DATABASE ` + quoteIdent(dbName) + ` WITH (FORCE)`)
+		if gdb != nil {
+			if sqlDB, err := gdb.DB(); err == nil {
+				_ = sqlDB.Close()
+			}
+		}
+		if _, err := admin.Exec(`DROP DATABASE ` + quoteIdent(dbName) + ` WITH (FORCE)`); err != nil {
+			t.Errorf("drop throwaway db %s: %v", dbName, err)
+		}
+		_ = admin.Close()
 	})
 
 	gormDSN := appendDBName(dsn, dbName)
-	gdb, err := gorm.Open(gormpg.New(gormpg.Config{DSN: gormDSN, PreferSimpleProtocol: true}), &gorm.Config{})
+	gdb, err = gorm.Open(gormpg.New(gormpg.Config{DSN: gormDSN, PreferSimpleProtocol: true}), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open gorm: %v", err)
 	}

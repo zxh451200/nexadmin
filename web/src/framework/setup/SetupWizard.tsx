@@ -4,10 +4,12 @@ import { useNavigate } from 'react-router-dom'
 import { useMemo } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { CheckCircle2, Circle, Eye, EyeOff, Loader2, XCircle } from 'lucide-react'
+import { CheckCircle2, Circle, Eye, EyeOff, Loader2, TriangleAlert, XCircle } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { BrandMark } from '@/framework/components/BrandMark'
+import { MOCK_ENABLED } from '@/framework/env'
 import { LanguageSwitch } from '@/framework/i18n/LanguageSwitch'
+import { Alert, AlertDescription, AlertTitle } from '@/framework/ui/alert'
 import { Input } from '@/framework/ui/input'
 import { Label } from '@/framework/ui/label'
 import { ThemeToggle } from '@/framework/theme/ThemeToggle'
@@ -151,6 +153,14 @@ export default function SetupWizard() {
             <p className="text-sm text-muted-foreground">{t('setup.subtitle')}</p>
           </div>
         </header>
+
+        {MOCK_ENABLED && (
+          <Alert variant="warning" className="mb-6">
+            <TriangleAlert aria-hidden="true" />
+            <AlertTitle>{t('setup.mockTitle')}</AlertTitle>
+            <AlertDescription>{t('setup.mockNotice')}</AlertDescription>
+          </Alert>
+        )}
 
         <ol className="mb-6 hidden items-center gap-2 md:flex" aria-label={t('setup.steps')}>
           {STEPS.map((k, i) => (

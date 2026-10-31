@@ -54,6 +54,23 @@
       "agent": "客服",
       "system": "系统"
     },
+    "export": {
+      "action": "导出",
+      "tooMany": "符合条件的工单超过导出上限，请缩小筛选范围",
+      "failed": "导出失败，请稍后重试"
+    },
+    "activity": {
+      "created": "提交了工单",
+      "statusChanged": "把状态从{{from}}改为{{to}}",
+      "priorityChanged": "把优先级从{{from}}改为{{to}}",
+      "assigneeChanged": "把负责人从{{from}}改为{{to}}",
+      "groupChanged": "把分组从{{from}}改为{{to}}",
+      "tagsChanged": "把标签从{{from}}改为{{to}}",
+      "attachmentAdded": "上传了附件 {{name}}",
+      "ratingAdded": "评价了 {{score}} 分",
+      "ruleApplied": "命中自动化规则「{{rule}}」",
+      "empty": "未分配"
+    },
     "actions": {
       "processing": "开始处理",
       "resume": "继续处理",

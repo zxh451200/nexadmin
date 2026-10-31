@@ -285,8 +285,21 @@ func (s *Service) AssignGroup(ctx context.Context, ticketNo string, groupID idge
 				assigned = true
 			}
 		}
+		fromGroup, fromAssignee := t.GroupName, t.AssigneeName
+		toAssignee, _ := updates["assignee_name"].(string)
 		if err := tx.Model(&Ticket{}).Where("id = ?", int64(t.ID)).Updates(updates).Error; err != nil {
 			return err
+		}
+		act := actorFrom(ctx)
+		if t.GroupID != groupID || fromGroup != g.Name {
+			if err := s.recordActivity(ctx, tx, &t, act, ActGroupChanged, fromGroup, g.Name, ""); err != nil {
+				return err
+			}
+		}
+		if assigned && toAssignee != fromAssignee {
+			if err := s.recordActivity(ctx, tx, &t, act, ActAssigneeChanged, fromAssignee, toAssignee, ""); err != nil {
+				return err
+			}
 		}
 		return tx.Where("id = ?", int64(t.ID)).Take(&t).Error
 	})
@@ -314,6 +327,9 @@ func (s *Service) autoAssignGroup(ctx context.Context, t *Ticket) {
 		s.logWarn("ticket: resolve auto-assign group failed", "err", err.Error())
 		return
 	}
+	// 分派是「发生的事」，不是人做的动作：发起人记系统，否则事后看不出这单怎么落到某人手里。
+	oldGroupID, oldGroupName := t.GroupID, t.GroupName
+	oldAssigneeID, oldAssigneeName := t.AssigneeID, t.AssigneeName
 	updates := map[string]any{"group_id": g.ID, "group_name": g.Name}
 	t.GroupID, t.GroupName = g.ID, g.Name
 	if t.AssigneeID == 0 {
@@ -327,6 +343,17 @@ func (s *Service) autoAssignGroup(ctx context.Context, t *Ticket) {
 	if err := s.db.WithContext(ctx).Model(&Ticket{}).Where("id = ?", int64(t.ID)).Updates(updates).Error; err != nil {
 		s.logWarn("ticket: auto assign update failed", "err", err.Error())
 		return
+	}
+	act := systemActor("auto assign")
+	if oldGroupID != t.GroupID {
+		if err := s.recordActivity(ctx, nil, t, act, ActGroupChanged, oldGroupName, t.GroupName, ""); err != nil {
+			s.logWarn("ticket: record auto group failed", "err", err.Error())
+		}
+	}
+	if oldAssigneeID != t.AssigneeID {
+		if err := s.recordActivity(ctx, nil, t, act, ActAssigneeChanged, oldAssigneeName, t.AssigneeName, ""); err != nil {
+			s.logWarn("ticket: record auto assign failed", "err", err.Error())
+		}
 	}
 	if t.AssigneeID != 0 {
 		s.notifyAssign(ctx, t)

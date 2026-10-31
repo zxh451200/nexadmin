@@ -68,9 +68,16 @@ func (s *Service) SetTags(ctx context.Context, ticketNo string, tags []string) (
 		}
 		return nil, err
 	}
+	oldTags := strings.Join(splitTags(t.Tags), ",")
 	if err := s.db.WithContext(ctx).Model(&Ticket{}).Where("id = ?", int64(t.ID)).
 		Update("tags", canonicalTags(normalized)).Error; err != nil {
 		return nil, err
+	}
+	newTags := strings.Join(normalized, ",")
+	if oldTags != newTags {
+		if err := s.recordActivity(ctx, nil, &t, actorFrom(ctx), ActTagsChanged, oldTags, newTags, ""); err != nil {
+			return nil, err
+		}
 	}
 	t.Tags, t.TagList = canonicalTags(normalized), normalized
 	return &t, nil

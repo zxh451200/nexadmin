@@ -110,24 +110,6 @@ func splitTags(raw string) []string {
 
 func (Ticket) TableName() string { return "plg_ticket" }
 
-// SLADurations 是各优先级的响应时限（工程参考值，非标准强制；坐席回复后重置）。
-func SLADurations() map[string]time.Duration {
-	return map[string]time.Duration{
-		PriorityUrgent: 2 * time.Hour,
-		PriorityHigh:   8 * time.Hour,
-		PriorityNormal: 24 * time.Hour,
-		PriorityLow:    72 * time.Hour,
-	}
-}
-
-// SLAFor 返回优先级对应的响应时限；未知优先级按 normal。
-func SLAFor(priority string) time.Duration {
-	if d, ok := SLADurations()[priority]; ok {
-		return d
-	}
-	return SLADurations()[PriorityNormal]
-}
-
 // TicketReply 是一条回复；content 只支持文本（P0），附件留给 P1。
 type TicketReply struct {
 	database.PlatformModel

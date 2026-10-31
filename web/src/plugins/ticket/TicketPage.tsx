@@ -3,6 +3,7 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleCheck,
+  Download,
   Paperclip,
   Plus,
   RotateCcw,
@@ -38,6 +39,8 @@ import { Textarea } from '@/framework/ui/textarea'
 import { cn } from '@/lib/utils'
 import {
   downloadAttachment,
+  exportTickets,
+  isExportTooMany,
   useAssignGroup,
   useAssignTicket,
   useBizTypes,
@@ -68,9 +71,11 @@ import {
   type CannedReply,
   type SLASetting,
   type Ticket,
+  type TicketActivity,
   type TicketAttachment,
   type TicketGroup,
   type TicketPriority,
+  type TicketQueryParams,
   type TicketReply,
   type TicketRule,
 } from './api'
@@ -78,6 +83,11 @@ import { formatTime, priorityVariant, statusVariant } from './format'
 import { TicketStatsPanel } from './TicketStatsPanel'
 
 const ALL = '__all'
+
+/** 线程里的一条：客户/坐席说的话，或系统里发生的事。 */
+type ThreadItem =
+  | { kind: 'reply'; at: string; reply: TicketReply }
+  | { kind: 'act'; at: string; act: TicketActivity }
 const PAGE_SIZE = 20
 const STATUSES = ['open', 'processing', 'pending', 'resolved', 'closed'] as const
 const PRIORITIES = ['urgent', 'high', 'normal', 'low'] as const
@@ -184,6 +194,7 @@ export default function TicketPage() {
   const [tagOpen, setTagOpen] = useState(false)
   const [tagTarget, setTagTarget] = useState<Ticket | null>(null)
   const [tagDraft, setTagDraft] = useState('')
+  const [exporting, setExporting] = useState(false)
 
   // 搜索防抖：300ms 内连续输入只发一次请求
   useEffect(() => {
@@ -196,7 +207,7 @@ export default function TicketPage() {
     setPage(1)
   }, [appliedKeyword, statusFilter, priorityFilter, assigneeFilter, overdueOnly, groupFilter, tagFilter])
 
-  const tickets = useTickets({
+  const listFilters: Omit<TicketQueryParams, 'page' | 'pageSize'> = {
     status: statusFilter,
     priority: priorityFilter,
     keyword: appliedKeyword || undefined,
@@ -205,9 +216,9 @@ export default function TicketPage() {
     mine: assigneeFilter === 'mine' ? '1' : undefined,
     groupId: groupFilter !== '0' ? groupFilter : undefined,
     tag: tagFilter !== '0' ? tagFilter : undefined,
-    page,
-    pageSize: PAGE_SIZE,
-  })
+  }
+
+  const tickets = useTickets({ ...listFilters, page, pageSize: PAGE_SIZE })
   const list = tickets.data?.list ?? []
   const total = tickets.data?.total ?? 0
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE))
@@ -216,6 +227,18 @@ export default function TicketPage() {
   useEffect(() => {
     if (page > pages) setPage(pages)
   }, [page, pages])
+
+  // 导出复用列表当前的筛选对象：看到的和导出的必须同源，最多 5000 行由服务端把关。
+  const onExport = async () => {
+    setExporting(true)
+    try {
+      await exportTickets(listFilters)
+    } catch (e) {
+      toast.error(isExportTooMany(e) ? t('plugin_ticket.export.tooMany') : t('plugin_ticket.export.failed'))
+    } finally {
+      setExporting(false)
+    }
+  }
 
   // 站内信 / 分享链接直达某张工单
   const ticketParam = params.get('ticket') ?? ''
@@ -633,6 +656,10 @@ export default function TicketPage() {
         description={t('plugin_ticket.description')}
         actions={
           <>
+            <Button variant="outline" onClick={() => void onExport()} disabled={exporting}>
+              <Download aria-hidden="true" />
+              <span className="max-sm:sr-only">{t('plugin_ticket.export.action')}</span>
+            </Button>
             <Can perm="ticket:edit">
               <Button variant="outline" onClick={openRules}>
                 <Zap aria-hidden="true" />
@@ -833,6 +860,7 @@ export default function TicketPage() {
               canned={canned.data ?? []}
               onManageCanned={() => setCannedOpen(true)}
               attachments={replies.data?.attachments ?? []}
+              activities={replies.data?.activities ?? []}
               onUpload={uploadAtt}
               uploading={uploadAttachmentMut.isPending}
             />
@@ -1575,6 +1603,7 @@ function TicketThread({
   canned,
   onManageCanned,
   attachments,
+  activities,
   onUpload,
   uploading,
 }: {
@@ -1591,6 +1620,7 @@ function TicketThread({
   canned: CannedReply[]
   onManageCanned: () => void
   attachments: TicketAttachment[]
+  activities: TicketActivity[]
   onUpload: (file: File, internal: boolean) => Promise<void>
   uploading: boolean
 }) {
@@ -1600,9 +1630,15 @@ function TicketThread({
   const bottomRef = useRef<HTMLDivElement | null>(null)
   const fileRef = useRef<HTMLInputElement | null>(null)
 
+  // 动态与回复按时间合并成一条流：坐席要看的是「这一单发生了什么」，不是两张表顺序拼接。
+  const stream: ThreadItem[] = [
+    ...replies.map((reply) => ({ kind: 'reply' as const, at: reply.createdAt, reply })),
+    ...activities.map((act) => ({ kind: 'act' as const, at: act.createdAt, act })),
+  ].sort((a, b) => a.at.localeCompare(b.at))
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: 'end' })
-  }, [replies.length, ticket?.ticketNo])
+  }, [stream.length, ticket?.ticketNo])
 
   // 切工单时清空未发送的草稿，避免把上一张的回复发到下一张
   useEffect(() => {
@@ -1624,6 +1660,41 @@ function TicketThread({
     void onSend(content, internal)
       .then(() => setDraft(''))
       .catch(() => undefined)
+  }
+
+  const activityValue = (action: string, value: string) => {
+    if (!value) return t('plugin_ticket.activity.empty')
+    if (action === 'status_changed') return t(`plugin_ticket.status.${value}`, value)
+    if (action === 'priority_changed') return t(`plugin_ticket.priority.${value}`, value)
+    return value
+  }
+
+  const activityLabel = (a: TicketActivity) => {
+    const from = activityValue(a.action, a.fromValue)
+    const to = activityValue(a.action, a.toValue)
+    switch (a.action) {
+      case 'created':
+        return t('plugin_ticket.activity.created')
+      case 'status_changed':
+        return t('plugin_ticket.activity.statusChanged', { from, to })
+      case 'priority_changed':
+        return t('plugin_ticket.activity.priorityChanged', { from, to })
+      case 'assignee_changed':
+        return t('plugin_ticket.activity.assigneeChanged', { from, to })
+      case 'group_changed':
+        return t('plugin_ticket.activity.groupChanged', { from, to })
+      case 'tags_changed':
+        return t('plugin_ticket.activity.tagsChanged', { from, to })
+      case 'attachment_added':
+        return t('plugin_ticket.activity.attachmentAdded', { name: a.detail })
+      case 'rating_added':
+        return t('plugin_ticket.activity.ratingAdded', { score: to })
+      case 'rule_applied':
+        return t('plugin_ticket.activity.ruleApplied', { rule: to })
+      default:
+        // 后端新增动作码时前端不该整条丢掉：至少把原值显示出来。
+        return `${a.action}${to ? `: ${to}` : ''}`
+    }
   }
 
   const insertCanned = (id: string) => {
@@ -1767,7 +1838,23 @@ function TicketThread({
         {loading && replies.length === 0 ? (
           <div className="text-center text-sm text-muted-foreground">{t('plugin_ticket.loading')}</div>
         ) : null}
-        {replies.map((r) => (
+        {stream.map((item) => {
+          if (item.kind === 'act') {
+            const a = item.act
+            return (
+              <div key={`act-${a.id}`} className="flex justify-center">
+                <span className="max-w-[85%] rounded-full bg-muted px-2.5 py-1 text-center text-[11px] text-muted-foreground">
+                  <span className="font-medium">{a.actorName || t(`plugin_ticket.repliers.${a.actorType}`)}</span>
+                  {' · '}
+                  {activityLabel(a)}
+                  {' · '}
+                  {formatTime(a.createdAt, i18n.language)}
+                </span>
+              </div>
+            )
+          }
+          const r = item.reply
+          return (
           <div
             key={r.id}
             className={cn('flex', r.internal ? 'justify-start' : r.replierType === 'agent' ? 'justify-end' : 'justify-start')}
@@ -1798,7 +1885,8 @@ function TicketThread({
               <div className="whitespace-pre-wrap break-words">{r.content}</div>
             </div>
           </div>
-        ))}
+          )
+        })}
         <div ref={bottomRef} />
       </div>
 

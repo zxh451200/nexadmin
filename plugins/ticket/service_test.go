@@ -55,6 +55,15 @@ func ticketRow(no, status string, replySeq int64) *sqlmock.Rows {
 }
 
 func ticketRowWithRating(no, status string, replySeq int64, rating any) *sqlmock.Rows {
+	return ticketRowCols(no, status, replySeq, rating, 0, "")
+}
+
+// ticketRowAssignee 同形状，只把负责人两列填上（动态用例要区分「真改派」与「重复认领同一个人」）。
+func ticketRowAssignee(no, status string, replySeq int64, assigneeID int64, assigneeName string) *sqlmock.Rows {
+	return ticketRowCols(no, status, replySeq, nil, assigneeID, assigneeName)
+}
+
+func ticketRowCols(no, status string, replySeq int64, rating any, assigneeID int64, assigneeName string) *sqlmock.Rows {
 	return sqlmock.NewRows([]string{
 		"id", "ticket_no", "biz_type", "biz_no", "title", "status", "priority",
 		"reporter_type", "reporter_id", "reporter_name", "assignee_id", "assignee_name",
@@ -63,7 +72,7 @@ func ticketRowWithRating(no, status string, replySeq int64, rating any) *sqlmock
 		"resolution_due_at", "resolution_overdue",
 	}).AddRow(
 		1001, no, "trade_group", "G-1", "order broken", status, PriorityNormal,
-		ReplierReporter, "tok-1", "visitor", 0, "",
+		ReplierReporter, "tok-1", "visitor", assigneeID, assigneeName,
 		replySeq, nil, testNow, ReplierReporter, "hi",
 		testNow, testNow, rating, "", nil, nil, false,
 	)
@@ -135,19 +144,6 @@ func TestResumeDueAt(t *testing.T) {
 	}
 }
 
-// SLA 时限：按优先级取值，未知回落 normal。
-func TestSLAFor(t *testing.T) {
-	if SLAFor(PriorityUrgent) != 2*time.Hour {
-		t.Fatal("urgent should be 2h")
-	}
-	if SLAFor(PriorityNormal) != 24*time.Hour {
-		t.Fatal("normal should be 24h")
-	}
-	if SLAFor("whatever") != 24*time.Hour {
-		t.Fatal("unknown priority should fall back to normal")
-	}
-}
-
 // MarkOverdue 先取候选再按 id 更新（gorm 默认事务包裹 → Begin/Commit）。
 func TestMarkOverdue(t *testing.T) {
 	db, m := mockDB(t)
@@ -191,6 +187,7 @@ func TestNewTicketNotifiesAgents(t *testing.T) {
 	m.ExpectBegin()
 	m.ExpectExec("INSERT INTO `plg_ticket`").WillReturnResult(sqlmock.NewResult(1, 1))
 	m.ExpectExec("INSERT INTO `plg_ticket_reply`").WillReturnResult(sqlmock.NewResult(1, 1))
+	m.ExpectExec("INSERT INTO `plg_ticket_activity`").WillReturnResult(sqlmock.NewResult(1, 1))
 	m.ExpectCommit()
 	m.ExpectQuery("DISTINCT u.id AS user_id").
 		WillReturnRows(sqlmock.NewRows([]string{"user_id", "tenant_id"}).AddRow(7, 1).AddRow(8, 1))
@@ -224,6 +221,7 @@ func TestCreatePublishesAndInsertsReply(t *testing.T) {
 	m.ExpectBegin()
 	m.ExpectExec("INSERT INTO `plg_ticket`").WillReturnResult(sqlmock.NewResult(1, 1))
 	m.ExpectExec("INSERT INTO `plg_ticket_reply`").WillReturnResult(sqlmock.NewResult(1, 1))
+	m.ExpectExec("INSERT INTO `plg_ticket_activity`").WillReturnResult(sqlmock.NewResult(1, 1))
 	m.ExpectCommit()
 
 	tk, err := s.Create(context.Background(), CreateInput{
@@ -271,6 +269,9 @@ func TestAgentReplyTransitions(t *testing.T) {
 	m.ExpectQuery("SELECT \\* FROM `plg_ticket` WHERE ticket_no = \\?").
 		WillReturnRows(ticketRow("TK1001", StatusOpen, 1))
 	m.ExpectExec("INSERT INTO `plg_ticket_reply`").WillReturnResult(sqlmock.NewResult(1, 1))
+	// 这条回复既推状态（open→pending）又默认认领，所以是两行动态；顺序与 updates 里的赋值顺序一致。
+	m.ExpectExec("INSERT INTO `plg_ticket_activity`").WillReturnResult(sqlmock.NewResult(1, 1))
+	m.ExpectExec("INSERT INTO `plg_ticket_activity`").WillReturnResult(sqlmock.NewResult(1, 1))
 	m.ExpectExec("UPDATE `plg_ticket`").WillReturnResult(sqlmock.NewResult(1, 1))
 	m.ExpectQuery("SELECT \\* FROM `plg_ticket` WHERE id = \\?").
 		WillReturnRows(ticketRow("TK1001", StatusPending, 2))
@@ -302,6 +303,7 @@ func TestVisitorReplyReopens(t *testing.T) {
 	m.ExpectQuery("SELECT \\* FROM `plg_ticket` WHERE ticket_no = \\?").
 		WillReturnRows(ticketRow("TK1001", StatusClosed, 3))
 	m.ExpectExec("INSERT INTO `plg_ticket_reply`").WillReturnResult(sqlmock.NewResult(1, 1))
+	m.ExpectExec("INSERT INTO `plg_ticket_activity`").WillReturnResult(sqlmock.NewResult(1, 1))
 	m.ExpectExec("UPDATE `plg_ticket`").WillReturnResult(sqlmock.NewResult(1, 1))
 	m.ExpectQuery("SELECT \\* FROM `plg_ticket` WHERE id = \\?").
 		WillReturnRows(ticketRow("TK1001", StatusProcessing, 4))
@@ -328,6 +330,7 @@ func TestSetStatusTransitions(t *testing.T) {
 	m.ExpectQuery("SELECT \\* FROM `plg_ticket` WHERE ticket_no = \\?").
 		WillReturnRows(ticketRow("TK1001", StatusOpen, 2))
 	m.ExpectExec("UPDATE `plg_ticket`").WillReturnResult(sqlmock.NewResult(1, 1))
+	m.ExpectExec("INSERT INTO `plg_ticket_activity`").WillReturnResult(sqlmock.NewResult(1, 1))
 	m.ExpectQuery("SELECT \\* FROM `plg_ticket` WHERE id = \\?").
 		WillReturnRows(ticketRow("TK1001", StatusResolved, 2))
 	m.ExpectCommit()
@@ -423,6 +426,7 @@ func TestRateTicket(t *testing.T) {
 	m.ExpectQuery("SELECT \\* FROM `plg_ticket` WHERE ticket_no = \\?").
 		WillReturnRows(ticketRowWithRating("TK1001", StatusResolved, 2, nil))
 	m.ExpectExec("UPDATE `plg_ticket`").WillReturnResult(sqlmock.NewResult(1, 1))
+	m.ExpectExec("INSERT INTO `plg_ticket_activity`").WillReturnResult(sqlmock.NewResult(1, 1))
 	m.ExpectQuery("SELECT \\* FROM `plg_ticket` WHERE id = \\?").
 		WillReturnRows(ticketRowWithRating("TK1001", StatusResolved, 2, 5))
 	m.ExpectCommit()

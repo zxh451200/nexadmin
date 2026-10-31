@@ -244,6 +244,10 @@ func (h *handler) uploadAttachment(c *gin.Context, visitor bool) {
 		response.Fail(c, err)
 		return
 	}
+	if err := h.svc.RecordAttachmentAdded(c.Request.Context(), t,
+		ActivityActor{Type: uploaderType, Name: uploaderName}, att.Name); err != nil && h.svc.log != nil {
+		h.svc.log.Warn("ticket: record attachment activity failed", "ticketNo", t.TicketNo, "err", err.Error())
+	}
 	response.OK(c, att)
 }
 

@@ -30,17 +30,29 @@ func TestITMySQLBindAndGate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer admin.Close()
 	name := fmt.Sprintf("nexadmin_totpit_%d", time.Now().UnixNano())
 	if _, err := admin.Exec("CREATE DATABASE `" + name + "` CHARACTER SET utf8mb4"); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _, _ = admin.Exec("DROP DATABASE IF EXISTS `" + name + "`") })
+	var db *gorm.DB
+	// 收尾顺序：关业务连接池 → 删库 → 关管理连接。admin.Close() 放 defer 会先于 t.Cleanup 执行，
+	// DROP 报 "sql: database is closed" 且错误被吞掉，每跑一次就在实例上留一个临时库。
+	t.Cleanup(func() {
+		if db != nil {
+			if sqlDB, err := db.DB(); err == nil {
+				_ = sqlDB.Close()
+			}
+		}
+		if _, err := admin.Exec("DROP DATABASE IF EXISTS `" + name + "`"); err != nil {
+			t.Errorf("drop throwaway db %s: %v", name, err)
+		}
+		_ = admin.Close()
+	})
 
 	if !strings.Contains(dsn, "parseTime=true") {
 		dsn += "?parseTime=true&loc=UTC"
 	}
-	db, err := gorm.Open(mysql.Open(strings.Replace(dsn, "/?", "/"+name+"?", 1)), &gorm.Config{})
+	db, err = gorm.Open(mysql.Open(strings.Replace(dsn, "/?", "/"+name+"?", 1)), &gorm.Config{})
 	if err != nil {
 		t.Fatal(err)
 	}

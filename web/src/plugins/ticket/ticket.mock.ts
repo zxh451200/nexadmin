@@ -1,5 +1,14 @@
 import { defineMock } from '@/framework/request/mock'
-import type { CannedReply, SLASetting, Ticket, TicketAttachment, TicketGroup, TicketReply, TicketRule } from './api'
+import type {
+  CannedReply,
+  SLASetting,
+  Ticket,
+  TicketActivity,
+  TicketAttachment,
+  TicketGroup,
+  TicketReply,
+  TicketRule,
+} from './api'
 
 const ago = (min: number) => new Date(Date.now() - min * 60_000).toISOString()
 
@@ -121,6 +130,33 @@ const attachments: Record<string, TicketAttachment[]> = {
   ],
 }
 
+// 动态轨迹：与后端同一套动作码。变更类接口往里追加，时间轴才有东西可渲染。
+const activities: TicketActivity[] = tickets.map((tk, i) => ({
+  id: `act-created-${i}`,
+  ticketNo: tk.ticketNo,
+  actorType: tk.creatorName ? 'agent' : 'reporter',
+  actorName: tk.creatorName || tk.reporterName || 'visitor',
+  action: 'created',
+  fromValue: '',
+  toValue: '',
+  detail: '',
+  createdAt: tk.createdAt,
+}))
+
+const pushActivity = (tk: Ticket, patch: Partial<TicketActivity> & { action: TicketActivity['action'] }) => {
+  activities.push({
+    id: `act-${Date.now()}-${activities.length}`,
+    ticketNo: tk.ticketNo,
+    actorType: 'agent',
+    actorName: 'admin',
+    fromValue: '',
+    toValue: '',
+    detail: '',
+    createdAt: new Date().toISOString(),
+    ...patch,
+  })
+}
+
 const sla: SLASetting = {
   workdays: [1, 2, 3, 4, 5, 6, 7],
   startMinute: 0,
@@ -173,28 +209,62 @@ const assertRuleGroup = (gid: string) => {
 }
 const nextId = () => String(7432000000000000000n + BigInt(Date.now() % 1_000_000))
 
+// 列表与导出共用同一套筛选，mock 里也要保持「看到的 = 导出的」。
+function mockFilterTickets(raw: Record<string, unknown>): Ticket[] {
+  const q = (k: string) => String(raw[k] ?? '')
+  const kw = q('keyword').trim().toLowerCase()
+  let rows = tickets.filter(
+    (tk) => !kw || tk.ticketNo.toLowerCase().includes(kw) || tk.title.toLowerCase().includes(kw) || tk.lastPreview.toLowerCase().includes(kw),
+  )
+  if (q('status')) rows = rows.filter((tk) => tk.status === q('status'))
+  if (q('priority')) rows = rows.filter((tk) => tk.priority === q('priority'))
+  if (q('bizType')) rows = rows.filter((tk) => tk.bizType === q('bizType'))
+  if (q('overdue') === '1') rows = rows.filter((tk) => tk.overdue)
+  if (q('unassigned') === '1') rows = rows.filter((tk) => !tk.assigneeId || tk.assigneeId === '0')
+  else if (q('mine') === '1') rows = rows.filter((tk) => tk.assigneeId === '7')
+  else if (q('assigneeId')) rows = rows.filter((tk) => tk.assigneeId === q('assigneeId'))
+  if (q('groupId')) rows = rows.filter((tk) => tk.groupId === q('groupId'))
+  if (q('tag')) rows = rows.filter((tk) => (tk.tags ?? []).includes(q('tag')))
+  return rows
+}
+
+function csvCell(v: unknown): string {
+  const s = v === null || v === undefined ? '' : String(v)
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+}
+
 defineMock([
   {
     method: 'GET',
     url: '/plugins/ticket/tickets',
     handler: ({ query }) => {
-      const kw = String(query.keyword ?? '').trim().toLowerCase()
-      let rows = tickets.filter(
-        (tk) => !kw || tk.ticketNo.toLowerCase().includes(kw) || tk.title.toLowerCase().includes(kw) || tk.lastPreview.toLowerCase().includes(kw),
-      )
-      if (query.status) rows = rows.filter((tk) => tk.status === query.status)
-      if (query.priority) rows = rows.filter((tk) => tk.priority === query.priority)
-      if (query.bizType) rows = rows.filter((tk) => tk.bizType === query.bizType)
-      if (String(query.overdue ?? '') === '1') rows = rows.filter((tk) => tk.overdue)
-      if (String(query.unassigned ?? '') === '1') rows = rows.filter((tk) => !tk.assigneeId || tk.assigneeId === '0')
-      else if (String(query.mine ?? '') === '1') rows = rows.filter((tk) => tk.assigneeId === '7')
-      else if (query.assigneeId) rows = rows.filter((tk) => tk.assigneeId === String(query.assigneeId))
-      if (query.groupId) rows = rows.filter((tk) => tk.groupId === String(query.groupId))
-      if (query.tag) rows = rows.filter((tk) => (tk.tags ?? []).includes(String(query.tag)))
+      const rows = mockFilterTickets(query)
       const page = Number(query.page ?? 1) || 1
       const pageSize = Number(query.pageSize ?? 20) || 20
       const start = (page - 1) * pageSize
       return { list: rows.slice(start, start + pageSize), total: rows.length, page, pageSize }
+    },
+  },
+  {
+    // 真后端返回 xlsx；mock 没有二进制，退回同样筛选的 CSV 文本。
+    method: 'GET',
+    url: '/plugins/ticket/tickets-export',
+    handler: ({ query }) => {
+      const head = ['工单号', '标题', '状态', '优先级', '分组', '处理人', '报告人', '创建人', '业务对象', '标签',
+        '满意度', '响应超时', '解决超时', '提交时间', '首次响应', '解决时间', '关闭时间', '最后回复']
+      const lines = [head.join(',')].concat(
+        mockFilterTickets(query).map((tk) =>
+          [
+            tk.ticketNo, tk.title, tk.status, tk.priority, tk.groupName ?? '', tk.assigneeName,
+            tk.reporterName || tk.reporterId, tk.creatorName ?? '',
+            tk.bizType && tk.bizNo ? `${tk.bizType}: ${tk.bizNo}` : `${tk.bizType}${tk.bizNo}`,
+            (tk.tags ?? []).join(','), tk.rating ?? '', tk.overdue ? 'TRUE' : 'FALSE',
+            tk.resolutionOverdue ? 'TRUE' : 'FALSE',
+            tk.createdAt, tk.firstReplyAt ?? '', tk.resolvedAt ?? '', tk.closedAt ?? '', tk.lastReplyAt ?? '',
+          ].map(csvCell).join(','),
+        ),
+      )
+      return lines.join('\r\n')
     },
   },
   {
@@ -238,6 +308,13 @@ defineMock([
             }
           }
           if (r.note) notes.push(r.note)
+          pushActivity(tk, {
+            action: 'rule_applied',
+            actorType: 'system',
+            actorName: '自动化规则',
+            toValue: r.name,
+            createdAt: tk.createdAt,
+          })
         })
       // 规则没分到组时，再走默认自动分派组
       if (!tk.groupId) {
@@ -253,6 +330,7 @@ defineMock([
         }
       }
       tickets.unshift(tk)
+      pushActivity(tk, { action: 'created', createdAt: tk.createdAt })
       replies[tk.ticketNo] = [
         {
           id: nextId(),
@@ -297,14 +375,20 @@ defineMock([
           continue
         }
         if (action === 'assign') {
+          const from = tk.assigneeName
           tk.assigneeId = String(body.assigneeId ?? '7')
           tk.assigneeName = String(body.assigneeName ?? 'admin')
+          if (from !== tk.assigneeName) pushActivity(tk, { action: 'assignee_changed', fromValue: from, toValue: tk.assigneeName })
         } else if (action === 'status') {
+          const from = tk.status
           tk.status = String(body.status ?? tk.status) as Ticket['status']
+          if (from !== tk.status) pushActivity(tk, { action: 'status_changed', fromValue: from, toValue: tk.status })
           if (tk.status === 'resolved') tk.resolvedAt = new Date().toISOString()
           if (tk.status === 'closed') tk.closedAt = new Date().toISOString()
         } else if (action === 'priority') {
+          const from = tk.priority
           tk.priority = String(body.priority ?? tk.priority) as Ticket['priority']
+          if (from !== tk.priority) pushActivity(tk, { action: 'priority_changed', fromValue: from, toValue: tk.priority })
         } else {
           skipped += 1
           continue
@@ -320,7 +404,12 @@ defineMock([
     handler: ({ params }) => {
       const tk = find(params.no)
       if (!tk) throw new Error('not found')
-      return { ticket: tk, replies: replies[params.no] ?? [], attachments: attachments[params.no] ?? [] }
+      return {
+        ticket: tk,
+        replies: replies[params.no] ?? [],
+        attachments: attachments[params.no] ?? [],
+        activities: activities.filter((a) => a.ticketNo === params.no),
+      }
     },
   },
   {
@@ -341,6 +430,7 @@ defineMock([
         createdAt: new Date().toISOString(),
       }
       attachments[params.no] = [...(attachments[params.no] ?? []), row]
+      pushActivity(tk, { action: 'attachment_added', detail: row.name })
       return row
     },
   },
@@ -365,6 +455,7 @@ defineMock([
       replies[params.no] = [...(replies[params.no] ?? []), r]
       tk.lastReplyAt = r.createdAt
       if (!internal) {
+        const from = tk.status
         tk.lastPreview = r.content
         tk.lastReplierType = 'agent'
         if (tk.status === 'resolved' || tk.status === 'closed') {
@@ -374,9 +465,11 @@ defineMock([
         }
         tk.status = 'pending'
         tk.slaPausedAt = r.createdAt
+        pushActivity(tk, { action: 'status_changed', fromValue: from, toValue: 'pending' })
         if (tk.assigneeId === '0') {
           tk.assigneeId = '7'
           tk.assigneeName = 'admin'
+          pushActivity(tk, { action: 'assignee_changed', fromValue: '', toValue: 'admin' })
         }
         if (tk.firstReplyAt == null) tk.firstReplyAt = r.createdAt
       }
@@ -389,7 +482,9 @@ defineMock([
     handler: ({ params, body }) => {
       const tk = find(params.no)
       if (!tk) throw new Error('not found')
+      const from = tk.status
       tk.status = String(body.status ?? 'open') as Ticket['status']
+      if (from !== tk.status) pushActivity(tk, { action: 'status_changed', fromValue: from, toValue: tk.status })
       if (tk.status === 'pending') tk.slaPausedAt = new Date().toISOString()
       if (tk.status === 'processing') {
         tk.slaPausedAt = null
@@ -410,9 +505,11 @@ defineMock([
     handler: ({ params, body }) => {
       const tk = find(params.no)
       if (!tk) throw new Error('not found')
+      const from = tk.assigneeName
       const id = String(body.assigneeId ?? '7')
       tk.assigneeId = id === '0' ? '7' : id
       tk.assigneeName = String(body.assigneeName ?? '') || (tk.assigneeId === '7' ? 'admin' : `用户 ${tk.assigneeId}`)
+      if (from !== tk.assigneeName) pushActivity(tk, { action: 'assignee_changed', fromValue: from, toValue: tk.assigneeName })
       return tk
     },
   },
@@ -429,6 +526,13 @@ defineMock([
       tk.rating = score
       tk.ratingComment = String(body.comment ?? '')
       tk.ratedAt = new Date().toISOString()
+      pushActivity(tk, {
+        action: 'rating_added',
+        actorType: 'reporter',
+        actorName: tk.reporterName || 'visitor',
+        toValue: String(score),
+        detail: tk.ratingComment,
+      })
       return tk
     },
   },
@@ -465,7 +569,9 @@ defineMock([
           }
         }
       }
+      const from = (tk.tags ?? []).join(',')
       tk.tags = tags.slice(0, 10)
+      if (from !== tk.tags.join(',')) pushActivity(tk, { action: 'tags_changed', fromValue: from, toValue: tk.tags.join(',') })
       return tk
     },
   },
@@ -618,14 +724,26 @@ defineMock([
       const gid = String(body.groupId ?? '0')
       const group = groups.find((g) => g.id === gid)
       if (group && !group.enabled) throw new Error('group disabled')
+      const fromGroup = tk.groupName
+      const fromAssignee = tk.assigneeName
       tk.groupId = group ? group.id : ''
       tk.groupName = group ? group.name : ''
+      if (fromGroup !== tk.groupName) pushActivity(tk, { action: 'group_changed', fromValue: fromGroup, toValue: tk.groupName })
       if (group?.autoAssign && (!tk.assigneeId || tk.assigneeId === '0')) {
         const member = group.members?.[0]
         if (member) {
           tk.assigneeId = member.userId
           tk.assigneeName = member.userName
         }
+      }
+      if (fromAssignee !== tk.assigneeName) {
+        pushActivity(tk, {
+          action: 'assignee_changed',
+          actorType: 'system',
+          actorName: '自动分派',
+          fromValue: fromAssignee,
+          toValue: tk.assigneeName,
+        })
       }
       return tk
     },

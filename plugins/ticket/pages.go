@@ -71,6 +71,9 @@ type pageStrings struct {
 	AttAdd       string            `json:"attAdd"`
 	AttUploading string            `json:"attUploading"`
 	AttFailed    string            `json:"attFailed"`
+	Timeline     string            `json:"timeline"`
+	TimelineNew  string            `json:"timelineNew"`
+	TimelineStat string            `json:"timelineStat"`
 	Status       map[string]string `json:"status"`
 	Priority     map[string]string `json:"priority"`
 }
@@ -177,6 +180,7 @@ var viewTmpl = template.Must(template.New("view").Parse(`<!doctype html>
   <section id="out" hidden>
     <h2 id="ttl"></h2>
     <p id="meta" class="muted"></p>
+    <div id="timeline" class="card" hidden></div>
     <div id="replies" class="card"></div>
     <div id="atts" class="card" hidden></div>
     <div id="rate" class="card"></div>
@@ -293,6 +297,17 @@ function renderAttachments(tk, no, atts) {
   box.appendChild(btn);
   box.appendChild(note);
 }
+function renderTimeline(acts) {
+  const box = document.getElementById('timeline');
+  box.innerHTML = '';
+  box.hidden = !acts.length;
+  if (!acts.length) return;
+  box.appendChild(el('h2', S.timeline));
+  acts.forEach((a) => {
+    const text = a.action === 'created' ? S.timelineNew : S.timelineStat + ' ' + (S.status[a.toValue] || a.toValue);
+    box.appendChild(el('p', new Date(a.createdAt).toLocaleString() + ' · ' + text));
+  });
+}
 async function load(no) {
   msg.textContent = ''; out.hidden = true;
   try {
@@ -315,6 +330,7 @@ async function load(no) {
     });
     renderRating(tk, no);
     renderAttachments(tk, no, data.data.attachments || []);
+    renderTimeline(data.data.activities || []);
     out.hidden = false;
   } catch (err) {
     msg.textContent = (err && err.message) || S.notFound;
@@ -364,6 +380,7 @@ func pageDict(en bool) pageStrings {
 			RateComment: "Anything to add? (optional)", RateSubmit: "Submit rating",
 			RateThanks: "Thanks for your feedback.", RatedLabel: "Your rating", RateFailed: "Rating failed, please try again.",
 			AttTitle: "Attachments", AttAdd: "Upload file", AttUploading: "Uploading…", AttFailed: "Upload failed, please try again.",
+			Timeline: "Progress", TimelineNew: "Ticket submitted", TimelineStat: "Status changed to",
 			Status:   map[string]string{"open": "Open", "processing": "Processing", "pending": "Waiting on customer", "resolved": "Resolved", "closed": "Closed"},
 			Priority: map[string]string{"low": "Low", "normal": "Normal", "high": "High", "urgent": "Urgent"},
 		}
@@ -376,6 +393,7 @@ func pageDict(en bool) pageStrings {
 		RateComment: "补充说明（可选）", RateSubmit: "提交评价",
 		RateThanks: "感谢你的评价。", RatedLabel: "你的评价", RateFailed: "评价提交失败，请稍后重试。",
 		AttTitle: "附件", AttAdd: "上传附件", AttUploading: "上传中…", AttFailed: "上传失败，请稍后重试。",
+		Timeline: "处理进度", TimelineNew: "已提交工单", TimelineStat: "状态变更为",
 		Status:   map[string]string{"open": "待处理", "processing": "处理中", "pending": "待客户回复", "resolved": "已解决", "closed": "已关闭"},
 		Priority: map[string]string{"low": "低", "normal": "普通", "high": "高", "urgent": "紧急"},
 	}

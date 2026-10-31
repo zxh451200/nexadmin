@@ -1,5 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { api, tokenStore } from '@/framework/request/http'
+import { ApiError, api, http, tokenStore } from '@/framework/request/http'
 import type { Page, PageQuery } from '@/framework/request/types'
 
 export type TicketStatus = 'open' | 'processing' | 'pending' | 'resolved' | 'closed'
@@ -70,6 +70,31 @@ export interface RepliesResult {
   ticket: Ticket
   replies: TicketReply[]
   attachments?: TicketAttachment[]
+  /** 工单动态（审计轨迹）。坐席看到全部，客户自助页只有提交与状态变化。 */
+  activities?: TicketActivity[]
+}
+
+export type TicketActivityAction =
+  | 'created'
+  | 'status_changed'
+  | 'priority_changed'
+  | 'assignee_changed'
+  | 'group_changed'
+  | 'tags_changed'
+  | 'attachment_added'
+  | 'rating_added'
+  | 'rule_applied'
+
+export interface TicketActivity {
+  id: string
+  ticketNo: string
+  actorType: string
+  actorName: string
+  action: TicketActivityAction | string
+  fromValue: string
+  toValue: string
+  detail: string
+  createdAt: string
 }
 
 export interface TicketAttachment {
@@ -217,6 +242,35 @@ export async function downloadAttachment(ticketNo: string, att: TicketAttachment
   a.href = url
   a.download = att.name
   a.click()
+  URL.revokeObjectURL(url)
+}
+
+/** 命中后端「超过导出行数上限」错误（reason=TICKET_EXPORT_TOO_MANY）。 */
+export function isExportTooMany(e: unknown): boolean {
+  return e instanceof ApiError && e.reason === 'TICKET_EXPORT_TOO_MANY'
+}
+
+/**
+ * 按当前筛选导出工单：服务端写 xlsx（最多 5000 行），需要 ticket:list 权限。
+ * mock 阶段没有二进制能力，退回带 BOM 的 CSV 文本，文件名跟着换扩展名。
+ */
+export async function exportTickets(query: Omit<TicketQueryParams, 'page' | 'pageSize'>): Promise<void> {
+  const res = await http.get<unknown>(`${BASE}/tickets-export`, {
+    params: { ...query },
+    responseType: 'blob',
+    silent: true,
+  })
+  const data = res.data
+  const isBlob = data instanceof Blob
+  const blob = isBlob ? data : new Blob(['\uFEFF', String(data)], { type: 'text/csv;charset=utf-8' })
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '')
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `tickets-${stamp}.${isBlob ? 'xlsx' : 'csv'}`
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
   URL.revokeObjectURL(url)
 }
 

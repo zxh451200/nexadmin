@@ -147,7 +147,16 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Ticket, error) {
 		if err != nil {
 			return err
 		}
-		return tx.Create(&first).Error
+		if err := tx.Create(&first).Error; err != nil {
+			return err
+		}
+		creator := ActivityActor{Type: in.ReporterType, ID: in.ReporterID, Name: in.ReporterName}
+		if in.CreatorID != 0 {
+			creator = ActivityActor{
+				Type: ActorAgent, ID: strconv.FormatInt(int64(in.CreatorID), 10), Name: in.CreatorName,
+			}
+		}
+		return s.recordActivity(ctx, tx, t, creator, ActCreated, "", "", "")
 	})
 	if err != nil {
 		return nil, err
@@ -281,6 +290,19 @@ func (s *Service) Reply(ctx context.Context, ticketNo string, in ReplyInput) (*T
 				updates["resolution_due_at"] = businessDue(now, target.ResolutionMinutes, sla, loc)
 			}
 		}
+		// 回复引发的状态迁移也要进动态：否则时间轴只看得到「谁说了话」，看不到「于是发生了什么」。
+		actor := ActivityActor{Type: in.ReplierType, ID: in.ReplierID, Name: in.ReplierName}
+		if to, ok := updates["status"].(string); ok && to != t.Status {
+			if err := s.recordActivity(ctx, tx, &t, actor, ActStatusChanged, t.Status, to, ""); err != nil {
+				return err
+			}
+		}
+		if uid, ok := updates["assignee_id"].(int64); ok && uid != int64(t.AssigneeID) {
+			toName, _ := updates["assignee_name"].(string)
+			if err := s.recordActivity(ctx, tx, &t, actor, ActAssigneeChanged, t.AssigneeName, toName, ""); err != nil {
+				return err
+			}
+		}
 		if err := tx.Model(&Ticket{}).Where("id = ?", int64(t.ID)).Updates(updates).Error; err != nil {
 			return err
 		}
@@ -392,6 +414,9 @@ func (s *Service) SetStatus(ctx context.Context, ticketNo, to, operator string) 
 		if err := tx.Model(&Ticket{}).Where("id = ?", int64(t.ID)).Updates(updates).Error; err != nil {
 			return err
 		}
+		if err := s.recordActivity(ctx, tx, &t, agentActor(ctx, operator), ActStatusChanged, t.Status, to, ""); err != nil {
+			return err
+		}
 		return tx.Where("id = ?", int64(t.ID)).Take(&t).Error
 	})
 	if err != nil {
@@ -441,6 +466,10 @@ func (s *Service) Rate(ctx context.Context, ticketNo string, in RateInput) (*Tic
 		}).Error; err != nil {
 			return err
 		}
+		rater := ActivityActor{Type: t.ReporterType, ID: t.ReporterID, Name: t.ReporterName}
+		if err := s.recordActivity(ctx, tx, &t, rater, ActRatingAdded, "", strconv.Itoa(in.Score), in.Comment); err != nil {
+			return err
+		}
 		return tx.Where("id = ?", int64(t.ID)).Take(&t).Error
 	})
 	if err != nil {
@@ -480,10 +509,17 @@ func (s *Service) assign(ctx context.Context, ticketNo string, assigneeID idgen.
 			}
 			return err
 		}
+		fromID, fromName := int64(t.AssigneeID), t.AssigneeName
 		if err := tx.Model(&Ticket{}).Where("id = ?", int64(t.ID)).Updates(map[string]any{
 			"assignee_id": assigneeID, "assignee_name": assigneeName,
 		}).Error; err != nil {
 			return err
+		}
+		// 同一人重复认领不刷屏：值没变就不记。
+		if fromID != int64(assigneeID) || fromName != assigneeName {
+			if err := s.recordActivity(ctx, tx, &t, actorFrom(ctx), ActAssigneeChanged, fromName, assigneeName, ""); err != nil {
+				return err
+			}
 		}
 		t.AssigneeID, t.AssigneeName = assigneeID, assigneeName
 		return nil
@@ -510,8 +546,9 @@ type TicketQuery struct {
 	PageSize   int
 }
 
-// ListTickets 坐席列表按最后回复时间倒序。
-func (s *Service) ListTickets(ctx context.Context, q TicketQuery) ([]Ticket, int64, error) {
+// ticketFilter 将 TicketQuery 落成 WHERE 条件，列表、统计与导出共用同一套条件，
+// 避免「导出看到的行数和列表不一致」这类第二套筛选漂移。
+func (s *Service) ticketFilter(ctx context.Context, q TicketQuery) *gorm.DB {
 	db := s.db.WithContext(ctx).Model(&Ticket{})
 	if q.Status != "" {
 		db = db.Where("status = ?", q.Status)
@@ -540,6 +577,12 @@ func (s *Service) ListTickets(ctx context.Context, q TicketQuery) ([]Ticket, int
 		like := "%" + kw + "%"
 		db = db.Where("ticket_no LIKE ? OR title LIKE ? OR last_preview LIKE ?", like, like, like)
 	}
+	return db
+}
+
+// ListTickets 坐席列表按最后回复时间倒序。
+func (s *Service) ListTickets(ctx context.Context, q TicketQuery) ([]Ticket, int64, error) {
+	db := s.ticketFilter(ctx, q)
 	var total int64
 	if err := db.Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -802,11 +845,21 @@ func (s *Service) setPriority(ctx context.Context, ticketNo, priority string) er
 			}
 			return err
 		}
+		// 改优先级要按 SLA 策略重算两个时钟：写死常量会把营业时间外的单也按自然小时推，
+		// 与建单/重开那条路径口径不一致。未停表时才动 due_at（停表中的补时由回复/状态迁移负责）。
 		updates := map[string]any{"priority": priority}
+		target := s.CurrentSLA().TargetFor(priority)
 		if t.SlaPausedAt == nil {
-			updates["due_at"] = t.CreatedAt.Add(SLAFor(priority))
+			updates["due_at"] = businessDue(t.CreatedAt, target.FirstMinutes, s.CurrentSLA(), s.location())
+			updates["resolution_due_at"] = businessDue(t.CreatedAt, target.ResolutionMinutes, s.CurrentSLA(), s.location())
 		}
-		return tx.Model(&Ticket{}).Where("id = ?", int64(t.ID)).Updates(updates).Error
+		if err := tx.Model(&Ticket{}).Where("id = ?", int64(t.ID)).Updates(updates).Error; err != nil {
+			return err
+		}
+		if t.Priority != priority {
+			return s.recordActivity(ctx, tx, &t, actorFrom(ctx), ActPriorityChanged, t.Priority, priority, "")
+		}
+		return nil
 	})
 }
 

@@ -228,6 +228,34 @@ ticket:
   group_disabled: 分组已停用，不能转入
   assignee_invalid: 指派的处理人无效
   plugin_inactive: 工单插件未启用或授权已失效
+  status_open: 待处理
+  status_processing: 处理中
+  status_pending: 待客户回复
+  status_resolved: 已解决
+  status_closed: 已关闭
+  priority_urgent: 紧急
+  priority_high: 高
+  priority_normal: 普通
+  priority_low: 低
+  export_sheet: 工单记录
+  export_no: 工单号
+  export_title: 标题
+  export_status: 状态
+  export_priority: 优先级
+  export_group: 分组
+  export_assignee: 处理人
+  export_reporter: 报告人
+  export_creator: 创建人
+  export_biz: 业务对象
+  export_tags: 标签
+  export_rating: 满意度
+  export_response_overdue: 响应超时
+  export_resolution_overdue: 解决超时
+  export_created_at: 提交时间
+  export_first_reply_at: 首次响应
+  export_resolved_at: 解决时间
+  export_closed_at: 关闭时间
+  export_last_reply_at: 最后回复
 totp:
   already_enabled: 两步验证已开启
   not_enrolled: 尚未绑定两步验证，请先扫码绑定

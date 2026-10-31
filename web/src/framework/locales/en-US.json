@@ -224,6 +224,8 @@
   "setup": {
     "title": "System setup",
     "subtitle": "First deployment — complete the steps below",
+    "mockTitle": "Frontend mock mode",
+    "mockNotice": "Every request is answered by frontend fixtures: the connection test never reaches a database, so it succeeds even with an empty password. Turn off VITE_MOCK and run the backend to verify real settings.",
     "steps": "Setup steps",
     "step": {
       "env": "Environment",

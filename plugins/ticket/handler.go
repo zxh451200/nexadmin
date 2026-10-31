@@ -1,6 +1,8 @@
 package ticket
 
 import (
+	"mime"
+	"net/http"
 	"strconv"
 	"time"
 
@@ -32,15 +34,26 @@ func respond(c *gin.Context, data any, err error) {
 
 // ---- 坐席端 ----
 
-// GET /plugins/ticket/tickets?status=&priority=&bizType=&keyword=&overdue=1&assigneeId=&unassigned=1&mine=1&page=&pageSize=
+// GET /plugins/ticket/tickets?status=&priority=&bizType=&keyword=&overdue=1&assigneeId=&unassigned=1&mine=1&groupId=&tag=&page=&pageSize=
 func (h *handler) list(c *gin.Context) {
 	page, size := response.ParsePage(c)
+	q := ticketQueryFrom(c)
+	q.Page, q.PageSize = page, size
+	list, total, err := h.svc.ListTickets(c.Request.Context(), q)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.Page(c, list, total, page, size)
+}
+
+// ticketQueryFrom 解析列表（与导出）的筛选条件；mine=1 走当前登录坐席。
+func ticketQueryFrom(c *gin.Context) TicketQuery {
 	uid, _ := claimsOperator(c)
 	q := TicketQuery{
 		Status: c.Query("status"), Priority: c.Query("priority"), BizType: c.Query("bizType"),
 		Keyword: c.Query("keyword"), Overdue: c.Query("overdue"), Tag: c.Query("tag"),
 		Unassigned: c.Query("unassigned") == "1",
-		Page:       page, PageSize: size,
 	}
 	if c.Query("mine") == "1" {
 		q.AssigneeID = uid
@@ -55,12 +68,7 @@ func (h *handler) list(c *gin.Context) {
 			q.GroupID = idgen.ID(id)
 		}
 	}
-	list, total, err := h.svc.ListTickets(c.Request.Context(), q)
-	if err != nil {
-		response.Fail(c, err)
-		return
-	}
-	response.Page(c, list, total, page, size)
+	return q
 }
 
 // GET /plugins/ticket/tickets/:no/replies?since=0&limit=50
@@ -75,7 +83,12 @@ func (h *handler) replies(c *gin.Context) {
 		response.Fail(c, err)
 		return
 	}
-	response.OK(c, gin.H{"ticket": t, "replies": rows, "attachments": atts})
+	acts, err := h.svc.TicketActivities(c.Request.Context(), t.ID, false)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, gin.H{"ticket": t, "replies": rows, "attachments": atts, "activities": acts})
 }
 
 // POST /plugins/ticket/tickets/:no/replies  {"content":"...","internal":false} —— 坐席回复/内部备注。
@@ -171,7 +184,13 @@ func (h *handler) visitorGet(c *gin.Context) {
 		response.Fail(c, err)
 		return
 	}
-	response.OK(c, gin.H{"ticket": t, "replies": rows, "attachments": atts})
+	// 客户只看得懂的两类动态：提交与状态变化；内部协作细节不外泄。
+	acts, err := h.svc.TicketActivities(c.Request.Context(), t.ID, true)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, gin.H{"ticket": t, "replies": rows, "attachments": atts, "activities": acts})
 }
 
 // POST /plugins/ticket/tickets/:no/replies —— 访客补充回复（resolved/closed 自动重开）。
@@ -427,6 +446,27 @@ func (h *handler) setTags(c *gin.Context) {
 	respond(c, t, err)
 }
 
+// GET /plugins/ticket/tickets-export?<与列表完全相同的筛选> —— 导出工单记录（xlsx，最多 5000 行）。
+// 不挂 OperLogMiddleware：操作日志中间件会把响应体前 8KB 当文本入库，对 zip 容器没有意义
+// （可能因非法 UTF-8 写失败）。审计边界与 im 的会话导出一致，靠访问日志与权限码兜。
+func (h *handler) export(c *gin.Context) {
+	ctx := c.Request.Context()
+	rows, err := h.svc.ExportTickets(ctx, ticketQueryFrom(c), exportLimit)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	hd := c.Writer.Header()
+	hd.Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	hd.Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": h.svc.ExportFilename()}))
+	hd.Set("Cache-Control", "no-store")
+	hd.Set("X-Content-Type-Options", "nosniff")
+	c.Status(http.StatusOK)
+	if err := h.svc.WriteTicketsXLSX(ctx, c.Writer, rows); err != nil && h.svc.log != nil {
+		h.svc.log.Warn("ticket: export failed midway", "rows", len(rows), "err", err.Error())
+	}
+}
+
 func pathID(c *gin.Context) (idgen.ID, bool) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil || id <= 0 {
@@ -459,12 +499,26 @@ func parseLimit(c *gin.Context) int {
 	return limit
 }
 
+// agentActorContext 把登录坐席放进 context，服务层在同一条事务里记动态时取用。
+// 公开接口与清扫器没有登录态，发起人就是系统，不冒充成某个人。
+func (h *handler) agentActorContext(c *gin.Context) {
+	uid, name := claimsOperator(c)
+	if uid != 0 {
+		c.Request = c.Request.WithContext(WithActor(c.Request.Context(),
+			ActivityActor{Type: ActorAgent, ID: strconv.FormatInt(int64(uid), 10), Name: name}))
+	}
+	c.Next()
+}
+
 // Register 注册坐席与访客路由（由 plugin.go 的 module 调用）。
 func (h *handler) Register(r *gin.RouterGroup, d *core.Deps) {
 	g := r.Group("/plugins/ticket")
+	g.Use(h.agentActorContext)
 	g.GET("/tickets", core.Perm("ticket:list"), h.list)
 	// 统计与列表同一组筛选条件；注册在 /tickets/:no 之前，静态段优先匹配。
 	g.GET("/tickets/stats", core.Perm("ticket:list"), h.Stats)
+	// 导出沿用列表的全部筛选（静态段 /tickets-export 与 :no 不冲突）。
+	g.GET("/tickets-export", core.Perm("ticket:list"), h.export)
 	// 后台代客建单与批量操作（静态段 /tickets/bulk 在 :no 之前注册）。
 	g.POST("/tickets", core.Perm("ticket:create"), d.OperLogMiddleware("ticket", "create"), h.create)
 	g.POST("/tickets/bulk", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "update"), h.bulk)

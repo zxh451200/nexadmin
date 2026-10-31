@@ -88,8 +88,8 @@ func TestAggregateTicketsSlaBreach(t *testing.T) {
 	if row.BreachRate != 50 {
 		t.Errorf("违约率应为 50%%，得到 %v", row.BreachRate)
 	}
-	if row.TargetMinutes != int64(SLAFor(PriorityHigh).Minutes()) {
-		t.Errorf("目标时限应取 SLAFor，得到 %d", row.TargetMinutes)
+	if row.TargetMinutes != int64(DefaultSLA().TargetFor(PriorityHigh).FirstMinutes) {
+		t.Errorf("目标时限应取 SLA 策略默认值 %d，得到 %d", DefaultSLA().TargetFor(PriorityHigh).FirstMinutes, row.TargetMinutes)
 	}
 	if row.ResolutionTargetMinutes != 1440 {
 		t.Errorf("解决目标时限应取策略默认值 1440，得到 %d", row.ResolutionTargetMinutes)

@@ -218,6 +218,7 @@ func (s *Service) applyRules(ctx context.Context, t *Ticket) {
 		if !r.Enabled || !ruleMatches(r, *t) {
 			continue
 		}
+		before := *t
 		updates := map[string]any{}
 		if r.SetPriority != "" && r.SetPriority != t.Priority {
 			updates["priority"] = r.SetPriority
@@ -252,6 +253,7 @@ func (s *Service) applyRules(ctx context.Context, t *Ticket) {
 				continue
 			}
 			changed = true
+			s.recordRuleEffects(ctx, t, before, *t, r.Name)
 		}
 		if r.Note != "" {
 			if _, _, err := s.Reply(ctx, t.TicketNo, ReplyInput{
@@ -270,5 +272,31 @@ func (s *Service) applyRules(ctx context.Context, t *Ticket) {
 	}
 	if assigned {
 		s.notifyAssign(ctx, t)
+	}
+}
+
+// recordRuleEffects 把规则改写的字段逐条落进动态，再补一条「命中规则 X」：
+// 只记规则名看不出后果，只记后果看不出是谁干的。记失败不影响建单，与规则本身同一口径。
+func (s *Service) recordRuleEffects(ctx context.Context, t *Ticket, before, after Ticket, ruleName string) {
+	act := systemActor("rule")
+	rules := []struct {
+		action       string
+		from, to     string
+		changedField bool
+	}{
+		{ActPriorityChanged, before.Priority, after.Priority, before.Priority != after.Priority},
+		{ActGroupChanged, before.GroupName, after.GroupName, before.GroupID != after.GroupID},
+		{ActAssigneeChanged, before.AssigneeName, after.AssigneeName, before.AssigneeID != after.AssigneeID},
+	}
+	for _, item := range rules {
+		if !item.changedField {
+			continue
+		}
+		if err := s.recordActivity(ctx, nil, t, act, item.action, item.from, item.to, ruleName); err != nil {
+			s.logWarn("ticket: record rule activity failed", "rule", ruleName, "action", item.action, "err", err.Error())
+		}
+	}
+	if err := s.recordActivity(ctx, nil, t, act, ActRuleApplied, "", ruleName, ""); err != nil {
+		s.logWarn("ticket: record rule hit failed", "rule", ruleName, "err", err.Error())
 	}
 }

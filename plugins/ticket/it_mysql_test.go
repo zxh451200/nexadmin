@@ -9,8 +9,10 @@ package ticket
 // 隔离：自建一次性数据库 nexadmin_ticketit_<纳秒>，跑完整库 DROP，不触碰既有数据库。
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"sort"
@@ -24,7 +26,9 @@ import (
 
 	"nexadmin/core/event"
 	"nexadmin/core/notify"
+	"nexadmin/core/response"
 	"nexadmin/core/storage"
+	"nexadmin/pkg/excel"
 	"nexadmin/pkg/idgen"
 )
 
@@ -88,7 +92,6 @@ func TestITMySQLTicketOps(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open admin conn: %v", err)
 	}
-	defer func() { _ = admin.Close() }()
 	if err := admin.Ping(); err != nil {
 		t.Fatalf("mysql not reachable: %v", err)
 	}
@@ -97,10 +100,24 @@ func TestITMySQLTicketOps(t *testing.T) {
 	if _, err := admin.Exec("CREATE DATABASE `" + dbName + "` CHARACTER SET utf8mb4"); err != nil {
 		t.Fatalf("create throwaway db: %v", err)
 	}
-	t.Cleanup(func() { _, _ = admin.Exec("DROP DATABASE IF EXISTS `" + dbName + "`") })
+	var gdb *gorm.DB
+	// 收尾顺序必须是：关业务连接池 → 删库 → 关管理连接。
+	// 之前 admin.Close() 是 defer，比 t.Cleanup 先跑，DROP 永远报 "sql: database is closed"
+	// 且错误被吞掉，每跑一次就在实例上留一个 nexadmin_ticketit_* 库。
+	t.Cleanup(func() {
+		if gdb != nil {
+			if sqlDB, err := gdb.DB(); err == nil {
+				_ = sqlDB.Close()
+			}
+		}
+		if _, err := admin.Exec("DROP DATABASE IF EXISTS `" + dbName + "`"); err != nil {
+			t.Errorf("drop throwaway db %s: %v", dbName, err)
+		}
+		_ = admin.Close()
+	})
 
 	gormDSN := strings.Replace(dsn, ")/", ")/"+dbName+"", 1)
-	gdb, err := gorm.Open(mysql.Open(gormDSN), &gorm.Config{})
+	gdb, err = gorm.Open(mysql.Open(gormDSN), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open gorm: %v", err)
 	}
@@ -578,5 +595,109 @@ loop:
 	}
 	if !found {
 		t.Fatal("ticket.overdue event not published")
+	}
+
+	// 导出：与列表共用筛选，真实引擎跑通 COALESCE 排序 + tags LIKE + LIMIT；超上限在写文件前拒绝。
+	useBuiltinLocale(t)
+	exp := makeTicket("export me")
+	if _, err := svc.SetTags(ctx, exp.TicketNo, []string{"vip"}); err != nil {
+		t.Fatal(err)
+	}
+	exported, err := svc.ExportTickets(ctx, TicketQuery{Tag: "vip"}, exportLimit)
+	must(err)
+	if len(exported) != 1 || exported[0].TicketNo != exp.TicketNo {
+		t.Fatalf("export by tag = %+v", exported)
+	}
+	if _, err := svc.ExportTickets(ctx, TicketQuery{}, 1); err == nil {
+		t.Fatal("超过上限的导出应被拒绝")
+	} else {
+		var e *response.Error
+		if !errors.As(err, &e) || e.Reason != ExportTooManyReason {
+			t.Fatalf("limit error = %v", err)
+		}
+	}
+	var exportFile bytes.Buffer
+	must(svc.WriteTicketsXLSX(ctx, &exportFile, exported))
+	cells, err := excel.ReadAll(bytes.NewReader(exportFile.Bytes()), int64(exportFile.Len()), excel.ReadOptions{})
+	must(err)
+	if len(cells) != 2 || cells[0][0] != "工单号" || cells[1][0] != exp.TicketNo {
+		t.Fatalf("导出内容 = %v", cells)
+	}
+	if cells[1][9] != "vip" || cells[1][12] != "FALSE" {
+		t.Errorf("标签/解决超时列 = %q / %q", cells[1][9], cells[1][12])
+	}
+
+	// 动态轨迹：真实引擎上一次生命周期的变更顺序、公开视图的过滤，以及改优先级重算 SLA 时钟。
+	trail := makeTicket("activity trail")
+	if _, _, err := svc.Reply(ctx, trail.TicketNo, ReplyInput{
+		ReplierType: ReplierAgent, ReplierID: "11", ReplierName: "kf-11", Content: "看下",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.SetStatus(ctx, trail.TicketNo, StatusResolved, "kf-11"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.SetTags(ctx, trail.TicketNo, []string{"退款"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Rate(ctx, trail.TicketNo, RateInput{Score: 4, Comment: "还行"}); err != nil {
+		t.Fatal(err)
+	}
+	acts, err := svc.TicketActivities(ctx, trail.ID, false)
+	must(err)
+	if len(acts) == 0 {
+		t.Fatal("生命周期没有留下任何动态")
+	}
+	if acts[0].Action != ActCreated {
+		t.Errorf("第一条动态应是建单，得到 %q", acts[0].Action)
+	}
+	seen := map[string]int{}
+	for i := 1; i < len(acts); i++ {
+		if int64(acts[i].ID) <= int64(acts[i-1].ID) {
+			t.Fatalf("动态未按时间升序：%d 在 %d 之后", acts[i-1].ID, acts[i].ID)
+		}
+		seen[acts[i].Action]++
+	}
+	if seen[ActStatusChanged] < 2 || seen[ActAssigneeChanged] < 1 || seen[ActTagsChanged] != 1 || seen[ActRatingAdded] != 1 {
+		t.Errorf("动态覆盖不全：%+v", seen)
+	}
+	if acts[len(acts)-1].Action != ActRatingAdded || acts[len(acts)-1].ToValue != "4" {
+		t.Errorf("最后一条动态 = %+v", acts[len(acts)-1])
+	}
+	// 客户自助页只能看到提交与状态变化。
+	publicActs, err := svc.TicketActivities(ctx, trail.ID, true)
+	must(err)
+	for _, a := range publicActs {
+		if a.Action != ActCreated && a.Action != ActStatusChanged {
+			t.Errorf("公开动态里出现内部动作 %q", a.Action)
+		}
+	}
+	if len(publicActs) >= len(acts) {
+		t.Errorf("公开视图没有过滤：%d 条 vs 全部 %d 条", len(publicActs), len(acts))
+	}
+	// 改优先级按策略重算两个时钟（不是加死常量小时数）。
+	prio := makeTicket("priority reprice")
+	var preTicket Ticket
+	must(gdb.Where("ticket_no = ?", prio.TicketNo).Take(&preTicket).Error)
+	if preTicket.ResolutionDueAt == nil {
+		t.Fatal("建单时就该有解决时限")
+	}
+	if _, err := svc.Bulk(ctx, BulkInput{TicketNos: []string{prio.TicketNo}, Action: "priority", Priority: PriorityUrgent}, 11, "kf-11"); err != nil {
+		t.Fatal(err)
+	}
+	var postTicket Ticket
+	must(gdb.Where("ticket_no = ?", prio.TicketNo).Take(&postTicket).Error)
+	if !postTicket.DueAt.Before(*preTicket.DueAt) || !postTicket.ResolutionDueAt.Before(*preTicket.ResolutionDueAt) {
+		t.Errorf("提到紧急后两个时钟都应收紧：due %v→%v，resolution %v→%v",
+			preTicket.DueAt, postTicket.DueAt, preTicket.ResolutionDueAt, postTicket.ResolutionDueAt)
+	}
+	prioActs, err := svc.TicketActivities(ctx, postTicket.ID, false)
+	must(err)
+	last := prioActs[len(prioActs)-1]
+	if last.TicketNo != prio.TicketNo {
+		t.Errorf("动态应带上工单号，得到 %q", last.TicketNo)
+	}
+	if last.Action != ActPriorityChanged || last.FromValue != PriorityNormal || last.ToValue != PriorityUrgent {
+		t.Errorf("改优先级的动态 = %+v", last)
 	}
 }

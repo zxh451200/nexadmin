@@ -54,6 +54,23 @@
       "agent": "Agent",
       "system": "System"
     },
+    "export": {
+      "action": "Export",
+      "tooMany": "Too many tickets match these filters to export; narrow the filters first",
+      "failed": "Export failed, please try again later"
+    },
+    "activity": {
+      "created": "created the ticket",
+      "statusChanged": "changed status from {{from}} to {{to}}",
+      "priorityChanged": "changed priority from {{from}} to {{to}}",
+      "assigneeChanged": "changed assignee from {{from}} to {{to}}",
+      "groupChanged": "moved group from {{from}} to {{to}}",
+      "tagsChanged": "changed tags from {{from}} to {{to}}",
+      "attachmentAdded": "uploaded {{name}}",
+      "ratingAdded": "rated {{score}} / 5",
+      "ruleApplied": "automation rule {{rule}} applied",
+      "empty": "unassigned"
+    },
     "actions": {
       "processing": "Start processing",
       "resume": "Resume",

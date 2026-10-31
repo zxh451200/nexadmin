@@ -228,6 +228,34 @@ ticket:
   group_disabled: This group is disabled and cannot receive tickets
   assignee_invalid: Invalid assignee
   plugin_inactive: Ticket plugin is not enabled or its license has lapsed
+  status_open: Open
+  status_processing: Processing
+  status_pending: Waiting on customer
+  status_resolved: Resolved
+  status_closed: Closed
+  priority_urgent: Urgent
+  priority_high: High
+  priority_normal: Normal
+  priority_low: Low
+  export_sheet: Tickets
+  export_no: Ticket no
+  export_title: Title
+  export_status: Status
+  export_priority: Priority
+  export_group: Group
+  export_assignee: Assignee
+  export_reporter: Reporter
+  export_creator: Created by
+  export_biz: Business object
+  export_tags: Tags
+  export_rating: CSAT
+  export_response_overdue: Response overdue
+  export_resolution_overdue: Resolution overdue
+  export_created_at: Created at
+  export_first_reply_at: First response
+  export_resolved_at: Resolved at
+  export_closed_at: Closed at
+  export_last_reply_at: Last reply
 totp:
   already_enabled: Two-factor authentication is already enabled
   not_enrolled: Two-factor authentication is not enrolled yet; scan the QR code first
