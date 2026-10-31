@@ -30,6 +30,8 @@ type SettingForm struct {
 	FooterNote  string       `json:"footerNote"`
 	// 指针：旧客户端不传该字段时保持原值，避免误关市场。
 	MarketEnabled *bool `json:"marketEnabled"`
+	// MessageNotifyEmail 同样是指针：不传保持原值（设置页分区块保存时不误改）。
+	MessageNotifyEmail *bool `json:"messageNotifyEmail"`
 	// I18nJSON 是非默认语言译文；服务层按白名单语言/字段清洗后入库。
 	I18nJSON string `json:"i18nJson"`
 }
@@ -72,7 +74,14 @@ type MessageQuery struct {
 	Page     int
 	PageSize int
 	Keyword  string
-	Unread   bool
+	// Status 为空 = 全部状态；非空时必须是 MsgNew / MsgRead / MsgHandled 之一。
+	Status string
+}
+
+// MessageStatusForm 是批量改状态：一次把 ids 里的留言置为 status。
+type MessageStatusForm struct {
+	IDs    []idgen.ID `json:"ids"`
+	Status string     `json:"status"`
 }
 
 // FeatureForm 是特性卡片表单。

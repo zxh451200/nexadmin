@@ -33,6 +33,9 @@ type Setting struct {
 	SocialsJSON     string `gorm:"column:socials;type:text" json:"-"`
 	FriendLinksJSON string `gorm:"column:friend_links;type:text" json:"-"`
 	MarketEnabled   bool   `gorm:"not null;default:true" json:"marketEnabled"` // 官网插件市场入口开关
+	// MessageNotifyEmail 是新留言是否抄送一封到站点联系邮箱（ContactEmail）。
+	// 站内信始终发（零配置），这一项只管邮件；SMTP 未配置时发送自然跳过并记日志。
+	MessageNotifyEmail bool `gorm:"column:message_notify_email;not null;default:true" json:"messageNotifyEmail"`
 	// I18nJSON 是非默认语言的字段译文：{"en-US":{"homeTitle":"…"}}；空 = 全部回退原文。
 	I18nJSON string `gorm:"type:text" json:"i18nJson"`
 	// SeedVersion 记录出厂内容补种进度：升级后只补一次新增的出厂条目，不复活管理员删掉的内容。
@@ -53,6 +56,21 @@ type FriendLink struct {
 	URL  string `json:"url"`
 }
 
+// 留言处理状态：线性流转 new → read → handled。
+// 用状态而不是「读没读」一个布尔：读过了但还没回复是官网询盘的常态，
+// 只记已读的话，收件箱看不出还剩几条要跟进。
+const (
+	MsgNew     = "new"     // 未读
+	MsgRead    = "read"    // 已读，待跟进
+	MsgHandled = "handled" // 已处理
+)
+
+// messageStatuses 是合法状态集；列表筛选与写入都按它校验。
+var messageStatuses = map[string]bool{MsgNew: true, MsgRead: true, MsgHandled: true}
+
+// ValidMessageStatus 报告状态名是否合法（管理端入参校验用）。
+func ValidMessageStatus(s string) bool { return messageStatuses[s] }
+
 // Message 是官网「在线留言」：匿名投稿，平台级保存，后台只读不改正文。
 type Message struct {
 	database.PlatformModel
@@ -62,8 +80,8 @@ type Message struct {
 	Content string `gorm:"size:2000;not null" json:"content"`
 	IP      string `gorm:"size:64;not null" json:"ip"`
 	UA      string `gorm:"size:255;not null" json:"ua"`
-	// read 是 MySQL 保留字，列名写成 is_read，避免手写 SQL 到处加引号。
-	Read bool `gorm:"column:is_read;not null;default:false" json:"read"`
+	// Status 取 MsgNew / MsgRead / MsgHandled 之一，投稿落库时恒为 MsgNew。
+	Status string `gorm:"size:16;not null;default:'new'" json:"status"`
 }
 
 func (Message) TableName() string { return "plg_website_message" }

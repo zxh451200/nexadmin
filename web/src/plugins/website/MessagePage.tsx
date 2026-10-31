@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Mail, MailOpen, Trash2 } from 'lucide-react'
+import { CheckCheck, Inbox, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
@@ -11,59 +11,91 @@ import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
-import { Switch } from '@/framework/ui/switch'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import { formatTime } from './format'
-import { useDeleteMessage, useMessages, useSetMessageRead, type SiteMessage } from './api'
+import {
+  MESSAGE_STATUSES,
+  useDeleteMessages,
+  useMessages,
+  useSetMessageStatus,
+  type MessageStatus,
+  type SiteMessage,
+} from './api'
 
-/** 官网「在线留言」收件箱：列表 + 详情；打开详情即标记已读。 */
+const ALL = '__all'
+
+/** 官网「在线留言」收件箱：按状态跟进（未读 → 已读 → 已处理），支持批量。 */
 export default function MessagePage() {
   const { t, i18n } = useTranslation()
   const confirm = useConfirm()
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
-  const [keyword, setKeyword] = useState('')
-  const [draft, setDraft] = useState('')
-  const [unread, setUnread] = useState(false)
+  const [draft, setDraft] = useState<{ keyword?: string; status?: MessageStatus }>({})
+  const [filters, setFilters] = useState<{ keyword?: string; status?: MessageStatus }>({})
+  const [selected, setSelected] = useState<string[]>([])
   const [detail, setDetail] = useState<SiteMessage | null>(null)
-  const { data, isLoading } = useMessages({ page, pageSize, keyword: keyword || undefined, unread: unread || undefined })
-  const setRead = useSetMessageRead()
-  const remove = useDeleteMessage()
+  const { data, isLoading } = useMessages({
+    page,
+    pageSize,
+    keyword: filters.keyword || undefined,
+    status: filters.status,
+  })
+  const setStatus = useSetMessageStatus()
+  const remove = useDeleteMessages()
 
-  const open = (row: SiteMessage) => {
-    setDetail(row)
-    if (!row.read) void setRead.mutateAsync({ id: row.id, read: true }).catch(() => undefined)
-  }
+  const statusLabel = (s: MessageStatus) =>
+    s === 'new' ? t('plugin_website.message.statusNew')
+      : s === 'read' ? t('plugin_website.message.statusRead')
+        : t('plugin_website.message.statusHandled')
 
-  const toggleRead = async (row: SiteMessage) => {
+  const statusBadge = (s: MessageStatus) =>
+    s === 'new' ? <Badge variant="info">{statusLabel(s)}</Badge>
+      : s === 'handled' ? <Badge variant="success">{statusLabel(s)}</Badge>
+        : <Badge variant="outline">{statusLabel(s)}</Badge>
+
+  // 批量改状态后要清选择：列表一刷新，选中的行可能已经不在了。
+  const applyStatus = async (ids: string[], status: MessageStatus) => {
     try {
-      await setRead.mutateAsync({ id: row.id, read: !row.read })
+      await setStatus.mutateAsync({ ids, status })
+      setSelected([])
     } catch {
       toast.error(t('common.operateFailed'))
     }
   }
 
-  const onDelete = async (row: SiteMessage) => {
-    if (await confirm({ destructive: true, description: t('plugin_website.message.deleteConfirm', { name: row.name }) })) {
-      try {
-        await remove.mutateAsync(row.id)
-        if (detail?.id === row.id) setDetail(null)
-        toast.success(t('common.operateSuccess'))
-      } catch {
-        toast.error(t('common.operateFailed'))
-      }
+  const open = (row: SiteMessage) => {
+    setDetail(row)
+    // 打开详情即算已读；已处理的不回退，避免看一次就把跟进状态冲掉。
+    if (row.status === 'new') void applyStatus([row.id], 'read')
+  }
+
+  const onDelete = async (rows: SiteMessage[]) => {
+    const ok = await confirm({
+      destructive: true,
+      description: rows.length === 1
+        ? t('plugin_website.message.deleteConfirm', { name: rows[0].name })
+        : t('plugin_website.message.deleteBatchConfirm', { count: rows.length }),
+    })
+    if (!ok) return
+    try {
+      await remove.mutateAsync(rows.map((r) => r.id))
+      if (detail && rows.some((r) => r.id === detail.id)) setDetail(null)
+      setSelected([])
+      toast.success(t('common.operateSuccess'))
+    } catch {
+      toast.error(t('common.operateFailed'))
     }
   }
 
+  const selectedRows = (data?.list ?? []).filter((r) => selected.includes(r.id))
+  // 详情弹窗读实时那一行：标已读后列表刷新，弹窗里的状态徽标跟着变，而不是停在你点开的旧值上。
+  const view = detail ? (data?.list.find((r) => r.id === detail.id) ?? detail) : null
+
   const columns: Column<SiteMessage>[] = [
     {
-      key: 'read',
+      key: 'status',
       title: t('plugin_website.message.status'),
-      render: (r) =>
-        r.read ? (
-          <Badge variant="outline">{t('plugin_website.message.read')}</Badge>
-        ) : (
-          <Badge variant="info">{t('plugin_website.message.unread')}</Badge>
-        ),
+      render: (r) => statusBadge(r.status),
     },
     {
       key: 'name',
@@ -103,34 +135,40 @@ export default function MessagePage() {
       <PageHeader title={t('plugin_website.message.title')} description={t('plugin_website.message.desc')} />
       <FilterBar
         onSearch={() => {
-          setKeyword(draft)
+          setFilters(draft)
           setPage(1)
+          setSelected([])
         }}
         onReset={() => {
-          setDraft('')
-          setKeyword('')
-          setUnread(false)
+          setDraft({})
+          setFilters({})
           setPage(1)
+          setSelected([])
         }}
       >
         <Input
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
+          value={draft.keyword ?? ''}
+          onChange={(e) => setDraft((d) => ({ ...d, keyword: e.target.value }))}
           placeholder={t('plugin_website.message.searchPlaceholder')}
           aria-label={t('plugin_website.message.searchPlaceholder')}
           className="md:w-64"
         />
-        <label className="flex h-10 items-center gap-2 whitespace-nowrap rounded-md border border-input bg-background px-3 text-sm md:h-9">
-          <Switch
-            checked={unread}
-            onCheckedChange={(v) => {
-              setUnread(v)
-              setPage(1)
-            }}
-            aria-label={t('plugin_website.message.onlyUnread')}
-          />
-          {t('plugin_website.message.onlyUnread')}
-        </label>
+        <Select
+          value={draft.status ?? ALL}
+          onValueChange={(v) => setDraft((d) => ({ ...d, status: v === ALL ? undefined : (v as MessageStatus) }))}
+        >
+          <SelectTrigger className="md:w-40" aria-label={t('plugin_website.message.status')}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>{t('plugin_website.all')}</SelectItem>
+            {MESSAGE_STATUSES.map((s) => (
+              <SelectItem key={s} value={s}>
+                {statusLabel(s)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </FilterBar>
       <DataTable
         columns={columns}
@@ -148,23 +186,51 @@ export default function MessagePage() {
           },
         }}
         emptyText={t('plugin_website.message.empty')}
+        selection={{ selected, onChange: setSelected }}
+        batchActions={(ids) => (
+          <Can perm="website:message">
+            <Button type="button" variant="outline" size="sm" onClick={() => void applyStatus(ids, 'read')}>
+              <Inbox className="me-2 size-4" aria-hidden="true" />
+              {t('plugin_website.message.markRead')}
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => void applyStatus(ids, 'handled')}>
+              <CheckCheck className="me-2 size-4" aria-hidden="true" />
+              {t('plugin_website.message.markHandled')}
+            </Button>
+            <Button type="button" variant="destructive" size="sm" onClick={() => void onDelete(selectedRows)}>
+              <Trash2 className="me-2 size-4" aria-hidden="true" />
+              {t('common.delete')}
+            </Button>
+          </Can>
+        )}
         rowActions={(row) => (
           <Can perm="website:message">
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label={row.read ? t('plugin_website.message.markUnread') : t('plugin_website.message.markRead')}
-              onClick={() => void toggleRead(row)}
-            >
-              {row.read ? <Mail className="size-4" aria-hidden="true" /> : <MailOpen className="size-4" aria-hidden="true" />}
-            </Button>
-            <Button variant="ghost" size="icon" aria-label={t('common.delete')} onClick={() => void onDelete(row)}>
+            {row.status !== 'handled' ? (
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={t('plugin_website.message.markHandled')}
+                onClick={() => void applyStatus([row.id], 'handled')}
+              >
+                <CheckCheck className="size-4" aria-hidden="true" />
+              </Button>
+            ) : (
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={t('plugin_website.message.markUnread')}
+                onClick={() => void applyStatus([row.id], 'new')}
+              >
+                <Inbox className="size-4" aria-hidden="true" />
+              </Button>
+            )}
+            <Button variant="ghost" size="icon" aria-label={t('common.delete')} onClick={() => void onDelete([row])}>
               <Trash2 className="size-4" aria-hidden="true" />
             </Button>
           </Can>
         )}
       />
-      {detail ? (
+      {view ? (
         <ResponsiveDialog
           open
           onOpenChange={(v) => {
@@ -179,22 +245,26 @@ export default function MessagePage() {
         >
           <dl className="flex flex-col gap-3 text-sm">
             <div className="flex gap-2">
+              <dt className="w-20 shrink-0 text-muted-foreground">{t('plugin_website.message.status')}</dt>
+              <dd>{statusBadge(view.status)}</dd>
+            </div>
+            <div className="flex gap-2">
               <dt className="w-20 shrink-0 text-muted-foreground">{t('plugin_website.message.name')}</dt>
-              <dd className="min-w-0 break-words">{detail.name}</dd>
+              <dd className="min-w-0 break-words">{view.name}</dd>
             </div>
             <div className="flex gap-2">
               <dt className="w-20 shrink-0 text-muted-foreground">{t('plugin_website.message.contact')}</dt>
               <dd className="min-w-0 break-words">
-                <a className="underline" href={`mailto:${detail.email}`}>{detail.email}</a>
-                {detail.phone ? <span className="text-muted-foreground"> · {detail.phone}</span> : null}
+                <a className="underline" href={`mailto:${view.email}`}>{view.email}</a>
+                {view.phone ? <span className="text-muted-foreground"> · {view.phone}</span> : null}
               </dd>
             </div>
             <div className="flex gap-2">
               <dt className="w-20 shrink-0 text-muted-foreground">{t('plugin_website.message.createdAt')}</dt>
-              <dd className="num">{formatTime(detail.createdAt, i18n.language)}</dd>
+              <dd className="num">{formatTime(view.createdAt, i18n.language)}</dd>
             </div>
-            <div className="whitespace-pre-wrap break-words rounded-md border bg-muted/40 p-3">{detail.content}</div>
-            <div className="text-xs text-muted-foreground">{[detail.ip, detail.ua].filter(Boolean).join(' · ')}</div>
+            <div className="whitespace-pre-wrap break-words rounded-md border bg-muted/40 p-3">{view.content}</div>
+            <div className="text-xs text-muted-foreground">{[view.ip, view.ua].filter(Boolean).join(' · ')}</div>
           </dl>
         </ResponsiveDialog>
       ) : null}

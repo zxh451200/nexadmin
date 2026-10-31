@@ -240,6 +240,9 @@ func (s *Service) SaveSettings(ctx context.Context, f SettingForm) (*Setting, er
 	if f.MarketEnabled != nil {
 		row.MarketEnabled = *f.MarketEnabled
 	}
+	if f.MessageNotifyEmail != nil {
+		row.MessageNotifyEmail = *f.MessageNotifyEmail
+	}
 	if err := s.db.WithContext(ctx).Save(row).Error; err != nil {
 		return nil, err
 	}
@@ -898,6 +901,8 @@ func bumpMarketStat(db *gorm.DB, pluginID string, downloads, sum, count int64) e
 var emailReg = regexp.MustCompile(`^[^\s@]+@[^\s@]+\.[^\s@]+$`)
 
 // CreateMessage 保存一条匿名留言。限流与蜜罐在 HTTP 层，这里只校验内容。
+// 落库成功后发 website.message.created；通知由订阅者异步做（见 notify.go），
+// 请求路径不等发送结果——宁可丢事件，也不拖慢访客投稿。
 func (s *Service) CreateMessage(ctx context.Context, f ContactForm, ip, ua string) (*Message, error) {
 	name := trimRunes(f.Name, 64)
 	email := trimRunes(f.Email, 128)
@@ -915,18 +920,20 @@ func (s *Service) CreateMessage(ctx context.Context, f ContactForm, ip, ua strin
 	row := &Message{
 		Name: name, Email: email, Phone: phone, Content: content,
 		IP: trimLen(ip, 64), UA: trimLen(ua, 255),
+		Status: MsgNew,
 	}
 	if err := s.db.WithContext(ctx).Create(row).Error; err != nil {
 		return nil, err
 	}
+	s.publishCreated(ctx, row)
 	return row, nil
 }
 
-// ListMessages 是后台留言列表：按时间倒序，可按未读与关键字筛。
+// ListMessages 是后台留言列表：按时间倒序，可按状态与关键字筛。
 func (s *Service) ListMessages(ctx context.Context, q MessageQuery) ([]Message, int64, error) {
 	tx := s.db.WithContext(ctx).Model(&Message{})
-	if q.Unread {
-		tx = tx.Where("is_read = ?", false)
+	if q.Status != "" {
+		tx = tx.Where("status = ?", q.Status)
 	}
 	if kw := strings.TrimSpace(q.Keyword); kw != "" {
 		like := "%" + kw + "%"
@@ -944,33 +951,47 @@ func (s *Service) ListMessages(ctx context.Context, q MessageQuery) ([]Message, 
 	return rows, total, nil
 }
 
-// UnreadMessages 返回未读数（后台页签角标用）。
-func (s *Service) UnreadMessages(ctx context.Context) (int64, error) {
-	var n int64
-	err := s.db.WithContext(ctx).Model(&Message{}).Where("is_read = ?", false).Count(&n).Error
-	return n, err
-}
-
-// SetMessageRead 标记已读/未读；留言不存在时返回 404（而不是静默成功）。
-func (s *Service) SetMessageRead(ctx context.Context, id idgen.ID, read bool) error {
-	res := s.db.WithContext(ctx).Model(&Message{}).Where("id = ?", int64(id)).Update("is_read", read)
+// SetMessagesStatus 批量把 ids 里的留言置为某个状态，返回实际改动条数。
+// 全部没命中（被别人删了）才算 404；部分命中是并发下的常态，如实返回条数让界面刷新。
+func (s *Service) SetMessagesStatus(ctx context.Context, ids []idgen.ID, status string) (int64, error) {
+	if len(ids) == 0 {
+		return 0, response.BadRequest("website.message_ids_empty")
+	}
+	if !ValidMessageStatus(status) {
+		return 0, response.BadRequest("website.message_status_invalid")
+	}
+	res := s.db.WithContext(ctx).Model(&Message{}).
+		Where("id IN ?", int64IDs(ids)).Update("status", status)
 	if res.Error != nil {
-		return res.Error
+		return 0, res.Error
 	}
 	if res.RowsAffected == 0 {
-		return response.NotFound("website.message_not_found")
+		return 0, response.NotFound("website.message_not_found")
 	}
-	return nil
+	return res.RowsAffected, nil
 }
 
-// DeleteMessage 删除一条留言。
-func (s *Service) DeleteMessage(ctx context.Context, id idgen.ID) error {
-	res := s.db.WithContext(ctx).Delete(&Message{}, "id = ?", int64(id))
+// DeleteMessages 批量删除留言，返回实际删除条数（语义同 SetMessagesStatus）。
+func (s *Service) DeleteMessages(ctx context.Context, ids []idgen.ID) (int64, error) {
+	if len(ids) == 0 {
+		return 0, response.BadRequest("website.message_ids_empty")
+	}
+	res := s.db.WithContext(ctx).Delete(&Message{}, "id IN ?", int64IDs(ids))
 	if res.Error != nil {
-		return res.Error
+		return 0, res.Error
 	}
 	if res.RowsAffected == 0 {
-		return response.NotFound("website.message_not_found")
+		return 0, response.NotFound("website.message_not_found")
 	}
-	return nil
+	return res.RowsAffected, nil
+}
+
+// int64IDs 把 ID 列表转成 IN 子句认得的类型：[]idgen.ID 走反射取值，
+// 不同驱动对自定义整数别名的处理不一致，转 int64 是三库都稳的写法。
+func int64IDs(ids []idgen.ID) []int64 {
+	out := make([]int64, len(ids))
+	for i, id := range ids {
+		out[i] = int64(id)
+	}
+	return out
 }

@@ -8,6 +8,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// 在线留言投稿阈值：匿名写入口，比页面浏览紧得多。
+const (
+	contactRateMax    = 5
+	contactRateWindow = time.Minute
+)
+
 // ipLimiter 是进程内滑动窗口 IP 限流，作为公开官网页的兜底（identity 插件 CAS 入口同款思路；
 // 阈值放宽到正常访客与爬虫无感）。多实例部署时每实例独立计数。
 type ipLimiter struct {

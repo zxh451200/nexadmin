@@ -35,7 +35,7 @@ import {
 type SharedTextKey =
   | 'siteName' | 'logoUrl' | 'homeCtaHref' | 'contactEmail'
   | 'contactPhone' | 'qrCodeUrl' | 'qrCodeCaption' | 'icp'
-type SharedSettings = Pick<SiteSettingsForm, SharedTextKey | 'marketEnabled'> & {
+type SharedSettings = Pick<SiteSettingsForm, SharedTextKey | 'marketEnabled' | 'messageNotifyEmail'> & {
   socials: SocialLink[]
   friendLinks: FriendLink[]
 }
@@ -196,6 +196,13 @@ function SettingsFormBody({
       {sharedInput('homeCtaHref')}
       {localizedField('seoKeywords')}
       {sharedInput('contactEmail')}
+      <SwitchRow
+        label={t('plugin_website.message.notifyEmail')}
+        description={t('plugin_website.message.notifyEmailHint')}
+        checked={shared.messageNotifyEmail}
+        disabled={sharedDisabled}
+        onCheckedChange={(v) => onSharedChange({ ...shared, messageNotifyEmail: v })}
+      />
       {sharedInput('contactPhone')}
       <SharedFieldShell labelKey="plugin_website.fields.qrCodeUrl">
         <div className="flex items-center gap-2">
@@ -352,6 +359,7 @@ export default function SettingsPage() {
         qrCodeCaption: data.qrCodeCaption,
         icp: data.icp,
         marketEnabled: data.marketEnabled,
+        messageNotifyEmail: data.messageNotifyEmail,
         socials: data.socials ?? [],
         friendLinks: data.friendLinks ?? [],
       })

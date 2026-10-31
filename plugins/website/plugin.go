@@ -15,11 +15,14 @@ import (
 	"go.uber.org/zap"
 
 	"nexadmin/core"
+	"nexadmin/core/event"
+	"nexadmin/core/middleware"
 	"nexadmin/core/plugin"
 	"nexadmin/core/plugin/market"
 )
 
 func init() {
+	event.Register(CatalogInfos()...)
 	plugin.Register(plugin.Plugin{
 		ID: "website", Name: "企业官网", Version: "0.6.0", Edition: plugin.Pro,
 		Module: &module{},
@@ -29,6 +32,7 @@ func init() {
 type module struct {
 	once sync.Once
 	svc  *Service
+	sub  sync.Once
 }
 
 func (m *module) service(d *core.Deps) *Service {
@@ -53,9 +57,8 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.PUT("/settings", core.Perm("website:setting"), core.Desc("更新站点设置"), h.saveSettings)
 
 	g.GET("/messages", core.Perm("website:message"), core.Desc("留言列表"), h.listMessages)
-	g.GET("/messages/unread", core.Perm("website:message"), core.Desc("未读留言数"), h.unreadMessages)
-	g.PUT("/messages/:id/read", core.Perm("website:message"), core.Desc("标记留言已读"), h.setMessageRead)
-	g.DELETE("/messages/:id", core.Perm("website:message"), core.Desc("删除留言"), h.deleteMessage)
+	g.PUT("/messages/status", core.Perm("website:message"), core.Desc("批量修改留言状态"), h.setMessageStatus)
+	g.DELETE("/messages", core.Perm("website:message"), core.Desc("批量删除留言"), h.deleteMessages)
 
 	g.GET("/navs", core.Perm("website:nav"), core.Desc("导航列表"), h.listNavs)
 	g.POST("/navs", core.Perm("website:nav"), core.Desc("新增导航"), h.createNav)
@@ -94,8 +97,13 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	// 官网页面在授权导入后重启生效。
 	if d.RootGroup != nil {
 		site := &siteHandler{svc: m.service(d), log: d.Log, pkg: newPackageCache(), signKey: loadMarketSignKey(d.Log)}
-		// 留言是匿名写入口：比普通页面更紧的阈值（每 IP 每分钟 5 条），和页面浏览分开计数。
-		site.contactLimit = newIPLimiter(5, time.Minute).Middleware()
+		// 留言是匿名写入口：阈值比普通页面紧（每 IP 每分钟 5 条），和页面浏览分开计数。
+		// 计数走共享 cache，多实例部署时是同一个桶；cache 没装配才退回进程内滑动窗口。
+		if d.Cache != nil {
+			site.contactHits = middleware.NewLimiter(d.Cache, d.Log, "website-contact", contactRateMax, contactRateWindow)
+		} else {
+			site.contactLocal = newIPLimiter(contactRateMax, contactRateWindow)
+		}
 		pub := d.RootGroup.Group("", newIPLimiter(600, time.Minute).Middleware())
 		// 默认语言固定渲染在无前缀路径上；cookie 只影响首页回跳与语言中立端点。
 		pub.Use(LanguageContext(DefaultLanguage()), langNegotiate)
@@ -162,11 +170,11 @@ func (h *siteHandler) registerPages(g *gin.RouterGroup, bareHome bool) {
 	g.GET("/p/:slug", h.pageDetail)
 	g.HEAD("/p/:slug", h.pageDetail)
 	// 在线留言：GET 是联系页，POST 是同一个地址的投稿入口（无 JS 也能直接表单提交）。
+	// 投稿限流在 handler 内判定（contactAllowed），这样超限时无 JS 的表单提交
+	// 也能 303 回联系页带错误提示，而不是被中间件直接吐一段 JSON。
 	g.GET("/contact", h.contact)
 	g.HEAD("/contact", h.contact)
-	if h.contactLimit != nil {
-		g.POST("/contact", h.contactLimit, h.contactSubmit)
-	}
+	g.POST("/contact", h.contactSubmit)
 	// 文档区：渲染 nexadmin/docs 内嵌的框架使用文档，内容中文为主，随语言分组走前缀。
 	g.GET("/docs", h.docsIndex)
 	g.HEAD("/docs", h.docsIndex)
@@ -193,11 +201,21 @@ func loadMarketSignKey(log *zap.Logger) ed25519.PrivateKey {
 	return key
 }
 
-// Start 实现 plugin.Starter：首次启动种入出厂内容（NexAdmin 官网默认文案）。
+// Start 实现 plugin.Starter：首次启动种入出厂内容（NexAdmin 官网默认文案），
+// 并挂上新留言通知（站内信 + 可选邮件抄送）。
 func (m *module) Start(ctx context.Context, d *core.Deps) error {
 	svc := m.service(d)
 	ensureSeed(ctx, svc, d.Log)
 	ensureSeedBackfill(ctx, svc, d.Log)
 	ensureSeedI18n(ctx, svc, d.Log)
+	// 只订阅一次：重复挂载会把同一个事件挂两遍，一条留言就发多封通知。
+	m.sub.Do(func() {
+		n := newNotifier(ctx, d, svc)
+		if n == nil {
+			return
+		}
+		event.Subscribe(event.SubscriberFunc(n.handle))
+		go n.run()
+	})
 	return nil
 }

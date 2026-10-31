@@ -3,6 +3,7 @@ package website
 import (
 	"io"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -64,14 +65,15 @@ func (h *handler) saveSettings(c *gin.Context) {
 
 // ---- 在线留言 ----
 
-// GET /plugins/website/messages?keyword=&unread=1&page=&pageSize=
+// GET /plugins/website/messages?keyword=&status=&page=&pageSize=
 func (h *handler) listMessages(c *gin.Context) {
 	page, size := response.ParsePage(c)
-	q := MessageQuery{
-		Page: page, PageSize: size,
-		Keyword: c.Query("keyword"),
-		Unread:  c.Query("unread") == "1" || c.Query("unread") == "true",
+	status := strings.TrimSpace(c.Query("status"))
+	if status != "" && !ValidMessageStatus(status) {
+		response.Fail(c, response.BadRequest("website.message_status_invalid"))
+		return
 	}
+	q := MessageQuery{Page: page, PageSize: size, Keyword: c.Query("keyword"), Status: status}
 	list, total, err := h.svc.ListMessages(c.Request.Context(), q)
 	if err != nil {
 		response.Fail(c, err)
@@ -80,38 +82,42 @@ func (h *handler) listMessages(c *gin.Context) {
 	response.Page(c, list, total, q.Page, q.PageSize)
 }
 
-// GET /plugins/website/messages/unread —— 未读数（侧栏角标/筛选计数用）。
-func (h *handler) unreadMessages(c *gin.Context) {
-	n, err := h.svc.UnreadMessages(c.Request.Context())
-	respond(c, map[string]int64{"count": n}, err)
-}
-
-// PUT /plugins/website/messages/:id/read —— 标记已读/未读；不传 read 视为已读。
-func (h *handler) setMessageRead(c *gin.Context) {
-	id, ok := parseID(c)
-	if !ok {
-		return
-	}
-	var f struct {
-		Read *bool `json:"read"`
-	}
+// PUT /plugins/website/messages/status —— 批量改状态（单条就是长度为 1 的 ids）。
+// 返回实际改动条数：并发下有人先删了几条，界面据实刷新而不是报假成功。
+func (h *handler) setMessageStatus(c *gin.Context) {
+	var f MessageStatusForm
 	if !response.BindJSON(c, &f) {
 		return
 	}
-	read := true
-	if f.Read != nil {
-		read = *f.Read
-	}
-	respond(c, nil, h.svc.SetMessageRead(c.Request.Context(), id, read))
+	n, err := h.svc.SetMessagesStatus(c.Request.Context(), f.IDs, strings.TrimSpace(f.Status))
+	respond(c, map[string]int64{"updated": n}, err)
 }
 
-// DELETE /plugins/website/messages/:id
-func (h *handler) deleteMessage(c *gin.Context) {
-	id, ok := parseID(c)
-	if !ok {
+// DELETE /plugins/website/messages?ids=1,2,3 —— 批量删除（形状与 /users、/tenants 一致）。
+func (h *handler) deleteMessages(c *gin.Context) {
+	ids, err := parseIDs(c.Query("ids"))
+	if err != nil {
+		response.Fail(c, err)
 		return
 	}
-	respond(c, nil, h.svc.DeleteMessage(c.Request.Context(), id))
+	n, err := h.svc.DeleteMessages(c.Request.Context(), ids)
+	respond(c, map[string]int64{"deleted": n}, err)
+}
+
+// parseIDs 解析逗号分隔的 ID 列表；任一项非法就整体拒绝，不做「删掉能删的」。
+func parseIDs(raw string) ([]idgen.ID, error) {
+	var ids []idgen.ID
+	for _, part := range strings.Split(raw, ",") {
+		if part = strings.TrimSpace(part); part == "" {
+			continue
+		}
+		id, err := idgen.Parse(part)
+		if err != nil || id <= 0 {
+			return nil, response.BadRequest("website.message_ids_invalid")
+		}
+		ids = append(ids, id)
+	}
+	return ids, nil
 }
 
 // ---- 导航 ----

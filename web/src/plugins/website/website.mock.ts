@@ -1,6 +1,6 @@
 import { defineMock, mockError } from '@/framework/request/mock'
 import type { EntitySchema } from '@/framework/components/i18n'
-import type { FeatureItem, NavItem, SitePage, SitePost, SiteSettings } from './api'
+import type { FeatureItem, MessageStatus, NavItem, SiteMessage, SitePage, SitePost, SiteSettings } from './api'
 
 const ago = (min: number) => new Date(Date.now() - min * 60_000).toISOString()
 const id = (n: number) => String(8100000000000000000n + BigInt(n))
@@ -24,6 +24,7 @@ const settings: SiteSettings = {
   icp: '',
   footerNote: '框架区源码以 MIT 许可开源；业务与插件代码归各自作者。',
   marketEnabled: true,
+  messageNotifyEmail: true,
   i18nJson: '',
   updatedAt: ago(60 * 24),
 }
@@ -78,6 +79,34 @@ let posts: SitePost[] = [
     seoDesc: '官网插件：服务端渲染、SEO 友好的企业官网，后台可管设置、导航、页面与新闻。',
     content: '<p>你正在浏览的页面，就是它的默认模板。</p>',
     publishedAt: ago(60 * 24), i18nJson: '', publishedJson: '', updatedAt: ago(60 * 24),
+  },
+]
+
+// 后台留言收件箱：三态各留几条，未读/已读/已处理的界面都能在 mock 模式里看到。
+let messages: SiteMessage[] = [
+  {
+    id: id(501), name: '张先生', email: 'zhang@example.com', phone: '13800000000',
+    content: '我们公司想用这套框架做内部后台，想确认二次开发的报价和交付周期，方便的话请回个电话。',
+    ip: '203.0.113.24', ua: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)', status: 'new',
+    createdAt: ago(35), updatedAt: ago(35),
+  },
+  {
+    id: id(502), name: 'Nora', email: 'nora@studio.io', phone: '',
+    content: 'Does the source delivery include the plugin SDK and the license server?',
+    ip: '198.51.100.7', ua: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)', status: 'new',
+    createdAt: ago(180), updatedAt: ago(180),
+  },
+  {
+    id: id(503), name: '李女士', email: 'li@vendor.cn', phone: '13900000000',
+    content: '咨询一下多租户隔离的实现方式，我们有两个子公司要共用一套系统。',
+    ip: '203.0.113.51', ua: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)', status: 'read',
+    createdAt: ago(60 * 20), updatedAt: ago(60 * 19),
+  },
+  {
+    id: id(504), name: '王工', email: 'wang@dev.team', phone: '',
+    content: '官网插件的留言表能不能加自定义字段？',
+    ip: '192.0.2.10', ua: 'Mozilla/5.0 (X11; Linux x86_64)', status: 'handled',
+    createdAt: ago(60 * 40), updatedAt: ago(60 * 39),
   },
 ]
 
@@ -341,6 +370,44 @@ defineMock([
     handler: ({ params }) => {
       posts = posts.filter((x) => x.id !== params.id)
       return { ok: true }
+    },
+  },
+  {
+    method: 'GET',
+    url: '/plugins/website/messages',
+    handler: ({ query }) => {
+      const kw = String(query.keyword ?? '').trim().toLowerCase()
+      let rows = messages.filter((m) => !kw || m.name.toLowerCase().includes(kw) || m.email.includes(kw) || m.content.toLowerCase().includes(kw))
+      if (query.status) rows = rows.filter((m) => m.status === query.status)
+      return paginate([...rows].reverse(), query)
+    },
+  },
+  {
+    method: 'PUT',
+    url: '/plugins/website/messages/status',
+    handler: ({ body }) => {
+      const ids = new Set<string>((body.ids ?? []).map(String))
+      const status = String(body.status ?? '') as MessageStatus
+      if (!ids.size || !['new', 'read', 'handled'].includes(status)) return mockError(400, 'bad request')
+      let updated = 0
+      for (const row of messages) {
+        if (ids.has(row.id)) {
+          row.status = status
+          row.updatedAt = new Date().toISOString()
+          updated++
+        }
+      }
+      return { updated }
+    },
+  },
+  {
+    method: 'DELETE',
+    url: '/plugins/website/messages',
+    handler: ({ query }) => {
+      const ids = new Set(String(query.ids ?? '').split(',').map((s) => s.trim()).filter(Boolean))
+      const before = messages.length
+      messages = messages.filter((m) => !ids.has(m.id))
+      return { deleted: before - messages.length }
     },
   },
 ])

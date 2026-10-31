@@ -31,6 +31,9 @@ func defaultSetting() Setting {
 		SeoKeywords:   "NexAdmin,后台管理框架,Gin,React,多租户,RBAC,插件,开源",
 		FooterNote:    "框架区源码以 MIT 许可开源；业务与插件代码归各自作者。",
 		MarketEnabled: true,
+		// 新留言默认抄送站点联系邮箱：站内信只在本后台有人登录时才看得见，
+		// 邮件才是客户真正会读到的入口（SMTP 未配置时自然跳过）。
+		MessageNotifyEmail: true,
 		SeedVersion:   seedVersion,
 		I18nJSON: enText(map[string]string{
 			"siteDesc":     "A source-delivered admin framework: Gin + GORM on the backend, React + shadcn/ui on the frontend, shipped as a single production binary.",

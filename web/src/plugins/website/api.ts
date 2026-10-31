@@ -42,6 +42,8 @@ export interface SiteSettings {
   icp: string
   footerNote: string
   marketEnabled: boolean
+  /** 新留言是否抄送一封到 contactEmail（SMTP 未配置时自动跳过） */
+  messageNotifyEmail: boolean
   i18nJson: string
   updatedAt: string
 }
@@ -339,7 +341,12 @@ export function useDeletePost() {
   })
 }
 
-/** 官网「在线留言」：匿名投稿，后台只读/标记/删除。 */
+/** 官网「在线留言」：匿名投稿，后台按状态跟进（只读不改正文）。 */
+export type MessageStatus = 'new' | 'read' | 'handled'
+
+/** 列表筛选与批量操作共用的状态顺序；与后端 MsgNew/MsgRead/MsgHandled 同源。 */
+export const MESSAGE_STATUSES: MessageStatus[] = ['new', 'read', 'handled']
+
 export interface SiteMessage {
   id: string
   name: string
@@ -348,7 +355,7 @@ export interface SiteMessage {
   content: string
   ip: string
   ua: string
-  read: boolean
+  status: MessageStatus
   createdAt: string
   updatedAt: string
 }
@@ -357,29 +364,32 @@ export interface MessageQuery {
   page: number
   pageSize: number
   keyword?: string
-  unread?: boolean
+  /** 省略 = 全部状态 */
+  status?: MessageStatus
 }
 
 export function useMessages(query: MessageQuery) {
   return useQuery({
     queryKey: [...KEY, 'messages', query],
-    queryFn: () => api.get<Page<SiteMessage>>(`${BASE}/messages`, { ...query, unread: query.unread ? 1 : undefined }),
+    queryFn: () => api.get<Page<SiteMessage>>(`${BASE}/messages`, query),
     placeholderData: keepPreviousData,
   })
 }
 
-export function useSetMessageRead() {
+/** 批量改状态：单条操作就是长度为 1 的 ids。updated 是服务端实际改动条数。 */
+export function useSetMessageStatus() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, read }: { id: string; read: boolean }) => api.put<null>(`${BASE}/messages/${id}/read`, { read }),
+    mutationFn: ({ ids, status }: { ids: string[]; status: MessageStatus }) =>
+      api.put<{ updated: number }>(`${BASE}/messages/status`, { ids, status }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: [...KEY, 'messages'] }),
   })
 }
 
-export function useDeleteMessage() {
+export function useDeleteMessages() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (id: string) => api.del(`${BASE}/messages/${id}`),
+    mutationFn: (ids: string[]) => api.del<{ deleted: number }>(`${BASE}/messages`, { ids: ids.join(',') }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: [...KEY, 'messages'] }),
   })
 }

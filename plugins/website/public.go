@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"net/http"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"nexadmin/core/middleware"
 	"nexadmin/core/plugin/market"
 	"nexadmin/core/response"
 	"nexadmin/pkg/idgen"
@@ -34,8 +36,30 @@ type siteHandler struct {
 	marketOn func() (bool, error)
 	// signKey 为空表示不签名（未配置 NEXADMIN_MARKET_SIGN_KEY）。
 	signKey ed25519.PrivateKey
-	// contactLimit 是在线留言的 IP 限流中间件（每种语言分组共用同一实例，计数不分裂）。
-	contactLimit gin.HandlerFunc
+	// contactHits 是在线留言的 IP 投稿计数（共享 cache，多实例一致）。
+	contactHits *middleware.Limiter
+	// contactLocal 是 cache 未装配时的进程内兜底计数器。
+	contactLocal *ipLimiter
+}
+
+// contactAllowed 报告这个 IP 还能不能投稿；超限已经写好 Retry-After。
+func (h *siteHandler) contactAllowed(c *gin.Context) bool {
+	if h.contactHits != nil {
+		ok, retry := h.contactHits.Hit(c.Request.Context(), "ip:"+c.ClientIP())
+		if ok {
+			return true
+		}
+		secs := int(retry.Seconds())
+		if secs < 1 {
+			secs = 1
+		}
+		c.Header("Retry-After", strconv.Itoa(secs))
+		return false
+	}
+	if h.contactLocal != nil {
+		return h.contactLocal.allow(c.ClientIP())
+	}
+	return true
 }
 
 // baseView 装配站点级数据（设置、导航、特性、最新新闻）与页脚年份。
@@ -254,6 +278,11 @@ func contactErrorText(v *siteView, code string) string {
 
 // POST /contact —— 在线留言。fetch 提交回 JSON；无 JS 的整页表单提交 303 回联系页带结果。
 func (h *siteHandler) contactSubmit(c *gin.Context) {
+	// 先计数再解析：绑定失败也是一次投稿尝试，不能靠反复触发校验绕过配额。
+	if !h.contactAllowed(c) {
+		h.contactFail(c, http.StatusTooManyRequests, "rate")
+		return
+	}
 	var f ContactForm
 	if err := c.ShouldBind(&f); err != nil {
 		h.contactFail(c, http.StatusBadRequest, "fail")
