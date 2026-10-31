@@ -242,6 +242,10 @@ func TestLiveIMFeatures(t *testing.T) {
 	if err != nil || rec.Content != "" || rec.Kind != KindSystem {
 		t.Fatalf("recall = %+v, %v", rec, err)
 	}
+	// 撤回时间必须是「现在」，不能复用会话创建时间。
+	if rec.RecalledAt == nil || time.Since(*rec.RecalledAt).Abs() > time.Minute {
+		t.Fatalf("recalledAt should be now, got %v", rec.RecalledAt)
+	}
 	var stored Message
 	if err := db.Where("id = ?", int64(m.ID)).Take(&stored).Error; err != nil || stored.Content != "" || stored.RecalledAt == nil {
 		t.Fatalf("recalled row = %+v (%v)", stored, err)
@@ -302,6 +306,11 @@ func TestLiveIMFeatures(t *testing.T) {
 		if merged[i].Seq != int64(i+1) {
 			t.Fatalf("target seq not contiguous at %d: %+v", i, merged[i])
 		}
+	}
+	// 合并系统提示里要留操作坐席，便于追溯。
+	lastMerged := merged[len(merged)-1]
+	if lastMerged.Kind != KindSystem || !strings.Contains(lastMerged.Meta, `"by":"7"`) {
+		t.Fatalf("merge note should record the agent: %+v", lastMerged)
 	}
 	_, srcMsgs, _, err := s.Messages(ctx, c2.ConvNo, MessageQuery{Limit: 10})
 	if err != nil || len(srcMsgs) == 0 {

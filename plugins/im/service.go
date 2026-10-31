@@ -1406,8 +1406,9 @@ func (s *Service) Recall(ctx context.Context, convNo string, seq int64, userID s
 		return nil, response.BadRequest("error.bad_request")
 	}
 	var (
-		out  Message
-		conv Conversation
+		out        Message
+		conv       Conversation
+		recalledAt time.Time
 	)
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("conv_no = ?", convNo).Take(&conv).Error; err != nil {
@@ -1430,6 +1431,7 @@ func (s *Service) Recall(ctx context.Context, convNo string, seq int64, userID s
 			return response.Conflict("im.message_not_recallable")
 		}
 		now := time.Now().UTC()
+		recalledAt = now
 		meta, _ := json.Marshal(map[string]string{"code": "message_recalled"})
 		if err := tx.Model(&Message{}).Where("id = ?", int64(out.ID)).Updates(map[string]any{
 			"content": "", "kind": KindSystem, "meta": string(meta), "recalled_at": now,
@@ -1446,7 +1448,7 @@ func (s *Service) Recall(ctx context.Context, convNo string, seq int64, userID s
 		return nil, err
 	}
 	out.Content, out.Kind = "", KindSystem
-	out.RecalledAt = &conv.CreatedAt
+	out.RecalledAt = &recalledAt
 	out.Meta = `{"code":"message_recalled"}`
 	s.publishControl(conv.ConvNo, map[string]any{"type": "recalled", "seq": seq})
 	return &out, nil
@@ -1505,7 +1507,9 @@ func (s *Service) Merge(ctx context.Context, fromNo, toNo, agentID string) (*Mer
 			return err
 		}
 		now := time.Now().UTC()
-		mergedMeta, _ := json.Marshal(map[string]string{"code": "conv_merged", "from": src.ConvNo})
+		mergedMeta, _ := json.Marshal(map[string]string{
+			"code": "conv_merged", "from": src.ConvNo, "by": truncate(strings.TrimSpace(agentID), 64),
+		})
 		sysID, err := idgen.Next()
 		if err != nil {
 			return err
