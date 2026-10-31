@@ -75,7 +75,7 @@ func (s *Service) publishCustomer(ctx context.Context, name string, c *Customer)
 // publishOppStage 把商机阶段变更发布到总线。
 func (s *Service) publishOppStage(ctx context.Context, o *Opportunity, from string) {
 	event.Publish(ctx, EventOppStageChanged, OppEventData{
-		TenantID: o.TenantID, OpportunityID: o.ID, CustomerID: idgen.ID(o.CustomerID),
+		TenantID: o.TenantID, OpportunityID: o.ID, CustomerID: o.CustomerID,
 		Title: o.Title, FromStage: from, ToStage: o.Stage,
 		AmountMinor: o.AmountMinor, Currency: o.Currency,
 		OccurredAt: time.Now().UTC(),

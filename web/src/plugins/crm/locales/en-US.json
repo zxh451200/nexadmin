@@ -68,13 +68,20 @@
       "noAnchor": "No external system",
       "codePlaceholder": "Auto-generated if empty",
       "codeHint": "Leave the code empty to auto-generate one (C- prefix); it is only used for list display and search. You can also enter your own code. Level is for display only.",
-      "anchorHint": "Pick the external system and enter its customer number so the member resolves to the same customer; it cannot be changed after creation."
+      "anchorHint": "Pick the external system and enter its customer number so the member resolves to the same customer; it cannot be changed after creation.",
+      "notBound": "Not linked",
+      "bind": "Link external system",
+      "bindHint": "After linking, that external member resolves to this same customer; the link cannot be changed once created.",
+      "chooseSource": "Choose external system",
+      "opportunities": "Opportunities",
+      "noOpportunity": "No opportunities"
     },
     "opp": {
       "create": "New Lead / Opportunity",
       "edit": "Edit Lead / Opportunity",
       "deleteConfirm": "Delete \"{{title}}\"?",
       "noCustomer": "No customer yet",
+      "chooseCustomer": "Choose customer",
       "searchPlaceholder": "Title"
     }
   }

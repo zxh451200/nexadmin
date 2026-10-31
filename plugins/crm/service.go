@@ -280,7 +280,7 @@ func (s *Service) ResolveByExternal(ctx context.Context, source, externalNo, fal
 
 // OpportunityInput 是线索/商机入参。
 type OpportunityInput struct {
-	CustomerID  int64
+	CustomerID  idgen.ID
 	Title       string
 	Stage       string
 	AmountMinor int64
@@ -316,13 +316,16 @@ func (s *Service) CreateOpportunity(ctx context.Context, in OpportunityInput) (*
 	if err := in.normalize(); err != nil {
 		return nil, err
 	}
+	var customerName string
 	if in.CustomerID != 0 {
-		if _, err := s.GetCustomer(ctx, idgen.ID(in.CustomerID)); err != nil {
+		cu, err := s.GetCustomer(ctx, in.CustomerID)
+		if err != nil {
 			return nil, err
 		}
+		customerName = cu.Name
 	}
 	o := &Opportunity{
-		CustomerID: in.CustomerID, Title: in.Title, Stage: in.Stage,
+		CustomerID: in.CustomerID, CustomerName: customerName, Title: in.Title, Stage: in.Stage,
 		AmountMinor: in.AmountMinor, Currency: in.Currency,
 		ExpectedAt: truncate(in.ExpectedAt, 10), Owner: truncate(in.Owner, 64),
 		Remark: truncate(in.Remark, 500),
@@ -339,6 +342,14 @@ func (s *Service) UpdateOpportunity(ctx context.Context, id idgen.ID, in Opportu
 	if err := in.normalize(); err != nil {
 		return nil, err
 	}
+	var customerName string
+	if in.CustomerID != 0 {
+		cu, err := s.GetCustomer(ctx, in.CustomerID)
+		if err != nil {
+			return nil, err
+		}
+		customerName = cu.Name
+	}
 	var o Opportunity
 	var fromStage string
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -353,12 +364,10 @@ func (s *Service) UpdateOpportunity(ctx context.Context, id idgen.ID, in Opportu
 			return response.Conflict("crm.stage_final")
 		}
 		updates := map[string]any{
-			"title": in.Title, "stage": in.Stage, "amount_minor": in.AmountMinor,
+			"customer_id": in.CustomerID,
+			"title":       in.Title, "stage": in.Stage, "amount_minor": in.AmountMinor,
 			"currency": in.Currency, "expected_at": truncate(in.ExpectedAt, 10),
 			"owner": truncate(in.Owner, 64), "remark": truncate(in.Remark, 500),
-		}
-		if in.CustomerID != 0 {
-			updates["customer_id"] = in.CustomerID
 		}
 		if err := tx.Model(&Opportunity{}).Where("id = ?", int64(id)).Updates(updates).Error; err != nil {
 			return err
@@ -370,9 +379,8 @@ func (s *Service) UpdateOpportunity(ctx context.Context, id idgen.ID, in Opportu
 	}
 	o.Title, o.Stage, o.AmountMinor, o.Currency = in.Title, in.Stage, in.AmountMinor, in.Currency
 	o.ExpectedAt, o.Owner, o.Remark = truncate(in.ExpectedAt, 10), truncate(in.Owner, 64), truncate(in.Remark, 500)
-	if in.CustomerID != 0 {
-		o.CustomerID = in.CustomerID
-	}
+	// PUT 是全量更新：清空所属客户也要落库（表单提供「暂不关联客户」）。
+	o.CustomerID, o.CustomerName = in.CustomerID, customerName
 	if fromStage != in.Stage {
 		s.publishOppStage(ctx, &o, fromStage)
 	}
@@ -395,13 +403,54 @@ func (s *Service) GetOpportunity(ctx context.Context, id idgen.ID) (*Opportunity
 		}
 		return nil, err
 	}
+	o.CustomerName = s.customerName(ctx, o.CustomerID)
 	return &o, nil
+}
+
+// customerName 取客户名；客户已被删除时返回空串，不影响商机本身可读。
+func (s *Service) customerName(ctx context.Context, id idgen.ID) string {
+	if id == 0 {
+		return ""
+	}
+	var c Customer
+	if err := s.db.WithContext(ctx).Select("id", "name").Take(&c, id).Error; err != nil {
+		return ""
+	}
+	return c.Name
+}
+
+// fillCustomerNames 批量回填客户名，列表一页只多一次查询。
+func (s *Service) fillCustomerNames(ctx context.Context, rows []Opportunity) error {
+	ids := make([]int64, 0, len(rows))
+	seen := make(map[int64]bool, len(rows))
+	for _, o := range rows {
+		id := int64(o.CustomerID)
+		if id != 0 && !seen[id] {
+			seen[id] = true
+			ids = append(ids, id)
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	var customers []Customer
+	if err := s.db.WithContext(ctx).Select("id", "name").Where("id IN ?", ids).Find(&customers).Error; err != nil {
+		return err
+	}
+	names := make(map[int64]string, len(customers))
+	for _, c := range customers {
+		names[int64(c.ID)] = c.Name
+	}
+	for i := range rows {
+		rows[i].CustomerName = names[int64(rows[i].CustomerID)]
+	}
+	return nil
 }
 
 // OpportunityQuery 过滤线索/商机列表。
 type OpportunityQuery struct {
 	Keyword    string
-	CustomerID int64
+	CustomerID idgen.ID
 	Stage      string
 	Page       int
 	PageSize   int
@@ -425,6 +474,9 @@ func (s *Service) ListOpportunities(ctx context.Context, q OpportunityQuery) ([]
 	}
 	var rows []Opportunity
 	if err := db.Order("id DESC").Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Find(&rows).Error; err != nil {
+		return nil, 0, err
+	}
+	if err := s.fillCustomerNames(ctx, rows); err != nil {
 		return nil, 0, err
 	}
 	return rows, total, nil

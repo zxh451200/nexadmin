@@ -7,6 +7,7 @@ import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { DatePicker } from '@/framework/components/DatePicker'
 import { FilterBar } from '@/framework/components/FilterBar'
+import { RemoteSelect } from '@/framework/components/RemoteSelect'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
@@ -14,7 +15,6 @@ import { Input } from '@/framework/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import { Textarea } from '@/framework/ui/textarea'
 import {
-  useCustomers,
   useDeleteOpportunity,
   useOpportunities,
   useSaveOpportunity,
@@ -39,27 +39,25 @@ function OpportunityFormDialog({
 }) {
   const { t } = useTranslation()
   const save = useSaveOpportunity()
-  const { data } = useCustomers({ page: 1, pageSize: 200 })
   const isNew = !editing
-  const [draft, setDraft] = useState<Partial<CrmOpportunityForm>>({})
+  // 由父组件按 id 重挂载，初始值直接取自编辑对象。
+  const [draft, setDraft] = useState<Partial<CrmOpportunityForm>>(() =>
+    editing
+      ? {
+          customerId: editing.customerId,
+          title: editing.title,
+          stage: editing.stage,
+          amountMinor: editing.amountMinor,
+          currency: editing.currency,
+          expectedAt: editing.expectedAt,
+          owner: editing.owner,
+          remark: editing.remark,
+        }
+      : {},
+  )
 
-  const value: Partial<CrmOpportunityForm> = editing
-    ? {
-        customerId: editing.customerId,
-        title: editing.title,
-        stage: editing.stage,
-        amountMinor: editing.amountMinor,
-        currency: editing.currency,
-        expectedAt: editing.expectedAt,
-        owner: editing.owner,
-        remark: editing.remark,
-      }
-    : draft
-
-  const set = (patch: Partial<CrmOpportunityForm>) => {
-    if (editing) return
-    setDraft((d) => ({ ...d, ...patch }))
-  }
+  const value = draft
+  const set = (patch: Partial<CrmOpportunityForm>) => setDraft((d) => ({ ...d, ...patch }))
 
   const submit = async () => {
     const data = { ...value, title: (value.title ?? '').trim() } as CrmOpportunityForm
@@ -72,7 +70,7 @@ function OpportunityFormDialog({
       toast.success(t('common.operateSuccess'))
       onOpenChange(false)
     } catch {
-      toast.error(t('common.operateFailed'))
+      // 失败原因已由请求层统一提示，这里不再叠一条笼统文案。
     }
   }
 
@@ -97,22 +95,18 @@ function OpportunityFormDialog({
         </label>
         <label className="flex flex-col gap-1">
           {t('plugin_crm.fields.customerId')}
-          <Select
-            value={String(value.customerId ?? '') || ALL}
-            onValueChange={(v) => set({ customerId: v === ALL ? undefined : Number(v) })}
-          >
-            <SelectTrigger aria-label={t('plugin_crm.fields.customerId')}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>{t('plugin_crm.opp.noCustomer')}</SelectItem>
-              {(data?.list ?? []).map((cu) => (
-                <SelectItem key={cu.id} value={cu.id}>
-                  {cu.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <RemoteSelect
+            url="/plugins/crm/customers"
+            value={value.customerId && value.customerId !== '0' ? value.customerId : ''}
+            onChange={(v) => set({ customerId: typeof v === 'string' ? v : '' })}
+            placeholder={t('plugin_crm.opp.chooseCustomer')}
+            allowClear
+            initialOptions={
+              editing?.customerId && editing.customerId !== '0' && editing.customerName
+                ? [{ value: editing.customerId, label: editing.customerName }]
+                : undefined
+            }
+          />
         </label>
         <div className="grid grid-cols-2 gap-3">
           <label className="flex flex-col gap-1">
@@ -178,7 +172,7 @@ export function OpportunitiesTab() {
         await remove.mutateAsync(o.id)
         toast.success(t('common.operateSuccess'))
       } catch {
-        toast.error(t('common.operateFailed'))
+        // 失败原因已由请求层统一提示。
       }
     }
   }
@@ -190,7 +184,15 @@ export function OpportunitiesTab() {
       mobile: 'title',
       render: (o) => <span className="font-medium text-foreground">{o.title}</span>,
     },
-    { key: 'customer', title: t('plugin_crm.fields.customerId'), mobile: 'sub', render: (o) => (o.customerId ? String(o.customerId) : '-') },
+    {
+      key: 'customer',
+      title: t('plugin_crm.fields.customerId'),
+      mobile: 'sub',
+      render: (o) =>
+        o.customerId && o.customerId !== '0'
+          ? (o.customerName || o.customerId)
+          : <span className="text-muted-foreground">-</span>,
+    },
     {
       key: 'stage',
       title: t('plugin_crm.fields.stage'),
@@ -298,7 +300,12 @@ export function OpportunitiesTab() {
           </Can>
         )}
       />
-      <OpportunityFormDialog key={editing?.id ?? 'new'} open={formOpen} onOpenChange={setFormOpen} editing={editing} />
+      <OpportunityFormDialog
+        key={formOpen ? (editing?.id ?? 'new') : 'closed'}
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        editing={editing}
+      />
     </div>
   )
 }

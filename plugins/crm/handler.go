@@ -113,14 +113,14 @@ func (h *handler) deleteCustomer(c *gin.Context) {
 // POST /plugins/crm/customers/bind-external  {"customerId":1,"source":"hotel","externalNo":"M0001"}
 func (h *handler) bindExternal(c *gin.Context) {
 	var f struct {
-		CustomerID int64  `json:"customerId"`
-		Source     string `json:"source"`
-		ExternalNo string `json:"externalNo"`
+		CustomerID idgen.ID `json:"customerId"`
+		Source     string   `json:"source"`
+		ExternalNo string   `json:"externalNo"`
 	}
 	if !response.BindJSON(c, &f) {
 		return
 	}
-	cu, err := h.svc.BindExternal(c.Request.Context(), idgen.ID(f.CustomerID), f.Source, f.ExternalNo)
+	cu, err := h.svc.BindExternal(c.Request.Context(), f.CustomerID, f.Source, f.ExternalNo)
 	respond(c, cu, err)
 }
 
@@ -136,14 +136,14 @@ func (h *handler) resolveExternal(c *gin.Context) {
 }
 
 type opportunityForm struct {
-	CustomerID  int64  `json:"customerId"`
-	Title       string `json:"title"`
-	Stage       string `json:"stage"`
-	AmountMinor int64  `json:"amountMinor"`
-	Currency    string `json:"currency"`
-	ExpectedAt  string `json:"expectedAt"`
-	Owner       string `json:"owner"`
-	Remark      string `json:"remark"`
+	CustomerID  idgen.ID `json:"customerId"`
+	Title       string   `json:"title"`
+	Stage       string   `json:"stage"`
+	AmountMinor int64    `json:"amountMinor"`
+	Currency    string   `json:"currency"`
+	ExpectedAt  string   `json:"expectedAt"`
+	Owner       string   `json:"owner"`
+	Remark      string   `json:"remark"`
 }
 
 func (f opportunityForm) input() OpportunityInput {
@@ -159,7 +159,7 @@ func (h *handler) listOpportunities(c *gin.Context) {
 	page, size := response.ParsePage(c)
 	customerID, _ := strconv.ParseInt(c.Query("customerId"), 10, 64)
 	rows, total, err := h.svc.ListOpportunities(c.Request.Context(), OpportunityQuery{
-		Keyword: c.Query("keyword"), CustomerID: customerID, Stage: c.Query("stage"),
+		Keyword: c.Query("keyword"), CustomerID: idgen.ID(customerID), Stage: c.Query("stage"),
 		Page: page, PageSize: size,
 	})
 	if err != nil {

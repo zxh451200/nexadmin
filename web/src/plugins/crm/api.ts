@@ -36,7 +36,9 @@ export interface CrmCustomerForm {
 
 export interface CrmOpportunity {
   id: string
-  customerId: number
+  /** 雪花 ID 一律按字符串传，避免超过 JS 安全整数后被改写。 */
+  customerId: string
+  customerName?: string
   title: string
   stage: OppStage
   amountMinor: number
@@ -48,7 +50,7 @@ export interface CrmOpportunity {
 }
 
 export interface CrmOpportunityForm {
-  customerId?: number
+  customerId?: string
   title: string
   stage?: OppStage
   amountMinor?: number
@@ -64,6 +66,7 @@ export interface CustomerQuery extends PageQuery {
 }
 export interface OpportunityQuery extends PageQuery {
   stage?: string
+  customerId?: string
 }
 
 const BASE = '/plugins/crm'
@@ -77,11 +80,12 @@ export function useCustomers(query: CustomerQuery) {
   })
 }
 
-export function useOpportunities(query: OpportunityQuery) {
+export function useOpportunities(query: OpportunityQuery, enabled = true) {
   return useQuery({
     queryKey: [...KEY, 'opportunities', query],
     queryFn: () => api.get<Page<CrmOpportunity>>(`${BASE}/opportunities`, query),
     placeholderData: keepPreviousData,
+    enabled,
   })
 }
 
@@ -103,6 +107,15 @@ export function useDeleteCustomer() {
   const invalidate = useInvalidate()
   return useMutation({
     mutationFn: (id: string) => api.del(`${BASE}/customers/${id}`),
+    onSuccess: invalidate,
+  })
+}
+
+export function useBindExternal() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (data: { customerId: string; source: string; externalNo: string }) =>
+      api.post<CrmCustomer>(`${BASE}/customers/bind-external`, data),
     onSuccess: invalidate,
   })
 }

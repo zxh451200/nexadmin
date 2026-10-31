@@ -161,10 +161,50 @@ func TestOpportunityFinalStageLocked(t *testing.T) {
 	m.ExpectRollback()
 
 	_, err := s.UpdateOpportunity(tenantCtx, 3001, OpportunityInput{
-		CustomerID: 2001, Title: "年会酒席", Stage: StageLead, AmountMinor: 100000, Currency: "CNY",
+		Title: "年会酒席", Stage: StageLead, AmountMinor: 100000, Currency: "CNY",
 	})
 	if err == nil {
 		t.Fatal("final stage should be locked")
+	}
+	if err := m.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// 雪花 ID 超出 JS 安全整数：商机关联客户也要按字符串出 JSON。
+func TestOpportunityCustomerIDSerializesAsString(t *testing.T) {
+	o := Opportunity{CustomerID: 7430000000000000001}
+	o.ID = 3001
+	raw, err := json.Marshal(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), `"customerId":"7430000000000000001"`) {
+		t.Fatalf("customerId must be a JSON string: %s", raw)
+	}
+}
+
+// 商机列表回填客户名，前端不再只能显示裸 ID。
+func TestListOpportunitiesFillsCustomerName(t *testing.T) {
+	db, m := mockDB(t)
+	s := NewService(db, nopLogger{})
+
+	m.ExpectQuery("SELECT count\\(\\*\\) FROM `plg_crm_opportunity`").
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+	m.ExpectQuery("SELECT \\* FROM `plg_crm_opportunity`").
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "tenant_id", "customer_id", "title", "stage", "amount_minor", "currency",
+			"expected_at", "owner", "remark", "created_at", "updated_at",
+		}).AddRow(3001, 7, 2001, "年会酒席", "lead", 100000, "CNY", "", "", "", testNow, testNow))
+	m.ExpectQuery("SELECT `id`,`name` FROM `plg_crm_customer` WHERE id IN").
+		WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(2001, "张三"))
+
+	rows, total, err := s.ListOpportunities(tenantCtx, OpportunityQuery{Page: 1, PageSize: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 1 || len(rows) != 1 || rows[0].CustomerName != "张三" {
+		t.Fatalf("customer name not filled: %+v total=%d", rows, total)
 	}
 	if err := m.ExpectationsWereMet(); err != nil {
 		t.Fatal(err)

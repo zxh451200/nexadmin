@@ -2,6 +2,7 @@ package crm
 
 import (
 	"nexadmin/core/database"
+	"nexadmin/pkg/idgen"
 )
 
 // 客户主数据状态与来源。
@@ -55,14 +56,16 @@ func (Customer) TableName() string { return "plg_crm_customer" }
 // 禁止 float。Stage 从 lead 推进到 won/lost；won/lost 是终态。
 type Opportunity struct {
 	database.TenantModel
-	CustomerID  int64  `gorm:"not null;default:0;index" json:"customerId"`
-	Title       string `gorm:"size:200;not null" json:"title"`
-	Stage       string `gorm:"size:16;not null;default:'lead';index" json:"stage"`
-	AmountMinor int64  `gorm:"not null;default:0" json:"amountMinor"`
-	Currency    string `gorm:"size:8;not null;default:'CNY'" json:"currency"`
-	ExpectedAt  string `gorm:"size:10;not null;default:''" json:"expectedAt"`
-	Owner       string `gorm:"size:64;not null;default:''" json:"owner"`
-	Remark      string `gorm:"size:500;not null;default:''" json:"remark"`
+	// CustomerID 必须走 idgen.ID：雪花 ID 超出 JS 安全整数，JSON 里只能是字符串。
+	CustomerID   idgen.ID `gorm:"not null;default:0;index" json:"customerId"`
+	CustomerName string   `gorm:"-" json:"customerName,omitempty"`
+	Title        string   `gorm:"size:200;not null" json:"title"`
+	Stage        string   `gorm:"size:16;not null;default:'lead';index" json:"stage"`
+	AmountMinor  int64    `gorm:"not null;default:0" json:"amountMinor"`
+	Currency     string   `gorm:"size:8;not null;default:'CNY'" json:"currency"`
+	ExpectedAt   string   `gorm:"size:10;not null;default:''" json:"expectedAt"`
+	Owner        string   `gorm:"size:64;not null;default:''" json:"owner"`
+	Remark       string   `gorm:"size:500;not null;default:''" json:"remark"`
 }
 
 func (Opportunity) TableName() string { return "plg_crm_opportunity" }

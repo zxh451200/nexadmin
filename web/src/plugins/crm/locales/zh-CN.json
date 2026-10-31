@@ -68,13 +68,20 @@
       "noAnchor": "不关联外部系统",
       "codePlaceholder": "留空自动生成",
       "codeHint": "客户编码留空会自动生成（C- 前缀），仅用于列表展示与搜索；也可以填你们自己的编号。等级只影响展示，不做业务判定。",
-      "anchorHint": "选择外部系统并填写对方系统的客户编号后，该会员会对应到同一个客户；创建后不可修改。"
+      "anchorHint": "选择外部系统并填写对方系统的客户编号后，该会员会对应到同一个客户；创建后不可修改。",
+      "notBound": "未绑定",
+      "bind": "绑定外部系统",
+      "bindHint": "绑定后该外部会员会对应到同一个客户；绑定关系创建后不可修改。",
+      "chooseSource": "选择外部系统",
+      "opportunities": "名下商机",
+      "noOpportunity": "暂无商机"
     },
     "opp": {
       "create": "新建线索/商机",
       "edit": "编辑线索/商机",
       "deleteConfirm": "确认删除「{{title}}」？",
       "noCustomer": "暂不关联客户",
+      "chooseCustomer": "选择客户",
       "searchPlaceholder": "标题"
     }
   }

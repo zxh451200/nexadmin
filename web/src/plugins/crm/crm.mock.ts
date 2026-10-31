@@ -37,7 +37,8 @@ let customers: CrmCustomer[] = [
 let opportunities: CrmOpportunity[] = [
   {
     id: '7431000000000000001',
-    customerId: 7430000000000000001,
+    customerId: '7430000000000000001',
+    customerName: '杭州云栖酒店',
     title: '秋季房务系统扩容',
     stage: 'proposal',
     amountMinor: 1280000,
@@ -49,7 +50,8 @@ let opportunities: CrmOpportunity[] = [
   },
   {
     id: '7431000000000000002',
-    customerId: 7430000000000000001,
+    customerId: '7430000000000000001',
+    customerName: '杭州云栖酒店',
     title: '商城会员储值接入',
     stage: 'lead',
     amountMinor: 0,
@@ -60,6 +62,13 @@ let opportunities: CrmOpportunity[] = [
     createdAt: ago(60 * 24 * 2),
   },
 ]
+
+const customerName = (id: string) => customers.find((c) => c.id === id)?.name
+
+const withCustomerName = (o: CrmOpportunity): CrmOpportunity => ({
+  ...o,
+  customerName: o.customerId && o.customerId !== '0' ? customerName(o.customerId) : undefined,
+})
 
 const paginate = <T,>(rows: T[], query: Record<string, unknown>) => {
   const page = Math.max(1, Number(query.page) || 1)
@@ -74,7 +83,11 @@ defineMock([
     handler: ({ query }) => {
       const kw = String(query.keyword ?? '').trim().toLowerCase()
       let rows = customers.filter(
-        (c) => !kw || c.name.toLowerCase().includes(kw) || (c.code ?? '').toLowerCase().includes(kw),
+        (c) =>
+          !kw ||
+          c.name.toLowerCase().includes(kw) ||
+          (c.code ?? '').toLowerCase().includes(kw) ||
+          (c.externalNo ?? '').toLowerCase().includes(kw),
       )
       if (query.status) rows = rows.filter((c) => c.status === query.status)
       if (query.source) rows = rows.filter((c) => c.externalSource === query.source)
@@ -130,10 +143,25 @@ defineMock([
     },
   },
   {
+    method: 'POST',
+    url: '/plugins/crm/customers/bind-external',
+    handler: ({ body }) => {
+      const c = customers.find((x) => x.id === String(body.customerId ?? '')) ?? mockError(404, 'not found')
+      const source = String(body.source ?? '')
+      const externalNo = String(body.externalNo ?? '').trim()
+      if (!source || !externalNo) mockError(400, 'external invalid')
+      const clash = customers.find((x) => x.externalSource === source && x.externalNo === externalNo)
+      if (clash && clash.id !== c.id) mockError(409, 'external taken')
+      c.externalSource = source
+      c.externalNo = externalNo
+      return c
+    },
+  },
+  {
     method: 'DELETE',
     url: '/plugins/crm/customers/:id',
     handler: ({ params }) => {
-      if (opportunities.some((o) => String(o.customerId) === params.id)) mockError(409, 'customer in use')
+      if (opportunities.some((o) => o.customerId === params.id)) mockError(409, 'customer in use')
       customers = customers.filter((x) => x.id !== params.id)
       return { ok: true }
     },
@@ -145,7 +173,8 @@ defineMock([
       const kw = String(query.keyword ?? '').trim().toLowerCase()
       let rows = opportunities.filter((o) => !kw || o.title.toLowerCase().includes(kw))
       if (query.stage) rows = rows.filter((o) => o.stage === query.stage)
-      return paginate([...rows].reverse(), query)
+      if (query.customerId) rows = rows.filter((o) => o.customerId === query.customerId)
+      return paginate([...rows].reverse().map(withCustomerName), query)
     },
   },
   {
@@ -153,9 +182,12 @@ defineMock([
     url: '/plugins/crm/opportunities',
     handler: ({ body }) => {
       if (!String(body.title ?? '').trim()) mockError(400, 'title required')
+      const customerId = String(body.customerId ?? '') || '0'
+      if (customerId !== '0' && !customerName(customerId)) mockError(404, 'customer not found')
       const o: CrmOpportunity = {
         id: String(7431000000000000000n + BigInt(opportunities.length + 1)),
-        customerId: Number(body.customerId) || 0,
+        customerId,
+        customerName: customerName(customerId),
         title: body.title,
         stage: body.stage ?? 'lead',
         amountMinor: Number(body.amountMinor) || 0,
@@ -175,9 +207,14 @@ defineMock([
     handler: ({ params, body }) => {
       const o = opportunities.find((x) => x.id === params.id) ?? mockError(404, 'not found')
       if (['won', 'lost'].includes(o.stage) && body.stage !== o.stage) mockError(409, 'final stage')
+      const customerId = String(body.customerId ?? '') || '0'
+      if (customerId !== '0' && !customerName(customerId)) mockError(404, 'customer not found')
+      o.customerId = customerId
+      o.customerName = customerName(customerId)
       o.title = body.title
       o.stage = body.stage ?? o.stage
       o.amountMinor = Number(body.amountMinor) || 0
+      o.currency = body.currency ?? o.currency
       o.expectedAt = body.expectedAt ?? o.expectedAt
       o.owner = body.owner ?? o.owner
       o.remark = body.remark ?? o.remark
