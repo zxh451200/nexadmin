@@ -74,7 +74,7 @@ func (*module) Name() string { return "ticket" }
 // Register 注册路由。
 func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	svc := m.service(d)
-	h := &handler{svc: svc, store: svc.Storage()}
+	h := &handler{svc: svc, store: svc.Storage(), log: d.Log}
 	h.Register(r, d)
 }
 
@@ -85,6 +85,11 @@ func (m *module) Start(ctx context.Context, d *core.Deps) error {
 		s.logWarn("ticket: load SLA policy failed, using defaults", "err", err.Error())
 	} else {
 		s.SetSLA(st)
+	}
+	// 附件第二道闸有没有接必须留在日志里：否则「装了杀毒」与「没装」在运行现场长得一样。
+	// 宿主若在 Start 之后才 RegisterScanner，以拒绝日志里的 scanner 字段为准。
+	if d.Log != nil {
+		d.Log.Sugar().Infow("ticket: attachment scanner at boot", "name", ScannerName())
 	}
 	go func() {
 		t := time.NewTicker(time.Minute)

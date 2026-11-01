@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -26,23 +27,43 @@ type SLATarget struct {
 }
 
 // SLASetting 是整份 SLA 策略；Workdays 1=周一 ... 7=周日，时间用当天第几分钟表示。
+// Code/Label 支持多套命名策略（Code 空串 = 默认策略），Holidays 是跳过的工作日（空 = 无节假日），
+// 三者的零值都等价于旧的全局单策略行为。
 type SLASetting struct {
+	Code        string               `json:"code,omitempty"`
+	Label       string               `json:"label,omitempty"`
 	Workdays    []int                `json:"workdays"`
 	StartMinute int                  `json:"startMinute"`
 	EndMinute   int                  `json:"endMinute"`
 	Targets     map[string]SLATarget `json:"targets"`
+	Holidays    []string             `json:"holidays"`
 }
 
-// SLA 是策略表的行；targets 用 JSON 文本存，避免三引擎 JSON 类型差异。
+// SLA 是策略表的行；targets 用 JSON 文本存，holidays 用逗号分隔存，避免三引擎 JSON 类型差异。
 type SLA struct {
 	database.PlatformModel
+	Code        string `gorm:"size:32;not null;default:''" json:"-"`
+	Label       string `gorm:"size:64;not null;default:''" json:"-"`
 	Workdays    string `gorm:"size:20;not null" json:"-"`
 	StartMinute int    `gorm:"not null" json:"-"`
 	EndMinute   int    `gorm:"not null" json:"-"`
 	Targets     string `gorm:"type:text;not null" json:"-"`
+	Holidays    string `gorm:"type:text;not null" json:"-"`
 }
 
 func (SLA) TableName() string { return "plg_ticket_sla" }
+
+// slaCodeRe 是策略编码：小写字母、数字、下划线、连字符，1~32 位（空串另作默认策略处理）。
+var slaCodeRe = regexp.MustCompile(`^[a-z0-9_-]{1,32}$`)
+
+// maxSLAHolidays 是单套策略的节假日上限，挡住误填与序列化膨胀。
+const maxSLAHolidays = 200
+
+// holidayLayout 是节假日的日期格式（YYYY-MM-DD）。
+const holidayLayout = "2006-01-02"
+
+// minHolidayDate 是允许的节假日下界，挡 1970/0001 这类误填。
+var minHolidayDate = time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
 
 // DefaultSLA 是未配置时的出厂策略：7×24 营业，时限沿用旧的响应档位，解决时限按 4 倍设定。
 func DefaultSLA() SLASetting {
@@ -72,8 +93,17 @@ func (v SLASetting) TargetFor(priority string) SLATarget {
 
 const maxSLAMinutes = 525600 // 一年，挡住溢出与误填
 
-// normalize 校验并补齐策略：工作日去重排序、时间窗合法、四个优先级都有限时。
+// normalize 校验并补齐策略：工作日去重排序、时间窗合法、四个优先级都有限时，
+// 另校验策略编码/名称与节假日列表。
 func (v *SLASetting) normalize() error {
+	// Code 空串合法（默认策略），非空只允许 [a-z0-9_-]{1,32}。
+	if v.Code != "" && !slaCodeRe.MatchString(v.Code) {
+		return response.BadRequest("error.bad_request")
+	}
+	// Label 按字符数（rune）限制，与 DDL VARCHAR(64) 的语义对齐。
+	if len([]rune(v.Label)) > 64 {
+		return response.BadRequest("error.bad_request")
+	}
 	seen := make(map[int]bool, len(v.Workdays))
 	days := make([]int, 0, 7)
 	for _, d := range v.Workdays {
@@ -112,6 +142,32 @@ func (v *SLASetting) normalize() error {
 			delete(v.Targets, p)
 		}
 	}
+	// 节假日：空项丢弃，非空必须能按 YYYY-MM-DD 解析且不早于 2000-01-01；去重升序，超限拒绝。
+	seenDay := make(map[string]bool, len(v.Holidays))
+	hdays := make([]string, 0, len(v.Holidays))
+	for _, raw := range v.Holidays {
+		d := strings.TrimSpace(raw)
+		if d == "" {
+			continue
+		}
+		t, err := time.Parse(holidayLayout, d)
+		if err != nil || t.Before(minHolidayDate) {
+			return response.BadRequest("error.bad_request")
+		}
+		if !seenDay[d] {
+			seenDay[d] = true
+			hdays = append(hdays, d)
+		}
+	}
+	if len(hdays) > maxSLAHolidays {
+		return response.BadRequest("error.bad_request")
+	}
+	if len(hdays) == 0 {
+		v.Holidays = nil
+	} else {
+		sort.Strings(hdays)
+		v.Holidays = hdays
+	}
 	return nil
 }
 
@@ -124,11 +180,45 @@ func encodeSLA(v SLASetting) (SLA, error) {
 	if err != nil {
 		return SLA{}, err
 	}
-	return SLA{Workdays: strings.Join(parts, ","), StartMinute: v.StartMinute, EndMinute: v.EndMinute, Targets: string(b)}, nil
+	return SLA{
+		Code: v.Code, Label: v.Label,
+		Workdays: strings.Join(parts, ","), StartMinute: v.StartMinute, EndMinute: v.EndMinute,
+		Targets: string(b), Holidays: strings.Join(v.Holidays, ","),
+	}, nil
+}
+
+// parseHolidays 把逗号分隔的节假日串解析为去重升序的合法日期列表：逐项 trim、去空、
+// 按 YYYY-MM-DD 校验（非法丢弃）。这是对库内脏数据的防御性收敛，不做数量/下界拒绝。
+func parseHolidays(s string) []string {
+	if strings.TrimSpace(s) == "" {
+		return nil
+	}
+	seen := make(map[string]bool)
+	out := make([]string, 0, 8)
+	for _, part := range strings.Split(s, ",") {
+		d := strings.TrimSpace(part)
+		if d == "" {
+			continue
+		}
+		if _, err := time.Parse(holidayLayout, d); err != nil {
+			continue
+		}
+		if !seen[d] {
+			seen[d] = true
+			out = append(out, d)
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	sort.Strings(out)
+	return out
 }
 
 func decodeSLA(row SLA) SLASetting {
 	out := DefaultSLA()
+	out.Code = row.Code
+	out.Label = row.Label
 	days := make([]int, 0, 7)
 	for _, part := range strings.Split(row.Workdays, ",") {
 		if d, err := strconv.Atoi(strings.TrimSpace(part)); err == nil && d >= 1 && d <= 7 {
@@ -147,6 +237,7 @@ func decodeSLA(row SLA) SLASetting {
 			out.Targets = targets
 		}
 	}
+	out.Holidays = parseHolidays(row.Holidays)
 	return out
 }
 
@@ -204,12 +295,107 @@ func (s *Service) SaveSLA(ctx context.Context, in SLASetting) (SLASetting, error
 			Updates(map[string]any{
 				"workdays": row.Workdays, "start_minute": row.StartMinute,
 				"end_minute": row.EndMinute, "targets": row.Targets,
+				"holidays": row.Holidays,
 			}).Error; err != nil {
 			return SLASetting{}, err
 		}
 	}
 	s.SetSLA(in)
 	return in, nil
+}
+
+// ListSLAPolicies 按 code ASC, id ASC 取全部策略（默认策略 code 为空串，也在列内）。
+func (s *Service) ListSLAPolicies(ctx context.Context) ([]SLASetting, error) {
+	var rows []SLA
+	if err := s.db.WithContext(ctx).Order("code ASC, id ASC").Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make([]SLASetting, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, decodeSLA(r))
+	}
+	return out, nil
+}
+
+// GetSLAPolicy 按 code 精确取一套策略；code 为空串取默认行。找不到回落 DefaultSLA 且不报错，
+// 与 LoadSLA 的回落语义一致。
+func (s *Service) GetSLAPolicy(ctx context.Context, code string) (SLASetting, error) {
+	var row SLA
+	err := s.db.WithContext(ctx).Where("code = ?", code).Order("id ASC").Take(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return DefaultSLA(), nil
+	}
+	if err != nil {
+		return DefaultSLA(), err
+	}
+	return decodeSLA(row), nil
+}
+
+// SaveSLAPolicy 校验后按 code upsert 一套策略；无则建行，有则覆盖六列。
+// 当 code 为空串（默认策略）时同步刷新进程内缓存，保持今天 SaveSLA 的行为。
+func (s *Service) SaveSLAPolicy(ctx context.Context, v SLASetting) (SLASetting, error) {
+	if err := v.normalize(); err != nil {
+		return SLASetting{}, err
+	}
+	row, err := encodeSLA(v)
+	if err != nil {
+		return SLASetting{}, err
+	}
+	var existing SLA
+	err = s.db.WithContext(ctx).Where("code = ?", v.Code).Order("id ASC").Take(&existing).Error
+	switch {
+	case errors.Is(err, gorm.ErrRecordNotFound):
+		id, idErr := idgen.Next()
+		if idErr != nil {
+			return SLASetting{}, idErr
+		}
+		row.ID = id
+		if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
+			return SLASetting{}, err
+		}
+	case err != nil:
+		return SLASetting{}, err
+	default:
+		if err := s.db.WithContext(ctx).Model(&SLA{}).Where("id = ?", int64(existing.ID)).
+			Updates(map[string]any{
+				"code": row.Code, "label": row.Label,
+				"workdays": row.Workdays, "start_minute": row.StartMinute,
+				"end_minute": row.EndMinute, "targets": row.Targets,
+				"holidays": row.Holidays,
+			}).Error; err != nil {
+			return SLASetting{}, err
+		}
+	}
+	if v.Code == "" {
+		s.SetSLA(v)
+	}
+	return v, nil
+}
+
+// DeleteSLAPolicy 按 code 删除一套策略；默认策略（code 空串）不可删。删不存在的行不报错。
+func (s *Service) DeleteSLAPolicy(ctx context.Context, code string) error {
+	if code == "" {
+		return response.BadRequest("error.bad_request")
+	}
+	return s.db.WithContext(ctx).Where("code = ?", code).Delete(&SLA{}).Error
+}
+
+// SLAForCode 解析某套策略：code 空串走进程内缓存（默认策略），否则查行；
+// 未命中回落缓存。分组→策略的绑定解析应由调用方（如 handler/service）拿 Group.SLACode
+// 后调本方法，本文件不感知 plg_ticket_group。
+func (s *Service) SLAForCode(ctx context.Context, code string) (SLASetting, error) {
+	if code == "" {
+		return s.CurrentSLA(), nil
+	}
+	var row SLA
+	err := s.db.WithContext(ctx).Where("code = ?", code).Order("id ASC").Take(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return s.CurrentSLA(), nil
+	}
+	if err != nil {
+		return SLASetting{}, err
+	}
+	return decodeSLA(row), nil
 }
 
 // businessDue 在营业时间内累加 minutes；默认 7×24 时退化为直接相加。
@@ -220,12 +406,16 @@ func businessDue(start time.Time, minutes int, v SLASetting, loc *time.Location)
 	if loc == nil {
 		loc = time.UTC
 	}
-	if len(v.Workdays) == 7 && v.StartMinute == 0 && v.EndMinute == 1440 {
+	if len(v.Workdays) == 7 && v.StartMinute == 0 && v.EndMinute == 1440 && len(v.Holidays) == 0 {
 		return start.Add(time.Duration(minutes) * time.Minute)
 	}
 	work := make(map[int]bool, len(v.Workdays))
 	for _, d := range v.Workdays {
 		work[d] = true
+	}
+	holiday := make(map[string]bool, len(v.Holidays))
+	for _, h := range v.Holidays {
+		holiday[h] = true
 	}
 	dayBase := func(t time.Time) time.Time {
 		return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, loc)
@@ -240,7 +430,8 @@ func businessDue(start time.Time, minutes int, v SLASetting, loc *time.Location)
 		if wd == 0 {
 			wd = 7
 		}
-		if !work[wd] || !cur.Before(dayEnd) {
+		// 落在节假日的整天按非工作日跳过，即便它同时在 Workdays 内。
+		if !work[wd] || holiday[base.Format(holidayLayout)] || !cur.Before(dayEnd) {
 			cur = base.AddDate(0, 0, 1).Add(time.Duration(v.StartMinute) * time.Minute)
 			continue
 		}
@@ -256,4 +447,21 @@ func businessDue(start time.Time, minutes int, v SLASetting, loc *time.Location)
 	}
 	// 策略异常（例如一年里全是非工作日）时兜底，避免死循环。
 	return cur.Add(time.Duration(remaining) * time.Minute)
+}
+
+// slaFor 取某个队列实际生效的策略：分组绑了 code 就用那套，没绑、查不到或查库出错
+// 都回落默认策略——SLA 解析失败不该把建单整条链打挂。
+func (s *Service) slaFor(ctx context.Context, groupID int64) SLASetting {
+	if groupID == 0 {
+		return s.CurrentSLA()
+	}
+	var g Group
+	if err := s.db.WithContext(ctx).Select("sla_code").Where("id = ?", groupID).Take(&g).Error; err != nil {
+		return s.CurrentSLA()
+	}
+	v, err := s.SLAForCode(ctx, g.SLACode)
+	if err != nil {
+		return s.CurrentSLA()
+	}
+	return v
 }

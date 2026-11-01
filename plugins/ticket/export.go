@@ -25,6 +25,9 @@ const ExportTooManyReason = "TICKET_EXPORT_TOO_MANY"
 
 // ExportTickets 按列表筛选取工单行（不含分页）；命中行数超过 limit 时拒绝。
 func (s *Service) ExportTickets(ctx context.Context, q TicketQuery, limit int) ([]Ticket, error) {
+	if err := validateStatuses(q.Status); err != nil {
+		return nil, err
+	}
 	if limit <= 0 {
 		limit = exportLimit
 	}

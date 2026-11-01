@@ -501,3 +501,76 @@ func TestCannedInputNormalize(t *testing.T) {
 		t.Fatal("oversized canned reply accepted")
 	}
 }
+
+// 多值筛选：列表/统计/导出都走 ticketFilter，所以闸只有一处——条件必须真落成 IN，
+// 而不是只取第一个值（那样「未完结队列」会静默少几张单）。
+func TestStatusFilterAcceptsMultipleValues(t *testing.T) {
+	db, m := mockDB(t)
+	s := NewService(db, nopLogger{})
+	var total int64
+
+	m.ExpectQuery("SELECT count\\(.\\) FROM `plg_ticket` WHERE .*status IN \\(\\?,\\?\\)").
+		WithArgs("open", "pending").
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(2))
+	if err := s.ticketFilter(context.Background(), TicketQuery{Status: "open, pending"}).Count(&total).Error; err != nil {
+		t.Fatal(err)
+	}
+	if total != 2 {
+		t.Errorf("total = %d, want 2", total)
+	}
+
+	// 单值仍走等值：老口径不能顺手改成 IN，导出与索引都按单值形状写。
+	m.ExpectQuery("SELECT count\\(.\\) FROM `plg_ticket` WHERE .*status = \\?").
+		WithArgs("resolved").
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+	if err := s.ticketFilter(context.Background(), TicketQuery{Status: "resolved"}).Count(&total).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := m.ExpectationsWereMet(); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestStatusSetNormalizesList(t *testing.T) {
+	cases := []struct {
+		in   string
+		want []string
+	}{
+		{"", nil},
+		{"open", []string{"open"}},
+		{" open , processing ", []string{"open", "processing"}},
+		{"open,open,pending", []string{"open", "pending"}},
+		{"open,,", []string{"open"}},
+	}
+	for _, c := range cases {
+		got := statusSet(c.in)
+		if len(got) != len(c.want) {
+			t.Errorf("statusSet(%q) = %v, want %v", c.in, got, c.want)
+			continue
+		}
+		for i := range got {
+			if got[i] != c.want[i] {
+				t.Errorf("statusSet(%q)[%d] = %q, want %q", c.in, i, got[i], c.want[i])
+			}
+		}
+	}
+}
+
+// 拼错的状态要当场报错：返回空列表会被读成「没有这类工单」，而真实原因是拼错了。
+func TestValidateStatusesRejectsTypos(t *testing.T) {
+	for _, good := range []string{"", "open", "open,processing", " open ,closed"} {
+		if err := validateStatuses(good); err != nil {
+			t.Errorf("validateStatuses(%q) = %v, want nil", good, err)
+		}
+	}
+	for _, bad := range []string{"vip", "open,vip", "OPEN"} {
+		err := validateStatuses(bad)
+		if err == nil {
+			t.Fatalf("validateStatuses(%q) 应返回错误", bad)
+		}
+		e, isResp := err.(*response.Error)
+		if !isResp || e.Status != http.StatusBadRequest {
+			t.Errorf("validateStatuses(%q) = %T %v", bad, err, err)
+		}
+	}
+}

@@ -90,6 +90,15 @@ type CreateInput struct {
 	ReporterType string `json:"reporterType"`
 	ReporterID   string `json:"reporterId"`
 	ReporterName string `json:"reporterName"`
+	// Tags 是建单时就带的标签（宿主按订单属性打标签用）。公开接口会清空它——
+	// 让客户自填标签等于让他自己给自己打「vip」，还能反向操纵自动化规则的命中。
+	Tags []string `json:"tags"`
+	// CustomValues 是自定义字段的值（key = 字段 code）。未定义/已停用的 code 直接拒绝：
+	// 让调用方自塞 key 等于在工单里存一份没人认识、也没人校验的数据。
+	CustomValues map[string]any `json:"customValues"`
+	// EnforceRequiredFields 由 handler 按入口设置。后台代客建单要求补齐必填；
+	// 公开入口不要求——必填是「坐席要求补的信息」，不该把客户的提交挡在门外。
+	EnforceRequiredFields bool `json:"-"`
 	// CreatorID/CreatorName 由后台代客建单的 handler 从登录态填充，不接受前端传入。
 	CreatorID   idgen.ID `json:"-"`
 	CreatorName string   `json:"-"`
@@ -112,6 +121,18 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Ticket, error) {
 	if len(in.BizType) > 32 || len(in.BizNo) > 64 {
 		return nil, response.BadRequest("error.bad_request")
 	}
+	// 建单标签先按同一套规则清洗（去重、上限 10 个、每个 ≤20 字、不含逗号），
+	// 再交给自动化规则匹配：规则读的就是这份规范串。
+	tags, err := normalizeTags(in.Tags)
+	if err != nil {
+		return nil, err
+	}
+	// 自定义字段在建单时就校验，而不是存进去再指望读侧发现：坏值一旦落库，
+	// 后面的报表与导出都会跟着错。
+	customRaw, err := s.customValuesFor(ctx, in.CustomValues, in.EnforceRequiredFields)
+	if err != nil {
+		return nil, err
+	}
 
 	id, err := idgen.Next()
 	if err != nil {
@@ -131,7 +152,12 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Ticket, error) {
 		CreatorID:    in.CreatorID, CreatorName: truncate(in.CreatorName, 64),
 		ReplySeq: 1, LastReplyAt: &now, LastReplierType: in.ReporterType,
 		LastPreview: preview(in.Content),
-		DueAt:       &due, ResolutionDueAt: &resolutionDue,
+		Tags:        canonicalTags(tags), TagList: tags,
+		CustomValuesRaw: customRaw,
+		// AfterFind 只在读路径跑；建行返回的这一份要自己解码，否则 POST 的响应里
+		// customValues 是 null（前端按对象读就崩），而且建单回执看着像没存上。
+		CustomValues: DecodeCustomValues(customRaw),
+		DueAt:        &due, ResolutionDueAt: &resolutionDue,
 	}
 	t.ID = id
 	first := TicketReply{
@@ -162,7 +188,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Ticket, error) {
 		return nil, err
 	}
 	// 自动化规则先跑；规则没分到组时再走默认自动分派；最后发事件与新单提醒。
-	s.applyRules(ctx, t)
+	s.applyRules(ctx, t, true)
 	s.autoAssignGroup(ctx, t)
 	s.publish(ctx, EventCreated, t, EventData{
 		SenderType: in.ReporterType, SenderName: in.ReporterName, Seq: 1, Preview: preview(in.Content),
@@ -232,7 +258,8 @@ func (s *Service) Reply(ctx context.Context, ticketNo string, in ReplyInput) (*T
 		if !in.Internal {
 			updates["last_preview"] = preview(in.Content)
 		}
-		sla := s.CurrentSLA()
+		// 时钟按这张单所在队列绑定的策略算，不同队列可以有不同的营业时间与节假日。
+		sla := s.slaFor(ctx, int64(t.GroupID))
 		loc := s.location()
 		if in.ReplierType == ReplierAgent && !in.Internal {
 			if t.FirstReplyAt == nil {
@@ -361,7 +388,7 @@ func (s *Service) SetStatus(ctx context.Context, ticketNo, to, operator string) 
 			return response.Conflict("ticket.illegal_transition")
 		}
 		now := time.Now().UTC()
-		sla := s.CurrentSLA()
+		sla := s.slaFor(ctx, int64(t.GroupID))
 		loc := s.location()
 		target := sla.TargetFor(t.Priority)
 		updates := map[string]any{"status": to}
@@ -532,6 +559,7 @@ func (s *Service) assign(ctx context.Context, ticketNo string, assigneeID idgen.
 
 // TicketQuery 是坐席工单列表过滤条件。
 type TicketQuery struct {
+	// Status 允许单值，也允许逗号分隔多值（"open" / "open,processing,pending"）。
 	Status   string
 	Priority string
 	BizType  string
@@ -542,16 +570,50 @@ type TicketQuery struct {
 	Unassigned bool
 	GroupID    idgen.ID
 	Tag        string
-	Page       int
-	PageSize   int
+	// BizNo 精确到某一张业务单；ReporterType + ReporterID 成对使用（客户门户「我的工单」）。
+	// 这两个主要给宿主服务端调用（见 client.go），后台列表不填即不生效。
+	BizNo        string
+	ReporterType string
+	ReporterID   string
+	Page         int
+	PageSize     int
+}
+
+// statusSet 拆分 status 参数：单值与逗号分隔多值同一口径，列表/统计/导出共用。
+func statusSet(raw string) []string {
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	seen := make(map[string]bool, len(parts))
+	for _, p := range parts {
+		v := strings.TrimSpace(p)
+		if v == "" || seen[v] {
+			continue
+		}
+		seen[v] = true
+		out = append(out, v)
+	}
+	return out
+}
+
+// validateStatuses 在查询前把关：拼错的状态宁可当场拒绝，也不要返回一张空列表。
+func validateStatuses(raw string) error {
+	for _, v := range statusSet(raw) {
+		if !ValidStatus(v) {
+			return response.BadRequest("ticket.status_invalid")
+		}
+	}
+	return nil
 }
 
 // ticketFilter 将 TicketQuery 落成 WHERE 条件，列表、统计与导出共用同一套条件，
 // 避免「导出看到的行数和列表不一致」这类第二套筛选漂移。
 func (s *Service) ticketFilter(ctx context.Context, q TicketQuery) *gorm.DB {
 	db := s.db.WithContext(ctx).Model(&Ticket{})
-	if q.Status != "" {
-		db = db.Where("status = ?", q.Status)
+	switch statuses := statusSet(q.Status); {
+	case len(statuses) == 1:
+		db = db.Where("status = ?", statuses[0])
+	case len(statuses) > 1:
+		db = db.Where("status IN ?", statuses)
 	}
 	if q.Priority != "" {
 		db = db.Where("priority = ?", q.Priority)
@@ -573,15 +635,26 @@ func (s *Service) ticketFilter(ctx context.Context, q TicketQuery) *gorm.DB {
 	if tag := strings.TrimSpace(q.Tag); tag != "" {
 		db = db.Where("tags LIKE ?", "%,"+tag+",%")
 	}
+	if bizNo := strings.TrimSpace(q.BizNo); bizNo != "" {
+		db = db.Where("biz_no = ?", bizNo)
+	}
+	// 报告人身份只认「类型 + ID」成对：单给 ID 会把 visitor 与后台用户混成一串同名 ID。
+	if rid := strings.TrimSpace(q.ReporterID); rid != "" && q.ReporterType != "" {
+		db = db.Where("reporter_type = ? AND reporter_id = ?", q.ReporterType, rid)
+	}
 	if kw := strings.TrimSpace(q.Keyword); kw != "" {
 		like := "%" + kw + "%"
-		db = db.Where("ticket_no LIKE ? OR title LIKE ? OR last_preview LIKE ?", like, like, like)
+		// 带上业务单号：坐席拿到的是订单号，先搜的也是它（后台工作台与客户门户同一口径）。
+		db = db.Where("ticket_no LIKE ? OR title LIKE ? OR last_preview LIKE ? OR biz_no LIKE ?", like, like, like, like)
 	}
 	return db
 }
 
 // ListTickets 坐席列表按最后回复时间倒序。
 func (s *Service) ListTickets(ctx context.Context, q TicketQuery) ([]Ticket, int64, error) {
+	if err := validateStatuses(q.Status); err != nil {
+		return nil, 0, err
+	}
 	db := s.ticketFilter(ctx, q)
 	var total int64
 	if err := db.Count(&total).Error; err != nil {
@@ -592,7 +665,79 @@ func (s *Service) ListTickets(ctx context.Context, q TicketQuery) ([]Ticket, int
 		Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Find(&rows).Error; err != nil {
 		return nil, 0, err
 	}
+	s.fillMergedInto(ctx, rows)
 	return rows, total, nil
+}
+
+// fillMergedInto 给一页列表补「已合并到哪张」：只读不写，两次批量查询换掉一列冗余。
+// 读失败就留空（列表照常出），不因此把整页查询打挂。
+func (s *Service) fillMergedInto(ctx context.Context, rows []Ticket) {
+	if len(rows) == 0 {
+		return
+	}
+	ids := make([]int64, 0, len(rows))
+	for i := range rows {
+		ids = append(ids, int64(rows[i].ID))
+	}
+	var pointers []struct {
+		ID           int64
+		MergedIntoID int64 `gorm:"column:merged_into_id"`
+	}
+	if err := s.db.WithContext(ctx).Table("plg_ticket").Select("id, merged_into_id").
+		Where("id IN ? AND merged_into_id IS NOT NULL", ids).Scan(&pointers).Error; err != nil {
+		s.logWarn("ticket: read merge pointers failed", "err", err.Error())
+		return
+	}
+	if len(pointers) == 0 {
+		return
+	}
+	targets := make([]int64, 0, len(pointers))
+	for _, p := range pointers {
+		targets = append(targets, p.MergedIntoID)
+	}
+	var heads []struct {
+		ID       int64
+		TicketNo string
+	}
+	if err := s.db.WithContext(ctx).Table("plg_ticket").Select("id, ticket_no").
+		Where("id IN ?", targets).Scan(&heads).Error; err != nil {
+		s.logWarn("ticket: read merge targets failed", "err", err.Error())
+		return
+	}
+	noByID := make(map[int64]string, len(heads))
+	for _, h := range heads {
+		noByID[h.ID] = h.TicketNo
+	}
+	for i := range rows {
+		for _, p := range pointers {
+			if p.ID == int64(rows[i].ID) {
+				rows[i].MergedIntoNo = noByID[p.MergedIntoID]
+			}
+		}
+	}
+}
+
+// hostQueryLimit 是宿主服务端反查的默认上限（订单页「这张单的几个工单」这种场景）。
+const hostQueryLimit = 200
+
+// HostTickets 给宿主服务端反查工单：按业务单号或按报告人，忽略分页参数、自带上限。
+// 返回 truncated=true 时说明命中数超过上限，调用方应收窄条件而不是以为「就这么几张」。
+func (s *Service) HostTickets(ctx context.Context, q TicketQuery, limit int) (rows []Ticket, truncated bool, err error) {
+	if err := validateStatuses(q.Status); err != nil {
+		return nil, false, err
+	}
+	if limit <= 0 {
+		limit = hostQueryLimit
+	}
+	var total int64
+	if err := s.ticketFilter(ctx, q).Count(&total).Error; err != nil {
+		return nil, false, err
+	}
+	if err := s.ticketFilter(ctx, q).Order("COALESCE(last_reply_at, created_at) DESC").
+		Limit(limit).Find(&rows).Error; err != nil {
+		return nil, false, err
+	}
+	return rows, total > int64(limit), nil
 }
 
 const overdueSweepLimit = 500
@@ -848,10 +993,11 @@ func (s *Service) setPriority(ctx context.Context, ticketNo, priority string) er
 		// 改优先级要按 SLA 策略重算两个时钟：写死常量会把营业时间外的单也按自然小时推，
 		// 与建单/重开那条路径口径不一致。未停表时才动 due_at（停表中的补时由回复/状态迁移负责）。
 		updates := map[string]any{"priority": priority}
-		target := s.CurrentSLA().TargetFor(priority)
+		sla := s.slaFor(ctx, int64(t.GroupID))
+		target := sla.TargetFor(priority)
 		if t.SlaPausedAt == nil {
-			updates["due_at"] = businessDue(t.CreatedAt, target.FirstMinutes, s.CurrentSLA(), s.location())
-			updates["resolution_due_at"] = businessDue(t.CreatedAt, target.ResolutionMinutes, s.CurrentSLA(), s.location())
+			updates["due_at"] = businessDue(t.CreatedAt, target.FirstMinutes, sla, s.location())
+			updates["resolution_due_at"] = businessDue(t.CreatedAt, target.ResolutionMinutes, sla, s.location())
 		}
 		if err := tx.Model(&Ticket{}).Where("id = ?", int64(t.ID)).Updates(updates).Error; err != nil {
 			return err

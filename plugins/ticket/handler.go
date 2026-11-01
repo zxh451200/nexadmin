@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 
 	"nexadmin/core"
 	"nexadmin/core/auth"
@@ -22,6 +23,8 @@ import (
 type handler struct {
 	svc   *Service
 	store storage.Storage
+	// log 只用于导出这类「不进操作日志」的审计行；测试里手工构造 handler 时为 nil。
+	log *zap.Logger
 }
 
 func respond(c *gin.Context, data any, err error) {
@@ -88,7 +91,15 @@ func (h *handler) replies(c *gin.Context) {
 		response.Fail(c, err)
 		return
 	}
-	response.OK(c, gin.H{"ticket": t, "replies": rows, "attachments": atts, "activities": acts})
+	quotaMaxCount, quotaMaxBytes := attachmentQuota()
+	response.OK(c, gin.H{
+		"ticket":      t,
+		"replies":     rows,
+		"attachments": atts,
+		"activities":  acts,
+		// 上限由后端说一次，前端不再自己抄一份
+		"quota": gin.H{"maxCount": quotaMaxCount, "maxBytes": quotaMaxBytes},
+	})
 }
 
 // POST /plugins/ticket/tickets/:no/replies  {"content":"...","internal":false} —— 坐席回复/内部备注。
@@ -168,6 +179,8 @@ func (h *handler) open(c *gin.Context) {
 	if f.ReporterType == "" {
 		f.ReporterType = ReplierReporter
 	}
+	// 公开入口不收标签：让客户自填就是让他给自己打「vip」，还会反过来操纵规则命中。
+	f.Tags = nil
 	t, err := h.svc.Create(c.Request.Context(), f)
 	respond(c, t, err)
 }
@@ -234,6 +247,8 @@ func (h *handler) create(c *gin.Context) {
 	uid, name := claimsOperator(c)
 	f.CreatorID, f.CreatorName = uid, name
 	f.ReporterType = ReplierReporter
+	// 坐席这一侧要求把必填的自定义字段补齐；客户自助页不要求（见 CreateInput 注释）。
+	f.EnforceRequiredFields = true
 	t, err := h.svc.Create(c.Request.Context(), f)
 	respond(c, t, err)
 }
@@ -448,7 +463,8 @@ func (h *handler) setTags(c *gin.Context) {
 
 // GET /plugins/ticket/tickets-export?<与列表完全相同的筛选> —— 导出工单记录（xlsx，最多 5000 行）。
 // 不挂 OperLogMiddleware：操作日志中间件会把响应体前 8KB 当文本入库，对 zip 容器没有意义
-// （可能因非法 UTF-8 写失败）。审计边界与 im 的会话导出一致，靠访问日志与权限码兜。
+// （clip 会裁到合法 UTF-8，存进去是一堆乱码），所以这里改成往应用日志记一条结构化审计：
+// 谁、按什么条件、导出了几行。
 func (h *handler) export(c *gin.Context) {
 	ctx := c.Request.Context()
 	rows, err := h.svc.ExportTickets(ctx, ticketQueryFrom(c), exportLimit)
@@ -462,8 +478,16 @@ func (h *handler) export(c *gin.Context) {
 	hd.Set("Cache-Control", "no-store")
 	hd.Set("X-Content-Type-Options", "nosniff")
 	c.Status(http.StatusOK)
-	if err := h.svc.WriteTicketsXLSX(ctx, c.Writer, rows); err != nil && h.svc.log != nil {
-		h.svc.log.Warn("ticket: export failed midway", "rows", len(rows), "err", err.Error())
+	if err := h.svc.WriteTicketsXLSX(ctx, c.Writer, rows); err != nil {
+		if h.svc.log != nil {
+			h.svc.log.Warn("ticket: export failed midway", "rows", len(rows), "err", err.Error())
+		}
+		return
+	}
+	if h.log != nil {
+		_, operator := claimsOperator(c)
+		h.log.Info("ticket export", zap.String("operator", operator),
+			zap.Int("rows", len(rows)), zap.String("filters", c.Request.URL.RawQuery))
 	}
 }
 
@@ -528,6 +552,8 @@ func (h *handler) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.POST("/tickets/:no/assign", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "update"), h.assign)
 	g.POST("/tickets/:no/attachments", core.Perm("ticket:reply"), h.uploadAdmin)
 	g.GET("/tickets/:no/attachments/:token", core.Perm("ticket:list"), h.downloadAdmin)
+	// 删附件＝改附件能力的对偶，沿用 ticket:reply；删除本身要进操作日志（它是普通 JSON 响应）。
+	g.DELETE("/tickets/:no/attachments/:token", core.Perm("ticket:reply"), d.OperLogMiddleware("ticket", "delete"), h.deleteAdmin)
 
 	g.GET("/canned", core.Perm("ticket:list"), h.listCanned)
 	g.POST("/canned", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "create"), h.createCanned)
@@ -553,6 +579,24 @@ func (h *handler) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.GET("/tags", core.Perm("ticket:list"), h.listTags)
 	g.PUT("/tickets/:no/tags", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "update"), h.setTags)
 
+	// 自定义字段（见 field.go）：定义是配置类资源，复用 ticket:list / ticket:edit，不新增权限码。
+	g.GET("/fields", core.Perm("ticket:list"), h.listFields)
+	g.POST("/fields", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "create"), h.createField)
+	g.PUT("/fields/:id", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "update"), h.updateField)
+	g.DELETE("/fields/:id", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "delete"), h.deleteField)
+	g.POST("/tickets/:no/custom-values", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "update"), h.setCustomValues)
+
+	// 多套 SLA 策略与节假日（见 sla.go）：默认策略仍走上面的 GET/PUT /sla，这里只管命名策略。
+	g.GET("/sla/policies", core.Perm("ticket:list"), h.listSLAPolicies)
+	g.POST("/sla/policy", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "update"), h.saveSLAPolicy)
+	g.DELETE("/sla/policy/:code", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "delete"), h.deleteSLAPolicy)
+
+	// 合并与关联单（见 merge.go / merge_handler.go）：复用 ticket:edit / ticket:list，不新增权限码。
+	g.POST("/tickets/:no/merge", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "update"), h.mergeTicket)
+	g.GET("/tickets/:no/links", core.Perm("ticket:list"), h.links)
+	g.POST("/tickets/:no/links", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "update"), h.addLink)
+	g.DELETE("/tickets/:no/links/:other", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "delete"), h.removeLink)
+
 	// 访客公开接口：限流按 IP；路径带 /visitor 前缀与坐席接口分开——同一个 engine 上
 	// protected 与 Public 两组不能注册相同的 method+path，否则 gin 在 addRoute 时 panic。
 	p := d.Public.Group("/plugins/ticket/visitor")
@@ -568,6 +612,9 @@ func (h *handler) Register(r *gin.RouterGroup, d *core.Deps) {
 		middleware.RateLimit(d.Cache, d.Log, "ticket-upload", middleware.ByIP(), 20, time.Minute), h.uploadVisitor)
 	p.GET("/tickets/:no/attachments/:token",
 		middleware.RateLimit(d.Cache, d.Log, "ticket-download", middleware.ByIP(), 120, time.Minute), h.downloadVisitor)
+	// 访客只能删自己上传的公开附件（服务层判定），能力令牌与下载同口径；限流收紧到 20 次/分。
+	p.DELETE("/tickets/:no/attachments/:token",
+		middleware.RateLimit(d.Cache, d.Log, "ticket-attachment-delete", middleware.ByIP(), 20, time.Minute), h.deleteVisitor)
 
 	// 客户自助页挂在根路径：页面本身不需要登录，提交/查询仍走上面的公开 JSON 接口。
 	d.Root.GET("/ticket/new",

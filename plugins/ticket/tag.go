@@ -74,12 +74,19 @@ func (s *Service) SetTags(ctx context.Context, ticketNo string, tags []string) (
 		return nil, err
 	}
 	newTags := strings.Join(normalized, ",")
+	// 先回显本次写入的标签；下面若重跑规则改动了标签，回读会把这份回显覆盖成真实状态。
+	t.Tags, t.TagList = canonicalTags(normalized), normalized
 	if oldTags != newTags {
 		if err := s.recordActivity(ctx, nil, &t, actorFrom(ctx), ActTagsChanged, oldTags, newTags, ""); err != nil {
 			return nil, err
 		}
+		// match_tags 的条件会随人工改标签而变，所以改完重跑一遍规则（一轮、每条规则一次，不补内部备注）；
+		// 重跑改过优先级/分组/标签的话，回读一次让调用方拿到真实状态。
+		s.applyRules(ctx, &t, false)
+		if err := s.db.WithContext(ctx).Where("id = ?", int64(t.ID)).Take(&t).Error; err != nil {
+			return nil, err
+		}
 	}
-	t.Tags, t.TagList = canonicalTags(normalized), normalized
 	return &t, nil
 }
 

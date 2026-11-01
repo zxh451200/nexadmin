@@ -72,7 +72,10 @@ func runTicketMigrations(t *testing.T, gdb *gorm.DB) {
 	}
 }
 
-func TestITMySQLTicketOps(t *testing.T) {
+// itMySQLService 起一个一次性库、跑完插件全部迁移，返回服务与裸句柄。
+// 真引擎用例共用这套夹具：迁移能否在 MySQL 上跑通（TEXT NOT NULL 的 ALTER、BOOLEAN 列、
+// 唯一键形状）只有在这里才被真正验证——sqlmock 从不执行 SQL。
+func itMySQLService(t *testing.T) (*Service, *gorm.DB, *fakeSender) {
 	dsn := os.Getenv("NEXADMIN_IT_MYSQL_DSN")
 	if dsn == "" {
 		t.Skip("NEXADMIN_IT_MYSQL_DSN not set; skipping real-MySQL integration test")
@@ -150,9 +153,14 @@ func TestITMySQLTicketOps(t *testing.T) {
 		}
 	}
 
-	ctx := context.Background()
 	sender := &fakeSender{}
 	svc := NewService(gdb, nopLogger{}).WithTimezone("UTC").WithNotify(sender, "zh-CN")
+	return svc, gdb, sender
+}
+
+func TestITMySQLTicketOps(t *testing.T) {
+	svc, gdb, sender := itMySQLService(t)
+	ctx := context.Background()
 
 	must := func(err error) {
 		t.Helper()
@@ -704,5 +712,229 @@ loop:
 	}
 	if last.Action != ActPriorityChanged || last.FromValue != PriorityNormal || last.ToValue != PriorityUrgent {
 		t.Errorf("改优先级的动态 = %+v", last)
+	}
+}
+
+// TestITMySQLSLAPoliciesFieldsAndMultiStatus 把本批新增的 SQL 在真引擎上过一遍：
+// 013（策略 code/label/holidays + 队列绑定）、014（字段定义表 + 工单 custom_values），
+// 以及 status 多值筛选落成的 IN 查询。sqlmock 从不执行 SQL，这些形状只有真库能证。
+func TestITMySQLSLAPoliciesFieldsAndMultiStatus(t *testing.T) {
+	svc, gdb, _ := itMySQLService(t)
+	ctx := context.Background()
+	must := func(err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// 默认策略：只在工作日 9-18 点营业，普通优先级首响 60 分钟
+	_, err := svc.SaveSLA(ctx, SLASetting{
+		Workdays: []int{1, 2, 3, 4, 5}, StartMinute: 9 * 60, EndMinute: 18 * 60,
+		Targets: map[string]SLATarget{PriorityNormal: {FirstMinutes: 60, ResolutionMinutes: 600}},
+	})
+	must(err)
+
+	// 命名策略：节假日要能在真库里往返（TEXT 列 + 逗号串），并去重升序
+	vip, err := svc.SaveSLAPolicy(ctx, SLASetting{
+		Code: "vip-desk", Label: "VIP 值班室",
+		Workdays: []int{1, 2, 3, 4, 5}, StartMinute: 9 * 60, EndMinute: 18 * 60,
+		Holidays: []string{"2026-01-02", "2026-01-01", "2026-01-01"},
+		Targets:  map[string]SLATarget{PriorityNormal: {FirstMinutes: 15, ResolutionMinutes: 60}},
+	})
+	must(err)
+	if len(vip.Holidays) != 2 || vip.Holidays[0] != "2026-01-01" {
+		t.Fatalf("节假日没有去重升序往返：%+v", vip.Holidays)
+	}
+	if _, err = svc.SaveSLAPolicy(ctx, vip); err != nil {
+		t.Fatal(err)
+	}
+	list, err := svc.ListSLAPolicies(ctx)
+	must(err)
+	// 同 code 再存是覆盖，不是新增一行
+	if len(list) != 2 {
+		t.Fatalf("策略行数 = %d，应为 2（默认 + vip-desk）：%+v", len(list), list)
+	}
+	if err := svc.DeleteSLAPolicy(ctx, ""); err == nil {
+		t.Fatal("默认策略必须不可删")
+	}
+
+	// 队列绑定策略
+	grp, err := svc.CreateGroup(ctx, GroupInput{Name: "VIP 队列", Enabled: true, SLACode: "vip-desk"})
+	must(err)
+	var reloaded Group
+	must(gdb.Where("id = ?", int64(grp.ID)).Take(&reloaded).Error)
+	if reloaded.SLACode != "vip-desk" {
+		t.Fatalf("group.sla_code 没落库：%q", reloaded.SLACode)
+	}
+	if err := svc.checkSLACode(ctx, "no-such-policy"); err == nil {
+		t.Fatal("绑到不存在的策略必须被拒")
+	}
+
+	// 转组后到期时间按新队列的策略重算（15 分钟而不是默认那套的 60 分钟）
+	fresh, err := svc.Create(ctx, CreateInput{Title: "vip order", Content: "broken", Priority: PriorityNormal, ReporterType: ReplierReporter})
+	must(err)
+	moved, err := svc.AssignGroup(ctx, fresh.TicketNo, grp.ID)
+	must(err)
+	if moved.DueAt == nil {
+		t.Fatal("转组后 due_at 丢了")
+	}
+	want := businessDue(moved.CreatedAt, vip.TargetFor(PriorityNormal).FirstMinutes, vip, time.UTC)
+	if !moved.DueAt.Equal(want) {
+		t.Fatalf("due_at = %v，按 vip-desk 应为 %v", moved.DueAt, want)
+	}
+
+	// 自定义字段：定义落库、候选项编进 TEXT 列。
+	// Enabled 必须显式给真：这一列故意不打 gorm default 标签（打了 GORM 会把零值列从
+	// INSERT 里剔除，Enabled:false 会被库默认值改成 true），所以漏写就是「建成停用」。
+	chanField, err := svc.SaveField(ctx, Field{Code: "order_channel", Label: "下单渠道", Type: FieldTypeSelect, OptionList: []string{"App", "门店"}, Required: true, Enabled: true})
+	must(err)
+	if chanField.Options == "" {
+		t.Fatal("候选项没编进 options 列")
+	}
+	if _, err = svc.SaveField(ctx, Field{Code: "serial_no", Label: "序列号", Type: FieldTypeText, Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	// 停用的字段算「未定义」：值不该被收下，也不参与必填
+	if _, err = svc.SaveField(ctx, Field{Code: "old_note", Label: "旧备注", Type: FieldTypeText, Enabled: false}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = svc.Create(ctx, CreateInput{Title: "t", Content: "c", ReporterType: ReplierReporter, EnforceRequiredFields: true, CustomValues: map[string]any{"old_note": "x"}}); err == nil {
+		t.Fatal("停用字段的 code 必须被拒")
+	}
+
+	// 未定义的 code 拒绝（两种入口都拒）
+	if _, err = svc.Create(ctx, CreateInput{Title: "t", Content: "c", ReporterType: ReplierReporter, CustomValues: map[string]any{"nope": "x"}}); err == nil {
+		t.Fatal("未定义的字段 code 必须被拒")
+	}
+	// 坐席入口要求补齐必填，公开入口不要求
+	if _, err = svc.Create(ctx, CreateInput{Title: "t", Content: "c", ReporterType: ReplierReporter, EnforceRequiredFields: true}); err == nil {
+		t.Fatal("缺必填字段必须被拒")
+	}
+	visitorTk, err := svc.Create(ctx, CreateInput{
+		Title: "visitor t", Content: "c", ReporterType: ReplierReporter,
+		CustomValues: map[string]any{"serial_no": "SN-1"},
+	})
+	must(err)
+	if visitorTk.CustomValues["serial_no"] != "SN-1" {
+		t.Fatalf("公开入口该收下已填的值：%+v", visitorTk.CustomValues)
+	}
+	// 类型/候选项校验不因入口而放松
+	if _, err = svc.Create(ctx, CreateInput{Title: "t", Content: "c", ReporterType: ReplierReporter, CustomValues: map[string]any{"order_channel": "电话"}}); err == nil {
+		t.Fatal("取值不在候选项里必须被拒")
+	}
+	agentTk, err := svc.Create(ctx, CreateInput{
+		Title: "agent t", Content: "c", ReporterType: ReplierReporter, EnforceRequiredFields: true,
+		CustomValues: map[string]any{"order_channel": "App", "serial_no": "SN-2"},
+	})
+	must(err)
+	var stored Ticket
+	must(gdb.Where("ticket_no = ?", agentTk.TicketNo).Take(&stored).Error)
+	if stored.CustomValuesRaw != `{"order_channel":"App","serial_no":"SN-2"}` {
+		t.Fatalf("custom_values 列 = %q", stored.CustomValuesRaw)
+	}
+	if got := stored.AfterFind(nil); got != nil {
+		t.Fatal(got)
+	}
+	if stored.CustomValues["order_channel"] != "App" {
+		t.Fatalf("读路径没解码附加字段：%+v", stored.CustomValues)
+	}
+
+	// 改值：nil 删除该字段，并留下一条动态
+	updated, err := svc.SetCustomValues(ctx, agentTk.TicketNo, map[string]any{"serial_no": nil, "order_channel": "门店"})
+	must(err)
+	if _, ok := updated.CustomValues["serial_no"]; ok {
+		t.Fatalf("nil 应当删掉该字段：%+v", updated.CustomValues)
+	}
+	if updated.CustomValues["order_channel"] != "门店" {
+		t.Fatalf("改值没生效：%+v", updated.CustomValues)
+	}
+	var acts []TicketActivity
+	must(gdb.Where("ticket_no = ? AND action = ?", agentTk.TicketNo, ActFieldsChanged).Find(&acts).Error)
+	if len(acts) != 1 {
+		t.Fatalf("应留下一条附加字段动态，得到 %d 条", len(acts))
+	}
+	if acts[0].FromValue == acts[0].ToValue {
+		t.Errorf("动态应带前后值：from=%q to=%q", acts[0].FromValue, acts[0].ToValue)
+	}
+
+	// 删掉定义后，那个 code 不再被接受
+	must(svc.DeleteField(ctx, int64(chanField.ID)))
+	if _, err = svc.Create(ctx, CreateInput{Title: "t3", Content: "c", ReporterType: ReplierReporter, CustomValues: map[string]any{"order_channel": "App"}}); err == nil {
+		t.Fatal("字段定义删除后该 code 不该再被接受")
+	}
+
+	// status 多值：真库上确实是 IN，且是单值的超集
+	both, _, err := svc.ListTickets(ctx, TicketQuery{Status: "open,pending", Page: 1, PageSize: 20})
+	must(err)
+	onlyOpen, _, err := svc.ListTickets(ctx, TicketQuery{Status: StatusOpen, Page: 1, PageSize: 20})
+	must(err)
+	if len(both) < len(onlyOpen) {
+		t.Fatalf("多值结果应覆盖单值：%d < %d", len(both), len(onlyOpen))
+	}
+	if _, _, err := svc.ListTickets(ctx, TicketQuery{Status: "open,vip"}); err == nil {
+		t.Fatal("拼错的状态必须报错，而不是返回空列表")
+	}
+}
+
+// TestITMySQLRuleRerunOnTagChange 人工改标签后要按 match_tags 重跑规则：
+// 只跑一轮、每条规则一次，规则自己追加的标签不会再触发它（否则就是环）。
+func TestITMySQLRuleRerunOnTagChange(t *testing.T) {
+	svc, gdb, _ := itMySQLService(t)
+	ctx := context.Background()
+	must := func(err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	grp, err := svc.CreateGroup(ctx, GroupInput{Name: "退款组", Enabled: true})
+	must(err)
+	_, err = svc.CreateRule(ctx, RuleInput{
+		Name: "refund→退款组", Enabled: true,
+		MatchTags: []string{"refund"}, SetGroupID: grp.ID, AddTags: []string{"加急处理"},
+	})
+	must(err)
+
+	tk, err := svc.Create(ctx, CreateInput{Title: "t", Content: "c", ReporterType: ReplierReporter})
+	must(err)
+	if tk.GroupID == grp.ID {
+		t.Fatal("建单时没有 refund 标签，不该被规则转组")
+	}
+
+	updated, err := svc.SetTags(ctx, tk.TicketNo, []string{"refund"})
+	must(err)
+	if updated.GroupID != grp.ID {
+		t.Fatalf("改标签后规则没重跑：group = %v", updated.GroupID)
+	}
+	has := func(tags []string, want string) bool {
+		for _, tag := range tags {
+			if tag == want {
+				return true
+			}
+		}
+		return false
+	}
+	if !has(updated.TagList, "refund") || !has(updated.TagList, "加急处理") {
+		t.Fatalf("规则应追加「加急处理」并保留 refund：%v", updated.TagList)
+	}
+
+	// 同一份标签再改一次：规则追加的标签不能滚雪球（每次只追加一次、且去重）
+	again, err := svc.SetTags(ctx, tk.TicketNo, updated.TagList)
+	must(err)
+	counts := map[string]int{}
+	for _, tag := range again.TagList {
+		counts[tag]++
+	}
+	if counts["加急处理"] != 1 {
+		t.Fatalf("「加急处理」出现了 %d 次，规则在自我叠加：%v", counts["加急处理"], again.TagList)
+	}
+
+	// 规则命中要能在动态里看到
+	var n int64
+	must(gdb.Model(&TicketActivity{}).Where("ticket_no = ? AND action = ?", tk.TicketNo, ActRuleApplied).Count(&n).Error)
+	if n < 1 {
+		t.Fatal("重跑命中的规则应留下 rule_applied 动态")
 	}
 }

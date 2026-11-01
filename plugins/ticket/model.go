@@ -41,6 +41,12 @@ func ValidPriority(p string) bool {
 	return p == PriorityLow || p == PriorityNormal || p == PriorityHigh || p == PriorityUrgent
 }
 
+// ValidStatus 状态是否是本插件认识的五个值之一。筛选参数用它把关：写错的状态串
+// 静默返回空列表会被读成「没有这类工单」，而真实原因是拼错了。
+func ValidStatus(s string) bool {
+	return s == StatusOpen || s == StatusProcessing || s == StatusPending || s == StatusResolved || s == StatusClosed
+}
+
 // Settleable 报告工单是否处于未完结状态（坐席视角，含等客户回复）。
 func Settleable(status string) bool {
 	return status == StatusOpen || status == StatusProcessing || status == StatusPending
@@ -90,11 +96,21 @@ type Ticket struct {
 	// Tags 以逗号包裹存储（,vip,refund,），对外用 TagList 数组。
 	Tags    string   `gorm:"size:255;not null;default:''" json:"-"`
 	TagList []string `gorm:"-" json:"tags"`
+	// CustomValuesRaw 是自定义字段的值（JSON 对象文本，列 custom_values）。
+	// 值不进独立列，所以管理员加字段不需要迁移历史工单。
+	CustomValuesRaw string `gorm:"column:custom_values;type:text;not null" json:"-"`
+	// CustomValues 是对外形态；读路径由 AfterFind 解码，写路径在 service 里显式编码。
+	CustomValues map[string]any `gorm:"-" json:"customValues"`
+	// MergedIntoNo 由列表读取时批量回填（指针列 merged_into_id 属 merge.go 的写路径）。
+	// 带着它，坐席在列表里能看出这张单已被并走、并跳回主单；真后端不给就会是个空字段。
+	MergedIntoNo string `gorm:"-" json:"mergedIntoNo,omitempty"`
 }
 
-// AfterFind 把存储串拆回标签数组，所有读路径（列表/详情/刷新）都自动生效。
+// AfterFind 把存储串拆回标签数组、把 custom_values 拆回值映射，
+// 所有读路径（列表/详情/刷新）都自动生效；坏 JSON 一律当「没有值」而不是报错。
 func (t *Ticket) AfterFind(*gorm.DB) error {
 	t.TagList = splitTags(t.Tags)
+	t.CustomValues = DecodeCustomValues(t.CustomValuesRaw)
 	return nil
 }
 

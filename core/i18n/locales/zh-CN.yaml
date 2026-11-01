@@ -231,6 +231,17 @@ ticket:
   group_disabled: 分组已停用，不能转入
   assignee_invalid: 指派的处理人无效
   plugin_inactive: 工单插件未启用或授权已失效
+  attachment_quota_count: 这张工单的附件已达 %s 个，超过上限 %s 个
+  attachment_quota_bytes: 附件总大小将达到 %s MB，超过单工单 %s MB 上限
+  attachment_delete_failed: 附件删除失败，请稍后重试
+  merge_self: 不能把工单合并进它自己
+  already_merged: 这张工单已被合并进其他工单，不能再操作
+  merge_target_terminal: 目标工单已结束，不能接收合并
+  merge_cycle: 合并会形成循环，已拒绝
+  link_self: 不能把工单关联到自己
+  link_exists: 这两张工单已经关联
+  link_limit: 关联工单数量已达上限
+  link_not_found: 未找到这两个工单之间的关联
   status_open: 待处理
   status_processing: 处理中
   status_pending: 待客户回复
@@ -259,6 +270,15 @@ ticket:
   export_resolved_at: 解决时间
   export_closed_at: 关闭时间
   export_last_reply_at: 最后回复
+  field_code_invalid: 字段标识不合法（小写字母开头，字母数字下划线，最长 32）
+  field_code_conflict: 字段标识已被占用
+  field_label_required: 字段名称必填，且不超过 64 个字符
+  field_type_invalid: 字段类型不合法
+  field_option_invalid: 字段候选项不合法（单选至少 1 项、最多 50 项，且不含逗号）
+  field_required: 该字段必填
+  field_value_invalid: 字段值不合法（类型或取值范围不符）
+  sla_code_unknown: 要绑定的 SLA 策略不存在
+  attachment_rejected: 附件未通过安全扫描，已拒绝
 totp:
   already_enabled: 两步验证已开启
   not_enrolled: 尚未绑定两步验证，请先扫码绑定

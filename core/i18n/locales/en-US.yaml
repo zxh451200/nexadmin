@@ -231,6 +231,17 @@ ticket:
   group_disabled: This group is disabled and cannot receive tickets
   assignee_invalid: Invalid assignee
   plugin_inactive: Ticket plugin is not enabled or its license has lapsed
+  attachment_quota_count: This ticket already has %s attachments, over the limit of %s
+  attachment_quota_bytes: The attachments would total %s MB, over the %s MB per-ticket limit
+  attachment_delete_failed: Failed to delete the attachment; please try again later
+  merge_self: A ticket cannot be merged into itself
+  already_merged: This ticket has already been merged into another one
+  merge_target_terminal: The target ticket is finished and cannot receive merges
+  merge_cycle: The merge would create a loop, so it was rejected
+  link_self: A ticket cannot be linked to itself
+  link_exists: These two tickets are already linked
+  link_limit: The link limit for this ticket has been reached
+  link_not_found: No link exists between these two tickets
   status_open: Open
   status_processing: Processing
   status_pending: Waiting on customer
@@ -259,6 +270,15 @@ ticket:
   export_resolved_at: Resolved at
   export_closed_at: Closed at
   export_last_reply_at: Last reply
+  field_code_invalid: Invalid field code (must start lowercase, letters/digits/underscore, max 32)
+  field_code_conflict: Field code is already taken
+  field_label_required: Field label is required (max 64 characters)
+  field_type_invalid: Invalid field type
+  field_option_invalid: Invalid field options (a select needs 1-50 options, no commas)
+  field_required: This field is required
+  field_value_invalid: Invalid field value (type or range mismatch)
+  sla_code_unknown: The SLA policy to bind does not exist
+  attachment_rejected: The attachment failed the security scan and was rejected
 totp:
   already_enabled: Two-factor authentication is already enabled
   not_enrolled: Two-factor authentication is not enrolled yet; scan the QR code first

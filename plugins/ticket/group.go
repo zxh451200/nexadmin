@@ -24,6 +24,8 @@ type Group struct {
 	AutoAssign  bool   `gorm:"not null;default:0" json:"autoAssign"`
 	Enabled     bool   `gorm:"not null;default:1" json:"enabled"`
 	Sort        int    `gorm:"not null;default:0" json:"sort"`
+	// SLACode 绑定一套命名 SLA 策略；空串 = 用默认策略（队列之间时限可以不同）。
+	SLACode string `gorm:"size:32;not null;default:''" json:"slaCode"`
 }
 
 func (Group) TableName() string { return "plg_ticket_group" }
@@ -45,6 +47,8 @@ type GroupInput struct {
 	AutoAssign  bool   `json:"autoAssign"`
 	Enabled     bool   `json:"enabled"`
 	Sort        int    `json:"sort"`
+	// SLACode 绑定一套命名 SLA 策略；空 = 用默认策略。
+	SLACode string `json:"slaCode"`
 }
 
 // GroupView 是分组 + 成员，管理弹窗一次取全。
@@ -56,13 +60,35 @@ type GroupView struct {
 func (in *GroupInput) normalize() error {
 	in.Name = strings.TrimSpace(in.Name)
 	in.Description = strings.TrimSpace(in.Description)
+	in.SLACode = strings.TrimSpace(in.SLACode)
 	if in.Name == "" || len(in.Name) > 64 || len(in.Description) > 200 {
+		return response.BadRequest("error.bad_request")
+	}
+	if in.SLACode != "" && !slaCodeRe.MatchString(in.SLACode) {
 		return response.BadRequest("error.bad_request")
 	}
 	if in.Sort < 0 {
 		in.Sort = 0
 	}
 	return nil
+}
+
+// checkSLACode 拦「绑到不存在的策略」：那种写法会静默回落默认策略，
+// 管理员以为这个队列有自己的一套时限，实际没有。
+func (s *Service) checkSLACode(ctx context.Context, code string) error {
+	if code == "" {
+		return nil
+	}
+	policies, err := s.ListSLAPolicies(ctx)
+	if err != nil {
+		return err
+	}
+	for _, p := range policies {
+		if p.Code == code {
+			return nil
+		}
+	}
+	return response.BadRequest("ticket.sla_code_unknown")
 }
 
 // ListGroups 按排序返回分组及成员。
@@ -87,11 +113,17 @@ func (s *Service) CreateGroup(ctx context.Context, in GroupInput) (*Group, error
 	if err := in.normalize(); err != nil {
 		return nil, err
 	}
+	if err := s.checkSLACode(ctx, in.SLACode); err != nil {
+		return nil, err
+	}
 	id, err := idgen.Next()
 	if err != nil {
 		return nil, err
 	}
-	g := &Group{Name: in.Name, Description: in.Description, AutoAssign: in.AutoAssign, Enabled: in.Enabled, Sort: in.Sort}
+	g := &Group{
+		Name: in.Name, Description: in.Description, AutoAssign: in.AutoAssign,
+		Enabled: in.Enabled, Sort: in.Sort, SLACode: in.SLACode,
+	}
 	g.ID = id
 	if err := s.db.WithContext(ctx).Create(g).Error; err != nil {
 		return nil, err
@@ -105,6 +137,9 @@ func (s *Service) UpdateGroup(ctx context.Context, id idgen.ID, in GroupInput) (
 	if err := in.normalize(); err != nil {
 		return nil, err
 	}
+	if err := s.checkSLACode(ctx, in.SLACode); err != nil {
+		return nil, err
+	}
 	var g Group
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("id = ?", int64(id)).Take(&g).Error; err != nil {
@@ -116,6 +151,7 @@ func (s *Service) UpdateGroup(ctx context.Context, id idgen.ID, in GroupInput) (
 		if err := tx.Model(&Group{}).Where("id = ?", int64(id)).Updates(map[string]any{
 			"name": in.Name, "description": in.Description,
 			"auto_assign": in.AutoAssign, "enabled": in.Enabled, "sort": in.Sort,
+			"sla_code": in.SLACode,
 		}).Error; err != nil {
 			return err
 		}
@@ -269,6 +305,12 @@ func (s *Service) AssignGroup(ctx context.Context, ticketNo string, groupID idge
 	}
 	var t Ticket
 	assigned := false
+	// 目标队列的策略在开事务前解析：事务里再去读 plg_ticket_sla 会延长行锁持有时间。
+	// groupID 为 0（移出分组）时 g 是零值，SLACode 空串 → 回落默认策略。
+	groupSLA, slaErr := s.SLAForCode(ctx, g.SLACode)
+	if slaErr != nil {
+		return nil, slaErr
+	}
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("ticket_no = ?", strings.TrimSpace(ticketNo)).Take(&t).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -277,6 +319,14 @@ func (s *Service) AssignGroup(ctx context.Context, ticketNo string, groupID idge
 			return err
 		}
 		updates := map[string]any{"group_id": groupID, "group_name": g.Name}
+		// 换队列可能换一套时限：未停表且未完结时按新队列的策略重算两个时钟，
+		// 否则这张单会带着旧队列算出来的到期时间进到新队列里。
+		if t.GroupID != groupID && t.SlaPausedAt == nil && Settleable(t.Status) {
+			target := groupSLA.TargetFor(t.Priority)
+			loc := s.location()
+			updates["due_at"] = businessDue(t.CreatedAt, target.FirstMinutes, groupSLA, loc)
+			updates["resolution_due_at"] = businessDue(t.CreatedAt, target.ResolutionMinutes, groupSLA, loc)
+		}
 		if g.AutoAssign && t.AssigneeID == 0 {
 			uid, name, err := s.leastLoadedMember(tx, g.ID)
 			if err == nil && uid != 0 {

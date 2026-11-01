@@ -39,6 +39,8 @@ button:disabled{opacity:.5;cursor:default}
 .star{background:transparent;color:#9ca3af;font-size:24px;line-height:1;padding:4px 7px;margin:0;border:1px solid #d1d5db;border-radius:8px;cursor:pointer}
 .star.on{color:#f59e0b;border-color:#f59e0b}
 a{color:#1d4ed8}
+.att-del{margin:0 0 0 8px;padding:2px 6px;font-size:12px;border:1px solid #d1d5db;border-radius:6px;background:transparent;color:#b91c1c;cursor:pointer}
+@media (prefers-color-scheme:dark){.att-del{border-color:#334155;color:#f87171}}
 @media (prefers-color-scheme:dark){
  body{background:#0b0f14;color:#e5e7eb}
  .card{background:#111820;border-color:#243040}
@@ -54,6 +56,9 @@ a{color:#1d4ed8}
 
 type pageStrings struct {
 	Required     string            `json:"required"`
+	Unset        string            `json:"unset"`
+	Yes          string            `json:"yes"`
+	No           string            `json:"no"`
 	Submitting   string            `json:"submitting"`
 	Failed       string            `json:"failed"`
 	Success      string            `json:"success"`
@@ -71,6 +76,9 @@ type pageStrings struct {
 	AttAdd       string            `json:"attAdd"`
 	AttUploading string            `json:"attUploading"`
 	AttFailed    string            `json:"attFailed"`
+	AttDel       string            `json:"attDel"`
+	AttDelAsk    string            `json:"attDelAsk"`
+	AttDelFailed string            `json:"attDelFailed"`
 	Timeline     string            `json:"timeline"`
 	TimelineNew  string            `json:"timelineNew"`
 	TimelineStat string            `json:"timelineStat"`
@@ -112,6 +120,7 @@ var formTmpl = template.Must(template.New("form").Parse(`<!doctype html>
         <option value="high">{{.PHigh}}</option>
         <option value="urgent">{{.PUrgent}}</option>
       </select>
+      <div id="cf"></div>
       <button type="submit" id="submit">{{.Submit}}</button>
       <p id="msg" role="status"></p>
     </form>
@@ -121,6 +130,54 @@ var formTmpl = template.Must(template.New("form").Parse(`<!doctype html>
 <script>
 const API = '/api/v1/plugins/ticket/visitor';
 const S = {{.Strings}};
+// 自定义字段：由管理员定义、这里按类型渲染。必填只标星号不设 required——
+// 必填是坐席要补的信息，不该把客户挡在提交之外（后端同口径，见 CreateInput.EnforceRequiredFields）。
+const FIELDS = {{.Fields}};
+const cfBox = document.getElementById('cf');
+FIELDS.forEach((f) => {
+  const id = 'cf-' + f.code;
+  const lab = document.createElement('label');
+  lab.setAttribute('for', id);
+  lab.textContent = f.label + (f.required ? ' *' : '');
+  cfBox.appendChild(lab);
+  let el;
+  if (f.type === 'select' || f.type === 'bool') {
+    el = document.createElement('select');
+    const blank = document.createElement('option');
+    blank.value = '';
+    blank.textContent = S.unset;
+    el.appendChild(blank);
+    const opts = f.type === 'bool'
+      ? [{ v: 'true', t: S.yes }, { v: 'false', t: S.no }]
+      : (f.options || []).map((o) => ({ v: o, t: o }));
+    opts.forEach((o) => {
+      const op = document.createElement('option');
+      op.value = o.v;
+      op.textContent = o.t;
+      el.appendChild(op);
+    });
+  } else {
+    el = document.createElement('input');
+    el.type = f.type === 'number' ? 'number' : f.type === 'date' ? 'date' : 'text';
+    if (f.type === 'text') el.maxLength = 500;
+  }
+  el.id = id;
+  el.name = f.code;
+  cfBox.appendChild(el);
+});
+
+// 收集已填的字段：空值不提交（后端把「没填」与「填了空串」当两件事）。
+function collectFields() {
+  const out = {};
+  FIELDS.forEach((f) => {
+    const el = document.getElementById('cf-' + f.code);
+    if (!el) return;
+    const v = el.value === '' ? '' : String(el.value).trim();
+    if (v === '') return;
+    out[f.code] = f.type === 'bool' ? v === 'true' : f.type === 'number' ? Number(v) : v;
+  });
+  return out;
+}
 const form = document.getElementById('f');
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -131,7 +188,8 @@ form.addEventListener('submit', async (e) => {
     content: document.getElementById('content').value.trim(),
     reporterName: document.getElementById('name').value.trim(),
     reporterId: document.getElementById('contact').value.trim(),
-    priority: document.getElementById('priority').value
+    priority: document.getElementById('priority').value,
+    customValues: collectFields()
   };
   if (!body.title || !body.content) { msg.textContent = S.required; msg.className = 'err'; return; }
   btn.disabled = true; msg.textContent = S.submitting; msg.className = 'muted';
@@ -265,6 +323,26 @@ function renderAttachments(tk, no, atts) {
     link.href = API + '/tickets/' + encodeURIComponent(no) + '/attachments/' + encodeURIComponent(a.token);
     link.textContent = a.name + ' (' + Math.max(1, Math.round(a.size / 1024)) + ' KB)';
     p.appendChild(link);
+    // 只有客户自己上传的公开附件能删；服务端同样判定，这里只是不摆出按下去必然失败的按钮。
+    if (a.uploaderType === 'reporter') {
+      const del = el('button', S.attDel, 'att-del');
+      del.type = 'button';
+      del.onclick = async () => {
+        if (!confirm(S.attDelAsk)) return;
+        del.disabled = true;
+        try {
+          const res = await fetch(API + '/tickets/' + encodeURIComponent(no) + '/attachments/' + encodeURIComponent(a.token), { method: 'DELETE' });
+          const data = await res.json();
+          if (!res.ok || data.code !== 0) throw new Error(data.message || S.attDelFailed);
+          load(no);
+        } catch (err) {
+          msg.textContent = (err && err.message) || S.attDelFailed;
+          msg.className = 'err';
+          del.disabled = false;
+        }
+      };
+      p.appendChild(del);
+    }
     box.appendChild(p);
   });
   if (tk.status === 'closed') return;
@@ -353,6 +431,8 @@ type formPageData struct {
 	Lang, Title, Intro, Subject, Content, Name, Contact, Priority string
 	PNormal, PHigh, PUrgent, Submit, QueryLink                    string
 	Strings                                                       template.JS
+	// Fields 是启用的自定义字段（code/label/type/required/options），由页面脚本按类型渲染。
+	Fields template.JS
 }
 
 type viewPageData struct {
@@ -374,6 +454,7 @@ func pageDict(en bool) pageStrings {
 	if en {
 		return pageStrings{
 			Required: "Subject and description are required.", Submitting: "Submitting…",
+			Unset: "Not filled", Yes: "Yes", No: "No",
 			Failed: "Submission failed, please try again.", Success: "Submitted. Your ticket number is",
 			NotFound: "Ticket not found.", NoReplies: "No replies yet.", Reporter: "Reporter",
 			RateTitle: "Rate your support", RateHint: "How did we do?",
@@ -381,12 +462,14 @@ func pageDict(en bool) pageStrings {
 			RateThanks: "Thanks for your feedback.", RatedLabel: "Your rating", RateFailed: "Rating failed, please try again.",
 			AttTitle: "Attachments", AttAdd: "Upload file", AttUploading: "Uploading…", AttFailed: "Upload failed, please try again.",
 			Timeline: "Progress", TimelineNew: "Ticket submitted", TimelineStat: "Status changed to",
+			AttDel: "Delete", AttDelAsk: "Delete this attachment? It cannot be recovered.", AttDelFailed: "Delete failed, please try again.",
 			Status:   map[string]string{"open": "Open", "processing": "Processing", "pending": "Waiting on customer", "resolved": "Resolved", "closed": "Closed"},
 			Priority: map[string]string{"low": "Low", "normal": "Normal", "high": "High", "urgent": "Urgent"},
 		}
 	}
 	return pageStrings{
 		Required: "请填写标题和描述。", Submitting: "提交中…",
+		Unset: "未填", Yes: "是", No: "否",
 		Failed: "提交失败，请稍后重试。", Success: "已提交，工单号",
 		NotFound: "未找到工单。", NoReplies: "暂无回复。", Reporter: "报告人",
 		RateTitle: "服务评价", RateHint: "问题解决得怎么样？",
@@ -394,6 +477,7 @@ func pageDict(en bool) pageStrings {
 		RateThanks: "感谢你的评价。", RatedLabel: "你的评价", RateFailed: "评价提交失败，请稍后重试。",
 		AttTitle: "附件", AttAdd: "上传附件", AttUploading: "上传中…", AttFailed: "上传失败，请稍后重试。",
 		Timeline: "处理进度", TimelineNew: "已提交工单", TimelineStat: "状态变更为",
+		AttDel: "删除", AttDelAsk: "确定删除这个附件？删除后无法恢复。", AttDelFailed: "删除失败，请稍后重试。",
 		Status:   map[string]string{"open": "待处理", "processing": "处理中", "pending": "待客户回复", "resolved": "已解决", "closed": "已关闭"},
 		Priority: map[string]string{"low": "低", "normal": "普通", "high": "高", "urgent": "紧急"},
 	}
@@ -410,11 +494,28 @@ func stringsJSON(s pageStrings) template.JS {
 // formPage GET /ticket/new —— 客户提交工单。
 func (h *handler) formPage(c *gin.Context) {
 	en := pageIsEN(c)
+	// 自定义字段读失败不该让客户页打不开：退化成「没有附加字段」，日志里留痕。
+	fields := make([]map[string]any, 0, 4)
+	if defs, err := h.svc.EnabledFields(c.Request.Context()); err != nil {
+		h.svc.logWarn("ticket: load custom fields for form failed", "err", err.Error())
+	} else {
+		for _, f := range defs {
+			fields = append(fields, map[string]any{
+				"code": f.Code, "label": f.Label, "type": f.Type,
+				"required": f.Required, "options": f.OptionList,
+			})
+		}
+	}
+	fieldsJSON, err := json.Marshal(fields)
+	if err != nil {
+		fieldsJSON = []byte("[]")
+	}
 	d := formPageData{
 		Lang: "zh-CN", Title: "提交工单", Intro: "描述你遇到的问题，我们会尽快处理；无需登录。",
 		Subject: "标题", Content: "问题描述", Name: "称呼", Contact: "联系方式（可选）", Priority: "优先级",
 		PNormal: "普通", PHigh: "高", PUrgent: "紧急", Submit: "提交", QueryLink: "查询已有工单",
 		Strings: stringsJSON(pageDict(en)),
+		Fields:  template.JS(fieldsJSON),
 	}
 	if en {
 		d.Lang = "en"

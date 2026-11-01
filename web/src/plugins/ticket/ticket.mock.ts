@@ -1,10 +1,13 @@
-import { defineMock } from '@/framework/request/mock'
+import { defineMock, mockError } from '@/framework/request/mock'
 import type {
   CannedReply,
+  LinkedTicket,
   SLASetting,
   Ticket,
   TicketActivity,
   TicketAttachment,
+  TicketField,
+  TicketFieldType,
   TicketGroup,
   TicketReply,
   TicketRule,
@@ -46,6 +49,7 @@ const mkTicket = (n: number, p: Partial<Ticket>): Ticket => ({
   rating: null,
   ratingComment: '',
   tags: [],
+  customValues: {},
   resolutionOverdue: false,
   createdAt: at(n, 0),
   ...p,
@@ -64,10 +68,20 @@ const tickets: Ticket[] = [
     lastPreview: '已收到，正在处理',
     slaPausedAt: at(1, 50),
     tags: ['vip', '售后'],
+    customValues: { order_channel: 'App', serial_no: 'SN-88213', warranty_until: '2027-03-14', onsite_visit: true },
   }),
   mkTicket(2, { priority: 'urgent', overdue: true, lastPreview: '急：商品破损', groupId: '902', groupName: '退款组', tags: ['refund'] }),
   mkTicket(3, { status: 'resolved', lastPreview: '问题已解决，请确认', resolvedAt: at(3, 95), rating: 5, ratingComment: '处理很快，感谢' }),
-  mkTicket(4, { status: 'closed', priority: 'low', lastPreview: '感谢反馈', resolvedAt: at(4, 120), rating: 4 }),
+  mkTicket(4, {
+    status: 'closed',
+    priority: 'low',
+    lastPreview: '感谢反馈',
+    resolvedAt: at(4, 120),
+    closedAt: at(4, 130),
+    rating: 4,
+    // 历史合并痕迹：TK…4 早就并进了 TK…1，回复与附件仍留在原单（合并只搬状态，不搬内容）
+    mergedIntoNo: 'TK743000000000000001',
+  }),
   mkTicket(5, { bizType: '', bizNo: '', title: '咨询发票开具' }),
   mkTicket(6, { status: 'processing', priority: 'normal', assigneeId: '7', assigneeName: 'admin', lastPreview: '正在核实订单' }),
 ]
@@ -161,6 +175,7 @@ const sla: SLASetting = {
   workdays: [1, 2, 3, 4, 5, 6, 7],
   startMinute: 0,
   endMinute: 1440,
+  holidays: [],
   targets: {
     urgent: { firstMinutes: 120, resolutionMinutes: 480 },
     high: { firstMinutes: 480, resolutionMinutes: 1440 },
@@ -168,6 +183,121 @@ const sla: SLASetting = {
     low: { firstMinutes: 4320, resolutionMinutes: 10080 },
   },
 }
+
+/** 深拷贝一份策略：mock 里多处共享引用会互相污染（改一套，另一套也跟着变）。 */
+const cloneSLA = (v: SLASetting): SLASetting => ({
+  code: v.code ?? '',
+  label: v.label ?? '',
+  workdays: [...(v.workdays ?? [])],
+  startMinute: v.startMinute,
+  endMinute: v.endMinute,
+  holidays: [...(v.holidays ?? [])],
+  targets: Object.fromEntries(Object.entries(v.targets ?? {}).map(([k, t]) => [k, { ...t }])),
+})
+
+// 命名策略：默认策略（code 空串）即上面那份，这里再放一套只在工作日白天营业、且有节假日的。
+const slaPolicies: SLASetting[] = [
+  {
+    code: 'vip-desk',
+    label: 'VIP 值班室',
+    workdays: [1, 2, 3, 4, 5],
+    startMinute: 540,
+    endMinute: 1080,
+    holidays: ['2026-01-01', '2026-05-01'],
+    targets: {
+      urgent: { firstMinutes: 30, resolutionMinutes: 120 },
+      high: { firstMinutes: 60, resolutionMinutes: 240 },
+      normal: { firstMinutes: 120, resolutionMinutes: 480 },
+      low: { firstMinutes: 480, resolutionMinutes: 1440 },
+    },
+  },
+]
+
+// 自定义字段定义：三种类型各一条，含一条必填与一条停用，覆盖渲染的所有分支。
+const fields: TicketField[] = [
+  { id: '951', code: 'order_channel', label: '下单渠道', type: 'select', options: ['App', '小程序', '线下门店'], required: true, enabled: true, sort: 0 },
+  { id: '952', code: 'serial_no', label: '设备序列号', type: 'text', options: [], required: false, enabled: true, sort: 1 },
+  { id: '953', code: 'warranty_until', label: '保修到期', type: 'date', options: [], required: false, enabled: true, sort: 2 },
+  { id: '954', code: 'onsite_visit', label: '是否上门', type: 'bool', options: [], required: false, enabled: true, sort: 3 },
+  { id: '955', code: 'old_refund_no', label: '旧退款单号', type: 'text', options: [], required: false, enabled: false, sort: 4 },
+]
+
+const FIELD_TYPES: TicketFieldType[] = ['text', 'number', 'select', 'date', 'bool']
+
+/** 把请求体收成一条字段定义，拒绝口径与后端 normalize 一致（不是静默修正）。 */
+function fieldFrom(body: Record<string, unknown>): TicketField {
+  const code = String(body.code ?? '').trim()
+  const label = String(body.label ?? '').trim()
+  const type = String(body.type ?? 'text') as TicketFieldType
+  const options = (Array.isArray(body.options) ? body.options : []).map((x) => String(x).trim()).filter(Boolean)
+  if (!/^[a-z][a-z0-9_]{0,31}$/.test(code)) {
+    throw mockError(400, L('字段标识不合法（小写字母开头，字母数字下划线，最长 32）', 'invalid field code'), 'TICKET_FIELD_CODE_INVALID')
+  }
+  if (!label || label.length > 64) {
+    throw mockError(400, L('字段名称必填，且不超过 64 个字符', 'field label is required'), 'TICKET_FIELD_LABEL_REQUIRED')
+  }
+  if (!FIELD_TYPES.includes(type)) throw mockError(400, L('字段类型不合法', 'invalid field type'), 'TICKET_FIELD_TYPE_INVALID')
+  if (type === 'select' && options.length === 0) {
+    throw mockError(400, L('单选字段至少要有候选项', 'a select field needs options'), 'TICKET_FIELD_OPTION_INVALID')
+  }
+  if (type !== 'select' && options.length > 0) {
+    throw mockError(400, L('只有单选字段能带候选项', 'only select fields take options'), 'TICKET_FIELD_OPTION_INVALID')
+  }
+  return {
+    id: body.id ? String(body.id) : undefined,
+    code,
+    label,
+    type,
+    options: [...new Set(options)],
+    required: body.required === true,
+    enabled: body.enabled !== false,
+    sort: Number(body.sort ?? 0),
+    groupId: body.groupId ? String(body.groupId) : '',
+  }
+}
+
+/**
+ * 按启用的定义校验一份值：未定义/已停用的 code 直接拒绝（后端同口径，静默丢弃会让
+ * 前端以为存进去了）。enforceRequired 只在坐席入口为真——客户提交不该被必填挡住。
+ */
+function validateFieldValues(target: Record<string, unknown>, patch: Record<string, unknown>, enforceRequired: boolean) {
+  const defs = fields.filter((f) => f.enabled)
+  const byCode = new Map(defs.map((f) => [f.code, f]))
+  const out: Record<string, unknown> = { ...target }
+  for (const [code, raw] of Object.entries(patch)) {
+    const def = byCode.get(code)
+    if (!def) {
+      throw mockError(400, L(`字段 ${code} 未定义或已停用`, `field ${code} is undefined or disabled`), 'TICKET_FIELD_CODE_INVALID')
+    }
+    if (raw === null || raw === undefined || raw === '') {
+      delete out[code]
+      continue
+    }
+    if (def.type === 'select' && !def.options.includes(String(raw))) {
+      throw mockError(400, L(`${def.label} 的取值不在候选项里`, `${def.label} is not one of the options`), 'TICKET_FIELD_VALUE_INVALID')
+    }
+    if (def.type === 'number' && !Number.isFinite(Number(raw))) {
+      throw mockError(400, L(`${def.label} 需要填数字`, `${def.label} must be a number`), 'TICKET_FIELD_VALUE_INVALID')
+    }
+    if (def.type === 'date' && !/^\d{4}-\d{2}-\d{2}$/.test(String(raw))) {
+      throw mockError(400, L(`${def.label} 需要日期（年-月-日）`, `${def.label} must be YYYY-MM-DD`), 'TICKET_FIELD_VALUE_INVALID')
+    }
+    out[code] = def.type === 'bool' ? raw === true || raw === 'true' : raw
+  }
+  if (enforceRequired) {
+    const missing = defs.find((f) => f.required && (out[f.code] === undefined || out[f.code] === ''))
+    if (missing) throw mockError(400, L(`${missing.label} 为必填`, `${missing.label} is required`), 'TICKET_FIELD_REQUIRED')
+  }
+  return out
+}
+
+/** 「code=值」一行串，供动态回看变更前后（与后端 summarizeCustomValues 同形状）。 */
+const summarizeValues = (values: Record<string, unknown>) =>
+  Object.keys(values)
+    .sort()
+    .map((code) => `${code}=${String(values[code])}`)
+    .join(' ')
+    .slice(0, 500)
 
 const groups: TicketGroup[] = [
   {
@@ -177,6 +307,7 @@ const groups: TicketGroup[] = [
     autoAssign: true,
     enabled: true,
     sort: 0,
+    slaCode: 'vip-desk',
     members: [
       { groupId: '901', userId: '7', userName: 'admin' },
       { groupId: '901', userId: '8', userName: '李工' },
@@ -194,11 +325,47 @@ const rules: TicketRule[] = [
     matchPriority: 'urgent',
     matchBizType: '',
     matchKeyword: '',
+    matchTags: [],
     setPriority: '',
     setGroupId: '902',
     note: '',
+    addTags: [],
   },
 ]
+
+/**
+ * 双向关联：与后端同一规范化（一行存两个工单号，按字符串序小的在前），解除就是删这一行。
+ * 合并痕迹不进这里——它是 plg_ticket 上的一次性指针，见 mergedIntoNo。
+ */
+const links: { a: string; b: string; at: string }[] = [
+  { a: 'TK743000000000000001', b: 'TK743000000000000002', at: at(1, 40) },
+]
+
+/** 合并与关联的失败整句由后端按请求语言给出，mock 也照同一套语言切换，前端才能验证「只显示 e.message」。 */
+const L = (zh: string, en: string) => (localStorage.getItem('nex-lang') === 'en-US' ? en : zh)
+const maxTagsPerTicket = 10
+const maxTagRunes = 20
+const maxLinksPerTicket = 50
+
+/** 与后端 normalizeTags 同一口径：非法标签直接拒（含逗号、超 20 字、总量超 10）。 */
+function normalizeTags(input: unknown): string[] {
+  const raw = Array.isArray(input) ? input.map(String) : []
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const item of raw) {
+    const tag = item.trim()
+    if (!tag) continue
+    if (tag.includes(',') || [...tag].length > maxTagRunes) {
+      mockError(400, L('标签不合法', 'invalid tag'), 'TICKET_TAG_INVALID')
+    }
+    if (!seen.has(tag)) {
+      seen.add(tag)
+      out.push(tag)
+    }
+  }
+  if (out.length > maxTagsPerTicket) mockError(400, L('标签最多 10 个', 'too many tags'), 'TICKET_TAG_LIMIT')
+  return out
+}
 
 const find = (no: string) => tickets.find((x) => x.ticketNo === no)
 // 规则只能指向启用的分组：与后端 checkRuleGroup 一致，停用或不存在的组都拒绝写入
@@ -209,14 +376,52 @@ const assertRuleGroup = (gid: string) => {
 }
 const nextId = () => String(7432000000000000000n + BigInt(Date.now() % 1_000_000))
 
+const linkedRow = (tk: Ticket, kind: LinkedTicket['kind'], when: string): LinkedTicket => ({
+  ticketNo: tk.ticketNo,
+  title: tk.title,
+  status: tk.status,
+  priority: tk.priority,
+  kind,
+  linkedAt: when,
+})
+
+/** 与后端同一份「未完结才能当主单」的口径（merge.go 的 Settleable）。 */
+const settleable = (status: string) => status === 'open' || status === 'processing' || status === 'pending'
+
+/** 顺着 mergedIntoNo 找最终主单；重访或超跳数按成环拒绝，和 resolveMergeRoot 一致。 */
+function mergeRoot(start: Ticket): Ticket {
+  const seen = new Set<string>([start.ticketNo])
+  let cur = start
+  for (let hop = 0; hop < 32; hop++) {
+    const nextNo = cur.mergedIntoNo
+    if (!nextNo) return cur
+    if (seen.has(nextNo)) mockError(409, L('合并会形成循环，已拒绝', 'the merge would form a cycle'), 'MERGE_CYCLE')
+    seen.add(nextNo)
+    const row = find(nextNo)
+    if (!row) return cur
+    cur = row
+  }
+  return mockError(409, L('合并会形成循环，已拒绝', 'the merge would form a cycle'), 'MERGE_CYCLE')
+}
+
+const peersOf = (no: string) => links.filter((l) => l.a === no || l.b === no)
+
 // 列表与导出共用同一套筛选，mock 里也要保持「看到的 = 导出的」。
 function mockFilterTickets(raw: Record<string, unknown>): Ticket[] {
   const q = (k: string) => String(raw[k] ?? '')
   const kw = q('keyword').trim().toLowerCase()
   let rows = tickets.filter(
-    (tk) => !kw || tk.ticketNo.toLowerCase().includes(kw) || tk.title.toLowerCase().includes(kw) || tk.lastPreview.toLowerCase().includes(kw),
+    (tk) => !kw || tk.ticketNo.toLowerCase().includes(kw) || tk.title.toLowerCase().includes(kw) || tk.lastPreview.toLowerCase().includes(kw) || tk.bizNo.toLowerCase().includes(kw),
   )
-  if (q('status')) rows = rows.filter((tk) => tk.status === q('status'))
+  // status 与后端同口径：单值或逗号分隔多值（合并候选就靠这个一次取到「未完结」池子）。
+  const statusRaw = q('status')
+  if (statusRaw) {
+    const set = statusRaw
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+    if (set.length > 0) rows = rows.filter((tk) => set.includes(tk.status))
+  }
   if (q('priority')) rows = rows.filter((tk) => tk.priority === q('priority'))
   if (q('bizType')) rows = rows.filter((tk) => tk.bizType === q('bizType'))
   if (q('overdue') === '1') rows = rows.filter((tk) => tk.overdue)
@@ -281,6 +486,8 @@ defineMock([
         reporterId: String(body.reporterId ?? ''),
         creatorName: 'admin',
         lastPreview: String(body.content ?? ''),
+        // 坐席建单要求补齐必填（与后端 EnforceRequiredFields=true 同口径）。
+        customValues: validateFieldValues({}, (body.customValues ?? {}) as Record<string, unknown>, true),
       })
       // 自动化规则先跑：改优先级/转组/加内部备注
       const notes: string[] = []
@@ -290,7 +497,9 @@ defineMock([
           const hit =
             (!r.matchPriority || r.matchPriority === tk.priority) &&
             (!r.matchBizType || r.matchBizType === tk.bizType) &&
-            (!r.matchKeyword || tk.title.toLowerCase().includes(r.matchKeyword.toLowerCase()))
+            (!r.matchKeyword || tk.title.toLowerCase().includes(r.matchKeyword.toLowerCase())) &&
+            // matchTags 是「与」：多个标签要全部命中，和后端 ruleMatches 一致
+            (r.matchTags ?? []).every((tag) => (tk.tags ?? []).includes(tag))
           if (!hit) return
           if (r.setPriority) tk.priority = r.setPriority as Ticket['priority']
           if (r.setGroupId && r.setGroupId !== '0') {
@@ -306,6 +515,11 @@ defineMock([
                 }
               }
             }
+          }
+          // addTags 追加去重：原有标签顺序不动、超上限的丢在尾部（与 mergeRuleTags 同一口径）
+          const add = (r.addTags ?? []).filter((tag) => tag && !(tk.tags ?? []).includes(tag))
+          if (add.length) {
+            tk.tags = [...(tk.tags ?? []), ...add].slice(0, maxTagsPerTicket)
           }
           if (r.note) notes.push(r.note)
           pushActivity(tk, {
@@ -409,6 +623,7 @@ defineMock([
         replies: replies[params.no] ?? [],
         attachments: attachments[params.no] ?? [],
         activities: activities.filter((a) => a.ticketNo === params.no),
+        quota: { maxCount: 20, maxBytes: 100 * 1024 * 1024 },
       }
     },
   },
@@ -418,6 +633,8 @@ defineMock([
     handler: ({ params, body }) => {
       const tk = find(params.no)
       if (!tk) throw new Error('not found')
+      // 与后端同一配额：单工单最多 20 个附件（真后端还会返回中英文案与 reason）
+      if ((attachments[params.no] ?? []).length >= 20) throw new Error('attachment quota exceeded')
       const row: TicketAttachment = {
         id: nextId(),
         token: `mock-att-${Date.now()}`,
@@ -432,6 +649,128 @@ defineMock([
       attachments[params.no] = [...(attachments[params.no] ?? []), row]
       pushActivity(tk, { action: 'attachment_added', detail: row.name })
       return row
+    },
+  },
+  {
+    method: 'DELETE',
+    url: '/plugins/ticket/tickets/:no/attachments/:token',
+    handler: ({ params }) => {
+      const tk = find(params.no)
+      if (!tk) throw new Error('not found')
+      const list = attachments[params.no] ?? []
+      const row = list.find((a) => a.token === params.token)
+      if (!row) throw new Error('not found')
+      attachments[params.no] = list.filter((a) => a.token !== params.token)
+      pushActivity(tk, { action: 'attachment_removed', detail: row.name })
+      return { ok: true }
+    },
+  },
+  {
+    // POST /tickets/:no/merge —— 把本单并进另一张：被合并方进 closed 并记下指针，
+    // 回复与附件一行都不搬（原地保留才可追溯），主单累计「合并了 N 张」。
+    method: 'POST',
+    url: '/plugins/ticket/tickets/:no/merge',
+    handler: ({ params, body }) => {
+      const src = find(params.no)
+      if (!src) throw new Error('not found')
+      const intoNo = String(body.intoNo ?? '').trim()
+      if (!intoNo) mockError(400, L('参数不完整', 'bad request'), 'BAD_REQUEST')
+      if (intoNo === src.ticketNo) {
+        mockError(400, L('不能把工单合并进它自己', 'A ticket cannot be merged into itself.'), 'MERGE_SELF')
+      }
+      if (src.mergedIntoNo) {
+        mockError(409, L('这张工单已被合并进其他工单，不能再操作', 'This ticket was already merged into another one.'), 'ALREADY_MERGED')
+      }
+      const dst = find(intoNo)
+      if (!dst) mockError(404, L('工单不存在', 'ticket not found'), 'NOT_FOUND')
+      const root = mergeRoot(dst)
+      if (!settleable(root.status)) {
+        mockError(409, L('目标工单已结束，不能接收合并', 'The target ticket is already finished.'), 'MERGE_TARGET_TERMINAL')
+      }
+      if (root.ticketNo === src.ticketNo) {
+        mockError(409, L('合并会形成循环，已拒绝', 'The merge would form a cycle.'), 'MERGE_CYCLE')
+      }
+      const from = src.status
+      src.mergedIntoNo = root.ticketNo
+      src.status = 'closed'
+      src.closedAt = new Date().toISOString()
+      src.slaPausedAt = null
+      pushActivity(src, { action: 'merged_into', fromValue: from, toValue: 'closed', detail: root.ticketNo })
+      const count = tickets.filter((t) => t.mergedIntoNo === root.ticketNo).length
+      pushActivity(root, { action: 'merged_tickets', toValue: String(count), detail: src.ticketNo })
+      return { source: src.ticketNo, target: root.ticketNo, mergedCount: count }
+    },
+  },
+  {
+    method: 'GET',
+    url: '/plugins/ticket/tickets/:no/links',
+    handler: ({ params }) => {
+      const tk = find(params.no)
+      if (!tk) throw new Error('not found')
+      // 对侧被删（悬挂引用）时跳过那一条，不让整张详情读失败
+      const list = peersOf(tk.ticketNo).flatMap<LinkedTicket>((l) => {
+        const peer = find(l.a === tk.ticketNo ? l.b : l.a)
+        return peer ? [linkedRow(peer, 'link', l.at)] : []
+      })
+      const mergedFrom = tickets.filter((t) => t.mergedIntoNo === tk.ticketNo).map((t) => linkedRow(t, 'merged_from', t.closedAt ?? t.createdAt))
+      const intoNo = tk.mergedIntoNo
+      const into = intoNo ? find(intoNo) : undefined
+      return {
+        links: list,
+        merge: {
+          mergedInto: into ? linkedRow(into, 'merged_into', tk.closedAt ?? tk.createdAt) : undefined,
+          mergedFrom,
+          mergedCount: mergedFrom.length,
+        },
+      }
+    },
+  },
+  {
+    method: 'POST',
+    url: '/plugins/ticket/tickets/:no/links',
+    handler: ({ params, body }) => {
+      const tk = find(params.no)
+      if (!tk) throw new Error('not found')
+      const otherNo = String(body.ticketNo ?? '').trim()
+      if (!otherNo) mockError(400, L('参数不完整', 'bad request'), 'BAD_REQUEST')
+      if (otherNo === tk.ticketNo) {
+        mockError(400, L('不能把工单关联到自己', 'A ticket cannot be linked to itself.'), 'LINK_SELF')
+      }
+      const other = find(otherNo)
+      if (!other) mockError(404, L('工单不存在', 'ticket not found'), 'NOT_FOUND')
+      const pair: [string, string] = tk.ticketNo < otherNo ? [tk.ticketNo, otherNo] : [otherNo, tk.ticketNo]
+      if (links.some((l) => l.a === pair[0] && l.b === pair[1])) {
+        mockError(409, L('这两张工单已经关联', 'These two tickets are already linked.'), 'LINK_EXISTS')
+      }
+      if (peersOf(tk.ticketNo).length >= maxLinksPerTicket || peersOf(otherNo).length >= maxLinksPerTicket) {
+        mockError(400, L('关联工单数量已达上限', 'Too many linked tickets.'), 'LINK_LIMIT')
+      }
+      const now = new Date().toISOString()
+      links.push({ a: pair[0], b: pair[1], at: now })
+      pushActivity(tk, { action: 'linked', toValue: other.ticketNo })
+      pushActivity(other, { action: 'linked', toValue: tk.ticketNo })
+      return { ticketAId: pair[0], ticketBId: pair[1], linkBy: 'admin', createdAt: now }
+    },
+  },
+  {
+    // 只有双向关联能解除；合并是一次性事实，界面不会为它摆这个按钮
+    method: 'DELETE',
+    url: '/plugins/ticket/tickets/:no/links/:other',
+    handler: ({ params }) => {
+      const tk = find(params.no)
+      if (!tk) throw new Error('not found')
+      const pair: [string, string] = params.no < params.other ? [params.no, params.other] : [params.other, params.no]
+      const idx = links.findIndex((l) => l.a === pair[0] && l.b === pair[1])
+      if (idx < 0) {
+        mockError(404, L('未找到这两个工单之间的关联', 'No link between these two tickets.'), 'LINK_NOT_FOUND')
+      }
+      links.splice(idx, 1)
+      const peer = find(params.other)
+      if (peer) {
+        pushActivity(tk, { action: 'unlinked', fromValue: peer.ticketNo })
+        pushActivity(peer, { action: 'unlinked', fromValue: tk.ticketNo })
+      }
+      return { ok: true }
     },
   },
   {
@@ -577,6 +916,66 @@ defineMock([
   },
   {
     method: 'GET',
+    url: '/plugins/ticket/fields',
+    handler: () => fields.map((f) => ({ ...f, options: [...f.options] })),
+  },
+  {
+    method: 'POST',
+    url: '/plugins/ticket/fields',
+    handler: ({ body }) => {
+      // 新建不接受带 id（后端同口径）：带 id 的写入要走 PUT /fields/:id。
+      if (body.id) throw mockError(400, L('新建字段不要带 id', 'a new field must not carry an id'), 'BAD_REQUEST')
+      const row = fieldFrom(body)
+      if (fields.some((f) => f.code === row.code)) {
+        throw mockError(400, L('字段标识已被占用', 'field code is already taken'), 'TICKET_FIELD_CODE_CONFLICT')
+      }
+      row.id = nextId()
+      fields.push(row)
+      return { ...row, options: [...row.options] }
+    },
+  },
+  {
+    method: 'PUT',
+    url: '/plugins/ticket/fields/:id',
+    handler: ({ params, body }) => {
+      const found = fields.find((f) => f.id === params.id)
+      if (!found) throw new Error('not found')
+      const next = fieldFrom({ ...body, id: params.id })
+      if (fields.some((f) => f.code === next.code && f.id !== params.id)) {
+        throw mockError(400, L('字段标识已被占用', 'field code is already taken'), 'TICKET_FIELD_CODE_CONFLICT')
+      }
+      Object.assign(found, next)
+      return { ...found, options: [...found.options] }
+    },
+  },
+  {
+    method: 'DELETE',
+    url: '/plugins/ticket/fields/:id',
+    handler: ({ params }) => {
+      const i = fields.findIndex((f) => f.id === params.id)
+      if (i < 0) throw new Error('not found')
+      // 删定义不清存量值：读侧只认启用中的定义，旧值留着只是不再显示。
+      fields.splice(i, 1)
+      return { id: params.id }
+    },
+  },
+  {
+    method: 'POST',
+    url: '/plugins/ticket/tickets/:no/custom-values',
+    handler: ({ params, body }) => {
+      const tk = find(params.no)
+      if (!tk) throw new Error('not found')
+      const patch = (body.values ?? {}) as Record<string, unknown>
+      const merged = validateFieldValues({ ...(tk.customValues ?? {}) }, patch, true)
+      const from = summarizeValues(tk.customValues ?? {})
+      tk.customValues = merged
+      const to = summarizeValues(merged)
+      if (from !== to) pushActivity(tk, { action: 'custom_fields_changed', fromValue: from, toValue: to })
+      return tk
+    },
+  },
+  {
+    method: 'GET',
     url: '/plugins/ticket/rules',
     handler: () => rules,
   },
@@ -602,9 +1001,11 @@ defineMock([
         matchPriority: String(body.matchPriority ?? ''),
         matchBizType: String(body.matchBizType ?? ''),
         matchKeyword: String(body.matchKeyword ?? ''),
+        matchTags: normalizeTags(body.matchTags),
         setPriority: String(body.setPriority ?? ''),
         setGroupId,
         note: String(body.note ?? ''),
+        addTags: normalizeTags(body.addTags),
       }
       rules.push(row)
       return row
@@ -624,9 +1025,11 @@ defineMock([
       row.matchPriority = String(body.matchPriority ?? '')
       row.matchBizType = String(body.matchBizType ?? '')
       row.matchKeyword = String(body.matchKeyword ?? '')
+      row.matchTags = normalizeTags(body.matchTags)
       row.setPriority = String(body.setPriority ?? '')
       row.setGroupId = setGroupId
       row.note = String(body.note ?? '')
+      row.addTags = normalizeTags(body.addTags)
       return row
     },
   },
@@ -655,6 +1058,7 @@ defineMock([
         autoAssign: body.autoAssign === true,
         enabled: body.enabled !== false,
         sort: Number(body.sort ?? groups.length),
+        slaCode: String(body.slaCode ?? ''),
         members: [],
       }
       groups.push(row)
@@ -672,6 +1076,15 @@ defineMock([
       row.autoAssign = body.autoAssign === true
       row.enabled = body.enabled !== false
       row.sort = Number(body.sort ?? row.sort)
+      // 绑到不存在的策略要当场拒绝（后端 checkSLACode 同口径：静默回落默认策略，
+      // 管理员看不出自己写错了）。
+      if (body.slaCode !== undefined) {
+        const code = String(body.slaCode ?? '')
+        if (code && !slaPolicies.some((p) => p.code === code)) {
+          throw mockError(400, L('要绑定的 SLA 策略不存在', 'the SLA policy to bind does not exist'), 'TICKET_SLA_CODE_UNKNOWN')
+        }
+        row.slaCode = code
+      }
       // 改名同步工单上的冗余组名（与后端一致）
       tickets.forEach((tk) => {
         if (tk.groupId === row.id) tk.groupName = row.name
@@ -761,7 +1174,54 @@ defineMock([
       sla.startMinute = Number(body.startMinute ?? sla.startMinute)
       sla.endMinute = Number(body.endMinute ?? sla.endMinute)
       sla.targets = body.targets ?? sla.targets
+      sla.holidays = Array.isArray(body.holidays) ? [...body.holidays] : sla.holidays
       return sla
+    },
+  },
+  {
+    method: 'GET',
+    url: '/plugins/ticket/sla/policies',
+    handler: () => [cloneSLA({ ...sla, code: '', label: '' }), ...slaPolicies.map(cloneSLA)].sort((a, b) => (a.code ?? '').localeCompare(b.code ?? '')),
+  },
+  {
+    method: 'POST',
+    url: '/plugins/ticket/sla/policy',
+    handler: ({ body }) => {
+      const incoming = body as unknown as SLASetting
+      const code = String(incoming.code ?? '')
+      if (!code) {
+        // 默认策略与 GET/PUT /sla 同一份数据：后端也是这么处理的（保存后刷新进程内缓存）。
+        sla.workdays = [...(incoming.workdays ?? sla.workdays)]
+        sla.startMinute = Number(incoming.startMinute ?? sla.startMinute)
+        sla.endMinute = Number(incoming.endMinute ?? sla.endMinute)
+        sla.targets = incoming.targets ?? sla.targets
+        sla.holidays = [...(incoming.holidays ?? [])]
+        return cloneSLA({ ...sla, code: '' })
+      }
+      const found = slaPolicies.find((p) => p.code === code)
+      if (found) {
+        const i = slaPolicies.indexOf(found)
+        slaPolicies[i] = cloneSLA({ ...incoming, code })
+        return cloneSLA(slaPolicies[i])
+      }
+      // code 字符集闸：与后端 normalize 同口径（小写字母数字下划线连字符，1~32）。
+      if (!/^[a-z0-9_-]{1,32}$/.test(code)) {
+        throw mockError(400, L('策略编码不合法', 'invalid policy code'), 'TICKET_SLA_CODE_INVALID')
+      }
+      slaPolicies.push(cloneSLA(incoming))
+      return cloneSLA(incoming)
+    },
+  },
+  {
+    method: 'DELETE',
+    url: '/plugins/ticket/sla/policy/:code',
+    handler: ({ params }) => {
+      // 默认策略（空 code）不可删，与后端 DeleteSLAPolicy 同口径。
+      if (!params.code) throw mockError(400, L('默认策略不可删除', 'the default policy cannot be deleted'), 'TICKET_SLA_DEFAULT_UNDELETABLE')
+      const i = slaPolicies.findIndex((p) => p.code === params.code)
+      if (i >= 0) slaPolicies.splice(i, 1)
+      // 绑着它的队列回落默认策略（后端不清 group.sla_code，读侧回落）
+      return { code: params.code }
     },
   },
   {

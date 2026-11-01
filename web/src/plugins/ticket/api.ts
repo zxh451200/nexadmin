@@ -38,6 +38,15 @@ export interface Ticket {
   ratingComment?: string
   ratedAt?: string | null
   tags?: string[]
+  /** 自定义字段的值（key = 字段 code）；后端未定义/已停用的 code 不会出现。 */
+  customValues?: Record<string, unknown>
+  /**
+   * 本单被合并进了哪张主单（列表行上的「已合并到 TK…」标记用）。
+   * 真后端的工单列表投影（model.go 的 Ticket）目前不带这一列，所以是可选字段：
+   * 没有就什么都不显示，关联面板仍会从 /tickets/:no/links 读到同一事实。
+   * mock 里会填上，用来验证列表行的标记与跳转。
+   */
+  mergedIntoNo?: string
   createdAt: string
 }
 
@@ -72,6 +81,8 @@ export interface RepliesResult {
   attachments?: TicketAttachment[]
   /** 工单动态（审计轨迹）。坐席看到全部，客户自助页只有提交与状态变化。 */
   activities?: TicketActivity[]
+  /** 附件配额由后端下发（个数与总字节），前端只呈现不复制常量 */
+  quota?: { maxCount: number; maxBytes: number }
 }
 
 export type TicketActivityAction =
@@ -81,9 +92,15 @@ export type TicketActivityAction =
   | 'assignee_changed'
   | 'group_changed'
   | 'tags_changed'
+  | 'custom_fields_changed'
   | 'attachment_added'
+  | 'attachment_removed'
   | 'rating_added'
   | 'rule_applied'
+  | 'merged_into'
+  | 'merged_tickets'
+  | 'linked'
+  | 'unlinked'
 
 export interface TicketActivity {
   id: string
@@ -117,6 +134,8 @@ export interface CreateTicketInput {
   reporterId?: string
   bizType?: string
   bizNo?: string
+  /** 建单时一并提交的自定义字段值。 */
+  customValues?: Record<string, unknown>
 }
 
 export interface BulkTicketsInput {
@@ -160,6 +179,8 @@ export interface TicketGroup {
   autoAssign: boolean
   enabled: boolean
   sort: number
+  /** 该队列绑定的 SLA 策略编码；空串 = 默认策略。 */
+  slaCode?: string
   members?: GroupMember[]
 }
 
@@ -169,6 +190,7 @@ export interface GroupInput {
   autoAssign: boolean
   enabled: boolean
   sort: number
+  slaCode?: string
 }
 
 export interface TicketRule {
@@ -179,9 +201,13 @@ export interface TicketRule {
   matchPriority: string
   matchBizType: string
   matchKeyword: string
+  /** 命中条件里的标签：多个标签是「与」语义，要全部命中 */
+  matchTags: string[]
   setPriority: string
   setGroupId: string
   note: string
+  /** 动作里追加的标签：最多 10 个、每个不超过 20 字（与工单标签同一规范） */
+  addTags: string[]
 }
 
 export interface RuleInput {
@@ -191,9 +217,11 @@ export interface RuleInput {
   matchPriority: string
   matchBizType: string
   matchKeyword: string
+  matchTags: string[]
   setPriority: string
   setGroupId: number
   note: string
+  addTags: string[]
 }
 
 const BASE = '/plugins/ticket'
@@ -226,6 +254,16 @@ export function useUploadAttachment() {
       if (internal) fd.append('internal', '1')
       return api.post<TicketAttachment>(`${BASE}/tickets/${ticketNo}/attachments`, fd)
     },
+    onSuccess: invalidate,
+  })
+}
+
+/** 删除附件（坐席端）。失败原因（配额、删除失败）由后端按请求语言返回文案，前端直接展示。 */
+export function useDeleteAttachment() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: ({ ticketNo, token }: { ticketNo: string; token: string }) =>
+      api.del<{ ok: boolean }>(`${BASE}/tickets/${ticketNo}/attachments/${token}`),
     onSuccess: invalidate,
   })
 }
@@ -460,16 +498,126 @@ export function useSetTicketTags() {
   })
 }
 
+/**
+ * 合并与关联单（后端 plugins/ticket/merge.go）。
+ * 失败原因（不能合并自己、已被合并、目标已结束、会成环、关联重复/超上限/不存在）
+ * 后端已按请求语言返回整句，前端只显示 e.message，不再自己拼一套措辞。
+ */
+export type LinkedTicketKind = 'link' | 'merged_into' | 'merged_from'
+
+export interface LinkedTicket {
+  ticketNo: string
+  title: string
+  status: string
+  priority: string
+  kind: LinkedTicketKind
+  linkedAt: string
+}
+
+export interface MergeSummary {
+  /** 本单被并进了哪张；没被合并过就为空 */
+  mergedInto?: LinkedTicket
+  mergedFrom: LinkedTicket[]
+  mergedCount: number
+}
+
+export interface LinksResult {
+  links: LinkedTicket[]
+  merge: MergeSummary
+}
+
+export interface MergeResult {
+  source: string
+  /** 链解析后实际生效的主单，可能与提交的目标不同 */
+  target: string
+  mergedCount: number
+}
+
+/** 一次读全「双向关联 + 合并痕迹」：关联面板与「已合并到 TK…」提示同源。 */
+export function useTicketLinks(ticketNo?: string) {
+  return useQuery({
+    queryKey: [...KEY, 'links', ticketNo],
+    queryFn: () => api.get<LinksResult>(`${BASE}/tickets/${ticketNo}/links`),
+    enabled: !!ticketNo,
+  })
+}
+
+export function useMergeTicket() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    // silent：错误整句由调用方展示，避免拦截器与页面各弹一次
+    mutationFn: ({ ticketNo, intoNo }: { ticketNo: string; intoNo: string }) =>
+      api.post<MergeResult>(`${BASE}/tickets/${ticketNo}/merge`, { intoNo }, { silent: true }),
+    onSuccess: invalidate,
+  })
+}
+
+export function useAddLink() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: ({ ticketNo, otherNo }: { ticketNo: string; otherNo: string }) =>
+      api.post<unknown>(`${BASE}/tickets/${ticketNo}/links`, { ticketNo: otherNo }, { silent: true }),
+    onSuccess: invalidate,
+  })
+}
+
+export function useRemoveLink() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: ({ ticketNo, otherNo }: { ticketNo: string; otherNo: string }) =>
+      api.del<{ ok: boolean }>(`${BASE}/tickets/${ticketNo}/links/${otherNo}`, undefined, { silent: true }),
+    onSuccess: invalidate,
+  })
+}
+
+const MERGE_TARGET_STATUSES = ['open', 'processing', 'pending'] as const
+const candidateQuery = (keyword: string, status?: string) => ({
+  page: 1,
+  pageSize: 10,
+  keyword: keyword || undefined,
+  status,
+})
+
+/**
+ * 合并候选：只有未完结（open/processing/pending）的单能当主单，后端是硬拒绝的。
+ * status 支持逗号分隔多值，所以一次请求就是那个「未完结」池子——从前这里发三次，
+ * 每次一页，拼完还去重，等于用三个请求换一个筛选条件。
+ */
+export function useMergeCandidates(keyword: string, enabled: boolean) {
+  const query = useQuery({
+    queryKey: [...KEY, 'tickets', candidateQuery(keyword, MERGE_TARGET_STATUSES.join(','))],
+    queryFn: () => api.get<Page<Ticket>>(`${BASE}/tickets`, candidateQuery(keyword, MERGE_TARGET_STATUSES.join(','))),
+    enabled,
+    placeholderData: keepPreviousData,
+  })
+  return { list: query.data?.list ?? [], isLoading: query.isLoading }
+}
+
+/** 关联候选：关联允许指向终态单（恰恰是「这几张是同一件事」最需要留痕的场景），所以不加状态筛选。 */
+export function useLinkCandidates(keyword: string, enabled: boolean) {
+  return useQuery({
+    queryKey: [...KEY, 'tickets', candidateQuery(keyword)],
+    queryFn: () => api.get<Page<Ticket>>(`${BASE}/tickets`, candidateQuery(keyword)),
+    enabled,
+    placeholderData: keepPreviousData,
+  })
+}
+
 /** SLA 策略（与后端 /plugins/ticket/sla 一一对应） */
 export interface SLATarget {
   firstMinutes: number
   resolutionMinutes: number
 }
 export interface SLASetting {
+  /** 策略编码；空串是默认策略（GET/PUT /sla 那一份）。 */
+  code?: string
+  label?: string
   workdays: number[]
   startMinute: number
   endMinute: number
   targets: Record<string, SLATarget>
+  /** 跳过的节假日（YYYY-MM-DD，后端去重升序）。 */
+  holidays?: string[]
 }
 
 export function useSLA() {
@@ -483,6 +631,80 @@ export function useSaveSLA() {
   const invalidate = useInvalidate()
   return useMutation({
     mutationFn: (input: SLASetting) => api.put<SLASetting>(`${BASE}/sla`, input),
+    onSuccess: invalidate,
+  })
+}
+
+/** 全部命名策略（默认策略 code 为空串，也在列表里）。 */
+export function useSLAPolicies() {
+  return useQuery({
+    queryKey: [...KEY, 'sla-policies'],
+    queryFn: () => api.get<SLASetting[]>(`${BASE}/sla/policies`),
+  })
+}
+
+export function useSaveSLAPolicy() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (input: SLASetting) => api.post<SLASetting>(`${BASE}/sla/policy`, input),
+    onSuccess: invalidate,
+  })
+}
+
+export function useDeleteSLAPolicy() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (code: string) => api.del<{ code: string }>(`${BASE}/sla/policy/${encodeURIComponent(code)}`, undefined, { silent: true }),
+    onSuccess: invalidate,
+  })
+}
+
+/** 自定义字段：定义（管理员配置）与值（挂在工单上）。 */
+export type TicketFieldType = 'text' | 'number' | 'select' | 'date' | 'bool'
+
+export interface TicketField {
+  id?: string
+  code: string
+  label: string
+  type: TicketFieldType
+  options: string[]
+  required: boolean
+  enabled: boolean
+  sort: number
+  groupId?: string
+}
+
+export function useTicketFields() {
+  return useQuery({
+    queryKey: [...KEY, 'fields'],
+    queryFn: () => api.get<TicketField[]>(`${BASE}/fields`),
+  })
+}
+
+export function useSaveField() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (input: TicketField) =>
+      input.id
+        ? api.put<TicketField>(`${BASE}/fields/${input.id}`, input)
+        : api.post<TicketField>(`${BASE}/fields`, input),
+    onSuccess: invalidate,
+  })
+}
+
+export function useDeleteField() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (id: string) => api.del<{ id: string }>(`${BASE}/fields/${id}`, undefined, { silent: true }),
+    onSuccess: invalidate,
+  })
+}
+
+export function useSetCustomValues() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: ({ ticketNo, values }: { ticketNo: string; values: Record<string, unknown> }) =>
+      api.post<Ticket>(`${BASE}/tickets/${ticketNo}/custom-values`, { values }),
     onSuccess: invalidate,
   })
 }

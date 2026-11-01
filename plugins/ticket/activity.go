@@ -16,15 +16,17 @@ import (
 
 // 动作码（稳定契约：前端字典与开放事件都以它为准）。
 const (
-	ActCreated         = "created"
-	ActStatusChanged   = "status_changed"
-	ActPriorityChanged = "priority_changed"
-	ActAssigneeChanged = "assignee_changed"
-	ActGroupChanged    = "group_changed"
-	ActTagsChanged     = "tags_changed"
-	ActAttachmentAdded = "attachment_added"
-	ActRatingAdded     = "rating_added"
-	ActRuleApplied     = "rule_applied"
+	ActCreated           = "created"
+	ActStatusChanged     = "status_changed"
+	ActPriorityChanged   = "priority_changed"
+	ActAssigneeChanged   = "assignee_changed"
+	ActGroupChanged      = "group_changed"
+	ActTagsChanged       = "tags_changed"
+	ActFieldsChanged     = "custom_fields_changed"
+	ActAttachmentAdded   = "attachment_added"
+	ActAttachmentRemoved = "attachment_removed"
+	ActRatingAdded       = "rating_added"
+	ActRuleApplied       = "rule_applied"
 )
 
 // 动作发起方，与回复的 Replier* 用同一套词。
@@ -144,4 +146,14 @@ func (s *Service) TicketActivities(ctx context.Context, ticketID idgen.ID, publi
 // publicActivityActions 是客户可见的动作码集合（顺序稳定，便于断言与 SQL 复用）。
 func publicActivityActions() []string {
 	return []string{ActCreated, ActStatusChanged}
+}
+
+// ActivitiesByNo 按工单号取动态，给宿主服务端用（订单页展示处理进度这类场景）。
+// publicOnly=true 时只返回客户可见的两类，宿主可以直接把这份喂给前台。
+func (s *Service) ActivitiesByNo(ctx context.Context, ticketNo string, publicOnly bool) ([]TicketActivity, error) {
+	t, err := s.Ticket(ctx, ticketNo)
+	if err != nil {
+		return nil, err
+	}
+	return s.TicketActivities(ctx, t.ID, publicOnly)
 }

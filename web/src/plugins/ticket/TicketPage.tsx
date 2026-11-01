@@ -1,20 +1,29 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
+  ArrowUpRight,
   ChevronLeft,
   ChevronRight,
   CircleCheck,
+  Copy,
   Download,
+  Ellipsis,
+  GitMerge,
+  Link2,
+  ListChecks,
   Paperclip,
   Plus,
   RotateCcw,
   Send,
   Settings2,
+  SlidersHorizontal,
   StickyNote,
   Tag,
   Trash2,
+  Unlink,
   Timer,
   UserRoundCheck,
   Users,
+  X,
   XCircle,
   Zap,
 } from 'lucide-react'
@@ -34,6 +43,7 @@ import { Card } from '@/framework/ui/card'
 import { Checkbox } from '@/framework/ui/checkbox'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/framework/ui/dropdown-menu'
 import { Input } from '@/framework/ui/input'
+import { Popover, PopoverContent, PopoverTrigger } from '@/framework/ui/popover'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/framework/ui/tabs'
 import { Textarea } from '@/framework/ui/textarea'
 import { cn } from '@/lib/utils'
@@ -41,6 +51,7 @@ import {
   downloadAttachment,
   exportTickets,
   isExportTooMany,
+  useAddLink,
   useAssignGroup,
   useAssignTicket,
   useBizTypes,
@@ -50,18 +61,31 @@ import {
   useCreateGroup,
   useCreateRule,
   useCreateTicket,
+  useDeleteAttachment,
   useDeleteCanned,
+  useDeleteField,
   useDeleteGroup,
   useDeleteRule,
+  useDeleteSLAPolicy,
   useGroups,
+  useLinkCandidates,
+  useMergeCandidates,
+  useMergeTicket,
+  useRemoveLink,
   useReplies,
   useReplyTicket,
   useRules,
   useSLA,
+  useSLAPolicies,
+  useSaveField,
   useSaveSLA,
+  useSaveSLAPolicy,
+  useSetCustomValues,
   useSetGroupMembers,
   useSetTicketStatus,
   useSetTicketTags,
+  useTicketFields,
+  useTicketLinks,
   useTicketTags,
   useTickets,
   useUpdateCanned,
@@ -69,10 +93,13 @@ import {
   useUpdateRule,
   useUploadAttachment,
   type CannedReply,
+  type LinksResult,
   type SLASetting,
   type Ticket,
   type TicketActivity,
   type TicketAttachment,
+  type TicketField,
+  type TicketFieldType,
   type TicketGroup,
   type TicketPriority,
   type TicketQueryParams,
@@ -119,9 +146,12 @@ const defaultSLA: SLASetting = {
 }
 
 const cloneSLA = (v: SLASetting): SLASetting => ({
+  code: v.code ?? '',
+  label: v.label ?? '',
   workdays: [...v.workdays],
   startMinute: v.startMinute,
   endMinute: v.endMinute,
+  holidays: [...(v.holidays ?? [])],
   targets: Object.fromEntries(Object.entries(v.targets).map(([k, t]) => [k, { ...t }])),
 })
 
@@ -139,11 +169,88 @@ const emptyGroupForm = {
   autoAssign: false,
   enabled: true,
   sort: 0,
+  slaCode: '',
   userIds: [] as string[],
 }
 
 const ANY = '__any'
 const NONE = '__none'
+
+const FIELD_TYPES: TicketFieldType[] = ['text', 'number', 'select', 'date', 'bool']
+
+const emptyFieldForm = {
+  id: undefined as string | undefined,
+  code: '',
+  label: '',
+  type: 'text' as TicketFieldType,
+  // 候选项按行/逗号输入都可以（存进后端是数组），编辑态用整段文本最省事。
+  optionsText: '',
+  required: false,
+  enabled: true,
+  sort: 0,
+}
+
+/** 自定义字段的只读显示形态：未填、布尔与其余类型各走各的词。 */
+const fieldValueText = (type: TicketFieldType, v: unknown, unset: string, yes: string, no: string) => {
+  if (v === undefined || v === null || v === '') return unset
+  if (type === 'bool') return v === true ? yes : no
+  return String(v)
+}
+
+/**
+ * 自定义字段的控件组：建单与「改附加字段」两处复用，渲染口径只有一份。
+ * 单选的空值用哨兵而不是空串——Radix 的 SelectItem 不接受空 value。
+ */
+function FieldInputs({
+  defs,
+  values,
+  onChange,
+  disabled,
+}: {
+  defs: TicketField[]
+  values: Record<string, unknown>
+  onChange: (code: string, value: unknown) => void
+  disabled?: boolean
+}) {
+  const { t } = useTranslation()
+  if (defs.length === 0) return null
+  return (
+    <>
+      {defs.map((f) => (
+        <Field key={f.code} label={f.label} required={f.required}>
+          {f.type === 'select' ? (
+            <SimpleSelect
+              aria-label={f.label}
+              value={String(values[f.code] ?? '') || NONE}
+              onChange={(v) => onChange(f.code, v === NONE ? '' : v)}
+              options={[{ value: NONE, label: t('plugin_ticket.fields.unset') }, ...f.options.map((o) => ({ value: o, label: o }))]}
+              disabled={disabled}
+            />
+          ) : f.type === 'bool' ? (
+            <label className="flex h-9 items-center gap-2 text-sm">
+              <Checkbox
+                checked={values[f.code] === true}
+                onCheckedChange={(v) => onChange(f.code, v === true)}
+                aria-label={f.label}
+              />
+              {t('plugin_ticket.fields.yes')}
+            </label>
+          ) : (
+            <Input
+              type={f.type === 'number' ? 'number' : f.type === 'date' ? 'date' : 'text'}
+              value={String(values[f.code] ?? '')}
+              onChange={(e) =>
+                onChange(f.code, f.type === 'number' && e.target.value !== '' ? Number(e.target.value) : e.target.value)
+              }
+              aria-label={f.label}
+              disabled={disabled}
+            />
+          )}
+        </Field>
+      ))}
+    </>
+  )
+}
 
 const emptyRuleForm = {
   id: undefined as string | undefined,
@@ -153,9 +260,11 @@ const emptyRuleForm = {
   matchPriority: '',
   matchBizType: '',
   matchKeyword: '',
+  matchTags: [] as string[],
   setPriority: '',
   setGroupId: '0',
   note: '',
+  addTags: [] as string[],
 }
 
 export default function TicketPage() {
@@ -172,6 +281,7 @@ export default function TicketPage() {
   const [keyword, setKeyword] = useState('')
   const [appliedKeyword, setAppliedKeyword] = useState('')
   const [overdueOnly, setOverdueOnly] = useState(false)
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const [page, setPage] = useState(1)
   const [selectedNo, setSelectedNo] = useState<string | undefined>()
   const [checked, setChecked] = useState<string[]>([])
@@ -195,6 +305,22 @@ export default function TicketPage() {
   const [tagTarget, setTagTarget] = useState<Ticket | null>(null)
   const [tagDraft, setTagDraft] = useState('')
   const [exporting, setExporting] = useState(false)
+  // 合并：只选未完结的主单；关联：可选任何状态的单。两个入口都在详情头部按钮组里。
+  const [mergeOpen, setMergeOpen] = useState(false)
+  const [mergeKeyword, setMergeKeyword] = useState('')
+  const [mergeChoice, setMergeChoice] = useState('')
+  const [linkOpen, setLinkOpen] = useState(false)
+  const [linkKeyword, setLinkKeyword] = useState('')
+  const [linkChoice, setLinkChoice] = useState('')
+  // 自定义字段：定义管理 + 建单时填值 + 详情里改值。
+  const [fieldsOpen, setFieldsOpen] = useState(false)
+  const [fieldForm, setFieldForm] = useState(emptyFieldForm)
+  const [createCustom, setCreateCustom] = useState<Record<string, unknown>>({})
+  const [valuesTarget, setValuesTarget] = useState<Ticket | null>(null)
+  const [valuesDraft, setValuesDraft] = useState<Record<string, unknown>>({})
+  // SLA 对话框当前是在「新建一套策略」还是「改已有的一套」：编码只在新建时可填，
+  // 改已有策略的编码等于另起一套、留下孤儿。
+  const [policyNew, setPolicyNew] = useState(false)
 
   // 搜索防抖：300ms 内连续输入只发一次请求
   useEffect(() => {
@@ -270,8 +396,22 @@ export default function TicketPage() {
   const updateRule = useUpdateRule()
   const deleteRule = useDeleteRule()
   const uploadAttachmentMut = useUploadAttachment()
+  const deleteAttachmentMut = useDeleteAttachment()
   const allTags = useTicketTags()
   const setTagsMut = useSetTicketTags()
+  const fields = useTicketFields()
+  const saveFieldMut = useSaveField()
+  const deleteFieldMut = useDeleteField()
+  const setValuesMut = useSetCustomValues()
+  const slaPolicies = useSLAPolicies()
+  const savePolicyMut = useSaveSLAPolicy()
+  const deletePolicyMut = useDeleteSLAPolicy()
+  const links = useTicketLinks(selectedNo)
+  const mergeMut = useMergeTicket()
+  const addLinkMut = useAddLink()
+  const removeLinkMut = useRemoveLink()
+  const mergeCandidates = useMergeCandidates(mergeKeyword.trim(), mergeOpen)
+  const linkCandidates = useLinkCandidates(linkKeyword.trim(), linkOpen)
 
   const setView = (v: string) => {
     const next = new URLSearchParams(params)
@@ -356,6 +496,7 @@ export default function TicketPage() {
 
   const openCreate = () => {
     setCreateForm(emptyCreateForm)
+    setCreateCustom({})
     setCreateOpen(true)
   }
 
@@ -364,6 +505,10 @@ export default function TicketPage() {
       toast.error(t('plugin_ticket.create.required'))
       return
     }
+    // 空着的字段不提交：后端把「没填」和「填了空串」当成两件事（必填项会因此报错）。
+    const customValues = Object.fromEntries(
+      Object.entries(createCustom).filter(([, v]) => v !== '' && v !== undefined && v !== null),
+    )
     try {
       const created = await createTicket.mutateAsync({
         title: createForm.title.trim(),
@@ -373,12 +518,94 @@ export default function TicketPage() {
         reporterId: createForm.reporterId.trim() || undefined,
         bizType: createForm.bizType.trim() || undefined,
         bizNo: createForm.bizNo.trim() || undefined,
+        customValues: Object.keys(customValues).length ? customValues : undefined,
       })
       toast.success(t('common.operateSuccess'))
       setCreateOpen(false)
       selectTicket(created.ticketNo)
-    } catch {
-      toast.error(t('common.operateFailed'))
+    } catch (e) {
+      // 必填缺失、类型不符都由后端按请求语言给句子，前端不重造措辞。
+      toast.error(e instanceof Error && e.message ? e.message : t('common.operateFailed'))
+    }
+  }
+
+  const enabledFields = (fields.data ?? []).filter((f) => f.enabled)
+
+  const openFields = () => {
+    setFieldForm(emptyFieldForm)
+    setFieldsOpen(true)
+  }
+
+  const editField = (row: TicketField) => {
+    setFieldForm({
+      id: row.id,
+      code: row.code,
+      label: row.label,
+      type: row.type,
+      optionsText: row.options.join(', '),
+      required: row.required,
+      enabled: row.enabled,
+      sort: row.sort,
+    })
+  }
+
+  const submitField = async () => {
+    if (!fieldForm.code.trim() || !fieldForm.label.trim()) {
+      toast.error(t('plugin_ticket.fields.requiredError'))
+      return
+    }
+    const options = [...new Set(fieldForm.optionsText.split(/[,，\n]/).map((s) => s.trim()).filter(Boolean))]
+    if (fieldForm.type === 'select' && options.length === 0) {
+      toast.error(t('plugin_ticket.fields.optionsRequired'))
+      return
+    }
+    try {
+      await saveFieldMut.mutateAsync({
+        id: fieldForm.id,
+        code: fieldForm.code.trim(),
+        label: fieldForm.label.trim(),
+        type: fieldForm.type,
+        options: fieldForm.type === 'select' ? options : [],
+        required: fieldForm.required,
+        enabled: fieldForm.enabled,
+        sort: fieldForm.sort,
+      })
+      setFieldForm(emptyFieldForm)
+      toast.success(t('common.operateSuccess'))
+    } catch (e) {
+      toast.error(e instanceof Error && e.message ? e.message : t('common.operateFailed'))
+    }
+  }
+
+  const removeField = async (row: TicketField) => {
+    if (!row.id) return
+    if (!(await confirm({ description: t('plugin_ticket.fields.deleteConfirm', { label: row.label }) }))) return
+    try {
+      await deleteFieldMut.mutateAsync(row.id)
+      if (fieldForm.id === row.id) setFieldForm(emptyFieldForm)
+      toast.success(t('common.operateSuccess'))
+    } catch (e) {
+      toast.error(e instanceof Error && e.message ? e.message : t('common.operateFailed'))
+    }
+  }
+
+  const openValues = (tk: Ticket) => {
+    setValuesDraft({ ...(tk.customValues ?? {}) })
+    setValuesTarget(tk)
+  }
+
+  const submitValues = async () => {
+    if (!valuesTarget) return
+    // 清空的项发 null：后端的合并语义里 null 才是「删掉这个字段」。
+    const patch = Object.fromEntries(
+      Object.entries(valuesDraft).map(([code, v]) => [code, v === '' || v === undefined ? null : v]),
+    )
+    try {
+      await setValuesMut.mutateAsync({ ticketNo: valuesTarget.ticketNo, values: patch })
+      setValuesTarget(null)
+      toast.success(t('common.operateSuccess'))
+    } catch (e) {
+      toast.error(e instanceof Error && e.message ? e.message : t('common.operateFailed'))
     }
   }
 
@@ -453,10 +680,110 @@ export default function TicketPage() {
     }
   }
 
+  const removeAtt = async (att: TicketAttachment) => {
+    if (!selectedNo) return
+    if (!(await confirm({ description: t('plugin_ticket.attachments.deleteConfirm', { name: att.name }) }))) return
+    try {
+      await deleteAttachmentMut.mutateAsync({ ticketNo: selectedNo, token: att.token })
+      toast.success(t('common.operateSuccess'))
+    } catch (e) {
+      // 配额与删除失败都由后端按请求语言给句子（含「当前 N / 上限 M」），前端不重造措辞。
+      toast.error(e instanceof Error && e.message ? e.message : t('plugin_ticket.attachments.deleteFailed'))
+    }
+  }
+
+  // ---- 合并与关联 ----
+  // 失败原因（自合并、已合并、目标已结束、成环、重复/超上限/不存在）后端已按请求语言给整句，
+  // 这里只显示 e.message，不再拼一套自己的措辞。
+  const openMerge = () => {
+    setMergeKeyword('')
+    setMergeChoice('')
+    setMergeOpen(true)
+  }
+
+  const submitMerge = async () => {
+    if (!selectedNo || !mergeChoice) return
+    const ok = await confirm({
+      title: t('plugin_ticket.merge.confirmTitle'),
+      description: t('plugin_ticket.merge.confirm', { source: selectedNo, target: mergeChoice }),
+      confirmText: t('plugin_ticket.merge.confirmButton'),
+      destructive: true,
+    })
+    if (!ok) return
+    try {
+      const res = await mergeMut.mutateAsync({ ticketNo: selectedNo, intoNo: mergeChoice })
+      toast.success(t('plugin_ticket.merge.done', { no: res.target, count: res.mergedCount }))
+      setMergeOpen(false)
+      // 合并痕迹要看的是主单：直接切过去，省得人去列表里找
+      selectTicket(res.target)
+    } catch (e) {
+      toast.error(e instanceof Error && e.message ? e.message : t('plugin_ticket.merge.failed'))
+    }
+  }
+
+  const openLink = () => {
+    setLinkKeyword('')
+    setLinkChoice('')
+    setLinkOpen(true)
+  }
+
+  const submitLink = async () => {
+    if (!selectedNo || !linkChoice) return
+    try {
+      await addLinkMut.mutateAsync({ ticketNo: selectedNo, otherNo: linkChoice })
+      toast.success(t('plugin_ticket.link.done', { no: linkChoice }))
+      setLinkOpen(false)
+    } catch (e) {
+      toast.error(e instanceof Error && e.message ? e.message : t('plugin_ticket.link.failed'))
+    }
+  }
+
+  const removeLink = async (otherNo: string) => {
+    if (!selectedNo) return
+    const ok = await confirm({ description: t('plugin_ticket.link.removeConfirm', { no: otherNo }), destructive: true })
+    if (!ok) return
+    try {
+      await removeLinkMut.mutateAsync({ ticketNo: selectedNo, otherNo })
+      toast.success(t('common.operateSuccess'))
+    } catch (e) {
+      toast.error(e instanceof Error && e.message ? e.message : t('plugin_ticket.link.removeFailed'))
+    }
+  }
+
   const openSLA = () => {
     setSlaForm(cloneSLA(slaQuery.data ?? defaultSLA))
+    setPolicyNew(false)
     setSlaOpen(true)
   }
+
+  // 切到哪一套策略就把哪一套装进表单；列表里没有的那套（刚删掉）回落默认。
+  const pickPolicy = (code: string) => {
+    const row = (slaPolicies.data ?? []).find((p) => (p.code ?? '') === code)
+    setSlaForm(cloneSLA(row ?? slaQuery.data ?? defaultSLA))
+    setPolicyNew(false)
+  }
+
+  const newPolicy = () => {
+    setSlaForm({ ...cloneSLA(slaQuery.data ?? defaultSLA), code: '', label: '', holidays: [] })
+    setPolicyNew(true)
+  }
+
+  const removePolicy = async (code: string) => {
+    if (!(await confirm({ description: t('plugin_ticket.sla.deletePolicyConfirm', { code }) }))) return
+    try {
+      await deletePolicyMut.mutateAsync(code)
+      pickPolicy('')
+      toast.success(t('common.operateSuccess'))
+    } catch (e) {
+      toast.error(e instanceof Error && e.message ? e.message : t('common.operateFailed'))
+    }
+  }
+
+  const addHoliday = () => setSlaForm((f) => ({ ...f, holidays: [...(f.holidays ?? []), ''] }))
+  const setHoliday = (i: number, v: string) =>
+    setSlaForm((f) => ({ ...f, holidays: (f.holidays ?? []).map((h, k) => (k === i ? v : h)) }))
+  const removeHoliday = (i: number) =>
+    setSlaForm((f) => ({ ...f, holidays: (f.holidays ?? []).filter((_, k) => k !== i) }))
 
   const toggleWorkday = (d: number) => {
     setSlaForm((f) => ({
@@ -477,12 +804,25 @@ export default function TicketPage() {
       toast.error(t('plugin_ticket.sla.invalid'))
       return
     }
+    const code = (slaForm.code ?? '').trim()
+    if (code && !/^[a-z0-9_-]{1,32}$/.test(code)) {
+      toast.error(t('plugin_ticket.sla.codeInvalid'))
+      return
+    }
+    const days = (slaForm.holidays ?? []).map((h) => h.trim()).filter(Boolean)
+    if (days.some((h) => !/^\d{4}-\d{2}-\d{2}$/.test(h))) {
+      toast.error(t('plugin_ticket.sla.holidayInvalid'))
+      return
+    }
+    const payload: SLASetting = { ...slaForm, code, label: (slaForm.label ?? '').trim(), holidays: [...new Set(days)].sort() }
     try {
-      await saveSLA.mutateAsync(slaForm)
+      // 有编码就是命名策略（POST /sla/policy）；空编码仍是整份默认策略（PUT /sla）。
+      if (payload.code) await savePolicyMut.mutateAsync(payload)
+      else await saveSLA.mutateAsync(payload)
       toast.success(t('common.operateSuccess'))
       setSlaOpen(false)
-    } catch {
-      toast.error(t('common.operateFailed'))
+    } catch (e) {
+      toast.error(e instanceof Error && e.message ? e.message : t('common.operateFailed'))
     }
   }
 
@@ -500,6 +840,7 @@ export default function TicketPage() {
       autoAssign: g.autoAssign,
       enabled: g.enabled,
       sort: g.sort,
+      slaCode: g.slaCode ?? '',
       userIds: (g.members ?? []).map((m) => m.userId),
     })
     // 组员回显用接口返回的姓名，避免不在用户列表首页的成员显示成数字 ID
@@ -518,6 +859,7 @@ export default function TicketPage() {
         autoAssign: groupForm.autoAssign,
         enabled: groupForm.enabled,
         sort: groupForm.sort,
+        slaCode: groupForm.slaCode,
       }
       const saved = groupForm.id
         ? await updateGroup.mutateAsync({ id: groupForm.id, ...input })
@@ -580,16 +922,29 @@ export default function TicketPage() {
       matchPriority: r.matchPriority,
       matchBizType: r.matchBizType,
       matchKeyword: r.matchKeyword,
+      matchTags: [...(r.matchTags ?? [])],
       setPriority: r.setPriority,
       setGroupId: r.setGroupId && r.setGroupId !== '0' ? r.setGroupId : '0',
       note: r.note,
+      addTags: [...(r.addTags ?? [])],
     })
   }
 
+  /** 与后端 normalizeTags 同一口径：不含逗号、每个 ≤20 字、总量 ≤10；不合规则当场拦住 */
+  const tagsValid = (tags: string[]) =>
+    tags.length <= 10 && tags.every((tag) => tag.trim() && !tag.includes(',') && [...tag.trim()].length <= 20)
+
   const submitRule = async () => {
-    const hasAction = Boolean(ruleForm.setPriority || (ruleForm.setGroupId && ruleForm.setGroupId !== '0') || ruleForm.note.trim())
+    // addTags 也是动作：只打标的规则同样合法（与后端 normalize 一致）
+    const hasAction =
+      Boolean(ruleForm.setPriority || (ruleForm.setGroupId && ruleForm.setGroupId !== '0') || ruleForm.note.trim()) ||
+      ruleForm.addTags.length > 0
     if (!ruleForm.name.trim() || !hasAction) {
       toast.error(t('plugin_ticket.rules.invalid'))
+      return
+    }
+    if (!tagsValid(ruleForm.matchTags) || !tagsValid(ruleForm.addTags)) {
+      toast.error(t('plugin_ticket.tags.invalid'))
       return
     }
     try {
@@ -600,16 +955,18 @@ export default function TicketPage() {
         matchPriority: ruleForm.matchPriority,
         matchBizType: ruleForm.matchBizType.trim(),
         matchKeyword: ruleForm.matchKeyword.trim(),
+        matchTags: ruleForm.matchTags,
         setPriority: ruleForm.setPriority,
         setGroupId: Number(ruleForm.setGroupId || 0),
         note: ruleForm.note.trim(),
+        addTags: ruleForm.addTags,
       }
       if (ruleForm.id) await updateRule.mutateAsync({ id: ruleForm.id, ...input })
       else await createRule.mutateAsync(input)
       setRuleForm(emptyRuleForm)
       toast.success(t('common.operateSuccess'))
-    } catch {
-      toast.error(t('common.operateFailed'))
+    } catch (e) {
+      toast.error(e instanceof Error && e.message ? e.message : t('common.operateFailed'))
     }
   }
 
@@ -624,10 +981,13 @@ export default function TicketPage() {
     }
   }
 
-  const ruleSummary = (r: TicketRule) => {    const condition = [
+  const ruleSummary = (r: TicketRule): string => {
+    const condition = [
       r.matchPriority ? t(`plugin_ticket.priority.${r.matchPriority}`) : t('plugin_ticket.rules.any'),
       r.matchBizType || '-',
       r.matchKeyword || '-',
+      // 标签条件是 AND，摘要里把「全部命中」写出来，别让人猜
+      r.matchTags?.length ? `${t('plugin_ticket.rules.matchTags')}: ${r.matchTags.map((x) => `#${x}`).join(' + ')}` : '-',
     ].join(' · ')
     const action = [
       r.setPriority ? t(`plugin_ticket.priority.${r.setPriority}`) : '',
@@ -635,6 +995,7 @@ export default function TicketPage() {
         ? (groups.data?.find((g) => g.id === r.setGroupId)?.name ?? `#${r.setGroupId}`)
         : '',
       r.note,
+      r.addTags?.length ? `${t('plugin_ticket.rules.addTags')}: ${r.addTags.map((x) => `#${x}`).join(' ')}` : '',
     ]
       .filter(Boolean)
       .join(' / ')
@@ -644,6 +1005,62 @@ export default function TicketPage() {
   // 停用组里可能还有存量工单：筛选保留并标注；转组只列启用的，当前所在的停用组除外。
   const groupLabel = (g: TicketGroup) =>
     g.enabled ? g.name : `${g.name} · ${t('plugin_ticket.groups.disabled')}`
+
+  // 下拉收进弹出面板后，屏上要仍看得出「筛了什么、怎么取消」：生效条件一枚 chip，点一下就撤掉该条件。
+  const activeFilters: { key: string; label: string; value?: string; clear: () => void }[] = []
+  if (statusFilter) {
+    activeFilters.push({
+      key: 'status',
+      label: t('plugin_ticket.fields.status'),
+      value: t(`plugin_ticket.status.${statusFilter}`),
+      clear: () => setStatusFilter(undefined),
+    })
+  }
+  if (priorityFilter) {
+    activeFilters.push({
+      key: 'priority',
+      label: t('plugin_ticket.fields.priority'),
+      value: t(`plugin_ticket.priority.${priorityFilter}`),
+      clear: () => setPriorityFilter(undefined),
+    })
+  }
+  if (assigneeFilter !== 'all') {
+    activeFilters.push({
+      key: 'assignee',
+      label: t('plugin_ticket.assignee'),
+      value: t(assigneeFilter === 'mine' ? 'plugin_ticket.assigneeMine' : 'plugin_ticket.assigneeUnassigned'),
+      clear: () => setAssigneeFilter('all'),
+    })
+  }
+  if (groupFilter !== '0') {
+    const g = (groups.data ?? []).find((x) => x.id === groupFilter)
+    activeFilters.push({
+      key: 'group',
+      label: t('plugin_ticket.groups.label'),
+      value: g ? groupLabel(g) : groupFilter,
+      clear: () => setGroupFilter('0'),
+    })
+  }
+  if (tagFilter !== '0') {
+    activeFilters.push({
+      key: 'tag',
+      label: t('plugin_ticket.tags.title'),
+      value: `#${tagFilter}`,
+      clear: () => setTagFilter('0'),
+    })
+  }
+  if (overdueOnly) {
+    activeFilters.push({ key: 'overdue', label: t('plugin_ticket.overdue'), clear: () => setOverdueOnly(false) })
+  }
+
+  const resetFilters = () => {
+    setStatusFilter(undefined)
+    setPriorityFilter(undefined)
+    setAssigneeFilter('all')
+    setGroupFilter('0')
+    setTagFilter('0')
+    setOverdueOnly(false)
+  }
 
   // 业务类型填错只会静默不命中，所以把已有值摆出来点选；仍允许输入新的类型
   const ruleBizTypeHints = (bizTypes.data ?? []).filter((v) => v && v !== ruleForm.matchBizType).slice(0, 6)
@@ -670,6 +1087,12 @@ export default function TicketPage() {
               <Button variant="outline" onClick={openGroups}>
                 <Users aria-hidden="true" />
                 {t('plugin_ticket.groups.title')}
+              </Button>
+            </Can>
+            <Can perm="ticket:edit">
+              <Button variant="outline" onClick={openFields}>
+                <ListChecks aria-hidden="true" />
+                {t('plugin_ticket.fields.title')}
               </Button>
             </Can>
             <Can perm="ticket:edit">
@@ -705,67 +1128,120 @@ export default function TicketPage() {
                   aria-label={t('common.keyword')}
                   className="min-w-32 flex-1"
                 />
-                <SimpleSelect
-                  aria-label={t('plugin_ticket.assigneeFilter')}
-                  className="w-28"
-                  value={assigneeFilter}
-                  onChange={(v) => setAssigneeFilter(v as AssigneeFilter)}
-                  options={[
-                    { value: 'all', label: t('plugin_ticket.assigneeAll') },
-                    { value: 'unassigned', label: t('plugin_ticket.assigneeUnassigned') },
-                    { value: 'mine', label: t('plugin_ticket.assigneeMine') },
-                  ]}
-                />
-                <SimpleSelect
-                  aria-label={t('plugin_ticket.groups.label')}
-                  className="w-28"
-                  value={groupFilter}
-                  onChange={setGroupFilter}
-                  options={[
-                    { value: '0', label: t('plugin_ticket.groups.all') },
-                    ...(groups.data ?? []).map((g) => ({ value: g.id, label: groupLabel(g) })),
-                  ]}
-                />
-                <SimpleSelect
-                  aria-label={t('plugin_ticket.tags.title')}
-                  className="w-24"
-                  value={tagFilter}
-                  onChange={setTagFilter}
-                  options={[
-                    { value: '0', label: t('plugin_ticket.tags.all') },
-                    ...(allTags.data ?? []).map((tag) => ({ value: tag, label: tag })),
-                  ]}
-                />
-                <SimpleSelect
-                  aria-label={t('plugin_ticket.fields.status')}
-                  className="w-24"
-                  value={statusFilter ?? ALL}
-                  onChange={(v) => setStatusFilter(v === ALL ? undefined : v)}
-                  options={[
-                    { value: ALL, label: t('plugin_ticket.all') },
-                    ...STATUSES.map((s) => ({ value: s, label: t(`plugin_ticket.status.${s}`) })),
-                  ]}
-                />
-                <SimpleSelect
-                  aria-label={t('plugin_ticket.fields.priority')}
-                  className="w-20"
-                  value={priorityFilter ?? ALL}
-                  onChange={(v) => setPriorityFilter(v === ALL ? undefined : v)}
-                  options={[
-                    { value: ALL, label: t('plugin_ticket.all') },
-                    ...PRIORITIES.map((p) => ({ value: p, label: t(`plugin_ticket.priority.${p}`) })),
-                  ]}
-                />
-                {/* 和两个下拉同高同边框：窄面板里它会被挤到第二行，看起来仍是一个筛选控件，而不是孤零零一个勾选框 */}
-                <label className="flex h-10 items-center gap-2 whitespace-nowrap rounded-md border border-input bg-background px-3 text-base shadow-sm md:h-9 md:text-sm">
-                  <Checkbox
-                    checked={overdueOnly}
-                    onCheckedChange={(v) => setOverdueOnly(v === true)}
-                    aria-label={t('plugin_ticket.overdue')}
-                  />
-                  {t('plugin_ticket.overdue')}
-                </label>
+                {/* 六个维度平铺在 24rem 窄栏里要占三四行，队列被顶出视口；收成一枚按钮 + 已选 chips，
+                    列表高度与筛选是否生效都仍然一眼可见 */}
+                <Popover open={filtersOpen} onOpenChange={setFiltersOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="h-10 shrink-0 md:h-9">
+                      <SlidersHorizontal aria-hidden="true" />
+                      {t('plugin_ticket.filter.title')}
+                      {activeFilters.length > 0 ? (
+                        <>
+                          <Badge variant="secondary" aria-hidden="true" className="ms-1 min-w-5 justify-center">
+                            {activeFilters.length}
+                          </Badge>
+                          {/* 屏下只念「筛选 1」听不出 1 是什么，补一句可读的计数 */}
+                          <span className="sr-only">
+                            {t('plugin_ticket.filter.activeCount', { count: activeFilters.length })}
+                          </span>
+                        </>
+                      ) : null}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent align="end" className="w-72 space-y-2">
+                    <SimpleSelect
+                      aria-label={t('plugin_ticket.assigneeFilter')}
+                      label={t('plugin_ticket.assignee')}
+                      className="w-full"
+                      value={assigneeFilter}
+                      onChange={(v) => setAssigneeFilter(v as AssigneeFilter)}
+                      options={[
+                        { value: 'all', label: t('plugin_ticket.all') },
+                        { value: 'unassigned', label: t('plugin_ticket.assigneeUnassigned') },
+                        { value: 'mine', label: t('plugin_ticket.assigneeMine') },
+                      ]}
+                    />
+                    <SimpleSelect
+                      aria-label={t('plugin_ticket.groups.label')}
+                      label={t('plugin_ticket.groups.label')}
+                      className="w-full"
+                      value={groupFilter}
+                      onChange={setGroupFilter}
+                      options={[
+                        { value: '0', label: t('plugin_ticket.all') },
+                        ...(groups.data ?? []).map((g) => ({ value: g.id, label: groupLabel(g) })),
+                      ]}
+                    />
+                    <SimpleSelect
+                      aria-label={t('plugin_ticket.tags.title')}
+                      label={t('plugin_ticket.tags.title')}
+                      className="w-full"
+                      value={tagFilter}
+                      onChange={setTagFilter}
+                      options={[
+                        { value: '0', label: t('plugin_ticket.all') },
+                        ...(allTags.data ?? []).map((tag) => ({ value: tag, label: tag })),
+                      ]}
+                    />
+                    <SimpleSelect
+                      aria-label={t('plugin_ticket.fields.status')}
+                      label={t('plugin_ticket.fields.status')}
+                      className="w-full"
+                      value={statusFilter ?? ALL}
+                      onChange={(v) => setStatusFilter(v === ALL ? undefined : v)}
+                      options={[
+                        { value: ALL, label: t('plugin_ticket.all') },
+                        ...STATUSES.map((s) => ({ value: s, label: t(`plugin_ticket.status.${s}`) })),
+                      ]}
+                    />
+                    <SimpleSelect
+                      aria-label={t('plugin_ticket.fields.priority')}
+                      label={t('plugin_ticket.fields.priority')}
+                      className="w-full"
+                      value={priorityFilter ?? ALL}
+                      onChange={(v) => setPriorityFilter(v === ALL ? undefined : v)}
+                      options={[
+                        { value: ALL, label: t('plugin_ticket.all') },
+                        ...PRIORITIES.map((p) => ({ value: p, label: t(`plugin_ticket.priority.${p}`) })),
+                      ]}
+                    />
+                    <label className="flex h-9 items-center gap-2 rounded-md border border-input px-3 text-sm">
+                      <Checkbox
+                        checked={overdueOnly}
+                        onCheckedChange={(v) => setOverdueOnly(v === true)}
+                        aria-label={t('plugin_ticket.overdue')}
+                      />
+                      {t('plugin_ticket.overdue')}
+                    </label>
+                    <div className="flex items-center justify-between border-t pt-2 text-sm">
+                      <span className="text-muted-foreground">
+                        {t('plugin_ticket.filter.activeCount', { count: activeFilters.length })}
+                      </span>
+                      <Button variant="ghost" size="sm" onClick={resetFilters} disabled={activeFilters.length === 0}>
+                        {t('common.reset')}
+                      </Button>
+                    </div>
+                  </PopoverContent>
+                </Popover>
               </div>
+
+              {activeFilters.length > 0 ? (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {activeFilters.map((f) => (
+                    <button
+                      key={f.key}
+                      type="button"
+                      onClick={f.clear}
+                      aria-label={`${t('plugin_ticket.filter.remove')} ${f.label}${f.value ? ` ${f.value}` : ''}`}
+                      className="flex h-7 max-w-full items-center gap-1 rounded-full border border-input bg-muted/60 px-2.5 text-xs hover:bg-muted"
+                    >
+                      <span className="shrink-0 text-muted-foreground">{f.label}</span>
+                      {f.value ? <span className="truncate">{f.value}</span> : null}
+                      <X aria-hidden="true" className="size-3 shrink-0" />
+                    </button>
+                  ))}
+                </div>
+              ) : null}
 
               {checked.length > 0 ? (
                 <div className="flex flex-wrap items-center gap-2 rounded-md bg-muted px-2 py-1.5">
@@ -803,13 +1279,14 @@ export default function TicketPage() {
 
               <div className="min-h-0 flex-1 overflow-y-auto">
                 {list.map((tk) => (
-                  <TicketListItem
+                    <TicketListItem
                     key={tk.id}
                     ticket={tk}
                     active={tk.ticketNo === selectedNo}
                     checked={checked.includes(tk.ticketNo)}
                     onToggle={(on) => toggleChecked(tk.ticketNo, on)}
                     onSelect={() => selectTicket(tk.ticketNo)}
+                    onOpenTarget={(no) => selectTicket(no)}
                   />
                 ))}
                 {!tickets.isLoading && list.length === 0 ? (
@@ -857,12 +1334,21 @@ export default function TicketPage() {
               onOpenAssign={openAssign}
               onOpenMove={openMove}
               onEditTags={openTags}
+              fields={enabledFields}
+              onEditValues={openValues}
               canned={canned.data ?? []}
               onManageCanned={() => setCannedOpen(true)}
               attachments={replies.data?.attachments ?? []}
               activities={replies.data?.activities ?? []}
+              quota={replies.data?.quota}
               onUpload={uploadAtt}
+              onDeleteAttachment={removeAtt}
               uploading={uploadAttachmentMut.isPending}
+              links={links.data}
+              onOpenMerge={openMerge}
+              onOpenLink={openLink}
+              onUnlink={(otherNo) => void removeLink(otherNo)}
+              onOpenTicket={(no) => selectTicket(no)}
             />
           </div>
         </TabsContent>
@@ -982,6 +1468,151 @@ export default function TicketPage() {
               />
             </Field>
           </div>
+          {/* 自定义字段：管理员定义的附加信息，建单时一并填；必填与类型由后端把关。 */}
+          {enabledFields.length > 0 ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <FieldInputs
+                defs={enabledFields}
+                values={createCustom}
+                onChange={(code, v) => setCreateCustom((c) => ({ ...c, [code]: v }))}
+              />
+            </div>
+          ) : null}
+        </div>
+      </ResponsiveDialog>
+
+      {/* 自定义字段定义：加字段不动表结构，值统一存在工单的 custom_values 里。 */}
+      <ResponsiveDialog
+        open={fieldsOpen}
+        onOpenChange={setFieldsOpen}
+        title={t('plugin_ticket.fields.title')}
+        description={t('plugin_ticket.fields.description')}
+        size="lg"
+        footer={
+          <Button variant="outline" onClick={() => setFieldsOpen(false)}>
+            {t('common.close')}
+          </Button>
+        }
+      >
+        <div className="space-y-4">
+          {(fields.data ?? []).length === 0 ? (
+            <EmptyState title={t('plugin_ticket.fields.empty')} className="py-6" />
+          ) : (
+            <div className="divide-y">
+              {(fields.data ?? []).map((f) => (
+                <div key={f.id ?? f.code} className="flex flex-wrap items-center gap-2 py-2">
+                  <span className={cn('font-medium', !f.enabled && 'text-muted-foreground')}>{f.label}</span>
+                  <span className="font-mono text-xs text-muted-foreground">{f.code}</span>
+                  <Badge variant="secondary">{t(`plugin_ticket.fields.types.${f.type}`)}</Badge>
+                  {f.required ? <Badge variant="outline">{t('plugin_ticket.fields.required')}</Badge> : null}
+                  {!f.enabled ? <Badge variant="outline">{t('plugin_ticket.fields.disabled')}</Badge> : null}
+                  {f.options.length > 0 ? (
+                    <span className="text-xs text-muted-foreground">{f.options.join(' / ')}</span>
+                  ) : null}
+                  <span className="ms-auto flex items-center gap-1">
+                    <Button variant="ghost" size="sm" onClick={() => editField(f)}>
+                      {t('common.edit')}
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => void removeField(f)} aria-label={t('common.delete')}>
+                      <Trash2 aria-hidden="true" />
+                    </Button>
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label={t('plugin_ticket.fields.code')}>
+              <Input
+                value={fieldForm.code}
+                onChange={(e) => setFieldForm((f) => ({ ...f, code: e.target.value }))}
+                maxLength={32}
+                disabled={!!fieldForm.id}
+                placeholder="order_channel"
+              />
+            </Field>
+            <Field label={t('plugin_ticket.fields.label')}>
+              <Input value={fieldForm.label} onChange={(e) => setFieldForm((f) => ({ ...f, label: e.target.value }))} maxLength={64} />
+            </Field>
+            <Field label={t('plugin_ticket.fields.type')}>
+              <SimpleSelect
+                aria-label={t('plugin_ticket.fields.type')}
+                value={fieldForm.type}
+                onChange={(v) => setFieldForm((f) => ({ ...f, type: v as TicketFieldType }))}
+                options={FIELD_TYPES.map((tp) => ({ value: tp, label: t(`plugin_ticket.fields.types.${tp}`) }))}
+              />
+            </Field>
+            <Field label={t('plugin_ticket.fields.sort')}>
+              <Input
+                type="number"
+                min={0}
+                value={String(fieldForm.sort)}
+                onChange={(e) => setFieldForm((f) => ({ ...f, sort: Math.max(0, Number(e.target.value) || 0) }))}
+              />
+            </Field>
+          </div>
+          {fieldForm.type === 'select' ? (
+            <Field label={t('plugin_ticket.fields.options')}>
+              <Input
+                value={fieldForm.optionsText}
+                onChange={(e) => setFieldForm((f) => ({ ...f, optionsText: e.target.value }))}
+                placeholder={t('plugin_ticket.fields.optionsPlaceholder')}
+              />
+            </Field>
+          ) : null}
+          <div className="flex flex-wrap items-center gap-4">
+            <label className="flex items-center gap-1.5 text-sm">
+              <Checkbox
+                checked={fieldForm.required}
+                onCheckedChange={(v) => setFieldForm((f) => ({ ...f, required: v === true }))}
+              />
+              {t('plugin_ticket.fields.required')}
+            </label>
+            <label className="flex items-center gap-1.5 text-sm">
+              <Checkbox
+                checked={fieldForm.enabled}
+                onCheckedChange={(v) => setFieldForm((f) => ({ ...f, enabled: v === true }))}
+              />
+              {t('plugin_ticket.fields.enabled')}
+            </label>
+            <Button size="sm" disabled={saveFieldMut.isPending} onClick={() => void submitField()}>
+              {fieldForm.id ? t('common.save') : t('plugin_ticket.fields.add')}
+            </Button>
+            {fieldForm.id ? (
+              <Button size="sm" variant="ghost" onClick={() => setFieldForm(emptyFieldForm)}>
+                {t('common.cancel')}
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      </ResponsiveDialog>
+
+      {/* 改附加字段：清空某项再保存就是删掉它（后端的合并语义里 null 才是删除）。 */}
+      <ResponsiveDialog
+        open={!!valuesTarget}
+        onOpenChange={(o) => {
+          if (!o) setValuesTarget(null)
+        }}
+        title={t('plugin_ticket.fields.editValues')}
+        description={t('plugin_ticket.fields.editValuesFor', { no: valuesTarget?.ticketNo ?? '' })}
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setValuesTarget(null)}>
+              {t('common.cancel')}
+            </Button>
+            <Button disabled={setValuesMut.isPending} onClick={() => void submitValues()}>
+              {t('common.save')}
+            </Button>
+          </>
+        }
+      >
+        <div className="grid gap-3 sm:grid-cols-2">
+          <FieldInputs
+            defs={enabledFields}
+            values={valuesDraft}
+            onChange={(code, v) => setValuesDraft((d) => ({ ...d, [code]: v }))}
+          />
         </div>
       </ResponsiveDialog>
 
@@ -1078,6 +1709,76 @@ export default function TicketPage() {
         }
       >
         <div className="space-y-4">
+          {/* 多套策略：默认策略就是原来那一份；命名策略绑给队列，各队列时限与节假日可以不同。 */}
+          <div className="flex flex-wrap items-center gap-2">
+            <SimpleSelect
+              aria-label={t('plugin_ticket.sla.policy')}
+              label={t('plugin_ticket.sla.policy')}
+              value={slaForm.code ? slaForm.code : NONE}
+              onChange={(v) => pickPolicy(v === NONE ? '' : v)}
+              options={[
+                { value: NONE, label: t('plugin_ticket.sla.policyDefault') },
+                ...(slaPolicies.data ?? [])
+                  .filter((p) => p.code)
+                  .map((p) => ({ value: p.code ?? '', label: p.label || (p.code ?? '') })),
+              ]}
+            />
+            <Button variant="outline" size="sm" onClick={newPolicy}>
+              <Plus aria-hidden="true" />
+              {t('plugin_ticket.sla.newPolicy')}
+            </Button>
+            {slaForm.code ? (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={deletePolicyMut.isPending}
+                onClick={() => void removePolicy(slaForm.code ?? '')}
+              >
+                <Trash2 aria-hidden="true" />
+                {t('plugin_ticket.sla.deletePolicy')}
+              </Button>
+            ) : null}
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label={t('plugin_ticket.sla.code')}>
+              <Input
+                value={slaForm.code ?? ''}
+                onChange={(e) => setSlaForm((f) => ({ ...f, code: e.target.value }))}
+                maxLength={32}
+                disabled={!policyNew}
+                placeholder="vip-desk"
+              />
+            </Field>
+            <Field label={t('plugin_ticket.sla.label')}>
+              <Input
+                value={slaForm.label ?? ''}
+                onChange={(e) => setSlaForm((f) => ({ ...f, label: e.target.value }))}
+                maxLength={64}
+              />
+            </Field>
+          </div>
+          <Field label={t('plugin_ticket.sla.holidays')}>
+            <div className="space-y-2">
+              {(slaForm.holidays ?? []).map((h, i) => (
+                <div key={`holiday-${i}`} className="flex items-center gap-2">
+                  <Input
+                    type="date"
+                    value={h}
+                    onChange={(e) => setHoliday(i, e.target.value)}
+                    aria-label={`${t('plugin_ticket.sla.holidays')} ${i + 1}`}
+                  />
+                  <Button variant="ghost" size="icon" onClick={() => removeHoliday(i)} aria-label={t('common.delete')}>
+                    <Trash2 aria-hidden="true" />
+                  </Button>
+                </div>
+              ))}
+              <Button variant="outline" size="sm" onClick={addHoliday}>
+                <Plus aria-hidden="true" />
+                {t('plugin_ticket.sla.addHoliday')}
+              </Button>
+              <p className="text-xs text-muted-foreground">{t('plugin_ticket.sla.holidaysHint')}</p>
+            </div>
+          </Field>
           <Field label={t('plugin_ticket.sla.workdays')}>
             <div className="flex flex-wrap gap-x-4 gap-y-2">
               {WEEKDAYS.map((d) => (
@@ -1233,6 +1934,20 @@ export default function TicketPage() {
                 />
               </Field>
             </div>
+            <Field label={t('plugin_ticket.groups.slaPolicy')}>
+              <SimpleSelect
+                aria-label={t('plugin_ticket.groups.slaPolicy')}
+                value={groupForm.slaCode || NONE}
+                onChange={(v) => setGroupForm((f) => ({ ...f, slaCode: v === NONE ? '' : v }))}
+                options={[
+                  { value: NONE, label: t('plugin_ticket.sla.policyDefault') },
+                  ...(slaPolicies.data ?? [])
+                    .filter((p) => p.code)
+                    .map((p) => ({ value: p.code ?? '', label: p.label || (p.code ?? '') })),
+                ]}
+              />
+              <p className="mt-1 text-xs text-muted-foreground">{t('plugin_ticket.groups.slaPolicyHint')}</p>
+            </Field>
             <div className="flex flex-wrap gap-4">
               <label className="flex items-center gap-1.5 text-sm">
                 <Checkbox
@@ -1405,6 +2120,16 @@ export default function TicketPage() {
                 />
               </Field>
             </div>
+            {/* 标签条件：用 div 而不是 Field，避免 label 里套可点击控件 */}
+            <div className="space-y-1">
+              <span className="text-xs font-medium text-foreground">{t('plugin_ticket.rules.matchTags')}</span>
+              <TagMultiSelect
+                value={ruleForm.matchTags}
+                onChange={(tags) => setRuleForm((f) => ({ ...f, matchTags: tags }))}
+                options={allTags.data ?? []}
+                hint={t('plugin_ticket.rules.matchTagsHint')}
+              />
+            </div>
             <p className="pt-1 text-xs font-medium text-muted-foreground">{t('plugin_ticket.rules.action')}</p>
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label={t('plugin_ticket.rules.setPriority')}>
@@ -1441,6 +2166,16 @@ export default function TicketPage() {
                 onChange={(e) => setRuleForm((f) => ({ ...f, note: e.target.value }))}
               />
             </Field>
+            <div className="space-y-1">
+              <span className="text-xs font-medium text-foreground">{t('plugin_ticket.rules.addTags')}</span>
+              <TagMultiSelect
+                value={ruleForm.addTags}
+                onChange={(tags) => setRuleForm((f) => ({ ...f, addTags: tags }))}
+                options={allTags.data ?? []}
+                allowCreate
+                hint={t('plugin_ticket.rules.addTagsHint')}
+              />
+            </div>
             <div className="flex flex-wrap items-center gap-4">
               <label className="flex items-center gap-1.5 text-sm">
                 <Checkbox
@@ -1474,6 +2209,115 @@ export default function TicketPage() {
               </Button>
             </div>
           </div>
+        </div>
+      </ResponsiveDialog>
+
+      {/* 合并重复工单：只列未完结的主单，提交前二次确认，且不可撤销 */}
+      <ResponsiveDialog
+        open={mergeOpen}
+        onOpenChange={setMergeOpen}
+        title={t('plugin_ticket.merge.dialogTitle')}
+        description={t('plugin_ticket.merge.description', { no: selectedNo ?? '' })}
+        size="md"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setMergeOpen(false)}>
+              {t('common.cancel')}
+            </Button>
+            <Button disabled={!mergeChoice || mergeMut.isPending} onClick={() => void submitMerge()}>
+              <GitMerge aria-hidden="true" />
+              {t('plugin_ticket.merge.confirmButton')}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <p className="rounded-md bg-muted px-2.5 py-2 text-xs text-muted-foreground">{t('plugin_ticket.merge.warning')}</p>
+          <Input
+            value={mergeKeyword}
+            onChange={(e) => setMergeKeyword(e.target.value)}
+            placeholder={t('plugin_ticket.merge.searchPlaceholder')}
+            aria-label={t('plugin_ticket.merge.searchPlaceholder')}
+          />
+          <p className="text-xs font-medium text-muted-foreground">{t('plugin_ticket.merge.candidates')}</p>
+          <div className="max-h-72 divide-y divide-border/60 overflow-y-auto">
+            {mergeCandidates.list
+              .filter((tk) => tk.ticketNo !== selectedNo && !tk.mergedIntoNo)
+              .map((tk) => (
+                <button
+                  key={tk.id}
+                  type="button"
+                  onClick={() => setMergeChoice(tk.ticketNo)}
+                  className={cn(
+                    'flex w-full min-w-0 flex-wrap items-center gap-2 px-2 py-2 text-start text-xs hover:bg-accent',
+                    mergeChoice === tk.ticketNo && 'bg-accent',
+                  )}
+                >
+                  <span className="font-mono">{tk.ticketNo}</span>
+                  <span className="min-w-24 max-w-full flex-1 truncate">{tk.title}</span>
+                  <Badge variant={statusVariant(tk.status)}>{t(`plugin_ticket.status.${tk.status}`)}</Badge>
+                </button>
+              ))}
+            {!mergeCandidates.isLoading && mergeCandidates.list.filter((tk) => tk.ticketNo !== selectedNo).length === 0 ? (
+              <p className="px-2 py-3 text-xs text-muted-foreground">{t('plugin_ticket.merge.noCandidates')}</p>
+            ) : null}
+          </div>
+          {mergeChoice ? (
+            <p className="text-xs text-muted-foreground">{t('plugin_ticket.merge.picked', { no: mergeChoice })}</p>
+          ) : null}
+        </div>
+      </ResponsiveDialog>
+
+      {/* 关联工单：双向、可解除，任何状态都能关联（终态单正是最需要留痕的场景） */}
+      <ResponsiveDialog
+        open={linkOpen}
+        onOpenChange={setLinkOpen}
+        title={t('plugin_ticket.link.dialogTitle')}
+        description={t('plugin_ticket.link.description')}
+        size="md"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setLinkOpen(false)}>
+              {t('common.cancel')}
+            </Button>
+            <Button disabled={!linkChoice || addLinkMut.isPending} onClick={() => void submitLink()}>
+              <Link2 aria-hidden="true" />
+              {t('plugin_ticket.link.confirmButton')}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <Input
+            value={linkKeyword}
+            onChange={(e) => setLinkKeyword(e.target.value)}
+            placeholder={t('plugin_ticket.link.searchPlaceholder')}
+            aria-label={t('plugin_ticket.link.searchPlaceholder')}
+          />
+          <p className="text-xs font-medium text-muted-foreground">{t('plugin_ticket.link.results')}</p>
+          <div className="max-h-72 divide-y divide-border/60 overflow-y-auto">
+            {(linkCandidates.data?.list ?? [])
+              .filter((tk) => tk.ticketNo !== selectedNo)
+              .map((tk) => (
+                <button
+                  key={tk.id}
+                  type="button"
+                  onClick={() => setLinkChoice(tk.ticketNo)}
+                  className={cn(
+                    'flex w-full min-w-0 flex-wrap items-center gap-2 px-2 py-2 text-start text-xs hover:bg-accent',
+                    linkChoice === tk.ticketNo && 'bg-accent',
+                  )}
+                >
+                  <span className="font-mono">{tk.ticketNo}</span>
+                  <span className="min-w-24 max-w-full flex-1 truncate">{tk.title}</span>
+                  <Badge variant={statusVariant(tk.status)}>{t(`plugin_ticket.status.${tk.status}`)}</Badge>
+                </button>
+              ))}
+            {!linkCandidates.isLoading && (linkCandidates.data?.list?.length ?? 0) === 0 ? (
+              <p className="px-2 py-3 text-xs text-muted-foreground">{t('plugin_ticket.link.none')}</p>
+            ) : null}
+          </div>
+          {linkChoice ? <p className="text-xs text-muted-foreground">{t('plugin_ticket.link.picked', { no: linkChoice })}</p> : null}
         </div>
       </ResponsiveDialog>
 
@@ -1549,42 +2393,62 @@ function TicketListItem({
   checked,
   onToggle,
   onSelect,
+  onOpenTarget,
 }: {
   ticket: Ticket
   active: boolean
   checked: boolean
   onToggle: (on: boolean) => void
   onSelect: () => void
+  onOpenTarget: (ticketNo: string) => void
 }) {
   const { t, i18n } = useTranslation()
   return (
     <div
       className={cn(
-        'flex items-start gap-2 rounded-md px-2 py-2 transition-colors hover:bg-accent',
+        'flex flex-col gap-1 rounded-md px-2 py-2 transition-colors hover:bg-accent',
         active && 'bg-accent',
       )}
     >
-      <Checkbox
-        checked={checked}
-        onCheckedChange={(v) => onToggle(v === true)}
-        aria-label={t('dataTable.selectRow')}
-        className="mt-1"
-      />
-      <button type="button" onClick={onSelect} className="flex min-w-0 flex-1 flex-col gap-1 text-start text-sm">
-        <div className="flex w-full items-center gap-2">
-          <span className="min-w-0 flex-1 truncate font-medium text-foreground">{ticket.title}</span>
-          {ticket.overdue ? <Badge variant="destructive">{t('plugin_ticket.overdue')}</Badge> : null}
-          <Badge variant={statusVariant(ticket.status)}>{t(`plugin_ticket.status.${ticket.status}`)}</Badge>
-        </div>
-        <div className="flex w-full items-center gap-2 text-xs text-muted-foreground">
-          <Badge variant={priorityVariant(ticket.priority)}>{t(`plugin_ticket.priority.${ticket.priority}`)}</Badge>
-          <span className="min-w-0 flex-1 truncate">
-            {ticket.ticketNo}
-            {ticket.bizNo ? ` · ${ticket.bizNo}` : ''}
+      <div className="flex items-start gap-2">
+        <Checkbox
+          checked={checked}
+          onCheckedChange={(v) => onToggle(v === true)}
+          aria-label={t('dataTable.selectRow')}
+          className="mt-1"
+        />
+        <button type="button" onClick={onSelect} className="flex min-w-0 flex-1 flex-col gap-1 text-start text-sm">
+          <div className="flex w-full items-center gap-2">
+            <span className="min-w-0 flex-1 truncate font-medium text-foreground">{ticket.title}</span>
+            {ticket.overdue ? <Badge variant="destructive">{t('plugin_ticket.overdue')}</Badge> : null}
+            <Badge variant={statusVariant(ticket.status)}>{t(`plugin_ticket.status.${ticket.status}`)}</Badge>
+          </div>
+          <div className="flex w-full items-center gap-2 text-xs text-muted-foreground">
+            <Badge variant={priorityVariant(ticket.priority)}>{t(`plugin_ticket.priority.${ticket.priority}`)}</Badge>
+            <span className="min-w-0 flex-1 truncate">
+              {ticket.ticketNo}
+              {ticket.bizNo ? ` · ${ticket.bizNo}` : ''}
+            </span>
+            <span>{formatTime(ticket.lastReplyAt ?? ticket.createdAt, i18n.language)}</span>
+          </div>
+        </button>
+      </div>
+      {/* 被合并的单在队列里要一眼认出来，并且一点就到主单；独立成行，避免按钮里套按钮 */}
+      {ticket.mergedIntoNo ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-6 self-start max-w-full justify-start gap-1 px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
+          onClick={() => onOpenTarget(ticket.mergedIntoNo as string)}
+        >
+          <GitMerge aria-hidden="true" className="h-3 w-3 shrink-0" />
+          <span className="truncate">
+            {t('plugin_ticket.merge.mergedBadge', { no: ticket.mergedIntoNo })}
+            <ArrowUpRight aria-hidden="true" className="ms-1 inline h-3 w-3" />
           </span>
-          <span>{formatTime(ticket.lastReplyAt ?? ticket.createdAt, i18n.language)}</span>
-        </div>
-      </button>
+        </Button>
+      ) : null}
     </div>
   )
 }
@@ -1600,12 +2464,21 @@ function TicketThread({
   onOpenAssign,
   onOpenMove,
   onEditTags,
+  fields,
+  onEditValues,
   canned,
   onManageCanned,
   attachments,
   activities,
+  quota,
   onUpload,
+  onDeleteAttachment,
   uploading,
+  links,
+  onOpenMerge,
+  onOpenLink,
+  onUnlink,
+  onOpenTicket,
 }: {
   ticket?: Ticket
   replies: TicketReply[]
@@ -1617,12 +2490,21 @@ function TicketThread({
   onOpenAssign: (ticket: Ticket) => void
   onOpenMove: (ticket: Ticket) => void
   onEditTags: (ticket: Ticket) => void
+  fields: TicketField[]
+  onEditValues: (ticket: Ticket) => void
   canned: CannedReply[]
   onManageCanned: () => void
   attachments: TicketAttachment[]
   activities: TicketActivity[]
+  quota?: { maxCount: number; maxBytes: number }
   onUpload: (file: File, internal: boolean) => Promise<void>
+  onDeleteAttachment: (att: TicketAttachment) => Promise<void>
   uploading: boolean
+  links?: LinksResult
+  onOpenMerge: () => void
+  onOpenLink: () => void
+  onUnlink: (otherNo: string) => void
+  onOpenTicket: (ticketNo: string) => void
 }) {
   const { t, i18n } = useTranslation()
   const [draft, setDraft] = useState('')
@@ -1662,6 +2544,17 @@ function TicketThread({
       .catch(() => undefined)
   }
 
+  // 复制工单号：客户自助查询与关单确认都要念它，不该让人手抄 20 位。
+  const copyTicketNo = async (no: string) => {
+    try {
+      await navigator.clipboard.writeText(no)
+      toast.success(t('plugin_ticket.copied'))
+    } catch {
+      // 非安全上下文或用户没给权限时浏览器会拒，提示手动选择复制而不是假装成功
+      toast.error(t('plugin_ticket.copyFailed'))
+    }
+  }
+
   const activityValue = (action: string, value: string) => {
     if (!value) return t('plugin_ticket.activity.empty')
     if (action === 'status_changed') return t(`plugin_ticket.status.${value}`, value)
@@ -1685,8 +2578,22 @@ function TicketThread({
         return t('plugin_ticket.activity.groupChanged', { from, to })
       case 'tags_changed':
         return t('plugin_ticket.activity.tagsChanged', { from, to })
+      case 'custom_fields_changed':
+        return t('plugin_ticket.activity.fieldsChanged', { from, to })
       case 'attachment_added':
         return t('plugin_ticket.activity.attachmentAdded', { name: a.detail })
+      case 'attachment_removed':
+        return t('plugin_ticket.activity.attachmentRemoved', { name: a.detail })
+      // 合并与关联：主单号/对侧单号在 detail 与 to/from 里，按 merge.go 的落法取
+      case 'merged_into':
+        return t('plugin_ticket.activity.mergedInto', { no: a.detail })
+      case 'merged_tickets':
+        // 变量名不用 count：i18next 会把数字 count 当复数索引去找 _one/_other 键
+        return t('plugin_ticket.activity.mergedTickets', { total: to, no: a.detail })
+      case 'linked':
+        return t('plugin_ticket.activity.linked', { no: to })
+      case 'unlinked':
+        return t('plugin_ticket.activity.unlinked', { no: from })
       case 'rating_added':
         return t('plugin_ticket.activity.ratingAdded', { score: to })
       case 'rule_applied':
@@ -1704,23 +2611,70 @@ function TicketThread({
 
   return (
     <Card className="flex min-h-0 flex-col">
-      <div className="flex flex-wrap items-center gap-2 border-b px-4 py-2">
-        <div className="min-w-0 flex-1 basis-48">
-          <div className="truncate text-sm font-medium text-foreground">
-            {ticket.title}
-            <span className="text-muted-foreground"> · {ticket.ticketNo}</span>
+      <div className="space-y-2 border-b px-4 py-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="truncate text-sm font-medium text-foreground" title={ticket.title}>
+              {ticket.title}
+            </span>
+            <Badge variant={statusVariant(ticket.status)}>{t(`plugin_ticket.status.${ticket.status}`)}</Badge>
+            {(ticket.tags ?? []).map((tag) => (
+              <Badge key={tag} variant="secondary">
+                #{tag}
+              </Badge>
+            ))}
+            {ticket.rating ? (
+              <Badge variant="success" title={ticket.ratingComment || undefined}>
+                {t('plugin_ticket.rating.badge', { score: ticket.rating })}
+              </Badge>
+            ) : null}
           </div>
-          <div className="truncate text-xs text-muted-foreground">
-            {ticket.reporterName || t(`plugin_ticket.repliers.${ticket.reporterType}`)}
-            {ticket.bizNo ? ` · ${ticket.bizType}/${ticket.bizNo}` : ''}
-            {ticket.assigneeName || (ticket.assigneeId && ticket.assigneeId !== '0')
-              ? ` · ${t('plugin_ticket.assignee')}: ${ticket.assigneeName || `#${ticket.assigneeId}`}`
-              : ` · ${t('plugin_ticket.assignee')}: ${t('plugin_ticket.assigneeUnassigned')}`}
-            {ticket.groupName ? ` · ${t('plugin_ticket.groups.label')}: ${ticket.groupName}` : ''}
-            {ticket.creatorName ? ` · ${t('plugin_ticket.createdBy')}: ${ticket.creatorName}` : ''}
+          {/* 工单号是客户自助查询和关单确认要念的东西，不能跟着标题一起被省略号吃掉 */}
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+            <span className="inline-flex items-center gap-1">
+              <span className="font-mono">{ticket.ticketNo}</span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-5 w-5 text-muted-foreground hover:text-foreground"
+                aria-label={t('plugin_ticket.copyNo')}
+                onClick={() => void copyTicketNo(ticket.ticketNo)}
+              >
+                <Copy aria-hidden="true" className="h-3 w-3" />
+              </Button>
+            </span>
+            <span>
+              {ticket.reporterName || t(`plugin_ticket.repliers.${ticket.reporterType}`)}
+              {ticket.bizNo ? ` · ${ticket.bizType}/${ticket.bizNo}` : ''}
+              {ticket.assigneeName || (ticket.assigneeId && ticket.assigneeId !== '0')
+                ? ` · ${t('plugin_ticket.assignee')}: ${ticket.assigneeName || `#${ticket.assigneeId}`}`
+                : ` · ${t('plugin_ticket.assignee')}: ${t('plugin_ticket.assigneeUnassigned')}`}
+              {ticket.groupName ? ` · ${t('plugin_ticket.groups.label')}: ${ticket.groupName}` : ''}
+              {ticket.creatorName ? ` · ${t('plugin_ticket.createdBy')}: ${ticket.creatorName}` : ''}
+            </span>
           </div>
+          {fields.length > 0 ? (
+            <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+              {fields.map((f) => (
+                <span key={f.code}>
+                  {t('plugin_ticket.fields.valuePair', {
+                    label: f.label,
+                    value: fieldValueText(
+                      f.type,
+                      ticket.customValues?.[f.code],
+                      t('plugin_ticket.fields.unset'),
+                      t('plugin_ticket.fields.yes'),
+                      t('plugin_ticket.fields.no'),
+                    ),
+                  })}
+                </span>
+              ))}
+            </div>
+          ) : null}
         </div>
-        <Can perm="ticket:edit">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
+          <Can perm="ticket:edit">
           {ticket.assigneeId === '0' || ticket.assigneeId === '' ? (
             <Button variant="outline" size="sm" onClick={() => void onClaim(ticket.ticketNo)}>
               <UserRoundCheck aria-hidden="true" />
@@ -1732,14 +2686,42 @@ function TicketThread({
               {t('plugin_ticket.actions.transfer')}
             </Button>
           )}
-          <Button variant="outline" size="sm" onClick={() => onOpenMove(ticket)}>
-            <Users aria-hidden="true" />
-            {t('plugin_ticket.groups.move')}
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => onEditTags(ticket)}>
-            <Tag aria-hidden="true" />
-            {t('plugin_ticket.tags.edit')}
-          </Button>
+          {/* 管理类动作收进「更多」：十个同权重按钮铺开会把头部压成一坨，窄屏还会把文字挤没 */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">
+                <Ellipsis aria-hidden="true" />
+                {t('plugin_ticket.actions.more')}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="min-w-44">
+              <DropdownMenuItem onClick={() => onOpenMove(ticket)}>
+                <Users aria-hidden="true" />
+                {t('plugin_ticket.groups.move')}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onEditTags(ticket)}>
+                <Tag aria-hidden="true" />
+                {t('plugin_ticket.tags.edit')}
+              </DropdownMenuItem>
+              {fields.length > 0 ? (
+                <DropdownMenuItem onClick={() => onEditValues(ticket)}>
+                  <ListChecks aria-hidden="true" />
+                  {t('plugin_ticket.fields.editValues')}
+                </DropdownMenuItem>
+              ) : null}
+              {/* 已被合并过的单不再摆「合并」入口：那点下去只会拿到后端的拒绝 */}
+              {!links?.merge.mergedInto ? (
+                <DropdownMenuItem onClick={onOpenMerge}>
+                  <GitMerge aria-hidden="true" />
+                  {t('plugin_ticket.merge.action')}
+                </DropdownMenuItem>
+              ) : null}
+              <DropdownMenuItem onClick={onOpenLink}>
+                <Link2 aria-hidden="true" />
+                {t('plugin_ticket.link.action')}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           {ticket.status === 'open' ? (
             <Button variant="outline" size="sm" onClick={() => void onSetStatus(ticket.ticketNo, 'processing')}>
               {t('plugin_ticket.actions.processing')}
@@ -1798,38 +2780,54 @@ function TicketThread({
             </Button>
           ) : null}
         </Can>
-        <Badge variant={statusVariant(ticket.status)}>{t(`plugin_ticket.status.${ticket.status}`)}</Badge>
-        {(ticket.tags ?? []).map((tag) => (
-          <Badge key={tag} variant="secondary">
-            #{tag}
-          </Badge>
-        ))}
-        {ticket.rating ? (
-          <Badge variant="success" title={ticket.ratingComment || undefined}>
-            {t('plugin_ticket.rating.badge', { score: ticket.rating })}
-          </Badge>
-        ) : null}
+        </div>
       </div>
 
+      <LinkedTicketsPanel data={links} onOpenTicket={onOpenTicket} onUnlink={onUnlink} />
+
       {attachments.length ? (
-        <div className="flex flex-wrap gap-2 border-b px-4 py-2">
+        <div className="flex flex-wrap items-center gap-2 border-b px-4 py-2">
+          {/* 配额是后端硬拦的（超了直接 400），提前把余量说清楚，别让人撞了才知道 */}
+          {quota ? (
+            <span className="me-1 text-[11px] text-muted-foreground">
+              {t('plugin_ticket.attachments.quota', {
+                count: attachments.length,
+                max: quota.maxCount,
+                used: Math.max(1, Math.round(attachments.reduce((sum, a) => sum + a.size, 0) / 1048576)),
+                cap: Math.max(1, Math.round(quota.maxBytes / 1048576)),
+              })}
+            </span>
+          ) : null}
           {attachments.map((a) => (
-            <Button
-              key={a.id}
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => void downloadAttachment(ticket.ticketNo, a)}
-            >
-              <Paperclip aria-hidden="true" />
-              {a.internal ? (
-                <Badge variant="warning" className="me-1">
-                  {t('plugin_ticket.attachments.internal')}
-                </Badge>
-              ) : null}
-              <span className="max-w-48 truncate">{a.name}</span>
-              <span className="ms-1 text-[11px] text-muted-foreground">{formatSize(a.size)}</span>
-            </Button>
+            <div key={a.id} className="inline-flex items-center gap-1">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void downloadAttachment(ticket.ticketNo, a)}
+              >
+                <Paperclip aria-hidden="true" />
+                {a.internal ? (
+                  <Badge variant="warning" className="me-1">
+                    {t('plugin_ticket.attachments.internal')}
+                  </Badge>
+                ) : null}
+                <span className="max-w-48 truncate">{a.name}</span>
+                <span className="ms-1 text-[11px] text-muted-foreground">{formatSize(a.size)}</span>
+              </Button>
+              {/* 删除会连带删掉存储对象，不可恢复，所以必须二次确认 */}
+              <Can perm="ticket:reply">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label={t('plugin_ticket.attachments.delete')}
+                  onClick={() => void onDeleteAttachment(a)}
+                >
+                  <Trash2 aria-hidden="true" />
+                </Button>
+              </Can>
+            </div>
           ))}
         </div>
       ) : null}
@@ -1987,5 +2985,169 @@ function TicketThread({
         </div>
       )}
     </Card>
+  )
+}
+
+/**
+ * 关联与合并面板：按 kind 分组（双向关联 / 本单被并入 / 并入本单的重复单）。
+ * 只有双向关联给解除按钮——合并不可撤销，界面不该摆一个点下去必然失败的按钮。
+ * 浅底 + divide-y 分组，不再在详情卡片里套一圈边框。
+ */
+function LinkedTicketsPanel({
+  data,
+  onOpenTicket,
+  onUnlink,
+}: {
+  data?: LinksResult
+  onOpenTicket: (ticketNo: string) => void
+  onUnlink: (otherNo: string) => void
+}) {
+  const { t } = useTranslation()
+  const merge = data?.merge
+  const sections = [
+    { key: 'link', label: t('plugin_ticket.link.groupLink'), rows: data?.links ?? [] },
+    { key: 'merged_into', label: t('plugin_ticket.link.groupMergedInto'), rows: merge?.mergedInto ? [merge.mergedInto] : [] },
+    { key: 'merged_from', label: t('plugin_ticket.link.groupMergedFrom'), rows: merge?.mergedFrom ?? [] },
+  ].filter((g) => g.rows.length > 0)
+  if (!data || sections.length === 0) return null
+  return (
+    <div className="space-y-1.5 border-b bg-muted/40 px-4 py-2">
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        <span className="font-medium text-foreground">{t('plugin_ticket.link.title')}</span>
+        {data.merge.mergedCount > 0 ? (
+          <Badge variant="secondary">{t('plugin_ticket.link.mergedCount', { count: data.merge.mergedCount })}</Badge>
+        ) : null}
+      </div>
+      {sections.map((section) => (
+        <div key={section.key} className="min-w-0">
+          <p className="text-[11px] text-muted-foreground">{section.label}</p>
+          <div className="divide-y divide-border/60">
+            {section.rows.map((row) => (
+              <div key={`${row.kind}-${row.ticketNo}`} className="flex min-w-0 flex-wrap items-center gap-2 py-1 text-xs">
+                <Button
+                  type="button"
+                  variant="link"
+                  size="sm"
+                  className="h-5 shrink-0 justify-start px-0 font-mono text-xs"
+                  onClick={() => onOpenTicket(row.ticketNo)}
+                >
+                  {row.ticketNo}
+                  <ArrowUpRight aria-hidden="true" className="h-3 w-3" />
+                </Button>
+                <span className="min-w-24 flex-1 truncate" title={row.title}>
+                  {row.title}
+                </span>
+                <Badge variant={statusVariant(row.status)}>{t(`plugin_ticket.status.${row.status}`, row.status)}</Badge>
+                {row.kind === 'link' ? (
+                  <Can perm="ticket:edit">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 shrink-0 gap-1 px-1.5 text-[11px] text-destructive"
+                      onClick={() => onUnlink(row.ticketNo)}
+                    >
+                      <Unlink aria-hidden="true" className="h-3 w-3" />
+                      {t('plugin_ticket.link.remove')}
+                    </Button>
+                  </Can>
+                ) : (
+                  <span className="shrink-0 text-[11px] text-muted-foreground">{t('plugin_ticket.link.locked')}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/**
+ * 标签多选：候选来自已有的 GET /tags（点选），allowCreate 时还能手输。
+ * SimpleSelect 是单选控件，标签是数组，所以这里用点选标签行；上限与工单标签同一口径。
+ */
+function TagMultiSelect({
+  value,
+  onChange,
+  options,
+  allowCreate,
+  hint,
+}: {
+  value: string[]
+  onChange: (tags: string[]) => void
+  options: string[]
+  allowCreate?: boolean
+  hint?: string
+}) {
+  const { t } = useTranslation()
+  const [text, setText] = useState('')
+  const toggle = (tag: string) => onChange(value.includes(tag) ? value.filter((x) => x !== tag) : [...value, tag])
+  const addTyped = () => {
+    const tag = text.trim()
+    if (!tag) return
+    if (!value.includes(tag)) onChange([...value, tag])
+    setText('')
+  }
+  return (
+    <div className="space-y-1.5">
+      {value.length ? (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {value.map((tag) => (
+            <Badge key={tag} variant="secondary" className="gap-1">
+              #{tag}
+              <button
+                type="button"
+                onClick={() => onChange(value.filter((x) => x !== tag))}
+                aria-label={t('plugin_ticket.rules.removeTag', { tag })}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                ×
+              </button>
+            </Badge>
+          ))}
+        </div>
+      ) : null}
+      {options.length ? (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {options.map((tag) => (
+            <Button
+              key={tag}
+              type="button"
+              size="sm"
+              variant={value.includes(tag) ? 'default' : 'outline'}
+              className="h-6 px-2 text-xs"
+              onClick={() => toggle(tag)}
+            >
+              #{tag}
+            </Button>
+          ))}
+        </div>
+      ) : (
+        <p className="text-[11px] text-muted-foreground">{t('plugin_ticket.rules.noTagOptions')}</p>
+      )}
+      {allowCreate ? (
+        <div className="flex items-center gap-1.5">
+          <Input
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                addTyped()
+              }
+            }}
+            placeholder={t('plugin_ticket.rules.tagPlaceholder')}
+            aria-label={t('plugin_ticket.rules.addTags')}
+            maxLength={20}
+            className="h-8"
+          />
+          <Button type="button" variant="outline" size="sm" className="h-8 shrink-0" disabled={!text.trim()} onClick={addTyped}>
+            {t('plugin_ticket.rules.addTag')}
+          </Button>
+        </div>
+      ) : null}
+      {hint ? <p className="text-[11px] text-muted-foreground">{hint}</p> : null}
+    </div>
   )
 }
