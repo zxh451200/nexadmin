@@ -14,6 +14,7 @@
     },
     "all": "全部",
     "empty": "暂无数据",
+    "mineOnly": "只看我的",
     "searchPlaceholder": "客户名称 / 编码 / 外部编号",
     "nameRequired": "请填写客户名称",
     "titleRequired": "请填写标题",
@@ -55,6 +56,9 @@
       "email": "邮箱",
       "remark": "备注",
       "customerId": "所属客户",
+      "contact": "主对接联系人",
+      "contactName": "联系人姓名",
+      "contactTitle": "职务",
       "title": "标题",
       "stage": "阶段",
       "amountMinor": "金额",
@@ -83,6 +87,37 @@
       "noCustomer": "暂不关联客户",
       "chooseCustomer": "选择客户",
       "searchPlaceholder": "标题"
+    },
+    "contact": {
+      "title": "联系人",
+      "add": "添加联系人",
+      "primary": "主联系人",
+      "chooseContact": "选择联系人（可选）",
+      "empty": "暂无联系人",
+      "nameRequired": "请填写联系人姓名",
+      "deleteConfirm": "确认删除联系人 {{name}}？"
+    },
+    "activity": {
+      "title": "跟进记录",
+      "write": "写跟进",
+      "submit": "记录",
+      "kindLabel": "跟进类型",
+      "kind": {
+        "call": "电话",
+        "visit": "拜访",
+        "note": "备注",
+        "todo": "待办"
+      },
+      "content": "跟进内容",
+      "contentPlaceholder": "记下这次沟通的要点…",
+      "contentRequired": "请填写跟进内容",
+      "nextAt": "下次跟进日期",
+      "due": "待办：{{date}}",
+      "openOnly": "只看待办",
+      "complete": "标记完成",
+      "reopen": "恢复待办",
+      "empty": "还没有跟进记录，点「写跟进」记下第一次沟通",
+      "deleteConfirm": "确认删除这条跟进记录？"
     }
   }
 }

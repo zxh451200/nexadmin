@@ -22,9 +22,11 @@ import {
   type CrmCustomerForm,
   type CustomerQuery,
 } from './api'
+import { ActivitiesSection, ContactsSection } from './CustomerProfile'
 import { formatMoney, formatTime, stageVariant } from './format'
 
 const ALL = '__all'
+const MINE = '__mine'
 const NO_LEVEL = '__none'
 
 const SOURCES = ['hotel', 'mall', 'order', 'manual'] as const
@@ -327,6 +329,9 @@ function CustomerDetailDialog({ customer, onClose }: { customer: CrmCustomer | n
               </div>
             </Can>
           ) : null}
+          {/* P0：联系人与跟进时间线——都继承客户的数据范围，读写走同一套可见性。 */}
+          <ContactsSection customerId={customer.id} />
+          <ActivitiesSection customerId={customer.id} />
           <div className="flex flex-col gap-2">
             <div className="flex items-baseline justify-between gap-2">
               <div className="text-sm font-medium text-foreground">{t('plugin_crm.customer.opportunities')}</div>
@@ -479,6 +484,16 @@ export function CustomersTab() {
                 {t(`plugin_crm.status.${s}`)}
               </SelectItem>
             ))}
+          </SelectContent>
+        </Select>
+        {/* 只看我的：owner = 当前账号，与角色数据范围叠加。 */}
+        <Select value={draft.mine ? MINE : ALL} onValueChange={(v) => setDraft((d) => ({ ...d, mine: v === MINE }))}>
+          <SelectTrigger className="md:w-32" aria-label={t('plugin_crm.fields.owner')}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>{t('plugin_crm.all')}</SelectItem>
+            <SelectItem value={MINE}>{t('plugin_crm.mineOnly')}</SelectItem>
           </SelectContent>
         </Select>
       </FilterBar>

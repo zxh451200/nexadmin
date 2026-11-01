@@ -14,6 +14,7 @@
     },
     "all": "All",
     "empty": "No data",
+    "mineOnly": "Mine only",
     "searchPlaceholder": "Customer name / code / external no",
     "nameRequired": "Customer name is required",
     "titleRequired": "Title is required",
@@ -55,6 +56,9 @@
       "email": "Email",
       "remark": "Remark",
       "customerId": "Customer",
+      "contact": "Primary contact",
+      "contactName": "Contact name",
+      "contactTitle": "Job title",
       "title": "Title",
       "stage": "Stage",
       "amountMinor": "Amount",
@@ -83,6 +87,37 @@
       "noCustomer": "No customer yet",
       "chooseCustomer": "Choose customer",
       "searchPlaceholder": "Title"
+    },
+    "contact": {
+      "title": "Contacts",
+      "add": "Add contact",
+      "primary": "Primary",
+      "chooseContact": "Choose contact (optional)",
+      "empty": "No contacts yet",
+      "nameRequired": "Contact name is required",
+      "deleteConfirm": "Delete contact {{name}}?"
+    },
+    "activity": {
+      "title": "Follow-ups",
+      "write": "Log follow-up",
+      "submit": "Save",
+      "kindLabel": "Kind",
+      "kind": {
+        "call": "Call",
+        "visit": "Visit",
+        "note": "Note",
+        "todo": "To-do"
+      },
+      "content": "Content",
+      "contentPlaceholder": "Write down the key points of this conversation…",
+      "contentRequired": "Follow-up content is required",
+      "nextAt": "Next follow-up date",
+      "due": "Due: {{date}}",
+      "openOnly": "Open to-dos only",
+      "complete": "Mark done",
+      "reopen": "Reopen",
+      "empty": "No follow-ups yet. Click \"Log follow-up\" to record the first conversation.",
+      "deleteConfirm": "Delete this follow-up record?"
     }
   }
 }

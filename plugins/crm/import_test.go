@@ -109,6 +109,9 @@ func TestImportCustomerUpdatesByPhone(t *testing.T) {
 
 	m.ExpectQuery("SELECT \\* FROM `plg_crm_customer` WHERE phone = \\?").
 		WillReturnRows(customerRow(2002, "旧名", "", ""))
+	// UpdateCustomer 现在先做一次可见性预查（nil 范围不裁剪，但 Take 仍在）。
+	m.ExpectQuery("SELECT \\* FROM `plg_crm_customer` WHERE `plg_crm_customer`.`id` = \\?").
+		WillReturnRows(customerRow(2002, "旧名", "", ""))
 	m.ExpectQuery("SELECT \\* FROM `plg_crm_customer` WHERE `plg_crm_customer`.`id` = \\?").
 		WillReturnRows(customerRow(2002, "旧名", "", ""))
 	m.ExpectBegin()

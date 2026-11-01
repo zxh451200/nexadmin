@@ -152,6 +152,12 @@ func TestOpportunityFinalStageLocked(t *testing.T) {
 	db, m := mockDB(t)
 	s := NewService(db, nopLogger{})
 
+	// visibleOpportunity 先做一次非事务预查（nil 范围不裁剪，但 Take 仍在）。
+	m.ExpectQuery("SELECT \\* FROM `plg_crm_opportunity`").
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "tenant_id", "customer_id", "title", "stage", "amount_minor", "currency",
+			"expected_at", "owner", "remark", "created_at", "updated_at",
+		}).AddRow(3001, 7, 2001, "年会酒席", "won", 100000, "CNY", "", "", "", testNow, testNow))
 	m.ExpectBegin()
 	m.ExpectQuery("SELECT \\* FROM `plg_crm_opportunity`").
 		WillReturnRows(sqlmock.NewRows([]string{
@@ -160,7 +166,7 @@ func TestOpportunityFinalStageLocked(t *testing.T) {
 		}).AddRow(3001, 7, 2001, "年会酒席", "won", 100000, "CNY", "", "", "", testNow, testNow))
 	m.ExpectRollback()
 
-	_, err := s.UpdateOpportunity(tenantCtx, 3001, OpportunityInput{
+	_, err := s.UpdateOpportunity(tenantCtx, nil, 3001, OpportunityInput{
 		Title: "年会酒席", Stage: StageLead, AmountMinor: 100000, Currency: "CNY",
 	})
 	if err == nil {

@@ -39,6 +39,8 @@ export interface CrmOpportunity {
   /** 雪花 ID 一律按字符串传，避免超过 JS 安全整数后被改写。 */
   customerId: string
   customerName?: string
+  /** 客户下主对接联系人（可选）。 */
+  contactId?: string
   title: string
   stage: OppStage
   amountMinor: number
@@ -51,6 +53,7 @@ export interface CrmOpportunity {
 
 export interface CrmOpportunityForm {
   customerId?: string
+  contactId?: string
   title: string
   stage?: OppStage
   amountMinor?: number
@@ -63,10 +66,63 @@ export interface CrmOpportunityForm {
 export interface CustomerQuery extends PageQuery {
   status?: string
   source?: string
+  /** 只看我的：owner = 当前账号（与角色数据范围叠加）。 */
+  mine?: boolean
 }
 export interface OpportunityQuery extends PageQuery {
   stage?: string
   customerId?: string
+  mine?: boolean
+}
+
+// 联系人：一个客户多个联系人，isPrimary 标主联系人。
+export interface CrmContact {
+  id: string
+  customerId: string
+  name: string
+  title?: string
+  phone?: string
+  email?: string
+  isPrimary: boolean
+  remark?: string
+}
+
+export interface CrmContactForm {
+  name: string
+  title?: string
+  phone?: string
+  email?: string
+  isPrimary?: boolean
+  remark?: string
+}
+
+// 跟进记录：call/visit/note/todo；todo 用 done/nextAt 表待办。
+export type ActivityKind = 'call' | 'visit' | 'note' | 'todo'
+
+export interface CrmActivity {
+  id: string
+  customerId: string
+  opportunityId?: string
+  kind: ActivityKind
+  content: string
+  nextAt?: string
+  done: boolean
+  author?: string
+  createdAt: string
+}
+
+export interface CrmActivityForm {
+  opportunityId?: string
+  kind?: ActivityKind
+  content: string
+  nextAt?: string
+}
+
+export interface ActivityQuery extends PageQuery {
+  opportunityId?: string
+  kind?: string
+  /** 只看待办（done=false）。 */
+  openOnly?: boolean
 }
 
 const BASE = '/plugins/crm'
@@ -135,6 +191,70 @@ export function useDeleteOpportunity() {
   const invalidate = useInvalidate()
   return useMutation({
     mutationFn: (id: string) => api.del(`${BASE}/opportunities/${id}`),
+    onSuccess: invalidate,
+  })
+}
+
+// ---- 联系人 ----
+
+export function useContacts(customerId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: [...KEY, 'contacts', customerId],
+    queryFn: () => api.get<CrmContact[]>(`${BASE}/customers/${customerId}/contacts`),
+    enabled: enabled && !!customerId,
+  })
+}
+
+export function useSaveContact() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: ({ customerId, id, data }: { customerId: string; id?: string; data: CrmContactForm }) =>
+      id ? api.put<CrmContact>(`${BASE}/contacts/${id}`, data) : api.post<CrmContact>(`${BASE}/customers/${customerId}/contacts`, data),
+    onSuccess: invalidate,
+  })
+}
+
+export function useDeleteContact() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (id: string) => api.del(`${BASE}/contacts/${id}`),
+    onSuccess: invalidate,
+  })
+}
+
+// ---- 跟进记录 ----
+
+export function useActivities(query: ActivityQuery, enabled = true) {
+  return useQuery({
+    queryKey: [...KEY, 'activities', query],
+    queryFn: () => api.get<Page<CrmActivity>>(`${BASE}/customers/${query.customerId}/activities`, query),
+    placeholderData: keepPreviousData,
+    enabled: enabled && !!query.customerId,
+  })
+}
+
+export function useCreateActivity() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: ({ customerId, data }: { customerId: string; data: CrmActivityForm }) =>
+      api.post<CrmActivity>(`${BASE}/customers/${customerId}/activities`, data),
+    onSuccess: invalidate,
+  })
+}
+
+export function useToggleActivityDone() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: ({ id, done }: { id: string; done: boolean }) =>
+      api.put(`${BASE}/activities/${id}/done`, { done }),
+    onSuccess: invalidate,
+  })
+}
+
+export function useDeleteActivity() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (id: string) => api.del(`${BASE}/activities/${id}`),
     onSuccess: invalidate,
   })
 }

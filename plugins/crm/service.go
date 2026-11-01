@@ -8,6 +8,8 @@ import (
 
 	"gorm.io/gorm"
 
+	"nexadmin/core/auth"
+	"nexadmin/core/datascope"
 	"nexadmin/core/response"
 	"nexadmin/pkg/idgen"
 )
@@ -128,8 +130,12 @@ func (s *Service) CreateCustomer(ctx context.Context, in CustomerInput) (*Custom
 }
 
 // UpdateCustomer 更新客户主数据（external 锚点不随编辑变更——锚点是宿主体系的稳定锚）。
-func (s *Service) UpdateCustomer(ctx context.Context, id idgen.ID, in CustomerInput) (*Customer, error) {
+// sc 非 nil 且受限时，范围外客户得到 403。
+func (s *Service) UpdateCustomer(ctx context.Context, sc *datascope.Scope, id idgen.ID, in CustomerInput) (*Customer, error) {
 	if err := in.normalize(); err != nil {
+		return nil, err
+	}
+	if _, err := s.visibleCustomer(ctx, sc, id); err != nil {
 		return nil, err
 	}
 	var c Customer
@@ -157,8 +163,12 @@ func (s *Service) UpdateCustomer(ctx context.Context, id idgen.ID, in CustomerIn
 	return &c, nil
 }
 
-// DeleteCustomer 删除客户主数据。还有商机挂在该客户下时拒绝（主数据不级联消失）。
-func (s *Service) DeleteCustomer(ctx context.Context, id idgen.ID) error {
+// DeleteCustomer 删除客户主数据。还有商机挂在客户下时拒绝（主数据不级联消失）；
+// 联系人与跟进记录随客户一并清理（事务内，不留孤儿）。sc 非 nil 且受限时，范围外客户得到 403。
+func (s *Service) DeleteCustomer(ctx context.Context, sc *datascope.Scope, id idgen.ID) error {
+	if _, err := s.visibleCustomer(ctx, sc, id); err != nil {
+		return err
+	}
 	var n int64
 	if err := s.db.WithContext(ctx).Model(&Opportunity{}).Where("customer_id = ?", int64(id)).Count(&n).Error; err != nil {
 		return err
@@ -166,31 +176,36 @@ func (s *Service) DeleteCustomer(ctx context.Context, id idgen.ID) error {
 	if n > 0 {
 		return response.Conflict("crm.customer_in_use")
 	}
-	return s.db.WithContext(ctx).Delete(&Customer{}, id).Error
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("customer_id = ?", int64(id)).Delete(&Contact{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("customer_id = ?", int64(id)).Delete(&Activity{}).Error; err != nil {
+			return err
+		}
+		return tx.Delete(&Customer{}, id).Error
+	})
 }
 
 // GetCustomer 按 ID 取客户。
-func (s *Service) GetCustomer(ctx context.Context, id idgen.ID) (*Customer, error) {
-	var c Customer
-	if err := s.db.WithContext(ctx).Take(&c, id).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, response.NotFound("crm.not_found")
-		}
-		return nil, err
-	}
-	return &c, nil
+// GetCustomer 按 ID 取客户（HTTP 入口需先解析数据范围；sc 为 nil 表示不裁剪，仅供内部调用）。
+func (s *Service) GetCustomer(ctx context.Context, sc *datascope.Scope, id idgen.ID) (*Customer, error) {
+	return s.visibleCustomer(ctx, sc, id)
 }
 
-// CustomerQuery 过滤客户列表。
+// CustomerQuery 过滤客户列表。Scope 由 HTTP 入口解析后传入；nil 表示不裁剪（内部调用）。
 type CustomerQuery struct {
 	Keyword  string // 名称 / 编码 / 锚点
 	Status   string
 	Source   string
+	Scope    *datascope.Scope
+	Mine     bool // 只看我的：owner = 当前账号（与角色范围叠加）
 	Page     int
 	PageSize int
 }
 
-// ListCustomers 分页列出客户。
+// ListCustomers 分页列出客户。受限操作者按 owner（账号）+ 所属部门裁剪，
+// 复用 core/datascope 的 UsernameCond，与系统模块语义一致。
 func (s *Service) ListCustomers(ctx context.Context, q CustomerQuery) ([]Customer, int64, error) {
 	db := s.db.WithContext(ctx).Model(&Customer{})
 	if kw := strings.TrimSpace(q.Keyword); kw != "" {
@@ -202,6 +217,17 @@ func (s *Service) ListCustomers(ctx context.Context, q CustomerQuery) ([]Custome
 	}
 	if q.Source != "" {
 		db = db.Where("external_source = ?", q.Source)
+	}
+	if cond, args, limited := q.Scope.UsernameCond("owner"); limited {
+		db = db.Where(cond, args...)
+	}
+	// 「只看我的」是显式语义（与角色范围叠加）：owner = 当前账号。
+	if q.Mine {
+		_, name, ok := auth.UserFromContext(ctx)
+		if !ok {
+			return nil, 0, response.Unauthorized("error.unauthorized")
+		}
+		db = db.Where("owner = ?", name)
 	}
 	var total int64
 	if err := db.Count(&total).Error; err != nil {
@@ -281,6 +307,7 @@ func (s *Service) ResolveByExternal(ctx context.Context, source, externalNo, fal
 // OpportunityInput 是线索/商机入参。
 type OpportunityInput struct {
 	CustomerID  idgen.ID
+	ContactID   idgen.ID
 	Title       string
 	Stage       string
 	AmountMinor int64
@@ -311,21 +338,46 @@ func (in *OpportunityInput) normalize() error {
 	return nil
 }
 
-// CreateOpportunity 建一条线索/商机（stage=lead 即线索）。
-func (s *Service) CreateOpportunity(ctx context.Context, in OpportunityInput) (*Opportunity, error) {
+// contactInCustomer 校验联系人存在且属于该客户（商机挂联系人时的引用完整性）。
+func (s *Service) contactInCustomer(ctx context.Context, contactID, customerID idgen.ID) error {
+	var ct Contact
+	if err := s.db.WithContext(ctx).Take(&ct, int64(contactID)).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return response.NotFound("crm.not_found")
+		}
+		return err
+	}
+	if ct.CustomerID != customerID {
+		return response.Conflict("crm.contact_customer_mismatch")
+	}
+	return nil
+}
+
+// CreateOpportunity 建一条线索/商机（stage=lead 即线索）。sc 非 nil 且受限时，
+// 不允许把商机挂到范围外客户名下（防借客户字段泄漏）。
+func (s *Service) CreateOpportunity(ctx context.Context, sc *datascope.Scope, in OpportunityInput) (*Opportunity, error) {
 	if err := in.normalize(); err != nil {
 		return nil, err
 	}
 	var customerName string
 	if in.CustomerID != 0 {
-		cu, err := s.GetCustomer(ctx, in.CustomerID)
+		cu, err := s.visibleCustomer(ctx, sc, in.CustomerID)
 		if err != nil {
 			return nil, err
 		}
 		customerName = cu.Name
 	}
+	if in.ContactID != 0 {
+		if in.CustomerID == 0 {
+			return nil, response.BadRequest("crm.contact_customer_mismatch")
+		}
+		if err := s.contactInCustomer(ctx, in.ContactID, in.CustomerID); err != nil {
+			return nil, err
+		}
+	}
 	o := &Opportunity{
-		CustomerID: in.CustomerID, CustomerName: customerName, Title: in.Title, Stage: in.Stage,
+		CustomerID: in.CustomerID, CustomerName: customerName, ContactID: in.ContactID,
+		Title: in.Title, Stage: in.Stage,
 		AmountMinor: in.AmountMinor, Currency: in.Currency,
 		ExpectedAt: truncate(in.ExpectedAt, 10), Owner: truncate(in.Owner, 64),
 		Remark: truncate(in.Remark, 500),
@@ -338,17 +390,29 @@ func (s *Service) CreateOpportunity(ctx context.Context, in OpportunityInput) (*
 }
 
 // UpdateOpportunity 更新线索/商机；阶段推进合法且发事件（won/lost 为终态）。
-func (s *Service) UpdateOpportunity(ctx context.Context, id idgen.ID, in OpportunityInput) (*Opportunity, error) {
+// sc 非 nil 且受限时，范围外商机 403，且不允许把所属客户改到范围外。
+func (s *Service) UpdateOpportunity(ctx context.Context, sc *datascope.Scope, id idgen.ID, in OpportunityInput) (*Opportunity, error) {
 	if err := in.normalize(); err != nil {
+		return nil, err
+	}
+	if _, err := s.visibleOpportunity(ctx, sc, id); err != nil {
 		return nil, err
 	}
 	var customerName string
 	if in.CustomerID != 0 {
-		cu, err := s.GetCustomer(ctx, in.CustomerID)
+		cu, err := s.visibleCustomer(ctx, sc, in.CustomerID)
 		if err != nil {
 			return nil, err
 		}
 		customerName = cu.Name
+	}
+	if in.ContactID != 0 {
+		if in.CustomerID == 0 {
+			return nil, response.BadRequest("crm.contact_customer_mismatch")
+		}
+		if err := s.contactInCustomer(ctx, in.ContactID, in.CustomerID); err != nil {
+			return nil, err
+		}
 	}
 	var o Opportunity
 	var fromStage string
@@ -365,6 +429,7 @@ func (s *Service) UpdateOpportunity(ctx context.Context, id idgen.ID, in Opportu
 		}
 		updates := map[string]any{
 			"customer_id": in.CustomerID,
+			"contact_id":  in.ContactID,
 			"title":       in.Title, "stage": in.Stage, "amount_minor": in.AmountMinor,
 			"currency": in.Currency, "expected_at": truncate(in.ExpectedAt, 10),
 			"owner": truncate(in.Owner, 64), "remark": truncate(in.Remark, 500),
@@ -381,6 +446,7 @@ func (s *Service) UpdateOpportunity(ctx context.Context, id idgen.ID, in Opportu
 	o.ExpectedAt, o.Owner, o.Remark = truncate(in.ExpectedAt, 10), truncate(in.Owner, 64), truncate(in.Remark, 500)
 	// PUT 是全量更新：清空所属客户也要落库（表单提供「暂不关联客户」）。
 	o.CustomerID, o.CustomerName = in.CustomerID, customerName
+	o.ContactID = in.ContactID
 	if fromStage != in.Stage {
 		s.publishOppStage(ctx, &o, fromStage)
 	}
@@ -389,22 +455,22 @@ func (s *Service) UpdateOpportunity(ctx context.Context, id idgen.ID, in Opportu
 
 func isFinalStage(stage string) bool { return stage == StageWon || stage == StageLost }
 
-// DeleteOpportunity 删除线索/商机。
-func (s *Service) DeleteOpportunity(ctx context.Context, id idgen.ID) error {
+// DeleteOpportunity 删除线索/商机（sc 非 nil 且受限时，范围外 403）。
+func (s *Service) DeleteOpportunity(ctx context.Context, sc *datascope.Scope, id idgen.ID) error {
+	if _, err := s.visibleOpportunity(ctx, sc, id); err != nil {
+		return err
+	}
 	return s.db.WithContext(ctx).Delete(&Opportunity{}, id).Error
 }
 
-// GetOpportunity 按 ID 取线索/商机。
-func (s *Service) GetOpportunity(ctx context.Context, id idgen.ID) (*Opportunity, error) {
-	var o Opportunity
-	if err := s.db.WithContext(ctx).Take(&o, id).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, response.NotFound("crm.not_found")
-		}
+// GetOpportunity 按 ID 取线索/商机（sc 非 nil 且受限时，范围外 403）。
+func (s *Service) GetOpportunity(ctx context.Context, sc *datascope.Scope, id idgen.ID) (*Opportunity, error) {
+	o, err := s.visibleOpportunity(ctx, sc, id)
+	if err != nil {
 		return nil, err
 	}
 	o.CustomerName = s.customerName(ctx, o.CustomerID)
-	return &o, nil
+	return o, nil
 }
 
 // customerName 取客户名；客户已被删除时返回空串，不影响商机本身可读。
@@ -447,16 +513,18 @@ func (s *Service) fillCustomerNames(ctx context.Context, rows []Opportunity) err
 	return nil
 }
 
-// OpportunityQuery 过滤线索/商机列表。
+// OpportunityQuery 过滤线索/商机列表。Scope 由 HTTP 入口解析后传入；nil 表示不裁剪（内部调用）。
 type OpportunityQuery struct {
 	Keyword    string
 	CustomerID idgen.ID
 	Stage      string
+	Scope      *datascope.Scope
+	Mine       bool // 只看我的：owner = 当前账号（与角色范围叠加）
 	Page       int
 	PageSize   int
 }
 
-// ListOpportunities 分页列出线索/商机。
+// ListOpportunities 分页列出线索/商机。受限操作者按 owner（账号）+ 所属部门裁剪。
 func (s *Service) ListOpportunities(ctx context.Context, q OpportunityQuery) ([]Opportunity, int64, error) {
 	db := s.db.WithContext(ctx).Model(&Opportunity{})
 	if kw := strings.TrimSpace(q.Keyword); kw != "" {
@@ -467,6 +535,16 @@ func (s *Service) ListOpportunities(ctx context.Context, q OpportunityQuery) ([]
 	}
 	if q.Stage != "" {
 		db = db.Where("stage = ?", q.Stage)
+	}
+	if cond, args, limited := q.Scope.UsernameCond("owner"); limited {
+		db = db.Where(cond, args...)
+	}
+	if q.Mine {
+		_, name, ok := auth.UserFromContext(ctx)
+		if !ok {
+			return nil, 0, response.Unauthorized("error.unauthorized")
+		}
+		db = db.Where("owner = ?", name)
 	}
 	var total int64
 	if err := db.Count(&total).Error; err != nil {

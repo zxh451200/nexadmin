@@ -214,6 +214,11 @@ crm:
   external_taken: This external customer number is already bound to another customer
   customer_in_use: Customer still has opportunities and cannot be deleted
   not_found: Customer or opportunity not found
+  contact_name_required: Contact name is required
+  contact_customer_mismatch: The contact does not belong to this customer (clear the customer together with the contact)
+  activity_content_required: Follow-up content is required
+  activity_kind_invalid: Invalid follow-up kind
+  date_invalid: Date must be in YYYY-MM-DD format
   plugin_inactive: CRM plugin is not enabled or its license has lapsed
 aigateway:
   kind_invalid: Invalid model kind (llm/embedding/rerank/asr/tts/ocr)
@@ -291,6 +296,7 @@ totp:
   code_invalid: Invalid or expired verification code
   code_replayed: This verification code was already used; wait for the next one
   kind_invalid: Invalid verification method
+  password_required: Disabling two-factor authentication requires your current password
 workflow:
   def_not_found: Workflow definition not found
   def_json_broken: Workflow definition is corrupted and cannot be parsed
@@ -481,6 +487,7 @@ datascope:
   resource.notice: "Notices"
   resource.dept: "Departments"
   resource.user: "Users"
+  resource.customer: "Customers"
 backup:
   busy: "A backup is already running. Please try again later."
   not_ready: "This backup is not finished or has failed, so there is no file to download."
@@ -629,6 +636,7 @@ website:
   image_type_unsupported: "Only PNG / JPEG / WebP / GIF images are supported."
   file_required: "The file field is missing."
   translate_failed: "Translation failed. Please try again later."
+  preview_unavailable: "Preview link is unavailable: no signing key is configured on this server."
 codegen:
   table_not_found: "Table not found: %s"
   invalid_input: "Invalid input. Please check and try again."

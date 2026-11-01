@@ -15,6 +15,7 @@ import { Input } from '@/framework/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import { Textarea } from '@/framework/ui/textarea'
 import {
+  useContacts,
   useDeleteOpportunity,
   useOpportunities,
   useSaveOpportunity,
@@ -25,6 +26,7 @@ import {
 import { formatMoney, formatTime, stageVariant } from './format'
 
 const ALL = '__all'
+const MINE = '__mine'
 
 const STAGES = ['lead', 'qualified', 'proposal', 'negotiate', 'won', 'lost'] as const
 
@@ -45,6 +47,7 @@ function OpportunityFormDialog({
     editing
       ? {
           customerId: editing.customerId,
+          contactId: editing.contactId,
           title: editing.title,
           stage: editing.stage,
           amountMinor: editing.amountMinor,
@@ -58,6 +61,10 @@ function OpportunityFormDialog({
 
   const value = draft
   const set = (patch: Partial<CrmOpportunityForm>) => setDraft((d) => ({ ...d, ...patch }))
+  // 联系人下拉：跟随所选客户加载（数量小不分页）；编辑态用它回显已选联系人名。
+  const { data: contacts = [] } = useContacts(
+    value.customerId && value.customerId !== '0' ? value.customerId : undefined,
+  )
 
   const submit = async () => {
     const data = { ...value, title: (value.title ?? '').trim() } as CrmOpportunityForm
@@ -106,6 +113,22 @@ function OpportunityFormDialog({
                 ? [{ value: editing.customerId, label: editing.customerName }]
                 : undefined
             }
+          />
+        </label>
+        {/* 主对接联系人：跟随所属客户，清空客户时一并清空（后端校验归属一致）。 */}
+        <label className="flex flex-col gap-1">
+          {t('plugin_crm.fields.contact')}
+          <RemoteSelect
+            key={value.customerId ?? ''}
+            url={`/plugins/crm/customers/${value.customerId ?? '0'}/contacts`}
+            value={value.contactId && value.contactId !== '0' ? value.contactId : ''}
+            onChange={(v) => set({ contactId: typeof v === 'string' && v ? v : '' })}
+            placeholder={t('plugin_crm.contact.chooseContact')}
+            allowClear
+            disabled={!value.customerId || value.customerId === '0'}
+            initialOptions={contacts
+              .filter((c) => c.id === editing?.contactId)
+              .map((c) => ({ value: c.id, label: c.name }))}
           />
         </label>
         <div className="grid grid-cols-2 gap-3">
@@ -243,6 +266,16 @@ export function OpportunitiesTab() {
                 {t(`plugin_crm.stage.${s}`)}
               </SelectItem>
             ))}
+          </SelectContent>
+        </Select>
+        {/* 只看我的：owner = 当前账号，与角色数据范围叠加。 */}
+        <Select value={draft.mine ? MINE : ALL} onValueChange={(v) => setDraft((d) => ({ ...d, mine: v === MINE }))}>
+          <SelectTrigger className="md:w-32" aria-label={t('plugin_crm.fields.owner')}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>{t('plugin_crm.all')}</SelectItem>
+            <SelectItem value={MINE}>{t('plugin_crm.mineOnly')}</SelectItem>
           </SelectContent>
         </Select>
       </FilterBar>

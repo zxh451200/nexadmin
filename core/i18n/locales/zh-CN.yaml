@@ -214,6 +214,11 @@ crm:
   external_taken: 该外部编号已绑定其他客户
   customer_in_use: 客户名下还有商机，不能删除
   not_found: 客户或商机不存在
+  contact_name_required: 联系人姓名不能为空
+  contact_customer_mismatch: 联系人不属于该客户（清空所属客户时需一并清空联系人）
+  activity_content_required: 跟进内容不能为空
+  activity_kind_invalid: 跟进类型无效
+  date_invalid: 日期格式必须是 YYYY-MM-DD
   plugin_inactive: 客户主数据插件未启用或授权已失效
 aigateway:
   kind_invalid: 模型种类无效（llm/embedding/rerank/asr/tts/ocr）
@@ -291,6 +296,7 @@ totp:
   code_invalid: 动态验证码错误或已过期
   code_replayed: 动态验证码已使用，请等待下一个
   kind_invalid: 验证方式无效
+  password_required: 关闭两步验证需要当前登录密码
 workflow:
   def_not_found: 流程定义不存在
   def_json_broken: 流程定义损坏，无法解析
@@ -481,6 +487,7 @@ datascope:
   resource.notice: "公告"
   resource.dept: "部门"
   resource.user: "用户"
+  resource.customer: "客户"
 backup:
   busy: "已有备份正在进行，请稍后再试"
   not_ready: "该备份未完成或已失败，没有可下载的文件"
@@ -629,6 +636,7 @@ website:
   image_type_unsupported: "只支持 PNG / JPEG / WebP / GIF 图片"
   file_required: "缺少 file 字段"
   translate_failed: "翻译服务调用失败，请稍后重试"
+  preview_unavailable: "预览链接暂不可用：服务未配置签名密钥"
 codegen:
   table_not_found: "数据表不存在：%s"
   invalid_input: "参数不正确，请检查后重试"

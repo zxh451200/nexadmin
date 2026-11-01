@@ -56,7 +56,9 @@ func importCustomer(ctx context.Context, svc *Service, row map[string]string) er
 		switch {
 		case err == nil:
 			in.Status = existing.Status
-			_, uerr := svc.UpdateCustomer(ctx, existing.ID, in)
+			// 导入在后台任务里跑，不经过 HTTP 身份链：sc 传 nil 表示不裁剪
+			//（能进导入入口 already 由 crm:edit 权限把守，见 datascope 的 nil 约定）。
+			_, uerr := svc.UpdateCustomer(ctx, nil, existing.ID, in)
 			return rowError(ctx, uerr)
 		case !errors.Is(err, gorm.ErrRecordNotFound):
 			return err

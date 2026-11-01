@@ -70,6 +70,15 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.POST("/opportunities", core.Perm("crm:opp"), h.createOpportunity)
 	g.PUT("/opportunities/:id", core.Perm("crm:opp"), h.updateOpportunity)
 	g.DELETE("/opportunities/:id", core.Perm("crm:opp"), h.deleteOpportunity)
+	// 联系人与跟进记录：读写都继承客户的可见性（数据范围按 customer.owner 裁剪）。
+	g.GET("/customers/:id/contacts", core.Perm("crm:list"), h.listContacts)
+	g.POST("/customers/:id/contacts", core.Perm("crm:edit"), h.createContact)
+	g.PUT("/contacts/:id", core.Perm("crm:edit"), h.updateContact)
+	g.DELETE("/contacts/:id", core.Perm("crm:edit"), h.deleteContact)
+	g.GET("/customers/:id/activities", core.Perm("crm:list"), h.listActivities)
+	g.POST("/customers/:id/activities", core.Perm("crm:edit"), h.createActivity)
+	g.PUT("/activities/:id/done", core.Perm("crm:edit"), h.markActivityDone)
+	g.DELETE("/activities/:id", core.Perm("crm:edit"), h.deleteActivity)
 }
 
 // Start 实现 plugin.Starter：crm 无后台任务，保留扩展点。
