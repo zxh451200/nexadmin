@@ -378,7 +378,8 @@ func TestITMySQLMigrateBaselineMixed(t *testing.T) {
 //
 // 方言差异（列/索引探针）由各引擎文件注入 itDDLProbe，共用用例里不写 if 分支。
 
-// TestITMySQLFundGates 在真实 MySQL 8 上跑五条资金闸门用例。
+// TestITMySQLFundGates 在真实 MySQL 8 上跑五条资金闸门用例 + 四条并发交叉路径用例
+// （两者共用同一套夹具：一次性库 + 真迁移 + 连接池 8）。
 //
 // 守卫同本文件既有用例：未设 NEXADMIN_IT_MYSQL_DSN 直接跳过；一次性库跑完即 DROP。
 func TestITMySQLFundGates(t *testing.T) {
@@ -480,6 +481,24 @@ type itGateProvider struct {
 	freezeCalls     int
 	transferCalls   map[string]int
 	refundQueryCall int
+
+	// ---- 交叉路径用例的桩扩展（零值 = 既有五条闸门的语义，互不影响）----
+	// refundFlip：补查回「渠道已退款成功」，让 SyncRefund 真的走翻转分支。
+	refundFlip bool
+	// freezePending：冻结受理但不确认，占位行停在 authorizing（补查路径的前置）。
+	freezePending bool
+	// freezeViaLedger：冻结走 mock 台账（渠道侧真记下这笔授权），
+	// 请款/撤销的交叉路径要用它——台账里没有的授权，请款会按「查无」被拒。
+	freezeViaLedger bool
+	// captureHold：请款在持锁事务内的停留时长——把「另一方正好撞在锁上」变成设计而不是运气。
+	captureHold time.Duration
+	// gate：渠道动作一进入就非阻塞投递的一次性闩，给并发另一方一个确定的起跑点。
+	gate chan struct{}
+	// authQueryPlan：预授权补查按「第几次进入」给不同结论（先确认后查无），
+	// 用来把「谁先落库」变成断言里可核对的真值，而不是看调度运气。
+	authQueryPlan  func(call int, authNo string) (*AuthResult, error)
+	queryAuthCalls map[string]int
+	actionCalls    map[string]int
 }
 
 func newITGateProvider(name string, latency time.Duration) *itGateProvider {
@@ -496,12 +515,105 @@ func (p *itGateProvider) wait() {
 	}
 }
 
-func (p *itGateProvider) Freeze(_ context.Context, in AuthFreezeRequest, _ map[string]string) (*AuthResult, error) {
+func (p *itGateProvider) Freeze(ctx context.Context, in AuthFreezeRequest, cfg map[string]string) (*AuthResult, error) {
 	p.mu.Lock()
 	p.freezeCalls++
+	unconfirmed := p.freezePending
+	viaLedger := p.freezeViaLedger
 	p.mu.Unlock()
 	p.wait()
+	switch {
+	case unconfirmed:
+		// 受理未确认：服务层必须把占位行留在 authorizing 交给补查，绝不落 authorized。
+		return &AuthResult{Status: "pending", Reason: "it: 渠道受理未回执"}, nil
+	case viaLedger:
+		// 请款/撤销路径要求「渠道侧真有这笔授权」（mock 台账），交叉路径的请款用例走这里；
+		// 渠道授权号由台账给出（mockauth_…），与它自己的请款/撤销结论自洽。
+		return p.mockProvider.Freeze(ctx, in, cfg)
+	}
 	return &AuthResult{ChannelAuthNo: "itca_" + in.AuthNo, Status: "success", AmountMinor: in.AmountMinor}, nil
+}
+
+// setGate 装/摘「动作已进入」的闩（传 nil 摘掉，避免闩跨用例泄漏）。
+func (p *itGateProvider) setGate(g chan struct{}) {
+	p.mu.Lock()
+	p.gate = g
+	p.mu.Unlock()
+}
+
+// hitGate 非阻塞投递：闩是 cap=1 的一次性通道，重复投递丢弃（渠道动作可能被打多次）。
+func (p *itGateProvider) hitGate() {
+	p.mu.Lock()
+	g := p.gate
+	p.mu.Unlock()
+	if g == nil {
+		return
+	}
+	select {
+	case g <- struct{}{}:
+	default:
+	}
+}
+
+// countAction 记一次渠道动作（并发安全，供交叉路径断言取数）。
+func (p *itGateProvider) countAction(name string) {
+	p.mu.Lock()
+	if p.actionCalls == nil {
+		p.actionCalls = map[string]int{}
+	}
+	p.actionCalls[name]++
+	p.mu.Unlock()
+}
+
+// holdCapture 在渠道动作里造出「持锁事务还没提交」的时间窗。
+func (p *itGateProvider) holdCapture() {
+	p.mu.Lock()
+	hold := p.captureHold
+	p.mu.Unlock()
+	if hold > 0 {
+		time.Sleep(hold)
+	}
+}
+
+// CompleteAuth 计数 + 落闩 + 在渠道侧停留，然后按 mock 的真语义回结论。
+// 请款的渠道调用发生在持锁事务内，所以「落闩」就是「行锁已持有」的信号。
+func (p *itGateProvider) CompleteAuth(ctx context.Context, in AuthCompleteRequest, cfg map[string]string) (*AuthResult, error) {
+	p.countAction("complete")
+	p.hitGate()
+	p.holdCapture()
+	return p.mockProvider.CompleteAuth(ctx, in, cfg)
+}
+
+func (p *itGateProvider) CancelAuth(ctx context.Context, in AuthCancelRequest, cfg map[string]string) (*AuthResult, error) {
+	p.countAction("cancel")
+	return p.mockProvider.CancelAuth(ctx, in, cfg)
+}
+
+// QueryAuth 按进入次序执行 authQueryPlan（计划自己在锁外 sleep，用来排出「谁先落库」）。
+func (p *itGateProvider) QueryAuth(ctx context.Context, authNo string, cfg map[string]string) (*AuthResult, error) {
+	p.mu.Lock()
+	if p.queryAuthCalls == nil {
+		p.queryAuthCalls = map[string]int{}
+	}
+	p.queryAuthCalls[authNo]++
+	call := p.queryAuthCalls[authNo]
+	plan := p.authQueryPlan
+	p.mu.Unlock()
+	if plan == nil {
+		return p.mockProvider.QueryAuth(ctx, authNo, cfg)
+	}
+	return plan(call, authNo)
+}
+
+// crossSnapshot 取交叉路径的计次。
+func (p *itGateProvider) crossSnapshot() (complete, cancel int, queryAuthByNo map[string]int) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	out := make(map[string]int, len(p.queryAuthCalls))
+	for k, v := range p.queryAuthCalls {
+		out[k] = v
+	}
+	return p.actionCalls["complete"], p.actionCalls["cancel"], out
 }
 
 func (p *itGateProvider) Transfer(_ context.Context, in TransferRequest, _ map[string]string) (*TransferResult, error) {
@@ -518,12 +630,22 @@ func (p *itGateProvider) Transfer(_ context.Context, in TransferRequest, _ map[s
 	}, nil
 }
 
-// QueryRefund 永远回「查无此退款」：退款保持 pending，只留下节流与计数。
-func (p *itGateProvider) QueryRefund(_ context.Context, _ RefundQueryRequest, _ map[string]string) (*RefundStatusResult, error) {
+// QueryRefund 默认永远回「查无此退款」：退款保持 pending，只留下节流与计数。
+// refundFlip=true 时回「渠道已退款成功」，让补查真的走翻转分支（交叉路径用例用）。
+func (p *itGateProvider) QueryRefund(_ context.Context, req RefundQueryRequest, cfg map[string]string) (*RefundStatusResult, error) {
 	p.mu.Lock()
 	p.refundQueryCall++
+	flip := p.refundFlip
 	p.mu.Unlock()
+	// 落闩 = 「补查已经查到结论，下一步就是进事务翻转」：并发的回调 racer 以此为起跑点。
+	p.hitGate()
 	p.wait()
+	if flip {
+		return &RefundStatusResult{
+			Found: true, OK: true,
+			ChannelRefundID: "itcb_" + mockHash(req.RefundNo), Reason: "it: 渠道已退款成功",
+		}, nil
+	}
 	return &RefundStatusResult{Found: false, Reason: "it: 渠道查无这笔退款"}, nil
 }
 
@@ -585,13 +707,17 @@ func (l *itWarnLogger) countEvent(msg, eventID string) int {
 	return l.byEvent[msg+"\x00"+eventID]
 }
 
-// itRunFundGates 跑五条闸门；两个引擎文件各自建库后调用。
+// itRunFundGates 跑五条闸门 + 四条并发交叉路径；两个引擎文件各自建库后调用。
 func itRunFundGates(t *testing.T, gdb *gorm.DB, ctx context.Context, ddl itDDLProbe) {
 	t.Run("ConcurrentAuthFreezesOnce", func(t *testing.T) { itGateConcurrentAuth(t, gdb, ctx, ddl) })
 	t.Run("ConcurrentPayoutClaimsEachItemOnce", func(t *testing.T) { itGateConcurrentPayout(t, gdb, ctx) })
 	t.Run("RefundSyncThrottleIsPersisted", func(t *testing.T) { itGateRefundSyncThrottle(t, gdb, ctx) })
 	t.Run("CallbackNotifyIDForensics", func(t *testing.T) { itGateCallbackNotifyID(t, gdb, ctx, ddl) })
 	t.Run("OutboxDeadLetterTransitionsOnce", func(t *testing.T) { itGateOutboxDeadLetter(t, gdb, ctx) })
+	t.Run("RefundSyncVsCallbackFlipsOnce", func(t *testing.T) { itCrossRefundSyncVsCallback(t, gdb, ctx) })
+	t.Run("CaptureVsVoidMutuallyExclusive", func(t *testing.T) { itCrossCaptureVsVoid(t, gdb, ctx) })
+	t.Run("AuthReconcileBackfillsOnce", func(t *testing.T) { itCrossAuthReconcile(t, gdb, ctx) })
+	t.Run("PayoutSettlementJoinsOneBatch", func(t *testing.T) { itCrossPayoutUnique(t, gdb, ctx) })
 }
 
 // 闸门 1：并发同 (biz_type,biz_no) 预授权只向渠道冻结一次。
@@ -1072,5 +1198,488 @@ func itGateOutboxDeadLetter(t *testing.T, gdb *gorm.DB, ctx context.Context) {
 	}
 	if counts.Pending != 0 {
 		t.Fatalf("CountOutbox pending = %d, want 0（本轮积压已全部收敛为死信）", counts.Pending)
+	}
+}
+
+// ==================== 并发交叉路径 IT ====================
+//
+// 上面五条闸门各钉一道守卫；这一组钉的是**两条路径同时动手**的四条交叉路径。
+// 共同方法学：
+//   - 断言一律是「库里的计数与真值」（SELECT COUNT(*) / 状态列），不看日志文本；
+//   - 重叠不是靠 sleep 碰运气：渠道动作（QueryRefund / CompleteAuth）本身就在
+//     「即将进事务」或「正持行锁」的位置，桩在那里落闩，另一方收到闩立刻出发，
+//     两边就落在同一个事务窗口里；重叠是否真的成立由「删守卫必红」反证（见回票）。
+//   - 夹具沿用 itRunFundGates 的一次性库 + 真迁移 + 连接池 8（池=1 时这些用例
+//     全部失去意义，删锁也全绿）。
+
+// itPaySuccessCallback 走真实验签链路把支付单翻成 succeeded（交叉路径用例的前置）。
+func itPaySuccessCallback(t *testing.T, s *Service, ctx context.Context, code, paymentNo, secret string) {
+	t.Helper()
+	ts := time.Now().Unix()
+	body := []byte(`{"paymentNo":"` + paymentNo + `","result":"success","channelTxnId":"itxt_` + paymentNo +
+		`","timestamp":` + fmt.Sprint(ts) + `}`)
+	if _, err := s.HandleCallback(ctx, CallbackInput{
+		Channel: code, Body: body,
+		Headers: map[string]string{"x-timestamp": formatID(ts), "x-signature": SignMockCallback(secret, body, ts)},
+	}); err != nil {
+		t.Fatalf("%s 支付回调（%s）: %v", code, paymentNo, err)
+	}
+}
+
+// itRefundSuccessCallback 发一笔退款成功回执。错误回给调用方：它跑在并发协程里，
+// 不能在那里 t.Fatal。
+func itRefundSuccessCallback(s *Service, ctx context.Context, code, paymentNo, refundNo, secret string) error {
+	ts := time.Now().Unix()
+	body := []byte(`{"paymentNo":"` + paymentNo + `","refundNo":"` + refundNo +
+		`","result":"success","channelRefundId":"itcb_` + refundNo + `","timestamp":` + fmt.Sprint(ts) + `}`)
+	_, err := s.HandleCallback(ctx, CallbackInput{
+		Channel: code, Body: body,
+		Headers: map[string]string{"x-timestamp": formatID(ts), "x-signature": SignMockCallback(secret, body, ts)},
+	})
+	return err
+}
+
+// itCountRows 原生 SQL 计数：交叉路径的断言只认库里真值。
+func itCountRows(t *testing.T, gdb *gorm.DB, query string, args ...any) int64 {
+	t.Helper()
+	var n int64
+	if err := gdb.Raw(query, args...).Scan(&n).Error; err != nil {
+		t.Fatalf("count via %q: %v", query, err)
+	}
+	return n
+}
+
+// itWarmPool 先把连接池填到并发深度再开赛。
+// 冷池上「起跑」本身就要花几十到上百毫秒（MySQL 握手、PG 的 SASL 认证），
+// 两个 racer 的建连时间差会直接吃掉「同一瞬间都在同一行上」的窗口，
+// 表现为删了守卫也全绿（实测冷池下补查交叉用例偶发有一方漏扫）。
+func itWarmPool(t *testing.T, gdb *gorm.DB, n int) {
+	t.Helper()
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			var v int
+			if err := gdb.Raw("SELECT 1").Scan(&v).Error; err != nil {
+				t.Errorf("warm pool: %v", err)
+			}
+		}()
+	}
+	wg.Wait()
+}
+
+// itScanOne 原生 SQL 取单个标量（状态/金额列）。
+func itScanOne[T int64 | string](t *testing.T, gdb *gorm.DB, query string, args ...any) T {
+	t.Helper()
+	var v T
+	if err := gdb.Raw(query, args...).Scan(&v).Error; err != nil {
+		t.Fatalf("scan via %q: %v", query, err)
+	}
+	return v
+}
+
+// 交叉路径 1：同一笔 pending 退款，「补查翻转」与「回调翻转」同时发生。
+//
+// 资金语义：一笔退款只能入一次账。两条路径最终都走 transitionRefund，唯一的闸门是它对
+// 退款单行的 FOR UPDATE + 「非 pending 直接返回」；出站箱的 event_id 是随机 UUID，
+// 兜不住重复翻转，所以必须按库里计数断言：refunded_minor 只累计一次、
+// pay.refund.succeeded 恰一行、退款单终态唯一。
+func itCrossRefundSyncVsCallback(t *testing.T, gdb *gorm.DB, ctx context.Context) {
+	const (
+		rounds      = 6
+		secret      = "it-xrefund-secret"
+		orderMinor  = int64(1000)
+		refundMinor = int64(400)
+	)
+	prov := newITGateProvider("it-xrefund", 0)
+	prov.refundFlip = true
+	s := NewService(gdb, nopLogger{})
+	if _, err := s.UpsertChannel(ctx, SaveChannelInput{
+		Code: "itxref", Name: "补查与回调交叉", Provider: prov.Name(), Enabled: true,
+		Config: map[string]string{"secret": secret, "refundOutcome": "pending"},
+	}); err != nil {
+		t.Fatalf("upsert cross-refund channel: %v", err)
+	}
+	itWarmPool(t, gdb, 4) // 冷池建连时间会吃掉交叉窗口，先填满连接再开赛
+
+	for i := 0; i < rounds; i++ {
+		tag := fmt.Sprintf("XR-%d", i)
+		o, _, err := s.Create(ctx, CreateInput{
+			BizType: "it_xref", BizNo: tag, ChannelCode: "itxref",
+			AmountMinor: orderMinor, Currency: "CNY", Subject: "it cross refund",
+		})
+		if err != nil {
+			t.Fatalf("create order %s: %v", tag, err)
+		}
+		itPaySuccessCallback(t, s, ctx, "itxref", o.PaymentNo, secret)
+		r, err := s.CreateRefund(ctx, RefundInput{
+			PaymentNo: o.PaymentNo, BizType: "it_xref_refund", BizNo: "XRR-" + tag,
+			AmountMinor: refundMinor, Reason: "it",
+		})
+		if err != nil {
+			t.Fatalf("create refund %s: %v", tag, err)
+		}
+		if r.Status != RefundPending {
+			t.Fatalf("round %s refund status = %q, want pending（异步受理才会进补查路径）", tag, r.Status)
+		}
+
+		gate := make(chan struct{}, 1)
+		prov.setGate(gate)
+		var syncErr, cbErr error
+		var callbackFired bool
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			_, syncErr = s.SyncRefund(ctx, r.RefundNo)
+		}()
+		go func() {
+			defer wg.Done()
+			// 起跑点：补查侧已经拿到渠道结论（它的下一步就是进事务翻转），
+			// 回调侧此刻出发，两边就落在同一个行锁窗口里。
+			select {
+			case <-gate:
+				callbackFired = true
+			case <-time.After(3 * time.Second):
+				t.Errorf("round %s: 补查侧没打渠道（闩没响），两条路径没交叉", tag)
+				return
+			}
+			cbErr = itRefundSuccessCallback(s, ctx, "itxref", o.PaymentNo, r.RefundNo, secret)
+		}()
+		wg.Wait()
+		prov.setGate(nil)
+
+		if !callbackFired {
+			continue // 已由上面的 Errorf 记为失败
+		}
+		if syncErr != nil {
+			t.Errorf("round %s SyncRefund: %v", tag, syncErr)
+		}
+		if cbErr != nil {
+			t.Errorf("round %s HandleCallback: %v", tag, cbErr)
+		}
+
+		if got := itScanOne[int64](t, gdb, `SELECT refunded_minor FROM plg_pay_order WHERE payment_no = ?`, o.PaymentNo); got != refundMinor {
+			t.Fatalf("round %s: refunded_minor = %d, want %d（补查与回调各记一遍 = 同一笔退款重复入账）",
+				tag, got, refundMinor)
+		}
+		if got := itScanOne[string](t, gdb, `SELECT status FROM plg_pay_order WHERE payment_no = ?`, o.PaymentNo); got != StatusPartiallyRefunded {
+			t.Fatalf("round %s: 支付单状态 = %q, want %s（状态迁移只许发生一次）", tag, got, StatusPartiallyRefunded)
+		}
+		if n := itCountRows(t, gdb, `SELECT COUNT(*) FROM plg_pay_outbox WHERE event_name = ? AND payload LIKE ?`,
+			EventRefundOK, `%`+r.RefundNo+`%`); n != 1 {
+			t.Fatalf("round %s: 出站箱 pay.refund.succeeded = %d 行, want 恰 1（%s 被发了两遍，下游会重复入账）",
+				tag, n, r.RefundNo)
+		}
+		if n := itCountRows(t, gdb, `SELECT COUNT(*) FROM plg_pay_refund WHERE biz_type = ? AND biz_no = ?`,
+			"it_xref_refund", "XRR-"+tag); n != 1 {
+			t.Fatalf("round %s: 退款单行数 = %d, want 1", tag, n)
+		}
+		var fin Refund
+		if err := gdb.Raw(`SELECT status, fail_reason, succeeded_at FROM plg_pay_refund WHERE refund_no = ?`, r.RefundNo).
+			Scan(&fin).Error; err != nil {
+			t.Fatalf("round %s reload refund: %v", tag, err)
+		}
+		if fin.Status != RefundSucceeded || fin.SucceededAt == nil || fin.FailReason != "" {
+			t.Fatalf("round %s: 退款终态不唯一（status=%q succeededAt=%v failReason=%q）", tag, fin.Status, fin.SucceededAt, fin.FailReason)
+		}
+	}
+}
+
+// 交叉路径 2：并发 CaptureAuth 与 VoidAuth 打在同一张 authorized 单上。
+//
+// 资金语义：全额请款与撤销互斥。两条路径都靠授权行的 FOR UPDATE + Freezable 判定；
+// 请款的渠道调用就在持锁事务里，所以「请款已进入渠道动作」等价于「行锁已被持有」，
+// 撤销此刻出发必然撞在同一把锁上。断言取库里真值：不能既是 voided 又带已请款额，
+// 同 bizNo 的请款收款单不重复，Σcaptured ≤ amount。
+func itCrossCaptureVsVoid(t *testing.T, gdb *gorm.DB, ctx context.Context) {
+	const (
+		secret    = "it-xcapture-secret"
+		frozen    = int64(5000)
+		capBiz    = "it_xcap_capture"
+		capBizNo  = "XCC-1"
+		lockHeld  = 150 * time.Millisecond
+		startWait = 3 * time.Second
+	)
+	prov := newITGateProvider("it-xcapture", 0)
+	prov.freezeViaLedger = true // 渠道侧要真记下这笔授权，请款/撤销才有得可请、可撤
+	prov.captureHold = lockHeld
+	s := NewService(gdb, nopLogger{})
+	if _, err := s.UpsertChannel(ctx, SaveChannelInput{
+		Code: "itxcap", Name: "请款与撤销交叉", Provider: prov.Name(), Enabled: true,
+		Config: map[string]string{"secret": secret},
+	}); err != nil {
+		t.Fatalf("upsert capture/void channel: %v", err)
+	}
+	itWarmPool(t, gdb, 4) // 建连耗时不能算进「撤销撞上请款持锁」的那 150ms
+	a, err := s.CreateAuth(ctx, CreateAuthInput{
+		BizType: "it_xcap", BizNo: "XC-1", ChannelCode: "itxcap",
+		AmountMinor: frozen, Currency: "CNY", SubjectID: "it-xcap-subj", PayerID: "it-buyer", Remark: "it",
+	})
+	if err != nil {
+		t.Fatalf("CreateAuth: %v", err)
+	}
+	if a.Status != AuthAuthorized {
+		t.Fatalf("预授权状态 = %q, want authorized（并发对象必须是同一张 authorized 单）", a.Status)
+	}
+
+	gate := make(chan struct{}, 1)
+	prov.setGate(gate)
+	var capErr, voidErr error
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		_, capErr = s.CaptureAuth(ctx, a.AuthNo, CaptureAuthInput{
+			AmountMinor: frozen, BizType: capBiz, BizNo: capBizNo, OperatorID: "it",
+		})
+	}()
+	go func() {
+		defer wg.Done()
+		select {
+		case <-gate:
+		case <-time.After(startWait):
+			// 请款没进渠道动作（多半是它自己先被拒）：撤销照常出发，
+			// 此时库里应当只有撤销一个终态，下面的互斥断言仍然成立。
+		}
+		_, voidErr = s.VoidAuth(ctx, a.AuthNo)
+	}()
+	wg.Wait()
+	prov.setGate(nil)
+
+	complete, cancel, _ := prov.crossSnapshot()
+	if capErr == nil && voidErr == nil {
+		t.Fatalf("全额请款与撤销双双成功（complete=%d cancel=%d）：行锁闸门失效，同一笔冻结被两头动用",
+			complete, cancel)
+	}
+	if capErr != nil && voidErr != nil {
+		t.Fatalf("并发请款与撤销都被拒（capErr=%v voidErr=%v）：没有一方推进，前置没建立", capErr, voidErr)
+	}
+
+	fresh, err := s.QueryAuth(ctx, a.AuthNo)
+	if err != nil {
+		t.Fatalf("reload auth: %v", err)
+	}
+	if fresh.CapturedMinor > fresh.AmountMinor {
+		t.Fatalf("Σcaptured=%d > amount=%d：请款累计越界", fresh.CapturedMinor, fresh.AmountMinor)
+	}
+	orders := itCountRows(t, gdb, `SELECT COUNT(*) FROM plg_pay_order WHERE biz_type = ? AND biz_no = ?`, capBiz, capBizNo)
+	switch fresh.Status {
+	case AuthVoided:
+		if fresh.CapturedMinor != 0 {
+			t.Fatalf("撤销单上还挂着已请款额 %d：请款与撤销同时成立", fresh.CapturedMinor)
+		}
+		if fresh.VoidedAt == nil {
+			t.Fatal("voided 却 voided_at IS NULL：撤销没留终态时间")
+		}
+		if orders != 0 {
+			t.Fatalf("撤销成功的单留下 %d 张请款收款单, want 0（撤销成立就不该有收款事实）", orders)
+		}
+	default:
+		if fresh.Status != AuthCaptured && fresh.Status != AuthPartialCaptured {
+			t.Fatalf("终态 %q 既不是撤销也不是请款：并发把状态写花了", fresh.Status)
+		}
+		if fresh.VoidedAt != nil {
+			t.Fatalf("已请款（%q）的单上写着撤销时间 %v：两个终态混在同一行", fresh.Status, fresh.VoidedAt)
+		}
+		if orders != 1 {
+			t.Fatalf("同 bizNo %s 的请款收款单 = %d 张, want 恰 1（重复收款 = 重复扣款）", capBizNo, orders)
+		}
+		if fresh.CapturedMinor != frozen {
+			t.Fatalf("全额请款后 captured_minor = %d, want %d", fresh.CapturedMinor, frozen)
+		}
+	}
+	if voidErr == nil && fresh.Status != AuthVoided {
+		t.Fatalf("撤销返回成功但库里状态是 %q：结论与真值不符", fresh.Status)
+	}
+	if capErr == nil && itCountRows(t, gdb,
+		`SELECT COUNT(*) FROM plg_pay_order WHERE biz_type = ? AND biz_no = ? AND status = ?`,
+		capBiz, capBizNo, StatusSucceeded) != 1 {
+		t.Fatal("请款返回成功但没有对应的 succeeded 收款单")
+	}
+}
+
+// 交叉路径 3：同一张滞留 authorizing 的预授权被两个实例同时补查。
+//
+// 渠道查询天然幂等，两次 QueryAuth 是允许的；不许发生的是「状态回填两次」：
+// 回填走 applyAuthConfirmed / markAuthFailed 的条件更新（WHERE id = ? AND status = 'authorizing'），
+// 所以断言取库里真值——两个实例都查过（重叠成立），但终态只由第一个写入者决定，
+// 既不会被第二个「已冻结」结论覆盖，也不会被后来的「查无此单」落回 failed。
+func itCrossAuthReconcile(t *testing.T, gdb *gorm.DB, ctx context.Context) {
+	// 阶段 A：两个实例都拿到「渠道已冻结」结论，但授权号不同 ——
+	// 库里留下的必须是先落库那一个，第二个写入被条件更新拒掉。
+	itReconcileRound(t, gdb, ctx, 1, "两次都回填 authorized",
+		func(call int, _ string) (*AuthResult, error) {
+			if call == 1 {
+				time.Sleep(400 * time.Millisecond)
+				return &AuthResult{ChannelAuthNo: "itca_first", Status: AuthAuthorized}, nil
+			}
+			time.Sleep(900 * time.Millisecond) // 保证第二次结论一定排在第一次落库之后
+			return &AuthResult{ChannelAuthNo: "itca_second", Status: AuthAuthorized}, nil
+		}, AuthAuthorized, "itca_first")
+
+	// 阶段 B：先确认后查无 —— 已经回填 authorized 的行不许被后来的「查无」落回 failed。
+	itReconcileRound(t, gdb, ctx, 2, "回填后又落 failed",
+		func(call int, authNo string) (*AuthResult, error) {
+			if call == 1 {
+				time.Sleep(400 * time.Millisecond)
+				return &AuthResult{ChannelAuthNo: "itca_adopt", Status: AuthAuthorized}, nil
+			}
+			time.Sleep(900 * time.Millisecond)
+			return nil, response.NotFound(errNotFound).WithMsg("it: 渠道查无这笔授权 " + authNo)
+		}, AuthAuthorized, "itca_adopt")
+}
+
+func itReconcileRound(t *testing.T, gdb *gorm.DB, ctx context.Context, idx int, label string,
+	plan func(call int, authNo string) (*AuthResult, error), wantStatus, wantChannelAuthNo string) {
+	t.Helper()
+	prov := newITGateProvider(fmt.Sprintf("it-xrecon-%d", idx), 0)
+	prov.freezePending = true // 受理未确认：占位行停在 authorizing，交给补查收敛
+	prov.authQueryPlan = plan
+	code := fmt.Sprintf("itxr%d", idx)
+	s := NewService(gdb, nopLogger{})
+	if _, err := s.UpsertChannel(ctx, SaveChannelInput{
+		Code: code, Name: fmt.Sprintf("补查交叉 %d", idx), Provider: prov.Name(), Enabled: true,
+		Config: map[string]string{"secret": "it-xrecon-secret"},
+	}); err != nil {
+		t.Fatalf("upsert reconcile channel %d: %v", idx, err)
+	}
+	bizNo := fmt.Sprintf("XRA-%d", idx)
+	if _, err := s.CreateAuth(ctx, CreateAuthInput{
+		BizType: "it_xrecon", BizNo: bizNo, ChannelCode: code,
+		AmountMinor: 3000, Currency: "CNY", SubjectID: fmt.Sprintf("it-xrecon-subj-%d", idx), Remark: "it",
+	}); err == nil {
+		t.Fatalf("%s: 渠道受理未确认时 CreateAuth 不该返回成功（假冻结）", label)
+	}
+
+	var a Authorization
+	if err := gdb.WithContext(ctx).Where("biz_type = ? AND biz_no = ?", "it_xrecon", bizNo).Take(&a).Error; err != nil {
+		t.Fatalf("%s: load authorizing row: %v", label, err)
+	}
+	if a.Status != AuthAuthorizing {
+		t.Fatalf("%s: 前置状态 = %q, want authorizing", label, a.Status)
+	}
+	stale := time.Now().UTC().Add(-10 * time.Minute)
+	if err := gdb.Exec("UPDATE plg_pay_auth SET updated_at = ? WHERE id = ?", stale, int64(a.ID)).Error; err != nil {
+		t.Fatalf("%s: push auth updated_at stale: %v", label, err)
+	}
+
+	sums := make([]AuthReconcileSummary, 2)
+	errs := make([]error, 2)
+	start := make(chan struct{})
+	itWarmPool(t, gdb, 4) // 两个实例都要在第一次回填落库前扫到这一行
+	var wg sync.WaitGroup
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func(n int) {
+			defer wg.Done()
+			<-start
+			sums[n], errs[n] = s.ReconcileStuckAuths(ctx, time.Now().UTC())
+		}(i)
+	}
+	close(start)
+	wg.Wait()
+	for i := range errs {
+		if errs[i] != nil {
+			t.Fatalf("%s: ReconcileStuckAuths racer #%d: %v", label, i, errs[i])
+		}
+	}
+
+	// 重叠取证：两个实例都扫到了这一行、都打了渠道查询（查询幂等，多打不算错）。
+	for i := range sums {
+		if sums[i].Checked < 1 {
+			t.Fatalf("%s: racer #%d 一个滞留行都没扫到（Checked=0）：两条补查没重叠，用例失去意义", label, i)
+		}
+	}
+	_, _, queries := prov.crossSnapshot()
+	if queries[a.AuthNo] != 2 {
+		t.Fatalf("%s: 渠道 QueryAuth 对本行调用 %d 次, want 2（两个实例都真的查过）", label, queries[a.AuthNo])
+	}
+
+	var fin Authorization
+	if err := gdb.WithContext(ctx).Where("id = ?", int64(a.ID)).Take(&fin).Error; err != nil {
+		t.Fatalf("%s: reload auth: %v", label, err)
+	}
+	if fin.Status != wantStatus {
+		t.Fatalf("%s: 终态 = %q, want %q（failReason=%q）", label, fin.Status, wantStatus, fin.FailReason)
+	}
+	if fin.ChannelAuthNo != wantChannelAuthNo {
+		t.Fatalf("%s: channel_auth_no = %q, want %q —— 状态回填发生了第二次，后到的写入覆盖了先落库的渠道结论",
+			label, fin.ChannelAuthNo, wantChannelAuthNo)
+	}
+	if fin.FailReason != "" {
+		t.Fatalf("%s: 已回填 %s 的行上还写着 %q —— 既回填 authorized 又落 failed", label, wantStatus, fin.FailReason)
+	}
+}
+
+// 交叉路径 4：同一张结算单被两个请求同时建批。
+//
+// 兜底的是 uk_pay_payout_item_settlement：一条结算单只进一个批次，重复出款在 DDL 层就被拒。
+// 两个请求都持同一张结算单行的 FOR UPDATE，所以后到者必然在对方提交之后才写明细 ——
+// 唯一索引不看运气：无论是否重叠它都必须拦住第二行明细。失败方要拿到明确的索引冲突错误
+// （不是静默成功），且它自己的批次行随事务回滚（库里不留下半截草稿批次）。
+func itCrossPayoutUnique(t *testing.T, gdb *gorm.DB, ctx context.Context) {
+	const itemIndex = "uk_pay_payout_item_settlement"
+	s := NewService(gdb, nopLogger{})
+	st := Settlement{
+		SubjectID: "it-xpo-subj", PeriodStart: "2026-11-03", PeriodEnd: "2026-11-03",
+		GrossMinor: 1000, CommissionMinor: 100, NetMinor: 900,
+		Currency: "CNY", Status: SettlementConfirmed, OrderCount: 1,
+	}
+	if err := gdb.WithContext(ctx).Create(&st).Error; err != nil {
+		t.Fatalf("create settlement: %v", err)
+	}
+	settlementID := int64(st.ID)
+	batchesBefore := itCountRows(t, gdb, `SELECT COUNT(*) FROM plg_pay_payout_batch`)
+
+	batches := make([]*PayoutBatch, 2)
+	errs := make([]error, 2)
+	start := make(chan struct{})
+	itWarmPool(t, gdb, 4) // 让两个请求真的在结算单的行锁上排队，而不是在建连上排队
+	var wg sync.WaitGroup
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func(n int) {
+			defer wg.Done()
+			<-start
+			batches[n], errs[n] = s.CreatePayout(ctx, CreatePayoutInput{
+				SettlementIDs: []int64{settlementID}, Method: "channel", Note: "it cross payout",
+			})
+		}(i)
+	}
+	close(start)
+	wg.Wait()
+
+	ok := 0
+	var texts []string
+	for i := range errs {
+		texts = append(texts, fmt.Sprintf("racer#%d: %v", i, errs[i]))
+		if errs[i] == nil {
+			ok++
+			continue
+		}
+		// 按索引名取证：两引擎都把索引写进错误里，且不受服务端语言影响。
+		if !strings.Contains(strings.ToLower(errs[i].Error()), itemIndex) {
+			t.Fatalf("落败方拿到的不是 %s 冲突，而是：%v（要的是明确错误，不是含糊的 500 文本）", itemIndex, errs[i])
+		}
+	}
+	if ok != 1 {
+		t.Fatalf("并发建批成功方 = %d, want 恰 1（两张批次吃同一笔钱 = 重复出款）：%s", ok, strings.Join(texts, " | "))
+	}
+	if n := itCountRows(t, gdb, `SELECT COUNT(*) FROM plg_pay_payout_item WHERE settlement_id = ?`, settlementID); n != 1 {
+		t.Fatalf("%s 没拦住：该结算单在 plg_pay_payout_item 里有 %d 行, want 1", itemIndex, n)
+	}
+	if n := itCountRows(t, gdb, `SELECT COUNT(*) FROM plg_pay_payout_batch`) - batchesBefore; n != 1 {
+		t.Fatalf("并发建批落下 %d 行批次, want 恰 1（失败方的批次必须随事务回滚，不留半截草稿）", n)
+	}
+	var winner *PayoutBatch
+	for i := range batches {
+		if errs[i] == nil {
+			winner = batches[i]
+		}
+	}
+	if n := itCountRows(t, gdb, `SELECT COUNT(*) FROM plg_pay_payout_item WHERE batch_id = ?`, int64(winner.ID)); n != 1 {
+		t.Fatalf("胜者批次 %d 的明细 = %d 行, want 1", int64(winner.ID), n)
 	}
 }

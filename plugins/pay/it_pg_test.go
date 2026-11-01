@@ -195,8 +195,9 @@ func TestITPostgresMigrationsAndConcurrency(t *testing.T) {
 	}
 }
 
-// TestITPostgresFundGates 在真实 PostgreSQL 上跑同一组资金闸门用例
-// （夹具、闸门断言与 MySQL 版共用 itRunFundGates，只有 DDL 探针是 PG 方言）。
+// TestITPostgresFundGates 在真实 PostgreSQL 上跑同一组资金用例（五条闸门 + 四条并发交叉路径）。
+// 夹具、断言与 MySQL 版共用 itRunFundGates，本文件只放方言差异：
+// DDL 探针（information_schema / pg_indexes）与一次性库的建/删语句。
 func TestITPostgresFundGates(t *testing.T) {
 	dsn := os.Getenv("NEXADMIN_IT_PG_DSN")
 	if dsn == "" {
