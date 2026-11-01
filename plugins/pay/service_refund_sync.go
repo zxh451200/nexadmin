@@ -33,43 +33,54 @@ type RefundSyncSummary struct {
 	Flipped  int `json:"flipped"`
 	NotFound int `json:"notFound"`
 	Failed   int `json:"failed"`
+	// Skipped = 库里这一笔已终态，但不是本轮翻的（并发回调或另一个补查先落定）。
+	// 与 Flipped 分开，一轮扫下来「救回几笔」才等于真的写入数。
+	Skipped int `json:"skipped"`
 }
 
 // SyncRefund 主动查一笔退款在渠道侧的真实结论并收敛。
+func (s *Service) SyncRefund(ctx context.Context, refundNo string) (*Refund, error) {
+	upd, _, err := s.syncRefundOnce(ctx, refundNo)
+	return upd, err
+}
+
+// syncRefundOnce 与 SyncRefund 同一条路，多报一个 changed：这一笔到底是不是本轮翻的。
+// sweeper 用它把 flipped 和 skipped 分开——两个补查者（或补查与回调）撞在一起时，
+// 只有真的写入者算「救回一笔」，否则指标会翻倍，运维据此判断补偿有效性就是错的。
 //
 // 幂等：本地退款单已终态直接返回，不打渠道。不支持 RefundQuery 的渠道返回
 // capabilityUnsupported（明确失败，绝不静默成功）。渠道返回 Found=false（查无此退款）
 // 时保持 pending，递增 SyncAttempts、刷新 LastSyncAt 节流，并留一条可数告警——
 // 「查了但没动」必须区别于「没查」，否则运维无从判断补偿是否真的跑过。
-func (s *Service) SyncRefund(ctx context.Context, refundNo string) (*Refund, error) {
+func (s *Service) syncRefundOnce(ctx context.Context, refundNo string) (*Refund, bool, error) {
 	var r Refund
 	if err := s.db.WithContext(ctx).Where("refund_no = ?", strings.TrimSpace(refundNo)).Take(&r).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, response.NotFound(errNotFound)
+			return nil, false, response.NotFound(errNotFound)
 		}
-		return nil, err
+		return nil, false, err
 	}
 	// 已终态（succeeded/failed）：幂等返回，不打渠道。
 	if r.Status != RefundPending {
-		return &r, nil
+		return &r, false, nil
 	}
 
 	// 定位原支付单（取渠道与渠道流水），退款结论要落回它上面。
 	var o Order
 	if err := s.db.WithContext(ctx).Where("payment_no = ?", r.PaymentNo).Take(&o).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, response.NotFound(errNotFound)
+			return nil, false, response.NotFound(errNotFound)
 		}
-		return nil, err
+		return nil, false, err
 	}
 	p, cfg, err := s.channelOf(ctx, o.ChannelCode)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	qp, canQuery := p.(RefundQueryProvider)
 	// 双闸：既要实现 QueryRefund，又要渠道声明 RefundQuery 能力——任一不满足都算不支持。
 	if !canQuery || !ProviderCaps(p).RefundQuery {
-		return nil, capabilityUnsupported(p.Name(), "退款查询")
+		return nil, false, capabilityUnsupported(p.Name(), "退款查询")
 	}
 
 	// 补偿查询必须带与发起退款时同一个幂等号，渠道才认得出是同一笔。
@@ -84,10 +95,10 @@ func (s *Service) SyncRefund(ctx context.Context, refundNo string) (*Refund, err
 		IdempotencyKey: idemKey, AmountMinor: r.AmountMinor, OrderAmountMinor: o.AmountMinor,
 	}, cfg)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if res == nil {
-		return nil, response.New(502, errChannelError)
+		return nil, false, response.New(502, errChannelError)
 	}
 
 	// 查无此退款 / 渠道仍在处理：保持 pending，节流 + 可数留痕，不动状态机。
@@ -97,7 +108,7 @@ func (s *Service) SyncRefund(ctx context.Context, refundNo string) (*Refund, err
 		s.logWarn("pay: refund sync no-op",
 			"checked", 1, "flipped", 0, "refundNo", r.RefundNo,
 			"found", res.Found, "reason", res.Reason)
-		return &r, nil
+		return &r, false, nil
 	}
 
 	// 渠道给出确定结论：组装成 CallbackResult 复用 transitionRefund 收敛——
@@ -114,18 +125,23 @@ func (s *Service) SyncRefund(ctx context.Context, refundNo string) (*Refund, err
 		Reason:        res.Reason,
 	})
 	if terr != nil {
-		return nil, terr
+		return nil, false, terr
 	}
 	if !changed {
-		// 并发回调此刻已把退款翻到终态：幂等，不再重复收敛。
-		return &r, nil
+		// 并发回调/另一个补查已经把这笔翻到终态：本轮没写，但也不能把手里那份 pending
+		// 的旧副本当结论交回去——回读一次，调用方才知道钱已经动了。
+		var settled Refund
+		if serr := s.db.WithContext(ctx).Where("refund_no = ?", r.RefundNo).Take(&settled).Error; serr != nil {
+			return &r, false, nil
+		}
+		return &settled, false, nil
 	}
 	// 回读权威终态返回（transitionRefund 的失败分支只改库不改内存态）。
 	var fresh Refund
 	if rerr := s.db.WithContext(ctx).Where("refund_no = ?", r.RefundNo).Take(&fresh).Error; rerr != nil {
-		return &r, nil
+		return &r, true, nil
 	}
-	return &fresh, nil
+	return &fresh, true, nil
 }
 
 // recordRefundSyncNoop 记录一次「查了但没翻」：递增 SyncAttempts、刷新 LastSyncAt 节流，
@@ -172,21 +188,25 @@ func (s *Service) SyncStuckRefunds(ctx context.Context, now time.Time, olderThan
 			continue
 		}
 		summary.Checked++
-		upd, err := s.SyncRefund(ctx, row.RefundNo)
+		upd, changed, err := s.syncRefundOnce(ctx, row.RefundNo)
 		if err != nil {
 			summary.Failed++
 			s.logWarn("pay: stuck refund sync failed", "refundNo", row.RefundNo, "err", err.Error())
 			continue
 		}
-		if upd != nil && upd.Status != RefundPending {
+		switch {
+		case changed:
 			summary.Flipped++
-		} else {
+		case upd != nil && upd.Status != RefundPending:
+			// 本轮没写、库里已终态 = 并发回调或另一个补查先落定，不能再算一次救回。
+			summary.Skipped++
+		default:
 			summary.NotFound++
 		}
 	}
 	// 每轮一条可数日志：没有这行，就分不清「扫了但没有卡住的退款」与「sweeper 没跑」。
 	s.logWarn("pay: stuck refund sync pass",
 		"checked", summary.Checked, "flipped", summary.Flipped,
-		"notFound", summary.NotFound, "failed", summary.Failed)
+		"notFound", summary.NotFound, "failed", summary.Failed, "skipped", summary.Skipped)
 	return summary, nil
 }

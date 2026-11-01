@@ -171,6 +171,49 @@ func TestSyncRefundFlipsPendingToSucceeded(t *testing.T) {
 	}
 }
 
+// 1b. 进事务时并发回调已经翻好：本轮没写 → changed=false，且交回的是库里真值而不是
+// 手里那份 pending 副本。sweeper 靠这两个信息把 flipped 与 skipped 分开，
+// 否则补查者与回调各数一次，「救回几笔」会是资金事实的两倍。
+func TestSyncRefundAlreadyFlippedByPeer(t *testing.T) {
+	db, m := mockDB(t)
+	s := NewService(db, nopLog())
+	sp := &stubQuery{name: "stubq-peer", caps: Capabilities{RefundQuery: true},
+		res: &RefundStatusResult{Found: true, OK: true, ChannelRefundID: "chanrf_peer"}}
+	RegisterProvider(sp)
+
+	m.ExpectQuery("SELECT \\* FROM `plg_pay_refund` WHERE refund_no").
+		WillReturnRows(refundRow(RefundPending, 200, 0, nil, ""))
+	m.ExpectQuery("SELECT \\* FROM `plg_pay_order` WHERE payment_no").
+		WillReturnRows(orderRow("PAY1", StatusRefunding, 500, 0))
+	m.ExpectQuery("SELECT \\* FROM `plg_pay_channel` WHERE code").
+		WillReturnRows(channelRow("mock", "stubq-peer", `{"k":"v"}`))
+	// 事务里的 FOR UPDATE 读到的是已经终态的行：直接返回，不写任何表。
+	m.ExpectBegin()
+	m.ExpectQuery("SELECT \\* FROM `plg_pay_refund` WHERE refund_no").
+		WillReturnRows(refundRow(RefundSucceeded, 200, 0, nil, "chanrf_peer"))
+	m.ExpectCommit()
+	// changed=false 也要回读真值交回去。
+	m.ExpectQuery("SELECT \\* FROM `plg_pay_refund` WHERE refund_no").
+		WillReturnRows(refundRow(RefundSucceeded, 200, 0, nil, "chanrf_peer"))
+
+	upd, changed, err := s.syncRefundOnce(tenantCtx, "RF5001")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed {
+		t.Fatal("changed = true, want false（本轮没有写入就不算救回一笔）")
+	}
+	if upd == nil || upd.Status != RefundSucceeded {
+		t.Fatalf("返回 %+v, want succeeded —— 把旧的 pending 副本交回去，调用方会以为还没结论", upd)
+	}
+	if sp.calls != 1 {
+		t.Fatalf("QueryRefund calls = %d, want 1", sp.calls)
+	}
+	if err := m.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // 2. 渠道拒绝 → failed 且 refunding 还原为上一个可退状态（refunded=0→succeeded / >0→partially_refunded）。
 func TestSyncRefundChannelReject(t *testing.T) {
 	cases := []struct {
@@ -644,6 +687,60 @@ func TestReconcileStuckAuths(t *testing.T) {
 			}
 			if sp.queryCalls != 1 {
 				t.Fatalf("QueryAuth calls = %d, want 1", sp.queryCalls)
+			}
+			if err := m.ExpectationsWereMet(); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+// 补查撞车：两个实例同时收敛同一张 authorizing。渠道查询多打一次是幂等的，但汇总只许
+// 数真的写入者——条件更新影响 0 行时必须落 Skipped，否则一轮扫完 adopted/failed 翻倍，
+// 运维据此判断「补偿救回了几笔」就是错的（真库那一侧由 itCrossAuthReconcile 钉住）。
+func TestReconcileStuckAuthsCountsOnlyWriters(t *testing.T) {
+	cases := []struct {
+		tag      string
+		queryRes *AuthResult
+		queryErr error
+		what     string
+	}{
+		{"adopt", &AuthResult{ChannelAuthNo: "chan_late", Status: "AUTHORIZED"}, nil, "渠道确认"},
+		{"miss", nil, response.NotFound(errNotFound), "渠道查无"},
+	}
+	for _, c := range cases {
+		t.Run(c.what+"但行已被别人落定", func(t *testing.T) {
+			db, m := mockDB(t)
+			s := NewService(db, nopLog())
+			sp := &stubAuth{name: "stubauth-skip-" + c.tag, caps: Capabilities{Auth: true},
+				queryRes: c.queryRes, queryErr: c.queryErr}
+			RegisterProvider(sp)
+
+			m.ExpectQuery("SELECT \\* FROM `plg_pay_auth` WHERE status").
+				WillReturnRows(authRow(AuthAuthorizing, 1000, 0, sp.name, ""))
+			m.ExpectQuery("SELECT \\* FROM `plg_pay_channel` WHERE code").
+				WillReturnRows(channelRow(sp.name, sp.name, `{"k":"v"}`))
+			m.ExpectBegin()
+			// affected 0 = WHERE status='authorizing' 一行都不匹配，本轮没有写进去。
+			m.ExpectExec("UPDATE `plg_pay_auth`").WillReturnResult(sqlmock.NewResult(1, 0))
+			m.ExpectCommit()
+
+			got, err := s.ReconcileStuckAuths(tenantCtx, time.Now().UTC())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.Checked != 1 {
+				t.Fatalf("checked = %d, want 1", got.Checked)
+			}
+			if got.Adopted != 0 || got.Failed != 0 {
+				t.Fatalf("adopted=%d failed=%d, want 0/0（本轮没写就不算救回）：%+v", got.Adopted, got.Failed, got)
+			}
+			if got.Skipped != 1 {
+				t.Fatalf("skipped = %d, want 1", got.Skipped)
+			}
+			if got.Adopted+got.Failed+got.Unresolved+got.Skipped != got.Checked {
+				t.Fatalf("分桶加起来 %d != checked %d —— 有笔没归属",
+					got.Adopted+got.Failed+got.Unresolved+got.Skipped, got.Checked)
 			}
 			if err := m.ExpectationsWereMet(); err != nil {
 				t.Fatal(err)

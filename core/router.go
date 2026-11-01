@@ -89,7 +89,18 @@ func (a *App) commonRoutes(e *gin.Engine, api *gin.RouterGroup, probes []*health
 	a.registerShutdown(e)
 	api.GET("/system/status", func(c *gin.Context) {
 		// instanceId 每次进程启动不同：市场自重启后，前端据此确认等到的是新进程而不是尚未退出的旧进程。
-		response.OK(c, gin.H{"initialized": a.initialized.Load(), "instanceId": InstanceID()})
+		// demo 供前端显示「演示模式」徽标；演示凭据只在 demo 开启时下发（演示站凭据本就公开，
+		// 但关闭演示模式时绝不能把它们带出后端）。
+		status := gin.H{"initialized": a.initialized.Load(), "instanceId": InstanceID(), "demo": a.cfg.Demo.Enabled}
+		if a.cfg.Demo.Enabled {
+			if a.cfg.Demo.Account != "" {
+				status["account"] = a.cfg.Demo.Account
+			}
+			if a.cfg.Demo.Password != "" {
+				status["password"] = a.cfg.Demo.Password
+			}
+		}
+		response.OK(c, status)
 	})
 	api.GET("/i18n/languages", func(c *gin.Context) {
 		response.OK(c, i18n.Default().Languages())
@@ -202,6 +213,13 @@ func (a *App) buildFull() (*gin.Engine, error) {
 	ws.SetDefault(wsHub)
 	e.GET("/ws", ws.NewHandler(wsHub, svc).Handle)
 	api := e.Group(contractAPIPrefix)
+	// 演示站写保护（config demo.enabled，默认关）：registry 始终创建，
+	// 插件用 Deps.DemoAllow 注册的放行条目在未开启时也只是写进一张没人查的表。
+	demoReg := middleware.NewDemoRegistry(middleware.DemoBuiltinAllow(contractAPIPrefix)...)
+	demoReg.Allow(cfg.Demo.Allow...)
+	if cfg.Demo.Enabled {
+		api.Use(middleware.DemoMode(demoReg))
+	}
 	api.Use(middleware.NoStore(), middleware.ParseToken(svc), openapi.Authenticate(openapi.Options{
 		Store: openapi.GormStore{DB: db}, Cache: ch, Log: a.log,
 		Limiter: middleware.NewLimiter(ch, a.log, "openapi-sign", cfg.RateLimit.Rule("openapi_sign").Limit, cfg.RateLimit.Rule("openapi_sign").Window),
@@ -223,10 +241,11 @@ func (a *App) buildFull() (*gin.Engine, error) {
 
 	deps := &Deps{
 		Config: cfg, DB: db, Cache: ch, Bus: bus, Auth: svc, Log: a.log, Notify: nf,
-		Public: api,
-		Admin:  api.Group(contractAdminPrefix, middleware.RequireSuper(), middleware.SkipTenant()),
-		Root:   e,
-		APIDoc: apidoc.New(e, apidoc.Options{Disabled: cfg.DisabledModules}),
+		demoAllow: demoReg,
+		Public:    api,
+		Admin:     api.Group(contractAdminPrefix, middleware.RequireSuper(), middleware.SkipTenant()),
+		Root:      e,
+		APIDoc:    apidoc.New(e, apidoc.Options{Disabled: cfg.DisabledModules}),
 	}
 	api.GET("/mcp/tools", Perm("mcp:list"), func(c *gin.Context) {
 		response.OK(c, gin.H{"tools": deps.APIDoc.Tools()})

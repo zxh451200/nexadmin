@@ -97,6 +97,7 @@
   "layout": {
     "appName": "NexAdmin",
     "home": "Home",
+    "demoBadge": "Demo mode",
     "navigation": "Main navigation",
     "skipToContent": "Skip to main content",
     "openMenu": "Open menu",

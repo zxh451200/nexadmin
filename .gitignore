@@ -1,4 +1,4 @@
-node_modules/
+﻿node_modules/
 dist/
 bin/
 data/*
@@ -10,21 +10,22 @@ config/config.yaml
 .env.local
 *.log
 
-# 插件授权私钥（开发用，禁止提交）
+# 鎻掍欢鎺堟潈绉侀挜锛堝紑鍙戠敤锛岀姝㈡彁浜わ級
 .dev-keys/
 
-# 编译产物
+# 缂栬瘧浜х墿
 /nexadmin
 /server
 /cmd/nexadmin/nexadmin
 *.exe
 
-# 安全扫描插件状态
+# 瀹夊叏鎵弿鎻掍欢鐘舵€?
 .mimosa/
 
-# Python 字节码缓存
+# Python 瀛楄妭鐮佺紦瀛?
 __pycache__/
 
-# 本地工具会话产物
+# 鏈湴宸ュ叿浼氳瘽浜х墿
 .zcode/
+.qoder/
 .tmp/

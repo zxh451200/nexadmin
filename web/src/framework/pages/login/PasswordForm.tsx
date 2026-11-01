@@ -20,12 +20,18 @@ export function PasswordForm({
   // onChallenge 保留在接口上供 PhoneForm 等其他入口使用，PasswordForm 自身不再调用。
   onChallenge: _onChallenge,
   captchaAlways,
+  demoCredentials,
+  fillNonce = 0,
 }: {
   onSuccess: () => void
   onForgot?: () => void
   onChallenge?: (c: LoginChallenge) => void
   /** 「登录验证码」强制开启（/auth/methods 的 captchaEnabled）：首屏就要求图形验证码 */
   captchaAlways?: boolean
+  /** 演示站凭据（/system/status 下发）：非 null 时预填账号与密码 */
+  demoCredentials?: { account: string; password: string } | null
+  /** 父组件的「填入演示账号」按钮计数：变化时重新预填（用户清空后再填回去） */
+  fillNonce?: number
 }) {
   const { t } = useTranslation()
   const login = useAuth((s) => s.login)
@@ -62,6 +68,14 @@ export function PasswordForm({
   )
   type Values = z.infer<typeof schema>
   const form = useForm<Values>({ resolver: zodResolver(schema), defaultValues: { username: '', password: '', captcha: '' } })
+
+  // 演示站预填：凭据就绪时填一次，fillNonce 变化（点「填入演示账号」）时再填。
+  // demoCredentials 由 useDemoAccount 用 useMemo 保持稳定，不会在用户编辑时反复重置。
+  useEffect(() => {
+    if (!demoCredentials) return
+    form.setValue('username', demoCredentials.account)
+    form.setValue('password', demoCredentials.password)
+  }, [demoCredentials, fillNonce, form])
 
   const onSubmit = async (v: Values) => {
     if (needCaptcha && !v.captcha) {

@@ -171,6 +171,10 @@ type PayoutSweepSummary struct {
 	Batches    int `json:"batches"`
 	Resolved   int `json:"resolved"`
 	Unresolved int `json:"unresolved"`
+	// Skipped = 渠道终局拿到了，但这一笔已由别的写入者落定（条件更新影响 0 行）。
+	// 不单独记就会把「两个 sweeper 补查同一批」数成两倍救回，且败者的相反结论
+	// 曾能直接覆写已落定的那一行（见 settleStuckPayoutItem）。
+	Skipped int `json:"skipped"`
 }
 
 // payoutStaleAfter 是「发起后多久没终局才算滞留」：给渠道正常的异步处理留窗口，
@@ -225,22 +229,38 @@ func (s *Service) SweepStuckPayouts(ctx context.Context, now time.Time) (PayoutS
 			continue
 		}
 		resolvedHere := 0
+		// 两个 sweeper 会各自打一次渠道查询（查询幂等，多打不算错），但终局只许第一个写入者落：
+		// 写入带 `status = initiated` 守卫，按真实影响行数分档，败者记 Skipped 不算救回。
 		switch {
 		case res.Accepted:
 			for j := range stuck {
 				it := &stuck[j]
-				s.finishPayoutItem(tenant.Skip(ctx), it, PayoutItemSuccess,
+				wrote, werr := s.settleStuckPayoutItem(tenant.Skip(ctx), it, PayoutItemSuccess,
 					firstNonEmpty(res.ChannelDetailNo, it.ChannelNo), "")
-				out.Resolved++
-				resolvedHere++
+				switch {
+				case werr != nil:
+					out.Unresolved++
+				case wrote:
+					out.Resolved++
+					resolvedHere++
+				default:
+					out.Skipped++
+				}
 			}
 		case !res.Pending:
 			reason := truncate(firstNonEmpty(res.Reason, res.State, "渠道代付终局为失败"), 200)
 			for j := range stuck {
 				it := &stuck[j]
-				s.finishPayoutItem(tenant.Skip(ctx), it, PayoutItemFailed, it.ChannelNo, reason)
-				out.Resolved++
-				resolvedHere++
+				wrote, werr := s.settleStuckPayoutItem(tenant.Skip(ctx), it, PayoutItemFailed, it.ChannelNo, reason)
+				switch {
+				case werr != nil:
+					out.Unresolved++
+				case wrote:
+					out.Resolved++
+					resolvedHere++
+				default:
+					out.Skipped++
+				}
 			}
 		default:
 			out.Unresolved += len(stuck)
@@ -257,7 +277,7 @@ func (s *Service) SweepStuckPayouts(ctx context.Context, now time.Time) (PayoutS
 	}
 	if out.Batches > 0 {
 		s.logInfo("pay: stuck payouts swept", "batches", out.Batches,
-			"resolved", out.Resolved, "unresolved", out.Unresolved)
+			"resolved", out.Resolved, "unresolved", out.Unresolved, "skipped", out.Skipped)
 	}
 	return out, nil
 }
@@ -420,6 +440,28 @@ func (s *Service) finishPayoutItem(ctx context.Context, it *PayoutItem, status, 
 	it.Status = status
 	it.ChannelNo = truncate(channelNo, 128)
 	it.FailReason = truncate(failReason, 200)
+}
+
+// settleStuckPayoutItem 是代付终局补查专用的落终局写入：只把仍停在 initiated 的那一笔收敛，
+// 并报告是否真的写了。与 finishPayoutItem 的区别就是这道 `status = initiated` 守卫——
+// 两个 sweeper 可能拿到相反的渠道结论，无守卫写入会让后到的结论覆写已经落定的资金事实。
+func (s *Service) settleStuckPayoutItem(ctx context.Context, it *PayoutItem, status, channelNo, failReason string) (bool, error) {
+	res := s.db.WithContext(ctx).Model(&PayoutItem{}).
+		Where("id = ? AND status = ?", int64(it.ID), PayoutItemInitiated).
+		Updates(map[string]any{
+			"status":      status,
+			"channel_no":  truncate(channelNo, 128),
+			"fail_reason": truncate(failReason, 200),
+		})
+	if res.Error != nil {
+		s.logWarn("pay: payout settle update failed", "item", int64(it.ID), "status", status, "err", res.Error.Error())
+		return false, res.Error
+	}
+	if res.RowsAffected == 0 {
+		return false, nil
+	}
+	it.Status, it.ChannelNo, it.FailReason = status, truncate(channelNo, 128), truncate(failReason, 200)
+	return true, nil
 }
 
 // finalizePayoutBatch 按笔的终局聚合批次状态：全部成功才 paid；全失败 failed；

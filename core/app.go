@@ -42,6 +42,7 @@ import (
 	"nexadmin/core/ctl"
 	"nexadmin/core/i18n"
 	"nexadmin/core/mcp"
+	"nexadmin/core/middleware"
 	"nexadmin/core/migrate"
 	"nexadmin/core/notify"
 	"nexadmin/core/setup"
@@ -102,7 +103,15 @@ type Deps struct {
 	// 非 HTTP 扩展点应在执行前及成功返回前检查；Register / Start 装配期间不要调用。
 	// nil 表示手工装配时未提供 guard，插件可保留原有行为；生产管理器始终注入。
 	PluginActive func() bool
+	// demoAllow 收集演示模式（config demo.enabled）的额外放行接口。nil = 手工构造的
+	// Deps（测试）未装配注册表，DemoAllow 空操作；生产装配始终非 nil（见 router.go）。
+	demoAllow *middleware.DemoRegistry
 }
+
+// DemoAllow 在演示模式（config 的 demo.enabled）下额外放行指定写接口，元素格式
+// "POST /api/v1/xxx"（完整路径，支持尾部 * 前缀匹配）。给插件声明自己的公开写接口
+// （如支付回调）在演示站保持可用；demo 未开启时注册表没人查，注册也是无害的。
+func (d *Deps) DemoAllow(entries ...string) { d.demoAllow.Allow(entries...) }
 
 // Option 用于定制框架行为，而不是修改 core/。
 type Option func(*App)

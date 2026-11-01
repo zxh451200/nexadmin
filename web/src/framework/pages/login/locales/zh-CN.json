@@ -1,6 +1,9 @@
 {
   "loginPage": {
     "welcome": "欢迎回来",
+    "demoBadge": "演示模式",
+    "demoAccountHint": "公开演示环境：数据会定期重置，请勿保存真实内容。",
+    "demoFill": "填入演示账号",
     "welcomeHint": "登录后继续管理你的业务",
     "slogan": "开箱即用的企业级管理后台",
     "sloganDesc": "多租户、多语言、AI 加持，让后台开发更专注业务本身。",

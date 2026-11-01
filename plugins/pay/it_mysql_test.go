@@ -498,7 +498,13 @@ type itGateProvider struct {
 	// 用来把「谁先落库」变成断言里可核对的真值，而不是看调度运气。
 	authQueryPlan  func(call int, authNo string) (*AuthResult, error)
 	queryAuthCalls map[string]int
-	actionCalls    map[string]int
+	// transferPending：代付只受理不给终局，明细停在 initiated（终局补查路径的前置）。
+	transferPending bool
+	// transferQueryPlan：代付终局补查按「第几次进入」给不同结论。两个 sweeper 拿到相反
+	// 终局时，后到那个不许覆写已经落定的资金事实——守卫拿掉就红在这里。
+	transferQueryPlan func(call int) (*TransferResult, error)
+	transferQueryCall int
+	actionCalls       map[string]int
 }
 
 func newITGateProvider(name string, latency time.Duration) *itGateProvider {
@@ -622,12 +628,33 @@ func (p *itGateProvider) Transfer(_ context.Context, in TransferRequest, _ map[s
 		p.transferCalls = map[string]int{}
 	}
 	p.transferCalls[in.ItemNo]++
+	pending := p.transferPending
 	p.mu.Unlock()
 	p.wait()
+	if pending {
+		// 渠道受理但终局没回来：明细只能留在 initiated，交给补查收敛。
+		return &TransferResult{Pending: true, State: "PROCESSING",
+			ChannelBatchNo: "itbt_" + in.BatchNo, ChannelDetailNo: "itdt_" + in.ItemNo}, nil
+	}
 	return &TransferResult{
 		Accepted: true, State: "SUCCESS",
 		ChannelBatchNo: "itbt_" + in.BatchNo, ChannelDetailNo: "itdt_" + in.ItemNo,
 	}, nil
+}
+
+// QueryTransfer 按 transferQueryPlan 给「第几次进入」的结论（两个 sweeper 撞车用例用），
+// 没装计划就退回 mock 台账的真语义。
+func (p *itGateProvider) QueryTransfer(ctx context.Context, batchNo string, cfg map[string]string) (*TransferResult, error) {
+	p.mu.Lock()
+	p.transferQueryCall++
+	call, plan := p.transferQueryCall, p.transferQueryPlan
+	p.mu.Unlock()
+	if plan != nil {
+		if res, err := plan(call); res != nil || err != nil {
+			return res, err
+		}
+	}
+	return p.mockProvider.QueryTransfer(ctx, batchNo, cfg)
 }
 
 // QueryRefund 默认永远回「查无此退款」：退款保持 pending，只留下节流与计数。
@@ -707,7 +734,7 @@ func (l *itWarnLogger) countEvent(msg, eventID string) int {
 	return l.byEvent[msg+"\x00"+eventID]
 }
 
-// itRunFundGates 跑五条闸门 + 四条并发交叉路径；两个引擎文件各自建库后调用。
+// itRunFundGates 跑五条闸门 + 一条请款/撤销合法序列 + 四条并发交叉路径；两个引擎文件各自建库后调用。
 func itRunFundGates(t *testing.T, gdb *gorm.DB, ctx context.Context, ddl itDDLProbe) {
 	t.Run("ConcurrentAuthFreezesOnce", func(t *testing.T) { itGateConcurrentAuth(t, gdb, ctx, ddl) })
 	t.Run("ConcurrentPayoutClaimsEachItemOnce", func(t *testing.T) { itGateConcurrentPayout(t, gdb, ctx) })
@@ -718,6 +745,7 @@ func itRunFundGates(t *testing.T, gdb *gorm.DB, ctx context.Context, ddl itDDLPr
 	t.Run("CaptureVsVoidMutuallyExclusive", func(t *testing.T) { itCrossCaptureVsVoid(t, gdb, ctx) })
 	t.Run("AuthReconcileBackfillsOnce", func(t *testing.T) { itCrossAuthReconcile(t, gdb, ctx) })
 	t.Run("PayoutSettlementJoinsOneBatch", func(t *testing.T) { itCrossPayoutUnique(t, gdb, ctx) })
+	t.Run("VoidAfterPartialCaptureKeepsCapturedFact", func(t *testing.T) { itGateVoidAfterPartialCapture(t, gdb, ctx) })
 }
 
 // 闸门 1：并发同 (biz_type,biz_no) 预授权只向渠道冻结一次。
@@ -1591,6 +1619,23 @@ func itReconcileRound(t *testing.T, gdb *gorm.DB, ctx context.Context, idx int, 
 		if sums[i].Checked < 1 {
 			t.Fatalf("%s: racer #%d 一个滞留行都没扫到（Checked=0）：两条补查没重叠，用例失去意义", label, i)
 		}
+		if sums[i].Adopted+sums[i].Failed+sums[i].Unresolved+sums[i].Skipped != sums[i].Checked {
+			t.Fatalf("%s: racer #%d 分桶不齐（checked=%d）：%+v —— 有一笔补查没有归属", label, i, sums[i].Checked, sums[i])
+		}
+	}
+	// 指标不许翻倍：这一行只能被一个实例「救回」，另一个必须落 Skipped（条件更新影响 0 行）。
+	// 库里那一行只有一个终态（下面的 channel_auth_no 取证），计数也必须只有一个写入者。
+	saved, skipped := 0, 0
+	for i := range sums {
+		saved += sums[i].Adopted + sums[i].Failed
+		skipped += sums[i].Skipped
+	}
+	if saved != 1 {
+		t.Fatalf("%s: 两实例合计「本轮落定」= %d, want 恰 1（补查撞车被数成两次救回，运维据此判断补偿效果就是错的）：%+v",
+			label, saved, sums)
+	}
+	if skipped != 1 {
+		t.Fatalf("%s: 两实例合计 skipped = %d, want 1（败者的那一笔没归属）：%+v", label, skipped, sums)
 	}
 	_, _, queries := prov.crossSnapshot()
 	if queries[a.AuthNo] != 2 {
@@ -1703,5 +1748,68 @@ func itCrossPayoutUnique(t *testing.T, gdb *gorm.DB, ctx context.Context) {
 	}
 	if n := itCountRows(t, gdb, `SELECT COUNT(*) FROM plg_pay_payout_item WHERE settlement_id = ?`, settlementID); n != 1 {
 		t.Fatalf("结算单 %d 重试后有 %d 行明细, want 仍 1", settlementID, n)
+	}
+}
+
+// 合法序列（此前没闸）：部分请款之后再撤销。Freezable 含 partial_captured，所以撤销是允许的，
+// 但它只释放没请款的那部分——已经请款成功的钱是既成资金事实，撤销既不许在本地抹掉
+// captured_minor，也不许让那张收款单跟着消失。这条走真库是因为前两条都要看库里落下来的列，
+// sqlmock 从不执行 SQL，照不出「UPDATE 少写了一列」。
+func itGateVoidAfterPartialCapture(t *testing.T, gdb *gorm.DB, ctx context.Context) {
+	const (
+		secret  = "it-voidp-secret"
+		frozen  = int64(5000)
+		capture = int64(2000)
+	)
+	prov := newITGateProvider("it-voidp", 0)
+	prov.freezeViaLedger = true // 渠道台账要真记下这笔授权，部分请款与撤销才有得可动
+	s := NewService(gdb, nopLogger{})
+	if _, err := s.UpsertChannel(ctx, SaveChannelInput{
+		Code: "itvoidp", Name: "部分请款后撤销", Provider: prov.Name(), Enabled: true,
+		Config: map[string]string{"secret": secret},
+	}); err != nil {
+		t.Fatalf("upsert void-partial channel: %v", err)
+	}
+	a, err := s.CreateAuth(ctx, CreateAuthInput{
+		BizType: "it_voidp", BizNo: "VP-1", ChannelCode: "itvoidp",
+		AmountMinor: frozen, Currency: "CNY", SubjectID: "it-voidp-subj", PayerID: "it-buyer",
+	})
+	if err != nil {
+		t.Fatalf("CreateAuth: %v", err)
+	}
+	if a.Status != AuthAuthorized {
+		t.Fatalf("预授权状态 = %q, want authorized", a.Status)
+	}
+
+	if _, err := s.CaptureAuth(ctx, a.AuthNo, CaptureAuthInput{
+		AmountMinor: capture, BizType: "it_voidp_capture", BizNo: "VPC-1", OperatorID: "it",
+	}); err != nil {
+		t.Fatalf("CaptureAuth(部分请款): %v", err)
+	}
+	after, err := s.QueryAuth(ctx, a.AuthNo)
+	if err != nil {
+		t.Fatalf("reload after partial capture: %v", err)
+	}
+	if after.Status != AuthPartialCaptured || after.CapturedMinor != capture {
+		t.Fatalf("部分请款后 = (%q, captured %d), want (partial_captured, %d)", after.Status, after.CapturedMinor, capture)
+	}
+
+	v, err := s.VoidAuth(ctx, a.AuthNo)
+	if err != nil {
+		t.Fatalf("部分请款后的撤销必须被允许（Freezable 含 partial_captured，释放剩余额度）：%v", err)
+	}
+	if v.Status != AuthVoided || v.VoidedAt == nil {
+		t.Fatalf("撤销终态 = (%q, voidedAt=%v), want (voided, 非空)", v.Status, v.VoidedAt)
+	}
+	if got := itScanOne[int64](t, gdb, `SELECT captured_minor FROM plg_pay_auth WHERE auth_no = ?`, a.AuthNo); got != capture {
+		t.Fatalf("撤销后 captured_minor = %d, want %d —— 撤销把已经请款成功的资金事实抹掉了", got, capture)
+	}
+	if n := itCountRows(t, gdb, `SELECT COUNT(*) FROM plg_pay_order WHERE biz_type = ? AND biz_no = ? AND status = ?`,
+		"it_voidp_capture", "VPC-1", StatusSucceeded); n != 1 {
+		t.Fatalf("部分请款的收款单 = %d 行(succeeded), want 1 —— 撤销不该倒扣已经收进来的钱", n)
+	}
+	complete, cancel, _ := prov.crossSnapshot()
+	if complete != 1 || cancel != 1 {
+		t.Fatalf("渠道动作 complete=%d cancel=%d, want 1/1（请款一次、撤销剩余额度一次）", complete, cancel)
 	}
 }

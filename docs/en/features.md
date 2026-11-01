@@ -190,6 +190,10 @@ Packages can also limit the menu scope: a user's effective permissions are inter
 - Usage snapshots: `sys_tenant_usage_daily` is unique on `(tenant_id, day)`; each visit to My tenant upserts that day's row, the trend shows at most 30 days, and the first day has a single point.
 - Per-tenant rate limiting: `ratelimit.tenant_api` (default `limit: 0`, i.e. off) counts every `/api/v1` request per tenant so one tenant's traffic spike cannot starve the others; requests without a resolved tenant are not counted.
 
+## 7. Public demo mode
+
+With `demo.enabled: true` (off by default; keys in the configuration reference) the framework enters demo-site write protection: every non-read request to `/api/v1` (anything but GET/HEAD/OPTIONS) is rejected with 403 and the message "Demo mode: modifying data is disabled". Only the built-in whitelist passes — sign in, refresh token, sign out and the WebSocket entry ticket; any other write endpoint must be allow-listed via `demo.allow` or a plugin's `Deps.DemoAllow` (trailing `*` acts as a prefix). Self-service endpoints such as password change are deliberately not allow-listed, so the public demo account's password cannot be changed. Public pages at the site root (including the website contact form) do not pass through this gate. The frontend shows a "Demo mode" badge on the sign-in page and in the top bar based on the `demo` field of `GET /system/status`; when `demo.account` / `demo.password` are set, the credentials are served through that endpoint only while demo mode is on, and the sign-in page displays them with a one-click fill button. Deployment steps (demo account, scheduled reset) live in the deployment guide.
+
 ## Appendix: permission codes ↔ endpoints
 
 Generated from source. Paths omit the `/api/v1` prefix (`/healthz` and `/metrics` are at the root). "Login only" = a valid login is required but no permission code is checked; "public" = no login (some protected by credentials, one-time state, signatures or rate limits). Grouped by module; endpoints sharing a permission code are on one line.

@@ -901,6 +901,55 @@ func TestPayoutSweepResolvesSuccess(t *testing.T) {
 	}
 }
 
+// 两个 sweeper 补查同一批次：渠道查询重复无害，终局只许第一个写入者落。
+// 明细写入带 `status = initiated` 守卫，影响 0 行的那一笔记 Skipped 不记 Resolved——
+// 既防指标翻倍，也防后到的相反结论覆写已经落定的资金事实。
+func TestPayoutSweepCountsOnlyRealWriters(t *testing.T) {
+	stub := &payoutStub{name: "payoutsweepskip", caps: Capabilities{Payout: true}}
+	RegisterProvider(stub)
+	db, m := mockDB(t)
+	s := NewService(db, nopLog())
+
+	m.ExpectQuery("plg_pay_payout_batch").
+		WillReturnRows(payoutSweepBatchRow(918, PayoutPartial, "sweepchan", "CB-918"))
+	m.ExpectQuery("plg_pay_payout_item").
+		WillReturnRows(payoutItemRows(
+			payoutItemRow(9181, 918, 8181, 500, "subjA", PayoutItemInitiated, "CH-1", ""),
+			payoutItemRow(9182, 918, 8182, 200, "subjB", PayoutItemInitiated, "CH-2", ""),
+		))
+	m.ExpectQuery("plg_pay_channel").WillReturnRows(channelRow("sweepchan", stub.name, ""))
+	m.ExpectBegin()
+	m.ExpectExec("UPDATE `plg_pay_payout_item` SET").WillReturnResult(sqlmock.NewResult(0, 1)) // 9181 本轮写的
+	m.ExpectCommit()
+	m.ExpectBegin()
+	m.ExpectExec("UPDATE `plg_pay_payout_item` SET").WillReturnResult(sqlmock.NewResult(0, 0)) // 9182 已被并发落定
+	m.ExpectCommit()
+	m.ExpectQuery("plg_pay_payout_item").
+		WillReturnRows(payoutItemRows(
+			payoutItemRow(9181, 918, 8181, 500, "subjA", PayoutItemSuccess, "CH-1", ""),
+			payoutItemRow(9182, 918, 8182, 200, "subjB", PayoutItemSuccess, "CH-2", ""),
+		))
+	expectBatchWrite(m)
+
+	got, err := s.SweepStuckPayouts(tenantCtx, time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Batches != 1 {
+		t.Fatalf("batches = %d, want 1", got.Batches)
+	}
+	if got.Resolved != 1 || got.Skipped != 1 {
+		t.Fatalf("resolved=%d skipped=%d, want 1/1（一轮扫完的「救回笔数」必须等于真的写入数）：%+v",
+			got.Resolved, got.Skipped, got)
+	}
+	if got.Resolved+got.Skipped+got.Unresolved != 2 {
+		t.Fatalf("分桶加起来 %d != 明细 2 笔 —— 有笔没归属", got.Resolved+got.Skipped+got.Unresolved)
+	}
+	if err := m.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // 渠道仍在处理：一笔都不许动——把「不知道」写成「失败」或「成功」都是伪造资金事实。
 func TestPayoutSweepKeepsPendingItems(t *testing.T) {
 	stub := &payoutStub{name: "payoutsweeppend", caps: Capabilities{Payout: true},

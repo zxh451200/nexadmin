@@ -7,6 +7,7 @@ error:
   bad_request: 请求参数不正确
   unauthorized: 未登录或登录已过期
   forbidden: 没有权限执行此操作
+  demo_mode: 演示模式，不允许修改数据
   not_found: 资源不存在
   not_initialized: 系统尚未初始化
   tenant_mismatch: 无权访问该租户

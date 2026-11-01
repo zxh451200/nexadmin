@@ -13,4 +13,4 @@ export function setMockInitialized(v: boolean) {
   localStorage.setItem('mock-initialized', String(v))
 }
 
-defineMock([{ method: 'GET', url: '/system/status', handler: () => ({ initialized: isMockInitialized() }) }])
+defineMock([{ method: 'GET', url: '/system/status', handler: () => ({ initialized: isMockInitialized(), demo: false }) }])

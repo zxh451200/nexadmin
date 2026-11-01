@@ -117,6 +117,20 @@ type Config struct {
 	Secret struct {
 		Algorithm string `mapstructure:"algorithm"`
 	} `mapstructure:"secret"`
+	// Demo 是公开演示站模式：开启后拦截对 /api/v1 的写操作（非 GET/HEAD/OPTIONS 一律 403），
+	// 只放行内建白名单（登录 / 刷新令牌 / 登出 / WebSocket 入场票）与注册的额外接口，
+	// 供公开演示环境保护数据不被改写。官网等根路径公开页（含留言表单）不经过该闸门，不受影响。
+	Demo struct {
+		Enabled bool `mapstructure:"enabled"`
+		// Account / Password 是演示账号凭据。演示站凭据本来就是公开的，允许明文写在
+		// config.yaml（务必只挂 guest 等最小角色）；仅当 Enabled 时才随 GET /system/status
+		// 下发，登录页据此展示并一键填充。关闭演示模式时这两个值不会被带出后端。
+		Account  string `mapstructure:"account"`
+		Password string `mapstructure:"password"`
+		// Allow 额外放行的接口，元素格式 "POST /api/v1/xxx"（完整路径，方法大写），
+		// 支持尾部 * 前缀匹配。插件用 Deps.DemoAllow 注册时无需写配置。
+		Allow []string `mapstructure:"allow"`
+	} `mapstructure:"demo"`
 
 	// 以下由 Load 填充，不来自 yaml。
 	DefaultConfigPath string `mapstructure:"-"`

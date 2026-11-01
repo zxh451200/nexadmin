@@ -97,6 +97,7 @@
   "layout": {
     "appName": "NexAdmin",
     "home": "首页",
+    "demoBadge": "演示模式",
     "navigation": "主导航",
     "skipToContent": "跳到主要内容",
     "openMenu": "打开菜单",

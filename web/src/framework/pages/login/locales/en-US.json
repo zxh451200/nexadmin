@@ -1,6 +1,9 @@
 {
   "loginPage": {
     "welcome": "Welcome back",
+    "demoBadge": "Demo mode",
+    "demoAccountHint": "Public demo: data is reset periodically. Do not store real content.",
+    "demoFill": "Fill demo account",
     "welcomeHint": "Sign in to continue managing your business",
     "slogan": "Enterprise admin, ready out of the box",
     "sloganDesc": "Multi-tenant, multilingual and AI-powered, so you can focus on your business.",

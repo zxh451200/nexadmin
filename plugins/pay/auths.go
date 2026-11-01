@@ -206,18 +206,26 @@ func (s *Service) freezeAuth(ctx context.Context, a *Authorization, ch *Channel,
 }
 
 // markAuthFailed 把渠道明确拒绝的占位行落成 failed 并留原因。只从 authorizing 迁移，
-// 避免覆盖并发补查已经回填的结论。
-func (s *Service) markAuthFailed(ctx context.Context, a *Authorization, cause error) {
+// 避免覆盖并发补查已经回填的结论；返回是否真的写了这一行（false = 败给并发，或写失败）。
+func (s *Service) markAuthFailed(ctx context.Context, a *Authorization, cause error) bool {
 	reason := "预授权冻结失败"
 	if cause != nil {
 		reason = truncate(cause.Error(), 200)
 	}
-	if err := s.db.WithContext(ctx).Model(&Authorization{}).
+	res := s.db.WithContext(ctx).Model(&Authorization{}).
 		Where("id = ? AND status = ?", int64(a.ID), AuthAuthorizing).
-		Updates(map[string]any{"status": AuthFailed, "fail_reason": reason}).Error; err != nil {
-		s.logWarn("pay: mark auth failed error", "authNo", a.AuthNo, "err", err.Error())
+		Updates(map[string]any{"status": AuthFailed, "fail_reason": reason})
+	if res.Error != nil {
+		s.logWarn("pay: mark auth failed error", "authNo", a.AuthNo, "err", res.Error.Error())
+		return false
+	}
+	if res.RowsAffected == 0 {
+		// 行已被并发补查落定：不覆盖，也不算本轮救回。
+		s.logWarn("pay: auth already settled by another writer", "authNo", a.AuthNo, "reason", reason)
+		return false
 	}
 	s.logWarn("pay: auth freeze rejected", "authNo", a.AuthNo, "reason", reason)
+	return true
 }
 
 // AuthReconcileSummary 是 authorizing 残留补查一轮的可数结果。
@@ -226,6 +234,11 @@ type AuthReconcileSummary struct {
 	Adopted    int `json:"adopted"`
 	Failed     int `json:"failed"`
 	Unresolved int `json:"unresolved"`
+	// Skipped 是「渠道结论拿到了，但这一行不是本轮落定的」：条件更新影响 0 行。
+	// 单独一档，因为两个实例补查同一张滞留单时渠道查询本就该幂等重复，若把败者也
+	// 记进 Adopted/Failed，指标会比真实资金事实多出一倍，运维据此判断「补查救回了几笔」
+	// 就是错的。恒等式：Checked = Adopted + Failed + Unresolved + Skipped。
+	Skipped int `json:"skipped"`
 }
 
 // authStaleAfter 是「占位行多久没结论才算残留」：小于这个窗口留给在途请求自己收尾。
@@ -262,17 +275,26 @@ func (s *Service) ReconcileStuckAuths(ctx context.Context, now time.Time) (AuthR
 		res, qerr := ap.QueryAuth(ctx, a.AuthNo, cfg)
 		switch {
 		case qerr == nil && res != nil && strings.TrimSpace(res.ChannelAuthNo) != "" && !authStatusInProgress(res.Status):
-			if err := s.applyAuthConfirmed(ctx, a, truncate(res.ChannelAuthNo, 128)); err != nil {
+			wrote, err := s.applyAuthConfirmed(ctx, a, truncate(res.ChannelAuthNo, 128))
+			if err != nil {
 				out.Unresolved++
 				s.logWarn("pay: auth adopt failed", "authNo", a.AuthNo, "err", err.Error())
 				continue
 			}
-			out.Adopted++
+			// 只数真的写入者：败者的渠道结论没有落库，记 Skipped。
+			if wrote {
+				out.Adopted++
+			} else {
+				out.Skipped++
+			}
 		case isNotFound(qerr):
 			// 渠道查无此单：冻结请求根本没落到渠道，落 failed 让业务重试。
-			s.markAuthFailed(ctx, a, qerr)
-			a.Status = AuthFailed
-			out.Failed++
+			if s.markAuthFailed(ctx, a, qerr) {
+				a.Status = AuthFailed
+				out.Failed++
+			} else {
+				out.Skipped++
+			}
 		default:
 			out.Unresolved++
 			s.logWarn("pay: auth reconcile unresolved", "authNo", a.AuthNo,
@@ -281,20 +303,25 @@ func (s *Service) ReconcileStuckAuths(ctx context.Context, now time.Time) (AuthR
 	}
 	if out.Checked > 0 {
 		s.logInfo("pay: stuck auths reconciled", "checked", out.Checked, "adopted", out.Adopted,
-			"failed", out.Failed, "unresolved", out.Unresolved)
+			"failed", out.Failed, "unresolved", out.Unresolved, "skipped", out.Skipped)
 	}
 	return out, nil
 }
 
 // applyAuthConfirmed 把占位行回填为已冻结（只从 authorizing 迁移）。
-func (s *Service) applyAuthConfirmed(ctx context.Context, a *Authorization, channelAuthNo string) error {
-	if err := s.db.WithContext(tenant.Skip(ctx)).Model(&Authorization{}).
+// 返回是否真的写了这一行：影响 0 行 = 并发补查已经落定，调用方记 Skipped 而不是 Adopted。
+func (s *Service) applyAuthConfirmed(ctx context.Context, a *Authorization, channelAuthNo string) (bool, error) {
+	res := s.db.WithContext(tenant.Skip(ctx)).Model(&Authorization{}).
 		Where("id = ? AND status = ?", int64(a.ID), AuthAuthorizing).
-		Updates(map[string]any{"status": AuthAuthorized, "channel_auth_no": channelAuthNo}).Error; err != nil {
-		return err
+		Updates(map[string]any{"status": AuthAuthorized, "channel_auth_no": channelAuthNo})
+	if res.Error != nil {
+		return false, res.Error
+	}
+	if res.RowsAffected == 0 {
+		return false, nil
 	}
 	a.Status, a.ChannelAuthNo = AuthAuthorized, channelAuthNo
-	return nil
+	return true, nil
 }
 
 // errText 把 error 转成日志用的字符串（nil 安全）。

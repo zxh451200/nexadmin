@@ -156,7 +156,8 @@ func (s *Service) runSweeper(ctx context.Context) {
 				s.logWarn("pay: sync stuck refunds failed", "err", err.Error())
 			} else if summary.Checked > 0 {
 				s.logInfo("pay: stuck refunds swept", "checked", summary.Checked,
-					"flipped", summary.Flipped, "notFound", summary.NotFound, "failed", summary.Failed)
+					"flipped", summary.Flipped, "notFound", summary.NotFound,
+					"failed", summary.Failed, "skipped", summary.Skipped)
 			}
 			// 预授权残留补查：停在 authorizing 的占位行（进程崩溃或渠道受理未回执）
 			// 只能问渠道才知道钱到底冻没冻，本地猜不得。
@@ -165,7 +166,8 @@ func (s *Service) runSweeper(ctx context.Context) {
 				s.logWarn("pay: reconcile stuck auths failed", "err", err.Error())
 			} else if auths.Checked > 0 {
 				s.logInfo("pay: stuck auths swept", "checked", auths.Checked,
-					"adopted", auths.Adopted, "failed", auths.Failed, "unresolved", auths.Unresolved)
+					"adopted", auths.Adopted, "failed", auths.Failed,
+					"unresolved", auths.Unresolved, "skipped", auths.Skipped)
 			}
 			// 代付终局补查：停在 initiated 的转账笔只有渠道能给终局。
 			payouts, err := s.SweepStuckPayouts(tenant.Skip(ctx), now)
@@ -173,7 +175,8 @@ func (s *Service) runSweeper(ctx context.Context) {
 				s.logWarn("pay: sweep stuck payouts failed", "err", err.Error())
 			} else if payouts.Batches > 0 {
 				s.logInfo("pay: stuck payouts swept", "batches", payouts.Batches,
-					"resolved", payouts.Resolved, "unresolved", payouts.Unresolved)
+					"resolved", payouts.Resolved, "unresolved", payouts.Unresolved,
+					"skipped", payouts.Skipped)
 			}
 		}
 	}

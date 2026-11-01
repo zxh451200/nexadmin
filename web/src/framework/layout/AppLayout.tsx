@@ -11,6 +11,7 @@ import { useActivePlugins } from '@/framework/modules/plugin/active'
 import { buildMenuFromServer, buildMenuTree, findMenuTrail, type ServerMenu } from '@/framework/router/discover'
 import { ThemeToggle } from '@/framework/theme/ThemeToggle'
 import { Avatar, AvatarFallback, AvatarImage } from '@/framework/ui/avatar'
+import { Badge } from '@/framework/ui/badge'
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -41,6 +42,7 @@ import { MAX_CACHED_PAGES, resolveTab, useTabs } from './tabs-store'
 import { Watermark } from './Watermark'
 import { useIsMobile } from '@/framework/hooks/use-mobile'
 import { PageActiveContext } from '@/framework/hooks/use-page-active'
+import { useDemoMode } from '@/framework/hooks/use-demo-mode'
 import { useIosInstallHint, usePwaInstall } from '@/framework/pwa/install'
 
 const COLLAPSE_KEY = 'nex-sidebar-collapsed'
@@ -128,6 +130,7 @@ export function AppLayout() {
   const [isFullscreen, setIsFullscreen] = useState(() => !!document.fullscreenElement)
   const isMobile = useIsMobile()
   const isMac = /mac|iphone|ipad/i.test(navigator.platform)
+  const demo = useDemoMode()
   useIosInstallHint()
 
   const toggleFullscreen = () => {
@@ -253,6 +256,13 @@ export function AppLayout() {
               ))}
             </BreadcrumbList>
           </Breadcrumb>
+
+          {/* 演示站标记（config demo.enabled）：顶栏常驻提醒，手机端靠登录页徽标 */}
+          {demo && (
+            <Badge variant="warning" className="hidden shrink-0 md:inline-flex">
+              {t('layout.demoBadge')}
+            </Badge>
+          )}
 
           <Button
             variant="outline"

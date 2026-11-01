@@ -19,7 +19,7 @@ function FullPageSpinner() {
 export function SetupGate({ children }: { children: ReactNode }) {
   const { data, isLoading } = useQuery({
     queryKey: ['system', 'status'],
-    queryFn: () => api.get<{ initialized: boolean }>('/system/status', undefined, { silent: true }),
+    queryFn: () => api.get<{ initialized: boolean; demo?: boolean; account?: string; password?: string }>('/system/status', undefined, { silent: true }),
     retry: 1,
     staleTime: Infinity,
     refetchOnWindowFocus: false,

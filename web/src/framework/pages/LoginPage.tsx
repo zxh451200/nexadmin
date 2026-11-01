@@ -8,9 +8,12 @@ import { loginPanels, resumeLoginContinuation, useAuth } from '@/framework/auth/
 import type { LoginContinuation } from '@/framework/auth/useAuth'
 import type { AuthMethods, LoginChallenge } from '@/framework/auth/types'
 import { BrandMark } from '@/framework/components/BrandMark'
+import { useDemoAccount, useDemoMode } from '@/framework/hooks/use-demo-mode'
 import { LanguageSwitch } from '@/framework/i18n/LanguageSwitch'
 import { api } from '@/framework/request/http'
 import { ThemeToggle } from '@/framework/theme/ThemeToggle'
+import { Badge } from '@/framework/ui/badge'
+import { Button } from '@/framework/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/framework/ui/tabs'
 import { ForgotPasswordDialog } from './login/ForgotPasswordDialog'
 import { PasswordForm } from './login/PasswordForm'
@@ -184,6 +187,10 @@ export default function LoginPage() {
   const name = site?.siteName || DEFAULT_NAME
   const logoUrl = site?.logoUrl || undefined
   const copyright = site?.copyright || t('loginPage.defaultCopyright', { year: new Date().getFullYear(), name })
+  const demo = useDemoMode()
+  const demoAccount = useDemoAccount()
+  // 「填入演示账号」按钮的计数：变化时让 PasswordForm 重新预填（用户清空后再填回去）
+  const [demoFill, setDemoFill] = useState(0)
 
   if (token && !continuing && !challenge && !continuationError) return <Navigate to={redirect} replace />
 
@@ -218,9 +225,12 @@ export default function LoginPage() {
           <div className="w-full max-w-sm">
             <BrandMark name={name} logoUrl={logoUrl} className="mb-8 hidden size-10 rounded-xl lg:flex" iconClassName="size-5" />
             <div className="mb-8">
-              <h1 className="text-3xl font-bold tracking-tight text-foreground">
-                {registering ? t('login.register.title') : t('loginPage.welcome')}
-              </h1>
+              <div className="flex flex-wrap items-center gap-3">
+                <h1 className="text-3xl font-bold tracking-tight text-foreground">
+                  {registering ? t('login.register.title') : t('loginPage.welcome')}
+                </h1>
+                {demo && <Badge variant="warning">{t('loginPage.demoBadge')}</Badge>}
+              </div>
               <p className="mt-2 text-sm text-muted-foreground">
                 {registering ? t('login.register.welcomeHint') : t('loginPage.welcomeHint')}
               </p>
@@ -230,7 +240,19 @@ export default function LoginPage() {
             {registering ? (
               <RegisterForm onSuccess={done} onLogin={() => setRegistering(false)} onChallenge={setChallenge} />
             ) : (
-              <fieldset disabled={continuing || challenge !== null}>
+              <>
+                {demoAccount && (
+                  <div className="mb-6 rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm">
+                    <p className="text-muted-foreground">{t('loginPage.demoAccountHint')}</p>
+                    <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                      <code className="text-xs font-semibold text-foreground">{demoAccount.account} / {demoAccount.password}</code>
+                      <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => setDemoFill((n) => n + 1)}>
+                        {t('loginPage.demoFill')}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                <fieldset disabled={continuing || challenge !== null}>
                 {methods.length > 1 ? (
                   <Tabs defaultValue={methods[0]}>
                     <TabsList className="grid w-full grid-cols-2">
@@ -241,7 +263,7 @@ export default function LoginPage() {
                       ))}
                     </TabsList>
                     <TabsContent value="password" className="mt-6">
-                      <PasswordForm onSuccess={done} onForgot={onForgot} onChallenge={setChallenge} captchaAlways={data.captchaEnabled} />
+                      <PasswordForm onSuccess={done} onForgot={onForgot} onChallenge={setChallenge} captchaAlways={data.captchaEnabled} demoCredentials={demoAccount} fillNonce={demoFill} />
                     </TabsContent>
                     <TabsContent value="phone" className="mt-6">
                       <PhoneForm onSuccess={done} onChallenge={setChallenge} />
@@ -250,7 +272,7 @@ export default function LoginPage() {
                 ) : methods[0] === 'phone' ? (
                   <PhoneForm onSuccess={done} onChallenge={setChallenge} />
                 ) : (
-                  <PasswordForm onSuccess={done} onForgot={onForgot} onChallenge={setChallenge} captchaAlways={data.captchaEnabled} />
+                  <PasswordForm onSuccess={done} onForgot={onForgot} onChallenge={setChallenge} captchaAlways={data.captchaEnabled} demoCredentials={demoAccount} fillNonce={demoFill} />
                 )}
 
                 <SocialLogin providers={data.providers} redirect={redirect} />
@@ -270,6 +292,7 @@ export default function LoginPage() {
                   </p>
                 ) : null}
               </fieldset>
+              </>
             )}
 
             <p className="mt-8 text-center text-xs text-muted-foreground lg:hidden">{copyright}</p>
