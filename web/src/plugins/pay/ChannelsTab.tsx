@@ -40,7 +40,6 @@ import { ListErrorBanner } from './ListErrorBanner'
 function ProbeDialog({ code, onClose }: { code: string; onClose: () => void }) {
   const { t, i18n } = useTranslation()
   const probe = useProbeChannel()
-  const stateVariant = (v: string) => (v === 'pass' ? 'success' : v === 'fail' ? 'destructive' : 'outline')
   const fmt = (v?: string) => (v ? formatTime(v, i18n.language) : '-')
 
   return (
