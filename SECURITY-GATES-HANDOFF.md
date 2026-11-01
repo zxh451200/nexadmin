@@ -72,7 +72,9 @@ paths = ['''(^|[\\/])modules[\\/]sendlog[\\/]sanitize_test\.go$''', '''(^|[\\/])
 [[allowlists]]
 description = "Public GitHub PAT documentation vector (widely published example value; harmless to allow anywhere). gitleaks v8.28 skips files whose path matches an allowlist, so a path-scoped entry would unscan the whole fixture file."
 regexTarget = "secret"
-regexes = ['''^ghp_16C7e42F292c6912E7710c838347Ae178B4a$''']
+# 精确值 = test_gates.py 的 known（ghp_ 前缀 + 公开文档示例值，运行时拼装）；
+# 完整字面量不写入本文档，避免触发 gitleaks 的 github-pat 规则。
+regexes = ['''^<known 令牌>$''']
 ```
 
 说明：最后一条**故意去掉 `paths`**——v8.28 会把路径命中的文件整体跳过，"路径+精确值"语义无法表达；该值是 GitHub 官方文档公开示例 token，全仓放行无风险。
