@@ -86,6 +86,7 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.GET("/channels", core.Perm("pay:list"), h.listChannels)
 	g.POST("/channels", core.Perm("pay:channel"), h.upsertChannel)
 	g.DELETE("/channels/:id", core.Perm("pay:channel"), h.deleteChannel)
+	g.POST("/channels/:code/probe", core.Perm("pay:channel"), h.probeChannel)
 	g.GET("/providers", core.Perm("pay:list"), h.providers)
 	g.GET("/capabilities", core.Perm("pay:list"), h.capabilities)
 	// 回调审计

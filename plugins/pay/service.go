@@ -25,6 +25,22 @@ type Service struct {
 	log logger
 	// loc 是应用时区：统计按天分桶要用它把 UTC 时间换算成用户看到的自然日。
 	loc *time.Location
+	// publisher 是资金事件的投递出口，nil 时用进程内总线（core/event）。
+	// 做成注入点的理由很具体：「总线连续拒绝 → 超上限转死信」这条分支在真实进程里
+	// 要把缓冲打满才能触发，用测试去打满会卡死同包其它用例，等于没有闸。
+	publisher EventPublisher
+}
+
+// EventPublisher 投递一个资金事件，返回 false 表示没投出去（缓冲满等），
+// 由出站箱按退避重投，累计到上限转死信。
+type EventPublisher func(ctx context.Context, name string, data EventData) bool
+
+// WithPublisher 替换事件投递出口（测试/宿主自定义投递用）。
+func (s *Service) WithPublisher(p EventPublisher) *Service {
+	if p != nil {
+		s.publisher = p
+	}
+	return s
 }
 
 // WithTimezone 设置应用时区（非法值退回 UTC）。

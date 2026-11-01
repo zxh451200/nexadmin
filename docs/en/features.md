@@ -338,7 +338,7 @@ Generated from source. Paths omit the `/api/v1` prefix (`/healthz` and `/metrics
 | pay (plugin) | `pay:edit` | `POST /plugins/pay/orders`<br>`POST /plugins/pay/orders/:no/close`<br>`POST /plugins/pay/orders/:no/sync`<br>`POST /plugins/pay/refunds/:no/sync` |
 | pay (plugin) | `pay:refund` | `POST /plugins/pay/refunds` |
 | pay (plugin) | `pay:auth` | `POST /plugins/pay/authorizations`<br>`POST /plugins/pay/authorizations/:no/capture`<br>`POST /plugins/pay/authorizations/:no/void` |
-| pay (plugin) | `pay:channel` | `POST /plugins/pay/channels`<br>`DELETE /plugins/pay/channels/:id` |
+| pay (plugin) | `pay:channel` | `POST /plugins/pay/channels`<br>`DELETE /plugins/pay/channels/:id`<br>`POST /plugins/pay/channels/:code/probe` |
 | pay (plugin) | `pay:settle` | `GET/POST /plugins/pay/reconcile/tasks`<br>`GET /plugins/pay/reconcile/tasks/:id/diffs`<br>`POST /plugins/pay/reconcile/diffs/:id/resolve`<br>`GET/POST /plugins/pay/commission-rules`<br>`GET /plugins/pay/settlements`<br>`POST /plugins/pay/settlements/generate`<br>`POST /plugins/pay/settlements/:id/confirm`<br>`GET/POST /plugins/pay/payouts`<br>`POST /plugins/pay/payouts/:id/mark-paid`<br>`POST /plugins/pay/payouts/:id/pay`<br>`GET /plugins/pay/payouts/:id/items` |
 | pay (plugin) | `pay:outbox` | `POST /plugins/pay/outbox/:eventId/retry`<br>`POST /plugins/pay/outbox/:eventId/discard` |
 | pay (plugin) | Public (channel callbacks / mock cashier, signature verification applies) | `POST /plugins/pay/notify/:channelCode`<br>`GET /plugins/pay/mock/cashier`<br>`POST /plugins/pay/mock/cashier/confirm` |

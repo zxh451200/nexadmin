@@ -32,7 +32,11 @@ const (
 
 // publish 把已落出站箱的事件发布到进程内总线。返回 false 表示总线缓冲满被丢弃，
 // dispatcher 会按退避重投——这正是 outbox 存在的意义（core/event 非持久、满即丢）。
+// 注入了 publisher 时用注入的出口（测试要的就是「连续拒绝」这条路径）。
 func (s *Service) publish(ctx context.Context, data EventData) bool {
+	if s.publisher != nil {
+		return s.publisher(ctx, data.EventName, data)
+	}
 	return event.Default().Publish(ctx, data.EventName, data)
 }
 

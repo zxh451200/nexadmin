@@ -80,7 +80,13 @@ func TestCapabilitiesSupportsCurrency(t *testing.T) {
 // 每个渠道实现声明的方式与币种都必须能通过自己的判定函数——防止「声明了却把自己判否」
 // 这类自相矛盾（能力矩阵下发给前端，前端照它禁用入口）。
 func TestRegisteredProvidersCapsAreSelfConsistent(t *testing.T) {
+	// 只管内建渠道：测试里注册的桩实现（stub / noprobe 等）按 needing 决定要不要声明能力，
+	// 拿它当「真实渠道没声明能力」来红是误报。
+	nameSet := map[string]bool{"alipay": true, "wechat": true, "epay": true, "mock": true}
 	for _, name := range ProviderNames() {
+		if !nameSet[name] {
+			continue
+		}
 		p, err := LookupProvider(name)
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)

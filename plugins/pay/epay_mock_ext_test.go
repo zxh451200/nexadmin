@@ -739,12 +739,24 @@ func TestEpayNotifyTimestampWindow(t *testing.T) {
 func TestEpayProviderSurfaceUnchanged(t *testing.T) {
 	p := epayProvider{}
 	schema := p.ConfigSchema()
-	if len(schema) != 4 {
+	// 4 个必填项不许动（前端与既有渠道配置都按它们渲染）；queryUrl 是为「渠道自检」
+	// 加的可选第 5 项：没有它自检只能报「未执行」，不能假装通过。
+	if len(schema) != 5 {
 		t.Fatalf("易支付凭据字段变了：%+v", schema)
 	}
 	got := map[string]ConfigField{}
 	for _, f := range schema {
 		got[f.Key] = f
+	}
+	if f, ok := (func() (ConfigField, bool) {
+		for _, x := range schema {
+			if x.Key == "queryUrl" {
+				return x, true
+			}
+		}
+		return ConfigField{}, false
+	})(); !ok || f.Required || f.Secret {
+		t.Fatalf("queryUrl 必须是可选、非密文字段，got %+v", f)
 	}
 	for _, k := range []string{"gateway", "pid", "key", "payType"} {
 		f, ok := got[k]

@@ -338,6 +338,22 @@ export interface PayPayoutItem {
   failReason?: string
 }
 
+/** 渠道自检：单项结论。skipped = 没查（缺可选配置），既不算通过也不算失败。 */
+export type ProbeState = 'pass' | 'fail' | 'skipped'
+export interface PayProbeCheck {
+  name: 'credentials' | 'privateKey' | 'alipayPublicKey' | 'apiV3Key' | 'platformCerts' | 'signing' | 'gateway' | string
+  state: ProbeState
+  detail?: string
+}
+export interface PayChannelProbe {
+  channelCode: string
+  provider: string
+  checks: PayProbeCheck[]
+  failed: number
+  skipped: number
+  checkedAt: string
+}
+
 export interface OrderQuery extends PageQuery {
   status?: string
   channelCode?: string
@@ -653,6 +669,13 @@ export function useMarkPayoutPaid() {
     mutationFn: (v: { id: string; receiptNo: string }) =>
       api.post<PayPayoutBatch>(`${BASE}/payouts/${v.id}/mark-paid`, { receiptNo: v.receiptNo }),
     onSuccess: invalidate,
+  })
+}
+
+/** 渠道凭据与连通性自检（契约第 11 条）：只读，不下单不退款不打款。 */
+export function useProbeChannel() {
+  return useMutation({
+    mutationFn: (code: string) => api.post<PayChannelProbe>(`${BASE}/channels/${code}/probe`),
   })
 }
 

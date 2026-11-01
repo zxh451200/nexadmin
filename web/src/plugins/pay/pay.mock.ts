@@ -1043,6 +1043,43 @@ defineMock([
     },
   },
   {
+    // 渠道自检（契约第 11 条）：故意留下 fail 与 skipped 两类，验证面板不会把「没查」画成「通过」
+    method: 'POST',
+    url: '/plugins/pay/channels/:code/probe',
+    handler: ({ params }) => {
+      const code = String(params.code ?? '')
+      const provider = providerOfCode(code)
+      const base = {
+        channelCode: code,
+        provider,
+        checkedAt: new Date().toISOString(),
+      }
+      if (provider === 'wechat') {
+        const checks = [
+          { name: 'credentials', state: 'pass', detail: '必填凭据齐全' },
+          { name: 'privateKey', state: 'pass', detail: '商户 API 私钥可解析' },
+          { name: 'apiV3Key', state: 'pass', detail: 'APIv3 密钥长度正确' },
+          { name: 'platformCerts', state: 'fail', detail: '平台证书下载失败：sign error(mchid=1900000101)' },
+          { name: 'gateway', state: 'fail', detail: '签名被渠道拒绝（私钥/公钥或算法不对）' },
+        ]
+        return { ...base, checks, failed: 2, skipped: 0 }
+      }
+      if (provider === 'epay') {
+        const checks = [
+          { name: 'credentials', state: 'pass', detail: '必填凭据齐全' },
+          { name: 'signing', state: 'pass', detail: 'MD5 签名可生成' },
+          { name: 'gateway', state: 'skipped', detail: '未配置主动查询地址，无法验证凭据是否被上游接受' },
+        ]
+        return { ...base, checks, failed: 0, skipped: 1 }
+      }
+      const checks = [
+        { name: 'credentials', state: 'pass', detail: '必填凭据齐全' },
+        { name: 'gateway', state: 'skipped', detail: '模拟渠道没有外部网关' },
+      ]
+      return { ...base, checks, failed: 0, skipped: 1 }
+    },
+  },
+  {
     // 逐笔代付结论（契约第 10 条）
     method: 'GET',
     url: '/plugins/pay/payouts/:id/items',

@@ -28,6 +28,7 @@ func (epayProvider) ConfigSchema() []ConfigField {
 		{Key: "pid", Type: "text", Required: true, Placeholder: "商户 ID"},
 		{Key: "key", Type: "password", Required: true, Secret: true, Placeholder: "商户密钥"},
 		{Key: "payType", Type: "select", Required: true, Options: []string{"alipay", "wxpay", "qqpay"}},
+		{Key: "queryUrl", Type: "url", Placeholder: "可选：上游主动查询地址（形如 https://pay.example.com/api.php）"},
 	}
 }
 

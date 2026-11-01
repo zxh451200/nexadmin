@@ -262,6 +262,76 @@ type PayoutProvider interface {
 	QueryTransfer(ctx context.Context, batchNo string, cfg map[string]string) (*TransferResult, error)
 }
 
+// ProbeProvider 让管理端在填完凭据后当场自检（对标竞品后台的「渠道连通性测试」）。
+//
+// 铁律：探针只许做只读动作——查一笔不存在的单、下载平台证书、本地签一次再验一次。
+// 绝不下单、绝不退款、绝不代付：自检不该产生任何资金事实，也不该在渠道侧留下
+// 一笔没人认领的订单。
+type ProbeProvider interface {
+	Probe(ctx context.Context, cfg map[string]string) (*ProbeResult, error)
+}
+
+// 自检结论的三种取值：pass / fail / skipped。
+// skipped 存在的理由：有些检查需要额外配置（如易支付的主动查询地址），
+// 没配就是「没查」，既不该算通过（自欺）也不该算失败（冤枉人）。
+const (
+	ProbePass    = "pass"
+	ProbeFail    = "fail"
+	ProbeSkipped = "skipped"
+)
+
+// ProbeCheck 是一项自检结论。Name 是稳定标识（前端按它取字典文案），
+// Detail 放渠道原始返回或错误码——诊断信息照 failReason 的口径原样透出，不进字典。
+type ProbeCheck struct {
+	Name   string `json:"name"`
+	State  string `json:"state"`
+	Detail string `json:"detail,omitempty"`
+}
+
+// ProbeResult 是一次自检的全部检查项。整体结论由「有无 fail 项」现算，
+// 不放独立的 ok 字段：那会出现「整体通过但有一项失败」的自相矛盾状态。
+type ProbeResult struct {
+	Provider string       `json:"provider"`
+	Checks   []ProbeCheck `json:"checks"`
+}
+
+// Failed 返回失败项（没有则 nil），供上层决定 HTTP 码与日志。
+func (r *ProbeResult) Failed() []ProbeCheck {
+	var out []ProbeCheck
+	for _, c := range r.Checks {
+		if c.State == ProbeFail {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+func trimDetail(detail string) string {
+	if len(detail) > 300 {
+		return detail[:300]
+	}
+	return detail
+}
+
+func probePass(name, detail string) ProbeCheck {
+	return ProbeCheck{Name: name, State: ProbePass, Detail: trimDetail(detail)}
+}
+func probeFail(name, detail string) ProbeCheck {
+	return ProbeCheck{Name: name, State: ProbeFail, Detail: trimDetail(detail)}
+}
+func probeSkip(name, detail string) ProbeCheck {
+	return ProbeCheck{Name: name, State: ProbeSkipped, Detail: trimDetail(detail)}
+}
+
+// probeFailErr 把 requireProviderConfig 之类的错误折成一项失败。错误里 Wrap 进来的
+// 内部原因平时只进日志，自检场景要的就是这句话，所以在此透出。
+func probeFailErr(name string, err error) ProbeCheck {
+	if err == nil {
+		return probePass(name, "")
+	}
+	return probeFail(name, err.Error())
+}
+
 // ProviderCaps 返回渠道声明的能力；未声明 CapabilityProvider 的按零值
 // （只 CNY、无可选能力），保证新渠道不会凭空获得能力。
 func ProviderCaps(p Provider) Capabilities {

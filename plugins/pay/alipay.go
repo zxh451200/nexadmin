@@ -244,7 +244,10 @@ func (p alipayProvider) Query(ctx context.Context, paymentNo string, cfg map[str
 	if err != nil {
 		return nil, err
 	}
-	if res["sub_code"] == "ACQ.TRADE_NOT_EXIST" || res["code"] == "40004" {
+	// 只认「查无此单」这一种 40004：40004 是业务失败的总码，未签约（PERMISSION_NOT_MATCH）
+	// 也回它。此前按 code 判会把「商户没这个权限」误报成「渠道还没这笔单」，
+	// 于是自检显示通过、运营以为配置没问题。
+	if alipayNotExist(res) {
 		return &ChannelStatus{}, nil // 渠道侧还没有这笔单：维持未定，不报错
 	}
 	if msg := alipayResponseError(res); msg != "" {
@@ -422,7 +425,14 @@ func (p alipayProvider) call(ctx context.Context, cfg map[string]string, key *rs
 	nodeKey := strings.ReplaceAll(method, ".", "_") + "_response"
 	raw, ok := root[nodeKey]
 	if !ok {
-		return nil, channelGatewayError("alipay", "网关应答缺少节点 "+nodeKey)
+		// 网关级错误（公共参数、权限、签名本身不对）走 error_response 节点，
+		// 业务码与 sub_msg 都在里面。以前这里只报「缺少节点」，运营看不到真因，
+		// 自检也就白做——现在把 error_response 当成应答节点照常验签并透出。
+		if errNode, isErr := root["error_response"]; isErr {
+			raw = errNode
+		} else {
+			return nil, channelGatewayError("alipay", "网关应答缺少节点 "+nodeKey)
+		}
 	}
 	sig := rawString(root["sign"])
 	if sig == "" {

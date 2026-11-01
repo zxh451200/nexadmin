@@ -107,3 +107,11 @@ func (h *handler) discardOutbox(c *gin.Context) {
 	}
 	response.OK(c, outboxView(row, false))
 }
+
+// POST /plugins/pay/channels/:code/probe —— 渠道凭据与连通性自检。
+// 只读：不建单、不退款、不打款。跑完了但有检查项失败仍回 200（自检本身成功了），
+// 失败项在 checks 里逐项标红；只有「没跑成」（渠道不存在/不支持自检）才回错误码。
+func (h *handler) probeChannel(c *gin.Context) {
+	report, err := h.svc.ProbeChannel(c.Request.Context(), c.Param("code"))
+	respond(c, report, err)
+}

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Pencil, Plus, Trash2 } from 'lucide-react'
+import { Pencil, Plus, Stethoscope, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
@@ -17,7 +17,9 @@ import {
   useDeleteChannel,
   useProviders,
   useSaveChannel,
+  useProbeChannel,
   type PayChannel,
+  type PayChannelProbe,
   type PayChannelForm,
   type PayProvider,
   type ProviderCapabilities,
@@ -34,6 +36,75 @@ import { formatBp, formatTime } from './format'
 import { ListErrorBanner } from './ListErrorBanner'
 
 /** 渠道列表里的能力摘要：只列支持的动作，一眼看出哪些入口在该渠道可用。 */
+/** 一次自检的结论面板：逐项 pass/fail/skipped + 渠道原文诊断。 */
+function ProbeDialog({ code, onClose }: { code: string; onClose: () => void }) {
+  const { t, i18n } = useTranslation()
+  const probe = useProbeChannel()
+  const stateVariant = (v: string) => (v === 'pass' ? 'success' : v === 'fail' ? 'destructive' : 'outline')
+  const fmt = (v?: string) => (v ? formatTime(v, i18n.language) : '-')
+
+  return (
+    <ResponsiveDialog
+      open
+      onOpenChange={(v) => !v && onClose()}
+      title={`${t('plugin_pay.probe.title')} · ${code}`}
+      size="md"
+      footer={
+        <>
+          <Button variant="outline" onClick={() => void probe.mutate(code)} disabled={probe.isPending}>
+            {probe.isPending ? t('common.loading') : t('plugin_pay.probe.rerun')}
+          </Button>
+          <Button onClick={onClose}>{t('common.close')}</Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-3">
+        {/* 自检只读：不下单、不退款、不打款，所以可以随便点 */}
+        <p className="text-xs text-muted-foreground">{t('plugin_pay.probe.hint')}</p>
+        {probe.isError ? <ListErrorBanner onRetry={() => void probe.mutate(code)} /> : null}
+        {probe.data ? <ProbeResultView r={probe.data} fmt={fmt} /> : null}
+        {!probe.data && !probe.isError && probe.isPending ? (
+          <p className="text-xs text-muted-foreground">{t('common.loading')}</p>
+        ) : null}
+        {!probe.data && !probe.isPending && !probe.isError ? (
+          <p className="text-xs text-muted-foreground">{t('plugin_pay.probe.idle')}</p>
+        ) : null}
+      </div>
+    </ResponsiveDialog>
+  )
+}
+
+function ProbeResultView({ r, fmt }: { r: PayChannelProbe; fmt: (v?: string) => string }) {
+  const { t } = useTranslation()
+  const variant = (v: string) => (v === 'pass' ? 'success' : v === 'fail' ? 'destructive' : 'outline')
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+        <Badge variant={r.failed > 0 ? 'destructive' : 'success'}>
+          {t(r.failed > 0 ? 'plugin_pay.probe.hasFailures' : 'plugin_pay.probe.allPassed', { count: r.failed })}
+        </Badge>
+        <span>{r.provider}</span>
+        <span className="num">{fmt(r.checkedAt)}</span>
+      </div>
+      <dl className="flex flex-col divide-y divide-border rounded-lg border border-border">
+        {r.checks.map((c) => (
+          <div key={c.name} className="flex flex-col gap-1 p-2.5">
+            <dt className="flex items-center gap-2">
+              <Badge variant={variant(c.state)}>{t(`plugin_pay.probeState.${c.state}`)}</Badge>
+              <span className="text-sm">{t(`plugin_pay.probeCheck.${c.name}`, { defaultValue: c.name })}</span>
+            </dt>
+            {/* 诊断原文照 failReason 口径透出：它是渠道给的话，翻译了反而对不上工单 */}
+            {c.detail ? <dd className="break-words text-xs text-muted-foreground">{c.detail}</dd> : null}
+          </div>
+        ))}
+      </dl>
+      {r.skipped > 0 ? (
+        <p className="text-xs text-muted-foreground">{t('plugin_pay.probe.skippedNote', { count: r.skipped })}</p>
+      ) : null}
+    </div>
+  )
+}
+
 function CapabilityCell({ caps, provider }: { caps: ProviderCapabilities | null; provider: string }) {
   const { t } = useTranslation()
   if (!caps) {
@@ -303,6 +374,7 @@ export function ChannelsTab() {
   const remove = useDeleteChannel()
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<PayChannel | null>(null)
+  const [probing, setProbing] = useState<string | null>(null)
 
   const onDelete = async (c: PayChannel) => {
     if (await confirm({ destructive: true, description: t('plugin_pay.channel.deleteConfirm', { name: c.name }) })) {
@@ -362,6 +434,15 @@ export function ChannelsTab() {
             <Button
               variant="ghost"
               size="icon"
+              aria-label={t('plugin_pay.probe.title')}
+              title={t('plugin_pay.probe.title')}
+              onClick={() => setProbing(c.code)}
+            >
+              <Stethoscope aria-hidden="true" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
               aria-label={t('common.edit')}
               onClick={() => {
                 setEditing(c)
@@ -376,6 +457,7 @@ export function ChannelsTab() {
           </Can>
         )}
       />
+      {probing ? <ProbeDialog code={probing} onClose={() => setProbing(null)} /> : null}
       {/* 每次打开重新挂载：表单状态按当前编辑对象初始化，避免沿用上一次的草稿。 */}
       {formOpen && <ChannelFormDialog open={formOpen} onOpenChange={setFormOpen} editing={editing} providers={providers} />}
     </div>

@@ -392,6 +392,29 @@
       "initiated": "已发起待终局",
       "success": "已到账",
       "failed": "失败"
+    },
+    "probe": {
+      "title": "渠道自检",
+      "hint": "只读探针：查一笔必然不存在的单、下载平台证书、校验密钥可解析。不会下单、不退款、不打款。",
+      "rerun": "重新自检",
+      "idle": "点击「重新自检」开始检查。",
+      "allPassed": "全部检查通过",
+      "hasFailures": "{{count}} 项未通过",
+      "skippedNote": "有 {{count}} 项因缺少可选配置未执行——没查不等于查过没问题。"
+    },
+    "probeState": {
+      "pass": "通过",
+      "fail": "未通过",
+      "skipped": "未执行"
+    },
+    "probeCheck": {
+      "credentials": "必填凭据完整",
+      "privateKey": "应用私钥可解析",
+      "alipayPublicKey": "支付宝公钥可解析",
+      "apiV3Key": "APIv3 密钥长度",
+      "platformCerts": "微信平台证书下载",
+      "signing": "签名可生成",
+      "gateway": "网关可达且接受签名"
     }
   }
 }

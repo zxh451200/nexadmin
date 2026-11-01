@@ -392,6 +392,29 @@
       "initiated": "Initiated, awaiting result",
       "success": "Paid",
       "failed": "Failed"
+    },
+    "probe": {
+      "title": "Channel check",
+      "hint": "Read-only probe: queries an order that cannot exist, downloads platform certificates, and parses keys. It never creates orders, refunds or transfers.",
+      "rerun": "Run again",
+      "idle": "Press “Run again” to start.",
+      "allPassed": "All checks passed",
+      "hasFailures": "{{count}} check(s) failed",
+      "skippedNote": "{{count}} check(s) were not run because optional settings are missing — not run is not the same as passed."
+    },
+    "probeState": {
+      "pass": "Passed",
+      "fail": "Failed",
+      "skipped": "Not run"
+    },
+    "probeCheck": {
+      "credentials": "Required credentials",
+      "privateKey": "Application private key parses",
+      "alipayPublicKey": "Alipay public key parses",
+      "apiV3Key": "APIv3 key length",
+      "platformCerts": "WeChat platform certificates",
+      "signing": "Signature can be generated",
+      "gateway": "Gateway reachable and accepted the signature"
     }
   }
 }

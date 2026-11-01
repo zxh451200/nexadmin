@@ -556,6 +556,33 @@ paths:
               schema: { $ref: '#/components/schemas/Envelope' }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  /channels/{code}/probe:
+    post:
+      tags: [channels]
+      summary: 渠道凭据与连通性自检
+      description: |
+        只读探针：查一笔必然不存在的单、下载微信平台证书、本地校验密钥可解析。
+        **绝不下单、绝不退款、绝不代付**——自检不该产生任何资金事实。
+        跑完但有检查项失败时仍回 200（自检这件事本身成功了），失败项在 `checks` 里逐项给出；
+        只有「没跑成」（渠道不存在、类型未注册、该类型不支持自检）才回错误码。
+      operationId: probeChannel
+      x-permission: pay:channel
+      parameters:
+        - { name: code, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: 自检结论（逐项 pass / fail / skipped）
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/ChannelProbe' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /providers:
     get:
       tags: [channels]
@@ -1526,6 +1553,32 @@ components:
           type: array
           items: { type: string }
         placeholder: { type: string }
+
+    ChannelProbe:
+      type: object
+      description: 一次渠道自检的结论。整体是否可用由 failed 计数判，不设独立的 ok 字段。
+      properties:
+        channelCode: { type: string }
+        provider: { type: string }
+        checks:
+          type: array
+          items: { $ref: '#/components/schemas/ProbeCheck' }
+        failed: { type: integer, description: 失败项数；>0 表示凭据或连通性有问题 }
+        skipped: { type: integer, description: 未执行项数（缺可选配置等），既不算通过也不算失败 }
+        checkedAt: { type: string, format: date-time }
+
+    ProbeCheck:
+      type: object
+      properties:
+        name:
+          type: string
+          description: 检查项的稳定标识，前端按它取字典文案
+          enum: [credentials, privateKey, alipayPublicKey, apiV3Key, platformCerts, signing, gateway]
+        state: { type: string, enum: [pass, fail, skipped] }
+        detail:
+          type: string
+          description: 诊断原文（渠道应答/错误），与 failReason 同口径不入字典
+          x-text-field: true
 
     ProviderInfo:
       type: object
