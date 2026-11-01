@@ -51,6 +51,10 @@ jobs:
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
       - name: Test security gates
         run: python3 -m unittest discover -s scripts/security -p 'test_*.py' -v
+        env:
+          # 不写 __pycache__：字节码会把运行时拼装的测试夹具常量折叠固化，
+          # 生成到被扫描的目录里，导致扫描步骤命中 github-pat 等规则。
+          PYTHONDONTWRITEBYTECODE: "1"
       - name: Scan checked out files, without Git history or inline bypasses
         run: |
           gitleaks dir . --config .gitleaks.toml --redact --ignore-gitleaks-allow --gitleaks-ignore-path /dev/null --exit-code 1 --report-path /tmp/gitleaks-report.json --report-format json || code=$?

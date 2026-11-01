@@ -13,7 +13,7 @@ paths = ['''(^|[\\/])node_modules[\\/]''', '''(^|[\\/])\.git[\\/]''']
 
 [[allowlists]]
 description = "Local runtime and dev artifacts; gitignored, never present in CI checkouts"
-paths = ['''(^|[\\/])\.mimosa[\\/]''', '''(^|[\\/])\.dev-keys[\\/]''', '''(^|[\\/])data[\\/](run|sso-keys)[\\/]''', '''(^|[\\/])web[\\/]dist[\\/]''']
+paths = ['''(^|[\\/])\.mimosa[\\/]''', '''(^|[\\/])\.dev-keys[\\/]''', '''(^|[\\/])data[\\/](run|sso-keys)[\\/]''', '''(^|[\\/])web[\\/]dist[\\/]''', '''(^|[\\/])scripts[\\/]security[\\/]__pycache__[\\/]''']
 
 [[allowlists]]
 description = "Test fixtures and frontend mocks use placeholder keys/tokens by design; enumerated files only so new test files stay scanned"
