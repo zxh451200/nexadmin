@@ -36,6 +36,12 @@ cd web && npx tsc --noEmit && npx eslint src
 
 涉及迁移时补跑 `nexadmin-server migrate --dry-run`；涉及官网时截图验证浅色/深色两套主题。
 
+跑真引擎集成测试（`TestIT*`）时 MySQL DSN 的库名要留空：
+`NEXADMIN_IT_MYSQL_DSN='root:pass@tcp(127.0.0.1:3306)/?charset=utf8mb4&parseTime=true&loc=UTC'`。
+各包把库名换成一次性测试库的写法不同（替换 `)/`、在末个 `/` 后插名字、解析 DSN 后换 `DBName`），
+DSN 里写了库名要么连出一个不存在的库、要么直接跑进你命名的那个库；totp 与 ticket 的用例会在这种 DSN 上
+主动失败，不要改成静默跳过。PG 侧 `NEXADMIN_IT_PG_DSN` 用 `host=localhost`（避开 pgx 连 127.0.0.1 的超时）。
+
 Windows 上若 `TestContract*` 报 "contract changed" 而自己没动契约，那是 golden 被 checkout 成 CRLF：
 `rm core/testdata/contracts/*.golden && git checkout -- core/testdata/contracts` 重新按 LF 检出即可，
 **不要重写 golden**（`.gitattributes` 已把 `*.golden` 钉成 `eol=lf`，新克隆不会再有这个问题）。

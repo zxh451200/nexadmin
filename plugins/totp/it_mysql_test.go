@@ -50,9 +50,20 @@ func TestITMySQLBindAndGate(t *testing.T) {
 	})
 
 	if !strings.Contains(dsn, "parseTime=true") {
-		dsn += "?parseTime=true&loc=UTC"
+		// 分隔符按 DSN 里有没有 "?" 选：固定写 "?" 会在已带参数的 DSN 上拼出第二个 "?"，
+		// 驱动把它当参数值，报 1064 而看不出是自己填错了。
+		if strings.Contains(dsn, "?") {
+			dsn += "&parseTime=true&loc=UTC"
+		} else {
+			dsn += "?parseTime=true&loc=UTC"
+		}
 	}
-	db, err = gorm.Open(mysql.Open(strings.Replace(dsn, "/?", "/"+name+"?", 1)), &gorm.Config{})
+	gormDSN := strings.Replace(dsn, "/?", "/"+name+"?", 1)
+	if gormDSN == dsn {
+		// 换成一次性库的名字没生效，说明 DSN 里写了库名——继续跑就是往开发库建表删表。
+		t.Fatalf("NEXADMIN_IT_MYSQL_DSN 的库名必须留空（user:pass@tcp(host:port)/?parseTime=true），当前 DSN 会连到命名库")
+	}
+	db, err = gorm.Open(mysql.Open(gormDSN), &gorm.Config{})
 	if err != nil {
 		t.Fatal(err)
 	}

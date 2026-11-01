@@ -117,6 +117,11 @@ func TestITMySQLTicketOps(t *testing.T) {
 	})
 
 	gormDSN := strings.Replace(dsn, ")/", ")/"+dbName+"", 1)
+	if gormDSN == dsn {
+		// 一次性库名没拼进去，说明 DSN 的形态不是 user:pass@tcp(host:port)/；
+		// 继续跑就是往 DSN 里那个库建表删表，宁可当场失败。
+		t.Fatalf("NEXADMIN_IT_MYSQL_DSN 形如 user:pass@tcp(host:port)/（库名留空），当前 DSN 换不出一次性库：%s", dsn)
+	}
 	gdb, err = gorm.Open(mysql.Open(gormDSN), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open gorm: %v", err)
