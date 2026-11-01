@@ -734,7 +734,7 @@ func (l *itWarnLogger) countEvent(msg, eventID string) int {
 	return l.byEvent[msg+"\x00"+eventID]
 }
 
-// itRunFundGates 跑五条闸门 + 一条请款/撤销合法序列 + 四条并发交叉路径；两个引擎文件各自建库后调用。
+// itRunFundGates 跑五条闸门 + 一条请款/撤销合法序列 + 五条并发交叉路径；两个引擎文件各自建库后调用。
 func itRunFundGates(t *testing.T, gdb *gorm.DB, ctx context.Context, ddl itDDLProbe) {
 	t.Run("ConcurrentAuthFreezesOnce", func(t *testing.T) { itGateConcurrentAuth(t, gdb, ctx, ddl) })
 	t.Run("ConcurrentPayoutClaimsEachItemOnce", func(t *testing.T) { itGateConcurrentPayout(t, gdb, ctx) })
@@ -745,6 +745,7 @@ func itRunFundGates(t *testing.T, gdb *gorm.DB, ctx context.Context, ddl itDDLPr
 	t.Run("CaptureVsVoidMutuallyExclusive", func(t *testing.T) { itCrossCaptureVsVoid(t, gdb, ctx) })
 	t.Run("AuthReconcileBackfillsOnce", func(t *testing.T) { itCrossAuthReconcile(t, gdb, ctx) })
 	t.Run("PayoutSettlementJoinsOneBatch", func(t *testing.T) { itCrossPayoutUnique(t, gdb, ctx) })
+	t.Run("PayoutSweepWritesTerminalOnce", func(t *testing.T) { itCrossPayoutSweepRace(t, gdb, ctx) })
 	t.Run("VoidAfterPartialCaptureKeepsCapturedFact", func(t *testing.T) { itGateVoidAfterPartialCapture(t, gdb, ctx) })
 }
 
@@ -1811,5 +1812,100 @@ func itGateVoidAfterPartialCapture(t *testing.T, gdb *gorm.DB, ctx context.Conte
 	complete, cancel, _ := prov.crossSnapshot()
 	if complete != 1 || cancel != 1 {
 		t.Fatalf("渠道动作 complete=%d cancel=%d, want 1/1（请款一次、撤销剩余额度一次）", complete, cancel)
+	}
+}
+
+// 交叉路径 5：两个 sweeper 同时补查同一批滞留在 initiated 的代付明细，并拿到相反的终局。
+//
+// 资金语义：出款终局是资金事实，只许第一个写入者落。渠道查询幂等，多打一次不算错；
+// 但后到的「失败」结论若允许无守卫写入，会把已经落定的「成功」覆写成失败——钱已经出去了，
+// 账上记成没出，运维照着这张表会再打一次款（重复出款）。断言取库里真值：
+// 终态仍是第一个结论、失败原因没被写进去、两个 sweeper 合计只数到一个写入者。
+func itCrossPayoutSweepRace(t *testing.T, gdb *gorm.DB, ctx context.Context) {
+	prov := newITGateProvider("it-sweprice", 0)
+	prov.transferPending = true // 发起时只受理、不给终局：明细留在 initiated，交给补查收敛
+	prov.transferQueryPlan = func(call int) (*TransferResult, error) {
+		switch call {
+		case 1:
+			time.Sleep(300 * time.Millisecond) // 第一个结论故意晚到，保证两个 sweeper 都先扫到了这一行
+			return &TransferResult{Accepted: true, State: "SUCCESS", ChannelBatchNo: "itbt_race"}, nil
+		case 2:
+			time.Sleep(700 * time.Millisecond)
+			return &TransferResult{Accepted: false, State: "FAILED",
+				ChannelBatchNo: "itbt_race", Reason: "it: 渠道回终局失败"}, nil
+		}
+		return nil, nil
+	}
+	s := NewService(gdb, nopLogger{})
+	if _, err := s.UpsertChannel(ctx, SaveChannelInput{
+		Code: "itswee", Name: "代付终局补查撞车", Provider: prov.Name(), Enabled: true,
+		Config: map[string]string{"secret": "it-sweep-secret"},
+	}); err != nil {
+		t.Fatalf("upsert payout race channel: %v", err)
+	}
+	st := Settlement{
+		SubjectID: "it-swee-subj", PeriodStart: "2026-11-04", PeriodEnd: "2026-11-04",
+		GrossMinor: 1000, CommissionMinor: 100, NetMinor: 900,
+		Currency: "CNY", Status: SettlementConfirmed, OrderCount: 1,
+	}
+	if err := gdb.WithContext(ctx).Create(&st).Error; err != nil {
+		t.Fatalf("create settlement: %v", err)
+	}
+	batch, err := s.CreatePayout(ctx, CreatePayoutInput{
+		SettlementIDs: []int64{int64(st.ID)}, Method: "channel", Note: "it race",
+	})
+	if err != nil {
+		t.Fatalf("CreatePayout: %v", err)
+	}
+	if _, err := s.PayPayoutViaChannel(ctx, int64(batch.ID), "itswee"); err != nil {
+		t.Fatalf("PayPayoutViaChannel: %v", err)
+	}
+
+	// 前置取证：明细真的停在 initiated，批次真的带上了渠道批次号（否则补查压根不入选）。
+	if got := itScanOne[string](t, gdb, `SELECT status FROM plg_pay_payout_item WHERE batch_id = ?`, int64(batch.ID)); got != PayoutItemInitiated {
+		t.Fatalf("发起后代付明细 = %q, want %s：前置没建立，两条补查撞不了车", got, PayoutItemInitiated)
+	}
+	if got := itScanOne[string](t, gdb, `SELECT channel_batch_no FROM plg_pay_payout_batch WHERE id = ?`, int64(batch.ID)); got == "" {
+		t.Fatal("批次没有渠道批次号：SweepStuckPayouts 不会入选，用例失去意义")
+	}
+	stale := time.Now().UTC().Add(-20 * time.Minute)
+	if err := gdb.Exec(`UPDATE plg_pay_payout_item SET updated_at = ? WHERE batch_id = ?`, stale, int64(batch.ID)).Error; err != nil {
+		t.Fatalf("age payout item: %v", err)
+	}
+
+	itWarmPool(t, gdb, 4) // 两个 sweeper 都要在第一个终局落库前扫到这一行
+	sums := make([]PayoutSweepSummary, 2)
+	errs := make([]error, 2)
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func(n int) {
+			defer wg.Done()
+			<-start
+			sums[n], errs[n] = s.SweepStuckPayouts(ctx, time.Now().UTC())
+		}(i)
+	}
+	close(start)
+	wg.Wait()
+	for i := range errs {
+		if errs[i] != nil {
+			t.Fatalf("sweeper #%d: %v", i, errs[i])
+		}
+	}
+	resolved, skipped := 0, 0
+	for i := range sums {
+		resolved += sums[i].Resolved
+		skipped += sums[i].Skipped
+	}
+	if resolved != 1 || skipped != 1 {
+		t.Fatalf("本轮落定 = %d, 败者 = %d, want 1/1（两个 sweeper 各数一遍 = 指标翻倍，也说明覆写没被拦住）：%+v",
+			resolved, skipped, sums)
+	}
+	if got := itScanOne[string](t, gdb, `SELECT status FROM plg_pay_payout_item WHERE batch_id = ?`, int64(batch.ID)); got != PayoutItemSuccess {
+		t.Fatalf("代付明细终态 = %q, want %s —— 后到的渠道结论覆写了已经落定的资金事实", got, PayoutItemSuccess)
+	}
+	if got := itScanOne[string](t, gdb, `SELECT fail_reason FROM plg_pay_payout_item WHERE batch_id = ?`, int64(batch.ID)); got != "" {
+		t.Fatalf("成功那笔上写着失败原因 %q —— 同一笔既成功又失败", got)
 	}
 }
