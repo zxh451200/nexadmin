@@ -89,13 +89,13 @@ async function pay(outcome){
 func (h *handler) mockCashier(c *gin.Context) {
 	paymentNo := c.Query("no")
 	if paymentNo == "" {
-		response.Fail(c, response.BadRequest("error.bad_request"))
+		fail(c, response.BadRequest("error.bad_request"))
 		return
 	}
 	// 收银台是公开页：跨租户定位订单后以其租户上下文读取。
 	o, err := h.svc.queryByNoGlobal(c.Request.Context(), paymentNo)
 	if err != nil {
-		response.Fail(c, err)
+		fail(c, err)
 		return
 	}
 	ret := safeReturnURL(c.Query("return"))
@@ -132,7 +132,7 @@ func (h *handler) mockConfirm(c *gin.Context) {
 	}
 	o, err := h.svc.MockPay(c.Request.Context(), f.PaymentNo, f.Outcome)
 	if err != nil {
-		response.Fail(c, err)
+		fail(c, err)
 		return
 	}
 	if o == nil {

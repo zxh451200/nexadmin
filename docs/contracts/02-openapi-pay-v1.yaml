@@ -13,7 +13,7 @@ info:
 
     通用应答信封：`{ code, message, data, reason? }`，`code=0` 为成功；
     失败时 `code` 等于 HTTP 状态码，`message` 是 i18n 后的文案，机器判断请用
-    `ApiError.errorCode`（即 `PAY_*`，与 HTTP 状态码一起返回）。
+    `reason`（即 `PAY_*` 错误 key，与 HTTP 状态码一起返回；文案会随语言变，key 不会）。
     分页应答的 `data` 是 `{ list, total, page, pageSize }`。
     ID 字段是雪花 ID（int64），超过 JS 安全整数，序列化按字符串处理。
 
@@ -1303,11 +1303,12 @@ components:
       properties:
         code: { type: integer }
         message: { type: string }
-        errorCode:
+        reason:
           type: string
           description: |
-            契约错误码（`PAY_*`）。文案在 core/i18n/locales/<lang>.yaml 的 pay 段；
-            新增取值必须同时进代码、字典与本枚举。
+            机器可识别原因。本插件的失败应答一律带 pay 错误 key（`pay.PAY_*`），
+            调用方按它分支而不是按 message 文案。文案在 core/i18n/locales/<lang>.yaml
+            的 pay 段；新增取值必须同时进代码、字典与本枚举。
           enum:
             - PAY_INVALID_AMOUNT
             - PAY_CURRENCY_UNSUPPORTED

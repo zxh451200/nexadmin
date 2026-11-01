@@ -664,7 +664,7 @@ defineMock([
     handler: ({ params }) => {
       const r = refunds.find((x) => x.refundNo === params.no) ?? mockError(404, 'refund not found')
       const caps = capabilitiesOfCode(r.channelCode)
-      if (!caps.refundQuery) mockError(400, 'channel does not support refund query', 'PAY_CAPABILITY_UNSUPPORTED')
+      if (!caps.refundQuery) mockError(400, 'channel does not support refund query', 'pay.PAY_CAPABILITY_UNSUPPORTED')
       const now = new Date().toISOString()
       r.syncAttempts = (r.syncAttempts ?? 0) + 1
       r.lastSyncAt = now
@@ -795,7 +795,7 @@ defineMock([
       if (!body.channelCode || amount <= 0) mockError(400, 'channel and amount required')
       // 前端禁用只是体验，后端（这里＝mock）仍要独立拒一次
       const caps = capabilitiesOfCode(String(body.channelCode))
-      if (!caps.auth) mockError(400, 'channel does not support authorization', 'PAY_CAPABILITY_UNSUPPORTED')
+      if (!caps.auth) mockError(400, 'channel does not support authorization', 'pay.PAY_CAPABILITY_UNSUPPORTED')
       const currency = String(body.currency ?? 'CNY')
       const allowedCurrencies = caps.currencies.length ? caps.currencies : ['CNY']
       if (!allowedCurrencies.includes(currency)) mockError(400, `currency ${currency} not supported`)
@@ -858,7 +858,7 @@ defineMock([
       const source: string = body.source === 'channel' ? 'channel' : 'manual'
       const caps = capabilitiesOfCode(String(body.channelCode))
       if (source === 'channel' && !caps.bill) {
-        mockError(400, 'channel does not provide bills', 'PAY_CAPABILITY_UNSUPPORTED')
+        mockError(400, 'channel does not provide bills', 'pay.PAY_CAPABILITY_UNSUPPORTED')
       }
       const amounts: { amountMinor?: number }[] = Array.isArray(body.channelAmounts) ? body.channelAmounts : []
       const n = reconcileTasks.length + 1
@@ -984,7 +984,7 @@ defineMock([
       // PAY_PAYOUT_SETTLEMENT_TAKEN。mock 不拦的话，本地会把「重复出款」演成成功。
       const taken = payoutItems.find((it) => ids.includes(it.settlementId))
       if (taken) {
-        mockError(409, `settlement ${taken.settlementId} already in payout batch ${taken.batchId}`, 'PAY_PAYOUT_SETTLEMENT_TAKEN')
+        mockError(409, `settlement ${taken.settlementId} already in payout batch ${taken.batchId}`, 'pay.PAY_PAYOUT_SETTLEMENT_TAKEN')
       }
       const n = payouts.length + 1
       const p: PayPayoutBatch = {
@@ -1020,7 +1020,7 @@ defineMock([
       const channelCode = String(body.channelCode ?? '').trim()
       if (!channelCode) mockError(400, 'channelCode required')
       const caps = capabilitiesOfCode(channelCode)
-      if (!caps.payout) mockError(400, 'channel does not support payout', 'PAY_CAPABILITY_UNSUPPORTED')
+      if (!caps.payout) mockError(400, 'channel does not support payout', 'pay.PAY_CAPABILITY_UNSUPPORTED')
       // 逐笔发起：缺收款方标识的笔直接落 failed，其余落 success（与后端的「前置校验不过不摸渠道」同口径）
       const mine = payoutItems.filter((it) => it.batchId === p.id)
       const targets = mine.length ? mine : [{ id: `gen-${p.id}`, batchId: p.id, settlementId: '7461', netMinor: p.totalMinor, receiverId: 'shop-001', status: 'pending' as const }]

@@ -424,7 +424,7 @@ func (h *handler) Stats(c *gin.Context) {
 	}
 	st, err := h.svc.Stats(c.Request.Context(), q)
 	if err != nil {
-		response.Fail(c, err)
+		fail(c, err)
 		return
 	}
 	response.OK(c, st)

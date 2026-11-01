@@ -10,8 +10,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
-
-	"nexadmin/core/response"
 )
 
 // 请求级幂等（契约 Idempotency-Key）：同键同体重放首次响应并置
@@ -48,7 +46,7 @@ func idempotency(db *gorm.DB) gin.HandlerFunc {
 		switch {
 		case err == nil:
 			if rec.ReqHash != hash {
-				response.Fail(c, idemConflict())
+				fail(c, idemConflict())
 				c.Abort()
 				return
 			}

@@ -126,14 +126,15 @@ func TestContractRoutesMatchOpenAPI(t *testing.T) {
 }
 
 // TestContractErrorCodesAreLocalized 钉住「错误码即契约」：代码里用到的每个 PAY_* key
-// 都要同时出现在契约的 errorCode 枚举与两个语言的字典里，否则前端拿到的就是没有文案的码。
+// 都要同时出现在契约 ApiError.reason 的枚举与两个语言的字典里，否则调用方拿到的就是
+// 没有文案的码（reason 是上线的机器码，见 core/response.Fail）。
 func TestContractErrorCodesAreLocalized(t *testing.T) {
 	keys := map[string]bool{}
 	for _, k := range []string{
 		errInvalidAmount, errCurrencyUnsupported, errFxRateMissing, errStateConflict,
 		errExpired, errRefundExceeds, errSignInvalid, errChannelUnavailable, errChannelError,
 		errNotFound, errTenantMismatch, errIdempotencyConflict, errInternal,
-		errCapabilityUnsupported, errNotifyStaleKey,
+		errCapabilityUnsupported, errNotifyStaleKey, errPayoutSettlementTaken,
 	} {
 		keys[strings.TrimPrefix(k, "pay.")] = true
 	}
@@ -147,9 +148,9 @@ func TestContractErrorCodesAreLocalized(t *testing.T) {
 			Schemas struct {
 				ApiError struct {
 					Properties struct {
-						ErrorCode struct {
+						Reason struct {
 							Enum []string `yaml:"enum"`
-						} `yaml:"errorCode"`
+						} `yaml:"reason"`
 					} `yaml:"properties"`
 				} `yaml:"ApiError"`
 			} `yaml:"schemas"`
@@ -159,16 +160,16 @@ func TestContractErrorCodesAreLocalized(t *testing.T) {
 		t.Fatal(err)
 	}
 	inDoc := map[string]bool{}
-	for _, e := range doc.Components.Schemas.ApiError.Properties.ErrorCode.Enum {
+	for _, e := range doc.Components.Schemas.ApiError.Properties.Reason.Enum {
 		inDoc[e] = true
 	}
 	for k := range keys {
 		if !inDoc[k] {
-			t.Errorf("错误码 %s 在代码里会被返回，但契约的 ApiError.errorCode 枚举里没有", k)
+			t.Errorf("错误码 %s 在代码里会被返回，但契约的 ApiError.reason 枚举里没有", k)
 		}
 	}
-	if len(doc.Components.Schemas.ApiError.Properties.ErrorCode.Enum) == 0 {
-		t.Fatal("契约里没有 ApiError.errorCode 枚举，本用例形同虚设")
+	if len(doc.Components.Schemas.ApiError.Properties.Reason.Enum) == 0 {
+		t.Fatal("契约里没有 ApiError.reason 枚举，本用例形同虚设")
 	}
 
 	// 字典侧：core/i18n/locales/<lang>.yaml 的 pay 段必须覆盖同一集合。

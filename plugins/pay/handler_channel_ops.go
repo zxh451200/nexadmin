@@ -22,7 +22,7 @@ func (h *handler) capabilities(c *gin.Context) {
 	for _, n := range names {
 		caps, err := capsOf(n)
 		if err != nil {
-			response.Fail(c, err)
+			fail(c, err)
 			return
 		}
 		if caps.Currencies == nil {
@@ -42,7 +42,7 @@ func (h *handler) capabilities(c *gin.Context) {
 func (h *handler) syncRefund(c *gin.Context) {
 	r, err := h.svc.SyncRefund(c.Request.Context(), c.Param("no"))
 	if err != nil {
-		response.Fail(c, err)
+		fail(c, err)
 		return
 	}
 	response.OK(c, refundView(r))
@@ -53,7 +53,7 @@ func (h *handler) listOutbox(c *gin.Context) {
 	page, size := response.ParsePage(c)
 	rows, total, err := h.svc.ListOutbox(c.Request.Context(), c.Query("status"), c.Query("keyword"), page, size)
 	if err != nil {
-		response.Fail(c, err)
+		fail(c, err)
 		return
 	}
 	out := make([]OutboxView, len(rows))
@@ -74,7 +74,7 @@ func (h *handler) outboxCounts(c *gin.Context) {
 func (h *handler) getOutbox(c *gin.Context) {
 	row, err := h.svc.GetOutbox(c.Request.Context(), c.Param("eventId"))
 	if err != nil {
-		response.Fail(c, err)
+		fail(c, err)
 		return
 	}
 	response.OK(c, outboxView(row, true))
@@ -86,7 +86,7 @@ func (h *handler) getOutbox(c *gin.Context) {
 func (h *handler) retryOutbox(c *gin.Context) {
 	row, err := h.svc.RetryOutbox(c.Request.Context(), c.Param("eventId"))
 	if err != nil {
-		response.Fail(c, err)
+		fail(c, err)
 		return
 	}
 	response.OK(c, outboxView(row, false))
@@ -102,7 +102,7 @@ func (h *handler) discardOutbox(c *gin.Context) {
 	}
 	row, err := h.svc.DiscardOutbox(c.Request.Context(), c.Param("eventId"), f.Note)
 	if err != nil {
-		response.Fail(c, err)
+		fail(c, err)
 		return
 	}
 	response.OK(c, outboxView(row, false))

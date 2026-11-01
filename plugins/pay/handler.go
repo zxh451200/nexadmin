@@ -22,16 +22,31 @@ type handler struct{ svc *Service }
 
 func respond(c *gin.Context, data any, err error) {
 	if err != nil {
-		response.Fail(c, err)
+		fail(c, err)
 		return
 	}
 	response.OK(c, data)
 }
 
+// fail 是 pay 的统一失败出口：框架信封只给文案，机器判断要看 reason。
+// 这里把错误 key（pay.PAY_*）落进 reason，调用方才能把「这张结算单已经打过款」与
+// 「状态不允许」分开（两者都是 409）；文案随语言变，key 不变。
+// 显式设过 Reason 的错误原样保留——那是更具体的机器码（如 NOT_INITIALIZED）。
+func fail(c *gin.Context, err error) {
+	var e *response.Error
+	if errors.As(err, &e) && e.Reason == "" {
+		cp := *e
+		cp.Reason = e.Key
+		response.Fail(c, &cp)
+		return
+	}
+	response.Fail(c, err)
+}
+
 func idParam(c *gin.Context, name string) (int64, bool) {
 	id, err := strconv.ParseInt(c.Param(name), 10, 64)
 	if err != nil || id == 0 {
-		response.Fail(c, response.BadRequest("error.bad_request"))
+		fail(c, response.BadRequest("error.bad_request"))
 		return 0, false
 	}
 	return id, true
@@ -96,7 +111,7 @@ func (h *handler) createOrder(c *gin.Context) {
 		ReturnURL: f.ReturnURL, ExpireSec: f.ExpireSec, Metadata: f.Metadata,
 	})
 	if err != nil {
-		response.Fail(c, err)
+		fail(c, err)
 		return
 	}
 	respond(c, orderView(o, params), nil)
@@ -111,7 +126,7 @@ func (h *handler) listOrders(c *gin.Context) {
 		FailReason: c.Query("failReason"), Page: page, PageSize: size,
 	})
 	if err != nil {
-		response.Fail(c, err)
+		fail(c, err)
 		return
 	}
 	out := make([]OrderView, len(rows))
@@ -125,7 +140,7 @@ func (h *handler) listOrders(c *gin.Context) {
 func (h *handler) orderByBiz(c *gin.Context) {
 	o, err := h.svc.QueryByBiz(c.Request.Context(), c.Query("bizType"), c.Query("bizNo"))
 	if err != nil {
-		response.Fail(c, err)
+		fail(c, err)
 		return
 	}
 	respond(c, orderView(o, nil), nil)
@@ -135,7 +150,7 @@ func (h *handler) orderByBiz(c *gin.Context) {
 func (h *handler) getOrder(c *gin.Context) {
 	o, err := h.svc.QueryByNo(c.Request.Context(), c.Param("no"))
 	if err != nil {
-		response.Fail(c, err)
+		fail(c, err)
 		return
 	}
 	respond(c, orderView(o, nil), nil)
@@ -151,7 +166,7 @@ func (h *handler) closeOrder(c *gin.Context) {
 func (h *handler) syncOrder(c *gin.Context) {
 	o, err := h.svc.QueryByNo(c.Request.Context(), c.Param("no"))
 	if err != nil {
-		response.Fail(c, err)
+		fail(c, err)
 		return
 	}
 	respond(c, orderView(o, nil), nil)
@@ -188,7 +203,7 @@ func (h *handler) createRefund(c *gin.Context) {
 		respond(c, refundView(r), err)
 		return
 	}
-	response.Fail(c, err)
+	fail(c, err)
 }
 
 // GET /plugins/pay/refunds —— 管理端分页列表（契约外附加）。
@@ -198,7 +213,7 @@ func (h *handler) listRefunds(c *gin.Context) {
 		Status: c.Query("status"), Keyword: c.Query("keyword"), Page: page, PageSize: size,
 	})
 	if err != nil {
-		response.Fail(c, err)
+		fail(c, err)
 		return
 	}
 	out := make([]RefundView, len(rows))
@@ -214,10 +229,10 @@ func (h *handler) getRefund(c *gin.Context) {
 	err := h.svc.db.WithContext(c.Request.Context()).Where("refund_no = ?", c.Param("no")).Take(&r).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			response.Fail(c, response.NotFound(errNotFound))
+			fail(c, response.NotFound(errNotFound))
 			return
 		}
-		response.Fail(c, err)
+		fail(c, err)
 		return
 	}
 	respond(c, refundView(&r), nil)
@@ -253,7 +268,7 @@ func (h *handler) createAuth(c *gin.Context) {
 		respond(c, authView(a), err)
 		return
 	}
-	response.Fail(c, err)
+	fail(c, err)
 }
 
 // POST /plugins/pay/authorizations/:no/capture —— 契约 captureAuthorization。
@@ -290,7 +305,7 @@ func (h *handler) listAuths(c *gin.Context) {
 	page, size := response.ParsePage(c)
 	rows, total, err := h.svc.ListAuths(c.Request.Context(), c.Query("status"), c.Query("keyword"), page, size)
 	if err != nil {
-		response.Fail(c, err)
+		fail(c, err)
 		return
 	}
 	out := make([]AuthView, len(rows))
@@ -306,7 +321,7 @@ func (h *handler) listAuths(c *gin.Context) {
 func (h *handler) listChannels(c *gin.Context) {
 	rows, err := h.svc.ListChannels(c.Request.Context(), c.Query("subjectId"), c.Query("enabled") == "true")
 	if err != nil {
-		response.Fail(c, err)
+		fail(c, err)
 		return
 	}
 	out := make([]*ChannelView, len(rows))
@@ -357,7 +372,7 @@ func (h *handler) listCallbacks(c *gin.Context) {
 	}
 	rows, total, err := h.svc.ListCallbacks(c.Request.Context(), q)
 	if err != nil {
-		response.Fail(c, err)
+		fail(c, err)
 		return
 	}
 	out := make([]CallbackView, len(rows))
@@ -558,7 +573,7 @@ func (h *handler) notify(c *gin.Context) {
 	code := c.Param("channelCode")
 	body, err := c.GetRawData()
 	if err != nil {
-		response.Fail(c, response.BadRequest("error.bad_request"))
+		fail(c, response.BadRequest("error.bad_request"))
 		return
 	}
 	headers := map[string]string{}
@@ -569,7 +584,7 @@ func (h *handler) notify(c *gin.Context) {
 		Channel: code, Body: body, Headers: headers,
 	})
 	if err != nil {
-		response.Fail(c, err)
+		fail(c, err)
 		return
 	}
 	// 答错格式等于告诉渠道「没收到」：支付宝会重试 24 小时，微信会判失败。
