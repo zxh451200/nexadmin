@@ -938,3 +938,72 @@ func TestITMySQLRuleRerunOnTagChange(t *testing.T) {
 		t.Fatal("重跑命中的规则应留下 rule_applied 动态")
 	}
 }
+
+// TestITMySQLInboundEmail 邮件进单：新邮件建单、重投幂等、回信按 In-Reply-To 落回原单、自动回复拒绝。
+func TestITMySQLInboundEmail(t *testing.T) {
+	svc, gdb, _ := itMySQLService(t)
+	ctx := context.Background()
+	must := func(err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	first := &InboundEmail{
+		From: "cust@example.com", FromName: "客户", Subject: "订单破损",
+		Body: "外包装压坏了", MessageID: "<m1@example.com>",
+	}
+	no, created, err := svc.IngestEmail(ctx, first)
+	must(err)
+	if !created || no == "" {
+		t.Fatalf("首封邮件应新建工单：no=%q created=%v", no, created)
+	}
+	var t1 Ticket
+	must(gdb.Where("ticket_no = ?", no).Take(&t1).Error)
+	if t1.ReporterID != "cust@example.com" || t1.Title != "订单破损" {
+		t.Fatalf("邮件建单字段不对：reporter=%q title=%q", t1.ReporterID, t1.Title)
+	}
+
+	// 同一封重投（IMAP 重连/网关重试）：幂等，不新建、不重复回帖
+	no2, created2, err := svc.IngestEmail(ctx, first)
+	must(err)
+	if created2 || no2 != no {
+		t.Fatalf("重投应幂等：no=%q created=%v", no2, created2)
+	}
+	var replies int64
+	must(gdb.Model(&TicketReply{}).Where("ticket_id = ?", int64(t1.ID)).Count(&replies).Error)
+	if replies != 1 {
+		t.Fatalf("重投后回复数 = %d，应为 1", replies)
+	}
+
+	// 回信：In-Reply-To 指向首封 → 落回原单
+	second := &InboundEmail{
+		From: "cust@example.com", FromName: "客户", Subject: "Re: 订单破损",
+		Body: "请问处理到哪了", MessageID: "<m2@example.com>",
+		References: []string{"<m1@example.com>"},
+	}
+	no3, created3, err := svc.IngestEmail(ctx, second)
+	must(err)
+	if created3 || no3 != no {
+		t.Fatalf("回信应落回原单：no=%q created=%v", no3, created3)
+	}
+	var t2 Ticket
+	must(gdb.Where("id = ?", int64(t1.ID)).Take(&t2).Error)
+	if t2.ReplySeq != 2 || t2.LastReplierType != ReplierReporter {
+		t.Fatalf("回信没进原单：seq=%d last=%q", t2.ReplySeq, t2.LastReplierType)
+	}
+	var stored TicketReply
+	must(gdb.Where("message_id = ?", "<m2@example.com>").Take(&stored).Error)
+	if stored.TicketID != t1.ID {
+		t.Fatalf("message_id 应挂在原单下：%+v", stored)
+	}
+
+	// 自动回复不进单
+	if _, _, err := svc.IngestEmail(ctx, &InboundEmail{
+		From: "noreply@example.com", Subject: "自动回复：订单破损",
+		Body: "我们已收到您的邮件", MessageID: "<m3@example.com>",
+	}); err == nil {
+		t.Fatal("自动回复不该进单")
+	}
+}

@@ -99,6 +99,8 @@ type CreateInput struct {
 	// EnforceRequiredFields 由 handler 按入口设置。后台代客建单要求补齐必填；
 	// 公开入口不要求——必填是「坐席要求补的信息」，不该把客户的提交挡在门外。
 	EnforceRequiredFields bool `json:"-"`
+	// MessageID 只在邮件渠道进单时填（首条描述的 RFC 5322 Message-ID），用于重投去重与回信线程匹配。
+	MessageID string `json:"-"`
 	// CreatorID/CreatorName 由后台代客建单的 handler 从登录态填充，不接受前端传入。
 	CreatorID   idgen.ID `json:"-"`
 	CreatorName string   `json:"-"`
@@ -164,6 +166,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Ticket, error) {
 		TicketID: t.ID, Seq: 1, ReplierType: in.ReporterType,
 		ReplierID: truncate(in.ReporterID, 64), ReplierName: truncate(in.ReporterName, 64),
 		Content: truncate(in.Content, 2000), CreatedAt: now,
+		MessageID: truncate(in.MessageID, 255),
 	}
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(t).Error; err != nil {
@@ -204,6 +207,8 @@ type ReplyInput struct {
 	ReplierName string
 	Content     string
 	Internal    bool
+	// MessageID 只在邮件渠道补信时填，用于重投去重。
+	MessageID string
 }
 
 // Reply 回帖：行锁下取序号；坐席公开回复把工单推到 pending（等客户），并暂停 SLA 时钟；
@@ -244,6 +249,7 @@ func (s *Service) Reply(ctx context.Context, ticketNo string, in ReplyInput) (*T
 			TicketID: t.ID, Seq: t.ReplySeq + 1, ReplierType: in.ReplierType,
 			ReplierID: truncate(in.ReplierID, 64), ReplierName: in.ReplierName,
 			Content: in.Content, Internal: in.Internal, CreatedAt: now,
+			MessageID: truncate(in.MessageID, 255),
 		}
 		out.ID = id
 		if err := tx.Create(&out).Error; err != nil {

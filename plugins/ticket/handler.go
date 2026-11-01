@@ -616,6 +616,12 @@ func (h *handler) Register(r *gin.RouterGroup, d *core.Deps) {
 	p.DELETE("/tickets/:no/attachments/:token",
 		middleware.RateLimit(d.Cache, d.Log, "ticket-attachment-delete", middleware.ByIP(), 20, time.Minute), h.deleteVisitor)
 
+	// 邮件进单：任何能 POST 原始 MIME 的组件都能接（IMAP 轮询器 / 邮件网关 / 厂商 inbound）。
+	// 无登录，靠 X-Ticket-Secret；未配置密钥时整体 503。IP 限流只是兜底（网关会突发）。
+	in := d.Public.Group("/plugins/ticket/inbound")
+	in.POST("/email",
+		middleware.RateLimit(d.Cache, d.Log, "ticket-inbound", middleware.ByIP(), 120, time.Minute), h.inboundEmail)
+
 	// 客户自助页挂在根路径：页面本身不需要登录，提交/查询仍走上面的公开 JSON 接口。
 	d.Root.GET("/ticket/new",
 		middleware.RateLimit(d.Cache, d.Log, "ticket-form-page", middleware.ByIP(), 60, time.Minute), h.formPage)

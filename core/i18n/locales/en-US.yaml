@@ -280,6 +280,10 @@ ticket:
   field_value_invalid: Invalid field value (type or range mismatch)
   sla_code_unknown: The SLA policy to bind does not exist
   attachment_rejected: The attachment failed the security scan and was rejected
+  inbound_disabled: Email intake is not enabled (no shared secret configured)
+  inbound_secret_invalid: The email intake secret is incorrect
+  inbound_parse_failed: The message could not be parsed; is it a complete MIME email?
+  inbound_auto_reply: Auto-replies and bounces are not turned into tickets
 totp:
   already_enabled: Two-factor authentication is already enabled
   not_enrolled: Two-factor authentication is not enrolled yet; scan the QR code first

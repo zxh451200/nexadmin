@@ -6,6 +6,7 @@ package ticket
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"sync"
 	"time"
@@ -90,6 +91,12 @@ func (m *module) Start(ctx context.Context, d *core.Deps) error {
 	// 宿主若在 Start 之后才 RegisterScanner，以拒绝日志里的 scanner 字段为准。
 	if d.Log != nil {
 		d.Log.Sugar().Infow("ticket: attachment scanner at boot", "name", ScannerName())
+	}
+	// 邮件进单的共享密钥只从环境读：那是部署方凭据，不进仓库、不进库。
+	// 没有密钥时入口返回 503，启动日志把「开没开」写清楚。
+	SetInboundSecret(os.Getenv("NEXADMIN_TICKET_INBOUND_SECRET"))
+	if d.Log != nil {
+		d.Log.Sugar().Infow("ticket: inbound email", "enabled", inboundSecretValue() != "")
 	}
 	go func() {
 		t := time.NewTicker(time.Minute)

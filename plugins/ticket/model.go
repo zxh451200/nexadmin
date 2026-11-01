@@ -138,6 +138,9 @@ type TicketReply struct {
 	// Internal 为内部备注：仅坐席可见，访客接口不返回。
 	Internal  bool      `gorm:"column:is_internal;not null;default:0" json:"internal"`
 	CreatedAt time.Time `json:"createdAt"`
+	// MessageID 是邮件渠道进单时这条回复对应的 RFC 5322 Message-ID：
+	// 同一条邮件重投（IMAP 重连、webhook 重试）靠它去重，回信也靠 In-Reply-To 找回这张单。
+	MessageID string `gorm:"size:255;not null;default:'';index:idx_plg_ticket_reply_msgid" json:"-"`
 }
 
 func (TicketReply) TableName() string { return "plg_ticket_reply" }
