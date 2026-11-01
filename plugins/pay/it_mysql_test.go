@@ -747,6 +747,7 @@ func itRunFundGates(t *testing.T, gdb *gorm.DB, ctx context.Context, ddl itDDLPr
 	t.Run("PayoutSettlementJoinsOneBatch", func(t *testing.T) { itCrossPayoutUnique(t, gdb, ctx) })
 	t.Run("PayoutSweepWritesTerminalOnce", func(t *testing.T) { itCrossPayoutSweepRace(t, gdb, ctx) })
 	t.Run("VoidAfterPartialCaptureKeepsCapturedFact", func(t *testing.T) { itGateVoidAfterPartialCapture(t, gdb, ctx) })
+	t.Run("OutboxFailureRollsBackMoneyFact", func(t *testing.T) { itGateOutboxFailureRollsBack(t, gdb, ctx) })
 }
 
 // 闸门 1：并发同 (biz_type,biz_no) 预授权只向渠道冻结一次。
@@ -1910,5 +1911,101 @@ func itCrossPayoutSweepRace(t *testing.T, gdb *gorm.DB, ctx context.Context) {
 	}
 	if got := itScanOne[string](t, gdb, `SELECT fail_reason FROM plg_pay_payout_item WHERE batch_id = ?`, int64(batch.ID)); got != "" {
 		t.Fatalf("成功那笔上写着失败原因 %q —— 同一笔既成功又失败", got)
+	}
+}
+
+// 资金事实与出站箱必须同生共死：退款翻转写库与 pay.refund.succeeded 入箱在同一个事务里，
+// 任一失败要整体回滚。这条用 GORM 回调把「出站箱插入」注入成失败来验，因为它是唯一能
+// 制造「钱已翻、事件没写」这个半提交状态的办法——若真发生，下游永不入账、对账又显示已退，
+// 是账实不符里最难查的一种。注入去掉后再跑一次必须正常收敛，证明红只来自注入。
+func itGateOutboxFailureRollsBack(t *testing.T, gdb *gorm.DB, ctx context.Context) {
+	const (
+		secret  = "it-obfail-secret"
+		code    = "itobf"
+		refundY = int64(400)
+	)
+	prov := newITGateProvider("it-obfail", 0)
+	s := NewService(gdb, nopLogger{})
+	if _, err := s.UpsertChannel(ctx, SaveChannelInput{
+		Code: code, Name: "出站箱写失败", Provider: prov.Name(), Enabled: true,
+		// 异步受理：退款先停在 pending，回执才走 transitionRefund（同步渠道压根不会有入箱这一步）。
+		Config: map[string]string{"secret": secret, "refundOutcome": "pending"},
+	}); err != nil {
+		t.Fatalf("upsert outbox-fail channel: %v", err)
+	}
+	o, _, err := s.Create(ctx, CreateInput{
+		BizType: "it_obf", BizNo: "OBF-1", ChannelCode: code,
+		AmountMinor: 1000, Currency: "CNY", Subject: "it outbox fail",
+	})
+	if err != nil {
+		t.Fatalf("create order: %v", err)
+	}
+	itPaySuccessCallback(t, s, ctx, code, o.PaymentNo, secret)
+	r, err := s.CreateRefund(ctx, RefundInput{
+		PaymentNo: o.PaymentNo, BizType: "it_obf_refund", BizNo: "OBFR-1",
+		AmountMinor: refundY, Reason: "it",
+	})
+	if err != nil {
+		t.Fatalf("create refund: %v", err)
+	}
+	outboxBefore := itCountRows(t, gdb, `SELECT COUNT(*) FROM plg_pay_outbox`)
+
+	const hook = "it:fail_outbox_create"
+	// 自诊断：hookCalls 证明回调真的挂上了（否则整条用例是在验空气），
+	// hookMatched 证明表名匹配口径没写错。
+	var hookCalls, hookMatched int
+	var hookSee string
+	if err := gdb.Callback().Create().Before("gorm:create").Register(hook, func(tx *gorm.DB) {
+		hookCalls++
+		table := ""
+		if tx.Statement != nil {
+			table = tx.Statement.Table
+			if table == "" && tx.Statement.Schema != nil {
+				table = tx.Statement.Schema.Table
+			}
+		}
+		hookSee = fmt.Sprintf("table=%q dest=%T", table, tx.Statement.Dest)
+		// 按模型类型认更稳：Before("gorm:create") 阶段表名可能还没落到 Statement.Table。
+		_, isOutbox := tx.Statement.Dest.(*Outbox)
+		if isOutbox || strings.Contains(table, "plg_pay_outbox") {
+			hookMatched++
+			tx.AddError(errors.New("it: injected outbox insert failure"))
+		}
+	}); err != nil {
+		t.Fatalf("register outbox failure hook: %v", err)
+	}
+	defer func() { _ = gdb.Callback().Create().Remove(hook) }()
+
+	if err := itRefundSuccessCallback(s, ctx, code, o.PaymentNo, r.RefundNo, secret); err == nil {
+		t.Fatalf("出站箱写入失败（hook 命中 %d/%d 次，最后一次见到 %s），退款回调却返回成功：半提交状态被当成了成功",
+			hookMatched, hookCalls, hookSee)
+	}
+	if hookCalls == 0 || hookMatched == 0 {
+		t.Fatalf("注入没有生效（hook 命中 %d/%d 次）：这条用例没验到出站箱写入这一环", hookMatched, hookCalls)
+	}
+	// 回滚取证：钱没动、事件没进箱，一样都不许留。
+	if got := itScanOne[int64](t, gdb, `SELECT refunded_minor FROM plg_pay_order WHERE payment_no = ?`, o.PaymentNo); got != 0 {
+		t.Fatalf("出站箱失败后 refunded_minor = %d, want 0 —— 钱翻了但事件没写，账实从此不符", got)
+	}
+	if got := itScanOne[string](t, gdb, `SELECT status FROM plg_pay_refund WHERE refund_no = ?`, r.RefundNo); got != RefundPending {
+		t.Fatalf("出站箱失败后退款状态 = %q, want %s（必须整笔回滚）", got, RefundPending)
+	}
+	if n := itCountRows(t, gdb, `SELECT COUNT(*) FROM plg_pay_outbox`) - outboxBefore; n != 0 {
+		t.Fatalf("失败的回调留下了 %d 行出站箱记录，want 0", n)
+	}
+
+	// 去掉注入再跑一次：同一笔必须能正常收敛，证明上面的红只来自注入而不是数据坏了。
+	if err := gdb.Callback().Create().Remove(hook); err != nil {
+		t.Fatalf("remove outbox failure hook: %v", err)
+	}
+	if err := itRefundSuccessCallback(s, ctx, code, o.PaymentNo, r.RefundNo, secret); err != nil {
+		t.Fatalf("去掉注入后应正常收敛：%v", err)
+	}
+	if got := itScanOne[int64](t, gdb, `SELECT refunded_minor FROM plg_pay_order WHERE payment_no = ?`, o.PaymentNo); got != refundY {
+		t.Fatalf("去掉注入后 refunded_minor = %d, want %d", got, refundY)
+	}
+	if n := itCountRows(t, gdb, `SELECT COUNT(*) FROM plg_pay_outbox WHERE event_name = ? AND payload LIKE ?`,
+		EventRefundOK, `%`+r.RefundNo+`%`); n != 1 {
+		t.Fatalf("恢复后的出站箱 pay.refund.succeeded = %d 行, want 恰 1", n)
 	}
 }
