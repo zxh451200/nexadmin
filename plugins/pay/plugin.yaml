@@ -1,7 +1,7 @@
 id: pay
 name: 支付中台
 version: 0.1.0
-description: 资金事实中台（docs/contracts/02-openapi-pay-v1.yaml）：支付单状态机、渠道抽象与回调验签防重放、退款（含 refunding 异步回执与渠道补查）、资金预授权（渠道真实冻结/请款/撤销）、账单驱动对账、结算与渠道代付（逐笔幂等、单笔失败不拖垮批次）、plg_pay_outbox 资金事件出站箱（死信可重投）、请求级 Idempotency-Key；内置支付宝（RSA2，含 JSAPI 与付款码）、微信支付（APIv3，平台证书自动下载轮换）、易支付与 mock 渠道；渠道能力矩阵（币种/下单方式/退款查询/预授权/账单/代付）下发前端禁用入口，不支持的操作明确报 PAY_CAPABILITY_UNSUPPORTED 而非伪造渠道流水号；凭据按字段表单配置并加密入库；业务系统通过进程内 API 对接。
+description: 资金事实中台（docs/contracts/02-openapi-pay-v1.yaml）：支付单状态机、渠道抽象与回调验签防重放、退款（含 refunding 异步回执与渠道补查）、资金预授权（渠道真实冻结/请款/撤销）、账单驱动对账、结算与渠道代付（逐笔幂等、单笔失败不拖垮批次）、渠道凭据与连通性自检（只读探针，pass/fail/未执行三态）、plg_pay_outbox 资金事件出站箱（死信可重投）、请求级 Idempotency-Key；内置支付宝（RSA2，含 JSAPI 与付款码）、微信支付（APIv3，平台证书自动下载轮换）、易支付与 mock 渠道；渠道能力矩阵（币种/下单方式/退款查询/预授权/账单/代付）下发前端禁用入口，不支持的操作明确报 PAY_CAPABILITY_UNSUPPORTED 而非伪造渠道流水号；凭据按字段表单配置并加密入库；业务系统通过进程内 API 对接。
 author: NexAdmin
 edition: pro
 requires_nexadmin: ">=0.1.0"
