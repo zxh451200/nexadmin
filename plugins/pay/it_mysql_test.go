@@ -1679,12 +1679,15 @@ func itCrossPayoutUnique(t *testing.T, gdb *gorm.DB, ctx context.Context) {
 	settlementID := int64(st.ID)
 	batchesBefore := itCountRows(t, gdb, `SELECT COUNT(*) FROM plg_pay_payout_batch`)
 
-	batches := make([]*PayoutBatch, 2)
-	errs := make([]error, 2)
+	// 三个 racer 而不是两个：两两互斥可能只是「锁刚好串行」，三个一起上才试得出
+	// 后到者是不是都真的被同一道闸拦住（每个败者都要拿到同一个契约码）。
+	const racers = 3
+	batches := make([]*PayoutBatch, racers)
+	errs := make([]error, racers)
 	start := make(chan struct{})
-	itWarmPool(t, gdb, 4) // 让两个请求真的在结算单的行锁上排队，而不是在建连上排队
+	itWarmPool(t, gdb, 6) // 让三个请求真的在结算单的行锁上排队，而不是在建连上排队
 	var wg sync.WaitGroup
-	for i := 0; i < 2; i++ {
+	for i := 0; i < racers; i++ {
 		wg.Add(1)
 		go func(n int) {
 			defer wg.Done()
@@ -1717,7 +1720,7 @@ func itCrossPayoutUnique(t *testing.T, gdb *gorm.DB, ctx context.Context) {
 		}
 	}
 	if ok != 1 {
-		t.Fatalf("并发建批成功方 = %d, want 恰 1（两张批次吃同一笔钱 = 重复出款）：%s", ok, strings.Join(texts, " | "))
+		t.Fatalf("并发建批成功方 = %d, want 恰 1（多张批次吃同一笔钱 = 重复出款）：%s", ok, strings.Join(texts, " | "))
 	}
 	if n := itCountRows(t, gdb, `SELECT COUNT(*) FROM plg_pay_payout_item WHERE settlement_id = ?`, settlementID); n != 1 {
 		t.Fatalf("%s 没拦住：该结算单在 plg_pay_payout_item 里有 %d 行, want 1", itemIndex, n)

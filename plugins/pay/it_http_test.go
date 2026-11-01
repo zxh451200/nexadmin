@@ -168,4 +168,36 @@ func TestITMySQLHTTPPayoutConflict(t *testing.T) {
 	if data, ok := body["data"]; ok && data != nil {
 		t.Fatalf("失败应答不该带业务数据：%v", data)
 	}
+
+	// 收口范围取证：fail() 是逐调用点替换的，只验一条路由会被「碰巧改到了这条」蒙过去。
+	// 404：查不存在的支付单。
+	probe := func(method, path, payload string) (int, map[string]any) {
+		t.Helper()
+		req := httptest.NewRequest(method, path, strings.NewReader(payload))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Uid", "1")
+		w := httptest.NewRecorder()
+		e.ServeHTTP(w, req)
+		var out map[string]any
+		if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+			t.Fatalf("%s %s 应答不是 JSON（HTTP %d）：%s", method, path, w.Code, w.Body.String())
+		}
+		return w.Code, out
+	}
+	code, body = probe(http.MethodGet, "/api/v1/plugins/pay/orders/nope-404", "")
+	if code != http.StatusNotFound {
+		t.Fatalf("查不存在的支付单 HTTP %d, want 404：%v", code, body)
+	}
+	if got, _ := body["reason"].(string); got != errNotFound {
+		t.Fatalf("404 的 reason = %q, want %q（这条路由没走失败出口）", got, errNotFound)
+	}
+
+	// 400：空结算单列表（参数校验分支）。
+	code, body = probe(http.MethodPost, "/api/v1/plugins/pay/payouts", `{"settlementIds":[]}`)
+	if code != http.StatusBadRequest {
+		t.Fatalf("空 settlementIds HTTP %d, want 400：%v", code, body)
+	}
+	if got, _ := body["reason"].(string); got != errInvalidAmount {
+		t.Fatalf("400 的 reason = %q, want %q（这条路由没走失败出口）", got, errInvalidAmount)
+	}
 }
