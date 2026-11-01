@@ -8,12 +8,14 @@
       "channel": "Manage channels",
       "refund": "Manual refunds",
       "auth": "Authorization actions",
-      "settle": "Reconcile & settle"
+      "settle": "Reconcile & settle",
+      "outbox": "Handle funds-event outbox"
     },
     "tabs": {
       "orders": "Orders",
       "refunds": "Refunds",
       "callbacks": "Callback audit",
+      "outbox": "Event outbox",
       "channels": "Channels",
       "authorizations": "Authorizations",
       "reconcile": "Reconciliation",
@@ -123,19 +125,45 @@
       "currency": "Currency",
       "remark": "Remark",
       "billDate": "Bill date",
-      "batchNo": "Batch No"
+      "batchNo": "Batch No",
+      "payerId": "Payer ID"
     },
     "channel": {
       "create": "New Channel",
       "edit": "Edit Channel",
-      "deleteConfirm": "Delete channel {{name}}?"
+      "deleteConfirm": "Delete channel {{name}}?",
+      "methodPlaceholder": "Select a method this channel supports"
     },
     "method": {
       "native": "QR code",
+      "qr": "QR code",
       "page": "Desktop web",
       "wap": "Mobile web",
+      "h5": "Mobile web (H5)",
       "jsapi": "Official account",
-      "app": "App"
+      "app": "App",
+      "micropay": "Payment code"
+    },
+    "capabilities": {
+      "title": "Channel capabilities",
+      "unknown": "No capability matrix for this provider",
+      "currencies": "Currencies",
+      "methods": "Methods",
+      "noMethod": "No method advertised",
+      "actionsNone": "{{provider}} advertises no compensating action",
+      "actions": {
+        "refundQuery": "Refund query",
+        "auth": "Authorization",
+        "bill": "Channel bill",
+        "payout": "Channel payout"
+      },
+      "unsupportedSuffix": "not supported",
+      "providerUnsupported": "{{provider}} does not support “{{action}}”; the server rejects the request as well.",
+      "unsupportedCurrency": "{{provider}} does not support the currency {{currency}}.",
+      "unsupportedMethod": "{{provider}} does not support the method “{{method}}”.",
+      "allowedOnly": "{{provider}} supports only: {{options}}",
+      "noneAdvertised": "{{provider}} advertises no supported values; confirm with the channel or pick another one.",
+      "enforcedByServer": "Disabling options here is only a convenience: the server validates the same capability matrix and rejects unsupported requests."
     },
     "stats": {
       "rangeLabel": "Time range",
@@ -189,7 +217,9 @@
       "partial_captured": "Partially captured",
       "captured": "Captured",
       "voided": "Voided",
-      "expired": "Expired"
+      "expired": "Expired",
+      "authorizing": "Freezing",
+      "failed": "Freeze declined"
     },
     "auth": {
       "searchPlaceholder": "Authorization no / biz no",
@@ -202,7 +232,52 @@
       "subjectPlaceholder": "Optional: subject ID",
       "pickChannel": "Select channel",
       "noChannel": "No channel available. Create one under Channels first.",
-      "remaining": "Available to capture: {{amount}}"
+      "methodOptional": "Optional: a method this channel supports",
+      "remaining": "Available to capture: {{amount}}",
+      "payerIdHint": "Alipay buyer_id / logon id",
+      "payerIdRequiredForReal": "Required by real channels; the channel rejects when it is missing — never guessed locally."
+    },
+    "refundSync": {
+      "action": "Query the channel",
+      "column": "Channel query",
+      "attempts": "Queried {{n}} time(s)",
+      "lastSyncAt": "last query {{time}}",
+      "never": "Not queried yet",
+      "done": "Channel queried; current status: {{status}}",
+      "noPerm": "Requires the close/sync order permission to query the channel"
+    },
+    "outboxStatus": {
+      "pending": "Pending",
+      "sent": "Delivered",
+      "dead": "Dead letter",
+      "discarded": "Discarded"
+    },
+    "outbox": {
+      "description": "Delivery ledger for funds events written in the same transaction as the status change. Failed publishes retry with backoff; exceeding the limit or an unparseable payload turns the row into a dead letter.",
+      "deadHint": "Dead letters are never retried automatically: retry them or discard them with a note — silently marking them delivered is not allowed.",
+      "eventId": "Event ID",
+      "attempts": "Attempts",
+      "lastError": "Last error",
+      "timeline": "Milestone",
+      "nextRetryAt": "Next retry",
+      "sentAt": "Delivered at",
+      "deadAt": "Dead at",
+      "countPending": "Pending {{n}}",
+      "countDead": "Dead {{n}}",
+      "countSent": "Delivered {{n}}",
+      "countDiscarded": "Discarded {{n}}",
+      "searchPlaceholder": "Event ID / event name",
+      "empty": "No funds events",
+      "detail": "Event detail",
+      "payload": "Event payload (JSON)",
+      "payloadEmpty": "Payload is empty or not returned by the API",
+      "retry": "Retry",
+      "retryConfirm": "Retry event {{id}}? Funds events may be consumed twice downstream; confirm the consumer has not already processed it.",
+      "discard": "Discard",
+      "discardHint": "Discarding stops delivery for good (the dispatcher skips the row). Record why, so the decision can be audited later.",
+      "discardNoteLabel": "Reason (required)",
+      "discardNotePlaceholder": "e.g. compensated through reconciliation; no replay needed",
+      "discardNoteRequired": "Enter a reason for discarding"
     },
     "reconcileStatus": {
       "open": "Open",
@@ -237,7 +312,21 @@
       "notePlaceholder": "Note (optional)",
       "note": "Note",
       "resolve": "Mark resolved",
-      "ignore": "Ignore"
+      "ignore": "Ignore",
+      "source": "Data source",
+      "sourceValue": {
+        "manual": "Entered locally",
+        "channel": "Channel bill"
+      },
+      "sourceManualHint": "Entered locally: type the channel-side amounts by hand; useful when the bill is not downloadable or you only spot-check.",
+      "sourceChannelHint": "Channel bill: the server downloads and parses the day's bill, so no manual amounts are needed. Unavailable when the channel cannot provide bills.",
+      "pickChannelFirst": "Pick a channel first: which source is available depends on that channel's capabilities.",
+      "bill": "Bill fetch",
+      "billRows": "Bill rows",
+      "billDigest": "Bill digest",
+      "failedWithReason": "This reconciliation failed: {{reason}}",
+      "emptyBecauseFailed": "The run failed and produced no differences; fix the reason above and run it again.",
+      "channelBillEmpty": "The channel bill has 0 rows: it may not be generated yet or the day had no transactions. Verify the bill date and re-run."
     },
     "settle": {
       "viewLabel": "Settlement view",
@@ -269,7 +358,23 @@
       "pickSettlement": "Select at least one confirmed settlement",
       "pickSettlementHint": "Only confirmed settlements are listed; each settlement can belong to one batch.",
       "noConfirmed": "No confirmed settlements to pay",
-      "receiptRequired": "Enter the payout receipt number"
+      "receiptRequired": "Enter the payout receipt number",
+      "payoutPathsTitle": "Two payout paths",
+      "payoutPathManualHint": "Manual receipt: the money already left the bank/offline channel; this only records the receipt number and never calls the channel.",
+      "payoutPathChannelHint": "Channel payout: calls the channel payout API to actually transfer money and stores the channel batch number. Unavailable when the channel cannot pay out.",
+      "payoutPathColumn": "Payout path",
+      "payoutPath": {
+        "manual": "Manual receipt",
+        "channel": "Channel payout"
+      },
+      "payViaChannel": "Pay via channel",
+      "pickPayoutChannel": "Payout channel",
+      "pickPayoutChannelFirst": "Select the channel to pay out through",
+      "noPayoutChannel": "No channel supports payout: enable one under Channels, or use the manual receipt path.",
+      "channelPayConfirm": "Pay batch {{no}} through channel {{code}}? This transfers real money and uses the batch number as the idempotency key.",
+      "payoutItemsTitle": "Per-transfer results",
+      "payoutItemsHint": "One failed transfer does not block the rest; “awaiting result” items are resolved by querying the channel in the background — never guessed locally.",
+      "channelNo": "Channel no."
     },
     "settlementStatus": {
       "draft": "Draft",
@@ -278,7 +383,15 @@
     },
     "payoutStatus": {
       "draft": "Draft",
-      "paid": "Paid"
+      "paid": "Paid",
+      "partial": "Partially paid",
+      "failed": "Payout failed"
+    },
+    "payoutItemStatus": {
+      "pending": "Not started",
+      "initiated": "Initiated, awaiting result",
+      "success": "Paid",
+      "failed": "Failed"
     }
   }
 }

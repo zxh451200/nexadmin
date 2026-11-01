@@ -1,15 +1,20 @@
 import { defineMock, mockError } from '@/framework/request/mock'
 import type {
+  OutboxCounts,
   PayAuthorization,
   PayCallback,
   PayChannel,
   PayCommissionRule,
   PayOrder,
+  PayOutboxEvent,
   PayPayoutBatch,
+  PayPayoutItem,
+  PayProviderCapability,
   PayReconcileDiff,
   PayReconcileTask,
   PayRefund,
   PaySettlement,
+  ProviderCapabilities,
 } from './api'
 
 const ago = (min: number) => new Date(Date.now() - min * 60_000).toISOString()
@@ -71,7 +76,86 @@ let channels: PayChannel[] = [
     hasConfig: true,
     updatedAt: ago(60 * 24 * 30),
   },
+  // 四个渠道类型的故意差异（见下方 capabilities）：预览里也要真的能验到「禁用」
+  {
+    id: '2',
+    code: 'ali01',
+    name: '支付宝-主站',
+    provider: 'alipay',
+    method: 'page',
+    feeRateBp: 60,
+    enabled: true,
+    sort: 10,
+    hasConfig: true,
+    updatedAt: ago(60 * 24 * 12),
+  },
+  {
+    id: '3',
+    code: 'wx01',
+    name: '微信支付-服务商',
+    provider: 'wechat',
+    method: 'jsapi',
+    feeRateBp: 60,
+    enabled: true,
+    sort: 20,
+    hasConfig: true,
+    updatedAt: ago(60 * 24 * 6),
+  },
+  {
+    id: '4',
+    code: 'epay01',
+    name: '易支付-聚合',
+    provider: 'epay',
+    method: 'wap',
+    feeRateBp: 120,
+    enabled: true,
+    sort: 30,
+    hasConfig: true,
+    updatedAt: ago(60 * 24 * 2),
+  },
 ]
+
+/**
+ * 渠道能力矩阵（第二份契约）：四个 provider 故意各不相同——
+ * epay 只有 CNY、四个动作全不支持（用来验证退款补查/预授权/对账/代付的禁用与原因文案）；
+ * wechat 不支持预授权且只收 CNY/HKD；alipay 全能力含多币种；mock 只支持退款查询。
+ */
+const PROVIDER_CAPABILITIES: Record<string, ProviderCapabilities> = {
+  mock: { currencies: ['CNY'], methods: ['native', 'page', 'wap'], refundQuery: true, auth: true, bill: false, payout: false },
+  alipay: {
+    currencies: ['CNY', 'USD', 'EUR', 'HKD'],
+    methods: ['native', 'page', 'wap', 'jsapi', 'app', 'micropay'],
+    refundQuery: true,
+    auth: true,
+    bill: true,
+    payout: true,
+  },
+  wechat: {
+    currencies: ['CNY', 'HKD'],
+    methods: ['native', 'jsapi', 'app', 'h5'],
+    refundQuery: true,
+    auth: false,
+    bill: true,
+    payout: true,
+  },
+  epay: { currencies: ['CNY'], methods: ['page', 'wap'], refundQuery: false, auth: false, bill: false, payout: false },
+}
+
+const capabilitiesOf = (provider: string): ProviderCapabilities =>
+  PROVIDER_CAPABILITIES[provider] ?? {
+    currencies: ['CNY'],
+    methods: [],
+    refundQuery: false,
+    auth: false,
+    bill: false,
+    payout: false,
+  }
+
+/** provider 由渠道编码反查：mock 里也要按「该渠道不支持」拒绝，和后端口径一致。 */
+const providerOfCode = (channelCode?: string): string =>
+  channels.find((c) => c.code === channelCode)?.provider ?? ''
+
+const capabilitiesOfCode = (channelCode?: string): ProviderCapabilities => capabilitiesOf(providerOfCode(channelCode))
 
 const callbacks: PayCallback[] = orders
   .filter((o) => o.status === 'succeeded' || o.status === 'failed')
@@ -98,9 +182,87 @@ let refunds: PayRefund[] = [
     fxRateMicro: 1000000,
     reason: '部分退款',
     status: 'succeeded',
+    channelCode: 'mock',
     channelRefundId: 'mockrf_1',
     succeededAt: ago(30),
+    // 补查过一次才落到成功：留痕要能看到
+    syncAttempts: 1,
+    lastSyncAt: ago(28),
     createdAt: ago(31),
+  },
+  {
+    id: '7423',
+    refundNo: 'RF7422000000000000002',
+    paymentNo: payNo(6),
+    subjectId: 'shop-001',
+    bizType: 'trade_refund',
+    bizNo: 'R-2',
+    amountMinor: 9900,
+    feeRefundMinor: 60,
+    currency: 'CNY',
+    fxRateMicro: 1000000,
+    reason: '整机退货，回调迟迟未到',
+    status: 'pending',
+    channelCode: 'ali01',
+    channelRefundId: 'ali_rf_9900',
+    // 卡住的退款：查过 3 次仍 pending —— 管理端要能看出「查过几次、最后一次何时」
+    syncAttempts: 3,
+    lastSyncAt: ago(12),
+    createdAt: ago(180),
+  },
+  {
+    id: '7424',
+    refundNo: 'RF7422000000000000003',
+    paymentNo: payNo(1),
+    subjectId: 'shop-002',
+    bizType: 'trade_refund',
+    bizNo: 'R-3',
+    amountMinor: 1200,
+    feeRefundMinor: 0,
+    currency: 'CNY',
+    fxRateMicro: 1000000,
+    reason: '重复支付退回',
+    status: 'pending',
+    channelCode: 'wx01',
+    // 从未向渠道补查过
+    syncAttempts: 0,
+    createdAt: ago(45),
+  },
+  {
+    id: '7425',
+    refundNo: 'RF7422000000000000004',
+    paymentNo: payNo(3),
+    subjectId: 'shop-003',
+    bizType: 'trade_refund',
+    bizNo: 'R-4',
+    amountMinor: 300,
+    feeRefundMinor: 0,
+    currency: 'CNY',
+    fxRateMicro: 1000000,
+    reason: '聚合渠道退款，回调丢失',
+    status: 'pending',
+    channelCode: 'epay01',
+    // epay 在能力矩阵里 refundQuery=false：这一行的补查按钮必须置灰并说明原因
+    syncAttempts: 0,
+    createdAt: ago(20),
+  },
+  {
+    id: '7426',
+    refundNo: 'RF7422000000000000005',
+    paymentNo: payNo(6),
+    subjectId: 'shop-001',
+    bizType: 'trade_refund',
+    bizNo: 'R-5',
+    amountMinor: 800,
+    feeRefundMinor: 0,
+    currency: 'CNY',
+    fxRateMicro: 1000000,
+    status: 'failed',
+    channelCode: 'ali01',
+    failReason: '渠道拒绝：超出可退余额',
+    syncAttempts: 2,
+    lastSyncAt: ago(6),
+    createdAt: ago(200),
   },
 ]
 
@@ -117,13 +279,42 @@ let auths: PayAuthorization[] = [
     amountMinor: 30000, capturedMinor: 12000, currency: 'CNY', fxRateMicro: 1000000,
     cardLast4: '1881', expiresAt: ago(-60 * 24), createdAt: ago(20),
   },
+  {
+    // 占位行：已按业务键抢到冻结权、渠道结论未回（authorizing），由后台补查收敛
+    id: '7433', tenantId: '1', authNo: 'AUTH7431000000000000003', subjectId: 'shop-003',
+    bizType: 'hotel', bizNo: 'B-1003', channelCode: 'ali01', method: 'native', status: 'authorizing',
+    amountMinor: 20000, capturedMinor: 0, currency: 'CNY', fxRateMicro: 1000000,
+    payerId: '2088101234567890', expiresAt: ago(-60 * 24), createdAt: ago(2),
+  },
+  {
+    // 渠道明确拒绝冻结：钱没冻住，业务可换业务单号重试
+    id: '7434', tenantId: '1', authNo: 'AUTH7431000000000000004', subjectId: 'shop-004',
+    bizType: 'hotel', bizNo: 'B-1004', channelCode: 'ali01', method: 'native', status: 'failed',
+    amountMinor: 15000, capturedMinor: 0, currency: 'CNY', fxRateMicro: 1000000,
+    failReason: 'alipay: 商户未签约资金授权产品', expiresAt: ago(-60 * 24), createdAt: ago(3),
+  },
 ]
 
 let reconcileTasks: PayReconcileTask[] = [
   {
     id: '7441', tenantId: '1', subjectId: '', channelCode: 'mock', billDate: dayKey(ago(0)),
     status: 'open', totalLocalMinor: 41799, totalChannelMinor: 40000, diffCount: 2, source: 'manual',
+    billDigest: '', billRows: 0, failReason: '',
     createdAt: ago(5), updatedAt: ago(5),
+  },
+  {
+    id: '7444', tenantId: '1', subjectId: '', channelCode: 'ali01', billDate: dayKey(ago(24 * 60)),
+    status: 'closed', totalLocalMinor: 288000, totalChannelMinor: 288000, diffCount: 0, source: 'channel',
+    // 渠道账单取数成功：行数 + 摘要都要能看到
+    billDigest: '3f2a6c1b9d0e4a75b8c1d2e3f40516a7b8c9d0e1f2031425364758697a8b9c0d', billRows: 128, failReason: '',
+    createdAt: ago(60 * 20), updatedAt: ago(60 * 20),
+  },
+  {
+    id: '7445', tenantId: '1', subjectId: '', channelCode: 'wx01', billDate: dayKey(ago(24 * 60)),
+    status: 'open', totalLocalMinor: 0, totalChannelMinor: 0, diffCount: 0, source: 'channel',
+    // 失败的对账：0 差异不等于「对平了」，必须带 failReason 呈现
+    billDigest: '', billRows: 0, failReason: '渠道账单下载失败：downloading（账单生成中，请稍后重试）',
+    createdAt: ago(90), updatedAt: ago(90),
   },
 ]
 
@@ -162,7 +353,123 @@ let payouts: PayPayoutBatch[] = [
     id: '7471', tenantId: '1', batchNo: 'PO7471000000000000001', status: 'paid', totalMinor: 19360,
     currency: 'CNY', settlementCount: 1, method: 'bank', note: '', receiptNo: 'RCPT-001', paidAt: ago(30), createdAt: ago(40),
   },
+  {
+    // 走渠道代付成功的批次：有渠道编码与渠道批次号，没有人工回执
+    id: '7472', tenantId: '1', batchNo: 'PO7471000000000000002', status: 'paid', totalMinor: 49623,
+    currency: 'CNY', settlementCount: 1, method: 'balance', note: '', receiptNo: '',
+    channelCode: 'ali01', channelBatchNo: 'ALIPO_20261030_000777', paidAt: ago(120), createdAt: ago(150),
+  },
+  {
+    // 待打款批次：两条路径（渠道代付 / 人工回执）都能试
+    id: '7473', tenantId: '1', batchNo: 'PO7471000000000000003', status: 'draft', totalMinor: 12800,
+    currency: 'CNY', settlementCount: 1, method: '', note: '', receiptNo: '', paidAt: null, createdAt: ago(20),
+  },
+  {
+    // 一笔成功一笔失败：后端「一笔失败不拖垮整批」的口径要在预览里看得见
+    id: '7474', tenantId: '1', batchNo: 'PO7471000000000000004', status: 'partial', totalMinor: 27360,
+    currency: 'CNY', settlementCount: 2, method: 'balance', note: '', receiptNo: '',
+    channelCode: 'ali01', channelBatchNo: 'ALIPO_20261030_000778',
+    failReason: '1 笔失败：结算单缺少收款方标识，无法代付', createdAt: ago(10),
+  },
+  {
+    // 渠道已受理、终局未回：停在 initiated，由后台补查收敛
+    id: '7475', tenantId: '1', batchNo: 'PO7471000000000000005', status: 'draft', totalMinor: 12800,
+    currency: 'CNY', settlementCount: 1, method: 'balance', note: '', receiptNo: '',
+    channelCode: 'ali01', channelBatchNo: 'ALIPO_20261030_000779', createdAt: ago(4),
+  },
 ]
+
+/**
+ * 逐笔代付结论（第二份契约）：批次 partial 时必须能下钻到「哪几笔失败、为什么失败」。
+ * 7472 = 渠道代付全成功；7473 = 未发起；7474 = 一笔成功一笔失败（partial）；
+ * 7475 = 一笔已发起待终局（initiated，由后台补查收敛，本地不猜）。
+ */
+const payoutItems: PayPayoutItem[] = [
+  { id: '7481', batchId: '7472', settlementId: '7461', netMinor: 49623, receiverId: 'shop-001', status: 'success', channelNo: 'ALI_DT_7481' },
+  { id: '7482', batchId: '7474', settlementId: '7462', netMinor: 19360, receiverId: 'shop-001', status: 'success', channelNo: 'ALI_DT_7482' },
+  { id: '7483', batchId: '7474', settlementId: '7463', netMinor: 8000, receiverId: '', status: 'failed', failReason: '结算单缺少收款方标识，无法代付' },
+  { id: '7484', batchId: '7475', settlementId: '7462', netMinor: 12800, receiverId: 'shop-002', status: 'initiated', channelNo: 'ALI_DT_7484' },
+]
+
+/**
+ * 资金事件出站箱（第二份契约）：dead 若干行 + 一条载荷超长的行，
+ * 用来验列表徽标、重投/丢弃动作与详情里的 JSON 不顶破布局。
+ */
+const longPayload = JSON.stringify(
+  {
+    eventId: 'EV-LONG-0001',
+    eventName: 'pay.succeeded',
+    tenantId: '1',
+    occurredAt: ago(70),
+    data: {
+      paymentNo: payNo(1),
+      bizType: 'trade_group',
+      bizNo: 'G-1',
+      amountMinor: 12900,
+      currency: 'CNY',
+      channelCode: 'ali01',
+      // 故意塞长的元数据：验证 pre 里的长 URL/字段不会把弹窗顶破
+      metadata: {
+        receiptUrl: `https://invoice.example.com/${'very-long-path'.repeat(12)}/download.pdf`,
+        items: Array.from({ length: 12 }, (_, i) => ({ sku: `SKU-${i}`, title: `示例商品 ${i}`, qty: i + 1, minor: 1000 + i })),
+      },
+    },
+  },
+  null,
+  0,
+)
+
+const outbox: PayOutboxEvent[] = [
+  {
+    id: '7481', tenantId: '1', eventId: 'EV-PAY-0000000000000000001', eventName: 'pay.succeeded', status: 'sent',
+    attempts: 0, lastError: '', nextRetryAt: ago(300), sentAt: ago(300), createdAt: ago(302),
+    payload: JSON.stringify({ eventId: 'EV-PAY-0000000000000000001', data: { paymentNo: payNo(1), amountMinor: 12900 } }),
+  },
+  {
+    id: '7482', tenantId: '1', eventId: 'EV-PAY-0000000000000000002', eventName: 'pay.closed', status: 'pending',
+    attempts: 2, lastError: '总线缓冲满，第 2 次重投失败', nextRetryAt: ago(-3), createdAt: ago(28),
+    payload: JSON.stringify({ eventId: 'EV-PAY-0000000000000000002', data: { paymentNo: payNo(5) } }),
+  },
+  {
+    id: '7483', tenantId: '1', eventId: 'EV-PAY-0000000000000000003', eventName: 'pay.refunded', status: 'dead',
+    attempts: 12, lastError: '进程内总线连续拒绝投递，已达重试上限', nextRetryAt: ago(15), deadAt: ago(14), createdAt: ago(120),
+    payload: JSON.stringify({ eventId: 'EV-PAY-0000000000000000003', data: { refundNo: 'RF7422000000000000002', amountMinor: 9900 } }),
+  },
+  {
+    id: '7484', tenantId: '1', eventId: 'EV-PAY-0000000000000000004', eventName: 'pay.auth.captured', status: 'dead',
+    attempts: 12, lastError: '载荷不可解析: unexpected end of JSON input', nextRetryAt: ago(40), deadAt: ago(39), createdAt: ago(240),
+    payload: '{"eventId":"EV-PAY-0000000000000000004","data":',
+  },
+  {
+    id: '7485', tenantId: '1', eventId: 'EV-LONG-0001', eventName: 'pay.succeeded', status: 'dead',
+    attempts: 12, lastError: '进程内总线连续拒绝投递，已达重试上限', nextRetryAt: ago(60), deadAt: ago(58), createdAt: ago(300),
+    payload: longPayload,
+  },
+  {
+    id: '7486', tenantId: '1', eventId: 'EV-PAY-0000000000000000006', eventName: 'pay.failed', status: 'discarded',
+    attempts: 12, lastError: '人工丢弃: 下游已通过对账补偿，无需重放', nextRetryAt: ago(300), deadAt: ago(320), createdAt: ago(400),
+    payload: JSON.stringify({ eventId: 'EV-PAY-0000000000000000006', data: { paymentNo: payNo(4), failReason: 'user closed cashier' } }),
+  },
+  {
+    id: '7487', tenantId: '1', eventId: 'EV-PAY-0000000000000000007', eventName: 'pay.succeeded', status: 'pending',
+    attempts: 0, lastError: '', nextRetryAt: ago(1), createdAt: ago(3),
+    payload: JSON.stringify({ eventId: 'EV-PAY-0000000000000000007', data: { paymentNo: payNo(3), amountMinor: 13100 } }),
+  },
+]
+
+const outboxCounts = (): OutboxCounts => ({
+  pending: outbox.filter((o) => o.status === 'pending').length,
+  dead: outbox.filter((o) => o.status === 'dead').length,
+  sent: outbox.filter((o) => o.status === 'sent').length,
+  discarded: outbox.filter((o) => o.status === 'discarded').length,
+})
+
+/** 列表与动作响应都不回载荷（与后端 outboxView(row, false) 同口径）。 */
+const withoutPayload = (o: PayOutboxEvent): PayOutboxEvent => {
+  const copy = { ...o }
+  delete copy.payload
+  return copy
+}
 
 const paginate = <T,>(rows: T[], query: Record<string, unknown>) => {
   const page = Math.max(1, Number(query.page) || 1)
@@ -231,6 +538,15 @@ defineMock([
   },
   {
     method: 'GET',
+    // 渠道能力矩阵（契约第 1 条）：四个 provider 的差异见 PROVIDER_CAPABILITIES
+    url: '/plugins/pay/capabilities',
+    handler: (): PayProviderCapability[] =>
+      Object.keys(PROVIDER_CAPABILITIES)
+        .sort()
+        .map((provider) => ({ provider, capabilities: PROVIDER_CAPABILITIES[provider] })),
+  },
+  {
+    method: 'GET',
     url: '/plugins/pay/callbacks',
     handler: ({ query }) => {
       const kw = String(query.keyword ?? '').trim().toLowerCase()
@@ -278,6 +594,7 @@ defineMock([
         existing.feeRateBp = Number(body.feeRateBp) || 0
         existing.enabled = !!body.enabled
         existing.sort = body.sort ?? 0
+        if (body.method !== undefined) existing.method = String(body.method)
         if (body.config && Object.keys(body.config).length > 0) existing.hasConfig = true
         existing.updatedAt = new Date().toISOString()
         return existing
@@ -287,6 +604,7 @@ defineMock([
         code,
         name: body.name,
         provider: body.provider,
+        method: body.method ? String(body.method) : undefined,
         feeRateBp: Number(body.feeRateBp) || 0,
         enabled: !!body.enabled,
         sort: body.sort ?? 0,
@@ -328,12 +646,34 @@ defineMock([
         fxRateMicro: o.fxRateMicro,
         reason: body.reason ?? '',
         status: 'succeeded',
+        channelCode: o.channelCode,
         channelRefundId: 'mockrf_mock',
         succeededAt: new Date().toISOString(),
+        syncAttempts: 0,
         operatorId: 'manual',
         createdAt: new Date().toISOString(),
       }
       refunds = [...refunds, r]
+      return r
+    },
+  },
+  {
+    // 主动向渠道查退款结果（契约第 7 条）：能力不支持的渠道按 400 拒绝，口径同后端
+    method: 'POST',
+    url: '/plugins/pay/refunds/:no/sync',
+    handler: ({ params }) => {
+      const r = refunds.find((x) => x.refundNo === params.no) ?? mockError(404, 'refund not found')
+      const caps = capabilitiesOfCode(r.channelCode)
+      if (!caps.refundQuery) mockError(400, 'channel does not support refund query', 'PAY_CAPABILITY_UNSUPPORTED')
+      const now = new Date().toISOString()
+      r.syncAttempts = (r.syncAttempts ?? 0) + 1
+      r.lastSyncAt = now
+      // 模拟渠道侧结论：第一次补查就把卡住的退款确认成功（真实渠道可能仍返回处理中）
+      if (r.status === 'pending' && r.syncAttempts >= 2) {
+        r.status = 'succeeded'
+        r.succeededAt = now
+        r.channelRefundId = r.channelRefundId || `q_${r.refundNo}`
+      }
       return r
     },
   },
@@ -453,6 +793,12 @@ defineMock([
     handler: ({ body }) => {
       const amount = Number(body.amountMinor) || 0
       if (!body.channelCode || amount <= 0) mockError(400, 'channel and amount required')
+      // 前端禁用只是体验，后端（这里＝mock）仍要独立拒一次
+      const caps = capabilitiesOfCode(String(body.channelCode))
+      if (!caps.auth) mockError(400, 'channel does not support authorization', 'PAY_CAPABILITY_UNSUPPORTED')
+      const currency = String(body.currency ?? 'CNY')
+      const allowedCurrencies = caps.currencies.length ? caps.currencies : ['CNY']
+      if (!allowedCurrencies.includes(currency)) mockError(400, `currency ${currency} not supported`)
       const n = auths.length + 1
       const a: PayAuthorization = {
         id: String(7431000000000000000n + BigInt(n)), tenantId: '1',
@@ -508,12 +854,25 @@ defineMock([
     url: '/plugins/pay/reconcile/tasks',
     handler: ({ body }) => {
       if (!body.channelCode || !body.billDate) mockError(400, 'channel and billDate required')
+      // 缺省 manual（向后兼容）；source=channel 走渠道账单，要求该渠道有账单能力
+      const source: string = body.source === 'channel' ? 'channel' : 'manual'
+      const caps = capabilitiesOfCode(String(body.channelCode))
+      if (source === 'channel' && !caps.bill) {
+        mockError(400, 'channel does not provide bills', 'PAY_CAPABILITY_UNSUPPORTED')
+      }
+      const amounts: { amountMinor?: number }[] = Array.isArray(body.channelAmounts) ? body.channelAmounts : []
       const n = reconcileTasks.length + 1
+      const digest = source === 'channel' ? `${(n * 2654435761).toString(16).padStart(8, '0').repeat(8)}` : ''
       const t: PayReconcileTask = {
         id: String(7441000000000000000n + BigInt(n)), tenantId: '1', subjectId: body.subjectId ?? '',
         channelCode: body.channelCode, billDate: body.billDate, status: 'open',
-        totalLocalMinor: 0, totalChannelMinor: (body.channelAmounts ?? []).reduce((s: number, e: { amountMinor?: number }) => s + (Number(e.amountMinor) || 0), 0),
-        diffCount: 0, source: 'manual', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+        totalLocalMinor: 0,
+        totalChannelMinor: source === 'channel' ? 0 : amounts.reduce((s, e) => s + (Number(e.amountMinor) || 0), 0),
+        diffCount: 0, source,
+        billDigest: digest,
+        billRows: source === 'channel' ? 42 : 0,
+        failReason: '',
+        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
       }
       reconcileTasks = [...reconcileTasks, t]
       return t
@@ -643,6 +1002,101 @@ defineMock([
       p.receiptNo = String(body.receiptNo ?? '')
       p.paidAt = new Date().toISOString()
       return p
+    },
+  },
+  {
+    // 走渠道代付（契约第 9 条）：只有能力矩阵支持 payout 的渠道可用，口径同后端
+    method: 'POST',
+    url: '/plugins/pay/payouts/:id/pay',
+    handler: ({ params, body }) => {
+      const p = payouts.find((x) => x.id === params.id) ?? mockError(404, 'payout not found')
+      if (p.status !== 'draft') mockError(409, 'already paid')
+      const channelCode = String(body.channelCode ?? '').trim()
+      if (!channelCode) mockError(400, 'channelCode required')
+      const caps = capabilitiesOfCode(channelCode)
+      if (!caps.payout) mockError(400, 'channel does not support payout', 'PAY_CAPABILITY_UNSUPPORTED')
+      // 逐笔发起：缺收款方标识的笔直接落 failed，其余落 success（与后端的「前置校验不过不摸渠道」同口径）
+      const mine = payoutItems.filter((it) => it.batchId === p.id)
+      const targets = mine.length ? mine : [{ id: `gen-${p.id}`, batchId: p.id, settlementId: '7461', netMinor: p.totalMinor, receiverId: 'shop-001', status: 'pending' as const }]
+      let ok = 0
+      let firstFail = ''
+      for (const it of targets) {
+        if (it.status === 'success') { ok++; continue }
+        if (!it.receiverId) {
+          it.status = 'failed'
+          it.failReason = '结算单缺少收款方标识，无法代付'
+          firstFail = firstFail || it.failReason
+          continue
+        }
+        it.status = 'success'
+        it.channelNo = `MOCK_DT_${it.id}`
+        it.failReason = ''
+        ok++
+      }
+      p.channelCode = channelCode
+      p.channelBatchNo = p.channelBatchNo || `PO_${channelCode}_${p.batchNo.slice(-3)}`
+      p.method = 'channel'
+      p.status = ok === targets.length ? 'paid' : ok > 0 ? 'partial' : 'failed'
+      p.failReason = p.status === 'paid' ? '' : `${targets.length - ok} 笔失败：${firstFail}`
+      if (p.status === 'paid') p.paidAt = new Date().toISOString()
+      return p
+    },
+  },
+  {
+    // 逐笔代付结论（契约第 10 条）
+    method: 'GET',
+    url: '/plugins/pay/payouts/:id/items',
+    handler: ({ params }) => payoutItems.filter((it) => it.batchId === params.id),
+  },
+  {
+    // 出站箱分页列表（契约第 2 条）：列表一律不带载荷
+    method: 'GET',
+    url: '/plugins/pay/outbox',
+    handler: ({ query }) => {
+      const kw = String(query.keyword ?? '').trim().toLowerCase()
+      let rows = outbox.filter((o) => !kw || o.eventId.toLowerCase().includes(kw) || o.eventName.toLowerCase().includes(kw))
+      if (query.status) rows = rows.filter((o) => o.status === query.status)
+      return paginate([...rows].reverse().map(withoutPayload), query)
+    },
+  },
+  {
+    // 各状态行数（契约第 3 条）：静态段必须注册在 /outbox/:eventId 之前，同后端约定
+    method: 'GET',
+    url: '/plugins/pay/outbox/counts',
+    handler: () => outboxCounts(),
+  },
+  {
+    method: 'GET',
+    url: '/plugins/pay/outbox/:eventId',
+    handler: ({ params }) => outbox.find((o) => o.eventId === params.eventId) ?? mockError(404, 'outbox event not found'),
+  },
+  {
+    // 人工重投（契约第 5 条）：只允许 dead → pending，其它状态 409
+    method: 'POST',
+    url: '/plugins/pay/outbox/:eventId/retry',
+    handler: ({ params }) => {
+      const row = outbox.find((o) => o.eventId === params.eventId) ?? mockError(404, 'outbox event not found')
+      if (row.status !== 'dead') mockError(409, 'only a dead event can be retried')
+      row.status = 'pending'
+      row.attempts = 0
+      row.lastError = ''
+      row.deadAt = null
+      row.nextRetryAt = new Date().toISOString()
+      return withoutPayload(row)
+    },
+  },
+  {
+    // 人工丢弃（契约第 6 条）：note 进 lastError 留痕
+    method: 'POST',
+    url: '/plugins/pay/outbox/:eventId/discard',
+    handler: ({ params, body }) => {
+      const row = outbox.find((o) => o.eventId === params.eventId) ?? mockError(404, 'outbox event not found')
+      if (row.status !== 'dead') mockError(409, 'only a dead event can be discarded')
+      const note = String(body.note ?? '').trim()
+      if (!note) mockError(400, 'note required')
+      row.status = 'discarded'
+      row.lastError = `人工丢弃: ${note}`.slice(0, 500)
+      return withoutPayload(row)
     },
   },
 ])

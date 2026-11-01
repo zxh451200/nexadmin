@@ -14,17 +14,30 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   useAuthorizations,
   useCaptureAuth,
-  useChannels,
   useCreateAuth,
   useVoidAuth,
   type AuthQuery,
   type PayAuthorization,
 } from './api'
+import { CapabilityNote, CapabilitySelect } from './CapabilityControls'
+import {
+  allCurrencies,
+  allMethods,
+  capabilitiesOfChannel,
+  firstCurrency,
+  supportsAction,
+  supportsCurrency,
+  supportsMethod,
+  unsupportedAction,
+  useCapabilityIndex,
+  useChannelDirectory,
+} from './capabilities'
 import { formatMoney, formatTime } from './format'
 import { ListErrorBanner } from './ListErrorBanner'
 
 const ALL = '__all'
-const STATUSES = ['authorized', 'partial_captured', 'captured', 'voided', 'expired'] as const
+// authorizing = 已占位、渠道冻结结论未回；failed = 渠道明确拒绝（钱没冻住，可换单重试）。
+const STATUSES = ['authorizing', 'authorized', 'partial_captured', 'captured', 'voided', 'expired', 'failed'] as const
 
 const freezable = (s: string) => s === 'authorized' || s === 'partial_captured'
 
@@ -32,6 +45,9 @@ function statusVariant(s: string): 'success' | 'destructive' | 'info' | 'warning
   if (s === 'captured') return 'success'
   if (s === 'authorized') return 'info'
   if (s === 'partial_captured') return 'warning'
+  // authorizing 是「还不确定」，用 warning 提示要去看渠道结论；failed 才是终局失败。
+  if (s === 'authorizing') return 'warning'
+  if (s === 'failed') return 'destructive'
   if (s === 'expired') return 'destructive'
   return 'secondary'
 }
@@ -171,20 +187,54 @@ export function AuthorizationsTab() {
 function CreateAuthDialog({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation()
   const create = useCreateAuth()
-  const { data: channels = [] } = useChannels()
+  const index = useCapabilityIndex()
+  const { channels, providerOf } = useChannelDirectory()
   const [bizNo] = useState(() => `manual-${Date.now()}`)
   const [subjectId, setSubjectId] = useState('')
   const [channelCode, setChannelCode] = useState('')
   const [amount, setAmount] = useState('')
   const [currency, setCurrency] = useState('CNY')
+  const [method, setMethod] = useState('')
+  // 真实渠道冻结必须有买家标识，缺它渠道会直接拒绝（不是可选装饰）
+  const [payerId, setPayerId] = useState('')
   const [cardLast4, setCardLast4] = useState('')
   const [validDays, setValidDays] = useState('7')
   const [remark, setRemark] = useState('')
+
+  // 该渠道类型的能力：决定预授权入口、币种与支付方式哪些可用
+  const provider = providerOf(channelCode)
+  const caps = capabilitiesOfChannel(index, providerOf, channelCode)
+  const authSupported = supportsAction(caps, 'auth')
+  const currencyOptions = allCurrencies(index).map((c) => ({ value: c, label: c }))
+  const methodOptions = allMethods(index).map((m) => ({
+    value: m,
+    label: t(`plugin_pay.method.${m}`, { defaultValue: m }),
+  }))
+
+  const pickChannel = (code: string) => {
+    setChannelCode(code)
+    const next = capabilitiesOfChannel(index, providerOf, code)
+    // 换渠道后把不合法的币种/方式收敛掉：币种退回该渠道首个支持值，方式清空待选
+    if (!supportsCurrency(next, currency)) setCurrency(firstCurrency(next))
+    if (method && !supportsMethod(next, method)) setMethod('')
+  }
 
   const submit = async () => {
     const minor = Math.round(Number(amount) * 100)
     if (!channelCode || !minor || minor <= 0) {
       toast.error(t('plugin_pay.auth.invalid'))
+      return
+    }
+    if (!authSupported) {
+      toast.error(unsupportedAction(t, provider, 'auth'))
+      return
+    }
+    if (!supportsCurrency(caps, currency)) {
+      toast.error(t('plugin_pay.capabilities.unsupportedCurrency', { provider, currency }))
+      return
+    }
+    if (method && !supportsMethod(caps, method)) {
+      toast.error(t('plugin_pay.capabilities.unsupportedMethod', { provider, method }))
       return
     }
     try {
@@ -193,8 +243,10 @@ function CreateAuthDialog({ onClose }: { onClose: () => void }) {
         bizNo,
         subjectId: subjectId.trim(),
         channelCode,
+        method: method.trim() || undefined,
         amountMinor: minor,
         currency,
+        payerId: payerId.trim(),
         cardLast4: cardLast4.trim(),
         validDays: Number(validDays) || 7,
         remark: remark.trim(),
@@ -216,7 +268,9 @@ function CreateAuthDialog({ onClose }: { onClose: () => void }) {
           <Button variant="outline" onClick={onClose}>
             {t('common.cancel')}
           </Button>
-          <Button onClick={() => void submit()}>{t('common.save')}</Button>
+          <Button onClick={() => void submit()} disabled={!!channelCode && !authSupported}>
+            {t('common.save')}
+          </Button>
         </>
       }
     >
@@ -227,40 +281,79 @@ function CreateAuthDialog({ onClose }: { onClose: () => void }) {
         </label>
         <label className="flex flex-col gap-1">
           {t('plugin_pay.fields.channel')}
-          <Select value={channelCode} onValueChange={setChannelCode}>
+          <Select value={channelCode} onValueChange={pickChannel}>
             <SelectTrigger aria-label={t('plugin_pay.fields.channel')}>
               <SelectValue placeholder={t('plugin_pay.auth.pickChannel')} />
             </SelectTrigger>
             <SelectContent>
-              {channels.map((c) => (
-                <SelectItem key={c.code} value={c.code}>
-                  {c.name}
-                </SelectItem>
-              ))}
+              {channels.map((c) => {
+                const cCaps = capabilitiesOfChannel(index, providerOf, c.code)
+                const ok = supportsAction(cCaps, 'auth')
+                return (
+                  <SelectItem key={c.code} value={c.code} disabled={!ok}>
+                    <span className="flex flex-wrap items-center gap-1.5">
+                      {c.name}
+                      {!ok ? (
+                        <span className="text-xs text-muted-foreground">
+                          {t('plugin_pay.capabilities.unsupportedSuffix')}
+                        </span>
+                      ) : null}
+                    </span>
+                  </SelectItem>
+                )
+              })}
             </SelectContent>
           </Select>
           {channels.length === 0 ? <span className="text-xs text-muted-foreground">{t('plugin_pay.auth.noChannel')}</span> : null}
+          {channelCode && !authSupported ? (
+            <CapabilityNote tone="warn">
+              {unsupportedAction(t, provider, 'auth')}
+            </CapabilityNote>
+          ) : null}
         </label>
         <div className="grid grid-cols-2 gap-3">
           <label className="flex flex-col gap-1">
             {t('plugin_pay.fields.amount')}
             <Input type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
           </label>
-          <label className="flex flex-col gap-1">
-            {t('plugin_pay.fields.currency')}
-            <Input value={currency} maxLength={8} onChange={(e) => setCurrency(e.target.value.toUpperCase())} />
-          </label>
+          <CapabilitySelect
+            label={t('plugin_pay.fields.currency')}
+            value={currency}
+            onChange={setCurrency}
+            options={currencyOptions}
+            caps={caps}
+            provider={provider}
+            kind="currency"
+            placeholder={t('plugin_pay.fields.currency')}
+          />
         </div>
         <div className="grid grid-cols-2 gap-3">
+          <CapabilitySelect
+            label={t('plugin_pay.fields.method')}
+            value={method}
+            onChange={setMethod}
+            options={methodOptions}
+            caps={caps}
+            provider={provider}
+            kind="method"
+            placeholder={t('plugin_pay.auth.methodOptional')}
+          />
           <label className="flex flex-col gap-1">
             {t('plugin_pay.fields.cardLast4')}
             <Input value={cardLast4} maxLength={4} onChange={(e) => setCardLast4(e.target.value)} />
           </label>
-          <label className="flex flex-col gap-1">
-            {t('plugin_pay.fields.validDays')}
-            <Input type="number" min="1" max="30" value={validDays} onChange={(e) => setValidDays(e.target.value)} />
-          </label>
         </div>
+        <div className="grid grid-cols-2 gap-3">
+          <label className="flex flex-col gap-1">
+            {t('plugin_pay.fields.payerId')}
+            <Input value={payerId} onChange={(e) => setPayerId(e.target.value)} placeholder={t('plugin_pay.auth.payerIdHint')} />
+          </label>
+          <p className="self-end text-xs text-muted-foreground">{t('plugin_pay.auth.payerIdRequiredForReal')}</p>
+        </div>
+        <label className="flex flex-col gap-1">
+          {t('plugin_pay.fields.validDays')}
+          <Input type="number" min="1" max="30" value={validDays} onChange={(e) => setValidDays(e.target.value)} />
+        </label>
         <label className="flex flex-col gap-1">
           {t('plugin_pay.fields.remark')}
           <Input value={remark} maxLength={500} onChange={(e) => setRemark(e.target.value)} />

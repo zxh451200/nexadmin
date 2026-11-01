@@ -3,15 +3,18 @@ import { useTranslation } from 'react-i18next'
 import { usePermission } from '@/framework/auth/usePermission'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/framework/ui/tabs'
+import { Badge } from '@/framework/ui/badge'
+import { useOutboxCounts } from './api'
 import { AuthorizationsTab } from './AuthorizationsTab'
 import { CallbacksTab } from './CallbacksTab'
 import { ChannelsTab } from './ChannelsTab'
 import { OrdersTab } from './OrdersTab'
+import { OutboxTab } from './OutboxTab'
 import { ReconciliationTab } from './ReconciliationTab'
 import { RefundsTab } from './RefundsTab'
 import { SettlementTab } from './SettlementTab'
 
-const TABS = ['orders', 'refunds', 'callbacks', 'channels', 'authorizations', 'reconcile', 'settle'] as const
+const TABS = ['orders', 'refunds', 'callbacks', 'outbox', 'channels', 'authorizations', 'reconcile', 'settle'] as const
 type Tab = (typeof TABS)[number]
 
 export default function PayPage() {
@@ -22,6 +25,8 @@ export default function PayPage() {
   const raw = params.get('tab')
   const parsed = TABS.includes(raw as Tab) ? (raw as Tab) : 'orders'
   const tab: Tab = parsed === 'reconcile' || parsed === 'settle' ? (canSettle ? parsed : 'orders') : parsed
+  // 页签上的告警：死信不会自动重投，必须让人在切页签之前就看到
+  const { data: outboxCounts } = useOutboxCounts()
 
   const setTab = (v: string) => {
     const next = new URLSearchParams(params)
@@ -39,6 +44,18 @@ export default function PayPage() {
           <TabsTrigger value="orders">{t('plugin_pay.tabs.orders')}</TabsTrigger>
           <TabsTrigger value="refunds">{t('plugin_pay.tabs.refunds')}</TabsTrigger>
           <TabsTrigger value="callbacks">{t('plugin_pay.tabs.callbacks')}</TabsTrigger>
+          <TabsTrigger value="outbox" className="gap-1.5">
+            {t('plugin_pay.tabs.outbox')}
+            {outboxCounts?.dead ? (
+              <Badge variant="destructive" className="px-1.5 py-0 text-xs">
+                {outboxCounts.dead}
+              </Badge>
+            ) : outboxCounts?.pending ? (
+              <Badge variant="info" className="px-1.5 py-0 text-xs">
+                {outboxCounts.pending}
+              </Badge>
+            ) : null}
+          </TabsTrigger>
           <TabsTrigger value="channels">{t('plugin_pay.tabs.channels')}</TabsTrigger>
           <TabsTrigger value="authorizations">{t('plugin_pay.tabs.authorizations')}</TabsTrigger>
           {canSettle ? <TabsTrigger value="reconcile">{t('plugin_pay.tabs.reconcile')}</TabsTrigger> : null}
@@ -52,6 +69,9 @@ export default function PayPage() {
         </TabsContent>
         <TabsContent value="callbacks" className="m-0">
           <CallbacksTab />
+        </TabsContent>
+        <TabsContent value="outbox" className="m-0">
+          <OutboxTab />
         </TabsContent>
         <TabsContent value="channels" className="m-0">
           <ChannelsTab />

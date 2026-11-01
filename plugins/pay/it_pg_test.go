@@ -154,7 +154,12 @@ func TestITPostgresMigrationsAndConcurrency(t *testing.T) {
 	events := make(chan event.Event, 8)
 	event.Subscribe(event.SubscriberFunc(func(e event.Event) {
 		if e.Name == EventSucceeded {
-			events <- e
+			// 非阻塞：这条订阅只观察不消费，写满会把包级总线的分发协程卡死，
+			// 连累后面真的等待事件投递的用例（同 it_mysql_test.go 的说明）。
+			select {
+			case events <- e:
+			default:
+			}
 		}
 	}))
 	var before int64
@@ -188,6 +193,80 @@ func TestITPostgresMigrationsAndConcurrency(t *testing.T) {
 	if after-before != 1 {
 		t.Fatalf("concurrent duplicate callbacks produced %d outbox rows, want exactly 1", after-before)
 	}
+}
+
+// TestITPostgresFundGates 在真实 PostgreSQL 上跑同一组资金闸门用例
+// （夹具、闸门断言与 MySQL 版共用 itRunFundGates，只有 DDL 探针是 PG 方言）。
+func TestITPostgresFundGates(t *testing.T) {
+	dsn := os.Getenv("NEXADMIN_IT_PG_DSN")
+	if dsn == "" {
+		t.Skip("NEXADMIN_IT_PG_DSN not set; skipping real-PostgreSQL integration test")
+	}
+	admin, err := sql.Open("pgx", dsn)
+	if err != nil {
+		t.Fatalf("open admin conn: %v", err)
+	}
+	if err := admin.Ping(); err != nil {
+		t.Fatalf("postgres not reachable: %v", err)
+	}
+	dbName := fmt.Sprintf("nexadmin_payit_%d", time.Now().UnixNano())
+	if _, err := admin.Exec(`CREATE DATABASE ` + quoteIdent(dbName)); err != nil {
+		t.Fatalf("create throwaway db: %v", err)
+	}
+	var gdb *gorm.DB
+	// 收尾顺序同既有用例：先关业务连接池 → 删库 → 关管理连接。
+	t.Cleanup(func() {
+		if gdb != nil {
+			if sqlDB, err := gdb.DB(); err == nil {
+				_ = sqlDB.Close()
+			}
+		}
+		if _, err := admin.Exec(`DROP DATABASE ` + quoteIdent(dbName) + ` WITH (FORCE)`); err != nil {
+			t.Errorf("drop throwaway db %s: %v", dbName, err)
+		}
+		_ = admin.Close()
+	})
+
+	gdb, err = gorm.Open(gormpg.New(gormpg.Config{
+		DSN: appendDBName(dsn, dbName), PreferSimpleProtocol: true,
+	}), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open gorm: %v", err)
+	}
+	sqlDB, err := gdb.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	sqlDB.SetMaxOpenConns(8) // 池 > 1：条件更新认领/租约抢占只有池>1 才真的互相抢
+
+	for _, pl := range []string{"pay", "crm", "aigateway"} {
+		runPluginMigrations(t, "../"+pl+"/migrations/postgres", gdb)
+	}
+
+	ctx := tenant.With(context.Background(), 7)
+	itRunFundGates(t, gdb, ctx, itDDLProbe{
+		// PG 方言：列走 information_schema（小写名），索引走 pg_indexes。
+		hasColumn: func(table, column string) bool {
+			var n int64
+			err := gdb.Raw(`SELECT COUNT(*) FROM information_schema.columns
+				WHERE table_schema = current_schema() AND table_name = ? AND column_name = ?`,
+				strings.ToLower(table), strings.ToLower(column)).Scan(&n).Error
+			if err != nil {
+				t.Fatalf("probe column %s.%s: %v", table, column, err)
+			}
+			return n > 0
+		},
+		hasIndex: func(table, index string) bool {
+			var n int64
+			err := gdb.Raw(`SELECT COUNT(*) FROM pg_indexes
+				WHERE schemaname = current_schema() AND tablename = ? AND indexname = ?`,
+				strings.ToLower(table), strings.ToLower(index)).Scan(&n).Error
+			if err != nil {
+				t.Fatalf("probe index %s.%s: %v", table, index, err)
+			}
+			return n > 0
+		},
+	})
 }
 
 // quoteIdent 安全引用 PG 标识符（库名由测试自拼，无注入面，仍按规范引用）。

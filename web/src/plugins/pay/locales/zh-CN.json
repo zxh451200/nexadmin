@@ -8,12 +8,14 @@
       "channel": "渠道配置",
       "refund": "手动退款",
       "auth": "预授权操作",
-      "settle": "对账与结算"
+      "settle": "对账与结算",
+      "outbox": "资金事件出站箱处置"
     },
     "tabs": {
       "orders": "支付单",
       "refunds": "退款记录",
       "callbacks": "回调审计",
+      "outbox": "资金事件出站箱",
       "channels": "渠道配置",
       "authorizations": "预授权",
       "reconcile": "对账",
@@ -123,19 +125,45 @@
       "currency": "币种",
       "remark": "备注",
       "billDate": "账单日期",
-      "batchNo": "批次号"
+      "batchNo": "批次号",
+      "payerId": "买家标识"
     },
     "channel": {
       "create": "新建渠道",
       "edit": "编辑渠道",
-      "deleteConfirm": "确认删除渠道 {{name}}？"
+      "deleteConfirm": "确认删除渠道 {{name}}？",
+      "methodPlaceholder": "选择该渠道支持的支付方式"
     },
     "method": {
       "native": "扫码",
+      "qr": "扫码",
       "page": "电脑网站",
       "wap": "手机网站",
+      "h5": "手机网页",
       "jsapi": "公众号",
-      "app": "APP"
+      "app": "APP",
+      "micropay": "付款码当面付"
+    },
+    "capabilities": {
+      "title": "渠道能力",
+      "unknown": "未提供该渠道类型的能力信息",
+      "currencies": "支持币种",
+      "methods": "支持支付方式",
+      "noMethod": "未声明可用支付方式",
+      "actionsNone": "{{provider}} 未声明支持任何补偿动作",
+      "actions": {
+        "refundQuery": "退款结果查询",
+        "auth": "资金预授权",
+        "bill": "渠道账单对账",
+        "payout": "渠道代付"
+      },
+      "unsupportedSuffix": "该渠道不支持",
+      "providerUnsupported": "该渠道（{{provider}}）不支持「{{action}}」，后端同样会拒绝该请求。",
+      "unsupportedCurrency": "该渠道（{{provider}}）不支持币种 {{currency}}。",
+      "unsupportedMethod": "该渠道（{{provider}}）不支持支付方式「{{method}}」。",
+      "allowedOnly": "{{provider}} 仅支持：{{options}}",
+      "noneAdvertised": "{{provider}} 未声明支持的取值，请与渠道确认后改用其它渠道。",
+      "enforcedByServer": "以下拉里的禁用项仅为体验；服务端会按同一份能力矩阵独立校验并拒绝不支持的请求。"
     },
     "stats": {
       "rangeLabel": "时间范围",
@@ -189,7 +217,9 @@
       "partial_captured": "部分请款",
       "captured": "已请款",
       "voided": "已撤销",
-      "expired": "已过期"
+      "expired": "已过期",
+      "authorizing": "冻结中",
+      "failed": "冻结被拒"
     },
     "auth": {
       "searchPlaceholder": "预授权号 / 业务单号",
@@ -202,7 +232,52 @@
       "subjectPlaceholder": "可选：主体 ID",
       "pickChannel": "选择渠道",
       "noChannel": "还没有可用渠道，请先在「渠道配置」新建",
-      "remaining": "可请款余额：{{amount}}"
+      "methodOptional": "可选：该渠道支持的支付方式",
+      "remaining": "可请款余额：{{amount}}",
+      "payerIdHint": "支付宝 buyer_id / 登录号",
+      "payerIdRequiredForReal": "真实渠道冻结必需；缺失时渠道会明确拒绝，本地不代为猜测。"
+    },
+    "refundSync": {
+      "action": "向渠道查询结果",
+      "column": "渠道补查",
+      "attempts": "已向渠道查询 {{n}} 次",
+      "lastSyncAt": "最近查询 {{time}}",
+      "never": "尚未向渠道查询",
+      "done": "已向渠道查询，当前状态：{{status}}",
+      "noPerm": "缺少「关闭/补查支付单」权限，无法向渠道查询"
+    },
+    "outboxStatus": {
+      "pending": "待投递",
+      "sent": "已投递",
+      "dead": "死信",
+      "discarded": "已丢弃"
+    },
+    "outbox": {
+      "description": "资金事件与状态翻转同事务落库后的投递台账。进程内总线投递失败会按退避重投，超过上限或载荷不可解析转死信。",
+      "deadHint": "死信不会被自动重投：要么重投，要么填原因确认丢弃——不允许静默标记成已投递。",
+      "eventId": "事件号",
+      "attempts": "重试次数",
+      "lastError": "最近错误",
+      "timeline": "投递节点",
+      "nextRetryAt": "下次重试",
+      "sentAt": "投递时间",
+      "deadAt": "转死信时间",
+      "countPending": "待投递 {{n}}",
+      "countDead": "死信 {{n}}",
+      "countSent": "已投递 {{n}}",
+      "countDiscarded": "已丢弃 {{n}}",
+      "searchPlaceholder": "事件号 / 事件类型",
+      "empty": "暂无资金事件",
+      "detail": "事件详情",
+      "payload": "事件载荷（JSON）",
+      "payloadEmpty": "载荷为空或接口未返回载荷",
+      "retry": "重投",
+      "retryConfirm": "确认重投事件 {{id}}？资金事件可能被下游重复消费，请先核对下游是否已处理过。",
+      "discard": "丢弃",
+      "discardHint": "丢弃后该事件不再投递（dispatcher 不再取走），请写清判断依据以便事后核对。",
+      "discardNoteLabel": "丢弃原因（必填）",
+      "discardNotePlaceholder": "例如：下游已通过对账补偿，无需重放",
+      "discardNoteRequired": "请填写丢弃原因"
     },
     "reconcileStatus": {
       "open": "待处理",
@@ -237,7 +312,21 @@
       "notePlaceholder": "处置说明（可选）",
       "note": "处置说明",
       "resolve": "标记已解决",
-      "ignore": "忽略"
+      "ignore": "忽略",
+      "source": "取数来源",
+      "sourceValue": {
+        "manual": "本地录入",
+        "channel": "渠道账单"
+      },
+      "sourceManualHint": "本地录入：由人工填写渠道侧成交金额，适合账单未下载或只做抽样核对。",
+      "sourceChannelHint": "渠道账单：由后端向渠道下载当日账单并解析，无需手工填写金额；渠道不支持账单时该项不可选。",
+      "pickChannelFirst": "先选择渠道：取数来源是否可用取决于该渠道的能力。",
+      "bill": "账单取数",
+      "billRows": "账单行数",
+      "billDigest": "账单摘要",
+      "failedWithReason": "本次对账失败：{{reason}}",
+      "emptyBecauseFailed": "对账失败，未生成差异行；请按上面的失败原因处理后重跑。",
+      "channelBillEmpty": "渠道账单为 0 行：可能账单尚未生成或当日确实没有成交，请核对账单日期后重跑。"
     },
     "settle": {
       "viewLabel": "结算视图",
@@ -269,7 +358,23 @@
       "pickSettlement": "请选择至少一张已确认结算单",
       "pickSettlementHint": "只列出「已确认」的结算单；一张结算单只能进一个批次。",
       "noConfirmed": "没有可打款的已确认结算单",
-      "receiptRequired": "请填写打款回执号"
+      "receiptRequired": "请填写打款回执号",
+      "payoutPathsTitle": "两条打款路径",
+      "payoutPathManualHint": "人工回执：钱已在银行/线下出款，这里只回填回执号留痕，不会调用渠道。",
+      "payoutPathChannelHint": "走渠道代付：调用渠道代付接口真实出款，成功后回传渠道批次号；渠道未开通代付时不可用。",
+      "payoutPathColumn": "打款路径",
+      "payoutPath": {
+        "manual": "人工回执",
+        "channel": "渠道代付"
+      },
+      "payViaChannel": "走渠道代付",
+      "pickPayoutChannel": "选择代付渠道",
+      "pickPayoutChannelFirst": "请选择用于代付的渠道",
+      "noPayoutChannel": "没有支持代付的渠道：请先在「渠道配置」启用支持代付的渠道，或改用人工回执路径。",
+      "channelPayConfirm": "确认通过渠道 {{code}} 向批次 {{no}} 发起代付？该操作会真实出款，且以批次号为幂等键。",
+      "payoutItemsTitle": "逐笔代付结论",
+      "payoutItemsHint": "一笔失败不影响其余笔；「已发起待终局」由后台向渠道补查收敛，本地不猜结论。",
+      "channelNo": "渠道单号"
     },
     "settlementStatus": {
       "draft": "草稿",
@@ -278,7 +383,15 @@
     },
     "payoutStatus": {
       "draft": "待打款",
-      "paid": "已打款"
+      "paid": "已打款",
+      "partial": "部分打款",
+      "failed": "打款失败"
+    },
+    "payoutItemStatus": {
+      "pending": "未发起",
+      "initiated": "已发起待终局",
+      "success": "已到账",
+      "failed": "失败"
     }
   }
 }

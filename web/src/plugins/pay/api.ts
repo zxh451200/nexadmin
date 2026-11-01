@@ -90,6 +90,51 @@ export interface PayProvider {
   fields: PayProviderField[]
 }
 
+/**
+ * 渠道能力矩阵（后端 Capabilities）：决定币种/支付方式下拉里哪些选项可用，
+ * 以及退款查询、预授权、渠道账单、渠道代付四个动作在该渠道是否可用。
+ * 前端据此禁用只是体验，服务端仍会独立判一次并拒绝。
+ */
+export interface ProviderCapabilities {
+  currencies: string[]
+  methods: string[]
+  refundQuery: boolean
+  auth: boolean
+  bill: boolean
+  payout: boolean
+}
+
+export interface PayProviderCapability {
+  provider: string
+  capabilities: ProviderCapabilities
+}
+
+/** 出站箱状态（后端 plg_pay_outbox.status）：dead=死信，discarded=人工确认丢弃。 */
+export type OutboxStatus = 'pending' | 'sent' | 'dead' | 'discarded'
+
+/** 资金事件出站箱行；载荷只在详情接口返回（列表不带，避免整页塞 JSON）。 */
+export interface PayOutboxEvent {
+  id: string
+  tenantId: string
+  eventId: string
+  eventName: string
+  status: OutboxStatus | string
+  attempts: number
+  lastError?: string
+  nextRetryAt?: string | null
+  sentAt?: string | null
+  deadAt?: string | null
+  createdAt: string
+  payload?: string
+}
+
+export interface OutboxCounts {
+  pending: number
+  dead: number
+  sent: number
+  discarded: number
+}
+
 export interface PayCallback {
   id: string
   channelCode: string
@@ -117,15 +162,34 @@ export interface PayRefund {
   failReason?: string
   operatorId?: string
   succeededAt?: string | null
+  /**
+   * 退款单所属渠道编码：补查按钮要按「该渠道是否支持查退款结果」禁用。
+   * 后端 RefundView 目前不带这个字段，缺省时前端按支付单详情兜底解析。
+   */
+  channelCode?: string
+  /** 已向渠道补查的次数（后端 syncAttempts）：卡住的退款要能看出「查过没有」 */
+  syncAttempts?: number
+  lastSyncAt?: string | null
   createdAt: string
 }
 
-export type AuthStatus = 'authorized' | 'partial_captured' | 'captured' | 'voided' | 'expired'
+// authorizing = 已占位、渠道冻结结论未回；failed = 渠道明确拒绝冻结（钱没冻住，可换单重试）。
+export type AuthStatus =
+  | 'authorizing'
+  | 'authorized'
+  | 'partial_captured'
+  | 'captured'
+  | 'voided'
+  | 'expired'
+  | 'failed'
 export type ReconcileStatus = 'open' | 'closed'
 export type DiffKind = 'long' | 'short' | 'missing'
 export type DiffStatus = 'open' | 'resolved' | 'ignored'
 export type SettlementStatus = 'draft' | 'confirmed' | 'paid'
-export type PayoutStatus = 'draft' | 'paid'
+// partial = 批次内有的笔成功、有的失败；failed = 全部失败。渠道代付才会出现这两种。
+export type PayoutStatus = 'draft' | 'paid' | 'partial' | 'failed'
+// 逐笔代付结论：initiated = 已向渠道发起、终局未回（由后台补查收敛）。
+export type PayoutItemStatus = 'pending' | 'initiated' | 'success' | 'failed'
 
 export interface PayAuthorization {
   id: string
@@ -143,8 +207,12 @@ export interface PayAuthorization {
   currency: string
   fxRateMicro: number
   channelAuthNo?: string
+  /** 渠道侧买家标识（支付宝 buyer_id 等）；真实渠道冻结必需 */
+  payerId?: string
   cardLast4?: string
   remark?: string
+  /** 渠道拒绝冻结 / 撤销的原因 */
+  failReason?: string
   expiresAt?: string | null
   voidedAt?: string | null
   createdAt: string
@@ -158,10 +226,14 @@ export interface PayAuthForm {
   method?: string
   amountMinor: number
   currency?: string
+  /** 渠道侧买家标识（支付宝 buyer_id / buyer_logon_id）：真实渠道冻结必需 */
+  payerId?: string
   cardLast4?: string
   validDays?: number
   remark?: string
 }
+
+export type ReconcileSource = 'manual' | 'channel'
 
 export interface PayReconcileTask {
   id: string
@@ -174,6 +246,12 @@ export interface PayReconcileTask {
   totalChannelMinor: number
   diffCount: number
   source: string
+  /** 渠道账单原文的 SHA-256（账单本体不落库）；source=channel 时用于核对取数 */
+  billDigest?: string
+  /** 解析出的账单行数：区分「账单为空」与「解析失败/没取到数」 */
+  billRows?: number
+  /** 对账失败原因：失败的任务不能只呈现一张空差异表 */
+  failReason?: string
   createdAt: string
   updatedAt: string
 }
@@ -240,8 +318,24 @@ export interface PayPayoutBatch {
   method?: string
   note?: string
   receiptNo?: string
+  /** 走渠道代付时用的渠道实例（人工回执路径为空） */
+  channelCode?: string
+  channelBatchNo?: string
+  failReason?: string
   paidAt?: string | null
   createdAt: string
+}
+
+/** 批次内逐笔代付结论：批次为 partial/failed 时必须能下钻到哪几笔失败、为什么失败。 */
+export interface PayPayoutItem {
+  id: string
+  batchId: string
+  settlementId: string
+  netMinor: number
+  receiverId?: string
+  status: PayoutItemStatus
+  channelNo?: string
+  failReason?: string
 }
 
 export interface OrderQuery extends PageQuery {
@@ -260,6 +354,9 @@ export interface RefundQuery extends PageQuery {
   status?: string
 }
 export interface AuthQuery extends PageQuery {
+  status?: string
+}
+export interface OutboxQuery extends PageQuery {
   status?: string
 }
 
@@ -285,6 +382,16 @@ export function useProviders() {
   return useQuery({
     queryKey: [...KEY, 'providers'],
     queryFn: () => api.get<PayProvider[]>(`${BASE}/providers`),
+    staleTime: 5 * 60_000,
+  })
+}
+
+/** 渠道能力矩阵：一次取回全部渠道类型，按 provider 索引后驱动表单禁用（契约第 1 条）。 */
+export function useCapabilities() {
+  return useQuery({
+    queryKey: [...KEY, 'capabilities'],
+    // silent：旧后端没有该接口时只让前端「不禁用」，不要每页弹一次错误 toast
+    queryFn: () => api.get<PayProviderCapability[]>(`${BASE}/capabilities`, undefined, { silent: true }),
     staleTime: 5 * 60_000,
   })
 }
@@ -360,6 +467,43 @@ export function usePayouts(query: { status?: string }) {
   })
 }
 
+/** 批次内逐笔代付结论（契约第 10 条）：只在打开批次详情时取。 */
+export function usePayoutItems(batchId?: string) {
+  return useQuery({
+    queryKey: [...KEY, 'payout-items', batchId ?? ''],
+    queryFn: () => api.get<PayPayoutItem[]>(`${BASE}/payouts/${batchId}/items`),
+    enabled: !!batchId,
+  })
+}
+
+/** 出站箱分页列表（契约第 2 条）：列表不带载荷，载荷走详情接口。 */
+export function useOutboxEvents(query: OutboxQuery) {
+  return useQuery({
+    queryKey: [...KEY, 'outbox', query],
+    queryFn: () => api.get<Page<PayOutboxEvent>>(`${BASE}/outbox`, query),
+    placeholderData: keepPreviousData,
+  })
+}
+
+/** 出站箱各状态行数（契约第 3 条）：页签上的 pending/dead 告警徽标。 */
+export function useOutboxCounts() {
+  return useQuery({
+    queryKey: [...KEY, 'outbox-counts'],
+    // silent：徽标是锦上添花，无权限/旧后端时静默降级为不显示数字
+    queryFn: () => api.get<OutboxCounts>(`${BASE}/outbox/counts`, undefined, { silent: true }),
+    placeholderData: keepPreviousData,
+  })
+}
+
+/** 单条出站箱详情（契约第 4 条）：带完整事件载荷，供 JSON 查看。 */
+export function useOutboxEvent(eventId: string | null) {
+  return useQuery({
+    queryKey: [...KEY, 'outbox-event', eventId],
+    queryFn: () => api.get<PayOutboxEvent>(`${BASE}/outbox/${eventId}`),
+    enabled: !!eventId,
+  })
+}
+
 function useInvalidate() {
   const qc = useQueryClient()
   return () => void qc.invalidateQueries({ queryKey: KEY })
@@ -406,6 +550,15 @@ export function useCreateRefund() {
   })
 }
 
+/** 主动向渠道查退款结果（契约第 7 条）：回调丢失时的补偿路径，返回最新退款单。 */
+export function useSyncRefund() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (refundNo: string) => api.post<PayRefund>(`${BASE}/refunds/${refundNo}/sync`),
+    onSuccess: invalidate,
+  })
+}
+
 export function useCreateAuth() {
   const invalidate = useInvalidate()
   return useMutation({
@@ -438,8 +591,14 @@ export function useVoidAuth() {
 export function useRunReconcileTask() {
   const invalidate = useInvalidate()
   return useMutation({
-    mutationFn: (data: { channelCode: string; billDate: string; subjectId?: string; channelAmounts: ReconcileAmount[] }) =>
-      api.post<PayReconcileTask>(`${BASE}/reconcile/tasks`, data),
+    // source 缺省 manual（向后兼容）；channel 由后端下载渠道账单，此时不需要 channelAmounts。
+    mutationFn: (data: {
+      channelCode: string
+      billDate: string
+      subjectId?: string
+      source?: ReconcileSource
+      channelAmounts?: ReconcileAmount[]
+    }) => api.post<PayReconcileTask>(`${BASE}/reconcile/tasks`, data),
     onSuccess: invalidate,
   })
 }
@@ -493,6 +652,35 @@ export function useMarkPayoutPaid() {
   return useMutation({
     mutationFn: (v: { id: string; receiptNo: string }) =>
       api.post<PayPayoutBatch>(`${BASE}/payouts/${v.id}/mark-paid`, { receiptNo: v.receiptNo }),
+    onSuccess: invalidate,
+  })
+}
+
+/** 走渠道代付（契约第 9 条）：由渠道真实出款并回传批次号，区别于人工回填回执。 */
+export function usePayPayoutViaChannel() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (v: { id: string; channelCode: string }) =>
+      api.post<PayPayoutBatch>(`${BASE}/payouts/${v.id}/pay`, { channelCode: v.channelCode }),
+    onSuccess: invalidate,
+  })
+}
+
+/** 人工重投一条死信（契约第 5 条）：仅 dead → pending。 */
+export function useRetryOutbox() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (eventId: string) => api.post<PayOutboxEvent>(`${BASE}/outbox/${eventId}/retry`),
+    onSuccess: invalidate,
+  })
+}
+
+/** 人工确认丢弃一条死信（契约第 6 条）：note 必填，后端写进 lastError 留痕。 */
+export function useDiscardOutbox() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (v: { eventId: string; note: string }) =>
+      api.post<PayOutboxEvent>(`${BASE}/outbox/${v.eventId}/discard`, { note: v.note }),
     onSuccess: invalidate,
   })
 }

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CheckCircle2, Pencil, Plus } from 'lucide-react'
+import { Banknote, CheckCircle2, Pencil, Plus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { parseISO } from 'date-fns'
 import { toast } from 'sonner'
@@ -20,14 +20,19 @@ import {
   useCreatePayout,
   useGenerateSettlements,
   useMarkPayoutPaid,
+  usePayPayoutViaChannel,
+  usePayoutItems,
   usePayouts,
   useSaveCommissionRule,
   useSettlements,
   type PayCommissionRule,
+  type PayChannel,
   type PayPayoutBatch,
   type PaySettlement,
   type SettlementStatus,
 } from './api'
+import { CapabilityNote } from './CapabilityControls'
+import { capabilitiesOfChannel, supportsAction, useCapabilityIndex, useChannelDirectory } from './capabilities'
 import { formatBp, formatMoney, formatTime } from './format'
 import { ListErrorBanner } from './ListErrorBanner'
 
@@ -356,23 +361,65 @@ function GenerateDialog({ onClose }: { onClose: () => void }) {
   )
 }
 
+const PAYOUT_STATUSES = ['draft', 'partial', 'failed', 'paid'] as const
+
+function payoutVariant(s: string): 'success' | 'destructive' | 'info' | 'warning' {
+  if (s === 'paid') return 'success'
+  if (s === 'partial') return 'warning'
+  if (s === 'failed') return 'destructive'
+  return 'info'
+}
+
 function PayoutsPanel() {
   const { t, i18n } = useTranslation()
   const [status, setStatus] = useState<string | undefined>(undefined)
   const [createOpen, setCreateOpen] = useState(false)
   const [paying, setPaying] = useState<PayPayoutBatch | null>(null)
+  const [channelPaying, setChannelPaying] = useState<PayPayoutBatch | null>(null)
+  // 代付批次必须能下钻到「哪几笔失败、为什么失败」，partial 不是终点
+  const [itemsOf, setItemsOf] = useState<PayPayoutBatch | null>(null)
   const { data = [], isLoading, isError, refetch } = usePayouts({ status })
+  const index = useCapabilityIndex()
+  const { channels, providerOf } = useChannelDirectory()
+  // 支持代付的渠道实例：一个都没有时按钮置灰并在面板里说明原因（后端也会拒）
+  const payoutChannels = channels.filter((c) => supportsAction(capabilitiesOfChannel(index, providerOf, c.code), 'payout'))
+  const noPayoutChannel = index.known && payoutChannels.length === 0
 
   const columns: Column<PayPayoutBatch>[] = [
-    { key: 'batchNo', title: t('plugin_pay.fields.batchNo'), mobile: 'title', render: (r) => <span className="font-medium text-foreground">{r.batchNo}</span> },
-    { key: 'status', title: t('plugin_pay.fields.status'), mobile: 'sub', render: (r) => <Badge variant={r.status === 'paid' ? 'success' : 'info'}>{t(`plugin_pay.payoutStatus.${r.status}`)}</Badge> },
+    { key: 'batchNo', title: t('plugin_pay.fields.batchNo'), mobile: 'title', render: (r) => <span className="block truncate font-medium text-foreground">{r.batchNo}</span> },
+    {
+      key: 'status',
+      title: t('plugin_pay.fields.status'),
+      mobile: 'sub',
+      // 渠道代付会出现 partial/failed：一笔失败不拖垮整批，所以徽章必须分得清
+      // 「全成功 / 部分失败 / 全失败」，不能只剩 paid / 非 paid 两档。
+      render: (r) => (
+        <Badge variant={payoutVariant(r.status)}>{t(`plugin_pay.payoutStatus.${r.status}`)}</Badge>
+      ),
+    },
     { key: 'total', title: t('plugin_pay.fields.amount'), align: 'end', render: (r) => <span className="num">{formatMoney(r.totalMinor, r.currency)}</span> },
-    { key: 'count', title: t('plugin_pay.settle.settlementCount'), align: 'end', render: (r) => <span className="num">{r.settlementCount}</span> },
-    { key: 'method', title: t('plugin_pay.settle.payoutMethod'), render: (r) => r.method || '-' },
-    { key: 'receipt', title: t('plugin_pay.settle.receiptNo'), render: (r) => r.receiptNo || '-' },
+    { key: 'count', title: t('plugin_pay.settle.settlementCount'), align: 'end', mobile: 'hidden', render: (r) => <span className="num">{r.settlementCount}</span> },
+    { key: 'method', title: t('plugin_pay.settle.payoutMethod'), mobile: 'hidden', render: (r) => r.method || '-' },
+    {
+      // 两条打款路径要分得清：渠道代付有渠道批次号，人工回执只有回执号
+      key: 'path',
+      title: t('plugin_pay.settle.payoutPathColumn'),
+      render: (r) => (
+        <div className="min-w-0 text-xs">
+          <Badge variant={r.channelCode ? 'info' : 'outline'}>
+            {t(r.channelCode ? 'plugin_pay.settle.payoutPath.channel' : 'plugin_pay.settle.payoutPath.manual')}
+          </Badge>
+          {r.channelCode ? <div className="break-all text-muted-foreground">{r.channelCode}</div> : null}
+          {r.channelBatchNo ? <div className="num break-all text-muted-foreground">{r.channelBatchNo}</div> : null}
+          {r.receiptNo ? <div className="num break-all text-muted-foreground">{t('plugin_pay.settle.receiptNo')}: {r.receiptNo}</div> : null}
+          {r.failReason ? <div className="break-words text-destructive">{r.failReason}</div> : null}
+        </div>
+      ),
+    },
     {
       key: 'createdAt',
       title: t('plugin_pay.fields.createdAt'),
+      mobile: 'hidden',
       render: (r) => <span className="num text-xs text-muted-foreground">{formatTime(r.createdAt, i18n.language)}</span>,
     },
   ]
@@ -387,13 +434,19 @@ function PayoutsPanel() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={ALL}>{t('plugin_pay.all')}</SelectItem>
-            {(['draft', 'paid'] as const).map((s) => (
+            {PAYOUT_STATUSES.map((s) => (
               <SelectItem key={s} value={s}>
                 {t(`plugin_pay.payoutStatus.${s}`)}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
+      </div>
+      <div className="flex flex-col gap-1.5 rounded-lg border border-border p-3 text-xs text-muted-foreground">
+        <p className="font-medium text-foreground">{t('plugin_pay.settle.payoutPathsTitle')}</p>
+        <p>{t('plugin_pay.settle.payoutPathManualHint')}</p>
+        <p>{t('plugin_pay.settle.payoutPathChannelHint')}</p>
+        {noPayoutChannel ? <CapabilityNote tone="warn">{t('plugin_pay.settle.noPayoutChannel')}</CapabilityNote> : null}
       </div>
       <DataTable
         columns={columns}
@@ -410,19 +463,168 @@ function PayoutsPanel() {
             </Button>
           </Can>
         }
+        onRowClick={(r) => {
+          if (r.channelCode) setItemsOf(r)
+        }}
         rowActions={(r) =>
           r.status === 'draft' ? (
             <Can perm="pay:settle">
-              <Button variant="ghost" size="icon" aria-label={t('plugin_pay.settle.markPaid')} onClick={() => setPaying(r)}>
-                <CheckCircle2 aria-hidden="true" />
-              </Button>
+              <div className="flex items-center">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={t('plugin_pay.settle.payViaChannel')}
+                  title={t('plugin_pay.settle.payViaChannel')}
+                  disabled={noPayoutChannel}
+                  onClick={() => setChannelPaying(r)}
+                >
+                  <Banknote aria-hidden="true" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={t('plugin_pay.settle.markPaid')}
+                  title={t('plugin_pay.settle.markPaid')}
+                  onClick={() => setPaying(r)}
+                >
+                  <CheckCircle2 aria-hidden="true" />
+                </Button>
+              </div>
             </Can>
           ) : null
         }
       />
       {createOpen ? <CreatePayoutDialog onClose={() => setCreateOpen(false)} /> : null}
       {paying ? <MarkPaidDialog batch={paying} onClose={() => setPaying(null)} /> : null}
+      {channelPaying ? <ChannelPayDialog batch={channelPaying} channels={payoutChannels} onClose={() => setChannelPaying(null)} /> : null}
+      {itemsOf ? <PayoutItemsDialog batch={itemsOf} onClose={() => setItemsOf(null)} /> : null}
     </div>
+  )
+}
+
+/** 逐笔代付结论（契约第 10 条）：批次 partial/failed 时下钻到具体是哪几笔、为什么失败。 */
+function PayoutItemsDialog({ batch, onClose }: { batch: PayPayoutBatch; onClose: () => void }) {
+  const { t } = useTranslation()
+  const { data = [], isLoading, isError, refetch } = usePayoutItems(batch.id)
+
+  const variant = (s: string): 'success' | 'destructive' | 'info' | 'warning' =>
+    s === 'success' ? 'success' : s === 'failed' ? 'destructive' : s === 'initiated' ? 'warning' : 'info'
+
+  return (
+    <ResponsiveDialog
+      open
+      onOpenChange={(v) => !v && onClose()}
+      title={`${t('plugin_pay.settle.payoutItemsTitle')} · ${batch.batchNo}`}
+      size="lg"
+      footer={
+        <Button variant="outline" onClick={onClose}>
+          {t('common.close')}
+        </Button>
+      }
+    >
+      <div className="flex flex-col gap-2">
+        <p className="text-xs text-muted-foreground">{t('plugin_pay.settle.payoutItemsHint')}</p>
+        {isError ? <ListErrorBanner onRetry={() => void refetch()} /> : null}
+        {isLoading ? <p className="text-xs text-muted-foreground">{t('common.loading')}</p> : null}
+        {!isLoading && data.length === 0 ? <p className="text-xs text-muted-foreground">{t('plugin_pay.empty')}</p> : null}
+        <ul className="flex flex-col gap-2">
+          {data.map((it) => (
+            <li key={it.id} className="flex flex-col gap-1 rounded-lg border border-border p-2 text-xs">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant={variant(it.status)}>{t(`plugin_pay.payoutItemStatus.${it.status}`)}</Badge>
+                <span className="num">{formatMoney(it.netMinor, batch.currency)}</span>
+                <span className="break-all text-muted-foreground">{it.receiverId || '-'}</span>
+              </div>
+              {it.channelNo ? (
+                <div className="num break-all text-muted-foreground">
+                  {t('plugin_pay.settle.channelNo')}: {it.channelNo}
+                </div>
+              ) : null}
+              {it.failReason ? <div className="break-words text-destructive">{it.failReason}</div> : null}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </ResponsiveDialog>
+  )
+}
+
+/** 走渠道代付（契约第 9 条）：只列能力矩阵里支持代付的渠道实例，确认后真实出款。 */
+function ChannelPayDialog({
+  batch,
+  channels,
+  onClose,
+}: {
+  batch: PayPayoutBatch;
+  channels: PayChannel[];
+  onClose: () => void
+}) {
+  const { t } = useTranslation()
+  const confirm = useConfirm()
+  const pay = usePayPayoutViaChannel()
+  const [channelCode, setChannelCode] = useState('')
+
+  const submit = async () => {
+    if (!channelCode) {
+      toast.error(t('plugin_pay.settle.pickPayoutChannelFirst'))
+      return
+    }
+    if (!(await confirm({ destructive: true, description: t('plugin_pay.settle.channelPayConfirm', { no: batch.batchNo, code: channelCode }) }))) {
+      return
+    }
+    try {
+      await pay.mutateAsync({ id: batch.id, channelCode })
+      toast.success(t('common.operateSuccess'))
+      onClose()
+    } catch {
+      toast.error(t('common.operateFailed'))
+    }
+  }
+
+  return (
+    <ResponsiveDialog
+      open
+      onOpenChange={(v) => !v && onClose()}
+      title={`${t('plugin_pay.settle.payViaChannel')} · ${batch.batchNo}`}
+      size="sm"
+      footer={
+        <>
+          <Button variant="outline" onClick={onClose}>
+            {t('common.cancel')}
+          </Button>
+          <Button onClick={() => void submit()} disabled={pay.isPending}>
+            <Banknote aria-hidden="true" />
+            {t('plugin_pay.settle.payViaChannel')}
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-3 text-sm">
+        <p className="text-xs text-muted-foreground">{t('plugin_pay.settle.payoutPathChannelHint')}</p>
+        <p className="num text-xs text-muted-foreground">
+          {formatMoney(batch.totalMinor, batch.currency)} · {t('plugin_pay.settle.settlementCount')}: {batch.settlementCount}
+        </p>
+        {channels.length === 0 ? (
+          <CapabilityNote tone="warn">{t('plugin_pay.settle.noPayoutChannel')}</CapabilityNote>
+        ) : (
+          <label className="flex flex-col gap-1">
+            {t('plugin_pay.settle.pickPayoutChannel')}
+            <Select value={channelCode} onValueChange={setChannelCode}>
+              <SelectTrigger aria-label={t('plugin_pay.settle.pickPayoutChannel')}>
+                <SelectValue placeholder={t('plugin_pay.auth.pickChannel')} />
+              </SelectTrigger>
+              <SelectContent>
+                {channels.map((c) => (
+                  <SelectItem key={c.code} value={c.code}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </label>
+        )}
+      </div>
+    </ResponsiveDialog>
   )
 }
 
@@ -530,10 +732,13 @@ function MarkPaidDialog({ batch, onClose }: { batch: PayPayoutBatch; onClose: ()
         </>
       }
     >
-      <label className="flex flex-col gap-1 text-sm">
-        {t('plugin_pay.settle.receiptNo')}
-        <Input value={receiptNo} maxLength={64} onChange={(e) => setReceiptNo(e.target.value)} />
-      </label>
+      <div className="flex flex-col gap-2 text-sm">
+        <p className="text-xs text-muted-foreground">{t('plugin_pay.settle.payoutPathManualHint')}</p>
+        <label className="flex flex-col gap-1">
+          {t('plugin_pay.settle.receiptNo')}
+          <Input value={receiptNo} maxLength={64} onChange={(e) => setReceiptNo(e.target.value)} />
+        </label>
+      </div>
     </ResponsiveDialog>
   )
 }

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { RotateCcw } from 'lucide-react'
+import { RefreshCw, RotateCcw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
@@ -11,11 +11,85 @@ import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
-import { useCreateRefund, useRefunds, type PayRefund, type RefundQuery } from './api'
+import {
+  useCreateRefund,
+  useOrder,
+  useRefunds,
+  useSyncRefund,
+  type PayRefund,
+  type RefundQuery,
+} from './api'
+import { CapabilityNote } from './CapabilityControls'
+import {
+  capabilitiesOfChannel,
+  supportsAction,
+  unsupportedAction,
+  useCapabilityIndex,
+  useChannelDirectory,
+} from './capabilities'
 import { formatMoney, formatTime, refundStatusVariant } from './format'
 import { ListErrorBanner } from './ListErrorBanner'
 
 const ALL = '__all'
+
+/** 只有「处理中」的退款需要人工向渠道补查：终态行再查一次只会白调一次渠道。 */
+const syncable = (s: string) => s === 'pending'
+
+/**
+ * 补查动作 + 补查留痕（次数/最近时间）写在一个组件里：
+ * 每行都要按「该退款所属渠道是否支持查退款结果」判定可用性，Hooks 只能按行组件调用。
+ */
+function RefundSyncCell({ refund }: { refund: PayRefund }) {
+  const { t, i18n } = useTranslation()
+  const index = useCapabilityIndex()
+  const { providerOf } = useChannelDirectory()
+  const sync = useSyncRefund()
+  // 退款单视图暂未带 channelCode（契约缺口）：缺省时回查一次支付单拿渠道。
+  const { data: order } = useOrder(refund.channelCode ? null : refund.paymentNo)
+  const channelCode = refund.channelCode || order?.channelCode || ''
+  const provider = providerOf(channelCode)
+  const caps = capabilitiesOfChannel(index, providerOf, channelCode)
+  const supported = supportsAction(caps, 'refundQuery')
+
+  const onSync = async () => {
+    try {
+      const next = await sync.mutateAsync(refund.refundNo)
+      toast.success(t('plugin_pay.refundSync.done', { status: t(`plugin_pay.refundStatus.${next.status}`) }))
+    } catch {
+      toast.error(t('common.operateFailed'))
+    }
+  }
+
+  const attempts = refund.syncAttempts ?? 0
+  return (
+    <div className="flex min-w-0 flex-col gap-1">
+      <div className="num text-xs text-muted-foreground">
+        {attempts > 0
+          ? t('plugin_pay.refundSync.attempts', { n: attempts })
+          : t('plugin_pay.refundSync.never')}
+        {refund.lastSyncAt ? ` · ${t('plugin_pay.refundSync.lastSyncAt', { time: formatTime(refund.lastSyncAt, i18n.language) })}` : ''}
+      </div>
+      {syncable(refund.status) ? (
+        supported ? (
+          <Can perm="pay:edit" fallback={<span className="text-xs text-muted-foreground">{t('plugin_pay.refundSync.noPerm')}</span>}>
+            <Button variant="outline" size="sm" disabled={sync.isPending} onClick={() => void onSync()}>
+              <RefreshCw aria-hidden="true" />
+              {t('plugin_pay.refundSync.action')}
+            </Button>
+          </Can>
+        ) : (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Button variant="outline" size="sm" disabled aria-disabled="true">
+              <RefreshCw aria-hidden="true" />
+              {t('plugin_pay.refundSync.action')}
+            </Button>
+            <CapabilityNote>{unsupportedAction(t, provider, 'refundQuery')}</CapabilityNote>
+          </div>
+        )
+      ) : null}
+    </div>
+  )
+}
 
 export function RefundsTab() {
   const { t, i18n } = useTranslation()
@@ -35,19 +109,26 @@ export function RefundsTab() {
       title: t('plugin_pay.fields.refundNo'),
       mobile: 'title',
       render: (r) => (
-        <div>
-          <span className="font-medium text-foreground">{r.refundNo}</span>
+        <div className="min-w-0">
+          <span className="block truncate font-medium text-foreground">{r.refundNo}</span>
           <div className="text-xs text-muted-foreground">{r.paymentNo}</div>
         </div>
       ),
     },
     { key: 'amount', title: t('plugin_pay.fields.amount'), align: 'end', render: (r) => <span className="num">{formatMoney(r.amountMinor, r.currency)}</span> },
     { key: 'status', title: t('plugin_pay.fields.status'), render: (r) => <Badge variant={refundStatusVariant(r.status)}>{t(`plugin_pay.refundStatus.${r.status}`)}</Badge> },
-    { key: 'reason', title: t('plugin_pay.fields.reason'), render: (r) => <span className="text-xs">{r.reason || '-'}</span> },
-    { key: 'operator', title: t('plugin_pay.fields.operator'), render: (r) => r.operatorId || '-' },
+    { key: 'reason', title: t('plugin_pay.fields.reason'), render: (r) => <span className="text-xs break-words">{r.reason || r.failReason || '-'}</span> },
+    { key: 'operator', title: t('plugin_pay.fields.operator'), mobile: 'hidden', render: (r) => r.operatorId || '-' },
+    {
+      key: 'sync',
+      title: t('plugin_pay.refundSync.column'),
+      mobile: 'normal',
+      render: (r) => <RefundSyncCell refund={r} />,
+    },
     {
       key: 'createdAt',
       title: t('plugin_pay.fields.createdAt'),
+      mobile: 'hidden',
       render: (r) => <span className="num text-xs text-muted-foreground">{formatTime(r.createdAt, i18n.language)}</span>,
     },
   ]
