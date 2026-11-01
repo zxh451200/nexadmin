@@ -1,8 +1,8 @@
 # SECURITY-GATES-HANDOFF — GitHub Actions security 工作流修复交接文档
 
-> 更新时间：2026-10-28（第三轮）。写给下一个接手的 AI / 开发者。
+> 更新时间：2026-11-01（第四轮）。写给下一个接手的 AI / 开发者。
 > 目标：让 https://github.com/zxh451200/nexadmin 的 `security` 工作流全绿。
-> 现状：`ci` 工作流全绿。`security` 工作流 5 个门禁中 **4 个已修复并验证**（Worktree secrets、Go vulnerabilities、Go license allowlist、npm license allowlist，commit `a25fe78`；第三轮补丁 `2af8a33`、`c699366`，见「已修复（第三轮）」），**仅剩 npm vulnerabilities**（见「待办任务」）。
+> 现状：`ci` 工作流全绿。`security` 工作流 5 个门禁中 **4 个已修复并验证**（Worktree secrets、Go vulnerabilities、Go license allowlist、npm license allowlist，commit `a25fe78`；第三轮补丁 `2af8a33`、`c699366`，第四轮见「已修复（第四轮）」），**仅剩 npm vulnerabilities**（53 个漏洞，需 zod4/react-router7/vite7/tiptap3.32 前端迁移，见「待办任务」）。
 
 ---
 
@@ -24,6 +24,14 @@
 1. **许可证门禁测试回归（commit `2af8a33`）**：`a25fe78` 把 `OFL-1.1` 加入 `allowed` 的同时保留了字体例外记录，例外变成白名单短路下的死配置，`test_exception_is_exact_and_requires_reason` 必挂（它假设 `exceptions[0]` 的 license 不在白名单里）→ 测试改为选取**首个 license 不在白名单里的例外**（真正走到例外匹配分支），全部例外都在白名单时 skip；另在本机无 openssl 时跳过 RSA 夹具（CI Linux 不受影响）。
 2. **Go vulnerabilities 新增漏洞（commit `c699366`）**：`golang.org/x/net` v0.61.0 的 GO-2026-6860（测试代码 `pkg/htmlsafe` 触发 html.Parse）→ 已升 **v0.62.0**；`github.com/yuin/goldmark` v1.7.8 的 GO-2026-5320（XSS，`plugins/website` docs 渲染触发）→ 已升 **v1.7.17**（该升级此前在工作区未提交，本提交一并落库）。两者合入后 `govulncheck -test ./...` 在 CI 工具链（go1.27.3）下干净；本机 go1.27.2 仍会报标准库 GO-2026-6809，属环境差异。
 3. **已知无害冗余**：`license-policy.json` 里两条 OFL-1.1 字体例外在白名单命中下不再生效（reason 文档仍有价值，保留）；若要清理，直接删除这两条 exception 即可，门禁行为不变。
+
+## 二点七、已修复（第四轮，2026-11-01，支付中台依赖引入的新违规）
+
+1. **Worktree secrets 单测在 CI 必挂的真根因**：secrets 任务 `go install` 装的 gitleaks 在 `$(go env GOPATH)/bin`，runner 默认 PATH 不含它，`shutil.which("gitleaks")` 在 `CI=true` 下直接 `self.fail`（单测步骤 exit 1，扫描步骤从未执行）→ install 步骤后追加 `echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"`。
+2. **Go vulnerabilities（支付/身份认证新依赖）**：`github.com/russellhaering/goxmldsig` v1.4.0 的 GO-2026-4753（SAML 登出/签名路径，`plugins/identity` 触发）→ 已升 **v1.6.0**（连带 etree v1.6.0、clockwork v0.5.0）。
+3. **Go license allowlist（flowlite replace）**：根 go.mod 以 `replace` 引入仓库内第一方模块 `github.com/nexadmin/flowlite`（Apache-2.0），licenses.py 对任何 replace 一律拒绝 → 改为**指向仓库目录内的 replace 放行**（第一方代码随本仓库 MIT 覆盖），指向外部的 replace 仍拒绝。注意：flowlite/ 目录尚无 LICENSE 文件（AGENTS.md 声称 Apache-2.0），待补。
+4. **npm license allowlist（bpmn-js）**：工作流插件引入 `bpmn-js@18.31.1`，license 字段为 "SEE LICENSE IN LICENSE"（实际是 bpmn.io 自定义许可：允许商用但必须保留画布 "Powered by bpmn.io" 水印；已核实前端未隐藏水印）→ 按精确值加 exception，理由注明水印条件，版本升级需重审。
+5. **gitleaks 新命中**：`plugins/pay/wechat_ext_test.go` 的测试夹具加入 fixture 枚举白名单。
 
 ## 三、任务 1：Worktree secrets 门禁（gitleaks）——已修复（commit `a25fe78`，下文方案即实际落地的内容，留作记录）
 

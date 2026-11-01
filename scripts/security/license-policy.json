@@ -35,6 +35,13 @@
       "version": "1.0.30001816",
       "license": "CC-BY-4.0",
       "reason": "Browser compatibility data used by build tooling; retain attribution and the CC-BY notice for redistributed data."
+    },
+    {
+      "ecosystem": "npm",
+      "name": "bpmn-js",
+      "version": "18.31.1",
+      "license": "SEE LICENSE IN LICENSE",
+      "reason": "bpmn.io license: free to use commercially provided the built-in 'Powered by bpmn.io' canvas watermark is retained; the workflow plugin does not hide it. Re-review on every version bump."
     }
   ]
 }

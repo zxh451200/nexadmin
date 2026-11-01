@@ -45,7 +45,10 @@ jobs:
           go-version: 1.27.3
           cache: false
       - name: Install open source gitleaks CLI (no commercial token)
-        run: go install github.com/zricethezav/gitleaks/v8@v8.28.0
+        run: |
+          go install github.com/zricethezav/gitleaks/v8@v8.28.0
+          # go install 装进 GOPATH/bin，runner 默认 PATH 不含它；单测里 shutil.which("gitleaks") 依赖这一步
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
       - name: Test security gates
         run: python3 -m unittest discover -s scripts/security -p 'test_*.py' -v
       - name: Scan checked out files, without Git history or inline bypasses

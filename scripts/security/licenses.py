@@ -213,7 +213,12 @@ def go_records(root):
         if not module or module.get("Main"):
             continue
         if module.get("Replace"):
-            raise ValueError("Go replacement requires explicit license review: " + module["Path"])
+            # 仓库内的本地模块（如 flowlite）是第一方代码，许可证随本仓库覆盖；
+            # 指向仓库之外的 replace 仍然拒绝，要求显式许可证审查。
+            rep_dir = module["Replace"].get("Dir") or ""
+            if not rep_dir or not Path(rep_dir).resolve().is_relative_to(ROOT):
+                raise ValueError("Go replacement requires explicit license review: " + module["Path"])
+            continue
         dependencies[module["Path"]] = module["Version"]
         if not package.get("ForTest"):
             imports.add(package["ImportPath"])

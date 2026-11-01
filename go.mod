@@ -4,9 +4,9 @@ go 1.26.0
 
 require (
 	github.com/gin-gonic/gin v1.10.1
-	github.com/nexadmin/flowlite v0.0.0
 	github.com/go-sql-driver/mysql v1.8.1
 	github.com/golang-jwt/jwt/v5 v5.2.2
+	github.com/nexadmin/flowlite v0.0.0
 	github.com/redis/go-redis/v9 v9.7.3
 	github.com/spf13/viper v1.15.0
 	go.uber.org/zap v1.27.0
@@ -19,12 +19,12 @@ require (
 )
 
 require (
-	github.com/beevik/etree v1.5.0
+	github.com/beevik/etree v1.6.0
 	github.com/crewjam/saml v0.5.1
 	github.com/go-ldap/ldap/v3 v3.4.15
 	github.com/gorilla/websocket v1.5.3
 	github.com/mozillazg/go-pinyin v0.21.0
-	github.com/russellhaering/goxmldsig v1.4.0
+	github.com/russellhaering/goxmldsig v1.6.0
 	github.com/tjfoc/gmsm v1.4.1
 	github.com/xuri/excelize/v2 v2.11.1-0.20260930021559-01a9ff32fb3c
 	github.com/yuin/goldmark v1.7.17
@@ -37,7 +37,7 @@ require (
 	github.com/dlclark/regexp2/v2 v2.2.1 // indirect
 	github.com/go-asn1-ber/asn1-ber v1.5.8 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/jonboulle/clockwork v0.2.2 // indirect
+	github.com/jonboulle/clockwork v0.5.0 // indirect
 	github.com/mattermost/xml-roundtrip-validator v0.1.0 // indirect
 	github.com/richardlehane/mscfb v1.0.8 // indirect
 	github.com/richardlehane/msoleps v1.0.6 // indirect
@@ -66,7 +66,7 @@ require (
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
-	github.com/jackc/pgx/v5 v5.9.2
+	github.com/jackc/pgx/v5 v5.9.2 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
