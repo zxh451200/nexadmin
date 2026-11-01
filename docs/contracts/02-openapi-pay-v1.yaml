@@ -1272,7 +1272,7 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/ApiError' }
     Conflict:
-      description: 当前状态不允许该操作（PAY_STATE_CONFLICT / PAY_REFUND_EXCEEDS / PAY_CHANNEL_ERROR）
+      description: 当前状态不允许该操作（PAY_STATE_CONFLICT / PAY_REFUND_EXCEEDS / PAY_CHANNEL_ERROR / PAY_PAYOUT_SETTLEMENT_TAKEN）
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ApiError' }
@@ -1323,6 +1323,7 @@ components:
             - PAY_IDEMPOTENCY_CONFLICT
             - PAY_CAPABILITY_UNSUPPORTED
             - PAY_NOTIFY_STALE
+            - PAY_PAYOUT_SETTLEMENT_TAKEN
             - PAY_INTERNAL
 
     Amount:

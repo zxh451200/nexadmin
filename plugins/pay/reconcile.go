@@ -592,6 +592,11 @@ func (s *Service) CreatePayout(ctx context.Context, in CreatePayoutInput) (*Payo
 				NetMinor: settlements[i].NetMinor,
 			}
 			if err := tx.Create(&item).Error; err != nil {
+				// 一张结算单只进一个批次：拦下它的是 uk_pay_payout_item_settlement。
+				// 折成 409 + 契约码给调用方，原错误 Wrap 进日志保住「哪个索引拦的」。
+				if isDuplicateKeyErr(err) {
+					return response.Conflict(errPayoutSettlementTaken).Wrap(err)
+				}
 				return err
 			}
 		}

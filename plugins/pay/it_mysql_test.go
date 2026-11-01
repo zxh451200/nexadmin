@@ -1659,9 +1659,15 @@ func itCrossPayoutUnique(t *testing.T, gdb *gorm.DB, ctx context.Context) {
 			ok++
 			continue
 		}
-		// 按索引名取证：两引擎都把索引写进错误里，且不受服务端语言影响。
-		if !strings.Contains(strings.ToLower(errs[i].Error()), itemIndex) {
-			t.Fatalf("落败方拿到的不是 %s 冲突，而是：%v（要的是明确错误，不是含糊的 500 文本）", itemIndex, errs[i])
+		// 落败方要拿到契约 409（不是驱动原文冒出去的 500），并且原错误仍 Wrap 在里面：
+		// 索引名是「谁拦下这笔出款」的唯一取证，两引擎都把它写进错误文本，不受服务端语言影响。
+		var re *response.Error
+		if !errors.As(errs[i], &re) || re.Key != errPayoutSettlementTaken || re.Status != 409 {
+			t.Fatalf("落败方拿到的是 %v, want 409 %s（重复出款要有明确契约码，调用方才能提示「已打过款」）",
+				errs[i], errPayoutSettlementTaken)
+		}
+		if !strings.Contains(strings.ToLower(re.Error()), itemIndex) {
+			t.Fatalf("409 里没有 %s —— 拦住这笔的索引被吞了，只剩一句通用文案：%s", itemIndex, re.Error())
 		}
 	}
 	if ok != 1 {
@@ -1681,5 +1687,21 @@ func itCrossPayoutUnique(t *testing.T, gdb *gorm.DB, ctx context.Context) {
 	}
 	if n := itCountRows(t, gdb, `SELECT COUNT(*) FROM plg_pay_payout_item WHERE batch_id = ?`, int64(winner.ID)); n != 1 {
 		t.Fatalf("胜者批次 %d 的明细 = %d 行, want 1", int64(winner.ID), n)
+	}
+
+	// 串行重试同一条断言：并发那一路要看调度，这一路不看——重复出款必须由同一个索引、
+	// 同一个契约码拦下，且 409 文本里仍带着索引名。
+	_, retryErr := s.CreatePayout(ctx, CreatePayoutInput{
+		SettlementIDs: []int64{settlementID}, Method: "channel", Note: "it cross payout retry",
+	})
+	var re *response.Error
+	if !errors.As(retryErr, &re) || re.Key != errPayoutSettlementTaken || re.Status != 409 {
+		t.Fatalf("重复建批串行重试拿到的是 %v, want 409 %s", retryErr, errPayoutSettlementTaken)
+	}
+	if !strings.Contains(strings.ToLower(re.Error()), itemIndex) {
+		t.Fatalf("串行重试的 409 里没有 %s：%s", itemIndex, re.Error())
+	}
+	if n := itCountRows(t, gdb, `SELECT COUNT(*) FROM plg_pay_payout_item WHERE settlement_id = ?`, settlementID); n != 1 {
+		t.Fatalf("结算单 %d 重试后有 %d 行明细, want 仍 1", settlementID, n)
 	}
 }

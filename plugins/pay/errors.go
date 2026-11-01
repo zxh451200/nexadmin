@@ -28,6 +28,10 @@ const (
 	// 或该下单方式）。必须与「渠道拒绝了这笔操作」分开：前者是配置与产品签约问题，
 	// 用户要看的是「换渠道或去渠道侧签约」，后者才是业务重试。
 	errCapabilityUnsupported = "pay.PAY_CAPABILITY_UNSUPPORTED"
+	// errPayoutSettlementTaken 是「这张结算单已经进过别的打款批次」。兜底的是
+	// uk_pay_payout_item_settlement，不是应用层预检：预检在并发下先放行再去撞索引，
+	// 结论一样，但调用方拿到的是驱动原文。折成 409 + 本码，原错误 Wrap 进日志留证。
+	errPayoutSettlementTaken = "pay.PAY_PAYOUT_SETTLEMENT_TAKEN"
 	// errNotifyStaleKey 对应哨兵错误 errNotifyStale（见下方 var）：Provider 报
 	// 「回调业务时间超前本地时钟」，HandleCallback 把它回成这个 i18n key。
 	errNotifyStaleKey         = "pay.PAY_NOTIFY_STALE"
@@ -72,6 +76,18 @@ const (
 )
 
 var errMockPending = errors.New("mock: pending")
+
+// dupKeyRe 认唯一索引冲突在两引擎上的写法：MySQL/MariaDB 是 1062
+// （Duplicate entry ... for key 'uk_x'），PG 是 23505（duplicate key value violates
+// unique constraint "uk_x"）。GORM 未开 TranslateError，拿不到 gorm.ErrDuplicatedKey，
+// 只能按驱动文本判——所以判定只做「是不是唯一约束拦的」，不猜具体是哪个索引。
+var dupKeyRe = regexp.MustCompile(`(?i)duplicate entry|error 1062|duplicate key value|unique constraint|sqlstate 23505`)
+
+// isDuplicateKeyErr 判底层错误是否由唯一索引拦下。调用方据此折成契约 409，
+// 并把原错误 Wrap 进去：索引名是「谁拦的」唯一取证，不能丢。
+func isDuplicateKeyErr(err error) bool {
+	return err != nil && dupKeyRe.MatchString(err.Error())
+}
 
 // errNotifyStale 是「回调携带的业务时间超前本地时钟超过允许窗口」的哨兵：
 // Provider 在 VerifyCallback 里用 fmt.Errorf("...: %w", errNotifyStale) 报，

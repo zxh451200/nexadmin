@@ -980,6 +980,12 @@ defineMock([
       const picked = settlements.filter((s) => ids.includes(s.id))
       if (picked.length !== ids.length || picked.length === 0) mockError(400, 'settlements not found')
       if (picked.some((s) => s.status !== 'confirmed')) mockError(409, 'settlement not confirmed')
+      // 一张结算单只进一个批次：真库由 uk_pay_payout_item_settlement 拦下并回 409
+      // PAY_PAYOUT_SETTLEMENT_TAKEN。mock 不拦的话，本地会把「重复出款」演成成功。
+      const taken = payoutItems.find((it) => ids.includes(it.settlementId))
+      if (taken) {
+        mockError(409, `settlement ${taken.settlementId} already in payout batch ${taken.batchId}`, 'PAY_PAYOUT_SETTLEMENT_TAKEN')
+      }
       const n = payouts.length + 1
       const p: PayPayoutBatch = {
         id: String(7471000000000000000n + BigInt(n)), tenantId: '1',
