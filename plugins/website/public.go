@@ -78,6 +78,7 @@ func (h *siteHandler) baseView(ctx context.Context, lang string, postLimit int) 
 		Socials: parseSocials(set.SocialsJSON), FriendLinks: parseFriendLinks(set.FriendLinksJSON),
 		ICP: set.ICP, FooterNote: set.FooterNote,
 		SeoKeywords: set.SeoKeywords, MarketEnabled: set.MarketEnabled,
+		Consent: set.ContactConsent, ConsentURL: set.ContactConsentURL,
 		Navs: data.Navs, Features: data.Features, Posts: data.Posts,
 		Year: time.Now().Year(),
 		Lang: languageOr(lang), Languages: Languages(),
@@ -272,6 +273,8 @@ func contactErrorText(v *siteView, code string) string {
 		return v.T("contact.err.content")
 	case "rate":
 		return v.T("contact.err.rate")
+	case "consent":
+		return v.T("contact.err.consent")
 	}
 	return v.T("contact.err.fail")
 }
@@ -291,6 +294,20 @@ func (h *siteHandler) contactSubmit(c *gin.Context) {
 	// 蜜罐命中：静默成功，不给机器人任何反馈。
 	if strings.TrimSpace(f.Company) != "" {
 		h.contactOK(c)
+		return
+	}
+	// 隐私同意：站点要求而未勾选就不入库。读设置失败同样拒绝——
+	// 把「查不到」当成「没开启」，等于这道合规要求可以被数据库抖动绕过。
+	set, err := h.svc.Settings(c.Request.Context())
+	if err != nil {
+		if h.log != nil {
+			h.log.Warn("website: 留言读取站点设置失败", zap.Error(err))
+		}
+		h.contactFail(c, http.StatusInternalServerError, "fail")
+		return
+	}
+	if set.ContactConsent && !f.Consent {
+		h.contactFail(c, http.StatusBadRequest, "consent")
 		return
 	}
 	if _, err := h.svc.CreateMessage(c.Request.Context(), f, c.ClientIP(), c.Request.UserAgent()); err != nil {

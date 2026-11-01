@@ -32,6 +32,9 @@ type SettingForm struct {
 	MarketEnabled *bool `json:"marketEnabled"`
 	// MessageNotifyEmail 同样是指针：不传保持原值（设置页分区块保存时不误改）。
 	MessageNotifyEmail *bool `json:"messageNotifyEmail"`
+	// ContactConsent / ContactConsentURL 是留言的隐私同意勾选：默认关，开启时地址必填。
+	ContactConsent    *bool  `json:"contactConsent"`
+	ContactConsentURL string `json:"contactConsentUrl"`
 	// I18nJSON 是非默认语言译文；服务层按白名单语言/字段清洗后入库。
 	I18nJSON string `json:"i18nJson"`
 }
@@ -67,6 +70,8 @@ type ContactForm struct {
 	Content string `json:"content" form:"content"`
 	// Company 是蜜罐：真人看不到这个字段，填了就是机器人（静默丢弃，不告诉对方）。
 	Company string `json:"company" form:"company"`
+	// Consent 是「已阅读并同意隐私政策」勾选：站点开启该要求时必须为 true。
+	Consent bool `json:"consent" form:"consent"`
 }
 
 // MessageQuery 是后台留言列表的筛选。

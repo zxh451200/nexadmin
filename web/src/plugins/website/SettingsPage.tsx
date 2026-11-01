@@ -34,8 +34,8 @@ import {
 /** 不随语言变化的字段：留在页面本地 state，译文态下置灰。 */
 type SharedTextKey =
   | 'siteName' | 'logoUrl' | 'homeCtaHref' | 'contactEmail'
-  | 'contactPhone' | 'qrCodeUrl' | 'qrCodeCaption' | 'icp'
-type SharedSettings = Pick<SiteSettingsForm, SharedTextKey | 'marketEnabled' | 'messageNotifyEmail'> & {
+  | 'contactPhone' | 'qrCodeUrl' | 'qrCodeCaption' | 'icp' | 'contactConsentUrl'
+type SharedSettings = Pick<SiteSettingsForm, SharedTextKey | 'marketEnabled' | 'messageNotifyEmail' | 'contactConsent'> & {
   socials: SocialLink[]
   friendLinks: FriendLink[]
 }
@@ -203,6 +203,15 @@ function SettingsFormBody({
         disabled={sharedDisabled}
         onCheckedChange={(v) => onSharedChange({ ...shared, messageNotifyEmail: v })}
       />
+      <SwitchRow
+        label={t('plugin_website.message.consent')}
+        description={t('plugin_website.message.consentHint')}
+        checked={shared.contactConsent}
+        disabled={sharedDisabled}
+        onCheckedChange={(v) => onSharedChange({ ...shared, contactConsent: v })}
+      />
+      {/* 政策地址只在开启后出现：关着时摆一个必填框只会让人以为现在就在拦投稿 */}
+      {shared.contactConsent ? sharedInput('contactConsentUrl') : null}
       {sharedInput('contactPhone')}
       <SharedFieldShell labelKey="plugin_website.fields.qrCodeUrl">
         <div className="flex items-center gap-2">
@@ -360,6 +369,8 @@ export default function SettingsPage() {
         icp: data.icp,
         marketEnabled: data.marketEnabled,
         messageNotifyEmail: data.messageNotifyEmail,
+        contactConsent: data.contactConsent,
+        contactConsentUrl: data.contactConsentUrl ?? '',
         socials: data.socials ?? [],
         friendLinks: data.friendLinks ?? [],
       })

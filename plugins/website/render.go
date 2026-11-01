@@ -139,39 +139,43 @@ var pageTmpl = map[string]*template.Template{
 
 // siteView 是模板数据。公共字段来自站点设置与导航；Title/Desc 用于 <title> 与 meta。
 type siteView struct {
-	SiteName     string
-	SiteDesc     string
-	LogoURL      string
-	HomeTitle    string
-	HomeSubtitle string
-	HomeCTALabel string
-	HomeCTAHref  string
-	ContactEmail string
-	ContactPhone string
-	QRCodeURL    string
+	SiteName      string
+	SiteDesc      string
+	LogoURL       string
+	HomeTitle     string
+	HomeSubtitle  string
+	HomeCTALabel  string
+	HomeCTAHref   string
+	ContactEmail  string
+	ContactPhone  string
+	QRCodeURL     string
 	QRCodeCaption string
-	Socials      []SocialLink
-	FriendLinks  []FriendLink
-	ICP          string
-	FooterNote   string
-	SeoKeywords  string
-	BaseURL      string // 绝对地址，用于 canonical / og:url / og:image
-	Path         string // 当前请求路径（含语言前缀），用于 canonical
-	Route        string // 去掉语言前缀的站内路径，用于导航高亮与语言切换
-	Query        string // 原始 query，语言切换时保留筛选
-	Navs         []Nav
-	Features     []Feature
-	Title        string
-	Desc         string
-	OGImage      string // 绝对地址；空 = 用站点默认分享图
-	Noindex      bool
-	Posts        []Post
-	Post         *Post
-	Page         *Page
-	Year         int
+	Socials       []SocialLink
+	FriendLinks   []FriendLink
+	ICP           string
+	FooterNote    string
+	SeoKeywords   string
+	BaseURL       string // 绝对地址，用于 canonical / og:url / og:image
+	Path          string // 当前请求路径（含语言前缀），用于 canonical
+	Route         string // 去掉语言前缀的站内路径，用于导航高亮与语言切换
+	Query         string // 原始 query，语言切换时保留筛选
+	Navs          []Nav
+	Features      []Feature
+	Title         string
+	Desc          string
+	OGImage       string // 绝对地址；空 = 用站点默认分享图
+	Noindex       bool
+	Posts         []Post
+	Post          *Post
+	Page          *Page
+	Year          int
 	// 联系页的提交结果：无 JS 的整页提交回跳后由模板渲染提示。
 	ContactSent  bool
 	ContactError string
+
+	// Consent / ConsentURL：站点开启隐私同意勾选时的勾选项与政策地址。
+	Consent    bool
+	ConsentURL string
 
 	Lang      Language
 	Languages []Language
@@ -313,7 +317,7 @@ func (v *siteView) JSStrings() template.JS {
 	m := map[string]string{}
 	for _, k := range []string{
 		"packaging", "packagingHint", "packFailed", "copied", "copyManual", "menuOpen", "menuClose", "emailCopy", "emailCopied",
-		"contactSending", "contactSent", "contactFailed", "contactRate", "contactErrName", "contactErrEmail", "contactErrContent",
+		"contactSending", "contactSent", "contactFailed", "contactRate", "contactErrName", "contactErrEmail", "contactErrContent", "contactErrConsent",
 		"chatErrSend", "chatErrLoad", "chatClosed", "chatGuest", "chatAgent",
 		"chatClosedTitle", "chatClosedAuto", "chatNewNote", "chatRateFailed", "chatUploadFailed", "chatInviteDefault",
 	} {

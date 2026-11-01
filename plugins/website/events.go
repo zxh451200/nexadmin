@@ -35,7 +35,7 @@ const messagePreviewRunes = 120
 func (s *Service) publishCreated(ctx context.Context, m *Message) {
 	event.Publish(ctx, EventMessageCreated, EventData{
 		ID: m.ID, Name: m.Name,
-		Preview: trimRunes(m.Content, messagePreviewRunes),
+		Preview:    trimRunes(m.Content, messagePreviewRunes),
 		OccurredAt: m.CreatedAt,
 	})
 }

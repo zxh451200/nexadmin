@@ -36,6 +36,11 @@ type Setting struct {
 	// MessageNotifyEmail 是新留言是否抄送一封到站点联系邮箱（ContactEmail）。
 	// 站内信始终发（零配置），这一项只管邮件；SMTP 未配置时发送自然跳过并记日志。
 	MessageNotifyEmail bool `gorm:"column:message_notify_email;not null;default:true" json:"messageNotifyEmail"`
+	// ContactConsent 打开后，官网留言必须先勾选「已阅读并同意隐私政策」。
+	// 默认关：升级不改存量站点的公开表单；交付客户时在站点设置里打开。
+	ContactConsent bool `gorm:"column:contact_consent;not null;default:false" json:"contactConsent"`
+	// ContactConsentURL 是被同意的政策地址：站内 /p/xxx 或完整 https:// 地址，开启时必填。
+	ContactConsentURL string `gorm:"column:contact_consent_url;size:255;not null" json:"contactConsentUrl"`
 	// I18nJSON 是非默认语言的字段译文：{"en-US":{"homeTitle":"…"}}；空 = 全部回退原文。
 	I18nJSON string `gorm:"type:text" json:"i18nJson"`
 	// SeedVersion 记录出厂内容补种进度：升级后只补一次新增的出厂条目，不复活管理员删掉的内容。

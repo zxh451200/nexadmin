@@ -51,6 +51,8 @@
       "searchPlaceholder": "搜索称呼、邮箱或内容",
       "notifyEmail": "新留言抄送邮箱",
       "notifyEmailHint": "把新收到的留言抄送一封到上面的联系邮箱；未配置 SMTP 时自动跳过。站内信不受这一项影响，始终发送。",
+      "consent": "留言需同意隐私政策",
+      "consentHint": "打开后，官网联系页的留言表单会多一个必勾项，没勾选就不入库。交付客户的站点建议打开——收集称呼、电话、邮箱属于处理个人信息。",
       "empty": "暂无留言"
     },
     "nav": {
@@ -127,6 +129,7 @@
       "homeCtaLabel": "主按钮文字",
       "homeCtaHref": "主按钮链接",
       "seoKeywords": "SEO 关键词",
+      "contactConsentUrl": "隐私政策地址",
       "contactEmail": "联系邮箱",
       "contactPhone": "联系电话",
       "qrCodeUrl": "二维码图片",
@@ -177,6 +180,7 @@
       "siteDesc": "一句话介绍，会用于标题与搜索摘要",
       "homeTitle": "为生产级后台系统\n而生的全栈框架",
       "homeCtaHref": "#quickstart",
+      "contactConsentUrl": "/p/privacy 或完整 https:// 地址",
       "contactEmail": "team@example.com",
       "contactPhone": "010-88886666",
       "logoUrl": "https://… 或点击右侧按钮上传",

@@ -1533,6 +1533,25 @@ html[data-scheme="light"] .shot-light { display: block; }
 .field input:focus-visible,
 .field textarea:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 1px; border-color: transparent; }
 .contact-hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+.contact-consent { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; color: var(--text-2); }
+/* 自绘复选框：站点没声明 color-scheme，原生控件在深色下会画成纯白方块，勾选/未勾选看不出区别。 */
+.contact-consent input {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin: 1px 0 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: var(--input-bg);
+  display: inline-grid;
+  place-content: center;
+}
+.contact-consent input:checked { background: var(--accent); border-color: var(--accent); }
+.contact-consent input:checked::after { content: ""; width: 8px; height: 4px; border: 2px solid #fff; border-top: 0; border-right: 0; transform: rotate(-45deg) translate(0, -1px); }
+.contact-consent input:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+.contact-consent a { color: inherit; text-decoration: underline; }
 .contact-status { margin: 0; font-size: 13px; }
 .contact-status-ok { color: var(--green); }
 .contact-status-err { color: var(--red); }

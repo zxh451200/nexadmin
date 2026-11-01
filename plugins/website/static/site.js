@@ -615,6 +615,7 @@
       if (code === 'name') return msg('contactErrName', '请填写称呼');
       if (code === 'email') return msg('contactErrEmail', '请填写有效的邮箱地址');
       if (code === 'content') return msg('contactErrContent', '留言内容至少 5 个字');
+      if (code === 'consent') return msg('contactErrConsent', '请先阅读并同意隐私政策');
       if (code === 'rate') return msg('contactRate', '发送太频繁，请稍后再试');
       return msg('contactFailed', '发送失败，请稍后重试');
     };
@@ -627,6 +628,8 @@
       if (!name) { show(errText('name'), false); return; }
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { show(errText('email'), false); return; }
       if (content.length < 5) { show(errText('content'), false); return; }
+      var consent = form.querySelector('[name="consent"]');
+      if (consent && !consent.checked) { show(errText('consent'), false); return; }
       if (submit) submit.disabled = true;
       show(msg('contactSending', '正在发送…'), true);
       fetch(form.action, {

@@ -593,6 +593,7 @@ website:
   contact_name_required: "请填写称呼"
   contact_email_invalid: "请填写有效的邮箱地址"
   contact_content_short: "留言内容至少 5 个字"
+  contact_consent_url_invalid: "开启隐私同意勾选后必须填政策地址：站内 /p/xxx 或完整 https:// 地址"
   message_not_found: "留言不存在或已删除"
   message_ids_empty: "请至少选择一条留言"
   message_ids_invalid: "留言编号不合法"

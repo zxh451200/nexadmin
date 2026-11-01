@@ -44,6 +44,10 @@ export interface SiteSettings {
   marketEnabled: boolean
   /** 新留言是否抄送一封到 contactEmail（SMTP 未配置时自动跳过） */
   messageNotifyEmail: boolean
+  /** 留言是否必须先勾选「已阅读并同意隐私政策」 */
+  contactConsent: boolean
+  /** 被同意的政策地址：站内 /p/xxx 或完整 https:// 地址（开启时必填） */
+  contactConsentUrl: string
   i18nJson: string
   updatedAt: string
 }

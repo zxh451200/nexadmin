@@ -40,8 +40,12 @@ const (
 
 // 测试缝用的最小面：core/notify 的 *Service 同时满足两者，nil 时方法是安全空操作。
 type (
-	msgSender  interface{ Send(ctx context.Context, m notify.Msg) error }
-	mailSender interface{ SendMail(ctx context.Context, to, tpl, lang string, d mail.Data) error }
+	msgSender interface {
+		Send(ctx context.Context, m notify.Msg) error
+	}
+	mailSender interface {
+		SendMail(ctx context.Context, to, tpl, lang string, d mail.Data) error
+	}
 )
 
 type holder struct {

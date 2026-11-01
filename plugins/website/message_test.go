@@ -197,7 +197,7 @@ func TestSetMessagesStatus(t *testing.T) {
 		db, m := mockDB(t)
 		m.ExpectBegin()
 		// 状态列 + 雪花 id 列表：批量接口就是一条 UPDATE ... WHERE id IN (...)，不做逐条循环。
-		m.ExpectExec(`UPDATE ` + "`plg_website_message`" + ` SET .status.=\?,.updated_at.=\? WHERE id IN \(\?,\?\)`).
+		m.ExpectExec(`UPDATE `+"`plg_website_message`"+` SET .status.=\?,.updated_at.=\? WHERE id IN \(\?,\?\)`).
 			WithArgs(MsgHandled, sqlmock.AnyArg(), int64(11), int64(12)).
 			WillReturnResult(sqlmock.NewResult(0, 2))
 		m.ExpectCommit()
@@ -251,7 +251,7 @@ func TestSetMessagesStatus(t *testing.T) {
 func TestDeleteMessages(t *testing.T) {
 	db, m := mockDB(t)
 	m.ExpectBegin()
-	m.ExpectExec(`DELETE FROM ` + "`plg_website_message`" + ` WHERE id IN \(\?,\?\)`).
+	m.ExpectExec(`DELETE FROM `+"`plg_website_message`"+` WHERE id IN \(\?,\?\)`).
 		WithArgs(int64(11), int64(12)).
 		WillReturnResult(sqlmock.NewResult(0, 2))
 	m.ExpectCommit()
@@ -331,6 +331,7 @@ func TestContactHoneypotDropsSilently(t *testing.T) {
 
 func TestContactJSONSuccessCallsService(t *testing.T) {
 	db, m := mockDB(t)
+	expectSetting(m, false, "")
 	m.ExpectBegin()
 	m.ExpectExec("INSERT INTO `plg_website_message`").WillReturnResult(sqlmock.NewResult(3, 1))
 	m.ExpectCommit()
@@ -353,6 +354,7 @@ func TestContactRateLimitShapes(t *testing.T) {
 	db, m := mockDB(t)
 	// 前两次放行并落库，第三次起限流（限流不再碰库，所以只有两轮 INSERT 期望）。
 	for i := 1; i <= 2; i++ {
+		expectSetting(m, false, "")
 		m.ExpectBegin()
 		m.ExpectExec("INSERT INTO `plg_website_message`").WillReturnResult(sqlmock.NewResult(int64(i), 1))
 		m.ExpectCommit()
@@ -608,3 +610,173 @@ func TestContactHitsSharedCounter(t *testing.T) {
 		t.Error("超限应写 Retry-After")
 	}
 }
+
+// ---- 隐私同意勾选 ----
+
+// expectSetting 排一条站点设置读取：投稿处理要先读它，才知道这个站点有没有开合规要求。
+func expectSetting(m sqlmock.Sqlmock, consent bool, policyURL string) {
+	m.ExpectQuery(`SELECT \* FROM .plg_website_setting.`).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "contact_consent", "contact_consent_url"}).
+			AddRow(1, consent, policyURL))
+}
+
+func TestContactConsentGate(t *testing.T) {
+	t.Run("开启但未勾选不入库", func(t *testing.T) {
+		db, m := mockDB(t)
+		expectSetting(m, true, "/p/privacy")
+		h := &siteHandler{svc: NewService(db)}
+		c, w := newFormContext(validForm(), "application/json")
+
+		h.contactSubmit(c)
+
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("status = %d body=%s, want 400", w.Code, w.Body.String())
+		}
+		if body := decodeOK(t, w); body["error"] != "consent" {
+			t.Errorf("error = %v, want consent", body["error"])
+		}
+		// 只读了一次设置，没有任何 INSERT 期望：没勾选就不该落库。
+		if err := m.ExpectationsWereMet(); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	t.Run("勾选后放行", func(t *testing.T) {
+		db, m := mockDB(t)
+		expectSetting(m, true, "/p/privacy")
+		m.ExpectBegin()
+		m.ExpectExec("INSERT INTO `plg_website_message`").WillReturnResult(sqlmock.NewResult(5, 1))
+		m.ExpectCommit()
+		h := &siteHandler{svc: NewService(db)}
+		f := validForm()
+		f.Set("consent", "1")
+		c, w := newFormContext(f, "application/json")
+
+		h.contactSubmit(c)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("status = %d body=%s", w.Code, w.Body.String())
+		}
+		if err := m.ExpectationsWereMet(); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	t.Run("站点没开启时不要求", func(t *testing.T) {
+		db, m := mockDB(t)
+		expectSetting(m, false, "")
+		m.ExpectBegin()
+		m.ExpectExec("INSERT INTO `plg_website_message`").WillReturnResult(sqlmock.NewResult(6, 1))
+		m.ExpectCommit()
+		h := &siteHandler{svc: NewService(db)}
+		c, w := newFormContext(validForm(), "application/json")
+
+		h.contactSubmit(c)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("关闭时不该拦投稿, got %d body=%s", w.Code, w.Body.String())
+		}
+	})
+
+	// 读设置失败要拒绝投稿：把「查不到」当成「没开启」，等于合规要求能被数据库抖动绕过。
+	t.Run("读设置失败按拒绝", func(t *testing.T) {
+		db, m := mockDB(t)
+		m.ExpectQuery(`SELECT \* FROM .plg_website_setting.`).WillReturnError(errors.New("db down"))
+		h := &siteHandler{svc: NewService(db)}
+		c, w := newFormContext(validForm(), "application/json")
+
+		h.contactSubmit(c)
+
+		if w.Code != http.StatusInternalServerError {
+			t.Fatalf("status = %d, want 500", w.Code)
+		}
+		if body := decodeOK(t, w); body["ok"] != false {
+			t.Errorf("body = %v, want ok=false", body)
+		}
+	})
+
+	// 无 JS 的整页提交：未勾选要回联系页并带上错误码，而不是停在一段 JSON。
+	t.Run("无JS回联系页", func(t *testing.T) {
+		db, m := mockDB(t)
+		expectSetting(m, true, "/p/privacy")
+		h := &siteHandler{svc: NewService(db)}
+		c, w := newFormContext(validForm(), "")
+
+		h.contactSubmit(c)
+
+		if got := c.Writer.Status(); got != http.StatusSeeOther {
+			t.Fatalf("应 303, got %d body=%s", got, w.Body.String())
+		}
+		if loc := w.Header().Get("Location"); loc != "/contact?error=consent" {
+			t.Errorf("Location = %q", loc)
+		}
+	})
+}
+
+// 勾选项只在开启时出现：关着时摆一个必勾框，等于替客户改了公开表单。
+func TestContactConsentTemplate(t *testing.T) {
+	render := func(v *siteView) string {
+		var b strings.Builder
+		if err := pageTmpl["contact"].ExecuteTemplate(&b, "layout", v); err != nil {
+			t.Fatal(err)
+		}
+		return b.String()
+	}
+
+	v := testView()
+	v.Consent = false
+	if off := render(v); strings.Contains(off, `name="consent"`) {
+		t.Error("站点未开启时不该出现同意勾选")
+	}
+
+	v = testView()
+	v.Consent = true
+	v.ConsentURL = "/p/privacy"
+	on := render(v)
+	if !strings.Contains(on, `name="consent"`) {
+		t.Error("开启后应出现同意勾选")
+	}
+	if !strings.Contains(on, `href="/p/privacy"`) {
+		t.Error("勾选旁应指向站点设置里的政策地址")
+	}
+	if !strings.Contains(on, "《隐私政策》") {
+		t.Error("政策链接文字缺失")
+	}
+}
+
+func TestSaveSettingsRequiresConsentURL(t *testing.T) {
+	db, m := mockDB(t)
+	expectSetting(m, false, "")
+
+	_, err := NewService(db).SaveSettings(context.Background(), SettingForm{
+		SiteName: "NexAdmin", ContactConsent: boolPtr(true), ContactConsentURL: "",
+	})
+	var be *response.Error
+	if !errors.As(err, &be) || be.Key != "website.contact_consent_url_invalid" {
+		t.Fatalf("开启却没填地址应报错, got %v", err)
+	}
+	// 校验在写库之前：只有那次读取，没有 UPDATE。
+	if err := m.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSaveSettingsAcceptsConsentURL(t *testing.T) {
+	db, m := mockDB(t)
+	expectSetting(m, false, "")
+	m.ExpectBegin()
+	m.ExpectExec("UPDATE `plg_website_setting`").WillReturnResult(sqlmock.NewResult(0, 1))
+	m.ExpectCommit()
+
+	_, err := NewService(db).SaveSettings(context.Background(), SettingForm{
+		SiteName: "NexAdmin", ContactConsent: boolPtr(true), ContactConsentURL: "https://example.com/privacy",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := m.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func boolPtr(v bool) *bool { return &v }

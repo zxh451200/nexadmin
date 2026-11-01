@@ -34,7 +34,7 @@ func defaultSetting() Setting {
 		// 新留言默认抄送站点联系邮箱：站内信只在本后台有人登录时才看得见，
 		// 邮件才是客户真正会读到的入口（SMTP 未配置时自然跳过）。
 		MessageNotifyEmail: true,
-		SeedVersion:   seedVersion,
+		SeedVersion:        seedVersion,
 		I18nJSON: enText(map[string]string{
 			"siteDesc":     "A source-delivered admin framework: Gin + GORM on the backend, React + shadcn/ui on the frontend, shipped as a single production binary.",
 			"homeTitle":    "The full-stack framework" + "\n" + "built for production admin",

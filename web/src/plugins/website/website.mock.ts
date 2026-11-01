@@ -25,6 +25,8 @@ const settings: SiteSettings = {
   footerNote: '框架区源码以 MIT 许可开源；业务与插件代码归各自作者。',
   marketEnabled: true,
   messageNotifyEmail: true,
+  contactConsent: false,
+  contactConsentUrl: '',
   i18nJson: '',
   updatedAt: ago(60 * 24),
 }

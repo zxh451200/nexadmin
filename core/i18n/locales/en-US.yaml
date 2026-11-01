@@ -593,6 +593,7 @@ website:
   contact_name_required: "Please enter your name."
   contact_email_invalid: "Please enter a valid email address."
   contact_content_short: "The message must be at least 5 characters."
+  contact_consent_url_invalid: "With the consent checkbox enabled, a policy URL is required: an on-site /p/xxx path or a full https:// address."
   message_not_found: "The message does not exist or has been deleted."
   message_ids_empty: "Select at least one message."
   message_ids_invalid: "Invalid message id."

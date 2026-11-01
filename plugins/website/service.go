@@ -243,6 +243,14 @@ func (s *Service) SaveSettings(ctx context.Context, f SettingForm) (*Setting, er
 	if f.MessageNotifyEmail != nil {
 		row.MessageNotifyEmail = *f.MessageNotifyEmail
 	}
+	if f.ContactConsent != nil {
+		row.ContactConsent = *f.ContactConsent
+	}
+	row.ContactConsentURL = trimLen(f.ContactConsentURL, 255)
+	// 开关开着就必须有可点的政策地址：勾选项没有正文可读，等于让人盲签，合规上站不住。
+	if row.ContactConsent && !footerURLValid(row.ContactConsentURL, false) {
+		return nil, response.BadRequest("website.contact_consent_url_invalid")
+	}
 	if err := s.db.WithContext(ctx).Save(row).Error; err != nil {
 		return nil, err
 	}

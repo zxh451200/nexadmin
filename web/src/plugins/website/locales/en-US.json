@@ -51,6 +51,8 @@
       "searchPlaceholder": "Search name, email or content",
       "notifyEmail": "Copy new messages by email",
       "notifyEmailHint": "Send a copy of every new message to the contact email above. Skipped automatically when SMTP is not configured. In-app notifications are always sent.",
+      "consent": "Messages require consent to the privacy policy",
+      "consentHint": "When on, the contact page adds a required checkbox and submissions without it are rejected. Recommended for delivered client sites — collecting a name, phone and email is processing personal data.",
       "empty": "No messages yet"
     },
     "nav": {
@@ -127,6 +129,7 @@
       "homeCtaLabel": "CTA label",
       "homeCtaHref": "CTA link",
       "seoKeywords": "SEO keywords",
+      "contactConsentUrl": "Privacy policy URL",
       "contactEmail": "Contact email",
       "contactPhone": "Contact phone",
       "qrCodeUrl": "QR code image",
@@ -177,6 +180,7 @@
       "siteDesc": "One-line intro used in title and search snippets",
       "homeTitle": "A full-stack framework\nbuilt for production admin systems",
       "homeCtaHref": "#quickstart",
+      "contactConsentUrl": "/p/privacy or a full https:// URL",
       "contactEmail": "team@example.com",
       "contactPhone": "010-88886666",
       "logoUrl": "https://… or upload with the button on the right",

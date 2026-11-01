@@ -70,6 +70,12 @@
         <span>Company</span>
         <input name="company" tabindex="-1" autocomplete="off">
       </label>
+      {{if .Consent}}
+      <label class="contact-consent">
+        <input type="checkbox" name="consent" value="1" required>
+        <span>{{.T "contact.consent"}} <a href="{{.ConsentURL}}" target="_blank" rel="noopener noreferrer">{{.T "contact.consentPolicy"}}</a></span>
+      </label>
+      {{end}}
       <button class="btn btn-primary" type="submit">{{.T "contact.send"}}</button>
     </form>
   </div>
