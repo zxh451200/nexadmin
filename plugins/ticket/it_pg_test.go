@@ -160,10 +160,18 @@ func TestITPostgresTicketBatch(t *testing.T) {
 		OptionList: []string{"App", "门店"}, Required: true, Enabled: true,
 	})
 	must(err)
+	if _, err = svc.SaveField(ctx, Field{Code: "serial_no", Label: "序列号", Type: FieldTypeText, Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
 	defs, err := svc.EnabledFields(ctx)
 	must(err)
-	if len(defs) != 1 || len(defs[0].OptionList) != 2 {
-		t.Fatalf("PG 上没读回字段定义/候选项：%+v", defs)
+	if len(defs) != 2 {
+		t.Fatalf("PG 上启用字段数 = %d，应为 2：%+v", len(defs), defs)
+	}
+	for _, d := range defs {
+		if d.Code == "order_channel" && (len(d.OptionList) != 2 || !d.Required) {
+			t.Fatalf("候选项/必填没从 TEXT/BOOLEAN 列读回来：%+v", d)
+		}
 	}
 
 	fresh, err := svc.Create(ctx, CreateInput{Title: "pg t", Content: "c", ReporterType: ReplierReporter})
@@ -180,18 +188,26 @@ func TestITPostgresTicketBatch(t *testing.T) {
 
 	agentTk, err := svc.Create(ctx, CreateInput{
 		Title: "pg agent", Content: "c", ReporterType: ReplierReporter, EnforceRequiredFields: true,
-		CustomValues: map[string]any{"order_channel": "App"},
+		CustomValues: map[string]any{"order_channel": "App", "serial_no": "SN-9"},
 	})
 	must(err)
 	var stored Ticket
 	must(gdb.Where("ticket_no = ?", agentTk.TicketNo).Take(&stored).Error)
-	if stored.CustomValuesRaw != `{"order_channel":"App"}` {
+	if stored.CustomValuesRaw != `{"order_channel":"App","serial_no":"SN-9"}` {
 		t.Fatalf("custom_values 列 = %q", stored.CustomValuesRaw)
 	}
-	updated, err := svc.SetCustomValues(ctx, agentTk.TicketNo, map[string]any{"order_channel": nil})
+	// nil 删除非必填项 + 同时改必填项的值
+	updated, err := svc.SetCustomValues(ctx, agentTk.TicketNo, map[string]any{"serial_no": nil, "order_channel": "门店"})
 	must(err)
-	if _, ok := updated.CustomValues["order_channel"]; ok {
+	if _, ok := updated.CustomValues["serial_no"]; ok {
 		t.Fatalf("nil 应删掉该字段：%+v", updated.CustomValues)
+	}
+	if updated.CustomValues["order_channel"] != "门店" {
+		t.Fatalf("改值没生效：%+v", updated.CustomValues)
+	}
+	// 删必填项必须被拒（合并后整份再校验）
+	if _, err := svc.SetCustomValues(ctx, agentTk.TicketNo, map[string]any{"order_channel": nil}); err == nil {
+		t.Fatal("删掉必填字段必须被拒")
 	}
 
 	// status 多值在 PG 上落成 IN
