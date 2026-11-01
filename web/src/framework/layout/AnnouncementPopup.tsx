@@ -37,13 +37,16 @@ export function AnnouncementPopup() {
     },
   })
 
-  if (dismissed || data.length === 0) return null
+  // Dialog 必须保持挂载、用 open 驱动关闭：若在 dismissed 时直接 return null，
+  // Radix 来不及走关闭流程，body 上的 pointer-events:none 不会被恢复，
+  // 整个页面从此点不动（实测复现过：Esc 后只剩一个残留按钮、内容区不可交互）。
+  if (data.length === 0) return null
 
   const total = data.length
   const current = data[Math.min(index, total - 1)]
 
   return (
-    <Dialog open onOpenChange={(o) => !o && setDismissed(true)}>
+    <Dialog open={!dismissed} onOpenChange={(o) => !o && setDismissed(true)}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>{current.title}</DialogTitle>
