@@ -19,6 +19,13 @@ import (
 //	NEXADMIN_PAY_LIVE_BILL_DATE=2026-10-30 \
 //	go test ./plugins/pay/ -run TestLiveChannelSmoke -v
 //
+// 没有正式商户也能先跑支付宝：开放平台的沙箱凭据与生产同形（appId + 应用私钥 + 支付宝公钥），
+// 只要把 gateway 指到沙箱即可（渠道配置里可配，默认生产）：
+//
+//	NEXADMIN_PAY_LIVE_ALIPAY_CONFIG='{"appId":"...","privateKey":"...","alipayPublicKey":"...","gateway":"https://openapi.alipaydev.com/gateway.do"}'
+//
+// 此时账单/预授权/转账会如实报「未签约」——那不是失败，是这几项本来就要正式商户+产品签约。
+//
 // 只读边界（刻意的）：探针只查不存在的单、下载证书、拉账单。绝不下单、绝不退款、
 // 绝不打款——那些动作会真动钱，该在有监控的窗口由人做，不该被一个 `go test` 顺手触发。
 //
@@ -127,7 +134,13 @@ func TestLiveChannelSmoke(t *testing.T) {
 				t.Logf("[%s] 账单 %s：%d 行，digest=%s；交易 %d / 退款 %d", ch.provider, billDate, bill.RowCount, bill.Digest[:12],
 					countBillKind(bill, BillKindTrade), countBillKind(bill, BillKindRefund))
 				if bill.RowCount == 0 {
-					t.Errorf("[%s] %s 账单解析出 0 行：要么那天真没交易，要么解析器不匹配该账单格式，需人工核对样例文件", ch.provider, billDate)
+					// mock 没有外部账单源（账单由进程内台账生成），空账单是它的常态；
+					// 真渠道空账单则可能是解析器不匹配该格式——那是必须人看的问题，不能降级成日志。
+					if ch.provider == "mock" {
+						t.Logf("[%s] 空账单（mock 无外部账单源，符合预期）", ch.provider)
+					} else {
+						t.Errorf("[%s] %s 账单解析出 0 行：要么那天真没交易，要么解析器不匹配该账单格式，需人工核对样例文件", ch.provider, billDate)
+					}
 				}
 			}
 			if caps.Payout {
