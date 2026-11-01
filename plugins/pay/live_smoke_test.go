@@ -120,26 +120,31 @@ func TestLiveChannelSmoke(t *testing.T) {
 					t.Errorf("[%s] 探针退款号竟查到成功退款", ch.provider)
 				}
 			}
+			// 账单/代付/预授权各自独立：某一项失败也必须把其余项跑完，否则一次联调只看到
+			// 第一个缺口（沙箱场景尤其明显：账单必失败，会把未签约的预授权/转账整段吞掉）。
 			if caps.Bill {
 				bp, ok := p.(BillProvider)
 				if !ok {
 					t.Errorf("[%s] 声明支持账单却没实现 BillProvider", ch.provider)
-					return
-				}
-				bill, err := bp.FetchBill(ctx, BillRequest{BillDate: billDate}, ch.cfg)
-				if err != nil {
+				} else if bill, err := bp.FetchBill(ctx, BillRequest{BillDate: billDate}, ch.cfg); err != nil {
 					t.Errorf("[%s] 拉取 %s 账单失败（这条只有真凭据能验，必须报）：%v", ch.provider, billDate, err)
-					return
-				}
-				t.Logf("[%s] 账单 %s：%d 行，digest=%s；交易 %d / 退款 %d", ch.provider, billDate, bill.RowCount, bill.Digest[:12],
-					countBillKind(bill, BillKindTrade), countBillKind(bill, BillKindRefund))
-				if bill.RowCount == 0 {
-					// mock 没有外部账单源（账单由进程内台账生成），空账单是它的常态；
-					// 真渠道空账单则可能是解析器不匹配该格式——那是必须人看的问题，不能降级成日志。
-					if ch.provider == "mock" {
-						t.Logf("[%s] 空账单（mock 无外部账单源，符合预期）", ch.provider)
-					} else {
-						t.Errorf("[%s] %s 账单解析出 0 行：要么那天真没交易，要么解析器不匹配该账单格式，需人工核对样例文件", ch.provider, billDate)
+				} else {
+					t.Logf("[%s] 账单 %s：%d 行，digest=%s；交易 %d / 退款 %d", ch.provider, billDate, bill.RowCount, bill.Digest[:12],
+						countBillKind(bill, BillKindTrade), countBillKind(bill, BillKindRefund))
+					if bill.RowCount == 0 {
+						// mock 没有外部账单源（账单由进程内台账生成），空账单是它的常态；
+						// 沙箱网关对任意日期都回只含 # 说明段的样本账单（解析器已把它归为空账单），
+						// 0 行也是常态；生产网关空账单则可能是解析器不匹配该格式——
+						// 那是必须人看的问题，不能降级成日志。
+						if ch.provider == "mock" || sandboxGatewayCfg(ch.cfg) {
+							reason := "沙箱样本账单"
+							if ch.provider == "mock" {
+								reason = "mock 无外部账单源"
+							}
+							t.Logf("[%s] 空账单（%s，符合预期）", ch.provider, reason)
+						} else {
+							t.Errorf("[%s] %s 账单解析出 0 行：要么那天真没交易，要么解析器不匹配该账单格式，需人工核对样例文件", ch.provider, billDate)
+						}
 					}
 				}
 			}
@@ -147,10 +152,7 @@ func TestLiveChannelSmoke(t *testing.T) {
 				pp, ok := p.(PayoutProvider)
 				if !ok {
 					t.Errorf("[%s] 声明支持代付却没实现 PayoutProvider", ch.provider)
-					return
-				}
-				tr, err := pp.QueryTransfer(ctx, liveProbeNo(), ch.cfg)
-				if err != nil {
+				} else if tr, err := pp.QueryTransfer(ctx, liveProbeNo(), ch.cfg); err != nil {
 					t.Logf("[%s] QueryTransfer 未成功（未签约或查无批次都会走到这里，把原文留着）：%v", ch.provider, err)
 				} else {
 					t.Logf("[%s] QueryTransfer 应答 state=%s accepted=%v pending=%v", ch.provider, tr.State, tr.Accepted, tr.Pending)
@@ -160,10 +162,7 @@ func TestLiveChannelSmoke(t *testing.T) {
 				ap, ok := p.(AuthProvider)
 				if !ok {
 					t.Errorf("[%s] 声明支持预授权却没实现 AuthProvider", ch.provider)
-					return
-				}
-				res, err := ap.QueryAuth(ctx, liveProbeNo(), ch.cfg)
-				if err != nil {
+				} else if res, err := ap.QueryAuth(ctx, liveProbeNo(), ch.cfg); err != nil {
 					t.Logf("[%s] QueryAuth 未成功（未签约资金授权产品会在这里现原形）：%v", ch.provider, err)
 				} else {
 					t.Logf("[%s] QueryAuth 应答 status=%s authNo=%s", ch.provider, res.Status, res.ChannelAuthNo)
@@ -176,6 +175,12 @@ func TestLiveChannelSmoke(t *testing.T) {
 // liveProbeNo 造一个必然不存在的单号。前缀带 PROBE 便于在渠道后台一眼认出是联调流量。
 func liveProbeNo() string {
 	return "PROBE" + time.Now().UTC().Format("20060102150405")
+}
+
+// sandboxGatewayCfg 判断渠道配置是否指向沙箱网关：沙箱的账单是只含说明段的样本、
+// 未签约产品回 HTML 错误页，都与生产行为不同，冒烟里按「符合预期」处理而不是失败。
+func sandboxGatewayCfg(cfg map[string]string) bool {
+	return strings.Contains(strings.ToLower(cfg["gateway"]), "sandbox")
 }
 
 func countBillKind(bill *Bill, kind string) int {

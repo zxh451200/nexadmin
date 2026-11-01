@@ -18,6 +18,9 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
+
+	"golang.org/x/text/encoding/simplifiedchinese"
 
 	"nexadmin/core/response"
 )
@@ -420,6 +423,13 @@ func (p alipayProvider) call(ctx context.Context, cfg map[string]string, key *rs
 	}
 	var root map[string]json.RawMessage
 	if err := json.Unmarshal(body, &root); err != nil {
+		// 未签约的产品（沙箱尤其明显）网关会直接回一段 HTML 错误页而不是 JSON。
+		// 按形状把话说清，别让人从「不是 JSON」里猜是网络断了还是权限没开。
+		if head := bytes.TrimSpace(body); len(head) > 0 && head[0] == '<' {
+			return nil, channelGatewayError("alipay", fmt.Sprintf(
+				"网关返回 HTML 错误页而非 JSON（HTTP %d）——通常是该产品未签约或网关临时异常，页面开头：%s",
+				resp.StatusCode, truncate(string(head), 120)))
+		}
 		return nil, channelGatewayError("alipay", "网关应答不是 JSON："+truncate(string(body), 200))
 	}
 	nodeKey := strings.ReplaceAll(method, ".", "_") + "_response"
@@ -878,7 +888,8 @@ func (p alipayProvider) FetchBill(ctx context.Context, in BillRequest, cfg map[s
 	}
 	rows, err := parseAlipayBill(raw)
 	if err != nil {
-		return nil, channelGatewayError("alipay", err.Error())
+		// 解析器自己的错误已带 "alipay:" 前缀，别再套一层（现场见过 "alipay: alipay: …"）。
+		return nil, channelGatewayError("alipay", strings.TrimPrefix(err.Error(), "alipay: "))
 	}
 	sum := sha256.Sum256(raw)
 	return &Bill{Rows: rows, Digest: hex.EncodeToString(sum[:]), RowCount: len(rows)}, nil
@@ -915,6 +926,21 @@ func downloadAlipayBill(ctx context.Context, downloadURL string) ([]byte, error)
 	if len(bytes.TrimSpace(raw)) == 0 {
 		return nil, channelGatewayError("alipay", "账单内容为空")
 	}
+	// 渠道没给账单文件时（沙箱不提供账单下载、该产品未签约、链接过期），这里拿到的往往是
+	// 一段 HTML/JSON 页面。先按魔数判掉：否则它会流进 CSV 解析器，报成「找不到表头行」，
+	// 运维还得猜是解析器坏了还是没签约。把 content-type 与开头字节直接带出来。
+	if head := bytes.TrimSpace(raw); head[0] != 'P' { // 账单压缩包以 PK 开头
+		if head[0] == '<' || head[0] == '{' || head[0] == '[' {
+			kind := "JSON"
+			if head[0] == '<' {
+				kind = "HTML"
+			}
+			return nil, channelGatewayError("alipay", fmt.Sprintf(
+				"渠道没返回账单文件，而是一段 %s（HTTP %d，content-type=%q，开头 %x）——"+
+					"沙箱一般不开账单下载；正式商户需先签约账单产品",
+				kind, resp.StatusCode, resp.Header.Get("Content-Type"), head[:min(len(head), 32)]))
+		}
+	}
 	return raw, nil
 }
 
@@ -926,17 +952,70 @@ func parseAlipayBill(raw []byte) ([]BillRow, error) {
 		return nil, err
 	}
 	var rows []BillRow
+	// recognized 标记「至少认出一份官方账单内容」：明细文件、汇总表、纯说明段样本都算。
+	// 渠道明确交出的账单即使 0 行流水也是合法空账单（沙箱实测：明细=说明段+完整表头+
+	//「交易合计：0笔」，汇总是另一张表）。什么都没认出来而总行数为 0，仍按既有契约报错——
+	// 可能是解析器与账单格式不匹配，必须人看。
+	recognized := false
 	for _, data := range files {
+		if alipayBillIsSummaryCSV(data) {
+			// 汇总 CSV 是另一张表（门店/笔数/净额），表头没有流水列名，流进明细解析器
+			// 只会报「找不到表头行」——沙箱与生产的账单 ZIP 都带这份，直接跳过。
+			recognized = true
+			continue
+		}
 		parsed, err := parseAlipayBillCSV(data)
 		if err != nil {
+			// 整份文件只有 # 说明段、没有明细表头（老沙箱样本形状）：合法空账单；
+			// 解析失败只留给连说明段都不像的内容。
+			if alipayBillSummaryOnly(data) {
+				recognized = true
+				continue
+			}
 			return nil, err
 		}
+		// 认出表头的文件有流水行自然算数；0 行时只有带官方明细标记的才算「认出」，
+		// 无标记的表头+0 行可能是格式没对齐，留给下面的守卫报错。
+		recognized = recognized || len(parsed) > 0 || alipayBillIsDetailCSV(data)
 		rows = append(rows, parsed...)
 	}
-	if len(rows) == 0 {
+	if len(rows) == 0 && !recognized {
 		return nil, fmt.Errorf("alipay: 账单未解析出任何流水行（表头缺失或不是 UTF-8 CSV）：%s", truncate(string(raw), 160))
 	}
 	return rows, nil
+}
+
+// alipayBillIsSummaryCSV 判断一份 CSV 是否是「业务汇总」表（按门店的笔数/净额汇总），
+// 不是流水，跳过不解析。按内容标记认，不按文件名——文件名格式渠道随时会调。
+func alipayBillIsSummaryCSV(data []byte) bool {
+	return strings.Contains(string(alipayBillToUTF8(data)), "支付宝业务汇总查询")
+}
+
+// alipayBillIsDetailCSV 判断一份 CSV 是否是官方「业务明细」文件：带 #支付宝业务明细查询
+// 说明段。这种文件 0 行流水 = 渠道明确交出的空账单。
+func alipayBillIsDetailCSV(data []byte) bool {
+	return strings.Contains(string(alipayBillToUTF8(data)), "支付宝业务明细查询")
+}
+
+// alipayBillSummaryOnly 判断一份 CSV 是否只是账单的说明段：所有非空行都以 # 开头
+// （csv 读取器按注释整段跳过），且至少一行点名「支付宝业务」。沙箱对任意日期都回
+// 这种只有汇总头、没有明细段的样本。没有「支付宝业务」字样的纯注释文件不算——
+// 那可能是任何东西，仍按解析失败处理，不能静默当空账单。
+func alipayBillSummaryOnly(data []byte) bool {
+	sawSection := false
+	for _, line := range strings.Split(string(alipayBillToUTF8(data)), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if !strings.HasPrefix(line, "#") {
+			return false
+		}
+		if strings.Contains(line, "支付宝业务") {
+			sawSection = true
+		}
+	}
+	return sawSection
 }
 
 // splitAlipayBillFiles 返回账单里所有需要解析的 CSV 内容（ZIP 会取其中每个 .csv 条目，
@@ -995,7 +1074,23 @@ var alipayBillAliases = map[string][]string{
 // parseAlipayBillCSV 在一份 CSV 里定位表头后逐行取值。
 // Comment='#' 让新版账单的 # 说明段被 csv 读取器跳过；FieldsPerRecord=-1 容忍
 // 说明段/汇总段的列数与表头不一致。
+// alipayBillToUTF8 把账单原文归一成 UTF-8。支付宝账单是 GBK/GB18030，按 UTF-8 判表头
+// 永远找不到列名；已经是合法 UTF-8 的原样返回（新格式账单可能已是 UTF-8）。
+func alipayBillToUTF8(b []byte) []byte {
+	if utf8.Valid(b) {
+		return b
+	}
+	out, err := io.ReadAll(simplifiedchinese.GB18030.NewDecoder().Reader(bytes.NewReader(b)))
+	if err != nil || !utf8.Valid(out) {
+		return b
+	}
+	return out
+}
+
 func parseAlipayBillCSV(data []byte) ([]BillRow, error) {
+	// 支付宝账单是 GBK/GB18030 编码（旧版 CSV 尤其如此）：直接按 UTF-8 读，表头行永远是
+	// 乱码，于是「找不到表头行」——真凭据联调时才暴露的那类缺陷。先归一成 UTF-8 再解析。
+	data = alipayBillToUTF8(data)
 	r := csv.NewReader(bytes.NewReader(data))
 	r.Comment = '#'
 	r.FieldsPerRecord = -1

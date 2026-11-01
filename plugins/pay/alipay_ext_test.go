@@ -675,6 +675,30 @@ func TestAlipayFetchBillValidatesDate(t *testing.T) {
 	}
 }
 
+// TestAlipayGatewayHTMLPage 未签约的产品（沙箱实测资金授权）网关直接回一段 HTML
+// 错误页而不是 JSON：错误文案必须把形状与「未签约」线索说清，别让人从
+//「不是 JSON」里猜是网络断了还是权限没开。
+func TestAlipayGatewayHTMLPage(t *testing.T) {
+	_, priv, pub := testRSA(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte("<!DOCTYPE html><html><head><title>支付宝 - 网上支付</title></head><body></body></html>"))
+	}))
+	t.Cleanup(srv.Close)
+	cfg := map[string]string{"appId": "2021000000000001", "privateKey": priv, "alipayPublicKey": pub, "gateway": srv.URL}
+	_, err := (alipayProvider{}).Query(context.Background(), "PAY-HTML-1", cfg)
+	if err == nil {
+		t.Fatal("HTML 错误页被当成正常应答")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "HTML") || !strings.Contains(msg, "未签约") {
+		t.Fatalf("错误文案应说明是 HTML 错误页并给未签约线索：%v", msg)
+	}
+	if !strings.Contains(msg, "支付宝 - 网上支付") {
+		t.Fatalf("错误文案应带上页面开头原文便于辨认：%v", msg)
+	}
+}
+
 // ---- 代付 ----
 
 func TestAlipayPayoutProvider(t *testing.T) {
