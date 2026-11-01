@@ -439,7 +439,15 @@ func (p alipayProvider) call(ctx context.Context, cfg map[string]string, key *rs
 		return nil, channelGatewayError("alipay", "网关应答缺少签名")
 	}
 	if !alipayVerify(pub, string(raw), sig) {
-		return nil, channelGatewayError("alipay", "网关应答验签失败")
+		// 验签失败时把节点里的 code/sub_code/sub_msg 一并透出来：真实原因九成是
+		// 「签名私钥与后台登记的应用公钥不匹配」（isv.invalid-signature），
+		// 只说「验签失败」等于让运维去猜公钥/私钥/网关哪个错了。
+		f := alipayFields(raw)
+		detail := strings.TrimSpace(strings.Join([]string{
+			f["code"], f["sub_code"], truncate(f["sub_msg"], 160),
+		}, " "))
+		return nil, channelGatewayError("alipay", "网关应答验签失败（"+
+			strings.TrimSpace(detail)+"）——核对应用公钥是否为该私钥的配对公钥、支付宝公钥是否取自同一应用")
 	}
 	return alipayFields(raw), nil
 }

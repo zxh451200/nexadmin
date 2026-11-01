@@ -269,3 +269,25 @@ func probeItem(t *testing.T, res *ProbeResult, name string) ProbeCheck {
 	t.Fatalf("自检结果里没有 %q 项（实际：%s）", name, strings.Join(got, ", "))
 	return ProbeCheck{}
 }
+
+// 验签失败时把网关给的 code/sub_code 带出来：真实运维现场九成是「私钥与后台登记的应用公钥
+// 不配对」，只说「验签失败」会让人去查网络或网关。这里用一个签名对不上的应答制造不匹配。
+func TestAlipayVerifyFailureSurfacesSubCode(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"error_response":{"code":"40002","msg":"Invalid Arguments",` +
+			`"sub_code":"isv.invalid-signature","sub_msg":"验签出错，建议检查签名私钥与应用公钥是否匹配"},` +
+			`"sign":"AAAA"}`))
+	}))
+	defer srv.Close()
+
+	if _, err := (alipayProvider{}).Query(context.Background(), "PROBE-NOPE", alipayProbeConfig(t, srv.URL)); err == nil {
+		t.Fatal("应答没通过验签却被当成成功")
+	} else {
+		for _, want := range []string{"验签失败", "isv.invalid-signature", "应用公钥"} {
+			if !strings.Contains(err.Error(), want) {
+				t.Fatalf("错误里缺 %q，运维只能靠猜：%v", want, err)
+			}
+		}
+	}
+}
