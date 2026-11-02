@@ -823,3 +823,14 @@ license:
   read_failed: "读取授权文件失败：%s"
   id_invalid: "非法的插件 id %s"
   revoked: "授权已被发行方吊销（序列号 %s%s）；请联系发行方确认吊销原因；如需继续使用，请重新签发授权"
+realname:
+  name_required: 请填写姓名：核验需要姓名和证件号同时具备
+  id_type_unsupported: 暂不支持该证件类型的在线核验，当前只支持大陆居民身份证
+  provider_unknown: 未知的在线核验服务商，请选择已实现接入的 provider
+  provider_required: 开启在线核验前需要先选择服务商
+  credentials_required: 开启在线核验前需要先配置 AppKey 或 AppSecret
+  endpoint_invalid: 核验服务地址不合法，只接受 https 地址
+  status_invalid: 核验状态筛选值不合法
+  provider_status: 核验服务返回异常状态 %s
+  provider_unreachable: 无法连接核验服务，请检查服务地址与网络
+  provider_bad_response: 核验服务响应格式错误，响应体需带回 matched 字段

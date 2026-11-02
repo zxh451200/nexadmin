@@ -25,9 +25,10 @@
 #       客户端用 `nexadmin plugin verify --sig <文件> --key <公钥文件> <zip>` 校验。
 # 私有 GitHub：NEXADMIN_MARKET_GITHUB_API 覆盖 API 根地址（GitHub Enterprise）。
 # 注意：edition/version 以各插件 plugin.yaml 为准，下载/安装时交叉校验。
-# 发布状态（2026-10-31 核对）：17 条目录全部已同步到 zxh451200/nexadmin-plugins 的对应 subdir，
+# 发布状态（2026-11-03 核对）：18 条目录里 17 条已同步到 zxh451200/nexadmin-plugins 的对应 subdir，
 #   包内 edition/version 与这里一致；ref 留空 = 跟随默认分支，要锁版本时再打 tag 并填 ref。
-#   free 7 个：codegen/cron/crm/imports/ldap/maps/totp；pro 10 个：其余。
+#   realname 尚未 pack 上传：市场卡片能显示，但点「安装」会 404；母版仓库已内置它，本地直接可用。
+#   free 8 个：codegen/cron/crm/imports/ldap/maps/realname/totp；pro 10 个：其余。
 #   totp/ldap 未默认编译，用户需按需安装；不要因免费分层自动叠加安全/身份钩子。
 plugins:
   - id: assistant
@@ -186,6 +187,20 @@ plugins:
       en-US:
         name: Map Service
         description: 'Free basic map plugin: enable AMap, Baidu or Google as needed. Picking runs in the browser; reverse geocoding uses the backend proxy without exposing server keys.'
+  - id: realname
+    name: 证件实名
+    description: 免费基础证件能力：身份证号格式校验与归属地/生日/性别解析、二要素在线核验（厂商 provider 默认关闭，密钥只存服务端）、核验结论台账留痕（只存摘要与脱敏串，不落明文）。
+    category: identity
+    edition: free
+    version: 0.1.0
+    price: 免费
+    author: NexAdmin
+    repo: zxh451200/nexadmin-plugins
+    subdir: realname
+    i18n:
+      en-US:
+        name: ID Verification
+        description: 'Free basic ID-card capability: validates mainland resident ID numbers and parses region, birthday and sex; optional two-element name-number verification through a pluggable provider that is off by default with secrets kept server-side; the ledger stores only digests and masked values.'
   - id: report
     name: 报表中心
     description: 报表中心 + 数据大屏（结构化数据集、参数化查询、租户与数据范围隔离；图表/表格/指标卡；画布式大屏）。

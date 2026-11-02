@@ -823,3 +823,14 @@ license:
   read_failed: "Failed to read the license file: %s"
   id_invalid: "Invalid plugin ID %s"
   revoked: "The license was revoked by the publisher (serial %s%s). Contact the publisher about the reason; request a new license to keep using the plugin"
+realname:
+  name_required: Enter the name - verification needs both a name and an ID number
+  id_type_unsupported: Online verification currently supports only the mainland resident ID card
+  provider_unknown: Unknown verification provider; pick one that is implemented
+  provider_required: Choose a provider before enabling online verification
+  credentials_required: Set AppKey or AppSecret before enabling online verification
+  endpoint_invalid: Invalid verification endpoint; only https addresses are accepted
+  status_invalid: Invalid verification status filter
+  provider_status: The verification service replied with status %s
+  provider_unreachable: Cannot reach the verification service; check the endpoint and network
+  provider_bad_response: Bad response from the verification service; the body must carry a matched field
