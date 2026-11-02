@@ -6,6 +6,7 @@ import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
 import { cn } from '@/lib/utils'
 import { precheckFile, useUploadConfig } from '@/framework/upload/precheck'
+import { Lightbox } from '@/framework/upload/Lightbox'
 import { uploadFile } from '@/framework/upload/uploadClient'
 import { toWebp, webpName } from '@/framework/upload/toWebp'
 import { ResponsiveDialog } from './ResponsiveDialog'
@@ -49,6 +50,7 @@ export function ImageUrlField({
   const inputRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
   const [open, setOpen] = useState(false)
+  const [zoom, setZoom] = useState(false)
 
   const pick = async (file: File | undefined) => {
     if (!file) return
@@ -115,7 +117,27 @@ export function ImageUrlField({
         ) : null}
       </div>
       {hint && !crop ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
-      {value ? <img src={value} alt="" loading="lazy" className={cn('rounded-md border border-border bg-muted/40 object-contain p-1', previewClassName)} /> : null}
+      {/* 缩略图与文件管理同一交互：点开就是 Lightbox 大图，SVG/透明底也看得清 */}
+      {value ? (
+        <>
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => setZoom(true)}
+            aria-label={t('common.preview')}
+            title={t('common.preview')}
+            className="block rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed"
+          >
+            <img
+              src={value}
+              alt=""
+              loading="lazy"
+              className={cn('rounded-md border border-border bg-muted/40 object-contain p-1', previewClassName)}
+            />
+          </button>
+          <Lightbox open={zoom} onOpenChange={setZoom} src={value} alt={ariaLabel ?? title} />
+        </>
+      ) : null}
       <input
         ref={inputRef}
         type="file"
