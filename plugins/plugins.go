@@ -18,6 +18,7 @@ import (
 	_ "nexadmin/plugins/maps"
 	_ "nexadmin/plugins/media"
 	_ "nexadmin/plugins/pay"
+	_ "nexadmin/plugins/realname"
 	_ "nexadmin/plugins/report"
 	_ "nexadmin/plugins/scim"
 	_ "nexadmin/plugins/security"

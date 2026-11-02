@@ -1,0 +1,68 @@
+{
+  "plugin_realname": {
+    "menu": "证件实名",
+    "title": "证件实名",
+    "description": "免费基础证件能力：身份证号格式校验与归属地/生日/性别解析、二要素在线核验（服务商默认关闭）、核验结论台账留痕（只存摘要与脱敏串，明文不落库）。",
+    "name": "姓名",
+    "number": "身份证号",
+    "remark": "备注",
+    "submit": "提交核验",
+    "parseOnly": "仅校验解析",
+    "parseResult": "解析结果",
+    "parseIdle": "填好姓名与证件号后点「仅校验解析」或直接提交核验，这里会显示归属地、出生日期与性别。",
+    "region": "归属地",
+    "birthday": "出生日期",
+    "sex": "性别",
+    "age": "年龄",
+    "sexValue": {
+      "male": "男",
+      "female": "女"
+    },
+    "legacyHint": "15 位旧证号码，已按规则升成 18 位；15 位号码本身没有校验位。",
+    "historicalHint": "归属地代码已撤销（撤县设区等），此处按历史区划显示。",
+    "ledgerHint": "台账只保存姓名与号码的脱敏串、以及号码的 sha256 摘要，明文不落库。",
+    "doneOnline": "已提交在线核验",
+    "doneOffline": "在线核验未启用：本次只给出格式结论，已记入台账",
+    "configTitle": "核验设置",
+    "enabled": "启用在线核验",
+    "enabledHint": "开启后每次核验按次调用外部服务；服务商、https 地址与密钥配齐才允许保存。",
+    "provider": "核验服务商",
+    "providerNone": "未选择",
+    "providerGeneric": "通用 HTTP 契约（自建网关）",
+    "endpoint": "服务地址",
+    "appKey": "AppKey",
+    "appSecret": "AppSecret",
+    "secretHint": "留空表示保持不变；密钥只存服务端，接口只回「有没有」。",
+    "timeoutMs": "超时（毫秒）",
+    "dailyLimit": "每日调用上限",
+    "searchPlaceholder": "搜索姓名或号码片段",
+    "statusLabel": "结论",
+    "allStatuses": "全部结论",
+    "status": {
+      "valid": "格式通过",
+      "invalid": "格式不通过",
+      "match": "核验一致",
+      "mismatch": "核验不一致",
+      "error": "核验未完成"
+    },
+    "detail": "详情",
+    "operator": "操作人",
+    "time": "时间",
+    "empty": "还没有核验记录：上方提交一次，这里就会留痕。",
+    "reason": {
+      "empty": "号码为空",
+      "length": "号码长度不是 15 位或 18 位",
+      "chars": "号码含非法字符",
+      "region": "归属地代码不存在",
+      "birthday": "出生日期不合法",
+      "birthday_future": "出生日期晚于今天",
+      "checksum": "校验位不符，多半是号码抄错了一位",
+      "daily_limit": "今日在线核验额度已用完",
+      "provider_error": "在线核验调用失败"
+    },
+    "perm": {
+      "verify": "发起核验",
+      "config": "核验设置"
+    }
+  }
+}

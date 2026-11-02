@@ -21,7 +21,7 @@ import (
 // Only these general-purpose enhancements move to Free; other plugins stay Pro.
 var freePluginIDs = map[string]bool{
 	"cron": true, "codegen": true, "imports": true, "totp": true,
-	"ldap": true, "maps": true, "crm": true,
+	"ldap": true, "maps": true, "crm": true, "realname": true,
 }
 
 func editionContractRoot(t *testing.T) string {

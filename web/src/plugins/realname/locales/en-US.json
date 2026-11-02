@@ -1,0 +1,68 @@
+{
+  "plugin_realname": {
+    "menu": "ID Verification",
+    "title": "ID Verification",
+    "description": "Free basic ID-card capability: format validation of mainland resident ID numbers with region, birthday and sex parsing, optional two-element name/number verification (provider off by default), and a verification ledger that keeps only digests and masked values.",
+    "name": "Name",
+    "number": "ID number",
+    "remark": "Note",
+    "submit": "Run verification",
+    "parseOnly": "Check format only",
+    "parseResult": "Parsed result",
+    "parseIdle": "Fill in the name and ID number, then use Check format only or submit; region, birthday and sex appear here.",
+    "region": "Region",
+    "birthday": "Birthday",
+    "sex": "Sex",
+    "age": "Age",
+    "sexValue": {
+      "male": "Male",
+      "female": "Female"
+    },
+    "legacyHint": "A 15-digit legacy number, upgraded to 18 digits. Legacy numbers carry no check digit of their own.",
+    "historicalHint": "This region code has been retired (county-to-district changes and similar); it is shown with its historical name.",
+    "ledgerHint": "The ledger stores only masked name/number values plus a sha256 digest of the number; plaintext is never written to the database.",
+    "doneOnline": "Sent to online verification",
+    "doneOffline": "Online verification is off: only the format verdict was recorded",
+    "configTitle": "Verification settings",
+    "enabled": "Enable online verification",
+    "enabledHint": "Each verification then calls a paid external service. Saving requires a provider, an https endpoint and a credential.",
+    "provider": "Provider",
+    "providerNone": "Not selected",
+    "providerGeneric": "Generic HTTP contract (self-hosted gateway)",
+    "endpoint": "Endpoint",
+    "appKey": "AppKey",
+    "appSecret": "AppSecret",
+    "secretHint": "Leave empty to keep the stored secret. Secrets stay server-side; the API only reports whether one exists.",
+    "timeoutMs": "Timeout (ms)",
+    "dailyLimit": "Daily call limit",
+    "searchPlaceholder": "Search a name or number fragment",
+    "statusLabel": "Verdict",
+    "allStatuses": "All verdicts",
+    "status": {
+      "valid": "Format OK",
+      "invalid": "Format invalid",
+      "match": "Name matches",
+      "mismatch": "Name mismatch",
+      "error": "Not completed"
+    },
+    "detail": "Detail",
+    "operator": "Operator",
+    "time": "Time",
+    "empty": "No verification yet. Submit one above and it is recorded here.",
+    "reason": {
+      "empty": "Number is empty",
+      "length": "Number is neither 15 nor 18 digits",
+      "chars": "Number contains invalid characters",
+      "region": "Region code does not exist",
+      "birthday": "Invalid birth date",
+      "birthday_future": "Birth date is in the future",
+      "checksum": "Check digit mismatch, usually one mistyped digit",
+      "daily_limit": "Daily online verification quota exhausted",
+      "provider_error": "Online verification call failed"
+    },
+    "perm": {
+      "verify": "Run verification",
+      "config": "Verification settings"
+    }
+  }
+}

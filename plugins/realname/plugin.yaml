@@ -1,0 +1,25 @@
+id: realname
+name: 证件实名
+version: 0.1.0
+description: 免费基础证件能力：身份证号格式校验与归属地/生日/性别解析、二要素在线核验（厂商 provider 默认关闭，密钥只存服务端）、核验结论台账留痕（只存摘要与脱敏串，不落明文）。
+author: NexAdmin
+edition: free
+requires_nexadmin: ">=0.1.0"
+menus:
+  - parent: /
+    type: menu
+    title: plugin_realname.menu
+    path: /realname
+    component: plugins/realname/RealnamePage
+    perm: realname:list
+    icon: Fingerprint
+    sort: 75
+    keep_alive: true
+  - parent: realname:list
+    type: button
+    title: plugin_realname.perm.verify
+    perm: realname:verify
+  - parent: realname:list
+    type: button
+    title: plugin_realname.perm.config
+    perm: realname:config
