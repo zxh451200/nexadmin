@@ -53,7 +53,12 @@ const plugins: PluginInfo[] = [
 ]
 
 defineMock([
-  { method: 'GET', url: '/plugins', handler: (): PluginInfo[] => plugins.map((p) => ({ ...p })) },
+  {
+    method: 'GET',
+    url: '/plugins',
+    // 台账里没有的就是内置插件：与真后端 listPlugins 同一口径，页面据此分「已安装 / 内置插件」两组
+    handler: (): PluginInfo[] => plugins.map((p) => ({ ...p, bundled: !mockLedger.has(p.id) })),
+  },
   {
     method: 'POST',
     url: '/plugins/:id/license',
@@ -77,9 +82,11 @@ defineMock([
     url: '/plugins/market',
     handler: (): MarketEntry[] =>
       catalog.map((e) => {
-        const installed = plugins.some((p) => p.id === e.id)
         const p = plugins.find((x) => x.id === e.id)
-        return { ...e, installed, installedVersion: installed ? p?.version : undefined, status: installed ? p?.status : undefined }
+        // 与真后端同一口径：installed 只看安装台账（mock 里由安装/卸载任务推进），
+        // 注册表里有但台账没有的是内置插件（母版仓库现场就是这样），只展示不给覆盖/卸载。
+        const installed = mockLedger.has(e.id)
+        return { ...e, installed, bundled: !installed && !!p, installedVersion: p?.version, status: p?.status }
       }),
   },
   {
@@ -100,7 +107,7 @@ defineMock([
   { method: 'GET', url: '/plugins/market/jobs/:jobId', handler: ({ params }): MarketJob => pollMockJob(String(params.jobId)) },
 ])
 
-const catalog: Omit<MarketEntry, 'installed'>[] = [
+const catalog: Omit<MarketEntry, 'installed' | 'bundled'>[] = [
   {
     id: 'cron',
     name: '定时任务',
@@ -143,6 +150,8 @@ const catalog: Omit<MarketEntry, 'installed'>[] = [
 
 const mockJobs = new Map<string, MarketJob>()
 let mockJobSeq = 0
+// 安装台账（真后端在 data/ 下的 json）：只有这里的 id 算「本机装过」，其余注册表里的是内置。
+const mockLedger = new Set<string>()
 
 const MOCK_STEPS: Record<MarketJob['kind'], (id: string) => string[]> = {
   install: (id) => [
@@ -178,6 +187,12 @@ function pollMockJob(jobId: string): MarketJob {
     job.state = 'restarting'
   } else {
     job.state = 'done'
+    // 任务跑完才改台账：市场页下一次拉取就能看到「已安装 / 内置」的换位
+    const target = jobId.split('-').pop() ?? ''
+    if (target) {
+      if (job.kind === 'install') mockLedger.add(target)
+      if (job.kind === 'remove') mockLedger.delete(target)
+    }
   }
   return { ...job, log: [...job.log] }
 }

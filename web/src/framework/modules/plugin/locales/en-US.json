@@ -77,6 +77,13 @@
       "remove": "Uninstall",
       "rebuild": "Rebuild & restart",
       "installed": "Installed",
+      "bundled": "Built-in",
+      "bundledHint": "Compiled into this binary; change the source and rebuild. Overwrite-install and uninstall are not offered",
+      "updateAvailable": "Update available: v{{version}}",
+      "updateAll": {
+        "button": "Update all ({{count}})",
+        "confirm": "{{count}} plugins have updates. Each update rebuilds and restarts the service; they run one at a time and continue automatically after each restart. Start now?"
+      },
       "empty": "Marketplace catalog is empty: register plugins in config/plugin-market.yaml to enable one-click installs",
       "remove.confirm": "Uninstall {{name}}? Source files will be removed and the service rebuilt (data tables are kept; use --purge on the CLI to drop them)",
       "installLicense": {

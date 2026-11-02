@@ -87,8 +87,10 @@ export interface MarketEntry {
   price?: string
   author?: string
   installed: boolean
+  /** 随二进制编译进来的内置插件（不在安装台账里）：市场页只展示，不给覆盖/卸载 */
+  bundled: boolean
   installedVersion?: string
-  /** 运行期授权状态；未装为空 */
+  /** 运行期授权状态；未注册为空 */
   status?: string | null
 }
 

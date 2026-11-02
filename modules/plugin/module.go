@@ -154,11 +154,16 @@ func classifyInstalled(infos []plugin.Info, categories map[string]string, ledger
 }
 
 // marketEntry 是市场页的列表项：目录条目 + 安装状态 + 运行期授权状态。
+//
+// Installed 与「已安装」页同一口径——只认安装台账（本机装过的）。
+// Bundled 表示插件随二进制编译进来（母版仓库里的源码插件全是这种）：它没在台账里，
+// 市场页因此不给「重装覆盖 / 卸载」，那两个动作在源码树上是删目录，不是装插件。
 type marketEntry struct {
 	market.Entry
 	Installed        bool   `json:"installed"`
+	Bundled          bool   `json:"bundled"`
 	InstalledVersion string `json:"installedVersion"`
-	Status           string `json:"status"` // 运行期状态；未装或未注册为空
+	Status           string `json:"status"` // 运行期状态；未注册为空
 }
 
 type marketActions struct {
@@ -187,14 +192,23 @@ func registerMarketWith(r *gin.RouterGroup, m *plugin.Manager, actions marketAct
 		for _, p := range m.List(c.Request.Context()) {
 			byID[p.ID] = p
 		}
+		// 台账读不到就按「全部内置」处理，与 listPlugins 同一取舍：宁可少给按钮，
+		// 也不给一个会删源码目录的入口。
+		ledger, ledgerErr := market.LoadLedger(root)
+		if ledgerErr != nil {
+			zap.L().Warn("plugin: 读取安装台账失败", zap.Error(ledgerErr))
+		}
+		userInstalled := make(map[string]bool, len(ledger))
+		for _, l := range ledger {
+			userInstalled[l.ID] = true
+		}
 		out := make([]marketEntry, 0, len(entries))
 		for _, e := range entries {
-			item := marketEntry{Entry: e}
-			if item.Installed = market.Installed(root, e.ID); item.Installed {
-				if p, ok := byID[e.ID]; ok {
-					item.InstalledVersion = p.Version
-					item.Status = p.Status
-				}
+			item := marketEntry{Entry: e, Installed: userInstalled[e.ID]}
+			if p, ok := byID[e.ID]; ok {
+				item.InstalledVersion = p.Version
+				item.Status = p.Status
+				item.Bundled = !item.Installed
 			}
 			out = append(out, item)
 		}

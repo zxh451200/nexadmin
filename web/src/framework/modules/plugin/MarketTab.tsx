@@ -27,6 +27,30 @@ import {
 
 const PENDING_LICENSE = (id: string) => `market-pending-license:${id}`
 
+// 批量更新跨重启续跑：每次安装都会重建并重启服务，页面随后整页刷新，
+// 所以队列放 sessionStorage，刷新后由 effect 接着装下一个（见 MarketTab 内的续跑 effect）。
+interface BatchQueue {
+  ids: string[]
+  attempts: Record<string, number>
+}
+
+const BATCH_QUEUE_KEY = 'market-batch-updates'
+
+function readBatchQueue(): BatchQueue | null {
+  try {
+    const raw = sessionStorage.getItem(BATCH_QUEUE_KEY)
+    const q = raw ? (JSON.parse(raw) as BatchQueue) : null
+    return q && Array.isArray(q.ids) ? q : null
+  } catch {
+    return null
+  }
+}
+
+function writeBatchQueue(q: BatchQueue | null) {
+  if (q && q.ids.length) sessionStorage.setItem(BATCH_QUEUE_KEY, JSON.stringify(q))
+  else sessionStorage.removeItem(BATCH_QUEUE_KEY)
+}
+
 /** pro 插件安装确认：可顺手粘贴授权文本；服务自重启恢复后自动弹出导入（sessionStorage 跨刷新桥接）。 */
 function InstallDialog({
   entry,
@@ -179,6 +203,18 @@ const STATUS_LABEL: Record<string, string> = {
   disabled: 'pluginMgr.status.disabled',
 }
 
+// isNewer 比较市场目录版本与已装版本（按段逐段数值比较，段数不齐按 0 补）；
+// 任何一端缺版本号都不算「有更新」，避免目录缺字段时误报。
+function isNewer(catalog?: string, installed?: string): boolean {
+  if (!catalog || !installed || catalog === installed) return false
+  const a = catalog.split('.').map((x) => Number(x) || 0)
+  const b = installed.split('.').map((x) => Number(x) || 0)
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    if ((a[i] ?? 0) !== (b[i] ?? 0)) return (a[i] ?? 0) > (b[i] ?? 0)
+  }
+  return false
+}
+
 export default function MarketTab({ focus = '' }: { focus?: string }) {
   const { t } = useTranslation()
   const { has } = usePermission()
@@ -199,7 +235,7 @@ export default function MarketTab({ focus = '' }: { focus?: string }) {
   useEffect(() => {
     if (!data.length) return
     const pending = data.find(
-      (e) => e.installed && e.status === 'unlicensed' && sessionStorage.getItem(PENDING_LICENSE(e.id)),
+      (e) => e.installedVersion && e.status === 'unlicensed' && sessionStorage.getItem(PENDING_LICENSE(e.id)),
     )
     if (!pending) return
     const content = sessionStorage.getItem(PENDING_LICENSE(pending.id)) ?? ''
@@ -216,6 +252,9 @@ export default function MarketTab({ focus = '' }: { focus?: string }) {
     data.forEach((e) => e.category && set.add(e.category))
     return Array.from(set)
   }, [data])
+
+  // 批量更新的待装清单；角标数量随之逐个减少（每次安装重启后由续跑 effect 推进）。
+  const outdated = useMemo(() => data.filter((e) => isNewer(e.version, e.installedVersion)), [data])
 
   const entries = useMemo(() => {
     const kw = keyword.trim().toLowerCase()
@@ -259,6 +298,56 @@ export default function MarketTab({ focus = '' }: { focus?: string }) {
     remove.mutate({ id: e.id }, { onSuccess: (res) => setJobId(res.jobId) })
   }
 
+  // 批量更新续跑：队列里有待装插件时，装完一个（重启回来）就接着装下一个；
+  // 已经试过一次仍是旧版本的（安装失败）跳过，不让一个失败插件卡死整个队列。
+  useEffect(() => {
+    if (!data.length || install.isPending) return
+    const q = readBatchQueue()
+    if (!q?.ids.length) return
+    const id = q.ids[0]
+    const e = data.find((x) => x.id === id)
+    if (!e || !isNewer(e.version, e.installedVersion) || (q.attempts[id] ?? 0) >= 1) {
+      q.ids.shift()
+      writeBatchQueue(q)
+      return
+    }
+    q.attempts[id] = (q.attempts[id] ?? 0) + 1
+    writeBatchQueue(q)
+    install.mutate(
+      { id, force: true },
+      {
+        onSuccess: (res) => setJobId(res.jobId),
+        onError: () => {
+          // 提交失败（非安装失败）：回收这次尝试次数，让用户能手动重试
+          const cur = readBatchQueue()
+          if (cur) {
+            cur.attempts[id] = (cur.attempts[id] ?? 1) - 1
+            writeBatchQueue(cur)
+          }
+        },
+      },
+    )
+  }, [data, install])
+
+  const onUpdateAll = () => {
+    if (!outdated.length) return
+    if (!window.confirm(t('pluginMgr.market.updateAll.confirm', { count: outdated.length }))) return
+    writeBatchQueue({ ids: outdated.map((e) => e.id), attempts: {} })
+    const first = outdated[0]
+    const q = readBatchQueue()
+    if (q) {
+      q.attempts[first.id] = 1
+      writeBatchQueue(q)
+    }
+    install.mutate(
+      { id: first.id, force: true },
+      {
+        onSuccess: (res) => setJobId(res.jobId),
+        onError: () => writeBatchQueue(null),
+      },
+    )
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <PluginFilterBar
@@ -270,18 +359,30 @@ export default function MarketTab({ focus = '' }: { focus?: string }) {
         categories={categories}
         trailing={
           canInstall ? (
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={rebuild.isPending}
-              onClick={() => {
-                setJobEdition(null)
-                rebuild.mutate(undefined, { onSuccess: (res) => setJobId(res.jobId) })
-              }}
-            >
-              <RefreshCw className={rebuild.isPending ? 'animate-spin' : ''} aria-hidden="true" />
-              {t('pluginMgr.market.rebuild')}
-            </Button>
+            <div className="flex items-center gap-2">
+              {outdated.length > 0 ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={install.isPending}
+                  onClick={onUpdateAll}
+                >
+                  {t('pluginMgr.market.updateAll.button', { count: outdated.length })}
+                </Button>
+              ) : null}
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={rebuild.isPending}
+                onClick={() => {
+                  setJobEdition(null)
+                  rebuild.mutate(undefined, { onSuccess: (res) => setJobId(res.jobId) })
+                }}
+              >
+                <RefreshCw className={rebuild.isPending ? 'animate-spin' : ''} aria-hidden="true" />
+                {t('pluginMgr.market.rebuild')}
+              </Button>
+            </div>
           ) : null
         }
       />
@@ -318,6 +419,9 @@ export default function MarketTab({ focus = '' }: { focus?: string }) {
                   <span className="min-w-0 truncate">{e.name}</span>
                   {e.version ? <span className="num text-xs font-normal text-muted-foreground">v{e.version}</span> : null}
                   {e.price ? <span className="num text-xs text-primary">{e.price}</span> : null}
+                  {isNewer(e.version, e.installedVersion) ? (
+                    <Badge variant="warning">{t('pluginMgr.market.updateAvailable', { version: e.version })}</Badge>
+                  ) : null}
                   <Badge variant={e.edition === 'pro' ? 'info' : 'secondary'} className="ms-auto">
                     {t(`pluginMgr.edition.${e.edition}`)}
                   </Badge>
@@ -328,12 +432,13 @@ export default function MarketTab({ focus = '' }: { focus?: string }) {
                 <div className="flex flex-wrap items-center gap-2">
                   {e.category ? <Badge variant="outline">{t(`pluginMgr.market.category.${e.category}`, e.category)}</Badge> : null}
                   {e.installed ? (
-                    <>
-                      <Badge variant="success">{t('pluginMgr.market.installed')}</Badge>
-                      {e.status && STATUS_LABEL[e.status] ? (
-                        <Badge variant="secondary">{t(STATUS_LABEL[e.status])}</Badge>
-                      ) : null}
-                    </>
+                    <Badge variant="success">{t('pluginMgr.market.installed')}</Badge>
+                  ) : e.bundled ? (
+                    <Badge variant="outline">{t('pluginMgr.market.bundled')}</Badge>
+                  ) : null}
+                  {/* 授权状态看的是「这个插件在不在跑」，内置与本机装过的一样要显示 */}
+                  {e.installedVersion && e.status && STATUS_LABEL[e.status] ? (
+                    <Badge variant="secondary">{t(STATUS_LABEL[e.status])}</Badge>
                   ) : null}
                   {e.repo ? (
                     <a
@@ -347,7 +452,10 @@ export default function MarketTab({ focus = '' }: { focus?: string }) {
                     </a>
                   ) : null}
                 </div>
-                {canInstall ? (
+                {e.bundled ? (
+                  // 内置插件不给「重装覆盖 / 卸载」：那是对源码目录动手，正确路径是改代码后重建。
+                  <p className="mt-auto text-xs text-muted-foreground">{t('pluginMgr.market.bundledHint')}</p>
+                ) : canInstall ? (
                   <div className="mt-auto flex gap-2">
                     <Button size="sm" disabled={install.isPending} onClick={() => onInstall(e)}>
                       {install.isPending ? (

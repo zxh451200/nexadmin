@@ -134,19 +134,19 @@ func TestInstallAndRemoveDir(t *testing.T) {
 	}
 }
 
-func TestInstalledDetect(t *testing.T) {
+func TestSourcePresentDetect(t *testing.T) {
 	root := newRoot(t)
-	if Installed(root, "demo-x") {
-		t.Fatal("not installed yet")
+	if SourcePresent(root, "demo-x") {
+		t.Fatal("源码目录还不该存在")
 	}
 	if _, err := Install(root, makePkg(t, manifestYAML), false); err != nil {
 		t.Fatal(err)
 	}
-	if !Installed(root, "demo-x") {
-		t.Fatal("should be installed after Install")
+	if !SourcePresent(root, "demo-x") {
+		t.Fatal("Install 之后源码目录该存在")
 	}
-	if Installed(root, "../evil") || Installed(root, "") {
-		t.Fatal("illegal ids must never be installed")
+	if SourcePresent(root, "../evil") || SourcePresent(root, "") {
+		t.Fatal("非法 id 一律不该命中")
 	}
 }
 

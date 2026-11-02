@@ -706,8 +706,12 @@ func purgePluginTables(db *gorm.DB, engine, id string, out io.Writer) (int, erro
 	return dropped, nil
 }
 
-// Installed 判断插件是否已装进源码树（backend 或 web 目录存在）。
-func Installed(root, id string) bool {
+// SourcePresent 报告插件的源码目录在不在树里（backend 或 web 目录存在）。
+//
+// 这**不是**后台「已安装」的口径：母版仓库里每个源码插件的目录都在盘上，
+// 用它判安装会把内置插件说成用户装过（并给出会删源码目录的卸载按钮）。
+// 界面用的 installed 只看安装台账（LoadLedger）；这里只服务安装/删除的前置判断。
+func SourcePresent(root, id string) bool {
 	if !plugin.ValidID(id) {
 		return false
 	}

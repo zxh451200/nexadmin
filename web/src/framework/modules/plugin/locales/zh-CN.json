@@ -77,6 +77,13 @@
       "remove": "卸载",
       "rebuild": "重建并重启",
       "installed": "已安装",
+      "bundled": "内置",
+      "bundledHint": "随程序编译进来，改代码后重建生效；这里不提供覆盖安装或卸载",
+      "updateAvailable": "有新版本 v{{version}}",
+      "updateAll": {
+        "button": "全部更新（{{count}}）",
+        "confirm": "共 {{count}} 个插件有更新。每个插件更新都会重建并重启服务，一次装一个、刷新后自动接着装下一个。现在开始？"
+      },
       "empty": "市场目录为空：在 config/plugin-market.yaml 里登记插件后，这里就能一键安装",
       "remove.confirm": "卸载 {{name}}？将移除源码文件并重建服务（默认保留数据表，可在命令行用 --purge 清库）",
       "installLicense": {
