@@ -79,6 +79,8 @@
       "installed": "Installed",
       "bundled": "Built-in",
       "bundledHint": "Compiled into this binary; change the source and rebuild. Overwrite-install and uninstall are not offered",
+      "filterFree": "Free",
+      "filterPaid": "Paid",
       "updateAvailable": "Update available: v{{version}}",
       "updateAll": {
         "button": "Update all ({{count}})",

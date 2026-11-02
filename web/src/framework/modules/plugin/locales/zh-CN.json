@@ -79,6 +79,8 @@
       "installed": "已安装",
       "bundled": "内置",
       "bundledHint": "随程序编译进来，改代码后重建生效；这里不提供覆盖安装或卸载",
+      "filterFree": "免费",
+      "filterPaid": "收费",
       "updateAvailable": "有新版本 v{{version}}",
       "updateAll": {
         "button": "全部更新（{{count}}）",

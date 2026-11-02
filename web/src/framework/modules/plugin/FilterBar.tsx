@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
 
-/** 已安装 / 市场两个标签页共用的筛选行：关键词 + 分类芯片；trailing 放页级操作。 */
+/** 已安装 / 市场两个标签页共用的筛选行：关键词 + 分类芯片（可选免费/收费）；trailing 放页级操作。 */
 export function PluginFilterBar({
   keyword,
   onKeyword,
@@ -12,6 +12,8 @@ export function PluginFilterBar({
   category,
   onCategory,
   categories,
+  edition,
+  onEdition,
   trailing,
 }: {
   keyword: string
@@ -20,6 +22,10 @@ export function PluginFilterBar({
   category: string
   onCategory: (value: string) => void
   categories: string[]
+  /** 当前版本档筛选：'free' | 'pro' | ''（空为不过滤） */
+  edition?: string
+  /** 传了才渲染「免费 / 收费」芯片 */
+  onEdition?: (value: string) => void
   trailing?: ReactNode
 }) {
   const { t } = useTranslation()
@@ -29,6 +35,16 @@ export function PluginFilterBar({
         <Search className="absolute start-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
         <Input className="ps-8" placeholder={placeholder} value={keyword} onChange={(e) => onKeyword(e.target.value)} />
       </div>
+      {onEdition ? (
+        <>
+          <Button size="sm" variant={edition === 'free' ? 'default' : 'outline'} onClick={() => onEdition(edition === 'free' ? '' : 'free')}>
+            {t('pluginMgr.market.filterFree')}
+          </Button>
+          <Button size="sm" variant={edition === 'pro' ? 'default' : 'outline'} onClick={() => onEdition(edition === 'pro' ? '' : 'pro')}>
+            {t('pluginMgr.market.filterPaid')}
+          </Button>
+        </>
+      ) : null}
       {categories.map((c) => (
         <Button
           key={c}

@@ -227,6 +227,7 @@ export default function MarketTab({ focus = '' }: { focus?: string }) {
   const [jobEdition, setJobEdition] = useState<PluginEdition | null>(null)
   const [keyword, setKeyword] = useState(focus)
   const [category, setCategory] = useState('')
+  const [edition, setEdition] = useState('')
   const [installTarget, setInstallTarget] = useState<MarketEntry | null>(null)
   const [licenseTarget, setLicenseTarget] = useState<PluginInfo | null>(null)
   const [licensePrefill, setLicensePrefill] = useState('')
@@ -260,6 +261,7 @@ export default function MarketTab({ focus = '' }: { focus?: string }) {
     const kw = keyword.trim().toLowerCase()
     return data.filter((e) => {
       if (category && e.category !== category) return false
+      if (edition && e.edition !== edition) return false
       if (!kw) return true
       return (
         e.name.toLowerCase().includes(kw) ||
@@ -267,7 +269,7 @@ export default function MarketTab({ focus = '' }: { focus?: string }) {
         (e.description ?? '').toLowerCase().includes(kw)
       )
     })
-  }, [data, keyword, category])
+  }, [data, keyword, category, edition])
 
   const onInstall = (e: MarketEntry) => {
     // pro 插件先过安装确认（可顺手贴授权）；free 直接装。
@@ -357,6 +359,8 @@ export default function MarketTab({ focus = '' }: { focus?: string }) {
         category={category}
         onCategory={setCategory}
         categories={categories}
+        edition={edition}
+        onEdition={setEdition}
         trailing={
           canInstall ? (
             <div className="flex items-center gap-2">
@@ -418,7 +422,8 @@ export default function MarketTab({ focus = '' }: { focus?: string }) {
                 <CardTitle className="flex flex-wrap items-center gap-2 text-base font-medium">
                   <span className="min-w-0 truncate">{e.name}</span>
                   {e.version ? <span className="num text-xs font-normal text-muted-foreground">v{e.version}</span> : null}
-                  {e.price ? <span className="num text-xs text-primary">{e.price}</span> : null}
+                  {/* 目录里的 price（「待定」「¥299」）不再上屏：报价是商务侧的事，
+                      用户要看的是免费还是专业档——右上角徽章与「免费/收费」筛选就是这个口径。 */}
                   {isNewer(e.version, e.installedVersion) ? (
                     <Badge variant="warning">{t('pluginMgr.market.updateAvailable', { version: e.version })}</Badge>
                   ) : null}
