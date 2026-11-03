@@ -105,7 +105,7 @@ export function ColumnsStep({ schema, cfg, onCfgChange, module, onModuleChange, 
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="codegen-gomodule">{t('plugin_codegen.config.goModule')}</Label>
-            <Input id="codegen-gomodule" value={goModule} onChange={(e) => onGoModuleChange(e.target.value.trim())} maxLength={100} placeholder="nexadmin" aria-invalid={!!goModuleError} />
+            <Input id="codegen-gomodule" value={goModule} onChange={(e) => onGoModuleChange(e.target.value.trim())} maxLength={100} placeholder="example.com/shop" aria-invalid={!!goModuleError} />
             <p className={goModuleError ? 'text-xs text-destructive' : 'text-xs text-muted-foreground'}>{goModuleError ?? t('plugin_codegen.config.goModuleHint')}</p>
           </div>
         </FormGrid>
