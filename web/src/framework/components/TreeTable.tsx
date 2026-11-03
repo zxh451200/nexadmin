@@ -325,8 +325,10 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
       const id = el.dataset.sortableId
       if (!id) continue
       const r = el.getBoundingClientRect()
-      // 按 data 属性认把手：勾选框也是带 aria-label 的 button，按 aria-label 找会认错
-      const handle = (el.querySelector<HTMLElement>('button[data-drag-handle]') ?? el.querySelector<HTMLElement>('button[aria-label]'))?.getBoundingClientRect()
+      // anchor 取把手所在「单元格」的起始沿，不取把手按钮：按钮在 renderRows 里已经按深度缩过
+      // 一档（ps-6），plan() 会再加一次 depth×INDENT_STEP，两处都算就是把第 2 级以下的落位线
+      // 每级多缩 24px——单元格边沿与深度无关，才是「这一级从哪条物理边起算」的那个值。
+      const anchorEdge = el.querySelector('td')?.getBoundingClientRect()
       // 名称列（第一个数据列，把手与勾选列排在它前面）：落位线只画到树那一列为止
       const leadingCells = (onReorder ? 1 : 0) + (selection ? 1 : 0)
       const nameCell = el.querySelectorAll('td')[leadingCells]?.getBoundingClientRect()
@@ -335,7 +337,7 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
         bottom: r.bottom,
         left: r.left,
         right: r.right,
-        anchor: rtl ? (handle?.right ?? r.right - 8) : (handle?.left ?? r.left + 8),
+        anchor: rtl ? (anchorEdge?.right ?? r.right - 8) : (anchorEdge?.left ?? r.left + 8),
         nameEdge: nameCell ? (rtl ? nameCell.left : nameCell.right) : 0,
       })
     }
