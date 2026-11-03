@@ -42,6 +42,28 @@ func Perm(code string) gin.HandlerFunc {
 	return h
 }
 
+// IsPlatformCaller 判断本次请求是不是平台级调用方：超管，或落在默认租户上下文里。
+// 给「平台共享表」的写入口用（表里没有 tenant_id，一行服务所有租户）：
+// 权限点回答的是「能不能用这个模块」，回答不了「能不能改所有租户共用的那一行」。
+func IsPlatformCaller(c *gin.Context) bool {
+	if cl := auth.ClaimsFrom(c); cl != nil && cl.Super {
+		return true
+	}
+	tid, ok := tenant.From(c.Request.Context())
+	return ok && tid == tenant.DefaultID
+}
+
+// RequirePlatform 是 IsPlatformCaller 的中间件形态，平台共享表的写路由挂它。
+func RequirePlatform() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if IsPlatformCaller(c) {
+			c.Next()
+			return
+		}
+		response.Fail(c, response.Forbidden("error.forbidden"))
+	}
+}
+
 // Desc 为路由提供面向 OpenAPI、MCP 和 AI 工具目录的简短描述。
 func Desc(summary string) gin.HandlerFunc {
 	h := func(c *gin.Context) { c.Next() }
@@ -235,6 +257,8 @@ func (a *App) buildFull() (*gin.Engine, error) {
 	api.POST("/auth/login", rl("login", middleware.ByIPAndPath()), h.Login)
 	api.GET("/auth/captcha", rl("captcha", middleware.ByIPAndPath()), h.Captcha)
 	api.GET("/auth/captcha/:key/audio", rl("captcha", middleware.ByIPAndPath()), h.CaptchaAudio)
+	api.GET("/auth/slider", rl("captcha", middleware.ByIPAndPath()), h.SliderCaptcha)
+	api.POST("/auth/slider/verify", rl("captcha", middleware.ByIPAndPath()), h.SliderVerify)
 	api.POST("/auth/refresh", rl("refresh", middleware.ByIPAndPath()), h.Refresh)
 	api.GET("/auth/methods", h.Methods)
 	api.POST("/auth/logout", middleware.RequireLogin(), h.Logout)

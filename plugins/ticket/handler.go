@@ -639,7 +639,7 @@ func (h *handler) Register(r *gin.RouterGroup, d *core.Deps) {
 
 	// 插件设置（邮件通知开关 / 客服门户地址，见 notify.go）：读复用 list，写要求 edit。
 	g.GET("/settings", core.Perm("ticket:list"), h.getSettings)
-	g.PUT("/settings", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "update"), h.saveSettings)
+	g.PUT("/settings", core.Perm("ticket:edit"), core.RequirePlatform(), d.OperLogMiddleware("ticket", "update"), h.saveSettings)
 
 	// 访客公开接口：限流按 IP；路径带 /visitor 前缀与坐席接口分开——同一个 engine 上
 	// protected 与 Public 两组不能注册相同的 method+path，否则 gin 在 addRoute 时 panic。
