@@ -1,8 +1,7 @@
-import { useState } from 'react'
-import { Check, Copy, Download, FileCode2 } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { Check, Copy, Download, FileCode2, Files } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { DataTable, type Column } from '@/framework/components/DataTable'
 import { EmptyState } from '@/framework/components/EmptyState'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
@@ -22,6 +21,19 @@ export function PreviewStep({ output }: Props) {
   const [copied, setCopied] = useState(false)
   const file: GenFile | undefined = output.files.find((f) => f.path === current) ?? output.files[0]
 
+  // 按目录分组：同一目录只写一遍路径前缀，窄栏里也能一眼扫完。
+  const groups = useMemo(() => {
+    const map = new Map<string, GenFile[]>()
+    for (const f of output.files) {
+      const cut = f.path.lastIndexOf('/')
+      const dir = cut < 0 ? '' : f.path.slice(0, cut)
+      const list = map.get(dir)
+      if (list) list.push(f)
+      else map.set(dir, [f])
+    }
+    return [...map]
+  }, [output.files])
+
   const copy = async () => {
     if (!file) return
     try {
@@ -40,37 +52,63 @@ export function PreviewStep({ output }: Props) {
     toast.success(t('plugin_codegen.preview.downloaded'))
   }
 
-  const columns: Column<GenFile>[] = [
-    {
-      key: 'path',
-      title: t('plugin_codegen.preview.path'),
-      mobile: 'title',
-      render: (f) => (
-        <span className={cn('font-mono text-xs', f.path === file?.path && 'font-semibold text-primary')}>{f.path}</span>
-      ),
-    },
-    { key: 'lang', title: t('plugin_codegen.preview.lang'), render: (f) => <Badge variant="outline">{f.lang}</Badge> },
-  ]
-
   return (
     <div className="flex flex-col gap-4">
       <ul className={cn(cardSurface, 'flex flex-col gap-1 p-3 text-sm text-muted-foreground')}>
-        {output.notes.map((n) => (
-          <li key={n.code}>
-            {t(`plugin_codegen.notes.${n.code}`)}
-            {n.value ? <code className="ms-2 rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground">{n.value}</code> : null}
-          </li>
-        ))}
+        {output.notes.map((n) => {
+          const [head, tail] = t(`plugin_codegen.notes.${n.code}`).split('{{value}}')
+          return (
+            <li key={n.code}>
+              {head}
+              {n.value ? <code className="mx-1 rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground">{n.value}</code> : null}
+              {tail}
+            </li>
+          )
+        })}
       </ul>
       <div className="grid gap-4 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
-        <DataTable
-          columns={columns}
-          data={output.files}
-          rowKey="path"
-          pagination={false}
-          onRowClick={(f) => setCurrent(f.path)}
-          emptyText={t('plugin_codegen.preview.empty')}
-        />
+        <nav className={cn(cardSurface, 'flex min-w-0 flex-col overflow-hidden')} aria-label={t('plugin_codegen.preview.files')}>
+          <header className="flex items-center gap-2 border-b border-border bg-muted/50 px-3 py-2">
+            <Files className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <span className="text-xs font-medium">{t('plugin_codegen.preview.files')}</span>
+            <span className="ms-auto font-mono text-xs text-muted-foreground">{output.files.length}</span>
+          </header>
+          <div className="max-h-[40dvh] overflow-y-auto overscroll-contain p-1.5 lg:max-h-[60dvh]">
+            {output.files.length === 0 ? (
+              <p className="px-2 py-6 text-center text-xs text-muted-foreground">{t('plugin_codegen.preview.empty')}</p>
+            ) : null}
+            {groups.map(([dir, files]) => (
+              <div key={dir || '_'} className="mb-1 last:mb-0">
+                {dir ? (
+                  <p className="sticky top-0 z-10 truncate bg-card px-2 py-1 font-mono text-[11px] text-muted-foreground">{dir}</p>
+                ) : null}
+                <ul>
+                  {files.map((f) => {
+                    const active = f.path === file?.path
+                    const name = f.path.slice(f.path.lastIndexOf('/') + 1)
+                    return (
+                      <li key={f.path}>
+                        <button
+                          type="button"
+                          onClick={() => setCurrent(f.path)}
+                          aria-current={active ? 'true' : undefined}
+                          className={cn(
+                            'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-start transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                            active ? 'bg-primary/10 text-primary' : 'text-foreground hover:bg-muted',
+                          )}
+                        >
+                          <FileCode2 className={cn('size-3.5 shrink-0', active ? 'text-primary' : 'text-muted-foreground')} aria-hidden="true" />
+                          <span className="min-w-0 flex-1 truncate font-mono text-xs">{name}</span>
+                          <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">{f.lang}</span>
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </nav>
         <section className={cn(cardSurface, 'min-w-0 overflow-hidden')} aria-label={t('plugin_codegen.preview.viewer')}>
           {file ? (
             <>

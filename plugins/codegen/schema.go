@@ -17,6 +17,8 @@ type RawColumn struct {
 	HasDefault bool
 	Comment    string
 	Length     int64
+	// Dict 是新建表定义携带的字典编码；真实库读不到这个信息，恒为空串。
+	Dict string
 }
 
 // SchemaReader 抽象表结构读取，便于单测替身；生产实现只用 GORM Migrator 的引擎无关方法。

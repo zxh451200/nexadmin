@@ -17,13 +17,15 @@ type TableDef struct {
 	Fields     []FieldDef `json:"fields"`
 }
 
-// FieldDef 是新表的一列。Length 只对 string 生效；Required 只对可判空的类型生效。
+// FieldDef 是新表的一列。Length 只对 string 生效；Required 只对可判空的类型生效；
+// Dict 是字典编码：给了它 kind 必须是 string，列固定 VARCHAR(64) NOT NULL DEFAULT ''。
 type FieldDef struct {
 	Name     string `json:"name"`
 	Kind     Kind   `json:"kind"`
 	Length   int    `json:"length"`
 	Required bool   `json:"required"`
 	Comment  string `json:"comment"`
+	Dict     string `json:"dict"`
 }
 
 const (
@@ -52,6 +54,7 @@ type defField struct {
 	length   int
 	required bool
 	comment  string
+	dict     string // 字典编码；非空表示这是字典下拉列
 }
 
 // tableDef 是校验后的表定义。
@@ -109,16 +112,31 @@ func (d TableDef) normalize() (*tableDef, error) {
 			return nil, fmt.Errorf("field %q has unsupported kind %q", fn, f.Kind)
 		}
 		length := 0
+		dict := strings.TrimSpace(f.Dict)
 		switch f.Kind {
 		case KindString:
-			length = f.Length
-			if length == 0 {
-				length = defaultVarchar
-			}
-			if length < 1 || length > maxVarchar {
-				return nil, fmt.Errorf("field %q length must be 1-%d", fn, maxVarchar)
+			if dict != "" {
+				if err := ValidIdent(dict); err != nil {
+					return nil, fmt.Errorf("field %q has invalid dict code %q", fn, dict)
+				}
+				// 字典列固定 VARCHAR(64) NOT NULL DEFAULT ''，长度由编码格式决定，不接收自定义长度。
+				if f.Length != 0 && f.Length != 64 {
+					return nil, fmt.Errorf("field %q: length is fixed to 64 for dict fields", fn)
+				}
+				length = 64
+			} else {
+				length = f.Length
+				if length == 0 {
+					length = defaultVarchar
+				}
+				if length < 1 || length > maxVarchar {
+					return nil, fmt.Errorf("field %q length must be 1-%d", fn, maxVarchar)
+				}
 			}
 		default:
+			if dict != "" {
+				return nil, fmt.Errorf("field %q: dict is only valid for string fields", fn)
+			}
 			if f.Length != 0 {
 				return nil, fmt.Errorf("field %q: length is only valid for string", fn)
 			}
@@ -126,7 +144,7 @@ func (d TableDef) normalize() (*tableDef, error) {
 		if f.Required && !requirable(f.Kind) {
 			return nil, fmt.Errorf("field %q (%s) cannot be required", fn, f.Kind)
 		}
-		td.fields = append(td.fields, defField{name: fn, kind: f.Kind, length: length, required: f.Required, comment: sanitizeComment(f.Comment)})
+		td.fields = append(td.fields, defField{name: fn, kind: f.Kind, length: length, required: f.Required, comment: sanitizeComment(f.Comment), dict: dict})
 	}
 	return td, nil
 }
@@ -139,11 +157,16 @@ func (d *tableDef) rawColumns() []RawColumn {
 		out = append(out, RawColumn{Name: "tenant_id", TypeName: "bigint"})
 	}
 	for _, f := range d.fields {
-		c := RawColumn{Name: f.name, TypeName: rawTypeName(f.kind), Comment: f.comment, Length: int64(f.length)}
+		c := RawColumn{Name: f.name, TypeName: rawTypeName(f.kind), Comment: f.comment, Length: int64(f.length), Dict: f.dict}
 		switch f.kind {
 		case KindString, KindText, KindDate, KindDateTime:
 			c.Nullable = !f.required
 		default:
+			c.HasDefault = true
+		}
+		// 字典列有库级默认值：不可空，向导推荐配置据此不标必填。
+		if f.dict != "" {
+			c.Nullable = false
 			c.HasDefault = true
 		}
 		out = append(out, c)
@@ -218,6 +241,10 @@ func (f defField) sqlType(engine string) string {
 	pg := engine == "postgres"
 	switch f.kind {
 	case KindString:
+		if f.dict != "" {
+			// 字典列与 add module 脚手架同款：VARCHAR(64) NOT NULL DEFAULT ''。
+			return "VARCHAR(64) NOT NULL DEFAULT ''"
+		}
 		if f.required {
 			return fmt.Sprintf("VARCHAR(%d) NOT NULL", f.length)
 		}

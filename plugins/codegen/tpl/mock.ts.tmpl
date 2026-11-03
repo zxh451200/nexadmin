@@ -17,6 +17,12 @@ let items: [[.Pascal]][] = [
     createdAt: T,
     updatedAt: T,
 [[- end]]
+[[- if $.Sub]]
+    [[$.Sub.JSONPlural]]: [
+      { id: '[[mockid 8]]', [[range $j, $f := $.Sub.Fields]][[if $j]], [[end]][[$f.Camel]]: [[mock $f 1]][[end]] },
+      { id: '[[mockid 9]]', [[range $j, $f := $.Sub.Fields]][[if $j]], [[end]][[$f.Camel]]: [[mock $f 2]][[end]] },
+    ],
+[[- end]]
   },
 [[- end]]
 ]

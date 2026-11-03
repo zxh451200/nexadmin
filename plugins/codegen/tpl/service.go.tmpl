@@ -44,7 +44,7 @@ func likeArg(s string) string {
 	return "%" + r.Replace(s) + "%"
 }
 [[- end]]
-[[- if .HasFormTime]]
+[[- if .UsesParseTime]]
 
 var timeLayouts = []string{time.RFC3339Nano, "2006-01-02T15:04:05", "2006-01-02 15:04:05", "2006-01-02T15:04", "2006-01-02 15:04", "2006-01-02"}
 
@@ -108,6 +108,49 @@ func (f Form) apply(m *[[.Pascal]]) error {
 [[- end]]
 	return nil
 }
+[[- if .Sub]]
+// apply 把子行请求体写到子模型上。
+func (f [[.Sub.Pascal]]Form) apply(m *[[.Sub.Pascal]]) error {
+[[- range .Sub.FormFields]]
+[[- if isTime .]]
+	t[[.Pascal]], err := parseTime(f.[[.Pascal]])
+	if err != nil {
+		return response.BadRequest("error.bad_request").WithMsg("invalid [[.Camel]]")
+	}
+[[- if .Required]]
+	if t[[.Pascal]] == nil {
+		return response.BadRequest("error.bad_request").WithMsg("[[.Camel]] is required")
+	}
+[[- end]]
+	m.[[.Pascal]] = t[[.Pascal]]
+[[- else if eq .Kind "string"]]
+	m.[[.Pascal]] = strings.TrimSpace(f.[[.Pascal]])
+[[- if .Required]]
+	if m.[[.Pascal]] == "" {
+		return response.BadRequest("error.bad_request").WithMsg("[[.Camel]] is required")
+	}
+[[- end]]
+[[- else]]
+	m.[[.Pascal]] = f.[[.Pascal]]
+[[- if and .Required (eq .Kind "text")]]
+	if m.[[.Pascal]] == "" {
+		return response.BadRequest("error.bad_request").WithMsg("[[.Camel]] is required")
+	}
+[[- end]]
+[[- end]]
+[[- end]]
+	return nil
+}
+
+func to[[.Sub.Pascal]]View(m *[[.Sub.Pascal]]) [[.Sub.Pascal]]View {
+	return [[.Sub.Pascal]]View{
+		ID: m.ID,
+[[- range .Sub.Fields]]
+		[[.Pascal]]: m.[[.Pascal]],
+[[- end]]
+	}
+}
+[[- end]]
 
 func (s *Service) get(ctx context.Context, id idgen.ID) (*[[.Pascal]], error) {
 	var m [[.Pascal]]
@@ -156,6 +199,15 @@ func (s *Service) Get(ctx context.Context, id idgen.ID) (*View, error) {
 		return nil, err
 	}
 	v := toView(m)
+[[- if .Sub]]
+	var kids [][[.Sub.Pascal]]
+	if err := s.db.WithContext(ctx).Where("[[.Sub.FK]] = ?", int64(m.ID)).Order("id ASC").Find(&kids).Error; err == nil {
+		v.Children = make([][[.Sub.Pascal]]View, 0, len(kids))
+		for i := range kids {
+			v.Children = append(v.Children, to[[.Sub.Pascal]]View(&kids[i]))
+		}
+	}
+[[- end]]
 	return &v, nil
 }
 
@@ -172,6 +224,57 @@ func (s *Service) Save(ctx context.Context, id idgen.ID, f Form) (*View, error) 
 	if err := f.apply(&m); err != nil {
 		return nil, err
 	}
+[[- if .Sub]]
+	// 主表与子行一个事务：子行整存整取（清旧插新，ID 每次重新生成），挂一半算保存失败。
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if id == 0 {
+[[- if eq .Shape "plain"]]
+			nid, err := idgen.Next()
+			if err != nil {
+				return err
+			}
+			m.ID = nid
+[[- if .Tenant]]
+			tid, ok := tn.From(ctx)
+			if !ok {
+				return response.BadRequest("error.bad_request").WithMsg("missing tenant")
+			}
+			m.TenantID = tid
+[[- end]]
+[[- end]]
+			if err := tx.Create(&m).Error; err != nil {
+				return err
+			}
+		} else if err := tx.Save(&m).Error; err != nil {
+			return err
+		}
+		// 子行整存整取：清掉旧子行再整批插入（客户端不传子行 ID）。
+		if err := tx.Where("[[.Sub.FK]] = ?", int64(m.ID)).Delete(&[[.Sub.Pascal]]{}).Error; err != nil {
+			return err
+		}
+			for i := range f.Children {
+				kid := [[.Sub.Pascal]]{[[.Sub.FKPascal]]: m.ID}
+[[- if and .Sub.Tenant (eq .Sub.Shape "plain")]]
+				kid.TenantID = m.TenantID
+[[- end]]
+				if err := f.Children[i].apply(&kid); err != nil {
+					return err
+				}
+				nid, err := idgen.Next()
+				if err != nil {
+					return err
+				}
+				kid.ID = nid
+				if err := tx.Create(&kid).Error; err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+[[- else]]
 	db := s.db.WithContext(ctx)
 	if id == 0 {
 [[- if eq .Shape "plain"]]
@@ -194,6 +297,7 @@ func (s *Service) Save(ctx context.Context, id idgen.ID, f Form) (*View, error) 
 	} else if err := db.Save(&m).Error; err != nil {
 		return nil, err
 	}
+[[- end]]
 	v := toView(&m)
 	return &v, nil
 }

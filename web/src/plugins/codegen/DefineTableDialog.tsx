@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { RequiredMark } from '@/framework/components/RequiredMark'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Button } from '@/framework/ui/button'
 import { Checkbox } from '@/framework/ui/checkbox'
@@ -9,7 +10,8 @@ import { Label } from '@/framework/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import { REQUIRABLE, type FieldDef, type FieldKind, type TableDef } from './api'
 
-const NAME_RE = /^[a-z][a-z0-9_]{0,43}$/
+// 表名与列名走同一条标识符规则：与后端 plugins/codegen/ident.go 的 identRe 一字不差，
+// 前端不再自己收紧成 44 位（那会让 45–48 位的合法表名在这里被拒）。
 const IDENT_RE = /^[a-z][a-z0-9_]{0,47}$/
 const MIGRATION_RE = /^\d{1,4}$/
 const RESERVED = new Set(['id', 'tenant_id', 'created_at', 'updated_at', 'deleted_at'])
@@ -24,15 +26,16 @@ interface Row {
   length: string
   required: boolean
   comment: string
+  dict: string
 }
 
 function blankRow(): Row {
   seq += 1
-  return { id: seq, name: '', kind: 'string', length: '255', required: false, comment: '' }
+  return { id: seq, name: '', kind: 'string', length: '255', required: false, comment: '', dict: '' }
 }
 
 /** 字段行的一列：手机上在控件上方显示列名，桌面上只是网格单元 */
-function Col({ label, children }: { label: string; children: ReactNode }) {
+function Col({ label, children }: { label: ReactNode; children: ReactNode }) {
   return (
     <div className="flex min-w-0 flex-col gap-1">
       <span className="text-xs text-muted-foreground md:hidden">{label}</span>
@@ -73,7 +76,7 @@ export function DefineTableDialog({ open, onOpenChange, pending, onSubmit }: Pro
 
   const submit = () => {
     const base = name.trim().replace(/^biz_/, '')
-    if (!NAME_RE.test(base)) return setError('errName')
+    if (!IDENT_RE.test(base)) return setError('errName')
     if (!MIGRATION_RE.test(migration.trim()) || Number(migration) === 0) return setError('errMigration')
     if (rows.length === 0) return setError('errFields')
     const seen = new Set<string>()
@@ -84,17 +87,23 @@ export function DefineTableDialog({ open, onOpenChange, pending, onSubmit }: Pro
       if (seen.has(n)) return setError('errFieldDup')
       seen.add(n)
       if (r.kind === 'string') {
+        if (r.dict.trim() && !IDENT_RE.test(r.dict.trim())) return setError('errDict')
         const len = Number(r.length)
         if (!Number.isInteger(len) || len < 1 || len > 4000) return setError('errLength')
       }
     }
-    const fields: FieldDef[] = rows.map((r) => ({
-      name: r.name.trim(),
-      kind: r.kind,
-      required: r.required && REQUIRABLE.includes(r.kind),
-      length: r.kind === 'string' ? Number(r.length) : 0,
-      comment: r.comment.trim() || undefined,
-    }))
+    const fields: FieldDef[] = rows.map((r) => {
+      const dict = r.kind === 'string' ? r.dict.trim() : ''
+      return {
+        name: r.name.trim(),
+        kind: r.kind,
+        required: r.required && REQUIRABLE.includes(r.kind),
+        // 字典列固定 VARCHAR(64)，长度由后端定，不透传用户填的长度
+        length: dict ? 64 : r.kind === 'string' ? Number(r.length) : 0,
+        comment: r.comment.trim() || undefined,
+        dict: dict || undefined,
+      }
+    })
     setError(undefined)
     onSubmit({ name: base, tenant, softDelete, migration: migration.trim(), fields })
   }
@@ -120,7 +129,10 @@ export function DefineTableDialog({ open, onOpenChange, pending, onSubmit }: Pro
       <div className="space-y-4">
         <div className="grid items-start gap-3 md:grid-cols-[minmax(0,1fr)_12rem]">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="codegen-def-name">{t('plugin_codegen.define.name')}</Label>
+            <Label htmlFor="codegen-def-name">
+              {t('plugin_codegen.define.name')}
+              <RequiredMark />
+            </Label>
             <div className="flex h-10 items-center rounded-md border border-input bg-background ps-3 shadow-sm transition-[color,box-shadow,border-color] focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/40 md:h-9">
               <span className="me-1.5 border-e border-input pe-2 font-mono text-sm text-muted-foreground">biz_</span>
               <Input
@@ -128,7 +140,7 @@ export function DefineTableDialog({ open, onOpenChange, pending, onSubmit }: Pro
                 value={name}
                 onChange={(e) => setName(e.target.value.trim().toLowerCase())}
                 placeholder="product"
-                maxLength={44}
+                maxLength={48}
                 autoComplete="off"
                 className="h-full flex-1 rounded-none border-0 bg-transparent px-1.5 shadow-none focus-visible:ring-0"
               />
@@ -136,7 +148,10 @@ export function DefineTableDialog({ open, onOpenChange, pending, onSubmit }: Pro
             <p className="text-xs text-muted-foreground">{t('plugin_codegen.define.nameHint')}</p>
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="codegen-def-migration">{t('plugin_codegen.define.migration')}</Label>
+            <Label htmlFor="codegen-def-migration">
+              {t('plugin_codegen.define.migration')}
+              <RequiredMark />
+            </Label>
             <Input
               id="codegen-def-migration"
               value={migration}
@@ -168,10 +183,14 @@ export function DefineTableDialog({ open, onOpenChange, pending, onSubmit }: Pro
                 <span className="text-xs text-muted-foreground">{t('plugin_codegen.define.softDeleteHint')}</span>
               </label>
             </div>
-            <div className="hidden gap-2 border-b py-2 text-xs font-medium text-muted-foreground md:grid md:grid-cols-[minmax(0,1fr)_7rem_5.5rem_minmax(0,1fr)_4rem_2.25rem]">
-              <span>{t('plugin_codegen.define.fieldName')}</span>
+            <div className="hidden gap-2 border-b py-2 text-xs font-medium text-muted-foreground md:grid md:grid-cols-[minmax(0,1fr)_7rem_5rem_8.5rem_minmax(0,1fr)_4rem_2.25rem]">
+              <span>
+                {t('plugin_codegen.define.fieldName')}
+                <RequiredMark />
+              </span>
               <span>{t('plugin_codegen.define.fieldType')}</span>
               <span>{t('plugin_codegen.define.fieldLength')}</span>
+              <span>{t('plugin_codegen.define.fieldDict')}</span>
               <span>{t('plugin_codegen.define.fieldComment')}</span>
               <span className="text-center">{t('plugin_codegen.define.fieldRequired')}</span>
               <span />
@@ -180,9 +199,9 @@ export function DefineTableDialog({ open, onOpenChange, pending, onSubmit }: Pro
               {rows.map((r) => (
                 <div
                   key={r.id}
-                  className="grid gap-2 py-2.5 transition-colors hover:bg-accent/40 md:grid-cols-[minmax(0,1fr)_7rem_5.5rem_minmax(0,1fr)_4rem_2.25rem] md:items-center"
+                  className="grid gap-2 py-2.5 transition-colors hover:bg-accent/40 md:grid-cols-[minmax(0,1fr)_7rem_5rem_8.5rem_minmax(0,1fr)_4rem_2.25rem] md:items-center"
                 >
-                  <Col label={t('plugin_codegen.define.fieldName')}>
+                  <Col label={<>{t('plugin_codegen.define.fieldName')}<RequiredMark /></>}>
                     <Input
                       value={r.name}
                       onChange={(e) => patch(r.id, { name: e.target.value.trim().toLowerCase() })}
@@ -199,6 +218,7 @@ export function DefineTableDialog({ open, onOpenChange, pending, onSubmit }: Pro
                           kind: v as FieldKind,
                           required: REQUIRABLE.includes(v as FieldKind) ? r.required : false,
                           length: v === 'string' ? r.length || '255' : '',
+                          dict: v === 'string' ? r.dict : '',
                         })
                       }
                     >
@@ -224,6 +244,18 @@ export function DefineTableDialog({ open, onOpenChange, pending, onSubmit }: Pro
                       disabled={r.kind !== 'string'}
                       min={1}
                       max={4000}
+                    />
+                  </Col>
+                  <Col label={t('plugin_codegen.define.fieldDict')}>
+                    <Input
+                      value={r.dict}
+                      onChange={(e) => patch(r.id, { dict: e.target.value.trim().toLowerCase() })}
+                      placeholder="sys_status"
+                      aria-label={t('plugin_codegen.define.fieldDict')}
+                      maxLength={48}
+                      disabled={r.kind !== 'string'}
+                      className="font-mono"
+                      autoComplete="off"
                     />
                   </Col>
                   <Col label={t('plugin_codegen.define.fieldComment')}>

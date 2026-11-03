@@ -58,7 +58,7 @@ func richColumns() []RawColumn {
 
 func newFake() *fakeReader {
 	return &fakeReader{
-		tables: []string{"demo_item", "plain_note", "dict_tag", "tenant_note", "sys_user", "plg_cron_job", "sys_migration",
+		tables: []string{"demo_item", "plain_note", "dict_tag", "tenant_note", "demo_tree", "demo_reply", "sys_user", "plg_cron_job", "sys_migration",
 			"schema_migrations", "Bad Table", "x;drop table y", "no_pk"},
 		cols: map[string][]RawColumn{
 			"demo_item": richColumns(),
@@ -78,6 +78,25 @@ func newFake() *fakeReader {
 				{Name: "tenant_id", TypeName: "bigint"},
 				{Name: "content", TypeName: "text"},
 				{Name: "level", TypeName: "smallint"},
+			},
+			// 树形表：parent_id 自引用。
+			"demo_tree": {
+				{Name: "id", TypeName: "bigint", PrimaryKey: true},
+				{Name: "tenant_id", TypeName: "bigint"},
+				{Name: "title", TypeName: "varchar", Length: 100},
+				{Name: "parent_id", TypeName: "bigint", Nullable: true},
+				{Name: "created_at", TypeName: "datetime"},
+				{Name: "updated_at", TypeName: "datetime"},
+			},
+			// 主子表的子表：article_id 指向 demo_item。
+			"demo_reply": {
+				{Name: "id", TypeName: "bigint", PrimaryKey: true},
+				{Name: "tenant_id", TypeName: "bigint"},
+				{Name: "article_id", TypeName: "bigint"},
+				{Name: "content", TypeName: "text"},
+				{Name: "score", TypeName: "int"},
+				{Name: "created_at", TypeName: "datetime"},
+				{Name: "updated_at", TypeName: "datetime"},
 			},
 			"no_pk": {{Name: "a", TypeName: "int"}},
 		},
@@ -178,7 +197,7 @@ func TestClassifyAndShape(t *testing.T) {
 	}
 }
 
-func svc() *Service { return NewService(newFake()) }
+func svc() *Service { return NewService(newFake(), nil) }
 
 func TestServiceTablesAndRejects(t *testing.T) {
 	ctx := context.Background()
@@ -190,7 +209,7 @@ func TestServiceTablesAndRejects(t *testing.T) {
 	for _, x := range tabs {
 		names = append(names, x.Name)
 	}
-	if got, want := strings.Join(names, ","), "demo_item,dict_tag,no_pk,plain_note,tenant_note"; got != want {
+	if got, want := strings.Join(names, ","), "demo_item,demo_reply,demo_tree,dict_tag,no_pk,plain_note,tenant_note"; got != want {
 		t.Fatalf("tables = %s, want %s", got, want)
 	}
 	for _, bad := range []string{"sys_user", "plg_cron_job", "schema_migrations", "Bad Table", "x;drop table y", "ghost", "../etc"} {
@@ -409,11 +428,12 @@ func TestHandlersAndPermissions(t *testing.T) {
 	}
 
 	// 真实注册的路由：未登录一律被 core.Perm 拦下（不是 200）。
+	// 10 条 = 原 9 条 + 批量删除 DELETE /configs（复用 codegen:edit，不新增权限码）。
 	r := gin.New()
 	(&module{}).Register(r.Group("/api/v1"), &core.Deps{})
 	routes := r.Routes()
-	if len(routes) != 5 {
-		t.Fatalf("registered %d routes, want 5", len(routes))
+	if len(routes) != 10 {
+		t.Fatalf("registered %d routes, want 10", len(routes))
 	}
 	for _, rt := range routes {
 		req := httptest.NewRequest(rt.Method, strings.ReplaceAll(rt.Path, ":name", "demo_item"), strings.NewReader(`{}`))
@@ -451,16 +471,29 @@ func TestGeneratedCodeCompiles(t *testing.T) {
 		table, module string
 		cols          []ColumnConfig
 		def           *TableDef
+		sub           *SubTableSpec
 	}{
-		{"demo_item", "demo", nil, nil}, {"plain_note", "note", nil, nil}, {"dict_tag", "tag", nil, nil},
-		{"tenant_note", "tnote", nil, nil}, {"demo_item", "demotwo", allq, nil},
+		{"demo_item", "demo", nil, nil, nil}, {"plain_note", "note", nil, nil, nil}, {"dict_tag", "tag", nil, nil, nil},
+		{"tenant_note", "tnote", nil, nil, nil}, {"demo_item", "demotwo", allq, nil, nil},
 		{"", "softprod", nil, &TableDef{Name: "soft_product", Tenant: true, SoftDelete: true, Fields: []FieldDef{
 			{Name: "title", Kind: KindString, Length: 80, Required: true},
 			{Name: "qty", Kind: KindInt},
 			{Name: "published_at", Kind: KindDateTime},
+		}}, nil},
+		// 字典列：推荐配置直接是字典下拉，覆盖 DictSelect 渲染分支。
+		{"", "dictprod", nil, &TableDef{Name: "dict_product", Tenant: true, Fields: []FieldDef{
+			{Name: "title", Kind: KindString, Length: 80, Required: true},
+			{Name: "status", Kind: KindString, Dict: "sys_status"},
+		}}, nil},
+		// 树形表：TreeTable 列表 + 父级下拉的真实编译。
+		{"demo_tree", "treedemo", nil, nil, nil},
+		// 主子表：子行编辑器 + 事务保存的真实编译。
+		{"demo_item", "subdemo", nil, nil, &SubTableSpec{Table: "demo_reply", ForeignKey: "article_id", Columns: []ColumnConfig{
+			{Name: "content", Form: true, Control: "textarea"}, {Name: "score", Form: true, Control: "number"},
 		}}},
 	} {
-		out, err := svc().Generate(context.Background(), GenRequest{Table: tc.table, Define: tc.def, Module: tc.module, GoModule: "nexadmin", Columns: tc.cols})
+		// GoModule 留空：生成的代码要能在「本项目」编译，母版里是 nexadmin，派生项目里是用户自己的 module。
+		out, err := svc().Generate(context.Background(), GenRequest{Table: tc.table, Define: tc.def, Module: tc.module, Columns: tc.cols, Sub: tc.sub})
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -1,15 +1,15 @@
-import { defineMock, mockError } from '@/framework/request/mock'
-import type { ColumnConfig, ColumnInfo, FieldDef, FieldKind, GenFile, GenOutput, GenRequest, Kind, TableDef, TableSchema } from './api'
+import { defineMock, genId, mockError } from '@/framework/request/mock'
+import type { ColumnConfig, ColumnInfo, FieldDef, FieldKind, GenFile, GenOutput, GenRequest, Kind, SaveConfigReq, SavedGenConfig, TableDef, TableSchema } from './api'
 
 // 与服务端一致的白名单与保留名（简化版）
 const IDENT = /^[a-z][a-z0-9_]{0,47}$/
 const MODULE = /^[a-z][a-z0-9_]{0,30}$/
-const NAME = /^[a-z][a-z0-9_]{0,43}$/
+const NAME = /^[a-z][a-z0-9_]{0,47}$/
 const RESERVED_MODULES = new Set(['user', 'role', 'menu', 'dept', 'post', 'dict', 'config', 'core', 'pkg', 'main', 'service', 'handler', 'form', 'view'])
 const FRAMEWORK = (n: string) => n.startsWith('sys_') || n.startsWith('plg_') || n === 'schema_migrations'
 const SYSTEM_FIELDS = new Set(['id', 'tenant_id', 'created_at', 'updated_at', 'deleted_at'])
 
-type Def = [name: string, type: string, kind: Kind, opts?: { pk?: boolean; nullable?: boolean; comment?: string; length?: number; def?: boolean }]
+type Def = [name: string, type: string, kind: Kind, opts?: { pk?: boolean; nullable?: boolean; comment?: string; length?: number; def?: boolean; dict?: string }]
 
 const TABLES: Record<string, Def[]> = {
   biz_article: [
@@ -20,7 +20,7 @@ const TABLES: Record<string, Def[]> = {
     ['author', 'varchar', 'string', { comment: '作者', length: 50 }],
     ['views', 'int', 'int', { comment: '浏览量' }],
     ['is_top', 'tinyint', 'bool', { comment: '是否置顶' }],
-    ['status', 'varchar', 'string', { comment: '状态', length: 20, def: true }],
+    ['status', 'varchar', 'string', { comment: '状态', length: 64, def: true, dict: 'article_status' }],
     ['published_at', 'datetime', 'datetime', { comment: '发布时间', nullable: true }],
     ['cover', 'blob', '', { nullable: true }],
     ['created_at', 'datetime', 'datetime'],
@@ -38,9 +38,25 @@ const TABLES: Record<string, Def[]> = {
 }
 
 const CONTROLS: Record<string, ColumnConfig['control'][]> = {
-  string: ['input', 'textarea'], text: ['textarea', 'input'], int: ['number', 'input'], float: ['number', 'input'],
+  string: ['input', 'textarea', 'dict'], text: ['textarea', 'input'], int: ['number', 'input'], float: ['number', 'input'],
   id: ['input'], bool: ['switch'], date: ['date'], datetime: ['datetime'],
 }
+
+// 已保存配置：mock 里两条示例，覆盖「已有表」与「新建表」两种来源。
+// ID 用 19 位数字串（与后端 idgen 雪花同形状）：批量删的 ?ids= 校验按后端口径只收正整数，
+// 这里若用 cfg-1 这种非数字 ID，前端一删就 400，接不上。
+let savedConfigs: SavedGenConfig[] = [
+  {
+    id: '7440000000000000001', name: '文章模块（示例）', module: 'article', goModule: '',
+    table: 'biz_article',
+    columns: [],
+  },
+  {
+    id: '7440000000000000002', name: '联系人模块（示例）', module: 'contact', goModule: '',
+    table: 'biz_contact',
+    columns: [],
+  },
+]
 
 const REQUIRABLE_KINDS: Kind[] = ['string', 'text', 'date', 'datetime']
 
@@ -66,6 +82,10 @@ function toSchema(table: string, defs: Def[]): TableSchema {
     const cfg: ColumnConfig = { name, list: false, query: false, form: false, required: false, control: '' }
     if (supported && !system) {
       cfg.control = CONTROLS[kind][0]
+      if (o.dict) {
+        cfg.control = 'dict'
+        cfg.dict = o.dict
+      }
       cfg.form = true
       cfg.required = REQUIRABLE_KINDS.includes(kind) && !o.nullable && !o.def
       if (kind !== 'text' && lists < 8) {
@@ -86,10 +106,10 @@ function toSchema(table: string, defs: Def[]): TableSchema {
     }
     return {
       name, type, kind, nullable: !!o.nullable, primaryKey: !!o.pk, comment: o.comment ?? '', system, supported,
-      reason: supported ? undefined : 'unsupported column type', length: o.length, config: cfg,
+      reason: supported ? undefined : 'unsupported column type', length: o.length, dict: o.dict, config: cfg,
     }
   })
-  return { table, shape: tenant ? (stamps ? 'tenant' : 'plain') : stamps ? 'platform' : 'plain', tenant, suggestedModule: moduleName(table), columns }
+  return { table, shape: tenant ? (stamps ? 'tenant' : 'plain') : stamps ? 'platform' : 'plain', tenant, tree: false, suggestedModule: moduleName(table), columns }
 }
 
 function schemaOf(table: string): TableSchema {
@@ -120,7 +140,8 @@ function schemaOfDef(def: TableDef): TableSchema {
       nullable: requirable ? !f.required : false,
       def: !requirable,
       comment: f.comment,
-      length: f.kind === 'string' ? f.length || 255 : undefined,
+      length: f.kind === 'string' ? (f.dict ? 64 : f.length || 255) : undefined,
+      dict: f.dict,
     }])
   }
   defs.push(['created_at', 'datetime', 'datetime'], ['updated_at', 'datetime', 'datetime'])
@@ -269,4 +290,59 @@ defineMock([
   },
   { method: 'POST', url: '/plugins/codegen/preview', handler: ({ body }) => generate(body as GenRequest) },
   { method: 'POST', url: '/plugins/codegen/download', handler: ({ body }) => generate(body as GenRequest) },
+  {
+    method: 'POST',
+    url: '/plugins/codegen/install',
+    handler: ({ body }) => {
+      const out = generate(body as GenRequest)
+      // mock 模式没有真实磁盘：全部算写入，给界面走通回执链路。
+      return { written: out.files.map((f) => f.path), skipped: [] }
+    },
+  },
+  { method: 'GET', url: '/plugins/codegen/configs', handler: () => savedConfigs },
+  {
+    method: 'POST',
+    url: '/plugins/codegen/configs',
+    handler: ({ body }) => {
+      const req = body as SaveConfigReq
+      if (!req.name?.trim() || !req.module) mockError(400, 'bad request')
+      const existing = savedConfigs.find((c) => c.name === req.name.trim())
+      const row: SavedGenConfig = {
+        id: existing?.id ?? genId(),
+        name: req.name.trim(),
+        module: req.module,
+        goModule: req.goModule ?? '',
+        table: req.table ?? '',
+        define: req.define,
+        columns: req.columns ?? [],
+      }
+      savedConfigs = existing ? savedConfigs.map((c) => (c.id === existing.id ? row : c)) : [...savedConfigs, row]
+      return row
+    },
+  },
+  {
+    method: 'DELETE',
+    url: '/plugins/codegen/configs/:id',
+    handler: ({ params }) => {
+      savedConfigs = savedConfigs.filter((c) => c.id !== params.id)
+      return { ok: true }
+    },
+  },
+  {
+    // 批量删除：与后端 DELETE /plugins/codegen/configs?ids= 同口径（service.DeleteConfigs 一条 DELETE 走完）。
+    // ids 缺失 / 整体为空 / 任一项不是正整数（含 0）一律 400，绝不退化成「清空所有配置」；
+    // 只真删点名的那几条，返回实删条数 deleted；一条都没命中 404，不静默返回 deleted=0。
+    method: 'DELETE',
+    url: '/plugins/codegen/configs',
+    handler: ({ query }) => {
+      const parts = String(query.ids ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+      if (parts.length === 0 || parts.some((s) => !/^\d+$/.test(s) || /^0+$/.test(s))) mockError(400, 'Bad request')
+      const ids = new Set(parts)
+      const before = savedConfigs.length
+      savedConfigs = savedConfigs.filter((c) => !ids.has(c.id))
+      const deleted = before - savedConfigs.length
+      if (deleted === 0) mockError(404, 'Not found')
+      return { deleted }
+    },
+  },
 ])

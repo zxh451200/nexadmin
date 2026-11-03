@@ -11,13 +11,35 @@ export interface [[.Pascal]] {
   createdAt: string
   updatedAt: string
 [[- end]]
+[[- if .Sub]]
+  /** 子行只在详情接口返回；列表行不带 */
+  [[.Sub.JSONPlural]]?: [[.Sub.Pascal]][]
+[[- end]]
 }
 
 export interface [[.Pascal]]Form {
 [[- range .FormFields]]
   [[.Camel]]: [[.TSType]]
 [[- end]]
+[[- if .Sub]]
+  /** 子行随主表整存整取：每次保存都全量重写，ID 由服务端重新生成 */
+  [[.Sub.JSONPlural]]: [[.Sub.Pascal]]Form[]
+[[- end]]
 }
+[[- if .Sub]]
+export interface [[.Sub.Pascal]] {
+  id: string
+[[- range .Sub.Fields]]
+  [[.Camel]]: [[.TSType]]
+[[- end]]
+}
+
+export interface [[.Sub.Pascal]]Form {
+[[- range .Sub.FormFields]]
+  [[.Camel]]: [[if eq .Kind "bool"]]boolean[[else if or (eq .Kind "int") (eq .Kind "float")]]number[[else]]string[[end]]
+[[- end]]
+}
+[[- end]]
 
 /** 列表查询：各查询条件的值（字符串，空表示不筛选）。 */
 export type [[.Pascal]]Query = PageQuery
@@ -31,6 +53,16 @@ export function use[[.Pascal]]List(query: [[.Pascal]]Query) {
     placeholderData: keepPreviousData,
   })
 }
+[[- if .Sub]]
+/** 详情：子行只在这里返回，编辑弹窗靠它还原既有子行。 */
+export function use[[.Pascal]]Detail(id: string | undefined) {
+  return useQuery({
+    queryKey: [...KEY, 'detail', id],
+    queryFn: () => api.get<[[.Pascal]]>(`/[[.Plural]]/${id}`),
+    enabled: !!id,
+  })
+}
+[[- end]]
 
 export function useSave[[.Pascal]]() {
   const qc = useQueryClient()

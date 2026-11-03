@@ -2,31 +2,53 @@ package codegen
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"gorm.io/gorm"
 
 	"nexadmin/core/response"
+	"nexadmin/pkg/idgen"
 )
 
-// Service 是代码生成器的业务层。无状态：读当前库的表结构，或按定义合成；渲染结果全部在内存里。
-type Service struct{ reader SchemaReader }
+// Service 是代码生成器的业务层。渲染无状态：读当前库的表结构或按定义合成，结果全在内存里；
+// 唯一落库的是「保存的生成配置」（plg_codegen_config），让向导可以存一份下次继续改。
+type Service struct {
+	reader SchemaReader
+	db     *gorm.DB
+}
 
-// NewService 创建服务。
-func NewService(r SchemaReader) *Service { return &Service{reader: r} }
+// NewService 创建服务。db 可为 nil（单测只渲染时）：配置读写随之不可用。
+func NewService(r SchemaReader, db *gorm.DB) *Service { return &Service{reader: r, db: db} }
 
 // TableInfo 是 GET /tables 的一项。
 type TableInfo struct {
 	Name string `json:"name"`
 }
 
+// SubTableSpec 是主子表模式的子表：Table 必须已有（子表不能凭空定义），
+// ForeignKey 是子表里指向主表的 BIGINT *_id 列，子行随主表整存整取。
+type SubTableSpec struct {
+	Table      string         `json:"table" binding:"max=64"`
+	ForeignKey string         `json:"foreignKey" binding:"max=64"`
+	Columns    []ColumnConfig `json:"columns" binding:"max=200,dive"`
+}
+
 // GenRequest 是 /preview 与 /download 的请求体。Table 与 Define 二选一：已有表给 Table，
 // 新建表给 Define（生成物会附带三份迁移）。Columns 只提供每列的展示配置，
 // 列的类型 / 可空 / 主键一律由服务端重新读库或按定义合成，不信任客户端。
+// Sub 可选：给了就按主子表生成（子行编辑器 + 事务整存整取）。
 type GenRequest struct {
 	Table    string         `json:"table" binding:"max=64"`
 	Module   string         `json:"module" binding:"required,max=64"`
 	GoModule string         `json:"goModule" binding:"max=100"`
 	Columns  []ColumnConfig `json:"columns" binding:"max=200,dive"`
 	Define   *TableDef      `json:"define"`
+	Sub      *SubTableSpec  `json:"sub"`
 }
 
 // SchemaRequest 是 /schema 的入参：已有表给 Table，新建表给 Define。
@@ -144,9 +166,297 @@ func (s *Service) Generate(ctx context.Context, req GenRequest) (*Output, error)
 	if def != nil {
 		spec.Migrations = def.migrations()
 	}
+	if req.Sub != nil {
+		if req.Sub.Table == a.Table {
+			return nil, badReq(fmt.Errorf("sub table must differ from the main table"))
+		}
+		subA, err := s.analyze(ctx, req.Sub.Table)
+		if err != nil {
+			return nil, err
+		}
+		sub, err := buildSubSpec(subA, req.Sub.ForeignKey, req.Sub.Columns, spec.Pascal)
+		if err != nil {
+			return nil, badReq(err)
+		}
+		if sub.Tenant && !spec.Tenant {
+			return nil, badReq(fmt.Errorf("sub table %q is tenant-scoped but the main table is not", sub.Table))
+		}
+		spec.Sub = sub
+	}
 	out, err := Render(spec)
 	if err != nil {
 		return nil, response.Internal().Wrap(err)
 	}
 	return out, nil
+}
+
+// InstallResult 是直写项目的回执：写入了哪些文件、哪些因已存在被跳过。
+type InstallResult struct {
+	Written []string `json:"written"`
+	Skipped []string `json:"skipped"`
+}
+
+// projectRoot 解析写入根目录：优先 NEXADMIN_ROOT 环境变量，否则用后端进程的工作目录
+// （dev 模式 `go run ./cmd/server` 就是仓库根）。只有看起来像项目根（有 go.mod）的
+// 目录才接受——写错地方比写不了更糟。
+func projectRoot() (string, error) {
+	root := os.Getenv("NEXADMIN_ROOT")
+	if root == "" {
+		wd, err := os.Getwd()
+		if err != nil {
+			return "", err
+		}
+		root = wd
+	}
+	if _, err := os.Stat(filepath.Join(root, "go.mod")); err != nil {
+		return "", fmt.Errorf("%q has no go.mod; set NEXADMIN_ROOT to the project root", root)
+	}
+	return filepath.Abs(root)
+}
+
+// detectGoModule 是「Go 模块路径」留空时的 import 前缀：从项目根向上找最近的 go.mod，读它的 module 行。
+// 母版里得到 nexadmin（与旧默认一致），派生项目里得到用户自己的模块路径——
+// 写死 nexadmin 会让二开项目生成的代码 import 一个根本不存在的包。
+func detectGoModule() string {
+	dir, err := projectRoot()
+	if err != nil {
+		if dir, err = os.Getwd(); err != nil {
+			return "nexadmin"
+		}
+	}
+	for d := filepath.Clean(dir); ; {
+		if m, ok := goModuleLine(filepath.Join(d, "go.mod")); ok {
+			return m
+		}
+		up := filepath.Dir(d)
+		if up == d {
+			return "nexadmin"
+		}
+		d = up
+	}
+}
+
+// goModuleLine 读 go.mod 的 module 行（只认 `module <路径>` 单行写法）。
+func goModuleLine(path string) (string, bool) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return "", false
+	}
+	for _, l := range strings.Split(string(raw), "\n") {
+		if f := strings.Fields(l); len(f) == 2 && f[0] == "module" {
+			return strings.Trim(f[1], `"`), true
+		}
+	}
+	return "", false
+}
+
+// Install 把渲染结果写进项目根目录；已存在的文件默认跳过（overwrite=false）。
+// 路径在渲染层已过白名单，这里再核一道并确保没有逃逸出根目录。
+func (s *Service) Install(ctx context.Context, req GenRequest, overwrite bool) (*InstallResult, error) {
+	out, err := s.Generate(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	root, err := projectRoot()
+	if err != nil {
+		return nil, response.BadRequest("codegen.install_no_root").Wrap(err)
+	}
+	res := &InstallResult{Written: []string{}, Skipped: []string{}}
+	for _, f := range out.Files {
+		if !validOutPath(f.Path) {
+			return nil, response.Internal().Wrap(fmt.Errorf("unsafe output path %q", f.Path))
+		}
+		full := filepath.Join(root, filepath.FromSlash(f.Path))
+		if rel, err := filepath.Rel(root, full); err != nil || rel == ".." || filepath.IsAbs(rel) {
+			return nil, response.Internal().Wrap(fmt.Errorf("output path escapes project root: %q", f.Path))
+		}
+		if !overwrite {
+			if _, err := os.Stat(full); err == nil {
+				res.Skipped = append(res.Skipped, f.Path)
+				continue
+			}
+		}
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			return nil, err
+		}
+		if err := os.WriteFile(full, []byte(f.Content), 0o644); err != nil {
+			return nil, err
+		}
+		res.Written = append(res.Written, f.Path)
+	}
+	return res, nil
+}
+
+// ---- 保存的生成配置 ----
+
+// maxConfigs 是配置存量的上限：配置是给人工复用的小数据，超了就该清理，而不是无限堆。
+const maxConfigs = 200
+
+// ConfigForm 是保存生成配置的入参；Table 与 Define 二选一，与 GenRequest 同构。
+type ConfigForm struct {
+	Name     string         `json:"name" binding:"required,max=64"`
+	Module   string         `json:"module" binding:"required,max=32"`
+	GoModule string         `json:"goModule" binding:"max=100"`
+	Table    string         `json:"table" binding:"max=64"`
+	Define   *TableDef      `json:"define"`
+	Columns  []ColumnConfig `json:"columns" binding:"max=200,dive"`
+	Sub      *SubTableSpec  `json:"sub"`
+}
+
+// SavedConfig 是载入配置所需的最小形状（前端据此还原向导状态）。
+type SavedConfig struct {
+	ID       idgen.ID      `json:"id"`
+	Name     string        `json:"name"`
+	Module   string        `json:"module"`
+	GoModule string        `json:"goModule"`
+	Table    string        `json:"table"`
+	Define   *TableDef     `json:"define,omitempty"`
+	Columns  []ColumnConfig `json:"columns"`
+	Sub      *SubTableSpec `json:"sub,omitempty"`
+}
+
+// ListConfigs 列出全部保存的配置（按更新时间倒序）。
+func (s *Service) ListConfigs(ctx context.Context) ([]SavedConfig, error) {
+	if s.db == nil {
+		return nil, response.Internal()
+	}
+	var rows []CodegenConfig
+	if err := s.db.WithContext(ctx).Order("updated_at DESC, id DESC").Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make([]SavedConfig, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, r.view())
+	}
+	return out, nil
+}
+
+// SaveConfig 按名字保存（同名即更新）。上限 maxConfigs，防止无人清理的配置无限增长。
+func (s *Service) SaveConfig(ctx context.Context, f ConfigForm) (*SavedConfig, error) {
+	if s.db == nil {
+		return nil, response.Internal()
+	}
+	f.Name = strings.TrimSpace(f.Name)
+	if f.Name == "" {
+		return nil, badReq(fmt.Errorf("config name is required"))
+	}
+	if err := ValidModule(f.Module); err != nil {
+		return nil, badReq(err)
+	}
+	if f.GoModule != "" {
+		if err := ValidGoModule(f.GoModule); err != nil {
+			return nil, badReq(err)
+		}
+	}
+	var n int64
+	if err := s.db.WithContext(ctx).Model(&CodegenConfig{}).Count(&n).Error; err != nil {
+		return nil, err
+	}
+	defineJSON, columnsJSON, subJSON := "", "", ""
+	if f.Define != nil {
+		td, err := f.Define.normalize()
+		if err != nil {
+			return nil, badReq(err)
+		}
+		raw, err := json.Marshal(f.Define)
+		if err != nil {
+			return nil, response.Internal().Wrap(err)
+		}
+		defineJSON = string(raw)
+		f.Table = td.table
+	}
+	if len(f.Columns) > 0 {
+		raw, err := json.Marshal(f.Columns)
+		if err != nil {
+			return nil, response.Internal().Wrap(err)
+		}
+		columnsJSON = string(raw)
+	}
+	if f.Sub != nil {
+		raw, err := json.Marshal(f.Sub)
+		if err != nil {
+			return nil, response.Internal().Wrap(err)
+		}
+		subJSON = string(raw)
+	}
+	var row CodegenConfig
+	err := s.db.WithContext(ctx).Where("name = ?", f.Name).First(&row).Error
+	switch {
+	case err == nil:
+		row.Module, row.GoModule, row.Table = f.Module, f.GoModule, f.Table
+		row.DefineJSON, row.ColumnsJSON, row.SubJSON = defineJSON, columnsJSON, subJSON
+		if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
+			return nil, err
+		}
+	case isNotFound(err):
+		if n >= maxConfigs {
+			return nil, response.BadRequest("codegen.config_too_many")
+		}
+		row = CodegenConfig{
+			Name: f.Name, Module: f.Module, GoModule: f.GoModule, Table: f.Table,
+			DefineJSON: defineJSON, ColumnsJSON: columnsJSON, SubJSON: subJSON,
+		}
+		if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
+			return nil, err
+		}
+	default:
+		return nil, err
+	}
+	v := row.view()
+	return &v, nil
+}
+
+// DeleteConfig 删除一份保存的配置；不存在的 ID 忽略。
+func (s *Service) DeleteConfig(ctx context.Context, id idgen.ID) error {
+	if s.db == nil {
+		return response.Internal()
+	}
+	return s.db.WithContext(ctx).Delete(&CodegenConfig{}, "id = ?", int64(id)).Error
+}
+
+// DeleteConfigs 批量删除保存的生成配置。逐条判断与单条 DeleteConfig 完全一致：一行配置自包含
+// （表定义 / 列配置 / 子表都在同一行的 JSON 列里），既不引用别的表也没有「内置不可删」这类护栏，
+// 所以批量也不新增判断；一条 DELETE 在 GORM 自带事务里走完，不会出现「删了一半」。
+// plg_codegen_config 是平台级表（PlatformModel 没有 tenant_id 列），这里可钉的范围就是点名的 id 集合：
+// 去掉 id IN 条件等于清掉所有人存过的配置。越权 / 已不存在的 id 删不到，也不计入实删数；
+// 0 命中报不存在，不静默返回 deleted=0 让界面以为删成功了。
+func (s *Service) DeleteConfigs(ctx context.Context, ids []idgen.ID) (int64, error) {
+	if s.db == nil {
+		return 0, response.Internal()
+	}
+	list := make([]int64, 0, len(ids))
+	for _, id := range ids {
+		list = append(list, int64(id))
+	}
+	res := s.db.WithContext(ctx).Where("id IN ?", list).Delete(&CodegenConfig{})
+	if res.Error != nil {
+		return 0, res.Error
+	}
+	if res.RowsAffected == 0 {
+		return 0, response.NotFound("error.not_found")
+	}
+	return res.RowsAffected, nil
+}
+
+func isNotFound(err error) bool { return errors.Is(err, gorm.ErrRecordNotFound) }
+
+// view 把存储行还原成可载入的配置；JSON 损坏按缺失处理（配置坏了不该挡住列表）。
+func (r CodegenConfig) view() SavedConfig {
+	v := SavedConfig{ID: r.ID, Name: r.Name, Module: r.Module, GoModule: r.GoModule, Table: r.Table}
+	if r.DefineJSON != "" {
+		var d TableDef
+		if json.Unmarshal([]byte(r.DefineJSON), &d) == nil {
+			v.Define = &d
+		}
+	}
+	if r.ColumnsJSON != "" {
+		_ = json.Unmarshal([]byte(r.ColumnsJSON), &v.Columns)
+	}
+	if r.SubJSON != "" {
+		var s SubTableSpec
+		if json.Unmarshal([]byte(r.SubJSON), &s) == nil {
+			v.Sub = &s
+		}
+	}
+	return v
 }

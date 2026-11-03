@@ -3,7 +3,7 @@
     "menu": "代码生成器",
     "title": "代码生成器",
     "description": "免费代码生成器：读取已有业务表，或直接定义新表；按推荐配置生成 Go 模块与前端页面，先预览再打包 zip 下载",
-    "btn": { "download": "下载代码包" },
+    "btn": { "download": "下载代码包", "install": "写入项目", "saveConfig": "保存配置" },
     "steps": { "table": "1. 选择表", "config": "2. 配置列", "preview": "3. 预览与下载" },
     "tables": {
       "name": "表名",
@@ -37,6 +37,7 @@
       "fieldName": "字段名",
       "fieldType": "类型",
       "fieldLength": "长度",
+      "fieldDict": "字典编码",
       "fieldRequired": "必填",
       "fieldComment": "注释",
       "submit": "创建并继续",
@@ -51,19 +52,20 @@
         "date": "日期",
         "datetime": "日期时间"
       },
-      "errName": "表名需为小写字母开头，只含字母、数字、下划线，最长 44 位",
+      "errName": "表名（不含 biz_ 前缀）需为小写字母开头，只含字母、数字、下划线，最长 48 位",
       "errMigration": "迁移编号需为 1-4 位数字且大于 0",
       "errFields": "至少添加一个字段",
       "errFieldName": "字段名需为小写字母开头，只含字母、数字、下划线",
       "errReserved": "id / tenant_id / created_at / updated_at / deleted_at 是系统列，不能作为字段名",
       "errFieldDup": "字段名重复",
-      "errLength": "长度需为 1-4000 的整数"
+      "errLength": "长度需为 1-4000 的整数",
+      "errDict": "字典编码需为小写字母开头，只含字母、数字、下划线"
     },
     "config": {
       "module": "模块名",
       "moduleHint": "小写字母开头的字母数字，同时作为 Go 包名、前端目录名和 i18n 命名空间",
       "goModule": "Go 模块路径",
-      "goModuleHint": "你的项目 go.mod 里的 module，留空使用 nexadmin",
+      "goModuleHint": "你的项目 go.mod 里的 module；留空自动读本项目的 go.mod",
       "shape": "表形态：{{shape}}"
     },
     "shape": {
@@ -80,14 +82,14 @@
       "form": "表单字段",
       "required": "必填",
       "control": "控件",
+      "dictCode": "字典编码",
       "system": "系统列",
       "unsupported": "不支持",
       "empty": "这张表没有列"
     },
-    "controls": { "input": "输入框", "textarea": "多行文本", "number": "数字", "switch": "开关", "date": "日期", "datetime": "日期时间" },
+    "controls": { "input": "输入框", "textarea": "多行文本", "number": "数字", "switch": "开关", "date": "日期", "datetime": "日期时间", "dict": "字典下拉" },
     "preview": {
-      "path": "文件路径",
-      "lang": "类型",
+      "files": "文件",
       "empty": "没有生成任何文件",
       "viewer": "代码查看",
       "readonly": "只读",
@@ -100,11 +102,40 @@
     },
     "notes": {
       "import_line": "在 internal/modules/modules.go 加一行空导入，重新编译并重启后自动补菜单：",
-      "api_prefix": "接口前缀：",
+      "api_prefix": "所有接口都挂在{{value}}下",
       "migration": "已附带三份建表迁移，按你项目的编号放进 migrations/business 后重启自动建表：",
       "null_zero": "表已存在，不生成迁移；值为 NULL 的列读出为零值，保存时写回零值。"
     },
-    "action": { "back": "上一步", "preview": "预览文件", "download": "下载 zip" },
+    "action": { "back": "上一步", "preview": "预览文件", "download": "下载 zip", "install": "写入项目", "saveConfig": "保存配置" },
+    "saved": {
+      "title": "已保存配置",
+      "name": "配置名称",
+      "load": "载入",
+      "empty": "还没有保存的配置",
+      "saveTitle": "保存生成配置",
+      "saveHint": "同名会覆盖更新；只保存表/定义与列配置，代码每次现场生成。",
+      "saved": "已保存配置「{{name}}」，在「已保存配置」里可随时载入",
+      "deleteConfirm": "删除配置「{{name}}」？",
+      "deleteBatchConfirm": "确认删除选中的 {{count}} 个配置？",
+      "deletedPartial": "已删除 {{deleted}}/{{total}} 个配置（其余可能已被删除）"
+    },
+    "install": {
+      "title": "写入项目",
+      "desc": "把生成的文件写入项目根目录（后端进程的工作目录，可用环境变量 NEXADMIN_ROOT 指定；目录里必须有 go.mod）。",
+      "overwrite": "覆盖已存在的文件",
+      "overwriteHint": "默认只新增不覆盖：已存在的文件会跳过并在回执里列出，多份生成物可以安全并存。",
+      "restartHint": "写入后需要重新编译并重启后端；新建表的迁移文件放进 migrations/business 后重启自动建表。",
+      "done": "已写入 {{written}} 个文件，跳过 {{skipped}} 个已存在文件"
+    },
+    "sub": {
+      "title": "主子表（可选）",
+      "hint": "选一张已有表作为子表：它需要一个指向主表的 BIGINT *_id 外键列，子行随主表整存整取（每次保存全量重写，ID 由服务端重新生成）。",
+      "select": "子表",
+      "none": "不生成主子表",
+      "fk": "外键列",
+      "fkRequired": "请选择子表里指向主表的外键列",
+      "treeReject": "树形表不能作为主子表的子表"
+    },
     "downloaded": "代码包已下载",
     "done": { "title": "下一步", "description": "解压到项目根目录后，按下面几步接入：" },
     "errors": {

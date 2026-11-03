@@ -5,6 +5,12 @@ import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+[[- if .HasDictList]]
+import { DictTag } from '@/framework/components/DictTag'
+[[- end]]
+[[- if .HasDictQuery]]
+import { DictSelect } from '@/framework/components/DictSelect'
+[[- end]]
 [[- if .HasKindQuery "date"]]
 import { DatePicker } from '@/framework/components/DatePicker'
 [[- end]]
@@ -18,6 +24,9 @@ import { Input } from '@/framework/ui/input'
 [[- end]]
 [[- if .HasKindQuery "bool"]]
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
+[[- end]]
+[[- if .Tree]]
+import { TreeTable } from '@/framework/components/TreeTable'
 [[- end]]
 import { useDelete[[.Pascal]]s, use[[.Pascal]]List, type [[.Pascal]][[if .QueryFields]], type [[.Pascal]]Query[[end]] } from './api'
 import { [[.Pascal]]FormDialog } from './[[.Pascal]]FormDialog'
@@ -36,6 +45,27 @@ function fmt(v: string | null, lang: string, withTime: boolean) {
 
 const ALL = '__all__'
 [[- end]]
+[[- if .Tree]]
+
+type [[.Pascal]]Tree = [[.Pascal]] & { children?: [[.Pascal]]Tree[] }
+
+// buildTree 把服务端的平铺分页结果按 parentId 组装成树；parentId 为空或指向
+// 不存在的行（数据异常 / 被过滤掉）时按根节点处理，不让任何一行静默消失。
+function buildTree(rows: [[.Pascal]][]): [[.Pascal]]Tree[] {
+  const byId = new Map(rows.map((r) => [r.id, { ...r } as [[.Pascal]]Tree]))
+  const roots: [[.Pascal]]Tree[] = []
+  for (const r of rows) {
+    const node = byId.get(r.id)!
+    const parent = r.parentId ? byId.get(r.parentId) : undefined
+    if (parent && parent !== node) {
+      ;(parent.children ??= []).push(node)
+    } else {
+      roots.push(node)
+    }
+  }
+  return roots
+}
+[[- end]]
 
 export default function [[.Pascal]]Page() {
   const { t[[if .HasTimeList]], i18n[[end]] } = useTranslation()
@@ -44,11 +74,18 @@ export default function [[.Pascal]]Page() {
   const [draft, setDraft] = useState<[[.Pascal]]Query>({})
   const [filters, setFilters] = useState<[[.Pascal]]Query>({})
 [[- end]]
+[[- if .Tree]]
+  // 树形列表一次拉全量（够大的站就该上懒加载树了，那不是生成器该自作主张的）。
+  const { data, isLoading } = use[[.Pascal]]List({ [[if .QueryFields]]...filters, [[end]]page: 1, pageSize: 1000 })
+[[- else]]
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const { data, isLoading } = use[[.Pascal]]List({ [[if .QueryFields]]...filters, [[end]]page, pageSize })
+[[- end]]
   const remove = useDelete[[.Pascal]]s()
+[[- if not .Tree]]
   const [selected, setSelected] = useState<string[]>([])
+[[- end]]
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<[[.Pascal]] | null>(null)
 
@@ -61,7 +98,9 @@ export default function [[.Pascal]]Page() {
     if (!(await confirm({ destructive: true, description: t('common.deleteConfirm') }))) return
     try {
       await remove.mutateAsync(ids)
+[[- if not .Tree]]
       setSelected((s) => s.filter((x) => !ids.includes(x)))
+[[- end]]
       toast.success(t('common.operateSuccess'))
     } catch {
       toast.error(t('common.operateFailed'))
@@ -76,7 +115,9 @@ export default function [[.Pascal]]Page() {
 [[- if eq $i 0]]
       mobile: 'title',
 [[- end]]
-[[- if eq $f.Kind "bool"]]
+[[- if $f.IsDict]]
+      render: (r) => <DictTag dict="[[$f.Dict]]" value={r.[[$f.Camel]]} />,
+[[- else if eq $f.Kind "bool"]]
       render: (r) => (r.[[$f.Camel]] ? t('common.yes') : t('common.no')),
 [[- else if eq $f.Kind "date"]]
       render: (r) => <span className="num">{fmt(r.[[$f.Camel]], i18n.language, false)}</span>,
@@ -108,18 +149,29 @@ export default function [[.Pascal]]Page() {
       <FilterBar
         onSearch={() => {
           setFilters(draft)
+[[- if not .Tree]]
           setPage(1)
           setSelected([])
+[[- end]]
         }}
         onReset={() => {
           setDraft({})
           setFilters({})
+[[- if not .Tree]]
           setPage(1)
           setSelected([])
+[[- end]]
         }}
       >
 [[- range .QueryFields]]
-[[- if eq .Kind "bool"]]
+[[- if .IsDict]]
+        <DictSelect
+          dict="[[.Dict]]"
+          allLabel={t('[[$.Module]].field.[[.Camel]]')}
+          value={(draft.[[.Camel]] as string | undefined) ?? ''}
+          onChange={(v) => setDraft((d) => ({ ...d, [[.Camel]]: v || undefined }))}
+        />
+[[- else if eq .Kind "bool"]]
         <Select value={(draft.[[.Camel]] as string | undefined) ?? ALL} onValueChange={(v) => setDraft((d) => ({ ...d, [[.Camel]]: v === ALL ? undefined : v }))}>
           <SelectTrigger className="md:w-40" aria-label={t('[[$.Module]].field.[[.Camel]]')}>
             <SelectValue />
@@ -145,6 +197,30 @@ export default function [[.Pascal]]Page() {
       </FilterBar>
 [[- end]]
 
+[[- if .Tree]]
+      <TreeTable
+        columns={columns}
+        data={buildTree(data?.list ?? [])}
+        loading={isLoading}
+        defaultExpandAll
+        columnSettingsKey="[[.Module]]-list"
+        emptyText={t('[[.Module]].empty')}
+        rowActions={(r) => (
+          <>
+            <Can perm="[[.Module]]:edit">
+              <Button variant="ghost" size="icon" aria-label={t('common.edit')} onClick={() => openForm(r)}>
+                <Pencil aria-hidden="true" />
+              </Button>
+            </Can>
+            <Can perm="[[.Module]]:delete">
+              <Button variant="ghost" size="icon" className="text-destructive" aria-label={t('common.delete')} onClick={() => onDelete([r.id])}>
+                <Trash2 aria-hidden="true" />
+              </Button>
+            </Can>
+          </>
+        )}
+      />
+[[- else]]
       <DataTable
         columns={columns}
         data={data?.list ?? []}
@@ -185,6 +261,7 @@ export default function [[.Pascal]]Page() {
           </>
         )}
       />
+[[- end]]
 
       <[[.Pascal]]FormDialog open={formOpen} onOpenChange={setFormOpen} editing={editing} />
     </PageContainer>

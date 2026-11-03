@@ -1,27 +1,33 @@
-import { useEffect, useMemo } from 'react'
+﻿import { useEffect, useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-[[- if .HasControl "date"]]
+[[- if or (.HasControl "date") .SubHasDate]]
 import { DatePicker } from '@/framework/components/DatePicker'
 [[- end]]
-[[- if .HasControl "datetime"]]
+[[- if or (.HasControl "datetime") .SubHasDateTime]]
 import { DateTimePicker } from '@/framework/components/DateTimePicker'
+[[- end]]
+[[- if .HasDictForm]]
+import { DictSelect } from '@/framework/components/DictSelect'
 [[- end]]
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { FormGrid, FormLayout } from '@/framework/components/FormLayout'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
-[[- if .HasControl "switch"]]
+[[- if or (.HasControl "switch") .SubHasSwitch]]
 import { Switch } from '@/framework/ui/switch'
 [[- end]]
-[[- if .HasControl "textarea"]]
+[[- if or (.HasControl "textarea") .SubHasTextarea]]
 import { Textarea } from '@/framework/ui/textarea'
 [[- end]]
+[[- if .Tree]]
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
+[[- end]]
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/framework/ui/form'
-import { useSave[[.Pascal]], type [[.Pascal]], type [[.Pascal]]Form } from './api'
+import { useSave[[.Pascal]][[if .Tree]], use[[.Pascal]]List[[end]][[if .Sub]], use[[.Pascal]]Detail[[end]], type [[.Pascal]][[if .Sub]], type [[.Sub.Pascal]]Form[[end]], type [[.Pascal]]Form } from './api'
 
 export interface [[.Pascal]]FormDialogProps {
   open: boolean
@@ -40,6 +46,11 @@ const empty: FormValues = {
   [[.Camel]]: [[if eq .Kind "bool"]]false[[else]]''[[end]],
 [[- end]]
 }
+[[- if .Sub]]
+
+// KidDraft 是子行的编辑草稿：控件友好（全 string / boolean），提交时再按类型转换。
+type KidDraft = Record<string, string | boolean>
+[[- end]]
 
 function toValues(r: [[.Pascal]]): FormValues {
   return {
@@ -60,6 +71,18 @@ function toBody(v: FormValues): [[.Pascal]]Form {
 export function [[.Pascal]]FormDialog({ open, onOpenChange, editing }: [[.Pascal]]FormDialogProps) {
   const { t } = useTranslation()
   const save = useSave[[.Pascal]]()
+[[- if .Tree]]
+  // 父级下拉的选项来自全量列表（树形表数据量有限）；编辑时排除自己，防止把自己挂成自己的子级。
+  const { data: all } = use[[.Pascal]]List({ page: 1, pageSize: 1000 })
+  const parentOptions = (all?.list ?? []).filter((r) => r.id !== editing?.id)
+[[- end]]
+[[- if .Sub]]
+  // 子行随主表整存整取：编辑时要拿详情接口里的既有子行（列表接口不带 children）。
+  // 草稿统一用 string / boolean（控件友好），提交时按字段类型转换。
+  const detail = use[[.Pascal]]Detail(editing?.id)
+  const [kids, setKids] = useState<KidDraft[]>([])
+  const patchKid = (i: number, p: KidDraft) => setKids((cur) => cur.map((r, j) => (j === i ? { ...r, ...p } : r)))
+[[- end]]
 
   const schema = useMemo(
     () =>
@@ -76,10 +99,26 @@ export function [[.Pascal]]FormDialog({ open, onOpenChange, editing }: [[.Pascal
   useEffect(() => {
     if (open) form.reset(editing ? toValues(editing) : empty)
   }, [open, editing, form])
+[[- if .Sub]]
+  useEffect(() => {
+    if (!open) return
+    const rows = detail.data?.[[.Sub.JSONPlural]] ?? editing?.[[.Sub.JSONPlural]] ?? []
+    setKids(rows.map((r) => ({ [[range $i, $f := .Sub.FormFields]][[if $i]], [[end]][[$f.Camel]]: [[if eq $f.Kind "bool"]]!!r.[[$f.Camel]][[else if or (eq $f.Kind "int") (eq $f.Kind "float")]]String(r.[[$f.Camel]] ?? '')[[else]]r.[[$f.Camel]] ?? ''[[end]][[end]] })))
+    // editing 有值但列表行不带 children，等详情到达后覆盖；保持依赖完整。
+  }, [open, editing, detail.data])
+[[- end]]
 
   const onSubmit = form.handleSubmit(async (v) => {
     try {
-      await save.mutateAsync({ id: editing?.id, data: toBody(v) })
+      await save.mutateAsync({
+        id: editing?.id,
+        data: {
+          ...toBody(v),
+[[- if .Sub]]
+          [[.Sub.JSONPlural]]: kids.map((k) => ({ [[range $i, $f := .Sub.FormFields]][[if $i]], [[end]][[$f.Camel]]: [[if eq $f.Kind "bool"]]!!k.[[$f.Camel]][[else if eq $f.Kind "int"]]Math.trunc(Number(k.[[$f.Camel]]) || 0)[[else if eq $f.Kind "float"]]Number(k.[[$f.Camel]]) || 0[[else if isTime $f]](String(k.[[$f.Camel]] || '') || null) as string | null[[else]]String(k.[[$f.Camel]] ?? '').trim()[[end]][[end]] })) as [[.Sub.Pascal]]Form[],
+[[- end]]
+        },
+      })
       toast.success(t('common.operateSuccess'))
       onOpenChange(false)
     } catch (e) {
@@ -124,10 +163,26 @@ export function [[.Pascal]]FormDialog({ open, onOpenChange, editing }: [[.Pascal
                 <FormItem>
                   <FormLabel>{t('[[$.Module]].field.[[.Camel]]')}</FormLabel>
                   <FormControl>
-[[- if eq .Control "date"]]
+[[- if and $.Tree (eq .Name "parent_id")]]
+                    <Select value={(field.value as string) || '__root__'} onValueChange={(v) => field.onChange(v === '__root__' ? '' : v)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder={t('[[$.Module]].field.[[.Camel]]')} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__root__">{t('[[$.Module]].treeRoot')}</SelectItem>
+                        {parentOptions.map((r) => (
+                          <SelectItem key={r.id} value={r.id}>
+                            {r.[[$.TreeLabel]]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+[[- else if eq .Control "date"]]
                     <DatePicker value={field.value as string} onChange={field.onChange} />
 [[- else if eq .Control "datetime"]]
                     <DateTimePicker value={field.value as string} onChange={field.onChange} />
+[[- else if eq .Control "dict"]]
+                    <DictSelect dict="[[.Dict]]" value={field.value as string} onChange={(v) => field.onChange(v)} allowClear={[[if .Required]]false[[else]]true[[end]]} />
 [[- else if eq .Control "textarea"]]
                     <Textarea rows={3} {...field} value={field.value as string} />
 [[- else if eq .Control "number"]]
@@ -143,6 +198,50 @@ export function [[.Pascal]]FormDialog({ open, onOpenChange, editing }: [[.Pascal
             />
 [[- end]]
           </FormGrid>
+[[- if .Sub]]
+          <section className="flex flex-col gap-2 rounded-md border border-border p-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-sm font-medium">{t('[[.Module]].sub.title')}</span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setKids((cur) => [...cur, { [[range $i, $f := .Sub.FormFields]][[if $i]], [[end]][[$f.Camel]]: [[if eq $f.Kind "bool"]]false[[else]]''[[end]][[end]] } as KidDraft])}
+              >
+                {t('[[.Module]].sub.add')}
+              </Button>
+            </div>
+            {kids.length === 0 ? <p className="text-xs text-muted-foreground">{t('[[.Module]].sub.empty')}</p> : null}
+            {kids.map((kid, i) => (
+              <div key={i} className="flex flex-col gap-2 rounded-md border border-border p-2">
+                <div className="grid gap-2 sm:grid-cols-2">
+[[- range $f := .Sub.FormFields]]
+                  <label className="flex flex-col gap-1 text-sm">
+                    <span>{t('[[$.Module]].field.[[$f.Camel]]')}</span>
+[[- if eq $f.Kind "bool"]]
+                    <Switch checked={!!kid.[[$f.Camel]]} onCheckedChange={(v) => patchKid(i, { [[$f.Camel]]: v })} />
+[[- else if eq $f.Control "date"]]
+                    <DatePicker value={String(kid.[[$f.Camel]] ?? '')} onChange={(v) => patchKid(i, { [[$f.Camel]]: v ?? '' })} />
+[[- else if eq $f.Control "datetime"]]
+                    <DateTimePicker value={String(kid.[[$f.Camel]] ?? '')} onChange={(v) => patchKid(i, { [[$f.Camel]]: v ?? '' })} />
+[[- else if eq $f.Control "textarea"]]
+                    <Textarea rows={2} value={String(kid.[[$f.Camel]] ?? '')} onChange={(e) => patchKid(i, { [[$f.Camel]]: e.target.value })} />
+[[- else]]
+                    <Input
+                      value={String(kid.[[$f.Camel]] ?? '')}
+                      [[if or (eq $f.Kind "int") (eq $f.Kind "float")]]type="number" [[end]]onChange={(e) => patchKid(i, { [[$f.Camel]]: e.target.value })}
+                    />
+[[- end]]
+                  </label>
+[[- end]]
+                </div>
+                <Button type="button" variant="ghost" size="sm" className="self-start text-destructive" onClick={() => setKids((cur) => cur.filter((_, j) => j !== i))}>
+                  {t('common.delete')}
+                </Button>
+              </div>
+            ))}
+          </section>
+[[- end]]
         </FormLayout>
       </Form>
     </ResponsiveDialog>

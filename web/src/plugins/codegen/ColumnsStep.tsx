@@ -1,6 +1,8 @@
+import { Info } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { FormGrid, FormLayout } from '@/framework/components/FormLayout'
+import { RequiredMark } from '@/framework/components/RequiredMark'
 import { Badge } from '@/framework/ui/badge'
 import { Checkbox } from '@/framework/ui/checkbox'
 import { Input } from '@/framework/ui/input'
@@ -30,6 +32,7 @@ export function ColumnsStep({ schema, cfg, onCfgChange, module, onModuleChange, 
     key,
     title: t(`plugin_codegen.col.${key}`),
     align: 'center',
+    width: 88,
     render: (c) => {
       const cur = byName.get(c.name)
       if (!cur) return null
@@ -48,6 +51,7 @@ export function ColumnsStep({ schema, cfg, onCfgChange, module, onModuleChange, 
     {
       key: 'name',
       title: t('plugin_codegen.col.name'),
+      width: 200,
       mobile: 'title',
       render: (c) => (
         <span className="flex flex-wrap items-center gap-2">
@@ -61,6 +65,7 @@ export function ColumnsStep({ schema, cfg, onCfgChange, module, onModuleChange, 
     {
       key: 'type',
       title: t('plugin_codegen.col.type'),
+      width: 150,
       mobile: 'sub',
       render: (c) => <span className="font-mono text-xs text-muted-foreground">{c.type}{c.nullable ? ' · NULL' : ''}</span>,
     },
@@ -72,23 +77,36 @@ export function ColumnsStep({ schema, cfg, onCfgChange, module, onModuleChange, 
     {
       key: 'control',
       title: t('plugin_codegen.col.control'),
+      width: 190,
       render: (c) => {
         const cur = byName.get(c.name)
         const options = CONTROLS[c.kind] ?? []
         if (!cur || !c.supported || c.system || !cur.form || options.length === 0) return <span className="text-muted-foreground">-</span>
         return (
-          <Select value={cur.control || options[0]} onValueChange={(v) => patch(c.name, { control: v as Control })} disabled={options.length < 2}>
-            <SelectTrigger className="w-32" aria-label={`${c.name} ${t('plugin_codegen.col.control')}`}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {options.map((o) => (
-                <SelectItem key={o} value={o}>
-                  {t(`plugin_codegen.controls.${o}`)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex items-center gap-1.5">
+            <Select value={cur.control || options[0]} onValueChange={(v) => patch(c.name, { control: v as Control, dict: v === 'dict' ? (cur.dict || '') : undefined })} disabled={options.length < 2}>
+              <SelectTrigger className="w-36" aria-label={`${c.name} ${t('plugin_codegen.col.control')}`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {options.map((o) => (
+                  <SelectItem key={o} value={o}>
+                    {t(`plugin_codegen.controls.${o}`)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {cur.control === 'dict' ? (
+              <Input
+                className="w-32 font-mono"
+                value={cur.dict ?? ''}
+                onChange={(e) => patch(c.name, { dict: e.target.value.trim().toLowerCase() })}
+                placeholder="sys_status"
+                aria-label={`${c.name} ${t('plugin_codegen.col.dictCode')}`}
+                maxLength={48}
+              />
+            ) : null}
+          </div>
         )
       },
     },
@@ -99,7 +117,10 @@ export function ColumnsStep({ schema, cfg, onCfgChange, module, onModuleChange, 
       <FormLayout onSubmit={(e) => e.preventDefault()}>
         <FormGrid cols={2}>
           <div className="flex flex-col gap-2">
-            <Label htmlFor="codegen-module">{t('plugin_codegen.config.module')}</Label>
+            <Label htmlFor="codegen-module">
+              {t('plugin_codegen.config.module')}
+              <RequiredMark />
+            </Label>
             <Input id="codegen-module" value={module} onChange={(e) => onModuleChange(e.target.value.trim())} maxLength={31} aria-invalid={!!moduleError} />
             <p className={moduleError ? 'text-xs text-destructive' : 'text-xs text-muted-foreground'}>{moduleError ?? t('plugin_codegen.config.moduleHint')}</p>
           </div>
@@ -109,9 +130,6 @@ export function ColumnsStep({ schema, cfg, onCfgChange, module, onModuleChange, 
             <p className={goModuleError ? 'text-xs text-destructive' : 'text-xs text-muted-foreground'}>{goModuleError ?? t('plugin_codegen.config.goModuleHint')}</p>
           </div>
         </FormGrid>
-        <p className="text-xs text-muted-foreground">
-          {t('plugin_codegen.config.shape', { shape: t(`plugin_codegen.shape.${schema.shape}`) })}
-        </p>
       </FormLayout>
       <DataTable
         columns={columns}
@@ -120,6 +138,12 @@ export function ColumnsStep({ schema, cfg, onCfgChange, module, onModuleChange, 
         pagination={false}
         columnSettingsKey="plugin-codegen-columns"
         emptyText={t('plugin_codegen.col.empty')}
+        toolbar={
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Info aria-hidden="true" className="size-3.5 shrink-0" />
+            {t('plugin_codegen.config.shape', { shape: t(`plugin_codegen.shape.${schema.shape}`) })}
+          </p>
+        }
       />
     </div>
   )

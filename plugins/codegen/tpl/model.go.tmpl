@@ -42,11 +42,14 @@ func ([[.Pascal]]) TableName() string { return "[[.Table]]" }
 type View struct {
 	ID idgen.ID `json:"id"`
 [[- range .Fields]]
-	[[.Pascal]] [[.GoType]] `json:"[[.Camel]]"`
+		[[.Pascal]] [[.GoType]] `json:"[[.Camel]]"`
 [[- end]]
 [[- if .HasStamps]]
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
+[[- end]]
+[[- if .Sub]]
+	Children [][[.Sub.Pascal]]View `json:"[[.Sub.JSONPlural]],omitempty"`
 [[- end]]
 }
 
@@ -54,6 +57,9 @@ type View struct {
 type Form struct {
 [[- range .FormFields]]
 	[[.Pascal]] [[.FormType]] `json:"[[.Camel]]"[[bind .]]`
+[[- end]]
+[[- if .Sub]]
+	Children [][[.Sub.Pascal]]Form `json:"[[.Sub.JSONPlural]]"`
 [[- end]]
 }
 
@@ -65,3 +71,40 @@ type ListQuery struct {
 	[[.Pascal]] [[queryType .]]
 [[- end]]
 }
+[[- if .Sub]]
+// [[.Sub.Pascal]] 对应子表 [[.Sub.Table]]：随主表整存整取（每次保存重写全部子行，ID 由服务端重新生成）。
+type [[.Sub.Pascal]] struct {
+[[- if eq .Sub.Shape "tenant"]]
+	database.TenantModel
+[[- else if eq .Sub.Shape "platform"]]
+	database.PlatformModel
+[[- else]]
+	ID idgen.ID `gorm:"column:id;primaryKey;autoIncrement:false"`
+[[- if .Sub.Tenant]]
+	TenantID idgen.ID `gorm:"column:tenant_id;not null"`
+[[- end]]
+[[- end]]
+	[[.Sub.FKPascal]] idgen.ID `gorm:"column:[[.Sub.FK]];index"`
+[[- range .Sub.Fields]]
+	[[.Pascal]] [[.GoType]] `gorm:"column:[[.Name]]"`[[if .Comment]] // [[.Comment]][[end]]
+[[- end]]
+}
+
+// TableName 指定子表表名。
+func ([[.Sub.Pascal]]) TableName() string { return "[[.Sub.Table]]" }
+
+// [[.Sub.Pascal]]View 是子行的接口返回。
+type [[.Sub.Pascal]]View struct {
+	ID idgen.ID `json:"id"`
+[[- range .Sub.Fields]]
+	[[.Pascal]] [[.GoType]] `json:"[[.Camel]]"`
+[[- end]]
+}
+
+// [[.Sub.Pascal]]Form 是子行的请求体；ID 不进来——子行每次保存都整行重写。
+type [[.Sub.Pascal]]Form struct {
+[[- range .Sub.FormFields]]
+	[[.Pascal]] [[.FormType]] `json:"[[.Camel]]"[[bind .]]`
+[[- end]]
+}
+[[- end]]

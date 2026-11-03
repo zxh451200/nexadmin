@@ -109,6 +109,14 @@ func mockValue(f Field, i int) string {
 	case KindID:
 		return fmt.Sprintf("'189000000000%07d'", i)
 	}
+	// 字典列的真实选项在运行时从字典接口取，mock 里只能给占位编码：
+	// DictTag 取不到标签时会原样显示编码，页面仍可用。
+	if f.IsDict() {
+		if i%2 == 0 {
+			return "'active'"
+		}
+		return "'disabled'"
+	}
 	return tsStr(fmt.Sprintf("%s %d", f.Title, i))
 }
 
@@ -170,6 +178,27 @@ func localeJSON(s *Spec, zh bool) string {
 		fmt.Fprintf(&b, "      %s: %s%s\n", str(f.Camel), str(label), sep)
 	}
 	b.WriteString("    }")
+	if s.Tree {
+		fmt.Fprintf(&b, ",\n    \"treeRoot\": %s", str(pick("（根节点）", "(root)")))
+	}
+	if s.Sub != nil {
+		fmt.Fprintf(&b, ",\n    \"sub\": {\n      \"title\": %s,\n      \"add\": %s,\n      \"empty\": %s,\n      \"field\": {\n",
+			str(pick(title+"明细", title+" items")),
+			str(pick("添加一行", "Add row")),
+			str(pick("还没有明细，点「添加一行」新增。", "No items yet — click \"Add row\".")))
+		for i, f := range s.Sub.Fields {
+			label := f.Title
+			if zh {
+				label = f.LabelZh()
+			}
+			sep := ","
+			if i == len(s.Sub.Fields)-1 {
+				sep = ""
+			}
+			fmt.Fprintf(&b, "      %s: %s%s\n", str(f.Camel), str(label), sep)
+		}
+		b.WriteString("      }\n    }")
+	}
 	var req []Field
 	for _, f := range s.Fields {
 		if f.Form && f.Required && f.Kind != KindBool && f.Kind != KindInt && f.Kind != KindFloat && f.Kind != KindID {

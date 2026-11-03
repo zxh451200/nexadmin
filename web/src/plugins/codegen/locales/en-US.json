@@ -3,7 +3,7 @@
     "menu": "Code Generator",
     "title": "Code Generator",
     "description": "Free code generator: read an existing business table or define a new one, generate a Go module and frontend pages from a recommended config, preview them, then download a zip",
-    "btn": { "download": "Download package" },
+    "btn": { "download": "Download package", "install": "Write to project", "saveConfig": "Save config" },
     "steps": { "table": "1. Pick a table", "config": "2. Configure columns", "preview": "3. Preview & download" },
     "tables": {
       "name": "Table",
@@ -37,6 +37,7 @@
       "fieldName": "Field name",
       "fieldType": "Type",
       "fieldLength": "Length",
+      "fieldDict": "Dict code",
       "fieldRequired": "Required",
       "fieldComment": "Comment",
       "submit": "Create and continue",
@@ -51,19 +52,20 @@
         "date": "Date",
         "datetime": "Date & time"
       },
-      "errName": "Use lowercase letters, digits and underscores, starting with a letter, up to 44 characters",
+      "errName": "Use lowercase letters, digits and underscores, starting with a letter, up to 48 characters (the biz_ prefix is added for you)",
       "errMigration": "Migration number must be 1-4 digits and greater than 0",
       "errFields": "Add at least one field",
       "errFieldName": "Field names use lowercase letters, digits and underscores, starting with a letter",
       "errReserved": "id / tenant_id / created_at / updated_at / deleted_at are system columns and cannot be field names",
       "errFieldDup": "Duplicate field name",
-      "errLength": "Length must be an integer between 1 and 4000"
+      "errLength": "Length must be an integer between 1 and 4000",
+      "errDict": "Dict codes use lowercase letters, digits and underscores, starting with a letter"
     },
     "config": {
       "module": "Module name",
       "moduleHint": "Lowercase letter first, then letters and digits; used as the Go package, the frontend folder and the i18n namespace",
       "goModule": "Go module path",
-      "goModuleHint": "The module in your project's go.mod; defaults to nexadmin",
+      "goModuleHint": "The module in your project's go.mod; leave it empty to read this project's go.mod",
       "shape": "Table shape: {{shape}}"
     },
     "shape": {
@@ -80,14 +82,14 @@
       "form": "In form",
       "required": "Required",
       "control": "Control",
+      "dictCode": "Dict code",
       "system": "System",
       "unsupported": "Unsupported",
       "empty": "This table has no columns"
     },
-    "controls": { "input": "Input", "textarea": "Textarea", "number": "Number", "switch": "Switch", "date": "Date", "datetime": "Date & time" },
+    "controls": { "input": "Input", "textarea": "Textarea", "number": "Number", "switch": "Switch", "date": "Date", "datetime": "Date & time", "dict": "Dictionary" },
     "preview": {
-      "path": "File path",
-      "lang": "Type",
+      "files": "Files",
       "empty": "No files were generated",
       "viewer": "Code viewer",
       "readonly": "Read-only",
@@ -100,11 +102,40 @@
     },
     "notes": {
       "import_line": "Add one blank import to internal/modules/modules.go; rebuild and restart to seed the menu:",
-      "api_prefix": "API prefix:",
+      "api_prefix": "All endpoints are mounted under{{value}}",
       "migration": "Three migrations are included; drop them into migrations/business with your project's number and restart to create the table:",
       "null_zero": "The table already exists, so no migration is generated; NULL columns are read as zero values and written back as zero values."
     },
-    "action": { "back": "Back", "preview": "Preview files", "download": "Download zip" },
+    "action": { "back": "Back", "preview": "Preview files", "download": "Download zip", "install": "Write to project", "saveConfig": "Save config" },
+    "saved": {
+      "title": "Saved configs",
+      "name": "Config name",
+      "load": "Load",
+      "empty": "No saved configs yet",
+      "saveTitle": "Save generation config",
+      "saveHint": "Saving with the same name updates it. Only the table/definition and column config are stored; code is always rendered fresh.",
+      "saved": "Config \"{{name}}\" saved — load it any time from Saved configs",
+      "deleteConfirm": "Delete config \"{{name}}\"?",
+      "deleteBatchConfirm": "Delete the {{count}} selected config(s)?",
+      "deletedPartial": "Deleted {{deleted}} of {{total}} config(s) (the rest may already be gone)"
+    },
+    "install": {
+      "title": "Write to project",
+      "desc": "Writes the generated files into the project root (the backend working directory; override with the NEXADMIN_ROOT environment variable; the directory must contain go.mod).",
+      "overwrite": "Overwrite existing files",
+      "overwriteHint": "By default only new files are written: existing ones are skipped and listed in the receipt, so multiple generated modules can coexist safely.",
+      "restartHint": "Rebuild and restart the backend afterwards. Drop new-table migrations into migrations/business and they apply on restart.",
+      "done": "Wrote {{written}} files, skipped {{skipped}} existing ones"
+    },
+    "sub": {
+      "title": "Master-detail (optional)",
+      "hint": "Pick an existing table as the detail table: it needs a BIGINT *_id column pointing at the main table. Detail rows are saved with the master in one transaction (rewritten in full on every save; IDs are regenerated server-side).",
+      "select": "Detail table",
+      "none": "No master-detail",
+      "fk": "Foreign key",
+      "fkRequired": "Pick the detail table's foreign-key column",
+      "treeReject": "A tree table cannot be a detail table"
+    },
     "downloaded": "Package downloaded",
     "done": { "title": "Next steps", "description": "Unzip into the project root, then:" },
     "errors": {
