@@ -78,7 +78,7 @@
       "rebuild": "Rebuild & restart",
       "installed": "Installed",
       "bundled": "Built-in",
-      "bundledNote": "\"Built-in\" plugins are compiled into this binary and are listed here only to show version and license state: pro ones take a license from the card. Overwrite-install and uninstall edit the source tree and then rebuild, so the market does not offer them.",
+      "bundledNote": "\"Built-in\" plugins are compiled into this binary and are listed here only to show version and license state: pro ones take a license from the card. To switch a built-in plugin off (free ones too), list it in the disabled_plugins config and restart. Overwrite-install and uninstall edit the source tree, so the market does not offer them.",
       "filterFree": "Free",
       "filterPaid": "Paid",
       "updateAvailable": "Update available: v{{version}}",

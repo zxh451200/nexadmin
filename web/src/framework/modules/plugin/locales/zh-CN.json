@@ -78,7 +78,7 @@
       "rebuild": "重建并重启",
       "installed": "已安装",
       "bundled": "内置",
-      "bundledNote": "「内置」是随程序编译进来的插件，列在这里只为看清版本与授权状态：pro 插件在卡片上导授权，覆盖安装与卸载要改源码目录后重建，市场页不提供。",
+      "bundledNote": "「内置」是随程序编译进来的插件，列在这里只为看清版本与授权状态：pro 插件在卡片上导授权；要停用某个内置插件（free 也一样）改配置 disabled_plugins 后重启；覆盖安装与卸载等于对源码目录动手，市场页不提供。",
       "filterFree": "免费",
       "filterPaid": "收费",
       "updateAvailable": "有新版本 v{{version}}",
