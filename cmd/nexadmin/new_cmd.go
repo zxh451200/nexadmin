@@ -124,7 +124,7 @@ func cmdNew(args []string, out io.Writer) error {
 	fl.StringVar(&o.Out, "out", "", "输出目录（默认 ../<名称>）")
 	fl.StringVar(&o.Module, "module", "", "Go 模块路径（默认 <名称>）")
 	fl.BoolVar(&o.WithPlugins, "with-plugins", false, "连同已安装的插件一起带上")
-	fl.StringVar(&pluginsCSV, "plugins", "", "只带上点名的插件（逗号分隔，如 cron,codegen）；不写=只带 totp 安全基线")
+	fl.StringVar(&pluginsCSV, "plugins", "", "只带上点名的插件（逗号分隔，如 cron,codegen；也可写预设 basic / standard）；不写=只带 totp 安全基线")
 	fl.BoolVar(&o.WithoutTotp, "without-totp", false, "不默认带上 totp（两步验证）插件")
 	fl.BoolVar(&o.Git, "git", false, "在新目录 git init 并提交初始版本")
 	// 允许名称写在选项前后：先取出第一个非选项参数

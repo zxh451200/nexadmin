@@ -6,9 +6,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
+
+	"nexadmin/core/plugin"
 )
 
 func wfile(t *testing.T, root, rel, content string) {
@@ -209,6 +213,85 @@ func TestNewPluginsMutexWithAll(t *testing.T) {
 	_, _, err := newTo(t, makeTemplate(t), newOptions{Module: "example.com/demo", WithPlugins: true, Plugins: []string{"cron"}})
 	if err == nil {
 		t.Fatal("--plugins 与 --with-plugins 同时给出要报错")
+	}
+}
+
+func TestExpandPluginPresets(t *testing.T) {
+	if got := expandPluginPresets([]string{"basic"}); len(got) != len(pluginPresets["basic"]) {
+		t.Errorf("basic 应展开成 %d 个，实得 %v", len(pluginPresets["basic"]), got)
+	}
+	if got := expandPluginPresets([]string{"cron"}); len(got) != 1 || got[0] != "cron" {
+		t.Errorf("不是别名的要原样交给校验，实得 %v", got)
+	}
+	seen := map[string]bool{}
+	for _, id := range carryPlugins(newOptions{Plugins: []string{"basic", "standard", "cron"}}) {
+		if seen[id] {
+			t.Errorf("%s 被重复下发", id)
+		}
+		seen[id] = true
+	}
+	for _, want := range []string{"totp", "crm", "report", "audit", "security"} {
+		if !seen[want] {
+			t.Errorf("预设展开后缺 %s", want)
+		}
+	}
+}
+
+// 预设是人工策展的清单，最容易烂在两处：加了新插件没归类、别名撞了插件名。
+// 这两条都在这里钉死，别等用户 --plugins=basic 少装了一个插件才发现。
+func TestPluginPresetsMatchManifests(t *testing.T) {
+	root, err := findRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	dirs, err := os.ReadDir(filepath.Join(root, "plugins"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	editions := map[string]string{}
+	for _, d := range dirs {
+		if !d.IsDir() {
+			continue
+		}
+		raw, err := os.ReadFile(filepath.Join(root, "plugins", d.Name(), plugin.ManifestFile))
+		if err != nil {
+			continue
+		}
+		m := regexp.MustCompile(`(?m)^edition:\s*([A-Za-z]+)`).FindSubmatch(raw)
+		if m == nil {
+			t.Errorf("plugins/%s 的清单没有 edition 行", d.Name())
+			continue
+		}
+		editions[d.Name()] = string(m[1])
+	}
+	if len(editions) < 10 {
+		t.Fatalf("只读到 %d 个插件清单，母版应该更多——测试夹具或路径不对", len(editions))
+	}
+	for name, ids := range pluginPresets {
+		if _, ok := editions[name]; ok {
+			t.Errorf("预设别名 %q 与插件同名，展开会盖掉真插件", name)
+		}
+		for _, id := range ids {
+			if _, ok := editions[id]; !ok {
+				t.Errorf("预设 %s 里的 %q 在 plugins/ 下不存在", name, id)
+			}
+		}
+	}
+	for _, id := range pluginPresets["basic"] {
+		if editions[id] != "free" {
+			t.Errorf("basic 里的 %s 是 %s：basic 承诺开箱即用，不该含需要授权的插件", id, editions[id])
+		}
+	}
+	basic := pluginPresets["basic"]
+	for id, ed := range editions {
+		if ed == "free" && !slices.Contains(basic, id) {
+			t.Errorf("free 插件 %s 没进 basic 预设：新加通用插件要顺手归类", id)
+		}
+	}
+	for _, id := range pluginPresets["standard"] {
+		if !slices.Contains(basic, id) && editions[id] != "pro" {
+			t.Errorf("standard 相对 basic 多出的 %s 应该是 pro（买授权即生效那一类）", id)
+		}
 	}
 }
 

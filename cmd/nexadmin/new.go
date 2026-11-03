@@ -34,6 +34,29 @@ type newOptions struct {
 	Git         bool
 }
 
+// pluginPresets 是 --plugins 可写的别名。预设只是一份策展清单，不是依赖闭包——
+// 全仓插件之间没有相互依赖（plugin.yaml 只有 requires_nexadmin），归对类就够用；
+// TestPluginPresetsMatchManifests 在有人新增插件忘了归类时把它喊红。
+var pluginPresets = map[string][]string{
+	// basic：free 插件，开箱即用，不需要授权文件
+	"basic": {"crm", "cron", "codegen", "imports", "ldap", "maps", "realname", "totp"},
+	// standard：basic + 三件 pro。pro 随包编译进来但默认休眠，导入授权即生效，不必再重建
+	"standard": {"crm", "cron", "codegen", "imports", "ldap", "maps", "realname", "totp", "report", "audit", "security"},
+}
+
+// expandPluginPresets 把别名换成插件 id；不是别名的原样交给 validateCarryPlugins 报错。
+func expandPluginPresets(list []string) []string {
+	out := make([]string, 0, len(list))
+	for _, p := range list {
+		if preset, ok := pluginPresets[p]; ok {
+			out = append(out, preset...)
+			continue
+		}
+		out = append(out, p)
+	}
+	return out
+}
+
 // carryPlugins 是 --with-plugins 之外要逐个下发的插件：默认只有安全基线 totp。
 // --plugins 里点名 totp 也只会带一次；--without-totp 只是撤掉基线，压不过显式点名。
 func carryPlugins(o newOptions) []string {
@@ -41,7 +64,7 @@ func carryPlugins(o newOptions) []string {
 	if !o.WithoutTotp {
 		list = append(list, "totp")
 	}
-	for _, p := range o.Plugins {
+	for _, p := range expandPluginPresets(o.Plugins) {
 		if !slices.Contains(list, p) {
 			list = append(list, p)
 		}
@@ -68,15 +91,27 @@ func listPluginIDs(root string) []string {
 // validateCarryPlugins 在拷贝之前先检查点名的插件：一个拼错的 id 不该换来一个半成品项目目录，
 // 而带路径分隔符的名字会直接拼进 plugins/<id> 的拷贝路径，必须在这里挡掉。
 func validateCarryPlugins(root string, o newOptions) error {
+	explicit := expandPluginPresets(o.Plugins)
 	for _, id := range carryPlugins(o) {
 		if !projectNameRe.MatchString(id) {
 			return fmt.Errorf("插件名不合法: %q（只能是字母数字 . _ -，且不以分隔符开头）", id)
 		}
-		if _, err := os.Stat(filepath.Join(root, "plugins", id)); err != nil && slices.Contains(o.Plugins, id) {
-			return fmt.Errorf("模板里没有插件 %q；可选：%s", id, strings.Join(listPluginIDs(root), ", "))
+		if _, err := os.Stat(filepath.Join(root, "plugins", id)); err != nil && slices.Contains(explicit, id) {
+			return fmt.Errorf("模板里没有插件 %q；可用预设：%s；可选插件：%s",
+				id, strings.Join(presetNames(), " / "), strings.Join(listPluginIDs(root), ", "))
 		}
 	}
 	return nil
+}
+
+// presetNames 是排好序的预设别名清单（报错文案要稳定，不能按 map 遍历顺序拼）。
+func presetNames() []string {
+	names := make([]string, 0, len(pluginPresets))
+	for name := range pluginPresets {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
 
 // ---- 排除规则 ----
