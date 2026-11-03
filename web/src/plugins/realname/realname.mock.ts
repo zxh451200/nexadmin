@@ -20,7 +20,7 @@ const COUNTIES: Record<string, string> = {
   '110101': '东城区', '110105': '朝阳区', '410181': '巩义市', '440304': '福田区', '500154': '开州区', '610104': '莲湖区',
 }
 
-function resolveRegion(code: string): { path: string[]; level: number; ok: boolean } {
+function resolveRegion(code: string): { path: string[]; level: number } {
   const path: string[] = []
   let level = 0
   const push = (name: string | undefined, lv: number) => {
@@ -32,7 +32,7 @@ function resolveRegion(code: string): { path: string[]; level: number; ok: boole
   push(PROVINCES[code.slice(0, 2)], 1)
   push(PREFECTURES[code.slice(0, 4)], 2)
   push(COUNTIES[code], 3)
-  return { path, level, ok: level > 0 }
+  return { path, level }
 }
 
 const normalize = (raw: string) =>
@@ -68,8 +68,8 @@ function parseNumber(raw: string): { ok: true; info: ParseResult } | { ok: false
   if (!/^\d{17}[0-9X]$/.test(n)) return { ok: false, reason: 'chars', masked }
 
   const code = n.slice(0, 6)
+  // 归属地不参与合法性判定：查不到就停在 level 0，与 pkg/idcard 同口径。
   const region = resolveRegion(code)
-  if (!region.ok) return { ok: false, reason: 'region', masked }
 
   const y = Number(n.slice(6, 10))
   const mo = Number(n.slice(10, 12))

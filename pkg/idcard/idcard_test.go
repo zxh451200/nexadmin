@@ -30,12 +30,12 @@ var stubRegions = map[string]string{
 }
 
 // stubRegion 逐级回退解析，与插件里包 core/region 的实现同一口径。
-func stubRegion(code string) ([]string, int, bool) { return walkStub(code, true) }
+func stubRegion(code string) ([]string, int) { return walkStub(code, true) }
 
 // stubRegionNoCounty 模拟只同步到地级粒度的区划快照。
-func stubRegionNoCounty(code string) ([]string, int, bool) { return walkStub(code, false) }
+func stubRegionNoCounty(code string) ([]string, int) { return walkStub(code, false) }
 
-func walkStub(code string, withCounty bool) ([]string, int, bool) {
+func walkStub(code string, withCounty bool) ([]string, int) {
 	levels := []string{code[:2] + "0000", code[:4] + "00", code}
 	var path []string
 	level := 0
@@ -53,10 +53,7 @@ func walkStub(code string, withCounty bool) ([]string, int, bool) {
 		path = append(path, name)
 		level = i + 1
 	}
-	if level == 0 {
-		return nil, 0, false
-	}
-	return path, level, true
+	return path, level
 }
 
 func TestParseValid(t *testing.T) {
@@ -141,8 +138,13 @@ func TestParseLengthWithoutResolver(t *testing.T) {
 	if _, err := Parse("999999199003077759", nil); err != nil {
 		t.Fatalf("region=nil 应跳过区划码校验，实际: %v", err)
 	}
-	if _, err := Parse("999999199003077759", stubRegion); ReasonOf(err) != ReasonRegion {
-		t.Fatalf("连省级都认不出应报 region，实际: %v", err)
+	// 连省级都认不出也不算非法：归属地留空，号码合法性不受影响。
+	info, err := Parse("999999199003077759", stubRegion)
+	if err != nil {
+		t.Fatalf("未知区划码不该判非法，实际: %v", err)
+	}
+	if info.RegionLevel != 0 || len(info.RegionNames) != 0 {
+		t.Errorf("未识别区划应留空，实际 level=%d names=%v", info.RegionLevel, info.RegionNames)
 	}
 }
 

@@ -332,10 +332,13 @@ export default function RealnamePage() {
                   <dd>{parsed.status === 'valid' ? `${parsed.age ?? 0}` : '-'}</dd>
                 </div>
               </dl>
-              {parsed.status === 'valid' && (parsed.regionLevel ?? 3) < 3 ? (
+              {parsed.status === 'valid' && (parsed.regionLevel ?? 3) === 0 ? (
+                <p className="text-xs text-muted-foreground">{t('plugin_realname.regionUnknownHint')}</p>
+              ) : null}
+              {parsed.status === 'valid' && (parsed.regionLevel ?? 3) > 0 && (parsed.regionLevel ?? 3) < 3 ? (
                 <p className="text-xs text-muted-foreground">
                   {t('plugin_realname.regionCoarseHint', {
-                    level: t(`plugin_realname.regionLevel.${parsed.regionLevel ?? 0}`),
+                    level: t(`plugin_realname.regionLevel.${parsed.regionLevel}`),
                   })}
                 </p>
               ) : null}

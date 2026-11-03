@@ -304,6 +304,24 @@ func TestLedgerCarriesNoPlaintext(t *testing.T) {
 	}
 }
 
+// 区划数据模块没启用或码不在现行/历史表里时，号码本身照样合法，归属地留空。
+func TestParseUnknownRegionIsStillValid(t *testing.T) {
+	svc := NewService(nil, nil, nil)
+	v, err := svc.Parse("", "999999199003077759")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Status != StatusValid || v.Reason != "" {
+		t.Errorf("status/reason = %s/%q，区划查不到不该影响合法性", v.Status, v.Reason)
+	}
+	if v.RegionLevel != 0 || len(v.RegionNames) != 0 {
+		t.Errorf("region = %d %v，应留空", v.RegionLevel, v.RegionNames)
+	}
+	if v.Birthday != "1990-03-07" || v.Sex != "male" {
+		t.Errorf("派生字段 = %s/%s", v.Birthday, v.Sex)
+	}
+}
+
 func TestSaveConfigRefusesInsecureEndpoint(t *testing.T) {
 	db, m := mockDB(t)
 	// 前两次会先读配置再拒绝；provider 未知在读取之前就拒绝。

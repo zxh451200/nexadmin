@@ -73,6 +73,7 @@
       "2": "prefecture",
       "3": "county"
     },
-    "regionCoarseHint": "Region resolved only to {level}: the division snapshot is coarser or the county was reorganized. It does not affect the validity verdict."
+    "regionCoarseHint": "Region resolved only to {level}: the division snapshot is coarser or the county was reorganized. It does not affect the validity verdict.",
+    "regionUnknownHint": "Region unrecognized: the division dataset has no such code (module off, or the code is neither current nor historical). It does not affect the validity verdict."
   }
 }

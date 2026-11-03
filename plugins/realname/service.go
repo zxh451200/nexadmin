@@ -531,9 +531,9 @@ func (s *Service) cacheStore(ctx context.Context, key, status, message string) {
 // 区划快照粒度不一（有的只同步到地级）、撤县设区、快照年份滞后，都会让身份证前 6 位
 // 查不到县级。这些都不算号码非法——合法性由校验位与出生日期决定，归属地只是附带信息。
 // 只有连省级都认不出（如 99xxxx）才判码不对。
-func lookupRegion(code string) (path []string, level int, ok bool) {
+func lookupRegion(code string) (path []string, level int) {
 	if len(code) != 6 {
-		return nil, 0, false
+		return nil, 0
 	}
 	levels := []string{code[:2] + "0000", code[:4] + "00", code}
 	for i, c := range levels {
@@ -557,10 +557,7 @@ func lookupRegion(code string) (path []string, level int, ok bool) {
 		path = append(path, name)
 		level = i + 1
 	}
-	if level == 0 {
-		return nil, 0, false
-	}
-	return path, level, true
+	return path, level
 }
 
 func checkIdType(idType string) error {
