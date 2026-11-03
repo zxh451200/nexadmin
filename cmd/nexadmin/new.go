@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 
+	"nexadmin/core/plugin"
 	"nexadmin/core/plugin/market"
 )
 
@@ -72,7 +73,8 @@ func carryPlugins(o newOptions) []string {
 	return list
 }
 
-// listPluginIDs 列出模板 plugins/ 下可选的插件 id，供 --plugins 报错时给全清单。
+// listPluginIDs 列出模板 plugins/ 下可下发的插件 id，供 --plugins 报错时给全清单。
+// 只算目录里带 plugin.yaml 的：没清单的目录拷进项目只会得到一个空包和一条编译不过的 import。
 func listPluginIDs(root string) []string {
 	ents, err := os.ReadDir(filepath.Join(root, "plugins"))
 	if err != nil {
@@ -80,9 +82,13 @@ func listPluginIDs(root string) []string {
 	}
 	var ids []string
 	for _, e := range ents {
-		if e.IsDir() {
-			ids = append(ids, e.Name())
+		if !e.IsDir() {
+			continue
 		}
+		if _, err := os.Stat(filepath.Join(root, "plugins", e.Name(), plugin.ManifestFile)); err != nil {
+			continue
+		}
+		ids = append(ids, e.Name())
 	}
 	sort.Strings(ids)
 	return ids
@@ -96,9 +102,17 @@ func validateCarryPlugins(root string, o newOptions) error {
 		if !projectNameRe.MatchString(id) {
 			return fmt.Errorf("插件名不合法: %q（只能是字母数字 . _ -，且不以分隔符开头）", id)
 		}
-		if _, err := os.Stat(filepath.Join(root, "plugins", id)); err != nil && slices.Contains(explicit, id) {
+		if !slices.Contains(explicit, id) {
+			continue // 基线（totp）由框架保证存在，不在这里挡点名之外的路
+		}
+		dir := filepath.Join(root, "plugins", id)
+		if _, err := os.Stat(dir); err != nil {
 			return fmt.Errorf("模板里没有插件 %q；可用预设：%s；可选插件：%s",
 				id, strings.Join(presetNames(), " / "), strings.Join(listPluginIDs(root), ", "))
+		}
+		if _, err := os.Stat(filepath.Join(dir, plugin.ManifestFile)); err != nil {
+			return fmt.Errorf("插件 %q 的目录里没有 %s：它还没成型（清单未上架），下发进项目只会得到一个空目录和一条编译不过的 import；可选插件：%s",
+				id, plugin.ManifestFile, strings.Join(listPluginIDs(root), ", "))
 		}
 	}
 	return nil

@@ -36,8 +36,12 @@ func makeTemplate(t *testing.T) string {
 	wfile(t, r, "core/a.go", "package core\n\n// 来自 nexadmin 的说明，见 \"nexadmin/x\" 注释\nimport (\n\t\"fmt\"\n\n\t\"nexadmin/pkg/b\"\n\tx \"nexadmin/plugins/cron\"\n)\n\nvar s = \"nexadmin/pkg/b 不是 import\"\n")
 	wfile(t, r, "cmd/server/main.go", "package main\n\nimport _ \"nexadmin/plugins\"\n\nfunc main() {}\n")
 	wfile(t, r, "plugins/plugins.go", tplPlugins)
+	wfile(t, r, "plugins/cron/plugin.yaml", "id: cron\nname: 定时任务\nversion: 1.0.0\nedition: free\n")
 	wfile(t, r, "plugins/cron/cron.go", "package cron\n")
+	wfile(t, r, "plugins/totp/plugin.yaml", "id: totp\nname: 两步验证\nversion: 1.0.0\nedition: free\n")
 	wfile(t, r, "plugins/totp/plugin.go", "package totp\n\nimport \"nexadmin/core\"\n\nvar _ = core.Perm\n")
+	// 目录在、清单未上架（母版里 devicehub 就是这个形态）：点名它必须在校验阶段被挡下
+	wfile(t, r, "plugins/halfbaked/plugin.go", "package halfbaked\n")
 	wfile(t, r, "plugins/totp/migrations/mysql/001_init.sql", "CREATE TABLE plg_totp_secret (id BIGINT);\n")
 	wfile(t, r, "web/src/plugins/.gitkeep", "")
 	wfile(t, r, "web/src/plugins/cron/index.ts", "x")
@@ -195,6 +199,25 @@ func TestNewUnknownPlugin(t *testing.T) {
 		t.Errorf("报错应给出可选清单: %v", err)
 	}
 	if has(dst, "core") || has(dst, "go.mod") {
+		t.Errorf("校验必须排在拷贝之前，别留下半成品项目: %s", dst)
+	}
+}
+
+// TestNewPluginWithoutManifest 挡的是「目录在、清单没上架」的插件（母版里的 devicehub 就是这个形态）：
+// 以前它过校验，拷进项目得到一个空包 + plugins.go 里一条编译不过的 import。
+func TestNewPluginWithoutManifest(t *testing.T) {
+	dst, _, err := newTo(t, makeTemplate(t), newOptions{Module: "example.com/demo", Plugins: []string{"halfbaked"}})
+	if err == nil {
+		t.Fatal("目录里没有 plugin.yaml 的插件必须拒绝，别把项目拷成编译不过的半成品")
+	}
+	if !strings.Contains(err.Error(), plugin.ManifestFile) {
+		t.Errorf("报错要说清缺的是清单: %v", err)
+	}
+	_, list, found := strings.Cut(err.Error(), "可选插件：")
+	if !found || strings.Contains(list, "halfbaked") {
+		t.Errorf("报错要给出可选插件清单，且清单里不该有没清单的插件: %v", err)
+	}
+	if has(dst, "plugins") || has(dst, "go.mod") {
 		t.Errorf("校验必须排在拷贝之前，别留下半成品项目: %s", dst)
 	}
 }

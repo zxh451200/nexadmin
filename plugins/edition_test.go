@@ -49,7 +49,13 @@ func editionContractRoot(t *testing.T) string {
 }
 
 func TestPluginEditionsMatchManifestRegistrationAndCatalog(t *testing.T) {
-	root := editionContractRoot(t)
+	runEditionContract(t, editionContractRoot(t))
+}
+
+// runEditionContract 核对「本地 plugin.yaml ↔ plugin.go 注册 ↔ 市场目录条目」三者一致。
+// 抽成接收 root 的函数，是为了能被一条合成树用例（只带部分插件的派生项目）当成靶子跑。
+func runEditionContract(t *testing.T, root string) {
+	t.Helper()
 	paths, err := filepath.Glob(filepath.Join(root, "plugins", "*", plugin.ManifestFile))
 	if err != nil || len(paths) == 0 {
 		t.Fatalf("find manifests: %v (%d found)", err, len(paths))
@@ -126,6 +132,10 @@ func TestPluginEditionsMatchManifestRegistrationAndCatalog(t *testing.T) {
 		})
 	}
 	for id := range freePluginIDs {
+		if !master && manifests[id] == nil {
+			// 派生项目按 --plugins 点名只带一部分插件：没落地的免费插件不该被要求补齐
+			continue
+		}
 		if manifests[id] == nil || !listed[id] {
 			t.Errorf("free plugin %s must have both a manifest and a catalog entry", id)
 		}
@@ -214,8 +224,20 @@ func readPluginRegistration(t *testing.T, path string) plugin.Plugin {
 }
 
 func TestFreePluginFrontendDescriptions(t *testing.T) {
-	root := editionContractRoot(t)
+	runFreePluginFrontendDescriptions(t, editionContractRoot(t))
+}
+
+// runFreePluginFrontendDescriptions 核对免费插件的前端简介确实写成「免费」口径。
+// 母版必须有全部免费插件；派生项目只核对它实际带进树里的那些。
+func runFreePluginFrontendDescriptions(t *testing.T, root string) {
+	t.Helper()
+	master := isFrameworkMaster(root)
 	for id := range freePluginIDs {
+		if !master {
+			if _, err := os.Stat(filepath.Join(root, "plugins", id, plugin.ManifestFile)); err != nil {
+				continue
+			}
+		}
 		for _, lang := range []string{"zh-CN", "en-US"} {
 			t.Run(id+"/"+lang, func(t *testing.T) {
 				path := filepath.Join(root, "web", "src", "plugins", id, "locales", lang+".json")
@@ -242,4 +264,49 @@ func TestFreePluginFrontendDescriptions(t *testing.T) {
 			})
 		}
 	}
+}
+
+// TestDerivedProjectCarryingSomeFreePlugins 是上面两处「母版专属断言」的负控制：
+// 合成一棵只带 totp 的派生树（模块名不是 nexadmin），两条闸都不许报「缺插件」。
+// 删掉那两处 !master 守卫，这条用例会红在「free plugin crm must have both…」——
+// 派生项目默认只点名带几个插件，原来的写法让它的 go test ./plugins 天生红。
+func TestDerivedProjectCarryingSomeFreePlugins(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, body string) {
+		t.Helper()
+		path := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("go.mod", "module acme.cn/app\n\ngo 1.24\n")
+	write("plugins/totp/plugin.yaml", "id: totp\nname: 两步验证\nversion: 1.0.0\nedition: free\ndescription: 免费的 TOTP 两步验证\n")
+	write("plugins/totp/plugin.go", `package totp
+
+import "nexadmin/core/plugin"
+
+func init() {
+	plugin.Register(plugin.Plugin{ID: "totp", Name: "两步验证", Version: "1.0.0", Edition: plugin.Free})
+}
+`)
+	write("config/plugin-market.yaml", "plugins:\n"+
+		"  - id: totp\n"+
+		"    name: 两步验证\n"+
+		"    description: 免费的 TOTP 两步验证\n"+
+		"    category: security\n"+
+		"    edition: free\n"+
+		"    version: 1.0.0\n"+
+		"    repo: acme/nexadmin-plugin-totp\n"+
+		"    price: 免费\n"+
+		"    i18n:\n"+
+		"      en-US:\n"+
+		"        description: Free TOTP two-factor sign-in\n")
+	write("web/src/plugins/totp/locales/zh-CN.json", `{"plugin_totp":{"description":"免费的 TOTP 两步验证"}}`)
+	write("web/src/plugins/totp/locales/en-US.json", `{"plugin_totp":{"description":"Free TOTP two-factor sign-in"}}`)
+
+	runEditionContract(t, root)
+	runFreePluginFrontendDescriptions(t, root)
 }
