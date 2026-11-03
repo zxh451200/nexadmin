@@ -16,27 +16,32 @@ func TestDefVersionArchiveAndRollbackIT(t *testing.T) {
 	}
 
 	s := NewService(db, nopLogger{})
-	def := savePublished(t, s)
+	// savePublished 走 tctx(42)（无租户），内存 store 的单测够用；真库带租户过滤器，
+	// 必须用本包既有的 tctx 约定，否则 TenantModel 直接拒绝写入。
+	def, err := s.DefSave(tctx(42), 0, DefForm{Key: "leave", Name: "请假审批", Status: DefPublished, XML: sampleXML})
+	if err != nil {
+		t.Fatalf("保存定义失败: %v", err)
+	}
 
-	xmlV1, err := s.DefXML(ctxOf(), def.ID)
+	xmlV1, err := s.DefXML(tctx(42), def.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// 修改内容再保存：当前版本递增为 2，旧版本 1 进历史表
 	changed := strings.Replace(sampleXML, `name="主管审批"`, `name="主管审批（改）"`, 1)
-	if _, err := s.DefSave(ctxOf(), def.ID, DefForm{Key: def.Key, Name: def.Name, Status: DefPublished, XML: changed}); err != nil {
+	if _, err := s.DefSave(tctx(42), def.ID, DefForm{Key: def.Key, Name: def.Name, Status: DefPublished, XML: changed}); err != nil {
 		t.Fatal(err)
 	}
 
-	versions, err := s.DefVersions(ctxOf(), def.ID)
+	versions, err := s.DefVersions(tctx(42), def.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(versions) != 1 || versions[0].Version != 1 {
 		t.Fatalf("历史版本 = %+v, want [v1]", versions)
 	}
-	gotV1, err := s.DefVersionXML(ctxOf(), def.ID, 1)
+	gotV1, err := s.DefVersionXML(tctx(42), def.ID, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,18 +50,18 @@ func TestDefVersionArchiveAndRollbackIT(t *testing.T) {
 	}
 
 	// 回滚到 v1：当前版本递增为 3（内容回到 v1），历史表变成两份
-	out, err := s.DefRollback(ctxOf(), def.ID, 1)
+	out, err := s.DefRollback(tctx(42), def.ID, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if out.Version != 3 {
 		t.Fatalf("回滚后 version = %d, want 3", out.Version)
 	}
-	xmlNow, _ := s.DefXML(ctxOf(), def.ID)
+	xmlNow, _ := s.DefXML(tctx(42), def.ID)
 	if xmlNow != xmlV1 {
 		t.Fatal("回滚后当前 XML 应与 v1 一致")
 	}
-	if versions, _ := s.DefVersions(ctxOf(), def.ID); len(versions) != 2 {
+	if versions, _ := s.DefVersions(tctx(42), def.ID); len(versions) != 2 {
 		t.Fatalf("历史版本数 = %d, want 2", len(versions))
 	}
 }
