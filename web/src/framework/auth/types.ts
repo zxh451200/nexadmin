@@ -66,4 +66,13 @@ export interface AuthMethods {
 export interface CaptchaResult {
   key: string
   image: string
+  /** 校验形态：缺省按图形处理（后端旧响应没有这个字段） */
+  kind?: 'image' | 'slider'
+  /** 以下四项仅滑块形态返回，单位都是图片像素，前端据此把拖动量换算回校验口径 */
+  piece?: string
+  pieceTop?: number
+  width?: number
+  height?: number
+  pieceWidth?: number
+  pieceHeight?: number
 }

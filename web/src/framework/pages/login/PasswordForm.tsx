@@ -41,7 +41,7 @@ export function PasswordForm({
   // 否则默认不要求，服务端在同一用户名/IP 连续失败后返回 reason=CAPTCHA_REQUIRED，此时才出现验证码输入
   const [needCaptcha, setNeedCaptcha] = useState(!!captchaAlways)
   useEffect(() => setNeedCaptcha(!!captchaAlways), [captchaAlways])
-  const { captcha, refresh } = useCaptcha(needCaptcha)
+  const { captcha, refresh, mode, setMode } = useCaptcha(needCaptcha)
   const [show, setShow] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [verifying, setVerifying] = useState(false)
@@ -181,7 +181,7 @@ export function PasswordForm({
             </FormItem>
           )}
         />
-        {needCaptcha && !challenge ? <CaptchaField form={form} captcha={captcha} onRefresh={refresh} required={needCaptcha} /> : null}
+        {needCaptcha && !challenge ? <CaptchaField form={form} captcha={captcha} onRefresh={refresh} mode={mode} onModeChange={setMode} required={needCaptcha} /> : null}
 
         {challenge ? (
           <div className="space-y-2">

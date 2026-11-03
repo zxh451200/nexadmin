@@ -18,7 +18,7 @@ const COOLDOWN = 60
 export function PhoneForm({ onSuccess, onChallenge }: { onSuccess: () => void; onChallenge?: (c: LoginChallenge) => void }) {
   const { t } = useTranslation()
   const login = useAuth((s) => s.login)
-  const { captcha, refresh } = useCaptcha()
+  const { captcha, refresh, mode, setMode } = useCaptcha()
   const [submitting, setSubmitting] = useState(false)
   const [sending, setSending] = useState(false)
   const [left, setLeft] = useState(0)
@@ -87,7 +87,7 @@ export function PhoneForm({ onSuccess, onChallenge }: { onSuccess: () => void; o
             </FormItem>
           )}
         />
-        <CaptchaField form={form} captcha={captcha} onRefresh={refresh} />
+        <CaptchaField form={form} captcha={captcha} onRefresh={refresh} mode={mode} onModeChange={setMode} />
         <FormField
           control={form.control}
           name="code"

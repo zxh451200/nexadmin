@@ -30,7 +30,7 @@ export function RegisterForm({
   const { t } = useTranslation()
   const acceptLogin = useAuth((s) => s.acceptLogin)
   // 注册验证码始终必填（防脚本批量注册），进入表单即拉取
-  const { captcha, refresh } = useCaptcha(true)
+  const { captcha, refresh, mode, setMode } = useCaptcha(true)
   const [show, setShow] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
@@ -138,7 +138,7 @@ export function RegisterForm({
             </FormItem>
           )}
         />
-        <CaptchaField form={form} captcha={captcha} onRefresh={refresh} />
+        <CaptchaField form={form} captcha={captcha} onRefresh={refresh} mode={mode} onModeChange={setMode} />
         <Button type="submit" className="w-full" disabled={submitting}>
           {submitting && <Loader2 className="me-2 size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />}
           {t('login.register.submit')}

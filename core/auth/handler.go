@@ -188,6 +188,52 @@ func (h *Handler) CaptchaAudio(c *gin.Context) {
 	response.OK(c, gin.H{"audio": "data:audio/wav;base64," + base64.StdEncoding.EncodeToString(wav)})
 }
 
+// SliderCaptcha GET /auth/slider：返回滑块挑战。孔位横坐标不外泄；pieceTop 是滑块图
+// 在背景中的顶边偏移，width/height/pieceWidth/pieceHeight 让前端把 CSS 像素的拖动量
+// 换算回图片像素（容差按图片像素判定，两侧必须同一口径）。
+func (h *Handler) SliderCaptcha(c *gin.Context) {
+	key, bg, piece, pieceTop, err := h.Svc.NewSliderCaptcha(c.Request.Context(), c.ClientIP())
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	c.Header("Cache-Control", "no-store")
+	response.OK(c, gin.H{
+		"key": key, "image": bg, "piece": piece, "pieceTop": pieceTop,
+		"width": sliderBgW, "height": sliderBgH,
+		"pieceWidth": sliderPieceW, "pieceHeight": sliderPieceH,
+	})
+}
+
+// SliderVerify POST /auth/slider/verify  body: {key, x, trail}
+// 校验通过返回 {token}：前端把它当作 captcha 字段连同 captchaKey 提交，
+// 于是登录、短信、注册仍走 VerifyCaptcha 同一条消费通道。
+// 失败（落点偏、轨迹不像人）与挑战不存在（过期、超次数、IP 不符）都回原句文案，
+// 前端拿到任何非 2xx 都重画一张，不区分子原因也不泄露挑战是否还存在。
+func (h *Handler) SliderVerify(c *gin.Context) {
+	var body struct {
+		Key   string       `json:"key"`
+		X     int          `json:"x"`
+		Trail []trailPoint `json:"trail"`
+	}
+	if !response.BindJSON(c, &body) {
+		return
+	}
+	token, err := h.Svc.VerifySliderCaptcha(c.Request.Context(), body.Key, body.X, body.Trail, c.ClientIP())
+	if err != nil {
+		switch {
+		case errors.Is(err, errSliderFailed):
+			response.Fail(c, response.BadRequest("auth.captcha_invalid"))
+		case errors.Is(err, errSliderUnavailable):
+			response.Fail(c, response.NotFound("auth.captcha_invalid"))
+		default:
+			response.Fail(c, err)
+		}
+		return
+	}
+	response.OK(c, gin.H{"token": token})
+}
+
 // Refresh POST /auth/refresh  body: {refreshToken}
 func (h *Handler) Refresh(c *gin.Context) {
 	var body struct {

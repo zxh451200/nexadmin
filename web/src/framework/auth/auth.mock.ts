@@ -174,6 +174,56 @@ function svgCaptcha(text: string) {
   return `data:image/svg+xml;base64,${btoa(svg)}`
 }
 
+/**
+ * 滑块形态的假数据：与后端同一套尺寸（背景 280x120、拼图块方身 56、凸出 12），
+ * 前端换算落点时用的是响应里的 width/pieceWidth，所以这里必须保持同口径。
+ * 落点 X 与后端一样只留在 mock 进程内，不出现在响应里。
+ */
+const SLIDER_BG_W = 280
+const SLIDER_BG_H = 120
+const SLIDER_PIECE = 56
+const SLIDER_TAB = 12
+/** 与后端相同的容差（图片像素）与轨迹点数下限 */
+const SLIDER_TOLERANCE = 6
+const SLIDER_TRAIL_MIN = 6
+const sliderXs = new Map<string, number>()
+
+function puzzleShapes(cx: number, cy: number, style: string) {
+  return (
+    `<rect x="${cx}" y="${cy}" width="${SLIDER_PIECE}" height="${SLIDER_PIECE}" ${style}/>` +
+    `<circle cx="${cx + SLIDER_PIECE}" cy="${cy + SLIDER_PIECE / 2}" r="${SLIDER_TAB}" ${style}/>` +
+    `<circle cx="${cx + SLIDER_PIECE / 2}" cy="${cy}" r="${SLIDER_TAB}" ${style}/>`
+  )
+}
+
+function svgSlider() {
+  const x = SLIDER_PIECE + 20 + Math.floor(Math.random() * (SLIDER_BG_W - SLIDER_PIECE * 2 - SLIDER_TAB - 24))
+  const y = SLIDER_TAB + 4 + Math.floor(Math.random() * (SLIDER_BG_H - SLIDER_PIECE - SLIDER_TAB * 2 - 8))
+  const deco = Array.from({ length: 8 })
+    .map(() => {
+      const cx = Math.floor(Math.random() * SLIDER_BG_W)
+      const cy = Math.floor(Math.random() * SLIDER_BG_H)
+      const r = 8 + Math.floor(Math.random() * 26)
+      const hue = Math.floor(Math.random() * 360)
+      return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="hsl(${hue} 45% 60%)" opacity="0.35"/>`
+    })
+    .join('')
+  const bg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${SLIDER_BG_W}" height="${SLIDER_BG_H}" viewBox="0 0 ${SLIDER_BG_W} ${SLIDER_BG_H}">` +
+    `<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#dbe6f5"/><stop offset="1" stop-color="#b9c9e0"/></linearGradient></defs>` +
+    `<rect width="${SLIDER_BG_W}" height="${SLIDER_BG_H}" fill="url(#g)"/>${deco}` +
+    puzzleShapes(x, y, 'fill="#111827" opacity="0.62"') +
+    puzzleShapes(x, y, 'fill="none" stroke="#f8fafc" stroke-width="1"') +
+    `</svg>`
+  const pw = SLIDER_PIECE + SLIDER_TAB
+  const piece =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${pw}" height="${pw}" viewBox="0 0 ${pw} ${pw}">` +
+    `<defs><linearGradient id="p" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8fb3e6"/><stop offset="1" stop-color="#5c7fb5"/></linearGradient></defs>` +
+    puzzleShapes(0, SLIDER_TAB, 'fill="url(#p)" stroke="#f8fafc" stroke-width="1"') +
+    `</svg>`
+  return { x, pieceTop: y - SLIDER_TAB, bg: `data:image/svg+xml;base64,${btoa(bg)}`, piece: `data:image/svg+xml;base64,${btoa(piece)}` }
+}
+
 function checkCaptcha(key?: string, text?: string, reason?: string) {
   const expected = key ? captchas.get(key) : undefined
   if (key) captchas.delete(key)
@@ -217,6 +267,43 @@ defineMock([
       // 假数据只给一段静音，够让"听音频"按钮在 dev 下走通完整链路。
       if (!captchas.has(params.key)) mockError(404, '验证码已失效')
       return { audio: silentWavDataURI() }
+    },
+  },
+  {
+    method: 'GET',
+    url: '/auth/slider',
+    handler: () => {
+      const key = Math.random().toString(36).slice(2)
+      const { x, pieceTop, bg, piece } = svgSlider()
+      sliderXs.set(key, x)
+      // 与后端同口径：孔位 X 不下发，只给滑块图顶边与各档尺寸（前端按图片像素换算落点）
+      return {
+        key,
+        image: bg,
+        piece,
+        pieceTop,
+        width: SLIDER_BG_W,
+        height: SLIDER_BG_H,
+        pieceWidth: SLIDER_PIECE + SLIDER_TAB,
+        pieceHeight: SLIDER_PIECE + SLIDER_TAB,
+      }
+    },
+  },
+  {
+    method: 'POST',
+    url: '/auth/slider/verify',
+    handler: ({ body }) => {
+      const expected = sliderXs.get(body?.key)
+      // 与后端一致：拖偏了不作废挑战（只累计尝试），只有签发成功才消费
+      if (expected === undefined) mockError(404, '验证码已失效')
+      const trail: unknown[] = Array.isArray(body?.trail) ? body.trail : []
+      if (trail.length < SLIDER_TRAIL_MIN) mockError(400, '验证码错误')
+      if (Math.abs((body?.x ?? Number.NaN) - expected) > SLIDER_TOLERANCE) mockError(400, '验证码错误')
+      sliderXs.delete(body.key)
+      // token 写进与图形验证码同一张表：登录/短信/注册的 checkCaptcha 才能原样消费
+      const token = Math.random().toString(16).slice(2).padEnd(16, '0')
+      captchas.set(body.key, token)
+      return { token }
     },
   },
   {

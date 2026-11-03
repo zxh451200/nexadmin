@@ -66,6 +66,7 @@ function match(method: string, path: string): { rule: CompiledRule; params: Reco
 const PUBLIC_PREFIXES = [
   '/auth/login',
   '/auth/captcha',
+  '/auth/slider',
   '/auth/sms-code',
   '/auth/refresh',
   '/auth/methods',
