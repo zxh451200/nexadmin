@@ -146,7 +146,7 @@ func overlayIDs(set map[string]bool) []string {
 //  3. 锁外落盘（saveDisabledOverlay）；失败就原样返回，内存不动——磁盘是唯一真相。
 //  4. 第二次进 m.mu 改叠加层 + applyStatusLocked（复用启动判定）+ syncLifecycleLocked 让 worker
 //     立刻取消/重新拉起，然后取 Info 副本。
-//  请求路径（admit/MenuVisible/ActiveIDs）只取 m.mu，不会排在 swMu 后面。
+//     请求路径（admit/MenuVisible/ActiveIDs）只取 m.mu，不会排在 swMu 后面。
 func (m *Manager) SetEnabled(id string, on bool) (Info, error) {
 	m.swMu.Lock()
 	defer m.swMu.Unlock()
