@@ -24,6 +24,21 @@ var freePluginIDs = map[string]bool{
 	"ldap": true, "maps": true, "crm": true, "realname": true,
 }
 
+// isFrameworkMaster 判断这棵树是不是框架母版：母版的 Go 模块名就是 nexadmin，
+// 派生项目改成了自己的模块名。母版才有全部插件，「目录必须对上本地清单」这类闸只在母版成立。
+func isFrameworkMaster(root string) bool {
+	raw, err := os.ReadFile(filepath.Join(root, "go.mod"))
+	if err != nil {
+		return false
+	}
+	for _, l := range strings.Split(string(raw), "\n") {
+		if f := strings.Fields(l); len(f) == 2 && f[0] == "module" {
+			return strings.Trim(f[1], `"`) == "nexadmin"
+		}
+	}
+	return false
+}
+
 func editionContractRoot(t *testing.T) string {
 	t.Helper()
 	_, file, _, ok := runtime.Caller(0)
@@ -79,8 +94,13 @@ func TestPluginEditionsMatchManifestRegistrationAndCatalog(t *testing.T) {
 		t.Fatalf("load catalog: %v (%d entries)", err, len(entries))
 	}
 	listed := make(map[string]bool)
+	master := isFrameworkMaster(root)
 	for _, entry := range entries {
 		listed[entry.ID] = true
+		if manifests[entry.ID] == nil && !master {
+			// 派生项目只带部分插件：目录里没落地的条目不算失败，落地的仍逐条核对
+			continue
+		}
 		t.Run("catalog/"+entry.ID, func(t *testing.T) {
 			man := manifests[entry.ID]
 			if man == nil {

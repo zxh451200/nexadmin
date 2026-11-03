@@ -239,6 +239,8 @@ func TestExpandPluginPresets(t *testing.T) {
 
 // 预设是人工策展的清单，最容易烂在两处：加了新插件没归类、别名撞了插件名。
 // 这两条都在这里钉死，别等用户 --plugins=basic 少装了一个插件才发现。
+// 「预设里的 id 必须存在」这类完整性断言只在母版成立：派生项目本来就只带部分插件，
+// 这道测试文件会随 new 一起下发，所以按 go.mod 的模块名分清母版与派生。
 func TestPluginPresetsMatchManifests(t *testing.T) {
 	root, err := findRoot()
 	if err != nil {
@@ -264,22 +266,27 @@ func TestPluginPresetsMatchManifests(t *testing.T) {
 		}
 		editions[d.Name()] = string(m[1])
 	}
-	if len(editions) < 10 {
-		t.Fatalf("只读到 %d 个插件清单，母版应该更多——测试夹具或路径不对", len(editions))
+	master := moduleOfGoMod(root) == oldModule
+	if master && len(editions) < 10 {
+		t.Fatalf("母版只读到 %d 个插件清单，测试夹具或路径不对", len(editions))
 	}
-	for name, ids := range pluginPresets {
+	for name := range pluginPresets {
 		if _, ok := editions[name]; ok {
 			t.Errorf("预设别名 %q 与插件同名，展开会盖掉真插件", name)
 		}
-		for _, id := range ids {
-			if _, ok := editions[id]; !ok {
-				t.Errorf("预设 %s 里的 %q 在 plugins/ 下不存在", name, id)
+	}
+	if master {
+		for name, ids := range pluginPresets {
+			for _, id := range ids {
+				if _, ok := editions[id]; !ok {
+					t.Errorf("预设 %s 里的 %q 在 plugins/ 下不存在", name, id)
+				}
 			}
 		}
 	}
 	for _, id := range pluginPresets["basic"] {
-		if editions[id] != "free" {
-			t.Errorf("basic 里的 %s 是 %s：basic 承诺开箱即用，不该含需要授权的插件", id, editions[id])
+		if ed, ok := editions[id]; ok && ed != "free" {
+			t.Errorf("basic 里的 %s 是 %s：basic 承诺开箱即用，不该含需要授权的插件", id, ed)
 		}
 	}
 	basic := pluginPresets["basic"]
@@ -288,11 +295,27 @@ func TestPluginPresetsMatchManifests(t *testing.T) {
 			t.Errorf("free 插件 %s 没进 basic 预设：新加通用插件要顺手归类", id)
 		}
 	}
-	for _, id := range pluginPresets["standard"] {
-		if !slices.Contains(basic, id) && editions[id] != "pro" {
-			t.Errorf("standard 相对 basic 多出的 %s 应该是 pro（买授权即生效那一类）", id)
+	if master {
+		for _, id := range pluginPresets["standard"] {
+			if !slices.Contains(basic, id) && editions[id] != "pro" {
+				t.Errorf("standard 相对 basic 多出的 %s 应该是 pro（买授权即生效那一类）", id)
+			}
 		}
 	}
+}
+
+// moduleOfGoMod 读项目根 go.mod 的 module 名（读不到返回空串）。
+func moduleOfGoMod(root string) string {
+	raw, err := os.ReadFile(filepath.Join(root, "go.mod"))
+	if err != nil {
+		return ""
+	}
+	for _, l := range strings.Split(string(raw), "\n") {
+		if f := strings.Fields(l); len(f) == 2 && f[0] == "module" {
+			return strings.Trim(f[1], `"`)
+		}
+	}
+	return ""
 }
 
 func TestNewRewriteImports(t *testing.T) {
