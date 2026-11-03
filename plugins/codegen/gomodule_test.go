@@ -3,6 +3,7 @@ package codegen
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -36,7 +37,38 @@ func TestDetectGoModulePrefersRootEnvAndQuotes(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("NEXADMIN_ROOT", dir)
-	if got := detectGoModule(); got != "example.com/quoted" {
+	got, err := detectGoModule()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "example.com/quoted" {
 		t.Errorf("实得 %q", got)
+	}
+}
+
+// 定位不到 go.mod 时必须当场报错，不能悄悄用 nexadmin 当前缀：
+// 悄悄生成的代码要到编译才炸，报的还是「package nexadmin/... does not exist」。
+func TestDetectGoModuleFailsWithoutGoMod(t *testing.T) {
+	dir := t.TempDir()
+	// 这个分支要求 temp 目录到盘根之间真的没有 go.mod；机器上若有（例如把 Go 工作区装在某个
+	// module 里），向上找会得到答案，断言就不成立了——此时如实跳过，不改成放宽期望。
+	for d := filepath.Clean(dir); ; {
+		if _, err := os.Stat(filepath.Join(d, "go.mod")); err == nil {
+			t.Skipf("%s 一带本来就有 go.mod，测不到「向上都找不到」的分支", d)
+		}
+		up := filepath.Dir(d)
+		if up == d {
+			break
+		}
+		d = up
+	}
+	t.Setenv("NEXADMIN_ROOT", dir)
+	t.Chdir(dir)
+	_, err := detectGoModule()
+	if err == nil {
+		t.Fatal("没有 go.mod 时不能默默返回一个前缀")
+	}
+	if !strings.Contains(err.Error(), "go.mod") {
+		t.Errorf("报错要指向真正的原因（找不到 go.mod）: %v", err)
 	}
 }

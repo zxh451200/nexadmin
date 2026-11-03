@@ -127,7 +127,11 @@ func buildSpec(a *Analysis, goModule, module string, cfg []ColumnConfig) (*Spec,
 		return nil, err
 	}
 	if goModule == "" {
-		goModule = detectGoModule()
+		m, err := detectGoModule()
+		if err != nil {
+			return nil, err
+		}
+		goModule = m
 	}
 	if err := ValidGoModule(goModule); err != nil {
 		return nil, err

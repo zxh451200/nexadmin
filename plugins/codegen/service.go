@@ -217,20 +217,22 @@ func projectRoot() (string, error) {
 // detectGoModule 是「Go 模块路径」留空时的 import 前缀：从项目根向上找最近的 go.mod，读它的 module 行。
 // 母版里得到 nexadmin（与旧默认一致），派生项目里得到用户自己的模块路径——
 // 写死 nexadmin 会让二开项目生成的代码 import 一个根本不存在的包。
-func detectGoModule() string {
+// 找不到 go.mod 时报错而不是悄悄回落 nexadmin：悄悄生成的代码要到编译那一刻才炸，
+// 而且报的是「package nexadmin/... does not exist」，与真正的原因（根目录没定位到）隔了一层。
+func detectGoModule() (string, error) {
 	dir, err := projectRoot()
 	if err != nil {
 		if dir, err = os.Getwd(); err != nil {
-			return "nexadmin"
+			return "", response.BadRequest("codegen.install_no_root").Wrap(err)
 		}
 	}
 	for d := filepath.Clean(dir); ; {
 		if m, ok := goModuleLine(filepath.Join(d, "go.mod")); ok {
-			return m
+			return m, nil
 		}
 		up := filepath.Dir(d)
 		if up == d {
-			return "nexadmin"
+			return "", response.BadRequest("codegen.install_no_root").Wrap(fmt.Errorf("%q 往上没有 go.mod", filepath.Clean(dir)))
 		}
 		d = up
 	}
