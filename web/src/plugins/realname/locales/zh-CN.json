@@ -63,7 +63,8 @@
     },
     "perm": {
       "verify": "发起核验",
-      "config": "核验设置"
+      "config": "核验设置",
+      "reveal": "查看明文证件号"
     },
     "dedup": "重复提交",
     "dedupFolded": "同一号码折叠",

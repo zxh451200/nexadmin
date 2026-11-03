@@ -63,7 +63,8 @@
     },
     "perm": {
       "verify": "Run verification",
-      "config": "Verification settings"
+      "config": "Verification settings",
+      "reveal": "View plaintext ID number"
     },
     "dedup": "Repeat submissions",
     "dedupFolded": "Fold same number",
