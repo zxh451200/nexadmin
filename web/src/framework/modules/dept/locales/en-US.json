@@ -37,7 +37,8 @@
     },
     "confirm": {
       "delete": "Delete department \"{{name}}\"?",
-      "deleteCascade": "Delete department \"{{name}}\"? Its {{count}} descendant departments will also be deleted. This cannot be undone."
+      "deleteCascade": "Delete department \"{{name}}\"? Its {{count}} descendant departments will also be deleted. This cannot be undone.",
+      "deleteBatchConfirm": "Delete the {{count}} selected department(s)? Their child departments are deleted too."
     }
   }
 }

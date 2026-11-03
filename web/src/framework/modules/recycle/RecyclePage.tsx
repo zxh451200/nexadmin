@@ -13,7 +13,17 @@ import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import { fmtDateTime } from '../oper-log/format'
-import { RECYCLE_TYPES, usePurge, useRecycleList, useRestore, type RecycleItem, type RecycleType } from './api'
+import {
+  RECYCLE_TYPES,
+  usePurge,
+  usePurgeBatch,
+  useRecycleList,
+  useRestore,
+  useRestoreBatch,
+  type RecycleBatchResult,
+  type RecycleItem,
+  type RecycleType,
+} from './api'
 
 const ALL = 'all'
 
@@ -25,6 +35,7 @@ export default function RecyclePage() {
   const [type, setType] = useState<string>(ALL)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
+  const [selected, setSelected] = useState<string[]>([])
 
   const { data, isLoading } = useRecycleList({
     page,
@@ -33,15 +44,30 @@ export default function RecyclePage() {
     type: type === ALL ? undefined : (type as RecycleType),
   })
   const restore = useRestore()
+  const restoreBatch = useRestoreBatch()
   const purge = usePurge()
+  const purgeBatch = usePurgeBatch()
 
   const run = async (fn: () => Promise<unknown>, okKey: string) => {
     try {
       await fn()
       toast.success(t(okKey))
+      setSelected([])
     } catch (e) {
       toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
     }
+  }
+
+  // 批量回执：冲突与源行消失按条计数，让用户知道有多少条没成、为什么列表少了行。
+  const report = (res: RecycleBatchResult | undefined, okKey: string) => {
+    const parts: string[] = []
+    if (res?.restored) parts.push(t('recycle.batch.restored', { count: res.restored }))
+    if (res?.purged) parts.push(t('recycle.batch.purged', { count: res.purged }))
+    if (res?.conflict) parts.push(t('recycle.batch.conflict', { count: res.conflict }))
+    if (res?.gone) parts.push(t('recycle.batch.gone', { count: res.gone }))
+    if (parts.length) toast.success(parts.join('，'))
+    else toast.success(t(okKey))
+    setSelected([])
   }
 
   const onRestore = async (row: RecycleItem) => {
@@ -53,6 +79,26 @@ export default function RecyclePage() {
     if (!(await confirm({ destructive: true, description: t('recycle.confirm.purge', { name: row.name }) }))) return
     await run(() => purge.mutateAsync(row.id), 'recycle.purged')
   }
+
+  const onRestoreBatch = async (rows: RecycleItem[]) => {
+    if (!(await confirm({ description: t('recycle.confirm.restoreBatch', { count: rows.length }) }))) return
+    try {
+      report(await restoreBatch.mutateAsync(rows.map((r) => r.id)), 'recycle.restored')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+    }
+  }
+
+  const onPurgeBatch = async (rows: RecycleItem[]) => {
+    if (!(await confirm({ destructive: true, description: t('recycle.confirm.purgeBatch', { count: rows.length }) }))) return
+    try {
+      report(await purgeBatch.mutateAsync(rows.map((r) => r.id)), 'recycle.purged')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+    }
+  }
+
+  const selectedRows = (data?.list ?? []).filter((r) => selected.includes(r.id))
 
   const columns: Column<RecycleItem>[] = [
     { key: 'name', title: t('recycle.col.name'), mobile: 'title' },
@@ -117,6 +163,23 @@ export default function RecyclePage() {
         rowKey="id"
         loading={isLoading}
         columnSettingsKey="recycle"
+        selection={{ selected, onChange: setSelected }}
+        batchActions={(_ids) => (
+          <>
+            <Can perm="recycle:restore">
+              <Button type="button" variant="outline" size="sm" onClick={() => void onRestoreBatch(selectedRows)}>
+                <RotateCcw className="me-2 size-4" aria-hidden="true" />
+                {t('recycle.action.restore')}
+              </Button>
+            </Can>
+            <Can perm="recycle:delete">
+              <Button type="button" variant="destructive" size="sm" onClick={() => void onPurgeBatch(selectedRows)}>
+                <Trash2 className="me-2 size-4" aria-hidden="true" />
+                {t('recycle.action.purge')}
+              </Button>
+            </Can>
+          </>
+        )}
         rowActions={(row) => (
           <div className="flex items-center">
             <Can perm="recycle:restore">

@@ -21,11 +21,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/framework/ui/skeleton'
 import { formatSize } from '@/framework/upload/precheck'
 import { cn } from '@/lib/utils'
-import { FileActionsMenu, FilePreviewDialog, MoveDialog } from './FileActions'
+import { FileActionsMenu, FilePreviewDialog, MoveDialog, RenameDialog } from './FileActions'
 import { FileThumb } from './FileThumb'
 import { GROUP_ALL, GroupPanel } from './GroupPanel'
 import { UploadDialog } from './UploadDialog'
-import { useDeleteFiles, useFileList, useMoveFiles, useUpdateFile, type FileItem } from './api'
+import { useDeleteFiles, useFileList, useMoveFiles, useUpdateFile, type FileItem, type FileSort } from './api'
 
 const PAGE_SIZE_GRID = 24
 const CATEGORIES = ['image', 'video', 'doc', 'other'] as const
@@ -36,8 +36,10 @@ interface Filters {
   keyword: string
   category: string
   range: DateRangeValue
+  sort: FileSort
+  desc: boolean
 }
-const emptyFilters: Filters = { keyword: '', category: 'all', range: {} }
+const emptyFilters: Filters = { keyword: '', category: 'all', range: {}, sort: 'created_at', desc: true }
 
 export default function FilePage() {
   const { t, i18n } = useTranslation()
@@ -53,6 +55,7 @@ export default function FilePage() {
   const [uploadOpen, setUploadOpen] = useState(false)
   const [preview, setPreview] = useState<FileItem | null>(null)
   const [moving, setMoving] = useState<string[] | null>(null)
+  const [renaming, setRenaming] = useState<FileItem | null>(null)
 
   const pageSize = view === 'grid' ? PAGE_SIZE_GRID : listSize
   const { data, isLoading } = useFileList({
@@ -63,6 +66,8 @@ export default function FilePage() {
     groupId: group === GROUP_ALL ? undefined : group,
     from: applied.range.from,
     to: applied.range.to,
+    sort: applied.sort,
+    desc: applied.desc,
   })
   const update = useUpdateFile()
   const move = useMoveFiles()
@@ -132,6 +137,7 @@ export default function FilePage() {
       onPreview={setPreview}
       onToggleVisibility={(x) => void toggleVisibility(x)}
       onMove={(x) => setMoving([x.id])}
+      onRename={setRenaming}
       onDelete={(x) => void remove([x.id])}
     />
   )
@@ -201,6 +207,21 @@ export default function FilePage() {
         </SelectContent>
       </Select>
       <DateRangePicker value={draft.range} onChange={(range) => setDraft((d) => ({ ...d, range }))} ariaLabel={t('fileMgr.timeRange')} className="md:w-64" placeholder={t('fileMgr.timeRange')} />
+      <Select value={`${draft.sort}:${draft.desc ? 'desc' : 'asc'}`} onValueChange={(v) => {
+        const [sort, dir] = v.split(':')
+        setDraft((d) => ({ ...d, sort: sort as FileSort, desc: dir === 'desc' }))
+      }}>
+        <SelectTrigger className="md:w-40" aria-label={t('fileMgr.sortBy')}>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="created_at:desc">{t('fileMgr.sortNewest')}</SelectItem>
+          <SelectItem value="created_at:asc">{t('fileMgr.sortOldest')}</SelectItem>
+          <SelectItem value="name:asc">{t('fileMgr.sortNameAsc')}</SelectItem>
+          <SelectItem value="size:desc">{t('fileMgr.sortSizeDesc')}</SelectItem>
+          <SelectItem value="size:asc">{t('fileMgr.sortSizeAsc')}</SelectItem>
+        </SelectContent>
+      </Select>
     </FilterBar>
   )
 
@@ -260,7 +281,12 @@ export default function FilePage() {
 
           {view === 'list' ? (
             <DataTable
-              toolbar={viewToggle('ms-auto')}
+              toolbar={
+                <>
+                  <span className="num text-sm text-muted-foreground">{t('common.total', { count: total })}</span>
+                  {viewToggle('ms-auto')}
+                </>
+              }
               columns={columns}
               columnSettingsKey="file"
               data={rows}
@@ -282,8 +308,9 @@ export default function FilePage() {
             />
           ) : (
             <>
+              {batchBar}
               <div className="flex flex-wrap items-center gap-2">
-                {batchBar}
+                <span className="num text-sm text-muted-foreground">{t('common.total', { count: total })}</span>
                 <div className="ms-auto shrink-0">{viewToggle()}</div>
               </div>
 
@@ -311,7 +338,7 @@ export default function FilePage() {
                                 <Checkbox
                                   checked={checked}
                                   aria-label={t('fileMgr.selectFile', { name: f.name })}
-                                  className="bg-background shadow-sm"
+                                  className="border-border bg-background shadow-sm"
                                   onCheckedChange={() => setSelected((s) => (checked ? s.filter((x) => x !== f.id) : [...s, f.id]))}
                                 />
                               </div>
@@ -362,8 +389,14 @@ export default function FilePage() {
       </div>
 
       <UploadDialog open={uploadOpen} onOpenChange={setUploadOpen} defaultGroupId={group === GROUP_ALL || group === 'none' ? '' : group} />
-      <FilePreviewDialog file={preview} onClose={() => setPreview(null)} />
-      <MoveDialog key={moving?.join(',') ?? 'closed'} open={!!moving} onOpenChange={(o) => !o && setMoving(null)} count={moving?.length ?? 0} onConfirm={(g) => void doMove(g)} />
+      <FilePreviewDialog file={preview} images={rows} onClose={() => setPreview(null)} />
+      <MoveDialog key={moving ? `move-${moving.join(',')}` : 'move-closed'} open={!!moving} onOpenChange={(o) => !o && setMoving(null)} count={moving?.length ?? 0} onConfirm={(g) => void doMove(g)} />
+      <RenameDialog
+        key={renaming ? `rename-${renaming.id}` : 'rename-closed'}
+        file={renaming}
+        onOpenChange={(o) => !o && setRenaming(null)}
+        onRenamed={() => setSelected([])}
+      />
     </PageContainer>
   )
 }

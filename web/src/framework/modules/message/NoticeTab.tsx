@@ -6,6 +6,8 @@ import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { DictSelect } from '@/framework/components/DictSelect'
 import { DictTag } from '@/framework/components/DictTag'
+import { ExportCsvButton } from '@/framework/components/export/ExportCsvButton'
+import { dictText, useDictItems } from '@/framework/components/pickers/useDictItems'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { RichTextView } from '@/framework/components/RichTextView'
@@ -14,7 +16,7 @@ import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
 import { Label } from '@/framework/ui/label'
 import { Switch } from '@/framework/ui/switch'
-import { useClearNotices, useDeleteNotice, useMyNotices, useReadNotice, type MyNotice } from './api'
+import { fetchNoticesForExport, useClearNotices, useDeleteNotice, useDismissNotices, useMyNotices, useReadNotice, type MyNotice } from './api'
 import { formatTime } from './format'
 
 interface Filters {
@@ -33,6 +35,7 @@ export function NoticeTab() {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [detail, setDetail] = useState<MyNotice | null>(null)
+  const [selected, setSelected] = useState<string[]>([])
 
   const search = () => {
     setApplied(draft)
@@ -54,12 +57,30 @@ export function NoticeTab() {
   const readNotice = useReadNotice()
   const clear = useClearNotices()
   const remove = useDeleteNotice()
+  const dismissBatch = useDismissNotices()
+  // 导出的类型/级别列要和页面上的 DictTag 用同一份字典，否则中英文对不上
+  const { data: typeItems } = useDictItems('notice_type')
+  const { data: levelItems } = useDictItems('notice_level')
+
+  // 批量移除：语义与单条一致——只从「我的」消息中心摘掉，公告本身与其他人的列表不动。
+  const onDeleteBatch = async (ids: string[]) => {
+    if (!(await confirm({ destructive: true, description: t('message.deleteBatchNoticeConfirm', { count: ids.length }) }))) return
+    try {
+      const { dismissed } = await dismissBatch.mutateAsync(ids)
+      if (detail && ids.includes(detail.id)) setDetail(null)
+      setSelected([])
+      toast.success(dismissed < ids.length ? t('message.dismissedPartial', { dismissed, total: ids.length }) : t('common.operateSuccess'))
+    } catch {
+      toast.error(t('common.operateFailed'))
+    }
+  }
 
   const onDelete = async (n: MyNotice) => {
     if (!(await confirm({ destructive: true, description: t('message.deleteNoticeConfirm') }))) return
     try {
       await remove.mutateAsync(n.id)
       if (detail?.id === n.id) setDetail(null)
+      setSelected((s) => s.filter((x) => x !== n.id))
       if (data?.list.length === 1 && page > 1) setPage(page - 1)
       toast.success(t('common.operateSuccess'))
     } catch {
@@ -72,6 +93,7 @@ export function NoticeTab() {
     try {
       await clear.mutateAsync()
       setDetail(null)
+      setSelected([])
       setPage(1)
       toast.success(t('common.operateSuccess'))
     } catch {
@@ -133,7 +155,23 @@ export function NoticeTab() {
           <Label htmlFor="notice-only-unread">{t('message.onlyUnread')}</Label>
         </div>
       </FilterBar>
-      <div className="flex flex-wrap md:justify-end">
+      <div className="flex flex-wrap gap-2 md:justify-end">
+        <ExportCsvButton
+          filename="notices"
+          columns={[
+            { header: t('message.fields.title'), value: (n) => n.title },
+            { header: t('message.fields.type'), value: (n) => dictText(typeItems, n.type) },
+            { header: t('message.fields.level'), value: (n) => dictText(levelItems, n.level) },
+            { header: t('message.fields.status'), value: (n) => (n.read ? t('message.read') : t('message.unread')) },
+            { header: t('message.fields.publishedAt'), value: (n) => formatTime(n.publishedAt ?? '', i18n.language) },
+            { header: t('message.fields.content'), value: (n) => n.content },
+          ]}
+          getRows={() => fetchNoticesForExport({
+            keyword: applied.keyword.trim() || undefined,
+            type: applied.type || undefined,
+            unread: applied.onlyUnread ? '1' : undefined,
+          })}
+        />
         <Button variant="outline" className="text-destructive" onClick={onClear} disabled={!data?.total || clear.isPending}>
           <Trash2 aria-hidden="true" />
           {t('message.clearNotices')}
@@ -156,6 +194,13 @@ export function NoticeTab() {
             setPageSize(s)
           },
         }}
+        selection={{ selected, onChange: setSelected }}
+        batchActions={(ids) => (
+          <Button variant="destructive" size="sm" onClick={() => void onDeleteBatch(ids)}>
+            <Trash2 aria-hidden="true" />
+            {t('common.delete')}
+          </Button>
+        )}
         rowActions={(n) => (
           <Button variant="ghost" size="sm" className="text-destructive" onClick={() => onDelete(n)}>
             <Trash2 aria-hidden="true" />

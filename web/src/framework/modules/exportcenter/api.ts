@@ -89,6 +89,19 @@ export function useDeleteJob() {
   return useMutation({ mutationFn: (id: string) => api.del<null>(`/jobs/${id}`), onSuccess: invalidate })
 }
 
+/**
+ * 批量删除任务：DELETE /jobs?ids=1,2,3，作用域与判据同单条（结果文件连带删）。
+ * 返回体与后端一致：{ deleted: n }——看不见（非本人且无 job:all）或已删除的 id 不计入 n；
+ * 其中有未结束的任务时后端整批 409 拒绝，不会只删「能删的那几条」。
+ */
+export function useDeleteJobs() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (ids: string[]) => api.del<{ deleted: number }>('/jobs', { ids: ids.join(',') }),
+    onSuccess: invalidate,
+  })
+}
+
 /** 下载结果文件（后端校验所有者；Content-Disposition 带文件名，这里优先用列表里的名字） */
 export async function downloadJobFile(job: Pick<Job, 'id' | 'fileName'>): Promise<void> {
   const res = await http.get<unknown>(`/jobs/${job.id}/download`, { responseType: 'blob' })

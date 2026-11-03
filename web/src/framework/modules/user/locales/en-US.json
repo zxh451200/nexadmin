@@ -35,14 +35,13 @@
       "defaultPasswordHint": "New users get the initial password Nex@123456. Ask them to change it after first sign-in."
     },
     "v": {
-      "usernameMin": "Username must be at least 3 characters",
-      "usernameFormat": "Only letters, digits, underscore, dot and hyphen are allowed",
+      "usernameMin": "Username must be 2 to 64 characters",
+      "usernameFormat": "Only letters, digits, underscore, dot, hyphen and @ are allowed",
       "nicknameRequired": "Please enter a nickname",
       "phoneFormat": "Invalid phone number",
       "emailFormat": "Invalid email address",
       "deptRequired": "Please select a department",
       "rolesRequired": "Please select at least one role",
-      "passwordMin": "Password must be at least 8 characters",
       "passwordMismatch": "Passwords do not match"
     },
     "resetPassword": {

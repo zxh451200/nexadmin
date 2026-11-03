@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { ArrowLeft, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useForm } from 'react-hook-form'
@@ -11,6 +11,7 @@ import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { DictSelect } from '@/framework/components/DictSelect'
 import { DictTag, tagVariant } from '@/framework/components/DictTag'
+import { ExportCsvButton } from '@/framework/components/export/ExportCsvButton'
 import { FormGrid, FormGridFull, FormLayout } from '@/framework/components/FormLayout'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Badge } from '@/framework/ui/badge'
@@ -22,7 +23,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/framework/ui/textarea'
 import {
   TAG_VARIANTS,
+  fetchDictDataForExport,
   useDeleteDictData,
+  useDeleteDictDataBatch,
   useDictData,
   useSaveDictData,
   useSortDictData,
@@ -76,10 +79,19 @@ export function DictDataPanel({ type, onBack }: Props) {
   const confirm = useConfirm()
   const [editing, setEditing] = useState<DictDataRow | null>(null)
   const [open, setOpen] = useState(false)
+  const [selected, setSelected] = useState<string[]>([])
   const { data = [], isLoading } = useDictData(type?.id ?? null)
   const save = useSaveDictData()
   const del = useDeleteDictData()
+  const delBatch = useDeleteDictDataBatch()
   const sort = useSortDictData()
+  // 数据项搜索：省市区这类大字典动辄几百行，没有过滤基本没法维护
+  const [keyword, setKeyword] = useState('')
+  const shown = useMemo(() => {
+    const kw = keyword.trim().toLowerCase()
+    if (!kw) return data
+    return data.filter((r) => [r.label, r.value, r.remark].some((v) => (v ?? '').toLowerCase().includes(kw)))
+  }, [data, keyword])
 
   const form = useForm<FormValues>({ resolver: zodResolver(schema), defaultValues: empty })
   // 译文按语言存在 i18nJson 里（与内容侧同一份契约）；这里只需要 label 一个短字段，
@@ -87,6 +99,8 @@ export function DictDataPanel({ type, onBack }: Props) {
   const [i18n, setI18n] = useState<Record<string, string>>({})
   const { languages } = useLanguages()
   const extraLangs = languages.filter((l) => !l.default)
+  // 换字典类型时把上一个类型的勾选丢掉：那些 id 属于别的类型，界面上已经看不见，却还会被当成选中项提交
+  useEffect(() => setSelected([]), [type?.id])
   useEffect(() => {
     if (!open) return
     if (editing) {
@@ -125,6 +139,20 @@ export function DictDataPanel({ type, onBack }: Props) {
     if (!(await confirm({ destructive: true, description: t('dict.data.deleteConfirm', { name: row.label }) }))) return
     try {
       await del.mutateAsync(row.id)
+      setSelected((s) => s.filter((x) => x !== row.id))
+      toast.success(t('common.operateSuccess'))
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+    }
+  }
+
+  // 批量删除：内置类型下的出厂数据项由后端整批拒绝（409 dict.builtin），
+  // 哪几条是出厂的要问后端，所以原样提交、把服务端的明确提示透出来。
+  const removeBatch = async (ids: string[]) => {
+    if (!(await confirm({ destructive: true, description: t('dict.data.deleteBatchConfirm', { count: ids.length }) }))) return
+    try {
+      await delBatch.mutateAsync(ids)
+      setSelected([])
       toast.success(t('common.operateSuccess'))
     } catch (e) {
       toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
@@ -167,21 +195,52 @@ export function DictDataPanel({ type, onBack }: Props) {
             <p className="num truncate text-xs text-muted-foreground">{type.code}</p>
           </div>
         </div>
-        <Can perm="dict:create">
-          <Button type="button" size="sm" onClick={() => openForm(null)}>
-            <Plus className="me-1 h-4 w-4" aria-hidden="true" />
-            {t('common.add')}
-          </Button>
-        </Can>
+        <div className="flex shrink-0 items-center gap-2">
+          <ExportCsvButton
+            filename={`${t('dict.data.exportFilename')}-${type.code}`}
+            perm="dict:list"
+            size="sm"
+            getRows={() => fetchDictDataForExport(type.id)}
+            columns={[
+              { header: t('dict.data.label'), value: (r) => r.label },
+              { header: t('dict.data.value'), value: (r) => r.value },
+              { header: t('dict.data.tag'), value: (r) => t(`dict.tag.${r.tag}`) },
+              { header: t('common.sort'), value: (r) => r.sort },
+              { header: t('common.status'), value: (r) => (r.status === '1' ? t('common.enable') : t('common.disable')) },
+              { header: t('common.remark'), value: (r) => r.remark ?? '' },
+            ]}
+          />
+          <Can perm="dict:create">
+            <Button type="button" size="sm" onClick={() => openForm(null)}>
+              <Plus className="me-1 h-4 w-4" aria-hidden="true" />
+              {t('common.add')}
+            </Button>
+          </Can>
+        </div>
       </div>
+      <Input
+        value={keyword}
+        onChange={(e) => setKeyword(e.target.value)}
+        placeholder={t('dict.data.searchPlaceholder')}
+        aria-label={t('common.search')}
+      />
       <DataTable<DictDataRow>
         columns={columns}
         columnSettingsKey="dictData"
-        data={data}
+        data={shown}
         rowKey="id"
         loading={isLoading}
         pagination={false}
         sortable={has('dict:update') ? { onReorder: (ids) => sort.mutateAsync(ids) } : undefined}
+        selection={{ selected, onChange: setSelected }}
+        batchActions={(ids) => (
+          <Can perm="dict:delete">
+            <Button type="button" variant="destructive" size="sm" onClick={() => void removeBatch(ids)}>
+              <Trash2 className="me-1 h-4 w-4" aria-hidden="true" />
+              {t('common.delete')}
+            </Button>
+          </Can>
+        )}
         rowActions={(row) => (
           <>
             <Can perm="dict:update">

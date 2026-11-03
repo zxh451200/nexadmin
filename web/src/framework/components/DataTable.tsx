@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { ChevronDown, ChevronUp } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { DndContext, DragOverlay, type DragEndEvent, type DragStartEvent } from '@dnd-kit/core'
@@ -104,6 +105,17 @@ export function DataTable<T>({
   const rows = override ?? data
   const ids = useMemo(() => rows.map(getKey), [rows, getKey])
 
+  // 分页表格的自愈：批量/单条删除很容易把人留在「total 还有、这一页却空了」的空白页上。
+  // 只在确实空了且不在首页时退一页；首页或真·空表（total=0）不触发，不会和空状态抢显示。
+  const pag = pagination === false ? undefined : pagination
+  const { page: pagPage, pageSize: pagSize, total: pagTotal } = pag ?? { page: 1, pageSize: 0, total: 0 }
+  const onPagChange = pag?.onChange
+  useEffect(() => {
+    if (loading || rows.length > 0 || pagTotal === 0 || pagPage <= 1) return
+    onPagChange?.(pagPage - 1, pagSize)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, rows.length, pagPage, pagSize, pagTotal])
+
   // 浮层内容：起拖时取该行第一列的单元格，宽度取被拖行的实际宽度
   const [dragChip, setDragChip] = useState<{ label: ReactNode; width: number } | null>(null)
   useDragCursor(!!dragChip)
@@ -140,6 +152,22 @@ export function DataTable<T>({
     const from = ids.indexOf(String(e.active.id))
     const to = ids.indexOf(String(e.over.id))
     if (from < 0 || to < 0) return
+    const next = arrayMove(rows, from, to)
+    setOverride(next)
+    try {
+      await sortable.onReorder(next.map(getKey))
+    } catch {
+      setOverride(null)
+      toast.error(t('dataTable.reorderFailed'))
+    }
+  }
+
+  // 移动端的显式上/下移：触屏长按拖拽发现性差、滚动易误取消；与 TreeTable 的同名能力对等。
+  const nudge = async (id: string, delta: -1 | 1) => {
+    if (!sortable) return
+    const from = ids.indexOf(id)
+    const to = from + delta
+    if (from < 0 || to < 0 || to >= ids.length) return
     const next = arrayMove(rows, from, to)
     setOverride(next)
     try {
@@ -335,6 +363,32 @@ export function DataTable<T>({
                 leading={
                   <>
                     {sortEnabled ? <SortableHandle /> : null}
+                    {sortEnabled ? (
+                      <span className="inline-flex flex-col gap-0.5">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-5 w-5"
+                          disabled={index <= 0}
+                          aria-label={t('dataTable.moveUp')}
+                          onClick={() => void nudge(id, -1)}
+                        >
+                          <ChevronUp className="size-3.5" aria-hidden="true" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-5 w-5"
+                          disabled={index >= rows.length - 1}
+                          aria-label={t('dataTable.moveDown')}
+                          onClick={() => void nudge(id, 1)}
+                        >
+                          <ChevronDown className="size-3.5" aria-hidden="true" />
+                        </Button>
+                      </span>
+                    ) : null}
                     {selection ? (
                       <SelectBox
                         checked={selected.includes(id)}

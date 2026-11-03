@@ -216,6 +216,24 @@ defineMock([
     },
   },
   {
+    method: 'DELETE',
+    url: '/openapi/apps',
+    handler: ({ query }): { deleted: number } => {
+      // 与后端同口径：?ids= 空或非法直接 400，一条都不动；一条都没命中则 404
+      const raw = String(query.ids ?? '').trim()
+      const ids = raw.split(',').map((x) => x.trim()).filter(Boolean)
+      if (!raw || !ids.length || ids.some((x) => !/^[1-9][0-9]*$/.test(x))) mockError(400, 'Invalid ids')
+      const target = new Set(ids)
+      const before = apps.length
+      for (let i = apps.length - 1; i >= 0; i--) {
+        if (target.has(apps[i].id)) apps.splice(i, 1)
+      }
+      const deleted = before - apps.length
+      if (!deleted) mockError(404, 'Not found')
+      return { deleted }
+    },
+  },
+  {
     method: 'PUT',
     url: '/openapi/apps/:id/enabled',
     handler: ({ params, body }) => {
@@ -259,6 +277,24 @@ defineMock([
       if (idx < 0) mockError(404, 'Not found')
       webhooks.splice(idx, 1)
       return null
+    },
+  },
+  {
+    method: 'DELETE',
+    url: '/openapi/webhooks',
+    handler: ({ query }): { deleted: number } => {
+      // 与后端同口径：?ids= 空或非法直接 400，一条都不动；一条都没命中则 404
+      const raw = String(query.ids ?? '').trim()
+      const ids = raw.split(',').map((x) => x.trim()).filter(Boolean)
+      if (!raw || !ids.length || ids.some((x) => !/^[1-9][0-9]*$/.test(x))) mockError(400, 'Invalid ids')
+      const target = new Set(ids)
+      const before = webhooks.length
+      for (let i = webhooks.length - 1; i >= 0; i--) {
+        if (target.has(webhooks[i].id)) webhooks.splice(i, 1)
+      }
+      const deleted = before - webhooks.length
+      if (!deleted) mockError(404, 'Not found')
+      return { deleted }
     },
   },
   {

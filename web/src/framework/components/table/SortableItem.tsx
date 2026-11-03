@@ -75,6 +75,7 @@ export function SortableHandle({ className }: { className?: string }) {
       ref={ctx.setActivatorNodeRef}
       {...ctx.attributes}
       {...ctx.listeners}
+      data-drag-handle="1"
       aria-label={t('dataTable.dragHandle')}
       onClick={(e) => e.stopPropagation()}
       className={cn(

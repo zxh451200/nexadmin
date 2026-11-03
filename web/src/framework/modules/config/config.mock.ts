@@ -61,7 +61,6 @@ const seed: ConfigRow[] = [
   row(6, '登录验证码', 'login.captcha_enabled', 'true', 'boolean', true, '关闭后登录页不再出现验证码'),
   row(7, '登录最大重试次数', 'login.max_retry', '5', 'number', false),
   row(8, '账号锁定时长(分钟)', 'login.lock_minutes', '30', 'number', false),
-  row(10, 'IP 白名单', 'security.ip_whitelist', '["10.0.0.0/8","192.168.0.0/16"]', 'json', false, '仅超管端生效'),
   row(11, '图片上传大小上限(MB)', KEY_IMAGE, '0', 'number', true, '0 或留空表示不限制'),
   row(12, '视频上传大小上限(MB)', KEY_VIDEO, '0', 'number', true, '0 或留空表示不限制'),
   row(13, '普通文件上传大小上限(MB)', KEY_FILE, '0', 'number', true, '0 或留空表示不限制'),

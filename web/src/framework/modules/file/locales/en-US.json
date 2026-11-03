@@ -56,6 +56,13 @@
     "noVideoSource": "Demo data has no video source",
     "empty": "No files",
     "selectFile": "Select file {{name}}",
+    "storageUsed": "Storage used",
+    "sortBy": "Sort",
+    "sortNewest": "Newest first",
+    "sortOldest": "Oldest first",
+    "sortNameAsc": "Name A-Z",
+    "sortSizeDesc": "Size, largest first",
+    "sortSizeAsc": "Size, smallest first",
     "pageInfo": "Page {{page}} / {{pages}}, {{total}} total"
   }
 }

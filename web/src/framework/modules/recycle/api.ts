@@ -2,8 +2,18 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { api } from '@/framework/request/http'
 import type { Page } from '@/framework/request/types'
 
-export const RECYCLE_TYPES = ['user', 'role', 'dict', 'notice', 'post'] as const
+// 与后端 recbin.Tables 的登记保持一致：只列真正会进回收站的类型，
+// 多列的筛选项永远查不到数据，只会让人以为那种数据丢了。
+export const RECYCLE_TYPES = ['user', 'notice'] as const
 export type RecycleType = (typeof RECYCLE_TYPES)[number]
+
+/** 批量还原 / 批量彻底删除的回执：冲突与源行消失按条计数。 */
+export interface RecycleBatchResult {
+  restored?: number
+  purged?: number
+  conflict?: number
+  gone?: number
+}
 
 export interface RecycleItem {
   id: string
@@ -38,10 +48,26 @@ export function useRestore() {
   })
 }
 
+export function useRestoreBatch() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (ids: string[]) => api.post<RecycleBatchResult>('/recycle/restore', { ids }),
+    onSuccess: () => qc.invalidateQueries(),
+  })
+}
+
 export function usePurge() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (id: string) => api.del<null>(`/recycle/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['recycle'] }),
+  })
+}
+
+export function usePurgeBatch() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (ids: string[]) => api.del<RecycleBatchResult>('/recycle', { ids: ids.join(',') }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['recycle'] }),
   })
 }

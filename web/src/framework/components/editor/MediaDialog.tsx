@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/framework/ui/dialog'
+import { RequiredMark } from '@/framework/components/RequiredMark'
 import { Uploader } from '@/framework/components/Uploader'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
@@ -103,6 +104,7 @@ export function MediaDialog({ kind, onClose, onInsert }: MediaDialogProps) {
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="editor-video-url" className="text-xs text-muted-foreground">
               {t('editor.videoUrl')}
+              <RequiredMark />
             </Label>
             <div className="flex gap-2">
               <Input

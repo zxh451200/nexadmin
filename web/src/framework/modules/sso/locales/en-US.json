@@ -13,6 +13,8 @@
     "resetSecret": "Reset secret",
     "resetConfirm": "The current secret of \"{{name}}\" stops working immediately and the app must be updated. Continue?",
     "deleteConfirm": "Delete app \"{{name}}\"? It will no longer be able to use single sign-on.",
+    "deleteBatchConfirm": "Delete the {{count}} selected SSO app(s)? They will no longer be able to use single sign-on.",
+    "exportFilename": "sso-apps",
     "btn": { "edit": "Edit" },
     "fields": {
       "name": "App name",

@@ -1,14 +1,22 @@
 {
   "recycle": {
     "menu": "Recycle bin",
-    "description": "Deleted users, roles, dictionaries, notices and more. Restore them or delete permanently",
+    "description": "Deleted users, notices and more. Restore them or delete permanently",
     "col": { "name": "Name", "type": "Type", "deletedBy": "Deleted by", "deletedAt": "Deleted at" },
-    "type": { "all": "All types", "user": "User", "role": "Role", "dict": "Dictionary", "notice": "Notice", "post": "Post" },
+    "type": { "all": "All types", "user": "User", "notice": "Notice" },
     "filter": { "keyword": "Keyword", "keywordPlaceholder": "Name", "type": "Data type" },
     "action": { "restore": "Restore", "purge": "Delete permanently" },
     "confirm": {
       "restore": "Restore {{name}}?",
-      "purge": "Permanently delete {{name}}? This cannot be undone."
+      "purge": "Permanently delete {{name}}? This cannot be undone.",
+      "restoreBatch": "Restore the selected {{count}} items?",
+      "purgeBatch": "Permanently delete the selected {{count}} items? This cannot be undone."
+    },
+    "batch": {
+      "restored": "Restored {{count}} items",
+      "purged": "Permanently deleted {{count}} items",
+      "conflict": "{{count}} conflicts (the same-name data was recreated)",
+      "gone": "{{count}} source rows no longer exist; their records were cleaned up"
     },
     "restored": "Restored",
     "purged": "Permanently deleted"

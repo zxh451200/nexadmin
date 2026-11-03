@@ -32,7 +32,7 @@ import {
 } from './api'
 import { OperLogDetailDialog } from './OperLogDetailDialog'
 import { blobExt } from '../user/api'
-import { saveBlob } from '../user/csv'
+import { saveBlob } from '@/framework/components/export/csv'
 import { fmtDateTime, stamp } from './format'
 import { OperStatsPanel } from './StatsPanel'
 

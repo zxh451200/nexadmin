@@ -21,10 +21,12 @@ export interface RegionSelectProps {
 
 const KEYS = ['province', 'city', 'district'] as const
 
-// 直辖市与省直辖县级市没有地级这一层，选中省级后只需再选一级，第三列不该空着出现。
+// 直辖市、港澳与省直辖县级市没有地级这一层，选中省级后只需再选一级，第三列不该空着出现；
+// 台湾省只到省级（没有公开的下级区划），选完就该收在省级这一列。
 function widthFor(path: RegionNode[], level: number): number {
   if (path.length === 0) return level
-  return path[0].children?.some((c) => c.children?.length) ? level : Math.min(level, 2)
+  if (!path[0].children?.length) return 1
+  return path[0].children.some((c) => c.children?.length) ? level : Math.min(level, 2)
 }
 
 function toValue(path: RegionNode[]): RegionValue {

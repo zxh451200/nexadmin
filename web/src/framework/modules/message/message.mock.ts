@@ -92,9 +92,17 @@ defineMock([
   {
     method: 'DELETE',
     url: '/messages',
-    handler: () => {
-      items = []
-      return null
+    handler: ({ query }) => {
+      // 带 ids 是批量删除，不带才是清空全部（与后端同口径）
+      const raw = String(query.ids ?? '').trim()
+      if (!raw) {
+        items = []
+        return null
+      }
+      const ids = new Set(raw.split(',').map((s) => s.trim()).filter(Boolean))
+      const before = items.length
+      items = items.filter((m) => !ids.has(m.id))
+      return { deleted: before - items.length }
     },
   },
   {

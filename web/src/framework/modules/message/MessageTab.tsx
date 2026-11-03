@@ -8,13 +8,15 @@ import { DataTable, type Column } from '@/framework/components/DataTable'
 import { DateRangePicker, type DateRangeValue } from '@/framework/components/DateRangePicker'
 import { DictSelect } from '@/framework/components/DictSelect'
 import { DictTag } from '@/framework/components/DictTag'
+import { ExportCsvButton } from '@/framework/components/export/ExportCsvButton'
+import { dictText, useDictItems } from '@/framework/components/pickers/useDictItems'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
 import { Label } from '@/framework/ui/label'
 import { Switch } from '@/framework/ui/switch'
-import { useClearMessages, useDeleteMessage, useMarkRead, useMessageList, useReadAll, type Message } from './api'
+import { fetchMessagesForExport, useClearMessages, useDeleteMessage, useDeleteMessages, useMarkRead, useMessageList, useReadAll, type Message } from './api'
 import { formatTime } from './format'
 
 interface Filters {
@@ -58,7 +60,11 @@ export function MessageTab({ unread }: { unread: number }) {
   const markRead = useMarkRead()
   const readAll = useReadAll()
   const remove = useDeleteMessage()
+  const removeBatch = useDeleteMessages()
   const clear = useClearMessages()
+  const [selected, setSelected] = useState<string[]>([])
+  // 导出里的分类列要和页面上的 DictTag 同一份字典，否则中英文对不上
+  const { data: categoryItems } = useDictItems('message_category')
 
   const open = (m: Message) => {
     setDetail(m)
@@ -79,7 +85,21 @@ export function MessageTab({ unread }: { unread: number }) {
     try {
       await remove.mutateAsync(m.id)
       if (detail?.id === m.id) setDetail(null)
+      setSelected((s) => s.filter((x) => x !== m.id))
       toast.success(t('common.operateSuccess'))
+    } catch {
+      toast.error(t('common.operateFailed'))
+    }
+  }
+
+  // 批量删除：跨页选中也一次提交；后端只删属于当前用户的行，返回实际条数。
+  const onDeleteBatch = async (ids: string[]) => {
+    if (!(await confirm({ destructive: true, description: t('message.deleteBatchConfirm', { count: ids.length }) }))) return
+    try {
+      const { deleted } = await removeBatch.mutateAsync(ids)
+      if (detail && ids.includes(detail.id)) setDetail(null)
+      setSelected([])
+      toast.success(deleted < ids.length ? t('message.deletedPartial', { deleted, total: ids.length }) : t('common.operateSuccess'))
     } catch {
       toast.error(t('common.operateFailed'))
     }
@@ -90,6 +110,7 @@ export function MessageTab({ unread }: { unread: number }) {
     try {
       await clear.mutateAsync()
       setDetail(null)
+      setSelected([])
       setPage(1)
       toast.success(t('common.operateSuccess'))
     } catch {
@@ -157,6 +178,23 @@ export function MessageTab({ unread }: { unread: number }) {
         </div>
       </FilterBar>
       <div className="flex flex-wrap gap-2 md:justify-end">
+        <ExportCsvButton
+          filename="messages"
+          columns={[
+            { header: t('message.fields.title'), value: (m) => m.title },
+            { header: t('message.fields.category'), value: (m) => dictText(categoryItems, m.category) },
+            { header: t('message.fields.status'), value: (m) => (m.readAt ? t('message.read') : t('message.unread')) },
+            { header: t('message.fields.time'), value: (m) => formatTime(m.createdAt, i18n.language) },
+            { header: t('message.fields.content'), value: (m) => m.content },
+          ]}
+          getRows={() => fetchMessagesForExport({
+            keyword: applied.keyword.trim() || undefined,
+            category: applied.category || undefined,
+            unread: applied.onlyUnread ? '1' : undefined,
+            from: applied.range.from,
+            to: applied.range.to,
+          })}
+        />
         <Button variant="outline" onClick={onReadAll} disabled={unread === 0 || readAll.isPending}>
           <CheckCheck aria-hidden="true" />
           {t('message.readAll')}
@@ -183,6 +221,13 @@ export function MessageTab({ unread }: { unread: number }) {
             setPageSize(s)
           },
         }}
+        selection={{ selected, onChange: setSelected }}
+        batchActions={(ids) => (
+          <Button variant="destructive" size="sm" onClick={() => void onDeleteBatch(ids)}>
+            <Trash2 aria-hidden="true" />
+            {t('common.delete')}
+          </Button>
+        )}
         rowActions={(m) => (
           <Button variant="ghost" size="sm" className="text-destructive" onClick={() => onDelete(m)}>
             <Trash2 aria-hidden="true" />

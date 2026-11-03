@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { CheckCircle2, Download, ExternalLink, KeyRound, Loader2, RefreshCw, Store, Trash2, XCircle } from 'lucide-react'
+import { CheckCircle2, Download, ExternalLink, KeyRound, Loader2, PackagePlus, RefreshCw, Store, Trash2, XCircle } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { usePermission } from '@/framework/auth/usePermission'
 import { Badge } from '@/framework/ui/badge'
@@ -233,6 +234,27 @@ export default function MarketTab({ focus = '' }: { focus?: string }) {
   const [installTarget, setInstallTarget] = useState<MarketEntry | null>(null)
   const [licenseTarget, setLicenseTarget] = useState<PluginInfo | null>(null)
   const [licensePrefill, setLicensePrefill] = useState('')
+  const uploadRef = useRef<HTMLInputElement | null>(null)
+
+  // 本地 zip 上传安装：走与市场安装相同的 job 链路（安装 → 重建 → 自重启），
+  // jobId 回来后弹任务对话框看实时日志；重启后按实例 ID 自动整页刷新。
+  const onUpload = async (file: File) => {
+    if (!file.name.toLowerCase().endsWith('.zip')) {
+      toast.error(t('pluginMgr.market.upload.zipOnly'))
+      return
+    }
+    const fd = new FormData()
+    fd.append('file', file)
+    try {
+      const res = await import('@/framework/request/http').then(({ api }) =>
+        api.post<{ jobId: string }>('/plugins/market/upload', fd, { timeout: 60_000 }),
+      )
+      setJobEdition(null)
+      setJobId(res.jobId)
+    } catch (e) {
+      toast.error(e instanceof Error && e.message ? e.message : t('common.operateFailed'))
+    }
+  }
 
   // 重启恢复后：有待导入授权的插件（sessionStorage 桥）且状态为未授权 → 自动弹出导入。
   useEffect(() => {
@@ -391,6 +413,22 @@ export default function MarketTab({ focus = '' }: { focus?: string }) {
                   {t('pluginMgr.market.updateAll.button', { count: outdated.length })}
                 </Button>
               ) : null}
+              <input
+                ref={uploadRef}
+                type="file"
+                accept=".zip,application/zip"
+                aria-label={t('pluginMgr.market.upload.button')}
+                className="sr-only"
+                onChange={(e) => {
+                  const f = (e.target.files ?? [])[0]
+                  if (f) void onUpload(f)
+                  if (uploadRef.current) uploadRef.current.value = ''
+                }}
+              />
+              <Button size="sm" variant="outline" disabled={install.isPending} onClick={() => uploadRef.current?.click()}>
+                <PackagePlus className={install.isPending ? 'animate-spin' : ''} aria-hidden="true" />
+                {t('pluginMgr.market.upload.button')}
+              </Button>
               <Button
                 size="sm"
                 variant="outline"

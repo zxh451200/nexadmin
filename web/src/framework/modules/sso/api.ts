@@ -92,6 +92,20 @@ export function useDeleteSsoApp() {
   })
 }
 
+/** 批量删除应用：DELETE /sso/apps?ids=1,2,3，权限与单条删一致（sso:edit），返回体为空 */
+export function useDeleteSsoApps() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (ids: string[]) => api.del<null>('/sso/apps', { ids: ids.join(',') }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+  })
+}
+
+/** 导出取数：后端 /sso/apps/export 与列表同一套 keyword 条件、不分页，权限复用 sso:list */
+export function fetchSsoAppsForExport(keyword?: string) {
+  return api.get<SsoApp[]>('/sso/apps/export', { keyword: keyword?.trim() || undefined })
+}
+
 export function useSetSsoAppEnabled() {
   const qc = useQueryClient()
   return useMutation({

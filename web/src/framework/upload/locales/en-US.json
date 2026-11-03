@@ -20,5 +20,14 @@
     "zoomIn": "Zoom in",
     "zoomOut": "Zoom out",
     "rotate": "Rotate"
+  },
+  "lightbox": {
+    "prev": "Previous",
+    "next": "Next",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "rotateCw": "Rotate clockwise",
+    "rotateCcw": "Rotate counterclockwise",
+    "counter": "{index} of {total}"
   }
 }

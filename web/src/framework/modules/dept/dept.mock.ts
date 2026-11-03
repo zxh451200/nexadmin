@@ -138,6 +138,22 @@ defineMock([
   },
   {
     method: 'DELETE',
+    url: '/depts',
+    handler: ({ query }) => {
+      // 与后端 response.ParseIDsQuery 同口径：ids 缺失/全非法就整体拒绝，绝不退化成「删全部」
+      const roots = String(query.ids ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+      if (roots.length === 0) mockError(400, 'error.bad_request')
+      // 与后端 DeleteMany 同口径：任一选中项不在库里（并发被删/脏 ID）整体 404，不静默少删
+      for (const r of roots) if (!items.some((x) => x.id === r)) mockError(404, 'error.not_found')
+      // 每项连同整棵子树（逐层展开）
+      const gone = new Set(roots.flatMap((r) => [r, ...descendantIds(r)]))
+      const before = items.length
+      items = items.filter((x) => !gone.has(x.id))
+      return { deleted: before - items.length }
+    },
+  },
+  {
+    method: 'DELETE',
     url: '/depts/:id',
     handler: ({ params }) => {
       const gone = new Set([params.id, ...descendantIds(params.id)])

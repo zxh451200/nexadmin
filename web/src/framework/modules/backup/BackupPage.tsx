@@ -21,6 +21,7 @@ import {
   useBackupStatus,
   useCreateBackup,
   useDeleteBackup,
+  useDeleteBackups,
   type BackupRecord,
 } from './api'
 
@@ -45,6 +46,7 @@ export default function BackupPage() {
   const [pageSize, setPageSize] = useState(10)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [downloading, setDownloading] = useState<string | null>(null)
+  const [selected, setSelected] = useState<string[]>([])
 
   // 有备份在进行时才轮询；页面不可见（切走标签 / 浏览器后台）时暂停，回来时立即刷新一次
   const status = useBackupStatus(live)
@@ -52,6 +54,7 @@ export default function BackupPage() {
   const config = useBackupConfig()
   const create = useCreateBackup()
   const del = useDeleteBackup()
+  const delBatch = useDeleteBackups()
   useRefreshOnResume(live, () => Promise.all([list.refetch(), status.refetch()]))
 
   const st = status.data
@@ -97,9 +100,24 @@ export default function BackupPage() {
     if (!(await confirm({ description: t('backup.deleteConfirm', { name: r.fileName }), destructive: true }))) return
     try {
       await del.mutateAsync(r.id)
+      setSelected((s) => s.filter((x) => x !== r.id))
       toast.success(t('common.operateSuccess'))
     } catch {
       // 错误 toast 由 http 拦截器弹出
+    }
+  }
+
+  // 批量删除：判据与副作用（连带删磁盘文件、有进行中的备份则整批拒绝）都在后端，
+  // 这里只按后端返回的实删条数如实提示——不足选中条数时不说「全部删除成功」。
+  const removeMany = async (ids: string[]) => {
+    if (!(await confirm({ description: t('backup.deleteBatchConfirm', { count: ids.length }), destructive: true }))) return
+    try {
+      const { deleted } = await delBatch.mutateAsync(ids)
+      setSelected([])
+      toast.success(deleted < ids.length ? t('backup.deletedPartial', { deleted, total: ids.length }) : t('common.operateSuccess'))
+    } catch {
+      // 具体原因（如「已有备份正在进行」）由 http 拦截器弹出，这里补一条通用失败提示
+      toast.error(t('common.operateFailed'))
     }
   }
 
@@ -229,6 +247,15 @@ export default function BackupPage() {
             setPageSize(s)
           },
         }}
+        selection={{ selected, onChange: setSelected }}
+        batchActions={(ids) => (
+          <Can perm="backup:edit">
+            <Button variant="destructive" size="sm" disabled={delBatch.isPending} onClick={() => void removeMany(ids)}>
+              <Trash2 aria-hidden="true" />
+              {t('common.delete')}
+            </Button>
+          </Can>
+        )}
         rowActions={(r) => (
           <>
             {r.status === 'success' ? (

@@ -63,9 +63,10 @@ export function UserFormDialog({ open, onOpenChange, user }: UserFormDialogProps
         username: z
           .string()
           .trim()
-          .min(3, t('user.v.usernameMin'))
-          .max(32)
-          .regex(/^[A-Za-z0-9_.-]+$/, t('user.v.usernameFormat')),
+          // 账号规则以服务端为准：modules/system/user/mutate.go 的 usernameRe = ^[A-Za-z0-9_.@-]{2,64}$
+          .min(2, t('user.v.usernameMin'))
+          .max(64)
+          .regex(/^[A-Za-z0-9_.@-]+$/, t('user.v.usernameFormat')),
         nickname: z.string().trim().min(1, t('user.v.nicknameRequired')).max(32),
         phone: z.string().trim().regex(/^$|^1[3-9]\d{9}$/, t('user.v.phoneFormat')),
         email: z.string().trim().email(t('user.v.emailFormat')).or(z.literal('')),

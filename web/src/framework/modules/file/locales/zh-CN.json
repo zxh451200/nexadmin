@@ -56,6 +56,13 @@
     "noVideoSource": "演示数据未提供视频源",
     "empty": "暂无文件",
     "selectFile": "选择文件 {{name}}",
+    "storageUsed": "已用空间",
+    "sortBy": "排序",
+    "sortNewest": "最新优先",
+    "sortOldest": "最早优先",
+    "sortNameAsc": "按名称 A-Z",
+    "sortSizeDesc": "按大小 从大到小",
+    "sortSizeAsc": "按大小 从小到大",
     "pageInfo": "第 {{page}} / {{pages}} 页，共 {{total}} 项"
   }
 }

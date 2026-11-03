@@ -13,7 +13,7 @@ import { TreeTable } from '@/framework/components/TreeTable'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import type { Column } from '@/framework/components/table/types'
 import { Button } from '@/framework/ui/button'
-import { countDescendants, useDeleteMenu, useMenuTree, useMoveMenu, useSortMenus, type SysMenu } from './api'
+import { collectSubtreeIds, countDescendants, useDeleteMenu, useDeleteMenus, useMenuTree, useMoveMenu, useSortMenus, type SysMenu } from './api'
 import { MenuFormDialog } from './MenuFormDialog'
 
 // 按钮是权限点，不是导航项：默认不混进菜单列表，类型筛选选「按钮」时才列出来维护
@@ -27,12 +27,14 @@ export default function MenuPage() {
   const confirm = useConfirm()
   const { data = [], isLoading } = useMenuTree()
   const del = useDeleteMenu()
+  const delBatch = useDeleteMenus()
   const sort = useSortMenus()
   const move = useMoveMenu()
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<SysMenu | null>(null)
   const [parentId, setParentId] = useState<string | null>(null)
+  const [selected, setSelected] = useState<string[]>([])
 
   const tr = (s: string) => t(s, { defaultValue: s })
 
@@ -73,6 +75,25 @@ export default function MenuPage() {
       toast.success(t('common.operateSuccess'))
     } catch (e) {
       toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+    }
+  }
+
+  // 批量删除：TreeTable 勾父带子，但列表默认不显示按钮、筛选时还会剪掉分支，
+  // 所以确认框的数字按完整树展开后的「真正会被删掉的行」来报（含未显示的按钮），与后端级联同口径。
+  const onDeleteBatch = async (ids: string[]) => {
+    const doomed = collectSubtreeIds(data, ids)
+    const ok = await confirm({
+      destructive: true,
+      description: t('sysMenu.confirm.deleteBatchConfirm', { count: doomed.length }),
+    })
+    if (!ok) return
+    try {
+      await delBatch.mutateAsync(doomed)
+      toast.success(t('common.operateSuccess'))
+      setSelected([])
+    } catch {
+      // 具体理由（父节点不存在 / 按钮必须挂菜单等）由请求层 toast，这里只兜一句操作失败
+      toast.error(t('common.operateFailed'))
     }
   }
 
@@ -120,6 +141,15 @@ export default function MenuPage() {
         loading={isLoading}
         columnSettingsKey="sysMenu"
         forceExpandAll={filter.active}
+        selection={{ selected, onChange: setSelected }}
+        batchActions={(ids) => (
+          <Can perm="menu:delete">
+            <Button type="button" variant="destructive" size="sm" onClick={() => void onDeleteBatch(ids)}>
+              <Trash2 className="me-2 size-4" aria-hidden="true" />
+              {t('common.delete')}
+            </Button>
+          </Can>
+        )}
         onReorder={canDrag ? (pid, ids) => sort.mutateAsync({ parentId: pid, ids }) : undefined}
         onMove={canDrag ? (id, parentId, afterId) => move.mutateAsync({ id, parentId, afterId }) : undefined}
         // 按钮是最末级，也不能脱离父菜单：拖到按钮行右侧或拖回顶级时当场拦下并说明原因，不等服务端报错

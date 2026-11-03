@@ -59,10 +59,6 @@
         "name": "Account lock duration (minutes)",
         "remark": ""
       },
-      "security_ip_whitelist": {
-        "name": "IP allowlist",
-        "remark": "Applies to platform administrator endpoints only"
-      },
       "upload_max_size_image_mb": {
         "name": "Max image upload size (MB)",
         "remark": "0 or empty means unlimited"

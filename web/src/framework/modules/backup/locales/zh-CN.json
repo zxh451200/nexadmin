@@ -8,6 +8,8 @@
     "running": "备份中…",
     "started": "已开始备份，完成后会自动刷新",
     "deleteConfirm": "确定要删除备份「{{name}}」吗？文件会从磁盘上一并删除。",
+    "deleteBatchConfirm": "确定要删除选中的 {{count}} 个备份吗？对应文件会从磁盘上一并删除。",
+    "deletedPartial": "已删除 {{deleted}}/{{total}} 个备份（其余可能已被删除或由保留策略清理）",
     "btn": { "edit": "备份管理", "download": "下载备份" },
     "unavailable": {
       "title": "无法备份：缺少导出工具",

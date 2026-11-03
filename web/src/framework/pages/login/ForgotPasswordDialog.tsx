@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { CheckCircle2, Eye, EyeOff, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
+import { RequiredMark } from '@/framework/components/RequiredMark'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { api, ApiError } from '@/framework/request/http'
 import { Button } from '@/framework/ui/button'
@@ -160,6 +161,7 @@ export function ForgotPasswordDialog({ open, onOpenChange, channels }: Props) {
           <div className="space-y-2">
             <Label htmlFor="forgot-target">
               {t(emailOnly ? 'forgot.email' : phoneOnly ? 'forgot.phone' : 'forgot.target')}
+              <RequiredMark />
             </Label>
             <Input
               id="forgot-target"
@@ -181,7 +183,10 @@ export function ForgotPasswordDialog({ open, onOpenChange, channels }: Props) {
       {step === 2 && (
         <div className="space-y-5">
           <div className="space-y-2">
-            <Label htmlFor="forgot-code">{t('forgot.code')}</Label>
+            <Label htmlFor="forgot-code">
+              {t('forgot.code')}
+              <RequiredMark />
+            </Label>
             <div className="flex items-start gap-3">
               <Input
                 id="forgot-code"
@@ -206,7 +211,10 @@ export function ForgotPasswordDialog({ open, onOpenChange, channels }: Props) {
             {errors.code && <p className="text-sm text-destructive">{errors.code}</p>}
           </div>
           <div className="space-y-2">
-            <Label htmlFor="forgot-password">{t('forgot.newPassword')}</Label>
+            <Label htmlFor="forgot-password">
+              {t('forgot.newPassword')}
+              <RequiredMark />
+            </Label>
             <div className="relative">
               <Input
                 id="forgot-password"
@@ -230,7 +238,10 @@ export function ForgotPasswordDialog({ open, onOpenChange, channels }: Props) {
             {errors.password && <p className="text-sm text-destructive">{errors.password}</p>}
           </div>
           <div className="space-y-2">
-            <Label htmlFor="forgot-confirm">{t('forgot.confirmPassword')}</Label>
+            <Label htmlFor="forgot-confirm">
+              {t('forgot.confirmPassword')}
+              <RequiredMark />
+            </Label>
             <Input
               id="forgot-confirm"
               type={show ? 'text' : 'password'}

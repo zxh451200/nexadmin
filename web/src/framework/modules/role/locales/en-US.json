@@ -57,6 +57,7 @@
         "button": "Button"
       }
     },
-    "deleteConfirm": "Delete role \"{{name}}\"? This cannot be undone."
+    "deleteConfirm": "Delete role \"{{name}}\"? This cannot be undone.",
+    "deleteBatchConfirm": "Delete the {{count}} selected roles? If any of them cannot be deleted (built-in or still assigned to users), none of them are deleted."
   }
 }

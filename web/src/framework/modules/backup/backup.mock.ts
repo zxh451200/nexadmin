@@ -127,6 +127,23 @@ defineMock([
   },
   {
     method: 'DELETE',
+    url: '/backups',
+    handler: ({ query }) => {
+      // 与后端 response.ParseIDsQuery 同口径：ids 缺失或任一项非法直接 400，绝不退化成「删全部」
+      const ids = String(query.ids ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+      if (!ids.length || ids.some((s) => !/^[1-9]\d*$/.test(s))) mockError(400, 'Bad ids')
+      const hits = records.filter((r) => ids.includes(r.id))
+      // 一条都没命中要报不存在，不能静默返回 deleted:0 让界面以为删成功了
+      if (!hits.length) mockError(404, 'Not found')
+      // 有进行中的备份：整批拒绝，不删「能删的那几条」（同 Service.DeleteMany）
+      if (hits.some((r) => r.status === 'running')) mockError(409, 'A backup is running')
+      for (const r of hits) records.splice(records.indexOf(r), 1)
+      // 请求里不存在/已被保留策略清掉的 id 删不到，也就不计入 deleted（后端返回 RowsAffected）
+      return { deleted: hits.length }
+    },
+  },
+  {
+    method: 'DELETE',
     url: '/backups/:id',
     handler: ({ params }) => {
       const i = records.findIndex((x) => x.id === params.id)

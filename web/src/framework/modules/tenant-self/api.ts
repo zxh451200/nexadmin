@@ -50,7 +50,9 @@ export interface TenantSelfInput {
 const KEY = ['tenant-self'] as const
 
 export function useTenantSelf() {
-  return useQuery({ queryKey: KEY, queryFn: () => api.get<TenantSelf>('/tenant-self') })
+  // 平台超管与默认租户没有租户记录，后端按契约返回 404；页面用「未托管」空状态承接，
+  // 这里必须 silent，否则每次进页面都会先弹一条「资源不存在」。
+  return useQuery({ queryKey: KEY, queryFn: () => api.get<TenantSelf>('/tenant-self', undefined, { silent: true }) })
 }
 
 export function useSaveTenantSelf() {

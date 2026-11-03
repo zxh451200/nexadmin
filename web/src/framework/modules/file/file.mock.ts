@@ -144,9 +144,25 @@ defineMock([
       if (kw) rows = rows.filter((f) => f.name.toLowerCase().includes(kw) || f.uploader.toLowerCase().includes(kw))
       if (query.from) rows = rows.filter((f) => f.createdAt.slice(0, 10) >= String(query.from))
       if (query.to) rows = rows.filter((f) => f.createdAt.slice(0, 10) <= String(query.to))
-      rows.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      const dir = query.desc === 'false' ? 1 : -1
+      rows.sort((a, b) => {
+        switch (query.sort) {
+          case 'name':
+            return dir * a.name.localeCompare(b.name)
+          case 'size':
+            return dir * (a.size - b.size)
+          default:
+            return dir * a.createdAt.localeCompare(b.createdAt)
+        }
+      })
       return { list: rows.slice((page - 1) * pageSize, page * pageSize), total: rows.length, page, pageSize }
     },
+  },
+  {
+    // 演示配额 1GB：有额度才能看到进度条形态
+    method: 'GET',
+    url: '/files/usage',
+    handler: () => ({ usedBytes: files.reduce((n, f) => n + (f.size || 0), 0), quotaMB: 1024 }),
   },
   {
     method: 'POST',

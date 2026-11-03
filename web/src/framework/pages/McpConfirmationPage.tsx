@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '@/framework/auth/useAuth'
+import { RequiredMark } from '@/framework/components/RequiredMark'
 import { LanguageSwitch } from '@/framework/i18n/LanguageSwitch'
 import { api, ApiError } from '@/framework/request/http'
 import { ThemeToggle } from '@/framework/theme/ThemeToggle'
@@ -184,7 +185,10 @@ function ConfirmationContent({ id }: { id: string }) {
             )}
             {!accepted && !expired && usable && !confirmation.isError && (
               <form onSubmit={(event) => { void approve(event) }} className="space-y-3" autoComplete="off">
-                <Label htmlFor="confirmation-password">{t('mcpConfirmation.password')}</Label>
+                <Label htmlFor="confirmation-password">
+                  {t('mcpConfirmation.password')}
+                  <RequiredMark />
+                </Label>
                 <Input ref={password} id="confirmation-password" type="password" autoComplete="off"
                   required disabled={blocked || busy} aria-describedby="confirmation-password-hint" />
                 <p id="confirmation-password-hint" className="text-xs text-muted-foreground">{t('mcpConfirmation.passwordHint')}</p>

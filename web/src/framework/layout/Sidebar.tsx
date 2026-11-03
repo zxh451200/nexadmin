@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { ChevronDown, ChevronsDownUp, ChevronsUpDown, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -10,6 +10,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/framework/ui/tooltip'
 import type { MenuNode } from '@/framework/router/types'
 import { usePersistedSet } from '@/framework/hooks/use-persisted-set'
 import { DynamicIcon } from './DynamicIcon'
+import { useMenuBadges } from './menuBadge'
 import { usePublicSettings } from './Watermark'
 
 const GROUPS_KEY = 'nex-sidebar-groups' // 记住哪些一级目录是收起的
@@ -53,7 +54,15 @@ export function Sidebar({ menu, collapsed = false, onNavigate, onToggleCollapse 
   const allClosed = groupKeys.length > 0 && groupKeys.every((k) => isClosed(k))
   const toggleAllGroups = () => setClosed(allClosed ? [] : groupKeys)
 
+  // 菜单徽标：只对当前可见的叶子菜单项轮询（源由各模块/插件注册，见 menuBadge.ts）
+  const leafPaths = useMemo(
+    () => menu.flatMap((g) => (g.children ?? []).filter((c) => c.path).map((c) => c.path as string)),
+    [menu],
+  )
+  const badges = useMenuBadges(leafPaths)
+
   const renderItem = (item: MenuNode, nested: boolean, tone?: string) => {
+    const badge = item.path ? (badges[item.path] ?? 0) : 0
     const link = (
       <NavLink
         to={item.path!}
@@ -84,6 +93,15 @@ export function Sidebar({ menu, collapsed = false, onNavigate, onToggleCollapse 
         {/* 图标按分组色调着色（.tone-text 读 data-tone 的 --tone）；文字与激活底色仍走 sidebar-accent 令牌，不替换 */}
         <DynamicIcon name={item.icon} className={cn('size-5 shrink-0', !collapsed && 'md:size-4', tone && 'tone-text')} />
         {!collapsed && <span className="truncate">{t(item.title)}</span>}
+        {/* 徽标：展开态是行尾计数，收起态是图标上的圆点；0 时不渲染 */}
+        {badge > 0 &&
+          (collapsed ? (
+            <span aria-hidden="true" className="absolute end-2 top-2 size-2 rounded-full bg-primary" />
+          ) : (
+            <span className="ms-auto inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 py-0.5 text-[11px] leading-none font-medium text-primary-foreground">
+              {badge > 99 ? '99+' : badge}
+            </span>
+          ))}
       </NavLink>
     )
     return (

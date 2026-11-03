@@ -123,6 +123,23 @@ defineMock([
   },
   {
     method: 'DELETE',
+    url: '/jobs',
+    handler: ({ query }) => {
+      // 与后端 response.ParseIDsQuery 同口径：ids 缺失或任一项非法直接 400，绝不退化成「删全部任务」
+      const ids = String(query.ids ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+      if (!ids.length || ids.some((s) => !/^[1-9]\d*$/.test(s))) mockError(400, 'Bad ids')
+      // mock 只有一个所有者，后端「别人的任务按不存在处理、不计入实删数」在这里表现为筛不到
+      const hits = entries.filter((e) => ids.includes(e.id))
+      // 一条都没命中要报不存在，不能静默返回 deleted:0
+      if (!hits.length) mockError(404, '任务不存在')
+      // 有未结束的任务：整批 409，不删「能删的那几条」（同 handler.removeBatch 的预校验）
+      if (hits.some((e) => e.status === 'queued' || e.status === 'running')) mockError(409, '当前状态不允许该操作')
+      entries = entries.filter((e) => !ids.includes(e.id))
+      return { deleted: hits.length }
+    },
+  },
+  {
+    method: 'DELETE',
     url: '/jobs/:id',
     handler: ({ params }) => {
       const e = find(params.id)

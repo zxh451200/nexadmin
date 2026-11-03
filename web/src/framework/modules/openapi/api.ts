@@ -1,4 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { collectAllPages } from '@/framework/components/export/ExportCsvButton'
 import { api, http } from '@/framework/request/http'
 import type { Page } from '@/framework/request/types'
 
@@ -67,6 +68,8 @@ export interface Delivery {
   event: string
   status: DeliveryStatus
   attempts: number
+  /** 发出去的 JSON 请求体：排障时与响应同样重要 */
+  payload?: string | null
   responseStatus?: number | null
   responseBody?: string | null
   error?: string | null
@@ -84,6 +87,11 @@ export interface DeliveryQuery {
 const KEY = ['openapi'] as const
 
 const toList = <T>(res: T[] | { list: T[] }): T[] => (Array.isArray(res) ? res : (res.list ?? []))
+
+/** 后端列表返分页信封、本地 mock 返裸数组：导出前统一成 collectAllPages 认的形状，
+ *  否则 VITE_MOCK 下 res.list 恒为 undefined，导出来永远是「没有可导出的行」。 */
+const asPage = <T>(res: T[] | Page<T> | undefined): { list: T[]; total: number } =>
+  Array.isArray(res) ? { list: res, total: res.length } : { list: res?.list ?? [], total: res?.total ?? 0 }
 
 export function useOpenApps() {
   return useQuery({
@@ -108,6 +116,19 @@ export function useDeleteOpenApp() {
     onSuccess: () => qc.invalidateQueries({ queryKey: [...KEY, 'apps'] }),
   })
 }
+
+export function useDeleteOpenApps() {
+  const qc = useQueryClient()
+  return useMutation({
+    // 路径写静态字面量：contract_check 靠静态解析这里的第一个实参对照后端路由
+    mutationFn: (ids: string[]) => api.del<{ deleted: number }>('/openapi/apps', { ids: ids.join(',') }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [...KEY, 'apps'] }),
+  })
+}
+
+/** 导出用：翻开放应用列表接口自己的分页取全量（不新增后端端点，也不新增权限码） */
+export const fetchAllOpenApps = () =>
+  collectAllPages<OpenApp>(async (page, pageSize) => asPage(await api.get<OpenApp[] | Page<OpenApp>>('/openapi/apps', { page, pageSize })))
 
 export function useSetOpenAppEnabled() {
   const qc = useQueryClient()
@@ -147,6 +168,19 @@ export function useDeleteWebhook() {
   })
 }
 
+export function useDeleteWebhooks() {
+  const qc = useQueryClient()
+  return useMutation({
+    // 路径写静态字面量：contract_check 靠静态解析这里的第一个实参对照后端路由
+    mutationFn: (ids: string[]) => api.del<{ deleted: number }>('/openapi/webhooks', { ids: ids.join(',') }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [...KEY, 'webhooks'] }),
+  })
+}
+
+/** 导出用：翻 Webhook 列表接口自己的分页取全量（不新增后端端点，也不新增权限码） */
+export const fetchAllWebhooks = () =>
+  collectAllPages<Webhook>(async (page, pageSize) => asPage(await api.get<Webhook[] | Page<Webhook>>('/openapi/webhooks', { page, pageSize })))
+
 export function useSetWebhookEnabled() {
   const qc = useQueryClient()
   return useMutation({
@@ -180,6 +214,8 @@ export function useDeliveries(query: DeliveryQuery) {
     queryKey: [...KEY, 'deliveries', query],
     queryFn: () => api.get<Page<Delivery>>('/openapi/deliveries', { ...query }),
     placeholderData: keepPreviousData,
+    // pending 的投递在后台持续重试，页面不刷会一直停在旧状态
+    refetchInterval: 8000,
   })
 }
 

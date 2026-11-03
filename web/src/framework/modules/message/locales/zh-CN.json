@@ -12,11 +12,16 @@
     "clearMessagesConfirm": "将删除你收到的全部消息（含未读），删除后不可恢复。确定清空吗？",
     "clearNoticesConfirm": "将清空消息中心里的全部公告，之后新发布的公告仍会正常显示。确定清空吗？",
     "deleteNoticeConfirm": "这条公告会从你的消息中心移除，公告本身与其他人的列表不受影响。确定删除吗？",
+    "deleteBatchNoticeConfirm": "选中的 {{count}} 条公告会从你的消息中心移除，公告本身与其他人的列表不受影响。确定删除吗？",
+    "dismissedPartial": "已移除 {{dismissed}}/{{total}} 条（其余可能不在你的可见范围或已移除）",
     "unread": "未读",
+    "read": "已读",
     "pinned": "置顶",
     "goLink": "前往查看",
     "attachments": "附件",
     "deleteConfirm": "确定删除这条消息吗？",
+    "deleteBatchConfirm": "确认删除选中的 {{count}} 条消息？",
+    "deletedPartial": "已删除 {{deleted}}/{{total}} 条（其余可能刚被删除）",
     "emptyMessages": "暂无消息",
     "emptyNotices": "暂无公告",
     "emptyFiltered": "没有符合筛选条件的记录",
@@ -29,7 +34,9 @@
       "time": "时间",
       "type": "类型",
       "level": "级别",
-      "publishedAt": "发布时间"
+      "publishedAt": "发布时间",
+      "content": "内容",
+      "status": "状态"
     }
   }
 }

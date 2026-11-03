@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { Eye, EyeOff, Loader2, Lock, ShieldCheck } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '@/framework/auth/useAuth'
+import { RequiredMark } from '@/framework/components/RequiredMark'
 import { ApiError } from '@/framework/request/http'
 import { Alert, AlertDescription } from '@/framework/ui/alert'
 import { Button } from '@/framework/ui/button'
@@ -180,13 +181,16 @@ export function PasswordForm({
             </FormItem>
           )}
         />
-        {needCaptcha && !challenge ? <CaptchaField form={form} captcha={captcha} onRefresh={refresh} /> : null}
+        {needCaptcha && !challenge ? <CaptchaField form={form} captcha={captcha} onRefresh={refresh} required={needCaptcha} /> : null}
 
         {challenge ? (
           <div className="space-y-2">
             <div className="flex items-center gap-2">
               <ShieldCheck className="size-4 text-muted-foreground" aria-hidden="true" />
-              <span className="text-sm text-muted-foreground">{t('login.totpInlineLabel')}</span>
+              <label htmlFor="totp-inline-code" className="text-sm text-muted-foreground">
+                {t('login.totpInlineLabel')}
+                <RequiredMark />
+              </label>
             </div>
             {totpError ? (
               <Alert variant="destructive" role="alert">
@@ -194,6 +198,7 @@ export function PasswordForm({
               </Alert>
             ) : null}
             <Input
+              id="totp-inline-code"
               value={totpCode}
               onChange={(e) => {
                 setTotpCode(e.target.value)

@@ -15,7 +15,7 @@ import type { Column } from '@/framework/components/table/types'
 import { Button } from '@/framework/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/framework/ui/tabs'
 import { PostSection } from '@/framework/modules/post/PostPage'
-import { countDescendants, isTrimmed, useDeleteDept, useMoveDept, useSortDepts, useDeptTree, type SysDept } from './api'
+import { collectSubtreeIds, countDescendants, isTrimmed, useDeleteDept, useDeleteDepts, useMoveDept, useSortDepts, useDeptTree, type SysDept } from './api'
 import { DeptFormDialog } from './DeptFormDialog'
 
 export default function DeptPage() {
@@ -32,12 +32,14 @@ export default function DeptPage() {
   // 被数据范围裁剪的树只含部分同级，整体排序会得到 409，裁剪时不提供拖动（排序与移动都不给）
   const trimmed = useMemo(() => isTrimmed(data), [data])
   const del = useDeleteDept()
+  const delBatch = useDeleteDepts()
   const sort = useSortDepts()
   const move = useMoveDept()
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<SysDept | null>(null)
   const [parentId, setParentId] = useState<string | null>(null)
+  const [selected, setSelected] = useState<string[]>([])
 
   const filter = useClientFilter()
   const shown = useMemo(() => {
@@ -72,6 +74,25 @@ export default function DeptPage() {
       toast.success(t('common.operateSuccess'))
     } catch (e) {
       toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+    }
+  }
+
+  // 批量删除：TreeTable 勾父带子，但筛选/数据范围裁剪时可见子树是折叠的，
+  // 所以确认框的数字按完整树展开后的「真正会被删掉的行」来报，与后端级联同口径，不许骗人。
+  const onDeleteBatch = async (ids: string[]) => {
+    const doomed = collectSubtreeIds(data, ids)
+    const ok = await confirm({
+      destructive: true,
+      description: t('dept.confirm.deleteBatchConfirm', { count: doomed.length }),
+    })
+    if (!ok) return
+    try {
+      await delBatch.mutateAsync(doomed)
+      toast.success(t('common.operateSuccess'))
+      setSelected([])
+    } catch {
+      // 具体理由（子树里还有在职用户 / 超出数据范围）由请求层 toast，这里只兜一句操作失败
+      toast.error(t('common.operateFailed'))
     }
   }
 
@@ -122,6 +143,15 @@ export default function DeptPage() {
         columnSettingsKey="dept"
         onReorder={canDrag ? (pid, ids) => sort.mutateAsync({ parentId: pid, ids }) : undefined}
         onMove={canDrag ? (id, parentId, afterId) => move.mutateAsync({ id, parentId, afterId }) : undefined}
+        selection={{ selected, onChange: setSelected }}
+        batchActions={(ids) => (
+          <Can perm="dept:delete">
+            <Button type="button" variant="destructive" size="sm" onClick={() => void onDeleteBatch(ids)}>
+              <Trash2 className="me-2 size-4" aria-hidden="true" />
+              {t('common.delete')}
+            </Button>
+          </Can>
+        )}
         rowActions={(row) =>
           row.readonly ? null : (
             <>

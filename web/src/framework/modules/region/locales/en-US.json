@@ -2,7 +2,7 @@
   "region": {
     "settingsTitle": "Region data",
     "title": "Region data",
-    "desc": "The region picker uses the data shipped with the framework. After administrative changes, sync a newer dataset from a source.",
+    "desc": "The region picker uses the data shipped with the framework, including Hong Kong, Macao and Taiwan (Taiwan stops at the province level; no sub-divisions are published). After administrative changes, sync a newer dataset from a source.",
     "cardDesc": "Syncing replaces the region list for all tenants; region codes stored in existing records are untouched.",
     "builtin": "Built-in",
     "synced": "Synced",
@@ -16,11 +16,29 @@
     "sourceLabel": "Source URL",
     "sourceHint": "Defaults to region.source_url in config.yaml; you can point it at a mirror here. HTTPS only, private networks are rejected. Content may be a flat code → name object or a three-level tree.",
     "sync": "Sync now",
+    "submitting": "Submitting…",
     "syncing": "Syncing…",
+    "syncStarted": "Sync started in the background — you'll be notified here when it finishes",
+    "syncStage": "Syncing: {{stage}}…",
+    "stage": {
+      "fetching": "fetching data source",
+      "validating": "validating & saving"
+    },
     "reset": "Restore built-in data",
     "syncDone": "Synced: {{added}} added, {{renamed}} renamed, {{removed}} removed",
     "syncRemoved": "{{n}} regions no longer exist in the new data; existing records keep their codes",
     "confirmReset": "Restore the built-in data? The synced snapshot will be deleted.",
-    "resetDone": "Built-in data restored"
+    "resetDone": "Built-in data restored",
+    "preview": "Preview changes",
+    "upload": "Upload data file",
+    "previewTitle": "Sync preview (not applied)",
+    "previewDesc": "This sync will add {{added}}, rename {{renamed}} and remove {{removed}} entries; up to 20 samples per kind are listed. Nothing is applied yet.",
+    "diff": {
+      "added": "{{count}} added",
+      "renamed": "{{count}} renamed",
+      "removed": "{{count}} removed",
+      "was": "was",
+      "none": "none"
+    }
   }
 }

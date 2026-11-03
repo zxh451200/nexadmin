@@ -6,13 +6,16 @@ import { Can } from '@/framework/auth/Can'
 import { usePermission } from '@/framework/auth/usePermission'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { ExportCsvButton } from '@/framework/components/export/ExportCsvButton'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Switch } from '@/framework/ui/switch'
 import { fmtDateTime } from '../oper-log/format'
 import {
+  fetchAllWebhooks,
   useDeleteWebhook,
+  useDeleteWebhooks,
   useResetWebhookSecret,
   useSetWebhookEnabled,
   useTestWebhook,
@@ -36,6 +39,7 @@ export function WebhooksTab() {
   const { data, isLoading } = useWebhooks()
   const setEnabled = useSetWebhookEnabled()
   const remove = useDeleteWebhook()
+  const removeBatch = useDeleteWebhooks()
   const reset = useResetWebhookSecret()
   const test = useTestWebhook()
   const [formOpen, setFormOpen] = useState(false)
@@ -43,6 +47,7 @@ export function WebhooksTab() {
   const [secret, setSecret] = useState<SecretTarget | null>(null)
   const [testing, setTesting] = useState<{ name: string; result: WebhookTestResult } | null>(null)
   const [testingId, setTestingId] = useState<string | null>(null)
+  const [selected, setSelected] = useState<string[]>([])
 
   const openForm = (w: Webhook | null) => {
     setEditing(w)
@@ -58,9 +63,23 @@ export function WebhooksTab() {
     }
   }
 
-  const onDelete = async (w: Webhook) => {
-    if (await confirm({ destructive: true, title: t('common.delete'), description: t('openapi.webhooks.deleteConfirm', { name: w.name }) })) {
-      await run(() => remove.mutateAsync(w.id))
+  const rows = data ?? []
+  const selectedRows = rows.filter((w) => selected.includes(w.id))
+
+  // 单条与批量共用：数组就走 ?ids= 的批量端点，后端在同一事务里连带清掉这些订阅的投递记录
+  const onDelete = async (target: Webhook | Webhook[]) => {
+    const list = Array.isArray(target) ? target : [target]
+    const description = Array.isArray(target)
+      ? t('openapi.webhooks.deleteBatchConfirm', { count: list.length })
+      : t('openapi.webhooks.deleteConfirm', { name: list[0].name })
+    if (!(await confirm({ destructive: true, title: t('common.delete'), description }))) return
+    try {
+      if (Array.isArray(target)) await removeBatch.mutateAsync(list.map((w) => w.id))
+      else await remove.mutateAsync(list[0].id)
+      setSelected((ids) => ids.filter((id) => !list.some((w) => w.id === id)))
+      toast.success(t('common.operateSuccess'))
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
     }
   }
 
@@ -144,13 +163,37 @@ export function WebhooksTab() {
         pagination={false}
         emptyText={t('openapi.webhooks.empty')}
         toolbar={
+          <div className="flex flex-wrap items-center gap-2">
+            <Can perm="openapi:edit">
+              <Button onClick={() => openForm(null)}>
+                <Plus aria-hidden="true" />
+                {t('openapi.webhooks.create')}
+              </Button>
+            </Can>
+            {/* 导出走列表同一个接口：签名密钥（secret）只在创建/重置时随响应出现一次，列表里没有，导出列也就不可能带上 */}
+            <ExportCsvButton
+              perm="openapi:list"
+              filename="openapi-webhooks"
+              getRows={fetchAllWebhooks}
+              columns={[
+                { header: t('openapi.webhooks.fields.name'), value: (w) => w.name },
+                { header: t('openapi.webhooks.fields.url'), value: (w) => w.url },
+                { header: t('openapi.webhooks.fields.events'), value: (w) => w.events.join(' | ') },
+                { header: t('openapi.webhooks.fields.enabled'), value: (w) => (w.enabled ? t('common.yes') : t('common.no')) },
+                { header: t('openapi.webhooks.fields.createdAt'), value: (w) => fmtDateTime(w.createdAt, i18n.language) },
+              ]}
+            />
+          </div>
+        }
+        selection={{ selected, onChange: setSelected }}
+        batchActions={(ids) => (
           <Can perm="openapi:edit">
-            <Button onClick={() => openForm(null)}>
-              <Plus aria-hidden="true" />
-              {t('openapi.webhooks.create')}
+            <Button variant="destructive" size="sm" onClick={() => void onDelete(selectedRows.filter((w) => ids.includes(w.id)))}>
+              <Trash2 aria-hidden="true" />
+              {t('common.delete')}
             </Button>
           </Can>
-        }
+        )}
         rowActions={(w) => (
           <Can perm="openapi:edit">
             <Button

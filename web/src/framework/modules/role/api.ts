@@ -79,6 +79,15 @@ export function useDeleteRole() {
   })
 }
 
+/** 批量删除：后端逐条走与单条删除相同的护栏，任一条不合格整批回滚，返回实际删除条数。 */
+export function useDeleteRoles() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (ids: string[]) => api.del<{ deleted: number }>('/roles', { ids: ids.join(',') }),
+    onSuccess: invalidate,
+  })
+}
+
 export function useSortRoles() {
   const invalidate = useInvalidate()
   return useMutation({

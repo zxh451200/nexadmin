@@ -86,6 +86,13 @@
         "button": "Update all ({{count}})",
         "confirm": "{{count}} plugins have updates. Each update rebuilds and restarts the service; they run one at a time and continue automatically after each restart. Start now?"
       },
+      "upload": {
+        "button": "Upload package",
+        "zipOnly": "Only .zip packages can be uploaded",
+        "fileRequired": "Pick a plugin package to upload",
+        "tooLarge": "The package exceeds the {{size}}MB limit",
+        "failed": "Failed to upload the package"
+      },
       "empty": "Marketplace catalog is empty: register plugins in config/plugin-market.yaml to enable one-click installs",
       "remove.confirm": "Uninstall {{name}}? Source files will be removed and the service rebuilt (data tables are kept; use --purge on the CLI to drop them)",
       "installLicense": {

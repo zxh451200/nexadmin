@@ -117,6 +117,7 @@
       "account": "Username and password",
       "phone": "Phone verification code",
       "thirdParty": "Third-party sign-in",
+      "thirdPartyHint": "Fill in the app credentials below after enabling",
       "providers": {
         "wecom": "WeCom",
         "dingtalk": "DingTalk",
@@ -133,6 +134,8 @@
         "github": "Create a GitHub OAuth App and configure its callback URL",
         "oidc": "Connect any standard OpenID Connect provider; fill in the Issuer"
       },
+      "matchLimit": "Matching & restrictions",
+      "matchLimitHint": "How third-party identities map to local accounts",
       "matchBy": "Account matching",
       "matchByHint": "Existing users are matched by this field after third-party sign-in",
       "matchPhone": "Phone",

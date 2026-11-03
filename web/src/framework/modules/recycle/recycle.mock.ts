@@ -1,5 +1,5 @@
 import { defineMock, genId, mockError } from '@/framework/request/mock'
-import type { RecycleItem, RecycleType } from './api'
+import type { RecycleBatchResult, RecycleItem, RecycleType } from './api'
 
 interface Entry extends RecycleItem {
   /** 被删除的原始数据，还原时交给对应模块 */
@@ -18,11 +18,11 @@ const sample = (type: RecycleType, name: string, daysAgo: number): Entry => ({
   row: null,
 })
 
-// 角色 / 字典 / 岗位没有接入回收站，这里放几条演示数据；还原时仅从回收站移除
+// 类型清单与后端 recbin.Tables 一致：只有 user / notice 会进回收站。
 let entries: Entry[] = [
-  sample('role', '临时审批员', 1),
-  sample('dict', 'sys_priority', 2),
-  sample('post', '实习生', 4),
+  sample('user', '临时审批员', 1),
+  sample('notice', '十一值班安排（已撤回）', 2),
+  sample('notice', '旧版本发布说明', 5),
 ]
 
 /** 各模块注册自己的还原方法（只有注册过的类型才会真正写回原模块） */
@@ -57,6 +57,20 @@ defineMock([
   },
   {
     method: 'POST',
+    url: '/recycle/restore',
+    handler: ({ body }) => {
+      const ids = new Set<string>((body.ids ?? []).map(String))
+      const res: RecycleBatchResult = {}
+      for (const hit of entries.filter((e) => ids.has(e.id))) {
+        restorers.get(hit.type)?.(hit.row)
+        res.restored = (res.restored ?? 0) + 1
+      }
+      entries = entries.filter((e) => !ids.has(e.id))
+      return res
+    },
+  },
+  {
+    method: 'POST',
     url: '/recycle/:id/restore',
     handler: ({ params }) => {
       const hit = entries.find((e) => e.id === params.id)
@@ -64,6 +78,17 @@ defineMock([
       restorers.get(hit.type)?.(hit.row)
       entries = entries.filter((e) => e.id !== hit.id)
       return null
+    },
+  },
+  {
+    method: 'DELETE',
+    url: '/recycle',
+    handler: ({ query }) => {
+      const ids = new Set(String(query.ids ?? '').split(',').map((s) => s.trim()).filter(Boolean))
+      if (ids.size === 0) mockError(400, 'Bad request')
+      const res: RecycleBatchResult = { purged: entries.filter((e) => ids.has(e.id)).length }
+      entries = entries.filter((e) => !ids.has(e.id))
+      return res
     },
   },
   {

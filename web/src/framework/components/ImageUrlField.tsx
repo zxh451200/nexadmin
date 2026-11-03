@@ -102,8 +102,7 @@ export function ImageUrlField({
         <Button
           type="button"
           variant="outline"
-          size="sm"
-          className="shrink-0"
+          className="shrink-0 px-3"
           disabled={disabled || uploading}
           onClick={() => (crop ? setOpen(true) : inputRef.current?.click())}
         >
@@ -111,7 +110,7 @@ export function ImageUrlField({
           {uploading ? t('uploader.uploading') : t('common.upload')}
         </Button>
         {value ? (
-          <Button type="button" variant="ghost" size="sm" className="shrink-0" disabled={disabled} onClick={() => onChange('')}>
+          <Button type="button" variant="ghost" className="shrink-0 px-3" disabled={disabled} onClick={() => onChange('')}>
             {t('common.clear')}
           </Button>
         ) : null}
@@ -135,7 +134,7 @@ export function ImageUrlField({
               className={cn('rounded-md border border-border bg-muted/40 object-contain p-1', previewClassName)}
             />
           </button>
-          <Lightbox open={zoom} onOpenChange={setZoom} src={value} alt={ariaLabel ?? title} />
+          <Lightbox open={zoom} onOpenChange={setZoom} slides={[{ src: value, alt: ariaLabel ?? title }]} />
         </>
       ) : null}
       <input

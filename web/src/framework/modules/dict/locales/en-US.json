@@ -18,7 +18,11 @@
       "create": "New dictionary type",
       "edit": "Edit dictionary type",
       "builtin": "Built-in",
-      "deleteConfirm": "Delete dictionary type \"{{name}}\"?"
+      "deleteConfirm": "Delete dictionary type \"{{name}}\"?",
+      "deleteBatchConfirm": "Delete the selected {{count}} dictionary type(s)?",
+      "batchOnlyBuiltin": "Every selected dictionary type is built-in and cannot be deleted.",
+      "batchDeletedSkipped": "Deleted {{count}} dictionary type(s), skipped {{skipped}} built-in one(s).",
+      "exportFilename": "dictionary-types"
     },
     "data": {
       "title": "Dictionary data",
@@ -29,8 +33,11 @@
       "create": "New dictionary item",
       "edit": "Edit dictionary item",
       "deleteConfirm": "Delete dictionary item \"{{name}}\"?",
+      "deleteBatchConfirm": "Delete the selected {{count}} dictionary item(s)?",
+      "exportFilename": "dictionary-data",
       "translations": "Other languages",
-      "translationPlaceholder": "Leave empty to fall back to the source"
+      "translationPlaceholder": "Leave empty to fall back to the source",
+      "searchPlaceholder": "Search label, value or remark"
     }
   }
 }

@@ -55,9 +55,14 @@ export interface TenantUsage {
   daysLeft: number
 }
 
+/** 租户列表查询：keyword/status/packageId，后端 ListQuery 逐项对应 */
+export interface TenantListQuery extends PageQuery {
+  packageId?: string
+}
+
 const KEY = ['tenant'] as const
 
-export function useTenants(query: PageQuery) {
+export function useTenants(query: TenantListQuery) {
   return useQuery({
     queryKey: [...KEY, 'list', query],
     queryFn: () => api.get<Page<TenantRow>>('/tenants', query),

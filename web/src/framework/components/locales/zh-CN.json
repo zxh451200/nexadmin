@@ -4,6 +4,8 @@
     "columnSettingsHint": "选择要显示的列",
     "resetColumns": "恢复默认",
     "dragHandle": "拖动排序",
+    "moveUp": "上移",
+    "moveDown": "下移",
     "selectAllRows": "选择全部行",
     "selectRow": "选择此行",
     "selectedCount": "已选 {{count}} 项",
@@ -23,7 +25,7 @@
     "collapseAll": "全部收起",
     "batchActions": "批量操作",
     "reorderFailed": "调整顺序失败，已恢复原顺序",
-    "dragHint": "向右拖 = 成为子级 · 向左拖 = 升一级 · 拖到虚线框 = 回到顶级",
+    "dragHint": "向右拖 = 成为子级 · 向左拖 = 升一级 · 拖到虚线框 = 回到顶级 · 悬停折叠项自动展开",
     "willNest": "松手后成为这一行的子级",
     "willOutdent": "松手后升到上一级",
     "nestBlocked": "这一行下面不能再挂子级",
@@ -90,5 +92,9 @@
     "machineConfirmed": "已标记为人工校对",
     "publishGroup": "各语言发布",
     "publishMissing": "缺：{{fields}}"
+  },
+  "exportCsv": {
+    "noRows": "没有可导出的数据",
+    "done": "已导出 {{count}} 行"
   }
 }

@@ -14,7 +14,7 @@
     "revokeConfirm": "确定撤回「{{title}}」吗？撤回后用户将无法再看到该公告。",
     "pinnedTag": "置顶",
     "platformTag": "平台",
-    "titleTooLong": "标题不能超过 100 个字符",
+    "titleTooLong": "标题不能超过 200 个字符",
     "contentRequired": "请填写公告正文",
     "targetRequired": "请选择发布对象",
     "expireAfterPublish": "到期时间必须晚于定时发布时间",

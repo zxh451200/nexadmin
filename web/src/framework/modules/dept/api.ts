@@ -58,6 +58,15 @@ export function useDeleteDept() {
   })
 }
 
+export function useDeleteDepts() {
+  const qc = useQueryClient()
+  return useMutation({
+    // 与后端 DELETE /depts?ids= 同口径：每项连同子树，返回真正被删掉的条数
+    mutationFn: (ids: string[]) => api.del<{ deleted: number }>('/depts', { ids: ids.join(',') }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['dept'] }),
+  })
+}
+
 export function useSortDepts() {
   const qc = useQueryClient()
   return useMutation({
@@ -77,4 +86,23 @@ export function useMoveDept() {
 
 export function countDescendants(node: SysDept): number {
   return (node.children ?? []).reduce((n, c) => n + 1 + countDescendants(c), 0)
+}
+
+/**
+ * 把勾选集合展开成「真正会被删掉的行集合」：每个命中节点连同它的全部后代。
+ * 必须按完整树（不是筛选/裁剪后的可见树）展开——后端的级联是按真实子树算的，
+ * 只报可见行会让确认框里的数字小于实删条数。
+ */
+export function collectSubtreeIds(nodes: SysDept[], ids: string[]): string[] {
+  const picked = new Set(ids)
+  const out = new Set<string>()
+  const walk = (list: SysDept[], inSubtree: boolean) => {
+    for (const n of list) {
+      const hit = inSubtree || picked.has(n.id)
+      if (hit) out.add(n.id)
+      if (n.children?.length) walk(n.children, hit)
+    }
+  }
+  walk(nodes, false)
+  return [...out]
 }

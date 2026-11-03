@@ -59,10 +59,6 @@
         "name": "账号锁定时长(分钟)",
         "remark": ""
       },
-      "security_ip_whitelist": {
-        "name": "IP 白名单",
-        "remark": "仅超管端生效"
-      },
       "upload_max_size_image_mb": {
         "name": "图片上传大小上限(MB)",
         "remark": "0 或留空表示不限制"

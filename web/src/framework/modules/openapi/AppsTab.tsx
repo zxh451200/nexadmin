@@ -7,6 +7,7 @@ import { Can } from '@/framework/auth/Can'
 import { usePermission } from '@/framework/auth/usePermission'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { ExportCsvButton } from '@/framework/components/export/ExportCsvButton'
 import { api } from '@/framework/request/http'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
@@ -15,7 +16,7 @@ import { fmtDateTime } from '../oper-log/format'
 import { CopyButton } from '../sso/CopyButton'
 import { AppFormDialog } from './AppFormDialog'
 import { AppSecretDialog, type AppSecretTarget } from './AppSecretDialog'
-import { useDeleteOpenApp, useOpenApps, useResetOpenAppSecret, useSetOpenAppEnabled, type OpenApp } from './api'
+import { useDeleteOpenApp, useDeleteOpenApps, useOpenApps, useResetOpenAppSecret, useSetOpenAppEnabled, fetchAllOpenApps, type OpenApp } from './api'
 
 export function AppsTab() {
   const { t, i18n } = useTranslation()
@@ -25,10 +26,12 @@ export function AppsTab() {
   const { data, isLoading } = useOpenApps()
   const setEnabled = useSetOpenAppEnabled()
   const remove = useDeleteOpenApp()
+  const removeBatch = useDeleteOpenApps()
   const reset = useResetOpenAppSecret()
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<OpenApp | null>(null)
   const [secret, setSecret] = useState<AppSecretTarget | null>(null)
+  const [selected, setSelected] = useState<string[]>([])
 
   const { data: roles } = useQuery({
     queryKey: ['openapi', 'role-options'],
@@ -50,9 +53,23 @@ export function AppsTab() {
     }
   }
 
-  const onDelete = async (a: OpenApp) => {
-    if (await confirm({ destructive: true, title: t('common.delete'), description: t('openapi.apps.deleteConfirm', { name: a.name }) })) {
-      await run(() => remove.mutateAsync(a.id))
+  const rows = data ?? []
+  const selectedRows = rows.filter((a) => selected.includes(a.id))
+
+  // 单条与批量共用：数组就走 ?ids= 的批量端点，后端 0 命中报 404、越权 id 不计入实删数
+  const onDelete = async (target: OpenApp | OpenApp[]) => {
+    const list = Array.isArray(target) ? target : [target]
+    const description = Array.isArray(target)
+      ? t('openapi.apps.deleteBatchConfirm', { count: list.length })
+      : t('openapi.apps.deleteConfirm', { name: list[0].name })
+    if (!(await confirm({ destructive: true, title: t('common.delete'), description }))) return
+    try {
+      if (Array.isArray(target)) await removeBatch.mutateAsync(list.map((a) => a.id))
+      else await remove.mutateAsync(list[0].id)
+      setSelected((ids) => ids.filter((id) => !list.some((a) => a.id === id)))
+      toast.success(t('common.operateSuccess'))
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
     }
   }
 
@@ -147,13 +164,40 @@ export function AppsTab() {
         pagination={false}
         emptyText={t('openapi.apps.empty')}
         toolbar={
+          <div className="flex flex-wrap items-center gap-2">
+            <Can perm="openapi:edit">
+              <Button onClick={() => openForm(null)}>
+                <Plus aria-hidden="true" />
+                {t('openapi.apps.create')}
+              </Button>
+            </Can>
+            {/* 导出走列表同一个接口：AppSecret / 密钥密文不在列表返回里，这里也就无从带出 */}
+            <ExportCsvButton
+              perm="openapi:list"
+              filename="openapi-apps"
+              getRows={fetchAllOpenApps}
+              columns={[
+                { header: t('openapi.apps.fields.name'), value: (a) => a.name },
+                { header: t('openapi.apps.fields.appKey'), value: (a) => a.appKey },
+                { header: t('openapi.apps.fields.description'), value: (a) => a.description },
+                { header: t('openapi.apps.fields.roles'), value: (a) => a.roleIds.map((id) => roleName.get(id) ?? id).join(' | ') },
+                { header: t('openapi.apps.fields.enabled'), value: (a) => (a.enabled ? t('common.yes') : t('common.no')) },
+                { header: t('openapi.apps.fields.ipAllow'), value: (a) => (a.ipAllow.length ? a.ipAllow.join(' | ') : t('openapi.apps.ipUnlimited')) },
+                { header: t('openapi.apps.fields.lastUsedAt'), value: (a) => (a.lastUsedAt ? fmtDateTime(a.lastUsedAt, i18n.language) : t('openapi.neverUsed')) },
+                { header: t('openapi.apps.fields.createdAt'), value: (a) => fmtDateTime(a.createdAt, i18n.language) },
+              ]}
+            />
+          </div>
+        }
+        selection={{ selected, onChange: setSelected }}
+        batchActions={(ids) => (
           <Can perm="openapi:edit">
-            <Button onClick={() => openForm(null)}>
-              <Plus aria-hidden="true" />
-              {t('openapi.apps.create')}
+            <Button variant="destructive" size="sm" onClick={() => void onDelete(selectedRows.filter((a) => ids.includes(a.id)))}>
+              <Trash2 aria-hidden="true" />
+              {t('common.delete')}
             </Button>
           </Can>
-        }
+        )}
         rowActions={(a) => (
           <>
             <Button variant="ghost" size="icon" aria-label={t('openapi.apps.guide.action')} onClick={() => setSecret({ app: a })}>

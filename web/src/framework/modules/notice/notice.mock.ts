@@ -317,9 +317,17 @@ defineMock([
   {
     method: 'DELETE',
     url: '/notices/mine',
-    handler: () => {
-      clearedAt = new Date().toISOString()
-      return null
+    handler: ({ query }) => {
+      // 带 ids 是「只移除选中的几条」，不带才是清空；与后端 ClearMine 的分流同口径
+      const raw = String(query.ids ?? '').trim()
+      if (!raw) {
+        clearedAt = new Date().toISOString()
+        return null
+      }
+      const ids = raw.split(',').map((s) => s.trim()).filter(Boolean)
+      const before = dismissedByMe.size
+      ids.forEach((id) => dismissedByMe.add(id))
+      return { dismissed: dismissedByMe.size - before }
     },
   },
   {

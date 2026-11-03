@@ -75,6 +75,15 @@ export function useDeleteDictType() {
   })
 }
 
+/** 批量删除字典类型：后端早就有 DELETE /dict/types?ids=，返回体是空的（不是实际条数） */
+export function useDeleteDictTypes() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (ids: string[]) => api.del<null>('/dict/types', { ids: ids.join(',') }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['dict'] }),
+  })
+}
+
 export function useSortDictTypes() {
   const invalidate = useInvalidate(TYPES_KEY)
   return useMutation({
@@ -98,6 +107,28 @@ export function useDeleteDictData() {
     mutationFn: (id: string) => api.del<null>(`/dict/data/${id}`),
     onSuccess: invalidate,
   })
+}
+
+/** 批量删除字典数据：后端已有 DELETE /dict/data?ids=；内置项会被整批拒绝（409 dict.builtin） */
+export function useDeleteDictDataBatch() {
+  const invalidate = useInvalidate(DATA_KEY)
+  return useMutation({
+    mutationFn: (ids: string[]) => api.del<null>('/dict/data', { ids: ids.join(',') }),
+    onSuccess: invalidate,
+  })
+}
+
+/**
+ * 导出取数：后端 /dict/types/export 与 /dict/data/export 是与列表同一套筛选条件的不分页 JSON 入口
+ * （列表接口被 ParsePage 钉在 pageSize<=200，靠它导不全）。CSV 由前端 ExportCsvButton 生成，
+ * 表头走模块字典，中英文跟着界面语言走。
+ */
+export function fetchDictTypesForExport(keyword: string) {
+  return api.get<DictTypeRow[]>('/dict/types/export', { keyword: keyword.trim() || undefined })
+}
+
+export function fetchDictDataForExport(typeId: string) {
+  return api.get<DictDataRow[]>('/dict/data/export', { typeId })
 }
 
 export function useSortDictData() {

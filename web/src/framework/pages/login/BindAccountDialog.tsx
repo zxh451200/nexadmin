@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { ChallengeResult, LoginResult } from '@/framework/auth/types'
+import { RequiredMark } from '@/framework/components/RequiredMark'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { api } from '@/framework/request/http'
 import { Alert, AlertDescription } from '@/framework/ui/alert'
@@ -77,7 +78,10 @@ export function BindAccountDialog({ open, providerName, bindToken, onBound, onCa
           </Alert>
         ) : null}
         <div className="flex flex-col gap-2">
-          <Label htmlFor="bind-username">{t('login.username')}</Label>
+          <Label htmlFor="bind-username">
+            {t('login.username')}
+            <RequiredMark />
+          </Label>
           <Input
             id="bind-username"
             autoComplete="username"
@@ -87,7 +91,10 @@ export function BindAccountDialog({ open, providerName, bindToken, onBound, onCa
           />
         </div>
         <div className="flex flex-col gap-2">
-          <Label htmlFor="bind-password">{t('login.password')}</Label>
+          <Label htmlFor="bind-password">
+            {t('login.password')}
+            <RequiredMark />
+          </Label>
           <Input
             id="bind-password"
             type="password"

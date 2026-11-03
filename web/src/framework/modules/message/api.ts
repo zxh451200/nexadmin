@@ -1,4 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { collectAllPages } from '@/framework/components/export/ExportCsvButton'
 import { api } from '@/framework/request/http'
 import type { Page, PageQuery } from '@/framework/request/types'
 import type { UploadedFile } from '@/framework/upload/types'
@@ -82,8 +83,7 @@ function useInvalidate() {
   }
 }
 
-export function useMarkRead() {
-  const invalidate = useInvalidate()
+export function useMarkRead() {  const invalidate = useInvalidate()
   return useMutation({
     mutationFn: (id: string) => api.put(`/messages/${id}/read`, undefined),
     onSuccess: invalidate,
@@ -114,6 +114,15 @@ export function useClearMessages() {
   })
 }
 
+/** 批量删除选中的消息；只删自己的行，返回实际删除条数 */
+export function useDeleteMessages() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (ids: string[]) => api.del<{ deleted: number }>('/messages', { ids: ids.join(',') }),
+    onSuccess: invalidate,
+  })
+}
+
 export function useClearNotices() {
   const invalidate = useInvalidate()
   return useMutation({
@@ -131,10 +140,31 @@ export function useDeleteNotice() {
   })
 }
 
+/** 批量移除选中的公告；返回实际移除条数（越权或已移除过的不计入） */
+export function useDismissNotices() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (ids: string[]) => api.del<{ dismissed: number }>('/notices/mine', { ids: ids.join(',') }),
+    onSuccess: invalidate,
+  })
+}
+
 export function useReadNotice() {
   const invalidate = useInvalidate()
   return useMutation({
     mutationFn: (id: string) => api.post(`/notices/${id}/read`, undefined),
     onSuccess: invalidate,
   })
+}
+
+/**
+ * 导出用的全量取数：与列表同一套筛选条件，只是不分页（逐页捞齐）。
+ * 这两个接口本来就是「只返回当前用户自己的数据」，所以导出不会绕过数据范围。
+ */
+export function fetchMessagesForExport(query: Omit<MessageQuery, 'page' | 'pageSize'>) {
+  return collectAllPages<Message>((page, pageSize) => api.get<Page<Message>>('/messages', { ...query, page, pageSize }))
+}
+
+export function fetchNoticesForExport(query: Omit<NoticeQuery, 'page' | 'pageSize'>) {
+  return collectAllPages<MyNotice>((page, pageSize) => api.get<Page<MyNotice>>('/notices/mine', { ...query, page, pageSize }))
 }

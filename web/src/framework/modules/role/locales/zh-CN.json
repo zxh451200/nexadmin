@@ -57,6 +57,7 @@
         "button": "按钮"
       }
     },
-    "deleteConfirm": "确定删除角色「{{name}}」吗？此操作不可恢复。"
+    "deleteConfirm": "确定删除角色「{{name}}」吗？此操作不可恢复。",
+    "deleteBatchConfirm": "确认删除选中的 {{count}} 个角色？只要有一条不可删（内置角色或仍被用户占用），整批都不会删除。"
   }
 }

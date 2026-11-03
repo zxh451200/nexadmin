@@ -13,6 +13,7 @@
       "resetSecret": "Reset secret",
       "resetConfirm": "The current AppSecret of \"{{name}}\" stops working immediately and callers must update their config. Continue?",
       "deleteConfirm": "Delete app \"{{name}}\"? Its callers will lose access immediately.",
+      "deleteBatchConfirm": "Delete the {{count}} selected app(s)? Their callers will lose access immediately.",
       "ipUnlimited": "Unrestricted",
       "ipCount": "{{count}} entries",
       "fields": {
@@ -67,6 +68,7 @@
       "resetSecret": "Reset signing secret",
       "resetConfirm": "The current signing secret of \"{{name}}\" stops working immediately and the receiver must be updated. Continue?",
       "deleteConfirm": "Delete webhook \"{{name}}\"? Events will no longer be pushed.",
+      "deleteBatchConfirm": "Delete the {{count}} selected webhook(s)? Their delivery records are deleted too and events will no longer be pushed.",
       "fields": {
         "name": "Name",
         "url": "Endpoint URL",
@@ -135,6 +137,7 @@
         "status": "Status",
         "attempts": "Attempts",
         "responseCode": "Response code",
+        "payload": "Request payload",
         "responseBody": "Response body",
         "error": "Error",
         "createdAt": "Created",

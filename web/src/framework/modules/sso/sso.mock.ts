@@ -88,6 +88,17 @@ defineMock([
   { method: 'POST', url: '/sso/keys/rotate', handler: (): SsoKey[] => rotateKeys() },
   { method: 'GET', url: '/sso/apps', handler: (): SsoApp[] => apps.map((a) => ({ ...a })) },
   {
+    // 与后端 GET /sso/apps/export 同形：不分页、只按 keyword 过滤（name / client_id 模糊），返回裸数组
+    method: 'GET',
+    url: '/sso/apps/export',
+    handler: ({ query }): SsoApp[] => {
+      const kw = String(query.keyword ?? '').trim().toLowerCase()
+      return apps
+        .filter((a) => !kw || a.name.toLowerCase().includes(kw) || a.clientId.toLowerCase().includes(kw))
+        .map((a) => ({ ...a }))
+    },
+  },
+  {
     method: 'POST',
     url: '/sso/apps',
     handler: ({ body }) => {
@@ -103,6 +114,20 @@ defineMock([
       const app = find(params.id)
       Object.assign(app, sanitize(body))
       return { ...app }
+    },
+  },
+  {
+    // 批量删：与后端 removeMany 同口径——空/非法 ids 一律 400，绝不退化成「不带条件全删」
+    method: 'DELETE',
+    url: '/sso/apps',
+    handler: ({ query }) => {
+      const raw = String(query.ids ?? '').trim()
+      if (!raw) mockError(400, 'Bad request')
+      const ids = raw.split(',').map((s) => s.trim()).filter(Boolean)
+      if (ids.length === 0 || ids.some((s) => !/^\d+$/.test(s) || s === '0')) mockError(400, 'Bad request')
+      // apps 是 const，原地收缩而不是重新赋值（与上面单条删除的 splice 同一手法）
+      apps.splice(0, apps.length, ...apps.filter((a) => !ids.includes(a.id)))
+      return null
     },
   },
   {

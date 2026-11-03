@@ -23,6 +23,7 @@ import {
   JOB_TYPES,
   useCancelJob,
   useDeleteJob,
+  useDeleteJobs,
   useJobList,
   useRetryJob,
   type Job,
@@ -53,6 +54,7 @@ export default function ExportCenterPage() {
   const [pageSize, setPageSize] = useState(10)
   const [busy, setBusy] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
+  const [selected, setSelected] = useState<string[]>([])
 
   // 有进行中的任务且页面可见时才轮询；切到别的标签或浏览器标签页隐藏时暂停，恢复时立即刷新一次
   const { data, isLoading, refetch } = useJobList(
@@ -69,14 +71,17 @@ export default function ExportCenterPage() {
   const cancel = useCancelJob()
   const retry = useRetryJob()
   const del = useDeleteJob()
+  const delBatch = useDeleteJobs()
 
-  const run = async (id: string, fn: () => Promise<unknown>, okKey?: string) => {
+  const run = async (id: string, fn: () => Promise<unknown>, okKey?: string): Promise<boolean> => {
     setBusy(id)
     try {
       await fn()
       if (okKey) toast.success(t(okKey))
+      return true
     } catch (e) {
       toast.error(errMsg(e, t('common.operateFailed')))
+      return false
     } finally {
       setBusy(null)
     }
@@ -98,7 +103,23 @@ export default function ExportCenterPage() {
   }
   const onDelete = async (j: Job) => {
     if (!(await confirm({ destructive: true, description: t('jobs.confirm.delete') }))) return
-    await run(j.id, () => del.mutateAsync(j.id), 'jobs.toast.deleted')
+    if (await run(j.id, () => del.mutateAsync(j.id), 'jobs.toast.deleted')) {
+      setSelected((s) => s.filter((x) => x !== j.id))
+    }
+  }
+
+  // 批量删除：作用域（非管理员只看得到自己的任务）与判据（有未结束的任务整批 409 拒绝、
+  // 删任务连带删结果文件）都收在后端，这里只按后端返回的实删条数如实提示。
+  const onDeleteBatch = async (ids: string[]) => {
+    if (!(await confirm({ destructive: true, description: t('jobs.confirm.deleteBatch', { count: ids.length }) }))) return
+    try {
+      const { deleted } = await delBatch.mutateAsync(ids)
+      setSelected([])
+      toast.success(deleted < ids.length ? t('jobs.toast.deletedPartial', { deleted, total: ids.length }) : t('jobs.toast.deleted'))
+    } catch (e) {
+      // 具体原因（如「有任务还没结束」）由 http 拦截器弹出，这里补一条通用失败提示
+      toast.error(errMsg(e, t('common.operateFailed')))
+    }
   }
 
   const typeLabel = (v: string) => t(`jobs.type.${v}`, { defaultValue: v })
@@ -215,6 +236,13 @@ export default function ExportCenterPage() {
         rowKey="id"
         loading={isLoading}
         columnSettingsKey="jobs"
+        selection={{ selected, onChange: setSelected }}
+        batchActions={(ids) => (
+          <Button variant="destructive" size="sm" disabled={delBatch.isPending} onClick={() => void onDeleteBatch(ids)}>
+            <Trash2 aria-hidden="true" />
+            {t('jobs.action.delete')}
+          </Button>
+        )}
         rowActions={(j) => (
           <div className="flex items-center">
             {j.downloadable ? (

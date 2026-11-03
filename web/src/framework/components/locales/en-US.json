@@ -4,6 +4,8 @@
     "columnSettingsHint": "Choose columns to display",
     "resetColumns": "Reset to default",
     "dragHandle": "Drag to reorder",
+    "moveUp": "Move up",
+    "moveDown": "Move down",
     "selectAllRows": "Select all rows",
     "selectRow": "Select this row",
     "selectedCount": "{{count}} selected",
@@ -23,7 +25,7 @@
     "collapseAll": "Collapse all",
     "batchActions": "Batch actions",
     "reorderFailed": "Failed to reorder, the original order was restored",
-    "dragHint": "Drag right to nest · drag left to un-nest · drop on the dashed box for top level",
+    "dragHint": "Drag right to nest · drag left to un-nest · drop on the dashed box for top level · hover a collapsed row to expand it",
     "willNest": "Release to nest under this row",
     "willOutdent": "Release to move up one level",
     "nestBlocked": "This row cannot contain children",
@@ -90,5 +92,9 @@
     "machineConfirmed": "Marked as reviewed",
     "publishGroup": "Publish per language",
     "publishMissing": "Missing: {{fields}}"
+  },
+  "exportCsv": {
+    "noRows": "Nothing to export",
+    "done": "Exported {{count}} row(s)"
   }
 }

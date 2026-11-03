@@ -3,6 +3,7 @@ import { Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { LoginChallenge } from '@/framework/auth/types'
 import { useAuth } from '@/framework/auth/useAuth'
+import { RequiredMark } from '@/framework/components/RequiredMark'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Alert, AlertDescription } from '@/framework/ui/alert'
 import { Button } from '@/framework/ui/button'
@@ -90,7 +91,10 @@ export function SecondFactorDialog({ challenge, onVerified, onCancel, onChalleng
           </Alert>
         ) : null}
         <div className="flex flex-col gap-2">
-          <Label htmlFor="second-factor-code">{t(recovery ? 'login.recoveryCode' : 'login.otpCode')}</Label>
+          <Label htmlFor="second-factor-code">
+            {t(recovery ? 'login.recoveryCode' : 'login.otpCode')}
+            <RequiredMark />
+          </Label>
           <Input
             id="second-factor-code"
             value={code}

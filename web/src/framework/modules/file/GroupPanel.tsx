@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
+import { RequiredMark } from '@/framework/components/RequiredMark'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { useIsMobile } from '@/framework/hooks/use-mobile'
 import { Button } from '@/framework/ui/button'
@@ -11,12 +12,15 @@ import { Input } from '@/framework/ui/input'
 import { Label } from '@/framework/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import { cn } from '@/lib/utils'
-import { useCreateGroup, useDeleteGroup, useFileGroups, useRenameGroup, type FileGroup } from './api'
+import { formatSize } from '@/framework/upload/precheck'
+import { useCreateGroup, useDeleteGroup, useFileGroups, useFileUsage, useRenameGroup, type FileGroup, type FileUsage } from './api'
 
 /** 特殊值：全部 */
 export const GROUP_ALL = 'all'
 /** 特殊值：未分组（对应 groupId=''，筛选时传 'none'） */
 export const GROUP_NONE = 'none'
+
+const pctOf = (u: FileUsage) => Math.min(100, Math.round((u.usedBytes / (u.quotaMB * 1024 * 1024)) * 100))
 
 interface Props {
   value: string
@@ -28,6 +32,7 @@ export function GroupPanel({ value, onChange }: Props) {
   const isMobile = useIsMobile()
   const confirm = useConfirm()
   const { data: groups = [] } = useFileGroups()
+  const { data: usage } = useFileUsage()
   const create = useCreateGroup()
   const rename = useRenameGroup()
   const remove = useDeleteGroup()
@@ -62,7 +67,7 @@ export function GroupPanel({ value, onChange }: Props) {
   const item = (key: string, label: string, count: number | undefined, editable?: FileGroup) => {
     const active = value === key
     return (
-      <li key={key} className="group/item flex items-center">
+      <li key={key} className="group/item relative flex items-center">
         <button
           type="button"
           aria-current={active ? 'true' : undefined}
@@ -76,9 +81,10 @@ export function GroupPanel({ value, onChange }: Props) {
           <span className="min-w-0 flex-1 truncate">{label}</span>
           {count !== undefined && <span className="num text-xs text-muted-foreground">{count}</span>}
         </button>
+        {/* 悬停操作浮在行尾并自带卡色底：不预留通道，所有行的选中底色和计数列才在同一宽度上 */}
         {editable && (
           <Can perm="file:upload">
-            <div className="flex shrink-0 items-center opacity-0 transition-opacity focus-within:opacity-100 group-hover/item:opacity-100 motion-reduce:transition-none [@media(hover:none)]:opacity-100">
+            <div className="flex shrink-0 items-center gap-0.5 opacity-100 focus-within:opacity-100 [@media(hover:hover)]:absolute [@media(hover:hover)]:inset-y-0 [@media(hover:hover)]:end-0 [@media(hover:hover)]:rounded-md [@media(hover:hover)]:bg-card [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:transition-opacity [@media(hover:hover)]:group-hover/item:opacity-100 [@media(hover:hover)]:motion-reduce:transition-none">
               <Button variant="ghost" size="icon" aria-label={t('fileMgr.renameGroup')} className="size-11 shrink-0 md:size-8" onClick={() => setEditing({ id: editable.id, name: editable.name })}>
                 <Pencil className="size-3.5" aria-hidden="true" />
               </Button>
@@ -102,6 +108,22 @@ export function GroupPanel({ value, onChange }: Props) {
       </Button>
     </Can>
   )
+
+  // 存储用量：套餐有限额时给进度条（超 90% 转警示色），不限时只显示已用。
+  const usageBar =
+    usage && !isMobile ? (
+      <div className="border-t border-border px-1 pt-2">
+        <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+          <span>{t('fileMgr.storageUsed')}</span>
+          <span className="num">{usage.quotaMB > 0 ? `${formatSize(usage.usedBytes)} / ${usage.quotaMB} MB` : formatSize(usage.usedBytes)}</span>
+        </div>
+        {usage.quotaMB > 0 ? (
+          <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuenow={Math.round(pctOf(usage))} aria-valuemin={0} aria-valuemax={100}>
+            <div className={cn('h-full rounded-full', pctOf(usage) >= 90 ? 'bg-destructive' : 'bg-primary')} style={{ width: `${pctOf(usage)}%` }} />
+          </div>
+        ) : null}
+      </div>
+    ) : null
 
   return (
     <>
@@ -157,6 +179,7 @@ export function GroupPanel({ value, onChange }: Props) {
             {item(GROUP_NONE, t('fileMgr.ungrouped'), undefined)}
             {groups.map((g) => item(g.id, g.name, g.count, g))}
           </ul>
+          {usageBar}
         </nav>
       )}
 
@@ -177,7 +200,10 @@ export function GroupPanel({ value, onChange }: Props) {
         }
       >
         <div className="space-y-2">
-          <Label htmlFor="file-group-name">{t('fileMgr.groupName')}</Label>
+          <Label htmlFor="file-group-name">
+            {t('fileMgr.groupName')}
+            <RequiredMark />
+          </Label>
           <Input
             id="file-group-name"
             autoFocus

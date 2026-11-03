@@ -54,6 +54,15 @@ export function useDeletePost() {
   })
 }
 
+/** 批量删除：后端逐条走与单条删除相同的护栏，任一条不合格整批回滚，返回实际删除条数。 */
+export function useDeletePosts() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (ids: string[]) => api.del<{ deleted: number }>('/posts', { ids: ids.join(',') }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['post'] }),
+  })
+}
+
 export function useSortPosts() {
   const qc = useQueryClient()
   return useMutation({

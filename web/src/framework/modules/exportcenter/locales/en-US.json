@@ -24,7 +24,8 @@
     "action": { "download": "Download", "cancel": "Cancel", "retry": "Retry", "delete": "Delete", "refresh": "Refresh" },
     "confirm": {
       "cancel": "Cancel this task?",
-      "delete": "Delete this task and its result file? This cannot be undone."
+      "delete": "Delete this task and its result file? This cannot be undone.",
+      "deleteBatch": "Delete the {{count}} selected tasks and their result files? This cannot be undone; if any of them is still running, the whole batch fails."
     },
     "toast": {
       "submitted": "Submitted to the export center",
@@ -34,7 +35,8 @@
       "failed": "Export failed",
       "canceled": "Task canceled",
       "retried": "Resubmitted",
-      "deleted": "Deleted"
+      "deleted": "Deleted",
+      "deletedPartial": "Deleted {{deleted}} of {{total}} tasks (the rest may already be gone)"
     },
     "duration": { "sec": "{{n}} s", "min": "{{m}} min {{s}} s" },
     "indicator": { "label": "Export center, {{count}} tasks in progress", "none": "Export center" },

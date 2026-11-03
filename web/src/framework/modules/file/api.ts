@@ -27,6 +27,8 @@ export interface FileGroup {
   count?: number
 }
 
+export type FileSort = 'created_at' | 'name' | 'size'
+
 export interface FileQuery {
   page: number
   pageSize: number
@@ -35,6 +37,10 @@ export interface FileQuery {
   groupId?: string
   from?: string
   to?: string
+  /** 排序字段（白名单外的值后端回退默认）；默认 created_at */
+  sort?: FileSort
+  /** 默认倒序（最新/最大在前） */
+  desc?: boolean
 }
 
 export interface RegisterFilesBody {
@@ -51,6 +57,21 @@ export function useFileList(query: FileQuery) {
     queryKey: [...KEY, query],
     queryFn: () => api.get<Page<FileItem>>('/files', query),
     placeholderData: keepPreviousData,
+  })
+}
+
+export interface FileUsage {
+  usedBytes: number
+  /** 套餐存储额度（MB）；0 = 不限 */
+  quotaMB: number
+}
+
+/** 侧栏用量（已用 + 套餐额度）：后端 30s 缓存，这里 30s 轮询同口径。 */
+export function useFileUsage() {
+  return useQuery({
+    queryKey: [...KEY, 'usage'],
+    queryFn: () => api.get<FileUsage>('/files/usage'),
+    refetchInterval: 30_000,
   })
 }
 

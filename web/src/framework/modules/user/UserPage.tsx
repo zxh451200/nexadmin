@@ -29,7 +29,7 @@ import {
   type User,
   type UserFilters,
 } from './api'
-import { saveBlob } from './csv'
+import { saveBlob } from '@/framework/components/export/csv'
 import { ImportDialog } from './ImportDialog'
 import { ResetPasswordDialog } from './ResetPasswordDialog'
 import { UserFormDialog } from './UserFormDialog'

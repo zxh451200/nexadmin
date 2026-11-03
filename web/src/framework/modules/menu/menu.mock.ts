@@ -228,6 +228,21 @@ defineMock([
   },
   {
     method: 'DELETE',
+    url: '/menus',
+    handler: ({ query }) => {
+      // 与后端 response.ParseIDsQuery 同口径：ids 缺失/全非法就整体拒绝，绝不退化成「删全部」
+      const roots = String(query.ids ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+      if (roots.length === 0) mockError(400, 'error.bad_request')
+      // 与后端 removeMany 同口径：每项连同全部后代（含列表里没显示的按钮）求并集后一次删完。
+      // 真后端在同一事务里还清掉 sys_role_menu 的授权，mock 不建模该表。
+      const gone = new Set(roots.flatMap((r) => [r, ...descendantIds(r)]))
+      const before = items.length
+      for (let i = items.length - 1; i >= 0; i--) if (gone.has(items[i].id)) items.splice(i, 1)
+      return { deleted: before - items.length }
+    },
+  },
+  {
+    method: 'DELETE',
     url: '/menus/:id',
     handler: ({ params }) => {
       const gone = new Set([params.id, ...descendantIds(params.id)])

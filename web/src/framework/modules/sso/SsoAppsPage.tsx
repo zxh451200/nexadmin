@@ -7,11 +7,12 @@ import { Can } from '@/framework/auth/Can'
 import { usePermission } from '@/framework/auth/usePermission'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { ExportCsvButton } from '@/framework/components/export/ExportCsvButton'
 import { api } from '@/framework/request/http'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Switch } from '@/framework/ui/switch'
-import { useDeleteSsoApp, useResetSsoSecret, useSetSsoAppEnabled, useSsoApps, type SsoApp } from './api'
+import { fetchSsoAppsForExport, useDeleteSsoApp, useDeleteSsoApps, useResetSsoSecret, useSetSsoAppEnabled, useSsoApps, type SsoApp } from './api'
 import { CopyButton } from './CopyButton'
 import { KeyRotationDialog } from './KeyRotationDialog'
 import { SecretDialog, type SecretTarget } from './SecretDialog'
@@ -26,7 +27,9 @@ export function SsoSection() {
   const { data, isLoading } = useSsoApps()
   const setEnabled = useSetSsoAppEnabled()
   const remove = useDeleteSsoApp()
+  const removeBatch = useDeleteSsoApps()
   const reset = useResetSsoSecret()
+  const [selected, setSelected] = useState<string[]>([])
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<SsoApp | null>(null)
   const [secret, setSecret] = useState<SecretTarget | null>(null)
@@ -55,6 +58,19 @@ export function SsoSection() {
   const onDelete = async (a: SsoApp) => {
     if (await confirm({ destructive: true, title: t('common.delete'), description: t('sso.deleteConfirm', { name: a.name }) })) {
       await run(() => remove.mutateAsync(a.id))
+      setSelected((s) => s.filter((x) => x !== a.id))
+    }
+  }
+
+  // 批量删除：一次提交选中的 id，后端在同一事务里连各应用的 refresh_token 一起清掉
+  const onDeleteBatch = async (ids: string[]) => {
+    if (!(await confirm({ destructive: true, title: t('common.delete'), description: t('sso.deleteBatchConfirm', { count: ids.length }) }))) return
+    try {
+      await removeBatch.mutateAsync(ids)
+      setSelected([])
+      toast.success(t('common.operateSuccess'))
+    } catch {
+      toast.error(t('common.operateFailed'))
     }
   }
 
@@ -132,6 +148,25 @@ export function SsoSection() {
               <KeyRound aria-hidden="true" />
               {t('sso.keys.entry')}
             </Button>
+            <ExportCsvButton
+              filename={t('sso.exportFilename')}
+              perm="sso:list"
+              getRows={() => fetchSsoAppsForExport()}
+              columns={[
+                { header: t('sso.fields.name'), value: (a) => a.name },
+                { header: t('sso.fields.clientId'), value: (a) => a.clientId },
+                { header: t('sso.fields.enabled'), value: (a) => (a.enabled ? t('common.enable') : t('common.disable')) },
+                {
+                  header: t('sso.fields.roles'),
+                  value: (a) => (a.roleIds.length === 0 ? t('sso.allUsers') : a.roleIds.map((id) => roleName.get(id) ?? id).join(' | ')),
+                },
+                { header: t('sso.fields.redirectUris'), value: (a) => a.redirectUris.join(' | ') },
+                { header: t('sso.fields.homeUrl'), value: (a) => a.homeUrl },
+                { header: t('sso.fields.allowOrgRead'), value: (a) => (a.allowOrgRead ? t('common.yes') : t('common.no')) },
+                { header: t('sso.fields.description'), value: (a) => a.description },
+                { header: t('common.createdAt'), value: (a) => a.createdAt },
+              ]}
+            />
             <Can perm="sso:edit">
               <Button onClick={() => openForm(null)}>
                 <Plus aria-hidden="true" />
@@ -147,6 +182,15 @@ export function SsoSection() {
         loading={isLoading}
         pagination={false}
         emptyText={t('sso.empty')}
+        selection={{ selected, onChange: setSelected }}
+        batchActions={(ids) => (
+          <Can perm="sso:edit">
+            <Button variant="destructive" size="sm" onClick={() => void onDeleteBatch(ids)}>
+              <Trash2 aria-hidden="true" />
+              {t('common.delete')}
+            </Button>
+          </Can>
+        )}
         rowActions={(a) => (
           <>
             <Button

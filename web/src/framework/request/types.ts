@@ -52,6 +52,11 @@ export interface LanguageInfo {
   prefix?: string
   /** Go 布局串 */
   dateFormat?: string
+  /**
+   * 启用开关：停用的语言保留全部配置但不参与文案协商与公开站路由。
+   * 管理接口的清单里有这个字段；公开视图 /i18n/languages 只返回启用的语言（无此字段）。
+   */
+  enabled?: boolean
 }
 
 export interface UploadConfig {

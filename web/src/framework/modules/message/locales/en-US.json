@@ -12,11 +12,16 @@
     "clearMessagesConfirm": "All messages you received, including unread ones, will be deleted. This cannot be undone. Clear them?",
     "clearNoticesConfirm": "All notices in the message center will be cleared for you. Notices published later still appear. Clear them?",
     "deleteNoticeConfirm": "This notice will be removed from your message center only; the notice and everyone else's list stay unchanged. Delete it?",
+    "deleteBatchNoticeConfirm": "The {{count}} selected notice(s) will be removed from your message center only; the notices and everyone else's list stay unchanged. Remove them?",
+    "dismissedPartial": "Removed {{dismissed}} of {{total}} (the rest may be outside your audience or already removed)",
     "unread": "Unread",
+    "read": "Read",
     "pinned": "Pinned",
     "goLink": "Open link",
     "attachments": "Attachments",
     "deleteConfirm": "Delete this message?",
+    "deleteBatchConfirm": "Delete the {{count}} selected message(s)?",
+    "deletedPartial": "Deleted {{deleted}} of {{total}} (the rest may already be gone)",
     "emptyMessages": "No messages",
     "emptyNotices": "No notices",
     "emptyFiltered": "No records match these filters",
@@ -29,7 +34,9 @@
       "time": "Time",
       "type": "Type",
       "level": "Level",
-      "publishedAt": "Published at"
+      "publishedAt": "Published at",
+      "content": "Content",
+      "status": "Status"
     }
   }
 }

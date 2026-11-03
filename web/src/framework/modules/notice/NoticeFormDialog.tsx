@@ -27,7 +27,8 @@ const SCOPES: NoticeScope[] = ['all', 'role', 'dept', 'user']
 function buildSchema(t: (k: string) => string) {
   return z
     .object({
-      title: z.string().trim().min(1, t('common.required')).max(100, t('notice.titleTooLong')),
+      // 标题上限以服务端为准：modules/notice/dto.go 的 binding:"max=200"（列宽也是 200）。
+      title: z.string().trim().min(1, t('common.required')).max(200, t('notice.titleTooLong')),
       type: z.string().min(1, t('common.required')),
       level: z.string().min(1, t('common.required')),
       content: z.string().min(1, t('notice.contentRequired')),
@@ -161,12 +162,12 @@ export function NoticeFormDialog({ open, onOpenChange, editing }: Props) {
                           target="title"
                           format="text"
                           getText={() => form.getValues('title')}
-                          onResult={(text) => form.setValue('title', text.slice(0, 100), { shouldDirty: true, shouldValidate: true })}
+                          onResult={(text) => form.setValue('title', text.slice(0, 200), { shouldDirty: true, shouldValidate: true })}
                         />
                       </div>
                     </div>
                     <FormControl>
-                      <Input {...field} maxLength={100} placeholder={t('common.pleaseInput')} />
+                      <Input {...field} maxLength={200} placeholder={t('common.pleaseInput')} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

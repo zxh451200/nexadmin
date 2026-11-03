@@ -10,6 +10,7 @@ import { usePermission } from '@/framework/auth/usePermission'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { DictSelect } from '@/framework/components/DictSelect'
+import { ExportCsvButton } from '@/framework/components/export/ExportCsvButton'
 import { FormGrid, FormGridFull, FormLayout } from '@/framework/components/FormLayout'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Button } from '@/framework/ui/button'
@@ -17,7 +18,15 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/framework/ui/input'
 import { Textarea } from '@/framework/ui/textarea'
 import { cn } from '@/lib/utils'
-import { useDeleteDictType, useDictTypes, useSaveDictType, useSortDictTypes, type DictTypeRow } from './api'
+import {
+  fetchDictTypesForExport,
+  useDeleteDictType,
+  useDeleteDictTypes,
+  useDictTypes,
+  useSaveDictType,
+  useSortDictTypes,
+  type DictTypeRow,
+} from './api'
 
 const schema = z.object({
   name: z.string().trim().min(1).max(50),
@@ -50,9 +59,11 @@ export function DictTypePanel({ selectedId, onSelect, onDeleted }: Props) {
   const [keyword, setKeyword] = useState('')
   const [editing, setEditing] = useState<DictTypeRow | null>(null)
   const [open, setOpen] = useState(false)
+  const [selected, setSelected] = useState<string[]>([])
   const { data = [], isLoading } = useDictTypes(keyword)
   const save = useSaveDictType()
   const del = useDeleteDictType()
+  const delBatch = useDeleteDictTypes()
   const sort = useSortDictTypes()
 
   const form = useForm<FormValues>({ resolver: zodResolver(schema), defaultValues: empty })
@@ -85,8 +96,29 @@ export function DictTypePanel({ selectedId, onSelect, onDeleted }: Props) {
     if (!(await confirm({ destructive: true, description: t('dict.type.deleteConfirm', { name: row.name }) }))) return
     try {
       await del.mutateAsync(row.id)
+      setSelected((s) => s.filter((x) => x !== row.id))
       toast.success(t('common.operateSuccess'))
       onDeleted(row.id)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+    }
+  }
+
+  // 批量删除：内置类型是后端整批拒绝（409），所以先剔掉它们，
+  // 并在提示里说清跳过了几条——不然是「我勾了 5 条怎么只删了 3 条」的悬案。
+  const removeBatch = async (ids: string[]) => {
+    const deletable = ids.filter((id) => !data.find((r) => r.id === id)?.builtin)
+    const skipped = ids.length - deletable.length
+    if (deletable.length === 0) {
+      toast.info(t('dict.type.batchOnlyBuiltin'))
+      return
+    }
+    if (!(await confirm({ destructive: true, description: t('dict.type.deleteBatchConfirm', { count: deletable.length }) }))) return
+    try {
+      await delBatch.mutateAsync(deletable)
+      setSelected([])
+      deletable.forEach((id) => onDeleted(id))
+      toast.success(skipped > 0 ? t('dict.type.batchDeletedSkipped', { count: deletable.length, skipped }) : t('common.operateSuccess'))
     } catch (e) {
       toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
     }
@@ -113,12 +145,29 @@ export function DictTypePanel({ selectedId, onSelect, onDeleted }: Props) {
     <section className="flex min-w-0 flex-col gap-3" aria-label={t('dict.type.title')}>
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-base font-semibold text-foreground">{t('dict.type.title')}</h2>
-        <Can perm="dict:create">
-          <Button type="button" size="sm" onClick={() => openForm(null)}>
-            <Plus className="me-1 h-4 w-4" aria-hidden="true" />
-            {t('common.add')}
-          </Button>
-        </Can>
+        <div className="flex shrink-0 items-center gap-2">
+          <ExportCsvButton
+            filename={t('dict.type.exportFilename')}
+            perm="dict:list"
+            size="sm"
+            getRows={() => fetchDictTypesForExport(keyword)}
+            columns={[
+              { header: t('dict.type.name'), value: (r) => r.name },
+              { header: t('dict.type.code'), value: (r) => r.code },
+              { header: t('common.sort'), value: (r) => r.sort },
+              { header: t('common.status'), value: (r) => (r.status === '1' ? t('common.enable') : t('common.disable')) },
+              { header: t('dict.type.builtin'), value: (r) => (r.builtin ? t('common.yes') : t('common.no')) },
+              { header: t('common.remark'), value: (r) => r.remark ?? '' },
+              { header: t('common.createdAt'), value: (r) => r.createdAt },
+            ]}
+          />
+          <Can perm="dict:create">
+            <Button type="button" size="sm" onClick={() => openForm(null)}>
+              <Plus className="me-1 h-4 w-4" aria-hidden="true" />
+              {t('common.add')}
+            </Button>
+          </Can>
+        </div>
       </div>
       <form
         className="flex gap-2"
@@ -145,6 +194,15 @@ export function DictTypePanel({ selectedId, onSelect, onDeleted }: Props) {
         pagination={false}
         onRowClick={onSelect}
         sortable={keyword || !has('dict:update') ? undefined : { onReorder: (ids) => sort.mutateAsync(ids) }}
+        selection={{ selected, onChange: setSelected }}
+        batchActions={(ids) => (
+          <Can perm="dict:delete">
+            <Button type="button" variant="destructive" size="sm" onClick={() => void removeBatch(ids)}>
+              <Trash2 className="me-1 h-4 w-4" aria-hidden="true" />
+              {t('common.delete')}
+            </Button>
+          </Can>
+        )}
         rowActions={(row) => (
           <>
             <Can perm="dict:update">

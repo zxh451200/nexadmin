@@ -67,6 +67,34 @@ export function countDescendants(node: SysMenu): number {
   return (node.children ?? []).reduce((n, c) => n + 1 + countDescendants(c), 0)
 }
 
+/**
+ * 把勾选集合按完整树展开成「真正会被删掉的行集合」：每个命中节点连同它的全部下级。
+ * 不能按可见树算——菜单列表默认折叠掉按钮、筛选时还会剪掉不命中的分支，
+ * 而后端是按真实子树级联删除的，只报可见行会让确认框里的数字小于实删条数。
+ */
+export function collectSubtreeIds(nodes: SysMenu[], ids: string[]): string[] {
+  const picked = new Set(ids)
+  const out = new Set<string>()
+  const walk = (list: SysMenu[], inSubtree: boolean) => {
+    for (const n of list) {
+      const hit = inSubtree || picked.has(n.id)
+      if (hit) out.add(n.id)
+      if (n.children?.length) walk(n.children, hit)
+    }
+  }
+  walk(nodes, false)
+  return [...out]
+}
+
+export function useDeleteMenus() {
+  const qc = useQueryClient()
+  return useMutation({
+    // 与后端 DELETE /menus?ids= 同口径：每项连同子树，返回真正被删掉的条数
+    mutationFn: (ids: string[]) => api.del<{ deleted: number }>('/menus', { ids: ids.join(',') }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['sysMenu'] }),
+  })
+}
+
 export function useMoveMenu() {
   const qc = useQueryClient()
   return useMutation({

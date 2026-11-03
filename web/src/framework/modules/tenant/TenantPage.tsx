@@ -24,6 +24,7 @@ import { api } from '@/framework/request/http'
 import { Button } from '@/framework/ui/button'
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/framework/ui/form'
 import { Input } from '@/framework/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import {
   useDeleteTenants,
   useRenewTenant,
@@ -35,6 +36,8 @@ import {
 import { ExpireBadge, TenantUsageCell } from './TenantUsage'
 
 const quota = z.number().int().min(0).nullable()
+// Radix Select 选项值不能是空串：「全部套餐」用非空哨兵值
+const ALL = '__all'
 const schema = z
   .object({
     isNew: z.boolean(),
@@ -99,8 +102,8 @@ export default function TenantPage() {
   const confirm = useConfirm()
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
-  const [draft, setDraft] = useState({ keyword: '', status: '' })
-  const [filters, setFilters] = useState({ keyword: '', status: '' })
+  const [draft, setDraft] = useState({ keyword: '', status: '', packageId: '' })
+  const [filters, setFilters] = useState({ keyword: '', status: '', packageId: '' })
   const [selected, setSelected] = useState<string[]>([])
   const [editing, setEditing] = useState<TenantRow | null>(null)
   const [open, setOpen] = useState(false)
@@ -112,6 +115,7 @@ export default function TenantPage() {
     pageSize,
     keyword: filters.keyword || undefined,
     status: filters.status || undefined,
+    packageId: filters.packageId || undefined,
   })
   const save = useSaveTenant()
   const renew = useRenewTenant()
@@ -246,7 +250,7 @@ export default function TenantPage() {
           setFilters(draft)
         }}
         onReset={() => {
-          const init = { keyword: '', status: '' }
+          const init = { keyword: '', status: '', packageId: '' }
           setDraft(init)
           setFilters(init)
           setPage(1)
@@ -266,6 +270,23 @@ export default function TenantPage() {
           onChange={(v) => setDraft((d) => ({ ...d, status: v }))}
           placeholder={t('common.status')}
         />
+        {/* 按套餐筛：后端 ListTenants 一直支持 packageId，界面上从来没有入口 */}
+        <Select
+          value={draft.packageId || ALL}
+          onValueChange={(v) => setDraft((d) => ({ ...d, packageId: v === ALL ? '' : v }))}
+        >
+          <SelectTrigger className="md:w-44" aria-label={t('tenant.package')}>
+            <SelectValue placeholder={t('tenant.package')} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>{t('tenant.allPackages')}</SelectItem>
+            {(pkgs.data ?? []).map((p) => (
+              <SelectItem key={p.id} value={p.id}>
+                {p.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </FilterBar>
 
       <DataTable<TenantRow>

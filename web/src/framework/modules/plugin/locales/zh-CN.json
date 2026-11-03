@@ -86,6 +86,13 @@
         "button": "全部更新（{{count}}）",
         "confirm": "共 {{count}} 个插件有更新。每个插件更新都会重建并重启服务，一次装一个、刷新后自动接着装下一个。现在开始？"
       },
+      "upload": {
+        "button": "上传安装包",
+        "zipOnly": "只能上传 .zip 安装包",
+        "fileRequired": "请选择要上传的安装包",
+        "tooLarge": "安装包超过 {{size}}MB 上限",
+        "failed": "安装包上传失败"
+      },
       "empty": "市场目录为空：在 config/plugin-market.yaml 里登记插件后，这里就能一键安装",
       "remove.confirm": "卸载 {{name}}？将移除源码文件并重建服务（默认保留数据表，可在命令行用 --purge 清库）",
       "installLicense": {

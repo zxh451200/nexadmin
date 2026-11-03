@@ -101,4 +101,17 @@ defineMock([
       return null
     },
   },
+  // 批量删除：与后端同语义——ids 里有一条不存在就整批 404，成功返回 { deleted } 实际条数。
+  {
+    method: 'DELETE',
+    url: '/posts',
+    handler: ({ query }) => {
+      const ids = String(query.ids ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+      if (ids.length === 0) mockError(400, 'Bad request')
+      if (ids.some((id) => !items.some((x) => x.id === id))) mockError(404, 'Not found')
+      const before = items.length
+      items = items.filter((x) => !ids.includes(x.id))
+      return { deleted: before - items.length }
+    },
+  },
 ])

@@ -132,6 +132,26 @@ defineMock([
       return null
     },
   },
+  // 批量删除：与后端同语义——ids 里任一条不可删（不存在 / 内置角色）整批失败，成功才返回实际删除条数。
+  // 必须先于 createCrudMock 的 DELETE /roles 注册，否则会被那条只返回 null 的通用规则吃掉。
+  {
+    method: 'DELETE',
+    url: '/roles',
+    handler: ({ query }) => {
+      const ids = String(query.ids ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+      if (ids.length === 0) mockError(400, 'Bad request')
+      const rows = ids.map((id) => store.get(id))
+      if (rows.some((r) => !r)) mockError(404, 'Not found')
+      if (rows.some((r) => r?.builtin)) mockError(400, '内置角色不可删除')
+      rows.forEach((r) => {
+        if (r) {
+          store.remove(r.id)
+          roleMenus.delete(r.id) // 与后端一致：删角色连带清掉它的菜单授权
+        }
+      })
+      return { deleted: rows.length }
+    },
+  },
 ])
 
 const store = createCrudMock<Role>({

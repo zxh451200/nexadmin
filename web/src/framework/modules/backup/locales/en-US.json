@@ -8,6 +8,8 @@
     "running": "Backing up…",
     "started": "Backup started; the list refreshes automatically",
     "deleteConfirm": "Delete backup \"{{name}}\"? The file is removed from disk as well.",
+    "deleteBatchConfirm": "Delete the {{count}} selected backups? Their files are removed from disk as well.",
+    "deletedPartial": "Deleted {{deleted}} of {{total}} backups (the rest may already be gone or cleaned up by retention)",
     "btn": { "edit": "Manage backups", "download": "Download backup" },
     "unavailable": {
       "title": "Cannot back up: dump tool missing",

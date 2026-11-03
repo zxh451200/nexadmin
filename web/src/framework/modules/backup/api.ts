@@ -88,6 +88,18 @@ export function useDeleteBackup() {
   return useMutation({ mutationFn: (id: string) => api.del<void>(`/backups/${id}`), onSuccess: inv })
 }
 
+/**
+ * 批量删除备份：DELETE /backups?ids=1,2,3，判据与副作用同单条（文件连带删、有进行中的备份整批拒绝）。
+ * 返回体与后端一致：{ deleted: n }——请求里不存在/已被清理的 id 不计入 n。
+ */
+export function useDeleteBackups() {
+  const inv = useInvalidate()
+  return useMutation({
+    mutationFn: (ids: string[]) => api.del<{ deleted: number }>('/backups', { ids: ids.join(',') }),
+    onSuccess: inv,
+  })
+}
+
 export function useSaveBackupConfig() {
   const inv = useInvalidate()
   return useMutation({ mutationFn: (body: BackupConfig) => api.put<BackupConfig>('/backups/config', body), onSuccess: inv })

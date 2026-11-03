@@ -14,7 +14,7 @@
     "revokeConfirm": "Revoke \"{{title}}\"? Users will no longer see it.",
     "pinnedTag": "Pinned",
     "platformTag": "Platform",
-    "titleTooLong": "Title must be at most 100 characters",
+    "titleTooLong": "Title must be at most 200 characters",
     "contentRequired": "Please enter the notice content",
     "targetRequired": "Please select recipients",
     "expireAfterPublish": "Expiry must be later than the scheduled publish time",

@@ -2,12 +2,13 @@ import { useEffect, useRef, useState } from 'react'
 import { Download } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+import { RequiredMark } from '@/framework/components/RequiredMark'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
 import { Label } from '@/framework/ui/label'
+import { downloadCsv, saveBlob } from '@/framework/components/export/csv'
 import { blobExt, fetchImportTemplate, useImportUsers, type ImportResult } from './api'
-import { downloadCsv, saveBlob } from './csv'
 
 export interface ImportDialogProps {
   open: boolean
@@ -84,7 +85,10 @@ export function ImportDialog({ open, onOpenChange }: ImportDialogProps) {
           </Button>
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="user-import-file">{t('user.import.file')}</Label>
+          <Label htmlFor="user-import-file">
+            {t('user.import.file')}
+            <RequiredMark />
+          </Label>
           <Input
             id="user-import-file"
             ref={fileInput}

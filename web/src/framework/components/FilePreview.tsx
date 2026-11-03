@@ -43,7 +43,7 @@ export function FilePreview({ file, className, children }: FilePreviewProps) {
         <button type="button" aria-label={t('common.preview')} className="block size-full" onClick={() => setZoom(true)}>
           <img src={file.url} alt={file.name} className="aspect-square size-full object-cover" loading="lazy" />
         </button>
-        <Lightbox open={zoom} onOpenChange={setZoom} src={file.url} alt={file.name} />
+        <Lightbox open={zoom} onOpenChange={setZoom} slides={[{ src: file.url, alt: file.name }]} />
         {children}
       </div>
     )

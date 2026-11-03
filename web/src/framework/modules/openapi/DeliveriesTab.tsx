@@ -212,6 +212,17 @@ export function DeliveriesTab() {
               </div>
             ) : null}
             <div className="sm:col-span-2">
+              <DetailRow label={t('openapi.deliveries.fields.payload')}>
+                {detail.payload ? (
+                  <pre className="max-h-72 overflow-auto rounded-md border border-border bg-muted/40 p-3 text-xs whitespace-pre-wrap">
+                    {detail.payload.length > BODY_LIMIT ? detail.payload.slice(0, BODY_LIMIT) : detail.payload}
+                  </pre>
+                ) : (
+                  <span className="text-muted-foreground">{t('openapi.deliveries.noBody')}</span>
+                )}
+              </DetailRow>
+            </div>
+            <div className="sm:col-span-2">
               <DetailRow label={t('openapi.deliveries.fields.responseBody')}>
                 {body ? (
                   <pre className="max-h-72 overflow-auto rounded-md border border-border bg-muted/40 p-3 text-xs whitespace-pre-wrap">

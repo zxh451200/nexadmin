@@ -35,14 +35,13 @@
       "defaultPasswordHint": "新建用户的初始密码为 Nex@123456，首次登录后请修改"
     },
     "v": {
-      "usernameMin": "账号至少 3 个字符",
-      "usernameFormat": "账号只能包含字母、数字、下划线、点和短横线",
+      "usernameMin": "账号至少 2 个字符，最长 64 个",
+      "usernameFormat": "账号只能包含字母、数字、下划线、点、短横线和 @",
       "nicknameRequired": "请输入昵称",
       "phoneFormat": "手机号格式不正确",
       "emailFormat": "邮箱格式不正确",
       "deptRequired": "请选择部门",
       "rolesRequired": "请至少选择一个角色",
-      "passwordMin": "密码至少 8 位",
       "passwordMismatch": "两次输入的密码不一致"
     },
     "resetPassword": {

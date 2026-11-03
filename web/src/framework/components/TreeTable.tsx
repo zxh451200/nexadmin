@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { ChevronRight } from 'lucide-react'
+import { ChevronDown, ChevronRight, ChevronUp } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { DndContext, DragOverlay, type DragEndEvent, type DragStartEvent, type Modifier } from '@dnd-kit/core'
@@ -8,6 +8,7 @@ import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { useCompactLayout } from './table/use-compact-layout'
 import { useOverflowX } from './table/use-overflow-x'
 import { Button } from '@/framework/ui/button'
+import { Checkbox } from '@/framework/ui/checkbox'
 import { Skeleton } from '@/framework/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/framework/ui/table'
 import { cn } from '@/lib/utils'
@@ -43,6 +44,13 @@ export interface TreeTableProps<T extends { id: string; children?: T[] }> {
   defaultExpandAll?: boolean
   /** 筛选时用：不管记忆的展开状态，全部展开以便看到命中项 */
   forceExpandAll?: boolean
+  /**
+   * 行多选。树形语义：勾一个节点等于勾它整棵子树（与后端级联删除同口径），
+   * 父节点在只选中部分后代时显示半选。
+   */
+  selection?: { selected: string[]; onChange: (selected: string[]) => void }
+  /** 选中行后显示的批量操作；函数形式可拿到已选 id */
+  batchActions?: ReactNode | ((selected: string[]) => ReactNode)
   loading?: boolean
   toolbar?: ReactNode
   columnSettingsKey?: string
@@ -63,6 +71,25 @@ const DROP_LINE_INSET = 48
 const dampX: Modifier = ({ transform }) => ({ ...transform, x: transform.x * 0.5 })
 
 const groupId = (parentId: string | null) => `g:${parentId ?? ''}`
+
+/** 没传 selection 时的稳定空数组：每次新建会让 selectedSet 的 useMemo 失效 */
+const NO_SELECTION: string[] = []
+
+function SelectBox({
+  checked,
+  onChange,
+  label,
+}: {
+  checked: boolean | 'indeterminate'
+  onChange: () => void
+  label: string
+}) {
+  return (
+    <div className="flex h-11 w-11 shrink-0 items-center justify-center md:h-9 md:w-9" onClick={(e) => e.stopPropagation()}>
+      <Checkbox checked={checked} onCheckedChange={onChange} aria-label={label} />
+    </div>
+  )
+}
 
 function collectParents<T extends { id: string; children?: T[] }>(nodes: T[], out: string[] = []): string[] {
   for (const n of nodes) {
@@ -103,6 +130,8 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
   maxDepth,
   defaultExpandAll,
   forceExpandAll,
+  selection,
+  batchActions,
   loading,
   toolbar,
   columnSettingsKey,
@@ -290,9 +319,11 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
       const id = el.dataset.sortableId
       if (!id) continue
       const r = el.getBoundingClientRect()
-      const handle = el.querySelector<HTMLElement>('button[aria-label]')?.getBoundingClientRect()
-      // 名称列（第一个数据列，拖动把手排在它前面）的右边界：落位线只画到树那一列为止
-      const nameCell = el.querySelectorAll('td')[onReorder ? 1 : 0]?.getBoundingClientRect()
+      // 按 data 属性认把手：勾选框也是带 aria-label 的 button，按 aria-label 找会认错
+      const handle = (el.querySelector<HTMLElement>('button[data-drag-handle]') ?? el.querySelector<HTMLElement>('button[aria-label]'))?.getBoundingClientRect()
+      // 名称列（第一个数据列，把手与勾选列排在它前面）的右边界：落位线只画到树那一列为止
+      const leadingCells = (onReorder ? 1 : 0) + (selection ? 1 : 0)
+      const nameCell = el.querySelectorAll('td')[leadingCells]?.getBoundingClientRect()
       next.set(id, {
         top: r.top,
         bottom: r.bottom,
@@ -509,6 +540,22 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
       width: Math.round(e.active.rect.current.initial?.width ?? 0),
     })
   }
+
+  // 拖到折叠的父级上悬停 600ms 自动展开（Notion / Ant Tree 同款）：
+  // 不展开就只能靠「右拖挂进去」盲放，展开后子级露出来，落点一目了然。
+  // 指针一动 drop 就换 overId、计时器重置——悬停不动才触发。
+  // 展开会改变行布局，展开后下一帧重拍快照，落点计算才不会错位。
+  useEffect(() => {
+    if (!dragId || !drop || drop.mode === 'blocked') return
+    const node = findNode(tree, drop.overId)
+    if (!node?.children?.length || isOpen(node)) return
+    const timer = window.setTimeout(() => {
+      commitExpanded(new Set(expanded).add(node.id))
+      requestAnimationFrame(() => snapshotRects())
+    }, 600)
+    return () => window.clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dragId, drop, expanded])
   const onDragCancel = () => {
     setDragId(null)
     setDragChip(null)
@@ -688,7 +735,7 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
     )
   }
 
-  const colSpan = visibleColumns.length + (onReorder ? 1 : 0) + (rowActions ? 1 : 0)
+  const colSpan = visibleColumns.length + (onReorder ? 1 : 0) + (selection ? 1 : 0) + (rowActions ? 1 : 0)
   // 只有表格真的横向溢出时才吸附操作列
   const { ref: scrollRef, overflowing } = useOverflowX<HTMLDivElement>()
   const pinActions = overflowing && !!rowActions
@@ -715,6 +762,31 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
     return out
   }, [tree])
   const rowno = (id: unknown) => Math.max(1, flatIds.indexOf(String(id)) + 1)
+
+  // ---- 行多选（勾父带子）----
+  // 后端删父节点会级联删整棵子树，所以「选中」的口径必须和被删的集合一致：
+  // 勾一个节点就是勾它和它的全部后代，父节点只在选中部分后代时显示半选。
+  const selected = selection?.selected ?? NO_SELECTION
+  const selectedSet = useMemo(() => new Set(selected), [selected])
+  const subtreeIds = (node: T): string[] => [node.id, ...(node.children ?? []).flatMap(subtreeIds)]
+  const allRowsSelected = flatIds.length > 0 && flatIds.every((id) => selectedSet.has(id))
+  const toggleAllRows = () => {
+    if (!selection) return
+    selection.onChange(allRowsSelected ? [] : [...flatIds])
+  }
+  const toggleRowSelection = (node: T) => {
+    if (!selection) return
+    const ids = subtreeIds(node)
+    const picked = ids.every((id) => selectedSet.has(id))
+    selection.onChange(picked ? selected.filter((x) => !ids.includes(x)) : [...new Set([...selected, ...ids])])
+  }
+  const rowChecked = (node: T): boolean | 'indeterminate' => {
+    if (selectedSet.has(node.id)) return true
+    return subtreeIds(node).some((id) => selectedSet.has(id)) ? 'indeterminate' : false
+  }
+  const headChecked: boolean | 'indeterminate' = allRowsSelected
+    ? true
+    : selected.length > 0 ? 'indeterminate' : false
   const a11y = useMemo(
     () => ({
       announcements: {
@@ -755,6 +827,11 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
                 </div>
               </TableCell>
             ) : null}
+            {selection ? (
+              <TableCell className="w-12 py-0">
+                <SelectBox checked={rowChecked(node)} onChange={() => toggleRowSelection(node)} label={t('dataTable.selectRow')} />
+              </TableCell>
+            ) : null}
             {visibleColumns.map((c, ci) => (
               <TableCell key={c.key} className={cn('whitespace-nowrap', alignClass(c.align))}>
                 {ci === 0 ? (
@@ -784,11 +861,11 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
         return (
           <Fragment key={node.id}>
             {onReorder ? (
-              <SortableItem id={node.id} as="tr" className={cn('group', onRowClick && 'cursor-pointer', revealed.has(node.id) && 'tree-row-in')} {...clickProps(node)}>
+              <SortableItem id={node.id} as="tr" className={cn('group', onRowClick && 'cursor-pointer', selectedSet.has(node.id) && 'bg-muted/50', revealed.has(node.id) && 'tree-row-in')} {...clickProps(node)}>
                 {cells}
               </SortableItem>
             ) : (
-              <TableRow className={cn('group', onRowClick && 'cursor-pointer', revealed.has(node.id) && 'tree-row-in')} {...clickProps(node)}>
+              <TableRow className={cn('group', onRowClick && 'cursor-pointer', selectedSet.has(node.id) && 'bg-muted/50', revealed.has(node.id) && 'tree-row-in')} {...clickProps(node)}>
                 {cells}
               </TableRow>
             )}
@@ -808,6 +885,11 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
             {onReorder ? (
               <TableHead className="w-14">
                 <span className="sr-only">{t('dataTable.dragHandle')}</span>
+              </TableHead>
+            ) : null}
+            {selection ? (
+              <TableHead className="w-12">
+                <SelectBox checked={headChecked} onChange={toggleAllRows} label={t('dataTable.selectAllRows')} />
               </TableHead>
             ) : null}
             {visibleColumns.map((c) => (
@@ -869,6 +951,7 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
               dense
                 ? 'rounded-lg border border-border bg-card px-2 py-1 transition-colors hover:bg-muted/50'
                 : 'card-edge rounded-xl border border-border bg-card px-3 py-2.5',
+              selectedSet.has(node.id) && 'bg-muted/50',
               revealed.has(node.id) && 'tree-row-in',
             )}
           >
@@ -880,9 +963,44 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
               onClick={onRowClick ? () => onRowClick(node) : undefined}
               leading={
                 <>
+                  {selection ? (
+                    <SelectBox
+                      checked={rowChecked(node)}
+                      onChange={() => toggleRowSelection(node)}
+                      label={t('dataTable.selectRow')}
+                    />
+                  ) : null}
                   {onReorder ? (
                     <span className="inline-flex" onKeyDown={(e) => onRowKeyDown(e, node.id)}>
                       <SortableHandle />
+                    </span>
+                  ) : null}
+                  {/* 移动端的显式上/下移：长按拖拽在触屏上发现性差、滚动又容易误取消，
+                      一对相邻兄弟互换的按钮是最稳的兜底（与 Alt+方向键同一套 nudge 逻辑） */}
+                  {onReorder ? (
+                    <span className="inline-flex flex-col gap-0.5">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-5 w-5"
+                        disabled={index <= 0}
+                        aria-label={t('dataTable.moveUp')}
+                        onClick={() => void nudgeRow(node.id, -1)}
+                      >
+                        <ChevronUp className="size-3.5" aria-hidden="true" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-5 w-5"
+                        disabled={index >= nodes.length - 1}
+                        aria-label={t('dataTable.moveDown')}
+                        onClick={() => void nudgeRow(node.id, 1)}
+                      >
+                        <ChevronDown className="size-3.5" aria-hidden="true" />
+                      </Button>
                     </span>
                   ) : null}
                   {renderToggle(node, true)}
@@ -913,6 +1031,12 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
 
   const mobile = (
     <div className={dense ? 'flex flex-col gap-1.5' : 'flex flex-col gap-3'}>
+      {selection && tree.length > 0 && !loading ? (
+        <label className="flex min-h-11 items-center gap-1 text-sm text-muted-foreground">
+          <SelectBox checked={headChecked} onChange={toggleAllRows} label={t('dataTable.selectAllRows')} />
+          {t('common.selectAll')}
+        </label>
+      ) : null}
       {loading
         ? Array.from({ length: 4 }, (_, i) => (
             <div key={i} className="space-y-2 rounded-lg border border-border bg-card p-3">
@@ -949,6 +1073,22 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
           ) : null}
         </div>
       </div>
+
+      {selection && selected.length > 0 ? (
+        <div
+          className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted px-3 py-2"
+          role="region"
+          aria-label={t('dataTable.batchActions')}
+        >
+          <span className="num text-sm text-foreground">{t('dataTable.selectedCount', { count: selected.length })}</span>
+          <Button type="button" variant="ghost" size="sm" onClick={() => selection.onChange([])}>
+            {t('common.clear')}
+          </Button>
+          <div className="ms-auto flex flex-wrap items-center gap-2">
+            {typeof batchActions === 'function' ? batchActions(selected) : batchActions}
+          </div>
+        </div>
+      ) : null}
 
       {(onReorder || onMove) ? (
         <DndContext

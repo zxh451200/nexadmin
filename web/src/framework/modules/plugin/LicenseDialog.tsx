@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+import { RequiredMark } from '@/framework/components/RequiredMark'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
@@ -80,7 +81,10 @@ function LicenseDialogBody({ plugin, onOpenChange, initialContent }: Props) {
           {fileName ? <p className="truncate text-xs text-muted-foreground">{fileName}</p> : null}
         </div>
         <div className="space-y-2">
-          <Label htmlFor="plugin-license-text">{t('pluginMgr.license.paste')}</Label>
+          <Label htmlFor="plugin-license-text">
+            {t('pluginMgr.license.paste')}
+            <RequiredMark />
+          </Label>
           <Textarea
             id="plugin-license-text"
             rows={8}

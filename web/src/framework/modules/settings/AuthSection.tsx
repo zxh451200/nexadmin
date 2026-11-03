@@ -4,17 +4,61 @@ import { useTranslation } from 'react-i18next'
 import { z } from 'zod'
 import { ProviderIcon } from '@/framework/components/BrandIcon'
 import { FormGrid, FormGridFull } from '@/framework/components/FormLayout'
+import { cn } from '@/lib/utils'
 import { PROVIDER_KEYS, type AllSettings } from './api'
-import { SelectField, SwitchField, TextField, TextareaField } from './fields'
+import { SelectField, SwitchField, TextField, TextareaField, type AnyControl } from './fields'
 import { SectionCard } from './SectionCard'
 
-/** 开关行的图标 + 标签排版：基础方式和第三方方式两组对齐到同一列 */
-function RowLabel({ icon, label }: { icon: ReactNode; label: ReactNode }) {
+// 底座 size-9 + 间距 gap-3：展开的配置面板按同一宽度缩进，读起来才是「这个方式的下级」
+const INDENT = 'md:ms-12'
+
+/**
+ * 一条登录方式：图标底座在左，名称与说明同列排布，开关贴右边缘。
+ * 底座启用时点亮成品牌色——扫一眼左列就知道开了哪些，不用逐个去看右侧开关。
+ */
+function MethodRow({
+  control,
+  name,
+  icon,
+  enabled,
+  label,
+  description,
+  panel,
+}: {
+  control: AnyControl
+  name: string
+  icon: ReactNode
+  enabled: boolean
+  label: ReactNode
+  description?: ReactNode
+  panel?: ReactNode
+}) {
   return (
-    <span className="flex items-center gap-2.5">
-      <span className="shrink-0 text-muted-foreground">{icon}</span>
-      <span>{label}</span>
-    </span>
+    <div className="flex flex-col gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-muted/40">
+      <div className="flex items-center gap-3">
+        <span
+          aria-hidden="true"
+          className={cn(
+            'flex size-9 shrink-0 items-center justify-center rounded-lg border transition-colors',
+            enabled ? 'border-primary/30 bg-primary/10 text-primary' : 'border-border text-muted-foreground',
+          )}
+        >
+          {icon}
+        </span>
+        <SwitchField control={control} name={name} bare label={label} description={description} className="min-w-0 flex-1" />
+      </div>
+      {panel}
+    </div>
+  )
+}
+
+/** 分组标题：说明跟在标题右侧；组与组之间只靠留白分开，不画通栏分隔线 */
+function GroupLegend({ title, hint }: { title: string; hint?: string }) {
+  return (
+    <legend className="mb-1.5 text-sm font-semibold text-foreground">
+      {title}
+      {hint ? <span className="ms-2 text-xs font-normal text-muted-foreground">{hint}</span> : null}
+    </legend>
   )
 }
 
@@ -48,108 +92,115 @@ export function AuthSection({ value }: { value: AllSettings['auth'] }) {
     <SectionCard section="auth" value={value} schema={authSchema}>
       {(form) => (
         <>
-          <fieldset className="flex flex-col gap-2">
-            <legend className="mb-2 text-sm font-medium text-foreground">{t('settings.auth.basicMethods')}</legend>
-            <div className="divide-y divide-border border-y border-border">
-              <div className="py-3">
-                <SwitchField
-                  control={form.control}
-                  name="account"
-                  label={<RowLabel icon={<KeyRound className="size-[18px]" aria-hidden="true" />} label={t('settings.auth.account')} />}
-                  bare
-                />
-              </div>
-              <div className="py-3">
-                <SwitchField
-                  control={form.control}
-                  name="phone"
-                  label={<RowLabel icon={<Smartphone className="size-[18px]" aria-hidden="true" />} label={t('settings.auth.phone')} />}
-                  bare
-                />
-              </div>
+          <fieldset className="flex flex-col gap-1">
+            <GroupLegend title={t('settings.auth.basicMethods')} />
+            <div className="-mx-2">
+              <MethodRow
+                control={form.control}
+                name="account"
+                icon={<KeyRound className="size-[18px]" />}
+                enabled={form.watch('account')}
+                label={t('settings.auth.account')}
+              />
+              <MethodRow
+                control={form.control}
+                name="phone"
+                icon={<Smartphone className="size-[18px]" />}
+                enabled={form.watch('phone')}
+                label={t('settings.auth.phone')}
+              />
             </div>
           </fieldset>
 
-          <fieldset className="flex flex-col gap-2">
-            <legend className="mb-2 text-sm font-medium text-foreground">{t('settings.auth.thirdParty')}</legend>
-            {/* 平铺列表 + 分隔线：外层已经有卡片，再给每一行套边框会变成「卡片套卡片」 */}
-            <div className="divide-y divide-border border-y border-border">
+          <fieldset className="flex flex-col gap-1">
+            <GroupLegend title={t('settings.auth.thirdParty')} hint={t('settings.auth.thirdPartyHint')} />
+            <div className="-mx-2">
               {PROVIDER_KEYS.map((key) => {
                 const enabled = form.watch(`providers.${key}.enabled`)
                 return (
-                  <div key={key} className="flex flex-col gap-3 py-3">
-                    <SwitchField
-                      control={form.control}
-                      name={`providers.${key}.enabled`}
-                      bare
-                      label={<RowLabel icon={<ProviderIcon provider={key} className="size-[18px]" />} label={t(`settings.auth.providers.${key}`)} />}
-                      description={t(`settings.auth.providerHints.${key}`)}
-                    />
-                    {enabled ? (
-                      <div className="rounded-md bg-muted/40 p-3">
-                        <FormGrid>
-                          <TextField control={form.control} name={`providers.${key}.clientId`} label="Client ID" />
-                          <TextField control={form.control} name={`providers.${key}.clientSecret`} label="Client Secret" type="password" />
-                          {key === 'oidc' ? (
-                            <FormGridFull>
-                              <TextField
-                                control={form.control}
-                                name="providers.oidc.issuer"
-                                label="Issuer"
-                                type="url"
-                                inputMode="url"
-                                placeholder="https://idp.example.com"
-                              />
-                            </FormGridFull>
-                          ) : null}
-                        </FormGrid>
-                      </div>
-                    ) : null}
-                  </div>
+                  <MethodRow
+                    key={key}
+                    control={form.control}
+                    name={`providers.${key}.enabled`}
+                    icon={<ProviderIcon provider={key} className="size-[18px]" />}
+                    enabled={enabled}
+                    label={t(`settings.auth.providers.${key}`)}
+                    description={t(`settings.auth.providerHints.${key}`)}
+                    panel={
+                      enabled ? (
+                        <div className={cn('rounded-lg border border-border/60 bg-muted/50 p-3', INDENT)}>
+                          <FormGrid cols={2}>
+                            <TextField control={form.control} name={`providers.${key}.clientId`} label="Client ID" />
+                            <TextField
+                              control={form.control}
+                              name={`providers.${key}.clientSecret`}
+                              label="Client Secret"
+                              type="password"
+                            />
+                            {key === 'oidc' ? (
+                              <FormGridFull>
+                                <TextField
+                                  control={form.control}
+                                  name="providers.oidc.issuer"
+                                  label="Issuer"
+                                  type="url"
+                                  inputMode="url"
+                                  placeholder="https://idp.example.com"
+                                />
+                              </FormGridFull>
+                            ) : null}
+                          </FormGrid>
+                        </div>
+                      ) : null
+                    }
+                  />
                 )
               })}
             </div>
           </fieldset>
 
-          <FormGrid>
-            <SelectField
-              control={form.control}
-              name="matchBy"
-              label={t('settings.auth.matchBy')}
-              description={t('settings.auth.matchByHint')}
-              options={[
-                { value: 'phone', label: t('settings.auth.matchPhone') },
-                { value: 'email', label: t('settings.auth.matchEmail') },
-                { value: 'employeeNo', label: t('settings.auth.matchEmployeeNo') },
-              ]}
-            />
-            <TextField
-              control={form.control}
-              name="proxy"
-              label={t('settings.auth.proxy')}
-              description={t('settings.auth.proxyHint')}
-              type="url"
-              inputMode="url"
-              placeholder="http://proxy.example.com:8080"
-            />
-            <FormGridFull>
-              <SwitchField
+          <fieldset className="flex flex-col gap-3">
+            <GroupLegend title={t('settings.auth.matchLimit')} hint={t('settings.auth.matchLimitHint')} />
+            <FormGrid cols={2}>
+              <SelectField
                 control={form.control}
-                name="autoCreate"
-                label={t('settings.auth.autoCreate')}
-                description={t('settings.auth.autoCreateHint')}
+                name="matchBy"
+                label={t('settings.auth.matchBy')}
+                description={t('settings.auth.matchByHint')}
+                options={[
+                  { value: 'phone', label: t('settings.auth.matchPhone') },
+                  { value: 'email', label: t('settings.auth.matchEmail') },
+                  { value: 'employeeNo', label: t('settings.auth.matchEmployeeNo') },
+                ]}
               />
-            </FormGridFull>
-            <FormGridFull>
-              <TextareaField
+              <TextField
                 control={form.control}
-                name="allowedDomains"
-                label={t('settings.auth.allowedDomains')}
-                description={t('settings.auth.allowedDomainsHint')}
-                placeholder="example.com, corp.example.com"
+                name="proxy"
+                label={t('settings.auth.proxy')}
+                description={t('settings.auth.proxyHint')}
+                type="url"
+                inputMode="url"
+                placeholder="http://proxy.example.com:8080"
               />
-            </FormGridFull>
-          </FormGrid>
+              <FormGridFull>
+                <SwitchField
+                  control={form.control}
+                  name="autoCreate"
+                  label={t('settings.auth.autoCreate')}
+                  description={t('settings.auth.autoCreateHint')}
+                />
+              </FormGridFull>
+              <FormGridFull>
+                <TextareaField
+                  control={form.control}
+                  name="allowedDomains"
+                  label={t('settings.auth.allowedDomains')}
+                  description={t('settings.auth.allowedDomainsHint')}
+                  placeholder="example.com, corp.example.com"
+                />
+              </FormGridFull>
+            </FormGrid>
+          </fieldset>
         </>
       )}
     </SectionCard>

@@ -27,6 +27,7 @@
     },
     "confirm": {
       "delete": "Delete post \"{{name}}\"?"
-    }
+    },
+    "deleteBatchConfirm": "Delete the {{count}} selected posts? If any of them cannot be deleted (still assigned to a user), none of them are deleted."
   }
 }

@@ -24,7 +24,8 @@
     "action": { "download": "下载", "cancel": "取消", "retry": "重试", "delete": "删除", "refresh": "刷新" },
     "confirm": {
       "cancel": "确定取消该任务？",
-      "delete": "确定删除该任务及其结果文件？此操作不可恢复。"
+      "delete": "确定删除该任务及其结果文件？此操作不可恢复。",
+      "deleteBatch": "确定删除选中的 {{count}} 个任务及其结果文件？此操作不可恢复；其中若有未结束的任务，本次删除会整批失败。"
     },
     "toast": {
       "submitted": "已提交到导出中心",
@@ -34,7 +35,8 @@
       "failed": "导出失败",
       "canceled": "任务已取消",
       "retried": "已重新提交",
-      "deleted": "已删除"
+      "deleted": "已删除",
+      "deletedPartial": "已删除 {{deleted}}/{{total}} 个任务（其余可能已被删除）"
     },
     "duration": { "sec": "{{n}} 秒", "min": "{{m}} 分 {{s}} 秒" },
     "indicator": { "label": "导出中心，{{count}} 个任务进行中", "none": "导出中心" },

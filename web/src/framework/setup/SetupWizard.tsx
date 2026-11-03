@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { FormProvider, useForm } from 'react-hook-form'
+import { useForm } from 'react-hook-form'
 import { useNavigate } from 'react-router-dom'
 import { useMemo } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
@@ -10,6 +10,7 @@ import { BrandMark } from '@/framework/components/BrandMark'
 import { MOCK_ENABLED } from '@/framework/env'
 import { LanguageSwitch } from '@/framework/i18n/LanguageSwitch'
 import { Alert, AlertDescription, AlertTitle } from '@/framework/ui/alert'
+import { Form } from '@/framework/ui/form'
 import { Input } from '@/framework/ui/input'
 import { Label } from '@/framework/ui/label'
 import { ThemeToggle } from '@/framework/theme/ThemeToggle'
@@ -187,7 +188,7 @@ export default function SetupWizard() {
         </div>
 
         <SetupTokenContext.Provider value={setupToken}>
-        <FormProvider {...form}>
+        <Form {...form}>
           <form
             onSubmit={(e) => e.preventDefault()}
             noValidate
@@ -195,7 +196,8 @@ export default function SetupWizard() {
           >
             {phase !== 'done' && (
               <div className="space-y-2">
-                <Label htmlFor="setup-token">{t('setup.tokenLabel')}</Label>
+                {/* 安装令牌缺失时 execute 必失败（请求头 X-Setup-Token），属于事实必填 */}
+                <Label htmlFor="setup-token" required>{t('setup.tokenLabel')}</Label>
                 <div className="relative">
                   <Input id="setup-token" type={showToken ? 'text' : 'password'} autoComplete="off" spellCheck={false}
                     value={setupToken} disabled={locked} onChange={(e) => setSetupToken(e.target.value.trim())}
@@ -248,7 +250,7 @@ export default function SetupWizard() {
               </div>
             </div>
           </form>
-        </FormProvider>
+        </Form>
         </SetupTokenContext.Provider>
       </main>
     </div>
