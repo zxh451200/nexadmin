@@ -46,6 +46,7 @@ const (
 	ActionApprove     = "approve"
 	ActionReject      = "reject"
 	ActionCountersign = "countersign"
+	ActionTransfer    = "transfer"
 	ActionRollback    = "rollback"
 	ActionEscalate    = "escalate"
 	ActionWithdraw    = "withdraw"
@@ -111,9 +112,12 @@ type Instance struct {
 	Done           []string            `json:"done"`
 	Votes          map[string]Vote     `json:"votes"`
 	ExtraApprovers map[string][]string `json:"extraApprovers,omitempty"`
-	Vars           map[string]string   `json:"vars"`
-	History        []Event             `json:"history"`
-	Revision       int64               `json:"revision"`
+	// ReplacedApprovers 是转办产生的节点级审批人覆盖：key 是节点，value 是替换后的
+	// 审批人集合（转办即整组换成受让人）。回退清除该节点及其下游的覆盖。
+	ReplacedApprovers map[string][]string `json:"replacedApprovers,omitempty"`
+	Vars              map[string]string   `json:"vars"`
+	History           []Event             `json:"history"`
+	Revision          int64               `json:"revision"`
 }
 
 // PendingTask 是某个待审批节点上的一位待办人。
@@ -201,6 +205,10 @@ func modeOf(n Node) string {
 }
 
 func effectiveApprovers(n Node, inst *Instance) []string {
+	// 转办覆盖优先：整组替换定义与加签的审批人集合。
+	if replaced, ok := inst.ReplacedApprovers[n.Key]; ok {
+		return append([]string(nil), replaced...)
+	}
 	out := append([]string(nil), n.Approvers...)
 	for _, a := range inst.ExtraApprovers[n.Key] {
 		if !contains(out, a) {

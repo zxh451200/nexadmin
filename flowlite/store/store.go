@@ -121,8 +121,10 @@ type PendingTask struct {
 	Assignee string
 }
 
-// TaskQuery 是待办列表查询条件。
+// TaskQuery 是待办列表查询条件。Keyword 由实现侧决定匹配口径：插件实现按
+// 实例的标题 / 流程标识 / 业务键模糊匹配（待办表没有这些列，需要关联实例表）。
 type TaskQuery struct {
+	Keyword  string
 	Page     int
 	PageSize int
 }
@@ -148,10 +150,11 @@ type Action struct {
 	At      time.Time
 }
 
-// ActionQuery 是动作查询条件。
+// ActionQuery 是动作查询条件。Keyword 口径同 TaskQuery（按实例标题等模糊匹配）。
 type ActionQuery struct {
 	Actor    string
 	Actions  []string // 为空 = 全部动作
+	Keyword  string
 	Page     int
 	PageSize int
 }

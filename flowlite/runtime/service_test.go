@@ -68,7 +68,7 @@ func TestStartApproveFlow(t *testing.T) {
 		t.Fatal("实例必须带定义版本与快照")
 	}
 
-	tasks, total, err := svc.ListMinePending(ctx, "u1", 1, 20)
+	tasks, total, err := svc.ListMinePending(ctx, "u1", "", 1, 20)
 	if err != nil || total != 1 || len(tasks) != 1 || tasks[0].Inst.ID != res.Inst.ID {
 		t.Fatalf("u1 待办 = %d/%d %v", total, len(tasks), err)
 	}
@@ -76,7 +76,7 @@ func TestStartApproveFlow(t *testing.T) {
 	if _, err := svc.Act(ctx, res.Inst.ID, "u1", ActionApprove, ActionInput{Comment: "同意"}); err != nil {
 		t.Fatalf("u1 审批失败: %v", err)
 	}
-	tasks, total, _ = svc.ListMinePending(ctx, "u2", 1, 20)
+	tasks, total, _ = svc.ListMinePending(ctx, "u2", "", 1, 20)
 	if total != 1 || len(tasks) != 1 {
 		t.Fatalf("会签待办应到 u2/u3，实际 total=%d", total)
 	}
@@ -91,12 +91,12 @@ func TestStartApproveFlow(t *testing.T) {
 	if out.State.Status != engine.StatusApproved {
 		t.Fatalf("状态 = %s", out.State.Status)
 	}
-	_, total, _ = svc.ListMinePending(ctx, "u3", 1, 20)
+	_, total, _ = svc.ListMinePending(ctx, "u3", "", 1, 20)
 	if total != 0 {
 		t.Fatalf("结束后不应有待办，实际 %d", total)
 	}
 
-	handled, total, err := svc.ListMineHandled(ctx, "u2", 1, 20)
+	handled, total, err := svc.ListMineHandled(ctx, "u2", "", 1, 20)
 	if err != nil || total != 1 || handled[0].Inst.ID != res.Inst.ID {
 		t.Fatalf("我已办 = %d %v", total, err)
 	}
@@ -223,7 +223,7 @@ func TestCountersignRequiresApprover(t *testing.T) {
 	if _, err := svc.Act(ctx, res.Inst.ID, "u1", ActionCountersign, ActionInput{Approver: "u9", Comment: "请一起看"}); err != nil {
 		t.Fatalf("当前审批人加签失败: %v", err)
 	}
-	_, total, _ := svc.ListMinePending(ctx, "u9", 1, 20)
+	_, total, _ := svc.ListMinePending(ctx, "u9", "", 1, 20)
 	if total != 1 {
 		t.Fatalf("加签后 u9 应有待办，实际 %d", total)
 	}
@@ -260,7 +260,7 @@ func TestSweepEscalates(t *testing.T) {
 	if len(out.State.Current) != 1 || out.State.Current[0] != "n2" {
 		t.Fatalf("超时后应升级到 n2，Current = %v", out.State.Current)
 	}
-	_, total, _ := svc.ListMinePending(context.Background(), "u2", 1, 20)
+	_, total, _ := svc.ListMinePending(context.Background(), "u2", "", 1, 20)
 	if total != 1 {
 		t.Fatalf("升级后 u2 应有待办，实际 %d", total)
 	}

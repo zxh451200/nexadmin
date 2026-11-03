@@ -39,6 +39,7 @@ const (
 	ActionApprove     Action = "approve"
 	ActionReject      Action = "reject"
 	ActionCountersign Action = "countersign"
+	ActionTransfer    Action = "transfer"
 	ActionRollback    Action = "rollback"
 	ActionEscalate    Action = "escalate"
 	ActionWithdraw    Action = "withdraw"
@@ -100,6 +101,7 @@ type StartInput struct {
 type ActionInput struct {
 	Comment  string
 	Approver string // countersign 专用
+	To       string // transfer 专用：受让人
 	ToNode   string // rollback 专用
 }
 
@@ -286,6 +288,8 @@ func (s *Service) actOnce(ctx context.Context, id, actor string, act Action, in 
 		err = engine.Reject(*def, state, actor, in.Comment, now)
 	case ActionCountersign:
 		err = engine.Countersign(*def, state, actor, in.Approver, in.Comment, now)
+	case ActionTransfer:
+		err = engine.Transfer(*def, state, actor, in.To, in.Comment, now)
 	case ActionRollback:
 		err = engine.Rollback(*def, state, actor, in.ToNode, in.Comment, now)
 	case ActionEscalate:
@@ -337,7 +341,7 @@ func (s *Service) authorize(act Action, rec *store.Instance, def *engine.Definit
 		if rec.Submitter != actor {
 			return ErrNotOwner
 		}
-	case ActionCountersign, ActionEscalate:
+	case ActionCountersign, ActionTransfer, ActionEscalate:
 		if !engine.IsActiveApprover(*def, state, actor) {
 			return engine.ErrNotApprover
 		}
@@ -393,11 +397,12 @@ func (s *Service) emitEvent(ctx context.Context, name string, res *Result, actor
 }
 
 // ListMinePending 返回 assignee 的待办（含公开任务），按待办顺序返回实例视图。
-func (s *Service) ListMinePending(ctx context.Context, assignee string, page, pageSize int) ([]*Result, int64, error) {
+// keyword 按实例的标题 / 流程标识 / 业务键模糊过滤（实现在 TaskStore 侧）。
+func (s *Service) ListMinePending(ctx context.Context, assignee, keyword string, page, pageSize int) ([]*Result, int64, error) {
 	if s.Tasks == nil {
 		return nil, 0, nil
 	}
-	tasks, total, err := s.Tasks.ListPending(ctx, assignee, store.TaskQuery{Page: page, PageSize: pageSize})
+	tasks, total, err := s.Tasks.ListPending(ctx, assignee, store.TaskQuery{Keyword: keyword, Page: page, PageSize: pageSize})
 	if err != nil {
 		return nil, 0, err
 	}
@@ -428,14 +433,14 @@ func (s *Service) ListMinePending(ctx context.Context, assignee string, page, pa
 	return out, total, nil
 }
 
-// ListMineHandled 返回 assignee 处理过（同意/驳回）的实例。
-func (s *Service) ListMineHandled(ctx context.Context, assignee string, page, pageSize int) ([]*Result, int64, error) {
+// ListMineHandled 返回 assignee 处理过（同意/驳回）的实例。keyword 口径同 ListMinePending。
+func (s *Service) ListMineHandled(ctx context.Context, assignee, keyword string, page, pageSize int) ([]*Result, int64, error) {
 	if s.Actions == nil {
 		return nil, 0, nil
 	}
 	acts, total, err := s.Actions.List(ctx, store.ActionQuery{
 		Actor: assignee, Actions: []string{engine.ActionApprove, engine.ActionReject},
-		Page: page, PageSize: pageSize,
+		Keyword: keyword, Page: page, PageSize: pageSize,
 	})
 	if err != nil {
 		return nil, 0, err

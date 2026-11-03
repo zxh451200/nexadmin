@@ -15,14 +15,15 @@ func Start(def Definition, vars map[string]string, actor string, now time.Time) 
 		return nil, fmt.Errorf("%w: %s", ErrInvalidDefinition, strings.Join(errs, "；"))
 	}
 	inst := &Instance{
-		DefKey:         def.Key,
-		Status:         StatusRunning,
-		Current:        []string{def.Start},
-		Done:           []string{},
-		Votes:          map[string]Vote{},
-		ExtraApprovers: map[string][]string{},
-		Vars:           map[string]string{},
-		History:        []Event{},
+		DefKey:            def.Key,
+		Status:            StatusRunning,
+		Current:           []string{def.Start},
+		Done:              []string{},
+		Votes:             map[string]Vote{},
+		ExtraApprovers:    map[string][]string{},
+		ReplacedApprovers: map[string][]string{},
+		Vars:              map[string]string{},
+		History:           []Event{},
 	}
 	for k, v := range vars {
 		inst.Vars[k] = v
@@ -202,6 +203,33 @@ func Countersign(def Definition, inst *Instance, actor, approver, comment string
 	return nil
 }
 
+// Transfer 转办：把当前审批节点的待办转给另一个人。该节点此后的审批人集合
+// 整组替换为受让人（all 模式等于把会签改单人），转办人自己随即失去审批权；
+// 已投出的票保留——受让人接管的是「剩余的审批」，不是从零重签。
+func Transfer(def Definition, inst *Instance, actor, to, comment string, now time.Time) error {
+	if err := requireRunning(inst); err != nil {
+		return err
+	}
+	to = strings.TrimSpace(to)
+	if to == "" {
+		return fmt.Errorf("受让人不能为空")
+	}
+	node, err := activeApproval(def, inst)
+	if err != nil {
+		return err
+	}
+	if !canAct(effectiveApprovers(node, inst), actor) {
+		return fmt.Errorf("%w: user %s is not approver of %s", ErrNotApprover, actor, nodeName(node))
+	}
+	if inst.ReplacedApprovers == nil {
+		inst.ReplacedApprovers = map[string][]string{}
+	}
+	inst.ReplacedApprovers[node.Key] = []string{to}
+	inst.History = append(inst.History, Event{At: now, Node: node.Key, Actor: actor, Action: ActionTransfer, Comment: trimComment(comment, "转办给 "+to)})
+	inst.Revision++
+	return nil
+}
+
 // Rollback 回退：把 token 退回某个审批节点，清除该节点及其下游的投票与完成标记，
 // 使其可重新审批。只允许回退到审批节点。是否允许某个人回退由宿主鉴权决定。
 func Rollback(def Definition, inst *Instance, actor, toNode, comment string, now time.Time) error {
@@ -223,6 +251,7 @@ func Rollback(def Definition, inst *Instance, actor, toNode, comment string, now
 	for key := range down {
 		delete(inst.Votes, key)
 		delete(inst.ExtraApprovers, key)
+		delete(inst.ReplacedApprovers, key)
 	}
 	inst.Done = removeKeys(inst.Done, down)
 	inst.Current = []string{toNode}
@@ -252,6 +281,7 @@ func Escalate(def Definition, inst *Instance, actor, comment string, now time.Ti
 	inst.Done = removeKey(inst.Done, target)
 	delete(inst.Votes, target)
 	delete(inst.ExtraApprovers, target)
+	delete(inst.ReplacedApprovers, target)
 	inst.Current = []string{target}
 	inst.History = append(inst.History, Event{At: now, Node: target, Actor: actor, Action: ActionEscalate, Comment: comment})
 	inst.Revision++
