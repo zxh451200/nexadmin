@@ -8,17 +8,32 @@ import type { ParseResult, Verification, VerifyConfig, VerifyResult, VerifyStatu
 const WEIGHTS = [7, 9, 10, 5, 8, 4, 2, 1, 6, 3, 7, 9, 10, 5, 8, 4, 2]
 const CHECK_SET = '10X98765432'
 
-// 只放样本用到的几个区划，其余按「码不存在」处理，与后端的未知码分支同形。
-const REGIONS: Record<string, string[]> = {
-  '110101': ['北京市', '市辖区', '东城区'],
-  '110105': ['北京市', '市辖区', '朝阳区'],
-  '330106': ['浙江省', '杭州市', '西湖区'],
-  '440304': ['广东省', '深圳市', '福田区'],
-  '500154': ['重庆市', '市辖区', '开州区'],
-  '610104': ['陕西省', '西安市', '莲湖区'],
-  '810000': ['香港特别行政区'],
+// 三级分表存，逐级回退：与插件里包 core/region 的实现同一口径——
+// 县级查不到只把归属地停在省/地级，不能因此判号码非法。
+const PROVINCES: Record<string, string> = {
+  '11': '北京市', '41': '河南省', '44': '广东省', '50': '重庆市', '61': '陕西省', '81': '香港特别行政区', '83': '台湾地区',
 }
-const HISTORICAL = new Set(['500234'])
+const PREFECTURES: Record<string, string> = {
+  '1101': '市辖区', '4101': '郑州市', '4403': '深圳市', '5001': '市辖区', '6101': '西安市',
+}
+const COUNTIES: Record<string, string> = {
+  '110101': '东城区', '110105': '朝阳区', '410181': '巩义市', '440304': '福田区', '500154': '开州区', '610104': '莲湖区',
+}
+
+function resolveRegion(code: string): { path: string[]; level: number; ok: boolean } {
+  const path: string[] = []
+  let level = 0
+  const push = (name: string | undefined, lv: number) => {
+    if (!name) return
+    if (path[path.length - 1] === name) return
+    path.push(name)
+    level = lv
+  }
+  push(PROVINCES[code.slice(0, 2)], 1)
+  push(PREFECTURES[code.slice(0, 4)], 2)
+  push(COUNTIES[code], 3)
+  return { path, level, ok: level > 0 }
+}
 
 const normalize = (raw: string) =>
   raw
@@ -53,9 +68,8 @@ function parseNumber(raw: string): { ok: true; info: ParseResult } | { ok: false
   if (!/^\d{17}[0-9X]$/.test(n)) return { ok: false, reason: 'chars', masked }
 
   const code = n.slice(0, 6)
-  const names = REGIONS[code]
-  const historical = HISTORICAL.has(code)
-  if (!names && !historical) return { ok: false, reason: 'region', masked }
+  const region = resolveRegion(code)
+  if (!region.ok) return { ok: false, reason: 'region', masked }
 
   const y = Number(n.slice(6, 10))
   const mo = Number(n.slice(10, 12))
@@ -78,8 +92,9 @@ function parseNumber(raw: string): { ok: true; info: ParseResult } | { ok: false
       numberMasked: maskId(n),
       legacy,
       regionCode: code,
-      regionNames: historical ? [names?.[0] ?? '已撤销区划'] : names,
-      regionHistorical: historical,
+      regionNames: region.path,
+      regionLevel: region.level,
+      regionHistorical: false,
       birthday,
       sex: Number(n[16]) % 2 === 1 ? 'male' : 'female',
       age,
@@ -123,6 +138,17 @@ function row(partial: Partial<Verification> & { status: VerifyStatus }): Verific
 }
 
 const ledger: Verification[] = [
+  // 同一号码连提交两次：默认折叠成一行，切「全部留痕」能看到这两行。
+  row({
+    status: 'match',
+    nameMasked: '张**',
+    numberMasked: maskId('11010119900307803X'),
+    provider: 'generic',
+    providerMsg: '姓名与号码一致',
+    latencyMs: 176,
+    remark: '重复提交（第二次）',
+    createdAt: ago(30),
+  }),
   row({
     status: 'match',
     nameMasked: '张**',
@@ -243,6 +269,11 @@ defineMock([
       let rows = ledger
       if (status) rows = rows.filter((v) => v.status === status)
       if (kw) rows = rows.filter((v) => `${v.nameMasked}${v.numberMasked}${v.remark ?? ''}`.toLowerCase().includes(kw))
+      // 默认折叠：同一脱敏号码只留最新一条（列表本身按新到旧排），all=1 看全部留痕。
+      if (!query.all) {
+        const seen = new Set<string>()
+        rows = rows.filter((v) => (seen.has(v.numberMasked) ? false : (seen.add(v.numberMasked), true)))
+      }
       return paginate(rows, query)
     },
   },

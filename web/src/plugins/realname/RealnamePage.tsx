@@ -28,6 +28,7 @@ import {
 } from './api'
 
 const ALL = '__all'
+const FOLD = '__fold'
 const MASK = '********'
 
 // 格式结论与在线结论分开着色：valid 只是"号码合规则"，不该显示成绿色通过。
@@ -176,8 +177,8 @@ export default function RealnamePage() {
   const parse = useParse()
   const verify = useVerify()
 
-  const [draft, setDraft] = useState<{ keyword?: string; status?: VerifyStatus }>({})
-  const [filters, setFilters] = useState<{ keyword?: string; status?: VerifyStatus }>({})
+  const [draft, setDraft] = useState<{ keyword?: string; status?: VerifyStatus; all?: '1' }>({})
+  const [filters, setFilters] = useState<{ keyword?: string; status?: VerifyStatus; all?: '1' }>({})
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const { data, isLoading } = useVerifications({ ...filters, page, pageSize })
@@ -331,6 +332,13 @@ export default function RealnamePage() {
                   <dd>{parsed.status === 'valid' ? `${parsed.age ?? 0}` : '-'}</dd>
                 </div>
               </dl>
+              {parsed.status === 'valid' && (parsed.regionLevel ?? 3) < 3 ? (
+                <p className="text-xs text-muted-foreground">
+                  {t('plugin_realname.regionCoarseHint', {
+                    level: t(`plugin_realname.regionLevel.${parsed.regionLevel ?? 0}`),
+                  })}
+                </p>
+              ) : null}
               {parsed.legacy ? (
                 <p className="text-xs text-muted-foreground">{t('plugin_realname.legacyHint')}</p>
               ) : null}
@@ -374,6 +382,18 @@ export default function RealnamePage() {
                 {t(`plugin_realname.status.${s}`)}
               </SelectItem>
             ))}
+          </SelectContent>
+        </Select>
+        <Select
+          value={draft.all ?? FOLD}
+          onValueChange={(v) => setDraft((d) => ({ ...d, all: v === ALL ? '1' : undefined }))}
+        >
+          <SelectTrigger className="md:w-40" aria-label={t('plugin_realname.dedup')}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={FOLD}>{t('plugin_realname.dedupFolded')}</SelectItem>
+            <SelectItem value={ALL}>{t('plugin_realname.dedupAll')}</SelectItem>
           </SelectContent>
         </Select>
       </FilterBar>

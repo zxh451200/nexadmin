@@ -2,24 +2,61 @@ package idcard
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 )
 
-// 测试用区划码表：只放样本里出现过的码，其余一律 ok=false。
+// 测试用区划码表：只放样本里出现过的码，其余一律认不出。
 var stubRegions = map[string]string{
-	"110105": "朝阳区",
+	"110000": "北京市",
+	"110100": "市辖区",
 	"110101": "东城区",
+	"110105": "朝阳区",
+	"410000": "河南省",
+	"410100": "郑州市",
+	"410181": "巩义市",
+	"440000": "广东省",
+	"440300": "深圳市",
 	"440304": "福田区",
+	"500000": "重庆市",
+	"500100": "市辖区",
 	"500154": "开州区",
+	"610000": "陕西省",
+	"610100": "西安市",
 	"610104": "莲湖区",
 	"810000": "香港特别行政区",
 	"830000": "台湾地区",
 }
 
-func stubResolver(code string) (string, bool) {
-	name, ok := stubRegions[code]
-	return name, ok
+// stubRegion 逐级回退解析，与插件里包 core/region 的实现同一口径。
+func stubRegion(code string) ([]string, int, bool) { return walkStub(code, true) }
+
+// stubRegionNoCounty 模拟只同步到地级粒度的区划快照。
+func stubRegionNoCounty(code string) ([]string, int, bool) { return walkStub(code, false) }
+
+func walkStub(code string, withCounty bool) ([]string, int, bool) {
+	levels := []string{code[:2] + "0000", code[:4] + "00", code}
+	var path []string
+	level := 0
+	for i, c := range levels {
+		if i == 2 && !withCounty {
+			break
+		}
+		if i > 0 && c == levels[i-1] {
+			continue // 直辖市、省直辖县级：上级与本级代码同形
+		}
+		name, ok := stubRegions[c]
+		if !ok {
+			continue
+		}
+		path = append(path, name)
+		level = i + 1
+	}
+	if level == 0 {
+		return nil, 0, false
+	}
+	return path, level, true
 }
 
 func TestParseValid(t *testing.T) {
@@ -28,22 +65,23 @@ func TestParseValid(t *testing.T) {
 		raw      string
 		number   string
 		legacy   bool
-		region   string
+		path     string
+		level    int
 		birthday string
 		sex      string
 	}{
-		{"末位X", "11010519491231002X", "11010519491231002X", false, "朝阳区", "1949-12-31", SexFemale},
-		{"小写x与空白", " 11010119900307803x ", "11010119900307803X", false, "东城区", "1990-03-07", SexMale},
-		{"纯数字", "500154199301135886", "500154199301135886", false, "开州区", "1993-01-13", SexFemale},
-		{"闰日出生的号码", "440304198802291234", "440304198802291234", false, "福田区", "1988-02-29", SexMale},
-		{"港澳居民居住证", "810000199408230021", "810000199408230021", false, "香港特别行政区", "1994-08-23", SexFemale},
-		{"台湾居民居住证", "830000199201300022", "830000199201300022", false, "台湾地区", "1992-01-30", SexFemale},
-		{"全角数字", "５００１５４１９９３０１１３５８８６", "500154199301135886", false, "开州区", "1993-01-13", SexFemale},
-		{"15位升级", "610104620927690", "610104196209276908", true, "莲湖区", "1962-09-27", SexFemale},
+		{"末位X", "11010519491231002X", "11010519491231002X", false, "北京市/市辖区/朝阳区", 3, "1949-12-31", SexFemale},
+		{"小写x与空白", " 11010119900307803x ", "11010119900307803X", false, "北京市/市辖区/东城区", 3, "1990-03-07", SexMale},
+		{"纯数字", "500154199301135886", "500154199301135886", false, "重庆市/市辖区/开州区", 3, "1993-01-13", SexFemale},
+		{"闰日出生的号码", "440304198802291234", "440304198802291234", false, "广东省/深圳市/福田区", 3, "1988-02-29", SexMale},
+		{"港澳居民居住证", "810000199408230021", "810000199408230021", false, "香港特别行政区", 1, "1994-08-23", SexFemale},
+		{"台湾居民居住证", "830000199201300022", "830000199201300022", false, "台湾地区", 1, "1992-01-30", SexFemale},
+		{"全角数字", "５００１５４１９９３０１１３５８８６", "500154199301135886", false, "重庆市/市辖区/开州区", 3, "1993-01-13", SexFemale},
+		{"15位升级", "610104620927690", "610104196209276908", true, "陕西省/西安市/莲湖区", 3, "1962-09-27", SexFemale},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			info, err := Parse(tc.raw, stubResolver)
+			info, err := Parse(tc.raw, stubRegion)
 			if err != nil {
 				t.Fatalf("Parse(%q) 报错: %v", tc.raw, err)
 			}
@@ -53,8 +91,11 @@ func TestParseValid(t *testing.T) {
 			if info.Legacy != tc.legacy {
 				t.Errorf("Legacy = %v, want %v", info.Legacy, tc.legacy)
 			}
-			if info.RegionName != tc.region {
-				t.Errorf("RegionName = %q, want %q", info.RegionName, tc.region)
+			if got := strings.Join(info.RegionNames, "/"); got != tc.path {
+				t.Errorf("RegionNames = %q, want %q", got, tc.path)
+			}
+			if info.RegionLevel != tc.level {
+				t.Errorf("RegionLevel = %d, want %d", info.RegionLevel, tc.level)
 			}
 			if got := info.Birthday.Format("2006-01-02"); got != tc.birthday {
 				t.Errorf("Birthday = %s, want %s", got, tc.birthday)
@@ -62,20 +103,46 @@ func TestParseValid(t *testing.T) {
 			if info.Sex != tc.sex {
 				t.Errorf("Sex = %q, want %q", info.Sex, tc.sex)
 			}
-			if info.CheckBit != tc.number[len(tc.number)-1:] {
+			if info.CheckBit != tc.number[17:] {
 				t.Errorf("CheckBit = %q, want %q", info.CheckBit, tc.number[17:])
 			}
 		})
 	}
 }
 
+// 区划快照粒度不到县级时，合法号码仍应判合法，只把归属地停在能命中的层级。
+// 这条来自真实反馈：410181（巩义市）在只到地级的小区划快照里查不到，被误判成"格式不通过"。
+func TestCountyMissIsNotAnInvalidNumber(t *testing.T) {
+	info, err := Parse("41018119890415451X", stubRegionNoCounty)
+	if err != nil {
+		t.Fatalf("县级查不到不该判非法，实际: %v", err)
+	}
+	if got := strings.Join(info.RegionNames, "/"); got != "河南省/郑州市" {
+		t.Errorf("RegionNames = %q, want 河南省/郑州市", got)
+	}
+	if info.RegionLevel != 2 {
+		t.Errorf("RegionLevel = %d, want 2", info.RegionLevel)
+	}
+	if info.Birthday.Format("2006-01-02") != "1989-04-15" || info.Sex != SexMale {
+		t.Errorf("birthday/sex = %s/%s", info.Birthday.Format("2006-01-02"), info.Sex)
+	}
+	// 同一号码在完整数据下应能到县级。
+	full, err := Parse("41018119890415451X", stubRegion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if full.RegionLevel != 3 || strings.Join(full.RegionNames, "/") != "河南省/郑州市/巩义市" {
+		t.Errorf("完整数据下 = %q level %d", strings.Join(full.RegionNames, "/"), full.RegionLevel)
+	}
+}
+
 func TestParseLengthWithoutResolver(t *testing.T) {
-	// 不注入 resolver 时，区划码不存在的号码仍按号码规则判定通过。
+	// 不注入 resolver 时，区划码不参与判定。
 	if _, err := Parse("999999199003077759", nil); err != nil {
 		t.Fatalf("region=nil 应跳过区划码校验，实际: %v", err)
 	}
-	if _, err := Parse("999999199003077759", stubResolver); ReasonOf(err) != ReasonRegion {
-		t.Fatalf("未知区划码应报 region，实际: %v", err)
+	if _, err := Parse("999999199003077759", stubRegion); ReasonOf(err) != ReasonRegion {
+		t.Fatalf("连省级都认不出应报 region，实际: %v", err)
 	}
 }
 
@@ -100,7 +167,7 @@ func TestParseReasons(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := Parse(tc.raw, stubResolver)
+			_, err := Parse(tc.raw, stubRegion)
 			if ReasonOf(err) != tc.want {
 				t.Fatalf("Parse(%q) reason = %q (err=%v), want %q", tc.raw, ReasonOf(err), err, tc.want)
 			}
@@ -122,6 +189,7 @@ func TestChecksumMatchesStandard(t *testing.T) {
 		"50015419930113588": '6',
 		"44030419880229123": '4',
 		"61010419620927690": '8',
+		"41018119890415451": 'X',
 	}
 	for body, want := range cases {
 		got, err := Checksum(body)
@@ -152,18 +220,18 @@ func TestUpgrade(t *testing.T) {
 	if _, err := Upgrade("12345"); ReasonOf(err) != ReasonLength {
 		t.Fatalf("过短应报 length，实际 %v", err)
 	}
-	// 15 位号码自身没有校验位，升级后的号码校验位是自己补的，必须能再解析回去。
+	// 15 位号码本身没有校验位，升级后的校验位是自己补的，必须能再解析回去。
 	up, err := Upgrade("610104620927690")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Parse(up, stubResolver); err != nil {
+	if _, err := Parse(up, stubRegion); err != nil {
 		t.Fatalf("升级后的号码应可解析: %v", err)
 	}
 }
 
 func TestAgeAt(t *testing.T) {
-	info, err := Parse("11010119900307803X", stubResolver)
+	info, err := Parse("11010119900307803X", stubRegion)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -186,7 +254,7 @@ func TestAgeAt(t *testing.T) {
 	}
 
 	// 闰日出生的号码：非闰年按 3 月 1 日长岁。
-	leap, err := Parse("440304198802291234", stubResolver)
+	leap, err := Parse("440304198802291234", stubRegion)
 	if err != nil {
 		t.Fatal(err)
 	}

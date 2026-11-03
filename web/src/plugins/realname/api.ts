@@ -16,6 +16,8 @@ export interface ParseResult {
   legacy?: boolean
   regionCode?: string
   regionNames?: string[]
+  /** 1 省 / 2 地级 / 3 县级：小于 3 说明区划数据粒度或撤并导致只认到上级 */
+  regionLevel?: number
   regionHistorical?: boolean
   birthday?: string
   sex?: string
@@ -39,6 +41,8 @@ export interface Verification {
 
 export interface VerificationQuery extends PageQuery {
   status?: VerifyStatus
+  /** '1' = 显示全部留痕；缺省按号码折叠成最新一次 */
+  all?: '1'
 }
 
 export function useVerifications(query: VerificationQuery) {

@@ -34,18 +34,23 @@ const (
 	SexFemale = "female"
 )
 
-// RegionFunc 把 6 位区划码解析成名称；ok=false 表示码不存在。
-type RegionFunc func(code string) (name string, ok bool)
+// RegionFunc 解析 6 位区划码，返回最深命中层级的省/市/县路径与层级（1 省 / 2 地 / 3 县）。
+// ok=false 只用于连省级都认不出的码。
+//
+// 刻意不把"查不到县级"当错误：区划数据粒度、撤县设区、快照年份都会造成这种情况，
+// 号码合法性由校验位与出生日期决定，区划只是附带信息。
+type RegionFunc func(code string) (path []string, level int, ok bool)
 
 // Info 是解析成功的结果。Number 是归一化后的 18 位号码，含可能的 15 位升级。
 type Info struct {
-	Number     string
-	Legacy     bool // 由 15 位号码升级而来（15 位本身没有校验位）
-	RegionCode string
-	RegionName string // 注入了 RegionFunc 且命中时才有值
-	Birthday   time.Time
-	Sex        string
-	CheckBit   string
+	Number      string
+	Legacy      bool // 由 15 位号码升级而来（15 位本身没有校验位）
+	RegionCode  string
+	RegionNames []string // 注入 RegionFunc 且命中时才有值，最深只到实际命中的层级
+	RegionLevel int      // 1 省 / 2 地 / 3 县
+	Birthday    time.Time
+	Sex         string
+	CheckBit    string
 }
 
 // AgeAt 按 now 计算周岁；生日当天算已满岁，未到则减一岁。
@@ -145,11 +150,11 @@ func Parse(raw string, region RegionFunc) (Info, error) {
 	info := Info{Number: n, Legacy: legacy, RegionCode: n[:6], CheckBit: n[17:]}
 
 	if region != nil {
-		name, ok := region(info.RegionCode)
+		path, level, ok := region(info.RegionCode)
 		if !ok {
 			return Info{}, &Error{Reason: ReasonRegion, Detail: info.RegionCode}
 		}
-		info.RegionName = name
+		info.RegionNames, info.RegionLevel = path, level
 	}
 
 	birthday, err := time.Parse("20060102", n[6:14])

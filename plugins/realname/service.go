@@ -66,6 +66,7 @@ type ParseView struct {
 	Legacy           bool     `json:"legacy"`
 	RegionCode       string   `json:"regionCode,omitempty"`
 	RegionNames      []string `json:"regionNames,omitempty"`
+	RegionLevel      int      `json:"regionLevel"`
 	RegionHistorical bool     `json:"regionHistorical"`
 	Birthday         string   `json:"birthday,omitempty"`
 	Sex              string   `json:"sex,omitempty"`
@@ -85,13 +86,14 @@ func (s *Service) Parse(idType, number string) (*ParseView, error) {
 			NumberMasked: mask.IDCard(idcard.Normalize(number)),
 		}, nil
 	}
-	names, historical := regionTrail(info.RegionCode)
+	_, historical := region.HistoricalInfo(info.RegionCode)
 	return &ParseView{
 		Status:           StatusValid,
 		NumberMasked:     mask.IDCard(info.Number),
 		Legacy:           info.Legacy,
 		RegionCode:       info.RegionCode,
-		RegionNames:      names,
+		RegionNames:      info.RegionNames,
+		RegionLevel:      info.RegionLevel,
 		RegionHistorical: historical,
 		Birthday:         info.Birthday.Format("2006-01-02"),
 		Sex:              info.Sex,
@@ -230,9 +232,11 @@ func (s *Service) record(ctx context.Context, row *Verification) error {
 
 // ListQuery 是台账筛选条件。
 type ListQuery struct {
-	Keyword  string
-	Status   string
-	Scope    *datascope.Scope
+	Keyword string
+	Status  string
+	Scope   *datascope.Scope
+	// Latest 为真时同一号码只展示最近一次结论（默认），重复提交折叠成一行。
+	Latest   bool
 	Page     int
 	PageSize int
 }
@@ -248,12 +252,21 @@ func (s *Service) ListVerifications(ctx context.Context, q ListQuery) ([]Verific
 			tx = tx.Where(cond, args...)
 		}
 	}
-	if q.Status != "" {
-		tx = tx.Where("status = ?", q.Status)
-	}
-	if kw := strings.TrimSpace(q.Keyword); kw != "" {
+	kw := strings.TrimSpace(q.Keyword)
+	if kw != "" {
 		like := "%" + kw + "%"
 		tx = tx.Where("name_masked LIKE ? OR number_masked LIKE ? OR remark LIKE ?", like, like, like)
+	}
+	if q.Latest {
+		folded, ok := s.foldLatest(ctx, tx, q, kw)
+		if ok {
+			tx = folded
+		}
+		// 取不到租户上下文时不折叠：折叠必须建立在租户边界上，宁可多列几行也不跨租户取号。
+	}
+	// 结论筛选放在折叠之后：语义是"每个号码最新一次的结论"，而不是"最新一次恰好是该结论的行"。
+	if q.Status != "" {
+		tx = tx.Where("status = ?", q.Status)
 	}
 	var total int64
 	if err := tx.Count(&total).Error; err != nil {
@@ -272,6 +285,30 @@ func (s *Service) ListVerifications(ctx context.Context, q ListQuery) ([]Verific
 		return nil, 0, err
 	}
 	return rows, total, nil
+}
+
+// foldLatest 把同一号码的重复提交折叠成一行：只取每个 number_hash 的最新一条。
+//
+// 子查询必须自己带上租户与数据范围条件——core/database 的租户过滤是查询回调，
+// 而 gorm 拼子查询时不跑回调，漏带条件就会跨租户挑到别人的 id。
+func (s *Service) foldLatest(ctx context.Context, tx *gorm.DB, q ListQuery, kw string) (*gorm.DB, bool) {
+	tid, ok := tenant.From(ctx)
+	if !ok {
+		return nil, false
+	}
+	inner := s.db.WithContext(ctx).Model(&Verification{}).
+		Select("MAX(id) AS id").
+		Where("tenant_id = ?", tid)
+	if q.Scope != nil {
+		if cond, args, limited := q.Scope.UserIDCond("operator_id"); limited {
+			inner = inner.Where(cond, args...)
+		}
+	}
+	if kw != "" {
+		like := "%" + kw + "%"
+		inner = inner.Where("name_masked LIKE ? OR number_masked LIKE ? OR remark LIKE ?", like, like, like)
+	}
+	return tx.Where("id IN (?)", inner.Group("number_hash")), true
 }
 
 // ConfigView 是配置回显：密钥只回「有没有」，真值不下发浏览器。
@@ -489,38 +526,41 @@ func (s *Service) cacheStore(ctx context.Context, key, status, message string) {
 	_ = s.cache.Set(ctx, key, string(raw), verifyCacheTTL)
 }
 
-// lookupRegion 现行码优先，其次已撤销的历史码：老身份证的区划大多改过名或撤并，
-// 只认现行表会把合法号码判成非法。
-func lookupRegion(code string) (string, bool) {
-	if name, ok := region.Name(code); ok {
-		return name, true
-	}
-	if h, ok := region.HistoricalInfo(code); ok {
-		return h.Name, true
-	}
-	return "", false
-}
-
-// regionTrail 把 6 位区划码拆成省/市/县名称；同名层级合并（直辖市、不设区的市）。
-func regionTrail(code string) (names []string, historical bool) {
+// lookupRegion 逐级回退解析归属地：省 → 地 → 县，返回最深命中的路径与层级。
+//
+// 区划快照粒度不一（有的只同步到地级）、撤县设区、快照年份滞后，都会让身份证前 6 位
+// 查不到县级。这些都不算号码非法——合法性由校验位与出生日期决定，归属地只是附带信息。
+// 只有连省级都认不出（如 99xxxx）才判码不对。
+func lookupRegion(code string) (path []string, level int, ok bool) {
 	if len(code) != 6 {
-		return nil, false
+		return nil, 0, false
 	}
-	_, historical = region.HistoricalInfo(code)
-	seen := map[string]bool{}
-	for _, c := range []string{code[:2] + "0000", code[:4] + "0000", code} {
-		name, ok := region.Name(c)
-		if !ok {
-			if h, isHistorical := region.HistoricalInfo(c); isHistorical {
-				name, ok = h.Name, true
+	levels := []string{code[:2] + "0000", code[:4] + "00", code}
+	for i, c := range levels {
+		if i > 0 && c == levels[i-1] {
+			continue // 直辖市、省直辖县级单位：上级与本级代码同形
+		}
+		name, found := region.Name(c)
+		if !found {
+			if h, historical := region.HistoricalInfo(c); historical {
+				name = h.Name
+			} else {
+				continue
 			}
 		}
-		if ok && name != "" && !seen[name] {
-			seen[name] = true
-			names = append(names, name)
+		if name == "" {
+			continue
 		}
+		if len(path) > 0 && path[len(path)-1] == name {
+			continue // 同名层级不重复列
+		}
+		path = append(path, name)
+		level = i + 1
 	}
-	return names, historical
+	if level == 0 {
+		return nil, 0, false
+	}
+	return path, level, true
 }
 
 func checkIdType(idType string) error {

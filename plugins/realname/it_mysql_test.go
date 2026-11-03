@@ -93,6 +93,28 @@ func itCase(t *testing.T, db *gorm.DB) {
 	if !strings.Contains(dump, "110101") {
 		t.Errorf("台账脱敏串应保留区划前缀，实际 %s", dump)
 	}
+
+	// 同一号码重复提交：真引擎上折叠查询要只回一行，全部留痕要两行。
+	if _, err := svc.verify(ctx, VerifyInput{Number: validNumber, Name: fullName}, cfgForIT(u)); err != nil {
+		t.Fatalf("第二次核验: %v", err)
+	}
+	folded, foldedTotal, err := svc.ListVerifications(ctx, ListQuery{Latest: true, Page: 1, PageSize: 20})
+	if err != nil {
+		t.Fatalf("folded list: %v", err)
+	}
+	all, allTotal, err := svc.ListVerifications(ctx, ListQuery{Latest: false, Page: 1, PageSize: 20})
+	if err != nil {
+		t.Fatalf("full list: %v", err)
+	}
+	if allTotal != 2 || len(all) != 2 {
+		t.Errorf("全部留痕应有 2 行，实际 total=%d rows=%d", allTotal, len(all))
+	}
+	if foldedTotal != 1 || len(folded) != 1 {
+		t.Errorf("同一号码应折叠成 1 行，实际 total=%d rows=%d", foldedTotal, len(folded))
+	}
+	if len(folded) == 1 && folded[0].ID != all[0].ID {
+		t.Errorf("折叠应保留最新一条：folded=%v all[0]=%v", folded[0].ID, all[0].ID)
+	}
 }
 
 func itScanAll(t *testing.T, rows *sql.Rows, cols []string) string {
@@ -245,4 +267,9 @@ func itPGWithDB(dsn, name string) string {
 		out = append(out, "dbname="+name)
 	}
 	return strings.Join(out, " ")
+}
+
+// cfgForIT 复用假上游地址构造已启用的配置。
+func cfgForIT(u *upstream) *Config {
+	return enabledConfig(u.srv.URL, "it-key", 0)
 }

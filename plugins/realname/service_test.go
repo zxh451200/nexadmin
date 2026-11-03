@@ -361,3 +361,75 @@ func TestSaveConfigKeepsStoredSecret(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+// 巩义市 410181：真实反馈里被误判成"格式不通过"的号码，必须走通并给出完整三级归属地。
+func TestParseRealCountyLevelCity(t *testing.T) {
+	svc := NewService(nil, nil, nil)
+	v, err := svc.Parse("", "41018119890415451X")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Status != StatusValid {
+		t.Fatalf("status = %s reason = %s，合法号码被判非法", v.Status, v.Reason)
+	}
+	if got := strings.Join(v.RegionNames, "/"); got != "河南省/郑州市/巩义市" {
+		t.Errorf("RegionNames = %q，归属地路径不完整（中间层曾被我拼成 8 位码）", got)
+	}
+	if v.RegionLevel != 3 {
+		t.Errorf("RegionLevel = %d, want 3", v.RegionLevel)
+	}
+	if v.Birthday != "1989-04-15" || v.Sex != "male" {
+		t.Errorf("birthday/sex = %s/%s", v.Birthday, v.Sex)
+	}
+}
+
+// 折叠必须带上租户与数据范围条件：gorm 拼子查询不跑查询回调，租户过滤不会自动进去。
+func TestListFoldingCarriesTenantBoundaries(t *testing.T) {
+	db, m := mockDB(t)
+	// 折叠形态：外层 WHERE ... id IN (SELECT MAX(id) ... WHERE tenant_id ...)
+	m.ExpectQuery(`SELECT count.*FROM .plg_realname_verification. WHERE .*IN .*SELECT MAX\(id\).*tenant_id`).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+	m.ExpectQuery(`SELECT .* FROM .plg_realname_verification. WHERE .*IN .*SELECT MAX\(id\)`).
+		WillReturnRows(sqlmock.NewRows(verificationCols()))
+
+	svc := NewService(db, memCache(t), nil)
+	_, total, err := svc.ListVerifications(tenantCtx, ListQuery{Latest: true, Page: 1, PageSize: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 1 {
+		t.Fatalf("total = %d", total)
+	}
+	if err := m.ExpectationsWereMet(); err != nil {
+		t.Error(err)
+	}
+}
+
+// 没有租户上下文时不折叠：SQL 里不该出现子查询。锚定的 count 模式匹配不到带 WHERE 的折叠形态。
+func TestListWithoutTenantDoesNotFold(t *testing.T) {
+	db, m := mockDB(t)
+	m.ExpectQuery(`^SELECT count.*FROM .plg_realname_verification.$`).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(2))
+	m.ExpectQuery(`^SELECT .* FROM .plg_realname_verification. ORDER BY`).
+		WillReturnRows(sqlmock.NewRows(verificationCols()))
+
+	svc := NewService(db, memCache(t), nil)
+	rows, total, err := svc.ListVerifications(context.Background(), ListQuery{Latest: true, Page: 1, PageSize: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 2 || len(rows) != 0 {
+		t.Fatalf("total=%d rows=%d", total, len(rows))
+	}
+	if err := m.ExpectationsWereMet(); err != nil {
+		t.Error(err)
+	}
+}
+
+func verificationCols() []string {
+	return []string{
+		"id", "tenant_id", "created_at", "updated_at", "name_masked", "id_type",
+		"number_masked", "number_hash", "status", "reason", "provider", "provider_msg",
+		"latency_ms", "operator_id", "operator_name", "remark",
+	}
+}

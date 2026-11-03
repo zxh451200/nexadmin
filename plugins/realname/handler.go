@@ -65,7 +65,7 @@ func (h *handler) list(c *gin.Context) {
 	page, size := response.ParsePage(c)
 	rows, total, err := h.svc.ListVerifications(c.Request.Context(), ListQuery{
 		Keyword: c.Query("keyword"), Status: c.Query("status"),
-		Scope: sc, Page: page, PageSize: size,
+		Scope: sc, Latest: c.Query("all") != "1", Page: page, PageSize: size,
 	})
 	if err != nil {
 		response.Fail(c, err)
