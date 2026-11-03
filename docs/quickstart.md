@@ -16,7 +16,7 @@ go run ./cmd/nexadmin new myapp --out ../myapp --module example.com/myapp
 cd ../myapp
 ```
 
-把名称、输出目录与 Go module 路径替换成自己的值。输出目录须不存在或为空，且不能在母版目录内部。默认不初始化 Git、不提交；除 `totp`（两步验证，安全基线）外**不带其他插件**，不需要 MFA 可加 `--without-totp`；不要为开始业务开发加 `--with-plugins` 搬入母版的开发插件与状态。
+把名称、输出目录与 Go module 路径替换成自己的值。输出目录须不存在或为空，且不能在母版目录内部。默认不初始化 Git、不提交；除 `totp`（两步验证，安全基线）外**不带其他插件**，不需要 MFA 可加 `--without-totp`。要按业务挑插件用 `--plugins cron,codegen`——点名的插件连同 `web/src/plugins/<id>` 一起下发并写回 `plugins/plugins.go`，点错了（模板里没有）直接报错而不是静默少带；`--with-plugins` 会把母版全部插件搬过去，只在照搬母版时用。
 
 先读生成项目的 `AGENTS.md` 与 `.nexadmin.manifest.json`。业务后端放 `internal/`，页面放 `web/src/pages/`，迁移放 `migrations/business/`，配置只覆盖 `config/config.yaml`；升级边界见[二次开发指南](二次开发指南.md)。
 

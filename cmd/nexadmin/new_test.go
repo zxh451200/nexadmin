@@ -150,6 +150,68 @@ func TestNewWithPlugins(t *testing.T) {
 	}
 }
 
+func TestNewNamedPlugins(t *testing.T) {
+	dst, _, err := newTo(t, makeTemplate(t), newOptions{Module: "example.com/demo", Plugins: []string{"cron"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, rel := range []string{"plugins/cron/cron.go", "web/src/plugins/cron/index.ts"} {
+		if !has(dst, rel) {
+			t.Errorf("--plugins cron 应带上 %s", rel)
+		}
+	}
+	pl := readStr(t, dst, "plugins/plugins.go")
+	if !strings.Contains(pl, `_ "example.com/demo/plugins/cron"`) {
+		t.Errorf("--plugins cron 应写入导入:\n%s", pl)
+	}
+	if !strings.Contains(pl, "totp") {
+		t.Errorf("--plugins 不该弄丢 totp 基线:\n%s", pl)
+	}
+}
+
+func TestNewNamedTotpBeatsWithoutTotp(t *testing.T) {
+	dst, _, err := newTo(t, makeTemplate(t), newOptions{Module: "example.com/demo", WithoutTotp: true, Plugins: []string{"totp"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !has(dst, "plugins/totp/plugin.go") {
+		t.Error("显式点名 totp 应压过 --without-totp")
+	}
+	if pl := readStr(t, dst, "plugins/plugins.go"); !strings.Contains(pl, "totp") {
+		t.Errorf("显式点名的 totp 应写回导入:\n%s", pl)
+	}
+}
+
+func TestNewUnknownPlugin(t *testing.T) {
+	dst, _, err := newTo(t, makeTemplate(t), newOptions{Module: "example.com/demo", Plugins: []string{"nope"}})
+	if err == nil {
+		t.Fatal("点名的插件不存在时要报错，不能静默少带")
+	}
+	if !strings.Contains(err.Error(), "cron") {
+		t.Errorf("报错应给出可选清单: %v", err)
+	}
+	if has(dst, "core") || has(dst, "go.mod") {
+		t.Errorf("校验必须排在拷贝之前，别留下半成品项目: %s", dst)
+	}
+}
+
+func TestNewPluginsPathGuard(t *testing.T) {
+	_, _, err := newTo(t, makeTemplate(t), newOptions{Module: "example.com/demo", Plugins: []string{"../core"}})
+	if err == nil {
+		t.Fatal("带路径分隔符的插件名必须拒绝")
+	}
+	if !strings.Contains(err.Error(), "插件名不合法") {
+		t.Errorf("必须被名字校验拦下，而不是走到复制环节才炸: %v", err)
+	}
+}
+
+func TestNewPluginsMutexWithAll(t *testing.T) {
+	_, _, err := newTo(t, makeTemplate(t), newOptions{Module: "example.com/demo", WithPlugins: true, Plugins: []string{"cron"}})
+	if err == nil {
+		t.Fatal("--plugins 与 --with-plugins 同时给出要报错")
+	}
+}
+
 func TestNewRewriteImports(t *testing.T) {
 	dst, _, err := newTo(t, makeTemplate(t), newOptions{Module: "example.com/demo"})
 	if err != nil {

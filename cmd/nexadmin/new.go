@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -28,8 +29,54 @@ type newOptions struct {
 	Out         string
 	Module      string
 	WithPlugins bool
+	Plugins     []string
 	WithoutTotp bool
 	Git         bool
+}
+
+// carryPlugins 是 --with-plugins 之外要逐个下发的插件：默认只有安全基线 totp。
+// --plugins 里点名 totp 也只会带一次；--without-totp 只是撤掉基线，压不过显式点名。
+func carryPlugins(o newOptions) []string {
+	list := make([]string, 0, len(o.Plugins)+1)
+	if !o.WithoutTotp {
+		list = append(list, "totp")
+	}
+	for _, p := range o.Plugins {
+		if !slices.Contains(list, p) {
+			list = append(list, p)
+		}
+	}
+	return list
+}
+
+// listPluginIDs 列出模板 plugins/ 下可选的插件 id，供 --plugins 报错时给全清单。
+func listPluginIDs(root string) []string {
+	ents, err := os.ReadDir(filepath.Join(root, "plugins"))
+	if err != nil {
+		return nil
+	}
+	var ids []string
+	for _, e := range ents {
+		if e.IsDir() {
+			ids = append(ids, e.Name())
+		}
+	}
+	sort.Strings(ids)
+	return ids
+}
+
+// validateCarryPlugins 在拷贝之前先检查点名的插件：一个拼错的 id 不该换来一个半成品项目目录，
+// 而带路径分隔符的名字会直接拼进 plugins/<id> 的拷贝路径，必须在这里挡掉。
+func validateCarryPlugins(root string, o newOptions) error {
+	for _, id := range carryPlugins(o) {
+		if !projectNameRe.MatchString(id) {
+			return fmt.Errorf("插件名不合法: %q（只能是字母数字 . _ -，且不以分隔符开头）", id)
+		}
+		if _, err := os.Stat(filepath.Join(root, "plugins", id)); err != nil && slices.Contains(o.Plugins, id) {
+			return fmt.Errorf("模板里没有插件 %q；可选：%s", id, strings.Join(listPluginIDs(root), ", "))
+		}
+	}
+	return nil
 }
 
 // ---- 排除规则 ----
@@ -78,8 +125,8 @@ func newSkip(rel string, isDir bool, withPlugins bool) bool {
 	return false
 }
 
-// copyDefaultPlugin 复制默认随项目交付的插件（plugins/<id> 与 web/src/plugins/<id>）。
-// 最小模板可能不带该插件，此时返回 false 且不写导入。
+// copyDefaultPlugin 复制随项目交付的插件（plugins/<id> 与 web/src/plugins/<id>），
+// 基线插件和 --plugins 点名的插件都走这里。最小模板可能不带该插件，此时返回 false 且不写导入。
 func copyDefaultPlugin(root, dst, id string) (bool, error) {
 	copied := false
 	for _, rel := range []string{filepath.Join("plugins", id), filepath.Join("web", "src", "plugins", id)} {

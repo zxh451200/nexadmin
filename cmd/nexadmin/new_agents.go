@@ -57,7 +57,7 @@ var agentsMD = strings.ReplaceAll(`# AI 开发规则（AGENTS.md）
 - ^plugin list|install [--force] <目录或zip>|remove <id>|keygen|sign|revoke^ 管理源码插件（^sign^ / ^revoke^ 是发行方用的授权签发与吊销，二开者一般不需要）。
 - ^add module <名称> [--fields "title:string,status:dict(sys_status),owner_id:ref(user)"] [--sortable]^：生成后端 ^internal/modules/<名>/^、迁移 ^migrations/business/*/NNN_<名>.sql^、前端 ^web/src/pages/<名>/^，幂等追加空导入；重启自动执行迁移并补菜单（新菜单超管默认可见，其他角色到「角色管理」分配）。字段类型 string text int float bool date datetime dict(编码) ref(资源) image file。生成后补业务逻辑，别重写骨架；已存在的目录拒绝覆盖。
 - ^i18n add <locale> [--name 显示名] [--dir ltr|rtl]^ 加语言；^i18n check [--all]^ 查缺失翻译（只提示）。
-- ^new <名称> [--out 目录] [--module go模块路径] [--with-plugins] [--git]^ 派生新项目；^upgrade^ 见下节。
+- ^new <名称> [--out 目录] [--module go模块路径] [--plugins id,id | --with-plugins] [--without-totp] [--git]^ 派生新项目（默认只带 totp 基线，^--plugins^ 点名要带哪几个）；^upgrade^ 见下节。
 - ^release check [--strict]^、^release pack^：框架发版用，二开者一般不需要。
 - 开发：后端 ^go run ./cmd/server^；前端 ^cd web && npm install && npm run dev^；生产迁移 ^nexadmin-server migrate [--status|--dry-run]^。
 - 提交前：^go build ./... && go vet ./... && go test ./...^；前端 ^cd web && npx tsc --noEmit && npm run build^。

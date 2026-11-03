@@ -16,7 +16,7 @@ go run ./cmd/nexadmin new myapp --out ../myapp --module example.com/myapp
 cd ../myapp
 ```
 
-Replace the name, output directory and Go module path. The destination must be absent or empty and outside the template directory. By default, this neither initializes Git nor commits and includes **no plugins other than `totp`** (two-factor, part of the security baseline); pass `--without-totp` if you do not need MFA. Do not add `--with-plugins` just to start business development with the template's development plugins and state.
+Replace the name, output directory and Go module path. The destination must be absent or empty and outside the template directory. By default, this neither initializes Git nor commits and includes **no plugins other than `totp`** (two-factor, part of the security baseline); pass `--without-totp` if you do not need MFA. To pick plugins per business, use `--plugins cron,codegen` — each named plugin is copied together with its `web/src/plugins/<id>` tree and re-added to `plugins/plugins.go`, and an id the template does not have fails the command instead of being skipped silently. Use `--with-plugins` only when you really want to carry every plugin the template ships with.
 
 Read the generated `AGENTS.md` and `.nexadmin.manifest.json`. Put backend business code in `internal/`, pages in `web/src/pages/`, migrations in `migrations/business/`, and configuration overrides in `config/config.yaml`. See the [Customization Guide](dev-guide.md) for upgrade boundaries.
 

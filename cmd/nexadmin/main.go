@@ -7,7 +7,7 @@
 //	nexadmin plugin sign --key <私钥> --plugin <id> --customer <名称> --expires <2027-01-01> [--domains a.com,b.com] [--serial <序列号>] [--out 文件]
 //	nexadmin plugin revoke --key <私钥> --serial <序列号> --reason <原因> [--plugin <id>] [--list 现有清单] [--out config/license-revoked.json]
 //	nexadmin upgrade --from <源码包目录或zip> [--to <版本>] [--dry-run] [--manifest .nexadmin.manifest.json] [--allow-dirty]
-//	nexadmin new <名称> [--out <目录>] [--module <go模块路径>] [--with-plugins] [--git]
+//	nexadmin new <名称> [--out <目录>] [--module <go模块路径>] [--plugins <id,id> | --with-plugins] [--without-totp] [--git]
 //	nexadmin add module <名称> [--fields "title:string,status:dict(sys_status)"] [--sortable]
 //	nexadmin i18n add <locale> [--name <显示名>] [--dir ltr|rtl]
 //	nexadmin i18n check [--all]
@@ -58,7 +58,8 @@ const usage = `用法:
   nexadmin plugin lint <插件目录（含 plugin.yaml）>
                       上架前自检：清单校验、迁移三方言齐全、菜单权限码前缀
   nexadmin upgrade --from <源码包目录或zip> [--to <版本>] [--dry-run] [--manifest .nexadmin.manifest.json] [--allow-dirty]
-  nexadmin new <名称> [--out <目录,默认 ../名称>] [--module <go模块路径,默认 名称>] [--with-plugins] [--git]
+  nexadmin new <名称> [--out <目录,默认 ../名称>] [--module <go模块路径,默认 名称>] [--plugins <id,id> | --with-plugins] [--without-totp] [--git]
+                      派生新项目：默认只带 totp 安全基线插件，--plugins 点名要带哪几个，--with-plugins 全带
   nexadmin add module <名称> [--fields "title:string,status:dict(sys_status),sort:int,cover:image,published_at:datetime,owner_id:ref(user)"] [--sortable]
   nexadmin i18n add <locale> [--name <显示名>] [--dir ltr|rtl] [--translate]
   nexadmin i18n check [--all]
