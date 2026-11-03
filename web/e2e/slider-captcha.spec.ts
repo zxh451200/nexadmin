@@ -92,9 +92,9 @@ async function dragTo(page: Page, targetImgX: number) {
 /** 连错 N 次密码，把 mock 推到「登录必须带验证码」的状态（与后端同一阈值 3 次） */
 async function forceCaptchaEnforced(page: Page, account: string, times: number) {
   for (let i = 0; i < times; i++) {
-    await page.getByLabel('用户名').fill(account)
-    await page.getByLabel('密码').fill('nope')
-    await page.getByRole('button', { name: '登录' }).click()
+    await page.getByRole('textbox', { name: '用户名' }).fill(account)
+    await page.getByRole('textbox', { name: '密码' }).fill('nope')
+    await page.getByRole('button', { name: '登录', exact: true }).click()
     await expect(page.getByRole('slider')).toBeVisible()
     await page.waitForTimeout(400) // 失败后表单会清空并重取挑战，等它换完
   }
@@ -108,9 +108,9 @@ test('拖到孔位即通过，token 能被登录接口的验证码通道消费',
   await dragTo(page, await holeOf(page))
   await expect(page.getByText('验证通过')).toBeVisible()
 
-  await page.getByLabel('用户名').fill(account)
-  await page.getByLabel('密码').fill('pw-for-e2e')
-  await page.getByRole('button', { name: '登录' }).click()
+  await page.getByRole('textbox', { name: '用户名' }).fill(account)
+  await page.getByRole('textbox', { name: '密码' }).fill('pw-for-e2e')
+  await page.getByRole('button', { name: '登录', exact: true }).click()
   await expect(page).not.toHaveURL(/\/login/, { timeout: 20_000 })
 })
 
