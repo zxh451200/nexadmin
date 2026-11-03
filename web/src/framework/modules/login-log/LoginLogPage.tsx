@@ -21,7 +21,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/framework/ui/tabs'
 import { isExportTooMany } from '../oper-log/api'
 import { fmtDateTime, stamp } from '../oper-log/format'
 import { blobExt } from '../user/api'
-import { saveBlob } from '../user/csv'
+import { saveBlob } from '@/framework/components/export/csv'
 import {
   LOGIN_TYPES,
   exportLoginLogs,

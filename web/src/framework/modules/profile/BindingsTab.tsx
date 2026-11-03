@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
+import { RequiredMark } from '@/framework/components/RequiredMark'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
@@ -78,7 +79,10 @@ function PhoneDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
     >
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-2">
-          <Label htmlFor="bind-phone">{t('profile.bindings.phoneInput')}</Label>
+          <Label htmlFor="bind-phone">
+            {t('profile.bindings.phoneInput')}
+            <RequiredMark />
+          </Label>
           <Input
             id="bind-phone"
             type="tel"
@@ -90,7 +94,10 @@ function PhoneDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
           />
         </div>
         <div className="flex flex-col gap-2">
-          <Label htmlFor="bind-code">{t('profile.bindings.codeInput')}</Label>
+          <Label htmlFor="bind-code">
+            {t('profile.bindings.codeInput')}
+            <RequiredMark />
+          </Label>
           <div className="flex gap-2">
             <Input
               id="bind-code"

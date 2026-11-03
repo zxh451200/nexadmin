@@ -22,6 +22,7 @@
       "neverWarning": "A token that never expires stays valid for as long as it is leaked, which is risky. Set an expiry and rotate it regularly.",
       "revoke": "Revoke",
       "revokeConfirm": "Token \"{{name}}\" stops working immediately and programs using it lose access. This cannot be undone. Revoke it?",
+      "deleteBatchConfirm": "The {{count}} selected token(s) stop working immediately and programs using them lose access. This cannot be undone. Revoke them?",
       "revoked": "Token revoked",
       "fields": {
         "name": "Name",

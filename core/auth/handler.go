@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 
 	"github.com/gin-gonic/gin"
@@ -164,6 +165,27 @@ func (h *Handler) Captcha(c *gin.Context) {
 	}
 	c.Header("Cache-Control", "no-store")
 	response.OK(c, gin.H{"key": key, "image": img})
+}
+
+// CaptchaAudio GET /auth/captcha/:key/audio：把同一张验证码读成音频（WAV 的 data URI），供视障用户听写。
+// 只读不消费（消费只在 VerifyCaptcha），所以能反复听；lang 缺省时按请求协商出的界面语言选语音包。
+// 走 JSON 而不是裸字节，是为了和图形验证码共用同一条前端链路（含 mock 模式），代价是 base64 膨胀约三分之一。
+func (h *Handler) CaptchaAudio(c *gin.Context) {
+	lang := c.Query("lang")
+	if lang == "" {
+		lang = i18n.Lang(c.Request.Context())
+	}
+	wav, err := h.Svc.CaptchaAudio(c.Request.Context(), c.Param("key"), c.ClientIP(), lang)
+	if errors.Is(err, errCaptchaUnavailable) {
+		response.Fail(c, response.NotFound("auth.captcha_invalid"))
+		return
+	}
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	c.Header("Cache-Control", "no-store")
+	response.OK(c, gin.H{"audio": "data:audio/wav;base64," + base64.StdEncoding.EncodeToString(wav)})
 }
 
 // Refresh POST /auth/refresh  body: {refreshToken}

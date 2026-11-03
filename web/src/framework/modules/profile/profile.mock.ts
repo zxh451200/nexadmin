@@ -175,6 +175,22 @@ defineMock([
   },
   {
     method: 'DELETE',
+    url: '/profile/tokens',
+    handler: ({ query }): { deleted: number } => {
+      // 与后端同口径：?ids= 空或非法直接 400，一条都不动；一条都没命中（含越权 id）则 404
+      const raw = String(query.ids ?? '').trim()
+      const ids = raw.split(',').map((x) => x.trim()).filter(Boolean)
+      if (!raw || !ids.length || ids.some((x) => !/^[1-9][0-9]*$/.test(x))) mockError(400, 'Invalid ids')
+      const target = new Set(ids)
+      const before = tokens.length
+      tokens = tokens.filter((x) => !target.has(x.id))
+      const deleted = before - tokens.length
+      if (!deleted) mockError(404, 'Not found')
+      return { deleted }
+    },
+  },
+  {
+    method: 'DELETE',
     url: '/profile/tokens/:id',
     handler: ({ params }) => {
       if (!tokens.some((x) => x.id === params.id)) mockError(404, 'Not found')

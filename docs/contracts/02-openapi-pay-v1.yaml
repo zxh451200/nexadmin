@@ -111,6 +111,8 @@ paths:
         - { name: channelCode, in: query, schema: { type: string } }
         - { name: bizType, in: query, schema: { type: string } }
         - { name: subjectId, in: query, schema: { type: string } }
+        - { name: createdFrom, in: query, schema: { type: string, format: date }, description: 下单日期起（含，yyyy-mm-dd，应用时区；非法值报 PAY_DATE_INVALID） }
+        - { name: createdTo, in: query, schema: { type: string, format: date }, description: 下单日期止（含，yyyy-mm-dd，应用时区） }
       responses:
         '200':
           description: 分页列表
@@ -124,6 +126,41 @@ paths:
                       data:
                         allOf:
                           - $ref: '#/components/schemas/PageOfOrderView'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /orders/export:
+    get:
+      tags: [orders]
+      summary: 按当前筛选导出全部支付单（JSON 列表，CSV 由前端生成）
+      operationId: exportPayOrders
+      x-permission: pay:list
+      description: 不带分页；命中行数超过 10000 时报 PAY_EXPORT_TOO_MANY，调用方应缩小日期范围而不是重试。
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [pending, succeeded, failed, closed, refunding, partially_refunded, refunded] } }
+        - { name: keyword, in: query, schema: { type: string } }
+        - { name: channelCode, in: query, schema: { type: string } }
+        - { name: bizType, in: query, schema: { type: string } }
+        - { name: subjectId, in: query, schema: { type: string } }
+        - { name: scene, in: query, schema: { type: string } }
+        - { name: failReason, in: query, schema: { type: string } }
+        - { name: createdFrom, in: query, schema: { type: string, format: date } }
+        - { name: createdTo, in: query, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: 全量列表（不超过 10000 行）
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/OrderView'
+        '400': { $ref: '#/components/responses/BadRequest' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
   /orders/by-biz:
@@ -539,6 +576,33 @@ paths:
                       data: { $ref: '#/components/schemas/ChannelView' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '409': { $ref: '#/components/responses/Conflict' }
+    delete:
+      tags: [channels]
+      summary: 批量删除渠道实例
+      description: |
+        管理端批量删除：与单条 DELETE /channels/{id} 完全同口径（无额外护栏、无连带清理）。
+        只删点名的 id；越权 / 不存在的 id 不计入实删数；一条都没命中回 404；
+        ids 缺失或任一项非法回 400，绝不退化成「不带 ids 就删全部渠道」。
+      operationId: deleteChannelsBatch
+      x-permission: pay:channel
+      parameters:
+        - { name: ids, in: query, required: true, schema: { type: string }, description: 逗号分隔的渠道实例 ID（雪花 ID 字符串） }
+      responses:
+        '200':
+          description: 已删除，data.deleted 为实删条数
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          deleted: { type: integer, format: int64 }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
 
   /channels/{id}:
     delete:
@@ -1325,6 +1389,8 @@ components:
             - PAY_CAPABILITY_UNSUPPORTED
             - PAY_NOTIFY_STALE
             - PAY_PAYOUT_SETTLEMENT_TAKEN
+            - PAY_DATE_INVALID
+            - PAY_EXPORT_TOO_MANY
             - PAY_INTERNAL
 
     Amount:

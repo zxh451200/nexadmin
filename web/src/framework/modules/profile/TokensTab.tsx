@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { ExportCsvButton } from '@/framework/components/export/ExportCsvButton'
+import { RequiredMark } from '@/framework/components/RequiredMark'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
@@ -12,7 +14,16 @@ import { Label } from '@/framework/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import { fmtDateTime } from '../oper-log/format'
 import { CodeBlock, RevealDialog } from '../openapi/RevealDialog'
-import { useAccessTokens, useCreateAccessToken, useRevokeAccessToken, type AccessToken, type AccessTokenCreated, type TokenScope } from './api'
+import {
+  fetchAllAccessTokens,
+  useAccessTokens,
+  useCreateAccessToken,
+  useRevokeAccessToken,
+  useRevokeAccessTokens,
+  type AccessToken,
+  type AccessTokenCreated,
+  type TokenScope,
+} from './api'
 
 const DAY = 86400000
 const SOON_DAYS = 7
@@ -96,7 +107,10 @@ function CreateDialog({
         noValidate
       >
         <div className="flex flex-col gap-2">
-          <Label htmlFor="token-name">{t('profile.tokens.fields.name')}</Label>
+          <Label htmlFor="token-name">
+            {t('profile.tokens.fields.name')}
+            <RequiredMark />
+          </Label>
           <Input
             id="token-name"
             value={name}
@@ -158,15 +172,28 @@ export function TokensTab() {
   const confirm = useConfirm()
   const { data, isLoading } = useAccessTokens()
   const revoke = useRevokeAccessToken()
+  const revokeBatch = useRevokeAccessTokens()
   const [createOpen, setCreateOpen] = useState(false)
   const [created, setCreated] = useState<AccessTokenCreated | null>(null)
   // 关闭后清掉明文，避免残留在内存状态里被再次渲染
   const [shown, setShown] = useState(false)
+  const [selected, setSelected] = useState<string[]>([])
 
-  const onRevoke = async (tk: AccessToken) => {
-    if (!(await confirm({ destructive: true, title: t('profile.tokens.revoke'), description: t('profile.tokens.revokeConfirm', { name: tk.name }) }))) return
+  const rows = data ?? []
+  const selectedRows = rows.filter((tk) => selected.includes(tk.id))
+
+  // 单条与批量共用：数组就走 ?ids= 的批量端点。作用域仍是「自己的令牌」，
+  // 混进来的他人令牌 id 不会被删、也不计入实删条数（后端按 RowsAffected 返回）。
+  const onRevoke = async (target: AccessToken | AccessToken[]) => {
+    const list = Array.isArray(target) ? target : [target]
+    const description = Array.isArray(target)
+      ? t('profile.tokens.deleteBatchConfirm', { count: list.length })
+      : t('profile.tokens.revokeConfirm', { name: list[0].name })
+    if (!(await confirm({ destructive: true, title: t('profile.tokens.revoke'), description }))) return
     try {
-      await revoke.mutateAsync(tk.id)
+      if (Array.isArray(target)) await revokeBatch.mutateAsync(list.map((tk) => tk.id))
+      else await revoke.mutateAsync(list[0].id)
+      setSelected((ids) => ids.filter((id) => !list.some((tk) => tk.id === id)))
       toast.success(t('profile.tokens.revoked'))
     } catch (e) {
       toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
@@ -223,18 +250,41 @@ export function TokensTab() {
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-muted-foreground">{t('profile.tokens.description')}</p>
-        <Button type="button" className="shrink-0" onClick={() => setCreateOpen(true)}>
-          <Plus aria-hidden="true" />
-          {t('profile.tokens.create')}
-        </Button>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <Button type="button" onClick={() => setCreateOpen(true)}>
+            <Plus aria-hidden="true" />
+            {t('profile.tokens.create')}
+          </Button>
+          {/* 令牌列表接口只回前缀（prefix），明文与哈希都不在返回里：导出的列因此天然不含可凭证 */}
+          <ExportCsvButton
+            filename="profile-tokens"
+            getRows={fetchAllAccessTokens}
+            columns={[
+              { header: t('profile.tokens.fields.name'), value: (tk) => tk.name },
+              { header: t('profile.tokens.fields.scope'), value: (tk) => t(`profile.tokens.scope.${tk.scope}`) },
+              { header: t('profile.tokens.fields.prefix'), value: (tk) => tk.prefix },
+              { header: t('profile.tokens.fields.lastUsedAt'), value: (tk) => (tk.lastUsedAt ? fmtDateTime(tk.lastUsedAt, i18n.language) : t('profile.tokens.neverUsed')) },
+              { header: t('profile.tokens.fields.expiresAt'), value: (tk) => (tk.expiresAt ? fmtDateTime(tk.expiresAt, i18n.language) : t('profile.tokens.expiry.never')) },
+              { header: t('common.status'), value: (tk) => t(`profile.tokens.state.${tokenState(tk)}`) },
+              { header: t('common.createdAt'), value: (tk) => fmtDateTime(tk.createdAt, i18n.language) },
+            ]}
+          />
+        </div>
       </div>
       <DataTable
         columns={columns}
-        data={data ?? []}
+        data={rows}
         rowKey="id"
         loading={isLoading}
         pagination={false}
         emptyText={t('profile.tokens.empty')}
+        selection={{ selected, onChange: setSelected }}
+        batchActions={(ids) => (
+          <Button variant="destructive" size="sm" onClick={() => void onRevoke(selectedRows.filter((tk) => ids.includes(tk.id)))}>
+            <Trash2 aria-hidden="true" />
+            {t('profile.tokens.revoke')}
+          </Button>
+        )}
         rowActions={(tk) => (
           <Button variant="ghost" size="icon" className="text-destructive" aria-label={`${t('profile.tokens.revoke')}: ${tk.name}`} onClick={() => void onRevoke(tk)}>
             <Trash2 aria-hidden="true" />

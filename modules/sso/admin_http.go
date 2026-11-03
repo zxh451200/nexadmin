@@ -8,7 +8,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
+	"nexadmin/core/database"
 	"nexadmin/core/response"
+	"nexadmin/core/tenant"
 	"nexadmin/pkg/idgen"
 )
 
@@ -78,16 +80,27 @@ func newSecret() (plain, hash string) {
 	return plain, hashSecret(plain)
 }
 
+// appsQuery 是列表与导出共用的查询：同一套关键字过滤，租户条件由 core/database 的租户插件按 ctx 追加。
+// 只写这一遍，导出不会和列表口径不一致。
+func (h *handler) appsQuery(c *gin.Context) *gorm.DB {
+	q := h.db.WithContext(c.Request.Context()).Model(&App{})
+	if kw := strings.TrimSpace(c.Query("keyword")); kw != "" {
+		q = q.Where("name LIKE ? OR client_id LIKE ?", "%"+kw+"%", "%"+kw+"%")
+	}
+	return q
+}
+
+// maxExportApps 一次导出的行数上限：接入应用是「一个租户几十条」的量级，
+// 上限只兜底防异常；真要更大规模应改走导出中心作业，而不是抬这个数。
+const maxExportApps = 500
+
 // List GET /sso/apps?keyword=&page=&pageSize=（未传 pageSize 时返回全部，上限 200）
 func (h *handler) list(c *gin.Context) {
 	page, size := response.ParsePage(c)
 	if c.Query("pageSize") == "" {
 		size = 200
 	}
-	q := h.db.WithContext(c.Request.Context()).Model(&App{})
-	if kw := strings.TrimSpace(c.Query("keyword")); kw != "" {
-		q = q.Where("name LIKE ? OR client_id LIKE ?", "%"+kw+"%", "%"+kw+"%")
-	}
+	q := h.appsQuery(c)
 	var total int64
 	if err := q.Count(&total).Error; err != nil {
 		response.Fail(c, err)
@@ -103,6 +116,21 @@ func (h *handler) list(c *gin.Context) {
 		out = append(out, toDTO(&rows[i]))
 	}
 	response.Page(c, out, total, page, size)
+}
+
+// export GET /sso/apps/export?keyword= —— 不分页返回当前租户在当前关键字下的全部应用（与 list 同一套条件）。
+// 权限复用读权限 sso:list；CSV 由前端 ExportCsvButton 生成，表头跟着界面语言走。
+func (h *handler) exportApps(c *gin.Context) {
+	var rows []App
+	if err := h.appsQuery(c).Order("created_at DESC, id DESC").Limit(maxExportApps).Find(&rows).Error; err != nil {
+		response.Fail(c, err)
+		return
+	}
+	out := make([]appDTO, 0, len(rows))
+	for i := range rows {
+		out = append(out, toDTO(&rows[i]))
+	}
+	response.OK(c, out)
 }
 
 // Create POST /sso/apps，响应里带一次性明文 clientSecret。
@@ -189,6 +217,38 @@ func (h *handler) remove(c *gin.Context) {
 			return err
 		}
 		return tx.Delete(a).Error
+	})
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, nil)
+}
+
+// removeMany DELETE /sso/apps?ids=1,2,3 —— 批量删除应用，并清掉它们各自的 refresh_token。
+// 权限与单条删一致（sso:edit），不新增权限码。
+// 租户条件显式写进 SQL（同 modules/sendlog）：批量删除是破坏性操作，除了 GORM 租户插件那层保护
+// 再钉一遍——越权删在只测列表的用例里看不出来，显式条件也让单测能钉住真实的 SQL 形状。
+func (h *handler) removeMany(c *gin.Context) {
+	ids, err := response.ParseIDsQuery(c)
+	if err != nil {
+		response.Fail(c, err) // 空 ids / 非法 ids 一律拒绝：退化成「不带条件全删」是灾难
+		return
+	}
+	tid, ok := tenant.From(c.Request.Context())
+	if !ok {
+		response.Fail(c, database.ErrNoTenant) // 认不出租户就一条都不动，不会落到「删全站」
+		return
+	}
+	raw := make([]int64, len(ids))
+	for i, id := range ids {
+		raw[i] = int64(id)
+	}
+	err = h.db.WithContext(c.Request.Context()).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("tenant_id = ? AND app_id IN ?", int64(tid), raw).Delete(&Refresh{}).Error; err != nil {
+			return err
+		}
+		return tx.Where("tenant_id = ? AND id IN ?", int64(tid), raw).Delete(&App{}).Error
 	})
 	if err != nil {
 		response.Fail(c, err)

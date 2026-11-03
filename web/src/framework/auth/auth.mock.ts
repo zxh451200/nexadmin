@@ -127,21 +127,50 @@ function userFromCtx(ctx: MockContext, kind: 'a' | 'r' = 'a') {
   return u
 }
 
+/** 一段 0.05 秒的静音 WAV，供 mock 的音频验证码接口返回 */
+function silentWavDataURI(): string {
+  const samples = 400
+  const bytes = new Uint8Array(44 + samples * 2)
+  const view = new DataView(bytes.buffer)
+  const ascii = (off: number, s: string) => {
+    for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i))
+  }
+  ascii(0, 'RIFF')
+  view.setUint32(4, 36 + samples * 2, true)
+  ascii(8, 'WAVE')
+  ascii(12, 'fmt ')
+  view.setUint32(16, 16, true)
+  view.setUint16(20, 1, true)
+  view.setUint16(22, 1, true)
+  view.setUint32(24, 8000, true)
+  view.setUint32(28, 16000, true)
+  view.setUint16(32, 2, true)
+  view.setUint16(34, 16, true)
+  ascii(36, 'data')
+  view.setUint32(40, samples * 2, true)
+  let bin = ''
+  for (const b of bytes) bin += String.fromCharCode(b)
+  return 'data:audio/wav;base64,' + btoa(bin)
+}
+
 function svgCaptcha(text: string) {
+  const step = 24
+  const w = 14 + text.length * step + 6
   const chars = text
     .split('')
     .map((c, i) => {
       const rot = Math.floor(Math.random() * 30) - 15
-      return `<text x="${14 + i * 24}" y="30" font-size="24" font-family="monospace" font-weight="700" fill="#4b6cb7" transform="rotate(${rot} ${14 + i * 24} 24)">${c}</text>`
+      const x = 14 + i * step
+      return `<text x="${x}" y="30" font-size="24" font-family="monospace" font-weight="700" fill="#4b6cb7" transform="rotate(${rot} ${x} 24)">${c}</text>`
     })
     .join('')
   const lines = Array.from({ length: 4 })
     .map(
       () =>
-        `<line x1="${Math.random() * 110}" y1="${Math.random() * 40}" x2="${Math.random() * 110}" y2="${Math.random() * 40}" stroke="#8a9bb8" stroke-width="1" opacity="0.6"/>`,
+        `<line x1="${Math.random() * w}" y1="${Math.random() * 40}" x2="${Math.random() * w}" y2="${Math.random() * 40}" stroke="#8a9bb8" stroke-width="1" opacity="0.6"/>`,
     )
     .join('')
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="110" height="40" viewBox="0 0 110 40"><rect width="110" height="40" fill="#eef2f8"/>${lines}${chars}</svg>`
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="40" viewBox="0 0 ${w} 40"><rect width="${w}" height="40" fill="#eef2f8"/>${lines}${chars}</svg>`
   return `data:image/svg+xml;base64,${btoa(svg)}`
 }
 
@@ -173,10 +202,21 @@ defineMock([
     method: 'GET',
     url: '/auth/captcha',
     handler: () => {
-      const text = Array.from({ length: 4 }, () => 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'[Math.floor(Math.random() * 31)]).join('')
+      // 与后端同口径：5 位数字，60 秒一次性
+      const text = Array.from({ length: 5 }, () => String(Math.floor(Math.random() * 10))).join('')
       const key = Math.random().toString(36).slice(2)
       captchas.set(key, text)
       return { key, image: svgCaptcha(text) }
+    },
+  },
+  {
+    method: 'GET',
+    url: '/auth/captcha/:key/audio',
+    handler: ({ params }) => {
+      // 只读不消费，和后端一致：听完还能再听，答案留到提交时才作废。
+      // 假数据只给一段静音，够让"听音频"按钮在 dev 下走通完整链路。
+      if (!captchas.has(params.key)) mockError(404, '验证码已失效')
+      return { audio: silentWavDataURI() }
     },
   },
   {

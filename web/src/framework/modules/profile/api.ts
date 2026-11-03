@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { startOAuthBind } from '@/framework/auth/oauth'
 import { useAuth } from '@/framework/auth/useAuth'
+import { collectAllPages } from '@/framework/components/export/ExportCsvButton'
 import { api } from '@/framework/request/http'
 
 export interface Profile {
@@ -151,3 +152,22 @@ export function useRevokeAccessToken() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['profile', 'tokens'] }),
   })
 }
+
+export function useRevokeAccessTokens() {
+  const qc = useQueryClient()
+  return useMutation({
+    // 路径写静态字面量：contract_check 靠静态解析这里的第一个实参对照后端路由
+    mutationFn: (ids: string[]) => api.del<{ deleted: number }>('/profile/tokens', { ids: ids.join(',') }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['profile', 'tokens'] }),
+  })
+}
+
+/** 导出用：令牌列表接口本身不分页（一次返回自己的全部令牌），
+ *  这里照样走 collectAllPages —— 把裸数组归一成信封后第一页就到底，
+ *  既不新增后端端点，也不新增权限码（作用域仍是「自己的令牌」）。 */
+export const fetchAllAccessTokens = () =>
+  collectAllPages<AccessToken>(async (page, pageSize) => {
+    const res = await api.get<AccessToken[]>('/profile/tokens', { page, pageSize })
+    const list = res ?? []
+    return { list, total: list.length }
+  })

@@ -68,9 +68,11 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	r.GET("/sso/keys", core.Perm("sso:list"), h.keysList)
 	r.POST("/sso/keys/rotate", core.Perm("sso:edit"), h.keysRotate)
 	r.GET("/sso/apps", core.Perm("sso:list"), h.list)
+	r.GET("/sso/apps/export", core.Perm("sso:list"), h.exportApps) // 导出口径与 list 完全一致，权限同为读码
 	r.POST("/sso/apps", core.Perm("sso:edit"), h.create)
 	r.PUT("/sso/apps/:id", core.Perm("sso:edit"), h.update)
 	r.DELETE("/sso/apps/:id", core.Perm("sso:edit"), h.remove)
+	r.DELETE("/sso/apps", core.Perm("sso:edit"), h.removeMany) // 批量删：?ids=1,2,3，与单条删同一个权限码
 	r.PUT("/sso/apps/:id/enabled", core.Perm("sso:edit"), h.setEnabled)
 	r.POST("/sso/apps/:id/reset-secret", core.Perm("sso:edit"), h.resetSecret)
 	r.GET("/sso/portal", h.portal)
