@@ -297,7 +297,7 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
   }, [dragId])
 
   /** 拖动开始时快照一次行坐标：排序动画会改行位置，实时读 DOM 会「套住自己」来回跳 */
-  type RowBox = { top: number; bottom: number; left: number; right: number; anchor: number; nameEdge: number }
+  type RowBox = { top: number; bottom: number; left: number; right: number; anchor: number; nameEdge: number | null }
   const [rects, setRects] = useState<Map<string, RowBox>>(() => new Map())
   // 起拖后内容层被滚走多少：快照坐标是起拖那一刻的屏幕坐标，落点命中要按这个位移换算回去，
   // 否则长树一旦触发边缘自动滚动，指针还停在原处、行已经跑走，落点就指错行。
@@ -338,7 +338,7 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
         left: r.left,
         right: r.right,
         anchor: rtl ? (anchorEdge?.right ?? r.right - 8) : (anchorEdge?.left ?? r.left + 8),
-        nameEdge: nameCell ? (rtl ? nameCell.left : nameCell.right) : 0,
+        nameEdge: nameCell ? (rtl ? nameCell.left : nameCell.right) : null,
       })
     }
     setRects(next)
@@ -446,8 +446,8 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
       // anchor 是这一级起算的那条物理边（LTR 左 / RTL 右），往里落一级就是 ±step
       const start = (o.indentBase ?? firstAnchor) + (rtl ? -step : step)
       // 线只画到名称列那一头：整行在宽表格里是两三千像素，一条贯穿屏幕的蓝线读起来像进度条，
-      // 反而把「落在哪一行、第几级」这两个真正的信息淹了。卡片布局量不到 td（nameEdge=0）才退回整行。
-      const far = box!.nameEdge > 0 ? box!.nameEdge : (rtl ? box!.left : box!.right)
+      // 反而把「落在哪一行、第几级」这两个真正的信息淹了。卡片布局量不到 td（nameEdge 为 null）才退回整行。
+      const far = box!.nameEdge ?? (rtl ? box!.left : box!.right)
       const width = Math.max(120, Math.abs(far - start) - 8)
       return {
         y: o.y,
