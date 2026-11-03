@@ -46,6 +46,8 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	r.DELETE("/file-groups/:id", core.Perm(PermDelete), h.DeleteGroup)
 
 	r.GET("/files", core.Perm(PermList), h.List)
+	// 静态段注册在 /files/:id 之前（与 pay /orders/stats 同一套匹配约定）。
+	r.GET("/files/usage", core.Perm(PermList), h.Usage)
 	r.POST("/files", core.Perm(PermUpload), h.Register)
 	r.PUT("/files/move", core.Perm(PermUpload), h.Move)
 	r.PUT("/files/:id", core.Perm(PermUpload), h.Update)

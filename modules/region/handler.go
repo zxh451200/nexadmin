@@ -28,7 +28,8 @@ func (h *Handler) Status(c *gin.Context) {
 	response.OK(c, h.svc.Status())
 }
 
-// Sync POST /regions/sync：拉取数据源、校验后落库并立即生效。
+// Sync POST /regions/sync：后台任务化——立即返回，拉取/校验/落库在后台协程跑，
+// 进度与结果走 GET /regions/sync/status 轮询（源最大 16MB，慢源不再卡住请求）。
 func (h *Handler) Sync(c *gin.Context) {
 	var q syncRequest
 	if err := c.ShouldBindJSON(&q); err != nil && !errors.Is(err, io.EOF) {
@@ -39,12 +40,82 @@ func (h *Handler) Sync(c *gin.Context) {
 	if cl := auth.ClaimsFrom(c); cl != nil {
 		actor = cl.Username
 	}
-	res, err := h.svc.Sync(c.Request.Context(), strings.TrimSpace(q.Source), actor)
+	if err := h.svc.StartSync(c.Request.Context(), strings.TrimSpace(q.Source), actor, h.onSynced); err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, gin.H{"started": true})
+}
+
+// SyncStatus GET /regions/sync/status：后台同步的阶段与结果。
+func (h *Handler) SyncStatus(c *gin.Context) {
+	response.OK(c, h.svc.SyncStatus())
+}
+
+// onSynced 是后台同步成功后的回调：广播给其它实例重装快照。
+func (h *Handler) onSynced() {
+	h.bus.Publish(busKind, nil)
+}
+
+// Preview POST /regions/preview：dry-run——同一条拉取/校验链路，但不落库不生效，
+// 回报这次同步会新增/删除/改名多少条以及每类最多 20 条样本。
+func (h *Handler) Preview(c *gin.Context) {
+	var q syncRequest
+	if err := c.ShouldBindJSON(&q); err != nil && !errors.Is(err, io.EOF) {
+		response.Fail(c, response.BadRequest("error.bad_request").Wrap(err))
+		return
+	}
+	res, err := h.svc.Preview(c.Request.Context(), strings.TrimSpace(q.Source))
 	if err != nil {
 		response.Fail(c, err)
 		return
 	}
-	h.bus.Publish(busKind, nil)
+	response.OK(c, res)
+}
+
+// maxUploadSize 是上传数据文件的上限，与在线拉取的 maxSourceSize 一致。
+const maxUploadSize = 16 << 20
+
+// ImportFile POST /regions/import：multipart 字段 file——手动上传数据文件
+// （离线 / 内网环境没有可拉取的 HTTPS URL）。?apply=1 直接生效，默认 dry-run 只预览。
+func (h *Handler) ImportFile(c *gin.Context) {
+	fh, err := c.FormFile("file")
+	if err != nil {
+		response.Fail(c, response.BadRequest("region.file_required"))
+		return
+	}
+	if fh.Size > maxUploadSize {
+		response.Fail(c, response.BadRequest("region.source_too_large", maxUploadSize>>20))
+		return
+	}
+	f, err := fh.Open()
+	if err != nil {
+		response.Fail(c, response.BadRequest("error.bad_request").Wrap(err))
+		return
+	}
+	defer f.Close()
+	raw, err := io.ReadAll(io.LimitReader(f, maxUploadSize+1))
+	if err != nil {
+		response.Fail(c, response.BadRequest("error.bad_request").Wrap(err))
+		return
+	}
+	if len(raw) > maxUploadSize {
+		response.Fail(c, response.BadRequest("region.source_too_large", maxUploadSize>>20))
+		return
+	}
+	actor := ""
+	if cl := auth.ClaimsFrom(c); cl != nil {
+		actor = cl.Username
+	}
+	apply := c.Query("apply") == "1"
+	res, err := h.svc.ImportFile(c.Request.Context(), raw, actor, apply)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	if apply {
+		h.bus.Publish(busKind, nil)
+	}
 	response.OK(c, res)
 }
 

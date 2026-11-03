@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
+	"nexadmin/core"
 	"nexadmin/core/response"
 	"nexadmin/pkg/excel"
 )
@@ -23,7 +24,8 @@ var (
 )
 
 // sniffImport 按扩展名 + 文件头魔数判断导入文件类型（"xlsx" / "csv"）。不看 Content-Type，两者必须一致。
-func sniffImport(filename string, size int64, f io.ReaderAt) (string, error) {
+// 大小按本次请求生效的 importLimits 判（lim 来自 resolveImportLimits），报错里带出的是那个值，不是内置默认。
+func sniffImport(lim importLimits, filename string, size int64, f io.ReaderAt) (string, error) {
 	head := make([]byte, 512)
 	n, _ := f.ReadAt(head, 0)
 	head = head[:n]
@@ -34,16 +36,16 @@ func sniffImport(filename string, size int64, f io.ReaderAt) (string, error) {
 		if !isZip {
 			return "", bad("user.import.not_xlsx")
 		}
-		if size > importMaxXLSXBytes {
-			return "", bad("user.import.file_too_large_5mb")
+		if size > lim.xlsx {
+			return "", bad("user.import.file_too_large", core.MBText(lim.xlsx))
 		}
 		return "xlsx", nil
 	case ".csv":
 		if isZip || isOLE || bytes.IndexByte(head, 0) >= 0 {
 			return "", bad("user.import.csv_encoding_invalid")
 		}
-		if size > importMaxBytes {
-			return "", bad("user.import.file_too_large_2mb")
+		if size > lim.csv {
+			return "", bad("user.import.file_too_large", core.MBText(lim.csv))
 		}
 		return "csv", nil
 	case ".xls":

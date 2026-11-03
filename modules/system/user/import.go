@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
+	"nexadmin/core"
 	"nexadmin/core/i18n"
 	"nexadmin/core/response"
 	"nexadmin/pkg/excel"
@@ -20,11 +21,33 @@ import (
 // 用户导入：支持 .xlsx（pkg/excel，读第一个 sheet）与 CSV（UTF-8，可带 BOM）；按扩展名 + 文件魔数判断类型，不信任 Content-Type。
 // 部分成功：逐行独立入库，失败行不影响其它行；失败行（行号 + 原因）随结果返回，前端可下载。
 
+// 导入上限的内置默认。xlsx 是压缩包，同样行数下比 CSV 大，所以分两档。
 const (
 	importMaxBytes     = 2 << 20 // CSV
-	importMaxXLSXBytes = 5 << 20 // xlsx 是压缩包，同样行数下比 CSV 大
+	importMaxXLSXBytes = 5 << 20 // xlsx
 	importMaxRows      = 5000
 )
+
+// importLimits 是本次导入生效的文件上限（按类型分档）。
+type importLimits struct {
+	csv  int64
+	xlsx int64
+}
+
+func defaultImportLimits() importLimits {
+	return importLimits{csv: importMaxBytes, xlsx: importMaxXLSXBytes}
+}
+
+// resolveImportLimits 用系统参数「上传限制」的普通文件上限收紧内置默认。
+// 只能往小调：CSV 整读进内存、xlsx 要解包，把这条通道按参数放大等于让后台导入口变成内存消耗口。
+func resolveImportLimits(ctx context.Context) importLimits {
+	l := defaultImportLimits()
+	if s, ok := core.UploadLimitsFromSettings(ctx); ok {
+		l.csv = core.ResolveUploadCeiling(s.MaxFileMB, l.csv, importMaxBytes)
+		l.xlsx = core.ResolveUploadCeiling(s.MaxFileMB, l.xlsx, importMaxXLSXBytes)
+	}
+	return l
+}
 
 // importHeader 是模板表头（也是导入的列顺序）。导入时按表头名匹配列，顺序可变，缺列视为空。
 var importHeader = []string{"账号", "姓名", "手机", "邮箱", "性别", "部门", "角色", "岗位", "备注"}
@@ -64,13 +87,13 @@ type rawRec struct {
 }
 
 // parseImportCSV 解析 CSV：去 BOM，按表头名映射列，跳过全空行。
-func parseImportCSV(r io.Reader) ([]importRow, error) {
-	raw, err := io.ReadAll(io.LimitReader(r, importMaxBytes+1))
+func parseImportCSV(r io.Reader, lim importLimits) ([]importRow, error) {
+	raw, err := io.ReadAll(io.LimitReader(r, lim.csv+1))
 	if err != nil {
 		return nil, err
 	}
-	if len(raw) > importMaxBytes {
-		return nil, bad("user.import.file_too_large_2mb")
+	if int64(len(raw)) > lim.csv {
+		return nil, bad("user.import.file_too_large", core.MBText(lim.csv))
 	}
 	raw = bytes.TrimPrefix(raw, []byte("\xef\xbb\xbf"))
 	cr := csv.NewReader(bytes.NewReader(raw))
@@ -133,8 +156,8 @@ func buildImportRows(recs []rawRec) ([]importRow, error) {
 
 // parseImportXLSX 读取 .xlsx 的第一个 sheet：第一行有内容的行是表头，行号取文件中的真实行号。
 // 压缩包大小、文件数、行列数、XML 深度等限制见 excel.ReadOptions，防 zip 炸弹与资源耗尽。
-func parseImportXLSX(r io.ReaderAt, size int64) ([]importRow, error) {
-	opt := excel.ReadOptions{MaxArchiveBytes: importMaxXLSXBytes, MaxFiles: 100, MaxPartBytes: 16 << 20, MaxTotalBytes: 32 << 20,
+func parseImportXLSX(r io.ReaderAt, size int64, lim importLimits) ([]importRow, error) {
+	opt := excel.ReadOptions{MaxArchiveBytes: lim.xlsx, MaxFiles: 100, MaxPartBytes: 16 << 20, MaxTotalBytes: 32 << 20,
 		MaxRows: importMaxRows * 4, MaxCols: 64, MaxDepth: 32, MaxStrings: 200000}
 	rd, err := excel.Open(r, size, opt)
 	if err != nil {
@@ -380,16 +403,18 @@ func (h *handler) importFile(c *gin.Context) {
 		return
 	}
 	defer f.Close()
-	kind, err := sniffImport(fh.Filename, fh.Size, f)
+	// 上限按请求解析：系统参数「上传限制」可以把这两档往小调（见 resolveImportLimits）。
+	lim := resolveImportLimits(c.Request.Context())
+	kind, err := sniffImport(lim, fh.Filename, fh.Size, f)
 	if err != nil {
 		response.Fail(c, err)
 		return
 	}
 	var rows []importRow
 	if kind == "xlsx" {
-		rows, err = parseImportXLSX(f, fh.Size)
+		rows, err = parseImportXLSX(f, fh.Size, lim)
 	} else {
-		rows, err = parseImportCSV(f)
+		rows, err = parseImportCSV(f, lim)
 	}
 	if err != nil {
 		response.Fail(c, err)

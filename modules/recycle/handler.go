@@ -45,3 +45,48 @@ func (h *Handler) Restore(c *gin.Context) {
 func (h *Handler) Purge(c *gin.Context) {
 	h.act(c, func(s *Service, c *gin.Context, id idgen.ID) error { return s.Purge(c.Request.Context(), id) })
 }
+
+// BatchForm 是批量还原 / 批量彻底删除的入参。
+type BatchForm struct {
+	IDs []idgen.ID `json:"ids" binding:"required,min=1,max=200"`
+}
+
+// RestoreBatch POST /recycle/restore —— 批量还原，冲突与源行消失按条计数返回。
+func (h *Handler) RestoreBatch(c *gin.Context) {
+	var f BatchForm
+	if !response.BindJSON(c, &f) {
+		return
+	}
+	res, err := h.svc.RestoreBatch(c.Request.Context(), f.IDs)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, res)
+}
+
+// PurgeBatch DELETE /recycle?ids=1,2,3 —— 批量彻底删除。
+func (h *Handler) PurgeBatch(c *gin.Context) {
+	var ids []idgen.ID
+	for _, s := range strings.Split(c.Query("ids"), ",") {
+		if s = strings.TrimSpace(s); s == "" {
+			continue
+		}
+		id, err := idgen.Parse(s)
+		if err != nil || id == 0 {
+			response.Fail(c, response.BadRequest("error.bad_request"))
+			return
+		}
+		ids = append(ids, id)
+	}
+	if len(ids) == 0 {
+		response.Fail(c, response.BadRequest("error.bad_request"))
+		return
+	}
+	res, err := h.svc.PurgeBatch(c.Request.Context(), ids)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, res)
+}

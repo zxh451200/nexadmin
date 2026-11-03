@@ -125,6 +125,23 @@ func (h *handler) remove(c *gin.Context) {
 	response.OK(c, nil)
 }
 
+// removeAll DELETE /roles?ids=1,2,3 —— 批量删除。
+// ids 由 response.ParseIDsQuery 校验：任一项非法或整体为空都是 400，绝不退化成「不带 ids 就动整张表」。
+// 逐条护栏与单条删除一致，任一条不合格整批回滚，返回体给出实际删除条数。
+func (h *handler) removeAll(c *gin.Context) {
+	ids, err := response.ParseIDsQuery(c)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	n, err := h.svc.deleteMany(c.Request.Context(), ids)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, map[string]int64{"deleted": n})
+}
+
 // sort PUT /roles/sort  body: {ids}
 func (h *handler) sort(c *gin.Context) {
 	var body struct {

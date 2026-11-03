@@ -84,6 +84,12 @@ type Config struct {
 	Log struct {
 		ExportMaxRows int `mapstructure:"export_max_rows"`
 	} `mapstructure:"log"`
+	// Ticket 是工单插件（plugins/ticket）的附件配额：单张工单的附件份数与总字节上限，
+	// 只能往上调到运维可接受的范围，与「单个文件上限」（系统参数 upload.*）是两条独立的闸；<=0 = 出厂默认 20 份 / 100MB。
+	Ticket struct {
+		AttachmentMaxCount int `mapstructure:"attachment_max_count"`
+		AttachmentMaxMB    int `mapstructure:"attachment_max_mb"`
+	} `mapstructure:"ticket"`
 	Setup struct {
 		AllowRemote bool `mapstructure:"allow_remote"`
 	} `mapstructure:"setup"`
@@ -287,6 +293,9 @@ type Language struct {
 	Prefix string `mapstructure:"prefix" json:"prefix,omitempty"`
 	// DateFormat 是 Go 布局串；缺省为 "2006-01-02"。
 	DateFormat string `mapstructure:"dateFormat" json:"dateFormat,omitempty"`
+	// Enabled 是启用开关：停用的语言保留全部配置（前缀/日期格式等）但不参与文案协商
+	// 与公开站路由，比删行可逆。指针语义：nil = 启用（config.yaml 种子不写该字段时保持既有行为）。
+	Enabled *bool `mapstructure:"enabled" json:"enabled,omitempty"`
 }
 
 type Auth struct {

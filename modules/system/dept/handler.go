@@ -141,6 +141,32 @@ func (h *Handler) Delete(c *gin.Context) {
 	response.OK(c, nil)
 }
 
+// DeleteMany DELETE /depts?ids=1,2,3 —— 批量删除，每项连同整棵子树一起删，返回实际删除条数。
+// 数据范围逐条用同一个 CheckDelete（级联子树必须全部在范围内），任一条越界就在写库之前整体拒绝。
+func (h *Handler) DeleteMany(c *gin.Context) {
+	ids, err := response.ParseIDsQuery(c)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	sc, ok := h.scope(c)
+	if !ok {
+		return
+	}
+	for _, id := range ids {
+		if err := h.svc.CheckDelete(c.Request.Context(), sc, id); err != nil {
+			response.Fail(c, err)
+			return
+		}
+	}
+	n, err := h.svc.DeleteMany(c.Request.Context(), ids)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, map[string]int64{"deleted": n})
+}
+
 // Sort PUT /depts/sort
 func (h *Handler) Sort(c *gin.Context) {
 	var in SortInput

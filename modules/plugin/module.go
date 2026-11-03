@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -235,6 +236,39 @@ func registerMarketWith(r *gin.RouterGroup, m *plugin.Manager, actions marketAct
 			return
 		}
 		response.OK(c, gin.H{"jobId": actions.install(root, entry, in.Force)})
+	})
+
+	r.POST("/plugins/market/upload", install, func(c *gin.Context) {
+		fh, err := c.FormFile("file")
+		if err != nil {
+			response.Fail(c, response.BadRequest("plugin.upload_file_required"))
+			return
+		}
+		if fh.Size > maxUploadBytes {
+			response.Fail(c, response.BadRequest("plugin.upload_too_large", maxUploadBytes>>20))
+			return
+		}
+		if !strings.HasSuffix(strings.ToLower(fh.Filename), ".zip") {
+			response.Fail(c, response.BadRequest("plugin.upload_zip_only"))
+			return
+		}
+		tmp, err := os.CreateTemp("", "nexadmin-plugin-upload-*.zip")
+		if err != nil {
+			response.Fail(c, err)
+			return
+		}
+		tmpPath := tmp.Name()
+		defer os.Remove(tmpPath) //nolint:errcheck // 任务异步读；读失败时报安装失败，临时文件随之清理
+		if err := saveUpload(c, tmp, fh, maxUploadBytes); err != nil {
+			tmp.Close()
+			response.Fail(c, err)
+			return
+		}
+		if err := tmp.Close(); err != nil {
+			response.Fail(c, err)
+			return
+		}
+		response.OK(c, gin.H{"jobId": startUploadZip(m.Root(), tmpPath)})
 	})
 
 	r.POST("/plugins/market/remove", install, func(c *gin.Context) {

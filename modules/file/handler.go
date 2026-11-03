@@ -86,6 +86,16 @@ func (h *Handler) DeleteGroup(c *gin.Context) {
 
 // ---- 文件 ----
 
+// GET /files/usage —— 侧栏用量（已用字节 + 套餐额度 MB，0 = 不限）。
+func (h *Handler) Usage(c *gin.Context) {
+	used, quotaMB, err := h.svc.Usage(c.Request.Context())
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, gin.H{"usedBytes": used, "quotaMB": quotaMB})
+}
+
 func (h *Handler) List(c *gin.Context) {
 	var q listQuery
 	if !response.BindQuery(c, &q) {

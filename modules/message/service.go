@@ -132,6 +132,20 @@ func (s *Service) Delete(ctx context.Context, uid, id idgen.ID) error {
 	return res.Error
 }
 
+// DeleteMany 批量删除自己的消息：只动 user_id 命中的行，返回实际删除条数。
+// 越权 ID 不会被删（所以 deleted 可能小于请求条数），界面按返回值如实刷新。
+func (s *Service) DeleteMany(ctx context.Context, uid idgen.ID, ids []idgen.ID) (int64, error) {
+	list := make([]int64, 0, len(ids))
+	for _, id := range ids {
+		list = append(list, int64(id))
+	}
+	res := s.db.WithContext(ctx).Where("user_id = ? AND id IN ?", int64(uid), list).Delete(&Message{})
+	if res.Error == nil {
+		defaultHub.poke(ctx, uid)
+	}
+	return res.RowsAffected, res.Error
+}
+
 // ClearAll 清空自己的全部消息（含未读）。
 func (s *Service) ClearAll(ctx context.Context, uid idgen.ID) error {
 	res := s.db.WithContext(ctx).Where("user_id = ?", int64(uid)).Delete(&Message{})

@@ -61,10 +61,10 @@ plugins:
         description: 'Enable per table and record field-level before/after values for inserts, updates, and deletes. Sensitive fields are masked and writes are batched asynchronously. Built for enterprise compliance.'
   - id: codegen
     name: 代码生成器
-    description: 免费代码生成器：读取已有业务表，或在向导里定义新表；按推荐配置生成 Go 模块、前端页面与三引擎迁移，在线预览、打包 zip 下载。无状态、不建表、不写磁盘。
+    description: 免费代码生成器：读取已有业务表，或在向导里定义新表；按推荐配置生成 Go 模块、前端页面与三引擎迁移，在线预览、打包 zip 下载或直接写入项目根目录（默认不覆盖已有文件）。生成配置可按名字保存复用。
     category: devops
     edition: free
-    version: 1.1.0
+    version: 1.2.0
     price: 免费
     author: NexAdmin
     repo: zxh451200/nexadmin-plugins
@@ -72,7 +72,7 @@ plugins:
     i18n:
       en-US:
         name: Code Generator
-        description: 'Free code generator: read an existing business table or define a new one in the wizard; generate a Go module, frontend pages and migrations for all three engines. Preview online and download a zip. Stateless: no tables, no disk writes.'
+        description: 'Free code generator: read an existing business table or define a new one in the wizard; dict columns, tree tables and master-detail are supported. Generates a Go module, frontend pages and migrations for all three engines; preview online, download a zip or write straight into the project root. Generation configs can be saved and reused by name.'
   - id: crm
     name: 客户主数据
     description: 免费基础客户主数据 + 线索商机台账：让酒店、商城等外部系统的会员对应到同一个客户；不做销售自动化。
@@ -203,10 +203,10 @@ plugins:
         description: 'Free basic ID-card capability: validates mainland resident ID numbers and parses region, birthday and sex; optional two-element name-number verification through a pluggable provider that is off by default with secrets kept server-side; the ledger stores only digests and masked values.'
   - id: report
     name: 报表中心
-    description: 报表中心 + 数据大屏（结构化数据集、参数化查询、租户与数据范围隔离；图表/表格/指标卡；画布式大屏）。
+    description: 报表中心 + 数据大屏（结构化数据集、参数化查询、租户与数据范围隔离；图表/表格/指标卡；画布式大屏；报表订阅提醒）。
     category: business
     edition: pro
-    version: 1.0.0
+    version: 1.1.0
     price: 待定
     author: NexAdmin
     repo: zxh451200/nexadmin-plugins

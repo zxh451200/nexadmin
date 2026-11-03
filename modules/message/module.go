@@ -73,7 +73,7 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 			}
 			return svc.ValidateMarkRead(ctx, uid, id)
 		})
-	g.DELETE("/messages", h.Clear)
+	g.DELETE("/messages", h.ClearOrDeleteBatch)
 	g.DELETE("/messages/:id", h.Delete)
 
 	// 每日清理随优雅关闭退出（与 apimonitor/clienterror 同口径：OnClose 关闭 stop 通道）。

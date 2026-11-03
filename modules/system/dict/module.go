@@ -25,6 +25,7 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 
 	t := r.Group("/dict/types")
 	t.PUT("/sort", core.Perm("dict:update"), h.SortTypes) // 固定路径先于 /:id
+	t.GET("/export", core.Perm("dict:list"), h.ExportTypes)
 	t.GET("", core.Perm("dict:list"), h.ListTypes)
 	t.GET("/:id", core.Perm("dict:list"), h.GetType)
 	t.POST("", core.Perm("dict:create"), h.CreateType)
@@ -34,6 +35,7 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 
 	x := r.Group("/dict/data")
 	x.PUT("/sort", core.Perm("dict:update"), h.SortData)
+	x.GET("/export", core.Perm("dict:list"), h.ExportData)
 	x.GET("", core.Perm("dict:list"), h.ListData)
 	x.GET("/:id", core.Perm("dict:list"), h.GetData)
 	x.POST("", core.Perm("dict:create"), h.CreateData)

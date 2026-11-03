@@ -163,6 +163,22 @@ func (h *Handler) Delete(c *gin.Context) {
 	response.OK(c, nil)
 }
 
+// DeleteMany DELETE /backups?ids=1,2,3：与单条 DELETE /backups/:id 同一套判据与副作用（见 Service.DeleteMany），
+// 命中进行中的备份整批拒绝；审计由路由上的 audit("delete") 中间件写，与单条同一条路径。
+func (h *Handler) DeleteMany(c *gin.Context) {
+	ids, err := response.ParseIDsQuery(c)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	n, err := h.svc.DeleteMany(c.Request.Context(), ids)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	response.OK(c, gin.H{"deleted": n})
+}
+
 // Download GET /backups/:id/download：文件名取自库里的记录并再次校验（不信任任何请求里的路径），
 // 响应头带 X-Checksum-SHA256，下载本身写操作日志（二进制响应体不入日志）。
 func (h *Handler) Download(c *gin.Context) {

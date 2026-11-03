@@ -3,18 +3,24 @@ package recycle
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 	"time"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"nexadmin/core/response"
+	"nexadmin/core/tenant"
 	"nexadmin/modules/internal/recbin"
 	"nexadmin/pkg/idgen"
 )
 
 // Service 是回收站的业务层。
-type Service struct{ db *gorm.DB }
+type Service struct {
+	db  *gorm.DB
+	log *zap.Logger
+}
 
 // Item 与前端 RecycleItem 一致。
 type Item struct {
@@ -25,7 +31,8 @@ type Item struct {
 	DeletedAt time.Time `json:"deletedAt"`
 }
 
-// List 按删除时间倒序。
+// List 按删除时间倒序。deleted_by 存的是操作人 ID，批量查昵称翻译成展示名
+// （查不到——操作人也被删了——就回退原始值）。
 func (s *Service) List(ctx context.Context, typ, keyword string, page, size int) ([]Item, int64, error) {
 	tx := s.db.WithContext(ctx).Model(&recbin.Entry{})
 	if typ != "" {
@@ -44,11 +51,46 @@ func (s *Service) List(ctx context.Context, typ, keyword string, page, size int)
 	if err := tx.Order("deleted_at DESC").Offset((page - 1) * size).Limit(size).Find(&rows).Error; err != nil {
 		return nil, 0, err
 	}
+	names := s.userNames(ctx, rows)
 	out := make([]Item, len(rows))
 	for i, e := range rows {
-		out[i] = Item{ID: e.ID, Type: e.Type, Name: e.Name, DeletedBy: e.DeletedBy, DeletedAt: e.DeletedAt}
+		deletedBy := e.DeletedBy
+		if nick, ok := names[e.DeletedBy]; ok && nick != "" {
+			deletedBy = nick
+		}
+		out[i] = Item{ID: e.ID, Type: e.Type, Name: e.Name, DeletedBy: deletedBy, DeletedAt: e.DeletedAt}
 	}
 	return out, total, nil
+}
+
+// userNames 批量把「删除人 ID 字符串」翻译成昵称；查询失败静默回退原始值（列表不能因昵称挂掉）。
+func (s *Service) userNames(ctx context.Context, rows []recbin.Entry) map[string]string {
+	ids := make([]int64, 0, len(rows))
+	seen := map[int64]bool{}
+	for _, e := range rows {
+		id, err := strconv.ParseInt(e.DeletedBy, 10, 64)
+		if err != nil || id <= 0 || seen[id] {
+			continue
+		}
+		seen[id] = true
+		ids = append(ids, id)
+	}
+	out := make(map[string]string, len(ids))
+	if len(ids) == 0 {
+		return out
+	}
+	var users []struct {
+		ID       idgen.ID `gorm:"column:id"`
+		Nickname string   `gorm:"column:nickname"`
+	}
+	if err := s.db.WithContext(tenant.Skip(ctx)).Table("sys_user").
+		Select("id", "nickname").Where("id IN ?", ids).Scan(&users).Error; err != nil {
+		return out
+	}
+	for _, u := range users {
+		out[idgen.ID(u.ID).String()] = u.Nickname
+	}
+	return out
 }
 
 func (s *Service) entry(ctx context.Context, id idgen.ID) (*recbin.Entry, string, error) {
@@ -84,7 +126,8 @@ func (s *Service) Restore(ctx context.Context, id idgen.ID) error {
 	}
 	gone := false
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		res := tx.Exec("UPDATE "+table+" SET deleted_at = NULL WHERE id = ? AND tenant_id = ? AND deleted_at IS NOT NULL", int64(e.RefID), int64(e.TenantID))
+		// 表名来自 recbin.Tables 白名单；条件值全部走参数绑定。
+		res := tx.Table(table).Where("id = ? AND tenant_id = ? AND deleted_at IS NOT NULL", int64(e.RefID), int64(e.TenantID)).Update("deleted_at", nil)
 		if res.Error != nil {
 			// 多半是唯一约束冲突（同名用户已被重新创建）
 			return response.Conflict("recycle.restore_conflict").Wrap(res.Error)
@@ -113,12 +156,13 @@ func (s *Service) Purge(ctx context.Context, id idgen.ID) error {
 		ref, tid := int64(e.RefID), int64(e.TenantID)
 		if e.Type == recbin.TypeNotice { // 公告的发布对象与已读记录一并清理
 			for _, t := range []string{"sys_notice_target", "sys_notice_read"} {
-				if err := tx.Exec("DELETE FROM "+t+" WHERE notice_id = ?", ref).Error; err != nil {
+				if err := tx.Table(t).Where("notice_id = ?", ref).Delete(nil).Error; err != nil {
 					return err
 				}
 			}
 		}
-		res := tx.Exec("DELETE FROM "+table+" WHERE id = ? AND tenant_id = ? AND deleted_at IS NOT NULL", ref, tid)
+		// 表名来自 recbin.Tables 白名单；条件值全部走参数绑定。
+		res := tx.Table(table).Where("id = ? AND tenant_id = ? AND deleted_at IS NOT NULL", ref, tid).Delete(nil)
 		if res.Error != nil {
 			return res.Error
 		}
@@ -132,4 +176,59 @@ func (s *Service) Purge(ctx context.Context, id idgen.ID) error {
 		return errSourceGone()
 	}
 	return nil
+}
+
+// BatchResult 是批量还原 / 批量彻底删除的回执。
+// 批量动作不因个别条目失败而整体失败：冲突与源行消失如实计数，让界面刷新后自见分晓。
+type BatchResult struct {
+	Restored int64 `json:"restored,omitempty"`
+	Purged   int64 `json:"purged,omitempty"`
+	Conflict int64 `json:"conflict,omitempty"`
+	Gone     int64 `json:"gone,omitempty"`
+}
+
+// RestoreBatch 批量还原。
+func (s *Service) RestoreBatch(ctx context.Context, ids []idgen.ID) (*BatchResult, error) {
+	res := &BatchResult{}
+	for _, id := range ids {
+		err := s.Restore(ctx, id)
+		switch {
+		case err == nil:
+			res.Restored++
+		case isConflict(err):
+			res.Conflict++
+		case isNotFoundErr(err):
+			res.Gone++
+		default:
+			return nil, err // 非预期错误（库故障）立刻失败，不静默吞掉
+		}
+	}
+	return res, nil
+}
+
+// PurgeBatch 批量彻底删除。
+func (s *Service) PurgeBatch(ctx context.Context, ids []idgen.ID) (*BatchResult, error) {
+	res := &BatchResult{}
+	for _, id := range ids {
+		err := s.Purge(ctx, id)
+		switch {
+		case err == nil:
+			res.Purged++
+		case isNotFoundErr(err):
+			res.Gone++
+		default:
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func isConflict(err error) bool {
+	var be *response.Error
+	return errors.As(err, &be) && be.Status == 409
+}
+
+func isNotFoundErr(err error) bool {
+	var be *response.Error
+	return errors.As(err, &be) && be.Status == 404
 }

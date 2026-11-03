@@ -16,6 +16,10 @@ import (
 // dictLabelFields 是字典项唯一可翻译的字段。
 var dictLabelFields = pi18n.Fields{"label": {Max: 100}}
 
+// maxExportRows 是导出接口（不分页）的行数上限，防止异常数据把一次响应撑爆。
+// 字典类型/数据都是平台级小表，正常远达不到；真需要更大规模时改走导出中心作业，别抬这个上限。
+const maxExportRows = 10000
+
 // platformLocales 把框架语言清单（sys_language）适配成 pkg/i18n 需要的形状：
 // 契约层不认识任何具体表，语言清单归调用方所有。
 type platformLocales struct{}
@@ -82,19 +86,29 @@ func filter(q *gorm.DB, keyword, status string, cols ...string) *gorm.DB {
 
 // ---- 字典类型 ----
 
+// typesScope 是字典类型「列表」与「导出」共用的查询条件：同一套关键字/状态过滤，只写一遍。
+func (s *Service) typesScope(ctx context.Context, q ListQuery) *gorm.DB {
+	return filter(s.db.WithContext(ctx).Model(&Type{}), q.Keyword, q.Status, "name", "code")
+}
+
 // ListTypes 分页查询字典类型，按 sort 排序。
 func (s *Service) ListTypes(ctx context.Context, q ListQuery, page, size int) ([]Type, int64, error) {
-	db := filter(s.db.WithContext(ctx).Model(&Type{}), q.Keyword, q.Status, "name", "code")
+	db := s.typesScope(ctx, q)
 	var total int64
 	if err := db.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 	list := []Type{}
 	err := db.Order("sort, id").Offset((page - 1) * size).Limit(size).Find(&list).Error
+	markBuiltinTypes(list)
+	return list, total, err
+}
+
+// markBuiltinTypes 就地补上派生标记 builtin（不入库，读出时按出厂清单算）。
+func markBuiltinTypes(list []Type) {
 	for i := range list {
 		list[i].Builtin = isBuiltinType(list[i].Code)
 	}
-	return list, total, err
 }
 
 // GetType 读取单个字典类型。
@@ -176,25 +190,53 @@ func (s *Service) SortTypes(ctx context.Context, ids []idgen.ID) error {
 	return sortIDs(s.db.WithContext(ctx), &Type{}, ids)
 }
 
+// ExportTypes 按与 ListTypes 完全相同的筛选条件返回全部字典类型（不分页），供前端生成 CSV。
+// 上限 maxExportRows 只是兜底：字典是平台级小表（几百行量级），不会走到异步导出作业。
+func (s *Service) ExportTypes(ctx context.Context, q ListQuery) ([]Type, error) {
+	list := []Type{}
+	err := s.typesScope(ctx, q).Order("sort, id").Limit(maxExportRows).Find(&list).Error
+	markBuiltinTypes(list)
+	return list, err
+}
+
 // ---- 字典数据 ----
 
-// ListData 分页查询字典数据，可按 typeId / status / 关键字过滤。
-func (s *Service) ListData(ctx context.Context, q ListQuery, page, size int) ([]Data, int64, error) {
+// dataScope 是字典数据「列表」与「导出」共用的查询条件：同一套关键字/状态/类型过滤，只写一遍。
+func (s *Service) dataScope(ctx context.Context, q ListQuery) (*gorm.DB, error) {
 	db := filter(s.db.WithContext(ctx).Model(&Data{}), q.Keyword, q.Status, "dict_label", "dict_value")
 	if q.TypeID != "" {
 		tid, err := idgen.Parse(q.TypeID)
 		if err != nil {
-			return nil, 0, response.BadRequest("error.bad_request").Wrap(err)
+			return nil, response.BadRequest("error.bad_request").Wrap(err)
 		}
 		db = db.Where("type_id = ?", int64(tid))
+	}
+	return db, nil
+}
+
+// ListData 分页查询字典数据，可按 typeId / status / 关键字过滤。
+func (s *Service) ListData(ctx context.Context, q ListQuery, page, size int) ([]Data, int64, error) {
+	db, err := s.dataScope(ctx, q)
+	if err != nil {
+		return nil, 0, err
 	}
 	var total int64
 	if err := db.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 	list := []Data{}
-	err := db.Order("sort, id").Offset((page - 1) * size).Limit(size).Find(&list).Error
+	err = db.Order("sort, id").Offset((page - 1) * size).Limit(size).Find(&list).Error
 	return list, total, err
+}
+
+// ExportData 按与 ListData 完全相同的筛选条件返回全部字典数据（不分页），供前端生成 CSV。
+func (s *Service) ExportData(ctx context.Context, q ListQuery) ([]Data, error) {
+	db, err := s.dataScope(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	list := []Data{}
+	return list, db.Order("sort, id").Limit(maxExportRows).Find(&list).Error
 }
 
 // GetData 读取单条字典数据。

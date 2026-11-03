@@ -29,6 +29,7 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.POST("", core.Perm("dept:create"), h.Create)
 	g.PUT("/:id", core.Perm("dept:update"), h.Update)
 	g.DELETE("/:id", core.Perm("dept:delete"), h.Delete)
+	g.DELETE("", core.Perm("dept:delete"), h.DeleteMany) // ?ids= 批量，与单条同一个权限码
 }
 
 // seedID 与前端 mock 的部门 ID 一致（186000000000000 + 4 位序号）。

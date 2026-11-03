@@ -155,6 +155,21 @@ func (h *handler) remove(c *gin.Context) {
 	response.OK(c, nil)
 }
 
+// removeMany DELETE /menus?ids=1,2,3 —— 批量删除，每项连同整棵子树一起删，返回实际删除条数。
+func (h *handler) removeMany(c *gin.Context) {
+	ids, err := response.ParseIDsQuery(c)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	n, err := h.svc.removeMany(c.Request.Context(), ids)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, map[string]int64{"deleted": n})
+}
+
 // sort PUT /menus/sort
 func (h *handler) sort(c *gin.Context) {
 	var in sortInput

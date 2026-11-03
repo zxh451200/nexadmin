@@ -42,4 +42,5 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	r.POST("/menus", core.Perm("menu:create"), h.create)
 	r.PUT("/menus/:id", core.Perm("menu:update"), h.update)
 	r.DELETE("/menus/:id", core.Perm("menu:delete"), h.remove)
+	r.DELETE("/menus", core.Perm("menu:delete"), h.removeMany) // ?ids= 批量，与单条同一个权限码
 }

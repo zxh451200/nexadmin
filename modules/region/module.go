@@ -70,6 +70,9 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 		d.Bus.On(busKind, func(_ json.RawMessage) { h.reload() }, h.reload)
 	}
 	r.GET("/regions/status", core.Perm("region:sync"), h.Status)
+	r.GET("/regions/sync/status", core.Perm("region:sync"), h.SyncStatus)
+	r.POST("/regions/preview", core.Perm("region:sync"), h.Preview)
+	r.POST("/regions/import", core.Perm("region:sync"), h.ImportFile)
 	r.POST("/regions/sync", core.Perm("region:sync"), h.Sync)
 	r.POST("/regions/reset", core.Perm("region:sync"), h.Reset)
 }

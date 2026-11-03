@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
+	"nexadmin/core/database"
 	coreoa "nexadmin/core/openapi"
 	"nexadmin/core/response"
 	"nexadmin/core/secret"
@@ -239,6 +240,50 @@ func (h *handler) appRemove(c *gin.Context) {
 		return
 	}
 	response.OK(c, nil)
+}
+
+// idValues 把批量 id 转成 SQL 参数：GORM 的 `IN ?` 要 []int64，而 idgen.ID 只是 int64 的别名类型。
+func idValues(ids []idgen.ID) []int64 {
+	out := make([]int64, len(ids))
+	for i, id := range ids {
+		out[i] = int64(id)
+	}
+	return out
+}
+
+// DELETE /openapi/apps?ids=1,2,3 —— 批量删除开放应用，权限码复用单条删除的 openapi:edit。
+//
+// 单条删除（appRemove）除了「按 id 读出本租户的应用（租户条件由 core/database 的租户插件追加）再删行」
+// 之外没有别的清理动作，批量版因此也只删行：
+//   - 密钥不需要额外吊销：签名调用每请求都现查 App（core/openapi 的 authn.app → Store.AppByKey），
+//     缓存里只有 nonce 与 last_used_at 的节流键，行没了签名立刻验不过；
+//   - 投递记录（sys_webhook_delivery）只挂 Webhook，与 App 无关，不存在悬挂引用。
+//
+// 租户条件再显式写进 WHERE（同 modules/sso、modules/sendlog 的批量删除）：破坏性操作除了插件那层保护
+// 再钉一遍，越权/别租户的 id 不会被删、也就不会计入实删条数，单测还能钉住真实 SQL 形状。
+func (h *handler) appRemoveMany(c *gin.Context) {
+	ids, err := response.ParseIDsQuery(c)
+	if err != nil {
+		response.Fail(c, err) // 空 ids / 任一项非法一律 400：绝不退化成「不带条件动整张表」
+		return
+	}
+	tid, ok := tenant.From(c.Request.Context())
+	if !ok {
+		response.Fail(c, database.ErrNoTenant) // 认不出租户就一条都不动，不会落到「删全站」
+		return
+	}
+	res := h.db.WithContext(c.Request.Context()).
+		Where("tenant_id = ? AND id IN ?", int64(tid), idValues(ids)).
+		Delete(&coreoa.App{})
+	if res.Error != nil {
+		response.Fail(c, res.Error)
+		return
+	}
+	if res.RowsAffected == 0 {
+		response.Fail(c, response.NotFound("error.not_found")) // 与单条删除同口径：选中的都不在就 404
+		return
+	}
+	response.OK(c, map[string]int64{"deleted": res.RowsAffected})
 }
 
 // PUT /openapi/apps/:id/enabled {enabled}

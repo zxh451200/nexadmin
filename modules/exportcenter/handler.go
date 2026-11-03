@@ -187,6 +187,53 @@ func (h *handler) act(c *gin.Context, fn func(context.Context, job.Actor, idgen.
 	response.OK(c, nil)
 }
 
+// removeBatch DELETE /jobs?ids=1,2,3 —— 批量删除，作用域与判据同单条 DELETE /jobs/:id：
+// 先逐个过 Manager.Get（非管理员只看得到自己的任务，别人的按不存在处理、不计入实删数），
+// 任一命中项还在 queued/running 就整批 409 拒绝（不删「能删的那几条」），
+// 全部校验通过后才逐条走 Manager.Delete —— 那条路径本身就会删行并连带删结果文件，副作用一样不少。
+// 一条都没命中时报 not found；ids 非法或为空直接 400，不退化成「删全部」。
+func (h *handler) removeBatch(c *gin.Context) {
+	a, ok := h.actor(c)
+	if !ok {
+		return
+	}
+	ids, err := response.ParseIDsQuery(c)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	ctx := c.Request.Context()
+	rows := make([]*job.Job, 0, len(ids))
+	for _, id := range ids {
+		j, err := h.m.Get(ctx, a, id)
+		if errors.Is(err, job.ErrNotFound) {
+			continue // 越权 / 已不存在：看不到也就删不到，不计入实删条数
+		}
+		if err != nil {
+			h.fail(c, err)
+			return
+		}
+		if !job.IsFinal(j.Status) {
+			h.fail(c, job.ErrBadState)
+			return
+		}
+		rows = append(rows, j)
+	}
+	if len(rows) == 0 {
+		response.Fail(c, response.NotFound("error.not_found"))
+		return
+	}
+	var n int64
+	for _, j := range rows {
+		if err := h.m.Delete(ctx, a, j.ID); err != nil {
+			h.fail(c, err)
+			return
+		}
+		n++
+	}
+	response.OK(c, gin.H{"deleted": n})
+}
+
 // download GET /jobs/:id/download：校验所有者后由后端代理输出（不暴露存储地址、不发签名链接），
 // 与文件模块的私有文件下载一致：attachment + nosniff，本地存储走 ServeContent（支持 Range）。
 func (h *handler) download(c *gin.Context) {

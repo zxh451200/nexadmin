@@ -98,6 +98,23 @@ func (h *Handler) Delete(c *gin.Context) {
 	response.OK(c, nil)
 }
 
+// DeleteBatch DELETE /posts?ids=1,2,3 —— 批量删除。
+// ids 走 response.ParseIDsQuery：任一项非法或整体为空都是 400，不会退化成「没带 ids 就动整张表」。
+// 逐条护栏与单条删除一致，任一条不合格整批回滚，返回体给出实际删除条数。
+func (h *Handler) DeleteBatch(c *gin.Context) {
+	ids, err := response.ParseIDsQuery(c)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	n, err := h.svc.DeleteMany(c.Request.Context(), ids)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, map[string]int64{"deleted": n})
+}
+
 // Sort PUT /posts/sort
 func (h *Handler) Sort(c *gin.Context) {
 	var in SortInput

@@ -33,4 +33,6 @@ func routes(r gin.IRoutes, h *Handler) {
 	r.POST("/backups", core.Perm("backup:edit"), guard, audit("create"), h.Create)
 	r.GET("/backups/:id/download", core.Perm("backup:download"), guard, h.Download)
 	r.DELETE("/backups/:id", core.Perm("backup:edit"), guard, audit("delete"), h.Delete)
+	// 批量删：权限码复用单条删除的 backup:edit（不新增权限点），审计与超管校验同单条。
+	r.DELETE("/backups", core.Perm("backup:edit"), guard, audit("delete"), h.DeleteMany)
 }

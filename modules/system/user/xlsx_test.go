@@ -13,7 +13,7 @@ func TestImportTemplateXLSXParses(t *testing.T) {
 	if err := writeImportTemplateXLSX(&buf); err != nil {
 		t.Fatal(err)
 	}
-	rows, err := parseImportXLSX(bytes.NewReader(buf.Bytes()), int64(buf.Len()))
+	rows, err := parseImportXLSX(bytes.NewReader(buf.Bytes()), int64(buf.Len()), defaultImportLimits())
 	if err != nil || len(rows) != 1 {
 		t.Fatalf("rows=%v err=%v", rows, err)
 	}
@@ -44,7 +44,7 @@ func TestExportXLSXRoundTripToImport(t *testing.T) {
 			t.Fatalf("sensitive field leaked in %s", f.Name)
 		}
 	}
-	rows, err := parseImportXLSX(bytes.NewReader(buf.Bytes()), int64(buf.Len()))
+	rows, err := parseImportXLSX(bytes.NewReader(buf.Bytes()), int64(buf.Len()), defaultImportLimits())
 	if err != nil || len(rows) != 2 {
 		t.Fatalf("rows=%v err=%v", rows, err)
 	}
@@ -74,7 +74,7 @@ func TestSniffImport(t *testing.T) {
 		{"a", []byte("x"), ""},
 	}
 	for _, c := range cases {
-		got, err := sniffImport(c.name, int64(len(c.body)), bytes.NewReader(c.body))
+		got, err := sniffImport(defaultImportLimits(), c.name, int64(len(c.body)), bytes.NewReader(c.body))
 		if (err == nil) != (c.want != "") || got != c.want {
 			t.Errorf("%s %q: got %q err=%v want %q", c.name, c.body, got, err, c.want)
 		}
@@ -84,7 +84,7 @@ func TestSniffImport(t *testing.T) {
 func TestParseImportXLSXRejectsBadFiles(t *testing.T) {
 	// 损坏文件：不 panic，返回错误
 	for _, b := range [][]byte{[]byte("PK\x03\x04garbage"), []byte("PK\x03\x04"), nil} {
-		if _, err := parseImportXLSX(bytes.NewReader(b), int64(len(b))); err == nil {
+		if _, err := parseImportXLSX(bytes.NewReader(b), int64(len(b)), defaultImportLimits()); err == nil {
 			t.Errorf("expected error for %q", b)
 		}
 	}
@@ -97,7 +97,7 @@ func TestParseImportXLSXRejectsBadFiles(t *testing.T) {
 	if buf.Len() > importMaxXLSXBytes {
 		t.Fatalf("bomb too big to be a bomb: %d", buf.Len())
 	}
-	if _, err := parseImportXLSX(bytes.NewReader(buf.Bytes()), int64(buf.Len())); err == nil {
+	if _, err := parseImportXLSX(bytes.NewReader(buf.Bytes()), int64(buf.Len()), defaultImportLimits()); err == nil {
 		t.Error("zip bomb accepted")
 	}
 }

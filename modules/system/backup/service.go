@@ -332,6 +332,36 @@ func (s *Service) Delete(ctx context.Context, id idgen.ID) error {
 	return s.db.WithContext(ctx).Where("id = ?", id).Delete(&Record{}).Error
 }
 
+// DeleteMany 批量删除备份：判据与单条 Delete 完全一致——正在进行且未超过 staleAfter 的备份不能删，
+// 命中一条就整批拒绝（不做「删掉能删的」）；每条都先删文件与 .sha256 旁路再删记录，
+// 文件删不掉就报错返回，绝不出现「行没了、文件还在」。
+// 请求里不存在 / 不属于本表的 id 删不到，也就不计入返回条数；一条都没命中时报不存在。
+func (s *Service) DeleteMany(ctx context.Context, ids []idgen.ID) (int64, error) {
+	list := make([]int64, 0, len(ids))
+	for _, id := range ids {
+		list = append(list, int64(id))
+	}
+	var rows []Record
+	if err := s.db.WithContext(ctx).Where("id IN ?", list).Find(&rows).Error; err != nil {
+		return 0, err
+	}
+	if len(rows) == 0 {
+		return 0, ErrNotFound
+	}
+	for i := range rows {
+		if rows[i].Status == StatusRunning && s.now().UTC().Sub(rows[i].CreatedAt) < staleAfter {
+			return 0, ErrBusy
+		}
+	}
+	for i := range rows {
+		if err := s.removeFiles(&rows[i]); err != nil {
+			return 0, err
+		}
+	}
+	res := s.db.WithContext(ctx).Where("id IN ?", list).Delete(&Record{})
+	return res.RowsAffected, res.Error
+}
+
 // ApplyRetention 按当前设置清理过期备份，返回清理条数。
 func (s *Service) ApplyRetention(ctx context.Context) (int, error) {
 	set, err := s.Setting(ctx)

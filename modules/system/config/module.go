@@ -107,7 +107,6 @@ var factoryRows = []struct {
 	{6, "登录验证码", "login.captcha_enabled", "true", TypeBoolean, true, "开启=登录必须先过图形验证码；关闭=连续失败达到阈值后才要求"},
 	{7, "登录最大重试次数", "login.max_retry", "5", TypeNumber, false, ""},
 	{8, "账号锁定时长(分钟)", "login.lock_minutes", "30", TypeNumber, false, ""},
-	{10, "IP 白名单", "security.ip_whitelist", `["10.0.0.0/8","192.168.0.0/16"]`, TypeJSON, false, "仅超管端生效"},
 	{11, "图片上传大小上限(MB)", KeyUploadImage, "0", TypeNumber, true, "0 或留空表示不限制"},
 	{12, "视频上传大小上限(MB)", KeyUploadVideo, "0", TypeNumber, true, "0 或留空表示不限制"},
 	{13, "普通文件上传大小上限(MB)", KeyUploadFile, "0", TypeNumber, true, "0 或留空表示不限制"},
@@ -141,10 +140,12 @@ func (module) Seed(db *gorm.DB) error {
 
 // SeedOnStartup 实现 setup.StartupSeeder：一次查询比对出厂参数键，齐全就返回；缺项才走完整的幂等 Seed。
 // 老版本出厂参数里的 site.name / site.logo 是无消费的死配置（站点信息实际由设置页「站点」分区的
-// siteName / logoUrl 提供，默认 logo 也早已统一为 /icon.svg），这里幂等清掉，让参数页与生效配置一致。
+// siteName / logoUrl 提供，默认 logo 也早已统一为 /icon.svg），security.ip_whitelist 同样没有任何
+// 代码读取它（超管端没有 IP 白名单闸），这里一并幂等清掉，让参数页与生效配置一致。
 func (m module) SeedOnStartup(db *gorm.DB) error {
 	db = db.WithContext(tn.Skip(db.Statement.Context))
-	if err := db.Where("config_key IN ?", []string{"site.name", "site.logo"}).Delete(&Config{}).Error; err != nil {
+	dead := []string{"site.name", "site.logo", "security.ip_whitelist"}
+	if err := db.Where("config_key IN ?", dead).Delete(&Config{}).Error; err != nil {
 		return err
 	}
 	var keys []string

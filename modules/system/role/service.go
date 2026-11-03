@@ -119,14 +119,66 @@ func (s *service) options(ctx context.Context, op *roleassign.Operator) ([]optio
 
 // find 按 ID 读取当前租户的角色。
 func (s *service) find(ctx context.Context, id idgen.ID) (*Role, error) {
+	return findIn(ctx, s.db, id)
+}
+
+// findIn 在给定的连接（*gorm.DB 或事务）上按 ID 读取当前租户的角色。
+// 租户条件由 TenantModel 的插件追加，事务内外走同一套作用域，批量删除才不会绕过它。
+func findIn(ctx context.Context, tx *gorm.DB, id idgen.ID) (*Role, error) {
 	var r Role
-	if err := s.db.WithContext(ctx).First(&r, "id = ?", int64(id)).Error; err != nil {
+	if err := tx.WithContext(ctx).First(&r, "id = ?", int64(id)).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, notFound()
 		}
 		return nil, err
 	}
 	return &r, nil
+}
+
+// usersHolding 统计仍（未删除地）持有该角色的用户数——单条与批量删除共用的护栏。
+func usersHolding(tx *gorm.DB, id idgen.ID) (int64, error) {
+	// sys_user_role 无租户列，角色已在调用方按租户校验过归属。
+	var n int64
+	err := tx.Table("sys_user_role AS ur").
+		Joins("JOIN sys_user u ON u.id = ur.user_id AND u.deleted_at IS NULL").
+		Where("ur.role_id = ?", int64(id)).Count(&n).Error
+	return n, err
+}
+
+// clearRoleLinks 清理角色的菜单授权、数据范围与用户关联。
+func clearRoleLinks(tx *gorm.DB, id idgen.ID) error {
+	for _, table := range []string{"sys_role_menu", "sys_role_dept", "sys_user_role"} {
+		if err := tx.Exec("DELETE FROM "+table+" WHERE role_id = ?", int64(id)).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// deleteOne 在一个事务里删除单个角色，判断与 remove 逐条一致：租户内读取（读不到 404）、
+// 内置角色不可删、仍有用户占用则 409，通过后才删本体并清理三张关联表。
+func deleteOne(ctx context.Context, tx *gorm.DB, id idgen.ID) (*Role, error) {
+	r, err := findIn(ctx, tx, id)
+	if err != nil {
+		return nil, err
+	}
+	if r.Builtin {
+		return nil, bad("role.builtin_delete_forbidden")
+	}
+	n, err := usersHolding(tx, id)
+	if err != nil {
+		return nil, err
+	}
+	if n > 0 {
+		return nil, response.Conflict("role.in_use", n)
+	}
+	if err := tx.Delete(&Role{}, "id = ?", int64(id)).Error; err != nil {
+		return nil, err
+	}
+	if err := clearRoleLinks(tx, id); err != nil {
+		return nil, err
+	}
+	return r, nil
 }
 
 func (s *service) get(ctx context.Context, id idgen.ID) (*roleDTO, error) {
@@ -303,11 +355,9 @@ func (s *service) remove(ctx context.Context, id idgen.ID) error {
 		return bad("role.builtin_delete_forbidden")
 	}
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// 仍有（未删除的）用户持有该角色时拒绝；sys_user_role 无租户列，角色已在上面按租户校验过归属。
-		var n int64
-		if err := tx.Table("sys_user_role AS ur").
-			Joins("JOIN sys_user u ON u.id = ur.user_id AND u.deleted_at IS NULL").
-			Where("ur.role_id = ?", int64(id)).Count(&n).Error; err != nil {
+		// 仍有（未删除的）用户持有该角色时拒绝。
+		n, err := usersHolding(tx, id)
+		if err != nil {
 			return err
 		}
 		if n > 0 {
@@ -316,18 +366,37 @@ func (s *service) remove(ctx context.Context, id idgen.ID) error {
 		if err := tx.Delete(&Role{}, "id = ?", int64(id)).Error; err != nil {
 			return err
 		}
-		for _, table := range []string{"sys_role_menu", "sys_role_dept", "sys_user_role"} {
-			if err := tx.Exec("DELETE FROM "+table+" WHERE role_id = ?", int64(id)).Error; err != nil {
-				return err
-			}
-		}
-		return nil
+		return clearRoleLinks(tx, id)
 	})
 	if err != nil {
 		return err
 	}
 	event.Publish(ctx, event.RoleDeleted, roleEvent(r))
 	return nil
+}
+
+// deleteMany 批量删除角色：一次事务内逐条走与单条删除完全相同的判断，任一条不合格整批回滚，
+// 绝不静默跳过「能删的那几条」——部分成功会让界面以为自己删的就是返回的那几条。
+// 返回实际删除条数（全部成功时等于请求条数）。
+func (s *service) deleteMany(ctx context.Context, ids []idgen.ID) (int64, error) {
+	var deleted []*Role
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		for _, id := range ids {
+			r, err := deleteOne(ctx, tx, id)
+			if err != nil {
+				return err
+			}
+			deleted = append(deleted, r)
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	for _, r := range deleted {
+		event.Publish(ctx, event.RoleDeleted, roleEvent(r))
+	}
+	return int64(len(deleted)), nil
 }
 
 // sort 按传入顺序重排角色（sort = 10, 20, 30 ...）。

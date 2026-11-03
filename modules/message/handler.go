@@ -59,9 +59,41 @@ func (h *Handler) MarkRead(c *gin.Context) {
 	response.Fail(c, response.BadRequest("error.bad_request"))
 }
 
-// Clear DELETE /messages
-func (h *Handler) Clear(c *gin.Context) {
-	done(c, nil, h.svc.ClearAll(c.Request.Context(), uidOf(c)))
+// ClearOrDeleteBatch DELETE /messages?ids=1,2,3 —— 带 ids 就批量删这几条；不带 ids 保持原语义＝清空全部。
+// 带了 ids 却解析不出合法 ID 一律 400：否则会静默退化成「清空全部」，那是最难发现的一种误删。
+func (h *Handler) ClearOrDeleteBatch(c *gin.Context) {
+	uid := uidOf(c)
+	raw, withIDs := c.GetQuery("ids")
+	if !withIDs {
+		done(c, nil, h.svc.ClearAll(c.Request.Context(), uid))
+		return
+	}
+	ids, err := parseIDs(raw)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	n, err := h.svc.DeleteMany(c.Request.Context(), uid, ids)
+	done(c, map[string]int64{"deleted": n}, err)
+}
+
+// parseIDs 解析逗号分隔的 ID 列表；任一项非法就整体拒绝，不做「删掉能删的」。
+func parseIDs(raw string) ([]idgen.ID, error) {
+	var ids []idgen.ID
+	for _, s := range strings.Split(raw, ",") {
+		if s = strings.TrimSpace(s); s == "" {
+			continue
+		}
+		id, err := idgen.Parse(s)
+		if err != nil || id <= 0 {
+			return nil, response.BadRequest("error.bad_request")
+		}
+		ids = append(ids, id)
+	}
+	if len(ids) == 0 {
+		return nil, response.BadRequest("error.bad_request")
+	}
+	return ids, nil
 }
 
 // Delete DELETE /messages/:id

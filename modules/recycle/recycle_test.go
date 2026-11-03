@@ -62,8 +62,8 @@ func TestRestoreUsesRecordOwnTenantAndWhitelistedTable(t *testing.T) {
 	expectEntry(mock, entryRow(10, 3, recbin.TypeUser, 77))
 	mock.ExpectBegin()
 	// 表名来自白名单映射，条件带回收记录自己的租户（原生 SQL 不经过租户 scope）
-	mock.ExpectExec("UPDATE sys_user SET deleted_at = NULL WHERE id = \\? AND tenant_id = \\?").
-		WithArgs(int64(77), int64(3)).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("UPDATE `sys_user` SET `deleted_at`=\\? WHERE id = \\? AND tenant_id = \\?").
+		WithArgs(nil, int64(77), int64(3)).WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec("DELETE FROM `sys_recycle` WHERE id = \\?").WithArgs(int64(10)).WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 	if err := s.Restore(ctxT(), 10); err != nil {
@@ -78,7 +78,7 @@ func TestRestoreConflictRollsBackAndKeepsEntry(t *testing.T) {
 	s, mock := setup(t)
 	expectEntry(mock, entryRow(10, 1, recbin.TypeUser, 77))
 	mock.ExpectBegin()
-	mock.ExpectExec("UPDATE sys_user SET deleted_at = NULL").WillReturnError(errors.New("Duplicate entry 'bob'"))
+	mock.ExpectExec("UPDATE `sys_user` SET `deleted_at`=\\?").WillReturnError(errors.New("Duplicate entry 'bob'"))
 	mock.ExpectRollback()
 	err := s.Restore(ctxT(), 10)
 	if statusOf(err) != http.StatusConflict {
@@ -93,7 +93,7 @@ func TestPurgeOnlyHardDeletesSoftDeletedRowOfSameTenant(t *testing.T) {
 	s, mock := setup(t)
 	expectEntry(mock, entryRow(11, 4, recbin.TypeUser, 88))
 	mock.ExpectBegin()
-	mock.ExpectExec("DELETE FROM sys_user WHERE id = \\? AND tenant_id = \\? AND deleted_at IS NOT NULL").
+	mock.ExpectExec("DELETE FROM `sys_user` WHERE id = \\? AND tenant_id = \\? AND deleted_at IS NOT NULL").
 		WithArgs(int64(88), int64(4)).WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec("DELETE FROM `sys_recycle` WHERE id = \\?").WithArgs(int64(11)).WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
@@ -109,9 +109,9 @@ func TestPurgeNoticeAlsoCleansTargetsAndReads(t *testing.T) {
 	s, mock := setup(t)
 	expectEntry(mock, entryRow(12, 1, recbin.TypeNotice, 99))
 	mock.ExpectBegin()
-	mock.ExpectExec("DELETE FROM sys_notice_target WHERE notice_id = \\?").WithArgs(int64(99)).WillReturnResult(sqlmock.NewResult(0, 2))
-	mock.ExpectExec("DELETE FROM sys_notice_read WHERE notice_id = \\?").WithArgs(int64(99)).WillReturnResult(sqlmock.NewResult(0, 5))
-	mock.ExpectExec("DELETE FROM sys_notice WHERE id = \\? AND tenant_id = \\? AND deleted_at IS NOT NULL").
+	mock.ExpectExec("DELETE FROM `sys_notice_target` WHERE notice_id = \\?").WithArgs(int64(99)).WillReturnResult(sqlmock.NewResult(0, 2))
+	mock.ExpectExec("DELETE FROM `sys_notice_read` WHERE notice_id = \\?").WithArgs(int64(99)).WillReturnResult(sqlmock.NewResult(0, 5))
+	mock.ExpectExec("DELETE FROM `sys_notice` WHERE id = \\? AND tenant_id = \\? AND deleted_at IS NOT NULL").
 		WithArgs(int64(99), int64(1)).WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec("DELETE FROM `sys_recycle`").WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
@@ -207,7 +207,7 @@ func TestHandlerRestoreOK(t *testing.T) {
 	s, mock := setup(t)
 	expectEntry(mock, entryRow(10, 1, recbin.TypeUser, 77))
 	mock.ExpectBegin()
-	mock.ExpectExec("UPDATE sys_user").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("UPDATE `sys_user` SET `deleted_at`=\\?").WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec("DELETE FROM `sys_recycle`").WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 	w := httptest.NewRecorder()
@@ -222,8 +222,8 @@ func TestRestoreSourceGoneReturns404AndCleansEntry(t *testing.T) {
 	s, mock := setup(t)
 	expectEntry(mock, entryRow(10, 3, recbin.TypeUser, 77))
 	mock.ExpectBegin()
-	mock.ExpectExec("UPDATE sys_user SET deleted_at = NULL WHERE id = \\? AND tenant_id = \\? AND deleted_at IS NOT NULL").
-		WithArgs(int64(77), int64(3)).WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec("UPDATE `sys_user` SET `deleted_at`=\\? WHERE id = \\? AND tenant_id = \\? AND deleted_at IS NOT NULL").
+		WithArgs(nil, int64(77), int64(3)).WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec("DELETE FROM `sys_recycle` WHERE id = \\?").WithArgs(int64(10)).WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit() // 回收记录的清理必须提交，而不是随 404 回滚
 	err := s.Restore(ctxT(), 10)
@@ -240,7 +240,7 @@ func TestPurgeSourceGoneReturns404AndCleansEntry(t *testing.T) {
 	s, mock := setup(t)
 	expectEntry(mock, entryRow(11, 4, recbin.TypeUser, 88))
 	mock.ExpectBegin()
-	mock.ExpectExec("DELETE FROM sys_user WHERE id = \\? AND tenant_id = \\? AND deleted_at IS NOT NULL").
+	mock.ExpectExec("DELETE FROM `sys_user` WHERE id = \\? AND tenant_id = \\? AND deleted_at IS NOT NULL").
 		WithArgs(int64(88), int64(4)).WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec("DELETE FROM `sys_recycle` WHERE id = \\?").WithArgs(int64(11)).WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()

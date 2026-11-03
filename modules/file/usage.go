@@ -22,6 +22,25 @@ func (s *Service) usedBytes(ctx context.Context, tid idgen.ID) (int64, error) {
 	})
 }
 
+// Usage 是侧栏用量展示的读口：已用字节数与套餐存储额度（MB，0 = 不限）。
+// 上传预检会拦超额，但用户不该等到上传失败才知道空间满了——竞品的网盘控制台都把用量挂在显眼处。
+func (s *Service) Usage(ctx context.Context) (int64, int64, error) {
+	tid, _ := tenant.From(ctx)
+	used, err := s.usedBytes(ctx, tid)
+	if err != nil {
+		return 0, 0, err
+	}
+	info, err := tenant.QuotaInfo(ctx)
+	if err != nil {
+		return 0, 0, err
+	}
+	var quotaMB int64
+	if info != nil {
+		quotaMB = info.MaxStorageMB
+	}
+	return used, quotaMB, nil
+}
+
 // ensureStorage 在新增 add 字节前检查套餐存储额度（0 = 不限）；没有额度限制时不做任何查询。
 // 此函数仅供用量检查；上传必须调用 reserveStorage 原子预占。
 func (s *Service) ensureStorage(ctx context.Context, add int64) error {

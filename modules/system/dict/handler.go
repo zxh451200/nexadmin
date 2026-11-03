@@ -124,6 +124,21 @@ func (h *Handler) SortTypes(c *gin.Context) {
 	}
 }
 
+// ExportTypes GET /dict/types/export?keyword=&status= —— 不分页返回当前筛选下的全部字典类型。
+// 权限与筛选口径都跟 ListTypes 一致（dict:list），CSV 由前端 ExportCsvButton 生成，表头跟着界面语言走。
+func (h *Handler) ExportTypes(c *gin.Context) {
+	var q ListQuery
+	if !response.BindQuery(c, &q) {
+		return
+	}
+	list, err := h.svc.ExportTypes(c.Request.Context(), q)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, list)
+}
+
 // ---- 字典数据 ----
 
 func (h *Handler) ListData(c *gin.Context) {
@@ -198,6 +213,21 @@ func (h *Handler) SortData(c *gin.Context) {
 	if response.BindJSON(c, &in) {
 		done(c, h.svc.SortData(c.Request.Context(), in.IDs))
 	}
+}
+
+// ExportData GET /dict/data/export?keyword=&status=&typeId= —— 不分页返回当前筛选下的全部字典数据。
+// 与 ListData 同一套条件（dict:list），不分租户、也不放宽任何过滤：能列出什么就能导出什么。
+func (h *Handler) ExportData(c *gin.Context) {
+	var q ListQuery
+	if !response.BindQuery(c, &q) {
+		return
+	}
+	list, err := h.svc.ExportData(c.Request.Context(), q)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, list)
 }
 
 // Items GET /dicts/:code/items —— 前端下拉/标签取数，只要登录；标签按请求语言返回。

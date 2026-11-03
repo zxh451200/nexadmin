@@ -140,6 +140,9 @@ export:
   sync_limit: 5000          # 匹配行数不超过它时同步直出；超过则前端改用异步导出
 log:
   export_max_rows: 50000    # 操作日志 / 登录日志服务端导出（GET /oper-logs/export、/login-logs/export）的行数上限，超过则拒绝，需缩小筛选范围
+ticket:
+  attachment_max_count: 0   # 单张工单的附件份数上限；0 或留空 = 出厂默认 20 份
+  attachment_max_mb: 0      # 单张工单的附件总字节上限（MB）；0 或留空 = 出厂默认 100MB
 setup:
   allow_remote: false
 ai:

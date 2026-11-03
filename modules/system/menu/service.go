@@ -302,6 +302,65 @@ func (s *service) removeLocked(ctx context.Context, id idgen.ID) error {
 	})
 }
 
+// subtreeUnion 把每个选中节点连同它的全部下级求并集（去重、升序），口径与单条 remove 完全一致：
+// 勾一个节点就是删它和它的全部后代。库里不存在的 ID 跳过（单条删除对不存在的菜单本就「视为成功」）；
+// 全部不存在时返回空集，调用方据此连 DELETE 都不打——空集合喂给 `id IN ?` 绝不能退化成全表操作。
+// 纯函数：不碰数据库，「选中集 = 被删集合」这条不变式可以在这里表驱动测死。
+func subtreeUnion(rows []Menu, roots []idgen.ID) []int64 {
+	exists := make(map[idgen.ID]bool, len(rows))
+	for i := range rows {
+		exists[rows[i].ID] = true
+	}
+	set := make(map[idgen.ID]bool, len(roots))
+	for _, id := range roots {
+		if !exists[id] {
+			continue
+		}
+		set[id] = true
+		for d := range descendants(rows, id) {
+			set[d] = true
+		}
+	}
+	out := make([]int64, 0, len(set))
+	for id := range set {
+		out = append(out, int64(id))
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	return out
+}
+
+// removeMany 批量删除菜单：每项连同全部下级求并集后删掉，并在同一事务里清掉角色对这些菜单的授权，
+// 返回实际删除条数（取 DELETE 的 RowsAffected，而不是选择集长度，确认框与返回值才不骗人）。
+// 与单条 remove 共用 mutateTree 的锁序：校验与写入同事务，任一环节失败整体回滚，
+// 不会留下「菜单删了半棵、授权还剩孤儿行」的中间态。
+func (s *service) removeMany(ctx context.Context, ids []idgen.ID) (int64, error) {
+	if len(ids) == 0 {
+		return 0, bad("error.bad_request")
+	}
+	var n int64
+	err := s.mutateTree(ctx, func(locked *service) error {
+		rows, err := locked.list(ctx)
+		if err != nil {
+			return err
+		}
+		list := subtreeUnion(rows, ids)
+		if len(list) == 0 {
+			return nil
+		}
+		db := locked.db.WithContext(ctx)
+		res := db.Where("id IN ?", list).Delete(&Menu{})
+		if res.Error != nil {
+			return res.Error
+		}
+		n = res.RowsAffected
+		return db.Exec("DELETE FROM sys_role_menu WHERE menu_id IN ?", list).Error
+	})
+	if err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
 // sort 重排同一父节点下的菜单；传入的 ID 集合必须与当前该层完全一致，否则 409 提示刷新。
 func (s *service) sort(ctx context.Context, in sortInput) error {
 	return s.mutateTree(ctx, func(locked *service) error { return locked.sortLocked(ctx, in) })

@@ -10,7 +10,10 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"go.uber.org/zap"
@@ -42,7 +45,23 @@ type Result struct {
 	Added   int         `json:"added"`
 	Removed int         `json:"removed"`
 	Renamed int         `json:"renamed"`
+	// Preview = true 表示这是 dry-run 结果：数据未生效，样本字段才有值。
+	Preview        bool         `json:"preview,omitempty"`
+	AddedSamples   []DiffSample `json:"addedSamples,omitempty"`
+	RemovedSamples []DiffSample `json:"removedSamples,omitempty"`
+	RenamedSamples []DiffSample `json:"renamedSamples,omitempty"`
 }
+
+// DiffSample 是预览时的一条变更样本（每类最多 maxDiffSamples 条，防大 diff 撑爆响应）。
+type DiffSample struct {
+	Code string `json:"code"`
+	Name string `json:"name"`
+	// Old 只有改名样本有：原名称。
+	Old string `json:"old,omitempty"`
+}
+
+// maxDiffSamples 是每类变更样本的上限：预览只给「长什么样」，全量清单没意义。
+const maxDiffSamples = 20
 
 // Service 负责同步快照的拉取、校验、落库与装配。
 type Service struct {
@@ -86,7 +105,80 @@ func (s *Service) Load(ctx context.Context) {
 }
 
 // Sync 拉取 source（空则用上次的来源或默认来源），校验通过后落库并立即生效。
-func (s *Service) Sync(ctx context.Context, source, actor string) (Result, error) {
+// 后台执行：立即返回，进度与结果走 SyncStatus 轮询（源最大 16MB，慢源不再卡住请求）。
+func (s *Service) Sync(ctx context.Context, source, actor string) error {
+	return s.StartSync(ctx, source, actor, nil)
+}
+
+// syncState 是后台同步任务的状态：前端轮询 GET /regions/sync/status 消费。
+type syncState struct {
+	Running bool    `json:"running"`
+	Stage   string  `json:"stage,omitempty"` // fetching | validating
+	Result  *Result `json:"result,omitempty"`
+	Error   string  `json:"error,omitempty"`
+}
+
+// 后台同步全局串行（内存快照的 Activate 不支持多写者并发生效）；状态指针整体替换，读侧无锁。
+var (
+	syncMu  sync.Mutex
+	syncJob atomic.Pointer[syncState]
+)
+
+// StartSync 把一次同步放到后台协程执行并立即返回；已有任务在跑时返回 409。
+// 廉价校验（来源缺失、明文地址）在提交前同步完成：明显的输入错误当场报 400，
+// 不让用户等轮询；慢的部分（拉取 16MB、校验、落库）才是后台化的意义。
+// onSynced 在成功落库并生效后回调（广播其它实例重装快照），由 handler 注入。
+func (s *Service) StartSync(ctx context.Context, source, actor string, onSynced func()) error {
+	syncMu.Lock()
+	defer syncMu.Unlock()
+	if st := syncJob.Load(); st != nil && st.Running {
+		return response.Conflict("region.sync_running")
+	}
+	source = strings.TrimSpace(source)
+	if source == "" {
+		source = s.source(ctx)
+	}
+	if source == "" {
+		return response.BadRequest("region.source_missing")
+	}
+	if err := checkSourceURL(source); err != nil {
+		return response.BadRequest("region.source_insecure", source).Wrap(err)
+	}
+	syncJob.Store(&syncState{Running: true, Stage: "fetching"})
+	// 后台任务不复用请求 ctx（请求返回即取消）；进程退出随进程消亡，状态自然丢弃。
+	go func() {
+		res, err := s.sync(context.Background(), source, actor, true)
+		if err != nil {
+			// 错误文案：response.Error 的本地化文案需要请求 ctx；后台任务取不到就用原始文本。
+			syncJob.Store(&syncState{Error: err.Error()})
+			return
+		}
+		syncJob.Store(&syncState{Result: &res})
+		if onSynced != nil {
+			onSynced()
+		}
+	}()
+	return nil
+}
+
+func (s *Service) storeSyncStage(stage string) {
+	syncJob.Store(&syncState{Running: true, Stage: stage})
+}
+
+// SyncStatus 返回当前后台同步状态（从未跑过时是零值：not running、无结果）。
+func (s *Service) SyncStatus() *syncState {
+	if p := syncJob.Load(); p != nil {
+		return p
+	}
+	return &syncState{}
+}
+
+// Preview 与 Sync 同一条校验链路，但不落库不生效：先看这次同步会改什么，再决定要不要应用。
+func (s *Service) Preview(ctx context.Context, source string) (Result, error) {
+	return s.sync(ctx, source, "", false)
+}
+
+func (s *Service) sync(ctx context.Context, source, actor string, apply bool) (Result, error) {
 	source = strings.TrimSpace(source)
 	if source == "" {
 		source = s.source(ctx)
@@ -98,6 +190,19 @@ func (s *Service) Sync(ctx context.Context, source, actor string) (Result, error
 	if err != nil {
 		return Result{}, err
 	}
+	return s.applyData(ctx, raw, source, lastModified, actor, apply)
+}
+
+// ImportFile 处理手动上传的数据文件（离线 / 内网环境没有可拉取的 HTTPS URL）：
+// 与 URL 同步走同一条解析/校验/落库链路，来源记录为 "upload"。
+func (s *Service) ImportFile(ctx context.Context, raw []byte, actor string, apply bool) (Result, error) {
+	if len(raw) == 0 {
+		return Result{}, response.BadRequest("region.source_missing")
+	}
+	return s.applyData(ctx, raw, "upload", "", actor, apply)
+}
+
+func (s *Service) applyData(ctx context.Context, raw []byte, source, lastModified, actor string, apply bool) (Result, error) {
 	tree, err := parseSource(raw)
 	if err != nil {
 		return Result{}, err
@@ -117,7 +222,12 @@ func (s *Service) Sync(ctx context.Context, source, actor string) (Result, error
 	if err != nil {
 		return Result{}, err
 	}
-	added, removed, renamed := diffNames(before, tree)
+	added, removed, renamed, addedS, removedS, renamedS := diffTree(before, tree)
+	if !apply {
+		// 预览只回报差异与样本，不写库、不切换内存数据。
+		return Result{Preview: true, Added: added, Removed: removed, Renamed: renamed,
+			AddedSamples: addedS, RemovedSamples: removedS, RenamedSamples: renamedS}, nil
+	}
 	row := Snapshot{
 		SourceURL:   source,
 		DataDate:    meta.DataDate,
@@ -311,40 +421,48 @@ func publicIP(ip net.IP) bool {
 }
 
 // parseSource 接受两种公开格式：code→name 的扁平对象，或已有的三级树数组。
+// 两种格式都会先补全港澳台：公开数据源大多不含台湾省，只含港澳，
+// 不补就会让「同步一次港澳台又没了」——补全后的字节就是落库与生效的字节，摘要与差异对比都按它算。
 func parseSource(raw []byte) ([]byte, error) {
 	trimmed := bytes.TrimSpace(raw)
 	if len(trimmed) == 0 {
 		return nil, response.BadRequest("region.data_invalid", "数据源为空")
 	}
+	var tree []byte
+	var err error
 	switch trimmed[0] {
 	case '{':
 		var flat map[string]string
-		if err := json.Unmarshal(trimmed, &flat); err != nil || len(flat) == 0 {
+		if err = json.Unmarshal(trimmed, &flat); err != nil || len(flat) == 0 {
 			return nil, response.BadRequest("region.data_invalid", "扁平格式应为 code→name 的对象")
 		}
-		tree, err := region.FromFlat(flat)
-		if err != nil {
+		if tree, err = region.FromFlat(flat); err != nil {
 			return nil, response.BadRequest("region.data_invalid", err.Error())
 		}
-		return tree, nil
 	case '[':
 		var nodes []*region.Node
-		if err := json.Unmarshal(trimmed, &nodes); err != nil || len(nodes) == 0 {
+		if err = json.Unmarshal(trimmed, &nodes); err != nil || len(nodes) == 0 {
 			return nil, response.BadRequest("region.data_invalid", "树格式应为节点数组")
 		}
-		tree, err := region.Encode(nodes)
-		if err != nil {
+		if tree, err = region.Encode(nodes); err != nil {
 			return nil, response.BadRequest("region.data_invalid", err.Error())
 		}
-		return tree, nil
+	default:
+		return nil, response.BadRequest("region.data_invalid", "数据源应是 JSON 对象或数组")
 	}
-	return nil, response.BadRequest("region.data_invalid", "数据源应是 JSON 对象或数组")
+	completed, err := region.EnsureSpecialRegions(tree)
+	if err != nil {
+		return nil, response.BadRequest("region.data_invalid", err.Error())
+	}
+	return completed, nil
 }
 
-func diffNames(before []*region.Node, raw []byte) (added, removed, renamed int) {
+// diffTree 对比新旧两棵树：返回三类变更的计数，并各收集最多 maxDiffSamples 条样本
+// 供同步预览展示；遍历顺序确定，样本是确定性的（按 code 排序后取前 N 条）。
+func diffTree(before []*region.Node, raw []byte) (added, removed, renamed int, addedS, removedS, renamedS []DiffSample) {
 	var after []*region.Node
 	if err := json.Unmarshal(raw, &after); err != nil {
-		return 0, 0, 0
+		return 0, 0, 0, nil, nil, nil
 	}
 	oldNames := map[string]string{}
 	var walkOld func(list []*region.Node)
@@ -364,22 +482,41 @@ func diffNames(before []*region.Node, raw []byte) (added, removed, renamed int) 
 		}
 	}
 	walkNew(after)
-	for code, name := range newNames {
-		old, ok := oldNames[code]
-		if !ok {
-			added++
-			continue
-		}
-		if old != name {
-			renamed++
-		}
+	// 排序保证样本确定性，不然每次预览的样本都不一样，没法对照。
+	codes := make([]string, 0, len(newNames)+len(oldNames))
+	for code := range newNames {
+		codes = append(codes, code)
 	}
 	for code := range oldNames {
 		if _, ok := newNames[code]; !ok {
-			removed++
+			codes = append(codes, code)
 		}
 	}
-	return added, removed, renamed
+	sort.Strings(codes)
+	for _, code := range codes {
+		name, ok := newNames[code]
+		if !ok {
+			removed++
+			if len(removedS) < maxDiffSamples {
+				removedS = append(removedS, DiffSample{Code: code, Name: oldNames[code]})
+			}
+			continue
+		}
+		old, ok := oldNames[code]
+		switch {
+		case !ok:
+			added++
+			if len(addedS) < maxDiffSamples {
+				addedS = append(addedS, DiffSample{Code: code, Name: name})
+			}
+		case old != name:
+			renamed++
+			if len(renamedS) < maxDiffSamples {
+				renamedS = append(renamedS, DiffSample{Code: code, Name: name, Old: old})
+			}
+		}
+	}
+	return added, removed, renamed, addedS, removedS, renamedS
 }
 
 // licenseFor 只给配置里的默认数据源标注许可证；管理员临时换成别的地址时不猜，留空由页面显示「—」。

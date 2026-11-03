@@ -234,6 +234,7 @@ func (a *App) buildFull() (*gin.Engine, error) {
 	}
 	api.POST("/auth/login", rl("login", middleware.ByIPAndPath()), h.Login)
 	api.GET("/auth/captcha", rl("captcha", middleware.ByIPAndPath()), h.Captcha)
+	api.GET("/auth/captcha/:key/audio", rl("captcha", middleware.ByIPAndPath()), h.CaptchaAudio)
 	api.POST("/auth/refresh", rl("refresh", middleware.ByIPAndPath()), h.Refresh)
 	api.GET("/auth/methods", h.Methods)
 	api.POST("/auth/logout", middleware.RequireLogin(), h.Logout)

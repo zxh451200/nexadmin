@@ -97,4 +97,7 @@ type listQuery struct {
 	GroupID  string `form:"groupId"` // "none" = 未分组
 	From     string `form:"from"`
 	To       string `form:"to"`
+	// Sort 取 name / size / created_at（白名单外的值静默回退默认排序）；Desc = 倒序
+	Sort string `form:"sort"`
+	Desc bool   `form:"desc"`
 }

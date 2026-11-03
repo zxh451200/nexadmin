@@ -119,24 +119,68 @@ func (s *Service) Update(ctx context.Context, id idgen.ID, in Input) (*Post, err
 	return get(db, id)
 }
 
-// Delete 删除岗位。
-func (s *Service) Delete(ctx context.Context, id idgen.ID) error {
-	db := s.db.WithContext(ctx)
-	if _, err := get(db, id); err != nil {
-		return err
-	}
-	// 仍有（未删除的）用户关联该岗位时拒绝；sys_user_post 无租户列，岗位已在上面按租户校验过归属。
+// usersAssigned 统计仍（未删除地）关联该岗位的用户数——单条与批量删除共用的护栏。
+func usersAssigned(tx *gorm.DB, id idgen.ID) (int64, error) {
+	// sys_user_post 无租户列，岗位已在调用方按租户校验过归属。
 	var n int64
-	err := db.Table("sys_user_post AS up").
+	err := tx.Table("sys_user_post AS up").
 		Joins("JOIN sys_user u ON u.id = up.user_id AND u.deleted_at IS NULL").
 		Where("up.post_id = ?", int64(id)).Count(&n).Error
+	return n, err
+}
+
+// rejectIfInUse 有人在用就 409，与 Delete 的语义一致。
+func rejectIfInUse(tx *gorm.DB, id idgen.ID) error {
+	n, err := usersAssigned(tx, id)
 	if err != nil {
 		return err
 	}
 	if n > 0 {
 		return response.Conflict("post.in_use", n)
 	}
+	return nil
+}
+
+// deleteOne 在给定的连接上删除单个岗位：先按租户读取（读不到 404），再挡住仍在使用的岗位。
+func deleteOne(ctx context.Context, tx *gorm.DB, id idgen.ID) error {
+	if _, err := get(tx.WithContext(ctx), id); err != nil {
+		return err
+	}
+	if err := rejectIfInUse(tx, id); err != nil {
+		return err
+	}
+	return tx.Where("id = ?", int64(id)).Delete(&Post{}).Error
+}
+
+// Delete 删除岗位。
+func (s *Service) Delete(ctx context.Context, id idgen.ID) error {
+	db := s.db.WithContext(ctx)
+	if _, err := get(db, id); err != nil {
+		return err
+	}
+	if err := rejectIfInUse(db, id); err != nil {
+		return err
+	}
 	return db.Where("id = ?", int64(id)).Delete(&Post{}).Error
+}
+
+// DeleteMany 批量删除岗位：一次事务内逐条走与 Delete 完全相同的判断，任一条不合格整批回滚，
+// 绝不静默跳过「能删的那几条」。返回实际删除条数（全部成功时等于请求条数）。
+func (s *Service) DeleteMany(ctx context.Context, ids []idgen.ID) (int64, error) {
+	var deleted int64
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		for _, id := range ids {
+			if err := deleteOne(ctx, tx, id); err != nil {
+				return err
+			}
+			deleted++
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	return deleted, nil
 }
 
 // Sort 调整顺序：ids 必须恰好是当前租户的全部岗位，否则 409。

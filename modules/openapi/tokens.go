@@ -159,6 +159,38 @@ func (h *handler) tokenCreate(c *gin.Context) {
 	response.OK(c, tokenCreatedDTO{ID: rec.ID, Name: rec.Name, Scope: rec.Scope, Prefix: rec.Prefix, ExpiresAt: rec.ExpiresAt, CreatedAt: rec.CreatedAt, Token: plain})
 }
 
+// DELETE /profile/tokens?ids=1,2,3（只能删自己的，批量版）
+//
+// 作用域与单条删除完全一致：走 self(c) 拿到当前登录用户（令牌/应用主体一律拒绝），
+// 再把 user_id 显式钉进 WHERE —— 别人的令牌 id 混在 ids 里也不会被删，只按 RowsAffected
+// 返回实删条数；一条都没命中（含全是越权 id）时与单条一样报 404。
+// 路由不挂权限码：这是用户自助接口，权限来自「令牌属于自己」这条数据范围，而不是 openapi:edit。
+// 关联清理：PAT 行本身没有下游引用（last_used_at 只是行内字段，签名/投递都不依赖它），
+// 鉴权侧每请求现查 token_hash（core/openapi 的 authn.pat → Store.PATByHash），删行即刻失效。
+func (h *handler) tokenDeleteMany(c *gin.Context) {
+	cl, ok := self(c)
+	if !ok {
+		return
+	}
+	ids, err := response.ParseIDsQuery(c)
+	if err != nil {
+		response.Fail(c, err) // 空 ids / 任一项非法一律 400：绝不退化成「不带条件动整张表」
+		return
+	}
+	res := h.db.WithContext(c.Request.Context()).
+		Where("user_id = ? AND id IN ?", int64(cl.UserID), idValues(ids)).
+		Delete(&coreoa.PAT{})
+	if res.Error != nil {
+		response.Fail(c, res.Error)
+		return
+	}
+	if res.RowsAffected == 0 {
+		response.Fail(c, response.NotFound("error.not_found"))
+		return
+	}
+	response.OK(c, map[string]int64{"deleted": res.RowsAffected})
+}
+
 // DELETE /profile/tokens/:id（只能删自己的）
 func (h *handler) tokenDelete(c *gin.Context) {
 	cl, ok := self(c)

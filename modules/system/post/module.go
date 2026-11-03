@@ -25,6 +25,7 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	g := r.Group("/posts")
 	g.GET("/options", h.Options) // 固定路径先于 /:id
 	g.PUT("/sort", core.Perm("post:update"), h.Sort)
+	g.DELETE("", core.Perm("post:delete"), h.DeleteBatch) // 批量删除：?ids=1,2,3，权限码与单条删除同一个
 	g.GET("", core.Perm("post:list"), h.List)
 	g.GET("/:id", core.Perm("post:list"), h.Get)
 	g.POST("", core.Perm("post:create"), h.Create)

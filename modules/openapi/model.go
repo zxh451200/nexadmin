@@ -99,12 +99,14 @@ func toWebhookDTO(w *Webhook) webhookDTO {
 }
 
 type deliveryDTO struct {
-	ID             idgen.ID   `json:"id"`
-	WebhookID      idgen.ID   `json:"webhookId"`
-	EventID        string     `json:"eventId"`
-	Event          string     `json:"event"`
-	Status         string     `json:"status"`
-	Attempts       int        `json:"attempts"`
+	ID        idgen.ID `json:"id"`
+	WebhookID idgen.ID `json:"webhookId"`
+	EventID   string   `json:"eventId"`
+	Event     string   `json:"event"`
+	Status    string   `json:"status"`
+	Attempts  int      `json:"attempts"`
+	// Payload 是发出去的 JSON 请求体：排障时「对方到底收到了什么」与响应同样重要。
+	Payload        string     `json:"payload"`
 	ResponseStatus int        `json:"responseStatus"`
 	ResponseBody   string     `json:"responseBody"`
 	Error          string     `json:"error"`
@@ -116,7 +118,7 @@ type deliveryDTO struct {
 
 func toDeliveryDTO(d *Delivery) deliveryDTO {
 	out := deliveryDTO{ID: d.ID, WebhookID: d.WebhookID, EventID: d.EventID, Event: d.Event, Status: d.Status, Attempts: d.Attempts,
-		ResponseStatus: d.ResponseStatus, ResponseBody: d.ResponseBody, Error: d.ErrorMsg, DurationMs: d.DurationMs,
+		Payload: d.Payload, ResponseStatus: d.ResponseStatus, ResponseBody: d.ResponseBody, Error: d.ErrorMsg, DurationMs: d.DurationMs,
 		CreatedAt: d.CreatedAt, DeliveredAt: d.DeliveredAt}
 	if d.Status == StatusPending {
 		t := d.NextAttemptAt

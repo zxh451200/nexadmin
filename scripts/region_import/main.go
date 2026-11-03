@@ -76,6 +76,13 @@ var mainland = map[string]bool{
 	"650000": true,
 }
 
+// 港澳台：省级按国标，下级的区/堂区是数据源按同一编法自定义的。
+// 来源不带时由 core/region/data/regions_sar.json 在运行时补全，这里只负责「带了就收」。
+var special = map[string]bool{"710000": true, "810000": true, "820000": true}
+
+// leafProvinces 与 core/region 同口径：台湾省的下级区划没有公开权威来源，只到省级。
+var leafProvinces = map[string]bool{"710000": true}
+
 func main() {
 	var o options
 	flag.StringVar(&o.input, "input", "", "必填：已获授权的本地 JSON 数组文件")
@@ -208,7 +215,7 @@ func level(code string) int {
 			return 0
 		}
 	}
-	if !mainland[code[:2]+"0000"] {
+	if !mainland[code[:2]+"0000"] && !special[code[:2]+"0000"] {
 		return 0
 	}
 	if code[2:] == "0000" {
@@ -331,7 +338,7 @@ func convert(records []*inputNode, o options, direct, childless map[string]bool)
 		n := nodes[code]
 		switch level(code) {
 		case 1:
-			if !o.sample && len(n.Children) == 0 {
+			if !o.sample && len(n.Children) == 0 && !leafProvinces[code] {
 				return nil, totals, fmt.Errorf("正式模式省级 %s 缺少下级", code)
 			}
 		case 2:
@@ -353,8 +360,14 @@ func convert(records []*inputNode, o options, direct, childless map[string]bool)
 			return nil, totals, fmt.Errorf("无县地级市声明 %s 不存在", code)
 		}
 	}
-	if !o.sample && len(roots) != len(mainland) {
-		return nil, totals, fmt.Errorf("正式模式要求大陆31省覆盖，实际 %d；样例请显式 -sample", len(roots))
+	mainlandRoots := 0
+	for _, n := range roots {
+		if mainland[n.Code] {
+			mainlandRoots++
+		}
+	}
+	if !o.sample && mainlandRoots != len(mainland) {
+		return nil, totals, fmt.Errorf("正式模式要求大陆31省覆盖，实际 %d；样例请显式 -sample", mainlandRoots)
 	}
 	return roots, totals, nil
 }

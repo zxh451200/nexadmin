@@ -26,6 +26,7 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	r.GET("/roles", core.Perm("role:list"), h.list)
 	r.GET("/roles/options", h.options) // 下拉选项：登录即可，只返回启用角色的 id 与名称
 	r.PUT("/roles/sort", core.Perm("role:update"), h.sort)
+	r.DELETE("/roles", core.Perm("role:delete"), h.removeAll) // 批量删除：?ids=1,2,3，权限码与单条删除同一个
 	r.GET("/roles/:id", core.Perm("role:list"), h.get)
 	r.POST("/roles", core.Perm("role:create"), h.create)
 	r.PUT("/roles/:id", core.Perm("role:update"), h.update)

@@ -184,6 +184,8 @@ Fixed-window rate limiting: the same key allows at most `limit` requests per `wi
 | `region.source_url` | string | `https://raw.githubusercontent.com/mumuy/data_location/master/list.json` | Default source for syncing region data; pre-fills the field under Settings → Region data. HTTPS only, private/loopback addresses are rejected at dial time. Empty = built-in snapshot only | Point it at your own mirror when the default source is unreachable |
 | `region.source_license` | string | `MIT` | License declared by that source; recorded with each synced snapshot for provenance | Change it when switching to another source |
 
+Hong Kong, Macao and Taiwan do not depend on the source: the default source only carries Hong Kong and Macao (Taiwan is absent from every public flat dataset), so any of them missing after a sync is topped up from `core/region/data/regions_sar.json`, while entries the source does provide win. Taiwan stops at the province level — its sub-divisions have no authoritative public source, and the framework does not invent them.
+
 ## 9. Keys read by code but absent from default.yaml
 
 The following keys are read by their owning modules directly from `config/default.yaml`, `config/config.yaml` and environment variables (same `NEXADMIN_` rules), bypassing `core/config` validation:

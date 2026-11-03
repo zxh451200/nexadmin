@@ -54,14 +54,10 @@ func settingsLimits(base Limits) LimitsFunc {
 	}
 }
 
-// LimitsFunc 返回当前生效的上传限制。默认读 config 里的 upload.*；
-// 系统参数模块可以通过 SetLimitsProvider 换成“后台可设”的实现。
+// LimitsFunc 返回当前生效的上传限制：config.yaml 的 upload.* 为底，系统参数「上传限制」覆盖
+// （settingsLimits 经 core.UploadLimitsFromSettings 取设置页的值）。装配时由 NewService 注入，
+// 只这一条通道——早先另有一个包级 SetLimitsProvider 注册点，没人调用，留着会让人以为有第二条链。
 type LimitsFunc func(ctx context.Context) Limits
-
-var limitsProvider LimitsFunc
-
-// SetLimitsProvider 让系统参数模块接管上传限制（后台参数页修改后即时生效）。
-func SetLimitsProvider(f LimitsFunc) { limitsProvider = f }
 
 // Service 是文件业务层。
 type Service struct {
@@ -77,9 +73,6 @@ func NewService(db *gorm.DB, st *store, limits LimitsFunc) *Service {
 }
 
 func (s *Service) currentLimits(ctx context.Context) Limits {
-	if limitsProvider != nil {
-		return limitsProvider(ctx)
-	}
 	return s.limits(ctx)
 }
 
@@ -227,8 +220,22 @@ func (s *Service) List(ctx context.Context, q listQuery, page, pageSize int) ([]
 	if err := tx.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
+	// 排序白名单：列名只来自这里，请求里的字符串永远进不了 SQL；id 兜底保证分页稳定
+	var order string
+	switch q.Sort {
+	case "name":
+		order = "name"
+	case "size":
+		order = "size"
+	default:
+		order = "created_at"
+	}
+	dir := "DESC"
+	if !q.Desc {
+		dir = "ASC"
+	}
 	var rows []File
-	if err := tx.Order("created_at DESC, id DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&rows).Error; err != nil {
+	if err := tx.Order(order + " " + dir + ", id DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&rows).Error; err != nil {
 		return nil, 0, err
 	}
 	return s.toItems(rows), total, nil

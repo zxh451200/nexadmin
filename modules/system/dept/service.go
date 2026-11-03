@@ -229,6 +229,86 @@ func (s *Service) Delete(ctx context.Context, id idgen.ID) error {
 	return nil
 }
 
+// subtreeUnionIDs 从 all 里求出若干子树根的物化路径前缀命中的部门 ID 并集（去重、升序）。
+// 判定与单条 Delete 的 `path LIKE '<path>%'` 完全同口径：前缀含根自身，所以「勾一个节点 = 删它和它全部后代」。
+// roots 里有重复路径不会让结果变大，这就是批量删除「不重不漏」的依据（纯函数，便于脱离数据库测）。
+func subtreeUnionIDs(all []Dept, rootPaths []string) []int64 {
+	set := make(map[int64]bool, len(all))
+	for i := range all {
+		for _, p := range rootPaths {
+			if p != "" && strings.HasPrefix(all[i].Path, p) {
+				set[int64(all[i].ID)] = true
+				break
+			}
+		}
+	}
+	out := make([]int64, 0, len(set))
+	for v := range set {
+		out = append(out, v)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	return out
+}
+
+// DeleteMany 批量删除部门：每个 ID 连同其全部下级求并集后删除，返回实际删除条数。
+// 护栏与单条 Delete 完全一致，且在同一个事务里判断：并集内任一部门仍有（未删除的）用户就整体 409 回滚，
+// 不静默跳过能删的那几棵——否则调用方以为自己删的就是选中的那些行。
+// 选中的 ID 在库里不存在时同样整体失败（404）：静默少删会让返回条数与选择集对不上。
+func (s *Service) DeleteMany(ctx context.Context, ids []idgen.ID) (int64, error) {
+	if len(ids) == 0 {
+		// 空集合喂给 `id IN ?` 是不打对象的语句，绝不能退化成「全表删除」
+		return 0, bad("error.bad_request")
+	}
+	var gone []Dept
+	var n int64
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var all []Dept // 单租户的部门量级很小（出厂种子才 12 条），整表读一次换「并集在内存里算准」
+		if err := tx.Find(&all).Error; err != nil {
+			return err
+		}
+		byID := make(map[int64]*Dept, len(all))
+		for i := range all {
+			byID[int64(all[i].ID)] = &all[i]
+		}
+		rootPaths := make([]string, 0, len(ids))
+		for _, id := range ids {
+			d, ok := byID[int64(id)]
+			if !ok {
+				return notFound()
+			}
+			rootPaths = append(rootPaths, d.Path)
+		}
+		union := subtreeUnionIDs(all, rootPaths)
+		var users int64
+		if err := tx.Table("sys_user").Where("deleted_at IS NULL AND dept_id IN ?", union).Count(&users).Error; err != nil {
+			return err
+		}
+		if users > 0 {
+			return response.Conflict("dept.has_users", users)
+		}
+		gone = make([]Dept, 0, len(union))
+		for _, v := range union {
+			if d, ok := byID[v]; ok {
+				gone = append(gone, *d)
+			}
+		}
+		res := tx.Where("id IN ?", union).Delete(&Dept{})
+		if res.Error != nil {
+			return res.Error
+		}
+		n = res.RowsAffected
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	// 与单条删除一样，逐个发 dept.deleted，下游（缓存、数据范围快照）才不会漏
+	for i := range gone {
+		event.Publish(ctx, event.DeptDeleted, deptEvent(&gone[i]))
+	}
+	return n, nil
+}
+
 // Sort 调整同级顺序：ids 必须恰好是该父节点下的全部子部门，否则 409。
 func (s *Service) Sort(ctx context.Context, in SortInput) error {
 	parent := nz(in.ParentID)

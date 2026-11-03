@@ -10,10 +10,12 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
+	"nexadmin/core/database"
 	"nexadmin/core/event"
 	coreoa "nexadmin/core/openapi"
 	"nexadmin/core/response"
 	"nexadmin/core/secret"
+	"nexadmin/core/tenant"
 	"nexadmin/pkg/idgen"
 )
 
@@ -174,6 +176,45 @@ func (h *handler) hookRemove(c *gin.Context) {
 		return
 	}
 	response.OK(c, nil)
+}
+
+// DELETE /openapi/webhooks?ids=1,2,3 —— 批量删除 Webhook 订阅，权限码复用单条删除的 openapi:edit。
+//
+// 清理动作原样照搬 hookRemove，并且同样整体事务化：先删这些订阅的投递记录（否则 sys_webhook_delivery
+// 里留下一堆指向已删订阅的悬挂行，worker 也只会把它们当成失效投递），再删订阅本身；任一步失败整批回滚，
+// 不出现「投递记录没了、订阅还在」的半截状态。
+// 两条语句都显式带 tenant_id（同 modules/sso 的批量删除）：越权 id 既不删订阅、也不清别租户的投递记录，
+// 实删条数按 Webhook 的 RowsAffected 如实返回，越权/不存在的 id 不计入。
+func (h *handler) hookRemoveMany(c *gin.Context) {
+	ids, err := response.ParseIDsQuery(c)
+	if err != nil {
+		response.Fail(c, err) // 空 ids / 任一项非法一律 400：绝不退化成「不带条件动整张表」
+		return
+	}
+	tid, ok := tenant.From(c.Request.Context())
+	if !ok {
+		response.Fail(c, database.ErrNoTenant) // 认不出租户就一条都不动
+		return
+	}
+	raw := idValues(ids)
+	var deleted int64
+	err = h.db.WithContext(c.Request.Context()).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("tenant_id = ? AND webhook_id IN ?", int64(tid), raw).Delete(&Delivery{}).Error; err != nil {
+			return err
+		}
+		res := tx.Where("tenant_id = ? AND id IN ?", int64(tid), raw).Delete(&Webhook{})
+		deleted = res.RowsAffected
+		return res.Error
+	})
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	if deleted == 0 {
+		response.Fail(c, response.NotFound("error.not_found")) // 与单条删除同口径
+		return
+	}
+	response.OK(c, map[string]int64{"deleted": deleted})
 }
 
 // PUT /openapi/webhooks/:id/enabled {enabled}

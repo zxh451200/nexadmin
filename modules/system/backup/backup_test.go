@@ -172,7 +172,8 @@ func TestRoutesRegisterWithoutConflict(t *testing.T) {
 	e := gin.New()
 	routes(e.Group("/api/v1"), NewHandler(nil)) // gin 在路由冲突时 panic
 	want := map[string]bool{"GET /api/v1/backups": false, "POST /api/v1/backups": false, "GET /api/v1/backups/status": false,
-		"GET /api/v1/backups/config": false, "PUT /api/v1/backups/config": false, "GET /api/v1/backups/:id/download": false, "DELETE /api/v1/backups/:id": false}
+		"GET /api/v1/backups/config": false, "PUT /api/v1/backups/config": false, "GET /api/v1/backups/:id/download": false,
+		"DELETE /api/v1/backups": false, "DELETE /api/v1/backups/:id": false}
 	for _, r := range e.Routes() {
 		delete(want, r.Method+" "+r.Path)
 	}

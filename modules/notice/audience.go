@@ -52,6 +52,49 @@ func (s *Service) visible(ctx context.Context, uid idgen.ID) *gorm.DB {
 	return q.Where("id NOT IN (?)", s.dismissSub(uid))
 }
 
+// DismissMany 批量把公告从自己的消息中心移除：只处理「当前用户本来看得见」的那些，
+// 越权或已被移除的 id 不计入返回条数（与 message.Service.DeleteMany 同口径，公告本身不动）。
+func (s *Service) DismissMany(ctx context.Context, uid idgen.ID, ids []idgen.ID) (int64, error) {
+	if len(ids) == 0 {
+		return 0, response.BadRequest("error.bad_request")
+	}
+	list := make([]int64, 0, len(ids))
+	for _, id := range ids {
+		list = append(list, int64(id))
+	}
+	var mine []int64
+	if err := s.visible(ctx, uid).Where("id IN ?", list).Pluck("id", &mine).Error; err != nil {
+		return 0, err
+	}
+	if len(mine) == 0 {
+		return 0, response.NotFound("error.not_found")
+	}
+	// 已经移除过的不再插一遍：与单条 Dismiss 一致，靠唯一索引兜并发重复提交
+	var already []int64
+	if err := s.db.WithContext(ctx).Model(&Dismiss{}).
+		Where("user_id = ? AND notice_id IN ?", int64(uid), mine).Pluck("notice_id", &already).Error; err != nil {
+		return 0, err
+	}
+	have := make(map[int64]bool, len(already))
+	for _, id := range already {
+		have[id] = true
+	}
+	rows := make([]Dismiss, 0, len(mine))
+	for _, id := range mine {
+		if have[id] {
+			continue
+		}
+		rows = append(rows, Dismiss{NoticeID: idgen.ID(id), UserID: uid})
+	}
+	if len(rows) == 0 {
+		return 0, nil
+	}
+	if err := s.db.WithContext(ctx).Create(&rows).Error; err != nil {
+		return 0, err
+	}
+	return int64(len(rows)), nil
+}
+
 // Clear 清空“我的公告”：公告本身不动，只记住当前时间点，之前发布的公告不再出现在
 // 该用户的列表、未读数与登录弹窗里；之后发布的新公告照常可见。
 func (s *Service) Clear(ctx context.Context, uid idgen.ID) error {

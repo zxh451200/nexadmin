@@ -41,6 +41,8 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	r.GET("/profile/tokens", h.tokenList)
 	r.POST("/profile/tokens", patCreate, h.tokenCreate)
 	r.DELETE("/profile/tokens/:id", h.tokenDelete)
+	// 批量撤销与单条同作用域（只动自己的令牌），同样不挂权限码
+	r.DELETE("/profile/tokens", h.tokenDeleteMany)
 
 	registerDocs(r, d)
 
@@ -50,6 +52,7 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	r.POST("/openapi/apps", core.Perm("openapi:edit"), h.appCreate)
 	r.PUT("/openapi/apps/:id", core.Perm("openapi:edit"), h.appUpdate)
 	r.DELETE("/openapi/apps/:id", core.Perm("openapi:edit"), h.appRemove)
+	r.DELETE("/openapi/apps", core.Perm("openapi:edit"), h.appRemoveMany) // 批量：?ids=1,2,3
 	r.PUT("/openapi/apps/:id/enabled", core.Perm("openapi:edit"), h.appSetEnabled)
 	r.POST("/openapi/apps/:id/reset-secret", core.Perm("openapi:edit"), h.appResetSecret)
 
@@ -57,6 +60,7 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	r.POST("/openapi/webhooks", core.Perm("openapi:edit"), h.hookCreate)
 	r.PUT("/openapi/webhooks/:id", core.Perm("openapi:edit"), h.hookUpdate)
 	r.DELETE("/openapi/webhooks/:id", core.Perm("openapi:edit"), h.hookRemove)
+	r.DELETE("/openapi/webhooks", core.Perm("openapi:edit"), h.hookRemoveMany) // 批量：?ids=1,2,3
 	r.PUT("/openapi/webhooks/:id/enabled", core.Perm("openapi:edit"), h.hookSetEnabled)
 	r.POST("/openapi/webhooks/:id/reset-secret", core.Perm("openapi:edit"), h.hookResetSecret)
 	r.POST("/openapi/webhooks/:id/test", core.Perm("openapi:edit"), h.hookTest)

@@ -13,6 +13,9 @@
 //	  -license MIT -authorization "<授权声明>" -direct-counties <脚本打印> -childless-prefectures <脚本打印>
 //	cp /tmp/region/out/{regions.json,manifest.json} core/region/data/
 //	go run ./scripts/region_fetch -from core/region/data/regions.json -web-mock web/src/framework/request/regions.mock.ts
+//
+// 重新生成的 manifest.json 只描述大陆快照，不带 specialRegions 那段港澳台溯源；
+// 覆盖 core/region/data/manifest.json 后要把该字段手工补回去（counts 也只算大陆 31 省）。
 package main
 
 import (
@@ -62,6 +65,11 @@ func main() {
 		fail(errors.New("输入为空"))
 	}
 	tree, err := region.FromFlat(flat)
+	if err != nil {
+		fail(err)
+	}
+	// 台湾省不在公开扁平数据里（省名见 GB/T 2260，无下级），按内置补全一起写出。
+	tree, err = region.EnsureSpecialRegions(tree)
 	if err != nil {
 		fail(err)
 	}
@@ -157,6 +165,11 @@ func fail(err error) {
 // 拼音同样出自 region.Pinyin，所以 mock 与后端不会给出两套搜索结果。
 func writeWebMock(from, target string) {
 	raw, err := os.ReadFile(from)
+	if err != nil {
+		fail(err)
+	}
+	// regions.json 只存大陆 31 省；前端 mock 要和后端 Tree() 同一口径，先补港澳台。
+	raw, err = region.EnsureSpecialRegions(raw)
 	if err != nil {
 		fail(err)
 	}

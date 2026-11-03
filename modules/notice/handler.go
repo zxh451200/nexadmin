@@ -197,9 +197,22 @@ func (h *Handler) Mine(c *gin.Context) {
 	response.Page(c, list, total, page, size)
 }
 
-// ClearMine DELETE /notices/mine：清空“我的公告”（只影响当前用户，公告本身不动）
+// ClearMine DELETE /notices/mine?ids=1,2,3 —— 带 ids 只把这几条从我的消息中心移除；
+// 不带 ids 保持原语义＝清空全部。带了 ids 却解析不出合法 ID 一律 400：
+// 静默退回「清空」是最难发现的误删（与 modules/message 的 ClearOrDeleteBatch 同一口径）。
 func (h *Handler) ClearMine(c *gin.Context) {
-	respond(c, nil, h.svc.Clear(c.Request.Context(), auth.ClaimsFrom(c).UserID))
+	uid := auth.ClaimsFrom(c).UserID
+	if _, withIDs := c.GetQuery("ids"); !withIDs {
+		respond(c, nil, h.svc.Clear(c.Request.Context(), uid))
+		return
+	}
+	ids, err := response.ParseIDsQuery(c)
+	if err != nil {
+		respond(c, nil, err)
+		return
+	}
+	n, err := h.svc.DismissMany(c.Request.Context(), uid, ids)
+	respond(c, map[string]int64{"dismissed": n}, err)
 }
 
 // DismissMine DELETE /notices/mine/:id：把一条公告从我的消息中心移除（公告本身不删）

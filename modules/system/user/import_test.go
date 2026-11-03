@@ -25,17 +25,17 @@ func TestParseImportCSV(t *testing.T) {
 		"alice,Alice,13800000001,a@x.com,女,研发部,运营;审计,工程师,\r\n" +
 		",,,,,,,,\r\n" + // 全空行被跳过
 		"bob,Bob\r\n" // 缺列视为空
-	rows, err := parseImportCSV(strings.NewReader(src))
+	rows, err := parseImportCSV(strings.NewReader(src), defaultImportLimits())
 	if err != nil || len(rows) != 2 {
 		t.Fatalf("rows=%v err=%v", rows, err)
 	}
 	if rows[0].Row != 2 || rows[0].Username != "alice" || rows[0].Roles != "运营;审计" || rows[1].Row != 4 || rows[1].Nickname != "Bob" {
 		t.Fatalf("unexpected rows: %+v", rows)
 	}
-	if _, err := parseImportCSV(strings.NewReader("姓名,手机\r\nx,y\r\n")); err == nil {
+	if _, err := parseImportCSV(strings.NewReader("姓名,手机\r\nx,y\r\n"), defaultImportLimits()); err == nil {
 		t.Fatal("missing username column must be rejected")
 	}
-	if _, err := parseImportCSV(strings.NewReader("")); err == nil {
+	if _, err := parseImportCSV(strings.NewReader(""), defaultImportLimits()); err == nil {
 		t.Fatal("empty file must be rejected")
 	}
 }

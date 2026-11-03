@@ -305,6 +305,38 @@ func TestListDataBadTypeID(t *testing.T) {
 	}
 }
 
+// 导出必须与列表同口径、但不分页：同样的关键字/状态/类型条件，语句结尾是 LIMIT ?（没有 OFFSET）。
+// 少一条过滤或漏掉上限，导出清单就和界面看到的不是一回事了。
+func TestExportReusesListFiltersWithoutPaging(t *testing.T) {
+	s, mock := setup(t)
+	mock.ExpectQuery("^SELECT \\* FROM `sys_dict_type` WHERE .*LOWER\\(name\\) LIKE \\? OR LOWER\\(code\\) LIKE \\?.* AND status IN \\(\\?\\) ORDER BY sort, id LIMIT \\?$").
+		WillReturnRows(sqlmock.NewRows([]string{"id", "code"}).AddRow(1, "sys_status").AddRow(2, "custom_a"))
+	list, err := s.ExportTypes(bg, ListQuery{Keyword: " AB ", Status: "1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 2 {
+		t.Fatalf("导出行数 = %d, want 2", len(list))
+	}
+	if !list[0].Builtin || list[1].Builtin { // 派生标记同列表一起补上，前端导出列才有「内置」这列
+		t.Errorf("builtin 标记应按出厂清单: %+v", list)
+	}
+
+	mock.ExpectQuery("^SELECT \\* FROM `sys_dict_data` WHERE .*status IN \\(\\?\\) AND type_id = \\? ORDER BY sort, id LIMIT \\?$").
+		WithArgs("1", int64(9), int64(maxExportRows)).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}))
+	if _, err := s.ExportData(bg, ListQuery{TypeID: "9", Status: "1"}); err != nil {
+		t.Fatal(err)
+	}
+	// typeId 非法：与 ListData 同一个 400，且一条语句都不发
+	if _, err := s.ExportData(bg, ListQuery{TypeID: "abc"}); statusOf(err) != http.StatusBadRequest {
+		t.Fatalf("typeId 非法应 400，得到 %v", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Error(err)
+	}
+}
+
 func router(s *Service) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	h := &Handler{svc: s}
