@@ -126,7 +126,9 @@ function parseNumber(raw: string): { ok: true; info: ParseResult } | { ok: false
 }
 
 const now = () => new Date().toISOString()
-const ago = (min: number) => new Date(Date.now() - min * 60_000).toISOString()
+
+// 台账默认空着：假数据不该冒充业务记录，页面开起来就是空态，
+// 你自己提交的那几条才会进列表（假上游只覆盖接口，不编造记录）。
 
 // 假上游的"实名花名册"：只有这里成对登记过的姓名+号码才会 match。
 const ROSTER: Record<string, string> = {
@@ -160,78 +162,7 @@ function row(partial: Partial<Verification> & { status: VerifyStatus }): Verific
   }
 }
 
-const ledger: Verification[] = [
-  row({
-    status: 'valid',
-    idType: 'hmt_permit',
-    nameMasked: '陳*',
-    numberMasked: maskId('810000199408230021'),
-    reason: 'type_unsupported',
-    remark: '港澳台居民居住证：无二要素通道',
-    createdAt: ago(15),
-  }),
-  row({
-    status: 'valid',
-    idType: 'foreigner_prp',
-    nameMasked: 'SMITH',
-    numberMasked: maskId('941840199003078038'),
-    reason: 'type_unsupported',
-    createdAt: ago(8),
-  }),
-  // 同一号码连提交两次：默认折叠成一行，切「全部留痕」能看到这两行。
-  row({
-    status: 'match',
-    nameMasked: '张**',
-    numberMasked: maskId('11010119900307803X'),
-    provider: 'generic',
-    providerMsg: '姓名与号码一致',
-    latencyMs: 176,
-    remark: '重复提交（第二次）',
-    createdAt: ago(30),
-  }),
-  row({
-    status: 'match',
-    nameMasked: '张**',
-    numberMasked: maskId('11010119900307803X'),
-    provider: 'generic',
-    providerMsg: '姓名与号码一致',
-    latencyMs: 187,
-    remark: '酒店入住实名登记',
-    createdAt: ago(35),
-  }),
-  row({
-    status: 'mismatch',
-    nameMasked: '王*',
-    numberMasked: maskId('11010519491231002X'),
-    provider: 'generic',
-    providerMsg: '姓名与号码不一致',
-    latencyMs: 214,
-    operatorName: 'front-desk',
-    createdAt: ago(140),
-  }),
-  row({
-    status: 'invalid',
-    nameMasked: '赵*',
-    numberMasked: maskId('110101199003078031'),
-    reason: 'checksum',
-    createdAt: ago(190),
-  }),
-  row({
-    status: 'valid',
-    nameMasked: '孙*',
-    numberMasked: maskId('440304198802291234'),
-    remark: '在线核验未启用，仅格式结论',
-    createdAt: ago(260),
-  }),
-  row({
-    status: 'error',
-    nameMasked: '周*',
-    numberMasked: maskId('500154199301135886'),
-    reason: 'daily_limit',
-    provider: 'generic',
-    createdAt: ago(300),
-  }),
-]
+const ledger: Verification[] = []
 
 const paginate = (rows: Verification[], query: Record<string, unknown>) => {
   const page = Number(query.page ?? 1)
