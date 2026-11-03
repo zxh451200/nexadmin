@@ -222,6 +222,18 @@ func TestNewPluginWithoutManifest(t *testing.T) {
 	}
 }
 
+// TestNewWithoutTotpConflictsWithPreset 钉的是两个旗标互相抵消：预设里含 totp，
+// 而 carryPlugins 让显式点名压过 --without-totp，同时给就等于 --without-totp 静默失效。
+func TestNewWithoutTotpConflictsWithPreset(t *testing.T) {
+	_, _, err := newTo(t, makeTemplate(t), newOptions{Module: "example.com/demo", WithoutTotp: true, Plugins: []string{"basic"}})
+	if err == nil {
+		t.Fatal("--without-totp 与含 totp 的预设同时给必须报错，不能静默按预设装")
+	}
+	if !strings.Contains(err.Error(), "--without-totp") {
+		t.Errorf("报错要指向冲突的两个旗标: %v", err)
+	}
+}
+
 func TestNewPluginsPathGuard(t *testing.T) {
 	_, _, err := newTo(t, makeTemplate(t), newOptions{Module: "example.com/demo", Plugins: []string{"../core"}})
 	if err == nil {

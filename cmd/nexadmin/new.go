@@ -97,6 +97,15 @@ func listPluginIDs(root string) []string {
 // validateCarryPlugins 在拷贝之前先检查点名的插件：一个拼错的 id 不该换来一个半成品项目目录，
 // 而带路径分隔符的名字会直接拼进 plugins/<id> 的拷贝路径，必须在这里挡掉。
 func validateCarryPlugins(root string, o newOptions) error {
+	if o.WithoutTotp {
+		// 预设里含 totp，而 carryPlugins 的规则是「显式点名压过 --without-totp」——
+		// 两个旗标同时给，结果只会是 --without-totp 静默失效，不如当场说清。
+		for _, raw := range o.Plugins {
+			if list, ok := pluginPresets[raw]; ok && slices.Contains(list, "totp") {
+				return fmt.Errorf("--without-totp 与预设 %q 冲突：%s 里就含 totp。要留 totp 就去掉 --without-totp，要去掉 totp 就改用 --plugins 逐个点名", raw, raw)
+			}
+		}
+	}
 	explicit := expandPluginPresets(o.Plugins)
 	for _, id := range carryPlugins(o) {
 		if !projectNameRe.MatchString(id) {

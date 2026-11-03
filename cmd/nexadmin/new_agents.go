@@ -60,7 +60,8 @@ var agentsMD = strings.ReplaceAll(`# AI 开发规则（AGENTS.md）
 - ^new <名称> [--out 目录] [--module go模块路径] [--plugins id,id|basic|standard | --with-plugins] [--without-totp] [--git]^ 派生新项目（默认只带 totp 基线，^--plugins^ 点名或写预设 ^basic^/^standard^）；^upgrade^ 见下节。
 - ^release check [--strict]^、^release pack^：框架发版用，二开者一般不需要。
 - 开发：后端 ^go run ./cmd/server^；前端 ^cd web && npm install && npm run dev^；生产迁移 ^nexadmin-server migrate [--status|--dry-run]^。
-- 提交前：^go build ./... && go vet ./... && go test ./...^；前端 ^cd web && npx tsc --noEmit && npm run build^。
+- 提交前：^go build ./... && go vet ./... && go test ./...^；前端 ^cd web && npx tsc --noEmit && npm run lint && npm run build^。
+- 改了树形表格/拖拽几何（落位线、缩进、书写方向）再跑 ^cd web && npm run e2e^：那些坐标是按像素算的，写错不报错、只画歪，tsc 与 eslint 照不出来。
 
 ## 7. 升级流程
 1. ^git commit^ 当前改动（工作区不干净会被拒绝）。
