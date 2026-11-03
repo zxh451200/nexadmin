@@ -1,9 +1,14 @@
 // Package region 是内置的省市区数据（go:embed，不建表、无迁移）。
 // 业务表只存 6 位行政区划代码；本包提供树/下级查询和代码校验。
 //
-// data/regions.json 是随包发布的完整快照（31 省级 / 333 地级 / 2847 县级），
+// data/regions.json 是随包发布的大陆快照（31 省级 / 333 地级 / 2847 县级），
 // 由 scripts/region_fetch 从公开数据源生成、scripts/region_import 校验，来源与许可证见
 // data/manifest.json。运行时可用 Activate 覆盖为同步下来的新版本，Reset 退回内置快照。
+//
+// 港澳台不在这份快照里：统计局只发布它们的省级代码，港澳下级的区/堂区是数据源按国标规则
+// 自定义的代码段，台湾省没有任何公开的下级数据。它们单独放在 data/regions_sar.json，
+// 由 EnsureSpecialRegions 补进树——内置数据装载时补一次，同步的外部数据缺哪条补哪条，
+// 源里已经带了就以源为准。所以生效的数据恒为 34 个省级。
 package region
 
 import (
@@ -20,6 +25,9 @@ import (
 
 //go:embed data/regions.json
 var rawData []byte
+
+//go:embed data/regions_sar.json
+var rawSAR []byte
 
 //go:embed data/regions_history.json
 var rawHistory []byte
@@ -71,7 +79,7 @@ var (
 	history   map[string]Historical
 )
 
-// 大陆 31 个省级行政区；港澳台用的是非国标代码段，不在省市区数据范围内。
+// 大陆 31 个省级行政区代码段。
 var mainlandPrefixes = map[string]bool{
 	"11": true, "12": true, "13": true, "14": true, "15": true,
 	"21": true, "22": true, "23": true,
@@ -79,6 +87,16 @@ var mainlandPrefixes = map[string]bool{
 	"41": true, "42": true, "43": true, "44": true, "45": true, "46": true,
 	"50": true, "51": true, "52": true, "53": true, "54": true,
 	"61": true, "62": true, "63": true, "64": true, "65": true,
+}
+
+// 港澳台代码段：省级按国标，下级的区/堂区是数据源按同一编法自定义的，见包注释。
+var sarPrefixes = map[string]bool{"71": true, "81": true, "82": true}
+
+// leafProvinces 允许没有下级：台湾省的下级区划没有公开权威来源，只到省级。
+var leafProvinces = map[string]bool{"710000": true}
+
+func isProvincePrefix(prefix string) bool {
+	return mainlandPrefixes[prefix] || sarPrefixes[prefix]
 }
 
 // manifest 是随包数据的来源记录，由 scripts/region_import 生成。
@@ -100,7 +118,12 @@ func builtinInfo() Info {
 
 func load() error {
 	once.Do(func() {
-		snap, err := build(rawData, builtinInfo())
+		raw, err := EnsureSpecialRegions(rawData)
+		if err != nil {
+			builtinEr = fmt.Errorf("region: bad embedded data: %w", err)
+			return
+		}
+		snap, err := build(raw, builtinInfo())
 		if err != nil {
 			builtinEr = fmt.Errorf("region: bad embedded data: %w", err)
 			return
@@ -171,8 +194,42 @@ func Encode(roots []*Node) ([]byte, error) {
 	return json.Marshal(roots)
 }
 
+// EnsureSpecialRegions 把内置的港澳台补进 raw 描述的树：源里已有同代码段的以源为准，
+// 一条都没补时原样返回原字节（快照摘要因此不会因为补全而变）。
+func EnsureSpecialRegions(raw []byte) ([]byte, error) {
+	var roots []*Node
+	if err := json.Unmarshal(raw, &roots); err != nil {
+		return nil, fmt.Errorf("region: 解析失败: %w", err)
+	}
+	present := map[string]bool{}
+	for _, n := range roots {
+		if n == nil {
+			return nil, fmt.Errorf("region: 存在空节点")
+		}
+		if len(n.Code) >= 2 {
+			present[n.Code[:2]] = true
+		}
+	}
+	var sar []*Node
+	if err := json.Unmarshal(rawSAR, &sar); err != nil {
+		return nil, fmt.Errorf("region: bad embedded SAR data: %w", err)
+	}
+	missing := 0
+	for _, n := range sar {
+		if !present[n.Code[:2]] {
+			roots = append(roots, n)
+			missing++
+		}
+	}
+	if missing == 0 {
+		return raw, nil
+	}
+	sort.Slice(roots, func(i, j int) bool { return roots[i].Code < roots[j].Code })
+	return Encode(roots)
+}
+
 // FromFlat 把 code→name 的扁平表（公开数据集常见格式）转成三级树字节。
-// 直辖市的区县与省直辖县级市直接挂在省级下面，与内置快照的结构一致。
+// 直辖市的区县、港澳的区/堂区与省直辖县级市直接挂在省级下面，与内置快照的结构一致。
 func FromFlat(flat map[string]string) ([]byte, error) {
 	codes := make([]string, 0, len(flat))
 	for code := range flat {
@@ -183,7 +240,7 @@ func FromFlat(flat map[string]string) ([]byte, error) {
 	index := map[string]*Node{}
 	for _, code := range codes {
 		name := strings.TrimSpace(flat[code])
-		if len(code) != 6 || !mainlandPrefixes[code[:2]] || name == "" {
+		if len(code) != 6 || !isProvincePrefix(code[:2]) || name == "" {
 			continue
 		}
 		node := &Node{Code: code, Name: name}
@@ -269,11 +326,12 @@ func build(raw []byte, meta Info) (*snapshot, error) {
 	if err := walk(roots, 1, ""); err != nil {
 		return nil, err
 	}
-	if counts[0] != len(mainlandPrefixes) {
-		return nil, fmt.Errorf("region: 省级应为大陆 %d 个，实际 %d", len(mainlandPrefixes), counts[0])
+	if counts[0] != len(mainlandPrefixes)+len(sarPrefixes) {
+		return nil, fmt.Errorf("region: 省级应为 %d 个（大陆 31 + 港澳台），实际 %d；外部数据先用 region.EnsureSpecialRegions 补全",
+			len(mainlandPrefixes)+len(sarPrefixes), counts[0])
 	}
 	for _, n := range roots {
-		if len(n.Children) == 0 {
+		if len(n.Children) == 0 && !leafProvinces[n.Code] {
 			return nil, fmt.Errorf("region: 省级 %s %s 没有下级", n.Code, n.Name)
 		}
 	}
@@ -294,8 +352,8 @@ func codeLevel(code string) (int, error) {
 			return 0, fmt.Errorf("region: 代码 %q 含非数字", code)
 		}
 	}
-	if !mainlandPrefixes[code[:2]] {
-		return 0, fmt.Errorf("region: 代码 %q 不在大陆省级范围内", code)
+	if !isProvincePrefix(code[:2]) {
+		return 0, fmt.Errorf("region: 代码 %q 不在省级代码范围内", code)
 	}
 	switch {
 	case strings.HasSuffix(code, "0000"):
@@ -306,7 +364,7 @@ func codeLevel(code string) (int, error) {
 	return 3, nil
 }
 
-// parentMatches：普通地级市/下辖县按 4 位前缀归属；直辖市的区县与省直辖县级市直接挂在省下。
+// parentMatches：普通地级市/下辖县按 4 位前缀归属；直辖市的区县、港澳的区/堂区与省直辖县级市直接挂在省下。
 func parentMatches(parent, code string, lvl int) bool {
 	if parent == code[:2]+"0000" {
 		return true

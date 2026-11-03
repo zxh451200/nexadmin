@@ -56,5 +56,14 @@
     "460400",
     "620200"
   ],
+  "specialRegions": {
+    "file": "regions_sar.json",
+    "reason": "上面 counts 只描述本文件（大陆 31 省）。统计局不发布港澳台的区划明细，所以港澳台另存一份，运行时由 region.EnsureSpecialRegions 补进树：数据源缺哪条补哪条，源里带了就以源为准。生效数据恒为 34 个省级。",
+    "sources": {
+      "710000": "台湾省：省级代码与名称按 GB/T 2260，取自 province-city-china 9.0.0（https://www.npmjs.com/package/province-city-china，MIT）。它的下级区划没有公开权威来源，因此只到省级，不编造。",
+      "810000": "香港特别行政区及其 18 个区：取自本文件 sourceURL（mumuy/data_location 的 list.json，MIT）。该源声明港澳代码是它按国标编法自定义的，非统计局发布值。",
+      "820000": "澳门特别行政区及其 9 个堂区：同上。"
+    }
+  },
   "validationScope": "结构、代码形态及省级覆盖校验；来源和授权为提供者声明，未在线核实，不证明各省市县数据完整或现行有效；未生成拼音或合成行政层级"
 }

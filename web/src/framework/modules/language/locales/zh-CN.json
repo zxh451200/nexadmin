@@ -3,12 +3,15 @@
     "menu": "语言管理",
     "desc": "全站唯一的语言清单：后台界面、公开站路由、字典标签与导出表头都读这一份。",
     "hint": "新增或删除语言、改路径前缀后要重启服务，公开站才会按新前缀注册页面路由。",
+    "configHint": "首次启动后清单以数据库为准，config.yaml 里的 languages 只作初始种子、此后修改不再生效。",
     "add": "添加语言",
     "remove": "删除语言",
     "default": "默认",
     "defaultTag": "默认语言",
+    "disabledTag": "已停用",
     "saved": "已保存",
     "savedRestart": "已保存，重启服务后公开站生效",
+    "conflict": "语言清单刚被其他人修改过，请刷新页面后再保存",
     "prefixRoot": "默认语言挂根路径，前缀必须为空",
     "prefixHint": "公开站路径前缀，如 /ja；留空则按语基自动推导",
     "derivedHint": "留空时按语言代码自动推导",
@@ -19,7 +22,8 @@
       "prefix": "路径前缀",
       "htmlLang": "<html lang> / hreflang",
       "ogLocale": "og:locale",
-      "dateFormat": "日期格式"
+      "dateFormat": "日期格式",
+      "enabled": "启用"
     },
     "setDefault": "设为默认",
     "removeConfirm": "删除语言「{{name}}」？保存后该语言的公开站页面会一并下线。",
@@ -29,6 +33,9 @@
     "prefixInvalid": "路径前缀只能用字母、数字和连字符",
     "removeDefaultBlocked": "默认语言不能删除，先把别的语言设为默认",
     "reorder": "拖动调整顺序",
-    "restoredDraft": "已恢复上次未保存的修改"
+    "restoredDraft": "已恢复上次未保存的修改",
+    "i18nEditor": "界面文案翻译",
+    "i18nEditorHint": "逐条编辑后台与官网的界面文案、查看各语言覆盖度：",
+    "i18nEditorCta": "打开翻译编辑器"
   }
 }

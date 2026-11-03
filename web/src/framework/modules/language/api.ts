@@ -20,7 +20,9 @@ export function useAdminLanguages() {
 export function useSaveLanguages() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (languages: LanguageRow[]) => api.put<SaveLanguagesResult>('/languages', { languages }),
+    // base 是编辑时的语言码集合（乐观锁）：服务端与当前集合比对，不一致返回 409
+    mutationFn: ({ languages, base }: { languages: LanguageRow[]; base: string }) =>
+      api.put<SaveLanguagesResult>('/languages', { languages, base }),
     // 语言切换器读的是 /i18n/languages（同一份清单的公开视图），一起失效才不会显示旧列表
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: KEY })

@@ -33,7 +33,9 @@ type languageRow struct {
 	Prefix     string `gorm:"column:prefix;size:16;not null;default:''"`
 	DateFormat string `gorm:"column:date_format;size:32;not null;default:''"`
 	IsDefault  bool   `gorm:"column:is_default;not null;default:false"`
-	Sort       int    `gorm:"column:sort;not null;default:0"`
+	// Enabled 是启用开关：停用的语言行保留在表里（配置不丢），但不进进程内的生效清单。
+	Enabled bool `gorm:"column:enabled;not null;default:true"`
+	Sort    int  `gorm:"column:sort;not null;default:0"`
 }
 
 func (languageRow) TableName() string { return "sys_language" }
@@ -49,6 +51,7 @@ func (r languageRow) toLanguage() Language {
 		Prefix:     r.Prefix,
 		DateFormat: r.DateFormat,
 		Default:    r.IsDefault,
+		Enabled:    &r.Enabled,
 	}
 }
 
@@ -57,7 +60,8 @@ var (
 	// rtlRe 与前端 framework/i18n 的判定保持一致：dir 缺省时按语基推出来。
 	rtlRe = regexp.MustCompile(`^(ar|he|fa|ur|yi|ps|ku)(-|$)`)
 
-	loadedLangs atomic.Pointer[[]Language]
+	loadedLangs atomic.Pointer[[]Language] // 生效清单（只含启用的语言）
+	allLangs    atomic.Pointer[[]Language] // 全量清单（含停用的，管理页用）
 )
 
 // NormalizeLanguages 校验并补全一份语言清单：后台保存与启动加载共用同一套规则。
@@ -76,6 +80,11 @@ func NormalizeLanguages(list []Language) ([]Language, error) {
 		l.Prefix = strings.Trim(strings.TrimSpace(l.Prefix), "/")
 		l.HTMLLang = strings.TrimSpace(l.HTMLLang)
 		l.Dir = strings.ToLower(strings.TrimSpace(l.Dir))
+		if l.Enabled == nil {
+			// 种子与旧客户端不写 enabled：缺省就是启用（指针语义保兼容）。
+			t := true
+			l.Enabled = &t
+		}
 		if l.Code == "" || !languageCodeRe.MatchString(l.Code) {
 			return nil, fmt.Errorf("语言代码不合法: %q（示例 zh-CN、en-US、ja-JP）", l.Code)
 		}
@@ -111,6 +120,9 @@ func NormalizeLanguages(list []Language) ([]Language, error) {
 		if l.Default {
 			if hasDefault {
 				return nil, fmt.Errorf("默认语言只能有一个")
+			}
+			if !*l.Enabled {
+				return nil, fmt.Errorf("默认语言不能停用: %s", l.Code)
 			}
 			hasDefault = true
 			if l.Prefix != "" {
@@ -187,11 +199,23 @@ func SyncLanguageTable(db *gorm.DB, cfg *config.Config) ([]Language, error) {
 	if err != nil {
 		return nil, fmt.Errorf("core: sys_language 内容不合法: %w", err)
 	}
-	loadedLangs.Store(&normalized)
+	// 全量清单给管理页（停用的语言要能再启用）；生效清单只留启用的——
+	// 文案协商、公开站路由、字典标签都从 Languages() 取，停用即整体下线。
+	all := make([]Language, len(normalized))
+	copy(all, normalized)
+	allLangs.Store(&all)
+	enabled := make([]Language, 0, len(normalized))
+	for _, l := range normalized {
+		if l.Enabled == nil || *l.Enabled {
+			enabled = append(enabled, l)
+		}
+	}
+	loadedLangs.Store(&enabled)
 	return normalized, nil
 }
 
 func rowOf(l Language, sort int) languageRow {
+	enabled := l.Enabled == nil || *l.Enabled
 	return languageRow{
 		Code:       l.Code,
 		Name:       l.Name,
@@ -202,6 +226,7 @@ func rowOf(l Language, sort int) languageRow {
 		Prefix:     l.Prefix,
 		DateFormat: l.DateFormat,
 		IsDefault:  l.Default,
+		Enabled:    enabled,
 		Sort:       sort,
 	}
 }
@@ -229,7 +254,7 @@ func ReloadLanguages(db *gorm.DB, cfg *config.Config) error {
 }
 
 // SaveLanguageList 校验后整表替换 sys_language，并立即重建进程内清单。
-// 返回落库后的规范清单（字段已补全）。
+// 返回落库后的规范全量清单（含停用语言，字段已补全）；生效集用 Languages() 取。
 //
 // 公开站按前缀注册的路由在引擎构建期生成，运行中不能加路由：调用方必须把
 // 「需重启生效」告诉用户，这里不试图热改路由。
@@ -256,15 +281,25 @@ func SaveLanguageList(db *gorm.DB, cfg *config.Config, list []Language) ([]Langu
 	if err := ReloadLanguages(db, cfg); err != nil {
 		return nil, err
 	}
-	return Languages(), nil
+	return AllLanguages(), nil
 }
 
-// Languages 返回进程内已加载的语言清单；SyncLanguageTable 之前回落到 config 清单。
+// Languages 返回进程内已加载的生效清单（只含启用的语言）；SyncLanguageTable 之前回落到 config 清单。
 func Languages() []Language {
 	if p := loadedLangs.Load(); p != nil {
 		return *p
 	}
 	return nil
+}
+
+// AllLanguages 返回全量清单（含停用的语言行），管理页据此展示与再启用。
+// AllLanguages 与 Languages 返回的是同一底层的两份拷贝，调用方可放心修改。
+func AllLanguages() []Language {
+	if p := allLangs.Load(); p != nil {
+		return *p
+	}
+	// 清单还没装载（极早启动期）时退化为生效清单。
+	return Languages()
 }
 
 // reloadLanguages 是启动期的入口：迁移刚建好 sys_language，这里播种或读回，

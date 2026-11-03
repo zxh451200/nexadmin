@@ -3,12 +3,15 @@
     "menu": "Languages",
     "desc": "The single source of truth for languages: admin UI, public-site routes, dictionary labels and export headers all read this list.",
     "hint": "Restart the service after adding or removing a language or changing a path prefix — public-site routes are registered at startup.",
+    "configHint": "After first startup the list lives in the database: the languages section in config.yaml only seeds it and no longer takes effect.",
     "add": "Add language",
     "remove": "Remove language",
     "default": "Default",
     "defaultTag": "Default language",
+    "disabledTag": "Disabled",
     "saved": "Saved",
     "savedRestart": "Saved — restart the service for the public site to pick it up",
+    "conflict": "The language list was just changed by someone else. Refresh the page before saving.",
     "prefixRoot": "The default language serves the root path, so its prefix must be empty",
     "prefixHint": "Public-site path prefix, e.g. ja; leave empty to derive it from the language base tag",
     "derivedHint": "Derived from the language code when left empty",
@@ -19,7 +22,8 @@
       "prefix": "Path prefix",
       "htmlLang": "<html lang> / hreflang",
       "ogLocale": "og:locale",
-      "dateFormat": "Date format"
+      "dateFormat": "Date format",
+      "enabled": "Enabled"
     },
     "setDefault": "Set as default",
     "removeConfirm": "Remove language \"{{name}}\"? After saving, its public pages go away too.",
@@ -29,6 +33,9 @@
     "prefixInvalid": "Path prefix may only contain letters, digits and hyphens",
     "removeDefaultBlocked": "The default language cannot be removed — make another language the default first",
     "reorder": "Drag to reorder",
-    "restoredDraft": "Restored your unsaved changes"
+    "restoredDraft": "Restored your unsaved changes",
+    "i18nEditor": "UI copy translations",
+    "i18nEditorHint": "Edit admin and public-site strings per key and check per-language coverage:",
+    "i18nEditorCta": "Open the translation editor"
   }
 }

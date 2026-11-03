@@ -13,10 +13,12 @@ import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
+import { Checkbox } from '@/framework/ui/checkbox'
 import { Card } from '@/framework/ui/card'
 import { Input } from '@/framework/ui/input'
 import { Skeleton } from '@/framework/ui/skeleton'
 import { cn } from '@/lib/utils'
+import { ApiError } from '@/framework/request/http'
 import { useAdminLanguages, useSaveLanguages, type LanguageRow } from './api'
 
 /** 编辑期在 LanguageRow 上挂一个稳定 key：拖拽与未保存草稿都靠它认行。 */
@@ -27,13 +29,13 @@ let seq = 0
 const nextId = () => `${Date.now().toString(36)}-${(seq++).toString(36)}`
 
 const emptyRow = (): EditableRow => ({
-  rowId: nextId(), code: '', name: '', dir: 'ltr', default: false, htmlLang: '', ogLocale: '', prefix: '', dateFormat: '',
+  rowId: nextId(), code: '', name: '', dir: 'ltr', default: false, htmlLang: '', ogLocale: '', prefix: '', dateFormat: '', enabled: true,
 })
 
 // 保存是整表替换：用固定字段顺序做指纹（忽略 rowId），避免对象键序不同造成“永远显示未保存”。
 const signature = (rows: LanguageRow[]) =>
   rows
-    .map((r) => [r.code, r.name, r.dir, r.default ? '1' : '0', r.htmlLang, r.ogLocale, r.prefix, r.dateFormat].join('\u0001'))
+    .map((r) => [r.code, r.name, r.dir, r.default ? '1' : '0', r.htmlLang, r.ogLocale, r.prefix, r.dateFormat, r.enabled === false ? '0' : '1'].join('\u0001'))
     .join('\u0002')
 
 const CODE_RE = /^[a-zA-Z]{2,3}(-[a-zA-Z0-9]+)*$/
@@ -71,8 +73,11 @@ export function LanguageSection() {
   const rowsRef = useRef<EditableRow[]>([])
   rowsRef.current = rows
 
+  // base 是编辑时的语言码集合（乐观锁指纹）：保存时发给服务端比对。
+  const baseRef = useRef('')
   useEffect(() => {
     if (!data) return
+    baseRef.current = data.map((r) => r.code).sort().join(',')
     const next = data.map((r) => ({ ...r, rowId: nextId() }))
     // updater 必须保持纯函数：StrictMode 会拿同一份 prev 调用两次，
     // 所以“该不该采用服务端数据”要在外面算好，不能靠 updater 里改 ref 再判断。
@@ -131,7 +136,7 @@ export function LanguageSection() {
   const patch = (i: number, next: Partial<LanguageRow>) =>
     setRows((prev) => prev.map((r, k) => (k === i ? { ...r, ...next } : r)))
   const setDefault = (i: number) =>
-    setRows((prev) => prev.map((r, k) => ({ ...r, default: k === i, prefix: k === i ? '' : r.prefix })))
+    setRows((prev) => prev.map((r, k) => ({ ...r, default: k === i, prefix: k === i ? '' : r.prefix, enabled: k === i ? true : r.enabled })))
 
   const remove = async (i: number) => {
     const row = rows[i]
@@ -162,13 +167,19 @@ export function LanguageSection() {
       return
     }
     try {
-      const res = await save.mutateAsync(rows)
+      const res = await save.mutateAsync({ languages: rows, base: baseRef.current })
       const saved = res.languages ?? rows
+      baseRef.current = saved.map((r) => r.code).sort().join(',')
       serverSig.current = signature(saved)
       setRows(saved.map((r) => ({ ...r, rowId: nextId() })))
       sessionStorage.removeItem(DRAFT_KEY)
       toast.success(res.needRestart ? t('language.savedRestart') : t('language.saved'))
     } catch (e) {
+      // 乐观锁拒绝（409）：明确告诉用户刷新，而不是一句笼统的「操作失败」
+      if (e instanceof ApiError && e.status === 409) {
+        toast.error(t('language.conflict'), { id: 'language-conflict' })
+        return
+      }
       toast.error(e instanceof Error && e.message ? e.message : t('common.operateFailed'))
     }
   }
@@ -209,9 +220,19 @@ export function LanguageSection() {
                           <span className="truncate font-mono text-sm font-medium">{row.code || '…'}</span>
                           {row.default ? <Badge variant="success">{t('language.defaultTag')}</Badge> : null}
                           <Badge variant={row.dir === 'rtl' ? 'secondary' : 'outline'}>{row.dir}</Badge>
+                          {row.enabled === false ? <Badge variant="warning">{t('language.disabledTag')}</Badge> : null}
                         </div>
                         <Can perm="language:update">
                           <div className="flex items-center gap-2">
+                            <label className="flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
+                              <Checkbox
+                                checked={row.enabled !== false}
+                                disabled={row.default}
+                                onCheckedChange={(v) => patch(i, { enabled: v === true })}
+                                aria-label={t('language.fields.enabled')}
+                              />
+                              {t('language.fields.enabled')}
+                            </label>
                             {row.default ? null : (
                               <Button type="button" variant="ghost" size="sm" onClick={() => setDefault(i)}>
                                 {t('language.setDefault')}
@@ -277,6 +298,19 @@ export function LanguageSection() {
       </DndContext>
 
       <p className="text-xs text-muted-foreground">{t('language.hint')}</p>
+      <p className="text-xs text-muted-foreground">{t('language.configHint')}</p>
+
+      {/* 与 i18n-editor 插件的桥接：语言生命周期在这里管，词条级翻译在那里管——给个入口别让人找。 */}
+      <div className="flex flex-wrap items-center gap-2 rounded-md border border-border px-3 py-2.5 text-sm">
+        <span className="font-medium">{t('language.i18nEditor')}</span>
+        <span className="text-xs text-muted-foreground">{t('language.i18nEditorHint')}</span>
+        <Button asChild variant="outline" size="sm" className="ms-auto">
+          <a href="/admin/system/i18n-editor">
+            {t('language.i18nEditorCta')}
+            <ChevronDown className="ms-1 size-4 -rotate-90" aria-hidden="true" />
+          </a>
+        </Button>
+      </div>
     </div>
   )
 }
