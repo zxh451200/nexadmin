@@ -9,6 +9,7 @@ import (
 
 	"nexadmin/core"
 	"nexadmin/core/response"
+	"nexadmin/modules/internal/recbin"
 	pi18n "nexadmin/pkg/i18n"
 	"nexadmin/pkg/idgen"
 )
@@ -124,6 +125,10 @@ func (s *Service) GetType(ctx context.Context, id idgen.ID) (*Type, error) {
 	return &t, nil
 }
 
+// typeCodeTaken 判断编码是否已被别的字典类型占用。
+// uk_sys_dict_type_code 接软删除时已降级成普通索引（三引擎都拿不到「只对未删行唯一」的写法），
+// 全局唯一性从这里保证：Model 查询自动带 deleted_at IS NULL，所以回收站里的类型不占码，
+// 删掉可以重建同码；还原撞码由回收站在还原前显式检查并回 409 recycle.restore_conflict。
 func (s *Service) typeCodeTaken(ctx context.Context, code string, exclude idgen.ID) (bool, error) {
 	var n int64
 	err := s.db.WithContext(ctx).Model(&Type{}).Where("code = ? AND id <> ?", code, int64(exclude)).Count(&n).Error
@@ -165,23 +170,33 @@ func (s *Service) UpdateType(ctx context.Context, id idgen.ID, in TypeInput) (*T
 	return s.GetType(ctx, id)
 }
 
-// DeleteTypes 删除字典类型，并级联删除其下全部字典数据；编码在出厂清单里的内置类型拒绝删除（409 dict.builtin）。
+// DeleteTypes 软删除字典类型并登记回收站；编码在出厂清单里的内置类型拒绝删除（409 dict.builtin）。
+//
+// 不再级联删除 sys_dict_data：条目原样留着，还原类型时整套字典才是完整的（软删除的类型
+// 已经查不出来，Items 按 code 取不到它，不会泄漏给业务）。只有「彻底删除」才按
+// recbin.Children[TypeDictType] 级联物理清掉条目（含已软删的条目）。
 func (s *Service) DeleteTypes(ctx context.Context, ids []idgen.ID) error {
 	raw := toInt64(ids)
-	var codes []string
-	if err := s.db.WithContext(ctx).Model(&Type{}).Where("id IN ?", raw).Pluck("code", &codes).Error; err != nil {
+	var types []Type
+	if err := s.db.WithContext(ctx).Where("id IN ?", raw).Find(&types).Error; err != nil {
 		return err
 	}
-	for _, c := range codes {
-		if isBuiltinType(c) {
+	for _, t := range types {
+		if isBuiltinType(t.Code) {
 			return builtinErr()
 		}
 	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("type_id IN ?", raw).Delete(&Data{}).Error; err != nil {
-			return err
+		for _, t := range types {
+			if err := tx.Delete(&Type{}, "id = ?", int64(t.ID)).Error; err != nil {
+				return err
+			}
+			// 字典是平台级表（源行没有 tenant_id），回收记录的 tenant_id 由 GORM 从 ctx 的当前租户填入。
+			if err := recbin.Add(ctx, tx, recbin.TypeDictType, t.ID, t.Name, recbin.Operator(ctx)); err != nil {
+				return err
+			}
 		}
-		return tx.Where("id IN ?", raw).Delete(&Type{}).Error
+		return nil
 	})
 }
 
@@ -252,6 +267,8 @@ func (s *Service) GetData(ctx context.Context, id idgen.ID) (*Data, error) {
 }
 
 // checkData 校验所属类型存在、同类型下值唯一。
+// 唯一性同 typeCodeTaken：uk_sys_dict_data_type_value 已降级为普通索引，
+// 靠这里的 deleted_at IS NULL（Model 查询自动追加）只比对未删条目。
 func (s *Service) checkData(ctx context.Context, in DataInput, exclude idgen.ID) error {
 	if _, err := s.GetType(ctx, in.TypeID); err != nil {
 		return response.BadRequest("dict.type_not_found")
@@ -315,11 +332,11 @@ func (s *Service) UpdateData(ctx context.Context, id idgen.ID, in DataInput) (*D
 	return s.GetData(ctx, id)
 }
 
-// DeleteData 删除字典数据；内置类型下的出厂数据项（seed 里的 value）拒绝删除（409 dict.builtin）。
+// DeleteData 软删除字典数据并登记回收站；内置类型下的出厂数据项（seed 里的 value）拒绝删除（409 dict.builtin）。
 func (s *Service) DeleteData(ctx context.Context, ids []idgen.ID) error {
 	raw := toInt64(ids)
 	var rows []Data
-	if err := s.db.WithContext(ctx).Select("id", "type_id", "dict_value").Where("id IN ?", raw).Find(&rows).Error; err != nil {
+	if err := s.db.WithContext(ctx).Select("id", "type_id", "dict_label", "dict_value").Where("id IN ?", raw).Find(&rows).Error; err != nil {
 		return err
 	}
 	if len(rows) > 0 {
@@ -341,7 +358,17 @@ func (s *Service) DeleteData(ctx context.Context, ids []idgen.ID) error {
 			}
 		}
 	}
-	return s.db.WithContext(ctx).Where("id IN ?", raw).Delete(&Data{}).Error
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		for _, r := range rows {
+			if err := tx.Delete(&Data{}, "id = ?", int64(r.ID)).Error; err != nil {
+				return err
+			}
+			if err := recbin.Add(ctx, tx, recbin.TypeDictData, r.ID, r.Label, recbin.Operator(ctx)); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 // SortData 按 ids 顺序重写 sort。

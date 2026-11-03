@@ -15,6 +15,7 @@ import (
 
 	"nexadmin/core/response"
 	"nexadmin/core/tenant"
+	"nexadmin/modules/internal/recbin"
 	"nexadmin/pkg/idgen"
 )
 
@@ -48,7 +49,8 @@ func statusOf(err error) int {
 func count(n int) *sqlmock.Rows { return sqlmock.NewRows([]string{"c"}).AddRow(n) }
 
 func expectCodeCount(mock sqlmock.Sqlmock, code string, exclude int64, n int) {
-	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `sys_post` WHERE code = \\? AND id <> \\?").
+	// 软删除后同码可以重建：查重只比对 deleted_at IS NULL 的行（唯一索引已降级为普通索引）。
+	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `sys_post` WHERE \\(code = \\? AND id <> \\?\\) AND `sys_post`\\.`deleted_at` IS NULL").
 		WithArgs(code, exclude).WillReturnRows(count(n))
 }
 
@@ -162,8 +164,10 @@ func expectUsers(mock sqlmock.Sqlmock, n int) {
 
 func TestDeleteRejectedWhenUsersAssigned(t *testing.T) {
 	s, mock := setup(t)
+	mock.ExpectBegin()
 	expectGet(mock, 8, true)
-	expectUsers(mock, 3) // 之后不预期任何写语句（含 Begin / DELETE）
+	expectUsers(mock, 3) // 之后不预期任何写语句（软删与登记都不该发生）
+	mock.ExpectRollback()
 	err := s.Delete(ctx, 8)
 	var re *response.Error
 	if !errors.As(err, &re) || re.Status != http.StatusConflict || re.Key != "post.in_use" || len(re.Args) != 1 || re.Args[0] != int64(3) {
@@ -177,7 +181,9 @@ func TestDeleteRejectedWhenUsersAssigned(t *testing.T) {
 func TestDelete(t *testing.T) {
 	t.Run("不存在 404 且不执行删除", func(t *testing.T) {
 		s, mock := setup(t)
+		mock.ExpectBegin()
 		expectGet(mock, 8, false)
+		mock.ExpectRollback()
 		if err := s.Delete(ctx, 8); statusOf(err) != http.StatusNotFound {
 			t.Fatalf("期望 404，得到 %v", err)
 		}
@@ -185,12 +191,16 @@ func TestDelete(t *testing.T) {
 			t.Error(err)
 		}
 	})
-	t.Run("存在则删除", func(t *testing.T) {
+	// 删除 = 同一事务里「打 deleted_at + 登记回收站」，绝不出 DELETE FROM sys_post，
+	// 也绝不动 sys_user_post（还原后岗位关联才是完整的）。
+	t.Run("存在则软删除并登记回收站", func(t *testing.T) {
 		s, mock := setup(t)
+		mock.ExpectBegin()
 		expectGet(mock, 8, true)
 		expectUsers(mock, 0)
-		mock.ExpectBegin()
-		mock.ExpectExec("DELETE FROM `sys_post` WHERE id = \\?").WithArgs(int64(8)).WillReturnResult(sqlmock.NewResult(0, 1))
+		mock.ExpectExec("UPDATE `sys_post` SET `deleted_at`=\\? WHERE id = \\?").
+			WithArgs(sqlmock.AnyArg(), int64(8)).WillReturnResult(sqlmock.NewResult(0, 1))
+		expectRecycleInsert(mock, recbin.TypePost, 8)
 		mock.ExpectCommit()
 		if err := s.Delete(ctx, 8); err != nil {
 			t.Fatal(err)
@@ -199,6 +209,15 @@ func TestDelete(t *testing.T) {
 			t.Error(err)
 		}
 	})
+}
+
+// expectRecycleInsert 钉住「回收站登记行的类型、指向的源行 id 与所属租户」——
+// 列顺序按 GORM 生成的 INSERT：id, created_at, updated_at, tenant_id, type, ref_id, name, deleted_by, deleted_at。
+func expectRecycleInsert(mock sqlmock.Sqlmock, typ string, ref int64) {
+	mock.ExpectExec("INSERT INTO `sys_recycle`").
+		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), int64(3), typ, ref,
+			sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(1, 1))
 }
 
 func TestSortRequiresExactlyAllPosts(t *testing.T) {
@@ -244,7 +263,7 @@ func TestSortRequiresExactlyAllPosts(t *testing.T) {
 func TestListAndOptions(t *testing.T) {
 	t.Run("关键字转义，匹配名称或编码", func(t *testing.T) {
 		s, mock := setup(t)
-		mock.ExpectQuery("FROM `sys_post` WHERE LOWER\\(name\\) LIKE \\? OR LOWER\\(code\\) LIKE \\? ORDER BY sort, id").
+		mock.ExpectQuery("FROM `sys_post` WHERE \\(LOWER\\(name\\) LIKE \\? OR LOWER\\(code\\) LIKE \\?\\) AND `sys_post`\\.`deleted_at` IS NULL ORDER BY sort, id").
 			WithArgs(`%a\%\_%`, `%a\%\_%`).WillReturnRows(sqlmock.NewRows([]string{"id"}))
 		list, err := s.List(ctx, " A%_ ")
 		if err != nil || list == nil {
@@ -256,7 +275,7 @@ func TestListAndOptions(t *testing.T) {
 	})
 	t.Run("下拉只取启用岗位", func(t *testing.T) {
 		s, mock := setup(t)
-		mock.ExpectQuery("FROM `sys_post` WHERE status = \\? ORDER BY sort, id").WithArgs("1").
+		mock.ExpectQuery("FROM `sys_post` WHERE status = \\? AND `sys_post`\\.`deleted_at` IS NULL ORDER BY sort, id").WithArgs("1").
 			WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(1, "开发").AddRow(2, "测试"))
 		got, err := s.Options(ctx)
 		if err != nil || len(got) != 2 || got[0].Name != "开发" {

@@ -161,7 +161,7 @@ func TestListFiltersEscapesKeywordAndPaginates(t *testing.T) {
 		WithArgs("user", `%a\%b\_c\\%`).WillReturnRows(sqlmock.NewRows([]string{"c"}).AddRow(25))
 	mock.ExpectQuery("FROM `sys_recycle` WHERE type = \\? AND name LIKE \\? ORDER BY deleted_at DESC LIMIT \\? OFFSET \\?").
 		WithArgs("user", `%a\%b\_c\\%`, 10, 10).WillReturnRows(entryRow(1, 1, "user", 5))
-	list, total, err := s.List(ctxT(), "user", `a%b_c\`, 2, 10)
+	list, total, err := s.List(ctxT(), ListFilter{Type: "user", Keyword: `a%b_c\`, Page: 2, Size: 10})
 	if err != nil {
 		t.Fatal(err)
 	}

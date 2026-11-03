@@ -13,10 +13,16 @@ import (
 	"gorm.io/gorm"
 
 	"nexadmin/core/roleassign"
+	"nexadmin/pkg/idgen"
 )
 
 func newSvc(t *testing.T) (*service, sqlmock.Sqlmock) {
 	t.Helper()
+	// 软删除会在同一事务里往 sys_recycle 插一行，那行的主键来自雪花——不初始化就当场报
+	// "idgen: not initialized"，报在 delete 用例里看着像删除逻辑坏了，其实是夹具没配齐。
+	if err := idgen.Init(1); err != nil {
+		t.Fatal(err)
+	}
 	sqlDB, mock, err := sqlmock.New()
 	if err != nil {
 		t.Fatal(err)

@@ -9,6 +9,7 @@ import (
 
 	"nexadmin/core"
 	"nexadmin/core/response"
+	"nexadmin/modules/internal/recbin"
 	"nexadmin/pkg/idgen"
 )
 
@@ -48,6 +49,9 @@ func get(tx *gorm.DB, id idgen.ID) (*Post, error) {
 }
 
 // codeTaken 判断同租户内编码是否已被其他岗位占用（租户条件由 scope 自动追加）。
+// 回收站里的软删除岗位不算占用（Model 查询自动带 deleted_at IS NULL）：
+// uk_sys_post_tenant_code 接软删除时已降级成普通索引，同租户内 code 的唯一性从这里保证；
+// 还原撞码由回收站在还原前显式检查并回 409 recycle.restore_conflict。
 func codeTaken(tx *gorm.DB, code string, exclude idgen.ID) (bool, error) {
 	var n int64
 	err := tx.Model(&Post{}).Where("code = ? AND id <> ?", code, int64(exclude)).Count(&n).Error
@@ -141,30 +145,37 @@ func rejectIfInUse(tx *gorm.DB, id idgen.ID) error {
 	return nil
 }
 
-// deleteOne 在给定的连接上删除单个岗位：先按租户读取（读不到 404），再挡住仍在使用的岗位。
+// trashPost 在 tx（事务）里打 deleted_at 并登记回收站：两步同事务，
+// 否则「行删了、回收站里没有」就是永久失联的数据。sys_user_post 不动——
+// 删除前 rejectIfInUse 已保证没有未删用户持有它，彻底删除时才由回收站按 recbin.Children 清。
+func trashPost(ctx context.Context, tx *gorm.DB, p *Post) error {
+	if err := tx.Delete(&Post{}, "id = ?", int64(p.ID)).Error; err != nil {
+		return err
+	}
+	return recbin.Add(ctx, tx, recbin.TypePost, p.ID, p.Name, recbin.Operator(ctx))
+}
+
+// deleteOne 在给定的连接上软删除单个岗位：先按租户读取（读不到 404），再挡住仍在使用的岗位。
 func deleteOne(ctx context.Context, tx *gorm.DB, id idgen.ID) error {
-	if _, err := get(tx.WithContext(ctx), id); err != nil {
+	p, err := get(tx.WithContext(ctx), id)
+	if err != nil {
 		return err
 	}
 	if err := rejectIfInUse(tx, id); err != nil {
 		return err
 	}
-	return tx.Where("id = ?", int64(id)).Delete(&Post{}).Error
+	return trashPost(ctx, tx, p)
 }
 
-// Delete 删除岗位。
+// Delete 软删除岗位（进回收站，可还原）。
 func (s *Service) Delete(ctx context.Context, id idgen.ID) error {
 	db := s.db.WithContext(ctx)
-	if _, err := get(db, id); err != nil {
-		return err
-	}
-	if err := rejectIfInUse(db, id); err != nil {
-		return err
-	}
-	return db.Where("id = ?", int64(id)).Delete(&Post{}).Error
+	return db.Transaction(func(tx *gorm.DB) error {
+		return deleteOne(ctx, tx, id)
+	})
 }
 
-// DeleteMany 批量删除岗位：一次事务内逐条走与 Delete 完全相同的判断，任一条不合格整批回滚，
+// DeleteMany 批量软删除岗位：一次事务内逐条走与 Delete 完全相同的判断，任一条不合格整批回滚，
 // 绝不静默跳过「能删的那几条」。返回实际删除条数（全部成功时等于请求条数）。
 func (s *Service) DeleteMany(ctx context.Context, ids []idgen.ID) (int64, error) {
 	var deleted int64

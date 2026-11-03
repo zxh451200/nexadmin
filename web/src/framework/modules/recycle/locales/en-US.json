@@ -1,10 +1,10 @@
 {
   "recycle": {
     "menu": "Recycle bin",
-    "description": "Deleted users, notices and more. Restore them or delete permanently",
+    "description": "Deleted records wait here. Restore them, or delete them permanently — the second one cannot be undone",
     "col": { "name": "Name", "type": "Type", "deletedBy": "Deleted by", "deletedAt": "Deleted at" },
-    "type": { "all": "All types", "user": "User", "notice": "Notice" },
-    "filter": { "keyword": "Keyword", "keywordPlaceholder": "Name", "type": "Data type" },
+    "type": { "all": "All types", "user": "User", "notice": "Notice", "role": "Role", "dictType": "Dictionary type", "dictData": "Dictionary item", "post": "Post" },
+    "filter": { "keyword": "Keyword", "keywordPlaceholder": "Name", "type": "Data type", "from": "Deleted from", "to": "Deleted to" },
     "action": { "restore": "Restore", "purge": "Delete permanently" },
     "confirm": {
       "restore": "Restore {{name}}?",

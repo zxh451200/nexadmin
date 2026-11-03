@@ -39,10 +39,10 @@ func TestImportDataCreates(t *testing.T) {
 	s, mock := setup(t)
 	mock.ExpectQuery("FROM `sys_dict_type` WHERE code = \\?").
 		WillReturnRows(typeRow(9, "sys_common_status", "1"))
-	mock.ExpectQuery("FROM `sys_dict_data` WHERE type_id = \\? AND dict_value = \\?").
+	mock.ExpectQuery("FROM `sys_dict_data` WHERE \\(type_id = \\? AND dict_value = \\?\\) AND `sys_dict_data`\\.`deleted_at` IS NULL").
 		WillReturnRows(sqlmock.NewRows([]string{"id"}))
 	expectGetType(mock, 9, typeRow(9, "sys_common_status", "1"))
-	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `sys_dict_data` WHERE type_id = \\? AND dict_value = \\? AND id <> \\?").
+	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `sys_dict_data` WHERE \\(type_id = \\? AND dict_value = \\? AND id <> \\?\\) AND `sys_dict_data`\\.`deleted_at` IS NULL").
 		WithArgs(int64(9), "1", int64(0)).WillReturnRows(count(0))
 	mock.ExpectBegin()
 	mock.ExpectExec("INSERT INTO `sys_dict_data`").WillReturnResult(sqlmock.NewResult(4321, 1))
@@ -65,11 +65,11 @@ func TestImportDataUpdatesExisting(t *testing.T) {
 	dataCols := sqlmock.NewRows([]string{"id", "type_id", "dict_value"}).AddRow(20, 9, "1")
 	mock.ExpectQuery("FROM `sys_dict_type` WHERE code = \\?").
 		WillReturnRows(typeRow(9, "sys_common_status", "1"))
-	mock.ExpectQuery("FROM `sys_dict_data` WHERE type_id = \\? AND dict_value = \\?").WillReturnRows(dataCols)
+	mock.ExpectQuery("FROM `sys_dict_data` WHERE \\(type_id = \\? AND dict_value = \\?\\) AND `sys_dict_data`\\.`deleted_at` IS NULL").WillReturnRows(dataCols)
 	mock.ExpectQuery("FROM `sys_dict_data` WHERE id = \\?").WithArgs(20, 1).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "type_id", "dict_value"}).AddRow(20, 9, "1"))
 	expectGetType(mock, 9, typeRow(9, "sys_common_status", "1"))
-	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `sys_dict_data` WHERE type_id = \\? AND dict_value = \\? AND id <> \\?").
+	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `sys_dict_data` WHERE \\(type_id = \\? AND dict_value = \\? AND id <> \\?\\) AND `sys_dict_data`\\.`deleted_at` IS NULL").
 		WithArgs(int64(9), "1", int64(20)).WillReturnRows(count(0))
 	mock.ExpectBegin()
 	mock.ExpectExec("UPDATE `sys_dict_data` SET").WillReturnResult(sqlmock.NewResult(0, 1))

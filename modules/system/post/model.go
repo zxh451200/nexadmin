@@ -2,6 +2,8 @@
 package post
 
 import (
+	"gorm.io/gorm"
+
 	"nexadmin/core/database"
 	"nexadmin/pkg/idgen"
 )
@@ -15,6 +17,10 @@ type Post struct {
 	Sort   int       `gorm:"not null" json:"sort"`
 	Status string    `gorm:"size:1;not null" json:"status"` // "1" 启用 "0" 停用
 	Remark string    `gorm:"size:500;not null" json:"remark,omitempty"`
+	// DeletedAt 软删除列：删除即进回收站（recbin.TypePost）。
+	// 同租户内 code 的唯一索引（uk_sys_post_tenant_code）已降级为普通索引，
+	// 唯一性由 codeTaken 保证——否则软删除行会永久占住编码，还原时也永远撞键。
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
 // TableName 指定表名。

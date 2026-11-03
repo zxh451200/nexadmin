@@ -4,7 +4,7 @@ import type { Page } from '@/framework/request/types'
 
 // 与后端 recbin.Tables 的登记保持一致：只列真正会进回收站的类型，
 // 多列的筛选项永远查不到数据，只会让人以为那种数据丢了。
-export const RECYCLE_TYPES = ['user', 'notice'] as const
+export const RECYCLE_TYPES = ['user', 'notice', 'role', 'dictType', 'dictData', 'post'] as const
 export type RecycleType = (typeof RECYCLE_TYPES)[number]
 
 /** 批量还原 / 批量彻底删除的回执：冲突与源行消失按条计数。 */
@@ -29,6 +29,9 @@ export interface RecycleQuery {
   pageSize: number
   keyword?: string
   type?: RecycleType
+  /** 删除日期范围（YYYY-MM-DD，含当天），任一可省 */
+  from?: string
+  to?: string
 }
 
 export function useRecycleList(query: RecycleQuery) {

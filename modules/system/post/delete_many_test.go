@@ -8,6 +8,7 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 
 	"nexadmin/core/response"
+	"nexadmin/modules/internal/recbin"
 	"nexadmin/pkg/idgen"
 )
 
@@ -21,13 +22,20 @@ func expectDeleteOne(mock sqlmock.Sqlmock, id int64, assigned int) {
 		WithArgs(id).WillReturnRows(count(assigned))
 }
 
+// expectTrashPost 钉住批量删除的写语句：只打 deleted_at 并登记回收站，
+// 绝不出 DELETE FROM sys_post，也不动 sys_user_post（还原后岗位关联才是完整的）。
+func expectTrashPost(mock sqlmock.Sqlmock, id int64) {
+	mock.ExpectExec("UPDATE `sys_post` SET `deleted_at`=\\? WHERE id = \\?").
+		WithArgs(sqlmock.AnyArg(), id).WillReturnResult(sqlmock.NewResult(0, 1))
+	expectRecycleInsert(mock, recbin.TypePost, id)
+}
+
 func TestDeleteManyAppliesSingleDeleteGuards(t *testing.T) {
 	s, mock := setup(t)
 	mock.ExpectBegin()
 	for _, id := range []int64{8, 9} {
 		expectDeleteOne(mock, id, 0)
-		mock.ExpectExec("DELETE FROM `sys_post` WHERE id = \\?").
-			WithArgs(id).WillReturnResult(sqlmock.NewResult(0, 1))
+		expectTrashPost(mock, id)
 	}
 	mock.ExpectCommit()
 
@@ -43,13 +51,12 @@ func TestDeleteManyAppliesSingleDeleteGuards(t *testing.T) {
 	}
 }
 
-// 第二条仍在被使用：整批回滚（Rollback，第一条的 DELETE 一起作废），不返回「删了 1 条」的部分成功。
+// 第二条仍在被使用：整批回滚（Rollback，第一条的软删与回收站登记一起作废），不返回「删了 1 条」的部分成功。
 func TestDeleteManyRollsBackWholeBatchWhenPostInUse(t *testing.T) {
 	s, mock := setup(t)
 	mock.ExpectBegin()
 	expectDeleteOne(mock, 8, 0)
-	mock.ExpectExec("DELETE FROM `sys_post` WHERE id = \\?").
-		WithArgs(int64(8)).WillReturnResult(sqlmock.NewResult(0, 1))
+	expectTrashPost(mock, 8)
 	expectDeleteOne(mock, 9, 3) // 判定命中后不再预期任何写语句
 	mock.ExpectRollback()
 
@@ -73,8 +80,7 @@ func TestDeleteManyRejectsUnknownPost(t *testing.T) {
 	mock.ExpectBegin()
 	expectGet(mock, 8, true)
 	mock.ExpectQuery(`SELECT count\(\*\) FROM sys_user_post`).WithArgs(int64(8)).WillReturnRows(count(0))
-	mock.ExpectExec("DELETE FROM `sys_post` WHERE id = \\?").
-		WithArgs(int64(8)).WillReturnResult(sqlmock.NewResult(0, 1))
+	expectTrashPost(mock, 8)
 	expectGet(mock, 9, false)
 	mock.ExpectRollback()
 

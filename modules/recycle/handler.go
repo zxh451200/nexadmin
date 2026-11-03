@@ -12,10 +12,18 @@ import (
 // Handler 是回收站的 HTTP 层。
 type Handler struct{ svc *Service }
 
-// List GET /recycle?type=&keyword=&page=&pageSize=
+// List GET /recycle?type=&keyword=&from=&to=&page=&pageSize=
+// from/to 是删除日期（YYYY-MM-DD，含当天），任一可省。
 func (h *Handler) List(c *gin.Context) {
 	page, size := response.ParsePage(c)
-	list, total, err := h.svc.List(c.Request.Context(), c.Query("type"), strings.TrimSpace(c.Query("keyword")), page, size)
+	list, total, err := h.svc.List(c.Request.Context(), ListFilter{
+		Type:    c.Query("type"),
+		Keyword: strings.TrimSpace(c.Query("keyword")),
+		From:    c.Query("from"),
+		To:      c.Query("to"),
+		Page:    page,
+		Size:    size,
+	})
 	if err != nil {
 		response.Fail(c, err)
 		return

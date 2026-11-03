@@ -2,6 +2,8 @@
 package dict
 
 import (
+	"gorm.io/gorm"
+
 	"nexadmin/core/database"
 	"nexadmin/pkg/idgen"
 )
@@ -16,6 +18,9 @@ type Type struct {
 	Remark string `gorm:"size:500;not null" json:"remark,omitempty"`
 	// Builtin 是派生标记：编码在出厂清单 seedTypes 里即为 true；不入库，读出时计算。
 	Builtin bool `gorm:"-" json:"builtin"`
+	// DeletedAt 软删除列：删除即进回收站（recbin.TypeDictType）。字典类型是平台级表（无 tenant_id），
+	// 回收记录仍按「执行删除的租户」隔离。删除时其下 sys_dict_data 一律保留，还原后条目原样回来。
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
 // TableName 指定表名。
@@ -35,6 +40,9 @@ type Data struct {
 	Sort     int      `gorm:"not null" json:"sort"`
 	Status   string   `gorm:"size:1;not null" json:"status"`
 	Remark   string   `gorm:"size:500;not null" json:"remark,omitempty"`
+	// DeletedAt 软删除列：删除即进回收站（recbin.TypeDictData）。
+	// 同 (type_id, dict_value) 的唯一索引已降级为普通索引，唯一性由 checkData 保证。
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
 // TableName 指定表名。

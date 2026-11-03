@@ -18,6 +18,8 @@ import (
 	corei18n "nexadmin/core/i18n"
 	"nexadmin/core/middleware"
 	"nexadmin/core/response"
+	"nexadmin/core/tenant"
+	"nexadmin/modules/internal/recbin"
 	"nexadmin/pkg/idgen"
 )
 
@@ -40,6 +42,12 @@ func setup(t *testing.T) (*Service, sqlmock.Sqlmock) {
 
 var bg = context.Background()
 
+// tbg 是带租户的上下文：字典本身是平台级表（sys_dict_type/data 在 core/database/isolation.go
+// 的免租户清单里），但软删除要往 sys_recycle 登记一行，那是 TenantModel——没有租户就当场报
+// "no tenant in context"。生产里这一路始终带着请求解析出的租户，测试必须同形，否则
+// 「删除字典」在真库里根本走不通。
+var tbg = tenant.With(bg, 3)
+
 func statusOf(err error) int {
 	var re *response.Error
 	if errors.As(err, &re) {
@@ -55,7 +63,9 @@ func typeRow(id int64, code, status string) *sqlmock.Rows {
 }
 
 func expectTypeCodeCount(mock sqlmock.Sqlmock, code string, exclude int64, n int) {
-	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `sys_dict_type` WHERE code = \\? AND id <> \\?").
+	// 唯一索引 uk_sys_dict_type_code 已降级为普通索引，全局唯一性由这里保证；
+	// 软删除的类型不占码，所以 Model 查询自动追加的 deleted_at IS NULL 必须出现在期望里（改坏了不会报错，只会放行重复码）。
+	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `sys_dict_type` WHERE \\(code = \\? AND id <> \\?\\) AND `sys_dict_type`\\.`deleted_at` IS NULL").
 		WithArgs(code, exclude).WillReturnRows(count(n))
 }
 
@@ -63,12 +73,24 @@ func expectGetType(mock sqlmock.Sqlmock, id int64, rows *sqlmock.Rows) {
 	mock.ExpectQuery("FROM `sys_dict_type` WHERE id = \\?").WithArgs(id, 1).WillReturnRows(rows)
 }
 
-func expectTypeCodes(mock sqlmock.Sqlmock, codes ...string) {
-	rows := sqlmock.NewRows([]string{"code"})
-	for _, c := range codes {
-		rows.AddRow(c)
+// expectTypeRows 钉住 DeleteTypes 选出的待删类型：查询取整行（软删除要把 name 写进回收登记）。
+// id 按入参顺序取 1..n，与本文件里 DeleteTypes 传的 id 集合一致。
+func expectTypeRows(mock sqlmock.Sqlmock, codes ...string) {
+	rows := sqlmock.NewRows([]string{"id", "name", "code"})
+	for i, c := range codes {
+		rows.AddRow(int64(i+1), "名称"+c, c)
 	}
-	mock.ExpectQuery("SELECT `code` FROM `sys_dict_type` WHERE id IN").WillReturnRows(rows)
+	mock.ExpectQuery("SELECT \\* FROM `sys_dict_type` WHERE id IN").WillReturnRows(rows)
+}
+
+// expectRecycleInsert 钉住回收登记行的类型与源行 id。字典是平台级表（源行没有 tenant_id），
+// 登记行仍带租户列，值取自 ctx——bg 没有租户所以这里不钉租户，只钉类型与指向的行。
+// 列顺序按 GORM 生成的 INSERT：id, created_at, updated_at, tenant_id, type, ref_id, name, deleted_by, deleted_at。
+func expectRecycleInsert(mock sqlmock.Sqlmock, typ string, ref int64) {
+	mock.ExpectExec("INSERT INTO `sys_recycle`").
+		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), int64(3), typ, ref,
+			sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(1, 1))
 }
 
 func TestCreateTypeCodeUnique(t *testing.T) {
@@ -124,15 +146,20 @@ func TestUpdateTypeCodeUniqueExcludesSelf(t *testing.T) {
 	})
 }
 
-func TestDeleteTypesCascadesDataInTransaction(t *testing.T) {
+// 删除字典类型 = 同事务里「打 deleted_at + 登记回收站」，逐条一次。
+// 关键不在数量而在**不级联**：sys_dict_data 一条都不许被 DELETE，否则还原出来的类型是空的；
+// 只有回收站的「彻底删除」才按 recbin.Children 物理清条目。
+func TestDeleteTypesSoftDeletesAndRegisters(t *testing.T) {
 	s, mock := setup(t)
-	expectTypeCodes(mock, "custom_a", "custom_b")
+	expectTypeRows(mock, "custom_a", "custom_b")
 	mock.ExpectBegin()
-	// 先删子（字典数据），再删父（字典类型），同一事务
-	mock.ExpectExec("DELETE FROM `sys_dict_data` WHERE type_id IN \\(\\?,\\?\\)").WithArgs(int64(1), int64(2)).WillReturnResult(sqlmock.NewResult(0, 3))
-	mock.ExpectExec("DELETE FROM `sys_dict_type` WHERE id IN \\(\\?,\\?\\)").WithArgs(int64(1), int64(2)).WillReturnResult(sqlmock.NewResult(0, 2))
+	for _, id := range []int64{1, 2} {
+		mock.ExpectExec("UPDATE `sys_dict_type` SET `deleted_at`=\\? WHERE id = \\?").
+			WithArgs(sqlmock.AnyArg(), id).WillReturnResult(sqlmock.NewResult(0, 1))
+		expectRecycleInsert(mock, recbin.TypeDictType, id)
+	}
 	mock.ExpectCommit()
-	if err := s.DeleteTypes(bg, []idgen.ID{1, 2}); err != nil {
+	if err := s.DeleteTypes(tbg, []idgen.ID{1, 2}); err != nil {
 		t.Fatal(err)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
@@ -140,12 +167,13 @@ func TestDeleteTypesCascadesDataInTransaction(t *testing.T) {
 	}
 }
 
+// 类型行没打成 deleted_at 就整批回滚，回收登记也不能留下——「行删了、回收站里没有」是永久失联。
 func TestDeleteTypesRollsBackWhenTypeDeleteFails(t *testing.T) {
 	s, mock := setup(t)
-	expectTypeCodes(mock, "custom_a")
+	expectTypeRows(mock, "custom_a")
 	mock.ExpectBegin()
-	mock.ExpectExec("DELETE FROM `sys_dict_data`").WillReturnResult(sqlmock.NewResult(0, 3))
-	mock.ExpectExec("DELETE FROM `sys_dict_type`").WillReturnError(errors.New("boom"))
+	mock.ExpectExec("UPDATE `sys_dict_type` SET `deleted_at`=\\? WHERE id = \\?").
+		WithArgs(sqlmock.AnyArg(), int64(1)).WillReturnError(errors.New("boom"))
 	mock.ExpectRollback()
 	if err := s.DeleteTypes(bg, []idgen.ID{1}); err == nil {
 		t.Fatal("应返回错误")
@@ -170,7 +198,7 @@ func TestCreateDataRules(t *testing.T) {
 	t.Run("同类型下值重复 409", func(t *testing.T) {
 		s, mock := setup(t)
 		expectGetType(mock, 9, typeRow(9, "gender", "1"))
-		mock.ExpectQuery("SELECT count\\(\\*\\) FROM `sys_dict_data` WHERE type_id = \\? AND dict_value = \\? AND id <> \\?").
+		mock.ExpectQuery("SELECT count\\(\\*\\) FROM `sys_dict_data` WHERE \\(type_id = \\? AND dict_value = \\? AND id <> \\?\\) AND `sys_dict_data`\\.`deleted_at` IS NULL").
 			WithArgs(int64(9), "1", int64(0)).WillReturnRows(count(1))
 		if _, err := s.CreateData(bg, in); statusOf(err) != http.StatusConflict {
 			t.Fatalf("期望 409，得到 %v", err)
@@ -204,7 +232,7 @@ func TestUpdateDataValueUniqueExcludesSelf(t *testing.T) {
 	mock.ExpectQuery("FROM `sys_dict_data` WHERE id = \\?").WithArgs(20, 1).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "type_id", "dict_value"}).AddRow(20, 9, "1"))
 	expectGetType(mock, 9, typeRow(9, "gender", "1"))
-	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `sys_dict_data` WHERE type_id = \\? AND dict_value = \\? AND id <> \\?").
+	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `sys_dict_data` WHERE \\(type_id = \\? AND dict_value = \\? AND id <> \\?\\) AND `sys_dict_data`\\.`deleted_at` IS NULL").
 		WithArgs(int64(9), "1", int64(20)).WillReturnRows(count(0))
 	mock.ExpectBegin()
 	mock.ExpectExec("UPDATE `sys_dict_data` SET").WillReturnResult(sqlmock.NewResult(0, 1))
@@ -238,7 +266,7 @@ func TestItems(t *testing.T) {
 	dataCols := []string{"id", "dict_label", "label_en", "i18n_json", "dict_value", "tag"}
 	t.Run("字典不存在或停用返回空数组", func(t *testing.T) {
 		s, mock := setup(t)
-		mock.ExpectQuery("FROM `sys_dict_type` WHERE code = \\? AND status = \\?").WithArgs("gender", "1", 1).
+		mock.ExpectQuery("FROM `sys_dict_type` WHERE \\(code = \\? AND status = \\?\\) AND `sys_dict_type`\\.`deleted_at` IS NULL").WithArgs("gender", "1", 1).
 			WillReturnRows(sqlmock.NewRows([]string{"id"}))
 		got, err := s.Items(bg, "gender", "zh-CN")
 		if err != nil || got == nil || len(got) != 0 {
@@ -262,8 +290,8 @@ func TestItems(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s, mock := setup(t)
-			mock.ExpectQuery("FROM `sys_dict_type` WHERE code = \\? AND status = \\?").WillReturnRows(typeRow(9, "gender", "1"))
-			mock.ExpectQuery("FROM `sys_dict_data` WHERE type_id = \\? AND status = \\? ORDER BY sort, id").
+			mock.ExpectQuery("FROM `sys_dict_type` WHERE \\(code = \\? AND status = \\?\\) AND `sys_dict_type`\\.`deleted_at` IS NULL").WillReturnRows(typeRow(9, "gender", "1"))
+			mock.ExpectQuery("FROM `sys_dict_data` WHERE \\(type_id = \\? AND status = \\?\\) AND `sys_dict_data`\\.`deleted_at` IS NULL ORDER BY sort, id").
 				WithArgs(int64(9), "1").WillReturnRows(rows())
 			got, err := s.Items(bg, "gender", tc.lang)
 			if err != nil || len(got) != 2 {
@@ -309,7 +337,7 @@ func TestListDataBadTypeID(t *testing.T) {
 // 少一条过滤或漏掉上限，导出清单就和界面看到的不是一回事了。
 func TestExportReusesListFiltersWithoutPaging(t *testing.T) {
 	s, mock := setup(t)
-	mock.ExpectQuery("^SELECT \\* FROM `sys_dict_type` WHERE .*LOWER\\(name\\) LIKE \\? OR LOWER\\(code\\) LIKE \\?.* AND status IN \\(\\?\\) ORDER BY sort, id LIMIT \\?$").
+	mock.ExpectQuery("^SELECT \\* FROM `sys_dict_type` WHERE .*LOWER\\(name\\) LIKE \\? OR LOWER\\(code\\) LIKE \\?.* AND status IN \\(\\?\\) AND `sys_dict_type`\\.`deleted_at` IS NULL ORDER BY sort, id LIMIT \\?$").
 		WillReturnRows(sqlmock.NewRows([]string{"id", "code"}).AddRow(1, "sys_status").AddRow(2, "custom_a"))
 	list, err := s.ExportTypes(bg, ListQuery{Keyword: " AB ", Status: "1"})
 	if err != nil {
@@ -322,7 +350,7 @@ func TestExportReusesListFiltersWithoutPaging(t *testing.T) {
 		t.Errorf("builtin 标记应按出厂清单: %+v", list)
 	}
 
-	mock.ExpectQuery("^SELECT \\* FROM `sys_dict_data` WHERE .*status IN \\(\\?\\) AND type_id = \\? ORDER BY sort, id LIMIT \\?$").
+	mock.ExpectQuery("^SELECT \\* FROM `sys_dict_data` WHERE .*status IN \\(\\?\\) AND type_id = \\? AND `sys_dict_data`\\.`deleted_at` IS NULL ORDER BY sort, id LIMIT \\?$").
 		WithArgs("1", int64(9), int64(maxExportRows)).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}))
 	if _, err := s.ExportData(bg, ListQuery{TypeID: "9", Status: "1"}); err != nil {
@@ -413,7 +441,7 @@ func TestHandlerItemsLanguageNegotiation(t *testing.T) {
 func TestBuiltinTypeProtection(t *testing.T) {
 	t.Run("删除内置类型 409 且不写库", func(t *testing.T) {
 		s, mock := setup(t)
-		expectTypeCodes(mock, "custom_a", "sys_status")
+		expectTypeRows(mock, "custom_a", "sys_status")
 		err := s.DeleteTypes(bg, []idgen.ID{1, 2})
 		if statusOf(err) != http.StatusConflict {
 			t.Fatalf("期望 409，得到 %v", err)
@@ -428,12 +456,13 @@ func TestBuiltinTypeProtection(t *testing.T) {
 	})
 	t.Run("删除非内置类型成功", func(t *testing.T) {
 		s, mock := setup(t)
-		expectTypeCodes(mock, "custom_a")
+		expectTypeRows(mock, "custom_a")
 		mock.ExpectBegin()
-		mock.ExpectExec("DELETE FROM `sys_dict_data`").WillReturnResult(sqlmock.NewResult(0, 0))
-		mock.ExpectExec("DELETE FROM `sys_dict_type`").WillReturnResult(sqlmock.NewResult(0, 1))
+		mock.ExpectExec("UPDATE `sys_dict_type` SET `deleted_at`=\\? WHERE id = \\?").
+			WithArgs(sqlmock.AnyArg(), int64(1)).WillReturnResult(sqlmock.NewResult(0, 1))
+		expectRecycleInsert(mock, recbin.TypeDictType, 1) // 条目不动，只登记类型本身
 		mock.ExpectCommit()
-		if err := s.DeleteTypes(bg, []idgen.ID{1}); err != nil {
+		if err := s.DeleteTypes(tbg, []idgen.ID{1}); err != nil {
 			t.Fatal(err)
 		}
 		if err := mock.ExpectationsWereMet(); err != nil {
@@ -478,7 +507,7 @@ func TestBuiltinDataProtection(t *testing.T) {
 	}
 	t.Run("删除内置数据项 409", func(t *testing.T) {
 		s, mock := setup(t)
-		mock.ExpectQuery("SELECT `id`,`type_id`,`dict_value` FROM `sys_dict_data` WHERE id IN").WillReturnRows(dataRows(9, "1"))
+		mock.ExpectQuery("SELECT `id`,`type_id`,`dict_label`,`dict_value` FROM `sys_dict_data` WHERE id IN").WillReturnRows(dataRows(9, "1"))
 		mock.ExpectQuery("SELECT `id`,`code` FROM `sys_dict_type` WHERE id IN").
 			WillReturnRows(sqlmock.NewRows([]string{"id", "code"}).AddRow(9, "sys_gender"))
 		if err := s.DeleteData(bg, []idgen.ID{30}); statusOf(err) != http.StatusConflict {
@@ -490,13 +519,15 @@ func TestBuiltinDataProtection(t *testing.T) {
 	})
 	t.Run("内置类型下用户自加的数据项可删", func(t *testing.T) {
 		s, mock := setup(t)
-		mock.ExpectQuery("SELECT `id`,`type_id`,`dict_value` FROM `sys_dict_data` WHERE id IN").WillReturnRows(dataRows(9, "custom"))
+		mock.ExpectQuery("SELECT `id`,`type_id`,`dict_label`,`dict_value` FROM `sys_dict_data` WHERE id IN").WillReturnRows(dataRows(9, "custom"))
 		mock.ExpectQuery("SELECT `id`,`code` FROM `sys_dict_type` WHERE id IN").
 			WillReturnRows(sqlmock.NewRows([]string{"id", "code"}).AddRow(9, "sys_gender"))
 		mock.ExpectBegin()
-		mock.ExpectExec("DELETE FROM `sys_dict_data` WHERE id IN").WillReturnResult(sqlmock.NewResult(0, 1))
+		mock.ExpectExec("UPDATE `sys_dict_data` SET `deleted_at`=\\? WHERE id = \\?").
+			WithArgs(sqlmock.AnyArg(), int64(30)).WillReturnResult(sqlmock.NewResult(0, 1))
+		expectRecycleInsert(mock, recbin.TypeDictData, 30)
 		mock.ExpectCommit()
-		if err := s.DeleteData(bg, []idgen.ID{30}); err != nil {
+		if err := s.DeleteData(tbg, []idgen.ID{30}); err != nil {
 			t.Fatal(err)
 		}
 		if err := mock.ExpectationsWereMet(); err != nil {

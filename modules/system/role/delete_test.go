@@ -43,10 +43,7 @@ func TestRemoveUnusedRoleSucceeds(t *testing.T) {
 	expectRole(mock, false)
 	mock.ExpectBegin()
 	expectRoleUsers(mock, 0)
-	mock.ExpectExec("DELETE FROM `sys_role` WHERE id = \\?").WillReturnResult(sqlmock.NewResult(0, 1))
-	for _, table := range []string{"sys_role_menu", "sys_role_dept", "sys_user_role"} {
-		mock.ExpectExec("DELETE FROM " + table + " WHERE role_id = \\?").WillReturnResult(sqlmock.NewResult(0, 0))
-	}
+	expectDeleteWrites(mock, 9) // 软删除 + 登记回收站，三张关联表一条 DELETE 都不该有
 	mock.ExpectCommit()
 	if err := s.remove(tenant.With(context.Background(), 3), 9); err != nil {
 		t.Fatal(err)

@@ -27,16 +27,25 @@ func expectDeleteOne(mock sqlmock.Sqlmock, id int64, builtin bool, holders int) 
 		WillReturnRows(sqlmock.NewRows([]string{"c"}).AddRow(holders))
 }
 
+// expectDeleteWrites 钉住软删除的两步：打 deleted_at + 同事务登记回收站。
+// 三条关联表（sys_role_menu / sys_role_dept / sys_user_role）这里一条都不该出现 DELETE——
+// 清了它们，还原回来的就是个没有菜单、没有数据范围、没人的空壳角色。
 func expectDeleteWrites(mock sqlmock.Sqlmock, id int64) {
-	mock.ExpectExec("DELETE FROM `sys_role` WHERE id = \\?").
-		WithArgs(id).WillReturnResult(sqlmock.NewResult(0, 1))
-	for _, table := range []string{"sys_role_menu", "sys_role_dept", "sys_user_role"} {
-		mock.ExpectExec("DELETE FROM " + table + " WHERE role_id = \\?").
-			WithArgs(id).WillReturnResult(sqlmock.NewResult(0, 0))
-	}
+	mock.ExpectExec("UPDATE `sys_role` SET `deleted_at`=\\? WHERE id = \\?").
+		WithArgs(sqlmock.AnyArg(), id).WillReturnResult(sqlmock.NewResult(0, 1))
+	expectRecycleInsert(mock, id)
 }
 
-// 全部可删时：一个事务内逐条走单条删除的判断，本体与三张关联表都清干净，返回实际条数。
+// expectRecycleInsert 钉住回收登记行的类型、源行 id 与所属租户。
+// 列顺序按 GORM 生成的 INSERT：id, created_at, updated_at, tenant_id, type, ref_id, name, deleted_by, deleted_at。
+func expectRecycleInsert(mock sqlmock.Sqlmock, ref int64) {
+	mock.ExpectExec("INSERT INTO `sys_recycle`").
+		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), int64(3), "role", ref,
+			sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+}
+
+// 全部可删时：一个事务内逐条走单条删除的判断，每条都是「打 deleted_at + 登记回收站」，返回实际条数。
 func TestDeleteManyAppliesSingleDeleteGuards(t *testing.T) {
 	s, mock := newSvc(t)
 	mock.ExpectBegin()

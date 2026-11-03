@@ -3,6 +3,8 @@ package role
 import (
 	"time"
 
+	"gorm.io/gorm"
+
 	"nexadmin/core/database"
 	"nexadmin/pkg/idgen"
 )
@@ -31,6 +33,9 @@ type Role struct {
 	// Assignable：是否允许被下级管理员分配给用户。超管不受限；内置超管角色恒为不可分配。
 	Assignable bool
 	Remark     string
+	// DeletedAt 软删除列：删除即进回收站（recbin.TypeRole），菜单/数据范围/用户关联都保留，
+	// 还原后授权原样回来。彻底删除才由回收站清关联表。
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
 func (Role) TableName() string { return "sys_role" }

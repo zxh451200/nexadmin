@@ -14,6 +14,7 @@ import (
 	"nexadmin/core/response"
 	"nexadmin/core/roleassign"
 	"nexadmin/core/tenant"
+	"nexadmin/modules/internal/recbin"
 	"nexadmin/pkg/idgen"
 )
 
@@ -145,18 +146,9 @@ func usersHolding(tx *gorm.DB, id idgen.ID) (int64, error) {
 	return n, err
 }
 
-// clearRoleLinks 清理角色的菜单授权、数据范围与用户关联。
-func clearRoleLinks(tx *gorm.DB, id idgen.ID) error {
-	for _, table := range []string{"sys_role_menu", "sys_role_dept", "sys_user_role"} {
-		if err := tx.Exec("DELETE FROM "+table+" WHERE role_id = ?", int64(id)).Error; err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// deleteOne 在一个事务里删除单个角色，判断与 remove 逐条一致：租户内读取（读不到 404）、
-// 内置角色不可删、仍有用户占用则 409，通过后才删本体并清理三张关联表。
+// deleteOne 在一个事务里删除单个角色（软删除 + 登记回收站），判断与 remove 逐条一致：
+// 租户内读取（读不到 404）、内置角色不可删、仍有用户占用则 409，
+// 通过后只打 deleted_at，不动任何关联表。
 func deleteOne(ctx context.Context, tx *gorm.DB, id idgen.ID) (*Role, error) {
 	r, err := findIn(ctx, tx, id)
 	if err != nil {
@@ -172,13 +164,20 @@ func deleteOne(ctx context.Context, tx *gorm.DB, id idgen.ID) (*Role, error) {
 	if n > 0 {
 		return nil, response.Conflict("role.in_use", n)
 	}
-	if err := tx.Delete(&Role{}, "id = ?", int64(id)).Error; err != nil {
-		return nil, err
-	}
-	if err := clearRoleLinks(tx, id); err != nil {
+	if err := trashRole(ctx, tx, r); err != nil {
 		return nil, err
 	}
 	return r, nil
+}
+
+// trashRole 在 tx（事务）里打 deleted_at 并登记回收站——两步必须同事务，
+// 否则「行删了、回收站里没有」就是永久失联的数据。租户条件由 GORM 的租户 scope 追加，
+// 菜单/数据范围/用户关联三张表都不动（彻底删除时才由回收站按 recbin.Children 清）。
+func trashRole(ctx context.Context, tx *gorm.DB, r *Role) error {
+	if err := tx.Delete(&Role{}, "id = ?", int64(r.ID)).Error; err != nil {
+		return err
+	}
+	return recbin.Add(ctx, tx, recbin.TypeRole, r.ID, r.Name, recbin.Operator(ctx))
 }
 
 func (s *service) get(ctx context.Context, id idgen.ID) (*roleDTO, error) {
@@ -238,6 +237,9 @@ func (in *roleInput) check() ([]idgen.ID, error) {
 }
 
 // codeTaken 判断当前租户内编码是否已被其他角色占用。
+// 回收站里的软删除角色不算占用（Model 查询自动带 deleted_at IS NULL）：
+// sys_role 的 (tenant_id, code) 本来就只是普通索引，唯一性一直靠这里，
+// 所以删掉再建同码角色可以，还原时若同码已有人则由回收站回 409 recycle.restore_conflict。
 func (s *service) codeTaken(ctx context.Context, code string, exclude idgen.ID) (bool, error) {
 	var n int64
 	tx := s.db.WithContext(ctx).Model(&Role{}).Where("code = ?", code)
@@ -345,7 +347,7 @@ func (s *service) update(ctx context.Context, id idgen.ID, in roleInput) (*roleD
 	return toDTO(r, depts), nil
 }
 
-// remove 删除角色并清理它的菜单授权、数据范围和用户关联；内置角色不可删除。
+// remove 软删除角色并登记回收站；内置角色不可删除，菜单/数据范围/用户关联保留（还原才是完整的）。
 func (s *service) remove(ctx context.Context, id idgen.ID) error {
 	r, err := s.find(ctx, id)
 	if err != nil {
@@ -363,10 +365,7 @@ func (s *service) remove(ctx context.Context, id idgen.ID) error {
 		if n > 0 {
 			return response.Conflict("role.in_use", n)
 		}
-		if err := tx.Delete(&Role{}, "id = ?", int64(id)).Error; err != nil {
-			return err
-		}
-		return clearRoleLinks(tx, id)
+		return trashRole(ctx, tx, r)
 	})
 	if err != nil {
 		return err
@@ -375,8 +374,8 @@ func (s *service) remove(ctx context.Context, id idgen.ID) error {
 	return nil
 }
 
-// deleteMany 批量删除角色：一次事务内逐条走与单条删除完全相同的判断，任一条不合格整批回滚，
-// 绝不静默跳过「能删的那几条」——部分成功会让界面以为自己删的就是返回的那几条。
+// deleteMany 批量删除角色（软删除 + 逐条登记回收站）：一次事务内逐条走与单条删除完全相同的判断，
+// 任一条不合格整批回滚，绝不静默跳过「能删的那几条」——部分成功会让界面以为自己删的就是返回的那几条。
 // 返回实际删除条数（全部成功时等于请求条数）。
 func (s *service) deleteMany(ctx context.Context, ids []idgen.ID) (int64, error) {
 	var deleted []*Role

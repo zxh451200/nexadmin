@@ -1,10 +1,10 @@
 {
   "recycle": {
     "menu": "回收站",
-    "description": "已删除的用户、公告等数据，可还原或彻底删除",
+    "description": "删掉的数据先留在这里，可以还原，也可以彻底删除；彻底删除后找不回来",
     "col": { "name": "名称", "type": "类型", "deletedBy": "删除人", "deletedAt": "删除时间" },
-    "type": { "all": "全部类型", "user": "用户", "notice": "公告" },
-    "filter": { "keyword": "关键词", "keywordPlaceholder": "名称", "type": "数据类型" },
+    "type": { "all": "全部类型", "user": "用户", "notice": "公告", "role": "角色", "dictType": "字典类型", "dictData": "字典条目", "post": "岗位" },
+    "filter": { "keyword": "关键词", "keywordPlaceholder": "名称", "type": "数据类型", "from": "删除起始日期", "to": "删除截止日期" },
     "action": { "restore": "还原", "purge": "彻底删除" },
     "confirm": {
       "restore": "确认还原 {{name}}？",

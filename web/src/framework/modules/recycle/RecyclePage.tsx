@@ -33,6 +33,9 @@ export default function RecyclePage() {
   const [draft, setDraft] = useState('')
   const [keyword, setKeyword] = useState('')
   const [type, setType] = useState<string>(ALL)
+  const [from, setFrom] = useState('')
+  const [to, setTo] = useState('')
+  const [appliedRange, setAppliedRange] = useState<{ from?: string; to?: string }>({})
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [selected, setSelected] = useState<string[]>([])
@@ -42,6 +45,8 @@ export default function RecyclePage() {
     pageSize,
     keyword: keyword || undefined,
     type: type === ALL ? undefined : (type as RecycleType),
+    from: appliedRange.from || undefined,
+    to: appliedRange.to || undefined,
   })
   const restore = useRestore()
   const restoreBatch = useRestoreBatch()
@@ -122,12 +127,16 @@ export default function RecyclePage() {
       <FilterBar
         onSearch={() => {
           setKeyword(draft.trim())
+          setAppliedRange({ from: from || undefined, to: to || undefined })
           setPage(1)
         }}
         onReset={() => {
           setDraft('')
           setKeyword('')
           setType(ALL)
+          setFrom('')
+          setTo('')
+          setAppliedRange({})
           setPage(1)
         }}
       >
@@ -156,6 +165,23 @@ export default function RecyclePage() {
             ))}
           </SelectContent>
         </Select>
+        {/* 删除时间范围：date 输入即够（回收站不需要精确到时分秒） */}
+        <Input
+          type="date"
+          aria-label={t('recycle.filter.from')}
+          className="md:w-40"
+          value={from}
+          max={to || undefined}
+          onChange={(e) => setFrom(e.target.value)}
+        />
+        <Input
+          type="date"
+          aria-label={t('recycle.filter.to')}
+          className="md:w-40"
+          value={to}
+          min={from || undefined}
+          onChange={(e) => setTo(e.target.value)}
+        />
       </FilterBar>
       <DataTable<RecycleItem>
         columns={columns}
