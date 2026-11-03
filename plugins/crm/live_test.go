@@ -151,6 +151,17 @@ func TestLiveCustomerType(t *testing.T) {
 		t.Fatalf("code wiped on update: %q -> %q", gotPerson.Code, after.Code)
 	}
 
+	// 详情回显的是脱敏串，用户直接保存时也不能把证件写回企业客户名下：类型清空优先于「没改过就沿用」。
+	if _, err := svc.UpdateCustomer(ctx, nil, person.ID, CustomerInput{
+		Name: "真库用例-个人-" + uniq, Type: TypeCompany, Industry: "软件业",
+		IdType: IdTypeIDCard, IdNo: "110101********001X",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if back := liveCustomer(t, db, person.ID); back.IdNo != "" || back.IdType != "" {
+		t.Fatalf("masked id restored onto company row in DB: %+v", back)
+	}
+
 	// 列表：类型过滤 + 关键词按证件号 / 信用代码命中（这两列是这次新加进检索的）。
 	rows, total, err := svc.ListCustomers(ctx, CustomerQuery{Type: TypeCompany, Keyword: taxNo, Page: 1, PageSize: 10})
 	if err != nil {

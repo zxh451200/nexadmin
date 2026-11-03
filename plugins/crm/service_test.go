@@ -372,3 +372,39 @@ func TestTruncateCutsByRunesNotBytes(t *testing.T) {
 		t.Fatal("裁剪产出非法 UTF-8")
 	}
 }
+
+// 类型清空的优先级高于「脱敏串视为没改过」：详情回显的是 110101********001X，
+// 用户把这条个人客户改成企业并直接保存时，不能因为号码带星号就把原证件回填进来
+// ——否则企业客户名下又挂回一条个人证件，类型分流白做。
+func TestUpdateToCompanyDropsMaskedIdNo(t *testing.T) {
+	db, m := mockDB(t)
+	s := NewService(db, nopLogger{})
+
+	// sqlmock 的 Rows 是一次性游标，两次 Take 要各自一份。
+	masked := func() *sqlmock.Rows {
+		return sqlmock.NewRows([]string{"id", "tenant_id", "name", "type", "id_type", "id_no", "status"}).
+			AddRow(2001, 7, "张三", TypePerson, IdTypeIDCard, "110101********001X", StatusActive)
+	}
+	// visibleCustomer 预查 + 更新前取原行。
+	m.ExpectQuery("SELECT \\* FROM `plg_crm_customer`").WillReturnRows(masked())
+	m.ExpectQuery("SELECT \\* FROM `plg_crm_customer`").WillReturnRows(masked())
+	m.ExpectBegin()
+	m.ExpectExec("UPDATE `plg_crm_customer` SET").WillReturnResult(sqlmock.NewResult(0, 1))
+	m.ExpectCommit()
+
+	cu, err := s.UpdateCustomer(tenantCtx, nil, 2001, CustomerInput{
+		Name: "张三", Type: TypeCompany, IdNo: "110101********001X", IdType: IdTypeIDCard,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cu.Type != TypeCompany {
+		t.Fatalf("type not switched: %+v", cu)
+	}
+	if cu.IdNo != "" || cu.IdType != "" {
+		t.Fatalf("masked id number was restored onto a company customer: %+v", cu)
+	}
+	if err := m.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
