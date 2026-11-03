@@ -265,7 +265,7 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
   }, [dragId])
 
   /** 拖动开始时快照一次行坐标：排序动画会改行位置，实时读 DOM 会「套住自己」来回跳 */
-  type RowBox = { top: number; bottom: number; left: number; right: number; handleLeft: number }
+  type RowBox = { top: number; bottom: number; left: number; right: number; handleLeft: number; nameRight: number }
   const [rects, setRects] = useState<Map<string, RowBox>>(() => new Map())
   // 起拖后内容层被滚走多少：快照坐标是起拖那一刻的屏幕坐标，落点命中要按这个位移换算回去，
   // 否则长树一旦触发边缘自动滚动，指针还停在原处、行已经跑走，落点就指错行。
@@ -291,7 +291,16 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
       if (!id) continue
       const r = el.getBoundingClientRect()
       const handle = el.querySelector<HTMLElement>('button[aria-label]')?.getBoundingClientRect()
-      next.set(id, { top: r.top, bottom: r.bottom, left: r.left, right: r.right, handleLeft: handle?.left ?? r.left + 8 })
+      // 名称列（第一个数据列，拖动把手排在它前面）的右边界：落位线只画到树那一列为止
+      const nameCell = el.querySelectorAll('td')[onReorder ? 1 : 0]?.getBoundingClientRect()
+      next.set(id, {
+        top: r.top,
+        bottom: r.bottom,
+        left: r.left,
+        right: r.right,
+        handleLeft: handle?.left ?? r.left + 8,
+        nameRight: nameCell?.right ?? 0,
+      })
     }
     setRects(next)
     const r = contentEl()?.getBoundingClientRect()
@@ -393,10 +402,13 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
       reason?: string
     }): DropPlan => {
       const left = (o.indentBase ?? firstHandle) + DROP_LINE_INSET + Math.max(0, o.depth) * INDENT_STEP
+      // 线只画到名称列右边界：整行在宽表格里是两三千像素，一条贯穿屏幕的蓝线读起来像进度条，
+      // 反而把「落在哪一行、第几级」这两个真正的信息淹了。卡片布局量不到 td（nameRight=0）才退回整行。
+      const right = box!.nameRight > 0 ? box!.nameRight : box!.right
       return {
         y: o.y,
         left,
-        width: Math.max(120, box!.right - left - 8),
+        width: Math.max(120, right - left - 8),
         mode: o.mode,
         parentId: o.parentId,
         afterId: o.afterId,
