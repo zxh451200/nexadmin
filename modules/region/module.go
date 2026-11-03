@@ -1,5 +1,6 @@
 // Package region 提供省市区接口，数据在 core/region（go:embed，无迁移）。
-// 管理员可以从数据源在线同步一份新快照，快照存在 sys_region_snapshot 并立即生效。
+// 管理员可以从数据源在线同步一份新快照，快照存在 sys_region_snapshot 并立即生效；
+// 每次覆盖前那份旧快照会进 sys_region_snapshot_version，历史可回看、可回滚。
 package region
 
 import (
@@ -23,11 +24,18 @@ func (module) Name() string { return "region" }
 
 // Register 注册省市区接口：
 //
-//	GET  /api/v1/regions/tree?level=3   一次取回前 level 级的树（登录即可）
-//	GET  /api/v1/regions?parent=<code>  按需取下级；parent 为空返回省级（登录即可）
-//	GET  /api/v1/regions/status         当前数据版本与默认数据源（region:sync）
-//	POST /api/v1/regions/sync           拉取数据源并生效（region:sync）
-//	POST /api/v1/regions/reset          恢复随包发布的数据（region:sync）
+//	GET  /api/v1/regions/tree?level=3            一次取回前 level 级的树（登录即可）
+//	GET  /api/v1/regions?parent=<code>           按需取下级；parent 为空返回省级（登录即可）
+//	GET  /api/v1/regions/status                  当前数据版本与默认数据源（region:sync）
+//	POST /api/v1/regions/sync                    拉取数据源并生效（region:sync）
+//	POST /api/v1/regions/reset                   恢复随包发布的数据（region:sync）
+//	GET  /api/v1/regions/versions                历史版本列表（region:sync）
+//	GET  /api/v1/regions/versions/:version       单个历史版本（region:sync）
+//	POST /api/v1/regions/versions/:version/rollback  回滚到某个历史版本（region:sync）
+//
+// 版本历史的读与回滚都沿用 region:sync：它能做的事与「同步一次数据」完全同量级
+// （都是替换全平台在用的那一份区划数据），没有一个「只能看历史、不能改数据」的中间档，
+// 所以不新增权限码；新增权限码会让既有角色默认看不到历史，反而是能力回退。
 func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	r.GET("/regions/tree", func(c *gin.Context) {
 		level, _ := strconv.Atoi(c.Query("level"))
@@ -75,4 +83,7 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	r.POST("/regions/import", core.Perm("region:sync"), h.ImportFile)
 	r.POST("/regions/sync", core.Perm("region:sync"), h.Sync)
 	r.POST("/regions/reset", core.Perm("region:sync"), h.Reset)
+	r.GET("/regions/versions", core.Perm("region:sync"), h.Versions)
+	r.GET("/regions/versions/:version", core.Perm("region:sync"), h.Version)
+	r.POST("/regions/versions/:version/rollback", core.Perm("region:sync"), h.RollbackVersion)
 }

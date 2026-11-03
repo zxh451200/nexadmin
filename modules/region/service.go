@@ -63,6 +63,37 @@ type DiffSample struct {
 // maxDiffSamples 是每类变更样本的上限：预览只给「长什么样」，全量清单没意义。
 const maxDiffSamples = 20
 
+// maxVersions 是版本列表一次返回的条数上限：历史用于回看与回滚，最早的版本留在库里。
+const maxVersions = 50
+
+// VersionView 是一条历史版本的展示行：不带整棵树 payload（列表里塞 300KB 的 JSON 没有意义），
+// 正文另走 GetVersion。
+type VersionView struct {
+	Version     int       `json:"version"`
+	SHA256      string    `json:"sha256"`
+	DataDate    string    `json:"dataDate"`
+	SourceURL   string    `json:"sourceUrl"`
+	Provinces   int       `json:"provinces"`
+	Prefectures int       `json:"prefectures"`
+	Counties    int       `json:"counties"`
+	CreatedBy   string    `json:"createdBy"`
+	CreatedAt   time.Time `json:"createdAt"`
+}
+
+// VersionDetail 是单个版本的完整记录：展示行之上再加整棵树，前端只用它算省级摘要。
+type VersionDetail struct {
+	VersionView
+	Payload string `json:"payload"`
+}
+
+func (v SnapshotVersion) view() VersionView {
+	return VersionView{
+		Version: v.Version, SHA256: v.SHA256, DataDate: v.DataDate, SourceURL: v.SourceURL,
+		Provinces: v.Provinces, Prefectures: v.Prefectures, Counties: v.Counties,
+		CreatedBy: v.CreatedBy, CreatedAt: v.CreatedAt,
+	}
+}
+
 // Service 负责同步快照的拉取、校验、落库与装配。
 type Service struct {
 	db     *gorm.DB
@@ -124,6 +155,13 @@ var (
 	syncJob atomic.Pointer[syncState]
 )
 
+// syncRunning 是「后台同步在跑」的当前判定：回滚改的是同一份内存快照，
+// 有同步在跑时回滚一律当场 409，否则回滚的结果会被在跑的同步覆盖掉。
+func syncRunning() bool {
+	st := syncJob.Load()
+	return st != nil && st.Running
+}
+
 // StartSync 把一次同步放到后台协程执行并立即返回；已有任务在跑时返回 409。
 // 廉价校验（来源缺失、明文地址）在提交前同步完成：明显的输入错误当场报 400，
 // 不让用户等轮询；慢的部分（拉取 16MB、校验、落库）才是后台化的意义。
@@ -131,7 +169,7 @@ var (
 func (s *Service) StartSync(ctx context.Context, source, actor string, onSynced func()) error {
 	syncMu.Lock()
 	defer syncMu.Unlock()
-	if st := syncJob.Load(); st != nil && st.Running {
+	if syncRunning() {
 		return response.Conflict("region.sync_running")
 	}
 	source = strings.TrimSpace(source)
@@ -203,16 +241,22 @@ func (s *Service) ImportFile(ctx context.Context, raw []byte, actor string, appl
 }
 
 func (s *Service) applyData(ctx context.Context, raw []byte, source, lastModified, actor string, apply bool) (Result, error) {
-	tree, err := parseSource(raw)
-	if err != nil {
-		return Result{}, err
-	}
 	meta := region.Info{
 		SourceURL: source,
 		DataDate:  dateFrom(lastModified),
 		License:   s.licenseFor(source),
 		SyncedBy:  actor,
 		SyncedAt:  time.Now().Format(time.RFC3339),
+	}
+	return s.apply(ctx, raw, meta, apply)
+}
+
+// apply 是「解析 → 校验 → 与当前数据比对 → 留档并落库 → 生效」这条唯一链路：
+// 在线同步、文件导入和版本回滚都从这里过，回滚不会因为少校验一步而写进坏数据。
+func (s *Service) apply(ctx context.Context, raw []byte, meta region.Info, apply bool) (Result, error) {
+	tree, err := parseSource(raw)
+	if err != nil {
+		return Result{}, err
 	}
 	info, err := region.Validate(tree, meta)
 	if err != nil {
@@ -229,7 +273,7 @@ func (s *Service) applyData(ctx context.Context, raw []byte, source, lastModifie
 			AddedSamples: addedS, RemovedSamples: removedS, RenamedSamples: renamedS}, nil
 	}
 	row := Snapshot{
-		SourceURL:   source,
+		SourceURL:   meta.SourceURL,
 		DataDate:    meta.DataDate,
 		License:     meta.License,
 		Payload:     string(tree),
@@ -237,7 +281,7 @@ func (s *Service) applyData(ctx context.Context, raw []byte, source, lastModifie
 		Provinces:   info.Provinces,
 		Prefectures: info.Prefectures,
 		Counties:    info.Counties,
-		SyncedBy:    actor,
+		SyncedBy:    meta.SyncedBy,
 		SyncedAt:    time.Now(),
 	}
 	if err := s.save(ctx, row); err != nil {
@@ -249,52 +293,171 @@ func (s *Service) applyData(ctx context.Context, raw []byte, source, lastModifie
 	if s.log != nil {
 		// 每次同步都记一条，包含「检查了多少、变了几条」，便于排障时区分空跑与已跳过
 		s.log.Info("region: 省市区数据已同步",
-			zap.String("source", source), zap.String("actor", actor), zap.String("sha256", info.SHA256),
+			zap.String("source", meta.SourceURL), zap.String("actor", meta.SyncedBy), zap.String("sha256", info.SHA256),
 			zap.Int("provinces", info.Provinces), zap.Int("prefectures", info.Prefectures), zap.Int("counties", info.Counties),
 			zap.Int("added", added), zap.Int("removed", removed), zap.Int("renamed", renamed))
 	}
 	return Result{Info: region.Current(), Added: added, Removed: removed, Renamed: renamed}, nil
 }
 
-// Reset 删除快照并退回内置数据。
-func (s *Service) Reset(ctx context.Context) (region.Info, error) {
+// Reset 删除快照并退回内置数据：历史版本表不动，且删除前先把当前快照存成一个版本，
+// 所以「恢复内置数据」之后还能从版本历史一键回滚回来。
+func (s *Service) Reset(ctx context.Context, actor string) (region.Info, error) {
 	if s.db != nil {
-		if err := s.db.WithContext(ctx).Where("id = ?", idgen.ID(snapshotID)).Delete(&Snapshot{}).Error; err != nil {
-			return region.Info{}, response.Internal().Wrap(err)
+		db := s.db.WithContext(ctx)
+		if err := db.Transaction(func(tx *gorm.DB) error {
+			// 没有「即将写入的内容」可比对：恢复内置一定让当前快照留一个版本。
+			if err := archiveCurrent(ctx, tx, ""); err != nil {
+				return err
+			}
+			if err := tx.Where("id = ?", idgen.ID(snapshotID)).Delete(&Snapshot{}).Error; err != nil {
+				return response.Internal().Wrap(err)
+			}
+			return nil
+		}); err != nil {
+			return region.Info{}, err
 		}
 	}
 	info := region.Reset()
 	if s.log != nil {
-		s.log.Info("region: 已恢复内置省市区数据")
+		s.log.Info("region: 已恢复内置省市区数据", zap.String("actor", actor))
 	}
 	return info, nil
 }
 
-func (s *Service) save(ctx context.Context, row Snapshot) error {
-	db := s.db.WithContext(ctx)
-	res := db.Model(&Snapshot{}).Where("id = ?", idgen.ID(snapshotID)).Updates(map[string]any{
-		"source_url":  row.SourceURL,
-		"data_date":   row.DataDate,
-		"license":     row.License,
-		"payload":     row.Payload,
-		"sha256":      row.SHA256,
-		"provinces":   row.Provinces,
-		"prefectures": row.Prefectures,
-		"counties":    row.Counties,
-		"synced_by":   row.SyncedBy,
-		"synced_at":   row.SyncedAt,
-	})
-	if res.Error != nil {
-		return response.Internal().Wrap(res.Error)
+// archiveCurrent 在覆盖 sys_region_snapshot 之前把被覆盖的旧快照存成一个版本：
+// 库里没有当前行（首次同步、或刚恢复过内置）就没有旧内容可存；
+// nextSHA 与当前行摘要相同说明这次写入没改内容（例如重复同步同一个源），不重复留档。
+// 版本号取库里现有最大值 +1：行数与列表下标都不能当版本号，删过行就会撞号。
+func archiveCurrent(ctx context.Context, tx *gorm.DB, nextSHA string) error {
+	var cur Snapshot
+	err := tx.WithContext(ctx).Where("id = ?", idgen.ID(snapshotID)).First(&cur).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil
 	}
-	if res.RowsAffected == 0 {
-		row.ID = idgen.ID(snapshotID)
-		if err := db.Create(&row).Error; err != nil {
-			return response.Internal().Wrap(err)
-		}
+	if err != nil {
+		return response.Internal().Wrap(err)
+	}
+	if cur.SHA256 == nextSHA {
+		return nil
+	}
+	var maxVersion int
+	if err := tx.WithContext(ctx).Model(&SnapshotVersion{}).
+		Select("COALESCE(MAX(version), 0)").Scan(&maxVersion).Error; err != nil {
+		return response.Internal().Wrap(err)
+	}
+	version := SnapshotVersion{
+		Version: maxVersion + 1, Payload: cur.Payload, SHA256: cur.SHA256, DataDate: cur.DataDate,
+		SourceURL: cur.SourceURL, Provinces: cur.Provinces, Prefectures: cur.Prefectures,
+		Counties: cur.Counties, CreatedBy: cur.SyncedBy,
+	}
+	if err := tx.WithContext(ctx).Create(&version).Error; err != nil {
+		return response.Internal().Wrap(err)
 	}
 	return nil
 }
+
+func (s *Service) save(ctx context.Context, row Snapshot) error {
+	db := s.db.WithContext(ctx)
+	return db.Transaction(func(tx *gorm.DB) error {
+		// 顺序不能反：先留档再覆盖，覆盖失败回滚时历史也不会留下一条「根本没生效过」的版本。
+		if err := archiveCurrent(ctx, tx, row.SHA256); err != nil {
+			return err
+		}
+		res := tx.Model(&Snapshot{}).Where("id = ?", idgen.ID(snapshotID)).Updates(map[string]any{
+			"source_url":  row.SourceURL,
+			"data_date":   row.DataDate,
+			"license":     row.License,
+			"payload":     row.Payload,
+			"sha256":      row.SHA256,
+			"provinces":   row.Provinces,
+			"prefectures": row.Prefectures,
+			"counties":    row.Counties,
+			"synced_by":   row.SyncedBy,
+			"synced_at":   row.SyncedAt,
+		})
+		if res.Error != nil {
+			return response.Internal().Wrap(res.Error)
+		}
+		if res.RowsAffected == 0 {
+			row.ID = idgen.ID(snapshotID)
+			if err := tx.Create(&row).Error; err != nil {
+				return response.Internal().Wrap(err)
+			}
+		}
+		return nil
+	})
+}
+
+// ListVersions 列出历史版本（新→旧，不含整棵树正文）：版本历史覆盖的是
+// 「上一次生效的快照」，所以当前生效的那一份不在列表里，看它用状态接口。
+func (s *Service) ListVersions(ctx context.Context) ([]VersionView, error) {
+	if s.db == nil {
+		return []VersionView{}, nil
+	}
+	var rows []SnapshotVersion
+	if err := s.db.WithContext(ctx).Order("version DESC").Limit(maxVersions).Find(&rows).Error; err != nil {
+		return nil, response.Internal().Wrap(err)
+	}
+	out := make([]VersionView, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, r.view())
+	}
+	return out, nil
+}
+
+// GetVersion 取单个版本的完整记录（含整棵树正文）。
+func (s *Service) GetVersion(ctx context.Context, version int) (VersionDetail, error) {
+	row, err := s.versionRow(ctx, version)
+	if err != nil {
+		return VersionDetail{}, err
+	}
+	return VersionDetail{VersionView: row.view(), Payload: row.Payload}, nil
+}
+
+func (s *Service) versionRow(ctx context.Context, version int) (SnapshotVersion, error) {
+	var row SnapshotVersion
+	if s.db == nil {
+		return row, response.NotFound("region.version_not_found", version)
+	}
+	err := s.db.WithContext(ctx).Where("version = ?", version).First(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return row, response.NotFound("region.version_not_found", version)
+	}
+	if err != nil {
+		return row, response.Internal().Wrap(err)
+	}
+	return row, nil
+}
+
+// RollbackToVersion 回滚到某个历史版本：把那份 payload 当作一次正常同步走完整校验与落库，
+// 回滚前的当前快照同样留档，所以版本号继续递增、历史不丢，回滚本身也能再被回滚。
+// 来源与数据日期沿用该版本记录的值，页面看到的「这份数据从哪来」不会因为回滚而变成空。
+func (s *Service) RollbackToVersion(ctx context.Context, version int, actor string) (Result, error) {
+	if syncRunning() {
+		return Result{}, response.Conflict("region.sync_running")
+	}
+	row, err := s.versionRow(ctx, version)
+	if err != nil {
+		return Result{}, err
+	}
+	meta := region.Info{
+		SourceURL: row.SourceURL,
+		DataDate:  row.DataDate,
+		License:   s.licenseFor(row.SourceURL),
+		SyncedBy:  actor,
+		SyncedAt:  time.Now().Format(time.RFC3339),
+	}
+	res, err := s.apply(ctx, []byte(row.Payload), meta, true)
+	if err != nil {
+		return Result{}, err
+	}
+	if s.log != nil {
+		s.log.Info("region: 已回滚到历史版本", zap.Int("version", version), zap.String("actor", actor), zap.String("sha256", row.SHA256))
+	}
+	return res, nil
+}
+
 
 func (s *Service) source(ctx context.Context) string {
 	if s.db != nil {

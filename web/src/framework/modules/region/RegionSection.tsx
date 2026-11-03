@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Eye, FileUp, Loader2, RefreshCw, RotateCcw } from 'lucide-react'
+import { ChevronDown, ChevronRight, Eye, FileUp, History, Loader2, RefreshCw, RotateCcw, Undo2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
+import { EmptyState } from '@/framework/components/EmptyState'
 import { RequiredMark } from '@/framework/components/RequiredMark'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
@@ -11,7 +12,19 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from '@/framework/ui/input'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Skeleton } from '@/framework/ui/skeleton'
-import { useImportRegionFile, usePreviewRegion, useResetRegion, useRegionStatus, useSyncRegion, useSyncRegionStatus, type RegionPreviewResult } from './api'
+import {
+  useImportRegionFile,
+  usePreviewRegion,
+  useRegionVersion,
+  useRegionVersions,
+  useResetRegion,
+  useRegionStatus,
+  useRollbackRegionVersion,
+  useSyncRegion,
+  useSyncRegionStatus,
+  type RegionPreviewResult,
+  type RegionVersion,
+} from './api'
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -33,6 +46,7 @@ export function RegionSection() {
   const importFile = useImportRegionFile()
   const [draft, setDraft] = useState<string | null>(null)
   const [previewRes, setPreviewRes] = useState<RegionPreviewResult | null>(null)
+  const [historyOpen, setHistoryOpen] = useState(false)
   const uploadRef = useRef<HTMLInputElement | null>(null)
   // 后台同步：提交后轮询 status（1.2s），结束弹出结果/错误；中途按钮显示阶段。
   const [syncing, setSyncing] = useState(false)
@@ -191,9 +205,15 @@ export function RegionSection() {
               <RotateCcw className="me-2 size-4" aria-hidden="true" />
               {t('region.reset')}
             </Button>
+            <Button type="button" variant="outline" onClick={() => setHistoryOpen(true)}>
+              <History className="me-2 size-4" aria-hidden="true" />
+              {t('region.history')}
+            </Button>
           </Can>
         </CardFooter>
       </Card>
+
+      <RegionVersionsDialog open={historyOpen} onClose={() => setHistoryOpen(false)} />
 
       <ResponsiveDialog
         open={!!previewRes}
@@ -222,6 +242,115 @@ export function RegionSection() {
       </ResponsiveDialog>
     </div>
   )
+}
+
+/** 版本历史：每次覆盖保存前留下的快照，可看摘要、可回滚（回滚再走一次校验，版本继续递增） */
+function RegionVersionsDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { t, i18n } = useTranslation()
+  const confirm = useConfirm()
+  const versions = useRegionVersions(open)
+  const rollback = useRollbackRegionVersion()
+  // 展开才拉那一条的正文：列表里没有整棵树，也不该有。
+  const [expanded, setExpanded] = useState<number | undefined>(undefined)
+
+  const onRollback = async (v: RegionVersion) => {
+    if (!(await confirm({ destructive: true, description: t('region.confirmRollback', { version: v.version }) }))) return
+    try {
+      const res = await rollback.mutateAsync(v.version)
+      toast.success(t('region.rollbackDone', { version: v.version, added: res.added, renamed: res.renamed, removed: res.removed }))
+      if (res.removed > 0) toast.warning(t('region.syncRemoved', { n: res.removed }))
+    } catch (e) {
+      toast.error(e instanceof Error && e.message ? e.message : t('common.operateFailed'), { id: 'region-rollback' })
+    }
+  }
+
+  const list = versions.data ?? []
+  return (
+    <ResponsiveDialog
+      open={open}
+      onOpenChange={(o) => !o && onClose()}
+      title={t('region.historyTitle')}
+      description={t('region.historyDesc')}
+      size="lg"
+      footer={
+        <Button type="button" variant="outline" onClick={onClose}>
+          {t('common.close')}
+        </Button>
+      }
+    >
+      {versions.isLoading ? <p className="text-sm text-muted-foreground">{t('region.historyLoading')}</p> : null}
+      {versions.isError ? <p className="text-sm text-destructive">{t('common.operateFailed')}</p> : null}
+      {!versions.isLoading && list.length === 0 ? <EmptyState title={t('region.historyEmpty')} /> : null}
+      <ul className="flex flex-col divide-y">
+        {list.map((v) => (
+          <li key={v.version} className="flex flex-col gap-1 py-2">
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <span className="num font-medium">v{v.version}</span>
+              <span className="num text-xs text-muted-foreground">{showTime(v.createdAt, i18n.language)}</span>
+              <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{v.createdBy || '—'}</span>
+              <span className="text-xs text-muted-foreground">
+                {t('region.countsValue', { provinces: v.provinces, prefectures: v.prefectures, counties: v.counties })}
+              </span>
+              <span className="font-mono text-xs text-muted-foreground">{v.sha256.slice(0, 8)}</span>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setExpanded(expanded === v.version ? undefined : v.version)}>
+                {expanded === v.version ? (
+                  <ChevronDown className="me-1 size-4" aria-hidden="true" />
+                ) : (
+                  <ChevronRight className="me-1 size-4" aria-hidden="true" />
+                )}
+                {t('region.versionSummary')}
+              </Button>
+              <Button type="button" variant="outline" size="sm" disabled={rollback.isPending} onClick={() => void onRollback(v)}>
+                <Undo2 className="me-1 size-4" aria-hidden="true" />
+                {t('region.rollbackVersion')}
+              </Button>
+            </div>
+            {expanded === v.version ? <VersionSummary version={v.version} /> : null}
+          </li>
+        ))}
+      </ul>
+    </ResponsiveDialog>
+  )
+}
+
+/** 单个版本的摘要：整棵树在这里只被读成省级名单，不原样上屏（几百 KB 没人能在弹窗里读完）。 */
+function VersionSummary({ version }: { version: number }) {
+  const { t } = useTranslation()
+  const { data, isLoading } = useRegionVersion(version)
+  if (isLoading) return <p className="text-xs text-muted-foreground">{t('region.historyLoading')}</p>
+  if (!data) return null
+  return (
+    <dl className="grid gap-x-6 gap-y-2 rounded-md bg-muted/40 p-2 text-xs sm:grid-cols-2">
+      <Row label={t('region.source')}>
+        <span className="break-all font-mono">{data.sourceUrl || '—'}</span>
+      </Row>
+      <Row label={t('region.dataDate')}>{data.dataDate || '—'}</Row>
+      <Row label={t('region.sha')}>
+        <span className="break-all font-mono">{data.sha256}</span>
+      </Row>
+      <Row label={t('region.provinceList')}>{provinceNames(data.payload, t('region.namesSeparator')) || '—'}</Row>
+    </dl>
+  )
+}
+
+// showTime 按当前语言本地化；后端给的是 RFC3339，解析不了就显示占位。
+function showTime(iso: string, lang: string): string {
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString(lang)
+}
+
+// provinceNames 从该版本的整棵树正文里取省级（第一层）名称，解析失败就当没有。
+function provinceNames(payload: string, sep: string): string {
+  try {
+    const nodes = JSON.parse(payload) as unknown
+    if (!Array.isArray(nodes)) return ''
+    return nodes
+      .map((n) => (n && typeof n === 'object' && 'name' in n && typeof n.name === 'string' ? n.name : ''))
+      .filter(Boolean)
+      .join(sep)
+  } catch {
+    return ''
+  }
 }
 
 function DiffList({ title, samples }: { title: string; samples?: { code: string; name: string; old?: string }[] }) {

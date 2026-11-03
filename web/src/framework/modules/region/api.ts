@@ -47,6 +47,25 @@ export interface RegionPreviewResult {
 }
 
 const KEY = ['region', 'status'] as const
+const VERSIONS_KEY = ['region', 'versions'] as const
+
+/** 一个历史版本（列表项，不含整棵树正文） */
+export interface RegionVersion {
+  version: number
+  sha256: string
+  dataDate: string
+  sourceUrl: string
+  provinces: number
+  prefectures: number
+  counties: number
+  createdBy: string
+  createdAt: string
+}
+
+/** 单个历史版本的完整记录：正文是那一份整棵树，页面只用它算省级摘要 */
+export interface RegionVersionDetail extends RegionVersion {
+  payload: string
+}
 
 export function useRegionStatus() {
   return useQuery({ queryKey: KEY, queryFn: () => api.get<RegionStatus>('/regions/status') })
@@ -57,6 +76,7 @@ function useInvalidateRegions() {
   const qc = useQueryClient()
   return () => {
     void qc.invalidateQueries({ queryKey: KEY })
+    void qc.invalidateQueries({ queryKey: VERSIONS_KEY })
     void qc.invalidateQueries({ queryKey: ['regions-tree'] })
   }
 }
@@ -118,5 +138,34 @@ export function useImportRegionFile() {
     onSuccess: (_d, v) => {
       if (v.apply) invalidate()
     },
+  })
+}
+
+/** 版本历史列表（新→旧，不含整棵树正文）：对话框打开时才请求 */
+export function useRegionVersions(enabled: boolean) {
+  return useQuery({
+    queryKey: VERSIONS_KEY,
+    queryFn: () => api.get<RegionVersion[]>('/regions/versions'),
+    enabled,
+  })
+}
+
+/** 单个版本的完整记录（含整棵树，页面只取省级名单展示） */
+export function useRegionVersion(version?: number) {
+  return useQuery({
+    // 路径写静态字面量：contract_check 靠静态解析这里的第一个实参对照后端路由
+    queryFn: () => api.get<RegionVersionDetail>(`/regions/versions/${version}`, undefined, { silent: true }),
+    queryKey: [...VERSIONS_KEY, version],
+    enabled: !!version,
+  })
+}
+
+/** 回滚到某个版本：那份快照重新走一次完整校验与落库，版本继续递增，还能再回滚 */
+export function useRollbackRegionVersion() {
+  const invalidate = useInvalidateRegions()
+  return useMutation({
+    mutationFn: (version: number) =>
+      api.post<RegionSyncResult>(`/regions/versions/${version}/rollback`, {}, { silent: true }),
+    onSuccess: invalidate,
   })
 }

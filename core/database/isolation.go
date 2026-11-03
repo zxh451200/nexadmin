@@ -31,7 +31,7 @@ sys_file sys_file_group sys_notice sys_notice_target sys_notice_read sys_message
 sys_oper_log sys_login_log sys_client_error sys_recycle sys_job sys_dashboard_layout
 sys_backup sys_backup_setting sys_webhook sys_webhook_delivery sys_migration sys_plugin_migration
 sys_tenant_usage_daily sys_language sys_monitor_snapshot sys_notice_clear sys_notice_dismiss
-sys_region_snapshot`
+sys_region_snapshot sys_region_snapshot_version`
 
 type isolation struct {
 	base    *gorm.DB

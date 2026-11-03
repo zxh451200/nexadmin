@@ -153,10 +153,10 @@ func TestSyncAppliesSnapshotAndResetRestores(t *testing.T) {
 	withTestClient(t, ts)
 
 	e, mock := newEnv(t)
+	// 覆盖保存是一个事务：先读当前行留档（这里库里还没有行，所以没有历史可留），再 UPSERT。
 	mock.ExpectBegin()
+	expectArchiveMiss(mock)
 	mock.ExpectExec("UPDATE `sys_region_snapshot`").WillReturnResult(sqlmock.NewResult(0, 0))
-	mock.ExpectCommit()
-	mock.ExpectBegin()
 	mock.ExpectExec("INSERT INTO `sys_region_snapshot`").WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectCommit()
 
@@ -184,7 +184,12 @@ func TestSyncAppliesSnapshotAndResetRestores(t *testing.T) {
 		t.Fatalf("同步后未生效: %q", name)
 	}
 
+	// 恢复内置也留档：删行之前把当前快照存成一个版本，历史表不动，所以还回得去。
 	mock.ExpectBegin()
+	expectArchiveFrom(mock, "已同步的快照", "sha-synced", "同步人")
+	mock.ExpectQuery("SELECT COALESCE\\(MAX\\(version\\), 0\\) FROM `sys_region_snapshot_version`").
+		WillReturnRows(sqlmock.NewRows([]string{"max"}).AddRow(int64(1)))
+	mock.ExpectExec("INSERT INTO `sys_region_snapshot_version`").WillReturnResult(sqlmock.NewResult(2, 1))
 	mock.ExpectExec("DELETE FROM `sys_region_snapshot`").WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 	if w := do(e, http.MethodPost, "/api/v1/regions/reset", "", "region:sync"); w.Code != http.StatusOK {
@@ -227,10 +232,10 @@ func TestSyncKeepsSpecialRegions(t *testing.T) {
 
 	source := ts.URL + "/regions.json"
 	e, mock := newEnv(t)
+	// 覆盖保存是一个事务：先读当前行留档（这里库里还没有行，所以没有历史可留），再 UPSERT。
 	mock.ExpectBegin()
+	expectArchiveMiss(mock)
 	mock.ExpectExec("UPDATE `sys_region_snapshot`").WillReturnResult(sqlmock.NewResult(0, 0))
-	mock.ExpectCommit()
-	mock.ExpectBegin()
 	mock.ExpectExec("INSERT INTO `sys_region_snapshot`").WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectCommit()
 
