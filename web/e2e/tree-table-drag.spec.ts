@@ -31,7 +31,7 @@ async function openMenu(page: Page) {
   }
 }
 
-async function anchorOf(page: Page, index = 1) {
+async function anchorOf(page: Page) {
   return page.evaluate((sel) => {
     const el = document.querySelectorAll('[data-sortable-id]')[1]
     const h = el.querySelector(sel)!.getBoundingClientRect()

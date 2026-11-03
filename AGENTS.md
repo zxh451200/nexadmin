@@ -31,10 +31,12 @@ NexAdmin 框架母版：后端 Gin + GORM、前端 React + shadcn/ui，生产构
 ```
 go build ./... && go vet ./... && go test ./...
 cd flowlite && go build ./... && go vet ./... && go test ./...
-cd web && npx tsc --noEmit && npx eslint src
+cd web && npm run typecheck && npm run lint   # 已含 e2e 与 playwright.config
 ```
 
 涉及迁移时补跑 `nexadmin-server migrate --dry-run`；涉及官网时截图验证浅色/深色两套主题。
+改动树形表格/拖拽几何（落位线、缩进、书写方向）时跑 `cd web && npm run e2e`——这类坐标是物理算的，
+改错不报错只画歪，`tsc`/`eslint` 照不出来（用例含 LTR、RTL、移动端卡片三档）。
 
 跑真引擎集成测试（`TestIT*`）时 MySQL DSN 的库名要留空：
 `NEXADMIN_IT_MYSQL_DSN='root:pass@tcp(127.0.0.1:3306)/?charset=utf8mb4&parseTime=true&loc=UTC'`。

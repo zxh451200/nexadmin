@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "node scripts/check-production-env.mjs --build",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src",
+    "lint": "eslint src e2e playwright.config.ts",
     "e2e": "playwright test"
   },
   "dependencies": {
