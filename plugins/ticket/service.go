@@ -379,7 +379,8 @@ func (s *Service) Reply(ctx context.Context, ticketNo string, in ReplyInput) (*T
 	if in.ReplierType == ReplierAgent && !in.Internal {
 		s.sendReporterEmail(ctx, &t, EmailReplied, preview(in.Content))
 	}
-	s.publishWS(wsKindReplied, &t, preview(in.Content))
+	// 内部备注的正文不进任何 WS 帧（见 replyPreview）。
+	s.publishWS(wsKindReplied, &t, replyPreview(in.Internal, in.Content))
 	return &out, &t, nil
 }
 
