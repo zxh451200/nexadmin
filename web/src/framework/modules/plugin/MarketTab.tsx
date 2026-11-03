@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { CheckCircle2, Download, ExternalLink, Loader2, RefreshCw, Store, Trash2, XCircle } from 'lucide-react'
+import { CheckCircle2, Download, ExternalLink, KeyRound, Loader2, RefreshCw, Store, Trash2, XCircle } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { usePermission } from '@/framework/auth/usePermission'
@@ -23,6 +23,7 @@ import {
   type MarketEntry,
   type PluginEdition,
   type PluginInfo,
+  type PluginStatus,
 } from './api'
 
 const PENDING_LICENSE = (id: string) => `market-pending-license:${id}`
@@ -219,6 +220,7 @@ export default function MarketTab({ focus = '' }: { focus?: string }) {
   const { t } = useTranslation()
   const { has } = usePermission()
   const canInstall = has('plugin:install')
+  const canLicense = has('plugin:license')
   const { data = [], isLoading, isError, refetch } = useMarket()
   const install = useInstallPlugin()
   const remove = useRemovePlugin()
@@ -298,6 +300,21 @@ export default function MarketTab({ focus = '' }: { focus?: string }) {
     if (!window.confirm(t('pluginMgr.market.remove.confirm', { name: e.name }))) return
     setJobEdition(null)
     remove.mutate({ id: e.id }, { onSuccess: (res) => setJobId(res.jobId) })
+  }
+
+  // 内置插件在市场页唯一可做的动作是导授权——装/卸都要对源码目录动手，不给。
+  const onLicense = (e: MarketEntry) => {
+    setLicensePrefill('')
+    setLicenseTarget({
+      id: e.id,
+      name: e.name,
+      version: e.installedVersion ?? e.version ?? '',
+      edition: e.edition,
+      status: (e.status || 'unlicensed') as PluginStatus,
+      customer: '',
+      expiresAt: null,
+      reason: '',
+    })
   }
 
   // 批量更新续跑：队列里有待装插件时，装完一个（重启回来）就接着装下一个；
@@ -391,6 +408,11 @@ export default function MarketTab({ focus = '' }: { focus?: string }) {
         }
       />
 
+      {/* 一句话交代清楚「为什么这里列了不能装的插件」，比每张卡片各挂一遍同一句话省事 */}
+      {entries.some((e) => e.bundled) ? (
+        <p className="text-xs text-muted-foreground">{t('pluginMgr.market.bundledNote')}</p>
+      ) : null}
+
       {isLoading ? (
         <div className="grid grid-cols-1 gap-3 md:gap-4 lg:grid-cols-2 xl:grid-cols-3">
           {Array.from({ length: 3 }, (_, i) => (
@@ -458,8 +480,14 @@ export default function MarketTab({ focus = '' }: { focus?: string }) {
                   ) : null}
                 </div>
                 {e.bundled ? (
-                  // 内置插件不给「重装覆盖 / 卸载」：那是对源码目录动手，正确路径是改代码后重建。
-                  <p className="mt-auto text-xs text-muted-foreground">{t('pluginMgr.market.bundledHint')}</p>
+                  // 内置插件不给「重装覆盖 / 卸载」：那是对源码目录动手，正确路径是改代码后重建；
+                  // 卡片上只留真正能做的动作。
+                  canLicense && e.edition === 'pro' ? (
+                    <Button size="sm" variant="outline" className="mt-auto self-start" onClick={() => onLicense(e)}>
+                      <KeyRound aria-hidden="true" />
+                      {t('pluginMgr.license.action')}
+                    </Button>
+                  ) : null
                 ) : canInstall ? (
                   <div className="mt-auto flex gap-2">
                     <Button size="sm" disabled={install.isPending} onClick={() => onInstall(e)}>

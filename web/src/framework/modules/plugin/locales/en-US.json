@@ -78,7 +78,7 @@
       "rebuild": "Rebuild & restart",
       "installed": "Installed",
       "bundled": "Built-in",
-      "bundledHint": "Compiled into this binary; change the source and rebuild. Overwrite-install and uninstall are not offered",
+      "bundledNote": "\"Built-in\" plugins are compiled into this binary and are listed here only to show version and license state: pro ones take a license from the card. Overwrite-install and uninstall edit the source tree and then rebuild, so the market does not offer them.",
       "filterFree": "Free",
       "filterPaid": "Paid",
       "updateAvailable": "Update available: v{{version}}",
