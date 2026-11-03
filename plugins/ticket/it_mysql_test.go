@@ -14,20 +14,25 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
-	"gorm.io/driver/mysql"
+	gomysql "github.com/go-sql-driver/mysql"
 	"gorm.io/gorm"
 
+	"nexadmin/core/config"
+	"nexadmin/core/database"
 	"nexadmin/core/event"
 	"nexadmin/core/notify"
 	"nexadmin/core/response"
 	"nexadmin/core/storage"
+	"nexadmin/core/tenant"
 	"nexadmin/pkg/excel"
 	"nexadmin/pkg/idgen"
 )
@@ -50,7 +55,66 @@ func (f *fakeSender) count() int {
 	return len(f.msgs)
 }
 
-func runTicketMigrations(t *testing.T, gdb *gorm.DB) {
+// itCtx 是真引擎用例的默认上下文：带一个真租户（tenant.DefaultID），不是 Skip。
+// 单测用 testCtx()（Skip，不表态租户）；这里要的就是「插入被填上 tenant_id、查询被加上
+// tenant_id 条件」这件事在真引擎上成立。跨租户的用例在 scope_it_test.go 里另起租户。
+func itCtx() context.Context { return tenant.With(itBaseCtx(), idgen.ID(1)) }
+
+// itBaseCtx 给需要「无租户」的用例（清扫器）用。
+func itBaseCtx() context.Context { return context.Background() }
+
+// itRunMigrationsOn 在一次性库上跑插件全部迁移。
+// 不能拿夹具里的 admin 连接直接建表：按 AGENTS.md，NEXADMIN_IT_MYSQL_DSN 的库名必须留空，
+// 那条连接没选库，迁移会报 Error 1046 No database selected。这里另开一条指向该库的连接，
+// 并保留「换不出一次性库名就当场失败」的硬闸——继续跑就是往用户命名的库里建表删表。
+func itRunMigrationsOn(t *testing.T, dsn, dbName string) {
+	t.Helper()
+	target := strings.Replace(dsn, ")/", ")/"+dbName, 1)
+	if target == dsn {
+		t.Fatalf("NEXADMIN_IT_MYSQL_DSN 形如 user:pass@tcp(host:port)/（库名留空），当前 DSN 换不出一次性库：%s", dsn)
+	}
+	db, err := sql.Open("mysql", target)
+	if err != nil {
+		t.Fatalf("open migration conn: %v", err)
+	}
+	defer db.Close()
+	runTicketMigrations(t, func(s string) error {
+		_, err := db.Exec(s)
+		return err
+	})
+}
+
+// itMySQLConfig 把 NEXADMIN_IT_MYSQL_DSN 拆成 config.Database，好让夹具走 database.Open。
+// 顺带把 AGENTS.md 那条「库名要留空」变成硬闸：DSN 里写了库名就拒跑，
+// 否则一次性库名拼不进去，建表删表会落到人家命名的那个库上。
+func itMySQLConfig(dsn, dbName string) (config.Database, error) {
+	d, err := gomysql.ParseDSN(dsn)
+	if err != nil {
+		return config.Database{}, fmt.Errorf("parse NEXADMIN_IT_MYSQL_DSN: %w", err)
+	}
+	if d.DBName != "" {
+		return config.Database{}, fmt.Errorf("NEXADMIN_IT_MYSQL_DSN 的库名要留空（夹具自己换一次性库），当前是 %q", d.DBName)
+	}
+	cfg := config.Database{Type: "mysql", User: d.User, Password: d.Passwd, Name: dbName, NodeID: 1, Port: 3306}
+	if host, portStr, e := net.SplitHostPort(d.Addr); e == nil {
+		cfg.Host = host
+		if p, e2 := strconv.Atoi(portStr); e2 == nil {
+			cfg.Port = p
+		} else {
+			cfg.Port = 3306
+		}
+	} else {
+		cfg.Host = d.Addr
+	}
+	if cfg.Host == "" {
+		cfg.Host = "127.0.0.1"
+	}
+	return cfg, nil
+}
+
+// runTicketMigrations 按编号顺序跑完插件全部迁移。exec 由调用方给：迁移文件一个文件里
+// 有多条语句，只有开了 multiStatements 的连接能跑，所以走 admin 而不是业务句柄。
+func runTicketMigrations(t *testing.T, exec func(string) error) {
 	t.Helper()
 	entries, err := os.ReadDir("migrations/mysql")
 	if err != nil {
@@ -66,7 +130,7 @@ func runTicketMigrations(t *testing.T, gdb *gorm.DB) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := gdb.Exec(string(b)).Error; err != nil {
+		if err := exec(string(b)); err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
 	}
@@ -119,17 +183,22 @@ func itMySQLService(t *testing.T) (*Service, *gorm.DB, *fakeSender) {
 		_ = admin.Close()
 	})
 
-	gormDSN := strings.Replace(dsn, ")/", ")/"+dbName+"", 1)
-	if gormDSN == dsn {
-		// 一次性库名没拼进去，说明 DSN 的形态不是 user:pass@tcp(host:port)/；
-		// 继续跑就是往 DSN 里那个库建表删表，宁可当场失败。
-		t.Fatalf("NEXADMIN_IT_MYSQL_DSN 形如 user:pass@tcp(host:port)/（库名留空），当前 DSN 换不出一次性库：%s", dsn)
-	}
-	gdb, err = gorm.Open(mysql.Open(gormDSN), &gorm.Config{})
+	// 迁移跑在一条指向一次性库的专用连接上（admin 那条按规矩没选库）。
+	itRunMigrationsOn(t, dsn, dbName)
+
+	// 业务句柄必须走 database.Open 这个生产构造器：租户隔离是它内部 Use 的 tenantPlugin，
+	// 裸 gorm.Open 拿不到那道闸，跨租户断言就会对着一个不存在的闸门全绿。
+	cfg, err := itMySQLConfig(dsn, dbName)
 	if err != nil {
-		t.Fatalf("open gorm: %v", err)
+		t.Fatalf("%v", err)
 	}
-	runTicketMigrations(t, gdb)
+	gdb, err = database.Open(cfg)
+	if err != nil {
+		t.Fatalf("database.Open: %v", err)
+	}
+	// 句柄默认绑租户 1：夹具里几十处 gdb.X 逐个 WithContext 不如在这里一次性定住，
+	// 需要别的租户的用例（scope_it_test）再显式覆盖。
+	gdb = gdb.WithContext(itCtx())
 
 	// 极简用户表：让负责人姓名/租户反查在真库上成立（真实项目由框架迁移提供）。
 	for _, stmt := range []string{
@@ -160,7 +229,7 @@ func itMySQLService(t *testing.T) (*Service, *gorm.DB, *fakeSender) {
 
 func TestITMySQLTicketOps(t *testing.T) {
 	svc, gdb, sender := itMySQLService(t)
-	ctx := context.Background()
+	ctx := itCtx()
 
 	must := func(err error) {
 		t.Helper()
@@ -720,7 +789,7 @@ loop:
 // 以及 status 多值筛选落成的 IN 查询。sqlmock 从不执行 SQL，这些形状只有真库能证。
 func TestITMySQLSLAPoliciesFieldsAndMultiStatus(t *testing.T) {
 	svc, gdb, _ := itMySQLService(t)
-	ctx := context.Background()
+	ctx := itCtx()
 	must := func(err error) {
 		t.Helper()
 		if err != nil {
@@ -881,7 +950,7 @@ func TestITMySQLSLAPoliciesFieldsAndMultiStatus(t *testing.T) {
 // 只跑一轮、每条规则一次，规则自己追加的标签不会再触发它（否则就是环）。
 func TestITMySQLRuleRerunOnTagChange(t *testing.T) {
 	svc, gdb, _ := itMySQLService(t)
-	ctx := context.Background()
+	ctx := itCtx()
 	must := func(err error) {
 		t.Helper()
 		if err != nil {
@@ -942,7 +1011,7 @@ func TestITMySQLRuleRerunOnTagChange(t *testing.T) {
 // TestITMySQLInboundEmail 邮件进单：新邮件建单、重投幂等、回信按 In-Reply-To 落回原单、自动回复拒绝。
 func TestITMySQLInboundEmail(t *testing.T) {
 	svc, gdb, _ := itMySQLService(t)
-	ctx := context.Background()
+	ctx := itCtx()
 	must := func(err error) {
 		t.Helper()
 		if err != nil {
@@ -1006,4 +1075,91 @@ func TestITMySQLInboundEmail(t *testing.T) {
 	}); err == nil {
 		t.Fatal("自动回复不该进单")
 	}
+}
+
+// TestITMySQLReporterNotify 走通 016 迁移 + 客户邮件链路：设置落库、建单回执、
+// 坐席公开回复通知、内部备注不发、解决通知、reporter_email 列落库、报告人历史。
+func TestITMySQLReporterNotify(t *testing.T) {
+	svc, gdb, _ := itMySQLService(t)
+	ctx := itCtx()
+	must := func(err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	oldResolver := portalResolver
+	portalResolver = fakeResolver{}
+	t.Cleanup(func() { portalResolver = oldResolver })
+	mailer := &fakeMailer{}
+	svc.WithMailer(mailer)
+
+	// 出厂设置：邮件通知默认关；保存后立即生效（缓存同步失效）。
+	if svc.Settings(ctx).EmailNotifyEnabled {
+		t.Fatal("邮件通知出厂应为关")
+	}
+	if _, err := svc.SaveSettings(ctx, SettingsInput{EmailNotifyEnabled: true, PortalURL: "https://help.example.com"}); err != nil {
+		t.Fatalf("保存设置失败: %v", err)
+	}
+	if !svc.Settings(ctx).EmailNotifyEnabled {
+		t.Fatal("保存后缓存里应读到开")
+	}
+	var settingRows int64
+	must(gdb.Model(&TicketSetting{}).Count(&settingRows).Error)
+	if settingRows != 1 {
+		t.Fatalf("设置应落成单行，实际 %d 行", settingRows)
+	}
+
+	// 访客自助建单（带邮箱）：受理回执 1 封，链接带上门户地址。
+	tk, err := svc.Create(ctx, CreateInput{
+		Title: "登录报错", Content: "一直转圈", ReporterType: ReplierReporter,
+		ReporterID: "cust@example.org", ReporterName: "客户", ReporterEmail: "cust@example.org",
+	})
+	must(err)
+	if mailer.count() != 1 {
+		t.Fatalf("建单回执应发 1 封，实际 %d", mailer.count())
+	}
+	if _, _, data := mailer.last(); data.Link != "https://help.example.com/ticket/view?no="+tk.TicketNo {
+		t.Fatalf("回执链接 = %q", data.Link)
+	}
+
+	// 坐席公开回复 +1；内部备注 0。
+	_, _, err = svc.Reply(ctx, tk.TicketNo, ReplyInput{ReplierType: ReplierAgent, ReplierID: "9", ReplierName: "Agent9", Content: "您好，正在排查"})
+	must(err)
+	if mailer.count() != 2 {
+		t.Fatalf("公开回复后应 2 封，实际 %d", mailer.count())
+	}
+	_, _, err = svc.Reply(ctx, tk.TicketNo, ReplyInput{ReplierType: ReplierAgent, ReplierID: "9", ReplierName: "Agent9", Content: "内部判断是缓存", Internal: true})
+	must(err)
+	if mailer.count() != 2 {
+		t.Fatalf("内部备注不该发信，实际 %d", mailer.count())
+	}
+
+	// 标记解决 +1。
+	_, err = svc.SetStatus(ctx, tk.TicketNo, StatusResolved, "agent9")
+	must(err)
+	if mailer.count() != 3 {
+		t.Fatalf("解决通知应 3 封，实际 %d", mailer.count())
+	}
+
+	// reporter_email 落库；存量口径（reporterId 即邮箱）在 notify_test 里已单测兜底。
+	var rawEmail string
+	must(gdb.Raw("SELECT reporter_email FROM plg_ticket WHERE ticket_no = ?", tk.TicketNo).Scan(&rawEmail).Error)
+	if rawEmail != "cust@example.org" {
+		t.Fatalf("reporter_email = %q", rawEmail)
+	}
+
+	// 报告人历史：同 reporterId 建第二张单后，从第二张查得到第一张。
+	tk2, err := svc.Create(ctx, CreateInput{
+		Title: "导出失败", Content: "点了没反应", ReporterType: ReplierReporter,
+		ReporterID: "cust@example.org", ReporterName: "客户",
+	})
+	must(err)
+	hist, err := svc.ReporterHistory(ctx, tk2.TicketNo)
+	must(err)
+	if len(hist) != 1 || hist[0].TicketNo != tk.TicketNo {
+		t.Fatalf("报告人历史 = %+v，应含 %s", hist, tk.TicketNo)
+	}
+	// WS 帧：hub 未装配是空操作，这里只验发布路径不 panic。
+	svc.publishWS(wsKindCreated, tk, "x")
 }

@@ -52,10 +52,14 @@ func Settleable(status string) bool {
 	return status == StatusOpen || status == StatusProcessing || status == StatusPending
 }
 
-// Ticket 是一张工单（平台级表）。biz_type + biz_no 可选关联宿主业务对象（如订单号）；
-// 报告人身份由宿主侧给出（visitorToken/会员 ID/后台用户）。
+// Ticket 是一张工单（租户表：查询/更新/删除自动带 tenant_id）。biz_type + biz_no 可选关联
+// 宿主业务对象（如订单号）；报告人身份由宿主侧给出（visitorToken/会员 ID/后台用户）。
+//
+// 隔离边界：客户数据五张表（本表与 _reply/_attachment/_activity/_link）按租户切开；
+// 配置类表（_canned/_field/_group/_group_member/_rule/_sla/_setting）仍是平台级共享，
+// 见迁移 017 的说明。别把这里当成「工单已整体多租户」。
 type Ticket struct {
-	database.PlatformModel
+	database.TenantModel
 	TicketNo string `gorm:"size:40;not null;uniqueIndex:uk_plg_ticket_no" json:"ticketNo"`
 	BizType  string `gorm:"size:32;not null;default:'';index" json:"bizType"`
 	BizNo    string `gorm:"size:64;not null;default:'';index" json:"bizNo"`
@@ -66,6 +70,9 @@ type Ticket struct {
 	ReporterType string `gorm:"size:16;not null" json:"reporterType"`
 	ReporterID   string `gorm:"size:64" json:"reporterId"`
 	ReporterName string `gorm:"size:64" json:"reporterName"`
+	// ReporterEmail 是报告人邮箱（邮件进单天然有、表单可选填），坐席通知客户用；
+	// 为空且 ReporterID 是邮箱形态时通知回退用 ReporterID（见 notify.go）。
+	ReporterEmail string `gorm:"size:128;not null;default:''" json:"reporterEmail"`
 	// CreatorID/CreatorName 是后台代客建单的坐席；访客自建为 0/空。
 	CreatorID    idgen.ID `gorm:"not null;default:0" json:"creatorId"`
 	CreatorName  string   `gorm:"size:64" json:"creatorName"`
@@ -128,7 +135,7 @@ func (Ticket) TableName() string { return "plg_ticket" }
 
 // TicketReply 是一条回复；content 只支持文本（P0），附件留给 P1。
 type TicketReply struct {
-	database.PlatformModel
+	database.TenantModel
 	TicketID    idgen.ID `gorm:"not null;uniqueIndex:uk_plg_ticket_reply_seq,priority:1" json:"-"`
 	Seq         int64    `gorm:"not null;uniqueIndex:uk_plg_ticket_reply_seq,priority:2" json:"seq"`
 	ReplierType string   `gorm:"size:16;not null" json:"replierType"`
@@ -154,3 +161,12 @@ type CannedReply struct {
 }
 
 func (CannedReply) TableName() string { return "plg_ticket_canned" }
+
+// TicketSetting 是单行全局设置（邮件通知开关 + 客服门户地址）；id 固定 1。
+type TicketSetting struct {
+	database.PlatformModel
+	EmailNotifyEnabled bool   `gorm:"not null;default:0" json:"emailNotifyEnabled"`
+	PortalURL          string `gorm:"size:255;not null;default:''" json:"portalUrl"`
+}
+
+func (TicketSetting) TableName() string { return "plg_ticket_setting" }

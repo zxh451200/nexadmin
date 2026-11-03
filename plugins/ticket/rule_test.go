@@ -1,7 +1,6 @@
 package ticket
 
 import (
-	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -11,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 
+	"nexadmin/core/database"
 	"nexadmin/core/response"
 )
 
@@ -242,14 +241,20 @@ func TestITMySQLRuleTags(t *testing.T) {
 		}
 		_ = admin.Close()
 	})
-	gormDSN := strings.Replace(dsn, ")/", ")/"+dbName+"", 1)
-	gdb, err = gorm.Open(mysql.Open(gormDSN), &gorm.Config{})
+	itRunMigrationsOn(t, dsn, dbName)
+	cfg, err := itMySQLConfig(dsn, dbName)
 	if err != nil {
-		t.Fatalf("open gorm: %v", err)
+		t.Fatalf("%v", err)
 	}
-	runTicketMigrations(t, gdb)
+	gdb, err = database.Open(cfg)
+	if err != nil {
+		t.Fatalf("database.Open: %v", err)
+	}
+	// 句柄默认绑租户 1：夹具里几十处 gdb.X 逐个 WithContext 不如在这里一次性定住，
+	// 需要别的租户的用例（scope_it_test）再显式覆盖。
+	gdb = gdb.WithContext(itCtx())
 
-	ctx := context.Background()
+	ctx := testCtx()
 	svc := NewService(gdb, nopLogger{}).WithTimezone("UTC")
 	must := func(err error) {
 		t.Helper()

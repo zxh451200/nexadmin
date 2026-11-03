@@ -1,6 +1,8 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useRef } from 'react'
 import { ApiError, api, http, tokenStore } from '@/framework/request/http'
 import type { Page, PageQuery } from '@/framework/request/types'
+import { useWs } from '@/framework/hooks/useWs'
 
 export type TicketStatus = 'open' | 'processing' | 'pending' | 'resolved' | 'closed'
 export type TicketPriority = 'low' | 'normal' | 'high' | 'urgent'
@@ -17,6 +19,8 @@ export interface Ticket {
   reporterType: string
   reporterId: string
   reporterName: string
+  /** 报告人邮箱（通知客户用）；为空时后端对邮箱形态的 reporterId 兜底。 */
+  reporterEmail?: string
   creatorId?: string
   creatorName?: string
   groupId?: string
@@ -73,6 +77,10 @@ export interface TicketQueryParams extends PageQuery {
   mine?: string
   groupId?: string
   tag?: string
+  /** 排序列键，取值由后端白名单决定；未知键后端退回默认列 */
+  sort?: string
+  /** asc / desc，缺省 desc */
+  order?: string
 }
 
 export interface RepliesResult {
@@ -81,8 +89,8 @@ export interface RepliesResult {
   attachments?: TicketAttachment[]
   /** 工单动态（审计轨迹）。坐席看到全部，客户自助页只有提交与状态变化。 */
   activities?: TicketActivity[]
-  /** 附件配额由后端下发（个数与总字节），前端只呈现不复制常量 */
-  quota?: { maxCount: number; maxBytes: number }
+  /** 附件配额与可收类型由后端下发（个数、总字节、文件选择器 accept），前端只呈现不复制常量 */
+  quota?: { maxCount: number; maxBytes: number; accept: string }
 }
 
 export type TicketActivityAction =
@@ -132,6 +140,8 @@ export interface CreateTicketInput {
   priority?: TicketPriority
   reporterName?: string
   reporterId?: string
+  /** 报告人邮箱（可选）：坐席回复 / 解决时按设置给客户发通知邮件。 */
+  reporterEmail?: string
   bizType?: string
   bizNo?: string
   /** 建单时一并提交的自定义字段值。 */
@@ -779,5 +789,92 @@ export function useTicketStats(filter: TicketStatsFilter) {
     queryKey: ['ticket', 'stats', filter],
     queryFn: () => api.get<TicketStats>(`${BASE}/tickets/stats`, filter),
     placeholderData: keepPreviousData,
+  })
+}
+
+// ---- 实时推送（WS）与侧栏面板（后端 ws.go / badge.go / notify.go）----
+
+/** WS 帧：后端 wsFrame。字段刻意最小，详情数据由前端命中帧后拉增量。 */
+export interface TicketWsFrame {
+  type: 'created' | 'replied' | 'status' | 'assigned' | 'rated'
+  ticketNo: string
+  status?: string
+  preview?: string
+}
+
+/** 列表级主题：任何工单变化都会发一帧，队列页订阅它刷新列表。 */
+export const TICKET_WS_FEED = 'ticket:feed'
+
+export const ticketWsTopic = (ticketNo: string) => `ticket:${ticketNo}`
+
+/** 订阅 WS 主题的通用壳：handler 走 ref 免得订阅随闭包重建。 */
+function useTicketTopic(topic: string | undefined, onFrame: (f: TicketWsFrame) => void) {
+  const { subscribe } = useWs()
+  const handler = useRef(onFrame)
+  handler.current = onFrame
+  useEffect(() => {
+    if (!topic) return
+    return subscribe(topic, (data) => {
+      const f = data as TicketWsFrame
+      if (f?.type && f.ticketNo) handler.current(f)
+    })
+  }, [topic, subscribe])
+}
+
+/** 选中工单的实时帧：详情会话页订阅，收到即刷回复与动态（轮询保留作兜底）。 */
+export function useTicketStream(ticketNo: string | undefined, onFrame: (f: TicketWsFrame) => void) {
+  useTicketTopic(ticketNo ? ticketWsTopic(ticketNo) : undefined, onFrame)
+}
+
+/** 全列表实时帧：收到即刷列表查询（8s 轮询保留作兜底）。 */
+export function useTicketFeed(onFrame: (f: TicketWsFrame) => void) {
+  useTicketTopic(TICKET_WS_FEED, onFrame)
+}
+
+/** 侧栏菜单徽标：待我注意的未完结数（未认领 open + 认领给我的未完结）。 */
+export function useBadgeCount() {
+  return useQuery({
+    queryKey: [...KEY, 'badge'],
+    queryFn: () => api.get<{ count: number }>(`${BASE}/tickets/badge`, undefined, { silent: true }),
+    refetchInterval: 60_000,
+  })
+}
+
+/** 插件设置：客户邮件通知开关 + 客服门户地址（邮件里的「查看工单」链接）。 */
+export interface TicketSettings {
+  emailNotifyEnabled: boolean
+  portalUrl: string
+}
+
+export function useTicketSettings() {
+  return useQuery({
+    queryKey: [...KEY, 'settings'],
+    queryFn: () => api.get<TicketSettings>(`${BASE}/settings`),
+  })
+}
+
+export function useSaveTicketSettings() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (input: TicketSettings) => api.put<TicketSettings>(`${BASE}/settings`, input, { silent: true }),
+    onSuccess: invalidate,
+  })
+}
+
+/** 报告人历史工单：详情侧栏「这人之前提过什么」，防重复建单。 */
+export interface ReporterHistoryItem {
+  ticketNo: string
+  title: string
+  status: TicketStatus
+  priority: TicketPriority
+  reporterName: string
+  createdAt: string
+}
+
+export function useReporterHistory(ticketNo?: string) {
+  return useQuery({
+    queryKey: [...KEY, 'reporter-history', ticketNo],
+    queryFn: () => api.get<ReporterHistoryItem[]>(`${BASE}/tickets/${ticketNo}/reporter-tickets`),
+    enabled: !!ticketNo,
   })
 }

@@ -6,7 +6,6 @@ package ticket
 // 一旦实现去 UPDATE/INSERT plg_ticket_reply 或 plg_ticket_attachment，sqlmock 会直接报 unexpected call。
 
 import (
-	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -18,9 +17,9 @@ import (
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
-	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 
+	"nexadmin/core/database"
 	"nexadmin/core/response"
 	"nexadmin/pkg/idgen"
 )
@@ -96,7 +95,7 @@ func TestMergeWritesPointerAndBothTrails(t *testing.T) {
 	m.ExpectExec(sqlActivity).WillReturnResult(sqlmock.NewResult(1, 1))
 	m.ExpectCommit()
 
-	res, err := s.Merge(context.Background(), "TK1001", "TK2002", "alice")
+	res, err := s.Merge(testCtx(), "TK1001", "TK2002", "alice")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +120,7 @@ func TestMergeRejectsSelf(t *testing.T) {
 }
 
 func mergeErr(s *Service, from, to string) error {
-	_, err := s.Merge(context.Background(), from, to, "alice")
+	_, err := s.Merge(testCtx(), from, to, "alice")
 	return err
 }
 
@@ -171,7 +170,7 @@ func TestMergeResolvesChainToFinalMain(t *testing.T) {
 	m.ExpectExec(sqlActivity).WillReturnResult(sqlmock.NewResult(1, 1))
 	m.ExpectCommit()
 
-	res, err := s.Merge(context.Background(), "TK1001", "TK2002", "alice")
+	res, err := s.Merge(testCtx(), "TK1001", "TK2002", "alice")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -254,7 +253,7 @@ func TestMergeLocksTicketsInStableOrder(t *testing.T) {
 	m.ExpectExec(sqlActivity).WillReturnResult(sqlmock.NewResult(1, 1))
 	m.ExpectCommit()
 
-	res, err := s.Merge(context.Background(), "TK2002", "TK1001", "alice")
+	res, err := s.Merge(testCtx(), "TK2002", "TK1001", "alice")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -304,7 +303,7 @@ func TestLinkStoresCanonicalPairAndBothTrails(t *testing.T) {
 	m.ExpectCommit()
 
 	// 传入顺序与 id 大小相反：存下来仍必须是 a=1001、b=2002。
-	link, err := s.Link(context.Background(), "TK2002", "TK1001", "alice")
+	link, err := s.Link(testCtx(), "TK2002", "TK1001", "alice")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -323,7 +322,7 @@ func TestLinkStoresCanonicalPairAndBothTrails(t *testing.T) {
 func TestLinkGuards(t *testing.T) {
 	db, m := mockDB(t)
 	s := NewService(db, nopLogger{})
-	_, err := s.Link(context.Background(), "TK1001", "TK1001", "alice")
+	_, err := s.Link(testCtx(), "TK1001", "TK1001", "alice")
 	mustKey(t, err, http.StatusBadRequest, "ticket.link_self")
 	if err := m.ExpectationsWereMet(); err != nil {
 		t.Errorf("自关联不该发出任何 SQL: %v", err)
@@ -336,7 +335,7 @@ func TestLinkGuards(t *testing.T) {
 	m2.ExpectQuery(sqlTicketByNo).WithArgs("TK2002", 1).WillReturnRows(mergeRow("TK2002", 2002, StatusOpen, nil))
 	m2.ExpectQuery(sqlLinkDup).WillReturnRows(countRow(1))
 	m2.ExpectRollback()
-	_, err = s2.Link(context.Background(), "TK1001", "TK2002", "alice")
+	_, err = s2.Link(testCtx(), "TK1001", "TK2002", "alice")
 	mustKey(t, err, http.StatusConflict, "ticket.link_exists")
 
 	db3, m3 := mockDB(t)
@@ -347,7 +346,7 @@ func TestLinkGuards(t *testing.T) {
 	m3.ExpectQuery(sqlLinkDup).WillReturnRows(countRow(0))
 	m3.ExpectQuery(sqlLinkSide).WillReturnRows(countRow(maxLinksPerTicket))
 	m3.ExpectRollback()
-	_, err = s3.Link(context.Background(), "TK1001", "TK2002", "alice")
+	_, err = s3.Link(testCtx(), "TK1001", "TK2002", "alice")
 	mustKey(t, err, http.StatusBadRequest, "ticket.link_limit")
 
 	db4, m4 := mockDB(t)
@@ -356,7 +355,7 @@ func TestLinkGuards(t *testing.T) {
 	m4.ExpectQuery(sqlTicketByNo).WithArgs("TK1001", 1).WillReturnRows(mergeRow("TK1001", 1001, StatusOpen, nil))
 	m4.ExpectQuery(sqlTicketByNo).WithArgs("TK2002", 1).WillReturnRows(emptyRow())
 	m4.ExpectRollback()
-	_, err = s4.Link(context.Background(), "TK1001", "TK2002", "alice")
+	_, err = s4.Link(testCtx(), "TK1001", "TK2002", "alice")
 	mustKey(t, err, http.StatusNotFound, "ticket.not_found")
 }
 
@@ -372,7 +371,7 @@ func TestUnlinkDeletesCanonicalRow(t *testing.T) {
 	m.ExpectExec(sqlActivity).WillReturnResult(sqlmock.NewResult(1, 1))
 	m.ExpectExec(sqlActivity).WillReturnResult(sqlmock.NewResult(1, 1))
 	m.ExpectCommit()
-	if err := s.Unlink(context.Background(), "TK2002", "TK1001", "alice"); err != nil {
+	if err := s.Unlink(testCtx(), "TK2002", "TK1001", "alice"); err != nil {
 		t.Fatal(err)
 	}
 	if err := m.ExpectationsWereMet(); err != nil {
@@ -386,10 +385,10 @@ func TestUnlinkDeletesCanonicalRow(t *testing.T) {
 	m2.ExpectQuery(sqlTicketByNo).WithArgs("TK2002", 1).WillReturnRows(mergeRow("TK2002", 2002, StatusOpen, nil))
 	m2.ExpectExec(sqlLinkDelete).WithArgs(int64(1001), int64(2002)).WillReturnResult(sqlmock.NewResult(0, 0))
 	m2.ExpectRollback()
-	mustKey(t, s2.Unlink(context.Background(), "TK1001", "TK2002", "alice"), http.StatusNotFound, "ticket.link_not_found")
+	mustKey(t, s2.Unlink(testCtx(), "TK1001", "TK2002", "alice"), http.StatusNotFound, "ticket.link_not_found")
 
-	mustKey(t, s2.Unlink(context.Background(), "TK1001", "TK1001", "alice"), http.StatusBadRequest, "ticket.link_self")
-	mustKey(t, s2.Unlink(context.Background(), "", "TK2002", "alice"), http.StatusBadRequest, "error.bad_request")
+	mustKey(t, s2.Unlink(testCtx(), "TK1001", "TK1001", "alice"), http.StatusBadRequest, "ticket.link_self")
+	mustKey(t, s2.Unlink(testCtx(), "", "TK2002", "alice"), http.StatusBadRequest, "error.bad_request")
 }
 
 // 读接口带出关联列表：两个方向都要能看见对面那张。
@@ -404,7 +403,7 @@ func TestListLinksReadsBothDirections(t *testing.T) {
 		mergeRow("TK1001", 1001, StatusClosed, nil).
 			AddRow(3003, "TK3003", "trade_group", "G-1", "other", StatusOpen, PriorityLow, nil, nil, nil, nil))
 
-	list, err := s.ListLinks(context.Background(), "TK2002")
+	list, err := s.ListLinks(testCtx(), "TK2002")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -433,7 +432,7 @@ func TestListLinksSkipsDanglingAndEmpty(t *testing.T) {
 		"id", "ticket_no", "biz_type", "biz_no", "title", "status", "priority",
 		"merged_into_id", "closed_at", "resolution_due_at", "sla_paused_at"))
 
-	list, err := s.ListLinks(context.Background(), "TK1001")
+	list, err := s.ListLinks(testCtx(), "TK1001")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -445,7 +444,7 @@ func TestListLinksSkipsDanglingAndEmpty(t *testing.T) {
 	s2 := NewService(db2, nopLogger{})
 	m2.ExpectQuery(sqlTicketByNo).WithArgs("TK1001", 1).WillReturnRows(mergeRow("TK1001", 1001, StatusOpen, nil))
 	m2.ExpectQuery(sqlLinkScan).WithArgs(int64(1001), int64(1001), int64(linkListLimit)).WillReturnRows(linkRows(nil))
-	list, err = s2.ListLinks(context.Background(), "TK1001")
+	list, err = s2.ListLinks(testCtx(), "TK1001")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -460,7 +459,7 @@ func TestListLinksSkipsDanglingAndEmpty(t *testing.T) {
 	db3, m3 := mockDB(t)
 	s3 := NewService(db3, nopLogger{})
 	m3.ExpectQuery(sqlTicketByNo).WithArgs("TK9999", 1).WillReturnRows(emptyRow())
-	_, err = s3.ListLinks(context.Background(), "TK9999")
+	_, err = s3.ListLinks(testCtx(), "TK9999")
 	mustKey(t, err, http.StatusNotFound, "ticket.not_found")
 }
 
@@ -473,7 +472,7 @@ func TestMergeSummaryShowsBothSides(t *testing.T) {
 	m.ExpectQuery(sqlMergedInto).WithArgs(int64(1001), int64(linkListLimit)).WillReturnRows(
 		mergeRow("TK3003", 3003, StatusClosed, int64(1001)))
 
-	sum, err := s.MergeSummary(context.Background(), "TK1001")
+	sum, err := s.MergeSummary(testCtx(), "TK1001")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -501,7 +500,7 @@ func TestMergeSummaryToleratesDanglingPointer(t *testing.T) {
 		"id", "ticket_no", "biz_type", "biz_no", "title", "status", "priority",
 		"merged_into_id", "closed_at", "resolution_due_at", "sla_paused_at"))
 
-	sum, err := s.MergeSummary(context.Background(), "TK1001")
+	sum, err := s.MergeSummary(testCtx(), "TK1001")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -622,14 +621,22 @@ func TestITMySQLTicketMerge(t *testing.T) {
 		_ = admin.Close()
 	})
 
-	gormDSN := strings.Replace(dsn, ")/", ")/"+dbName, 1)
-	gdb, err = gorm.Open(mysql.Open(gormDSN), &gorm.Config{})
+	itRunMigrationsOn(t, dsn, dbName)
+	cfg, err := itMySQLConfig(dsn, dbName)
 	if err != nil {
-		t.Fatalf("open gorm: %v", err)
+		t.Fatalf("%v", err)
 	}
-	runTicketMigrations(t, gdb)
+	gdb, err = database.Open(cfg)
+	if err != nil {
+		t.Fatalf("database.Open: %v", err)
+	}
+	// 句柄默认绑租户 1：夹具里几十处 gdb.X 逐个 WithContext 不如在这里一次性定住，
+	// 需要别的租户的用例（scope_it_test）再显式覆盖。
+	gdb = gdb.WithContext(itCtx())
 
-	ctx := WithActor(context.Background(), ActivityActor{Type: ActorAgent, ID: "11", Name: "alice"})
+	// 真库用例：ctx 要和 gdb 句柄同属租户 1，用 testCtx() 建出来的行是 tenant_id=0，
+	// 句柄按租户 1 查就成了 ticket.not_found。
+	ctx := WithActor(itCtx(), ActivityActor{Type: ActorAgent, ID: "11", Name: "alice"})
 	svc := NewService(gdb, nopLogger{}).WithTimezone("UTC")
 	must := func(err error) {
 		t.Helper()

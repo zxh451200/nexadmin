@@ -5,7 +5,6 @@ package ticket
 // 每条用例都按「实现里删掉对应守卫就会红」来写。
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -541,7 +540,7 @@ func TestFieldSaveFieldCreatesRow(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	m.ExpectCommit()
 
-	got, err := s.SaveField(context.Background(), Field{
+	got, err := s.SaveField(testCtx(), Field{
 		Code: "instrument", Label: "乐器", Type: FieldTypeSelect, OptionList: []string{"viola", "cello"},
 		Required: true, Enabled: true, Sort: 3, GroupID: 7,
 	})
@@ -574,7 +573,7 @@ func TestFieldSaveFieldUpdatesRow(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	m.ExpectCommit()
 
-	got, err := s.SaveField(context.Background(), Field{
+	got, err := s.SaveField(testCtx(), Field{
 		PlatformModel: platformID(fieldID),
 		Code:          "note", Label: "备注", Type: FieldTypeSelect, OptionList: []string{"a", "b"},
 		Required: true, Enabled: true, Sort: 2, GroupID: 9,
@@ -599,7 +598,7 @@ func TestFieldSaveFieldRejectsDuplicateCode(t *testing.T) {
 	s := NewService(db, nopLogger{})
 
 	m.ExpectQuery(sqlFieldCount).WithArgs("note", int64(0)).WillReturnRows(countRow(1))
-	_, err := s.SaveField(context.Background(), Field{Code: "note", Label: "备注", Type: FieldTypeText, Enabled: true})
+	_, err := s.SaveField(testCtx(), Field{Code: "note", Label: "备注", Type: FieldTypeText, Enabled: true})
 	mustKey(t, err, 409, "ticket.field_code_conflict")
 	// 冲突后一条写 SQL 都不许发出（否则会撞唯一键变成 500）。
 	if err := m.ExpectationsWereMet(); err != nil {
@@ -612,7 +611,7 @@ func TestFieldSaveFieldRejectsInvalidDefinition(t *testing.T) {
 	s := NewService(db, nopLogger{})
 
 	// 定义不合法时在发 SQL 之前就要拦住。
-	_, err := s.SaveField(context.Background(), Field{Code: "Note", Label: "备注", Type: FieldTypeText})
+	_, err := s.SaveField(testCtx(), Field{Code: "Note", Label: "备注", Type: FieldTypeText})
 	mustKey(t, err, 400, "ticket.field_code_invalid")
 	if err := m.ExpectationsWereMet(); err != nil {
 		t.Error(err)
@@ -625,7 +624,7 @@ func TestFieldSaveFieldUpdateMissingRow(t *testing.T) {
 
 	m.ExpectQuery(sqlFieldCount).WithArgs("note", int64(404)).WillReturnRows(countRow(0))
 	m.ExpectQuery(sqlFieldTake).WithArgs(int64(404), 1).WillReturnRows(emptyRow(fieldMockColumns...))
-	_, err := s.SaveField(context.Background(), Field{
+	_, err := s.SaveField(testCtx(), Field{
 		PlatformModel: platformID(404), Code: "note", Label: "备注", Type: FieldTypeText, Enabled: true,
 	})
 	mustKey(t, err, 404, "error.not_found")
@@ -644,7 +643,7 @@ func TestFieldListFieldsLoadsOptions(t *testing.T) {
 			AddRow(int64(1), testNow, testNow, "instrument", "乐器", FieldTypeSelect, "viola,cello", false, true, 0, int64(0)).
 			AddRow(int64(2), testNow, testNow, "note", "备注", FieldTypeText, "", false, false, 1, int64(7)),
 	)
-	rows, err := s.ListFields(context.Background())
+	rows, err := s.ListFields(testCtx())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -672,7 +671,7 @@ func TestFieldEnabledFieldsFilters(t *testing.T) {
 
 	m.ExpectQuery("SELECT \\* FROM `plg_ticket_field` WHERE enabled = \\?").WithArgs(true).
 		WillReturnRows(fieldRow(1, "note", "备注", FieldTypeText, "", false, true, 0, 0))
-	rows, err := s.EnabledFields(context.Background())
+	rows, err := s.EnabledFields(testCtx())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -691,7 +690,7 @@ func TestFieldDeleteFieldRemovesDefinition(t *testing.T) {
 	m.ExpectBegin()
 	m.ExpectExec(sqlFieldDel).WithArgs(int64(2001)).WillReturnResult(sqlmock.NewResult(0, 1))
 	m.ExpectCommit()
-	if err := s.DeleteField(context.Background(), 2001); err != nil {
+	if err := s.DeleteField(testCtx(), 2001); err != nil {
 		t.Fatal(err)
 	}
 	if err := m.ExpectationsWereMet(); err != nil {
@@ -707,7 +706,7 @@ func TestFieldDeleteFieldMissingRow(t *testing.T) {
 	m.ExpectExec(sqlFieldDel).WithArgs(int64(404)).WillReturnResult(sqlmock.NewResult(0, 0))
 	m.ExpectCommit()
 	// 删不动就是不存在：这条断言挡住「删了个空气却返回 200」。
-	mustKey(t, s.DeleteField(context.Background(), 404), 404, "error.not_found")
+	mustKey(t, s.DeleteField(testCtx(), 404), 404, "error.not_found")
 	if err := m.ExpectationsWereMet(); err != nil {
 		t.Error(err)
 	}

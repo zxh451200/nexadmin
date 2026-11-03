@@ -1,7 +1,6 @@
 package ticket
 
 import (
-	"context"
 	"database/sql/driver"
 	"testing"
 
@@ -26,7 +25,7 @@ func TestTicketActivitiesReturnsAscending(t *testing.T) {
 		WithArgs(int64(1001), int64(activityLimit)).
 		WillReturnRows(activityRows([]int64{3, 2, 1}, []string{ActRatingAdded, ActStatusChanged, ActCreated}))
 
-	acts, err := s.TicketActivities(context.Background(), idgen.ID(1001), false)
+	acts, err := s.TicketActivities(testCtx(), idgen.ID(1001), false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,7 +44,7 @@ func TestTicketActivitiesPublicFilter(t *testing.T) {
 		WithArgs([]driver.Value{int64(1001), ActCreated, ActStatusChanged, int64(activityLimit)}...).
 		WillReturnRows(activityRows([]int64{2, 1}, []string{ActStatusChanged, ActCreated}))
 
-	acts, err := s.TicketActivities(context.Background(), idgen.ID(1001), true)
+	acts, err := s.TicketActivities(testCtx(), idgen.ID(1001), true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,7 +68,7 @@ func TestAssignSamePersonRecordsNothing(t *testing.T) {
 	m.ExpectExec("UPDATE `plg_ticket`").WillReturnResult(sqlmock.NewResult(1, 1))
 	m.ExpectCommit()
 
-	if _, err := s.assign(context.Background(), "TK1001", idgen.ID(7), "alice"); err != nil {
+	if _, err := s.assign(testCtx(), "TK1001", idgen.ID(7), "alice"); err != nil {
 		t.Fatal(err)
 	}
 	if err := m.ExpectationsWereMet(); err != nil {
@@ -81,7 +80,7 @@ func TestAssignSamePersonRecordsNothing(t *testing.T) {
 func TestRecordActivitySkipsZeroTicket(t *testing.T) {
 	db, m := mockDB(t)
 	s := NewService(db, nopLogger{})
-	if err := s.recordActivity(context.Background(), nil, nil, actorFrom(context.Background()), ActCreated, "", "", ""); err != nil {
+	if err := s.recordActivity(testCtx(), nil, nil, actorFrom(testCtx()), ActCreated, "", "", ""); err != nil {
 		t.Fatal(err)
 	}
 	if err := m.ExpectationsWereMet(); err != nil {
@@ -90,18 +89,18 @@ func TestRecordActivitySkipsZeroTicket(t *testing.T) {
 }
 
 func TestActorFromContext(t *testing.T) {
-	if got := actorFrom(context.Background()); got.Type != ActorSystem {
+	if got := actorFrom(testCtx()); got.Type != ActorSystem {
 		t.Errorf("无登录态应记为系统，得到 %+v", got)
 	}
-	ctx := WithActor(context.Background(), ActivityActor{Type: ActorAgent, ID: "7", Name: "alice"})
+	ctx := WithActor(testCtx(), ActivityActor{Type: ActorAgent, ID: "7", Name: "alice"})
 	if got := actorFrom(ctx); got.Type != ActorAgent || got.Name != "alice" {
 		t.Errorf("context 发起人丢失：%+v", got)
 	}
 	// 接口参数里的操作人名（SetStatus/Bulk 都从登录态取）在没有 context 发起人的场景下记为坐席。
-	if got := agentActor(context.Background(), "alice"); got.Type != ActorAgent || got.Name != "alice" {
+	if got := agentActor(testCtx(), "alice"); got.Type != ActorAgent || got.Name != "alice" {
 		t.Errorf("agentActor fallback = %+v", got)
 	}
-	if got := agentActor(context.Background(), ""); got.Type != ActorSystem {
+	if got := agentActor(testCtx(), ""); got.Type != ActorSystem {
 		t.Errorf("无发起人且无名字应记系统，得到 %+v", got)
 	}
 	if got := agentActor(ctx, ""); got.Name != "alice" {

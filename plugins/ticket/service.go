@@ -3,6 +3,7 @@ package ticket
 import (
 	"context"
 	"errors"
+	netmail "net/mail"
 	"net/url"
 	"strconv"
 	"strings"
@@ -28,6 +29,9 @@ type Service struct {
 	// notifier 是站内信入口（nil 安全，测试夹具不注入）；lang 取应用默认语言。
 	notifier msgSender
 	lang     string
+	// mailer 是客户邮件出口（nil 安全）；settingCache 缓存单行设置，见 notify.go。
+	mailer       mailSender
+	settingCache atomic.Pointer[cachedSetting]
 	// sla 是进程内缓存的 SLA 策略（插件启动时载入，保存时刷新）。
 	sla atomic.Pointer[SLASetting]
 	// store 是附件存储（local/S3）；未配置时为 nil，附件接口返回服务不可用。
@@ -90,6 +94,9 @@ type CreateInput struct {
 	ReporterType string `json:"reporterType"`
 	ReporterID   string `json:"reporterId"`
 	ReporterName string `json:"reporterName"`
+	// ReporterEmail 是报告人邮箱（可选）：坐席公开回复 / 解决时按设置发通知邮件用。
+	// 非法地址静默置空——邮箱是通知增强，不该把建单挡在门外。
+	ReporterEmail string `json:"reporterEmail"`
 	// Tags 是建单时就带的标签（宿主按订单属性打标签用）。公开接口会清空它——
 	// 让客户自填标签等于让他自己给自己打「vip」，还能反向操纵自动化规则的命中。
 	Tags []string `json:"tags"`
@@ -112,6 +119,12 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Ticket, error) {
 	in.Title, in.Content = strings.TrimSpace(in.Title), strings.TrimSpace(in.Content)
 	in.ReporterType = strings.TrimSpace(in.ReporterType)
 	in.ReporterID, in.ReporterName = strings.TrimSpace(in.ReporterID), strings.TrimSpace(in.ReporterName)
+	// 邮箱只做格式收敛，不做硬校验：通知是增强能力，坏地址静默丢弃比拒绝建单更合理。
+	if addr, err := netmail.ParseAddress(strings.TrimSpace(in.ReporterEmail)); err != nil {
+		in.ReporterEmail = ""
+	} else {
+		in.ReporterEmail = truncate(addr.Address, 128)
+	}
 	switch {
 	case in.Title == "" || in.Content == "":
 		return nil, response.BadRequest("ticket.title_content_required")
@@ -150,8 +163,8 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Ticket, error) {
 		BizType:  in.BizType, BizNo: in.BizNo,
 		Title: truncate(in.Title, 200), Status: StatusOpen, Priority: in.Priority,
 		ReporterType: in.ReporterType, ReporterID: truncate(in.ReporterID, 64),
-		ReporterName: truncate(in.ReporterName, 64),
-		CreatorID:    in.CreatorID, CreatorName: truncate(in.CreatorName, 64),
+		ReporterName: truncate(in.ReporterName, 64), ReporterEmail: in.ReporterEmail,
+		CreatorID: in.CreatorID, CreatorName: truncate(in.CreatorName, 64),
 		ReplySeq: 1, LastReplyAt: &now, LastReplierType: in.ReporterType,
 		LastPreview: preview(in.Content),
 		Tags:        canonicalTags(tags), TagList: tags,
@@ -197,6 +210,11 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Ticket, error) {
 		SenderType: in.ReporterType, SenderName: in.ReporterName, Seq: 1, Preview: preview(in.Content),
 	})
 	s.notifyNewTicket(ctx, t)
+	// 自助建单（访客表单 / 邮件进单）给报告人发受理回执；代客建单由坐席当面沟通。
+	if in.CreatorID == 0 {
+		s.sendReporterEmail(ctx, t, EmailCreated, "")
+	}
+	s.publishWS(wsKindCreated, t, preview(in.Content))
 	return t, nil
 }
 
@@ -357,6 +375,11 @@ func (s *Service) Reply(ctx context.Context, ticketNo string, in ReplyInput) (*T
 	if in.ReplierType == ReplierReporter {
 		s.notifyReply(ctx, &t)
 	}
+	// 坐席公开回复通知客户（内部备注绝不发——那是坐席之间的悄悄话）。
+	if in.ReplierType == ReplierAgent && !in.Internal {
+		s.sendReporterEmail(ctx, &t, EmailReplied, preview(in.Content))
+	}
+	s.publishWS(wsKindReplied, &t, preview(in.Content))
 	return &out, &t, nil
 }
 
@@ -458,9 +481,12 @@ func (s *Service) SetStatus(ctx context.Context, ticketNo, to, operator string) 
 	switch to {
 	case StatusResolved:
 		s.publish(ctx, EventResolved, &t, EventData{SenderType: ReplierAgent, SenderName: operator})
+		s.sendReporterEmail(ctx, &t, EmailResolved, "")
 	case StatusClosed:
 		s.publish(ctx, EventClosed, &t, EventData{SenderType: ReplierAgent, SenderName: operator})
+		s.sendReporterEmail(ctx, &t, EmailClosed, "")
 	}
+	s.publishWS(wsKindStatus, &t, "")
 	return &t, nil
 }
 
@@ -509,6 +535,7 @@ func (s *Service) Rate(ctx context.Context, ticketNo string, in RateInput) (*Tic
 		return nil, err
 	}
 	s.publish(ctx, EventRated, &t, EventData{SenderType: ReplierReporter, SenderName: t.ReporterName, Rating: in.Score})
+	s.publishWS("rated", &t, "")
 	return &t, nil
 }
 
@@ -521,6 +548,7 @@ func (s *Service) Assign(ctx context.Context, ticketNo string, assigneeID idgen.
 	if assigneeID != actorID {
 		s.notifyAssign(ctx, t)
 	}
+	s.publishWS(wsKindAssigned, t, "")
 	return t, nil
 }
 
@@ -581,8 +609,12 @@ type TicketQuery struct {
 	BizNo        string
 	ReporterType string
 	ReporterID   string
-	Page         int
-	PageSize     int
+	// Sort 是排序列的键（见 listSortCols 白名单），Order 是方向（asc/desc，默认 desc）。
+	// 两者都只当键用，真正的 SQL 片段一律来自写死的白名单表。
+	Sort     string
+	Order    string
+	Page     int
+	PageSize int
 }
 
 // statusSet 拆分 status 参数：单值与逗号分隔多值同一口径，列表/统计/导出共用。
@@ -653,7 +685,35 @@ func (s *Service) ticketFilter(ctx context.Context, q TicketQuery) *gorm.DB {
 		// 带上业务单号：坐席拿到的是订单号，先搜的也是它（后台工作台与客户门户同一口径）。
 		db = db.Where("ticket_no LIKE ? OR title LIKE ? OR last_preview LIKE ? OR biz_no LIKE ?", like, like, like, like)
 	}
-	return db
+	// 数据范围收口：列表、统计、导出共用本函数，所以三者的行数天然一致。
+	return scopeCond(ctx, db)
+}
+
+// listSortCols 是客户端能请求的排序列。值全部是写死的 SQL 片段——请求方只能给这里的键，
+// 键不在表里就退回默认列，所以用户输入永远进不了语句本身。
+// priority 用 CASE 而不是 MySQL 的 FIELD()：三引擎都要能跑，CASE 是唯一都认的写法。
+// 权重是「越重要越大」，这样降序=紧急在前，跟其它列的降序语义一致（反过来会让人以为排序坏了）。
+var listSortCols = map[string]string{
+	"lastReply": "COALESCE(last_reply_at, created_at)",
+	"createdAt": "created_at",
+	"dueAt":     "due_at",
+	"priority":  "CASE priority WHEN 'urgent' THEN 3 WHEN 'high' THEN 2 WHEN 'normal' THEN 1 ELSE 0 END",
+}
+
+const listSortDefault = "lastReply"
+
+// listOrder 拼出 ORDER BY。尾部的 id DESC 是平票时的稳定序：没有它，同一优先级的
+// 一批单在翻页时可能重复出现或整页漏掉（上一页和这一页拿到同样的行）。
+func listOrder(q TicketQuery) string {
+	expr, ok := listSortCols[q.Sort]
+	if !ok {
+		expr = listSortCols[listSortDefault]
+	}
+	dir := "DESC"
+	if strings.EqualFold(strings.TrimSpace(q.Order), "asc") {
+		dir = "ASC"
+	}
+	return expr + " " + dir + ", id DESC"
 }
 
 // ListTickets 坐席列表按最后回复时间倒序。
@@ -667,7 +727,7 @@ func (s *Service) ListTickets(ctx context.Context, q TicketQuery) ([]Ticket, int
 		return nil, 0, err
 	}
 	var rows []Ticket
-	if err := db.Order("COALESCE(last_reply_at, created_at) DESC").
+	if err := db.Order(listOrder(q)).
 		Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Find(&rows).Error; err != nil {
 		return nil, 0, err
 	}
@@ -685,12 +745,19 @@ func (s *Service) fillMergedInto(ctx context.Context, rows []Ticket) {
 	for i := range rows {
 		ids = append(ids, int64(rows[i].ID))
 	}
+	// 这两条是 Table() 原生查询，租户插件不经过（core/database/model.go 写明了），
+	// 所以条件得自己带：目标单号是别的租户的行时，宁可留空也不能把人家单号填进来。
+	tid, hasTenant := tenant.From(ctx)
 	var pointers []struct {
 		ID           int64
 		MergedIntoID int64 `gorm:"column:merged_into_id"`
 	}
-	if err := s.db.WithContext(ctx).Table("plg_ticket").Select("id, merged_into_id").
-		Where("id IN ? AND merged_into_id IS NOT NULL", ids).Scan(&pointers).Error; err != nil {
+	pq := s.db.WithContext(ctx).Table("plg_ticket").Select("id, merged_into_id").
+		Where("id IN ? AND merged_into_id IS NOT NULL", ids)
+	if hasTenant {
+		pq = pq.Where("tenant_id = ?", int64(tid))
+	}
+	if err := pq.Scan(&pointers).Error; err != nil {
 		s.logWarn("ticket: read merge pointers failed", "err", err.Error())
 		return
 	}
@@ -705,8 +772,12 @@ func (s *Service) fillMergedInto(ctx context.Context, rows []Ticket) {
 		ID       int64
 		TicketNo string
 	}
-	if err := s.db.WithContext(ctx).Table("plg_ticket").Select("id, ticket_no").
-		Where("id IN ?", targets).Scan(&heads).Error; err != nil {
+	hq := s.db.WithContext(ctx).Table("plg_ticket").Select("id, ticket_no").
+		Where("id IN ?", targets)
+	if hasTenant {
+		hq = hq.Where("tenant_id = ?", int64(tid))
+	}
+	if err := hq.Scan(&heads).Error; err != nil {
 		s.logWarn("ticket: read merge targets failed", "err", err.Error())
 		return
 	}
@@ -739,7 +810,7 @@ func (s *Service) HostTickets(ctx context.Context, q TicketQuery, limit int) (ro
 	if err := s.ticketFilter(ctx, q).Count(&total).Error; err != nil {
 		return nil, false, err
 	}
-	if err := s.ticketFilter(ctx, q).Order("COALESCE(last_reply_at, created_at) DESC").
+	if err := s.ticketFilter(ctx, q).Order(listOrder(q)).
 		Limit(limit).Find(&rows).Error; err != nil {
 		return nil, false, err
 	}
@@ -751,7 +822,11 @@ const overdueSweepLimit = 500
 // MarkOverdue 把「未完结且已过响应时限」的工单标记为超时，返回本次标记笔数。
 // pending 已停表，不在待响应集合里；只做标记不改状态；由 plugin.Starter 的清扫器每分钟调用。
 // 先取候选再按 id 更新，保证「刚变成超时」的工单能给负责人发一次提醒（标记后不会重复提醒）。
+//
+// 清扫器没有租户上下文，而 plg_ticket 现在是租户表：不 Skip 的话租户插件会直接 ErrNoTenant，
+// 一轮清扫都跑不动。这里显式跨租户扫，提醒与事件再按各自的负责人落回租户（见 notifyOverdue）。
 func (s *Service) MarkOverdue(ctx context.Context, now time.Time) (int64, error) {
+	ctx = tenant.Skip(ctx)
 	var total int64
 	respRows, err := s.findOverdueCandidates(ctx, false, now)
 	if err != nil {
@@ -959,6 +1034,12 @@ func (s *Service) Bulk(ctx context.Context, in BulkInput, actorID idgen.ID, acto
 			continue
 		}
 		seen[no] = true
+		// 批量入口是 /tickets/bulk，路径里没有 :no，中间件够不着，所以逐条在校验这里补。
+		// 越权点任一条就整批拒绝而不是静默跳过：受限坐席本来在列表里看不到它，
+		// 能提交上来说明请求是手搓的，跳过去会让调用方以为「已经改好了」。
+		if err := s.guardNo(ctx, no); err != nil {
+			return res, err
+		}
 		var err error
 		switch in.Action {
 		case "assign":

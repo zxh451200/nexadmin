@@ -18,11 +18,13 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/gin-gonic/gin"
-	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 
+	"nexadmin/core/database"
 	"nexadmin/core/response"
 	"nexadmin/core/storage"
+	"nexadmin/core/tenant"
+	"nexadmin/pkg/idgen"
 )
 
 func TestAttachmentRuleFor(t *testing.T) {
@@ -40,7 +42,7 @@ func TestAttachmentRuleFor(t *testing.T) {
 		{"text/html", "a.html", false, ""},
 	}
 	for _, c := range cases {
-		rule, ok := attachmentRuleFor(c.mime, c.name)
+		rule, ok := attachmentRuleFor(defaultAttachmentCeilings(), c.mime, c.name)
 		if ok != c.ok || (ok && rule.ext != c.ext) {
 			t.Errorf("%s/%s: got ok=%v ext=%q", c.mime, c.name, ok, rule.ext)
 		}
@@ -130,6 +132,13 @@ func pngBody() []byte {
 
 func attachmentEngine(h *handler) *gin.Engine {
 	r := gin.New()
+	// 走 handler 的用例，租户上下文来自请求而不是 testCtx()：工单表已是租户表，
+	// 不表态的话每条请求都会在租户插件里 ErrNoTenant。Skip = 平台级访问，
+	// 与 testCtx() 同一口径；真正的跨租户断言在 it_*/scope_it 里用真租户跑。
+	r.Use(func(c *gin.Context) {
+		c.Request = c.Request.WithContext(tenant.Skip(c.Request.Context()))
+		c.Next()
+	})
 	r.POST("/tickets/:no/attachments", h.uploadAdmin)
 	r.DELETE("/tickets/:no/attachments/:token", h.deleteAdmin)
 	r.DELETE("/visitor/tickets/:no/attachments/:token", h.deleteVisitor)
@@ -292,7 +301,7 @@ func TestDownloadSecurityHeaders(t *testing.T) {
 	svc.SetStorage(store)
 	h := &handler{svc: svc, store: store}
 	key := "202506/pub-token.png"
-	if err := store.Put(context.Background(), key, bytes.NewReader(pngBody()), int64(len(pngBody())), storage.PutOptions{ContentType: "image/png"}); err != nil {
+	if err := store.Put(testCtx(), key, bytes.NewReader(pngBody()), int64(len(pngBody())), storage.PutOptions{ContentType: "image/png"}); err != nil {
 		t.Fatal(err)
 	}
 	m.ExpectQuery("SELECT \\* FROM `plg_ticket` WHERE ticket_no = \\?").
@@ -330,7 +339,7 @@ func TestVisitorCannotSeeOrDeleteInternal(t *testing.T) {
 		t.Fatal(err)
 	}
 	key := "202506/inner-token.txt"
-	if err := store.Put(context.Background(), key, strings.NewReader("internal note"), 13, storage.PutOptions{ContentType: "text/plain"}); err != nil {
+	if err := store.Put(testCtx(), key, strings.NewReader("internal note"), 13, storage.PutOptions{ContentType: "text/plain"}); err != nil {
 		t.Fatal(err)
 	}
 	svc := NewService(db, nopLogger{})
@@ -356,7 +365,7 @@ func TestVisitorCannotSeeOrDeleteInternal(t *testing.T) {
 			if err := m.ExpectationsWereMet(); err != nil {
 				t.Fatal(err)
 			}
-			if ok, err := store.Exists(context.Background(), key); err != nil || !ok {
+			if ok, err := store.Exists(testCtx(), key); err != nil || !ok {
 				t.Fatalf("internal object must stay untouched: exists=%v err=%v", ok, err)
 			}
 		})
@@ -371,7 +380,7 @@ func TestVisitorCannotDeleteAgentAttachment(t *testing.T) {
 		t.Fatal(err)
 	}
 	key := "202506/agent-token.png"
-	if err := store.Put(context.Background(), key, bytes.NewReader(pngBody()), int64(len(pngBody())), storage.PutOptions{ContentType: "image/png"}); err != nil {
+	if err := store.Put(testCtx(), key, bytes.NewReader(pngBody()), int64(len(pngBody())), storage.PutOptions{ContentType: "image/png"}); err != nil {
 		t.Fatal(err)
 	}
 	svc := NewService(db, nopLogger{})
@@ -392,7 +401,7 @@ func TestVisitorCannotDeleteAgentAttachment(t *testing.T) {
 	if err := m.ExpectationsWereMet(); err != nil {
 		t.Fatal(err)
 	}
-	if ok, _ := store.Exists(context.Background(), key); !ok {
+	if ok, _ := store.Exists(testCtx(), key); !ok {
 		t.Fatal("agent attachment object must stay")
 	}
 }
@@ -405,7 +414,7 @@ func TestDeleteAgentRemovesObjectRowAndRecordsActivity(t *testing.T) {
 		t.Fatal(err)
 	}
 	key := "202506/gone-token.png"
-	if err := store.Put(context.Background(), key, bytes.NewReader(pngBody()), int64(len(pngBody())), storage.PutOptions{ContentType: "image/png"}); err != nil {
+	if err := store.Put(testCtx(), key, bytes.NewReader(pngBody()), int64(len(pngBody())), storage.PutOptions{ContentType: "image/png"}); err != nil {
 		t.Fatal(err)
 	}
 	svc := NewService(db, nopLogger{})
@@ -431,7 +440,7 @@ func TestDeleteAgentRemovesObjectRowAndRecordsActivity(t *testing.T) {
 		t.Fatalf("status = %d body=%s", w.Code, w.Body.String())
 	}
 	// 对象必须真的没了——只删行不删对象的改法会在这里红。
-	if ok, err := store.Exists(context.Background(), key); err != nil || ok {
+	if ok, err := store.Exists(testCtx(), key); err != nil || ok {
 		t.Fatalf("storage object must be deleted: exists=%v err=%v", ok, err)
 	}
 	if err := m.ExpectationsWereMet(); err != nil {
@@ -455,7 +464,7 @@ func TestDeleteFailsWhenObjectCannotBeRemoved(t *testing.T) {
 		t.Fatal(err)
 	}
 	key := "202506/stuck-token.png"
-	if err := inner.Put(context.Background(), key, bytes.NewReader(pngBody()), int64(len(pngBody())), storage.PutOptions{ContentType: "image/png"}); err != nil {
+	if err := inner.Put(testCtx(), key, bytes.NewReader(pngBody()), int64(len(pngBody())), storage.PutOptions{ContentType: "image/png"}); err != nil {
 		t.Fatal(err)
 	}
 	svc := NewService(db, nopLogger{})
@@ -480,7 +489,7 @@ func TestDeleteFailsWhenObjectCannotBeRemoved(t *testing.T) {
 	if err := m.ExpectationsWereMet(); err != nil {
 		t.Fatal(err)
 	}
-	if ok, _ := inner.Exists(context.Background(), key); !ok {
+	if ok, _ := inner.Exists(testCtx(), key); !ok {
 		t.Fatal("object must stay when delete failed (retry needs it)")
 	}
 }
@@ -515,7 +524,7 @@ func TestSaveAttachmentQuotaBackstop(t *testing.T) {
 		WillReturnRows(ticketRow("TK1001", StatusOpen, 1))
 	m.ExpectQuery("SELECT COUNT\\(\\*\\) AS cnt").WithArgs(int64(1001)).
 		WillReturnRows(quotaRows(0, 1<<20))
-	_, err := svc.SaveAttachment(context.Background(), "TK1001", ReplierReporter, "visitor", false, "a.png", "image/png", 2<<20, "202506/a.png")
+	_, err := svc.SaveAttachment(testCtx(), "TK1001", ReplierReporter, "visitor", false, "a.png", "image/png", 2<<20, "202506/a.png")
 	var e *response.Error
 	if !errors.As(err, &e) || e.Reason != AttachmentQuotaBytesReason {
 		t.Fatalf("SaveAttachment must reject over byte quota, got %v", err)
@@ -570,14 +579,24 @@ func TestITMySQLAttachmentQuotaAndDelete(t *testing.T) {
 		}
 		_ = admin.Close()
 	})
-	gormDSN := strings.Replace(dsn, ")/", ")/"+dbName+"", 1)
-	gdb, err = gorm.Open(mysql.Open(gormDSN), &gorm.Config{})
+	// 同 itMySQLService：迁移走开了 multiStatements 的 admin 连接，业务句柄走 database.Open
+	// 才能拿到生产同款租户闸；裸 gorm.Open 会让下面的隔离断言对着不存在的闸门跑。
+	itRunMigrationsOn(t, dsn, dbName)
+	cfg, err := itMySQLConfig(dsn, dbName)
 	if err != nil {
-		t.Fatalf("open gorm: %v", err)
+		t.Fatalf("%v", err)
 	}
-	runTicketMigrations(t, gdb)
+	gdb, err = database.Open(cfg)
+	if err != nil {
+		t.Fatalf("database.Open: %v", err)
+	}
+	// 句柄默认绑租户 1：夹具里几十处 gdb.X 逐个 WithContext 不如在这里一次性定住，
+	// 需要别的租户的用例（scope_it_test）再显式覆盖。
+	gdb = gdb.WithContext(itCtx())
 
-	ctx := context.Background()
+	// 本用例走的是真库真租户：ctx 必须和 gdb 句柄同属租户 1，
+	// 用 testCtx()（Skip）建出来的行 tenant_id=0，handler 侧按租户 1 查就成了 404。
+	ctx := itCtx()
 	storeDir := t.TempDir()
 	store, err := storage.NewLocal(storeDir)
 	if err != nil {
@@ -693,6 +712,12 @@ func TestITMySQLAttachmentQuotaAndDelete(t *testing.T) {
 	}
 	w = httptest.NewRecorder()
 	engine := gin.New()
+	// 同 attachmentEngine：走 handler 就得给请求表态租户，否则删除在租户插件里就断了，
+	// 下面那条 activity 计数会静默变成 0（看起来像「没记动态」而不是「没权限」）。
+	engine.Use(func(c *gin.Context) {
+		c.Request = c.Request.WithContext(tenant.With(c.Request.Context(), idgen.ID(1)))
+		c.Next()
+	})
 	engine.DELETE("/tickets/:no/attachments/:token", h.deleteAdmin)
 	engine.ServeHTTP(w, httptest.NewRequest(http.MethodDelete, "/tickets/"+no+"/attachments/"+attInt.Token, nil))
 	if w.Code != http.StatusOK {
@@ -742,6 +767,10 @@ func TestITMySQLAttachmentQuotaAndDelete(t *testing.T) {
 	beforeFiles := countStoredFiles(t, storeDir)
 	SetAttachmentQuota(1, 1<<30)
 	r := gin.New()
+	r.Use(func(c *gin.Context) {
+		c.Request = c.Request.WithContext(tenant.With(c.Request.Context(), idgen.ID(1)))
+		c.Next()
+	})
 	r.POST("/tickets/:no/attachments", h.uploadAdmin)
 	w = httptest.NewRecorder()
 	r.ServeHTTP(w, uploadPNGRequest(t, no))

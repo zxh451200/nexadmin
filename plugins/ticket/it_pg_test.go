@@ -11,7 +11,6 @@ package ticket
 // 隔离：自建一次性库 nexadmin_ticketpg_<纳秒>，跑完 DROP ... WITH (FORCE)，不碰既有数据库。
 
 import (
-	"context"
 	"database/sql"
 	"fmt"
 	"os"
@@ -116,7 +115,7 @@ func TestITPostgresTicketBatch(t *testing.T) {
 	}
 	runTicketMigrationsPG(t, gdb)
 
-	ctx := context.Background()
+	ctx := itCtx()
 	svc := NewService(gdb, nopLogger{}).WithTimezone("UTC")
 	must := func(err error) {
 		t.Helper()

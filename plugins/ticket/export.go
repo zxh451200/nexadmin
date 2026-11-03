@@ -41,7 +41,8 @@ func (s *Service) ExportTickets(ctx context.Context, q TicketQuery, limit int) (
 		return nil, e
 	}
 	var rows []Ticket
-	err := s.ticketFilter(ctx, q).Order("COALESCE(last_reply_at, created_at) DESC").Limit(limit).Find(&rows).Error
+	// 排序沿用列表同一套口径：导出看到的顺序和列表不一致，比列不一致更难解释。
+	err := s.ticketFilter(ctx, q).Order(listOrder(q)).Limit(limit).Find(&rows).Error
 	return rows, err
 }
 

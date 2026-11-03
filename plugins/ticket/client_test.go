@@ -1,7 +1,6 @@
 package ticket
 
 import (
-	"context"
 	"database/sql/driver"
 	"testing"
 
@@ -48,7 +47,7 @@ func TestBizTicketsCarriesBizFilters(t *testing.T) {
 		WithArgs([]driver.Value{"order", "O-77", int64(hostQueryLimit)}...).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "ticket_no", "biz_no"}).AddRow(1001, "TK1001", "O-77"))
 
-	rows, truncated, err := BizTickets(context.Background(), "order", "O-77")
+	rows, truncated, err := BizTickets(testCtx(), "order", "O-77")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +70,7 @@ func TestHostTicketsReportTruncated(t *testing.T) {
 		WithArgs("order", int64(2)).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "ticket_no"}).AddRow(1, "TK1").AddRow(2, "TK2"))
 
-	rows, truncated, err := s.HostTickets(context.Background(), TicketQuery{BizType: "order"}, 2)
+	rows, truncated, err := s.HostTickets(testCtx(), TicketQuery{BizType: "order"}, 2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +94,7 @@ func TestReporterFilterNeedsBothTypeAndID(t *testing.T) {
 	m.ExpectQuery("SELECT .* FROM `plg_ticket`").
 		WithArgs(ReplierReporter, "tok-1", int64(10)).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}))
-	if _, _, err := s.HostTickets(context.Background(), TicketQuery{ReporterType: ReplierReporter, ReporterID: "tok-1"}, 10); err != nil {
+	if _, _, err := s.HostTickets(testCtx(), TicketQuery{ReporterType: ReplierReporter, ReporterID: "tok-1"}, 10); err != nil {
 		t.Fatal(err)
 	}
 
@@ -106,7 +105,7 @@ func TestReporterFilterNeedsBothTypeAndID(t *testing.T) {
 	m.ExpectQuery("SELECT .* FROM `plg_ticket` ORDER").
 		WithArgs(int64(10)).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}))
-	if _, _, err := s.HostTickets(context.Background(), TicketQuery{ReporterID: "tok-1"}, 10); err != nil {
+	if _, _, err := s.HostTickets(testCtx(), TicketQuery{ReporterID: "tok-1"}, 10); err != nil {
 		t.Fatal(err)
 	}
 	if err := m.ExpectationsWereMet(); err != nil {
@@ -125,19 +124,19 @@ func TestClientUnavailableWithoutMountedPlugin(t *testing.T) {
 	if current() != nil {
 		t.Fatal("默认服务没被清空，后面的断言都是假的")
 	}
-	if _, err := Get(context.Background(), "TK1"); err == nil {
+	if _, err := Get(testCtx(), "TK1"); err == nil {
 		t.Fatal("未挂载时 Ticket 应返回服务不可用")
 	}
-	if _, _, err := BizTickets(context.Background(), "order", "O-1"); err == nil {
+	if _, _, err := BizTickets(testCtx(), "order", "O-1"); err == nil {
 		t.Fatal("未挂载时 BizTickets 应返回服务不可用")
 	}
-	if _, err := Activities(context.Background(), "TK1", true); err == nil {
+	if _, err := Activities(testCtx(), "TK1", true); err == nil {
 		t.Fatal("未挂载时 Activities 应返回服务不可用")
 	}
-	if _, err := SetStatus(context.Background(), "TK1", StatusClosed, "host"); err == nil {
+	if _, err := SetStatus(testCtx(), "TK1", StatusClosed, "host"); err == nil {
 		t.Fatal("未挂载时 SetStatus 应返回服务不可用")
 	}
-	if _, err := Assign(context.Background(), "TK1", idgen.ID(7), "kf"); err == nil {
+	if _, err := Assign(testCtx(), "TK1", idgen.ID(7), "kf"); err == nil {
 		t.Fatal("未挂载时 Assign 应返回服务不可用")
 	}
 }

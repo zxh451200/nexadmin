@@ -18,6 +18,7 @@
     "overdue": "Overdue",
     "loading": "Loading…",
     "pickTicket": "Pick a ticket on the left to work on",
+    "pickTicketMobile": "Pick a ticket above to work on",
     "searchPlaceholder": "Ticket no / title / preview / business no",
     "filter": {
       "title": "Filters",
@@ -29,6 +30,15 @@
     "assigneeFilter": "Assignee filter",
     "assigneeUnassigned": "Unassigned",
     "assigneeMine": "Only mine",
+    "sort": {
+      "label": "Sort by",
+      "lastReply": "Last reply",
+      "createdAt": "Created",
+      "priority": "Priority",
+      "dueAt": "SLA due",
+      "asc": "Asc",
+      "desc": "Desc"
+    },
     "claim": "Start processing",
     "resolve": "Mark resolved",
     "close": "Close ticket",
@@ -36,10 +46,6 @@
     "replyPlaceholder": "Type a reply, Enter to send",
     "send": "Reply",
     "closedNotice": "Ticket is closed; a reply from the reporter reopens it.",
-    "fields": {
-      "status": "Status",
-      "priority": "Priority"
-    },
     "status": {
       "open": "Open",
       "processing": "Processing",
@@ -92,7 +98,6 @@
       "transfer": "Transfer",
       "assignToMe": "Assign to me",
       "setPriority": "Set priority",
-      "more": "More",
       "clearSelection": "Clear selection"
     },
     "transfer": {
@@ -110,10 +115,25 @@
       "reporterNamePlaceholder": "Customer name / nickname",
       "reporterId": "Customer ID",
       "reporterIdPlaceholder": "Member ID, phone, etc. (optional)",
+      "reporterEmail": "Customer email",
       "bizType": "Business type",
       "bizNo": "Business no",
       "required": "Title and description are required",
       "submit": "Create"
+    },
+    "config": {
+      "title": "Configuration"
+    },
+    "settings": {
+      "title": "Notification settings",
+      "description": "Customer email notifications and support portal URL",
+      "emailNotify": "Customer email notifications",
+      "emailNotifyHint": "When enabled, agents' public replies, resolutions and closures email the reporter, and self-service tickets get a confirmation email. Internal notes never trigger email.",
+      "portalUrl": "Support portal URL",
+      "portalUrlHint": "Prefix for the \"View ticket\" link in emails, e.g. https://support.example.com; leave empty for no link. Public http/https addresses only."
+    },
+    "history": {
+      "title": "Reporter's other tickets"
     },
     "internal": {
       "label": "Internal note",
@@ -207,7 +227,13 @@
       "deletePolicyConfirm": "Delete policy {{code}}? Groups bound to it fall back to the default policy.",
       "code": "Policy code",
       "codeInvalid": "Policy code allows lowercase letters, digits, underscore and hyphen (max 32).",
+      "codeHint": "The code cannot be changed after creation (groups bind to it).",
+      "codeDefaultHint": "The default policy has no code and covers groups without a policy; use \"New policy\" to differentiate queues.",
+      "creating": "Creating: fill in the code, then save",
       "label": "Display name",
+      "sectionBusiness": "Business hours",
+      "sectionHolidays": "Holidays",
+      "sectionHours": "Targets (hours)",
       "holidays": "Holidays",
       "addHoliday": "Add holiday",
       "holidaysHint": "Whole days listed here never count towards targets, even when they are workdays.",
@@ -222,6 +248,8 @@
       "save": "Save policy"
     },
     "fields": {
+      "status": "Status",
+      "priority": "Priority",
       "title": "Custom fields",
       "description": "Attach the information your business needs to a ticket; values live on the ticket, so adding a field changes no table.",
       "empty": "No custom fields yet",

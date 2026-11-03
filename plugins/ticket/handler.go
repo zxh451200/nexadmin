@@ -37,7 +37,7 @@ func respond(c *gin.Context, data any, err error) {
 
 // ---- 坐席端 ----
 
-// GET /plugins/ticket/tickets?status=&priority=&bizType=&keyword=&overdue=1&assigneeId=&unassigned=1&mine=1&groupId=&tag=&page=&pageSize=
+// GET /plugins/ticket/tickets?status=&priority=&bizType=&keyword=&overdue=1&assigneeId=&unassigned=1&mine=1&groupId=&tag=&sort=&order=&page=&pageSize=
 func (h *handler) list(c *gin.Context) {
 	page, size := response.ParsePage(c)
 	q := ticketQueryFrom(c)
@@ -56,6 +56,7 @@ func ticketQueryFrom(c *gin.Context) TicketQuery {
 	q := TicketQuery{
 		Status: c.Query("status"), Priority: c.Query("priority"), BizType: c.Query("bizType"),
 		Keyword: c.Query("keyword"), Overdue: c.Query("overdue"), Tag: c.Query("tag"),
+		Sort: c.Query("sort"), Order: c.Query("order"),
 		Unassigned: c.Query("unassigned") == "1",
 	}
 	if c.Query("mine") == "1" {
@@ -97,8 +98,8 @@ func (h *handler) replies(c *gin.Context) {
 		"replies":     rows,
 		"attachments": atts,
 		"activities":  acts,
-		// 上限由后端说一次，前端不再自己抄一份
-		"quota": gin.H{"maxCount": quotaMaxCount, "maxBytes": quotaMaxBytes},
+		// 上限与可收类型由后端说一次，前端不再自己抄一份
+		"quota": gin.H{"maxCount": quotaMaxCount, "maxBytes": quotaMaxBytes, "accept": attachmentAccept()},
 	})
 }
 
@@ -269,6 +270,38 @@ func (h *handler) bulk(c *gin.Context) {
 	}
 	res, err := h.svc.Bulk(c.Request.Context(), f, uid, name)
 	respond(c, res, err)
+}
+
+// GET /plugins/ticket/tickets/badge —— 侧栏菜单徽标：待我注意的未完结数（见 badge.go）。
+func (h *handler) badge(c *gin.Context) {
+	uid, _ := claimsOperator(c)
+	n, err := h.svc.BadgeCount(c.Request.Context(), int64(uid))
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, gin.H{"count": n})
+}
+
+// GET /plugins/ticket/tickets/:no/reporter-tickets —— 报告人最近的其他工单（详情侧栏）。
+func (h *handler) reporterTickets(c *gin.Context) {
+	rows, err := h.svc.ReporterHistory(c.Request.Context(), c.Param("no"))
+	respond(c, rows, err)
+}
+
+// GET /plugins/ticket/settings —— 通知设置（邮件通知开关 / 门户地址）。
+func (h *handler) getSettings(c *gin.Context) {
+	respond(c, h.svc.SettingsFresh(c.Request.Context()), nil)
+}
+
+// PUT /plugins/ticket/settings  {"emailNotifyEnabled":true,"portalUrl":"https://…"}
+func (h *handler) saveSettings(c *gin.Context) {
+	var f SettingsInput
+	if !response.BindJSON(c, &f) {
+		return
+	}
+	row, err := h.svc.SaveSettings(c.Request.Context(), f)
+	respond(c, row, err)
 }
 
 // GET /plugins/ticket/canned —— 快捷回复列表。
@@ -538,6 +571,8 @@ func (h *handler) agentActorContext(c *gin.Context) {
 func (h *handler) Register(r *gin.RouterGroup, d *core.Deps) {
 	g := r.Group("/plugins/ticket")
 	g.Use(h.agentActorContext)
+	// 数据范围先解析进 ctx：ticketFilter 裁列表，inScope 裁单条，两者读同一份范围。
+	g.Use(h.resolveScope)
 	g.GET("/tickets", core.Perm("ticket:list"), h.list)
 	// 统计与列表同一组筛选条件；注册在 /tickets/:no 之前，静态段优先匹配。
 	g.GET("/tickets/stats", core.Perm("ticket:list"), h.Stats)
@@ -546,14 +581,14 @@ func (h *handler) Register(r *gin.RouterGroup, d *core.Deps) {
 	// 后台代客建单与批量操作（静态段 /tickets/bulk 在 :no 之前注册）。
 	g.POST("/tickets", core.Perm("ticket:create"), d.OperLogMiddleware("ticket", "create"), h.create)
 	g.POST("/tickets/bulk", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "update"), h.bulk)
-	g.GET("/tickets/:no/replies", core.Perm("ticket:list"), h.replies)
-	g.POST("/tickets/:no/replies", core.Perm("ticket:reply"), d.OperLogMiddleware("ticket", "reply"), h.adminReply)
-	g.POST("/tickets/:no/status", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "update"), h.setStatus)
-	g.POST("/tickets/:no/assign", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "update"), h.assign)
-	g.POST("/tickets/:no/attachments", core.Perm("ticket:reply"), h.uploadAdmin)
-	g.GET("/tickets/:no/attachments/:token", core.Perm("ticket:list"), h.downloadAdmin)
+	g.GET("/tickets/:no/replies", core.Perm("ticket:list"), h.inScope, h.replies)
+	g.POST("/tickets/:no/replies", core.Perm("ticket:reply"), h.inScope, d.OperLogMiddleware("ticket", "reply"), h.adminReply)
+	g.POST("/tickets/:no/status", core.Perm("ticket:edit"), h.inScope, d.OperLogMiddleware("ticket", "update"), h.setStatus)
+	g.POST("/tickets/:no/assign", core.Perm("ticket:edit"), h.inScope, d.OperLogMiddleware("ticket", "update"), h.assign)
+	g.POST("/tickets/:no/attachments", core.Perm("ticket:reply"), h.inScope, h.uploadAdmin)
+	g.GET("/tickets/:no/attachments/:token", core.Perm("ticket:list"), h.inScope, h.downloadAdmin)
 	// 删附件＝改附件能力的对偶，沿用 ticket:reply；删除本身要进操作日志（它是普通 JSON 响应）。
-	g.DELETE("/tickets/:no/attachments/:token", core.Perm("ticket:reply"), d.OperLogMiddleware("ticket", "delete"), h.deleteAdmin)
+	g.DELETE("/tickets/:no/attachments/:token", core.Perm("ticket:reply"), h.inScope, d.OperLogMiddleware("ticket", "delete"), h.deleteAdmin)
 
 	g.GET("/canned", core.Perm("ticket:list"), h.listCanned)
 	g.POST("/canned", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "create"), h.createCanned)
@@ -568,7 +603,7 @@ func (h *handler) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.PUT("/groups/:id", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "update"), h.updateGroup)
 	g.DELETE("/groups/:id", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "delete"), h.deleteGroup)
 	g.PUT("/groups/:id/members", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "update"), h.setGroupMembers)
-	g.POST("/tickets/:no/group", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "update"), h.assignGroup)
+	g.POST("/tickets/:no/group", core.Perm("ticket:edit"), h.inScope, d.OperLogMiddleware("ticket", "update"), h.assignGroup)
 
 	g.GET("/rules", core.Perm("ticket:list"), h.listRules)
 	g.GET("/biz-types", core.Perm("ticket:list"), h.listBizTypes)
@@ -577,14 +612,14 @@ func (h *handler) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.DELETE("/rules/:id", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "delete"), h.deleteRule)
 
 	g.GET("/tags", core.Perm("ticket:list"), h.listTags)
-	g.PUT("/tickets/:no/tags", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "update"), h.setTags)
+	g.PUT("/tickets/:no/tags", core.Perm("ticket:edit"), h.inScope, d.OperLogMiddleware("ticket", "update"), h.setTags)
 
 	// 自定义字段（见 field.go）：定义是配置类资源，复用 ticket:list / ticket:edit，不新增权限码。
 	g.GET("/fields", core.Perm("ticket:list"), h.listFields)
 	g.POST("/fields", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "create"), h.createField)
 	g.PUT("/fields/:id", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "update"), h.updateField)
 	g.DELETE("/fields/:id", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "delete"), h.deleteField)
-	g.POST("/tickets/:no/custom-values", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "update"), h.setCustomValues)
+	g.POST("/tickets/:no/custom-values", core.Perm("ticket:edit"), h.inScope, d.OperLogMiddleware("ticket", "update"), h.setCustomValues)
 
 	// 多套 SLA 策略与节假日（见 sla.go）：默认策略仍走上面的 GET/PUT /sla，这里只管命名策略。
 	g.GET("/sla/policies", core.Perm("ticket:list"), h.listSLAPolicies)
@@ -592,10 +627,19 @@ func (h *handler) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.DELETE("/sla/policy/:code", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "delete"), h.deleteSLAPolicy)
 
 	// 合并与关联单（见 merge.go / merge_handler.go）：复用 ticket:edit / ticket:list，不新增权限码。
-	g.POST("/tickets/:no/merge", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "update"), h.mergeTicket)
-	g.GET("/tickets/:no/links", core.Perm("ticket:list"), h.links)
-	g.POST("/tickets/:no/links", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "update"), h.addLink)
-	g.DELETE("/tickets/:no/links/:other", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "delete"), h.removeLink)
+	// 对侧工单号在请求体里，中间件只挡得住 :no，所以 merge.go 里还要单独校对侧（见 visibleOther）。
+	g.POST("/tickets/:no/merge", core.Perm("ticket:edit"), h.inScope, d.OperLogMiddleware("ticket", "update"), h.mergeTicket)
+	g.GET("/tickets/:no/links", core.Perm("ticket:list"), h.inScope, h.links)
+	g.POST("/tickets/:no/links", core.Perm("ticket:edit"), h.inScope, d.OperLogMiddleware("ticket", "update"), h.addLink)
+	g.DELETE("/tickets/:no/links/:other", core.Perm("ticket:edit"), h.inScope, d.OperLogMiddleware("ticket", "delete"), h.removeLink)
+
+	// 侧栏面板：菜单徽标计数与报告人历史工单（见 badge.go）。徽标走静默轮询，不进操作日志。
+	g.GET("/tickets/badge", core.Perm("ticket:list"), h.badge)
+	g.GET("/tickets/:no/reporter-tickets", core.Perm("ticket:list"), h.inScope, h.reporterTickets)
+
+	// 插件设置（邮件通知开关 / 客服门户地址，见 notify.go）：读复用 list，写要求 edit。
+	g.GET("/settings", core.Perm("ticket:list"), h.getSettings)
+	g.PUT("/settings", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "update"), h.saveSettings)
 
 	// 访客公开接口：限流按 IP；路径带 /visitor 前缀与坐席接口分开——同一个 engine 上
 	// protected 与 Public 两组不能注册相同的 method+path，否则 gin 在 addRoute 时 panic。

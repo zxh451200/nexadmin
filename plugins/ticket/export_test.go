@@ -31,7 +31,7 @@ func useBuiltinLocale(t *testing.T) {
 }
 
 func ctxLang(lang string) context.Context {
-	return corei18n.WithLang(context.Background(), lang)
+	return corei18n.WithLang(testCtx(), lang)
 }
 
 // cell 取第 i 列文本；空白单元格在读回时可能整格缺席，缺席即空串。
@@ -131,7 +131,7 @@ func TestExportTicketsRejectsOverLimit(t *testing.T) {
 	m.ExpectQuery("SELECT count(.*) FROM `plg_ticket`").
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(5001))
 
-	_, err := s.ExportTickets(context.Background(), TicketQuery{Status: StatusOpen}, exportLimit)
+	_, err := s.ExportTickets(testCtx(), TicketQuery{Status: StatusOpen}, exportLimit)
 	var e *response.Error
 	if !errors.As(err, &e) {
 		t.Fatalf("超限应返回 response.Error，得到 %v", err)
@@ -154,7 +154,7 @@ func TestExportTicketsUsesListFilters(t *testing.T) {
 		WithArgs(append(args, int64(exportLimit))...).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "ticket_no", "status"}).AddRow(1001, "TK1001", StatusResolved))
 
-	rows, err := s.ExportTickets(context.Background(), TicketQuery{
+	rows, err := s.ExportTickets(testCtx(), TicketQuery{
 		Status: StatusResolved, Overdue: "1", AssigneeID: idgen.ID(7), Tag: "vip",
 	}, exportLimit)
 	if err != nil {

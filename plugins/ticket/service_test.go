@@ -47,6 +47,12 @@ func mockDB(t *testing.T) (*gorm.DB, sqlmock.Sqlmock) {
 
 type nopLogger struct{}
 
+// testCtx 是单测的默认上下文。工单五张数据表已是租户表，夹具若不表态就会 ErrNoTenant；
+// 这里显式 Skip（平台级访问）而不是塞一个假租户：sqlmock 从不执行 SQL，INSERT 列清单
+// 多一列就要改一片期望，而那些用例没有一条是在验租户——租户断言全部在 it_*/scope_it 里
+// 用真库真租户跑。
+func testCtx() context.Context { return tenant.Skip(context.Background()) }
+
 func (nopLogger) Warn(string, ...any)  {}
 func (nopLogger) Error(string, ...any) {}
 
@@ -158,7 +164,7 @@ func TestMarkOverdue(t *testing.T) {
 	m.ExpectCommit()
 	m.ExpectQuery("SELECT .* FROM `plg_ticket` WHERE resolution_overdue = \\?").
 		WillReturnRows(sqlmock.NewRows([]string{"id", "ticket_no", "title", "assignee_id", "priority"}))
-	n, err := s.MarkOverdue(context.Background(), testNow.Add(time.Hour))
+	n, err := s.MarkOverdue(testCtx(), testNow.Add(time.Hour))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -224,7 +230,7 @@ func TestCreatePublishesAndInsertsReply(t *testing.T) {
 	m.ExpectExec("INSERT INTO `plg_ticket_activity`").WillReturnResult(sqlmock.NewResult(1, 1))
 	m.ExpectCommit()
 
-	tk, err := s.Create(context.Background(), CreateInput{
+	tk, err := s.Create(testCtx(), CreateInput{
 		BizType: "trade_group", BizNo: "G-1", Title: "order broken",
 		Content: "item arrived broken", Priority: PriorityHigh,
 		ReporterType: ReplierReporter, ReporterID: "tok-1", ReporterName: "visitor",
@@ -253,7 +259,7 @@ func TestCreatePublishesAndInsertsReply(t *testing.T) {
 func TestCreateValidation(t *testing.T) {
 	db, _ := mockDB(t)
 	s := NewService(db, nopLogger{})
-	_, err := s.Create(context.Background(), CreateInput{Title: "x", ReporterType: ReplierReporter})
+	_, err := s.Create(testCtx(), CreateInput{Title: "x", ReporterType: ReplierReporter})
 	e, ok := err.(*response.Error)
 	if !ok || e.Status != http.StatusBadRequest {
 		t.Fatalf("want 400, got %v", err)
@@ -277,7 +283,7 @@ func TestAgentReplyTransitions(t *testing.T) {
 		WillReturnRows(ticketRow("TK1001", StatusPending, 2))
 	m.ExpectCommit()
 
-	reply, tk, err := s.Reply(context.Background(), "TK1001", ReplyInput{
+	reply, tk, err := s.Reply(testCtx(), "TK1001", ReplyInput{
 		ReplierType: ReplierAgent, ReplierID: "7", ReplierName: "alice", Content: "working on it",
 	})
 	if err != nil {
@@ -309,7 +315,7 @@ func TestVisitorReplyReopens(t *testing.T) {
 		WillReturnRows(ticketRow("TK1001", StatusProcessing, 4))
 	m.ExpectCommit()
 
-	_, tk, err := s.Reply(context.Background(), "TK1001", ReplyInput{
+	_, tk, err := s.Reply(testCtx(), "TK1001", ReplyInput{
 		ReplierType: ReplierReporter, ReplierID: "tok-1", ReplierName: "visitor", Content: "still broken",
 	})
 	if err != nil {
@@ -334,7 +340,7 @@ func TestSetStatusTransitions(t *testing.T) {
 	m.ExpectQuery("SELECT \\* FROM `plg_ticket` WHERE id = \\?").
 		WillReturnRows(ticketRow("TK1001", StatusResolved, 2))
 	m.ExpectCommit()
-	if _, err := s.SetStatus(context.Background(), "TK1001", StatusResolved, "alice"); err != nil {
+	if _, err := s.SetStatus(testCtx(), "TK1001", StatusResolved, "alice"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -345,14 +351,14 @@ func TestSetStatusTransitions(t *testing.T) {
 	m2.ExpectQuery("SELECT \\* FROM `plg_ticket` WHERE ticket_no = \\?").
 		WillReturnRows(ticketRow("TK1001", StatusClosed, 2))
 	m2.ExpectRollback()
-	_, err := s2.SetStatus(context.Background(), "TK1001", StatusResolved, "alice")
+	_, err := s2.SetStatus(testCtx(), "TK1001", StatusResolved, "alice")
 	e, ok := err.(*response.Error)
 	if !ok || e.Status != http.StatusConflict {
 		t.Fatalf("want 409, got %v", err)
 	}
 
 	// 非法目标值直接 400
-	if _, err := s.SetStatus(context.Background(), "TK1001", "nonsense", "alice"); err == nil {
+	if _, err := s.SetStatus(testCtx(), "TK1001", "nonsense", "alice"); err == nil {
 		t.Fatal("invalid target accepted")
 	}
 }
@@ -372,7 +378,7 @@ func TestRepliesSinceCursor(t *testing.T) {
 		WithArgs(int64(1001), 1, 50).
 		WillReturnRows(rows)
 
-	_, list, err := s.Replies(context.Background(), "TK1001", 1, 50, true)
+	_, list, err := s.Replies(testCtx(), "TK1001", 1, 50, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -395,7 +401,7 @@ func TestVisitorRepliesExcludeInternal(t *testing.T) {
 		WithArgs(int64(1001), false, 50).
 		WillReturnRows(rows)
 
-	_, list, err := s.Replies(context.Background(), "TK1001", 0, 50, false)
+	_, list, err := s.Replies(testCtx(), "TK1001", 0, 50, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -408,7 +414,7 @@ func TestVisitorRepliesExcludeInternal(t *testing.T) {
 func TestInternalNoteRequiresAgent(t *testing.T) {
 	db, _ := mockDB(t)
 	s := NewService(db, nopLogger{})
-	_, _, err := s.Reply(context.Background(), "TK1001", ReplyInput{
+	_, _, err := s.Reply(testCtx(), "TK1001", ReplyInput{
 		ReplierType: ReplierReporter, Content: "note", Internal: true,
 	})
 	e, ok := err.(*response.Error)
@@ -430,7 +436,7 @@ func TestRateTicket(t *testing.T) {
 	m.ExpectQuery("SELECT \\* FROM `plg_ticket` WHERE id = \\?").
 		WillReturnRows(ticketRowWithRating("TK1001", StatusResolved, 2, 5))
 	m.ExpectCommit()
-	tk, err := s.Rate(context.Background(), "TK1001", RateInput{Score: 5, Comment: " great "})
+	tk, err := s.Rate(testCtx(), "TK1001", RateInput{Score: 5, Comment: " great "})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -439,7 +445,7 @@ func TestRateTicket(t *testing.T) {
 	}
 
 	// 分数越界：不碰数据库
-	if _, err := s.Rate(context.Background(), "TK1001", RateInput{Score: 0}); err == nil {
+	if _, err := s.Rate(testCtx(), "TK1001", RateInput{Score: 0}); err == nil {
 		t.Fatal("score 0 accepted")
 	}
 
@@ -450,7 +456,7 @@ func TestRateTicket(t *testing.T) {
 	m2.ExpectQuery("SELECT \\* FROM `plg_ticket` WHERE ticket_no = \\?").
 		WillReturnRows(ticketRow("TK1001", StatusProcessing, 2))
 	m2.ExpectRollback()
-	if _, err := s2.Rate(context.Background(), "TK1001", RateInput{Score: 5}); err == nil {
+	if _, err := s2.Rate(testCtx(), "TK1001", RateInput{Score: 5}); err == nil {
 		t.Fatal("unresolved ticket accepted a rating")
 	}
 
@@ -461,7 +467,7 @@ func TestRateTicket(t *testing.T) {
 	m3.ExpectQuery("SELECT \\* FROM `plg_ticket` WHERE ticket_no = \\?").
 		WillReturnRows(ticketRowWithRating("TK1001", StatusClosed, 2, 4))
 	m3.ExpectRollback()
-	if _, err := s3.Rate(context.Background(), "TK1001", RateInput{Score: 5}); err == nil {
+	if _, err := s3.Rate(testCtx(), "TK1001", RateInput{Score: 5}); err == nil {
 		t.Fatal("ticket accepted a second rating")
 	}
 }
@@ -470,14 +476,14 @@ func TestRateTicket(t *testing.T) {
 func TestBulkRejectsBadInput(t *testing.T) {
 	db, _ := mockDB(t)
 	s := NewService(db, nopLogger{})
-	if _, err := s.Bulk(context.Background(), BulkInput{Action: "status", Status: StatusClosed}, 0, "alice"); err == nil {
+	if _, err := s.Bulk(testCtx(), BulkInput{Action: "status", Status: StatusClosed}, 0, "alice"); err == nil {
 		t.Fatal("empty ticket list accepted")
 	}
 	nos := make([]string, bulkLimit+1)
 	for i := range nos {
 		nos[i] = "TK" + strconv.Itoa(i)
 	}
-	if _, err := s.Bulk(context.Background(), BulkInput{TicketNos: nos, Action: "status", Status: StatusClosed}, 0, "alice"); err == nil {
+	if _, err := s.Bulk(testCtx(), BulkInput{TicketNos: nos, Action: "status", Status: StatusClosed}, 0, "alice"); err == nil {
 		t.Fatal("oversized ticket list accepted")
 	}
 }
@@ -512,7 +518,7 @@ func TestStatusFilterAcceptsMultipleValues(t *testing.T) {
 	m.ExpectQuery("SELECT count\\(.\\) FROM `plg_ticket` WHERE .*status IN \\(\\?,\\?\\)").
 		WithArgs("open", "pending").
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(2))
-	if err := s.ticketFilter(context.Background(), TicketQuery{Status: "open, pending"}).Count(&total).Error; err != nil {
+	if err := s.ticketFilter(testCtx(), TicketQuery{Status: "open, pending"}).Count(&total).Error; err != nil {
 		t.Fatal(err)
 	}
 	if total != 2 {
@@ -523,7 +529,7 @@ func TestStatusFilterAcceptsMultipleValues(t *testing.T) {
 	m.ExpectQuery("SELECT count\\(.\\) FROM `plg_ticket` WHERE .*status = \\?").
 		WithArgs("resolved").
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
-	if err := s.ticketFilter(context.Background(), TicketQuery{Status: "resolved"}).Count(&total).Error; err != nil {
+	if err := s.ticketFilter(testCtx(), TicketQuery{Status: "resolved"}).Count(&total).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := m.ExpectationsWereMet(); err != nil {

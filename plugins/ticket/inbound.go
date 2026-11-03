@@ -326,6 +326,7 @@ func (s *Service) IngestEmail(ctx context.Context, m *InboundEmail) (string, boo
 	t, err := s.Create(ctx, CreateInput{
 		Title: title, Content: m.Body, ReporterType: ReplierReporter,
 		ReporterID: truncate(m.From, 64), ReporterName: truncate(m.FromName, 64),
+		ReporterEmail: m.From, // 邮件进单天然有报告人地址：后续坐席回复/解决时通知客户就靠它
 		// 邮件先落单，必填的附加字段由坐席补齐（与公开入口同一口径）。
 		EnforceRequiredFields: false, MessageID: m.MessageID,
 	})

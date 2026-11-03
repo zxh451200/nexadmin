@@ -24,19 +24,26 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
+	"nexadmin/core"
+	"nexadmin/core/config"
 	"nexadmin/core/database"
 	"nexadmin/core/response"
 	"nexadmin/core/storage"
 	"nexadmin/pkg/idgen"
 )
 
-// maxUploadBytes 是附件请求体的硬上限（20MB），更细的类型/大小限制见 attachmentRuleFor。
-const maxUploadBytes = 20 << 20
+// 单文件上限的内置默认（系统参数「上传限制」没设时用这些值）。
+const (
+	maxUploadBytes         = 20 << 20 // 文档/压缩包类与请求体的缺省上限
+	attachmentImageBytes   = 8 << 20  // 图片类缺省上限
+	attachmentTextBytes    = 2 << 20  // 纯文本：内容尺度，不当配额开放
+	attachmentCeilingBytes = 50 << 20 // 传输层绝对硬顶，见 attachmentCeilingsFor
+)
 
-// 单张工单的附件配额出厂默认：条数与总字节。取值来源选了「插件内常量 + 进程级覆盖钩子」
-// 而不是 config 项：与本插件 exportLimit、activityLimit 的惯例一致，零跨文件协调；
-// 代价是运维改上限要改代码重启（不能按部署调）。若框架侧加了配置项，装配层调用
-// SetAttachmentQuota 注入即可，本文件不再需要改动（取舍与键名建议见交付报告）。
+// 单张工单的附件配额出厂默认：份数与总字节。生效值由 config.yaml 的 ticket 段注入
+// （见 applyAttachmentQuota）；键缺省或 <=0 时回到这里的出厂默认。
+// 与「单个文件上限」（系统参数 upload.* + 内置默认）是两条独立的闸：这条管一张工单攒多少，
+// 那条管单次上传收多大的文件。
 const (
 	attachmentQuotaMaxCountDefault = int64(20)
 	attachmentQuotaMaxBytesDefault = int64(100 << 20)
@@ -71,6 +78,20 @@ func SetAttachmentQuota(maxCount, maxBytes int64) {
 	attachmentQuotaMaxBytes.Store(maxBytes)
 }
 
+// applyAttachmentQuota 把 config.yaml 的 ticket 段换算成配额并注入；cfg 为 nil、
+// 键缺省或 <=0 都保持出厂默认（SetAttachmentQuota 自己也会把非正值打回默认）。
+func applyAttachmentQuota(cfg *config.Config) {
+	if cfg == nil {
+		SetAttachmentQuota(0, 0)
+		return
+	}
+	var maxBytes int64
+	if mb := cfg.Ticket.AttachmentMaxMB; mb > 0 {
+		maxBytes = int64(mb) << 20
+	}
+	SetAttachmentQuota(int64(cfg.Ticket.AttachmentMaxCount), maxBytes)
+}
+
 // 配额超限与对象删除失败的错误契约：key 走 i18n 字典（中英双份待接线），
 // Reason 供前端定位是哪一类超限（与 export 的 TICKET_EXPORT_TOO_MANY 同一手法）。
 const (
@@ -80,7 +101,7 @@ const (
 
 // Attachment 是工单附件；internal 表示挂在内部备注下，访客不可见。
 type Attachment struct {
-	database.PlatformModel
+	database.TenantModel
 	Token        string   `gorm:"size:40;not null;uniqueIndex:uk_plg_ticket_attachment_token" json:"token"`
 	TicketID     idgen.ID `gorm:"not null" json:"-"`
 	UploaderType string   `gorm:"size:16;not null" json:"uploaderType"`
@@ -254,6 +275,49 @@ func (s *Service) DeleteAttachment(ctx context.Context, ticketNo, token string, 
 	return att, t, nil
 }
 
+// attachmentCeilings 是一次上传请求生效的单文件上限。
+type attachmentCeilings struct {
+	image   int64
+	doc     int64
+	text    int64
+	maxBody int64 // 请求体硬上限，取三者最大值
+}
+
+func defaultAttachmentCeilings() attachmentCeilings {
+	return attachmentCeilings{image: attachmentImageBytes, doc: maxUploadBytes, text: attachmentTextBytes}
+}
+
+// attachmentCeilingsFor 解析生效上限：系统参数「上传限制」> 内置默认，并按传输硬顶截顶
+// （换算口径统一在 core.ResolveUploadCeiling）。图片类跟 upload.max_size_image_mb，
+// 文档/压缩包跟 upload.max_size_file_mb；附件流式落存储不整读进内存，但仍截顶，免得一个离谱的
+// 参数值把工单接口变成大文件搬运口。文本不吃配置：它是内容尺度不是配额。
+// 与「单张工单条数/总字节配额」（SetAttachmentQuota）是两条独立的闸，后者管累计量。
+func attachmentCeilingsFor(ctx context.Context) attachmentCeilings {
+	c := defaultAttachmentCeilings()
+	if l, ok := core.UploadLimitsFromSettings(ctx); ok {
+		c.image = core.ResolveUploadCeiling(l.MaxImageMB, c.image, attachmentCeilingBytes)
+		c.doc = core.ResolveUploadCeiling(l.MaxFileMB, c.doc, attachmentCeilingBytes)
+	}
+	c.maxBody = max(attachmentTextBytes, max(c.image, c.doc))
+	return c
+}
+
+// attachmentAccept 是下发给前端文件选择器的 accept，与 attachmentRuleFor 的白名单同源：
+// 后端不收的类型不在这里出现，前端不再自己手抄一份（有用例逐条比对两边）。
+// .zip/.docx/.xlsx/.pptx 是同一 MIME（zip 外壳）按扩展名细分，所以四种都要列。
+func attachmentAccept() string {
+	return strings.Join([]string{
+		"image/png", "image/jpeg", "image/gif", "image/webp",
+		"application/pdf", "text/plain", ".zip", ".docx", ".xlsx", ".pptx",
+	}, ",")
+}
+
+// attachmentSizeOK 是尺寸的放行判据：正好等于该类型上限通过，多一字节拒（<=0 视为没有内容）。
+// 类型与尺寸分开判：两个原因要给出两个错误码，不能合成一句「上传失败」。
+func attachmentSizeOK(rule attachmentRule, size int64) bool {
+	return size > 0 && size <= rule.max
+}
+
 // attachmentRule 描述某类可上传文件的落盘扩展名与大小上限。
 type attachmentRule struct {
 	ext string
@@ -262,31 +326,31 @@ type attachmentRule struct {
 
 // attachmentRuleFor 按服务端探测到的 MIME（必要时结合原始文件名）决定是否接收。
 // MIME 一律由内容嗅探得出，不信任客户端声明的 Content-Type 与扩展名。
-func attachmentRuleFor(mime, filename string) (attachmentRule, bool) {
+func attachmentRuleFor(ceil attachmentCeilings, mime, filename string) (attachmentRule, bool) {
 	switch strings.ToLower(mime) {
 	case "image/png":
-		return attachmentRule{".png", 8 << 20}, true
+		return attachmentRule{".png", ceil.image}, true
 	case "image/jpeg":
-		return attachmentRule{".jpg", 8 << 20}, true
+		return attachmentRule{".jpg", ceil.image}, true
 	case "image/gif":
-		return attachmentRule{".gif", 8 << 20}, true
+		return attachmentRule{".gif", ceil.image}, true
 	case "image/webp":
-		return attachmentRule{".webp", 8 << 20}, true
+		return attachmentRule{".webp", ceil.image}, true
 	case "application/pdf":
-		return attachmentRule{".pdf", maxUploadBytes}, true
+		return attachmentRule{".pdf", ceil.doc}, true
 	case "text/plain":
-		return attachmentRule{".txt", 2 << 20}, true
+		return attachmentRule{".txt", ceil.text}, true
 	case "application/zip":
 		// Office 文档本质是 zip，按原始扩展名保留可读的扩展名。
 		switch strings.ToLower(path.Ext(filename)) {
 		case ".docx":
-			return attachmentRule{".docx", maxUploadBytes}, true
+			return attachmentRule{".docx", ceil.doc}, true
 		case ".xlsx":
-			return attachmentRule{".xlsx", maxUploadBytes}, true
+			return attachmentRule{".xlsx", ceil.doc}, true
 		case ".pptx":
-			return attachmentRule{".pptx", maxUploadBytes}, true
+			return attachmentRule{".pptx", ceil.doc}, true
 		}
-		return attachmentRule{".zip", maxUploadBytes}, true
+		return attachmentRule{".zip", ceil.doc}, true
 	}
 	return attachmentRule{}, false
 }
@@ -331,13 +395,14 @@ func (h *handler) uploadAttachment(c *gin.Context, visitor bool) {
 		response.Fail(c, response.Conflict("ticket.illegal_transition"))
 		return
 	}
-	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxUploadBytes)
+	ceil := attachmentCeilingsFor(c.Request.Context())
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, ceil.maxBody)
 	fh, err := c.FormFile("file")
 	if err != nil {
 		response.Fail(c, response.BadRequest("error.bad_request"))
 		return
 	}
-	if fh.Size <= 0 || fh.Size > maxUploadBytes {
+	if fh.Size <= 0 || fh.Size > ceil.maxBody {
 		response.Fail(c, response.BadRequest("error.bad_request"))
 		return
 	}
@@ -350,8 +415,8 @@ func (h *handler) uploadAttachment(c *gin.Context, visitor bool) {
 	head := make([]byte, 512)
 	n, _ := io.ReadFull(f, head)
 	mime := strings.TrimSpace(strings.Split(http.DetectContentType(head[:n]), ";")[0])
-	rule, ok := attachmentRuleFor(mime, fh.Filename)
-	if !ok || fh.Size > rule.max {
+	rule, ok := attachmentRuleFor(ceil, mime, fh.Filename)
+	if !ok || !attachmentSizeOK(rule, fh.Size) {
 		response.Fail(c, response.BadRequest("error.bad_request"))
 		return
 	}

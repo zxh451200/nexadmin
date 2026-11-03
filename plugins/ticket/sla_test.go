@@ -1,7 +1,6 @@
 package ticket
 
 import (
-	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -309,7 +308,7 @@ func TestSLAListPolicies(t *testing.T) {
 	m.ExpectQuery("SELECT \\* FROM `plg_ticket_sla` ORDER BY code ASC").
 		WillReturnRows(slaPolicyRows())
 
-	list, err := s.ListSLAPolicies(context.Background())
+	list, err := s.ListSLAPolicies(testCtx())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -341,7 +340,7 @@ func TestSLASavePolicyInsert(t *testing.T) {
 		Code: "vip", Label: "VIP", Workdays: []int{1, 2, 3, 4, 5}, StartMinute: 540, EndMinute: 1080,
 		Targets: DefaultSLA().Targets, Holidays: []string{"2026-01-01"},
 	}
-	saved, err := s.SaveSLAPolicy(context.Background(), in)
+	saved, err := s.SaveSLAPolicy(testCtx(), in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -373,7 +372,7 @@ func TestSLASavePolicyUpdateDefault(t *testing.T) {
 		Code: "", Label: "新默认", Workdays: []int{1, 2, 3, 4, 5}, StartMinute: 540, EndMinute: 1080,
 		Targets: DefaultSLA().Targets, Holidays: []string{"2026-01-01"},
 	}
-	if _, err := s.SaveSLAPolicy(context.Background(), in); err != nil {
+	if _, err := s.SaveSLAPolicy(testCtx(), in); err != nil {
 		t.Fatal(err)
 	}
 	// code 为空串 → 必须刷新进程内缓存（保持今天 SaveSLA 的行为）；删掉守卫这里就红。
@@ -394,7 +393,7 @@ func TestSLADeletePolicy(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(0, 0)) // 0 行受影响 = 不存在，也不报错
 	m.ExpectCommit()
 
-	if err := s.DeleteSLAPolicy(context.Background(), "ghost"); err != nil {
+	if err := s.DeleteSLAPolicy(testCtx(), "ghost"); err != nil {
 		t.Fatalf("删不存在的策略不应报错：%v", err)
 	}
 	if err := m.ExpectationsWereMet(); err != nil {
@@ -407,7 +406,7 @@ func TestSLADeleteDefaultRejected(t *testing.T) {
 	db, m := mockDB(t)
 	s := NewService(db, nopLogger{})
 	// 不登记任何期望：若守卫被删，DELETE 会发出 SQL 并返回 sqlmock 的 not-expected 错误（非业务错误）。
-	err := s.DeleteSLAPolicy(context.Background(), "")
+	err := s.DeleteSLAPolicy(testCtx(), "")
 	if err == nil {
 		t.Fatal("默认策略删除应被拒")
 	}
@@ -430,7 +429,7 @@ func TestSLAForCode(t *testing.T) {
 	})
 
 	// 空串直接走缓存，不发 SQL。
-	if got, err := s.SLAForCode(context.Background(), ""); err != nil || got.Code != "" {
+	if got, err := s.SLAForCode(testCtx(), ""); err != nil || got.Code != "" {
 		t.Fatalf("空 code 应走缓存：%+v err=%v", got, err)
 	}
 
@@ -439,7 +438,7 @@ func TestSLAForCode(t *testing.T) {
 		AddRow(int64(2), testNow, testNow, "vip", "VIP", "1,2,3,4,5", 540, 1080, "{}", "2026-01-01")
 	m.ExpectQuery("SELECT \\* FROM `plg_ticket_sla` WHERE code = \\? ORDER BY id ASC").
 		WillReturnRows(vipRow)
-	got, err := s.SLAForCode(context.Background(), "vip")
+	got, err := s.SLAForCode(testCtx(), "vip")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -450,7 +449,7 @@ func TestSLAForCode(t *testing.T) {
 	// 未命中回落缓存。
 	m.ExpectQuery("SELECT \\* FROM `plg_ticket_sla` WHERE code = \\? ORDER BY id ASC").
 		WillReturnRows(sqlmock.NewRows(slaColumns))
-	fallback, err := s.SLAForCode(context.Background(), "missing")
+	fallback, err := s.SLAForCode(testCtx(), "missing")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -468,7 +467,7 @@ func TestSLAGetPolicyFallback(t *testing.T) {
 	s := NewService(db, nopLogger{})
 	m.ExpectQuery("SELECT \\* FROM `plg_ticket_sla` WHERE code = \\? ORDER BY id ASC").
 		WillReturnRows(sqlmock.NewRows(slaColumns))
-	got, err := s.GetSLAPolicy(context.Background(), "nope")
+	got, err := s.GetSLAPolicy(testCtx(), "nope")
 	if err != nil {
 		t.Fatalf("找不到不应报错：%v", err)
 	}

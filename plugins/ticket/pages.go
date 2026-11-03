@@ -113,6 +113,10 @@ var formTmpl = template.Must(template.New("form").Parse(`<!doctype html>
           <label for="contact">{{.Contact}}</label>
           <input id="contact" maxlength="64">
         </div>
+        <div>
+          <label for="email">{{.Email}}</label>
+          <input id="email" type="email" maxlength="128">
+        </div>
       </div>
       <label for="priority">{{.Priority}}</label>
       <select id="priority">
@@ -188,6 +192,7 @@ form.addEventListener('submit', async (e) => {
     content: document.getElementById('content').value.trim(),
     reporterName: document.getElementById('name').value.trim(),
     reporterId: document.getElementById('contact').value.trim(),
+    reporterEmail: document.getElementById('email').value.trim(),
     priority: document.getElementById('priority').value,
     customValues: collectFields()
   };
@@ -428,9 +433,9 @@ if (input.value) load(input.value.trim());
 </html>`))
 
 type formPageData struct {
-	Lang, Title, Intro, Subject, Content, Name, Contact, Priority string
-	PNormal, PHigh, PUrgent, Submit, QueryLink                    string
-	Strings                                                       template.JS
+	Lang, Title, Intro, Subject, Content, Name, Contact, Email, Priority string
+	PNormal, PHigh, PUrgent, Submit, QueryLink                           string
+	Strings                                                              template.JS
 	// Fields 是启用的自定义字段（code/label/type/required/options），由页面脚本按类型渲染。
 	Fields template.JS
 }
@@ -512,7 +517,7 @@ func (h *handler) formPage(c *gin.Context) {
 	}
 	d := formPageData{
 		Lang: "zh-CN", Title: "提交工单", Intro: "描述你遇到的问题，我们会尽快处理；无需登录。",
-		Subject: "标题", Content: "问题描述", Name: "称呼", Contact: "联系方式（可选）", Priority: "优先级",
+		Subject: "标题", Content: "问题描述", Name: "称呼", Contact: "联系方式（可选）", Email: "邮箱（选填，用于接收处理进展通知）", Priority: "优先级",
 		PNormal: "普通", PHigh: "高", PUrgent: "紧急", Submit: "提交", QueryLink: "查询已有工单",
 		Strings: stringsJSON(pageDict(en)),
 		Fields:  template.JS(fieldsJSON),
@@ -520,7 +525,7 @@ func (h *handler) formPage(c *gin.Context) {
 	if en {
 		d.Lang = "en"
 		d.Title, d.Intro = "Submit a ticket", "Describe the issue and we will get back to you. No sign-in required."
-		d.Subject, d.Content, d.Name, d.Contact, d.Priority = "Subject", "Description", "Your name", "Contact (optional)", "Priority"
+		d.Subject, d.Content, d.Name, d.Contact, d.Email, d.Priority = "Subject", "Description", "Your name", "Contact (optional)", "Email (optional, for progress updates)", "Priority"
 		d.PNormal, d.PHigh, d.PUrgent, d.Submit, d.QueryLink = "Normal", "High", "Urgent", "Submit", "Track an existing ticket"
 	}
 	c.Data(http.StatusOK, "text/html; charset=utf-8", render(formTmpl, d))

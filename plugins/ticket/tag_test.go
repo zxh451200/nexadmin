@@ -1,7 +1,6 @@
 package ticket
 
 import (
-	"context"
 	"strconv"
 	"testing"
 
@@ -44,7 +43,7 @@ func TestCreateCarriesTagsIntoRuleMatching(t *testing.T) {
 	m.ExpectExec("INSERT INTO `plg_ticket_activity`").WillReturnResult(sqlmock.NewResult(1, 1))
 	m.ExpectCommit()
 
-	tk, err := s.Create(context.Background(), CreateInput{
+	tk, err := s.Create(testCtx(), CreateInput{
 		Title: "order broken", Content: "x", ReporterType: ReplierReporter,
 		Tags: []string{"vip", " vip ", "", "refund"},
 	})
@@ -82,7 +81,7 @@ func TestCreateRejectsTooManyTagsBeforeTouchingDB(t *testing.T) {
 	for i := 0; i <= maxTags; i++ {
 		tags = append(tags, "t"+strconv.Itoa(i))
 	}
-	if _, err := s.Create(context.Background(), CreateInput{
+	if _, err := s.Create(testCtx(), CreateInput{
 		Title: "t", Content: "c", ReporterType: ReplierReporter, Tags: tags,
 	}); err == nil {
 		t.Fatal("超过标签上限应被拒绝")

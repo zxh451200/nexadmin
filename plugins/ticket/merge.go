@@ -85,7 +85,7 @@ const (
 
 // TicketLink 是一条双向关联，规范化存一行：TicketAID < TicketBID。
 type TicketLink struct {
-	database.PlatformModel
+	database.TenantModel
 	TicketAID idgen.ID `gorm:"column:ticket_a_id;not null;uniqueIndex:uk_plg_ticket_link_pair,priority:1" json:"ticketAId"`
 	TicketBID idgen.ID `gorm:"column:ticket_b_id;not null;uniqueIndex:uk_plg_ticket_link_pair,priority:2" json:"ticketBId"`
 	// LinkBy 是建关联的坐席显示名，冗余一份省得回查用户表。
@@ -98,7 +98,11 @@ func (TicketLink) TableName() string { return "plg_ticket_link" }
 // 其中 merged_into_id 是本次新增的可空列，model.go 的 Ticket 里没有它（本次写域不改核心模型），
 // 所以自带 TableName 让 GORM 落在 plg_ticket 上，而不是为这一个字段去动 Ticket。
 type mergeTicket struct {
-	ID              idgen.ID   `gorm:"column:id;primaryKey"`
+	ID idgen.ID `gorm:"column:id;primaryKey"`
+	// TenantID 不读不用，但必须声明：租户插件是按 schema 里有没有 tenant_id 字段决定要不要
+	// 追加条件的（core/database/model.go 的 tenantScope）。这个窄投影漏掉它，合并与关联
+	// 就会静默地跨租户读写 plg_ticket —— 五张表里唯独这条没有模型兜底。
+	TenantID        idgen.ID   `gorm:"column:tenant_id"`
 	TicketNo        string     `gorm:"column:ticket_no"`
 	BizType         string     `gorm:"column:biz_type"`
 	BizNo           string     `gorm:"column:biz_no"`
@@ -189,6 +193,11 @@ func (s *Service) Merge(ctx context.Context, fromNo, toNo, operator string) (*Me
 		return nil, response.BadRequest("error.bad_request")
 	case fromNo == toNo:
 		return nil, response.BadRequest("ticket.merge_self")
+	}
+	// 对侧单号在请求体里，中间件只挡得住 :no。合并会把本单的回复与附件并进目标单，
+	// 目标单不在请求者范围内就等于往看不见的单里塞内容，所以这里补一次校验。
+	if err := s.guardNo(ctx, toNo); err != nil {
+		return nil, err
 	}
 
 	var out MergeResult
@@ -354,6 +363,10 @@ func (s *Service) Link(ctx context.Context, ticketNo, otherNo, operator string) 
 	case ticketNo == otherNo:
 		return nil, response.BadRequest("ticket.link_self")
 	}
+	// 关联是双向可见的：把范围外的单挂进来，它就会出现本单的关联列表里。
+	if err := s.guardNo(ctx, otherNo); err != nil {
+		return nil, err
+	}
 	name := truncate(strings.TrimSpace(operator), 64)
 
 	var link TicketLink
@@ -415,6 +428,10 @@ func (s *Service) Unlink(ctx context.Context, ticketNo, otherNo, operator string
 		return response.BadRequest("error.bad_request")
 	case ticketNo == otherNo:
 		return response.BadRequest("ticket.link_self")
+	}
+	// 解除关联会给两侧各落一条动态，对侧在范围外同样不该被改。
+	if err := s.guardNo(ctx, otherNo); err != nil {
+		return err
 	}
 	name := truncate(strings.TrimSpace(operator), 64)
 
@@ -520,7 +537,9 @@ func (s *Service) loadLinkedTickets(ctx context.Context, ids []idgen.ID) map[idg
 		return out
 	}
 	rows := make([]mergeTicket, 0, len(unique))
-	if err := s.db.WithContext(ctx).Where("id IN ?", unique).Find(&rows).Error; err != nil {
+	// 范围外的对侧单取不到，调用方原有的「索引里没有就跳过」分支正好把它变成不显示，
+	// 所以关联列表与合并摘要都不需要各自再裁一遍。
+	if err := scopeCond(ctx, s.db.WithContext(ctx)).Where("id IN ?", unique).Find(&rows).Error; err != nil {
 		s.logWarn("ticket: load linked tickets failed", "err", err.Error())
 		return out
 	}

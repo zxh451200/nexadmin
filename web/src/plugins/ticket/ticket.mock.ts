@@ -195,6 +195,9 @@ const cloneSLA = (v: SLASetting): SLASetting => ({
   targets: Object.fromEntries(Object.entries(v.targets ?? {}).map(([k, t]) => [k, { ...t }])),
 })
 
+// 通知设置（真后端落 plg_ticket_setting 单行；mock 内存态即可，出厂关）。
+let mockSettings = { emailNotifyEnabled: false, portalUrl: '' }
+
 // 命名策略：默认策略（code 空串）即上面那份，这里再放一套只在工作日白天营业、且有节假日的。
 const slaPolicies: SLASetting[] = [
   {
@@ -430,7 +433,34 @@ function mockFilterTickets(raw: Record<string, unknown>): Ticket[] {
   else if (q('assigneeId')) rows = rows.filter((tk) => tk.assigneeId === q('assigneeId'))
   if (q('groupId')) rows = rows.filter((tk) => tk.groupId === q('groupId'))
   if (q('tag')) rows = rows.filter((tk) => (tk.tags ?? []).includes(q('tag')))
-  return rows
+  return mockSortTickets(rows, q('sort'), q('order'))
+}
+
+// 与后端 listSortCols 同一套键（service.go）：mock 不认 sort 的话，
+// 开发态点排序控件没有反应，看起来就像「这功能没接上」。
+const MOCK_PRIORITY_RANK: Record<string, number> = { urgent: 3, high: 2, normal: 1, low: 0 }
+
+function mockSortTickets(rows: Ticket[], sort: string, order: string): Ticket[] {
+  const dir = order === 'asc' ? 1 : -1
+  const key = (tk: Ticket): string | number => {
+    switch (sort) {
+      case 'createdAt':
+        return tk.createdAt
+      case 'dueAt':
+        return tk.dueAt ?? ''
+      case 'priority':
+        return MOCK_PRIORITY_RANK[tk.priority] ?? 0
+      default:
+        return tk.lastReplyAt || tk.createdAt
+    }
+  }
+  return [...rows].sort((a, b) => {
+    const ka = key(a)
+    const kb = key(b)
+    const base = ka < kb ? -1 : ka > kb ? 1 : 0
+    // 平票兜底一个稳定序，和后端尾部的 id DESC 同职责：否则同值行翻页会重复或整页漏掉。
+    return base * dir || (a.ticketNo < b.ticketNo ? 1 : a.ticketNo > b.ticketNo ? -1 : 0)
+  })
 }
 
 function csvCell(v: unknown): string {
@@ -623,7 +653,11 @@ defineMock([
         replies: replies[params.no] ?? [],
         attachments: attachments[params.no] ?? [],
         activities: activities.filter((a) => a.ticketNo === params.no),
-        quota: { maxCount: 20, maxBytes: 100 * 1024 * 1024 },
+        quota: {
+          maxCount: 20,
+          maxBytes: 100 * 1024 * 1024,
+          accept: 'image/png,image/jpeg,image/gif,image/webp,application/pdf,text/plain,.zip,.docx,.xlsx,.pptx',
+        },
       }
     },
   },
@@ -1361,6 +1395,51 @@ defineMock([
             resolutionBreachRate: 0,
           })),
       }
+    },
+  },
+  // ---- 侧栏面板与设置（badge.go / notify.go）----
+  {
+    method: 'GET',
+    url: '/plugins/ticket/tickets/badge',
+    handler: () => ({
+      count: tickets.filter(
+        (tk) =>
+          (tk.status === 'open' || tk.status === 'processing' || tk.status === 'pending') &&
+          ((tk.assigneeId === '0' && tk.status === 'open') || tk.assigneeId === '7'),
+      ).length,
+    }),
+  },
+  {
+    method: 'GET',
+    url: '/plugins/ticket/tickets/:no/reporter-tickets',
+    handler: ({ params }) => {
+      const cur = find(params.no)
+      if (!cur || !cur.reporterId) return []
+      return tickets
+        .filter((tk) => tk.ticketNo !== cur.ticketNo && tk.reporterId === cur.reporterId)
+        .slice(0, 10)
+        .map((tk) => ({
+          ticketNo: tk.ticketNo, title: tk.title, status: tk.status, priority: tk.priority,
+          reporterName: tk.reporterName, createdAt: tk.createdAt,
+        }))
+    },
+  },
+  {
+    method: 'GET',
+    url: '/plugins/ticket/settings',
+    handler: () => mockSettings,
+  },
+  {
+    // 门户地址合法性由真后端把关（拒绝内网地址）；mock 只做最短的 scheme 检查。
+    method: 'PUT',
+    url: '/plugins/ticket/settings',
+    handler: ({ body }) => {
+      const portal = String(body.portalUrl ?? '').trim()
+      if (portal && !/^https?:\/\//.test(portal)) {
+        throw mockError(400, L('客服门户地址不合法（仅支持 http/https 的公网地址）', 'Invalid portal URL (a public http/https address is required)'), 'TICKET_PORTAL_URL_INVALID')
+      }
+      mockSettings = { emailNotifyEnabled: !!body.emailNotifyEnabled, portalUrl: portal }
+      return mockSettings
     },
   },
 ])

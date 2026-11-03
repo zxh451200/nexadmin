@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent, type ReactNode } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   ArrowUpRight,
   ChevronLeft,
@@ -32,8 +33,12 @@ import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
+import { useIsMobile } from '@/framework/hooks/use-mobile'
+import { DatePicker } from '@/framework/components/DatePicker'
 import { EmptyState } from '@/framework/components/EmptyState'
+import { useInvalidateMenuBadges } from '@/framework/layout/menuBadge'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
+import { RequiredMark } from '@/framework/components/RequiredMark'
 import { RemoteSelect } from '@/framework/components/RemoteSelect'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { SimpleSelect } from '@/framework/components/SimpleSelect'
@@ -41,9 +46,16 @@ import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Card } from '@/framework/ui/card'
 import { Checkbox } from '@/framework/ui/checkbox'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/framework/ui/dropdown-menu'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/framework/ui/dropdown-menu'
 import { Input } from '@/framework/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/framework/ui/popover'
+import { Switch } from '@/framework/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/framework/ui/tabs'
 import { Textarea } from '@/framework/ui/textarea'
 import { cn } from '@/lib/utils'
@@ -74,18 +86,23 @@ import {
   useRemoveLink,
   useReplies,
   useReplyTicket,
+  useReporterHistory,
   useRules,
   useSLA,
   useSLAPolicies,
   useSaveField,
   useSaveSLA,
   useSaveSLAPolicy,
+  useSaveTicketSettings,
   useSetCustomValues,
   useSetGroupMembers,
   useSetTicketStatus,
   useSetTicketTags,
+  useTicketFeed,
   useTicketFields,
   useTicketLinks,
+  useTicketSettings,
+  useTicketStream,
   useTicketTags,
   useTickets,
   useUpdateCanned,
@@ -117,7 +134,13 @@ type ThreadItem =
   | { kind: 'act'; at: string; act: TicketActivity }
 const PAGE_SIZE = 20
 const STATUSES = ['open', 'processing', 'pending', 'resolved', 'closed'] as const
+/** 详情头部的主按钮只摆这一步，其余合法流转收进「更多」。 */
+const NEXT_STATUS: Record<string, string> = { open: 'processing', processing: 'resolved', pending: 'processing', resolved: 'closed' }
+/** 当前状态下的一次状态流转候选。 */
+type StatusMove = { to: string; label: string; icon?: ReactNode; destructive?: boolean; confirm?: string }
 const PRIORITIES = ['urgent', 'high', 'normal', 'low'] as const
+// 与后端 listSortCols 的键一一对应（service.go）。加一列要两边同时加，否则前端选了也退回默认序。
+const SORT_KEYS = ['lastReply', 'createdAt', 'priority', 'dueAt'] as const
 
 type AssigneeFilter = 'all' | 'unassigned' | 'mine'
 
@@ -127,6 +150,7 @@ const emptyCreateForm = {
   priority: 'normal' as TicketPriority,
   reporterName: '',
   reporterId: '',
+  reporterEmail: '',
   bizType: '',
   bizNo: '',
 }
@@ -281,6 +305,9 @@ export default function TicketPage() {
   const [keyword, setKeyword] = useState('')
   const [appliedKeyword, setAppliedKeyword] = useState('')
   const [overdueOnly, setOverdueOnly] = useState(false)
+  // 排序键与后端 listSortCols 白名单一致；未知键后端退回默认列，所以这里只给得出选的。
+  const [sortKey, setSortKey] = useState('lastReply')
+  const [sortAsc, setSortAsc] = useState(false)
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [page, setPage] = useState(1)
   const [selectedNo, setSelectedNo] = useState<string | undefined>()
@@ -321,6 +348,8 @@ export default function TicketPage() {
   // SLA 对话框当前是在「新建一套策略」还是「改已有的一套」：编码只在新建时可填，
   // 改已有策略的编码等于另起一套、留下孤儿。
   const [policyNew, setPolicyNew] = useState(false)
+  // 通知设置（客户邮件开关 / 门户地址）。
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   // 搜索防抖：300ms 内连续输入只发一次请求
   useEffect(() => {
@@ -331,7 +360,7 @@ export default function TicketPage() {
   // 任一筛选变化都回到第一页
   useEffect(() => {
     setPage(1)
-  }, [appliedKeyword, statusFilter, priorityFilter, assigneeFilter, overdueOnly, groupFilter, tagFilter])
+  }, [appliedKeyword, statusFilter, priorityFilter, assigneeFilter, overdueOnly, groupFilter, tagFilter, sortKey, sortAsc])
 
   const listFilters: Omit<TicketQueryParams, 'page' | 'pageSize'> = {
     status: statusFilter,
@@ -342,6 +371,8 @@ export default function TicketPage() {
     mine: assigneeFilter === 'mine' ? '1' : undefined,
     groupId: groupFilter !== '0' ? groupFilter : undefined,
     tag: tagFilter !== '0' ? tagFilter : undefined,
+    sort: sortKey,
+    order: sortAsc ? 'asc' : 'desc',
   }
 
   const tickets = useTickets({ ...listFilters, page, pageSize: PAGE_SIZE })
@@ -413,6 +444,19 @@ export default function TicketPage() {
   const mergeCandidates = useMergeCandidates(mergeKeyword.trim(), mergeOpen)
   const linkCandidates = useLinkCandidates(linkKeyword.trim(), linkOpen)
 
+  // 实时推送（WS）与菜单徽标：命中帧即刷对应查询，8s/3s 轮询保留作 WS 不可用时的兜底。
+  const queryClient = useQueryClient()
+  const invalidateBadges = useInvalidateMenuBadges()
+  useTicketFeed(() => {
+    void queryClient.invalidateQueries({ queryKey: ['plugin_ticket', 'tickets'] })
+    invalidateBadges()
+  })
+  useTicketStream(selectedNo, () => {
+    void queryClient.invalidateQueries({ queryKey: ['plugin_ticket', 'replies', selectedNo] })
+    void queryClient.invalidateQueries({ queryKey: ['plugin_ticket', 'links', selectedNo] })
+    void queryClient.invalidateQueries({ queryKey: ['plugin_ticket', 'badge'] })
+  })
+
   const setView = (v: string) => {
     const next = new URLSearchParams(params)
     if (v === 'stats') next.set('view', 'stats')
@@ -447,6 +491,7 @@ export default function TicketPage() {
     try {
       await setStatusMut.mutateAsync({ ticketNo, status: to })
       toast.success(t('common.operateSuccess'))
+      invalidateBadges()
     } catch {
       toast.error(t('common.operateFailed'))
     }
@@ -456,6 +501,7 @@ export default function TicketPage() {
     try {
       await assign.mutateAsync({ ticketNo, assigneeId: 0, assigneeName: '' })
       toast.success(t('common.operateSuccess'))
+      invalidateBadges()
     } catch {
       toast.error(t('common.operateFailed'))
     }
@@ -471,6 +517,7 @@ export default function TicketPage() {
     try {
       await assign.mutateAsync({ ticketNo: assignTarget.ticketNo, assigneeId: Number(assignUserId), assigneeName: '' })
       toast.success(t('common.operateSuccess'))
+      invalidateBadges()
       setAssignTarget(null)
       setAssignUserId('')
     } catch {
@@ -483,6 +530,7 @@ export default function TicketPage() {
     try {
       const res = await bulk.mutateAsync({ ticketNos: checked, ...input })
       toast.success(t('plugin_ticket.bulk.done', { updated: res.updated, skipped: res.skipped }))
+      invalidateBadges()
       setChecked([])
     } catch {
       toast.error(t('common.operateFailed'))
@@ -516,11 +564,13 @@ export default function TicketPage() {
         priority: createForm.priority,
         reporterName: createForm.reporterName.trim() || undefined,
         reporterId: createForm.reporterId.trim() || undefined,
+        reporterEmail: createForm.reporterEmail.trim() || undefined,
         bizType: createForm.bizType.trim() || undefined,
         bizNo: createForm.bizNo.trim() || undefined,
         customValues: Object.keys(customValues).length ? customValues : undefined,
       })
       toast.success(t('common.operateSuccess'))
+      invalidateBadges()
       setCreateOpen(false)
       selectTicket(created.ticketNo)
     } catch (e) {
@@ -1075,31 +1125,40 @@ export default function TicketPage() {
           <>
             <Button variant="outline" onClick={() => void onExport()} disabled={exporting}>
               <Download aria-hidden="true" />
-              <span className="max-sm:sr-only">{t('plugin_ticket.export.action')}</span>
+              {t('plugin_ticket.export.action')}
             </Button>
+            {/* 五个配置弹窗平铺成一行同权重按钮，页头就成了第二条工具条；入口一个不少，收进一枚「配置」。 */}
             <Can perm="ticket:edit">
-              <Button variant="outline" onClick={openRules}>
-                <Zap aria-hidden="true" />
-                {t('plugin_ticket.rules.title')}
-              </Button>
-            </Can>
-            <Can perm="ticket:edit">
-              <Button variant="outline" onClick={openGroups}>
-                <Users aria-hidden="true" />
-                {t('plugin_ticket.groups.title')}
-              </Button>
-            </Can>
-            <Can perm="ticket:edit">
-              <Button variant="outline" onClick={openFields}>
-                <ListChecks aria-hidden="true" />
-                {t('plugin_ticket.fields.title')}
-              </Button>
-            </Can>
-            <Can perm="ticket:edit">
-              <Button variant="outline" onClick={openSLA}>
-                <Timer aria-hidden="true" />
-                {t('plugin_ticket.sla.title')}
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline">
+                    <Settings2 aria-hidden="true" />
+                    {t('plugin_ticket.config.title')}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="min-w-40">
+                  <DropdownMenuItem onSelect={openRules}>
+                    <Zap aria-hidden="true" />
+                    {t('plugin_ticket.rules.title')}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={openGroups}>
+                    <Users aria-hidden="true" />
+                    {t('plugin_ticket.groups.title')}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={openFields}>
+                    <ListChecks aria-hidden="true" />
+                    {t('plugin_ticket.fields.title')}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={openSLA}>
+                    <Timer aria-hidden="true" />
+                    {t('plugin_ticket.sla.title')}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => setSettingsOpen(true)}>
+                    <Settings2 aria-hidden="true" />
+                    {t('plugin_ticket.settings.title')}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </Can>
             <Can perm="ticket:create">
               <Button onClick={openCreate}>
@@ -1117,9 +1176,12 @@ export default function TicketPage() {
           <TabsTrigger value="stats">{t('plugin_ticket.view.stats')}</TabsTrigger>
         </TabsList>
         <TabsContent value="logs">
-          {/* 队列与会话是一体两面：选中哪张单就看哪段对话，整体算「列表」视图，不拆散 */}
-          <div className="grid h-[calc(100vh-14rem)] min-h-96 grid-cols-1 gap-4 md:grid-cols-[24rem_1fr]">
-            <Card className="flex min-h-0 flex-col gap-2 p-2">
+          {/* 队列与会话是一体两面：选中哪张单就看哪段对话，整体算「列表」视图，不拆散。
+              高度约束只给桌面双栏：移动端单列下 calc 高度会把队列和会话各压成半屏。
+              桌面再给一个下限：窗口矮到算出来的高度装不下「头部+次级面板+会话保底+回复框」时，
+              让整页滚，而不是把会话挤成一条缝。 */}
+          <div className="grid h-auto min-h-96 grid-cols-1 gap-4 md:h-[calc(100vh-14rem)] md:min-h-[36rem] md:grid-cols-[24rem_1fr]">
+            <Card className="flex max-h-[32rem] min-h-0 flex-col gap-2 p-2 md:max-h-none">
               <div className="flex flex-wrap items-center gap-2">
                 <Input
                   value={keyword}
@@ -1149,6 +1211,26 @@ export default function TicketPage() {
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent align="end" className="w-72 space-y-2">
+                    {/* 排序和筛选同源：导出用的就是这份 listFilters，顺序也得跟着走 */}
+                    <div className="flex items-end gap-2">
+                      <SimpleSelect
+                        aria-label={t('plugin_ticket.sort.label')}
+                        label={t('plugin_ticket.sort.label')}
+                        className="min-w-0 flex-1"
+                        value={sortKey}
+                        onChange={setSortKey}
+                        options={SORT_KEYS.map((k) => ({ value: k, label: t(`plugin_ticket.sort.${k}`) }))}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-9 shrink-0"
+                        onClick={() => setSortAsc((v) => !v)}
+                      >
+                        {sortAsc ? t('plugin_ticket.sort.asc') : t('plugin_ticket.sort.desc')}
+                      </Button>
+                    </div>
                     <SimpleSelect
                       aria-label={t('plugin_ticket.assigneeFilter')}
                       label={t('plugin_ticket.assignee')}
@@ -1244,36 +1326,42 @@ export default function TicketPage() {
               ) : null}
 
               {checked.length > 0 ? (
-                <div className="flex flex-wrap items-center gap-2 rounded-md bg-muted px-2 py-1.5">
-                  <span className="text-xs text-muted-foreground">{t('common.selected', { count: checked.length })}</span>
+                // 24rem 窄栏里「计数 + 四个动作」挤一行会折出「关闭 / 清除」的孤行：
+                // 计数与清除占一行，批量动作单独一行。
+                <div className="space-y-1.5 rounded-md bg-muted px-2 py-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs text-muted-foreground">{t('common.selected', { count: checked.length })}</span>
+                    <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => setChecked([])}>
+                      {t('common.clear')}
+                    </Button>
+                  </div>
                   <Can perm="ticket:edit">
-                    <Button size="sm" variant="outline" onClick={() => void runBulk({ action: 'assign' })}>
-                      {t('plugin_ticket.actions.assignToMe')}
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => void runBulk({ action: 'status', status: 'resolved' })}>
-                      {t('plugin_ticket.bulk.resolve')}
-                    </Button>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button size="sm" variant="outline">
-                          {t('plugin_ticket.actions.setPriority')}
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="start">
-                        {PRIORITIES.map((p) => (
-                          <DropdownMenuItem key={p} onSelect={() => void runBulk({ action: 'priority', priority: p })}>
-                            {t(`plugin_ticket.priority.${p}`)}
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                    <Button size="sm" variant="outline" className="text-destructive" onClick={() => void bulkClose()}>
-                      {t('plugin_ticket.bulk.close')}
-                    </Button>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <Button size="sm" variant="outline" onClick={() => void runBulk({ action: 'assign' })}>
+                        {t('plugin_ticket.actions.assignToMe')}
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => void runBulk({ action: 'status', status: 'resolved' })}>
+                        {t('plugin_ticket.bulk.resolve')}
+                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button size="sm" variant="outline">
+                            {t('plugin_ticket.actions.setPriority')}
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start">
+                          {PRIORITIES.map((p) => (
+                            <DropdownMenuItem key={p} onSelect={() => void runBulk({ action: 'priority', priority: p })}>
+                              {t(`plugin_ticket.priority.${p}`)}
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                      <Button size="sm" variant="outline" className="text-destructive" onClick={() => void bulkClose()}>
+                        {t('plugin_ticket.bulk.close')}
+                      </Button>
+                    </div>
                   </Can>
-                  <Button size="sm" variant="ghost" onClick={() => setChecked([])}>
-                    {t('common.clear')}
-                  </Button>
                 </div>
               ) : null}
 
@@ -1453,6 +1541,15 @@ export default function TicketPage() {
                 maxLength={64}
               />
             </Field>
+            <Field label={t('plugin_ticket.create.reporterEmail')}>
+              <Input
+                type="email"
+                value={createForm.reporterEmail}
+                placeholder="name@example.com"
+                onChange={(e) => setCreateForm((f) => ({ ...f, reporterEmail: e.target.value }))}
+                maxLength={128}
+              />
+            </Field>
             <Field label={t('plugin_ticket.create.bizType')}>
               <Input
                 value={createForm.bizType}
@@ -1480,6 +1577,9 @@ export default function TicketPage() {
           ) : null}
         </div>
       </ResponsiveDialog>
+
+      {/* 通知设置：客户邮件开关 + 客服门户地址（邮件里「查看工单」的链接前缀）。 */}
+      {settingsOpen ? <TicketSettingsDialog onOpenChange={setSettingsOpen} /> : null}
 
       {/* 自定义字段定义：加字段不动表结构，值统一存在工单的 custom_values 里。 */}
       <ResponsiveDialog
@@ -1523,7 +1623,7 @@ export default function TicketPage() {
           )}
 
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label={t('plugin_ticket.fields.code')}>
+            <Field label={t('plugin_ticket.fields.code')} required>
               <Input
                 value={fieldForm.code}
                 onChange={(e) => setFieldForm((f) => ({ ...f, code: e.target.value }))}
@@ -1532,7 +1632,7 @@ export default function TicketPage() {
                 placeholder="order_channel"
               />
             </Field>
-            <Field label={t('plugin_ticket.fields.label')}>
+            <Field label={t('plugin_ticket.fields.label')} required>
               <Input value={fieldForm.label} onChange={(e) => setFieldForm((f) => ({ ...f, label: e.target.value }))} maxLength={64} />
             </Field>
             <Field label={t('plugin_ticket.fields.type')}>
@@ -1553,7 +1653,7 @@ export default function TicketPage() {
             </Field>
           </div>
           {fieldForm.type === 'select' ? (
-            <Field label={t('plugin_ticket.fields.options')}>
+            <Field label={t('plugin_ticket.fields.options')} required>
               <Input
                 value={fieldForm.optionsText}
                 onChange={(e) => setFieldForm((f) => ({ ...f, optionsText: e.target.value }))}
@@ -1708,7 +1808,7 @@ export default function TicketPage() {
           </>
         }
       >
-        <div className="space-y-4">
+        <div className="space-y-5">
           {/* 多套策略：默认策略就是原来那一份；命名策略绑给队列，各队列时限与节假日可以不同。 */}
           <div className="flex flex-wrap items-center gap-2">
             <SimpleSelect
@@ -1738,17 +1838,29 @@ export default function TicketPage() {
                 {t('plugin_ticket.sla.deletePolicy')}
               </Button>
             ) : null}
+            {/* 新建态给显式反馈：否则「点了没反应」——表单本来就在默认策略上，唯一的可见变化只有编码框解锁 */}
+            {policyNew ? <Badge variant="secondary">{t('plugin_ticket.sla.creating')}</Badge> : null}
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label={t('plugin_ticket.sla.code')}>
-              <Input
-                value={slaForm.code ?? ''}
-                onChange={(e) => setSlaForm((f) => ({ ...f, code: e.target.value }))}
-                maxLength={32}
-                disabled={!policyNew}
-                placeholder="vip-desk"
-              />
-            </Field>
+            {policyNew ? (
+              <Field label={t('plugin_ticket.sla.code')} required>
+                <Input
+                  autoFocus
+                  value={slaForm.code ?? ''}
+                  onChange={(e) => setSlaForm((f) => ({ ...f, code: e.target.value }))}
+                  maxLength={32}
+                  placeholder="vip-desk"
+                />
+              </Field>
+            ) : slaForm.code ? (
+              <Field label={t('plugin_ticket.sla.code')}>
+                <Input value={slaForm.code ?? ''} disabled />
+              </Field>
+            ) : (
+              <div className="flex items-end pb-2 text-xs text-muted-foreground">
+                {t('plugin_ticket.sla.codeDefaultHint')}
+              </div>
+            )}
             <Field label={t('plugin_ticket.sla.label')}>
               <Input
                 value={slaForm.label ?? ''}
@@ -1757,15 +1869,64 @@ export default function TicketPage() {
               />
             </Field>
           </div>
-          <Field label={t('plugin_ticket.sla.holidays')}>
+          {policyNew || slaForm.code ? (
+            <p className="-mt-3 text-xs text-muted-foreground">{t('plugin_ticket.sla.codeHint')}</p>
+          ) : null}
+
+          {/* 营业时间：工作日 + 上下班时刻，一组信息摆在一起 */}
+          <div className="space-y-3 border-t pt-4">
+            <p className="text-xs font-medium text-foreground">{t('plugin_ticket.sla.sectionBusiness')}</p>
+            <Field label={t('plugin_ticket.sla.workdays')} required>
+              <div className="flex flex-wrap gap-x-4 gap-y-2">
+                {WEEKDAYS.map((d) => (
+                  <label key={d} className="flex items-center gap-1.5 text-sm">
+                    <Checkbox
+                      checked={slaForm.workdays.includes(d)}
+                      onCheckedChange={() => toggleWorkday(d)}
+                      aria-label={t(`plugin_ticket.weekdays.${d}`)}
+                    />
+                    {t(`plugin_ticket.weekdays.${d}`)}
+                  </label>
+                ))}
+              </div>
+            </Field>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label={t('plugin_ticket.sla.start')} required>
+                <Input
+                  type="number"
+                  min={0}
+                  max={24}
+                  step={0.5}
+                  list="sla-clock"
+                  value={minutesToHours(slaForm.startMinute)}
+                  onChange={(e) => setSlaForm((f) => ({ ...f, startMinute: hoursToClock(e.target.value) }))}
+                />
+              </Field>
+              <Field label={t('plugin_ticket.sla.end')} required>
+                <Input
+                  type="number"
+                  min={0}
+                  max={24}
+                  step={0.5}
+                  list="sla-clock"
+                  value={minutesToHours(slaForm.endMinute)}
+                  onChange={(e) => setSlaForm((f) => ({ ...f, endMinute: hoursToClock(e.target.value) }))}
+                />
+              </Field>
+            </div>
+          </div>
+
+          {/* 节假日：营业时间的例外清单 */}
+          <div className="space-y-3 border-t pt-4">
+            <p className="text-xs font-medium text-foreground">{t('plugin_ticket.sla.sectionHolidays')}</p>
             <div className="space-y-2">
               {(slaForm.holidays ?? []).map((h, i) => (
                 <div key={`holiday-${i}`} className="flex items-center gap-2">
-                  <Input
-                    type="date"
+                  <DatePicker
                     value={h}
-                    onChange={(e) => setHoliday(i, e.target.value)}
-                    aria-label={`${t('plugin_ticket.sla.holidays')} ${i + 1}`}
+                    onChange={(v) => setHoliday(i, v)}
+                    ariaLabel={`${t('plugin_ticket.sla.holidays')} ${i + 1}`}
+                    className="w-44"
                   />
                   <Button variant="ghost" size="icon" onClick={() => removeHoliday(i)} aria-label={t('common.delete')}>
                     <Trash2 aria-hidden="true" />
@@ -1778,75 +1939,57 @@ export default function TicketPage() {
               </Button>
               <p className="text-xs text-muted-foreground">{t('plugin_ticket.sla.holidaysHint')}</p>
             </div>
-          </Field>
-          <Field label={t('plugin_ticket.sla.workdays')}>
-            <div className="flex flex-wrap gap-x-4 gap-y-2">
-              {WEEKDAYS.map((d) => (
-                <label key={d} className="flex items-center gap-1.5 text-sm">
-                  <Checkbox
-                    checked={slaForm.workdays.includes(d)}
-                    onCheckedChange={() => toggleWorkday(d)}
-                    aria-label={t(`plugin_ticket.weekdays.${d}`)}
-                  />
-                  {t(`plugin_ticket.weekdays.${d}`)}
-                </label>
-              ))}
-            </div>
-          </Field>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label={t('plugin_ticket.sla.start')}>
-              <Input
-                type="number"
-                min={0}
-                max={24}
-                step={0.5}
-                value={minutesToHours(slaForm.startMinute)}
-                onChange={(e) => setSlaForm((f) => ({ ...f, startMinute: hoursToClock(e.target.value) }))}
-              />
-            </Field>
-            <Field label={t('plugin_ticket.sla.end')}>
-              <Input
-                type="number"
-                min={0}
-                max={24}
-                step={0.5}
-                value={minutesToHours(slaForm.endMinute)}
-                onChange={(e) => setSlaForm((f) => ({ ...f, endMinute: hoursToClock(e.target.value) }))}
-              />
-            </Field>
           </div>
-          <div className="space-y-2">
-            <div className="grid grid-cols-[4rem_1fr_1fr] gap-2 text-xs text-muted-foreground">
-              <span />
-              <span>{t('plugin_ticket.sla.first')}</span>
-              <span>{t('plugin_ticket.sla.resolution')}</span>
+
+          {/* 时限矩阵：输入框可直接打字，datalist 给常用值下拉，不用对着 spinner 一下下点 */}
+          <div className="space-y-3 border-t pt-4">
+            <p className="text-xs font-medium text-foreground">{t('plugin_ticket.sla.sectionHours')}</p>
+            <div className="space-y-2">
+              <div className="grid grid-cols-[5rem_1fr_1fr] gap-2 text-xs text-muted-foreground">
+                <span />
+                <span>{t('plugin_ticket.sla.first')}</span>
+                <span>{t('plugin_ticket.sla.resolution')}</span>
+              </div>
+              {PRIORITIES.map((p) => {
+                const target = slaForm.targets[p] ?? defaultSLA.targets[p]
+                return (
+                  <div key={p} className="grid grid-cols-[5rem_1fr_1fr] items-center gap-2">
+                    <span className="text-sm">{t(`plugin_ticket.priority.${p}`)}</span>
+                    <Input
+                      type="number"
+                      min={0.5}
+                      step={0.5}
+                      list="sla-hours"
+                      value={minutesToHours(target.firstMinutes)}
+                      aria-label={`${t(`plugin_ticket.priority.${p}`)} ${t('plugin_ticket.sla.first')}`}
+                      onChange={(e) => setTarget(p, 'firstMinutes', hoursToMinutes(e.target.value))}
+                    />
+                    <Input
+                      type="number"
+                      min={0.5}
+                      step={0.5}
+                      list="sla-hours"
+                      value={minutesToHours(target.resolutionMinutes)}
+                      aria-label={`${t(`plugin_ticket.priority.${p}`)} ${t('plugin_ticket.sla.resolution')}`}
+                      onChange={(e) => setTarget(p, 'resolutionMinutes', hoursToMinutes(e.target.value))}
+                    />
+                  </div>
+                )
+              })}
             </div>
-            {PRIORITIES.map((p) => {
-              const target = slaForm.targets[p] ?? defaultSLA.targets[p]
-              return (
-                <div key={p} className="grid grid-cols-[4rem_1fr_1fr] items-center gap-2">
-                  <span className="text-sm">{t(`plugin_ticket.priority.${p}`)}</span>
-                  <Input
-                    type="number"
-                    min={0.5}
-                    step={0.5}
-                    value={minutesToHours(target.firstMinutes)}
-                    aria-label={`${t(`plugin_ticket.priority.${p}`)} ${t('plugin_ticket.sla.first')}`}
-                    onChange={(e) => setTarget(p, 'firstMinutes', hoursToMinutes(e.target.value))}
-                  />
-                  <Input
-                    type="number"
-                    min={0.5}
-                    step={0.5}
-                    value={minutesToHours(target.resolutionMinutes)}
-                    aria-label={`${t(`plugin_ticket.priority.${p}`)} ${t('plugin_ticket.sla.resolution')}`}
-                    onChange={(e) => setTarget(p, 'resolutionMinutes', hoursToMinutes(e.target.value))}
-                  />
-                </div>
-              )
-            })}
           </div>
           <p className="text-xs text-muted-foreground">{t('plugin_ticket.sla.hint')}</p>
+          {/* datalist 挂在弹窗根部：上下班时刻与各时限共用两组常用值 */}
+          <datalist id="sla-clock">
+            {[0, 8, 8.5, 9, 12, 17, 18, 24].map((h) => (
+              <option key={h} value={h} />
+            ))}
+          </datalist>
+          <datalist id="sla-hours">
+            {[0.5, 1, 2, 4, 8, 12, 24, 48, 72, 168].map((h) => (
+              <option key={h} value={h} />
+            ))}
+          </datalist>
         </div>
       </ResponsiveDialog>
 
@@ -2130,7 +2273,11 @@ export default function TicketPage() {
                 hint={t('plugin_ticket.rules.matchTagsHint')}
               />
             </div>
-            <p className="pt-1 text-xs font-medium text-muted-foreground">{t('plugin_ticket.rules.action')}</p>
+            {/* 组必填：四个动作至少要配一个，提交前 hasAction 把关 */}
+            <p className="flex items-center gap-1 pt-1 text-xs font-medium text-muted-foreground">
+              {t('plugin_ticket.rules.action')}
+              <RequiredMark />
+            </p>
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label={t('plugin_ticket.rules.setPriority')}>
                 <SimpleSelect
@@ -2420,16 +2567,22 @@ function TicketListItem({
         <button type="button" onClick={onSelect} className="flex min-w-0 flex-1 flex-col gap-1 text-start text-sm">
           <div className="flex w-full items-center gap-2">
             <span className="min-w-0 flex-1 truncate font-medium text-foreground">{ticket.title}</span>
-            {ticket.overdue ? <Badge variant="destructive">{t('plugin_ticket.overdue')}</Badge> : null}
-            <Badge variant={statusVariant(ticket.status)}>{t(`plugin_ticket.status.${ticket.status}`)}</Badge>
+            {/* 超时是红字不是药丸：三枚药丸挤在同一列会把右边缘啃得参差不齐 */}
+            {ticket.overdue ? <span className="shrink-0 text-xs font-medium text-destructive">{t('plugin_ticket.overdue')}</span> : null}
+            <Badge variant={statusVariant(ticket.status)} className="shrink-0">
+              {t(`plugin_ticket.status.${ticket.status}`)}
+            </Badge>
           </div>
+          {/* 一行一个右对齐锚点：状态在上、时间在下，工单号再长也只省略自己 */}
           <div className="flex w-full items-center gap-2 text-xs text-muted-foreground">
-            <Badge variant={priorityVariant(ticket.priority)}>{t(`plugin_ticket.priority.${ticket.priority}`)}</Badge>
-            <span className="min-w-0 flex-1 truncate">
+            <Badge variant={priorityVariant(ticket.priority)} className="shrink-0">
+              {t(`plugin_ticket.priority.${ticket.priority}`)}
+            </Badge>
+            <span className="min-w-0 flex-1 truncate font-mono">
               {ticket.ticketNo}
               {ticket.bizNo ? ` · ${ticket.bizNo}` : ''}
             </span>
-            <span>{formatTime(ticket.lastReplyAt ?? ticket.createdAt, i18n.language)}</span>
+            <span className="shrink-0 tabular-nums">{formatTime(ticket.lastReplyAt ?? ticket.createdAt, i18n.language)}</span>
           </div>
         </button>
       </div>
@@ -2496,7 +2649,7 @@ function TicketThread({
   onManageCanned: () => void
   attachments: TicketAttachment[]
   activities: TicketActivity[]
-  quota?: { maxCount: number; maxBytes: number }
+  quota?: { maxCount: number; maxBytes: number; accept: string }
   onUpload: (file: File, internal: boolean) => Promise<void>
   onDeleteAttachment: (att: TicketAttachment) => Promise<void>
   uploading: boolean
@@ -2507,10 +2660,12 @@ function TicketThread({
   onOpenTicket: (ticketNo: string) => void
 }) {
   const { t, i18n } = useTranslation()
+  const isMobile = useIsMobile()
   const [draft, setDraft] = useState('')
   const [internal, setInternal] = useState(false)
-  const bottomRef = useRef<HTMLDivElement | null>(null)
+  const scrollerRef = useRef<HTMLDivElement | null>(null)
   const fileRef = useRef<HTMLInputElement | null>(null)
+  const draftRef = useRef<HTMLTextAreaElement | null>(null)
 
   // 动态与回复按时间合并成一条流：坐席要看的是「这一单发生了什么」，不是两张表顺序拼接。
   const stream: ThreadItem[] = [
@@ -2518,8 +2673,11 @@ function TicketThread({
     ...activities.map((act) => ({ kind: 'act' as const, at: act.createdAt, act })),
   ].sort((a, b) => a.at.localeCompare(b.at))
 
+  // 滚到底只看这一段对话：scrollIntoView 会连带动外层滚动容器，
+  // 切工单时整页跟着上下跳，看着就是「抖」。
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ block: 'end' })
+    const el = scrollerRef.current
+    if (el) el.scrollTop = el.scrollHeight
   }, [stream.length, ticket?.ticketNo])
 
   // 切工单时清空未发送的草稿，避免把上一张的回复发到下一张
@@ -2531,7 +2689,10 @@ function TicketThread({
   if (!ticket) {
     return (
       <Card className="flex items-center justify-center text-sm text-muted-foreground">
-        {t('plugin_ticket.pickTicket')}
+        {/* 移动端队列在上方，「左侧」不成立；用 hook 切文案而不是 CSS（文本没法响应式） */}
+        {loading
+          ? t('plugin_ticket.loading')
+          : t(isMobile ? 'plugin_ticket.pickTicketMobile' : 'plugin_ticket.pickTicket')}
       </Card>
     )
   }
@@ -2604,15 +2765,90 @@ function TicketThread({
     }
   }
 
+  // 模板插到光标处，已输入的内容保留：整体覆盖会让坐席刚打的字当场消失。
   const insertCanned = (id: string) => {
     const row = canned.find((c) => c.id === id)
-    if (row) setDraft(row.content)
+    if (!row) return
+    // 从菜单选条目时焦点已经离开输入框，selectionStart 会退回 0；
+    // 那种情况按「追加到末尾」处理，正在打字时才是插到光标处。
+    const focused = document.activeElement === draftRef.current
+    const at = focused ? (draftRef.current?.selectionStart ?? draft.length) : draft.length
+    const before = draft.slice(0, at)
+    // 前面是实字时补一个空格，避免「好的已收到」这种粘连
+    const gap = before && !/\s$/.test(before) ? ' ' : ''
+    const next = before + gap + row.content + draft.slice(at)
+    setDraft(next)
+    const caret = before.length + gap.length + row.content.length
+    requestAnimationFrame(() => {
+      draftRef.current?.focus()
+      draftRef.current?.setSelectionRange(caret, caret)
+    })
   }
+
+  const uploadFiles = (files: File[]) => {
+    files.forEach((file) => void onUpload(file, internal))
+  }
+
+  // 截图贴进回复框：坐席收到「你看这个界面」最常见动作是 Ctrl+V，不该逼人先存盘再点回形针。
+  const onPasteFiles = (e: ClipboardEvent<HTMLTextAreaElement>) => {
+    const imgs = Array.from(e.clipboardData.files).filter((f) => f.type.startsWith('image/'))
+    if (!imgs.length) return
+    e.preventDefault()
+    uploadFiles(imgs)
+  }
+
+  const onDropFiles = (e: DragEvent<HTMLTextAreaElement>) => {
+    const files = Array.from(e.dataTransfer.files)
+    if (!files.length) return
+    e.preventDefault()
+    uploadFiles(files)
+  }
+
+  // 单行 Input 时回车靠表单原生提交；换成多行框后要自己接管，且必须放过输入法选词的回车。
+  const onDraftKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+      e.preventDefault()
+      submit()
+    }
+  }
+
+  const st = ticket.status
+  const closeConfirmMsg = t('plugin_ticket.closeConfirm', { no: ticket.ticketNo })
+  // 状态动作按当前状态给：主按钮只摆「下一步」，其余收进「更多」。
+  // 五个同权重按钮铺开是头部最乱的来源，而坐席当下要点的从来只有一个。
+  const statusMoves = (
+    [
+      st === 'open' && { to: 'processing', label: t('plugin_ticket.actions.processing') },
+      st === 'pending' && { to: 'processing', label: t('plugin_ticket.actions.resume') },
+      st === 'resolved' && {
+        to: 'processing',
+        label: t('plugin_ticket.actions.reopen'),
+        icon: <RotateCcw aria-hidden="true" />,
+      },
+      st === 'processing' && { to: 'pending', label: t('plugin_ticket.actions.pending') },
+      st !== 'resolved' && st !== 'closed' && {
+        to: 'resolved',
+        label: t('plugin_ticket.resolve'),
+        icon: <CircleCheck aria-hidden="true" />,
+      },
+      st !== 'closed' && {
+        to: 'closed',
+        label: t('plugin_ticket.close'),
+        icon: <XCircle aria-hidden="true" />,
+        destructive: true,
+        confirm: closeConfirmMsg,
+      },
+    ].filter(Boolean) as StatusMove[]
+  )
+  const primaryMove = statusMoves.find((m) => m.to === NEXT_STATUS[st])
+  const otherMoves = statusMoves.filter((m) => m !== primaryMove)
 
   return (
     <Card className="flex min-h-0 flex-col">
-      <div className="space-y-2 border-b px-4 py-3">
-        <div className="min-w-0">
+      {/* 标题区在左、动作区在右：动作跟着这张单走，不该在标题下面再铺一行工具条。
+          窄屏给标题整行，否则三个按钮能把标题挤成「工单…」 */}
+      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 border-b px-4 py-3">
+        <div className="min-w-0 flex-1 basis-full space-y-1.5 md:basis-0">
           <div className="flex flex-wrap items-center gap-2">
             <span className="truncate text-sm font-medium text-foreground" title={ticket.title}>
               {ticket.title}
@@ -2630,7 +2866,7 @@ function TicketThread({
             ) : null}
           </div>
           {/* 工单号是客户自助查询和关单确认要念的东西，不能跟着标题一起被省略号吃掉 */}
-          <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
             <span className="inline-flex items-center gap-1">
               <span className="font-mono">{ticket.ticketNo}</span>
               <Button
@@ -2655,7 +2891,7 @@ function TicketThread({
             </span>
           </div>
           {fields.length > 0 ? (
-            <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+            <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
               {fields.map((f) => (
                 <span key={f.code}>
                   {t('plugin_ticket.fields.valuePair', {
@@ -2673,117 +2909,83 @@ function TicketThread({
             </div>
           ) : null}
         </div>
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
           <Can perm="ticket:edit">
-          {ticket.assigneeId === '0' || ticket.assigneeId === '' ? (
-            <Button variant="outline" size="sm" onClick={() => void onClaim(ticket.ticketNo)}>
-              <UserRoundCheck aria-hidden="true" />
-              {t('plugin_ticket.assign')}
-            </Button>
-          ) : (
-            <Button variant="outline" size="sm" onClick={() => onOpenAssign(ticket)}>
-              <UserRoundCheck aria-hidden="true" />
-              {t('plugin_ticket.actions.transfer')}
-            </Button>
-          )}
-          {/* 管理类动作收进「更多」：十个同权重按钮铺开会把头部压成一坨，窄屏还会把文字挤没 */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
-                <Ellipsis aria-hidden="true" />
-                {t('plugin_ticket.actions.more')}
+            {ticket.assigneeId === '0' || ticket.assigneeId === '' ? (
+              <Button variant="outline" size="sm" onClick={() => void onClaim(ticket.ticketNo)}>
+                <UserRoundCheck aria-hidden="true" />
+                {t('plugin_ticket.assign')}
               </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="min-w-44">
-              <DropdownMenuItem onClick={() => onOpenMove(ticket)}>
-                <Users aria-hidden="true" />
-                {t('plugin_ticket.groups.move')}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onEditTags(ticket)}>
-                <Tag aria-hidden="true" />
-                {t('plugin_ticket.tags.edit')}
-              </DropdownMenuItem>
-              {fields.length > 0 ? (
-                <DropdownMenuItem onClick={() => onEditValues(ticket)}>
-                  <ListChecks aria-hidden="true" />
-                  {t('plugin_ticket.fields.editValues')}
-                </DropdownMenuItem>
-              ) : null}
-              {/* 已被合并过的单不再摆「合并」入口：那点下去只会拿到后端的拒绝 */}
-              {!links?.merge.mergedInto ? (
-                <DropdownMenuItem onClick={onOpenMerge}>
-                  <GitMerge aria-hidden="true" />
-                  {t('plugin_ticket.merge.action')}
-                </DropdownMenuItem>
-              ) : null}
-              <DropdownMenuItem onClick={onOpenLink}>
-                <Link2 aria-hidden="true" />
-                {t('plugin_ticket.link.action')}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          {ticket.status === 'open' ? (
-            <Button variant="outline" size="sm" onClick={() => void onSetStatus(ticket.ticketNo, 'processing')}>
-              {t('plugin_ticket.actions.processing')}
-            </Button>
-          ) : null}
-          {ticket.status === 'processing' ? (
-            <Button variant="outline" size="sm" onClick={() => void onSetStatus(ticket.ticketNo, 'pending')}>
-              {t('plugin_ticket.actions.pending')}
-            </Button>
-          ) : null}
-          {ticket.status === 'pending' ? (
-            <Button variant="outline" size="sm" onClick={() => void onSetStatus(ticket.ticketNo, 'processing')}>
-              {t('plugin_ticket.actions.resume')}
-            </Button>
-          ) : null}
-          {ticket.status === 'resolved' ? (
-            <Button variant="outline" size="sm" onClick={() => void onSetStatus(ticket.ticketNo, 'processing')}>
-              <RotateCcw aria-hidden="true" />
-              {t('plugin_ticket.actions.reopen')}
-            </Button>
-          ) : null}
-          {ticket.status !== 'closed' && ticket.status !== 'resolved' ? (
-            <>
-              <Button variant="outline" size="sm" onClick={() => void onSetStatus(ticket.ticketNo, 'resolved')}>
-                <CircleCheck aria-hidden="true" />
-                {t('plugin_ticket.resolve')}
+            ) : (
+              <Button variant="outline" size="sm" onClick={() => onOpenAssign(ticket)}>
+                <UserRoundCheck aria-hidden="true" />
+                {t('plugin_ticket.actions.transfer')}
               </Button>
+            )}
+            {primaryMove ? (
               <Button
-                variant="outline"
+                variant={primaryMove.destructive ? 'outline' : 'default'}
                 size="sm"
-                className="text-destructive"
-                onClick={() =>
-                  void onSetStatus(
-                    ticket.ticketNo,
-                    'closed',
-                    t('plugin_ticket.closeConfirm', { no: ticket.ticketNo }),
-                  )
-                }
+                className={cn(primaryMove.destructive && 'text-destructive')}
+                onClick={() => void onSetStatus(ticket.ticketNo, primaryMove.to, primaryMove.confirm)}
               >
-                <XCircle aria-hidden="true" />
-                {t('plugin_ticket.close')}
+                {primaryMove.icon}
+                {primaryMove.label}
               </Button>
-            </>
-          ) : null}
-          {ticket.status === 'resolved' ? (
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-destructive"
-              onClick={() =>
-                void onSetStatus(ticket.ticketNo, 'closed', t('plugin_ticket.closeConfirm', { no: ticket.ticketNo }))
-              }
-            >
-              <XCircle aria-hidden="true" />
-              {t('plugin_ticket.close')}
-            </Button>
-          ) : null}
-        </Can>
+            ) : null}
+            {/* 管理类动作和其余状态流转一起收进「更多」：同权重按钮铺开会把头部压成一坨，窄屏还会把文字挤没 */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Ellipsis aria-hidden="true" />
+                  {t('common.more')}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-44">
+                {otherMoves.map((m) => (
+                  <DropdownMenuItem
+                    key={`${m.to}-${m.label}`}
+                    onClick={() => void onSetStatus(ticket.ticketNo, m.to, m.confirm)}
+                  >
+                    {m.icon}
+                    <span className={cn(m.destructive && 'text-destructive')}>{m.label}</span>
+                  </DropdownMenuItem>
+                ))}
+                {otherMoves.length > 0 ? <DropdownMenuSeparator /> : null}
+                <DropdownMenuItem onClick={() => onOpenMove(ticket)}>
+                  <Users aria-hidden="true" />
+                  {t('plugin_ticket.groups.move')}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onEditTags(ticket)}>
+                  <Tag aria-hidden="true" />
+                  {t('plugin_ticket.tags.edit')}
+                </DropdownMenuItem>
+                {fields.length > 0 ? (
+                  <DropdownMenuItem onClick={() => onEditValues(ticket)}>
+                    <ListChecks aria-hidden="true" />
+                    {t('plugin_ticket.fields.editValues')}
+                  </DropdownMenuItem>
+                ) : null}
+                {/* 已被合并过的单不再摆「合并」入口：那点下去只会拿到后端的拒绝 */}
+                {!links?.merge.mergedInto ? (
+                  <DropdownMenuItem onClick={onOpenMerge}>
+                    <GitMerge aria-hidden="true" />
+                    {t('plugin_ticket.merge.action')}
+                  </DropdownMenuItem>
+                ) : null}
+                <DropdownMenuItem onClick={onOpenLink}>
+                  <Link2 aria-hidden="true" />
+                  {t('plugin_ticket.link.action')}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </Can>
         </div>
       </div>
 
       <LinkedTicketsPanel data={links} onOpenTicket={onOpenTicket} onUnlink={onUnlink} />
+
+      <ReporterHistoryPanel ticketNo={ticket.ticketNo} onOpenTicket={onOpenTicket} />
 
       {attachments.length ? (
         <div className="flex flex-wrap items-center gap-2 border-b px-4 py-2">
@@ -2832,7 +3034,7 @@ function TicketThread({
         </div>
       ) : null}
 
-      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-4">
+      <div ref={scrollerRef} className="min-h-32 flex-1 space-y-2 overflow-y-auto p-4">
         {loading && replies.length === 0 ? (
           <div className="text-center text-sm text-muted-foreground">{t('plugin_ticket.loading')}</div>
         ) : null}
@@ -2885,7 +3087,6 @@ function TicketThread({
           </div>
           )
         })}
-        <div ref={bottomRef} />
       </div>
 
       {ticket.status !== 'closed' ? (
@@ -2907,70 +3108,76 @@ function TicketThread({
                 {t('plugin_ticket.internal.label')}
               </label>
               <span className="hidden text-[11px] text-muted-foreground sm:inline">{t('plugin_ticket.internal.hint')}</span>
+              {/* 附件与快捷回复并到这一行右侧；「管理快捷回复」只留菜单里那一个入口，
+                  同一个动作摆两枚按钮（齿轮 + 菜单项）是多余的噪音 */}
               <div className="ms-auto flex items-center gap-1">
+                <input
+                  ref={fileRef}
+                  type="file"
+                  className="hidden"
+                  accept={quota?.accept}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) void onUpload(file, internal)
+                    e.target.value = ''
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label={t('plugin_ticket.attachments.add')}
+                  disabled={uploading}
+                  onClick={() => fileRef.current?.click()}
+                >
+                  <Paperclip aria-hidden="true" />
+                </Button>
+                {/* 空列表不再禁用按钮：一个灰掉的闪电只会被读成「坏了」，而真正的门槛是还没有话术 */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button type="button" variant="outline" size="sm" disabled={!canned.length}>
+                    <Button type="button" variant="outline" size="sm">
                       <Zap aria-hidden="true" />
                       {t('plugin_ticket.canned.label')}
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="max-h-72 overflow-y-auto">
-                    {canned.length ? (
-                      canned.map((row) => (
-                        <DropdownMenuItem key={row.id} onSelect={() => insertCanned(row.id)}>
-                          {row.title}
-                        </DropdownMenuItem>
-                      ))
-                    ) : (
+                    {canned.map((row) => (
+                      <DropdownMenuItem key={row.id} onSelect={() => insertCanned(row.id)}>
+                        {row.title}
+                      </DropdownMenuItem>
+                    ))}
+                    {!canned.length ? (
                       <DropdownMenuItem disabled>{t('plugin_ticket.canned.empty')}</DropdownMenuItem>
-                    )}
+                    ) : null}
+                    <Can perm="ticket:edit">
+                      <DropdownMenuItem onSelect={() => onManageCanned()}>
+                        <Settings2 aria-hidden="true" />
+                        {t('plugin_ticket.canned.manage')}
+                      </DropdownMenuItem>
+                    </Can>
                   </DropdownMenuContent>
                 </DropdownMenu>
-                <Can perm="ticket:edit">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    aria-label={t('plugin_ticket.canned.manage')}
-                    onClick={onManageCanned}
-                  >
-                    <Settings2 aria-hidden="true" />
-                  </Button>
-                </Can>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <input
-                ref={fileRef}
-                type="file"
-                className="hidden"
-                accept="image/png,image/jpeg,image/gif,image/webp,application/pdf,text/plain,.zip,.docx,.xlsx,.pptx"
-                onChange={(e) => {
-                  const file = e.target.files?.[0]
-                  if (file) void onUpload(file, internal)
-                  e.target.value = ''
-                }}
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                aria-label={t('plugin_ticket.attachments.add')}
-                disabled={uploading}
-                onClick={() => fileRef.current?.click()}
-              >
-                <Paperclip aria-hidden="true" />
-              </Button>
-              <Input
+            <div className="flex items-end gap-2">
+              <Textarea
+                ref={draftRef}
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={onDraftKeyDown}
+                onPaste={onPasteFiles}
+                onDragOver={(e) => {
+                  if (e.dataTransfer.types.includes('Files')) e.preventDefault()
+                }}
+                onDrop={onDropFiles}
                 placeholder={
                   internal
                     ? t('plugin_ticket.internal.label')
                     : t('plugin_ticket.replyPlaceholder')
                 }
                 aria-label={t('plugin_ticket.replyPlaceholder')}
+                rows={2}
+                className="min-h-0 min-w-0 flex-1 resize-none"
               />
               <Button type="submit" variant={internal ? 'outline' : 'default'} disabled={sending || !draft.trim()}>
                 {internal ? <StickyNote aria-hidden="true" /> : <Send aria-hidden="true" />}
@@ -3003,6 +3210,7 @@ function LinkedTicketsPanel({
   onUnlink: (otherNo: string) => void
 }) {
   const { t } = useTranslation()
+  const [open, setOpen] = useState(false)
   const merge = data?.merge
   const sections = [
     { key: 'link', label: t('plugin_ticket.link.groupLink'), rows: data?.links ?? [] },
@@ -3010,14 +3218,25 @@ function LinkedTicketsPanel({
     { key: 'merged_from', label: t('plugin_ticket.link.groupMergedFrom'), rows: merge?.mergedFrom ?? [] },
   ].filter((g) => g.rows.length > 0)
   if (!data || sections.length === 0) return null
+  const total = sections.reduce((n, s) => n + s.rows.length, 0)
   return (
-    <div className="space-y-1.5 border-b bg-muted/40 px-4 py-2">
-      <div className="flex flex-wrap items-center gap-2 text-xs">
+    <div className="border-b bg-muted/40 px-4 py-2">
+      {/* 折叠面板：关联是次要上下文，默认收起把会话让出来，和报告人历史一个形态 */}
+      <button
+        type="button"
+        className="flex flex-wrap items-center gap-2 text-xs"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <ChevronRight aria-hidden="true" className={cn('h-3 w-3 shrink-0 transition-transform', open && 'rotate-90')} />
         <span className="font-medium text-foreground">{t('plugin_ticket.link.title')}</span>
+        <Badge variant="secondary">{total}</Badge>
         {data.merge.mergedCount > 0 ? (
           <Badge variant="secondary">{t('plugin_ticket.link.mergedCount', { count: data.merge.mergedCount })}</Badge>
         ) : null}
-      </div>
+      </button>
+      {open ? (
+        <div className="mt-1.5 space-y-1.5">
       {sections.map((section) => (
         <div key={section.key} className="min-w-0">
           <p className="text-[11px] text-muted-foreground">{section.label}</p>
@@ -3059,7 +3278,126 @@ function LinkedTicketsPanel({
           </div>
         </div>
       ))}
+        </div>
+      ) : null}
     </div>
+  )
+}
+
+/**
+ * 报告人历史工单（requester history）：该报告人最近提过的其他单。
+ * 折叠面板：没历史就不渲染，避免给每张单都添一行无意义的「没有历史」。
+ */
+function ReporterHistoryPanel({ ticketNo, onOpenTicket }: { ticketNo: string; onOpenTicket: (no: string) => void }) {
+  const { t, i18n } = useTranslation()
+  const { data, isLoading } = useReporterHistory(ticketNo)
+  const [open, setOpen] = useState(false)
+  const rows = data ?? []
+  if (isLoading || rows.length === 0) return null
+  return (
+    <div className="border-b px-4 py-2">
+      <button
+        type="button"
+        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <ChevronRight aria-hidden="true" className={cn('h-3 w-3 transition-transform', open && 'rotate-90')} />
+        {t('plugin_ticket.history.title')}
+        <Badge variant="secondary" className="ms-1">
+          {rows.length}
+        </Badge>
+      </button>
+      {open ? (
+        <ul className="mt-1.5 space-y-1">
+          {rows.map((r) => (
+            <li key={r.ticketNo}>
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 text-xs text-muted-foreground hover:text-foreground"
+                onClick={() => onOpenTicket(r.ticketNo)}
+              >
+                <span className="shrink-0 font-mono">{r.ticketNo}</span>
+                <Badge variant={statusVariant(r.status)}>{t(`plugin_ticket.status.${r.status}`)}</Badge>
+                <span className="truncate">{r.title}</span>
+                <span className="ms-auto shrink-0">{formatTime(r.createdAt, i18n.language)}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  )
+}
+
+/**
+ * 通知设置：客户邮件开关（坐席公开回复 / 解决 / 关闭时通知报告人）与客服门户地址。
+ * 门户地址是邮件里「查看工单」链接的前缀；合法性（http/https、拒绝内网地址）由后端把关。
+ */
+function TicketSettingsDialog({ onOpenChange }: { onOpenChange: (v: boolean) => void }) {
+  const { t } = useTranslation()
+  const { data, isLoading } = useTicketSettings()
+  const save = useSaveTicketSettings()
+  const [emailNotify, setEmailNotify] = useState(false)
+  const [portal, setPortal] = useState('')
+  const [hydrated, setHydrated] = useState(false)
+
+  // 设置查到货再回填一次：弹窗开着时后台轮询回来的新值不覆盖正在编辑的表单。
+  useEffect(() => {
+    if (data && !hydrated) {
+      setEmailNotify(data.emailNotifyEnabled)
+      setPortal(data.portalUrl ?? '')
+      setHydrated(true)
+    }
+  }, [data, hydrated])
+
+  const submit = async () => {
+    try {
+      await save.mutateAsync({ emailNotifyEnabled: emailNotify, portalUrl: portal.trim() })
+      toast.success(t('common.operateSuccess'))
+      onOpenChange(false)
+    } catch (e) {
+      // 门户地址不合法等由后端按请求语言给整句，前端不重造措辞。
+      toast.error(e instanceof Error && e.message ? e.message : t('common.operateFailed'))
+    }
+  }
+
+  return (
+    <ResponsiveDialog
+      open
+      onOpenChange={onOpenChange}
+      title={t('plugin_ticket.settings.title')}
+      description={t('plugin_ticket.settings.description')}
+      size="md"
+      footer={
+        <>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            {t('common.cancel')}
+          </Button>
+          <Button disabled={save.isPending || isLoading} onClick={() => void submit()}>
+            {t('common.save')}
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-3">
+        <label className="flex items-center justify-between gap-2">
+          <span className="text-sm text-foreground">{t('plugin_ticket.settings.emailNotify')}</span>
+          <Switch checked={emailNotify} onCheckedChange={setEmailNotify} aria-label={t('plugin_ticket.settings.emailNotify')} />
+        </label>
+        <p className="text-xs text-muted-foreground">{t('plugin_ticket.settings.emailNotifyHint')}</p>
+        <label className="block space-y-1">
+          <span className="text-xs font-medium text-foreground">{t('plugin_ticket.settings.portalUrl')}</span>
+          <Input
+            value={portal}
+            placeholder="https://support.example.com"
+            onChange={(e) => setPortal(e.target.value)}
+            maxLength={255}
+          />
+          <span className="block text-xs text-muted-foreground">{t('plugin_ticket.settings.portalUrlHint')}</span>
+        </label>
+      </div>
+    </ResponsiveDialog>
   )
 }
 

@@ -38,8 +38,9 @@ func (z zapLog) Warn(msg string, kv ...any)  { z.l.Sugar().Warnw(msg, kv...) }
 func (z zapLog) Error(msg string, kv ...any) { z.l.Sugar().Errorw(msg, kv...) }
 
 type module struct {
-	once sync.Once
-	svc  *Service
+	once    sync.Once
+	wsGuard sync.Once
+	svc     *Service
 }
 
 func (m *module) service(d *core.Deps) *Service {
@@ -50,12 +51,14 @@ func (m *module) service(d *core.Deps) *Service {
 		}
 		m.svc = NewService(d.DB, zapLog{l}).WithTimezone(d.Config.App.Timezone)
 		// 站内信：转派与访客回复提醒负责人；未注入时业务照常。
+		// 客户邮件共用同一个 Notify 入口（SendMail 走模板邮件渠道），开关在插件设置里。
 		if d.Notify != nil {
 			lang := ""
 			if d.Config != nil {
 				lang = d.Config.DefaultLanguage()
 			}
 			m.svc.WithNotify(d.Notify, lang)
+			m.svc.WithMailer(d.Notify)
 		}
 		// 附件：沿用框架 storage（local/S3），目录与其他上传隔离。
 		if d.Config != nil {
@@ -65,6 +68,8 @@ func (m *module) service(d *core.Deps) *Service {
 				m.svc.SetStorage(st)
 			}
 		}
+		// 附件配额：config.yaml 的 ticket 段注入一次（<=0 保持出厂默认），让份数与总字节能按部署调整。
+		applyAttachmentQuota(d.Config)
 		SetDefault(m.svc)
 	})
 	return m.svc
@@ -76,6 +81,8 @@ func (*module) Name() string { return "ticket" }
 func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	svc := m.service(d)
 	h := &handler{svc: svc, store: svc.Storage(), log: d.Log}
+	// WS 订阅守卫：ticket: 前缀的准入判定（匿名拒绝 / 工单存在 / ticket:list），见 ws_guard.go。
+	m.wsGuard.Do(func() { registerWSTopicGuard(svc, d.Auth) })
 	h.Register(r, d)
 }
 

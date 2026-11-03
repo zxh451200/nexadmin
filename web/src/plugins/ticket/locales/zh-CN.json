@@ -18,6 +18,7 @@
     "overdue": "已超时",
     "loading": "加载中…",
     "pickTicket": "选择左侧工单查看与处理",
+    "pickTicketMobile": "选择上方工单查看与处理",
     "searchPlaceholder": "工单号 / 标题 / 摘要 / 业务单号",
     "filter": {
       "title": "筛选",
@@ -29,6 +30,15 @@
     "assigneeFilter": "负责人筛选",
     "assigneeUnassigned": "未分配",
     "assigneeMine": "只看我的",
+    "sort": {
+      "label": "排序",
+      "lastReply": "最后回复",
+      "createdAt": "创建时间",
+      "priority": "优先级",
+      "dueAt": "SLA 到期",
+      "asc": "升序",
+      "desc": "降序"
+    },
     "claim": "开始处理",
     "resolve": "标记解决",
     "close": "关闭工单",
@@ -36,10 +46,6 @@
     "replyPlaceholder": "输入回复，回车发送",
     "send": "回复",
     "closedNotice": "工单已关闭；报告人补充回复会自动重开。",
-    "fields": {
-      "status": "状态",
-      "priority": "优先级"
-    },
     "status": {
       "open": "待处理",
       "processing": "处理中",
@@ -92,7 +98,6 @@
       "transfer": "转派",
       "assignToMe": "认领给我",
       "setPriority": "改优先级",
-      "more": "更多",
       "clearSelection": "取消选择"
     },
     "transfer": {
@@ -110,10 +115,25 @@
       "reporterNamePlaceholder": "客户姓名 / 昵称",
       "reporterId": "客户标识",
       "reporterIdPlaceholder": "会员 ID、手机号等（可选）",
+      "reporterEmail": "客户邮箱",
       "bizType": "业务类型",
       "bizNo": "业务单号",
       "required": "请填写标题和描述",
       "submit": "创建"
+    },
+    "config": {
+      "title": "配置"
+    },
+    "settings": {
+      "title": "通知设置",
+      "description": "客户邮件通知与客服门户地址",
+      "emailNotify": "客户邮件通知",
+      "emailNotifyHint": "开启后，坐席公开回复、标记解决、关闭工单时会给报告人邮箱发通知邮件；客户自助建单会收到受理回执。内部备注不会发邮件。",
+      "portalUrl": "客服门户地址",
+      "portalUrlHint": "邮件里「查看工单」链接的前缀，如 https://support.example.com；留空则邮件不带链接。仅支持公网 http/https 地址。"
+    },
+    "history": {
+      "title": "报告人历史工单"
     },
     "internal": {
       "label": "内部备注",
@@ -207,7 +227,13 @@
       "deletePolicyConfirm": "删除策略 {{code}}？绑定它的队列会回落默认策略。",
       "code": "策略编码",
       "codeInvalid": "策略编码只能用小写字母、数字、下划线和连字符，最长 32 位。",
+      "codeHint": "编码创建后不可修改（队列靠它绑定策略）。",
+      "codeDefaultHint": "默认策略没有编码，绑定到未指定策略的队列；要区分队列请点「新建策略」。",
+      "creating": "正在新建：填写编码后保存",
       "label": "显示名称",
+      "sectionBusiness": "营业时间",
+      "sectionHolidays": "节假日",
+      "sectionHours": "时限（小时）",
       "holidays": "节假日",
       "addHoliday": "添加节假日",
       "holidaysHint": "落在这些日期的整天不计时限，即使它是指定的工作日。",
@@ -222,6 +248,8 @@
       "save": "保存策略"
     },
     "fields": {
+      "status": "状态",
+      "priority": "优先级",
       "title": "自定义字段",
       "description": "给工单加上业务上要知道的信息；值存在工单上，加字段不动表结构。",
       "empty": "还没有自定义字段",

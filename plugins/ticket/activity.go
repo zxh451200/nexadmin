@@ -41,7 +41,7 @@ const activityLimit = 200
 
 // TicketActivity 是工单上的一次变更。
 type TicketActivity struct {
-	database.PlatformModel
+	database.TenantModel
 	TicketID  idgen.ID `gorm:"not null;index:idx_plg_ticket_activity_ticket,priority:1" json:"-"`
 	TicketNo  string   `gorm:"size:40;not null;default:''" json:"ticketNo"`
 	ActorType string   `gorm:"size:16;not null" json:"actorType"`
