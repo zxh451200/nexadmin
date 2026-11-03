@@ -32,6 +32,9 @@ const (
 	PermList    = "plugin:list"
 	PermLicense = "plugin:license"
 	PermInstall = "plugin:install"
+	// PermEdit 是「插件管理页的启用/停用开关」。没有复用到 PermLicense：那个码的语义是
+	// 「导入授权文件」（发行侧动作），启停是运营侧动作，两者授予范围不该绑在一起。
+	PermEdit = "plugin:edit"
 )
 
 // marketRunner 是进程级唯一任务执行器：构建任务必须全序列化。
@@ -47,6 +50,7 @@ func menus() []plugin.MenuSpec {
 		{Parent: "/system", Type: "menu", Title: "plugin.menu", Icon: "Puzzle", Path: "/system/plugin",
 			Component: "plugin/PluginPage", Perm: PermList, Sort: 100, KeepAlive: true},
 		{Parent: PermList, Type: "button", Title: "plugin.btn.license", Perm: PermLicense, Sort: 10},
+		{Parent: PermList, Type: "button", Title: "plugin.btn.toggle", Perm: PermEdit, Sort: 15},
 		{Parent: PermList, Type: "button", Title: "plugin.btn.install", Perm: PermInstall, Sort: 20},
 	}
 }
@@ -72,7 +76,58 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 
 	viaApp, dormant := m.Routes()
 	registerLicenseRoutes(r, d.Public, m, viaApp, dormant)
+	registerEnabled(r, m)
 	registerMarket(r, m)
+}
+
+// registerEnabled 挂运行期启停开关：POST /plugins/:id/enabled，body {"enabled":true|false}。
+//
+// 用一条参数路由而不是逐个插件静态注册：启动时被停用（配置 disabled_plugins 或上次点过开关）的
+// 插件在 Routes() 里既不在 viaApp 也不在 dormant，一个静态路由都不会为它预留，那样就再也打不开了。
+// 例外是休眠 pro 插件：它们的 /plugins/<id>/*rest 通配会盖住参数路由（gin 里静态子树优先，
+// 而且静态路径与通配兄弟会直接 panic），所以那部分在 registerLicenseRoutes 的转发端点里内部分派，
+// 与 /license 同一处理。
+func registerEnabled(r *gin.RouterGroup, m *plugin.Manager) {
+	r.POST("/plugins/:id/enabled", requirePlatformUser, core.Perm(PermEdit), toggleEnabled(m, ""))
+}
+
+// enabledInput 的 enabled 用指针：省略字段 ≠ false，不能让一个写坏的 body 把插件停了。
+type enabledInput struct {
+	Enabled *bool `json:"enabled"`
+}
+
+// toggleEnabled 是启停处理函数。id 非空时固定用它（休眠插件的转发端点里没有 :id 参数），
+// 为空时从参数路由的 :id 取。
+func toggleEnabled(m *plugin.Manager, id string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		pluginID := id
+		if pluginID == "" {
+			pluginID = c.Param("id")
+		}
+		var in enabledInput
+		if !response.BindJSON(c, &in) {
+			return
+		}
+		if in.Enabled == nil {
+			response.Fail(c, response.BadRequest("plugin.enabled_required"))
+			return
+		}
+		info, err := m.SetEnabled(pluginID, *in.Enabled)
+		switch {
+		case err == nil:
+			// 回完整 Info：前端据此立刻知道是「已经生效」还是「needRestart，重启前不会恢复」。
+			plugin.LocalizeInfo(c.Request.Context(), &info)
+			response.OK(c, info)
+		case errors.Is(err, plugin.ErrNotFound):
+			response.Fail(c, response.NotFound("plugin.not_found"))
+		case errors.Is(err, plugin.ErrDisabledByConfig):
+			response.Fail(c, response.BadRequest("plugin.disabled_by_config"))
+		case errors.Is(err, plugin.ErrNotManageable):
+			response.Fail(c, response.BadRequest("plugin.not_switchable"))
+		default:
+			response.Fail(c, err)
+		}
+	}
 }
 
 func requirePlatformUser(c *gin.Context) {
@@ -90,6 +145,7 @@ func requirePlatformUser(c *gin.Context) {
 
 func registerLicenseRoutes(r, public *gin.RouterGroup, m *plugin.Manager, viaApp, dormant []string) {
 	licPerm := core.Perm(PermLicense)
+	editPerm := core.Perm(PermEdit)
 	for _, id := range viaApp {
 		r.POST("/plugins/"+id+"/license", requirePlatformUser, licPerm, importLicense(m, id))
 	}
@@ -99,15 +155,27 @@ func registerLicenseRoutes(r, public *gin.RouterGroup, m *plugin.Manager, viaApp
 	for _, id := range dormant {
 		id := id
 		imp := importLicense(m, id)
+		tog := toggleEnabled(m, id)
 		public.Any("/plugins/"+id+"/*rest", func(c *gin.Context) {
-			if c.Request.Method == http.MethodPost && c.Param("rest") == "/license" {
+			// 休眠插件的 /plugins/<id>/*rest 会盖住 /plugins/:id/enabled（通配与静态兄弟不能共存，
+			// 见 registerEnabled），所以启停请求在这里内部分派，与 /license 同一处理。
+			if c.Request.Method == http.MethodPost && (c.Param("rest") == "/license" || c.Param("rest") == "/enabled") {
 				if requirePlatformUser(c); c.IsAborted() {
 					return
 				}
-				if licPerm(c); c.IsAborted() {
+				lic := c.Param("rest") == "/license"
+				perm := licPerm
+				if !lic {
+					perm = editPerm
+				}
+				if perm(c); c.IsAborted() {
 					return
 				}
-				imp(c)
+				if lic {
+					imp(c)
+				} else {
+					tog(c)
+				}
 				return
 			}
 			m.Dispatch(c, id)
@@ -413,6 +481,9 @@ func importLicense(m *plugin.Manager, id string) gin.HandlerFunc {
 			response.Fail(c, response.NotFound("plugin.not_found"))
 		case errors.Is(err, plugin.ErrFree):
 			response.Fail(c, response.BadRequest("plugin.free_no_license"))
+		case errors.Is(err, plugin.ErrDisabledByOperator):
+			// 运行期开关停用的插件：导授权不会让它复活，请先在插件管理页启用。
+			response.Fail(c, response.BadRequest("plugin.disabled_by_operator"))
 		case errors.As(err, &le):
 			response.Fail(c, response.BadRequest(le.Key, le.Args...))
 		default:

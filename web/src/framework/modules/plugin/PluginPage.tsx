@@ -2,16 +2,20 @@ import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, KeyRound, Puzzle, Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
+import { toast } from 'sonner'
 import { EmptyState } from '@/framework/components/EmptyState'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
+import { Can } from '@/framework/auth/Can'
 import { usePermission } from '@/framework/auth/usePermission'
 import { Alert, AlertDescription, AlertTitle } from '@/framework/ui/alert'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/framework/ui/card'
+import { Label } from '@/framework/ui/label'
 import { Skeleton } from '@/framework/ui/skeleton'
+import { Switch } from '@/framework/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/framework/ui/tabs'
-import { daysUntil, isExpiringSoon, usePlugins, type PluginInfo, type PluginStatus } from './api'
+import { daysUntil, isExpiringSoon, usePlugins, useTogglePluginEnabled, type PluginInfo, type PluginStatus } from './api'
 import { PluginFilterBar } from './FilterBar'
 import { LicenseDialog } from './LicenseDialog'
 import MarketTab from './MarketTab'
@@ -28,17 +32,36 @@ const STATUS_VARIANT: Record<PluginStatus, 'success' | 'warning' | 'destructive'
 /** 市场目录未登记（第三方/手工安装）的已安装插件，单独归到「其他」分类。 */
 const OTHER_CATEGORY = '_other'
 
-function PluginCard({ p, canLicense, onLicense }: { p: PluginInfo; canLicense: boolean; onLicense: (p: PluginInfo) => void }) {
+function PluginCard({
+  p,
+  canLicense,
+  onLicense,
+}: {
+  p: PluginInfo
+  canLicense: boolean
+  onLicense: (p: PluginInfo) => void
+}) {
   const { t, i18n } = useTranslation()
+  const toggle = useTogglePluginEnabled()
   const fmt = (iso?: string | null) => (iso ? new Date(iso).toLocaleDateString(i18n.language) : '—')
   const shownName = t(`plugin_${p.id.replaceAll('-', '_')}.title`, { defaultValue: p.name })
   const shownDesc = p.description ? t(`plugin_${p.id.replaceAll('-', '_')}.description`, { defaultValue: p.description }) : ''
   const soon = isExpiringSoon(p)
+  // 开关只管「操作员要不要这个插件」：active（在用）与 disabled（已停用）两种状态之间切换。
+  // 未授权 / 过期 / 吊销 / 无效的插件不给开关——打开它也不会可用，那种情况要处理的是授权，
+  // 给一个点了没反应的开关比不给更容易让人以为已经生效了。
+  const switchable = p.status === 'active' || p.status === 'disabled'
+  const on = p.status !== 'disabled'
   const rows: [string, string][] = [
     [t('pluginMgr.field.customer'), p.customer || '—'],
     [t('pluginMgr.field.expiresAt'), fmt(p.expiresAt)],
     ...(p.serial ? ([[t('pluginMgr.field.serial'), p.serial]] as [string, string][]) : []),
   ]
+  const toggleHint = p.configDisabled
+    ? t('pluginMgr.toggle.configDisabled')
+    : p.needRestart
+      ? t(on ? 'pluginMgr.toggle.needRestartOn' : 'pluginMgr.toggle.needRestartOff')
+      : t('pluginMgr.toggle.hint')
   return (
     <Card className="flex flex-col">
       <CardHeader className="pb-2">
@@ -73,8 +96,42 @@ function PluginCard({ p, canLicense, onLicense }: { p: PluginInfo; canLicense: b
             </div>
           ) : null}
         </dl>
-        {canLicense && p.edition === 'pro' ? (
-          <Button variant="outline" size="sm" className="mt-auto w-full sm:w-auto sm:self-end" onClick={() => onLicense(p)}>
+        {switchable ? (
+          // 按钮=权限点：开关挂在 plugin:edit 上，没有该权限点的人看不到这个开关。
+          <Can perm="plugin:edit">
+            <div className="mt-auto flex flex-col gap-2 border-t border-border pt-3">
+              <div className="flex items-center justify-between gap-3">
+                <Label htmlFor={`plugin-enabled-${p.id}`} className="text-sm">
+                  {t('pluginMgr.toggle.label')}
+                </Label>
+                <Switch
+                  id={`plugin-enabled-${p.id}`}
+                  checked={on}
+                  // 配置停用的插件开关打不开（后端也会拒绝）：置灰并说明该改哪里，而不是给一个必报错的按钮。
+                  disabled={p.configDisabled || toggle.isPending}
+                  onCheckedChange={(next) =>
+                    toggle.mutate(
+                      { id: p.id, enabled: next },
+                      {
+                        onSuccess: (info) => {
+                          toast.success(
+                            info.needRestart
+                              ? t('pluginMgr.toggle.doneNeedRestart', { name: shownName })
+                              : t(next ? 'pluginMgr.toggle.doneOn' : 'pluginMgr.toggle.doneOff', { name: shownName }),
+                          )
+                        },
+                      },
+                    )
+                  }
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">{toggleHint}</p>
+            </div>
+          </Can>
+        ) : null}
+        {canLicense && p.edition === 'pro' && p.status !== 'disabled' ? (
+          // 停用的插件不预留授权导入路由（与配置停用同口径），点了只会 404：先启用再导授权。
+          <Button variant="outline" size="sm" className="w-full sm:w-auto sm:self-end" onClick={() => onLicense(p)}>
             <KeyRound aria-hidden="true" />
             {t('pluginMgr.license.action')}
           </Button>

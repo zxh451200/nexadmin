@@ -76,6 +76,20 @@ defineMock([
     },
   },
 
+  {
+    method: 'POST',
+    url: '/plugins/:id/enabled',
+    // mock：只切 disabled 这一个开关，不模拟授权闸门，也不模拟 needRestart（真后端带 worker 的插件需要重启）
+    handler: ({ params, body }): PluginInfo => {
+      const p = plugins.find((x) => x.id === params.id) ?? mockError(404, 'Not found')
+      const enabled = body?.enabled === true
+      if (p.status !== 'active' && p.status !== 'disabled') mockError(400, 'plugin is not switchable')
+      p.status = enabled ? 'active' : 'disabled'
+      p.reason = enabled ? '' : '已在插件管理页停用'
+      return { ...p, bundled: !mockLedger.has(p.id) }
+    },
+  },
+
   // ---- 插件市场（mock：目录静态、任务每次轮询推进一段日志） ----
   {
     method: 'GET',

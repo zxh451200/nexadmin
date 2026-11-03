@@ -86,6 +86,9 @@ type Info struct {
 	NeedRestart bool   `json:"needRestart"`
 	PendingHost bool   `json:"pendingHost"`
 	Stopping    bool   `json:"stopping"`
+	// ConfigDisabled 为真表示这个插件是被配置 disabled_plugins 停用的：运行期启停开关打不开它，
+	// 前端据此把开关置灰并说明「要改配置后重启」，而不是给一个点了必定报错的按钮。
+	ConfigDisabled bool `json:"configDisabled"`
 }
 
 // ImportResult 是导入授权的结果。
@@ -130,6 +133,11 @@ type Manager struct {
 	stop    context.CancelFunc
 	host    string // 第一次请求观察到的域名（配置里没有域名时使用）
 
+	// swMu 串行化 SetEnabled（操作员切换）。锁序恒为 swMu -> m.mu：
+	// 持有 swMu 时可以放开/重新获取 m.mu，持有 m.mu 时绝不取 swMu。
+	// 请求路径（gate/admit）只取 m.mu，所以落盘期间不会被开关挡住。
+	swMu sync.Mutex
+
 	// 吊销清单（见 revoke.go）：revBy 是当前已验签采信的清单，revSeq 是它的版本，revFP 是清单文件上次处理时的指纹。
 	revBy        map[string]RevokedEntry
 	revSeq       int64
@@ -138,6 +146,10 @@ type Manager struct {
 	revPending   string           // 正在锁外验签的清单指纹（"" = 无），用于让并发 admit 等待生效结果
 	revPendingCh chan struct{}    // revPending 完成（成功或忽略）后关闭，唤醒等待者
 	pendingWarns []pendingWarn    // Attach 之前产生的告警，Attach 时补发
+
+	// opDisabled 是运行期「操作员停用」叠加层（见 disabled.go）：与配置 disabled_plugins 取并集，
+	// 持久化在节点本地的 data/licenses/disabled.json。读写在 m.mu 内完成，落盘在锁外。
+	opDisabled map[string]bool
 
 	closeOnce sync.Once // 把插件 ctx 取消登记进框架关闭钩子，只做一次
 }
@@ -214,7 +226,14 @@ func newManager(plugins []Plugin, o Options) *Manager {
 		o.DisabledPlugins = LoadDisabledPlugins(o.Root)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	m := &Manager{opts: o, entries: map[string]*entry{}, ctx: ctx, stop: sync.OnceFunc(cancel), revSrc: &osRevocationSource{path: RevocationsPath(o.Root)}}
+	m := &Manager{opts: o, entries: map[string]*entry{}, ctx: ctx, stop: sync.OnceFunc(cancel), revSrc: &osRevocationSource{path: RevocationsPath(o.Root)}, opDisabled: map[string]bool{}}
+	// 运行期停用叠加层从磁盘加载：页面上点过的开关重启后保持原样（节点本地文件，见 disabled.go）。
+	// 读失败只告警并按「没人停用」继续启动——一个可选文件不该拖住整个服务。
+	if overlay, derr := LoadDisabledOverlay(o.Root); derr != nil {
+		m.warnLocked("读取插件停用清单失败，按未停用处理", zap.String("path", DisabledPath(o.Root)), zap.Error(derr))
+	} else {
+		m.opDisabled = overlay
+	}
 	m.refreshRevocationsLocked() // 先载入吊销清单，再评估各插件的授权
 	for _, p := range plugins {
 		m.evaluate(p)
@@ -283,22 +302,56 @@ func (m *Manager) evaluate(p Plugin) {
 		e.hotSafe = !routes.RequiresRootRoutes()
 	}
 
-	// 配置里停用的插件：不校验授权、不挂载、不迁移，列表里显示 disabled。
+	// 停用判定与运行期开关（SetEnabled）共用 applyStatusLocked：
+	// 配置 disabled_plugins 或运行期叠加层命中任意一条都不校验授权、不挂载、不迁移，列表里显示 disabled，
+	// 只是原因区分来源（配置 / 操作员）。
+	var l *License
+	var lerr error
+	if m.disabledReasonLocked(p.ID) == "" && p.Edition == Pro {
+		l, lerr = checkFile(m.opts.Root, p.ID, m.opts.Now(), m.opts.Keys)
+	}
+	m.applyStatusLocked(e, l, lerr)
+}
+
+// disabledReasonLocked 报告插件是否被停用清单命中，返回原因对应的字典 key（未命中返回 ""）。
+// 配置里的 id 与叠加层都按 normalizeID 后的口径比较（与 LoadDisabledPlugins 一致）。
+// 调用方需持有 m.mu（或在构造阶段）。
+func (m *Manager) disabledReasonLocked(id string) string {
 	for _, d := range m.opts.DisabledPlugins {
-		if d == p.ID {
-			e.info.Status, e.info.ReasonKey = StatusDisabled, "plugin.reason.disabled_by_config"
-			return
+		if normalizeID(d) == id {
+			return reasonDisabledByConfig
 		}
 	}
+	if m.opDisabled[id] {
+		return reasonDisabledByOperator
+	}
+	return ""
+}
 
-	switch p.Edition {
+// applyStatusLocked 是「这个插件现在该是什么状态」的唯一判定：先致命项、再停用清单（配置 ∪ 叠加层）、
+// 最后按 edition 走授权闸门。启动时（evaluate）与运行期（SetEnabled）都走这里，两边状态形状一致。
+// l/lerr 是调用方读好的授权结果：停用的插件不读授权文件，所以两处都可能传 nil/nil。
+// 调用方需持有 m.mu。
+func (m *Manager) applyStatusLocked(e *entry, l *License, lerr error) {
+	if e.fatal {
+		return // 清单/注册问题不是开关能改的：保持 invalid
+	}
+	if why := m.disabledReasonLocked(e.p.ID); why != "" {
+		e.info.Status, e.info.ReasonKey, e.info.ReasonArgs, e.info.Reason = StatusDisabled, why, nil, ""
+		e.info.ConfigDisabled = why == reasonDisabledByConfig
+		m.syncLifecycleLocked(e)
+		return
+	}
+	e.info.ConfigDisabled = false
+	switch e.p.Edition {
 	case Free:
 		e.info.Status = StatusActive
+		m.syncLifecycleLocked(e)
 	case Pro:
-		l, err := checkFile(m.opts.Root, p.ID, m.opts.Now(), m.opts.Keys)
-		m.applyLic(e, l, err)
+		m.applyLic(e, l, lerr) // 内部已 syncLifecycleLocked
 	default:
-		bad("plugin.reason.unknown_edition", p.Edition)
+		e.fatal = true
+		e.info.Status, e.info.ReasonKey, e.info.ReasonArgs = StatusInvalid, "plugin.reason.unknown_edition", []any{e.p.Edition}
 	}
 }
 
@@ -922,6 +975,9 @@ func (m *Manager) ImportLicense(id, content string) (ImportResult, error) {
 		return ImportResult{}, ErrFree
 	}
 	if e.info.Status == StatusDisabled {
+		if e.info.ReasonKey == reasonDisabledByOperator {
+			return ImportResult{}, ErrDisabledByOperator
+		}
 		return ImportResult{}, errors.New("插件已在配置 disabled_plugins 中停用，请先从配置移除再导入授权")
 	}
 	if e.mounting {

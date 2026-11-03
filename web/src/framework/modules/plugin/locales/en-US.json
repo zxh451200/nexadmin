@@ -3,15 +3,16 @@
     "menu": "Plugins",
     "btn": {
       "license": "Import license",
+      "toggle": "Enable / disable",
       "install": "Install from market"
     }
   },
   "pluginMgr": {
     "menu": "Plugins",
     "title": "Plugins",
-    "description": "Installed plugins and license status. Plugins supporting hot activation can be enabled online; others require a restart.",
+    "description": "Installed plugins, license status and the enable switch. Disabling closes the plugin's APIs and menu entry immediately; background jobs stop cleanly only after a restart.",
     "platformOnly": "Only platform super administrators can manage plugins and licenses",
-    "restartRequired": "Restart required",
+    "restartRequired": "Restart to restore",
     "pendingHost": "Domain verification pending",
     "stopping": "Waiting for previous workers to exit",
     "tab": {
@@ -41,6 +42,16 @@
       "item": "{{name}} ({{days}} days left)",
       "sep": ", ",
       "badge": "Expires in {{days}} days"
+    },
+    "toggle": {
+      "label": "Enabled",
+      "hint": "Disabling closes this plugin's APIs and menu entry right away; established connections and background jobs only stop cleanly after a restart.",
+      "needRestartOn": "Disabling it earlier stopped the background jobs, and enabling online cannot restart them: until the service restarts, this plugin's APIs and menu entry stay unavailable. Next step: restart the service.",
+      "needRestartOff": "Background jobs got the cancel signal, but they only stop cleanly after a restart; enabling the plugin later needs a restart too.",
+      "configDisabled": "Disabled by the disabled_plugins config, so this switch cannot turn it on. Next step: remove the id from the config and restart the service.",
+      "doneOn": "{{name}} enabled: APIs and menu entry are back",
+      "doneOff": "{{name}} disabled: APIs and menu entry are closed immediately",
+      "doneNeedRestart": "{{name}} is set to enabled, but its background jobs only come back after a restart"
     },
     "license": {
       "action": "Import license",
@@ -78,7 +89,7 @@
       "rebuild": "Rebuild & restart",
       "installed": "Installed",
       "bundled": "Built-in",
-      "bundledNote": "\"Built-in\" plugins are compiled into this binary and are listed here only to show version and license state: pro ones take a license from the card. To switch a built-in plugin off (free ones too), list it in the disabled_plugins config and restart. Overwrite-install and uninstall edit the source tree, so the market does not offer them.",
+      "bundledNote": "\"Built-in\" plugins are compiled into this binary and are listed here only to show version and license state: pro ones take a license from the card. To take a built-in plugin offline for a while (free ones too), use the enable switch on its card in the Installed tab (disabling closes its APIs and menu entry immediately; background jobs stop cleanly only after a restart). For a permanent switch use the disabled_plugins config, which wins over the toggle. Overwrite-install and uninstall edit the source tree, so the market does not offer them.",
       "filterFree": "Free",
       "filterPaid": "Paid",
       "updateAvailable": "Update available: v{{version}}",

@@ -268,7 +268,9 @@ cd web && npx tsc --noEmit && npx eslint src
 
 - `plugin remove <id>`：删除 `plugins/<id>/`、`web/src/plugins/<id>/` 并从 `plugins.go` 摘掉导入；**数据表与授权文件保留**，重装后数据原样回来。重新编译并重启生效。
 - `plugin remove --purge <id>`：在 remove 之外先连数据库清理——DROP `plg_<id>_%` 前缀的表（平台插件清平台库，`migration_target: tenant` 插件清各租户业务库），并按清单的菜单码删除 `sys_menu` 记录；清单缺失时表仍按前缀清、菜单需手动处理。授权文件保留。数据库清不掉会中止且不删文件，可重试。
-- 临时停用（不删代码不动数据）：`config/config.yaml` 里 `disabled_plugins: [<id>]`，重启后该插件完全不挂载，插件管理页显示"已停用"，`plugin list` 显示 `disabled`；free 插件的软停用就走这里（pro 插件也可用，不必撤授权）。从配置移除并重启即恢复。
+- 临时停用（不删代码不动数据）：两条路。
+  - 配置：`config/config.yaml` 里 `disabled_plugins: [<id>]`，重启后该插件完全不挂载，插件管理页显示“已停用”，`plugin list` 显示 `disabled`。从配置移除并重启即恢复。
+  - 运行期：插件管理页卡片上的启用开关（`POST /api/v1/plugins/<id>/enabled`，权限点 `plugin:edit`），停用清单落盘在**节点本地**的 `data/licenses/disabled.json`，重启后保持。两条来源取并集，**配置优先**：配置里停用的插件，页面上的开关打不开（回 400 并说明要改配置）。free 插件没有授权闸门，停用全走这两条；pro 插件也可用（不必撤授权，但停用期间没有授权导入入口，要导先启用）。多节点不会自动同步，见下一节的边界清单。
 
 ### 官网插件市场（website 插件）
 
@@ -412,6 +414,11 @@ cd web && npx tsc --noEmit && npx eslint src
 - `requires_nexadmin` 已校验：插件挂载时（以及 `nexadmin plugin install`）会按它检查框架版本，不满足则不挂载（状态 `invalid`，授权再有效也没用），`plugin install` 可用 `--force` 跳过。该项为空，或框架版本未知（开发环境没有版本号）时放行；写错而无法解析的范围视为不满足。
 - 授权不联网回查，只有离线吊销：发行方用 `plugin revoke`（或授权后台导出）生成签名的吊销清单 `config/license-revoked.json`，随升级包分发；框架验签后把序列号命中的授权标为 `revoked`（路由返回 403，原因显示在插件管理页），文件变化后无需重启。这只是辅助手段，不是强保护：源码交付下买家可以删除清单或改掉校验代码；没有序列号的旧授权不能被单独吊销。仍应缩短授权有效期、按期续签；发行方私钥泄露或需要整体作废时，从公钥集合里去掉对应公钥（`config/license-keys.pub` 或内置列表），由该钥签发的授权会全部失效。
 - 支持多把公钥：校验时用内置公钥加 `config/license-keys.pub`（每行一把 base64，`#` 起为注释）里追加的公钥，授权文件里的 `kid` 指明用哪一把（旧授权文件没有 `kid`，依次尝试全部公钥）。发行方轮换密钥时先追加新公钥，等旧授权都过期后再去掉旧公钥，不必改源码。内置的是开发公钥，正式发行前必须替换（`nexadmin release check` 会拦截）。
+- 运行期启停（插件管理页开关）能立刻生效的和不能立刻生效的，划开写：
+  - **立刻生效**：插件自己的路由（`gate`/`admit` 按运行期状态判定，停用后请求直接 403 并带上原因）、`GET /plugins/active` 的可用性判据、侧栏菜单可见性（`MenuVisible` 与 `/plugins/active` 同一判据，所以停用后不会留一个点进去 403 的入口）。这一侧不需要重启。
+  - **需要重启**：已经建立的 WebSocket / SSE 长连接（守卫只追加不摘除）、事件订阅（`core/event` 只有 `Subscribe`，没有 `Unsubscribe`）、作业注册（`core/job` 的运行期注销不是公开能力）、插件里用 `sync.Once` 造出来的 service 单例，以及后台 worker——除非 Module 实现 `plugin.RestartableStarter`（`Start` 返回后给出 `Done()`，ctx 取消后所有任务确认退出），否则被停用的 worker 不会在线重新拉起：重新启用会留下 `needRestart=true`，此时**接口和菜单也仍然不可用**（框架不假装它已经活了），必须重启服务。当前官方插件都还没实现 `RestartableStarter`，所以带 worker 的插件停用后再启用都要重启。
+  - 想做可恢复的 worker：实现 `RestartableStarter`（`Done()` 必须在本轮所有任务退出后关闭），框架会在恢复启用时重新 `Start` 一次并给一份新的 ctx。
+  - 停用清单是节点本地文件（`data/licenses/disabled.json`），集群多节点不会自动同步：要么逐节点切换，要么用配置 `disabled_plugins`（随配置分发）。`nexadmin plugin list` 只读磁盘与配置，不读这个叠加层。
 - 插件路由只有在声明「仅 API」热挂载契约后才可能在导入授权时即时挂载；当前官方插件未逐个声明，导入授权后请以返回的 `needRestart` 为准，必要时重启。声明需实现 `plugin.RuntimeRoutes` 的 `RequiresRootRoutes() bool` 并返回 `false`，且所有路由位于 `/api/v1/plugins/<id>/` 下。
 - 插件的迁移、菜单写入和热挂载在真实数据库上还未完整验证，请在提交说明中写明你的验证范围。
 

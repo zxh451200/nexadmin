@@ -31,6 +31,8 @@ export interface PluginInfo {
   needRestart?: boolean
   pendingHost?: boolean
   stopping?: boolean
+  /** 被配置 disabled_plugins 停用：运行期开关打不开它，要改配置并重启 */
+  configDisabled?: boolean
 }
 
 const KEY = ['plugins', 'list'] as const
@@ -44,6 +46,22 @@ export function useImportLicense() {
   return useMutation({
     mutationFn: ({ id, content }: { id: string; content: string }) =>
       api.post<{ needRestart: boolean }>(`/plugins/${encodeURIComponent(id)}/license`, { content }),
+    onSuccess: () => {
+      clearActivePluginsCache()
+      return qc.invalidateQueries({ queryKey: ['plugins'] })
+    },
+  })
+}
+
+/**
+ * 运行期启停开关。返回切换后的插件状态（含 needRestart / configDisabled）。
+ * 切换后同时失效列表与 active 缓存，侧栏入口立刻收/放。
+ */
+export function useTogglePluginEnabled() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
+      api.post<PluginInfo>(`/plugins/${encodeURIComponent(id)}/enabled`, { enabled }),
     onSuccess: () => {
       clearActivePluginsCache()
       return qc.invalidateQueries({ queryKey: ['plugins'] })
