@@ -479,6 +479,59 @@ func (h *handler) copyPost(c *gin.Context) {
 	respond(c, row, err)
 }
 
+// ---- 新闻版本历史 ----
+
+// parseVersion 解析 :ver 路径参数：非法值当 400 拒绝，不拿去问库。
+func parseVersion(c *gin.Context) (int, bool) {
+	v, err := strconv.Atoi(c.Param("ver"))
+	if err != nil || v <= 0 {
+		response.Fail(c, response.BadRequest("error.bad_request"))
+		return 0, false
+	}
+	return v, true
+}
+
+// GET /plugins/website/posts/:id/versions —— 版本历史（不含正文），新→旧，最多 50 条。
+// 权限沿用 website:post：菜单/按钮点模型里新增权限码要同步菜单种子与角色分配，
+// 而版本历史与新闻编辑本来就是同一个动作面，拆开只会让老角色一夜之间看不到历史。
+func (h *handler) listPostVersions(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	list, err := h.svc.ListPostVersions(c.Request.Context(), id)
+	respond(c, list, err)
+}
+
+// GET /plugins/website/posts/:id/versions/:ver —— 单个历史版本详情（正文只在这里回传）。
+func (h *handler) postVersion(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	ver, ok := parseVersion(c)
+	if !ok {
+		return
+	}
+	row, err := h.svc.GetPostVersion(c.Request.Context(), id, ver)
+	respond(c, row, err)
+}
+
+// POST /plugins/website/posts/:id/versions/:ver/rollback —— 回滚到历史版本：
+// 用那份快照走一次正常保存，当前内容先归档、版本继续递增，回滚可再回滚。
+func (h *handler) rollbackPostVersion(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	ver, ok := parseVersion(c)
+	if !ok {
+		return
+	}
+	row, err := h.svc.RollbackPostVersion(c.Request.Context(), id, ver)
+	respond(c, row, err)
+}
+
 // ---- 新闻分类 ----
 
 // GET /plugins/website/categories

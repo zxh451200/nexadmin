@@ -103,6 +103,51 @@ let posts: SitePost[] = [
 // 新新闻的号段同样要和种子的 401/402 分开：按条数让号，第三条会正好撞上种子的 402。
 let nextPostId = 450
 
+// ---- 新闻版本历史 ----
+// mock 是第二份契约：守卫与发号规则对齐后端 service.go 的 archivePostVersion——
+// 正文没变不重复存（后端比 sha256，这里比字符串，语义同一）、版本号 = 现有最大+1、
+// 超限滚动丢弃（保留最近 50）。后端规则变了必须同步改这里，否则 dev 点回滚当场穿帮。
+interface MockPostVersion {
+  version: number
+  title: string
+  summary: string
+  coverUrl: string
+  content: string
+  i18nJson: string
+  seoTitle: string
+  seoDesc: string
+  noindex: boolean
+  published: boolean
+  publishedAt: string | null
+  createdBy: string
+  createdAt: string
+}
+const MAX_POST_VERSIONS = 50
+const postVersions: Record<string, MockPostVersion[]> = {
+  // 给种子新闻留一条旧快照，页面上的「版本历史」在 mock 下也不是永远空态。
+  [id(1)]: [{
+    version: 1, title: 'NexAdmin 上线（初稿）', summary: '（初稿摘要）', coverUrl: '',
+    content: '<p>初版正文：十分钟上手。</p>', i18nJson: '', seoTitle: '', seoDesc: '',
+    noindex: false, published: false, publishedAt: null, createdBy: '演示编辑', createdAt: ago(60 * 48),
+  }],
+}
+// 剥标签数纯文本字符数：与后端 plainFromHTML + rune 数同口径的粗对齐（mock 不引后端实现）。
+const versionWords = (s: string) =>
+  s.replace(/<[^>]*>/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"').replace(/&#39;/g, "'").split(/\s+/).filter(Boolean).join(' ').length
+function archivePostVersion(prev: SitePost, newContent: string) {
+  const list = postVersions[prev.id] ?? []
+  if (prev.content === newContent) return
+  const next = list.reduce((m, v) => Math.max(m, v.version), 0) + 1
+  list.push({
+    version: next, title: prev.title, summary: prev.summary, coverUrl: prev.coverUrl,
+    content: prev.content, i18nJson: prev.i18nJson, seoTitle: prev.seoTitle, seoDesc: prev.seoDesc,
+    noindex: prev.noindex, published: prev.published, publishedAt: prev.publishedAt ?? null,
+    createdBy: '演示编辑', createdAt: new Date().toISOString(),
+  })
+  postVersions[prev.id] = list.slice(-MAX_POST_VERSIONS)
+}
+
 // 新闻分类（栏目）：mock 里只有两条种子；新建走 POST /categories（见下方路由）。
 // 行上的 postCount 恒为 0，GET /categories 查询时按新闻真实算，与后端 gorm:"-" 同一口径。
 let categories: PostCategory[] = [
@@ -702,6 +747,8 @@ defineMock([
       const ids = new Set(String(query.ids ?? '').split(',').map((s) => s.trim()).filter(Boolean))
       const before = posts.length
       posts = posts.filter((p) => !ids.has(p.id))
+      // 级联清版本：彻底删除不留孤儿快照（对齐后端 DeletePosts）
+      for (const key of ids) delete postVersions[key]
       return { deleted: before - posts.length }
     },
   },
@@ -759,6 +806,8 @@ defineMock([
       const row = posts.find((x) => x.id === params.id) ?? mockError(404, 'not found')
       checkTagLimit(body.tags)
       const wasPublished = row.published
+      // 覆盖前留档：正文没变不重复存（与后端 archivePostVersion 同一守卫）
+      archivePostVersion({ ...row }, typeof body.content === 'string' ? body.content : row.content)
       // tags/categoryIds 是表单字段（标签名与栏目 ID），行上存的是展开后的对象，不能直接 assign
       const { tags: tagNames, categoryIds: catIds, ...rest } = body
       Object.assign(row, rest, { updatedAt: new Date().toISOString() })
@@ -772,10 +821,49 @@ defineMock([
     },
   },
   {
+    method: 'GET',
+    url: '/plugins/website/posts/:id/versions',
+    handler: ({ params }) => {
+      if (!posts.some((x) => x.id === params.id)) mockError(404, 'not found')
+      // 展示行不带正文（对齐后端 PostVersionView），新→旧
+      return [...(postVersions[params.id] ?? [])]
+        .sort((a, b) => b.version - a.version)
+        .map(({ version, title, summary, createdBy, createdAt }) => ({ version, title, summary, createdBy, createdAt }))
+    },
+  },
+  {
+    method: 'GET',
+    url: '/plugins/website/posts/:id/versions/:ver',
+    handler: ({ params }) => {
+      const snap = (postVersions[params.id] ?? []).find((v) => v.version === Number(params.ver)) ?? mockError(404, 'not found')
+      // 回传形状对齐后端 PostVersionDetail：不夹带 i18n_json 等内部列，mock 与契约同一份形状
+      const { version, title, summary, coverUrl, content, published, publishedAt, createdBy, createdAt } = snap
+      return { version, title, summary, coverUrl, content, words: versionWords(content), published, publishedAt, createdBy, createdAt }
+    },
+  },
+  {
+    method: 'POST',
+    url: '/plugins/website/posts/:id/versions/:ver/rollback',
+    handler: ({ params }) => {
+      const row = posts.find((x) => x.id === params.id) ?? mockError(404, 'not found')
+      const snap = (postVersions[row.id] ?? []).find((v) => v.version === Number(params.ver)) ?? mockError(404, 'not found')
+      // 回滚 = 拿快照走一次正常保存：当前内容先归档、版本继续递增，回滚可再回滚
+      archivePostVersion({ ...row }, snap.content)
+      Object.assign(row, {
+        title: snap.title, summary: snap.summary, coverUrl: snap.coverUrl, content: snap.content,
+        i18nJson: snap.i18nJson, seoTitle: snap.seoTitle, seoDesc: snap.seoDesc,
+        noindex: snap.noindex, published: snap.published, publishedAt: snap.publishedAt,
+        updatedAt: new Date().toISOString(),
+      })
+      return row
+    },
+  },
+  {
     method: 'DELETE',
     url: '/plugins/website/posts/:id',
     handler: ({ params }) => {
       posts = posts.filter((x) => x.id !== params.id)
+      delete postVersions[params.id]
       return { ok: true }
     },
   },

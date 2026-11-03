@@ -100,6 +100,9 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.GET("/posts/:id/preview", core.Perm("website:post"), core.Desc("签发新闻预览链接"), h.postPreview)
 	g.POST("/posts/:id/copy", core.Perm("website:post"), core.Desc("复制新闻"), h.copyPost)
 	g.DELETE("/posts/:id", core.Perm("website:post"), core.Desc("删除新闻"), h.deletePost)
+	g.GET("/posts/:id/versions", core.Perm("website:post"), core.Desc("新闻版本历史"), h.listPostVersions)
+	g.GET("/posts/:id/versions/:ver", core.Perm("website:post"), core.Desc("新闻历史版本详情"), h.postVersion)
+	g.POST("/posts/:id/versions/:ver/rollback", core.Perm("website:post"), core.Desc("回滚新闻到历史版本"), h.rollbackPostVersion)
 
 	g.GET("/categories", core.Perm("website:post"), core.Desc("新闻分类列表"), h.listCategories)
 	g.POST("/categories", core.Perm("website:post"), core.Desc("新增新闻分类"), h.createCategory)

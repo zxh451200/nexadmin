@@ -635,6 +635,56 @@ export function useCopyPost() {
   })
 }
 
+/** 与后端 service.go 的 maxPostVersions 同值：界面提示保留额度用。 */
+export const MAX_POST_VERSIONS = 50
+
+/** 版本历史展示行：后端列表接口不回传正文（Post 的 content 是 mediumtext，不进列表响应）。 */
+export interface PostVersionRow {
+  version: number
+  title: string
+  summary: string
+  createdBy: string
+  createdAt: string
+}
+
+/** 单个历史版本详情：正文只在这里回传；words 是剥掉 HTML 后的字符数，界面按「标题/摘要 + 字数」预览，不把整篇 HTML 上屏。 */
+export interface PostVersionDetail extends PostVersionRow {
+  coverUrl: string
+  content: string
+  words: number
+  published: boolean
+  publishedAt?: string | null
+}
+
+/** 新闻版本历史（不含正文），新→旧，最多 50 条；弹窗打开时才拉。 */
+export function usePostVersions(postId?: string) {
+  return useQuery({
+    queryKey: [...KEY, 'post-versions', postId],
+    queryFn: () => api.get<PostVersionRow[]>(`${BASE}/posts/${postId}/versions`),
+    enabled: !!postId,
+  })
+}
+
+/** 取单个历史版本详情（含正文与字数）；silent：错误由弹窗 toast。 */
+export function fetchPostVersion(postId: string, version: number): Promise<PostVersionDetail> {
+  return api.get<PostVersionDetail>(`${BASE}/posts/${postId}/versions/${version}`, undefined, { silent: true })
+}
+
+/** 回滚到历史版本：快照走一次正常保存，当前内容先归档、版本继续递增，回滚可再回滚。 */
+export function useRollbackPost() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (v: { id: string; version: number }) =>
+      api.post<SitePost>(`${BASE}/posts/${v.id}/versions/${v.version}/rollback`, {}),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [...KEY, 'posts'] })
+      // 回滚会新增一条版本行：弹窗里的历史列表要跟着刷（v{旧最大+1} 就是被顶掉的当前内容）。
+      void qc.invalidateQueries({ queryKey: [...KEY, 'post-versions'] })
+      invalidateTaxonomies(qc)
+    },
+  })
+}
+
 /** 官网「在线留言」：匿名投稿，后台按状态跟进（只读不改正文）。 */
 export type MessageStatus = 'new' | 'read' | 'handled'
 

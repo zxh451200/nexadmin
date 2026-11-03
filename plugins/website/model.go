@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"nexadmin/core/database"
+	"nexadmin/pkg/idgen"
 )
 
 // 官网内容全部是平台级（官网代表整个部署主体，不随租户隔离）；表前缀 plg_website_。
@@ -206,6 +207,30 @@ type Post struct {
 }
 
 func (Post) TableName() string { return "plg_website_post" }
+
+// PostVersion 是新闻的历史版本快照（表 plg_website_post_version）：当前内容始终在
+// plg_website_post 上；每次覆盖保存前把旧行快照落到这里（正文没变不重复存），
+// 改坏了可回看、可回滚。正文与译文不外泄（json:"-"）：列表接口按 PostVersionView
+// 只回元数据，整篇 HTML 只在单版本详情接口按需取，不进列表响应。
+type PostVersion struct {
+	database.PlatformModel
+	PostID      idgen.ID   `gorm:"column:post_id;not null;index:idx_plg_website_post_version,priority:1" json:"postId"`
+	Version     int        `gorm:"column:version;not null;index:idx_plg_website_post_version,priority:2" json:"version"`
+	Title       string     `gorm:"size:200;not null;default:''" json:"title"`
+	Summary     string     `gorm:"size:500;not null;default:''" json:"summary"`
+	CoverURL    string     `gorm:"column:cover_url;size:255;not null;default:''" json:"coverUrl"`
+	Content     string     `gorm:"column:content;type:mediumtext" json:"-"`
+	I18nJSON    string     `gorm:"column:i18n_json;type:text" json:"-"`
+	SeoTitle    string     `gorm:"column:seo_title;size:200;not null;default:''" json:"seoTitle"`
+	SeoDesc     string     `gorm:"column:seo_desc;size:300;not null;default:''" json:"seoDesc"`
+	Noindex     bool       `gorm:"column:noindex;not null;default:false" json:"noindex"`
+	Published   bool       `gorm:"column:published;not null;default:false" json:"published"`
+	PublishedAt *time.Time `gorm:"column:published_at" json:"publishedAt,omitempty"`
+	// CreatedBy 是触发这次归档的编辑展示名（用户名；取不到登录态时为空，如种子与后台任务）。
+	CreatedBy string `gorm:"column:created_by;size:64;not null;default:''" json:"createdBy"`
+}
+
+func (PostVersion) TableName() string { return "plg_website_post_version" }
 
 // Category 是新闻分类，即编辑部的栏目：后台单独维护、集合有限、公开侧按栏目导航。
 // 标题只存默认语言：栏目是组织维度，跨语言展示时直接落原文即可。

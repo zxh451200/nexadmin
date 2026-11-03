@@ -1,10 +1,11 @@
 import { useCallback, useState } from 'react'
 import type { ReactNode } from 'react'
-import { Copy, Download, ExternalLink, Eye, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { Copy, Download, ExternalLink, Eye, History, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Can } from '@/framework/auth/Can'
+import { EmptyState } from '@/framework/components/EmptyState'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { FilterBar } from '@/framework/components/FilterBar'
@@ -34,7 +35,9 @@ import TranslationStatus from './TranslationStatus'
 import { downloadCsv } from '@/framework/components/export/csv'
 import { formatTime } from './format'
 import {
+  MAX_POST_VERSIONS,
   fetchPostPreview,
+  fetchPostVersion,
   fetchPostsForExport,
   translateContent,
   useCategories,
@@ -46,6 +49,8 @@ import {
   useI18nSchema,
   useLanguages,
   usePosts,
+  usePostVersions,
+  useRollbackPost,
   useSaveCategory,
   useSavePost,
   useSaveTag,
@@ -54,6 +59,7 @@ import {
   type ContentQuery,
   type PostCategory,
   type PostTag,
+  type PostVersionDetail,
   type SitePost,
 } from './api'
 
@@ -727,6 +733,98 @@ function TagRow({
   )
 }
 
+/**
+ * 新闻版本历史弹窗（同 workflow 的 DefVersionsDialog 范式）：
+ * 列表只有元数据；预览展开时单独拉那一条的正文，按「标题/摘要 + 字数」给信号，
+ * 不把整篇 HTML 上屏。回滚是破坏性动作，确认后才走——它会把当前内容先归档，
+ * 版本继续递增，回滚本身还能再回滚。
+ */
+function PostVersionsDialog({ post, onClose }: { post: SitePost | null; onClose: () => void }) {
+  const { t, i18n } = useTranslation()
+  const confirm = useConfirm()
+  const rollback = useRollbackPost()
+  const { data: versions = [], isLoading } = usePostVersions(post?.id)
+  const [detail, setDetail] = useState<PostVersionDetail | null>(null)
+  const [loadingVer, setLoadingVer] = useState<number | null>(null)
+
+  const onPreview = async (version: number) => {
+    if (!post) return
+    if (detail?.version === version) {
+      setDetail(null)
+      return
+    }
+    setLoadingVer(version)
+    try {
+      setDetail(await fetchPostVersion(post.id, version))
+    } catch {
+      // 服务端原因由 http 拦截器统一弹出
+    } finally {
+      setLoadingVer(null)
+    }
+  }
+
+  const onRollback = async (version: number) => {
+    if (!post) return
+    if (!(await confirm({ destructive: true, description: t('plugin_website.post.rollbackConfirm', { version }) }))) return
+    try {
+      await rollback.mutateAsync({ id: post.id, version })
+      setDetail(null)
+      toast.success(t('plugin_website.post.rollbackDone', { version }))
+    } catch {
+      // 同上：拦截器已经把服务端原因说过了
+    }
+  }
+
+  return (
+    <ResponsiveDialog
+      open={!!post}
+      onOpenChange={(o) => !o && onClose()}
+      title={`${t('plugin_website.post.versions')} · ${post?.title ?? ''}`}
+      description={t('plugin_website.post.versionsHint', { max: MAX_POST_VERSIONS })}
+      size="lg"
+      footer={
+        <Button variant="outline" onClick={onClose}>
+          {t('common.close')}
+        </Button>
+      }
+    >
+      {isLoading ? <p className="text-sm text-muted-foreground">{t('common.loading')}</p> : null}
+      {!isLoading && versions.length === 0 ? (
+        <EmptyState title={t('plugin_website.post.versionsEmpty')} />
+      ) : null}
+      <ul className="flex flex-col divide-y">
+        {versions.map((v) => (
+          <li key={v.version} className="flex flex-col gap-1 py-2 text-sm">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="num w-12 shrink-0 font-medium">v{v.version}</span>
+              <span className="min-w-0 flex-1 truncate text-muted-foreground">{v.title}</span>
+              {v.createdBy ? <span className="max-w-32 truncate text-xs text-muted-foreground">{v.createdBy}</span> : null}
+              <span className="num text-xs text-muted-foreground">{formatTime(v.createdAt, i18n.language)}</span>
+              <Button variant="ghost" size="sm" disabled={loadingVer === v.version} onClick={() => void onPreview(v.version)}>
+                {detail?.version === v.version
+                  ? t('plugin_website.post.hideVersion')
+                  : loadingVer === v.version
+                    ? t('common.loading')
+                    : t('plugin_website.post.previewVersion')}
+              </Button>
+              <Button variant="outline" size="sm" disabled={rollback.isPending} onClick={() => void onRollback(v.version)}>
+                {t('plugin_website.post.rollbackVersion')}
+              </Button>
+            </div>
+            {detail?.version === v.version ? (
+              <div className="rounded-md border border-border bg-muted/40 p-3 text-xs">
+                <p className="font-medium text-foreground">{detail.title}</p>
+                {detail.summary ? <p className="mt-1 text-muted-foreground">{detail.summary}</p> : null}
+                <p className="num mt-1 text-muted-foreground">{t('plugin_website.post.versionWords', { count: detail.words })}</p>
+              </div>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    </ResponsiveDialog>
+  )
+}
+
 export default function PostPage() {
   const { t, i18n } = useTranslation()
   const confirm = useConfirm()
@@ -748,6 +846,8 @@ export default function PostPage() {
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<SitePost | null>(null)
   const [catOpen, setCatOpen] = useState(false)
+  // 版本历史弹窗挂在被点的那一行上；null = 关闭。
+  const [versionsOf, setVersionsOf] = useState<SitePost | null>(null)
   const [exporting, setExporting] = useState(false)
   // 点译文徽标直接定位到那门语言；nonce 让「重复点同一个语言」也能重新触发定位。
   const [focus, setFocus] = useState<{ code: string; nonce: number } | null>(null)
@@ -1027,6 +1127,9 @@ export default function PostPage() {
             <Button variant="ghost" size="icon" aria-label={t('common.edit')} onClick={() => openAt(row)}>
               <Pencil aria-hidden="true" />
             </Button>
+            <Button variant="ghost" size="icon" aria-label={t('plugin_website.post.versions')} onClick={() => setVersionsOf(row)}>
+              <History aria-hidden="true" />
+            </Button>
             <Button variant="ghost" size="icon" className="text-destructive" aria-label={t('common.delete')} onClick={() => void onDelete([row])}>
               <Trash2 aria-hidden="true" />
             </Button>
@@ -1043,6 +1146,8 @@ export default function PostPage() {
         />
       )}
       {catOpen && <TaxonomyManager onOpenChange={setCatOpen} />}
+      {/* 条件挂载：每次打开都是新状态，上一篇的正文预览不会串到下一篇 */}
+      {versionsOf && <PostVersionsDialog post={versionsOf} onClose={() => setVersionsOf(null)} />}
     </PageContainer>
   )
 }

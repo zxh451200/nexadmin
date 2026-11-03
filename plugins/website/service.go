@@ -20,6 +20,7 @@ import (
 	"gorm.io/gorm/clause"
 
 	"nexadmin/core"
+	"nexadmin/core/auth"
 	"nexadmin/core/response"
 	"nexadmin/pkg/htmlsafe"
 	pi18n "nexadmin/pkg/i18n"
@@ -792,10 +793,13 @@ func (s *Service) SavePost(ctx context.Context, id idgen.ID, f PostForm) (*Post,
 		}
 	}
 	var row Post
-	if id != 0 {
+	updating := id != 0
+	var prev Post // 覆盖前的旧行快照：进事务后先归档再覆盖，改坏了能回滚
+	if updating {
 		if err := s.db.WithContext(ctx).First(&row, "id = ?", int64(id)).Error; err != nil {
 			return nil, err
 		}
+		prev = row
 	} else {
 		row = Post{}
 	}
@@ -833,6 +837,12 @@ func (s *Service) SavePost(ctx context.Context, id idgen.ID, f PostForm) (*Post,
 	// 正文与关联一起写：分类挂一半算保存失败，界面上重新来一遍比解释一半成功容易。
 	// 标签也在事务里找或建：新闻没存上却长出一个新标签，是没人会来清理的脏数据。
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 覆盖前留档（同 workflow 定义版本）：旧行进版本历史表，正文没变不重复存。
+		if updating {
+			if _, err := archivePostVersion(ctx, tx, &prev, row.Content); err != nil {
+				return err
+			}
+		}
 		if err := tx.Save(&row).Error; err != nil {
 			return err
 		}
@@ -858,9 +868,10 @@ func (s *Service) SavePost(ctx context.Context, id idgen.ID, f PostForm) (*Post,
 // summaryMaxRunes 是自动摘要的截取长度（rune 数）：列表页一行简介的量级。
 const summaryMaxRunes = 120
 
-// summaryFromHTML 从消毒后的富文本里剥出纯文本、压掉空白，截 max 个 rune 当摘要。
+// plainFromHTML 从消毒后的富文本里剥出纯文本、压掉空白并还原转义实体。
 // 输入已经过 htmlsafe.Sanitize，剩下的实体只剩转义文本（&amp; 之类），顺手还原。
-func summaryFromHTML(s string, max int) string {
+// 自动摘要与版本历史的字数统计共用这一份剥离逻辑，两边口径不漂移。
+func plainFromHTML(s string) string {
 	var b strings.Builder
 	inTag := false
 	for _, r := range s {
@@ -875,7 +886,12 @@ func summaryFromHTML(s string, max int) string {
 		}
 	}
 	plain := strings.Join(strings.Fields(b.String()), " ")
-	plain = strings.NewReplacer("&amp;", "&", "&lt;", "<", "&gt;", ">", "&quot;", `"`, "&#39;", "'").Replace(plain)
+	return strings.NewReplacer("&amp;", "&", "&lt;", "<", "&gt;", ">", "&quot;", `"`, "&#39;", "'").Replace(plain)
+}
+
+// summaryFromHTML 从消毒后的富文本里剥纯文本，截 max 个 rune 当摘要。
+func summaryFromHTML(s string, max int) string {
+	plain := plainFromHTML(s)
 	runes := []rune(plain)
 	if len(runes) > max {
 		return string(runes[:max]) + "…"
@@ -883,8 +899,14 @@ func summaryFromHTML(s string, max int) string {
 	return plain
 }
 
+// DeletePost 删除新闻并级联清掉它的版本历史：彻底删除不留快照孤儿。
 func (s *Service) DeletePost(ctx context.Context, id idgen.ID) error {
-	return s.db.WithContext(ctx).Delete(&Post{}, "id = ?", int64(id)).Error
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Delete(&Post{}, "id = ?", int64(id)).Error; err != nil {
+			return err
+		}
+		return tx.Where("post_id = ?", int64(id)).Delete(&PostVersion{}).Error
+	})
 }
 
 // ---- 新闻分类 ----
@@ -966,18 +988,30 @@ func (s *Service) SetPostsStatus(ctx context.Context, ids []idgen.ID, status str
 }
 
 // DeletePosts 批量删除新闻，返回实际删除条数；部分没命中是并发下的常态，如实返回。
+// 与单条删除同口径：版本历史级联清掉，不留孤儿快照。
 func (s *Service) DeletePosts(ctx context.Context, ids []idgen.ID) (int64, error) {
 	if len(ids) == 0 {
 		return 0, response.BadRequest("website.post_ids_empty")
 	}
-	res := s.db.WithContext(ctx).Delete(&Post{}, "id IN ?", int64IDs(ids))
-	if res.Error != nil {
-		return 0, res.Error
+	var deleted int64
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		res := tx.Delete(&Post{}, "id IN ?", int64IDs(ids))
+		if res.Error != nil {
+			return res.Error
+		}
+		deleted = res.RowsAffected
+		if deleted == 0 {
+			return nil
+		}
+		return tx.Where("post_id IN ?", int64IDs(ids)).Delete(&PostVersion{}).Error
+	})
+	if err != nil {
+		return 0, err
 	}
-	if res.RowsAffected == 0 {
+	if deleted == 0 {
 		return 0, response.NotFound("website.post_not_found")
 	}
-	return res.RowsAffected, nil
+	return deleted, nil
 }
 
 // ExportPosts 取当前筛选下的全部新闻（不带分页，上限 exportMax），前端据此生成 CSV；
@@ -1054,6 +1088,192 @@ func (s *Service) freePostSlug(ctx context.Context, base string) (string, error)
 		}
 		candidate = truncateSlug(fmt.Sprintf("%s-copy-%d", base, i), "post")
 	}
+}
+
+// ---- 新闻版本历史 ----
+
+// maxPostVersions 是单条新闻的版本保留上限：官网新闻编辑频繁，超限若按 formbuilder
+// 的做法报 conflict 会把正常保存整个挡住，编辑寸步难行；这里选滚动丢弃最旧的，
+// 恒定保留最近 maxPostVersions 条。归档与裁剪都在覆盖保存的同一事务里完成。
+const maxPostVersions = 50
+
+// contentFingerprint 是快照守卫的正文指纹：content 是 mediumtext，先哈希再比
+// 比整串逐字节比较便宜，也让「内容相同不重复存」这条守卫在测试里可断言。
+func contentFingerprint(s string) string {
+	sum := sha256.Sum256([]byte(s))
+	return hex.EncodeToString(sum[:])
+}
+
+// editorName 取当前登录用户名作为快照归属（归档时正在保存的那位编辑）；
+// 用户名空的老令牌回退用户 ID 串，无登录态（种子、后台任务）返回空。
+func editorName(ctx context.Context) string {
+	cl := auth.ClaimsFromContext(ctx)
+	if cl == nil {
+		return ""
+	}
+	if name := strings.TrimSpace(cl.Username); name != "" {
+		return trimLen(name, 64)
+	}
+	return strconv.FormatInt(int64(cl.UserID), 10)
+}
+
+// archivePostVersion 把覆盖前的旧行存进版本历史表（同 workflow 定义版本的范式）：
+// 正文指纹没变就不重复存——只挪标题/分类的历史没有回看价值，还会白占保留额度；
+// 版本号 = 该新闻现有最大 version+1（滚动丢弃后表行数不等于最大版本号，不能拿行号或下标发号）。
+// 超过上限时删掉最旧的整段，保留最近 maxPostVersions 条。返回本次落的版本号（没存给 0）。
+func archivePostVersion(ctx context.Context, tx *gorm.DB, prev *Post, newContent string) (int, error) {
+	if contentFingerprint(prev.Content) == contentFingerprint(newContent) {
+		return 0, nil
+	}
+	var maxVer int
+	if err := tx.Model(&PostVersion{}).Where("post_id = ?", int64(prev.ID)).
+		Select("COALESCE(MAX(version), 0)").Scan(&maxVer).Error; err != nil {
+		return 0, err
+	}
+	next := maxVer + 1
+	snap := PostVersion{
+		PostID: prev.ID, Version: next, Title: prev.Title, Summary: prev.Summary,
+		CoverURL: prev.CoverURL, Content: prev.Content, I18nJSON: prev.I18nJSON,
+		SeoTitle: prev.SeoTitle, SeoDesc: prev.SeoDesc, Noindex: prev.Noindex,
+		Published: prev.Published, PublishedAt: prev.PublishedAt, CreatedBy: editorName(ctx),
+	}
+	if err := tx.Create(&snap).Error; err != nil {
+		return 0, err
+	}
+	// 版本号逐次 +1 连续递增，所以 version <= next-上限 恰好是超额的最旧段。
+	if next > maxPostVersions {
+		if err := tx.Where("post_id = ? AND version <= ?", int64(prev.ID), next-maxPostVersions).
+			Delete(&PostVersion{}).Error; err != nil {
+			return 0, err
+		}
+	}
+	return next, nil
+}
+
+// PostVersionView 是版本历史的一条展示行：不含正文（mediumtext 不进列表响应），
+// 要看内容走 GetPostVersion 单版本详情。
+type PostVersionView struct {
+	Version   int       `json:"version"`
+	Title     string    `json:"title"`
+	Summary   string    `json:"summary"`
+	CreatedBy string    `json:"createdBy"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+// PostVersionDetail 是单个历史版本的详情：唯一回传快照正文的接口，
+// Words 是剥掉 HTML 后的字符数——界面按「标题/摘要 + 字数」预览，不把整篇 HTML 上屏。
+type PostVersionDetail struct {
+	PostVersionView
+	CoverURL    string     `json:"coverUrl"`
+	Content     string     `json:"content"`
+	Words       int        `json:"words"`
+	Published   bool       `json:"published"`
+	PublishedAt *time.Time `json:"publishedAt,omitempty"`
+}
+
+func (r *PostVersion) versionView() PostVersionView {
+	return PostVersionView{
+		Version: r.Version, Title: r.Title, Summary: r.Summary,
+		CreatedBy: r.CreatedBy, CreatedAt: r.CreatedAt,
+	}
+}
+
+// ListPostVersions 列出一条新闻的版本历史（不含正文），新→旧，最多 maxPostVersions 条。
+// 新闻不存在给 404：对着已删新闻的历史列表静默回空，界面会把「没权限看」误报成「没历史」。
+func (s *Service) ListPostVersions(ctx context.Context, postID idgen.ID) ([]PostVersionView, error) {
+	if _, err := s.PostByID(ctx, postID); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, response.NotFound("website.post_not_found")
+		}
+		return nil, err
+	}
+	var rows []PostVersion
+	// Select 只取展示列：列表绝不把 mediumtext 正文带出来。
+	err := s.db.WithContext(ctx).Model(&PostVersion{}).
+		Where("post_id = ?", int64(postID)).
+		Select("version", "title", "summary", "created_by", "created_at").
+		Order("version DESC").Limit(maxPostVersions).Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	out := make([]PostVersionView, 0, len(rows))
+	for i := range rows {
+		out = append(out, rows[i].versionView())
+	}
+	return out, nil
+}
+
+func (s *Service) postVersionRow(ctx context.Context, postID idgen.ID, version int) (*PostVersion, error) {
+	var row PostVersion
+	err := s.db.WithContext(ctx).Where("post_id = ? AND version = ?", int64(postID), version).
+		First(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, response.NotFound("website.post_not_found")
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &row, nil
+}
+
+// GetPostVersion 取单个历史版本的详情（正文只在这里回传）。
+func (s *Service) GetPostVersion(ctx context.Context, postID idgen.ID, version int) (*PostVersionDetail, error) {
+	row, err := s.postVersionRow(ctx, postID, version)
+	if err != nil {
+		return nil, err
+	}
+	detail := &PostVersionDetail{
+		PostVersionView: row.versionView(),
+		CoverURL:        row.CoverURL,
+		Content:         row.Content,
+		Words:           utf8.RuneCountInString(plainFromHTML(row.Content)),
+		Published:       row.Published,
+		PublishedAt:     row.PublishedAt,
+	}
+	return detail, nil
+}
+
+// postWithTaxonomy 取当前行并带上分类/标签：回滚要在「不改这些快照外字段」的前提下构造表单，
+// PostByID 不带关联（列表路径不预载），拿它当底会把分类清空——回滚恢复内容，不该拆栏目。
+func (s *Service) postWithTaxonomy(ctx context.Context, postID idgen.ID) (*Post, error) {
+	var row Post
+	err := s.db.WithContext(ctx).Preload("Categories").Preload("Tags").First(&row, "id = ?", int64(postID)).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, response.NotFound("website.post_not_found")
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &row, nil
+}
+
+// RollbackPostVersion 回滚到历史版本：拿那份快照走一次正常 SavePost——覆盖前先归档当前内容，
+// 版本继续递增、回滚本身也可被再回滚（同 workflow 定义版本的范式，不删不改历史行）。
+// 快照没有的字段沿用当前行：slug 与分类/标签不动（回滚恢复的是内容，不是 URL 与视图），
+// 按语言发布态由 SavePost 依恢复出的译文重新校验，缺译语言照旧被服务端降级。
+func (s *Service) RollbackPostVersion(ctx context.Context, postID idgen.ID, version int) (*Post, error) {
+	snap, err := s.postVersionRow(ctx, postID, version)
+	if err != nil {
+		return nil, err
+	}
+	cur, err := s.postWithTaxonomy(ctx, postID)
+	if err != nil {
+		return nil, err
+	}
+	f := PostForm{
+		Slug: cur.Slug, Title: snap.Title, CoverURL: snap.CoverURL, Summary: snap.Summary,
+		SeoTitle: snap.SeoTitle, SeoDesc: snap.SeoDesc, SeoKeywords: cur.SeoKeywords,
+		Content: snap.Content, Published: snap.Published, PublishedAt: snap.PublishedAt,
+		I18nJSON: snap.I18nJSON, PublishedJSON: cur.PublishedJSON,
+		NoIndex: snap.Noindex, Author: cur.Author, Pinned: cur.Pinned,
+	}
+	for _, c := range cur.Categories {
+		f.CategoryIDs = append(f.CategoryIDs, c.ID)
+	}
+	for _, tg := range cur.Tags {
+		f.Tags = append(f.Tags, tg.Name)
+	}
+	return s.SavePost(ctx, postID, f)
 }
 
 // ---- 公开页数据装配 ----

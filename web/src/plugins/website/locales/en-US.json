@@ -173,7 +173,16 @@
       "tagRemove": "Remove tag {{name}}",
       "tagLimit": "A post takes at most {{max}} tags; remove one to add another.",
       "tagDeleteConfirm": "Delete tag \"{{name}}\"? It will be removed from {{count}} posts too.",
-      "tagRequired": "Tag name is required"
+      "tagRequired": "Tag name is required",
+      "versions": "Version history",
+      "versionsHint": "Every save that changes the body archives the previous content, keeping the latest {{max}} versions. Rollback re-saves historical content — the current one is archived first, and the rollback itself can be rolled back.",
+      "versionsEmpty": "No versions yet: this post has no body-changing overwrite yet.",
+      "previewVersion": "Preview",
+      "hideVersion": "Hide preview",
+      "versionWords": "{{count}} characters",
+      "rollbackVersion": "Rollback",
+      "rollbackConfirm": "Roll back to v{{version}}? The current content is archived as a new version first and stays recoverable.",
+      "rollbackDone": "Rolled back to v{{version}}."
     },
     "all": "All",
     "filter": {
