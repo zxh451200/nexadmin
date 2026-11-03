@@ -14,8 +14,30 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { Input } from '@/framework/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import { useHandlers, useSaveJob, type CronJob, type CronJobForm } from './api'
-import { CRON_PRESETS, CUSTOM_PRESET, parseCron, presetKeyOf } from './cron'
+import { CRON_PRESETS, CUSTOM_PRESET, describeCron, parseCron, presetKeyOf, WEEKDAYS, type CronDescription } from './cron'
 import { formatTime } from './format'
+
+/** 把 describeCron 的结构化零件拼成人类可读的一句话（当前界面语言）。 */
+function describeCronText(d: CronDescription, t: (k: string, opts?: Record<string, unknown>) => string): string {
+  const hhmm = (h?: number) => `${String(h ?? 0).padStart(2, '0')}:00`.slice(0, 5)
+  switch (d.mode) {
+    case 'everyMinutes':
+      return t('plugin_cron.describe.everyMinutes', { n: d.minutes ?? 1 })
+    case 'hourly':
+      return t('plugin_cron.describe.hourly', { minute: String(d.minutes ?? 0).padStart(2, '0') })
+    case 'daily':
+      return t('plugin_cron.describe.daily', { time: `${String(d.hour ?? 0).padStart(2, '0')}:00` })
+    case 'weekly': {
+      if (!d.weekdays?.length) return ''
+      const names = d.weekdays.map((w) => t(`plugin_cron.describe.weekday.${WEEKDAYS[w] ?? 'mon'}`))
+      return t('plugin_cron.describe.weekly', { time: `${String(d.hour ?? 0).padStart(2, '0')}:00`, days: names.join('、') })
+    }
+    case 'monthly':
+      return t('plugin_cron.describe.monthly', { time: hhmm(d.hour), day: d.day ?? 1 })
+    default:
+      return ''
+  }
+}
 
 function buildSchema(t: (k: string) => string) {
   return z.object({
@@ -28,15 +50,22 @@ function buildSchema(t: (k: string) => string) {
     params: z.string().refine(isJsonObjectText, t('plugin_cron.errors.paramsJson')),
     enabled: z.boolean(),
     retryCount: z.number().int().min(0, t('plugin_cron.errors.retryRange')).max(10, t('plugin_cron.errors.retryRange')),
+    timeoutSeconds: z
+      .number()
+      .int()
+      .min(0, t('plugin_cron.errors.timeoutRange'))
+      .max(3600, t('plugin_cron.errors.timeoutRange')),
   })
 }
 
 type FormValues = z.infer<ReturnType<typeof buildSchema>>
 
-const emptyValues: FormValues = { name: '', cronExpr: '*/5 * * * *', handler: '', params: '', enabled: true, retryCount: 0 }
+const emptyValues: FormValues = { name: '', cronExpr: '*/5 * * * *', handler: '', params: '', enabled: true, retryCount: 0, timeoutSeconds: 0 }
 
 const toValues = (j?: CronJob | null): FormValues =>
-  j ? { name: j.name, cronExpr: j.cronExpr, handler: j.handler, params: j.params, enabled: j.enabled, retryCount: j.retryCount } : emptyValues
+  j
+    ? { name: j.name, cronExpr: j.cronExpr, handler: j.handler, params: j.params, enabled: j.enabled, retryCount: j.retryCount, timeoutSeconds: j.timeoutSeconds ?? 0 }
+    : emptyValues
 
 interface Props {
   open: boolean
@@ -148,6 +177,11 @@ export function JobFormDialog({ open, onOpenChange, editing }: Props) {
                     <FormMessage />
                     <div className="rounded-md border border-border bg-muted/40 p-3 text-sm" aria-live="polite">
                       <p className="mb-1 text-xs font-medium text-muted-foreground">{t('plugin_cron.preview.title')}</p>
+                      {(() => {
+                        const d = describeCron(expr ?? '')
+                        const desc = d ? describeCronText(d, t) : ''
+                        return desc ? <p className="mb-2 text-foreground">{desc}</p> : null
+                      })()}
                       {preview && preview.length > 0 ? (
                         <ul className="num grid gap-0.5 sm:grid-cols-2">
                           {preview.map((d) => (
@@ -215,6 +249,28 @@ export function JobFormDialog({ open, onOpenChange, editing }: Props) {
                     />
                   </FormControl>
                   <FormDescription>{t('plugin_cron.hints.retryCount')}</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="timeoutSeconds"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('plugin_cron.fields.timeoutSeconds')}</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      inputMode="numeric"
+                      min={0}
+                      max={3600}
+                      value={field.value}
+                      onChange={(e) => field.onChange(e.target.value === '' ? 0 : Number(e.target.value))}
+                    />
+                  </FormControl>
+                  <FormDescription>{t('plugin_cron.hints.timeoutSeconds')}</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}

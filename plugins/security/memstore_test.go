@@ -228,6 +228,26 @@ func (m *memStore) DeleteRule(_ context.Context, tid, id idgen.ID) error {
 	return nil
 }
 
+func (m *memStore) DeleteRules(_ context.Context, tid idgen.ID, ids []idgen.ID) (int64, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	set := map[idgen.ID]bool{}
+	for _, id := range ids {
+		set[id] = true
+	}
+	var keep []IPRule
+	var n int64
+	for _, r := range m.rules[tid] {
+		if set[r.ID] {
+			n++
+			continue
+		}
+		keep = append(keep, r)
+	}
+	m.rules[tid] = keep
+	return n, nil
+}
+
 func (m *memStore) AddLog(_ context.Context, tid idgen.ID, l *LogRow) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

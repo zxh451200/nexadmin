@@ -162,6 +162,37 @@ func (m *memStore) DeleteForm(ctx context.Context, id idgen.ID) error {
 	return nil
 }
 
+// DeleteForms 与 gormStore 同语义：先校验点名的表单全部在当前租户下（少一条整批失败），
+// 再对每一个做与单条 DeleteForm 相同的连带清理（版本、提交、去重键）。
+func (m *memStore) DeleteForms(ctx context.Context, ids []idgen.ID) (int64, error) {
+	t, err := m.tid(ctx)
+	if err != nil {
+		return 0, err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, id := range ids {
+		if _, err := m.form(t, id); err != nil {
+			return 0, err
+		}
+	}
+	for _, id := range ids {
+		delete(m.forms, [2]int64{t, int64(id)})
+		for k := range m.versions {
+			if k[0] == t && k[1] == int64(id) {
+				delete(m.versions, k)
+			}
+		}
+		for sid, s := range m.subs {
+			if int64(s.TenantID) == t && s.FormID == id {
+				delete(m.subs, sid)
+				delete(m.dedupe, dkey(t, id, s.DedupeKey))
+			}
+		}
+	}
+	return int64(len(ids)), nil
+}
+
 func dkey(t int64, f idgen.ID, key string) string {
 	return string(rune(t)) + "|" + f.String() + "|" + key
 }

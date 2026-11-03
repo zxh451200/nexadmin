@@ -53,6 +53,7 @@ func routes(r *gin.RouterGroup, h *handler) {
 	g.GET("/users", core.Perm("formbuilder:design"), h.users)
 	g.GET("/forms", core.Perm("formbuilder:design"), h.listForms)
 	g.POST("/forms", core.Perm("formbuilder:design"), h.createForm)
+	g.DELETE("/forms", core.Perm("formbuilder:design"), h.deleteForms)
 	g.POST("/forms/import", core.Perm("formbuilder:design"), h.importForm)
 	g.GET("/forms/:id", core.Perm("formbuilder:design"), h.getForm)
 	g.PUT("/forms/:id", core.Perm("formbuilder:design"), h.saveForm)
@@ -77,6 +78,7 @@ func routes(r *gin.RouterGroup, h *handler) {
 	g.GET("/forms/:id/submissions", core.Perm("formbuilder:submission"), h.listSubmissions)
 	g.GET("/forms/:id/submissions/:sid", core.Perm("formbuilder:submission"), h.getSubmission)
 	g.DELETE("/forms/:id/submissions/:sid", core.Perm("formbuilder:submission"), h.deleteSubmission)
+	g.DELETE("/forms/:id/submissions", core.Perm("formbuilder:submission"), h.deleteSubmissions)
 
 	// 导出
 	g.GET("/forms/:id/export", core.Perm("formbuilder:export"), h.exportSync)

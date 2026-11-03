@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { RequiredMark } from '@/framework/components/RequiredMark'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
@@ -73,11 +74,17 @@ export function TestLoginDialog({ source, onClose }: Props) {
       >
         <p className="text-sm text-muted-foreground">{t('plugin_identity.testLoginHint')}</p>
         <div className="flex flex-col gap-2">
-          <Label htmlFor="identity-test-user">{t('plugin_identity.fields.testUsername')}</Label>
+          <Label htmlFor="identity-test-user">
+            {t('plugin_identity.fields.testUsername')}
+            <RequiredMark />
+          </Label>
           <Input id="identity-test-user" value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="off" spellCheck={false} maxLength={256} />
         </div>
         <div className="flex flex-col gap-2">
-          <Label htmlFor="identity-test-pass">{t('plugin_identity.fields.testPassword')}</Label>
+          <Label htmlFor="identity-test-pass">
+            {t('plugin_identity.fields.testPassword')}
+            <RequiredMark />
+          </Label>
           <Input id="identity-test-pass" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" maxLength={512} />
         </div>
         {result ? (

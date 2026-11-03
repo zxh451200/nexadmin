@@ -38,6 +38,7 @@ func (z zapLog) Error(msg string, kv ...any) { z.l.Sugar().Errorw(msg, kv...) }
 type module struct {
 	once sync.Once
 	svc  *Service
+	sub  sync.Once
 }
 
 func (m *module) service(d *core.Deps) *Service {
@@ -56,14 +57,28 @@ func (*module) Name() string { return "workflow" }
 
 // Register 注册路由。
 func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
-	h := &handler{svc: m.service(d)}
+	svc := m.service(d)
+	if d.Notify != nil {
+		// 催办站内信走统一通知出口；未装配时 Urge 空转成功
+		svc.SetUrgeSender(d.Notify)
+	}
+	h := &handler{svc: svc}
 	h.Register(r, d)
 }
 
-// Start 实现 plugin.Starter：每分钟清扫一次「审批节点配置了 TimeoutMinutes 且等待超时」
-// 的运行中实例，自动升级到 EscalateTo。
+// Start 实现 plugin.Starter：挂上待办通知（站内信），并每分钟清扫一次
+// 「审批节点配置了 TimeoutMinutes 且等待超时」的运行中实例，自动升级到 EscalateTo。
 func (m *module) Start(ctx context.Context, d *core.Deps) error {
 	s := m.service(d)
+	// 只订阅一次：重复挂载会把同一个事件挂两遍，一条待办就发多封站内信。
+	m.sub.Do(func() {
+		n := newTodoNotifier(ctx, d)
+		if n == nil {
+			return
+		}
+		event.Subscribe(event.SubscriberFunc(n.handle))
+		go n.run()
+	})
 	go func() {
 		t := time.NewTicker(time.Minute)
 		defer t.Stop()

@@ -130,3 +130,65 @@ export function presetKeyOf(expr: string): string {
   const norm = expr.trim().split(/\s+/).join(' ')
   return CRON_PRESETS.find((p) => p.expr === norm)?.key ?? CUSTOM_PRESET
 }
+
+export const WEEKDAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const
+
+/**
+ * describeCron 把表达式翻译成人类可读的一句话（如「每 5 分钟」「每天 09:00」）。
+ * 只覆盖常见形态，覆盖不到时返回空串（表单里留空即可，不硬凑）。中文文案由调用方组织，
+ * 这里返回结构化的描述零件：mode（频率形态）与细节。
+ */
+export interface CronDescription {
+  /** everyMinutes | hourly | daily | weekly | monthly | other */
+  mode: 'everyMinutes' | 'hourly' | 'daily' | 'weekly' | 'monthly' | 'other'
+  /** 分钟步长（everyMinutes） */
+  minutes?: number
+  /** 小时（daily/monthly，0-23） */
+  hour?: number
+  /** 周几（weekly，0-6，0=周日） */
+  weekdays?: number[]
+  /** 几号（monthly，1-31） */
+  day?: number
+}
+
+/** 解析单字段为「全部」或值集合；解析失败返回 undefined。内部用，不校验合法性（parseCron 已验）。 */
+function fieldValues(part: string, min: number, max: number): Set<number> | undefined {
+  const r = parseField(part, { min, max })
+  if (typeof r === 'string') return undefined
+  return r
+}
+
+export function describeCron(expr: string): CronDescription | null {
+  const parts = expr.trim().split(/\s+/).filter(Boolean)
+  if (parts.length !== 5) return null
+  const [min, hour, dom, mon, dow] = parts
+  if (mon !== '*') return { mode: 'other' }
+  const star = (p: string) => p === '*' || p === '*/1'
+
+  // 每 N 分钟：*/5 * * * *
+  const minStep = min.match(/^\*\/(\d+)$/)
+  if (minStep && star(hour) && star(dom) && star(dow)) {
+    return { mode: 'everyMinutes', minutes: Number(minStep[1]) }
+  }
+  // 每小时：0 * * * *（分钟固定）
+  if (hour === '*' && star(dom) && star(dow) && /^\d+$/.test(min)) {
+    return { mode: 'hourly' }
+  }
+  // 每天：0 9 * * *
+  if (star(dom) && star(dow) && /^\d+$/.test(min) && /^\d+$/.test(hour)) {
+    return { mode: 'daily', hour: Number(hour) }
+  }
+  // 每周：0 9 * * 1-5 / 0 0 * * 1
+  if (star(dom) && star(mon) && /^\d+$/.test(min) && /^\d+$/.test(hour)) {
+    const days = fieldValues(dow, 0, 7)
+    if (days) {
+      const list = [...days].map((d) => (d === 7 ? 0 : d)).sort((a, b) => a - b)
+      return { mode: 'weekly', hour: Number(hour), weekdays: list }
+    }
+  }
+  // 每月：0 0 1 * *
+  if (star(dow) && star(mon) && /^\d+$/.test(min) && /^\d+$/.test(hour) && /^\d+$/.test(dom)) {
+    return { mode: 'monthly', hour: Number(hour), day: Number(dom) }
+  }
+  return { mode: 'other' }
+}

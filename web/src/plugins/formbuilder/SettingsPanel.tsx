@@ -32,7 +32,7 @@ export function SettingsPanel({ formId, def, audience, onDef, onAudience }: Prop
         <h2 id="fb-set-basic" className="text-sm font-semibold">
           {t('plugin_formbuilder.settings.basic')}
         </h2>
-        <Field id="fb-set-name" label={t('plugin_formbuilder.fields.name')}>
+        <Field id="fb-set-name" label={t('plugin_formbuilder.fields.name')} required>
           <Input id="fb-set-name" value={def.name} maxLength={100} aria-invalid={!def.name.trim() || undefined} onChange={(e) => onDef({ ...def, name: e.target.value })} />
         </Field>
         <Field id="fb-set-desc" label={t('plugin_formbuilder.fields.description')}>

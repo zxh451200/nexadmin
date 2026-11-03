@@ -81,6 +81,16 @@ func (g gormDefs) Save(ctx context.Context, d *store.Definition) (*store.Definit
 	if err := db.First(&m, "id = ?", int64(id)).Error; err != nil {
 		return nil, notFoundOr(err)
 	}
+	// 覆盖前留档：当前版本快照进历史表，内容没变化就不重复存（改状态也会递增版本，
+	// 但 XML 相同的历史没有回看价值）。
+	if m.BpmnXML != string(d.XML) {
+		snap := DefVersion{
+			DefID: m.ID, DefKey: m.DefKey, Version: m.Version, Name: m.Name, Status: m.Status, BpmnXML: m.BpmnXML,
+		}
+		if err := db.Create(&snap).Error; err != nil {
+			return nil, err
+		}
+	}
 	m.DefKey, m.Name, m.Status = d.Key, d.Name, d.Status
 	m.Definition, m.BpmnXML = string(d.Definition), string(d.XML)
 	m.Version++
@@ -90,16 +100,24 @@ func (g gormDefs) Save(ctx context.Context, d *store.Definition) (*store.Definit
 	return defRecord(&m), nil
 }
 
+// deleteDef 在给定会话上删除一条定义，返回实删行数：条件只有 id，租户隔离由
+// core/database 的 tenantPlugin 在 DELETE 前追加 tenant_id。0 行 = 不存在或不在当前租户下。
+// 单条与批量共用这一份判断，批量既不多删（不级联别的表）也不少删。
+func deleteDef(db *gorm.DB, id idgen.ID) (int64, error) {
+	res := db.Delete(&Def{}, "id = ?", int64(id))
+	return res.RowsAffected, res.Error
+}
+
 func (g gormDefs) Delete(ctx context.Context, id string) error {
 	key, err := parseID(id)
 	if err != nil {
 		return store.ErrNotFound
 	}
-	res := g.db.WithContext(ctx).Delete(&Def{}, "id = ?", int64(key))
-	if res.Error != nil {
-		return res.Error
+	n, err := deleteDef(g.db.WithContext(ctx), key)
+	if err != nil {
+		return err
 	}
-	if res.RowsAffected == 0 {
+	if n == 0 {
 		return store.ErrNotFound
 	}
 	return nil
@@ -344,6 +362,7 @@ func (g gormTasks) ListPending(ctx context.Context, assignee string, q store.Tas
 	base := g.db.WithContext(ctx).Model(&Task{}).
 		Where("status = ?", TaskPending).
 		Where("assignee = ? OR assignee = ''", assignee)
+	base = taskKeyword(base, q.Keyword)
 	var total int64
 	if err := base.Session(&gorm.Session{}).Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -364,6 +383,18 @@ func (g gormTasks) ListPending(ctx context.Context, assignee string, q store.Tas
 		})
 	}
 	return out, total, nil
+}
+
+// taskKeyword 给待办/已办查询挂上关键词过滤：待办与动作表都没有标题列，
+// 关联实例表按 标题 / 流程标识 / 业务键 模糊匹配（kw 是调用方给的参数值，走占位符绑定）。
+func taskKeyword(db *gorm.DB, kw string) *gorm.DB {
+	kw = strings.TrimSpace(kw)
+	if kw == "" {
+		return db
+	}
+	like := "%" + kw + "%"
+	return db.Joins("JOIN plg_workflow_inst i ON i.id = inst_id AND i.deleted_at IS NULL").
+		Where("i.title LIKE ? OR i.def_key LIKE ? OR i.business_key LIKE ?", like, like, like)
 }
 
 func (g gormTasks) ListByInstance(ctx context.Context, instID string) ([]*store.Task, error) {
@@ -418,6 +449,7 @@ func (g gormActions) List(ctx context.Context, q store.ActionQuery) ([]*store.Ac
 	if len(q.Actions) > 0 {
 		base = base.Where("action IN ?", q.Actions)
 	}
+	base = taskKeyword(base, q.Keyword)
 	var total int64
 	if err := base.Session(&gorm.Session{}).Count(&total).Error; err != nil {
 		return nil, 0, err

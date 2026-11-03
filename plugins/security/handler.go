@@ -244,6 +244,21 @@ func (h *handler) deleteRule(c *gin.Context) {
 	}
 }
 
+// DELETE /ip-rules?ids=1,2,3&confirmLockout=true —— 批量删除，权限码复用单条删除的 security:ip:edit。
+// confirmLockout 与单条同一个查询参数：整批删完会锁住操作者自己时默认 409，确认后整批放行并留痕。
+func (h *handler) deleteRules(c *gin.Context) {
+	ids, err := response.ParseIDsQuery(c)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	if u, ok := h.me(c); ok {
+		u.ConfirmLockout = c.Query("confirmLockout") == "true"
+		n, err := h.svc.DeleteRules(c.Request.Context(), u, ids)
+		respond(c, gin.H{"deleted": n}, err)
+	}
+}
+
 // GET /logs?page=&pageSize=
 func (h *handler) listLogs(c *gin.Context) {
 	u, ok := h.me(c)

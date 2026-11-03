@@ -96,11 +96,11 @@ export function ChartDialog({ open, onOpenChange, editing }: Props) {
         {/* 常规字段只有名称/数据集/图表类型三个，交给 FormGrid 的 auto 判定走单列纵向；写死三列会和下面的长表单错位 */}
         <FormGrid>
           <div className="flex flex-col gap-2">
-            <Label htmlFor="ch-name">{t('common.name')}</Label>
+            <Label htmlFor="ch-name" required>{t('common.name')}</Label>
             <Input id="ch-name" value={builtinText(t, form.name)} maxLength={100} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           </div>
           <div className="flex flex-col gap-2">
-            <Label htmlFor="ch-ds">{t('plugin_report.chart.dataset')}</Label>
+            <Label htmlFor="ch-ds" required>{t('plugin_report.chart.dataset')}</Label>
             <Select value={form.datasetId} onValueChange={(v) => setForm({ ...form, datasetId: v, config: { ...emptyChartConfig(), colors: form.config.colors } })}>
               <SelectTrigger id="ch-ds">
                 <SelectValue placeholder={t('common.pleaseSelect')} />

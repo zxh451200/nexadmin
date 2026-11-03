@@ -1,4 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { collectAllPages } from '@/framework/components/export/ExportCsvButton'
 import { api } from '@/framework/request/http'
 import type { Page, PageQuery } from '@/framework/request/types'
 
@@ -110,6 +111,20 @@ export function useDeleteModel() {
     mutationFn: (id: string) => api.del(`${BASE}/models/${id}`),
     onSuccess: invalidate,
   })
+}
+
+/** 批量删除：ids 走查询参数（不是路径），后端只删属于当前租户且点名的行，返回实际条数。 */
+export function useDeleteModels() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (ids: string[]) => api.del<{ deleted: number }>(`${BASE}/models`, { ids: ids.join(',') }),
+    onSuccess: invalidate,
+  })
+}
+
+/** 导出取「当前筛选条件下的全量」：与列表同一套 keyword / kind 口径，逐页捞齐。 */
+export function fetchModelsForExport(query: Omit<ModelQuery, 'page' | 'pageSize'>) {
+  return collectAllPages<AiModel>((page, pageSize) => api.get<Page<AiModel>>(`${BASE}/models`, { ...query, page, pageSize }))
 }
 
 export function usePingModel() {

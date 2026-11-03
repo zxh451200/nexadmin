@@ -11,6 +11,7 @@ import (
 	"nexadmin/core/event"
 	"nexadmin/core/response"
 	"nexadmin/core/secret"
+	"nexadmin/core/tenant"
 	"nexadmin/pkg/idgen"
 )
 
@@ -171,6 +172,31 @@ func (s *Service) SaveModel(ctx context.Context, id idgen.ID, in ModelInput) (*M
 // DeleteModel 删除模型配置。
 func (s *Service) DeleteModel(ctx context.Context, id idgen.ID) error {
 	return s.db.WithContext(ctx).Delete(&Model{}, id).Error
+}
+
+// DeleteModels 批量删除模型配置。逐条判断与单条 DeleteModel 走的是同一套：同一张表、同一租户作用域，
+// 单条没有引用检查/内置护栏（用量台账 plg_aigateway_usage 是事实记录，删配置不删台账），批量也不加。
+// 一条 DELETE 在 GORM 自带事务里走完，不会出现「删了一半」。
+// tenant_id 在这里显式带一次：core/database 的全局 scope 插件是第一道防线，但不该是唯一一道
+// （与 identity 的 store 同一口径），显式条件也让租户隔离能在 SQL 层被测试钉住。
+// 越权 / 已不存在的 id 落在条件外，删不到也不计入实删数；0 命中报不存在，不静默返回 deleted=0。
+func (s *Service) DeleteModels(ctx context.Context, ids []idgen.ID) (int64, error) {
+	list := make([]int64, 0, len(ids))
+	for _, id := range ids {
+		list = append(list, int64(id))
+	}
+	q := s.db.WithContext(ctx)
+	if tid, ok := tenant.From(ctx); ok && !tenant.Skipped(ctx) {
+		q = q.Where("tenant_id = ?", int64(tid))
+	}
+	res := q.Where("id IN ?", list).Delete(&Model{})
+	if res.Error != nil {
+		return 0, res.Error
+	}
+	if res.RowsAffected == 0 {
+		return 0, response.NotFound("error.not_found")
+	}
+	return res.RowsAffected, nil
 }
 
 // Resolve 返回某类里默认启用的模型配置（密钥已解密）；没有则 ErrDisabled。

@@ -19,7 +19,7 @@ func TestAttachmentRuleFor(t *testing.T) {
 		{"application/x-msdownload", "x.exe", false, "", ""},
 	}
 	for _, c := range cases {
-		rule, ok := attachmentRuleFor(c.mime, c.name)
+		rule, ok := attachmentRuleFor(defaultAttachmentCeilings(), c.mime, c.name)
 		if ok != c.ok || rule.ext != c.ext || rule.kind != c.kind {
 			t.Fatalf("%s/%s => %+v ok=%v", c.mime, c.name, rule, ok)
 		}
@@ -28,8 +28,8 @@ func TestAttachmentRuleFor(t *testing.T) {
 
 func TestSafeFilename(t *testing.T) {
 	cases := map[string]string{
-		"../../etc/passwd":  "passwd",
-		`C:\tmp\报价单.pdf`: "报价单.pdf",
+		"../../etc/passwd": "passwd",
+		`C:\tmp\报价单.pdf`:   "报价单.pdf",
 		"   ":              "file",
 		"..":               "file",
 	}

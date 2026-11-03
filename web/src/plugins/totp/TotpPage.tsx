@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { api } from '@/framework/request/http'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
+import { RequiredMark } from '@/framework/components/RequiredMark'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Card } from '@/framework/ui/card'
@@ -20,6 +21,7 @@ export default function TotpPage() {
   const [secret, setSecret] = useState('')
   const [uri, setUri] = useState('')
   const [code, setCode] = useState('')
+  const [password, setPassword] = useState('')
 
   const enroll = useMutation({
     mutationFn: () => api.post<{ secret: string; uri: string }>('/plugins/totp/enroll'),
@@ -31,8 +33,8 @@ export default function TotpPage() {
     onError: () => toast.error(t('plugin_totp.codeWrong')),
   })
   const disable = useMutation({
-    mutationFn: () => api.post('/plugins/totp/disable', { code }),
-    onSuccess: () => { toast.success(t('plugin_totp.disabled')); setCode(''); void qc.invalidateQueries({ queryKey: ['totp'] }) },
+    mutationFn: () => api.post('/plugins/totp/disable', { code, password }),
+    onSuccess: () => { toast.success(t('plugin_totp.disabled')); setCode(''); setPassword(''); void qc.invalidateQueries({ queryKey: ['totp'] }) },
     onError: () => toast.error(t('plugin_totp.codeWrong')),
   })
 
@@ -64,7 +66,13 @@ export default function TotpPage() {
                   <p className="text-muted-foreground">{t('plugin_totp.secretLabel')}</p>
                   <code className="block rounded bg-muted px-2 py-1 font-mono text-xs break-all">{secret}</code>
                 </div>
-                <Input value={code} onChange={(e) => setCode(e.target.value)} placeholder={t('plugin_totp.codePlaceholder')} maxLength={6} />
+                <label className="flex flex-col gap-1 text-sm">
+                  <span>
+                    {t('plugin_totp.codePlaceholder')}
+                    <RequiredMark />
+                  </span>
+                  <Input value={code} onChange={(e) => setCode(e.target.value)} placeholder={t('plugin_totp.codePlaceholder')} maxLength={6} />
+                </label>
                 <Button onClick={() => confirm.mutate()} disabled={confirm.isPending || code.length !== 6}>
                   {t('plugin_totp.confirm')}
                 </Button>
@@ -73,8 +81,32 @@ export default function TotpPage() {
           </div>
         ) : (
           <div className="space-y-3">
-            <Input value={code} onChange={(e) => setCode(e.target.value)} placeholder={t('plugin_totp.codePlaceholder')} maxLength={6} />
-            <Button variant="destructive" onClick={() => disable.mutate()} disabled={disable.isPending || code.length !== 6}>
+            <p className="text-sm text-muted-foreground">{t('plugin_totp.disableHint')}</p>
+            <label className="flex flex-col gap-1 text-sm">
+              <span>
+                {t('plugin_totp.passwordPlaceholder')}
+                <RequiredMark />
+              </span>
+              <Input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder={t('plugin_totp.passwordPlaceholder')}
+                autoComplete="current-password"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-sm">
+              <span>
+                {t('plugin_totp.codePlaceholder')}
+                <RequiredMark />
+              </span>
+              <Input value={code} onChange={(e) => setCode(e.target.value)} placeholder={t('plugin_totp.codePlaceholder')} maxLength={6} />
+            </label>
+            <Button
+              variant="destructive"
+              onClick={() => disable.mutate()}
+              disabled={disable.isPending || code.length !== 6 || !password}
+            >
               {t('plugin_totp.disable')}
             </Button>
           </div>

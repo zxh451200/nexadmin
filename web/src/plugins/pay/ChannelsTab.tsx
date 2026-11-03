@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { RequiredMark } from '@/framework/components/RequiredMark'
 import { JsonInput } from '@/framework/components/JsonInput'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { SwitchRow } from '@/framework/components/SwitchField'
@@ -15,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   useChannels,
   useDeleteChannel,
+  useDeleteChannelsBatch,
   useProviders,
   useSaveChannel,
   useProbeChannel,
@@ -237,11 +239,17 @@ function ChannelFormDialog({ open, onOpenChange, editing, providers }: Props) {
     >
       <div className="flex flex-col gap-3">
         <label className="flex flex-col gap-1 text-sm">
-          {t('plugin_pay.fields.channelCode')}
+          <span>
+            {t('plugin_pay.fields.channelCode')}
+            <RequiredMark />
+          </span>
           <Input value={code} disabled={!isNew} onChange={(e) => onCodeChange(e.target.value)} placeholder="wx01" />
         </label>
         <label className="flex flex-col gap-1 text-sm">
-          {t('plugin_pay.fields.provider')}
+          <span>
+            {t('plugin_pay.fields.provider')}
+            <RequiredMark />
+          </span>
           <Select
             value={provider}
             onValueChange={(v) => {
@@ -281,7 +289,10 @@ function ChannelFormDialog({ open, onOpenChange, editing, providers }: Props) {
           <CapabilityNote>{t('plugin_pay.capabilities.enforcedByServer')}</CapabilityNote>
         </div>
         <label className="flex flex-col gap-1 text-sm">
-          {t('plugin_pay.fields.channelName')}
+          <span>
+            {t('plugin_pay.fields.channelName')}
+            <RequiredMark />
+          </span>
           <Input value={name} onChange={(e) => setName(e.target.value)} />
         </label>
         <label className="flex flex-col gap-1 text-sm">
@@ -371,18 +382,34 @@ export function ChannelsTab() {
   const { data: providers = [] } = useProviders()
   const index = useCapabilityIndex()
   const remove = useDeleteChannel()
+  const removeBatch = useDeleteChannelsBatch()
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<PayChannel | null>(null)
   const [probing, setProbing] = useState<string | null>(null)
+  const [selected, setSelected] = useState<string[]>([])
 
   const onDelete = async (c: PayChannel) => {
     if (await confirm({ destructive: true, description: t('plugin_pay.channel.deleteConfirm', { name: c.name }) })) {
       try {
         await remove.mutateAsync(c.id)
+        setSelected((s) => s.filter((id) => id !== c.id))
         toast.success(t('common.operateSuccess'))
       } catch {
         toast.error(t('common.operateFailed'))
       }
+    }
+  }
+
+  // 批量删渠道：与单条同口径（后端本就没有「在用不可删」类护栏），越权/不存在的 id 不计入实删数，
+  // 所以 deleted 少于选中时要据实说「删了 n 条」。
+  const onDeleteBatch = async (ids: string[]) => {
+    if (!(await confirm({ destructive: true, description: t('plugin_pay.channel.deleteBatchConfirm', { count: ids.length }) }))) return
+    try {
+      const { deleted } = await removeBatch.mutateAsync(ids)
+      setSelected([])
+      toast.success(deleted < ids.length ? t('plugin_pay.channel.deletedPartial', { deleted, total: ids.length }) : t('common.operateSuccess'))
+    } catch {
+      toast.error(t('common.operateFailed'))
     }
   }
 
@@ -452,6 +479,15 @@ export function ChannelsTab() {
             </Button>
             <Button variant="ghost" size="icon" className="text-destructive" aria-label={t('common.delete')} onClick={() => void onDelete(c)}>
               <Trash2 aria-hidden="true" />
+            </Button>
+          </Can>
+        )}
+        selection={{ selected, onChange: setSelected }}
+        batchActions={(ids) => (
+          <Can perm="pay:channel">
+            <Button variant="destructive" size="sm" onClick={() => void onDeleteBatch(ids)}>
+              <Trash2 aria-hidden="true" />
+              {t('common.delete')}
             </Button>
           </Can>
         )}

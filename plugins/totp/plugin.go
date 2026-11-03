@@ -5,10 +5,14 @@
 package totp
 
 import (
+	"context"
+
 	"github.com/gin-gonic/gin"
 
 	"nexadmin/core"
+	"nexadmin/core/auth"
 	"nexadmin/core/plugin"
+	"nexadmin/pkg/idgen"
 )
 
 // 建表由运行时执行 plugins/totp/migrations/<引擎>/*.sql(安装时 CLI 拷贝),插件自己不做迁移。
@@ -23,7 +27,17 @@ func init() {
 
 type module struct{}
 
-func (m *module) service(d *core.Deps) *Service { return NewService(d.DB) }
+func (m *module) service(d *core.Deps) *Service {
+	var reauth ReauthFn
+	if d.Auth != nil && d.Auth.Provider() != nil {
+		if v, ok := d.Auth.Provider().(auth.PasswordVerifier); ok {
+			reauth = func(ctx context.Context, uid uint64, password string) error {
+				return v.VerifyPassword(ctx, idgen.ID(uid), password)
+			}
+		}
+	}
+	return NewService(d.DB, d.Cache, reauth)
+}
 
 func (*module) Name() string { return "totp" }
 

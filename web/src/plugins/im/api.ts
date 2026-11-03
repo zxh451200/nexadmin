@@ -323,6 +323,23 @@ export async function uploadAttachment(convNo: string, file: File): Promise<ImAt
   return api.post<ImAttachment>(`${BASE}/conversations/${convNo}/attachments`, form)
 }
 
+/** 附件上传的生效限制：大小来自系统参数「上传限制」，类型来自服务端白名单。 */
+export interface AttachmentLimits {
+  accept: string
+  imageBytes: number
+  docBytes: number
+  textBytes: number
+  maxBodyBytes: number
+}
+
+/** 文件选择器按它渲染 accept，前端不再手抄一份服务端白名单。 */
+export function useAttachmentLimits() {
+  return useQuery({
+    queryKey: [...KEY, 'attachment-limits'],
+    queryFn: () => api.get<AttachmentLimits>(`${BASE}/attachment-limits`),
+  })
+}
+
 export function useAgents(enabled = true) {
   return useQuery({
     queryKey: [...KEY, 'agents'],
@@ -402,7 +419,16 @@ export function useDeleteConv() {
   })
 }
 
-/** 按当前筛选条件导出会话记录（xlsx，最多 5000 条）。 */
+/** 超管批量删除会话（后端只删已结束的，进行中的回在 skipped 里）。 */
+export function useDeleteConvsBatch() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (nos: string[]) => api.post<DeleteConvResult>(`${BASE}/conversations-delete`, { nos }),
+    onSuccess: invalidate,
+  })
+}
+
+/** 按当前筛选条件导出会话记录（xlsx，会话清单 + 完整对话两个 sheet，最多 5000 个会话）。 */
 export async function exportConversations(query: ConvQuery): Promise<void> {
   const res = await http.get<unknown>(`${BASE}/conversations-export`, { params: query, responseType: 'blob' })
   const blob =

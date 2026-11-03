@@ -18,6 +18,8 @@
     "on": "已启用",
     "off": "已停用",
     "deleteConfirm": "确定删除身份源「{{name}}」吗？",
+    "deleteBatchConfirm": "确认删除选中的 {{count}} 个身份源？用它登录的账号会立即回退到本地口令。",
+    "deletedPartial": "已删除 {{deleted}}/{{total}} 个身份源（其余可能已被删除或不属于当前租户）",
     "testConnection": "测试连接",
     "testLogin": "测试用户登录",
     "testLoginTitle": "测试用户登录 · {{name}}",

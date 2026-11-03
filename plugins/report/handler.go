@@ -25,6 +25,53 @@ type handler struct {
 	permFn  func(c *gin.Context, code string) bool
 }
 
+// ---- 报表订阅 ----
+
+// GET /plugins/report/reports/:id/subscription —— 读订阅配置；未配置返回 null。
+func (h *handler) getSubscription(c *gin.Context) {
+	id, ok := pathID(c, "id")
+	if !ok {
+		return
+	}
+	sub, err := h.svc.GetSubscription(c.Request.Context(), id)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	if sub == nil {
+		response.OK(c, nil)
+		return
+	}
+	response.OK(c, sub)
+}
+
+// PUT /plugins/report/reports/:id/subscription —— 保存订阅配置（存在则更新）。
+func (h *handler) saveSubscription(c *gin.Context) {
+	id, ok := pathID(c, "id")
+	if !ok {
+		return
+	}
+	var f SubscriptionForm
+	if !response.BindJSON(c, &f) {
+		return
+	}
+	sub, err := h.svc.SaveSubscription(c.Request.Context(), id, f)
+	respond(c, sub, err)
+}
+
+// DELETE /plugins/report/reports/:id/subscription —— 删除订阅。
+func (h *handler) deleteSubscription(c *gin.Context) {
+	id, ok := pathID(c, "id")
+	if !ok {
+		return
+	}
+	if err := h.svc.DeleteSubscription(c.Request.Context(), id); err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, nil)
+}
+
 func newHandler(svc *Service, db *gorm.DB) *handler {
 	h := &handler{svc: svc, db: db}
 	h.scopeFn = func(c *gin.Context, cl *auth.Claims) (*datascope.Scope, error) {

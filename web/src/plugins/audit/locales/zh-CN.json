@@ -6,6 +6,10 @@
     "tabs": { "logs": "变更记录", "scope": "审计范围" },
     "btn": { "config": "审计范围", "clean": "清理记录" },
     "all": "全部",
+    "filter": {
+      "allTables": "全部数据表",
+      "allActions": "全部动作"
+    },
     "system": "系统",
     "detail": "变更详情",
     "empty": "暂无变更记录",

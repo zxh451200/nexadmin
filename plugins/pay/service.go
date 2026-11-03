@@ -884,6 +884,27 @@ func (s *Service) DeleteChannel(ctx context.Context, id idgen.ID) error {
 	return s.db.WithContext(ctx).Delete(&Channel{}, id).Error
 }
 
+// DeleteChannels 批量删除渠道配置：与单条 DeleteChannel 完全同口径——
+// 单条没有任何「渠道在用 / 已结算不可删」的护栏，也不做连带清理（渠道只被订单按
+// code 引用，删配置不动订单事实），批量也不加、不减。
+// 越权 / 不存在的 id 落在租户 scope 外（core/database 的 tenantPlugin 给 DELETE 追加
+// tenant_id 条件，与单条同一条路径），删不到也不计入实删数；0 命中报不存在。
+// 一条 DELETE 由 GORM 包在一个事务里走完，不会删一半。
+func (s *Service) DeleteChannels(ctx context.Context, ids []idgen.ID) (int64, error) {
+	list := make([]int64, 0, len(ids))
+	for _, id := range ids {
+		list = append(list, int64(id))
+	}
+	res := s.db.WithContext(ctx).Where("id IN ?", list).Delete(&Channel{})
+	if res.Error != nil {
+		return 0, res.Error
+	}
+	if res.RowsAffected == 0 {
+		return 0, response.NotFound("error.not_found")
+	}
+	return res.RowsAffected, nil
+}
+
 // ListChannels 按租户列出渠道（sort, id 排序）。
 func (s *Service) ListChannels(ctx context.Context, subjectID string, enabledOnly bool) ([]Channel, error) {
 	db := s.db.WithContext(ctx).Model(&Channel{})
@@ -909,12 +930,45 @@ type OrderQuery struct {
 	BizType    string
 	Scene      string
 	FailReason string
-	Page       int
-	PageSize   int
+	// CreatedFrom/CreatedTo 是下单日期范围（含两端，yyyy-mm-dd，按应用时区解析）。
+	// 财务查「某天的单」比翻页高频；非法值显式报错而不是静默忽略——
+	// 对账导出里少一天是数据事故，不是体验问题。
+	CreatedFrom string
+	CreatedTo   string
+	Page        int
+	PageSize    int
 }
 
-// ListOrders 分页列出支付单。
-func (s *Service) ListOrders(ctx context.Context, q OrderQuery) ([]Order, int64, error) {
+// orderDateRange 解析日期范围（两端都含：to 取当天结束的排他上界）。
+// 空值 = 不限制；非法格式或 from 晚于 to 都报错，绝不静默当成「没筛」。
+func orderDateRange(fromStr, toStr string, loc *time.Location) (from, to time.Time, err error) {
+	if s := strings.TrimSpace(fromStr); s != "" {
+		if from, err = time.ParseInLocation("2006-01-02", s, loc); err != nil {
+			return time.Time{}, time.Time{}, response.BadRequest(errDateInvalid)
+		}
+	}
+	if s := strings.TrimSpace(toStr); s != "" {
+		if to, err = time.ParseInLocation("2006-01-02", s, loc); err != nil {
+			return time.Time{}, time.Time{}, response.BadRequest(errDateInvalid)
+		}
+		to = to.AddDate(0, 0, 1)
+	}
+	if !from.IsZero() && !to.IsZero() && to.Before(from) {
+		return time.Time{}, time.Time{}, response.BadRequest(errDateInvalid)
+	}
+	return from, to, nil
+}
+
+// orderFilter 组装列表/导出共用的筛选条件（无排序无分页）。
+func (s *Service) orderFilter(ctx context.Context, q OrderQuery) (*gorm.DB, time.Time, time.Time, error) {
+	loc := s.loc
+	if loc == nil {
+		loc = time.UTC
+	}
+	from, to, err := orderDateRange(q.CreatedFrom, q.CreatedTo, loc)
+	if err != nil {
+		return nil, from, to, err
+	}
 	db := s.db.WithContext(ctx).Model(&Order{})
 	if kw := strings.TrimSpace(q.Keyword); kw != "" {
 		like := "%" + kw + "%"
@@ -938,12 +992,52 @@ func (s *Service) ListOrders(ctx context.Context, q OrderQuery) ([]Order, int64,
 	if q.FailReason != "" {
 		db = db.Where("fail_reason = ?", q.FailReason)
 	}
+	if !from.IsZero() {
+		db = db.Where("created_at >= ?", from)
+	}
+	if !to.IsZero() {
+		db = db.Where("created_at < ?", to)
+	}
+	return db, from, to, nil
+}
+
+// ListOrders 分页列出支付单。
+func (s *Service) ListOrders(ctx context.Context, q OrderQuery) ([]Order, int64, error) {
+	db, _, _, err := s.orderFilter(ctx, q)
+	if err != nil {
+		return nil, 0, err
+	}
 	var total int64
 	if err := db.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 	var rows []Order
 	if err := db.Order("id DESC").Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Find(&rows).Error; err != nil {
+		return nil, 0, err
+	}
+	return rows, total, nil
+}
+
+// exportMax 是单次导出的行数上限。财务导出宁可被要求缩窄范围，也不能拿到一份
+// 静默截断的对账单——少一行就是差异，所以超限报错而不是截断。
+const exportMax = 10000
+
+// ExportOrders 取当前筛选下的全部支付单（不带分页，上限 exportMax），
+// 前端据此生成 CSV；与留言导出同款形状。
+func (s *Service) ExportOrders(ctx context.Context, q OrderQuery) ([]Order, int64, error) {
+	db, _, _, err := s.orderFilter(ctx, q)
+	if err != nil {
+		return nil, 0, err
+	}
+	var total int64
+	if err := db.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	if total > exportMax {
+		return nil, total, response.BadRequest(errExportTooMany)
+	}
+	var rows []Order
+	if err := db.Order("id DESC").Limit(exportMax).Find(&rows).Error; err != nil {
 		return nil, 0, err
 	}
 	return rows, total, nil

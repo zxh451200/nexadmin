@@ -4,6 +4,7 @@ import { useAuth } from '@/framework/auth/useAuth'
 import { usePermission } from '@/framework/auth/usePermission'
 import { ApiError } from '@/framework/request/http'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
+import { RequiredMark } from '@/framework/components/RequiredMark'
 import { Button } from '@/framework/ui/button'
 import { Textarea } from '@/framework/ui/textarea'
 import { Input } from '@/framework/ui/input'
@@ -74,8 +75,12 @@ function Conversations() {
         <Button variant="outline" disabled={pending} onClick={() => { void refresh() }}>{t('plugin_assistant.refresh')}</Button>
       </div>
     </div>
-    {editing && <form className="flex flex-col gap-2 sm:flex-row" onSubmit={event => { event.preventDefault(); void mutate() }}>
-      <Input autoFocus aria-label={t('plugin_assistant.conversations.name')} placeholder={t('plugin_assistant.conversations.name')} value={name} maxLength={80} disabled={pending} onChange={event => setName(event.target.value)} />
+    {editing && <form className="flex flex-col gap-2 sm:flex-row sm:items-center" onSubmit={event => { event.preventDefault(); void mutate() }}>
+      <label className="flex items-center gap-1 text-sm">
+        <span>{t('plugin_assistant.conversations.name')}</span>
+        <RequiredMark />
+      </label>
+      <Input autoFocus className="sm:max-w-xs" aria-label={t('plugin_assistant.conversations.name')} placeholder={t('plugin_assistant.conversations.name')} value={name} maxLength={80} disabled={pending} onChange={event => setName(event.target.value)} />
       <Button disabled={pending || !name.trim() || new TextEncoder().encode(name.trim()).length > 240}>{t('plugin_assistant.conversations.save')}</Button>
       <Button type="button" variant="outline" disabled={pending} onClick={() => setEditing(undefined)}>{t('plugin_assistant.conversations.dismiss')}</Button>
     </form>}

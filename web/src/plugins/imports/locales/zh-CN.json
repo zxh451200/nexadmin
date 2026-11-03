@@ -7,6 +7,10 @@
       "run": "执行导入"
     },
     "all": "全部",
+    "filter": {
+      "allSources": "全部来源",
+      "allStatuses": "全部状态"
+    },
     "empty": "暂无导入记录",
     "noSourcesTitle": "暂无可导入的数据源",
     "noSources": "当前还没有可导入的数据表。开发为某个模块接入导入后，这里会出现可选的来源与模板。",
@@ -22,6 +26,11 @@
     "batchDone": "已提交 {{ok}} 个文件，{{fail}} 个失败",
     "delete": "删除",
     "deleteConfirm": "删除「{{name}}」这条导入记录？已导入的数据不受影响。",
+    "deleteBatchConfirm": "删除选中的 {{count}} 条导入记录？已导入的数据不受影响；只要有记录还在排队或执行中，本次一条都不会删，请先取消它们。",
+    "deletedPartial": "选中 {{total}} 条，实际删除 {{deleted}} 条（其余不存在或不属于当前租户）",
+    "cancel": "取消导入",
+    "cancelConfirm": "取消「{{name}}」？已处理的部分会保留，其余行不再处理。",
+    "cancelDone": "已取消，已处理的部分保留",
     "fields": {
       "source": "数据来源",
       "file": "CSV / XLSX 文件",
@@ -37,7 +46,8 @@
       "pending": "排队中",
       "running": "处理中",
       "done": "已完成",
-      "failed": "失败"
+      "failed": "失败",
+      "cancelled": "已取消"
     }
   }
 }

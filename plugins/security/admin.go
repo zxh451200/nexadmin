@@ -392,6 +392,52 @@ func (s *Service) DeleteRule(ctx context.Context, op User, id idgen.ID) error {
 	return nil
 }
 
+// DeleteRules 批量删除规则：判据与副作用照搬单条 DeleteRule，一样都不能少——
+//   - 防自锁 guard 按「一次去掉整批」算 candidate（cur 减去本次全部目标），会锁住操作者自己时
+//     默认 409 整批拒绝，带 confirmLockout=true 才放行并在审计里记 confirm_lockout；
+//   - 删除成功后清本进程规则缓存并广播给其它实例（漏了这步访问控制最长要等 ruleCacheTTL 才生效）；
+//   - 每条被删的规则各写一行 delete_ip_rule 审计，与单条同口径。
+//
+// 作用域：目标只在 ListRules(op.TID) 里找（跨租户的 id 既看不到也删不到），SQL 里再显式带 tenant_id；
+// 越权 / 不存在的 id 不计入实删条数，0 命中报不存在。
+func (s *Service) DeleteRules(ctx context.Context, op User, ids []idgen.ID) (int64, error) {
+	cur, err := s.st.ListRules(ctx, op.TID)
+	if err != nil {
+		return 0, err
+	}
+	set := make(map[idgen.ID]bool, len(ids))
+	for _, id := range ids {
+		set[id] = true
+	}
+	targets := make([]IPRule, 0, len(ids))
+	cand := make([]IPRule, 0, len(cur))
+	for i := range cur {
+		if set[cur[i].ID] {
+			targets = append(targets, cur[i])
+			continue
+		}
+		cand = append(cand, cur[i])
+	}
+	if len(targets) == 0 {
+		return 0, response.NotFound("error.not_found")
+	}
+	if err := s.guard(ctx, op, cur, cand); err != nil { // 整批拒绝：不删「能删的那几条」
+		return 0, err
+	}
+	n, err := s.st.DeleteRules(ctx, op.TID, ids)
+	if err != nil {
+		return 0, err
+	}
+	if n == 0 {
+		return 0, response.NotFound("error.not_found")
+	}
+	s.invalidateRules(op.TID)
+	for i := range targets {
+		s.audit(ctx, op, "delete_ip_rule", targets[i].CIDR, targets[i].Action+"/"+targets[i].Scope+confirmNote(op))
+	}
+	return n, nil
+}
+
 func confirmNote(op User) string {
 	if op.ConfirmLockout {
 		return " confirm_lockout"

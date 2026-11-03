@@ -101,18 +101,24 @@ func (h *handler) confirm(c *gin.Context) {
 	if !response.BindJSON(c, &f) {
 		return
 	}
-	respond(c, nil, h.svc.Confirm(c.Request.Context(), uidOf(c), strings.TrimSpace(f.Code)))
+	respond(c, nil, h.svc.Confirm(c.Request.Context(), uidOf(c), strings.TrimSpace(f.Code), c.ClientIP()))
 }
 
-// POST /plugins/totp/disable  {"code":"123456"} —— 解绑(需验证码)。
+// POST /plugins/totp/disable  {"code":"123456","password":"…"} —— 解绑(需当前密码 + 验证码)。
+// password 缺失单独报 totp.password_required:旧客户端/版本错位期间能一眼看出缺的是密码,而不是通用参数错误。
 func (h *handler) disable(c *gin.Context) {
 	var f struct {
-		Code string `json:"code" binding:"required"`
+		Code     string `json:"code" binding:"required"`
+		Password string `json:"password"`
 	}
 	if !response.BindJSON(c, &f) {
 		return
 	}
-	respond(c, nil, h.svc.Disable(c.Request.Context(), uidOf(c), strings.TrimSpace(f.Code)))
+	if f.Password == "" {
+		response.Fail(c, response.BadRequest("totp.password_required"))
+		return
+	}
+	respond(c, nil, h.svc.Disable(c.Request.Context(), uidOf(c), strings.TrimSpace(f.Code), f.Password, c.ClientIP()))
 }
 
 func respond(c *gin.Context, data any, err error) {

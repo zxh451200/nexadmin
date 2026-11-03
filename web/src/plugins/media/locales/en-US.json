@@ -44,6 +44,8 @@
       "open": "Open in new tab",
       "empty": "No videos yet",
       "deleteConfirm": "Delete the record for “{{name}}”? The asset on the provider side must be removed in its console.",
+      "deleteBatchConfirm": "Delete the {{count}} selected video records? Assets on the provider side still have to be removed in each provider console.",
+      "deletedPartial": "{{deleted}} of {{total}} selected records deleted (the rest do not exist or belong to another tenant)",
       "copyLink": "Copy MP4 link",
       "copied": "Link copied — paste it into the editor's Insert video dialog",
       "noDownload": "Playback subdomain is missing; no direct link yet",

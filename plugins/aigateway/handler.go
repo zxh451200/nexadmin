@@ -96,6 +96,19 @@ func (h *handler) deleteModel(c *gin.Context) {
 	respond(c, nil, h.svc.DeleteModel(c.Request.Context(), id))
 }
 
+// DELETE /plugins/aigateway/models?ids=1,2,3 —— 批量删除，权限码复用单条删除的 aigateway:edit。
+// ids 缺失 / 整体为空 / 任一项非法都由 response.ParseIDsQuery 直接 400，
+// 绝不退化成「不带 ids 就删掉本租户全部模型」。
+func (h *handler) deleteModels(c *gin.Context) {
+	ids, err := response.ParseIDsQuery(c)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	n, err := h.svc.DeleteModels(c.Request.Context(), ids)
+	respond(c, gin.H{"deleted": n}, err)
+}
+
 // POST /plugins/aigateway/models/:id/ping —— 连通性测试（SSRF 三层防线内）。
 func (h *handler) pingModel(c *gin.Context) {
 	id, ok := idParam(c)

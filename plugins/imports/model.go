@@ -1,6 +1,9 @@
 package imports
 
 import (
+	"context"
+
+	"nexadmin/core"
 	"nexadmin/core/database"
 )
 
@@ -14,7 +17,7 @@ type Job struct {
 	TotalRows  int    `gorm:"column:total_rows" json:"totalRows"`
 	OkRows     int    `gorm:"column:ok_rows" json:"okRows"`
 	FailRows   int    `gorm:"column:fail_rows" json:"failRows"`
-	Status     string `gorm:"column:status" json:"status"` // pending | running | done | failed
+	Status     string `gorm:"column:status" json:"status"` // pending | running | done | failed | cancelled
 	DurationMs int64  `gorm:"column:duration_ms" json:"durationMs"`
 	// ErrorJSON 是最多 500 条 RowError 的 JSON;超出 MaxErrors 的错误只计数不存明细。
 	ErrorJSON string `gorm:"column:error_json;type:text" json:"-"`
@@ -25,12 +28,13 @@ type Job struct {
 
 func (Job) TableName() string { return "plg_imports_job" }
 
-// 任务状态：pending(已受理) → running(后台执行中) → done | failed。
+// 任务状态：pending(已受理) → running(后台执行中) → done | failed | cancelled(取消，已处理部分保留)。
 const (
-	StatusPending = "pending"
-	StatusRunning = "running"
-	StatusDone    = "done"
-	StatusFailed  = "failed"
+	StatusPending   = "pending"
+	StatusRunning   = "running"
+	StatusDone      = "done"
+	StatusFailed    = "failed"
+	StatusCancelled = "cancelled"
 )
 
 // 上限：小文件同步、大文件异步(后台逐行,仍受 AsyncMaxRows 硬顶)。
@@ -40,3 +44,13 @@ const (
 	MaxBytes     = 20 << 20
 	MaxErrors    = 500 // 明细错误最多存 500 条,超出只计数
 )
+
+// importMaxBytes 是本次导入生效的文件上限：系统参数「上传限制」的普通文件上限只能把它往小调。
+// 导入走 io.ReadAll 整读进内存，MaxBytes 因此同时是这条通道的内存天花板——参数放大也顶不开它；
+// 想收紧（比如 5MB）改 upload.max_size_file_mb 就行，不必再改代码重启。
+func importMaxBytes(ctx context.Context) int64 {
+	if l, ok := core.UploadLimitsFromSettings(ctx); ok {
+		return core.ResolveUploadCeiling(l.MaxFileMB, MaxBytes, MaxBytes)
+	}
+	return MaxBytes
+}

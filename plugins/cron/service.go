@@ -12,6 +12,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"nexadmin/core/notify"
 	"nexadmin/core/response"
 	"nexadmin/core/tenant"
 	"nexadmin/pkg/idgen"
@@ -25,6 +26,8 @@ const (
 	maxCatchUp    = 5 * time.Minute // 进程被挂起后最多补跑多久之内的调度分钟
 	staleRunning  = time.Hour       // 超过这个时间仍是 running 的日志视为中断
 	maxRetryCount = 10
+	// maxJobTimeoutSeconds 是按任务配置单次超时的上限（1 小时）：再慢的任务就该拆了。
+	maxJobTimeoutSeconds = 3600
 )
 
 // Service 是调度器 + 任务管理。单实例直接按分钟调度；多实例靠数据库抢占避免重复执行。
@@ -40,6 +43,8 @@ const (
 type Service struct {
 	db  *gorm.DB
 	log *zap.Logger
+	// alert 是失败告警器；nil（未启用）时不发通知。
+	alert *alerter
 
 	mu      sync.Mutex
 	running map[idgen.ID]bool // 本实例内同一任务不并发
@@ -52,6 +57,13 @@ func NewService(db *gorm.DB, log *zap.Logger) *Service {
 		log = zap.NewNop()
 	}
 	return &Service{db: db, log: log, running: map[idgen.ID]bool{}, base: context.Background()}
+}
+
+// EnableAlerts 打开失败告警：Start 时由插件装配（ctx 是插件运行期 context）。
+func (s *Service) EnableAlerts(ctx context.Context, n interface {
+	Send(ctx context.Context, m notify.Msg) error
+}) {
+	s.alert = newAlerter(ctx, s.db, n, s.log)
 }
 
 // ---- 调度循环 ----
@@ -177,9 +189,14 @@ func (s *Service) execute(ctx context.Context, job Job, row *Log) {
 	if !ok {
 		attempts, err = 1, fmt.Errorf("handler %q is not registered", job.Handler)
 	} else {
+		// 单次尝试的超时按任务配置（timeoutSeconds），0 回退全局默认 jobTimeout。
+		timeout := jobTimeout
+		if job.TimeoutSeconds > 0 {
+			timeout = time.Duration(job.TimeoutSeconds) * time.Second
+		}
 		for attempts < job.RetryCount+1 {
 			attempts++
-			actx, cancel := context.WithTimeout(ctx, jobTimeout)
+			actx, cancel := context.WithTimeout(ctx, timeout)
 			out, err = safeRun(actx, spec, env, job.Params)
 			cancel()
 			if err == nil || ctx.Err() != nil || attempts > job.RetryCount {
@@ -211,6 +228,10 @@ func (s *Service) execute(ctx context.Context, job Job, row *Log) {
 	if e := s.db.WithContext(wctx).Model(&Job{}).Where("id = ?", job.ID).
 		UpdateColumns(map[string]any{"last_run_at": row.StartedAt, "last_status": status}).Error; e != nil {
 		s.log.Error("cron: update job status", zap.Error(e))
+	}
+	// 重试耗尽仍失败才告警：重试期间的抖动不打扰人。
+	if status == StatusFailed {
+		s.alert.alert(job, row, errText)
 	}
 }
 
@@ -245,6 +266,8 @@ type JobForm struct {
 	Params     string `json:"params"`
 	Enabled    bool   `json:"enabled"`
 	RetryCount int    `json:"retryCount"`
+	// TimeoutSeconds 是单次尝试的超时（秒）；0 = 全局默认。上限 maxJobTimeoutSeconds。
+	TimeoutSeconds int `json:"timeoutSeconds"`
 }
 
 // JobView 是任务列表项：任务本身 + 下次执行时间。
@@ -272,6 +295,9 @@ func (f *JobForm) normalize() error {
 	}
 	if f.RetryCount < 0 || f.RetryCount > maxRetryCount {
 		return badReq("cron.retry_count_invalid", maxRetryCount)
+	}
+	if f.TimeoutSeconds < 0 || f.TimeoutSeconds > maxJobTimeoutSeconds {
+		return badReq("cron.timeout_invalid", maxJobTimeoutSeconds)
 	}
 	if len(f.Params) > 4<<10 {
 		return badReq("cron.params_too_long")
@@ -360,7 +386,7 @@ func (s *Service) SaveJob(ctx context.Context, id idgen.ID, f JobForm) (*JobView
 			return nil, err
 		}
 	}
-	j.Name, j.CronExpr, j.Handler, j.Params, j.Enabled, j.RetryCount = f.Name, f.CronExpr, f.Handler, f.Params, f.Enabled, f.RetryCount
+	j.Name, j.CronExpr, j.Handler, j.Params, j.Enabled, j.RetryCount, j.TimeoutSeconds = f.Name, f.CronExpr, f.Handler, f.Params, f.Enabled, f.RetryCount, f.TimeoutSeconds
 	if err := s.db.WithContext(ctx).Save(j).Error; err != nil {
 		return nil, err
 	}
@@ -386,6 +412,26 @@ func (s *Service) DeleteJob(ctx context.Context, id idgen.ID) error {
 		return err
 	}
 	return s.db.WithContext(ctx).Delete(&Job{}, "id = ?", id).Error // 执行日志保留，job_name 已冗余存储
+}
+
+// DeleteJobs 批量删除任务：副作用与单条 DeleteJob 一致（只删任务行，执行日志保留），
+// 单条删除没有“运行中不可删”的判断，所以批量也不加。
+// 作用域靠 ctx 的租户 scope 插件（core/database 的 tenantPlugin 给 DELETE 追加 tenant_id 条件），
+// 与单条同一条路径；越权 / 不存在的 id 落在 scope 外，删不到也不计入实删条数，0 命中报不存在。
+// 一条 DELETE 走完（GORM 自带事务），不会出现「删了一半」。
+func (s *Service) DeleteJobs(ctx context.Context, ids []idgen.ID) (int64, error) {
+	list := make([]int64, 0, len(ids))
+	for _, id := range ids {
+		list = append(list, int64(id))
+	}
+	res := s.db.WithContext(ctx).Where("id IN ?", list).Delete(&Job{})
+	if res.Error != nil {
+		return 0, res.Error
+	}
+	if res.RowsAffected == 0 {
+		return 0, response.NotFound("error.not_found")
+	}
+	return res.RowsAffected, nil
 }
 
 // RunNow 立即异步执行一次（不受 cron 表达式与启用状态限制），返回 running 状态的日志行。

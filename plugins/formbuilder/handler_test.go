@@ -32,6 +32,7 @@ var routePerms = map[string]string{
 	"GET /api/v1/plugins/formbuilder/users":                         "formbuilder:design",
 	"GET /api/v1/plugins/formbuilder/forms":                         "formbuilder:design",
 	"POST /api/v1/plugins/formbuilder/forms":                        "formbuilder:design",
+	"DELETE /api/v1/plugins/formbuilder/forms":                      "formbuilder:design",
 	"POST /api/v1/plugins/formbuilder/forms/import":                 "formbuilder:design",
 	"GET /api/v1/plugins/formbuilder/forms/:id":                     "formbuilder:design",
 	"PUT /api/v1/plugins/formbuilder/forms/:id":                     "formbuilder:design",
@@ -50,6 +51,7 @@ var routePerms = map[string]string{
 	"GET /api/v1/plugins/formbuilder/forms/:id/submissions":         "formbuilder:submission",
 	"GET /api/v1/plugins/formbuilder/forms/:id/submissions/:sid":    "formbuilder:submission",
 	"DELETE /api/v1/plugins/formbuilder/forms/:id/submissions/:sid": "formbuilder:submission",
+	"DELETE /api/v1/plugins/formbuilder/forms/:id/submissions":      "formbuilder:submission",
 	"GET /api/v1/plugins/formbuilder/forms/:id/export":              "formbuilder:export",
 	"POST /api/v1/plugins/formbuilder/forms/:id/export-job":         "formbuilder:export",
 }

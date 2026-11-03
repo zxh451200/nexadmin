@@ -25,6 +25,8 @@ type Service struct {
 	reg *Registry
 	set Settings
 	eng *Engine
+	// mailer 是报表订阅的邮件出口；nil = 未装配（生产由 Register 注入），调度直接空转。
+	mailer mailer
 }
 
 // NewService 创建服务。

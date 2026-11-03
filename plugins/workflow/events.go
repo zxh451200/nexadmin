@@ -33,11 +33,13 @@ type EventData struct {
 	BizType     string    `json:"bizType,omitempty"`
 	BusinessKey string    `json:"businessKey,omitempty"`
 	Status      string    `json:"status"`
-	Current     []string  `json:"current,omitempty"`
-	Approvers   []string  `json:"approvers,omitempty"`
-	Actor       string    `json:"actor,omitempty"`
-	Comment     string    `json:"comment,omitempty"`
-	OccurredAt  time.Time `json:"occurredAt"`
+	// TenantID 是实例所属租户：站内信是租户表，订阅方按它路由发送上下文。
+	TenantID   string    `json:"tenantId,omitempty"`
+	Current    []string  `json:"current,omitempty"`
+	Approvers  []string  `json:"approvers,omitempty"`
+	Actor      string    `json:"actor,omitempty"`
+	Comment    string    `json:"comment,omitempty"`
+	OccurredAt time.Time `json:"occurredAt"`
 }
 
 // handleEvent 把运行时事件桥接到框架事件总线。
@@ -59,7 +61,8 @@ func (s *Service) handleEvent(ctx context.Context, ev runtime.Event) {
 	data := EventData{
 		InstID: instID, DefKey: ev.Inst.DefKey, Title: ev.Inst.Title,
 		BizType: ev.Inst.BizType, BusinessKey: ev.Inst.BusinessKey, Status: ev.Inst.Status,
-		Actor: ev.Actor, Comment: ev.Comment, OccurredAt: ev.At,
+		TenantID: ev.Inst.TenantID,
+		Actor:    ev.Actor, Comment: ev.Comment, OccurredAt: ev.At,
 	}
 	if ev.State != nil {
 		data.Current = ev.State.Current

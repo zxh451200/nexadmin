@@ -14,6 +14,8 @@ export interface CronJob {
   params: string
   enabled: boolean
   retryCount: number
+  /** 单次尝试的超时（秒）；0 = 用全局默认（5 分钟） */
+  timeoutSeconds?: number
   lastRunAt: string | null
   lastStatus: RunStatus | ''
   nextRunAt: string | null
@@ -28,6 +30,7 @@ export interface CronJobForm {
   params: string
   enabled: boolean
   retryCount: number
+  timeoutSeconds?: number
 }
 
 export interface CronHandler {
@@ -127,6 +130,16 @@ export function useDeleteJob() {
   const invalidate = useInvalidate()
   return useMutation({
     mutationFn: (id: string) => api.del(`${BASE}/jobs/${id}`),
+    onSuccess: invalidate,
+  })
+}
+
+/** 批量删除任务：deleted 是后端实际删除条数（越权或已被删的 id 不计入，一条都没删到时报 404）。
+ *  路径写静态字面量：contract_check 靠静态解析这里的第一个实参对照后端路由。 */
+export function useDeleteJobs() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (ids: string[]) => api.del<{ deleted: number }>('/plugins/cron/jobs', { ids: ids.join(',') }),
     onSuccess: invalidate,
   })
 }

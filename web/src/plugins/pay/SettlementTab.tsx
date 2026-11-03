@@ -7,6 +7,7 @@ import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { DatePicker } from '@/framework/components/DatePicker'
+import { RequiredMark } from '@/framework/components/RequiredMark'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Segmented } from '@/framework/components/Segmented'
 import { Badge } from '@/framework/ui/badge'
@@ -177,7 +178,10 @@ function RuleDialog({ rule, onClose }: { rule: PayCommissionRule | null; onClose
         </label>
         <div className="grid grid-cols-2 gap-3">
           <label className="flex flex-col gap-1">
-            {t('plugin_pay.fields.bizType')}
+            <span>
+              {t('plugin_pay.fields.bizType')}
+              <RequiredMark />
+            </span>
             <Input value={bizType} onChange={(e) => setBizType(e.target.value)} />
           </label>
           <label className="flex flex-col gap-1">
@@ -267,7 +271,7 @@ function SettlementsPanel() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_pay.all')}</SelectItem>
+            <SelectItem value={ALL}>{t('plugin_pay.filter.allStatuses')}</SelectItem>
             {(['draft', 'confirmed', 'paid'] as const).map((s) => (
               <SelectItem key={s} value={s}>
                 {t(`plugin_pay.settlementStatus.${s}`)}
@@ -348,11 +352,17 @@ function GenerateDialog({ onClose }: { onClose: () => void }) {
         </label>
         <div className="grid grid-cols-2 gap-3">
           <label className="flex flex-col gap-1">
-            {t('plugin_pay.settle.periodStart')}
+            <span>
+              {t('plugin_pay.settle.periodStart')}
+              <RequiredMark />
+            </span>
             <DatePicker value={periodStart} onChange={setPeriodStart} allowClear={false} toDate={periodEnd ? parseISO(periodEnd) : undefined} />
           </label>
           <label className="flex flex-col gap-1">
-            {t('plugin_pay.settle.periodEnd')}
+            <span>
+              {t('plugin_pay.settle.periodEnd')}
+              <RequiredMark />
+            </span>
             <DatePicker value={periodEnd} onChange={setPeriodEnd} allowClear={false} fromDate={periodStart ? parseISO(periodStart) : undefined} />
           </label>
         </div>
@@ -433,7 +443,7 @@ function PayoutsPanel() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_pay.all')}</SelectItem>
+            <SelectItem value={ALL}>{t('plugin_pay.filter.allStatuses')}</SelectItem>
             {PAYOUT_STATUSES.map((s) => (
               <SelectItem key={s} value={s}>
                 {t(`plugin_pay.payoutStatus.${s}`)}
@@ -608,7 +618,10 @@ function ChannelPayDialog({
           <CapabilityNote tone="warn">{t('plugin_pay.settle.noPayoutChannel')}</CapabilityNote>
         ) : (
           <label className="flex flex-col gap-1">
-            {t('plugin_pay.settle.pickPayoutChannel')}
+            <span>
+              {t('plugin_pay.settle.pickPayoutChannel')}
+              <RequiredMark />
+            </span>
             <Select value={channelCode} onValueChange={setChannelCode}>
               <SelectTrigger aria-label={t('plugin_pay.settle.pickPayoutChannel')}>
                 <SelectValue placeholder={t('plugin_pay.auth.pickChannel')} />
@@ -669,7 +682,10 @@ function CreatePayoutDialog({ onClose }: { onClose: () => void }) {
       }
     >
       <div className="flex flex-col gap-3 text-sm">
-        <p className="text-xs text-muted-foreground">{t('plugin_pay.settle.pickSettlementHint')}</p>
+        {/* 结算单是「至少选一个」的组必填：星号标在组提示前 */}
+        <p className="text-xs text-muted-foreground">
+          <RequiredMark /> {t('plugin_pay.settle.pickSettlementHint')}
+        </p>
         {isLoading ? <p className="text-muted-foreground">{t('common.loading')}</p> : null}
         {!isLoading && data.length === 0 ? <p className="text-muted-foreground">{t('plugin_pay.settle.noConfirmed')}</p> : null}
         <div className="flex max-h-64 flex-col gap-2 overflow-y-auto">
@@ -735,7 +751,10 @@ function MarkPaidDialog({ batch, onClose }: { batch: PayPayoutBatch; onClose: ()
       <div className="flex flex-col gap-2 text-sm">
         <p className="text-xs text-muted-foreground">{t('plugin_pay.settle.payoutPathManualHint')}</p>
         <label className="flex flex-col gap-1">
-          {t('plugin_pay.settle.receiptNo')}
+          <span>
+            {t('plugin_pay.settle.receiptNo')}
+            <RequiredMark />
+          </span>
           <Input value={receiptNo} maxLength={64} onChange={(e) => setReceiptNo(e.target.value)} />
         </label>
       </div>

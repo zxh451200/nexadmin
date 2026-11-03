@@ -14,6 +14,8 @@
     "confirmed": "两步验证已启用",
     "disabled": "两步验证已关闭",
     "disable": "停用两步验证",
+    "disableHint": "为防止会话被盗用后直接关掉两步验证，停用需要先输入当前登录密码",
+    "passwordPlaceholder": "输入当前登录密码",
     "codeWrong": "验证码错误,请重试"
   }
 }

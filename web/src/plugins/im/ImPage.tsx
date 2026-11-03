@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { ArrowRightLeft, Ban, BarChart3, Bell, BellOff, ChevronUp, Download, FileText, Lock, Merge, MessageSquare, Paperclip, Pencil, Send, Settings2, Star, StickyNote, Tag, Trash2, Undo2, UserMinus, UserPlus } from 'lucide-react'
+import { ArrowRightLeft, Ban, BarChart3, Bell, BellOff, ChevronUp, Download, Ellipsis, FileText, Lock, Merge, MessageSquare, Paperclip, Pencil, Send, Settings2, Star, StickyNote, Tag, Trash2, Undo2, UserMinus, UserPlus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
@@ -11,13 +11,17 @@ import { EmptyState } from '@/framework/components/EmptyState'
 import { StatCard } from '@/framework/components/StatCard'
 import { TrendChart } from '@/framework/components/TrendChart'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
+import { RequiredMark } from '@/framework/components/RequiredMark'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { SimpleSelect } from '@/framework/components/SimpleSelect'
 import { TimeField } from '@/framework/components/pickers/TimeField'
+import { Lightbox, type LightboxSlide } from '@/framework/upload/Lightbox'
 import { useWs } from '@/framework/hooks/useWs'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Card } from '@/framework/ui/card'
+import { Checkbox } from '@/framework/ui/checkbox'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/framework/ui/dropdown-menu'
 import { Input } from '@/framework/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/framework/ui/popover'
 import { Switch } from '@/framework/ui/switch'
@@ -39,8 +43,10 @@ import {
   useSaveImSettings,
   useClaimConv,
   useCloseConv,
+  useAttachmentLimits,
   useConversations,
   useDeleteConv,
+  useDeleteConvsBatch,
   useDeleteQuickReply,
   useQuickReplies,
   useRecallMessage,
@@ -118,6 +124,7 @@ export default function ImPage() {
   const [pageSize, setPageSize] = useState(50)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [statsOpen, setStatsOpen] = useState(false)
+  const [picked, setPicked] = useState<string[]>([])
   const [notifyOn, setNotifyOn] = useState(() => localStorage.getItem(NOTIFY_KEY) === '1')
 
   const convs = useConversations({
@@ -134,6 +141,7 @@ export default function ImPage() {
   const setTags = useSetTags()
   const setNote = useSetNote()
   const deleteConv = useDeleteConv()
+  const deleteConvs = useDeleteConvsBatch()
   const recall = useRecallMessage()
   const merge = useMergeConv()
   const transfer = useTransferConv()
@@ -367,8 +375,47 @@ export default function ImPage() {
     }
   }
 
-  const list = convs.data?.list ?? []
+  // useMemo：勾选清理那个 effect 依赖 list，裸 `?? []` 会让它每次渲染都重跑。
+  const list = useMemo(() => convs.data?.list ?? [], [convs.data])
   const total = convs.data?.total ?? 0
+
+  // 批量删除沿用单条删除的口径：超管、且只有已结束的会话可删（进行中的后端会跳过，勾上也是白勾）。
+  const canPick = isSuper
+  const deletable = list.filter((c) => c.status === 'closed').map((c) => c.convNo)
+  const allPicked = deletable.length > 0 && deletable.every((no) => picked.includes(no))
+
+  // 会话被删掉或翻页移出视野时同步收掉勾选项，别让看不见的会话留在待删清单里。
+  useEffect(() => {
+    setPicked((p) => {
+      const kept = p.filter((no) => list.some((c) => c.convNo === no))
+      return kept.length === p.length ? p : kept
+    })
+  }, [list])
+
+  const togglePicked = (convNo: string, on: boolean) =>
+    setPicked((p) => (on ? [...new Set([...p, convNo])] : p.filter((x) => x !== convNo)))
+
+  const onDeletePicked = async () => {
+    const nos = [...picked]
+    if (nos.length === 0) return
+    if (
+      !(await confirm({
+        destructive: true,
+        title: t('plugin_im.batch.deleteTitle'),
+        description: t('plugin_im.batch.deleteConfirm', { count: nos.length }),
+      }))
+    )
+      return
+    try {
+      const res = await deleteConvs.mutateAsync(nos)
+      if (selected && nos.includes(selected)) setSelected(undefined)
+      setPicked([])
+      toast.success(t('plugin_im.batch.deleted', { count: res.deleted }))
+      if (res.skipped.length > 0) toast.warning(t('plugin_im.batch.skipped', { count: res.skipped.length }))
+    } catch {
+      toast.error(t('common.operateFailed'))
+    }
+  }
 
   return (
     <PageContainer>
@@ -379,16 +426,18 @@ export default function ImPage() {
           <>
             <Button variant="outline" size="sm" onClick={() => setStatsOpen(true)}>
               <BarChart3 aria-hidden="true" />
-              <span className="max-sm:sr-only">{t('plugin_im.stats.action')}</span>
+              {t('plugin_im.stats.action')}
             </Button>
             <Button variant="outline" size="sm" onClick={() => void onExport()} disabled={exporting}>
               <Download aria-hidden="true" />
-              <span className="max-sm:sr-only">{t('plugin_im.export')}</span>
+              {t('plugin_im.export')}
             </Button>
-            <Can perm="im:edit">
+            {/* 打开弹窗读的是 GET /settings（im:list），按 im:edit 门控会让只读角色点开就转圈；
+                能不能保存由弹窗内部按 im:edit 决定 */}
+            <Can perm="im:list">
               <Button variant="outline" size="sm" onClick={() => setSettingsOpen(true)}>
                 <Settings2 aria-hidden="true" />
-                <span className="max-sm:sr-only">{t('plugin_im.settings.action')}</span>
+                {t('plugin_im.settings.action')}
               </Button>
             </Can>
           </>
@@ -440,9 +489,43 @@ export default function ImPage() {
               {notifyOn ? <Bell aria-hidden="true" /> : <BellOff aria-hidden="true" />}
             </Button>
           </div>
+          {canPick ? (
+            <div className="flex items-center gap-2 border-b px-1 pb-1.5">
+              <Checkbox
+                id="im-pick-all"
+                checked={allPicked ? true : picked.length > 0 ? 'indeterminate' : false}
+                disabled={deletable.length === 0}
+                onCheckedChange={(v) => setPicked(v === true ? deletable : [])}
+              />
+              <label htmlFor="im-pick-all" className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+                {picked.length > 0 ? t('common.selected', { count: picked.length }) : t('plugin_im.batch.selectAllClosed')}
+              </label>
+              {picked.length > 0 ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="shrink-0 text-destructive"
+                  disabled={deleteConvs.isPending}
+                  onClick={() => void onDeletePicked()}
+                >
+                  <Trash2 aria-hidden="true" />
+                  {t('plugin_im.batch.delete')}
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
           <div className="min-h-0 flex-1 overflow-y-auto">
             {list.map((c) => (
-              <ConvListItem key={c.id} conv={c} active={c.convNo === selected} onSelect={() => setSelected(c.convNo)} />
+              <ConvListItem
+                key={c.id}
+                conv={c}
+                active={c.convNo === selected}
+                canPick={canPick}
+                picked={picked.includes(c.convNo)}
+                onTogglePick={(on) => togglePicked(c.convNo, on)}
+                onSelect={() => setSelected(c.convNo)}
+              />
             ))}
             {list.length < total ? (
               <Button variant="ghost" size="sm" className="mt-1 w-full" onClick={() => setPageSize((n) => n + 50)}>
@@ -483,10 +566,25 @@ export default function ImPage() {
   )
 }
 
-function ConvListItem({ conv, active, onSelect }: { conv: ImConversation; active: boolean; onSelect: () => void }) {
+function ConvListItem({
+  conv,
+  active,
+  canPick,
+  picked,
+  onTogglePick,
+  onSelect,
+}: {
+  conv: ImConversation
+  active: boolean
+  /** 只有超管看得到勾选框 */
+  canPick: boolean
+  picked: boolean
+  onTogglePick: (on: boolean) => void
+  onSelect: () => void
+}) {
   const { t } = useTranslation()
   const tags = (conv.tags || '').split(',').filter(Boolean)
-  return (
+  const row = (
     <button
       type="button"
       onClick={onSelect}
@@ -515,6 +613,21 @@ function ConvListItem({ conv, active, onSelect }: { conv: ImConversation; active
         </div>
       ) : null}
     </button>
+  )
+  if (!canPick) return row
+  // 勾选框必须是按钮的兄弟节点：套在 <button> 里既是无效 HTML，点了也会连带选中会话
+  return (
+    <div className="flex items-start gap-1">
+      <Checkbox
+        className="mt-2.5 shrink-0"
+        checked={picked}
+        disabled={conv.status !== 'closed'}
+        title={conv.status === 'closed' ? undefined : t('plugin_im.batch.onlyClosed')}
+        aria-label={conv.visitorName || conv.visitorToken}
+        onCheckedChange={(v) => onTogglePick(v === true)}
+      />
+      <div className="min-w-0 flex-1">{row}</div>
+    </div>
   )
 }
 
@@ -560,11 +673,17 @@ function FileAttachment({ att, url }: { att: ImAttachment; url: string }) {
 }
 
 // 图片取不到时退回文件名链接，气泡里不会剩一块空白。
-function ImageAttachment({ att, url }: { att: ImAttachment; url: string }) {
+function ImageAttachment({ att, url, onZoom }: { att: ImAttachment; url: string; onZoom: () => void }) {
   const [failed, setFailed] = useState(false)
   if (failed) return <FileAttachment att={att} url={url} />
   return (
-    <a href={url} target="_blank" rel="noreferrer" className="block">
+    <button
+      type="button"
+      onClick={onZoom}
+      aria-label={att.name}
+      title={att.name}
+      className="block max-w-full cursor-zoom-in rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
       <img
         src={url}
         alt={att.name}
@@ -572,7 +691,7 @@ function ImageAttachment({ att, url }: { att: ImAttachment; url: string }) {
         onError={() => setFailed(true)}
         className="max-h-60 max-w-full min-w-20 rounded-md object-contain"
       />
-    </a>
+    </button>
   )
 }
 
@@ -622,14 +741,30 @@ function ChatPane({
 }) {
   const { t, i18n } = useTranslation()
   const userId = useAuth((s) => s.user?.id)
+  const { has } = usePermission()
+  // 「更多」只在真有可收项时出现，别给没权限的坐席摆一个空菜单
+  const showMoreMenu = has('im:edit') || (canDelete && conv?.status === 'closed')
   const [draft, setDraft] = useState('')
   const [tagDraft, setTagDraft] = useState<string | null>(null)
   const [noteDraft, setNoteDraft] = useState<string | null>(null)
   const [mergeOpen, setMergeOpen] = useState(false)
   const [transferOpen, setTransferOpen] = useState(false)
+  const [zoomImageId, setZoomImageId] = useState<string | null>(null)
+  // 会话里已加载的图片消息：点开任意一张，左右就能翻到其余的
+  const imageSlides = useMemo<(LightboxSlide & { id: string })[]>(() => {
+    const out: (LightboxSlide & { id: string })[] = []
+    for (const m of messages) {
+      if (m.kind === 'system') continue
+      const att = messageAttachment(m)
+      if (att?.mime.startsWith('image/')) out.push({ id: m.id, src: imAttachmentUrl(att.token), alt: att.name })
+    }
+    return out
+  }, [messages])
   const bottomRef = useRef<HTMLDivElement | null>(null)
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
   const fileRef = useRef<HTMLInputElement | null>(null)
+  // 可传的类型与大小由后端下发：服务端白名单改了，这里的文件选择器跟着变
+  const { data: attLimits } = useAttachmentLimits()
   const lastTyping = useRef(0)
 
   useEffect(() => {
@@ -683,62 +818,69 @@ function ChatPane({
             {conv.visitorIp ? ` · ${conv.visitorIp}` : ''}
           </div>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex flex-wrap items-center gap-x-1 gap-y-2">
           <Can perm="im:reply">
             {conv.assigneeId ? (
               <Button variant="ghost" size="sm" onClick={() => onClaim(conv, true)}>
                 <UserMinus aria-hidden="true" />
-                <span className="max-sm:sr-only">{t('plugin_im.release')}</span>
+                {t('plugin_im.release')}
               </Button>
             ) : (
               <Button variant="ghost" size="sm" onClick={() => onClaim(conv, false)}>
                 <UserPlus aria-hidden="true" />
-                <span className="max-sm:sr-only">{t('plugin_im.claim')}</span>
+                {t('plugin_im.claim')}
               </Button>
             )}
           </Can>
-          <Can perm="im:edit">
-            <Button variant="ghost" size="sm" onClick={() => setTransferOpen(true)}>
-              <ArrowRightLeft aria-hidden="true" />
-              <span className="max-sm:sr-only">{t('plugin_im.transfer')}</span>
-            </Button>
-          </Can>
-          <Can perm="im:edit">
-            <Button variant="ghost" size="sm" onClick={() => setTagDraft(conv.tags || '')}>
-              <Tag aria-hidden="true" />
-              <span className="max-sm:sr-only">{t('plugin_im.tags.action')}</span>
-            </Button>
-          </Can>
-          <Can perm="im:edit">
-            <Button variant="ghost" size="sm" onClick={() => setNoteDraft(conv.note || '')}>
-              <StickyNote aria-hidden="true" />
-              <span className="max-sm:sr-only">{t('plugin_im.note.action')}</span>
-            </Button>
-          </Can>
-          {conv.status === 'open' ? (
-            <Can perm="im:edit">
-              <Button variant="ghost" size="sm" onClick={() => setMergeOpen(true)}>
-                <Merge aria-hidden="true" />
-                <span className="max-sm:sr-only">{t('plugin_im.merge.action')}</span>
-              </Button>
-            </Can>
+          {/* 管理类动作收进「更多」：铺开成六七个纯图标按钮既没人看得懂，也把会话信息挤没了 */}
+          {showMoreMenu ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm">
+                  <Ellipsis aria-hidden="true" />
+                  {t('common.more')}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="min-w-44">
+                <Can perm="im:edit">
+                  <DropdownMenuItem onClick={() => setTransferOpen(true)}>
+                    <ArrowRightLeft aria-hidden="true" />
+                    {t('plugin_im.transfer')}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setTagDraft(conv.tags || '')}>
+                    <Tag aria-hidden="true" />
+                    {t('plugin_im.tags.action')}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setNoteDraft(conv.note || '')}>
+                    <StickyNote aria-hidden="true" />
+                    {t('plugin_im.note.action')}
+                  </DropdownMenuItem>
+                  {conv.status === 'open' ? (
+                    <DropdownMenuItem onClick={() => setMergeOpen(true)}>
+                      <Merge aria-hidden="true" />
+                      {t('plugin_im.merge.action')}
+                    </DropdownMenuItem>
+                  ) : null}
+                </Can>
+                {canDelete && conv.status === 'closed' ? (
+                  <DropdownMenuItem className="text-destructive" onClick={() => onDelete(conv)}>
+                    <Trash2 aria-hidden="true" />
+                    {t('plugin_im.delete.action')}
+                  </DropdownMenuItem>
+                ) : null}
+              </DropdownMenuContent>
+            </DropdownMenu>
           ) : null}
           {conv.status === 'open' ? (
             <Can perm="im:edit">
               <Button variant="outline" size="sm" onClick={() => onClose(conv)}>
                 <Ban aria-hidden="true" />
-                <span className="max-sm:sr-only">{t('plugin_im.close')}</span>
+                {t('plugin_im.close')}
               </Button>
             </Can>
           ) : (
             <Badge variant="secondary">{t('plugin_im.status.closed')}</Badge>
           )}
-          {canDelete && conv.status === 'closed' ? (
-            <Button variant="ghost" size="sm" className="text-destructive" onClick={() => onDelete(conv)}>
-              <Trash2 aria-hidden="true" />
-              <span className="max-sm:sr-only">{t('plugin_im.delete.action')}</span>
-            </Button>
-          ) : null}
         </div>
       </div>
 
@@ -850,7 +992,7 @@ function ChatPane({
                 </div>
                 {att ? (
                   att.mime.startsWith('image/') ? (
-                    <ImageAttachment att={att} url={attUrl} />
+                    <ImageAttachment att={att} url={attUrl} onZoom={() => setZoomImageId(m.id)} />
                   ) : (
                     <FileAttachment att={att} url={attUrl} />
                   )
@@ -874,6 +1016,17 @@ function ChatPane({
         <div ref={bottomRef} />
       </div>
 
+      {zoomImageId !== null && imageSlides.some((s) => s.id === zoomImageId) ? (
+        <Lightbox
+          open
+          onOpenChange={(open) => {
+            if (!open) setZoomImageId(null)
+          }}
+          slides={imageSlides}
+          index={imageSlides.findIndex((s) => s.id === zoomImageId)}
+        />
+      ) : null}
+
       {typing ? (
         <div className="px-4 pb-1 text-xs text-muted-foreground">{t('plugin_im.visitorTyping')}</div>
       ) : null}
@@ -891,7 +1044,7 @@ function ChatPane({
               ref={fileRef}
               type="file"
               className="hidden"
-              accept="image/png,image/jpeg,image/gif,image/webp,application/pdf,text/plain,.zip,.docx,.xlsx,.pptx"
+              accept={attLimits?.accept}
               onChange={(e) => {
                 const file = e.target.files?.[0]
                 e.target.value = ''
@@ -932,7 +1085,7 @@ function ChatPane({
             />
             <Button type="submit" disabled={sending || !draft.trim()}>
               <Send aria-hidden="true" />
-              <span className="max-sm:sr-only">{t('plugin_im.send')}</span>
+              {t('plugin_im.send')}
             </Button>
           </form>
         </Can>
@@ -1011,14 +1164,20 @@ function MergeDialog({
         </>
       }
     >
-      <Input
-        value={target}
-        onChange={(e) => setTarget(e.target.value)}
-        placeholder="IM..."
-        aria-label={t('plugin_im.merge.target')}
-        className="font-mono"
-        autoFocus
-      />
+      <label className="flex flex-col gap-1 text-sm">
+        <span>
+          {t('plugin_im.merge.target')}
+          <RequiredMark />
+        </span>
+        <Input
+          value={target}
+          onChange={(e) => setTarget(e.target.value)}
+          placeholder="IM..."
+          aria-label={t('plugin_im.merge.target')}
+          className="font-mono"
+          autoFocus
+        />
+      </label>
       <p className="mt-2 text-xs text-muted-foreground">{t('plugin_im.merge.warning')}</p>
     </ResponsiveDialog>
   )
@@ -1156,19 +1315,31 @@ function QuickReplyManager() {
       <ResponsiveDialog open={open} onOpenChange={setOpen} title={t('plugin_im.quickReply.manage')} size="md">
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-2 rounded-md border p-3">
-            <Input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder={t('plugin_im.quickReply.name')}
-              aria-label={t('plugin_im.quickReply.name')}
-            />
-            <Textarea
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              placeholder={t('plugin_im.quickReply.content')}
-              aria-label={t('plugin_im.quickReply.content')}
-              rows={3}
-            />
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-muted-foreground">
+                {t('plugin_im.quickReply.name')}
+                <RequiredMark />
+              </span>
+              <Input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder={t('plugin_im.quickReply.name')}
+                aria-label={t('plugin_im.quickReply.name')}
+              />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-muted-foreground">
+                {t('plugin_im.quickReply.content')}
+                <RequiredMark />
+              </span>
+              <Textarea
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                placeholder={t('plugin_im.quickReply.content')}
+                aria-label={t('plugin_im.quickReply.content')}
+                rows={3}
+              />
+            </label>
             <div className="flex justify-end gap-2">
               {editing ? (
                 <Button variant="ghost" size="sm" onClick={reset}>
@@ -1223,8 +1394,11 @@ function QuickReplyManager() {
 
 function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const { t } = useTranslation()
+  const { has } = usePermission()
   const settings = useImSettings(open)
   const save = useSaveImSettings()
+  // 读设置只要 im:list，写要 im:edit：只读角色也该看得到当前配置，但保存按钮不给
+  const canEdit = has('im:edit')
   const [form, setForm] = useState<ImSettings | null>(null)
 
   useEffect(() => {
@@ -1266,18 +1440,32 @@ function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (
       description={t('plugin_im.settings.hint')}
       size="md"
       footer={
-        <div className="flex justify-end gap-2">
+        <div className="flex items-center justify-end gap-2">
+          {canEdit ? null : (
+            <span className="me-auto text-xs text-muted-foreground">{t('plugin_im.settings.readonlyHint')}</span>
+          )}
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             {t('common.cancel')}
           </Button>
-          <Button onClick={() => void submit()} disabled={!form || save.isPending}>
-            {t('common.save')}
-          </Button>
+          {canEdit ? (
+            <Button onClick={() => void submit()} disabled={!form || save.isPending}>
+              {t('common.save')}
+            </Button>
+          ) : null}
         </div>
       }
     >
       {!form ? (
-        <div className="py-6 text-center text-sm text-muted-foreground">{t('plugin_im.loading')}</div>
+        settings.isError ? (
+          <div className="flex flex-col items-center gap-3 py-6 text-center">
+            <p className="text-sm text-destructive">{t('common.loadFailed')}</p>
+            <Button variant="outline" size="sm" onClick={() => void settings.refetch()} disabled={settings.isFetching}>
+              {t('common.retry')}
+            </Button>
+          </div>
+        ) : (
+          <div className="py-6 text-center text-sm text-muted-foreground">{t('plugin_im.loading')}</div>
+        )
       ) : (
         <div className="flex flex-col gap-4">
           <label className="flex items-center justify-between gap-3 text-sm">

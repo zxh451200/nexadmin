@@ -77,6 +77,7 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.PUT("/sources/:id", core.Perm("identity:edit"), h.update)
 	g.PUT("/sources/:id/enabled", core.Perm("identity:edit"), h.setEnabled)
 	g.DELETE("/sources/:id", core.Perm("identity:edit"), h.remove)
+	g.DELETE("/sources", core.Perm("identity:edit"), h.removeMany)
 	g.POST("/sources/:id/test-connection", core.Perm("identity:test"), h.testConnection)
 	g.POST("/sources/:id/test-login", core.Perm("identity:test"), h.testLogin)
 	g.POST("/sources/:id/sync", core.Perm("identity:sync"), h.syncNow)

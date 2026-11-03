@@ -9,7 +9,7 @@ import { Alert, AlertDescription } from '@/framework/ui/alert'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Switch } from '@/framework/ui/switch'
-import { useDeleteRule, useRules, useSetRuleEnabled, type IpRule } from './api'
+import { useDeleteRule, useDeleteRules, useRules, useSetRuleEnabled, type IpRule } from './api'
 import { RuleFormDialog } from './RuleFormDialog'
 
 export function IpRulesTab() {
@@ -18,15 +18,19 @@ export function IpRulesTab() {
   const { data, isLoading } = useRules()
   const setEnabled = useSetRuleEnabled()
   const remove = useDeleteRule()
+  const removeBatch = useDeleteRules()
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<IpRule | null>(null)
+  const [selected, setSelected] = useState<string[]>([])
 
   const attempt = async (fn: () => Promise<unknown>) => {
     try {
       await fn()
       toast.success(t('common.operateSuccess'))
+      return true
     } catch (e) {
       toast.error(e instanceof Error && e.message ? e.message : t('common.operateFailed'))
+      return false
     }
   }
   const openForm = (r: IpRule | null) => {
@@ -35,7 +39,19 @@ export function IpRulesTab() {
   }
   const onDelete = async (r: IpRule) => {
     if (await confirm({ destructive: true, description: t('plugin_security.ip.deleteConfirm', { cidr: r.cidr }) })) {
-      await attempt(() => remove.mutateAsync(r.id))
+      if (await attempt(() => remove.mutateAsync(r.id))) setSelected((s) => s.filter((id) => id !== r.id))
+    }
+  }
+  // 批量删：一次提交点名的 id，整批一起判防自锁（会锁住自己时后端 409 整批拒绝，不删「能删的那几条」）。
+  // 删除立即影响登录的访问控制，deleted 是后端实删条数，部分删除时不写成「操作成功」。
+  const onDeleteBatch = async (ids: string[]) => {
+    if (!(await confirm({ destructive: true, description: t('plugin_security.ip.deleteBatchConfirm', { count: ids.length }) }))) return
+    try {
+      const { deleted } = await removeBatch.mutateAsync(ids)
+      setSelected([])
+      toast.success(deleted < ids.length ? t('plugin_security.ip.deletedPartial', { deleted, total: ids.length }) : t('common.operateSuccess'))
+    } catch (e) {
+      toast.error(e instanceof Error && e.message ? e.message : t('common.operateFailed'))
     }
   }
 
@@ -73,6 +89,15 @@ export function IpRulesTab() {
         loading={isLoading}
         columnSettingsKey="plugin-security-ip"
         emptyText={t('plugin_security.ip.empty')}
+        selection={{ selected, onChange: setSelected }}
+        batchActions={(ids) => (
+          <Can perm="security:ip:edit">
+            <Button variant="destructive" size="sm" onClick={() => void onDeleteBatch(ids)}>
+              <Trash2 aria-hidden="true" />
+              {t('common.delete')}
+            </Button>
+          </Can>
+        )}
         toolbar={
           <Can perm="security:ip:edit">
             <Button onClick={() => openForm(null)}>

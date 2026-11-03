@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ArrowLeft, Download, FileDown, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   downloadXlsx,
   useDeleteSubmission,
+  useDeleteSubmissions,
   useExportJob,
   useSubmissionMeta,
   useSubmissions,
@@ -61,21 +62,40 @@ export default function SubmissionsPage() {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [detailId, setDetailId] = useState<string | null>(null)
+  const [selected, setSelected] = useState<string[]>([])
 
   const { data: meta, isError } = useSubmissionMeta(id)
   const { data, isLoading } = useSubmissions(id, { ...toQuery(filters), page, pageSize })
   const remove = useDeleteSubmission()
+  const removeBatch = useDeleteSubmissions()
   const exportJob = useExportJob()
   const fields = (meta?.definition.fields ?? []).filter(hasValue)
   const back = () => navigate('/system/formbuilder')
+
+  // 列表是按表单取的，换表单后保留上一表单的选中只会让下一次批量删整批失败
+  useEffect(() => setSelected([]), [id])
 
   const onDelete = async (row: SubmissionRow) => {
     if (!id || !(await confirm({ destructive: true, description: t('plugin_formbuilder.submissions.deleteConfirm', { name: row.username }) }))) return
     try {
       await remove.mutateAsync({ formId: id, id: row.id })
       toast.success(t('common.operateSuccess'))
+      // 单删后从选中里摘掉：残留的 id 会让下一次批量删整批失败
+      setSelected((s) => s.filter((x) => x !== row.id))
     } catch {
       /* 已提示 */
+    }
+  }
+  // 批量删除：后端只在该表单的范围内删，混进其他表单的 id 会让整批失败；仍按实删条数说实话。
+  const onDeleteBatch = async (ids: string[]) => {
+    if (!id || !(await confirm({ destructive: true, description: t('plugin_formbuilder.submissions.deleteBatchConfirm', { count: ids.length }) }))) return
+    try {
+      const { deleted } = await removeBatch.mutateAsync({ formId: id, ids })
+      if (detailId && ids.includes(detailId)) setDetailId(null)
+      setSelected([])
+      toast.success(deleted < ids.length ? t('plugin_formbuilder.submissions.deletedPartial', { deleted, total: ids.length }) : t('common.operateSuccess'))
+    } catch {
+      toast.error(t('common.operateFailed'))
     }
   }
   const onExport = async () => {
@@ -215,6 +235,15 @@ export default function SubmissionsPage() {
           },
         }}
         emptyText={t('plugin_formbuilder.submissions.empty')}
+        selection={{ selected, onChange: setSelected }}
+        batchActions={(ids) => (
+          <Can perm="formbuilder:submission">
+            <Button variant="destructive" size="sm" disabled={removeBatch.isPending} onClick={() => void onDeleteBatch(ids)}>
+              <Trash2 aria-hidden="true" />
+              {t('common.delete')}
+            </Button>
+          </Can>
+        )}
         toolbar={
           <>
             <Button variant="outline" onClick={back}>

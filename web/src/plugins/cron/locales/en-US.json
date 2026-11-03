@@ -12,6 +12,10 @@
     "searchPlaceholder": "Search by job name",
     "empty": "No scheduled jobs yet",
     "emptyLogs": "No execution logs",
+    "rerun": {
+      "action": "Rerun this job",
+      "started": "\"{{name}}\" triggered — check the execution logs shortly"
+    },
     "fields": {
       "name": "Name",
       "cronExpr": "Cron expression",
@@ -19,6 +23,7 @@
       "params": "Parameters (JSON)",
       "enabled": "Enabled",
       "retryCount": "Retries on failure",
+      "timeoutSeconds": "Per-attempt timeout (s)",
       "nextRunAt": "Next run",
       "lastRun": "Last run",
       "job": "Job",
@@ -34,6 +39,7 @@
       "cronExpr": "min hour day month weekday; supports * , - /; evaluated in the server's local time zone",
       "params": "Leave empty for defaults; must be a JSON object",
       "retryCount": "How many times to retry after a failure (0-10), with exponential backoff",
+      "timeoutSeconds": "Per-attempt timeout in seconds (0-3600); empty or 0 uses the default of 5 minutes",
       "http": "method (GET/POST), url, body, timeoutSec (max 30); public addresses only",
       "clean_logs": "days (retention, default 30), targets (oper / login, default both)",
       "log": "message (text to write)"
@@ -73,17 +79,42 @@
       "step": "Invalid step",
       "empty": "Contains an empty item",
       "paramsJson": "Parameters must be a JSON object",
-      "retryRange": "Retries must be between 0 and 10"
+      "retryRange": "Retries must be between 0 and 10",
+      "timeoutRange": "The timeout must be between 0 and 3600 seconds"
+    },
+    "describe": {
+      "everyMinutes": "Every {{n}} minutes",
+      "hourly": "Hourly at :{{minute}}",
+      "daily": "Every day at {{time}}",
+      "weekly": "Every {{days}} at {{time}}",
+      "monthly": "On day {{day}} of every month at {{time}}",
+      "weekday": {
+        "sun": "Sunday",
+        "mon": "Monday",
+        "tue": "Tuesday",
+        "wed": "Wednesday",
+        "thu": "Thursday",
+        "fri": "Friday",
+        "sat": "Saturday"
+      }
     },
     "status": { "running": "Running", "success": "Success", "failed": "Failed" },
     "trigger": { "schedule": "Scheduled", "manual": "Manual" },
     "all": "All",
+    "filter": {
+      "allHandlers": "All types",
+      "allStates": "All states",
+      "allJobs": "All jobs",
+      "allStatuses": "All statuses"
+    },
     "enabledOn": "Enabled",
     "enabledOff": "Disabled",
     "run": "Run now",
     "runConfirm": "Run \"{{name}}\" once now?",
     "runStarted": "Started. Check the execution logs for the result",
     "deleteConfirm": "Delete job \"{{name}}\"? Existing execution logs are kept.",
+    "deleteBatchConfirm": "Delete the {{count}} selected job(s)? A run already in progress is not interrupted, and existing execution logs are kept.",
+    "deletedPartial": "Deleted {{deleted}} of {{total}} job(s) (the rest may already be gone or belong to another tenant)",
     "viewLogs": "View logs",
     "logDetail": "Execution details",
     "clean": {

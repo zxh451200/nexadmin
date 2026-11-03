@@ -17,6 +17,7 @@ import {
   downloadDefinition,
   useCopyForm,
   useDeleteForm,
+  useDeleteForms,
   useForms,
   useImportForm,
   usePublish,
@@ -45,10 +46,12 @@ export default function FormbuilderPage() {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [createOpen, setCreateOpen] = useState(false)
+  const [selected, setSelected] = useState<string[]>([])
 
   const { data, isLoading } = useForms({ ...filters, page, pageSize })
   const copy = useCopyForm()
   const remove = useDeleteForm()
+  const removeBatch = useDeleteForms()
   const publish = usePublish()
   const setOnline = useSetOnline()
   const importForm = useImportForm()
@@ -81,6 +84,19 @@ export default function FormbuilderPage() {
   const onDelete = async (f: FormSummary) => {
     if (await confirm({ destructive: true, description: t('plugin_formbuilder.deleteConfirm', { name: f.name, count: f.submissionCount }) })) {
       await attempt(() => remove.mutateAsync(f.id))
+      // 单删后从选中里摘掉：残留的 id 会让下一次批量删整批 404
+      setSelected((s) => s.filter((x) => x !== f.id))
+    }
+  }
+  // 批量删除：后端一个事务，护栏违反就整批失败；仍拿实删条数与选中条数比对，界面不撒谎。
+  const onDeleteBatch = async (ids: string[]) => {
+    if (!(await confirm({ destructive: true, description: t('plugin_formbuilder.deleteBatchConfirm', { count: ids.length }) }))) return
+    try {
+      const { deleted } = await removeBatch.mutateAsync(ids)
+      setSelected([])
+      toast.success(deleted < ids.length ? t('plugin_formbuilder.deletedPartial', { deleted, total: ids.length }) : t('common.operateSuccess'))
+    } catch {
+      toast.error(t('common.operateFailed'))
     }
   }
   const onExportDefinition = async (f: FormSummary) => {
@@ -198,6 +214,15 @@ export default function FormbuilderPage() {
           },
         }}
         emptyText={t('plugin_formbuilder.empty')}
+        selection={{ selected, onChange: setSelected }}
+        batchActions={(ids) => (
+          <Can perm="formbuilder:design">
+            <Button variant="destructive" size="sm" disabled={removeBatch.isPending} onClick={() => void onDeleteBatch(ids)}>
+              <Trash2 aria-hidden="true" />
+              {t('common.delete')}
+            </Button>
+          </Can>
+        )}
         toolbar={
           <Can perm="formbuilder:design">
             <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={importForm.isPending}>

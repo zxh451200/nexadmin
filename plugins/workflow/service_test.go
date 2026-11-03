@@ -12,7 +12,9 @@ import (
 
 	"github.com/nexadmin/flowlite/runtime"
 	"github.com/nexadmin/flowlite/store/memory"
+	"nexadmin/core/notify"
 	"nexadmin/core/response"
+	"nexadmin/core/tenant"
 	"nexadmin/pkg/idgen"
 )
 
@@ -298,5 +300,144 @@ func seqDefinition() Definition {
 			{From: "n1", To: "n2"},
 			{From: "n2", To: "end"},
 		},
+	}
+}
+
+// ---- 转办与驳回理由 ----
+
+// 驳回必须给理由：空理由打回给提交人，不留任何解释是不行的。
+func TestInstanceRejectRequiresComment(t *testing.T) {
+	s := memService(t)
+	def := savePublished(t, s)
+	inst, err := s.InstStart(ctxOf(), StartInput{DefID: idText(def.ID), Title: "张三请假"}, "alice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.InstReject(ctxOf(), inst.ID, "alice", "   "); err == nil {
+		t.Fatal("空理由驳回必须被拒绝")
+	} else if e, ok := err.(*response.Error); !ok || e.Key != "workflow.reject_comment_required" {
+		t.Fatalf("error = %v", err)
+	}
+	if _, err := s.InstReject(ctxOf(), inst.ID, "alice", "材料不全"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// 转办：原审批人失去审批权，受让人接管；历史留痕 transfer。
+func TestInstanceTransfer(t *testing.T) {
+	s := memService(t)
+	def := savePublished(t, s)
+	inst, err := s.InstStart(ctxOf(), StartInput{DefID: idText(def.ID), Title: "张三请假"}, "alice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 非当前审批人不能转办
+	if _, err := s.InstTransfer(ctxOf(), inst.ID, "bob", "dave", ""); err == nil {
+		t.Fatal("非审批人不应能转办")
+	}
+	transferred, err := s.InstTransfer(ctxOf(), inst.ID, "alice", "dave", "休假交接")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := transferred.Pending; len(got) != 1 || got[0].Assignee != "dave" {
+		t.Fatalf("待办应转给 dave, got %+v", got)
+	}
+	if _, err := s.InstApprove(ctxOf(), inst.ID, "alice", ""); err == nil {
+		t.Fatal("转办后原审批人不应再能批")
+	}
+	if _, err := s.InstApprove(ctxOf(), inst.ID, "dave", "同意"); err != nil {
+		t.Fatal(err)
+	}
+	if _, total, _ := s.InstList(ctxOf(), InstQuery{Done: "1", Page: 1, PageSize: 20}, "dave"); total != 1 {
+		t.Fatalf("受让人的我已办 = %d", total)
+	}
+	found := false
+	for _, e := range transferred.History {
+		if e.Action == "transfer" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("转办必须留痕")
+	}
+}
+
+// ---- 催办 ----
+
+type urgeRecorder struct {
+	urgent map[string]bool // actor → 收到过催办
+}
+
+func (r *urgeRecorder) Send(_ context.Context, m notify.Msg) error {
+	for _, to := range m.To {
+		r.urgent[to.String()] = true
+	}
+	return nil
+}
+
+// tctx 带租户的上下文：催办走请求上下文取租户。
+func tctx(id int64) context.Context {
+	return tenant.With(context.Background(), idgen.ID(id))
+}
+
+// 催办：只有发起人能催，收件人是当前待审批人（去重）；审批人之间不能互相催。
+// 审批人用数字形态的用户 ID——站内信只认 ID，非 ID 主体（测试/外部系统的字符串）静默跳过。
+func TestUrgeNotifiesPendingApprovers(t *testing.T) {
+	s := memService(t)
+	rec := &urgeRecorder{urgent: map[string]bool{}}
+	s.SetUrgeSender(rec)
+	def, err := s.DefSave(ctxOf(), 0, DefForm{Key: "urge", Name: "催办流程", Status: DefPublished, XML: `
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+  xmlns:flowlite="urn:flowlite:engine:1.0" id="D1" targetNamespace="urn:flowlite:engine:1.0">
+  <bpmn:process id="urge" name="催办流程" isExecutable="true">
+    <bpmn:startEvent id="start" />
+    <bpmn:userTask id="lead" name="主管审批" flowlite:approvers="9001" />
+    <bpmn:userTask id="hr" name="HR 会签" flowlite:approvers="9002,9003" flowlite:mode="all" />
+    <bpmn:endEvent id="end" />
+    <bpmn:sequenceFlow id="f1" sourceRef="start" targetRef="lead" />
+    <bpmn:sequenceFlow id="f2" sourceRef="lead" targetRef="hr" />
+    <bpmn:sequenceFlow id="f3" sourceRef="hr" targetRef="end" />
+  </bpmn:process>
+</bpmn:definitions>`})
+	if err != nil {
+		t.Fatal(err)
+	}
+	inst, err := s.InstStart(ctxOf(), StartInput{DefID: idText(def.ID), Title: "张三请假"}, "alice")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 非发起人不能催
+	if err := s.Urge(tctx(7), inst.ID, "9002"); err == nil {
+		t.Fatal("非发起人不应能催办")
+	}
+	// 发起人催：主管审批节点 9001
+	if err := s.Urge(tctx(7), inst.ID, "alice"); err != nil {
+		t.Fatal(err)
+	}
+	if !rec.urgent["9001"] {
+		t.Fatalf("9001 应收到催办, got %v", rec.urgent)
+	}
+
+	// 推进到会签节点：9002/9003 都该收到
+	if _, err := s.InstApprove(ctxOf(), inst.ID, "9001", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Urge(tctx(7), inst.ID, "alice"); err != nil {
+		t.Fatal(err)
+	}
+	if !rec.urgent["9002"] || !rec.urgent["9003"] {
+		t.Fatalf("会签审批人应都收到催办, got %v", rec.urgent)
+	}
+
+	// 全部通过后运行态结束，催办被拒
+	if _, err := s.InstApprove(ctxOf(), inst.ID, "9002", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.InstApprove(ctxOf(), inst.ID, "9003", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Urge(tctx(7), inst.ID, "alice"); err == nil {
+		t.Fatal("已结束的流程不应能催办")
 	}
 }

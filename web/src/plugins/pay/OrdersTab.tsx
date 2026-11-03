@@ -1,11 +1,13 @@
 import { useState, type ReactNode } from 'react'
-import { RefreshCw, Ban, Eye } from 'lucide-react'
+import { RefreshCw, Ban, Download, Eye, RotateCcw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
+import { parseISO } from 'date-fns'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { DatePicker } from '@/framework/components/DatePicker'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Segmented } from '@/framework/components/Segmented'
@@ -13,8 +15,19 @@ import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
-import { useChannels, useCloseOrder, useOrder, useOrders, useSyncOrder, type OrderQuery, type PayOrder } from './api'
+import {
+  fetchOrdersForExport,
+  useChannels,
+  useCloseOrder,
+  useOrder,
+  useOrders,
+  useSyncOrder,
+  type OrderQuery,
+  type PayOrder,
+} from './api'
+import { downloadCsv } from '@/framework/components/export/csv'
 import { formatMoney, formatTime, payStatusVariant } from './format'
+import { cn } from '@/lib/utils'
 import { ListErrorBanner } from './ListErrorBanner'
 import { PayStatsPanel } from './PayStatsPanel'
 
@@ -73,6 +86,44 @@ export function OrdersTab() {
     }
   }
 
+  // 导出当前筛选下的全部支付单：财务归档与对账的刚需。上限与超限报错在后端。
+  const [exporting, setExporting] = useState(false)
+  const onExport = async () => {
+    setExporting(true)
+    try {
+      const rows = await fetchOrdersForExport({ ...filters })
+      const stamp = new Date().toISOString().slice(0, 10)
+      downloadCsv(`pay-orders-${stamp}.csv`, [
+        [
+          t('plugin_pay.fields.paymentNo'), t('plugin_pay.fields.bizType'), t('plugin_pay.fields.subject'),
+          t('plugin_pay.fields.channel'), t('plugin_pay.fields.method'), t('plugin_pay.fields.status'),
+          t('plugin_pay.fields.amount'), t('plugin_pay.fields.refunded'), t('plugin_pay.fields.fee'),
+          t('plugin_pay.fields.channelTxnId'), t('plugin_pay.fields.createdAt'), t('plugin_pay.fields.paidAt'),
+        ],
+        ...rows.map((o) => [
+          o.paymentNo, `${o.bizType}/${o.bizNo}`, o.subject || o.subjectId || '',
+          o.channelCode, o.method || '', t(`plugin_pay.status.${o.status}`),
+          formatMoney(o.amountMinor, o.currency), formatMoney(o.refundedMinor, o.currency),
+          formatMoney(o.feeMinor, o.currency), o.channelTxnId || '',
+          formatTime(o.createdAt, i18n.language), o.paidAt ? formatTime(o.paidAt, i18n.language) : '',
+        ]),
+      ])
+    } catch {
+      toast.error(t('common.operateFailed'))
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  // 退款联动：带着单号跳到退款页签，那边自动打开弹窗预填——退款弹窗手输 PAY 单号太反人类。
+  const goRefund = (paymentNo: string) => {
+    const next = new URLSearchParams(params)
+    next.set('tab', 'refunds')
+    next.set('refundNo', paymentNo)
+    next.delete('view')
+    setParams(next)
+  }
+
   // 统计下钻：把同一组条件带进列表，并把视图切回日志。
   const onDrillDown = (patch: Partial<OrderQuery>) => {
     setDraft(patch)
@@ -123,6 +174,21 @@ export function OrdersTab() {
     { key: 'channel', title: t('plugin_pay.fields.channel'), render: (o) => <Badge variant="outline">{o.channelCode}</Badge> },
     { key: 'status', title: t('plugin_pay.fields.status'), mobile: 'sub', render: (o) => <Badge variant={payStatusVariant(o.status)}>{t(`plugin_pay.status.${o.status}`)}</Badge> },
     {
+      // 到期时间只对 pending 有意义：超期未支付的单子一眼可见，别等关单才发现
+      key: 'expireAt',
+      title: t('plugin_pay.fields.expireAt'),
+      mobile: 'hidden',
+      render: (o) => {
+        if (o.status !== 'pending' || !o.expireAt) return <span className="text-xs text-muted-foreground">-</span>
+        const overdue = new Date(o.expireAt).getTime() < Date.now()
+        return (
+          <span className={cn('num text-xs', overdue ? 'font-medium text-destructive' : 'text-muted-foreground')}>
+            {formatTime(o.expireAt, i18n.language)}
+          </span>
+        )
+      },
+    },
+    {
       key: 'createdAt',
       title: t('plugin_pay.fields.createdAt'),
       render: (o) => <span className="num text-xs text-muted-foreground">{formatTime(o.createdAt, i18n.language)}</span>,
@@ -167,7 +233,7 @@ export function OrdersTab() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_pay.all')}</SelectItem>
+            <SelectItem value={ALL}>{t('plugin_pay.filter.allStatuses')}</SelectItem>
             {STATUSES.map((s) => (
               <SelectItem key={s} value={s}>
                 {t(`plugin_pay.status.${s}`)}
@@ -180,7 +246,7 @@ export function OrdersTab() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_pay.all')}</SelectItem>
+            <SelectItem value={ALL}>{t('plugin_pay.filter.allChannels')}</SelectItem>
             {channels.map((c) => (
               <SelectItem key={c.code} value={c.code}>
                 {c.name}
@@ -188,6 +254,23 @@ export function OrdersTab() {
             ))}
           </SelectContent>
         </Select>
+        {/* 下单日期范围（含两端）：财务查「某天的单」比翻页高频 */}
+        <DatePicker
+          className="md:w-40"
+          value={draft.createdFrom ?? ''}
+          onChange={(v) => setDraft((d) => ({ ...d, createdFrom: v || undefined }))}
+          toDate={draft.createdTo ? parseISO(draft.createdTo) : undefined}
+          placeholder={t('plugin_pay.fields.dateFrom')}
+          ariaLabel={t('plugin_pay.fields.dateFrom')}
+        />
+        <DatePicker
+          className="md:w-40"
+          value={draft.createdTo ?? ''}
+          onChange={(v) => setDraft((d) => ({ ...d, createdTo: v || undefined }))}
+          fromDate={draft.createdFrom ? parseISO(draft.createdFrom) : undefined}
+          placeholder={t('plugin_pay.fields.dateTo')}
+          ariaLabel={t('plugin_pay.fields.dateTo')}
+        />
       </FilterBar>
       {extraFilters.length > 0 ? (
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
@@ -221,6 +304,12 @@ export function OrdersTab() {
           },
         }}
         emptyText={t('plugin_pay.empty')}
+        toolbar={
+          <Button type="button" variant="outline" onClick={() => void onExport()} disabled={exporting}>
+            <Download className="me-2 size-4" aria-hidden="true" />
+            {t('common.export')}
+          </Button>
+        }
         rowActions={(o) => (
           <div className="flex items-center">
             <Button variant="ghost" size="icon" aria-label={t('common.detail')} onClick={() => setDetail(o)}>
@@ -242,12 +331,19 @@ export function OrdersTab() {
                 </Button>
               </Can>
             ) : null}
+            {o.status === 'succeeded' || o.status === 'partially_refunded' ? (
+              <Can perm="pay:refund">
+                <Button variant="ghost" size="icon" aria-label={t('plugin_pay.refund')} onClick={() => goRefund(o.paymentNo)}>
+                  <RotateCcw aria-hidden="true" />
+                </Button>
+              </Can>
+            ) : null}
           </div>
         )}
       />
         </div>
       )}
-      <OrderDetailDialog order={detail} onClose={() => setDetail(null)} />
+      <OrderDetailDialog order={detail} onClose={() => setDetail(null)} onRefund={goRefund} />
     </div>
   )
 }
@@ -261,11 +357,19 @@ function DetailRow({ label, value }: { label: string; value?: ReactNode }) {
   )
 }
 
-function OrderDetailDialog({ order, onClose }: { order: PayOrder | null; onClose: () => void }) {
+function OrderDetailDialog({
+  order, onClose, onRefund,
+}: {
+  order: PayOrder | null
+  onClose: () => void
+  onRefund?: (paymentNo: string) => void
+}) {
   const { t, i18n } = useTranslation()
   const { data, isLoading } = useOrder(order?.paymentNo ?? null)
   const o = data ?? order
   const time = (v?: string | null) => (v ? formatTime(v, i18n.language) : '-')
+  // 已成功的单子，财务在详情里最常见的下一步就是退款：直接给入口，别让人回列表找
+  const refundable = o?.status === 'succeeded' || o?.status === 'partially_refunded'
   return (
     <ResponsiveDialog
       open={!!order}
@@ -273,9 +377,19 @@ function OrderDetailDialog({ order, onClose }: { order: PayOrder | null; onClose
       title={`${t('common.detail')} · ${order?.paymentNo ?? ''}`}
       size="lg"
       footer={
-        <Button variant="outline" onClick={onClose}>
-          {t('common.close')}
-        </Button>
+        <>
+          {o && refundable && onRefund ? (
+            <Can perm="pay:refund">
+              <Button onClick={() => onRefund(o.paymentNo)}>
+                <RotateCcw className="me-2 size-4" aria-hidden="true" />
+                {t('plugin_pay.refund')}
+              </Button>
+            </Can>
+          ) : null}
+          <Button variant="outline" onClick={onClose}>
+            {t('common.close')}
+          </Button>
+        </>
       }
     >
       {!o ? null : (

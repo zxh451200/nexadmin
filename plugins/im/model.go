@@ -68,11 +68,11 @@ type Message struct {
 	Seq        int64    `gorm:"not null;uniqueIndex:uk_plg_im_msg_seq,priority:2" json:"seq"`
 	SenderType string   `gorm:"size:16;not null" json:"senderType"`
 	// SenderID 是发送方标识：visitor 侧由宿主给（会员 ID 或匿名令牌），agent 侧是管理员 ID。
-	SenderID   string    `gorm:"size:64" json:"senderId"`
-	SenderName string    `gorm:"size:64" json:"senderName"`
-	Content    string    `gorm:"size:2000;not null" json:"content"`
-	Kind       string    `gorm:"size:16;not null" json:"kind"`
-	Meta       string    `gorm:"type:text" json:"meta,omitempty"`
+	SenderID   string `gorm:"size:64" json:"senderId"`
+	SenderName string `gorm:"size:64" json:"senderName"`
+	Content    string `gorm:"size:2000;not null" json:"content"`
+	Kind       string `gorm:"size:16;not null" json:"kind"`
+	Meta       string `gorm:"type:text" json:"meta,omitempty"`
 	// RecalledAt 是消息被撤回的时间；撤回后正文清空、kind 改为 system 并用 meta.code 标识。
 	RecalledAt *time.Time `json:"recalledAt,omitempty"`
 	CreatedAt  time.Time  `json:"createdAt"`

@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { useQueryClient } from '@tanstack/react-query'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { RequiredMark } from '@/framework/components/RequiredMark'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { SwitchRow } from '@/framework/components/SwitchField'
 import { Badge } from '@/framework/ui/badge'
@@ -16,7 +17,7 @@ import { Progress } from '@/framework/ui/progress'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import { formatSize } from '@/framework/upload/precheck'
 import { uploadToTus } from '@/framework/upload/uploadClient'
-import { createVideoUpload, deleteVideo, saveVideo, useSaveVideoConfig, useVideoConfig, useVideos, type VideoItem, type VideoProvider } from './api'
+import { createVideoUpload, deleteVideo, deleteVideosBatch, saveVideo, useSaveVideoConfig, useVideoConfig, useVideos, type VideoItem, type VideoProvider } from './api'
 
 const PAGE_SIZE = 10
 
@@ -34,6 +35,7 @@ export function VideoTab() {
   const [regOpen, setRegOpen] = useState(false)
   const [regId, setRegId] = useState('')
   const [regName, setRegName] = useState('')
+  const [selected, setSelected] = useState<string[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
   const canUpload = cfg.data?.canUpload ?? false
 
@@ -90,7 +92,22 @@ export function VideoTab() {
     try {
       await deleteVideo(row.id)
       await qc.invalidateQueries({ queryKey: ['media', 'video', 'assets'] })
+      setSelected((s) => s.filter((id) => id !== row.id))
       toast.success(t('common.operateSuccess'))
+    } catch {
+      toast.error(t('common.operateFailed'))
+    }
+  }
+
+  // 批量删台账：与单条同口径（只删本机这一行，厂商侧资产要去厂商控制台清，页面上那条提示同样适用）。
+  // 越权 / 已不存在的 id 不计入实删数，所以 deleted 少于选中时要据实说「删了 n 条」。
+  const onDeleteBatch = async (ids: string[]) => {
+    if (!(await confirm({ destructive: true, description: t('plugin_media.video.deleteBatchConfirm', { count: ids.length }) }))) return
+    try {
+      const { deleted } = await deleteVideosBatch(ids)
+      await qc.invalidateQueries({ queryKey: ['media', 'video', 'assets'] })
+      setSelected([])
+      toast.success(deleted < ids.length ? t('plugin_media.video.deletedPartial', { deleted, total: ids.length }) : t('common.operateSuccess'))
     } catch {
       toast.error(t('common.operateFailed'))
     }
@@ -246,6 +263,13 @@ export function VideoTab() {
         columnSettingsKey="media-videos"
         pagination={{ page, pageSize: PAGE_SIZE, total: list.data?.total ?? 0, onChange: setPage }}
         emptyText={t('plugin_media.video.empty')}
+        selection={{ selected, onChange: setSelected }}
+        batchActions={(ids) => (
+          <Button variant="destructive" size="sm" onClick={() => void onDeleteBatch(ids)}>
+            <Trash2 aria-hidden="true" />
+            {t('common.delete')}
+          </Button>
+        )}
       />
 
       <ResponsiveDialog
@@ -266,7 +290,10 @@ export function VideoTab() {
       >
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="reg-id">{t('plugin_media.video.videoId')}</Label>
+            <Label htmlFor="reg-id">
+              {t('plugin_media.video.videoId')}
+              <RequiredMark />
+            </Label>
             <Input id="reg-id" value={regId} onChange={(e) => setRegId(e.target.value)} className="font-mono" placeholder="vid-12345678 / fileId" />
           </div>
           <div className="flex flex-col gap-1.5">

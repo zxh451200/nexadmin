@@ -112,6 +112,8 @@ func mount(r *gin.RouterGroup, h *handler) {
 	g.PUT("/ip-rules/:id", core.Perm("security:ip:edit"), h.updateRule)
 	g.PUT("/ip-rules/:id/enabled", core.Perm("security:ip:edit"), h.setRuleEnabled)
 	g.DELETE("/ip-rules/:id", core.Perm("security:ip:edit"), h.deleteRule)
+	// 批量删：复用单条删除的 security:ip:edit，不新增权限点
+	g.DELETE("/ip-rules", core.Perm("security:ip:edit"), h.deleteRules)
 	g.GET("/logs", core.Perm("security:log"), h.listLogs)
 }
 

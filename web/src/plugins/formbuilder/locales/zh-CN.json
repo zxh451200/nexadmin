@@ -22,6 +22,8 @@
     "publishConfirm": "确定发布表单「{{name}}」吗？发布后将生成新版本，登录用户即可填写。",
     "offlineConfirm": "确定下线表单「{{name}}」吗？下线后用户将无法继续填写，已收集的提交不受影响。",
     "deleteConfirm": "确定删除表单「{{name}}」吗？其下 {{count}} 条提交将一并删除，且无法恢复。",
+    "deleteBatchConfirm": "确定删除选中的 {{count}} 个表单吗？各表单的版本与提交将一并删除，且无法恢复。",
+    "deletedPartial": "已删除 {{deleted}}/{{total}} 个表单（其余可能已被删除）",
     "import": { "title": "导入表单", "export": "导出定义", "tooLarge": "文件过大，无法导入", "invalid": "文件格式不正确，无法导入" },
     "fields": {
       "name": "表单名称", "description": "表单说明", "status": "状态", "version": "版本", "submissionCount": "提交数",
@@ -117,6 +119,8 @@
       "description": "查看并导出用户提交的内容", "submitter": "提交人", "submittedAt": "提交时间", "detail": "提交详情",
       "filterField": "筛选字段", "filterValue": "筛选值", "empty": "暂无提交", "truncated": "结果已按行数上限截断",
       "deleteConfirm": "确定删除「{{name}}」的这条提交吗？删除后无法恢复。",
+      "deleteBatchConfirm": "确定删除选中的 {{count}} 条提交吗？删除后无法恢复。",
+      "deletedPartial": "已删除 {{deleted}}/{{total}} 条提交（其余可能已被删除）",
       "exportXlsx": "导出 xlsx", "exportJob": "后台导出", "exportJobSubmitted": "导出任务已提交，可在导出任务中查看"
     }
   }

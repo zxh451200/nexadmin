@@ -41,7 +41,8 @@ function ChartCard({ reportId, chart, values }: { reportId: string; chart?: Char
     <Card className="h-full">
       <CardHeader className="flex-row items-center justify-between gap-2 space-y-0 pb-2">
         <CardTitle className="truncate text-base font-medium">{builtinText(t, chart?.name) || t('plugin_report.report.chartDeleted')}</CardTitle>
-        {chart?.type === 'table' ? (
+        {/* 任何图表都能导出造出它的底层结果行（BI 的 export underlying data） */}
+        {chart ? (
           <Button variant="ghost" size="sm" disabled={exporting || !q.data} onClick={() => void onExport()}>
             <Download aria-hidden="true" />
             {t('plugin_report.report.export')}

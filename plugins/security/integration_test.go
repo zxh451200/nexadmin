@@ -434,8 +434,10 @@ func TestEveryRouteRequiresPermission(t *testing.T) {
 			routes = append(routes, ri)
 		}
 	}
-	if len(routes) != 15 {
-		t.Fatalf("expected 15 plugin routes, got %d", len(routes))
+	// 15 → 16：新增 DELETE /ip-rules（?ids= 批量删，带 core.Perm("security:ip:edit")）。
+	// 这条断言是tripwire：加路由必须在这儿过一次，新路由没有 core.Perm 就会在下面那个循环里红。
+	if len(routes) != 16 {
+		t.Fatalf("expected 16 plugin routes, got %d", len(routes))
 	}
 	for _, ri := range routes {
 		path := strings.ReplaceAll(ri.Path, ":id", "123")

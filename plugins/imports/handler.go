@@ -79,7 +79,8 @@ func attachment(c *gin.Context, filename, contentType string, body []byte) {
 // POST /plugins/imports —— multipart:file(文件)+ source(来源标识)。同步执行,返回台账。
 func (h *handler) run(c *gin.Context) {
 	// 先卡住整个请求体，避免超大 multipart 在拒绝前被写到磁盘临时目录。
-	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, MaxBytes+(1<<20))
+	maxBytes := importMaxBytes(c.Request.Context())
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxBytes+(1<<20))
 	fh, err := c.FormFile("file")
 	if err != nil {
 		var maxErr *http.MaxBytesError
@@ -91,7 +92,7 @@ func (h *handler) run(c *gin.Context) {
 		return
 	}
 	source := c.PostForm("source")
-	if fh.Size > MaxBytes {
+	if fh.Size > maxBytes {
 		response.Fail(c, response.BadRequest("imports.file_too_large"))
 		return
 	}
@@ -101,13 +102,13 @@ func (h *handler) run(c *gin.Context) {
 		return
 	}
 	defer func() { _ = f.Close() }()
-	// 服务层还有一次大小校验；这里先按上限截断读取，避免超大文件在拒绝前就被读进内存。
-	content, err := io.ReadAll(io.LimitReader(f, MaxBytes+1))
+	// 服务层还有一次大小校验（绝对天花板 MaxBytes）；这里先按生效上限截断读取，避免超大文件在拒绝前就被读进内存。
+	content, err := io.ReadAll(io.LimitReader(f, maxBytes+1))
 	if err != nil {
 		response.Fail(c, response.BadRequest("imports.file_required"))
 		return
 	}
-	if len(content) > MaxBytes {
+	if int64(len(content)) > maxBytes {
 		response.Fail(c, response.BadRequest("imports.file_too_large"))
 		return
 	}
@@ -151,6 +152,34 @@ func (h *handler) remove(c *gin.Context) {
 	respond(c, nil, h.svc.DeleteJob(c.Request.Context(), id))
 }
 
+// DELETE /plugins/imports?ids=1,2,3 —— 批量删除台账（与单条同权：imports:run）。
+// ids 缺失或任一项非法由 response.ParseIDsQuery 直接 400，绝不退化成「不带 ids 就清台账」。
+func (h *handler) removeBatch(c *gin.Context) {
+	ids, err := response.ParseIDsQuery(c)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	n, err := h.svc.DeleteJobs(c.Request.Context(), ids)
+	respond(c, gin.H{"deleted": n}, err)
+}
+
+// POST /plugins/imports/:id/cancel —— 取消运行中/排队的异步导入（imports:run，与发起同权）。
+// 已处理的部分保留，状态记为 cancelled；返回取消后的台账。
+func (h *handler) cancel(c *gin.Context) {
+	id, err := idgen.Parse(c.Param("id"))
+	if err != nil || id == 0 {
+		response.Fail(c, response.BadRequest("error.bad_request"))
+		return
+	}
+	if err := h.svc.CancelJob(c.Request.Context(), id); err != nil {
+		response.Fail(c, err)
+		return
+	}
+	v, err := h.svc.GetJob(c.Request.Context(), id)
+	respond(c, v, err)
+}
+
 // GET /plugins/imports/:id/errors.csv —— 错误行报告(行号/列/原因)。
 func (h *handler) errorsCSV(c *gin.Context) {
 	id, err := idgen.Parse(c.Param("id"))
@@ -172,8 +201,10 @@ func (h *handler) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.GET("/sources", core.Perm("imports:list"), h.sources)
 	g.GET("/template", core.Perm("imports:list"), h.template)
 	g.POST("", core.Perm("imports:run"), h.run)
-	// 删除台账沿用「执行导入」权限：能导入的人就能清理自己提交的记录
+	// 取消与删除台账沿用「执行导入」权限：能导入的人就能取消/清理自己提交的任务
+	g.POST("/:id/cancel", core.Perm("imports:run"), h.cancel)
 	g.DELETE("/:id", core.Perm("imports:run"), h.remove)
+	g.DELETE("", core.Perm("imports:run"), h.removeBatch)
 	g.GET("", core.Perm("imports:list"), h.list)
 	g.GET("/:id", core.Perm("imports:list"), h.get)
 	g.GET("/:id/errors.csv", core.Perm("imports:list"), h.errorsCSV)

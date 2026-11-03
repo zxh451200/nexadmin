@@ -2,6 +2,7 @@ package identity
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -141,6 +142,30 @@ func (h *handler) remove(c *gin.Context) {
 	err := h.svc.Delete(c.Request.Context(), id)
 	h.audit(c, "delete", start, map[string]any{"id": id.String()}, err)
 	respond(c, nil, err)
+}
+
+// DELETE /plugins/identity/sources?ids=1,2,3 —— 批量删除，权限码复用单条删除的 identity:edit。
+// ids 缺失 / 整体为空 / 任一项非法都由 response.ParseIDsQuery 直接 400：
+// 「不带 ids 就删掉本租户全部身份源」是最难发现的一种误删。审计参数与单条同口径，只有 id。
+func (h *handler) removeMany(c *gin.Context) {
+	ids, err := response.ParseIDsQuery(c)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	start := time.Now()
+	n, err := h.svc.DeleteMany(c.Request.Context(), ids)
+	h.audit(c, "delete", start, map[string]any{"count": len(ids), "ids": idList(ids)}, err)
+	respond(c, gin.H{"deleted": n}, err)
+}
+
+// idList 把批量 id 变成审计用的字符串（只含数字与逗号，不含任何配置 / 口令）。
+func idList(ids []idgen.ID) string {
+	parts := make([]string, 0, len(ids))
+	for _, id := range ids {
+		parts = append(parts, id.String())
+	}
+	return strings.Join(parts, ",")
 }
 
 // POST /plugins/identity/sources/:id/test-connection

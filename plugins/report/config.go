@@ -14,6 +14,7 @@ import (
 const (
 	ChartBar    = "bar"
 	ChartLine   = "line"
+	ChartArea   = "area" // 面积图：折线 + 填充，趋势总量对比比纯折线更直观
 	ChartPie    = "pie"
 	ChartTable  = "table"
 	ChartMetric = "metric"
@@ -129,7 +130,7 @@ func validateColors(cs []string) *response.Error {
 func validateChartShape(typ string, sp Spec) *response.Error {
 	nd, nm := len(sp.Dimensions), len(sp.Measures)
 	switch typ {
-	case ChartBar, ChartLine:
+	case ChartBar, ChartLine, ChartArea:
 		if nd < 1 || nm < 1 {
 			return specErr("report.chart_axes_required")
 		}

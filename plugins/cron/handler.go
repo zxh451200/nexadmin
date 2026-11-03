@@ -102,6 +102,18 @@ func (h *handler) deleteJob(c *gin.Context) {
 	}
 }
 
+// DELETE /plugins/cron/jobs?ids=1,2,3 —— 批量删除，权限码复用单条删除的 cron:edit。
+// ids 非法或整体为空由 response.ParseIDsQuery 直接 400，不退化成「删全部」。
+func (h *handler) deleteJobs(c *gin.Context) {
+	ids, err := response.ParseIDsQuery(c)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	n, err := h.svc.DeleteJobs(c.Request.Context(), ids)
+	respond(c, gin.H{"deleted": n}, err)
+}
+
 // POST /plugins/cron/jobs/:id/run
 func (h *handler) runJob(c *gin.Context) {
 	if id, ok := paramID(c); ok {

@@ -22,6 +22,8 @@
     "publishConfirm": "Publish form \"{{name}}\"? A new version will be created and signed-in users can start filling it.",
     "offlineConfirm": "Take form \"{{name}}\" offline? Users can no longer fill it; collected submissions are kept.",
     "deleteConfirm": "Delete form \"{{name}}\"? Its {{count}} submissions will be deleted as well and cannot be recovered.",
+    "deleteBatchConfirm": "Delete the {{count}} selected forms? Their versions and submissions will be deleted as well and cannot be recovered.",
+    "deletedPartial": "Deleted {{deleted}}/{{total}} forms (the rest may already be gone)",
     "import": { "title": "Import form", "export": "Export definition", "tooLarge": "File is too large to import", "invalid": "Invalid file format, cannot import" },
     "fields": {
       "name": "Form name", "description": "Description", "status": "Status", "version": "Version", "submissionCount": "Submissions",
@@ -117,6 +119,8 @@
       "description": "View and export what users have submitted", "submitter": "Submitter", "submittedAt": "Submitted at", "detail": "Submission details",
       "filterField": "Filter field", "filterValue": "Filter value", "empty": "No submissions", "truncated": "Result truncated at the row limit",
       "deleteConfirm": "Delete this submission from \"{{name}}\"? This cannot be undone.",
+      "deleteBatchConfirm": "Delete the {{count}} selected submissions? This cannot be undone.",
+      "deletedPartial": "Deleted {{deleted}}/{{total}} submissions (the rest may already be gone)",
       "exportXlsx": "Export xlsx", "exportJob": "Export in background", "exportJobSubmitted": "Export task submitted. Check it in export tasks"
     }
   }

@@ -62,18 +62,24 @@ func TestExportRowCapAndChartMembership(t *testing.T) {
 	}
 }
 
-func TestExportOnlyTableCharts(t *testing.T) {
+// 非表格图表导出的是聚合后的底层结果行（BI 的 export underlying data）：饼图同样成立。
+func TestExportUnderlyingDataForAnyChartType(t *testing.T) {
 	svc, mock := newTestService(t)
 	cfg := `{"items":[{"chartId":"11","group":"","span":12}],"filters":[]}`
 	mock.ExpectQuery(reportRowSQL).WithArgs(int64(7), int64(3), 1).WillReturnRows(reportRows(cfg))
 	expectChartAndDataset(mock, "pie",
 		`{"dimensions":[{"column":"status"}],"measures":[{"agg":"count"}],"filters":[],"orderBy":[],"limit":0,"colors":[]}`,
 		`{"columns":["status"],"filters":[]}`)
-	mock.ExpectQuery("SELECT `status` AS `d0`,COUNT\\(\\*\\) AS `m0` FROM `plg_cron_log`").WillReturnRows(sqlmock.NewRows([]string{"d0", "m0"}))
+	mock.ExpectQuery("SELECT `status` AS `d0`,COUNT\\(\\*\\) AS `m0` FROM `plg_cron_log`").
+		WillReturnRows(sqlmock.NewRows([]string{"d0", "m0"}).AddRow("a", 1).AddRow("b", 2))
 	var buf bytes.Buffer
-	err := svc.ExportReportChart(tctx(7), func(ExportFile) ioWriter { return &buf }, 3, 11, nil, allViewer(), ExportLabels{})
-	if !isStatus(err, 400) || buf.Len() != 0 {
-		t.Fatalf("err = %v, wrote %d bytes", err, buf.Len())
+	var got ExportFile
+	err := svc.ExportReportChart(tctx(7), func(f ExportFile) ioWriter { got = f; return &buf }, 3, 11, nil, allViewer(), ExportLabels{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Name == "" || !bytes.HasPrefix(buf.Bytes(), []byte("PK")) {
+		t.Fatalf("export = %+v, %d bytes", got, buf.Len())
 	}
 }
 

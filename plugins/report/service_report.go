@@ -213,12 +213,20 @@ func (s *Service) ListReportGroups(ctx context.Context) ([]string, error) {
 	return out, nil
 }
 
-// DeleteReport 删除报表。
+// DeleteReport 删除报表，并一起清掉它的订阅：报表没了却留着订阅行，RunDue 每扫一次都会
+// 因为取不到目标 warn 一条，且永远不记 last_sent_date（跳过时不 mark），成了刷不完的日志。
 func (s *Service) DeleteReport(ctx context.Context, id idgen.ID) error {
 	if _, err := s.loadReport(ctx, id); err != nil {
 		return err
 	}
-	tx, _ := s.scoped(ctx)
+	tx, err := s.scoped(ctx)
+	if err != nil {
+		return err
+	}
+	if err := tx.Where("report_id = ?", int64(id)).Delete(&Subscription{}).Error; err != nil {
+		return dbErr(err)
+	}
+	tx, _ = s.scoped(ctx)
 	return dbErr(tx.Where("id = ?", id).Delete(&ReportDef{}).Error)
 }
 

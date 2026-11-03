@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Eraser } from 'lucide-react'
+import { Eraser, RotateCcw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
@@ -10,7 +10,7 @@ import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
-import { useCleanLogs, useJobs, useLogDetail, useLogs, type CronLog, type LogQuery } from './api'
+import { useCleanLogs, useJobs, useLogDetail, useLogs, useRunJob, type CronLog, type LogQuery } from './api'
 import { formatTime, statusVariant } from './format'
 
 const ALL = '__all'
@@ -146,6 +146,17 @@ export function LogsTab({ jobId, onJobChange }: Props) {
   const query: LogQuery = { jobId, status: applied, page, pageSize }
   const { data, isLoading } = useLogs(query)
   const { data: jobs } = useJobs({ page: 1, pageSize: 200 })
+  const runJob = useRunJob()
+
+  // 失败记录就地重跑：按该日志的任务再触发一次手动执行（正在运行会收到 409 提示）。
+  const onRerun = async (l: CronLog) => {
+    try {
+      await runJob.mutateAsync(l.jobId)
+      toast.success(t('plugin_cron.rerun.started', { name: l.jobName }))
+    } catch {
+      toast.error(t('common.operateFailed'))
+    }
+  }
 
   const columns: Column<CronLog>[] = [
     { key: 'jobName', title: t('plugin_cron.fields.job'), mobile: 'title', render: (l) => <span className="font-medium text-foreground">{l.jobName}</span> },
@@ -183,7 +194,7 @@ export function LogsTab({ jobId, onJobChange }: Props) {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_cron.all')}</SelectItem>
+            <SelectItem value={ALL}>{t('plugin_cron.filter.allJobs')}</SelectItem>
             {(jobs?.list ?? []).map((j) => (
               <SelectItem key={j.id} value={j.id}>
                 {j.name}
@@ -196,7 +207,7 @@ export function LogsTab({ jobId, onJobChange }: Props) {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_cron.all')}</SelectItem>
+            <SelectItem value={ALL}>{t('plugin_cron.filter.allStatuses')}</SelectItem>
             {STATUSES.map((s) => (
               <SelectItem key={s} value={s}>
                 {t(`plugin_cron.status.${s}`)}
@@ -229,7 +240,25 @@ export function LogsTab({ jobId, onJobChange }: Props) {
             </Button>
           </Can>
         }
-        rowActions={(l) => <DetailAction onClick={() => setDetail(l.id)} />}
+        rowActions={(l) => (
+          <>
+            {l.status === 'failed' ? (
+              <Can perm="cron:run">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label={t('plugin_cron.rerun.action')}
+                  disabled={runJob.isPending}
+                  onClick={() => void onRerun(l)}
+                >
+                  <RotateCcw className="size-4" aria-hidden="true" />
+                </Button>
+              </Can>
+            ) : null}
+            <DetailAction onClick={() => setDetail(l.id)} />
+          </>
+        )}
       />
 
       <LogDetailDialog id={detail} onClose={() => setDetail(null)} />

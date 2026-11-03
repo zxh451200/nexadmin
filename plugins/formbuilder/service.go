@@ -198,6 +198,27 @@ func (s *Service) DeleteForm(ctx context.Context, id idgen.ID) error {
 	return s.store.DeleteForm(ctx, id)
 }
 
+// DeleteForms 批量删除表单。去重后交给存储层：连带清理与护栏与单条一致，且整批一个事务，
+// 点名的表单只要有一条不在当前租户下就全部回滚，不返回"部分成功"。
+func (s *Service) DeleteForms(ctx context.Context, ids []idgen.ID) (int64, error) {
+	return s.store.DeleteForms(ctx, dedupeIDs(ids))
+}
+
+// dedupeIDs 去掉重复 ID 并保持顺序：同一条被重复勾选不是错误，但会让批量删除的
+// "实删条数必须等于点名条数"护栏误判成失败。
+func dedupeIDs(ids []idgen.ID) []idgen.ID {
+	seen := make(map[int64]struct{}, len(ids))
+	out := make([]idgen.ID, 0, len(ids))
+	for _, id := range ids {
+		if _, dup := seen[int64(id)]; dup {
+			continue
+		}
+		seen[int64(id)] = struct{}{}
+		out = append(out, id)
+	}
+	return out
+}
+
 // Publish 把当前草稿冻结成新版本。字典绑定的选项在此刻快照进版本，之后字典变化不影响该版本。
 func (s *Service) Publish(ctx context.Context, actor Actor, id idgen.ID) (*FormDTO, error) {
 	f, err := s.store.GetForm(ctx, id)

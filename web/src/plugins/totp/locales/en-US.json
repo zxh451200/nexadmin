@@ -14,6 +14,8 @@
     "confirmed": "Two-factor auth enabled",
     "disabled": "Two-factor auth disabled",
     "disable": "Disable two-factor auth",
+    "disableHint": "To stop a hijacked session from turning two-factor auth off, disabling first asks for your current password",
+    "passwordPlaceholder": "Enter your current password",
     "codeWrong": "Wrong code, try again"
   }
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/nexadmin/flowlite/engine"
 	"github.com/nexadmin/flowlite/runtime"
 	"github.com/nexadmin/flowlite/store"
+	"nexadmin/core/notify"
 	"nexadmin/core/response"
 	"nexadmin/core/tenant"
 	"nexadmin/pkg/idgen"
@@ -64,12 +65,18 @@ type logger interface {
 type Service struct {
 	rt  *runtime.Service
 	log logger
+	// db 只用于定义版本历史（plg_workflow_def_version）的读写；运行时数据一律走 rt 的存储端口。
+	// 测试用 newWithRuntime 注入内存存储时不设置，版本历史随之不可用（返回空列表）。
+	db *gorm.DB
+	// urgeSender 是催办的站内信出口；nil = 通知未装配，Urge 空转成功。
+	urgeSender urgeSender
 }
 
 // NewService 创建工作流服务。
 func NewService(db *gorm.DB, log logger) *Service {
 	rt := runtime.New(gormDefs{db: db}, gormInsts{db: db}, gormTasks{db: db}, gormActions{db: db})
 	s := newWithRuntime(rt, log)
+	s.db = db
 	// 定时扫描会跨租户读取（Skip）；推进时必须先 Unskip 再放实例租户，
 	// 否则 tenant.With 保留了 skip 标记，待办/动作会写成 tenant_id=0。
 	rt.ContextFor = func(ctx context.Context, inst *store.Instance) context.Context {
@@ -230,6 +237,92 @@ func (s *Service) DefDelete(ctx context.Context, id idgen.ID) error {
 	return mapStoreErr(s.rt.Defs.Delete(ctx, idText(id)), "workflow.def_not_found")
 }
 
+// DefDeleteMany 批量删除流程定义：逐条走单条删除的同一条判断（deleteDef：只按 id 删，
+// 租户条件由 tenantPlugin 追加），整批放在一个事务里——任一条语句失败就整批回滚，
+// 不会留下「选中 5 条删掉 3 条」的中间状态，也不做「删掉能删的」。
+// 护栏与级联和单条完全一致，即没有额外护栏、没有级联：在途实例按发起时存下的定义快照执行
+// （见 model.go Inst.DefSnapshot），所以不因「有在跑的实例」拒绝删除；历史版本
+// plg_workflow_def_version、待办 plg_workflow_task、动作 plg_workflow_action 都不随定义删除。
+// 越权 / 已不存在的 id 删不到，不计入实删数；一条都没删到报不存在，不静默返回 deleted=0。
+func (s *Service) DefDeleteMany(ctx context.Context, ids []idgen.ID) (int64, error) {
+	if s.db == nil {
+		// 测试注入内存存储时没有库（同 DefVersions 的口径）：真实装配一律经 NewService 带库。
+		return 0, response.Internal()
+	}
+	var deleted int64
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		for _, id := range ids {
+			n, err := deleteDef(tx, id)
+			if err != nil {
+				return err
+			}
+			deleted += n
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	if deleted == 0 {
+		return 0, response.NotFound("error.not_found")
+	}
+	return deleted, nil
+}
+
+// DefVersionView 是一条历史版本的展示行（不含 XML 正文，看图另走 XML 接口）。
+type DefVersionView struct {
+	Version   int       `json:"version"`
+	Name      string    `json:"name"`
+	Status    string    `json:"status"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// DefVersions 列出定义的历史版本（保存时留档的旧版本，不含当前版本），新→旧。
+func (s *Service) DefVersions(ctx context.Context, id idgen.ID) ([]DefVersionView, error) {
+	if _, err := s.rt.Defs.Get(ctx, idText(id)); err != nil {
+		return nil, mapStoreErr(err, "workflow.def_not_found")
+	}
+	if s.db == nil {
+		return []DefVersionView{}, nil
+	}
+	var rows []DefVersion
+	if err := s.db.WithContext(ctx).Where("def_id = ?", int64(id)).Order("version DESC").Limit(50).Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make([]DefVersionView, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, DefVersionView{Version: r.Version, Name: r.Name, Status: r.Status, UpdatedAt: r.UpdatedAt})
+	}
+	return out, nil
+}
+
+// DefVersionXML 取某历史版本的建模器 XML 原文。
+func (s *Service) DefVersionXML(ctx context.Context, id idgen.ID, version int) (string, error) {
+	var row DefVersion
+	err := s.db.WithContext(ctx).Where("def_id = ? AND version = ?", int64(id), version).First(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return "", response.NotFound("workflow.def_not_found")
+	}
+	if err != nil {
+		return "", err
+	}
+	return row.BpmnXML, nil
+}
+
+// DefRollback 回滚到历史版本：用那份 XML 原文走一次保存——版本继续递增，不覆盖历史，
+// 回滚本身也可被再回滚。实例快照不受影响：在途流程仍按发起时的定义执行。
+func (s *Service) DefRollback(ctx context.Context, id idgen.ID, version int) (*DefView, error) {
+	xml, err := s.DefVersionXML(ctx, id, version)
+	if err != nil {
+		return nil, err
+	}
+	cur, err := s.rt.Defs.Get(ctx, idText(id))
+	if err != nil {
+		return nil, mapStoreErr(err, "workflow.def_not_found")
+	}
+	return s.DefSave(ctx, id, DefForm{Key: cur.Key, Name: cur.Name, Status: cur.Status, XML: xml})
+}
+
 // DefXML 返回定义的 BPMN XML：优先返回建模器保存的原文（含布局），
 // 没有原文时由引擎按定义生成。
 func (s *Service) DefXML(ctx context.Context, id idgen.ID) (string, error) {
@@ -360,13 +453,13 @@ type InstQuery struct {
 func (s *Service) InstList(ctx context.Context, q InstQuery, actor string) ([]InstView, int64, error) {
 	switch {
 	case q.Todo == "1":
-		res, total, err := s.rt.ListMinePending(ctx, actor, q.Page, q.PageSize)
+		res, total, err := s.rt.ListMinePending(ctx, actor, q.Keyword, q.Page, q.PageSize)
 		if err != nil {
 			return nil, 0, err
 		}
 		return viewsOf(res), total, nil
 	case q.Done == "1":
-		res, total, err := s.rt.ListMineHandled(ctx, actor, q.Page, q.PageSize)
+		res, total, err := s.rt.ListMineHandled(ctx, actor, q.Keyword, q.Page, q.PageSize)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -440,14 +533,92 @@ func (s *Service) InstApprove(ctx context.Context, id idgen.ID, actor, comment s
 	return s.act(ctx, id, actor, runtime.ActionApprove, runtime.ActionInput{Comment: comment})
 }
 
-// InstReject 驳回：整条实例置为 rejected。
+// InstReject 驳回：整条实例置为 rejected。驳回必须给理由——这是审批记录可追溯的底线，
+// 也是对提交人的基本交代（否决没有解释等于让单据凭空消失）。
 func (s *Service) InstReject(ctx context.Context, id idgen.ID, actor, comment string) (*InstView, error) {
+	if strings.TrimSpace(comment) == "" {
+		return nil, response.BadRequest("workflow.reject_comment_required")
+	}
 	return s.act(ctx, id, actor, runtime.ActionReject, runtime.ActionInput{Comment: comment})
 }
 
 // InstCountersign 加签。
 func (s *Service) InstCountersign(ctx context.Context, id idgen.ID, actor, approver, comment string) (*InstView, error) {
 	return s.act(ctx, id, actor, runtime.ActionCountersign, runtime.ActionInput{Approver: approver, Comment: comment})
+}
+
+// InstTransfer 转办：把当前节点的待办转给另一人，转办人随即失去审批权。
+func (s *Service) InstTransfer(ctx context.Context, id idgen.ID, actor, to, comment string) (*InstView, error) {
+	return s.act(ctx, id, actor, runtime.ActionTransfer, runtime.ActionInput{To: strings.TrimSpace(to), Comment: comment})
+}
+
+// TodoCount 是侧边栏待办徽标的数据源：当前用户（含公开任务）的待办实例数。
+func (s *Service) TodoCount(ctx context.Context, actor string) (int64, error) {
+	_, total, err := s.rt.ListMinePending(ctx, actor, "", 1, 1)
+	return total, err
+}
+
+// urgeSender 是催办需要的最小站内信面；nil = 通知未装配，催办只返回成功但无人被提醒。
+type urgeSender interface {
+	Send(ctx context.Context, m notify.Msg) error
+}
+
+// SetUrgeSender 注入催办站内信出口（Register/Start 装配）。
+func (s *Service) SetUrgeSender(sender urgeSender) *Service {
+	s.urgeSender = sender
+	return s
+}
+
+// Urge 催办：发起人把运行中实例的当前待审批人再提醒一遍。
+// 不做频控——core/notify 每用户每渠道的限频兜底；读接口拿 pending 名单后即时发送。
+func (s *Service) Urge(ctx context.Context, id idgen.ID, actor string) error {
+	res, err := s.rt.Get(ctx, idText(id))
+	if err != nil {
+		return mapRuntimeErr(err, "workflow.inst_not_found")
+	}
+	if res.State == nil || res.State.Status != engine.StatusRunning {
+		return response.BadRequest("workflow.inst_not_running")
+	}
+	// 只有发起人能催：审批人之间的提醒走加签/转办，不混在催办语义里
+	if res.Inst.Submitter != actor {
+		return response.Forbidden("workflow.withdraw_not_owner")
+	}
+	if s.urgeSender == nil {
+		return nil
+	}
+	// 租户取请求上下文（管理端路由必带）；内存存储（测试）里 inst.TenantID 为空，回退到实例记录
+	tid, _ := tenant.From(ctx)
+	if tid == 0 {
+		tid, _ = idgen.Parse(res.Inst.TenantID)
+	}
+	if tid == 0 {
+		return nil
+	}
+	recipients := make([]idgen.ID, 0, len(res.State.Current))
+	seen := map[string]bool{}
+	for _, p := range engine.PendingTasks(*res.Def, res.State) {
+		if p.Assignee == "" || seen[p.Assignee] {
+			continue
+		}
+		seen[p.Assignee] = true
+		if uid, err := idgen.Parse(p.Assignee); err == nil {
+			recipients = append(recipients, uid)
+		}
+	}
+	if len(recipients) == 0 {
+		return nil
+	}
+	title := res.Inst.Title
+	if strings.TrimSpace(title) == "" {
+		title = res.Inst.DefKey
+	}
+	return s.urgeSender.Send(tenant.With(ctx, tid), notify.Msg{
+		To: recipients, Category: "workflow",
+		Title:    "催办：" + title,
+		Content:  "流程「" + title + "」的发起人请你尽快审批。",
+		Link:     inboxLink,
+		Channels: []string{notify.ChannelInApp},
+	})
 }
 
 // InstRollback 回退到指定审批节点。

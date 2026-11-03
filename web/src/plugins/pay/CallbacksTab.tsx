@@ -71,7 +71,7 @@ export function CallbacksTab() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_pay.all')}</SelectItem>
+            <SelectItem value={ALL}>{t('plugin_pay.filter.allChannels')}</SelectItem>
             {channels.map((c) => (
               <SelectItem key={c.code} value={c.code}>
                 {c.name}
@@ -87,7 +87,7 @@ export function CallbacksTab() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_pay.all')}</SelectItem>
+            <SelectItem value={ALL}>{t('plugin_pay.filter.allVerifies')}</SelectItem>
             <SelectItem value="ok">{t('plugin_pay.verifyOk')}</SelectItem>
             <SelectItem value="fail">{t('plugin_pay.verifyFail')}</SelectItem>
           </SelectContent>

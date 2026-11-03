@@ -229,6 +229,15 @@ export function useDeleteForm() {
   return useMutation({ mutationFn: (id: string) => api.del(`${BASE}/forms/${id}`), onSuccess: invalidate })
 }
 
+/** 批量删除表单：ids 走查询参数（?ids=1,2,3），后端整批一个事务，返回实删条数 */
+export function useDeleteForms() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (ids: string[]) => api.del<{ deleted: number }>(`${BASE}/forms`, { ids: ids.join(',') }),
+    onSuccess: invalidate,
+  })
+}
+
 export function usePublish() {
   const invalidate = useInvalidate()
   return useMutation({ mutationFn: (id: string) => api.post<FormDetail>(`${BASE}/forms/${id}/publish`), onSuccess: invalidate })
@@ -372,6 +381,16 @@ export function useDeleteSubmission() {
   const invalidate = useInvalidate()
   return useMutation({
     mutationFn: ({ formId, id }: { formId: string; id: string }) => api.del(`${BASE}/forms/${formId}/submissions/${id}`),
+    onSuccess: invalidate,
+  })
+}
+
+/** 批量删除某表单下的提交：删除范围始终限定在该表单，混进其他表单的 id 会让整批失败 */
+export function useDeleteSubmissions() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: ({ formId, ids }: { formId: string; ids: string[] }) =>
+      api.del<{ deleted: number }>(`${BASE}/forms/${formId}/submissions`, { ids: ids.join(',') }),
     onSuccess: invalidate,
   })
 }

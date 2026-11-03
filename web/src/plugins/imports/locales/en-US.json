@@ -7,6 +7,10 @@
       "run": "Run imports"
     },
     "all": "All",
+    "filter": {
+      "allSources": "All sources",
+      "allStatuses": "All statuses"
+    },
     "empty": "No imports yet",
     "noSourcesTitle": "No import sources yet",
     "noSources": "No importable data tables yet. Once a module is wired for import, its sources and templates show up here.",
@@ -22,6 +26,11 @@
     "batchDone": "{{ok}} file(s) submitted, {{fail}} failed",
     "delete": "Delete",
     "deleteConfirm": "Delete the import record for \"{{name}}\"? Imported data is not affected.",
+    "deleteBatchConfirm": "Delete the {{count}} selected import records? Imported data is not affected; if any of them is still queued or running, nothing is deleted — cancel it first.",
+    "deletedPartial": "{{deleted}} of {{total}} selected records deleted (the rest do not exist or belong to another tenant)",
+    "cancel": "Cancel import",
+    "cancelConfirm": "Cancel \"{{name}}\"? Processed rows are kept; the rest will be skipped.",
+    "cancelDone": "Cancelled — processed rows are kept",
     "fields": {
       "source": "Source",
       "file": "CSV / XLSX file",
@@ -37,7 +46,8 @@
       "pending": "Queued",
       "running": "Processing",
       "done": "Done",
-      "failed": "Failed"
+      "failed": "Failed",
+      "cancelled": "Cancelled"
     }
   }
 }

@@ -12,7 +12,7 @@
     "noMessages": "No messages yet",
     "loading": "Loading…",
     "pickConversation": "Pick a conversation on the left to reply",
-    "searchPlaceholder": "Conversation no. / visitor / preview",
+    "searchPlaceholder": "Conversation no. / visitor / preview / message content",
     "close": "Close conversation",
     "closeConfirm": "Close conversation {{no}}? The visitor will not be able to send messages afterwards.",
     "replyPlaceholder": "Type a reply, Enter to send, Shift+Enter for a new line",
@@ -94,6 +94,15 @@
       "title": "Delete conversation",
       "confirm": "Delete conversation {{no}}? Its messages and attachments will be deleted too, and this cannot be undone."
     },
+    "batch": {
+      "selectAllClosed": "Select all closed",
+      "delete": "Delete selected",
+      "deleteTitle": "Delete conversations",
+      "deleteConfirm": "Delete the selected {{count}} conversations? Their messages and attachments will be deleted too, and this cannot be undone.",
+      "deleted": "Deleted {{count}} conversation(s)",
+      "skipped": "{{count}} open conversation(s) were skipped",
+      "onlyClosed": "Only closed conversations can be deleted"
+    },
     "notify": {
       "on": "Desktop alerts on",
       "off": "Enable desktop alerts",
@@ -137,7 +146,8 @@
       "autoAssign": "Auto-assign conversations",
       "autoAssignHint": "New conversations go to the online agent with the fewest open chats; with nobody online they queue and are claimed in order as agents come online",
       "retentionDays": "Keep closed conversations for (days, 0 = forever)",
-      "retentionHint": "Only closed conversations are purged, together with their messages and attachments; checked hourly"
+      "retentionHint": "Only closed conversations are purged, together with their messages and attachments; checked hourly",
+      "readonlyHint": "You can view these settings but not save them"
     }
   }
 }

@@ -65,7 +65,8 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	// 订单
 	g.POST("/orders", idempotency(d.DB), core.Perm("pay:edit"), h.createOrder)
 	g.GET("/orders", core.Perm("pay:list"), h.listOrders)
-	// 统计注册在 /orders/:no 之前，静态段优先匹配。
+	// 静态段注册在 /orders/:no 之前（与 /orders/stats 同一套匹配约定）。
+	g.GET("/orders/export", core.Perm("pay:list"), h.exportOrders)
 	g.GET("/orders/stats", core.Perm("pay:list"), h.Stats)
 	g.GET("/orders/by-biz", core.Perm("pay:list"), h.orderByBiz)
 	g.GET("/orders/:no", core.Perm("pay:list"), h.getOrder)
@@ -86,6 +87,8 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.GET("/channels", core.Perm("pay:list"), h.listChannels)
 	g.POST("/channels", core.Perm("pay:channel"), h.upsertChannel)
 	g.DELETE("/channels/:id", core.Perm("pay:channel"), h.deleteChannel)
+	// 批量删除走集合路径 + ?ids=，权限复用单条删除的 pay:channel（与 /channels/:id 共存，同 media/cron 形状）。
+	g.DELETE("/channels", core.Perm("pay:channel"), h.deleteChannelsBatch)
 	g.POST("/channels/:code/probe", core.Perm("pay:channel"), h.probeChannel)
 	g.GET("/providers", core.Perm("pay:list"), h.providers)
 	g.GET("/capabilities", core.Perm("pay:list"), h.capabilities)

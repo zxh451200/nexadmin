@@ -18,6 +18,8 @@
     "on": "On",
     "off": "Off",
     "deleteConfirm": "Delete identity source \"{{name}}\"?",
+    "deleteBatchConfirm": "Delete the {{count}} selected identity source(s)? Accounts that signed in through them fall back to the local password immediately.",
+    "deletedPartial": "Deleted {{deleted}} of {{total}} source(s) (the rest may already be gone or belong to another tenant)",
     "testConnection": "Test connection",
     "testLogin": "Test user login",
     "testLoginTitle": "Test user login · {{name}}",

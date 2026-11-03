@@ -64,6 +64,7 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.POST("/models", core.Perm("aigateway:edit"), h.saveModel)
 	g.POST("/models/:id", core.Perm("aigateway:edit"), h.saveModel)
 	g.DELETE("/models/:id", core.Perm("aigateway:edit"), h.deleteModel)
+	g.DELETE("/models", core.Perm("aigateway:edit"), h.deleteModels)
 	g.POST("/models/:id/ping", core.Perm("aigateway:edit"), h.pingModel)
 	g.GET("/usage", core.Perm("aigateway:list"), h.listUsage)
 	g.GET("/usage/summary", core.Perm("aigateway:list"), h.usageSummary)

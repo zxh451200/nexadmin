@@ -164,6 +164,22 @@ defineMock([
     },
   },
   {
+    // 批量删除：与后端 DELETE /plugins/cron/jobs?ids= 同口径
+    // ids 缺失/非法（含 0）一律 400，不退化成「删全部」；一条都没命中报 404；成功返回实删条数。
+    method: 'DELETE',
+    url: '/plugins/cron/jobs',
+    handler: ({ query }) => {
+      const parts = String(query.ids ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+      if (parts.length === 0 || parts.some((s) => !/^\d+$/.test(s) || /^0+$/.test(s))) mockError(400, 'Bad request')
+      const ids = new Set(parts)
+      const before = jobs.length
+      jobs = jobs.filter((j) => !ids.has(j.id))
+      const deleted = before - jobs.length
+      if (deleted === 0) mockError(404, 'Not found')
+      return { deleted }
+    },
+  },
+  {
     method: 'POST',
     url: '/plugins/cron/jobs/:id/run',
     handler: ({ params }) => {

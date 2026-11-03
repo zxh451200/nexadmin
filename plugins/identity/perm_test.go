@@ -81,8 +81,9 @@ func adminRoutes(e *gin.Engine) (admin []gin.RouteInfo, public []gin.RouteInfo) 
 func TestEveryAdminRouteIsPermissionGated(t *testing.T) {
 	p := newPermEnv(t)
 	admin, public := adminRoutes(p.e)
-	if len(admin) != 10 {
-		t.Fatalf("expected 10 admin routes, got %d: %+v", len(admin), admin)
+	// 11 条 = 原 10 条 + 批量删除 DELETE /sources（复用 identity:edit，不新增权限码）。
+	if len(admin) != 11 {
+		t.Fatalf("expected 11 admin routes, got %d: %+v", len(admin), admin)
 	}
 	if len(public) != 6 {
 		t.Fatalf("expected exactly 6 public CAS routes, got %d", len(public))
@@ -126,8 +127,9 @@ func TestEveryAdminRouteIsPermissionGated(t *testing.T) {
 		if isSync != (sy != http.StatusForbidden) {
 			t.Errorf("%s %s: sync permission handled wrong, got %d", r.Method, r.Path, sy)
 		}
-		// 权限通过后才进入业务（坏 ID / 坏 JSON 在触库之前就返回 400）
-		if r.Path != "/api/v1/plugins/identity/sources" || r.Method == http.MethodPost {
+		// 权限通过后才进入业务（坏 ID / 坏 JSON / 缺 ids 在触库之前就返回 400）；
+		// 只有列表 GET /sources 是无条件 200，不在这条断言里。
+		if r.Path != "/api/v1/plugins/identity/sources" || r.Method != http.MethodGet {
 			if c := p.do(r.Method, path, all, "{"); c != http.StatusBadRequest {
 				t.Errorf("%s %s: authorized request got %d, want 400 (bad input)", r.Method, r.Path, c)
 			}

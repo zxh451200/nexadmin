@@ -110,6 +110,22 @@ defineMock([
     },
   },
   {
+    // 批量删除：与后端 response.ParseIDsQuery 同口径——ids 缺失 / 整体为空 / 任一项非法一律 400，
+    // 绝不退化成「不带 ids 就清空全部模型」；真删数组元素，返回 { deleted: n }，0 命中 404。
+    method: 'DELETE',
+    url: '/plugins/aigateway/models',
+    handler: ({ query }) => {
+      const parts = String(query.ids ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+      if (parts.length === 0 || parts.some((s) => !/^\d+$/.test(s) || s === '0')) mockError(400, 'bad ids')
+      const picked = new Set(parts)
+      const before = models.length
+      models = models.filter((m) => !picked.has(m.id))
+      const deleted = before - models.length
+      if (deleted === 0) mockError(404, 'not found')
+      return { deleted }
+    },
+  },
+  {
     method: 'POST',
     url: '/plugins/aigateway/models/:id/ping',
     handler: ({ params }) => {

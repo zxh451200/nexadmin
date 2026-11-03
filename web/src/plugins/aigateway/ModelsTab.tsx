@@ -5,7 +5,9 @@ import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { ExportCsvButton } from '@/framework/components/export/ExportCsvButton'
 import { FilterBar } from '@/framework/components/FilterBar'
+import { RequiredMark } from '@/framework/components/RequiredMark'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { SwitchRow } from '@/framework/components/SwitchField'
 import { Badge } from '@/framework/ui/badge'
@@ -14,7 +16,9 @@ import { Input } from '@/framework/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import {
   AI_KINDS,
+  fetchModelsForExport,
   useDeleteModel,
+  useDeleteModels,
   useModels,
   usePingModel,
   useSaveModel,
@@ -112,7 +116,10 @@ function ModelFormDialog({
             </Select>
           </label>
           <label className="flex flex-col gap-1">
-            {t('plugin_aigateway.fields.name')}
+            <span>
+              {t('plugin_aigateway.fields.name')}
+              <RequiredMark />
+            </span>
             <Input value={value.name ?? ''} onChange={(e) => set({ name: e.target.value })} />
           </label>
         </div>
@@ -166,19 +173,34 @@ export function ModelsTab() {
   const [pageSize, setPageSize] = useState(10)
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<AiModel | null>(null)
+  const [selected, setSelected] = useState<string[]>([])
 
   const { data, isLoading } = useModels({ ...filters, page, pageSize })
   const remove = useDeleteModel()
+  const removeBatch = useDeleteModels()
   const ping = usePingModel()
 
   const onDelete = async (m: AiModel) => {
     if (await confirm({ destructive: true, description: t('plugin_aigateway.model.deleteConfirm', { name: m.name }) })) {
       try {
         await remove.mutateAsync(m.id)
+        setSelected((s) => s.filter((x) => x !== m.id))
         toast.success(t('common.operateSuccess'))
       } catch {
         toast.error(t('common.operateFailed'))
       }
+    }
+  }
+
+  // 批量删除：跨页选中也一次提交；后端只在当前租户内删点名的行，整批要么全成要么整批回滚。
+  const onDeleteBatch = async (ids: string[]) => {
+    if (!(await confirm({ destructive: true, description: t('plugin_aigateway.model.deleteBatchConfirm', { count: ids.length }) }))) return
+    try {
+      await removeBatch.mutateAsync(ids)
+      setSelected([])
+      toast.success(t('common.operateSuccess'))
+    } catch {
+      toast.error(t('common.operateFailed'))
     }
   }
 
@@ -252,7 +274,7 @@ export function ModelsTab() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_aigateway.all')}</SelectItem>
+            <SelectItem value={ALL}>{t('plugin_aigateway.filter.allKinds')}</SelectItem>
             {AI_KINDS.map((k) => (
               <SelectItem key={k} value={k}>
                 {t(`plugin_aigateway.kind.${k}`)}
@@ -272,6 +294,24 @@ export function ModelsTab() {
           {t('plugin_aigateway.model.create')}
         </Button>
       </Can>
+      {/* 导出在前端生成（不占后端端点、不新增权限码）：密钥列永不进 CSV——
+          列表 DTO 里的 apiKey 本来就是打码值，导出来只是一串星号，索性整列不给。 */}
+      <ExportCsvButton
+        perm="aigateway:list"
+        filename="aigateway-models"
+        columns={[
+          { header: t('plugin_aigateway.fields.kind'), value: (m) => t(`plugin_aigateway.kind.${m.kind}`) },
+          { header: t('plugin_aigateway.fields.name'), value: (m) => m.name },
+          { header: t('plugin_aigateway.fields.provider'), value: (m) => m.provider ?? '' },
+          { header: t('plugin_aigateway.fields.model'), value: (m) => m.model ?? '' },
+          { header: t('plugin_aigateway.fields.baseUrl'), value: (m) => m.baseUrl ?? '' },
+          { header: t('plugin_aigateway.fields.dimension'), value: (m) => m.dimension ?? 0 },
+          { header: t('plugin_aigateway.fields.enabled'), value: (m) => (m.enabled ? t('plugin_aigateway.enabledOn') : t('plugin_aigateway.enabledOff')) },
+          { header: t('plugin_aigateway.fields.isDefault'), value: (m) => (m.isDefault ? t('plugin_aigateway.model.default') : '-') },
+          { header: t('plugin_aigateway.fields.updatedAt'), value: (m) => formatTime(m.updatedAt, i18n.language) },
+        ]}
+        getRows={() => fetchModelsForExport({ keyword: filters.keyword, kind: filters.kind })}
+      />
     </div>
   )
 
@@ -294,6 +334,15 @@ export function ModelsTab() {
         }}
         emptyText={t('plugin_aigateway.empty')}
         toolbar={filterToolbar}
+        selection={{ selected, onChange: setSelected }}
+        batchActions={(ids) => (
+          <Can perm="aigateway:edit">
+            <Button variant="destructive" size="sm" onClick={() => void onDeleteBatch(ids)}>
+              <Trash2 aria-hidden="true" />
+              {t('common.delete')}
+            </Button>
+          </Can>
+        )}
         rowActions={(m) => (
           <Can perm="aigateway:edit">
             <div className="flex items-center">

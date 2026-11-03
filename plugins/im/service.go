@@ -508,7 +508,10 @@ func (s *Service) convFilter(ctx context.Context, q ConversationQuery) *gorm.DB 
 	}
 	if kw := strings.TrimSpace(q.Keyword); kw != "" {
 		like := "%" + kw + "%"
-		db = db.Where("conv_no LIKE ? OR visitor_name LIKE ? OR last_preview LIKE ?", like, like, like)
+		// 正文也要能搜到：坐席找「上周那个客户提过的订单号」时，会话号/访客名/末条摘要都对不上。
+		db = db.Where("conv_no LIKE ? OR visitor_name LIKE ? OR last_preview LIKE ? OR "+
+			"EXISTS (SELECT 1 FROM plg_im_message WHERE plg_im_message.conv_id = plg_im_conversation.id"+
+			" AND content LIKE ?)", like, like, like, like)
 	}
 	return db
 }
@@ -520,6 +523,38 @@ func (s *Service) ExportConversations(ctx context.Context, q ConversationQuery, 
 	}
 	var rows []Conversation
 	err := s.convFilter(ctx, q).Order("COALESCE(last_msg_at, created_at) DESC").Limit(limit).Find(&rows).Error
+	return rows, err
+}
+
+// exportMsgLimit 是「完整对话」sheet 的行数上限：会话最多 5000 个，但每个会话的消息数无界，
+// 不设上限会把一次导出变成全表扫描。超限即截断并在末尾写一行提示。
+const exportMsgLimit = 20000
+
+// ExportMessage 是「完整对话」sheet 的一行：会话号 + 该条消息。
+type ExportMessage struct {
+	ConvNo     string
+	Seq        int64
+	SenderType string
+	SenderName string
+	Content    string
+	CreatedAt  time.Time
+	RecalledAt *time.Time
+}
+
+// ExportMessages 取这批会话的全部消息，按会话号与会话内序号排序，上限 limit。
+func (s *Service) ExportMessages(ctx context.Context, convIDs []idgen.ID, limit int) ([]ExportMessage, error) {
+	if len(convIDs) == 0 {
+		return nil, nil
+	}
+	if limit <= 0 {
+		limit = exportMsgLimit
+	}
+	var rows []ExportMessage
+	err := s.db.WithContext(ctx).Table("plg_im_message AS m").
+		Select("c.conv_no AS conv_no, m.seq, m.sender_type, m.sender_name, m.content, m.created_at, m.recalled_at").
+		Joins("JOIN plg_im_conversation AS c ON c.id = m.conv_id").
+		Where("m.conv_id IN ?", convIDs).
+		Order("c.conv_no, m.seq").Limit(limit).Scan(&rows).Error
 	return rows, err
 }
 

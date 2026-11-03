@@ -117,14 +117,22 @@ func (h *handler) createOrder(c *gin.Context) {
 	respond(c, orderView(o, params), nil)
 }
 
+// orderQueryFrom 把列表/导出共用的查询参数收拢成 OrderQuery。
+func orderQueryFrom(c *gin.Context) OrderQuery {
+	return OrderQuery{
+		Keyword: c.Query("keyword"), Status: c.Query("status"), Channel: c.Query("channelCode"),
+		SubjectID: c.Query("subjectId"), BizType: c.Query("bizType"), Scene: c.Query("scene"),
+		FailReason: c.Query("failReason"),
+		CreatedFrom: c.Query("createdFrom"), CreatedTo: c.Query("createdTo"),
+	}
+}
+
 // GET /plugins/pay/orders —— 管理端分页列表（契约外附加，前端列表用）。
 func (h *handler) listOrders(c *gin.Context) {
 	page, size := response.ParsePage(c)
-	rows, total, err := h.svc.ListOrders(c.Request.Context(), OrderQuery{
-		Keyword: c.Query("keyword"), Status: c.Query("status"), Channel: c.Query("channelCode"),
-		SubjectID: c.Query("subjectId"), BizType: c.Query("bizType"), Scene: c.Query("scene"),
-		FailReason: c.Query("failReason"), Page: page, PageSize: size,
-	})
+	q := orderQueryFrom(c)
+	q.Page, q.PageSize = page, size
+	rows, total, err := h.svc.ListOrders(c.Request.Context(), q)
 	if err != nil {
 		fail(c, err)
 		return
@@ -134,6 +142,21 @@ func (h *handler) listOrders(c *gin.Context) {
 		out[i] = orderView(&rows[i], nil)
 	}
 	response.Page(c, out, total, page, size)
+}
+
+// GET /plugins/pay/orders/export?<同列表筛选> —— 导出当前筛选下的全部支付单。
+// 返回 JSON 列表（不带分页），CSV 由前端生成；与留言导出同款形状。
+func (h *handler) exportOrders(c *gin.Context) {
+	rows, _, err := h.svc.ExportOrders(c.Request.Context(), orderQueryFrom(c))
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	out := make([]OrderView, len(rows))
+	for i := range rows {
+		out[i] = orderView(&rows[i], nil)
+	}
+	response.OK(c, out)
 }
 
 // GET /plugins/pay/orders/by-biz —— 契约 getPayOrderByBiz（收款侧主查询入口）。
@@ -352,6 +375,23 @@ func (h *handler) deleteChannel(c *gin.Context) {
 		return
 	}
 	respond(c, nil, h.svc.DeleteChannel(c.Request.Context(), idgen.ID(id)))
+}
+
+// DELETE /plugins/pay/channels?ids=1,2,3 —— 管理端批量删除（契约外附加）。
+// 权限码复用单条删除的 pay:channel；ids 缺失或任一项非法由 ParseIDsQuery 直接 400，
+// 绝不退化成「不带 ids 就删掉全部渠道」。回执 deleted 是实删条数（越权/不存在的不计入）。
+func (h *handler) deleteChannelsBatch(c *gin.Context) {
+	ids, err := response.ParseIDsQuery(c)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	n, err := h.svc.DeleteChannels(c.Request.Context(), ids)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	response.OK(c, gin.H{"deleted": n})
 }
 
 // GET /plugins/pay/providers —— 已注册渠道类型与凭据字段（前端建渠道表单用，契约外附加）。

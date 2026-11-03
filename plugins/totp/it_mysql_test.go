@@ -80,7 +80,7 @@ func TestITMySQLBindAndGate(t *testing.T) {
 			t.Fatalf("migration: %v", err)
 		}
 	}
-	svc := NewService(db)
+	svc := NewService(db, nil, nil)
 	// 表有 tenant_id：绑定与校验必须带租户上下文，否则租户过滤器会拒绝查询。
 	ctx := tenant.With(context.Background(), 1)
 	if err := idgen.Init(1); err != nil {
@@ -96,7 +96,7 @@ func TestITMySQLBindAndGate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.Confirm(ctx, 7, code); err != nil {
+	if err := svc.Confirm(ctx, 7, code, "10.0.0.1"); err != nil {
 		t.Fatalf("confirm: %v", err)
 	}
 	if ok, err := svc.EnrolledAndEnabled(ctx, 7); err != nil || !ok {

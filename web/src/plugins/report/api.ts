@@ -5,12 +5,12 @@ import type { Page, PageQuery } from '@/framework/request/types'
 export type ColType = 'string' | 'number' | 'time' | 'bool'
 export type Agg = 'count' | 'sum' | 'avg' | 'min' | 'max'
 export type Op = '=' | '!=' | '>' | '<' | '>=' | '<=' | 'in' | 'like' | 'between'
-export type ChartType = 'bar' | 'line' | 'pie' | 'table' | 'metric'
+export type ChartType = 'bar' | 'line' | 'area' | 'pie' | 'table' | 'metric'
 export type Bucket = '' | 'day' | 'month' | 'year'
 
 export const OPS: Op[] = ['=', '!=', '>', '<', '>=', '<=', 'in', 'like', 'between']
 export const AGGS: Agg[] = ['count', 'sum', 'avg', 'min', 'max']
-export const CHART_TYPES: ChartType[] = ['bar', 'line', 'pie', 'table', 'metric']
+export const CHART_TYPES: ChartType[] = ['bar', 'line', 'area', 'pie', 'table', 'metric']
 
 export interface SourceCol {
   name: string
@@ -109,6 +109,30 @@ export interface Report {
 }
 export type ReportForm = Pick<Report, 'name' | 'groupName' | 'remark' | 'config'>
 
+export type SubscriptionSchedule = 'daily' | 'weekly'
+
+/** 报表订阅配置：每张报表一条；到点给收件人列表发文本提醒。 */
+export interface ReportSubscription {
+  reportId: string
+  schedule: SubscriptionSchedule
+  /** 发送时刻的小时（0-23，服务器时区） */
+  sendHour: number
+  /** 每周发送日（0=周日..6=周六）；仅 weekly 使用 */
+  weekday: number
+  /** 逗号分隔的收件人邮箱 */
+  recipients: string
+  enabled: boolean
+  lastSentAt?: string | null
+}
+
+export interface ReportSubscriptionForm {
+  schedule: SubscriptionSchedule
+  sendHour: number
+  weekday: number
+  recipients: string
+  enabled?: boolean
+}
+
 export interface ScreenItem {
   chartId: string
   x: number
@@ -163,6 +187,12 @@ function useInvalidate() {
   return () => void qc.invalidateQueries({ queryKey: KEY })
 }
 
+/** 批量删除返回：deleted 是后端实删条数，blocked 是点名但没删的条数（本租户不存在，或数据集仍被图表引用） */
+export interface BatchDeleteResult {
+  deleted: number
+  blocked: number
+}
+
 // ---- 数据集 ----
 export const useSources = () =>
   useQuery({ queryKey: [...KEY, 'sources'], queryFn: () => api.get<Source[]>(`${BASE}/sources`), staleTime: 5 * 60_000 })
@@ -193,6 +223,14 @@ export function useSaveDataset() {
 export function useDeleteDataset() {
   const invalidate = useInvalidate()
   return useMutation({ mutationFn: (id: string) => api.del(`${BASE}/datasets/${id}`), onSuccess: invalidate })
+}
+/** 批量删数据集：仍被图表引用的计入 blocked 不删，一个都删不了时后端 409 */
+export function useDeleteDatasets() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (ids: string[]) => api.del<BatchDeleteResult>(`${BASE}/datasets`, { ids: ids.join(',') }),
+    onSuccess: invalidate,
+  })
 }
 export const previewDataset = (data: DatasetForm) => api.post<QueryResult>(`${BASE}/datasets/preview`, data)
 
@@ -233,6 +271,14 @@ export function useDeleteChart() {
   const invalidate = useInvalidate()
   return useMutation({ mutationFn: (id: string) => api.del(`${BASE}/charts/${id}`), onSuccess: invalidate })
 }
+/** 批量删图表：引用它的报表/大屏会显示「图表已删除」，与单条同口径 */
+export function useDeleteCharts() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (ids: string[]) => api.del<BatchDeleteResult>(`${BASE}/charts`, { ids: ids.join(',') }),
+    onSuccess: invalidate,
+  })
+}
 export const previewChart = (data: ChartForm) => api.post<QueryResult>(`${BASE}/charts/preview`, data)
 export const queryChart = (id: string) => api.post<QueryResult>(`${BASE}/charts/${id}/query`)
 
@@ -252,6 +298,32 @@ export const useReport = (id?: string, scope: 'manage' | 'view' = 'view') =>
     enabled: !!id,
   })
 
+// ---- 报表订阅 ----
+
+export const useReportSubscription = (id?: string) =>
+  useQuery({
+    queryKey: [...KEY, 'subscription', id],
+    queryFn: () => api.get<ReportSubscription | null>(`${BASE}/reports/${id}/subscription`),
+    enabled: !!id,
+  })
+
+export function useSaveSubscription() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (v: { id: string; data: ReportSubscriptionForm }) =>
+      api.put<ReportSubscription>(`${BASE}/reports/${v.id}/subscription`, v.data),
+    onSuccess: invalidate,
+  })
+}
+
+export function useDeleteSubscription() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (id: string) => api.del(`${BASE}/reports/${id}/subscription`),
+    onSuccess: invalidate,
+  })
+}
+
 export function useSaveReport() {
   const invalidate = useInvalidate()
   return useMutation({
@@ -265,6 +337,16 @@ export function useDeleteReport() {
   return useMutation({
     mutationFn: (id: string) => api.del(`${BASE}/reports/${id}`),
     // 只失效列表：被删报表的详情/图表查询仍挂在查看器上，整域失效会让它们对已删 id 立刻重取并 404
+    onSuccess: () => qc.invalidateQueries({ queryKey: [...KEY, 'reports'] }),
+  })
+}
+
+/** 批量删报表：点名但不存在的计入 blocked，一条都不存在时后端 404 */
+export function useDeleteReports() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (ids: string[]) => api.del<BatchDeleteResult>(`${BASE}/reports`, { ids: ids.join(',') }),
+    // 与单条同口径：只失效列表，别让查看器对已删 id 立刻重取
     onSuccess: () => qc.invalidateQueries({ queryKey: [...KEY, 'reports'] }),
   })
 }

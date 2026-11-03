@@ -1,4 +1,4 @@
-import { defineMock } from '@/framework/request/mock'
+import { defineMock, mockError } from '@/framework/request/mock'
 import type { ImportJob, ImportSourceMeta } from './api'
 
 const ago = (min: number) => new Date(Date.now() - min * 60_000).toISOString()
@@ -118,6 +118,24 @@ defineMock([
     handler: ({ params }) => {
       jobs = jobs.filter((j) => j.id !== params.id)
       return { ok: true }
+    },
+  },
+  {
+    // 批量删除：与后端 DELETE /plugins/imports?ids= 同口径。
+    // ids 缺失/非法（含 0）一律 400，不退化成「删全部」；批次里有排队中/执行中的任务整批 409（一条都不删）；
+    // 越权/不存在的 id 不计入实删数；0 命中 404。
+    method: 'DELETE',
+    url: '/plugins/imports',
+    handler: ({ query }) => {
+      const parts = String(query.ids ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+      if (parts.length === 0 || parts.some((s) => !/^\d+$/.test(s) || /^0+$/.test(s))) mockError(400, 'Bad request')
+      const picked = jobs.filter((j) => parts.includes(j.id))
+      if (picked.length === 0) mockError(404, 'Not found')
+      if (picked.some((j) => j.status === 'pending' || j.status === 'running')) mockError(409, 'The job is running; it can be deleted once it finishes.')
+      const ids = new Set(parts)
+      const before = jobs.length
+      jobs = jobs.filter((j) => !ids.has(j.id))
+      return { deleted: before - jobs.length }
     },
   },
   {

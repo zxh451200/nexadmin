@@ -1,5 +1,5 @@
-import { defineMock } from '@/framework/request/mock'
-import type { WfDefinition, WfInst } from './api'
+import { defineMock, mockError } from '@/framework/request/mock'
+import type { WfDef, WfDefinition, WfInst } from './api'
 
 const ago = (min: number) => new Date(Date.now() - min * 60_000).toISOString()
 
@@ -106,28 +106,43 @@ const insts: WfInst[] = ([
       : [],
 }))
 
+// 流程定义：列表要能被真删（含批量），所以放在可变数组里，而不是 GET handler 里写死一份。
+// ID 用 19 位数字串（与后端 idgen 雪花同形状）：后端 DELETE /defs?ids= 只收正整数，
+// mock 里用 d1/d2 这种 ID 的话前端一删就 400，接不上。
+let defs: WfDef[] = [
+  {
+    id: '7440000000000000001',
+    key: def.key,
+    name: def.name,
+    status: 'published',
+    version: 3,
+    definition: def,
+    xml: defXml,
+    createdAt: ago(60 * 24 * 30),
+    updatedAt: ago(60 * 24 * 2),
+  },
+  {
+    id: '7440000000000000002',
+    key: 'leave_approval',
+    name: '请假审批',
+    status: 'draft',
+    version: 1,
+    definition: def,
+    xml: defXml,
+    createdAt: ago(60 * 24 * 6),
+    updatedAt: ago(60 * 24),
+  },
+]
+
 defineMock([
   {
     method: 'GET',
     url: '/plugins/workflow/defs',
-    handler: () => ({
-      list: [
-        {
-          id: '1',
-          key: def.key,
-          name: def.name,
-          status: 'published',
-          version: 3,
-          definition: def,
-          xml: defXml,
-          createdAt: ago(60 * 24 * 30),
-          updatedAt: ago(60 * 24 * 2),
-        },
-      ],
-      total: 1,
-      page: 1,
-      pageSize: 10,
-    }),
+    handler: ({ query }) => {
+      const page = Number(query.page ?? 1)
+      const pageSize = Number(query.pageSize ?? 10)
+      return { list: defs.slice((page - 1) * pageSize, page * pageSize), total: defs.length, page, pageSize }
+    },
   },
   { method: 'GET', url: '/plugins/workflow/templates', handler: () => [
     { key: 'general_two_step', name: '两级审批(或签+超时升级)', definition: def, xml: defXml },
@@ -168,7 +183,7 @@ defineMock([
         revision: 1,
         current: ['lead'],
         done: ['start'],
-        vars: {},
+        vars: body.vars && typeof body.vars === 'object' ? body.vars : {},
         votes: {},
         history: [{ at: new Date().toISOString(), node: 'start', actor: '1800000000000000001', action: 'start' }],
         pending: [{ nodeKey: 'lead', nodeName: '主管审批', assignee: '1790000000000000001' }],
@@ -240,6 +255,29 @@ defineMock([
   },
   {
     method: 'POST',
+    url: '/plugins/workflow/instances/:id/transfer',
+    handler: ({ params, body }) => {
+      const x = insts.find((i) => i.id === params.id)
+      if (!x) throw new Error('not found')
+      // 转办：当前节点的待办整组换成受让人
+      const to = String(body.to ?? '')
+      x.pending = x.pending.filter((p) => p.nodeKey !== (x.current[0] ?? '') || p.assignee === '')
+      if (to) x.pending.push({ nodeKey: x.current[0] ?? '', nodeName: '转办审批', assignee: to })
+      x.history.push({ at: new Date().toISOString(), node: x.current[0] ?? '', actor: '1800000000000000001', action: 'transfer', comment: String(body.comment ?? '') })
+      x.updatedAt = new Date().toISOString()
+      return x
+    },
+  },
+  {
+    method: 'GET',
+    url: '/plugins/workflow/todo-count',
+    handler: () => {
+      const me = '1790000000000000001'
+      return { count: insts.filter((x) => x.status === 'running' && x.pending.some((p) => !p.assignee || p.assignee === me)).length }
+    },
+  },
+  {
+    method: 'POST',
     url: '/plugins/workflow/instances/:id/rollback',
     handler: ({ params, body }) => {
       const x = insts.find((i) => i.id === params.id)
@@ -264,5 +302,30 @@ defineMock([
   },
   { method: 'POST', url: '/plugins/workflow/defs', handler: ({ body }) => body },
   { method: 'PUT', url: '/plugins/workflow/defs/:id', handler: ({ body }) => body },
-  { method: 'DELETE', url: '/plugins/workflow/defs/:id', handler: () => ({ ok: true }) },
+  {
+    method: 'DELETE',
+    url: '/plugins/workflow/defs/:id',
+    handler: ({ params }) => {
+      defs = defs.filter((d) => d.id !== params.id)
+      return { ok: true }
+    },
+  },
+  {
+    // 批量删除：与后端 DELETE /plugins/workflow/defs?ids= 同口径（Service.DefDeleteMany）。
+    // ids 缺失 / 整体为空 / 任一项不是正整数（含 0）一律 400，绝不退化成「删光所有定义」；
+    // 只真删点名的那几条（实例、历史版本、待办都不动，与单条一致），返回实删条数 deleted；
+    // 一条都没命中 404，不静默返回 deleted=0。
+    method: 'DELETE',
+    url: '/plugins/workflow/defs',
+    handler: ({ query }) => {
+      const parts = String(query.ids ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+      if (parts.length === 0 || parts.some((s) => !/^\d+$/.test(s) || /^0+$/.test(s))) mockError(400, 'Bad request')
+      const ids = new Set(parts)
+      const before = defs.length
+      defs = defs.filter((d) => !ids.has(d.id))
+      const deleted = before - defs.length
+      if (deleted === 0) mockError(404, 'Not found')
+      return { deleted }
+    },
+  },
 ])

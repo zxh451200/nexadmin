@@ -361,6 +361,9 @@ export interface OrderQuery extends PageQuery {
   bizType?: string
   scene?: string
   failReason?: string
+  /** 下单日期范围（含两端，yyyy-mm-dd，按应用时区）；后端对非法值显式报错 */
+  createdFrom?: string
+  createdTo?: string
 }
 export interface CallbackQuery extends PageQuery {
   channelCode?: string
@@ -385,6 +388,19 @@ export function useOrders(query: OrderQuery) {
     queryFn: () => api.get<Page<PayOrder>>(`${BASE}/orders`, query),
     placeholderData: keepPreviousData,
   })
+}
+
+/**
+ * 导出当前筛选下的全部支付单（不带分页，上限 10000；超限后端报错），
+ * CSV 由前端生成；silent：错误由页面捕获后 toast，不走全局报错。
+ */
+export function fetchOrdersForExport(query: OrderQuery): Promise<PayOrder[]> {
+  const filters: Record<string, unknown> = {
+    status: query.status, channelCode: query.channelCode, subjectId: query.subjectId,
+    bizType: query.bizType, scene: query.scene, failReason: query.failReason,
+    createdFrom: query.createdFrom, createdTo: query.createdTo,
+  }
+  return api.get<PayOrder[]>(`${BASE}/orders/export`, filters, { silent: true })
 }
 
 export function useChannels() {
@@ -553,6 +569,19 @@ export function useDeleteChannel() {
   const invalidate = useInvalidate()
   return useMutation({
     mutationFn: (id: string) => api.del(`${BASE}/channels/${id}`),
+    onSuccess: invalidate,
+  })
+}
+
+/**
+ * 批量删除渠道：DELETE /plugins/pay/channels?ids= —— 与单条同口径，没有额外护栏，
+ * 越权 / 不存在的 id 不计入实删数，所以 deleted 可能少于提交条数。
+ * 路径写死成字面量：scripts/contract_check 靠静态解析核对前后端契约。
+ */
+export function useDeleteChannelsBatch() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (ids: string[]) => api.del<{ deleted: number }>('/plugins/pay/channels', { ids: ids.join(',') }),
     onSuccess: invalidate,
   })
 }

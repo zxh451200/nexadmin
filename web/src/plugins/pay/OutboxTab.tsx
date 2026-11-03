@@ -6,6 +6,7 @@ import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { FilterBar } from '@/framework/components/FilterBar'
+import { RequiredMark } from '@/framework/components/RequiredMark'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
@@ -164,7 +165,7 @@ export function OutboxTab() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_pay.all')}</SelectItem>
+            <SelectItem value={ALL}>{t('plugin_pay.filter.allStatuses')}</SelectItem>
             {STATUSES.map((s) => (
               <SelectItem key={s} value={s}>
                 {t(`plugin_pay.outboxStatus.${s}`)}
@@ -322,7 +323,10 @@ function DiscardDialog({ row, onClose }: { row: PayOutboxEvent; onClose: () => v
       <div className="flex flex-col gap-3 text-sm">
         <p className="text-xs text-muted-foreground">{t('plugin_pay.outbox.discardHint')}</p>
         <label className="flex flex-col gap-1">
-          {t('plugin_pay.outbox.discardNoteLabel')}
+          <span>
+            {t('plugin_pay.outbox.discardNoteLabel')}
+            <RequiredMark />
+          </span>
           <Input
             value={note}
             maxLength={200}

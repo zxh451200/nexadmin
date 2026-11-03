@@ -95,3 +95,13 @@ export function saveVideo(body: { videoId: string; name: string; size: number })
 export function deleteVideo(id: string) {
   return api.del(`/plugins/media/video/assets/${id}`)
 }
+
+/**
+ * 批量删除视频台账（DELETE /plugins/media/video/assets?ids=）：与单条同口径，只删本机这一行——
+ * 本插件不落原片也不转码，厂商侧资产仍需在厂商控制台清理。
+ * 越权 / 已不存在的 id 不计入实删数，所以 deleted 可能少于提交的条数。
+ * 路径写死成字面量：scripts/contract_check 靠静态解析核对前后端契约。
+ */
+export function deleteVideosBatch(ids: string[]) {
+  return api.del<{ deleted: number }>('/plugins/media/video/assets', { ids: ids.join(',') })
+}

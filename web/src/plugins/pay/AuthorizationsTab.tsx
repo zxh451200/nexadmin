@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { RequiredMark } from '@/framework/components/RequiredMark'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Badge } from '@/framework/ui/badge'
@@ -130,7 +131,7 @@ export function AuthorizationsTab() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_pay.all')}</SelectItem>
+            <SelectItem value={ALL}>{t('plugin_pay.filter.allStatuses')}</SelectItem>
             {STATUSES.map((s) => (
               <SelectItem key={s} value={s}>
                 {t(`plugin_pay.authStatus.${s}`)}
@@ -280,7 +281,10 @@ function CreateAuthDialog({ onClose }: { onClose: () => void }) {
           <Input value={subjectId} onChange={(e) => setSubjectId(e.target.value)} placeholder={t('plugin_pay.auth.subjectPlaceholder')} />
         </label>
         <label className="flex flex-col gap-1">
-          {t('plugin_pay.fields.channel')}
+          <span>
+            {t('plugin_pay.fields.channel')}
+            <RequiredMark />
+          </span>
           <Select value={channelCode} onValueChange={pickChannel}>
             <SelectTrigger aria-label={t('plugin_pay.fields.channel')}>
               <SelectValue placeholder={t('plugin_pay.auth.pickChannel')} />
@@ -313,7 +317,10 @@ function CreateAuthDialog({ onClose }: { onClose: () => void }) {
         </label>
         <div className="grid grid-cols-2 gap-3">
           <label className="flex flex-col gap-1">
-            {t('plugin_pay.fields.amount')}
+            <span>
+              {t('plugin_pay.fields.amount')}
+              <RequiredMark />
+            </span>
             <Input type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
           </label>
           <CapabilitySelect
@@ -405,7 +412,10 @@ function CaptureAuthDialog({ auth, onClose }: { auth: PayAuthorization; onClose:
           {t('plugin_pay.auth.remaining', { amount: formatMoney(remaining, auth.currency) })}
         </p>
         <label className="flex flex-col gap-1">
-          {t('plugin_pay.fields.amount')}
+          <span>
+            {t('plugin_pay.fields.amount')}
+            <RequiredMark />
+          </span>
           <Input type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
         </label>
       </div>

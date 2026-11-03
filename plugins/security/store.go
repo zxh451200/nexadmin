@@ -34,6 +34,8 @@ type store interface {
 	GetRule(ctx context.Context, tid, id idgen.ID) (*IPRule, error)
 	SaveRule(ctx context.Context, tid idgen.ID, r *IPRule) error
 	DeleteRule(ctx context.Context, tid, id idgen.ID) error
+	// DeleteRules 批量删除，返回实删条数（越权 / 不存在的 id 删不到，不计入）。
+	DeleteRules(ctx context.Context, tid idgen.ID, ids []idgen.ID) (int64, error)
 
 	AddLog(ctx context.Context, tid idgen.ID, l *LogRow) error
 	ListLogs(ctx context.Context, tid idgen.ID, page, size int) ([]LogRow, int64, error)
@@ -234,6 +236,17 @@ func (s *gormStore) SaveRule(ctx context.Context, tid idgen.ID, r *IPRule) error
 
 func (s *gormStore) DeleteRule(ctx context.Context, tid, id idgen.ID) error {
 	return s.q(ctx, tid).Where("tenant_id = ? AND id = ?", tid, id).Delete(&IPRule{}).Error
+}
+
+// DeleteRules 批量删除：tenant_id 条件与单条同一条写法（显式写在 SQL 里，不依赖 ctx 里的 scope 兜底），
+// 因此别的租户的规则行删不到，也不会因为批量就退化成「整张表」。
+func (s *gormStore) DeleteRules(ctx context.Context, tid idgen.ID, ids []idgen.ID) (int64, error) {
+	list := make([]int64, 0, len(ids))
+	for _, id := range ids {
+		list = append(list, int64(id))
+	}
+	res := s.q(ctx, tid).Where("tenant_id = ? AND id IN ?", tid, list).Delete(&IPRule{})
+	return res.RowsAffected, res.Error
 }
 
 func (s *gormStore) AddLog(ctx context.Context, tid idgen.ID, l *LogRow) error {

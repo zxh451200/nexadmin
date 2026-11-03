@@ -27,6 +27,11 @@
       "label": "View"
     },
     "all": "All",
+    "filter": {
+      "allStatuses": "All statuses",
+      "allChannels": "All channels",
+      "allVerifies": "All verification results"
+    },
     "empty": "No data",
     "searchPlaceholder": "Payment no / biz no",
     "close": "Close order",
@@ -98,6 +103,8 @@
       "status": "Status",
       "failReason": "Fail Reason",
       "createdAt": "Created",
+      "dateFrom": "Order date from",
+      "dateTo": "Order date to",
       "updatedAt": "Updated",
       "refundNo": "Refund No",
       "reason": "Reason",
@@ -132,6 +139,8 @@
       "create": "New Channel",
       "edit": "Edit Channel",
       "deleteConfirm": "Delete channel {{name}}?",
+      "deleteBatchConfirm": "Delete the {{count}} selected channels?",
+      "deletedPartial": "{{deleted}} of {{total}} selected channels deleted (the rest do not exist or belong to another tenant)",
       "methodPlaceholder": "Select a method this channel supports"
     },
     "method": {

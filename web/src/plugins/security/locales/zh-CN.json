@@ -81,6 +81,8 @@
       "off": "停用",
       "empty": "暂无规则",
       "deleteConfirm": "确定删除规则 {{cidr}} 吗？",
+      "deleteBatchConfirm": "确定删除选中的 {{count}} 条规则吗？删除后立即影响登录的访问控制；若这一批会让你当前的 IP 无法登录，整批都不会删除。",
+      "deletedPartial": "已删除 {{deleted}}/{{total}} 条规则（其余可能已被删除）",
       "errors": { "cidrRequired": "请输入 IP 或 CIDR" }
     },
     "logs": {

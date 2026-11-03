@@ -182,7 +182,7 @@ export function LogsTab() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_audit.all')}</SelectItem>
+            <SelectItem value={ALL}>{t('plugin_audit.filter.allTables')}</SelectItem>
             {(tables ?? []).map((n) => (
               <SelectItem key={n} value={n}>
                 {n}
@@ -203,7 +203,7 @@ export function LogsTab() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_audit.all')}</SelectItem>
+            <SelectItem value={ALL}>{t('plugin_audit.filter.allActions')}</SelectItem>
             {ACTIONS.map((a) => (
               <SelectItem key={a} value={a}>
                 {t(`plugin_audit.action.${a}`)}

@@ -1,5 +1,5 @@
 import { defineMock, genId, mockError } from '@/framework/request/mock'
-import type { Chart, ChartConfig, ChartForm, Dataset, Filter, FilterValues, Report, ReportConfig, ReportForm, Screen, ScreenForm, ScreenItem } from './api'
+import type { Chart, ChartConfig, ChartForm, Dataset, Filter, FilterValues, Report, ReportConfig, ReportForm, ReportSubscription, Screen, ScreenForm, ScreenItem } from './api'
 import { MOCK_SOURCES, runSpec } from './mockEngine'
 
 const now = () => new Date().toISOString()
@@ -31,6 +31,7 @@ const reportCfg: ReportConfig = {
   ],
 }
 let reports: Report[] = [{ id: id(21), name: '定时任务运行报表', groupName: '运维', remark: '执行趋势与失败明细', config: reportCfg, ...stamp }]
+let subscriptions: ReportSubscription[] = []
 let screens: Screen[] = [
   {
     id: id(31), name: '运维大屏', remark: '定时任务与登录概览', roleIds: [], ...stamp,
@@ -113,6 +114,21 @@ const screenErr = (b: Partial<ScreenForm>) => {
 const B = '/plugins/report'
 const upsert = <T extends { id: string }>(list: T[], item: T) => (list.some((x) => x.id === item.id) ? list.map((x) => (x.id === item.id ? item : x)) : [...list, item])
 
+/** 批量删除入参：与后端 response.ParseIDs 同口径——任一项非法就整体 400，绝不退化成全表删 */
+const batchIds = (query: Record<string, unknown>) => {
+  const parts = String(query.ids ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+  if (!parts.length || parts.some((s) => !/^[1-9][0-9]*$/.test(s))) mockError(400, 'ids 不能为空，且每一项都要是合法 ID')
+  return [...new Set(parts)]
+}
+
+/** 点名但本租户没有的计入 blocked；一条都不存在时 404，与后端 notFound() 一致 */
+const existingIn = <T extends { id: string }>(list: T[], ids: string[]) => {
+  const got = list.filter((x) => ids.includes(x.id))
+  if (!got.length) mockError(404, '记录不存在')
+  return got
+}
+const batchResult = (rows: { id: string }[], total: number) => ({ deleted: rows.length, blocked: total - rows.length })
+
 defineMock([
   // ---- 数据集 ----
   { method: 'GET', url: `${B}/sources`, handler: () => MOCK_SOURCES },
@@ -165,6 +181,19 @@ defineMock([
       return null
     },
   },
+  {
+    // 批量删数据集：仍被图表引用的跳过（计入 blocked），一个都删不了才 409
+    method: 'DELETE',
+    url: `${B}/datasets`,
+    handler: ({ query }) => {
+      const named = batchIds(query)
+      const free = existingIn(datasets, named).filter((d) => !charts.some((c) => c.datasetId === d.id))
+      if (!free.length) mockError(409, '数据集仍被图表使用，无法删除')
+      const drop = new Set(free.map((d) => d.id))
+      datasets = datasets.filter((d) => !drop.has(d.id))
+      return batchResult(free, named.length)
+    },
+  },
   // ---- 图表 ----
   { method: 'GET', url: `${B}/charts`, handler: ({ query }) => page([...charts].reverse().filter((c) => !kw(query) || c.name.toLowerCase().includes(kw(query))), query) },
   { method: 'GET', url: `${B}/report-options/charts`, handler: () => charts },
@@ -201,6 +230,18 @@ defineMock([
       need(charts, params.id)
       charts = charts.filter((c) => c.id !== params.id)
       return null
+    },
+  },
+  {
+    // 批量删图表：只删真实存在的，引用它们的报表/大屏显示「图表已删除」
+    method: 'DELETE',
+    url: `${B}/charts`,
+    handler: ({ query }) => {
+      const named = batchIds(query)
+      const rows = existingIn(charts, named)
+      const drop = new Set(rows.map((c) => c.id))
+      charts = charts.filter((c) => !drop.has(c.id))
+      return batchResult(rows, named.length)
     },
   },
   // ---- 报表 ----
@@ -244,7 +285,45 @@ defineMock([
     url: `${B}/reports/:id`,
     handler: ({ params }) => {
       need(reports, params.id)
+      subscriptions = subscriptions.filter((s) => s.reportId !== params.id)
       reports = reports.filter((r) => r.id !== params.id)
+      return null
+    },
+  },
+  {
+    // 批量删报表：只删真实存在的，顺带清掉这些报表的订阅配置（与单条同口径）
+    method: 'DELETE',
+    url: `${B}/reports`,
+    handler: ({ query }) => {
+      const named = batchIds(query)
+      const rows = existingIn(reports, named)
+      const drop = new Set(rows.map((r) => r.id))
+      subscriptions = subscriptions.filter((s) => !drop.has(s.reportId))
+      reports = reports.filter((r) => !drop.has(r.id))
+      return batchResult(rows, named.length)
+    },
+  },
+  // 订阅：mock 只有一条内存配置 per 报表
+  {
+    method: 'GET',
+    url: `${B}/reports/:id/subscription`,
+    handler: ({ params }) => subscriptions.find((s) => s.reportId === params.id) ?? null,
+  },
+  {
+    method: 'PUT',
+    url: `${B}/reports/:id/subscription`,
+    handler: ({ params, body }) => {
+      need(reports, params.id)
+      const row = { reportId: params.id, ...body, lastSentAt: null }
+      subscriptions = [...subscriptions.filter((s) => s.reportId !== params.id), row]
+      return row
+    },
+  },
+  {
+    method: 'DELETE',
+    url: `${B}/reports/:id/subscription`,
+    handler: ({ params }) => {
+      subscriptions = subscriptions.filter((s) => s.reportId !== params.id)
       return null
     },
   },

@@ -38,4 +38,5 @@ func (*module) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.GET("/video/assets", core.Perm(PermOptimize), h.Videos)
 	g.POST("/video/assets", core.Perm(PermOptimize), h.SaveVideo)
 	g.DELETE("/video/assets/:id", core.Perm(PermOptimize), h.DeleteVideo)
+	g.DELETE("/video/assets", core.Perm(PermOptimize), h.DeleteVideosBatch)
 }

@@ -494,6 +494,19 @@ defineMock([
   },
   {
     method: 'GET',
+    url: '/plugins/pay/orders/export',
+    handler: ({ query }) => {
+      const kw = String(query.keyword ?? '').trim().toLowerCase()
+      let rows = orders.filter((o) => !kw || o.paymentNo.toLowerCase().includes(kw) || o.bizNo.toLowerCase().includes(kw))
+      if (query.status) rows = rows.filter((o) => o.status === query.status)
+      if (query.channelCode) rows = rows.filter((o) => o.channelCode === query.channelCode)
+      if (query.bizType) rows = rows.filter((o) => o.bizType === query.bizType)
+      if (query.scene) rows = rows.filter((o) => o.scene === query.scene)
+      return [...rows].reverse()
+    },
+  },
+  {
+    method: 'GET',
     url: '/plugins/pay/channels',
     handler: () => channels,
   },
@@ -621,6 +634,22 @@ defineMock([
     handler: ({ params }) => {
       channels = channels.filter((x) => x.id !== params.id)
       return { ok: true }
+    },
+  },
+  {
+    // 批量删除：与后端 DELETE /plugins/pay/channels?ids= 同口径——
+    // ids 缺失/非法（含 0）一律 400，不退化成「删全部渠道」；一条都没命中 404；成功返回实删条数。
+    method: 'DELETE',
+    url: '/plugins/pay/channels',
+    handler: ({ query }) => {
+      const parts = String(query.ids ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+      if (parts.length === 0 || parts.some((s) => !/^\d+$/.test(s) || /^0+$/.test(s))) mockError(400, 'Bad request')
+      const ids = new Set(parts)
+      const before = channels.length
+      channels = channels.filter((x) => !ids.has(x.id))
+      const deleted = before - channels.length
+      if (deleted === 0) mockError(404, 'Not found')
+      return { deleted }
     },
   },
   {

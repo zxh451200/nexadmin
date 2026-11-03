@@ -6,6 +6,10 @@
     "tabs": { "logs": "Change records", "scope": "Audit scope" },
     "btn": { "config": "Audit scope", "clean": "Clean records" },
     "all": "All",
+    "filter": {
+      "allTables": "All tables",
+      "allActions": "All actions"
+    },
     "system": "System",
     "detail": "Change details",
     "empty": "No change records",

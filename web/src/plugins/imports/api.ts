@@ -1,4 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { collectAllPages } from '@/framework/components/export/ExportCsvButton'
 import { api, http, tokenStore } from '@/framework/request/http'
 import type { Page, PageQuery } from '@/framework/request/types'
 
@@ -56,6 +57,10 @@ export function useJobs(query: ImportJobQuery) {
     queryKey: [...KEY, 'jobs', query],
     queryFn: () => api.get<Page<ImportJob>>(`${BASE}`, query),
     placeholderData: keepPreviousData,
+    // 大文件导入是异步落库的：pending/running 未完成前定时刷新台账，
+    // 否则用户只能手动刷新才能看到进度与结果。
+    refetchInterval: (q) =>
+      (q.state.data?.list ?? []).some((j) => j.status === 'pending' || j.status === 'running') ? 3000 : false,
   })
 }
 
@@ -63,6 +68,34 @@ export function useDeleteImport() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (id: string) => api.del(`${BASE}/${id}`),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: KEY }),
+  })
+}
+
+/**
+ * 批量删除台账：一次提交点名的 id（DELETE /plugins/imports?ids=）。
+ * 后端与单条同口径——排队中/执行中的任务不允许删，且批次里有这种任务就整批失败；
+ * 越权或不存在的 id 不计入实删数，所以 deleted 可能小于提交的条数。
+ * 路径写死成字面量：scripts/contract_check 靠静态解析核对前后端契约。
+ */
+export function useDeleteImports() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (ids: string[]) => api.del<{ deleted: number }>('/plugins/imports', { ids: ids.join(',') }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: KEY }),
+  })
+}
+
+/** 按当前筛选导出台账：走列表同一个分页接口逐页捞全，不新增后端端点。 */
+export function fetchJobsForExport(query: Omit<ImportJobQuery, 'page' | 'pageSize'>) {
+  return collectAllPages<ImportJob>((page, pageSize) => api.get<Page<ImportJob>>(BASE, { ...query, page, pageSize }))
+}
+
+/** 取消运行中/排队的异步导入：已处理的部分保留，状态记为 cancelled。 */
+export function useCancelImport() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.post<ImportJob>(`${BASE}/${id}/cancel`),
     onSuccess: () => void qc.invalidateQueries({ queryKey: KEY }),
   })
 }

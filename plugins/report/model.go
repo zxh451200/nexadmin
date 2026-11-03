@@ -1,6 +1,8 @@
 package report
 
 import (
+	"time"
+
 	"nexadmin/core/database"
 	"nexadmin/pkg/idgen"
 )
@@ -64,3 +66,25 @@ type ScreenRole struct {
 }
 
 func (ScreenRole) TableName() string { return "plg_report_screen_role" }
+
+// Subscription 对应 plg_report_subscription：每张报表一条订阅配置（report_id 唯一）。
+// 到点给收件人列表发文本提醒邮件（附件需 mail 包扩展 multipart，另立项）。
+type Subscription struct {
+	database.TenantModel
+	// ReportID 是被订阅的报表。
+	ReportID idgen.ID `gorm:"uniqueIndex:uk_plg_report_subscription_report;not null" json:"reportId"`
+	// Schedule 取 daily / weekly。
+	Schedule string `gorm:"size:16;not null" json:"schedule"`
+	// SendHour 是发送时刻的小时（0-23，服务器时区）。
+	SendHour int `gorm:"not null;default:8" json:"sendHour"`
+	// Weekday 是每周发送日（0=周日..6=周六）；仅 weekly 使用。
+	Weekday int `gorm:"not null;default:1" json:"weekday"`
+	// Recipients 是逗号分隔的收件人邮箱（保存前逐个校验）。
+	Recipients string `gorm:"type:text;not null" json:"recipients"`
+	// Enabled 沿用 001 的风格用整型承载布尔（SMALLINT 1/0），避免三库方言分叉；视图层转 boolean。
+	Enabled int `gorm:"not null;default:1" json:"-"`
+	// LastSentDate 是最近一次发送的日期（服务器时区当天）；NULL = 从未发送。
+	LastSentDate *time.Time `gorm:"type:date" json:"lastSentDate,omitempty"`
+}
+
+func (Subscription) TableName() string { return "plg_report_subscription" }

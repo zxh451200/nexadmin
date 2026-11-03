@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, Sector, Tooltip, XAxis, YAxis } from 'recharts'
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, Sector, Tooltip, XAxis, YAxis } from 'recharts'
 import type { PieSectorDataItem } from 'recharts/types/polar/Pie'
 import { useTranslation } from 'react-i18next'
 import { ChartBox } from '@/framework/components/ChartBox'
@@ -72,7 +72,7 @@ function TableChart({ result, height }: { result: QueryResult; height: number })
 export function ChartView({ type, result, config, height, loading, error, className, showMetricLabel = true }: ChartViewProps) {
   const { t, i18n } = useTranslation()
   const compact = (n: number) => new Intl.NumberFormat(i18n.language, { notation: 'compact', maximumFractionDigits: 1 }).format(n)
-  const cart = useMemo(() => (result && (type === 'bar' || type === 'line') ? toCartesian(result) : null), [result, type])
+  const cart = useMemo(() => (result && (type === 'bar' || type === 'line' || type === 'area') ? toCartesian(result) : null), [result, type])
   const pie = useMemo(() => (result && type === 'pie' ? toPie(result) : []), [result, type])
   const metric = useMemo(() => (result && type === 'metric' ? toMetric(result) : null), [result, type])
   // Recharts 默认只弹 Tooltip；hover 时把被指到的那一片推出来一圈，否则图表"点不动"。
@@ -234,6 +234,25 @@ export function ChartView({ type, result, config, height, loading, error, classN
               )
             })}
           </BarChart>
+        ) : type === 'area' ? (
+          <AreaChart {...common}>
+            {parts}
+            {series.map((s, i) => (
+              <Area
+                key={s.key}
+                dataKey={s.key}
+                name={colText(s.key, s.label)}
+                type="monotone"
+                stroke={colorAt(config.colors, i)}
+                fill={colorAt(config.colors, i)}
+                fillOpacity={0.18}
+                strokeWidth={2}
+                stackId={config.stacked ? 'a' : undefined}
+                dot={false}
+                hide={hidden.has(s.key)}
+              />
+            ))}
+          </AreaChart>
         ) : (
           <LineChart {...common}>
             {parts}

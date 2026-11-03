@@ -89,6 +89,32 @@ func (m *memStore) DeleteSubmission(ctx context.Context, formID, id idgen.ID) er
 	return nil
 }
 
+// DeleteSubmissions 与 gormStore 同语义：任一 id 不在 (当前租户, formID) 范围内就整批失败，
+// 一条都不删；全部命中才删除并归还名额（计数最多减到 0）。
+func (m *memStore) DeleteSubmissions(ctx context.Context, formID idgen.ID, ids []idgen.ID) (int64, error) {
+	t, err := m.tid(ctx)
+	if err != nil {
+		return 0, err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, id := range ids {
+		s, ok := m.subs[int64(id)]
+		if !ok || int64(s.TenantID) != t || s.FormID != formID {
+			return 0, errNotFound
+		}
+	}
+	for _, id := range ids {
+		s := m.subs[int64(id)]
+		delete(m.subs, int64(id))
+		delete(m.dedupe, dkey(t, formID, s.DedupeKey))
+	}
+	if f, err := m.form(t, formID); err == nil {
+		f.SubmissionCount = max(f.SubmissionCount-int64(len(ids)), 0)
+	}
+	return int64(len(ids)), nil
+}
+
 // matching 返回符合 SQL 条件（租户、表单、版本、用户名、时间）的提交，按 id 倒序。调用方持锁。
 func (m *memStore) matching(t int64, q SubQuery) []Submission {
 	var out []Submission

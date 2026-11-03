@@ -189,5 +189,27 @@ defineMock([
       return null
     },
   },
+  {
+    // 批量删除：与后端 DELETE /plugins/security/ip-rules?ids=&confirmLockout= 同口径
+    // ids 缺失/非法（含 0）一律 400，不退化成「清空名单」；一条都没命中报 404；
+    // 防自锁按「整批一起去掉」判，会锁住自己就 409 整批拒绝（confirmLockout=true 才放行并留痕）；
+    // 每条被删规则各写一行 delete_ip_rule 审计，返回实删条数。
+    method: 'DELETE',
+    url: '/plugins/security/ip-rules',
+    handler: ({ query }) => {
+      const parts = String(query.ids ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+      if (parts.length === 0 || parts.some((s) => !/^\d+$/.test(s) || /^0+$/.test(s))) mockError(400, 'Bad request')
+      const ids = new Set(parts)
+      const targets = rules.filter((r) => ids.has(r.id))
+      if (targets.length === 0) mockError(404, 'Not found')
+      const confirmed = query.confirmLockout === 'true'
+      if (!confirmed) guard(rules.filter((r) => !ids.has(r.id)))
+      const before = rules.length
+      rules = rules.filter((r) => !ids.has(r.id))
+      const note = confirmed ? ' confirm_lockout' : ''
+      targets.forEach((r) => log('delete_ip_rule', r.cidr, `${r.action}/${r.scope}${note}`))
+      return { deleted: before - rules.length }
+    },
+  },
   { method: 'GET', url: '/plugins/security/logs', handler: ({ query }) => paginate(logs, query) },
 ])

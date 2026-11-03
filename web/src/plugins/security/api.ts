@@ -162,6 +162,17 @@ export function useDeleteRule() {
   return useMutation({ mutationFn: (id: string) => api.del<null>(`${BASE}/ip-rules/${id}`), onSuccess: invalidate })
 }
 
+/** 批量删除规则：deleted 是后端实际删除条数（越权或已被删的 id 不计入，一条都没删到时报 404）；
+ *  整批删完会锁住操作者当前 IP 时，后端默认 409 整批拒绝。
+ *  路径写静态字面量：contract_check 靠静态解析这里的第一个实参对照后端路由。 */
+export function useDeleteRules() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (ids: string[]) => api.del<{ deleted: number }>('/plugins/security/ip-rules', { ids: ids.join(',') }),
+    onSuccess: invalidate,
+  })
+}
+
 // ---- 日志 ----
 
 export function useLogs(query: PageQuery) {

@@ -11,6 +11,7 @@ import { Button } from '@/framework/ui/button'
 import { Switch } from '@/framework/ui/switch'
 import {
   useDeleteSource,
+  useDeleteSources,
   useSetEnabled,
   useSources,
   useTestConnection,
@@ -33,8 +34,10 @@ export default function IdentityPage() {
   const { data = [], isLoading } = useSources()
   const setEnabled = useSetEnabled()
   const remove = useDeleteSource()
+  const removeBatch = useDeleteSources()
   const testConn = useTestConnection()
   const [formOpen, setFormOpen] = useState(false)
+  const [selected, setSelected] = useState<string[]>([])
   const [editing, setEditing] = useState<IdentitySource | null>(null)
   const [loginTest, setLoginTest] = useState<IdentitySource | null>(null)
 
@@ -42,8 +45,10 @@ export default function IdentityPage() {
     try {
       await fn()
       toast.success(t('common.operateSuccess'))
+      return true
     } catch {
       toast.error(t('common.operateFailed'))
+      return false
     }
   }
   const openForm = (s: IdentitySource | null) => {
@@ -52,7 +57,21 @@ export default function IdentityPage() {
   }
   const onDelete = async (s: IdentitySource) => {
     if (await confirm({ destructive: true, description: t('plugin_identity.deleteConfirm', { name: s.name }) })) {
-      await attempt(() => remove.mutateAsync(s.id))
+      const ok = await attempt(() => remove.mutateAsync(s.id))
+      if (ok) setSelected((x) => x.filter((id) => id !== s.id))
+    }
+  }
+
+  // 批量删除身份源：后端一条事务删点名的行，越权/不存在的 id 不计入实删数，
+  // 所以实删少于选中时要照实说，不能报「操作成功」。
+  const onDeleteBatch = async (ids: string[]) => {
+    if (!(await confirm({ destructive: true, description: t('plugin_identity.deleteBatchConfirm', { count: ids.length }) }))) return
+    try {
+      const { deleted } = await removeBatch.mutateAsync(ids)
+      setSelected([])
+      toast.success(deleted < ids.length ? t('plugin_identity.deletedPartial', { deleted, total: ids.length }) : t('common.operateSuccess'))
+    } catch {
+      toast.error(t('common.operateFailed'))
     }
   }
   const onTestConnection = async (s: IdentitySource) => {
@@ -131,6 +150,15 @@ export default function IdentityPage() {
             </Button>
           </Can>
         }
+        selection={{ selected, onChange: setSelected }}
+        batchActions={(ids) => (
+          <Can perm="identity:edit">
+            <Button variant="destructive" size="sm" onClick={() => void onDeleteBatch(ids)}>
+              <Trash2 aria-hidden="true" />
+              {t('common.delete')}
+            </Button>
+          </Can>
+        )}
         rowActions={(s) => (
           <>
             <Can perm="identity:test">

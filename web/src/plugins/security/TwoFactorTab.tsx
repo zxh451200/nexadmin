@@ -142,7 +142,7 @@ export function TwoFactorTab() {
                 </div>
               </div>
               <div className="flex max-w-sm flex-col gap-2">
-                <Label htmlFor="sec-enable-code">{t('plugin_security.twofa.code')}</Label>
+                <Label htmlFor="sec-enable-code" required>{t('plugin_security.twofa.code')}</Label>
                 <Input
                   id="sec-enable-code"
                   value={code}
@@ -173,7 +173,7 @@ export function TwoFactorTab() {
           {st.enabled ? (
             <div className="flex max-w-sm flex-col gap-3">
               <p className="text-sm text-muted-foreground">{t('plugin_security.twofa.recoveryLeft', { count: st.recoveryLeft })}</p>
-              <Label htmlFor="sec-manage-code">{recovery ? t('plugin_security.twofa.recoveryInput') : t('plugin_security.twofa.code')}</Label>
+              <Label htmlFor="sec-manage-code" required>{recovery ? t('plugin_security.twofa.recoveryInput') : t('plugin_security.twofa.code')}</Label>
               <Input
                 id="sec-manage-code"
                 value={code}

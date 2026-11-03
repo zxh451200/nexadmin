@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
-import { CircleCheck, GitBranch, Pencil, Plus, Trash2, Undo2, UserPlus, XCircle } from 'lucide-react'
+import { ArrowRightLeft, BellRing, CircleCheck, GitBranch, History, Pencil, Plus, Trash2, Undo2, UserPlus, XCircle } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
@@ -8,6 +8,7 @@ import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { EmptyState } from '@/framework/components/EmptyState'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
+import { RequiredMark } from '@/framework/components/RequiredMark'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { SimpleSelect } from '@/framework/components/SimpleSelect'
 import { Badge } from '@/framework/ui/badge'
@@ -17,13 +18,18 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/framework/ui/tabs'
 import { resolveUserLabel } from '@/framework/modules/user/api'
 import { cn } from '@/lib/utils'
 import {
+  fetchDefVersionXML,
   useDefs,
+  useDefVersions,
   useDeleteDef,
+  useDeleteDefs,
   useInstance,
   useInstances,
+  useRollbackDef,
   useSaveDef,
   useStartInstance,
   useTemplates,
+  useUrgeInstance,
   useWfAction,
   type WfDef,
 } from './api'
@@ -49,28 +55,26 @@ export default function WorkflowPage() {
 
   return (
     <PageContainer>
-      <PageHeader
-        title={t('plugin_workflow.title')}
-        description={t('plugin_workflow.description')}
-        actions={
+      <PageHeader title={t('plugin_workflow.title')} description={t('plugin_workflow.description')} />
+      <Tabs value={tab} onValueChange={(v) => setTab(v as Filter | 'defs')} className="flex flex-col gap-4">
+        {/* 发起入口跟着列表走（与各页 DataTable toolbar 的「新建」同位），不飘在页头右上角 */}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <TabsList>
+            <TabsTrigger value="todo">{t('plugin_workflow.tabs.todo')}</TabsTrigger>
+            <TabsTrigger value="done">{t('plugin_workflow.tabs.done')}</TabsTrigger>
+            <TabsTrigger value="mine">{t('plugin_workflow.tabs.mine')}</TabsTrigger>
+            <TabsTrigger value="all">{t('plugin_workflow.tabs.all')}</TabsTrigger>
+            <Can perm="workflow:edit">
+              <TabsTrigger value="defs">{t('plugin_workflow.tabs.defs')}</TabsTrigger>
+            </Can>
+          </TabsList>
           <Can perm="workflow:start">
             <Button onClick={() => setStarting(true)}>
               <Plus aria-hidden="true" />
               {t('plugin_workflow.startAction')}
             </Button>
           </Can>
-        }
-      />
-      <Tabs value={tab} onValueChange={(v) => setTab(v as Filter | 'defs')} className="flex flex-col gap-4">
-        <TabsList>
-          <TabsTrigger value="todo">{t('plugin_workflow.tabs.todo')}</TabsTrigger>
-          <TabsTrigger value="done">{t('plugin_workflow.tabs.done')}</TabsTrigger>
-          <TabsTrigger value="mine">{t('plugin_workflow.tabs.mine')}</TabsTrigger>
-          <TabsTrigger value="all">{t('plugin_workflow.tabs.all')}</TabsTrigger>
-          <Can perm="workflow:edit">
-            <TabsTrigger value="defs">{t('plugin_workflow.tabs.defs')}</TabsTrigger>
-          </Can>
-        </TabsList>
+        </div>
         <TabsContent value="todo" className="m-0">
           <InstanceList filter="todo" onSelect={setSelected} />
         </TabsContent>
@@ -109,7 +113,9 @@ function StartFlow({ open, onClose }: { open: boolean; onClose: () => void }) {
       onClose={onClose}
       onSubmit={async (v) => {
         try {
-          const inst = await start.mutateAsync({ defId: v.defId, title: v.title, bizType: v.bizType, businessKey: v.businessKey, vars: {} })
+          const inst = await start.mutateAsync({
+            defId: v.defId, title: v.title, bizType: v.bizType, businessKey: v.businessKey, vars: v.vars ?? {},
+          })
           toast.success(t('plugin_workflow.startSuccess', { title: inst.title || v.title }))
           onClose()
         } catch {
@@ -129,6 +135,8 @@ function InstanceList({ filter, onSelect }: { filter: Filter; onSelect: (id: str
   const [keyword, setKeyword] = useState('')
   const [applied, setApplied] = useState('')
   const [status, setStatus] = useState('')
+  // Radix Select 的选项值不能是空串：空值触发器渲染成空白，「全部」用一个非空哨兵值表达。
+  const ALL = '__all'
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -150,12 +158,12 @@ function InstanceList({ filter, onSelect }: { filter: Filter; onSelect: (id: str
   const instances = useInstances(query)
   const names = useUserNames((instances.data?.list ?? []).map((w) => w.submitter))
   const rows = instances.data?.list ?? []
-  const showFilters = filter === 'all' || filter === 'mine'
+  // 关键词四个实例 tab 都给（待办多了找单子靠它）；状态筛选只对完整列表有意义。
+  const showStatus = filter === 'all' || filter === 'mine'
 
   return (
     <div className="space-y-3">
-      {showFilters ? (
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
           <Input
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
@@ -163,24 +171,25 @@ function InstanceList({ filter, onSelect }: { filter: Filter; onSelect: (id: str
             aria-label={t('plugin_workflow.searchPlaceholder')}
             className="w-full sm:w-64"
           />
-          <SimpleSelect
-            className="w-36"
-            aria-label={t('plugin_workflow.fields.status')}
-            value={status}
-            onChange={(v) => {
-              setStatus(v)
-              setPage(1)
-            }}
-            options={[
-              { value: '', label: t('plugin_workflow.statusAll') },
-              { value: 'running', label: t('plugin_workflow.status.running') },
-              { value: 'approved', label: t('plugin_workflow.status.approved') },
-              { value: 'rejected', label: t('plugin_workflow.status.rejected') },
-              { value: 'cancelled', label: t('plugin_workflow.status.cancelled') },
-            ]}
-          />
-        </div>
-      ) : null}
+          {showStatus ? (
+            <SimpleSelect
+              className="w-36"
+              aria-label={t('plugin_workflow.fields.status')}
+              value={status || ALL}
+              onChange={(v) => {
+                setStatus(v === ALL ? '' : v)
+                setPage(1)
+              }}
+              options={[
+                { value: ALL, label: t('plugin_workflow.statusAll') },
+                { value: 'running', label: t('plugin_workflow.status.running') },
+                { value: 'approved', label: t('plugin_workflow.status.approved') },
+                { value: 'rejected', label: t('plugin_workflow.status.rejected') },
+                { value: 'cancelled', label: t('plugin_workflow.status.cancelled') },
+              ]}
+            />
+          ) : null}
+      </div>
 
       <div className="overflow-hidden rounded-lg border bg-card">
         {instances.isLoading && rows.length === 0 ? (
@@ -271,21 +280,42 @@ function DefList() {
   const { t, i18n } = useTranslation()
   const confirm = useConfirm()
   const [editing, setEditing] = useState<WfDef | 'new' | null>(null)
+  const [versionsOf, setVersionsOf] = useState<WfDef | null>(null)
   const [page, setPage] = useState(1)
   const [pageSize] = useState(50)
+  // 勾选用独立状态：外层 selected 是「打开哪个实例详情」，与批量选择不是一回事。
+  const [selectedDefs, setSelectedDefs] = useState<string[]>([])
 
   const defs = useDefs({ page, pageSize })
   const remove = useDeleteDef()
+  const removeBatch = useDeleteDefs()
   const templates = useTemplates()
 
   const onDelete = async (d: WfDef) => {
     if (await confirm({ destructive: true, description: t('plugin_workflow.defDeleteConfirm', { name: d.name }) })) {
       try {
         await remove.mutateAsync(d.id)
+        setSelectedDefs((s) => s.filter((id) => id !== d.id))
         toast.success(t('common.operateSuccess'))
       } catch {
         toast.error(t('common.operateFailed'))
       }
+    }
+  }
+
+  // 批量删：一次提交点名的 id，后端逐条走单条删除的判断并在一个事务里走完。
+  // 在途实例按发起时存下的定义快照继续执行、历史版本与待办都不随定义删除（与单条一致），
+  // deleted 是实删条数：越权/已被删掉的 id 不计入，一条都没删到时整批报 404 走失败分支。
+  const onDeleteBatch = async (ids: string[]) => {
+    if (!(await confirm({ destructive: true, description: t('plugin_workflow.defDeleteBatchConfirm', { count: ids.length }) }))) {
+      return
+    }
+    try {
+      const { deleted } = await removeBatch.mutateAsync(ids)
+      setSelectedDefs([])
+      toast.success(deleted < ids.length ? t('plugin_workflow.deletedPartial', { deleted, total: ids.length }) : t('common.operateSuccess'))
+    } catch {
+      toast.error(t('common.operateFailed'))
     }
   }
 
@@ -329,6 +359,15 @@ function DefList() {
         columnSettingsKey="plugin-workflow-defs"
         pagination={{ page, pageSize, total: defs.data?.total ?? 0, onChange: setPage }}
         emptyText={t('plugin_workflow.empty')}
+        selection={{ selected: selectedDefs, onChange: setSelectedDefs }}
+        batchActions={(ids) => (
+          <Can perm="workflow:edit">
+            <Button variant="destructive" size="sm" disabled={removeBatch.isPending} onClick={() => void onDeleteBatch(ids)}>
+              <Trash2 aria-hidden="true" />
+              {t('common.delete')}
+            </Button>
+          </Can>
+        )}
         toolbar={
           <Can perm="workflow:edit">
             <Button onClick={() => setEditing('new')}>
@@ -341,6 +380,9 @@ function DefList() {
           <Can perm="workflow:edit">
             <Button variant="ghost" size="icon" aria-label={t('common.edit')} onClick={() => setEditing(d)}>
               <Pencil aria-hidden="true" />
+            </Button>
+            <Button variant="ghost" size="icon" aria-label={t('plugin_workflow.defVersions')} onClick={() => setVersionsOf(d)}>
+              <History aria-hidden="true" />
             </Button>
             <Button variant="ghost" size="icon" className="text-destructive" aria-label={t('common.delete')} onClick={() => void onDelete(d)}>
               <Trash2 aria-hidden="true" />
@@ -356,7 +398,83 @@ function DefList() {
           onClose={() => setEditing(null)}
         />
       ) : null}
+      <DefVersionsDialog def={versionsOf} onClose={() => setVersionsOf(null)} />
     </div>
+  )
+}
+
+// ---- 定义版本历史 ----
+
+function DefVersionsDialog({ def, onClose }: { def: WfDef | null; onClose: () => void }) {
+  const { t, i18n } = useTranslation()
+  const confirm = useConfirm()
+  const rollback = useRollbackDef()
+  const { data: versions = [], isLoading } = useDefVersions(def?.id)
+  const [xml, setXml] = useState<{ version: number; text: string } | null>(null)
+  const [loadingXml, setLoadingXml] = useState(false)
+
+  const onView = async (version: number) => {
+    if (xml?.version === version) {
+      setXml(null)
+      return
+    }
+    setLoadingXml(true)
+    try {
+      setXml({ version, text: await fetchDefVersionXML(def!.id, version) })
+    } catch {
+      toast.error(t('common.operateFailed'))
+    } finally {
+      setLoadingXml(false)
+    }
+  }
+
+  const onRollback = async (version: number) => {
+    if (!def || !(await confirm({ destructive: true, description: t('plugin_workflow.rollbackVersionConfirm', { version }) }))) return
+    try {
+      await rollback.mutateAsync({ id: def.id, version })
+      toast.success(t('plugin_workflow.rollbackVersionDone', { version }))
+    } catch {
+      toast.error(t('common.operateFailed'))
+    }
+  }
+
+  return (
+    <ResponsiveDialog
+      open={!!def}
+      onOpenChange={(o) => !o && onClose()}
+      title={`${t('plugin_workflow.defVersions')} · ${def?.name ?? ''}`}
+      description={t('plugin_workflow.defVersionsHint', { version: def?.version ?? 0 })}
+      size="lg"
+      footer={
+        <Button variant="outline" onClick={onClose}>
+          {t('common.close')}
+        </Button>
+      }
+    >
+      {isLoading ? <p className="text-sm text-muted-foreground">{t('plugin_workflow.loading')}</p> : null}
+      {!isLoading && versions.length === 0 ? (
+        <EmptyState title={t('plugin_workflow.defVersionsEmpty')} />
+      ) : null}
+      <ul className="flex flex-col divide-y">
+        {versions.map((v) => (
+          <li key={v.version} className="flex flex-wrap items-center gap-2 py-2 text-sm">
+            <span className="num w-12 font-medium">v{v.version}</span>
+            <span className="min-w-0 flex-1 truncate text-muted-foreground">{v.name}</span>
+            <span className="num text-xs text-muted-foreground">{formatTime(v.updatedAt, i18n.language)}</span>
+            <Button variant="ghost" size="sm" onClick={() => void onView(v.version)}>
+              {xml?.version === v.version ? t('plugin_workflow.hideXml') : t('plugin_workflow.viewXml')}
+            </Button>
+            <Button variant="outline" size="sm" disabled={rollback.isPending} onClick={() => void onRollback(v.version)}>
+              {t('plugin_workflow.rollbackVersion')}
+            </Button>
+          </li>
+        ))}
+      </ul>
+      {loadingXml ? <p className="text-xs text-muted-foreground">{t('plugin_workflow.loading')}</p> : null}
+      {xml ? (
+        <pre className="max-h-72 overflow-auto rounded-md border border-border bg-muted/40 p-3 text-xs">{xml.text}</pre>
+      ) : null}
+    </ResponsiveDialog>
   )
 }
 
@@ -495,12 +613,17 @@ function InstanceDrawer({ id, onClose }: { id?: string; onClose: () => void }) {
   const { t, i18n } = useTranslation()
   const confirm = useConfirm()
   const user = useAuth((s) => s.user)
+  // Radix Select 选项值不能为空串：回退目标下拉的「未选择」用非空哨兵值。
+  const NONE = '__none'
   const [comment, setComment] = useState('')
   const [countersignUsers, setCountersignUsers] = useState<string[]>([])
   const [countersignOpen, setCountersignOpen] = useState(false)
+  const [transferTo, setTransferTo] = useState<string[]>([])
+  const [transferOpen, setTransferOpen] = useState(false)
   const [rollbackTo, setRollbackTo] = useState('')
   const detail = useInstance(id)
   const action = useWfAction()
+  const urge = useUrgeInstance()
   const inst = detail.data
 
   const names = useUserNames([inst?.submitter ?? '', ...(inst?.history.map((h) => h.actor) ?? [])])
@@ -511,12 +634,34 @@ function InstanceDrawer({ id, onClose }: { id?: string; onClose: () => void }) {
   const myTask = inst?.pending?.some((p) => !p.assignee || p.assignee === user?.id) ?? false
   const canWithdraw = inst?.status === 'running' && !!user?.id && user.id === inst.submitter
 
+  const onUrge = async () => {
+    if (!inst) return
+    try {
+      await urge.mutateAsync(inst.id)
+      toast.success(t('plugin_workflow.urgeDone'))
+    } catch {
+      toast.error(t('common.operateFailed'))
+    }
+  }
+
   useEffect(() => {
     setComment('')
     setCountersignUsers([])
     setCountersignOpen(false)
+    setTransferTo([])
+    setTransferOpen(false)
     setRollbackTo('')
   }, [id])
+
+  // 抽屉是手写 overlay，没有 Radix 的焦点管理：至少让 Esc 能关，键盘用户才不会被锁在页面里
+  useEffect(() => {
+    if (!id) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [id, onClose])
 
   if (!id) return null
 
@@ -548,6 +693,19 @@ function InstanceDrawer({ id, onClose }: { id?: string; onClose: () => void }) {
       toast.success(t('plugin_workflow.countersignDone', { count: countersignUsers.length }))
       setCountersignUsers([])
       setCountersignOpen(false)
+    } catch {
+      toast.error(t('common.operateFailed'))
+    }
+  }
+
+  const doTransfer = async () => {
+    if (!inst || transferTo.length === 0) return
+    try {
+      await action.mutateAsync({ id: inst.id, action: 'transfer', body: { to: transferTo[0], comment: comment.trim() } })
+      toast.success(t('plugin_workflow.transferDone'))
+      setTransferTo([])
+      setTransferOpen(false)
+      setComment('')
     } catch {
       toast.error(t('common.operateFailed'))
     }
@@ -601,6 +759,23 @@ function InstanceDrawer({ id, onClose }: { id?: string; onClose: () => void }) {
             </section>
           ) : null}
 
+          {/* 申请内容（流程变量）：看不到内容就批是盲批；空值变量不上屏 */}
+          {inst && Object.entries(inst.vars ?? {}).some(([, v]) => (v ?? '') !== '') ? (
+            <section className="space-y-2">
+              <h3 className="text-xs font-medium text-muted-foreground">{t('plugin_workflow.varsTitle')}</h3>
+              <div className="flex flex-wrap gap-1.5">
+                {Object.entries(inst.vars)
+                  .filter(([, v]) => (v ?? '') !== '')
+                  .map(([k, v]) => (
+                    <Badge key={k} variant="outline" className="max-w-full gap-1 font-normal">
+                      <span className="shrink-0 text-muted-foreground">{k}</span>
+                      <span className="truncate">{v}</span>
+                    </Badge>
+                  ))}
+              </div>
+            </section>
+          ) : null}
+
           <section className="space-y-2">
             <h3 className="text-xs font-medium text-muted-foreground">{t('plugin_workflow.historyTitle')}</h3>
             {inst?.history.map((e, i) => (
@@ -625,25 +800,32 @@ function InstanceDrawer({ id, onClose }: { id?: string; onClose: () => void }) {
 
         {inst && isRunning ? (
           <div className="border-t p-3">
-            <Input
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-              placeholder={t('plugin_workflow.commentPlaceholder')}
-              aria-label={t('plugin_workflow.commentPlaceholder')}
-              className="mb-2"
-            />
+            {/* 驳回时必填：星号常驻但随驳回可用性提示（「驳回需要填写意见」在下方） */}
+            <label className="mb-2 flex flex-col gap-1">
+              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                {t('plugin_workflow.commentPlaceholder')}
+                <RequiredMark />
+              </span>
+              <Input
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                placeholder={t('plugin_workflow.commentPlaceholder')}
+                aria-label={t('plugin_workflow.commentPlaceholder')}
+              />
+            </label>
             <Can perm="workflow:approve">
               <div className="flex flex-wrap items-center gap-2">
                 <Button size="sm" onClick={() => void doAction('approve')} disabled={action.isPending || !myTask}>
                   <CircleCheck aria-hidden="true" />
                   {t('plugin_workflow.approve')}
                 </Button>
+                {/* 驳回必须给理由：没填意见就不给点 */}
                 <Button
                   size="sm"
                   variant="outline"
                   className="text-destructive"
                   onClick={() => void doAction('reject', t('plugin_workflow.rejectConfirm'))}
-                  disabled={action.isPending || !myTask}
+                  disabled={action.isPending || !myTask || !comment.trim()}
                 >
                   <XCircle aria-hidden="true" />
                   {t('plugin_workflow.reject')}
@@ -651,6 +833,10 @@ function InstanceDrawer({ id, onClose }: { id?: string; onClose: () => void }) {
                 <Button size="sm" variant="outline" onClick={() => setCountersignOpen((v) => !v)} disabled={action.isPending || !myTask}>
                   <UserPlus aria-hidden="true" />
                   {t('plugin_workflow.countersign')}
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => setTransferOpen((v) => !v)} disabled={action.isPending || !myTask}>
+                  <ArrowRightLeft aria-hidden="true" />
+                  {t('plugin_workflow.transfer')}
                 </Button>
                 <Button size="sm" variant="outline" onClick={() => void doAction('escalate', t('plugin_workflow.escalateConfirm'))} disabled={action.isPending || !myTask}>
                   <Undo2 aria-hidden="true" />
@@ -660,10 +846,10 @@ function InstanceDrawer({ id, onClose }: { id?: string; onClose: () => void }) {
                   <SimpleSelect
                     className="w-32"
                     aria-label={t('plugin_workflow.rollbackTo')}
-                    value={rollbackTo}
-                    onChange={setRollbackTo}
+                    value={rollbackTo || NONE}
+                    onChange={(v) => setRollbackTo(v === NONE ? '' : v)}
                     options={[
-                      { value: '', label: t('plugin_workflow.rollbackTo') },
+                      { value: NONE, label: t('plugin_workflow.rollbackTo') },
                       ...approvalNodes.map((n) => ({ value: n.key, label: n.name || n.key })),
                     ]}
                   />
@@ -678,8 +864,16 @@ function InstanceDrawer({ id, onClose }: { id?: string; onClose: () => void }) {
                 </div>
               </div>
               {!myTask ? <p className="mt-2 text-xs text-muted-foreground">{t('plugin_workflow.notMyTurn')}</p> : null}
+              {myTask && !comment.trim() ? (
+                <p className="mt-2 text-xs text-muted-foreground">{t('plugin_workflow.rejectNeedsComment')}</p>
+              ) : null}
               {countersignOpen ? (
                 <div className="mt-2 space-y-2 rounded border bg-muted/20 p-2">
+                  {/* 会签/转办共用选人组件：「至少选一个」的组必填，星号标在选择器上方 */}
+                  <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                    {t('plugin_workflow.countersign')}
+                    <RequiredMark />
+                  </p>
                   <ApproverPicker value={countersignUsers} onChange={setCountersignUsers} />
                   <div className="flex justify-end gap-2">
                     <Button size="sm" variant="ghost" onClick={() => setCountersignOpen(false)}>
@@ -691,20 +885,50 @@ function InstanceDrawer({ id, onClose }: { id?: string; onClose: () => void }) {
                   </div>
                 </div>
               ) : null}
+              {transferOpen ? (
+                <div className="mt-2 space-y-2 rounded border bg-muted/20 p-2">
+                  <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                    {t('plugin_workflow.transfer')}
+                    <RequiredMark />
+                  </p>
+                  <ApproverPicker value={transferTo} onChange={(v) => setTransferTo(v.slice(0, 1))} />
+                  <div className="flex justify-end gap-2">
+                    <Button size="sm" variant="ghost" onClick={() => setTransferOpen(false)}>
+                      {t('common.cancel')}
+                    </Button>
+                    <Button size="sm" onClick={() => void doTransfer()} disabled={action.isPending || transferTo.length === 0}>
+                      {t('plugin_workflow.transferSubmit')}
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
             </Can>
             {canWithdraw ? (
-              <Can perm="workflow:start">
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="mt-2 text-destructive"
-                  onClick={() => void doAction('withdraw', t('plugin_workflow.withdrawConfirm'))}
-                  disabled={action.isPending}
-                >
-                  <GitBranch aria-hidden="true" />
-                  {t('plugin_workflow.withdraw')}
-                </Button>
-              </Can>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <Can perm="workflow:start">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void onUrge()}
+                    disabled={urge.isPending}
+                  >
+                    <BellRing aria-hidden="true" />
+                    {t('plugin_workflow.urge')}
+                  </Button>
+                </Can>
+                <Can perm="workflow:start">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-destructive"
+                    onClick={() => void doAction('withdraw', t('plugin_workflow.withdrawConfirm'))}
+                    disabled={action.isPending}
+                  >
+                    <GitBranch aria-hidden="true" />
+                    {t('plugin_workflow.withdraw')}
+                  </Button>
+                </Can>
+              </div>
             ) : null}
           </div>
         ) : null}

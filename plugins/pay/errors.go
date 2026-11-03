@@ -35,6 +35,10 @@ const (
 	// errNotifyStaleKey 对应哨兵错误 errNotifyStale（见下方 var）：Provider 报
 	// 「回调业务时间超前本地时钟」，HandleCallback 把它回成这个 i18n key。
 	errNotifyStaleKey         = "pay.PAY_NOTIFY_STALE"
+	// errDateInvalid 是列表/导出的日期范围格式错误（yyyy-mm-dd）。显式报错而不是
+	// 静默忽略：财务按天对账，一个手滑的日期少筛一天就是要出事的数据。
+	errDateInvalid      = "pay.PAY_DATE_INVALID"
+	errExportTooMany    = "pay.PAY_EXPORT_TOO_MANY"
 	errNotRefundable          = errStateConflict
 	errNotClosable            = errStateConflict
 	errRefundRejected         = errChannelError

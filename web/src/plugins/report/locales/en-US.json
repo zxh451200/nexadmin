@@ -28,9 +28,35 @@
     "type": {
       "bar": "Bar",
       "line": "Line",
+      "area": "Area",
       "pie": "Pie",
       "table": "Table",
       "metric": "Metric"
+    },
+    "subscription": {
+      "title": "Subscribe",
+      "desc": "Send a reminder email to the recipients at the scheduled time, with a link to the report center",
+      "schedule": "Frequency",
+      "daily": "Daily",
+      "weekly": "Weekly",
+      "hour": "Send hour",
+      "weekday": "Day of week",
+      "wd": {
+        "0": "Sunday",
+        "1": "Monday",
+        "2": "Tuesday",
+        "3": "Wednesday",
+        "4": "Thursday",
+        "5": "Friday",
+        "6": "Saturday"
+      },
+      "recipients": "Recipients",
+      "recipientsHint": "Comma or semicolon separated, up to 20; SMTP is required, otherwise sending is skipped",
+      "enabled": "Enabled",
+      "lastSent": "Last sent: {{time}}",
+      "emailRequired": "Enter at least one recipient",
+      "emailInvalid": "Invalid email: {{email}}",
+      "deleteConfirm": "Delete this subscription? No more reminders will be sent."
     },
     "agg": {
       "count": "Count",
@@ -184,6 +210,8 @@
       "pickSource": "Pick a table first",
       "empty": "No datasets yet",
       "deleteConfirm": "Delete dataset \"{{name}}\"? It cannot be deleted while charts still use it.",
+      "deleteBatchConfirm": "Delete the {{count}} selected dataset(s)? Any still used by charts will be left in place.",
+      "deletedPartial": "Deleted {{deleted}} of {{total}} dataset(s) (the rest are still used by charts or already gone)",
       "safeHint": "Choose only from the admin-approved tables and fields. Raw SQL is not supported. The current tenant condition is added to every query automatically."
     },
     "chart": {
@@ -192,6 +220,8 @@
       "editTitle": "Edit chart",
       "empty": "No charts yet",
       "deleteConfirm": "Delete chart \"{{name}}\"? Reports and screens using it will show \"Chart deleted\".",
+      "deleteBatchConfirm": "Delete the {{count}} selected chart(s)? Reports and screens using them will show \"Chart deleted\".",
+      "deletedPartial": "Deleted {{deleted}} of {{total}} chart(s) (the rest may already be gone)",
       "dataset": "Dataset",
       "type": "Chart type",
       "shape": "Dimensions / measures",
@@ -230,6 +260,8 @@
       "noCharts": "This report has no charts yet",
       "chartDeleted": "Chart deleted",
       "deleteConfirm": "Delete report \"{{name}}\"?",
+      "deleteBatchConfirm": "Delete the {{count}} selected report(s)? Viewers lose them right away.",
+      "deletedPartial": "Deleted {{deleted}} of {{total}} report(s) (the rest may already be gone)",
       "group": "Group",
       "groupField": "Report group",
       "section": "Section name",
@@ -253,7 +285,7 @@
       "addFilter": "Add filter",
       "allOption": "{{label}}: all",
       "export": "Export xlsx",
-      "exportTruncated": "Export hit the row limit and only contains the first 5000 rows"
+      "exportTruncated": "Export hit the row limit for this query; later rows are not included"
     },
     "screen": {
       "create": "New screen",

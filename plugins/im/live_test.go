@@ -1,18 +1,23 @@
 package im
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
 	"nexadmin/core/config"
 	"nexadmin/core/database"
+	"nexadmin/pkg/excel"
 	"nexadmin/pkg/idgen"
 )
 
@@ -338,5 +343,219 @@ func TestLiveIMFeatures(t *testing.T) {
 	}
 	if st.FirstResponseCount < 1 {
 		t.Fatalf("first response samples = %d", st.FirstResponseCount)
+	}
+}
+
+// TestLiveIMKeywordSearchesMessageBody 在真实库上验证关键字能命中消息正文：
+// 搜索串只写进 a 的消息内容，会话号/访客名/摘要都不含它，命中 a 只可能来自正文。
+func TestLiveIMKeywordSearchesMessageBody(t *testing.T) {
+	db, ok := liveDB(t)
+	if !ok {
+		return
+	}
+	if err := idgen.Init(12); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	uniq := fmt.Sprintf("kw%d", time.Now().UnixNano())
+	token := "ORD" + uniq
+
+	mkConv := func(tag, name string) *Conversation {
+		c := &Conversation{ConvNo: "IMT" + uniq + tag, BizType: "live", BizNo: uniq + tag,
+			VisitorToken: uniq + tag, VisitorName: name, Status: StatusOpen, LastPreview: "摘要里没有编号"}
+		if err := db.Create(c).Error; err != nil {
+			t.Fatalf("create conv: %v", err)
+		}
+		return c
+	}
+	mkMsg := func(c *Conversation, seq int64, content string) {
+		m := &Message{ConvID: c.ID, Seq: seq, SenderType: SenderVisitor, SenderName: "访客",
+			Content: content, Kind: KindText}
+		if err := db.Create(m).Error; err != nil {
+			t.Fatalf("create msg: %v", err)
+		}
+	}
+	a := mkConv("A", "搜索用例甲")
+	b := mkConv("B", "搜索用例乙")
+	mkMsg(a, 1, "帮我查 "+token+" 到哪了")
+	mkMsg(b, 1, "帮我查别的")
+	t.Cleanup(func() {
+		db.Exec("DELETE FROM plg_im_message WHERE conv_id IN (?, ?)", int64(a.ID), int64(b.ID))
+		db.Exec("DELETE FROM plg_im_conversation WHERE conv_no IN (?, ?)", a.ConvNo, b.ConvNo)
+	})
+
+	s := NewService(db, nopLogger{})
+	search := func(kw string) []string {
+		t.Helper()
+		list, _, err := s.ListConversations(ctx, ConversationQuery{Keyword: kw, Page: 1, PageSize: 10})
+		if err != nil {
+			t.Fatalf("search %q: %v", kw, err)
+		}
+		nos := make([]string, 0, len(list))
+		for _, c := range list {
+			nos = append(nos, c.ConvNo)
+		}
+		return nos
+	}
+
+	if got := search(token); len(got) != 1 || got[0] != a.ConvNo {
+		t.Fatalf("body search = %v, want only %s", got, a.ConvNo)
+	}
+	// 摘要字段仍要能命中（没有因为加了子查询而把原条件挤掉）。
+	if got := search("搜索用例乙"); len(got) != 1 || got[0] != b.ConvNo {
+		t.Fatalf("name search = %v, want %s", got, b.ConvNo)
+	}
+	// 负控制：谁都不含的串必须空，否则上面两条是「全都返回」蒙对的。
+	if got := search("NOPE" + uniq); len(got) != 0 {
+		t.Fatalf("unmatched keyword = %v, want empty", got)
+	}
+}
+
+// TestLiveIMExportMessages 在真实库上验证「完整对话」导出数据：会话号来自 join、
+// 按会话号 + 会话内序号排序（插入时刻意反着插）、撤回消息带 RecalledAt、limit 生效。
+func TestLiveIMExportMessages(t *testing.T) {
+	db, ok := liveDB(t)
+	if !ok {
+		return
+	}
+	if err := idgen.Init(13); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	uniq := fmt.Sprintf("exp%d", time.Now().UnixNano())
+
+	mkConv := func(tag string) *Conversation {
+		c := &Conversation{ConvNo: "IME" + uniq + tag, BizType: "live", BizNo: uniq + tag,
+			VisitorToken: uniq + tag, VisitorName: "导出用例", Status: StatusClosed}
+		if err := db.Create(c).Error; err != nil {
+			t.Fatalf("create conv: %v", err)
+		}
+		return c
+	}
+	mkMsg := func(c *Conversation, seq int64, senderType, name, content string, recalled bool) {
+		m := &Message{ConvID: c.ID, Seq: seq, SenderType: senderType, SenderName: name,
+			Content: content, Kind: KindText}
+		if recalled {
+			now := time.Now().UTC().Truncate(time.Second)
+			m.RecalledAt = &now
+			m.Kind = KindSystem
+		}
+		if err := db.Create(m).Error; err != nil {
+			t.Fatalf("create msg: %v", err)
+		}
+	}
+	c1 := mkConv("C")
+	c2 := mkConv("D")
+	// 反着插 seq：若实现按插入顺序（id）排，这两条会颠倒，用例就瞎了。
+	mkMsg(c1, 2, SenderAgent, "客服一号", "稍等，我查一下", false)
+	mkMsg(c1, 1, SenderVisitor, "访客一号", "订单还没到", true)
+	mkMsg(c2, 1, SenderVisitor, "访客二号", "怎么退货", false)
+	t.Cleanup(func() {
+		db.Exec("DELETE FROM plg_im_message WHERE conv_id IN (?, ?)", int64(c1.ID), int64(c2.ID))
+		db.Exec("DELETE FROM plg_im_conversation WHERE conv_no IN (?, ?)", c1.ConvNo, c2.ConvNo)
+	})
+
+	s := NewService(db, nopLogger{})
+	rows, err := s.ExportMessages(ctx, []idgen.ID{c1.ID, c2.ID}, 100)
+	if err != nil {
+		t.Fatalf("export messages: %v", err)
+	}
+	if len(rows) != 3 {
+		t.Fatalf("rows = %d, want 3: %+v", len(rows), rows)
+	}
+	if rows[0].ConvNo != c1.ConvNo || rows[0].Seq != 1 || rows[1].Seq != 2 || rows[2].ConvNo != c2.ConvNo {
+		t.Fatalf("order = %+v", rows)
+	}
+	if rows[0].RecalledAt == nil {
+		t.Fatal("recalled message lost RecalledAt")
+	}
+	if rows[1].SenderType != SenderAgent || rows[1].SenderName != "客服一号" || rows[1].Content != "稍等，我查一下" {
+		t.Fatalf("agent row = %+v", rows[1])
+	}
+	// 上限：只给 1 行就必须只有 1 行，否则「截断提示」那条分支永远不会触发。
+	one, err := s.ExportMessages(ctx, []idgen.ID{c1.ID, c2.ID}, 1)
+	if err != nil {
+		t.Fatalf("export limit: %v", err)
+	}
+	if len(one) != 1 {
+		t.Fatalf("limited rows = %d, want 1", len(one))
+	}
+	// 空入参不发查询。
+	none, err := s.ExportMessages(ctx, nil, 100)
+	if err != nil || len(none) != 0 {
+		t.Fatalf("empty ids = %v, %v", none, err)
+	}
+}
+
+// TestLiveIMExportWritesTranscriptSheet 端到端验证「导出含完整对话」这条主张：
+// 直接调导出 handler，把生成的 xlsx 用我们自己的 reader 读回来数 sheet 和正文行。
+func TestLiveIMExportWritesTranscriptSheet(t *testing.T) {
+	db, ok := liveDB(t)
+	if !ok {
+		return
+	}
+	if err := idgen.Init(14); err != nil {
+		t.Fatal(err)
+	}
+	uniq := fmt.Sprintf("xlsx%d", time.Now().UnixNano())
+
+	c := &Conversation{ConvNo: "IMX" + uniq, BizType: "live", BizNo: uniq,
+		VisitorToken: uniq, VisitorName: "导出用例", Status: StatusClosed}
+	if err := db.Create(c).Error; err != nil {
+		t.Fatalf("create conv: %v", err)
+	}
+	for i, m := range []*Message{
+		{Seq: 1, SenderType: SenderVisitor, SenderName: "访客甲", Content: "订单还没到 " + uniq, Kind: KindText},
+		{Seq: 2, SenderType: SenderAgent, SenderName: "客服乙", Content: "已催发货", Kind: KindText},
+	} {
+		m.ConvID = c.ID
+		m.CreatedAt = time.Now().Add(time.Duration(i) * time.Second)
+		if err := db.Create(m).Error; err != nil {
+			t.Fatalf("create msg: %v", err)
+		}
+	}
+	t.Cleanup(func() {
+		db.Exec("DELETE FROM plg_im_message WHERE conv_id = ?", int64(c.ID))
+		db.Exec("DELETE FROM plg_im_conversation WHERE conv_no = ?", c.ConvNo)
+	})
+
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(rec)
+	ctx.Request = httptest.NewRequest(http.MethodGet, "/api/v1/plugins/im/conversations-export?keyword="+uniq, nil)
+	(&handler{svc: NewService(db, nopLogger{})}).export(ctx)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	buf := rec.Body.Bytes()
+	rd, err := excel.Open(bytes.NewReader(buf), int64(len(buf)), excel.ReadOptions{})
+	if err != nil {
+		t.Fatalf("open xlsx: %v", err)
+	}
+	names := rd.SheetNames()
+	if len(names) != 2 {
+		t.Fatalf("sheets = %v, want 2", names)
+	}
+	rows, err := excel.ReadAll(bytes.NewReader(buf), int64(len(buf)), excel.ReadOptions{Sheet: names[1]})
+	if err != nil {
+		t.Fatalf("read transcript sheet: %v", err)
+	}
+	if len(rows) != 3 { // 表头 + 2 条消息
+		t.Fatalf("transcript rows = %d: %v", len(rows), rows)
+	}
+	if rows[1][0] != c.ConvNo || rows[1][5] != "订单还没到 "+uniq || rows[2][5] != "已催发货" {
+		t.Fatalf("transcript content wrong: %v", rows[1:])
+	}
+	if rows[1][1] != "1" || rows[2][1] != "2" {
+		t.Fatalf("transcript seq = %v", rows[1:])
+	}
+	// 第一张 sheet 只剩会话清单，正文不该混进去。
+	list, err := excel.ReadAll(bytes.NewReader(buf), int64(len(buf)), excel.ReadOptions{Sheet: names[0]})
+	if err != nil {
+		t.Fatalf("read list sheet: %v", err)
+	}
+	if len(list) != 2 || strings.Contains(strings.Join(list[1], "|"), "已催发货") {
+		t.Fatalf("list sheet = %v", list)
 	}
 }

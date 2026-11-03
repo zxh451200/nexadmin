@@ -11,11 +11,14 @@
 package report
 
 import (
+	"context"
 	"io"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 
 	"nexadmin/core"
 	"nexadmin/core/plugin"
@@ -24,7 +27,7 @@ import (
 // 建表由运行时执行 plugins/report/migrations/<引擎>/*.sql，插件自己不做迁移。
 func init() {
 	plugin.Register(plugin.Plugin{
-		ID: "report", Name: "报表中心", Version: "1.0.0", Edition: plugin.Pro,
+		ID: "report", Name: "报表中心", Version: "1.1.0", Edition: plugin.Pro,
 		Module: &module{},
 	})
 }
@@ -37,7 +40,12 @@ func (*module) Name() string { return "report" }
 func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	reg, set := loadRegistry(d.Config, d.Log)
 	seedBuiltins(d.DB, d.Log)
-	registerRoutes(r, newHandler(NewService(d.DB, d.Log, reg, set), d.DB))
+	svc := NewService(d.DB, d.Log, reg, set)
+	if d.Notify != nil {
+		// 订阅邮件走统一通知出口：SMTP 未配置时 SendMail 返回可识别错误，发送按跳过处理。
+		svc.WithMailer(d.Notify)
+	}
+	registerRoutes(r, newHandler(svc, d.DB))
 }
 
 // registerRoutes 挂载全部路由；每个接口都有 core.Perm。
@@ -52,6 +60,7 @@ func registerRoutes(r *gin.RouterGroup, h *handler) {
 	g.GET("/datasets/:id", core.Perm("report:dataset"), h.getDataset)
 	g.PUT("/datasets/:id", core.Perm("report:dataset"), h.updateDataset)
 	g.DELETE("/datasets/:id", core.Perm("report:dataset"), h.deleteDataset)
+	g.DELETE("/datasets", core.Perm("report:dataset"), core.Desc("批量删除数据集"), h.deleteDatasets)
 
 	// 图表
 	g.GET("/chart-options/datasets", core.Perm("report:chart"), h.datasetOptions)
@@ -61,6 +70,7 @@ func registerRoutes(r *gin.RouterGroup, h *handler) {
 	g.GET("/charts/:id", core.Perm("report:chart"), h.getChart)
 	g.PUT("/charts/:id", core.Perm("report:chart"), h.updateChart)
 	g.DELETE("/charts/:id", core.Perm("report:chart"), h.deleteChart)
+	g.DELETE("/charts", core.Perm("report:chart"), core.Desc("批量删除图表"), h.deleteCharts)
 	g.POST("/charts/:id/query", core.Perm("report:chart"), h.queryChart)
 
 	// 报表页
@@ -71,7 +81,11 @@ func registerRoutes(r *gin.RouterGroup, h *handler) {
 	g.POST("/reports", core.Perm("report:report"), h.saveReport(0))
 	g.GET("/reports/:id", core.Perm("report:report"), h.getReport)
 	g.PUT("/reports/:id", core.Perm("report:report"), h.updateReport)
+	g.GET("/reports/:id/subscription", core.Perm("report:report"), h.getSubscription)
+	g.PUT("/reports/:id/subscription", core.Perm("report:report"), h.saveSubscription)
+	g.DELETE("/reports/:id/subscription", core.Perm("report:report"), h.deleteSubscription)
 	g.DELETE("/reports/:id", core.Perm("report:report"), h.deleteReport)
+	g.DELETE("/reports", core.Perm("report:report"), core.Desc("批量删除报表"), h.deleteReports)
 
 	// 数据大屏（管理）
 	g.GET("/screen-options/charts", core.Perm("report:screen"), h.chartOptions)
@@ -95,6 +109,35 @@ func registerRoutes(r *gin.RouterGroup, h *handler) {
 }
 
 type ioWriter = io.Writer
+
+// Start 实现 plugin.Starter：每分钟扫描一次到期的报表订阅并发送提醒。
+// d.Notify 在 Register 已注入；这里不再校验，RunDue 自带 nil 防御。
+func (m *module) Start(ctx context.Context, d *core.Deps) error {
+	reg, set := loadRegistry(d.Config, d.Log)
+	svc := NewService(d.DB, d.Log, reg, set)
+	if d.Notify != nil {
+		svc.WithMailer(d.Notify)
+	}
+	go func() {
+		t := time.NewTicker(time.Minute)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				if n, err := svc.RunDue(ctx, time.Now()); err != nil {
+					d.Log.Warn("report: subscription scan failed", zap.Error(err))
+				} else if n > 0 {
+					d.Log.Info("report: subscription reminders sent", zap.Int("count", n))
+				}
+			}
+		}
+	}()
+	return nil
+}
+
+var _ plugin.Starter = (*module)(nil)
 
 const xlsxContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 

@@ -44,6 +44,8 @@
       "open": "新窗口打开",
       "empty": "还没有视频",
       "deleteConfirm": "删除「{{name}}」的台账记录？厂商侧的文件需要在控制台清理。",
+      "deleteBatchConfirm": "删除选中的 {{count}} 条视频台账？厂商侧的文件需要在各自控制台清理。",
+      "deletedPartial": "选中 {{total}} 条，实际删除 {{deleted}} 条（其余不存在或不属于当前租户）",
       "copyLink": "复制 MP4 直链",
       "copied": "直链已复制，可粘贴到富文本「插入视频」",
       "noDownload": "未配置播放子域，暂时拿不到直链",

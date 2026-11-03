@@ -46,15 +46,18 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.PUT("/jobs/:id", core.Perm("cron:edit"), h.updateJob)
 	g.PUT("/jobs/:id/enabled", core.Perm("cron:edit"), h.setEnabled)
 	g.DELETE("/jobs/:id", core.Perm("cron:edit"), h.deleteJob)
+	// 批量删：复用单条删除的 cron:edit，不新增权限点
+	g.DELETE("/jobs", core.Perm("cron:edit"), h.deleteJobs)
 	g.POST("/jobs/:id/run", core.Perm("cron:run"), h.runJob)
 	g.GET("/logs", core.Perm("cron:log"), h.listLogs)
 	g.GET("/logs/:id", core.Perm("cron:log"), h.getLog)
 	g.DELETE("/logs", core.Perm("cron:clean"), h.cleanLogs)
 }
 
-// Start 实现 plugin.Starter：启动调度循环。非阻塞，ctx 结束时调度循环退出。
+// Start 实现 plugin.Starter：启动调度循环与失败告警。非阻塞，ctx 结束时调度循环退出。
 func (m *module) Start(ctx context.Context, d *core.Deps) error {
 	s := m.service(d)
+	s.EnableAlerts(ctx, d.Notify)
 	go s.Run(ctx)
 	return nil
 }

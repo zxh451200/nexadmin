@@ -11,7 +11,7 @@ import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import { Switch } from '@/framework/ui/switch'
-import { useDeleteJob, useHandlers, useJobs, useRunJob, useSetEnabled, type CronJob, type JobQuery } from './api'
+import { useDeleteJob, useDeleteJobs, useHandlers, useJobs, useRunJob, useSetEnabled, type CronJob, type JobQuery } from './api'
 import { formatTime, statusVariant } from './format'
 import { JobFormDialog } from './JobFormDialog'
 
@@ -30,11 +30,13 @@ export function JobsTab({ onViewLogs }: Props) {
   const [pageSize, setPageSize] = useState(10)
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<CronJob | null>(null)
+  const [selected, setSelected] = useState<string[]>([])
 
   const { data, isLoading } = useJobs({ ...filters, page, pageSize })
   const { data: handlers = [] } = useHandlers()
   const setEnabled = useSetEnabled()
   const remove = useDeleteJob()
+  const removeBatch = useDeleteJobs()
   const run = useRunJob()
 
   const handlerLabel = (name: string) => t(`plugin_cron.handlers.${name}`, { defaultValue: name })
@@ -47,8 +49,10 @@ export function JobsTab({ onViewLogs }: Props) {
     try {
       await fn()
       toast.success(okMsg)
+      return true
     } catch {
       toast.error(t('common.operateFailed'))
+      return false
     }
   }
   const onRun = async (j: CronJob) => {
@@ -58,7 +62,19 @@ export function JobsTab({ onViewLogs }: Props) {
   }
   const onDelete = async (j: CronJob) => {
     if (await confirm({ destructive: true, description: t('plugin_cron.deleteConfirm', { name: j.name }) })) {
-      await attempt(() => remove.mutateAsync(j.id))
+      if (await attempt(() => remove.mutateAsync(j.id))) setSelected((s) => s.filter((id) => id !== j.id))
+    }
+  }
+  // 批量删：一次提交点名的 id；后端只删当前租户下确实存在的行，deleted 是实删条数。
+  // 正在运行的那次执行不受影响（后端不中断它），执行日志保留——所以据实提示，不写成「全部删除成功」。
+  const onDeleteBatch = async (ids: string[]) => {
+    if (!(await confirm({ destructive: true, description: t('plugin_cron.deleteBatchConfirm', { count: ids.length }) }))) return
+    try {
+      const { deleted } = await removeBatch.mutateAsync(ids)
+      setSelected([])
+      toast.success(deleted < ids.length ? t('plugin_cron.deletedPartial', { deleted, total: ids.length }) : t('common.operateSuccess'))
+    } catch {
+      toast.error(t('common.operateFailed'))
     }
   }
 
@@ -125,7 +141,7 @@ export function JobsTab({ onViewLogs }: Props) {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_cron.all')}</SelectItem>
+            <SelectItem value={ALL}>{t('plugin_cron.filter.allHandlers')}</SelectItem>
             {handlers.map((h) => (
               <SelectItem key={h.name} value={h.name}>
                 {handlerLabel(h.name)}
@@ -138,7 +154,7 @@ export function JobsTab({ onViewLogs }: Props) {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_cron.all')}</SelectItem>
+            <SelectItem value={ALL}>{t('plugin_cron.filter.allStates')}</SelectItem>
             <SelectItem value="1">{t('plugin_cron.enabledOn')}</SelectItem>
             <SelectItem value="0">{t('plugin_cron.enabledOff')}</SelectItem>
           </SelectContent>
@@ -160,6 +176,15 @@ export function JobsTab({ onViewLogs }: Props) {
           },
         }}
         emptyText={t('plugin_cron.empty')}
+        selection={{ selected, onChange: setSelected }}
+        batchActions={(ids) => (
+          <Can perm="cron:edit">
+            <Button variant="destructive" size="sm" onClick={() => void onDeleteBatch(ids)}>
+              <Trash2 aria-hidden="true" />
+              {t('common.delete')}
+            </Button>
+          </Can>
+        )}
         toolbar={
           <Can perm="cron:edit">
             <Button onClick={() => openForm(null)}>

@@ -247,6 +247,26 @@ func (s *Service) Delete(ctx context.Context, id idgen.ID) error {
 	return s.st.remove(ctx, src.TenantID, src.ID)
 }
 
+// DeleteMany 批量删除身份源。逐条判断与单条 Delete 完全一致：都只在当前租户里匹配
+// （store.removeMany 与 remove 同样显式带 tenant_id），单条没有「被引用不可删」的护栏
+// （用户侧的外部登录绑定、目录同步任务里点名的 sourceId 都不回收，删源只是让这些源今后解析不到），
+// 所以批量也不新增判断，也不动别的表。整批一条事务：要么全删，要么整批回滚。
+// 越权 / 已不存在的 id 落在租户条件外，删不到也不计入实删数；0 命中报不存在。
+func (s *Service) DeleteMany(ctx context.Context, ids []idgen.ID) (int64, error) {
+	tid, err := tenantOf(ctx)
+	if err != nil {
+		return 0, err
+	}
+	n, err := s.st.removeMany(ctx, tid, ids)
+	if err != nil {
+		return 0, mapNotFound(err)
+	}
+	if n == 0 {
+		return 0, response.NotFound("error.not_found")
+	}
+	return n, nil
+}
+
 // viewOf 生成对外视图：口令（含密文）永不出现。配置损坏时 Config 为 nil。
 func viewOf(src Source) SourceView {
 	v := SourceView{ID: src.ID, Type: src.Type, Name: src.Name, Enabled: src.Enabled, CreatedAt: src.CreatedAt, UpdatedAt: src.UpdatedAt}

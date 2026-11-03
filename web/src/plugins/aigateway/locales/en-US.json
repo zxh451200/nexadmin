@@ -12,6 +12,9 @@
       "usage": "Usage"
     },
     "all": "All",
+    "filter": {
+      "allKinds": "All kinds"
+    },
     "empty": "No data",
     "searchPlaceholder": "Name / model id",
     "nameRequired": "Model name is required",
@@ -46,6 +49,7 @@
       "create": "Add Model",
       "edit": "Edit Model",
       "deleteConfirm": "Delete model {{name}}?",
+      "deleteBatchConfirm": "Delete the {{count}} selected models? Calls resolving these models will lose their config.",
       "keyKeep": "Leave empty to keep the existing key",
       "default": "Default",
       "ping": "Test connection",

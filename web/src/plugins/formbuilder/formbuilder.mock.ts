@@ -136,6 +136,12 @@ const page = <T,>(rows: T[], q: Record<string, unknown>) => {
   const size = Math.max(1, Number(q.pageSize) || 10)
   return { list: rows.slice((p - 1) * size, p * size), total: rows.length, page: p, pageSize: size }
 }
+/** 与后端 response.ParseIDs 同规则：任一项非法或整体取不到 ID 一律 400，绝不退化成"删全部"；重复 ID 去重 */
+function idsOf(raw: unknown): string[] {
+  const parts = String(raw ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+  if (!parts.length || parts.some((s) => !/^[1-9]\d*$/.test(s))) mockError(400, '请求参数不合法')
+  return [...new Set(parts)]
+}
 /** 提交列表筛选：版本、提交人、时间范围，以及按字段值的包含匹配；新的在前 */
 function filterSubs(f: Form, q: Record<string, unknown>): SubmissionRow[] {
   const ver = Number(q.version) || 0
@@ -249,6 +255,19 @@ defineMock([
       forms = forms.filter((x) => x.id !== f.id)
       delete subs[f.id]
       return null
+    },
+  },
+  {
+    // 批量删除表单：与后端同语义——点名的表单必须全部存在，否则整批 404；连带清掉各自的版本与提交
+    method: 'DELETE',
+    url: `${B}/forms`,
+    handler: ({ query }) => {
+      const ids = idsOf(query.ids)
+      for (const id of ids) need(id)
+      const gone = new Set(ids)
+      forms = forms.filter((f) => !gone.has(f.id))
+      for (const id of ids) delete subs[id]
+      return { deleted: ids.length }
     },
   },
   {
@@ -385,6 +404,22 @@ defineMock([
       if (!list.some((x) => x.id === params.sid)) mockError(404, '记录不存在')
       subs[f.id] = list.filter((x) => x.id !== params.sid)
       return null
+    },
+  },
+  {
+    // 批量删除提交：删除范围始终限定在该表单名下，混进其他表单的 id 会让整批 404 且一条不删
+    method: 'DELETE',
+    url: `${B}/forms/:id/submissions`,
+    handler: ({ params, query }) => {
+      const f = need(params.id)
+      const ids = idsOf(query.ids)
+      const list = subs[f.id] ?? []
+      for (const id of ids) {
+        if (!list.some((x) => x.id === id)) mockError(404, '记录不存在')
+      }
+      const gone = new Set(ids)
+      subs[f.id] = list.filter((x) => !gone.has(x.id))
+      return { deleted: ids.length }
     },
   },
   {

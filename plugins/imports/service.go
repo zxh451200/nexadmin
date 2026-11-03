@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"gorm.io/gorm"
@@ -20,6 +21,9 @@ import (
 type Service struct {
 	db  *gorm.DB
 	log logger
+	// cancels 是运行中异步任务的取消注册表(jobID → CancelFunc)；任务结束即移除。
+	// 进程重启后注册表丢失——残留的 running 台账无法取消，管理员可删除重建。
+	cancels sync.Map
 }
 
 // logger 是最小日志面(便于测试注入空实现)。
@@ -228,10 +232,16 @@ func (s *Service) runAsync(ctx context.Context, src Source, rows []map[string]st
 }
 
 // processAsync 在后台协程里按批次处理行,每批更新一次台账(前端可感知进度)。
-// 不使用请求 ctx(请求可能已断开),改用 context.Background();但租户必须从台账行还原,
+// 不使用请求 ctx(请求可能已断开),改用可取消的后台 ctx;但租户必须从台账行还原,
 // 否则租户表会在默认租户下读写(小文件走同步路径没这个问题,大文件会写错租户)。
+// 取消：CancelJob 触发 ctx 取消，已落库的部分保留，台账标记 cancelled。
 func (s *Service) processAsync(src Source, m *Job, rows []map[string]string, actor string) {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	s.cancels.Store(m.ID, cancel)
+	defer func() {
+		cancel()
+		s.cancels.Delete(m.ID)
+	}()
 	if m.TenantID != 0 {
 		ctx = tenant.With(ctx, m.TenantID)
 	}
@@ -245,6 +255,16 @@ func (s *Service) processAsync(src Source, m *Job, rows []map[string]string, act
 	errs := make([]RowError, 0, 8)
 	okRows, failRows := 0, 0
 	for i, row := range rows {
+		if ctx.Err() != nil {
+			// 已取消：处理过的批次已经落库，如实收尾，不虚报 done。
+			raw, _ := json.Marshal(errs)
+			s.db.WithContext(ctx).Model(&Job{}).Where("id = ?", int64(m.ID)).Updates(map[string]any{
+				"ok_rows": okRows, "fail_rows": failRows, "status": StatusCancelled,
+				"duration_ms": time.Since(start).Milliseconds(), "error_json": string(raw),
+			})
+			s.logWarn("imports: async job cancelled", "jobId", m.ID, "processed", okRows+failRows)
+			return
+		}
 		bad := ""
 		for _, c := range src.Columns {
 			if c.Required && strings.TrimSpace(row[c.Key]) == "" {
@@ -290,6 +310,27 @@ func (s *Service) processAsync(src Source, m *Job, rows []map[string]string, act
 	}
 	finished.ID = m.ID
 	s.publishCompleted(ctx, &finished, actor)
+}
+
+// CancelJob 取消一个运行中/pending 的异步导入：已处理的部分保留，状态记为 cancelled。
+// 任务不在注册表里（已完成、进程重启过或根本不存在）按 404 处理。
+func (s *Service) CancelJob(ctx context.Context, id idgen.ID) error {
+	m, _, err := s.jobGet(ctx, id)
+	if err != nil {
+		return err
+	}
+	if m.Status != StatusPending && m.Status != StatusRunning {
+		return response.Conflict("imports.job_not_running")
+	}
+	v, ok := s.cancels.Load(id)
+	if !ok {
+		// 进程重启后注册表丢失，后台协程已不存在：直接把台账收尾为 cancelled。
+		s.db.WithContext(ctx).Model(&Job{}).Where("id = ? AND status IN ?", int64(id), []string{StatusPending, StatusRunning}).
+			Update("status", StatusCancelled)
+		return nil
+	}
+	v.(context.CancelFunc)()
+	return nil
 }
 
 // processRows 同步路径的逐行处理(小文件 ≤ SyncMaxRows)。
@@ -351,7 +392,7 @@ func (s *Service) GetJob(ctx context.Context, id idgen.ID) (*JobView, error) {
 }
 
 // DeleteJob 删除一条导入台账（不影响已入库的数据）。
-// 排队中/执行中的任务不允许删：删掉会让后台协程没有目标行可写。
+// 排队中/执行中的任务不允许删：删掉会让后台协程没有目标行可写（先取消再删）。
 func (s *Service) DeleteJob(ctx context.Context, id idgen.ID) error {
 	m, _, err := s.jobGet(ctx, id)
 	if err != nil {
@@ -361,6 +402,46 @@ func (s *Service) DeleteJob(ctx context.Context, id idgen.ID) error {
 		return response.Conflict("imports.job_running")
 	}
 	return s.db.WithContext(ctx).Delete(&Job{}, "id = ?", int64(id)).Error
+}
+
+// DeleteJobs 批量删除导入台账：判断逐条照搬单条 DeleteJob——
+// 排队中/执行中的任务不允许删（先取消再删），且这一条是「在跑」的就不能只把它挑出来跳过：
+// 批次里有任何一条在跑，整批失败回滚，不做「删掉能删的」（部分成功会让调用方以为删的就是点名的几条）。
+// 越权 / 不存在的 id 落在租户 scope 外（core/database 的 tenantPlugin 给查询与 DELETE 追加 tenant_id 条件，
+// 与单条同一条路径），查不出来也就不计入实删数；一条都没命中报不存在。
+// 台账只存行数据与 ErrorJSON 文本，上传内容当场解析完即丢、不落文件（见 handler.run），所以没有连带清理。
+func (s *Service) DeleteJobs(ctx context.Context, ids []idgen.ID) (int64, error) {
+	list := make([]int64, 0, len(ids))
+	for _, id := range ids {
+		list = append(list, int64(id))
+	}
+	var deleted int64
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var rows []Job
+		if err := tx.Find(&rows, "id IN ?", list).Error; err != nil {
+			return err
+		}
+		if len(rows) == 0 {
+			return response.NotFound("error.not_found")
+		}
+		found := make([]int64, 0, len(rows))
+		for _, r := range rows {
+			if r.Status == StatusPending || r.Status == StatusRunning {
+				return response.Conflict("imports.job_running")
+			}
+			found = append(found, int64(r.ID))
+		}
+		res := tx.Where("id IN ?", found).Delete(&Job{})
+		if res.Error != nil {
+			return res.Error
+		}
+		deleted = res.RowsAffected
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	return deleted, nil
 }
 
 // GetJobErrors 取错误明细(供 errors.csv 生成)。

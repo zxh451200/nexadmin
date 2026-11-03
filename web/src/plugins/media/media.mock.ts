@@ -1,4 +1,4 @@
-import { defineMock } from '@/framework/request/mock'
+import { defineMock, mockError } from '@/framework/request/mock'
 import type { MediaStats, PendingImage, VideoConfigView, VideoItem } from './api'
 
 const ago = (days: number) => new Date(Date.now() - days * 86400000).toISOString()
@@ -91,6 +91,22 @@ defineMock([
     handler: ({ params }) => {
       videos = videos.filter((v) => v.id !== params.id)
       return { ok: true }
+    },
+  },
+  {
+    // 批量删除：与后端 DELETE /plugins/media/video/assets?ids= 同口径
+    // ids 缺失/非法（含 0）一律 400，不退化成「清台账」；一条都没命中 404；成功返回实删条数。
+    method: 'DELETE',
+    url: '/plugins/media/video/assets',
+    handler: ({ query }) => {
+      const parts = String(query.ids ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+      if (parts.length === 0 || parts.some((s) => !/^\d+$/.test(s) || /^0+$/.test(s))) mockError(400, 'Bad request')
+      const ids = new Set(parts)
+      const before = videos.length
+      videos = videos.filter((v) => !ids.has(v.id))
+      const deleted = before - videos.length
+      if (deleted === 0) mockError(404, 'Not found')
+      return { deleted }
     },
   },
 ])

@@ -115,6 +115,20 @@ func (m *memStore) remove(_ context.Context, tid, id idgen.ID) error {
 	return nil
 }
 
+// removeMany 与 remove 同一套租户校验：别的租户的行看不见也删不掉，不计入实删数。
+func (m *memStore) removeMany(_ context.Context, tid idgen.ID, ids []idgen.ID) (int64, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var n int64
+	for _, id := range ids {
+		if r, ok := m.rows[id]; ok && r.TenantID == tid {
+			delete(m.rows, id)
+			n++
+		}
+	}
+	return n, nil
+}
+
 // addLDAP 经 Service.Save 的同一条路径（校验 + 口令加密）插入一个 LDAP 源，返回存库行。
 func addLDAP(t *testing.T, svc *Service, tid idgen.ID, cfg LDAPConfig, enabled bool) *Source {
 	t.Helper()

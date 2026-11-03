@@ -28,9 +28,35 @@
     "type": {
       "bar": "柱状图",
       "line": "折线图",
+      "area": "面积图",
       "pie": "饼图",
       "table": "表格",
       "metric": "指标卡"
+    },
+    "subscription": {
+      "title": "订阅",
+      "desc": "到点给收件人列表发一封提醒邮件，附后台报表中心入口",
+      "schedule": "发送频率",
+      "daily": "每天",
+      "weekly": "每周",
+      "hour": "发送时刻（时）",
+      "weekday": "星期",
+      "wd": {
+        "0": "周日",
+        "1": "周一",
+        "2": "周二",
+        "3": "周三",
+        "4": "周四",
+        "5": "周五",
+        "6": "周六"
+      },
+      "recipients": "收件人",
+      "recipientsHint": "逗号或分号分隔，最多 20 个；需已配置 SMTP，未配置时自动跳过",
+      "enabled": "启用订阅",
+      "lastSent": "最近一次发送：{{time}}",
+      "emailRequired": "请至少填写一个收件人",
+      "emailInvalid": "邮箱格式不正确：{{email}}",
+      "deleteConfirm": "确认删除这条订阅？删除后到点不再发送。"
     },
     "agg": {
       "count": "计数",
@@ -184,6 +210,8 @@
       "pickSource": "请先选择数据表",
       "empty": "还没有数据集",
       "deleteConfirm": "确定删除数据集「{{name}}」吗？仍被图表使用时无法删除。",
+      "deleteBatchConfirm": "确定删除选中的 {{count}} 个数据集吗？仍被图表使用的不会被删除。",
+      "deletedPartial": "已删除 {{deleted}}/{{total}} 个数据集（其余的仍被图表使用或已被删除）",
       "safeHint": "只能从管理员授权的白名单表与字段中选择；不支持手写 SQL。每次查询都会自动附加当前租户条件。"
     },
     "chart": {
@@ -192,6 +220,8 @@
       "editTitle": "编辑图表",
       "empty": "还没有图表",
       "deleteConfirm": "确定删除图表「{{name}}」吗？引用它的报表和大屏会显示「图表已删除」。",
+      "deleteBatchConfirm": "确定删除选中的 {{count}} 个图表吗？引用它们的报表和大屏会显示「图表已删除」。",
+      "deletedPartial": "已删除 {{deleted}}/{{total}} 个图表（其余可能已被删除）",
       "dataset": "数据集",
       "type": "图表类型",
       "shape": "维度 / 度量",
@@ -230,6 +260,8 @@
       "noCharts": "这张报表还没有图表",
       "chartDeleted": "图表已删除",
       "deleteConfirm": "确定删除报表「{{name}}」吗？",
+      "deleteBatchConfirm": "确定删除选中的 {{count}} 张报表吗？删除后查看端立即看不到它们。",
+      "deletedPartial": "已删除 {{deleted}}/{{total}} 张报表（其余可能已被删除）",
       "group": "分组",
       "groupField": "所属分组",
       "section": "小节名称",
@@ -253,7 +285,7 @@
       "addFilter": "添加筛选器",
       "allOption": "{{label}}：全部",
       "export": "导出 xlsx",
-      "exportTruncated": "导出行数已达上限，仅包含前 5000 行"
+      "exportTruncated": "导出行数已达本次查询的上限，超出部分未包含"
     },
     "screen": {
       "create": "新建大屏",

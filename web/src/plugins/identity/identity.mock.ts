@@ -123,6 +123,21 @@ defineMock([
     },
   },
   {
+    // 批量删：与后端 removeMany 同口径——ids 缺失/为空/任一项非法一律 400，一条都没命中 404，
+    // 绝不退化成「不带 ids 就删掉本租户全部身份源」
+    method: 'DELETE',
+    url: '/plugins/identity/sources',
+    handler: ({ query }) => {
+      const raw = String(query.ids ?? '').trim()
+      const ids = raw.split(',').map((s) => s.trim()).filter(Boolean)
+      if (!raw || !ids.length || ids.some((s) => !/^[1-9]\d*$/.test(s))) mockError(400, 'Bad ids')
+      const hits = sources.filter((s) => ids.includes(s.id))
+      if (!hits.length) mockError(404, 'Not found')
+      sources = sources.filter((s) => !ids.includes(s.id))
+      return { deleted: hits.length }
+    },
+  },
+  {
     method: 'DELETE',
     url: '/plugins/identity/sources/:id',
     handler: ({ params }) => {

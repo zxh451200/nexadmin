@@ -123,6 +123,18 @@ func (h *handler) deleteForm(c *gin.Context) {
 	}
 }
 
+// DELETE /forms?ids=1,2,3  批量删除：ids 缺失或任一项非法一律 400，绝不退化成"删全部"。
+// 护栏与单条一致，整批一个事务，返回体带实删条数供界面说实话。
+func (h *handler) deleteForms(c *gin.Context) {
+	ids, err := response.ParseIDsQuery(c)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	deleted, err := h.svc.DeleteForms(c.Request.Context(), ids)
+	respond(c, gin.H{"deleted": deleted}, err)
+}
+
 // POST /forms/import  请求体 = 导出的定义文件
 func (h *handler) importForm(c *gin.Context) {
 	limitBody(c)
@@ -320,6 +332,22 @@ func (h *handler) deleteSubmission(c *gin.Context) {
 	if sid, ok := paramID(c, "sid"); ok {
 		respond(c, nil, h.svc.DeleteSubmission(c.Request.Context(), id, sid))
 	}
+}
+
+// DELETE /forms/:id/submissions?ids=1,2,3  批量删除提交：只在该表单的范围内删，
+// 混进其他表单的提交 ID 会让整批 404；ids 缺失或非法一律 400。
+func (h *handler) deleteSubmissions(c *gin.Context) {
+	id, ok := paramID(c, "id")
+	if !ok {
+		return
+	}
+	ids, err := response.ParseIDsQuery(c)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	deleted, err := h.svc.DeleteSubmissions(c.Request.Context(), id, ids)
+	respond(c, gin.H{"deleted": deleted}, err)
 }
 
 const xlsxContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"

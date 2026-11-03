@@ -9,7 +9,7 @@ import { FilterBar } from '@/framework/components/FilterBar'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
-import { useDatasets, useDeleteDataset, useSources, type Dataset } from './api'
+import { useDatasets, useDeleteDataset, useDeleteDatasets, useSources, type Dataset } from './api'
 import { DatasetDialog } from './DatasetDialog'
 import { builtinText } from './builtinText'
 
@@ -22,9 +22,11 @@ export function DatasetsTab() {
   const [pageSize, setPageSize] = useState(10)
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Dataset | null>(null)
+  const [picked, setPicked] = useState<string[]>([])
   const { data, isLoading } = useDatasets({ keyword, page, pageSize })
   const { data: sources = [] } = useSources()
   const remove = useDeleteDataset()
+  const removeBatch = useDeleteDatasets()
 
   const sourceLabel = (table: string) => t(`plugin_report.source.${table}`, { defaultValue: sources.find((s) => s.table === table)?.label ?? table })
   const openForm = (d: Dataset | null) => {
@@ -35,9 +37,22 @@ export function DatasetsTab() {
     if (!(await confirm({ destructive: true, description: t('plugin_report.dataset.deleteConfirm', { name: builtinText(t, d.name) }) }))) return
     try {
       await remove.mutateAsync(d.id)
+      setPicked((s) => s.filter((id) => id !== d.id))
       toast.success(t('common.operateSuccess'))
     } catch {
       toast.error(t('common.operateFailed'))
+    }
+  }
+  // 批量删：一次点名多条。deleted 是后端实删条数——仍被图表引用的会被跳过（计入 blocked），
+  // 一个都删不了时后端 409；部分删除时不写成「操作成功」。
+  const onDeleteBatch = async (ids: string[]) => {
+    if (!(await confirm({ destructive: true, description: t('plugin_report.dataset.deleteBatchConfirm', { count: ids.length }) }))) return
+    try {
+      const { deleted } = await removeBatch.mutateAsync(ids)
+      setPicked([])
+      toast.success(deleted < ids.length ? t('plugin_report.dataset.deletedPartial', { deleted, total: ids.length }) : t('common.operateSuccess'))
+    } catch (e) {
+      toast.error(e instanceof Error && e.message ? e.message : t('common.operateFailed'))
     }
   }
 
@@ -80,6 +95,15 @@ export function DatasetsTab() {
           },
         }}
         emptyText={t('plugin_report.dataset.empty')}
+        selection={{ selected: picked, onChange: setPicked }}
+        batchActions={(ids) => (
+          <Can perm="report:dataset">
+            <Button variant="destructive" size="sm" onClick={() => void onDeleteBatch(ids)}>
+              <Trash2 aria-hidden="true" />
+              {t('common.delete')}
+            </Button>
+          </Can>
+        )}
         toolbar={
           <Button onClick={() => openForm(null)}>
             <Plus aria-hidden="true" />

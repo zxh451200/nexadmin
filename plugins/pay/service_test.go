@@ -16,7 +16,6 @@ import (
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 
-	"nexadmin/core/event"
 	"nexadmin/core/response"
 	"nexadmin/core/tenant"
 	"nexadmin/pkg/idgen"
@@ -201,14 +200,21 @@ func TestHandleCallbackInvalidSignature(t *testing.T) {
 // 事件进总线。手续费按「主体精确 > 租户默认」规则计算。
 func TestCallbackMarksPaidAndPublishes(t *testing.T) {
 	db, m := mockDB(t)
-	s := NewService(db, nopLog())
 
-	events := make(chan event.Event, 4)
-	event.Subscribe(event.SubscriberFunc(func(e event.Event) {
-		if strings.HasPrefix(e.Name, "pay.") {
-			events <- e
+	// 用例自带投递出口：事件同步进本用例的局部 channel，不挂到进程级 event.Default()
+	// 单例总线。那条总线订阅者列表 append-only、没有复位入口，先跑用例留下的订阅者
+	// 一旦缓冲打满就会卡死唯一的 loop 分发协程，污染同包后续用例
+	// （同 outbox_dead_test.go:13-15 记录的坑）。WithPublisher 就是为此开的注入点。
+	events := make(chan string, 4)
+	s := NewService(db, nopLog()).WithPublisher(func(_ context.Context, name string, _ EventData) bool {
+		if strings.HasPrefix(name, "pay.") {
+			select {
+			case events <- name:
+			default:
+			}
 		}
-	}))
+		return true
+	})
 
 	m.MatchExpectationsInOrder(true)
 	m.ExpectQuery("SELECT \\* FROM `plg_pay_channel` WHERE code = \\?").
@@ -245,9 +251,9 @@ func TestCallbackMarksPaidAndPublishes(t *testing.T) {
 		t.Fatalf("unexpected order %+v", o)
 	}
 	select {
-	case ev := <-events:
-		if ev.Name != EventSucceeded {
-			t.Fatalf("want %s, got %s", EventSucceeded, ev.Name)
+	case name := <-events:
+		if name != EventSucceeded {
+			t.Fatalf("want %s, got %s", EventSucceeded, name)
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("pay.succeeded not published")
@@ -260,14 +266,16 @@ func TestCallbackMarksPaidAndPublishes(t *testing.T) {
 // 已支付单收到重复成功回调：原样放行，不重复发事件。
 func TestCallbackDuplicateIgnored(t *testing.T) {
 	db, m := mockDB(t)
-	s := NewService(db, nopLog())
 
+	// 同上：投递出口用本用例自带的 publisher，published 只统计本用例同步路径上的
+	// publish 调用，不再受进程级总线上别的用例残留订阅者/排队事件污染。
 	published := 0
-	event.Subscribe(event.SubscriberFunc(func(e event.Event) {
-		if e.Name == EventSucceeded {
+	s := NewService(db, nopLog()).WithPublisher(func(_ context.Context, name string, _ EventData) bool {
+		if name == EventSucceeded {
 			published++
 		}
-	}))
+		return true
+	})
 
 	m.ExpectQuery("SELECT \\* FROM `plg_pay_channel` WHERE code = \\?").
 		WillReturnRows(channelRow("mock", "mock", `{"secret":"k"}`))
@@ -323,14 +331,19 @@ func TestCreateRefundExceeds(t *testing.T) {
 // mock 渠道同步退款成功：退款单 succeeded、支付单累计 refunded_minor、事件 pay.refund.succeeded。
 func TestCreateRefundSucceeds(t *testing.T) {
 	db, m := mockDB(t)
-	s := NewService(db, nopLog())
 
-	events := make(chan event.Event, 4)
-	event.Subscribe(event.SubscriberFunc(func(e event.Event) {
-		if e.Name == EventRefundOK {
-			events <- e
+	// 同上：用例自带 publisher，退款成功事件同步进局部 channel，
+	// 不依赖进程级 event.Default() 单例总线（避免被同包其它用例的残留订阅者卡死）。
+	events := make(chan string, 4)
+	s := NewService(db, nopLog()).WithPublisher(func(_ context.Context, name string, _ EventData) bool {
+		if name == EventRefundOK {
+			select {
+			case events <- name:
+			default:
+			}
 		}
-	}))
+		return true
+	})
 
 	m.ExpectQuery("SELECT \\* FROM `plg_pay_refund` WHERE biz_type = \\? AND biz_no = \\?").
 		WillReturnRows(sqlmock.NewRows([]string{"id", "tenant_id"}))

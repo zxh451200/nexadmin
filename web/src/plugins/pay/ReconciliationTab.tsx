@@ -6,6 +6,7 @@ import { Can } from '@/framework/auth/Can'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { DatePicker } from '@/framework/components/DatePicker'
 import { FilterBar } from '@/framework/components/FilterBar'
+import { RequiredMark } from '@/framework/components/RequiredMark'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
@@ -118,7 +119,7 @@ export function ReconciliationTab() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_pay.all')}</SelectItem>
+            <SelectItem value={ALL}>{t('plugin_pay.filter.allChannels')}</SelectItem>
             {channels.map((c) => (
               <SelectItem key={c.code} value={c.code}>
                 {c.name}
@@ -131,7 +132,7 @@ export function ReconciliationTab() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_pay.all')}</SelectItem>
+            <SelectItem value={ALL}>{t('plugin_pay.filter.allStatuses')}</SelectItem>
             {STATUSES.map((s) => (
               <SelectItem key={s} value={s}>
                 {t(`plugin_pay.reconcileStatus.${s}`)}
@@ -238,7 +239,10 @@ function RunReconcileDialog({ onClose }: { onClose: () => void }) {
       <div className="flex flex-col gap-3 text-sm">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <label className="flex flex-col gap-1">
-            {t('plugin_pay.fields.channel')}
+            <span>
+              {t('plugin_pay.fields.channel')}
+              <RequiredMark />
+            </span>
             <Select value={channelCode} onValueChange={pickChannel}>
               <SelectTrigger aria-label={t('plugin_pay.fields.channel')}>
                 <SelectValue placeholder={t('plugin_pay.auth.pickChannel')} />
@@ -253,7 +257,10 @@ function RunReconcileDialog({ onClose }: { onClose: () => void }) {
             </Select>
           </label>
           <label className="flex flex-col gap-1">
-            {t('plugin_pay.fields.billDate')}
+            <span>
+              {t('plugin_pay.fields.billDate')}
+              <RequiredMark />
+            </span>
             <DatePicker value={billDate} onChange={setBillDate} allowClear={false} />
           </label>
           <label className="flex flex-col gap-1">

@@ -27,6 +27,11 @@
       "label": "视图"
     },
     "all": "全部",
+    "filter": {
+      "allStatuses": "全部状态",
+      "allChannels": "全部渠道",
+      "allVerifies": "全部验签结果"
+    },
     "empty": "暂无数据",
     "searchPlaceholder": "支付单号 / 业务单号",
     "close": "关闭支付单",
@@ -98,6 +103,8 @@
       "status": "状态",
       "failReason": "失败原因",
       "createdAt": "创建时间",
+      "dateFrom": "下单日期（起）",
+      "dateTo": "下单日期（止）",
       "updatedAt": "更新时间",
       "refundNo": "退款单号",
       "reason": "原因",
@@ -132,6 +139,8 @@
       "create": "新建渠道",
       "edit": "编辑渠道",
       "deleteConfirm": "确认删除渠道 {{name}}？",
+      "deleteBatchConfirm": "确认删除选中的 {{count}} 个渠道？",
+      "deletedPartial": "选中 {{total}} 个，实际删除 {{deleted}} 个（其余不存在或不属于当前租户）",
       "methodPlaceholder": "选择该渠道支持的支付方式"
     },
     "method": {

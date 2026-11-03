@@ -268,10 +268,20 @@ func (h *handler) merge(c *gin.Context) {
 // exportLimit 是一次导出的行数上限（与列表筛选一致，避免拖垮接口）。
 const exportLimit = 5000
 
-// GET /plugins/im/conversations-export?<与列表相同筛选> —— 导出会话记录（xlsx）。
+// GET /plugins/im/conversations-export?<与列表相同筛选> —— 导出会话记录（xlsx，含完整对话）。
 func (h *handler) export(c *gin.Context) {
 	ctx := c.Request.Context()
 	rows, err := h.svc.ExportConversations(ctx, convQueryFrom(c), exportLimit)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	ids := make([]idgen.ID, 0, len(rows))
+	for _, r := range rows {
+		ids = append(ids, r.ID)
+	}
+	// 消息要在写响应头之前取完：取失败还能回一个 JSON 错误，而不是发下半个 xlsx。
+	msgs, err := h.svc.ExportMessages(ctx, ids, exportMsgLimit)
 	if err != nil {
 		response.Fail(c, err)
 		return
@@ -316,6 +326,25 @@ func (h *handler) export(c *gin.Context) {
 		if err := sh.WriteRow(r.ConvNo, visitor, biz, r.AssigneeName, i18n.T(ctx, "im.status_"+r.Status),
 			r.Tags, r.Note, rating, r.CreatedAt.Local().Format("2006-01-02 15:04:05"), closed); err != nil {
 			break
+		}
+	}
+	ms, err := x.NewSheet(i18n.T(ctx, "im.export_msgs_sheet"), excel.SheetOptions{Header: []string{
+		i18n.T(ctx, "im.export_conv_no"), i18n.T(ctx, "im.export_seq"), i18n.T(ctx, "im.export_time"),
+		i18n.T(ctx, "im.export_sender"), i18n.T(ctx, "im.export_name"), i18n.T(ctx, "im.export_content"),
+	}})
+	if err == nil {
+		for _, m := range msgs {
+			content := m.Content
+			if m.RecalledAt != nil {
+				content = i18n.T(ctx, "im.export_recalled")
+			}
+			if err := ms.WriteRow(m.ConvNo, m.Seq, m.CreatedAt.Local().Format("2006-01-02 15:04:05"),
+				i18n.T(ctx, "im.sender_"+m.SenderType), m.SenderName, content); err != nil {
+				break
+			}
+		}
+		if len(msgs) >= exportMsgLimit {
+			_ = ms.WriteRow("", int64(0), "", "", "", i18n.T(ctx, "im.export_truncated"))
 		}
 	}
 	if err := x.Close(); err != nil && h.svc.log != nil {
@@ -558,6 +587,7 @@ func (h *handler) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.POST("/conversations-delete", middleware.RequireSuper(), d.OperLogMiddleware("im", "delete"), h.batchDelete)
 	g.GET("/conversations-export", core.Perm("im:list"), h.export)
 	g.POST("/conversations/:no/attachments", core.Perm("im:reply"), h.uploadAdmin)
+	g.GET("/attachment-limits", core.Perm("im:reply"), h.attachmentLimits)
 	g.GET("/agents", core.Perm("im:list"), h.agents)
 	g.GET("/settings", core.Perm("im:list"), h.getSettings)
 	g.PUT("/settings", core.Perm("im:edit"), h.putSettings)
@@ -601,6 +631,12 @@ func (h *handler) uploadAdmin(c *gin.Context) { h.upload(c, SenderAgent) }
 // POST /plugins/im/visitor/conversations/:no/attachments —— 访客上传附件。
 func (h *handler) uploadVisitor(c *gin.Context) { h.upload(c, SenderVisitor) }
 
+// GET /plugins/im/attachment-limits —— 附件上传的生效限制（大小来自系统参数「上传限制」，
+// 类型来自服务端白名单），前端据此渲染文件选择器，不再自己抄一份 accept。
+func (h *handler) attachmentLimits(c *gin.Context) {
+	response.OK(c, AttachmentLimitsFor(c.Request.Context()))
+}
+
 // upload 读取 multipart 文件、按内容嗅探类型、落存储并登记附件。
 func (h *handler) upload(c *gin.Context, uploader string) {
 	if h.store == nil {
@@ -619,14 +655,15 @@ func (h *handler) upload(c *gin.Context, uploader string) {
 		response.Fail(c, response.Conflict("im.conv_closed"))
 		return
 	}
-	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxUploadBytes)
+	ceil := attachmentCeilingsFor(c.Request.Context())
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, ceil.maxBody)
 	fh, err := c.FormFile("file")
 	if err != nil {
 		response.Fail(c, response.BadRequest("im.attachment_required"))
 		return
 	}
-	if fh.Size <= 0 || fh.Size > maxUploadBytes {
-		response.Fail(c, response.BadRequest("im.attachment_too_large"))
+	if fh.Size <= 0 || fh.Size > ceil.maxBody {
+		response.Fail(c, response.BadRequest("im.attachment_too_large", ceil.mbText(ceil.maxBody)))
 		return
 	}
 	f, err := fh.Open()
@@ -638,13 +675,13 @@ func (h *handler) upload(c *gin.Context, uploader string) {
 	head := make([]byte, 512)
 	n, _ := io.ReadFull(f, head)
 	mime := strings.TrimSpace(strings.Split(http.DetectContentType(head[:n]), ";")[0])
-	rule, ok := attachmentRuleFor(mime, fh.Filename)
+	rule, ok := attachmentRuleFor(ceil, mime, fh.Filename)
 	if !ok {
 		response.Fail(c, response.BadRequest("im.attachment_type"))
 		return
 	}
-	if fh.Size > rule.max {
-		response.Fail(c, response.BadRequest("im.attachment_too_large"))
+	if !attachmentSizeOK(rule, fh.Size) {
+		response.Fail(c, response.BadRequest("im.attachment_too_large", ceil.mbText(rule.max)))
 		return
 	}
 	token := randomToken(16)

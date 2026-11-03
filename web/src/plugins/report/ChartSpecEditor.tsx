@@ -35,7 +35,7 @@ export function ChartSpecEditor({ table, type, columns, value, onChange }: Props
     <div className="flex flex-col gap-5">
       {maxDims > 0 || type === 'table' ? (
         <section className="flex flex-col gap-2" aria-label={t('plugin_report.chart.dimensions')}>
-          <Label>{t('plugin_report.chart.dimensions')}</Label>
+          <Label required>{t('plugin_report.chart.dimensions')}</Label>
           {value.dimensions.map((d, i) => {
             const col = colOf(d.column)
             return (
@@ -88,7 +88,7 @@ export function ChartSpecEditor({ table, type, columns, value, onChange }: Props
       ) : null}
 
       <section className="flex flex-col gap-2" aria-label={t('plugin_report.chart.measures')}>
-        <Label>{t('plugin_report.chart.measures')}</Label>
+        <Label required>{t('plugin_report.chart.measures')}</Label>
         {value.measures.map((m, i) => {
           const col = colOf(m.column)
           const aggs = aggsFor(m.column ? col : undefined)
@@ -204,7 +204,7 @@ export function ChartSpecEditor({ table, type, columns, value, onChange }: Props
             )
           })}
         </div>
-        {type === 'bar' ? (
+        {type === 'bar' || type === 'area' ? (
           <label className="flex items-center gap-2 text-sm">
             <Switch checked={!!value.stacked} onCheckedChange={(v) => patch({ stacked: v })} aria-label={t('plugin_report.chart.stacked')} />
             {t('plugin_report.chart.stacked')}

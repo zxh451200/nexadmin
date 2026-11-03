@@ -12,7 +12,7 @@
     "noMessages": "暂无消息",
     "loading": "加载中…",
     "pickConversation": "选择左侧会话开始回复",
-    "searchPlaceholder": "会话号 / 访客 / 摘要",
+    "searchPlaceholder": "会话号 / 访客 / 摘要 / 聊天内容",
     "close": "关闭会话",
     "closeConfirm": "确认关闭会话 {{no}}？关闭后访客不能再发消息。",
     "replyPlaceholder": "输入回复，回车发送，Shift+回车换行",
@@ -94,6 +94,15 @@
       "title": "删除会话",
       "confirm": "删除会话 {{no}}？该会话的消息与附件会一并删除，且无法恢复。"
     },
+    "batch": {
+      "selectAllClosed": "全选已结束会话",
+      "delete": "删除所选",
+      "deleteTitle": "批量删除会话",
+      "deleteConfirm": "删除所选 {{count}} 个会话？它们的消息与附件会一并删除，且无法恢复。",
+      "deleted": "已删除 {{count}} 个会话",
+      "skipped": "{{count}} 个进行中的会话未删除",
+      "onlyClosed": "只有已结束的会话可删除"
+    },
     "notify": {
       "on": "已开启桌面提醒",
       "off": "开启桌面提醒",
@@ -137,7 +146,8 @@
       "autoAssign": "自动分配会话",
       "autoAssignHint": "新会话分给在线且进行中会话最少的坐席；没人在线时排队，坐席上线后按先后领取",
       "retentionDays": "会话保留天数（0 = 永久保留）",
-      "retentionHint": "只清理已结束的会话，消息与附件一并删除；每小时检查一次"
+      "retentionHint": "只清理已结束的会话，消息与附件一并删除；每小时检查一次",
+      "readonlyHint": "你可以查看这些设置，但没有保存权限"
     }
   }
 }

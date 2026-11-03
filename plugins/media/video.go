@@ -9,6 +9,7 @@ import (
 	"gorm.io/gorm"
 
 	"nexadmin/core/response"
+	"nexadmin/pkg/idgen"
 )
 
 var videoIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{8,64}$`)
@@ -202,6 +203,27 @@ func (s *service) DeleteVideo(ctx context.Context, id string) error {
 		return err
 	}
 	return s.db.WithContext(ctx).Delete(&Video{}, "id = ?", row.ID).Error
+}
+
+// DeleteVideos 批量删除视频台账：与单条 DeleteVideo 完全同口径——只删本机这一行。
+// 本插件既不落原片也不做转码（直传给外部流媒体，见 plugin.go 的包注释），
+// 所以没有转码产物 / 存储对象 / 缓存要连带清；厂商侧资产仍需在厂商控制台清理，单条和批量一样。
+// 单条删除没有任何「不可删」的判断，批量也不加。
+// 越权 / 不存在的 id 落在租户 scope 外（core/database 的 tenantPlugin 给 DELETE 追加 tenant_id 条件，
+// 与单条同一条路径），删不到也不计入实删数；0 命中报不存在。一条 DELETE 走完，不会删一半。
+func (s *service) DeleteVideos(ctx context.Context, ids []idgen.ID) (int64, error) {
+	list := make([]int64, 0, len(ids))
+	for _, id := range ids {
+		list = append(list, int64(id))
+	}
+	res := s.db.WithContext(ctx).Where("id IN ?", list).Delete(&Video{})
+	if res.Error != nil {
+		return 0, res.Error
+	}
+	if res.RowsAffected == 0 {
+		return 0, response.NotFound("error.not_found")
+	}
+	return res.RowsAffected, nil
 }
 
 func toVideoItem(v Video, download string) VideoItem {

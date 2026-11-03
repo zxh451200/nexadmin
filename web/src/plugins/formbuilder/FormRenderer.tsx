@@ -75,7 +75,8 @@ function FieldView({ f, id, value, error, disabled, preview, onChange }: FieldPr
     <div className="flex flex-col gap-2" data-field={f.key}>
       <Label htmlFor={id} className="flex items-center gap-1">
         <span>{f.title}</span>
-        {f.required ? <span className="text-destructive" aria-hidden="true">*</span> : null}
+        {/* min>=1 的多选/文件在提交时会被 minCount/minFiles 拦截，同样属于必填语义 */}
+        {f.required || (f.min !== undefined && f.min >= 1) ? <span className="text-destructive" aria-hidden="true">*</span> : null}
       </Label>
       <Control f={f} id={id} value={value} disabled={disabled} preview={preview} onChange={onChange} describedBy={describedBy} invalid={!!error} />
       {f.description ? (

@@ -70,7 +70,7 @@ export function UsageTab() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_aigateway.all')}</SelectItem>
+            <SelectItem value={ALL}>{t('plugin_aigateway.filter.allKinds')}</SelectItem>
             {AI_KINDS.map((k) => (
               <SelectItem key={k} value={k}>
                 {t(`plugin_aigateway.kind.${k}`)}

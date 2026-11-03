@@ -210,6 +210,17 @@ defineMock([
   },
   {
     method: 'GET',
+    url: '/plugins/im/attachment-limits',
+    handler: () => ({
+      accept: 'image/png,image/jpeg,image/gif,image/webp,application/pdf,text/plain,.zip,.docx,.xlsx,.pptx',
+      imageBytes: 8 * 1024 * 1024,
+      docBytes: 20 * 1024 * 1024,
+      textBytes: 2 * 1024 * 1024,
+      maxBodyBytes: 20 * 1024 * 1024,
+    }),
+  },
+  {
+    method: 'GET',
     url: '/plugins/im/settings',
     handler: () => ({
       businessHours: false,
@@ -225,6 +236,11 @@ defineMock([
       bannedWords: [],
       autoAssign: false,
     }),
+  },
+  {
+    method: 'PUT',
+    url: '/plugins/im/settings',
+    handler: ({ body }) => body,
   },
   {
     method: 'GET',

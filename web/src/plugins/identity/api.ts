@@ -163,6 +163,15 @@ export function useDeleteSource() {
   return useMutation({ mutationFn: (id: string) => api.del(`${BASE}/sources/${id}`), onSuccess: invalidate })
 }
 
+/** 批量删除身份源：DELETE /plugins/identity/sources?ids=1,2,3，权限与单条删一致；返回实际删除条数 */
+export function useDeleteSources() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (ids: string[]) => api.del<{ deleted: number }>(`${BASE}/sources`, { ids: ids.join(',') }),
+    onSuccess: invalidate,
+  })
+}
+
 export function useTestConnection() {
   return useMutation({ mutationFn: (id: string) => api.post<TestResult>(`${BASE}/sources/${id}/test-connection`) })
 }

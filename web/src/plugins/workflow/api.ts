@@ -3,7 +3,7 @@ import { api } from '@/framework/request/http'
 import type { Page, PageQuery } from '@/framework/request/types'
 
 export type WfStatus = 'running' | 'approved' | 'rejected' | 'cancelled'
-export type ReplierType = 'start' | 'approve' | 'reject' | 'countersign' | 'rollback' | 'escalate' | 'withdraw'
+export type ReplierType = 'start' | 'approve' | 'reject' | 'countersign' | 'transfer' | 'rollback' | 'escalate' | 'withdraw'
 
 export interface WfNode {
   key: string
@@ -161,6 +161,45 @@ export function useDeleteDef() {
   })
 }
 
+/** 批量删除流程定义：deleted 是后端实删条数（越权或已被删的 id 不计入，一条都没删到时报 404）。
+ *  路径写静态字面量：contract_check 靠静态解析这里的第一个实参对照后端路由。 */
+export function useDeleteDefs() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (ids: string[]) => api.del<{ deleted: number }>('/plugins/workflow/defs', { ids: ids.join(',') }),
+    onSuccess: invalidate,
+  })
+}
+
+export interface WfDefVersion {
+  version: number
+  name: string
+  status: string
+  updatedAt: string
+}
+
+export function useDefVersions(id?: string) {
+  return useQuery({
+    queryKey: [...KEY, 'def-versions', id],
+    queryFn: () => api.get<WfDefVersion[]>(`${BASE}/defs/${id}/versions`),
+    enabled: !!id,
+  })
+}
+
+export async function fetchDefVersionXML(id: string, version: number): Promise<string> {
+  const d = await api.get<{ xml: string }>(`${BASE}/defs/${id}/versions/${version}/xml?format=json`, undefined, { silent: true })
+  return d.xml
+}
+
+/** 回滚到历史版本：用那份 XML 走一次保存，版本继续递增，回滚本身也可被再回滚。 */
+export function useRollbackDef() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (v: { id: string; version: number }) => api.post<WfDef>(`${BASE}/defs/${v.id}/versions/${v.version}/rollback`, {}),
+    onSuccess: invalidate,
+  })
+}
+
 export function useStartInstance() {
   const invalidate = useInvalidate()
   return useMutation({
@@ -173,8 +212,23 @@ export function useStartInstance() {
 export function useWfAction() {
   const invalidate = useInvalidate()
   return useMutation({
-    mutationFn: ({ id, action, body }: { id: string; action: 'approve' | 'reject' | 'countersign' | 'rollback' | 'escalate' | 'withdraw'; body: Record<string, unknown> }) =>
+    mutationFn: ({ id, action, body }: { id: string; action: 'approve' | 'reject' | 'countersign' | 'transfer' | 'rollback' | 'escalate' | 'withdraw'; body: Record<string, unknown> }) =>
       api.post<WfInst>(`${BASE}/instances/${id}/${action}`, body),
     onSuccess: invalidate,
   })
+}
+
+/** 催办：发起人给当前待审批人再发一轮站内信提醒。 */
+export function useUrgeInstance() {
+  return useMutation({
+    mutationFn: (id: string) => api.post<null>(`${BASE}/instances/${id}/urge`, {}),
+    onSuccess: useInvalidate(),
+  })
+}
+
+/** 侧边栏待办徽标：我的待办实例数（含公开任务），与「我的待办」tab 同口径。 */
+export function fetchTodoCount(): Promise<number> {
+  return api
+    .get<{ count: number }>(`${BASE}/todo-count`, undefined, { silent: true })
+    .then((d) => d.count)
 }

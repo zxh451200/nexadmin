@@ -1,6 +1,6 @@
 id: report
 name: 报表中心
-version: 1.0.0
+version: 1.1.0
 description: 报表中心 + 数据大屏（结构化数据集：表/列白名单、参数化查询、自动租户与数据范围隔离；柱/折/饼/表格/指标卡；报表页筛选器联动与 xlsx 导出；画布式数据大屏，按角色授权）。官方付费插件。
 author: NexAdmin
 edition: pro

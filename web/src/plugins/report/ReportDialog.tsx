@@ -3,6 +3,7 @@ import { Plus, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { FormGrid, FormGridFull, FormLayout } from '@/framework/components/FormLayout'
+import { RequiredMark } from '@/framework/components/RequiredMark'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
@@ -90,7 +91,7 @@ export function ReportDialog({ open, onOpenChange, editing }: Props) {
         {/* 只有名称/分组两个常规字段，交给 FormGrid 的 auto 判定走单列纵向；写死三列会空出三分之一并让两列错位 */}
         <FormGrid>
           <div className="flex flex-col gap-2">
-            <Label htmlFor="rp-name">{t('common.name')}</Label>
+            <Label htmlFor="rp-name" required>{t('common.name')}</Label>
             <Input id="rp-name" value={builtinText(t, form.name)} maxLength={100} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           </div>
           <div className="flex flex-col gap-2">
@@ -107,7 +108,11 @@ export function ReportDialog({ open, onOpenChange, editing }: Props) {
           </div>
           <FormGridFull>
             <fieldset className="flex flex-col gap-2">
-              <legend className="mb-1 text-sm font-medium">{t('plugin_report.report.items')}</legend>
+              <legend className="mb-1 flex items-center gap-1 text-sm font-medium">
+                {t('plugin_report.report.items')}
+                {/* 组必填：每一行的图表都要选，保存按钮按 items.every(chartId) 把关 */}
+                <RequiredMark />
+              </legend>
               <p className="text-xs text-muted-foreground">{t('plugin_report.report.sectionHint')}</p>
               {cfg.items.map((it, i) => (
                 <div key={i} className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_10rem_7rem_auto]">
@@ -156,7 +161,11 @@ export function ReportDialog({ open, onOpenChange, editing }: Props) {
           </FormGridFull>
           <FormGridFull>
             <fieldset className="flex flex-col gap-2">
-              <legend className="mb-1 text-sm font-medium">{t('plugin_report.report.filters')}</legend>
+              <legend className="mb-1 flex items-center gap-1 text-sm font-medium">
+                {t('plugin_report.report.filters')}
+                {/* 组必填：每行的 label/数据集/列都要填（同 items 口径） */}
+                <RequiredMark />
+              </legend>
               <p className="text-xs text-muted-foreground">{t('plugin_report.report.filtersHint')}</p>
               {cfg.filters.map((f, i) => (
                 <div key={i} className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_9rem_1fr_1fr_auto]">

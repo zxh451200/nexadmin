@@ -24,7 +24,7 @@ func TestGateFailsClosedOnQueryError(t *testing.T) {
 		t.Fatal(err)
 	}
 	mock.ExpectQuery(`SELECT \* FROM ` + "`plg_totp_secret`").WillReturnError(errors.New("db down"))
-	g := &gate{svc: NewService(db)}
+	g := &gate{svc: NewService(db, nil, nil)}
 	req, err := g.Check(context.Background(), auth.GateInput{User: &auth.User{ID: 7, TenantID: 1}})
 	if err == nil || req != nil {
 		t.Fatalf("query error must reject the login, got req=%+v err=%v", req, err)

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
 import { FormLayout } from '@/framework/components/FormLayout'
+import { RequiredMark } from '@/framework/components/RequiredMark'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
@@ -67,7 +68,10 @@ export function CreateFormDialog({ open, onOpenChange, onCreated }: Props) {
         }}
       >
         <div className="flex flex-col gap-2">
-          <Label htmlFor="fb-create-name">{t('plugin_formbuilder.fields.name')}</Label>
+          <Label htmlFor="fb-create-name">
+            {t('plugin_formbuilder.fields.name')}
+            <RequiredMark />
+          </Label>
           <Input id="fb-create-name" value={name} maxLength={100} autoFocus onChange={(e) => setName(e.target.value)} />
         </div>
         <div className="flex flex-col gap-2">

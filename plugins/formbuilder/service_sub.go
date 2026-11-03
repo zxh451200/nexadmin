@@ -230,6 +230,12 @@ func (s *Service) DeleteSubmission(ctx context.Context, formID, id idgen.ID) err
 	return s.store.DeleteSubmission(ctx, formID, id)
 }
 
+// DeleteSubmissions 批量删除某表单下的提交：删除范围始终是 (当前租户, formID)，
+// 混进来的其他表单的提交 ID 一条也删不到，并且会让整批以 404 失败。
+func (s *Service) DeleteSubmissions(ctx context.Context, formID idgen.ID, ids []idgen.ID) (int64, error) {
+	return s.store.DeleteSubmissions(ctx, formID, dedupeIDs(ids))
+}
+
 // Roles / Users 给设计器的可见范围选择器提供候选项。
 func (s *Service) Roles(ctx context.Context) ([]RoleOption, error) {
 	list, err := s.dir.Roles(ctx)

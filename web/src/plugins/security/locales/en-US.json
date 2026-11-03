@@ -81,6 +81,8 @@
       "off": "Off",
       "empty": "No rules yet",
       "deleteConfirm": "Delete rule {{cidr}}?",
+      "deleteBatchConfirm": "Delete the {{count}} selected rule(s)? This changes login access control immediately. If the whole batch would lock out your current IP, none of them are deleted.",
+      "deletedPartial": "Deleted {{deleted}} of {{total}} rule(s) (the rest may already be gone)",
       "errors": { "cidrRequired": "Enter an IP or CIDR" }
     },
     "logs": {

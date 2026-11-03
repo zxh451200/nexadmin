@@ -23,6 +23,20 @@ type Def struct {
 
 func (Def) TableName() string { return "plg_workflow_def" }
 
+// DefVersion 是定义的历史版本快照（表 plg_workflow_def_version）。当前版本始终在
+// plg_workflow_def 上；每次覆盖保存前把旧行存进这里，改坏了可回看、可回滚。
+type DefVersion struct {
+	database.TenantModel
+	DefID    idgen.ID `gorm:"column:def_id;index:idx_plg_workflow_def_version" json:"defId"`
+	DefKey   string   `gorm:"column:def_key" json:"defKey"`
+	Version  int      `gorm:"column:version" json:"version"`
+	Name     string   `gorm:"column:name" json:"name"`
+	Status   string   `gorm:"column:status" json:"status"`
+	BpmnXML  string   `gorm:"column:bpmn_xml;type:text" json:"-"`
+}
+
+func (DefVersion) TableName() string { return "plg_workflow_def_version" }
+
 // 定义状态。
 const (
 	DefDraft     = "draft"

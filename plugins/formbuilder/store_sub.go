@@ -166,6 +166,41 @@ func (s *gormStore) DeleteSubmission(ctx context.Context, formID, id idgen.ID) e
 	})
 }
 
+// DeleteSubmissions 是 DeleteSubmission 的批量版，在一个事务里做完：
+//
+//	DELETE FROM ...submission WHERE tenant_id = ? AND form_id = ? AND id IN (?)
+//	UPDATE  ...form SET submission_count = submission_count - <实删条数> WHERE tenant_id = ? AND id = ?
+//
+// form_id 条件留在 WHERE 里是这条接口的关键：请求体里混进别的表单的提交 id 时它匹配不到行，
+// 于是 RowsAffected < len(ids)，护栏触发、整批回滚——既删不到别人表单的数据，也不会"顺手删掉能删的"。
+// 名额归还用 CASE 兜住减法下溢（计数与真实行数漂移时最多减到 0），与单条删除的 submission_count > 0 同语义。
+func (s *gormStore) DeleteSubmissions(ctx context.Context, formID idgen.ID, ids []idgen.ID) (int64, error) {
+	tid, ok := tenant.From(ctx)
+	if !ok || tid == 0 {
+		return 0, database.ErrNoTenant
+	}
+	var deleted int64
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		res := tx.Where("tenant_id = ? AND form_id = ? AND id IN ?", int64(tid), int64(formID), ids).Delete(&Submission{})
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected != int64(len(ids)) {
+			return errNotFound
+		}
+		if err := tx.Model(&Form{}).Where("tenant_id = ? AND id = ?", int64(tid), int64(formID)).
+			UpdateColumn("submission_count", gorm.Expr("CASE WHEN submission_count >= ? THEN submission_count - ? ELSE 0 END", res.RowsAffected, res.RowsAffected)).Error; err != nil {
+			return err
+		}
+		deleted = res.RowsAffected
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	return deleted, nil
+}
+
 func (s *gormStore) subScope(ctx context.Context, q SubQuery) (*gorm.DB, error) {
 	db, _, err := s.scope(ctx, &Submission{})
 	if err != nil {

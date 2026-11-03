@@ -91,7 +91,7 @@ export function RuleFormDialog({ open, onOpenChange, editing }: Props) {
         </div>
         <FormGridFull>
           <div className="flex flex-col gap-2">
-            <Label htmlFor="sec-rule-cidr">{t('plugin_security.ip.cidr')}</Label>
+            <Label htmlFor="sec-rule-cidr" required>{t('plugin_security.ip.cidr')}</Label>
             <Input
               id="sec-rule-cidr"
               className="font-mono"

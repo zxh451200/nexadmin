@@ -1,8 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { RefreshCw, RotateCcw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
+import { RequiredMark } from '@/framework/components/RequiredMark'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { FilterBar } from '@/framework/components/FilterBar'
@@ -94,11 +96,26 @@ function RefundSyncCell({ refund }: { refund: PayRefund }) {
 export function RefundsTab() {
   const { t, i18n } = useTranslation()
   const confirm = useConfirm()
+  const [params, setParams] = useSearchParams()
+  // 订单页「去退款」带着单号过来（?refundNo=PAY…）：自动打开弹窗并预填；
+  // 用完即清 URL 参数，下次手动打开不残留。
+  const linkedNo = params.get('refundNo') ?? ''
+  const [initialNo, setInitialNo] = useState('')
   const [draft, setDraft] = useState<RefundQuery>({})
   const [filters, setFilters] = useState<RefundQuery>({})
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [formOpen, setFormOpen] = useState(false)
+
+  useEffect(() => {
+    if (!linkedNo) return
+    setInitialNo(linkedNo)
+    setFormOpen(true)
+    const next = new URLSearchParams(params)
+    next.delete('refundNo')
+    setParams(next, { replace: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkedNo])
 
   const { data, isLoading, isError, refetch } = useRefunds({ ...filters, page, pageSize })
   const create = useCreateRefund()
@@ -159,7 +176,7 @@ export function RefundsTab() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_pay.all')}</SelectItem>
+            <SelectItem value={ALL}>{t('plugin_pay.filter.allStatuses')}</SelectItem>
             {(['pending', 'succeeded', 'failed'] as const).map((s) => (
               <SelectItem key={s} value={s}>
                 {t(`plugin_pay.refundStatus.${s}`)}
@@ -196,6 +213,7 @@ export function RefundsTab() {
 
       <RefundDialog
         open={formOpen}
+        initialPaymentNo={initialNo}
         onClose={() => setFormOpen(false)}
         onSubmit={async (paymentNo, amountMinor, reason) => {
           if (!(await confirm({ destructive: true, description: t('plugin_pay.refundConfirm', { no: paymentNo }) }))) return false
@@ -215,10 +233,13 @@ export function RefundsTab() {
 
 function RefundDialog({
   open,
+  initialPaymentNo,
   onClose,
   onSubmit,
 }: {
   open: boolean
+  /** 从订单页带过来的预填单号；每次打开时重置为它 */
+  initialPaymentNo?: string
   onClose: () => void
   onSubmit: (paymentNo: string, amountMinor: number, reason: string) => Promise<boolean>
 }) {
@@ -226,6 +247,13 @@ function RefundDialog({
   const [paymentNo, setPaymentNo] = useState('')
   const [amount, setAmount] = useState('')
   const [reason, setReason] = useState('')
+  // 每次打开都按预填单号重置：弹窗常挂载，上一次的输入不能漏进这一次
+  useEffect(() => {
+    if (!open) return
+    setPaymentNo(initialPaymentNo ?? '')
+    setAmount('')
+    setReason('')
+  }, [open, initialPaymentNo])
   const submit = async () => {
     const minor = Math.round(Number(amount) * 100)
     if (!paymentNo.trim() || !minor || minor <= 0) {
@@ -254,11 +282,17 @@ function RefundDialog({
     >
       <div className="flex flex-col gap-3 text-sm">
         <label className="flex flex-col gap-1">
-          {t('plugin_pay.fields.paymentNo')}
+          <span>
+            {t('plugin_pay.fields.paymentNo')}
+            <RequiredMark />
+          </span>
           <Input value={paymentNo} onChange={(e) => setPaymentNo(e.target.value)} placeholder="PAY..." />
         </label>
         <label className="flex flex-col gap-1">
-          {t('plugin_pay.fields.amount')}
+          <span>
+            {t('plugin_pay.fields.amount')}
+            <RequiredMark />
+          </span>
           <Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} />
         </label>
         <label className="flex flex-col gap-1">

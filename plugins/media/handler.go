@@ -102,6 +102,22 @@ func (h *handler) DeleteVideo(c *gin.Context) {
 	response.OK(c, nil)
 }
 
+// DeleteVideosBatch DELETE /plugins/media/video/assets?ids=1,2,3 —— 批量删台账，权限码复用单条删除的 media:optimize。
+// ids 缺失或任一项非法由 response.ParseIDsQuery 直接 400，绝不退化成「不带 ids 就清台账」。
+func (h *handler) DeleteVideosBatch(c *gin.Context) {
+	ids, err := response.ParseIDsQuery(c)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	n, err := h.svc.DeleteVideos(c.Request.Context(), ids)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, gin.H{"deleted": n})
+}
+
 func usernameOf(c *gin.Context) string {
 	if cl := auth.ClaimsFrom(c); cl != nil {
 		return cl.Username

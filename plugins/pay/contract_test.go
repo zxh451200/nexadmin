@@ -135,6 +135,7 @@ func TestContractErrorCodesAreLocalized(t *testing.T) {
 		errExpired, errRefundExceeds, errSignInvalid, errChannelUnavailable, errChannelError,
 		errNotFound, errTenantMismatch, errIdempotencyConflict, errInternal,
 		errCapabilityUnsupported, errNotifyStaleKey, errPayoutSettlementTaken,
+		errDateInvalid, errExportTooMany,
 	} {
 		keys[strings.TrimPrefix(k, "pay.")] = true
 	}
