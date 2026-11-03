@@ -11,6 +11,7 @@ import (
 	"net/mail"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -18,6 +19,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
+	"nexadmin/core"
 	"nexadmin/core/response"
 	"nexadmin/pkg/htmlsafe"
 	pi18n "nexadmin/pkg/i18n"
@@ -25,9 +27,17 @@ import (
 )
 
 // Service 是官网内容业务层：站点设置（单行）、导航、特性、页面、新闻的 CRUD 与公开页数据装配。
-type Service struct{ db *gorm.DB }
+type Service struct {
+	db *gorm.DB
+	// cfgImageMaxMB 是 config.yaml 的 upload.max_size_image_mb（<=0 = 未配），由模块注册时登记，
+	// 系统参数「上传限制」没设时用它兜底。
+	cfgImageMaxMB float64
+}
 
 func NewService(db *gorm.DB) *Service { return &Service{db: db} }
+
+// SetConfigImageMaxMB 登记 config.yaml 的图片大小上限（MB）作为媒体上传的兜底值。
+func (s *Service) SetConfigImageMaxMB(mb int) { s.cfgImageMaxMB = float64(mb) }
 
 // slugReg 允许小写字母、数字、连字符。
 var slugReg = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,63}$`)
@@ -71,7 +81,10 @@ const (
 )
 
 // socialPlatforms 是页脚社交图标的可选值，必须与 render.go 的 socialIconPaths 键一致（有测试兜底）。
-var socialPlatforms = []string{"github", "x", "linkedin", "youtube", "wechat", "weibo", "bilibili", "rss", "mail"}
+var socialPlatforms = []string{
+	"github", "x", "linkedin", "youtube", "instagram", "facebook", "discord", "telegram",
+	"whatsapp", "reddit", "tiktok", "twitch", "mastodon", "wechat", "weibo", "bilibili", "rss", "mail",
+}
 
 func validSocialPlatform(p string) bool {
 	for _, v := range socialPlatforms {
@@ -223,6 +236,17 @@ func (s *Service) SaveSettings(ctx context.Context, f SettingForm) (*Setting, er
 	if row.QRCodeURL != "" && !footerURLValid(row.QRCodeURL, false) {
 		return nil, response.BadRequest("website.qr_url_invalid")
 	}
+	row.FaviconURL = trimLen(f.FaviconURL, 255)
+	row.OgImageURL = trimLen(f.OgImageURL, 255)
+	if row.FaviconURL != "" && !footerURLValid(row.FaviconURL, false) {
+		return nil, response.BadRequest("website.url_invalid")
+	}
+	if row.OgImageURL != "" && !footerURLValid(row.OgImageURL, false) {
+		return nil, response.BadRequest("website.url_invalid")
+	}
+	// head 注入限长：统计脚本几十行足够，超长多半是误把整页代码粘进来
+	row.HeadCode = trimLen(f.HeadCode, 5000)
+	row.TitleSuffix = trimLen(f.TitleSuffix, 100)
 	socials, err := normalizeSocials(f.Socials)
 	if err != nil {
 		return nil, err
@@ -385,6 +409,38 @@ func (s *Service) DeleteNav(ctx context.Context, id idgen.ID) error {
 	})
 }
 
+// DeleteNavs 批量删除导航：每一项连同其全部后代一起删（与单条删除同口径），返回实际删除条数。
+func (s *Service) DeleteNavs(ctx context.Context, ids []idgen.ID) (int64, error) {
+	var n int64
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var rows []Nav
+		if err := tx.Select("id", "parent_id").Find(&rows).Error; err != nil {
+			return err
+		}
+		parents := navParentMap(rows)
+		set := make(map[uint64]bool, len(ids))
+		for _, id := range ids {
+			for _, v := range navSubtreeIDs(parents, uint64(id)) {
+				set[v] = true
+			}
+		}
+		if len(set) == 0 {
+			return response.NotFound("website.nav_not_found")
+		}
+		list := make([]int64, 0, len(set))
+		for v := range set {
+			list = append(list, int64(v))
+		}
+		res := tx.Delete(&Nav{}, "id IN ?", list)
+		if res.Error != nil {
+			return res.Error
+		}
+		n = res.RowsAffected
+		return nil
+	})
+	return n, err
+}
+
 // ReorderNavs 在一个事务内批量写入 parentId / sort（拖拽排序与改上级共用）。
 // sort 为 0 时按 items 顺序补 10、20…，兼容只传 id 的调用方。
 func (s *Service) ReorderNavs(ctx context.Context, items []NavOrderItem) error {
@@ -395,6 +451,23 @@ func (s *Service) ReorderNavs(ctx context.Context, items []NavOrderItem) error {
 		var rows []Nav
 		if err := tx.Select("id", "parent_id").Find(&rows).Error; err != nil {
 			return err
+		}
+		// 孤儿行（父级已被并发删除/历史脏数据）会卡死整树校验：任何一次拖拽都报
+		// nav_parent_missing。先把它们静默洗回顶级，再继续——这与前端 buildNavTree
+		// 对孤儿按顶级兜底是同一口径，管理员在列表里也能看见并手动归位。
+		known := make(map[uint64]bool, len(rows))
+		for _, r := range rows {
+			known[uint64(r.ID)] = true
+		}
+		for _, r := range rows {
+			pid := uint64(r.ParentID)
+			if pid == 0 || known[pid] {
+				continue
+			}
+			if err := tx.Model(&Nav{}).Where("id = ?", int64(r.ID)).Update("parent_id", 0).Error; err != nil {
+				return err
+			}
+			r.ParentID = 0
 		}
 		parents := navParentMap(rows)
 		for i := range items {
@@ -431,6 +504,10 @@ func (s *Service) SaveFeature(ctx context.Context, id idgen.ID, f FeatureForm) (
 	f.Title = trimLen(f.Title, 128)
 	f.Description = trimLen(f.Description, 500)
 	f.Icon = trimLen(f.Icon, 64)
+	if _, ok := iconPaths[f.Icon]; !ok {
+		// 图标名只收模板内置集合；未知名（含历史残留）退回空串，官网渲染有 defaultIcon 兜底。
+		f.Icon = ""
+	}
 	if f.Title == "" {
 		return nil, response.BadRequest("website.feature_title_required")
 	}
@@ -457,17 +534,32 @@ func (s *Service) DeleteFeature(ctx context.Context, id idgen.ID) error {
 	return s.db.WithContext(ctx).Delete(&Feature{}, "id = ?", int64(id)).Error
 }
 
+// DeleteFeatures 批量删除特性卡片，返回实际删除条数（语义同 DeletePages）。
+func (s *Service) DeleteFeatures(ctx context.Context, ids []idgen.ID) (int64, error) {
+	res := s.db.WithContext(ctx).Delete(&Feature{}, "id IN ?", int64IDs(ids))
+	if res.Error != nil {
+		return 0, res.Error
+	}
+	if res.RowsAffected == 0 {
+		return 0, response.NotFound("website.feature_not_found")
+	}
+	return res.RowsAffected, nil
+}
+
 // ---- 页面 / 新闻共用的列表查询 ----
 
 // ContentQuery 是页面/新闻的列表查询。
 type ContentQuery struct {
 	Keyword string
-	Status  string // "" | "published" | "draft"
+	// Status："published" | "draft" | "scheduled"（已发布但 published_at 在未来，到点才公开）。
+	Status string
 	// Missing 是语言码：筛「该语言完全没有译文」的条目。不是「缺某个字段」，
 	// 那种细粒度要靠译文 JSON 里的键判断，跨引擎不通用，交给界面上的 done/total 徽标。
-	Missing  string
-	Page     int
-	PageSize int
+	Missing string
+	// CategoryID 是新闻分类筛选；页面列表不消费这个字段。
+	CategoryID idgen.ID
+	Page       int
+	PageSize   int
 }
 
 func contentTx(tx *gorm.DB, q ContentQuery) *gorm.DB {
@@ -479,6 +571,13 @@ func contentTx(tx *gorm.DB, q ContentQuery) *gorm.DB {
 		tx = tx.Where("published = ?", true)
 	case "draft":
 		tx = tx.Where("published = ?", false)
+	case "scheduled":
+		// 定时发布：整篇已置发布、但发布时间还在未来。
+		tx = tx.Where("published = ? AND published_at IS NOT NULL AND published_at > ?", true, time.Now().UTC())
+	}
+	// 分类筛选只对新闻生效（关联表固定，无用户输入拼接）。
+	if q.CategoryID > 0 {
+		tx = tx.Where("id IN (SELECT post_id FROM plg_website_post_category WHERE category_id = ?)", int64(q.CategoryID))
 	}
 	if code := strings.TrimSpace(q.Missing); code != "" {
 		// 只接受已配置的语言，并且用规范 code 去匹配：拼出来的是 LIKE 的**参数值**，
@@ -506,7 +605,9 @@ func (s *Service) ListPages(ctx context.Context, q ContentQuery) ([]Page, int64,
 func (s *Service) SavePage(ctx context.Context, id idgen.ID, f PageForm) (*Page, error) {
 	f.Slug = strings.TrimSpace(f.Slug)
 	f.Title = trimLen(f.Title, 200)
+	f.SeoTitle = trimLen(f.SeoTitle, 200)
 	f.SeoDesc = trimLen(f.SeoDesc, 300)
+	f.OgImage = trimLen(f.OgImage, 255)
 	if err := ValidateSlug(f.Slug); err != nil {
 		return nil, err
 	}
@@ -525,10 +626,11 @@ func (s *Service) SavePage(ctx context.Context, id idgen.ID, f PageForm) (*Page,
 	if err != nil {
 		return nil, response.BadRequest("website.i18n_invalid").Wrap(err)
 	}
-	row.Slug, row.Title, row.SeoDesc = f.Slug, f.Title, f.SeoDesc
+	row.Slug, row.Title, row.SeoTitle, row.SeoDesc = f.Slug, f.Title, f.SeoTitle, f.SeoDesc
+	row.OgImage, row.Noindex = f.OgImage, f.NoIndex
 	row.Content, row.Published, row.I18nJSON = htmlsafe.Sanitize(f.Content), f.Published, i18n
 	pub, err := pi18n.NormalizePublish(f.PublishedJSON, f.Published, pi18n.ParseDoc(i18n),
-		map[string]string{"title": row.Title, "seoDesc": row.SeoDesc, "content": row.Content}, siteLocales{}, pageI18nFields)
+		map[string]string{"title": row.Title, "seoTitle": row.SeoTitle, "seoDesc": row.SeoDesc, "content": row.Content}, siteLocales{}, pageI18nFields)
 	if err != nil {
 		return nil, response.BadRequest("website.i18n_invalid").Wrap(err)
 	}
@@ -543,6 +645,104 @@ func (s *Service) DeletePage(ctx context.Context, id idgen.ID) error {
 	return s.db.WithContext(ctx).Delete(&Page{}, "id = ?", int64(id)).Error
 }
 
+// SetPagesStatus 批量发布或下线单页，返回实际改动条数。语义与新闻批量一致：
+// 只动原文发布位，各语言的发布开关（published_json）不碰。
+func (s *Service) SetPagesStatus(ctx context.Context, ids []idgen.ID, status string) (int64, error) {
+	if len(ids) == 0 {
+		return 0, response.BadRequest("website.page_ids_empty")
+	}
+	tx := s.db.WithContext(ctx).Model(&Page{}).Where("id IN ?", int64IDs(ids))
+	switch status {
+	case "published":
+		tx = tx.Where("published = ?", false).Update("published", true)
+	case "draft":
+		tx = tx.Where("published = ?", true).Update("published", false)
+	default:
+		return 0, response.BadRequest("website.page_status_invalid")
+	}
+	return tx.RowsAffected, tx.Error
+}
+
+// DeletePages 批量删除单页，返回实际删除条数。
+func (s *Service) DeletePages(ctx context.Context, ids []idgen.ID) (int64, error) {
+	res := s.db.WithContext(ctx).Delete(&Page{}, "id IN ?", int64IDs(ids))
+	if res.Error != nil {
+		return 0, res.Error
+	}
+	if res.RowsAffected == 0 {
+		return 0, response.NotFound("website.page_not_found")
+	}
+	return res.RowsAffected, nil
+}
+
+// PageByID 按主键取页面（含草稿）；管理端签发预览链接用。
+func (s *Service) PageByID(ctx context.Context, id idgen.ID) (*Page, error) {
+	var row Page
+	if err := s.db.WithContext(ctx).First(&row, "id = ?", int64(id)).Error; err != nil {
+		return nil, err
+	}
+	return &row, nil
+}
+
+// PageBySlug 按 slug 取页面（不看发布态）并按语言落译文。预览链路用：
+// 发布校验由调用方决定（PublishedPageBy 管公开访问，预览令牌管例外放行）。
+func (s *Service) PageBySlug(ctx context.Context, slug, lang string) (*Page, error) {
+	var row Page
+	if err := s.db.WithContext(ctx).Where("slug = ?", slug).First(&row).Error; err != nil {
+		return nil, err
+	}
+	row.localize(lang)
+	return &row, nil
+}
+
+// CopyPage 复制一篇页面：内容与译文原样带走，发布态归零（副本一律是草稿，
+// 不会顺手把整份多语言内容顶上线），slug 取 <slug>-copy，撞车递增为 -copy-2、-copy-3…。
+func (s *Service) CopyPage(ctx context.Context, id idgen.ID) (*Page, error) {
+	var src Page
+	if err := s.db.WithContext(ctx).First(&src, "id = ?", int64(id)).Error; err != nil {
+		return nil, err
+	}
+	slug, err := s.freePageSlug(ctx, src.Slug)
+	if err != nil {
+		return nil, err
+	}
+	row := Page{
+		Slug: slug, Title: src.Title, SeoTitle: src.SeoTitle, SeoDesc: src.SeoDesc, Content: src.Content,
+		OgImage: src.OgImage, I18nJSON: src.I18nJSON,
+	}
+	if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
+		return nil, err
+	}
+	return &row, nil
+}
+
+// freePageSlug 给副本挑一个没被占用的 slug；slug 列上限 64，放不下后缀就先截短原文
+// （base 本身只含合法字符，截短不破坏 slug 规则）。
+func (s *Service) freePageSlug(ctx context.Context, base string) (string, error) {
+	candidate := truncateSlug(base+"-copy", "page")
+	for i := 2; ; i++ {
+		var n int64
+		if err := s.db.WithContext(ctx).Model(&Page{}).Where("slug = ?", candidate).Count(&n).Error; err != nil {
+			return "", err
+		}
+		if n == 0 {
+			return candidate, nil
+		}
+		candidate = truncateSlug(fmt.Sprintf("%s-copy-%d", base, i), "page")
+	}
+}
+
+// truncateSlug 把 slug 收进列宽（64）内；截到空串就回退 fallback，保证仍是合法 slug。
+func truncateSlug(s, fallback string) string {
+	if len(s) > 64 {
+		s = strings.TrimRight(s[:64], "-")
+	}
+	if s == "" {
+		s = fallback
+	}
+	return s
+}
+
 func (s *Service) ListPosts(ctx context.Context, q ContentQuery) ([]Post, int64, error) {
 	tx := contentTx(s.db.WithContext(ctx).Model(&Post{}), q)
 	var total int64
@@ -550,7 +750,9 @@ func (s *Service) ListPosts(ctx context.Context, q ContentQuery) ([]Post, int64,
 		return nil, 0, err
 	}
 	var rows []Post
-	if err := tx.Order("updated_at DESC").Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Find(&rows).Error; err != nil {
+	// 列表要展示分类徽标，整页一次带出；关联行数远小于页面行数，不构成 N+1。
+	if err := tx.Preload("Categories").Preload("Tags").Order("updated_at DESC").
+		Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Find(&rows).Error; err != nil {
 		return nil, 0, err
 	}
 	return rows, total, nil
@@ -560,13 +762,34 @@ func (s *Service) SavePost(ctx context.Context, id idgen.ID, f PostForm) (*Post,
 	f.Slug = strings.TrimSpace(f.Slug)
 	f.Title = trimLen(f.Title, 200)
 	f.Summary = trimLen(f.Summary, 500)
+	f.SeoTitle = trimLen(f.SeoTitle, 200)
 	f.SeoDesc = trimLen(f.SeoDesc, 300)
+	f.SeoKeywords = trimLen(f.SeoKeywords, 300)
 	f.CoverURL = trimLen(f.CoverURL, 255)
 	if err := ValidateSlug(f.Slug); err != nil {
 		return nil, err
 	}
 	if f.Title == "" {
 		return nil, response.BadRequest("website.post_title_required")
+	}
+	// 标签上限先挡住：超出的部分静默丢弃会让人以为都打上了。
+	if len(f.Tags) > maxTagsPerPost {
+		return nil, response.BadRequest("website.tag_too_many", maxTagsPerPost)
+	}
+	// 分类只认已存在的：并发下被删掉的分类静默剔除，保存后回读的真实关联就是界面的下一帧。
+	var cats []Category
+	if len(f.CategoryIDs) > 0 {
+		ids := make([]int64, 0, len(f.CategoryIDs))
+		for _, c := range f.CategoryIDs {
+			if c > 0 {
+				ids = append(ids, int64(c))
+			}
+		}
+		if len(ids) > 0 {
+			if err := s.db.WithContext(ctx).Where("id IN ?", ids).Find(&cats).Error; err != nil {
+				return nil, err
+			}
+		}
 	}
 	var row Post
 	if id != 0 {
@@ -581,10 +804,17 @@ func (s *Service) SavePost(ctx context.Context, id idgen.ID, f PostForm) (*Post,
 	if err != nil {
 		return nil, response.BadRequest("website.i18n_invalid").Wrap(err)
 	}
-	row.Slug, row.Title, row.CoverURL, row.Summary, row.SeoDesc = f.Slug, f.Title, f.CoverURL, f.Summary, f.SeoDesc
+	row.Slug, row.Title, row.CoverURL, row.SeoDesc = f.Slug, f.Title, f.CoverURL, f.SeoDesc
+	row.SeoKeywords, row.SeoTitle, row.Noindex = f.SeoKeywords, f.SeoTitle, f.NoIndex
+	row.Author, row.Pinned = trimLen(f.Author, 64), f.Pinned
 	row.Content, row.Published, row.I18nJSON = htmlsafe.Sanitize(f.Content), f.Published, i18n
+	// 摘要留空时从正文截一段：竞品的入门体验，别让每篇文章都得手写摘要。
+	if f.Summary == "" && row.Content != "" {
+		f.Summary = summaryFromHTML(row.Content, summaryMaxRunes)
+	}
+	row.Summary = f.Summary
 	pub, err := pi18n.NormalizePublish(f.PublishedJSON, f.Published, pi18n.ParseDoc(i18n),
-		map[string]string{"title": row.Title, "summary": row.Summary, "seoDesc": row.SeoDesc, "content": row.Content}, siteLocales{}, postI18nFields)
+		map[string]string{"title": row.Title, "summary": row.Summary, "seoTitle": row.SeoTitle, "seoDesc": row.SeoDesc, "content": row.Content}, siteLocales{}, postI18nFields)
 	if err != nil {
 		return nil, response.BadRequest("website.i18n_invalid").Wrap(err)
 	}
@@ -592,7 +822,7 @@ func (s *Service) SavePost(ctx context.Context, id idgen.ID, f PostForm) (*Post,
 	if f.Published {
 		switch {
 		case f.PublishedAt != nil:
-			// 手动指定：回填历史文章的真实发布时间，或修正误发时间。
+			// 手动指定：回填历史文章的真实发布时间、修正误发，或设未来时间做定时发布。
 			t := f.PublishedAt.UTC()
 			row.PublishedAt = &t
 		case !wasPublished || row.PublishedAt == nil:
@@ -600,14 +830,230 @@ func (s *Service) SavePost(ctx context.Context, id idgen.ID, f PostForm) (*Post,
 			row.PublishedAt = &now
 		}
 	}
+	// 正文与关联一起写：分类挂一半算保存失败，界面上重新来一遍比解释一半成功容易。
+	// 标签也在事务里找或建：新闻没存上却长出一个新标签，是没人会来清理的脏数据。
+	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Save(&row).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&row).Association("Categories").Replace(cats); err != nil {
+			return err
+		}
+		tags, terr := resolveTagsTx(tx, f.Tags)
+		if terr != nil {
+			return terr
+		}
+		if err := tx.Model(&row).Association("Tags").Replace(tags); err != nil {
+			return err
+		}
+		row.Tags = tags
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &row, nil
+}
+
+// summaryMaxRunes 是自动摘要的截取长度（rune 数）：列表页一行简介的量级。
+const summaryMaxRunes = 120
+
+// summaryFromHTML 从消毒后的富文本里剥出纯文本、压掉空白，截 max 个 rune 当摘要。
+// 输入已经过 htmlsafe.Sanitize，剩下的实体只剩转义文本（&amp; 之类），顺手还原。
+func summaryFromHTML(s string, max int) string {
+	var b strings.Builder
+	inTag := false
+	for _, r := range s {
+		switch {
+		case r == '<':
+			inTag = true
+			b.WriteRune(' ') // 块级标签的边界退化为一个空格，词与词不粘连
+		case r == '>':
+			inTag = false
+		case !inTag:
+			b.WriteRune(r)
+		}
+	}
+	plain := strings.Join(strings.Fields(b.String()), " ")
+	plain = strings.NewReplacer("&amp;", "&", "&lt;", "<", "&gt;", ">", "&quot;", `"`, "&#39;", "'").Replace(plain)
+	runes := []rune(plain)
+	if len(runes) > max {
+		return string(runes[:max]) + "…"
+	}
+	return plain
+}
+
+func (s *Service) DeletePost(ctx context.Context, id idgen.ID) error {
+	return s.db.WithContext(ctx).Delete(&Post{}, "id = ?", int64(id)).Error
+}
+
+// ---- 新闻分类 ----
+
+// ListCategories 带每个栏目当前的新闻数：界面要按「这个栏目下有多少篇」排栏目，
+// 删栏目之前也得让人先看见影响面。
+func (s *Service) ListCategories(ctx context.Context) ([]Category, error) {
+	var rows []Category
+	if err := s.db.WithContext(ctx).Order("sort, id").Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	counts, err := categoryPostCounts(s.db.WithContext(ctx))
+	if err != nil {
+		return nil, err
+	}
+	for i := range rows {
+		rows[i].PostCount = counts[int64(rows[i].ID)]
+	}
+	return rows, nil
+}
+
+func (s *Service) SaveCategory(ctx context.Context, id idgen.ID, f CategoryForm) (*Category, error) {
+	f.Title = trimLen(f.Title, 100)
+	f.Slug = strings.TrimSpace(f.Slug)
+	if err := ValidateSlug(f.Slug); err != nil {
+		return nil, err
+	}
+	if f.Title == "" {
+		return nil, response.BadRequest("website.category_title_required")
+	}
+	var row Category
+	if id != 0 {
+		if err := s.db.WithContext(ctx).First(&row, "id = ?", int64(id)).Error; err != nil {
+			return nil, err
+		}
+	} else {
+		row = Category{}
+	}
+	row.Title, row.Slug, row.Sort = f.Title, f.Slug, f.Sort
 	if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
 		return nil, err
 	}
 	return &row, nil
 }
 
-func (s *Service) DeletePost(ctx context.Context, id idgen.ID) error {
-	return s.db.WithContext(ctx).Delete(&Post{}, "id = ?", int64(id)).Error
+// DeleteCategory 连同新闻-分类关联一起删：留着悬空关联会让列表的分类徽标显示幽灵分类。
+func (s *Service) DeleteCategory(ctx context.Context, id idgen.ID) error {
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Delete(&Category{}, "id = ?", int64(id)).Error; err != nil {
+			return err
+		}
+		return tx.Exec("DELETE FROM plg_website_post_category WHERE category_id = ?", int64(id)).Error
+	})
+}
+
+// ---- 新闻批量操作 / 导出 ----
+
+// SetPostsStatus 批量发布或下线新闻，返回实际改动条数。
+// 发布时只补齐空的发布时间：定时文章的未来时间不动（批量发布不是「立即上线」的强制令），
+// 各语言的发布开关（published_json）也不动——那是对编辑工作成果的按语言裁剪，批量动作不该覆盖。
+func (s *Service) SetPostsStatus(ctx context.Context, ids []idgen.ID, status string) (int64, error) {
+	if len(ids) == 0 {
+		return 0, response.BadRequest("website.post_ids_empty")
+	}
+	tx := s.db.WithContext(ctx).Model(&Post{}).Where("id IN ?", int64IDs(ids))
+	switch status {
+	case "published":
+		tx = tx.Where("published = ?", false).Updates(map[string]any{
+			"published":    true,
+			"published_at": gorm.Expr("COALESCE(published_at, ?)", time.Now().UTC()),
+		})
+	case "draft":
+		// 原文下线 = 整篇下线（含全部语言），语义与单条保存一致。
+		tx = tx.Where("published = ?", true).Update("published", false)
+	default:
+		return 0, response.BadRequest("website.post_status_invalid")
+	}
+	return tx.RowsAffected, tx.Error
+}
+
+// DeletePosts 批量删除新闻，返回实际删除条数；部分没命中是并发下的常态，如实返回。
+func (s *Service) DeletePosts(ctx context.Context, ids []idgen.ID) (int64, error) {
+	if len(ids) == 0 {
+		return 0, response.BadRequest("website.post_ids_empty")
+	}
+	res := s.db.WithContext(ctx).Delete(&Post{}, "id IN ?", int64IDs(ids))
+	if res.Error != nil {
+		return 0, res.Error
+	}
+	if res.RowsAffected == 0 {
+		return 0, response.NotFound("website.post_not_found")
+	}
+	return res.RowsAffected, nil
+}
+
+// ExportPosts 取当前筛选下的全部新闻（不带分页，上限 exportMax），前端据此生成 CSV；
+// 筛选与 ListPosts 同源，导出文件和页面上看到的列表对得上。
+func (s *Service) ExportPosts(ctx context.Context, q ContentQuery) ([]Post, error) {
+	var rows []Post
+	err := contentTx(s.db.WithContext(ctx).Model(&Post{}), q).Preload("Categories").Preload("Tags").
+		Order("updated_at DESC, id DESC").Limit(exportMax).Find(&rows).Error
+	return rows, err
+}
+
+// PostByID 按主键取新闻（含草稿）；管理端签发预览链接用。
+func (s *Service) PostByID(ctx context.Context, id idgen.ID) (*Post, error) {
+	var row Post
+	if err := s.db.WithContext(ctx).First(&row, "id = ?", int64(id)).Error; err != nil {
+		return nil, err
+	}
+	return &row, nil
+}
+
+// PostBySlug 按 slug 取新闻（不看发布态）并按语言落译文。预览链路用：
+// 发布校验由调用方决定（PublishedPostBy 管公开访问，预览令牌管例外放行）。
+func (s *Service) PostBySlug(ctx context.Context, slug, lang string) (*Post, error) {
+	var row Post
+	if err := s.db.WithContext(ctx).Preload("Categories").Preload("Tags").Where("slug = ?", slug).First(&row).Error; err != nil {
+		return nil, err
+	}
+	row.localize(lang)
+	return &row, nil
+}
+
+// CopyPost 复制一篇新闻：内容、译文、分类与标签原样带走，发布态归零（副本一律是草稿，
+// 不会顺手把整份多语言内容顶上线），slug 取 <slug>-copy，撞车递增为 -copy-2、-copy-3…。
+func (s *Service) CopyPost(ctx context.Context, id idgen.ID) (*Post, error) {
+	var src Post
+	if err := s.db.WithContext(ctx).Preload("Categories").Preload("Tags").First(&src, "id = ?", int64(id)).Error; err != nil {
+		return nil, err
+	}
+	slug, err := s.freePostSlug(ctx, src.Slug)
+	if err != nil {
+		return nil, err
+	}
+	row := Post{
+		Slug: slug, Title: src.Title, CoverURL: src.CoverURL, Summary: src.Summary,
+		SeoDesc: src.SeoDesc, SeoKeywords: src.SeoKeywords, Content: src.Content,
+		I18nJSON: src.I18nJSON,
+	}
+	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&row).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&row).Association("Categories").Replace(src.Categories); err != nil {
+			return err
+		}
+		return tx.Model(&row).Association("Tags").Replace(src.Tags)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &row, nil
+}
+
+// freePostSlug 给副本挑一个没被占用的 slug；slug 列上限 64，放不下后缀就先截短原文
+// （base 本身只含合法字符，截短不破坏 slug 规则）。
+func (s *Service) freePostSlug(ctx context.Context, base string) (string, error) {
+	candidate := truncateSlug(base+"-copy", "post")
+	for i := 2; ; i++ {
+		var n int64
+		if err := s.db.WithContext(ctx).Model(&Post{}).Where("slug = ?", candidate).Count(&n).Error; err != nil {
+			return "", err
+		}
+		if n == 0 {
+			return candidate, nil
+		}
+		candidate = truncateSlug(fmt.Sprintf("%s-copy-%d", base, i), "post")
+	}
 }
 
 // ---- 公开页数据装配 ----
@@ -660,8 +1106,7 @@ func (s *Service) SiteData(ctx context.Context, postLimit int, lang string) (*Si
 			window = 60
 		}
 	}
-	if err := s.db.WithContext(ctx).Where("published = ?", true).
-		Order("published_at DESC").Limit(window).Find(&posts).Error; err != nil {
+	if err := livePostTx(s.db.WithContext(ctx)).Order("pinned DESC, published_at DESC").Limit(window).Find(&posts).Error; err != nil {
 		return nil, err
 	}
 	if len(Languages()) > 1 {
@@ -686,7 +1131,7 @@ func (s *Service) SiteData(ctx context.Context, postLimit int, lang string) (*Si
 // PublishedPostBy 取一篇已发布的新闻；未发布或不存在返回 gorm.ErrRecordNotFound。
 func (s *Service) PublishedPostBy(ctx context.Context, slug, lang string) (*Post, error) {
 	var row Post
-	err := s.db.WithContext(ctx).Where("slug = ? AND published = ?", slug, true).First(&row).Error
+	err := livePostTx(s.db.WithContext(ctx)).Preload("Categories").Preload("Tags").Where("slug = ?", slug).First(&row).Error
 	if err != nil {
 		return &row, err
 	}
@@ -696,7 +1141,71 @@ func (s *Service) PublishedPostBy(ctx context.Context, slug, lang string) (*Post
 		return nil, gorm.ErrRecordNotFound
 	}
 	row.localize(lang)
+	// 浏览量自增：非致命，计数失败不影响渲染（预览令牌的草稿访问不计）。
+	_ = s.db.WithContext(ctx).Model(&Post{}).Where("id = ?", int64(row.ID)).
+		UpdateColumn("views", gorm.Expr("views + 1")).Error
 	return &row, nil
+}
+
+// livePostTx 是公开端新闻的上线条件：整篇已发布，且发布时间不在未来。
+// 定时发布（published_at 设为未来时间）到点才对访客可见，管理端不受影响。
+func livePostTx(tx *gorm.DB) *gorm.DB {
+	return tx.Where("published = ? AND (published_at IS NULL OR published_at <= ?)", true, time.Now().UTC())
+}
+
+// newsPageCap 是公开新闻列表一次参与排序的行数上限：按语言发布不是 SQL 谓词，
+// 只能先取有界窗口再在 Go 里筛，窗口给到两千行对官网新闻足够，也不会全表捞。
+const newsPageCap = 2000
+
+// PublishedPostsPage 是公开新闻列表的分页查询：返回该语言已上线的新闻与总数。
+// 窗口内先按语言与发布时间筛出真实集合再切片取页，总数是筛完的准确值。
+// term 非空时先按栏目/标签收窄，归档页与全部新闻共用这一条查询。
+func (s *Service) PublishedPostsPage(ctx context.Context, lang string, term termFilter, page, pageSize int) ([]Post, int64, error) {
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 {
+		pageSize = 20
+	}
+	windowTx := livePostTx(s.db.WithContext(ctx))
+	switch term.Kind {
+	case "category":
+		windowTx = windowTx.Where("id IN (SELECT pc.post_id FROM plg_website_post_category pc JOIN plg_website_category wc ON wc.id = pc.category_id WHERE wc.slug = ?)", term.Slug)
+	case "tag":
+		windowTx = windowTx.Where("id IN (SELECT pt.post_id FROM plg_website_post_tag pt JOIN plg_website_tag wt ON wt.id = pt.tag_id WHERE wt.slug = ?)", term.Slug)
+	}
+	var window []Post
+	if err := windowTx.
+		Select("id", "published_json").Order("pinned DESC, published_at DESC, id DESC").
+		Limit(newsPageCap).Find(&window).Error; err != nil {
+		return nil, 0, err
+	}
+	ids := make([]int64, 0, len(window))
+	for _, p := range window {
+		if len(Languages()) > 1 && !pi18n.Published(true, p.PublishedJSON, lang, siteLocales{}) {
+			continue
+		}
+		ids = append(ids, int64(p.ID))
+	}
+	total := int64(len(ids))
+	start := (page - 1) * pageSize
+	if start >= len(ids) {
+		return nil, total, nil
+	}
+	end := start + pageSize
+	if end > len(ids) {
+		end = len(ids)
+	}
+	pageIDs := ids[start:end]
+	var rows []Post
+	if err := s.db.WithContext(ctx).Preload("Categories").Preload("Tags").Where("id IN ?", pageIDs).
+		Order("published_at DESC, id DESC").Find(&rows).Error; err != nil {
+		return nil, 0, err
+	}
+	for i := range rows {
+		rows[i].localize(lang)
+	}
+	return rows, total, nil
 }
 
 // PublishedPageBy 取一篇已发布的自定义页。
@@ -715,25 +1224,81 @@ func (s *Service) PublishedPageBy(ctx context.Context, slug, lang string) (*Page
 
 // ---- 媒体（logo / 封面小图） ----
 
-// 上传限制：只收位图（svg 可携带脚本，不当图片存储）；单文件上限 2MB。
-const mediaMaxBytes = 2 << 20
+// 媒体图片以字节直接存进 plg_website_media 表，所以 mediaHardMaxMB 是硬顶：
+// 系统参数与 config.yaml 只能把上限调到它之下，不能把数据库当对象存储。
+const (
+	mediaDefaultMaxMB = 2.0
+	mediaHardMaxMB    = 5.0
+)
 
-var mediaMimes = map[string]bool{
-	"image/png": true, "image/jpeg": true, "image/webp": true, "image/gif": true,
+// mediaImageTypes 是内置位图白名单：svg 可携带脚本，不当图片存储。
+// 清单由代码持有并下发给前端，提示文案与文件选择器都跟着它走，不再各处手抄。
+var mediaImageTypes = []struct {
+	mime, label string
+}{
+	{"image/png", "PNG"},
+	{"image/jpeg", "JPEG"},
+	{"image/webp", "WebP"},
+	{"image/gif", "GIF"},
+}
+
+// MediaLimits 是媒体上传的生效限制，前端按它渲染 accept 与提示文案。
+type MediaLimits struct {
+	MaxMB    float64  `json:"maxMb"`
+	MaxBytes int      `json:"maxBytes"`
+	Mimes    []string `json:"mimes"`
+	Labels   []string `json:"labels"`
+}
+
+// Text 是上限的人话写法：2MB / 2.5MB（去掉小数尾巴）。
+func (l MediaLimits) Text() string {
+	return strconv.FormatFloat(l.MaxMB, 'f', -1, 64) + "MB"
+}
+
+// TypesText 是类型清单的人话写法：PNG / JPEG / WebP / GIF。
+func (l MediaLimits) TypesText() string { return strings.Join(l.Labels, " / ") }
+
+func (l MediaLimits) allows(mime string) bool {
+	for _, m := range l.Mimes {
+		if m == mime {
+			return true
+		}
+	}
+	return false
+}
+
+// MediaLimits 返回当前生效的媒体上传限制。大小：系统参数「上传限制」> config.yaml 的
+// upload.max_size_image_mb > 内置默认，最后截到 mediaHardMaxMB；类型：位图白名单，由代码持有。
+func (s *Service) MediaLimits(ctx context.Context) MediaLimits {
+	mb := s.cfgImageMaxMB
+	if l, ok := core.UploadLimitsFromSettings(ctx); ok && l.MaxImageMB > 0 {
+		mb = l.MaxImageMB
+	}
+	if mb <= 0 {
+		mb = mediaDefaultMaxMB
+	}
+	lim := MediaLimits{MaxMB: min(mb, mediaHardMaxMB)}
+	lim.MaxBytes = int(lim.MaxMB * 1024 * 1024)
+	for _, t := range mediaImageTypes {
+		lim.Mimes = append(lim.Mimes, t.mime)
+		lim.Labels = append(lim.Labels, t.label)
+	}
+	return lim
 }
 
 // SaveMedia 校验并保存一张小图，返回可公开访问的 URL 路径。
 // 类型按内容嗅探判定（http.DetectContentType），不信任扩展名。
 func (s *Service) SaveMedia(ctx context.Context, data []byte) (*Media, error) {
+	lim := s.MediaLimits(ctx)
 	if len(data) == 0 {
 		return nil, response.BadRequest("website.file_empty")
 	}
-	if len(data) > mediaMaxBytes {
-		return nil, response.BadRequest("website.image_too_large")
+	if len(data) > lim.MaxBytes {
+		return nil, response.BadRequest("website.image_too_large", lim.Text())
 	}
 	mime := http.DetectContentType(data)
-	if !mediaMimes[mime] {
-		return nil, response.BadRequest("website.image_type_unsupported")
+	if !lim.allows(mime) {
+		return nil, response.BadRequest("website.image_type_unsupported", lim.TypesText())
 	}
 	m := Media{Mime: mime, Size: len(data), Data: data}
 	if err := s.db.WithContext(ctx).Create(&m).Error; err != nil {
@@ -794,7 +1359,8 @@ func publishedLocales(published bool, publishedJSON string) []string {
 func (s *Service) SitemapEntries(ctx context.Context) ([]SitemapEntry, error) {
 	out := []SitemapEntry{{Loc: "/"}, {Loc: "/news"}}
 	var posts []Post
-	if err := s.db.WithContext(ctx).Where("published = ?", true).
+	// noindex 的新闻不进 sitemap（<meta robots> 已拒绝收录，list 里再给条目只会浪费抓取配额）。
+	if err := livePostTx(s.db.WithContext(ctx)).Where("noindex = ?", false).
 		Select("slug", "published_at", "updated_at", "published_json").Order("published_at DESC").Limit(1000).Find(&posts).Error; err != nil {
 		return nil, err
 	}
@@ -806,7 +1372,8 @@ func (s *Service) SitemapEntries(ctx context.Context) ([]SitemapEntry, error) {
 		out = append(out, e)
 	}
 	var pages []Page
-	if err := s.db.WithContext(ctx).Where("published = ?", true).
+	// noindex 的页面同理：不进 sitemap，避免与 meta robots 打架。
+	if err := s.db.WithContext(ctx).Where("published = ? AND noindex = ?", true, false).
 		Select("slug", "updated_at", "published_json").Order("updated_at DESC").Limit(1000).Find(&pages).Error; err != nil {
 		return nil, err
 	}
@@ -937,9 +1504,8 @@ func (s *Service) CreateMessage(ctx context.Context, f ContactForm, ip, ua strin
 	return row, nil
 }
 
-// ListMessages 是后台留言列表：按时间倒序，可按状态与关键字筛。
-func (s *Service) ListMessages(ctx context.Context, q MessageQuery) ([]Message, int64, error) {
-	tx := s.db.WithContext(ctx).Model(&Message{})
+// messageFilter 是列表与导出共用的筛选条件：保证导出的文件和页面上看到的列表是同一批数据。
+func messageFilter(tx *gorm.DB, q MessageQuery) *gorm.DB {
 	if q.Status != "" {
 		tx = tx.Where("status = ?", q.Status)
 	}
@@ -947,6 +1513,12 @@ func (s *Service) ListMessages(ctx context.Context, q MessageQuery) ([]Message, 
 		like := "%" + kw + "%"
 		tx = tx.Where("name LIKE ? OR email LIKE ? OR content LIKE ?", like, like, like)
 	}
+	return tx
+}
+
+// ListMessages 是后台留言列表：按时间倒序，可按状态与关键字筛。
+func (s *Service) ListMessages(ctx context.Context, q MessageQuery) ([]Message, int64, error) {
+	tx := messageFilter(s.db.WithContext(ctx).Model(&Message{}), q)
 	var total int64
 	if err := tx.Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -957,6 +1529,26 @@ func (s *Service) ListMessages(ctx context.Context, q MessageQuery) ([]Message, 
 		return nil, 0, err
 	}
 	return rows, total, nil
+}
+
+// CountNewMessages 返回未读（new）留言数：侧边栏徽标与收件箱入口的数据源。
+func (s *Service) CountNewMessages(ctx context.Context) (int64, error) {
+	var n int64
+	err := s.db.WithContext(ctx).Model(&Message{}).Where("status = ?", MsgNew).Count(&n).Error
+	return n, err
+}
+
+// exportMax 是单次导出的行数上限。留言是人工跟进的低频数据，超过这个量级说明
+// 该接入导出中心走异步任务了，同步一把梭反而拖垮请求。
+const exportMax = 10000
+
+// ExportMessages 取当前筛选下的全部留言（不带分页），前端据此生成 CSV；
+// 筛选与 ListMessages 同源，导出文件和页面上看到的列表对得上。
+func (s *Service) ExportMessages(ctx context.Context, q MessageQuery) ([]Message, error) {
+	var rows []Message
+	err := messageFilter(s.db.WithContext(ctx).Model(&Message{}), q).
+		Order("created_at DESC, id DESC").Limit(exportMax).Find(&rows).Error
+	return rows, err
 }
 
 // SetMessagesStatus 批量把 ids 里的留言置为某个状态，返回实际改动条数。

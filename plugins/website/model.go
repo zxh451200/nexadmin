@@ -43,6 +43,15 @@ type Setting struct {
 	ContactConsentURL string `gorm:"column:contact_consent_url;size:255;not null" json:"contactConsentUrl"`
 	// I18nJSON 是非默认语言的字段译文：{"en-US":{"homeTitle":"…"}}；空 = 全部回退原文。
 	I18nJSON string `gorm:"type:text" json:"i18nJson"`
+	// FaviconURL 是浏览器标签图标；OgImageURL 是站点默认分享图（og:image 兜底）。
+	// 空分别回退模板内置 favicon.svg 与 og.png。
+	FaviconURL string `gorm:"column:favicon_url;size:255;not null;default:''" json:"faviconUrl"`
+	OgImageURL string `gorm:"column:og_image_url;size:255;not null;default:''" json:"ogImageUrl"`
+	// HeadCode 是自定义 <head> 代码（统计脚本、站点验证等）：原样注入 <head>，仅 website:setting
+	// 可写，属可信管理员配置；服务层限长，注入经 template.HTML 显式标记。
+	HeadCode string `gorm:"column:head_code;type:text" json:"headCode"`
+	// TitleSuffix 拼在 <title> 的「标题」之后，替换默认的「 - 站点名」；空 = 沿用内置组合。
+	TitleSuffix string `gorm:"column:title_suffix;size:100;not null;default:''" json:"titleSuffix"`
 	// SeedVersion 记录出厂内容补种进度：升级后只补一次新增的出厂条目，不复活管理员删掉的内容。
 	SeedVersion int `gorm:"not null;default:1" json:"-"`
 }
@@ -147,6 +156,7 @@ type Page struct {
 	database.PlatformModel
 	Slug      string `gorm:"size:64;not null;uniqueIndex:uk_plg_website_page_slug" json:"slug"`
 	Title     string `gorm:"size:200;not null" json:"title"`
+	SeoTitle  string `gorm:"size:200;not null;default:''" json:"seoTitle"`
 	SeoDesc   string `gorm:"size:300;not null" json:"seoDesc"`
 	Content   string `gorm:"type:mediumtext" json:"content"`
 	Published bool   `json:"published"`
@@ -154,6 +164,11 @@ type Page struct {
 	// PublishedJSON 是非默认语言的发布态：{"en-US":true,"ja-JP":false}；
 	// 空 = 该行的 published 对所有语言生效（升级前保存的内容不会因新规则突然下线）。
 	PublishedJSON string `gorm:"type:text" json:"publishedJson"`
+	// SeoTitle 是独立的 meta 标题：留空回退「标题 - 站点名」；非默认语言存 i18nJson。
+	// OgImage 是社交分享图（og:image / twitter:image），空 = 站点默认分享图。
+	OgImage string `gorm:"size:255;not null;default:''" json:"ogImage"`
+	// Noindex 关闭搜索引擎收录：<meta robots> 与 sitemap 同步生效，站内列表照常展示。
+	Noindex bool `gorm:"not null;default:false" json:"noindex"`
 }
 
 func (Page) TableName() string { return "plg_website_page" }
@@ -172,9 +187,51 @@ type Post struct {
 	I18nJSON    string     `gorm:"type:text" json:"i18nJson"`
 	// PublishedJSON 是非默认语言的发布态，语义同 Page；默认语言沿用 published 列。
 	PublishedJSON string `gorm:"type:text" json:"publishedJson"`
+	// SeoKeywords 是新闻级 SEO 关键词：详情页非空时优先于站点设置生成 meta keywords；只存默认语言。
+	SeoKeywords string `gorm:"size:300;not null;default:''" json:"seoKeywords"`
+	// SeoTitle 是独立的 meta 标题：留空回退「标题 - 站点名」；非默认语言存 i18nJson。
+	SeoTitle string `gorm:"size:200;not null;default:''" json:"seoTitle"`
+	// Noindex 关闭搜索引擎收录：<meta robots> 与 sitemap 同步生效，站内列表照常展示。
+	Noindex bool `gorm:"not null;default:false" json:"noindex"`
+	// Categories 是新闻所属分类；关联表 plg_website_post_category，保存时整体替换。
+	Categories []Category `gorm:"many2many:plg_website_post_category" json:"categories,omitempty"`
+	// Tags 是新闻标签；关联表 plg_website_post_tag，保存时整体替换。
+	Tags []Tag `gorm:"many2many:plg_website_post_tag" json:"tags,omitempty"`
+	// Views 是公开详情的浏览量：公开详情命中自增，只增不清（要清零走 SQL）。
+	Views int64 `gorm:"not null;default:0" json:"views"`
+	// Pinned 置顶：公开列表（含首页动态）置顶优先于发布时间排序。
+	Pinned bool `gorm:"not null;default:false" json:"pinned"`
+	// Author 是展示名（如「市场部」），不关联后台账号。
+	Author string `gorm:"size:64;not null;default:''" json:"author"`
 }
 
 func (Post) TableName() string { return "plg_website_post" }
+
+// Category 是新闻分类，即编辑部的栏目：后台单独维护、集合有限、公开侧按栏目导航。
+// 标题只存默认语言：栏目是组织维度，跨语言展示时直接落原文即可。
+type Category struct {
+	database.PlatformModel
+	Title string `gorm:"size:100;not null" json:"title"`
+	Slug  string `gorm:"size:64;not null;uniqueIndex:uk_plg_website_category_slug" json:"slug"`
+	Sort  int    `json:"sort"`
+	// PostCount 是栏目下的新闻数：保存时回填，不落库。界面用它排栏目，
+	// 也让人在删栏目之前先看见「这里面有 12 篇」。
+	PostCount int64 `gorm:"-" json:"postCount"`
+}
+
+func (Category) TableName() string { return "plg_website_category" }
+
+// Tag 是新闻标签：与栏目分层的第二维度，编辑器里打字即建，主题词自由生长。
+// Name 是展示与去重的依据（中文标签很常见），Slug 只负责出现在 URL 里。
+type Tag struct {
+	database.PlatformModel
+	Name string `gorm:"size:64;not null" json:"name"`
+	Slug string `gorm:"size:64;not null;uniqueIndex:uk_plg_website_tag_slug" json:"slug"`
+	// PostCount 语义同 Category.PostCount。
+	PostCount int64 `gorm:"-" json:"postCount"`
+}
+
+func (Tag) TableName() string { return "plg_website_tag" }
 
 // Media 是官网自管的小型媒体文件（logo / 封面），平台级、按 id 不可变。
 // 官网代表整个部署主体，不能放租户隔离的文件模块，所以插件自己存（只存小图）。

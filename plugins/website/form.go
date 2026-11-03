@@ -37,6 +37,13 @@ type SettingForm struct {
 	ContactConsentURL string `json:"contactConsentUrl"`
 	// I18nJSON 是非默认语言译文；服务层按白名单语言/字段清洗后入库。
 	I18nJSON string `json:"i18nJson"`
+	// FaviconURL / OgImageURL 是站点资产：浏览器标签图标与默认分享图（og:image 兜底），空 = 模板内置。
+	FaviconURL string `json:"faviconUrl"`
+	OgImageURL string `json:"ogImageUrl"`
+	// HeadCode 是自定义 <head> 代码（统计脚本等），原样注入；限长见服务层。
+	HeadCode string `json:"headCode"`
+	// TitleSuffix 拼在 <title> 的「标题」之后；空 = 沿用「 - 站点名」。
+	TitleSuffix string `json:"titleSuffix"`
 }
 
 // ItemForm 是导航项表单。
@@ -103,12 +110,16 @@ type FeatureForm struct {
 type PageForm struct {
 	Slug      string `json:"slug"`
 	Title     string `json:"title"`
+	SeoTitle  string `json:"seoTitle"`
 	SeoDesc   string `json:"seoDesc"`
 	Content   string `json:"content"`
 	Published bool   `json:"published"`
 	I18nJSON  string `json:"i18nJson"`
 	// PublishedJSON 是非默认语言发布态；服务层会剔除缺译语言的 true。
 	PublishedJSON string `json:"publishedJson"`
+	// OgImage 是社交分享图；Noindex 关闭收录（<meta robots> 与 sitemap 同步）。
+	OgImage string `json:"ogImage"`
+	NoIndex bool   `json:"noindex"`
 }
 
 // PostForm 是新闻表单；Content 为富文本 HTML，落库前 Sanitize。
@@ -120,10 +131,43 @@ type PostForm struct {
 	SeoDesc   string `json:"seoDesc"`
 	Content   string `json:"content"`
 	Published bool   `json:"published"`
-	// PublishedAt 只在发布时生效：给了就按它记（回填历史文章、修正误发），
-	// 不给则沿用「首次发布写当前时间」的默认行为。
+	// PublishedAt 只在发布时生效：给了就按它记（回填历史文章、修正误发、定时发布），
+	// 不给则沿用「首次发布写当前时间」的默认行为。设为未来时间即定时发布：
+	// 到点之前公开端按未上线处理。
 	PublishedAt *time.Time `json:"publishedAt"`
-	I18nJSON    string     `json:"i18nJson"`
+	// SeoKeywords 是新闻级 SEO 关键词，非空时详情页优先于站点设置生成 meta keywords。
+	SeoKeywords string `json:"seoKeywords"`
+	// CategoryIDs 是所属分类的完整列表，保存时整体替换；空 = 清空分类。
+	CategoryIDs []idgen.ID `json:"categoryIds"`
+	// Tags 是标签名的完整列表，保存时整体替换；不存在的名字当场建标签。
+	// 用名字而不是 id：标签是打字即建的自由词，让编辑器先建后勾只是把成本推给界面。
+	Tags     []string `json:"tags"`
+	I18nJSON string   `json:"i18nJson"`
 	// PublishedJSON 是非默认语言发布态；服务层会剔除缺译语言的 true。
 	PublishedJSON string `json:"publishedJson"`
+	// SeoTitle 是独立的 meta 标题；Noindex 关闭收录（<meta robots> 与 sitemap 同步）。
+	SeoTitle string `json:"seoTitle"`
+	NoIndex  bool   `json:"noindex"`
+	// Author 是展示名（不关联账号）；Pinned 置顶：公开列表置顶优先于发布时间。
+	Author string `json:"author"`
+	Pinned bool   `json:"pinned"`
+}
+
+// CategoryForm 是新闻分类表单。
+type CategoryForm struct {
+	Title string `json:"title"`
+	Slug  string `json:"slug"`
+	Sort  int    `json:"sort"`
+}
+
+// TagForm 是标签管理表单：Slug 留空由 Name 派生（改名不换 URL 标识，避免把已分享的链接打断）。
+type TagForm struct {
+	Name string `json:"name"`
+	Slug string `json:"slug"`
+}
+
+// PostStatusForm 是新闻批量发布/下线：一次把 ids 里的新闻置为 status。
+type PostStatusForm struct {
+	IDs    []idgen.ID `json:"ids"`
+	Status string     `json:"status"`
 }

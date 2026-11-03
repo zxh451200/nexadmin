@@ -29,6 +29,7 @@ import TranslationStatus from './TranslationStatus'
 import {
   translateContent,
   useDeleteNav,
+  useDeleteNavs,
   useI18nSchema,
   useLanguages,
   useNavs,
@@ -137,13 +138,15 @@ function countNavs(nodes: NavNode[]): number {
  * 弹窗外壳也由本组件渲染：底部按钮要用这里的 submit 与 state，必须留在 Provider 内。
  */
 function NavFormBody({
-  onOpenChange, editing, tree, defaultParentId, pages,
+  onOpenChange, editing, tree, defaultParentId, pages, pagesComplete,
 }: {
   onOpenChange: (v: boolean) => void
   editing: NavItem | null
   tree: NavNode[]
   defaultParentId: string
   pages: SitePage[]
+  /** 页面清单是否已全部载入（total ≤ 本地 list 长度）；没载全时 /p/slug 的本地存在性检查跳过。 */
+  pagesComplete: boolean
 }) {
   const { t } = useTranslation()
   const save = useSaveNav()
@@ -177,11 +180,13 @@ function NavFormBody({
     }
     const path = v.split(/[?#]/)[0]
     const known = (x: string) =>
-      x === '/' || ['/news', '/plugins', '/docs'].some((r) => x === r || x.startsWith(`${r}/`)) || (x.startsWith('/p/') && x.length > 3)
+      x === '/' || ['/news', '/plugins', '/docs', '/contact'].some((r) => x === r || x.startsWith(`${r}/`)) || (x.startsWith('/p/') && x.length > 3)
     if (known(path)) {
       if (path.startsWith('/p/')) {
         const slug = path.slice(3)
-        if (!pages.some((page) => page.slug === slug)) {
+        // 本地只载入了页面清单的第一页：列表没载全时别急着说「页面不存在」，
+        // 后端 SaveNav 会查库把关，这里误报比放行更伤（save 被前端拦死）。
+        if (pagesComplete && !pages.some((page) => page.slug === slug)) {
           return { title: t('plugin_website.nav.errPageMissing', { slug }), hints: [t('plugin_website.nav.errPageMissingHint')] }
         }
       }
@@ -196,7 +201,9 @@ function NavFormBody({
     }
   }
   const [parentId, setParentId] = useState(editing?.parentId ?? defaultParentId)
-  const [sort, setSort] = useState(editing?.sort ?? 0)
+  // 排序留字符串中间态：Number() 直转会让清空/负号输入瞬间跳成 0，小数会在提交时被后端 400。
+  const [sortText, setSortText] = useState(String(editing?.sort ?? 0))
+  const sort = Math.trunc(Number(sortText)) || 0
   const [enabled, setEnabled] = useState(editing?.enabled ?? true)
 
   // 上级选项：顶级 + 现有节点；排除自己与后代，并过滤掉放下后会超过 3 级的候选。
@@ -261,7 +268,7 @@ function NavFormBody({
       footer={
         <>
           <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
-          <Button onClick={() => void submit()}>{t('common.save')}</Button>
+          <Button disabled={save.isPending} onClick={() => void submit()}>{t('common.save')}</Button>
         </>
       }
     >
@@ -312,9 +319,10 @@ function NavFormBody({
         <SharedFieldShell labelKey="plugin_website.fields.sort">
           <Input
             type="number"
-            value={sort}
+            step={1}
+            value={sortText}
             disabled={sharedDisabled}
-            onChange={(e) => setSort(Number(e.target.value) || 0)}
+            onChange={(e) => setSortText(e.target.value)}
           />
         </SharedFieldShell>
         <SwitchRow label={t('plugin_website.fields.enabled')} checked={enabled} disabled={sharedDisabled} onCheckedChange={setEnabled} />
@@ -325,13 +333,14 @@ function NavFormBody({
 }
 
 function NavFormDialog({
-  onOpenChange, editing, tree, defaultParentId, pages,
+  onOpenChange, editing, tree, defaultParentId, pages, pagesComplete,
 }: {
   onOpenChange: (v: boolean) => void
   editing: NavItem | null
   tree: NavNode[]
   defaultParentId: string
   pages: SitePage[]
+  pagesComplete: boolean
 }) {
   const { data: languages = [] } = useLanguages()
   const { data: schema, isError, refetch } = useI18nSchema('nav')
@@ -361,6 +370,7 @@ function NavFormDialog({
         tree={tree}
         defaultParentId={defaultParentId}
         pages={pages}
+        pagesComplete={pagesComplete}
       />
     </LocaleFormProvider>
   )
@@ -373,14 +383,32 @@ export default function NavPage() {
   // 预取字段 schema：点「新建/编辑」时直接命中缓存，不再先闪一个加载弹窗。
   useI18nSchema('nav')
   const { data: navs = [], isLoading } = useNavs()
-  const { data: pagesData } = usePages({ page: 1, pageSize: 100 })
+  // 页面候选与 /p/slug 校验用的清单；后端单页上限 200，超过部分靠后端校验兜底。
+  const { data: pagesData } = usePages({ page: 1, pageSize: 200 })
+  const pagesList = pagesData?.list ?? []
+  const pagesComplete = (pagesData?.total ?? 0) <= pagesList.length
   const remove = useDeleteNav()
+  const removeBatch = useDeleteNavs()
   const reorder = useReorderNavs()
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<NavItem | null>(null)
   const [parentId, setParentId] = useState('0')
+  const [selected, setSelected] = useState<string[]>([])
 
   const tree = useMemo(() => buildNavTree(navs), [navs])
+
+  // 行深度：3 级行不能再挂子级（后端会拒），「新增子导航」按钮按深度隐藏。
+  const depths = useMemo(() => {
+    const out = new Map<string, number>()
+    const walk = (nodes: NavNode[], level: number) => {
+      for (const n of nodes) {
+        out.set(n.id, level)
+        walk(n.children ?? [], level + 1)
+      }
+    }
+    walk(tree, 1)
+    return out
+  }, [tree])
 
   const openCreate = (pid = '0') => {
     setEditing(null)
@@ -408,6 +436,20 @@ export default function NavPage() {
     }
   }
 
+  // 批量删除：TreeTable 勾父带子，所以 selected 就是「会被删掉的那些行」，
+  // 与后端按子树级联删除同口径，确认框里的数字不会骗人。
+  const onDeleteBatch = async (ids: string[]) => {
+    if (await confirm({ destructive: true, description: t('plugin_website.nav.deleteBatchConfirm', { count: ids.length }) })) {
+      try {
+        await removeBatch.mutateAsync(ids)
+        toast.success(t('common.operateSuccess'))
+        setSelected([])
+      } catch {
+        toast.error(t('common.operateFailed'))
+      }
+    }
+  }
+
   const columns: Column<NavNode>[] = [
     { key: 'label', title: t('plugin_website.fields.navLabel'), mobile: 'title', render: (r) => <span className="font-medium text-foreground">{r.label}</span> },
     { key: 'href', title: t('plugin_website.fields.navHref'), mobile: 'sub', render: (r) => <span className="font-mono text-xs">{r.href}</span> },
@@ -427,6 +469,15 @@ export default function NavPage() {
         maxDepth={NAV_MAX_DEPTH}
         columnSettingsKey="plugin-website-navs"
         emptyText={t('plugin_website.empty')}
+        selection={{ selected, onChange: setSelected }}
+        batchActions={(ids) => (
+          <Can perm="website:nav">
+            <Button variant="destructive" size="sm" onClick={() => void onDeleteBatch(ids)}>
+              <Trash2 className="me-2 size-4" aria-hidden="true" />
+              {t('common.delete')}
+            </Button>
+          </Can>
+        )}
         // 同层拖动后整组重排；失败时 TreeTable 回滚乐观数据并 toast
         onReorder={
           has('website:nav')
@@ -452,9 +503,11 @@ export default function NavPage() {
         }
         rowActions={(row) => (
           <Can perm="website:nav">
-            <Button variant="ghost" size="icon" aria-label={t('plugin_website.nav.addChild')} onClick={() => openCreate(row.id)}>
-              <Plus aria-hidden="true" />
-            </Button>
+            {(depths.get(row.id) ?? 1) < NAV_MAX_DEPTH ? (
+              <Button variant="ghost" size="icon" aria-label={t('plugin_website.nav.addChild')} onClick={() => openCreate(row.id)}>
+                <Plus aria-hidden="true" />
+              </Button>
+            ) : null}
             <Button variant="ghost" size="icon" aria-label={t('common.edit')} onClick={() => openEdit(row)}>
               <Pencil aria-hidden="true" />
             </Button>
@@ -471,7 +524,8 @@ export default function NavPage() {
           editing={editing}
           tree={tree}
           defaultParentId={parentId}
-          pages={pagesData?.list ?? []}
+          pages={pagesList}
+          pagesComplete={pagesComplete}
         />
       )}
     </PageContainer>

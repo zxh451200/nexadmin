@@ -29,6 +29,7 @@ import TranslationStatus from './TranslationStatus'
 import {
   translateContent,
   useDeleteFeature,
+  useDeleteFeatures,
   useFeatureIcons,
   useFeatures,
   useI18nSchema,
@@ -45,7 +46,7 @@ function FeatureIconSvg({ paths, className }: { paths: string; className?: strin
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth={1.6}
+      strokeWidth={2}
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
@@ -117,9 +118,13 @@ function FeatureFormBody({ onOpenChange, editing }: { onOpenChange: (v: boolean)
   const { data: icons = [], isLoading: iconsLoading } = useFeatureIcons()
   const lf = useLocaleForm()
   const { disabled: sharedDisabled } = useSharedField()
-  const [icon, setIcon] = useState(editing?.icon ?? 'building')
-  const [sort, setSort] = useState(editing?.sort ?? 0)
+  // 图标默认取下拉的第一项，避免前端硬编码图标名与后端集合改名后对不上。
+  const [icon, setIcon] = useState(editing?.icon ?? '')
+  // 排序留字符串中间态：Number() 直转会让清空/负号输入瞬间跳成 0。
+  const [sortText, setSortText] = useState(String(editing?.sort ?? 0))
   const [enabled, setEnabled] = useState(editing?.enabled ?? true)
+  const resolvedIcon = icon || icons[0]?.name || ''
+  const sort = Math.trunc(Number(sortText)) || 0
 
   const submit = async () => {
     const base = lf.baseValues()
@@ -131,7 +136,7 @@ function FeatureFormBody({ onOpenChange, editing }: { onOpenChange: (v: boolean)
       await save.mutateAsync({
         id: editing?.id,
         data: {
-          icon,
+          icon: resolvedIcon,
           sort,
           enabled,
           // 行上的裸列永远存原文；feature 不可按语言发布，只回传 i18nJson
@@ -156,7 +161,7 @@ function FeatureFormBody({ onOpenChange, editing }: { onOpenChange: (v: boolean)
       footer={
         <>
           <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
-          <Button onClick={() => void submit()}>{t('common.save')}</Button>
+          <Button disabled={save.isPending} onClick={() => void submit()}>{t('common.save')}</Button>
         </>
       }
     >
@@ -170,7 +175,7 @@ function FeatureFormBody({ onOpenChange, editing }: { onOpenChange: (v: boolean)
         <SharedFieldShell labelKey="plugin_website.fields.featureIcon">
           <FeatureIconSelect
             ariaLabel={t('plugin_website.fields.featureIcon')}
-            value={icon}
+            value={resolvedIcon}
             onChange={setIcon}
             icons={icons}
             loading={iconsLoading}
@@ -180,9 +185,10 @@ function FeatureFormBody({ onOpenChange, editing }: { onOpenChange: (v: boolean)
         <SharedFieldShell labelKey="plugin_website.fields.sort">
           <Input
             type="number"
-            value={sort}
+            step={1}
+            value={sortText}
             disabled={sharedDisabled}
-            onChange={(e) => setSort(Number(e.target.value) || 0)}
+            onChange={(e) => setSortText(e.target.value)}
           />
         </SharedFieldShell>
         <SharedFieldShell labelKey="plugin_website.fields.enabled" className="flex-row items-center justify-between">
@@ -235,14 +241,22 @@ export default function FeaturePage() {
   const { data: features = [], isLoading } = useFeatures()
   const { data: icons = [] } = useFeatureIcons()
   const remove = useDeleteFeature()
+  const removeBatch = useDeleteFeatures()
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<FeatureItem | null>(null)
+  const [selected, setSelected] = useState<string[]>([])
 
-  const onDelete = async (row: FeatureItem) => {
-    if (await confirm({ destructive: true, description: t('plugin_website.feature.deleteConfirm', { name: row.title }) })) {
+  const onDelete = async (target: FeatureItem | FeatureItem[]) => {
+    const list = Array.isArray(target) ? target : [target]
+    const description = Array.isArray(target)
+      ? t('plugin_website.feature.deleteBatchConfirm', { count: list.length })
+      : t('plugin_website.feature.deleteConfirm', { name: list[0].title })
+    if (await confirm({ destructive: true, description })) {
       try {
-        await remove.mutateAsync(row.id)
+        if (Array.isArray(target)) await removeBatch.mutateAsync(list.map((r) => r.id))
+        else await remove.mutateAsync(list[0].id)
         toast.success(t('common.operateSuccess'))
+        setSelected((s) => s.filter((id) => !list.some((r) => r.id === id)))
       } catch {
         toast.error(t('common.operateFailed'))
       }
@@ -276,6 +290,15 @@ export default function FeaturePage() {
         loading={isLoading}
         columnSettingsKey="plugin-website-features"
         emptyText={t('plugin_website.empty')}
+        selection={{ selected, onChange: setSelected }}
+        batchActions={(ids) => (
+          <Can perm="website:feature">
+            <Button variant="destructive" size="sm" onClick={() => void onDelete(features.filter((f) => ids.includes(f.id)))}>
+              <Trash2 className="me-2 size-4" aria-hidden="true" />
+              {t('common.delete')}
+            </Button>
+          </Can>
+        )}
         toolbar={
           <Can perm="website:feature">
             <Button onClick={() => { setEditing(null); setFormOpen(true) }}>

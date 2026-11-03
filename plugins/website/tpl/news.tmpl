@@ -2,7 +2,13 @@
 <section class="section page-head">
   <div class="container">
     <p class="fig">{{.T "news.fig"}}</p>
-    <h1 class="page-title">{{.T "news.title"}}</h1>
+    <h1 class="page-title">{{if eq .NewsKind "category"}}{{.TF "news.categoryTitleTag" .NewsTermName}}{{else if eq .NewsKind "tag"}}{{.TF "news.tagTitleTag" .NewsTermName}}{{else}}{{.T "news.title"}}{{end}}</h1>
+    {{if .NewsCategories}}
+    <nav class="chips term-nav" aria-label="{{.T "news.categoryNavAria"}}">
+      <a class="chip{{if not .NewsTermName}} active{{end}}" href="{{.URL "/news"}}">{{.T "news.allPosts"}}</a>
+      {{range .NewsCategories}}<a class="chip{{if .Active}} active{{end}}" href="{{$.URL "/news"}}?category={{.Slug}}"{{if .Active}} aria-current="true"{{end}}>{{.Name}}</a>{{end}}
+    </nav>
+    {{end}}
   </div>
 </section>
 <section class="section" style="padding-top:0">
@@ -13,8 +19,9 @@
       <a class="post-row" href="{{$.URL "/news"}}/{{.Slug}}">
         <time>{{if .PublishedAt}}{{fmtDate $.Lang .PublishedAt}}{{else}}{{fmtDate $.Lang .UpdatedAt}}{{end}}</time>
         <div class="post-row-main">
-          <h2>{{.Title}}</h2>
+          <h2>{{if .Pinned}}<span class="post-pin">{{$.T "news.pinned"}}</span>{{end}}{{.Title}}</h2>
           {{if .Summary}}<p>{{.Summary}}</p>{{end}}
+          {{if .Categories}}<span class="post-row-terms">{{range .Categories}}<span class="term-badge">{{.Title}}</span>{{end}}</span>{{end}}
         </div>
         {{if .CoverURL}}<img class="post-row-cover" src="{{.CoverURL}}" alt="" loading="lazy">{{end}}
         <span class="post-row-arrow" aria-hidden="true">→</span>
@@ -23,6 +30,13 @@
     </div>
     {{else}}
     <p class="empty">{{.T "news.empty"}}</p>
+    {{end}}
+    {{if gt .NewsTotalPages 1}}
+    <nav class="pager" aria-label="{{.T "news.pagerAria"}}">
+      {{if .NewsPrevURL}}<a class="pager-link" rel="prev" href="{{.NewsPrevURL}}">← {{.T "news.prev"}}</a>{{end}}
+      <span class="pager-status">{{.TF "news.pageOf" .NewsPage .NewsTotalPages}}</span>
+      {{if .NewsNextURL}}<a class="pager-link" rel="next" href="{{.NewsNextURL}}">{{.T "news.next"}} →</a>{{end}}
+    </nav>
     {{end}}
   </div>
 </section>

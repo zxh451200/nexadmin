@@ -1,6 +1,8 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import type { QueryClient } from '@tanstack/react-query'
 import { useMemo } from 'react'
 import { api, http } from '@/framework/request/http'
+import { MENU_BADGES_KEY } from '@/framework/layout/menuBadge'
 import { useLanguages as usePlatformLanguages } from '@/framework/i18n/useLanguages'
 import type { EntitySchema, LocaleOption } from '@/framework/components/i18n'
 import type { Page, PageQuery } from '@/framework/request/types'
@@ -9,7 +11,25 @@ import type { Page, PageQuery } from '@/framework/request/types'
 export type I18nEntity = 'setting' | 'nav' | 'feature' | 'page' | 'post'
 
 /** 页脚社交图标可选平台；键集合与后端 socialPlatforms 一致。 */
-export type SocialPlatform = 'github' | 'x' | 'linkedin' | 'youtube' | 'wechat' | 'weibo' | 'bilibili' | 'rss' | 'mail'
+export type SocialPlatform =
+  | 'github'
+  | 'x'
+  | 'linkedin'
+  | 'youtube'
+  | 'instagram'
+  | 'facebook'
+  | 'discord'
+  | 'telegram'
+  | 'whatsapp'
+  | 'reddit'
+  | 'tiktok'
+  | 'twitch'
+  | 'mastodon'
+  | 'wechat'
+  | 'weibo'
+  | 'bilibili'
+  | 'rss'
+  | 'mail'
 
 export interface SocialLink {
   platform: SocialPlatform
@@ -26,6 +46,14 @@ export interface SiteSettings {
   siteName: string
   siteDesc: string
   logoUrl: string
+  /** 浏览器标签图标；空 = 模板内置 favicon.svg */
+  faviconUrl: string
+  /** 站点默认分享图（og:image 兜底）；空 = 模板内置 og.png */
+  ogImageUrl: string
+  /** 自定义 <head> 代码（统计脚本等），原样注入；空 = 不注入 */
+  headCode: string
+  /** <title> 后缀，替换默认的「 - 站点名」；空 = 沿用内置组合 */
+  titleSuffix: string
   homeTitle: string
   homeSubtitle: string
   homeCtaLabel: string
@@ -104,23 +132,32 @@ export interface SitePage {
   id: string
   slug: string
   title: string
+  /** 独立 meta 标题；空 = 用「标题 - 站点名」 */
+  seoTitle: string
   seoDesc: string
   content: string
   published: boolean
   i18nJson: string
   /** 非默认语言发布态；空 = 所有语言沿用 published */
   publishedJson: string
+  /** 社交分享图（og:image）；空 = 站点默认分享图 */
+  ogImage: string
+  /** 关闭搜索引擎收录（<meta robots> 与 sitemap 同步） */
+  noindex: boolean
   updatedAt: string
 }
 
 export interface PageForm {
   slug: string
   title: string
+  seoTitle: string
   seoDesc: string
   content: string
   published: boolean
   i18nJson: string
   publishedJson: string
+  ogImage: string
+  noindex: boolean
 }
 
 export interface SitePost {
@@ -130,12 +167,27 @@ export interface SitePost {
   coverUrl: string
   summary: string
   seoDesc: string
+  /** 独立 meta 标题；空 = 用「标题 - 站点名」 */
+  seoTitle: string
+  seoKeywords: string
   content: string
   published: boolean
   publishedAt?: string | null
+  /** 所属分类；保存时按完整列表整体替换 */
+  categories?: PostCategory[]
+  /** 标签；保存时按名字整体替换，后端可能不带这个字段（老数据） */
+  tags?: PostTag[]
   i18nJson: string
   /** 非默认语言发布态；空 = 所有语言沿用 published */
   publishedJson: string
+  /** 关闭搜索引擎收录（<meta robots> 与 sitemap 同步） */
+  noindex: boolean
+  /** 公开详情浏览量（只增不清） */
+  views: number
+  /** 置顶：公开列表置顶优先于发布时间 */
+  pinned: boolean
+  /** 展示名（不关联账号） */
+  author: string
   updatedAt: string
 }
 
@@ -144,19 +196,62 @@ export interface PostForm {
   title: string
   coverUrl: string
   summary: string
+  seoTitle: string
   seoDesc: string
+  seoKeywords: string
   content: string
   published: boolean
-  /** 只在发布时生效；不传则由服务端按「首次发布写当前时间」处理 */
+  /** 只在发布时生效；设为未来时间即定时发布，到点前公开端不展示 */
   publishedAt?: string
+  /** 所属分类的完整 ID 列表；空 = 清空分类 */
+  categoryIds: string[]
+  /** 标签名的完整列表；空 = 清空，没出现过的名字后端当场建标签，上限 20 */
+  tags: string[]
   i18nJson: string
   publishedJson: string
+  noindex: boolean
+  /** 展示名；置顶：公开列表置顶优先 */
+  author: string
+  pinned: boolean
+}
+
+/** 新闻分类，即编辑部的栏目：后台单独维护、集合有限，公开侧按 /news?category=<slug> 导航。 */
+export interface PostCategory {
+  id: string
+  title: string
+  slug: string
+  sort: number
+  /** 栏目下的新闻数：界面按它排栏目，删栏目前先让人看见影响面 */
+  postCount: number
+}
+
+/** 新闻标签：编辑器里打字即长的自由主题词，名字是身份（展示字段是 name，不是 title）。 */
+export interface PostTag {
+  id: string
+  name: string
+  slug: string
+  /** 语义同 PostCategory.postCount */
+  postCount: number
+}
+
+export interface CategoryForm {
+  title: string
+  slug: string
+  sort: number
+}
+
+export interface TagForm {
+  name: string
+  /** 留空由后端按 name 派生；改名时回传原 slug，已分享的 /news?tag= 链接才不会断 */
+  slug: string
 }
 
 export interface ContentQuery extends PageQuery {
   status?: string
   /** 语言码：筛「该语言完全没有译文」的条目（不是缺某个字段，那看列表里的 done/total 徽标） */
   missing?: string
+  /** 新闻分类筛选（只对新闻列表生效） */
+  categoryId?: string
 }
 
 /** 特性卡片内置图标：名称 + SVG 内部标记。路径以后端 iconPaths 为准，前端不另存一份。 */
@@ -228,7 +323,24 @@ export function useSaveSettings() {
   })
 }
 
-/** 上传 logo / 封面小图（PNG/JPEG/WebP/GIF，≤2MB），返回可直接使用的站内 URL。 */
+/** 图片上传的生效限制：大小随系统参数「上传限制」/config.yaml 变化，类型是后端持有的位图白名单。 */
+export interface MediaLimits {
+  maxMb: number
+  maxBytes: number
+  /** 文件选择器的 accept 值，如 image/png */
+  mimes: string[]
+  /** 给人看的类型名，如 PNG */
+  labels: string[]
+}
+
+export function useMediaLimits() {
+  return useQuery({
+    queryKey: [...KEY, 'media-limits'],
+    queryFn: () => api.get<MediaLimits>(`${BASE}/media/limits`),
+  })
+}
+
+/** 上传 logo / 二维码 / favicon 小图；大小与类型上限见 useMediaLimits，超限由请求层 toast 服务端文案。 */
 export function uploadMedia(file: File) {
   const fd = new FormData()
   fd.append('file', file)
@@ -271,6 +383,14 @@ export function useDeleteNav() {
   })
 }
 
+export function useDeleteNavs() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (ids: string[]) => api.del<{ deleted: number }>(`${BASE}/navs`, { ids: ids.join(',') }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: [...KEY, 'navs'] }),
+  })
+}
+
 export function useFeatures() {
   return useQuery({
     queryKey: [...KEY, 'features'],
@@ -291,6 +411,14 @@ export function useDeleteFeature() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (id: string) => api.del(`${BASE}/features/${id}`),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: [...KEY, 'features'] }),
+  })
+}
+
+export function useDeleteFeatures() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (ids: string[]) => api.del<{ deleted: number }>(`${BASE}/features`, { ids: ids.join(',') }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: [...KEY, 'features'] }),
   })
 }
@@ -320,6 +448,42 @@ export function useDeletePage() {
   })
 }
 
+/**
+ * 签发草稿预览链接（24h 内有效）：/p/:slug?preview=…。
+ * 未发布的页面公开站是 404，这条是发布前看真实版式的唯一入口；silent：错误由页面 toast。
+ */
+export function fetchPagePreviewURL(id: string): Promise<string> {
+  return api.get<{ url: string }>(`${BASE}/pages/${id}/preview`, undefined, { silent: true }).then((d) => d.url)
+}
+
+/** 复制页面为草稿：内容与译文带走，发布态归零，slug 由后端自动去重为 <slug>-copy。 */
+export function useCopyPage() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.post<SitePage>(`${BASE}/pages/${id}/copy`, {}),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: [...KEY, 'pages'] }),
+  })
+}
+
+/** 批量发布/下线：单条操作就是长度为 1 的 ids。updated 是服务端实际改动条数。 */
+export function useSetPagesStatus() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ ids, status }: { ids: string[]; status: 'published' | 'draft' }) =>
+      api.put<{ updated: number }>(`${BASE}/pages/status`, { ids, status }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: [...KEY, 'pages'] }),
+  })
+}
+
+/** 批量删除：deleted 是服务端实际删除条数（并发下有人先删了几条，界面据实刷新）。 */
+export function useDeletePages() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (ids: string[]) => api.del<{ deleted: number }>(`${BASE}/pages`, { ids: ids.join(',') }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: [...KEY, 'pages'] }),
+  })
+}
+
 export function usePosts(query: ContentQuery) {
   return useQuery({
     queryKey: [...KEY, 'posts', query],
@@ -333,7 +497,10 @@ export function useSavePost() {
   return useMutation({
     mutationFn: ({ id, data }: { id?: string; data: PostForm }) =>
       id ? api.put<SitePost>(`${BASE}/posts/${id}`, data) : api.post<SitePost>(`${BASE}/posts`, data),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: [...KEY, 'posts'] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [...KEY, 'posts'] })
+      invalidateTaxonomies(qc)
+    },
   })
 }
 
@@ -341,7 +508,130 @@ export function useDeletePost() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (id: string) => api.del(`${BASE}/posts/${id}`),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [...KEY, 'posts'] })
+      invalidateTaxonomies(qc)
+    },
+  })
+}
+
+/** 新闻增删改都会挪动栏目/标签下的新闻数，两份清单要跟着刷。 */
+function invalidateTaxonomies(qc: QueryClient) {
+  void qc.invalidateQueries({ queryKey: [...KEY, 'categories'] })
+  void qc.invalidateQueries({ queryKey: [...KEY, 'tags'] })
+}
+
+/** 新闻分类：新闻表单与列表筛选共用一份。 */
+export function useCategories() {
+  return useQuery({
+    queryKey: [...KEY, 'categories'],
+    queryFn: () => api.get<PostCategory[]>(`${BASE}/categories`),
+  })
+}
+
+export function useSaveCategory() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, data }: { id?: string; data: CategoryForm }) =>
+      id ? api.put<PostCategory>(`${BASE}/categories/${id}`, data) : api.post<PostCategory>(`${BASE}/categories`, data),
+    // 新闻列表的分类徽标带的是行内副本，改名后不刷列表就会显示旧名
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [...KEY, 'categories'] })
+      void qc.invalidateQueries({ queryKey: [...KEY, 'posts'] })
+    },
+  })
+}
+
+export function useDeleteCategory() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.del(`${BASE}/categories/${id}`),
+    // 删除会连带解除新闻上的关联，列表同样要刷
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [...KEY, 'categories'] })
+      void qc.invalidateQueries({ queryKey: [...KEY, 'posts'] })
+    },
+  })
+}
+
+/** 新闻标签：编辑器里的自动补全与标签管理共用一份。 */
+export function useTags() {
+  return useQuery({
+    queryKey: [...KEY, 'tags'],
+    queryFn: () => api.get<PostTag[]>(`${BASE}/tags`),
+  })
+}
+
+export function useSaveTag() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, data }: { id?: string; data: TagForm }) =>
+      id ? api.put<PostTag>(`${BASE}/tags/${id}`, data) : api.post<PostTag>(`${BASE}/tags`, data),
+    // 改名会让标签清单与新闻上的标签一起变
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [...KEY, 'tags'] })
+      void qc.invalidateQueries({ queryKey: [...KEY, 'posts'] })
+    },
+  })
+}
+
+export function useDeleteTag() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.del(`${BASE}/tags/${id}`),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [...KEY, 'tags'] })
+      void qc.invalidateQueries({ queryKey: [...KEY, 'posts'] })
+    },
+  })
+}
+
+/**
+ * 批量发布/下线/删除都会改列表内容：成功后统一刷新闻列表。
+ * updated/deleted 是服务端实际改动条数，并发下有人先删了几条时界面据实刷新。
+ */
+export function useSetPostStatus() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ ids, status }: { ids: string[]; status: 'published' | 'draft' }) =>
+      api.put<{ updated: number }>(`${BASE}/posts/status`, { ids, status }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: [...KEY, 'posts'] }),
+  })
+}
+
+export function useDeletePosts() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (ids: string[]) => api.del<{ deleted: number }>(`${BASE}/posts`, { ids: ids.join(',') }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [...KEY, 'posts'] })
+      invalidateTaxonomies(qc)
+    },
+  })
+}
+
+/**
+ * 导出当前筛选下的全部新闻（不带分页，上限见后端 exportMax），CSV 由前端生成；
+ * silent：错误由页面捕获后 toast，不走全局报错。
+ */
+export function fetchPostsForExport(query: Pick<ContentQuery, 'keyword' | 'status' | 'categoryId'>): Promise<SitePost[]> {
+  return api.get<SitePost[]>(`${BASE}/posts/export`, { ...query }, { silent: true })
+}
+
+/** 签发草稿预览链接（24h 有效）：返回 /news/:slug?preview=<token>，新开标签页打开。 */
+export function fetchPostPreview(id: string): Promise<string> {
+  return api.get<{ url: string }>(`${BASE}/posts/${id}/preview`, undefined, { silent: true }).then((d) => d.url)
+}
+
+/** 复制为草稿：内容/译文/分类带走，发布态归零，slug 自动去重。 */
+export function useCopyPost() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.post<SitePost>(`${BASE}/posts/${id}/copy`),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [...KEY, 'posts'] })
+      invalidateTaxonomies(qc)
+    },
   })
 }
 
@@ -380,20 +670,44 @@ export function useMessages(query: MessageQuery) {
   })
 }
 
+/** 未读留言数：route.tsx 把它注册成侧边栏徽标数据源（见 framework/layout/menuBadge.ts）。 */
+export function fetchUnreadMessageCount(): Promise<number> {
+  return api
+    .get<{ count: number }>(`${BASE}/messages/unread-count`, undefined, { silent: true })
+    .then((d) => d.count)
+}
+
+/**
+ * 导出当前筛选下的全部留言（不带分页，上限见后端 exportMax），CSV 由前端生成；
+ * silent：错误由页面捕获后 toast，不走全局报错。
+ */
+export function fetchMessagesForExport(query: Pick<MessageQuery, 'keyword' | 'status'>): Promise<SiteMessage[]> {
+  return api.get<SiteMessage[]>(`${BASE}/messages/export`, { keyword: query.keyword, status: query.status }, { silent: true })
+}
+
+/** 批量改状态 / 删除都会影响未读数：把侧边栏徽标也刷一遍。 */
+function useInvalidateMessages() {
+  const qc = useQueryClient()
+  return () => {
+    void qc.invalidateQueries({ queryKey: [...KEY, 'messages'] })
+    void qc.invalidateQueries({ queryKey: MENU_BADGES_KEY })
+  }
+}
+
 /** 批量改状态：单条操作就是长度为 1 的 ids。updated 是服务端实际改动条数。 */
 export function useSetMessageStatus() {
-  const qc = useQueryClient()
+  const invalidate = useInvalidateMessages()
   return useMutation({
     mutationFn: ({ ids, status }: { ids: string[]; status: MessageStatus }) =>
       api.put<{ updated: number }>(`${BASE}/messages/status`, { ids, status }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: [...KEY, 'messages'] }),
+    onSuccess: invalidate,
   })
 }
 
 export function useDeleteMessages() {
-  const qc = useQueryClient()
+  const invalidate = useInvalidateMessages()
   return useMutation({
     mutationFn: (ids: string[]) => api.del<{ deleted: number }>(`${BASE}/messages`, { ids: ids.join(',') }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: [...KEY, 'messages'] }),
+    onSuccess: invalidate,
   })
 }

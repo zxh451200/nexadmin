@@ -36,7 +36,13 @@ type module struct {
 }
 
 func (m *module) service(d *core.Deps) *Service {
-	m.once.Do(func() { m.svc = NewService(d.DB) })
+	m.once.Do(func() {
+		m.svc = NewService(d.DB)
+		// 图片大小上限的兜底值：系统参数「上传限制」没设时用 config.yaml 的 upload.max_size_image_mb。
+		if d.Config != nil {
+			m.svc.SetConfigImageMaxMB(d.Config.Upload.MaxSizeImageMB)
+		}
+	})
 	return m.svc
 }
 
@@ -44,7 +50,7 @@ func (*module) Name() string { return "website" }
 
 // Register 注册管理端与公开官网路由。
 func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
-	h := &handler{svc: m.service(d), gw: newAIGateway(d)}
+	h := &handler{svc: m.service(d), gw: newAIGateway(d), previewKey: previewKeyOf(d)}
 
 	// 语言清单来自平台（sys_language，core 在迁移后已加载）：官网不再自持一份。
 	// 公开站路由随后按它注册，所以改动清单要重启才生效。
@@ -57,6 +63,8 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.PUT("/settings", core.Perm("website:setting"), core.Desc("更新站点设置"), h.saveSettings)
 
 	g.GET("/messages", core.Perm("website:message"), core.Desc("留言列表"), h.listMessages)
+	g.GET("/messages/unread-count", core.Perm("website:message"), core.Desc("留言未读数"), h.unreadMessageCount)
+	g.GET("/messages/export", core.Perm("website:message"), core.Desc("导出留言"), h.exportMessages)
 	g.PUT("/messages/status", core.Perm("website:message"), core.Desc("批量修改留言状态"), h.setMessageStatus)
 	g.DELETE("/messages", core.Perm("website:message"), core.Desc("批量删除留言"), h.deleteMessages)
 
@@ -64,25 +72,47 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.POST("/navs", core.Perm("website:nav"), core.Desc("新增导航"), h.createNav)
 	g.PUT("/navs/reorder", core.Perm("website:nav"), core.Desc("导航拖拽排序"), h.reorderNavs)
 	g.PUT("/navs/:id", core.Perm("website:nav"), core.Desc("更新导航"), h.updateNav)
+	g.DELETE("/navs", core.Perm("website:nav"), core.Desc("批量删除导航"), h.deleteNavs)
 	g.DELETE("/navs/:id", core.Perm("website:nav"), core.Desc("删除导航"), h.deleteNav)
 
 	g.GET("/features", core.Perm("website:feature"), core.Desc("特性卡片列表"), h.listFeatures)
 	g.GET("/feature-icons", core.Perm("website:feature"), core.Desc("特性卡片可选图标"), h.listFeatureIcons)
 	g.POST("/features", core.Perm("website:feature"), core.Desc("新增特性卡片"), h.createFeature)
 	g.PUT("/features/:id", core.Perm("website:feature"), core.Desc("更新特性卡片"), h.updateFeature)
+	g.DELETE("/features", core.Perm("website:feature"), core.Desc("批量删除特性卡片"), h.deleteFeatures)
 	g.DELETE("/features/:id", core.Perm("website:feature"), core.Desc("删除特性卡片"), h.deleteFeature)
 
 	g.GET("/pages", core.Perm("website:page"), core.Desc("页面列表"), h.listPages)
 	g.POST("/pages", core.Perm("website:page"), core.Desc("新增页面"), h.createPage)
+	g.PUT("/pages/status", core.Perm("website:page"), core.Desc("批量发布/下线页面"), h.setPagesStatus)
 	g.PUT("/pages/:id", core.Perm("website:page"), core.Desc("更新页面"), h.updatePage)
+	g.GET("/pages/:id/preview", core.Perm("website:page"), core.Desc("签发页面预览链接"), h.pagePreview)
+	g.POST("/pages/:id/copy", core.Perm("website:page"), core.Desc("复制页面"), h.copyPage)
+	g.DELETE("/pages", core.Perm("website:page"), core.Desc("批量删除页面"), h.deletePages)
 	g.DELETE("/pages/:id", core.Perm("website:page"), core.Desc("删除页面"), h.deletePage)
 
 	g.GET("/posts", core.Perm("website:post"), core.Desc("新闻列表"), h.listPosts)
+	g.GET("/posts/export", core.Perm("website:post"), core.Desc("导出新闻"), h.exportPosts)
+	g.PUT("/posts/status", core.Perm("website:post"), core.Desc("批量发布/下线新闻"), h.setPostStatus)
+	g.DELETE("/posts", core.Perm("website:post"), core.Desc("批量删除新闻"), h.deletePosts)
 	g.POST("/posts", core.Perm("website:post"), core.Desc("新增新闻"), h.createPost)
 	g.PUT("/posts/:id", core.Perm("website:post"), core.Desc("更新新闻"), h.updatePost)
+	g.GET("/posts/:id/preview", core.Perm("website:post"), core.Desc("签发新闻预览链接"), h.postPreview)
+	g.POST("/posts/:id/copy", core.Perm("website:post"), core.Desc("复制新闻"), h.copyPost)
 	g.DELETE("/posts/:id", core.Perm("website:post"), core.Desc("删除新闻"), h.deletePost)
 
+	g.GET("/categories", core.Perm("website:post"), core.Desc("新闻分类列表"), h.listCategories)
+	g.POST("/categories", core.Perm("website:post"), core.Desc("新增新闻分类"), h.createCategory)
+	g.PUT("/categories/:id", core.Perm("website:post"), core.Desc("更新新闻分类"), h.updateCategory)
+	g.DELETE("/categories/:id", core.Perm("website:post"), core.Desc("删除新闻分类"), h.deleteCategory)
+
+	g.GET("/tags", core.Perm("website:post"), core.Desc("新闻标签列表"), h.listTags)
+	g.POST("/tags", core.Perm("website:post"), core.Desc("新增新闻标签"), h.createTag)
+	g.PUT("/tags/:id", core.Perm("website:post"), core.Desc("更新新闻标签"), h.updateTag)
+	g.DELETE("/tags/:id", core.Perm("website:post"), core.Desc("删除新闻标签"), h.deleteTag)
+
 	g.POST("/media", core.Perm("website:setting"), core.Desc("上传 logo/封面图片"), h.uploadMedia)
+	g.GET("/media/limits", core.Perm("website:setting"), core.Desc("读取图片上传限制"), h.mediaLimits)
 	// 语言清单的管理接口在框架（/api/v1/languages，见 modules/system/language）：
 	// 官网不再重复提供一份，否则又变成两份互不可见的清单。
 	// 翻译表单的字段元数据由后端下发：白名单在 Go 里，前端不再抄一份。
@@ -96,7 +126,7 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	// 热挂载时 RootGroup 为 nil——运行中的引擎不能加根路由，此时只挂管理端 API，
 	// 官网页面在授权导入后重启生效。
 	if d.RootGroup != nil {
-		site := &siteHandler{svc: m.service(d), log: d.Log, pkg: newPackageCache(), signKey: loadMarketSignKey(d.Log)}
+		site := &siteHandler{svc: m.service(d), log: d.Log, pkg: newPackageCache(), signKey: loadMarketSignKey(d.Log), previewKey: previewKeyOf(d)}
 		// 留言是匿名写入口：阈值比普通页面紧（每 IP 每分钟 5 条），和页面浏览分开计数。
 		// 计数走共享 cache，多实例部署时是同一个桶；cache 没装配才退回进程内滑动窗口。
 		if d.Cache != nil {

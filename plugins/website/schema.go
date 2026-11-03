@@ -81,6 +81,7 @@ var entityViews = map[string]entityDef{
 		fields: pageI18nFields,
 		views: []fieldView{
 			{"title", "plugin_website.fields.pageTitle", widgetText, 0},
+			{"seoTitle", "plugin_website.fields.seoTitle", widgetText, 0},
 			{"seoDesc", "plugin_website.fields.seoDesc", widgetText, 0},
 			{"content", "plugin_website.fields.content", widgetRich, 0},
 		},
@@ -91,6 +92,7 @@ var entityViews = map[string]entityDef{
 		views: []fieldView{
 			{"title", "plugin_website.fields.postTitle", widgetText, 0},
 			{"summary", "plugin_website.fields.summary", widgetTextarea, 2},
+			{"seoTitle", "plugin_website.fields.seoTitle", widgetText, 0},
 			{"seoDesc", "plugin_website.fields.seoDesc", widgetTextarea, 2},
 			{"content", "plugin_website.fields.content", widgetRich, 0},
 		},

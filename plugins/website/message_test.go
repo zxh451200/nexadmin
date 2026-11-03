@@ -288,6 +288,43 @@ func TestListMessagesFiltersByStatus(t *testing.T) {
 	}
 }
 
+// ---- 未读数与导出 ----
+
+func TestCountNewMessages(t *testing.T) {
+	db, m := mockDB(t)
+	m.ExpectQuery(`SELECT count\(\*\) FROM .plg_website_message. WHERE status = \?`).
+		WithArgs(MsgNew).WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(3))
+	n, err := NewService(db).CountNewMessages(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 3 {
+		t.Errorf("count = %d, want 3", n)
+	}
+	if err := m.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// 导出与列表同一套筛选（messageFilter），但不带分页、行数有上限。
+func TestExportMessagesUsesSameFilterWithoutPaging(t *testing.T) {
+	db, m := mockDB(t)
+	m.ExpectQuery(`SELECT \* FROM .plg_website_message. WHERE status = \? ORDER BY created_at DESC, id DESC LIMIT \?`).
+		WithArgs(MsgNew, exportMax).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "name", "status", "created_at"}).
+			AddRow(11, "张三", MsgNew, testNow).AddRow(10, "李四", MsgNew, testNow))
+	rows, err := NewService(db).ExportMessages(context.Background(), MessageQuery{Status: MsgNew})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 2 || rows[0].Name != "张三" {
+		t.Fatalf("rows=%+v", rows)
+	}
+	if err := m.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // ---- 匿名投稿的 HTTP 行为 ----
 
 func newFormContext(values url.Values, accept string) (*gin.Context, *httptest.ResponseRecorder) {

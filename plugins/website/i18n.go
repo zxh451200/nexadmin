@@ -496,6 +496,7 @@ func (p *Post) localize(code string) {
 	tr := translations(p.I18nJSON, code)
 	p.Title = pi18n.Pick(tr, "title", p.Title)
 	p.Summary = pi18n.Pick(tr, "summary", p.Summary)
+	p.SeoTitle = pi18n.Pick(tr, "seoTitle", p.SeoTitle)
 	p.SeoDesc = pi18n.Pick(tr, "seoDesc", p.SeoDesc)
 	p.Content = pi18n.Pick(tr, "content", p.Content)
 }
@@ -503,6 +504,7 @@ func (p *Post) localize(code string) {
 func (p *Page) localize(code string) {
 	tr := translations(p.I18nJSON, code)
 	p.Title = pi18n.Pick(tr, "title", p.Title)
+	p.SeoTitle = pi18n.Pick(tr, "seoTitle", p.SeoTitle)
 	p.SeoDesc = pi18n.Pick(tr, "seoDesc", p.SeoDesc)
 	p.Content = pi18n.Pick(tr, "content", p.Content)
 }
@@ -519,10 +521,10 @@ var (
 		"title": {Max: 128}, "description": {Max: 500},
 	}
 	pageI18nFields = pi18n.Fields{
-		"title": {Max: 200}, "seoDesc": {Max: 300}, "content": {Rich: true},
+		"title": {Max: 200}, "seoTitle": {Max: 200}, "seoDesc": {Max: 300}, "content": {Rich: true},
 	}
 	postI18nFields = pi18n.Fields{
-		"title": {Max: 200}, "summary": {Max: 500}, "seoDesc": {Max: 300}, "content": {Rich: true},
+		"title": {Max: 200}, "summary": {Max: 500}, "seoTitle": {Max: 200}, "seoDesc": {Max: 300}, "content": {Rich: true},
 	}
 )
 

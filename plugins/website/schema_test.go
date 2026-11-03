@@ -104,7 +104,7 @@ func TestI18nSchemaFor(t *testing.T) {
 		if !ok {
 			t.Fatal("post 应当有 schema")
 		}
-		want := []string{"title", "summary", "seoDesc", "content"}
+		want := []string{"title", "summary", "seoTitle", "seoDesc", "content"}
 		if len(s.Translatable) != len(want) {
 			t.Fatalf("字段数 = %d, want %d", len(s.Translatable), len(want))
 		}
@@ -116,7 +116,10 @@ func TestI18nSchemaFor(t *testing.T) {
 		if got := s.Translatable[0].Max; got != 200 {
 			t.Errorf("title.max = %d, want 200（应等于白名单长度）", got)
 		}
-		if got := s.Translatable[3].Widget; got != widgetRich {
+		if got := s.Translatable[2].Max; got != 200 {
+			t.Errorf("seoTitle.max = %d, want 200", got)
+		}
+		if got := s.Translatable[4].Widget; got != widgetRich {
 			t.Errorf("content.widget = %s, want %s", got, widgetRich)
 		}
 	})
@@ -148,8 +151,8 @@ func TestI18nSchemaFor(t *testing.T) {
 			}
 		}()
 		s, _ := i18nSchemaFor("post")
-		if len(s.Translatable) != 3 {
-			t.Fatalf("摘掉白名单字段后应只剩 3 个，实得 %d（守卫没生效）", len(s.Translatable))
+		if len(s.Translatable) != 4 {
+			t.Fatalf("摘掉白名单字段后应只剩 4 个，实得 %d（守卫没生效）", len(s.Translatable))
 		}
 		for _, f := range s.Translatable {
 			if f.Key == "title" {

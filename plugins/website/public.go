@@ -6,8 +6,10 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"html/template"
 	"io/fs"
 	"net/http"
+	"net/url"
 	"path"
 	"strconv"
 	"strings"
@@ -36,6 +38,8 @@ type siteHandler struct {
 	marketOn func() (bool, error)
 	// signKey 为空表示不签名（未配置 NEXADMIN_MARKET_SIGN_KEY）。
 	signKey ed25519.PrivateKey
+	// previewKey 是草稿预览令牌的签名密钥（复用框架 JWT 密钥）；nil = 预览关闭。
+	previewKey []byte
 	// contactHits 是在线留言的 IP 投稿计数（共享 cache，多实例一致）。
 	contactHits *middleware.Limiter
 	// contactLocal 是 cache 未装配时的进程内兜底计数器。
@@ -71,7 +75,10 @@ func (h *siteHandler) baseView(ctx context.Context, lang string, postLimit int) 
 	set := data.Setting
 	v := &siteView{
 		SiteName: set.SiteName, SiteDesc: set.SiteDesc, LogoURL: set.LogoURL,
-		HomeTitle: set.HomeTitle, HomeSubtitle: set.HomeSubtitle,
+		FaviconURL: set.FaviconURL, OgImageURL: set.OgImageURL,
+		HeadCode:    template.HTML(set.HeadCode),
+		TitleSuffix: set.TitleSuffix,
+		HomeTitle:   set.HomeTitle, HomeSubtitle: set.HomeSubtitle,
 		HomeCTALabel: set.HomeCTALabel, HomeCTAHref: set.HomeCTAHref,
 		ContactEmail: set.ContactEmail, ContactPhone: set.ContactPhone,
 		QRCodeURL: set.QRCodeURL, QRCodeCaption: set.QRCodeCaption,
@@ -91,6 +98,16 @@ func (h *siteHandler) baseView(ctx context.Context, lang string, postLimit int) 
 	return v, nil
 }
 
+// composeTitle 组合 <title> 的「标题」段：`{标题} - {后缀}`。后缀取站点设置的
+// title_suffix，空回退站点名——「关于我们 - NexAdmin」与「关于我们 - 某品牌」只差一个配置。
+func (v *siteView) composeTitle(pageTitle string) string {
+	suffix := strings.TrimSpace(v.TitleSuffix)
+	if suffix == "" {
+		suffix = v.SiteName
+	}
+	return pageTitle + " - " + suffix
+}
+
 func (h *siteHandler) render(c *gin.Context, name string, status int, v *siteView) {
 	t, ok := pageTmpl[name]
 	if !ok {
@@ -103,6 +120,10 @@ func (h *siteHandler) render(c *gin.Context, name string, status int, v *siteVie
 	v.Route = stripLangPrefix(c.Request.URL.Path)
 	v.Path = v.Lang.Path(v.Route)
 	v.Query = c.Request.URL.RawQuery
+	// 站点默认分享图兜底：内容级 OGImage 为空时用站点设置（absURL 补协议），仍空由模板回退内置 og.png。
+	if v.OGImage == "" && v.OgImageURL != "" {
+		v.OGImage = absURL(v.BaseURL, v.OgImageURL)
+	}
 	var b strings.Builder
 	if err := t.ExecuteTemplate(&b, "layout", v); err != nil {
 		c.String(http.StatusInternalServerError, "render failed")
@@ -119,7 +140,7 @@ func (h *siteHandler) notFound(c *gin.Context, v *siteView) {
 			return
 		}
 	}
-	v.Title = v.T("notfound.title") + " - " + v.SiteName
+	v.Title = v.composeTitle(v.T("notfound.title"))
 	h.render(c, "notfound", http.StatusNotFound, v)
 }
 
@@ -155,37 +176,118 @@ func homePageTitle(siteName, homeTitle, siteDesc string) string {
 	return siteName
 }
 
-// GET /news —— 新闻列表。
+// newsPageSize 是公开新闻列表每页条数。
+const newsPageSize = 20
+
+// GET /news —— 新闻列表：?category=栏目 / ?tag=标签 收窄，?page=N 翻页。
+// 归档与全部共用这一条路由：查询式归档不占 /news/:slug 的下一段，
+// 不会和文章的 slug 抢路由（Gin 在同一层同时挂静态段和通配段会直接 panic）。
 func (h *siteHandler) newsList(c *gin.Context) {
+	ctx := c.Request.Context()
 	lang := langOf(c)
-	v, err := h.baseView(c.Request.Context(), lang.Code, 20)
+	v, err := h.baseView(ctx, lang.Code, 0)
 	if err != nil {
 		c.String(http.StatusInternalServerError, "site unavailable")
 		return
 	}
-	v.Title = v.T("news.pageTitleTag") + " - " + v.SiteName
+	page, _ := strconv.Atoi(c.Query("page"))
+	term := termFilter{}
+	// 栏目/标签不存在就是 404，而不是「这个筛选下暂时没内容」：前者是链接写错了，
+	// 后者是编辑部还没发，两者给访客的信息完全不同。
+	if slug := strings.TrimSpace(c.Query("category")); slug != "" {
+		row, cerr := h.svc.CategoryBySlug(ctx, slug)
+		if cerr != nil {
+			h.notFound(c, nil)
+			return
+		}
+		term = termFilter{Kind: "category", Slug: row.Slug}
+		v.NewsKind, v.NewsTermName = "category", row.Title
+		v.NewsTermQuery = url.Values{"category": {row.Slug}}.Encode()
+		v.Title = v.composeTitle(v.TF("news.categoryTitleTag", row.Title))
+	} else if slug := strings.TrimSpace(c.Query("tag")); slug != "" {
+		row, terr := h.svc.TagBySlug(ctx, slug)
+		if terr != nil {
+			h.notFound(c, nil)
+			return
+		}
+		term = termFilter{Kind: "tag", Slug: row.Slug}
+		v.NewsKind, v.NewsTermName = "tag", row.Name
+		v.NewsTermQuery = url.Values{"tag": {row.Slug}}.Encode()
+		v.Title = v.composeTitle(v.TF("news.tagTitleTag", row.Name))
+	}
+	posts, total, err := h.svc.PublishedPostsPage(ctx, lang.Code, term, page, newsPageSize)
+	if err != nil {
+		c.String(http.StatusInternalServerError, "site unavailable")
+		return
+	}
+	cats, err := h.svc.ListCategories(ctx)
+	if err != nil {
+		c.String(http.StatusInternalServerError, "site unavailable")
+		return
+	}
+	active := ""
+	if term.Kind == "category" {
+		active = term.Slug
+	}
+	v.NewsCategories = CategoryLinks(cats, active)
+	v.Posts = posts
+	v.NewsPage, v.NewsTotalPages = pageOf(page), pagesOf(total, newsPageSize)
+	// 第 1 页才是规范地址：?page=2 不进 canonical，避免搜索引擎把每页当独立页面收录。
+	v.Noindex = v.NewsPage > 1
+	if v.NewsTermName == "" {
+		v.Title = v.composeTitle(v.T("news.pageTitleTag"))
+	}
 	v.Desc = v.TF("news.pageDesc", v.SiteName)
 	h.render(c, "news", http.StatusOK, v)
+}
+
+func pageOf(p int) int {
+	if p < 1 {
+		return 1
+	}
+	return p
+}
+
+func pagesOf(total int64, size int) int {
+	if total <= 0 {
+		return 1
+	}
+	n := int((total + int64(size) - 1) / int64(size))
+	if n < 1 {
+		return 1
+	}
+	return n
 }
 
 // GET /news/:slug —— 新闻详情。
 func (h *siteHandler) postDetail(c *gin.Context) {
 	lang := langOf(c)
-	p, err := h.svc.PublishedPostBy(c.Request.Context(), c.Param("slug"), lang.Code)
+	slug := c.Param("slug")
+	p, err := h.svc.PublishedPostBy(c.Request.Context(), slug, lang.Code)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			c.String(http.StatusInternalServerError, "site unavailable")
+			return
+		}
+		// 未发布（不存在、整篇草稿或定时未到点）都按 404 走；唯一例外是
+		// 管理端签发的预览链接：令牌有效就照常渲染，发布前能看到真实版式。
+		draft, derr := h.svc.PostBySlug(c.Request.Context(), slug, lang.Code)
+		if derr != nil || !verifyPostPreview(h.previewKey, slug, c.Query("preview"), time.Now()) {
 			h.notFound(c, nil)
 			return
 		}
-		c.String(http.StatusInternalServerError, "site unavailable")
-		return
+		p = draft
 	}
 	v, err := h.baseView(c.Request.Context(), lang.Code, 0)
 	if err != nil {
 		c.String(http.StatusInternalServerError, "site unavailable")
 		return
 	}
-	v.Title = p.Title + " - " + v.SiteName
+	v.Title = v.composeTitle(p.Title)
+	// SEO 标题是完整标题的覆盖：填了就替换「文章标题」，站点名后缀保持一致的组合规律。
+	if p.SeoTitle != "" {
+		v.SeoTitle = v.composeTitle(p.SeoTitle)
+	}
 	switch {
 	case p.SeoDesc != "":
 		v.Desc = p.SeoDesc
@@ -194,9 +296,14 @@ func (h *siteHandler) postDetail(c *gin.Context) {
 	default:
 		v.Desc = v.SiteDesc
 	}
+	// 新闻级关键词优先：留空才回退站点设置，与 meta description 的取舍一致。
+	if p.SeoKeywords != "" {
+		v.SeoKeywords = p.SeoKeywords
+	}
 	v.Post = p
 	// og:image 只认绝对 URL；文章设了封面就用封面，否则模板回退站点默认图。
 	v.OGImage = absURL(v.BaseURL, p.CoverURL)
+	v.Noindex = p.Noindex
 	// hreflang、og:locale:alternate 与语言切换器都遍历 v.Languages：未发布的语言不能出现在这里。
 	v.Languages = visibleLanguages(p.Published, p.PublishedJSON)
 	h.render(c, "post", http.StatusOK, v)
@@ -220,27 +327,41 @@ func absURL(base, u string) string {
 // GET /p/:slug —— 自定义页。
 func (h *siteHandler) pageDetail(c *gin.Context) {
 	lang := langOf(c)
-	p, err := h.svc.PublishedPageBy(c.Request.Context(), c.Param("slug"), lang.Code)
+	slug := c.Param("slug")
+	p, err := h.svc.PublishedPageBy(c.Request.Context(), slug, lang.Code)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			c.String(http.StatusInternalServerError, "site unavailable")
+			return
+		}
+		// 未发布（不存在、整篇草稿或该语言未发布）按 404 走；唯一例外是
+		// 管理端签发的预览链接：令牌有效就照常渲染，发布前能看到真实版式。
+		draft, derr := h.svc.PageBySlug(c.Request.Context(), slug, lang.Code)
+		if derr != nil || !verifyPagePreview(h.previewKey, slug, c.Query("preview"), time.Now()) {
 			h.notFound(c, nil)
 			return
 		}
-		c.String(http.StatusInternalServerError, "site unavailable")
-		return
+		p = draft
 	}
 	v, err := h.baseView(c.Request.Context(), lang.Code, 0)
 	if err != nil {
 		c.String(http.StatusInternalServerError, "site unavailable")
 		return
 	}
-	v.Title = p.Title + " - " + v.SiteName
+	v.Title = v.composeTitle(p.Title)
+	// SEO 标题是完整标题的覆盖：填了就替换「页面标题」，站点名后缀保持一致的组合规律。
+	if p.SeoTitle != "" {
+		v.SeoTitle = v.composeTitle(p.SeoTitle)
+	}
 	if p.SeoDesc != "" {
 		v.Desc = p.SeoDesc
 	} else {
 		v.Desc = v.SiteDesc
 	}
 	v.Page = p
+	// og:image 只认绝对 URL；页面设了分享图就用它，否则模板回退站点默认图。
+	v.OGImage = absURL(v.BaseURL, p.OgImage)
+	v.Noindex = p.Noindex
 	v.Languages = visibleLanguages(p.Published, p.PublishedJSON)
 	h.render(c, "page", http.StatusOK, v)
 }
@@ -253,7 +374,7 @@ func (h *siteHandler) contact(c *gin.Context) {
 		c.String(http.StatusInternalServerError, "site unavailable")
 		return
 	}
-	v.Title = v.T("contact.titleTag") + " - " + v.SiteName
+	v.Title = v.composeTitle(v.T("contact.titleTag"))
 	v.Desc = v.TF("contact.desc", v.SiteName)
 	v.ContactSent = c.Query("sent") == "1"
 	v.ContactError = contactErrorText(v, c.Query("error"))

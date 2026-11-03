@@ -1,6 +1,7 @@
 package website
 
 import (
+	"context"
 	"html/template"
 	"net/http"
 	"strings"
@@ -332,14 +333,15 @@ func TestXMLEscape(t *testing.T) {
 
 // 保存媒体按内容嗅探判定类型：扩展名骗不过；非法内容要拒。
 func TestMediaValidation(t *testing.T) {
+	lim := NewService(nil).MediaLimits(context.Background())
 	png := []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n', 0, 0, 0, 13}
-	if mime := http.DetectContentType(png); !mediaMimes[mime] {
+	if mime := http.DetectContentType(png); !lim.allows(mime) {
 		t.Errorf("png detected as %q", mime)
 	}
-	if mediaMimes[http.DetectContentType([]byte("<svg onload=alert(1)>"))] {
+	if lim.allows(http.DetectContentType([]byte("<svg onload=alert(1)>"))) {
 		t.Error("svg/html content should not be accepted as image")
 	}
-	if mediaMimes[http.DetectContentType([]byte("plain text, not an image"))] {
+	if lim.allows(http.DetectContentType([]byte("plain text, not an image"))) {
 		t.Error("text content should not be accepted as image")
 	}
 }

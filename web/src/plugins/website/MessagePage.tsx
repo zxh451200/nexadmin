@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { CheckCheck, Inbox, Trash2 } from 'lucide-react'
+import { CheckCheck, Download, Inbox, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { downloadCsv } from '@/framework/components/export/csv'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
@@ -15,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { formatTime } from './format'
 import {
   MESSAGE_STATUSES,
+  fetchMessagesForExport,
   useDeleteMessages,
   useMessages,
   useSetMessageStatus,
@@ -67,6 +69,41 @@ export default function MessagePage() {
     setDetail(row)
     // 打开详情即算已读；已处理的不回退，避免看一次就把跟进状态冲掉。
     if (row.status === 'new') void applyStatus([row.id], 'read')
+  }
+
+  const [exporting, setExporting] = useState(false)
+  // 导出沿用当前筛选（不是当前页）：后端按同一套条件取全量，前端生成带 BOM 的 CSV。
+  const onExport = async () => {
+    setExporting(true)
+    try {
+      const rows = await fetchMessagesForExport({ keyword: filters.keyword, status: filters.status })
+      const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+      downloadCsv(`messages-${stamp}.csv`, [
+        [
+          t('plugin_website.message.status'),
+          t('plugin_website.message.name'),
+          t('plugin_website.message.email'),
+          t('plugin_website.message.phone'),
+          t('plugin_website.message.content'),
+          t('plugin_website.message.ip'),
+          t('plugin_website.message.createdAt'),
+        ],
+        ...rows.map((r) => [
+          statusLabel(r.status),
+          r.name,
+          r.email,
+          r.phone,
+          r.content,
+          r.ip,
+          formatTime(r.createdAt, i18n.language),
+        ]),
+      ])
+      toast.success(t('common.operateSuccess'))
+    } catch {
+      toast.error(t('common.operateFailed'))
+    } finally {
+      setExporting(false)
+    }
   }
 
   const onDelete = async (rows: SiteMessage[]) => {
@@ -161,7 +198,7 @@ export default function MessagePage() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_website.all')}</SelectItem>
+            <SelectItem value={ALL}>{t('plugin_website.filter.allStatuses')}</SelectItem>
             {MESSAGE_STATUSES.map((s) => (
               <SelectItem key={s} value={s}>
                 {statusLabel(s)}
@@ -171,6 +208,14 @@ export default function MessagePage() {
         </Select>
       </FilterBar>
       <DataTable
+        toolbar={
+          <Can perm="website:message">
+            <Button type="button" variant="outline" onClick={() => void onExport()} disabled={exporting}>
+              <Download className="me-2 size-4" aria-hidden="true" />
+              {t('common.export')}
+            </Button>
+          </Can>
+        }
         columns={columns}
         data={data?.list ?? []}
         rowKey="id"

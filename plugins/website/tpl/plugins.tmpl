@@ -16,7 +16,7 @@
   <div class="container">
     <form class="market-toolbar" action="{{.URL "/plugins"}}" method="get" role="search">
       <div class="market-search">
-        <span class="market-search-icon" aria-hidden="true">⌕</span>
+        <span class="market-search-icon" aria-hidden="true">{{uiIcon "search"}}</span>
         <input type="search" name="q" value="{{.MarketQuery}}" placeholder="{{.T "market.searchPlaceholder"}}" aria-label="{{.T "market.searchAria"}}" autocomplete="off">
       </div>
       {{if .MarketCategory}}<input type="hidden" name="category" value="{{.MarketCategory}}">{{end}}
