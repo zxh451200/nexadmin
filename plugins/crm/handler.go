@@ -3,12 +3,17 @@ package crm
 import (
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
+	"nexadmin/core/auth"
 	"nexadmin/core/datascope"
+	"nexadmin/core/region"
 	"nexadmin/core/response"
+	"nexadmin/pkg/idcard"
 	"nexadmin/pkg/idgen"
+	"nexadmin/pkg/mask"
 )
 
 // 路由前缀：/api/v1/plugins/crm。权限码：crm:list 查看；crm:edit 客户维护；
@@ -76,6 +81,38 @@ func (f customerForm) input() CustomerInput {
 	}
 }
 
+// PermRevealID 是查看明文证件号所需的权限点，由 realname 插件声明；
+// 每次查看都进操作日志，事后能回答"谁看过谁的证件号"。
+const PermRevealID = "realname:reveal"
+
+// canRevealID 判断当前请求者能否看明文。Claims.Perms 不进 JWT（只有开放平台
+// 中间件会填），所以走 Profile 取真实权限集合；取不到就按"不能"处理。
+func canRevealID(c *gin.Context) bool {
+	cl := auth.ClaimsFrom(c)
+	if cl == nil {
+		return false
+	}
+	if cl.Super {
+		return true
+	}
+	if svc := auth.Default(); svc != nil && svc.Provider() != nil {
+		if u, err := svc.Profile(c.Request.Context(), cl); err == nil {
+			return auth.HasPerm(u.Perms, PermRevealID)
+		}
+	}
+	return false
+}
+
+// maskIDRows 把证件号脱敏。列表/详情/导出三条读路都走这里，漏一条就是明文事故。
+func maskIDRows(c *gin.Context, rows []Customer) {
+	if canRevealID(c) {
+		return
+	}
+	for i := range rows {
+		rows[i].IdNo = mask.IDCard(rows[i].IdNo)
+	}
+}
+
 // GET /plugins/crm/customers?keyword=&type=&status=&source=&page=&pageSize=
 func (h *handler) listCustomers(c *gin.Context) {
 	sc, ok := h.scopeOf(c)
@@ -88,6 +125,7 @@ func (h *handler) listCustomers(c *gin.Context) {
 		response.Fail(c, err)
 		return
 	}
+	maskIDRows(c, rows)
 	response.Page(c, rows, total, page, size)
 }
 
@@ -112,6 +150,7 @@ func (h *handler) exportCustomers(c *gin.Context) {
 		response.Fail(c, err)
 		return
 	}
+	maskIDRows(c, rows) // 导出默认脱敏：明文只能逐条按权限查看，不跟着 CSV 批量出去。
 	response.OK(c, rows)
 }
 
@@ -126,7 +165,45 @@ func (h *handler) getCustomer(c *gin.Context) {
 		return
 	}
 	cu, err := h.svc.GetCustomer(c.Request.Context(), sc, id)
+	if err == nil && !canRevealID(c) {
+		cu.IdNo = mask.IDCard(cu.IdNo)
+	}
 	respond(c, cu, err)
+}
+
+// GET /plugins/crm/customers/:id/idcard —— 明文证件号与由号码派生的实名信息。
+// 单独一条路由而不是列表加字段：权限点独立、操作日志独立，谁看了什么留得下来。
+func (h *handler) revealID(c *gin.Context) {
+	sc, ok := h.scopeOf(c)
+	if !ok {
+		return
+	}
+	id, ok := idParam(c)
+	if !ok {
+		return
+	}
+	cu, err := h.svc.GetCustomer(c.Request.Context(), sc, id)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	if cu.IdNo == "" {
+		response.Fail(c, response.NotFound("crm.id_pair_invalid"))
+		return
+	}
+	view := gin.H{"idType": cu.IdType, "idNo": cu.IdNo}
+	if info, err := idcard.Parse(cu.IdNo, region.Trail); err == nil {
+		view["kind"] = info.Kind
+		view["regionNames"] = info.RegionNames
+		view["birthday"] = info.Birthday.Format("2006-01-02")
+		view["sex"] = info.Sex
+		view["age"] = info.AgeAt(time.Now().UTC())
+	} else {
+		// 存量脏数据（历史导入的错号）照样给原文，但要如实标出来，别让人以为号码是合法的。
+		view["valid"] = false
+		view["reason"] = string(idcard.ReasonOf(err))
+	}
+	response.OK(c, view)
 }
 
 // POST /plugins/crm/customers

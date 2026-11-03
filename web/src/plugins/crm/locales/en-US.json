@@ -169,6 +169,15 @@
       "reopen": "Reopen",
       "empty": "No follow-ups yet. Click \"Log follow-up\" to record the first conversation.",
       "deleteConfirm": "Delete this follow-up record?"
+    },
+    "reveal": {
+      "show": "Show ID number",
+      "hide": "Hide",
+      "invalid": "This number is invalid (legacy import or entry error)",
+      "sex": {
+        "male": "male",
+        "female": "female"
+      }
     }
   }
 }

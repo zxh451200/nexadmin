@@ -11,7 +11,9 @@ import (
 
 	"nexadmin/core/auth"
 	"nexadmin/core/datascope"
+	"nexadmin/core/region"
 	"nexadmin/core/response"
+	"nexadmin/pkg/idcard"
 	"nexadmin/pkg/idgen"
 )
 
@@ -126,6 +128,15 @@ func (in *CustomerInput) normalize() error {
 	if (in.IdType == "") != (in.IdNo == "") {
 		return response.BadRequest("crm.id_pair_invalid")
 	}
+	// 大陆居民身份证：归一化（去空白/全角、末位 x 大写、15 位升 18 位）后判合法性，
+	// 存归一化结果。带 * 的是列表/详情回显的脱敏串，视为"没改过"，由 UpdateCustomer 沿用原值。
+	if in.IdType == IdTypeIDCard && in.IdNo != "" && !strings.Contains(in.IdNo, "*") {
+		info, err := idcard.Parse(in.IdNo, region.Trail)
+		if err != nil {
+			return response.BadRequest("crm.id_no_invalid")
+		}
+		in.IdNo = info.Number
+	}
 	in.IdNo = truncate(in.IdNo, 64)
 	in.TaxNo = truncate(in.TaxNo, 32)
 	in.Industry = truncate(in.Industry, 64)
@@ -198,6 +209,10 @@ func (s *Service) ExportCustomers(ctx context.Context, q CustomerQuery) ([]Custo
 }
 
 func (s *Service) CreateCustomer(ctx context.Context, in CustomerInput) (*Customer, error) {
+	if strings.Contains(in.IdNo, "*") {
+		// 新建时没有"原值"可沿用，脱敏串当输入就是脏数据。
+		return nil, response.BadRequest("crm.id_no_masked")
+	}
 	if err := in.normalize(); err != nil {
 		return nil, err
 	}
@@ -271,6 +286,11 @@ func (s *Service) UpdateCustomer(ctx context.Context, sc *datascope.Scope, id id
 	// 清空编码视为"沿用原编码"：导入按手机号更新时不会把手工编码冲掉。
 	if in.Code == "" {
 		in.Code = c.Code
+	}
+	// 回显的是脱敏串（110101********803X）时同样视为"没改过"：否则一次普通保存
+	// 就会把星号写进库，证件号彻底废掉。
+	if strings.Contains(in.IdNo, "*") {
+		in.IdNo, in.IdType = c.IdNo, c.IdType
 	}
 	// 查重放在可见性与取行之后：先确认能改这条，再谈是否撞了别人。
 	if err := s.checkCustomerDuplicate(ctx, id, in); err != nil {

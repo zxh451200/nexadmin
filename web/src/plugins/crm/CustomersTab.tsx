@@ -18,6 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/framework/ui/textarea'
 import {
   fetchCustomersForExport,
+  useRevealIdNo,
   useBindExternal,
   useCustomers,
   useDeleteCustomer,
@@ -25,6 +26,7 @@ import {
   useOpportunities,
   useSaveCustomer,
   type CrmCustomer,
+  type IdNoReveal,
   type CrmCustomerForm,
   type CustomerQuery,
   type CustomerType,
@@ -363,6 +365,55 @@ function CustomerFormDialog({
 }
 
 
+// 明文证件号是单独一次请求（权限点 realname:reveal，后端记操作日志）。
+// key 绑在 customer.id 上：换客户查看时不会把上一个客户的明文留在屏幕上。
+function IdNoRow({ customer }: { customer: CrmCustomer }) {
+  const { t } = useTranslation()
+  const reveal = useRevealIdNo()
+  const [shown, setShown] = useState<IdNoReveal | null>(null)
+  const detail = shown
+    ? [
+        shown.regionNames?.length ? shown.regionNames.join(' / ') : '',
+        shown.birthday,
+        shown.sex ? t(`plugin_crm.reveal.sex.${shown.sex}`, { defaultValue: shown.sex }) : '',
+        typeof shown.age === 'number' ? `${shown.age}` : '',
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    : ''
+  return (
+    <div className="flex min-w-0 items-start justify-between gap-2">
+      <div className="min-w-0">
+        <DetailRow label={t('plugin_crm.fields.idNo')} value={shown?.idNo ?? customer.idNo} />
+        {detail ? <p className="mt-0.5 text-xs text-muted-foreground">{detail}</p> : null}
+        {shown && shown.valid === false ? (
+          <p className="mt-0.5 text-xs text-destructive">{t('plugin_crm.reveal.invalid')}</p>
+        ) : null}
+      </div>
+      {customer.idNo ? (
+        <Can perm="realname:reveal">
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={shown ? t('plugin_crm.reveal.hide') : t('plugin_crm.reveal.show')}
+            title={t('plugin_crm.reveal.show')}
+            disabled={reveal.isPending}
+            onClick={() => {
+              if (shown) {
+                setShown(null)
+                return
+              }
+              reveal.mutate(customer.id, { onSuccess: setShown })
+            }}
+          >
+            <Eye aria-hidden="true" />
+          </Button>
+        </Can>
+      ) : null}
+    </div>
+  )
+}
+
 function DetailRow({ label, value }: { label: string; value?: ReactNode }) {
   return (
     <div className="min-w-0">
@@ -454,8 +505,7 @@ function CustomerDetailDialog({ customer, onClose }: { customer: CrmCustomer | n
                   label={t('plugin_crm.fields.idType')}
                   value={customer.idType ? t(`plugin_crm.idType.${customer.idType}`, { defaultValue: customer.idType }) : ''}
                 />
-                <DetailRow label={t('plugin_crm.fields.idNo')} value={customer.idNo} />
-
+                <IdNoRow key={customer.id} customer={customer} />
               </>
             )}
             <DetailRow

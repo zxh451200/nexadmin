@@ -235,6 +235,8 @@ pay:
   PAY_DATE_INVALID: 日期格式必须是 YYYY-MM-DD
   PAY_EXPORT_TOO_MANY: 导出超过 10000 行上限，请缩小日期或筛选范围
   plugin_inactive: 支付中台插件未启用或授权已失效
+  id_no_invalid: 证件号不合法：请核对出生日期、地区码与末位校验码
+  id_no_masked: 证件号是脱敏回显值，请重新输入完整号码
 crm:
   name_required: 客户名称不能为空
   title_required: 线索/商机标题不能为空

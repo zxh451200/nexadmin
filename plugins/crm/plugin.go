@@ -62,6 +62,8 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	// 静态段注册在 /customers/:id 之前（与 pay /orders/stats 同一套匹配约定）。
 	g.GET("/customers/export", core.Perm("crm:list"), h.exportCustomers)
 	g.GET("/customers/:id", core.Perm("crm:list"), h.getCustomer)
+	// 明文证件号：权限点归 realname 插件，且每次查看都进操作日志。
+	g.GET("/customers/:id/idcard", core.Perm(PermRevealID), d.OperLogMiddleware("crm", "reveal-id"), h.revealID)
 	g.POST("/customers", core.Perm("crm:edit"), h.createCustomer)
 	g.PUT("/customers/:id", core.Perm("crm:edit"), h.updateCustomer)
 	g.DELETE("/customers/:id", core.Perm("crm:edit"), h.deleteCustomer)

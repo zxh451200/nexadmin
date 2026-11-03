@@ -189,6 +189,23 @@ export function useOpportunities(query: OpportunityQuery, enabled = true) {
   })
 }
 
+// 明文证件号：单独接口，权限点 realname:reveal，后端每次查看都记操作日志。
+export interface IdNoReveal {
+  idType: string
+  idNo: string
+  kind?: string
+  regionNames?: string[]
+  birthday?: string
+  sex?: string
+  age?: number
+  valid?: boolean
+  reason?: string
+}
+
+export function useRevealIdNo() {
+  return useMutation({ mutationFn: (id: string) => api.get<IdNoReveal>(`${BASE}/customers/${id}/idcard`) })
+}
+
 function useInvalidate() {
   const qc = useQueryClient()
   return () => void qc.invalidateQueries({ queryKey: KEY })

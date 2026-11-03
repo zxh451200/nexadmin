@@ -235,6 +235,8 @@ pay:
   PAY_DATE_INVALID: Date must be in YYYY-MM-DD format.
   PAY_EXPORT_TOO_MANY: Export exceeds the 10000-row limit; narrow the date or filter range.
   plugin_inactive: Pay plugin is not enabled or its license has lapsed
+  id_no_invalid: Invalid ID number - check the birth date, region code and check digit
+  id_no_masked: The ID number is the masked display value; enter the full number
 crm:
   name_required: Customer name is required
   title_required: Lead/opportunity title is required
