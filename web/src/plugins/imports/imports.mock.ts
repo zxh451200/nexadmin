@@ -113,6 +113,16 @@ defineMock([
     },
   },
   {
+    method: 'POST',
+    url: '/plugins/imports/:id/cancel',
+    handler: ({ params }) => {
+      const j = jobs.find((x) => x.id === params.id) ?? mockError(404, 'Not found')
+      if (j.status !== 'pending' && j.status !== 'running') mockError(409, 'The job is not running, so there is nothing to cancel.')
+      Object.assign(j, { status: 'cancelled' })
+      return j
+    },
+  },
+  {
     method: 'DELETE',
     url: '/plugins/imports/:id',
     handler: ({ params }) => {

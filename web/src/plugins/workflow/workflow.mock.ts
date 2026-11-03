@@ -1,5 +1,5 @@
 import { defineMock, mockError } from '@/framework/request/mock'
-import type { WfDef, WfDefinition, WfInst } from './api'
+import type { WfDef, WfDefVersion, WfDefinition, WfInst } from './api'
 
 const ago = (min: number) => new Date(Date.now() - min * 60_000).toISOString()
 
@@ -133,6 +133,18 @@ let defs: WfDef[] = [
     updatedAt: ago(60 * 24),
   },
 ]
+
+// 历史版本不含当前版本、列表新→旧（同后端 DefVersions）；XML 另按 `${defId}:${version}` 取，DefVersionView 里没有 XML。
+const defHistory: Record<string, WfDefVersion[]> = {
+  '7440000000000000001': [
+    { version: 2, name: def.name, status: 'published', updatedAt: ago(60 * 24 * 9) },
+    { version: 1, name: def.name, status: 'draft', updatedAt: ago(60 * 24 * 28) },
+  ],
+}
+const defHistoryXml: Record<string, string> = {
+  '7440000000000000001:2': defXml.replace('Definitions_mock', 'Definitions_mock_v2').replace('flowlite:timeoutMinutes="1440"', 'flowlite:timeoutMinutes="720"'),
+  '7440000000000000001:1': defXml.replace('Definitions_mock', 'Definitions_mock_v1').replace(' flowlite:escalateTo="director" flowlite:timeoutMinutes="1440"', ''),
+}
 
 defineMock([
   {
@@ -300,8 +312,55 @@ defineMock([
       return x
     },
   },
+  {
+    method: 'POST',
+    url: '/plugins/workflow/instances/:id/urge',
+    handler: ({ params }) => {
+      const x = insts.find((i) => i.id === params.id) ?? mockError(404, 'Not found')
+      if (x.status !== 'running') mockError(400, 'The workflow has finished and cannot be advanced')
+      return null
+    },
+  },
   { method: 'POST', url: '/plugins/workflow/defs', handler: ({ body }) => body },
   { method: 'PUT', url: '/plugins/workflow/defs/:id', handler: ({ body }) => body },
+  {
+    method: 'GET',
+    url: '/plugins/workflow/defs/:id/versions',
+    handler: ({ params }) => {
+      if (!defs.find((d) => d.id === params.id)) mockError(404, 'Not found')
+      return defHistory[params.id] ?? []
+    },
+  },
+  {
+    method: 'GET',
+    url: '/plugins/workflow/defs/:id/versions/:ver/xml',
+    handler: ({ params, query }) => {
+      if (!/^\d+$/.test(params.ver) || Number(params.ver) <= 0) mockError(400, 'Bad request')
+      if (!defs.find((d) => d.id === params.id)) mockError(404, 'Not found')
+      const ver = Number(params.ver)
+      const row = (defHistory[params.id] ?? []).find((v) => v.version === ver)
+      if (!row) mockError(404, 'Not found')
+      const xml = defHistoryXml[`${params.id}:${row.version}`] ?? defXml
+      return query.format === 'json' ? { xml } : xml
+    },
+  },
+  {
+    method: 'POST',
+    url: '/plugins/workflow/defs/:id/versions/:ver/rollback',
+    handler: ({ params }) => {
+      if (!/^\d+$/.test(params.ver) || Number(params.ver) <= 0) mockError(400, 'Bad request')
+      const d = defs.find((x) => x.id === params.id) ?? mockError(404, 'Not found')
+      const ver = Number(params.ver)
+      const rows = defHistory[d.id] ?? []
+      if (!rows.some((v) => v.version === ver)) mockError(404, 'Not found')
+      defHistoryXml[`${d.id}:${d.version}`] = d.xml ?? defXml
+      rows.unshift({ version: d.version, name: d.name, status: d.status, updatedAt: d.updatedAt })
+      d.xml = defHistoryXml[`${d.id}:${ver}`] ?? defXml
+      d.version += 1
+      d.updatedAt = new Date().toISOString()
+      return d
+    },
+  },
   {
     method: 'DELETE',
     url: '/plugins/workflow/defs/:id',

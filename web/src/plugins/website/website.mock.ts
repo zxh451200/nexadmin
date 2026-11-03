@@ -292,11 +292,40 @@ const mockSchemas: Record<string, EntitySchema> = {
   },
 }
 
+const machineTranslate = (text: string, to: string, format: string) =>
+  format === 'html'
+    ? text.replace(/(^|>)([^<>]+)(?=<|$)/g, (m, lead: string, seg: string) => (seg.trim() ? `${lead}[${to}] ${seg}` : m))
+    : `[${to}] ${text}`
+
+function aiEnabled(): boolean {
+  try {
+    const raw = localStorage.getItem('mock-settings')
+    return !raw || JSON.parse(raw)?.ai?.enabled !== false
+  } catch {
+    return true
+  }
+}
+
+const maxBatchItems = 50
+
 defineMock([
   {
     method: 'GET',
     url: '/plugins/website/i18n/schema/:entity',
     handler: ({ params }) => mockSchemas[params.entity] ?? mockError(404, 'unknown entity'),
+  },
+  {
+    method: 'POST',
+    url: '/plugins/website/i18n/translate/:entity',
+    handler: ({ params, body }) => {
+      if (!mockSchemas[params.entity]) mockError(404, 'unknown entity')
+      const texts = Array.isArray(body?.texts) ? body.texts : []
+      if (!texts.length || texts.length > maxBatchItems) mockError(400, 'bad request')
+      if (!aiEnabled()) mockError(503, 'Service temporarily unavailable')
+      const to = String(body?.to ?? '')
+      const format = String(body?.format ?? 'text')
+      return { entity: params.entity, texts: texts.map((x: unknown) => machineTranslate(String(x ?? ''), to, format)) }
+    },
   },
   { method: 'GET', url: '/plugins/website/settings', handler: () => settings },
   {
@@ -461,12 +490,41 @@ defineMock([
     },
   },
   {
+    // 字面量路由排在 PUT /pages/:id 之前，否则 status 会被当成 :id 吞掉
+    method: 'PUT',
+    url: '/plugins/website/pages/status',
+    handler: ({ body }) => {
+      const ids = new Set<string>((body.ids ?? []).map(String))
+      const status = String(body.status ?? '')
+      if (!ids.size || !['published', 'draft'].includes(status)) return mockError(400, 'bad request')
+      let updated = 0
+      for (const row of pages) {
+        if (ids.has(row.id) && row.published !== (status === 'published')) {
+          row.published = status === 'published'
+          row.updatedAt = new Date().toISOString()
+          updated++
+        }
+      }
+      return { updated }
+    },
+  },
+  {
     method: 'PUT',
     url: '/plugins/website/pages/:id',
     handler: ({ params, body }) => {
       const row = pages.find((x) => x.id === params.id) ?? mockError(404, 'not found')
       Object.assign(row, body, { updatedAt: new Date().toISOString() })
       return row
+    },
+  },
+  {
+    method: 'DELETE',
+    url: '/plugins/website/pages',
+    handler: ({ query }) => {
+      const ids = new Set(String(query.ids ?? '').split(',').map((s) => s.trim()).filter(Boolean))
+      const before = pages.length
+      pages = pages.filter((p) => !ids.has(p.id))
+      return { deleted: before - pages.length }
     },
   },
   {
