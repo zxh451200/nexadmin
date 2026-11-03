@@ -67,8 +67,11 @@ const NEST_OFFSET = 24
 const INDENT_STEP = 24
 /** 落点线从手柄列右侧起画：手柄 36px 是抓取区，线端圆点压在它下面会贴住六点手柄 */
 const DROP_LINE_INSET = 48
-/** 横向跟手打五折：位移看得见（这就是「往右拖=降级」的手势反馈），又不至于把行甩出滚动容器 */
+/** 横向跟手打五折：位移看得见（这就是「往树内侧拖=降级」的手势反馈），又不至于把行甩出滚动容器 */
 const dampX: Modifier = ({ transform }) => ({ ...transform, x: transform.x * 0.5 })
+
+/** 书写方向：树区在 LTR 靠左、RTL 靠右，落位线几何与缩进手势都按它镜像 */
+const isRtl = () => document.documentElement.dir === 'rtl'
 
 const groupId = (parentId: string | null) => `g:${parentId ?? ''}`
 
@@ -294,7 +297,7 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
   }, [dragId])
 
   /** 拖动开始时快照一次行坐标：排序动画会改行位置，实时读 DOM 会「套住自己」来回跳 */
-  type RowBox = { top: number; bottom: number; left: number; right: number; handleLeft: number; nameRight: number }
+  type RowBox = { top: number; bottom: number; left: number; right: number; anchor: number; nameEdge: number }
   const [rects, setRects] = useState<Map<string, RowBox>>(() => new Map())
   // 起拖后内容层被滚走多少：快照坐标是起拖那一刻的屏幕坐标，落点命中要按这个位移换算回去，
   // 否则长树一旦触发边缘自动滚动，指针还停在原处、行已经跑走，落点就指错行。
@@ -315,13 +318,16 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
 
   const snapshotRects = () => {
     const next = new Map<string, RowBox>()
+    // 树区在 LTR 靠左、RTL 靠右：anchor 是「这一级从哪条物理边起算」，nameEdge 是落位线的另一头，
+    // 两者都按方向取，后面算宽度就不用再分叉。
+    const rtl = isRtl()
     for (const el of document.querySelectorAll<HTMLElement>('[data-sortable-id]')) {
       const id = el.dataset.sortableId
       if (!id) continue
       const r = el.getBoundingClientRect()
       // 按 data 属性认把手：勾选框也是带 aria-label 的 button，按 aria-label 找会认错
       const handle = (el.querySelector<HTMLElement>('button[data-drag-handle]') ?? el.querySelector<HTMLElement>('button[aria-label]'))?.getBoundingClientRect()
-      // 名称列（第一个数据列，把手与勾选列排在它前面）的右边界：落位线只画到树那一列为止
+      // 名称列（第一个数据列，把手与勾选列排在它前面）：落位线只画到树那一列为止
       const leadingCells = (onReorder ? 1 : 0) + (selection ? 1 : 0)
       const nameCell = el.querySelectorAll('td')[leadingCells]?.getBoundingClientRect()
       next.set(id, {
@@ -329,8 +335,8 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
         bottom: r.bottom,
         left: r.left,
         right: r.right,
-        handleLeft: handle?.left ?? r.left + 8,
-        nameRight: nameCell?.right ?? 0,
+        anchor: rtl ? (handle?.right ?? r.right - 8) : (handle?.left ?? r.left + 8),
+        nameEdge: nameCell ? (rtl ? nameCell.left : nameCell.right) : 0,
       })
     }
     setRects(next)
@@ -417,10 +423,12 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
     }
     const overNode = findNode(tree, overId)
     if (!overNode || !box || containsNode(tree, active, overId)) return null
-    const dx = pointer.x - pointer.startX
+    const rtl = isRtl()
+    // 手势按书写方向取号：往「树内侧」拖是降级，RTL 下内侧是物理左
+    const dx = (pointer.x - pointer.startX) * (rtl ? -1 : 1)
     const activeParent = parentOf(tree, active) ?? null
     const overParent = parentOf(tree, overId) ?? null
-    const firstHandle = rects.values().next().value?.handleLeft ?? box.left + 8
+    const firstAnchor = rects.values().next().value?.anchor ?? (rtl ? box.right - 8 : box.left + 8)
 
     const plan = (o: {
       y: number
@@ -432,14 +440,17 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
       edge?: 'before' | 'after'
       reason?: string
     }): DropPlan => {
-      const left = (o.indentBase ?? firstHandle) + DROP_LINE_INSET + Math.max(0, o.depth) * INDENT_STEP
-      // 线只画到名称列右边界：整行在宽表格里是两三千像素，一条贯穿屏幕的蓝线读起来像进度条，
-      // 反而把「落在哪一行、第几级」这两个真正的信息淹了。卡片布局量不到 td（nameRight=0）才退回整行。
-      const right = box!.nameRight > 0 ? box!.nameRight : box!.right
+      const step = DROP_LINE_INSET + Math.max(0, o.depth) * INDENT_STEP
+      // anchor 是这一级起算的那条物理边（LTR 左 / RTL 右），往里落一级就是 ±step
+      const start = (o.indentBase ?? firstAnchor) + (rtl ? -step : step)
+      // 线只画到名称列那一头：整行在宽表格里是两三千像素，一条贯穿屏幕的蓝线读起来像进度条，
+      // 反而把「落在哪一行、第几级」这两个真正的信息淹了。卡片布局量不到 td（nameEdge=0）才退回整行。
+      const far = box!.nameEdge > 0 ? box!.nameEdge : (rtl ? box!.left : box!.right)
+      const width = Math.max(120, Math.abs(far - start) - 8)
       return {
         y: o.y,
-        left,
-        width: Math.max(120, right - left - 8),
+        left: rtl ? start - width : start,
+        width,
         mode: o.mode,
         parentId: o.parentId,
         afterId: o.afterId,
@@ -465,10 +476,10 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
       const afterId = kids.length ? kids[kids.length - 1].id : ''
       const y = appendAnchor(overId) ?? box.bottom
       if (maxDepth && depth + heightOf(activeNode) - 1 > maxDepth) {
-        return plan({ y, indentBase: box.handleLeft, depth, mode: 'blocked', parentId: overId, afterId, reason: 'dataTable.maxDepthReached' })
+        return plan({ y, indentBase: box.anchor, depth, mode: 'blocked', parentId: overId, afterId, reason: 'dataTable.maxDepthReached' })
       }
       const reason = blockNest?.(activeNode, overNode) ?? null
-      return plan({ y, indentBase: box.handleLeft, depth, mode: reason ? 'blocked' : 'move', parentId: overId, afterId, reason: reason ?? undefined })
+      return plan({ y, indentBase: box.anchor, depth, mode: reason ? 'blocked' : 'move', parentId: overId, afterId, reason: reason ?? undefined })
     }
     if (dx < -NEST_OFFSET && onMove && activeParent !== null) {
       // 往左拖过几档缩进就升几级：一次拖拽能从第 3 级直接回到第 1 级，
@@ -491,7 +502,7 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
       const rootReason = parentId === null ? (blockNest?.(activeNode, null) ?? null) : null
       return plan({
         y,
-        indentBase: parentId === null ? null : (rects.get(parentId)?.handleLeft ?? null),
+        indentBase: parentId === null ? null : (rects.get(parentId)?.anchor ?? null),
         depth: parentId === null ? 0 : (depthOf(tree, parentId) ?? 0) + 1,
         mode: rootReason ? 'blocked' : 'move',
         parentId,
@@ -503,7 +514,7 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
     if (overParent === activeParent) {
       return plan({
         y: edge === 'before' ? box.top : box.bottom,
-        indentBase: box.handleLeft,
+        indentBase: box.anchor,
         depth: depthOf(tree, overId) ?? 0,
         mode: 'reorder',
         parentId: overParent,
@@ -516,7 +527,7 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
     const groupReason = overParent === null ? (blockNest?.(activeNode, null) ?? null) : null
     return plan({
       y: edge === 'before' ? box.top : box.bottom,
-      indentBase: box.handleLeft,
+      indentBase: box.anchor,
       depth: depthOf(tree, overId) ?? 0,
       mode: groupReason ? 'blocked' : 'move',
       parentId: overParent,
