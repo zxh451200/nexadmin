@@ -80,7 +80,7 @@ func (s *Service) Parse(idType, number string) (*ParseView, error) {
 	if err := checkIdType(idType); err != nil {
 		return nil, err
 	}
-	info, err := idcard.Parse(number, lookupRegion)
+	info, err := idcard.Parse(number, region.Trail)
 	if err != nil {
 		return &ParseView{
 			Status:       StatusInvalid,
@@ -537,40 +537,6 @@ func (s *Service) cacheStore(ctx context.Context, key, status, message string) {
 		return
 	}
 	_ = s.cache.Set(ctx, key, string(raw), verifyCacheTTL)
-}
-
-// lookupRegion 逐级回退解析归属地：省 → 地 → 县，返回最深命中的路径与层级。
-//
-// 区划快照粒度不一（有的只同步到地级）、撤县设区、快照年份滞后，都会让身份证前 6 位
-// 查不到县级。这些都不算号码非法——合法性由校验位与出生日期决定，归属地只是附带信息。
-// 只有连省级都认不出（如 99xxxx）才判码不对。
-func lookupRegion(code string) (path []string, level int) {
-	if len(code) != 6 {
-		return nil, 0
-	}
-	levels := []string{code[:2] + "0000", code[:4] + "00", code}
-	for i, c := range levels {
-		if i > 0 && c == levels[i-1] {
-			continue // 直辖市、省直辖县级单位：上级与本级代码同形
-		}
-		name, found := region.Name(c)
-		if !found {
-			if h, historical := region.HistoricalInfo(c); historical {
-				name = h.Name
-			} else {
-				continue
-			}
-		}
-		if name == "" {
-			continue
-		}
-		if len(path) > 0 && path[len(path)-1] == name {
-			continue // 同名层级不重复列
-		}
-		path = append(path, name)
-		level = i + 1
-	}
-	return path, level
 }
 
 func checkIdType(idType string) error {
