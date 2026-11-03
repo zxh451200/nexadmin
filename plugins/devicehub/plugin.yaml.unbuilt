@@ -1,0 +1,31 @@
+# 未开工声明：devicehub 目前只有这份清单，没有 Go 注册（plugins/devicehub/plugin.go）、
+# 没有前端页面（web/src/plugins/devicehub/DevicePage 也不存在）、没有市场目录条目。
+# plugins/edition_test.go 按 plugins/*/plugin.yaml 清点「清单 ↔ 注册」一致性，
+# 所以这份清单改名为 plugin.yaml.unbuilt 停在这里，避免一个跑不起来的插件被当成已交付。
+# 真正实现时：把本文件改回 plugin.yaml，并同轮补上 plugin.go 的 plugin.Register、
+# devicehub:list/edit/control 权限点、菜单指向的 DevicePage 与市场条目。
+id: devicehub
+name: 设备接入与监控
+version: 0.1.0
+description: 工业设备接入与监控：Modbus TCP / MQTT 驱动接入变频器、PLC 与上位机网关，测点配置与秒级采集（死区压缩、断线重连）、实时监控页（WS 推送）、指令下发（独立权限 + 回执 + 操作日志）、阈值告警（站内信通知）、历史数据与 xlsx 报表导出；devicehub.* 事件可由宿主订阅。协议驱动为插件内可注册接口，二期扩展 S7 / OPC UA。
+author: NexAdmin
+edition: pro
+requires_nexadmin: ">=0.1.0"
+menus:
+  - parent: /
+    type: menu
+    title: plugin_devicehub.menu
+    path: /devicehub/monitor
+    component: plugins/devicehub/DevicePage
+    perm: devicehub:list
+    icon: Gauge
+    sort: 64
+    keep_alive: true
+  - parent: devicehub:list
+    type: button
+    title: plugin_devicehub.perm.edit
+    perm: devicehub:edit
+  - parent: devicehub:list
+    type: button
+    title: plugin_devicehub.perm.control
+    perm: devicehub:control
