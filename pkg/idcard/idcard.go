@@ -43,6 +43,8 @@ type RegionFunc func(code string) (path []string, level int)
 type Info struct {
 	Number      string
 	Legacy      bool // 由 15 位号码升级而来（15 位本身没有校验位）
+	Kind        string
+	Country     string // 仅五星卡有值：国籍的 ISO 3166-1 alpha-2
 	RegionCode  string
 	RegionNames []string // 命中几级就给几级；level=0 时为空
 	RegionLevel int      // 0 未识别 / 1 省 / 2 地 / 3 县
@@ -145,7 +147,15 @@ func Parse(raw string, region RegionFunc) (Info, error) {
 	if err != nil {
 		return Info{}, err
 	}
-	info := Info{Number: n, Legacy: legacy, RegionCode: n[:6], CheckBit: n[17:]}
+	kind := detectKind(n)
+	info := Info{Number: n, Legacy: legacy, Kind: kind, CheckBit: n[17:]}
+	if kind == KindForeignerPRP {
+		// 五星卡前 6 位不是区划码：第 2-3 位是申领地省级码，第 4-6 位是国籍数字码。
+		info.RegionCode = prpRegionCode(n)
+		info.Country = Alpha2FromNumeric(prpCountryNumeric(n))
+	} else {
+		info.RegionCode = n[:6]
+	}
 
 	// 归属地只是附带信息，永远不参与合法性判定：区划快照粒度不一、撤县设区、
 	// 区划数据模块未启用都会让合法码查不到。号码对不对由字符、出生日期与校验位决定，
@@ -153,6 +163,12 @@ func Parse(raw string, region RegionFunc) (Info, error) {
 	if region != nil {
 		path, level := region(info.RegionCode)
 		info.RegionNames, info.RegionLevel = path, level
+	}
+	if info.RegionLevel == 0 {
+		// 台湾居民居住证的 830000 是证件口径，区划表里只有 710000 台湾省。
+		if name, ok := hmtRegionNames[info.RegionCode]; ok {
+			info.RegionNames, info.RegionLevel = []string{name}, 1
+		}
 	}
 
 	birthday, err := time.Parse("20060102", n[6:14])

@@ -14,6 +14,7 @@ import { Button } from '@/framework/ui/button'
 import { Card } from '@/framework/ui/card'
 import { Input } from '@/framework/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
+import { useCountryNames } from '@/framework/components/CountrySelect'
 import {
   STATUSES,
   useConfig,
@@ -169,6 +170,7 @@ function ConfigDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v:
 
 export default function RealnamePage() {
   const { t } = useTranslation()
+  const countryName = useCountryNames()
   const [name, setName] = useState('')
   const [number, setNumber] = useState('')
   const [remark, setRemark] = useState('')
@@ -230,6 +232,7 @@ export default function RealnamePage() {
       mobile: 'sub',
       render: (r) => <span className="font-mono text-xs">{r.numberMasked || '-'}</span>,
     },
+    { key: 'idType', title: t('plugin_realname.typeLabel'), mobile: 'hidden', render: (r) => t(`plugin_realname.kind.${r.idType}`, { defaultValue: r.idType }) },
     { key: 'status', title: t('plugin_realname.statusLabel'), render: (r) => <StatusBadge status={r.status} /> },
     { key: 'detail', title: t('plugin_realname.detail'), mobile: 'normal', render: renderDetail },
     { key: 'provider', title: t('plugin_realname.provider'), mobile: 'hidden', render: (r) => r.provider || '-' },
@@ -316,6 +319,16 @@ export default function RealnamePage() {
                   <dd className="font-mono text-xs">{parsed.numberMasked || '-'}</dd>
                 </div>
                 <div className="flex flex-col">
+                  <dt className="text-xs text-muted-foreground">{t('plugin_realname.typeLabel')}</dt>
+                  <dd>{parsed.kind ? t(`plugin_realname.kind.${parsed.kind}`) : '-'}</dd>
+                </div>
+                {parsed.country ? (
+                  <div className="flex flex-col">
+                    <dt className="text-xs text-muted-foreground">{t('plugin_realname.country')}</dt>
+                    <dd>{countryName(parsed.country)}</dd>
+                  </div>
+                ) : null}
+                <div className="flex flex-col">
                   <dt className="text-xs text-muted-foreground">{t('plugin_realname.region')}</dt>
                   <dd>{parsed.regionNames?.length ? parsed.regionNames.join(' / ') : '-'}</dd>
                 </div>
@@ -332,10 +345,12 @@ export default function RealnamePage() {
                   <dd>{parsed.status === 'valid' ? `${parsed.age ?? 0}` : '-'}</dd>
                 </div>
               </dl>
-              {parsed.status === 'valid' && (parsed.regionLevel ?? 3) === 0 ? (
+              {parsed.status === 'valid' && (parsed.regionLevel ?? 3) === 0 && parsed.kind !== 'hmt_permit' ? (
                 <p className="text-xs text-muted-foreground">{t('plugin_realname.regionUnknownHint')}</p>
               ) : null}
-              {parsed.status === 'valid' && (parsed.regionLevel ?? 3) > 0 && (parsed.regionLevel ?? 3) < 3 ? (
+              {/* 五星卡的申领地本来就是省级码、港澳台居住证是 6 位证件码：它们停在省级
+                  不是数据缺失，只有大陆居民身份证才需要提示粒度。 */}
+              {parsed.status === 'valid' && parsed.kind === 'resident_id' && (parsed.regionLevel ?? 3) > 0 && (parsed.regionLevel ?? 3) < 3 ? (
                 <p className="text-xs text-muted-foreground">
                   {t('plugin_realname.regionCoarseHint', {
                     level: t(`plugin_realname.regionLevel.${parsed.regionLevel}`),

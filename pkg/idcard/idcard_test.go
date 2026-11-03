@@ -283,3 +283,57 @@ func TestNormalize(t *testing.T) {
 		}
 	}
 }
+
+// 证件类型识别：港澳台居住证与五星卡的前缀规则，以及 830000 的证件口径归属地。
+func TestDetectKindAndSpecialRegions(t *testing.T) {
+	cases := []struct {
+		name     string
+		number   string
+		kind     string
+		region   string
+		country  string
+		birthday string
+		sex      string
+	}{
+		{"大陆居民身份证", "11010119900307803X", KindResidentID, "北京市/市辖区/东城区", "", "1990-03-07", SexMale},
+		{"港澳居民居住证", "810000199408230021", KindHMTPermit, "香港特别行政区", "", "1994-08-23", SexFemale},
+		{"台湾居民居住证", "830000199201300022", KindHMTPermit, "台湾地区", "", "1992-01-30", SexFemale},
+		{"五星卡", "941840199003078038", KindForeignerPRP, "河南省", "US", "1990-03-07", SexMale},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			info, err := Parse(tc.number, stubRegion)
+			if err != nil {
+				t.Fatalf("Parse(%q): %v", tc.number, err)
+			}
+			if info.Kind != tc.kind {
+				t.Errorf("Kind = %q, want %q", info.Kind, tc.kind)
+			}
+			if got := strings.Join(info.RegionNames, "/"); got != tc.region {
+				t.Errorf("RegionNames = %q, want %q", got, tc.region)
+			}
+			if info.Country != tc.country {
+				t.Errorf("Country = %q, want %q", info.Country, tc.country)
+			}
+			if got := info.Birthday.Format("2006-01-02"); got != tc.birthday {
+				t.Errorf("Birthday = %s, want %s", got, tc.birthday)
+			}
+			if info.Sex != tc.sex {
+				t.Errorf("Sex = %q, want %q", info.Sex, tc.sex)
+			}
+		})
+	}
+}
+
+// 国籍数字码表：抽查几个，未知码必须返回空而不是猜。
+func TestAlpha2FromNumeric(t *testing.T) {
+	cases := map[string]string{"840": "US", "156": "CN", "392": "JP", "276": "DE", "076": "BR", "010": "AQ", "999": "", "000": ""}
+	for num, want := range cases {
+		if got := Alpha2FromNumeric(num); got != want {
+			t.Errorf("Alpha2FromNumeric(%q) = %q, want %q", num, got, want)
+		}
+	}
+	if len(isoNumericToAlpha2) < 240 {
+		t.Errorf("ISO 数字码表只有 %d 条，疑似生成不完整", len(isoNumericToAlpha2))
+	}
+}

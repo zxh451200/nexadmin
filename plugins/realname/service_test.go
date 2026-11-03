@@ -18,6 +18,7 @@ import (
 	"nexadmin/core/cache"
 	"nexadmin/core/config"
 	"nexadmin/core/tenant"
+	"nexadmin/pkg/idcard"
 	"nexadmin/pkg/idgen"
 )
 
@@ -449,5 +450,62 @@ func verificationCols() []string {
 		"id", "tenant_id", "created_at", "updated_at", "name_masked", "id_type",
 		"number_masked", "number_hash", "status", "reason", "provider", "provider_msg",
 		"latency_ms", "operator_id", "operator_name", "remark",
+	}
+}
+
+// 港澳台居住证与五星卡没有对应的二要素通道：不能送出去，也不能白扣额度。
+func TestVerifyNonResidentIDNeverCallsProvider(t *testing.T) {
+	for _, tc := range []struct{ number, idType string }{
+		{"810000199408230021", IdTypeHMTPermit},
+		{"941840199003078038", IdTypeForeigner},
+	} {
+		u := newUpstream(t, `{"matched":true,"message":"不该被调用"}`)
+		db, m := mockDB(t)
+		expectVerificationInsert(m)
+
+		svc := NewService(db, memCache(t), nil)
+		svc.httpClient = u.srv.Client()
+		res, err := svc.verify(tenantCtx, VerifyInput{Number: tc.number, Name: "测试"}, enabledConfig(u.srv.URL, "k", 0))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if u.hits != 0 {
+			t.Errorf("%s 仍外呼了 %d 次", tc.number, u.hits)
+		}
+		if res.Verification.Reason != ReasonTypeUnsupported || res.Verification.IdType != tc.idType {
+			t.Errorf("reason/idType = %q/%q", res.Verification.Reason, res.Verification.IdType)
+		}
+		if res.Online {
+			t.Error("未调用外部服务不应标记 online")
+		}
+		if err := m.ExpectationsWereMet(); err != nil {
+			t.Error(err)
+		}
+	}
+}
+
+// 用真实区划数据核对：台湾居民居住证给出证件口径，五星卡给出申领地与国籍。
+func TestParseKindsAgainstRealRegionDataset(t *testing.T) {
+	svc := NewService(nil, nil, nil)
+	hmt, err := svc.Parse("", "830000199201300022")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hmt.Kind != idcard.KindHMTPermit || strings.Join(hmt.RegionNames, "/") != "台湾地区" {
+		t.Errorf("830000 应给证件口径的台湾地区，实际 kind=%s names=%v", hmt.Kind, hmt.RegionNames)
+	}
+
+	prp, err := svc.Parse("", "941840199003078038")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if prp.Kind != idcard.KindForeignerPRP || prp.Country != "US" {
+		t.Errorf("五星卡 kind/country = %s/%q", prp.Kind, prp.Country)
+	}
+	if strings.Join(prp.RegionNames, "/") != "河南省" || prp.RegionCode != "410000" {
+		t.Errorf("申领地 = %v (%s)，前 6 位不是区划码", prp.RegionNames, prp.RegionCode)
+	}
+	if prp.Birthday != "1990-03-07" || prp.Sex != "male" {
+		t.Errorf("派生 = %s/%s", prp.Birthday, prp.Sex)
 	}
 }

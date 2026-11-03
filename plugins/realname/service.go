@@ -61,6 +61,8 @@ func NewService(db *gorm.DB, c cache.Cache, log *zap.Logger) *Service {
 // ParseView 是号码解析结果。号码只以脱敏形式回传，明文不出服务层。
 type ParseView struct {
 	Status           string   `json:"status"`
+	Kind             string   `json:"kind"`
+	Country          string   `json:"country,omitempty"`
 	Reason           string   `json:"reason,omitempty"`
 	NumberMasked     string   `json:"numberMasked"`
 	Legacy           bool     `json:"legacy"`
@@ -89,6 +91,8 @@ func (s *Service) Parse(idType, number string) (*ParseView, error) {
 	_, historical := region.HistoricalInfo(info.RegionCode)
 	return &ParseView{
 		Status:           StatusValid,
+		Kind:             info.Kind,
+		Country:          info.Country,
 		NumberMasked:     mask.IDCard(info.Number),
 		Legacy:           info.Legacy,
 		RegionCode:       info.RegionCode,
@@ -132,9 +136,13 @@ func (s *Service) verify(ctx context.Context, in VerifyInput, cfgOverride *Confi
 		return nil, response.BadRequest("realname.name_required")
 	}
 	number := idcard.Normalize(in.Number)
+	parse, err := s.Parse(in.IdType, in.Number)
+	if err != nil {
+		return nil, err
+	}
 
 	row := &Verification{
-		IdType:       IdTypeIDCard,
+		IdType:       idTypeOf(parse.Kind),
 		NameMasked:   mask.Name(name),
 		NumberMasked: mask.IDCard(number),
 		NumberHash:   numberHash(number),
@@ -144,15 +152,20 @@ func (s *Service) verify(ctx context.Context, in VerifyInput, cfgOverride *Confi
 		row.OperatorID = cl.UserID
 		row.OperatorName = truncateRunes(cl.Username, 64)
 	}
-
-	parse, err := s.Parse(in.IdType, in.Number)
-	if err != nil {
-		return nil, err
-	}
 	row.Status = parse.Status
 	row.Reason = parse.Reason
 	if row.Status == StatusInvalid {
 		return &VerifyResult{Verification: row, Parse: parse}, s.record(ctx, row)
+	}
+
+	// 只有大陆居民身份证有对应的二要素通道；港澳台居住证与五星卡送过去只会被厂商退回，
+	// 还白扣一次调用额度。
+	if parse.Kind != idcard.KindResidentID {
+		row.Reason = ReasonTypeUnsupported
+		if perr := s.record(ctx, row); perr != nil {
+			return nil, perr
+		}
+		return &VerifyResult{Verification: row, Parse: parse}, nil
 	}
 
 	cfg := cfgOverride
@@ -596,4 +609,16 @@ func secretDecrypt(enc string) (string, error) {
 		return enc, nil
 	}
 	return secret.Decrypt(enc)
+}
+
+// idTypeOf 把 pkg/idcard 的证件类型映射成台账用的 token（与 crm 的证件类型口径对齐）。
+func idTypeOf(kind string) string {
+	switch kind {
+	case idcard.KindHMTPermit:
+		return IdTypeHMTPermit
+	case idcard.KindForeignerPRP:
+		return IdTypeForeigner
+	default:
+		return IdTypeIDCard
+	}
 }

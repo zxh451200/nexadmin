@@ -9,6 +9,12 @@ import (
 // 的二要素接口形态完全不同，宁可明确拒绝，也不要"看起来支持"。
 const IdTypeIDCard = "id_card"
 
+// 号码自己就能分辨出来的另两类证件；台账按识别结果记录，不按调用方声称的类型记录。
+const (
+	IdTypeHMTPermit = "hmt_permit"    // 港澳台居民居住证
+	IdTypeForeigner = "foreigner_prp" // 外国人永久居留身份证（五星卡）
+)
+
 // 核验结论。格式结论与在线结论分开，插件未启用在线核验时停在 valid。
 const (
 	StatusValid    = "valid"    // 号码合规则，未做在线核验
@@ -25,8 +31,9 @@ var StatusSet = map[string]bool{
 
 // 非号码格式的失败原因机器码，与 pkg/idcard 的 Reason 共用一个 Reason 字段。
 const (
-	ReasonDailyLimit    = "daily_limit"
-	ReasonProviderError = "provider_error"
+	ReasonDailyLimit      = "daily_limit"
+	ReasonProviderError   = "provider_error"
+	ReasonTypeUnsupported = "type_unsupported"
 )
 
 // Config 是在线核验的租户级配置（一行一租户）。密钥经 core/secret 加密落库。

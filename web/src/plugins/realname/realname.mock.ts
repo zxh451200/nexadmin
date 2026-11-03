@@ -51,7 +51,26 @@ const checksum = (body: string) => {
 const maskId = (s: string) => (s.length <= 10 ? '***' : `${s.slice(0, 6)}${'*'.repeat(s.length - 10)}${s.slice(-4)}`)
 const maskName = (s: string) => (s.length <= 1 ? `${s}**` : `${s.slice(0, 1)}${'*'.repeat(s.length - 1)}`)
 
-/** 与 idcard.Parse 同一判定顺序：长度 → 字符 → 区划 → 生日 → 未来 → 校验位。 */
+// 证件类型识别，与 pkg/idcard 的 detectKind 同规则：9 开头是五星卡，
+// 810000/820000/830000 是港澳台居民居住证。
+const HMT_NAMES: Record<string, string> = {
+  '810000': '香港特别行政区',
+  '820000': '澳门特别行政区',
+  '830000': '台湾地区',
+}
+// 假数据只需要覆盖演示用的几个国籍数字码；权威表在 pkg/idcard/iso3166.go（249 条）。
+const NUMERIC_TO_ALPHA2: Record<string, string> = { '840': 'US', '156': 'CN', '392': 'JP', '410': 'KR', '826': 'GB' }
+
+function detectKind(n: string): { kind: 'resident_id' | 'hmt_permit' | 'foreigner_prp'; regionCode: string; country: string } {
+  if (n[0] === '9') {
+    return { kind: 'foreigner_prp', regionCode: `${n.slice(1, 3)}0000`, country: NUMERIC_TO_ALPHA2[n.slice(3, 6)] ?? '' }
+  }
+  const code = n.slice(0, 6)
+  if (HMT_NAMES[code]) return { kind: 'hmt_permit', regionCode: code, country: '' }
+  return { kind: 'resident_id', regionCode: code, country: '' }
+}
+
+/** 与 idcard.Parse 同一判定顺序：长度 → 字符 → 生日 → 未来 → 校验位（区划不参与合法性）。 */
 function parseNumber(raw: string): { ok: true; info: ParseResult } | { ok: false; reason: string; masked: string } {
   let n = normalize(raw)
   const masked = maskId(n)
@@ -67,9 +86,11 @@ function parseNumber(raw: string): { ok: true; info: ParseResult } | { ok: false
   }
   if (!/^\d{17}[0-9X]$/.test(n)) return { ok: false, reason: 'chars', masked }
 
-  const code = n.slice(0, 6)
+  const detected = detectKind(n)
   // 归属地不参与合法性判定：查不到就停在 level 0，与 pkg/idcard 同口径。
-  const region = resolveRegion(code)
+  const region = detected.kind === 'hmt_permit'
+    ? { path: [HMT_NAMES[detected.regionCode]], level: 1 }
+    : resolveRegion(detected.regionCode)
 
   const y = Number(n.slice(6, 10))
   const mo = Number(n.slice(10, 12))
@@ -91,7 +112,9 @@ function parseNumber(raw: string): { ok: true; info: ParseResult } | { ok: false
       status: 'valid',
       numberMasked: maskId(n),
       legacy,
-      regionCode: code,
+      kind: detected.kind,
+      country: detected.country,
+      regionCode: detected.regionCode,
       regionNames: region.path,
       regionLevel: region.level,
       regionHistorical: false,
@@ -138,6 +161,23 @@ function row(partial: Partial<Verification> & { status: VerifyStatus }): Verific
 }
 
 const ledger: Verification[] = [
+  row({
+    status: 'valid',
+    idType: 'hmt_permit',
+    nameMasked: '陳*',
+    numberMasked: maskId('810000199408230021'),
+    reason: 'type_unsupported',
+    remark: '港澳台居民居住证：无二要素通道',
+    createdAt: ago(15),
+  }),
+  row({
+    status: 'valid',
+    idType: 'foreigner_prp',
+    nameMasked: 'SMITH',
+    numberMasked: maskId('941840199003078038'),
+    reason: 'type_unsupported',
+    createdAt: ago(8),
+  }),
   // 同一号码连提交两次：默认折叠成一行，切「全部留痕」能看到这两行。
   row({
     status: 'match',
@@ -222,6 +262,7 @@ defineMock([
         ? r.info
         : { status: 'invalid', reason: r.reason, numberMasked: r.masked }
 
+      const nonResident = r.ok && out.kind && out.kind !== 'resident_id'
       let status: VerifyStatus = out.status
       let reason: string | undefined
       let provider = ''
@@ -230,9 +271,11 @@ defineMock([
 
       if (!r.ok) {
         reason = r.reason
+      } else if (nonResident) {
+        reason = 'type_unsupported'
       } else if (!online) {
         providerMsg = ''
-      } else {
+      } else if (online) {
         provider = config.provider
         latencyMs = 120 + Math.floor(Math.random() * 200)
         const plain = String(body.number ?? '')
@@ -246,6 +289,7 @@ defineMock([
       }
 
       const verification = row({
+        idType: out.kind === 'foreigner_prp' ? 'foreigner_prp' : out.kind === 'hmt_permit' ? 'hmt_permit' : 'id_card',
         status,
         reason,
         provider,
@@ -257,7 +301,7 @@ defineMock([
         createdAt: now(),
       })
       ledger.unshift(verification)
-      return { verification, parse: out, online: online && r.ok } satisfies VerifyResult
+      return { verification, parse: out, online: online && r.ok && !nonResident } satisfies VerifyResult
     },
   },
   {

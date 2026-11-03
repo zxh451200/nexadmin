@@ -58,7 +58,8 @@
       "birthday_future": "Birth date is in the future",
       "checksum": "Check digit mismatch, usually one mistyped digit",
       "daily_limit": "Daily online verification quota exhausted",
-      "provider_error": "Online verification call failed"
+      "provider_error": "Online verification call failed",
+      "type_unsupported": "This document type has no name/number verification channel; only the format verdict was recorded"
     },
     "perm": {
       "verify": "Run verification",
@@ -73,7 +74,15 @@
       "2": "prefecture",
       "3": "county"
     },
-    "regionCoarseHint": "Region resolved only to {level}: the division snapshot is coarser or the county was reorganized. It does not affect the validity verdict.",
-    "regionUnknownHint": "Region unrecognized: the division dataset has no such code (module off, or the code is neither current nor historical). It does not affect the validity verdict."
+    "regionCoarseHint": "Region resolved only to {{level}}: the division snapshot is coarser or the county was reorganized. It does not affect the validity verdict.",
+    "regionUnknownHint": "Region unrecognized: the division dataset has no such code (module off, or the code is neither current nor historical). It does not affect the validity verdict.",
+    "typeLabel": "Document type",
+    "country": "Nationality",
+    "kind": {
+      "resident_id": "Mainland resident ID",
+      "hmt_permit": "HMT resident permit",
+      "foreigner_prp": "Foreigner permanent residence card",
+      "id_card": "Mainland resident ID"
+    }
   }
 }

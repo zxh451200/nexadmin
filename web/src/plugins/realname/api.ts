@@ -11,6 +11,10 @@ export type VerifyStatus = (typeof STATUSES)[number]
 
 export interface ParseResult {
   status: VerifyStatus
+  /** 号码本身分辨出的证件类型 */
+  kind?: 'resident_id' | 'hmt_permit' | 'foreigner_prp'
+  /** 仅五星卡有值：国籍 ISO 3166-1 alpha-2 */
+  country?: string
   reason?: string
   numberMasked: string
   legacy?: boolean

@@ -58,7 +58,8 @@
       "birthday_future": "出生日期晚于今天",
       "checksum": "校验位不符，多半是号码抄错了一位",
       "daily_limit": "今日在线核验额度已用完",
-      "provider_error": "在线核验调用失败"
+      "provider_error": "在线核验调用失败",
+      "type_unsupported": "该证件类型没有对应的二要素核验通道，只给出格式结论"
     },
     "perm": {
       "verify": "发起核验",
@@ -73,7 +74,15 @@
       "2": "地级",
       "3": "县级"
     },
-    "regionCoarseHint": "归属地只识别到{level}：区划快照粒度或撤县设区所致，不影响号码合法性判定。",
-    "regionUnknownHint": "归属地未识别：区划数据里没有这个码（模块未启用或码不属于现行/历史区划），不影响号码合法性判定。"
+    "regionCoarseHint": "归属地只识别到{{level}}：区划快照粒度或撤县设区所致，不影响号码合法性判定。",
+    "regionUnknownHint": "归属地未识别：区划数据里没有这个码（模块未启用或码不属于现行/历史区划），不影响号码合法性判定。",
+    "typeLabel": "证件类型",
+    "country": "国籍",
+    "kind": {
+      "resident_id": "大陆居民身份证",
+      "hmt_permit": "港澳台居民居住证",
+      "foreigner_prp": "外国人永久居留身份证",
+      "id_card": "大陆居民身份证"
+    }
   }
 }
