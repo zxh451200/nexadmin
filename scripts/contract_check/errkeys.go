@@ -22,7 +22,9 @@ var errKeyRe = regexp.MustCompile(
 	`response\.(?:New|BadRequest|Unauthorized|Forbidden|NotFound|Conflict|Unavailable)\(\s*"([a-zA-Z][a-zA-Z0-9_]*\.[a-zA-Z0-9_.]+)"`)
 
 // skipErrKeyDir 的补充：cmd/ 是 nexadmin CLI（new_agents.go 内嵌文本里有 "response." 字样），不扫描。
-var errKeySkipDirs = []string{".git/", "node_modules/", "web/", "scripts/", "testdata/", "testkit/", ".mimosa/", "vendor/", "cmd/"}
+// .qoder/ 与 nexadmin-vendor/ 是本地工具/供应商留下的另一棵树，里面的 .go 不属于本项目源码，
+// 扫它们只会产出「别的树里缺 key」的假问题。
+var errKeySkipDirs = []string{".git/", ".qoder/", "nexadmin-vendor/", "node_modules/", "web/", "scripts/", "testdata/", "testkit/", ".mimosa/", "vendor/", "cmd/"}
 
 // errLocales 是要核对的语言（缺 zh 用户看到 key，缺 en 英文用户看到 key）。
 var errLocales = []struct {

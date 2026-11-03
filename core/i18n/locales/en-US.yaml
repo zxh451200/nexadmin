@@ -244,6 +244,8 @@ crm:
   type_invalid: Customer type must be person or company
   id_type_invalid: Invalid ID document type (id_card / passport / officer_card / hmt_permit / other)
   id_pair_invalid: ID document type and number must be filled in together
+  id_no_invalid: Invalid ID card number, check the 18 digits and the final checksum
+  id_no_masked: The ID number is still the masked value from the list (contains *); enter the full number before saving
   stage_invalid: Invalid opportunity stage
   stage_final: Opportunity reached a final stage (won/lost) and cannot move again
   amount_invalid: Invalid amount
@@ -648,6 +650,7 @@ region:
   file_required: "Pick a data file to upload."
   data_invalid: "The data source content is unusable: %s"
   source_missing: "No data source configured: set it in Settings or region.source_url in config.yaml"
+  sync_running: "A region data sync is already running; wait for it to finish before starting another"
 dashboard:
   too_many_items: "%s contains too many cards."
   invalid_card_id: "%s contains an invalid card ID."
@@ -758,6 +761,12 @@ report:
   date_range_two_values: "A date range needs both a start and an end value."
   filter_multi_unsupported: "This filter does not support multiple values."
   export_table_only: "Only table charts can be exported."
+  subscription_schedule_invalid: "Subscription schedule must be daily or weekly"
+  subscription_hour_invalid: "Send hour must be between 0 and 23"
+  subscription_weekday_invalid: "Weekly subscriptions need a weekday (0 is Sunday, 6 is Saturday)"
+  subscription_recipient_invalid: "Invalid recipient address: %s"
+  subscription_recipient_required: "Enter at least one recipient address"
+  subscription_recipient_too_many: "Too many recipients (limit %d per subscription)"
 security:
   mode_invalid: "Invalid policy mode"
   grace_days_invalid: "The grace period must be between 1 and 90 days"

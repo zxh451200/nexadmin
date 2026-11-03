@@ -244,6 +244,8 @@ crm:
   type_invalid: 客户类型只能是 个人 或 企业
   id_type_invalid: 证件类型无效（身份证 / 护照 / 军官证 / 港澳台通行证 / 其他）
   id_pair_invalid: 证件类型与证件号需同时填写
+  id_no_invalid: 身份证号不合法：请核对 18 位号码与末位校验码
+  id_no_masked: 证件号还是列表里的脱敏值（带 *），请填完整号码后再保存
   stage_invalid: 商机阶段无效
   stage_final: 商机已到终态（won/lost），不允许再改阶段
   amount_invalid: 金额无效
@@ -648,6 +650,7 @@ region:
   file_required: "请选择要上传的数据文件"
   data_invalid: "数据源内容不可用：%s"
   source_missing: "还没有配置数据源：请在系统设置里填写地址，或在 config.yaml 的 region.source_url 里配置"
+  sync_running: "已有一次地区数据同步在跑，请等它结束（或刷新看进度）后再发起"
 dashboard:
   too_many_items: "%s 的卡片数量过多"
   invalid_card_id: "%s 中有不合法的卡片 ID"
@@ -758,6 +761,12 @@ report:
   date_range_two_values: "日期范围需要起止两个值"
   filter_multi_unsupported: "该筛选器不支持多选"
   export_table_only: "只有表格图表可以导出"
+  subscription_schedule_invalid: "订阅周期只能是每天或每周"
+  subscription_hour_invalid: "发送时刻要在 0 到 23 之间"
+  subscription_weekday_invalid: "每周订阅要选星期几（0 是周日，6 是周六）"
+  subscription_recipient_invalid: "收件邮箱格式不对：%s"
+  subscription_recipient_required: "至少填写一个收件邮箱"
+  subscription_recipient_too_many: "收件人过多（单个订阅上限 %d 个）"
 security:
   mode_invalid: "无效的策略模式"
   grace_days_invalid: "宽限期必须在 1 到 90 天之间"
