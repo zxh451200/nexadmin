@@ -13,15 +13,35 @@
       "opportunities": "Leads / Opportunities"
     },
     "all": "All",
+    "filter": {
+      "allTypes": "All types",
+      "allSources": "All sources",
+      "allStatuses": "All statuses",
+      "allOwners": "All owners",
+      "allStages": "All stages"
+    },
     "empty": "No data",
     "mineOnly": "Mine only",
-    "searchPlaceholder": "Customer name / code / external no",
+    "searchPlaceholder": "Name / code / ID no / credit code / external no",
     "nameRequired": "Customer name is required",
     "titleRequired": "Title is required",
     "externalNoRequired": "Enter the customer number from the external system",
+    "idPairRequired": "ID document type and number must be filled in together",
     "status": {
       "active": "Active",
-      "inactive": "Inactive"
+      "inactive": "Dormant"
+    },
+    "type": {
+      "person": "Individual",
+      "company": "Company"
+    },
+    "idType": {
+      "none": "Not recorded",
+      "id_card": "ID card",
+      "passport": "Passport",
+      "officer_card": "Officer card",
+      "hmt_permit": "HK/MO/TW permit",
+      "other": "Other"
     },
     "level": {
       "A": "A (key)",
@@ -43,17 +63,34 @@
       "order": "Order system",
       "manual": "Manual ID"
     },
+    "picker": {
+      "country": "Select country / region",
+      "nationality": "Select nationality"
+    },
     "fields": {
       "name": "Name",
+      "type": "Customer type",
+      "namePerson": "Full name",
+      "nameCompany": "Company name",
+      "identity": "ID / credit code",
       "code": "Code",
       "level": "Level",
       "status": "Status",
       "externalAnchor": "External source",
       "externalSource": "External source",
       "externalNo": "External No",
-      "owner": "Owner",
+      "owner": "Account owner",
       "phone": "Phone",
+      "mobile": "Mobile",
+      "switchboard": "Main phone",
       "email": "Email",
+      "country": "Country / region",
+      "nationality": "Nationality",
+      "idType": "ID document type",
+      "idNo": "ID document no",
+      "taxNo": "Unified social credit code",
+      "industry": "Industry",
+      "address": "Registered address",
       "remark": "Remark",
       "customerId": "Customer",
       "contact": "Primary contact",
@@ -69,8 +106,17 @@
       "create": "New Customer",
       "edit": "Edit Customer",
       "deleteConfirm": "Delete customer {{name}}?",
+      "deleteBatchConfirm": "Delete the {{count}} selected customer(s)? Their contacts and follow-up records go with them and cannot be recovered. Customers that still have opportunities are left alone.",
+      "deletedPartial": "Deleted {{deleted}} of {{total}} customer(s) (the rest still have opportunities or are outside your data scope)",
       "noAnchor": "No external system",
       "codePlaceholder": "Auto-generated if empty",
+      "namePlaceholder": {
+        "person": "e.g. Jane Cooper",
+        "company": "Exactly as on the business license"
+      },
+      "taxNoPlaceholder": "18-character unified social credit code",
+      "typeHintPerson": "Individuals are identified by document: nationality plus ID type and number line up with hotel check-in and cross-border order records.",
+      "typeHintCompany": "Companies are identified by the unified social credit code; the people you deal with go in Contacts below, one per person, and the opportunity's default contact is picked from there.",
       "codeHint": "Leave the code empty to auto-generate one (C- prefix); it is only used for list display and search. You can also enter your own code. Level is for display only.",
       "anchorHint": "Pick the external system and enter its customer number so the member resolves to the same customer; it cannot be changed after creation.",
       "notBound": "Not linked",
@@ -84,13 +130,18 @@
       "create": "New Lead / Opportunity",
       "edit": "Edit Lead / Opportunity",
       "deleteConfirm": "Delete \"{{title}}\"?",
+      "deleteBatchConfirm": "Delete the {{count}} selected lead/opportunity record(s)? This cannot be undone.",
+      "deletedPartial": "Deleted {{deleted}} of {{total}} record(s) (the rest may already be gone or are outside your data scope)",
       "noCustomer": "No customer yet",
       "chooseCustomer": "Choose customer",
       "searchPlaceholder": "Title"
     },
     "contact": {
       "title": "Contacts",
+      "hintPerson": "The individual customer is usually a contact too; add family or emergency contacts separately.",
+      "hintCompany": "Add the people at this company (purchasing, admin, IT…); the opportunity's default contact comes from here.",
       "add": "Add contact",
+      "addSelf": "Add this person",
       "primary": "Primary",
       "chooseContact": "Choose contact (optional)",
       "empty": "No contacts yet",

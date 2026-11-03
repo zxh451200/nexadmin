@@ -5,6 +5,7 @@ error:
   unavailable: Service temporarily unavailable
   internal: Internal server error
   bad_request: Invalid request parameters
+  batch_too_many: "At most %d IDs can be named in one request; split the batch."
   unauthorized: Not signed in or session expired
   forbidden: You do not have permission to do this
   demo_mode: "Demo mode: modifying data is disabled"
@@ -122,7 +123,7 @@ im:
   quick_reply_not_found: Quick reply not found
   attachment_unavailable: Attachment storage is not configured
   attachment_required: Please choose a file to upload
-  attachment_too_large: The file exceeds the size limit
+  attachment_too_large: The file exceeds the size limit (max %s)
   attachment_type: Unsupported file type
   attachment_invalid: Attachment not found or not part of this conversation
   attachment_used: This attachment has already been sent
@@ -132,7 +133,7 @@ im:
   conv_open: The conversation is still open; close it before deleting
   status_open: Open
   status_closed: Closed
-  export_sheet: Conversations
+  export_sheet: Conversation list
   export_conv_no: Conversation no.
   export_visitor: Visitor
   export_biz: Business object
@@ -143,6 +144,17 @@ im:
   export_rating: Rating
   export_created_at: Started at
   export_closed_at: Closed at
+  export_msgs_sheet: Full transcript
+  export_seq: Seq
+  export_time: Time
+  export_sender: Sender
+  export_name: Nickname
+  export_content: Content
+  export_recalled: (recalled)
+  export_truncated: Message row limit reached; later conversations are not included.
+  sender_visitor: Visitor
+  sender_agent: Agent
+  sender_system: System
   settings_invalid: Invalid settings (time, timezone or workdays)
 imports:
   job_not_found: Import job not found
@@ -159,16 +171,25 @@ imports:
   too_many_rows_limit: "The current limit is %d rows; please split the file and import it in batches."
   missing_columns_detail: "The file is missing required columns: %s"
   job_running: "The job is running; it can be deleted once it finishes."
+  job_not_running: "The job is not running, so there is nothing to cancel."
   required_empty: Required column is empty
   required_suffix: "(required)"
   source:
     crm_customers:
       title: Customer import
       name: Customer name
+      type: Customer type (person/company)
       phone: Phone
       email: Email
       level: Level
       owner: Owner
+      country: Country / region
+      nationality: Nationality
+      id_type: ID document type
+      id_no: ID document number
+      tax_no: Unified social credit code
+      industry: Industry
+      address: Registered address
       remark: Remark
     dict_data:
       title: Dictionary data import
@@ -179,6 +200,15 @@ imports:
       sort: Sort
       status: Status (1 enabled, 0 disabled)
       remark: Remark
+      sort_invalid: Sort must be an integer
+    sys_posts:
+      title: Post import
+      code: Post code
+      name: Post name
+      sort: Sort
+      status: Status (1 enabled, 0 disabled)
+      remark: Remark
+      name_or_code_required: Post code and name are both required
       sort_invalid: Sort must be an integer
 ldap:
   host_basedn_required: LDAP address and Base DN are required
@@ -202,16 +232,25 @@ pay:
   PAY_CAPABILITY_UNSUPPORTED: This channel does not support the operation or currency; switch channel or sign up for the product on the channel side
   PAY_NOTIFY_STALE: Callback timestamp is ahead of the server clock and was rejected; check server time and channel settings
   PAY_PAYOUT_SETTLEMENT_TAKEN: This settlement already belongs to another payout batch; duplicate disbursement is not allowed
+  PAY_DATE_INVALID: Date must be in YYYY-MM-DD format.
+  PAY_EXPORT_TOO_MANY: Export exceeds the 10000-row limit; narrow the date or filter range.
   plugin_inactive: Pay plugin is not enabled or its license has lapsed
 crm:
   name_required: Customer name is required
   title_required: Lead/opportunity title is required
-  status_invalid: Invalid customer status
+  status_invalid: Customer status must be Active or Dormant
+  type_invalid: Customer type must be person or company
+  id_type_invalid: Invalid ID document type (id_card / passport / officer_card / hmt_permit / other)
+  id_pair_invalid: ID document type and number must be filled in together
   stage_invalid: Invalid opportunity stage
   stage_final: Opportunity reached a final stage (won/lost) and cannot move again
   amount_invalid: Invalid amount
   external_invalid: External source and customer number must be provided together
   external_taken: This external customer number is already bound to another customer
+  duplicate_customer: A customer with the same phone / tax number already exists; check for duplicates first.
+  export_too_many: Export exceeds the 10000-row limit; narrow the filters.
+  country_invalid: Country must be a 2-letter ISO 3166-1 alpha-2 code (e.g. CN, US)
+  nationality_invalid: Nationality must be a 2-letter ISO 3166-1 alpha-2 code (e.g. CN, US)
   customer_in_use: Customer still has opportunities and cannot be deleted
   not_found: Customer or opportunity not found
   contact_name_required: Contact name is required
@@ -289,6 +328,7 @@ ticket:
   inbound_secret_invalid: The email intake secret is incorrect
   inbound_parse_failed: The message could not be parsed; is it a complete MIME email?
   inbound_auto_reply: Auto-replies and bounces are not turned into tickets
+  portal_url_invalid: Invalid portal URL (a public http/https address is required)
 totp:
   already_enabled: Two-factor authentication is already enabled
   not_enrolled: Two-factor authentication is not enrolled yet; scan the QR code first
@@ -314,6 +354,8 @@ workflow:
   escalate_target_missing: The current node has no escalation target
   concurrent_update: Someone else just updated this workflow; refresh and try again
   plugin_inactive: Workflow plugin is not enabled or its license has lapsed
+  reject_comment_required: A reason is required to reject.
+  transfer_to_required: Choose a recipient for the transfer.
 formbuilder:
   head_id: Submission ID
   head_submitter: Submitter
@@ -461,6 +503,10 @@ plugin:
   not_found: "Plugin not found."
   disabled: "Plugin is not enabled."
   market_not_found: "This plugin is not in the marketplace catalog."
+  upload_file_required: "Pick a plugin package (.zip) to upload."
+  upload_too_large: "The package exceeds the %dMB limit."
+  upload_zip_only: "Only .zip packages can be uploaded."
+  upload_failed: "Failed to upload the package."
   free_no_license: "Free plugins do not require a license."
   market.checksum_mismatch: "The SHA-256 of plugin package %s does not match the catalog declaration (expected %s, got %s). Installation was refused and the download deleted."
   market.checksum_invalid: "Catalog entry %s declares an invalid checksum %q (expected 64 hexadecimal digits). Installation was refused."
@@ -512,6 +558,7 @@ config:
   ai.apikey_required: "Changing the AI base URL requires re-entering the API key."
 language:
   save_failed: "Failed to save language settings. Please check the language codes and prefixes."
+  conflict: "The language list was just changed by someone else. Refresh the page before saving."
 file:
   id_invalid: "Invalid ID."
   ids_invalid: "Some IDs in \"ids\" are invalid."
@@ -597,6 +644,7 @@ region:
   source_insecure: "The data source URL is not usable (HTTPS only, no credentials): %s"
   source_unreachable: "Failed to fetch the data source: %s"
   source_too_large: "The data source exceeds the %dMB limit."
+  file_required: "Pick a data file to upload."
   data_invalid: "The data source content is unusable: %s"
   source_missing: "No data source configured: set it in Settings or region.source_url in config.yaml"
 dashboard:
@@ -616,30 +664,44 @@ website:
   nav_parent_missing: "The parent navigation item does not exist."
   nav_not_found: "Navigation item not found."
   feature_title_required: "A feature needs a title."
+  feature_not_found: "The feature does not exist or has been deleted."
   page_title_required: "A page needs a title."
+  page_not_found: "The page does not exist or has been deleted."
+  page_ids_empty: "Select at least one page."
+  page_status_invalid: "Invalid page status."
   post_title_required: "A news post needs a title."
+  category_title_required: "A category needs a name."
+  tag_name_required: "A tag needs a name."
+  tag_too_many: "A news post takes at most %d tags."
+  slug_taken: "That identifier is already taken; pick another."
+  post_not_found: "The news post does not exist or has been deleted."
+  post_ids_empty: "Select at least one news post."
+  post_status_invalid: "Invalid news status."
+  ids_invalid: "Invalid id."
   social_invalid: "Incomplete social link: pick a platform and enter an https:// or mailto: address."
   social_too_many: "At most %d social icons."
   friend_link_invalid: "A friend link needs a name and an https:// address or an on-site path."
   friend_link_too_many: "At most %d friend links."
   qr_url_invalid: "Invalid QR code URL: upload an image or enter an https:// address."
+  url_invalid: "Invalid URL: enter an https:// address or an on-site path starting with /."
   contact_name_required: "Please enter your name."
   contact_email_invalid: "Please enter a valid email address."
   contact_content_short: "The message must be at least 5 characters."
   contact_consent_url_invalid: "With the consent checkbox enabled, a policy URL is required: an on-site /p/xxx path or a full https:// address."
   message_not_found: "The message does not exist or has been deleted."
   message_ids_empty: "Select at least one message."
-  message_ids_invalid: "Invalid message id."
   message_status_invalid: "Invalid message status."
   file_empty: "The file is empty."
-  image_too_large: "Images must not exceed 2 MB."
-  image_type_unsupported: "Only PNG / JPEG / WebP / GIF images are supported."
+  image_too_large: "Images must not exceed %s."
+  image_type_unsupported: "Only %s images are supported."
   file_required: "The file field is missing."
   translate_failed: "Translation failed. Please try again later."
   preview_unavailable: "Preview link is unavailable: no signing key is configured on this server."
 codegen:
   table_not_found: "Table not found: %s"
   invalid_input: "Invalid input. Please check and try again."
+  install_no_root: "Project root not found: there is no go.mod in the backend working directory. Set the NEXADMIN_ROOT environment variable to the project root, or start the backend from it."
+  config_too_many: "Too many saved configs (limit 200). Clean up the ones you no longer need first."
 report:
   record_not_found: "Record not found."
   query_timeout: "The query timed out. Please narrow the scope and try again."
@@ -774,6 +836,7 @@ cron:
   cron_expr_invalid: "Invalid cron expression"
   handler_unknown: "Unknown handler %q"
   retry_count_invalid: "retryCount must be between 0 and %d"
+  timeout_invalid: "timeoutSeconds must be between 0 and %d (0 = use the default)"
   params_too_long: "The parameters are too long (maximum 4 KB)"
   params_invalid: "Invalid parameters"
   job_running: "The job is already running"

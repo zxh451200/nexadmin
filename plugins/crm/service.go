@@ -3,6 +3,7 @@ package crm
 import (
 	"context"
 	"errors"
+	"net/http"
 	"strconv"
 	"strings"
 
@@ -14,10 +15,12 @@ import (
 	"nexadmin/pkg/idgen"
 )
 
-// 编码/等级的上限与列宽一致。
+// 名称/编码/等级/国家的上限与列宽一致（字符数，不是字节数）。
 const (
-	codeMaxLen  = 64
-	levelMaxLen = 16
+	nameMaxLen    = 200
+	codeMaxLen    = 64
+	levelMaxLen   = 16
+	countryMaxLen = 2 // ISO 3166-1 alpha-2
 )
 
 // Service 是 crm 业务层。宿主模块（hotel/mall 的 member）通过 client.go 对接。
@@ -42,20 +45,91 @@ type CustomerInput struct {
 	Code           string
 	Level          string
 	Status         string
+	Type           string
 	ExternalSource string
 	ExternalNo     string
 	Owner          string
 	Phone          string
 	Email          string
+	Country        string
+	Nationality    string
+	IdType         string
+	IdNo           string
+	TaxNo          string
+	Industry       string
+	Address        string
 	Remark         string
 }
 
+// normalizeISOCountry 把国籍/国家输入收口成 ISO 3166-1 alpha-2：去空格、统一大写，
+// 空串表示未登记（合法）；非 2 位字母视为无效（ok=false）。
+func normalizeISOCountry(raw string) (string, bool) {
+	code := strings.ToUpper(strings.TrimSpace(raw))
+	if code == "" {
+		return "", true
+	}
+	if len(code) != countryMaxLen {
+		return "", false
+	}
+	for _, r := range code {
+		if r < 'A' || r > 'Z' {
+			return "", false
+		}
+	}
+	return code, true
+}
+
 func (in *CustomerInput) normalize() error {
-	in.Name = strings.TrimSpace(in.Name)
+	in.Name = truncate(strings.TrimSpace(in.Name), nameMaxLen)
 	in.Code = truncate(strings.TrimSpace(in.Code), codeMaxLen)
 	// 等级是短档位（A/B/C），统一大写，避免 "a" 与 "A" 各算一档。
 	in.Level = truncate(strings.ToUpper(strings.TrimSpace(in.Level)), levelMaxLen)
+	// 联系字段在这里统一裁长：normalize 是唯一入口，调用方（创建/更新/导入）不必各抄一遍。
+	in.Owner = truncate(strings.TrimSpace(in.Owner), 64)
+	in.Phone = truncate(strings.TrimSpace(in.Phone), 32)
+	in.Email = truncate(strings.TrimSpace(in.Email), 128)
+	in.Remark = truncate(strings.TrimSpace(in.Remark), 500)
 	in.ExternalSource, in.ExternalNo = strings.TrimSpace(in.ExternalSource), strings.TrimSpace(in.ExternalNo)
+	in.Type = strings.ToLower(strings.TrimSpace(in.Type))
+	if in.Type == "" {
+		// 存量会员（酒店住客、商城会员）都是自然人，不填按个人。
+		in.Type = TypePerson
+	}
+	if !TypeSet[in.Type] {
+		return response.BadRequest("crm.type_invalid")
+	}
+	in.IdType = strings.ToLower(strings.TrimSpace(in.IdType))
+	in.IdNo = strings.TrimSpace(in.IdNo)
+	in.TaxNo = strings.ToUpper(strings.TrimSpace(in.TaxNo))
+	in.Industry = strings.TrimSpace(in.Industry)
+	in.Address = strings.TrimSpace(in.Address)
+	// 类型决定哪组身份字段生效，另一组清空：客户从个人改成企业，不该还背着一条护照号。
+	if in.Type == TypeCompany {
+		in.Nationality, in.IdType, in.IdNo = "", "", ""
+	} else {
+		in.TaxNo, in.Industry, in.Address = "", "", ""
+	}
+	country, ok := normalizeISOCountry(in.Country)
+	if !ok {
+		return response.BadRequest("crm.country_invalid")
+	}
+	in.Country = country
+	nationality, ok := normalizeISOCountry(in.Nationality)
+	if !ok {
+		return response.BadRequest("crm.nationality_invalid")
+	}
+	in.Nationality = nationality
+	if in.IdType != "" && !IdTypeSet[in.IdType] {
+		return response.BadRequest("crm.id_type_invalid")
+	}
+	// 证件类型与证件号成对：只填一项既没法核验也没法复用到入住登记。
+	if (in.IdType == "") != (in.IdNo == "") {
+		return response.BadRequest("crm.id_pair_invalid")
+	}
+	in.IdNo = truncate(in.IdNo, 64)
+	in.TaxNo = truncate(in.TaxNo, 32)
+	in.Industry = truncate(in.Industry, 64)
+	in.Address = truncate(in.Address, 200)
 	if in.Name == "" {
 		return response.BadRequest("crm.name_required")
 	}
@@ -80,8 +154,54 @@ func (in *CustomerInput) normalize() error {
 }
 
 // CreateCustomer 创建客户主数据（幂等键 = external 锚点；同锚点重复创建返回已有客户）。
+// checkCustomerDuplicate 是保存前的查重：同租户下，个人客户手机号、企业客户统一社会信用代码
+// 不允许与既有客户重复（手机号是联系与合并的主键级线索，信用代码对企业同理）。
+// excludeID 用于更新时排除自身；锚点查重已由 external 唯一索引兜住，这里管的是手工录入的主数据。
+// 对标竞品的 duplicate detection：创建时当场拦截，而不是让销售名单里躺着两份同一个客户。
+func (s *Service) checkCustomerDuplicate(ctx context.Context, excludeID idgen.ID, in CustomerInput) error {
+	check := func(cond string, arg any) bool {
+		db := s.db.WithContext(ctx).Model(&Customer{}).Where(cond, arg)
+		if excludeID != 0 {
+			db = db.Where("id <> ?", int64(excludeID))
+		}
+		var n int64
+		return db.Count(&n).Error == nil && n > 0
+	}
+	switch {
+	case in.Type == TypePerson && in.Phone != "":
+		if check("phone = ?", in.Phone) {
+			return response.New(http.StatusConflict, "crm.duplicate_customer")
+		}
+	case in.Type == TypeCompany && in.TaxNo != "":
+		if check("tax_no = ?", in.TaxNo) {
+			return response.New(http.StatusConflict, "crm.duplicate_customer")
+		}
+	}
+	return nil
+}
+
+// exportMax 是单次导出的行数上限：CRM 名单宁可让用户补筛选条件，也不静默截断。
+const exportMax = 10000
+
+// ExportCustomers 导出当前筛选下的全部客户（不带分页）。筛选与 ListCustomers 同源，
+// 数据范围同样生效——受限操作者拿不到范围外的客户。
+func (s *Service) ExportCustomers(ctx context.Context, q CustomerQuery) ([]Customer, error) {
+	q.Page, q.PageSize = 1, exportMax
+	rows, _, err := s.ListCustomers(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	if len(rows) >= exportMax {
+		return nil, response.BadRequest("crm.export_too_many")
+	}
+	return rows, nil
+}
+
 func (s *Service) CreateCustomer(ctx context.Context, in CustomerInput) (*Customer, error) {
 	if err := in.normalize(); err != nil {
+		return nil, err
+	}
+	if err := s.checkCustomerDuplicate(ctx, 0, in); err != nil {
 		return nil, err
 	}
 	if in.ExternalSource != "" {
@@ -97,9 +217,12 @@ func (s *Service) CreateCustomer(ctx context.Context, in CustomerInput) (*Custom
 		}
 	}
 	c := &Customer{
-		Name: in.Name, Code: in.Code, Level: in.Level, Status: in.Status,
+		Name: in.Name, Code: in.Code, Level: in.Level, Status: in.Status, Type: in.Type,
 		Owner: truncate(in.Owner, 64), Phone: truncate(in.Phone, 32),
 		Email: truncate(in.Email, 128), Remark: truncate(in.Remark, 500),
+		Country: in.Country, Nationality: in.Nationality,
+		IdType: in.IdType, IdNo: in.IdNo,
+		TaxNo: in.TaxNo, Industry: in.Industry, Address: in.Address,
 	}
 	if c.Code == "" {
 		// 先取 ID 再算编码：编码由 ID 派生，建库前就定下来，不需要回写一次。
@@ -149,16 +272,27 @@ func (s *Service) UpdateCustomer(ctx context.Context, sc *datascope.Scope, id id
 	if in.Code == "" {
 		in.Code = c.Code
 	}
+	// 查重放在可见性与取行之后：先确认能改这条，再谈是否撞了别人。
+	if err := s.checkCustomerDuplicate(ctx, id, in); err != nil {
+		return nil, err
+	}
 	updates := map[string]any{
 		"name": in.Name, "code": in.Code, "level": in.Level, "status": in.Status,
+		"type":  in.Type,
 		"owner": truncate(in.Owner, 64), "phone": truncate(in.Phone, 32),
 		"email": truncate(in.Email, 128), "remark": truncate(in.Remark, 500),
+		"country": in.Country, "nationality": in.Nationality,
+		"id_type": in.IdType, "id_no": in.IdNo,
+		"tax_no": in.TaxNo, "industry": in.Industry, "address": in.Address,
 	}
 	if err := s.db.WithContext(ctx).Model(&Customer{}).Where("id = ?", int64(id)).Updates(updates).Error; err != nil {
 		return nil, err
 	}
-	c.Name, c.Code, c.Level, c.Status = in.Name, in.Code, in.Level, in.Status
+	c.Name, c.Code, c.Level, c.Status, c.Type = in.Name, in.Code, in.Level, in.Status, in.Type
 	c.Owner, c.Phone, c.Email, c.Remark = updates["owner"].(string), updates["phone"].(string), updates["email"].(string), updates["remark"].(string)
+	c.Country, c.Nationality = in.Country, in.Nationality
+	c.IdType, c.IdNo = in.IdType, in.IdNo
+	c.TaxNo, c.Industry, c.Address = in.TaxNo, in.Industry, in.Address
 	s.publishCustomer(ctx, EventCustomerUpdated, &c)
 	return &c, nil
 }
@@ -195,7 +329,8 @@ func (s *Service) GetCustomer(ctx context.Context, sc *datascope.Scope, id idgen
 
 // CustomerQuery 过滤客户列表。Scope 由 HTTP 入口解析后传入；nil 表示不裁剪（内部调用）。
 type CustomerQuery struct {
-	Keyword  string // 名称 / 编码 / 锚点
+	Keyword  string // 名称 / 编码 / 锚点 / 证件号 / 信用代码
+	Type     string // person / company，空 = 不限
 	Status   string
 	Source   string
 	Scope    *datascope.Scope
@@ -209,8 +344,17 @@ type CustomerQuery struct {
 func (s *Service) ListCustomers(ctx context.Context, q CustomerQuery) ([]Customer, int64, error) {
 	db := s.db.WithContext(ctx).Model(&Customer{})
 	if kw := strings.TrimSpace(q.Keyword); kw != "" {
+		// 前台更多是「拿着证件号 / 信用代码找人」，不是按名称翻列表。
 		like := "%" + kw + "%"
-		db = db.Where("name LIKE ? OR code LIKE ? OR external_no LIKE ?", like, like, like)
+		db = db.Where("name LIKE ? OR code LIKE ? OR external_no LIKE ? OR id_no LIKE ? OR tax_no LIKE ?",
+			like, like, like, like, like)
+	}
+	q.Type = strings.ToLower(strings.TrimSpace(q.Type))
+	if q.Type != "" {
+		if !TypeSet[q.Type] {
+			return nil, 0, response.BadRequest("crm.type_invalid")
+		}
+		db = db.Where("type = ?", q.Type)
 	}
 	if q.Status != "" {
 		db = db.Where("status = ?", q.Status)
@@ -460,7 +604,15 @@ func (s *Service) DeleteOpportunity(ctx context.Context, sc *datascope.Scope, id
 	if _, err := s.visibleOpportunity(ctx, sc, id); err != nil {
 		return err
 	}
-	return s.db.WithContext(ctx).Delete(&Opportunity{}, id).Error
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 跟进记录必挂客户、可选挂商机：商机删掉后把 opportunity_id 归零，记录本身留在客户
+		// 时间线上，不留指向已删商机的悬空引用（那条跟进在时间轴里会显示成「无商机」而不是报错）。
+		if err := tx.Model(&Activity{}).Where("opportunity_id = ?", int64(id)).
+			Update("opportunity_id", 0).Error; err != nil {
+			return err
+		}
+		return tx.Delete(&Opportunity{}, id).Error
+	})
 }
 
 // GetOpportunity 按 ID 取线索/商机（sc 非 nil 且受限时，范围外 403）。
@@ -469,24 +621,25 @@ func (s *Service) GetOpportunity(ctx context.Context, sc *datascope.Scope, id id
 	if err != nil {
 		return nil, err
 	}
-	o.CustomerName = s.customerName(ctx, o.CustomerID)
+	brief := s.customerBrief(ctx, o.CustomerID)
+	o.CustomerName, o.CustomerType = brief.Name, brief.Type
 	return o, nil
 }
 
-// customerName 取客户名；客户已被删除时返回空串，不影响商机本身可读。
-func (s *Service) customerName(ctx context.Context, id idgen.ID) string {
+// customerBrief 取客户的名与类型；客户已被删除时返回零值，不影响商机本身可读。
+func (s *Service) customerBrief(ctx context.Context, id idgen.ID) Customer {
 	if id == 0 {
-		return ""
+		return Customer{}
 	}
 	var c Customer
-	if err := s.db.WithContext(ctx).Select("id", "name").Take(&c, id).Error; err != nil {
-		return ""
+	if err := s.db.WithContext(ctx).Select("id", "name", "type").Take(&c, id).Error; err != nil {
+		return Customer{}
 	}
-	return c.Name
+	return c
 }
 
-// fillCustomerNames 批量回填客户名，列表一页只多一次查询。
-func (s *Service) fillCustomerNames(ctx context.Context, rows []Opportunity) error {
+// fillCustomerBrief 批量回填客户名与类型，列表一页只多一次查询。
+func (s *Service) fillCustomerBrief(ctx context.Context, rows []Opportunity) error {
 	ids := make([]int64, 0, len(rows))
 	seen := make(map[int64]bool, len(rows))
 	for _, o := range rows {
@@ -500,15 +653,16 @@ func (s *Service) fillCustomerNames(ctx context.Context, rows []Opportunity) err
 		return nil
 	}
 	var customers []Customer
-	if err := s.db.WithContext(ctx).Select("id", "name").Where("id IN ?", ids).Find(&customers).Error; err != nil {
+	if err := s.db.WithContext(ctx).Select("id", "name", "type").Where("id IN ?", ids).Find(&customers).Error; err != nil {
 		return err
 	}
-	names := make(map[int64]string, len(customers))
+	briefs := make(map[int64]Customer, len(customers))
 	for _, c := range customers {
-		names[int64(c.ID)] = c.Name
+		briefs[int64(c.ID)] = c
 	}
 	for i := range rows {
-		rows[i].CustomerName = names[int64(rows[i].CustomerID)]
+		brief := briefs[int64(rows[i].CustomerID)]
+		rows[i].CustomerName, rows[i].CustomerType = brief.Name, brief.Type
 	}
 	return nil
 }
@@ -554,17 +708,21 @@ func (s *Service) ListOpportunities(ctx context.Context, q OpportunityQuery) ([]
 	if err := db.Order("id DESC").Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Find(&rows).Error; err != nil {
 		return nil, 0, err
 	}
-	if err := s.fillCustomerNames(ctx, rows); err != nil {
+	if err := s.fillCustomerBrief(ctx, rows); err != nil {
 		return nil, 0, err
 	}
 	return rows, total, nil
 }
 
+// truncate 按字符数裁剪：三引擎的 VARCHAR(n) 数的都是字符，不是字节。
+// 按字节切会把汉字切成半个码点，MySQL 以 1366 Incorrect string value 拒掉整行——
+// 中文备注、地址这类字段一定会踩到。
 func truncate(s string, n int) string {
-	if len(s) > n {
-		return s[:n]
+	r := []rune(s)
+	if len(r) <= n {
+		return s
 	}
-	return s
+	return string(r[:n])
 }
 
 // customerCode 由雪花 ID 派生客户编码（C- 前缀 + 36 进制）：ID 全局唯一且不可变，

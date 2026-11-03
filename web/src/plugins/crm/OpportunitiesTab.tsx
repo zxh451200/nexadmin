@@ -8,6 +8,7 @@ import { DataTable, type Column } from '@/framework/components/DataTable'
 import { DatePicker } from '@/framework/components/DatePicker'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { RemoteSelect } from '@/framework/components/RemoteSelect'
+import { RequiredMark } from '@/framework/components/RequiredMark'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
@@ -16,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/framework/ui/textarea'
 import {
   useContacts,
+  useDeleteOpportunities,
   useDeleteOpportunity,
   useOpportunities,
   useSaveOpportunity,
@@ -23,6 +25,7 @@ import {
   type CrmOpportunityForm,
   type OpportunityQuery,
 } from './api'
+import { TypeBadge } from './CustomersTab'
 import { formatMoney, formatTime, stageVariant } from './format'
 
 const ALL = '__all'
@@ -97,7 +100,10 @@ function OpportunityFormDialog({
     >
       <div className="flex flex-col gap-3 text-sm">
         <label className="flex flex-col gap-1">
-          {t('plugin_crm.fields.title')}
+          <span>
+            {t('plugin_crm.fields.title')}
+            <RequiredMark />
+          </span>
           <Input value={value.title ?? ''} onChange={(e) => set({ title: e.target.value })} />
         </label>
         <label className="flex flex-col gap-1">
@@ -185,18 +191,35 @@ export function OpportunitiesTab() {
   const [pageSize, setPageSize] = useState(10)
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<CrmOpportunity | null>(null)
+  // 多选状态叫 picked，与客户页保持一致。
+  const [picked, setPicked] = useState<string[]>([])
 
   const { data, isLoading } = useOpportunities({ ...filters, page, pageSize })
   const remove = useDeleteOpportunity()
+  const removeBatch = useDeleteOpportunities()
 
   const onDelete = async (o: CrmOpportunity) => {
     if (await confirm({ destructive: true, description: t('plugin_crm.opp.deleteConfirm', { title: o.title }) })) {
       try {
         await remove.mutateAsync(o.id)
+        // 行没了还留在勾选里会让批量按钮带着一个不存在的 id 再删一次。
+        setPicked((ids) => ids.filter((id) => id !== o.id))
         toast.success(t('common.operateSuccess'))
       } catch {
         // 失败原因已由请求层统一提示。
       }
+    }
+  }
+
+  // 批量删：范围外的商机由后端计入 blocked、不删，部分删除时照实说删了几条。
+  const onDeleteBatch = async (ids: string[]) => {
+    if (!(await confirm({ destructive: true, description: t('plugin_crm.opp.deleteBatchConfirm', { count: ids.length }) }))) return
+    try {
+      const { deleted } = await removeBatch.mutateAsync(ids)
+      setPicked([])
+      toast.success(deleted < ids.length ? t('plugin_crm.opp.deletedPartial', { deleted, total: ids.length }) : t('common.operateSuccess'))
+    } catch {
+      // 失败原因（整批不可见）已由请求层统一提示。
     }
   }
 
@@ -212,9 +235,14 @@ export function OpportunitiesTab() {
       title: t('plugin_crm.fields.customerId'),
       mobile: 'sub',
       render: (o) =>
-        o.customerId && o.customerId !== '0'
-          ? (o.customerName || o.customerId)
-          : <span className="text-muted-foreground">-</span>,
+        o.customerId && o.customerId !== '0' ? (
+          <span className="inline-flex min-w-0 items-center gap-1.5">
+            <span className="truncate">{o.customerName || o.customerId}</span>
+            <TypeBadge type={o.customerType} />
+          </span>
+        ) : (
+          <span className="text-muted-foreground">-</span>
+        ),
     },
     {
       key: 'stage',
@@ -260,7 +288,7 @@ export function OpportunitiesTab() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_crm.all')}</SelectItem>
+            <SelectItem value={ALL}>{t('plugin_crm.filter.allStages')}</SelectItem>
             {STAGES.map((s) => (
               <SelectItem key={s} value={s}>
                 {t(`plugin_crm.stage.${s}`)}
@@ -274,7 +302,7 @@ export function OpportunitiesTab() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_crm.all')}</SelectItem>
+            <SelectItem value={ALL}>{t('plugin_crm.filter.allOwners')}</SelectItem>
             <SelectItem value={MINE}>{t('plugin_crm.mineOnly')}</SelectItem>
           </SelectContent>
         </Select>
@@ -295,6 +323,15 @@ export function OpportunitiesTab() {
           },
         }}
         emptyText={t('plugin_crm.empty')}
+        selection={{ selected: picked, onChange: setPicked }}
+        batchActions={(ids) => (
+          <Can perm="crm:opp">
+            <Button variant="destructive" size="sm" onClick={() => void onDeleteBatch(ids)}>
+              <Trash2 aria-hidden="true" />
+              {t('common.delete')}
+            </Button>
+          </Can>
+        )}
         toolbar={
           <Can perm="crm:opp">
             <Button

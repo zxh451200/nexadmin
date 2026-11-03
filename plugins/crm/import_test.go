@@ -84,6 +84,9 @@ func TestImportCustomerCreates(t *testing.T) {
 
 	m.ExpectQuery("SELECT \\* FROM `plg_crm_customer` WHERE phone = \\?").
 		WillReturnRows(sqlmock.NewRows([]string{"id", "tenant_id"}))
+	// 查重（导入路径本身已按手机号去重，这里的 count 必然命中 0 行）
+	m.ExpectQuery("SELECT count\\(\\*\\) FROM `plg_crm_customer` WHERE phone = \\?").
+		WithArgs("13800138000").WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
 	m.ExpectBegin()
 	m.ExpectExec("INSERT INTO `plg_crm_customer`").WillReturnResult(sqlmock.NewResult(3001, 1))
 	m.ExpectCommit()
@@ -114,6 +117,9 @@ func TestImportCustomerUpdatesByPhone(t *testing.T) {
 		WillReturnRows(customerRow(2002, "旧名", "", ""))
 	m.ExpectQuery("SELECT \\* FROM `plg_crm_customer` WHERE `plg_crm_customer`.`id` = \\?").
 		WillReturnRows(customerRow(2002, "旧名", "", ""))
+	// 查重排除自身：count 0 行，更新放行
+	m.ExpectQuery("SELECT count\\(\\*\\) FROM `plg_crm_customer` WHERE phone = \\? AND id <> \\?").
+		WithArgs("13800138000", int64(2002)).WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
 	m.ExpectBegin()
 	m.ExpectExec("UPDATE `plg_crm_customer` SET").WillReturnResult(sqlmock.NewResult(0, 1))
 	m.ExpectCommit()

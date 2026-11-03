@@ -5,6 +5,7 @@ error:
   unavailable: 服务暂不可用
   internal: 服务器内部错误
   bad_request: 请求参数不正确
+  batch_too_many: "一次最多点名 %d 条，请分批操作"
   unauthorized: 未登录或登录已过期
   forbidden: 没有权限执行此操作
   demo_mode: 演示模式，不允许修改数据
@@ -122,7 +123,7 @@ im:
   quick_reply_not_found: 快捷回复不存在
   attachment_unavailable: 附件存储未配置
   attachment_required: 请选择要上传的文件
-  attachment_too_large: 文件超出大小限制
+  attachment_too_large: 文件超出大小限制（上限 %s）
   attachment_type: 不支持的文件类型
   attachment_invalid: 附件不存在或不属于该会话
   attachment_used: 附件已发送过
@@ -132,7 +133,7 @@ im:
   conv_open: 会话还在进行中，结束之后才能删除
   status_open: 进行中
   status_closed: 已结束
-  export_sheet: 会话记录
+  export_sheet: 会话清单
   export_conv_no: 会话号
   export_visitor: 访客
   export_biz: 业务对象
@@ -143,6 +144,17 @@ im:
   export_rating: 满意度
   export_created_at: 开始时间
   export_closed_at: 结束时间
+  export_msgs_sheet: 完整对话
+  export_seq: 序号
+  export_time: 时间
+  export_sender: 发送方
+  export_name: 昵称
+  export_content: 内容
+  export_recalled: （已撤回）
+  export_truncated: 消息行数已达导出上限，后面的会话未包含在内。
+  sender_visitor: 访客
+  sender_agent: 坐席
+  sender_system: 系统
   settings_invalid: 设置不合法（时间、时区或工作日）
 imports:
   job_not_found: 导入任务不存在
@@ -159,16 +171,25 @@ imports:
   too_many_rows_limit: "当前上限 %d 行,请拆分文件后分批导入"
   missing_columns_detail: "文件缺少必需的列：%s"
   job_running: "任务正在执行，完成后才能删除"
+  job_not_running: "任务不在执行中，无需取消"
   required_empty: 必填列为空
   required_suffix: "(必填)"
   source:
     crm_customers:
       title: 客户导入
       name: 客户名称
+      type: 客户类型（个人/企业）
       phone: 手机号
       email: 邮箱
       level: 客户等级
       owner: 负责人
+      country: 国家/地区
+      nationality: 国籍
+      id_type: 证件类型
+      id_no: 证件号
+      tax_no: 统一社会信用代码
+      industry: 所属行业
+      address: 企业注册地址
       remark: 备注
     dict_data:
       title: 字典数据导入
@@ -179,6 +200,15 @@ imports:
       sort: 排序
       status: 状态(1启用 0停用)
       remark: 备注
+      sort_invalid: 排序必须是整数
+    sys_posts:
+      title: 岗位导入
+      code: 岗位编码
+      name: 岗位名称
+      sort: 排序
+      status: 状态(1启用 0停用)
+      remark: 备注
+      name_or_code_required: 岗位编码和名称都不能为空
       sort_invalid: 排序必须是整数
 ldap:
   host_basedn_required: 请填写 LDAP 地址和 Base DN
@@ -202,16 +232,25 @@ pay:
   PAY_CAPABILITY_UNSUPPORTED: 该渠道不支持此操作或币种，请换渠道或在渠道侧签约该产品
   PAY_NOTIFY_STALE: 回调时间超前于服务器时钟，已拒绝入账，请核对服务器时间与渠道配置
   PAY_PAYOUT_SETTLEMENT_TAKEN: 这张结算单已进入其他打款批次，不能重复出款
+  PAY_DATE_INVALID: 日期格式必须是 YYYY-MM-DD
+  PAY_EXPORT_TOO_MANY: 导出超过 10000 行上限，请缩小日期或筛选范围
   plugin_inactive: 支付中台插件未启用或授权已失效
 crm:
   name_required: 客户名称不能为空
   title_required: 线索/商机标题不能为空
-  status_invalid: 客户状态无效
+  status_invalid: 客户状态只能是 活跃 或 沉睡
+  type_invalid: 客户类型只能是 个人 或 企业
+  id_type_invalid: 证件类型无效（身份证 / 护照 / 军官证 / 港澳台通行证 / 其他）
+  id_pair_invalid: 证件类型与证件号需同时填写
   stage_invalid: 商机阶段无效
   stage_final: 商机已到终态（won/lost），不允许再改阶段
   amount_invalid: 金额无效
   external_invalid: 外部来源与客户编号需同时填写
   external_taken: 该外部编号已绑定其他客户
+  duplicate_customer: 已存在同手机号 / 同信用代码的客户，请先查重再录入
+  export_too_many: 导出超过 10000 行上限，请缩小筛选范围
+  country_invalid: 国家/地区代码需为 2 位字母（ISO 3166-1 alpha-2，如 CN、US）
+  nationality_invalid: 国籍代码需为 2 位字母（ISO 3166-1 alpha-2，如 CN、US）
   customer_in_use: 客户名下还有商机，不能删除
   not_found: 客户或商机不存在
   contact_name_required: 联系人姓名不能为空
@@ -289,6 +328,7 @@ ticket:
   inbound_secret_invalid: 邮件进单密钥不正确
   inbound_parse_failed: 邮件内容无法解析，请检查是否为完整的 MIME 邮件
   inbound_auto_reply: 自动回复/退信不会进单
+  portal_url_invalid: 客服门户地址不合法（仅支持 http/https 的公网地址）
 totp:
   already_enabled: 两步验证已开启
   not_enrolled: 尚未绑定两步验证，请先扫码绑定
@@ -314,6 +354,8 @@ workflow:
   escalate_target_missing: 当前节点未配置升级目标
   concurrent_update: 该流程刚被他人处理，请刷新后重试
   plugin_inactive: 工作流插件未启用或授权已失效
+  reject_comment_required: 驳回必须填写理由
+  transfer_to_required: 请选择受让人
 formbuilder:
   head_id: 提交ID
   head_submitter: 提交人
@@ -461,6 +503,10 @@ plugin:
   not_found: "插件不存在"
   disabled: "插件未启用"
   market_not_found: "市场目录里没有该插件"
+  upload_file_required: "请选择要上传的安装包"
+  upload_too_large: "安装包超过 %dMB 上限"
+  upload_zip_only: "只能上传 .zip 安装包"
+  upload_failed: "安装包上传失败"
   free_no_license: "免费插件无需授权"
   market.checksum_mismatch: "插件包 %s 的 SHA-256 与目录声明不一致（期望 %s，实际 %s），已拒绝安装并删除下载文件"
   market.checksum_invalid: "目录条目 %s 的 checksum %q 不是合法的 SHA-256（应为 64 位十六进制），已拒绝安装"
@@ -512,6 +558,7 @@ config:
   ai.apikey_required: "修改 AI 地址时必须同时重新填写 API Key"
 language:
   save_failed: "语言配置保存失败，请检查语言代码与前缀"
+  conflict: "语言清单刚被其他人修改过，请刷新页面后再保存"
 file:
   id_invalid: "ID 不正确"
   ids_invalid: "ids 中有不正确的 ID"
@@ -597,6 +644,7 @@ region:
   source_insecure: "数据源地址不可用（只接受 HTTPS，且不能包含账号密码）：%s"
   source_unreachable: "拉取数据源失败：%s"
   source_too_large: "数据源超过 %dMB 上限"
+  file_required: "请选择要上传的数据文件"
   data_invalid: "数据源内容不可用：%s"
   source_missing: "还没有配置数据源：请在系统设置里填写地址，或在 config.yaml 的 region.source_url 里配置"
 dashboard:
@@ -616,30 +664,44 @@ website:
   nav_parent_missing: "上级导航不存在"
   nav_not_found: "导航不存在"
   feature_title_required: "特性需要标题"
+  feature_not_found: "特性不存在或已删除"
   page_title_required: "页面需要标题"
+  page_not_found: "页面不存在或已删除"
+  page_ids_empty: "请至少选择一个页面"
+  page_status_invalid: "页面状态不合法"
   post_title_required: "新闻需要标题"
+  category_title_required: "分类需要名称"
+  tag_name_required: "标签需要名称"
+  tag_too_many: "一篇新闻最多 %d 个标签"
+  slug_taken: "这个标识已被占用，换一个"
+  post_not_found: "新闻不存在或已删除"
+  post_ids_empty: "请至少选择一条新闻"
+  post_status_invalid: "新闻状态不合法"
+  ids_invalid: "编号不合法"
   social_invalid: "社交链接不完整：请选择平台并填写 https:// 或 mailto: 地址"
   social_too_many: "社交图标最多 %d 个"
   friend_link_invalid: "友情链接需要名称，且地址必须是 https:// 开头或站内路径"
   friend_link_too_many: "友情链接最多 %d 个"
   qr_url_invalid: "二维码地址不合法：请上传图片或填写 https:// 地址"
+  url_invalid: "地址不合法：请填写 https:// 开头，或以 / 开头的站内路径"
   contact_name_required: "请填写称呼"
   contact_email_invalid: "请填写有效的邮箱地址"
   contact_content_short: "留言内容至少 5 个字"
   contact_consent_url_invalid: "开启隐私同意勾选后必须填政策地址：站内 /p/xxx 或完整 https:// 地址"
   message_not_found: "留言不存在或已删除"
   message_ids_empty: "请至少选择一条留言"
-  message_ids_invalid: "留言编号不合法"
   message_status_invalid: "留言状态不合法"
   file_empty: "文件为空"
-  image_too_large: "图片不能超过 2MB"
-  image_type_unsupported: "只支持 PNG / JPEG / WebP / GIF 图片"
+  image_too_large: "图片不能超过 %s"
+  image_type_unsupported: "只支持 %s 图片"
   file_required: "缺少 file 字段"
   translate_failed: "翻译服务调用失败，请稍后重试"
   preview_unavailable: "预览链接暂不可用：服务未配置签名密钥"
 codegen:
   table_not_found: "数据表不存在：%s"
   invalid_input: "参数不正确，请检查后重试"
+  install_no_root: "找不到项目根目录：后端进程的工作目录下没有 go.mod。请在环境变量 NEXADMIN_ROOT 里指定项目根，或从项目根启动后端。"
+  config_too_many: "保存的配置太多（上限 200），请先清理不需要的配置"
 report:
   record_not_found: "记录不存在"
   query_timeout: "查询超时，请缩小范围后重试"
@@ -774,6 +836,7 @@ cron:
   cron_expr_invalid: "cron 表达式不合法"
   handler_unknown: "未知的处理器 %q"
   retry_count_invalid: "重试次数必须在 0 到 %d 之间"
+  timeout_invalid: "单次超时必须在 0 到 %d 秒之间（0 = 使用默认）"
   params_too_long: "参数过长（上限 4 KB）"
   params_invalid: "参数不合法"
   job_running: "任务正在运行中"

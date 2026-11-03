@@ -3,6 +3,8 @@ import { Check, Pencil, Phone, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
+import { DatePicker } from '@/framework/components/DatePicker'
+import { RequiredMark } from '@/framework/components/RequiredMark'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Checkbox } from '@/framework/ui/checkbox'
@@ -21,6 +23,7 @@ import {
   type CrmActivity,
   type CrmContact,
   type CrmContactForm,
+  type CrmCustomer,
 } from './api'
 import { formatTime } from './format'
 
@@ -34,18 +37,23 @@ const kindVariant = (k: ActivityKind) =>
 
 function ContactForm({
   initial,
+  prefill,
   onSubmit,
   onCancel,
   busy,
 }: {
   initial?: CrmContact
+  /** 新建时的预填（个人客户「一键把本人加成联系人」）。 */
+  prefill?: Partial<CrmContactForm>
   onSubmit: (data: CrmContactForm) => Promise<void>
   onCancel: () => void
   busy?: boolean
 }) {
   const { t } = useTranslation()
   const [draft, setDraft] = useState<Partial<CrmContactForm>>(
-    initial ? { name: initial.name, title: initial.title, phone: initial.phone, email: initial.email, isPrimary: initial.isPrimary, remark: initial.remark } : {},
+    initial
+      ? { name: initial.name, title: initial.title, phone: initial.phone, email: initial.email, isPrimary: initial.isPrimary, remark: initial.remark }
+      : (prefill ?? {}),
   )
   const set = (patch: Partial<CrmContactForm>) => setDraft((d) => ({ ...d, ...patch }))
 
@@ -60,12 +68,18 @@ function ContactForm({
   return (
     <div className="flex flex-col gap-2 rounded-md border border-border p-3">
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        <Input
-          value={draft.name ?? ''}
-          onChange={(e) => set({ name: e.target.value })}
-          placeholder={t('plugin_crm.fields.contactName')}
-          aria-label={t('plugin_crm.fields.contactName')}
-        />
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-muted-foreground">
+            {t('plugin_crm.fields.contactName')}
+            <RequiredMark />
+          </span>
+          <Input
+            value={draft.name ?? ''}
+            onChange={(e) => set({ name: e.target.value })}
+            placeholder={t('plugin_crm.fields.contactName')}
+            aria-label={t('plugin_crm.fields.contactName')}
+          />
+        </label>
         <Input
           value={draft.title ?? ''}
           onChange={(e) => set({ title: e.target.value })}
@@ -111,21 +125,35 @@ function ContactForm({
   )
 }
 
-export function ContactsSection({ customerId }: { customerId: string }) {
+export function ContactsSection({ customer }: { customer: CrmCustomer }) {
   const { t } = useTranslation()
   const confirm = useConfirm()
+  const customerId = customer.id
+  const isCompany = customer.type === 'company'
   const [adding, setAdding] = useState(false)
+  // 个人客户本人就是一条联系人记录：预填姓名与手机，省得照抄一遍。
+  const [selfFill, setSelfFill] = useState(false)
   const [editing, setEditing] = useState<CrmContact | null>(null)
   const { data: contacts = [], isLoading } = useContacts(customerId)
   const save = useSaveContact()
   const remove = useDeleteContact()
 
+  const openAdd = (asSelf: boolean) => {
+    setSelfFill(asSelf)
+    setAdding(true)
+  }
+
+  const closeForm = () => {
+    setAdding(false)
+    setSelfFill(false)
+    setEditing(null)
+  }
+
   const submit = async (data: CrmContactForm) => {
     try {
       await save.mutateAsync({ customerId, id: editing?.id, data })
       toast.success(t('common.operateSuccess'))
-      setAdding(false)
-      setEditing(null)
+      closeForm()
     } catch {
       // 失败原因已由请求层统一提示。
     }
@@ -144,25 +172,39 @@ export function ContactsSection({ customerId }: { customerId: string }) {
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex items-baseline justify-between gap-2">
-        <div className="text-sm font-medium text-foreground">{t('plugin_crm.contact.title')}</div>
-        {!adding && !editing ? (
-          <Button variant="outline" size="sm" onClick={() => setAdding(true)}>
-            {t('plugin_crm.contact.add')}
-          </Button>
-        ) : null}
+      <div className="flex flex-col gap-1">
+        <div className="flex items-baseline justify-between gap-2">
+          <div className="text-sm font-medium text-foreground">{t('plugin_crm.contact.title')}</div>
+          {!adding && !editing ? (
+            <div className="flex items-center gap-2">
+              {isCompany ? null : (
+                <Button variant="outline" size="sm" onClick={() => openAdd(true)}>
+                  {t('plugin_crm.contact.addSelf')}
+                </Button>
+              )}
+              <Button variant="outline" size="sm" onClick={() => openAdd(false)}>
+                {t('plugin_crm.contact.add')}
+              </Button>
+            </div>
+          ) : null}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {t(isCompany ? 'plugin_crm.contact.hintCompany' : 'plugin_crm.contact.hintPerson')}
+        </p>
       </div>
       {isLoading ? (
         <p className="text-xs text-muted-foreground">{t('common.loading')}</p>
       ) : adding || editing ? (
         <ContactForm
           initial={editing ?? undefined}
+          prefill={
+            selfFill
+              ? { name: customer.name, phone: customer.phone, email: customer.email, isPrimary: true }
+              : undefined
+          }
           busy={save.isPending}
           onSubmit={submit}
-          onCancel={() => {
-            setAdding(false)
-            setEditing(null)
-          }}
+          onCancel={closeForm}
         />
       ) : contacts.length ? (
         contacts.map((ct) => (
@@ -245,21 +287,27 @@ function ActivityForm({ customerId, onDone }: { customerId: string; onDone: () =
             ))}
           </SelectContent>
         </Select>
-        <Input
-          type="date"
+        <DatePicker
           value={nextAt}
-          onChange={(e) => setNextAt(e.target.value)}
-          aria-label={t('plugin_crm.activity.nextAt')}
+          onChange={setNextAt}
+          placeholder={t('plugin_crm.activity.nextAt')}
+          ariaLabel={t('plugin_crm.activity.nextAt')}
         />
       </div>
-      <Textarea
-        rows={2}
-        maxLength={2000}
-        value={content}
-        onChange={(e) => setContent(e.target.value)}
-        placeholder={t('plugin_crm.activity.contentPlaceholder')}
-        aria-label={t('plugin_crm.activity.content')}
-      />
+      <label className="flex flex-col gap-1">
+        <span className="text-xs text-muted-foreground">
+          {t('plugin_crm.activity.content')}
+          <RequiredMark />
+        </span>
+        <Textarea
+          rows={2}
+          maxLength={2000}
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          placeholder={t('plugin_crm.activity.contentPlaceholder')}
+          aria-label={t('plugin_crm.activity.content')}
+        />
+      </label>
       <div className="flex justify-end">
         <Button size="sm" disabled={create.isPending} onClick={() => void submit()}>
           {t('plugin_crm.activity.submit')}

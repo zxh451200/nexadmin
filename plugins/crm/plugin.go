@@ -59,10 +59,13 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 
 	g := r.Group("/plugins/crm")
 	g.GET("/customers", core.Perm("crm:list"), h.listCustomers)
+	// 静态段注册在 /customers/:id 之前（与 pay /orders/stats 同一套匹配约定）。
+	g.GET("/customers/export", core.Perm("crm:list"), h.exportCustomers)
 	g.GET("/customers/:id", core.Perm("crm:list"), h.getCustomer)
 	g.POST("/customers", core.Perm("crm:edit"), h.createCustomer)
 	g.PUT("/customers/:id", core.Perm("crm:edit"), h.updateCustomer)
 	g.DELETE("/customers/:id", core.Perm("crm:edit"), h.deleteCustomer)
+	g.DELETE("/customers", core.Perm("crm:edit"), core.Desc("批量删除客户（连带联系人与跟进）"), h.deleteCustomers)
 	g.POST("/customers/bind-external", core.Perm("crm:edit"), h.bindExternal)
 	g.GET("/customers/resolve-external", core.Perm("crm:list"), h.resolveExternal)
 	g.GET("/opportunities", core.Perm("crm:list"), h.listOpportunities)
@@ -70,6 +73,7 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.POST("/opportunities", core.Perm("crm:opp"), h.createOpportunity)
 	g.PUT("/opportunities/:id", core.Perm("crm:opp"), h.updateOpportunity)
 	g.DELETE("/opportunities/:id", core.Perm("crm:opp"), h.deleteOpportunity)
+	g.DELETE("/opportunities", core.Perm("crm:opp"), core.Desc("批量删除线索/商机"), h.deleteOpportunities)
 	// 联系人与跟进记录：读写都继承客户的可见性（数据范围按 customer.owner 裁剪）。
 	g.GET("/customers/:id/contacts", core.Perm("crm:list"), h.listContacts)
 	g.POST("/customers/:id/contacts", core.Perm("crm:edit"), h.createContact)

@@ -7,6 +7,7 @@ let customers: CrmCustomer[] = [
   {
     id: '7430000000000000001',
     name: '杭州云栖酒店',
+    type: 'company',
     code: 'C-001',
     level: 'A',
     status: 'active',
@@ -15,12 +16,18 @@ let customers: CrmCustomer[] = [
     owner: '王五',
     phone: '13800000000',
     email: 'a@example.com',
+    country: 'CN',
+    nationality: '',
+    taxNo: '91330100MA2AB1CD3X',
+    industry: '住宿业',
+    address: '浙江省杭州市西湖区云栖小镇',
     remark: '',
     createdAt: ago(60 * 24 * 40),
   },
   {
     id: '7430000000000000002',
     name: '李某',
+    type: 'person',
     code: '',
     level: '',
     status: 'active',
@@ -29,6 +36,10 @@ let customers: CrmCustomer[] = [
     owner: '',
     phone: '',
     email: '',
+    country: '',
+    nationality: 'CN',
+    idType: 'id_card',
+    idNo: '33010619900101001X',
     remark: '由 mall member 自动建档',
     createdAt: ago(60 * 24 * 10),
   },
@@ -64,11 +75,27 @@ let opportunities: CrmOpportunity[] = [
 ]
 
 const customerName = (id: string) => customers.find((c) => c.id === id)?.name
+const customerType = (id: string) => customers.find((c) => c.id === id)?.type
 
-const withCustomerName = (o: CrmOpportunity): CrmOpportunity => ({
+const withCustomerBrief = (o: CrmOpportunity): CrmOpportunity => ({
   ...o,
   customerName: o.customerId && o.customerId !== '0' ? customerName(o.customerId) : undefined,
+  customerType: o.customerId && o.customerId !== '0' ? customerType(o.customerId) : undefined,
 })
+
+// 与后端同一套规则：类型决定哪组身份字段生效，另一组清空——
+// 否则 mock 里会出现「企业客户有条护照号」，UI 回归照不出来。
+function applyTypeFields(c: CrmCustomer) {
+  if (c.type === 'company') {
+    c.nationality = ''
+    c.idType = ''
+    c.idNo = ''
+  } else {
+    c.taxNo = ''
+    c.industry = ''
+    c.address = ''
+  }
+}
 
 const paginate = <T,>(rows: T[], query: Record<string, unknown>) => {
   const page = Math.max(1, Number(query.page) || 1)
@@ -87,11 +114,34 @@ defineMock([
           !kw ||
           c.name.toLowerCase().includes(kw) ||
           (c.code ?? '').toLowerCase().includes(kw) ||
-          (c.externalNo ?? '').toLowerCase().includes(kw),
+          (c.externalNo ?? '').toLowerCase().includes(kw) ||
+          (c.idNo ?? '').toLowerCase().includes(kw) ||
+          (c.taxNo ?? '').toLowerCase().includes(kw),
       )
+      if (query.type) rows = rows.filter((c) => c.type === query.type)
       if (query.status) rows = rows.filter((c) => c.status === query.status)
       if (query.source) rows = rows.filter((c) => c.externalSource === query.source)
       return paginate([...rows].reverse(), query)
+    },
+  },
+  {
+    method: 'GET',
+    url: '/plugins/crm/customers/export',
+    handler: ({ query }) => {
+      const kw = String(query.keyword ?? '').trim().toLowerCase()
+      let rows = customers.filter(
+        (c) =>
+          !kw ||
+          c.name.toLowerCase().includes(kw) ||
+          (c.code ?? '').toLowerCase().includes(kw) ||
+          (c.externalNo ?? '').toLowerCase().includes(kw) ||
+          (c.idNo ?? '').toLowerCase().includes(kw) ||
+          (c.taxNo ?? '').toLowerCase().includes(kw),
+      )
+      if (query.type) rows = rows.filter((c) => c.type === query.type)
+      if (query.status) rows = rows.filter((c) => c.status === query.status)
+      if (query.source) rows = rows.filter((c) => c.externalSource === query.source)
+      return [...rows].reverse()
     },
   },
   {
@@ -111,6 +161,7 @@ defineMock([
         name: body.name,
         // 与后端一致：编码留空时由 ID 派生。
         code: String(body.code ?? '').trim() || `C-${BigInt(id).toString(36).toUpperCase()}`,
+        type: body.type === 'company' ? 'company' : 'person',
         level: body.level ?? '',
         status: body.status ?? 'active',
         externalSource: body.externalSource || null,
@@ -118,9 +169,17 @@ defineMock([
         owner: body.owner ?? '',
         phone: body.phone ?? '',
         email: body.email ?? '',
+        country: body.country ?? '',
+        nationality: body.nationality ?? '',
+        idType: body.idType ?? '',
+        idNo: body.idNo ?? '',
+        taxNo: body.taxNo ?? '',
+        industry: body.industry ?? '',
+        address: body.address ?? '',
         remark: body.remark ?? '',
         createdAt: new Date().toISOString(),
       }
+      applyTypeFields(c)
       customers = [...customers, c]
       return c
     },
@@ -133,12 +192,21 @@ defineMock([
       c.name = body.name
       // 与后端一致：更新时编码留空表示沿用原编码。
       c.code = String(body.code ?? '').trim() || c.code
+      c.type = body.type === 'company' ? 'company' : 'person'
       c.level = body.level ?? c.level
       c.status = body.status ?? c.status
       c.owner = body.owner ?? c.owner
       c.phone = body.phone ?? c.phone
       c.email = body.email ?? c.email
+      c.country = body.country ?? c.country
+      c.nationality = body.nationality ?? c.nationality
+      c.idType = body.idType ?? c.idType
+      c.idNo = body.idNo ?? c.idNo
+      c.taxNo = body.taxNo ?? c.taxNo
+      c.industry = body.industry ?? c.industry
+      c.address = body.address ?? c.address
       c.remark = body.remark ?? c.remark
+      applyTypeFields(c)
       return c
     },
   },
@@ -159,6 +227,26 @@ defineMock([
   },
   {
     method: 'DELETE',
+    url: '/plugins/crm/customers',
+    handler: ({ query }) => {
+      // 与后端同一套规则：ids 缺失/为空/任一项非法 → 400，绝不落到「无条件全表删」。
+      const ids = String(query.ids ?? '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+      if (ids.length === 0 || ids.some((id) => !/^\d+$/.test(id))) mockError(400, 'ids required')
+      const picked = customers.filter((c) => ids.includes(c.id))
+      if (picked.length === 0) mockError(404, 'not found')
+      // 名下仍有商机的客户不删，计入 blocked；全部占用才整批 409。
+      const free = picked.filter((c) => !opportunities.some((o) => o.customerId === c.id))
+      if (free.length === 0) mockError(409, 'customer in use')
+      const gone = new Set(free.map((c) => c.id))
+      customers = customers.filter((c) => !gone.has(c.id))
+      return { deleted: gone.size, blocked: ids.length - gone.size }
+    },
+  },
+  {
+    method: 'DELETE',
     url: '/plugins/crm/customers/:id',
     handler: ({ params }) => {
       if (opportunities.some((o) => o.customerId === params.id)) mockError(409, 'customer in use')
@@ -174,7 +262,7 @@ defineMock([
       let rows = opportunities.filter((o) => !kw || o.title.toLowerCase().includes(kw))
       if (query.stage) rows = rows.filter((o) => o.stage === query.stage)
       if (query.customerId) rows = rows.filter((o) => o.customerId === query.customerId)
-      return paginate([...rows].reverse().map(withCustomerName), query)
+      return paginate([...rows].reverse().map(withCustomerBrief), query)
     },
   },
   {
@@ -188,6 +276,7 @@ defineMock([
         id: String(7431000000000000000n + BigInt(opportunities.length + 1)),
         customerId,
         customerName: customerName(customerId),
+        customerType: customerType(customerId),
         title: body.title,
         stage: body.stage ?? 'lead',
         amountMinor: Number(body.amountMinor) || 0,
@@ -211,6 +300,7 @@ defineMock([
       if (customerId !== '0' && !customerName(customerId)) mockError(404, 'customer not found')
       o.customerId = customerId
       o.customerName = customerName(customerId)
+      o.customerType = customerType(customerId)
       o.title = body.title
       o.stage = body.stage ?? o.stage
       o.amountMinor = Number(body.amountMinor) || 0
@@ -219,6 +309,22 @@ defineMock([
       o.owner = body.owner ?? o.owner
       o.remark = body.remark ?? o.remark
       return o
+    },
+  },
+  {
+    method: 'DELETE',
+    url: '/plugins/crm/opportunities',
+    handler: ({ query }) => {
+      const ids = String(query.ids ?? '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+      if (ids.length === 0 || ids.some((id) => !/^\d+$/.test(id))) mockError(400, 'ids required')
+      const picked = opportunities.filter((o) => ids.includes(o.id))
+      if (picked.length === 0) mockError(404, 'not found')
+      const gone = new Set(picked.map((o) => o.id))
+      opportunities = opportunities.filter((o) => !gone.has(o.id))
+      return { deleted: gone.size, blocked: ids.length - gone.size }
     },
   },
   {

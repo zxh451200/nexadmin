@@ -11,6 +11,30 @@ const (
 	StatusInactive = "inactive"
 )
 
+// 客户类型：个人（自然人，如酒店住客、商城会员）或企业（签约单位）。
+const (
+	TypePerson  = "person"
+	TypeCompany = "company"
+)
+
+// TypeSet 是合法客户类型集合（i18n 与校验共用）。
+var TypeSet = map[string]bool{TypePerson: true, TypeCompany: true}
+
+// 个人客户的证件类型（对齐酒店实名登记口径）；空串 = 未登记。
+const (
+	IdTypeIDCard    = "id_card"
+	IdTypePassport  = "passport"
+	IdTypeOfficer   = "officer_card"
+	IdTypeHMTPermit = "hmt_permit"
+	IdTypeOther     = "other"
+)
+
+// IdTypeSet 是合法证件类型集合（空串另算未登记）。
+var IdTypeSet = map[string]bool{
+	IdTypeIDCard: true, IdTypePassport: true, IdTypeOfficer: true,
+	IdTypeHMTPermit: true, IdTypeOther: true,
+}
+
 // 商机阶段（线索 → 商机共用一张表，stage 区分；不做销售管线，阶段只有这六档）。
 const (
 	StageLead      = "lead"
@@ -33,6 +57,7 @@ var ExternalSourceSet = map[string]bool{
 }
 
 // Customer 是客户主数据：全生态认同的"同一个客户 ID"。
+// Name 按 Type 取语义——个人填姓名，企业填公司名称。
 // ExternalSource + ExternalNo 是与宿主 member 体系对接的锚点
 // （如 hotel+M0001 / mall+10086）：可空，非空时 (tenant_id, source, no) 唯一
 // ——唯一索引由迁移 SQL 定义（gorm 标签不覆盖嵌入的 tenant_id），宿主侧以此反查客户 ID。
@@ -42,12 +67,24 @@ type Customer struct {
 	Code           string  `gorm:"size:64;not null;default:''" json:"code"`
 	Level          string  `gorm:"size:16;not null;default:''" json:"level"`
 	Status         string  `gorm:"size:16;not null;default:'active';index" json:"status"`
+	Type           string  `gorm:"size:16;not null;default:'person';index" json:"type"`
 	ExternalSource *string `gorm:"size:16" json:"externalSource"`
 	ExternalNo     *string `gorm:"size:64" json:"externalNo"`
 	Owner          string  `gorm:"size:64;not null;default:''" json:"owner"`
 	Phone          string  `gorm:"size:32;not null;default:''" json:"phone"`
 	Email          string  `gorm:"size:128;not null;default:''" json:"email"`
-	Remark         string  `gorm:"size:500;not null;default:''" json:"remark"`
+	// Country / Nationality 存 ISO 3166-1 alpha-2 代码（CN、US…），空串 = 未登记。
+	// 只存代码不存名称：名称由前端 Intl.DisplayNames 按当前语言生成，中英文都不占翻译数据。
+	Country     string `gorm:"size:2;not null;default:''" json:"country"`
+	Nationality string `gorm:"size:2;not null;default:''" json:"nationality"`
+	// 个人客户的身份：证件类型 + 证件号，配合国籍做实名识别（酒店入住、跨境订单）。
+	IdType string `gorm:"size:16;not null;default:''" json:"idType"`
+	IdNo   string `gorm:"size:64;not null;default:''" json:"idNo"`
+	// 企业客户的身份：统一社会信用代码 + 行业 + 注册地址。
+	TaxNo    string `gorm:"size:32;not null;default:''" json:"taxNo"`
+	Industry string `gorm:"size:64;not null;default:''" json:"industry"`
+	Address  string `gorm:"size:200;not null;default:''" json:"address"`
+	Remark   string `gorm:"size:500;not null;default:''" json:"remark"`
 }
 
 func (Customer) TableName() string { return "plg_crm_customer" }
@@ -59,22 +96,24 @@ type Opportunity struct {
 	// CustomerID 必须走 idgen.ID：雪花 ID 超出 JS 安全整数，JSON 里只能是字符串。
 	CustomerID   idgen.ID `gorm:"not null;default:0;index" json:"customerId"`
 	CustomerName string   `gorm:"-" json:"customerName,omitempty"`
+	// CustomerType 是列表展示用的客户类型（个人/企业），不落商机表——类型归客户。
+	CustomerType string `gorm:"-" json:"customerType,omitempty"`
 	// ContactID 是客户下主对接联系人（可选；0 表示未指定）。
 	ContactID   idgen.ID `gorm:"not null;default:0" json:"contactId,omitempty"`
 	Title       string   `gorm:"size:200;not null" json:"title"`
-	Stage        string   `gorm:"size:16;not null;default:'lead';index" json:"stage"`
-	AmountMinor  int64    `gorm:"not null;default:0" json:"amountMinor"`
-	Currency     string   `gorm:"size:8;not null;default:'CNY'" json:"currency"`
-	ExpectedAt   string   `gorm:"size:10;not null;default:''" json:"expectedAt"`
-	Owner        string   `gorm:"size:64;not null;default:''" json:"owner"`
-	Remark       string   `gorm:"size:500;not null;default:''" json:"remark"`
+	Stage       string   `gorm:"size:16;not null;default:'lead';index" json:"stage"`
+	AmountMinor int64    `gorm:"not null;default:0" json:"amountMinor"`
+	Currency    string   `gorm:"size:8;not null;default:'CNY'" json:"currency"`
+	ExpectedAt  string   `gorm:"size:10;not null;default:''" json:"expectedAt"`
+	Owner       string   `gorm:"size:64;not null;default:''" json:"owner"`
+	Remark      string   `gorm:"size:500;not null;default:''" json:"remark"`
 }
 
 func (Opportunity) TableName() string { return "plg_crm_opportunity" }
 
 // 跟进记录类型（P0 四种：电话/拜访/备注/待办；todo 用 done 与 next_at 表达）。
 const (
-	KindCall = "call"
+	KindCall  = "call"
 	KindVisit = "visit"
 	KindNote  = "note"
 	KindTodo  = "todo"
@@ -86,7 +125,7 @@ var ActivityKindSet = map[string]bool{
 }
 
 // Contact 是客户下的联系人：一个客户可以有多个联系人，is_primary 标主联系人
-//（客户内最多一个，由服务层在事务里保证，不做数据库唯一约束以便平滑切换）。
+// （客户内最多一个，由服务层在事务里保证，不做数据库唯一约束以便平滑切换）。
 type Contact struct {
 	database.TenantModel
 	CustomerID idgen.ID `gorm:"not null;default:0;index" json:"customerId"`

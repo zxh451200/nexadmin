@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/gin-gonic/gin"
@@ -54,10 +55,12 @@ var tenantCtx = tenant.With(context.Background(), 7)
 
 func customerRow(id int64, name, source, no string) *sqlmock.Rows {
 	return sqlmock.NewRows([]string{
-		"id", "tenant_id", "name", "code", "level", "status",
-		"external_source", "external_no", "owner", "phone", "email", "remark",
+		"id", "tenant_id", "name", "code", "level", "status", "type",
+		"external_source", "external_no", "owner", "phone", "email", "country", "nationality",
+		"id_type", "id_no", "tax_no", "industry", "address", "remark",
 		"created_at", "updated_at",
-	}).AddRow(id, 7, name, "C-1", "", "active", source, no, "", "", "", "", testNow, testNow)
+	}).AddRow(id, 7, name, "C-1", "", "active", TypePerson, source, no, "", "", "", "", "",
+		"", "", "", "", "", "", testNow, testNow)
 }
 
 // 锚点锚定：同锚点重复建档返回已有客户（member 对齐客户 ID 的幂等基础）。
@@ -190,8 +193,8 @@ func TestOpportunityCustomerIDSerializesAsString(t *testing.T) {
 	}
 }
 
-// 商机列表回填客户名，前端不再只能显示裸 ID。
-func TestListOpportunitiesFillsCustomerName(t *testing.T) {
+// 商机列表回填客户名与类型，前端列表不用再猜客户是个人还是单位。
+func TestListOpportunitiesFillsCustomerBrief(t *testing.T) {
 	db, m := mockDB(t)
 	s := NewService(db, nopLogger{})
 
@@ -202,17 +205,170 @@ func TestListOpportunitiesFillsCustomerName(t *testing.T) {
 			"id", "tenant_id", "customer_id", "title", "stage", "amount_minor", "currency",
 			"expected_at", "owner", "remark", "created_at", "updated_at",
 		}).AddRow(3001, 7, 2001, "年会酒席", "lead", 100000, "CNY", "", "", "", testNow, testNow))
-	m.ExpectQuery("SELECT `id`,`name` FROM `plg_crm_customer` WHERE id IN").
-		WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(2001, "张三"))
+	m.ExpectQuery("SELECT `id`,`name`,`type` FROM `plg_crm_customer` WHERE id IN").
+		WillReturnRows(sqlmock.NewRows([]string{"id", "name", "type"}).AddRow(2001, "杭州某酒店", TypeCompany))
 
 	rows, total, err := s.ListOpportunities(tenantCtx, OpportunityQuery{Page: 1, PageSize: 10})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if total != 1 || len(rows) != 1 || rows[0].CustomerName != "张三" {
-		t.Fatalf("customer name not filled: %+v total=%d", rows, total)
+	if total != 1 || len(rows) != 1 {
+		t.Fatalf("want 1 row, got %+v total=%d", rows, total)
+	}
+	if rows[0].CustomerName != "杭州某酒店" || rows[0].CustomerType != TypeCompany {
+		t.Fatalf("customer brief not filled: %+v", rows[0])
 	}
 	if err := m.ExpectationsWereMet(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// 国籍/国家按 ISO 3166-1 alpha-2 收口：统一大写、去空格后入库；非 2 位字母直接拒绝，
+// 空串视为未登记（不填是合法的）。
+func TestCustomerCountryAndNationality(t *testing.T) {
+	db, m := mockDB(t)
+	s := NewService(db, nopLogger{})
+
+	m.ExpectBegin()
+	m.ExpectExec("INSERT INTO `plg_crm_customer`").WillReturnResult(sqlmock.NewResult(1, 1))
+	m.ExpectCommit()
+	// 王五：国籍/国家留空 = 未登记，同样要能建。
+	m.ExpectBegin()
+	m.ExpectExec("INSERT INTO `plg_crm_customer`").WillReturnResult(sqlmock.NewResult(2, 1))
+	m.ExpectCommit()
+
+	c, err := s.CreateCustomer(tenantCtx, CustomerInput{Name: "张三", Country: " cn ", Nationality: "us"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Country != "CN" || c.Nationality != "US" {
+		t.Fatalf("want CN/US, got %q/%q", c.Country, c.Nationality)
+	}
+
+	for _, bad := range []string{"China", "C", "12"} {
+		if _, err := s.CreateCustomer(tenantCtx, CustomerInput{Name: "李四", Country: bad}); err == nil {
+			t.Fatalf("country %q should be rejected", bad)
+		}
+		if _, err := s.CreateCustomer(tenantCtx, CustomerInput{Name: "李四", Nationality: bad}); err == nil {
+			t.Fatalf("nationality %q should be rejected", bad)
+		}
+	}
+	if _, err := s.CreateCustomer(tenantCtx, CustomerInput{Name: "王五"}); err != nil {
+		t.Fatalf("empty country/nationality should pass: %v", err)
+	}
+	if err := m.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// 客户类型决定哪组身份字段生效：个人用国籍+证件，企业用信用代码+行业+地址，
+// 另一组由服务层清空——切了类型还留着上一条护照号，列表和导出就会说假话。
+func TestCustomerTypeDrivesIdentityFields(t *testing.T) {
+	db, m := mockDB(t)
+	s := NewService(db, nopLogger{})
+
+	// 个人（不填类型的默认）与企业各建一条。个人无手机号不触发查重；企业有信用代码，查重先查后插。
+	m.ExpectBegin()
+	m.ExpectExec("INSERT INTO `plg_crm_customer`").WillReturnResult(sqlmock.NewResult(1, 1))
+	m.ExpectCommit()
+	m.ExpectQuery("SELECT count\\(\\*\\) FROM `plg_crm_customer` WHERE tax_no = \\?").
+		WithArgs("91330100MA2AB1CD3X").WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+	m.ExpectBegin()
+	m.ExpectExec("INSERT INTO `plg_crm_customer`").WillReturnResult(sqlmock.NewResult(2, 1))
+	m.ExpectCommit()
+	// 列表按类型过滤：count + 取页。
+	m.ExpectQuery("SELECT count\\(\\*\\) FROM `plg_crm_customer` WHERE type = \\?").
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+	m.ExpectQuery("SELECT \\* FROM `plg_crm_customer` WHERE type = \\?").
+		WillReturnRows(sqlmock.NewRows([]string{"id", "tenant_id"}))
+
+	person, err := s.CreateCustomer(tenantCtx, CustomerInput{Name: "张三", Nationality: "cn"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if person.Type != TypePerson || person.Nationality != "CN" {
+		t.Fatalf("person default or nationality normalization wrong: %+v", person)
+	}
+
+	cu, err := s.CreateCustomer(tenantCtx, CustomerInput{
+		Name: "杭州某酒店", Type: TypeCompany, Nationality: "CN",
+		IdType: IdTypeIDCard, IdNo: "33010619900101001X",
+		TaxNo: "91330100ma2ab1cd3x", Industry: "住宿业",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cu.Type != TypeCompany {
+		t.Fatalf("type not persisted: %+v", cu)
+	}
+	if cu.Nationality != "" || cu.IdType != "" || cu.IdNo != "" {
+		t.Fatalf("company must not carry person identity: %+v", cu)
+	}
+	if cu.TaxNo != "91330100MA2AB1CD3X" || cu.Industry != "住宿业" {
+		t.Fatalf("company identity not normalized: %+v", cu)
+	}
+
+	// 类型/证件类型非法、证件只填一半：全部拒绝且不碰库。
+	for _, tc := range []struct {
+		name string
+		in   CustomerInput
+		key  string
+	}{
+		{"bad type", CustomerInput{Name: "x", Type: "gov"}, "crm.type_invalid"},
+		{"bad id type", CustomerInput{Name: "x", IdType: "driver_license"}, "crm.id_type_invalid"},
+		{"id type without no", CustomerInput{Name: "x", IdType: IdTypePassport}, "crm.id_pair_invalid"},
+		{"id no without type", CustomerInput{Name: "x", IdNo: "E12345678"}, "crm.id_pair_invalid"},
+	} {
+		if _, err := s.CreateCustomer(tenantCtx, tc.in); err == nil {
+			t.Fatalf("%s: want error", tc.name)
+		} else if !containsKey(err, tc.key) {
+			t.Fatalf("%s: want key %s, got %v", tc.name, tc.key, err)
+		}
+	}
+
+	// 过滤条件容忍大小写与空格；非法值要直接报错，不能悄悄返回空列表。
+	rows, _, err := s.ListCustomers(tenantCtx, CustomerQuery{Type: " COMPANY ", Page: 1, PageSize: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 0 {
+		t.Fatalf("want empty page, got %+v", rows)
+	}
+	if _, _, err := s.ListCustomers(tenantCtx, CustomerQuery{Type: "gov", Page: 1, PageSize: 10}); err == nil {
+		t.Fatal("invalid filter type should be rejected")
+	} else if !containsKey(err, "crm.type_invalid") {
+		t.Fatalf("want crm.type_invalid, got %v", err)
+	}
+	if err := m.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// 裁剪按字符不是按字节：按字节切会把汉字切成半个码点，MySQL 直接以 1366 拒掉整行
+// （plugins/crm/live_test.go 在真库上抓到过一次）。
+func TestTruncateCutsByRunesNotBytes(t *testing.T) {
+	// 2 runes：rune 语义下恰好整串保留；若按字节切（6 字节 > 4）会出半个码点
+	if got := truncate("张三", 2); got != "张三" {
+		t.Fatalf("want 张三, got %q", got)
+	}
+	// 3 runes 裁到 2：整字切，不出半个码点
+	if got := truncate("张三张", 2); got != "张三" {
+		t.Fatalf("want 张三, got %q", got)
+	}
+	if got := truncate("hello", 10); got != "hello" {
+		t.Fatalf("短字符串应原样通过: %q", got)
+	}
+	in := CustomerInput{Name: "真库用例-" + strings.Repeat("杭", 300), Remark: strings.Repeat("记", 600)}
+	if err := in.normalize(); err != nil {
+		t.Fatal(err)
+	}
+	if n := len([]rune(in.Name)); n != 200 {
+		t.Fatalf("name should be cut to 200 chars, got %d", n)
+	}
+	if n := len([]rune(in.Remark)); n != 500 {
+		t.Fatalf("remark should be cut to 500 chars, got %d", n)
+	}
+	if !utf8.ValidString(in.Name) || !utf8.ValidString(in.Remark) {
+		t.Fatal("裁剪产出非法 UTF-8")
 	}
 }

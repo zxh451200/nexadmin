@@ -49,38 +49,70 @@ type customerForm struct {
 	Code           string `json:"code"`
 	Level          string `json:"level"`
 	Status         string `json:"status"`
+	Type           string `json:"type"`
 	ExternalSource string `json:"externalSource"`
 	ExternalNo     string `json:"externalNo"`
 	Owner          string `json:"owner"`
 	Phone          string `json:"phone"`
 	Email          string `json:"email"`
+	Country        string `json:"country"`
+	Nationality    string `json:"nationality"`
+	IdType         string `json:"idType"`
+	IdNo           string `json:"idNo"`
+	TaxNo          string `json:"taxNo"`
+	Industry       string `json:"industry"`
+	Address        string `json:"address"`
 	Remark         string `json:"remark"`
 }
 
 func (f customerForm) input() CustomerInput {
 	return CustomerInput{
-		Name: f.Name, Code: f.Code, Level: f.Level, Status: f.Status,
+		Name: f.Name, Code: f.Code, Level: f.Level, Status: f.Status, Type: f.Type,
 		ExternalSource: f.ExternalSource, ExternalNo: f.ExternalNo,
 		Owner: f.Owner, Phone: f.Phone, Email: f.Email, Remark: f.Remark,
+		Country: f.Country, Nationality: f.Nationality,
+		IdType: f.IdType, IdNo: f.IdNo,
+		TaxNo: f.TaxNo, Industry: f.Industry, Address: f.Address,
 	}
 }
 
-// GET /plugins/crm/customers?keyword=&status=&source=&page=&pageSize=
+// GET /plugins/crm/customers?keyword=&type=&status=&source=&page=&pageSize=
 func (h *handler) listCustomers(c *gin.Context) {
 	sc, ok := h.scopeOf(c)
 	if !ok {
 		return
 	}
 	page, size := response.ParsePage(c)
-	rows, total, err := h.svc.ListCustomers(c.Request.Context(), CustomerQuery{
-		Keyword: c.Query("keyword"), Status: c.Query("status"), Source: c.Query("source"),
-		Scope: sc, Mine: c.Query("mine") == "1", Page: page, PageSize: size,
-	})
+	rows, total, err := h.svc.ListCustomers(c.Request.Context(), customerQueryFrom(c, sc))
 	if err != nil {
 		response.Fail(c, err)
 		return
 	}
 	response.Page(c, rows, total, page, size)
+}
+
+// customerQueryFrom 把列表/导出共用的查询参数收拢。
+func customerQueryFrom(c *gin.Context, sc *datascope.Scope) CustomerQuery {
+	return CustomerQuery{
+		Keyword: c.Query("keyword"), Type: c.Query("type"),
+		Status: c.Query("status"), Source: c.Query("source"),
+		Scope: sc, Mine: c.Query("mine") == "1",
+	}
+}
+
+// GET /plugins/crm/customers/export?<同列表筛选> —— 导出当前筛选下的全部客户。
+// 数据范围生效；CSV 由前端生成。
+func (h *handler) exportCustomers(c *gin.Context) {
+	sc, ok := h.scopeOf(c)
+	if !ok {
+		return
+	}
+	rows, err := h.svc.ExportCustomers(c.Request.Context(), customerQueryFrom(c, sc))
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, rows)
 }
 
 // GET /plugins/crm/customers/:id
