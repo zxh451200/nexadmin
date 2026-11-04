@@ -40,7 +40,7 @@ type Summary struct {
 	B              int `json:"b"`
 	C              int `json:"c"`
 	Unresolved     int `json:"unresolved"`
-	Undecided      int `json:"undecided"` // 路径含运行时拼的段，静态判不出前后端是否同一条（不阻断）
+	Undecided      int `json:"undecided"`  // 路径含运行时拼的段，静态判不出前后端是否同一条（不阻断）
 	ErrKeys        int `json:"errKeys"`    // 扫描到的错误 key 字面量数
 	ErrMissing     int `json:"errMissing"` // 缺语言包条目的（key,语言）数
 }
