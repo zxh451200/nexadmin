@@ -569,6 +569,14 @@ func messageQuery(c *gin.Context) MessageQuery {
 // Register 注册坐席与访客路由（由 plugin.go 的 module 调用）。
 func (h *handler) Register(r *gin.RouterGroup, d *core.Deps) {
 	g := r.Group("/plugins/im")
+	// 会话、消息、附件、快捷回复、设置五张表都嵌 PlatformModel——一张都没有 tenant_id。
+	// 于是「谁能在后台看会话列表」不是数据范围问题而是归属问题：任何持 im:list 的租户
+	// 一次 GET /conversations 或一次 /conversations-export 就把所有租户的完整聊天记录带走，
+	// 服务层的 convFilter 里没有任何租户谓词（plugins/im/service.go:493）。
+	// 所以整个坐席后台只对平台调用方开放；访客公开接口在下面 d.Public 分组，不受影响。
+	// 真要按租户开放：给这五张表补 tenant_id（三引擎迁移 + 唯一键改形），并给匿名进线补归属
+	// ——Host→租户的解析链已有（core/router.go 的 tenant resolver），缺的是把结果落到会话上。
+	g.Use(core.RequirePlatformFeature())
 	g.GET("/conversations", core.Perm("im:list"), h.list)
 	g.GET("/conversations/:no/messages", core.Perm("im:list"), h.adminMessages)
 	g.POST("/conversations/:no/messages", core.Perm("im:reply"), h.adminSend)

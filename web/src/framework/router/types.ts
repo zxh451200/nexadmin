@@ -18,6 +18,10 @@ export interface ModuleRoute {
   path: string // 无前导斜杠，如 'system/user'
   component: LazyExoticComponent<ComponentType> | ComponentType
   perm?: string | string[] // 需要的权限点，如 'user:list'；数组默认「任一命中」即可进（合并页用）
+  // true = 平台级页面：后端把该插件的受保护分组整组挂上 core.RequirePlatformFeature()（数据表没有
+  // tenant_id，读也会把别的租户的记录带走），所以非平台调用方进来直接给解释页，
+  // 而不是让页面发一串必然 403 的请求再弹错误信封。与 perm 是两条独立的判据，都要过。
+  platform?: boolean
   // 该页面所属插件 ID（由 route.tsx 所在目录推断，见 discover/merge）：插件未启用时守卫直接拦截，
   // 不再渲染页面（否则页面会发出一串必然 404 的插件接口请求）。
   plugin?: string

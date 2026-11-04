@@ -55,14 +55,27 @@ func IsPlatformCaller(c *gin.Context) bool {
 
 // RequirePlatform 是 IsPlatformCaller 的中间件形态，平台共享表的写路由挂它。
 func RequirePlatform() gin.HandlerFunc {
+	return requirePlatform("error.platform_only")
+}
+
+// RequirePlatformFeature 把整个插件后台只留给平台级调用方。和 RequirePlatform 的差别不是松紧，
+// 是暴露面：这类插件的表一张都没有 tenant_id（在线客服的会话与消息、官网的留言与内容），
+// 一次列表或一次导出就把别的租户的客户记录整批带走——那只挡写入口不够，读也要挡。
+// 单租户部署（客户买回去只有一个默认租户）里所有人都算平台调用方，这条闸不改任何行为；
+// 它只在多租户下生效。真要按租户开放，得先给这些表补 tenant_id 并给匿名进线补归属。
+func RequirePlatformFeature() gin.HandlerFunc {
+	return requirePlatform("error.platform_only_feature")
+}
+
+func requirePlatform(errKey string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if IsPlatformCaller(c) {
 			c.Next()
 			return
 		}
-		// 文案要指得清路：这里的 403 不是「你没权限用这个模块」，是「这一行所有租户共用，
-		// 轮不到你改」——只回笼统的 forbidden，租户管理员会以为自己权限配错了而去翻角色。
-		response.Fail(c, response.Forbidden("error.platform_only"))
+		// 文案要指得清路：这里的 403 不是「你没权限用这个模块」，是「这一份所有租户共用，
+		// 轮不到你改/看」——只回笼统的 forbidden，租户管理员会以为自己权限配错了而去翻角色。
+		response.Fail(c, response.Forbidden(errKey))
 	}
 }
 

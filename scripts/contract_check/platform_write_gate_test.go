@@ -17,8 +17,11 @@ package main
 // public_route_gate_test.go 同一条路子）。二跳分组、运行时拼路径不判。
 // 两道闸各管一种空转，别指望其中一个替另一个兜底：本闸判「中间件还在不在」，把
 // RequirePlatform 换成 c.Next() 那种「挂着但什么都不做」由 core/platform_test.go 判红。
-// 未决插件（website/im/devicehub）进挂账：它们的表一张都没有 tenant_id，
-// 「平台自有插件」还是「下一个要修的洞」需要同样的产品决定——挂账命中数为 0 时会报错，是账不是豁免。
+// 两类收口都在判：单条写路由挂 core.RequirePlatform()（共享配置表，见 platWriteLedgerRoutes），
+// 以及整个后台挂 core.RequirePlatformFeature()（表里没有 tenant_id 的插件，读也是泄露，
+// 见 platPluginWideGates——后端分组与前端 platform: true 两张脸都要在）。
+// 还没收口的插件（devicehub）进挂账：它的表同样一张 tenant_id 都没有，
+// 「平台自有」还是「下一个要按租户切开的洞」需要它自己的产品决定——挂账命中数为 0 时会报错，是账不是豁免。
 
 import (
 	"os"
@@ -62,18 +65,38 @@ var platWriteLedgerRoutes = []platWriteLedger{
 	{"plugins/codegen/plugin.go", "POST", "/install", "(写磁盘：渲染结果落进项目根目录)"},
 }
 
-// platSharedPendingPlugins 登记「有 PlatformModel 表但写路由尚未挂闸」的插件，逐条写原因。
+// platPluginWideGates 登记「整个后台只对平台调用方开放」的插件：这类插件的共享表装的不是配置而是
+// 客户数据，一次列表或一次导出就把别的租户的记录带走，所以挡写不够、读也要挡——判据从
+// 「能不能改这一行」升级为「这张表根本不分租户」。两张脸都要在：后端分组挂
+// core.RequirePlatformFeature()，前端该插件的每条路由标 platform: true（否则人进来是一串 403）。
+var platPluginWideGates = []struct {
+	plugin      string
+	backendFile string
+	groupPath   string // 受保护分组的注册形态，用来核对 Use 挂在路由之前
+	routeFile   string
+	why         string
+}{
+	{"im", "plugins/im/handler.go", "/plugins/im", "web/src/plugins/im/route.tsx",
+		"会话/消息/附件/快捷回复/设置五张表都没有 tenant_id，convFilter 里没有任何租户谓词"},
+	{"website", "plugins/website/plugin.go", "/plugins/website", "web/src/plugins/website/route.tsx",
+		"内容与访客留言都没有 tenant_id，官网代表部署主体而不是某个租户"},
+}
+
+// platSharedPendingPlugins 登记「有 PlatformModel 表但既没挂闸也没整组收口」的插件，逐条写原因。
 // 这些插件不在本闸判定范围（要各自的产品决定），但必须留名——静默漏过才是这条闸存在的理由。
 var platSharedPendingPlugins = []struct {
 	plugin, reason string
 }{
-	{"website", "官网是平台自己的对外窗口（12 张表无 tenant_id）：按平台自有插件处理还是挂闸，待产品决定"},
-	{"im", "在线客服的会话/消息/附件/快捷回复/设置 5 张表都没有 tenant_id，跨租户可见性同上一条决定"},
 	{"devicehub", "设备台账/点位/读数为单租户垂直场景设计，无 tenant_id；该插件本会话在别人在途域，只登记不代修"},
 }
 
-// platSharedErrKey 是 RequirePlatform 回的错误 key（core/router.go），双语都要有。
-var platSharedErrKey = "error.platform_only"
+// platSharedErrKey / platFeatureErrKey 是两种平台闸各回的错误 key（core/router.go），双语都要有：
+// 前者是「这一行大家共用，轮不到你改」，后者是「这张表根本不分租户，整个后台不对你开放」——
+// 混用一条文案会让读被挡的人以为自己是配置错了。
+var (
+	platSharedErrKey  = "error.platform_only"
+	platFeatureErrKey = "error.platform_only_feature"
+)
 
 var (
 	platRouteRe = regexp.MustCompile(`(?m)^[ \t]*([A-Za-z_]\w*)\.(GET|POST|PUT|PATCH|DELETE|ANY)\(\s*"([^"]+)"`)
@@ -259,6 +282,48 @@ func TestPlatformWriteGate(t *testing.T) {
 	for _, p := range platSharedPendingPlugins {
 		pending[p.plugin] = p.reason
 	}
+
+	// 3b. 整组收口的插件：它的全部共享表都算覆盖（闸挂在分组上，不在单条路由上），
+	// 但两张脸都要真在：后端分组的 Use，和前端每条路由的 platform: true。
+	for _, w := range platPluginWideGates {
+		if _, ok := pending[w.plugin]; ok {
+			t.Errorf("插件 %s 同时登记成「整组收口」和「挂账」：删掉一条，别用两份说法盖同一件事", w.plugin)
+		}
+		if _, ok := shared[w.plugin]; !ok {
+			t.Errorf("整组收口登记已失效（插件 %s 已没有 PlatformModel 表）：%s", w.plugin, w.why)
+			continue
+		}
+		backend := platRead(t, w.backendFile)
+		useAt := strings.Index(backend, "g.Use(core.RequirePlatformFeature())")
+		if useAt < 0 {
+			t.Errorf("插件 %s 的后台分组没整组收口：%s 里找不到 g.Use(core.RequirePlatformFeature())（%s）",
+				w.plugin, w.backendFile, w.why)
+		} else {
+			if at := strings.Index(backend, `r.Group("`+w.groupPath+`")`); at < 0 || useAt < at {
+				t.Errorf("插件 %s 的整组闸位置不对：Use 必须紧跟分组声明（%s）之后、路由之前，否则前面注册的路由不受它管",
+					w.plugin, w.groupPath)
+			}
+			if first := strings.Index(backend, "g.GET("); first >= 0 && useAt > first {
+				t.Errorf("插件 %s 的 g.Use(core.RequirePlatformFeature()) 落在第一条路由之后：gin 的分组中间件只对之后注册的路由生效，前面那些等于没挂", w.plugin)
+			}
+		}
+		routeSrc := platRead(t, w.routeFile)
+		// 只数真属性行：注释里也可能写 platform: true，strings.Count 会把说明当成登记。
+		perms := len(regexp.MustCompile(`(?m)^\s*perm:`).FindAllString(routeSrc, -1))
+		marked := len(regexp.MustCompile(`(?m)^\s*platform: true,$`).FindAllString(routeSrc, -1))
+		if perms == 0 {
+			t.Errorf("插件 %s 的前端路由表 %s 里一条 perm 都没扫到：判定基础变了", w.plugin, w.routeFile)
+		} else if marked != perms {
+			t.Errorf("插件 %s 有 %d 条前端路由、只有 %d 条标了 platform: true：后端整组挡了读，前端没标的那几条会让人发一串必然 403 的请求再弹错误信封（%s）",
+				w.plugin, perms, marked, w.why)
+		}
+		if coveredByPlugin[w.plugin] == nil {
+			coveredByPlugin[w.plugin] = map[string]bool{}
+		}
+		for tb := range shared[w.plugin] {
+			coveredByPlugin[w.plugin][tb] = true
+		}
+	}
 	for plug, tables := range shared {
 		if _, ok := pending[plug]; ok {
 			continue
@@ -297,11 +362,14 @@ func TestPlatformWriteGate(t *testing.T) {
 		t.Error("normalize() 没填 Platform：登录与 /auth/me 都走它，漏了就等于载荷里永远没有这个字段")
 	}
 
-	// 5. 前端那张脸：三处都要认这个字段。
+	// 5. 前端那张脸：会话判据三处都要认，路由级判据两处都要认。
 	webFiles := map[string]string{
 		"web/src/framework/auth/types.ts":         "platform",
 		"web/src/framework/auth/usePermission.ts": "isPlatform",
 		"web/src/framework/auth/auth.mock.ts":     "platform:",
+		// 平台级插件的页面守卫：判据在 ModuleRoute 上声明，在 AppRoutes 里集中过闸。
+		"web/src/framework/router/types.ts":      "platform?: boolean",
+		"web/src/framework/router/AppRoutes.tsx": "route.platform && platform === false",
 	}
 	for f, needle := range webFiles {
 		if !strings.Contains(platRead(t, f), needle) {
@@ -309,16 +377,29 @@ func TestPlatformWriteGate(t *testing.T) {
 		}
 	}
 
-	// 6. 文案那张脸：403 的错误 key 双语都要在（缺 key 会把 key 原文甩给用户）。
+	// 6. 文案那张脸：两种 403 的 key 双语都要在（缺 key 会把 key 原文甩给用户），
+	//    平台级插件的解释页文案也要双语都在——那是非平台调用方看到的第一个整页。
 	for _, lang := range []string{"zh-CN", "en-US"} {
 		src := platRead(t, "core/i18n/locales/"+lang+".yaml")
-		if !strings.Contains(src, "platform_only:") {
-			t.Errorf("语言包 %s 缺 error.platform_only：租户用户撞 403 时看到的是 key 原文，不是「这是平台共享配置，请联系平台管理员」", lang)
+		for _, key := range []string{"platform_only:", "platform_only_feature:"} {
+			if !strings.Contains(src, key) {
+				t.Errorf("语言包 %s 缺 error.%s：撞闸的人看到的是 key 原文，不是「这一份所有租户共用/这张表不分租户」", lang, strings.TrimSuffix(key, ":"))
+			}
+		}
+		json := platRead(t, "web/src/framework/locales/"+lang+".json")
+		if !strings.Contains(json, `"platformOnly"`) {
+			t.Errorf("前端语言包 %s 缺 error.platformOnly：平台级插件的解释页会显示空白标题", lang)
 		}
 	}
 	routerSrc := platRead(t, "core/router.go")
-	if !strings.Contains(routerSrc, `response.Forbidden("`+platSharedErrKey+`")`) {
-		t.Errorf("RequirePlatform 没有回 %s：回笼统的 forbidden 会让人以为是自己权限配错，转头去翻角色", platSharedErrKey)
+	for _, pair := range [][2]string{
+		{`RequirePlatform() gin.HandlerFunc`, `requirePlatform("` + platSharedErrKey + `")`},
+		{`RequirePlatformFeature() gin.HandlerFunc`, `requirePlatform("` + platFeatureErrKey + `")`},
+	} {
+		if !strings.Contains(routerSrc, pair[0]) || !strings.Contains(routerSrc, pair[1]) {
+			t.Errorf("core/router.go 里 %s 与它回的错误 key 对不上（找 %q / %q）：闸与文案分家，用户看到的句子就不再解释他被挡的原因",
+				pair[0], pair[0], pair[1])
+		}
 	}
 
 	// 7. 多挂的闸只登记不判红：并行会话里别人也在收自己的共享表，判红就成了互相踩。
@@ -340,8 +421,8 @@ func TestPlatformWriteGate(t *testing.T) {
 		}
 	}
 
-	t.Logf("平台写闸：登记 %d 条路由（覆盖 %d 张共享表）；插件共享表清单 %d 个插件共 %d 张，挂账 %d 个插件；多挂未登记 %d 条",
-		len(platWriteLedgerRoutes), len(gatedTables), len(shared), platCountTables(shared), len(pending), extra)
+	t.Logf("平台写闸：登记 %d 条路由（覆盖 %d 张共享表）+ 整组收口 %d 个插件；插件共享表清单 %d 个插件共 %d 张，挂账 %d 个插件；多挂未登记 %d 条",
+		len(platWriteLedgerRoutes), len(gatedTables), len(platPluginWideGates), len(shared), platCountTables(shared), len(pending), extra)
 }
 
 func platCountTables(shared map[string]map[string]bool) int {

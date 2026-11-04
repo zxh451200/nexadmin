@@ -13,6 +13,7 @@ error:
   not_initialized: 系统尚未初始化
   tenant_mismatch: 无权访问该租户
   platform_only: 该项是平台级共享配置（所有租户共用同一行），只有平台管理员能修改；如需调整请联系平台管理员
+  platform_only_feature: 这个功能的数据不按租户分（表里没有租户列），后台只对平台管理员开放；需要给自己的客户开通，请让平台管理员把它改造成按租户隔离
   unknown: 未知错误
   ai_tenant_disabled: 当前租户已被平台关闭 AI 功能，请联系平台管理员
   ai_quota_exceeded: 今日 AI 调用次数已达租户上限（%d 次），请明天再试或联系平台管理员

@@ -13,6 +13,7 @@ error:
   not_initialized: System is not initialized
   tenant_mismatch: Access to this tenant is not allowed
   platform_only: This is platform-shared configuration (one row for every tenant) and only a platform administrator can change it; please contact the platform administrator
+  platform_only_feature: This feature's data is not split per tenant (its tables have no tenant column), so its console is open to platform administrators only; to offer it to your own customers, ask the platform administrator to make it tenant-scoped first
   unknown: Unknown error
   ai_tenant_disabled: AI is turned off for your tenant. Please contact the platform administrator
   ai_quota_exceeded: Your tenant has reached its daily AI call limit (%d). Please try again tomorrow or contact the platform administrator

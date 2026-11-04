@@ -59,6 +59,12 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	}
 
 	g := r.Group("/plugins/website")
+	// 官网 12 张表全嵌 PlatformModel，没有 tenant_id：导航/页面/新闻代表整个部署主体的对外窗口
+	// （plugins/website/service.go:372 就写着「官网导航是平台级数据」），而 plg_website_message
+	// 是访客留言——匿名表单写进来的客户数据，任何持 website:message 的租户都能整批读走并导出。
+	// 因此后台只对平台调用方开放；公开站与留言提交在下面的根引擎分组，匿名照常可用。
+	// 按租户开官网需要给这 12 张表补 tenant_id 并让匿名表单知道自己在哪个租户（Host→租户解析已有）。
+	g.Use(core.RequirePlatformFeature())
 	g.GET("/settings", core.Perm("website:setting"), core.Desc("读取站点设置"), h.getSettings)
 	g.PUT("/settings", core.Perm("website:setting"), core.Desc("更新站点设置"), h.saveSettings)
 

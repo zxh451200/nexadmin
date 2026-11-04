@@ -222,6 +222,10 @@
       "title": "Access denied",
       "desc": "You do not have permission to view this page. Please contact your administrator."
     },
+    "platformOnly": {
+      "title": "Platform-level feature",
+      "desc": "This feature's data is not split per tenant (its tables have no tenant column), so its console is open to platform administrators only. To offer it to your own customers, ask the platform administrator to make it tenant-scoped first."
+    },
     "404": {
       "title": "Page not found",
       "desc": "The page you are looking for does not exist or has been moved."
