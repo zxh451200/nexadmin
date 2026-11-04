@@ -196,6 +196,8 @@
     "otpPlaceholder": "Enter the 6-digit code",
     "otpInvalid": "Enter a 6-digit code",
     "otpFailed": "Verification failed. Please try again",
+    "methodsFailed": "Sign-in options failed to load; the captcha may not appear.",
+    "methodsRetry": "Retry",
     "otpSubmit": "Verify and sign in",
     "totpInlineLabel": "Enter the 6-digit code from your authenticator app",
     "recoveryCode": "Recovery code",

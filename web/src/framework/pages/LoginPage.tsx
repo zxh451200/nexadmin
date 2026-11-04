@@ -172,9 +172,12 @@ export default function LoginPage() {
   // 只允许站内相对路径，防开放重定向
   const redirect = raw.startsWith('/') && !raw.startsWith('//') && !raw.startsWith('/login') && !/[\\\u0000-\u0020\u007f]/.test(raw) ? raw : '/'
 
-  const { data = FALLBACK } = useQuery({
+  // /auth/methods 失败不能再 catch 成 FALLBACK：一次网络抖动会被当成「成功拿到结果」，
+  // react-query 因此不再重试；而 FALLBACK 里没有 captchaEnabled，首屏既不报错也不出验证码区，
+  // 用户只能把密码交给服务端回一句「验证码错误或已过期」。失败要露出来，并给重试的入口。
+  const { data = FALLBACK, isError: methodsFailed, refetch: refetchMethods } = useQuery({
     queryKey: ['auth', 'methods'],
-    queryFn: () => api.get<AuthMethods>('/auth/methods', undefined, { silent: true }).catch(() => FALLBACK),
+    queryFn: () => api.get<AuthMethods>('/auth/methods', undefined, { silent: true }),
     staleTime: 60_000,
   })
   const methods = data.methods.length > 0 ? data.methods : FALLBACK.methods
@@ -236,6 +239,14 @@ export default function LoginPage() {
               </p>
             </div>
             {continuationError && <p role="alert" className="mb-4 text-sm text-destructive">{continuationError.message || t('login.otpFailed')}</p>}
+            {methodsFailed && (
+              <p role="alert" className="mb-4 text-sm text-destructive">
+                {t('login.methodsFailed')}
+                <Button variant="link" size="sm" className="px-1 text-sm" onClick={() => void refetchMethods()}>
+                  {t('login.methodsRetry')}
+                </Button>
+              </p>
+            )}
 
             {registering ? (
               <RegisterForm onSuccess={done} onLogin={() => setRegistering(false)} onChallenge={setChallenge} />

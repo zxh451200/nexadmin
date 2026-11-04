@@ -196,6 +196,8 @@
     "otpPlaceholder": "输入 6 位验证码",
     "otpInvalid": "请输入 6 位验证码",
     "otpFailed": "验证失败，请重试",
+    "methodsFailed": "登录方式加载失败，验证码可能不会显示。",
+    "methodsRetry": "点此重试",
     "otpSubmit": "验证并登录",
     "totpInlineLabel": "请输入验证器中的 6 位动态码",
     "recoveryCode": "恢复码",
