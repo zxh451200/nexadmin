@@ -6,11 +6,17 @@ import (
 	"strings"
 )
 
-// classify 把前端调用（或 mock）与后端路由逐一对照，返回不一致项（按 METHOD+路径合并）。
-// used 记录被（强或弱）匹配到的后端路由；called 非空时用于标注 B 类条目是否也被真实调用。
-func classify(calls []Call, routes []Route, used []bool, called map[string]bool) []Issue {
+// classify 把前端调用（或 mock）与后端路由逐一对照，返回不一致项（按 METHOD+路径合并）
+// 与「静态判不出来」的那一批。
+//
+// 判不出来的意思是：调用路径里有 ":param"（运行时拼出来的段，如 test-${key}），
+// 后端那条路由的对应段是静态字面量，两边谁也不吞谁。把它当成「后端没有这条路由」，
+// 这条闸会恒红，反而照不出真的缺路由，所以单列出去，只计数不阻断。
+func classify(calls []Call, routes []Route, used []bool, called map[string]bool) ([]Issue, []Issue) {
 	byKey := map[string]*Issue{}
 	var order []string
+	undecidedByKey := map[string]*Issue{}
+	var undecided []string
 	for _, c := range calls {
 		kind, note, hit := classifyOne(c, routes)
 		for _, i := range hit {
@@ -20,6 +26,17 @@ func classify(calls []Call, routes []Route, used []bool, called map[string]bool)
 			continue
 		}
 		key := c.Method + " " + pathKey(c.Path)
+		if kind == kindMissing && strings.Contains(c.Path, ":param") {
+			is := undecidedByKey[key]
+			if is == nil {
+				is = &Issue{Method: c.Method, Path: c.Path, Module: c.Module, Kind: kind,
+					Severity: kindSeverity[kind], Note: "路径含运行时拼的段，静态判不出是否与某条路由同一条", Suggest: suggest(c, routes, hit)}
+				undecidedByKey[key] = is
+				undecided = append(undecided, key)
+			}
+			is.Locs = append(is.Locs, c.Loc)
+			continue
+		}
 		is := byKey[key]
 		if is == nil {
 			is = &Issue{Method: c.Method, Path: c.Path, Module: c.Module, Kind: kind, Severity: kindSeverity[kind], Note: note,
@@ -53,7 +70,12 @@ func classify(calls []Call, routes []Route, used []bool, called map[string]bool)
 		}
 		return a.Path < b.Path
 	})
-	return out
+	sort.Strings(undecided)
+	und := make([]Issue, 0, len(undecided))
+	for _, k := range undecided {
+		und = append(und, *undecidedByKey[k])
+	}
+	return out, und
 }
 
 // classifyOne 返回 (问题种类, 说明, 命中的后端路由下标)；种类为空表示对得上。

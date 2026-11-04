@@ -16,7 +16,7 @@ func writeText(w io.Writer, rep *Report) {
 	fmt.Fprintln(w, "== NexAdmin 前后端契约静态核对 ==")
 	fmt.Fprintf(w, "后端路由 %d 条（其中动态/通配 %d 条未参与核对，权限码 %d 个）；前端调用 %d 个唯一接口（%d 处）；前端 mock 契约 %d 条\n",
 		s.BackendRoutes, s.BackendDynamic, s.Perms, s.FrontCalls, s.FrontCallSites, s.MockRoutes)
-	fmt.Fprintf(w, "A 前端调用了但后端没有: %d | B 前端 mock 有但后端没有: %d | C 后端有但前端从未调用: %d | 无法解析: %d\n\n", s.A, s.B, s.C, s.Unresolved)
+	fmt.Fprintf(w, "A 前端调用了但后端没有: %d | B 前端 mock 有但后端没有: %d | C 后端有但前端从未调用: %d | 无法解析: %d | 静态判不出(动态段): %d\n\n", s.A, s.B, s.C, s.Unresolved, s.Undecided)
 	writeIssues(w, "A) 前端调用了但后端没有注册（联调必挂，最重要；按严重程度排序）", rep.A, false)
 	writeIssues(w, "B) 前端 mock 有但后端没有（mock 契约领先于后端）", rep.B, true)
 	fmt.Fprintf(w, "C) 后端有路由但前端从未调用（仅提示，不是错误）: %d 条\n", len(rep.C))

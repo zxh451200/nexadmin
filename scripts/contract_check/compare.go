@@ -40,6 +40,7 @@ type Summary struct {
 	B              int `json:"b"`
 	C              int `json:"c"`
 	Unresolved     int `json:"unresolved"`
+	Undecided      int `json:"undecided"` // 路径含运行时拼的段，静态判不出前后端是否同一条（不阻断）
 	ErrKeys        int `json:"errKeys"`    // 扫描到的错误 key 字面量数
 	ErrMissing     int `json:"errMissing"` // 缺语言包条目的（key,语言）数
 }
@@ -85,8 +86,9 @@ func build(be *BackendScan, calls, mocks []Call, fu []Unresolved, fields FieldRe
 	for _, c := range calls {
 		callKeys[c.Method+" "+pathKey(c.Path)] = true
 	}
-	rep.A = classify(calls, be.Routes, used, nil)
-	rep.B = classify(mocks, be.Routes, make([]bool, len(be.Routes)), callKeys)
+	var undCalls, undMocks []Issue
+	rep.A, undCalls = classify(calls, be.Routes, used, nil)
+	rep.B, undMocks = classify(mocks, be.Routes, make([]bool, len(be.Routes)), callKeys)
 	for i, r := range be.Routes {
 		if r.Dynamic {
 			rep.Summary.BackendDynamic++
@@ -108,6 +110,7 @@ func build(be *BackendScan, calls, mocks []Call, fu []Unresolved, fields FieldRe
 	rep.Summary.MockRoutes = len(uniqueKeys(mocks))
 	rep.Summary.A, rep.Summary.B, rep.Summary.C = len(rep.A), len(rep.B), len(rep.C)
 	rep.Summary.Unresolved = len(rep.Unresolved)
+	rep.Summary.Undecided = len(undCalls) + len(undMocks)
 	return rep
 }
 
