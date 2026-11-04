@@ -18,7 +18,11 @@ type TableDef struct {
 }
 
 // FieldDef 是新表的一列。Length 只对 string 生效；Required 只对可判空的类型生效；
-// Dict 是字典编码：给了它 kind 必须是 string，列固定 VARCHAR(64) NOT NULL DEFAULT ''。
+// Dict 是字典编码：给了它 kind 必须是 string，列固定为下面这一句 DDL。
+// 这一句要留在缩进代码块里：gofmt 格式化文档注释时，会把行内散文里的空 SQL
+// 字面量（两个 ASCII 单引号）换成弯引号，也就是改动注释本身的内容。
+//
+//	VARCHAR(64) NOT NULL DEFAULT ''
 type FieldDef struct {
 	Name     string `json:"name"`
 	Kind     Kind   `json:"kind"`
