@@ -143,6 +143,7 @@ log:
 ticket:
   attachment_max_count: 0   # 单张工单的附件份数上限；0 或留空 = 出厂默认 20 份
   attachment_max_mb: 0      # 单张工单的附件总字节上限（MB）；0 或留空 = 出厂默认 100MB
+  export_limit: 0           # 单次工单导出的行数上限；0 或留空 = 出厂默认 5000 行
 setup:
   allow_remote: false
 ai:

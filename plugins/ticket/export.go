@@ -10,6 +10,7 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"nexadmin/core/i18n"
@@ -17,8 +18,29 @@ import (
 	"nexadmin/pkg/excel"
 )
 
-// exportLimit 是一次导出的行数上限（与在线列表接口分开，避免大结果集拖垮请求）。
+// exportLimit 是一次导出的行数上限出厂值（与在线列表接口分开，避免大结果集拖垮请求）。
 const exportLimit = 5000
+
+// 生效的导出行数上限：装配时由 config.yaml 的 ticket.export_limit 覆盖（<=0 保持出厂值）。
+// 与附件配额同一手法（见 SetAttachmentQuota），工单不直查框架参数表。
+var exportLimitActive atomic.Int64
+
+func init() { exportLimitActive.Store(exportLimit) }
+
+func maxExportRows() int {
+	if v := exportLimitActive.Load(); v > 0 {
+		return int(v)
+	}
+	return exportLimit
+}
+
+// setExportLimit 覆盖导出行数上限；<=0 回到出厂值。
+func setExportLimit(n int) {
+	if n <= 0 {
+		n = exportLimit
+	}
+	exportLimitActive.Store(int64(n))
+}
 
 // ExportTooManyReason 是行数超限错误的 reason，前端据此显示本地化提示。
 const ExportTooManyReason = "TICKET_EXPORT_TOO_MANY"
@@ -29,7 +51,7 @@ func (s *Service) ExportTickets(ctx context.Context, q TicketQuery, limit int) (
 		return nil, err
 	}
 	if limit <= 0 {
-		limit = exportLimit
+		limit = maxExportRows()
 	}
 	var total int64
 	if err := s.ticketFilter(ctx, q).Count(&total).Error; err != nil {

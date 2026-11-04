@@ -68,8 +68,11 @@ func (m *module) service(d *core.Deps) *Service {
 				m.svc.SetStorage(st)
 			}
 		}
-		// 附件配额：config.yaml 的 ticket 段注入一次（<=0 保持出厂默认），让份数与总字节能按部署调整。
+		// 附件配额与导出行数上限：config.yaml 的 ticket 段注入一次（<=0 保持出厂默认）。
 		applyAttachmentQuota(d.Config)
+		if d.Config != nil {
+			setExportLimit(d.Config.Ticket.ExportLimit)
+		}
 		SetDefault(m.svc)
 	})
 	return m.svc

@@ -89,6 +89,7 @@ type Config struct {
 	Ticket struct {
 		AttachmentMaxCount int `mapstructure:"attachment_max_count"`
 		AttachmentMaxMB    int `mapstructure:"attachment_max_mb"`
+		ExportLimit        int `mapstructure:"export_limit"`
 	} `mapstructure:"ticket"`
 	Setup struct {
 		AllowRemote bool `mapstructure:"allow_remote"`

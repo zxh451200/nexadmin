@@ -500,7 +500,7 @@ func (h *handler) setTags(c *gin.Context) {
 // 谁、按什么条件、导出了几行。
 func (h *handler) export(c *gin.Context) {
 	ctx := c.Request.Context()
-	rows, err := h.svc.ExportTickets(ctx, ticketQueryFrom(c), exportLimit)
+	rows, err := h.svc.ExportTickets(ctx, ticketQueryFrom(c), maxExportRows())
 	if err != nil {
 		response.Fail(c, err)
 		return
