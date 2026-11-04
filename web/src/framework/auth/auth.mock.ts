@@ -239,6 +239,15 @@ function issue(u: AuthUser & { password?: string; phone?: string }) {
   return { accessToken: tokenFor(u.username, 'a'), refreshToken: tokenFor(u.username, 'r'), user: pub(u) }
 }
 
+// mockIssueSession 给插件侧 mock（SAML 交换、OAuth 回调）复用同一套会话签发：
+// 令牌格式与用户表都是这里的私有实现，抄第二份一定会漂。
+export function mockIssueSession(username: string) {
+	syncAdmin()
+	const u = users[username]
+	if (!u) return null
+	return issue(u)
+}
+
 /** 所有登录路径（密码、手机号、第三方、绑定）的统一出口：需要二次验证的账号只返回挑战，不发令牌 */
 function session(u: AuthUser & { password?: string; phone?: string }) {
   if (!SECOND_FACTOR_USERS.has(u.username)) return issue(u)

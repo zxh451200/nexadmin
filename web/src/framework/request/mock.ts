@@ -78,6 +78,11 @@ const PUBLIC_PREFIXES = [
   // d.Public.Group("/auth/saml") 注册。漏在这一份白名单里，mock 就会对匿名请求回 401 信封，
   // 而 401 会走 handleUnauthorized → 清全站查询缓存，把同一页在途的 /auth/methods 一起抹掉。
   '/auth/saml',
+  // 访客自助页（工单、在线客服）在无登录态下请求这些接口：真后端注册在 d.Public 分组上
+  // （plugins/ticket/handler.go、plugins/im 的 visitor 路由），mock 侧不列进来就会回 401 信封，
+  // 而 401 会连带拆登录态并清查询缓存——开发态这两块访客页整个不可用。
+  '/plugins/ticket/visitor',
+  '/plugins/im/visitor',
   '/settings/public',
   '/system/status',
   '/setup',
