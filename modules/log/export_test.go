@@ -42,7 +42,7 @@ func TestExportOperPassesFiltersAndWhitelistsColumns(t *testing.T) {
 	e, mock, cap := newExportEnv(t, config.RateLimit{}, 0)
 	kw := "%abc%"
 	args := []driver.Value{kw, kw, kw, "failed", sqlmock.AnyArg(), sqlmock.AnyArg(), "export"}
-	where := "WHERE .*module LIKE .* OR operator LIKE .* OR url LIKE .*status = .*created_at >= .*created_at < .*type = "
+	where := "WHERE .*LOWER\\(module\\) LIKE LOWER\\(\\?\\) OR LOWER\\(operator\\) LIKE LOWER\\(\\?\\) OR LOWER\\(url\\) LIKE LOWER\\(\\?\\).*status = .*created_at >= .*created_at < .*type = "
 	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `sys_oper_log` " + where).WithArgs(args...).WillReturnRows(countRows(2))
 	ts := time.Date(2026, 10, 1, 8, 30, 0, 0, time.UTC)
 	mock.ExpectQuery("SELECT `module`,`type`,`operator`,`ip`,`location`,`status`,`cost_ms`,`method`,`url`,`created_at` FROM `sys_oper_log` " + where).
@@ -166,7 +166,7 @@ func TestExportBadFormatRejected(t *testing.T) {
 
 func TestExportLoginColumnsAndFilters(t *testing.T) {
 	e, mock, cap := newExportEnv(t, config.RateLimit{}, 0)
-	where := "WHERE .*username LIKE .* OR ip LIKE .*status = .*login_type = "
+	where := "WHERE .*LOWER\\(username\\) LIKE LOWER\\(\\?\\) OR LOWER\\(ip\\) LIKE LOWER\\(\\?\\).*status = .*login_type = "
 	args := []driver.Value{"%zh%", "%zh%", "failed", "password"}
 	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `sys_login_log` " + where).WithArgs(args...).WillReturnRows(countRows(1))
 	mock.ExpectQuery("SELECT `username`,`login_type`,`ip`,`location`,`browser`,`os`,`status`,`fail_reason`,`created_at` FROM `sys_login_log` " + where).

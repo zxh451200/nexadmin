@@ -46,7 +46,7 @@ func (s *Service) List(ctx context.Context, uid idgen.ID, q ListQuery) ([]View, 
 	if q.Keyword != "" {
 		r := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 		like := "%" + r.Replace(q.Keyword) + "%"
-		tx = tx.Where("(title LIKE ? OR content LIKE ?)", like, like)
+		tx = tx.Where("(LOWER(title) LIKE LOWER(?) OR LOWER(content) LIKE LOWER(?))", like, like)
 	}
 	if t, err := time.ParseInLocation("2006-01-02", q.From, s.loc); err == nil {
 		tx = tx.Where("created_at >= ?", t.UTC())

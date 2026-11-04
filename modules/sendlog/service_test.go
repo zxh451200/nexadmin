@@ -276,7 +276,7 @@ func TestQueriesAreScopedToTenant(t *testing.T) {
 	ctx := tctx(7)
 	q := Query{Channel: "sms", Status: "fail", Recipient: "138", StartDate: "2025-01-01", EndDate: "2025-01-31", Page: 1, PageSize: 10}
 
-	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `sys_send_log` WHERE tenant_id = \\? AND channel = \\? AND status = \\? AND recipient LIKE \\?").
+	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `sys_send_log` WHERE tenant_id = \\? AND channel = \\? AND status = \\? AND LOWER\\(recipient\\) LIKE LOWER\\(\\?\\)").
 		WithArgs(int64(7), "sms", "fail", "%138%", sqlmock.AnyArg(), sqlmock.AnyArg()).
 		WillReturnRows(sqlmock.NewRows([]string{"c"}).AddRow(0))
 	mock.ExpectQuery("FROM `sys_send_log` WHERE tenant_id = \\? AND channel = \\?").

@@ -264,7 +264,7 @@ func likeArg(s string) string {
 func (s *Service) List(ctx context.Context, q Query) ([]ClientError, int64, error) {
 	tx := s.db.WithContext(ctx).Model(&ClientError{})
 	if kw := strings.TrimSpace(q.Keyword); kw != "" {
-		tx = tx.Where("(message LIKE ? OR route LIKE ? OR username LIKE ?)", likeArg(kw), likeArg(kw), likeArg(kw))
+		tx = tx.Where("(LOWER(message) LIKE LOWER(?) OR LOWER(route) LIKE LOWER(?) OR LOWER(username) LIKE LOWER(?))", likeArg(kw), likeArg(kw), likeArg(kw))
 	}
 	tx = tx.Session(&gorm.Session{})
 	var total int64

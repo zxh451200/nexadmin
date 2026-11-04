@@ -55,7 +55,7 @@ func (s *Service) targetIDs(ctx context.Context, id idgen.ID) []idgen.ID {
 func (s *Service) List(ctx context.Context, q ListQuery) ([]View, int64, error) {
 	base := scopedNotices(s.db.WithContext(ctx).Model(&Notice{}), q.Scope)
 	if q.Keyword != "" {
-		base = base.Where("title LIKE ?", likeArg(q.Keyword))
+		base = base.Where("LOWER(title) LIKE LOWER(?)", likeArg(q.Keyword))
 	}
 	for col, v := range map[string]string{"type": q.Type, "level": q.Level, "status": q.Status} {
 		if v != "" {

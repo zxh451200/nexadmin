@@ -193,7 +193,7 @@ func (s *Service) List(ctx context.Context, q Query) ([]View, int64, error) {
 		tx = tx.Where("status = ?", q.Status)
 	}
 	if kw := strings.TrimSpace(q.Recipient); kw != "" {
-		tx = tx.Where("recipient LIKE ?", likeArg(kw))
+		tx = tx.Where("LOWER(recipient) LIKE LOWER(?)", likeArg(kw))
 	}
 	if t, err := time.ParseInLocation("2006-01-02", q.StartDate, s.loc); err == nil {
 		tx = tx.Where("created_at >= ?", t.UTC())

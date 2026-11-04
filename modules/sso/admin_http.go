@@ -88,7 +88,7 @@ func newSecret() (plain, hash string) {
 func (h *handler) appsQuery(c *gin.Context) *gorm.DB {
 	q := h.db.WithContext(c.Request.Context()).Model(&App{})
 	if kw := strings.TrimSpace(c.Query("keyword")); kw != "" {
-		q = q.Where("name LIKE ? OR client_id LIKE ?", "%"+kw+"%", "%"+kw+"%")
+		q = q.Where("LOWER(name) LIKE LOWER(?) OR LOWER(client_id) LIKE LOWER(?)", "%"+kw+"%", "%"+kw+"%")
 	}
 	return q
 }

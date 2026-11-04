@@ -152,7 +152,7 @@ func (s *Service) Mine(ctx context.Context, uid idgen.ID, keyword, typ string, u
 		q = q.Where("type = ?", typ)
 	}
 	if keyword != "" {
-		q = q.Where("title LIKE ?", likeArg(keyword))
+		q = q.Where("LOWER(title) LIKE LOWER(?)", likeArg(keyword))
 	}
 	q = q.Session(&gorm.Session{})
 	var total int64

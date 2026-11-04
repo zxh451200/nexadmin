@@ -209,7 +209,7 @@ func (s *Service) List(ctx context.Context, q listQuery, page, pageSize int) ([]
 	if kw := strings.TrimSpace(q.Keyword); kw != "" {
 		kw = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(kw)
 		like := "%" + kw + "%"
-		tx = tx.Where("(name LIKE ? OR uploader LIKE ?)", like, like)
+		tx = tx.Where("(LOWER(name) LIKE LOWER(?) OR LOWER(uploader) LIKE LOWER(?))", like, like)
 	}
 	if t, err := time.Parse("2006-01-02", q.From); err == nil {
 		tx = tx.Where("created_at >= ?", t)

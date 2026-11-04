@@ -74,7 +74,7 @@ func (s *Service) filter(tx *gorm.DB, q Query, keywordCols ...string) *gorm.DB {
 		conds := make([]string, len(keywordCols))
 		args := make([]any, len(keywordCols))
 		for i, col := range keywordCols {
-			conds[i], args[i] = col+" LIKE ?", likeArg(kw)
+			conds[i], args[i] = "LOWER("+col+") LIKE LOWER(?)", likeArg(kw)
 		}
 		tx = tx.Where("("+strings.Join(conds, " OR ")+")", args...)
 	}

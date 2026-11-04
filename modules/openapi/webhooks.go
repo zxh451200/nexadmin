@@ -67,7 +67,7 @@ func (h *handler) hookList(c *gin.Context) {
 	}
 	q := h.db.WithContext(c.Request.Context()).Model(&Webhook{})
 	if kw := strings.TrimSpace(c.Query("keyword")); kw != "" {
-		q = q.Where("name LIKE ? OR url LIKE ?", "%"+kw+"%", "%"+kw+"%")
+		q = q.Where("LOWER(name) LIKE LOWER(?) OR LOWER(url) LIKE LOWER(?)", "%"+kw+"%", "%"+kw+"%")
 	}
 	var total int64
 	if err := q.Count(&total).Error; err != nil {

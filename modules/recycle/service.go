@@ -53,7 +53,7 @@ func (s *Service) List(ctx context.Context, f ListFilter) ([]Item, int64, error)
 	}
 	if f.Keyword != "" {
 		r := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
-		tx = tx.Where("name LIKE ?", "%"+r.Replace(f.Keyword)+"%")
+		tx = tx.Where("LOWER(name) LIKE LOWER(?)", "%"+r.Replace(f.Keyword)+"%")
 	}
 	// 时间范围：from/to 是日期字符串，先校验再换算成 UTC 当天边界，非法值当没有这个筛选。
 	if f.From != "" {
