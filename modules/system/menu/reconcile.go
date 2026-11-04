@@ -72,13 +72,16 @@ func reconcileMenuShape(db *gorm.DB) (checked, fixed int, err error) {
 		// 只隐藏、不删行也不改父节点：权限点与角色授权仍引用这些行；挂到设置菜单下会让角色分配
 		// 自动带上祖先节点，等于顺手授予 settings:list。条件匹配「仍可见」的旧形状，收敛后不再写库。
 		checked += 3
+		// hidden 在 PG 是 BOOLEAN，写 `hidden = 0` 在 PG 上直接报 42883（operator does not
+		// exist: boolean = integer），MySQL/MariaDB 却照单全收——这类差异只有真跑 PG 才暴露。
+		// false/true 三个字面量两边都认，所以这里不用 0/1。
 		var visible int64
-		if e := tx.Raw(`SELECT COUNT(*) FROM sys_menu WHERE code IN (?, ?, ?) AND hidden = 0`,
+		if e := tx.Raw(`SELECT COUNT(*) FROM sys_menu WHERE code IN (?, ?, ?) AND hidden = false`,
 			"ldap:list", "sso:list", "maps:config").Scan(&visible).Error; e != nil {
 			return e
 		}
 		if visible > 0 {
-			res := tx.Exec(`UPDATE sys_menu SET hidden = 1 WHERE code IN (?, ?, ?) AND hidden = 0`,
+			res := tx.Exec(`UPDATE sys_menu SET hidden = true WHERE code IN (?, ?, ?) AND hidden = false`,
 				"ldap:list", "sso:list", "maps:config")
 			if res.Error != nil {
 				return res.Error

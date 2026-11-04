@@ -17,7 +17,7 @@ func TestReconcileHidesSettingsSectionMenus(t *testing.T) {
 	mock.ExpectQuery("FROM sys_menu WHERE code = .*type = 'dir'").WillReturnRows(sqlmock.NewRows([]string{"id"}))
 	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM sys_menu WHERE code IN`).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(3))
-	mock.ExpectExec(`UPDATE sys_menu SET hidden = 1 WHERE code IN`).
+	mock.ExpectExec(`UPDATE sys_menu SET hidden = true WHERE code IN`).
 		WithArgs("ldap:list", "sso:list", "maps:config").
 		WillReturnResult(sqlmock.NewResult(0, 3))
 	mock.ExpectCommit()
