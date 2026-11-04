@@ -419,3 +419,108 @@ func embeddedIdent(expr ast.Expr) string {
 	}
 	return ""
 }
+
+// migrationNumberExemptions 是「已知撞号、但改名代价更大」的显式清单：数据，不是静默跳过。
+// 键是 <插件>/<引擎>/<编号>，值必须写清为什么这两份文件不能改名。
+//
+// website 的 019、020 各有两份，且都已经在存量库里执行过：runner 把版本号记在
+// 文件名上（core/migrate/discover.go:43「Name 文件名，同时是版本号」，
+// core/migrate/store.go:118 的 PRIMARY KEY (scope, version)），所以把
+// 019_post_metrics.sql 改成 022_... 会让那条已执行的 SQL 重新变成「待执行」，
+// 在存量库上再跑一遍。宁可留着撞号，也不能改名。
+var migrationNumberExemptions = map[string]string{
+	"website/mysql/019":    "019_head_code 与 019_post_metrics 都已入库；版本按文件名记账，改名＝已执行 SQL 在存量库重跑",
+	"website/mariadb/019":  "同 mysql：两份 019 都已入库，改名会让已执行 SQL 重新变成待执行",
+	"website/postgres/019": "同 mysql：两份 019 都已入库，改名会让已执行 SQL 重新变成待执行",
+	"website/mysql/020":    "020_post_tags 与 020_title_suffix 都已入库；版本按文件名记账，改名＝已执行 SQL 在存量库重跑",
+	"website/mariadb/020":  "同 mysql：两份 020 都已入库，改名会让已执行 SQL 重新变成待执行",
+	"website/postgres/020": "同 mysql：两份 020 都已入库，改名会让已执行 SQL 重新变成待执行",
+}
+
+// reMigrationVersion 取迁移文件名第一个 `_` 之前的数字段，即这条 SQL 的版本号。
+var reMigrationVersion = regexp.MustCompile(`^(\d+)_`)
+
+// TestPluginMigrationFileNumbersAreUnique 把「迁移编号只增不改」从人记得住的约定变成闸：
+// 对每个 plugins/<id>/migrations/<engine>/ 目录，同一编号被两个及以上 .sql 共用就失败，
+// 除非该 <插件>/<引擎>/<编号> 在 migrationNumberExemptions 里显式登记了理由。
+//
+// 撞号不该被当成排版问题：三份已存在的结构闸都不看编号
+// （TestPluginMigrationsConsistentAcrossEngines 比的是表/列/索引，
+// scripts/ci/migration_parity.py 比的是内容），而撞号时 runner 的执行顺序只由
+// 文件名排序决定，「019_head_code 先还是 019_post_metrics 先」没人写死过。
+//
+// 豁免条目也不许烂在列表里：登记的撞号如果已经不存在，同样报出来。
+func TestPluginMigrationFileNumbersAreUnique(t *testing.T) {
+	plugins, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	checked := 0
+	usedExemptions := map[string]bool{}
+	for _, p := range plugins {
+		if !p.IsDir() {
+			continue
+		}
+		migDir := filepath.Join(".", p.Name(), "migrations")
+		engines, err := os.ReadDir(migDir)
+		if err != nil {
+			continue // 没有 migrations/ 的插件不归这条闸管
+		}
+		for _, engine := range engines {
+			if !engine.IsDir() {
+				continue
+			}
+			dir := filepath.Join(migDir, engine.Name())
+			files, err := os.ReadDir(dir)
+			if err != nil {
+				t.Fatalf("plugin %s: 读 %s: %v", p.Name(), dir, err)
+			}
+			byVersion := map[string][]string{}
+			for _, f := range files {
+				if f.IsDir() || !strings.HasSuffix(f.Name(), ".sql") {
+					continue
+				}
+				m := reMigrationVersion.FindStringSubmatch(f.Name())
+				if m == nil {
+					continue // 没有数字前缀：内容交给「三引擎结构一致」那条闸看
+				}
+				byVersion[m[1]] = append(byVersion[m[1]], f.Name())
+			}
+			checked++
+
+			versions := make([]string, 0, len(byVersion))
+			for v := range byVersion {
+				versions = append(versions, v)
+			}
+			sort.Strings(versions)
+			for _, v := range versions {
+				names := byVersion[v]
+				if len(names) < 2 {
+					continue
+				}
+				sort.Strings(names)
+				key := p.Name() + "/" + engine.Name() + "/" + v
+				if reason, exempt := migrationNumberExemptions[key]; exempt {
+					usedExemptions[key] = true
+					t.Logf("放行已登记的撞号 %s（%s）：%s", key, strings.Join(names, "、"), reason)
+					continue
+				}
+				t.Errorf("plugin %s 的 %s 迁移目录里编号 %s 被 %d 个文件共用（%s）："+
+					"撞号时执行顺序只由文件名排序决定，而改名会让已执行的 SQL 在存量库重跑"+
+					"（版本记在文件名上，core/migrate/store.go:118 PRIMARY KEY (scope, version)）；"+
+					"新迁移请续到最大编号之后，确实要留撞号的必须进 migrationNumberExemptions 写清理由",
+					p.Name(), engine.Name(), v, len(names), strings.Join(names, "、"))
+			}
+		}
+	}
+	if checked == 0 {
+		t.Fatal("一个 plugins/<id>/migrations/<engine>/ 目录都没扫到——这条编号闸对空跑，不算闸")
+	}
+	for key := range migrationNumberExemptions {
+		if !usedExemptions[key] {
+			t.Errorf("migrationNumberExemptions 里登记的 %s 已经不再对应任何撞号，请删掉这条豁免", key)
+		}
+	}
+	t.Logf("迁移编号查重闸检查了 %d 个插件/引擎迁移目录，显式豁免 %d 处历史撞号",
+		checked, len(migrationNumberExemptions))
+}
