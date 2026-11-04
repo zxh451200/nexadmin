@@ -14,6 +14,7 @@ import (
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 
+	"nexadmin/core"
 	"nexadmin/core/auth"
 	"nexadmin/core/tenant"
 	"nexadmin/pkg/idgen"
@@ -98,8 +99,10 @@ func settingsEngine(h *Handler, cl auth.Claims, tid int64) *gin.Engine {
 		c.Request = c.Request.WithContext(tenant.With(c.Request.Context(), idgen.ID(tid)))
 	})
 	e.GET("/settings", h.Settings)
-	e.PUT("/settings/:section", h.SaveSection)
-	e.POST("/settings/:section/test", h.TestSection)
+	// 与真实注册同形（module.go）：sys_setting 整表没有 tenant_id，任何分区都是部署级的一行，
+	// 所以写与测试统一挂 core.RequirePlatform()，不再按分区名特判。
+	e.PUT("/settings/:section", core.RequirePlatform(), h.SaveSection)
+	e.POST("/settings/:section/test", core.RequirePlatform(), h.TestSection)
 	return e
 }
 
@@ -111,24 +114,25 @@ func call(e *gin.Engine, method, path, body string) (int, string) {
 	return w.Code, w.Body.String()
 }
 
-// 租户管理员（非超管、非平台租户）既不能保存也不能测试 ai 分区，且请求不会碰数据库。
-func TestAISectionIsPlatformOnly(t *testing.T) {
+// 租户管理员（非超管、非平台租户）改不动任何设置分区，且请求不会碰数据库。
+// 原先只有 ai 分区受限，而 security / auth / sms / notify 同样是 sys_setting 里那一份全局行：
+// 一个租户把 maxAttempts 设成 1 就能把别人全锁在门外，或把出站邮件指向自己的网关。
+func TestSettingsWritesArePlatformOnly(t *testing.T) {
 	s, mock := mockService(t)
 	h := &Handler{svc: s}
 	tenantAdmin := settingsEngine(h, auth.Claims{UserID: 5, TenantID: 9}, 9)
 	body := `{"baseUrl":"https://evil.example.com/v1","apiKey":"x"}`
-	for _, tc := range [][2]string{{"PUT", "/settings/ai"}, {"POST", "/settings/ai/test"}} {
+	for _, tc := range [][2]string{
+		{"PUT", "/settings/ai"}, {"POST", "/settings/ai/test"},
+		// 非 ai 分区也一起收口：这一条以前是 200，正是本轮要堵的洞。
+		{"POST", "/settings/cache/test"}, {"PUT", "/settings/security"}, {"PUT", "/settings/sms"},
+	} {
 		if code, raw := call(tenantAdmin, tc[0], tc[1], body); code != http.StatusForbidden {
 			t.Errorf("%s %s = %d %s, want 403", tc[0], tc[1], code, raw)
 		}
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("forbidden requests must not touch the database: %v", err)
-	}
-	// 其他分区不受影响（仍走原有 settings:update 权限，由路由中间件负责）。
-	mock.ExpectQuery("SELECT").WillReturnRows(sqlmock.NewRows([]string{"id"}))
-	if code, _ := call(tenantAdmin, "POST", "/settings/cache/test", `{}`); code != http.StatusOK {
-		t.Errorf("non-ai section test = %d, want 200", code)
 	}
 	// 超管和平台租户通过守卫（这里用非法地址让请求停在校验，证明确实进入了服务层）。
 	for name, e := range map[string]*gin.Engine{
@@ -140,6 +144,36 @@ func TestAISectionIsPlatformOnly(t *testing.T) {
 		if code != http.StatusBadRequest {
 			t.Errorf("%s: %d %s, want 400 from validation", name, code, raw)
 		}
+	}
+}
+
+// 非平台调用方读设置页时，凭据字段不许原样下发：smtp 密码、短信 access key、SSO client secret
+// 都是部署级的，整分区不返回会让界面变成一片空白（那是另一种入口蒸发），所以只抹值不删键。
+func TestRestrictSecretsMasksCredentialFields(t *testing.T) {
+	in := map[string]any{
+		"notify": map[string]any{"smtpHost": "mail.example.com", "smtpPassword": "s3cret", "useTLS": true},
+		"sms": map[string]any{
+			"providers": []any{map[string]any{"name": "ali", "accessKey": "AK-1", "accessSecret": "SK-1"}},
+		},
+		"security": map[string]any{"maxAttempts": 5, "loginTokenSecret": "jwt-key"},
+	}
+	restrictSecrets(in)
+	notify := in["notify"].(map[string]any)
+	if notify["smtpPassword"] != secretMask {
+		t.Errorf("smtpPassword = %v, want 掩码 %q", notify["smtpPassword"], secretMask)
+	}
+	if notify["smtpHost"] != "mail.example.com" || notify["useTLS"] != true {
+		t.Errorf("非凭据字段被动过：%v", notify)
+	}
+	prov := in["sms"].(map[string]any)["providers"].([]any)[0].(map[string]any)
+	if prov["accessKey"] != secretMask || prov["accessSecret"] != secretMask {
+		t.Errorf("嵌套里的密钥没抹掉：%v", prov)
+	}
+	if prov["name"] != "ali" {
+		t.Errorf("结构被删坏了：%v", prov)
+	}
+	if in["security"].(map[string]any)["maxAttempts"] != 5 {
+		t.Error("数字型非凭据字段不该被删")
 	}
 }
 

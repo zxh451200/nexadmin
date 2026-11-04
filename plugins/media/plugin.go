@@ -33,7 +33,7 @@ func (*module) Register(r *gin.RouterGroup, d *core.Deps) {
 
 	// 视频：浏览器直传外部流媒体（Cloudflare Stream），本机不落原片、不转码。
 	g.GET("/video/config", core.Perm(PermOptimize), h.VideoConfig)
-	g.PUT("/video/config", core.Perm(PermOptimize), h.SaveVideoConfig)
+	g.PUT("/video/config", core.Perm(PermOptimize), core.RequirePlatform(), h.SaveVideoConfig)
 	g.POST("/video/upload", core.Perm(PermOptimize), h.CreateVideoUpload)
 	g.GET("/video/assets", core.Perm(PermOptimize), h.Videos)
 	g.POST("/video/assets", core.Perm(PermOptimize), h.SaveVideo)

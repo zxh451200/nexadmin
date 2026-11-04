@@ -45,12 +45,18 @@ func Perm(code string) gin.HandlerFunc {
 // IsPlatformCaller 判断本次请求是不是平台级调用方：超管，或落在默认租户上下文里。
 // 给「平台共享表」的写入口用（表里没有 tenant_id，一行服务所有租户）：
 // 权限点回答的是「能不能用这个模块」，回答不了「能不能改所有租户共用的那一行」。
+// 判据本身在 tenant.IsPlatformCallerID（单源），auth.User.IsPlatform 与通知侧的收件人筛选都走它。
+// 注意「账号没有租户」与「context 里没有租户」不是一回事：前者按解析链兜底算平台内（默认租户），
+// 后者说明租户中间件根本没跑过——那是接线错误，一律拒，不给放行。
 func IsPlatformCaller(c *gin.Context) bool {
 	if cl := auth.ClaimsFrom(c); cl != nil && cl.Super {
 		return true
 	}
 	tid, ok := tenant.From(c.Request.Context())
-	return ok && tid == tenant.DefaultID
+	if !ok {
+		return false
+	}
+	return tenant.IsPlatformCallerID(tid, false)
 }
 
 // RequirePlatform 是 IsPlatformCaller 的中间件形态，平台共享表的写路由挂它。

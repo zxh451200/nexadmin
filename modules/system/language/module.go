@@ -23,7 +23,7 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	h := &handler{deps: d}
 	g := r.Group("/languages")
 	g.GET("", core.Perm("language:list"), h.list)
-	g.PUT("", core.Perm("language:update"), core.Desc("保存语言清单"), h.save)
+	g.PUT("", core.Perm("language:update"), core.RequirePlatform(), core.Desc("保存语言清单"), h.save)
 }
 
 type handler struct{ deps *core.Deps }

@@ -79,11 +79,11 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	}
 	r.GET("/regions/status", core.Perm("region:sync"), h.Status)
 	r.GET("/regions/sync/status", core.Perm("region:sync"), h.SyncStatus)
-	r.POST("/regions/preview", core.Perm("region:sync"), h.Preview)
-	r.POST("/regions/import", core.Perm("region:sync"), h.ImportFile)
-	r.POST("/regions/sync", core.Perm("region:sync"), h.Sync)
-	r.POST("/regions/reset", core.Perm("region:sync"), h.Reset)
+	r.POST("/regions/preview", core.Perm("region:sync"), core.RequirePlatform(), h.Preview)
+	r.POST("/regions/import", core.Perm("region:sync"), core.RequirePlatform(), h.ImportFile)
+	r.POST("/regions/sync", core.Perm("region:sync"), core.RequirePlatform(), h.Sync)
+	r.POST("/regions/reset", core.Perm("region:sync"), core.RequirePlatform(), h.Reset)
 	r.GET("/regions/versions", core.Perm("region:sync"), h.Versions)
 	r.GET("/regions/versions/:version", core.Perm("region:sync"), h.Version)
-	r.POST("/regions/versions/:version/rollback", core.Perm("region:sync"), h.RollbackVersion)
+	r.POST("/regions/versions/:version/rollback", core.Perm("region:sync"), core.RequirePlatform(), h.RollbackVersion)
 }

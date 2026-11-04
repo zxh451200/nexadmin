@@ -1,6 +1,7 @@
 package recycle
 
 import (
+	"nexadmin/core"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -46,12 +47,16 @@ func (h *Handler) act(c *gin.Context, fn func(*Service, *gin.Context, idgen.ID) 
 
 // Restore POST /recycle/:id/restore
 func (h *Handler) Restore(c *gin.Context) {
-	h.act(c, func(s *Service, c *gin.Context, id idgen.ID) error { return s.Restore(c.Request.Context(), id) })
+	h.act(c, func(s *Service, c *gin.Context, id idgen.ID) error {
+		return s.Restore(c.Request.Context(), id, core.IsPlatformCaller(c))
+	})
 }
 
 // Purge DELETE /recycle/:id
 func (h *Handler) Purge(c *gin.Context) {
-	h.act(c, func(s *Service, c *gin.Context, id idgen.ID) error { return s.Purge(c.Request.Context(), id) })
+	h.act(c, func(s *Service, c *gin.Context, id idgen.ID) error {
+		return s.Purge(c.Request.Context(), id, core.IsPlatformCaller(c))
+	})
 }
 
 // BatchForm 是批量还原 / 批量彻底删除的入参。
@@ -65,7 +70,7 @@ func (h *Handler) RestoreBatch(c *gin.Context) {
 	if !response.BindJSON(c, &f) {
 		return
 	}
-	res, err := h.svc.RestoreBatch(c.Request.Context(), f.IDs)
+	res, err := h.svc.RestoreBatch(c.Request.Context(), f.IDs, core.IsPlatformCaller(c))
 	if err != nil {
 		response.Fail(c, err)
 		return
@@ -91,7 +96,7 @@ func (h *Handler) PurgeBatch(c *gin.Context) {
 		response.Fail(c, response.BadRequest("error.bad_request"))
 		return
 	}
-	res, err := h.svc.PurgeBatch(c.Request.Context(), ids)
+	res, err := h.svc.PurgeBatch(c.Request.Context(), ids, core.IsPlatformCaller(c))
 	if err != nil {
 		response.Fail(c, err)
 		return

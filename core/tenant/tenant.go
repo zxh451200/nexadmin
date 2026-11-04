@@ -12,6 +12,14 @@ import (
 // DefaultID 是解析不到任何租户时使用的默认租户。
 const DefaultID idgen.ID = 1
 
+// IsPlatformCallerID 是「平台级调用方」这条判据的唯一出处：超管，或者本身就住在默认租户里
+// （默认租户就是平台自己）。tid 为 0 也算平台内——请求解析不到租户时框架同样回退到默认租户。
+// 三个消费方都必须走这里，不许各写一份：core.IsPlatformCaller（中间件按请求判）、
+// auth.User.IsPlatform（随会话给到前端）、以及通知侧「这条站内信该发给谁」（按收件人账号判）。
+func IsPlatformCallerID(tid idgen.ID, super bool) bool {
+	return super || tid == DefaultID || tid == 0
+}
+
 type idKey struct{}
 type skipKey struct{}
 

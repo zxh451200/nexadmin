@@ -604,19 +604,26 @@ func TestNotifyHandleFilters(t *testing.T) {
 	}
 }
 
-func TestQueryHoldersSQL(t *testing.T) {
+// 留言收件人必须真打得开官网后台：plg_website_message 不分租户（候选要 Skip 全局查），
+// 但后台整组只对平台调用方开放（plugin.go 的 RequirePlatformFeature）。
+// 别的租户持 website:message 的人收信后点进来只有「平台级功能」解释页——那是死信，必须滤掉。
+// 判据在 Go 侧（tenant.IsPlatformCallerID），与 plugins/im/notify_test.go 同一条线。
+func TestQueryHoldersKeepsOnlyPlatformCallers(t *testing.T) {
 	db, m := mockDB(t)
-	m.ExpectQuery(`SELECT DISTINCT u\.id AS user_id, u\.tenant_id AS tenant_id FROM sys_user AS u ` +
+	m.ExpectQuery(`SELECT DISTINCT u\.id AS user_id, u\.tenant_id AS tenant_id, u\.is_super AS is_super FROM sys_user AS u ` +
 		`.*FROM sys_user_role AS ur JOIN sys_role r .*sys_role_menu rm .*sys_menu m .*m\.perm = \?`).
-		WillReturnRows(sqlmock.NewRows([]string{"user_id", "tenant_id"}).AddRow(11, 2))
+		WillReturnRows(sqlmock.NewRows([]string{"user_id", "tenant_id", "is_super"}).
+			AddRow(11, 2, false). // 别的租户的运营：滤掉
+			AddRow(12, 3, true).  // 超管住在租户 3：留
+			AddRow(13, 1, false)) // 平台自己的普通账号：留
 	n := &notifier{db: db}
 
 	rows, err := n.queryHolders(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(rows) != 1 || rows[0].UserID != 11 || rows[0].TenantID != 2 {
-		t.Fatalf("收件人 = %+v", rows)
+	if len(rows) != 2 || rows[0].UserID != 12 || rows[1].UserID != 13 {
+		t.Fatalf("收件人 = %+v，应只留平台级调用方（12 超管、13 默认租户），把 11 滤掉", rows)
 	}
 	if err := m.ExpectationsWereMet(); err != nil {
 		t.Fatal(err)

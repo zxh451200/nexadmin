@@ -15,18 +15,22 @@ import (
 // 平台闸的行为：只认超管或默认租户。两种形态各管一种暴露面——
 // RequirePlatform 挡「改别人也在用的那一行」（共享配置表），RequirePlatformFeature 挡
 // 「看见别人整批的客户数据」（表里根本没有 tenant_id 的插件后台，读也是泄露）。
-// 把任何一个换成 c.Next() 直接放行，第三档就会红。
+// 把任何一个换成 c.Next() 直接放行，第三、四档就会红。
 func TestRequirePlatformAdmitsOnlyPlatformCallers(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	cases := []struct {
-		name   string
-		super  bool
-		tid    idgen.ID
-		wantOK bool
+		name      string
+		super     bool
+		tid       idgen.ID
+		setTenant bool // false = 租户中间件没跑过，context 里根本没有租户
+		wantOK    bool
 	}{
-		{"超管在租户上下文里", true, 7, true},
-		{"默认租户（平台本身）", false, tenant.DefaultID, true},
-		{"普通租户管理员", false, 7, false},
+		{"超管在租户上下文里", true, 7, true, true},
+		{"默认租户（平台本身）", false, tenant.DefaultID, true, true},
+		{"普通租户管理员", false, 7, true, false},
+		// 接线错误的一档：租户中间件没跑，宁可拒也不能放行——这条判据是安全边界，
+		// 「查不到」不等于「没启用」。
+		{"context 里没有租户", false, 0, false, false},
 	}
 	for _, gate := range []struct {
 		name string
@@ -37,7 +41,10 @@ func TestRequirePlatformAdmitsOnlyPlatformCallers(t *testing.T) {
 				var reached bool
 				r := gin.New()
 				g := r.Group("/x", func(c *gin.Context) {
-					ctx := tenant.With(c.Request.Context(), tc.tid)
+					ctx := c.Request.Context()
+					if tc.setTenant {
+						ctx = tenant.With(ctx, tc.tid)
+					}
 					auth.SetClaims(c, &auth.Claims{UserID: idgen.ID(42), TenantID: tc.tid, Super: tc.super})
 					c.Request = c.Request.WithContext(ctx)
 				}, gate.mw())

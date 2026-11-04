@@ -69,6 +69,53 @@ func expectUserKeyCheck(mock sqlmock.Sqlmock, ref int64, username string, liveRo
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(liveRows))
 }
 
+// 字典类型 / 字典项没有 tenant_id：回收站的可见性按租户算，但还原与彻底删除动的是全局那一行。
+// 字典自己的写路由已经只认平台调用方（modules/system/dict/module.go），这里不挡就是第二入口——
+// 租户把 recycle:restore 当后门，把自己删掉的字典项改回全局表里。
+// 断言「一条写语句都不许发出」：守卫必须在进事务之前，否则权限判断发生在已经动手之后。
+func TestPlatformEntriesNeedPlatformCaller(t *testing.T) {
+	s, mock := setup(t)
+	for _, typ := range []string{recbin.TypeDictType, recbin.TypeDictData} {
+		expectEntry(mock, entryRow(20, 9, typ, 5))
+		if got := statusOf(s.Restore(ctxT(), 20, false)); got != http.StatusForbidden {
+			t.Errorf("%s 还原（非平台调用方）= %d, want 403", typ, got)
+		}
+		expectEntry(mock, entryRow(21, 9, typ, 5))
+		if got := statusOf(s.Purge(ctxT(), 21, false)); got != http.StatusForbidden {
+			t.Errorf("%s 彻底删除（非平台调用方）= %d, want 403", typ, got)
+		}
+	}
+	// 批量同样失败（不是静默跳过）：非预期错误立刻返回，不记成 gone/conflict。
+	expectEntry(mock, entryRow(22, 9, recbin.TypeDictType, 5))
+	res, err := s.RestoreBatch(ctxT(), []idgen.ID{22}, false)
+	if err == nil || statusOf(err) != http.StatusForbidden {
+		t.Errorf("批量还原 = %+v err=%v, want 403 且整批失败", res, err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("被挡的请求不该发出任何写语句：%v", err)
+	}
+
+	// 平台调用方不受这条守卫影响：能走到事务里按 id 更新（不带租户谓词，那张表没有这一列）。
+	expectEntry(mock, entryRow(23, 9, recbin.TypeDictType, 5))
+	mock.ExpectBegin()
+	// keyConflict 先读源行的业务唯一键（code），再数同码的未删行：无冲突才允许还原。
+	mock.ExpectQuery("SELECT code FROM `sys_dict_type` WHERE id = \\?").
+		WithArgs(int64(5)).WillReturnRows(sqlmock.NewRows([]string{"code"}).AddRow("order_status"))
+	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `sys_dict_type`").
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+	mock.ExpectExec("UPDATE `sys_dict_type` SET `deleted_at`=\\? WHERE id = \\? AND deleted_at IS NOT NULL").
+		WithArgs(nil, int64(5)).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("DELETE FROM `sys_recycle` WHERE id = \\?").
+		WithArgs(int64(23)).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+	if err := s.Restore(ctxT(), 23, true); err != nil {
+		t.Fatalf("平台调用方还原：%v", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestRestoreUsesRecordOwnTenantAndWhitelistedTable(t *testing.T) {
 	s, mock := setup(t)
 	expectEntry(mock, entryRow(10, 3, recbin.TypeUser, 77))
@@ -81,7 +128,7 @@ func TestRestoreUsesRecordOwnTenantAndWhitelistedTable(t *testing.T) {
 		WithArgs(nil, int64(77), int64(3)).WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec("DELETE FROM `sys_recycle` WHERE id = \\?").WithArgs(int64(10)).WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
-	if err := s.Restore(ctxT(), 10); err != nil {
+	if err := s.Restore(ctxT(), 10, true); err != nil {
 		t.Fatal(err)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
@@ -97,7 +144,7 @@ func TestRestoreConflictRollsBackAndKeepsEntry(t *testing.T) {
 	// 不能出现还原 UPDATE，也不能出现删除回收记录的语句。
 	expectUserKeyCheck(mock, int64(77), "bob", 1)
 	mock.ExpectRollback()
-	err := s.Restore(ctxT(), 10)
+	err := s.Restore(ctxT(), 10, true)
 	if statusOf(err) != http.StatusConflict {
 		t.Fatalf("撞码应返回 409，得到 %v", err)
 	}
@@ -114,7 +161,7 @@ func TestPurgeOnlyHardDeletesSoftDeletedRowOfSameTenant(t *testing.T) {
 		WithArgs(int64(88), int64(4)).WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec("DELETE FROM `sys_recycle` WHERE id = \\?").WithArgs(int64(11)).WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
-	if err := s.Purge(ctxT(), 11); err != nil {
+	if err := s.Purge(ctxT(), 11, true); err != nil {
 		t.Fatal(err)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
@@ -132,7 +179,7 @@ func TestPurgeNoticeAlsoCleansTargetsAndReads(t *testing.T) {
 		WithArgs(int64(99), int64(1)).WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec("DELETE FROM `sys_recycle`").WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
-	if err := s.Purge(ctxT(), 12); err != nil {
+	if err := s.Purge(ctxT(), 12, true); err != nil {
 		t.Fatal(err)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
@@ -144,8 +191,8 @@ func TestPurgeNoticeAlsoCleansTargetsAndReads(t *testing.T) {
 func TestUnknownTypeNeverTouchesSQLTables(t *testing.T) {
 	for _, typ := range []string{"sys_role", "user; DROP TABLE sys_user", "", "USER", "sys_user"} {
 		for name, op := range map[string]func(*Service) error{
-			"restore": func(s *Service) error { return s.Restore(ctxT(), 10) },
-			"purge":   func(s *Service) error { return s.Purge(ctxT(), 10) },
+			"restore": func(s *Service) error { return s.Restore(ctxT(), 10, true) },
+			"purge":   func(s *Service) error { return s.Purge(ctxT(), 10, true) },
 		} {
 			t.Run(name+"/"+typ, func(t *testing.T) {
 				s, mock := setup(t)
@@ -164,7 +211,7 @@ func TestUnknownTypeNeverTouchesSQLTables(t *testing.T) {
 func TestEntryNotFound(t *testing.T) {
 	s, mock := setup(t)
 	expectEntry(mock, sqlmock.NewRows(entryCols))
-	if got := statusOf(s.Restore(ctxT(), 404)); got != http.StatusNotFound {
+	if got := statusOf(s.Restore(ctxT(), 404, true)); got != http.StatusNotFound {
 		t.Fatalf("记录不存在应 404，得到 %d", got)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
@@ -247,7 +294,7 @@ func TestRestoreSourceGoneReturns404AndCleansEntry(t *testing.T) {
 		WithArgs(nil, int64(77), int64(3)).WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec("DELETE FROM `sys_recycle` WHERE id = \\?").WithArgs(int64(10)).WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit() // 回收记录的清理必须提交，而不是随 404 回滚
-	err := s.Restore(ctxT(), 10)
+	err := s.Restore(ctxT(), 10, true)
 	var re *response.Error
 	if !errors.As(err, &re) || re.Status != http.StatusNotFound || re.Key != "recycle.source_gone" {
 		t.Fatalf("期望 404 recycle.source_gone，得到 %v", err)
@@ -265,7 +312,7 @@ func TestPurgeSourceGoneReturns404AndCleansEntry(t *testing.T) {
 		WithArgs(int64(88), int64(4)).WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec("DELETE FROM `sys_recycle` WHERE id = \\?").WithArgs(int64(11)).WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
-	err := s.Purge(ctxT(), 11)
+	err := s.Purge(ctxT(), 11, true)
 	var re *response.Error
 	if !errors.As(err, &re) || re.Status != http.StatusNotFound || re.Key != "recycle.source_gone" {
 		t.Fatalf("期望 404 recycle.source_gone，得到 %v", err)

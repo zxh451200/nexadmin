@@ -137,6 +137,17 @@ func errSourceGone() error { return response.NotFound("recycle.source_gone") }
 
 // srcScope 是定位源行的 WHERE 条件与参数。
 //
+// guardPlatform 挡住「从回收站改平台级源表」这条第二入口：字典类型/字典项这类表没有 tenant_id
+// （recbin.Platform），回收站里的可见性虽然按租户算，但还原与彻底删除动的是全局那一行。
+// 字典自己的写路由已经只认平台调用方（modules/system/dict/module.go），这里不补，
+// 租户就能借 recycle:restore / recycle:delete 绕过那道闸。
+func guardPlatform(e *recbin.Entry, platform bool) error {
+	if recbin.Platform[e.Type] && !platform {
+		return response.Forbidden("error.platform_only")
+	}
+	return nil
+}
+
 // 平台级源表（recbin.Platform：字典这类没有 tenant_id 的表）不能带租户谓词——那一列根本不存在，
 // 带上就是 SQL 直接报错；回收记录自己的 tenant_id 只用于「在谁的回收站里可见」。
 // 两种情况都必须带 deleted_at IS NOT NULL：不依赖各引擎对“值未变化”的 RowsAffected 口径差异
@@ -234,9 +245,12 @@ func (s *Service) keyUserConflict(ctx context.Context, tx *gorm.DB, e *recbin.En
 // 取舍：只返回 404 而保留记录，用户会反复点到同一条永远失败的记录，列表无法自愈；
 // 而返回成功会谎报“已还原”。源数据没了，记录本身没有任何还原 / 彻底删除的价值，所以两者都做：
 // 在事务里删除记录并提交，事务外再返回 404（不能在事务回调里返回错误，否则清理会被一并回滚）。
-func (s *Service) Restore(ctx context.Context, id idgen.ID) error {
+func (s *Service) Restore(ctx context.Context, id idgen.ID, platform bool) error {
 	e, table, err := s.entry(ctx, id)
 	if err != nil {
+		return err
+	}
+	if err := guardPlatform(e, platform); err != nil {
 		return err
 	}
 	gone := false
@@ -265,9 +279,12 @@ func (s *Service) Restore(ctx context.Context, id idgen.ID) error {
 
 // Purge 彻底删除：真正删掉源表的行（只删仍处于软删除状态的），并移出回收站。
 // 源行已不存在（RowsAffected==0）时与 Restore 同样处理：清掉回收记录并提交，再返回 404（取舍见 Restore）。
-func (s *Service) Purge(ctx context.Context, id idgen.ID) error {
+func (s *Service) Purge(ctx context.Context, id idgen.ID, platform bool) error {
 	e, table, err := s.entry(ctx, id)
 	if err != nil {
+		return err
+	}
+	if err := guardPlatform(e, platform); err != nil {
 		return err
 	}
 	gone := false
@@ -309,10 +326,10 @@ type BatchResult struct {
 }
 
 // RestoreBatch 批量还原。
-func (s *Service) RestoreBatch(ctx context.Context, ids []idgen.ID) (*BatchResult, error) {
+func (s *Service) RestoreBatch(ctx context.Context, ids []idgen.ID, platform bool) (*BatchResult, error) {
 	res := &BatchResult{}
 	for _, id := range ids {
-		err := s.Restore(ctx, id)
+		err := s.Restore(ctx, id, platform)
 		switch {
 		case err == nil:
 			res.Restored++
@@ -328,10 +345,10 @@ func (s *Service) RestoreBatch(ctx context.Context, ids []idgen.ID) (*BatchResul
 }
 
 // PurgeBatch 批量彻底删除。
-func (s *Service) PurgeBatch(ctx context.Context, ids []idgen.ID) (*BatchResult, error) {
+func (s *Service) PurgeBatch(ctx context.Context, ids []idgen.ID, platform bool) (*BatchResult, error) {
 	res := &BatchResult{}
 	for _, id := range ids {
-		err := s.Purge(ctx, id)
+		err := s.Purge(ctx, id, platform)
 		switch {
 		case err == nil:
 			res.Purged++

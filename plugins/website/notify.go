@@ -51,6 +51,7 @@ type (
 type holder struct {
 	UserID   idgen.ID `gorm:"column:user_id"`
 	TenantID idgen.ID `gorm:"column:tenant_id"`
+	IsSuper  bool     `gorm:"column:is_super"`
 }
 
 type notifier struct {
@@ -199,8 +200,11 @@ func (n *notifier) compose(data EventData) (string, string) {
 	return fmt.Sprintf("官网留言：%s 发来新询盘", data.Name), content
 }
 
-// queryHolders 返回持有 website:message 的用户（含超管与内置角色）。
-// 平台级查询：留言不随租户隔离，所以要跳过租户隔离看全部用户。
+// queryHolders 返回持有 website:message 的用户（含超管与内置角色）中的平台级调用方。
+// 平台级查询：留言不随租户隔离，所以取候选要跳过租户隔离看全部用户。
+// 收件人只留打得开官网后台的人（plugin.go 的 RequirePlatformFeature 整组收口）——
+// 别的租户点进来只有「平台级功能」解释页，那封站内信就是死信。
+// 判据同 plugins/im/notify.go：走 tenant.IsPlatformCallerID，写在 Go 侧才有真测的余地。
 func (n *notifier) queryHolders(ctx context.Context) ([]holder, error) {
 	db := n.db.WithContext(tenant.Skip(ctx))
 	holders := db.Table("sys_user_role AS ur").Select("ur.user_id").
@@ -210,14 +214,20 @@ func (n *notifier) queryHolders(ctx context.Context) ([]holder, error) {
 		Where("r.builtin = ? OR m.id IS NOT NULL", true)
 	var rows []holder
 	err := db.Table("sys_user AS u").
-		Select("DISTINCT u.id AS user_id, u.tenant_id AS tenant_id").
+		Select("DISTINCT u.id AS user_id, u.tenant_id AS tenant_id, u.is_super AS is_super").
 		Where("u.deleted_at IS NULL AND u.status = ?", "1").
 		Where("u.is_super = ? OR u.id IN (?)", true, holders).
 		Scan(&rows).Error
 	if err != nil {
 		return nil, err
 	}
-	return rows, nil
+	out := make([]holder, 0, len(rows))
+	for _, r := range rows {
+		if tenant.IsPlatformCallerID(r.TenantID, r.IsSuper) {
+			out = append(out, r)
+		}
+	}
+	return out, nil
 }
 
 func (n *notifier) warn(msg string, fields ...zap.Field) {

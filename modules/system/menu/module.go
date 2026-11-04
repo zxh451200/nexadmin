@@ -36,11 +36,11 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	// 菜单树被菜单页与角色“分配菜单”共用，所以三个权限满足任一即可。
 	r.GET("/menus/tree", anyPerm("menu:list", "role:list", "role:assign"), h.tree)
 	r.GET("/menus/mine", h.mine) // 侧边栏：登录即可，内容按当前用户权限过滤
-	r.PUT("/menus/sort", core.Perm("menu:update"), h.sort)
-	r.PUT("/menus/:id/move", core.Perm("menu:update"), h.move)
+	r.PUT("/menus/sort", core.Perm("menu:update"), core.RequirePlatform(), h.sort)
+	r.PUT("/menus/:id/move", core.Perm("menu:update"), core.RequirePlatform(), h.move)
 	r.GET("/menus/:id", core.Perm("menu:list"), h.get)
-	r.POST("/menus", core.Perm("menu:create"), h.create)
-	r.PUT("/menus/:id", core.Perm("menu:update"), h.update)
-	r.DELETE("/menus/:id", core.Perm("menu:delete"), h.remove)
-	r.DELETE("/menus", core.Perm("menu:delete"), h.removeMany) // ?ids= 批量，与单条同一个权限码
+	r.POST("/menus", core.Perm("menu:create"), core.RequirePlatform(), h.create)
+	r.PUT("/menus/:id", core.Perm("menu:update"), core.RequirePlatform(), h.update)
+	r.DELETE("/menus/:id", core.Perm("menu:delete"), core.RequirePlatform(), h.remove)
+	r.DELETE("/menus", core.Perm("menu:delete"), core.RequirePlatform(), h.removeMany) // ?ids= 批量，与单条同一个权限码
 }

@@ -46,6 +46,7 @@ type msgSender interface {
 type agentContact struct {
 	UserID   idgen.ID `gorm:"column:user_id"`
 	TenantID idgen.ID `gorm:"column:tenant_id"`
+	IsSuper  bool     `gorm:"column:is_super"`
 }
 
 type notifier struct {
@@ -183,8 +184,12 @@ func (n *notifier) compose(c *Conversation, data EventData) (string, string) {
 	return fmt.Sprintf("在线客服：%s 发来新消息", name), data.Preview
 }
 
-// queryAgents 返回持有 im:list 的用户（含超管与内置角色），按租户分组由调用方处理。
-// 平台级查询：线上客服会话跨租户共享，所以要跳过租户隔离看全部用户。
+// queryAgents 返回持有 im:list 的用户（含超管与内置角色）中的平台级调用方。
+// 平台级查询：线上客服会话跨租户共享，所以取候选要跳过租户隔离看全部用户。
+// 但收件人只留打得开坐席后台的人——后台整组只对平台调用方开放（handler.go 的
+// RequirePlatformFeature），发给别的租户就是一封点进去只剩「平台级功能」解释页的死信。
+// 判据写在 Go 侧而不是 SQL 字符串里：sqlmock 从不执行 SQL，写进 WHERE 就没人能证明它生效；
+// 这里用 tenant.IsPlatformCallerID，与中间件、会话载荷同一条判据，单测能真判。
 func (n *notifier) queryAgents(ctx context.Context) ([]agentContact, error) {
 	db := n.db.WithContext(tenant.Skip(ctx))
 	holders := db.Table("sys_user_role AS ur").Select("ur.user_id").
@@ -194,14 +199,20 @@ func (n *notifier) queryAgents(ctx context.Context) ([]agentContact, error) {
 		Where("r.builtin = ? OR m.id IS NOT NULL", true)
 	var rows []agentContact
 	err := db.Table("sys_user AS u").
-		Select("DISTINCT u.id AS user_id, u.tenant_id AS tenant_id").
+		Select("DISTINCT u.id AS user_id, u.tenant_id AS tenant_id, u.is_super AS is_super").
 		Where("u.deleted_at IS NULL AND u.status = ?", "1").
 		Where("u.is_super = ? OR u.id IN (?)", true, holders).
 		Scan(&rows).Error
 	if err != nil {
 		return nil, err
 	}
-	return rows, nil
+	out := make([]agentContact, 0, len(rows))
+	for _, r := range rows {
+		if tenant.IsPlatformCallerID(r.TenantID, r.IsSuper) {
+			out = append(out, r)
+		}
+	}
+	return out, nil
 }
 
 func (n *notifier) warn(msg string, kv ...any) {

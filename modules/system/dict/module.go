@@ -24,24 +24,24 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	r.GET("/dicts/:code/items", h.Items) // 登录即可，前端所有下拉/标签都走它
 
 	t := r.Group("/dict/types")
-	t.PUT("/sort", core.Perm("dict:update"), h.SortTypes) // 固定路径先于 /:id
+	t.PUT("/sort", core.Perm("dict:update"), core.RequirePlatform(), h.SortTypes) // 固定路径先于 /:id
 	t.GET("/export", core.Perm("dict:list"), h.ExportTypes)
 	t.GET("", core.Perm("dict:list"), h.ListTypes)
 	t.GET("/:id", core.Perm("dict:list"), h.GetType)
-	t.POST("", core.Perm("dict:create"), h.CreateType)
-	t.PUT("/:id", core.Perm("dict:update"), h.UpdateType)
-	t.DELETE("/:id", core.Perm("dict:delete"), h.DeleteType)
-	t.DELETE("", core.Perm("dict:delete"), h.DeleteTypes)
+	t.POST("", core.Perm("dict:create"), core.RequirePlatform(), h.CreateType)
+	t.PUT("/:id", core.Perm("dict:update"), core.RequirePlatform(), h.UpdateType)
+	t.DELETE("/:id", core.Perm("dict:delete"), core.RequirePlatform(), h.DeleteType)
+	t.DELETE("", core.Perm("dict:delete"), core.RequirePlatform(), h.DeleteTypes)
 
 	x := r.Group("/dict/data")
-	x.PUT("/sort", core.Perm("dict:update"), h.SortData)
+	x.PUT("/sort", core.Perm("dict:update"), core.RequirePlatform(), h.SortData)
 	x.GET("/export", core.Perm("dict:list"), h.ExportData)
 	x.GET("", core.Perm("dict:list"), h.ListData)
 	x.GET("/:id", core.Perm("dict:list"), h.GetData)
-	x.POST("", core.Perm("dict:create"), h.CreateData)
-	x.PUT("/:id", core.Perm("dict:update"), h.UpdateData)
-	x.DELETE("/:id", core.Perm("dict:delete"), h.DeleteOneData)
-	x.DELETE("", core.Perm("dict:delete"), h.DeleteManyData)
+	x.POST("", core.Perm("dict:create"), core.RequirePlatform(), h.CreateData)
+	x.PUT("/:id", core.Perm("dict:update"), core.RequirePlatform(), h.UpdateData)
+	x.DELETE("/:id", core.Perm("dict:delete"), core.RequirePlatform(), h.DeleteOneData)
+	x.DELETE("", core.Perm("dict:delete"), core.RequirePlatform(), h.DeleteManyData)
 }
 
 // 种子 ID 与前端 mock 一致：类型 7100000000000010000+i，数据 7200000000010000000+n（n 从 1 起按全局顺序）。

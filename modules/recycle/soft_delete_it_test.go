@@ -314,7 +314,7 @@ func runSoftDeleteInvariants(t *testing.T, db *gorm.DB) {
 	}
 
 	// 3) 还原撞码：同码有未删行时必须回 409 recycle.restore_conflict，而不是造出两条同码。
-	if status, key := itErrKey(t, svc.Restore(ctx, entryID)); status != 409 || key != "recycle.restore_conflict" {
+	if status, key := itErrKey(t, svc.Restore(ctx, entryID, true)); status != 409 || key != "recycle.restore_conflict" {
 		t.Fatalf("还原撞码期望 409 recycle.restore_conflict，实得 %d %q", status, key)
 	}
 
@@ -322,7 +322,7 @@ func runSoftDeleteInvariants(t *testing.T, db *gorm.DB) {
 	if err := db.WithContext(ctx).Unscoped().Where("id = ?", int64(dupe.ID)).Delete(&post.Post{}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.Restore(ctx, entryID); err != nil {
+	if err := svc.Restore(ctx, entryID, true); err != nil {
 		t.Fatalf("占码行清掉后还原仍失败: %v", err)
 	}
 	if err := db.WithContext(ctx).Model(&post.Post{}).Where("id = ?", int64(p.ID)).Count(&alive).Error; err != nil {
@@ -346,13 +346,13 @@ func runSoftDeleteInvariants(t *testing.T, db *gorm.DB) {
 		t.Fatalf("建字典类型失败: %v", err)
 	}
 	dtEntryID := itTrash(t, db, &dict.Type{}, "sys_dict_type", recbin.TypeDictType, dt.ID, dt.Name)
-	if err := svc.Restore(ctx, dtEntryID); err != nil {
+	if err := svc.Restore(ctx, dtEntryID, true); err != nil {
 		t.Fatalf("平台级表还原失败（多半是 srcScope 仍带 tenant_id）: %v", err)
 	}
 	// 彻底删除：类型进回收站后，其下条目按 recbin.Children 级联物理清掉。
 	db.WithContext(ctx).Create(&dict.Data{TypeID: dt.ID, Label: "男", Value: "1", Sort: 1, Status: "1"})
 	purgeID := itTrash(t, db, &dict.Type{}, "sys_dict_type", recbin.TypeDictType, dt.ID, dt.Name)
-	if err := svc.Purge(ctx, purgeID); err != nil {
+	if err := svc.Purge(ctx, purgeID, true); err != nil {
 		t.Fatalf("彻底删除字典类型失败: %v", err)
 	}
 	var dataLeft int64
@@ -475,7 +475,7 @@ func runUserRestoreInvariants(t *testing.T, db *gorm.DB) {
 	if err := db.WithContext(ctx).Create(&user.User{Username: "r_conflict_u", Nickname: "重注", Status: "1", Gender: "0"}).Error; err != nil {
 		t.Fatalf("重注同名账号被数据库挡了（索引难道是唯一？）: %v", err)
 	}
-	if status, key := itErrKey(t, svc.Restore(ctx, oldEntry)); status != 409 || key != "recycle.restore_conflict" {
+	if status, key := itErrKey(t, svc.Restore(ctx, oldEntry, true)); status != 409 || key != "recycle.restore_conflict" {
 		t.Fatalf("同名还原期望 409 recycle.restore_conflict，实得 %d %q", status, key)
 	}
 	if entryAlive(oldEntry) != 1 {
@@ -494,7 +494,7 @@ func runUserRestoreInvariants(t *testing.T, db *gorm.DB) {
 	if err := db.WithContext(ctx).Create(&user.User{Username: "r_other_name", Nickname: "占号", Phone: "13900000002", Status: "1", Gender: "0"}).Error; err != nil {
 		t.Fatalf("建同号用户失败: %v", err)
 	}
-	if status, key := itErrKey(t, svc.Restore(ctx, oldPEntry)); status != 409 || key != "recycle.restore_conflict" {
+	if status, key := itErrKey(t, svc.Restore(ctx, oldPEntry, true)); status != 409 || key != "recycle.restore_conflict" {
 		t.Fatalf("同号还原期望 409，实得 %d %q", status, key)
 	}
 
@@ -504,7 +504,7 @@ func runUserRestoreInvariants(t *testing.T, db *gorm.DB) {
 	if err := db.WithContext(ctx).Create(&user.User{Username: "r_empty_b", Nickname: "也空号", Status: "1", Gender: "0"}).Error; err != nil {
 		t.Fatalf("建第二个空号用户失败: %v", err)
 	}
-	if err := svc.Restore(ctx, oldEEntry); err != nil {
+	if err := svc.Restore(ctx, oldEEntry, true); err != nil {
 		t.Fatalf("空手机号不应误判撞码，还原应成功，实得 %v", err)
 	}
 
@@ -512,7 +512,7 @@ func runUserRestoreInvariants(t *testing.T, db *gorm.DB) {
 	if err := db.Unscoped().Table("sys_user").Where("username = ? AND id <> ?", "r_conflict_u", int64(old)).Delete(nil).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.Restore(ctx, oldEntry); err != nil {
+	if err := svc.Restore(ctx, oldEntry, true); err != nil {
 		t.Fatalf("占码行清掉后还原仍失败: %v", err)
 	}
 	if liveCount("r_conflict_u") != 1 {

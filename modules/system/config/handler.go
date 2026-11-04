@@ -5,29 +5,61 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"nexadmin/core/auth"
+	"nexadmin/core"
 	"nexadmin/core/response"
-	tn "nexadmin/core/tenant"
 	"nexadmin/pkg/idgen"
 )
 
-// platformCaller 报告调用方是否为平台级：超管，或平台（默认）租户。
-// 全局 AI 配置（base_url / api_key / model）是平台级的，租户管理员不能修改，也看不到地址。
-func platformCaller(c *gin.Context) bool {
-	if cl := auth.ClaimsFrom(c); cl != nil && cl.Super {
-		return true
-	}
-	tid, ok := tn.From(c.Request.Context())
-	return ok && tid == tn.DefaultID
-}
+// platformCaller 报告调用方是否为平台级。判据单源在 tenant.IsPlatformCallerID（经 core.IsPlatformCaller），
+// 这里不再自己写一份 `Super || tid == DefaultID`——中间件、载荷、通知收件人与这一处必须同一条线。
+func platformCaller(c *gin.Context) bool { return core.IsPlatformCaller(c) }
 
-// platformOnlySection 是只允许平台级调用方修改 / 测试的分区。
-func platformOnlySection(name string) bool { return name == "ai" }
+// secretKeyHints 是设置分区里凡是命中就按密钥处理的字段名片段。比对前去掉下划线/连字符并转小写，
+// 所以 smtpPassword、access_key、accessKey、appSecret 都算命中。
+// 这些值不属于任何租户，却决定整个部署往哪发信、谁能登进来：租户管理员的界面不需要看见它们。
+var secretKeyHints = []string{"password", "passwd", "secret", "apikey", "accesskey", "privatekey", "token", "keya", "keyb", "keyc"}
+
+// isSecretKey 报告字段名是否按密钥处理。
+func isSecretKey(k string) bool {
+	lower := strings.NewReplacer("_", "", "-", "", " ", "").Replace(strings.ToLower(k))
+	for _, hint := range secretKeyHints {
+		if strings.Contains(lower, hint) {
+			return true
+		}
+	}
+	return false
+}
 
 // restrictAI 把 GET /settings 里的 ai 分区缩减成租户可见的最小信息（不含地址与密钥）。
 func restrictAI(all map[string]any) {
 	if ai, ok := all["ai"].(map[string]any); ok {
 		all["ai"] = map[string]any{"enabled": ai["enabled"], "model": ai["model"]}
+	}
+}
+
+// restrictSecrets 递归抹掉非平台调用方不该看到的密钥字段（保留键名与结构，值置空）：
+// 界面还能渲染「已配置/未配置」，但拿不到真凭据。整分区不返回会让设置页变成一片空白，
+// 那是另一种「入口蒸发」。
+func restrictSecrets(v any) {
+	switch node := v.(type) {
+	case map[string]any:
+		for k, child := range node {
+			if isSecretKey(k) {
+				// 字符串值换成与 ai 分区同一个掩码（界面据此仍能显示「已配置」）；
+				// 非字符串的密钥形态（对象/数组）没有可展示的意义，删键。
+				if s, ok := child.(string); ok && s != "" {
+					node[k] = secretMask
+				} else {
+					delete(node, k)
+				}
+				continue
+			}
+			restrictSecrets(child)
+		}
+	case []any:
+		for _, item := range node {
+			restrictSecrets(item)
+		}
 	}
 }
 
@@ -180,6 +212,8 @@ func (h *Handler) Settings(c *gin.Context) {
 	}
 	if !platformCaller(c) {
 		restrictAI(v)
+		// 其余分区的凭据同样不外泄：security/auth/sms/notify 里的密码与密钥是部署级的。
+		restrictSecrets(v)
 	}
 	response.OK(c, v)
 }
@@ -195,11 +229,10 @@ func (h *Handler) PublicSettings(c *gin.Context) {
 }
 
 // SaveSection PUT /settings/:section
+// 整表 sys_setting 没有 tenant_id：任何分区都是部署级的一行，所以写入口在路由上统一挂
+// core.RequirePlatform()（module.go），这里不再按分区名特判——原先只有 ai 分区受限，
+// security / auth / sms / notify 谁都能改，一个租户把 maxAttempts 设成 1 就能把别人全锁在门外。
 func (h *Handler) SaveSection(c *gin.Context) {
-	if platformOnlySection(c.Param("section")) && !platformCaller(c) {
-		response.Fail(c, response.Forbidden("error.forbidden"))
-		return
-	}
 	var body map[string]any
 	if !response.BindJSON(c, &body) {
 		return
@@ -213,11 +246,8 @@ func (h *Handler) SaveSection(c *gin.Context) {
 }
 
 // TestSection POST /settings/:section/test
+// 同 SaveSection：测试一把也要拿部署级凭据去连外部服务，写入口已经整组只认平台调用方。
 func (h *Handler) TestSection(c *gin.Context) {
-	if platformOnlySection(c.Param("section")) && !platformCaller(c) {
-		response.Fail(c, response.Forbidden("error.forbidden"))
-		return
-	}
 	var body map[string]any
 	if !response.BindJSON(c, &body) {
 		return

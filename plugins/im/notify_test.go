@@ -195,19 +195,26 @@ func TestWorkerSendsQueuedVisitorEvent(t *testing.T) {
 	t.Fatal("worker did not deliver the notification")
 }
 
-func TestQueryAgentsCoversPermissionSuperAndBuiltin(t *testing.T) {
+// 收件人必须真打得开坐席后台：会话池不分租户（所以候选要 Skip 全局查），但后台整组只对
+// 平台调用方开放（handler.go 的 RequirePlatformFeature）。别的租户的坐席收信后点进来只有
+// 「平台级功能」解释页——那是死信，所以这一档必须被滤掉。
+// 判据在 Go 侧（tenant.IsPlatformCallerID），所以这里能真断言，而不是只核对 SQL 文本。
+func TestQueryAgentsKeepsOnlyPlatformCallers(t *testing.T) {
 	db, m := mockDB(t)
-	m.ExpectQuery(`SELECT DISTINCT u\.id AS user_id, u\.tenant_id AS tenant_id FROM sys_user AS u ` +
+	m.ExpectQuery(`SELECT DISTINCT u\.id AS user_id, u\.tenant_id AS tenant_id, u\.is_super AS is_super FROM sys_user AS u ` +
 		`.*FROM sys_user_role AS ur JOIN sys_role r .*sys_role_menu rm .*sys_menu m .*m\.perm = \?.*r\.builtin = \?`).
-		WillReturnRows(sqlmock.NewRows([]string{"user_id", "tenant_id"}).AddRow(11, 2).AddRow(12, 3))
+		WillReturnRows(sqlmock.NewRows([]string{"user_id", "tenant_id", "is_super"}).
+			AddRow(11, 2, false). // 别的租户的坐席：滤掉
+			AddRow(12, 3, true).  // 超管住在租户 3：仍然可写，留
+			AddRow(13, 1, false)) // 平台自己的普通账号：留
 	n := &notifier{db: db}
 
 	got, err := n.queryAgents(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 2 || got[0].UserID != 11 || got[0].TenantID != 2 || got[1].TenantID != 3 {
-		t.Fatalf("unexpected agents: %+v", got)
+	if len(got) != 2 || got[0].UserID != 12 || got[1].UserID != 13 {
+		t.Fatalf("收件人 = %+v，应只留平台级调用方（12 超管、13 默认租户），把 11 滤掉", got)
 	}
 	if err := m.ExpectationsWereMet(); err != nil {
 		t.Fatal(err)

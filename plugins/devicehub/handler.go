@@ -54,6 +54,12 @@ func claimsOperator(c *gin.Context) (idgen.ID, string) {
 // Register 注册全部路由（由 plugin.go 的 module 调用）。
 func (h *handler) Register(r *gin.RouterGroup, d *core.Deps) {
 	g := r.Group("/plugins/devicehub")
+	// 设备台账/测点/读数/指令/告警七张表全嵌 PlatformModel，一张都没有 tenant_id：
+	// 任何持 devicehub:list 的租户都能列出并导出别的租户的设备与历史读数，
+	// 而 devicehub:control 还能对别人的设备下发指令——那已经不是泄露而是越权操作。
+	// 与在线客服、官网同一判据（表不分租户 → 读也是暴露），整个后台只对平台调用方开放。
+	// 真要按租户开：七张表补 tenant_id（三引擎迁移 + 唯一键改形），采集侧再带上归属来源。
+	g.Use(core.RequirePlatformFeature())
 
 	// 设备
 	g.GET("/devices", core.Perm("devicehub:list"), h.listDevices)

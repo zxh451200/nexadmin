@@ -27,6 +27,6 @@ func (*module) Register(r *gin.RouterGroup, d *core.Deps) {
 	h := &handler{svc: newService(d.DB)}
 	g := r.Group("/plugins/maps")
 	g.GET("/config", core.Perm(PermConfig), h.Config)
-	g.PUT("/config", core.Perm(PermConfig), h.SaveConfig)
+	g.PUT("/config", core.Perm(PermConfig), core.RequirePlatform(), h.SaveConfig)
 	g.GET("/regeo", core.Perm(PermConfig), h.Regeo)
 }

@@ -61,21 +61,21 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	r.GET("/config/upload", h.GetUpload) // 上传组件读取限制，登录即可
 	g := r.Group("/configs")
 	g.GET("/upload", core.Perm("config:list"), h.GetUpload) // 固定路径先于 /:id
-	g.PUT("/upload", core.Perm("config:update"), h.SaveUpload)
+	g.PUT("/upload", core.Perm("config:update"), core.RequirePlatform(), h.SaveUpload)
 	g.GET("/upload-types", core.Perm("config:list"), h.UploadTypes)
-	g.POST("/refresh-cache", core.Perm("config:update"), h.RefreshCache)
+	g.POST("/refresh-cache", core.Perm("config:update"), core.RequirePlatform(), h.RefreshCache)
 	g.GET("", core.Perm("config:list"), h.List)
 	g.GET("/:id", core.Perm("config:list"), h.Get)
-	g.POST("", core.Perm("config:create"), h.Create)
-	g.PUT("/:id", core.Perm("config:update"), h.Update)
-	g.DELETE("/:id", core.Perm("config:delete"), h.DeleteOne)
-	g.DELETE("", core.Perm("config:delete"), h.DeleteMany)
+	g.POST("", core.Perm("config:create"), core.RequirePlatform(), h.Create)
+	g.PUT("/:id", core.Perm("config:update"), core.RequirePlatform(), h.Update)
+	g.DELETE("/:id", core.Perm("config:delete"), core.RequirePlatform(), h.DeleteOne)
+	g.DELETE("", core.Perm("config:delete"), core.RequirePlatform(), h.DeleteMany)
 
 	d.Public.GET("/settings/public", h.PublicSettings) // 匿名：登录页展示站点名称/Logo
 	s := r.Group("/settings")
 	s.GET("", core.Perm("settings:list"), h.Settings)
-	s.PUT("/:section", core.Perm("settings:update"), h.SaveSection)
-	s.POST("/:section/test", core.Perm("settings:update"), h.TestSection)
+	s.PUT("/:section", core.Perm("settings:update"), core.RequirePlatform(), h.SaveSection)
+	s.POST("/:section/test", core.Perm("settings:update"), core.RequirePlatform(), h.TestSection)
 }
 
 // 种子 ID 与前端 mock 一致：7300000000010000000 + 序号。

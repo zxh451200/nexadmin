@@ -54,8 +54,8 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 
 	g := r.Group("/plugins/ldap")
 	g.GET("/config", core.Perm("ldap:list"), h.config)
-	g.PUT("/config", core.Perm("ldap:edit"), h.configSave)
-	g.POST("/test", core.Perm("ldap:edit"), h.test)
+	g.PUT("/config", core.Perm("ldap:edit"), core.RequirePlatform(), h.configSave)
+	g.POST("/test", core.Perm("ldap:edit"), core.RequirePlatform(), h.test)
 }
 
 var _ = auth.RegisteredPerms

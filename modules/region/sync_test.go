@@ -19,6 +19,7 @@ import (
 	"nexadmin/core/auth"
 	"nexadmin/core/config"
 	coreregion "nexadmin/core/region"
+	"nexadmin/core/tenant"
 	"nexadmin/pkg/idgen"
 )
 
@@ -45,10 +46,16 @@ func newEnvWithSource(t *testing.T, source, license string) (*gin.Engine, sqlmoc
 	mock.ExpectQuery("SELECT \\* FROM `sys_region_snapshot`").WillReturnError(gorm.ErrRecordNotFound)
 	e := gin.New()
 	e.Use(func(c *gin.Context) {
+		// 这些用例测的是同步 / 回滚 / 数据源校验本身，所以调用方按平台级给：
+		// 区划快照是全局那一份，写路由已挂 core.RequirePlatform()（module.go），
+		// 不带默认租户的调用方会先被闸挡下，测不到后面的逻辑。闸自己由路由台账与
+		// core/platform_test.go 判，不靠这里。
 		auth.SetClaims(c, &auth.Claims{
 			UserID: 9, Username: "app:test", Principal: auth.PrincipalApp,
-			Perms: strings.Split(c.GetHeader("X-Test-Perms"), ","),
+			TenantID: tenant.DefaultID,
+			Perms:    strings.Split(c.GetHeader("X-Test-Perms"), ","),
 		})
+		c.Request = c.Request.WithContext(tenant.With(c.Request.Context(), tenant.DefaultID))
 	})
 	cfg := &config.Config{}
 	cfg.Region.SourceURL = source
