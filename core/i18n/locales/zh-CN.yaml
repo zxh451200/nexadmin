@@ -327,6 +327,7 @@ ticket:
   field_required: 该字段必填
   field_value_invalid: 字段值不合法（类型或取值范围不符）
   sla_code_unknown: 要绑定的 SLA 策略不存在
+  sla_code_conflict: SLA 策略编码已被占用，请刷新后重试
   attachment_rejected: 附件未通过安全扫描，已拒绝
   inbound_disabled: 邮件进单未启用（未配置共享密钥）
   inbound_secret_invalid: 邮件进单密钥不正确

@@ -20,6 +20,25 @@ import (
 	"nexadmin/pkg/idgen"
 )
 
+// slaDupKeyRe 认唯一索引（迁移 018 的 uk_plg_ticket_sla_code）冲突在两引擎上的驱动写法：
+// MySQL/MariaDB 是 1062（Duplicate entry '...' for key '...'），PG 是 23505
+// （duplicate key value violates unique constraint "..."）。框架没开 GORM 的 TranslateError，
+// gorm.ErrDuplicatedKey 永远拿不到，只能按文本判——与 plugins/pay/errors.go:88 同一口径。
+// 判定只回答「是不是唯一索引拦的」，不猜是哪个索引：索引名靠 Wrap 进日志留证。
+var slaDupKeyRe = regexp.MustCompile(`(?i)duplicate entry|error 1062|duplicate key value|unique constraint|sqlstate 23505`)
+
+// isSLADuplicateKeyErr 判 Create 的错误是否由 SLA 策略编码的唯一索引拦下。
+// 认得太宽会把真故障（连接断了、列不存在）折成 409 业务错误，所以给反例用例钉住。
+func isSLADuplicateKeyErr(err error) bool {
+	return err != nil && slaDupKeyRe.MatchString(err.Error())
+}
+
+// slaDupConflict 是「同 code 的并发保存撞上了唯一索引」：预检（先查后建）在单操作者下给出
+// 可读的错误，索引是并发窗口的兜底，输的那条在这里折回 4xx，而不是把驱动原文冒成 500。
+func slaDupConflict(err error) *response.Error {
+	return response.Conflict("ticket.sla_code_conflict").Wrap(err)
+}
+
 // SLATarget 是同一优先级下的两个时限（分钟）。
 type SLATarget struct {
 	FirstMinutes      int `json:"firstMinutes"`
@@ -286,6 +305,10 @@ func (s *Service) SaveSLA(ctx context.Context, in SLASetting) (SLASetting, error
 		}
 		row.ID = id
 		if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
+			// 唯一索引兜底：默认策略（code 空串）同样只允许一行，并发保存输的那条回 4xx。
+			if isSLADuplicateKeyErr(err) {
+				return SLASetting{}, slaDupConflict(err)
+			}
 			return SLASetting{}, err
 		}
 	case err != nil:
@@ -333,6 +356,8 @@ func (s *Service) GetSLAPolicy(ctx context.Context, code string) (SLASetting, er
 
 // SaveSLAPolicy 校验后按 code upsert 一套策略；无则建行，有则覆盖六列。
 // 当 code 为空串（默认策略）时同步刷新进程内缓存，保持今天 SaveSLA 的行为。
+// 预检（先查后建）保留：单操作者下它给出可读错误；并发窗口由 code 上的唯一索引兜底，
+// 撞索引的那条在这里折成 409 ticket.sla_code_conflict（见 slaDupConflict）。
 func (s *Service) SaveSLAPolicy(ctx context.Context, v SLASetting) (SLASetting, error) {
 	if err := v.normalize(); err != nil {
 		return SLASetting{}, err
@@ -351,6 +376,12 @@ func (s *Service) SaveSLAPolicy(ctx context.Context, v SLASetting) (SLASetting, 
 		}
 		row.ID = id
 		if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
+			// 「先查后建」的并发窗口由迁移 018 的 uk_plg_ticket_sla_code 封口：预检放行后两条
+			// INSERT 同时到达，输的那条拿到的是驱动原文，必须折成和预检同一族 4xx 业务错误——
+			// 既不能冒成 500，也不能像过去那样静默多出一行被读侧掩盖。
+			if isSLADuplicateKeyErr(err) {
+				return SLASetting{}, slaDupConflict(err)
+			}
 			return SLASetting{}, err
 		}
 	case err != nil:
@@ -373,6 +404,7 @@ func (s *Service) SaveSLAPolicy(ctx context.Context, v SLASetting) (SLASetting, 
 }
 
 // DeleteSLAPolicy 按 code 删除一套策略；默认策略（code 空串）不可删。删不存在的行不报错。
+// WHERE code = ? 不带 limit 是有意的：迁移 018 之后一个 code 至多一行，这条语句就是「删那一行」。
 func (s *Service) DeleteSLAPolicy(ctx context.Context, code string) error {
 	if code == "" {
 		return response.BadRequest("error.bad_request")

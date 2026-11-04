@@ -327,6 +327,7 @@ ticket:
   field_required: This field is required
   field_value_invalid: Invalid field value (type or range mismatch)
   sla_code_unknown: The SLA policy to bind does not exist
+  sla_code_conflict: This SLA policy code is already taken; refresh and try again
   attachment_rejected: The attachment failed the security scan and was rejected
   inbound_disabled: Email intake is not enabled (no shared secret configured)
   inbound_secret_invalid: The email intake secret is incorrect
