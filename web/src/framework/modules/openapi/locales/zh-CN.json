@@ -30,8 +30,8 @@
       "form": {
         "createTitle": "新增应用",
         "editTitle": "编辑应用",
-        "nameTooLong": "名称不能超过 50 个字符",
-        "descTooLong": "描述不能超过 200 个字符",
+        "nameTooLong": "名称不能超过 100 个字符",
+        "descTooLong": "描述不能超过 500 个字符",
         "rolesPlaceholder": "选择角色",
         "rolesHint": "应用调用接口时拥有所选角色的权限之和；不选则没有任何权限。",
         "ipHint": "每行一个 IPv4 / IPv6 地址或 CIDR，如 203.0.113.10、10.0.0.0/8。留空表示不限制来源 IP。",
@@ -80,7 +80,7 @@
       "form": {
         "createTitle": "新增 Webhook",
         "editTitle": "编辑 Webhook",
-        "nameTooLong": "名称不能超过 50 个字符",
+        "nameTooLong": "名称不能超过 100 个字符",
         "urlHint": "必须是 https 地址；开发环境允许 http://localhost。",
         "urlInvalid": "请输入 https 地址（开发可用 http://localhost）",
         "eventsRequired": "至少选择一个事件"

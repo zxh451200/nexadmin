@@ -44,8 +44,8 @@
     "form": {
       "createTitle": "Add app",
       "editTitle": "Edit app",
-      "nameTooLong": "Name must be 50 characters or fewer",
-      "descTooLong": "Description must be 200 characters or fewer",
+      "nameTooLong": "Name must be 100 characters or fewer",
+      "descTooLong": "Description must be 500 characters or fewer",
       "redirectHint": "One per line. Must be a full https URL (http://localhost is allowed for local debugging)",
       "redirectRequired": "Enter at least one callback URL",
       "redirectInvalid": "Invalid callback URL: {{uri}} (must be a full https or localhost URL without a # fragment)",

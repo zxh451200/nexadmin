@@ -23,7 +23,8 @@ const splitLines = (text: string) =>
 
 function buildSchema(t: (k: string, o?: Record<string, unknown>) => string) {
   return z.object({
-    name: z.string().trim().min(1, t('common.required')).max(50, t('sso.form.nameTooLong')),
+    // 长度与服务端 normalize() 同源：modules/sso/admin_http.go 名称 ≤100 字符、描述 ≤500 字符
+    name: z.string().trim().min(1, t('common.required')).max(100, t('sso.form.nameTooLong')),
     redirectUris: z.string().superRefine((v, ctx) => {
       const lines = splitLines(v)
       if (lines.length === 0) {
@@ -35,7 +36,7 @@ function buildSchema(t: (k: string, o?: Record<string, unknown>) => string) {
     }),
     logo: z.string().trim().refine((v) => !v || v.startsWith('/') || isHttpUrl(v), t('sso.form.urlInvalid')),
     homeUrl: z.string().trim().refine((v) => !v || isHttpUrl(v), t('sso.form.urlInvalid')),
-    description: z.string().trim().max(200, t('sso.form.descTooLong')),
+    description: z.string().trim().max(500, t('sso.form.descTooLong')),
     enabled: z.boolean(),
     roleIds: z.array(z.string()),
     allowOrgRead: z.boolean(),
@@ -127,7 +128,7 @@ export function SsoAppFormDialog({ open, onOpenChange, editing, onCreated }: Pro
                   <FormItem>
                     <FormLabel>{t('sso.fields.name')}</FormLabel>
                     <FormControl>
-                      <Input {...field} maxLength={50} placeholder={t('common.pleaseInput')} />
+                      <Input {...field} maxLength={100} placeholder={t('common.pleaseInput')} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -212,7 +213,7 @@ export function SsoAppFormDialog({ open, onOpenChange, editing, onCreated }: Pro
                   <FormItem>
                     <FormLabel>{t('sso.fields.description')}</FormLabel>
                     <FormControl>
-                      <Textarea {...field} rows={2} maxLength={200} />
+                      <Textarea {...field} rows={2} maxLength={500} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

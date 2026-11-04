@@ -32,7 +32,7 @@ func (f *hookForm) normalize() *response.Error {
 		return response.BadRequest("openapi.name_required")
 	}
 	f.URL = strings.TrimSpace(f.URL)
-	if len(f.URL) > 500 {
+	if utf8.RuneCountInString(f.URL) > 500 {
 		return response.BadRequest("openapi.url_too_long")
 	}
 	if _, err := validateURLStatic(f.URL); err != nil {

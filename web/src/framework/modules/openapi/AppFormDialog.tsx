@@ -16,8 +16,9 @@ import { isValidIpOrCidr, splitLines, useSaveOpenApp, type OpenApp, type OpenApp
 
 function buildSchema(t: (k: string, o?: Record<string, unknown>) => string) {
   return z.object({
-    name: z.string().trim().min(1, t('common.required')).max(50, t('openapi.apps.form.nameTooLong')),
-    description: z.string().trim().max(200, t('openapi.apps.form.descTooLong')),
+    // 长度与服务端同源：modules/openapi/apps.go 名称 ≤100 字符、描述 ≤500 字符（均按 rune 计）
+    name: z.string().trim().min(1, t('common.required')).max(100, t('openapi.apps.form.nameTooLong')),
+    description: z.string().trim().max(500, t('openapi.apps.form.descTooLong')),
     roleIds: z.array(z.string()),
     enabled: z.boolean(),
     ipAllow: z.string().superRefine((v, ctx) => {
@@ -96,7 +97,7 @@ export function AppFormDialog({ open, onOpenChange, editing, onCreated }: Props)
                   <FormItem>
                     <FormLabel>{t('openapi.apps.fields.name')}</FormLabel>
                     <FormControl>
-                      <Input {...field} maxLength={50} placeholder={t('common.pleaseInput')} />
+                      <Input {...field} maxLength={100} placeholder={t('common.pleaseInput')} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -111,7 +112,7 @@ export function AppFormDialog({ open, onOpenChange, editing, onCreated }: Props)
                   <FormItem>
                     <FormLabel>{t('openapi.apps.fields.description')}</FormLabel>
                     <FormControl>
-                      <Textarea {...field} rows={2} maxLength={200} />
+                      <Textarea {...field} rows={2} maxLength={500} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

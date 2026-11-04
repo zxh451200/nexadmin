@@ -44,8 +44,8 @@
     "form": {
       "createTitle": "新增应用",
       "editTitle": "编辑应用",
-      "nameTooLong": "名称不能超过 50 个字符",
-      "descTooLong": "描述不能超过 200 个字符",
+      "nameTooLong": "名称不能超过 100 个字符",
+      "descTooLong": "描述不能超过 500 个字符",
       "redirectHint": "每行一个，必须是完整的 https 地址（本地调试可用 http://localhost）",
       "redirectRequired": "至少填写一个回调地址",
       "redirectInvalid": "回调地址不合法：{{uri}}（需为 https 或 localhost 的完整 URL，且不能带 # 片段）",

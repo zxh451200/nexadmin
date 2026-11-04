@@ -30,8 +30,8 @@
       "form": {
         "createTitle": "New app",
         "editTitle": "Edit app",
-        "nameTooLong": "Name must be 50 characters or fewer",
-        "descTooLong": "Description must be 200 characters or fewer",
+        "nameTooLong": "Name must be 100 characters or fewer",
+        "descTooLong": "Description must be 500 characters or fewer",
         "rolesPlaceholder": "Select roles",
         "rolesHint": "The app gets the union of the selected roles' permissions when calling APIs; with no roles it has no permissions.",
         "ipHint": "One IPv4 / IPv6 address or CIDR per line, e.g. 203.0.113.10 or 10.0.0.0/8. Leave empty to allow any source IP.",
@@ -80,7 +80,7 @@
       "form": {
         "createTitle": "New webhook",
         "editTitle": "Edit webhook",
-        "nameTooLong": "Name must be 50 characters or fewer",
+        "nameTooLong": "Name must be 100 characters or fewer",
         "urlHint": "Must be an https URL; http://localhost is allowed for development.",
         "urlInvalid": "Enter an https URL (http://localhost allowed for development)",
         "eventsRequired": "Select at least one event"

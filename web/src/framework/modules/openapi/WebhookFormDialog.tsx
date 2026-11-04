@@ -26,7 +26,8 @@ import {
 
 function buildSchema(t: (k: string, o?: Record<string, unknown>) => string) {
   return z.object({
-    name: z.string().trim().min(1, t('common.required')).max(50, t('openapi.webhooks.form.nameTooLong')),
+    // 名称上限与 modules/openapi/webhooks.go 的 ≤100 字符一致
+    name: z.string().trim().min(1, t('common.required')).max(100, t('openapi.webhooks.form.nameTooLong')),
     url: z.string().trim().min(1, t('common.required')).refine(isValidWebhookUrl, t('openapi.webhooks.form.urlInvalid')),
     events: z.array(z.string()).min(1, t('openapi.webhooks.form.eventsRequired')),
     enabled: z.boolean(),
@@ -165,7 +166,7 @@ export function WebhookFormDialog({ open, onOpenChange, editing, onCreated }: Pr
                   <FormItem>
                     <FormLabel>{t('openapi.webhooks.fields.name')}</FormLabel>
                     <FormControl>
-                      <Input {...field} maxLength={50} placeholder={t('common.pleaseInput')} />
+                      <Input {...field} maxLength={100} placeholder={t('common.pleaseInput')} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

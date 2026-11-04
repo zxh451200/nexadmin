@@ -16,7 +16,7 @@
       "createTitle": "New access token",
       "generate": "Generate token",
       "empty": "No access tokens yet",
-      "nameTooLong": "Name must be 50 characters or fewer",
+      "nameTooLong": "Name must be 100 characters or fewer",
       "namePlaceholder": "e.g. CI pipeline",
       "neverUsed": "Never used",
       "neverWarning": "A token that never expires stays valid for as long as it is leaked, which is risky. Set an expiry and rotate it regularly.",

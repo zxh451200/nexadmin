@@ -67,7 +67,8 @@ function CreateDialog({
   const onSubmit = async () => {
     const n = name.trim()
     if (!n) return setError(t('common.required'))
-    if (n.length > 50) return setError(t('profile.tokens.nameTooLong'))
+    // 与后端同一口径：modules/openapi/tokens.go 用 utf8.RuneCountInString 数码点，这里也用码点数（n.length 会把 emoji 算 2）
+    if ([...n].length > 100) return setError(t('profile.tokens.nameTooLong'))
     try {
       const res = await create.mutateAsync({
         name: n,
@@ -114,7 +115,7 @@ function CreateDialog({
           <Input
             id="token-name"
             value={name}
-            maxLength={50}
+            maxLength={100}
             aria-invalid={!!error}
             aria-describedby={error ? 'token-name-err' : undefined}
             placeholder={t('profile.tokens.namePlaceholder')}

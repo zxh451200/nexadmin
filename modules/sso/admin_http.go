@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/url"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -60,7 +61,9 @@ func (f *appForm) normalize() *response.Error {
 	if f.HomeURL != "" && !validRedirectURI(f.HomeURL) {
 		return response.BadRequest("sso.home_url_invalid")
 	}
-	if len(f.Logo) > 500 || len(f.Description) > 500 {
+	// 按字符判：列宽 sys_sso_app.description 是 varchar(500)（MySQL 按字符计），
+	// 报错文案也写着「最多 500 个字符」。用 len() 量字节会把中文描述的实际容量压到 ~166 字。
+	if utf8.RuneCountInString(f.Logo) > 500 || utf8.RuneCountInString(f.Description) > 500 {
 		return response.BadRequest("sso.logo_description_too_long")
 	}
 	roles := []string{}

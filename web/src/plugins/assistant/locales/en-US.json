@@ -4,7 +4,7 @@
   "description": "Keep up to 30 personal named conversations, each retaining the latest 6 successful turns within 12 KiB. Legacy sessions remain cached for 30 minutes. Marking messages read requires password confirmation and Continue; pending confirmations expire.",
   "conversations": {
     "select": "Conversation", "legacy": "Legacy cached session", "new": "New conversation",
-    "rename": "Rename", "delete": "Delete", "name": "Conversation name (up to 80 characters)",
+    "rename": "Rename", "delete": "Delete", "name": "Conversation name (up to 80 characters and 240 bytes)",
     "save": "Save", "dismiss": "Dismiss", "confirmDelete": "Permanently delete this conversation and its retained turns?",
     "error": "Conversation list or change unavailable. Refresh and check the 30-conversation limit, name length, active run, and database migration setup."
   },
