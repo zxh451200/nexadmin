@@ -5,6 +5,8 @@ import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable } from '@/framework/components/DataTable'
+import { DatePicker } from '@/framework/components/DatePicker'
+import { toDate } from '@/framework/components/pickers/dates'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import type { Column } from '@/framework/components/table/types'
@@ -165,22 +167,21 @@ export default function RecyclePage() {
             ))}
           </SelectContent>
         </Select>
-        {/* 删除时间范围：date 输入即够（回收站不需要精确到时分秒） */}
-        <Input
-          type="date"
-          aria-label={t('recycle.filter.from')}
-          className="md:w-40"
+        {/* 删除时间范围：用共享 DatePicker，不用原生 type=date——原生弹窗是浏览器自己的
+            控件，跟主题令牌、语言包、其它筛选栏都不是一套长相（这条是全仓规矩）。 */}
+        <DatePicker
+          ariaLabel={t('recycle.filter.from')}
+          className="md:w-48"
           value={from}
-          max={to || undefined}
-          onChange={(e) => setFrom(e.target.value)}
+          toDate={toDate(to)}
+          onChange={setFrom}
         />
-        <Input
-          type="date"
-          aria-label={t('recycle.filter.to')}
-          className="md:w-40"
+        <DatePicker
+          ariaLabel={t('recycle.filter.to')}
+          className="md:w-48"
           value={to}
-          min={from || undefined}
-          onChange={(e) => setTo(e.target.value)}
+          fromDate={toDate(from)}
+          onChange={setTo}
         />
       </FilterBar>
       <DataTable<RecycleItem>
