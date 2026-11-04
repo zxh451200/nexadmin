@@ -27,12 +27,12 @@ func CatalogInfos() []event.Info {
 
 // EventData 是 workflow.* 事件载荷。
 type EventData struct {
-	InstID      idgen.ID  `json:"instId"`
-	DefKey      string    `json:"defKey"`
-	Title       string    `json:"title,omitempty"`
-	BizType     string    `json:"bizType,omitempty"`
-	BusinessKey string    `json:"businessKey,omitempty"`
-	Status      string    `json:"status"`
+	InstID      idgen.ID `json:"instId"`
+	DefKey      string   `json:"defKey"`
+	Title       string   `json:"title,omitempty"`
+	BizType     string   `json:"bizType,omitempty"`
+	BusinessKey string   `json:"businessKey,omitempty"`
+	Status      string   `json:"status"`
 	// TenantID 是实例所属租户：站内信是租户表，订阅方按它路由发送上下文。
 	TenantID   string    `json:"tenantId,omitempty"`
 	Current    []string  `json:"current,omitempty"`
