@@ -143,6 +143,21 @@ func (h *handler) getLog(c *gin.Context) {
 	}
 }
 
+// GET /plugins/cron/logs/export.csv?jobId=&status= —— 按当前筛选导出执行日志 CSV。
+func (h *handler) exportLogs(c *gin.Context) {
+	rows, err := h.svc.ExportLogs(c.Request.Context(), LogQuery{
+		JobID: c.Query("jobId"), Status: c.Query("status"),
+	})
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	c.Header("Content-Disposition", `attachment; filename="cron-logs.csv"`)
+	c.Header("Cache-Control", "no-store")
+	c.Header("X-Content-Type-Options", "nosniff")
+	c.Data(200, "text/csv; charset=utf-8", BuildLogsCSV(rows))
+}
+
 // DELETE /plugins/cron/logs?days=30&jobId=  （days=0 清理全部已结束的日志）
 func (h *handler) cleanLogs(c *gin.Context) {
 	days, err := strconv.Atoi(c.DefaultQuery("days", "0"))

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Eraser, RotateCcw } from 'lucide-react'
+import { Download, Eraser, RotateCcw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
@@ -10,7 +10,7 @@ import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
-import { useCleanLogs, useJobs, useLogDetail, useLogs, useRunJob, type CronLog, type LogQuery } from './api'
+import { downloadLogsCsv, useCleanLogs, useJobs, useLogDetail, useLogs, useRunJob, type CronLog, type LogQuery } from './api'
 import { formatTime, statusVariant } from './format'
 
 const ALL = '__all'
@@ -158,6 +158,15 @@ export function LogsTab({ jobId, onJobChange }: Props) {
     }
   }
 
+  const onExport = async () => {
+    try {
+      await downloadLogsCsv({ jobId, status: applied })
+      toast.success(t('common.operateSuccess'))
+    } catch {
+      // 具体原因（超出导出上限、筛选太宽等）请求层已经按服务端文案弹过了，这里不再叠一条更空的
+    }
+  }
+
   const columns: Column<CronLog>[] = [
     { key: 'jobName', title: t('plugin_cron.fields.job'), mobile: 'title', render: (l) => <span className="font-medium text-foreground">{l.jobName}</span> },
     { key: 'status', title: t('plugin_cron.fields.status'), mobile: 'sub', render: (l) => <Badge variant={statusVariant(l.status)}>{t(`plugin_cron.status.${l.status}`)}</Badge> },
@@ -233,12 +242,20 @@ export function LogsTab({ jobId, onJobChange }: Props) {
         }}
         emptyText={t('plugin_cron.emptyLogs')}
         toolbar={
-          <Can perm="cron:clean">
-            <Button variant="outline" onClick={() => setCleanOpen(true)}>
-              <Eraser aria-hidden="true" />
-              {t('plugin_cron.btn.clean')}
-            </Button>
-          </Can>
+          <>
+            <Can perm="cron:log">
+              <Button variant="outline" onClick={() => void onExport()}>
+                <Download aria-hidden="true" />
+                {t('plugin_cron.btn.export')}
+              </Button>
+            </Can>
+            <Can perm="cron:clean">
+              <Button variant="outline" onClick={() => setCleanOpen(true)}>
+                <Eraser aria-hidden="true" />
+                {t('plugin_cron.btn.clean')}
+              </Button>
+            </Can>
+          </>
         }
         rowActions={(l) => (
           <>

@@ -227,6 +227,7 @@ type RateLimit struct {
 
 	DashboardLayout Rule `mapstructure:"dashboard_layout"` // 工作台布局读写（按用户）
 	LogExport       Rule `mapstructure:"log_export"`       // 操作日志 / 登录日志服务端导出（按用户）
+	CronExport      Rule `mapstructure:"cron_export"`      // 定时任务执行日志导出（按用户）
 	TenantAPI       Rule `mapstructure:"tenant_api"`       // 租户内全部后台接口的总量（按租户）；limit=0 表示不限流
 
 	MCP        Rule `mapstructure:"mcp"`         // POST /api/v1/mcp（按用户）
@@ -267,6 +268,8 @@ func (r RateLimit) Rule(name string) Rule {
 		return r.DashboardLayout
 	case "log_export":
 		return r.LogExport
+	case "cron_export":
+		return r.CronExport
 	case "tenant_api":
 		return r.TenantAPI
 	case "mcp":

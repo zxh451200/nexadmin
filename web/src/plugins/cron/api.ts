@@ -66,6 +66,25 @@ export interface LogQuery extends PageQuery {
 const BASE = '/plugins/cron'
 const KEY = ['plugin_cron'] as const
 
+/**
+ * 导出执行日志 CSV（带令牌的 XHR 拉取 blob——浏览器直接打开链接不会带 Authorization）。
+ * 筛选与列表同源；上限见后端 logExportMax。
+ */
+export async function downloadLogsCsv(query: Pick<LogQuery, 'jobId' | 'status'>): Promise<void> {
+  const { http } = await import('@/framework/request/http')
+  const res = await http.get<unknown>(`${BASE}/logs/export.csv`, { params: { ...query }, responseType: 'blob', timeout: 60_000 })
+  // mock 阶段的响应体是字符串而不是 Blob（与用户导出同一兜底写法），否则 createObjectURL 直接抛。
+  const blob = res.data instanceof Blob ? res.data : new Blob([String(res.data)], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `cron-logs-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.csv`
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 0)
+}
+
 export function useHandlers() {
   return useQuery({
     queryKey: [...KEY, 'handlers'],

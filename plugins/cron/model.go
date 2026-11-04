@@ -20,16 +20,16 @@ const (
 // Job 对应 plg_cron_job（租户表：每个租户管理自己的任务）。
 type Job struct {
 	database.TenantModel
-	Name       string     `gorm:"size:100;not null" json:"name"`
-	CronExpr   string     `gorm:"size:100;not null" json:"cronExpr"`
-	Handler    string     `gorm:"size:64;not null" json:"handler"`
-	Params     string     `gorm:"type:text" json:"params"`
-	Enabled    bool       `json:"enabled"` // 注意：不要加 gorm default 标签，否则 false 会被默认值覆盖
-	RetryCount int        `json:"retryCount"`
+	Name       string `gorm:"size:100;not null" json:"name"`
+	CronExpr   string `gorm:"size:100;not null" json:"cronExpr"`
+	Handler    string `gorm:"size:64;not null" json:"handler"`
+	Params     string `gorm:"type:text" json:"params"`
+	Enabled    bool   `json:"enabled"` // 注意：不要加 gorm default 标签，否则 false 会被默认值覆盖
+	RetryCount int    `json:"retryCount"`
 	// TimeoutSeconds 是单次尝试的超时（秒）；0 = 用全局默认（jobTimeout）。上限在表单层校验。
 	TimeoutSeconds int        `json:"timeoutSeconds"`
 	LastRunAt      *time.Time `json:"lastRunAt"`
-	LastStatus string     `gorm:"size:16" json:"lastStatus"`
+	LastStatus     string     `gorm:"size:16" json:"lastStatus"`
 	// LastSlot 是最近一次被某个实例"抢占"的调度分钟（unix 分钟数），多实例防重复执行用，见 service.go。
 	LastSlot int64 `gorm:"not null" json:"-"`
 }

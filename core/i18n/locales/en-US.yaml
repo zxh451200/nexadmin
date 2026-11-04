@@ -863,6 +863,7 @@ cron:
   params_invalid: "Invalid parameters"
   job_running: "The job is already running"
   job_id_invalid: "Invalid job ID"
+  export_too_many_rows: "Matched %d log rows, above the %d-row export limit; narrow the filter by job or status and retry"
   alert_title: "Scheduled job failed: %s"
   alert_content: "Job \"%s\" (%s) still failed after %d attempt(s):\n\n%s\n\nOccurred at: %s\nFull logs are under Scheduled jobs, then History."
 media:

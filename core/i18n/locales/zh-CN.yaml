@@ -863,6 +863,7 @@ cron:
   params_invalid: "参数不合法"
   job_running: "任务正在运行中"
   job_id_invalid: "任务 ID 不合法"
+  export_too_many_rows: "匹配到 %d 条执行日志，超过单次导出上限 %d 条；请按任务或状态缩小筛选范围后重试"
   alert_title: "定时任务失败：%s"
   alert_content: "任务「%s」（%s）在第 %d 次尝试后仍然失败：\n\n%s\n\n发生时间：%s\n可到「定时任务 → 执行历史」查看完整日志。"
 media:

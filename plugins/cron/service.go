@@ -459,37 +459,70 @@ type LogQuery struct {
 const logListColumns = "id, tenant_id, job_id, job_name, handler, trigger_type, status, attempts, started_at, finished_at, cost_ms, " +
 	"SUBSTR(output, 1, 500) AS output, SUBSTR(error, 1, 500) AS error, created_at, updated_at"
 
-func (s *Service) ListLogs(ctx context.Context, q LogQuery) ([]Log, int64, error) {
+// logFilter 是执行日志列表与导出共用的筛选条件：两条路径各写一份早晚漂，
+// 而「导出的行数和页面上看到的不一样」是最难被发现的那种错。
+func (s *Service) logFilter(ctx context.Context, q LogQuery) (*gorm.DB, error) {
 	tx := s.db.WithContext(ctx).Model(&Log{})
 	if q.JobID != "" {
 		jid, err := idgen.Parse(q.JobID)
 		if err != nil {
-			return nil, 0, badReq("cron.job_id_invalid")
+			return nil, badReq("cron.job_id_invalid")
 		}
 		tx = tx.Where("job_id = ?", jid)
 	}
 	if q.Status != "" {
 		tx = tx.Where("status = ?", q.Status)
 	}
+	return tx, nil
+}
+
+func (s *Service) ListLogs(ctx context.Context, q LogQuery) ([]Log, int64, error) {
+	tx, err := s.logFilter(ctx, q)
+	if err != nil {
+		return nil, 0, err
+	}
 	var total int64
 	if err := tx.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 	var rows []Log
-	err := tx.Select(logListColumns).Order("started_at DESC, id DESC").
+	err = tx.Select(logListColumns).Order("started_at DESC, id DESC").
 		Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Find(&rows).Error
 	return rows, total, err
 }
 
 func (s *Service) GetLog(ctx context.Context, id idgen.ID) (*Log, error) {
 	var l Log
-	if err := s.db.WithContext(ctx).First(&l, "id = ?", id).Error; err != nil {
+	if err := s.db.WithContext(ctx).First(&l, "id = ?", int64(id)).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, response.NotFound("error.not_found")
 		}
 		return nil, err
 	}
 	return &l, nil
+}
+
+// logExportMax 是单次导出的日志行数上限：日志是低频运维数据，超量说明该接清理了。
+const logExportMax = 20000
+
+// ExportLogs 按与 ListLogs 同一套筛选导出执行日志（不带分页，上限 logExportMax），供 CSV 生成。
+// 先数一遍再取：命中行数超过上限时直接返回错误，此时响应头还没写，能把一条明确的
+// JSON 错误发回界面；静默截断会让使用者以为拿到的是全部日志。
+func (s *Service) ExportLogs(ctx context.Context, q LogQuery) ([]Log, error) {
+	tx, err := s.logFilter(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	var total int64
+	if err := tx.Count(&total).Error; err != nil {
+		return nil, err
+	}
+	if total > logExportMax {
+		return nil, badReq("cron.export_too_many_rows", total, logExportMax)
+	}
+	var rows []Log
+	err = tx.Select(logListColumns).Order("started_at DESC, id DESC").Limit(logExportMax).Find(&rows).Error
+	return rows, err
 }
 
 // CleanLogs 删除 days 天前的日志（days = 0 表示全部已结束的日志）；可限定某个任务；不会删除仍在运行的记录。
