@@ -52,11 +52,10 @@
     },
     "cache": {
       "title": "缓存",
-      "description": "选择缓存实现，Valkey 适用于多实例部署",
+      "description": "缓存实现（内存 / Valkey）",
       "type": "缓存类型",
       "memory": "内存",
-      "address": "地址",
-      "password": "密码"
+      "readonlyHint": "缓存由服务器上的 config/config.yaml（cache.driver / cache.addr / cache.password）决定，此处只读；改驱动需要编辑配置文件后重启服务。初始化向导和 init --config 会写入这些配置。"
     },
     "storage": {
       "title": "文件存储",

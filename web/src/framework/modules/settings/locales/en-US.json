@@ -52,11 +52,10 @@
     },
     "cache": {
       "title": "Cache",
-      "description": "Choose the cache backend; Valkey suits multi-instance deployments",
+      "description": "Cache backend (in-memory / Valkey)",
       "type": "Cache type",
       "memory": "In-memory",
-      "address": "Address",
-      "password": "Password"
+      "readonlyHint": "The cache is determined by config/config.yaml on the server (cache.driver / cache.addr / cache.password) and is read-only here. Changing the backend means editing that file and restarting the service. The setup wizard and init --config write these values."
     },
     "storage": {
       "title": "File storage",

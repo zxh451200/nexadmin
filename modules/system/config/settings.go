@@ -33,6 +33,19 @@ func isSection(s string) bool {
 	return false
 }
 
+// readonlySections：值由 config/config.yaml 在启动时决定（storage.* 决定文件存放，
+// cache.* 决定缓存驱动，core/router.go 据此构造缓存），设置页保存下来的这份没有任何地方会读。
+// 让它显示「保存成功」却不生效比直接拒绝更糟，所以这两个分区明确拒绝写入，前端也只展示不给编辑入口。
+var readonlySections = map[string]string{
+	"storage": "config.storage_readonly",
+	"cache":   "config.cache_readonly",
+}
+
+func readonlySection(name string) (string, bool) {
+	key, ok := readonlySections[name]
+	return key, ok
+}
+
 func provider() map[string]any {
 	return map[string]any{"enabled": false, "clientId": "", "clientSecret": ""}
 }
@@ -273,10 +286,8 @@ func (s *Service) SaveSection(ctx context.Context, name string, body map[string]
 	if !isSection(name) {
 		return nil, response.NotFound("error.not_found")
 	}
-	if name == "storage" {
-		// 文件存储只读 config/config.yaml 的 storage.*（向导 / init --config 写入）；这里保存的值没有任何地方会读，
-		// 让它“保存成功”却不生效比拒绝更糟，所以明确拒绝。
-		return nil, response.BadRequest("config.storage_readonly")
+	if key, ok := readonlySection(name); ok {
+		return nil, response.BadRequest(key)
 	}
 	cur, err := s.section(ctx, name)
 	if err != nil {

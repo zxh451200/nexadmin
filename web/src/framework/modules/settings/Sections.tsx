@@ -9,7 +9,7 @@ import { Alert, AlertDescription } from '@/framework/ui/alert'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/framework/ui/card'
 import { FormField, FormItem, FormLabel, FormMessage } from '@/framework/ui/form'
 import { ATTEMPT_OPTIONS, IDLE_MINUTE_OPTIONS, LOCK_MINUTE_OPTIONS, SESSION_HOUR_OPTIONS, type AllSettings } from './api'
-import { RadioField, SelectField, SwitchField, TextField } from './fields'
+import { SelectField, SwitchField, TextField } from './fields'
 import { UploadLimitCard } from '@/framework/modules/config/UploadLimitCard'
 import { SectionCard } from './SectionCard'
 
@@ -125,36 +125,29 @@ export function SecuritySection({ value }: { value: AllSettings['security'] }) {
   )
 }
 
-const cacheSchema = z.object({
-  type: z.enum(['memory', 'valkey']),
-  address: z.string().trim(),
-  password: z.string(),
-})
-
+/**
+ * 缓存只读：驱动与地址在启动时由 config.yaml 的 cache.* 决定（core/router.go 据此构造缓存），
+ * 后端 SaveSection 也已拒绝 cache 分区。这里若还提供编辑和「测试连接」，测的只是表单里的临时值，
+ * 保存会直接报错——和 storage 同一处理：只展示当前值，不给写入入口。
+ */
 export function CacheSection({ value }: { value: AllSettings['cache'] }) {
   const { t } = useTranslation()
   return (
-    <SectionCard section="cache" value={value} schema={cacheSchema} testable>
-      {(form) => (
-        <>
-          <RadioField
-            control={form.control}
-            name="type"
-            label={t('settings.cache.type')}
-            options={[
-              { value: 'memory', label: t('settings.cache.memory') },
-              { value: 'valkey', label: 'Valkey' },
-            ]}
-          />
-          {form.watch('type') === 'valkey' ? (
-            <FormGrid>
-              <TextField control={form.control} name="address" label={t('settings.cache.address')} placeholder="127.0.0.1:6379" />
-              <TextField control={form.control} name="password" label={t('settings.cache.password')} type="password" />
-            </FormGrid>
-          ) : null}
-        </>
-      )}
-    </SectionCard>
+    <Card>
+      <CardHeader>
+        <CardTitle>{t('settings.cache.title')}</CardTitle>
+        <CardDescription>{t('settings.cache.description')}</CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        <Alert variant="info">
+          <Info aria-hidden="true" />
+          <AlertDescription>{t('settings.cache.readonlyHint')}</AlertDescription>
+        </Alert>
+        <p className="text-sm text-muted-foreground">
+          {t('settings.cache.type')}：{value.type === 'valkey' ? 'Valkey' : t('settings.cache.memory')}
+        </p>
+      </CardContent>
+    </Card>
   )
 }
 
