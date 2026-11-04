@@ -38,6 +38,7 @@ import (
 	"nexadmin/modules/internal/recbin"
 	"nexadmin/modules/system/dict"
 	"nexadmin/modules/system/post"
+	"nexadmin/modules/system/user"
 	"nexadmin/pkg/idgen"
 )
 
@@ -371,6 +372,7 @@ func TestITMySQLSoftDeleteRecycle(t *testing.T) {
 	itSoftDeleteColumns(t, db, "mysql")
 	itUniqueDowngraded(t, db, "mysql")
 	runSoftDeleteInvariants(t, db)
+	runUserRestoreInvariants(t, db)
 }
 
 func TestITMariaDBSoftDeleteRecycle(t *testing.T) {
@@ -381,6 +383,7 @@ func TestITMariaDBSoftDeleteRecycle(t *testing.T) {
 	itSoftDeleteColumns(t, db, "mysql")
 	itUniqueDowngraded(t, db, "mysql")
 	runSoftDeleteInvariants(t, db)
+	runUserRestoreInvariants(t, db)
 }
 
 func TestITPostgresSoftDeleteRecycle(t *testing.T) {
@@ -391,4 +394,134 @@ func TestITPostgresSoftDeleteRecycle(t *testing.T) {
 	itSoftDeleteColumns(t, db, "postgres")
 	itUniqueDowngraded(t, db, "postgres")
 	runSoftDeleteInvariants(t, db)
+	runUserRestoreInvariants(t, db)
+}
+
+// itSeedUser 直接建一行未删用户并返回其 ID（绕开建号服务的配额/角色校验）：
+// 夹具库没装租户插件，但 TenantModel.BeforeCreate 仍按 ctx 填 tenant_id，所以它落在 itTenant 下。
+// 用软删前的真实列名，字段与 user.User 模型对齐（Password 为空串＝不可登录，测试不登录）。
+func itSeedUser(t *testing.T, db *gorm.DB, username, phone string) idgen.ID {
+	t.Helper()
+	u := &user.User{Username: username, Nickname: username, Phone: phone, Status: "1", Gender: "0"}
+	if err := db.WithContext(itCtx()).Create(u).Error; err != nil {
+		t.Fatalf("建用户 %s 失败: %v", username, err)
+	}
+	return u.ID
+}
+
+// itUsernameIndexNotUnique 钉住还原前提：三种引擎里 idx_sys_user_tenant_username 都是普通索引。
+// 若哪天它变成唯一索引，还原撞码会由数据库抛错而不是应用层 409，本用例的语义就站不住了。
+func itUsernameIndexNotUnique(t *testing.T, db *gorm.DB) {
+	t.Helper()
+	var n int64
+	switch db.Dialector.Name() {
+	case "postgres":
+		if err := db.Raw(`SELECT COUNT(*)
+			FROM pg_index ix
+			JOIN pg_class i ON i.oid = ix.indexrelid
+			JOIN pg_class t ON t.oid = ix.indrelid
+			WHERE t.relname = 'sys_user' AND i.relname = 'idx_sys_user_tenant_username' AND ix.indisunique`).Scan(&n).Error; err != nil {
+			t.Fatal(err)
+		}
+	default: // mysql / mariadb
+		if err := db.Raw("SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = 'sys_user' AND index_name = 'idx_sys_user_tenant_username' AND non_unique = 0").Scan(&n).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n != 0 {
+		t.Fatal("idx_sys_user_tenant_username 是唯一索引：还原同名应由数据库抛错，应用层 409 的语义不成立")
+	}
+}
+
+// runUserRestoreInvariants 是 user 还原撞码的配对边界（MySQL / MariaDB / PG 各跑一遍）：
+//
+// 前提钉住：sys_user 的 idx_sys_user_tenant_username 在三种引擎都是普通索引（非唯一），
+// 数据库挡不住「软删后又重注同名」——还原同名账号必须靠应用层 409，而不是等数据库抛错。
+//
+// 五条不变式：① 用户名撞码 → 409 且回收记录仍在、源行仍软删、未删同名仍只有一条（没有半写）；
+// ② 手机号撞码同样 409；③ 空手机号不参与查重，两个空号用户不互相误判；
+// ④ 占码行物理清掉后还原成功；⑤ 还原后只剩一条未删同名、回收登记消失、源行不再软删。
+func runUserRestoreInvariants(t *testing.T, db *gorm.DB) {
+	t.Helper()
+	itUsernameIndexNotUnique(t, db)
+	svc := NewService(db, zap.NewNop())
+	ctx := itCtx()
+
+	liveCount := func(username string) int64 {
+		var n int64
+		if err := db.Table("sys_user").Where("tenant_id = ? AND username = ? AND deleted_at IS NULL", itTenant, username).Count(&n).Error; err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	entryAlive := func(entryID idgen.ID) int64 {
+		var n int64
+		if err := db.WithContext(ctx).Table("sys_recycle").Where("id = ?", int64(entryID)).Count(&n).Error; err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	srcStillSoftDeleted := func(id idgen.ID) bool {
+		var n int64
+		if err := db.Table("sys_user").Where("id = ? AND deleted_at IS NOT NULL", int64(id)).Count(&n).Error; err != nil {
+			t.Fatal(err)
+		}
+		return n == 1
+	}
+
+	// 1) 用户名撞码：老账号软删进回收站后，同名账号被重新注册（未删）→ 还原必须 409。
+	old := itSeedUser(t, db, "r_conflict_u", "")
+	oldEntry := itTrash(t, db, &user.User{}, "sys_user", recbin.TypeUser, old, old.String())
+	if err := db.WithContext(ctx).Create(&user.User{Username: "r_conflict_u", Nickname: "重注", Status: "1", Gender: "0"}).Error; err != nil {
+		t.Fatalf("重注同名账号被数据库挡了（索引难道是唯一？）: %v", err)
+	}
+	if status, key := itErrKey(t, svc.Restore(ctx, oldEntry)); status != 409 || key != "recycle.restore_conflict" {
+		t.Fatalf("同名还原期望 409 recycle.restore_conflict，实得 %d %q", status, key)
+	}
+	if entryAlive(oldEntry) != 1 {
+		t.Fatal("撞码还原后回收记录应仍在（未半写：记录没被删）")
+	}
+	if !srcStillSoftDeleted(old) {
+		t.Fatal("撞码还原后源行应仍是软删除（未半写：deleted_at 没被清）")
+	}
+	if liveCount("r_conflict_u") != 1 {
+		t.Fatalf("撞码还原不应造出第二条未删同名（实得 %d）", liveCount("r_conflict_u"))
+	}
+
+	// 2) 手机号撞码：用户名不同但手机号与一条未删账号相同 → 同样 409（否则短信登录 Limit(2) 命中两行拒登）。
+	oldP := itSeedUser(t, db, "r_conflict_p", "13900000002")
+	oldPEntry := itTrash(t, db, &user.User{}, "sys_user", recbin.TypeUser, oldP, oldP.String())
+	if err := db.WithContext(ctx).Create(&user.User{Username: "r_other_name", Nickname: "占号", Phone: "13900000002", Status: "1", Gender: "0"}).Error; err != nil {
+		t.Fatalf("建同号用户失败: %v", err)
+	}
+	if status, key := itErrKey(t, svc.Restore(ctx, oldPEntry)); status != 409 || key != "recycle.restore_conflict" {
+		t.Fatalf("同号还原期望 409，实得 %d %q", status, key)
+	}
+
+	// 3) 空手机号不误判：两个空号用户不该因 phone='' 互相撞码；用户名不同也应放行。
+	oldE := itSeedUser(t, db, "r_empty_a", "")
+	oldEEntry := itTrash(t, db, &user.User{}, "sys_user", recbin.TypeUser, oldE, oldE.String())
+	if err := db.WithContext(ctx).Create(&user.User{Username: "r_empty_b", Nickname: "也空号", Status: "1", Gender: "0"}).Error; err != nil {
+		t.Fatalf("建第二个空号用户失败: %v", err)
+	}
+	if err := svc.Restore(ctx, oldEEntry); err != nil {
+		t.Fatalf("空手机号不应误判撞码，还原应成功，实得 %v", err)
+	}
+
+	// 4) 配对边界：物理清掉占码的同名账号后，还原必须成功且只剩一条未删同名行。
+	if err := db.Unscoped().Table("sys_user").Where("username = ? AND id <> ?", "r_conflict_u", int64(old)).Delete(nil).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.Restore(ctx, oldEntry); err != nil {
+		t.Fatalf("占码行清掉后还原仍失败: %v", err)
+	}
+	if liveCount("r_conflict_u") != 1 {
+		t.Fatalf("还原后未删同名应为 1，实得 %d", liveCount("r_conflict_u"))
+	}
+	if entryAlive(oldEntry) != 0 {
+		t.Fatal("还原成功却还留着回收登记")
+	}
+	if srcStillSoftDeleted(old) {
+		t.Fatal("还原成功后源行不应仍是软删除")
+	}
 }

@@ -57,10 +57,25 @@ func statusOf(err error) int {
 
 func ctxT() context.Context { return tenant.With(context.Background(), 1) }
 
+// expectUserKeyCheck 排布 keyUserConflict 在事务里发出的两条只读查询：
+// 先读源行的 username/phone（无 deleted_at 过滤），再数同租户内撞码的未删行。
+// liveRows=0 表示无冲突（放行还原），liveRows>0 表示撞码（409，事务回滚）。
+// 源行手机号回空串：手机号为空时不参与查重，count 查询也就没有 OR 分支，期望更简单。
+func expectUserKeyCheck(mock sqlmock.Sqlmock, ref int64, username string, liveRows int64) {
+	mock.ExpectQuery("SELECT username, phone FROM `sys_user` WHERE id = \\?").
+		WithArgs(ref).
+		WillReturnRows(sqlmock.NewRows([]string{"username", "phone"}).AddRow(username, ""))
+	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `sys_user`").
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(liveRows))
+}
+
 func TestRestoreUsesRecordOwnTenantAndWhitelistedTable(t *testing.T) {
 	s, mock := setup(t)
 	expectEntry(mock, entryRow(10, 3, recbin.TypeUser, 77))
 	mock.ExpectBegin()
+	// user 的唯一索引（idx_sys_user_tenant_username）在三种引擎里都是普通索引，数据库挡不住撞码，
+	// 还原前先由 keyUserConflict 查同租户未删行：这里无冲突。
+	expectUserKeyCheck(mock, int64(77), "bob", 0)
 	// 表名来自白名单映射，条件带回收记录自己的租户（原生 SQL 不经过租户 scope）
 	mock.ExpectExec("UPDATE `sys_user` SET `deleted_at`=\\? WHERE id = \\? AND tenant_id = \\?").
 		WithArgs(nil, int64(77), int64(3)).WillReturnResult(sqlmock.NewResult(0, 1))
@@ -78,11 +93,13 @@ func TestRestoreConflictRollsBackAndKeepsEntry(t *testing.T) {
 	s, mock := setup(t)
 	expectEntry(mock, entryRow(10, 1, recbin.TypeUser, 77))
 	mock.ExpectBegin()
-	mock.ExpectExec("UPDATE `sys_user` SET `deleted_at`=\\?").WillReturnError(errors.New("Duplicate entry 'bob'"))
+	// 撞码由应用层查出（数据库没有唯一索引兜底）：count 返回 1 → 409，事务回滚，
+	// 不能出现还原 UPDATE，也不能出现删除回收记录的语句。
+	expectUserKeyCheck(mock, int64(77), "bob", 1)
 	mock.ExpectRollback()
 	err := s.Restore(ctxT(), 10)
 	if statusOf(err) != http.StatusConflict {
-		t.Fatalf("唯一约束冲突应返回 409，得到 %v", err)
+		t.Fatalf("撞码应返回 409，得到 %v", err)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Error(err) // 不能出现删除回收记录的语句
@@ -207,6 +224,7 @@ func TestHandlerRestoreOK(t *testing.T) {
 	s, mock := setup(t)
 	expectEntry(mock, entryRow(10, 1, recbin.TypeUser, 77))
 	mock.ExpectBegin()
+	expectUserKeyCheck(mock, int64(77), "bob", 0)
 	mock.ExpectExec("UPDATE `sys_user` SET `deleted_at`=\\?").WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec("DELETE FROM `sys_recycle`").WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
@@ -222,6 +240,9 @@ func TestRestoreSourceGoneReturns404AndCleansEntry(t *testing.T) {
 	s, mock := setup(t)
 	expectEntry(mock, entryRow(10, 3, recbin.TypeUser, 77))
 	mock.ExpectBegin()
+	// 源行已被物理清掉：keyUserConflict 读不到键值就不谎报冲突（不查 count），交给 UPDATE 的 0 行 → 404。
+	mock.ExpectQuery("SELECT username, phone FROM `sys_user` WHERE id = \\?").
+		WithArgs(int64(77)).WillReturnRows(sqlmock.NewRows([]string{"username", "phone"}))
 	mock.ExpectExec("UPDATE `sys_user` SET `deleted_at`=\\? WHERE id = \\? AND tenant_id = \\? AND deleted_at IS NOT NULL").
 		WithArgs(nil, int64(77), int64(3)).WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec("DELETE FROM `sys_recycle` WHERE id = \\?").WithArgs(int64(10)).WillReturnResult(sqlmock.NewResult(0, 1))

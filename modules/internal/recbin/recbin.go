@@ -48,7 +48,12 @@ var Platform = map[string]bool{
 // 三种引擎都拿不到「只对未删行唯一」的干净写法（PG 的部分索引 MySQL 没有，跨引擎结构闸会红），
 // 对齐 sys_user 的既有做法。唯一性因此改由源模块的查重逻辑保证，还原时数据库不会再抛重复键，
 // 必须在这里显式比对同键的未删行，否则还原会造出两条同码数据（见 recycle.restore_conflict）。
-// 未登记的类型（user / notice）沿用数据库层抛错的老语义。
+//
+// Keys 只能表达「一组列同时相等」这一条 AND 复合键。user 不适用它：账号有两把各自独立的
+// 唯一键（用户名 / 手机号），撞任意一把都算冲突，是 OR 关系；而且手机号可空，空号不参与查重
+// （否则无手机号的用户之间会互相误判成撞码）。这两种形状 Keys 都写不出来，
+// 所以 user 的撞码判定单独放在 recycle.keyUserConflict（同租户内 username 相同，或 phone 非空且相同）。
+// notice 未登记：它的唯一性仍由数据库层索引决定，撞码时由还原 UPDATE 抛重复键兜底。
 var Keys = map[string][]string{
 	TypeRole:     {"tenant_id", "code"},
 	TypePost:     {"tenant_id", "code"},

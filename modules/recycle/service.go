@@ -154,8 +154,12 @@ func srcScope(e *recbin.Entry) (string, []any) {
 // role / post / dict 的唯一索引在接软删除时降级成了普通索引（见 recbin.Keys 的说明），
 // 数据库不会再抛重复键，不查就会还原出两条同码数据（同码角色 = 同一份权限码被两个角色带着，
 // 同码字典项 = Items() 取到随机一条）。错误码沿用降级前的 recycle.restore_conflict，前端与批量回执的
-// 计数字段都不用改。未登记 Keys 的类型（user / notice）不检查：数据库仍按各自的索引决定冲突。
+// 计数字段都不用改。user 走 keyUserConflict（两把 OR 关系的键，Keys 表达不了，见 recbin.Keys 说明）；
+// notice 不检查：数据库仍按它的索引决定冲突，撞码时由还原 UPDATE 抛重复键兜底。
 func (s *Service) keyConflict(ctx context.Context, tx *gorm.DB, e *recbin.Entry, table string) error {
+	if e.Type == recbin.TypeUser {
+		return s.keyUserConflict(ctx, tx, e, table)
+	}
 	cols := recbin.Keys[e.Type]
 	if len(cols) == 0 {
 		return nil
@@ -176,6 +180,41 @@ func (s *Service) keyConflict(ctx context.Context, tx *gorm.DB, e *recbin.Entry,
 			return nil // 拿不到键值列（白名单与表结构不一致）：放行比误判成冲突更安全，交由源行状态判定
 		}
 		dup = dup.Where(c+" = ?", v)
+	}
+	var n int64
+	if err := dup.Count(&n).Error; err != nil {
+		return err
+	}
+	if n > 0 {
+		return response.Conflict("recycle.restore_conflict")
+	}
+	return nil
+}
+
+// keyUserConflict 是 user 的还原撞码判定：用户名与手机号是两把各自独立的键（OR 关系），
+// 撞任意一把都会造出两条「同名 / 同手机号」的未删账号——同手机号会让 phoneLogin / 忘记密码
+// 用 Limit(2) 命中两行而当场拒登（见 user/phone.go、user/forgot.go）。sys_user 上的
+// idx_sys_user_tenant_username 在三种引擎里都是普通索引（非唯一），数据库挡不住，必须在应用层查。
+//
+// 手机号可空：无手机号的用户之间不该互相误判，所以只在源行手机号非空时才把 phone 纳入 OR 条件。
+// 键的隔离范围跟建号查重（user.usernameTaken 走租户 scope）一致：同一 tenant_id 下的未删行。
+// 表名来自 recbin.Tables 白名单；列名固定字面量，值全部参数绑定。
+func (s *Service) keyUserConflict(ctx context.Context, tx *gorm.DB, e *recbin.Entry, table string) error {
+	var src []struct {
+		Username string `gorm:"column:username"`
+		Phone    string `gorm:"column:phone"`
+	}
+	if err := tx.Table(table).Select("username, phone").
+		Where("id = ?", int64(e.RefID)).Scan(&src).Error; err != nil {
+		return err
+	}
+	if len(src) == 0 {
+		return nil // 源行已被物理清掉：交给后面的 RowsAffected==0 → 404，别在这里谎报冲突
+	}
+	dup := tx.Table(table).
+		Where("deleted_at IS NULL AND id <> ? AND tenant_id = ? AND username = ?", int64(e.RefID), int64(e.TenantID), src[0].Username)
+	if p := src[0].Phone; p != "" {
+		dup = dup.Or("deleted_at IS NULL AND id <> ? AND tenant_id = ? AND phone = ?", int64(e.RefID), int64(e.TenantID), p)
 	}
 	var n int64
 	if err := dup.Count(&n).Error; err != nil {
