@@ -34,6 +34,15 @@ type protocolError struct {
 
 func (e *protocolError) Error() string  { return e.detail }
 func invalid(kind, detail string) error { return &protocolError{400, kind, detail} }
+
+// dupKeyRe 认唯一索引冲突在两引擎上的写法：MySQL/MariaDB 是 1062（Duplicate entry ... for key
+// 'uk_x'），PG 是 23505（duplicate key value violates unique constraint）。框架没开 GORM 的
+// TranslateError，所以 gorm.ErrDuplicatedKey 在生产路径上永远拿不到——只认它就等于
+// 「并发撞唯一索引时回 500」，SCIM 协议要求的 409 uniqueness 从来没发出去（与 plugins/pay/errors.go 同口径）。
+var dupKeyRe = regexp.MustCompile(`(?i)duplicate entry|error 1062|duplicate key value|unique constraint|sqlstate 23505`)
+
+func dupKey(err error) bool { return err != nil && dupKeyRe.MatchString(err.Error()) }
+
 func writeSCIMError(c *gin.Context, err error) {
 	var pe *protocolError
 	var re *response.Error
@@ -42,7 +51,7 @@ func writeSCIMError(c *gin.Context, err error) {
 		scimErrorType(c, pe.status, pe.kind, pe.detail)
 	case errors.Is(err, gorm.ErrRecordNotFound):
 		scimError(c, 404, "resource not found")
-	case errors.Is(err, gorm.ErrDuplicatedKey):
+	case errors.Is(err, gorm.ErrDuplicatedKey) || dupKey(err):
 		scimErrorType(c, 409, "uniqueness", "resource already exists")
 	case errors.As(err, &re) && re.Status >= 400 && re.Status < 500:
 		scimError(c, re.Status, re.Error())
