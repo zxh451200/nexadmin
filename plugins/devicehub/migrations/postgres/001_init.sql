@@ -111,6 +111,7 @@ CREATE TABLE plg_devhub_alarm_event (
   level VARCHAR(8) NOT NULL,
   message VARCHAR(255) NOT NULL DEFAULT '',
   created_at TIMESTAMP NOT NULL,
+  updated_at TIMESTAMP NOT NULL,
   PRIMARY KEY (id)
 );
 CREATE INDEX idx_plg_devhub_alarm_event_point ON plg_devhub_alarm_event (point_id, created_at);

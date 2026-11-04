@@ -2,8 +2,10 @@
 // devicehub 作为客户端订阅上行主题；指令下发 publish 到下行主题。
 //
 // 主题约定（配置页写清楚，双方照着配）：
-//   上行（设备 → 平台）：{upstreamPrefix}/{pointAddress}，payload = {"v":123.5} 或裸数字/字符串
-//   下行（平台 → 设备）：{upstreamPrefix}/down/{pointAddress}，payload = {"v":<raw>}
+//
+//	上行（设备 → 平台）：{upstreamPrefix}/{pointAddress}，payload = {"v":123.5} 或裸数字/字符串
+//	下行（平台 → 设备）：{upstreamPrefix}/down/{pointAddress}，payload = {"v":<raw>}
+//
 // point.address 是相对地址（如 "motor/frequency"），prefix 在 device.config 里配（默认 devicehub/up/{deviceNo}）。
 // 离线判定：broker 连接断开（Ping 失败），或上行静默超过 offlineAfterSeconds（默认 60s）。
 package mqtt

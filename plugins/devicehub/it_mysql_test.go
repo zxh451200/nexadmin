@@ -189,17 +189,76 @@ func TestITMySQLDevicehub(t *testing.T) {
 		t.Fatal("只读测点的指令应被拒绝")
 	}
 
-	// 级联删除：设备删掉后测点/读数/告警全清
+	// 聚合行与告警规则是「只有 point_id、没有 device_id」的两类子表：
+	// 级联删除必须顺着测点找，否则 SQL 直接报 Unknown column（2026-11-04 真机跑出来的）。
+	if err := gdb.Create(&ReadingAgg{PointID: p.ID, Bucket: time.Now().UTC().Truncate(time.Hour),
+		NumMin: 42.7, NumMax: 42.7, NumAvg: 42.7, Cnt: 1}).Error; err != nil {
+		t.Fatalf("seed reading agg: %v", err)
+	}
+	if _, err := svc.CreateCommand(ctx, CommandInput{
+		DeviceNo: d.DeviceNo, PointID: p.ID, Value: 50, OperatorName: "tester",
+	}); err != nil {
+		t.Fatalf("create command: %v", err)
+	}
+
+	// 删测点：测点与它的告警规则一起走，历史读数按设计保留（趋势不因删测点而丢）。
+	p2, err := svc.SavePoint(ctx, d.ID, 0, PointInput{
+		Name: "备用频率", Address: "hr:40002", RW: RWRead, DataType: TypeFloat, Enabled: true,
+	})
+	if err != nil {
+		t.Fatalf("save second point: %v", err)
+	}
+	if _, err := svc.SaveAlarmRule(ctx, 0, AlarmRuleInput{
+		PointID: p2.ID, Name: "备用超限", Op: "gt", Threshold: 10, Level: LevelWarn, Enabled: true, CooldownSeconds: 60,
+	}); err != nil {
+		t.Fatalf("save alarm rule for second point: %v", err)
+	}
+	svc.onReading(ctx, d, p2.Address, driver.Value{Num: 99}, time.Second)
+	if err := svc.DeletePoint(ctx, d.ID, p2.ID); err != nil {
+		t.Fatalf("delete point: %v", err)
+	}
+	var left int64
+	if err := gdb.Model(&Point{}).Where("id = ?", int64(p2.ID)).Count(&left).Error; err != nil {
+		t.Fatal(err)
+	}
+	if left != 0 {
+		t.Error("测点没删掉")
+	}
+	if err := gdb.Model(&AlarmRule{}).Where("point_id = ?", int64(p2.ID)).Count(&left).Error; err != nil {
+		t.Fatal(err)
+	}
+	if left != 0 {
+		t.Errorf("删测点后残留 %d 条指向已删测点的告警规则", left)
+	}
+	if err := gdb.Model(&Reading{}).Where("point_id = ?", int64(p2.ID)).Count(&left).Error; err != nil {
+		t.Fatal(err)
+	}
+	if left == 0 {
+		t.Error("测点历史读数应保留（趋势数据不因删测点而丢）")
+	}
+
+	// 级联删除：设备删掉后测点/读数/聚合/指令/告警全清。
+	// 谓词按各表实际拥有的列写：聚合行与告警规则没有 device_id 列，写 device_id 会让用例自己报 1054。
 	if err := svc.DeleteDevice(ctx, d.ID); err != nil {
 		t.Fatalf("delete device: %v", err)
 	}
-	for _, table := range []string{"plg_devhub_point", "plg_devhub_reading", "plg_devhub_alarm_rule"} {
+	for _, tc := range []struct {
+		table, where string
+		args         []any
+	}{
+		{"plg_devhub_point", "device_id = ?", []any{int64(d.ID)}},
+		{"plg_devhub_reading", "device_id = ? OR point_id IN (?, ?)", []any{int64(d.ID), int64(p.ID), int64(p2.ID)}},
+		{"plg_devhub_reading_agg", "point_id = ?", []any{int64(p.ID)}},
+		{"plg_devhub_alarm_rule", "point_id IN (?, ?)", []any{int64(p.ID), int64(p2.ID)}},
+		{"plg_devhub_alarm_event", "device_id = ? OR point_id = ?", []any{int64(d.ID), int64(p.ID)}},
+		{"plg_devhub_command", "device_id = ? OR point_id = ?", []any{int64(d.ID), int64(p.ID)}},
+	} {
 		var n int64
-		if err := gdb.Table(table).Where("device_id = ? OR point_id = ?", int64(d.ID), int64(p.ID)).Count(&n).Error; err != nil {
-			t.Fatal(err)
+		if err := gdb.Table(tc.table).Where(tc.where, tc.args...).Count(&n).Error; err != nil {
+			t.Fatalf("%s: %v", tc.table, err)
 		}
 		if n != 0 {
-			t.Fatalf("%s 残留 %d 行", table, n)
+			t.Fatalf("%s 残留 %d 行", tc.table, n)
 		}
 	}
 }

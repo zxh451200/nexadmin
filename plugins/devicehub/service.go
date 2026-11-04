@@ -127,14 +127,26 @@ func (s *Service) SaveDevice(ctx context.Context, id idgen.ID, in DeviceInput) (
 	return &row, nil
 }
 
-// DeleteDevice 级联删除测点/读数/指令/告警（设备删除没有保留价值，与 nav 级联同口径）。
+// DeleteDevice 级联删除测点/读数/聚合/指令/告警（设备删除没有保留价值，与 nav 级联同口径）。
+//
+// 两类子表的键不一样：读数 / 指令 / 告警事件带 device_id，可以直接按设备删；
+// 聚合行（plg_devhub_reading_agg）与告警规则只有 point_id，必须顺着测点找，
+// 而且要在测点行还在的时候删——先删测点，子查询就一行也查不到，孤儿数据会留在库里。
 func (s *Service) DeleteDevice(ctx context.Context, id idgen.ID) error {
 	if s.collector != nil {
 		s.collector.stopDevice(id)
 	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		for _, table := range []any{&Point{}, &Reading{}, &ReadingAgg{}, &Command{}, &AlarmEvent{}, &AlarmRule{}} {
-			if err := tx.Where("device_id = ?", id).Delete(table).Error; err != nil {
+		pointIDs := func() *gorm.DB {
+			return tx.Session(&gorm.Session{NewDB: true}).Table("plg_devhub_point").Select("id").Where("device_id = ?", id)
+		}
+		for _, row := range []any{&ReadingAgg{}, &AlarmRule{}} {
+			if err := tx.Where("point_id IN (?)", pointIDs()).Delete(row).Error; err != nil {
+				return err
+			}
+		}
+		for _, row := range []any{&Reading{}, &Command{}, &AlarmEvent{}, &Point{}} {
+			if err := tx.Where("device_id = ?", id).Delete(row).Error; err != nil {
 				return err
 			}
 		}
@@ -162,16 +174,16 @@ func (s *Service) ListPoints(ctx context.Context, deviceID idgen.ID) ([]Point, e
 
 // PointInput 是测点表单。
 type PointInput struct {
-	Name       string  `json:"name"`
-	Address    string  `json:"address"`
-	Unit       string  `json:"unit"`
-	RW         string  `json:"rw"`
-	DataType   string  `json:"dataType"`
-	Scale      float64 `json:"scale"`
-	PollMs     int     `json:"pollIntervalMs"`
-	Deadband   float64 `json:"deadband"`
-	Enabled    bool    `json:"enabled"`
-	Sort       int     `json:"sort"`
+	Name     string  `json:"name"`
+	Address  string  `json:"address"`
+	Unit     string  `json:"unit"`
+	RW       string  `json:"rw"`
+	DataType string  `json:"dataType"`
+	Scale    float64 `json:"scale"`
+	PollMs   int     `json:"pollIntervalMs"`
+	Deadband float64 `json:"deadband"`
+	Enabled  bool    `json:"enabled"`
+	Sort     int     `json:"sort"`
 }
 
 var validDataTypes = map[string]bool{"bool": true, "int16": true, "uint16": true, "int32": true, "float32": true}
@@ -222,15 +234,25 @@ func (s *Service) SavePoint(ctx context.Context, deviceID idgen.ID, id idgen.ID,
 }
 
 // DeletePoint 删测点（历史读数保留——趋势数据不因测点删除而丢）。
+// 告警规则不保留：规则是配置不是历史，留着就是指向已删测点的死配置，
+// 而设备级删除（DeleteDevice）本来也会把规则清掉，两处口径要一致。
 func (s *Service) DeletePoint(ctx context.Context, deviceID idgen.ID, id idgen.ID) error {
-	res := s.db.WithContext(ctx).Where("id = ? AND device_id = ?", id, deviceID).Delete(&Point{})
-	if res.Error != nil {
-		return res.Error
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		res := tx.Where("id = ? AND device_id = ?", id, deviceID).Delete(&Point{})
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return response.NotFound("devicehub.point_not_found")
+		}
+		return tx.Where("point_id = ?", id).Delete(&AlarmRule{}).Error
+	})
+	if err != nil {
+		return err
 	}
-	if res.RowsAffected == 0 {
-		return response.NotFound("devicehub.point_not_found")
+	if s.collector != nil {
+		s.collector.Reload(ctx, deviceID)
 	}
-	s.collector.Reload(ctx, deviceID)
 	return nil
 }
 
@@ -524,12 +546,12 @@ type alarmRecipient struct {
 // AlarmRuleInput 是告警规则表单。
 type AlarmRuleInput struct {
 	PointID         idgen.ID `json:"pointId"`
-	Name            string  `json:"name"`
-	Op              string  `json:"op"`
-	Threshold       float64 `json:"threshold"`
-	Level           string  `json:"level"`
-	Enabled         bool    `json:"enabled"`
-	CooldownSeconds int     `json:"cooldownSeconds"`
+	Name            string   `json:"name"`
+	Op              string   `json:"op"`
+	Threshold       float64  `json:"threshold"`
+	Level           string   `json:"level"`
+	Enabled         bool     `json:"enabled"`
+	CooldownSeconds int      `json:"cooldownSeconds"`
 }
 
 // ListAlarmEvents 返回最近告警事件（监控页的告警流）。

@@ -20,12 +20,12 @@ import (
 
 // CommandInput 是指令下发请求。
 type CommandInput struct {
-	DeviceNo string `json:"deviceNo"`
+	DeviceNo string   `json:"deviceNo"`
 	PointID  idgen.ID `json:"pointId"`
 	// Value 是界面上按工程量填的值（scale 已由后端还原成 raw：raw = value * scale）。
 	Value float64 `json:"value"`
 	// RawValue 是直接下发的原始值（bool/整数/浮点字符串）。与 Value 二选一，RawValue 优先。
-	RawValue string `json:"rawValue"`
+	RawValue     string   `json:"rawValue"`
 	OperatorID   idgen.ID `json:"-"`
 	OperatorName string   `json:"-"`
 }

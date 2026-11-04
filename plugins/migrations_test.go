@@ -1,10 +1,14 @@
 package plugins_test
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -207,4 +211,211 @@ func compareEngines(t *testing.T, plugin string, a, b *engineSchema) {
 			t.Fatalf("%s", label("table only exists in second engine", name))
 		}
 	}
+}
+
+// 模型基座与 DDL 的列门禁：嵌入 database.PlatformModel 的模型必然写 id / created_at /
+// updated_at 三列（TenantModel 再多一列 tenant_id），三个引擎的建表语句里少任何一列都会在
+// 运行期炸（MySQL 1054 Unknown column、PG 42703 undefined column）。
+//
+// 上面那条「三引擎互相比对」的闸照不出这种错：plg_devhub_alarm_event 三份 SQL 里都缺
+// updated_at，比对结果完全一致，而 Go 模型每插一行都带着这一列——只有对着 Go 模型比才露馅
+// （2026-11-04 由 MySQL 集成测试跑出来）。
+func TestPluginModelBaseColumnsExistInDDL(t *testing.T) {
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	checked := 0
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		migDir := filepath.Join(e.Name(), "migrations")
+		if _, err := os.Stat(migDir); err != nil {
+			continue
+		}
+		models, err := baseModels(filepath.Join(e.Name()))
+		if err != nil {
+			t.Fatalf("plugin %s: %v", e.Name(), err)
+		}
+		if len(models) == 0 {
+			continue
+		}
+		engines := map[string]*engineSchema{}
+		sqlByText := map[string]string{}
+		for _, engine := range []string{"mysql", "mariadb", "postgres"} {
+			sqlByText[engine] = readEngineSQL(t, filepath.Join(migDir, engine))
+			engines[engine] = parseSchemaSQL(t, sqlByText[engine])
+			applyAlterColumns(engines[engine], sqlByText[engine])
+		}
+		for _, m := range models {
+			if strings.HasPrefix(m.table, "sys_") {
+				continue // 框架表：由 migrations/framework/ 建，插件迁移里没有它的 CREATE
+			}
+			want := []string{"id", "created_at", "updated_at"}
+			if m.tenant {
+				want = append(want, "tenant_id")
+			}
+			for _, engine := range []string{"mysql", "mariadb", "postgres"} {
+				ts := engines[engine].tables[m.table]
+				if ts == nil {
+					t.Errorf("plugin %s: 模型 %s 的表 %s 在 %s 迁移里没有建表语句", e.Name(), m.goType, m.table, engine)
+					continue
+				}
+				for _, col := range want {
+					if !ts.columns[col] {
+						t.Errorf("plugin %s: %s 嵌入 %s，但 %s 里表 %s 缺列 %s（插入即报 Unknown column）",
+							e.Name(), m.goType, m.base, engine, m.table, col)
+					}
+				}
+			}
+			checked++
+		}
+	}
+	if checked == 0 {
+		t.Fatal("没有模型被检查——闸对空跑")
+	}
+	t.Logf("base columns checked for %d plugin models", checked)
+}
+
+// applyAlterColumns 把 ALTER TABLE ... ADD/DROP COLUMN 叠到 CREATE 的结果上：
+// 迁移是按编号累加的（ticket 的 tenant_id 来自 017），只看 CREATE 会把已有列的表误判成缺列。
+// 不处理 RENAME/CHANGE（基座列 id / created_at / updated_at / tenant_id 不会被改名）。
+var (
+	reAlterStmt = regexp.MustCompile(`(?is)ALTER\s+TABLE\s+([\x60"]?[A-Za-z_][A-Za-z0-9_]*[\x60"]?)\s+(.*?);`)
+	reAlterAdd  = regexp.MustCompile(`(?is)\bADD\s+(?:COLUMN\s+)?[\x60"]?([A-Za-z_][A-Za-z0-9_]*)[\x60"]?`)
+	reAlterDrop = regexp.MustCompile(`(?is)\bDROP\s+(?:COLUMN\s+)?[\x60"]?([A-Za-z_][A-Za-z0-9_]*)[\x60"]?`)
+	// ADD/DROP 后面跟着这些词时改的不是列，是约束或索引。
+	reAlterNotColumn = map[string]bool{
+		"constraint": true, "unique": true, "primary": true, "index": true,
+		"key": true, "fulltext": true, "spatial": true, "if": true, "exists": true,
+	}
+)
+
+func applyAlterColumns(schema *engineSchema, sqlText string) {
+	clean := func(s string) string {
+		s = regexp.MustCompile(`(?i)\bIF\s+NOT\s+EXISTS\b`).ReplaceAllString(s, " ")
+		return regexp.MustCompile(`(?i)\bIF\s+EXISTS\b`).ReplaceAllString(s, " ")
+	}
+	for _, m := range reAlterStmt.FindAllStringSubmatch(sqlText, -1) {
+		table := strings.ToLower(strings.Trim(m[1], "`\""))
+		ts := schema.tables[table]
+		if ts == nil {
+			continue // 不是本插件建的表（框架表由 migrations/framework 负责）
+		}
+		for _, clause := range strings.Split(m[2], ",") {
+			clause = clean(clause)
+			re := reAlterAdd
+			drop := regexp.MustCompile(`(?i)\bDROP\b`).MatchString(clause)
+			if drop {
+				re = reAlterDrop
+			}
+			for _, cm := range re.FindAllStringSubmatch(clause, -1) {
+				col := strings.ToLower(cm[1])
+				if reAlterNotColumn[col] {
+					continue
+				}
+				if drop {
+					delete(ts.columns, col)
+					continue
+				}
+				ts.columns[col] = true
+			}
+		}
+	}
+}
+
+type baseModel struct {
+	goType string
+	base   string
+	table  string
+	tenant bool
+}
+
+// baseModels 在一个插件目录下找「嵌入了数据基座的模型 + 它的 TableName」。
+// 靠 ast 而不是编译产物：插件可能没被当前构建标签带上。
+func baseModels(dir string) ([]baseModel, error) {
+	fset := token.NewFileSet()
+	pkgs, err := parser.ParseDir(fset, dir, func(fi os.FileInfo) bool {
+		return !strings.HasSuffix(fi.Name(), "_test.go")
+	}, 0)
+	if err != nil {
+		return nil, err
+	}
+	bases := map[string]string{}
+	for _, p := range pkgs {
+		for _, f := range p.Files {
+			for _, d := range f.Decls {
+				gd, ok := d.(*ast.GenDecl)
+				if !ok || gd.Tok != token.TYPE {
+					continue
+				}
+				for _, spec := range gd.Specs {
+					ts, ok := spec.(*ast.TypeSpec)
+					if !ok {
+						continue
+					}
+					st, ok := ts.Type.(*ast.StructType)
+					if !ok {
+						continue
+					}
+					for _, fld := range st.Fields.List {
+						if len(fld.Names) > 0 || fld.Tag != nil {
+							continue // 具名字段不是基座
+						}
+						name := embeddedIdent(fld.Type)
+						if name == "PlatformModel" || name == "TenantModel" {
+							bases[ts.Name.Name] = name
+						}
+					}
+				}
+			}
+		}
+	}
+	if len(bases) == 0 {
+		return nil, nil
+	}
+	out := make([]baseModel, 0, len(bases))
+	for _, p := range pkgs {
+		for _, f := range p.Files {
+			for _, d := range f.Decls {
+				fd, ok := d.(*ast.FuncDecl)
+				if !ok || fd.Recv == nil || len(fd.Recv.List) != 1 || fd.Name.Name != "TableName" {
+					continue
+				}
+				recv := strings.TrimLeft(embeddedIdent(fd.Recv.List[0].Type), "*")
+				base, ok := bases[recv]
+				if !ok {
+					continue
+				}
+				lit, ok := fd.Body.List[0].(*ast.ReturnStmt)
+				if !ok || len(lit.Results) != 1 {
+					continue
+				}
+				bl, ok := lit.Results[0].(*ast.BasicLit)
+				if !ok {
+					continue
+				}
+				table, err := strconv.Unquote(bl.Value)
+				if err != nil {
+					continue
+				}
+				out = append(out, baseModel{goType: recv, base: base, table: table, tenant: base == "TenantModel"})
+			}
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].table < out[j].table })
+	return out, nil
+}
+
+func embeddedIdent(expr ast.Expr) string {
+	switch v := expr.(type) {
+	case *ast.SelectorExpr:
+		return v.Sel.Name
+	case *ast.Ident:
+		return v.Name
+	case *ast.StarExpr:
+		return embeddedIdent(v.X)
+	}
+	return ""
 }
