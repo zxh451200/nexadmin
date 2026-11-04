@@ -174,7 +174,7 @@ func (s *Service) Stats(ctx context.Context, q StatsQuery) (PayStats, error) {
 	}
 	if kw := strings.TrimSpace(q.Keyword); kw != "" {
 		like := "%" + escapeLike(kw) + "%"
-		db = db.Where("payment_no LIKE ? OR biz_no LIKE ?", like, like)
+		db = db.Where("LOWER(payment_no) LIKE LOWER(?) OR LOWER(biz_no) LIKE LOWER(?)", like, like)
 	}
 
 	var rows []payStatRow

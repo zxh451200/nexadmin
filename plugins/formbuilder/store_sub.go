@@ -211,7 +211,7 @@ func (s *gormStore) subScope(ctx context.Context, q SubQuery) (*gorm.DB, error) 
 		db = db.Where("version = ?", q.Version)
 	}
 	if q.Username != "" {
-		db = db.Where("username LIKE ?", "%"+likeEscape(q.Username)+"%")
+		db = db.Where("LOWER(username) LIKE LOWER(?)", "%"+likeEscape(q.Username)+"%")
 	}
 	if q.From != nil {
 		db = db.Where("created_at >= ?", *q.From)

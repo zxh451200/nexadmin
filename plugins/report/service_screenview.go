@@ -60,7 +60,7 @@ func (s *Service) ListScreensManage(ctx context.Context, keyword string, page, s
 	}
 	tx = tx.Model(&Screen{})
 	if keyword != "" {
-		tx = tx.Where("name LIKE ?", "%"+likeEscape(keyword)+"%")
+		tx = tx.Where("LOWER(name) LIKE LOWER(?)", "%"+likeEscape(keyword)+"%")
 	}
 	var total int64
 	if err := tx.Count(&total).Error; err != nil {

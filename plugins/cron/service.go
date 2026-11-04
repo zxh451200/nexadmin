@@ -331,7 +331,7 @@ type JobQuery struct {
 func (s *Service) ListJobs(ctx context.Context, q JobQuery) ([]JobView, int64, error) {
 	tx := s.db.WithContext(ctx).Model(&Job{})
 	if q.Keyword != "" {
-		tx = tx.Where("name LIKE ?", "%"+escapeLike(q.Keyword)+"%")
+		tx = tx.Where("LOWER(name) LIKE LOWER(?)", "%"+escapeLike(q.Keyword)+"%")
 	}
 	if q.Handler != "" {
 		tx = tx.Where("handler = ?", q.Handler)

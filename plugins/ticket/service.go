@@ -672,7 +672,7 @@ func (s *Service) ticketFilter(ctx context.Context, q TicketQuery) *gorm.DB {
 		db = db.Where("group_id = ?", int64(q.GroupID))
 	}
 	if tag := strings.TrimSpace(q.Tag); tag != "" {
-		db = db.Where("tags LIKE ?", "%,"+tag+",%")
+		db = db.Where("LOWER(tags) LIKE LOWER(?)", "%,"+tag+",%")
 	}
 	if bizNo := strings.TrimSpace(q.BizNo); bizNo != "" {
 		db = db.Where("biz_no = ?", bizNo)
@@ -684,7 +684,7 @@ func (s *Service) ticketFilter(ctx context.Context, q TicketQuery) *gorm.DB {
 	if kw := strings.TrimSpace(q.Keyword); kw != "" {
 		like := "%" + kw + "%"
 		// 带上业务单号：坐席拿到的是订单号，先搜的也是它（后台工作台与客户门户同一口径）。
-		db = db.Where("ticket_no LIKE ? OR title LIKE ? OR last_preview LIKE ? OR biz_no LIKE ?", like, like, like, like)
+		db = db.Where("LOWER(ticket_no) LIKE LOWER(?) OR LOWER(title) LIKE LOWER(?) OR LOWER(last_preview) LIKE LOWER(?) OR LOWER(biz_no) LIKE LOWER(?)", like, like, like, like)
 	}
 	// 数据范围收口：列表、统计、导出共用本函数，所以三者的行数天然一致。
 	return scopeCond(ctx, db)

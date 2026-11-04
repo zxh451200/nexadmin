@@ -565,7 +565,7 @@ type ContentQuery struct {
 
 func contentTx(tx *gorm.DB, q ContentQuery) *gorm.DB {
 	if kw := strings.TrimSpace(q.Keyword); kw != "" {
-		tx = tx.Where("title LIKE ? OR slug LIKE ?", "%"+kw+"%", "%"+kw+"%")
+		tx = tx.Where("LOWER(title) LIKE LOWER(?) OR LOWER(slug) LIKE LOWER(?)", "%"+kw+"%", "%"+kw+"%")
 	}
 	switch q.Status {
 	case "published":
@@ -584,6 +584,8 @@ func contentTx(tx *gorm.DB, q ContentQuery) *gorm.DB {
 		// 只接受已配置的语言，并且用规范 code 去匹配：拼出来的是 LIKE 的**参数值**，
 		// 走占位符绑定，不进 SQL 文本；未知 code 就当没有这个筛选。
 		if l, ok := LanguageByCode(code); ok {
+			// nexadmin:like-exempt 非关键词筛选：匹配的是配置里的语言 code，两侧同源、
+			// 大小写天然一致（不是人随手打的大写），折叠没有意义。见 plugins/like_case_insensitive_test.go。
 			tx = tx.Where("i18n_json IS NULL OR i18n_json = '' OR i18n_json NOT LIKE ?", "%\""+l.Code+"\":%")
 		}
 	}
@@ -1749,7 +1751,7 @@ func messageFilter(tx *gorm.DB, q MessageQuery) *gorm.DB {
 	}
 	if kw := strings.TrimSpace(q.Keyword); kw != "" {
 		like := "%" + kw + "%"
-		tx = tx.Where("name LIKE ? OR email LIKE ? OR content LIKE ?", like, like, like)
+		tx = tx.Where("LOWER(name) LIKE LOWER(?) OR LOWER(email) LIKE LOWER(?) OR LOWER(content) LIKE LOWER(?)", like, like, like)
 	}
 	return tx
 }

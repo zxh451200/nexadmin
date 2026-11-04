@@ -183,7 +183,7 @@ func (s *Service) ListOutbox(ctx context.Context, status, keyword string, page, 
 	}
 	if kw := strings.TrimSpace(keyword); kw != "" {
 		like := "%" + kw + "%"
-		db = db.Where("event_id LIKE ? OR event_name LIKE ?", like, like)
+		db = db.Where("LOWER(event_id) LIKE LOWER(?) OR LOWER(event_name) LIKE LOWER(?)", like, like)
 	}
 	var total int64
 	if err := db.Count(&total).Error; err != nil {

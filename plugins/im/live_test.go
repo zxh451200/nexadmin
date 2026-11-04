@@ -401,6 +401,15 @@ func TestLiveIMKeywordSearchesMessageBody(t *testing.T) {
 	if got := search(token); len(got) != 1 || got[0] != a.ConvNo {
 		t.Fatalf("body search = %v, want only %s", got, a.ConvNo)
 	}
+	// 配对大小写：同一个关键词换成小写必须命中同一行。PG 的 LIKE 区分大小写，
+	// 列或模式少折叠一侧时这两条在 PG 上会「搜不到」，而 MySQL/MariaDB 天生不区分。
+	if got := search(strings.ToLower(token)); len(got) != 1 || got[0] != a.ConvNo {
+		t.Fatalf("lowercased body search = %v, want only %s", got, a.ConvNo)
+	}
+	// 会话号（IM 前缀是大写、人工输入常打成小写）也要能按任意大小写命中。
+	if got := search(strings.ToLower(a.ConvNo)); len(got) != 1 || got[0] != a.ConvNo {
+		t.Fatalf("lowercased conv_no search = %v, want only %s", got, a.ConvNo)
+	}
 	// 摘要字段仍要能命中（没有因为加了子查询而把原条件挤掉）。
 	if got := search("搜索用例乙"); len(got) != 1 || got[0] != b.ConvNo {
 		t.Fatalf("name search = %v, want %s", got, b.ConvNo)

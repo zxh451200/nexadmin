@@ -180,7 +180,7 @@ func (s *Service) ListReports(ctx context.Context, keyword string, page, size in
 	}
 	tx = tx.Model(&ReportDef{})
 	if keyword != "" {
-		tx = tx.Where("name LIKE ?", "%"+likeEscape(keyword)+"%")
+		tx = tx.Where("LOWER(name) LIKE LOWER(?)", "%"+likeEscape(keyword)+"%")
 	}
 	var total int64
 	if err := tx.Count(&total).Error; err != nil {

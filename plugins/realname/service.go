@@ -268,7 +268,7 @@ func (s *Service) ListVerifications(ctx context.Context, q ListQuery) ([]Verific
 	kw := strings.TrimSpace(q.Keyword)
 	if kw != "" {
 		like := "%" + kw + "%"
-		tx = tx.Where("name_masked LIKE ? OR number_masked LIKE ? OR remark LIKE ?", like, like, like)
+		tx = tx.Where("LOWER(name_masked) LIKE LOWER(?) OR LOWER(number_masked) LIKE LOWER(?) OR LOWER(remark) LIKE LOWER(?)", like, like, like)
 	}
 	if q.Latest {
 		folded, ok := s.foldLatest(ctx, tx, q, kw)
@@ -319,7 +319,7 @@ func (s *Service) foldLatest(ctx context.Context, tx *gorm.DB, q ListQuery, kw s
 	}
 	if kw != "" {
 		like := "%" + kw + "%"
-		inner = inner.Where("name_masked LIKE ? OR number_masked LIKE ? OR remark LIKE ?", like, like, like)
+		inner = inner.Where("LOWER(name_masked) LIKE LOWER(?) OR LOWER(number_masked) LIKE LOWER(?) OR LOWER(remark) LIKE LOWER(?)", like, like, like)
 	}
 	return tx.Where("id IN (?)", inner.Group("number_hash")), true
 }

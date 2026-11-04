@@ -95,7 +95,7 @@ func (d *gormDirectory) Users(ctx context.Context, keyword string, limit int) ([
 		Where("tenant_id = ? AND status = ? AND deleted_at IS NULL", int64(tid), "1")
 	if keyword != "" {
 		like := "%" + likeEscape(keyword) + "%"
-		q = q.Where("username LIKE ? OR nickname LIKE ?", like, like)
+		q = q.Where("LOWER(username) LIKE LOWER(?) OR LOWER(nickname) LIKE LOWER(?)", like, like)
 	}
 	var list []UserOption
 	err = q.Order("id DESC").Limit(limit).Scan(&list).Error

@@ -127,7 +127,7 @@ func (g gormDefs) List(ctx context.Context, q store.DefQuery) ([]*store.Definiti
 	base := g.db.WithContext(ctx).Model(&Def{})
 	if kw := strings.TrimSpace(q.Keyword); kw != "" {
 		like := "%" + kw + "%"
-		base = base.Where("def_key LIKE ? OR name LIKE ?", like, like)
+		base = base.Where("LOWER(def_key) LIKE LOWER(?) OR LOWER(name) LIKE LOWER(?)", like, like)
 	}
 	if q.Status != "" {
 		base = base.Where("status = ?", q.Status)
@@ -255,7 +255,7 @@ func (g gormInsts) List(ctx context.Context, q store.InstQuery) ([]*store.Instan
 	base := g.db.WithContext(ctx).Model(&Inst{})
 	if kw := strings.TrimSpace(q.Keyword); kw != "" {
 		like := "%" + kw + "%"
-		base = base.Where("title LIKE ? OR def_key LIKE ? OR business_key LIKE ?", like, like, like)
+		base = base.Where("LOWER(title) LIKE LOWER(?) OR LOWER(def_key) LIKE LOWER(?) OR LOWER(business_key) LIKE LOWER(?)", like, like, like)
 	}
 	if q.Status != "" {
 		base = base.Where("status = ?", q.Status)
@@ -394,7 +394,7 @@ func taskKeyword(db *gorm.DB, kw string) *gorm.DB {
 	}
 	like := "%" + kw + "%"
 	return db.Joins("JOIN plg_workflow_inst i ON i.id = inst_id AND i.deleted_at IS NULL").
-		Where("i.title LIKE ? OR i.def_key LIKE ? OR i.business_key LIKE ?", like, like, like)
+		Where("LOWER(i.title) LIKE LOWER(?) OR LOWER(i.def_key) LIKE LOWER(?) OR LOWER(i.business_key) LIKE LOWER(?)", like, like, like)
 }
 
 func (g gormTasks) ListByInstance(ctx context.Context, instID string) ([]*store.Task, error) {

@@ -599,7 +599,7 @@ func (s *Service) ListAuths(ctx context.Context, status, keyword string, page, p
 	}
 	if kw := strings.TrimSpace(keyword); kw != "" {
 		like := "%" + kw + "%"
-		db = db.Where("auth_no LIKE ? OR biz_no LIKE ?", like, like)
+		db = db.Where("LOWER(auth_no) LIKE LOWER(?) OR LOWER(biz_no) LIKE LOWER(?)", like, like)
 	}
 	var total int64
 	if err := db.Count(&total).Error; err != nil {

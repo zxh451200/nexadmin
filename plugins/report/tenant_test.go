@@ -23,7 +23,7 @@ func TestTenantConditionAlwaysPresentAndNotOverridable(t *testing.T) {
 			{Column: "job_name", Op: "like", Value: `a%b_c\d`},
 		},
 	}, testEnv())
-	want := "WHERE `tenant_id` = ? AND (`status` = ?) AND (`attempts` <= ?) AND (`status` IN (?,?)) AND (`job_name` LIKE ?)"
+	want := "WHERE `tenant_id` = ? AND (`status` = ?) AND (`attempts` <= ?) AND (`status` IN (?,?)) AND (LOWER(`job_name`) LIKE LOWER(?))"
 	if !strings.Contains(sql, want) {
 		t.Fatalf("unexpected SQL:\n%s\nwant to contain:\n%s", sql, want)
 	}

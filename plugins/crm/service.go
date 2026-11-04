@@ -366,7 +366,7 @@ func (s *Service) ListCustomers(ctx context.Context, q CustomerQuery) ([]Custome
 	if kw := strings.TrimSpace(q.Keyword); kw != "" {
 		// 前台更多是「拿着证件号 / 信用代码找人」，不是按名称翻列表。
 		like := "%" + kw + "%"
-		db = db.Where("name LIKE ? OR code LIKE ? OR external_no LIKE ? OR id_no LIKE ? OR tax_no LIKE ?",
+		db = db.Where("LOWER(name) LIKE LOWER(?) OR LOWER(code) LIKE LOWER(?) OR LOWER(external_no) LIKE LOWER(?) OR LOWER(id_no) LIKE LOWER(?) OR LOWER(tax_no) LIKE LOWER(?)",
 			like, like, like, like, like)
 	}
 	q.Type = strings.ToLower(strings.TrimSpace(q.Type))
@@ -702,7 +702,7 @@ type OpportunityQuery struct {
 func (s *Service) ListOpportunities(ctx context.Context, q OpportunityQuery) ([]Opportunity, int64, error) {
 	db := s.db.WithContext(ctx).Model(&Opportunity{})
 	if kw := strings.TrimSpace(q.Keyword); kw != "" {
-		db = db.Where("title LIKE ?", "%"+kw+"%")
+		db = db.Where("LOWER(title) LIKE LOWER(?)", "%"+kw+"%")
 	}
 	if q.CustomerID != 0 {
 		db = db.Where("customer_id = ?", q.CustomerID)

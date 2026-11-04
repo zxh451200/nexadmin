@@ -418,7 +418,9 @@ func (t *Target) filterSQL(f Filter, q func(string) string) (string, []any, erro
 			return "", nil, specErr("report.filter_like_value_invalid")
 		}
 		esc := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(s)
-		return col + " LIKE ?", []any{"%" + esc + "%"}, nil
+		// 列与模式两侧都折叠大小写：PG 的 LIKE 区分大小写，只折叠一侧或都不折叠会让
+		// 管理员带大写的「like 筛选」在 PG 上搜不到，MySQL/MariaDB 却能搜到。
+		return "LOWER(" + col + ") LIKE LOWER(?)", []any{"%" + esc + "%"}, nil
 	case ">", "<", ">=", "<=":
 		if c.Type != TypeNumber && c.Type != TypeTime {
 			return "", nil, specErr("report.filter_compare_numeric_or_time_only")

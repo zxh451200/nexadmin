@@ -88,7 +88,7 @@ func (s *Service) ListModels(ctx context.Context, keyword, kind string, page, pa
 	db := s.db.WithContext(ctx).Model(&Model{})
 	if kw := strings.TrimSpace(keyword); kw != "" {
 		like := "%" + kw + "%"
-		db = db.Where("name LIKE ? OR model LIKE ?", like, like)
+		db = db.Where("LOWER(name) LIKE LOWER(?) OR LOWER(model) LIKE LOWER(?)", like, like)
 	}
 	if k := strings.TrimSpace(kind); k != "" {
 		db = db.Where("kind = ?", k)

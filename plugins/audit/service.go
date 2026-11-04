@@ -132,7 +132,7 @@ func (s *Service) ListLogs(ctx context.Context, q LogQuery) ([]Log, int64, error
 		tx = tx.Where("action = ?", q.Action)
 	}
 	if q.Operator != "" {
-		tx = tx.Where("operator_name LIKE ?", "%"+likeEscape(q.Operator)+"%")
+		tx = tx.Where("LOWER(operator_name) LIKE LOWER(?)", "%"+likeEscape(q.Operator)+"%")
 	}
 	if t, ok := parseDay(q.From); ok {
 		tx = tx.Where("created_at >= ?", t)

@@ -46,9 +46,9 @@ func allViewer() Viewer { return Viewer{Scope: &datascope.Scope{All: true}} }
 func TestOwnTablesAlwaysTenantScoped(t *testing.T) {
 	svc, mock := newTestService(t)
 	for _, tid := range []int64{7, 8} {
-		mock.ExpectQuery("SELECT count\\(\\*\\) FROM `plg_report_dataset` WHERE tenant_id = \\? AND name LIKE \\?").
+		mock.ExpectQuery("SELECT count\\(\\*\\) FROM `plg_report_dataset` WHERE tenant_id = \\? AND LOWER\\(name\\) LIKE LOWER\\(\\?\\)").
 			WithArgs(tid, "%a\\%b%").WillReturnRows(sqlmock.NewRows([]string{"c"}).AddRow(0))
-		mock.ExpectQuery("SELECT \\* FROM `plg_report_dataset` WHERE tenant_id = \\? AND name LIKE \\? ORDER BY id DESC LIMIT \\?").
+		mock.ExpectQuery("SELECT \\* FROM `plg_report_dataset` WHERE tenant_id = \\? AND LOWER\\(name\\) LIKE LOWER\\(\\?\\) ORDER BY id DESC LIMIT \\?").
 			WithArgs(tid, "%a\\%b%", 20).WillReturnRows(sqlmock.NewRows([]string{"id", "name"}))
 		if _, _, err := svc.ListDatasets(tctx(tid), "a%b", 1, 20); err != nil {
 			t.Fatal(err)

@@ -130,7 +130,7 @@ func (s *Service) ListDatasets(ctx context.Context, keyword string, page, size i
 	}
 	tx = tx.Model(&Dataset{})
 	if keyword != "" {
-		tx = tx.Where("name LIKE ?", "%"+likeEscape(keyword)+"%")
+		tx = tx.Where("LOWER(name) LIKE LOWER(?)", "%"+likeEscape(keyword)+"%")
 	}
 	var total int64
 	if err := tx.Count(&total).Error; err != nil {

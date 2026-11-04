@@ -504,14 +504,14 @@ func (s *Service) convFilter(ctx context.Context, q ConversationQuery) *gorm.DB 
 		db = db.Where("assignee_id = ?", id)
 	}
 	if tag := strings.TrimSpace(q.Tag); tag != "" {
-		db = db.Where("CONCAT(',', tags, ',') LIKE ?", "%,"+tag+",%")
+		db = db.Where("LOWER(CONCAT(',', tags, ',')) LIKE LOWER(?)", "%,"+tag+",%")
 	}
 	if kw := strings.TrimSpace(q.Keyword); kw != "" {
 		like := "%" + kw + "%"
 		// 正文也要能搜到：坐席找「上周那个客户提过的订单号」时，会话号/访客名/末条摘要都对不上。
-		db = db.Where("conv_no LIKE ? OR visitor_name LIKE ? OR last_preview LIKE ? OR "+
+		db = db.Where("LOWER(conv_no) LIKE LOWER(?) OR LOWER(visitor_name) LIKE LOWER(?) OR LOWER(last_preview) LIKE LOWER(?) OR "+
 			"EXISTS (SELECT 1 FROM plg_im_message WHERE plg_im_message.conv_id = plg_im_conversation.id"+
-			" AND content LIKE ?)", like, like, like, like)
+			" AND LOWER(content) LIKE LOWER(?))", like, like, like, like)
 	}
 	return db
 }

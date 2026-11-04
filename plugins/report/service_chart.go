@@ -159,7 +159,7 @@ func (s *Service) ListCharts(ctx context.Context, keyword string, datasetID idge
 	}
 	tx = tx.Model(&Chart{})
 	if keyword != "" {
-		tx = tx.Where("name LIKE ?", "%"+likeEscape(keyword)+"%")
+		tx = tx.Where("LOWER(name) LIKE LOWER(?)", "%"+likeEscape(keyword)+"%")
 	}
 	if datasetID != 0 {
 		tx = tx.Where("dataset_id = ?", datasetID)

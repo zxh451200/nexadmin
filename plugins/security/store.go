@@ -131,7 +131,7 @@ func (s *gormStore) EnsureGrace(ctx context.Context, tid, uid idgen.ID, username
 func (s *gormStore) ListTOTP(ctx context.Context, tid idgen.ID, keyword string, page, size int) ([]TOTPRow, int64, error) {
 	q := s.q(ctx, tid).Model(&TOTPRow{}).Where("tenant_id = ?", tid)
 	if keyword != "" {
-		q = q.Where("username LIKE ?", "%"+escapeLike(keyword)+"%")
+		q = q.Where("LOWER(username) LIKE LOWER(?)", "%"+escapeLike(keyword)+"%")
 	}
 	var total int64
 	if err := q.Count(&total).Error; err != nil {

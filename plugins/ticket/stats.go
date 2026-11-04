@@ -139,7 +139,7 @@ func (s *Service) Stats(ctx context.Context, q TicketStatsQuery) (TicketStats, e
 	}
 	if kw := strings.TrimSpace(q.Keyword); kw != "" {
 		like := "%" + strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(kw) + "%"
-		db = db.Where("ticket_no LIKE ? OR title LIKE ?", like, like)
+		db = db.Where("LOWER(ticket_no) LIKE LOWER(?) OR LOWER(title) LIKE LOWER(?)", like, like)
 	}
 	loc := s.loc
 	if loc == nil {

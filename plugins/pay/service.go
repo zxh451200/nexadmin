@@ -972,7 +972,7 @@ func (s *Service) orderFilter(ctx context.Context, q OrderQuery) (*gorm.DB, time
 	db := s.db.WithContext(ctx).Model(&Order{})
 	if kw := strings.TrimSpace(q.Keyword); kw != "" {
 		like := "%" + kw + "%"
-		db = db.Where("payment_no LIKE ? OR biz_no LIKE ?", like, like)
+		db = db.Where("LOWER(payment_no) LIKE LOWER(?) OR LOWER(biz_no) LIKE LOWER(?)", like, like)
 	}
 	if q.Status != "" {
 		db = db.Where("status = ?", q.Status)
@@ -1062,7 +1062,7 @@ func (s *Service) ListCallbacks(ctx context.Context, q CallbackQuery) ([]Callbac
 		db = db.Where("ok = ?", *q.OK)
 	}
 	if kw := strings.TrimSpace(q.Keyword); kw != "" {
-		db = db.Where("payment_no LIKE ?", "%"+kw+"%")
+		db = db.Where("LOWER(payment_no) LIKE LOWER(?)", "%"+kw+"%")
 	}
 	var total int64
 	if err := db.Count(&total).Error; err != nil {
@@ -1091,7 +1091,7 @@ func (s *Service) ListRefunds(ctx context.Context, q RefundQuery) ([]Refund, int
 	}
 	if kw := strings.TrimSpace(q.Keyword); kw != "" {
 		like := "%" + kw + "%"
-		db = db.Where("refund_no LIKE ? OR payment_no LIKE ? OR biz_no LIKE ?", like, like, like)
+		db = db.Where("LOWER(refund_no) LIKE LOWER(?) OR LOWER(payment_no) LIKE LOWER(?) OR LOWER(biz_no) LIKE LOWER(?)", like, like, like)
 	}
 	var total int64
 	if err := db.Count(&total).Error; err != nil {

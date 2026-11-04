@@ -96,7 +96,7 @@ func (s *gormStore) ListForms(ctx context.Context, fq FormQuery) ([]Form, int64,
 		return nil, 0, err
 	}
 	if fq.Keyword != "" {
-		q = q.Where("name LIKE ?", "%"+likeEscape(fq.Keyword)+"%")
+		q = q.Where("LOWER(name) LIKE LOWER(?)", "%"+likeEscape(fq.Keyword)+"%")
 	}
 	if fq.Status != "" {
 		q = q.Where("status = ?", fq.Status)
