@@ -13,11 +13,14 @@ import (
 	"testing"
 )
 
-// 涓夊紩鎿庤縼绉荤粨鏋勪竴鑷存€ч棬绂侊紙01 鍙锋柟妗堥獙鏀堕棬绂佺 5 鏉＄殑鍙嚜鍔ㄥ寲閮ㄥ垎锛夛細
-// 瀵规瘡涓甫 migrations/ 鐨勬彃浠讹紝瑙ｆ瀽 mysql/mariadb/postgres 涓変唤 SQL锛?// 鏂█ 琛ㄩ泦鍚堛€佹瘡寮犺〃鐨勫垪鍚嶉泦鍚堛€佺储寮曞悕鍙婂叾鍒楅泦 瀹屽叏涓€鑷淬€?// 绫诲瀷宸紓锛圱INYINT(1) vs BOOLEAN銆丏ATETIME(3) vs TIMESTAMP锛夋槸鍚堟硶鏂硅█宸紓锛屼笉姣斿銆?// 鐪熷疄涓夊簱鎵ц涓庡苟鍙戦獙璇佷粛闇€閮ㄧ讲渚ц鐩栵紙瑙佷氦鎺ヨ鏄庯級銆?
+// 三引擎迁移结构一致性门禁（01 号方案验收门禁第 5 条的可自动化部分）：
+// 对每个带 migrations/ 的插件，解析 mysql/mariadb/postgres 三份 SQL，
+// 断言 表集合、每张表的列名集合、索引名及其列集 完全一致。
+// 类型差异（TINYINT(1) vs BOOLEAN、DATETIME(3) vs TIMESTAMP）是合法方言差异，不比对。
+// 真实三库执行与并发验证仍需部署侧覆盖（见交接说明）。
 type tableSchema struct {
 	columns map[string]bool
-	// indexName 鈫?(columns, unique)
+	// indexName → (columns, unique)
 	indexes map[string]indexDef
 }
 
@@ -152,7 +155,7 @@ func TestPluginMigrationsConsistentAcrossEngines(t *testing.T) {
 		checked++
 	}
 	if checked == 0 {
-		t.Fatal("no plugin migrations found 鈥?gate ran against nothing")
+		t.Fatal("no plugin migrations found — gate ran against nothing")
 	}
 	t.Logf("migration consistency checked across %d plugins", checked)
 }
