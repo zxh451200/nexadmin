@@ -128,8 +128,13 @@ async function handleUnauthorized(config: AxiosRequestConfig | undefined, err: A
       // 落到下面清理登录态
     }
   }
-  tokenStore.clear()
-  unauthorizedHandler?.()
+  // 只在「确实有会话可拆」时拆：unauthorizedHandler 会连带 queryClient.clear()（换账号必须清缓存）。
+  // 未登录时（登录页拉公开发现接口、SSO 入口）也照样拆，会把同一页在途的 ['auth','methods']
+  // 从缓存里抹掉，表现是登录表单静默降级成「只有用户名/密码/登录」——不出错、也不刷新。
+  if (tokenStore.access || tokenStore.refresh) {
+    tokenStore.clear()
+    unauthorizedHandler?.()
+  }
   throw err
 }
 

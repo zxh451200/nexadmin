@@ -18,9 +18,11 @@ const IMG_W = 280
 test.setTimeout(240_000)
 
 /**
- * dev 冷启动有两层慢：新浏览器上下文要把几百个模块重新下一遍；而 /auth/methods 若在
- * mock 注册表就绪之前发出就会落到 FALLBACK（captchaEnabled 缺失 → 连验证码区都不出现），
- * 并被 60s staleTime 钉住。所以按导航重试，而不是假设第一次就成。
+ * dev 冷启动要把几百个模块重新下一遍，首屏要等 2-4 秒，所以按导航重试一次以上。
+ * （历史包袱：这里曾写着「/auth/methods 若在 mock 注册表就绪之前发出就会落到 FALLBACK」——
+ * 那个诊断是错的。mock-loader 的 import.meta.glob 是 eager 的静态 import，注册表在 React 挂载前
+ * 就填满了；静默降级的真因是登录页另一个匿名请求被 mock 当成需要鉴权的接口回 401，
+ * 401 处理顺手 queryClient.clear()，把在途的 ['auth','methods'] 一起抹掉。已修，见 request/mock.ts 的 PUBLIC_PREFIXES。）
  * 全程留在默认的「账号登录」表单上：手机号 tab 在满载机器上会随查询落定反复重挂。
  */
 async function openLogin(page: Page): Promise<string> {

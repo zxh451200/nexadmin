@@ -14,6 +14,7 @@ import { api } from '@/framework/request/http'
 import { ThemeToggle } from '@/framework/theme/ThemeToggle'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
+import { Skeleton } from '@/framework/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/framework/ui/tabs'
 import { ForgotPasswordDialog } from './login/ForgotPasswordDialog'
 import { PasswordForm } from './login/PasswordForm'
@@ -175,7 +176,14 @@ export default function LoginPage() {
   // /auth/methods 失败不能再 catch 成 FALLBACK：一次网络抖动会被当成「成功拿到结果」，
   // react-query 因此不再重试；而 FALLBACK 里没有 captchaEnabled，首屏既不报错也不出验证码区，
   // 用户只能把密码交给服务端回一句「验证码错误或已过期」。失败要露出来，并给重试的入口。
-  const { data = FALLBACK, isError: methodsFailed, refetch: refetchMethods } = useQuery({
+  // 查询没落定（pending）与失败（isError）都不渲染可提交的表单：登录方式未知时，
+  // 「用户名/密码/登录」这一副样子会让用户以为表单是完整的、只是不需要验证码。
+  const {
+    data = FALLBACK,
+    isPending: methodsPending,
+    isError: methodsFailed,
+    refetch: refetchMethods,
+  } = useQuery({
     queryKey: ['auth', 'methods'],
     queryFn: () => api.get<AuthMethods>('/auth/methods', undefined, { silent: true }),
     staleTime: 60_000,
@@ -239,17 +247,25 @@ export default function LoginPage() {
               </p>
             </div>
             {continuationError && <p role="alert" className="mb-4 text-sm text-destructive">{continuationError.message || t('login.otpFailed')}</p>}
-            {methodsFailed && (
-              <p role="alert" className="mb-4 text-sm text-destructive">
-                {t('login.methodsFailed')}
-                <Button variant="link" size="sm" className="px-1 text-sm" onClick={() => void refetchMethods()}>
-                  {t('login.methodsRetry')}
-                </Button>
-              </p>
-            )}
 
             {registering ? (
               <RegisterForm onSuccess={done} onLogin={() => setRegistering(false)} onChallenge={setChallenge} />
+            ) : methodsPending ? (
+              // 登录方式还没落到手里：给骨架，不给一副看起来可以直接提交、又没有验证码的表单
+              <div className="space-y-5" role="status" aria-busy="true">
+                <span className="sr-only">{t('login.methodsLoading')}</span>
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-11 w-full" />
+              </div>
+            ) : methodsFailed ? (
+              <div role="alert" className="space-y-4">
+                <p className="text-sm text-destructive">{t('login.methodsFailed')}</p>
+                <Button variant="outline" className="w-full" onClick={() => void refetchMethods()}>
+                  {t('login.methodsRetry')}
+                </Button>
+              </div>
             ) : (
               <>
                 {demoAccount && (

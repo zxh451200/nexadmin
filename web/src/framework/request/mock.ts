@@ -74,6 +74,10 @@ const PUBLIC_PREFIXES = [
   '/auth/providers',
   '/auth/oauth',
   '/auth/forgot',
+  // 登录页的插件入口（企业 SAML 源列表）在真后端是匿名路由：plugins/saml/plugin.go 用
+  // d.Public.Group("/auth/saml") 注册。漏在这一份白名单里，mock 就会对匿名请求回 401 信封，
+  // 而 401 会走 handleUnauthorized → 清全站查询缓存，把同一页在途的 /auth/methods 一起抹掉。
+  '/auth/saml',
   '/settings/public',
   '/system/status',
   '/setup',
