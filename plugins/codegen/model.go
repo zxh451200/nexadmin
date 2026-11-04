@@ -6,7 +6,7 @@ import "nexadmin/core/database"
 // 只存配置不存生成物，代码永远现场渲染；同名即更新（配置跟着人改，不做版本历史）。
 type CodegenConfig struct {
 	database.PlatformModel
-	Name  string `gorm:"size:64;not null;uniqueIndex:uk_plg_codegen_config_name" json:"name"`
+	Name   string `gorm:"size:64;not null;uniqueIndex:uk_plg_codegen_config_name" json:"name"`
 	Module string `gorm:"size:32;not null" json:"module"`
 	// GoModule 留空表示用所在 Go 项目的模块路径（见 detectGoModule）。
 	GoModule string `gorm:"size:100;not null;default:''" json:"goModule"`

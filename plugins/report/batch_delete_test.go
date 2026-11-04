@@ -202,7 +202,7 @@ func TestBatchDeleteAllMissingIs404WithNoWrites(t *testing.T) {
 		{"report", "plg_report_report", func() (int64, int64, error) { return svc.DeleteReports(tctx(7), ids(91, 92)) }},
 	}
 	for _, tc := range cases {
-		mock.ExpectQuery("SELECT `id` FROM `" + tc.table + "` WHERE tenant_id = \\? AND id IN \\(\\?,\\?\\)").
+		mock.ExpectQuery("SELECT `id` FROM `"+tc.table+"` WHERE tenant_id = \\? AND id IN \\(\\?,\\?\\)").
 			WithArgs(int64(7), int64(91), int64(92)).
 			WillReturnRows(sqlmock.NewRows([]string{"id"}))
 		deleted, blocked, err := tc.del()

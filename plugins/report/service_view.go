@@ -148,7 +148,7 @@ type ExportLabels struct {
 
 // ExportReportChart 把报表里任意图表的底层结果导出为 xlsx（行数受 MaxRows 限制，最多 5000）。
 // 不限图表类型：柱/折/饼看到的是聚合后的行，导出「造出这张图的数据」是 BI 的标准能力
-//（Metabase 叫 export underlying data）；指标卡只有一行一列，同样成立。
+// （Metabase 叫 export underlying data）；指标卡只有一行一列，同样成立。
 func (s *Service) ExportReportChart(ctx context.Context, w func(ExportFile) io.Writer, reportID, chartID idgen.ID, vals map[string]any, v Viewer, labels ExportLabels) error {
 	ch, res, err := s.reportChart(ctx, reportID, chartID, vals, v, s.set.MaxRows)
 	if err != nil {

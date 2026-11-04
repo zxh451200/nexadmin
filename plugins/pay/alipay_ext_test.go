@@ -677,7 +677,7 @@ func TestAlipayFetchBillValidatesDate(t *testing.T) {
 
 // TestAlipayGatewayHTMLPage 未签约的产品（沙箱实测资金授权）网关直接回一段 HTML
 // 错误页而不是 JSON：错误文案必须把形状与「未签约」线索说清，别让人从
-//「不是 JSON」里猜是网络断了还是权限没开。
+// 「不是 JSON」里猜是网络断了还是权限没开。
 func TestAlipayGatewayHTMLPage(t *testing.T) {
 	_, priv, pub := testRSA(t)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -14,9 +14,9 @@ type Field struct {
 	Control                    string
 	// Dict 是字典编码（Control = dict 时非空）：ident 白名单内的 [a-z][a-z0-9_]，
 	// 可安全嵌进生成的 TSX 属性。
-	Dict    string
-	MaxLen  int
-	Nullable bool
+	Dict                  string
+	MaxLen                int
+	Nullable              bool
 	Required, List, Query bool
 	Form                  bool
 }

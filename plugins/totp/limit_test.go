@@ -109,7 +109,8 @@ func TestDisableMissingPasswordReason(t *testing.T) {
 }
 
 // Disable 必须先过当前登录密码:没有密码校验器直接 503;密码错误原样返回 Provider 的错误,且不碰数据库。
-func TestDisableRequiresReauth(t *testing.T) {	db, mock := mockDB(t)
+func TestDisableRequiresReauth(t *testing.T) {
+	db, mock := mockDB(t)
 	ctx := context.Background()
 
 	svc := NewService(db, memCache(t), nil)

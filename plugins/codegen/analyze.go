@@ -42,16 +42,16 @@ type ColumnConfig struct {
 
 // ColumnInfo 是 GET /tables/:name/columns 返回的一列。
 type ColumnInfo struct {
-	Name       string       `json:"name"`
-	Type       string       `json:"type"`
-	Kind       Kind         `json:"kind"`
-	Nullable   bool         `json:"nullable"`
-	PrimaryKey bool         `json:"primaryKey"`
-	Comment    string       `json:"comment"`
-	System     bool         `json:"system"`
-	Supported  bool         `json:"supported"`
-	Reason     string       `json:"reason,omitempty"`
-	Length     int64        `json:"length,omitempty"`
+	Name       string `json:"name"`
+	Type       string `json:"type"`
+	Kind       Kind   `json:"kind"`
+	Nullable   bool   `json:"nullable"`
+	PrimaryKey bool   `json:"primaryKey"`
+	Comment    string `json:"comment"`
+	System     bool   `json:"system"`
+	Supported  bool   `json:"supported"`
+	Reason     string `json:"reason,omitempty"`
+	Length     int64  `json:"length,omitempty"`
 	// Dict 是推荐配置里的字典编码（仅新建表定义了 dict 字段时非空）。
 	Dict   string       `json:"dict,omitempty"`
 	Config ColumnConfig `json:"config"`
@@ -124,8 +124,8 @@ type Analysis struct {
 	Tenant     bool
 	SoftDelete bool
 	// Tree 表示这是树形表：有 parent_id（BIGINT）列，生成物用树形列表 + 父级下拉。
-	Tree  bool
-	Cols  []ColumnInfo
+	Tree bool
+	Cols []ColumnInfo
 }
 
 // analyze 校验表结构并给出默认推荐配置。不满足生成前提的表返回错误。

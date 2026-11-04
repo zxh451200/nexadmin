@@ -307,14 +307,14 @@ type ConfigForm struct {
 
 // SavedConfig 是载入配置所需的最小形状（前端据此还原向导状态）。
 type SavedConfig struct {
-	ID       idgen.ID      `json:"id"`
-	Name     string        `json:"name"`
-	Module   string        `json:"module"`
-	GoModule string        `json:"goModule"`
-	Table    string        `json:"table"`
-	Define   *TableDef     `json:"define,omitempty"`
+	ID       idgen.ID       `json:"id"`
+	Name     string         `json:"name"`
+	Module   string         `json:"module"`
+	GoModule string         `json:"goModule"`
+	Table    string         `json:"table"`
+	Define   *TableDef      `json:"define,omitempty"`
 	Columns  []ColumnConfig `json:"columns"`
-	Sub      *SubTableSpec `json:"sub,omitempty"`
+	Sub      *SubTableSpec  `json:"sub,omitempty"`
 }
 
 // ListConfigs 列出全部保存的配置（按更新时间倒序）。

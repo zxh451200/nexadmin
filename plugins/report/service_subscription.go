@@ -45,12 +45,12 @@ func (s *Service) WithMailer(m mailer) *Service {
 
 // SubscriptionView 是订阅配置视图。
 type SubscriptionView struct {
-	ReportID   idgen.ID  `json:"reportId"`
-	Schedule   string    `json:"schedule"`
-	SendHour   int       `json:"sendHour"`
-	Weekday    int       `json:"weekday"`
-	Recipients string    `json:"recipients"`
-	Enabled    bool      `json:"enabled"`
+	ReportID   idgen.ID   `json:"reportId"`
+	Schedule   string     `json:"schedule"`
+	SendHour   int        `json:"sendHour"`
+	Weekday    int        `json:"weekday"`
+	Recipients string     `json:"recipients"`
+	Enabled    bool       `json:"enabled"`
 	LastSentAt *time.Time `json:"lastSentAt,omitempty"`
 }
 

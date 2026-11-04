@@ -122,7 +122,7 @@ func orderQueryFrom(c *gin.Context) OrderQuery {
 	return OrderQuery{
 		Keyword: c.Query("keyword"), Status: c.Query("status"), Channel: c.Query("channelCode"),
 		SubjectID: c.Query("subjectId"), BizType: c.Query("bizType"), Scene: c.Query("scene"),
-		FailReason: c.Query("failReason"),
+		FailReason:  c.Query("failReason"),
 		CreatedFrom: c.Query("createdFrom"), CreatedTo: c.Query("createdTo"),
 	}
 }
