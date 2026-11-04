@@ -62,16 +62,9 @@ func fixPalette(pal color.Palette) {
 	}
 }
 
-// renderCaptchaAudio 出 WAV，供音频验证码使用。
-func renderCaptchaAudio(key, text, lang string) ([]byte, error) {
-	var buf bytes.Buffer
-	if _, err := captcha.NewAudio(key, digitBytes(text), audioLang(lang)).WriteTo(&buf); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
-}
+// renderCaptchaAudio 移至 captcha_audio.go：自绘合成替代 dchest NewAudio 的噪声混音。
 
-// audioLang 把界面语言映射到渲染器内置的语音包（en/ja/ru/zh/pt），其余回落英文。
+// audioLang 把界面语言映射到 captchasounds/ 打包的语音（en/ja/ru/zh/pt），其余回落英文。
 func audioLang(lang string) string {
 	prefix := lang
 	if i := strings.IndexByte(lang, '-'); i >= 0 {

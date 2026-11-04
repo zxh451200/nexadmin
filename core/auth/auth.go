@@ -77,12 +77,12 @@ type PasswordVerifier interface {
 
 // Claims 是 JWT 载荷。Kind 区分 access / refresh；access 里的 RID 是配对 refresh 的 jti，登出时一并吊销。
 type Claims struct {
-	UserID          idgen.ID        `json:"uid"`
-	TenantID        idgen.ID        `json:"tid"`
-	Username        string          `json:"un"`
-	Super           bool            `json:"su,omitempty"`
-	Kind            string          `json:"knd"`
-	RID             string          `json:"rid,omitempty"`
+	UserID   idgen.ID `json:"uid"`
+	TenantID idgen.ID `json:"tid"`
+	Username string   `json:"un"`
+	Super    bool     `json:"su,omitempty"`
+	Kind     string   `json:"knd"`
+	RID      string   `json:"rid,omitempty"`
 	// SessionStart 是本次会话首次登录的时间（Unix 秒）。刷新轮换原样带走，作为「最长会话」的锚点，
 	// 避免每次刷新都把计时重新推后（那样等于永不过期）。
 	SessionStart    int64           `json:"sst,omitempty"`
