@@ -590,41 +590,45 @@ func (h *handler) Register(r *gin.RouterGroup, d *core.Deps) {
 	// 删附件＝改附件能力的对偶，沿用 ticket:reply；删除本身要进操作日志（它是普通 JSON 响应）。
 	g.DELETE("/tickets/:no/attachments/:token", core.Perm("ticket:reply"), h.inScope, d.OperLogMiddleware("ticket", "delete"), h.deleteAdmin)
 
+	// 快捷回复/SLA/分组/规则/自定义字段这几张表嵌 database.PlatformModel——表里没有 tenant_id，
+	// 一行服务所有租户（017 划的线：客户数据按租户切，运营配置平台共享）。它们的写入口除权限点外
+	// 还要 core.RequirePlatform()：ticket:edit 只回答「能用这个模块」，回答不了「能改别人也在用的那一行」。
+	// 写租户表的按单操作（/tickets/:no/group、/tags、/custom-values、/merge）不挂闸，坐席照常做单。
 	g.GET("/canned", core.Perm("ticket:list"), h.listCanned)
-	g.POST("/canned", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "create"), h.createCanned)
-	g.PUT("/canned/:id", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "update"), h.updateCanned)
-	g.DELETE("/canned/:id", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "delete"), h.deleteCanned)
+	g.POST("/canned", core.Perm("ticket:edit"), core.RequirePlatform(), d.OperLogMiddleware("ticket", "create"), h.createCanned)
+	g.PUT("/canned/:id", core.Perm("ticket:edit"), core.RequirePlatform(), d.OperLogMiddleware("ticket", "update"), h.updateCanned)
+	g.DELETE("/canned/:id", core.Perm("ticket:edit"), core.RequirePlatform(), d.OperLogMiddleware("ticket", "delete"), h.deleteCanned)
 
 	g.GET("/sla", core.Perm("ticket:list"), h.getSLA)
-	g.PUT("/sla", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "update"), h.saveSLA)
+	g.PUT("/sla", core.Perm("ticket:edit"), core.RequirePlatform(), d.OperLogMiddleware("ticket", "update"), h.saveSLA)
 
 	g.GET("/groups", core.Perm("ticket:list"), h.listGroups)
-	g.POST("/groups", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "create"), h.createGroup)
-	g.PUT("/groups/:id", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "update"), h.updateGroup)
-	g.DELETE("/groups/:id", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "delete"), h.deleteGroup)
-	g.PUT("/groups/:id/members", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "update"), h.setGroupMembers)
+	g.POST("/groups", core.Perm("ticket:edit"), core.RequirePlatform(), d.OperLogMiddleware("ticket", "create"), h.createGroup)
+	g.PUT("/groups/:id", core.Perm("ticket:edit"), core.RequirePlatform(), d.OperLogMiddleware("ticket", "update"), h.updateGroup)
+	g.DELETE("/groups/:id", core.Perm("ticket:edit"), core.RequirePlatform(), d.OperLogMiddleware("ticket", "delete"), h.deleteGroup)
+	g.PUT("/groups/:id/members", core.Perm("ticket:edit"), core.RequirePlatform(), d.OperLogMiddleware("ticket", "update"), h.setGroupMembers)
 	g.POST("/tickets/:no/group", core.Perm("ticket:edit"), h.inScope, d.OperLogMiddleware("ticket", "update"), h.assignGroup)
 
 	g.GET("/rules", core.Perm("ticket:list"), h.listRules)
 	g.GET("/biz-types", core.Perm("ticket:list"), h.listBizTypes)
-	g.POST("/rules", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "create"), h.createRule)
-	g.PUT("/rules/:id", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "update"), h.updateRule)
-	g.DELETE("/rules/:id", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "delete"), h.deleteRule)
+	g.POST("/rules", core.Perm("ticket:edit"), core.RequirePlatform(), d.OperLogMiddleware("ticket", "create"), h.createRule)
+	g.PUT("/rules/:id", core.Perm("ticket:edit"), core.RequirePlatform(), d.OperLogMiddleware("ticket", "update"), h.updateRule)
+	g.DELETE("/rules/:id", core.Perm("ticket:edit"), core.RequirePlatform(), d.OperLogMiddleware("ticket", "delete"), h.deleteRule)
 
 	g.GET("/tags", core.Perm("ticket:list"), h.listTags)
 	g.PUT("/tickets/:no/tags", core.Perm("ticket:edit"), h.inScope, d.OperLogMiddleware("ticket", "update"), h.setTags)
 
 	// 自定义字段（见 field.go）：定义是配置类资源，复用 ticket:list / ticket:edit，不新增权限码。
 	g.GET("/fields", core.Perm("ticket:list"), h.listFields)
-	g.POST("/fields", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "create"), h.createField)
-	g.PUT("/fields/:id", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "update"), h.updateField)
-	g.DELETE("/fields/:id", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "delete"), h.deleteField)
+	g.POST("/fields", core.Perm("ticket:edit"), core.RequirePlatform(), d.OperLogMiddleware("ticket", "create"), h.createField)
+	g.PUT("/fields/:id", core.Perm("ticket:edit"), core.RequirePlatform(), d.OperLogMiddleware("ticket", "update"), h.updateField)
+	g.DELETE("/fields/:id", core.Perm("ticket:edit"), core.RequirePlatform(), d.OperLogMiddleware("ticket", "delete"), h.deleteField)
 	g.POST("/tickets/:no/custom-values", core.Perm("ticket:edit"), h.inScope, d.OperLogMiddleware("ticket", "update"), h.setCustomValues)
 
 	// 多套 SLA 策略与节假日（见 sla.go）：默认策略仍走上面的 GET/PUT /sla，这里只管命名策略。
 	g.GET("/sla/policies", core.Perm("ticket:list"), h.listSLAPolicies)
-	g.POST("/sla/policy", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "update"), h.saveSLAPolicy)
-	g.DELETE("/sla/policy/:code", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "delete"), h.deleteSLAPolicy)
+	g.POST("/sla/policy", core.Perm("ticket:edit"), core.RequirePlatform(), d.OperLogMiddleware("ticket", "update"), h.saveSLAPolicy)
+	g.DELETE("/sla/policy/:code", core.Perm("ticket:edit"), core.RequirePlatform(), d.OperLogMiddleware("ticket", "delete"), h.deleteSLAPolicy)
 
 	// 合并与关联单（见 merge.go / merge_handler.go）：复用 ticket:edit / ticket:list，不新增权限码。
 	// 对侧工单号在请求体里，中间件只挡得住 :no，所以 merge.go 里还要单独校对侧（见 visibleOther）。

@@ -32,6 +32,8 @@ import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
+import { PlatformNotice } from '@/framework/components/PlatformNotice'
+import { usePermission } from '@/framework/auth/usePermission'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { useIsMobile } from '@/framework/hooks/use-mobile'
 import { DatePicker } from '@/framework/components/DatePicker'
@@ -293,6 +295,9 @@ const emptyRuleForm = {
 
 export default function TicketPage() {
   const { t } = useTranslation()
+  // 字段/分组/规则/SLA/快捷回复这几张表没有 tenant_id，后端写入口只认平台调用方；
+  // 这里把写按钮置灰并给一行说明，读与队列操作照常。
+  const { isPlatform } = usePermission()
   const confirm = useConfirm()
   const [params, setParams] = useSearchParams()
   const view = params.get('view') === 'stats' ? 'stats' : 'logs'
@@ -1595,6 +1600,7 @@ export default function TicketPage() {
         }
       >
         <div className="space-y-4">
+          <PlatformNotice />
           {(fields.data ?? []).length === 0 ? (
             <EmptyState title={t('plugin_ticket.fields.empty')} className="py-6" />
           ) : (
@@ -1610,10 +1616,10 @@ export default function TicketPage() {
                     <span className="text-xs text-muted-foreground">{f.options.join(' / ')}</span>
                   ) : null}
                   <span className="ms-auto flex items-center gap-1">
-                    <Button variant="ghost" size="sm" onClick={() => editField(f)}>
+                    <Button variant="ghost" size="sm" disabled={!isPlatform} onClick={() => editField(f)}>
                       {t('common.edit')}
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => void removeField(f)} aria-label={t('common.delete')}>
+                    <Button variant="ghost" size="sm" disabled={!isPlatform} onClick={() => void removeField(f)} aria-label={t('common.delete')}>
                       <Trash2 aria-hidden="true" />
                     </Button>
                   </span>
@@ -1676,7 +1682,7 @@ export default function TicketPage() {
               />
               {t('plugin_ticket.fields.enabled')}
             </label>
-            <Button size="sm" disabled={saveFieldMut.isPending} onClick={() => void submitField()}>
+            <Button size="sm" disabled={!isPlatform || saveFieldMut.isPending} onClick={() => void submitField()}>
               {fieldForm.id ? t('common.save') : t('plugin_ticket.fields.add')}
             </Button>
             {fieldForm.id ? (
@@ -1729,6 +1735,7 @@ export default function TicketPage() {
         }
       >
         <div className="space-y-4">
+          <PlatformNotice />
           <div className="space-y-2">
             {canned.data?.length ? (
               canned.data.map((row) => (
@@ -1737,7 +1744,7 @@ export default function TicketPage() {
                     <p className="truncate text-sm font-medium">{row.title}</p>
                     <p className="line-clamp-2 text-xs text-muted-foreground">{row.content}</p>
                   </div>
-                  <Button variant="ghost" size="sm" onClick={() => editCanned(row)}>
+                  <Button variant="ghost" size="sm" disabled={!isPlatform} onClick={() => editCanned(row)}>
                     {t('common.edit')}
                   </Button>
                   <Button
@@ -1745,6 +1752,7 @@ export default function TicketPage() {
                     size="icon"
                     aria-label={t('common.delete')}
                     className="text-destructive"
+                    disabled={!isPlatform}
                     onClick={() => void removeCanned(row)}
                   >
                     <Trash2 aria-hidden="true" />
@@ -1780,7 +1788,7 @@ export default function TicketPage() {
                 </Button>
               ) : null}
               <Button
-                disabled={!cannedForm.title.trim() || !cannedForm.content.trim() || createCanned.isPending || updateCanned.isPending}
+                disabled={!isPlatform || !cannedForm.title.trim() || !cannedForm.content.trim() || createCanned.isPending || updateCanned.isPending}
                 onClick={() => void saveCanned()}
               >
                 {cannedForm.id ? t('plugin_ticket.canned.save') : t('plugin_ticket.canned.add')}
@@ -1802,13 +1810,14 @@ export default function TicketPage() {
             <Button variant="outline" onClick={() => setSlaOpen(false)}>
               {t('common.cancel')}
             </Button>
-            <Button disabled={saveSLA.isPending} onClick={() => void submitSLA()}>
+            <Button disabled={!isPlatform || saveSLA.isPending} onClick={() => void submitSLA()}>
               {t('plugin_ticket.sla.save')}
             </Button>
           </>
         }
       >
         <div className="space-y-5">
+          <PlatformNotice />
           {/* 多套策略：默认策略就是原来那一份；命名策略绑给队列，各队列时限与节假日可以不同。 */}
           <div className="flex flex-wrap items-center gap-2">
             <SimpleSelect
@@ -1823,7 +1832,7 @@ export default function TicketPage() {
                   .map((p) => ({ value: p.code ?? '', label: p.label || (p.code ?? '') })),
               ]}
             />
-            <Button variant="outline" size="sm" onClick={newPolicy}>
+            <Button variant="outline" size="sm" disabled={!isPlatform} onClick={newPolicy}>
               <Plus aria-hidden="true" />
               {t('plugin_ticket.sla.newPolicy')}
             </Button>
@@ -1831,7 +1840,7 @@ export default function TicketPage() {
               <Button
                 variant="outline"
                 size="sm"
-                disabled={deletePolicyMut.isPending}
+                disabled={!isPlatform || deletePolicyMut.isPending}
                 onClick={() => void removePolicy(slaForm.code ?? '')}
               >
                 <Trash2 aria-hidden="true" />
@@ -2006,6 +2015,7 @@ export default function TicketPage() {
         }
       >
         <div className="space-y-4">
+          <PlatformNotice />
           <div className="space-y-2">
             {groups.data?.length ? (
               groups.data.map((g) => (
@@ -2020,7 +2030,7 @@ export default function TicketPage() {
                       {g.description || '-'} · {t('plugin_ticket.groups.memberCount', { count: g.members?.length ?? 0 })}
                     </p>
                   </div>
-                  <Button variant="ghost" size="sm" onClick={() => editGroup(g)}>
+                  <Button variant="ghost" size="sm" disabled={!isPlatform} onClick={() => editGroup(g)}>
                     {t('common.edit')}
                   </Button>
                   <Button
@@ -2028,6 +2038,7 @@ export default function TicketPage() {
                     size="icon"
                     aria-label={t('common.delete')}
                     className="text-destructive"
+                    disabled={!isPlatform}
                     onClick={() => void removeGroup(g)}
                   >
                     <Trash2 aria-hidden="true" />
@@ -2115,6 +2126,7 @@ export default function TicketPage() {
               ) : null}
               <Button
                 disabled={
+                  !isPlatform ||
                   !groupForm.name.trim() ||
                   createGroup.isPending ||
                   updateGroup.isPending ||
@@ -2175,6 +2187,7 @@ export default function TicketPage() {
         }
       >
         <div className="space-y-4">
+          <PlatformNotice />
           <div className="space-y-2">
             {rules.data?.length ? (
               rules.data.map((r) => (
@@ -2186,7 +2199,7 @@ export default function TicketPage() {
                     </p>
                     <p className="line-clamp-2 text-xs text-muted-foreground">{ruleSummary(r)}</p>
                   </div>
-                  <Button variant="ghost" size="sm" onClick={() => editRule(r)}>
+                  <Button variant="ghost" size="sm" disabled={!isPlatform} onClick={() => editRule(r)}>
                     {t('common.edit')}
                   </Button>
                   <Button
@@ -2194,6 +2207,7 @@ export default function TicketPage() {
                     size="icon"
                     aria-label={t('common.delete')}
                     className="text-destructive"
+                    disabled={!isPlatform}
                     onClick={() => void removeRule(r)}
                   >
                     <Trash2 aria-hidden="true" />
@@ -2349,7 +2363,7 @@ export default function TicketPage() {
                 </Button>
               ) : null}
               <Button
-                disabled={!ruleForm.name.trim() || createRule.isPending || updateRule.isPending}
+                disabled={!isPlatform || !ruleForm.name.trim() || createRule.isPending || updateRule.isPending}
                 onClick={() => void submitRule()}
               >
                 {t('plugin_ticket.rules.save')}
@@ -3336,6 +3350,7 @@ function ReporterHistoryPanel({ ticketNo, onOpenTicket }: { ticketNo: string; on
  */
 function TicketSettingsDialog({ onOpenChange }: { onOpenChange: (v: boolean) => void }) {
   const { t } = useTranslation()
+  const { isPlatform } = usePermission()
   const { data, isLoading } = useTicketSettings()
   const save = useSaveTicketSettings()
   const [emailNotify, setEmailNotify] = useState(false)
@@ -3374,13 +3389,14 @@ function TicketSettingsDialog({ onOpenChange }: { onOpenChange: (v: boolean) => 
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             {t('common.cancel')}
           </Button>
-          <Button disabled={save.isPending || isLoading} onClick={() => void submit()}>
+          <Button disabled={!isPlatform || save.isPending || isLoading} onClick={() => void submit()}>
             {t('common.save')}
           </Button>
         </>
       }
     >
       <div className="space-y-3">
+        <PlatformNotice />
         <label className="flex items-center justify-between gap-2">
           <span className="text-sm text-foreground">{t('plugin_ticket.settings.emailNotify')}</span>
           <Switch checked={emailNotify} onCheckedChange={setEmailNotify} aria-label={t('plugin_ticket.settings.emailNotify')} />

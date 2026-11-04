@@ -6,6 +6,12 @@ export interface AuthUser {
   tenantId?: string
   roles: string[]
   perms: string[]
+  /**
+   * 平台级调用方（超管，或落在默认租户里）：平台共享表（没有 tenant_id、一行服务所有租户）的
+   * 写入口只认这种调用方。与 perms.includes('*') 不是一回事——平台自己的非超管坐席也是 true。
+   * 由 core/auth 的 normalize() 随登录与 /auth/me 给出；缺字段按「不是平台」处理（宁可只读，不误写）。
+   */
+  platform?: boolean
   /** 所属租户即将到期时由服务端返回（登录与 /auth/me）；超管与未临近到期的租户没有该字段 */
   tenantExpireSoon?: { expireAt: string; daysLeft: number }
 }

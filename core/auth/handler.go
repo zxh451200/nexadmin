@@ -33,6 +33,8 @@ func normalize(u *User) *User {
 	if u.Perms == nil {
 		u.Perms = []string{}
 	}
+	// 平台共享配置的写入口只认平台级调用方：把判据随会话一起给出，前端才能做成只读而不是让人撞 403。
+	u.Platform = u.IsPlatform()
 	return u
 }
 

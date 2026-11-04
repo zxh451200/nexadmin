@@ -60,7 +60,9 @@ func RequirePlatform() gin.HandlerFunc {
 			c.Next()
 			return
 		}
-		response.Fail(c, response.Forbidden("error.forbidden"))
+		// 文案要指得清路：这里的 403 不是「你没权限用这个模块」，是「这一行所有租户共用，
+		// 轮不到你改」——只回笼统的 forbidden，租户管理员会以为自己权限配错了而去翻角色。
+		response.Fail(c, response.Forbidden("error.platform_only"))
 	}
 }
 

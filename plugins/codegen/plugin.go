@@ -32,9 +32,11 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.POST("/schema", core.Perm("codegen:list"), h.schema)
 	g.POST("/preview", core.Perm("codegen:list"), h.preview)
 	g.POST("/download", core.Perm("codegen:download"), h.download)
-	g.POST("/install", core.Perm("codegen:install"), h.install)
+	// install 写进项目根目录、configs 落在 plg_codegen_config（PlatformModel，表里没有 tenant_id）：
+	// 这两类都不属于某个租户，写入口只认平台级调用方。preview/download/schema 是无状态渲染，按权限点即可。
+	g.POST("/install", core.Perm("codegen:install"), core.RequirePlatform(), h.install)
 	g.GET("/configs", core.Perm("codegen:list"), h.listConfigs)
-	g.POST("/configs", core.Perm("codegen:edit"), h.saveConfig)
-	g.DELETE("/configs/:id", core.Perm("codegen:edit"), h.deleteConfig)
-	g.DELETE("/configs", core.Perm("codegen:edit"), h.deleteConfigs)
+	g.POST("/configs", core.Perm("codegen:edit"), core.RequirePlatform(), h.saveConfig)
+	g.DELETE("/configs/:id", core.Perm("codegen:edit"), core.RequirePlatform(), h.deleteConfig)
+	g.DELETE("/configs", core.Perm("codegen:edit"), core.RequirePlatform(), h.deleteConfigs)
 }

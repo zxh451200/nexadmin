@@ -12,6 +12,7 @@ error:
   not_found: 资源不存在
   not_initialized: 系统尚未初始化
   tenant_mismatch: 无权访问该租户
+  platform_only: 该项是平台级共享配置（所有租户共用同一行），只有平台管理员能修改；如需调整请联系平台管理员
   unknown: 未知错误
   ai_tenant_disabled: 当前租户已被平台关闭 AI 功能，请联系平台管理员
   ai_quota_exceeded: 今日 AI 调用次数已达租户上限（%d 次），请明天再试或联系平台管理员

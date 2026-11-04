@@ -44,6 +44,7 @@
     "loading": "Loading…",
     "empty": "No data",
     "actions": "Actions",
+    "platformOnly": "Platform-shared setting: every tenant reads this same row, and only platform administrators can change it. You can view it; ask a platform admin to make changes.",
     "status": "Status",
     "enable": "Enable",
     "disable": "Disable",

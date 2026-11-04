@@ -3,6 +3,8 @@ import { ArrowLeft, ArrowRight, Database, Download, FolderInput, Plus, Save, Tra
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
+import { usePermission } from '@/framework/auth/usePermission'
+import { PlatformNotice } from '@/framework/components/PlatformNotice'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { EmptyState } from '@/framework/components/EmptyState'
 import { DataTable, type Column } from '@/framework/components/DataTable'
@@ -48,6 +50,8 @@ type Source = { kind: 'table'; name: string } | { kind: 'define'; def: TableDef 
 
 export default function CodegenPage() {
   const { t } = useTranslation()
+  // 保存的配置在 plg_codegen_config（没有 tenant_id），install 写进项目根目录：都不属于某个租户。
+  const { isPlatform } = usePermission()
   const confirm = useConfirm()
   const [step, setStep] = useState<Step>('table')
   const [draft, setDraft] = useState('')
@@ -330,6 +334,7 @@ export default function CodegenPage() {
               {savedConfigs.length > 0 ? (
                 <section className="flex flex-col gap-2">
                   <p className="text-sm font-medium text-muted-foreground">{t('plugin_codegen.saved.title')}</p>
+                  <PlatformNotice />
                   <DataTable
                     columns={configColumns}
                     data={savedConfigs}
@@ -339,7 +344,7 @@ export default function CodegenPage() {
                     selection={{ selected: selectedCfgs, onChange: setSelectedCfgs }}
                     batchActions={(ids) => (
                       <Can perm="codegen:edit">
-                        <Button variant="destructive" size="sm" disabled={removeConfigs.isPending} onClick={() => void onDeleteConfigBatch(ids)}>
+                        <Button variant="destructive" size="sm" disabled={!isPlatform || removeConfigs.isPending} onClick={() => void onDeleteConfigBatch(ids)}>
                           <Trash2 aria-hidden="true" />
                           {t('common.delete')}
                         </Button>
@@ -352,7 +357,7 @@ export default function CodegenPage() {
                           {t('plugin_codegen.saved.load')}
                         </Button>
                         <Can perm="codegen:edit">
-                          <Button variant="ghost" size="icon" className="text-destructive" aria-label={t('common.delete')} onClick={() => void onDeleteConfig(r)}>
+                          <Button variant="ghost" size="icon" className="text-destructive" aria-label={t('common.delete')} disabled={!isPlatform} onClick={() => void onDeleteConfig(r)}>
                             <Trash2 aria-hidden="true" />
                           </Button>
                         </Can>
@@ -389,9 +394,10 @@ export default function CodegenPage() {
           ) : (
             <p className="text-sm text-muted-foreground">{schema.isError ? t('plugin_codegen.errors.load') : t('common.loading')}</p>
           )}
+          <PlatformNotice />
           <div className="flex flex-wrap justify-end gap-2">
             <Can perm="codegen:edit">
-              <Button variant="outline" onClick={() => { setSaveName(module); setSaveOpen(true) }} disabled={!canPreview}>
+              <Button variant="outline" onClick={() => { setSaveName(module); setSaveOpen(true) }} disabled={!isPlatform || !canPreview}>
                 <Save className="me-2 size-4" aria-hidden="true" />
                 {t('plugin_codegen.action.saveConfig')}
               </Button>
@@ -415,7 +421,7 @@ export default function CodegenPage() {
               {t('plugin_codegen.action.back')}
             </Button>
             <Can perm="codegen:install">
-              <Button variant="outline" onClick={() => { setOverwrite(false); setInstallOpen(true) }} disabled={!output}>
+              <Button variant="outline" onClick={() => { setOverwrite(false); setInstallOpen(true) }} disabled={!isPlatform || !output}>
                 <FolderInput className="me-2 size-4" aria-hidden="true" />
                 {t('plugin_codegen.action.install')}
               </Button>

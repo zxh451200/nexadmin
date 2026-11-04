@@ -14,6 +14,8 @@ const users: Record<string, AuthUser & { password: string; phone: string }> = {
     tenantId: '1790000000000000100',
     roles: ['admin'],
     perms: ALL,
+    // 平台级调用方：平台共享配置（工单字段/分组/规则/SLA/快捷回复、代码生成器保存配置）的写入口给 admin 开着
+    platform: true,
     password: 'admin123',
     phone: '13800000000',
   },
@@ -25,6 +27,8 @@ const users: Record<string, AuthUser & { password: string; phone: string }> = {
     tenantId: DEMO_TENANT_ID,
     roles: ['operator'],
     perms: ['dashboard:view', 'user:list', 'role:list', 'dept:list', 'post:list', 'notice:list', 'message:list', 'profile:view'],
+    // 非平台调用方：demo 登录用来在开发态看平台共享配置的只读态（后端这类写路由会回 403）
+    platform: false,
     password: 'demo123',
     phone: '13900000000',
     // 演示：租户 9 天后到期，登录后顶栏出现“租户即将到期”提示条

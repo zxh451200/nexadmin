@@ -12,6 +12,7 @@ error:
   not_found: Resource not found
   not_initialized: System is not initialized
   tenant_mismatch: Access to this tenant is not allowed
+  platform_only: This is platform-shared configuration (one row for every tenant) and only a platform administrator can change it; please contact the platform administrator
   unknown: Unknown error
   ai_tenant_disabled: AI is turned off for your tenant. Please contact the platform administrator
   ai_quota_exceeded: Your tenant has reached its daily AI call limit (%d). Please try again tomorrow or contact the platform administrator

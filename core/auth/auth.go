@@ -34,6 +34,11 @@ type User struct {
 	Roles    []string `json:"roles"`
 	Perms    []string `json:"perms"` // "*" = 全部；"user:*" = 该前缀下全部
 	Super    bool     `json:"-"`     // 超管：可进 /api/v1/admin、可跨租户
+	// Platform 表示该用户是否平台级调用方（超管，或落在默认租户里）。平台共享表（嵌
+	// PlatformModel、没有 tenant_id 的那几张）的写路由只认这种调用方，前端据此把写入口
+	// 收成只读，而不是让人撞 403。与 core.IsPlatformCaller 同一条判据：非超管的请求租户
+	// 由 middleware.Tenant 强制等于令牌租户，所以这里能按用户自身算出来。
+	Platform bool `json:"platform"`
 	// LoginMethod 由 Provider.Login 在凭据通过时填写实际的校验方式（如 "ldap"）；空 = 按请求类型（password / phone）。
 	LoginMethod string `json:"-"`
 	// TenantExpireSoon 非空表示所属租户即将到期（由 Service.Decorate 填充，登录与 /auth/me 返回）。
@@ -44,6 +49,13 @@ type User struct {
 type ExpireSoon struct {
 	ExpireAt time.Time `json:"expireAt"`
 	DaysLeft int       `json:"daysLeft"`
+}
+
+// IsPlatform 报告该用户是否平台级调用方，与 core.IsPlatformCaller 同一条判据：超管，或落在默认租户里。
+// 非超管的请求租户由 middleware.Tenant 强制等于令牌租户（不等就 403 tenant_mismatch），
+// 所以按用户自身算与按请求算一致；令牌里没有租户时，解析链的兜底同样是默认租户，一并算平台内。
+func (u *User) IsPlatform() bool {
+	return u.Super || u.TenantID == tenant.DefaultID || u.TenantID == 0
 }
 
 // LoginRequest 是 POST /auth/login 的请求体（字段与前端 LoginPayload 一致）。
