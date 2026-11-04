@@ -28,11 +28,13 @@ export interface UploaderProps {
   onChange: (value: UploadedFile[]) => void
   disabled?: boolean
   className?: string
+  /** 开启后监听剪贴板粘贴（Ctrl+V 直接把截图/复制的文件加入上传）；默认关，避免多实例互相劫持 */
+  enablePaste?: boolean
 }
 
 const NO_CROP_TYPES = ['image/gif', 'image/svg+xml']
 
-export function Uploader({ kind, multiple, maxCount, crop, visibility = 'private', value, onChange, disabled, className }: UploaderProps) {
+export function Uploader({ kind, multiple, maxCount, crop, visibility = 'private', value, onChange, disabled, className, enablePaste }: UploaderProps) {
   const { t } = useTranslation()
   const { data: cfg } = useUploadConfig()
   const limit = maxCount ?? (multiple ? 9 : 1)
@@ -113,7 +115,7 @@ export function Uploader({ kind, multiple, maxCount, crop, visibility = 'private
     [run],
   )
 
-  const accept = (files: File[], rid?: string) => {
+  const accept = useCallback((files: File[], rid?: string) => {
     let room = rid ? files.length : limit - valueRef.current.length - pending.length
     const ok: File[] = []
     for (const f of files) {
@@ -140,13 +142,38 @@ export function Uploader({ kind, multiple, maxCount, crop, visibility = 'private
     } else {
       ok.forEach((f) => start(f, rid))
     }
-  }
+  }, [limit, kind, cfg, crop, start, t, pending.length])
 
   const onPick = (e: React.ChangeEvent<HTMLInputElement>, rid?: string) => {
     const files = Array.from(e.target.files ?? [])
     e.target.value = ''
     if (files.length) accept(files, rid)
   }
+
+  // 拖拽上传：OS 文件拖到上传区内直接走 accept（precheck 会拦类型不符的）。
+  const [dragOver, setDragOver] = useState(false)
+  const onDropFiles = (e: React.DragEvent) => {
+    e.preventDefault()
+    setDragOver(false)
+    if (disabled) return
+    const files = Array.from(e.dataTransfer.files ?? [])
+    if (files.length) accept(files)
+  }
+
+  // 剪贴板粘贴：仅 enablePaste 的实例监听（上传弹窗），避免页面上多个 Uploader 互相劫持 Ctrl+V
+  useEffect(() => {
+    if (!enablePaste) return
+    const onPaste = (e: ClipboardEvent) => {
+      if (disabled) return
+      const files = Array.from(e.clipboardData?.files ?? [])
+      if (files.length) {
+        e.preventDefault()
+        accept(files)
+      }
+    }
+    window.addEventListener('paste', onPaste)
+    return () => window.removeEventListener('paste', onPaste)
+  }, [enablePaste, disabled, accept])
 
   const onDragEnd = (e: DragEndEvent) => {
     const { active, over } = e
@@ -164,7 +191,18 @@ export function Uploader({ kind, multiple, maxCount, crop, visibility = 'private
   const curCrop = cropQueue[0] ?? null
 
   return (
-    <div className={cn('w-full', className)}>
+    <div
+      className={cn('w-full', className, dragOver && 'rounded-md outline-2 outline-dashed outline-primary outline-offset-4')}
+      onDragOver={(e) => {
+        if (disabled) return
+        e.preventDefault()
+        setDragOver(true)
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(false)
+      }}
+      onDrop={onDropFiles}
+    >
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <DragCursorHost />
         <SortableContext items={value.map((f) => f.id)} strategy={kind === 'image' ? rectSortingStrategy : verticalListSortingStrategy}>

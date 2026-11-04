@@ -14,6 +14,9 @@ export interface FileItem {
   type: string
   category: FileCategory
   size: number
+  /** 图片像素尺寸（0 = 非图片或未提取） */
+  width?: number
+  height?: number
   visibility: FileVisibility
   /** 空字符串 = 未分组 */
   groupId: string

@@ -26,6 +26,9 @@ type File struct {
 	// VariantOf 非 0 表示这是原文件的派生副本（如 WebP）：不计入列表、随原文件删除，
 	// 可见性继承原文件，永远不会比原文件更公开。
 	VariantOf idgen.ID `gorm:"column:variant_of"`
+	// Width / Height 是图片的像素尺寸（tus 完成时读头部提取）；0 = 非图片或未提取。
+	Width  int `gorm:"column:width;not null;default:0"`
+	Height int `gorm:"column:height;not null;default:0"`
 }
 
 func (File) TableName() string { return "sys_file" }
@@ -42,13 +45,16 @@ func (Group) TableName() string { return "sys_file_group" }
 
 // FileItem 对应前端 FileItem。
 type FileItem struct {
-	ID         string    `json:"id"`
-	Name       string    `json:"name"`
-	URL        string    `json:"url"`
-	PosterURL  string    `json:"posterUrl,omitempty"`
-	Type       string    `json:"type"`
-	Category   string    `json:"category"`
-	Size       int64     `json:"size"`
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	URL       string `json:"url"`
+	PosterURL string `json:"posterUrl,omitempty"`
+	Type      string `json:"type"`
+	Category  string `json:"category"`
+	Size      int64  `json:"size"`
+	// Width / Height 是图片像素尺寸；0 = 非图片或未提取。
+	Width      int       `json:"width,omitempty"`
+	Height     int       `json:"height,omitempty"`
 	Visibility string    `json:"visibility"`
 	GroupID    string    `json:"groupId"` // 空字符串 = 未分组
 	Uploader   string    `json:"uploader"`

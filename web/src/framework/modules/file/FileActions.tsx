@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Copy, Download, Eye, FolderInput, Globe, Lock, MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { cn } from '@/lib/utils'
 import { FileThumb } from './FileThumb'
 import { useFileGroups, useUpdateFile, type FileItem } from './api'
+import { formatSize } from '@/framework/upload/precheck'
 
 export function fileLink(f: FileItem): string {
   if (!f.url || f.url.startsWith('data:')) return f.url ? `${window.location.origin}/files/${f.id}/${encodeURIComponent(f.name)}` : ''
@@ -46,16 +47,40 @@ export function downloadFile(f: FileItem) {
   a.remove()
 }
 
-/** 预览：图片放大（同一页其它图可左右翻），视频播放，其他显示文件卡片 */
+/** 预览：图片放大（同一页其它图可左右翻）+ 底部信息条（格式/大小/尺寸/上传时间），视频播放，其他显示文件卡片 */
 export function FilePreviewDialog({ file, images, onClose }: { file: FileItem | null; images?: FileItem[]; onClose: () => void }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   if (!file) return null
+  const fmt = (mime: string) => {
+    const sub = mime.split('/')[1] ?? ''
+    return sub.replace(/^x-/, '').replace('svg+xml', 'svg').toUpperCase()
+  }
+  const infoOf = (f: FileItem) => (
+    <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-xs sm:grid-cols-4">
+      <div>
+        <dt className="text-muted-foreground">{t('fileMgr.infoFormat')}</dt>
+        <dd className="num mt-0.5 text-foreground">{fmt(f.type)}</dd>
+      </div>
+      <div>
+        <dt className="text-muted-foreground">{t('fileMgr.size')}</dt>
+        <dd className="num mt-0.5 text-foreground">{formatSize(f.size)}</dd>
+      </div>
+      {f.width && f.height ? (
+        <div>
+          <dt className="text-muted-foreground">{t('fileMgr.infoDimensions')}</dt>
+          <dd className="num mt-0.5 text-foreground">{f.width} × {f.height} px</dd>
+        </div>
+      ) : null}
+      <div>
+        <dt className="text-muted-foreground">{t('fileMgr.createdAt')}</dt>
+        <dd className="num mt-0.5 text-foreground">{new Date(f.createdAt).toLocaleDateString(i18n.language)}</dd>
+      </div>
+    </dl>
+  )
+  const info = infoOf(file)
   if (file.category === 'image' && file.url) {
-    const group = (images ?? []).filter((f) => f.category === 'image' && f.url)
-    const index = group.findIndex((f) => f.id === file.id)
-    const slides =
-      index >= 0 ? group.map((f) => ({ src: f.url, alt: f.name })) : [{ src: file.url, alt: file.name }]
-    return <Lightbox open onOpenChange={(o) => !o && onClose()} slides={slides} index={Math.max(0, index)} />
+    // key=file.id：换一张图重挂一次，翻页位置不会带着上一张的停留处进来
+    return <ImageLightbox key={file.id} file={file} images={images} infoOf={infoOf} onClose={onClose} />
   }
   const playable = file.category === 'video' && !!file.url
   return (
@@ -70,7 +95,36 @@ export function FilePreviewDialog({ file, images, onClose }: { file: FileItem | 
           <p className="text-sm text-muted-foreground">{t('fileMgr.noVideoSource')}</p>
         </div>
       )}
+      {info}
     </ResponsiveDialog>
+  )
+}
+
+/**
+ * 图片大图预览。翻页由 Lightbox 自己管，所以当前第几张要经 onSlideView 拿回来——
+ * 否则底部信息条（格式/大小/宽高/时间）会一直停在刚打开那一张上，多图时全是错图。
+ */
+function ImageLightbox({ file, images, infoOf, onClose }: {
+  file: FileItem
+  images?: FileItem[]
+  infoOf: (f: FileItem) => ReactNode
+  onClose: () => void
+}) {
+  const group = (images ?? []).filter((f) => f.category === 'image' && f.url)
+  const at = group.findIndex((f) => f.id === file.id)
+  const slides = at >= 0 ? group.map((f) => ({ src: f.url, alt: f.name })) : [{ src: file.url, alt: file.name }]
+  const [shown, setShown] = useState(Math.max(0, at))
+  // 只有一张图（或本图不在组里）时没有翻页可跟，信息条固定显示这一张。
+  const current = at >= 0 ? group[shown] ?? file : file
+  return (
+    <Lightbox
+      open
+      onOpenChange={(o) => !o && onClose()}
+      slides={slides}
+      index={Math.max(0, at)}
+      onSlideView={at >= 0 && group.length > 1 ? setShown : undefined}
+      caption={infoOf(current)}
+    />
   )
 }
 

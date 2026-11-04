@@ -35,25 +35,27 @@ const iso = (daysAgo: number, hour: number) => {
 
 interface Spec {
   name: string
-  category: FileCategory
+  category: 'image' | 'video' | 'doc' | 'other'
   type: string
   size: number
   group: number // groups index, -1 = none
   vis: 'public' | 'private'
+  width?: number
+  height?: number
 }
 
 const specs: Spec[] = [
-  { name: 'banner-spring.png', category: 'image', type: 'image/png', size: 842_113, group: 0, vis: 'public' },
-  { name: 'product-front.jpg', category: 'image', type: 'image/jpeg', size: 512_440, group: 0, vis: 'public' },
-  { name: 'product-side.jpg', category: 'image', type: 'image/jpeg', size: 498_021, group: 0, vis: 'public' },
-  { name: '产品详情图-01.png', category: 'image', type: 'image/png', size: 1_204_551, group: 0, vis: 'public' },
-  { name: '产品详情图-02.png', category: 'image', type: 'image/png', size: 1_180_320, group: 0, vis: 'private' },
+  { name: 'banner-spring.png', category: 'image', type: 'image/png', size: 842_113, group: 0, vis: 'public', width: 1920, height: 640 },
+  { name: 'product-front.jpg', category: 'image', type: 'image/jpeg', size: 512_440, group: 0, vis: 'public', width: 1200, height: 900 },
+  { name: 'product-side.jpg', category: 'image', type: 'image/jpeg', size: 498_021, group: 0, vis: 'public', width: 1200, height: 900 },
+  { name: '产品详情图-01.png', category: 'image', type: 'image/png', size: 1_204_551, group: 0, vis: 'public', width: 1080, height: 1440 },
+  { name: '产品详情图-02.png', category: 'image', type: 'image/png', size: 1_180_320, group: 0, vis: 'private', width: 1080, height: 1440 },
   { name: 'logo-dark.svg', category: 'image', type: 'image/svg+xml', size: 8_420, group: 0, vis: 'public' },
-  { name: 'avatar-zhangwei.png', category: 'image', type: 'image/png', size: 64_220, group: 3, vis: 'private' },
-  { name: 'avatar-emily.jpg', category: 'image', type: 'image/jpeg', size: 71_904, group: 3, vis: 'private' },
-  { name: 'avatar-lina.webp', category: 'image', type: 'image/webp', size: 38_210, group: 3, vis: 'private' },
-  { name: 'team-photo.jpg', category: 'image', type: 'image/jpeg', size: 2_310_998, group: -1, vis: 'private' },
-  { name: 'office-night.jpg', category: 'image', type: 'image/jpeg', size: 1_870_332, group: -1, vis: 'public' },
+  { name: 'avatar-zhangwei.png', category: 'image', type: 'image/png', size: 64_220, group: 3, vis: 'private', width: 256, height: 256 },
+  { name: 'avatar-emily.jpg', category: 'image', type: 'image/jpeg', size: 71_904, group: 3, vis: 'private', width: 256, height: 256 },
+  { name: 'avatar-lina.webp', category: 'image', type: 'image/webp', size: 38_210, group: 3, vis: 'private', width: 256, height: 256 },
+  { name: 'team-photo.jpg', category: 'image', type: 'image/jpeg', size: 2_310_998, group: -1, vis: 'private', width: 4032, height: 3024 },
+  { name: 'office-night.jpg', category: 'image', type: 'image/jpeg', size: 1_870_332, group: -1, vis: 'public', width: 3840, height: 2160 },
   { name: 'promo-2026.mp4', category: 'video', type: 'video/mp4', size: 48_220_113, group: 1, vis: 'public' },
   { name: 'product-demo.mp4', category: 'video', type: 'video/mp4', size: 31_902_440, group: 1, vis: 'public' },
   { name: '客户访谈-录屏.webm', category: 'video', type: 'video/webm', size: 76_330_901, group: 1, vis: 'private' },
@@ -80,6 +82,8 @@ let files: FileItem[] = specs.map((s, i) => {
     type: s.type,
     category: s.category,
     size: s.size,
+    width: s.width,
+    height: s.height,
     visibility: s.vis,
     groupId: s.group >= 0 ? groups[s.group].id : '',
     uploader: uploaders[i % uploaders.length],

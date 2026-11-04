@@ -482,7 +482,16 @@ func (h *tusHandler) finish(c *gin.Context, s *session, f *os.File) error {
 			return unsupportedContent(err)
 		}
 	}
+	category := classify(s.Type, s.Name)
 	sum := sha256.New()
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		return err
+	}
+	// 图片宽高：只读头部几十字节，放在整文件哈希之前一次 Seek 完成；读不出存 0（会留日志）。
+	var imgW, imgH int
+	if category == "image" {
+		imgW, imgH = imageDimensions(f, s.Name, s.Type)
+	}
 	if _, err := f.Seek(0, io.SeekStart); err != nil {
 		return err
 	}
@@ -495,7 +504,6 @@ func (h *tusHandler) finish(c *gin.Context, s *session, f *os.File) error {
 	tid, _ := idgen.Parse(s.TenantID)
 	rel := finalRel(s.TenantID, s.ID, s.Name, time.Now())
 	ctx := c.Request.Context()
-	category := classify(s.Type, s.Name)
 	visibility := s.Visibility
 	if s.VariantOf != 0 {
 		// 副本的可见性跟随原文件，客户端传什么都不算数；在落盘前解析，失败时临时文件仍可续传。
@@ -528,6 +536,7 @@ func (h *tusHandler) finish(c *gin.Context, s *session, f *os.File) error {
 	}
 	rec := File{
 		Name: s.Name, StoragePath: rel, MimeType: s.Type, Category: category, Size: s.Length,
+		Width: imgW, Height: imgH,
 		Hash: hash, Visibility: visibility, Token: randomToken(), Uploader: s.Username, VariantOf: s.VariantOf,
 	}
 	rec.ID, rec.TenantID = id, tid

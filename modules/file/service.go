@@ -82,6 +82,7 @@ func (s *Service) toItem(f File) FileItem {
 	it := FileItem{
 		ID: f.ID.String(), Name: f.Name, PosterURL: f.PosterURL, Type: f.MimeType, Category: f.Category,
 		Size: f.Size, Visibility: f.Visibility, Uploader: f.Uploader, CreatedAt: f.CreatedAt.UTC(),
+		Width: f.Width, Height: f.Height,
 	}
 	if f.GroupID != 0 {
 		it.GroupID = f.GroupID.String()

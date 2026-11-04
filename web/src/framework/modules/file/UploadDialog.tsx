@@ -61,7 +61,7 @@ export function UploadDialog({ open, onOpenChange, defaultGroupId }: Props) {
         onOpenChange(o)
       }}
       title={t('fileMgr.upload')}
-      description={t('fileMgr.uploadHint')}
+      description={t('fileMgr.uploadPasteHint')}
       size="lg"
       footer={
         <>
@@ -126,7 +126,7 @@ export function UploadDialog({ open, onOpenChange, defaultGroupId }: Props) {
             </Select>
           </div>
         </div>
-        <Uploader key={kind} kind={kind} multiple maxCount={20} visibility={visibility} value={files} onChange={setFiles} />
+        <Uploader key={kind} kind={kind} multiple maxCount={20} visibility={visibility} value={files} onChange={setFiles} enablePaste />
       </div>
     </ResponsiveDialog>
   )
