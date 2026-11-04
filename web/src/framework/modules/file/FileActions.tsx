@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { Copy, Download, Eye, FolderInput, Globe, Lock, MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -110,9 +110,14 @@ function ImageLightbox({ file, images, infoOf, onClose }: {
   infoOf: (f: FileItem) => ReactNode
   onClose: () => void
 }) {
-  const group = (images ?? []).filter((f) => f.category === 'image' && f.url)
+  // slides 的数组身份必须稳定：yarl 3.33 的状态提供器在 slides 引用变化时会按 index 重新同步，
+  // 于是 onSlideView 回填引起的重渲染会把视图拽回打开时那一张，翻页看着根本没动（实测踩过）。
+  const group = useMemo(() => (images ?? []).filter((f) => f.category === 'image' && f.url), [images])
   const at = group.findIndex((f) => f.id === file.id)
-  const slides = at >= 0 ? group.map((f) => ({ src: f.url, alt: f.name })) : [{ src: file.url, alt: file.name }]
+  const slides = useMemo(
+    () => (at >= 0 ? group.map((f) => ({ src: f.url, alt: f.name })) : [{ src: file.url, alt: file.name }]),
+    [group, at, file.url, file.name],
+  )
   const [shown, setShown] = useState(Math.max(0, at))
   // 只有一张图（或本图不在组里）时没有翻页可跟，信息条固定显示这一张。
   const current = at >= 0 ? group[shown] ?? file : file
