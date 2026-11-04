@@ -59,7 +59,8 @@ type AdminChecker interface {
 }
 
 // SiteWriter 把向导里填的站点名写入设置页「站点」分区（sys_setting.site.siteName，系统参数模块实现）。
-// 登录页、顶栏、PWA manifest 显示的站点名都取自这个分区；config.yaml 的 app.name 只用于日志 / 默认名称。幂等：重复执行只覆盖站点名。
+// 登录页、顶栏、PWA manifest 显示的站点名都取自这个分区；config.yaml 的 app.name 没有任何读取方，
+// 向导仍写一份只为兼容旧配置文件。幂等：重复执行只覆盖站点名。
 type SiteWriter interface {
 	WriteSiteName(ctx context.Context, db *gorm.DB, siteName string) error
 }
