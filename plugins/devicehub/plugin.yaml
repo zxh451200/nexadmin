@@ -1,9 +1,3 @@
-# 未开工声明：devicehub 目前只有这份清单，没有 Go 注册（plugins/devicehub/plugin.go）、
-# 没有前端页面（web/src/plugins/devicehub/DevicePage 也不存在）、没有市场目录条目。
-# plugins/edition_test.go 按 plugins/*/plugin.yaml 清点「清单 ↔ 注册」一致性，
-# 所以这份清单改名为 plugin.yaml.unbuilt 停在这里，避免一个跑不起来的插件被当成已交付。
-# 真正实现时：把本文件改回 plugin.yaml，并同轮补上 plugin.go 的 plugin.Register、
-# devicehub:list/edit/control 权限点、菜单指向的 DevicePage 与市场条目。
 id: devicehub
 name: 设备接入与监控
 version: 0.1.0
@@ -11,6 +5,10 @@ description: 工业设备接入与监控：Modbus TCP / MQTT 驱动接入变频�
 author: NexAdmin
 edition: pro
 requires_nexadmin: ">=0.1.0"
+
+# 安装时写入 sys_menu（字段与内置菜单一致；parent 写父节点 code）。
+# title 是 i18n key，文案在 web/src/plugins/devicehub/locales 的 plugin_devicehub 命名空间里。
+# edit / control 是按钮级权限点：设备写操作（下发指令）与配置改动分开授权，不挂根级。
 menus:
   - parent: /
     type: menu

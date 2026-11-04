@@ -1,0 +1,114 @@
+{
+  "plugin_devicehub": {
+    "menu": "设备监控",
+    "title": "设备接入与监控",
+    "description": "变频器、PLC 与上位机网关的接入、采集、监控与指令下发",
+    "perm": {
+      "edit": "管理设备",
+      "control": "指令下发"
+    },
+    "pickDevice": "选择左侧设备查看实时数据",
+    "status": {
+      "online": "在线",
+      "offline": "离线",
+      "disabled": "停用"
+    },
+    "protocol": {
+      "modbus-tcp": "Modbus TCP",
+      "modbus-rtu": "Modbus RTU",
+      "mqtt": "MQTT"
+    },
+    "device": {
+      "add": "新增设备",
+      "edit": "编辑设备",
+      "empty": "还没有设备，先接入一台",
+      "name": "设备名称",
+      "protocol": "协议",
+      "endpoint": "连接地址",
+      "endpointHint": "Modbus 形如 192.168.1.20:502；RTU 形如 COM3:9600,8,E,1",
+      "endpointMqttHint": "broker 地址，形如 tcp://192.168.1.10:1883",
+      "config": "协议配置（JSON）",
+      "configHint": "Modbus：{\"unitId\":1,\"pollIntervalMs\":5000}；MQTT：{\"username\":\"\",\"password\":\"\",\"upstreamPrefix\":\"devicehub/up/DEV1\"}",
+      "enabled": "启用",
+      "required": "请填写设备名称与连接地址",
+      "deleteConfirm": "确认删除设备「{{name}}」？其测点、历史数据与告警规则一并删除。"
+    },
+    "point": {
+      "add": "新增测点",
+      "edit": "编辑测点",
+      "empty": "还没有测点，先配一个采集地址",
+      "name": "测点名称",
+      "address": "采集地址",
+      "addressHint": "Modbus：hr:40001 / ir:30001 / co:1 / di:1；MQTT：相对主题（motor/frequency）",
+      "unit": "单位",
+      "dataType": "数据类型",
+      "rw": "读写",
+      "readonly": "只读",
+      "readwrite": "可写",
+      "scale": "缩放系数",
+      "scaleHint": "显示值 = 原始值 ÷ 系数（变频器 427.0→42.7Hz 填 10）",
+      "deadband": "死区",
+      "deadbandHint": "与上次存储值偏差不超过它就不落库（0 = 全存）",
+      "sort": "排序",
+      "enabled": "启用",
+      "disabled": "停用",
+      "never": "从未采集",
+      "required": "测点名称与采集地址必填",
+      "deleteConfirm": "确认删除测点「{{name}}」？历史数据保留。",
+      "rw": "可写"
+    },
+    "history": {
+      "range": "时间范围",
+      "h1": "近 1 小时",
+      "h24": "近 24 小时",
+      "d7": "近 7 天",
+      "d30": "近 30 天",
+      "empty": "这个时间窗内没有数据",
+      "avg": "均值",
+      "min": "最小",
+      "max": "最大"
+    },
+    "command": {
+      "point": "目标测点",
+      "value": "下发值",
+      "valuePlaceholder": "0 ~ 1 / 数字",
+      "send": "下发",
+      "required": "请选择测点并填写下发值",
+      "boolOnly": "布尔测点只接受 0 或 1",
+      "sent": "指令已下发，等待回执",
+      "hint": "指令下发是高危操作：仅「可写」测点可下发，每次下发都进操作日志。",
+      "status": {
+        "queued": "排队中",
+        "done": "已执行",
+        "failed": "失败",
+        "timeout": "超时"
+      }
+    },
+    "alarm": {
+      "addRule": "新增告警规则",
+      "empty": "暂无告警事件",
+      "name": "规则名称",
+      "op": "比较",
+      "threshold": "阈值",
+      "levelText": "级别",
+      "level": {
+        "info": "提示",
+        "warn": "警告",
+        "critical": "严重"
+      },
+      "cooldown": "冷却（秒）",
+      "cooldownHint": "触发后冷却期内不重复发通知，避免秒级采集刷屏",
+      "required": "测点、规则名称与阈值必填",
+      "ruleDisabled": "已停用",
+      "lastFired": "上次触发",
+      "deleteRule": "删除规则",
+      "deleteRuleConfirm": "确认删除规则「{{name}}」？删除后该测点不再产生这条告警"
+    },
+    "tab": {
+      "points": "测点",
+      "history": "历史趋势",
+      "commands": "指令",
+      "alarms": "告警"
+    }
+  }
+}

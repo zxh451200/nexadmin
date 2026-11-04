@@ -1,0 +1,114 @@
+{
+  "plugin_devicehub": {
+    "menu": "Device Monitor",
+    "title": "Device Access & Monitoring",
+    "description": "Connect, collect, monitor and command VFDs, PLCs and gateway hosts",
+    "perm": {
+      "edit": "Manage devices",
+      "control": "Send commands"
+    },
+    "pickDevice": "Pick a device on the left to see live values",
+    "status": {
+      "online": "Online",
+      "offline": "Offline",
+      "disabled": "Disabled"
+    },
+    "protocol": {
+      "modbus-tcp": "Modbus TCP",
+      "modbus-rtu": "Modbus RTU",
+      "mqtt": "MQTT"
+    },
+    "device": {
+      "add": "Add device",
+      "edit": "Edit device",
+      "empty": "No devices yet — connect one first",
+      "name": "Device name",
+      "protocol": "Protocol",
+      "endpoint": "Endpoint",
+      "endpointHint": "Modbus like 192.168.1.20:502; RTU like COM3:9600,8,E,1",
+      "endpointMqttHint": "Broker URL like tcp://192.168.1.10:1883",
+      "config": "Protocol config (JSON)",
+      "configHint": "Modbus: {\"unitId\":1,\"pollIntervalMs\":5000}; MQTT: {\"username\":\"\",\"password\":\"\",\"upstreamPrefix\":\"devicehub/up/DEV1\"}",
+      "enabled": "Enabled",
+      "required": "Device name and endpoint are required",
+      "deleteConfirm": "Delete device \"{{name}}\"? Its points, history and alarm rules are removed too."
+    },
+    "point": {
+      "add": "Add point",
+      "edit": "Edit point",
+      "empty": "No points yet — configure a collection address first",
+      "name": "Point name",
+      "address": "Address",
+      "addressHint": "Modbus: hr:40001 / ir:30001 / co:1 / di:1; MQTT: relative topic (motor/frequency)",
+      "unit": "Unit",
+      "dataType": "Data type",
+      "rw": "Access",
+      "readonly": "Read-only",
+      "readwrite": "Writable",
+      "scale": "Scale",
+      "scaleHint": "Displayed = raw ÷ scale (VFD 427.0→42.7Hz uses 10)",
+      "deadband": "Deadband",
+      "deadbandHint": "Deviation within deadband is not persisted (0 = store all)",
+      "sort": "Sort",
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "never": "Never collected",
+      "required": "Point name and address are required",
+      "deleteConfirm": "Delete point \"{{name}}\"? History is kept.",
+      "rw": "Writable"
+    },
+    "history": {
+      "range": "Range",
+      "h1": "Last hour",
+      "h24": "Last 24 hours",
+      "d7": "Last 7 days",
+      "d30": "Last 30 days",
+      "empty": "No data in this window",
+      "avg": "Avg",
+      "min": "Min",
+      "max": "Max"
+    },
+    "command": {
+      "point": "Target point",
+      "value": "Value",
+      "valuePlaceholder": "0 ~ 1 / number",
+      "send": "Send",
+      "required": "Pick a point and fill the value",
+      "boolOnly": "Boolean points accept 0 or 1 only",
+      "sent": "Command sent, waiting for receipt",
+      "hint": "Commands are high-risk: writable points only; every send is operation-logged.",
+      "status": {
+        "queued": "Queued",
+        "done": "Done",
+        "failed": "Failed",
+        "timeout": "Timeout"
+      }
+    },
+    "alarm": {
+      "addRule": "Add alarm rule",
+      "empty": "No alarm events",
+      "name": "Rule name",
+      "op": "Compare",
+      "threshold": "Threshold",
+      "levelText": "Level",
+      "level": {
+        "info": "Info",
+        "warn": "Warning",
+        "critical": "Critical"
+      },
+      "cooldown": "Cooldown (s)",
+      "cooldownHint": "No repeat notification within cooldown to avoid second-level spam",
+      "required": "Point, rule name and threshold are required",
+      "ruleDisabled": "Disabled",
+      "lastFired": "Last fired",
+      "deleteRule": "Delete rule",
+      "deleteRuleConfirm": "Delete the rule “{{name}}”? This point will stop raising that alarm."
+    },
+    "tab": {
+      "points": "Points",
+      "history": "History",
+      "commands": "Commands",
+      "alarms": "Alarms"
+    }
+  }
+}

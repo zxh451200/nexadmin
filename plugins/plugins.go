@@ -10,6 +10,7 @@ import (
 	_ "nexadmin/plugins/codegen"
 	_ "nexadmin/plugins/crm"
 	_ "nexadmin/plugins/cron"
+	_ "nexadmin/plugins/devicehub"
 	_ "nexadmin/plugins/formbuilder"
 	_ "nexadmin/plugins/i18n-editor"
 	_ "nexadmin/plugins/identity"
