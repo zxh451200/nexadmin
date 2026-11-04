@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Check, RefreshCw, Volume2 } from 'lucide-react'
+import { Check, GripVertical, RefreshCw, Volume2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { UseFormReturn } from 'react-hook-form'
 import { toast } from 'sonner'
@@ -11,7 +11,7 @@ import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/fram
 import { Input } from '@/framework/ui/input'
 import { Skeleton } from '@/framework/ui/skeleton'
 
-/** 人机校验的两种形态：图形数字（带语音）与滑块拼图 */
+/** 人机校验的两种形态：滑块拼图（默认）与图形数字（带语音，作无障碍兜底） */
 export type CaptchaMode = 'image' | 'slider'
 
 /**
@@ -21,7 +21,8 @@ export type CaptchaMode = 'image' | 'slider'
  * 登录必然报“验证码错误或已过期”。
  */
 export function useCaptcha(enabled = true) {
-  const [mode, setMode] = useState<CaptchaMode>('image')
+  // 滑块优先，图形码退成一键兜底：读数字打字在手机上最费事，而滑块这里方向键也能走完
+  const [mode, setMode] = useState<CaptchaMode>('slider')
   const [captcha, setCaptcha] = useState<CaptchaResult | null>(null)
   // 请求序号：切形态、点刷新都会让上一发请求还在路上。没有这道守卫，先发的图形请求
   // 后到达就会把滑块挑战覆盖掉——表现是滑轨里挂着数字验证码，永远拖不到位。
@@ -93,6 +94,7 @@ export function CaptchaField({ form, captcha, onRefresh, mode, onModeChange, req
           {mode === 'slider' ? (
             <SliderCaptcha
               captcha={captcha}
+              onRefresh={onRefresh}
               onToken={(token) => field.onChange(token)}
               onFailed={() => {
                 field.onChange('')
@@ -100,16 +102,18 @@ export function CaptchaField({ form, captcha, onRefresh, mode, onModeChange, req
               }}
             />
           ) : (
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               <FormControl>
                 <Input {...field} autoComplete="off" maxLength={6} placeholder={t('login.captchaPlaceholder')} />
               </FormControl>
+              {/* 尺寸取后端出图的显示口径（224x72 出图 = 112x36 的 2 倍），并与其他输入框同高：
+                  盒子给到 h-14 既会把图放大到发糊，也会让这一行比整张表单高出一截。 */}
               <div className="flex shrink-0 items-center gap-1">
                 <button
                   type="button"
                   onClick={onRefresh}
                   aria-label={t('login.refreshCaptcha')}
-                  className="group relative flex h-12 w-36 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-muted md:h-14 md:w-40"
+                  className="group relative flex h-10 w-[124px] shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-muted md:h-9 md:w-28"
                 >
                   {captcha ? (
                     <img src={captcha.image} alt={t('login.captcha')} className="h-full w-full object-contain" />
@@ -124,7 +128,7 @@ export function CaptchaField({ form, captcha, onRefresh, mode, onModeChange, req
                   type="button"
                   variant="ghost"
                   size="icon"
-                  className="h-12 w-12 md:h-14 md:w-14"
+                  className="size-10 md:size-9"
                   aria-label={t('login.captchaAudio')}
                   aria-busy={audioBusy}
                   disabled={!captcha || audioBusy}
@@ -156,6 +160,7 @@ const KNOB = 32
 
 interface SliderCaptchaProps {
   captcha: CaptchaResult | null
+  onRefresh: () => void
   onToken: (token: string) => void
   onFailed: () => void
 }
@@ -164,7 +169,7 @@ interface SliderCaptchaProps {
  * 滑块拼图：把滑块图拖到背景的孔位上。坐标一律换算成“图片像素”——后端容差按图片像素判定，
  * 而图片在页面上是等比缩放的，直接用 CSS 像素会随容器宽度漂掉。
  */
-function SliderCaptcha({ captcha, onToken, onFailed }: SliderCaptchaProps) {
+function SliderCaptcha({ captcha, onRefresh, onToken, onFailed }: SliderCaptchaProps) {
   const { t } = useTranslation()
   const trackRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<{ pointerX: number; startTime: number; startX: number; trackW: number } | null>(null)
@@ -266,7 +271,7 @@ function SliderCaptcha({ captcha, onToken, onFailed }: SliderCaptchaProps) {
   }
 
   return (
-    <div className="w-full max-w-[320px] space-y-2">
+    <div className="w-[280px] max-w-full space-y-2">
       <div className="relative overflow-hidden rounded-md border border-border" style={{ aspectRatio: `${imgW} / ${imgH}` }}>
         {!captcha ? (
           <Skeleton className="h-full w-full" />
@@ -288,6 +293,16 @@ function SliderCaptcha({ captcha, onToken, onFailed }: SliderCaptchaProps) {
                 }}
               />
             ) : null}
+            {done ? null : (
+              <button
+                type="button"
+                onClick={onRefresh}
+                aria-label={t('login.refreshCaptcha')}
+                className="absolute end-1 top-1 flex size-7 items-center justify-center rounded-md bg-background/70 text-foreground transition-colors hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <RefreshCw className="size-3.5" aria-hidden="true" />
+              </button>
+            )}
           </>
         )}
       </div>
@@ -307,16 +322,21 @@ function SliderCaptcha({ captcha, onToken, onFailed }: SliderCaptchaProps) {
         onKeyDown={onKeyDown}
         className="relative h-10 touch-none select-none rounded-md border border-border bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
+        {/* 进度填充跟着把手走：没有它，滑轨看上去只是一条空白条，拖到哪一档全凭把手一个方块 */}
+        <span
+          className={`pointer-events-none absolute inset-y-0 left-0 rounded-l-[5px] ${done ? 'bg-success/15' : 'bg-primary/15'}`}
+          style={{ width: `calc(4px + (100% - ${KNOB + 8}px) * ${frac} + ${KNOB / 2}px)` }}
+        />
         <span className="pointer-events-none absolute inset-0 flex items-center justify-center px-12 text-xs text-muted-foreground">
           {done ? t('login.sliderDone') : t('login.sliderPrompt')}
         </span>
         <span
-          className={`pointer-events-none absolute flex items-center justify-center rounded border border-primary/30 text-background ${
-            done ? 'bg-primary' : 'bg-primary/70'
+          className={`pointer-events-none absolute flex items-center justify-center rounded border ${
+            done ? 'border-success bg-success text-success-foreground' : 'border-primary/30 bg-primary text-primary-foreground'
           }`}
           style={{ width: KNOB, height: KNOB, top: 4, left: `calc(4px + (100% - ${KNOB + 8}px) * ${frac})` }}
         >
-          {done ? <Check className="size-4" aria-hidden="true" /> : <RefreshCw className="size-4" aria-hidden="true" />}
+          {done ? <Check className="size-4" aria-hidden="true" /> : <GripVertical className="size-4" aria-hidden="true" />}
         </span>
       </div>
     </div>

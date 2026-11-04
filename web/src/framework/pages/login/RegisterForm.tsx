@@ -14,7 +14,7 @@ import { Input } from '@/framework/ui/input'
 import { CaptchaField, useCaptcha } from './CaptchaField'
 
 /**
- * 自助注册表单：账号 + 密码 + 确认密码 + 图形验证码（强制）。
+ * 自助注册表单：账号 + 密码 + 确认密码 + 人机校验（强制，滑块/图形码同一条消费通道）。
  * 注册即登录：响应与 /auth/login 同形——有令牌直接进系统；部署了二次验证门时
  * 返回 {challenge}，交给登录页的二次验证对话框继续。
  */

@@ -114,7 +114,11 @@ func encodePNG(img image.Image) ([]byte, error) {
 }
 
 // paintSliderBackdrop 画一张带渐变底与随机几何物的背景。没有真实照片可嵌（离线、
-// 零依赖），几何物 + 干扰线 + 噪点同样能让“孔位”不被一行像素扫描直接定位。
+// 零依赖），几何物 + 网格 + 干扰线 + 噪点同样能让“孔位”不被一行像素扫描直接定位。
+//
+// 网格和提亮的几何物是给“可辨认”用的：滑块图裁的是这张底，纯渐变下裁片与四周几乎同色，
+// 页面上就是两团糊在一起的色块——用户无从判断有没有拼上，只能来回拖。有了格线与硬边色块，
+// 拼到位时边缘会重新接上同一条线。
 func paintSliderBackdrop(r *mrand.Rand) *image.NRGBA {
 	img := image.NewNRGBA(image.Rect(0, 0, sliderBgW, sliderBgH))
 	h1 := hue(r)
@@ -126,13 +130,24 @@ func paintSliderBackdrop(r *mrand.Rand) *image.NRGBA {
 		}
 	}
 	// 几何物：半透明圆、矩形与折线叠在渐变上。
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 14; i++ {
 		c := blend(hue(r), hue(r), r.Float64())
-		c.A = uint8(40 + r.Intn(90))
+		c.A = uint8(90 + r.Intn(120))
 		if i%3 == 0 {
 			fillCircle(img, r.Intn(sliderBgW), r.Intn(sliderBgH), 10+r.Intn(28), c)
 		} else {
 			fillRect(img, r.Intn(sliderBgW)-20, r.Intn(sliderBgH)-20, 24+r.Intn(48), 10+r.Intn(30), c)
+		}
+	}
+	// 细网格：整张图都有硬边，裁片落回孔位时格线接得上。
+	step := 14 + r.Intn(8)
+	grid := color.NRGBA{18, 24, 34, uint8(26 + r.Intn(18))}
+	for y := 0; y < sliderBgH; y++ {
+		for x := 0; x < sliderBgW; x++ {
+			if x%step != 0 && y%step != 0 {
+				continue
+			}
+			over(img, x, y, grid)
 		}
 	}
 	for i := 0; i < 5; i++ {
@@ -140,7 +155,7 @@ func paintSliderBackdrop(r *mrand.Rand) *image.NRGBA {
 		c.A = uint8(70 + r.Intn(90))
 		strokeLine(img, r.Intn(sliderBgW), r.Intn(sliderBgH), r.Intn(sliderBgW), r.Intn(sliderBgH), c)
 	}
-	for i := 0; i < 900; i++ { // 细噪点，压住“整块纯色”的可猜测性
+	for i := 0; i < 1400; i++ { // 细噪点，压住“整块纯色”的可猜测性
 		x, y := r.Intn(sliderBgW), r.Intn(sliderBgH)
 		p := img.PixOffset(x, y)
 		n := uint8(r.Intn(28))
@@ -307,7 +322,7 @@ func onSliderEdge(dx, dy int) bool {
 
 // punchSliderHole 在背景上按同一形状挖孔：压暗填充 + 浅色描边。
 func punchSliderHole(bg *image.NRGBA, x, y int) {
-	shadow := color.NRGBA{16, 20, 28, 150}
+	shadow := color.NRGBA{14, 18, 26, 185}
 	edge := color.NRGBA{245, 248, 252, 200}
 	for dy := -sliderTab; dy < sliderPiece; dy++ {
 		for dx := 0; dx < sliderPieceW; dx++ {

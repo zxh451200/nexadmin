@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Locator, type Page } from '@playwright/test'
 
 /**
  * 滑块验证码的几何与接线回归。
@@ -32,22 +32,22 @@ async function openLogin(page: Page): Promise<string> {
     localStorage.setItem('nex-lang', 'zh-CN')
     localStorage.setItem('mock-admin', JSON.stringify({ username: name, password: 'pw-for-e2e' }))
   }, account)
+  const slider = page.getByRole('slider')
   const toggle = page.getByRole('button', { name: '改用滑块验证' })
+  // 就绪判据按「哪一个先出现」取，两种默认形态都成立：滑块已是默认时直接就绪，
+  // 默认若翻回图形码则点一下切换入口。isVisible() 不等待，所以只能走 waitFor。
+  const appeared = (loc: Locator) => loc.waitFor({ state: 'visible', timeout: 60_000 }).then(() => true, () => false)
   for (let attempt = 0; attempt < 3; attempt++) {
     await page.goto('/admin/login', { waitUntil: 'domcontentloaded' })
-    // 必须用会等的断言：locator.isVisible() 不等待，timeout 传了也白传。
-    const ready = await toggle
-      .waitFor({ state: 'visible', timeout: 60_000 })
-      .then(() => true)
-      .catch(() => false)
-    if (ready) {
-      await toggle.click()
-      await expect(page.getByRole('slider')).toBeVisible()
-      // 滑轨不依赖挑战是否取到；只等滑轨会把「图没加载」吞成后面一句「找不到孔位」。
-      // 背景图按 alt 取（滑块图是 aria-hidden，role=img 只有背景这一个）。
-      await expect(page.getByRole('img', { name: '验证' })).toBeVisible()
-      return account
-    }
+    if (!(await Promise.race([appeared(slider), appeared(toggle)]))) continue
+    // 到这里形态已经落定，用不等的 count() 判断入口在不在：滑块是默认时它永远不出现，
+    // 再等一次 waitFor 只会白烧 60 秒超时。
+    if ((await toggle.count()) > 0) await toggle.click()
+    await expect(slider).toBeVisible()
+    // 滑轨不依赖挑战是否取到；只等滑轨会把「图没加载」吞成后面一句「找不到孔位」。
+    // 背景图按 alt 取（滑块图是 aria-hidden，role=img 只有背景这一个）。
+    await expect(page.getByRole('img', { name: '验证' })).toBeVisible()
+    return account
   }
   const where = await page
     .evaluate(() => document.body.innerText.replace(/\s+/g, ' ').slice(0, 200))
