@@ -19,6 +19,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"nexadmin/core"
 	"nexadmin/core/region"
 	"nexadmin/core/response"
 	"nexadmin/pkg/idgen"
@@ -26,9 +27,18 @@ import (
 
 const (
 	snapshotID = 1
-	// 数据源上限：完整三级树约 300KB，留足余量。
+	// 数据源上限的内置默认兼封顶：完整三级树约 300KB，16MB 留足余量。
 	maxSourceSize = 16 << 20
 )
+
+// regionMaxBytes 返回本次请求生效的数据源上限：系统参数「上传限制」的普通文件上限只能往小调，
+// 放大顶不开 builtin——快照整读进内存并在各实例常驻，放开等于让一次同步吃掉一整块内存。
+func regionMaxBytes(ctx context.Context, builtin int64) int64 {
+	if l, ok := core.UploadLimitsFromSettings(ctx); ok {
+		return core.ResolveUploadCeiling(l.MaxFileMB, builtin, builtin)
+	}
+	return builtin
+}
 
 // busKind 是同步完成后通知其它实例重新装载快照的事件名。
 const busKind = "region.snapshot"
@@ -458,7 +468,6 @@ func (s *Service) RollbackToVersion(ctx context.Context, version int, actor stri
 	return res, nil
 }
 
-
 func (s *Service) source(ctx context.Context) string {
 	if s.db != nil {
 		var row Snapshot
@@ -508,12 +517,13 @@ func (s *Service) fetch(ctx context.Context, source string) ([]byte, string, err
 	if resp.StatusCode != http.StatusOK {
 		return nil, "", response.BadRequest("region.source_unreachable", fmt.Sprintf("%s %d", source, resp.StatusCode))
 	}
-	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxSourceSize+1))
+	lim := regionMaxBytes(ctx, maxSourceSize)
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, lim+1))
 	if err != nil {
 		return nil, "", response.BadRequest("region.source_unreachable", err.Error())
 	}
-	if len(raw) > maxSourceSize {
-		return nil, "", response.BadRequest("region.source_too_large", maxSourceSize>>20)
+	if int64(len(raw)) > lim {
+		return nil, "", response.BadRequest("region.source_too_large", lim>>20)
 	}
 	return raw, resp.Header.Get("Last-Modified"), nil
 }
@@ -578,6 +588,7 @@ var newSourceClient = func() *http.Client {
 		},
 	}
 }
+
 func publicIP(ip net.IP) bool {
 	return ip != nil && !ip.IsLoopback() && !ip.IsPrivate() && !ip.IsLinkLocalUnicast() &&
 		!ip.IsLinkLocalMulticast() && !ip.IsMulticast() && !ip.IsUnspecified()

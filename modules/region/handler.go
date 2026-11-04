@@ -82,8 +82,10 @@ func (h *Handler) ImportFile(c *gin.Context) {
 		response.Fail(c, response.BadRequest("region.file_required"))
 		return
 	}
-	if fh.Size > maxUploadSize {
-		response.Fail(c, response.BadRequest("region.source_too_large", maxUploadSize>>20))
+	// 上限按请求解析：系统参数「上传限制」能把它往小调，放大顶不开内置 16MB（见 regionMaxBytes）。
+	lim := regionMaxBytes(c.Request.Context(), maxUploadSize)
+	if fh.Size > lim {
+		response.Fail(c, response.BadRequest("region.source_too_large", lim>>20))
 		return
 	}
 	f, err := fh.Open()
@@ -92,13 +94,13 @@ func (h *Handler) ImportFile(c *gin.Context) {
 		return
 	}
 	defer f.Close()
-	raw, err := io.ReadAll(io.LimitReader(f, maxUploadSize+1))
+	raw, err := io.ReadAll(io.LimitReader(f, lim+1))
 	if err != nil {
 		response.Fail(c, response.BadRequest("error.bad_request").Wrap(err))
 		return
 	}
-	if len(raw) > maxUploadSize {
-		response.Fail(c, response.BadRequest("region.source_too_large", maxUploadSize>>20))
+	if int64(len(raw)) > lim {
+		response.Fail(c, response.BadRequest("region.source_too_large", lim>>20))
 		return
 	}
 	actor := actorOf(c)

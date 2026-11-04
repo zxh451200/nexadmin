@@ -30,8 +30,8 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
-	coreregion "nexadmin/core/region"
 	"nexadmin/core/migrate"
+	coreregion "nexadmin/core/region"
 	"nexadmin/pkg/idgen"
 )
 
@@ -64,7 +64,7 @@ func itSave(t *testing.T, svc *Service, payload, mark string) {
 		SourceURL: "https://example.com/" + mark + ".json", DataDate: "2026-01-02", License: "MIT",
 		Payload: payload, SHA256: itSHA(payload),
 		Provinces: 34, Prefectures: 333, Counties: 2874,
-		SyncedBy:  "sync-" + mark, SyncedAt: time.Now(),
+		SyncedBy: "sync-" + mark, SyncedAt: time.Now(),
 	}); err != nil {
 		t.Fatalf("save %s: %v", mark, err)
 	}
