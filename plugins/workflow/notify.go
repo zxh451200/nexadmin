@@ -20,6 +20,7 @@ import (
 
 	"nexadmin/core"
 	"nexadmin/core/event"
+	"nexadmin/core/i18n"
 	"nexadmin/core/notify"
 	"nexadmin/core/tenant"
 	"nexadmin/pkg/idgen"
@@ -131,10 +132,14 @@ func (n *todoNotifier) notify(data EventData) {
 		n.warn("待办通知租户解析失败", zap.String("tenantId", data.TenantID))
 		return
 	}
-	title := "审批待办：" + titleOr(data)
-	if err := n.sender.Send(tenant.With(n.ctx, tid), notify.Msg{
-		To: ids, Category: notifyCategory, Title: title,
-		Content: "流程「" + titleOr(data) + "」等待你审批。",
+	// 收件人各自的语言拿不到（站内信只存一份文本），按应用默认语言出：
+	// 英文部署不再收到硬写死的中文。
+	tctx := tenant.With(n.ctx, tid)
+	name := titleOr(data)
+	if err := n.sender.Send(tctx, notify.Msg{
+		To: ids, Category: notifyCategory,
+		Title:   i18n.T(tctx, "workflow.notify_todo_title", name),
+		Content: i18n.T(tctx, "workflow.notify_todo_content", name),
 		Link:    inboxLink, Channels: []string{notify.ChannelInApp},
 	}); err != nil {
 		n.warn("待办站内信发送失败", zap.Error(err))

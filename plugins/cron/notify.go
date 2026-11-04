@@ -9,11 +9,11 @@ package cron
 
 import (
 	"context"
-	"fmt"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"nexadmin/core/i18n"
 	"nexadmin/core/notify"
 	"nexadmin/core/tenant"
 	"nexadmin/pkg/idgen"
@@ -68,17 +68,18 @@ func (a *alerter) alert(job Job, row *Log, errText string) {
 	if len(holders) == 0 {
 		return
 	}
-	title := fmt.Sprintf("定时任务失败：%s", job.Name)
-	content := fmt.Sprintf("任务「%s」（%s）在第 %d 次尝试后仍然失败：\n\n%s\n\n发生时间：%s\n可到「定时任务 → 执行历史」查看完整日志。",
-		job.Name, job.Handler, row.Attempts, errText, row.StartedAt.Format("2006-01-02 15:04:05"))
 	byTenant := map[idgen.ID][]idgen.ID{}
 	for _, h := range holders {
 		byTenant[h.TenantID] = append(byTenant[h.TenantID], h.UserID)
 	}
 	for tid, ids := range byTenant {
-		m := notify.Msg{To: ids, Category: alertCategory, Title: title, Content: content,
-			Link: "/system/cron", Channels: []string{notify.ChannelInApp}}
-		if err := a.sender.Send(tenant.With(a.ctx, tid), m); err != nil {
+		// 文本按收件租户的语言出（英文部署不再收到硬写死的中文）
+		tctx := tenant.With(a.ctx, tid)
+		m := notify.Msg{To: ids, Category: alertCategory,
+			Title:   i18n.T(tctx, "cron.alert_title", job.Name),
+			Content: i18n.T(tctx, "cron.alert_content", job.Name, job.Handler, row.Attempts, errText, row.StartedAt.Format("2006-01-02 15:04:05")),
+			Link:    "/system/cron", Channels: []string{notify.ChannelInApp}}
+		if err := a.sender.Send(tctx, m); err != nil {
 			a.warn("发送失败告警", zap.Int64("tenant", int64(tid)), zap.Error(err))
 		}
 	}

@@ -360,6 +360,10 @@ workflow:
   plugin_inactive: 工作流插件未启用或授权已失效
   reject_comment_required: 驳回必须填写理由
   transfer_to_required: 请选择受让人
+  notify_todo_title: "审批待办：%s"
+  notify_todo_content: "流程「%s」等待你审批。"
+  notify_urge_title: "催办：%s"
+  notify_urge_content: "流程「%s」的发起人请你尽快审批。"
 formbuilder:
   head_id: 提交ID
   head_submitter: 提交人
@@ -554,6 +558,7 @@ backup:
 config:
   key_exists: "参数键已存在"
   storage_readonly: "文件存储由 config/config.yaml 的 storage.* 决定，设置页只读；请改配置文件后重启"
+  cache_readonly: "缓存由 config/config.yaml 的 cache.* 决定，启动时生效，设置页只读；请改配置文件后重启"
   value_not_number: "参数值不是有效数字"
   value_not_boolean: "布尔参数值只能是 true 或 false"
   value_not_json: "参数值不是有效 JSON"
@@ -858,6 +863,8 @@ cron:
   params_invalid: "参数不合法"
   job_running: "任务正在运行中"
   job_id_invalid: "任务 ID 不合法"
+  alert_title: "定时任务失败：%s"
+  alert_content: "任务「%s」（%s）在第 %d 次尝试后仍然失败：\n\n%s\n\n发生时间：%s\n可到「定时任务 → 执行历史」查看完整日志。"
 media:
   provider_invalid: "未知的视频托管厂商"
   upload_credentials_required: "启用直传厂商前需要填写账号 / 密钥 / 子域"

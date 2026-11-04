@@ -12,6 +12,7 @@ import (
 	"github.com/nexadmin/flowlite/engine"
 	"github.com/nexadmin/flowlite/runtime"
 	"github.com/nexadmin/flowlite/store"
+	"nexadmin/core/i18n"
 	"nexadmin/core/notify"
 	"nexadmin/core/response"
 	"nexadmin/core/tenant"
@@ -612,10 +613,11 @@ func (s *Service) Urge(ctx context.Context, id idgen.ID, actor string) error {
 	if strings.TrimSpace(title) == "" {
 		title = res.Inst.DefKey
 	}
-	return s.urgeSender.Send(tenant.With(ctx, tid), notify.Msg{
+	sctx := tenant.With(ctx, tid)
+	return s.urgeSender.Send(sctx, notify.Msg{
 		To: recipients, Category: "workflow",
-		Title:    "催办：" + title,
-		Content:  "流程「" + title + "」的发起人请你尽快审批。",
+		Title:    i18n.T(sctx, "workflow.notify_urge_title", title),
+		Content:  i18n.T(sctx, "workflow.notify_urge_content", title),
 		Link:     inboxLink,
 		Channels: []string{notify.ChannelInApp},
 	})

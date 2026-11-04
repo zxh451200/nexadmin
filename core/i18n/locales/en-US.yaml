@@ -360,6 +360,10 @@ workflow:
   plugin_inactive: Workflow plugin is not enabled or its license has lapsed
   reject_comment_required: A reason is required to reject.
   transfer_to_required: Choose a recipient for the transfer.
+  notify_todo_title: "Approval waiting for you: %s"
+  notify_todo_content: "The flow \"%s\" is waiting for your approval."
+  notify_urge_title: "Reminder: %s"
+  notify_urge_content: "The requester of the flow \"%s\" asks you to approve it soon."
 formbuilder:
   head_id: Submission ID
   head_submitter: Submitter
@@ -554,6 +558,7 @@ backup:
 config:
   key_exists: "This parameter key already exists."
   storage_readonly: "File storage is controlled by storage.* in config/config.yaml and is read-only here; update the config file and restart."
+  cache_readonly: "Cache is controlled by cache.* in config/config.yaml at startup and is read-only here; update the config file and restart."
   value_not_number: "The value must be a valid number."
   value_not_boolean: "A boolean value must be either true or false."
   value_not_json: "The value must be valid JSON."
@@ -858,6 +863,8 @@ cron:
   params_invalid: "Invalid parameters"
   job_running: "The job is already running"
   job_id_invalid: "Invalid job ID"
+  alert_title: "Scheduled job failed: %s"
+  alert_content: "Job \"%s\" (%s) still failed after %d attempt(s):\n\n%s\n\nOccurred at: %s\nFull logs are under Scheduled jobs, then History."
 media:
   provider_invalid: "Unknown video hosting provider"
   upload_credentials_required: "Fill in the account, secret and subdomain before enabling a direct-upload provider"
