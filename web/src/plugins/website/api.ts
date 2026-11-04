@@ -333,14 +333,42 @@ export interface MediaLimits {
   labels: string[]
 }
 
-export function useMediaLimits() {
+/** 官网管理页的生效上限：图片上传 + 页脚两个列表条数 + 导航层级 + 单篇标签数。全部由后端说一次。 */
+export interface WebsiteLimits {
+  media: MediaLimits
+  socialMax: number
+  friendMax: number
+  navMaxDepth: number
+  postTagsMax: number
+}
+
+export function useWebsiteLimits() {
   return useQuery({
-    queryKey: [...KEY, 'media-limits'],
-    queryFn: () => api.get<MediaLimits>(`${BASE}/media/limits`),
+    queryKey: [...KEY, 'limits'],
+    queryFn: () => api.get<WebsiteLimits>(`${BASE}/limits`),
   })
 }
 
-/** 上传 logo / 二维码 / favicon 小图；大小与类型上限见 useMediaLimits，超限由请求层 toast 服务端文案。 */
+/**
+ * 出厂值：与服务端 plugins/website/nav.go 的 navMaxDepth、taxonomy.go 的 maxTagsPerPost 同值，
+ * 只在 /limits 还没到货的瞬间兜底（界面少一档不会造成错误数据，服务端始终会拒收超限）。
+ */
+export const FALLBACK_NAV_MAX_DEPTH = 3
+export const FALLBACK_POST_TAGS_MAX = 20
+
+/** 导航层级上限：与后端校验同源，改服务端不用再来这里同步一次。 */
+export function useNavMaxDepth(): number {
+  const { data } = useWebsiteLimits()
+  return data?.navMaxDepth || FALLBACK_NAV_MAX_DEPTH
+}
+
+/** 单篇新闻的标签上限：同上，与后端 maxTagsPerPost 同源。 */
+export function usePostTagsMax(): number {
+  const { data } = useWebsiteLimits()
+  return data?.postTagsMax || FALLBACK_POST_TAGS_MAX
+}
+
+/** 上传 logo / 二维码 / favicon 小图；大小与类型上限见 useWebsiteLimits 的 media 字段，超限由请求层 toast 服务端文案。 */
 export function uploadMedia(file: File) {
   const fd = new FormData()
   fd.append('file', file)

@@ -25,11 +25,11 @@ import {
   uploadMedia,
   useI18nSchema,
   useLanguages,
-  useMediaLimits,
+  useWebsiteLimits,
   useSaveSettings,
   useSettings,
   type FriendLink,
-  type MediaLimits,
+  type WebsiteLimits,
   type SiteSettingsForm,
   type SocialLink,
   type SocialPlatform,
@@ -74,11 +74,11 @@ type LocalizedKey = 'siteDesc' | 'homeTitle' | 'homeSubtitle' | 'homeCtaLabel' |
  * 可翻译字段交给 LocaleFormProvider，站点名/logo/联系方式等共用字段留在本地 state。
  */
 function SettingsFormBody({
-  shared, onSharedChange, mediaLimits,
+  shared, onSharedChange, limits,
 }: {
   shared: SharedSettings
   onSharedChange: (next: SharedSettings) => void
-  mediaLimits: MediaLimits
+  limits: WebsiteLimits
 }) {
   const { t } = useTranslation()
   const save = useSaveSettings()
@@ -93,9 +93,11 @@ function SettingsFormBody({
   // 分享图与封面同一套规则：https:// 或 / 开头，别的拦住——og:image 跟着指向它
   const ogInvalid = shared.ogImageUrl.trim() !== '' && !/^(https?:\/\/|\/)/i.test(shared.ogImageUrl.trim())
 
-  // 文件选择器与提示文案都按后端下发的生效限制渲染，同一组数值不再前后各抄一份。
-  const acceptImages = mediaLimits.mimes.join(',')
-  const mediaHint = { types: mediaLimits.labels.join(' / '), max: `${mediaLimits.maxMb}MB` }
+  // 文件选择器、提示文案与「添加」按钮的上限都按后端下发的生效值渲染，同一组数值不再前后各抄一份。
+  const acceptImages = limits.media.mimes.join(',')
+  const mediaHint = { types: limits.media.labels.join(' / '), max: `${limits.media.maxMb}MB` }
+  const socialMaxed = shared.socials.length >= limits.socialMax
+  const friendMaxed = shared.friendLinks.length >= limits.friendMax
 
   const set = (key: SharedTextKey, v: string) => onSharedChange({ ...shared, [key]: v })
 
@@ -351,7 +353,7 @@ function SettingsFormBody({
       {localizedField('footerNote')}
       <div className="flex flex-col gap-2">
         <span className="text-sm font-medium">{t('plugin_website.settings.socials')}</span>
-        <span className="text-xs text-muted-foreground">{t('plugin_website.hint.socials')}</span>
+        <span className="text-xs text-muted-foreground">{t('plugin_website.hint.socials', { max: limits.socialMax })}</span>
         {shared.socials.map((s, i) => (
           <div key={i} className="flex items-center gap-2">
             <Select
@@ -387,14 +389,14 @@ function SettingsFormBody({
             </Button>
           </div>
         ))}
-        <Button type="button" variant="outline" size="sm" className="w-fit" disabled={sharedDisabled} onClick={addSocial}>
+        <Button type="button" variant="outline" size="sm" className="w-fit" disabled={sharedDisabled || socialMaxed} onClick={addSocial}>
           <Plus className="size-4" aria-hidden="true" />
           {t('plugin_website.settings.addSocial')}
         </Button>
       </div>
       <div className="flex flex-col gap-2">
         <span className="text-sm font-medium">{t('plugin_website.settings.friendLinks')}</span>
-        <span className="text-xs text-muted-foreground">{t('plugin_website.hint.friendLinks')}</span>
+        <span className="text-xs text-muted-foreground">{t('plugin_website.hint.friendLinks', { max: limits.friendMax })}</span>
         {shared.friendLinks.map((l, i) => (
           <div key={i} className="flex items-center gap-2">
             <Input
@@ -424,7 +426,7 @@ function SettingsFormBody({
             </Button>
           </div>
         ))}
-        <Button type="button" variant="outline" size="sm" className="w-fit" disabled={sharedDisabled} onClick={addFriend}>
+        <Button type="button" variant="outline" size="sm" className="w-fit" disabled={sharedDisabled || friendMaxed} onClick={addFriend}>
           <Plus className="size-4" aria-hidden="true" />
           {t('plugin_website.settings.addFriendLink')}
         </Button>
@@ -478,7 +480,7 @@ export default function SettingsPage() {
   const { data, isLoading } = useSettings()
   const { data: languages = [] } = useLanguages()
   const { data: schema } = useI18nSchema('setting')
-  const { data: mediaLimits } = useMediaLimits()
+  const { data: limits } = useWebsiteLimits()
   const defaultLocale = languages.find((l) => l.default)?.code ?? ''
   const translate = useCallback<TranslateBatch>(
     (texts, to, format) => translateContent('setting', texts, defaultLocale, to, format),
@@ -511,8 +513,8 @@ export default function SettingsPage() {
     }
   }, [data, shared])
 
-  // schema、语言清单、设置与图片上传限制都是表单的前提，没到货前只出骨架屏——否则会闪出一个没有字段的空表单。
-  if (isLoading || !data || !shared || !schema || !defaultLocale || !mediaLimits) {
+  // schema、语言清单、设置与生效上限都是表单的前提，没到货前只出骨架屏——否则会闪出一个没有字段的空表单。
+  if (isLoading || !data || !shared || !schema || !defaultLocale || !limits) {
     return (
       <div className="flex flex-col gap-4">
         <Skeleton className="h-8 w-48" />
@@ -540,7 +542,7 @@ export default function SettingsPage() {
           i18nJson={data.i18nJson}
           translate={translate}
         >
-          <SettingsFormBody shared={shared} onSharedChange={setShared} mediaLimits={mediaLimits} />
+          <SettingsFormBody shared={shared} onSharedChange={setShared} limits={limits} />
         </LocaleFormProvider>
       </div>
     </PageContainer>

@@ -113,6 +113,21 @@ func TestSaveMediaRejectsByEffectiveLimits(t *testing.T) {
 	})
 }
 
+// 官网管理页的上限只有服务端一份：下发的四个数字必须与校验用的常量一致，
+// 否则「前端按 A 拦、后端按 B 拒」又会变成两个主人。
+func TestWebsiteLimitsMatchGuards(t *testing.T) {
+	got := NewService(nil).WebsiteLimits(context.Background())
+	if got.SocialMax != maxSocialLinks || got.FriendMax != maxFriendLinks {
+		t.Errorf("页脚列表上限下发 %d/%d，校验用的是 %d/%d", got.SocialMax, got.FriendMax, maxSocialLinks, maxFriendLinks)
+	}
+	if got.NavMaxDepth != navMaxDepth || got.PostTagsMax != maxTagsPerPost {
+		t.Errorf("层级/标签下发 %d/%d，校验用的是 %d/%d", got.NavMaxDepth, got.PostTagsMax, navMaxDepth, maxTagsPerPost)
+	}
+	if got.Media.MaxBytes != int(got.Media.MaxMB*1024*1024) || len(got.Media.Mimes) != len(mediaImageTypes) {
+		t.Errorf("媒体上限 = %+v，与图片大小/类型清单不自洽", got.Media)
+	}
+}
+
 // 语言包里这两条必须带参渲染：上限一改，报错跟着变，不会停在写死的「2MB」。
 // 谁把 %s 改回死值，Sprintf 的多余参数会露出来，用例就红。
 func TestMediaErrorTextsRenderWithLimits(t *testing.T) {

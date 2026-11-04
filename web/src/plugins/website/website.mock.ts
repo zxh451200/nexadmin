@@ -374,14 +374,21 @@ defineMock([
   },
   { method: 'GET', url: '/plugins/website/settings', handler: () => settings },
   {
-    // 与后端默认一致：2MB、位图四类。真机上这条会跟着系统参数「上传限制」变。
+    // 与后端出厂值一致：图片 2MB + 位图四类、社交 12、友链 20、导航 3 级、单篇标签 20。
+    // 真机上图片大小这一项会跟着系统参数「上传限制」变。
     method: 'GET',
-    url: '/plugins/website/media/limits',
+    url: '/plugins/website/limits',
     handler: () => ({
-      maxMb: 2,
-      maxBytes: 2 * 1024 * 1024,
-      mimes: ['image/png', 'image/jpeg', 'image/webp', 'image/gif'],
-      labels: ['PNG', 'JPEG', 'WebP', 'GIF'],
+      media: {
+        maxMb: 2,
+        maxBytes: 2 * 1024 * 1024,
+        mimes: ['image/png', 'image/jpeg', 'image/webp', 'image/gif'],
+        labels: ['PNG', 'JPEG', 'WebP', 'GIF'],
+      },
+      socialMax: 12,
+      friendMax: 20,
+      navMaxDepth: 3,
+      postTagsMax: 20,
     }),
   },
   {

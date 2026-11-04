@@ -79,7 +79,7 @@
     },
     "nav": {
       "title": "Navigation",
-      "desc": "Top navigation of the public site; supports nesting (up to 3 levels) and drag to reorder",
+      "desc": "Top navigation of the public site; supports nesting (up to {{max}} levels) and drag to reorder",
       "create": "New link",
       "edit": "Edit link",
       "required": "Label and href are required",
@@ -267,8 +267,8 @@
       "headCode": "Injected as-is into every page's <head> (GA / Baidu Analytics / site verification); configurable only by site-settings admins who own the script content, limited to 5000 characters",
       "titleSuffix": "Appended after page titles, replacing \" - SiteName\"; leave empty to use the site name",
       "qrCodeUrl": "Shown in the footer and on the contact page; leave empty to hide the QR code",
-      "socials": "Social icons in the footer and on the contact page; up to 12, https:// or mailto:",
-      "friendLinks": "The “Links” column in the footer; up to 20, hidden when empty",
+      "socials": "Social icons in the footer and on the contact page; up to {{max}}, https:// or mailto:",
+      "friendLinks": "The “Links” column in the footer; up to {{max}}, hidden when empty",
       "navHref": "Pick a site page here. Choose “Custom link” for an external URL (must start with https://) or an in-page anchor."
     },
     "logo": {

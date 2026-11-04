@@ -53,6 +53,7 @@ import {
   useRollbackPost,
   useSaveCategory,
   useSavePost,
+  usePostTagsMax,
   useSaveTag,
   useSetPostStatus,
   useTags,
@@ -64,9 +65,6 @@ import {
 } from './api'
 
 const ALL = '__all'
-
-/** 一篇新闻的标签上限，与后端 maxTagsPerPost 同值：界面先挡住，别等人保存才报错。 */
-const MAX_TAGS = 20
 
 /** 栏目 slug 的口径与后端 slugReg 一致：小写字母、数字与连字符，长度 1-64。 */
 const slugReg = /^[a-z0-9][a-z0-9-]{0,63}$/
@@ -135,6 +133,8 @@ function PostFormBody({
   onManageCategories: () => void
 }) {
   const { t } = useTranslation()
+  // 标签上限取自服务端 /limits（与 taxonomy.go 的 maxTagsPerPost 同源）：界面先挡住，别等保存才报错。
+  const tagsMax = usePostTagsMax()
   const save = useSavePost()
   const saveCategory = useSaveCategory()
   const { data: categories = [], isLoading: categoriesLoading } = useCategories()
@@ -156,7 +156,7 @@ function PostFormBody({
   const [catFormOpen, setCatFormOpen] = useState(false)
   // 一个栏目都没有时新建入口直接摊开：否则用户面对空面板只剩「分类与标签…」一条路。
   const catFormShown = catFormOpen || (!categories.length && !categoriesLoading)
-  const atTagLimit = tags.length >= MAX_TAGS
+  const atTagLimit = tags.length >= tagsMax
   // slug 是所有语言共用的，但每门语言有各自的路径前缀；提示按当前编辑的语言拼。
   const pathPrefix = lf.locales.find((l) => l.code === lf.active)?.prefix
   const articlePath = `${pathPrefix ? `/${pathPrefix}` : ''}/news/${slug || '…'}`
@@ -196,7 +196,7 @@ function PostFormBody({
       picked.push(name)
     }
     setTagInput('')
-    if (picked.length) setTags((cur) => [...cur, ...picked].slice(0, MAX_TAGS))
+    if (picked.length) setTags((cur) => [...cur, ...picked].slice(0, tagsMax))
   }
 
   const submit = async () => {
@@ -409,7 +409,7 @@ function PostFormBody({
               </Button>
             </div>
             {atTagLimit ? (
-              <span className="text-xs text-muted-foreground">{t('plugin_website.post.tagLimit', { max: MAX_TAGS })}</span>
+              <span className="text-xs text-muted-foreground">{t('plugin_website.post.tagLimit', { max: tagsMax })}</span>
             ) : null}
             {/* 补全走已有标签：同一个主题词长成新名字，公开侧就多出两个入口 */}
             <datalist id="post-tag-options">

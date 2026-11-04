@@ -115,7 +115,7 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.DELETE("/tags/:id", core.Perm("website:post"), core.Desc("删除新闻标签"), h.deleteTag)
 
 	g.POST("/media", core.Perm("website:setting"), core.Desc("上传 logo/封面图片"), h.uploadMedia)
-	g.GET("/media/limits", core.Perm("website:setting"), core.Desc("读取图片上传限制"), h.mediaLimits)
+	g.GET("/limits", core.Perm("website:setting"), core.Desc("读取官网生效上限"), h.limits)
 	// 语言清单的管理接口在框架（/api/v1/languages，见 modules/system/language）：
 	// 官网不再重复提供一份，否则又变成两份互不可见的清单。
 	// 翻译表单的字段元数据由后端下发：白名单在 Go 里，前端不再抄一份。

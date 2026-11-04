@@ -32,6 +32,7 @@ import {
   useDeleteNavs,
   useI18nSchema,
   useLanguages,
+  useNavMaxDepth,
   useNavs,
   usePages,
   useReorderNavs,
@@ -44,8 +45,6 @@ import {
 interface NavNode extends NavItem {
   children?: NavNode[]
 }
-
-const NAV_MAX_DEPTH = 3
 
 /** 「自定义链接」占位值：选中时展示输入框，提交时用输入值代替。 */
 const CUSTOM_HREF = '__custom__'
@@ -206,7 +205,10 @@ function NavFormBody({
   const sort = Math.trunc(Number(sortText)) || 0
   const [enabled, setEnabled] = useState(editing?.enabled ?? true)
 
-  // 上级选项：顶级 + 现有节点；排除自己与后代，并过滤掉放下后会超过 3 级的候选。
+  // 层级上限来自服务端 /limits，与 nav.go 的校验同源（未到货时按出厂值兜底）。
+  const maxDepth = useNavMaxDepth()
+
+  // 上级选项：顶级 + 现有节点；排除自己与后代，并过滤掉放下后会超过层级上限的候选。
   const parentOptions = useMemo<SimpleSelectOption[]>(() => {
     const self = editing ? findNavNode(tree, editing.id) ?? { ...editing, children: [] } : null
     const blocked = new Set<string>()
@@ -215,7 +217,7 @@ function NavFormBody({
     const out: SimpleSelectOption[] = [{ value: '0', label: t('plugin_website.nav.topLevel') }]
     const walk = (nodes: NavNode[], depth: number) => {
       for (const n of nodes) {
-        if (!blocked.has(n.id) && depth + height <= NAV_MAX_DEPTH) {
+        if (!blocked.has(n.id) && depth + height <= maxDepth) {
           out.push({ value: n.id, label: `${'— '.repeat(depth - 1)}${n.label}` })
         }
         walk(n.children ?? [], depth + 1)
@@ -223,7 +225,7 @@ function NavFormBody({
     }
     walk(tree, 1)
     return out
-  }, [tree, editing, t])
+  }, [tree, editing, t, maxDepth])
 
   const submit = async () => {
     const base = lf.baseValues()
@@ -397,7 +399,8 @@ export default function NavPage() {
 
   const tree = useMemo(() => buildNavTree(navs), [navs])
 
-  // 行深度：3 级行不能再挂子级（后端会拒），「新增子导航」按钮按深度隐藏。
+  // 行深度：已到层级上限的行不能再挂子级（后端会拒），「新增子导航」按钮按深度隐藏。
+  const maxDepth = useNavMaxDepth()
   const depths = useMemo(() => {
     const out = new Map<string, number>()
     const walk = (nodes: NavNode[], level: number) => {
@@ -460,13 +463,13 @@ export default function NavPage() {
 
   return (
     <PageContainer>
-      <PageHeader title={t('plugin_website.nav.title')} description={t('plugin_website.nav.desc')} />
+      <PageHeader title={t('plugin_website.nav.title')} description={t('plugin_website.nav.desc', { max: maxDepth })} />
       <TreeTable<NavNode>
         columns={columns}
         data={tree}
         loading={isLoading}
         defaultExpandAll
-        maxDepth={NAV_MAX_DEPTH}
+        maxDepth={maxDepth}
         columnSettingsKey="plugin-website-navs"
         emptyText={t('plugin_website.empty')}
         selection={{ selected, onChange: setSelected }}
@@ -503,7 +506,7 @@ export default function NavPage() {
         }
         rowActions={(row) => (
           <Can perm="website:nav">
-            {(depths.get(row.id) ?? 1) < NAV_MAX_DEPTH ? (
+            {(depths.get(row.id) ?? 1) < maxDepth ? (
               <Button variant="ghost" size="icon" aria-label={t('plugin_website.nav.addChild')} onClick={() => openCreate(row.id)}>
                 <Plus aria-hidden="true" />
               </Button>

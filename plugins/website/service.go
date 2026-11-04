@@ -1506,6 +1506,24 @@ func (s *Service) MediaLimits(ctx context.Context) MediaLimits {
 	return lim
 }
 
+// WebsiteLimits 是官网管理页要用到的全部生效上限：图片上传、页脚两个列表、导航层级、新闻标签数。
+// 这些数字原本在 Go、前端常量与语言包里各写一份，改一处就漂；这里收成一份，前端只消费。
+type WebsiteLimits struct {
+	Media       MediaLimits `json:"media"`
+	SocialMax   int         `json:"socialMax"`
+	FriendMax   int         `json:"friendMax"`
+	NavMaxDepth int         `json:"navMaxDepth"`
+	PostTagsMax int         `json:"postTagsMax"`
+}
+
+// WebsiteLimits 汇总生效上限：图片大小随系统参数变化，其余取代码内的常量。
+func (s *Service) WebsiteLimits(ctx context.Context) WebsiteLimits {
+	return WebsiteLimits{
+		Media: s.MediaLimits(ctx), SocialMax: maxSocialLinks, FriendMax: maxFriendLinks,
+		NavMaxDepth: navMaxDepth, PostTagsMax: maxTagsPerPost,
+	}
+}
+
 // SaveMedia 校验并保存一张小图，返回可公开访问的 URL 路径。
 // 类型按内容嗅探判定（http.DetectContentType），不信任扩展名。
 func (s *Service) SaveMedia(ctx context.Context, data []byte) (*Media, error) {

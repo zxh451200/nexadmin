@@ -184,11 +184,11 @@ type siteView struct {
 	LogoURL  string
 	// FaviconURL / OgImageURL 是站点设置里的资产：浏览器标签图标与默认分享图（og:image 兜底），
 	// 空 = 模板回退内置 favicon.svg / og.png。
-	FaviconURL    string
-	OgImageURL    string
+	FaviconURL string
+	OgImageURL string
 	// HeadCode 是站点设置里的自定义 <head> 代码（统计脚本等）：管理员可信输入，经
 	// template.HTML 显式标记后原样注入；空 = 不渲染任何内容。
-	HeadCode      template.HTML
+	HeadCode template.HTML
 	// TitleSuffix 拼在 <title> 的「{标题}」之后；空 = 「 - {站点名}」。由 composeTitle 消费。
 	TitleSuffix   string
 	HomeTitle     string

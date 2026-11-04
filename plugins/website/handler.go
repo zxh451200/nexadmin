@@ -616,10 +616,10 @@ func (h *handler) deleteTag(c *gin.Context) {
 
 // ---- 媒体（logo / 封面上传） ----
 
-// GET /plugins/website/media/limits —— 当前生效的图片上传限制。前端的文件选择器与提示
-// 文案都按它渲染，省得同一组限制在 Go、TS、语言包里各抄一份。
-func (h *handler) mediaLimits(c *gin.Context) {
-	response.OK(c, h.svc.MediaLimits(c.Request.Context()))
+// GET /plugins/website/limits —— 官网管理页的生效上限：图片上传的大小与类型、页脚两个列表的条数、
+// 导航层级与单篇新闻的标签数。前端只消费这一份，省得同一组数字在 Go、TS、语言包里各抄一份。
+func (h *handler) limits(c *gin.Context) {
+	response.OK(c, h.svc.WebsiteLimits(c.Request.Context()))
 }
 
 // POST /plugins/website/media —— multipart 字段 file；返回 {url, mime, size}。

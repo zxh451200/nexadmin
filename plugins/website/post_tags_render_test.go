@@ -35,7 +35,7 @@ func TestNewsListRendersCategoryNav(t *testing.T) {
 		t.Errorf("未筛选时不该有高亮栏目：%s", nav)
 	}
 	// 列表整行是链接，行内的栏目只能是徽标不能再套一层 <a>。
-	row := out[strings.Index(out, `class="post-row"`) : strings.Index(out, `post-row-arrow`)]
+	row := out[strings.Index(out, `class="post-row"`):strings.Index(out, `post-row-arrow`)]
 	if strings.Contains(row, "<a") && strings.Contains(row, "?category=") {
 		t.Errorf("列表行内嵌了栏目链接（<a> 套 <a> 是非法 HTML）")
 	}
@@ -155,7 +155,8 @@ func tagHrefSnippet(out string) string {
 	return out[i:end]
 }
 
-func canonicalSnippet(out string) string {	i := strings.Index(out, `rel="canonical"`)
+func canonicalSnippet(out string) string {
+	i := strings.Index(out, `rel="canonical"`)
 	if i < 0 {
 		return "（没有 canonical）"
 	}
@@ -166,7 +167,8 @@ func canonicalSnippet(out string) string {	i := strings.Index(out, `rel="canonic
 	return out[i:end]
 }
 
-func pagerSnippet(out string) string {	i := strings.Index(out, `class="pager"`)
+func pagerSnippet(out string) string {
+	i := strings.Index(out, `class="pager"`)
 	if i < 0 {
 		return "（没有 pager）"
 	}
