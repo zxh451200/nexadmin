@@ -36,8 +36,13 @@ func isSection(s string) bool {
 // readonlySections：值由 config/config.yaml 在启动时决定（storage.* 决定文件存放，
 // cache.* 决定缓存驱动，core/router.go 据此构造缓存），设置页保存下来的这份没有任何地方会读。
 // 让它显示「保存成功」却不生效比直接拒绝更糟，所以这两个分区明确拒绝写入，前端也只展示不给编辑入口。
-// 注意：sms / auth 同样只在启动时读 config.yaml，但已被提交的用例当作「可写分区」做正控制
-// （modules/system/config/settings_readonly_test.go，commit a8782c5）——要收它们得先改那条决定。
+// 注意：sms / auth 同样是「保存下来的这份没有任何地方会读」（smscode.New / core/auth 只取 config.yaml），
+// 但把它们并进上面那张表之前，得先解决一个更根本的问题：本服务拿不到 config.Config（NewService 只有 db 句柄），
+// section() 返回的是「库里的值 / 出厂默认」，不是「这台机器真正生效的值」。storage / cache 两张只读卡片
+// 现在就因为这个原因在展示不生效的数字。先给只读分区接上生效值来源，再谈把 sms / auth 收进来；
+// 否则只是把「保存成功却不生效」换成「显示得很确定」。
+// （settings_readonly_test.go 的正控制表里 sms / auth 只是随手取的分区名，连 params / language 这种
+// 不存在的分区都列进去了——那条不构成「sms / auth 必须可写」的决定。）
 var readonlySections = map[string]string{
 	"storage": "config.storage_readonly",
 	"cache":   "config.cache_readonly",
