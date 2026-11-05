@@ -234,8 +234,9 @@ func (s *Service) SavePoint(ctx context.Context, deviceID idgen.ID, id idgen.ID,
 }
 
 // DeletePoint 删测点（历史读数保留——趋势数据不因测点删除而丢）。
-// 告警规则不保留：规则是配置不是历史，留着就是指向已删测点的死配置，
-// 而设备级删除（DeleteDevice）本来也会把规则清掉，两处口径要一致。
+// 告警规则与小时聚合不保留：规则是配置不是历史，留着就是指向已删测点的死配置；聚合桶是只认
+// point_id 的派生缓存，测点没了就没有入口读它，而 DeleteDevice 的级联是「顺着该设备现存的测点找」，
+// 留着就成了设备删完也清不掉的孤儿行。原始 Reading 带 device_id，删设备时收得回，两处口径一致。
 func (s *Service) DeletePoint(ctx context.Context, deviceID idgen.ID, id idgen.ID) error {
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		res := tx.Where("id = ? AND device_id = ?", id, deviceID).Delete(&Point{})
@@ -245,7 +246,12 @@ func (s *Service) DeletePoint(ctx context.Context, deviceID idgen.ID, id idgen.I
 		if res.RowsAffected == 0 {
 			return response.NotFound("devicehub.point_not_found")
 		}
-		return tx.Where("point_id = ?", id).Delete(&AlarmRule{}).Error
+		for _, row := range []any{&AlarmRule{}, &ReadingAgg{}} {
+			if err := tx.Where("point_id = ?", id).Delete(row).Error; err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 	if err != nil {
 		return err
