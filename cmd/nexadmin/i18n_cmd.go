@@ -538,20 +538,50 @@ func collectLocales(root string, rels []string, ext string, warns *[]string) (*l
 	return set, nil
 }
 
-// missingKeys 以各语言 key 的并集为基准，返回每种语言缺失的 key（已排序）。
+// cldrPluralCategories 是 CLDR 的复数类别后缀。i18next 按当前语言的复数规则挑其中一个：
+// 英文有 one/other，中文只有 other。所以「中文没有 daysLeft_one」不是缺翻译，
+// 而是这门语言根本没有这个类别——旧版按各语言 key 的并集判缺失，就会把这类假缺报出来，
+// 逼人往中文里补永远用不到的 *_one（补上的还是死条目）。
+var cldrPluralCategories = []string{"_zero", "_one", "_two", "_few", "_many", "_other"}
+
+// pluralBase 把 key 折到它所在的复数族：daysLeft_one -> daysLeft；非变体原样返回。
+func pluralBase(k string) string {
+	for _, suf := range cldrPluralCategories {
+		if strings.HasSuffix(k, suf) {
+			return strings.TrimSuffix(k, suf)
+		}
+	}
+	return k
+}
+
+// pluralFamilyCovered 判断某语言在「基准 key 及其复数变体」这一族里是否至少有一条。
+// 只要基准 key 在就算覆盖：i18next 在该语言找不到对应复数类别时回退到基准 key。
+func pluralFamilyCovered(ks map[string]bool, base string) bool {
+	if ks[base] {
+		return true
+	}
+	for _, suf := range cldrPluralCategories {
+		if ks[base+suf] {
+			return true
+		}
+	}
+	return false
+}
+
+// missingKeys 以各语言 key 的并集为基准（复数族折成一个逻辑 key），返回每种语言缺失的 key（已排序）。
 func missingKeys(s *localeSet) map[string][]string {
 	ref := map[string]bool{}
 	for _, ks := range s.keys {
 		for k := range ks {
-			ref[k] = true
+			ref[pluralBase(k)] = true
 		}
 	}
 	out := map[string][]string{}
 	for code, ks := range s.keys {
 		var miss []string
-		for k := range ref {
-			if !ks[k] {
-				miss = append(miss, k)
+		for base := range ref {
+			if !pluralFamilyCovered(ks, base) {
+				miss = append(miss, base)
 			}
 		}
 		sort.Strings(miss)

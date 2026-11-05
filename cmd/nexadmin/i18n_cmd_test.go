@@ -186,3 +186,25 @@ func TestI18nCheckViaRun(t *testing.T) {
 		t.Error("缺少子命令应报用法")
 	}
 }
+
+// 旧版按各语言 key 的并集判缺失，会把「中文没有 *_one」报成缺翻译——
+// 中文的 CLDR 复数规则只有 other，补上 _one 是永远不会被取用的死条目。
+// 复数族必须折成一个逻辑 key：有基准 key 或该族任一变体就算覆盖。
+func TestMissingKeysFoldsCldrPluralCategories(t *testing.T) {
+	s := newLocaleSet()
+	s.add("en-US", []string{"tenantSelf.daysLeft_one", "tenantSelf.daysLeft_other", "report.name"})
+	s.add("zh-CN", []string{"tenantSelf.daysLeft", "report.name"})
+	s.add("fr-FR", []string{"report.name"})
+
+	miss := missingKeys(s)
+	if len(miss["zh-CN"]) != 0 {
+		t.Errorf("zh-CN 只有基准 key，不该被判缺复数变体：%v", miss["zh-CN"])
+	}
+	if len(miss["en-US"]) != 0 {
+		t.Errorf("en-US 只有复数变体，不该被判缺基准 key：%v", miss["en-US"])
+	}
+	// 真缺的仍然要报出来（折族不能把「这一族一条都没有」也折没了）
+	if len(miss["fr-FR"]) != 1 || miss["fr-FR"][0] != "tenantSelf.daysLeft" {
+		t.Errorf("fr-FR 整族缺失应报基准 key，实际：%v", miss["fr-FR"])
+	}
+}
