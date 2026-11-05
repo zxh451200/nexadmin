@@ -73,6 +73,37 @@ func TestFrontendExtraction(t *testing.T) {
 	}
 }
 
+// TestCrudMockSortRuleIsOptIn 钉住反向：没写 sortable: true 的资源不能展开出 PUT {base}/sort。
+// 只有正向（tsMock 里的 sortable: true）时，把旗标判断退回「无条件给每个资源注册 /sort」
+// 这套测试仍然全绿，多出来的假契约要等有人对真树跑一遍 contract_check 才照得出来。
+func TestCrudMockSortRuleIsOptIn(t *testing.T) {
+	root := writeTree(t, map[string]string{
+		"web/src/framework/modules/demo/on.mock.ts":  "import { createCrudMock } from '@/framework/request/mock'\ncreateCrudMock<Row>({ base: '/on', seed: [], sortable: true })\n",
+		"web/src/framework/modules/demo/off.mock.ts": "import { createCrudMock } from '@/framework/request/mock'\ncreateCrudMock<Row>({ base: '/off', seed: [], sortable: false })\n",
+	})
+	files, err := loadFront(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mocks, _ := frontMocks(files)
+	got := map[string]bool{}
+	for _, m := range mocks {
+		got[m.Method+" "+m.Path] = true
+	}
+	if !got["PUT /api/v1/on/sort"] {
+		t.Error("sortable: true 应展开出 PUT /on/sort")
+	}
+	if got["PUT /api/v1/off/sort"] {
+		t.Error("没声明 sortable 的资源不该有 PUT /off/sort")
+	}
+	// /off 的其余路由仍要展开，否则这条只是在测「根本没展开」
+	for _, w := range []string{"GET /api/v1/off", "GET /api/v1/off/:id", "POST /api/v1/off", "PUT /api/v1/off/:id", "DELETE /api/v1/off/:id", "DELETE /api/v1/off"} {
+		if !got[w] {
+			t.Errorf("createCrudMock 的其余展开缺 %q", w)
+		}
+	}
+}
+
 func TestABCClassification(t *testing.T) {
 	rep, err := Check(tsFixture(t))
 	if err != nil {
