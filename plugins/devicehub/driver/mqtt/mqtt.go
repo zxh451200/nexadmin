@@ -133,15 +133,38 @@ func (c *client) onMessage(_ paho.Client, msg paho.Message) {
 }
 
 // decodePayload 兼容三种形态：{"v":1.5} JSON、裸数字、裸字符串。
+//
+// {"v":...} 里的值按类型收敛：数字走 Num；布尔走 1/0（以前 json.Number 解不了 true，
+// 会把整段 JSON 当字符串存进读数）；字符串先按数字试一次再落 Str（设备端把数值点位
+// 发成 "1.5" 是常态）。null 与解不动的形态回零值，不猜。
 func decodePayload(raw []byte) driver.Value {
-	var payload struct {
-		V json.Number `json:"v"`
+	var envelope struct {
+		V json.RawMessage `json:"v"`
 	}
-	if err := json.Unmarshal(raw, &payload); err == nil && payload.V != "" {
-		if n, err := payload.V.Float64(); err == nil {
-			return driver.Value{Num: n}
+	if err := json.Unmarshal(raw, &envelope); err == nil && len(envelope.V) > 0 {
+		var num json.Number
+		if err := json.Unmarshal(envelope.V, &num); err == nil {
+			if f, err := num.Float64(); err == nil {
+				return driver.Value{Num: f}
+			}
+			return driver.Value{Str: num.String()}
 		}
-		return driver.Value{Str: payload.V.String()}
+		var b bool
+		if err := json.Unmarshal(envelope.V, &b); err == nil {
+			if b {
+				return driver.Value{Num: 1}
+			}
+			return driver.Value{Num: 0}
+		}
+		var s string
+		if err := json.Unmarshal(envelope.V, &s); err == nil {
+			s = strings.TrimSpace(s)
+			if f, err := strconv.ParseFloat(s, 64); err == nil {
+				return driver.Value{Num: f}
+			}
+			return driver.Value{Str: s}
+		}
+		return driver.Value{}
 	}
 	s := strings.TrimSpace(string(raw))
 	if s == "" {

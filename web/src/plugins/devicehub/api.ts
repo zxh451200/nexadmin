@@ -7,7 +7,7 @@ import { useWs } from '@/framework/hooks/useWs'
 const BASE = '/plugins/devicehub'
 const KEY = ['plugin_devicehub'] as const
 
-export type DeviceProtocol = 'modbus-tcp' | 'modbus-rtu' | 'mqtt'
+export type DeviceProtocol = 'modbus-tcp' | 'modbus-rtu' | 'mqtt' | 's7' | 'opcua'
 export type DeviceStatus = 'online' | 'offline' | 'disabled'
 export type PointRW = 'r' | 'rw'
 export type PointDataType = 'bool' | 'int16' | 'uint16' | 'int32' | 'float32'
@@ -220,6 +220,28 @@ export function useHistory(deviceNo: string | undefined, query: { pointId: strin
     enabled: !!deviceNo && !!query.pointId,
     placeholderData: keepPreviousData,
   })
+}
+
+/** 历史数据导出：真后端回 xlsx Blob，mock 阶段回 CSV 文本——扩展名按来货定，
+ * 把 CSV 文本存成 .xlsx 只会得到一个打不开的假文件。 */
+export async function exportHistory(deviceNo: string, query: { pointId: string; from: string; to: string; bucket?: string }): Promise<void> {
+  const { http } = await import('@/framework/request/http')
+  // 不带 silent：导出失败（行数超限、设备不存在）由拦截器解码 Blob 里的 JSON 错误体并弹提示，
+  // 静默的话点完按钮什么都没发生，现场只能理解成「导出坏了」。
+  const res = await http.get<unknown>(`${BASE}/devices/${deviceNo}/history-export`, {
+    params: { ...query },
+    responseType: 'blob',
+  })
+  const data = res.data
+  const blob = data instanceof Blob ? data : new Blob(['\uFEFF', String(data)], { type: 'text/csv;charset=utf-8' })
+  const ext = blob.type.includes('csv') ? 'csv' : 'xlsx'
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '')
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `history-${deviceNo}-${stamp}.${ext}`
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 export function useCommands(deviceNo?: string) {

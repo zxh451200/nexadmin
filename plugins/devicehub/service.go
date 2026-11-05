@@ -84,7 +84,7 @@ type DeviceInput struct {
 	Enabled  bool   `json:"enabled"`
 }
 
-var validProtocols = map[string]bool{"modbus-tcp": true, "modbus-rtu": true, "mqtt": true}
+var validProtocols = map[string]bool{"modbus-tcp": true, "modbus-rtu": true, "mqtt": true, "s7": true, "opcua": true}
 
 // SaveDevice 新建/更新设备；配置变更后重启该设备的采集 worker。
 func (s *Service) SaveDevice(ctx context.Context, id idgen.ID, in DeviceInput) (*Device, error) {

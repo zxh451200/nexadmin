@@ -67,6 +67,7 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	h := &handler{svc: svc, log: d.Log}
 	// WS 订阅守卫：devicehub: 前缀的准入判定（匿名拒绝 / 设备存在 / devicehub:list），见 ws_guard.go。
 	m.wsGuard.Do(func() { registerWSTopicGuard(svc, d.Auth) })
+	SetDefault(svc)
 	h.Register(r, d)
 }
 

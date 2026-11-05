@@ -21,6 +21,7 @@ import { Textarea } from '@/framework/ui/textarea'
 import { cn } from '@/lib/utils'
 import { formatTime } from './format'
 import {
+  exportHistory,
   useAlarmEvents,
   useAlarmRules,
   useCommands,
@@ -46,7 +47,7 @@ import {
   type PointInput,
 } from './api'
 
-const PROTOCOLS: DeviceProtocol[] = ['modbus-tcp', 'modbus-rtu', 'mqtt']
+const PROTOCOLS: DeviceProtocol[] = ['modbus-tcp', 'modbus-rtu', 'mqtt', 's7', 'opcua']
 const DATA_TYPES: PointDataType[] = ['bool', 'int16', 'uint16', 'int32', 'float32']
 const OPS: AlarmOp[] = ['gt', 'lt', 'ge', 'le', 'eq', 'ne']
 const LEVELS: AlarmLevel[] = ['info', 'warn', 'critical']
@@ -485,15 +486,22 @@ function HistoryPanel({ deviceNo, points }: { deviceNo: string; points: Point[] 
       {rows.length === 0 ? (
         <EmptyState title={t('plugin_devicehub.history.empty')} className="py-8" />
       ) : (
-        <TrendChart
-          data={rows.map((r) => ({ ts: formatTime(r.ts), avg: r.avg, min: r.min, max: r.max }))}
-          series={[
-            { key: 'avg', label: t('plugin_devicehub.history.avg') },
-            { key: 'min', label: t('plugin_devicehub.history.min') },
-            { key: 'max', label: t('plugin_devicehub.history.max') },
-          ]}
-          xKey="ts"
-        />
+        <>
+          <div className="flex justify-end">
+            <Button size="sm" variant="outline" onClick={() => void exportHistory(deviceNo, query)}>
+              {t('plugin_devicehub.history.export')}
+            </Button>
+          </div>
+          <TrendChart
+            data={rows.map((r) => ({ ts: formatTime(r.ts), avg: r.avg, min: r.min, max: r.max }))}
+            series={[
+              { key: 'avg', label: t('plugin_devicehub.history.avg') },
+              { key: 'min', label: t('plugin_devicehub.history.min') },
+              { key: 'max', label: t('plugin_devicehub.history.max') },
+            ]}
+            xKey="ts"
+          />
+        </>
       )}
     </div>
   )
@@ -809,7 +817,15 @@ function DeviceFormDialog({ device, onOpenChange }: { device: Device | null; onO
           <Field
             label={t('plugin_devicehub.device.endpoint')}
             required
-            hint={form.protocol === 'mqtt' ? t('plugin_devicehub.device.endpointMqttHint') : t('plugin_devicehub.device.endpointHint')}
+            hint={
+              form.protocol === 'mqtt'
+                ? t('plugin_devicehub.device.endpointMqttHint')
+                : form.protocol === 's7'
+                  ? t('plugin_devicehub.device.endpointS7Hint')
+                  : form.protocol === 'opcua'
+                    ? t('plugin_devicehub.device.endpointOpcuaHint')
+                    : t('plugin_devicehub.device.endpointHint')
+            }
           >
             <Input
               value={form.endpoint}

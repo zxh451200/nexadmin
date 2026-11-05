@@ -186,11 +186,13 @@ func (h *handler) history(c *gin.Context) {
 }
 
 func (h *handler) historyExport(c *gin.Context) {
-	if _, ok := h.deviceIDByNo(c); !ok {
-		return
-	}
 	var q HistoryQuery
 	if !response.BindQuery(c, &q) {
+		return
+	}
+	d, p, err := h.svc.pointAndDeviceByNo(c.Request.Context(), c.Param("no"), q.PointID)
+	if err != nil {
+		response.Fail(c, err)
 		return
 	}
 	rows, _, err := h.svc.History(c.Request.Context(), q)
@@ -198,7 +200,11 @@ func (h *handler) historyExport(c *gin.Context) {
 		response.Fail(c, err)
 		return
 	}
-	response.OK(c, rows)
+	c.Header("Content-Disposition", `attachment; filename="history-`+d.DeviceNo+`.xlsx"`)
+	c.Header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	if err := h.svc.WriteHistoryXLSX(c.Request.Context(), c.Writer, d, p, rows); err != nil {
+		response.Fail(c, err)
+	}
 }
 
 func (h *handler) listCommands(c *gin.Context) {

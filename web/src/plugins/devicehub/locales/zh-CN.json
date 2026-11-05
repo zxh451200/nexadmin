@@ -16,7 +16,9 @@
     "protocol": {
       "modbus-tcp": "Modbus TCP",
       "modbus-rtu": "Modbus RTU",
-      "mqtt": "MQTT"
+      "mqtt": "MQTT",
+      "s7": "西门子 S7",
+      "opcua": "OPC UA"
     },
     "device": {
       "add": "新增设备",
@@ -28,10 +30,12 @@
       "endpointHint": "Modbus 形如 192.168.1.20:502；RTU 形如 COM3:9600,8,E,1",
       "endpointMqttHint": "broker 地址，形如 tcp://192.168.1.10:1883",
       "config": "协议配置（JSON）",
-      "configHint": "Modbus：{\"unitId\":1,\"pollIntervalMs\":5000}；MQTT：{\"username\":\"\",\"password\":\"\",\"upstreamPrefix\":\"devicehub/up/DEV1\"}",
+      "configHint": "Modbus：{\"unitId\":1,\"pollIntervalMs\":5000}；MQTT：{\"username\":\"\",\"password\":\"\",\"upstreamPrefix\":\"devicehub/up/DEV1\"}；S7：{\"rack\":0,\"slot\":1,\"pollIntervalMs\":5000}（1200/1500 slot=0，300/400 slot=1 或 2）；OPC UA：{\"securityPolicy\":\"None\",\"username\":\"\",\"password\":\"\"}",
       "enabled": "启用",
       "required": "请填写设备名称与连接地址",
-      "deleteConfirm": "确认删除设备「{{name}}」？其测点、历史数据与告警规则一并删除。"
+      "deleteConfirm": "确认删除设备「{{name}}」？其测点、历史数据与告警规则一并删除。",
+      "endpointS7Hint": "S7 形如 192.168.1.30:102（rack/slot 在协议配置 JSON 里）",
+      "endpointOpcuaHint": "OPC UA 形如 opc.tcp://192.168.1.40:4840"
     },
     "point": {
       "add": "新增测点",
@@ -39,10 +43,10 @@
       "empty": "还没有测点，先配一个采集地址",
       "name": "测点名称",
       "address": "采集地址",
-      "addressHint": "Modbus：hr:40001 / ir:30001 / co:1 / di:1；MQTT：相对主题（motor/frequency）",
+      "addressHint": "Modbus：hr:40001 / ir:30001 / co:1 / di:1；MQTT：相对主题（motor/frequency）；S7：DB1.DBX0.0 / DB1.DBW2 / DB1.DBD4、M0.0 / MW10；OPC UA：ns=2;s=Tag1",
       "unit": "单位",
       "dataType": "数据类型",
-      "rw": "读写",
+      "rw": "可写",
       "readonly": "只读",
       "readwrite": "可写",
       "scale": "缩放系数",
@@ -54,8 +58,7 @@
       "disabled": "停用",
       "never": "从未采集",
       "required": "测点名称与采集地址必填",
-      "deleteConfirm": "确认删除测点「{{name}}」？历史数据保留。",
-      "rw": "可写"
+      "deleteConfirm": "确认删除测点「{{name}}」？历史数据保留。"
     },
     "history": {
       "range": "时间范围",
@@ -66,7 +69,8 @@
       "empty": "这个时间窗内没有数据",
       "avg": "均值",
       "min": "最小",
-      "max": "最大"
+      "max": "最大",
+      "export": "导出 xlsx"
     },
     "command": {
       "point": "目标测点",

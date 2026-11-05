@@ -123,6 +123,19 @@ defineMock([
     },
   },
   {
+    // 历史导出：真后端回 xlsx 二进制，mock 回同口径的 CSV 文本（前端按 Content 类型定扩展名）
+    method: 'GET', url: '/plugins/devicehub/devices/:no/history-export',
+    handler: ({ params }) => {
+      const rows: string[] = ['device_no,point,unit,ts,min,max,avg']
+      const now = Date.now()
+      for (let i = 23; i >= 0; i--) {
+        const v = 42 + 8 * Math.sin(i / 3)
+        rows.push(`${params.no},母线电压,V,${new Date(now - i * 3600_000).toISOString()},${(v - 1.2).toFixed(2)},${(v + 1.2).toFixed(2)},${v.toFixed(2)}`)
+      }
+      return rows.join('\n')
+    },
+  },
+  {
     method: 'GET', url: '/plugins/devicehub/devices/:no/commands',
     handler: () => [
       {

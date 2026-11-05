@@ -16,7 +16,9 @@
     "protocol": {
       "modbus-tcp": "Modbus TCP",
       "modbus-rtu": "Modbus RTU",
-      "mqtt": "MQTT"
+      "mqtt": "MQTT",
+      "s7": "Siemens S7",
+      "opcua": "OPC UA"
     },
     "device": {
       "add": "Add device",
@@ -31,7 +33,9 @@
       "configHint": "Modbus: {\"unitId\":1,\"pollIntervalMs\":5000}; MQTT: {\"username\":\"\",\"password\":\"\",\"upstreamPrefix\":\"devicehub/up/DEV1\"}",
       "enabled": "Enabled",
       "required": "Device name and endpoint are required",
-      "deleteConfirm": "Delete device \"{{name}}\"? Its points, history and alarm rules are removed too."
+      "deleteConfirm": "Delete device \"{{name}}\"? Its points, history and alarm rules are removed too.",
+      "endpointS7Hint": "S7 like 192.168.1.30:102 (rack/slot in the protocol config JSON)",
+      "endpointOpcuaHint": "OPC UA like opc.tcp://192.168.1.40:4840"
     },
     "point": {
       "add": "Add point",
@@ -39,10 +43,10 @@
       "empty": "No points yet — configure a collection address first",
       "name": "Point name",
       "address": "Address",
-      "addressHint": "Modbus: hr:40001 / ir:30001 / co:1 / di:1; MQTT: relative topic (motor/frequency)",
+      "addressHint": "Modbus: hr:40001 / ir:30001 / co:1 / di:1; MQTT: relative topic (motor/frequency); S7: DB1.DBX0.0 / DB1.DBW2 / DB1.DBD4, M0.0 / MW10; OPC UA: ns=2;s=Tag1",
       "unit": "Unit",
       "dataType": "Data type",
-      "rw": "Access",
+      "rw": "Writable",
       "readonly": "Read-only",
       "readwrite": "Writable",
       "scale": "Scale",
@@ -54,8 +58,7 @@
       "disabled": "Disabled",
       "never": "Never collected",
       "required": "Point name and address are required",
-      "deleteConfirm": "Delete point \"{{name}}\"? History is kept.",
-      "rw": "Writable"
+      "deleteConfirm": "Delete point \"{{name}}\"? History is kept."
     },
     "history": {
       "range": "Range",
@@ -66,7 +69,8 @@
       "empty": "No data in this window",
       "avg": "Avg",
       "min": "Min",
-      "max": "Max"
+      "max": "Max",
+      "export": "Export xlsx"
     },
     "command": {
       "point": "Target point",
