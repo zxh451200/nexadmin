@@ -42,7 +42,9 @@ cd web && npm run typecheck && npm run lint   # 已含 e2e 与 playwright.config
 `NEXADMIN_IT_MYSQL_DSN='root:pass@tcp(127.0.0.1:3306)/?charset=utf8mb4&parseTime=true&loc=UTC'`。
 各包把库名换成一次性测试库的写法不同（替换 `)/`、在末个 `/` 后插名字、解析 DSN 后换 `DBName`），
 DSN 里写了库名要么连出一个不存在的库、要么直接跑进你命名的那个库；totp 与 ticket 的用例会在这种 DSN 上
-主动失败，不要改成静默跳过。PG 侧 `NEXADMIN_IT_PG_DSN` 用 `host=localhost`（避开 pgx 连 127.0.0.1 的超时）。
+主动失败，不要改成静默跳过。PG 侧 `NEXADMIN_IT_PG_DSN` 用 `host=localhost`（避开 pgx 连 127.0.0.1 的超时），
+但库名不能留空——pgx 的 keyword DSN 没有空值写法，`dbname=` 会把下一个 token（`sslmode=disable`）当成库名，
+连不上就删不掉自己建的一次性库；写 `dbname=postgres`（只用于建/删库的管理连接，被测库名由用例生成）。
 
 Windows 上若 `TestContract*` 报 "contract changed" 而自己没动契约，那是 golden 被 checkout 成 CRLF：
 `rm core/testdata/contracts/*.golden && git checkout -- core/testdata/contracts` 重新按 LF 检出即可，

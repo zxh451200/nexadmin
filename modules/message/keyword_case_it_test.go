@@ -116,6 +116,24 @@ func kwPGKV(raw string) map[string]string {
 	return out
 }
 
+// kwPGAdminDSN 补齐库名：pgx 的 keyword DSN 没有空值写法，`dbname=` 会把下一个 token 当成库名，
+// 于是只用来 DROP 的那条管理会话连不上、一次性库全留在服务器上。被测库名由 config.Database.Name 决定，
+// 这里的库名只是「先连上服务器」的落点。
+func kwPGAdminDSN(raw string) string {
+	kv := kwPGKV(raw)
+	name := kv["dbname"]
+	if name == "" {
+		name = "postgres"
+	}
+	parts := make([]string, 0, len(kv)+1)
+	for k, v := range kv {
+		if k != "dbname" {
+			parts = append(parts, k+"="+v)
+		}
+	}
+	return strings.Join(append(parts, "dbname="+name), " ")
+}
+
 func kwOpenPG(t *testing.T) *gorm.DB {
 	t.Helper()
 	raw := os.Getenv("NEXADMIN_IT_PG_DSN")
@@ -136,7 +154,7 @@ func kwOpenPG(t *testing.T) *gorm.DB {
 	}
 	t.Cleanup(func() {
 		// 这条管理会话连的是原始 DSN 里的库（不是被测库），只用来 DROP。
-		admin, err := gorm.Open(gormpg.Open(raw), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+		admin, err := gorm.Open(gormpg.Open(kwPGAdminDSN(raw)), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 		if err != nil {
 			t.Errorf("连 PG 管理会话失败，一次性库 %s 残留: %v", cfg.Name, err)
 			return
