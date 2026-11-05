@@ -17,7 +17,8 @@ import (
 // 对每个带 migrations/ 的插件，解析 mysql/mariadb/postgres 三份 SQL，
 // 断言 表集合、每张表的列名集合、索引名及其列集 完全一致。
 // 类型差异（TINYINT(1) vs BOOLEAN、DATETIME(3) vs TIMESTAMP）是合法方言差异，不比对。
-// 真实三库执行与并发验证仍需部署侧覆盖（见交接说明）。
+// 真实三库执行由 migrations_live_engine_it_test.go 负责（本文件只比三份文本是否互相一致，不比类型能否执行）；
+// 并发验证仍需部署侧覆盖（见交接说明）。
 type tableSchema struct {
 	columns map[string]bool
 	// indexName → (columns, unique)
