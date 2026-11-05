@@ -21,6 +21,7 @@
     "templateXlsx": "XLSX 模板",
     "run": "开始导入",
     "errorsCsv": "下载失败明细",
+    "retryCsv": "下载待修复 CSV",
     "filesSelected": "已选 {{count}} 个文件",
     "removeFile": "移除 {{name}}",
     "batchDone": "已提交 {{ok}} 个文件，{{fail}} 个失败",

@@ -175,6 +175,7 @@ imports:
   job_running: "The job is running; it can be deleted once it finishes."
   job_not_running: "The job is not running, so there is nothing to cancel."
   required_empty: Required column is empty
+  retry_empty: This job did not keep the original cells of the failed rows (older job, or the ledger is full); fix them in your source file using the line numbers from the failed-rows CSV, then import again
   required_suffix: "(required)"
   source:
     crm_customers:
@@ -925,3 +926,22 @@ realname:
   provider_status: The verification service replied with status %s
   provider_unreachable: Cannot reach the verification service; check the endpoint and network
   provider_bad_response: Bad response from the verification service; the body must carry a matched field
+devicehub:
+  plugin_inactive: The device access plugin is inactive or its license has expired
+  name_required: Enter the device name (max 100 characters)
+  protocol_invalid: Unknown protocol driver; pick modbus-tcp, modbus-rtu, mqtt, s7 or opcua
+  endpoint_required: Enter the device endpoint (max 255 characters), such as 127.0.0.1:502 or opc.tcp://127.0.0.1:4840
+  config_invalid: The extra config is not valid JSON; check the quotes and braces, then save again
+  device_not_found: No device with that device number
+  device_disabled: The device is disabled; enable it on the device page before sending a command
+  point_name_required: Enter the point name (max 100 characters)
+  point_address_required: Enter the point address (max 128 characters); the syntax depends on the protocol - Modbus uses hr:40001, S7 uses DB1.DBD0, OPC UA uses ns=2;s=Tag
+  point_rw_invalid: The direction must be r (read only) or rw (writable)
+  point_type_invalid: Invalid data type; pick bool, int16, uint16, int32 or float32
+  point_not_found: The point does not exist, or does not belong to this device
+  point_required: Select a point before opening the history trend
+  point_readonly: This point is read only, so no command can be sent; set its direction to rw to allow commands
+  alarm_name_required: Enter the alarm rule name (max 100 characters)
+  alarm_op_invalid: Invalid comparison operator; pick gt, lt, ge, le, eq or ne
+  alarm_level_invalid: The alarm level must be info, warn or critical
+  alarm_not_found: The alarm rule does not exist

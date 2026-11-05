@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { ChevronDown, FileDown, FileUp, OctagonX, Trash2, Upload, X } from 'lucide-react'
+import { ChevronDown, FileDown, FilePen, FileUp, OctagonX, Trash2, Upload, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
@@ -20,6 +20,7 @@ import { Progress } from '@/framework/ui/progress'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import {
   downloadErrorsCsv,
+  downloadRetryCsv,
   downloadTemplate,
   fetchJobsForExport,
   useCancelImport,
@@ -359,10 +360,17 @@ export default function ImportsPage() {
         rowActions={(j) => (
           <div className="flex items-center justify-end gap-1">
             {j.failRows > 0 ? (
-              <Button variant="ghost" size="sm" onClick={() => void downloadErrorsCsv(j.id)}>
-                <FileDown aria-hidden="true" />
-                {t('plugin_imports.errorsCsv')}
-              </Button>
+              <>
+                <Button variant="ghost" size="sm" onClick={() => void downloadErrorsCsv(j.id)}>
+                  <FileDown aria-hidden="true" />
+                  {t('plugin_imports.errorsCsv')}
+                </Button>
+                {/* 待修复 CSV：失败行按模板口径原样导出，修正后可直接再导入 */}
+                <Button variant="ghost" size="sm" onClick={() => void downloadRetryCsv(j.id)}>
+                  <FilePen aria-hidden="true" />
+                  {t('plugin_imports.retryCsv')}
+                </Button>
+              </>
             ) : null}
             <Can perm="imports:run">
               {j.status === 'running' || j.status === 'pending' ? (

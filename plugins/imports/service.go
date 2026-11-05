@@ -116,11 +116,9 @@ func (s *Service) ListJobs(ctx context.Context, q JobQuery) ([]JobView, int64, e
 	}
 	out := make([]JobView, len(rows))
 	for i := range rows {
-		var errs []RowError
-		if strings.TrimSpace(rows[i].ErrorJSON) != "" {
-			_ = json.Unmarshal([]byte(rows[i].ErrorJSON), &errs)
-		}
-		out[i] = jobView(&rows[i], errs)
+		// 台账列表不带失败明细：明细现在含失败行的原始单元格，一页 20 条 × 最多 500 行能把
+		// 列表接口撑成几十 MB，而前端列表与导出的列里都没有它。看明细走 GET /:id 或下载 CSV。
+		out[i] = jobView(&rows[i], nil)
 	}
 	return out, total, nil
 }
@@ -198,18 +196,18 @@ func (s *Service) runSync(ctx context.Context, src Source, rows []map[string]str
 	start := time.Now()
 	okRows, failRows, errs := s.processRows(ctx, src, rows, 0, len(rows))
 
-	raw, err := json.Marshal(errs)
-	if err != nil {
-		return nil, err
-	}
+	raw, dropped := fitErrorsJSON(errs)
 	m := Job{
 		Source: src.Name, FileName: truncate(fileName, 200), Lang: i18n.Lang(ctx),
 		TotalRows: len(rows), OkRows: okRows, FailRows: failRows,
 		Status: StatusDone, DurationMs: time.Since(start).Milliseconds(),
-		ErrorJSON: string(raw), CreatedBy: truncate(actor, 64),
+		ErrorJSON: raw, CreatedBy: truncate(actor, 64),
 	}
 	if err := s.db.WithContext(ctx).Create(&m).Error; err != nil {
 		return nil, err
+	}
+	if dropped > 0 {
+		s.logWarn("imports: 失败明细超出台账容量，尾部条目未入库", "jobId", m.ID, "dropped", dropped)
 	}
 	s.publishCompleted(ctx, &m, actor)
 	v := jobView(&m, errs)
@@ -276,14 +274,14 @@ func (s *Service) processAsync(src Source, m *Job, rows []map[string]string, act
 		if bad != "" {
 			failRows++
 			if len(errs) < MaxErrors {
-				errs = append(errs, RowError{Row: i + 1, Key: bad, Message: i18n.T(ctx, "imports.required_empty")})
+				errs = append(errs, RowError{Row: i + 1, Key: bad, Message: i18n.T(ctx, "imports.required_empty"), Data: row})
 			}
 			continue
 		}
 		if err := safeCall(src.Handler, ctx, i+1, row); err != nil {
 			failRows++
 			if len(errs) < MaxErrors {
-				errs = append(errs, RowError{Row: i + 1, Message: truncate(err.Error(), 200)})
+				errs = append(errs, RowError{Row: i + 1, Message: truncate(err.Error(), 200), Data: row})
 			}
 			continue
 		}
@@ -296,14 +294,17 @@ func (s *Service) processAsync(src Source, m *Job, rows []map[string]string, act
 		}
 	}
 
-	raw, _ := json.Marshal(errs)
+	raw, dropped := fitErrorsJSON(errs)
 	updates := map[string]any{
 		"ok_rows": okRows, "fail_rows": failRows, "status": StatusDone,
-		"duration_ms": time.Since(start).Milliseconds(), "error_json": string(raw),
+		"duration_ms": time.Since(start).Milliseconds(), "error_json": raw,
 	}
 	if err := s.db.WithContext(ctx).Model(&Job{}).Where("id = ?", int64(m.ID)).Updates(updates).Error; err != nil {
 		s.logWarn("imports: async update failed", "jobId", m.ID, "err", err.Error())
 		return
+	}
+	if dropped > 0 {
+		s.logWarn("imports: 失败明细超出台账容量，尾部条目未入库", "jobId", m.ID, "dropped", dropped)
 	}
 	finished := Job{
 		Source: m.Source, FileName: m.FileName, TotalRows: len(rows),
@@ -350,14 +351,14 @@ func (s *Service) processRows(ctx context.Context, src Source, rows []map[string
 		if bad != "" {
 			failRows++
 			if len(errs) < MaxErrors {
-				errs = append(errs, RowError{Row: i + 1, Key: bad, Message: i18n.T(ctx, "imports.required_empty")})
+				errs = append(errs, RowError{Row: i + 1, Key: bad, Message: i18n.T(ctx, "imports.required_empty"), Data: row})
 			}
 			continue
 		}
 		if err := safeCall(src.Handler, ctx, i+1, row); err != nil {
 			failRows++
 			if len(errs) < MaxErrors {
-				errs = append(errs, RowError{Row: i + 1, Message: truncate(err.Error(), 200)})
+				errs = append(errs, RowError{Row: i + 1, Message: truncate(err.Error(), 200), Data: row})
 			}
 			continue
 		}
@@ -449,6 +450,59 @@ func (s *Service) DeleteJobs(ctx context.Context, ids []idgen.ID) (int64, error)
 func (s *Service) GetJobErrors(ctx context.Context, id idgen.ID) ([]RowError, error) {
 	_, errs, err := s.jobGet(ctx, id)
 	return errs, err
+}
+
+// GetJobRetryRows 取待修复 CSV 的原料：导入源（含列定义）、带原始行内容的失败记录，
+// 以及台账记录的提交语言——表头按它生成才和原始文件同口径，改完直接重传不会被列名语言卡住。
+// 没有原始数据的行（超出预算剥掉的）由 BuildRetryCSV 跳过。
+func (s *Service) GetJobRetryRows(ctx context.Context, id idgen.ID) (Source, []RowError, string, error) {
+	m, errs, err := s.jobGet(ctx, id)
+	if err != nil {
+		return Source{}, nil, "", err
+	}
+	src, err := getSource(m.Source)
+	if err != nil {
+		return Source{}, nil, "", response.BadRequest("imports.source_unknown").Wrap(err)
+	}
+	return src, errs, m.Lang, nil
+}
+
+// errorsBudgetBytes 是台账 error_json 一列的写入预算：列是 text，MySQL/MariaDB 的 64KB 是硬顶，
+// 超预算不是截断而是整条写入失败——同步导入会把已经写进库的行报成失败，异步导入永远停在 running。
+// 失败明细现在带失败行的原始单元格，更容易撞这个顶，所以写入前按预算收敛。
+const errorsBudgetBytes = 60 << 10
+
+// fitErrorsJSON 把失败明细压进预算，返回 JSON 与被丢掉的条数。
+// 收敛顺序是「先剥原始行内容、再丢尾部条目」：原因明细是主产物，能保一条是一条；
+// 待修复 CSV 依赖行内容，被剥掉的那部分自然不进 CSV（errors.csv 的行号仍能定位到原始文件）。
+func fitErrorsJSON(errs []RowError) (string, int) {
+	raw, err := json.Marshal(errs)
+	if err != nil {
+		return "[]", len(errs)
+	}
+	if len(raw) <= errorsBudgetBytes {
+		return string(raw), 0
+	}
+	trimmed := make([]RowError, len(errs))
+	copy(trimmed, errs)
+	for i := range trimmed {
+		trimmed[i].Data = nil
+	}
+	if raw, err := json.Marshal(trimmed); err == nil && len(raw) <= errorsBudgetBytes {
+		return string(raw), 0
+	}
+	for n := len(trimmed); n > 0; {
+		raw, err := json.Marshal(trimmed[:n])
+		if err == nil && len(raw) <= errorsBudgetBytes {
+			return string(raw), len(trimmed) - n
+		}
+		half := n - n/2
+		if half == n {
+			half--
+		}
+		n = half
+	}
+	return "[]", len(trimmed)
 }
 
 func truncate(s string, n int) string {

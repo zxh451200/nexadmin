@@ -20,6 +20,8 @@ export interface ImportRowError {
   row: number
   key: string
   message: string
+  /** 失败行的原始单元格；台账超预算时会被剥掉，剥掉的行不进待修复 CSV。 */
+  data?: Record<string, string>
 }
 
 export interface ImportJob {
@@ -29,8 +31,9 @@ export interface ImportJob {
   totalRows: number
   okRows: number
   failRows: number
-  status: 'pending' | 'running' | 'done' | 'failed'
+  status: 'pending' | 'running' | 'done' | 'failed' | 'cancelled'
   durationMs: number
+  /** 失败明细只随单条台账（GET /:id）返回；列表接口为控制载荷不带它。 */
   errors?: ImportRowError[]
   createdBy: string
   createdAt: string
@@ -150,4 +153,9 @@ export function downloadTemplate(source: string, format: TemplateFormat) {
 
 export function downloadErrorsCsv(id: string) {
   return download(`${BASE}/${id}/errors.csv`, undefined, `import-errors-${id}.csv`)
+}
+
+/** 待修复 CSV：失败行按模板口径原样导出，修正单元格后可直接再次上传导入。 */
+export function downloadRetryCsv(id: string) {
+  return download(`${BASE}/${id}/retry.csv`, undefined, `import-retry-${id}.csv`)
 }

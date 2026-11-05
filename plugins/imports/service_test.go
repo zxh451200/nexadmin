@@ -317,3 +317,73 @@ func TestDeleteJob(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// 台账列表曾经把每条任务的失败明细（含失败行原始单元格）整体平铺返回：
+// 一页 20 条 × 最多 500 行，列表接口能到几十 MB，而前端列表和导出的列里都没有明细。
+// 这条用例钉住「明细只随单条台账返回」，别让人当成冗余优化删掉。
+func TestListJobsOmitsRowErrorsButDetailKeepsThem(t *testing.T) {
+	if err := RegisterSource(testSource("lz-list", func(context.Context, int, map[string]string) error { return nil })); err != nil {
+		t.Fatal(err)
+	}
+	db, mk := mockDB(t)
+	s := NewService(db, nopLogger{})
+	cols := []string{"id", "source", "file_name", "total_rows", "ok_rows", "fail_rows", "status", "duration_ms", "error_json", "created_by", "lang"}
+	ledger := `[{"row":1,"key":"title","message":"重复","data":{"title":"商品A"}}]`
+
+	mk.ExpectQuery("SELECT count").WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+	mk.ExpectQuery("SELECT .+plg_imports_job").WillReturnRows(sqlmock.NewRows(cols).AddRow(int64(9), "lz-list", "u.csv", 10, 9, 1, StatusDone, 100, ledger, "admin", "en-US"))
+	list, _, err := s.ListJobs(skipCtx(), JobQuery{Page: 1, PageSize: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 1 {
+		t.Fatalf("列表应有 1 条，实际 %d", len(list))
+	}
+	if len(list[0].Errors) != 0 {
+		t.Errorf("列表不该带失败明细，实际 %d 条", len(list[0].Errors))
+	}
+	if list[0].FailRows != 1 {
+		t.Errorf("列表仍要给出失败行数，实际 %d", list[0].FailRows)
+	}
+
+	mk.ExpectQuery("SELECT .+plg_imports_job").WillReturnRows(sqlmock.NewRows(cols).AddRow(int64(9), "lz-list", "u.csv", 10, 9, 1, StatusDone, 100, ledger, "admin", "en-US"))
+	view, err := s.GetJob(skipCtx(), idgen.ID(9))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(view.Errors) != 1 || view.Errors[0].Data["title"] != "商品A" {
+		t.Errorf("单条台账应带回明细与原始行内容（待修复 CSV 的原料），实际 %+v", view.Errors)
+	}
+	if err := mk.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// 待修复 CSV 的表头按台账记录的提交语言生成，跟提交者当初拿到的模板同口径；
+// 按查看者语言生成会让英文界面的人下载到自己看不懂的表头，改完重传反而报「缺少必需的列」。
+func TestGetJobRetryRowsReturnsSubmitLang(t *testing.T) {
+	if err := RegisterSource(testSource("lz-lang", func(context.Context, int, map[string]string) error { return nil })); err != nil {
+		t.Fatal(err)
+	}
+	db, mk := mockDB(t)
+	s := NewService(db, nopLogger{})
+	mk.ExpectQuery("SELECT .+plg_imports_job").
+		WillReturnRows(sqlmock.NewRows([]string{"id", "source", "status", "error_json", "lang"}).
+			AddRow(int64(9), "lz-lang", StatusDone, `[{"row":2,"message":"重复","data":{"title":"商品A"}}]`, "en-US"))
+	src, errs, lang, err := s.GetJobRetryRows(skipCtx(), idgen.ID(9))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if lang != "en-US" {
+		t.Errorf("应还原提交语言，实际 %q", lang)
+	}
+	if src.Name != "lz-lang" {
+		t.Errorf("应带回导入源定义，实际 %q", src.Name)
+	}
+	if len(errs) != 1 || len(errs[0].Data) == 0 {
+		t.Errorf("应带回原始行内容，实际 %+v", errs)
+	}
+	if err := mk.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}

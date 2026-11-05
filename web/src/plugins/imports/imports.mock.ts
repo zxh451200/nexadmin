@@ -156,4 +156,17 @@ defineMock([
       return `row,key,message\n${(j?.errors ?? []).map((e) => `${e.row},${e.key},${e.message}`).join('\n')}`
     },
   },
+  {
+    method: 'GET',
+    url: '/plugins/imports/:id/retry.csv',
+    handler: ({ params }) => {
+      const j = jobs.find((x) => x.id === params.id)
+      // 与后端同口径：台账没留存原始行内容就报错，不发只有表头的空文件
+      const rows = (j?.errors ?? []).filter((e) => e.data && Object.keys(e.data).length > 0)
+      if (rows.length === 0) return { code: 400, message: 'imports.retry_empty' }
+      const header = Object.keys(rows[0].data as Record<string, string>)
+      const body = rows.map((e) => header.map((h) => (e.data as Record<string, string>)[h] ?? '').join(','))
+      return [header.join(','), ...body].join('\n')
+    },
+  },
 ])

@@ -12,6 +12,7 @@ import (
 
 	"nexadmin/core"
 	"nexadmin/core/auth"
+	"nexadmin/core/i18n"
 	"nexadmin/core/response"
 	"nexadmin/pkg/idgen"
 )
@@ -195,11 +196,45 @@ func (h *handler) errorsCSV(c *gin.Context) {
 	attachment(c, fmt.Sprintf("import-errors-%d.csv", int64(id)), "text/csv; charset=utf-8", BuildErrorsCSV(errs))
 }
 
+// GET /plugins/imports/:id/retry.csv —— 待修复 CSV：失败行按模板口径原样导出，
+// 修正单元格后可直接再次上传导入。表头按台账记录的提交语言生成（与原始文件同口径）。
+func (h *handler) retryCSV(c *gin.Context) {
+	id, err := idgen.Parse(c.Param("id"))
+	if err != nil || id == 0 {
+		response.Fail(c, response.BadRequest("error.bad_request"))
+		return
+	}
+	src, errs, lang, err := h.svc.GetJobRetryRows(c.Request.Context(), id)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	// 台账里一条原始行内容都没存（旧任务、或明细超预算被剥掉）时不给只有表头的空文件：
+	// 那种文件下载下来改无可改，直接把「回原始文件按行号改」说给用户。
+	retryable := false
+	for _, e := range errs {
+		if len(e.Data) > 0 {
+			retryable = true
+			break
+		}
+	}
+	if !retryable {
+		response.Fail(c, response.BadRequest("imports.retry_empty"))
+		return
+	}
+	ctx := c.Request.Context()
+	if lang != "" {
+		ctx = i18n.WithLang(ctx, lang)
+	}
+	attachment(c, fmt.Sprintf("import-retry-%d.csv", int64(id)), "text/csv; charset=utf-8", BuildRetryCSV(ctx, src, errs))
+}
+
 // Register 注册路由(由 plugin.go 的 module 调用)。
 func (h *handler) Register(r *gin.RouterGroup, d *core.Deps) {
 	g := r.Group("/plugins/imports")
 	g.GET("/sources", core.Perm("imports:list"), h.sources)
 	g.GET("/template", core.Perm("imports:list"), h.template)
+	g.GET("/:id/retry.csv", core.Perm("imports:list"), h.retryCSV)
 	g.POST("", core.Perm("imports:run"), h.run)
 	// 取消与删除台账沿用「执行导入」权限：能导入的人就能取消/清理自己提交的任务
 	g.POST("/:id/cancel", core.Perm("imports:run"), h.cancel)

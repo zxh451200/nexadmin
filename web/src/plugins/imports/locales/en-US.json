@@ -21,6 +21,7 @@
     "templateXlsx": "XLSX template",
     "run": "Start import",
     "errorsCsv": "Failed rows",
+    "retryCsv": "Fixable rows CSV",
     "filesSelected": "{{count}} files selected",
     "removeFile": "Remove {{name}}",
     "batchDone": "{{ok}} file(s) submitted, {{fail}} failed",

@@ -26,6 +26,9 @@ type RowError struct {
 	Row     int    `json:"row"` // 文件中的数据行号(1 起,不含表头)
 	Key     string `json:"key"` // 相关列标识(可空)
 	Message string `json:"message"`
+	// Data 是该行的原始内容（列标识 → 单元格文本）：修复 CSV 用它把失败行按模板口径
+	// 原样重导出。只随前 MaxErrors 条失败记录，避免大文件撑爆台账。
+	Data map[string]string `json:"data,omitempty"`
 }
 
 var (

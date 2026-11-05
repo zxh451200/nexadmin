@@ -175,6 +175,7 @@ imports:
   job_running: "任务正在执行，完成后才能删除"
   job_not_running: "任务不在执行中，无需取消"
   required_empty: 必填列为空
+  retry_empty: 这条台账没有留存失败行的原始内容（旧任务，或明细超出容量），请回到原始文件按「下载失败明细」里的行号修改后重新导入
   required_suffix: "(必填)"
   source:
     crm_customers:
@@ -925,3 +926,22 @@ realname:
   provider_status: 核验服务返回异常状态 %s
   provider_unreachable: 无法连接核验服务，请检查服务地址与网络
   provider_bad_response: 核验服务响应格式错误，响应体需带回 matched 字段
+devicehub:
+  plugin_inactive: 设备接入插件未启用或授权已失效
+  name_required: 设备名称不能为空，且不超过 100 字
+  protocol_invalid: 协议不在已实现的驱动里，可选 modbus-tcp / modbus-rtu / mqtt / s7 / opcua
+  endpoint_required: 设备地址不能为空且不超过 255 字，如 127.0.0.1:502 或 opc.tcp://127.0.0.1:4840
+  config_invalid: 扩展配置不是合法 JSON，请检查引号与括号后再保存
+  device_not_found: 设备编号不存在
+  device_disabled: 设备已停用，先在设备页启用再下发指令
+  point_name_required: 测点名称不能为空，且不超过 100 字
+  point_address_required: 测点地址不能为空且不超过 128 字，写法按协议：Modbus 用 hr:40001，S7 用 DB1.DBD0，OPC UA 用 ns=2;s=Tag
+  point_rw_invalid: 读写方向只能是 r（只读）或 rw（可写）
+  point_type_invalid: 数据类型无效，可选 bool / int16 / uint16 / int32 / float32
+  point_not_found: 测点不存在，或不属于这台设备
+  point_required: 请先选择测点再查看历史趋势
+  point_readonly: 该测点是只读方向，不能下发指令；需要下发请把读写方向改成 rw
+  alarm_name_required: 告警规则名称不能为空，且不超过 100 字
+  alarm_op_invalid: 比较符无效，可选 gt / lt / ge / le / eq / ne
+  alarm_level_invalid: 告警级别只能是 info / warn / critical
+  alarm_not_found: 告警规则不存在

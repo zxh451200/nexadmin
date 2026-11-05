@@ -20,6 +20,7 @@ type Job struct {
 	Status     string `gorm:"column:status" json:"status"` // pending | running | done | failed | cancelled
 	DurationMs int64  `gorm:"column:duration_ms" json:"durationMs"`
 	// ErrorJSON 是最多 500 条 RowError 的 JSON;超出 MaxErrors 的错误只计数不存明细。
+	// 明细还带失败行的原始内容，写入前按 errorsBudgetBytes 收敛：列是 text，MySQL/MariaDB 的 64KB 是硬顶。
 	ErrorJSON string `gorm:"column:error_json;type:text" json:"-"`
 	CreatedBy string `gorm:"column:created_by" json:"createdBy"`
 	// Lang 是提交时的界面语言：异步执行没有请求上下文，行错误文案按它翻译。
