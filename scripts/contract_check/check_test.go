@@ -22,7 +22,7 @@ const tsAPI = "import { api } from '@/framework/request/http'\n" +
 const tsMock = "import { createCrudMock, defineMock } from '@/framework/request/mock'\n" +
 	"defineMock([\n  { method: 'GET', url: '/mockonly', handler: () => ({ url: '/x' }) },\n" +
 	"  { method: 'PUT', url: '/things/:id/state', handler: () => null },\n])\n" +
-	"createCrudMock<Row>({ base: '/crud', seed: [] })\n"
+	"createCrudMock<Row>({ base: '/crud', seed: [], sortable: true })\n"
 
 func tsFixture(t *testing.T) string {
 	return writeTree(t, map[string]string{

@@ -99,6 +99,7 @@ stores.types = createCrudMock<DictTypeRow>({
   searchFields: ['name', 'code'],
   filterFields: ['status'],
   sortField: 'sort',
+  sortable: true,
 })
 
 stores.data = createCrudMock<DictDataRow>({
@@ -107,4 +108,5 @@ stores.data = createCrudMock<DictDataRow>({
   searchFields: ['label', 'value'],
   filterFields: ['typeId', 'status'],
   sortField: 'sort',
+  sortable: true,
 })

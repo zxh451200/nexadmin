@@ -11,12 +11,20 @@ var (
 	methodPropRe = regexp.MustCompile(`\bmethod\s*:\s*['"]([A-Za-z]+)['"]`)
 	urlPropRe    = regexp.MustCompile(`\burl\s*:\s*`)
 	basePropRe   = regexp.MustCompile(`\bbase\s*:\s*`)
+	// 与 mock.ts 的 CrudMockOptions.sortable 对应：没有这个字面量为 true 的旗标，
+	// createCrudMock 不会注册 PUT {base}/sort，这里也就不能替它虚报一条契约。
+	sortablePropRe = regexp.MustCompile(`\bsortable\s*:\s*true`)
 )
 
-// crudRoutes 是 createCrudMock 展开的路由，与 web/src/framework/request/mock.ts 保持一致。
-var crudRoutes = []struct{ method, suffix string }{
-	{"GET", ""}, {"PUT", "/sort"}, {"GET", "/:id"}, {"POST", ""},
-	{"PUT", "/:id"}, {"DELETE", "/:id"}, {"DELETE", ""},
+// crudRoutes 是 createCrudMock 展开的路由，与 web/src/framework/request/mock.ts 保持一致；
+// needSortable 的条目只在调用点写了 sortable: true 时才展开。
+var crudRoutes = []struct {
+	method       string
+	suffix       string
+	needSortable bool
+}{
+	{"GET", "", false}, {"PUT", "/sort", true}, {"GET", "/:id", false}, {"POST", "", false},
+	{"PUT", "/:id", false}, {"DELETE", "/:id", false}, {"DELETE", "", false},
 }
 
 // frontMocks 抽取 *.mock.ts 声明的“前端 mock 契约”：defineMock 的每个元素与 createCrudMock 的展开。
@@ -91,7 +99,11 @@ func frontMocks(files []*tsFile) (mocks []Call, unres []Unresolved) {
 				bad(m[0], "createCrudMock 的 base 不是静态字符串，未展开")
 				continue
 			}
+			sortable := sortablePropRe.Match(props)
 			for _, r := range crudRoutes {
+				if r.needSortable && !sortable {
+					continue
+				}
 				add(m[0], r.method, strings.TrimRight(e.val, "/")+r.suffix)
 			}
 		}

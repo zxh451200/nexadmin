@@ -148,6 +148,11 @@ export interface CrudMockOptions<T extends { id: string }> {
   searchFields?: (keyof T & string)[]
   filterFields?: string[]
   sortField?: string
+  /**
+   * 该资源在后端是否真有 PUT {base}/sort。默认 false：
+   * 无条件注册等于在 mock 里凭空多一条后端没有的契约，dev 里拖得动、生产直接 404。
+   */
+  sortable?: boolean
   /** 额外的自定义过滤（如日期范围），返回 false 则剔除该行 */
   extraFilter?: (row: T, query: Record<string, unknown>) => boolean
 }
@@ -165,6 +170,22 @@ export function createCrudMock<T extends { id: string }>(opts: CrudMockOptions<T
   const { base, searchFields = [], filterFields = [], sortField, extraFilter } = opts
   let items: T[] = opts.seed.map((s) => ({ ...s }))
   const rec = (x: T) => x as unknown as Record<string, unknown>
+
+  // 只有声明了 sortable 的资源才注册这条：必须排在 `${base}/:id` 之前，
+  // 否则 PUT /x/sort 会被占位路由吞掉，表现成 404 而不是「没这条契约」。
+  const sortRules: MockRule[] = opts.sortable ? [{
+    method: 'PUT',
+    url: `${base}/sort`,
+    handler: ({ body }) => {
+      const ids: string[] = body?.ids ?? []
+      const field = sortField ?? 'sort'
+      ids.forEach((id, i) => {
+        const it = items.find((x) => x.id === id)
+        if (it) rec(it)[field] = (i + 1) * 10
+      })
+      return null
+    },
+  }] : []
 
   defineMock([
     {
@@ -190,19 +211,7 @@ export function createCrudMock<T extends { id: string }>(opts: CrudMockOptions<T
         return { list: rows.slice((page - 1) * pageSize, page * pageSize), total, page, pageSize }
       },
     },
-    {
-      method: 'PUT',
-      url: `${base}/sort`,
-      handler: ({ body }) => {
-        const ids: string[] = body?.ids ?? []
-        const field = sortField ?? 'sort'
-        ids.forEach((id, i) => {
-          const it = items.find((x) => x.id === id)
-          if (it) rec(it)[field] = (i + 1) * 10
-        })
-        return null
-      },
-    },
+    ...sortRules,
     {
       method: 'GET',
       url: `${base}/:id`,

@@ -888,7 +888,7 @@ defineMock([
   },
   {
     method: 'POST',
-    url: '/plugins/ticket/tickets/:no/rating',
+    url: '/plugins/ticket/visitor/tickets/:no/rating',
     handler: ({ params, body }) => {
       const tk = find(params.no)
       if (!tk) throw new Error('not found')

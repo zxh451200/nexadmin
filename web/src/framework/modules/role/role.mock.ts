@@ -160,4 +160,5 @@ const store = createCrudMock<Role>({
   searchFields: ['name', 'code'],
   filterFields: ['status'],
   sortField: 'sort',
+  sortable: true,
 })
