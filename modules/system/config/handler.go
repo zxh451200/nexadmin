@@ -14,16 +14,43 @@ import (
 // 这里不再自己写一份 `Super || tid == DefaultID`——中间件、载荷、通知收件人与这一处必须同一条线。
 func platformCaller(c *gin.Context) bool { return core.IsPlatformCaller(c) }
 
-// secretKeyHints 是设置分区里凡是命中就按密钥处理的字段名片段。比对前去掉下划线/连字符并转小写，
-// 所以 smtpPassword、access_key、accessKey、appSecret 都算命中。
-// 这些值不属于任何租户，却决定整个部署往哪发信、谁能登进来：租户管理员的界面不需要看见它们。
-var secretKeyHints = []string{"password", "passwd", "secret", "apikey", "accesskey", "privatekey", "token", "keya", "keyb", "keyc"}
+// secretKeySuffixes 是「字段名以此结尾就算密钥」的后缀全集（比对前两边都走 normalizeKey：
+// 小写、去掉下划线与连字符）。用后缀而不是精确名，是因为设置里的键都带前缀——mail 的 password、
+// sms 的 accessSecret、SSO 的 clientSecret、smtpPassword、bindPassword——精确表会把变体一个个漏掉；
+// 用包含匹配又会把 keyboard 当成 keyb 家族误码掉。后缀这两个坑都避开。
+// 刻意不进表：publickey（公钥本就是公开的）、signature（签名结果是产物不是凭据）。
+var secretKeySuffixes = []string{
+	"password", "passwd", "passphrase", "secret", "apikey", "accesskey", "accesskeyid",
+	"clientsecret", "privatekey", "token", "accesstoken", "refreshtoken", "authtoken",
+	"credential", "sessionkey", "signkey", "secretkey",
+}
 
-// isSecretKey 报告字段名是否按密钥处理。
+// secretKeyContextPaths 是按「位置」才算密钥的字段——名字表抓不到的那一类。
+// 钉钉 / 飞书 / 企业微信的 webhook 地址自带 access_key 或 access_token，而字段名只是 url；
+// 同一个 url 出现在 site.logoUrl 里就是普通展示字段，所以只能按路径判。
+var secretKeyContextPaths = map[string]bool{"notify.robots[].url": true}
+
+// normalizeKey 把字段名收成比对形态（小写、去掉下划线 / 连字符 / 空格）。
+func normalizeKey(k string) string {
+	return strings.NewReplacer("_", "", "-", "", " ", "").Replace(strings.ToLower(k))
+}
+
+// secretKeyIgnore 是「后缀像密钥、但值不是凭据」的字段（键为规范化形态，值就是理由）。
+// 后缀表一定会认出它们，所以例外必须留名——否则一个数量上限被码成 ********，
+// 界面显示「已配置」，保存时又把占位符当原值写回去，坏的是功能而不是安全性。
+// 现在没有条目：ai.maxTokens 以 s 结尾，后缀表本来就不会码它——上一轮我以为是误码，
+// 加了这条登记，闸立刻报「死条目」，删掉。留着这张表是因为它总有用途：
+// 出现「名字像凭据但值是数量/开关/公开值」的字段时，在这里写理由，而不是让运行时误码。
+var secretKeyIgnore = map[string]string{}
+
+// isSecretKey 报告字段名是否按密钥处理：规范化后按后缀判定，例外表优先。
 func isSecretKey(k string) bool {
-	lower := strings.NewReplacer("_", "", "-", "", " ", "").Replace(strings.ToLower(k))
-	for _, hint := range secretKeyHints {
-		if strings.Contains(lower, hint) {
+	n := normalizeKey(k)
+	if _, ok := secretKeyIgnore[n]; ok {
+		return false
+	}
+	for _, suffix := range secretKeySuffixes {
+		if strings.HasSuffix(n, suffix) {
 			return true
 		}
 	}
@@ -37,31 +64,25 @@ func restrictAI(all map[string]any) {
 	}
 }
 
-// restrictSecrets 递归抹掉非平台调用方不该看到的密钥字段（保留键名与结构，值置空）：
-// 界面还能渲染「已配置/未配置」，但拿不到真凭据。整分区不返回会让设置页变成一片空白，
-// 那是另一种「入口蒸发」。
-func restrictSecrets(v any) {
-	restrictSecretsIn(v, false)
-}
+func restrictSecrets(v any) { restrictSecretsAt(v, "") }
 
-// restrictSecretsIn 递归抹密钥字段；robotURL 表示当前正处在 notify.robots 列表里。
-//
-// 服务层的 maskSecrets 对所有人生效，覆盖 password / secretKey / apiKey / clientSecret 四个名字；
-// 这里补的是它盖不到的两类，且只对非平台调用方生效：accessKey 与 token 类命名，
-// 以及 notify.robots[].url——钉钉 / 飞书 / 企业微信的 webhook 地址自带 access_key 或 access_token，
-// 拿到 URL 就能往群里发消息，而字段名是 url，按名字表永远漏。列表外的 url（site.logoUrl 之类）
-// 是普通展示字段，不许误伤。
-func restrictSecretsIn(v any, robotURL bool) {
+// restrictSecretsAt 递归抹掉非平台调用方不该看到的密钥字段：字符串值换成与 ai 分区同一个掩码，
+// 非字符串（少见的对象型密钥）直接删键；整分区不返回会让设置页变成一片空白，那是另一种「入口蒸发」。
+// path 是当前节点的位置（形如 notify.robots[].url 的前缀），只用于查 secretKeyContextPaths——
+// robots 的 webhook 地址自带 access_token，字段名却只是 url，按名字表永远抓不到；
+// 同一个 url 出现在 site.logoUrl 里就是普通展示字段，不许误伤。
+func restrictSecretsAt(v any, path string) {
 	switch node := v.(type) {
 	case map[string]any:
 		for k, child := range node {
-			if k == "robots" {
-				restrictSecretsIn(child, true)
-				continue
+			childPath := k
+			if path != "" {
+				childPath = path + "." + k
 			}
-			if isSecretKey(k) || (robotURL && k == "url") {
-				// 字符串值换成与 ai 分区同一个掩码（界面据此仍能显示「已配置」）；
-				// 非字符串的密钥形态（对象/数组）没有可展示的意义，删键。
+			if k == "robots" {
+				childPath = "notify.robots[]"
+			}
+			if isSecretKey(k) || secretKeyContextPaths[childPath] {
 				if s, ok := child.(string); ok && s != "" {
 					node[k] = secretMask
 				} else {
@@ -69,11 +90,11 @@ func restrictSecretsIn(v any, robotURL bool) {
 				}
 				continue
 			}
-			restrictSecretsIn(child, false)
+			restrictSecretsAt(child, childPath)
 		}
 	case []any:
 		for _, item := range node {
-			restrictSecretsIn(item, robotURL)
+			restrictSecretsAt(item, path)
 		}
 	}
 }

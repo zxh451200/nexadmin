@@ -194,6 +194,32 @@ func TestRestrictSecretsMasksCredentialFields(t *testing.T) {
 	if in["security"].(map[string]any)["maxAttempts"] != 5 {
 		t.Error("数字型非凭据字段不该被删")
 	}
+
+	// 后缀匹配的两端都要测：带前缀的密钥变体必须码掉，长得像但不是凭据的不许误伤。
+	variants := map[string]any{
+		"smtpPassword":   "p",
+		"bindPassphrase": "p",
+		"appSecret":      "p",
+		"sessionToken":   "p",
+	}
+	notSecret := map[string]any{
+		"keyboard":  "机械键盘",
+		"publicKey": "MIIBIjAN...", // 公钥本就是公开的
+		"signature": "a1b2c3",      // 签名结果是产物不是凭据
+		"monkeys":   "banana",
+	}
+	v := map[string]any{"x": variants, "y": notSecret}
+	restrictSecrets(v)
+	for k := range variants {
+		if v["x"].(map[string]any)[k] != secretMask {
+			t.Errorf("%s 没被码掉（带前缀的密钥变体是后缀匹配存在的理由）", k)
+		}
+	}
+	for k, want := range notSecret {
+		if got := v["y"].(map[string]any)[k]; got != want {
+			t.Errorf("%s 被误伤：%v, want 原样 %v", k, got, want)
+		}
+	}
 }
 
 // 租户读取设置页时 ai 分区只剩 enabled / model，没有地址和密钥。

@@ -93,11 +93,18 @@ var (
 	// 设置默认值里的字段名：map 字面量的 "key": 形状。不能只锚行首——一行常写好几个键。
 	keyNameRe       = regexp.MustCompile(`"([A-Za-z][A-Za-z0-9_]*)":`)
 	cpMapKeysRe     = regexp.MustCompile(`"([A-Za-z][A-Za-z0-9_]*)":\s*true`)
-	cpStringSliceRe = regexp.MustCompile(`(?s)secretKeyHints = \[\]string\{(.*?)\}`)
+	cpSuffixRe      = regexp.MustCompile(`(?s)secretKeySuffixes = \[\]string\{(.*?)\}`)
+	cpContextRe     = regexp.MustCompile(`(?s)secretKeyContextPaths = map\[string\]bool\{(.*?)\}`)
+	cpIgnoreRe      = regexp.MustCompile(`(?s)secretKeyIgnore = map\[string\]string\{(.*?)\}`)
+	cpPairRe        = regexp.MustCompile(`"([^"]+)":\s*"([^"]+)"`)
 	cpQuoteRe       = regexp.MustCompile(`"([^"]+)"`)
 	cpCreateTableRe = regexp.MustCompile(`(?s)CREATE TABLE(?: IF NOT EXISTS)?\s+(\w+)\s*\((.*?)\n\)`)
 	cpTenantColRe   = regexp.MustCompile(`\btenant_id\b`)
 	cpRouteRe       = regexp.MustCompile(`(?m)^[ \t]*([A-Za-z_]\w*)\.(GET|POST|PUT|PATCH|DELETE)\("([^"]*)",`)
+	// 后补的租户列：只看 CREATE TABLE 会把 017 这类 ALTER 加列当成「不分租户」——
+	// 第一版就是这么误报了 plg_ticket 等五张客户表。判据是「这张表最终有没有 tenant_id」，
+	// 所以 CREATE 与 ALTER 两条路都要认。
+	cpAlterTenantRe = regexp.MustCompile(`(?i)ALTER\s+TABLE\s+(\w+)[^;]*?ADD\s+COLUMN\s+tenant_id\b`)
 )
 
 // cpRoutes 扫台账文件里的路由注册，返回「文件 + 分组变量 + 方法 + 路径 → 整条语句」。
@@ -128,6 +135,9 @@ func cpSharedTables(t *testing.T) map[string]string {
 			if !cpTenantColRe.MatchString(m[2]) {
 				tables[m[1]] = e.Name()
 			}
+		}
+		for _, m := range cpAlterTenantRe.FindAllStringSubmatch(src, -1) {
+			delete(tables, m[1])
 		}
 	}
 	if len(tables) == 0 {
@@ -348,6 +358,7 @@ func TestSecretFieldNamesAreCovered(t *testing.T) {
 
 	// 1. 分区默认值里出现的字段名（只取三个构造函数体内、行首的 "key": 形状，避免抓到代码里的字符串）
 	names := map[string]bool{}
+	contextPaths := map[string]bool{}
 	// 三个构造函数分家两处：defaultSettings / provider 在 settings.go，notifyDefaults 在 notify.go，
 	// 所以按函数名去两个文件里找，找到哪个算哪个——只扫一个文件会误报「判据基础变了」。
 	for _, fn := range []string{"func defaultSettings()", "func notifyDefaults()", "func provider()"} {
@@ -377,13 +388,13 @@ func TestSecretFieldNamesAreCovered(t *testing.T) {
 	for _, m := range cpMapKeysRe.FindAllStringSubmatch(settingsSrc, -1) {
 		serviceMask[m[1]] = true
 	}
-	hints := cpStringSliceRe.FindStringSubmatch(handlerSrc)
-	if hints == nil {
-		t.Fatal("handler.go 里找不到 secretKeyHints 名单")
+	hintBlock := cpSuffixRe.FindStringSubmatch(handlerSrc)
+	if hintBlock == nil {
+		t.Fatal("handler.go 里找不到 secretKeySuffixes 名单")
 	}
-	var hintList []string
-	for _, m := range cpQuoteRe.FindAllStringSubmatch(hints[1], -1) {
-		hintList = append(hintList, m[1])
+	var suffixList []string
+	for _, m := range cpQuoteRe.FindAllStringSubmatch(hintBlock[1], -1) {
+		suffixList = append(suffixList, m[1])
 	}
 	norm := func(s string) string {
 		return strings.NewReplacer("_", "", "-", "", " ", "").Replace(strings.ToLower(s))
@@ -393,30 +404,69 @@ func TestSecretFieldNamesAreCovered(t *testing.T) {
 			return true
 		}
 		n := norm(name)
-		for _, h := range hintList {
-			if strings.Contains(n, norm(h)) {
+		for _, suffix := range suffixList {
+			if strings.HasSuffix(n, suffix) {
+				return true
+			}
+		}
+		// 按位置算密钥的那几个（webhook url）由 secretKeyContextPaths 声明，名字表盖不住。
+		for declared := range contextPaths {
+			if strings.HasSuffix(norm(declared), norm(name)) {
 				return true
 			}
 		}
 		return false
 	}
+	// 审计表刻意宽于生产表：它的职责是「像密钥就得有人解释」，解释不了就红。
+	// 按后缀而不是包含判定——上一版用包含，把 maxTokens（AI 单次回复的 token 上限，是数量不是凭据）
+	// 当成密钥误报，误报的结局是被人整片加豁免，真漂移跟着一起被盖住。
+	auditSuffixes := []string{"password", "passwd", "passphrase", "secret", "apikey", "accesskey",
+		"accesskeyid", "privatekey", "authkey", "appkey", "signkey", "sessionkey", "token",
+		"credential", "bearer", "webhook", "key"}
 	secretish := func(name string) bool {
 		n := norm(name)
-		// 这张表要宽于两份名单：它的职责是「像密钥就得有人解释」，解释不了就该红，
-		// 而不是「只有我认识的拼法才算」。publickey / signature 这类公开值刻意不在表里。
-		for _, k := range []string{"password", "passwd", "passphrase", "secret", "apikey", "accesskey",
-			"privatekey", "authkey", "appkey", "signkey", "sessionkey", "token", "credential", "bearer", "webhook"} {
-			if strings.Contains(n, k) {
+		for _, k := range auditSuffixes {
+			if strings.HasSuffix(n, k) {
 				return true
 			}
 		}
 		return false
 	}
 
+	// 例外表在生产代码里（handler.go 的 secretKeyIgnore），闸只审它是否过期：
+	// 登记了却不再被审计认出（改名 / 删字段 / 干脆进了后缀表）就是死条目。
+	ignoreBlock := cpIgnoreRe.FindStringSubmatch(handlerSrc)
+	if ignoreBlock == nil {
+		t.Fatal("handler.go 里找不到 secretKeyIgnore 例外表")
+	}
+	ignoreList := map[string]string{}
+	for _, m := range cpPairRe.FindAllStringSubmatch(ignoreBlock[1], -1) {
+		ignoreList[m[1]] = m[2]
+	}
 	var missing []string
+	usedIgnore := map[string]bool{}
 	for name := range names {
-		if secretish(name) && !covered(name) {
+		if !secretish(name) {
+			continue // 名字不像凭据，不需要解释
+		}
+		// 例外表优先：被审计认出的字段要么「会被码」（在后缀表 / secretFields / 位置表里），
+		// 要么「有意不码」并在 secretKeyIgnore 里写明理由。两边都不占就是漏网。
+		if _, ok := ignoreList[norm(name)]; ok {
+			usedIgnore[norm(name)] = true
+			continue
+		}
+		if !covered(name) {
 			missing = append(missing, name)
+		}
+	}
+	for name, reason := range ignoreList {
+		if !usedIgnore[name] {
+			t.Errorf("secretKeyIgnore 里的 %s 成了死条目（字段已不存在、或不再被后缀审计认出）：%s（例外表不许烂在列表里）", name, reason)
+		}
+	}
+	for name := range usedIgnore {
+		if !names[name] {
+			t.Errorf("例外表登记的 %s 在设置字段名里找不到：改成真名或删掉", name)
 		}
 	}
 	if len(missing) > 0 {
@@ -426,8 +476,18 @@ func TestSecretFieldNamesAreCovered(t *testing.T) {
 	}
 
 	// 3. 按名字抓不到的那一类：机器人 webhook 的 url 必须按上下文码掉；这条规则不许悄悄消失
-	if !strings.Contains(handlerSrc, `robotURL && k == "url"`) {
-		t.Error("handler.go 没有「notify.robots[].url 按上下文打码」这条规则：webhook 地址自带 access_token，字段名却是 url，按名单永远漏")
+	ctxBlock := cpContextRe.FindStringSubmatch(handlerSrc)
+	if ctxBlock == nil {
+		t.Fatal("handler.go 里找不到 secretKeyContextPaths 声明：按位置算密钥的那类（webhook url）没有登记处了")
+	}
+	for _, m := range cpQuoteRe.FindAllStringSubmatch(ctxBlock[1], -1) {
+		contextPaths[m[1]] = true
+	}
+	if !contextPaths["notify.robots[].url"] {
+		t.Errorf("secretKeyContextPaths 里没有 notify.robots[].url：webhook 地址自带 access_token，字段名却是 url，名字表盖不住（现有登记 %v）", sortedKeys(contextPaths))
+	}
+	if !strings.Contains(handlerSrc, "secretKeyContextPaths[childPath]") {
+		t.Error("restrictSecretsAt 没有真的按位置查表：声明成了摆设")
 	}
 	// url 不在分区默认值里（默认是空列表），它是保存后落库的机器人条目字段——所以去 notify.go 的
 	// robots 映射里找；找不到就说明那条上下文规则成了死代码。
@@ -440,8 +500,21 @@ func TestSecretFieldNamesAreCovered(t *testing.T) {
 		t.Errorf("maskSecrets 或其名单不见了（名单 %d 项）：那是所有人——包括平台自己——读设置页的第一道", len(serviceMask))
 	}
 
-	t.Logf("设置字段名 %d 个，其中密钥形状 %d 个全部有名单覆盖；服务层 secretFields %d 项、平台边界 secretKeyHints %d 项；robots url 按上下文打码在位",
-		len(names), countSecretish(names, secretish), len(serviceMask), len(hintList))
+	// 名单自身的两类死项：后缀没规范化（带下划线/大写）就永远不会命中；
+	// 上下文路径写得查不到（restrictSecretsAt 传的是 notify.robots[] 前缀 + 键名）同样是摆设。
+	for _, suffix := range suffixList {
+		if suffix != strings.ToLower(suffix) || strings.ContainsAny(suffix, "_- ") {
+			t.Errorf("secretKeySuffixes 里的 %q 不是规范化形态：比对两边都走 normalizeKey，这条永远不会命中", suffix)
+		}
+	}
+	for declared := range contextPaths {
+		if !strings.HasSuffix(declared, ".url") && !strings.HasSuffix(declared, "[]") {
+			t.Logf("上下文密钥登记 %q 的形态请自查：代码里拼出来的是「父路径.键名」", declared)
+		}
+	}
+
+	t.Logf("设置字段名 %d 个，其中密钥形状 %d 个全部有名单覆盖；服务层 secretFields %d 项、平台边界后缀表 %d 项、按位置登记 %d 项",
+		len(names), countSecretish(names, secretish), len(serviceMask), len(suffixList), len(contextPaths))
 }
 
 func countSecretish(names map[string]bool, pred func(string) bool) int {
@@ -452,4 +525,147 @@ func countSecretish(names map[string]bool, pred func(string) bool) int {
 		}
 	}
 	return n
+}
+
+// cpPluginSharedTables 从插件迁移的 DDL 扫出「没有 tenant_id」的表（插件目录名就是 owner）。
+// 为什么扫 DDL 而不是扫模型：plg_ldap_config / plg_maps_setting / plg_media_setting 的模型是
+// 各自手写的 key/value 结构，一个都不嵌 database.PlatformModel——扫模型会整片漏掉它们。
+func cpPluginSharedTables(t *testing.T) map[string]map[string]bool {
+	t.Helper()
+	root := findRoot()
+	entries, err := os.ReadDir(filepath.Join(root, "plugins"))
+	if err != nil {
+		t.Fatalf("读 plugins/ 失败：%v", err)
+	}
+	out := map[string]map[string]bool{}
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		dir := filepath.Join(root, "plugins", e.Name(), "migrations", "mysql")
+		files, err := os.ReadDir(dir)
+		if err != nil {
+			continue // 没有迁移目录 = 没有自己的表
+		}
+		tables := map[string]bool{}
+		for _, f := range files {
+			if f.IsDir() || !strings.HasSuffix(f.Name(), ".sql") {
+				continue
+			}
+			src := platRead(t, "plugins/"+e.Name()+"/migrations/mysql/"+f.Name())
+			for _, m := range cpCreateTableRe.FindAllStringSubmatch(src, -1) {
+				if !cpTenantColRe.MatchString(m[2]) {
+					tables[m[1]] = true
+				}
+			}
+			for _, m := range cpAlterTenantRe.FindAllStringSubmatch(src, -1) {
+				delete(tables, m[1])
+			}
+		}
+		if len(tables) > 0 {
+			out["plugins/"+e.Name()] = tables
+		}
+	}
+	return out
+}
+
+// TestEverySharedTableIsExplained 是那条总不变式：一张表没有 tenant_id，就是在服务所有租户，
+// 于是必须有一条明确的「谁挡着它」登记——整组收口 / 写路由台账 / 更强闸 / 无 HTTP 写入口 /
+// 关联表按父行归属，五者之一。登记缺失、登记过期、或 owner 换了收口方式却没改登记，都红。
+//
+// 这条同时也是「按租户切开」的退出门槛：给表补上 tenant_id（三引擎迁移 + 唯一键改形 +
+// 匿名入口补归属）之后，它会从这份 DDL 扫描里消失，闸随即要求删掉它的登记；
+// 反过来，谁想摘掉某台控制台的平台闸而不给表补列，这里立刻红——不允许用「先放开再说」把泄露放回去。
+func TestEverySharedTableIsExplained(t *testing.T) {
+	explained := map[string]string{} // 表名 → 靠什么解释
+	for _, e := range platWriteLedgerRoutes {
+		if !strings.HasPrefix(e.table, "(") {
+			explained[e.table] = "写路由台账（plugins）"
+		}
+	}
+	for _, e := range platControlPlaneWrites {
+		explained[e.table] = "写路由台账（控制面）"
+	}
+	for tb, reason := range platControlPlaneOtherGuarded {
+		explained[tb] = reason
+	}
+	for tb, reason := range platControlPlaneSharedBy {
+		explained[tb] = reason
+	}
+	// 整组收口的 owner：它名下所有表都算被这条登记解释
+	consoleOwners := map[string]bool{}
+	for _, w := range platPluginWideGates {
+		consoleOwners[w.plugin] = true
+	}
+	for _, c := range platConsoleReads {
+		consoleOwners[strings.TrimPrefix(c.file, "modules/")] = true
+	}
+
+	framework := cpSharedTables(t)
+	plugins := cpPluginSharedTables(t)
+	total, unexplained := 0, []string{}
+	for tb := range framework {
+		total++
+		if _, ok := explained[tb]; !ok {
+			unexplained = append(unexplained, tb+"（框架表，migrations/framework）")
+		}
+	}
+	for owner, tables := range plugins {
+		for tb := range tables {
+			total++
+			if _, ok := explained[tb]; ok {
+				continue
+			}
+			if consoleOwners[strings.TrimPrefix(owner, "plugins/")] {
+				continue // 整组收口解释了它名下的表
+			}
+			unexplained = append(unexplained, tb+"（"+owner+"/migrations）")
+		}
+	}
+	if total == 0 {
+		t.Fatal("闸对空跑：框架与插件的迁移里一张没有 tenant_id 的表都没扫到")
+	}
+	if len(unexplained) > 0 {
+		sort.Strings(unexplained)
+		t.Errorf("%d 张没有 tenant_id 的表里，有 %d 张没有任何一条「谁挡着它」的登记：%s。"+
+			"要么挂 core.RequirePlatform()（单条写路由）或整组 core.RequirePlatformFeature()（表装的是客户数据，读也泄露）并登记进台账，"+
+			"要么给它补 tenant_id（三引擎迁移 + 唯一键改形 + 匿名入口补归属）——不许既不登记也不收口",
+			total, len(unexplained), strings.Join(unexplained, ", "))
+	}
+	// 登记不许烂在列表里：台账点名的表如果已经不在 DDL 扫描里（补了 tenant_id 或改名），就是死条目
+	alive := map[string]bool{}
+	for tb := range framework {
+		alive[tb] = true
+	}
+	for _, tables := range plugins {
+		for tb := range tables {
+			alive[tb] = true
+		}
+	}
+	for _, e := range append(platLedgerTableNames(platWriteLedgerRoutes), platLedgerTableNames2(platControlPlaneWrites)...) {
+		if !alive[e] {
+			t.Errorf("台账登记的表 %s 在 DDL 扫描里已经没有这张了：补了 tenant_id 就删登记，别留死条目", e)
+		}
+	}
+
+	t.Logf("没有 tenant_id 的表共 %d 张（框架 %d、插件 %d），全部有「谁挡着它」的登记；整组收口 owner %d 个",
+		total, len(framework), total-len(framework), len(consoleOwners))
+}
+
+func platLedgerTableNames(entries []platWriteLedger) []string {
+	out := []string{}
+	for _, e := range entries {
+		if !strings.HasPrefix(e.table, "(") {
+			out = append(out, e.table)
+		}
+	}
+	return out
+}
+
+func platLedgerTableNames2(entries []platControlPlaneWrite) []string {
+	out := []string{}
+	for _, e := range entries {
+		out = append(out, e.table)
+	}
+	return out
 }
