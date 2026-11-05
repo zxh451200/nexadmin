@@ -11,6 +11,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"nexadmin/core"
 	"nexadmin/core/i18n"
 	"nexadmin/core/response"
 	"nexadmin/core/tenant"
@@ -147,7 +148,7 @@ func (s *Service) Run(ctx context.Context, in RunInput, actor string) (*JobView,
 		return nil, response.BadRequest("imports.file_required")
 	}
 	if len(in.Content) > MaxBytes {
-		return nil, response.BadRequest("imports.file_too_large")
+		return nil, response.BadRequest("imports.file_too_large", core.MBText(MaxBytes))
 	}
 
 	rows, perr := ParseUpload(src, in.Content, in.FileName)

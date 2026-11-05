@@ -163,7 +163,7 @@ imports:
   actor_required: Missing operator identity
   source_unknown: Unknown data source
   file_required: Please choose a file to import
-  file_too_large: Import file exceeds the size limit
+  file_too_large: Import files must not exceed %s
   parse_failed: Failed to parse the file; please check its format
   no_rows: No importable rows found in the file
   too_many_rows: Row count exceeds the single-import limit

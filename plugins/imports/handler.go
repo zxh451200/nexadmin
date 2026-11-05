@@ -85,7 +85,7 @@ func (h *handler) run(c *gin.Context) {
 	if err != nil {
 		var maxErr *http.MaxBytesError
 		if errors.As(err, &maxErr) {
-			response.Fail(c, response.BadRequest("imports.file_too_large"))
+			response.Fail(c, response.BadRequest("imports.file_too_large", core.MBText(maxBytes)))
 		} else {
 			response.Fail(c, response.BadRequest("imports.file_required"))
 		}
@@ -93,7 +93,7 @@ func (h *handler) run(c *gin.Context) {
 	}
 	source := c.PostForm("source")
 	if fh.Size > maxBytes {
-		response.Fail(c, response.BadRequest("imports.file_too_large"))
+		response.Fail(c, response.BadRequest("imports.file_too_large", core.MBText(maxBytes)))
 		return
 	}
 	f, err := fh.Open()
@@ -109,7 +109,7 @@ func (h *handler) run(c *gin.Context) {
 		return
 	}
 	if int64(len(content)) > maxBytes {
-		response.Fail(c, response.BadRequest("imports.file_too_large"))
+		response.Fail(c, response.BadRequest("imports.file_too_large", core.MBText(maxBytes)))
 		return
 	}
 	v, err := h.svc.Run(c.Request.Context(), RunInput{

@@ -163,7 +163,7 @@ imports:
   actor_required: 缺少操作者身份
   source_unknown: 未知的数据来源
   file_required: 请选择要导入的文件
-  file_too_large: 导入文件超出大小限制
+  file_too_large: 导入文件不能超过 %s
   parse_failed: 文件解析失败，请检查格式
   no_rows: 文件中没有可导入的数据行
   too_many_rows: 数据行数超出单次导入上限
