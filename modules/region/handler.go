@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"nexadmin/core"
 	"nexadmin/core/auth"
 	"nexadmin/core/cluster"
 	"nexadmin/core/response"
@@ -83,9 +84,10 @@ func (h *Handler) ImportFile(c *gin.Context) {
 		return
 	}
 	// 上限按请求解析：系统参数「上传限制」能把它往小调，放大顶不开内置 16MB（见 regionMaxBytes）。
+	// 参数允许小数 MB，报错统一用 core.MBText 写，避免 0.5MB 被整除成「0MB」。
 	lim := regionMaxBytes(c.Request.Context(), maxUploadSize)
 	if fh.Size > lim {
-		response.Fail(c, response.BadRequest("region.source_too_large", lim>>20))
+		response.Fail(c, response.BadRequest("region.source_too_large", core.MBText(lim)))
 		return
 	}
 	f, err := fh.Open()
@@ -100,7 +102,7 @@ func (h *Handler) ImportFile(c *gin.Context) {
 		return
 	}
 	if int64(len(raw)) > lim {
-		response.Fail(c, response.BadRequest("region.source_too_large", lim>>20))
+		response.Fail(c, response.BadRequest("region.source_too_large", core.MBText(lim)))
 		return
 	}
 	actor := actorOf(c)

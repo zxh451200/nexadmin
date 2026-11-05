@@ -523,7 +523,7 @@ func (s *Service) fetch(ctx context.Context, source string) ([]byte, string, err
 		return nil, "", response.BadRequest("region.source_unreachable", err.Error())
 	}
 	if int64(len(raw)) > lim {
-		return nil, "", response.BadRequest("region.source_too_large", lim>>20)
+		return nil, "", response.BadRequest("region.source_too_large", core.MBText(lim))
 	}
 	return raw, resp.Header.Get("Last-Modified"), nil
 }

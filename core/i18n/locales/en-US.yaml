@@ -659,7 +659,7 @@ exportcenter:
 region:
   source_insecure: "The data source URL is not usable (HTTPS only, no credentials): %s"
   source_unreachable: "Failed to fetch the data source: %s"
-  source_too_large: "The data source exceeds the %dMB limit."
+  source_too_large: "The data source exceeds the %s limit."
   file_required: "Pick a data file to upload."
   data_invalid: "The data source content is unusable: %s"
   source_missing: "No data source configured: set it in Settings or region.source_url in config.yaml"

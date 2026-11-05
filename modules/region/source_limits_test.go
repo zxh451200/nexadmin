@@ -42,8 +42,20 @@ func TestRegionMaxBytes(t *testing.T) {
 		if !(mb(4)+1 > got) {
 			t.Errorf("4MB+1 被放行")
 		}
-		if got>>20 != 4 {
-			t.Errorf("报错参数 = %d MB，想要 4（region.source_too_large 用它）", got>>20)
+		if text := core.MBText(got); text != "4MB" {
+			t.Errorf("报错参数 = %q，想要 4MB（region.source_too_large 用它）", text)
+		}
+	})
+
+	// 参数允许小数 MB：整除会把 0.5MB 显示成「0MB」，所以报错走 core.MBText。
+	t.Run("小数上限的报错写法不退化成 0MB", func(t *testing.T) {
+		withFileMB(t, 0.5)
+		got := regionMaxBytes(ctx, maxUploadSize)
+		if got != mb(0.5) {
+			t.Fatalf("上限 = %d，想要 %d", got, mb(0.5))
+		}
+		if text := core.MBText(got); text != "0.5MB" {
+			t.Errorf("报错参数 = %q，想要 0.5MB", text)
 		}
 	})
 

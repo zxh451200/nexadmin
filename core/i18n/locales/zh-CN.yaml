@@ -659,7 +659,7 @@ exportcenter:
 region:
   source_insecure: "数据源地址不可用（只接受 HTTPS，且不能包含账号密码）：%s"
   source_unreachable: "拉取数据源失败：%s"
-  source_too_large: "数据源超过 %dMB 上限"
+  source_too_large: "数据源超过 %s 上限"
   file_required: "请选择要上传的数据文件"
   data_invalid: "数据源内容不可用：%s"
   source_missing: "还没有配置数据源：请在系统设置里填写地址，或在 config.yaml 的 region.source_url 里配置"
