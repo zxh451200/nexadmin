@@ -1,10 +1,13 @@
 package file
 
 import (
+	"archive/zip"
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -13,6 +16,7 @@ import (
 	"gorm.io/gorm"
 
 	"nexadmin/core/auth"
+	"nexadmin/core/i18n"
 	"nexadmin/core/response"
 	"nexadmin/core/storage"
 	"nexadmin/core/tenant"
@@ -125,6 +129,144 @@ func (h *Handler) Register(c *gin.Context) {
 		return
 	}
 	response.OK(c, list)
+}
+
+// DownloadZip POST /files/download-zip body: {ids:[...]} —— 把选中的文件打包成一个 zip 返回。
+// zip 内按原始文件名落盘，同名文件补 -2 / -3 后缀到真正唯一；
+// 没进包的文件（外链、读不出内容）不静默丢，见 writeFilesZip 的交代方式。
+func (h *Handler) DownloadZip(c *gin.Context) {
+	var req moveReq
+	if !response.BindJSON(c, &req) {
+		return
+	}
+	ctx := c.Request.Context()
+	files, err := h.svc.FilesForDownload(ctx, req.IDs)
+	if err != nil {
+		// 还没写出任何字节：这里能正常回 400 + 具体数字，前端把后端文案原样 toast。
+		response.Fail(c, err)
+		return
+	}
+	c.Header("Content-Type", "application/zip")
+	c.Header("Content-Disposition", dispositionAttachment("files-"+time.Now().Format("20060102-150405")+".zip"))
+	zw := zip.NewWriter(c.Writer)
+	if err := h.writeFilesZip(ctx, zw, files); err != nil {
+		_ = c.Error(err)
+		// 故意不 Close：半包不写中央目录，解压端会报「文件损坏」。
+		// 已经吐出字节就改不了状态码，但给一个「看起来成功、里面某条 CRC 不对」的包更坏。
+		return
+	}
+	if err := zw.Close(); err != nil {
+		_ = c.Error(err)
+	}
+}
+
+// zipManifestName 是随包交回的「点名了但没进包」清单。名字留 ASCII：
+// 非 ASCII 条目名在老 Windows 解压器上会按本地代码页解码成乱码，清单本身读不出来的话
+// 就又回到静默丢文件了。
+const zipManifestName = "_FAILED.txt"
+
+// zipSkip 是一条没进包的记录（名字 + 已按请求语言翻好的原因）。
+type zipSkip struct {
+	name   string
+	reason string
+}
+
+// writeFilesZip 把 files 逐个写进 zw，外链与读不出内容的记入 skipped。
+//
+// 为什么不整包失败：一个 500 个文件的包里有一个对象丢了，让用户重头再点一遍是惩罚用户；
+// 但「什么都不留地跳过」更糟——用户少拿一个文件且毫不知情。响应已经在流式写出，
+// 状态码和响应体都改不了，所以把名单随包交回：浏览器保存附件时不展示响应头，
+// 下载完成后也不会把响应头留在任何地方，用户能看到的只有解压出来的文件。
+// 这与本仓库批量接口用 skipped 字段交代「点名但没处理」的行是同一口径
+// （plugins/codegen 的安装结果、plugins/im 的批量删除），清单条目是它的流式版本。
+func (h *Handler) writeFilesZip(ctx context.Context, zw *zip.Writer, files []File) error {
+	used := map[string]bool{zipManifestName: true} // 预留清单名：真有文件叫 _FAILED.txt 时它让行成 _FAILED-2.txt
+	var skipped []zipSkip
+	for _, f := range files {
+		if f.StoragePath == "" {
+			skipped = append(skipped, zipSkip{f.Name, i18n.T(ctx, "file.zip_skip_external")})
+			continue // 外链文件没有字节可打包
+		}
+		// 优先 Opener（本地存储零拷贝句柄）；其他存储走单段 Get（zip 不需要 Range）
+		var src io.ReadCloser
+		if op, ok := h.svc.store.blobs.(storage.Opener); ok {
+			rc, _, oerr := op.Open(ctx, f.StoragePath)
+			if oerr != nil {
+				skipped = append(skipped, zipSkip{f.Name, i18n.T(ctx, "file.zip_skip_read")})
+				continue
+			}
+			src = rc
+		} else {
+			obj, oerr := h.svc.store.blobs.Get(ctx, f.StoragePath, nil)
+			if oerr != nil {
+				skipped = append(skipped, zipSkip{f.Name, i18n.T(ctx, "file.zip_skip_read")})
+				continue
+			}
+			src = obj.Body
+		}
+		// 名字在取到内容之后才领用：跳过的文件不该占掉一个序号，否则 a.txt 读失败时
+		// 下一个 a.txt 会白拿 a-2.txt。
+		w, err := zw.Create(zipEntryName(used, f.Name))
+		if err != nil {
+			_ = src.Close()
+			return err
+		}
+		if _, err := io.Copy(w, src); err != nil {
+			_ = src.Close()
+			return err
+		}
+		_ = src.Close()
+	}
+	if len(skipped) == 0 {
+		return nil
+	}
+	return writeZipManifest(ctx, zw, skipped)
+}
+
+// zipEntryName 从 used 里领一个没被占用的条目名：a.txt → a-2.txt → a-3.txt……
+// 每次领用都回填 used，所以三个同名文件拿到的是三个不同条目——旧写法只在原始名上计数
+// （used[f.Name]++），第二个和第三个同名都算成 a-2.txt，而 zip.Writer 不拒绝重名，
+// 后写的直接顶掉前一个，用户少拿一个文件且毫不知情。
+//
+// 名字先过 cleanName：历史行里若有带 / 或 \ 的名字，不能让它变成包内目录或 ../ 跳出
+// （解压时的 zip-slip）。
+func zipEntryName(used map[string]bool, raw string) string {
+	name := cleanName(raw)
+	if name == "." || name == ".." {
+		name = "unnamed"
+	}
+	if !used[name] {
+		used[name] = true
+		return name
+	}
+	ext := filepath.Ext(name)
+	base := strings.TrimSuffix(name, ext)
+	for n := 2; ; n++ {
+		cand := base + "-" + strconv.Itoa(n) + ext
+		if !used[cand] {
+			used[cand] = true
+			return cand
+		}
+	}
+}
+
+// writeZipManifest 写清单条目本体（名字已在 used 里预留，这里不再领用）。
+// 带 BOM：清单几乎只会被 Windows 记事本打开，没 BOM 时中文按本地代码页显示成乱码
+// （与前端导出 CSV 的 \uFEFF 同一处理）。
+func writeZipManifest(ctx context.Context, zw *zip.Writer, skipped []zipSkip) error {
+	w, err := zw.Create(zipManifestName)
+	if err != nil {
+		return err
+	}
+	var sb strings.Builder
+	sb.WriteString("\uFEFF")
+	sb.WriteString(i18n.T(ctx, "file.zip_failed_header", len(skipped)))
+	sb.WriteString("\r\n\r\n")
+	for _, s := range skipped {
+		sb.WriteString(cleanName(s.name) + "\t" + s.reason + "\r\n")
+	}
+	_, err = io.WriteString(w, sb.String())
+	return err
 }
 
 func (h *Handler) Update(c *gin.Context) {

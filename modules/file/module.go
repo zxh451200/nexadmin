@@ -50,6 +50,7 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	r.GET("/files/usage", core.Perm(PermList), h.Usage)
 	r.POST("/files", core.Perm(PermUpload), h.Register)
 	r.PUT("/files/move", core.Perm(PermUpload), h.Move)
+	r.POST("/files/download-zip", core.Perm(PermList), h.DownloadZip)
 	r.PUT("/files/:id", core.Perm(PermUpload), h.Update)
 	r.DELETE("/files/:id", core.Perm(PermDelete), h.DeleteOne)
 	r.DELETE("/files", core.Perm(PermDelete), h.DeleteMany)

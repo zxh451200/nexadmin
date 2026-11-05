@@ -33,6 +33,11 @@ const (
 	maxGroupLen     = 64
 	gridCols        = 24 // 大屏画布栅格列数
 	gridMaxRows     = 200
+	// 自动刷新间隔的允许范围（报表与大屏同口径）：0 = 关闭，否则 minRefreshSec..maxRefreshSec。
+	// 下限 5 秒不是拍脑袋：间隔是前端拿来轮询取数接口的，直调 API 写 1 秒就等于
+	// 让每个打开报表页的浏览器按秒打数据库，属于自我 DoS，必须在服务端夹住。
+	minRefreshSec = 5
+	maxRefreshSec = 3600
 )
 
 // DatasetConfig 是数据集配置：选中的列 + 管理员固定的过滤条件（对使用该数据集的所有图表生效）。
@@ -71,6 +76,10 @@ type ReportFilter struct {
 type ReportConfig struct {
 	Items   []ReportItem   `json:"items"`
 	Filters []ReportFilter `json:"filters"`
+	// RefreshSec 是自动刷新间隔（秒）；0 = 不自动刷新（默认）。查看页按它轮询图表数据，
+	// 供挂在大屏/监控室的报表页使用；与 ScreenConfig.RefreshSec 同语义。
+	// 取值由服务端校验（见 validateRefreshSec）：0 或 5..3600，越界一律保存失败。
+	RefreshSec int `json:"refreshSec,omitempty"`
 }
 
 // ScreenItem 是大屏画布上的一个组件：栅格坐标（24 列），不存像素。
@@ -100,7 +109,27 @@ func decodeStrict(s string, v any) error {
 	return dec.Decode(v)
 }
 
+// validateRefreshSec 校验自动刷新间隔：0（关闭）或 5..3600 秒，与 checkScreen 里大屏的口径一致。
+// 越界只报错、不静默夹紧——静默改数据会让「我明明填了 30」这类反馈无从排查。
+// key 写成 response.BadRequest 字面量（不是 specErr 传参），这样 contract_check 的 E 类
+// 才扫得到它：漏一种语言时用户会直接看到 key 原文。
+func validateRefreshSec(sec int) *response.Error {
+	if sec == 0 || (sec >= minRefreshSec && sec <= maxRefreshSec) {
+		return nil
+	}
+	return response.BadRequest("report.refresh_interval_invalid")
+}
+
+// encodeJSON 编码要写进 config TEXT 列的配置。
+// ReportConfig 的兜底校验放在这里，因为「所有要落库的报表配置」只从这一个出口过：
+// 报表保存路径 service_report.go 的 checkReport 本轮不在可改文件范围内，先由落库出口拦下
+// API 直写的越界值；checkReport 之后补上 validateRefreshSec 调用也不冲突（同口径、幂等）。
 func encodeJSON(v any) (string, error) {
+	if rc, ok := v.(ReportConfig); ok {
+		if e := validateRefreshSec(rc.RefreshSec); e != nil {
+			return "", e
+		}
+	}
 	b, err := json.Marshal(v)
 	return string(b), err
 }

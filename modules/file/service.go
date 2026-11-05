@@ -3,6 +3,7 @@ package file
 import (
 	"context"
 	"errors"
+	"math"
 	"net/url"
 	"path"
 	"strings"
@@ -395,6 +396,61 @@ func (s *Service) Move(ctx context.Context, ids []idgen.ID, groupID idgen.ID) er
 		return response.BadRequest("file.group_not_found")
 	}
 	return s.db.WithContext(ctx).Model(&File{}).Where("id IN ?", ids).Update("group_id", groupID).Error
+}
+
+// 打包下载的一次性上限。两条都是「这条请求最多值多少」：数量决定 SQL 与 zip 条目数，
+// 总字节决定响应体积。zip 是逐条流式写出的，文件内容不会整包驻留内存，但每条读缓冲、
+// 以及「响应还没写完就被拖住的这条连接」都是实打实的占用——上限同时是内存和带宽天花板。
+// 上限一旦超过，报错也要在写第一个字节之前给出（见 Handler.DownloadZip）。
+const (
+	// MaxZipFiles 单次打包的文件数上限，与批量删除同口径：response.MaxBatchIDs = 500 条点名。
+	MaxZipFiles = response.MaxBatchIDs
+	// MaxZipBytes 单次打包的**解压前**原始字节上限（按台账 size 累加，1 GiB）。
+	// 取 1 GiB 是因为前端这请求的超时是 120s：1 GiB 已经要求 ~9 MB/s 的稳定带宽才能收完，
+	// 再放大只会让慢客户端把连接占得更久，而不是让用户多拿到什么。
+	MaxZipBytes = int64(1) << 30
+)
+
+// zipMB 把字节换成文案里的 MB 数（保留两位，%g 打出一长串小数没意义）。
+func zipMB(b int64) float64 { return math.Round(float64(b)/(1<<20)*100) / 100 }
+
+// FilesForDownload 取一批可打包下载的文件（含 storage_path 的才进 zip；外链没有字节可打包）。
+//
+// 读路径与本包 List / Delete 完全一致：只走 s.db（core/database 挂了租户插件，
+// 对带 tenant_id 的模型自动追加条件）+ variant_of = 0，所以打包下载看不到列表之外的行——
+// 派生副本不单独成条目，别的租户的 id 一条也查不出来。ctx 必须是带租户的请求 ctx。
+func (s *Service) FilesForDownload(ctx context.Context, ids []idgen.ID) ([]File, error) {
+	if len(ids) == 0 {
+		return nil, response.BadRequest("file.ids_invalid")
+	}
+	// 数量先于 SQL 判定：一条 800 个占位符的 IN (...) 本身就是被打死的对象，
+	// 不能为了算条数先把库打一遍。
+	if len(ids) > MaxZipFiles {
+		return nil, response.BadRequest("file.zip_too_many", len(ids), MaxZipFiles)
+	}
+	var rows []File
+	err := s.db.WithContext(ctx).Where("id IN ? AND variant_of = 0", ids).Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	// 总大小按台账 size 累加（解压前的原始字节），不碰存储：打包前就能拒绝。
+	var total int64
+	packable := 0
+	for _, f := range rows {
+		if f.StoragePath == "" {
+			continue // 外链：库里只有 URL，既没有字节可累加，也没有字节可打包
+		}
+		packable++
+		total += f.Size
+	}
+	if packable == 0 {
+		// 点名了但一个都拿不到（跨租户 id、已删除、全是外链）：给空 zip 等于什么都没发生。
+		return nil, response.BadRequest("file.zip_empty")
+	}
+	if total > MaxZipBytes {
+		return nil, response.BadRequest("file.zip_too_large", zipMB(total), zipMB(MaxZipBytes))
+	}
+	return rows, nil
 }
 
 // Delete 批量删除文件记录，并尽力删除存储里的对象（删除失败只影响垃圾文件，不回滚）。

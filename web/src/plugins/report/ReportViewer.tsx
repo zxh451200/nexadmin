@@ -19,10 +19,10 @@ const SPAN: Record<number, string> = {
   7: 'md:col-span-7', 8: 'md:col-span-8', 9: 'md:col-span-9', 10: 'md:col-span-10', 11: 'md:col-span-11', 12: 'md:col-span-12',
 }
 
-function ChartCard({ reportId, chart, values }: { reportId: string; chart?: Chart; values: FilterValues }) {
+function ChartCard({ reportId, chart, values, refreshMs }: { reportId: string; chart?: Chart; values: FilterValues; refreshMs?: number }) {
   const { t } = useTranslation()
   const [exporting, setExporting] = useState(false)
-  const q = useChartResult(['report', reportId, chart?.id, values], () => queryReportChart(reportId, chart!.id, values), { enabled: !!chart })
+  const q = useChartResult(['report', reportId, chart?.id, values], () => queryReportChart(reportId, chart!.id, values), { enabled: !!chart, refetchMs: refreshMs })
   const onExport = async () => {
     if (!chart) return
     setExporting(true)
@@ -72,6 +72,12 @@ export function ReportViewer({ reportId }: { reportId: string }) {
   const { t } = useTranslation()
   const { data: report, isLoading } = useReport(reportId, 'view')
   const [values, setValues] = useState<FilterValues>({})
+  // 自动刷新只走一条链路：间隔交给每张图的 useChartResult 做 refetchInterval。
+  // 这里不要再挂 setInterval + invalidateQueries——那会让同一份数据被两条道各拉一遍，
+  // 而且 invalidate 不受 usePageLive 的前台暂停约束，页面切到后台标签照样打服务端。
+  const refreshSec = report?.config.refreshSec ?? 0
+  const autoMs = refreshSec > 0 ? refreshSec * 1000 : undefined
+
   const groups = useMemo(() => {
     const out: { name: string; items: { chartId: string; span: number }[] }[] = []
     for (const it of report?.config.items ?? []) {
@@ -101,7 +107,7 @@ export function ReportViewer({ reportId }: { reportId: string }) {
               return (
                 // 指标卡只有一行数字：别被同一行的图表拉成大空白块
                 <div key={it.chartId} className={cn('min-w-0', SPAN[it.span] ?? 'md:col-span-12', chart?.type === 'metric' && 'self-start')}>
-                  <ChartCard reportId={reportId} chart={chart} values={values} />
+                  <ChartCard reportId={reportId} chart={chart} values={values} refreshMs={autoMs} />
                 </div>
               )
             })}

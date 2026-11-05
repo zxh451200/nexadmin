@@ -96,6 +96,8 @@ export interface ReportFilter {
 export interface ReportConfig {
   items: ReportItem[]
   filters: ReportFilter[]
+  /** 自动刷新间隔（秒）；0/缺省 = 不自动刷新（供挂在大屏/监控室的报表页使用） */
+  refreshSec?: number
 }
 export interface Report {
   id: string

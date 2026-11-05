@@ -33,6 +33,10 @@
       "table": "Table",
       "metric": "Metric"
     },
+    "reportRefresh": {
+      "field": "Auto-refresh (seconds)",
+      "hint": "0 = no auto-refresh; auto-refresh accepts only 5-3600 seconds; for report pages mounted on wall displays"
+    },
     "subscription": {
       "title": "Subscribe",
       "desc": "Send a reminder email to the recipients at the scheduled time, with a link to the report center",

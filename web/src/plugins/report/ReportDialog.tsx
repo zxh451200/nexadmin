@@ -16,7 +16,7 @@ import { builtinText, fieldText, revertBuiltin } from './builtinText'
 import { GroupSelect } from './GroupSelect'
 
 const SPANS = [3, 4, 6, 8, 12]
-const blank = (): ReportForm => ({ name: '', groupName: '', remark: '', config: { items: [], filters: [] } })
+const blank = (): ReportForm => ({ name: '', groupName: '', remark: '', config: { items: [], filters: [], refreshSec: 0 } })
 
 interface Props {
   open: boolean
@@ -217,12 +217,24 @@ export function ReportDialog({ open, onOpenChange, editing }: Props) {
               </Button>
             </fieldset>
           </FormGridFull>
-          <FormGridFull>
+          <FormGrid>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="rp-refresh">{t('plugin_report.reportRefresh.field')}</Label>
+              <Input
+                id="rp-refresh"
+                type="number"
+                min={0}
+                max={3600}
+                value={form.config.refreshSec ?? 0}
+                onChange={(e) => setForm({ ...form, config: { ...cfg, refreshSec: Math.max(0, Math.min(3600, Number(e.target.value) || 0)) } })}
+              />
+              <p className="text-xs text-muted-foreground">{t('plugin_report.reportRefresh.hint')}</p>
+            </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="rp-remark">{t('common.remark')}</Label>
               <Textarea id="rp-remark" rows={3} value={form.remark} maxLength={255} onChange={(e) => setForm({ ...form, remark: e.target.value })} />
             </div>
-          </FormGridFull>
+          </FormGrid>
         </FormGrid>
       </FormLayout>
     </ResponsiveDialog>

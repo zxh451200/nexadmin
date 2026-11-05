@@ -52,6 +52,9 @@ func (s *Service) checkReport(ctx context.Context, f *ReportForm) (string, error
 		return "", specErr("report.name_and_remark_invalid")
 	}
 	c := &f.Config
+	if e := validateRefreshSec(c.RefreshSec); e != nil {
+		return "", e
+	}
 	if len(c.Items) > maxReportItems || len(c.Filters) > maxReportFilter {
 		return "", specErr("report.report_items_too_many")
 	}

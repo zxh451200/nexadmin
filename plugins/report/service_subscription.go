@@ -1,7 +1,10 @@
 package report
 
 import (
+	"bytes"
 	"context"
+	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -9,6 +12,7 @@ import (
 	"gorm.io/gorm"
 
 	"nexadmin/core"
+	"nexadmin/core/datascope"
 	"nexadmin/core/response"
 	"nexadmin/core/tenant"
 	"nexadmin/pkg/idgen"
@@ -33,8 +37,9 @@ const (
 const maxRecipients = 20
 
 // mailer 是订阅投递需要的最小邮件面；nil = 邮件未装配，发送按跳过处理。
+// 附件走带附件的模板发送：正文仍是通知模板，报表里的表格图以 xlsx 附件跟在后面。
 type mailer interface {
-	SendMail(ctx context.Context, to, tpl, lang string, d mail.Data) error
+	SendMailWithAttachments(ctx context.Context, to, tpl, lang string, d mail.Data, atts []mail.Attachment) error
 }
 
 // WithMailer 注入邮件出口（Register 时装配；测试传 nil 或自定义实现）。
@@ -211,33 +216,77 @@ func (s *Service) RunDue(ctx context.Context, now time.Time) (int, error) {
 
 // deliver 给一条订阅投递提醒；false = 本条跳过（收件人解析失败或 SMTP 未配置）。
 // 单条失败只记日志：一封提醒邮件不值得让扫描器中断。
+// 报表里的表格图会导出成 xlsx 附件随邮件发送（附件生成失败降级为纯提醒，不阻塞投递）。
 func (s *Service) deliver(ctx context.Context, row Subscription, now time.Time) bool {
 	var report ReportDef
 	if err := s.db.WithContext(tenant.Skip(ctx)).First(&report, "id = ?", int64(row.ReportID)).Error; err != nil {
 		s.log.Warn("report: subscription target missing", zapID(row.ID), zapErr(err))
 		return false
 	}
+	tid := row.TenantID
+	if tid == 0 {
+		s.log.Warn("report: subscription tenant missing", zapID(row.ID))
+		return false
+	}
+	// 导出与租户相关查询在租户上下文里执行（订阅行本身带 tenant_id）。
+	tctx := tenant.With(ctx, tid)
 	to := strings.Split(row.Recipients, ",")
 	// 语言跟平台默认语言（与 ticket 的 composeReporterMail 同一口径），文案不写死中文；
 	// SiteName 留空由 notify 用配置里的站点名，品牌不钉死在代码里。
 	lang := core.DefaultLanguage().Code
 	title, content := composeSubscriptionMail(lang, report.Name)
+	atts := s.subscriptionAttachments(tctx, row.ReportID)
 	for _, addr := range to {
 		addr = strings.TrimSpace(addr)
 		if addr == "" {
 			continue
 		}
-		err := s.mailer.SendMail(ctx, addr, mail.TplNotice, lang, mail.Data{
+		err := s.mailer.SendMailWithAttachments(ctx, addr, mail.TplNotice, lang, mail.Data{
 			Title:   title,
 			Content: content,
 			Link:    "/monitor/report",
 			Time:    now.Format("2006-01-02 15:04"),
-		})
+		}, atts)
 		if err != nil {
 			s.log.Warn("report: subscription mail skipped/failed", zapID(row.ID), zapErr(err))
 		}
 	}
 	return true
+}
+
+// subscriptionAttachments 把报表里的表格图导出为 xlsx 附件（无 table 图返回 nil，纯提醒）。
+// 用全量数据范围：订阅由持有 report:report 的管理员配置，邮件代表「报表的完整口径」；
+// 生成失败的单张图表跳过并记日志，不让一图表挂掉拖垮整封邮件。
+func (s *Service) subscriptionAttachments(ctx context.Context, reportID idgen.ID) []mail.Attachment {
+	rep, err := s.loadReport(ctx, reportID)
+	if err != nil {
+		return nil
+	}
+	rv := reportView(rep)
+	v := Viewer{Scope: &datascope.Scope{All: true}}
+	var atts []mail.Attachment
+	for _, it := range rv.Config.Items {
+		cid, err := idgen.Parse(it.ChartID)
+		if err != nil || cid == 0 {
+			continue
+		}
+		ch, err := s.loadChart(ctx, cid)
+		if err != nil || ch.Type != ChartTable {
+			continue // 非表格图没有可导出的行集；柱/折/饼的底层导出另走查看端
+		}
+		var buf bytes.Buffer
+		err = s.ExportReportChart(ctx, func(ExportFile) io.Writer { return &buf }, reportID, cid, nil, v, ExportLabels{Name: ch.Name})
+		if err != nil {
+			s.log.Warn("report: subscription chart export failed", zap.String("chart", ch.Name), zapErr(err))
+			continue
+		}
+		name := cleanSheetName(ch.Name)
+		if name == "" {
+			name = fmt.Sprintf("chart-%s", it.ChartID)
+		}
+		atts = append(atts, mail.Attachment{Name: name + ".xlsx", ContentType: xlsxContentType, Data: buf.Bytes()})
+	}
+	return atts
 }
 
 // composeSubscriptionMail 拼订阅提醒的标题与正文，双语分支照 ticket 的 composeReporterMail。
