@@ -46,7 +46,8 @@
       "logoUploadHint": "建议使用透明背景的横版图片，高度 64px 以上。",
       "logoPlaceholder": "或直接填写图片地址",
       "copyright": "版权信息",
-      "defaultLanguage": "默认语言（系统通知与邮件的用语）",
+      "defaultLanguage": "默认语言",
+      "defaultLanguageHint": "系统通知与邮件的用语，不改变界面语言。",
       "watermark": "页面水印",
       "watermarkHint": "在页面上叠加用户名和时间"
     },

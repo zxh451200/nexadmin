@@ -36,6 +36,7 @@ export function SiteSection({ value }: { value: AllSettings['site'] }) {
             control={form.control}
             name="defaultLanguage"
             label={t('settings.site.defaultLanguage')}
+            description={t('settings.site.defaultLanguageHint')}
             options={languages.map((l) => ({ value: l.code, label: l.name }))}
           />
           <FormGridFull>
