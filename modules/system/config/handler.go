@@ -41,10 +41,25 @@ func restrictAI(all map[string]any) {
 // 界面还能渲染「已配置/未配置」，但拿不到真凭据。整分区不返回会让设置页变成一片空白，
 // 那是另一种「入口蒸发」。
 func restrictSecrets(v any) {
+	restrictSecretsIn(v, false)
+}
+
+// restrictSecretsIn 递归抹密钥字段；robotURL 表示当前正处在 notify.robots 列表里。
+//
+// 服务层的 maskSecrets 对所有人生效，覆盖 password / secretKey / apiKey / clientSecret 四个名字；
+// 这里补的是它盖不到的两类，且只对非平台调用方生效：accessKey 与 token 类命名，
+// 以及 notify.robots[].url——钉钉 / 飞书 / 企业微信的 webhook 地址自带 access_key 或 access_token，
+// 拿到 URL 就能往群里发消息，而字段名是 url，按名字表永远漏。列表外的 url（site.logoUrl 之类）
+// 是普通展示字段，不许误伤。
+func restrictSecretsIn(v any, robotURL bool) {
 	switch node := v.(type) {
 	case map[string]any:
 		for k, child := range node {
-			if isSecretKey(k) {
+			if k == "robots" {
+				restrictSecretsIn(child, true)
+				continue
+			}
+			if isSecretKey(k) || (robotURL && k == "url") {
 				// 字符串值换成与 ai 分区同一个掩码（界面据此仍能显示「已配置」）；
 				// 非字符串的密钥形态（对象/数组）没有可展示的意义，删键。
 				if s, ok := child.(string); ok && s != "" {
@@ -54,11 +69,11 @@ func restrictSecrets(v any) {
 				}
 				continue
 			}
-			restrictSecrets(child)
+			restrictSecretsIn(child, false)
 		}
 	case []any:
 		for _, item := range node {
-			restrictSecrets(item)
+			restrictSecretsIn(item, robotURL)
 		}
 	}
 }

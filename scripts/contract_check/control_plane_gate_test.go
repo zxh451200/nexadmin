@@ -90,6 +90,11 @@ var platControlPlaneOtherGuarded = map[string]string{
 }
 
 var (
+	// 设置默认值里的字段名：map 字面量的 "key": 形状。不能只锚行首——一行常写好几个键。
+	keyNameRe       = regexp.MustCompile(`"([A-Za-z][A-Za-z0-9_]*)":`)
+	cpMapKeysRe     = regexp.MustCompile(`"([A-Za-z][A-Za-z0-9_]*)":\s*true`)
+	cpStringSliceRe = regexp.MustCompile(`(?s)secretKeyHints = \[\]string\{(.*?)\}`)
+	cpQuoteRe       = regexp.MustCompile(`"([^"]+)"`)
 	cpCreateTableRe = regexp.MustCompile(`(?s)CREATE TABLE(?: IF NOT EXISTS)?\s+(\w+)\s*\((.*?)\n\)`)
 	cpTenantColRe   = regexp.MustCompile(`\btenant_id\b`)
 	cpRouteRe       = regexp.MustCompile(`(?m)^[ \t]*([A-Za-z_]\w*)\.(GET|POST|PUT|PATCH|DELETE)\("([^"]*)",`)
@@ -329,4 +334,122 @@ func TestConsoleReadGate(t *testing.T) {
 		}
 	}
 	t.Logf("整组收口的读入口 %d 条（3 个监控台）；控制面只读页 %d 个已核对", len(platConsoleReads), 12)
+}
+
+// TestSecretFieldNamesAreCovered 把「密钥名单」从口头约定变成核对：
+// 上一轮我在文档里写过「GET /settings 原先把 sms / notify / auth 的凭据原样下发」，那是错的——
+// 服务层的 maskSecrets 早就对所有人生效（password / secretKey / apiKey / clientSecret）。
+// 真正漏的是两类：名字不在表里的（accessKey、token 类），以及按名字表永远抓不到的
+// notify.robots[].url（webhook 地址自带 access_token）。所以这里逐名核对，新增字段名不许掉队。
+func TestSecretFieldNamesAreCovered(t *testing.T) {
+	settingsSrc := platRead(t, "modules/system/config/settings.go")
+	notifySrc := platRead(t, "modules/system/config/notify.go")
+	handlerSrc := platRead(t, "modules/system/config/handler.go")
+
+	// 1. 分区默认值里出现的字段名（只取三个构造函数体内、行首的 "key": 形状，避免抓到代码里的字符串）
+	names := map[string]bool{}
+	// 三个构造函数分家两处：defaultSettings / provider 在 settings.go，notifyDefaults 在 notify.go，
+	// 所以按函数名去两个文件里找，找到哪个算哪个——只扫一个文件会误报「判据基础变了」。
+	for _, fn := range []string{"func defaultSettings()", "func notifyDefaults()", "func provider()"} {
+		body := ""
+		for _, src := range []string{settingsSrc, notifySrc} {
+			if i := strings.Index(src, fn); i >= 0 {
+				body = src[i:]
+				if end := strings.Index(body, "\n}\n"); end > 0 {
+					body = body[:end]
+				}
+				break
+			}
+		}
+		if body == "" {
+			t.Fatalf("两个文件里都找不到 %s：判据基础变了", fn)
+		}
+		for _, m := range keyNameRe.FindAllStringSubmatch(body, -1) {
+			names[m[1]] = true
+		}
+	}
+	if len(names) < 20 {
+		t.Fatalf("闸对空跑：只扫到 %d 个设置字段名", len(names))
+	}
+
+	// 2. 两份名单：服务层对所有人生效的 secretFields，与平台边界用的 secretKeyHints（按片段匹配）
+	serviceMask := map[string]bool{}
+	for _, m := range cpMapKeysRe.FindAllStringSubmatch(settingsSrc, -1) {
+		serviceMask[m[1]] = true
+	}
+	hints := cpStringSliceRe.FindStringSubmatch(handlerSrc)
+	if hints == nil {
+		t.Fatal("handler.go 里找不到 secretKeyHints 名单")
+	}
+	var hintList []string
+	for _, m := range cpQuoteRe.FindAllStringSubmatch(hints[1], -1) {
+		hintList = append(hintList, m[1])
+	}
+	norm := func(s string) string {
+		return strings.NewReplacer("_", "", "-", "", " ", "").Replace(strings.ToLower(s))
+	}
+	covered := func(name string) bool {
+		if serviceMask[name] {
+			return true
+		}
+		n := norm(name)
+		for _, h := range hintList {
+			if strings.Contains(n, norm(h)) {
+				return true
+			}
+		}
+		return false
+	}
+	secretish := func(name string) bool {
+		n := norm(name)
+		// 这张表要宽于两份名单：它的职责是「像密钥就得有人解释」，解释不了就该红，
+		// 而不是「只有我认识的拼法才算」。publickey / signature 这类公开值刻意不在表里。
+		for _, k := range []string{"password", "passwd", "passphrase", "secret", "apikey", "accesskey",
+			"privatekey", "authkey", "appkey", "signkey", "sessionkey", "token", "credential", "bearer", "webhook"} {
+			if strings.Contains(n, k) {
+				return true
+			}
+		}
+		return false
+	}
+
+	var missing []string
+	for name := range names {
+		if secretish(name) && !covered(name) {
+			missing = append(missing, name)
+		}
+	}
+	if len(missing) > 0 {
+		sort.Strings(missing)
+		t.Errorf("%d 个设置字段名看着就是密钥，却不在任何一份名单里：%s（要么进 modules/system/config 的 secretFields，要么进 handler.go 的 secretKeyHints；漏一个就是把它明文发给每个租户）",
+			len(missing), strings.Join(missing, ", "))
+	}
+
+	// 3. 按名字抓不到的那一类：机器人 webhook 的 url 必须按上下文码掉；这条规则不许悄悄消失
+	if !strings.Contains(handlerSrc, `robotURL && k == "url"`) {
+		t.Error("handler.go 没有「notify.robots[].url 按上下文打码」这条规则：webhook 地址自带 access_token，字段名却是 url，按名单永远漏")
+	}
+	// url 不在分区默认值里（默认是空列表），它是保存后落库的机器人条目字段——所以去 notify.go 的
+	// robots 映射里找；找不到就说明那条上下文规则成了死代码。
+	if !strings.Contains(notifySrc, `"url":`) {
+		t.Error(`notify.go 的机器人条目里已经没有 "url" 字段了：那条 robots 规则该跟着删或改，别留死代码`)
+	}
+
+	// 4. 服务层那份对所有人生效的打码不许掉
+	if !strings.Contains(settingsSrc, "maskSecrets(v)") || len(serviceMask) == 0 {
+		t.Errorf("maskSecrets 或其名单不见了（名单 %d 项）：那是所有人——包括平台自己——读设置页的第一道", len(serviceMask))
+	}
+
+	t.Logf("设置字段名 %d 个，其中密钥形状 %d 个全部有名单覆盖；服务层 secretFields %d 项、平台边界 secretKeyHints %d 项；robots url 按上下文打码在位",
+		len(names), countSecretish(names, secretish), len(serviceMask), len(hintList))
+}
+
+func countSecretish(names map[string]bool, pred func(string) bool) int {
+	n := 0
+	for k := range names {
+		if pred(k) {
+			n++
+		}
+	}
+	return n
 }

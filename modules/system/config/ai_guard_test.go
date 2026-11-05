@@ -151,19 +151,38 @@ func TestSettingsWritesArePlatformOnly(t *testing.T) {
 // 都是部署级的，整分区不返回会让界面变成一片空白（那是另一种入口蒸发），所以只抹值不删键。
 func TestRestrictSecretsMasksCredentialFields(t *testing.T) {
 	in := map[string]any{
-		"notify": map[string]any{"smtpHost": "mail.example.com", "smtpPassword": "s3cret", "useTLS": true},
+		"notify": map[string]any{
+			"mail": map[string]any{"host": "mail.example.com", "password": "smtp-pass", "username": "ops@example.com"},
+			// webhook 地址自带 access_token：字段名是 url，按名字表永远漏，所以要按上下文码。
+			"robots": []any{map[string]any{"name": "值班群", "type": "dingtalk", "url": "https://oapi.dingtalk.com/robot/send?access_token=AAA", "secretKey": "SEC", "markdown": true}},
+		},
 		"sms": map[string]any{
 			"providers": []any{map[string]any{"name": "ali", "accessKey": "AK-1", "accessSecret": "SK-1"}},
 		},
 		"security": map[string]any{"maxAttempts": 5, "loginTokenSecret": "jwt-key"},
+		// 列表外的 url 是普通展示字段，不许误伤。
+		"site": map[string]any{"siteName": "NexAdmin", "logoUrl": "/icon.svg"},
 	}
 	restrictSecrets(in)
-	notify := in["notify"].(map[string]any)
-	if notify["smtpPassword"] != secretMask {
-		t.Errorf("smtpPassword = %v, want 掩码 %q", notify["smtpPassword"], secretMask)
+	mail := in["notify"].(map[string]any)["mail"].(map[string]any)
+	if mail["password"] != secretMask {
+		t.Errorf("mail.password = %v, want 掩码 %q", mail["password"], secretMask)
 	}
-	if notify["smtpHost"] != "mail.example.com" || notify["useTLS"] != true {
-		t.Errorf("非凭据字段被动过：%v", notify)
+	if mail["host"] != "mail.example.com" || mail["username"] != "ops@example.com" {
+		t.Errorf("非凭据字段被动过：%v", mail)
+	}
+	robot := in["notify"].(map[string]any)["robots"].([]any)[0].(map[string]any)
+	if robot["url"] != secretMask {
+		t.Errorf("robots[].url = %v, want 掩码：webhook 地址自带 access_token，拿到就能往群里发消息", robot["url"])
+	}
+	if robot["secretKey"] != secretMask {
+		t.Errorf("robots[].secretKey = %v, want 掩码", robot["secretKey"])
+	}
+	if robot["name"] != "值班群" || robot["markdown"] != true {
+		t.Errorf("机器人条目的结构被删坏了：%v", robot)
+	}
+	if site := in["site"].(map[string]any); site["logoUrl"] != "/icon.svg" {
+		t.Errorf("site.logoUrl 被误伤：%v", site["logoUrl"])
 	}
 	prov := in["sms"].(map[string]any)["providers"].([]any)[0].(map[string]any)
 	if prov["accessKey"] != secretMask || prov["accessSecret"] != secretMask {
