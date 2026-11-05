@@ -46,7 +46,7 @@
       "logoUploadHint": "A transparent horizontal logo at least 64px tall works best.",
       "logoPlaceholder": "Or enter an image URL",
       "copyright": "Copyright",
-      "defaultLanguage": "Default language",
+      "defaultLanguage": "Default language (used for notifications and mail)",
       "watermark": "Page watermark",
       "watermarkHint": "Overlay the username and time on pages"
     },

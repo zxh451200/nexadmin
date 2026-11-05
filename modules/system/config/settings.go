@@ -36,6 +36,8 @@ func isSection(s string) bool {
 // readonlySections：值由 config/config.yaml 在启动时决定（storage.* 决定文件存放，
 // cache.* 决定缓存驱动，core/router.go 据此构造缓存），设置页保存下来的这份没有任何地方会读。
 // 让它显示「保存成功」却不生效比直接拒绝更糟，所以这两个分区明确拒绝写入，前端也只展示不给编辑入口。
+// 注意：sms / auth 同样只在启动时读 config.yaml，但已被提交的用例当作「可写分区」做正控制
+// （modules/system/config/settings_readonly_test.go，commit a8782c5）——要收它们得先改那条决定。
 var readonlySections = map[string]string{
 	"storage": "config.storage_readonly",
 	"cache":   "config.cache_readonly",
