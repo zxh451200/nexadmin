@@ -255,6 +255,9 @@ crm:
   external_invalid: External source and customer number must be provided together
   external_taken: This external customer number is already bound to another customer
   duplicate_customer: A customer with the same phone / tax number already exists; check for duplicates first.
+  pool_taken: This customer has just been claimed by someone else; refresh and try again.
+  merge_ids_required: Merging requires both a target and a source customer.
+  merge_self: A customer cannot be merged into itself.
   export_too_many: Export exceeds the 10000-row limit; narrow the filters.
   country_invalid: Country must be a 2-letter ISO 3166-1 alpha-2 code (e.g. CN, US)
   nationality_invalid: Nationality must be a 2-letter ISO 3166-1 alpha-2 code (e.g. CN, US)

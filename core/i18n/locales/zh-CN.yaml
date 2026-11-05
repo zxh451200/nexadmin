@@ -255,6 +255,9 @@ crm:
   external_invalid: 外部来源与客户编号需同时填写
   external_taken: 该外部编号已绑定其他客户
   duplicate_customer: 已存在同手机号 / 同信用代码的客户，请先查重再录入
+  pool_taken: 这个客户刚被别人领取了，刷新后再试
+  merge_ids_required: 合并需要选择主客户与被并客户
+  merge_self: 不能把客户合并进它自己
   export_too_many: 导出超过 10000 行上限，请缩小筛选范围
   country_invalid: 国家/地区代码需为 2 位字母（ISO 3166-1 alpha-2，如 CN、US）
   nationality_invalid: 国籍代码需为 2 位字母（ISO 3166-1 alpha-2，如 CN、US）
