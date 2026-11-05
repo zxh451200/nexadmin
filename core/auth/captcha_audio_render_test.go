@@ -2,7 +2,9 @@ package auth
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/binary"
+	"fmt"
 	"testing"
 )
 
@@ -105,6 +107,41 @@ func TestComposedAudioGapJitterBounded(t *testing.T) {
 	if len(seen) < 2 {
 		t.Errorf("200 个 key 只得到 %d 档停顿——抖动没生效，字典攻击回来了", len(seen))
 	}
+}
+
+// TestComposedAudioDefeatsHashSet 把「离线哈希字典不可行」这句话钉成可计算的界：
+// 一串答案的音频由「位数 + 1」段停顿决定（数字之间各一段、两遍之间一段），每段 audioGapLevels 档，
+// 所以同一条答案能合成出 audioGapLevels^(位数+1) 种逐字节不同的音频——想靠「存好每种音频的哈希」
+// 免听认题，就得为每条答案预存这一整份集合。
+// 这里用真 key 采样：既要求档位算出的状态空间够大（把 audioGapLevels 调成 1 会当场红），
+// 也要求采样到的整串哈希远离「只有几种」（抖动只写在注释里、没进音频时会红）。
+func TestComposedAudioDefeatsHashSet(t *testing.T) {
+	const answer = "427193"
+	gaps := len(answer) + 1
+	space := 1
+	for i := 0; i < gaps; i++ {
+		space *= audioGapLevels
+	}
+	if space < 1000 {
+		t.Fatalf("答案 %q 的音频状态空间只有 %d（%d 档 × %d 段停顿）：档位太少，整串哈希字典可行",
+			answer, space, audioGapLevels, gaps)
+	}
+	const samples = 300
+	seen := map[string]bool{}
+	for i := 0; i < samples; i++ {
+		b, err := renderCaptchaAudio(fmt.Sprintf("cap-%d-%d", i, audioSampleRate), answer, "zh-CN")
+		if err != nil {
+			t.Fatal(err)
+		}
+		seen[fmt.Sprintf("%x", sha256.Sum256(b))] = true
+	}
+	// 300 次抽样落在 16384 份空间上，期望接近「每份都不同」；下界给得很松，
+	// 但只要抖动退化（档数变少或没进音频）就会跌破。
+	if len(seen) < samples/3 {
+		t.Errorf("%d 个 key 只产出 %d 种不同音频：同一答案的哈希集合太小，字典攻击可行", samples, len(seen))
+	}
+	t.Logf("答案 %q：%d 档^%d 段 = %d 种可区分音频，%d 次采样得到 %d 种不同整串哈希",
+		answer, audioGapLevels, gaps, space, samples, len(seen))
 }
 
 func mustEmbed(t *testing.T, name string) []byte {
