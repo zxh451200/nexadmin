@@ -20,8 +20,11 @@ package main
 // 两类收口都在判：单条写路由挂 core.RequirePlatform()（共享配置表，见 platWriteLedgerRoutes），
 // 以及整个后台挂 core.RequirePlatformFeature()（表里没有 tenant_id 的插件，读也是泄露，
 // 见 platPluginWideGates——后端分组与前端 platform: true 两张脸都要在）。
-// 还没收口的插件（devicehub）进挂账：它的表同样一张 tenant_id 都没有，
-// 「平台自有」还是「下一个要按租户切开的洞」需要它自己的产品决定——挂账命中数为 0 时会报错，是账不是豁免。
+// 三类登记都要有人：单条写路由清单（platWriteLedgerRoutes）、整组收口台账
+// （platPluginWideGates：表装的是客户数据，读也泄露，所以整个后台只认平台调用方）、
+// 以及挂账（platSharedPendingPlugins，写明「平台自有」还是「待决定」的理由）。
+// 挂账现在是空的——devicehub 已随 im / website 一起整组收口；空不等于放松：
+// 新插件带 PlatformModel 表就必须进三者之一，三者都不选就红，挂账条目不再命中同样报错（是账不是豁免）。
 
 import (
 	"os"
