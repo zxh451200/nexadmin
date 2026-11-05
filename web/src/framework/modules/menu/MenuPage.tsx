@@ -4,6 +4,7 @@ import { Pencil, Plus, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
+import { PlatformNotice } from '@/framework/components/PlatformNotice'
 import { usePermission } from '@/framework/auth/usePermission'
 import { DictTag } from '@/framework/components/DictTag'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
@@ -23,7 +24,9 @@ function withoutButtons(nodes: SysMenu[]): SysMenu[] {
 
 export default function MenuPage() {
   const { t } = useTranslation()
-  const { has } = usePermission()
+  // 菜单是全局那一棵树（sys_menu 没有 tenant_id）：非平台调用方只能看，不能改；
+  // 删除还会级联清掉别的租户角色上的菜单绑定，所以连拖拽排序一起收。
+  const { has, isPlatform } = usePermission()
   const confirm = useConfirm()
   const { data = [], isLoading } = useMenuTree()
   const del = useDeleteMenu()
@@ -97,7 +100,7 @@ export default function MenuPage() {
     }
   }
 
-  const canDrag = has('menu:update') && !filter.active
+  const canDrag = has('menu:update') && isPlatform && !filter.active
   const sortColumn: Column<SysMenu> = { key: 'sort', title: t('sysMenu.col.sort'), align: 'end', render: (r) => <span className="num">{r.sort}</span> }
 
   const columns: Column<SysMenu>[] = [
@@ -126,11 +129,12 @@ export default function MenuPage() {
   return (
     <PageContainer>
       <PageHeader title={t('sysMenu.menu')} description={t('sysMenu.description')} />
+        <PlatformNotice />
       <SimpleFilterBar filter={filter} placeholder={t('sysMenu.col.title')} typeDict="menu_type" typePlaceholder={t('sysMenu.col.type')} />
       <TreeTable<SysMenu>
         toolbar={
           <Can perm="menu:create">
-            <Button type="button" onClick={() => openCreate(null)}>
+            <Button type="button" disabled={!isPlatform} onClick={() => openCreate(null)}>
               <Plus className="me-2 size-4" aria-hidden="true" />
               {t('sysMenu.action.add')}
             </Button>
@@ -144,7 +148,7 @@ export default function MenuPage() {
         selection={{ selected, onChange: setSelected }}
         batchActions={(ids) => (
           <Can perm="menu:delete">
-            <Button type="button" variant="destructive" size="sm" onClick={() => void onDeleteBatch(ids)}>
+            <Button type="button" variant="destructive" size="sm" disabled={!isPlatform} onClick={() => void onDeleteBatch(ids)}>
               <Trash2 className="me-2 size-4" aria-hidden="true" />
               {t('common.delete')}
             </Button>
@@ -161,18 +165,18 @@ export default function MenuPage() {
           <>
             {row.type !== 'button' && (
               <Can perm="menu:create">
-                <Button type="button" variant="ghost" size="icon" aria-label={t('sysMenu.action.addChild')} onClick={() => openCreate(row.id)}>
+                <Button type="button" variant="ghost" size="icon" aria-label={t('sysMenu.action.addChild')} disabled={!isPlatform} onClick={() => openCreate(row.id)}>
                   <Plus className="size-4" aria-hidden="true" />
                 </Button>
               </Can>
             )}
             <Can perm="menu:update">
-              <Button type="button" variant="ghost" size="icon" aria-label={t('common.edit')} onClick={() => openEdit(row)}>
+              <Button type="button" variant="ghost" size="icon" aria-label={t('common.edit')} disabled={!isPlatform} onClick={() => openEdit(row)}>
                 <Pencil className="size-4" aria-hidden="true" />
               </Button>
             </Can>
             <Can perm="menu:delete">
-              <Button type="button" variant="ghost" size="icon" aria-label={t('common.delete')} onClick={() => onDelete(row)}>
+              <Button type="button" variant="ghost" size="icon" aria-label={t('common.delete')} disabled={!isPlatform} onClick={() => onDelete(row)}>
                 <Trash2 className="size-4 text-destructive" aria-hidden="true" />
               </Button>
             </Can>

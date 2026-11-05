@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
+import { usePermission } from '@/framework/auth/usePermission'
 import { FormGrid, FormGridFull, FormLayout } from '@/framework/components/FormLayout'
 import { DictSelect } from '@/framework/components/DictSelect'
 import { TreeSelect } from '@/framework/components/TreeSelect'
@@ -57,6 +58,8 @@ function collectIds(node: SysMenu, out: Set<string> = new Set()) {
 
 export function MenuFormDialog({ open, onOpenChange, editing, defaultParentId, tree }: MenuFormDialogProps) {
   const { t } = useTranslation()
+  // 这一页写的都是没有 tenant_id 的全局行：非平台调用方只读（后端 core.RequirePlatform() 挡）。
+  const { isPlatform } = usePermission()
   const create = useCreateMenu()
   const update = useUpdateMenu()
   const tr = (s: string) => t(s, { defaultValue: s })
@@ -198,7 +201,7 @@ export function MenuFormDialog({ open, onOpenChange, editing, defaultParentId, t
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             {t('common.cancel')}
           </Button>
-          <Button type="submit" form={formId} disabled={pending}>
+          <Button type="submit" form={formId} disabled={!isPlatform || pending}>
             {t('common.save')}
           </Button>
         </>

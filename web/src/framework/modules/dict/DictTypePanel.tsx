@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { z } from 'zod'
 import { Can } from '@/framework/auth/Can'
+import { PlatformNotice } from '@/framework/components/PlatformNotice'
 import { usePermission } from '@/framework/auth/usePermission'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
@@ -53,7 +54,8 @@ interface Props {
 
 export function DictTypePanel({ selectedId, onSelect, onDeleted }: Props) {
   const { t } = useTranslation()
-  const { has } = usePermission()
+  // 字典类型与字典项都是全局行（sys_dict_* 没有 tenant_id）：非平台调用方只读。
+  const { has, isPlatform } = usePermission()
   const confirm = useConfirm()
   const [input, setInput] = useState('')
   const [keyword, setKeyword] = useState('')
@@ -143,6 +145,7 @@ export function DictTypePanel({ selectedId, onSelect, onDeleted }: Props) {
 
   return (
     <section className="flex min-w-0 flex-col gap-3" aria-label={t('dict.type.title')}>
+      <PlatformNotice />
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-base font-semibold text-foreground">{t('dict.type.title')}</h2>
         <div className="flex shrink-0 items-center gap-2">
@@ -162,7 +165,7 @@ export function DictTypePanel({ selectedId, onSelect, onDeleted }: Props) {
             ]}
           />
           <Can perm="dict:create">
-            <Button type="button" size="sm" onClick={() => openForm(null)}>
+            <Button type="button" size="sm" disabled={!isPlatform} onClick={() => openForm(null)}>
               <Plus className="me-1 h-4 w-4" aria-hidden="true" />
               {t('common.add')}
             </Button>
@@ -193,11 +196,11 @@ export function DictTypePanel({ selectedId, onSelect, onDeleted }: Props) {
         loading={isLoading}
         pagination={false}
         onRowClick={onSelect}
-        sortable={keyword || !has('dict:update') ? undefined : { onReorder: (ids) => sort.mutateAsync(ids) }}
+        sortable={keyword || !has('dict:update') || !isPlatform ? undefined : { onReorder: (ids) => sort.mutateAsync(ids) }}
         selection={{ selected, onChange: setSelected }}
         batchActions={(ids) => (
           <Can perm="dict:delete">
-            <Button type="button" variant="destructive" size="sm" onClick={() => void removeBatch(ids)}>
+            <Button type="button" variant="destructive" size="sm" disabled={!isPlatform} onClick={() => void removeBatch(ids)}>
               <Trash2 className="me-1 h-4 w-4" aria-hidden="true" />
               {t('common.delete')}
             </Button>
@@ -206,13 +209,13 @@ export function DictTypePanel({ selectedId, onSelect, onDeleted }: Props) {
         rowActions={(row) => (
           <>
             <Can perm="dict:update">
-              <Button type="button" variant="ghost" size="icon" aria-label={t('common.edit')} onClick={() => openForm(row)}>
+              <Button type="button" variant="ghost" size="icon" aria-label={t('common.edit')} disabled={!isPlatform} onClick={() => openForm(row)}>
                 <Pencil className="h-4 w-4" aria-hidden="true" />
               </Button>
             </Can>
             {!row.builtin && (
               <Can perm="dict:delete">
-                <Button type="button" variant="ghost" size="icon" aria-label={t('common.delete')} onClick={() => remove(row)}>
+                <Button type="button" variant="ghost" size="icon" aria-label={t('common.delete')} disabled={!isPlatform} onClick={() => remove(row)}>
                   <Trash2 className="h-4 w-4 text-destructive" aria-hidden="true" />
                 </Button>
               </Can>
@@ -230,7 +233,7 @@ export function DictTypePanel({ selectedId, onSelect, onDeleted }: Props) {
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               {t('common.cancel')}
             </Button>
-            <Button type="submit" form="dict-type-form" disabled={save.isPending}>
+            <Button type="submit" form="dict-type-form" disabled={!isPlatform || save.isPending}>
               {t('common.save')}
             </Button>
           </>

@@ -10,6 +10,8 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { Can } from '@/framework/auth/Can'
+import { PlatformNotice } from '@/framework/components/PlatformNotice'
+import { usePermission } from '@/framework/auth/usePermission'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
@@ -60,6 +62,7 @@ function rowError(r: LanguageRow, rows: LanguageRow[], index: number, dupMsg: st
  */
 export function LanguageSection() {
   const { t } = useTranslation()
+  const { isPlatform } = usePermission()
   const confirm = useConfirm()
   const { data, isLoading } = useAdminLanguages()
   const save = useSaveLanguages()
@@ -190,6 +193,7 @@ export function LanguageSection() {
 
   return (
     <div className="flex flex-col gap-3">
+      <PlatformNotice />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-muted-foreground">{t('language.desc')}</p>
         <Can perm="language:update">
@@ -198,7 +202,7 @@ export function LanguageSection() {
               <Plus aria-hidden="true" />
               {t('language.add')}
             </Button>
-            <Button type="button" onClick={() => void submit()} disabled={save.isPending || !dirty}>
+            <Button type="button" onClick={() => void submit()} disabled={!isPlatform || save.isPending || !dirty}>
               {t('common.save')}
             </Button>
           </div>

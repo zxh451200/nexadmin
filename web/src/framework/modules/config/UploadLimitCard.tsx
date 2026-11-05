@@ -6,6 +6,8 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { z } from 'zod'
 import { Can } from '@/framework/auth/Can'
+import { PlatformNotice } from '@/framework/components/PlatformNotice'
+import { usePermission } from '@/framework/auth/usePermission'
 import { FormGrid, FormGridFull, FormLayout } from '@/framework/components/FormLayout'
 import { SwitchField } from '@/framework/components/SwitchField'
 import { RemoteSelect } from '@/framework/components/RemoteSelect'
@@ -30,6 +32,8 @@ const show = (n: number) => (n > 0 ? String(n) : '')
 
 export function UploadLimitCard() {
   const { t } = useTranslation()
+  // 这一页写的都是没有 tenant_id 的全局行：非平台调用方只读（后端 core.RequirePlatform() 挡）。
+  const { isPlatform } = usePermission()
   const { data } = useUploadSettings()
   const save = useSaveUploadSettings()
   const form = useForm<FormValues>({
@@ -90,6 +94,7 @@ export function UploadLimitCard() {
         <CardDescription>{t('sysConfig.upload.description')}</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
+        <PlatformNotice />
         {unlimited ? (
           // 这是“能保存但风险高”的提醒，用 warning（琥珀）而不是 destructive（红）：
           // 红色在后台里代表错误/阻断，会让用户以为不限制就存不了。
@@ -132,7 +137,7 @@ export function UploadLimitCard() {
             </FormGrid>
             <Can perm="config:update">
               <div>
-                <Button type="submit" disabled={save.isPending}>
+                <Button type="submit" disabled={!isPlatform || save.isPending}>
                   {t('common.save')}
                 </Button>
               </div>

@@ -54,10 +54,11 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 		d.OnClose(func() { close(stop) })
 	}
 	go monitorsnap.Loop(stop, store, monitorsnap.KindCache, m.metrics, d.Log)
-	r.GET("/monitor/cache", core.Perm(PermList), func(c *gin.Context) {
+	// 同 servermonitor：缓存命中率与内存占用是整个部署的，不是本租户的（sys_monitor_snapshot 无 tenant_id）。
+	r.GET("/monitor/cache", core.Perm(PermList), core.RequirePlatformFeature(), func(c *gin.Context) {
 		response.OK(c, m.snapshot(c.Request.Context()))
 	})
-	r.GET("/monitor/cache/history", core.Perm(PermList), monitorsnap.HandleHistory(store, monitorsnap.KindCache))
+	r.GET("/monitor/cache/history", core.Perm(PermList), core.RequirePlatformFeature(), monitorsnap.HandleHistory(store, monitorsnap.KindCache))
 }
 
 // metrics 是给历史落库用的扁平采样：memory 驱动没有键数与命中率，只落进程内存，

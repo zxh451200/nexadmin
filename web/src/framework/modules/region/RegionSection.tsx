@@ -3,6 +3,8 @@ import { ChevronDown, ChevronRight, Eye, FileUp, History, Loader2, RefreshCw, Ro
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
+import { PlatformNotice } from '@/framework/components/PlatformNotice'
+import { usePermission } from '@/framework/auth/usePermission'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { EmptyState } from '@/framework/components/EmptyState'
 import { RequiredMark } from '@/framework/components/RequiredMark'
@@ -38,6 +40,8 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 /** 系统设置 → 省市区数据：显示当前数据版本，可从数据源重新同步或恢复内置数据 */
 export function RegionSection() {
   const { t } = useTranslation()
+  // 区划快照是全局那一份（sys_region_snapshot 没有 tenant_id）：换掉它，所有人的地址选择器都跟着变。
+  const { isPlatform } = usePermission()
   const confirm = useConfirm()
   const { data, isLoading } = useRegionStatus()
   const sync = useSyncRegion()
@@ -121,6 +125,7 @@ export function RegionSection() {
   return (
     <div className="flex flex-col gap-3">
       <p className="text-sm text-muted-foreground">{t('region.desc')}</p>
+        <PlatformNotice />
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
@@ -161,7 +166,7 @@ export function RegionSection() {
         </CardContent>
         <CardFooter className="flex flex-wrap gap-2">
           <Can perm="region:sync">
-            <Button type="button" variant="outline" disabled={syncing || preview.isPending || sync.isPending || !source.trim()} onClick={() => void runPreview()}>
+            <Button type="button" variant="outline" disabled={!isPlatform || syncing || preview.isPending || sync.isPending || !source.trim()} onClick={() => void runPreview()}>
               {preview.isPending ? (
                 <Loader2 className="me-2 size-4 animate-spin" aria-hidden="true" />
               ) : (
@@ -169,7 +174,7 @@ export function RegionSection() {
               )}
               {t('region.preview')}
             </Button>
-            <Button type="button" disabled={syncing || sync.isPending || !source.trim()} onClick={() => void runSync()}>
+            <Button type="button" disabled={!isPlatform || syncing || sync.isPending || !source.trim()} onClick={() => void runSync()}>
               {syncing || sync.isPending ? (
                 <Loader2 className="me-2 size-4 animate-spin" aria-hidden="true" />
               ) : (
@@ -193,7 +198,7 @@ export function RegionSection() {
                 if (uploadRef.current) uploadRef.current.value = ''
               }}
             />
-            <Button type="button" variant="outline" disabled={importFile.isPending} onClick={() => uploadRef.current?.click()}>
+            <Button type="button" variant="outline" disabled={!isPlatform || importFile.isPending} onClick={() => uploadRef.current?.click()}>
               {importFile.isPending ? (
                 <Loader2 className="me-2 size-4 animate-spin" aria-hidden="true" />
               ) : (
@@ -201,7 +206,7 @@ export function RegionSection() {
               )}
               {t('region.upload')}
             </Button>
-            <Button type="button" variant="outline" disabled={reset.isPending || data.builtin} onClick={() => void runReset()}>
+            <Button type="button" variant="outline" disabled={!isPlatform || reset.isPending || data.builtin} onClick={() => void runReset()}>
               <RotateCcw className="me-2 size-4" aria-hidden="true" />
               {t('region.reset')}
             </Button>
@@ -226,7 +231,7 @@ export function RegionSection() {
               {t('common.cancel')}
             </Button>
             <Can perm="region:sync">
-              <Button type="button" onClick={() => { setPreviewRes(null); void runSync() }}>
+              <Button type="button" disabled={!isPlatform} onClick={() => { setPreviewRes(null); void runSync() }}>
                 <RefreshCw className="me-2 size-4" aria-hidden="true" />
                 {t('region.sync')}
               </Button>
@@ -247,6 +252,8 @@ export function RegionSection() {
 /** 版本历史：每次覆盖保存前留下的快照，可看摘要、可回滚（回滚再走一次校验，版本继续递增） */
 function RegionVersionsDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { t, i18n } = useTranslation()
+  // 回滚写的是全局那一份区划数据，与主面板同一条判据。
+  const { isPlatform } = usePermission()
   const confirm = useConfirm()
   const versions = useRegionVersions(open)
   const rollback = useRollbackRegionVersion()
@@ -300,7 +307,7 @@ function RegionVersionsDialog({ open, onClose }: { open: boolean; onClose: () =>
                 )}
                 {t('region.versionSummary')}
               </Button>
-              <Button type="button" variant="outline" size="sm" disabled={rollback.isPending} onClick={() => void onRollback(v)}>
+              <Button type="button" variant="outline" size="sm" disabled={!isPlatform || rollback.isPending} onClick={() => void onRollback(v)}>
                 <Undo2 className="me-1 size-4" aria-hidden="true" />
                 {t('region.rollbackVersion')}
               </Button>

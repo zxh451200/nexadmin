@@ -3,6 +3,8 @@ import { Plug } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { api } from '@/framework/request/http'
+import { PlatformNotice } from '@/framework/components/PlatformNotice'
+import { usePermission } from '@/framework/auth/usePermission'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Card } from '@/framework/ui/card'
@@ -34,6 +36,8 @@ interface LdapConfig {
 /** LDAP/AD 配置：作为「系统设置 → 安全与登录」的一个分区渲染，旧地址 /ldap/config 重定向到 ?tab=ldap。 */
 export function LdapSection() {
   const { t } = useTranslation()
+  // 这一页写的都是没有 tenant_id 的全局行：非平台调用方只读（后端 core.RequirePlatform() 挡）。
+  const { isPlatform } = usePermission()
   const qc = useQueryClient()
   const config = useQuery({ queryKey: ['ldap', 'config'], queryFn: () => api.get<LdapConfig>('/plugins/ldap/config') })
   const [form, setForm] = useState<Partial<LdapConfig>>({})
@@ -60,6 +64,7 @@ export function LdapSection() {
 
   return (
     <Card className="max-w-lg space-y-3 p-6">
+      <PlatformNotice />
       <div className="flex items-center gap-2">
         <Plug className="size-5 text-muted-foreground" aria-hidden="true" />
         <span className="text-sm font-medium">{t('plugin_ldap.enabled')}</span>
@@ -121,10 +126,10 @@ export function LdapSection() {
         </label>
       </div>
       <div className="flex gap-2">
-        <Button onClick={() => save.mutate()} disabled={save.isPending}>
+        <Button onClick={() => save.mutate()} disabled={!isPlatform || save.isPending}>
           {t('common.save')}
         </Button>
-        <Button variant="outline" onClick={() => test.mutate()} disabled={test.isPending}>
+        <Button variant="outline" onClick={() => test.mutate()} disabled={!isPlatform || test.isPending}>
           {t('plugin_ldap.test')}
         </Button>
         <Badge variant={cur.enabled ? 'success' : 'secondary'}>{cur.enabled ? t('plugin_ldap.on') : t('plugin_ldap.off')}</Badge>

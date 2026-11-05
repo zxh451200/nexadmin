@@ -38,10 +38,13 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 		d.OnClose(func() { close(stop) })
 	}
 	go monitorsnap.Loop(stop, store, monitorsnap.KindServer, s.metrics, d.Log)
-	r.GET("/monitor/server", core.Perm(PermList), func(c *gin.Context) { response.OK(c, s.snapshot()) })
-	r.GET("/monitor/server/history", core.Perm(PermList), monitorsnap.HandleHistory(store, monitorsnap.KindServer))
+	// 快照表 sys_monitor_snapshot 没有 tenant_id，实时值也来自本进程：
+	// 一个租户在这里看到的是整个部署的 CPU、内存、缓存命中与健康度，也就是所有租户的活动量。
+	// 与在线客服 / 官网 / 设备中心同一条判据（表不分租户 → 读也是暴露），控制台只对平台调用方开放。
+	r.GET("/monitor/server", core.Perm(PermList), core.RequirePlatformFeature(), func(c *gin.Context) { response.OK(c, s.snapshot()) })
+	r.GET("/monitor/server/history", core.Perm(PermList), core.RequirePlatformFeature(), monitorsnap.HandleHistory(store, monitorsnap.KindServer))
 	h := &healthRunner{d: d}
-	r.GET("/monitor/health", core.Perm(PermList), func(c *gin.Context) { response.OK(c, h.run(c.Request.Context())) })
+	r.GET("/monitor/health", core.Perm(PermList), core.RequirePlatformFeature(), func(c *gin.Context) { response.OK(c, h.run(c.Request.Context())) })
 	metrics.SetPluginSource(func() []metrics.PluginState {
 		list := plugin.Default().List(context.Background())
 		out := make([]metrics.PluginState, 0, len(list))

@@ -3,6 +3,8 @@ import { RotateCcw, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
+import { PlatformNotice } from '@/framework/components/PlatformNotice'
+import { usePermission } from '@/framework/auth/usePermission'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable } from '@/framework/components/DataTable'
 import { DatePicker } from '@/framework/components/DatePicker'
@@ -31,6 +33,11 @@ const ALL = 'all'
 
 export default function RecyclePage() {
   const { t, i18n } = useTranslation()
+  // 字典类型 / 字典项没有 tenant_id：还原与彻底删除动的是全局行，后端按调用方挡（modules/recycle/service.go 的 guardPlatform），这里同口径置灰；
+  // 用户 / 角色 / 公告那几类仍按租户归属，照常可操作。
+  const { isPlatform } = usePermission()
+  const dictRow = (r: { type: string }) => r.type === 'dictType' || r.type === 'dictData'
+  const blocked = (rows: { type: string }[]) => !isPlatform && rows.some(dictRow)
   const confirm = useConfirm()
   const [draft, setDraft] = useState('')
   const [keyword, setKeyword] = useState('')
@@ -126,6 +133,7 @@ export default function RecyclePage() {
   return (
     <PageContainer>
       <PageHeader title={t('recycle.menu')} description={t('recycle.description')} />
+        <PlatformNotice />
       <FilterBar
         onSearch={() => {
           setKeyword(draft.trim())
@@ -194,13 +202,13 @@ export default function RecyclePage() {
         batchActions={(_ids) => (
           <>
             <Can perm="recycle:restore">
-              <Button type="button" variant="outline" size="sm" onClick={() => void onRestoreBatch(selectedRows)}>
+              <Button type="button" variant="outline" size="sm" disabled={blocked(selectedRows)} onClick={() => void onRestoreBatch(selectedRows)}>
                 <RotateCcw className="me-2 size-4" aria-hidden="true" />
                 {t('recycle.action.restore')}
               </Button>
             </Can>
             <Can perm="recycle:delete">
-              <Button type="button" variant="destructive" size="sm" onClick={() => void onPurgeBatch(selectedRows)}>
+              <Button type="button" variant="destructive" size="sm" disabled={blocked(selectedRows)} onClick={() => void onPurgeBatch(selectedRows)}>
                 <Trash2 className="me-2 size-4" aria-hidden="true" />
                 {t('recycle.action.purge')}
               </Button>
@@ -210,12 +218,12 @@ export default function RecyclePage() {
         rowActions={(row) => (
           <div className="flex items-center">
             <Can perm="recycle:restore">
-              <Button type="button" variant="ghost" size="icon" aria-label={t('recycle.action.restore')} onClick={() => onRestore(row)}>
+              <Button type="button" variant="ghost" size="icon" aria-label={t('recycle.action.restore')} disabled={blocked([row])} onClick={() => onRestore(row)}>
                 <RotateCcw className="size-4" aria-hidden="true" />
               </Button>
             </Can>
             <Can perm="recycle:delete">
-              <Button type="button" variant="ghost" size="icon" aria-label={t('recycle.action.purge')} onClick={() => onPurge(row)}>
+              <Button type="button" variant="ghost" size="icon" aria-label={t('recycle.action.purge')} disabled={blocked([row])} onClick={() => onPurge(row)}>
                 <Trash2 className="size-4 text-destructive" aria-hidden="true" />
               </Button>
             </Can>

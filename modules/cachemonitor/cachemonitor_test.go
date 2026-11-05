@@ -15,6 +15,7 @@ import (
 	"nexadmin/core/auth"
 	"nexadmin/core/cache"
 	"nexadmin/core/config"
+	"nexadmin/core/tenant"
 )
 
 func TestParseInfo(t *testing.T) {
@@ -107,7 +108,13 @@ func serve(t *testing.T, cl *auth.Claims) *httptest.ResponseRecorder {
 	e := gin.New()
 	g := e.Group("/api/v1")
 	if cl != nil {
-		g.Use(func(c *gin.Context) { auth.SetClaims(c, cl) })
+		// 监控台按平台级调用方给：module.go 挂了 core.RequirePlatformFeature——
+		// sys_monitor_snapshot 没有 tenant_id，这里读的是整个部署的量，不是本租户的运维数据。
+		// 闸自己由 scripts/contract_check 的台账与 core/platform_test.go 判，不靠这里。
+		g.Use(func(c *gin.Context) {
+			auth.SetClaims(c, cl)
+			c.Request = c.Request.WithContext(tenant.With(c.Request.Context(), tenant.DefaultID))
+		})
 	}
 	cfg := &config.Config{}
 	cfg.Cache = config.Cache{Driver: "memory"}

@@ -6,6 +6,8 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { z } from 'zod'
 import { Can } from '@/framework/auth/Can'
+import { PlatformNotice } from '@/framework/components/PlatformNotice'
+import { usePermission } from '@/framework/auth/usePermission'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { pageAfterDelete } from '@/framework/hooks/page-fallback'
 import { DataTable, type Column } from '@/framework/components/DataTable'
@@ -49,6 +51,8 @@ const ALL = 'all'
 
 export function ParamsSection() {
   const { t } = useTranslation()
+  // 这一页写的都是没有 tenant_id 的全局行：非平台调用方只读（后端 core.RequirePlatform() 挡）。
+  const { isPlatform } = usePermission()
   const confirm = useConfirm()
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
@@ -154,6 +158,7 @@ export function ParamsSection() {
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm text-muted-foreground">{t('sysConfig.description')}</p>
+        <PlatformNotice />
 
       <FilterBar
         onSearch={() => {
@@ -193,13 +198,13 @@ export function ParamsSection() {
         toolbar={
           <>
             <Can perm="config:update">
-              <Button type="button" variant="outline" onClick={refreshCache} disabled={refresh.isPending}>
+              <Button type="button" variant="outline" onClick={refreshCache} disabled={!isPlatform || refresh.isPending}>
                 <RefreshCw className="me-2 h-4 w-4" aria-hidden="true" />
                 {t('sysConfig.refreshCache')}
               </Button>
             </Can>
             <Can perm="config:create">
-              <Button type="button" onClick={() => openForm(null)}>
+              <Button type="button" disabled={!isPlatform} onClick={() => openForm(null)}>
                 <Plus className="me-2 h-4 w-4" aria-hidden="true" />
                 {t('common.add')}
               </Button>
@@ -223,7 +228,7 @@ export function ParamsSection() {
         selection={{ selected, onChange: setSelected }}
         batchActions={(ids) => (
           <Can perm="config:delete">
-            <Button type="button" variant="destructive" size="sm" onClick={() => remove(ids)}>
+            <Button type="button" variant="destructive" size="sm" disabled={!isPlatform} onClick={() => remove(ids)}>
               <Trash2 className="me-1 h-4 w-4" aria-hidden="true" />
               {t('common.delete')}
             </Button>
@@ -232,12 +237,12 @@ export function ParamsSection() {
         rowActions={(row) => (
           <>
             <Can perm="config:update">
-              <Button type="button" variant="ghost" size="icon" aria-label={t('common.edit')} onClick={() => openForm(row)}>
+              <Button type="button" variant="ghost" size="icon" aria-label={t('common.edit')} disabled={!isPlatform} onClick={() => openForm(row)}>
                 <Pencil className="h-4 w-4" aria-hidden="true" />
               </Button>
             </Can>
             <Can perm="config:delete">
-              <Button type="button" variant="ghost" size="icon" aria-label={t('common.delete')} onClick={() => remove([row.id])}>
+              <Button type="button" variant="ghost" size="icon" aria-label={t('common.delete')} disabled={!isPlatform} onClick={() => remove([row.id])}>
                 <Trash2 className="h-4 w-4 text-destructive" aria-hidden="true" />
               </Button>
             </Can>
@@ -254,7 +259,7 @@ export function ParamsSection() {
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               {t('common.cancel')}
             </Button>
-            <Button type="submit" form="sys-config-form" disabled={save.isPending}>
+            <Button type="submit" form="sys-config-form" disabled={!isPlatform || save.isPending}>
               {t('common.save')}
             </Button>
           </>

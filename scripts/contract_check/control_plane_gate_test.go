@@ -82,7 +82,7 @@ var platControlPlaneOtherGuarded = map[string]string{
 	"sys_backup_setting":   "同上：PUT /backups/config 也只认超管",
 	"sys_tenant":           "分组级 middleware.RequireSuper()（modules/system/tenant/module.go）；PUT /tenant-self 钉在自己的租户行上",
 	"sys_tenant_pkg":       "分组级 middleware.RequireSuper()",
-	"sys_monitor_snapshot": "没有 HTTP 写入口，只有三个采样协程在写；读侧（监控历史）是另一条待决的产品线",
+	"sys_monitor_snapshot": "写侧没有 HTTP 入口（三个采样协程在写）；读侧整组收口，见 platConsoleReads——快照与实时值都是整个部署的量",
 	"sys_role_menu":        "关联表：写入口是 PUT /roles/:id/menus（父角色按租户归属）与菜单删除的级联，后者已随 sys_menu 的路由一起挂闸",
 	"sys_role_dept":        "关联表：随 PUT /roles/:id 一起写，父角色按租户归属",
 	"sys_user_role":        "关联表：随用户创建 / 角色分配写，父用户按租户归属，角色归属另有 roleguard",
@@ -95,19 +95,14 @@ var (
 	cpRouteRe       = regexp.MustCompile(`(?m)^[ \t]*([A-Za-z_]\w*)\.(GET|POST|PUT|PATCH|DELETE)\("([^"]*)",`)
 )
 
-// cpRoutes 扫这 8 个文件的路由注册，返回「文件 + 分组变量 + 方法 + 路径 → 整条语句」。
+// cpRoutes 扫台账文件里的路由注册，返回「文件 + 分组变量 + 方法 + 路径 → 整条语句」。
 func cpRoutes(t *testing.T) map[string]string {
 	t.Helper()
-	out := map[string]string{}
+	files := make([]string, 0, len(platControlPlaneWrites))
 	for _, e := range platControlPlaneWrites {
-		src := platRead(t, e.file)
-		for _, loc := range cpRouteRe.FindAllStringSubmatchIndex(src, -1) {
-			group, method, path := src[loc[2]:loc[3]], strings.ToUpper(src[loc[4]:loc[5]]), src[loc[6]:loc[7]]
-			key := e.file + " " + group + " " + method + " " + path
-			out[key] = platStatementAt(src, loc[0])
-		}
+		files = append(files, e.file)
 	}
-	return out
+	return cpScanFiles(t, cpFilesOf(files))
 }
 
 // cpSharedTables 从 DDL 扫出没有 tenant_id 的框架表（mysql 目录为准，三引擎结构由另一道闸核对）。
@@ -134,6 +129,56 @@ func cpSharedTables(t *testing.T) map[string]string {
 		t.Fatal("闸对空跑：DDL 里一张没有 tenant_id 的框架表都没扫到，判据本身失效")
 	}
 	return tables
+}
+
+// platConsoleReads 登记「读也整组收口」的控制台：这类页面的数据表没有 tenant_id，
+// 而读出来的又是整个部署的量（监控快照与实时指标），所以不是「只挡写」而是整组只认平台调用方，
+// 判据与在线客服 / 官网 / 设备中心同一条（core.RequirePlatformFeature）。
+// 两张脸都要在：后端每条 GET 挂中间件，前端路由标 platform: true（否则进页面就是一串 403）。
+var platConsoleReads = []struct {
+	file      string
+	group     string
+	method    string
+	path      string
+	routeFile string
+	why       string
+}{
+	{"modules/servermonitor/module.go", "r", "GET", "/monitor/server", "web/src/framework/modules/server-monitor/route.tsx", "本进程 CPU / 内存 / 磁盘"},
+	{"modules/servermonitor/module.go", "r", "GET", "/monitor/server/history", "web/src/framework/modules/server-monitor/route.tsx", "sys_monitor_snapshot 没有 tenant_id"},
+	{"modules/servermonitor/module.go", "r", "GET", "/monitor/health", "web/src/framework/modules/server-monitor/route.tsx", "整个部署的连通性与凭据配置状态"},
+	{"modules/cachemonitor/module.go", "r", "GET", "/monitor/cache", "web/src/framework/modules/cache-monitor/route.tsx", "共享缓存的命中率与键空间"},
+	{"modules/cachemonitor/module.go", "r", "GET", "/monitor/cache/history", "web/src/framework/modules/cache-monitor/route.tsx", "sys_monitor_snapshot 没有 tenant_id"},
+	{"modules/apimonitor/module.go", "r", "GET", "/monitor/api", "web/src/framework/modules/api-monitor/route.tsx", "全租户混在一起的 QPS / 耗时 / 错误率与逐接口明细"},
+	{"modules/apimonitor/module.go", "r", "GET", "/monitor/api/history", "web/src/framework/modules/api-monitor/route.tsx", "sys_monitor_snapshot 没有 tenant_id"},
+}
+
+// cpScanFiles 扫给定文件里的路由注册，返回「文件 + 分组变量 + 方法 + 路径 → 整条语句」。
+func cpScanFiles(t *testing.T, files []string) map[string]string {
+	t.Helper()
+	out := map[string]string{}
+	for _, rel := range files {
+		src := platRead(t, rel)
+		for _, loc := range cpRouteRe.FindAllStringSubmatchIndex(src, -1) {
+			group, method := src[loc[2]:loc[3]], strings.ToUpper(src[loc[4]:loc[5]])
+			key := rel + " " + group + " " + method + " " + src[loc[6]:loc[7]]
+			out[key] = platStatementAt(src, loc[0])
+		}
+	}
+	return out
+}
+
+// cpFilesOf 从台账里取出涉及的文件清单（去重、排序，保证扫描顺序稳定）。
+func cpFilesOf(files []string) []string {
+	set := map[string]bool{}
+	for _, f := range files {
+		set[f] = true
+	}
+	out := make([]string, 0, len(set))
+	for f := range set {
+		out = append(out, f)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func TestControlPlaneWriteGate(t *testing.T) {
@@ -218,4 +263,70 @@ func TestControlPlaneWriteGate(t *testing.T) {
 	t.Logf("控制面写闸：台账 %d 条路由（覆盖 %d 张全局行）；DDL 扫出无 tenant_id 的框架表 %d 张，"+
 		"其中已有更强闸或无 HTTP 写入口 %d 张、由台账路由一并写 %d 张；回收站与设置页凭据两处第二入口已核对",
 		len(platControlPlaneWrites), len(covered), len(shared), len(platControlPlaneOtherGuarded), len(platControlPlaneSharedBy))
+}
+
+// TestConsoleReadGate 判「读也整组收口」的那三个监控台：后端每条 GET 挂
+// core.RequirePlatformFeature()，前端路由标 platform: true。两张脸缺任一张都会红——
+// 只挂后端不标前端，租户进页面是一串 403；只标前端不挂后端，界面好看但数据照样泄露。
+func TestConsoleReadGate(t *testing.T) {
+	files := make([]string, 0, len(platConsoleReads))
+	for _, e := range platConsoleReads {
+		files = append(files, e.file)
+	}
+	routes := cpScanFiles(t, cpFilesOf(files))
+	if len(routes) == 0 {
+		t.Fatal("闸对空跑：监控模块里一条路由都没扫到")
+	}
+	byRouteFile := map[string]int{}
+	for _, e := range platConsoleReads {
+		key := e.file + " " + e.group + " " + e.method + " " + e.path
+		stmt, ok := routes[key]
+		if !ok {
+			t.Errorf("整组收口台账漂移：route_missing %s %s @%s（登记的路由在源码里找不到了）", e.method, e.path, e.file)
+			continue
+		}
+		if !strings.Contains(stmt, "core.RequirePlatformFeature()") {
+			t.Errorf("监控台读入口没整组收口：%s %s @%s（%s——快照表没有 tenant_id，读的是整个部署的量）",
+				e.method, e.path, e.file, e.why)
+		}
+		byRouteFile[e.routeFile]++
+	}
+	// 一个监控页可能同时打几条后端接口（实时 + 历史 + 健康），所以这里不比条数对等，
+	// 只要求该路由文件里的每条路由都标了 platform: true。
+	for routeFile := range byRouteFile {
+		src := platRead(t, routeFile)
+		perms := len(regexp.MustCompile(`(?m)^\s*perm:`).FindAllString(src, -1))
+		// 行尾要容 \r：Windows 检出会把 .tsx 变成 CRLF，用 $ 直接锚死会在新克隆 / 新 worktree 上
+		// 误报「没标 platform」（core/testdata 的 golden 当年就是同一个坑，见 AGENTS.md 第 3 节）。
+		marked := len(regexp.MustCompile(`(?m)^\s*platform: true,\r?$`).FindAllString(src, -1))
+		if perms == 0 {
+			t.Errorf("%s 一条 perm 都没扫到：判定基础变了", routeFile)
+		}
+		if marked != perms {
+			t.Errorf("%s 有 %d 条路由、只有 %d 条标了 platform: true：后端挡住读之后，没标的页面就是发一串必然 403 的请求",
+				routeFile, perms, marked)
+		}
+	}
+	// 控制面页面收成只读的那张脸：这些页面的写按钮必须按 isPlatform 置灰，
+	// 否则租户管理员一路点到 403 才知道自己动不了全局行。
+	for _, page := range []string{
+		"web/src/framework/modules/config/SysConfigPage.tsx",
+		"web/src/framework/modules/config/UploadLimitCard.tsx",
+		"web/src/framework/modules/settings/SectionCard.tsx",
+		"web/src/framework/modules/menu/MenuPage.tsx",
+		"web/src/framework/modules/dict/DictTypePanel.tsx",
+		"web/src/framework/modules/dict/DictDataPanel.tsx",
+		"web/src/framework/modules/language/LanguagePage.tsx",
+		"web/src/framework/modules/region/RegionSection.tsx",
+		"web/src/framework/modules/recycle/RecyclePage.tsx",
+		"web/src/plugins/ldap/LdapPage.tsx",
+		"web/src/plugins/maps/MapSettingsPage.tsx",
+		"web/src/plugins/media/VideoTab.tsx",
+	} {
+		src := platRead(t, page)
+		if !strings.Contains(src, "isPlatform") {
+			t.Errorf("%s 没有按 isPlatform 收写入口：后端挂闸、界面照旧，租户管理员只会反复点同一个 403", page)
+		}
+	}
+	t.Logf("整组收口的读入口 %d 条（3 个监控台）；控制面只读页 %d 个已核对", len(platConsoleReads), 12)
 }

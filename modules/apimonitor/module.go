@@ -44,12 +44,13 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 		s := apistat.Default.Snapshot()
 		return monitorsnap.Metrics{"qps": s.QPS, "avgMs": s.AvgMs, "errorRate": s.ErrorRate}
 	}, d.Log)
-	r.GET("/monitor/api", core.Perm(PermList), func(c *gin.Context) {
+	// 同 servermonitor：QPS / 平均耗时 / 错误率是全租户请求混在一起的量，发给单个租户就是把它人的活动量告诉他。
+	r.GET("/monitor/api", core.Perm(PermList), core.RequirePlatformFeature(), func(c *gin.Context) {
 		s := apistat.Default.Snapshot()
 		if s.APIs == nil {
 			s.APIs = []apistat.Stat{}
 		}
 		response.OK(c, snapshot{TS: time.Now().UnixMilli(), QPS: s.QPS, AvgMs: s.AvgMs, ErrorRate: s.ErrorRate, APIs: s.APIs})
 	})
-	r.GET("/monitor/api/history", core.Perm(PermList), monitorsnap.HandleHistory(store, monitorsnap.KindAPI))
+	r.GET("/monitor/api/history", core.Perm(PermList), core.RequirePlatformFeature(), monitorsnap.HandleHistory(store, monitorsnap.KindAPI))
 }

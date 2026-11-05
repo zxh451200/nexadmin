@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { useQueryClient } from '@tanstack/react-query'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
+import { PlatformNotice } from '@/framework/components/PlatformNotice'
+import { usePermission } from '@/framework/auth/usePermission'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { RequiredMark } from '@/framework/components/RequiredMark'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
@@ -23,6 +25,8 @@ const PAGE_SIZE = 10
 
 export function VideoTab() {
   const { t } = useTranslation()
+  // 这一页写的都是没有 tenant_id 的全局行：非平台调用方只读（后端 core.RequirePlatform() 挡）。
+  const { isPlatform } = usePermission()
   const qc = useQueryClient()
   const confirm = useConfirm()
   const cfg = useVideoConfig()
@@ -173,6 +177,7 @@ export function VideoTab() {
           <CardDescription>{t('plugin_media.video.configDesc')}</CardDescription>
         </CardHeader>
         <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <PlatformNotice />
           <div className="md:col-span-2">
             <SwitchRow bare label={t('plugin_media.video.enabled')} checked={form.enabled} onCheckedChange={(v) => setForm((f) => ({ ...f, enabled: v }))} />
           </div>
@@ -214,7 +219,7 @@ export function VideoTab() {
             </>
           ) : null}
           <div className="md:col-span-2">
-            <Button onClick={() => void onSaveConfig()} disabled={save.isPending}>
+            <Button onClick={() => void onSaveConfig()} disabled={!isPlatform || save.isPending}>
               {t('common.save')}
             </Button>
           </div>

@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { LocationField, type GeoPoint } from '@/framework/map'
+import { PlatformNotice } from '@/framework/components/PlatformNotice'
+import { usePermission } from '@/framework/auth/usePermission'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/framework/ui/card'
@@ -21,6 +23,8 @@ const ORDER: MapProviderId[] = ['amap', 'baidu', 'google']
 /** 地图服务：作为「系统设置 → 存储与集成」的一个分区渲染，旧地址 /system/map 重定向到 ?tab=maps。 */
 export function MapSection() {
   const { t } = useTranslation()
+  // 这一页写的都是没有 tenant_id 的全局行：非平台调用方只读（后端 core.RequirePlatform() 挡）。
+  const { isPlatform } = usePermission()
   const cfg = useMapsConfig()
   const save = useSaveMapsConfig()
   const [form, setForm] = useState<MapsConfigInput>(EMPTY)
@@ -55,6 +59,7 @@ export function MapSection() {
           <CardDescription>{t('plugin_maps.configDesc')}</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-6">
+          <PlatformNotice />
           {ORDER.map((id) => {
             const pv = cfg.data?.[id]
             return (
@@ -88,7 +93,7 @@ export function MapSection() {
             )
           })}
           <div>
-            <Button onClick={() => void submit()} disabled={save.isPending}>
+            <Button onClick={() => void submit()} disabled={!isPlatform || save.isPending}>
               {t('common.save')}
             </Button>
           </div>

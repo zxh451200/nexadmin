@@ -6,6 +6,8 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import type { ZodTypeAny } from 'zod'
 import { Can } from '@/framework/auth/Can'
+import { PlatformNotice } from '@/framework/components/PlatformNotice'
+import { usePermission } from '@/framework/auth/usePermission'
 import { FormLayout } from '@/framework/components/FormLayout'
 import { Button } from '@/framework/ui/button'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/framework/ui/card'
@@ -26,6 +28,8 @@ interface Props<K extends SectionKey> {
 /** 单个配置块：Card + 表单 + 保存/测试连接 */
 export function SectionCard<K extends SectionKey>({ section, value, schema, testable, children }: Props<K>) {
   const { t } = useTranslation()
+  // sys_setting 整表没有 tenant_id：任何分区都是部署级的一行，非平台调用方只读。
+  const { isPlatform } = usePermission()
   const save = useSaveSection()
   const test = useTestSection()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -67,11 +71,14 @@ export function SectionCard<K extends SectionKey>({ section, value, schema, test
       </CardHeader>
       <Form {...form}>
         <FormLayout id={`settings-${section}`} onSubmit={submit}>
-          <CardContent className="flex flex-col gap-4">{children(form)}</CardContent>
+          <CardContent className="flex flex-col gap-4">
+          <PlatformNotice />
+          {children(form)}
+        </CardContent>
           <CardFooter className="flex flex-col-reverse gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
             <Can perm="settings:update">
               {testable ? (
-                <Button type="button" variant="outline" className="w-full sm:w-auto" disabled={test.isPending} onClick={runTest}>
+                <Button type="button" variant="outline" className="w-full sm:w-auto" disabled={!isPlatform || test.isPending} onClick={runTest}>
                   {test.isPending ? (
                     <Loader2 className="me-2 h-4 w-4 animate-spin" aria-hidden="true" />
                   ) : (
@@ -80,7 +87,7 @@ export function SectionCard<K extends SectionKey>({ section, value, schema, test
                   {t('settings.testConnection')}
                 </Button>
               ) : null}
-              <Button type="submit" className="w-full sm:w-auto" disabled={save.isPending}>
+              <Button type="submit" className="w-full sm:w-auto" disabled={!isPlatform || save.isPending}>
                 {t('common.save')}
               </Button>
             </Can>

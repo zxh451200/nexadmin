@@ -80,15 +80,17 @@ var platPluginWideGates = []struct {
 		"会话/消息/附件/快捷回复/设置五张表都没有 tenant_id，convFilter 里没有任何租户谓词"},
 	{"website", "plugins/website/plugin.go", "/plugins/website", "web/src/plugins/website/route.tsx",
 		"内容与访客留言都没有 tenant_id，官网代表部署主体而不是某个租户"},
+	{"devicehub", "plugins/devicehub/handler.go", "/plugins/devicehub", "web/src/plugins/devicehub/route.tsx",
+		"设备/测点/读数/指令/告警七张表都没有 tenant_id，devicehub:control 还能对别人的设备下发指令"},
 }
 
 // platSharedPendingPlugins 登记「有 PlatformModel 表但既没挂闸也没整组收口」的插件，逐条写原因。
 // 这些插件不在本闸判定范围（要各自的产品决定），但必须留名——静默漏过才是这条闸存在的理由。
+// 这张表现在是空的，不等于放松：新插件只要带 PlatformModel 表，就必须进写闸清单、进整组台账，
+// 或者在这里写明理由，三者都不选就红。挂账项若不再对应真实表同样报错（豁免不许烂在列表里）。
 var platSharedPendingPlugins = []struct {
 	plugin, reason string
-}{
-	{"devicehub", "设备台账/点位/读数为单租户垂直场景设计，无 tenant_id；该插件本会话在别人在途域，只登记不代修"},
-}
+}{}
 
 // platSharedErrKey / platFeatureErrKey 是两种平台闸各回的错误 key（core/router.go），双语都要有：
 // 前者是「这一行大家共用，轮不到你改」，后者是「这张表根本不分租户，整个后台不对你开放」——
@@ -310,7 +312,8 @@ func TestPlatformWriteGate(t *testing.T) {
 		routeSrc := platRead(t, w.routeFile)
 		// 只数真属性行：注释里也可能写 platform: true，strings.Count 会把说明当成登记。
 		perms := len(regexp.MustCompile(`(?m)^\s*perm:`).FindAllString(routeSrc, -1))
-		marked := len(regexp.MustCompile(`(?m)^\s*platform: true,$`).FindAllString(routeSrc, -1))
+		// 同上：行尾要容 \r，Windows 检出把 .tsx 变成 CRLF，$ 直接锚死会在新克隆上误报「没标」。
+		marked := len(regexp.MustCompile(`(?m)^\s*platform: true,\r?$`).FindAllString(routeSrc, -1))
 		if perms == 0 {
 			t.Errorf("插件 %s 的前端路由表 %s 里一条 perm 都没扫到：判定基础变了", w.plugin, w.routeFile)
 		} else if marked != perms {
@@ -360,6 +363,25 @@ func TestPlatformWriteGate(t *testing.T) {
 	}
 	if !strings.Contains(platRead(t, "core/auth/handler.go"), "u.Platform = u.IsPlatform()") {
 		t.Error("normalize() 没填 Platform：登录与 /auth/me 都走它，漏了就等于载荷里永远没有这个字段")
+	}
+
+	// 4b. 判据单源：四个消费方都必须调 tenant.IsPlatformCallerID，不许就地重写
+	//     `Super || tid == DefaultID`——重写一份就会各自漂移，而通知侧那一处最容易漏
+	//     （漏了就是给别的租户发一封点进去只有解释页的死信）。
+	for _, consumer := range []struct {
+		file string
+		what string
+	}{
+		{"core/router.go", "中间件按请求挡"},
+		{"core/auth/auth.go", "随会话给到前端"},
+		{"plugins/im/notify.go", "客服站内信的收件人筛选"},
+		{"plugins/website/notify.go", "官网留言的收件人筛选"},
+	} {
+		src := platRead(t, consumer.file)
+		if !strings.Contains(src, "tenant.IsPlatformCallerID(") {
+			t.Errorf("平台判据没有单源：%s 里没有调 tenant.IsPlatformCallerID（它是%s的那一处消费方，就地重写就会和中间件分家）",
+				consumer.file, consumer.what)
+		}
 	}
 
 	// 5. 前端那张脸：会话判据三处都要认，路由级判据两处都要认。
