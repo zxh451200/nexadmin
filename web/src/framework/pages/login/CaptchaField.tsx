@@ -167,7 +167,9 @@ interface SliderCaptchaProps {
  * 滑块拼图：开源组件 rc-slider-captcha（MIT）负责拖拽交互、动画与状态机，
  * 我们只对接后端契约——`/auth/slider` 发挑战（背景 + 抠块），`/auth/slider/verify`
  * 按「图片像素 x + 轨迹」判真伪。bgSize 传图片原始尺寸，让显示与图片 1:1，
- * 组件给的 x 不用换算就是后端要的坐标；puzzleSize 的 top 用后端的 pieceTop 定孔位行。
+ * 组件给的 x 不用换算就是后端要的坐标；puzzleSize 的 top 用后端的 pieceTop 定孔位行，
+ * height 也必须显式传：库的样式表把拼图写成 height:100%，少了这一项 63px 的方片会被
+ * 拉成整幅背景高（110px），形状对不上孔位，看上去只剩一个被压扁的白框。
  *
  * 库的 bundle 里没有任何 aria/role/tabIndex，也接不了键盘：所以外层只补「组 + 状态播报」
  * 这一层诚实语义，不挂 role="slider"——那会向读屏承诺一个操作不了的控件。
@@ -272,8 +274,8 @@ function SliderCaptcha({ captcha, onRefresh, onToken, onFailed }: SliderCaptchaP
         bgSize={{ width: imgW, height: imgH }}
         puzzleSize={
           captcha
-            ? { width: captcha.pieceWidth ?? 68, top: captcha.pieceTop ?? 0, left: 0 }
-            : { width: 68, top: 0, left: 0 }
+            ? { width: captcha.pieceWidth ?? 63, height: captcha.pieceHeight ?? 63, top: captcha.pieceTop ?? 0, left: 0 }
+            : { width: 63, height: 63, top: 0, left: 0 }
         }
         request={async () => {
           if (!captcha) return new Promise<never>(() => {}) // 挑战未到位先挂起；key 变化会重挂组件

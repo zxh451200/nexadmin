@@ -143,6 +143,20 @@ async function lastVerify(page: Page): Promise<{ x: number; trail: { t: number; 
   )
 }
 
+test('拼图块按图片原始比例渲染，不被拉成整幅背景高', async ({ page }) => {
+  // 为什么钉这条：库的样式表把 .jigsaw-puzzle 写成 height:100%，puzzleSize 只被当成内联样式展开，
+  // 少传 height 就把 63×63 的方片拉成 63×110。横向行程照旧算得对——拖得动、也判得过，
+  // 错的只有画面，tsc/eslint 与其余用例都照不出来，只能直接量渲染盒。
+  await openLogin(page)
+  const natural = await page.evaluate(() => {
+    const img = document.querySelector<HTMLImageElement>('.rc-slider-captcha-jigsaw-puzzle')
+    return img ? ([img.naturalWidth, img.naturalHeight] as const) : null
+  })
+  const box = await page.locator('.rc-slider-captcha-jigsaw-puzzle').boundingBox()
+  if (!natural || !box) throw new Error('找不到拼图块')
+  expect([Math.round(box.width), Math.round(box.height)]).toEqual([...natural])
+})
+
 test('拖到孔位即通过，token 能被登录接口的验证码通道消费', async ({ page }) => {
   const account = await openLogin(page)
   await forceCaptchaEnforced(page, account, 3)
