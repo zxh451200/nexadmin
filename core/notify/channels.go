@@ -118,8 +118,23 @@ func (s *Service) templates() mail.Templates {
 // SendMail 异步按模板给一个邮箱发信（忘记密码验证码、账号通知、安全告警用）。
 // 邮件未配置时同步返回 ErrMailNotConfigured；其余失败只记日志（重试 2 次）。
 func (s *Service) SendMail(ctx context.Context, to, tpl, lang string, d mail.Data) error {
+	return s.SendMailWithAttachments(ctx, to, tpl, lang, d, nil)
+}
+
+// SendMailWithAttachments 同 SendMail，但可携带附件（如报表订阅的 xlsx）。
+// 附件体积在入队前同步校验（pkg/mail 的单附件 / 整封上限）：超限是永久性错误，
+// 重试只会反复撑爆内存，所以直接返回错误并记一条失败发送日志——调用方据返回值
+// 就能知道「这封邮件带不上附件」，不必翻日志或等订阅者投诉没收到报表。
+func (s *Service) SendMailWithAttachments(ctx context.Context, to, tpl, lang string, d mail.Data, atts []mail.Attachment) error {
 	if s == nil {
 		return ErrMailNotConfigured
+	}
+	if err := mail.CheckAttachments(atts); err != nil {
+		if addr, perr := mail.ParseAddress(to); perr == nil {
+			s.emit(ctx, Record{Channel: RecordEmail, Scene: mailScene(tpl), Recipient: addr, Subject: tpl,
+				Status: StatusFail, Err: s.errText(ctx, err)})
+		}
+		return err
 	}
 	st := s.Settings(ctx)
 	if !st.Mail.Configured() {
@@ -139,7 +154,7 @@ func (s *Service) SendMail(ctx context.Context, to, tpl, lang string, d mail.Dat
 	if err != nil {
 		return err
 	}
-	s.enqueue(ctx, "mail:"+tpl, func(ctx context.Context) error { return s.sendTemplate(ctx, st.Mail, addr, tpl, lang, d) },
+	s.enqueue(ctx, "mail:"+tpl, func(ctx context.Context) error { return s.sendTemplate(ctx, st.Mail, addr, tpl, lang, d, atts) },
 		func(ctx context.Context, err error, spent time.Duration) {
 			s.emit(ctx, Record{Channel: RecordEmail, Scene: mailScene(tpl), Recipient: addr, Subject: tpl,
 				Status: statusOf(err), Err: s.errText(ctx, err), Duration: spent})
@@ -147,7 +162,7 @@ func (s *Service) SendMail(ctx context.Context, to, tpl, lang string, d mail.Dat
 	return nil
 }
 
-func (s *Service) sendTemplate(ctx context.Context, ms MailSettings, to, tpl, lang string, d mail.Data) error {
+func (s *Service) sendTemplate(ctx context.Context, ms MailSettings, to, tpl, lang string, d mail.Data, atts []mail.Attachment) error {
 	subject, text, html, err := s.templates().Render(tpl, lang, d)
 	if err != nil {
 		return errors.Join(ErrSkip, err) // 模板本身有问题，重试没有意义
@@ -156,13 +171,19 @@ func (s *Service) sendTemplate(ctx context.Context, ms MailSettings, to, tpl, la
 	if err != nil {
 		return errors.Join(ErrSkip, err)
 	}
-	return c.Send(ctx, mail.Message{To: []string{to}, Subject: subject, Text: text, HTML: html})
+	return c.Send(ctx, mail.Message{To: []string{to}, Subject: subject, Text: text, HTML: html, Attachments: atts})
 }
 
 func (s *Service) deliverEmail(ctx context.Context, _ string, m Msg, to []Recipient) error {
 	st := s.Settings(ctx)
 	if !st.Mail.Configured() {
 		return skip("mail is not configured")
+	}
+	// 附件超限在逐个收件人之前一次判定：不重建整 MIME（内存），也不让 build 里的兜底校验
+	// 拖到 SMTP 会话阶段才失败。这里刻意不包 ErrSkip——发送日志要落成 fail 并带上上限数值，
+	// 「订阅者以为自己在收报表、其实早就没发了」正是要被这条治好的。
+	if err := mail.CheckAttachments(m.Attachments); err != nil {
+		return err
 	}
 	var failed []Recipient
 	var last error
@@ -173,7 +194,7 @@ func (s *Service) deliverEmail(ctx context.Context, _ string, m Msg, to []Recipi
 		}
 		// 标题、正文、称呼都是用户可控文本：只作为模板数据传入，由 html/template 转义。
 		d := mail.Data{SiteName: st.SiteName, Name: r.Name, Title: m.Title, Content: m.Content, Link: m.Link}
-		if err := s.sendTemplate(ctx, st.Mail, r.Email, mail.TplNotice, lang, d); err != nil {
+		if err := s.sendTemplate(ctx, st.Mail, r.Email, mail.TplNotice, lang, d, m.Attachments); err != nil {
 			if errors.Is(err, ErrSkip) {
 				return err
 			}
@@ -271,7 +292,7 @@ func (s *Service) TestMail(ctx context.Context, ms MailSettings, to, lang, site 
 	}
 	d := mail.Data{SiteName: site, Title: "SMTP test", Content: "This is a test message from the notification settings page."}
 	t0 := time.Now()
-	err = s.sendTemplate(ctx, ms, addr, mail.TplNotice, lang, d)
+	err = s.sendTemplate(ctx, ms, addr, mail.TplNotice, lang, d, nil)
 	s.emit(ctx, Record{Channel: RecordEmail, Scene: SceneTest, Recipient: addr, Subject: d.Title,
 		Status: statusOf(err), Err: s.errText(ctx, err, ms.Password), Duration: time.Since(t0)})
 	return err

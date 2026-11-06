@@ -10,6 +10,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/base64"
+	"errors"
 	"io"
 	"math/big"
 	"mime"
@@ -283,6 +284,231 @@ func TestSendSTARTTLSAndSSL(t *testing.T) {
 	h := newFake(t, &fakeSMTP{})
 	if err := client(t, h, SecuritySTARTTLS).Send(context.Background(), Message{To: []string{"a@example.org"}, Subject: "s", Text: "t"}); err == nil {
 		t.Fatal("expected error when STARTTLS is unavailable")
+	}
+}
+
+// 附件：整封升级为 multipart/mixed，正文仍按 alternative；附件以 base64 编码且带 Content-Disposition。
+func TestSendWithAttachments(t *testing.T) {
+	f := newFake(t, &fakeSMTP{auth: "PLAIN", user: "bot", pass: "pw"})
+	c := client(t, f, SecurityNone)
+	err := c.Send(context.Background(), Message{
+		To: []string{"a@example.org"}, Subject: "周报", Text: "本周数据见附件。",
+		Attachments: []Attachment{
+			{Name: "report.xlsx", ContentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", Data: []byte("PK\x03\x04fake-xlsx")},
+			{Name: "chart.csv", Data: []byte("a,b\n1,2")},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	msg, err := stdmail.ReadMessage(strings.NewReader(f.data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	mt, params, err := mime.ParseMediaType(msg.Header.Get("Content-Type"))
+	if err != nil || mt != "multipart/mixed" {
+		t.Fatalf("content-type %q %v", mt, err)
+	}
+	mr := multipart.NewReader(msg.Body, params["boundary"])
+	var texts, names, contents []string
+	for {
+		p, err := mr.NextPart()
+		if err != nil {
+			break
+		}
+		switch {
+		case p.Header.Get("Content-Disposition") != "":
+			names = append(names, p.FileName())
+			b, _ := io.ReadAll(base64.NewDecoder(base64.StdEncoding, p))
+			contents = append(contents, string(b))
+		default:
+			b, _ := io.ReadAll(p)
+			texts = append(texts, string(b))
+		}
+	}
+	if len(texts) != 1 || !strings.Contains(texts[0], "本周数据见附件。") {
+		t.Fatalf("body parts = %v", texts)
+	}
+	if len(names) != 2 || names[0] != "report.xlsx" || names[1] != "chart.csv" {
+		t.Fatalf("attachment names = %v", names)
+	}
+	if contents[0] != "PK\x03\x04fake-xlsx" || contents[1] != "a,b\n1,2" {
+		t.Fatalf("attachment contents mismatch: %q %q", contents[0], contents[1])
+	}
+}
+
+// 附件名带 CRLF：整封拒绝，一个字节都不出站。
+func TestAttachmentNameInjectionRejected(t *testing.T) {
+	f := newFake(t, &fakeSMTP{})
+	c := client(t, f, SecurityNone)
+	err := c.Send(context.Background(), Message{
+		To: []string{"a@example.org"}, Subject: "s", Text: "t",
+		Attachments: []Attachment{{Name: "x.xlsx\r\nBcc: evil@example.org", Data: []byte("d")}},
+	})
+	if err == nil || f.data != "" {
+		t.Fatalf("err = %v, data = %d bytes", err, len(f.data))
+	}
+}
+
+// attachmentNames 从收到的报文里取每个附件的 Content-Disposition 文件名；
+// 有 Content-Disposition 却没有文件名时直接失败——那正是「静默丢头」的症状。
+func attachmentNames(t *testing.T, data string) []string {
+	t.Helper()
+	msg, err := stdmail.ReadMessage(strings.NewReader(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	mt, params, err := mime.ParseMediaType(msg.Header.Get("Content-Type"))
+	if err != nil || mt != "multipart/mixed" {
+		t.Fatalf("content-type %q err %v", mt, err)
+	}
+	mr := multipart.NewReader(msg.Body, params["boundary"])
+	var names []string
+	for {
+		p, err := mr.NextPart()
+		if err != nil {
+			break
+		}
+		disp := p.Header.Get("Content-Disposition")
+		if disp == "" {
+			continue // 正文段
+		}
+		fn := p.FileName()
+		if fn == "" {
+			t.Fatalf("attachment has a Content-Disposition but no filename: %q", disp)
+		}
+		names = append(names, fn)
+	}
+	return names
+}
+
+// 缺陷 2：非 ASCII（中文）附件名必须带着文件名出站，不能退化成无名附件。
+// 中文文件名是让 Content-Disposition 生成最容易出问题的输入，这里按实际 MIME 往返验证。
+func TestSendAttachmentNonASCIIFilenameKept(t *testing.T) {
+	f := newFake(t, &fakeSMTP{auth: "PLAIN", user: "bot", pass: "pw"})
+	c := client(t, f, SecurityNone)
+	want := []string{"月度报表.xlsx", "sales 周报 1月.xlsx", `quote"月.xlsx`, "semi;colon.xlsx"}
+	atts := make([]Attachment, 0, len(want))
+	for _, n := range want {
+		atts = append(atts, Attachment{Name: n, Data: []byte("payload")})
+	}
+	if err := c.Send(context.Background(), Message{
+		To: []string{"a@example.org"}, Subject: "s", Text: "t", Attachments: atts,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	got := attachmentNames(t, f.data)
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Fatalf("attachment filenames = %q, want %q", got, want)
+	}
+}
+
+// contentDisposition 的任何输入都要产出带文件名的头：FormatMediaType 失败时走手工 RFC 2231 回退。
+// FormatMediaType 对「attachment + filename」这两个固定字段不会返回空串，所以回退分支单独测，
+// 保证那条路一旦生效也不是无名附件。
+func TestContentDispositionAlwaysCarriesFilename(t *testing.T) {
+	for _, n := range []string{"a.xlsx", "月度报表.xlsx", "a b.xlsx", `a"b.xlsx`, "a;b.xlsx", "emoji😀.xlsx", "\xff\xfe.xlsx"} {
+		disp := contentDisposition(n)
+		if disp == "" {
+			t.Fatalf("contentDisposition(%q) = \"\" — header would be dropped", n)
+		}
+		if !strings.Contains(disp, "attachment") {
+			t.Fatalf("contentDisposition(%q) = %q, want an attachment disposition", n, disp)
+		}
+	}
+	// RFC 2231 手工回退路径要能被标准库解回原名（收件人看到的文件名不受损）。
+	for _, n := range []string{"月度报表.xlsx", "a b.xlsx", `a"b.xlsx`, "semi;colon.xlsx", "100%.xlsx"} {
+		hdr := "attachment; filename*=UTF-8''" + rfc2231Encode(n)
+		_, params, err := mime.ParseMediaType(hdr)
+		if err != nil {
+			t.Fatalf("fallback header %q does not parse: %v", hdr, err)
+		}
+		if params["filename"] != n {
+			t.Fatalf("fallback round-trip: got %q, want %q (header %q)", params["filename"], n, hdr)
+		}
+	}
+}
+
+// 缺陷 1：附件体积上限。单个超限与整封总量超限都要明确报错，且一个字节都不出站。
+func TestAttachmentSizeLimitsRejected(t *testing.T) {
+	f := newFake(t, &fakeSMTP{auth: "PLAIN", user: "bot", pass: "pw"})
+	c := client(t, f, SecurityNone)
+
+	overSingle := []Attachment{{Name: "big.xlsx", Data: make([]byte, MaxAttachmentSize+1)}}
+	err := c.Send(context.Background(), Message{To: []string{"a@example.org"}, Subject: "s", Text: "t", Attachments: overSingle})
+	if err == nil {
+		t.Fatal("expected single-attachment over-limit rejection")
+	}
+	if !errors.Is(err, ErrAttachmentTooLarge) {
+		t.Fatalf("err = %v, want ErrAttachmentTooLarge", err)
+	}
+	for _, want := range []string{"big.xlsx", "10.0 MB"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error must name the attachment and the limit, got %q (missing %q)", err, want)
+		}
+	}
+
+	// 每个都合规、总量超限：3 张表各 6 MB = 18 MB > 17 MB 上限。
+	overTotal := []Attachment{
+		{Name: "a.xlsx", Data: make([]byte, 6*1000*1000)},
+		{Name: "b.xlsx", Data: make([]byte, 6*1000*1000)},
+		{Name: "c.xlsx", Data: make([]byte, 6*1000*1000)},
+	}
+	err = c.Send(context.Background(), Message{To: []string{"a@example.org"}, Subject: "s", Text: "t", Attachments: overTotal})
+	if !errors.Is(err, ErrAttachmentTooLarge) {
+		t.Fatalf("err = %v, want ErrAttachmentTooLarge for the total limit", err)
+	}
+	if !strings.Contains(err.Error(), "17.0 MB") {
+		t.Fatalf("total-limit error must name the limit, got %q", err)
+	}
+	// 两次超限都发生在进入 SMTP 会话之前：一个字节都不许出站（等价于 CRLF 用例的断言强度）。
+	if f.data != "" || len(f.rcpts) != 0 {
+		t.Fatalf("nothing should reach the server, got rcpts=%v data=%d bytes", f.rcpts, len(f.data))
+	}
+
+	// 刚好卡在上限内（单附件 10 MB、总量 17 MB）必须放行。
+	ok := []Attachment{
+		{Name: "x.xlsx", Data: make([]byte, MaxAttachmentSize)},
+		{Name: "y.xlsx", Data: make([]byte, MaxAttachmentsTotalSize-MaxAttachmentSize)},
+	}
+	if err := c.Send(context.Background(), Message{To: []string{"a@example.org"}, Subject: "s", Text: "t", Attachments: ok}); err != nil {
+		t.Fatalf("at-limit attachments must be accepted, got %v", err)
+	}
+	if f.data == "" {
+		t.Fatal("at-limit message should have reached the server")
+	}
+
+	for _, atts := range [][]Attachment{overSingle, overTotal} {
+		if err := CheckAttachments(atts); !errors.Is(err, ErrAttachmentTooLarge) {
+			t.Fatalf("CheckAttachments = %v, want ErrAttachmentTooLarge", err)
+		}
+	}
+}
+
+// CheckAttachments 是给调用方的同步判定入口（报表订阅靠它不看日志就知道附件发不出去）。
+func TestCheckAttachmentsIsSynchronous(t *testing.T) {
+	if err := CheckAttachments(nil); err != nil {
+		t.Fatalf("nil attachments must pass: %v", err)
+	}
+	if err := CheckAttachments([]Attachment{}); err != nil {
+		t.Fatalf("empty attachments must pass: %v", err)
+	}
+	if err := CheckAttachments([]Attachment{{Name: "ok.xlsx", Data: []byte("x")}}); err != nil {
+		t.Fatalf("small attachment must pass: %v", err)
+	}
+	err := CheckAttachments([]Attachment{{Name: "月度报表.xlsx", Data: make([]byte, MaxAttachmentSize+1)}})
+	if !errors.Is(err, ErrAttachmentTooLarge) {
+		t.Fatalf("err = %v, want ErrAttachmentTooLarge", err)
+	}
+	// 文案要把实际大小与上限都写出来：这条最终以通知/日志形式暴露给运维。
+	msg := err.Error()
+	if !strings.Contains(msg, "月度报表.xlsx") || !strings.Contains(msg, "10.0 MB") {
+		t.Fatalf("error text must carry the name and the limit: %q", msg)
+	}
+	// 匿名附件也要有个可辨识的序号，而不是空括号。
+	err = CheckAttachments([]Attachment{{Data: make([]byte, MaxAttachmentSize+1)}})
+	if err == nil || !strings.Contains(err.Error(), "attachment 1 ") {
+		t.Fatalf("unnamed attachment must fall back to an index label: %v", err)
 	}
 }
 

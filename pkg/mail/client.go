@@ -1,7 +1,9 @@
 // Package mail 是邮件发送能力（不是模块）：标准库 net/smtp + crypto/tls 的 SMTP 客户端，
 // 支持无加密 / STARTTLS / SMTPS(465)、PLAIN / LOGIN 认证、整体超时；
 // 头部字段一律拒绝 CR/LF，收件人用 net/mail 解析校验；正文为 text+html multipart，主题按 RFC 2047 编码。
-// 模板见 template.go（html/template 自动转义）。
+// 附件（Message.Attachments）升级为 multipart/mixed，体积受 MaxAttachmentSize 与
+// MaxAttachmentsTotalSize 上限约束，超限返回 ErrAttachmentTooLarge 而不是静默丢掉附件；
+// 调用方可以在发送前用 CheckAttachments 同步判定。模板见 template.go（html/template 自动转义）。
 package mail
 
 import (
@@ -92,7 +94,7 @@ func (c *Client) Send(ctx context.Context, m Message) error {
 		}
 		to = append(to, a)
 	}
-	data, err := build(c.cfg.FromName, c.cfg.FromAddr, to, m.Subject, m.Text, m.HTML, time.Now())
+	data, err := build(c.cfg.FromName, c.cfg.FromAddr, to, m.Subject, m.Text, m.HTML, m.Attachments, time.Now())
 	if err != nil {
 		return err
 	}

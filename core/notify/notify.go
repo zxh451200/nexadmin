@@ -34,13 +34,15 @@ const (
 )
 
 // Msg 是一条通知。To 是收件用户；Channels 为空时只发站内。robot 渠道是群播，不看 To。
+// Attachments 仅邮件渠道生效（站内/短信/机器人没有附件概念）。
 type Msg struct {
-	To       []idgen.ID
-	Category string
-	Title    string
-	Content  string
-	Link     string
-	Channels []string
+	To          []idgen.ID
+	Category    string
+	Title       string
+	Content     string
+	Link        string
+	Channels    []string
+	Attachments []mail.Attachment
 }
 
 // Contact 是用户资料里与通知有关的部分。Lang 为空时用站点默认语言。
