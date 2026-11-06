@@ -117,6 +117,8 @@ export function ChartView({ type, result, config, height, loading, error, classN
     return c ? columnText(t, result.source, c) : builtinText(t, label)
   }
   if (type === 'metric' && metric) {
+    // 同环比徽标：变化率带方向色；上期无数据显示「无上期」，上期为 0 不显示百分比。
+    const cmp = result.compare
     return (
       <div className={cn('flex flex-col items-center justify-center gap-1', className)} style={{ height }}>
         {showMetricLabel ? <span className="text-sm text-muted-foreground">{colText('m0', metric.label)}</span> : null}
@@ -124,6 +126,32 @@ export function ChartView({ type, result, config, height, loading, error, classN
           {metric.value == null ? '-' : new Intl.NumberFormat(i18n.language).format(metric.value)}
           {config.unit ? <span className="ms-1 text-base font-normal text-muted-foreground">{builtinText(t, config.unit)}</span> : null}
         </span>
+        {cmp ? (
+          <span className="flex items-center gap-1 text-xs">
+            <span
+              className={cn(
+                'num rounded-full px-1.5 py-0.5',
+                cmp.deltaPct == null
+                  ? 'bg-muted text-muted-foreground'
+                  : cmp.deltaPct >= 0
+                    ? 'bg-success/10 text-success'
+                    : 'bg-destructive/10 text-destructive',
+              )}
+            >
+              {cmp.previous == null
+                ? t('plugin_report.compare.noPrevious')
+                : cmp.deltaPct == null
+                  ? '—'
+                  : `${cmp.deltaPct >= 0 ? '+' : ''}${cmp.deltaPct}%`}
+            </span>
+            <span className="text-muted-foreground">{t(`plugin_report.compare.${cmp.mode}`)}</span>
+            {cmp.previous != null ? (
+              <span className="num text-muted-foreground">
+                {t('plugin_report.compare.previous', { value: new Intl.NumberFormat(i18n.language).format(cmp.previous) })}
+              </span>
+            ) : null}
+          </span>
+        ) : null}
       </div>
     )
   }

@@ -88,6 +88,7 @@ func (s *Service) sliderSecret(ctx context.Context, key string) (ip string, x in
 
 // VerifySliderCaptcha 校验滑块挑战：通过则签发一次性 token（60 秒），登录时作为
 // captcha 提交；未通过返回 errSliderFailed（失败不消费挑战，但累计尝试次数）。
+// 签发后挑战即被消费（重复 verify 同一挑战报不可用），防在同一孔位上反复试错。
 func (s *Service) VerifySliderCaptcha(ctx context.Context, key string, x int, trail []trailPoint, ip string) (string, error) {
 	key = strings.TrimSpace(key)
 	if key == "" || len(key) > 64 {

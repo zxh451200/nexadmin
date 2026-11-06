@@ -112,16 +112,20 @@ export function ChartsTab() {
           </Can>
         )}
         toolbar={
-          <Button onClick={() => openForm(null)}>
-            <Plus aria-hidden="true" />
-            {t('plugin_report.chart.create')}
-          </Button>
+          <Can perm="report:chart">
+            <Button onClick={() => openForm(null)}>
+              <Plus aria-hidden="true" />
+              {t('plugin_report.chart.create')}
+            </Button>
+          </Can>
         }
         rowActions={(c) => (
           <>
-            <Button variant="ghost" size="icon" aria-label={t('common.edit')} onClick={() => openForm(c)}>
-              <Pencil aria-hidden="true" />
-            </Button>
+            <Can perm="report:chart">
+              <Button variant="ghost" size="icon" aria-label={t('common.edit')} onClick={() => openForm(c)}>
+                <Pencil aria-hidden="true" />
+              </Button>
+            </Can>
             <Can perm="report:chart">
               <Button variant="ghost" size="icon" className="text-destructive" aria-label={t('common.delete')} onClick={() => void onDelete(c)}>
                 <Trash2 aria-hidden="true" />

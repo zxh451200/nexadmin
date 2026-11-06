@@ -181,6 +181,26 @@ export function ChartSpecEditor({ table, type, columns, value, onChange }: Props
           <Label htmlFor="chart-unit">{t('plugin_report.chart.unit')}</Label>
           <Input id="chart-unit" maxLength={16} value={builtinText(t, value.unit)} onChange={(e) => patch({ unit: e.target.value })} />
         </div>
+        {/* 指标卡同环比：环比=上一等长区间，同比=去年同期；区间从时间筛选推出，推不出时前端显示无对比。 */}
+        {type === 'metric' ? (
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="chart-compare">{t('plugin_report.chart.compare')}</Label>
+            <Select
+              value={value.compare || NONE}
+              onValueChange={(v) => patch({ compare: v === NONE ? undefined : (v as 'period' | 'year') })}
+            >
+              <SelectTrigger id="chart-compare">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NONE}>{t('plugin_report.chart.compareNone')}</SelectItem>
+                <SelectItem value="period">{t('plugin_report.chart.comparePeriod')}</SelectItem>
+                <SelectItem value="year">{t('plugin_report.chart.compareYear')}</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">{t('plugin_report.chart.compareHint')}</p>
+          </div>
+        ) : null}
       </section>
 
       <section className="flex flex-col gap-2">

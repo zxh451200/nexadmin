@@ -9,6 +9,7 @@ import (
 	"image/draw"
 	"image/png"
 	mrand "math/rand"
+	"math"
 )
 
 // 滑块拼图的几何与出图。尺寸一律以“图片像素”为准：前端把落点换算回同一口径后才
@@ -16,9 +17,9 @@ import (
 
 const (
 	sliderBgW   = 280 // 背景图宽
-	sliderBgH   = 120 // 背景图高
-	sliderPiece = 56  // 拼图块方身边长
-	sliderTab   = 12  // 凸出半圆的半径（右侧与上侧各一个）
+	sliderBgH   = 110 // 背景图高
+	sliderPiece = 52  // 拼图块方身边长
+	sliderTab   = 11  // 凸出半圆的半径（右侧与上侧各一个）
 )
 
 // 孔位取值范围：横向留出真实拖动距离，纵向保证整块（含上凸）都在图内。
@@ -113,85 +114,73 @@ func encodePNG(img image.Image) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// paintSliderBackdrop 画一张带渐变底与随机几何物的背景。没有真实照片可嵌（离线、
-// 零依赖），几何物 + 网格 + 干扰线 + 噪点同样能让“孔位”不被一行像素扫描直接定位。
-//
-// 网格和提亮的几何物是给“可辨认”用的：滑块图裁的是这张底，纯渐变下裁片与四周几乎同色，
-// 页面上就是两团糊在一起的色块——用户无从判断有没有拼上，只能来回拖。有了格线与硬边色块，
-// 拼到位时边缘会重新接上同一条线。
+// paintSliderBackdrop 画一张「山景」底图：天空渐变 + 几朵云 + 两层山丘。
+// 传统滑块验证码（极验/腾讯）都用照片级背景，裁出来的滑块才像一块「浮起的贴片」——
+// 纯色/纯渐变底上裁片与四周几乎同色，看上去只剩一圈描边，用户看到的就是
+// 「左边一个空框、中间一团色块」，与传统的「暗色挖孔 + 实心图块」正好颠倒。
+// 山丘轮廓与云的边缘提供了强空间纹理：拼图落位时边缘重新接上同一条等高线，肉眼可辨；
+// 底图仍逐张随机（云位/相位/丘高都来自 r），装饰不构成对孔位的定位线索。
 func paintSliderBackdrop(r *mrand.Rand) *image.NRGBA {
 	img := image.NewNRGBA(image.Rect(0, 0, sliderBgW, sliderBgH))
-	h1 := hue(r)
-	h2 := hue(r)
+	// 天空：竖直渐变，顶部更亮（登录页浅色表单上视觉重量仍然偏轻）。
+	skyTop := color.NRGBA{222, 227, 248, 255}
+	skyBottom := color.NRGBA{183, 191, 232, 255}
 	for y := 0; y < sliderBgH; y++ {
+		row := blend(skyTop, skyBottom, float64(y)/float64(sliderBgH-1))
 		for x := 0; x < sliderBgW; x++ {
-			t := float64(x+y) / float64(sliderBgW+sliderBgH)
-			img.SetNRGBA(x, y, blend(h1, h2, t))
+			img.SetNRGBA(x, y, row)
 		}
 	}
-	// 几何物：半透明圆、矩形与折线叠在渐变上。
-	for i := 0; i < 14; i++ {
-		c := blend(hue(r), hue(r), r.Float64())
-		c.A = uint8(90 + r.Intn(120))
-		if i%3 == 0 {
-			fillCircle(img, r.Intn(sliderBgW), r.Intn(sliderBgH), 10+r.Intn(28), c)
-		} else {
-			fillRect(img, r.Intn(sliderBgW)-20, r.Intn(sliderBgH)-20, 24+r.Intn(48), 10+r.Intn(30), c)
+	// 大尺度软色块：全图散布 10~14 个低透明度的明暗团（亮度在天空两端间偏移），
+	// 让任何 52x52 的裁片内部都有可见的明暗结构——否则落在平缓天空区的裁片
+	// 与四周几乎同色，浮起的贴片看上去仍是一个空框。
+	for i := 0; i < 10+r.Intn(5); i++ {
+		c := blend(skyTop, skyBottom, r.Float64())
+		lift := r.Intn(36) - 18 // ±18 亮度：柔和不抢戏，但裁片边缘肉眼可辨
+		c = color.NRGBA{clamp8(int(c.R) + lift), clamp8(int(c.G) + lift), clamp8(int(c.B) + lift), uint8(26 + r.Intn(26))}
+		fillCircle(img, r.Intn(sliderBgW), r.Intn(sliderBgH), 22+r.Intn(34), c)
+	}
+	// 云：上半天 2~4 团，每团 3 个交叠的浅白圆——椭圆簇比正圆更像云。
+	for i := 0; i < 2+r.Intn(3); i++ {
+		cx, cy := r.Intn(sliderBgW), r.Intn(sliderBgH/2)
+		c := color.NRGBA{248, 250, 255, uint8(80 + r.Intn(60))}
+		for j := 0; j < 3; j++ {
+			fillCircle(img, cx+j*13-13, cy+r.Intn(5), 9+r.Intn(8), c)
 		}
 	}
-	// 细网格：整张图都有硬边，裁片落回孔位时格线接得上。
-	step := 14 + r.Intn(8)
-	grid := color.NRGBA{18, 24, 34, uint8(26 + r.Intn(18))}
-	for y := 0; y < sliderBgH; y++ {
+	// 山丘：两层波浪带，前层更深。正弦相位与频率逐张随机，轮廓给「落位对齐」
+	// 提供跨过整个孔位区域的连续硬边——比网格线更自然，对齐与否一眼可辨。
+	hills := []struct {
+		base, amp int
+		ph        float64
+		c         color.NRGBA
+	}{
+		{sliderBgH - 28, 13, r.Float64() * 6.28, color.NRGBA{164, 174, 220, 255}},
+		{sliderBgH - 14, 9, r.Float64() * 6.28, color.NRGBA{138, 149, 205, 255}},
+	}
+	for _, hl := range hills {
+		freq := 0.018 + r.Float64()*0.02
 		for x := 0; x < sliderBgW; x++ {
-			if x%step != 0 && y%step != 0 {
-				continue
+			top := int(float64(hl.base) + float64(hl.amp)*math.Sin(hl.ph+float64(x)*freq))
+			for y := max(0, top); y < sliderBgH; y++ {
+				img.SetNRGBA(x, y, hl.c)
 			}
-			over(img, x, y, grid)
 		}
 	}
-	for i := 0; i < 5; i++ {
-		c := blend(hue(r), hue(r), r.Float64())
-		c.A = uint8(70 + r.Intn(90))
-		strokeLine(img, r.Intn(sliderBgW), r.Intn(sliderBgH), r.Intn(sliderBgW), r.Intn(sliderBgH), c)
-	}
-	for i := 0; i < 1400; i++ { // 细噪点，压住“整块纯色”的可猜测性
+	for i := 0; i < 700; i++ { // 细噪点，压住「整块纯色」的可猜测性
 		x, y := r.Intn(sliderBgW), r.Intn(sliderBgH)
 		p := img.PixOffset(x, y)
-		n := uint8(r.Intn(28))
-		img.Pix[p] = clamp8(int(img.Pix[p]) + int(n))
-		img.Pix[p+1] = clamp8(int(img.Pix[p+1]) + int(n))
-		img.Pix[p+2] = clamp8(int(img.Pix[p+2]) + int(n))
+		n := uint8(r.Intn(16))
+		img.Pix[p] = clamp8(int(img.Pix[p]) - int(n))
+		img.Pix[p+1] = clamp8(int(img.Pix[p+1]) - int(n))
+		img.Pix[p+2] = clamp8(int(img.Pix[p+2]) - int(n))
 	}
 	return img
 }
 
-func hue(r *mrand.Rand) color.NRGBA {
-	return hsvToNRGBA(r.Float64(), 0.35+r.Float64()*0.35, 0.55+r.Float64()*0.35)
-}
-
-func hsvToNRGBA(h, s, v float64) color.NRGBA {
-	i := int(h * 6)
-	f := h*6 - float64(i)
-	p := v * (1 - s)
-	q := v * (1 - f*s)
-	t := v * (1 - (1-f)*s)
-	var rr, gg, bb float64
-	switch i % 6 {
-	case 0:
-		rr, gg, bb = v, t, p
-	case 1:
-		rr, gg, bb = q, v, p
-	case 2:
-		rr, gg, bb = p, v, t
-	case 3:
-		rr, gg, bb = p, q, v
-	case 4:
-		rr, gg, bb = t, p, v
-	default:
-		rr, gg, bb = v, p, q
-	}
-	return color.NRGBA{uint8(rr * 255), uint8(gg * 255), uint8(bb * 255), 255}
+// shade 在品牌渐变的两端之间取一个同色系的装饰色：亮度随机、色相族不变。
+func shade(deep, light color.NRGBA, r *mrand.Rand) color.NRGBA {
+	return blend(deep, light, 0.25+r.Float64()*0.6)
 }
 
 func blend(a, b color.NRGBA, t float64) color.NRGBA {
@@ -285,23 +274,38 @@ func over(img *image.NRGBA, x, y int, c color.NRGBA) {
 	img.Pix[dst+3] = clamp8(int(img.Pix[dst+3]) + a)
 }
 
-// cutSliderPiece 从“挖孔之前”的背景裁出滑块图：形状内不透明、形状外全透明，
-// 边缘压一圈浅色描边，让滑块与背景在同一张图上仍能分辨。
+// cutSliderPiece 从“挖孔之前”的背景裁出滑块图：形状内不透明（真裁片），边缘压一圈
+// 浅色描边，形状外只放烘焙的投影（右下两档淡出）——白边 + 投影是传统滑块图块的画法，
+// 让裁片在任何底色上都读成「一块浮起的贴片」，而不是一个空框。
 func cutSliderPiece(src *image.NRGBA, x, y int) *image.NRGBA {
 	out := image.NewNRGBA(image.Rect(0, 0, sliderPieceW, sliderPieceH))
-	edge := color.NRGBA{250, 250, 252, 210}
+	edge := color.NRGBA{248, 250, 255, 235}
+	// shadowA[k] 是「沿左上方向距形状边界 k 像素」处的投影浓度：越贴近越浓，两档淡出。
+	shadowRGB := [3]uint8{56, 64, 118}
+	shadowA := [3]uint8{0, 96, 160}
 	for py := 0; py < sliderPieceH; py++ {
 		for px := 0; px < sliderPieceW; px++ {
 			// 局部坐标：包围盒 (0, sliderTab) 才是方身左上角。
 			dx, dy := px, py-sliderTab
 			if !inSliderPiece(dx, dy) {
+				// 投影 = 形状向右下平移后露出的部分：本点在形外、其左上 k 像处在形内。
+				for k := 1; k <= 2; k++ {
+					if inSliderPiece(dx-k, dy-k) {
+						p := out.PixOffset(px, py)
+						out.Pix[p], out.Pix[p+1], out.Pix[p+2] = shadowRGB[0], shadowRGB[1], shadowRGB[2]
+						out.Pix[p+3] = shadowA[k]
+						break
+					}
+				}
 				continue
 			}
 			sp := src.PixOffset(x+dx, y+dy)
 			dp := out.PixOffset(px, py)
 			out.Pix[dp], out.Pix[dp+1], out.Pix[dp+2] = src.Pix[sp], src.Pix[sp+1], src.Pix[sp+2]
 			out.Pix[dp+3] = 255
-			if onSliderEdge(dx, dy) {
+			// 白描边画到 2px：单像素描边在浅底上存在感弱，2px 才有「贴片白边」的厚度。
+			// 注意：真裁片测试只豁免 1px 边带，加宽前先同步它的豁免口径。
+			if onSliderEdge(dx, dy) || nearSliderEdge(dx, dy) {
 				op := out.PixOffset(px, py)
 				out.Pix[op], out.Pix[op+1], out.Pix[op+2] = edge.R, edge.G, edge.B
 			}
@@ -320,10 +324,21 @@ func onSliderEdge(dx, dy int) bool {
 	return false
 }
 
-// punchSliderHole 在背景上按同一形状挖孔：压暗填充 + 浅色描边。
+// nearSliderEdge 报告「距形状边界 2 像素以内」的内侧：白描边画成 2px 厚用的。
+func nearSliderEdge(dx, dy int) bool {
+	for _, d := range [8][2]int{{2, 0}, {-2, 0}, {0, 2}, {0, -2}, {1, 1}, {1, -1}, {-1, 1}, {-1, -1}} {
+		if !inSliderPiece(dx+d[0], dy+d[1]) {
+			return true
+		}
+	}
+	return false
+}
+
+// punchSliderHole 在背景上按同一形状挖孔：半透明暗填充 + 深色描边——
+// 传统形态里「目标」读作一个凹陷的暗色挖孔，与浮起的浅色滑块图块形成明暗对比。
 func punchSliderHole(bg *image.NRGBA, x, y int) {
-	shadow := color.NRGBA{14, 18, 26, 185}
-	edge := color.NRGBA{245, 248, 252, 200}
+	shadow := color.NRGBA{63, 71, 126, 145}
+	edge := color.NRGBA{56, 64, 118, 220}
 	for dy := -sliderTab; dy < sliderPiece; dy++ {
 		for dx := 0; dx < sliderPieceW; dx++ {
 			if !inSliderPiece(dx, dy) {

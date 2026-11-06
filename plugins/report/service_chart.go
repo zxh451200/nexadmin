@@ -102,6 +102,10 @@ func (s *Service) checkChart(ctx context.Context, f ChartForm) (idgen.ID, string
 	if badText(f.Config.Unit, 16, false) {
 		return 0, "", specErr("report.unit_too_long")
 	}
+	// 同环比只对指标卡有意义：其它类型按时间分桶看趋势，叠一个百分比反而糊。
+	if !compareModes[f.Config.Compare] || (f.Config.Compare != CompareOff && f.Type != ChartMetric) {
+		return 0, "", specErr("report.compare_mode_invalid")
+	}
 	if err := s.eng.ValidateSpec(tg, fullSpec(cfg, f.Config, nil)); err != nil {
 		return 0, "", err
 	}
@@ -232,7 +236,12 @@ func (s *Service) runChart(ctx context.Context, ch *Chart, extra []Filter, v Vie
 	if limit > 0 { // 导出等场景改用调用方给的行数（引擎仍会夹到 MaxLimit / 配置上限内）
 		sp.Limit = limit
 	}
-	return s.eng.Run(ctx, tg, sp, env)
+	res, err := s.eng.Run(ctx, tg, sp, env)
+	if err != nil {
+		return nil, err
+	}
+	// 指标卡同环比：跑了第二遍查询（上一等长区间/去年同期），失败不拖垮主数据。
+	return s.attachCompare(ctx, cc, tg, sp, env, res), nil
 }
 
 // QueryChart 编辑器里直接运行一个已保存的图表（不带运行时过滤）。

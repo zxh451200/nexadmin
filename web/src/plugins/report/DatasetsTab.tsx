@@ -105,16 +105,20 @@ export function DatasetsTab() {
           </Can>
         )}
         toolbar={
-          <Button onClick={() => openForm(null)}>
-            <Plus aria-hidden="true" />
-            {t('plugin_report.dataset.create')}
-          </Button>
+          <Can perm="report:dataset">
+            <Button onClick={() => openForm(null)}>
+              <Plus aria-hidden="true" />
+              {t('plugin_report.dataset.create')}
+            </Button>
+          </Can>
         }
         rowActions={(d) => (
           <>
-            <Button variant="ghost" size="icon" aria-label={t('common.edit')} onClick={() => openForm(d)}>
-              <Pencil aria-hidden="true" />
-            </Button>
+            <Can perm="report:dataset">
+              <Button variant="ghost" size="icon" aria-label={t('common.edit')} onClick={() => openForm(d)}>
+                <Pencil aria-hidden="true" />
+              </Button>
+            </Can>
             <Can perm="report:dataset">
               <Button variant="ghost" size="icon" className="text-destructive" aria-label={t('common.delete')} onClick={() => void onDelete(d)}>
                 <Trash2 aria-hidden="true" />

@@ -15,6 +15,7 @@ import (
 
 	"nexadmin/core"
 	coreai "nexadmin/core/ai"
+	"nexadmin/core/auth"
 	"nexadmin/core/notify"
 	"nexadmin/core/response"
 	"nexadmin/core/tenant"
@@ -101,6 +102,26 @@ func validateValue(typ, v string) error {
 	return nil
 }
 
+// valueRanges 是「类型只到 number、但取值有硬上下限」的参数。不拦的话会出现
+// 「界面存了 99、实际按出厂 5 生成」：core/auth 对越界值一律回退默认，
+// 管理员看到的却是自己填的那个数——反馈回来永远是对不上号的两句。
+var valueRanges = map[string][2]int{
+	"login.captcha_length": {auth.CaptchaLenMin, auth.CaptchaLenMax},
+}
+
+// checkKeyRange 在落库前拦住越界的有范围参数；不在表里的参数不受影响。
+func checkKeyRange(key, v string) error {
+	rg, ok := valueRanges[key]
+	if !ok {
+		return nil
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(v))
+	if err != nil || n < rg[0] || n > rg[1] {
+		return bad("config.value_out_of_range", rg[0], rg[1])
+	}
+	return nil
+}
+
 // List 分页查询参数，按创建时间升序。
 func (s *Service) List(ctx context.Context, q ListQuery, page, size int) ([]Config, int64, error) {
 	db := s.db.WithContext(ctx).Model(&Config{})
@@ -149,6 +170,9 @@ func (s *Service) Create(ctx context.Context, in Input) (*Config, error) {
 	if err := validateValue(in.Type, in.Value); err != nil {
 		return nil, err
 	}
+	if err := checkKeyRange(in.Key, in.Value); err != nil {
+		return nil, err
+	}
 	if taken, err := s.keyTaken(ctx, in.Key, 0); err != nil {
 		return nil, err
 	} else if taken {
@@ -166,6 +190,9 @@ func (s *Service) Update(ctx context.Context, id idgen.ID, in Input) (*Config, e
 		return nil, err
 	}
 	if err := validateValue(in.Type, in.Value); err != nil {
+		return nil, err
+	}
+	if err := checkKeyRange(in.Key, in.Value); err != nil {
 		return nil, err
 	}
 	if taken, err := s.keyTaken(ctx, in.Key, id); err != nil {
@@ -246,6 +273,27 @@ func (s *Service) loginCaptchaSourceFn(fallback bool) func(context.Context) bool
 		v, ok := m["login.captcha_enabled"]
 		return boolConfigValue(v, ok, fallback)
 	}
+}
+
+// captchaLengthSourceFn 返回「登录验证码位数」的运行时源（login.captcha_length，出厂 5）。
+// 值非法（非数字 / 越界）时回退 fallback；钳制在 core/auth 侧再做一次，两侧同一口径。
+func (s *Service) captchaLengthSourceFn(fallback int) func(context.Context) int {
+	return func(ctx context.Context) int {
+		m, err := s.values(tenant.Skip(ctx), "login.captcha_length")
+		if err != nil {
+			return fallback
+		}
+		return parseCaptchaLength(m["login.captcha_length"], fallback)
+	}
+}
+
+// parseCaptchaLength 是位数参数的纯解析部分：非数字回退兜底，合法值透传。
+func parseCaptchaLength(v string, fallback int) int {
+	n, err := strconv.Atoi(strings.TrimSpace(v))
+	if err != nil {
+		return fallback
+	}
+	return n
 }
 
 // clamp 把非法（负数、NaN、Inf）限制值归零，0 表示不限制。

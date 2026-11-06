@@ -52,6 +52,9 @@ type ChartConfig struct {
 	Colors  []string `json:"colors"`            // 语义 token，按系列顺序使用
 	Stacked bool     `json:"stacked,omitempty"` // 柱/折：堆叠
 	Unit    string   `json:"unit,omitempty"`    // 指标卡/坐标轴单位文案
+	// Compare 是指标卡的同环比模式："" 关闭，period 环比（上一等长区间），year 同比（去年同期）。
+	// 只对 metric 图表有意义；区间从报表筛选器/图表过滤里的时间条件推出，推不出时前端显示无对比。
+	Compare string `json:"compare,omitempty"`
 }
 
 // ReportItem 是报表页里的一个图表块。Span 是栅格宽度 1..12（报表页按 12 列流式排布）。

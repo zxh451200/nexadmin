@@ -2,6 +2,8 @@ package config
 
 import (
 	"context"
+	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -57,6 +59,12 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	if d.OnClose != nil {
 		d.OnClose(func() { auth.SetLoginCaptchaSource(nil) })
 	}
+	// 「验证码位数」同样来自参数设置（login.captcha_length，出厂 5，范围 4-8）：
+	// 参数页改完对之后新生成的验证码立即生效，无需重启。
+	auth.SetLoginCaptchaLengthSource(svc.captchaLengthSourceFn(auth.CaptchaLenDefault))
+	if d.OnClose != nil {
+		d.OnClose(func() { auth.SetLoginCaptchaLengthSource(nil) })
+	}
 
 	r.GET("/config/upload", h.GetUpload) // 上传组件读取限制，登录即可
 	g := r.Group("/configs")
@@ -105,6 +113,9 @@ var factoryRows = []struct {
 	{4, "用户初始密码", "user.default_password", "Nex@123456", TypeString, false, "新建用户及重置密码时使用"},
 	{5, "开放注册", "user.register_enabled", "false", TypeBoolean, true, ""},
 	{6, "登录验证码", "login.captcha_enabled", "true", TypeBoolean, true, "开启=登录必须先过图形验证码；关闭=连续失败达到阈值后才要求"},
+	{9, "登录验证码位数", "login.captcha_length", strconv.Itoa(auth.CaptchaLenDefault), TypeNumber, true,
+		// 出厂值与上下限都取自 core/auth：改一处三处（默认值、保存校验、运行时钳制）不会分家。
+		fmt.Sprintf("%d-%d 位；改后对新生成的验证码生效", auth.CaptchaLenMin, auth.CaptchaLenMax)},
 	{7, "登录最大重试次数", "login.max_retry", "5", TypeNumber, false, ""},
 	{8, "账号锁定时长(分钟)", "login.lock_minutes", "30", TypeNumber, false, ""},
 	{11, "图片上传大小上限(MB)", KeyUploadImage, "0", TypeNumber, true, "0 或留空表示不限制"},

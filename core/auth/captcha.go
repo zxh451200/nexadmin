@@ -21,7 +21,14 @@ import (
 // 计数只看提交的用户名字符串，与账号是否存在无关，因此不会泄露账号是否存在。
 
 const (
-	captchaLen        = 5
+	// CaptchaLenDefault 是验证码位数的出厂值；实际位数由参数设置 login.captcha_length
+	// 控制（运行时经 captchaLengthSource 注入，见 source.go），范围钳在 4–8。
+	// 导出给 config 模块当参数出厂值与回退值，两侧同一口径。
+	CaptchaLenDefault = 5
+	// CaptchaLenMin / CaptchaLenMax 是允许配置的上下限：设置页按它做保存校验，
+	// 本包按它做运行时钳制——两处必须同源，否则界面存的值和实际生成的位数会分家。
+	CaptchaLenMin = 4
+	CaptchaLenMax = 8
 	captchaAfterFails = 3
 	failWindow        = 15 * time.Minute
 )
@@ -53,10 +60,20 @@ func randDigits(n int) (string, error) {
 	return string(out), nil
 }
 
+// captchaLength 取当前配置的验证码位数（钳在 4–8）；源未注入/取值非法时回落出厂值。
+func (s *Service) captchaLength(ctx context.Context) int {
+	if fn, ok := captchaLengthSource.Load().(func(context.Context) int); ok && fn != nil {
+		if n := fn(ctx); n >= CaptchaLenMin && n <= CaptchaLenMax {
+			return n
+		}
+	}
+	return CaptchaLenDefault
+}
+
 // NewCaptcha 生成验证码，返回 key 与 data URI 图片；答案 60 秒后失效。
 // 答案与签发时的客户端 IP 绑定存储（ip|answer），校验时必须来自同一 IP，防止 key+答案被转交给其他来源使用。
 func (s *Service) NewCaptcha(ctx context.Context, ip string) (key, dataURI string, err error) {
-	text, err := randDigits(captchaLen)
+	text, err := randDigits(s.captchaLength(ctx))
 	if err != nil {
 		return "", "", err
 	}

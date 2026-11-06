@@ -17,7 +17,7 @@ let charts: Chart[] = [
   { id: id(12), name: '近 30 天执行趋势', datasetId: id(1), type: 'line', remark: '', ...stamp, config: cfg({ dimensions: [{ column: 'started_at', bucket: 'day' }], measures: [{ agg: 'count' }], colors: ['primary'] }) },
   { id: id(13), name: '各任务平均耗时', datasetId: id(1), type: 'bar', remark: '', ...stamp, config: cfg({ dimensions: [{ column: 'job_name' }], measures: [{ agg: 'avg', column: 'cost_ms' }], colors: ['chart-2'], unit: 'ms' }) },
   { id: id(14), name: '失败明细', datasetId: id(1), type: 'table', remark: '', ...stamp, config: cfg({ dimensions: [{ column: 'job_name' }, { column: 'handler' }, { column: 'started_at' }], filters: [{ column: 'status', op: '=', value: 'failed' }], orderBy: [{ ref: 'd2', desc: true }], limit: 500 }) },
-  { id: id(15), name: '执行总数', datasetId: id(1), type: 'metric', remark: '', ...stamp, config: cfg({ measures: [{ agg: 'count' }], colors: ['chart-1'], unit: '次' }) },
+  { id: id(15), name: '执行总数', datasetId: id(1), type: 'metric', remark: '', ...stamp, config: cfg({ measures: [{ agg: 'count' }], colors: ['chart-1'], unit: '次', compare: 'period' }) },
   { id: id(16), name: '登录方式分布', datasetId: id(2), type: 'pie', remark: '', ...stamp, config: cfg({ dimensions: [{ column: 'login_type' }], measures: [{ agg: 'count' }] }) },
 ]
 const reportCfg: ReportConfig = {

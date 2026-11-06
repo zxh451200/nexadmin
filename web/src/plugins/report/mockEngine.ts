@@ -97,6 +97,33 @@ function matches(row: Row, f: Filter, type: ColType): boolean {
   return false
 }
 
+/** 指标卡同环比（与后端同语义）：从时间条件推出当前窗口，回移后重跑一遍。 */
+function compareWindow(filters: Filter[], colType: (n: string) => ColType | undefined) {
+  let col: string | null = null
+  let lo: number | null = null
+  let hi: number | null = null
+  for (const f of filters) {
+    if (colType(f.column) !== 'time') continue
+    if (f.op === '>=' || f.op === '>') {
+      col ??= f.column
+      if (f.column === col) lo = Math.max(lo ?? -Infinity, new Date(String(f.value)).getTime())
+    } else if (f.op === '<' || f.op === '<=') {
+      col ??= f.column
+      if (f.column === col) hi = Math.min(hi ?? Infinity, new Date(String(f.value)).getTime())
+    }
+  }
+  if (col && lo != null && hi != null && lo < hi) return { col, lo, hi }
+  return null
+}
+
+function shiftTimeFilters(filters: Filter[], col: string, deltaMs: number): Filter[] {
+  return filters.map((f) => {
+    if (f.column !== col || !['>=', '>', '<', '<='].includes(f.op)) return f
+    const t = new Date(String(f.value)).getTime()
+    return { ...f, value: new Date(t + deltaMs).toISOString().replace(/\.\d{3}Z$/, 'Z') }
+  })
+}
+
 export function runSpec(table: string, allowed: string[], cfg: ChartConfig, extra: Filter[] = [], fixed: Filter[] = [], maxRows = 5000): QueryResult {
   const src = MOCK_SOURCES.find((s) => s.table === table)
   if (!src) throw new Error('source')
@@ -152,5 +179,28 @@ export function runSpec(table: string, allowed: string[], cfg: ChartConfig, extr
   const order = cfg.orderBy[0] ?? (cfg.dimensions.length ? { ref: 'd0', desc: false } : null)
   if (order) out.sort((a, b) => (a[order.ref]! < b[order.ref]! ? -1 : a[order.ref]! > b[order.ref]! ? 1 : 0) * (order.desc ? -1 : 1))
   const limit = Math.min(cfg.limit > 0 ? cfg.limit : 1000, maxRows, 5000)
-  return { columns, rows: out.slice(0, limit), truncated: out.length > limit }
+  const result: QueryResult = { columns, rows: out.slice(0, limit), truncated: out.length > limit }
+  if (cfg.compare && cfg.dimensions.length === 0 && cfg.measures.length === 1) {
+    const colType = (n: string) => src.columns.find((x) => x.name === n && allowed.includes(n))?.type
+    const win = compareWindow([...fixed, ...cfg.filters, ...extra], colType)
+    if (win) {
+      // 环比=回移一个窗口长度；同比=回移一年（mock 用 365 天近似）。
+      const delta = cfg.compare === 'year' ? -365 * day : win.lo - win.hi
+      const prev = runSpec(
+        table, allowed,
+        { ...cfg, filters: shiftTimeFilters(cfg.filters, win.col, delta) },
+        shiftTimeFilters(extra, win.col, delta),
+        shiftTimeFilters(fixed, win.col, delta),
+        maxRows,
+      )
+      const cur = Number(result.rows[0]?.m0 ?? 0)
+      const p = prev.rows[0]?.m0
+      const pv = p == null ? undefined : Number(p)
+      result.compare = {
+        mode: cfg.compare, current: cur, previous: pv,
+        deltaPct: pv === undefined || pv === 0 ? undefined : Math.round(((cur - pv) / Math.abs(pv)) * 1000) / 10,
+      }
+    }
+  }
+  return result
 }

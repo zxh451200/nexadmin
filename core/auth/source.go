@@ -50,3 +50,16 @@ func LoginCaptcha(ctx context.Context) bool {
 	}
 	return false
 }
+
+// captchaLengthSource 是「登录验证码位数」的运行时源（设置页「参数设置」的 login.captcha_length，
+// 出厂 5，范围 4–8）：改完参数页即刻生效，只影响之后新生成的验证码。由 config 模块启动时注入。
+var captchaLengthSource atomic.Value // func(context.Context) int
+
+// SetLoginCaptchaLengthSource 注入 / 清除「验证码位数」运行时源；传 nil 清除。
+func SetLoginCaptchaLengthSource(fn func(ctx context.Context) int) {
+	if fn == nil {
+		captchaLengthSource.Store((func(context.Context) int)(nil))
+		return
+	}
+	captchaLengthSource.Store(fn)
+}

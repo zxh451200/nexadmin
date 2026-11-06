@@ -273,7 +273,7 @@ func TestSliderKeyLengthGuard(t *testing.T) {
 // 改了它们，auth.mock.ts 的出图与 web/e2e/slider-captcha.spec.ts 的换算会静默错位，
 // 于是 e2e 在假数据上仍然绿、真后端却永远拖不到位。改这里请三处一起改。
 func TestSliderGeometryContract(t *testing.T) {
-	want := struct{ bgW, bgH, piece, tab, tolerance, trailMin int }{280, 120, 56, 12, 6, 6}
+	want := struct{ bgW, bgH, piece, tab, tolerance, trailMin int }{280, 110, 52, 11, 6, 6}
 	got := struct{ bgW, bgH, piece, tab, tolerance, trailMin int }{
 		sliderBgW, sliderBgH, sliderPiece, sliderTab, sliderTolerance, sliderTrailMin,
 	}
@@ -395,11 +395,12 @@ func TestSliderPieceIsTrueCropOfHole(t *testing.T) {
 			punchSliderHole(src, x, y)
 
 			mismatch, checked := 0, 0
-			for dy := -sliderTab; dy < sliderPiece; dy++ {
-				for dx := 0; dx < sliderPieceW; dx++ {
-					if !inSliderPiece(dx, dy) || onSliderEdge(dx, dy) {
-						continue
-					}
+				for dy := -sliderTab; dy < sliderPiece; dy++ {
+					for dx := 0; dx < sliderPieceW; dx++ {
+						// 白描边画到 2px：豁免口径与 cutSliderPiece 的上色范围同步。
+						if !inSliderPiece(dx, dy) || onSliderEdge(dx, dy) || nearSliderEdge(dx, dy) {
+							continue
+						}
 					checked++
 					p := piece.PixOffset(dx, dy+sliderTab)
 					q := before.PixOffset(x+dx, y+dy)

@@ -51,6 +51,8 @@ export interface ChartConfig {
   colors: string[]
   stacked?: boolean
   unit?: string
+  /** 指标卡同环比：period 环比（上一等长区间）、year 同比（去年同期）；留空 = 不对比。 */
+  compare?: 'period' | 'year'
 }
 export interface Chart {
   id: string
@@ -78,6 +80,8 @@ export interface QueryResult {
   source?: string
   rows: Record<string, string | number | boolean | null>[]
   truncated: boolean
+  /** 指标卡同环比：配置了对比且能推出时间窗时才有值 */
+  compare?: { mode: 'period' | 'year'; current: number; previous?: number; deltaPct?: number }
 }
 
 export interface ReportItem {

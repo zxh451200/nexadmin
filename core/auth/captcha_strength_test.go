@@ -237,11 +237,11 @@ func TestLegacyTemplateAttackCracksOldBitmapRenderer(t *testing.T) {
 	const samples = 20
 	cracked := 0
 	for i := 0; i < samples; i++ {
-		text, err := randDigits(captchaLen)
+		text, err := randDigits(CaptchaLenDefault)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if crackByLegacyTemplate(legacyRender(text), captchaLen) == text {
+		if crackByLegacyTemplate(legacyRender(text), CaptchaLenDefault) == text {
 			cracked++
 		}
 	}
@@ -262,7 +262,7 @@ func TestCaptchaResistsLegacyTemplateAttack(t *testing.T) {
 			t.Fatal(err)
 		}
 		text := answerOf(t, s, key)
-		if crackByLegacyTemplate(decodeDataURI(t, uri), captchaLen) == text {
+		if crackByLegacyTemplate(decodeDataURI(t, uri), CaptchaLenDefault) == text {
 			t.Logf("key %s 被模板匹配解出：%s", key, text)
 			cracked++
 		}

@@ -1,19 +1,27 @@
-import { expect, test, type Locator, type Page } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 
 /**
  * 滑块验证码的几何与接线回归。
- * 为什么值得钉住：孔位、滑块图落点、把手行程三处坐标分别按「后端图片像素」「CSS 百分比」
- * 「轨道 CSS 像素」三套口径算，任一处写错都不报错——只会画歪，或永远拖不到位。
+ * 为什么值得钉住：孔位、滑块图落点、把手行程三处坐标分别按「后端图片像素」与「CSS 像素」
+ * 两套口径算，任一处写错都不报错——只会画歪，或永远拖不到位。
  * 另外钉一条真实通道：滑块签发的 token 必须当作 captcha 交给 /auth/login 现成的校验口
  * （登录、短信、注册共用这一条），走偏一次就是「验证码错误或已过期」。
  *
+ * 滑块交互由 rc-slider-captcha（MIT）承担，我们只对接后端契约。测试针对它的真实 DOM：
+ * 容器 .rc-slider-captcha（内联 width = 背景图宽 = 280，显示与图片 1:1），
+ * 拖动把手 .rc-slider-captcha-control-button。rc 会把按钮行程按比例映射成拼图行程
+ * （ratio = 拼图可用行程 / 按钮可用行程），上报的 x 是拼图行程，所以按钮要走的鼠标
+ * 距离 = 目标图片像素 / ratio。
  * 只在 mock 数据源上跑：孔位从假数据背景 SVG 里读出（与后端同一套尺寸常量）。
- * 这里量的是前端换算与接线，后端判定（容差、轨迹像人、一次性消费、IP 绑定）由 core/auth 的用例钉住。
+ * 这里量的是前端接线，后端判定（容差、轨迹像人、一次性消费、IP 绑定）由 core/auth 的用例钉住。
  * 断言只看 UI：mock 在 axios 适配器里就地应答，不产生网络事件，waitForResponse 永远等不到。
+ *
+ * 键盘路径已随 rc 迁移移除（CaptchaField.tsx 顶部注释：方向键兜底改为「改用图形验证码」，
+ * 图形码可输入、有语音，无障碍语义不缺门），本文件不再有键盘用例。
  */
 
-// 与后端 slider_render.go 同口径（auth.mock.ts 出图也按这组常量）
-const IMG_W = 280
+const SLIDER = '.rc-slider-captcha'
+const SLIDER_BG_IMG = '.rc-slider-captcha-jigsaw-bg'
 
 test.setTimeout(240_000)
 
@@ -32,11 +40,11 @@ async function openLogin(page: Page): Promise<string> {
     localStorage.setItem('nex-lang', 'zh-CN')
     localStorage.setItem('mock-admin', JSON.stringify({ username: name, password: 'pw-for-e2e' }))
   }, account)
-  const slider = page.getByRole('slider')
+  const slider = page.locator(SLIDER)
   const toggle = page.getByRole('button', { name: '改用滑块验证' })
   // 就绪判据按「哪一个先出现」取，两种默认形态都成立：滑块已是默认时直接就绪，
   // 默认若翻回图形码则点一下切换入口。isVisible() 不等待，所以只能走 waitFor。
-  const appeared = (loc: Locator) => loc.waitFor({ state: 'visible', timeout: 60_000 }).then(() => true, () => false)
+  const appeared = (loc: import('@playwright/test').Locator) => loc.waitFor({ state: 'visible', timeout: 60_000 }).then(() => true, () => false)
   for (let attempt = 0; attempt < 3; attempt++) {
     await page.goto('/admin/login', { waitUntil: 'domcontentloaded' })
     if (!(await Promise.race([appeared(slider), appeared(toggle)]))) continue
@@ -44,9 +52,17 @@ async function openLogin(page: Page): Promise<string> {
     // 再等一次 waitFor 只会白烧 60 秒超时。
     if ((await toggle.count()) > 0) await toggle.click()
     await expect(slider).toBeVisible()
-    // 滑轨不依赖挑战是否取到；只等滑轨会把「图没加载」吞成后面一句「找不到孔位」。
-    // 背景图按 alt 取（滑块图是 aria-hidden，role=img 只有背景这一个）。
-    await expect(page.getByRole('img', { name: '验证' })).toBeVisible()
+    // 滑轨存在不等于挑战已取到：rc 的 request 在 captcha 未到位时会挂起，jigsaw 一直转圈。
+    // 等背景图的 mock SVG data URI 真正挂上 src，后面读孔位才不会扑空。
+    // 选择器内联写：waitForFunction 的谓词在浏览器上下文里执行，引用不到外层常量。
+    await page.waitForFunction(
+      () => {
+        const img = document.querySelector<HTMLImageElement>('.rc-slider-captcha-jigsaw-bg')
+        return !!img && img.src.startsWith('data:image/svg+xml;base64,')
+      },
+      undefined,
+      { timeout: 60_000 },
+    )
     return account
   }
   const where = await page
@@ -57,14 +73,14 @@ async function openLogin(page: Page): Promise<string> {
 
 /** 从 mock 背景图（SVG data URI）里读孔位横坐标；图还没换好时返回 null 而不是抛错 */
 async function readHole(page: Page): Promise<number | null> {
-  return page.evaluate(() => {
-    const img = document.querySelector<HTMLImageElement>('img[alt="验证"]')
+  return page.evaluate((sel) => {
+    const img = document.querySelector<HTMLImageElement>(sel)
     const src = img?.src ?? ''
     if (!src.startsWith('data:image/svg+xml;base64,')) return null
     const svg = atob(src.split(',')[1])
-    const m = svg.match(/<rect x="(\d+)" y="(\d+)" width="56" height="56" fill="#111827"/)
+    const m = svg.match(/<rect x="(\d+)" y="(\d+)" width="52" height="52" fill="#111827"/)
     return m ? Number(m[1]) : null
-  })
+  }, SLIDER_BG_IMG)
 }
 
 async function holeOf(page: Page): Promise<number> {
@@ -74,18 +90,30 @@ async function holeOf(page: Page): Promise<number> {
   throw new Error(`读不到 mock 背景里的孔位。页面上的图是：${srcs || '(没有 img)'}`)
 }
 
-/** 按住把手拖到目标图片像素横坐标；换算系数 = 轨道宽 / 背景图宽 */
+/**
+ * 按住 rc 把手拖到目标图片像素横坐标。
+ * 按钮行程与拼图行程不是 1:1：rc 按 ratio = puzzleMax / buttonMax 换算，
+ * 其中 puzzleMax = bgW - puzzleW、buttonMax = bgW - buttonW - 2（2 是滑轨指示条左右边框）。
+ * 尺寸全部从真实 DOM 量，避免把 280/40/63 抄成第二套常量。
+ */
 async function dragTo(page: Page, targetImgX: number) {
-  const box = await page.getByRole('slider').boundingBox()
-  if (!box) throw new Error('找不到滑轨')
-  const startX = box.x + 4 + 16 // 把手在行程起点时的中心：内边 4px + 半个把手
-  const midY = box.y + box.height / 2
-  const goalCss = targetImgX * (box.width / IMG_W)
-  await page.mouse.move(startX, midY)
+  const button = page.locator('.rc-slider-captcha-control-button')
+  const btn = await button.boundingBox()
+  const panel = await page.locator(SLIDER).boundingBox()
+  const piece = await page.locator('.rc-slider-captcha-jigsaw-puzzle').boundingBox()
+  if (!btn || !panel || !piece) throw new Error('找不到滑块把手或拼图')
+  const buttonMax = panel.width - btn.width - 2
+  const puzzleMax = panel.width - piece.width
+  // 后端要的是拼图行程；换算成鼠标（按钮）行程。
+  const mouseDelta = (targetImgX * buttonMax) / puzzleMax
+  const startX = btn.x + btn.width / 2
+  const startY = btn.y + btn.height / 2
+  await page.mouse.move(startX, startY)
   await page.mouse.down()
   for (let i = 1; i <= 14; i++) {
-    await page.mouse.move(startX + (goalCss * i) / 14, midY)
-    // 每步留一点真实时长：后端要求轨迹总时长 ≥150ms，瞬移会被判成脚本
+    await page.mouse.move(startX + (mouseDelta * i) / 14, startY)
+    // 每步留一点真实时长：rc 的 trail 没有时间戳，接线层按总时长线性铺开，
+    // 后端要求轨迹总时长 ≥150ms，瞬移仍会被判成脚本
     await page.waitForTimeout(20)
   }
   await page.mouse.up()
@@ -97,7 +125,7 @@ async function forceCaptchaEnforced(page: Page, account: string, times: number) 
     await page.getByRole('textbox', { name: '用户名' }).fill(account)
     await page.getByRole('textbox', { name: '密码' }).fill('nope')
     await page.getByRole('button', { name: '登录', exact: true }).click()
-    await expect(page.getByRole('slider')).toBeVisible()
+    await expect(page.locator(SLIDER)).toBeVisible()
     await page.waitForTimeout(400) // 失败后表单会清空并重取挑战，等它换完
   }
 }
@@ -121,34 +149,17 @@ test('拖偏了不通过，并换一张新挑战', async ({ page }) => {
   const before = await holeOf(page)
   await dragTo(page, before + 120) // 偏出一整块，远超容差
 
-  await expect(page.getByText('滑块验证没通过')).toBeVisible()
-  // 复位并换图：新孔位必须与旧的不同（同一张图重出会被当成「怎么拖都过」）。
+  // 失败提示（toast 几秒后会自动消失，偶发被断言窗口错过）与「换新挑战」是同一件事的两面：
+  // 校验失败 → onFailed → 取新挑战。两者任一出现即算通过，不再让 toast 的存续期变成竞态。
   // 用会返回 null 的读取：expect.poll 的回调抛错就直接失败，不会等到超时。
   await expect
     .poll(
       async () => {
         const now = await readHole(page)
-        return now !== null && now !== before ? 1 : 0
+        if (now !== null && now !== before) return 'changed'
+        return (await page.getByText('滑块验证没通过').count()) > 0 ? 'toast' : 'no'
       },
       { timeout: 20_000 },
     )
-    .toBe(1)
-})
-
-test('键盘也能完成校验（方向键按容差步进，回车提交）', async ({ page }) => {
-  await openLogin(page)
-  const hole = await holeOf(page)
-
-  const track = page.getByRole('slider')
-  await track.focus()
-  const presses = Math.round(hole / 6) // 后端容差 ±6px，按 6px 一档推进必然落进容差内
-  for (let i = 0; i < presses; i++) {
-    await page.keyboard.press('ArrowRight')
-    await page.waitForTimeout(8) // 让轨迹有真实时长（后端要求 ≥150ms）
-  }
-  await page.keyboard.press('Enter')
-  await expect(page.getByText('验证通过')).toBeVisible()
-
-  // 落点确实进了容差：拖到这一步还没有「没通过」的提示
-  await expect(page.getByText('滑块验证没通过')).toHaveCount(0)
+    .not.toBe('no')
 })

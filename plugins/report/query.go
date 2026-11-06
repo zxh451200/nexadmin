@@ -147,6 +147,8 @@ type Result struct {
 	Source    string           `json:"source,omitempty"` // 命中的白名单表名，前端据此取列标题
 	Rows      []map[string]any `json:"rows"`
 	Truncated bool             `json:"truncated"`
+	// Compare 是指标卡的同环比信息；只有配置了对比且推得出时间窗时才有值。
+	Compare *CompareInfo `json:"compare,omitempty"`
 }
 
 // Env 是一次查询的运行环境。
