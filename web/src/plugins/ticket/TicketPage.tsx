@@ -36,14 +36,18 @@ import { PlatformNotice } from '@/framework/components/PlatformNotice'
 import { usePermission } from '@/framework/auth/usePermission'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { useIsMobile } from '@/framework/hooks/use-mobile'
+import { useWs } from '@/framework/hooks/useWs'
 import { DatePicker } from '@/framework/components/DatePicker'
 import { EmptyState } from '@/framework/components/EmptyState'
 import { useInvalidateMenuBadges } from '@/framework/layout/menuBadge'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { RequiredMark } from '@/framework/components/RequiredMark'
+import { ChatBubble, SystemPill } from '@/framework/components/chat/MessageBubble'
 import { RemoteSelect } from '@/framework/components/RemoteSelect'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { SimpleSelect } from '@/framework/components/SimpleSelect'
+// 附件大小与 IM 会话同一份共享实现（framework/upload/precheck），不再各写一版
+import { formatSize as sharedFormatSize } from '@/framework/upload/precheck'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Card } from '@/framework/ui/card'
@@ -81,6 +85,7 @@ import {
   useDeleteGroup,
   useDeleteRule,
   useDeleteSLAPolicy,
+  useDeleteTicket,
   useGroups,
   useLinkCandidates,
   useMergeCandidates,
@@ -184,9 +189,6 @@ const cloneSLA = (v: SLASetting): SLASetting => ({
 const minutesToHours = (m: number) => String(Math.round((m / 60) * 100) / 100)
 const hoursToMinutes = (v: string) => Math.max(1, Math.round(Number(v || 0) * 60))
 const hoursToClock = (v: string) => Math.max(0, Math.min(24, Math.round(Number(v || 0) * 60)))
-
-const formatSize = (n: number) =>
-  n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)}MB` : n >= 1024 ? `${Math.round(n / 1024)}KB` : `${n}B`
 
 const emptyGroupForm = {
   id: undefined as string | undefined,
@@ -301,6 +303,9 @@ export default function TicketPage() {
   const confirm = useConfirm()
   const [params, setParams] = useSearchParams()
   const view = params.get('view') === 'stats' ? 'stats' : 'logs'
+  // WS hub 连接状态：决定列表/详情是帧直达还是轮询兜底，徽标照实说
+  const { status: wsStatus } = useWs()
+  const wsLive = wsStatus === 'open'
 
   const [statusFilter, setStatusFilter] = useState<string | undefined>()
   const [priorityFilter, setPriorityFilter] = useState<string | undefined>()
@@ -446,6 +451,7 @@ export default function TicketPage() {
   const mergeMut = useMergeTicket()
   const addLinkMut = useAddLink()
   const removeLinkMut = useRemoveLink()
+  const deleteTicketMut = useDeleteTicket()
   const mergeCandidates = useMergeCandidates(mergeKeyword.trim(), mergeOpen)
   const linkCandidates = useLinkCandidates(linkKeyword.trim(), linkOpen)
 
@@ -492,7 +498,8 @@ export default function TicketPage() {
   }
 
   const onChangeStatus = async (ticketNo: string, to: string, confirmMsg?: string) => {
-    if (confirmMsg && !(await confirm({ description: confirmMsg }))) return
+    // 关闭工单与 IM 关闭会话同一口径：红框确认（destructive），不是普通灰框
+    if (confirmMsg && !(await confirm({ destructive: true, description: confirmMsg }))) return
     try {
       await setStatusMut.mutateAsync({ ticketNo, status: to })
       toast.success(t('common.operateSuccess'))
@@ -802,6 +809,24 @@ export default function TicketPage() {
       toast.success(t('common.operateSuccess'))
     } catch (e) {
       toast.error(e instanceof Error && e.message ? e.message : t('plugin_ticket.link.removeFailed'))
+    }
+  }
+
+  // 删除工单：清掉回复/附件/关联/动态，不可恢复。删掉的正是当前详情那张时，收起会话回到队列。
+  const removeTicket = async (tk: Ticket) => {
+    const ok = await confirm({ destructive: true, description: t('plugin_ticket.delete.confirm', { no: tk.ticketNo }) })
+    if (!ok) return
+    try {
+      await deleteTicketMut.mutateAsync(tk.ticketNo)
+      if (selectedNo === tk.ticketNo) {
+        setSelectedNo(undefined)
+        const next = new URLSearchParams(params)
+        next.delete('ticket')
+        setParams(next, { replace: true })
+      }
+      toast.success(t('common.operateSuccess'))
+    } catch (e) {
+      toast.error(e instanceof Error && e.message ? e.message : t('common.operateFailed'))
     }
   }
 
@@ -1128,6 +1153,12 @@ export default function TicketPage() {
         description={t('plugin_ticket.description')}
         actions={
           <>
+            <Can perm="ticket:create">
+              <Button onClick={openCreate}>
+                <Plus aria-hidden="true" />
+                {t('plugin_ticket.create.title')}
+              </Button>
+            </Can>
             <Button variant="outline" onClick={() => void onExport()} disabled={exporting}>
               <Download aria-hidden="true" />
               {t('plugin_ticket.export.action')}
@@ -1164,12 +1195,6 @@ export default function TicketPage() {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-            </Can>
-            <Can perm="ticket:create">
-              <Button onClick={openCreate}>
-                <Plus aria-hidden="true" />
-                {t('plugin_ticket.create.title')}
-              </Button>
             </Can>
           </>
         }
@@ -1310,6 +1335,15 @@ export default function TicketPage() {
                     </div>
                   </PopoverContent>
                 </Popover>
+                {/* WS hub 已连接 = 帧直达（列表/详情收到即刷）；断线退回 8s/3s 轮询。
+                    与 IM 会话同一枚指示：两套坐席工作台用同一种说法讲「现在的消息是不是实时的」。 */}
+                <Badge
+                  variant={wsLive ? 'success' : 'secondary'}
+                  className="shrink-0"
+                  title={wsLive ? t('common.liveRealtime') : t('common.livePolling')}
+                >
+                  {wsLive ? t('common.liveRealtime') : t('common.livePolling')}
+                </Badge>
               </div>
 
               {activeFilters.length > 0 ? (
@@ -1442,6 +1476,7 @@ export default function TicketPage() {
               onOpenLink={openLink}
               onUnlink={(otherNo) => void removeLink(otherNo)}
               onOpenTicket={(no) => selectTicket(no)}
+              onDelete={(tk) => removeTicket(tk)}
             />
           </div>
         </TabsContent>
@@ -2541,7 +2576,8 @@ function Field({ label, required, children }: { label: string; required?: boolea
     <label className="block space-y-1">
       <span className="text-xs font-medium text-foreground">
         {label}
-        {required ? <span className="text-destructive"> *</span> : null}
+        {/* 与框架其它表单同一枚 RequiredMark，不再手画星号 */}
+        {required ? <RequiredMark /> : null}
       </span>
       {children}
     </label>
@@ -2646,6 +2682,7 @@ function TicketThread({
   onOpenLink,
   onUnlink,
   onOpenTicket,
+  onDelete,
 }: {
   ticket?: Ticket
   replies: TicketReply[]
@@ -2672,11 +2709,14 @@ function TicketThread({
   onOpenLink: () => void
   onUnlink: (otherNo: string) => void
   onOpenTicket: (ticketNo: string) => void
+  onDelete: (ticket: Ticket) => Promise<void>
 }) {
   const { t, i18n } = useTranslation()
   const isMobile = useIsMobile()
   const [draft, setDraft] = useState('')
   const [internal, setInternal] = useState(false)
+  // 快捷回复选择器：与 IM 的 QuickReplyPicker 同款（Popover 卡片式两行条目），不再是菜单
+  const [pickOpen, setPickOpen] = useState(false)
   const scrollerRef = useRef<HTMLDivElement | null>(null)
   const fileRef = useRef<HTMLInputElement | null>(null)
   const draftRef = useRef<HTMLTextAreaElement | null>(null)
@@ -2991,6 +3031,17 @@ function TicketThread({
                   <Link2 aria-hidden="true" />
                   {t('plugin_ticket.link.action')}
                 </DropdownMenuItem>
+                {/* 删除是清理性出口：独立权限点，确认文案明示不可恢复 */}
+                <Can perm="ticket:delete">
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    onClick={() => void onDelete(ticket)}
+                  >
+                    <Trash2 aria-hidden="true" />
+                    {t('plugin_ticket.delete.action')}
+                  </DropdownMenuItem>
+                </Can>
               </DropdownMenuContent>
             </DropdownMenu>
           </Can>
@@ -3029,7 +3080,7 @@ function TicketThread({
                   </Badge>
                 ) : null}
                 <span className="max-w-48 truncate">{a.name}</span>
-                <span className="ms-1 text-[11px] text-muted-foreground">{formatSize(a.size)}</span>
+                <span className="ms-1 text-[11px] text-muted-foreground">{sharedFormatSize(a.size)}</span>
               </Button>
               {/* 删除会连带删掉存储对象，不可恢复，所以必须二次确认 */}
               <Can perm="ticket:reply">
@@ -3056,49 +3107,37 @@ function TicketThread({
           if (item.kind === 'act') {
             const a = item.act
             return (
-              <div key={`act-${a.id}`} className="flex justify-center">
-                <span className="max-w-[85%] rounded-full bg-muted px-2.5 py-1 text-center text-[11px] text-muted-foreground">
-                  <span className="font-medium">{a.actorName || t(`plugin_ticket.repliers.${a.actorType}`)}</span>
-                  {' · '}
-                  {activityLabel(a)}
-                  {' · '}
-                  {formatTime(a.createdAt, i18n.language)}
-                </span>
-              </div>
+              <SystemPill key={`act-${a.id}`}>
+                <span className="font-medium">{a.actorName || t(`plugin_ticket.repliers.${a.actorType}`)}</span>
+                {' · '}
+                {activityLabel(a)}
+                {' · '}
+                {formatTime(a.createdAt, i18n.language)}
+              </SystemPill>
             )
           }
           const r = item.reply
           return (
-          <div
-            key={r.id}
-            className={cn('flex', r.internal ? 'justify-start' : r.replierType === 'agent' ? 'justify-end' : 'justify-start')}
-          >
-            <div
-              className={cn(
-                'max-w-[75%] rounded-lg px-3 py-2 text-sm',
-                r.internal
-                  ? 'border border-warning/40 bg-warning/10 text-foreground'
-                  : r.replierType === 'agent'
-                    ? 'bg-primary text-primary-foreground'
-                    : r.replierType === 'system'
-                      ? 'bg-muted text-muted-foreground'
-                      : 'bg-muted text-foreground',
-              )}
-            >
-              <div className="mb-0.5 flex items-center gap-1 text-[11px] opacity-70">
-                {r.internal ? (
+            <ChatBubble
+              key={r.id}
+              side={r.replierType === 'agent' && !r.internal ? 'end' : 'start'}
+              tone={r.internal ? 'warning' : r.replierType === 'agent' ? 'primary' : r.replierType === 'system' ? 'system' : 'default'}
+              badge={
+                r.internal ? (
                   <Badge variant="warning" className="px-1 py-0 text-[10px]">
                     {t('plugin_ticket.internal.badge')}
                   </Badge>
-                ) : null}
+                ) : undefined
+              }
+              meta={
                 <span>
                   {r.replierName || t(`plugin_ticket.repliers.${r.replierType}`)} ·{' '}
                   {formatTime(r.createdAt, i18n.language)}
                 </span>
-              </div>
+              }
+            >
               <div className="whitespace-pre-wrap break-words">{r.content}</div>
-            </div>
-          </div>
+            </ChatBubble>
           )
         })}
       </div>
@@ -3146,31 +3185,50 @@ function TicketThread({
                 >
                   <Paperclip aria-hidden="true" />
                 </Button>
-                {/* 空列表不再禁用按钮：一个灰掉的闪电只会被读成「坏了」，而真正的门槛是还没有话术 */}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
+                {/* 空列表不再禁用按钮：一个灰掉的闪电只会被读成「坏了」，而真正的门槛是还没有话术。
+                    与 IM 的 QuickReplyPicker 同款：Popover 卡片列出「标题 + 内容预览」两行条目。 */}
+                <Popover open={pickOpen} onOpenChange={setPickOpen}>
+                  <PopoverTrigger asChild>
                     <Button type="button" variant="outline" size="sm">
                       <Zap aria-hidden="true" />
                       {t('plugin_ticket.canned.label')}
                     </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="max-h-72 overflow-y-auto">
-                    {canned.map((row) => (
-                      <DropdownMenuItem key={row.id} onSelect={() => insertCanned(row.id)}>
-                        {row.title}
-                      </DropdownMenuItem>
-                    ))}
-                    {!canned.length ? (
-                      <DropdownMenuItem disabled>{t('plugin_ticket.canned.empty')}</DropdownMenuItem>
-                    ) : null}
+                  </PopoverTrigger>
+                  <PopoverContent align="end" className="w-72 p-1">
+                    <div className="max-h-64 overflow-y-auto">
+                      {canned.map((row) => (
+                        <button
+                          key={row.id}
+                          type="button"
+                          className="block w-full rounded-sm px-2 py-1.5 text-start text-sm hover:bg-accent"
+                          onClick={() => {
+                            insertCanned(row.id)
+                            setPickOpen(false)
+                          }}
+                        >
+                          <div className="font-medium text-foreground">{row.title}</div>
+                          <div className="truncate text-xs text-muted-foreground">{row.content}</div>
+                        </button>
+                      ))}
+                      {!canned.length ? (
+                        <div className="px-2 py-3 text-center text-xs text-muted-foreground">{t('plugin_ticket.canned.empty')}</div>
+                      ) : null}
+                    </div>
                     <Can perm="ticket:edit">
-                      <DropdownMenuItem onSelect={() => onManageCanned()}>
+                      <button
+                        type="button"
+                        className="mt-1 flex w-full items-center gap-1.5 border-t border-border px-2 py-1.5 text-start text-sm text-muted-foreground hover:bg-accent"
+                        onClick={() => {
+                          setPickOpen(false)
+                          onManageCanned()
+                        }}
+                      >
                         <Settings2 aria-hidden="true" />
                         {t('plugin_ticket.canned.manage')}
-                      </DropdownMenuItem>
+                      </button>
                     </Can>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                  </PopoverContent>
+                </Popover>
               </div>
             </div>
             <div className="flex items-end gap-2">

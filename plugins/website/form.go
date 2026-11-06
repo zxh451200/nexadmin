@@ -44,6 +44,8 @@ type SettingForm struct {
 	HeadCode string `json:"headCode"`
 	// TitleSuffix 拼在 <title> 的「标题」之后；空 = 沿用「 - 站点名」。
 	TitleSuffix string `json:"titleSuffix"`
+	// HomeSlug 是用作首页的自定义单页 slug；空 = 内置首页。服务层校验页面存在。
+	HomeSlug string `json:"homeSlug"`
 }
 
 // ItemForm 是导航项表单。
@@ -120,6 +122,8 @@ type PageForm struct {
 	// OgImage 是社交分享图；Noindex 关闭收录（<meta robots> 与 sitemap 同步）。
 	OgImage string `json:"ogImage"`
 	NoIndex bool   `json:"noindex"`
+	// Sort 是管理端列表排序：越小越靠前；0 = 未设置。
+	Sort int `json:"sort"`
 }
 
 // PostForm 是新闻表单；Content 为富文本 HTML，落库前 Sanitize。

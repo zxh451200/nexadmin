@@ -53,6 +53,9 @@ type Setting struct {
 	HeadCode string `gorm:"column:head_code;type:text" json:"headCode"`
 	// TitleSuffix 拼在 <title> 的「标题」之后，替换默认的「 - 站点名」；空 = 沿用内置组合。
 	TitleSuffix string `gorm:"column:title_suffix;size:100;not null;default:''" json:"titleSuffix"`
+	// HomeSlug 是用作首页的自定义单页 slug：非空时首页渲染该页内容（替换内置 Hero 页）；空 = 内置首页。
+	// 页面本身仍可通过 /p/:slug 访问，不冲突。
+	HomeSlug string `gorm:"column:home_slug;size:64;not null;default:''" json:"homeSlug"`
 	// SeedVersion 记录出厂内容补种进度：升级后只补一次新增的出厂条目，不复活管理员删掉的内容。
 	SeedVersion int `gorm:"not null;default:1" json:"-"`
 }
@@ -165,6 +168,8 @@ type Page struct {
 	// PublishedJSON 是非默认语言的发布态：{"en-US":true,"ja-JP":false}；
 	// 空 = 该行的 published 对所有语言生效（升级前保存的内容不会因新规则突然下线）。
 	PublishedJSON string `gorm:"type:text" json:"publishedJson"`
+	// Sort 是管理端列表排序：越小越靠前；0 = 未设置，排在已设置的后面。
+	Sort int `gorm:"not null;default:0" json:"sort"`
 	// SeoTitle 是独立的 meta 标题：留空回退「标题 - 站点名」；非默认语言存 i18nJson。
 	// OgImage 是社交分享图（og:image / twitter:image），空 = 站点默认分享图。
 	OgImage string `gorm:"size:255;not null;default:''" json:"ogImage"`

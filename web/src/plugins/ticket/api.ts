@@ -571,6 +571,15 @@ export function useAddLink() {
   })
 }
 
+/** 删除工单：回复/活动/关联/附件一并清掉，不可恢复。高危操作，独立权限点 ticket:delete。 */
+export function useDeleteTicket() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (ticketNo: string) => api.del<unknown>(`${BASE}/tickets/${ticketNo}`, undefined, { silent: true }),
+    onSuccess: invalidate,
+  })
+}
+
 export function useRemoveLink() {
   const invalidate = useInvalidate()
   return useMutation({

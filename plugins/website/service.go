@@ -248,6 +248,18 @@ func (s *Service) SaveSettings(ctx context.Context, f SettingForm) (*Setting, er
 	// head 注入限长：统计脚本几十行足够，超长多半是误把整页代码粘进来
 	row.HeadCode = trimLen(f.HeadCode, 5000)
 	row.TitleSuffix = trimLen(f.TitleSuffix, 100)
+	// 设为首页只存 slug 不存 ID：页面被删时首页自动回退内置首页，不留悬空引用。
+	// 校验只要求页面存在（草稿也行——发布后首页即生效）；下线后在首页自动回退，不用改设置。
+	row.HomeSlug = trimLen(f.HomeSlug, 64)
+	if row.HomeSlug != "" {
+		var n int64
+		if err := s.db.WithContext(ctx).Model(&Page{}).Where("slug = ?", row.HomeSlug).Count(&n).Error; err != nil {
+			return nil, err
+		}
+		if n == 0 {
+			return nil, response.BadRequest("website.home_slug_missing")
+		}
+	}
 	socials, err := normalizeSocials(f.Socials)
 	if err != nil {
 		return nil, err
@@ -599,7 +611,9 @@ func (s *Service) ListPages(ctx context.Context, q ContentQuery) ([]Page, int64,
 		return nil, 0, err
 	}
 	var rows []Page
-	if err := tx.Order("updated_at DESC").Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Find(&rows).Error; err != nil {
+	// 排序字段在前（0 = 未设置排在最后），同序号内按更新时间倒序。
+	if err := tx.Order("CASE WHEN sort > 0 THEN 0 ELSE 1 END, sort ASC, updated_at DESC, id DESC").
+		Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Find(&rows).Error; err != nil {
 		return nil, 0, err
 	}
 	return rows, total, nil
@@ -630,7 +644,7 @@ func (s *Service) SavePage(ctx context.Context, id idgen.ID, f PageForm) (*Page,
 		return nil, response.BadRequest("website.i18n_invalid").Wrap(err)
 	}
 	row.Slug, row.Title, row.SeoTitle, row.SeoDesc = f.Slug, f.Title, f.SeoTitle, f.SeoDesc
-	row.OgImage, row.Noindex = f.OgImage, f.NoIndex
+	row.OgImage, row.Noindex, row.Sort = f.OgImage, f.NoIndex, f.Sort
 	row.Content, row.Published, row.I18nJSON = htmlsafe.Sanitize(f.Content), f.Published, i18n
 	pub, err := pi18n.NormalizePublish(f.PublishedJSON, f.Published, pi18n.ParseDoc(i18n),
 		map[string]string{"title": row.Title, "seoTitle": row.SeoTitle, "seoDesc": row.SeoDesc, "content": row.Content}, siteLocales{}, pageI18nFields)

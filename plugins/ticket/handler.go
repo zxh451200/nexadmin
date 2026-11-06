@@ -524,6 +524,11 @@ func (h *handler) export(c *gin.Context) {
 	}
 }
 
+// DELETE /plugins/ticket/tickets/:no —— 删除工单（回复/活动/关联/附件一并清理，见 delete.go）。
+func (h *handler) deleteTicket(c *gin.Context) {
+	respond(c, nil, h.svc.DeleteTicket(c.Request.Context(), c.Param("no")))
+}
+
 func pathID(c *gin.Context) (idgen.ID, bool) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil || id <= 0 {
@@ -581,6 +586,8 @@ func (h *handler) Register(r *gin.RouterGroup, d *core.Deps) {
 	// 后台代客建单与批量操作（静态段 /tickets/bulk 在 :no 之前注册）。
 	g.POST("/tickets", core.Perm("ticket:create"), d.OperLogMiddleware("ticket", "create"), h.create)
 	g.POST("/tickets/bulk", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "update"), h.bulk)
+	// 删除工单是清理性高危操作：独立权限点 ticket:delete，范围外 404，进操作日志。
+	g.DELETE("/tickets/:no", core.Perm("ticket:delete"), h.inScope, d.OperLogMiddleware("ticket", "delete"), h.deleteTicket)
 	g.GET("/tickets/:no/replies", core.Perm("ticket:list"), h.inScope, h.replies)
 	g.POST("/tickets/:no/replies", core.Perm("ticket:reply"), h.inScope, d.OperLogMiddleware("ticket", "reply"), h.adminReply)
 	g.POST("/tickets/:no/status", core.Perm("ticket:edit"), h.inScope, d.OperLogMiddleware("ticket", "update"), h.setStatus)
