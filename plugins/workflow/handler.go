@@ -311,6 +311,12 @@ func (h *handler) todoCount(c *gin.Context) {
 	respond(c, map[string]int64{"count": n}, err)
 }
 
+// GET /plugins/workflow/stats —— 流程中心概览卡片（各状态实例数 + 我的待办）。
+func (h *handler) stats(c *gin.Context) {
+	st, err := h.svc.Stats(c.Request.Context(), actor(c))
+	respond(c, st, err)
+}
+
 // POST /plugins/workflow/instances/:id/urge —— 发起人催办（站内信提醒当前待审批人）。
 func (h *handler) instUrge(c *gin.Context) {
 	id, ok := paramID(c)
@@ -356,6 +362,7 @@ func (h *handler) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.POST("/instances/:id/countersign", core.Perm("workflow:approve"), h.instCountersign)
 	g.POST("/instances/:id/transfer", core.Perm("workflow:approve"), h.instTransfer)
 	g.GET("/todo-count", core.Perm("workflow:list"), h.todoCount)
+	g.GET("/stats", core.Perm("workflow:list"), h.stats)
 	g.POST("/instances/:id/rollback", core.Perm("workflow:approve"), h.instRollback)
 	g.POST("/instances/:id/escalate", core.Perm("workflow:approve"), h.instEscalate)
 	g.POST("/instances/:id/withdraw", core.Perm("workflow:start"), h.instWithdraw)

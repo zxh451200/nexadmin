@@ -289,6 +289,23 @@ defineMock([
     },
   },
   {
+    method: 'GET',
+    url: '/plugins/workflow/stats',
+    // 与后端 Stats 同口径：各状态实例数 + 我的待办。缺这条时流程中心的卡片恒为 0，
+    // 开发态看不出「加了一张卡但拿不到数」这类回归。
+    handler: () => {
+      const me = '1790000000000000001'
+      const by = (s: string) => insts.filter((x) => x.status === s).length
+      return {
+        running: by('running'),
+        approved: by('approved'),
+        rejected: by('rejected'),
+        cancelled: by('cancelled'),
+        todo: insts.filter((x) => x.status === 'running' && x.pending.some((p) => !p.assignee || p.assignee === me)).length,
+      }
+    },
+  },
+  {
     method: 'POST',
     url: '/plugins/workflow/instances/:id/rollback',
     handler: ({ params, body }) => {

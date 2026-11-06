@@ -232,3 +232,19 @@ export function fetchTodoCount(): Promise<number> {
     .get<{ count: number }>(`${BASE}/todo-count`, undefined, { silent: true })
     .then((d) => d.count)
 }
+
+/** 流程中心概览：各状态实例数 + 我的待办。 */
+export interface WorkflowStats {
+  running: number
+  approved: number
+  rejected: number
+  cancelled: number
+  todo: number
+}
+
+export function useWorkflowStats() {
+  return useQuery({
+    queryKey: [...KEY, 'stats'],
+    queryFn: () => api.get<WorkflowStats>(`${BASE}/stats`),
+  })
+}

@@ -559,6 +559,41 @@ func (s *Service) TodoCount(ctx context.Context, actor string) (int64, error) {
 	return total, err
 }
 
+// WorkflowStats 是流程中心的概览卡片：各终态与在途的实例数。
+// 计数走存储端口的分页 total（Page=1/PageSize=1），不新增聚合 SQL。
+type WorkflowStats struct {
+	Running   int64 `json:"running"`
+	Approved  int64 `json:"approved"`
+	Rejected  int64 `json:"rejected"`
+	Cancelled int64 `json:"cancelled"`
+	Todo      int64 `json:"todo"`
+}
+
+func (s *Service) Stats(ctx context.Context, actor string) (*WorkflowStats, error) {
+	count := func(status string) (int64, error) {
+		_, total, err := s.rt.Insts.List(ctx, store.InstQuery{Status: status, Page: 1, PageSize: 1})
+		return total, err
+	}
+	st := WorkflowStats{}
+	var err error
+	if st.Running, err = count(engine.StatusRunning); err != nil {
+		return nil, err
+	}
+	if st.Approved, err = count(engine.StatusApproved); err != nil {
+		return nil, err
+	}
+	if st.Rejected, err = count(engine.StatusRejected); err != nil {
+		return nil, err
+	}
+	if st.Cancelled, err = count(engine.StatusCancelled); err != nil {
+		return nil, err
+	}
+	if st.Todo, err = s.TodoCount(ctx, actor); err != nil {
+		return nil, err
+	}
+	return &st, nil
+}
+
 // urgeSender 是催办需要的最小站内信面；nil = 通知未装配，催办只返回成功但无人被提醒。
 type urgeSender interface {
 	Send(ctx context.Context, m notify.Msg) error

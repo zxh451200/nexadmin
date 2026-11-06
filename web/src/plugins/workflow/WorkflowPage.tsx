@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowRightLeft, BellRing, CircleCheck, GitBranch, History, Pencil, Plus, Trash2, Undo2, UserPlus, XCircle } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -6,6 +6,7 @@ import { Can } from '@/framework/auth/Can'
 import { useAuth } from '@/framework/auth/useAuth'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { EmptyState } from '@/framework/components/EmptyState'
+import { StatCard } from '@/framework/components/StatCard'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { RequiredMark } from '@/framework/components/RequiredMark'
@@ -31,6 +32,7 @@ import {
   useTemplates,
   useUrgeInstance,
   useWfAction,
+  useWorkflowStats,
   type WfDef,
 } from './api'
 import { formatTime, statusVariant } from './format'
@@ -52,10 +54,24 @@ export default function WorkflowPage() {
   const [tab, setTab] = useState<Filter | 'defs'>('todo')
   const [selected, setSelected] = useState<string | undefined>()
   const [starting, setStarting] = useState(false)
+  const { data: stats } = useWorkflowStats()
+
+  const cards = [
+    { label: t('plugin_workflow.tabs.todo'), value: stats?.todo ?? 0, tone: 'warning' as const },
+    { label: t('plugin_workflow.status.running'), value: stats?.running ?? 0, tone: 'primary' as const },
+    { label: t('plugin_workflow.status.approved'), value: stats?.approved ?? 0, tone: 'success' as const },
+    { label: t('plugin_workflow.status.rejected'), value: stats?.rejected ?? 0, tone: 'destructive' as const },
+    { label: t('plugin_workflow.status.cancelled'), value: stats?.cancelled ?? 0, tone: 'info' as const },
+  ]
 
   return (
     <PageContainer>
       <PageHeader title={t('plugin_workflow.title')} description={t('plugin_workflow.description')} />
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+        {cards.map((c) => (
+          <StatCard key={c.label} title={c.label} value={c.value} tone={c.tone} />
+        ))}
+      </div>
       <Tabs value={tab} onValueChange={(v) => setTab(v as Filter | 'defs')} className="flex flex-col gap-4">
         {/* 发起入口跟着列表走（与各页 DataTable toolbar 的「新建」同位），不飘在页头右上角 */}
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -653,11 +669,30 @@ function InstanceDrawer({ id, onClose }: { id?: string; onClose: () => void }) {
     setRollbackTo('')
   }, [id])
 
-  // 抽屉是手写 overlay，没有 Radix 的焦点管理：至少让 Esc 能关，键盘用户才不会被锁在页面里
+  // 抽屉是手写 overlay，没有 Radix 的焦点管理：Esc 关闭 + Tab 焦点圈定（首尾循环），
+  // 键盘用户才不会被锁在页面里，也不会 Tab 到抽屉背后的元素上。
+  const drawerRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (!id) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') {
+        onClose()
+        return
+      }
+      if (e.key !== 'Tab' || !drawerRef.current) return
+      const focusables = drawerRef.current.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      )
+      if (focusables.length === 0) return
+      const first = focusables[0]
+      const last = focusables[focusables.length - 1]
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault()
+        first.focus()
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -714,6 +749,7 @@ function InstanceDrawer({ id, onClose }: { id?: string; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/40" onClick={onClose}>
       <div
+        ref={drawerRef}
         className="flex h-full w-full max-w-2xl flex-col border-l bg-card shadow-xl"
         onClick={(e) => e.stopPropagation()}
         role="dialog"

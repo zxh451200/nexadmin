@@ -441,3 +441,44 @@ func TestUrgeNotifiesPendingApprovers(t *testing.T) {
 		t.Fatal("已结束的流程不应能催办")
 	}
 }
+
+// Stats：各状态计数与我的待办口径一致（存储端口分页 total）。
+func TestStatsCountsByStatus(t *testing.T) {
+	s := memService(t)
+	def := savePublished(t, s)
+	ctx := ctxOf()
+
+	inst, err := s.InstStart(ctx, StartInput{DefID: idText(def.ID), Title: "运行中"}, "alice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, err := s.Stats(tctx(7), "alice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Running != 1 || st.Todo != 1 || st.Approved != 0 || st.Rejected != 0 || st.Cancelled != 0 {
+		t.Fatalf("初始计数 = %+v", st)
+	}
+	if _, err := s.InstApprove(ctx, inst.ID, "alice", ""); err != nil {
+		t.Fatal(err)
+	}
+	// lead 通过后推进到会签节点：实例仍在途（Todo 按 actor 计实例，bob 名下 1 条）
+	if st, err = s.Stats(tctx(7), "bob"); err != nil {
+		t.Fatal(err)
+	}
+	if st.Running != 1 || st.Todo != 1 {
+		t.Fatalf("会签阶段计数 = %+v", st)
+	}
+	if _, err := s.InstApprove(ctx, inst.ID, "bob", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.InstApprove(ctx, inst.ID, "carol", ""); err != nil {
+		t.Fatal(err)
+	}
+	if st, err = s.Stats(tctx(7), "alice"); err != nil {
+		t.Fatal(err)
+	}
+	if st.Running != 0 || st.Approved != 1 || st.Todo != 0 {
+		t.Fatalf("通过后计数 = %+v", st)
+	}
+}
