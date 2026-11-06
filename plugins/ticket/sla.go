@@ -142,8 +142,17 @@ func (v *SLASetting) normalize() error {
 	if v.StartMinute < 0 || v.StartMinute >= 1440 || v.EndMinute <= 0 || v.EndMinute > 1440 || v.StartMinute >= v.EndMinute {
 		return response.BadRequest("error.bad_request")
 	}
+	// 补齐与删键都写在这张 map 上，而 SLASetting 虽是值传递、map 却是引用：
+	// 就地改会写进调用方那张表——两个并发保存直接 fatal「concurrent map writes」，
+	// 单次调用也会让调用方看见自己的入参被悄悄补全过。先换成这一份自己的副本。
 	if v.Targets == nil {
-		v.Targets = map[string]SLATarget{}
+		v.Targets = make(map[string]SLATarget, 4)
+	} else {
+		cp := make(map[string]SLATarget, len(v.Targets))
+		for p, t := range v.Targets {
+			cp[p] = t
+		}
+		v.Targets = cp
 	}
 	def := DefaultSLA()
 	for _, p := range []string{PriorityUrgent, PriorityHigh, PriorityNormal, PriorityLow} {

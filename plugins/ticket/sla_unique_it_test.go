@@ -458,7 +458,15 @@ func runSLAPolicyConcurrentSave(t *testing.T, gdb *gorm.DB, engine string) {
 		go func(i int) {
 			defer wg.Done()
 			<-start // 起跑线对齐，八条一起冲出去
-			_, errs[i] = svc.SaveSLAPolicy(ctx, setting)
+			// 每条 goroutine 自己一张 Targets：生产里每个请求各自反序列化出一张 map，
+			// 共用一张不是这次的被测点（它 2026-11-06 实测让进程 fatal「concurrent map writes」，
+			// 那个形状已由 normalize 的副本修掉；这里保持与生产同形，测的仍是 code 上的唯一索引）。
+			in := setting
+			in.Targets = make(map[string]SLATarget, len(setting.Targets))
+			for p, t := range setting.Targets {
+				in.Targets[p] = t
+			}
+			_, errs[i] = svc.SaveSLAPolicy(ctx, in)
 		}(i)
 	}
 	close(start)
