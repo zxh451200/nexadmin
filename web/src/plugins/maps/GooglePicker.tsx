@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Button } from '@/framework/ui/button'
 import type { MapPickerProps } from '@/framework/map'
 import { regeo, useMapsConfig } from './api'
+import { PickerSearch } from './PickerSearch'
 
 type LatLng = { lat: () => number; lng: () => number }
 type GMap = {
@@ -50,6 +51,8 @@ export function GooglePicker({ value, onChange, height = 420 }: MapPickerProps) 
   const cfg = useMapsConfig()
   const pc = cfg.data?.google
   const elRef = useRef<HTMLDivElement | null>(null)
+  // markerRef：搜索选中时把标记挪过去（marker 在 effect 里创建）
+  const markerRef = useRef<{ setPosition: (p: { lat: number; lng: number }) => void } | null>(null)
   const [sel, setSel] = useState<{ lng: number; lat: number } | null>(value ? { lng: value.lng, lat: value.lat } : null)
   const [address, setAddress] = useState(value?.address ?? '')
   const [error, setError] = useState<string | null>(null)
@@ -66,6 +69,7 @@ export function GooglePicker({ value, onChange, height = 420 }: MapPickerProps) 
         const center = { lat: sel?.lat ?? 39.90923, lng: sel?.lng ?? 116.397428 }
         const map = new g.maps.Map(elRef.current, { center, zoom: 12 })
         const marker = new g.maps.Marker({ position: center, map, draggable: true })
+        markerRef.current = marker
         marker.addListener('dragend', () => {
           const p = marker.getPosition()
           setSel({ lng: p.lng(), lat: p.lat() })
@@ -115,6 +119,11 @@ export function GooglePicker({ value, onChange, height = 420 }: MapPickerProps) 
   return (
     <div className="flex flex-col gap-2">
       {error ? <p className="text-xs text-destructive">{error}</p> : null}
+      <PickerSearch provider="google" onPick={({ lng, lat, address }) => {
+        setSel({ lng, lat })
+        setAddress(address)
+        markerRef.current?.setPosition({ lat, lng })
+      }} />
       <div ref={elRef} style={{ height }} className="w-full overflow-hidden rounded-md border border-border bg-muted" />
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
         <span className="num">{sel ? `${sel.lng.toFixed(6)}, ${sel.lat.toFixed(6)}` : t('plugin_maps.clickHint')}</span>

@@ -20,7 +20,7 @@ import { SsoAppFormDialog } from './SsoAppFormDialog'
 
 /** 单点登录应用：作为「系统设置 → 安全与登录」的一个分区渲染，旧地址 /system/sso-apps 重定向到 ?tab=sso。 */
 export function SsoSection() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const confirm = useConfirm()
   const { has } = usePermission()
   const canEdit = has('sso:edit')
@@ -144,6 +144,12 @@ export function SsoSection() {
       <DataTable
         toolbar={
           <>
+            <Can perm="sso:edit">
+              <Button onClick={() => openForm(null)}>
+                <Plus aria-hidden="true" />
+                {t('sso.create')}
+              </Button>
+            </Can>
             <Button variant="outline" onClick={() => setKeysOpen(true)}>
               <KeyRound aria-hidden="true" />
               {t('sso.keys.entry')}
@@ -164,15 +170,9 @@ export function SsoSection() {
                 { header: t('sso.fields.homeUrl'), value: (a) => a.homeUrl },
                 { header: t('sso.fields.allowOrgRead'), value: (a) => (a.allowOrgRead ? t('common.yes') : t('common.no')) },
                 { header: t('sso.fields.description'), value: (a) => a.description },
-                { header: t('common.createdAt'), value: (a) => a.createdAt },
+                { header: t('common.createdAt'), value: (a) => (a.createdAt ? new Date(a.createdAt).toLocaleString(i18n.language) : '') },
               ]}
             />
-            <Can perm="sso:edit">
-              <Button onClick={() => openForm(null)}>
-                <Plus aria-hidden="true" />
-                {t('sso.create')}
-              </Button>
-            </Can>
           </>
         }
         columns={columns}

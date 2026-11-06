@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ChevronLeft, ChevronRight, FolderInput, LayoutGrid, List, Lock, Trash2, Upload } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Download, FolderInput, LayoutGrid, List, Lock, Trash2, Upload } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
@@ -25,7 +25,7 @@ import { FileActionsMenu, FilePreviewDialog, MoveDialog, RenameDialog } from './
 import { FileThumb } from './FileThumb'
 import { GROUP_ALL, GroupPanel } from './GroupPanel'
 import { UploadDialog } from './UploadDialog'
-import { useDeleteFiles, useFileList, useMoveFiles, useUpdateFile, type FileItem, type FileSort } from './api'
+import { downloadFilesZip, useDeleteFiles, useFileList, useMoveFiles, useUpdateFile, type FileItem, type FileSort } from './api'
 
 const PAGE_SIZE_GRID = 24
 const CATEGORIES = ['image', 'video', 'doc', 'other'] as const
@@ -165,6 +165,10 @@ export default function FilePage() {
 
   const batchActions = (ids: string[]) => (
     <>
+      <Button variant="outline" size="sm" className="h-11 md:h-8" onClick={() => void downloadFilesZip(ids)}>
+        <Download className="me-1 size-4" aria-hidden="true" />
+        {t('fileMgr.zipSelected')}
+      </Button>
       {canManage && (
         <Button variant="outline" size="sm" className="h-11 md:h-8" onClick={() => setMoving(ids)}>
           <FolderInput className="me-1 size-4" aria-hidden="true" />

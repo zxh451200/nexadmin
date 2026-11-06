@@ -18,20 +18,23 @@ import { Button } from '@/framework/ui/button'
 import { Checkbox } from '@/framework/ui/checkbox'
 import { Card } from '@/framework/ui/card'
 import { Input } from '@/framework/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import { Skeleton } from '@/framework/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { ApiError } from '@/framework/request/http'
 import { useAdminLanguages, useSaveLanguages, type LanguageRow } from './api'
 
-/** 编辑期在 LanguageRow 上挂一个稳定 key：拖拽与未保存草稿都靠它认行。 */
-type EditableRow = LanguageRow & { rowId: string }
+/** 编辑期在 LanguageRow 上挂一个稳定 key：拖拽与未保存草稿都靠它认行。
+ *  dirTouched=false 表示这是新增行且用户没动过方向：随代码自动推导（与服务端留空推导同规则），
+ *  用户在 Select 里选过就置 true，此后不再自动改；从服务端加载的行是 undefined，永不自动改。 */
+type EditableRow = LanguageRow & { rowId: string; dirTouched?: boolean }
 
 const DRAFT_KEY = 'nex-language-draft'
 let seq = 0
 const nextId = () => `${Date.now().toString(36)}-${(seq++).toString(36)}`
 
 const emptyRow = (): EditableRow => ({
-  rowId: nextId(), code: '', name: '', dir: 'ltr', default: false, htmlLang: '', ogLocale: '', prefix: '', dateFormat: '', enabled: true,
+  rowId: nextId(), code: '', name: '', dir: '', default: false, htmlLang: '', ogLocale: '', prefix: '', dateFormat: '', enabled: true, dirTouched: false,
 })
 
 // 保存是整表替换：用固定字段顺序做指纹（忽略 rowId），避免对象键序不同造成“永远显示未保存”。
@@ -42,6 +45,11 @@ const signature = (rows: LanguageRow[]) =>
 
 const CODE_RE = /^[a-zA-Z]{2,3}(-[a-zA-Z0-9]+)*$/
 const PREFIX_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/
+
+// RTL 语基与服务端 core/languages.go 的 rtlRe 同一张清单：新增行 dir 留空时前端先按代码
+// 预推导出同一结果，用户看到的默认值就是保存后会生效的值，而不是「界面 LTR、重启后 RTL」。
+const RTL_BASE = /^(ar|he|fa|ur|yi|ps|ku)(-|$)/
+const deriveDir = (code: string): 'ltr' | 'rtl' => (RTL_BASE.test(code.trim()) ? 'rtl' : 'ltr')
 
 /** 一行语言的问题；空串表示没问题。 */
 function rowError(r: LanguageRow, rows: LanguageRow[], index: number, dupMsg: string, codeMsg: string, prefixMsg: string) {
@@ -70,6 +78,15 @@ export function LanguageSection() {
   const [hydrated, setHydrated] = useState(false)
   const restoredDraft = useRef(false)
   const hydratedRef = useRef(false)
+  // 新增行的聚焦：点「添加语言」后新卡片可能出现在视口外，聚焦它的代码输入框并滚到可见处
+  const [focusRowId, setFocusRowId] = useState<string | null>(null)
+  const codeInputs = useRef(new Map<string, HTMLInputElement>())
+  useEffect(() => {
+    if (!focusRowId) return
+    codeInputs.current.get(focusRowId)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    codeInputs.current.get(focusRowId)?.focus()
+    setFocusRowId(null)
+  }, [focusRowId])
   // 服务端上一份数据的指纹：用来区分“确实刷新了”和“本地有改动，别覆盖”
   const serverSig = useRef('')
   // rows 的最新值：effect 里判断“是否与服务端一致”要用它，不能读闭包里的旧值
@@ -136,10 +153,17 @@ export function LanguageSection() {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   )
 
-  const patch = (i: number, next: Partial<LanguageRow>) =>
+  const patch = (i: number, next: Partial<Omit<EditableRow, 'rowId'>>) =>
     setRows((prev) => prev.map((r, k) => (k === i ? { ...r, ...next } : r)))
   const setDefault = (i: number) =>
     setRows((prev) => prev.map((r, k) => ({ ...r, default: k === i, prefix: k === i ? '' : r.prefix, enabled: k === i ? true : r.enabled })))
+
+  // 新增行：追加后聚焦代码输入框；dir 留空由代码变化推导（见 RTL_BASE），保存时与服务端推导同结果
+  const addRow = () => {
+    const row = emptyRow()
+    setRows((prev) => [...prev, row])
+    setFocusRowId(row.rowId)
+  }
 
   const remove = async (i: number) => {
     const row = rows[i]
@@ -198,7 +222,7 @@ export function LanguageSection() {
         <p className="text-sm text-muted-foreground">{t('language.desc')}</p>
         <Can perm="language:update">
           <div className="flex items-center gap-2">
-            <Button type="button" variant="outline" onClick={() => setRows((prev) => [...prev, emptyRow()])}>
+            <Button type="button" variant="outline" onClick={addRow}>
               <Plus aria-hidden="true" />
               {t('language.add')}
             </Button>
@@ -223,7 +247,6 @@ export function LanguageSection() {
                           {handle}
                           <span className="truncate font-mono text-sm font-medium">{row.code || '…'}</span>
                           {row.default ? <Badge variant="success">{t('language.defaultTag')}</Badge> : null}
-                          <Badge variant={row.dir === 'rtl' ? 'secondary' : 'outline'}>{row.dir}</Badge>
                           {row.enabled === false ? <Badge variant="warning">{t('language.disabledTag')}</Badge> : null}
                         </div>
                         <Can perm="language:update">
@@ -258,10 +281,39 @@ export function LanguageSection() {
 
                       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                         <Field label={t('language.fields.code')} error={err}>
-                          <Input value={row.code} className="font-mono" placeholder="ja-JP" onChange={(e) => patch(i, { code: e.target.value })} />
+                          <Input
+                            value={row.code}
+                            className="font-mono"
+                            placeholder="ja-JP"
+                            ref={(el) => {
+                              if (el) codeInputs.current.set(row.rowId, el)
+                              else codeInputs.current.delete(row.rowId)
+                            }}
+                            onChange={(e) =>
+                              patch(i, {
+                                code: e.target.value,
+                                // 新增行且用户没动过方向：跟着代码推导（阿拉伯语系自动 RTL）
+                                ...(row.dirTouched === false ? { dir: deriveDir(e.target.value) } : {}),
+                              })
+                            }
+                          />
                         </Field>
                         <Field label={t('language.fields.name')}>
                           <Input value={row.name} placeholder="日本語" onChange={(e) => patch(i, { name: e.target.value })} />
+                        </Field>
+                        <Field label={t('language.fields.dir')} hint={t('language.fields.dirHint')}>
+                          <Select
+                            value={row.dir || deriveDir(row.code)}
+                            onValueChange={(v) => patch(i, { dir: v as 'ltr' | 'rtl', dirTouched: true })}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="ltr">{t('language.dirLtr')}</SelectItem>
+                              <SelectItem value="rtl">{t('language.dirRtl')}</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </Field>
                         <Field label={t('language.fields.prefix')} hint={row.default ? t('language.prefixRoot') : t('language.prefixHint')}>
                           <Input

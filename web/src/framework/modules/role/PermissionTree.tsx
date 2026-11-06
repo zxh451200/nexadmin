@@ -77,6 +77,8 @@ export function PermissionTree({ data, value, onChange, disabled, className }: P
     return out
   }, [data])
   const allIds = useMemo(() => data.flatMap((n) => subtreeIds(n)), [data])
+  // 全选/清空合成一个按钮：已全选时切成「清空」，否则是「全选」——两个动作互斥，不必并排占位。
+  const allSelected = allIds.length > 0 && allIds.every((id) => selected.has(id))
 
   const stateOf = (n: PermissionNode): boolean | 'indeterminate' => {
     const leaves = leafIds(n)
@@ -131,11 +133,14 @@ export function PermissionTree({ data, value, onChange, disabled, className }: P
     <div className={cn('flex flex-col gap-2', className)}>
       <div className="flex flex-wrap items-center gap-2">
         <ExpandAllToggle ids={allParents} expanded={open} onChange={setExpanded} />
-        <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => onChange(allIds)}>
-          {t('role.assign.selectAll')}
-        </Button>
-        <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => onChange([])}>
-          {t('role.assign.clearAll')}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={disabled}
+          onClick={() => onChange(allSelected ? [] : allIds)}
+        >
+          {allSelected ? t('role.assign.clearAll') : t('role.assign.selectAll')}
         </Button>
         <span className="num ms-auto text-sm text-muted-foreground">{t('role.assign.selectedCount', { count: value.length })}</span>
       </div>

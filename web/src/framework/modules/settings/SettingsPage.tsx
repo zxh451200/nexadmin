@@ -14,7 +14,7 @@ import { cn } from '@/lib/utils'
 import { useSettings } from './api'
 import { AuthSection } from './AuthSection'
 import { NotifySection } from './NotifySection'
-import { AiSection, CacheSection, SecuritySection, SiteSection, SmsSection, StorageSection } from './Sections'
+import { AiSection, SecuritySection, SiteSection, SmsSection, StorageSection } from './Sections'
 import { ParamsSection } from '@/framework/modules/config/SysConfigPage'
 import { LanguageSection } from '@/framework/modules/language/LanguagePage'
 
@@ -30,7 +30,6 @@ const GROUPS: ReadonlyArray<{ key: SettingsGroupKey; items: ReadonlyArray<{ key:
   {
     key: 'advanced',
     items: [
-      { key: 'cache' },
       { key: 'language', perm: 'language:list' },
       { key: 'params', perm: 'config:list' },
     ],
@@ -152,7 +151,6 @@ export default function SettingsPage() {
             ) : null}
             {active === 'site' ? <SiteSection value={data.site} /> : null}
             {active === 'security' ? <SecuritySection value={data.security} /> : null}
-            {active === 'cache' ? <CacheSection value={data.cache} /> : null}
             {active === 'storage' ? <StorageSection value={data.storage} /> : null}
             {active === 'ai' ? <AiSection value={data.ai} /> : null}
             {active === 'sms' ? <SmsSection value={data.sms} /> : null}

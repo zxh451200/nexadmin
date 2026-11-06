@@ -24,6 +24,12 @@
     "searchPlaceholder": "Search by name",
     "empty": "No data",
     "truncated": "Result truncated at the row limit",
+    "compare": {
+      "period": "vs previous period",
+      "year": "vs same period last year",
+      "previous": "previous {{value}}",
+      "noPrevious": "no previous period"
+    },
     "loadFailed": "Failed to load, please try again later",
     "type": {
       "bar": "Bar",
@@ -247,6 +253,11 @@
       "desc": "Descending",
       "limit": "Max rows (up to 5000)",
       "unit": "Unit",
+      "compare": "Comparison",
+      "compareNone": "None",
+      "comparePeriod": "Period over period",
+      "compareYear": "Year over year",
+      "compareHint": "The comparison window is derived from the report's time filter; without a complete start and end, only the current value is shown.",
       "colors": "Colors (semantic, used in order)",
       "stacked": "Stacked",
       "shapeCartesian": "Bar and line charts need at least 1 dimension and 1 measure",

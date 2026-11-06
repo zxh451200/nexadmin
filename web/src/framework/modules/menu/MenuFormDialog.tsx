@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -62,7 +62,7 @@ export function MenuFormDialog({ open, onOpenChange, editing, defaultParentId, t
   const { isPlatform } = usePermission()
   const create = useCreateMenu()
   const update = useUpdateMenu()
-  const tr = (s: string) => t(s, { defaultValue: s })
+  const tr = useCallback((s: string) => t(s, { defaultValue: s }), [t])
 
   const schema = useMemo(
     () =>
@@ -148,18 +148,43 @@ export function MenuFormDialog({ open, onOpenChange, editing, defaultParentId, t
 
   const type = form.watch('type')
 
-  // 上级候选：去掉按钮；编辑时排除自己及下级
+  // 上级候选：去掉按钮；编辑时排除自己及下级。
+  // 「不能选的不显示」：非法父级直接不上树（而不是灰显）——目录/菜单的父级只能是目录
+  // （菜单是叶子，只挂按钮），按钮的父级只能是菜单；非法节点若有可选子级，子级上提到当前层。
   const parentData = useMemo(() => {
     const blocked = editing ? collectIds(editing) : new Set<string>()
     const strip = (nodes: SysMenu[]): Record<string, unknown>[] =>
       nodes
         .filter((n) => n.type !== 'button')
         .map((n) => ({ id: n.id, title: tr(n.title), type: n.type, children: strip(n.children ?? []) }))
-    const mark = (nodes: Record<string, unknown>[]): Record<string, unknown>[] =>
-      nodes.map((n) => ({ ...n, blocked: blocked.has(n.id as string), children: mark(n.children as Record<string, unknown>[]) }))
-    return mark(strip(tree))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tree, editing, t])
+    const validKind = (n: Record<string, unknown>) => (type === 'button' ? n.type === 'menu' : n.type === 'dir')
+    const build = (nodes: Record<string, unknown>[], out: Record<string, unknown>[]) => {
+      for (const n of nodes) {
+        if (blocked.has(n.id as string)) continue // 编辑时自己与后代整体不可选：子树剔除
+        const kids = (n.children as Record<string, unknown>[]) ?? []
+        if (validKind(n)) {
+          const copy = { ...n, children: [] as Record<string, unknown>[] }
+          build(kids, copy.children as Record<string, unknown>[])
+          out.push(copy)
+        } else {
+          build(kids, out) // 类型不合法：节点不上树，可选子级上提
+        }
+      }
+    }
+    const out: Record<string, unknown>[] = []
+    build(strip(tree), out)
+    return out
+  }, [tree, editing, type, tr])
+
+  // 类型切换后，原上级可能不再合法（如目录挂在了菜单下）：回落顶级让用户重选，
+  // 不然提交的会是列表里已经不存在的选项。
+  useEffect(() => {
+    const pid = form.getValues('parentId')
+    if (!pid) return
+    const node = findNode(tree, pid)
+    const ok = !node || (type === 'button' ? node.type === 'menu' : node.type === 'dir')
+    if (!ok) form.setValue('parentId', '')
+  }, [type, tree, form])
 
   const pending = create.isPending || update.isPending
 
@@ -237,7 +262,6 @@ export function MenuFormDialog({ open, onOpenChange, editing, defaultParentId, t
                       value={field.value}
                       onChange={(v) => field.onChange(v ?? '')}
                       placeholder={t('sysMenu.field.parentPlaceholder')}
-                      isDisabled={(n) => !!n.blocked || (type === 'button' ? n.type === 'dir' : n.type === 'menu')}
                     />
                   </FormControl>
                   <FormMessage />

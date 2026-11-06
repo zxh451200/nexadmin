@@ -85,7 +85,9 @@
       "dictCode": "Dict code",
       "system": "System",
       "unsupported": "Unsupported",
-      "empty": "This table has no columns"
+      "empty": "This table has no columns",
+      "showSystem": "Show system columns",
+      "showSystemHint": "System columns (id, tenant_id, timestamps) are generated automatically and need no configuration here"
     },
     "controls": { "input": "Input", "textarea": "Textarea", "number": "Number", "switch": "Switch", "date": "Date", "datetime": "Date & time", "dict": "Dictionary" },
     "preview": {

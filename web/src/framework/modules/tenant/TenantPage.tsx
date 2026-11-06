@@ -98,7 +98,7 @@ const empty = (): FormValues => ({
 })
 
 export default function TenantPage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const confirm = useConfirm()
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
@@ -226,7 +226,8 @@ export default function TenantPage() {
       title: t('tenant.expireAt'),
       render: (r) => (
         <div className="flex flex-col items-start gap-1">
-          <span className="num">{r.expireAt.slice(0, 10)}</span>
+          {/* 到期是日期概念：本地化日期，不显示原始 ISO（也不会被时区偏移带偏一天） */}
+          <span className="num">{new Date(r.expireAt).toLocaleDateString(i18n.language)}</span>
           <ExpireBadge expireAt={r.expireAt} status={r.status} />
         </div>
       ),
@@ -234,7 +235,7 @@ export default function TenantPage() {
     { key: 'usage', title: t('tenant.usage.title'), mobile: 'hidden', render: (r) => <TenantUsageCell id={r.id} /> },
     { key: 'status', title: t('common.status'), render: (r) => <DictTag dict="tenant_status" value={r.status} /> },
     { key: 'adminUsername', title: t('tenant.adminUsername'), mobile: 'hidden' },
-    { key: 'createdAt', title: t('common.createdAt'), mobile: 'hidden', render: (r) => <span className="num">{r.createdAt.slice(0, 10)}</span> },
+    { key: 'createdAt', title: t('common.createdAt'), mobile: 'hidden', render: (r) => <span className="num">{new Date(r.createdAt).toLocaleString(i18n.language)}</span> },
   ]
 
   const isNew = !editing

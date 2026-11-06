@@ -171,6 +171,48 @@ export function useCustomers(query: CustomerQuery) {
   })
 }
 
+/** CRM 概览：按类型/状态的客户计数 + 公海与在途商机数。 */
+export interface CrmStats {
+  persons: number
+  companies: number
+  active: number
+  inactive: number
+  pool: number
+  openDeals: number
+}
+
+export function useCrmStats() {
+  return useQuery({
+    queryKey: [...KEY, 'stats'],
+    queryFn: () => api.get<CrmStats>(`${BASE}/stats`),
+  })
+}
+
+// 公海池：owner 为空的客户对全员开放。领取用条件 UPDATE，抢同一客户的后来者 409。
+export function useCustomerPool(query: CustomerQuery) {
+  return useQuery({
+    queryKey: [...KEY, 'pool', query],
+    queryFn: () => api.get<Page<CrmCustomer>>(`${BASE}/customers/pool`, query),
+    placeholderData: keepPreviousData,
+  })
+}
+
+export function useClaimCustomer() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (id: string) => api.post<CrmCustomer>(`${BASE}/customers/${id}/claim`, {}),
+    onSuccess: invalidate,
+  })
+}
+
+export function useReleaseCustomer() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (id: string) => api.post<CrmCustomer>(`${BASE}/customers/${id}/release`, {}),
+    onSuccess: invalidate,
+  })
+}
+
 /** 导出当前筛选下的全部客户（数据范围生效；上限 10000，超限后端报错）。silent：错误由页面 toast。 */
 export function fetchCustomersForExport(query: CustomerQuery): Promise<CrmCustomer[]> {
   const filters: Record<string, unknown> = {
@@ -242,6 +284,16 @@ export function useBindExternal() {
   return useMutation({
     mutationFn: (data: { customerId: string; source: string; externalNo: string }) =>
       api.post<CrmCustomer>(`${BASE}/customers/bind-external`, data),
+    onSuccess: invalidate,
+  })
+}
+
+/** 合并重复客户：source 并入 target，关联记录整体迁移后删除 source。 */
+export function useMergeCustomers() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (data: { targetId: string; sourceId: string }) =>
+      api.post<CrmCustomer>(`${BASE}/customers/merge`, data),
     onSuccess: invalidate,
   })
 }

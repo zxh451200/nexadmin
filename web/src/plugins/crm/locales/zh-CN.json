@@ -6,7 +6,8 @@
     "menu": "客户主数据",
     "perm": {
       "edit": "维护客户",
-      "opp": "维护线索/商机"
+      "opp": "维护线索/商机",
+      "pool": "领取/释放公海客户"
     },
     "tabs": {
       "customers": "客户",
@@ -22,6 +23,18 @@
     },
     "empty": "暂无数据",
     "mineOnly": "只看我的",
+    "pool": {
+      "only": "公海客户",
+      "claim": "领取",
+      "claimed": "已领取「{{name}}」",
+      "release": "放入公海",
+      "releaseConfirm": "把「{{name}}」放回公海？之后任何有公海权限的人都可以领取它。",
+      "exportDisabled": "公海视图不支持导出，请切回客户列表"
+    },
+    "stats": {
+      "openDeals": "在途商机",
+      "pool": "公海客户"
+    },
     "searchPlaceholder": "客户名称 / 编码 / 证件号 / 信用代码 / 外部编号",
     "nameRequired": "请填写客户名称",
     "titleRequired": "请填写标题",
@@ -123,6 +136,15 @@
       "bind": "绑定外部系统",
       "bindHint": "绑定后该外部会员会对应到同一个客户；绑定关系创建后不可修改。",
       "chooseSource": "选择外部系统",
+      "mergeTitle": "合并客户",
+      "mergeHint": "把重复档案并进一个主客户：联系人、跟进与商机整体迁移，主客户空着的字段用被并客户的补上。",
+      "mergeTarget": "主客户（保留）",
+      "mergeTargetHint": "留下的一份：资料以它为准，已有的字段不会被覆盖。",
+      "mergeSource": "被并客户（删除）",
+      "mergeSourceHint": "这份档案合并后删除，无法恢复。",
+      "mergeSearch": "输入名称 / 编码 / 电话搜索",
+      "mergePick": "请先搜索并选择客户",
+      "mergeConfirm": "确认合并？被并客户会被删除，其联系人、跟进与商机全部转到主客户名下。",
       "opportunities": "名下商机",
       "noOpportunity": "暂无商机"
     },

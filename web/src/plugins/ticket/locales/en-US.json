@@ -10,7 +10,12 @@
     "perm": {
       "reply": "Reply & claim",
       "edit": "Status & assignment",
-      "create": "Create on behalf"
+      "create": "Create on behalf",
+      "delete": "Delete tickets"
+    },
+    "delete": {
+      "action": "Delete ticket",
+      "confirm": "Delete ticket {{no}}? Its replies, attachments, links and activity trail are removed with it and cannot be recovered."
     },
     "all": "All",
     "empty": "No tickets",

@@ -177,40 +177,41 @@ export function MessageTab({ unread }: { unread: number }) {
           <Label htmlFor="message-only-unread">{t('message.onlyUnread')}</Label>
         </div>
       </FilterBar>
-      <div className="flex flex-wrap gap-2 md:justify-end">
-        <ExportCsvButton
-          filename="messages"
-          columns={[
-            { header: t('message.fields.title'), value: (m) => m.title },
-            { header: t('message.fields.category'), value: (m) => dictText(categoryItems, m.category) },
-            { header: t('message.fields.status'), value: (m) => (m.readAt ? t('message.read') : t('message.unread')) },
-            { header: t('message.fields.time'), value: (m) => formatTime(m.createdAt, i18n.language) },
-            { header: t('message.fields.content'), value: (m) => m.content },
-          ]}
-          getRows={() => fetchMessagesForExport({
-            keyword: applied.keyword.trim() || undefined,
-            category: applied.category || undefined,
-            unread: applied.onlyUnread ? '1' : undefined,
-            from: applied.range.from,
-            to: applied.range.to,
-          })}
-        />
-        <Button variant="outline" onClick={onReadAll} disabled={unread === 0 || readAll.isPending}>
-          <CheckCheck aria-hidden="true" />
-          {t('message.readAll')}
-        </Button>
-        <Button variant="outline" className="text-destructive" onClick={onClear} disabled={!data?.total || clear.isPending}>
-          <Trash2 aria-hidden="true" />
-          {t('message.clearMessages')}
-        </Button>
-      </div>
-
       <DataTable
         columns={columns}
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
         onRowClick={open}
+        toolbar={
+          <>
+            <ExportCsvButton
+              filename="messages"
+              columns={[
+                { header: t('message.fields.title'), value: (m) => m.title },
+                { header: t('message.fields.category'), value: (m) => dictText(categoryItems, m.category) },
+                { header: t('message.fields.status'), value: (m) => (m.readAt ? t('message.read') : t('message.unread')) },
+                { header: t('message.fields.time'), value: (m) => formatTime(m.createdAt, i18n.language) },
+                { header: t('message.fields.content'), value: (m) => m.content },
+              ]}
+              getRows={() => fetchMessagesForExport({
+                keyword: applied.keyword.trim() || undefined,
+                category: applied.category || undefined,
+                unread: applied.onlyUnread ? '1' : undefined,
+                from: applied.range.from,
+                to: applied.range.to,
+              })}
+            />
+            <Button variant="outline" onClick={onReadAll} disabled={unread === 0 || readAll.isPending}>
+              <CheckCheck aria-hidden="true" />
+              {t('message.readAll')}
+            </Button>
+            <Button variant="outline" className="text-destructive" onClick={onClear} disabled={!data?.total || clear.isPending}>
+              <Trash2 aria-hidden="true" />
+              {t('message.clearMessages')}
+            </Button>
+          </>
+        }
         emptyText={applied.keyword || applied.category || applied.onlyUnread || applied.range.from || applied.range.to ? t('message.emptyFiltered') : t('message.emptyMessages')}
         pagination={{
           page,

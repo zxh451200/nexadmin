@@ -24,6 +24,12 @@
     "searchPlaceholder": "按名称搜索",
     "empty": "暂无数据",
     "truncated": "结果已按行数上限截断",
+    "compare": {
+      "period": "环比",
+      "year": "同比",
+      "previous": "上期 {{value}}",
+      "noPrevious": "无上期"
+    },
     "loadFailed": "加载失败，请稍后重试",
     "type": {
       "bar": "柱状图",
@@ -247,6 +253,11 @@
       "desc": "倒序",
       "limit": "最大行数（≤ 5000）",
       "unit": "单位",
+      "compare": "同环比",
+      "compareNone": "不对比",
+      "comparePeriod": "环比（上一等长区间）",
+      "compareYear": "同比（去年同期）",
+      "compareHint": "对比区间从报表时间筛选推出：筛选没有完整的起止时间时只显示本期值。",
       "colors": "颜色（语义色，按顺序使用）",
       "stacked": "堆叠",
       "shapeCartesian": "柱状图/折线图需要至少 1 个维度和 1 个度量",

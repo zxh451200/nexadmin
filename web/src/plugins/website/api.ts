@@ -54,6 +54,8 @@ export interface SiteSettings {
   headCode: string
   /** <title> 后缀，替换默认的「 - 站点名」；空 = 沿用内置组合 */
   titleSuffix: string
+  /** 被设为首页的单页 slug；空 = 内置首页。页面被删或未发布时官网自动回退内置首页 */
+  homeSlug: string
   homeTitle: string
   homeSubtitle: string
   homeCtaLabel: string
@@ -144,6 +146,8 @@ export interface SitePage {
   ogImage: string
   /** 关闭搜索引擎收录（<meta robots> 与 sitemap 同步） */
   noindex: boolean
+  /** 管理端列表排序：越小越靠前；0 = 未设置（排在最后） */
+  sort: number
   updatedAt: string
 }
 
@@ -158,6 +162,7 @@ export interface PageForm {
   publishedJson: string
   ogImage: string
   noindex: boolean
+  sort: number
 }
 
 export interface SitePost {

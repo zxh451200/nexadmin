@@ -32,10 +32,15 @@
       "config": "协议配置（JSON）",
       "configHint": "Modbus：{\"unitId\":1,\"pollIntervalMs\":5000}；MQTT：{\"username\":\"\",\"password\":\"\",\"upstreamPrefix\":\"devicehub/up/DEV1\"}；S7：{\"rack\":0,\"slot\":1,\"pollIntervalMs\":5000}（1200/1500 slot=0，300/400 slot=1 或 2）；OPC UA：{\"securityPolicy\":\"None\",\"username\":\"\",\"password\":\"\"}",
       "enabled": "启用",
+      "location": "安装位置",
+      "locationAddress": "安装地址",
       "required": "请填写设备名称与连接地址",
       "deleteConfirm": "确认删除设备「{{name}}」？其测点、历史数据与告警规则一并删除。",
       "endpointS7Hint": "S7 形如 192.168.1.30:102（rack/slot 在协议配置 JSON 里）",
-      "endpointOpcuaHint": "OPC UA 形如 opc.tcp://192.168.1.40:4840"
+      "endpointOpcuaHint": "OPC UA 形如 opc.tcp://192.168.1.40:4840",
+      "search": "搜索名称 / 编号",
+      "list": "设备",
+      "noMatch": "没有匹配的设备"
     },
     "point": {
       "add": "新增测点",
@@ -109,7 +114,7 @@
       "deleteRuleConfirm": "确认删除规则「{{name}}」？删除后该测点不再产生这条告警"
     },
     "tab": {
-      "points": "测点",
+      "points": "测点配置",
       "history": "历史趋势",
       "commands": "指令",
       "alarms": "告警"

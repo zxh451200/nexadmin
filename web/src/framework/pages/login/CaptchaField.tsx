@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Check, GripVertical, RefreshCw, Volume2 } from 'lucide-react'
+import { RefreshCw, Volume2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { UseFormReturn } from 'react-hook-form'
 import { toast } from 'sonner'
+import SliderCaptchaLib, { type ActionType, type VerifyParam } from 'rc-slider-captcha'
 import { api } from '@/framework/request/http'
 import type { CaptchaResult } from '@/framework/auth/types'
 import { RequiredMark } from '@/framework/components/RequiredMark'
@@ -104,7 +105,8 @@ export function CaptchaField({ form, captcha, onRefresh, mode, onModeChange, req
           ) : (
             <div className="flex items-center gap-2">
               <FormControl>
-                <Input {...field} autoComplete="off" maxLength={6} placeholder={t('login.captchaPlaceholder')} />
+                {/* 位数可在参数设置里调到 8，输入框上限放宽到 8 跟随后端口径 */}
+                <Input {...field} autoComplete="off" maxLength={8} placeholder={t('login.captchaPlaceholder')} />
               </FormControl>
               {/* 尺寸取后端出图的显示口径（224x72 出图 = 112x36 的 2 倍），并与其他输入框同高：
                   盒子给到 h-14 既会把图放大到发糊，也会让这一行比整张表单高出一截。 */}
@@ -153,11 +155,6 @@ export function CaptchaField({ form, captcha, onRefresh, mode, onModeChange, req
   )
 }
 
-/** 轨迹采样上限：超过就隔点丢弃，免得长距离慢拖把请求体撑大 */
-const TRAIL_MAX = 240
-/** 轨道把手边长（CSS 像素），用于把手在轨道内的行程换算 */
-const KNOB = 32
-
 interface SliderCaptchaProps {
   captcha: CaptchaResult | null
   onRefresh: () => void
@@ -166,178 +163,88 @@ interface SliderCaptchaProps {
 }
 
 /**
- * 滑块拼图：把滑块图拖到背景的孔位上。坐标一律换算成“图片像素”——后端容差按图片像素判定，
- * 而图片在页面上是等比缩放的，直接用 CSS 像素会随容器宽度漂掉。
+ * 滑块拼图：开源组件 rc-slider-captcha（MIT）负责拖拽交互、动画与状态机，
+ * 我们只对接后端契约——`/auth/slider` 发挑战（背景 + 抠块），`/auth/slider/verify`
+ * 按「图片像素 x + 轨迹」判真伪。bgSize 传图片原始尺寸，让显示与图片 1:1，
+ * 组件给的 x 不用换算就是后端要的坐标；puzzleSize 的 top 用后端的 pieceTop 定孔位行。
+ * 无键盘操作路径：方向键可完成的兜底是「改用图形验证码」（可输入、有语音），语义上不缺门。
  */
 function SliderCaptcha({ captcha, onRefresh, onToken, onFailed }: SliderCaptchaProps) {
   const { t } = useTranslation()
-  const trackRef = useRef<HTMLDivElement>(null)
-  const dragRef = useRef<{ pointerX: number; startTime: number; startX: number; trackW: number } | null>(null)
-  const trailRef = useRef<{ t: number; x: number }[]>([])
-  const [x, setX] = useState(0)
-  const [busy, setBusy] = useState(false)
-  const [done, setDone] = useState(false)
-
+  const actionRef = useRef<ActionType | undefined>(undefined)
   const imgW = captcha?.width ?? 280
   const imgH = captcha?.height ?? 120
-  const pieceW = captcha?.pieceWidth ?? 68
-  const pieceH = captcha?.pieceHeight ?? 68
-  const pieceTop = captcha?.pieceTop ?? 0
-  const maxX = Math.max(1, imgW - pieceW)
-  const frac = Math.min(1, Math.max(0, x / maxX))
 
-  // 换一张挑战（或首次加载）就复位，否则残留落点会与新孔位错位。
-  useEffect(() => {
-    setX(0)
-    setBusy(false)
-    setDone(false)
-    trailRef.current = []
-  }, [captcha?.key])
-
-  const pushTrail = (now: number, pos: number) => {
-    const el = trailRef.current
-    const last = el[el.length - 1]
-    if (last && now - last.t < 16 && last.x === pos) return
-    el.push({ t: now, x: pos })
-    if (el.length > TRAIL_MAX) trailRef.current = el.filter((_, i) => i % 2 === 0 || i === el.length - 1)
-  }
-
-  const verify = async (pos: number) => {
-    if (!captcha?.key || busy || done) return
-    const trail = trailRef.current
-    if (trail.length < 2) return
-    setBusy(true)
+  const verify = async (data: VerifyParam) => {
+    if (!captcha?.key) throw new Error('captcha missing')
+    // rc 的 trail 是 [x,y][] 无时间戳；后端行为校验要单调毫秒时间戳与「末点 = 落点」。
+    // 用总时长线性铺开：真人拖动的推进形状仍是 rc 记录的原始轨迹，瞬间位移依旧会被
+    // 时长下限（150ms）挡住。末点强制对齐落点，满足 last.X == finalX 的判定。
+    const pts = data.trail.length ? data.trail : [[0, 0]]
+    const n = pts.length
+    const trail = pts.map((p, i) => ({ t: Math.round((i / Math.max(1, n - 1)) * data.duration), x: Math.round(p[0]) }))
+    trail[trail.length - 1] = { t: Math.max(1, data.duration), x: Math.round(data.x) }
     try {
       const { token } = await api.post<{ token: string }>(
         '/auth/slider/verify',
-        { key: captcha.key, x: Math.round(pos), trail: trail.map((p) => ({ t: Math.round(p.t), x: Math.round(p.x) })) },
+        { key: captcha.key, x: Math.round(data.x), trail },
         { silent: true },
       )
-      setDone(true)
       onToken(token)
-    } catch {
-      setBusy(false)
+    } catch (e) {
+      // 失败就地换血：清掉未定 token、父级取新挑战（key 变化 → 组件重挂）；
+      // 抛出让组件走完它的失败动画再消失。
       toast.error(t('login.sliderFailed'))
+      onToken('')
       onFailed()
+      throw e
     }
-  }
-
-  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!captcha || done || busy) return
-    dragRef.current = {
-      pointerX: e.clientX,
-      startX: x,
-      startTime: performance.now(),
-      trackW: trackRef.current?.getBoundingClientRect().width || imgW,
-    }
-    trailRef.current = [{ t: 0, x }]
-    e.currentTarget.setPointerCapture(e.pointerId)
-  }
-
-  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    const drag = dragRef.current
-    if (!drag || done || busy) return
-    // CSS 位移 ×（图片宽 / 轨道宽）= 图片像素位移；轨道与背景等宽，所以同一个比例。
-    const next = drag.startX + (e.clientX - drag.pointerX) * (imgW / drag.trackW)
-    const pos = Math.min(maxX, Math.max(0, next))
-    setX(pos)
-    pushTrail(performance.now() - drag.startTime, pos)
-  }
-
-  const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!dragRef.current) return
-    dragRef.current = null
-    e.currentTarget.releasePointerCapture(e.pointerId)
-    void verify(x)
-  }
-
-  // 键盘也能完成校验：方向键按容差步长推进并记轨迹，回车或空格提交。
-  const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (!captcha || done || busy) return
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault()
-      void verify(x)
-      return
-    }
-    const step = e.key === 'PageUp' || e.key === 'PageDown' ? 24 : 6
-    let next: number | null = null
-    if (e.key === 'ArrowRight' || e.key === 'PageUp') next = Math.min(maxX, x + step)
-    if (e.key === 'ArrowLeft' || e.key === 'PageDown') next = Math.max(0, x - step)
-    if (next === null) return
-    e.preventDefault()
-    if (!trailRef.current.length) trailRef.current = [{ t: 0, x }]
-    setX(next)
-    pushTrail(performance.now(), next)
   }
 
   return (
-    <div className="w-[280px] max-w-full space-y-2">
-      <div className="relative overflow-hidden rounded-md border border-border" style={{ aspectRatio: `${imgW} / ${imgH}` }}>
-        {!captcha ? (
-          <Skeleton className="h-full w-full" />
-        ) : (
-          <>
-            <img src={captcha.image} alt={t('login.captcha')} className="h-full w-full" draggable={false} />
-            {captcha.piece ? (
-              <img
-                src={captcha.piece}
-                alt=""
-                aria-hidden="true"
-                draggable={false}
-                className="pointer-events-none absolute"
-                style={{
-                  left: `${(x / imgW) * 100}%`,
-                  top: `${(pieceTop / imgH) * 100}%`,
-                  width: `${(pieceW / imgW) * 100}%`,
-                  height: `${(pieceH / imgH) * 100}%`,
-                }}
-              />
-            ) : null}
-            {done ? null : (
-              <button
-                type="button"
-                onClick={onRefresh}
-                aria-label={t('login.refreshCaptcha')}
-                className="absolute end-1 top-1 flex size-7 items-center justify-center rounded-md bg-background/70 text-foreground transition-colors hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <RefreshCw className="size-3.5" aria-hidden="true" />
-              </button>
-            )}
-          </>
-        )}
-      </div>
-      <div
-        ref={trackRef}
-        role="slider"
-        tabIndex={0}
-        aria-label={t('login.sliderPrompt')}
-        aria-valuemin={0}
-        aria-valuemax={Math.round(maxX)}
-        aria-valuenow={Math.round(x)}
-        aria-busy={busy}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
-        onKeyDown={onKeyDown}
-        className="relative h-10 touch-none select-none rounded-md border border-border bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        {/* 进度填充跟着把手走：没有它，滑轨看上去只是一条空白条，拖到哪一档全凭把手一个方块 */}
-        <span
-          className={`pointer-events-none absolute inset-y-0 left-0 rounded-l-[5px] ${done ? 'bg-success/15' : 'bg-primary/15'}`}
-          style={{ width: `calc(4px + (100% - ${KNOB + 8}px) * ${frac} + ${KNOB / 2}px)` }}
+    <div
+      className="w-full max-w-[280px]"
+      // 组件用 CSS 变量做主题；映射到站点的语义 token，跟随浅色/深色主题
+      style={{ '--rcsc-primary': 'hsl(var(--primary))', '--rcsc-panel-border-radius': '8px' } as React.CSSProperties}
+    >
+      {/* key 绑挑战 key：换一张挑战就重挂组件，拖拽状态与错误计数一并复位 */}
+      <div className="relative">
+        <SliderCaptchaLib
+        key={captcha?.key ?? 'empty'}
+        actionRef={actionRef}
+        autoRefreshOnError={false}
+        showRefreshIcon={false}
+        bgSize={{ width: imgW, height: imgH }}
+        puzzleSize={
+          captcha
+            ? { width: captcha.pieceWidth ?? 68, top: captcha.pieceTop ?? 0, left: 0 }
+            : { width: 68, top: 0, left: 0 }
+        }
+        request={async () => {
+          if (!captcha) return new Promise<never>(() => {}) // 挑战未到位先挂起；key 变化会重挂组件
+          return { bgUrl: captcha.image, puzzleUrl: captcha.piece ?? '' }
+        }}
+        onVerify={verify}
+        tipText={{
+          default: t('login.sliderPrompt'),
+          loading: t('common.loading'),
+          moving: t('login.sliderPrompt'),
+          verifying: t('common.loading'),
+          success: t('login.sliderDone'),
+          error: t('login.sliderFailed'),
+        }}
         />
-        <span className="pointer-events-none absolute inset-0 flex items-center justify-center px-12 text-xs text-muted-foreground">
-          {done ? t('login.sliderDone') : t('login.sliderPrompt')}
-        </span>
-        <span
-          className={`pointer-events-none absolute flex items-center justify-center rounded border ${
-            done ? 'border-success bg-success text-success-foreground' : 'border-primary/30 bg-primary text-primary-foreground'
-          }`}
-          style={{ width: KNOB, height: KNOB, top: 4, left: `calc(4px + (100% - ${KNOB + 8}px) * ${frac})` }}
-        >
-          {done ? <Check className="size-4" aria-hidden="true" /> : <GripVertical className="size-4" aria-hidden="true" />}
-        </span>
+        {/* 换一张挑战：组件内置刷新只会重放当前 request（拿不到新挑战），所以走父级重新取挑战 */}
+        {captcha ? (
+          <button
+            type="button"
+            onClick={onRefresh}
+            aria-label={t('login.refreshCaptcha')}
+            className="absolute end-1 top-1 z-10 flex size-7 items-center justify-center rounded-md bg-background/70 text-foreground transition-colors hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <RefreshCw className="size-3.5" aria-hidden="true" />
+          </button>
+        ) : null}
       </div>
     </div>
   )

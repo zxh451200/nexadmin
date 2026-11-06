@@ -52,7 +52,7 @@ export function SiteSection({ value }: { value: AllSettings['site'] }) {
                     title={t('settings.site.logoUpload')}
                     hint={t('settings.site.logoUploadHint')}
                     placeholder={t('settings.site.logoPlaceholder')}
-                    previewClassName="size-16"
+                    previewClassName="h-16 w-24"
                   />
                   <FormMessage />
                 </FormItem>
@@ -127,32 +127,6 @@ export function SecuritySection({ value }: { value: AllSettings['security'] }) {
 }
 
 /**
- * 缓存只读：驱动与地址在启动时由 config.yaml 的 cache.* 决定（core/router.go 据此构造缓存），
- * 后端 SaveSection 也已拒绝 cache 分区。这里若还提供编辑和「测试连接」，测的只是表单里的临时值，
- * 保存会直接报错——和 storage 同一处理：只展示当前值，不给写入入口。
- */
-export function CacheSection({ value }: { value: AllSettings['cache'] }) {
-  const { t } = useTranslation()
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{t('settings.cache.title')}</CardTitle>
-        <CardDescription>{t('settings.cache.description')}</CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
-        <Alert variant="info">
-          <Info aria-hidden="true" />
-          <AlertDescription>{t('settings.cache.readonlyHint')}</AlertDescription>
-        </Alert>
-        <p className="text-sm text-muted-foreground">
-          {t('settings.cache.type')}：{value.type === 'valkey' ? 'Valkey' : t('settings.cache.memory')}
-        </p>
-      </CardContent>
-    </Card>
-  )
-}
-
-/**
  * 文件存储只读：后端只读 config/config.yaml 的 storage.*（向导 / `init --config` 写入），
  * 这里保存的值不会被任何地方读取，所以不提供编辑，免得“保存成功却不生效”。
  */
@@ -188,6 +162,7 @@ const aiSchema = z.object({
   baseUrl: z.string().trim(),
   apiKey: z.string(),
   model: z.string().trim(),
+  embedModel: z.string().trim(),
   timeoutSec: z.number().int().min(1).max(600),
   redact: z.boolean(),
 })
@@ -207,7 +182,13 @@ export function AiSection({ value }: { value: AllSettings['ai'] }) {
           <FormGrid>
             <TextField control={form.control} name="baseUrl" label="Base URL" type="url" inputMode="url" />
             <TextField control={form.control} name="apiKey" label="API Key" type="password" />
-            <TextField control={form.control} name="model" label={t('settings.ai.model')} />
+            <TextField control={form.control} name="model" label={t('settings.ai.model')} description={t('settings.ai.modelHint')} />
+            <TextField
+              control={form.control}
+              name="embedModel"
+              label={t('settings.ai.embedModel')}
+              description={t('settings.ai.embedModelHint')}
+            />
             <TextField control={form.control} name="timeoutSec" label={t('settings.ai.timeoutSec')} type="number" inputMode="numeric" />
           </FormGrid>
         </>

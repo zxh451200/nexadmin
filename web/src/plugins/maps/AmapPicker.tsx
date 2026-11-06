@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Button } from '@/framework/ui/button'
 import type { MapPickerProps } from '@/framework/map'
 import { regeo, useMapsConfig } from './api'
+import { PickerSearch } from './PickerSearch'
 
 // 高德 JS API 全局对象；只声明用到的部分。
 type AMapNS = {
@@ -49,6 +50,8 @@ export function AmapPicker({ value, onChange, height = 420 }: MapPickerProps) {
   const cfg = useMapsConfig()
   const pc = cfg.data?.amap
   const elRef = useRef<HTMLDivElement | null>(null)
+  // markerRef 让搜索结果选中时能把标记挪过去（marker 在 effect 里创建，render 侧经 ref 访问）
+  const markerRef = useRef<{ setPosition: (p: [number, number]) => void } | null>(null)
   const [sel, setSel] = useState<{ lng: number; lat: number } | null>(value ? { lng: value.lng, lat: value.lat } : null)
   const [address, setAddress] = useState(value?.address ?? '')
   const [error, setError] = useState<string | null>(null)
@@ -68,6 +71,7 @@ export function AmapPicker({ value, onChange, height = 420 }: MapPickerProps) {
         const center: [number, number] = sel ? [sel.lng, sel.lat] : [116.397428, 39.90923]
         map = new AMap.Map(elRef.current, { zoom: 12, center })
         marker = new AMap.Marker({ position: center, draggable: true })
+        markerRef.current = marker
         map.add(marker)
         marker.on('dragend', () => {
           if (!marker) return
@@ -119,6 +123,11 @@ export function AmapPicker({ value, onChange, height = 420 }: MapPickerProps) {
   return (
     <div className="flex flex-col gap-2">
       {error ? <p className="text-xs text-destructive">{error}</p> : null}
+      <PickerSearch provider="amap" onPick={({ lng, lat, address }) => {
+        setSel({ lng, lat })
+        setAddress(address)
+        markerRef.current?.setPosition([lng, lat])
+      }} />
       <div ref={elRef} style={{ height }} className="w-full overflow-hidden rounded-md border border-border bg-muted" />
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
         <span className="num">{sel ? `${sel.lng.toFixed(6)}, ${sel.lat.toFixed(6)}` : t('plugin_maps.clickHint')}</span>

@@ -39,7 +39,7 @@ const isLocked = (u: User) => !!u.locked && (!u.lockedUntil || new Date(u.locked
 const errMsg = (e: unknown, fallback: string) => (e instanceof Error && e.message ? e.message : fallback)
 
 export default function UserPage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const confirm = useConfirm()
   const [draft, setDraft] = useState<UserFilters>({})
   const [applied, setApplied] = useState<UserFilters>({})
@@ -182,7 +182,7 @@ export default function UserPage() {
     {
       key: 'createdAt',
       title: t('user.col.createdAt'),
-      render: (u) => <span className="num">{new Date(u.createdAt).toLocaleString()}</span>,
+      render: (u) => <span className="num">{new Date(u.createdAt).toLocaleString(i18n.language)}</span>,
     },
   ]
 
@@ -215,6 +215,12 @@ export default function UserPage() {
       <DataTable<User>
         toolbar={
           <>
+            <Can perm="user:create">
+              <Button type="button" onClick={() => openForm(null)}>
+                <Plus className="me-2 h-4 w-4" aria-hidden="true" />
+                {t('common.create')}
+              </Button>
+            </Can>
             <Can perm="user:import">
               <Button type="button" variant="outline" onClick={() => setImportOpen(true)}>
                 <Upload className="me-2 h-4 w-4" aria-hidden="true" />
@@ -225,12 +231,6 @@ export default function UserPage() {
               <Button type="button" variant="outline" onClick={exportUsers} disabled={exporting}>
                 <Download className="me-2 h-4 w-4" aria-hidden="true" />
                 {t('common.export')}
-              </Button>
-            </Can>
-            <Can perm="user:create">
-              <Button type="button" onClick={() => openForm(null)}>
-                <Plus className="me-2 h-4 w-4" aria-hidden="true" />
-                {t('common.create')}
               </Button>
             </Can>
           </>

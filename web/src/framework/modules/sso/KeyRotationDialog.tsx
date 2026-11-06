@@ -16,7 +16,7 @@ interface Props {
 
 /** 签名密钥轮换：列出 JWKS 里的 key，并提供带二次确认的“立即轮换” */
 export function KeyRotationDialog({ open, onOpenChange }: Props) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const confirm = useConfirm()
   const { data, isLoading } = useSsoKeys(open)
   const rotate = useRotateSsoKeys()
@@ -66,8 +66,8 @@ export function KeyRotationDialog({ open, onOpenChange }: Props) {
                 <div className="flex flex-col gap-0.5">
                   <code className="font-mono text-sm">{k.kid}</code>
                   <span className="num text-xs text-muted-foreground">
-                    {t('sso.keys.createdAt')}: {new Date(k.createdAt).toLocaleString()}
-                    {k.retiresAt ? ` · ${t('sso.keys.retiresAt')}: ${new Date(k.retiresAt).toLocaleString()}` : ''}
+                    {t('sso.keys.createdAt')}: {new Date(k.createdAt).toLocaleString(i18n.language)}
+                    {k.retiresAt ? ` · ${t('sso.keys.retiresAt')}: ${new Date(k.retiresAt).toLocaleString(i18n.language)}` : ''}
                   </span>
                 </div>
                 <Badge variant={k.status === 'active' ? 'success' : 'secondary'}>{t(`sso.keys.status.${k.status}`)}</Badge>

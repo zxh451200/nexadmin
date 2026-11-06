@@ -6,7 +6,8 @@
     "menu": "Customer Master",
     "perm": {
       "edit": "Manage customers",
-      "opp": "Manage leads/opportunities"
+      "opp": "Manage leads/opportunities",
+      "pool": "Claim/release pool customers"
     },
     "tabs": {
       "customers": "Customers",
@@ -22,6 +23,18 @@
     },
     "empty": "No data",
     "mineOnly": "Mine only",
+    "pool": {
+      "only": "Public pool",
+      "claim": "Claim",
+      "claimed": "Claimed \"{{name}}\"",
+      "release": "Release to pool",
+      "releaseConfirm": "Release \"{{name}}\" to the public pool? Anyone with pool permission can then claim it.",
+      "exportDisabled": "Export is not available in the pool view; switch back to the customer list"
+    },
+    "stats": {
+      "openDeals": "Open deals",
+      "pool": "Pool customers"
+    },
     "searchPlaceholder": "Name / code / ID no / credit code / external no",
     "nameRequired": "Customer name is required",
     "titleRequired": "Title is required",
@@ -123,6 +136,15 @@
       "bind": "Link external system",
       "bindHint": "After linking, that external member resolves to this same customer; the link cannot be changed once created.",
       "chooseSource": "Choose external system",
+      "mergeTitle": "Merge customers",
+      "mergeHint": "Fold duplicate records into one master customer: contacts, activities and opportunities move over, and blank master fields are filled from the merged one.",
+      "mergeTarget": "Master customer (kept)",
+      "mergeTargetHint": "The record that stays: its data wins and existing fields are never overwritten.",
+      "mergeSource": "Merged customer (deleted)",
+      "mergeSourceHint": "This record is deleted after merging and cannot be recovered.",
+      "mergeSearch": "Search by name / code / phone",
+      "mergePick": "Search and pick a customer first",
+      "mergeConfirm": "Merge now? The merged customer is deleted; its contacts, activities and opportunities all move to the master customer.",
       "opportunities": "Opportunities",
       "noOpportunity": "No opportunities"
     },

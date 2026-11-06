@@ -35,3 +35,20 @@ export function useSaveMapsConfig() {
 export function regeo(provider: MapProviderId, lng: number, lat: number) {
   return api.get<{ address: string }>('/plugins/maps/regeo', { provider, lng, lat })
 }
+
+export interface MapPlace {
+  name: string
+  address: string
+  lng: number
+  lat: number
+}
+
+/** 地理编码：地址 → 坐标（厂商原生坐标系）。 */
+export function geocode(provider: MapProviderId, address: string) {
+  return api.get<{ lng: number; lat: number }>('/plugins/maps/geocode', { provider, address })
+}
+
+/** POI 关键字检索：keyword → 列表（坐标为厂商原生坐标系）。 */
+export function searchPlaces(provider: MapProviderId, keywords: string, city?: string) {
+  return api.get<MapPlace[]>('/plugins/maps/poi', { provider, keywords, city: city || undefined })
+}

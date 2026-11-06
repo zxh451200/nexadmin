@@ -7,6 +7,10 @@
       "reply": "Reply to messages",
       "edit": "Close conversations"
     },
+    "view": {
+      "workbench": "Chats",
+      "stats": "Statistics"
+    },
     "all": "All",
     "empty": "No conversations",
     "noMessages": "No messages yet",
@@ -59,7 +63,9 @@
     },
     "online": "Online",
     "offline": "Offline",
-    "recall": { "action": "Recall" },
+    "recall": {
+      "action": "Recall"
+    },
     "recallFailed": "Recall failed: you can only recall your own messages sent in the last 2 minutes",
     "merge": {
       "action": "Merge conversation",
@@ -148,6 +154,7 @@
       "retentionDays": "Keep closed conversations for (days, 0 = forever)",
       "retentionHint": "Only closed conversations are purged, together with their messages and attachments; checked hourly",
       "readonlyHint": "You can view these settings but not save them"
-    }
+    },
+    "pickConversationMobile": "Pick a conversation above to reply"
   }
 }

@@ -25,6 +25,10 @@ export interface Device {
   status: DeviceStatus
   enabled: boolean
   lastSeenAt?: string | null
+  /** 安装位置：坐标统一存 WGS-84 原值 */
+  lng?: number | null
+  lat?: number | null
+  location?: string
 }
 
 export interface Point {
@@ -51,6 +55,8 @@ export interface DeviceInput {
   endpoint: string
   config: string
   enabled: boolean
+  /** 安装位置（LocationField 选点或手填）；不传 = 清空 */
+  location?: { lng: number; lat: number; address?: string } | null
 }
 
 export interface PointInput {

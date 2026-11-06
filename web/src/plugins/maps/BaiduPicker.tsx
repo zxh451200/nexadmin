@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Button } from '@/framework/ui/button'
 import type { MapPickerProps } from '@/framework/map'
 import { regeo, useMapsConfig } from './api'
+import { PickerSearch } from './PickerSearch'
 
 // 百度 JS API GL 全局对象；只声明用到的部分。
 type BMapGLNS = {
@@ -52,6 +53,9 @@ export function BaiduPicker({ value, onChange, height = 420 }: MapPickerProps) {
   const cfg = useMapsConfig()
   const pc = cfg.data?.baidu
   const elRef = useRef<HTMLDivElement | null>(null)
+  // markerRef / nsRef：搜索选中时把标记挪过去（marker 与 BMapGL 命名空间都在 effect 里创建）
+  const markerRef = useRef<{ setPosition: (p: unknown) => void } | null>(null)
+  const nsRef = useRef<BMapGLNS | null>(null)
   const [sel, setSel] = useState<{ lng: number; lat: number } | null>(value ? { lng: value.lng, lat: value.lat } : null)
   const [address, setAddress] = useState(value?.address ?? '')
   const [error, setError] = useState<string | null>(null)
@@ -66,12 +70,14 @@ export function BaiduPicker({ value, onChange, height = 420 }: MapPickerProps) {
     void (async () => {
       try {
         const BMapGL = await loadBaidu(ak)
+        nsRef.current = BMapGL
         if (disposed || !elRef.current) return
         map = new BMapGL.Map(elRef.current)
         map.centerAndZoom(new BMapGL.Point(sel?.lng ?? 116.404, sel?.lat ?? 39.915), 12)
         map.enableScrollWheelZoom(true)
         marker = new BMapGL.Marker(new BMapGL.Point(sel?.lng ?? 116.404, sel?.lat ?? 39.915))
         marker.enableDragging()
+        markerRef.current = marker
         map.addOverlay(marker)
         marker.addEventListener('dragend', () => {
           if (!marker) return
@@ -117,6 +123,12 @@ export function BaiduPicker({ value, onChange, height = 420 }: MapPickerProps) {
   return (
     <div className="flex flex-col gap-2">
       {error ? <p className="text-xs text-destructive">{error}</p> : null}
+      <PickerSearch provider="baidu" onPick={({ lng, lat, address }) => {
+        setSel({ lng, lat })
+        setAddress(address)
+        const ns = nsRef.current
+        if (ns) markerRef.current?.setPosition(new ns.Point(lng, lat))
+      }} />
       <div ref={elRef} style={{ height }} className="w-full overflow-hidden rounded-md border border-border bg-muted" />
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
         <span className="num">{sel ? `${sel.lng.toFixed(6)}, ${sel.lat.toFixed(6)}` : t('plugin_maps.clickHint')}</span>

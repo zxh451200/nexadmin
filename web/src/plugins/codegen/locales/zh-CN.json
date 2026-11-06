@@ -85,7 +85,9 @@
       "dictCode": "字典编码",
       "system": "系统列",
       "unsupported": "不支持",
-      "empty": "这张表没有列"
+      "empty": "这张表没有列",
+      "showSystem": "显示系统列",
+      "showSystemHint": "系统列（id、tenant_id、时间戳）自动生成，不需要在这里配置"
     },
     "controls": { "input": "输入框", "textarea": "多行文本", "number": "数字", "switch": "开关", "date": "日期", "datetime": "日期时间", "dict": "字典下拉" },
     "preview": {

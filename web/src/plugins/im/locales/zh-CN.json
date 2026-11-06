@@ -7,6 +7,10 @@
       "reply": "回复消息",
       "edit": "关闭会话"
     },
+    "view": {
+      "workbench": "会话",
+      "stats": "统计"
+    },
     "all": "全部",
     "empty": "暂无会话",
     "noMessages": "暂无消息",
@@ -59,7 +63,9 @@
     },
     "online": "在线",
     "offline": "离线",
-    "recall": { "action": "撤回" },
+    "recall": {
+      "action": "撤回"
+    },
     "recallFailed": "撤回失败：只能撤回自己 2 分钟内发出的消息",
     "merge": {
       "action": "合并会话",
@@ -148,6 +154,7 @@
       "retentionDays": "会话保留天数（0 = 永久保留）",
       "retentionHint": "只清理已结束的会话，消息与附件一并删除；每小时检查一次",
       "readonlyHint": "你可以查看这些设置，但没有保存权限"
-    }
+    },
+    "pickConversationMobile": "选择上方会话开始回复"
   }
 }

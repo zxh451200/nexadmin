@@ -112,6 +112,24 @@
     "run": "Run now",
     "runConfirm": "Run \"{{name}}\" once now?",
     "runStarted": "Started. Check the execution logs for the result",
+    "runOnce": {
+      "paramsLabel": "Override params (JSON)",
+      "paramsHint": "Leave empty to use the saved params; filled in, it applies to this run only and is not written back to the job.",
+      "invalidJson": "Params must be a JSON object"
+    },
+    "autoRefresh": "Auto refresh",
+    "batch": {
+      "enable": "Enable selected",
+      "disable": "Disable selected",
+      "updated": "Updated {{count}} job(s)"
+    },
+    "health": {
+      "open": "Last 20 runs",
+      "title": "Last 20 runs of \"{{name}}\"",
+      "successRate": "Success rate",
+      "avgCost": "Avg duration",
+      "empty": "No runs yet"
+    },
     "deleteConfirm": "Delete job \"{{name}}\"? Existing execution logs are kept.",
     "deleteBatchConfirm": "Delete the {{count}} selected job(s)? A run already in progress is not interrupted, and existing execution logs are kept.",
     "deletedPartial": "Deleted {{deleted}} of {{total}} job(s) (the rest may already be gone or belong to another tenant)",
