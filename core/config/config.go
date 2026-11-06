@@ -118,6 +118,9 @@ type Config struct {
 		SourceURL string `mapstructure:"source_url"`
 		// SourceLicense 是该数据源声明的许可证，同步时随快照一起记录，仅用于展示与溯源。
 		SourceLicense string `mapstructure:"source_license"`
+		// AutoSyncHours 是自动同步的间隔（小时）：超过间隔且配置了默认数据源时，后台协程
+		// 自动执行一次同步（actor 记为 auto）。0 = 关闭（出厂值：不意外打外部地址）。
+		AutoSyncHours int `mapstructure:"auto_sync_hours"`
 	} `mapstructure:"region"`
 	// Secret 是静态加密（core/secret）：主密钥来自 NEXADMIN_SECRET_KEY 或 data/secret.key。
 	// algorithm 默认 aes-gcm；sm4-gcm 为国密选项（新密文 enc:v2:，旧 v1 密文仍可解）。
