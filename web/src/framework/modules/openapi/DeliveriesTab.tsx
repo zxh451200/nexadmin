@@ -9,6 +9,7 @@ import { FilterBar } from '@/framework/components/FilterBar'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Badge, type BadgeProps } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
+import { Input } from '@/framework/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import { fmtDateTime } from '../oper-log/format'
 import { DELIVERY_STATUSES, useDeliveries, useRetryDelivery, useWebhooks, type Delivery, type DeliveryStatus } from './api'
@@ -25,10 +26,12 @@ const BODY_LIMIT = 2000
 interface Filters {
   webhookId: string
   status: string
+  event: string
 }
 
 const ALL = 'all'
-const emptyFilters: Filters = { webhookId: ALL, status: ALL }
+const ANY = '__any'
+const emptyFilters: Filters = { webhookId: ALL, status: ALL, event: ANY }
 
 function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -55,6 +58,7 @@ export function DeliveriesTab() {
     pageSize,
     webhookId: applied.webhookId === ALL ? undefined : applied.webhookId,
     status: applied.status === ALL ? undefined : applied.status,
+    event: applied.event === ANY ? undefined : applied.event,
   })
   const retry = useRetryDelivery()
 
@@ -140,6 +144,13 @@ export function DeliveriesTab() {
             ))}
           </SelectContent>
         </Select>
+        <Input
+          className="md:w-52 font-mono"
+          value={draft.event === ANY ? '' : draft.event}
+          onChange={(e) => setDraft({ ...draft, event: e.target.value })}
+          placeholder={t('openapi.deliveries.filter.event')}
+          aria-label={t('openapi.deliveries.filter.event')}
+        />
       </FilterBar>
 
       <DataTable

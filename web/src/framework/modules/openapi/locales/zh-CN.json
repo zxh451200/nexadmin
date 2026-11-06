@@ -128,7 +128,8 @@
         "webhook": "Webhook",
         "allWebhooks": "全部 Webhook",
         "status": "状态",
-        "allStatus": "全部状态"
+        "allStatus": "全部状态",
+        "event": "事件名（如 user.created）"
       },
       "status": { "success": "成功", "failed": "失败", "pending": "待投递" },
       "fields": {

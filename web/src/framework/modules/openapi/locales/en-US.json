@@ -128,7 +128,8 @@
         "webhook": "Webhook",
         "allWebhooks": "All webhooks",
         "status": "Status",
-        "allStatus": "All statuses"
+        "allStatus": "All statuses",
+        "event": "Event name (e.g. user.created)"
       },
       "status": { "success": "Success", "failed": "Failed", "pending": "Pending" },
       "fields": {

@@ -303,7 +303,7 @@ func (h *handler) hookTest(c *gin.Context) {
 	response.OK(c, testResult{Success: res.ok(), StatusCode: res.Status, Body: res.Body, Error: res.Err, DurationMs: int(res.Duration / time.Millisecond)})
 }
 
-// GET /openapi/deliveries?webhookId=&status=success|failed|pending&page=&pageSize=
+// GET /openapi/deliveries?webhookId=&status=success|failed|pending&event=&page=&pageSize=
 func (h *handler) deliveryList(c *gin.Context) {
 	page, size := response.ParsePage(c)
 	q := h.db.WithContext(c.Request.Context()).Model(&Delivery{})
@@ -321,6 +321,10 @@ func (h *handler) deliveryList(c *gin.Context) {
 			return
 		}
 		q = q.Where("status = ?", st)
+	}
+	// 按事件名精确筛：调试「某个事件到底投出去没有」时，翻页找事件太低效。
+	if ev := strings.TrimSpace(c.Query("event")); ev != "" {
+		q = q.Where("event = ?", ev)
 	}
 	var total int64
 	if err := q.Count(&total).Error; err != nil {

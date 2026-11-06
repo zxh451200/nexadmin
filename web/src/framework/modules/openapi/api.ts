@@ -82,6 +82,8 @@ export interface DeliveryQuery {
   pageSize: number
   webhookId?: string
   status?: string
+  /** 事件名精确筛选（如 user.created） */
+  event?: string
 }
 
 const KEY = ['openapi'] as const
