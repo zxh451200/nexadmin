@@ -190,8 +190,11 @@ type siteView struct {
 	// template.HTML 显式标记后原样注入；空 = 不渲染任何内容。
 	HeadCode template.HTML
 	// TitleSuffix 拼在 <title> 的「{标题}」之后；空 = 「 - {站点名}」。由 composeTitle 消费。
-	TitleSuffix   string
-	HomeTitle     string
+	TitleSuffix string
+	// HomeSlug 是被设为首页的单页 slug（站点设置）；空 = 内置首页。
+	// 不进模板，由 home 处理器读取决定渲染哪张页面。
+	HomeSlug     string
+	HomeTitle    string
 	HomeSubtitle  string
 	HomeCTALabel  string
 	HomeCTAHref   string

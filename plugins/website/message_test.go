@@ -823,4 +823,46 @@ func TestSaveSettingsAcceptsConsentURL(t *testing.T) {
 	}
 }
 
+func TestSaveSettingsHomeSlugMissing(t *testing.T) {
+	db, m := mockDB(t)
+	expectSetting(m, false, "")
+	// 设为首页只认存在的页面：count 为 0 直接拒绝，不落库。
+	m.ExpectQuery("SELECT count\\(.\\) FROM .plg_website_page. WHERE slug =").WillReturnRows(
+		sqlmock.NewRows([]string{"count"}).AddRow(0))
+
+	_, err := NewService(db).SaveSettings(context.Background(), SettingForm{
+		SiteName: "NexAdmin", HomeSlug: "nope",
+	})
+	var be *response.Error
+	if !errors.As(err, &be) || be.Key != "website.home_slug_missing" {
+		t.Fatalf("设为首页指向不存在的页面应报错, got %v", err)
+	}
+	if err := m.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSaveSettingsAcceptsHomeSlug(t *testing.T) {
+	db, m := mockDB(t)
+	expectSetting(m, false, "")
+	m.ExpectQuery("SELECT count\\(.\\) FROM .plg_website_page. WHERE slug =").WillReturnRows(
+		sqlmock.NewRows([]string{"count"}).AddRow(1))
+	m.ExpectBegin()
+	m.ExpectExec("UPDATE `plg_website_setting`").WillReturnResult(sqlmock.NewResult(0, 1))
+	m.ExpectCommit()
+
+	row, err := NewService(db).SaveSettings(context.Background(), SettingForm{
+		SiteName: "NexAdmin", HomeSlug: "about",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if row.HomeSlug != "about" {
+		t.Fatalf("homeSlug 未写入, got %q", row.HomeSlug)
+	}
+	if err := m.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func boolPtr(v bool) *bool { return &v }

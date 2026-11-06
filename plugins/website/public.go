@@ -77,7 +77,7 @@ func (h *siteHandler) baseView(ctx context.Context, lang string, postLimit int) 
 		SiteName: set.SiteName, SiteDesc: set.SiteDesc, LogoURL: set.LogoURL,
 		FaviconURL: set.FaviconURL, OgImageURL: set.OgImageURL,
 		HeadCode:    template.HTML(set.HeadCode),
-		TitleSuffix: set.TitleSuffix,
+		TitleSuffix: set.TitleSuffix, HomeSlug: set.HomeSlug,
 		HomeTitle:   set.HomeTitle, HomeSubtitle: set.HomeSubtitle,
 		HomeCTALabel: set.HomeCTALabel, HomeCTAHref: set.HomeCTAHref,
 		ContactEmail: set.ContactEmail, ContactPhone: set.ContactPhone,
@@ -144,13 +144,34 @@ func (h *siteHandler) notFound(c *gin.Context, v *siteView) {
 	h.render(c, "notfound", http.StatusNotFound, v)
 }
 
-// GET / —— 官网首页。
+// GET / —— 官网首页。站点设置把某张单页设为首页时渲染该页内容（替换内置 Hero 页），
+// 与 /p/:slug 同一套发布判定；页面被删或（在当前语言）下线时静默回退内置首页——
+// 首页永远可访问，比 404 稳，也省得管理员每次改版还要回头动首页设置。
 func (h *siteHandler) home(c *gin.Context) {
 	lang := langOf(c)
 	v, err := h.baseView(c.Request.Context(), lang.Code, 3)
 	if err != nil {
 		c.String(http.StatusInternalServerError, "site unavailable")
 		return
+	}
+	if slug := strings.TrimSpace(v.HomeSlug); slug != "" {
+		if p, perr := h.svc.PublishedPageBy(c.Request.Context(), slug, lang.Code); perr == nil {
+			v.Page = p
+			v.Title = v.composeTitle(p.Title)
+			if p.SeoTitle != "" {
+				v.SeoTitle = v.composeTitle(p.SeoTitle)
+			}
+			if p.SeoDesc != "" {
+				v.Desc = p.SeoDesc
+			} else {
+				v.Desc = v.SiteDesc
+			}
+			v.OGImage = absURL(v.BaseURL, p.OgImage)
+			v.Noindex = p.Noindex
+			// 语言切换器保持站点全局清单：切到该页未发布的语言时回退内置首页，而不是没有入口。
+			h.render(c, "page", http.StatusOK, v)
+			return
+		}
 	}
 	// 标题用首页主标题（两行合成一行），比整段站点描述更适合 <title> 与搜索结果。
 	v.Title = homePageTitle(v.SiteName, v.HomeTitle, v.SiteDesc)
