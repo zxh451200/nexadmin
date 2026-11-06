@@ -34,6 +34,21 @@ func snapshotRow(payload, sha, actor string, prov, pref, count int) []driver.Val
 	return []driver.Value{int64(1), payload, sha, "https://example.com/regions.json", "2026-01-02", "MIT", prov, pref, count, actor, time.Now()}
 }
 
+// snapshotModel 造一条「即将覆盖保存的新快照」：新树、新摘要、同步人是 actor——
+// 与 snapshotRow 的默认来源/日期/量级一致，留档的 SHA 对比才有「内容变了要存」的语义。
+func snapshotModel(payload, sha, actor string) Snapshot {
+	return Snapshot{
+		SourceURL: "https://example.com/regions.json",
+		DataDate:  "2026-01-02",
+		License:   "MIT",
+		Payload:   payload,
+		SHA256:    sha,
+		Provinces: 34, Prefectures: 333, Counties: 2874,
+		SyncedBy: actor,
+		SyncedAt: time.Now(),
+	}
+}
+
 // versionColumns 是历史版本表读取的列集合。
 var versionColumns = []string{
 	"id", "version", "payload", "sha256", "data_date", "source_url",

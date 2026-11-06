@@ -878,6 +878,7 @@ cron:
   timeout_invalid: "单次超时必须在 0 到 %d 秒之间（0 = 使用默认）"
   params_too_long: "参数过长（上限 4 KB）"
   params_invalid: "参数不合法"
+  ids_required: "请至少选择一个任务"
   job_running: "任务正在运行中"
   job_id_invalid: "任务 ID 不合法"
   export_too_many_rows: "匹配到 %d 条执行日志，超过单次导出上限 %d 条；请按任务或状态缩小筛选范围后重试"

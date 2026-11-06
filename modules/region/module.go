@@ -8,8 +8,10 @@ import (
 	"encoding/json"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 
 	"nexadmin/core"
 	"nexadmin/core/region"
@@ -72,6 +74,22 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	}
 	// 启动时把上次同步的快照装进内存；失败只记日志，继续用内置数据。
 	svc.Load(context.Background())
+
+	// 定时自动同步随优雅关闭退出（与 message/recycle 同口径：OnClose 关闭 stop 通道）。
+	stop := make(chan struct{})
+	if d.OnClose != nil {
+		d.OnClose(func() { close(stop) })
+	}
+	hours := 0
+	if d.Config != nil {
+		hours = d.Config.Region.AutoSyncHours
+	}
+	var onSynced func()
+	if d.Bus != nil {
+		onSynced = func() { d.Bus.Publish(busKind, nil) }
+	}
+	go autoSyncLoop(stop, svc, d.Log, hours, onSynced)
+
 	h := &Handler{svc: svc, bus: d.Bus}
 	if d.Bus != nil {
 		// 其它实例同步完成后重装快照；重连后做一次全量校正。
@@ -86,4 +104,42 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	r.GET("/regions/versions", core.Perm("region:sync"), h.Versions)
 	r.GET("/regions/versions/:version", core.Perm("region:sync"), h.Version)
 	r.POST("/regions/versions/:version/rollback", core.Perm("region:sync"), core.RequirePlatform(), h.RollbackVersion)
+}
+
+// autoSyncLoop 按配置间隔自动同步省市区数据（region.auto_sync_hours，<=0 表示不自动同步——
+// 出厂值 0，不打外部地址；>0 等于管理员明确授权了这台机器按期访问数据源）。
+// 每小时醒一次：从未同步过（在用内置数据）或距上次同步已超过间隔，才发起一次后台同步
+// （actor 记为 auto，与手动同步共用同一条链路和并发闸）；发起失败只记日志，下一轮再试。
+// stop 关闭（进程优雅关闭）时立即退出，不再排下一次。
+func autoSyncLoop(stop <-chan struct{}, svc *Service, log *zap.Logger, hours int, onSynced func()) {
+	if hours <= 0 || svc == nil {
+		return
+	}
+	interval := time.Duration(hours) * time.Hour
+	run := func() {
+		last, ok, err := svc.lastSyncedAt(context.Background())
+		if err != nil {
+			log.Warn("region: auto sync check failed", zap.Error(err))
+			return
+		}
+		if ok && time.Since(last) < interval {
+			return
+		}
+		// 复用人工同步的入口：并发闸（409 conflict）、来源回退（上次的源 → 默认源）、
+		// 后台执行与状态轮询全部同一条链路；自动同步不会插队，有手动同步在跑就这轮让路。
+		if err := svc.StartSync(context.Background(), "", autoSyncActor, onSynced); err != nil {
+			log.Warn("region: auto sync skipped", zap.Error(err))
+		}
+	}
+	run()
+	tick := time.NewTicker(time.Hour)
+	defer tick.Stop()
+	for {
+		select {
+		case <-stop:
+			return
+		case <-tick.C:
+			run()
+		}
+	}
 }

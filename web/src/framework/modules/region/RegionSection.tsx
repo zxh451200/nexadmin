@@ -39,7 +39,7 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 
 /** 系统设置 → 省市区数据：显示当前数据版本，可从数据源重新同步或恢复内置数据 */
 export function RegionSection() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   // 区划快照是全局那一份（sys_region_snapshot 没有 tenant_id）：换掉它，所有人的地址选择器都跟着变。
   const { isPlatform } = usePermission()
   const confirm = useConfirm()
@@ -146,7 +146,7 @@ export function RegionSection() {
               <span className="break-all font-mono text-xs">{data.sourceUrl || '—'}</span>
             </Row>
             <Row label={t('region.license')}>{data.license || '—'}</Row>
-            <Row label={t('region.syncedAt')}>{data.syncedAt || '—'}</Row>
+            <Row label={t('region.syncedAt')}>{data.syncedAt ? showTime(data.syncedAt, i18n.language) : '—'}</Row>
             <Row label={t('region.syncedBy')}>{data.syncedBy || '—'}</Row>
           </dl>
           <div className="flex flex-col gap-1.5">

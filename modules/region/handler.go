@@ -48,7 +48,7 @@ func (h *Handler) Sync(c *gin.Context) {
 
 // SyncStatus GET /regions/sync/status：后台同步的阶段与结果。
 func (h *Handler) SyncStatus(c *gin.Context) {
-	response.OK(c, h.svc.SyncStatus())
+	response.OK(c, h.svc.SyncStatusView(c.Request.Context()))
 }
 
 // onSynced 是后台同步成功后的回调：广播给其它实例重装快照。

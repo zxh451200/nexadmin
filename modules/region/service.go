@@ -18,8 +18,10 @@ import (
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"nexadmin/core"
+	"nexadmin/core/i18n"
 	"nexadmin/core/region"
 	"nexadmin/core/response"
 	"nexadmin/pkg/idgen"
@@ -145,6 +147,23 @@ func (s *Service) Load(ctx context.Context) {
 	}
 }
 
+// lastSyncedAt 返回当前生效快照的同步时间：ok=false 表示从未同步过（还在用随包内置数据）。
+// 每次直查库而不是信内存：其它实例同步后本实例只装了数据，本地不掌握那次同步的时间戳。
+func (s *Service) lastSyncedAt(ctx context.Context) (time.Time, bool, error) {
+	if s.db == nil {
+		return time.Time{}, false, nil
+	}
+	var row Snapshot
+	err := s.db.WithContext(ctx).Select("synced_at").Where("id = ?", idgen.ID(snapshotID)).First(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return time.Time{}, false, nil
+	}
+	if err != nil {
+		return time.Time{}, false, err
+	}
+	return row.SyncedAt, !row.SyncedAt.IsZero(), nil
+}
+
 // Sync 拉取 source（空则用上次的来源或默认来源），校验通过后落库并立即生效。
 // 后台执行：立即返回，进度与结果走 SyncStatus 轮询（源最大 16MB，慢源不再卡住请求）。
 func (s *Service) Sync(ctx context.Context, source, actor string) error {
@@ -157,7 +176,15 @@ type syncState struct {
 	Stage   string  `json:"stage,omitempty"` // fetching | validating
 	Result  *Result `json:"result,omitempty"`
 	Error   string  `json:"error,omitempty"`
+	// actor / errKey / errArgs 不参与序列化：actor 用来区分「我点的」与定时自动同步，
+	// errKey + errArgs 是待翻译的失败原因，读状态时按查看者语言渲染进 Error。
+	actor   string
+	errKey  string
+	errArgs []any
 }
+
+// autoSyncActor 是定时自动同步在台账与状态里留下的操作者标记（与 module.go 的发起方同一常量）。
+const autoSyncActor = "auto"
 
 // 后台同步全局串行（内存快照的 Activate 不支持多写者并发生效）；状态指针整体替换，读侧无锁。
 var (
@@ -192,16 +219,18 @@ func (s *Service) StartSync(ctx context.Context, source, actor string, onSynced 
 	if err := checkSourceURL(source); err != nil {
 		return response.BadRequest("region.source_insecure", source).Wrap(err)
 	}
-	syncJob.Store(&syncState{Running: true, Stage: "fetching"})
+	syncJob.Store(&syncState{Running: true, Stage: "fetching", actor: actor})
 	// 后台任务不复用请求 ctx（请求返回即取消）；进程退出随进程消亡，状态自然丢弃。
 	go func() {
 		res, err := s.sync(context.Background(), source, actor, true)
 		if err != nil {
-			// 错误文案：response.Error 的本地化文案需要请求 ctx；后台任务取不到就用原始文本。
-			syncJob.Store(&syncState{Error: err.Error()})
+			// 失败按「key + 参数」存，不按翻译后的文本存：后台协程没有请求 ctx，
+			// 当场存翻译文本会把 region.sync_running 这类 key 原文吐到界面上
+			// （RegionSection 是直接 toast(st.error) 的）。翻译留到读状态时按查看者语言做。
+			failedSyncState(actor, err)
 			return
 		}
-		syncJob.Store(&syncState{Result: &res})
+		syncJob.Store(&syncState{Result: &res, actor: actor})
 		if onSynced != nil {
 			onSynced()
 		}
@@ -209,8 +238,41 @@ func (s *Service) StartSync(ctx context.Context, source, actor string, onSynced 
 	return nil
 }
 
-func (s *Service) storeSyncStage(stage string) {
-	syncJob.Store(&syncState{Running: true, Stage: stage})
+// failedSyncState 把一次后台同步的失败收敛成状态并写入当前任务状态（后台协程与测试共用
+// 这唯一的失败写入口，保证读侧 SyncStatusView 总能读到同一种形态）：业务错误存 key 与参数，
+// 其它错误（网络、解析）没有 key 可存，原文留着至少不丢信息。
+func failedSyncState(actor string, err error) *syncState {
+	st := &syncState{actor: actor}
+	var re *response.Error
+	if errors.As(err, &re) && re.Key != "" {
+		if re.Msg != "" {
+			st.Error = re.Msg
+		} else {
+			st.errKey, st.errArgs = re.Key, re.Args
+		}
+	} else if err != nil {
+		st.Error = err.Error()
+	}
+	syncJob.Store(st)
+	return st
+}
+
+// SyncStatusView 按查看者语言渲染后台同步状态：失败原因是 key 时在此翻译，
+// 自动同步（actor=auto）额外包一层前缀——否则定时任务天天失败的文案和「我刚点的那次」长得一样，
+// 管理员会以为自己那次同步坏了。i18n.T 在 ctx 没有语言时回落到平台默认语言，
+// 所以没有请求上下文（单测、其它调用方）也能拿到整句而不是 key。
+func (s *Service) SyncStatusView(ctx context.Context) syncState {
+	st := s.SyncStatus()
+	out := *st
+	if out.errKey == "" {
+		return out
+	}
+	msg := i18n.T(ctx, out.errKey, out.errArgs...)
+	if out.actor == autoSyncActor {
+		msg = i18n.T(ctx, "region.auto_sync_failed", msg)
+	}
+	out.Error = msg
+	return out
 }
 
 // SyncStatus 返回当前后台同步状态（从未跑过时是零值：not running、无结果）。
@@ -340,8 +402,13 @@ func (s *Service) Reset(ctx context.Context, actor string) (region.Info, error) 
 // nextSHA 与当前行摘要相同说明这次写入没改内容（例如重复同步同一个源），不重复留档。
 // 版本号取库里现有最大值 +1：行数与列表下标都不能当版本号，删过行就会撞号。
 func archiveCurrent(ctx context.Context, tx *gorm.DB, nextSHA string) error {
+	// 先锁住快照行再取 MAX(version)+1：syncMu 只在单个进程内串行，两个实例的首轮自动同步
+	// 会各读到同一个 MAX，写出两条相同版本号——按版本号取档与回滚从此有歧义。
+	// FOR UPDATE 在 mysql / mariadb / postgres 都成立；快照行不存在时下面直接返回，不需要锁。
 	var cur Snapshot
-	err := tx.WithContext(ctx).Where("id = ?", idgen.ID(snapshotID)).First(&cur).Error
+	err := tx.WithContext(ctx).
+		Clauses(clause.Locking{Strength: "UPDATE"}).
+		Where("id = ?", idgen.ID(snapshotID)).First(&cur).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil
 	}

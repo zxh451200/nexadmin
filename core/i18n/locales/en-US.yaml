@@ -878,6 +878,7 @@ cron:
   timeout_invalid: "timeoutSeconds must be between 0 and %d (0 = use the default)"
   params_too_long: "The parameters are too long (maximum 4 KB)"
   params_invalid: "Invalid parameters"
+  ids_required: "Select at least one job"
   job_running: "The job is already running"
   job_id_invalid: "Invalid job ID"
   export_too_many_rows: "Matched %d log rows, above the %d-row export limit; narrow the filter by job or status and retry"
