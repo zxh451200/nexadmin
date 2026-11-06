@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
-import { Lightbox } from '@/framework/upload/Lightbox'
+import { ImagePreviewDialog } from './ImagePreviewDialog'
 
 export interface ZoomableImageProps {
   src: string
@@ -13,7 +13,8 @@ export interface ZoomableImageProps {
 }
 
 /**
- * 展示型缩略图 + 点开大图：给不是表单字段、只是给人看一眼的图片用。
+ * 展示型缩略图 + 点开预览：给不是表单字段、只是给人看一眼的图片用（Logo/Favicon/二维码等小图）。
+ * 点开是居中弹窗，不做全屏灯箱——为一个小图标盖住整个视口，视觉上像误触。
  * 图片地址是人工填的，取不到时整块不占位，避免留一个点不动的空按钮。
  */
 export function ZoomableImage({ src, alt = '', className, title }: ZoomableImageProps) {
@@ -40,7 +41,7 @@ export function ZoomableImage({ src, alt = '', className, title }: ZoomableImage
           className={cn('rounded-md border border-border bg-muted/40 object-contain', className)}
         />
       </button>
-      <Lightbox open={zoom} onOpenChange={setZoom} slides={[{ src, alt }]} />
+      <ImagePreviewDialog open={zoom} onOpenChange={setZoom} src={src} alt={alt || label} />
     </>
   )
 }

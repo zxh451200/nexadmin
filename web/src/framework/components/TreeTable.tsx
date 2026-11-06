@@ -988,38 +988,43 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
                       <SortableHandle />
                     </span>
                   ) : null}
-                  {/* 移动端的显式上/下移：长按拖拽在触屏上发现性差、滚动又容易误取消，
-                      一对相邻兄弟互换的按钮是最稳的兜底（与 Alt+方向键同一套 nudge 逻辑） */}
-                  {onReorder ? (
-                    <span className="inline-flex flex-col gap-0.5">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-5 w-5"
-                        disabled={index <= 0}
-                        aria-label={t('dataTable.moveUp')}
-                        onClick={() => void nudgeRow(node.id, -1)}
-                      >
-                        <ChevronUp className="size-3.5" aria-hidden="true" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-5 w-5"
-                        disabled={index >= nodes.length - 1}
-                        aria-label={t('dataTable.moveDown')}
-                        onClick={() => void nudgeRow(node.id, 1)}
-                      >
-                        <ChevronDown className="size-3.5" aria-hidden="true" />
-                      </Button>
-                    </span>
-                  ) : null}
                   {renderToggle(node, true)}
                 </>
               }
-              actions={rowActions ? rowActions(node) : undefined}
+              actions={
+                onReorder ? (
+                  <>
+                    {/* 移动端的显式上/下移：长按拖拽在触屏上发现性差、滚动又容易误取消，
+                        一对相邻兄弟互换的按钮是最稳的兜底（与 Alt+方向键同一套 nudge 逻辑）。
+                        放在底部操作行而不是把手旁竖堆——竖堆会把卡片撑高一截。 */}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="size-8"
+                      disabled={index <= 0}
+                      aria-label={t('dataTable.moveUp')}
+                      onClick={() => void nudgeRow(node.id, -1)}
+                    >
+                      <ChevronUp className="size-4" aria-hidden="true" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="size-8"
+                      disabled={index >= nodes.length - 1}
+                      aria-label={t('dataTable.moveDown')}
+                      onClick={() => void nudgeRow(node.id, 1)}
+                    >
+                      <ChevronDown className="size-4" aria-hidden="true" />
+                    </Button>
+                    {rowActions ? rowActions(node) : null}
+                  </>
+                ) : (
+                  rowActions?.(node)
+                )
+              }
             />
           </div>
         )

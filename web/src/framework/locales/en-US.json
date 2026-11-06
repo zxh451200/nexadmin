@@ -29,6 +29,8 @@
     "detail": "Details",
     "search": "Search",
     "reset": "Reset",
+    "liveRealtime": "Realtime",
+    "livePolling": "Polling",
     "confirm": "Confirm",
     "cancel": "Cancel",
     "save": "Save",

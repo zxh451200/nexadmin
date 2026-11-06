@@ -29,6 +29,8 @@
     "detail": "详情",
     "search": "搜索",
     "reset": "重置",
+    "liveRealtime": "实时推送",
+    "livePolling": "轮询同步",
     "confirm": "确定",
     "cancel": "取消",
     "save": "保存",

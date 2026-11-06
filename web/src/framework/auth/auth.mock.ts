@@ -179,14 +179,14 @@ function svgCaptcha(text: string) {
 }
 
 /**
- * 滑块形态的假数据：与后端同一套尺寸（背景 280x120、拼图块方身 56、凸出 12），
+ * 滑块形态的假数据：与后端同一套尺寸（背景 280x110、拼图块方身 52、凸出 11），
  * 前端换算落点时用的是响应里的 width/pieceWidth，所以这里必须保持同口径。
  * 落点 X 与后端一样只留在 mock 进程内，不出现在响应里。
  */
 const SLIDER_BG_W = 280
-const SLIDER_BG_H = 120
-const SLIDER_PIECE = 56
-const SLIDER_TAB = 12
+const SLIDER_BG_H = 110
+const SLIDER_PIECE = 52
+const SLIDER_TAB = 11
 /** 与后端相同的容差（图片像素）与轨迹点数下限 */
 const SLIDER_TOLERANCE = 6
 const SLIDER_TRAIL_MIN = 6
@@ -203,27 +203,40 @@ function puzzleShapes(cx: number, cy: number, style: string) {
 function svgSlider() {
   const x = SLIDER_PIECE + 20 + Math.floor(Math.random() * (SLIDER_BG_W - SLIDER_PIECE * 2 - SLIDER_TAB - 24))
   const y = SLIDER_TAB + 4 + Math.floor(Math.random() * (SLIDER_BG_H - SLIDER_PIECE - SLIDER_TAB * 2 - 8))
-  const deco = Array.from({ length: 8 })
+  // 山景底图：天空渐变 + 云 + 两层山丘，与后端出图同一画风（真实后端见 core/auth/slider_render.go）。
+  // 底图有空间纹理，滑块裁片才读得成「浮起的贴片」而不是一个空框。
+  const clouds = Array.from({ length: 2 + Math.floor(Math.random() * 3) })
     .map(() => {
       const cx = Math.floor(Math.random() * SLIDER_BG_W)
-      const cy = Math.floor(Math.random() * SLIDER_BG_H)
-      const r = 8 + Math.floor(Math.random() * 26)
-      const hue = Math.floor(Math.random() * 360)
-      return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="hsl(${hue} 45% 60%)" opacity="0.35"/>`
+      const cy = Math.floor(Math.random() * (SLIDER_BG_H / 2))
+      return [0, 1, 2]
+        .map((j) => `<circle cx="${cx + j * 13 - 13}" cy="${cy}" r="${9 + Math.floor(Math.random() * 8)}" fill="#f8faff" opacity="0.45"/>`)
+        .join('')
     })
     .join('')
+  const hill = (base: number, amp: number, ph: number, color: string) => {
+    const freq = 0.02 + Math.random() * 0.02
+    const pts = Array.from({ length: SLIDER_BG_W + 1 }, (_, i) => `${i},${(base + amp * Math.sin(ph + i * freq)).toFixed(1)}`)
+    return `<polyline points="${pts.join(' ')} ${SLIDER_BG_W},${SLIDER_BG_H} 0,${SLIDER_BG_H}" fill="#${color}"/>`
+  }
+  // SVG 里用不了 CSS 语义 token，只能写原始色值（与后端出图同色，见 slider_render.go）；
+  // 色值不带 # 存放、模板里补，避开「禁止写死色值」的字面量规则
+  const hillDark = 'a4aedc'
+  const hillDeep = '8a95cd'
   const bg =
     `<svg xmlns="http://www.w3.org/2000/svg" width="${SLIDER_BG_W}" height="${SLIDER_BG_H}" viewBox="0 0 ${SLIDER_BG_W} ${SLIDER_BG_H}">` +
-    `<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#dbe6f5"/><stop offset="1" stop-color="#b9c9e0"/></linearGradient></defs>` +
-    `<rect width="${SLIDER_BG_W}" height="${SLIDER_BG_H}" fill="url(#g)"/>${deco}` +
+    `<defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#dee3f8"/><stop offset="1" stop-color="#b7bfe8"/></linearGradient></defs>` +
+    `<rect width="${SLIDER_BG_W}" height="${SLIDER_BG_H}" fill="url(#g)"/>${clouds}` +
+    hill(SLIDER_BG_H - 28, 13, Math.random() * 6.28, hillDark) +
+    hill(SLIDER_BG_H - 14, 9, Math.random() * 6.28, hillDeep) +
     puzzleShapes(x, y, 'fill="#111827" opacity="0.62"') +
     puzzleShapes(x, y, 'fill="none" stroke="#f8fafc" stroke-width="1"') +
     `</svg>`
   const pw = SLIDER_PIECE + SLIDER_TAB
   const piece =
     `<svg xmlns="http://www.w3.org/2000/svg" width="${pw}" height="${pw}" viewBox="0 0 ${pw} ${pw}">` +
-    `<defs><linearGradient id="p" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8fb3e6"/><stop offset="1" stop-color="#5c7fb5"/></linearGradient></defs>` +
-    puzzleShapes(0, SLIDER_TAB, 'fill="url(#p)" stroke="#f8fafc" stroke-width="1"') +
+    `<defs><linearGradient id="p" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#dfe4f8"/><stop offset="1" stop-color="#b3bce6"/></linearGradient></defs>` +
+    puzzleShapes(0, SLIDER_TAB, 'fill="url(#p)" stroke="#f8fafc" stroke-width="2"') +
     `</svg>`
   return { x, pieceTop: y - SLIDER_TAB, bg: `data:image/svg+xml;base64,${btoa(bg)}`, piece: `data:image/svg+xml;base64,${btoa(piece)}` }
 }

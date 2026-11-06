@@ -363,32 +363,6 @@ export function DataTable<T>({
                 leading={
                   <>
                     {sortEnabled ? <SortableHandle /> : null}
-                    {sortEnabled ? (
-                      <span className="inline-flex flex-col gap-0.5">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-5 w-5"
-                          disabled={index <= 0}
-                          aria-label={t('dataTable.moveUp')}
-                          onClick={() => void nudge(id, -1)}
-                        >
-                          <ChevronUp className="size-3.5" aria-hidden="true" />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-5 w-5"
-                          disabled={index >= rows.length - 1}
-                          aria-label={t('dataTable.moveDown')}
-                          onClick={() => void nudge(id, 1)}
-                        >
-                          <ChevronDown className="size-3.5" aria-hidden="true" />
-                        </Button>
-                      </span>
-                    ) : null}
                     {selection ? (
                       <SelectBox
                         checked={selected.includes(id)}
@@ -398,7 +372,38 @@ export function DataTable<T>({
                     ) : null}
                   </>
                 }
-                actions={rowActions ? rowActions(row) : undefined}
+                actions={
+                  sortEnabled ? (
+                    <>
+                      {/* 上/下移放在底部操作行（与编辑同排）：竖堆在把手旁会把卡片撑高 */}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-8"
+                        disabled={index <= 0}
+                        aria-label={t('dataTable.moveUp')}
+                        onClick={() => void nudge(id, -1)}
+                      >
+                        <ChevronUp className="size-4" aria-hidden="true" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-8"
+                        disabled={index >= rows.length - 1}
+                        aria-label={t('dataTable.moveDown')}
+                        onClick={() => void nudge(id, 1)}
+                      >
+                        <ChevronDown className="size-4" aria-hidden="true" />
+                      </Button>
+                      {rowActions ? rowActions(row) : null}
+                    </>
+                  ) : (
+                    rowActions?.(row)
+                  )
+                }
               />
             )
             return sortEnabled ? (

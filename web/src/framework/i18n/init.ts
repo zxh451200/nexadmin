@@ -51,7 +51,8 @@ let languagesPromise: Promise<LanguageInfo[]> | null = null
 
 export function languageDir(code: string): 'ltr' | 'rtl' {
   const info = languagesCache?.find((l) => l.code === code)
-  return info?.dir ?? (RTL.test(code) ? 'rtl' : 'ltr')
+  // dir 为空串表示未指定（保存时服务端推导），按语基落——用 || 而不是 ??，空串也要走推导
+  return info?.dir || (RTL.test(code) ? 'rtl' : 'ltr')
 }
 
 function applyDocument(code: string) {

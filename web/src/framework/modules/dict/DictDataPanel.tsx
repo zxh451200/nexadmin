@@ -199,6 +199,12 @@ export function DictDataPanel({ type, onBack }: Props) {
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          <Can perm="dict:create">
+            <Button type="button" size="sm" disabled={!isPlatform} onClick={() => openForm(null)}>
+              <Plus className="me-1 h-4 w-4" aria-hidden="true" />
+              {t('common.add')}
+            </Button>
+          </Can>
           <ExportCsvButton
             filename={`${t('dict.data.exportFilename')}-${type.code}`}
             perm="dict:list"
@@ -213,12 +219,6 @@ export function DictDataPanel({ type, onBack }: Props) {
               { header: t('common.remark'), value: (r) => r.remark ?? '' },
             ]}
           />
-          <Can perm="dict:create">
-            <Button type="button" size="sm" disabled={!isPlatform} onClick={() => openForm(null)}>
-              <Plus className="me-1 h-4 w-4" aria-hidden="true" />
-              {t('common.add')}
-            </Button>
-          </Can>
         </div>
       </div>
       <Input

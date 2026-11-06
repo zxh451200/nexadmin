@@ -1,14 +1,14 @@
 import { useRef, useState } from 'react'
-import { Loader2, Upload } from 'lucide-react'
+import { Loader2, Trash2, Upload, ZoomIn } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
 import { cn } from '@/lib/utils'
 import { precheckFile, useUploadConfig } from '@/framework/upload/precheck'
-import { Lightbox } from '@/framework/upload/Lightbox'
 import { uploadFile } from '@/framework/upload/uploadClient'
 import { toWebp, webpName } from '@/framework/upload/toWebp'
+import { ImagePreviewDialog } from './ImagePreviewDialog'
 import { ResponsiveDialog } from './ResponsiveDialog'
 import { Uploader, type UploadedFile } from './Uploader'
 import type { CropConfig } from './ImageCropDialog'
@@ -116,9 +116,10 @@ export function ImageUrlField({
         ) : null}
       </div>
       {hint && !crop ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
-      {/* 缩略图与文件管理同一交互：点开就是 Lightbox 大图，SVG/透明底也看得清 */}
+      {/* 缩略图与文件管理同一交互：点开是居中弹窗预览——Logo/图标类小图不整屏盖灯箱。
+          功能直接落在预览卡上：悬停浮现放大/清除；空值时是可点的上传卡，而不是一块空白。 */}
       {value ? (
-        <>
+        <div className="group relative w-fit">
           <button
             type="button"
             disabled={disabled}
@@ -134,8 +135,55 @@ export function ImageUrlField({
               className={cn('rounded-md border border-border bg-muted/40 object-contain p-1', previewClassName)}
             />
           </button>
-          <Lightbox open={zoom} onOpenChange={setZoom} slides={[{ src: value, alt: ariaLabel ?? title }]} />
-        </>
+          {/* 悬停/聚焦时浮现操作；触屏没有 hover，仍走卡片点开放大 + 行内「清除」按钮 */}
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center gap-1 rounded-md bg-black/50 opacity-0 transition-opacity group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100">
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="size-7 text-white hover:bg-white/20 hover:text-white"
+              disabled={disabled}
+              onClick={() => setZoom(true)}
+              aria-label={t('common.preview')}
+              title={t('common.preview')}
+            >
+              <ZoomIn aria-hidden="true" />
+            </Button>
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="size-7 text-white hover:bg-white/20 hover:text-white"
+              disabled={disabled}
+              onClick={() => onChange('')}
+              aria-label={t('common.clear')}
+              title={t('common.clear')}
+            >
+              <Trash2 aria-hidden="true" />
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          disabled={disabled || uploading}
+          onClick={() => (crop ? setOpen(true) : inputRef.current?.click())}
+          aria-label={ariaLabel ?? title}
+          className={cn(
+            'flex items-center justify-center gap-1 rounded-md border border-dashed text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:bg-muted/50 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50',
+            previewClassName,
+          )}
+        >
+          {uploading ? (
+            <Loader2 aria-hidden="true" className="size-4 animate-spin" />
+          ) : (
+            <Upload aria-hidden="true" className="size-4" />
+          )}
+          {uploading ? t('uploader.uploading') : t('common.upload')}
+        </button>
+      )}
+      {value ? (
+        <ImagePreviewDialog open={zoom} onOpenChange={setZoom} src={value} alt={ariaLabel ?? title} />
       ) : null}
       <input
         ref={inputRef}

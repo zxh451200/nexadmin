@@ -53,7 +53,7 @@ interface Props {
 }
 
 export function DictTypePanel({ selectedId, onSelect, onDeleted }: Props) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   // 字典类型与字典项都是全局行（sys_dict_* 没有 tenant_id）：非平台调用方只读。
   const { has, isPlatform } = usePermission()
   const confirm = useConfirm()
@@ -149,6 +149,12 @@ export function DictTypePanel({ selectedId, onSelect, onDeleted }: Props) {
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-base font-semibold text-foreground">{t('dict.type.title')}</h2>
         <div className="flex shrink-0 items-center gap-2">
+          <Can perm="dict:create">
+            <Button type="button" size="sm" disabled={!isPlatform} onClick={() => openForm(null)}>
+              <Plus className="me-1 h-4 w-4" aria-hidden="true" />
+              {t('common.add')}
+            </Button>
+          </Can>
           <ExportCsvButton
             filename={t('dict.type.exportFilename')}
             perm="dict:list"
@@ -161,15 +167,9 @@ export function DictTypePanel({ selectedId, onSelect, onDeleted }: Props) {
               { header: t('common.status'), value: (r) => (r.status === '1' ? t('common.enable') : t('common.disable')) },
               { header: t('dict.type.builtin'), value: (r) => (r.builtin ? t('common.yes') : t('common.no')) },
               { header: t('common.remark'), value: (r) => r.remark ?? '' },
-              { header: t('common.createdAt'), value: (r) => r.createdAt },
+              { header: t('common.createdAt'), value: (r) => (r.createdAt ? new Date(r.createdAt).toLocaleString(i18n.language) : '') },
             ]}
           />
-          <Can perm="dict:create">
-            <Button type="button" size="sm" disabled={!isPlatform} onClick={() => openForm(null)}>
-              <Plus className="me-1 h-4 w-4" aria-hidden="true" />
-              {t('common.add')}
-            </Button>
-          </Can>
         </div>
       </div>
       <form
