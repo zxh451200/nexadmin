@@ -51,13 +51,6 @@
       "watermark": "Page watermark",
       "watermarkHint": "Overlay the username and time on pages"
     },
-    "cache": {
-      "title": "Cache",
-      "description": "Cache backend (in-memory / Valkey)",
-      "type": "Cache type",
-      "memory": "In-memory",
-      "readonlyHint": "The cache is determined by config/config.yaml on the server (cache.driver / cache.addr / cache.password) and is read-only here. Changing the backend means editing that file and restarting the service. The setup wizard and init --config write these values."
-    },
     "storage": {
       "title": "File storage",
       "description": "Where uploaded files are stored",
@@ -65,6 +58,14 @@
       "local": "Local",
       "s3": "S3 compatible",
       "readonlyHint": "File storage is determined by config/config.yaml on the server (storage.driver / storage.s3.*) and is read-only here. Edit the file and restart the service to change it. The setup wizard and init --config write these values."
+    },
+    "cache": {
+      "title": "Cache",
+      "description": "Cache backend for hot data",
+      "type": "Cache type",
+      "memory": "In-process memory",
+      "redis": "Redis",
+      "readonlyHint": "The cache is determined by config/config.yaml on the server (cache.*) and is read-only here. Edit the file and restart the service to change it."
     },
     "ai": {
       "title": "AI model",
@@ -74,7 +75,10 @@
       "model": "Model",
       "timeoutSec": "Timeout (seconds)",
       "redact": "Redact sensitive data before sending",
-      "redactHint": "Phone numbers, emails, ID card numbers and bank card numbers are replaced with placeholders before being sent to the model and are not restored in the result. Keeping this on is recommended"
+      "redactHint": "Phone numbers, emails, ID card numbers and bank card numbers are replaced with placeholders before being sent to the model and are not restored in the result. Keeping this on is recommended",
+      "modelHint": "Chat/completion model (AI Q&A, filtering and translation)",
+      "embedModel": "Embedding model",
+      "embedModelHint": "Vector model (semantic search / knowledge base), shares Base URL and API Key with the chat model; leave empty to disable"
     },
     "sms": {
       "title": "SMS",

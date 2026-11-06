@@ -17,7 +17,7 @@ const defaults = (): AllSettings => ({
   security: { maxAttempts: '5', lockMinutes: '15', idleMinutes: '120', maxHours: '12' },
   cache: { type: 'memory', address: '', password: '' },
   storage: { type: 'local', endpoint: '', bucket: '', region: '', accessKey: '', secretKey: '' },
-  ai: { enabled: true, baseUrl: 'https://api.example.com/v1', apiKey: '', model: 'qwen-plus', timeoutSec: 30, redact: true },
+  ai: { enabled: true, baseUrl: 'https://api.example.com/v1', apiKey: '', model: 'qwen-plus', embedModel: '', timeoutSec: 30, redact: true },
   sms: { provider: 'none', accessKey: '', secretKey: '', signName: '', templateCode: '' },
   notify: {
     mail: { host: '', port: 587, security: 'starttls', username: '', password: '', fromName: '', fromAddr: '' },

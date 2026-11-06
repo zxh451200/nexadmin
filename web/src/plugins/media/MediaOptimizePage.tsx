@@ -20,7 +20,7 @@ type RowState = 'idle' | 'working' | 'done' | 'error'
 const PAGE_SIZE = 20
 
 export default function MediaOptimizePage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const stats = useMediaStats()
   const [page, setPage] = useState(1)
   const list = usePendingImages(page, PAGE_SIZE)
@@ -101,7 +101,7 @@ export default function MediaOptimizePage() {
     {
       key: 'createdAt',
       title: t('plugin_media.col.createdAt'),
-      render: (r) => <span className="num text-xs text-muted-foreground">{new Date(r.createdAt).toLocaleString()}</span>,
+      render: (r) => <span className="num text-xs text-muted-foreground">{new Date(r.createdAt).toLocaleString(i18n.language)}</span>,
     },
     {
       key: 'state',

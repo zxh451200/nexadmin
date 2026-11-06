@@ -51,13 +51,6 @@
       "watermark": "页面水印",
       "watermarkHint": "在页面上叠加用户名和时间"
     },
-    "cache": {
-      "title": "缓存",
-      "description": "缓存实现（内存 / Valkey）",
-      "type": "缓存类型",
-      "memory": "内存",
-      "readonlyHint": "缓存由服务器上的 config/config.yaml（cache.driver / cache.addr / cache.password）决定，此处只读；改驱动需要编辑配置文件后重启服务。初始化向导和 init --config 会写入这些配置。"
-    },
     "storage": {
       "title": "文件存储",
       "description": "上传文件的存放位置",
@@ -65,6 +58,14 @@
       "local": "本地",
       "s3": "S3 兼容",
       "readonlyHint": "文件存储由服务器上的 config/config.yaml（storage.driver / storage.s3.*）决定，此处只读；修改请编辑配置文件后重启服务。初始化向导和 init --config 会写入这些配置。"
+    },
+    "cache": {
+      "title": "缓存",
+      "description": "热点数据的缓存后端",
+      "type": "缓存方式",
+      "memory": "进程内存",
+      "redis": "Redis",
+      "readonlyHint": "缓存由服务器上的 config/config.yaml（cache.*）决定，此处只读；修改请编辑配置文件后重启服务。"
     },
     "ai": {
       "title": "AI 模型",
@@ -74,7 +75,10 @@
       "model": "模型",
       "timeoutSec": "超时时间（秒）",
       "redact": "发送前脱敏敏感信息",
-      "redactHint": "把手机号、邮箱、身份证号、银行卡号替换为占位符后再发给模型，返回内容不还原；建议保持开启"
+      "redactHint": "把手机号、邮箱、身份证号、银行卡号替换为占位符后再发给模型，返回内容不还原；建议保持开启",
+      "modelHint": "对话/补全模型（智能问答、AI 筛选与翻译用）",
+      "embedModel": "Embedding 模型",
+      "embedModelHint": "向量化模型（语义检索/知识库用），与对话模型同 Base URL 与 API Key；留空 = 不启用向量化"
     },
     "sms": {
       "title": "短信",

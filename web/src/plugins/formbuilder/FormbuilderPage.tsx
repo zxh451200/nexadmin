@@ -225,13 +225,13 @@ export default function FormbuilderPage() {
         )}
         toolbar={
           <Can perm="formbuilder:design">
-            <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={importForm.isPending}>
-              <Upload aria-hidden="true" />
-              {t('plugin_formbuilder.import.title')}
-            </Button>
             <Button onClick={() => setCreateOpen(true)}>
               <Plus aria-hidden="true" />
               {t('plugin_formbuilder.create')}
+            </Button>
+            <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={importForm.isPending}>
+              <Upload aria-hidden="true" />
+              {t('plugin_formbuilder.import.title')}
             </Button>
           </Can>
         }

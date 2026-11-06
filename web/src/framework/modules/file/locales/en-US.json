@@ -49,6 +49,7 @@
     "moveTo": "Move to group",
     "moveSuccess": "Moved",
     "moveSelected": "Move to...",
+    "zipSelected": "Download as zip",
     "deleteSelected": "Delete selected",
     "deleteConfirm": "Delete the {{count}} selected file(s)? This cannot be undone.",
     "selectedCount": "{{count}} selected",

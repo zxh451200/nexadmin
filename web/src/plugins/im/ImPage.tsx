@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { ArrowRightLeft, Ban, BarChart3, Bell, BellOff, ChevronUp, Download, Ellipsis, FileText, Lock, Merge, MessageSquare, Paperclip, Pencil, Send, Settings2, Star, StickyNote, Tag, Trash2, Undo2, UserMinus, UserPlus } from 'lucide-react'
+import { ArrowRightLeft, Ban, Bell, BellOff, ChevronLeft, ChevronRight, ChevronUp, Download, Ellipsis, FileText, Lock, Merge, MessageSquare, Paperclip, Pencil, Send, Settings2, Star, StickyNote, Tag, Trash2, Undo2, UserMinus, UserPlus, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { useAuth } from '@/framework/auth/useAuth'
+import { useIsMobile } from '@/framework/hooks/use-mobile'
 import { usePermission } from '@/framework/auth/usePermission'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { EmptyState } from '@/framework/components/EmptyState'
@@ -13,7 +14,9 @@ import { TrendChart } from '@/framework/components/TrendChart'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { RequiredMark } from '@/framework/components/RequiredMark'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
+import { ChatBubble, SystemPill } from '@/framework/components/chat/MessageBubble'
 import { SimpleSelect } from '@/framework/components/SimpleSelect'
+import { Skeleton } from '@/framework/ui/skeleton'
 import { TimeField } from '@/framework/components/pickers/TimeField'
 import { Lightbox, type LightboxSlide } from '@/framework/upload/Lightbox'
 import { useWs } from '@/framework/hooks/useWs'
@@ -25,6 +28,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Input } from '@/framework/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/framework/ui/popover'
 import { Switch } from '@/framework/ui/switch'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/framework/ui/tabs'
 import { Textarea } from '@/framework/ui/textarea'
 import { cn } from '@/lib/utils'
 import {
@@ -63,9 +67,12 @@ import {
   type ImQuickReply,
   type SenderType,
 } from './api'
-import { formatSize, formatTime, statusVariant } from './format'
+import { formatSize } from '@/framework/upload/precheck'
+import { formatTime, statusVariant } from './format'
 
 const ALL = '__all'
+/** 会话队列每页条数：与工单列表同一档 */
+const CONV_PAGE_SIZE = 50
 const NOTIFY_KEY = 'nex_im_notify'
 
 type StreamEvent = { type?: string; senderType?: SenderType; seq?: number }
@@ -112,18 +119,36 @@ export default function ImPage() {
   const { t } = useTranslation()
   const confirm = useConfirm()
   const { isSuper } = usePermission()
-  const [params] = useSearchParams()
+  const [params, setParams] = useSearchParams()
   // 站内信深链：/im/conversations?conv=IMxxx 直接打开对应会话。
   const linkedConv = params.get('conv') || undefined
+  // 列表与统计分屏：与工单中心同款——处理会话的人先看到队列，做复盘的人不被双栏挤走
+  const view = params.get('view') === 'stats' ? 'stats' : 'workbench'
+  const setView = (v: string) => {
+    const next = new URLSearchParams(params)
+    if (v === 'stats') next.set('view', 'stats')
+    else next.delete('view')
+    setParams(next, { replace: true })
+  }
   const [status, setStatus] = useState<string | undefined>()
   const [assignee, setAssignee] = useState<'all' | 'me' | 'unassigned'>('all')
   const [keyword, setKeyword] = useState('')
+  // 生效中的筛选 chips + 一键重置：与工单中心同一交互（点 chip 撤销对应维度）
+  const activeFilters = [
+    ...(keyword ? [{ key: 'keyword', label: keyword, clear: () => setKeyword('') }] : []),
+    ...(status ? [{ key: 'status', label: t(`plugin_im.status.${status}`), clear: () => setStatus(undefined) }] : []),
+    ...(assignee !== 'all' ? [{ key: 'assignee', label: t(`plugin_im.assignee.${assignee}`), clear: () => setAssignee('all') }] : []),
+  ]
+  const resetFilters = () => {
+    setKeyword('')
+    setStatus(undefined)
+    setAssignee('all')
+  }
   const [selected, setSelected] = useState<string | undefined>(linkedConv)
   const [live, setLive] = useState(false)
   const [typing, setTyping] = useState(false)
-  const [pageSize, setPageSize] = useState(50)
+  const [page, setPage] = useState(1)
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [statsOpen, setStatsOpen] = useState(false)
   const [picked, setPicked] = useState<string[]>([])
   const [notifyOn, setNotifyOn] = useState(() => localStorage.getItem(NOTIFY_KEY) === '1')
 
@@ -131,9 +156,11 @@ export default function ImPage() {
     status,
     keyword: keyword || undefined,
     assignee: assignee === 'all' ? undefined : assignee,
-    page: 1,
-    pageSize,
+    page,
+    pageSize: CONV_PAGE_SIZE,
   })
+  // 筛选变了回第一页：旧页码在新筛选下经常越界，空列表会被读成「没有会话」
+  useEffect(() => setPage(1), [status, assignee, keyword])
   const chat = useChatSession(selected, live ? 15000 : 2000)
   const send = useSendReply()
   const close = useCloseConv()
@@ -378,6 +405,9 @@ export default function ImPage() {
   // useMemo：勾选清理那个 effect 依赖 list，裸 `?? []` 会让它每次渲染都重跑。
   const list = useMemo(() => convs.data?.list ?? [], [convs.data])
   const total = convs.data?.total ?? 0
+  // 与工单队列同一套页码分页（50/页）：会话队列也是要「知道自己一共管多少」的工作台，
+  // 追加式加载更多让总数与位置永远不可见。
+  const pages = Math.max(1, Math.ceil(total / CONV_PAGE_SIZE))
 
   // 批量删除沿用单条删除的口径：超管、且只有已结束的会话可删（进行中的后端会跳过，勾上也是白勾）。
   const canPick = isSuper
@@ -424,18 +454,14 @@ export default function ImPage() {
         description={t('plugin_im.description')}
         actions={
           <>
-            <Button variant="outline" size="sm" onClick={() => setStatsOpen(true)}>
-              <BarChart3 aria-hidden="true" />
-              {t('plugin_im.stats.action')}
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => void onExport()} disabled={exporting}>
+            <Button variant="outline" onClick={() => void onExport()} disabled={exporting}>
               <Download aria-hidden="true" />
               {t('plugin_im.export')}
             </Button>
             {/* 打开弹窗读的是 GET /settings（im:list），按 im:edit 门控会让只读角色点开就转圈；
                 能不能保存由弹窗内部按 im:edit 决定 */}
             <Can perm="im:list">
-              <Button variant="outline" size="sm" onClick={() => setSettingsOpen(true)}>
+              <Button variant="outline" onClick={() => setSettingsOpen(true)}>
                 <Settings2 aria-hidden="true" />
                 {t('plugin_im.settings.action')}
               </Button>
@@ -443,8 +469,16 @@ export default function ImPage() {
           </>
         }
       />
-      <div className="grid h-[calc(100vh-14rem)] min-h-96 grid-cols-1 gap-4 md:grid-cols-[22rem_1fr]">
-        <Card className="flex min-h-0 flex-col gap-2 p-2">
+      {/* 列表与统计分屏：处理会话的人先看到队列，做复盘的人不被双栏挤走（分屏结构对齐工单中心） */}
+      <Tabs value={view} onValueChange={setView}>
+        <TabsList className="w-fit">
+          <TabsTrigger value="workbench">{t('plugin_im.view.workbench')}</TabsTrigger>
+          <TabsTrigger value="stats">{t('plugin_im.view.stats')}</TabsTrigger>
+        </TabsList>
+        <TabsContent value="workbench">
+      {/* 分栏几何与工单中心同款（24rem 列 + 桌面定高 + 移动端左栏限高）：两套坐席工作台并排打开不会互相打架 */}
+      <div className="grid h-auto min-h-96 grid-cols-1 gap-4 md:h-[calc(100vh-14rem)] md:min-h-[36rem] md:grid-cols-[24rem_1fr]">
+        <Card className="flex max-h-[32rem] min-h-0 flex-col gap-2 p-2 md:max-h-none">
           <div className="flex flex-wrap items-center gap-2">
             <Input
               value={keyword}
@@ -488,7 +522,34 @@ export default function ImPage() {
             >
               {notifyOn ? <Bell aria-hidden="true" /> : <BellOff aria-hidden="true" />}
             </Button>
+            {/* WS hub 已连接 = 新消息帧直达；断线退回增量轮询。与工单中心同一枚指示。 */}
+            <Badge
+              variant={wsStatus === 'open' ? 'success' : 'secondary'}
+              className="shrink-0"
+              title={wsStatus === 'open' ? t('common.liveRealtime') : t('common.livePolling')}
+            >
+              {wsStatus === 'open' ? t('common.liveRealtime') : t('common.livePolling')}
+            </Badge>
           </div>
+          {activeFilters.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-1.5 border-b px-1 pb-1.5">
+              {activeFilters.map((f) => (
+                <button
+                  key={f.key}
+                  type="button"
+                  onClick={f.clear}
+                  aria-label={`${t('common.remove')} ${f.label}`}
+                  className="flex h-7 max-w-full items-center gap-1 rounded-full border border-input bg-muted/60 px-2.5 text-xs hover:bg-muted"
+                >
+                  <span className="truncate">{f.label}</span>
+                  <X aria-hidden="true" className="size-3 shrink-0" />
+                </button>
+              ))}
+              <Button type="button" variant="ghost" size="sm" className="ms-auto h-6 px-2 text-xs" onClick={resetFilters}>
+                {t('common.reset')}
+              </Button>
+            </div>
+          ) : null}
           {canPick ? (
             <div className="flex items-center gap-2 border-b px-1 pb-1.5">
               <Checkbox
@@ -527,12 +588,31 @@ export default function ImPage() {
                 onSelect={() => setSelected(c.convNo)}
               />
             ))}
-            {list.length < total ? (
-              <Button variant="ghost" size="sm" className="mt-1 w-full" onClick={() => setPageSize((n) => n + 50)}>
-                {t('plugin_im.loadMore')}
-              </Button>
-            ) : null}
             {!convs.isLoading && list.length === 0 ? <EmptyState title={t('plugin_im.empty')} className="py-8" /> : null}
+          </div>
+          <div className="flex items-center justify-between gap-2 border-t pt-2 text-xs text-muted-foreground">
+            <span>{t('dataTable.totalCount', { count: total })}</span>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={t('dataTable.prevPage')}
+                disabled={page <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              >
+                <ChevronLeft aria-hidden="true" />
+              </Button>
+              <span className="whitespace-nowrap">{t('dataTable.pageInfo', { page, pages })}</span>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={t('dataTable.nextPage')}
+                disabled={page >= pages}
+                onClick={() => setPage((p) => Math.min(pages, p + 1))}
+              >
+                <ChevronRight aria-hidden="true" />
+              </Button>
+            </div>
           </div>
         </Card>
 
@@ -559,9 +639,13 @@ export default function ImPage() {
           canDelete={isSuper}
         />
       </div>
+        </TabsContent>
+        <TabsContent value="stats">
+          <StatsPanel />
+        </TabsContent>
+      </Tabs>
 
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
-      <StatsDialog open={statsOpen} onOpenChange={setStatsOpen} />
     </PageContainer>
   )
 }
@@ -740,6 +824,7 @@ function ChatPane({
   canDelete: boolean
 }) {
   const { t, i18n } = useTranslation()
+  const isMobile = useIsMobile()
   const userId = useAuth((s) => s.user?.id)
   const { has } = usePermission()
   // 「更多」只在真有可收项时出现，别给没权限的坐席摆一个空菜单
@@ -782,7 +867,8 @@ function ChatPane({
   if (!conv) {
     return (
       <Card className="flex items-center justify-center text-sm text-muted-foreground">
-        {t('plugin_im.pickConversation')}
+        {/* 移动端会话列表在上方，空态文案不提「左侧」 */}
+        {t(isMobile ? 'plugin_im.pickConversationMobile' : 'plugin_im.pickConversation')}
       </Card>
     )
   }
@@ -821,12 +907,12 @@ function ChatPane({
         <div className="flex flex-wrap items-center gap-x-1 gap-y-2">
           <Can perm="im:reply">
             {conv.assigneeId ? (
-              <Button variant="ghost" size="sm" onClick={() => onClaim(conv, true)}>
+              <Button variant="outline" size="sm" onClick={() => onClaim(conv, true)}>
                 <UserMinus aria-hidden="true" />
                 {t('plugin_im.release')}
               </Button>
             ) : (
-              <Button variant="ghost" size="sm" onClick={() => onClaim(conv, false)}>
+              <Button variant="outline" size="sm" onClick={() => onClaim(conv, false)}>
                 <UserPlus aria-hidden="true" />
                 {t('plugin_im.claim')}
               </Button>
@@ -836,7 +922,7 @@ function ChatPane({
           {showMoreMenu ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm">
+                <Button variant="outline" size="sm">
                   <Ellipsis aria-hidden="true" />
                   {t('common.more')}
                 </Button>
@@ -863,7 +949,7 @@ function ChatPane({
                   ) : null}
                 </Can>
                 {canDelete && conv.status === 'closed' ? (
-                  <DropdownMenuItem className="text-destructive" onClick={() => onDelete(conv)}>
+                  <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => onDelete(conv)}>
                     <Trash2 aria-hidden="true" />
                     {t('plugin_im.delete.action')}
                   </DropdownMenuItem>
@@ -965,41 +1051,33 @@ function ChatPane({
         {messages.map((m) => {
           if (m.kind === 'system') {
             return (
-              <div key={m.id} className="flex justify-center py-1">
-                <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs text-muted-foreground">
-                  {systemLabel(m, (key) => t(key))} · {formatTime(m.createdAt, i18n.language)}
-                </span>
-              </div>
+              <SystemPill key={m.id}>
+                {systemLabel(m, (key) => t(key))} · {formatTime(m.createdAt, i18n.language)}
+              </SystemPill>
             )
           }
           const mine = m.senderType === 'agent'
           const att = messageAttachment(m)
           const attUrl = att ? imAttachmentUrl(att.token) : ''
+          const recallable =
+            mine && !m.recalledAt && m.senderId && m.senderId === userId &&
+            Date.now() - new Date(m.createdAt).getTime() < 120_000
           return (
-            <div key={m.id} className={cn('flex', mine ? 'justify-end' : 'justify-start')}>
-              <div
-                className={cn(
-                  'max-w-[70%] rounded-lg px-3 py-2 text-sm',
-                  mine ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground',
-                )}
-              >
-                <div className="mb-0.5 flex items-center gap-2 text-[11px] opacity-70">
+            <ChatBubble
+              key={m.id}
+              side={mine ? 'end' : 'start'}
+              tone={mine ? 'primary' : 'default'}
+              meta={
+                <>
                   <span>{m.senderName || t(`plugin_im.senders.${m.senderType}`)}</span>
                   <span>{formatTime(m.createdAt, i18n.language)}</span>
                   {mine ? (
                     <span>{conv.visitorReadSeq >= m.seq ? t('plugin_im.read') : t('plugin_im.unread')}</span>
                   ) : null}
-                </div>
-                {att ? (
-                  att.mime.startsWith('image/') ? (
-                    <ImageAttachment att={att} url={attUrl} onZoom={() => setZoomImageId(m.id)} />
-                  ) : (
-                    <FileAttachment att={att} url={attUrl} />
-                  )
-                ) : null}
-                {m.content ? <div className="whitespace-pre-wrap break-words">{m.content}</div> : null}
-                {mine && !m.recalledAt && m.senderId && m.senderId === userId &&
-                Date.now() - new Date(m.createdAt).getTime() < 120_000 ? (
+                </>
+              }
+              footer={
+                recallable ? (
                   <button
                     type="button"
                     onClick={() => onRecall(conv, m)}
@@ -1008,9 +1086,18 @@ function ChatPane({
                     <Undo2 aria-hidden="true" className="size-3" />
                     {t('plugin_im.recall.action')}
                   </button>
-                ) : null}
-              </div>
-            </div>
+                ) : undefined
+              }
+            >
+              {att ? (
+                att.mime.startsWith('image/') ? (
+                  <ImageAttachment att={att} url={attUrl} onZoom={() => setZoomImageId(m.id)} />
+                ) : (
+                  <FileAttachment att={att} url={attUrl} />
+                )
+              ) : null}
+              {m.content ? <div className="whitespace-pre-wrap break-words">{m.content}</div> : null}
+            </ChatBubble>
           )
         })}
         <div ref={bottomRef} />
@@ -1590,25 +1677,24 @@ function fmtDuration(sec: number): string {
   return `${h}h ${m % 60}m`
 }
 
-/** 统计看板：窗口内总量、首响、满意度、按天趋势与坐席工作量。 */
-function StatsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+/** 统计面板：窗口内总量、首响、满意度、按天趋势与坐席工作量（独立 Tab，不再是弹窗）。 */
+function StatsPanel() {
   const { t } = useTranslation()
   const [days, setDays] = useState(7)
-  const stats = useImStats(days, open)
+  const stats = useImStats(days, true)
   const s = stats.data
   return (
-    <ResponsiveDialog
-      open={open}
-      onOpenChange={onOpenChange}
-      title={t('plugin_im.stats.title')}
-      description={t('plugin_im.stats.hint')}
-      size="xl"
-      footer={
-        <Button onClick={() => onOpenChange(false)}>{t('common.close')}</Button>
-      }
-    >
+    <div className="flex flex-col gap-4">
       {!s ? (
-        <div className="py-8 text-center text-sm text-muted-foreground">{t('plugin_im.loading')}</div>
+        // 与工单统计面板同一加载形态：骨架占位，不再是一行「加载中」文本
+        <div className="flex flex-col gap-4 py-4">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            {Array.from({ length: 4 }, (_, i) => (
+              <Skeleton key={i} className="h-24 w-full" />
+            ))}
+          </div>
+          <Skeleton className="h-64 w-full" />
+        </div>
       ) : (
         <div className="flex flex-col gap-4">
           <div className="flex gap-2">
@@ -1677,6 +1763,6 @@ function StatsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (ope
           {s.truncated ? <p className="text-xs text-warning">{t('plugin_im.stats.truncated', { count: 5000 })}</p> : null}
         </div>
       )}
-    </ResponsiveDialog>
+    </div>
   )
 }

@@ -24,7 +24,7 @@ import { createVideoUpload, deleteVideo, deleteVideosBatch, saveVideo, useSaveVi
 const PAGE_SIZE = 10
 
 export function VideoTab() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   // 这一页写的都是没有 tenant_id 的全局行：非平台调用方只读（后端 core.RequirePlatform() 挡）。
   const { isPlatform } = usePermission()
   const qc = useQueryClient()
@@ -138,7 +138,7 @@ export function VideoTab() {
     {
       key: 'createdAt',
       title: t('plugin_media.col.createdAt'),
-      render: (r) => <span className="num text-xs text-muted-foreground">{new Date(r.createdAt).toLocaleString()}</span>,
+      render: (r) => <span className="num text-xs text-muted-foreground">{new Date(r.createdAt).toLocaleString(i18n.language)}</span>,
     },
     {
       key: 'actions',

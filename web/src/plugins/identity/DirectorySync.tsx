@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '@/framework/auth/useAuth'
+import { formatTime } from '@/framework/modules/message/format'
 import { Button } from '@/framework/ui/button'
 import { getDirectorySync, startDirectorySync, type DirectorySyncSummary, type IdentitySource, type LdapConfig } from './api'
 
@@ -17,7 +18,7 @@ export function DirectorySync({ source }: { source: IdentitySource }) {
 }
 
 function SyncControls({ source, scope }: { source: IdentitySource; scope: string }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const enabled = source.enabled && !!(source.config as LdapConfig | null)?.directorySync?.enabled
   const [summary, setSummary] = useState<DirectorySyncSummary | null>(null)
   const [busy, setBusy] = useState(false)
@@ -123,8 +124,8 @@ function SyncControls({ source, scope }: { source: IdentitySource; scope: string
           deactivated: count(summary?.deactivated),
         })}</p>
         {summary?.jobId ? <p>{t('plugin_identity.sync.jobId')}: {summary.jobId}</p> : null}
-        {summary?.startedAt ? <p>{t('plugin_identity.sync.startedAt')}: {summary.startedAt}</p> : null}
-        {summary?.finishedAt ? <p>{t('plugin_identity.sync.finishedAt')}: {summary.finishedAt}</p> : null}
+        {summary?.startedAt ? <p>{t('plugin_identity.sync.startedAt')}: {formatTime(summary.startedAt, i18n.language)}</p> : null}
+        {summary?.finishedAt ? <p>{t('plugin_identity.sync.finishedAt')}: {formatTime(summary.finishedAt, i18n.language)}</p> : null}
         {summary?.error ? <p className="text-destructive">{summary.error}</p> : null}
         {notice ? <p className="text-destructive">{t(`plugin_identity.sync.${notice}`)}</p> : null}
       </div>

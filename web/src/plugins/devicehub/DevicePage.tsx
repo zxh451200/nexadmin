@@ -3,13 +3,14 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { CircleCheck, CircleX, Pencil, Plus, Trash2 } from 'lucide-react'
+import { CircleCheck, CircleX, MapPin, Pencil, Plus, Trash2 } from 'lucide-react'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { EmptyState } from '@/framework/components/EmptyState'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { SimpleSelect } from '@/framework/components/SimpleSelect'
+import { LocationField, type GeoPoint } from '@/framework/map'
 import { TrendChart } from '@/framework/components/TrendChart'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
@@ -84,6 +85,16 @@ export default function DevicePage() {
     setParams(next, { replace: true })
   }
 
+  // 左栏设备列表的本地搜索：按名称或编号过滤（设备多了以后没有搜索就没法用）。
+  // 在线在前、离线其次、停用沉底——监控页默认关心活着的设备；同档内按名称排。
+  const [kw, setKw] = useState('')
+  const filtered = useMemo(() => {
+    const k = kw.trim().toLowerCase()
+    const rows = k ? list.filter((d) => d.name.toLowerCase().includes(k) || d.deviceNo.toLowerCase().includes(k)) : [...list]
+    const rank = (s: string) => (s === 'online' ? 0 : s === 'offline' ? 1 : 2)
+    return rows.sort((a, b) => rank(a.status) - rank(b.status) || a.name.localeCompare(b.name))
+  }, [list, kw])
+
   // WS：命中帧即刷对应查询（8s 轮询兜底）
   useDeviceFeed(() => {
     void queryClient.invalidateQueries({ queryKey: ['plugin_devicehub', 'devices'] })
@@ -135,15 +146,28 @@ export default function DevicePage() {
         }
       />
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[20rem_1fr]">
-        {/* 设备列表 */}
+        {/* 设备列表：标题 + 搜索 + 滚动列表 */}
         <Card className="flex max-h-[70vh] min-h-0 flex-col gap-2 p-2">
+          <div className="flex items-center justify-between gap-2 px-1 pt-1">
+            <span className="text-sm font-medium text-foreground">{t('plugin_devicehub.device.list')}</span>
+            <span className="num text-xs text-muted-foreground">{filtered.length}</span>
+          </div>
+          <Input
+            className="h-8"
+            value={kw}
+            onChange={(e) => setKw(e.target.value)}
+            placeholder={t('plugin_devicehub.device.search')}
+            aria-label={t('plugin_devicehub.device.search')}
+          />
           {devices.isLoading ? (
             <p className="py-8 text-center text-sm text-muted-foreground">{t('common.loading')}</p>
           ) : list.length === 0 ? (
             <EmptyState title={t('plugin_devicehub.device.empty')} className="py-8" />
+          ) : filtered.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">{t('plugin_devicehub.device.noMatch')}</p>
           ) : (
             <div className="min-h-0 flex-1 overflow-y-auto">
-              {list.map((d) => (
+              {filtered.map((d) => (
                 <button
                   key={d.id}
                   type="button"
@@ -202,13 +226,27 @@ function DeviceDetail({
 
   return (
     <Card className="flex min-h-0 flex-col gap-3 p-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="truncate text-sm font-medium text-foreground">{d?.name}</span>
-        {d ? <Badge variant={statusVariant(d.status)}>{t(`plugin_devicehub.status.${d.status}`)}</Badge> : null}
-        <span className="font-mono text-xs text-muted-foreground">{deviceNo}</span>
-        <span className="text-xs text-muted-foreground">{d ? `${t(`plugin_devicehub.protocol.${d.protocol}`)} · ${d.endpoint}` : ''}</span>
+      {/* 头部两行：第一行设备名 + 状态 + 操作；第二行编号/协议/地址，视觉上不与操作按钮抢一行 */}
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="truncate text-base font-semibold text-foreground">{d?.name}</span>
+            {d ? <Badge variant={statusVariant(d.status)}>{t(`plugin_devicehub.status.${d.status}`)}</Badge> : null}
+          </div>
+          <p className="mt-0.5 truncate font-mono text-xs text-muted-foreground">
+            {deviceNo}
+            {d ? ` · ${t(`plugin_devicehub.protocol.${d.protocol}`)} · ${d.endpoint}` : ''}
+          </p>
+          {d?.location ? (
+            <p className="mt-0.5 truncate text-xs text-muted-foreground" title={d.location}>
+              <MapPin aria-hidden="true" className="me-1 inline size-3" />
+              {d.location}
+              {d.lng != null && d.lat != null ? `（${d.lng.toFixed(6)}, ${d.lat.toFixed(6)}）` : ''}
+            </p>
+          ) : null}
+        </div>
         {d ? (
-          <span className="ms-auto flex items-center gap-1">
+          <span className="flex shrink-0 items-center gap-1">
             <Can perm="devicehub:edit">
               <Button variant="ghost" size="icon" aria-label={t('common.edit')} onClick={() => onEdit(d)}>
                 <Pencil aria-hidden="true" />
@@ -234,28 +272,35 @@ function DeviceDetail({
         ) : null}
       </div>
 
-      {/* 实时值卡片：最近值 + 状态（WS 命中即刷新） */}
-      <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-        {(points.data ?? []).map((p) => (
-          <div key={p.id} className="rounded-lg border border-border p-2.5">
-            <p className="truncate text-xs text-muted-foreground" title={p.name}>
-              {p.name}
-            </p>
-            <p className="mt-1 flex items-baseline gap-1">
-              <span className="truncate text-lg font-semibold text-foreground tabular-nums">
-                {p.lastTs ? (p.lastValueStr !== '' && p.lastValueStr !== undefined ? p.lastValueStr : fmtNum(p.lastValueNum)) : '—'}
-              </span>
-              {p.unit ? <span className="text-xs text-muted-foreground">{p.unit}</span> : null}
-            </p>
-            <p className="mt-0.5 text-[11px] text-muted-foreground">
-              {p.lastTs ? formatTime(p.lastTs) : t('plugin_devicehub.point.never')}
-            </p>
+      {/* 实时值卡片：只放启用的测点（停用测点常年显示「从未采集」，是纯噪音），高度封顶可滚 */}
+      {(() => {
+        const live = (points.data ?? []).filter((p) => p.enabled)
+        return (
+          <div className="max-h-56 overflow-y-auto">
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+              {live.map((p) => (
+                <div key={p.id} className="rounded-lg border border-border p-2.5">
+                  <p className="truncate text-xs text-muted-foreground" title={p.name}>
+                    {p.name}
+                  </p>
+                  <p className="mt-1 flex items-baseline gap-1">
+                    <span className="truncate text-lg font-semibold text-foreground tabular-nums">
+                      {p.lastTs ? (p.lastValueStr !== '' && p.lastValueStr !== undefined ? p.lastValueStr : fmtNum(p.lastValueNum)) : '—'}
+                    </span>
+                    {p.unit ? <span className="text-xs text-muted-foreground">{p.unit}</span> : null}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                    {p.lastTs ? formatTime(p.lastTs) : t('plugin_devicehub.point.never')}
+                  </p>
+                </div>
+              ))}
+              {(points.data ?? []).length === 0 ? (
+                <p className="col-span-full py-4 text-center text-sm text-muted-foreground">{t('plugin_devicehub.point.empty')}</p>
+              ) : null}
+            </div>
           </div>
-        ))}
-        {(points.data ?? []).length === 0 ? (
-          <p className="col-span-full py-4 text-center text-sm text-muted-foreground">{t('plugin_devicehub.point.empty')}</p>
-        ) : null}
-      </div>
+        )
+      })()}
 
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="w-fit">
@@ -773,6 +818,12 @@ function DeviceFormDialog({ device, onOpenChange }: { device: Device | null; onO
     config: device?.config ?? '',
     enabled: device?.enabled ?? true,
   })
+  // 安装位置：LocationField 选点或手填；坐标存 WGS-84 原值
+  const [loc, setLoc] = useState<GeoPoint | null>(
+    device?.lng != null && device?.lat != null
+      ? { lng: device.lng, lat: device.lat, address: device.location || undefined }
+      : null,
+  )
 
   const submit = async () => {
     if (!form.name.trim() || !form.endpoint.trim()) {
@@ -780,7 +831,11 @@ function DeviceFormDialog({ device, onOpenChange }: { device: Device | null; onO
       return
     }
     try {
-      await save.mutateAsync({ ...form, deviceNo: device?.deviceNo })
+      await save.mutateAsync({
+        ...form,
+        deviceNo: device?.deviceNo,
+        location: loc ? { lng: loc.lng, lat: loc.lat, address: loc.address } : null,
+      })
       toast.success(t('common.operateSuccess'))
       onOpenChange(false)
     } catch (e) {
@@ -846,6 +901,15 @@ function DeviceFormDialog({ device, onOpenChange }: { device: Device | null; onO
               placeholder={'{"unitId":1,"pollIntervalMs":5000}'}
             />
           </Field>
+        </div>
+        <div className="sm:col-span-2">
+          {/* 安装位置：地图选点（地图插件）或手填坐标；坐标原值存 WGS-84 */}
+          <LocationField
+            label={t('plugin_devicehub.device.location')}
+            addressLabel={t('plugin_devicehub.device.locationAddress')}
+            value={loc}
+            onChange={setLoc}
+          />
         </div>
         <label className="flex items-center gap-2 text-sm sm:col-span-2">
           <Checkbox

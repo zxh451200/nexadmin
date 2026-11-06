@@ -32,6 +32,8 @@ export interface AiSettings {
   baseUrl: string
   apiKey: string
   model: string
+  /** 向量化（embeddings）模型名；空 = 未启用向量化（与对话模型同 BaseURL / APIKey） */
+  embedModel: string
   timeoutSec: number
   /** 发往模型前对手机号 / 邮箱 / 身份证号 / 银行卡号脱敏（默认开启） */
   redact: boolean

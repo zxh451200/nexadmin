@@ -1,5 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { api } from '@/framework/request/http'
+import { api, http } from '@/framework/request/http'
 import type { Page } from '@/framework/request/types'
 
 export type FileCategory = 'image' | 'video' | 'doc' | 'other'
@@ -123,4 +123,17 @@ export function useMoveFiles() {
 export function useDeleteFiles() {
   const inv = useInvalidate()
   return useMutation({ mutationFn: (ids: string[]) => api.del('/files', { ids: ids.join(',') }), onSuccess: inv })
+}
+
+/** 批量下载：把选中的文件打包成一个 zip（带令牌的 XHR 拉取 blob 后触发浏览器保存）。 */
+export async function downloadFilesZip(ids: string[]) {
+  const res = await http.post<Blob>('/files/download-zip', { ids }, { responseType: 'blob', timeout: 120_000 })
+  const url = URL.createObjectURL(res.data)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `files-${new Date().toISOString().slice(0, 10)}.zip`
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 0)
 }

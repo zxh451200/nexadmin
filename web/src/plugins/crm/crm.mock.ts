@@ -106,6 +106,20 @@ const paginate = <T,>(rows: T[], query: Record<string, unknown>) => {
 defineMock([
   {
     method: 'GET',
+    url: '/plugins/crm/stats',
+    // 与后端 Stats 同口径：类型/状态分桶计数 + 未到终态的商机数。
+    // 没有这条规则时 mock 下五张卡恒为 0，看板改动在开发态完全看不出来。
+    handler: () => ({
+      persons: customers.filter((c) => c.type === 'person').length,
+      companies: customers.filter((c) => c.type === 'company').length,
+      active: customers.filter((c) => c.status === 'active').length,
+      inactive: customers.filter((c) => c.status === 'inactive').length,
+      pool: customers.filter((c) => !c.owner).length,
+      openDeals: opportunities.filter((o) => o.stage !== 'won' && o.stage !== 'lost').length,
+    }),
+  },
+  {
+    method: 'GET',
     url: '/plugins/crm/customers',
     handler: ({ query }) => {
       const kw = String(query.keyword ?? '').trim().toLowerCase()
@@ -114,6 +128,8 @@ defineMock([
           !kw ||
           c.name.toLowerCase().includes(kw) ||
           (c.code ?? '').toLowerCase().includes(kw) ||
+          (c.phone ?? '').includes(kw) ||
+          (c.email ?? '').toLowerCase().includes(kw) ||
           (c.externalNo ?? '').toLowerCase().includes(kw) ||
           (c.idNo ?? '').toLowerCase().includes(kw) ||
           (c.taxNo ?? '').toLowerCase().includes(kw),
@@ -126,6 +142,66 @@ defineMock([
   },
   {
     method: 'GET',
+    url: '/plugins/crm/customers/pool',
+    handler: ({ query }) => {
+      const kw = String(query.keyword ?? '').trim().toLowerCase()
+      let rows = customers.filter(
+        (c) =>
+          !c.owner &&
+          (!kw ||
+            c.name.toLowerCase().includes(kw) ||
+            (c.code ?? '').toLowerCase().includes(kw) ||
+            (c.phone ?? '').includes(kw) ||
+            (c.email ?? '').toLowerCase().includes(kw)),
+      )
+      if (query.type) rows = rows.filter((c) => c.type === query.type)
+      if (query.status) rows = rows.filter((c) => c.status === query.status)
+      if (query.source) rows = rows.filter((c) => c.externalSource === query.source)
+      return paginate([...rows].reverse(), query)
+    },
+  },
+  {
+    method: 'POST',
+    url: '/plugins/crm/customers/:id/claim',
+    handler: ({ params }) => {
+      const c = customers.find((x) => x.id === params.id) ?? mockError(404, 'not found')
+      if (c.owner) mockError(409, 'pool taken')
+      c.owner = 'demo'
+      return c
+    },
+  },
+  {
+    method: 'POST',
+    url: '/plugins/crm/customers/:id/release',
+    handler: ({ params }) => {
+      const c = customers.find((x) => x.id === params.id) ?? mockError(404, 'not found')
+      c.owner = ''
+      return c
+    },
+  },
+  {
+    method: 'POST',
+    url: '/plugins/crm/customers/merge',
+    handler: ({ body }) => {
+      const target = customers.find((x) => x.id === String(body.targetId ?? '')) ?? mockError(404, 'not found')
+      const source = customers.find((x) => x.id === String(body.sourceId ?? '')) ?? mockError(404, 'not found')
+      if (target.id === source.id) mockError(400, 'merge self')
+      // 关联记录整体迁移（mock 数据里只有商机挂 customerId）。
+      opportunities.forEach((o) => {
+        if (o.customerId === source.id) o.customerId = target.id
+      })
+      // 补空不覆盖。
+      target.level = target.level || source.level
+      target.owner = target.owner || source.owner
+      target.phone = target.phone || source.phone
+      target.email = target.email || source.email
+      target.remark = target.remark || source.remark
+      customers = customers.filter((c) => c.id !== source.id)
+      return target
+    },
+  },
+  {
+    method: 'GET',
     url: '/plugins/crm/customers/export',
     handler: ({ query }) => {
       const kw = String(query.keyword ?? '').trim().toLowerCase()
@@ -134,6 +210,8 @@ defineMock([
           !kw ||
           c.name.toLowerCase().includes(kw) ||
           (c.code ?? '').toLowerCase().includes(kw) ||
+          (c.phone ?? '').includes(kw) ||
+          (c.email ?? '').toLowerCase().includes(kw) ||
           (c.externalNo ?? '').toLowerCase().includes(kw) ||
           (c.idNo ?? '').toLowerCase().includes(kw) ||
           (c.taxNo ?? '').toLowerCase().includes(kw),

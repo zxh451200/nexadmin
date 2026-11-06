@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Info } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { DataTable, type Column } from '@/framework/components/DataTable'
@@ -28,6 +29,12 @@ export function ColumnsStep({ schema, cfg, onCfgChange, module, onModuleChange, 
   const patch = (name: string, p: Partial<ColumnConfig>) =>
     onCfgChange(cfg.map((c) => (c.name === name ? { ...c, ...p, ...(p.form === false ? { required: false } : {}) } : c)))
 
+  // 系统列（id/tenant_id/时间戳）不可配置、每张表必然存在，默认收起——不收起的话
+  // 四行灰行 × 四个禁用空勾选框把真正要配置的业务行淹没在一排排短横线里。
+  const [showSystem, setShowSystem] = useState(false)
+  const rows = showSystem ? schema.columns : schema.columns.filter((c) => !c.system)
+
+  // 系统列/不支持的列不做勾选，与控件列一致画短横线：一排能点但禁用的空框，比 "-" 更吵。
   const flag = (key: 'list' | 'query' | 'form' | 'required', allow: (c: ColumnInfo, cur: ColumnConfig) => boolean): Column<ColumnInfo> => ({
     key,
     title: t(`plugin_codegen.col.${key}`),
@@ -35,11 +42,11 @@ export function ColumnsStep({ schema, cfg, onCfgChange, module, onModuleChange, 
     width: 88,
     render: (c) => {
       const cur = byName.get(c.name)
-      if (!cur) return null
+      if (!cur || c.system || !c.supported) return <span className="text-muted-foreground">-</span>
+      if (!allow(c, cur)) return <span className="text-muted-foreground">-</span>
       return (
         <Checkbox
           checked={cur[key]}
-          disabled={!c.supported || c.system || !allow(c, cur)}
           onCheckedChange={(v) => patch(c.name, { [key]: v === true })}
           aria-label={`${c.name} ${t(`plugin_codegen.col.${key}`)}`}
         />
@@ -69,7 +76,7 @@ export function ColumnsStep({ schema, cfg, onCfgChange, module, onModuleChange, 
       mobile: 'sub',
       render: (c) => <span className="font-mono text-xs text-muted-foreground">{c.type}{c.nullable ? ' · NULL' : ''}</span>,
     },
-    { key: 'comment', title: t('plugin_codegen.col.comment'), mobile: 'hidden', render: (c) => c.comment || '-' },
+    { key: 'comment', title: t('plugin_codegen.col.comment'), mobile: 'hidden', render: (c) => c.comment },
     flag('list', () => true),
     flag('query', (c) => QUERYABLE.includes(c.kind)),
     flag('form', () => true),
@@ -133,16 +140,22 @@ export function ColumnsStep({ schema, cfg, onCfgChange, module, onModuleChange, 
       </FormLayout>
       <DataTable
         columns={columns}
-        data={schema.columns}
+        data={rows}
         rowKey="name"
         pagination={false}
         columnSettingsKey="plugin-codegen-columns"
         emptyText={t('plugin_codegen.col.empty')}
         toolbar={
-          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Info aria-hidden="true" className="size-3.5 shrink-0" />
-            {t('plugin_codegen.config.shape', { shape: t(`plugin_codegen.shape.${schema.shape}`) })}
-          </p>
+          <>
+            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Info aria-hidden="true" className="size-3.5 shrink-0" />
+              {t('plugin_codegen.config.shape', { shape: t(`plugin_codegen.shape.${schema.shape}`) })}
+            </p>
+            <label className="flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground" title={t('plugin_codegen.col.showSystemHint')}>
+              <Checkbox checked={showSystem} onCheckedChange={(v) => setShowSystem(v === true)} />
+              {t('plugin_codegen.col.showSystem')}
+            </label>
+          </>
         }
       />
     </div>

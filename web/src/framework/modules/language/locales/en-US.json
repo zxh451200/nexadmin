@@ -19,6 +19,8 @@
     "fields": {
       "code": "Language code",
       "name": "Display name",
+      "dir": "Writing direction",
+      "dirHint": "RTL languages (Arabic etc.) are derived from the code; override here",
       "prefix": "Path prefix",
       "htmlLang": "<html lang> / hreflang",
       "ogLocale": "og:locale",
@@ -26,6 +28,8 @@
       "enabled": "Enabled"
     },
     "setDefault": "Set as default",
+    "dirLtr": "Left to right (LTR)",
+    "dirRtl": "Right to left (RTL)",
     "removeConfirm": "Remove language \"{{name}}\"? After saving, its public pages go away too.",
     "advanced": "Advanced: hreflang / og:locale / date format",
     "codeInvalid": "Invalid language code, e.g. zh-CN, ja-JP",

@@ -40,7 +40,8 @@ export interface RegionNode {
 export interface LanguageInfo {
   code: string
   name: string
-  dir: 'ltr' | 'rtl'
+  /** 空串 = 未指定，服务端保存时按语基推导（ar/he/fa/ur 等 → rtl）；读取接口恒返回 ltr/rtl */
+  dir: '' | 'ltr' | 'rtl'
   default: boolean
   /** 紧凑展示名（列表徽标一类） */
   short?: string
