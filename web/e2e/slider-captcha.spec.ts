@@ -98,7 +98,7 @@ async function holeOf(page: Page): Promise<number> {
  * 其中 puzzleMax = bgW - puzzleW、buttonMax = bgW - buttonW - 2（2 是滑轨指示条左右边框）。
  * 尺寸全部从真实 DOM 量，避免把 280/40/63 抄成第二套常量。
  */
-async function dragTo(page: Page, targetImgX: number) {
+async function dragTo(page: Page, targetImgX: number, opts?: { pauseAfterStep?: number; pauseMs?: number }) {
   const button = page.locator('.rc-slider-captcha-control-button')
   const btn = await button.boundingBox()
   const panel = await page.locator(SLIDER).boundingBox()
@@ -114,9 +114,11 @@ async function dragTo(page: Page, targetImgX: number) {
   await page.mouse.down()
   for (let i = 1; i <= 14; i++) {
     await page.mouse.move(startX + (mouseDelta * i) / 14, startY)
-    // 每步留一点真实时长：rc 的 trail 没有时间戳，接线层按总时长线性铺开，
-    // 后端要求轨迹总时长 ≥150ms，瞬移仍会被判成脚本
-    await page.waitForTimeout(20)
+    // 每步留一点真实时长：rc 的 trail 没有时间戳，接线层自己采一份，
+    // 后端要求轨迹总时长 ≥150ms，瞬移仍会被判成脚本。
+    // pauseAfterStep 用来在某一步后停住不动：停顿期间没有 pointermove，
+    // 真时序采样会留下一个空档，线性铺开则把它抹平——那条用例就靠这个区分。
+    await page.waitForTimeout(opts && i === opts.pauseAfterStep ? (opts.pauseMs ?? 350) : 20)
   }
   await page.mouse.up()
 }
@@ -165,6 +167,25 @@ test('拖到孔位即通过，token 能被登录接口的验证码通道消费',
   await page.getByRole('textbox', { name: '密码' }).fill('pw-for-e2e')
   await page.getByRole('button', { name: '登录', exact: true }).click()
   await expect(page).not.toHaveURL(/\/login/, { timeout: 20_000 })
+})
+
+test('轨迹时间戳来自真实采样：中途那次停顿必须留在交卷体里', async ({ page }) => {
+  // 为什么钉这条：rc 只给 [clientX, clientY][]，时间轴是接线层自己采的。
+  // 采样的接线一旦断掉（capture 阶段、contains 判据、时基换了），代码不会报错，
+  // 只会退回「按总时长线性铺开」——形状还是人的形状，逐点时序变成假的，
+  // 后端「像人」那条闸实际退化成「动没动 + 花了多久」。停顿法能把两者分开。
+  await openLogin(page)
+  await dragTo(page, await holeOf(page), { pauseAfterStep: 7, pauseMs: 400 })
+  await expect(page.getByText('验证通过')).toBeVisible()
+
+  const sent = await lastVerify(page)
+  if (!sent) throw new Error('mock 没收到 /auth/slider/verify 交卷')
+  const gaps = sent.trail.slice(1).map((p, i) => p.t - sent.trail[i].t)
+  const total = sent.trail[sent.trail.length - 1].t - sent.trail[0].t
+  // 线性铺开的最大间隔只有 total/(点数-1)（这条拖动约 700ms/14 ≈ 50ms），
+  // 真采样才看得见那次 400ms 的停顿本身。
+  expect(Math.max(...gaps)).toBeGreaterThanOrEqual(300)
+  expect(total).toBeGreaterThanOrEqual(400)
 })
 
 test('拖偏了不通过，并换一张新挑战', async ({ page }) => {

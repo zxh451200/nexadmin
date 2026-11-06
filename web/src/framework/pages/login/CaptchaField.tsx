@@ -11,6 +11,7 @@ import { Button } from '@/framework/ui/button'
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/framework/ui/form'
 import { Input } from '@/framework/ui/input'
 import { Skeleton } from '@/framework/ui/skeleton'
+import { buildTrail, type DragSample } from './sliderTrail'
 
 /** 人机校验的两种形态：滑块拼图（默认）与图形数字（带语音，作无障碍兜底） */
 export type CaptchaMode = 'image' | 'slider'
@@ -167,36 +168,65 @@ interface SliderCaptchaProps {
  * 我们只对接后端契约——`/auth/slider` 发挑战（背景 + 抠块），`/auth/slider/verify`
  * 按「图片像素 x + 轨迹」判真伪。bgSize 传图片原始尺寸，让显示与图片 1:1，
  * 组件给的 x 不用换算就是后端要的坐标；puzzleSize 的 top 用后端的 pieceTop 定孔位行。
- * 无键盘操作路径：方向键可完成的兜底是「改用图形验证码」（可输入、有语音），语义上不缺门。
+ *
+ * 库的 bundle 里没有任何 aria/role/tabIndex，也接不了键盘：所以外层只补「组 + 状态播报」
+ * 这一层诚实语义，不挂 role="slider"——那会向读屏承诺一个操作不了的控件。
+ * 键盘与语音的出路是「改用图形验证码」，那条路可输入、有语音，语义上不缺门。
  */
 function SliderCaptcha({ captcha, onRefresh, onToken, onFailed }: SliderCaptchaProps) {
   const { t } = useTranslation()
   const imgW = captcha?.width ?? 280
   const imgH = captcha?.height ?? 110
+  const rootRef = useRef<HTMLDivElement>(null)
+  const samplesRef = useRef<DragSample[]>([])
+  const startRef = useRef(0)
+  const [phase, setPhase] = useState<'idle' | 'moving' | 'verifying' | 'done' | 'failed'>('idle')
+
+  // 自己采一遍真实时序：库只给 [clientX, clientY][]，时间轴得由我们这边拿
+  useEffect(() => {
+    const inWidget = (e: PointerEvent) => rootRef.current?.contains(e.target as Node) ?? false
+    const down = (e: PointerEvent) => {
+      if (!inWidget(e)) return
+      startRef.current = e.timeStamp
+      samplesRef.current = [{ t: 0, cx: e.clientX }]
+      setPhase('moving')
+    }
+    const move = (e: PointerEvent) => {
+      const samples = samplesRef.current
+      if (!samples.length) return
+      const tMs = Math.round(e.timeStamp - startRef.current)
+      const last = samples[samples.length - 1]
+      if (last.cx === e.clientX && tMs - last.t < 16) return
+      samples.push({ t: tMs, cx: e.clientX })
+    }
+    // pointerup 不清空：库的 onVerify 在我们之后才跑，清了就没样本可用；下次 pointerdown 自然复位
+    window.addEventListener('pointerdown', down, true)
+    window.addEventListener('pointermove', move, true)
+    return () => {
+      window.removeEventListener('pointerdown', down, true)
+      window.removeEventListener('pointermove', move, true)
+    }
+  }, [])
+
+  // 换一张挑战就回到待拖动，否则播报会停在上一张的结果上
+  useEffect(() => setPhase('idle'), [captcha?.key])
 
   const verify = async (data: VerifyParam) => {
     if (!captcha?.key) throw new Error('captcha missing')
-    // rc 的 trail 是 [x,y][] 无时间戳，而且 x 记的是绝对 clientX；后端要的坐标系是「拼图行程」
-    // （落点 x、容差、推进量同一口径），另外要单调毫秒时间戳与「末点 = 落点」。
-    // 这里把轨迹平移到 0 起点并按落点缩放，推进量量的就是真实拖动，而不是页面横坐标的跨度。
-    // 时间戳按总时长线性铺开：真人形状仍是 rc 记录的原始轨迹，瞬间位移依旧会被时长下限（150ms）挡住。
-    const pts = data.trail.length ? data.trail : [[0, 0]]
-    const n = pts.length
-    const x0 = pts[0][0]
-    const span = pts[n - 1][0] - x0
-    const scale = span === 0 ? 0 : data.x / span
-    const trail = pts.map((p, i) => ({ t: Math.round((i / Math.max(1, n - 1)) * data.duration), x: Math.round((p[0] - x0) * scale) }))
-    trail[n - 1] = { t: Math.max(1, data.duration), x: Math.round(data.x) }
+    const trail = buildTrail(samplesRef.current, data.trail, data.x, data.duration)
+    setPhase('verifying')
     try {
       const { token } = await api.post<{ token: string }>(
         '/auth/slider/verify',
         { key: captcha.key, x: Math.round(data.x), trail },
         { silent: true },
       )
+      setPhase('done')
       onToken(token)
     } catch (e) {
       // 失败就地换血：清掉未定 token、父级取新挑战（key 变化 → 组件重挂）；
       // 抛出让组件走完它的失败动画再消失。
+      setPhase('failed')
       toast.error(t('login.sliderFailed'))
       onToken('')
       onFailed()
@@ -204,12 +234,35 @@ function SliderCaptcha({ captcha, onRefresh, onToken, onFailed }: SliderCaptchaP
     }
   }
 
+  // 播报用独立文案：库的视觉提示（.rc-slider-captcha-control-tips）本身就是可读文本，
+  // 这里再抄一遍会让同一句话在读屏与 getByText 里出现两次。
+  const status =
+    phase === 'moving'
+      ? t('login.sliderAriaMoving')
+      : phase === 'verifying'
+        ? t('login.sliderAriaVerifying')
+        : phase === 'done'
+          ? t('login.sliderAriaDone')
+          : phase === 'failed'
+            ? t('login.sliderAriaFailed')
+            : ''
+
   return (
     <div
+      ref={rootRef}
+      role="group"
+      aria-label={t('login.sliderPrompt')}
+      aria-describedby="slider-captcha-hint"
       className="w-full max-w-[280px]"
       // 组件用 CSS 变量做主题；映射到站点的语义 token，跟随浅色/深色主题
       style={{ '--rcsc-primary': 'hsl(var(--primary))', '--rcsc-panel-border-radius': '8px' } as React.CSSProperties}
     >
+      <span id="slider-captcha-hint" className="sr-only">
+        {t('login.sliderAriaHint')}
+      </span>
+      <span role="status" aria-live="polite" className="sr-only">
+        {status}
+      </span>
       {/* key 绑挑战 key：换一张挑战就重挂组件，拖拽状态与错误计数一并复位 */}
       <div className="relative">
         <SliderCaptchaLib
