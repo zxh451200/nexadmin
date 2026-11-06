@@ -1090,14 +1090,14 @@ export default function PostPage() {
         emptyText={t('plugin_website.empty')}
         toolbar={
           <Can perm="website:post">
+            <Button onClick={() => openAt(null)}>
+              <Plus aria-hidden="true" />
+              {t('plugin_website.post.create')}
+            </Button>
             <Button variant="outline" onClick={() => setCatOpen(true)}>{t('plugin_website.post.manageCategories')}</Button>
             <Button variant="outline" onClick={() => void onExport()} disabled={exporting}>
               <Download className="me-2 size-4" aria-hidden="true" />
               {t('common.export')}
-            </Button>
-            <Button onClick={() => openAt(null)}>
-              <Plus aria-hidden="true" />
-              {t('plugin_website.post.create')}
             </Button>
           </Can>
         }

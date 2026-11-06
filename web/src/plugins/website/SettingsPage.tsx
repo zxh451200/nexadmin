@@ -13,6 +13,7 @@ import {
   type TranslateBatch,
 } from '@/framework/components/i18n'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
+import { ImageCropDialog, type CropConfig } from '@/framework/components/ImageCropDialog'
 import { SwitchRow } from '@/framework/components/SwitchField'
 import { ZoomableImage } from '@/framework/components/ZoomableImage'
 import { Skeleton } from '@/framework/ui/skeleton'
@@ -25,6 +26,7 @@ import {
   uploadMedia,
   useI18nSchema,
   useLanguages,
+  usePages,
   useWebsiteLimits,
   useSaveSettings,
   useSettings,
@@ -37,7 +39,7 @@ import {
 
 /** 不随语言变化的字段：留在页面本地 state，译文态下置灰。 */
 type SharedTextKey =
-  | 'siteName' | 'logoUrl' | 'faviconUrl' | 'ogImageUrl' | 'headCode' | 'titleSuffix' | 'homeCtaHref' | 'contactEmail'
+  | 'siteName' | 'logoUrl' | 'faviconUrl' | 'ogImageUrl' | 'headCode' | 'titleSuffix' | 'homeSlug' | 'homeCtaHref' | 'contactEmail'
   | 'contactPhone' | 'qrCodeUrl' | 'qrCodeCaption' | 'icp' | 'contactConsentUrl'
 type SharedSettings = Pick<SiteSettingsForm, SharedTextKey | 'marketEnabled' | 'messageNotifyEmail' | 'contactConsent'> & {
   socials: SocialLink[]
@@ -84,11 +86,12 @@ function SettingsFormBody({
   const save = useSaveSettings()
   const lf = useLocaleForm()
   const { disabled: sharedDisabled } = useSharedField()
+  // 「设为首页」候选：全量页面（含草稿，草稿选了也不报错，发布后首页即生效）。
+  const { data: pagesData } = usePages({ page: 1, pageSize: 200 })
   const [uploading, setUploading] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
-  const [uploadingFav, setUploadingFav] = useState(false)
   const favRef = useRef<HTMLInputElement>(null)
-  const [uploadingQr, setUploadingQr] = useState(false)
+  const ogRef = useRef<HTMLInputElement>(null)
   const qrRef = useRef<HTMLInputElement>(null)
   // 分享图与封面同一套规则：https:// 或 / 开头，别的拦住——og:image 跟着指向它
   const ogInvalid = shared.ogImageUrl.trim() !== '' && !/^(https?:\/\/|\/)/i.test(shared.ogImageUrl.trim())
@@ -101,48 +104,34 @@ function SettingsFormBody({
 
   const set = (key: SharedTextKey, v: string) => onSharedChange({ ...shared, [key]: v })
 
-  const onPickLogo = async (file: File | undefined) => {
+  // 图片先裁剪再上传：分享图固定 1200×630（og:image 的标准比例），其余自由裁剪。
+  // 上传统一走 onCropConfirm，裁剪弹窗里取消就不上传。
+  type MediaKey = 'logoUrl' | 'faviconUrl' | 'ogImageUrl' | 'qrCodeUrl'
+  const [cropFile, setCropFile] = useState<File | null>(null)
+  const cropKey = useRef<MediaKey | null>(null)
+  const cropCfg: CropConfig =
+    cropKey.current === 'ogImageUrl' ? { width: 1200, height: 630 } : 'free'
+
+  const onPickMedia = (key: MediaKey, file: File | undefined, reset?: HTMLInputElement | null) => {
     if (!file) return
+    cropKey.current = key
+    setCropFile(file)
+    if (reset) reset.value = ''
+  }
+
+  const onCropConfirm = async (file: File) => {
+    const key = cropKey.current
+    setCropFile(null)
+    if (!key) return
     setUploading(true)
     try {
       const res = await uploadMedia(file)
-      set('logoUrl', res.url)
+      set(key, res.url)
       toast.success(t('plugin_website.logo.uploaded'))
     } catch {
       toast.error(t('common.operateFailed'))
     } finally {
       setUploading(false)
-      if (fileRef.current) fileRef.current.value = ''
-    }
-  }
-
-  const onPickQr = async (file: File | undefined) => {
-    if (!file) return
-    setUploadingQr(true)
-    try {
-      const res = await uploadMedia(file)
-      set('qrCodeUrl', res.url)
-      toast.success(t('plugin_website.qr.uploaded'))
-    } catch {
-      toast.error(t('common.operateFailed'))
-    } finally {
-      setUploadingQr(false)
-      if (qrRef.current) qrRef.current.value = ''
-    }
-  }
-
-  const onPickFav = async (file: File | undefined) => {
-    if (!file) return
-    setUploadingFav(true)
-    try {
-      const res = await uploadMedia(file)
-      set('faviconUrl', res.url)
-      toast.success(t('common.operateSuccess'))
-    } catch {
-      toast.error(t('common.operateFailed'))
-    } finally {
-      setUploadingFav(false)
-      if (favRef.current) favRef.current.value = ''
     }
   }
 
@@ -264,9 +253,9 @@ function SettingsFormBody({
             placeholder={t('plugin_website.placeholder.faviconUrl', { defaultValue: '' })}
           />
           {shared.faviconUrl && <ZoomableImage src={shared.faviconUrl} className="h-9 w-9 p-0.5" />}
-          <Button type="button" variant="outline" disabled={uploadingFav || sharedDisabled} onClick={() => favRef.current?.click()}>
+          <Button type="button" variant="outline" disabled={uploading || sharedDisabled} onClick={() => favRef.current?.click()}>
             <Upload aria-hidden="true" />
-            {uploadingFav ? t('plugin_website.logo.uploading') : t('plugin_website.logo.upload')}
+            {uploading ? t('plugin_website.logo.uploading') : t('plugin_website.logo.upload')}
           </Button>
         </div>
         <span className="text-xs text-muted-foreground">{t('plugin_website.hint.faviconUrl', mediaHint)}</span>
@@ -281,19 +270,47 @@ function SettingsFormBody({
       {localizedField('homeSubtitle')}
       {localizedField('homeCtaLabel')}
       {sharedInput('homeCtaHref')}
+      {/* 设为首页：把某张自定义单页顶到 / 上；空 = 内置 Hero 页。Radix Select 不收空串值，用哨兵。 */}
+      <SharedFieldShell labelKey="plugin_website.fields.homeSlug">
+        <Select
+          value={shared.homeSlug || '__builtin'}
+          disabled={sharedDisabled}
+          onValueChange={(v) => set('homeSlug', v === '__builtin' ? '' : v)}
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__builtin">{t('plugin_website.settings.homeBuiltin')}</SelectItem>
+            {(pagesData?.list ?? []).map((p) => (
+              <SelectItem key={p.id} value={p.slug}>
+                {p.title}
+                {!p.published ? `（${t('plugin_website.publishedOff')}）` : ''}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <span className="text-xs text-muted-foreground">{t('plugin_website.hint.homeSlug')}</span>
+      </SharedFieldShell>
       </section>
       <section className="flex flex-col gap-3 rounded-lg border bg-card p-4">
         <h3 className="text-sm font-medium">{t('plugin_website.settings.section.seo')}</h3>
         {localizedField('seoKeywords')}
       {sharedInput('titleSuffix')}
       <SharedFieldShell labelKey="plugin_website.fields.ogImageUrl">
-        <Input
-          value={shared.ogImageUrl}
-          disabled={sharedDisabled}
-          aria-invalid={ogInvalid}
-          onChange={(e) => set('ogImageUrl', e.target.value)}
-          placeholder={t('plugin_website.placeholder.ogImageUrl', { defaultValue: '' })}
-        />
+        <div className="flex items-center gap-2">
+          <Input
+            value={shared.ogImageUrl}
+            disabled={sharedDisabled}
+            aria-invalid={ogInvalid}
+            onChange={(e) => set('ogImageUrl', e.target.value)}
+            placeholder={t('plugin_website.placeholder.ogImageUrl', { defaultValue: '' })}
+          />
+          <Button type="button" variant="outline" disabled={uploading || sharedDisabled} onClick={() => ogRef.current?.click()}>
+            <Upload aria-hidden="true" />
+            {uploading ? t('plugin_website.logo.uploading') : t('plugin_website.fields.ogUpload')}
+          </Button>
+        </div>
         {shared.ogImageUrl ? <ZoomableImage src={shared.ogImageUrl} className="h-24 w-40 object-cover" /> : null}
         {ogInvalid ? <span className="text-xs text-destructive">{t('plugin_website.fields.coverInvalid')}</span> : null}
       </SharedFieldShell>
@@ -341,9 +358,9 @@ function SettingsFormBody({
             placeholder={t('plugin_website.placeholder.qrCodeUrl', { defaultValue: '' })}
           />
           {shared.qrCodeUrl && <ZoomableImage src={shared.qrCodeUrl} className="size-9 bg-background" />}
-          <Button type="button" variant="outline" disabled={uploadingQr || sharedDisabled} onClick={() => qrRef.current?.click()}>
+          <Button type="button" variant="outline" disabled={uploading || sharedDisabled} onClick={() => qrRef.current?.click()}>
             <Upload aria-hidden="true" />
-            {uploadingQr ? t('plugin_website.logo.uploading') : t('plugin_website.qr.upload')}
+            {uploading ? t('plugin_website.logo.uploading') : t('plugin_website.qr.upload')}
           </Button>
         </div>
         <span className="text-xs text-muted-foreground">{t('plugin_website.hint.qrCodeUrl')}</span>
@@ -448,21 +465,36 @@ function SettingsFormBody({
         type="file"
         accept={acceptImages}
         className="hidden"
-        onChange={(e) => void onPickLogo(e.target.files?.[0])}
+        onChange={(e) => onPickMedia('logoUrl', e.target.files?.[0], e.target)}
       />
       <input
         ref={favRef}
         type="file"
         accept={acceptImages}
         className="hidden"
-        onChange={(e) => void onPickFav(e.target.files?.[0])}
+        onChange={(e) => onPickMedia('faviconUrl', e.target.files?.[0], e.target)}
+      />
+      <input
+        ref={ogRef}
+        type="file"
+        accept={acceptImages}
+        className="hidden"
+        onChange={(e) => onPickMedia('ogImageUrl', e.target.files?.[0], e.target)}
       />
       <input
         ref={qrRef}
         type="file"
         accept={acceptImages}
         className="hidden"
-        onChange={(e) => void onPickQr(e.target.files?.[0])}
+        onChange={(e) => onPickMedia('qrCodeUrl', e.target.files?.[0], e.target)}
+      />
+
+      <ImageCropDialog
+        open={!!cropFile}
+        file={cropFile}
+        crop={cropCfg}
+        onCancel={() => setCropFile(null)}
+        onConfirm={(f) => void onCropConfirm(f)}
       />
       {/* 语言清单已归平台管理（系统设置 → 语言管理），这里只给入口提示，不再复制一份编辑器 */}
       <p className="text-xs text-muted-foreground">{t('plugin_website.languages.manageHint')}</p>
@@ -497,6 +529,7 @@ export default function SettingsPage() {
         ogImageUrl: data.ogImageUrl ?? '',
         headCode: data.headCode ?? '',
         titleSuffix: data.titleSuffix ?? '',
+        homeSlug: data.homeSlug ?? '',
         homeCtaHref: data.homeCtaHref,
         contactEmail: data.contactEmail,
         contactPhone: data.contactPhone,

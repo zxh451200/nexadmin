@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/framework/request/http'
+import { Can } from '@/framework/auth/Can'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Badge } from '@/framework/ui/badge'
@@ -59,10 +60,12 @@ export default function SamlPage() {
     <PageContainer>
       <PageHeader title={t('plugin_saml.title')} description={t('plugin_saml.description')} />
       <div className="mb-4 flex justify-end">
-        <Button onClick={() => setEditing({ ...empty })}>
-          <Plus aria-hidden="true" />
-          {t('plugin_saml.add')}
-        </Button>
+        <Can perm="saml:edit">
+          <Button onClick={() => setEditing({ ...empty })}>
+            <Plus aria-hidden="true" />
+            {t('plugin_saml.add')}
+          </Button>
+        </Can>
       </div>
       <div className="space-y-3">
         {(list.data ?? []).map((s) => (
@@ -73,14 +76,16 @@ export default function SamlPage() {
               <Badge variant={s.enabled ? 'success' : 'secondary'}>
                 {s.enabled ? t('plugin_saml.on') : t('plugin_saml.off')}
               </Badge>
-              <div className="ms-auto flex gap-2">
-                <Button size="sm" variant="outline" onClick={() => setEditing(s)}>
-                  {t('common.edit')}
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => remove.mutate(s.id)}>
-                  <Trash2 aria-hidden="true" />
-                </Button>
-              </div>
+              <Can perm="saml:edit">
+                <div className="ms-auto flex gap-2">
+                  <Button size="sm" variant="outline" onClick={() => setEditing(s)}>
+                    {t('common.edit')}
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => remove.mutate(s.id)}>
+                    <Trash2 aria-hidden="true" />
+                  </Button>
+                </div>
+              </Can>
             </div>
             <div className="space-y-1 text-xs text-muted-foreground">
               <div className="break-all">

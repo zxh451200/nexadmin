@@ -59,6 +59,7 @@ function PageFormBody({ onOpenChange, editing }: { onOpenChange: (v: boolean) =>
   const [slug, setSlug] = useState(editing?.slug ?? '')
   const [ogImage, setOgImage] = useState(editing?.ogImage ?? '')
   const [noindex, setNoindex] = useState(editing?.noindex ?? false)
+  const [sort, setSort] = useState(editing?.sort ?? 0)
   // 分享图与封面同一套规则：站内相对路径或绝对地址，别的拦住——og:image 跟着指向它。
   const ogInvalid = ogImage.trim() !== '' && !/^(https?:\/\/|\/)/i.test(ogImage.trim())
 
@@ -81,6 +82,7 @@ function PageFormBody({ onOpenChange, editing }: { onOpenChange: (v: boolean) =>
           published: lf.publishedOf(lf.defaultLocale),
           ogImage,
           noindex,
+          sort,
           ...lf.serialize(),
           // 行上的裸列永远存原文
           title: base.title ?? '',
@@ -158,6 +160,16 @@ function PageFormBody({ onOpenChange, editing }: { onOpenChange: (v: boolean) =>
           checked={noindex}
           onCheckedChange={setNoindex}
         />
+        <label className="flex flex-col gap-1 text-sm">
+          <span>{t('plugin_website.fields.sort')}</span>
+          <Input
+            type="number"
+            min={0}
+            value={sort || 0}
+            onChange={(e) => setSort(Math.max(0, Math.min(99999, Number(e.target.value) || 0)))}
+          />
+          <span className="text-xs text-muted-foreground">{t('plugin_website.fields.sortHint')}</span>
+        </label>
       </div>
     </ResponsiveDialog>
   )

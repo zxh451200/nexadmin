@@ -14,6 +14,7 @@ const settings: SiteSettings = {
   ogImageUrl: '',
   headCode: '',
   titleSuffix: '',
+  homeSlug: '',
   homeTitle: '为生产级后台系统\n而生的全栈框架',
   homeSubtitle: '多租户、RBAC、开放平台与插件体系，出厂即备。每一项能力都以源码交付——可读、可改、可升级。',
   homeCtaLabel: '开始使用',
@@ -59,7 +60,7 @@ let pages: SitePage[] = [
     content: '<p>NexAdmin 是一个以源码交付的后台管理框架：后端 Gin + GORM，前端 React + shadcn/ui。</p>',
     i18nJson: '',
     publishedJson: '',
-    ogImage: '', noindex: false,
+    ogImage: '', noindex: false, sort: 0,
     updatedAt: ago(60 * 26),
   },
 ]
@@ -535,7 +536,7 @@ defineMock([
         id: id(300 + pages.length), slug: body.slug, title: body.title,
         seoTitle: body.seoTitle ?? '', seoDesc: body.seoDesc ?? '', content: body.content ?? '', published: !!body.published,
         i18nJson: body.i18nJson ?? '', publishedJson: body.publishedJson ?? '',
-        ogImage: body.ogImage ?? '', noindex: !!body.noindex, updatedAt: new Date().toISOString(),
+        ogImage: body.ogImage ?? '', noindex: !!body.noindex, sort: body.sort ?? 0, updatedAt: new Date().toISOString(),
       }
       pages = [...pages, row]
       return row
@@ -606,7 +607,7 @@ defineMock([
       const row: SitePage = {
         id: id(300 + pages.length), slug, title: src.title, seoTitle: src.seoTitle, seoDesc: src.seoDesc, content: src.content,
         published: false, i18nJson: src.i18nJson, publishedJson: '',
-        ogImage: src.ogImage, noindex: false, updatedAt: new Date().toISOString(),
+        ogImage: src.ogImage, noindex: false, sort: 0, updatedAt: new Date().toISOString(),
       }
       pages = [...pages, row]
       return row
