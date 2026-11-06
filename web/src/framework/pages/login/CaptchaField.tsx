@@ -3,7 +3,7 @@ import { RefreshCw, Volume2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { UseFormReturn } from 'react-hook-form'
 import { toast } from 'sonner'
-import SliderCaptchaLib, { type ActionType, type VerifyParam } from 'rc-slider-captcha'
+import SliderCaptchaLib, { type VerifyParam } from 'rc-slider-captcha'
 import { api } from '@/framework/request/http'
 import type { CaptchaResult } from '@/framework/auth/types'
 import { RequiredMark } from '@/framework/components/RequiredMark'
@@ -171,19 +171,22 @@ interface SliderCaptchaProps {
  */
 function SliderCaptcha({ captcha, onRefresh, onToken, onFailed }: SliderCaptchaProps) {
   const { t } = useTranslation()
-  const actionRef = useRef<ActionType | undefined>(undefined)
   const imgW = captcha?.width ?? 280
-  const imgH = captcha?.height ?? 120
+  const imgH = captcha?.height ?? 110
 
   const verify = async (data: VerifyParam) => {
     if (!captcha?.key) throw new Error('captcha missing')
-    // rc 的 trail 是 [x,y][] 无时间戳；后端行为校验要单调毫秒时间戳与「末点 = 落点」。
-    // 用总时长线性铺开：真人拖动的推进形状仍是 rc 记录的原始轨迹，瞬间位移依旧会被
-    // 时长下限（150ms）挡住。末点强制对齐落点，满足 last.X == finalX 的判定。
+    // rc 的 trail 是 [x,y][] 无时间戳，而且 x 记的是绝对 clientX；后端要的坐标系是「拼图行程」
+    // （落点 x、容差、推进量同一口径），另外要单调毫秒时间戳与「末点 = 落点」。
+    // 这里把轨迹平移到 0 起点并按落点缩放，推进量量的就是真实拖动，而不是页面横坐标的跨度。
+    // 时间戳按总时长线性铺开：真人形状仍是 rc 记录的原始轨迹，瞬间位移依旧会被时长下限（150ms）挡住。
     const pts = data.trail.length ? data.trail : [[0, 0]]
     const n = pts.length
-    const trail = pts.map((p, i) => ({ t: Math.round((i / Math.max(1, n - 1)) * data.duration), x: Math.round(p[0]) }))
-    trail[trail.length - 1] = { t: Math.max(1, data.duration), x: Math.round(data.x) }
+    const x0 = pts[0][0]
+    const span = pts[n - 1][0] - x0
+    const scale = span === 0 ? 0 : data.x / span
+    const trail = pts.map((p, i) => ({ t: Math.round((i / Math.max(1, n - 1)) * data.duration), x: Math.round((p[0] - x0) * scale) }))
+    trail[n - 1] = { t: Math.max(1, data.duration), x: Math.round(data.x) }
     try {
       const { token } = await api.post<{ token: string }>(
         '/auth/slider/verify',
@@ -211,7 +214,6 @@ function SliderCaptcha({ captcha, onRefresh, onToken, onFailed }: SliderCaptchaP
       <div className="relative">
         <SliderCaptchaLib
         key={captcha?.key ?? 'empty'}
-        actionRef={actionRef}
         autoRefreshOnError={false}
         showRefreshIcon={false}
         bgSize={{ width: imgW, height: imgH }}

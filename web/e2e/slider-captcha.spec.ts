@@ -22,6 +22,8 @@ import { expect, test, type Page } from '@playwright/test'
 
 const SLIDER = '.rc-slider-captcha'
 const SLIDER_BG_IMG = '.rc-slider-captcha-jigsaw-bg'
+// 与后端 slider_render.go 的 sliderBgW 同口径（auth.mock.ts 出图也按这组常量）
+const BG_W = 280
 
 test.setTimeout(240_000)
 
@@ -130,6 +132,15 @@ async function forceCaptchaEnforced(page: Page, account: string, times: number) 
   }
 }
 
+/** 读 mock 记下的最后一次 /auth/slider/verify 交卷体（mock 不留网络事件，只能这么取证） */
+async function lastVerify(page: Page): Promise<{ x: number; trail: { t: number; x: number }[] } | null> {
+  return page.evaluate(
+    () =>
+      (window as unknown as { __nexSliderVerify?: { x: number; trail: { t: number; x: number }[] } })
+        .__nexSliderVerify ?? null,
+  )
+}
+
 test('拖到孔位即通过，token 能被登录接口的验证码通道消费', async ({ page }) => {
   const account = await openLogin(page)
   await forceCaptchaEnforced(page, account, 3)
@@ -137,6 +148,18 @@ test('拖到孔位即通过，token 能被登录接口的验证码通道消费',
   // 此时 mock 已强制校验 captcha：拖对 → 登录必须真进去
   await dragTo(page, await holeOf(page))
   await expect(page.getByText('验证通过')).toBeVisible()
+
+  // 交卷体的坐标系必须是「拼图行程」：起点归零、推进量不超过落点、末点等于 x、时间戳单调。
+  // 直接抄 rc 的绝对 clientX（迁移初期的实际形态，横坐标 700+）或漏掉它的 ratio 缩放，都会在这里红；
+  // 用例的拖动不回摆，所以「不超过落点」这条在真人过冲时才有余地，这里按脚本口径钉死。
+  const sent = await lastVerify(page)
+  if (!sent) throw new Error('mock 没收到 /auth/slider/verify 交卷')
+  const xs = sent.trail.map((p) => p.x)
+  expect(xs[0]).toBe(0)
+  expect(Math.max(...xs)).toBeLessThanOrEqual(sent.x + 1)
+  expect(Math.max(...xs)).toBeLessThanOrEqual(BG_W)
+  expect(xs[xs.length - 1]).toBe(sent.x)
+  for (let i = 1; i < sent.trail.length; i++) expect(sent.trail[i].t).toBeGreaterThanOrEqual(sent.trail[i - 1].t)
 
   await page.getByRole('textbox', { name: '用户名' }).fill(account)
   await page.getByRole('textbox', { name: '密码' }).fill('pw-for-e2e')

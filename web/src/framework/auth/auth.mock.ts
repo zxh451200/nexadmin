@@ -319,6 +319,9 @@ defineMock([
     method: 'POST',
     url: '/auth/slider/verify',
     handler: ({ body }) => {
+      // 取证口：把最后一次交卷原样挂到 window，供 e2e 断言前端上报的坐标系。
+      // mock 在 axios 适配器里就地应答，不产生网络事件，payload 从外部观察不到。
+      ;(window as unknown as { __nexSliderVerify?: unknown }).__nexSliderVerify = body
       const expected = sliderXs.get(body?.key)
       // 与后端一致：拖偏了不作废挑战（只累计尝试），只有签发成功才消费
       if (expected === undefined) mockError(404, '验证码已失效')
