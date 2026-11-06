@@ -197,16 +197,16 @@ export function ParamsSection() {
       <DataTable<ConfigRow>
         toolbar={
           <>
-            <Can perm="config:update">
-              <Button type="button" variant="outline" onClick={refreshCache} disabled={!isPlatform || refresh.isPending}>
-                <RefreshCw className="me-2 h-4 w-4" aria-hidden="true" />
-                {t('sysConfig.refreshCache')}
-              </Button>
-            </Can>
             <Can perm="config:create">
               <Button type="button" disabled={!isPlatform} onClick={() => openForm(null)}>
                 <Plus className="me-2 h-4 w-4" aria-hidden="true" />
                 {t('common.add')}
+              </Button>
+            </Can>
+            <Can perm="config:update">
+              <Button type="button" variant="outline" onClick={refreshCache} disabled={!isPlatform || refresh.isPending}>
+                <RefreshCw className="me-2 h-4 w-4" aria-hidden="true" />
+                {t('sysConfig.refreshCache')}
               </Button>
             </Can>
           </>

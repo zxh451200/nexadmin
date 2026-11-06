@@ -27,3 +27,7 @@ menus:
     type: button
     title: plugin_ticket.perm.create
     perm: ticket:create
+  - parent: ticket:list
+    type: button
+    title: plugin_ticket.perm.delete
+    perm: ticket:delete

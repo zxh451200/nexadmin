@@ -30,3 +30,7 @@ menus:
     type: button
     title: plugin_crm.perm.opp
     perm: crm:opp
+  - parent: crm:list
+    type: button
+    title: plugin_crm.perm.pool
+    perm: crm:pool

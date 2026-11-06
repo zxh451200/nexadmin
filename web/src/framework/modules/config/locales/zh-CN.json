@@ -51,6 +51,10 @@
         "name": "登录验证码",
         "remark": "开启=登录必须先过图形验证码；关闭=连续失败达到阈值后才要求"
       },
+      "login_captcha_length": {
+        "name": "登录验证码位数",
+        "remark": "4-8 位；改后对新生成的验证码生效"
+      },
       "login_max_retry": {
         "name": "登录最大重试次数",
         "remark": ""

@@ -51,6 +51,10 @@
         "name": "Login captcha",
         "remark": "On: a captcha is required for every sign-in. Off: only required after repeated failures"
       },
+      "login_captcha_length": {
+        "name": "Captcha length",
+        "remark": "4-8 digits; takes effect on captchas generated after saving"
+      },
       "login_max_retry": {
         "name": "Max sign-in attempts",
         "remark": ""

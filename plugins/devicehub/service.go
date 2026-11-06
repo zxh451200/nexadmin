@@ -82,6 +82,15 @@ type DeviceInput struct {
 	Endpoint string `json:"endpoint"`
 	Config   string `json:"config"`
 	Enabled  bool   `json:"enabled"`
+	// Location 是安装位置（LocationField 选点或手填）；nil = 清空。坐标存 WGS-84 原值。
+	Location *GeoPointInput `json:"location,omitempty"`
+}
+
+// GeoPointInput 是一个地理点位（经纬度 + 可读地址）。
+type GeoPointInput struct {
+	Lng     float64 `json:"lng"`
+	Lat     float64 `json:"lat"`
+	Address string  `json:"address"`
 }
 
 var validProtocols = map[string]bool{"modbus-tcp": true, "modbus-rtu": true, "mqtt": true, "s7": true, "opcua": true}
@@ -104,6 +113,10 @@ func (s *Service) SaveDevice(ctx context.Context, id idgen.ID, in DeviceInput) (
 	if in.Config != "" && !json.Valid([]byte(in.Config)) {
 		return nil, response.BadRequest("devicehub.config_invalid")
 	}
+	// 位置坐标范围校验：越界一律 400，不静默钳位（错位的设备定位比报错更难排查）
+	if in.Location != nil && (in.Location.Lng < -180 || in.Location.Lng > 180 || in.Location.Lat < -90 || in.Location.Lat > 90) {
+		return nil, response.BadRequest("devicehub.location_invalid")
+	}
 	var row Device
 	if id != 0 {
 		if err := s.db.WithContext(ctx).Take(&row, "id = ?", id).Error; err != nil {
@@ -111,6 +124,12 @@ func (s *Service) SaveDevice(ctx context.Context, id idgen.ID, in DeviceInput) (
 		}
 	}
 	row.Name, row.Protocol, row.Endpoint, row.Config, row.Enabled = in.Name, in.Protocol, in.Endpoint, in.Config, in.Enabled
+	if in.Location != nil {
+		lng, lat := in.Location.Lng, in.Location.Lat
+		row.Lng, row.Lat, row.Location = &lng, &lat, strings.TrimSpace(in.Location.Address)
+	} else {
+		row.Lng, row.Lat, row.Location = nil, nil, ""
+	}
 	if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
 		return nil, err
 	}

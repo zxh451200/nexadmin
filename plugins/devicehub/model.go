@@ -66,6 +66,10 @@ type Device struct {
 	Status     string     `gorm:"size:16;not null;default:offline" json:"status"`
 	Enabled    bool       `gorm:"not null;default:1" json:"enabled"`
 	LastSeenAt *time.Time `json:"lastSeenAt,omitempty"`
+	// 安装位置：LocationField 选点或手填。坐标统一存 WGS-84 原值（前端按所选地图厂商转换显示）。
+	Lng      *float64   `json:"lng,omitempty"`
+	Lat      *float64   `json:"lat,omitempty"`
+	Location string     `gorm:"size:255;not null;default:''" json:"location"`
 }
 
 func (Device) TableName() string { return "plg_devhub_device" }
