@@ -460,10 +460,14 @@ func cmdI18nAdd(root string, args []string, out io.Writer) error {
 type localeSet struct {
 	keys         map[string]map[string]bool // locale -> 打平后的 key
 	untranslated map[string][]string        // locale -> 仍带未翻译标记的文件
+	// plural 为真时按 CLDR 复数类别判缺失（前端 i18next 才有复数机制）。
+	// 后端 Go 文案是 fmt 风格（files_too_many = 「文件数太多」这种校验消息），
+	// 没有按 count 挑后缀这回事，只能按 key 字面比对——把它也当复数族会报假缺。
+	plural bool
 }
 
 func newLocaleSet() *localeSet {
-	return &localeSet{keys: map[string]map[string]bool{}, untranslated: map[string][]string{}}
+	return &localeSet{keys: map[string]map[string]bool{}, untranslated: map[string][]string{}, plural: true}
 }
 
 func (s *localeSet) add(code string, keys []string) {
@@ -505,6 +509,7 @@ func flattenKeys(prefix string, v any, out *[]string) {
 // collectLocales 扫描 rel 目录下的翻译文件；ext 为 .json 或 .yaml；无法解析的文件记入 warns 后跳过。
 func collectLocales(root string, rels []string, ext string, warns *[]string) (*localeSet, error) {
 	set := newLocaleSet()
+	set.plural = ext == ".json" // 只有前端 i18next 走复数类别，见 localeSet.plural
 	for _, rel := range rels {
 		files, err := walkLocaleFiles(root, rel, ext)
 		if err != nil {
@@ -538,51 +543,139 @@ func collectLocales(root string, rels []string, ext string, warns *[]string) (*l
 	return set, nil
 }
 
-// cldrPluralCategories 是 CLDR 的复数类别后缀。i18next 按当前语言的复数规则挑其中一个：
-// 英文有 one/other，中文只有 other。所以「中文没有 daysLeft_one」不是缺翻译，
-// 而是这门语言根本没有这个类别——旧版按各语言 key 的并集判缺失，就会把这类假缺报出来，
-// 逼人往中文里补永远用不到的 *_one（补上的还是死条目）。
+// cldrPluralCategories 是 CLDR 的复数类别后缀（i18next / Intl.PluralRules 的 key 形状）。
+// 「中文没有 daysLeft_one」不是缺翻译，而是这门语言根本没有这个类别——旧版按各语言 key 的
+// 并集判缺失，就会把这类假缺报出来，逼人往中文里补永远用不到的 *_one（补上的还是死条目）。
 var cldrPluralCategories = []string{"_zero", "_one", "_two", "_few", "_many", "_other"}
 
-// pluralBase 把 key 折到它所在的复数族：daysLeft_one -> daysLeft；非变体原样返回。
-func pluralBase(k string) string {
+// cldrSuffixes 按语言列出该语言的 CLDR 基数（cardinal）复数类别后缀。
+// 判定「这门语言该不该有 *_one」靠这张表，不是「只有英文有单数」这种偷懒规则——
+// 俄语/乌克兰语/波兰语是 one+few+many+other，捷克语少 many，阿拉伯语连 zero/two 都有。
+// 覆盖本仓库与二开常见语言；表外的语言只要求 _other（见 cldrSuffixesFor）。
+var cldrSuffixes = map[string][]string{
+	// 无单数变化：只有 other。
+	"zh": {"_other"}, "ja": {"_other"}, "ko": {"_other"}, "th": {"_other"}, "vi": {"_other"},
+	"id": {"_other"}, "ms": {"_other"}, "km": {"_other"}, "lo": {"_other"}, "my": {"_other"},
+	// one / other。
+	"en": {"_one", "_other"}, "de": {"_one", "_other"}, "it": {"_one", "_other"}, "es": {"_one", "_other"},
+	"pt": {"_one", "_other"}, "nl": {"_one", "_other"}, "sv": {"_one", "_other"}, "da": {"_one", "_other"},
+	"no": {"_one", "_other"}, "nb": {"_one", "_other"}, "fi": {"_one", "_other"}, "el": {"_one", "_other"},
+	"hu": {"_one", "_other"}, "tr": {"_one", "_other"}, "bn": {"_one", "_other"}, "hi": {"_one", "_other"},
+	// one / few / other（斯拉夫与部分欧洲语言的不同变体数量）。
+	"cs": {"_one", "_few", "_other"}, "sk": {"_one", "_few", "_other"},
+	// one / few / many / other。
+	"ru": {"_one", "_few", "_many", "_other"}, "uk": {"_one", "_few", "_many", "_other"},
+	"pl": {"_one", "_few", "_many", "_other"}, "hr": {"_one", "_few", "_other"}, "sr": {"_one", "_few", "_other"},
+	"bs": {"_one", "_few", "_other"}, "sl": {"_one", "_two", "_few", "_other"}, "lt": {"_one", "_few", "_other"},
+	"lv": {"_zero", "_one", "_other"}, "ro": {"_one", "_few", "_other"},
+	// one（含 0）/ many（大数）/ other。
+	"fr": {"_one", "_many", "_other"},
+	// 阿拉伯语全套。
+	"ar": {"_zero", "_one", "_two", "_few", "_many", "_other"},
+	"he": {"_one", "_two", "_many", "_other"}, "mt": {"_one", "_few", "_many", "_other"},
+}
+
+// splitPlural 把 key 折到它所在的复数族：daysLeft_one -> (daysLeft, "_one")；非变体后缀为 ""。
+func splitPlural(k string) (string, string) {
 	for _, suf := range cldrPluralCategories {
 		if strings.HasSuffix(k, suf) {
-			return strings.TrimSuffix(k, suf)
+			return strings.TrimSuffix(k, suf), suf
 		}
 	}
-	return k
+	return k, ""
 }
 
-// pluralFamilyCovered 判断某语言在「基准 key 及其复数变体」这一族里是否至少有一条。
-// 只要基准 key 在就算覆盖：i18next 在该语言找不到对应复数类别时回退到基准 key。
-func pluralFamilyCovered(ks map[string]bool, base string) bool {
+// cldrSuffixesFor 返回某 locale 在语法上真实存在的复数类别后缀。
+// 表外的语言只要求 _other：other 是所有语言都有的兜底类别，缺了真的渲染不出来；
+// _one 之类要按具体语言的规则才存在，猜错就是逼二开项目补永远取不到的死条目，所以宁可不报。
+func cldrSuffixesFor(code string) []string {
+	lang := code
+	if i := strings.IndexAny(lang, "-_"); i >= 0 {
+		lang = lang[:i]
+	}
+	if s, ok := cldrSuffixes[strings.ToLower(lang)]; ok {
+		return s
+	}
+	return []string{"_other"}
+}
+
+// pluralGaps 在「基准 key + 复数变体」这一族里，返回 code 这门语言真正取不到文案的 key。
+// sufs 是全部语言在这一族里声明过的后缀集合，want 是该语言按 CLDR 该有的类别后缀。规则：
+//   - 该语言有基准 key：i18next 找不到对应复数形式时会回退到基准 key（见其 finalKeys 顺序
+//     key+suffix → key），整族视为已覆盖。
+//   - 该语言这一族一条都没有：报基准 key——整族缺翻译。
+//   - 族里至少有两种复数形式（*_one/*_few…）：认定是真复数族，按该语言的 CLDR 类别逐个要求，
+//     缺哪个报哪个。中文写了 *_one 却没写 *_other 就在这一档：真缺，不是假缺。
+//   - 族里只见过一种形式（多数是全语言只写 *_other）：分不清是复数族还是名字恰好带后缀的普通
+//     叶子 key（如 plugins 的 category._other「其他」分类标签），只要求那一种，不臆造其他类别。
+func pluralGaps(ks map[string]bool, base string, sufs map[string]bool, want []string) []string {
 	if ks[base] {
-		return true
+		return nil
 	}
-	for _, suf := range cldrPluralCategories {
+	var observed []string
+	hit := false
+	for suf := range sufs {
+		if suf == "" {
+			continue
+		}
+		observed = append(observed, suf)
 		if ks[base+suf] {
-			return true
+			hit = true
 		}
 	}
-	return false
+	if len(observed) == 0 || !hit {
+		// 没有语言写过变体 => 就是个普通 key；该语言整族空缺 => 报基准 key，和旧版一样。
+		return []string{base}
+	}
+	var req []string
+	if len(observed) >= 2 {
+		req = want
+	} else {
+		for _, suf := range observed {
+			for _, w := range want {
+				if suf == w {
+					req = append(req, suf)
+				}
+			}
+		}
+	}
+	var miss []string
+	for _, suf := range req {
+		if !ks[base+suf] {
+			miss = append(miss, base+suf)
+		}
+	}
+	return miss
 }
 
-// missingKeys 以各语言 key 的并集为基准（复数族折成一个逻辑 key），返回每种语言缺失的 key（已排序）。
+// missingKeys 以各语言 key 的并集为基准，返回每种语言缺失的 key（已排序）。
+// s.plural 为真（前端 .json）时复数族按各语言的 CLDR 类别要求；为假（后端 .yaml）时逐字面比对。
 func missingKeys(s *localeSet) map[string][]string {
-	ref := map[string]bool{}
+	ref := map[string]map[string]bool{} // 基准 key -> 全语言声明过的后缀集合（"" = 字面 key 本身）
 	for _, ks := range s.keys {
 		for k := range ks {
-			ref[pluralBase(k)] = true
+			base, suf := k, ""
+			if s.plural {
+				base, suf = splitPlural(k)
+			}
+			if ref[base] == nil {
+				ref[base] = map[string]bool{}
+			}
+			ref[base][suf] = true
 		}
 	}
 	out := map[string][]string{}
 	for code, ks := range s.keys {
+		want := cldrSuffixesFor(code)
 		var miss []string
-		for base := range ref {
-			if !pluralFamilyCovered(ks, base) {
-				miss = append(miss, base)
+		for base, sufs := range ref {
+			if !s.plural {
+				if !ks[base] {
+					miss = append(miss, base)
+				}
+				continue
 			}
+			miss = append(miss, pluralGaps(ks, base, sufs, want)...)
 		}
 		sort.Strings(miss)
 		out[code] = miss

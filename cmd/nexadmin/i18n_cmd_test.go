@@ -189,7 +189,8 @@ func TestI18nCheckViaRun(t *testing.T) {
 
 // 旧版按各语言 key 的并集判缺失，会把「中文没有 *_one」报成缺翻译——
 // 中文的 CLDR 复数规则只有 other，补上 _one 是永远不会被取用的死条目。
-// 复数族必须折成一个逻辑 key：有基准 key 或该族任一变体就算覆盖。
+// 现在复数族按语言各自的 CLDR 类别要求：有基准 key 就算覆盖（i18next 会回退到它），
+// 整族一条都没有才报基准 key。
 func TestMissingKeysFoldsCldrPluralCategories(t *testing.T) {
 	s := newLocaleSet()
 	s.add("en-US", []string{"tenantSelf.daysLeft_one", "tenantSelf.daysLeft_other", "report.name"})
@@ -206,5 +207,128 @@ func TestMissingKeysFoldsCldrPluralCategories(t *testing.T) {
 	// 真缺的仍然要报出来（折族不能把「这一族一条都没有」也折没了）
 	if len(miss["fr-FR"]) != 1 || miss["fr-FR"][0] != "tenantSelf.daysLeft" {
 		t.Errorf("fr-FR 整族缺失应报基准 key，实际：%v", miss["fr-FR"])
+	}
+}
+
+// 复数类别知识放在「按语言查 CLDR 类别表」里，不是「只有英文有单数」：
+// 俄语/乌克兰语/波兰语有 one+few+many+other，中日韩泰越只有 other，
+// 表外的语言也只要求 other（漏报一个 *_one 比逼人选不出来的形式好）。
+func TestCldrSuffixesFor(t *testing.T) {
+	cases := map[string]string{
+		"en-US": "_one _other", "pt-BR": "_one _other", "de-DE": "_one _other",
+		"zh-CN": "_other", "zh-TW": "_other", "ja-JP": "_other", "ko-KR": "_other", "th-TH": "_other",
+		"ru-RU": "_one _few _many _other", "uk-UA": "_one _few _many _other", "pl-PL": "_one _few _many _other",
+		"cs-CZ": "_one _few _other", "ar-SA": "_zero _one _two _few _many _other",
+		"xx-YY": "_other", // 表外的语言：只要求 other
+	}
+	for code, want := range cases {
+		if got := strings.Join(cldrSuffixesFor(code), " "); got != want {
+			t.Errorf("cldrSuffixesFor(%s)=%q want %q", code, got, want)
+		}
+	}
+}
+
+// 走一遍真实的文件扫描路径，覆盖三种形状：
+//  1. en 有 *_one/*_other、zh 只有基准 key —— 必须放过（i18next 用基准 key 兜底）。
+//  2. 某个 key 一门语言整族都没有 —— 必须报。
+//  3. zh 写了 *_one 却没写 *_other 也没有基准 key —— 必须报 *_other（这是真缺，渲染会落空）。
+func TestI18nCheckPluralCategories(t *testing.T) {
+	root := t.TempDir()
+	wfile(t, root, "web/src/framework/modules/quota/locales/en-US.json", `{
+  "quota": {
+    "days": "{{count}} days",
+    "days_one": "{{count}} day",
+    "days_other": "{{count}} days",
+    "calls": "{{count}} calls",
+    "hours": "{{count}} hours",
+    "hours_one": "{{count}} hour",
+    "hours_other": "{{count}} hours"
+  }
+}`)
+	wfile(t, root, "web/src/framework/modules/quota/locales/zh-CN.json", `{
+  "quota": {
+    "days": "{{count}} 天",
+    "hours_one": "{{count}} 小时"
+  }
+}`)
+	var out bytes.Buffer
+	if err := cmdI18nCheck(root, []string{"--all"}, &out); err != nil {
+		t.Fatal(err)
+	}
+	s := out.String()
+	// 形状 2 + 形状 3 各一条，形状 1 一条都不许多报。
+	if !strings.Contains(s, "zh-CN: 共 2 个 key，缺失 2 个") {
+		t.Errorf("zh-CN 应只缺 quota.calls 与 quota.hours_other:\n%s", s)
+	}
+	for _, want := range []string{"  - quota.calls", "  - quota.hours_other"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("前端报告缺少 %q:\n%s", want, s)
+		}
+	}
+	if strings.Contains(s, "  - quota.days") || strings.Contains(s, "  - quota.calls_other") {
+		t.Errorf("基准 key 已覆盖的族不该再报，也不该报出折错的 key:\n%s", s)
+	}
+	if !strings.Contains(s, "en-US: 共 7 个 key，缺失 0 个") {
+		t.Errorf("en-US 不应有缺失:\n%s", s)
+	}
+
+	// 同一形状直接喂 missingKeys：zh/ja 只要 other，ru 还要 few/many。
+	loc := newLocaleSet()
+	loc.add("en-US", []string{"stat.items_one", "stat.items_other"})
+	loc.add("zh-CN", []string{"stat.items_one"})
+	loc.add("ja-JP", []string{"stat.items"})
+	loc.add("ru-RU", []string{"stat.items_one"})
+	miss := missingKeys(loc)
+	if g := strings.Join(miss["zh-CN"], ","); g != "stat.items_other" {
+		t.Errorf("zh-CN 缺 *_other 应报基准族里的 _other，实际：%q", g)
+	}
+	if len(miss["ja-JP"]) != 0 {
+		t.Errorf("ja-JP 有基准 key 不该被判缺失：%v", miss["ja-JP"])
+	}
+	if g := strings.Join(miss["ru-RU"], ","); g != "stat.items_few,stat.items_many,stat.items_other" {
+		t.Errorf("ru-RU 应有 few/many/other 三条缺失（不是只有 other），实际：%q", g)
+	}
+	// 后端 .yaml 没有复数机制：validation.validation.files_too_many/_few 这种叶子名
+	// 恰好以 _many/_few 结尾，不能当成复数族去补 *_one/*_other（真仓库里就有这对 key）。
+	wfile(t, root, "core/i18n/locales/en-US.yaml", "validation:\n  files_too_many: At most %v files\n  files_too_few: At least %v files\n")
+	wfile(t, root, "core/i18n/locales/zh-CN.yaml", "validation:\n  files_too_many: 最多 %v 个文件\n  files_too_few: 至少 %v 个文件\n")
+	out.Reset()
+	if err := cmdI18nCheck(root, []string{"--all"}, &out); err != nil {
+		t.Fatal(err)
+	}
+	s = out.String()
+	if strings.Contains(s, "files_too_one") || strings.Contains(s, "files_too_other") {
+		t.Errorf("后端不该按复数族报假缺:\n%s", s)
+	}
+	// 后端真缺一个 key 仍要报（字面比对）。
+	wfile(t, root, "core/i18n/locales/zh-CN.yaml", "validation:\n  files_too_many: 最多 %v 个文件\n")
+	out.Reset()
+	if err := cmdI18nCheck(root, []string{"--all"}, &out); err != nil {
+		t.Fatal(err)
+	}
+	if s = out.String(); !strings.Contains(s, "  - validation.files_too_few") {
+		t.Errorf("后端缺 key 应报出:\n%s", s)
+	}
+
+	// 真复数族（族里见过两种以上形式）里 en 少了 *_one 一样要报：
+	// 规则不是「只有别的语言才有单数」，而是「这门语言的 CLDR 有没有这个类别」。
+	loc2 := newLocaleSet()
+	loc2.add("zh-CN", []string{"stat.items_one", "stat.items_other"})
+	loc2.add("en-US", []string{"stat.items_other", "stat.items_few"})
+	if g := strings.Join(missingKeys(loc2)["en-US"], ","); g != "stat.items_one" {
+		t.Errorf("en-US 缺 *_one 应报出，实际：%q", g)
+	}
+	if g := strings.Join(missingKeys(loc2)["zh-CN"], ""); g != "" {
+		t.Errorf("zh-CN 有 *_other，多余那条 *_one 是死条目但不该判缺：%q", g)
+	}
+	// 只见过 *_other 的一族分不清是复数族还是叶子名恰好带后缀
+	// （plugins 就有 category._other =「其他」分类标签），所以不臆造别的类别。
+	loc3 := newLocaleSet()
+	loc3.add("en-US", []string{"form.category._other", "report.name"})
+	loc3.add("zh-CN", []string{"form.category._other", "report.name"})
+	for code, m := range missingKeys(loc3) {
+		if len(m) != 0 {
+			t.Errorf("%s 不该有缺失：%v", code, m)
+		}
 	}
 }
