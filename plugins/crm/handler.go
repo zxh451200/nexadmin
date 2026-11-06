@@ -113,6 +113,16 @@ func maskIDRows(c *gin.Context, rows []Customer) {
 	}
 }
 
+// GET /plugins/crm/stats —— CRM 概览卡片（按类型/状态的客户计数 + 在途商机数）。
+func (h *handler) crmStats(c *gin.Context) {
+	sc, ok := h.scopeOf(c)
+	if !ok {
+		return
+	}
+	st, err := h.svc.Stats(c.Request.Context(), sc)
+	respond(c, st, err)
+}
+
 // GET /plugins/crm/customers?keyword=&type=&status=&source=&page=&pageSize=
 func (h *handler) listCustomers(c *gin.Context) {
 	sc, ok := h.scopeOf(c)
@@ -152,6 +162,43 @@ func (h *handler) exportCustomers(c *gin.Context) {
 	}
 	maskIDRows(c, rows) // 导出默认脱敏：明文只能逐条按权限查看，不跟着 CSV 批量出去。
 	response.OK(c, rows)
+}
+
+// GET /plugins/crm/customers/pool?<同列表筛选> —— 公海客户列表。
+// 公海对持 crm:list 的所有人可见，不做数据范围（无主客户不属于任何人）。
+func (h *handler) listPool(c *gin.Context) {
+	page, size := response.ParsePage(c)
+	rows, total, err := h.svc.ListPool(c.Request.Context(), customerQueryFrom(c, nil))
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	maskIDRows(c, rows)
+	response.Page(c, rows, total, page, size)
+}
+
+// POST /plugins/crm/customers/:id/claim —— 从公海领取客户：owner = 当前账号。
+func (h *handler) claimCustomer(c *gin.Context) {
+	id, ok := idParam(c)
+	if !ok {
+		return
+	}
+	cu, err := h.svc.ClaimCustomer(c.Request.Context(), id)
+	respond(c, cu, err)
+}
+
+// POST /plugins/crm/customers/:id/release —— 把客户放回公海（owner 清空）。
+func (h *handler) releaseCustomer(c *gin.Context) {
+	sc, ok := h.scopeOf(c)
+	if !ok {
+		return
+	}
+	id, ok := idParam(c)
+	if !ok {
+		return
+	}
+	cu, err := h.svc.ReleaseCustomer(c.Request.Context(), sc, id)
+	respond(c, cu, err)
 }
 
 // GET /plugins/crm/customers/:id
@@ -258,6 +305,21 @@ func (h *handler) bindExternal(c *gin.Context) {
 		return
 	}
 	cu, err := h.svc.BindExternal(c.Request.Context(), f.CustomerID, f.Source, f.ExternalNo)
+	respond(c, cu, err)
+}
+
+// POST /plugins/crm/customers/merge  {"targetId":1,"sourceId":2}
+// 把 source 并入 target：联系人/跟进/商机整体迁移，主客户补空字段，删除从客户。
+func (h *handler) mergeCustomers(c *gin.Context) {
+	sc, ok := h.scopeOf(c)
+	if !ok {
+		return
+	}
+	var f MergeInput
+	if !response.BindJSON(c, &f) {
+		return
+	}
+	cu, err := h.svc.MergeCustomers(c.Request.Context(), sc, f)
 	respond(c, cu, err)
 }
 

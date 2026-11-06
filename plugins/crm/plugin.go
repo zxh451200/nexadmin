@@ -58,9 +58,11 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	h := &handler{svc: m.service(d)}
 
 	g := r.Group("/plugins/crm")
+	g.GET("/stats", core.Perm("crm:list"), h.crmStats)
 	g.GET("/customers", core.Perm("crm:list"), h.listCustomers)
 	// 静态段注册在 /customers/:id 之前（与 pay /orders/stats 同一套匹配约定）。
 	g.GET("/customers/export", core.Perm("crm:list"), h.exportCustomers)
+	g.GET("/customers/pool", core.Perm("crm:list"), h.listPool)
 	g.GET("/customers/:id", core.Perm("crm:list"), h.getCustomer)
 	// 明文证件号：权限点归 realname 插件，且每次查看都进操作日志。
 	g.GET("/customers/:id/idcard", core.Perm(PermRevealID), d.OperLogMiddleware("crm", "reveal-id"), h.revealID)
@@ -69,7 +71,12 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.DELETE("/customers/:id", core.Perm("crm:edit"), h.deleteCustomer)
 	g.DELETE("/customers", core.Perm("crm:edit"), core.Desc("批量删除客户（连带联系人与跟进）"), h.deleteCustomers)
 	g.POST("/customers/bind-external", core.Perm("crm:edit"), h.bindExternal)
+	// 静态段 merge 注册在 /customers/:id 之前。
+	g.POST("/customers/merge", core.Perm("crm:edit"), core.Desc("合并重复客户（关联记录整体迁移）"), h.mergeCustomers)
 	g.GET("/customers/resolve-external", core.Perm("crm:list"), h.resolveExternal)
+	// 公海：领取/释放是独立权限点——能编辑客户不等于能动归属。
+	g.POST("/customers/:id/claim", core.Perm("crm:pool"), h.claimCustomer)
+	g.POST("/customers/:id/release", core.Perm("crm:pool"), h.releaseCustomer)
 	g.GET("/opportunities", core.Perm("crm:list"), h.listOpportunities)
 	g.GET("/opportunities/:id", core.Perm("crm:list"), h.getOpportunity)
 	g.POST("/opportunities", core.Perm("crm:opp"), h.createOpportunity)

@@ -276,11 +276,6 @@ func TestCustomerTypeDrivesIdentityFields(t *testing.T) {
 	m.ExpectBegin()
 	m.ExpectExec("INSERT INTO `plg_crm_customer`").WillReturnResult(sqlmock.NewResult(2, 1))
 	m.ExpectCommit()
-	// 列表按类型过滤：count + 取页。
-	m.ExpectQuery("SELECT count\\(\\*\\) FROM `plg_crm_customer` WHERE type = \\?").
-		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
-	m.ExpectQuery("SELECT \\* FROM `plg_crm_customer` WHERE type = \\?").
-		WillReturnRows(sqlmock.NewRows([]string{"id", "tenant_id"}))
 
 	person, err := s.CreateCustomer(tenantCtx, CustomerInput{Name: "张三", Nationality: "cn"})
 	if err != nil {
@@ -326,7 +321,27 @@ func TestCustomerTypeDrivesIdentityFields(t *testing.T) {
 		}
 	}
 
+	// 查重：个人同手机号、企业同信用代码 → 409 拒绝。
+	m.ExpectQuery("SELECT count\\(\\*\\) FROM `plg_crm_customer` WHERE phone = \\?").
+		WithArgs("13800138000").WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+	if _, err := s.CreateCustomer(tenantCtx, CustomerInput{Name: "重复甲", Phone: "13800138000"}); err == nil {
+		t.Fatal("同手机号创建应被拒绝")
+	} else if !containsKey(err, "crm.duplicate_customer") {
+		t.Fatalf("want crm.duplicate_customer, got %v", err)
+	}
+	m.ExpectQuery("SELECT count\\(\\*\\) FROM `plg_crm_customer` WHERE tax_no = \\?").
+		WithArgs("91330100MA2AB1CD3X").WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+	if _, err := s.CreateCustomer(tenantCtx, CustomerInput{Name: "重复乙", Type: TypeCompany, TaxNo: "91330100MA2AB1CD3X"}); err == nil {
+		t.Fatal("同信用代码创建应被拒绝")
+	} else if !containsKey(err, "crm.duplicate_customer") {
+		t.Fatalf("want crm.duplicate_customer, got %v", err)
+	}
+
 	// 过滤条件容忍大小写与空格；非法值要直接报错，不能悄悄返回空列表。
+	m.ExpectQuery("SELECT count\\(\\*\\) FROM `plg_crm_customer` WHERE type = \\?").
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+	m.ExpectQuery("SELECT \\* FROM `plg_crm_customer` WHERE type = \\?").
+		WillReturnRows(sqlmock.NewRows([]string{"id", "tenant_id"}))
 	rows, _, err := s.ListCustomers(tenantCtx, CustomerQuery{Type: " COMPANY ", Page: 1, PageSize: 10})
 	if err != nil {
 		t.Fatal(err)

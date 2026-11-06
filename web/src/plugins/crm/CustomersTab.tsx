@@ -1,11 +1,12 @@
 import { useState, type ReactNode } from 'react'
-import { Download, Eye, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Combine, Download, Eye, Hand, Pencil, Plus, Trash2, UserMinus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { CountrySelect, useCountryNames } from '@/framework/components/CountrySelect'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { StatCard } from '@/framework/components/StatCard'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { RequiredMark } from '@/framework/components/RequiredMark'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
@@ -18,12 +19,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/framework/ui/textarea'
 import {
   fetchCustomersForExport,
+  useClaimCustomer,
+  useCrmStats,
+  useCustomerPool,
   useRevealIdNo,
   useBindExternal,
   useCustomers,
   useDeleteCustomer,
   useDeleteCustomers,
+  useMergeCustomers,
   useOpportunities,
+  useReleaseCustomer,
   useSaveCustomer,
   type CrmCustomer,
   type IdNoReveal,
@@ -37,6 +43,7 @@ import { downloadCsv } from '@/framework/components/export/csv'
 
 const ALL = '__all'
 const MINE = '__mine'
+const POOL = '__pool'
 const NO_LEVEL = '__none'
 const NO_ID_TYPE = '__none'
 
@@ -423,6 +430,118 @@ function DetailRow({ label, value }: { label: string; value?: ReactNode }) {
   )
 }
 
+// 合并客户里用的客户搜索选择器：按关键词取候选，Radix Select 不收空串值，占位用哨兵。
+function CustomerPicker({
+  value,
+  onChange,
+  excludeId,
+  ariaLabel,
+}: {
+  value: string
+  onChange: (id: string) => void
+  excludeId?: string
+  ariaLabel: string
+}) {
+  const { t } = useTranslation()
+  const [kw, setKw] = useState('')
+  const { data } = useCustomers({ keyword: kw || undefined, page: 1, pageSize: 20 })
+  const candidates = (data?.list ?? []).filter((c) => c.id !== excludeId)
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <Input
+        value={kw}
+        onChange={(e) => setKw(e.target.value)}
+        placeholder={t('plugin_crm.customer.mergeSearch')}
+        aria-label={ariaLabel}
+      />
+      <Select value={value || '__pick'} onValueChange={onChange}>
+        <SelectTrigger aria-label={ariaLabel}>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="__pick" disabled>
+            {t('plugin_crm.customer.mergePick')}
+          </SelectItem>
+          {candidates.map((c) => (
+            <SelectItem key={c.id} value={c.id}>
+              {c.name}
+              <span className="ms-2 text-xs text-muted-foreground">{c.code || c.phone}</span>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  )
+}
+
+function MergeDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+  const { t } = useTranslation()
+  const confirm = useConfirm()
+  const merge = useMergeCustomers()
+  const [targetId, setTargetId] = useState('')
+  const [sourceId, setSourceId] = useState('')
+
+  const canMerge = !!targetId && !!sourceId && targetId !== sourceId
+
+  const submit = async () => {
+    if (!canMerge) return
+    if (!(await confirm({ description: t('plugin_crm.customer.mergeConfirm') }))) return
+    try {
+      await merge.mutateAsync({ targetId, sourceId })
+      toast.success(t('common.operateSuccess'))
+      onOpenChange(false)
+      setTargetId('')
+      setSourceId('')
+    } catch {
+      // 失败原因已由请求层统一提示。
+    }
+  }
+
+  return (
+    <ResponsiveDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={t('plugin_crm.customer.mergeTitle')}
+      description={t('plugin_crm.customer.mergeHint')}
+      footer={
+        <>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            {t('common.cancel')}
+          </Button>
+          <Button disabled={!canMerge || merge.isPending} onClick={() => void submit()}>
+            {t('plugin_crm.customer.mergeTitle')}
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-4 text-sm">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <div className="flex flex-col gap-1">
+            <span className="font-medium text-foreground">{t('plugin_crm.customer.mergeTarget')}</span>
+            <CustomerPicker
+              value={targetId}
+              onChange={setTargetId}
+              excludeId={sourceId || undefined}
+              ariaLabel={t('plugin_crm.customer.mergeTarget')}
+            />
+            <p className="text-xs text-muted-foreground">{t('plugin_crm.customer.mergeTargetHint')}</p>
+          </div>
+          <div className="flex flex-col gap-1">
+            <span className="font-medium text-foreground">{t('plugin_crm.customer.mergeSource')}</span>
+            <CustomerPicker
+              value={sourceId}
+              onChange={setSourceId}
+              excludeId={targetId || undefined}
+              ariaLabel={t('plugin_crm.customer.mergeSource')}
+            />
+            <p className="text-xs text-muted-foreground">{t('plugin_crm.customer.mergeSourceHint')}</p>
+          </div>
+        </div>
+      </div>
+    </ResponsiveDialog>
+  )
+}
+
 function CustomerDetailDialog({ customer, onClose }: { customer: CrmCustomer | null; onClose: () => void }) {
   const { t, i18n } = useTranslation()
   const nameOf = useCountryNames()
@@ -591,18 +710,65 @@ export function CustomersTab() {
   const confirm = useConfirm()
   const [draft, setDraft] = useState<CustomerQuery>({})
   const [filters, setFilters] = useState<CustomerQuery>({})
+  // 归属筛选：全部 / 只看我的 / 公海。公海走独立接口（不做数据范围），不与 mine 叠加。
+  const [ownerFilter, setOwnerFilter] = useState<string>(ALL)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [formOpen, setFormOpen] = useState(false)
+  const [mergeOpen, setMergeOpen] = useState(false)
   const [editing, setEditing] = useState<CrmCustomer | null>(null)
   const [detail, setDetail] = useState<CrmCustomer | null>(null)
   // 多选状态叫 picked：detail 已经是「当前详情面板选中的行」，别再占一个 selected。
   const [picked, setPicked] = useState<string[]>([])
 
-  const { data, isLoading } = useCustomers({ ...filters, page, pageSize })
+  const { data: owned, isLoading: ownedLoading } = useCustomers({
+    ...filters,
+    mine: ownerFilter === MINE,
+    page,
+    pageSize,
+  })
+  const { data: pool, isLoading: poolLoading } = useCustomerPool({
+    keyword: filters.keyword, type: filters.type, status: filters.status, source: filters.source,
+    page,
+    pageSize,
+  })
+  const inPool = ownerFilter === POOL
+  const data = inPool ? pool : owned
+  const isLoading = inPool ? poolLoading : ownedLoading
   const remove = useDeleteCustomer()
   const removeBatch = useDeleteCustomers()
+  const claim = useClaimCustomer()
+  const release = useReleaseCustomer()
   const [exporting, setExporting] = useState(false)
+  const { data: stats } = useCrmStats()
+
+  const statCards = [
+    { label: t('plugin_crm.type.person'), value: stats?.persons ?? 0, tone: 'primary' as const },
+    { label: t('plugin_crm.type.company'), value: stats?.companies ?? 0, tone: 'info' as const },
+    { label: t('plugin_crm.status.active'), value: stats?.active ?? 0, tone: 'success' as const },
+    { label: t('plugin_crm.status.inactive'), value: stats?.inactive ?? 0, tone: 'warning' as const },
+    { label: t('plugin_crm.stats.pool'), value: stats?.pool ?? 0, tone: 'chart-3' as const },
+    { label: t('plugin_crm.stats.openDeals'), value: stats?.openDeals ?? 0, tone: 'chart-2' as const },
+  ]
+
+  const onClaim = async (cu: CrmCustomer) => {
+    try {
+      await claim.mutateAsync(cu.id)
+      toast.success(t('plugin_crm.pool.claimed', { name: cu.name }))
+    } catch {
+      // 失败原因已由请求层统一提示（如刚被别人领走）。
+    }
+  }
+
+  const onRelease = async (cu: CrmCustomer) => {
+    if (!(await confirm({ description: t('plugin_crm.pool.releaseConfirm', { name: cu.name }) }))) return
+    try {
+      await release.mutateAsync(cu.id)
+      toast.success(t('common.operateSuccess'))
+    } catch {
+      // 失败原因已由请求层统一提示。
+    }
+  }
 
   const onExport = async () => {
     setExporting(true)
@@ -749,6 +915,11 @@ export function CustomersTab() {
 
   return (
     <div className="flex flex-col gap-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+        {statCards.map((c) => (
+          <StatCard key={c.label} title={c.label} value={c.value} tone={c.tone} />
+        ))}
+      </div>
       <FilterBar
         onSearch={() => {
           setFilters(draft)
@@ -757,6 +928,7 @@ export function CustomersTab() {
         onReset={() => {
           setDraft({})
           setFilters({})
+          setOwnerFilter(ALL)
           setPage(1)
         }}
       >
@@ -806,14 +978,15 @@ export function CustomersTab() {
             ))}
           </SelectContent>
         </Select>
-        {/* 只看我的：owner = 当前账号，与角色数据范围叠加。 */}
-        <Select value={draft.mine ? MINE : ALL} onValueChange={(v) => setDraft((d) => ({ ...d, mine: v === MINE }))}>
+        {/* 归属：全部 / 只看我的 / 公海。公海走独立列表，对所有人开放。 */}
+        <Select value={ownerFilter} onValueChange={setOwnerFilter}>
           <SelectTrigger className="md:w-32" aria-label={t('plugin_crm.fields.owner')}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={ALL}>{t('plugin_crm.filter.allOwners')}</SelectItem>
             <SelectItem value={MINE}>{t('plugin_crm.mineOnly')}</SelectItem>
+            <SelectItem value={POOL}>{t('plugin_crm.pool.only')}</SelectItem>
           </SelectContent>
         </Select>
       </FilterBar>
@@ -844,10 +1017,6 @@ export function CustomersTab() {
         )}
         toolbar={
           <>
-            <Button variant="outline" onClick={() => void onExport()} disabled={exporting}>
-              <Download className="me-2 size-4" aria-hidden="true" />
-              {t('common.export')}
-            </Button>
             <Can perm="crm:edit">
               <Button
                 onClick={() => {
@@ -858,7 +1027,15 @@ export function CustomersTab() {
                 <Plus aria-hidden="true" />
                 {t('plugin_crm.customer.create')}
               </Button>
+              <Button variant="outline" disabled={inPool} onClick={() => setMergeOpen(true)}>
+                <Combine aria-hidden="true" />
+                {t('plugin_crm.customer.mergeTitle')}
+              </Button>
             </Can>
+            <Button variant="outline" onClick={() => void onExport()} disabled={exporting || inPool} title={inPool ? t('plugin_crm.pool.exportDisabled') : undefined}>
+              <Download className="me-2 size-4" aria-hidden="true" />
+              {t('common.export')}
+            </Button>
           </>
         }
         rowActions={(cu) => (
@@ -866,28 +1043,61 @@ export function CustomersTab() {
             <Button variant="ghost" size="icon" aria-label={t('common.detail')} onClick={() => setDetail(cu)}>
               <Eye aria-hidden="true" />
             </Button>
-            <Can perm="crm:edit">
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label={t('common.edit')}
-                onClick={() => {
-                  setEditing(cu)
-                  setFormOpen(true)
-                }}
-              >
-                <Pencil aria-hidden="true" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="text-destructive"
-                aria-label={t('common.delete')}
-                onClick={() => void onDelete(cu)}
-              >
-                <Trash2 aria-hidden="true" />
-              </Button>
-            </Can>
+            {inPool ? (
+              <Can perm="crm:pool">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={t('plugin_crm.pool.claim')}
+                  title={t('plugin_crm.pool.claim')}
+                  disabled={claim.isPending}
+                  onClick={() => void onClaim(cu)}
+                >
+                  <Hand aria-hidden="true" />
+                </Button>
+              </Can>
+            ) : (
+              <>
+                <Can perm="crm:edit">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={t('common.edit')}
+                    onClick={() => {
+                      setEditing(cu)
+                      setFormOpen(true)
+                    }}
+                  >
+                    <Pencil aria-hidden="true" />
+                  </Button>
+                </Can>
+                <Can perm="crm:pool">
+                  {cu.owner ? (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={t('plugin_crm.pool.release')}
+                      title={t('plugin_crm.pool.release')}
+                      disabled={release.isPending}
+                      onClick={() => void onRelease(cu)}
+                    >
+                      <UserMinus aria-hidden="true" />
+                    </Button>
+                  ) : null}
+                </Can>
+                <Can perm="crm:edit">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-destructive"
+                    aria-label={t('common.delete')}
+                    onClick={() => void onDelete(cu)}
+                  >
+                    <Trash2 aria-hidden="true" />
+                  </Button>
+                </Can>
+              </>
+            )}
           </>
         )}
       />
@@ -897,6 +1107,7 @@ export function CustomersTab() {
         onOpenChange={setFormOpen}
         editing={editing}
       />
+      {mergeOpen ? <MergeDialog open={mergeOpen} onOpenChange={setMergeOpen} /> : null}
       {detail ? <CustomerDetailDialog key={detail.id} customer={detail} onClose={() => setDetail(null)} /> : null}
     </div>
   )

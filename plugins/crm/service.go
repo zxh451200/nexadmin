@@ -164,7 +164,41 @@ func (in *CustomerInput) normalize() error {
 	return nil
 }
 
-// CreateCustomer 创建客户主数据（幂等键 = external 锚点；同锚点重复创建返回已有客户）。
+// CrmStats 是 CRM 概览卡片：按类型/状态的客户计数 + 公海与在途商机数。
+type CrmStats struct {
+	Persons   int64 `json:"persons"`
+	Companies int64 `json:"companies"`
+	Active    int64 `json:"active"`
+	Inactive  int64 `json:"inactive"`
+	Pool      int64 `json:"pool"` // 公海客户数（owner 为空）；无主客户不属于任何人，不随数据范围收窄
+	OpenDeals int64 `json:"openDeals"`
+}
+
+// Stats 汇总 CRM 概览计数。数据范围生效（受限操作者只统计自己范围内的客户）；
+// 公海计数单独跑：owner 为空的客户在范围条件里天然漏掉，得直接数。
+func (s *Service) Stats(ctx context.Context, sc *datascope.Scope) (*CrmStats, error) {
+	db := s.db.WithContext(ctx).Model(&Customer{})
+	if cond, args, limited := sc.UsernameCond("owner"); limited {
+		db = db.Where(cond, args...)
+	}
+	st := &CrmStats{}
+	if err := db.Select("COUNT(CASE WHEN type = 'person' THEN 1 END) AS persons, COUNT(CASE WHEN type = 'company' THEN 1 END) AS companies, COUNT(CASE WHEN status = 'active' THEN 1 END) AS active, COUNT(CASE WHEN status = 'inactive' THEN 1 END) AS inactive").Scan(st).Error; err != nil {
+		return nil, err
+	}
+	if err := s.db.WithContext(ctx).Model(&Customer{}).Where("owner = ''").Count(&st.Pool).Error; err != nil {
+		return nil, err
+	}
+	// 在途商机（lead/qualified/proposal/negotiate）：金额与阶段在 opportunity 表，按客户范围裁剪。
+	oppDB := s.db.WithContext(ctx).Model(&Opportunity{}).Where("stage IN ?", []string{StageLead, StageQualified, StageProposal, StageNegotiate})
+	if cond, args, limited := sc.UsernameCond("owner"); limited {
+		oppDB = oppDB.Where(cond, args...)
+	}
+	if err := oppDB.Count(&st.OpenDeals).Error; err != nil {
+		return nil, err
+	}
+	return st, nil
+}
+
 // checkCustomerDuplicate 是保存前的查重：同租户下，个人客户手机号、企业客户统一社会信用代码
 // 不允许与既有客户重复（手机号是联系与合并的主键级线索，信用代码对企业同理）。
 // excludeID 用于更新时排除自身；锚点查重已由 external 唯一索引兜住，这里管的是手工录入的主数据。
@@ -208,6 +242,7 @@ func (s *Service) ExportCustomers(ctx context.Context, q CustomerQuery) ([]Custo
 	return rows, nil
 }
 
+// CreateCustomer 创建客户主数据（幂等键 = external 锚点；同锚点重复创建返回已有客户）。
 func (s *Service) CreateCustomer(ctx context.Context, in CustomerInput) (*Customer, error) {
 	if strings.Contains(in.IdNo, "*") {
 		// 新建时没有"原值"可沿用，脱敏串当输入就是脏数据。
@@ -362,26 +397,11 @@ type CustomerQuery struct {
 // ListCustomers 分页列出客户。受限操作者按 owner（账号）+ 所属部门裁剪，
 // 复用 core/datascope 的 UsernameCond，与系统模块语义一致。
 func (s *Service) ListCustomers(ctx context.Context, q CustomerQuery) ([]Customer, int64, error) {
-	db := s.db.WithContext(ctx).Model(&Customer{})
-	if kw := strings.TrimSpace(q.Keyword); kw != "" {
-		// 前台更多是「拿着证件号 / 信用代码找人」，不是按名称翻列表。
-		like := "%" + kw + "%"
-		db = db.Where("LOWER(name) LIKE LOWER(?) OR LOWER(code) LIKE LOWER(?) OR LOWER(external_no) LIKE LOWER(?) OR LOWER(id_no) LIKE LOWER(?) OR LOWER(tax_no) LIKE LOWER(?)",
-			like, like, like, like, like)
-	}
 	q.Type = strings.ToLower(strings.TrimSpace(q.Type))
-	if q.Type != "" {
-		if !TypeSet[q.Type] {
-			return nil, 0, response.BadRequest("crm.type_invalid")
-		}
-		db = db.Where("type = ?", q.Type)
+	if q.Type != "" && !TypeSet[q.Type] {
+		return nil, 0, response.BadRequest("crm.type_invalid")
 	}
-	if q.Status != "" {
-		db = db.Where("status = ?", q.Status)
-	}
-	if q.Source != "" {
-		db = db.Where("external_source = ?", q.Source)
-	}
+	db := applyCustomerFilter(s.db.WithContext(ctx).Model(&Customer{}), q)
 	if cond, args, limited := q.Scope.UsernameCond("owner"); limited {
 		db = db.Where(cond, args...)
 	}
