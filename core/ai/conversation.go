@@ -371,7 +371,7 @@ func (c *Client) conversation(ctx context.Context, cfg Config, payload any) (Mes
 	}
 	ctx, cancel := context.WithTimeout(ctx, cfg.Timeout)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, cfg.endpoint(), bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, cfg.endpoint("chat/completions"), bytes.NewReader(body))
 	if err != nil {
 		return Message{}, nil, ErrUpstream
 	}

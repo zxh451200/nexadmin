@@ -27,12 +27,15 @@ const (
 
 // Config 是一次调用所需的模型配置。
 type Config struct {
-	Enabled   bool
-	BaseURL   string
-	APIKey    string
-	Model     string
-	Timeout   time.Duration
-	MaxTokens int
+	Enabled    bool
+	BaseURL    string
+	APIKey     string
+	Model      string
+	// EmbedModel 是向量化（embeddings）模型名；空 = 未启用向量化。
+	// 与对话模型共用 BaseURL / APIKey（OpenAI 兼容网关的 /embeddings 挂在同一地址下）。
+	EmbedModel string
+	Timeout    time.Duration
+	MaxTokens  int
 	// AllowPrivate 允许 BaseURL 指向私网 / 回环（来自 ai.allow_private_base_url）；链路本地与云元数据永远拒绝。
 	AllowPrivate bool
 	// Redact 决定发往上游前脱敏哪些敏感字段。FromSettings 默认全开；直接构造 Config 时零值 = 不脱敏。
@@ -41,7 +44,7 @@ type Config struct {
 
 // String 和 GoString 不含密钥，避免被 %v / %+v / %#v 误打进日志。
 func (c Config) String() string {
-	return fmt.Sprintf("ai.Config{enabled=%t base_url=%s model=%s key_set=%t}", c.Enabled, c.BaseURL, c.Model, c.APIKey != "")
+	return fmt.Sprintf("ai.Config{enabled=%t base_url=%s model=%s embed_model=%s key_set=%t}", c.Enabled, c.BaseURL, c.Model, c.EmbedModel, c.APIKey != "")
 }
 
 // GoString 见 String。
@@ -52,6 +55,7 @@ func (c Config) Normalize() Config {
 	c.BaseURL = strings.TrimSpace(c.BaseURL)
 	c.APIKey = strings.TrimSpace(c.APIKey)
 	c.Model = strings.TrimSpace(c.Model)
+	c.EmbedModel = strings.TrimSpace(c.EmbedModel)
 	if c.Timeout <= 0 {
 		c.Timeout = DefaultTimeout
 	}
@@ -67,6 +71,18 @@ func (c Config) Normalize() Config {
 	return c
 }
 
+// EmbedReady 表示向量化可用：已启用、BaseURL 合法且 EmbedModel 非空。
+func (c Config) EmbedReady() bool {
+	if !c.Enabled || strings.TrimSpace(c.EmbedModel) == "" {
+		return false
+	}
+	u, err := url.Parse(strings.TrimSpace(c.BaseURL))
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" {
+		return false
+	}
+	return true
+}
+
 // Ready 表示已启用且配置完整：地址是 http(s)、模型名非空；公网地址必须有 Key，
 // 本机 / 内网地址（Ollama、vLLM）可以不填 Key。
 func (c Config) Ready() bool {
@@ -80,8 +96,8 @@ func (c Config) Ready() bool {
 	return strings.TrimSpace(c.APIKey) != "" || localHost(u.Hostname())
 }
 
-func (c Config) endpoint() string {
-	return strings.TrimRight(strings.TrimSpace(c.BaseURL), "/") + "/chat/completions"
+func (c Config) endpoint(path string) string {
+	return strings.TrimRight(strings.TrimSpace(c.BaseURL), "/") + "/" + strings.TrimLeft(path, "/")
 }
 
 // localHost 判断主机是否本机 / 内网（无 Key 也允许）。
@@ -122,6 +138,9 @@ func FromSettings(row map[string]any, fallback Config) Config {
 	}
 	if s := str(row["model"]); s != "" {
 		out.Model = s
+	}
+	if s := str(row["embedModel"]); s != "" {
+		out.EmbedModel = s
 	}
 	if n := num(row["timeoutSec"]); n > 0 {
 		out.Timeout = time.Duration(n) * time.Second

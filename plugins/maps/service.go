@@ -189,6 +189,68 @@ func (s *service) Regeo(ctx context.Context, provider Provider, lng, lat float64
 	return "", badRequest("maps.provider_unknown")
 }
 
+// Place 是地理编码 / POI 检索的一条结果；坐标与厂商同坐标系（前端选点地图同厂商渲染，无需转换）。
+type Place struct {
+	Name    string  `json:"name"`
+	Address string  `json:"address"`
+	Lng     float64 `json:"lng"`
+	Lat     float64 `json:"lat"`
+}
+
+func (s *service) providerConfig(ctx context.Context, provider Provider) (string, error) {
+	cfg, err := s.Config(ctx)
+	if err != nil {
+		return "", err
+	}
+	pc := cfg[provider]
+	if !pc.Enabled || pc.ServerKey == "" {
+		return "", badRequest("maps.not_enabled")
+	}
+	return pc.ServerKey, nil
+}
+
+// Geocode 地理编码：地址 → 坐标（返回厂商原生坐标系）。
+func (s *service) Geocode(ctx context.Context, provider Provider, address string) (lng, lat float64, err error) {
+	address = strings.TrimSpace(address)
+	if address == "" {
+		return 0, 0, badRequest("maps.address_required")
+	}
+	key, err := s.providerConfig(ctx, provider)
+	if err != nil {
+		return 0, 0, err
+	}
+	switch provider {
+	case ProviderAMap:
+		return s.amap.Geocode(ctx, key, address)
+	case ProviderBaidu:
+		return s.baidu.Geocode(ctx, key, address)
+	case ProviderGoogle:
+		return s.google.Geocode(ctx, key, address)
+	}
+	return 0, 0, badRequest("maps.provider_unknown")
+}
+
+// PlaceSearch POI 关键字检索：keyword 必填；city 仅高德/百度生效（百度空 = 全国）。
+func (s *service) PlaceSearch(ctx context.Context, provider Provider, keywords, city string) ([]Place, error) {
+	keywords = strings.TrimSpace(keywords)
+	if keywords == "" {
+		return nil, badRequest("maps.keywords_required")
+	}
+	key, err := s.providerConfig(ctx, provider)
+	if err != nil {
+		return nil, err
+	}
+	switch provider {
+	case ProviderAMap:
+		return s.amap.Search(ctx, key, keywords, city)
+	case ProviderBaidu:
+		return s.baidu.Search(ctx, key, keywords, city)
+	case ProviderGoogle:
+		return s.google.Search(ctx, key, keywords)
+	}
+	return nil, badRequest("maps.provider_unknown")
+}
+
 // ---- 各厂商 Web 服务客户端；baseURL 可替换，测试用假上游 ----
 
 type amapClient struct {

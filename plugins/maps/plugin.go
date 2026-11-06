@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"nexadmin/core"
+	"nexadmin/core/middleware"
 	"nexadmin/core/plugin"
 )
 
@@ -26,7 +27,13 @@ func (*module) Name() string { return "maps" }
 func (*module) Register(r *gin.RouterGroup, d *core.Deps) {
 	h := &handler{svc: newService(d.DB)}
 	g := r.Group("/plugins/maps")
+	// 键配置是管理动作：maps:config + 平台级。
 	g.GET("/config", core.Perm(PermConfig), h.Config)
 	g.PUT("/config", core.Perm(PermConfig), core.RequirePlatform(), h.SaveConfig)
-	g.GET("/regeo", core.Perm(PermConfig), h.Regeo)
+	// 地理编码 / POI / 逆地理是所有表单用户的基础能力（选点、搜索、回填地址）：
+	// 登录即可用，不要求 maps:config——买回去配好 Key 就能到处挂 LocationField，不用改权限。
+	login := middleware.RequireLogin()
+	g.GET("/regeo", login, h.Regeo)
+	g.GET("/geocode", login, h.Geocode)
+	g.GET("/poi", login, h.Poi)
 }

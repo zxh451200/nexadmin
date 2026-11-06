@@ -114,12 +114,38 @@ func (h *handler) deleteJobs(c *gin.Context) {
 	respond(c, gin.H{"deleted": n}, err)
 }
 
-// POST /plugins/cron/jobs/:id/run
+// POST /plugins/cron/jobs/:id/run —— 可选 body {"params":"..."}：本次执行临时覆盖任务参数（不写回任务行）。
 func (h *handler) runJob(c *gin.Context) {
-	if id, ok := paramID(c); ok {
-		row, err := h.svc.RunNow(c.Request.Context(), id)
-		respond(c, row, err)
+	id, ok := paramID(c)
+	if !ok {
+		return
 	}
+	var body struct {
+		Params *string `json:"params"`
+	}
+	// body 缺省（不带参数直接跑）合法：旧客户端与「就用保存的参数」都走这条。
+	if c.Request.ContentLength > 0 && !response.BindJSON(c, &body) {
+		return
+	}
+	row, err := h.svc.RunNow(c.Request.Context(), id, body.Params)
+	respond(c, row, err)
+}
+
+// POST /plugins/cron/jobs/enabled {"ids":[...],"enabled":true} —— 批量启停（静态段先于 :id 注册）。
+func (h *handler) setJobsEnabled(c *gin.Context) {
+	var body struct {
+		IDs     []idgen.ID `json:"ids"`
+		Enabled bool       `json:"enabled"`
+	}
+	if !response.BindJSON(c, &body) {
+		return
+	}
+	if len(body.IDs) == 0 {
+		response.Fail(c, badReq("cron.ids_required"))
+		return
+	}
+	n, err := h.svc.SetJobsEnabled(c.Request.Context(), body.IDs, body.Enabled)
+	respond(c, gin.H{"updated": n}, err)
 }
 
 // GET /plugins/cron/logs?jobId=&status=&page=&pageSize=

@@ -10,6 +10,7 @@ import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
+import { Switch } from '@/framework/ui/switch'
 import { downloadLogsCsv, useCleanLogs, useJobs, useLogDetail, useLogs, useRunJob, type CronLog, type LogQuery } from './api'
 import { formatTime, statusVariant } from './format'
 
@@ -142,16 +143,18 @@ export function LogsTab({ jobId, onJobChange }: Props) {
   const [pageSize, setPageSize] = useState(10)
   const [detail, setDetail] = useState<string | null>(null)
   const [cleanOpen, setCleanOpen] = useState(false)
+  // 自动刷新：运行中恒 3s 紧盯，平时 10s 慢刷；可关
+  const [autoRefresh, setAutoRefresh] = useState(true)
 
   const query: LogQuery = { jobId, status: applied, page, pageSize }
-  const { data, isLoading } = useLogs(query)
+  const { data, isLoading } = useLogs(query, autoRefresh)
   const { data: jobs } = useJobs({ page: 1, pageSize: 200 })
   const runJob = useRunJob()
 
   // 失败记录就地重跑：按该日志的任务再触发一次手动执行（正在运行会收到 409 提示）。
   const onRerun = async (l: CronLog) => {
     try {
-      await runJob.mutateAsync(l.jobId)
+      await runJob.mutateAsync({ id: l.jobId })
       toast.success(t('plugin_cron.rerun.started', { name: l.jobName }))
     } catch {
       toast.error(t('common.operateFailed'))
@@ -243,6 +246,10 @@ export function LogsTab({ jobId, onJobChange }: Props) {
         emptyText={t('plugin_cron.emptyLogs')}
         toolbar={
           <>
+            <label className="flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
+              <Switch checked={autoRefresh} onCheckedChange={setAutoRefresh} aria-label={t('plugin_cron.autoRefresh')} />
+              {t('plugin_cron.autoRefresh')}
+            </label>
             <Can perm="cron:log">
               <Button variant="outline" onClick={() => void onExport()}>
                 <Download aria-hidden="true" />

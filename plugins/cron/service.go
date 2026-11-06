@@ -435,16 +435,47 @@ func (s *Service) DeleteJobs(ctx context.Context, ids []idgen.ID) (int64, error)
 }
 
 // RunNow 立即异步执行一次（不受 cron 表达式与启用状态限制），返回 running 状态的日志行。
-func (s *Service) RunNow(ctx context.Context, id idgen.ID) (*Log, error) {
+// paramsOverride 非 nil 时以它覆盖任务保存的参数（只管这一次执行，不写回任务行）：
+// 长度与处理器校验沿用保存路径的口径，超限/不合法在触发前就拒绝，而不是等执行失败才看到。
+func (s *Service) RunNow(ctx context.Context, id idgen.ID, paramsOverride *string) (*Log, error) {
 	j, err := s.getJob(ctx, id)
 	if err != nil {
 		return nil, err
+	}
+	if paramsOverride != nil {
+		p := strings.TrimSpace(*paramsOverride)
+		if p == "" {
+			return nil, badReq("cron.params_invalid")
+		}
+		if len(p) > 4<<10 {
+			return nil, badReq("cron.params_too_long")
+		}
+		if spec, ok := lookupHandler(j.Handler); ok && spec.Validate != nil {
+			if verr := spec.Validate(p); verr != nil {
+				return nil, response.BadRequest("cron.params_invalid").Wrap(verr)
+			}
+		}
+		j.Params = p
 	}
 	row, err := s.dispatch(*j, TriggerManual)
 	if errors.Is(err, errAlreadyRunning) {
 		return nil, response.Conflict("cron.job_running")
 	}
 	return row, err
+}
+
+// SetJobsEnabled 批量启停：实改条数按真实命中的行计（越权/已删除的 id 不计入）。
+// 用 map 形式 Updates 而不是单列 Update，与 model.go 里「false 不能被 default 吞掉」的注释同一处心思。
+func (s *Service) SetJobsEnabled(ctx context.Context, ids []idgen.ID, enabled bool) (int64, error) {
+	list := make([]int64, 0, len(ids))
+	for _, id := range ids {
+		list = append(list, int64(id))
+	}
+	res := s.db.WithContext(ctx).Model(&Job{}).Where("id IN ?", list).Updates(map[string]any{"enabled": enabled})
+	if res.Error != nil {
+		return 0, res.Error
+	}
+	return res.RowsAffected, nil
 }
 
 // ---- 执行日志 ----

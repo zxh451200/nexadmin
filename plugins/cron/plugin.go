@@ -48,6 +48,8 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.POST("/jobs", core.Perm("cron:edit"), h.createJob)
 	g.PUT("/jobs/:id", core.Perm("cron:edit"), h.updateJob)
 	g.PUT("/jobs/:id/enabled", core.Perm("cron:edit"), h.setEnabled)
+	// 批量启停：静态段 /jobs/enabled 先于 :id 注册；复用单条启停的 cron:edit，不新增权限点。
+	g.POST("/jobs/enabled", core.Perm("cron:edit"), d.OperLogMiddleware("cron", "update"), h.setJobsEnabled)
 	g.DELETE("/jobs/:id", core.Perm("cron:edit"), h.deleteJob)
 	// 批量删：复用单条删除的 cron:edit，不新增权限点
 	g.DELETE("/jobs", core.Perm("cron:edit"), h.deleteJobs)

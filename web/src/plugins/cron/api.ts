@@ -93,24 +93,34 @@ export function useHandlers() {
   })
 }
 
-export function useJobs(query: JobQuery) {
+export function useJobs(query: JobQuery, autoRefresh = true) {
+  const live = usePageLive()
   return useQuery({
     queryKey: [...KEY, 'jobs', query],
     queryFn: () => api.get<Page<CronJob>>(`${BASE}/jobs`, query),
     placeholderData: keepPreviousData,
+    // 运行中的行 3s 紧盯，平时 10s 慢刷；开关关掉即不轮询，页面不在前台时一律暂停
+    refetchInterval: (q) => {
+      if (!autoRefresh || !live) return false
+      return q.state.data?.list.some((j) => j.lastStatus === 'running') ? 3000 : 10_000
+    },
   })
 }
 
-export function useLogs(query: LogQuery) {
+export function useLogs(query: LogQuery, autoRefresh = true) {
   const live = usePageLive()
   const q = useQuery({
     queryKey: [...KEY, 'logs', query],
     queryFn: () => api.get<Page<CronLog>>(`${BASE}/logs`, query),
     placeholderData: keepPreviousData,
-    // 有任务在运行时轮询，结束后自动停止；页面不在前台时暂停
-    refetchInterval: (q) => (live && q.state.data?.list.some((l) => l.status === 'running') ? 3000 : false),
+    // 有任务在运行时 3s 紧盯；平时随开关 10s 慢刷；页面不在前台时暂停
+    refetchInterval: (q) => {
+      if (!live) return false
+      if (q.state.data?.list.some((l) => l.status === 'running')) return 3000
+      return autoRefresh ? 10_000 : false
+    },
   })
-  useRefreshOnResume(live, q.refetch, !!q.data?.list.some((l) => l.status === 'running'))
+  useRefreshOnResume(live, q.refetch, autoRefresh && !!q.data?.list.some((l) => l.status === 'running'))
   return q
 }
 
@@ -166,7 +176,19 @@ export function useDeleteJobs() {
 export function useRunJob() {
   const invalidate = useInvalidate()
   return useMutation({
-    mutationFn: (id: string) => api.post<CronLog>(`${BASE}/jobs/${id}/run`),
+    // params 可选：带上时仅本次执行覆盖任务保存的参数（不写回任务行）
+    mutationFn: ({ id, params }: { id: string; params?: string }) =>
+      api.post<CronLog>(`${BASE}/jobs/${id}/run`, params ? { params } : undefined),
+    onSuccess: invalidate,
+  })
+}
+
+/** 批量启停：updated 是后端实际命中的行数（越权或已删除的 id 不计入）。 */
+export function useSetJobsEnabled() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (p: { ids: string[]; enabled: boolean }) =>
+      api.post<{ updated: number }>('/plugins/cron/jobs/enabled', p),
     onSuccess: invalidate,
   })
 }
