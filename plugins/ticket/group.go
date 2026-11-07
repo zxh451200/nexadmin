@@ -411,6 +411,9 @@ func (s *Service) autoAssignGroup(ctx context.Context, t *Ticket) {
 }
 
 // leastLoadedMember 取组内未完结工单最少的成员；并列时取 user_id 较小者，保证可复现。
+// JOIN 上的 plg_ticket 故意不带 tenant_id：队列与成员是平台级（迁移 017），坐席跨租户服务，
+// 这里要数的是他手上全部的未完结单。按当前租户裁剪会漏掉别租户压给他的量，把新单派给更忙的人。
+// Table() 原生查询本来也不经过租户插件，所以这不是漏了条件（用例见 tenant_it_test.go）。
 func (s *Service) leastLoadedMember(db *gorm.DB, groupID idgen.ID) (idgen.ID, string, error) {
 	var row struct {
 		UserID   idgen.ID `gorm:"column:user_id"`

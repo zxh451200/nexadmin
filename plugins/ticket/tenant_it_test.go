@@ -168,6 +168,78 @@ func TestITMySQLTenantIsolation(t *testing.T) {
 	})
 }
 
+// 自动分派数的是「这个坐席手上全部未完结单」，不是本租户那一部分。队列与成员是平台级
+// （迁移 017），坐席跨租户服务，所以 leastLoadedMember 的 JOIN 故意不带 tenant_id。
+// 负载种成互相翻转的两档：按全量数该派 Bob(12)，按本租户数会派 Alice(11)——
+// 给那条 JOIN 加租户条件，这条用例必须红。
+func TestITMySQLAutoAssignCountsCrossTenantLoad(t *testing.T) {
+	svc, gdb, _ := itMySQLService(t)
+	ctx1 := itCtx()
+	ctx2 := tenant.With(itBaseCtx(), idgen.ID(2))
+	skip := tenant.Skip(itBaseCtx())
+
+	// 先建单再建组：还没有启用的自动分派组时 Create 不派单，负载才种得死。
+	seed := func(ctx context.Context, n int, assignee idgen.ID) {
+		t.Helper()
+		for i := 0; i < n; i++ {
+			tk, err := svc.Create(ctx, CreateInput{
+				Title: "load", Content: "load", Priority: PriorityNormal,
+				ReporterType: ReplierReporter, ReporterID: "load",
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := gdb.WithContext(skip).Model(&Ticket{}).Where("id = ?", int64(tk.ID)).
+				UpdateColumn("assignee_id", int64(assignee)).Error; err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	seed(ctx2, 3, 11) // Alice：本租户 0 单，别租户 3 单
+	seed(ctx1, 1, 12) // Bob：本租户 1 单
+
+	count := func(assignee idgen.ID, tid int64) int64 {
+		t.Helper()
+		var n int64
+		if err := gdb.WithContext(skip).Raw(
+			"SELECT COUNT(*) FROM plg_ticket WHERE assignee_id = ? AND tenant_id = ? AND status IN (?,?,?)",
+			int64(assignee), tid, StatusOpen, StatusProcessing, StatusPending).Scan(&n).Error; err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	// 正控制：负载没种上的话，下面「派给谁」的断言就是空转。
+	for _, c := range []struct {
+		assignee idgen.ID
+		tid      int64
+		want     int64
+	}{{11, 1, 0}, {11, 2, 3}, {12, 1, 1}, {12, 2, 0}} {
+		if got := count(c.assignee, c.tid); got != c.want {
+			t.Fatalf("种负载失败：assignee=%d tenant=%d 数到 %d, want %d", c.assignee, c.tid, got, c.want)
+		}
+	}
+
+	g, err := svc.CreateGroup(ctx1, GroupInput{Name: "shared desk", AutoAssign: true, Enabled: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.SetGroupMembers(ctx1, g.ID, []idgen.ID{11, 12}); err != nil {
+		t.Fatal(err)
+	}
+
+	fresh, err := svc.Create(ctx1, CreateInput{
+		Title: "new", Content: "new", Priority: PriorityNormal,
+		ReporterType: ReplierReporter, ReporterID: "new",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fresh.AssigneeID != 12 {
+		t.Fatalf("新单派给了 %d(%s), want 12(Bob)：全量负载 Bob=1 < Alice=3，"+
+			"按本租户裁剪才会反过来选 Alice", fresh.AssigneeID, fresh.AssigneeName)
+	}
+}
+
 func tenantNosOf(rows []Ticket) []string {
 	out := make([]string, 0, len(rows))
 	for _, r := range rows {
