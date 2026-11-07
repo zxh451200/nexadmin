@@ -48,6 +48,10 @@ type Seeder interface{ Seed(db *gorm.DB) error }
 // 否则客户删掉的行会在重启后又冒出来。
 type StartupSeeder interface{ SeedOnStartup(db *gorm.DB) error }
 
+// DemoSeeder 种入演示数据（演示租户、示例业务记录等）。向导默认不运行；
+// 仅当用户在向导里勾选"导入演示数据"时才执行。生产安装不应携带演示数据。
+type DemoSeeder interface{ SeedDemo(db *gorm.DB) error }
+
 // AdminCreator 创建超管（通常由用户模块实现）。
 type AdminCreator interface {
 	CreateAdmin(ctx context.Context, db *gorm.DB, a Admin) error
@@ -69,6 +73,7 @@ type SiteWriter interface {
 type Hooks struct {
 	Migrate      func(db *gorm.DB) error // 统一迁移运行器（core 装配）：框架 + 业务 + 已启用插件
 	Seeders      []Seeder
+	DemoSeeders  []DemoSeeder // 仅当向导勾选"导入演示数据"时运行
 	AdminCreator AdminCreator
 	AdminChecker AdminChecker
 	SiteWriter   SiteWriter // 可为空（系统参数模块被禁用时）：站点名只留在 app.name

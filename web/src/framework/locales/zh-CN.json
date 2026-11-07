@@ -351,6 +351,9 @@
       "aiBaseUrl": "接口地址",
       "aiModel": "模型名称",
       "aiApiKey": "API Key",
+      "demoData": "导入演示数据",
+      "demoDataHint": "创建演示租户与示例数据，仅供体验功能；生产环境请勿勾选。演示租户无真实管理员账号，不可登录。",
+      "demoDataOn": "已导入",
       "skipped": "已跳过"
     },
     "skip": "跳过",

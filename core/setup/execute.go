@@ -139,6 +139,13 @@ func (r *Runner) runProgress(parent context.Context, req *executeReq, emit func(
 			return abort(2, err)
 		}
 	}
+	if req.Optional.DemoData {
+		for _, s := range r.Hooks.DemoSeeders {
+			if err := s.SeedDemo(sess); err != nil {
+				return abort(2, err)
+			}
+		}
+	}
 	if r.Hooks.SiteWriter != nil { // 站点名写入设置页「站点」分区（登录页 / 顶栏 / manifest 读取的位置）
 		if err := r.Hooks.SiteWriter.WriteSiteName(ctx, sess, strings.TrimSpace(req.Admin.SiteName)); err != nil {
 			return abort(2, err)

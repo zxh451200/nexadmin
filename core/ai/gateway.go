@@ -3,9 +3,12 @@ package ai
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 	"time"
 
 	"go.uber.org/zap"
+
+	"nexadmin/core/metrics"
 )
 
 // 输入上限（按字符数）。
@@ -37,6 +40,8 @@ type Gateway struct {
 	Quota  Counter
 	Log    *zap.Logger
 	Now    func() time.Time // 提示里的“今天”，须已转换到站点时区
+
+	failOpen atomic.Int64 // 策略/计数器故障时放行的累计次数，供 metrics 采集
 }
 
 // NewGateway 创建网关：默认每用户每分钟 20 次，Log 为 nil 时不输出。
@@ -47,11 +52,15 @@ func NewGateway(load func(ctx context.Context) (Config, error), log *zap.Logger,
 	if loc == nil {
 		loc = time.UTC
 	}
-	return &Gateway{
+	g := &Gateway{
 		Load: load, Client: &Client{}, Log: log,
 		Limiter: NewWindowLimiter(DefaultRatePerMin, time.Minute),
 		Now:     func() time.Time { return time.Now().In(loc) },
 	}
+	metrics.AddCollector("ai_quota_fail_open", func(w *metrics.Writer) {
+		w.Counter("nexadmin_ai_quota_fail_open_total", "AI quota fail-open events (policy or counter failure, cache may be down)", float64(g.failOpen.Load()))
+	})
+	return g
 }
 
 // StatusInfo 是 GET /ai/status 的数据（前端 AiStatus）。不含 Key 与地址。

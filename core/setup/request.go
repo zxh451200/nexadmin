@@ -69,6 +69,8 @@ type optionalReq struct {
 	AIBaseURL string `json:"aiBaseUrl"`
 	AIAPIKey  string `json:"aiApiKey"`
 	AIModel   string `json:"aiModel"`
+
+	DemoData bool `json:"demoData"`
 }
 
 type executeReq struct {

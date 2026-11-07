@@ -113,6 +113,7 @@ func (g *Gateway) policyFor(ctx context.Context, who Caller) *TenantPolicy {
 	}
 	p, err := g.Policy(ctx, who)
 	if err != nil {
+		g.failOpen.Add(1)
 		g.Log.Warn("ai tenant policy lookup failed, allowing", zap.Error(err))
 		return nil
 	}
@@ -127,6 +128,7 @@ func (g *Gateway) consumeQuota(ctx context.Context, who Caller, p *TenantPolicy)
 	now := g.Now()
 	n, err := g.Quota.Incr(ctx, quotaKey(who.TenantID, now), quotaTTL(now))
 	if err != nil {
+		g.failOpen.Add(1)
 		g.Log.Warn("ai quota counter failed, allowing", zap.Error(err))
 		return nil // 计数器故障（如缓存宕机）时放行：配额是成本控制，不应让 AI 整体不可用
 	}

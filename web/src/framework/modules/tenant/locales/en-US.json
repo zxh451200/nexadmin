@@ -22,7 +22,7 @@
     "suspend": "Suspend",
     "resume": "Resume",
     "suspendConfirm": "Users of tenant \"{{name}}\" will be unable to sign in once suspended. Continue?",
-    "deleteConfirm": "Delete the {{count}} selected tenant(s)? This cannot be undone.",
+    "deleteConfirm": "Delete the {{count}} selected tenant(s)? Tenant records cannot be recovered, but their business data (users, files, etc.) will be retained as orphaned data and must be cleaned up separately.",
     "quotaInfo": "Quotas",
     "aiInfo": "AI features",
     "aiEnabled": "Allow AI",

@@ -63,7 +63,7 @@ func menuSeedIDs(count int) IDList {
 	return out
 }
 
-// Seed 幂等种入出厂套餐与租户：套餐按名称、租户按域名判断，已存在一律不动。
+// Seed 幂等种入出厂套餐：按名称判断，已存在一律不动。演示租户由 SeedDemo 负责。
 func (module) Seed(db *gorm.DB) error {
 	now := time.Now().UTC()
 	day := 24 * time.Hour
@@ -110,6 +110,16 @@ func (module) Seed(db *gorm.DB) error {
 			return err
 		}
 	}
+
+	return nil
+}
+
+// SeedDemo 幂等种入演示租户：按域名判断，已存在一律不动。
+// 仅当用户在向导里勾选"导入演示数据"时运行（setup.DemoSeeder）。
+// 演示租户只有账号名字符串，没有真实管理员账号/角色/部门，不可登录。
+func (module) SeedDemo(db *gorm.DB) error {
+	now := time.Now().UTC()
+	day := 24 * time.Hour
 
 	tenants := []struct {
 		n          int

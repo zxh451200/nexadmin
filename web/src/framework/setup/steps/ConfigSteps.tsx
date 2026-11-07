@@ -70,6 +70,9 @@ export function OptionalStep() {
           </div>
         )}
       </div>
+      <div className="space-y-4">
+        <SwitchField name="optional.demoData" label={t('setup.optional.demoData')} description={t('setup.optional.demoDataHint')} />
+      </div>
     </div>
   )
 }
@@ -87,6 +90,7 @@ export function ConfirmSummary() {
     [t('setup.cache.type'), t(`setup.cache.${v.cache.type}`)],
     [t('setup.optional.storageTitle'), t(`setup.optional.${v.optional.storage}`)],
     [t('setup.optional.aiTitle'), v.optional.aiEnabled ? v.optional.aiModel : t('setup.optional.skipped')],
+    [t('setup.optional.demoData'), v.optional.demoData ? t('setup.optional.demoDataOn') : t('setup.optional.skipped')],
   ]
   return (
     <div className="space-y-3">

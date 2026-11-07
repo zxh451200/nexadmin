@@ -64,6 +64,7 @@ export function buildSchema(t: TFunction) {
         aiBaseUrl: z.string().trim(),
         aiApiKey: z.string(),
         aiModel: z.string().trim(),
+        demoData: z.boolean(),
       })
       .superRefine((v, ctx) => {
         const need = (cond: boolean, keys: (keyof typeof v)[]) => {
@@ -95,6 +96,7 @@ export const defaultValues = (language: string): SetupValues => ({
     aiBaseUrl: '',
     aiApiKey: '',
     aiModel: '',
+    demoData: false,
   },
 })
 
@@ -103,6 +105,6 @@ export const STEP_FIELDS: string[][] = [
   ['db.type', 'db.host', 'db.port', 'db.username', 'db.password', 'db.database', 'db.autoCreate'],
   ['cache.type', 'cache.addr', 'cache.password'],
   ['admin.username', 'admin.password', 'admin.confirm', 'admin.siteName', 'admin.language', 'admin.timezone'],
-  ['optional.storage', 'optional.s3Endpoint', 'optional.s3Bucket', 'optional.s3AccessKey', 'optional.s3SecretKey', 'optional.s3Region', 'optional.s3Prefix', 'optional.s3PathStyle', 'optional.aiEnabled', 'optional.aiBaseUrl', 'optional.aiApiKey', 'optional.aiModel'],
+  ['optional.storage', 'optional.s3Endpoint', 'optional.s3Bucket', 'optional.s3AccessKey', 'optional.s3SecretKey', 'optional.s3Region', 'optional.s3Prefix', 'optional.s3PathStyle', 'optional.aiEnabled', 'optional.aiBaseUrl', 'optional.aiApiKey', 'optional.aiModel', 'optional.demoData'],
   [],
 ]

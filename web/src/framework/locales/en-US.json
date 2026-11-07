@@ -351,6 +351,9 @@
       "aiBaseUrl": "Base URL",
       "aiModel": "Model",
       "aiApiKey": "API key",
+      "demoData": "Import demo data",
+      "demoDataHint": "Creates demo tenants and sample data for exploring features; do not enable in production. Demo tenants have no real admin accounts and cannot sign in.",
+      "demoDataOn": "Imported",
       "skipped": "Skipped"
     },
     "skip": "Skip",

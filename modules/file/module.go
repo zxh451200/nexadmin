@@ -37,6 +37,9 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 		MaxImageMB: float64(cfg.Upload.MaxSizeImageMB), MaxVideoMB: float64(cfg.Upload.MaxSizeVideoMB), MaxFileMB: float64(cfg.Upload.MaxSizeFileMB),
 	}))
 	svc.cache = d.Cache
+	if d.Config.Cache.Driver == "memory" {
+		d.Log.Warn("file: storage quota enforcement requires Redis; with memory cache, uploads for tenants with storage limits will return 503")
+	}
 	h := &Handler{svc: svc}
 	tus := &tusHandler{svc: svc}
 

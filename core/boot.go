@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/user"
 	"sort"
+	"strconv"
 	"strings"
 
 	"go.uber.org/zap"
@@ -164,7 +165,45 @@ func (a *App) prepareData(db *gorm.DB) error {
 	if len(res.Applied) == 0 && rep.Menus() == 0 {
 		a.log.Info("迁移与种子已是最新")
 	}
-	return a.migrateTenants(db, a.cfg.App.AutoMigrate && a.cfg.Database.Isolation.AutoMigrate)
+	if err := a.migrateTenants(db, a.cfg.App.AutoMigrate && a.cfg.Database.Isolation.AutoMigrate); err != nil {
+		return err
+	}
+	a.checkIsolationConsistency(db)
+	return nil
+}
+
+// checkIsolationConsistency warns about configured tenant pools that have no matching sys_tenant record.
+func (a *App) checkIsolationConsistency(db *gorm.DB) {
+	if !a.cfg.Database.Isolation.Enabled {
+		return
+	}
+	configured := database.TenantDatabases(db)
+	if len(configured) == 0 {
+		return
+	}
+	ids := make([]int64, 0, len(configured))
+	for id := range configured {
+		n, err := strconv.ParseInt(id, 10, 64)
+		if err != nil {
+			continue
+		}
+		ids = append(ids, n)
+	}
+	var existing []int64
+	if err := database.Platform(db).Table("sys_tenant").Where("id IN ?", ids).Pluck("id", &existing).Error; err != nil {
+		a.log.Warn("isolation: cannot verify tenant consistency", zap.Error(err))
+		return
+	}
+	existSet := make(map[int64]bool, len(existing))
+	for _, id := range existing {
+		existSet[id] = true
+	}
+	for id := range configured {
+		n, _ := strconv.ParseInt(id, 10, 64)
+		if !existSet[n] {
+			a.log.Warn("isolation: configured tenant pool has no matching sys_tenant record", zap.String("tenant_id", id))
+		}
+	}
 }
 
 // seedStartup 依次运行实现了 StartupSeeder 的模块种子。

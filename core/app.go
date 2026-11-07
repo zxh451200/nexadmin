@@ -211,6 +211,9 @@ func (a *App) collect(mods []Module) {
 		if v, ok := m.(setup.Seeder); ok {
 			a.hooks.Seeders = append(a.hooks.Seeders, v)
 		}
+		if v, ok := m.(setup.DemoSeeder); ok {
+			a.hooks.DemoSeeders = append(a.hooks.DemoSeeders, v)
+		}
 		if v, ok := m.(setup.StartupSeeder); ok {
 			a.startupSeeders = append(a.startupSeeders, v)
 		}

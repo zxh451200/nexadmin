@@ -22,7 +22,7 @@
     "suspend": "停用",
     "resume": "恢复",
     "suspendConfirm": "停用后租户“{{name}}”下的用户将无法登录，确定停用吗？",
-    "deleteConfirm": "确定删除选中的 {{count}} 个租户吗？该操作不可恢复。",
+    "deleteConfirm": "确定删除选中的 {{count}} 个租户吗？租户记录删除后不可恢复，但其业务数据（用户、文件等）会保留为孤儿数据，需另行清理。",
     "quotaInfo": "额度",
     "aiInfo": "AI 功能",
     "aiEnabled": "允许使用 AI",
