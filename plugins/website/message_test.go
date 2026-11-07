@@ -20,6 +20,7 @@ import (
 	"nexadmin/core/cache"
 	"nexadmin/core/config"
 	"nexadmin/core/event"
+	"nexadmin/core/i18n"
 	"nexadmin/core/middleware"
 	"nexadmin/core/notify"
 	"nexadmin/core/response"
@@ -494,7 +495,52 @@ func inquiryData() EventData {
 	return EventData{ID: 21, Name: "张三", Preview: "想聊聊合作", OccurredAt: testNow}
 }
 
+// useBuiltinLocale 装载出厂词条目录（和运行期同一份 yaml），断言到的才是真文案：
+// 谁把 compose 的 key 打错或漏进词典，这里会退回 key 名，用例立刻红。
+func useBuiltinLocale(t *testing.T) {
+	t.Helper()
+	b, err := i18n.New([]config.Language{{Code: "zh-CN", Default: true}, {Code: "en-US"}}, "zh-CN", "none")
+	if err != nil {
+		t.Fatal(err)
+	}
+	prev := i18n.Default()
+	i18n.SetDefault(b)
+	t.Cleanup(func() { i18n.SetDefault(prev) })
+}
+
+// 站内信文本过词典：zh/en 两份模板都要出得来，称呼与占位符不能丢。
+func TestNotifyInAppTextComesFromDict(t *testing.T) {
+	useBuiltinLocale(t)
+	set := &Setting{}
+	for _, tc := range []struct{ lang, want, wantEmpty string }{
+		{"zh-CN", "官网留言：%s 发来新询盘", "（空）"},
+		{"en-US", "Website enquiry from %s", "(empty)"},
+	} {
+		n, fs, _ := newTestNotifier([]holder{{UserID: 11, TenantID: 2}}, set)
+		n.lang = tc.lang
+		n.notify(inquiryData())
+		if len(fs.sent) != 1 {
+			t.Fatalf("%s 站内信 = %d 条, want 1", tc.lang, len(fs.sent))
+		}
+		if got := fs.sent[0].msg.Title; got != strings.Replace(tc.want, "%s", "张三", 1) {
+			t.Errorf("%s 标题 = %q, want %q", tc.lang, got, tc.want)
+		}
+		if got := fs.sent[0].msg.Content; got != "想聊聊合作" {
+			t.Errorf("%s 正文 = %q, want 预览原文", tc.lang, got)
+		}
+		// 空正文的占位文案也走词典：英文部署不该看到「（空）」。
+		n.notify(EventData{ID: 22, Name: "李四", OccurredAt: testNow})
+		if len(fs.sent) != 2 {
+			t.Fatalf("%s 第二条站内信缺失: %+v", tc.lang, fs.sent)
+		}
+		if got := fs.sent[1].msg.Content; got != tc.wantEmpty {
+			t.Errorf("%s 空正文占位 = %q, want %q", tc.lang, got, tc.wantEmpty)
+		}
+	}
+}
+
 func TestNotifyInAppToPermissionHolders(t *testing.T) {
+	useBuiltinLocale(t)
 	set := &Setting{MessageNotifyEmail: true, ContactEmail: "team@example.com"}
 	n, fs, fm := newTestNotifier([]holder{{UserID: 11, TenantID: 2}, {UserID: 12, TenantID: 3}}, set)
 

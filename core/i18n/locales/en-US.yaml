@@ -340,6 +340,12 @@ ticket:
   inbound_parse_failed: The message could not be parsed; is it a complete MIME email?
   inbound_auto_reply: Auto-replies and bounces are not turned into tickets
   portal_url_invalid: Invalid portal URL (a public http/https address is required)
+  notify_assigned_title: Ticket assigned to you
+  notify_bulk_assigned_title: "Tickets assigned to you: %d"
+  notify_reply_title: New reply on ticket
+  notify_new_ticket_title: New ticket needs an owner
+  notify_overdue_response_title: "Response SLA breached: %d"
+  notify_overdue_resolution_title: "Resolution SLA breached: %d"
 totp:
   already_enabled: Two-factor authentication is already enabled
   not_enrolled: Two-factor authentication is not enrolled yet; scan the QR code first
@@ -729,6 +735,8 @@ website:
   translate_failed: "Translation failed. Please try again later."
   preview_unavailable: "Preview link is unavailable: no signing key is configured on this server."
   home_slug_missing: "The page chosen as homepage does not exist; create it under Pages first."
+  notify_inquiry_title: "Website enquiry from %s"
+  notify_content_empty: "(empty)"
 codegen:
   table_not_found: "Table not found: %s"
   invalid_input: "Invalid input. Please check and try again."

@@ -13,7 +13,6 @@ package website
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 
 	"go.uber.org/zap"
@@ -21,6 +20,7 @@ import (
 
 	"nexadmin/core"
 	"nexadmin/core/event"
+	"nexadmin/core/i18n"
 	"nexadmin/core/notify"
 	"nexadmin/core/tenant"
 	"nexadmin/pkg/idgen"
@@ -142,13 +142,15 @@ func (n *notifier) notifyInApp(data EventData) {
 		n.warn("没有用户持有留言权限，无人可通知", zap.String("perm", messagePerm))
 		return
 	}
-	title, content := n.compose(data)
 	byTenant := make(map[idgen.ID][]idgen.ID, len(holders))
 	for _, h := range holders {
 		byTenant[h.TenantID] = append(byTenant[h.TenantID], h.UserID)
 	}
 	for tid, ids := range byTenant {
-		if err := n.sender.Send(tenant.With(n.ctx, tid), notify.Msg{
+		// 文本挪进按租户的循环里出：这样租户级译文覆盖能命中收件租户自己那份。
+		tctx := tenant.With(n.langCtx(n.ctx), tid)
+		title, content := n.compose(tctx, data)
+		if err := n.sender.Send(tctx, notify.Msg{
 			To: ids, Category: notifyCategory, Title: title, Content: content,
 			Link: inboxLink, Channels: []string{notify.ChannelInApp},
 		}); err != nil {
@@ -170,7 +172,7 @@ func (n *notifier) notifyEmail(data EventData) {
 	if !set.MessageNotifyEmail || strings.TrimSpace(set.ContactEmail) == "" {
 		return
 	}
-	title, content := n.compose(data)
+	title, content := n.compose(n.langCtx(n.ctx), data)
 	err = n.mailer.SendMail(n.ctx, set.ContactEmail, mail.TplNotice, n.lang, mail.Data{
 		Title: title,
 		// 邮件里没有站内信那样的相对路由可点，把入口写成菜单位置。
@@ -188,16 +190,20 @@ func (n *notifier) notifyEmail(data EventData) {
 	}
 }
 
-// compose 生成通知标题与正文；语言跟随站点默认语言（收件人是内部用户，不按访客语言）。
-func (n *notifier) compose(data EventData) (string, string) {
+// langCtx 给待发文本定语言：跟随站点默认语言（n.lang），因为收件人是内部管理员，
+// 事件里没有访客语言可用。与 ticket 的 notifyText 同一取舍。
+func (n *notifier) langCtx(ctx context.Context) context.Context {
+	return i18n.WithLang(ctx, n.lang)
+}
+
+// compose 生成通知标题与正文；语言跟随站点默认语言（收件人是内部用户，不按访客语言），
+// 文案在 core/i18n/locales 双语各一份。
+func (n *notifier) compose(ctx context.Context, data EventData) (string, string) {
 	content := data.Preview
 	if content == "" {
-		content = "（空）"
+		content = i18n.T(ctx, "website.notify_content_empty")
 	}
-	if strings.HasPrefix(strings.ToLower(n.lang), "en") {
-		return fmt.Sprintf("Website enquiry from %s", data.Name), content
-	}
-	return fmt.Sprintf("官网留言：%s 发来新询盘", data.Name), content
+	return i18n.T(ctx, "website.notify_inquiry_title", data.Name), content
 }
 
 // queryHolders 返回持有 website:message 的用户（含超管与内置角色）中的平台级调用方。

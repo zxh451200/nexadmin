@@ -13,6 +13,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
+	"nexadmin/core/i18n"
 	"nexadmin/core/notify"
 	"nexadmin/core/response"
 	"nexadmin/core/storage"
@@ -1098,10 +1099,7 @@ func (s *Service) setPriority(ctx context.Context, ticketNo, priority string) er
 }
 
 func (s *Service) notifyAssign(ctx context.Context, t *Ticket) {
-	title := "工单已转派给你"
-	if strings.HasPrefix(strings.ToLower(s.lang), "en") {
-		title = "Ticket assigned to you"
-	}
+	title := s.notifyText(ctx, "ticket.notify_assigned_title")
 	s.sendNotify(ctx, t.AssigneeID, title, t.TicketNo+" · "+t.Title,
 		"/ticket/tickets?ticket="+url.QueryEscape(t.TicketNo), t.TicketNo)
 }
@@ -1110,19 +1108,13 @@ func (s *Service) notifyReply(ctx context.Context, t *Ticket) {
 	if t.AssigneeID == 0 {
 		return
 	}
-	title := "工单有新回复"
-	if strings.HasPrefix(strings.ToLower(s.lang), "en") {
-		title = "New reply on ticket"
-	}
+	title := s.notifyText(ctx, "ticket.notify_reply_title")
 	s.sendNotify(ctx, t.AssigneeID, title, t.TicketNo+" · "+t.Title,
 		"/ticket/tickets?ticket="+url.QueryEscape(t.TicketNo), t.TicketNo)
 }
 
 func (s *Service) notifyBulkAssign(ctx context.Context, n int, assigneeID idgen.ID) {
-	title := strconv.Itoa(n) + " 张工单已转派给你"
-	if strings.HasPrefix(strings.ToLower(s.lang), "en") {
-		title = "Tickets assigned to you: " + strconv.Itoa(n)
-	}
+	title := s.notifyText(ctx, "ticket.notify_bulk_assigned_title", n)
 	s.sendNotify(ctx, assigneeID, title, "", "/ticket/tickets", "")
 }
 
@@ -1149,10 +1141,7 @@ func (s *Service) notifyNewTicket(ctx context.Context, t *Ticket) {
 	if len(ids) == 0 {
 		return
 	}
-	title := "有新工单待认领"
-	if strings.HasPrefix(strings.ToLower(s.lang), "en") {
-		title = "New ticket needs an owner"
-	}
+	title := s.notifyText(ctx, "ticket.notify_new_ticket_title")
 	s.sendNotifyTo(ctx, ids, title, t.TicketNo+" · "+t.Title,
 		"/ticket/tickets?ticket="+url.QueryEscape(t.TicketNo), t.TicketNo)
 }
@@ -1248,16 +1237,11 @@ func (s *Service) notifyOverdue(ctx context.Context, rows []Ticket, kind string)
 		if n == 0 {
 			continue
 		}
-		title := strconv.Itoa(n) + " 张工单已超响应时限"
+		key := "ticket.notify_overdue_response_title"
 		if kind == "resolution" {
-			title = strconv.Itoa(n) + " 张工单已超解决时限"
+			key = "ticket.notify_overdue_resolution_title"
 		}
-		if strings.HasPrefix(strings.ToLower(s.lang), "en") {
-			title = "Response SLA breached: " + strconv.Itoa(n)
-			if kind == "resolution" {
-				title = "Resolution SLA breached: " + strconv.Itoa(n)
-			}
-		}
+		title := s.notifyText(ctx, key, n)
 		s.sendNotifyTo(tenant.With(ctx, c.TenantID), []idgen.ID{c.ID}, title, "", "/ticket/tickets?overdue=1", "")
 	}
 }
@@ -1307,6 +1291,14 @@ func resumeDueAt(due, paused *time.Time, now time.Time) *time.Time {
 	}
 	shifted := due.Add(now.Sub(*paused))
 	return &shifted
+}
+
+// notifyText 出站内信的文案：语言跟随应用默认语言（s.lang），因为收件人是坐席而不是
+// 发起请求的人——请求上下文里协商到的是操作者的语言，用它出文本会让同一封站内信
+// 因“谁点的按钮”而变成不同语言。ctx 上原有的租户信息保留，租户级译文覆盖仍能命中。
+// 与 workflow/cron 的站内信同一套做法（key 在 core/i18n/locales 双语各一份）。
+func (s *Service) notifyText(ctx context.Context, key string, args ...any) string {
+	return i18n.T(i18n.WithLang(ctx, s.lang), key, args...)
 }
 
 // sendNotify 是单收件人的站内信出口：未注入 notifier 或没有收件人时静默跳过。

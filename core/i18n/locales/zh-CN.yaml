@@ -340,6 +340,12 @@ ticket:
   inbound_parse_failed: 邮件内容无法解析，请检查是否为完整的 MIME 邮件
   inbound_auto_reply: 自动回复/退信不会进单
   portal_url_invalid: 客服门户地址不合法（仅支持 http/https 的公网地址）
+  notify_assigned_title: 工单已转派给你
+  notify_bulk_assigned_title: "%d 张工单已转派给你"
+  notify_reply_title: 工单有新回复
+  notify_new_ticket_title: 有新工单待认领
+  notify_overdue_response_title: "%d 张工单已超响应时限"
+  notify_overdue_resolution_title: "%d 张工单已超解决时限"
 totp:
   already_enabled: 两步验证已开启
   not_enrolled: 尚未绑定两步验证，请先扫码绑定
@@ -729,6 +735,8 @@ website:
   translate_failed: "翻译服务调用失败，请稍后重试"
   preview_unavailable: "预览链接暂不可用：服务未配置签名密钥"
   home_slug_missing: "设为首页的页面不存在，请先在「页面管理」创建"
+  notify_inquiry_title: "官网留言：%s 发来新询盘"
+  notify_content_empty: "（空）"
 codegen:
   table_not_found: "数据表不存在：%s"
   invalid_input: "参数不正确，请检查后重试"

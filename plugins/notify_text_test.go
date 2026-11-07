@@ -26,15 +26,16 @@ var literalSinkRe = regexp.MustCompile(`^[ \t]*(?:Title|Content|title|content)[ 
 // 站内信/告警是「上屏」文本：写死中文的文案让英文部署的收件人看不懂，
 // 词典里缺的 key 又会被 core/i18n 原样回退成 key 名。
 //
-// 取景范围是 plugins/workflow 与 plugins/cron——这两处的待发文本以前是硬中文
-// （title := "审批待办：" + name 再塞进 notify.Msg），现在改走 i18n.T，这条闸防它回退。
-// 不收全仓：ticket 与 website 用的是另一种既有写法（compose*(s.lang, …) 里 en/zh 两分支），
-// 两种语言都出得来，只是没过词典；devicehub 仍在途。这两笔属于「与词典口径统一」的整理，
-// 不是用户看到的错文案，等各自泳道收尾再一并收紧取景目录。
+// 取景范围是 plugins/workflow、plugins/cron、plugins/ticket、plugins/website。
+// 前两笔（f9ee14e）把硬中文的待发文本换成 i18n.T；ticket 与 website 原本是
+// compose*(s.lang, …) 里 en/zh 两分支——两种语言都出得来，只是没过词典，
+// 现已统一走 i18n.T，这条闸一并防它们回退。
+// 不收 devicehub：那条泳道还在途（service.go 的「设备告警：」+ d.Name 仍是硬编码），
+// 由 devicehub 的负责人收尾时自己收进取景目录；这里先不挡它。
 func TestInAppMessageTextGoesThroughDict(t *testing.T) {
 	root := editionContractRoot(t)
 	var offenders []string
-	for _, pkg := range []string{"workflow", "cron"} {
+	for _, pkg := range []string{"workflow", "cron", "ticket", "website"} {
 		dir := filepath.Join(root, "plugins", pkg)
 		ents, err := os.ReadDir(dir)
 		if err != nil {
@@ -76,6 +77,10 @@ func TestInAppMessageKeysMatchAcrossLangs(t *testing.T) {
 		"workflow.notify_todo_title", "workflow.notify_todo_content",
 		"workflow.notify_urge_title", "workflow.notify_urge_content",
 		"cron.alert_title", "cron.alert_content",
+		"ticket.notify_assigned_title", "ticket.notify_bulk_assigned_title",
+		"ticket.notify_reply_title", "ticket.notify_new_ticket_title",
+		"ticket.notify_overdue_response_title", "ticket.notify_overdue_resolution_title",
+		"website.notify_inquiry_title", "website.notify_content_empty",
 	} {
 		t.Run(key, func(t *testing.T) {
 			z, zok := zh[key]
