@@ -233,22 +233,62 @@ type marketEntry struct {
 	Bundled          bool   `json:"bundled"`
 	InstalledVersion string `json:"installedVersion"`
 	Status           string `json:"status"` // 运行期状态；未注册为空
+	SourceVersion    string `json:"sourceVersion"`
+	NeedRestart      bool   `json:"needRestart"`
 }
 
 type marketActions struct {
-	install func(string, market.Entry, bool) string
-	remove  func(string, string, bool) string
-	rebuild func(string, bool) string
+	install     func(string, []market.Entry, market.InstallOptions) string
+	upload      func(string, string) string
+	remove      func(string, string, bool) string
+	rebuild     func(string, bool) string
+	environment func(string) market.Environment
 }
 
 func registerMarket(r *gin.RouterGroup, m *plugin.Manager) {
-	registerMarketWith(r, m, marketActions{startInstall, startRemove, startRebuild})
+	registerMarketWith(r, m, marketActions{
+		install: startInstall, upload: startUploadZip, remove: startRemove,
+		rebuild: startRebuild, environment: market.CheckEnvironment,
+	})
 }
 
 func registerMarketWith(r *gin.RouterGroup, m *plugin.Manager, actions marketActions) {
 	r = r.Group("", requirePlatformUser)
 	list := core.Perm(PermList)
 	install := core.Perm(PermInstall)
+	environmentReady := func(c *gin.Context) bool {
+		e := actions.environment(m.Root())
+		if !e.Ready {
+			response.Fail(c, response.BadRequest("plugin.environment_unavailable", strings.Join(e.Issues, ", ")))
+			return false
+		}
+		return true
+	}
+	r.GET("/plugins/market/environment", list, func(c *gin.Context) {
+		response.OK(c, actions.environment(m.Root()))
+	})
+	r.POST("/plugins/market/check", install, func(c *gin.Context) {
+		var in struct {
+			IDs []string `json:"ids"`
+		}
+		if !response.BindJSON(c, &in) {
+			return
+		}
+		if err := validateMarketIDs(in.IDs); err != nil {
+			response.Fail(c, err)
+			return
+		}
+		out := make(map[string]market.UpdateStatus, len(in.IDs))
+		for _, id := range in.IDs {
+			status, err := market.InspectUpdate(m.Root(), id)
+			if err != nil {
+				response.Fail(c, err)
+				return
+			}
+			out[id] = status
+		}
+		response.OK(c, out)
+	})
 
 	r.GET("/plugins/market", list, func(c *gin.Context) {
 		root := m.Root()
@@ -267,17 +307,21 @@ func registerMarketWith(r *gin.RouterGroup, m *plugin.Manager, actions marketAct
 		if ledgerErr != nil {
 			zap.L().Warn("plugin: 读取安装台账失败", zap.Error(ledgerErr))
 		}
-		userInstalled := make(map[string]bool, len(ledger))
+		userInstalled := make(map[string]string, len(ledger))
 		for _, l := range ledger {
-			userInstalled[l.ID] = true
+			userInstalled[l.ID] = l.Version
 		}
 		out := make([]marketEntry, 0, len(entries))
 		for _, e := range entries {
-			item := marketEntry{Entry: e, Installed: userInstalled[e.ID]}
+			sourceVersion, installed := userInstalled[e.ID]
+			item := marketEntry{Entry: e, Installed: installed, SourceVersion: sourceVersion}
 			if p, ok := byID[e.ID]; ok {
 				item.InstalledVersion = p.Version
 				item.Status = p.Status
 				item.Bundled = !item.Installed
+				item.NeedRestart = p.NeedRestart || (installed && sourceVersion != p.Version)
+			} else {
+				item.NeedRestart = installed
 			}
 			out = append(out, item)
 		}
@@ -286,8 +330,9 @@ func registerMarketWith(r *gin.RouterGroup, m *plugin.Manager, actions marketAct
 
 	r.POST("/plugins/market/install", install, func(c *gin.Context) {
 		var in struct {
-			ID    string `json:"id" binding:"required"`
-			Force bool   `json:"force"`
+			ID            string `json:"id" binding:"required"`
+			Force         bool   `json:"force"`
+			AllowModified bool   `json:"allowModified"`
 		}
 		if !response.BindJSON(c, &in) {
 			return
@@ -303,10 +348,49 @@ func registerMarketWith(r *gin.RouterGroup, m *plugin.Manager, actions marketAct
 			response.Fail(c, response.NotFound("plugin.market_not_found"))
 			return
 		}
-		response.OK(c, gin.H{"jobId": actions.install(root, entry, in.Force)})
+		if !environmentReady(c) {
+			return
+		}
+		response.OK(c, gin.H{"jobId": actions.install(root, []market.Entry{entry}, market.InstallOptions{Overwrite: in.Force, AllowModified: in.AllowModified})})
+	})
+
+	r.POST("/plugins/market/install-batch", install, func(c *gin.Context) {
+		var in struct {
+			IDs           []string `json:"ids"`
+			AllowModified bool     `json:"allowModified"`
+		}
+		if !response.BindJSON(c, &in) {
+			return
+		}
+		if err := validateMarketIDs(in.IDs); err != nil {
+			response.Fail(c, err)
+			return
+		}
+		root := m.Root()
+		catalog, err := market.LoadCatalog(root)
+		if err != nil {
+			response.Fail(c, err)
+			return
+		}
+		entries := make([]market.Entry, 0, len(in.IDs))
+		for _, id := range in.IDs {
+			entry, ok := market.FindEntry(catalog, id)
+			if !ok {
+				response.Fail(c, response.NotFound("plugin.market_not_found"))
+				return
+			}
+			entries = append(entries, entry)
+		}
+		if !environmentReady(c) {
+			return
+		}
+		response.OK(c, gin.H{"jobId": actions.install(root, entries, market.InstallOptions{Overwrite: true, AllowModified: in.AllowModified})})
 	})
 
 	r.POST("/plugins/market/upload", install, func(c *gin.Context) {
+		if !environmentReady(c) {
+			return
+		}
 		fh, err := c.FormFile("file")
 		if err != nil {
 			response.Fail(c, response.BadRequest("plugin.upload_file_required"))
@@ -326,7 +410,12 @@ func registerMarketWith(r *gin.RouterGroup, m *plugin.Manager, actions marketAct
 			return
 		}
 		tmpPath := tmp.Name()
-		defer os.Remove(tmpPath) //nolint:errcheck // 任务异步读；读失败时报安装失败，临时文件随之清理
+		handedOff := false
+		defer func() {
+			if !handedOff {
+				_ = os.Remove(tmpPath)
+			}
+		}()
 		if err := saveUpload(c, tmp, fh, maxUploadBytes); err != nil {
 			tmp.Close()
 			response.Fail(c, err)
@@ -336,7 +425,9 @@ func registerMarketWith(r *gin.RouterGroup, m *plugin.Manager, actions marketAct
 			response.Fail(c, err)
 			return
 		}
-		response.OK(c, gin.H{"jobId": startUploadZip(m.Root(), tmpPath)})
+		jobID := actions.upload(m.Root(), tmpPath)
+		handedOff = true
+		response.OK(c, gin.H{"jobId": jobID})
 	})
 
 	r.POST("/plugins/market/remove", install, func(c *gin.Context) {
@@ -347,10 +438,20 @@ func registerMarketWith(r *gin.RouterGroup, m *plugin.Manager, actions marketAct
 		if !response.BindJSON(c, &in) {
 			return
 		}
+		if !plugin.ValidID(in.ID) {
+			response.Fail(c, response.BadRequest("plugin.market_ids_invalid"))
+			return
+		}
+		if !environmentReady(c) {
+			return
+		}
 		response.OK(c, gin.H{"jobId": actions.remove(m.Root(), in.ID, in.Purge)})
 	})
 
 	r.POST("/plugins/market/rebuild", install, func(c *gin.Context) {
+		if !environmentReady(c) {
+			return
+		}
 		response.OK(c, gin.H{"jobId": actions.rebuild(m.Root(), true)})
 	})
 
@@ -365,43 +466,12 @@ func registerMarketWith(r *gin.RouterGroup, m *plugin.Manager, actions marketAct
 	})
 }
 
-// startInstall 一键安装全流程：下载 → 安装 → 重建 → 自重启。
-// 构建失败时恢复安装前的源码、依赖清单与前端产物，避免留下装了一半、无法回退的源码树。
-func startInstall(root string, e market.Entry, force bool) string {
-	return marketRunner.Run("install", e.ID, func(x *market.Ctx) error {
-		err := market.ChangeSources(root, e.ID, func() error {
-			source := e.Repo
-			if e.URL != "" {
-				source = e.URL
-			}
-			x.Log("从 %s 拉取插件包…", source)
-			zipPath, err := market.Download(context.Background(), e)
-			if err != nil {
-				return err
-			}
-			defer os.Remove(zipPath) //nolint:errcheck
-			withWeb := market.HasWeb(zipPath)
-			x.Log("下载完成，开始安装…")
-			if _, err := market.InstallSub(root, zipPath, e.Subdir, force); err != nil {
-				return err
-			}
-			x.Log("插件 %s 已装入源码树，开始重建…", e.ID)
-			if err := market.Rebuild(context.Background(), root, withWeb, x.LogPlain); err != nil {
-				return fmt.Errorf("重建失败: %w", err)
-			}
-			return nil
-		})
-		if err != nil {
-			x.Log("失败，源码已恢复到安装前状态；可修正后重试")
-			return err
-		}
-		return triggerRestart(root, x)
-	})
-}
-
 // startRemove 移除 → 重建 → 自重启。purge 已经删库，无法回滚，因此不做源码恢复。
 func startRemove(root, id string, purge bool) string {
 	return marketRunner.Run("remove", id, func(x *market.Ctx) error {
+		if err := requireInstallEnvironment(root, productionInstallOperations()); err != nil {
+			return err
+		}
 		change := func() error {
 			if purge {
 				x.Log("清理插件数据表与菜单…")
@@ -434,6 +504,9 @@ func startRemove(root, id string, purge bool) string {
 // startRebuild 仅重建 + 自重启（不装不删）。
 func startRebuild(root string, withWeb bool) string {
 	return marketRunner.Run("rebuild", "", func(x *market.Ctx) error {
+		if err := requireInstallEnvironment(root, productionInstallOperations()); err != nil {
+			return err
+		}
 		if err := market.Rebuild(context.Background(), root, withWeb, x.LogPlain); err != nil {
 			return err
 		}

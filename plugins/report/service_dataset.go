@@ -14,8 +14,9 @@ import (
 type DatasetForm struct {
 	Name    string   `json:"name"`
 	Source  string   `json:"source"`
-	Columns []string `json:"columns"`
+	Columns []string `json:"columns"` // 主表裸列名或 "关联表.列"（关联须在 Joins 里声明）
 	Filters []Filter `json:"filters"`
+	Joins   []Join   `json:"joins,omitempty"`
 	Remark  string   `json:"remark"`
 }
 
@@ -26,6 +27,7 @@ type DatasetView struct {
 	Source    string   `json:"source"`
 	Columns   []string `json:"columns"`
 	Filters   []Filter `json:"filters"`
+	Joins     []Join   `json:"joins,omitempty"`
 	Remark    string   `json:"remark"`
 	CreatedAt string   `json:"createdAt"`
 	UpdatedAt string   `json:"updatedAt"`
@@ -38,7 +40,10 @@ func datasetView(d Dataset, cfg DatasetConfig) DatasetView {
 	if cfg.Filters == nil {
 		cfg.Filters = []Filter{}
 	}
-	return DatasetView{ID: d.ID, Name: d.Name, Source: d.Source, Columns: cfg.Columns, Filters: cfg.Filters, Remark: d.Remark,
+	if cfg.Joins == nil {
+		cfg.Joins = []Join{}
+	}
+	return DatasetView{ID: d.ID, Name: d.Name, Source: d.Source, Columns: cfg.Columns, Filters: cfg.Filters, Joins: cfg.Joins, Remark: d.Remark,
 		CreatedAt: d.CreatedAt.UTC().Format(timeFmt), UpdatedAt: d.UpdatedAt.UTC().Format(timeFmt)}
 }
 
@@ -52,7 +57,8 @@ func (s *Service) checkDataset(f DatasetForm) (*Target, DatasetConfig, error) {
 	if badText(f.Name, 100, true) || badText(f.Remark, 255, false) {
 		return nil, DatasetConfig{}, specErr("report.name_invalid")
 	}
-	tg, err := s.reg.Target(f.Source, f.Columns)
+	// 关联与列引用一起过 DatasetTarget：带点列必须匹配已声明关联，表/列都在白名单。
+	tg, err := s.reg.DatasetTarget(f.Source, f.Columns, f.Joins)
 	if err != nil {
 		return nil, DatasetConfig{}, err
 	}
@@ -76,7 +82,11 @@ func (s *Service) checkDataset(f DatasetForm) (*Target, DatasetConfig, error) {
 	if fs == nil {
 		fs = []Filter{}
 	}
-	return tg, DatasetConfig{Columns: cols, Filters: fs}, nil
+	js := f.Joins
+	if js == nil {
+		js = []Join{}
+	}
+	return tg, DatasetConfig{Columns: cols, Filters: fs, Joins: js}, nil
 }
 
 // SaveDataset 创建（id=0）或更新数据集。

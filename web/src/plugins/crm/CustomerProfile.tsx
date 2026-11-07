@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DatePicker } from '@/framework/components/DatePicker'
 import { RequiredMark } from '@/framework/components/RequiredMark'
+import { Can } from '@/framework/auth/Can'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Checkbox } from '@/framework/ui/checkbox'
@@ -176,16 +177,18 @@ export function ContactsSection({ customer }: { customer: CrmCustomer }) {
         <div className="flex items-baseline justify-between gap-2">
           <div className="text-sm font-medium text-foreground">{t('plugin_crm.contact.title')}</div>
           {!adding && !editing ? (
-            <div className="flex items-center gap-2">
-              {isCompany ? null : (
-                <Button variant="outline" size="sm" onClick={() => openAdd(true)}>
-                  {t('plugin_crm.contact.addSelf')}
+            <Can perm="crm:edit">
+              <div className="flex items-center gap-2">
+                {isCompany ? null : (
+                  <Button variant="outline" size="sm" onClick={() => openAdd(true)}>
+                    {t('plugin_crm.contact.addSelf')}
+                  </Button>
+                )}
+                <Button variant="outline" size="sm" onClick={() => openAdd(false)}>
+                  {t('plugin_crm.contact.add')}
                 </Button>
-              )}
-              <Button variant="outline" size="sm" onClick={() => openAdd(false)}>
-                {t('plugin_crm.contact.add')}
-              </Button>
-            </div>
+              </div>
+            </Can>
           ) : null}
         </div>
         <p className="text-xs text-muted-foreground">
@@ -226,20 +229,22 @@ export function ContactsSection({ customer }: { customer: CrmCustomer }) {
                 {ct.remark ? <span className="truncate">{ct.remark}</span> : null}
               </div>
             </div>
-            <div className="flex shrink-0 items-center gap-1">
-              <Button variant="ghost" size="icon" aria-label={t('common.edit')} onClick={() => setEditing(ct)}>
-                <Pencil aria-hidden="true" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="text-destructive"
-                aria-label={t('common.delete')}
-                onClick={() => void onDelete(ct)}
-              >
-                <Trash2 aria-hidden="true" />
-              </Button>
-            </div>
+            <Can perm="crm:edit">
+              <div className="flex shrink-0 items-center gap-1">
+                <Button variant="ghost" size="icon" aria-label={t('common.edit')} onClick={() => setEditing(ct)}>
+                  <Pencil aria-hidden="true" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-destructive"
+                  aria-label={t('common.delete')}
+                  onClick={() => void onDelete(ct)}
+                >
+                  <Trash2 aria-hidden="true" />
+                </Button>
+              </div>
+            </Can>
           </div>
         ))
       ) : (
@@ -347,9 +352,11 @@ export function ActivitiesSection({ customerId }: { customerId: string }) {
             {t('plugin_crm.activity.openOnly')}
           </label>
           {!writing ? (
-            <Button variant="outline" size="sm" onClick={() => setWriting(true)}>
-              {t('plugin_crm.activity.write')}
-            </Button>
+            <Can perm="crm:edit">
+              <Button variant="outline" size="sm" onClick={() => setWriting(true)}>
+                {t('plugin_crm.activity.write')}
+              </Button>
+            </Can>
           ) : null}
         </div>
       </div>
@@ -358,7 +365,15 @@ export function ActivitiesSection({ customerId }: { customerId: string }) {
         <p className="text-xs text-muted-foreground">{t('common.loading')}</p>
       ) : (data?.list ?? []).length ? (
         <ol className="flex flex-col gap-2">
-          {(data?.list ?? []).map((a) => (
+          {(data?.list ?? []).map((a) =>
+            // 系统留痕（归属/合并/标签等操作）走居中胶囊：它不是销售写的跟进，别占同一视觉权重。
+            a.kind === 'system' ? (
+              <li key={a.id} className="flex justify-center">
+                <span className="max-w-[85%] rounded-full bg-muted px-2.5 py-1 text-center text-[11px] text-muted-foreground">
+                  {a.content} · {formatTime(a.createdAt, i18n.language)}
+                </span>
+              </li>
+            ) : (
             <li key={a.id} className="flex items-start justify-between gap-3 rounded-md border border-border px-3 py-2">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
@@ -393,7 +408,8 @@ export function ActivitiesSection({ customerId }: { customerId: string }) {
                 </Button>
               </div>
             </li>
-          ))}
+            ),
+          )}
         </ol>
       ) : (
         <p className="text-xs text-muted-foreground">{t('plugin_crm.activity.empty')}</p>

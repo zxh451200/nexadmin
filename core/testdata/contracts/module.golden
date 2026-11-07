@@ -1,2 +1,0 @@
-Name func() string
-Register func(*gin.RouterGroup, *core.Deps)

@@ -280,6 +280,8 @@ func (a *App) buildFull() (*gin.Engine, error) {
 	api.GET("/auth/captcha/:key/audio", rl("captcha", middleware.ByIPAndPath()), h.CaptchaAudio)
 	api.GET("/auth/slider", rl("captcha", middleware.ByIPAndPath()), h.SliderCaptcha)
 	api.POST("/auth/slider/verify", rl("captcha", middleware.ByIPAndPath()), h.SliderVerify)
+	api.GET("/auth/click", rl("captcha", middleware.ByIPAndPath()), h.ClickCaptcha)
+	api.POST("/auth/click/verify", rl("captcha", middleware.ByIPAndPath()), h.ClickVerify)
 	api.POST("/auth/refresh", rl("refresh", middleware.ByIPAndPath()), h.Refresh)
 	api.GET("/auth/methods", h.Methods)
 	api.POST("/auth/logout", middleware.RequireLogin(), h.Logout)

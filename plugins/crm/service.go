@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"gorm.io/gorm"
 
@@ -15,6 +16,7 @@ import (
 	"nexadmin/core/response"
 	"nexadmin/pkg/idcard"
 	"nexadmin/pkg/idgen"
+	"nexadmin/pkg/recbin"
 )
 
 // 名称/编码/等级/国家的上限与列宽一致（字符数，不是字节数）。
@@ -29,6 +31,11 @@ const (
 type Service struct {
 	db  *gorm.DB
 	log logger
+	// notifier 是站内信入口（nil 安全，测试夹具不注入）；lang 取应用默认语言。
+	notifier msgSender
+	lang     string
+	// loc 是应用时区：next_at 是用户按本地日历填的日期，「到期」得按同一个日历算。
+	loc *time.Location
 }
 
 // logger 是 Service 需要的最小日志面。
@@ -61,6 +68,9 @@ type CustomerInput struct {
 	Industry       string
 	Address        string
 	Remark         string
+	// Custom 是自定义字段的整份值（code → 值）：建/改客户时整份校验后落 JSON。
+	// 未定义/已停用的 code 会被拒（不静默丢弃——悄悄丢值比报错更难排查）。
+	Custom map[string]any
 }
 
 // normalizeISOCountry 把国籍/国家输入收口成 ISO 3166-1 alpha-2：去空格、统一大写，
@@ -165,6 +175,13 @@ func (in *CustomerInput) normalize() error {
 }
 
 // CrmStats 是 CRM 概览卡片：按类型/状态的客户计数 + 公海与在途商机数。
+// DailyCount 是按天聚合的一格（建档趋势）。
+type DailyCount struct {
+	Date  string `json:"date"`  // YYYY-MM-DD
+	Count int64  `json:"count"`
+}
+
+// CrmStats 汇总 CRM 概览：既有六张卡 + 统计 Tab 的三个维度（阶段分布/来源分布/建档趋势）。
 type CrmStats struct {
 	Persons   int64 `json:"persons"`
 	Companies int64 `json:"companies"`
@@ -172,6 +189,12 @@ type CrmStats struct {
 	Inactive  int64 `json:"inactive"`
 	Pool      int64 `json:"pool"` // 公海客户数（owner 为空）；无主客户不属于任何人，不随数据范围收窄
 	OpenDeals int64 `json:"openDeals"`
+	Stages    map[string]int64 `json:"stages"`       // 六阶段商机计数（含 won/lost 终态）
+	// StageAmounts 六阶段商机金额漏斗：stage → 币种 → 金额（amount_minor 累加）。
+	// 按币种分开是因为不同币种的钱不能相加；单币种部署每档只有一个键。
+	StageAmounts map[string]map[string]int64 `json:"stageAmounts"`
+	Sources      map[string]int64            `json:"sources"`      // 客户来源分布（none = 无锚点/手工录入）
+	CreatedDaily []DailyCount                `json:"createdDaily"` // 近 30 天建档趋势（缺天补零）
 }
 
 // Stats 汇总 CRM 概览计数。数据范围生效（受限操作者只统计自己范围内的客户）；
@@ -195,6 +218,90 @@ func (s *Service) Stats(ctx context.Context, sc *datascope.Scope) (*CrmStats, er
 	}
 	if err := oppDB.Count(&st.OpenDeals).Error; err != nil {
 		return nil, err
+	}
+	// 阶段分布：六档全量计数（won/lost 也算，漏斗才能看出转化），范围按商机自己的 owner 裁。
+	stageRows := []struct {
+		Stage string
+		N     int64
+	}{}
+	stageDB := s.db.WithContext(ctx).Model(&Opportunity{}).Select("stage, COUNT(*) AS n").Group("stage")
+	if cond, args, limited := sc.UsernameCond("owner"); limited {
+		stageDB = stageDB.Where(cond, args...)
+	}
+	if err := stageDB.Scan(&stageRows).Error; err != nil {
+		return nil, err
+	}
+	st.Stages = make(map[string]int64, len(StageSet))
+	for stage := range StageSet {
+		st.Stages[stage] = 0
+	}
+	for _, r := range stageRows {
+		st.Stages[r.Stage] = r.N
+	}
+	// 金额漏斗：stage × 币种 分组求和（不同币种不能相加），单币种部署每档只有一个键。
+	amountRows := []struct {
+		Stage    string
+		Currency string
+		Total    int64
+	}{}
+	amountDB := s.db.WithContext(ctx).Model(&Opportunity{}).
+		Select("stage, currency, SUM(amount_minor) AS total").Group("stage, currency")
+	if cond, args, limited := sc.UsernameCond("owner"); limited {
+		amountDB = amountDB.Where(cond, args...)
+	}
+	if err := amountDB.Scan(&amountRows).Error; err != nil {
+		return nil, err
+	}
+	st.StageAmounts = make(map[string]map[string]int64, len(StageSet))
+	for stage := range StageSet {
+		st.StageAmounts[stage] = make(map[string]int64)
+	}
+	for _, r := range amountRows {
+		if st.StageAmounts[r.Stage] == nil {
+			st.StageAmounts[r.Stage] = make(map[string]int64)
+		}
+		st.StageAmounts[r.Stage][r.Currency] = r.Total
+	}
+	// 来源分布：external_source 分组 + 「无锚点/手工」一档，范围按客户 owner 裁。
+	sourceRows := []struct {
+		Source string
+		N      int64
+	}{}
+	sourceDB := s.db.WithContext(ctx).Model(&Customer{}).Select("COALESCE(NULLIF(external_source, ''), 'none') AS source, COUNT(*) AS n").Group("source")
+	if cond, args, limited := sc.UsernameCond("owner"); limited {
+		sourceDB = sourceDB.Where(cond, args...)
+	}
+	if err := sourceDB.Scan(&sourceRows).Error; err != nil {
+		return nil, err
+	}
+	st.Sources = make(map[string]int64, len(sourceRows))
+	for _, r := range sourceRows {
+		st.Sources[r.Source] = r.N
+	}
+	// 建档趋势：近 30 天按天聚合，缺天补零（图表要一条连续的线，不是一串洞）。
+	since := time.Now().UTC().AddDate(0, 0, -29)
+	trendRows := []struct {
+		D string
+		N int64
+	}{}
+	trendDB := s.db.WithContext(ctx).Model(&Customer{}).
+		Select("DATE(created_at) AS d, COUNT(*) AS n").
+		Where("created_at >= ?", since).
+		Group("d")
+	if cond, args, limited := sc.UsernameCond("owner"); limited {
+		trendDB = trendDB.Where(cond, args...)
+	}
+	if err := trendDB.Scan(&trendRows).Error; err != nil {
+		return nil, err
+	}
+	byDate := make(map[string]int64, len(trendRows))
+	for _, r := range trendRows {
+		byDate[r.D] = r.N
+	}
+	st.CreatedDaily = make([]DailyCount, 0, 30)
+	for i := 29; i >= 0; i-- {
+		day := time.Now().UTC().AddDate(0, 0, -i).Format("2006-01-02")
+		st.CreatedDaily = append(st.CreatedDaily, DailyCount{Date: day, Count: byDate[day]})
 	}
 	return st, nil
 }
@@ -274,6 +381,12 @@ func (s *Service) CreateCustomer(ctx context.Context, in CustomerInput) (*Custom
 		IdType: in.IdType, IdNo: in.IdNo,
 		TaxNo: in.TaxNo, Industry: in.Industry, Address: in.Address,
 	}
+	// 自定义字段：整份校验后落 JSON。校验在查重之后，错误优先级与字段本身一致
+	raw, err := s.customValuesFor(ctx, in.Custom)
+	if err != nil {
+		return nil, err
+	}
+	c.CustomValuesRaw = raw
 	if c.Code == "" {
 		// 先取 ID 再算编码：编码由 ID 派生，建库前就定下来，不需要回写一次。
 		id, err := idgen.Next()
@@ -340,8 +453,18 @@ func (s *Service) UpdateCustomer(ctx context.Context, sc *datascope.Scope, id id
 		"id_type": in.IdType, "id_no": in.IdNo,
 		"tax_no": in.TaxNo, "industry": in.Industry, "address": in.Address,
 	}
+	// 自定义字段：编辑是整份替换（表单提交的就是全量），校验口径与新建一致
+	raw, err := s.customValuesFor(ctx, in.Custom)
+	if err != nil {
+		return nil, err
+	}
+	updates["custom_values"] = raw
 	if err := s.db.WithContext(ctx).Model(&Customer{}).Where("id = ?", int64(id)).Updates(updates).Error; err != nil {
 		return nil, err
+	}
+	// 状态变更留痕：销售交接与复盘要的是「这单发生过什么」，状态跳变不该只活在操作日志里。
+	if c.Status != in.Status {
+		s.noteSystem(ctx, id, "状态由 "+c.Status+" 变更为 "+in.Status)
 	}
 	c.Name, c.Code, c.Level, c.Status, c.Type = in.Name, in.Code, in.Level, in.Status, in.Type
 	c.Owner, c.Phone, c.Email, c.Remark = updates["owner"].(string), updates["phone"].(string), updates["email"].(string), updates["remark"].(string)
@@ -352,10 +475,11 @@ func (s *Service) UpdateCustomer(ctx context.Context, sc *datascope.Scope, id id
 	return &c, nil
 }
 
-// DeleteCustomer 删除客户主数据。还有商机挂在客户下时拒绝（主数据不级联消失）；
-// 联系人与跟进记录随客户一并清理（事务内，不留孤儿）。sc 非 nil 且受限时，范围外客户得到 403。
+// DeleteCustomer 删除客户主数据（软删除，进回收站）。还有商机挂在客户下时拒绝（主数据不级联消失）；
+// 联系人与跟进原样保留——还原即完整回来，只有回收站的彻底删除才物理清。sc 非 nil 且受限时，范围外客户得到 403。
 func (s *Service) DeleteCustomer(ctx context.Context, sc *datascope.Scope, id idgen.ID) error {
-	if _, err := s.visibleCustomer(ctx, sc, id); err != nil {
+	c, err := s.visibleCustomer(ctx, sc, id)
+	if err != nil {
 		return err
 	}
 	var n int64
@@ -366,13 +490,11 @@ func (s *Service) DeleteCustomer(ctx context.Context, sc *datascope.Scope, id id
 		return response.Conflict("crm.customer_in_use")
 	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("customer_id = ?", int64(id)).Delete(&Contact{}).Error; err != nil {
+		// 打 deleted_at + 登记回收站必须同事务：行删了、回收站没登记 = 永久失联的数据
+		if err := tx.Delete(&Customer{}, id).Error; err != nil {
 			return err
 		}
-		if err := tx.Where("customer_id = ?", int64(id)).Delete(&Activity{}).Error; err != nil {
-			return err
-		}
-		return tx.Delete(&Customer{}, id).Error
+		return recbin.Add(ctx, tx, recbin.TypeCustomer, id, c.Name, recbin.Operator(ctx))
 	})
 }
 
@@ -384,14 +506,43 @@ func (s *Service) GetCustomer(ctx context.Context, sc *datascope.Scope, id idgen
 
 // CustomerQuery 过滤客户列表。Scope 由 HTTP 入口解析后传入；nil 表示不裁剪（内部调用）。
 type CustomerQuery struct {
-	Keyword  string // 名称 / 编码 / 锚点 / 证件号 / 信用代码
-	Type     string // person / company，空 = 不限
-	Status   string
-	Source   string
-	Scope    *datascope.Scope
-	Mine     bool // 只看我的：owner = 当前账号（与角色范围叠加）
-	Page     int
-	PageSize int
+	Keyword     string // 名称 / 编码 / 锚点 / 证件号 / 信用代码 / 手机 / 邮箱
+	Type        string // person / company，空 = 不限
+	Status      string
+	Source      string
+	Level       string // A / B / C，空 = 不限
+	Tag         string // 单个标签，逗号边界匹配
+	CreatedFrom string // 建档时间下限（YYYY-MM-DD，含端点）
+	CreatedTo   string // 建档时间上限（YYYY-MM-DD，含端点）
+	SortKey     string // 排序字段（白名单见 customerSortCols，空 = 默认 id DESC）
+	SortAsc     bool
+	Scope       *datascope.Scope
+	Mine        bool // 只看我的：owner = 当前账号（与角色范围叠加）
+	Page        int
+	PageSize    int
+}
+
+// customerSortCols 是列表排序的白名单：列名永远从这里出，查询参数只当键用
+//（拼接 ORDER BY 的来源不可信，这是排序注入的第一道也是最后一道闸）。
+var customerSortCols = map[string]string{
+	"created_at": "created_at",
+	"name":       "name",
+	"code":       "code",
+	"level":      "level",
+	"owner":      "owner",
+}
+
+// orderOf 把排序参数收口成安全片段：未知键退回默认 id DESC（新建的在前，历史口径不变）。
+func (q CustomerQuery) orderOf() string {
+	col, ok := customerSortCols[q.SortKey]
+	if !ok {
+		return "id DESC"
+	}
+	dir := " DESC"
+	if q.SortAsc {
+		dir = " ASC"
+	}
+	return col + dir + ", id DESC"
 }
 
 // ListCustomers 分页列出客户。受限操作者按 owner（账号）+ 所属部门裁剪，
@@ -418,7 +569,7 @@ func (s *Service) ListCustomers(ctx context.Context, q CustomerQuery) ([]Custome
 		return nil, 0, err
 	}
 	var rows []Customer
-	if err := db.Order("id DESC").Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Find(&rows).Error; err != nil {
+	if err := db.Order(q.orderOf()).Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Find(&rows).Error; err != nil {
 		return nil, 0, err
 	}
 	return rows, total, nil

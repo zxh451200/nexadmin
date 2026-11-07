@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { usePermission } from '@/framework/auth/usePermission'
+import { Alert, AlertDescription, AlertTitle } from '@/framework/ui/alert'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/framework/ui/card'
@@ -17,6 +18,9 @@ import {
   pageInstanceId,
   serverState,
   useInstallPlugin,
+  useInstallPluginBatch,
+  useCheckPluginUpdates,
+  useMarketEnvironment,
   useMarket,
   useMarketJob,
   useRebuildServer,
@@ -28,30 +32,6 @@ import {
 } from './api'
 
 const PENDING_LICENSE = (id: string) => `market-pending-license:${id}`
-
-// 批量更新跨重启续跑：每次安装都会重建并重启服务，页面随后整页刷新，
-// 所以队列放 sessionStorage，刷新后由 effect 接着装下一个（见 MarketTab 内的续跑 effect）。
-interface BatchQueue {
-  ids: string[]
-  attempts: Record<string, number>
-}
-
-const BATCH_QUEUE_KEY = 'market-batch-updates'
-
-function readBatchQueue(): BatchQueue | null {
-  try {
-    const raw = sessionStorage.getItem(BATCH_QUEUE_KEY)
-    const q = raw ? (JSON.parse(raw) as BatchQueue) : null
-    return q && Array.isArray(q.ids) ? q : null
-  } catch {
-    return null
-  }
-}
-
-function writeBatchQueue(q: BatchQueue | null) {
-  if (q && q.ids.length) sessionStorage.setItem(BATCH_QUEUE_KEY, JSON.stringify(q))
-  else sessionStorage.removeItem(BATCH_QUEUE_KEY)
-}
 
 /** pro 插件安装确认：可顺手粘贴授权文本；服务自重启恢复后自动弹出导入（sessionStorage 跨刷新桥接）。 */
 function InstallDialog({
@@ -106,31 +86,39 @@ function JobDialog({
   const qc = useQueryClient()
   const { data: job, isError } = useMarketJob(jobId)
   const [waitingRestart, setWaitingRestart] = useState(false)
+  const [restartTimedOut, setRestartTimedOut] = useState(false)
   const logRef = useRef<HTMLDivElement>(null)
 
-  // 任务消失（404）或状态到 restarting：服务正在/已经自重启，转入恢复等待。
   useEffect(() => {
-    if (!jobId) return
-    if (job?.state === 'restarting' || (!job && isError)) setWaitingRestart(true)
-  }, [jobId, job, isError])
+    if (!jobId || restartTimedOut) return
+    if (job?.state === 'failed' || job?.state === 'done') setWaitingRestart(false)
+    else if (job?.state === 'restarting' || (!job && isError)) setWaitingRestart(true)
+  }, [jobId, job, isError, restartTimedOut])
 
-  // 服务恢复后刷新整页（菜单/路由/已装列表都变了，整页重载最干净）。
-  // 必须确认实例标识已变化：旧进程还没退出时 /system/status 同样返回 200。
   useEffect(() => {
     if (!waitingRestart) return
     let stop = false
+    let timer: number | undefined
+    const deadline = Date.now() + 90_000
     const tick = async () => {
       const status = await serverState()
       const before = await pageInstanceId()
-      if (status.alive && (!before || !status.instanceId || status.instanceId !== before)) {
+      if (stop) return
+      if (status.alive && before && status.instanceId && status.instanceId !== before) {
         window.location.reload()
         return
       }
-      if (!stop) window.setTimeout(tick, 2500)
+      if (Date.now() >= deadline) {
+        setRestartTimedOut(true)
+        setWaitingRestart(false)
+        return
+      }
+      timer = window.setTimeout(tick, 2500)
     }
     void tick()
     return () => {
       stop = true
+      window.clearTimeout(timer)
     }
   }, [waitingRestart])
 
@@ -142,7 +130,14 @@ function JobDialog({
     if (job?.state === 'done' || job?.state === 'failed') void qc.invalidateQueries({ queryKey: MARKET_KEY })
   }, [job?.state, qc])
 
-  const stateNode = waitingRestart ? (
+  const stateNode = restartTimedOut || (isError && !waitingRestart) ? (
+    <div className="flex flex-col gap-2 text-sm text-destructive">
+      {t(restartTimedOut ? 'pluginMgr.market.job.restartTimeout' : 'pluginMgr.market.job.requestFailed')}
+      <Button size="sm" variant="outline" className="self-start" onClick={() => window.location.reload()}>
+        {t('pluginMgr.market.job.verify')}
+      </Button>
+    </div>
+  ) : waitingRestart ? (
     <div className="flex items-center gap-2 text-sm text-muted-foreground">
       <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
       {t('pluginMgr.market.job.restarting')}
@@ -224,6 +219,9 @@ export default function MarketTab({ focus = '' }: { focus?: string }) {
   const canLicense = has('plugin:license')
   const { data = [], isLoading, isError, refetch } = useMarket()
   const install = useInstallPlugin()
+  const batch = useInstallPluginBatch()
+  const checkUpdates = useCheckPluginUpdates()
+  const environment = useMarketEnvironment()
   const remove = useRemovePlugin()
   const rebuild = useRebuildServer()
   const [jobId, setJobId] = useState<string | null>(null)
@@ -232,17 +230,28 @@ export default function MarketTab({ focus = '' }: { focus?: string }) {
   const [category, setCategory] = useState('')
   const [edition, setEdition] = useState('')
   const [installTarget, setInstallTarget] = useState<MarketEntry | null>(null)
+  const [allowModified, setAllowModified] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [licenseTarget, setLicenseTarget] = useState<PluginInfo | null>(null)
   const [licensePrefill, setLicensePrefill] = useState('')
   const uploadRef = useRef<HTMLInputElement | null>(null)
+  const busy = install.isPending || batch.isPending || checkUpdates.isPending || remove.isPending || rebuild.isPending || uploading
+  const canBuild = environment.data?.ready === true
 
   // 本地 zip 上传安装：走与市场安装相同的 job 链路（安装 → 重建 → 自重启），
   // jobId 回来后弹任务对话框看实时日志；重启后按实例 ID 自动整页刷新。
   const onUpload = async (file: File) => {
+    if (!canBuild || busy) return
     if (!file.name.toLowerCase().endsWith('.zip')) {
       toast.error(t('pluginMgr.market.upload.zipOnly'))
       return
     }
+    if (file.size > 64 * 1024 * 1024) {
+      toast.error(t('pluginMgr.market.upload.tooLarge', { size: 64 }))
+      return
+    }
+    if (!window.confirm(t('pluginMgr.market.confirmRestart'))) return
+    setUploading(true)
     const fd = new FormData()
     fd.append('file', file)
     try {
@@ -253,6 +262,8 @@ export default function MarketTab({ focus = '' }: { focus?: string }) {
       setJobId(res.jobId)
     } catch (e) {
       toast.error(e instanceof Error && e.message ? e.message : t('common.operateFailed'))
+    } finally {
+      setUploading(false)
     }
   }
 
@@ -278,8 +289,7 @@ export default function MarketTab({ focus = '' }: { focus?: string }) {
     return Array.from(set)
   }, [data])
 
-  // 批量更新的待装清单；角标数量随之逐个减少（每次安装重启后由续跑 effect 推进）。
-  const outdated = useMemo(() => data.filter((e) => isNewer(e.version, e.installedVersion)), [data])
+  const outdated = useMemo(() => data.filter((e) => e.installed && !e.bundled && !e.needRestart && isNewer(e.version, e.installedVersion)), [data])
 
   const entries = useMemo(() => {
     const kw = keyword.trim().toLowerCase()
@@ -295,17 +305,30 @@ export default function MarketTab({ focus = '' }: { focus?: string }) {
     })
   }, [data, keyword, category, edition])
 
-  const onInstall = (e: MarketEntry) => {
-    // pro 插件先过安装确认（可顺手贴授权）；free 直接装。
-    if (e.edition === 'pro') {
-      setInstallTarget(e)
-      return
-    }
-    setJobEdition('free')
-    install.mutate(
-      { id: e.id, force: e.installed },
-      { onSuccess: (res) => setJobId(res.jobId) },
-    )
+  const confirmChanges = async (entries: MarketEntry[]): Promise<boolean | null> => {
+    const status = await checkUpdates.mutateAsync(entries.map((e) => e.id))
+    const changed = entries.filter((e) => status[e.id]?.exists && (status[e.id].modified || !status[e.id].baselineKnown))
+    if (!changed.length) return false
+    return window.confirm(t('pluginMgr.market.modifiedConfirm', { names: changed.map((e) => e.name).join(', ') })) ? true : null
+  }
+
+  const onInstall = async (e: MarketEntry) => {
+    if (!canBuild || busy) return
+    try {
+      const allow = await confirmChanges([e])
+      if (allow === null) return
+      if (e.edition === 'pro') {
+        setAllowModified(allow)
+        setInstallTarget(e)
+        return
+      }
+      if (!window.confirm(t('pluginMgr.market.confirmRestart'))) return
+      setJobEdition('free')
+      install.mutate(
+        { id: e.id, force: e.installed, allowModified: allow },
+        { onSuccess: (res) => setJobId(res.jobId) },
+      )
+    } catch { return }
   }
 
   const onInstallConfirm = (e: MarketEntry, license: string) => {
@@ -313,12 +336,13 @@ export default function MarketTab({ focus = '' }: { focus?: string }) {
     setInstallTarget(null)
     setJobEdition('pro')
     install.mutate(
-      { id: e.id, force: e.installed },
+      { id: e.id, force: e.installed, allowModified },
       { onSuccess: (res) => setJobId(res.jobId) },
     )
   }
 
   const onRemove = (e: MarketEntry) => {
+    if (!canBuild || busy) return
     if (!window.confirm(t('pluginMgr.market.remove.confirm', { name: e.name }))) return
     setJobEdition(null)
     remove.mutate({ id: e.id }, { onSuccess: (res) => setJobId(res.jobId) })
@@ -339,54 +363,18 @@ export default function MarketTab({ focus = '' }: { focus?: string }) {
     })
   }
 
-  // 批量更新续跑：队列里有待装插件时，装完一个（重启回来）就接着装下一个；
-  // 已经试过一次仍是旧版本的（安装失败）跳过，不让一个失败插件卡死整个队列。
-  useEffect(() => {
-    if (!data.length || install.isPending) return
-    const q = readBatchQueue()
-    if (!q?.ids.length) return
-    const id = q.ids[0]
-    const e = data.find((x) => x.id === id)
-    if (!e || !isNewer(e.version, e.installedVersion) || (q.attempts[id] ?? 0) >= 1) {
-      q.ids.shift()
-      writeBatchQueue(q)
-      return
-    }
-    q.attempts[id] = (q.attempts[id] ?? 0) + 1
-    writeBatchQueue(q)
-    install.mutate(
-      { id, force: true },
-      {
-        onSuccess: (res) => setJobId(res.jobId),
-        onError: () => {
-          // 提交失败（非安装失败）：回收这次尝试次数，让用户能手动重试
-          const cur = readBatchQueue()
-          if (cur) {
-            cur.attempts[id] = (cur.attempts[id] ?? 1) - 1
-            writeBatchQueue(cur)
-          }
-        },
-      },
-    )
-  }, [data, install])
-
-  const onUpdateAll = () => {
-    if (!outdated.length) return
-    if (!window.confirm(t('pluginMgr.market.updateAll.confirm', { count: outdated.length }))) return
-    writeBatchQueue({ ids: outdated.map((e) => e.id), attempts: {} })
-    const first = outdated[0]
-    const q = readBatchQueue()
-    if (q) {
-      q.attempts[first.id] = 1
-      writeBatchQueue(q)
-    }
-    install.mutate(
-      { id: first.id, force: true },
-      {
-        onSuccess: (res) => setJobId(res.jobId),
-        onError: () => writeBatchQueue(null),
-      },
-    )
+  const onUpdateAll = async () => {
+    if (!canBuild || busy || !outdated.length) return
+    try {
+      const allow = await confirmChanges(outdated)
+      if (allow === null) return
+      if (!window.confirm(t('pluginMgr.market.updateAll.confirm', { count: outdated.length }))) return
+      setJobEdition(null)
+      batch.mutate(
+        { ids: outdated.map((e) => e.id), allowModified: allow },
+        { onSuccess: (res) => setJobId(res.jobId) },
+      )
+    } catch { return }
   }
 
   return (
@@ -407,7 +395,7 @@ export default function MarketTab({ focus = '' }: { focus?: string }) {
                 <Button
                   size="sm"
                   variant="outline"
-                  disabled={install.isPending}
+                  disabled={!canBuild || busy}
                   onClick={onUpdateAll}
                 >
                   {t('pluginMgr.market.updateAll.button', { count: outdated.length })}
@@ -425,15 +413,16 @@ export default function MarketTab({ focus = '' }: { focus?: string }) {
                   if (uploadRef.current) uploadRef.current.value = ''
                 }}
               />
-              <Button size="sm" variant="outline" disabled={install.isPending} onClick={() => uploadRef.current?.click()}>
+              <Button size="sm" variant="outline" disabled={!canBuild || busy} onClick={() => uploadRef.current?.click()}>
                 <PackagePlus className={install.isPending ? 'animate-spin' : ''} aria-hidden="true" />
                 {t('pluginMgr.market.upload.button')}
               </Button>
               <Button
                 size="sm"
                 variant="outline"
-                disabled={rebuild.isPending}
+                disabled={!canBuild || busy}
                 onClick={() => {
+                  if (!window.confirm(t('pluginMgr.market.confirmRestart'))) return
                   setJobEdition(null)
                   rebuild.mutate(undefined, { onSuccess: (res) => setJobId(res.jobId) })
                 }}
@@ -446,7 +435,18 @@ export default function MarketTab({ focus = '' }: { focus?: string }) {
         }
       />
 
-      {/* 一句话交代清楚「为什么这里列了不能装的插件」，比每张卡片各挂一遍同一句话省事 */}
+      <Alert variant={canBuild ? 'default' : 'warning'}>
+        <div>
+          <AlertTitle>{t(canBuild ? 'pluginMgr.market.environment.ready' : 'pluginMgr.market.environment.unavailable')}</AlertTitle>
+          <AlertDescription>
+            <p>{t('pluginMgr.market.environment.guidance')}</p>
+            {environment.isLoading ? <p>{t('pluginMgr.market.environment.checking')}</p> : null}
+            {environment.isError ? <p>{t('pluginMgr.market.environment.failed')}</p> : null}
+            {environment.data?.issues.map((issue) => <p key={issue}>{t(`pluginMgr.market.environment.issue.${issue}`, { defaultValue: issue })}</p>)}
+            {!canBuild ? <Button size="sm" variant="outline" className="mt-2" onClick={() => void environment.refetch()}>{t('pluginMgr.market.retry')}</Button> : null}
+          </AlertDescription>
+        </div>
+      </Alert>
       {entries.some((e) => e.bundled) ? (
         <p className="text-xs text-muted-foreground">{t('pluginMgr.market.bundledNote')}</p>
       ) : null}
@@ -501,7 +501,10 @@ export default function MarketTab({ focus = '' }: { focus?: string }) {
                   ) : e.bundled ? (
                     <Badge variant="outline">{t('pluginMgr.market.bundled')}</Badge>
                   ) : null}
-                  {/* 授权状态看的是「这个插件在不在跑」，内置与本机装过的一样要显示 */}
+                  {e.needRestart ? <Badge variant="warning">{t('pluginMgr.market.pendingActivation')}</Badge> : null}
+                  {e.sourceVersion && e.sourceVersion !== e.installedVersion ? (
+                    <span className="text-xs text-muted-foreground">{t('pluginMgr.market.versions', { source: e.sourceVersion, running: e.installedVersion || '—' })}</span>
+                  ) : null}
                   {e.installedVersion && e.status && STATUS_LABEL[e.status] ? (
                     <Badge variant="secondary">{t(STATUS_LABEL[e.status])}</Badge>
                   ) : null}
@@ -528,7 +531,7 @@ export default function MarketTab({ focus = '' }: { focus?: string }) {
                   ) : null
                 ) : canInstall ? (
                   <div className="mt-auto flex gap-2">
-                    <Button size="sm" disabled={install.isPending} onClick={() => onInstall(e)}>
+                    <Button size="sm" disabled={!canBuild || busy || e.needRestart} onClick={() => void onInstall(e)}>
                       {install.isPending ? (
                         <Loader2 className="animate-spin" aria-hidden="true" />
                       ) : (
@@ -537,7 +540,7 @@ export default function MarketTab({ focus = '' }: { focus?: string }) {
                       {e.installed ? t('pluginMgr.market.update') : t('pluginMgr.market.install')}
                     </Button>
                     {e.installed ? (
-                      <Button size="sm" variant="outline" disabled={remove.isPending} onClick={() => onRemove(e)}>
+                      <Button size="sm" variant="outline" disabled={!canBuild || busy} onClick={() => onRemove(e)}>
                         <Trash2 aria-hidden="true" />
                         {t('pluginMgr.market.remove')}
                       </Button>
@@ -551,6 +554,7 @@ export default function MarketTab({ focus = '' }: { focus?: string }) {
       )}
 
       <JobDialog
+        key={jobId ?? 'idle'}
         jobId={jobId}
         edition={jobEdition ?? undefined}
         onClose={() => {

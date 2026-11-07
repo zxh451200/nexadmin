@@ -279,7 +279,9 @@ export default function LoginPage() {
                     </div>
                   </div>
                 )}
-                <fieldset disabled={continuing || challenge !== null}>
+                {/* min-w-0：fieldset 的 UA 默认 min-width:min-content 会被滑块组件
+                    固定 384px 的图片宽撑破（手机窄屏整页横向溢出），放开让它随容器收缩 */}
+                <fieldset disabled={continuing || challenge !== null} className="min-w-0">
                 {methods.length > 1 ? (
                   <Tabs defaultValue={methods[0]}>
                     <TabsList className="grid w-full grid-cols-2">

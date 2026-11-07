@@ -1,11 +1,12 @@
 package crm
 
 // 批量删除：语义与单条删除逐条对齐，只是把「一条一条点」换成「一次点名」。
-// 三条硬规则：
+// 硬规则：
 //   - ids 由 response.ParseIDs 校验，空或非法直接 400，绝不落到「无条件全表删」；
 //   - 数据范围外的 id 不删（与 visibleCustomer 的 403 同口径，只是批量不报错，计入 blocked）；
 //   - 仍挂商机的客户不删（与单条的 409 crm.customer_in_use 同口径），整批不因它失败，
 //     除非一个都删不了——那时才按单条的口径返回 404/409，让调用方知道白点了一趟。
+// 客户删除是软删除（进回收站）：联系人/跟进原样保留，还原即完整回来。
 
 import (
 	"context"
@@ -15,6 +16,7 @@ import (
 
 	"nexadmin/core/datascope"
 	"nexadmin/core/response"
+	"nexadmin/pkg/recbin"
 	"nexadmin/pkg/idgen"
 )
 
@@ -56,7 +58,10 @@ func exclude(ids []idgen.ID, skip map[idgen.ID]bool) []idgen.ID {
 	return out
 }
 
-// DeleteCustomers 批量删除客户，删掉的连同其联系人与跟进记录一起清（单条事务的批量版）。
+// DeleteCustomers 批量删除客户（软删除，进回收站）。语义与单条逐条对齐：
+//   - 数据范围外的 id 不删（计入 blocked）；
+//   - 仍挂商机的客户不删（整批不因它失败，除非一个都删不了——那时按单条口径返回 404/409）；
+//   - 联系人/跟进原样保留（回收站还原即完整回来），不再连带清理。
 func (s *Service) DeleteCustomers(ctx context.Context, sc *datascope.Scope, ids []idgen.ID) (deleted, blocked int64, err error) {
 	ownable, err := s.scopedIDs(ctx, sc, &Customer{}, ids)
 	if err != nil {
@@ -73,18 +78,21 @@ func (s *Service) DeleteCustomers(ctx context.Context, sc *datascope.Scope, ids 
 	if len(free) == 0 {
 		return 0, int64(len(ids)), response.Conflict("crm.customer_in_use")
 	}
+	// 每条都要带名字登记回收站：逐行取行名再软删（量级是勾选的几行，不为这个省一次查询）。
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("customer_id IN ?", free).Delete(&Contact{}).Error; err != nil {
-			return err
+		for _, id := range free {
+			var c Customer
+			if err := tx.Take(&c, int64(id)).Error; err != nil {
+				return err
+			}
+			if err := tx.Delete(&Customer{}, int64(id)).Error; err != nil {
+				return err
+			}
+			if err := recbin.Add(ctx, tx, recbin.TypeCustomer, id, c.Name, recbin.Operator(ctx)); err != nil {
+				return err
+			}
+			deleted++
 		}
-		if err := tx.Where("customer_id IN ?", free).Delete(&Activity{}).Error; err != nil {
-			return err
-		}
-		res := tx.Where("id IN ?", free).Delete(&Customer{})
-		if res.Error != nil {
-			return res.Error
-		}
-		deleted = res.RowsAffected
 		return nil
 	})
 	if err != nil {
@@ -121,7 +129,7 @@ func (s *Service) DeleteOpportunities(ctx context.Context, sc *datascope.Scope, 
 	return deleted, int64(len(ids)) - deleted, nil
 }
 
-// DELETE /plugins/crm/customers?ids=1,2,3 —— 批量删除客户（连带联系人与跟进）。
+// DELETE /plugins/crm/customers?ids=1,2,3 —— 批量删除客户（软删除进回收站）。
 // blocked 是「点名了但没删」的条数：范围外的、或仍有商机的。
 func (h *handler) deleteCustomers(c *gin.Context) {
 	sc, ok := h.scopeOf(c)

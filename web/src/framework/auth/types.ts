@@ -65,7 +65,7 @@ export interface AuthMethods {
   forgotChannels?: string[]
   /** 运行时开关（设置页「参数设置」的 user.register_enabled，默认关闭），与 /auth/register 的闸门同源 */
   registerEnabled?: boolean
-  /** 「登录验证码」强制开启（login.captcha_enabled，出厂 true）：登录首屏就显示图形验证码；关闭时按失败响应自适应 */
+  /** 「登录验证码」强制开启（login.captcha_enabled，出厂 false = 无感优先）：关闭时登录首屏不出验证码，同用户名/同 IP 连续失败达到阈值后按失败响应自适应挂出 */
   captchaEnabled?: boolean
 }
 
@@ -73,12 +73,16 @@ export interface CaptchaResult {
   key: string
   image: string
   /** 校验形态：缺省按图形处理（后端旧响应没有这个字段） */
-  kind?: 'image' | 'slider'
-  /** 以下四项仅滑块形态返回，单位都是图片像素，前端据此把拖动量换算回校验口径 */
+  kind?: 'image' | 'slider' | 'click'
+  /** 以下各项仅滑块形态返回，单位都是图片像素，前端据此把拖动量换算回校验口径 */
   piece?: string
   pieceTop?: number
   width?: number
   height?: number
   pieceWidth?: number
   pieceHeight?: number
+  /** 以下三项仅点选形态返回：thumb 是候选字条（要求按顺序点选的字），width/height 是主图口径 */
+  thumb?: string
+  thumbWidth?: number
+  thumbHeight?: number
 }

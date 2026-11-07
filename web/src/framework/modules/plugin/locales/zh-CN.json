@@ -83,6 +83,24 @@
     "clearFilters": "清除筛选",
     "market": {
       "search": "搜索插件 / 仓库",
+      "confirmRestart": "此操作会构建前后端并重启服务，期间会短暂中断访问。确认继续？",
+      "modifiedConfirm": "以下插件存在本地改动，或缺少安装基线：{{names}}。继续会先将源码备份到 data/plugins/backups，再覆盖插件目录；不会合并自定义修改。确认允许覆盖？",
+      "pendingActivation": "待构建或重启后核验",
+      "versions": "源码 v{{source}} / 运行 v{{running}}",
+      "environment": {
+        "ready": "当前节点支持源码安装与自动重启",
+        "unavailable": "当前节点暂不能一键安装",
+        "checking": "正在检查构建与重启条件…",
+        "failed": "环境检查失败，安装入口保留但暂不可用，请重试。",
+        "guidance": "插件以源码交付，不是热插拔；生产环境建议在构建机安装并验证，再部署产物。只有具备源码、Go、npm、前端依赖且由 start 托管的节点可在此安装。",
+        "issue": {
+          "source": "缺少完整项目源码。",
+          "go": "未找到 Go 工具链。",
+          "npm": "未找到 npm。",
+          "dependencies": "前端构建依赖未安装。",
+          "restart": "当前进程未由 start 托管，或托管身份不匹配，不能自动重启。"
+        }
+      },
       "install": "安装",
       "update": "重装覆盖",
       "remove": "卸载",
@@ -95,7 +113,7 @@
       "updateAvailable": "有新版本 v{{version}}",
       "updateAll": {
         "button": "全部更新（{{count}}）",
-        "confirm": "共 {{count}} 个插件有更新。每个插件更新都会重建并重启服务，一次装一个、刷新后自动接着装下一个。现在开始？"
+        "confirm": "共 {{count}} 个插件有更新。将全部下载预检，备份并安装后统一构建、只重启一次；构建失败会恢复源码与台账（不回滚数据库）。现在开始？"
       },
       "upload": {
         "button": "上传安装包",
@@ -126,7 +144,10 @@
         "title": "正在处理",
         "desc": "下载 → 安装 → 重建 → 自重启，全过程日志如下；期间请勿关闭页面",
         "running": "执行中…",
-        "restarting": "服务正在重启，等待恢复后自动刷新…",
+        "restarting": "服务正在重启，等待新实例恢复后自动刷新…",
+        "restartTimeout": "尚未确认新实例恢复。请检查服务日志或手动重启；这不代表安装已经成功。",
+        "requestFailed": "暂时无法读取任务状态，尚不能确认安装结果。请检查连接并刷新核验版本。",
+        "verify": "刷新并核验版本",
         "done": "已完成",
         "failed": "失败：请查看日志定位原因",
         "empty": "任务已提交，等待输出…",

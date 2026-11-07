@@ -30,6 +30,9 @@ const (
 	CaptchaLenMin = 4
 	CaptchaLenMax = 8
 	captchaAfterFails = 3
+	// hardAfterFails 是「点选验证码」的升级阈值（滑块阈值的两倍）：连错到这个量级说明
+	// 来者不是手滑——验证形式本身升级成点选，把专攻滑块的自动化工具一并筛出去。
+	hardAfterFails    = captchaAfterFails * 2
 	failWindow        = 15 * time.Minute
 )
 
@@ -89,6 +92,7 @@ func (s *Service) NewCaptcha(ctx context.Context, ip string) (key, dataURI strin
 	if err := s.cache.Set(ctx, captchaKey(key), ip+"|"+text, captchaTTL); err != nil {
 		return "", "", err
 	}
+	captchaIssue(captchaKindImage)
 	return key, "data:image/png;base64," + base64.StdEncoding.EncodeToString(pngBytes), nil
 }
 
@@ -112,9 +116,15 @@ func (s *Service) VerifyCaptcha(ctx context.Context, key, answer, ip string) (bo
 		boundIP, wantText = "", want
 	}
 	if boundIP != "" && subtle.ConstantTimeCompare([]byte(boundIP), []byte(ip)) != 1 {
+		captchaFail(captchaKindImage)
 		return false, nil
 	}
-	return subtle.ConstantTimeCompare([]byte(wantText), []byte(answer)) == 1, nil
+	if subtle.ConstantTimeCompare([]byte(wantText), []byte(answer)) == 1 {
+		captchaPass(captchaKindImage)
+		return true, nil
+	}
+	captchaFail(captchaKindImage)
+	return false, nil
 }
 
 // CaptchaAudio 把同一张图形验证码读成音频（WAV 字节），供视障用户听写。
@@ -162,6 +172,21 @@ func (s *Service) LoginNeedsCaptcha(ctx context.Context, username, ip string) (b
 			return false, err
 		}
 		if n >= captchaAfterFails {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// LoginNeedsHardCaptcha 报告是否该把验证码升级成点选：同一组计数器、更高的硬阈值。
+// 与 LoginNeedsCaptcha 读同一份计数，调用时机在 RecordLoginFailure 之后（计数已含本次）。
+func (s *Service) LoginNeedsHardCaptcha(ctx context.Context, username, ip string) (bool, error) {
+	for _, k := range []string{failUserKey(username), failIPKey(ip)} {
+		n, err := s.failCount(ctx, k)
+		if err != nil {
+			return false, err
+		}
+		if n >= hardAfterFails {
 			return true, nil
 		}
 	}

@@ -8,6 +8,7 @@ package crm
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -63,16 +64,29 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	// 静态段注册在 /customers/:id 之前（与 pay /orders/stats 同一套匹配约定）。
 	g.GET("/customers/export", core.Perm("crm:list"), h.exportCustomers)
 	g.GET("/customers/pool", core.Perm("crm:list"), h.listPool)
+	g.GET("/customers/tags", core.Perm("crm:list"), h.listCustomerTags)
+	g.GET("/customers/fields", core.Perm("crm:list"), h.listFields)
+	// 我的待跟进：到期未完成的跟进记录，静态段注册在 /customers/:id 之前。
+	g.GET("/customers/todos", core.Perm("crm:list"), h.listTodos)
+	// 字段定义是平台共享表（plg_crm_field，全租户共用一份），写入口只认平台级调用方。
+	g.POST("/customers/fields", core.Perm("crm:edit"), core.RequirePlatform(), h.createField)
+	g.PUT("/customers/fields/:id", core.Perm("crm:edit"), core.RequirePlatform(), h.updateField)
+	g.DELETE("/customers/fields/:id", core.Perm("crm:edit"), core.RequirePlatform(), h.deleteField)
+	g.GET("/customers/duplicates", core.Perm("crm:list"), h.listDuplicates)
+	g.POST("/customers/batch-update", core.Perm("crm:edit"), core.Desc("批量修改客户归属/状态/等级"), h.batchUpdateCustomers)
+	g.POST("/customers/batch-tags", core.Perm("crm:edit"), core.Desc("批量给客户追加标签"), h.batchAddTags)
 	g.GET("/customers/:id", core.Perm("crm:list"), h.getCustomer)
 	// 明文证件号：权限点归 realname 插件，且每次查看都进操作日志。
 	g.GET("/customers/:id/idcard", core.Perm(PermRevealID), d.OperLogMiddleware("crm", "reveal-id"), h.revealID)
 	g.POST("/customers", core.Perm("crm:edit"), h.createCustomer)
 	g.PUT("/customers/:id", core.Perm("crm:edit"), h.updateCustomer)
+	g.PUT("/customers/:id/tags", core.Perm("crm:edit"), h.setCustomerTags)
 	g.DELETE("/customers/:id", core.Perm("crm:edit"), h.deleteCustomer)
 	g.DELETE("/customers", core.Perm("crm:edit"), core.Desc("批量删除客户（连带联系人与跟进）"), h.deleteCustomers)
 	g.POST("/customers/bind-external", core.Perm("crm:edit"), h.bindExternal)
 	// 静态段 merge 注册在 /customers/:id 之前。
 	g.POST("/customers/merge", core.Perm("crm:edit"), core.Desc("合并重复客户（关联记录整体迁移）"), h.mergeCustomers)
+	g.POST("/customers/merge-preview", core.Perm("crm:edit"), h.previewMerge)
 	g.GET("/customers/resolve-external", core.Perm("crm:list"), h.resolveExternal)
 	// 公海：领取/释放是独立权限点——能编辑客户不等于能动归属。
 	g.POST("/customers/:id/claim", core.Perm("crm:pool"), h.claimCustomer)
@@ -94,8 +108,43 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.DELETE("/activities/:id", core.Perm("crm:edit"), h.deleteActivity)
 }
 
-// Start 实现 plugin.Starter：crm 无后台任务，保留扩展点。
+// Start 实现 plugin.Starter：注入通知与时区，并启动到期待办的提醒清扫。
 func (m *module) Start(ctx context.Context, d *core.Deps) error {
-	m.service(d)
+	s := m.service(d)
+	// 站内信：待跟进到期提醒归属人；未注入时业务照常。
+	if d.Notify != nil {
+		lang := ""
+		if d.Config != nil {
+			lang = d.Config.DefaultLanguage()
+		}
+		s.WithNotify(d.Notify, lang)
+	}
+	if d.Config != nil {
+		s.WithTimezone(d.Config.App.Timezone)
+	}
+	// 清扫：启动先扫一遍（重启后接上欠账），之后每 30 分钟一次。next_at 是日期粒度，
+	// 一天多次扫只为「当天新建的到期待办」也能及时提醒，不需要更密。
+	go func() {
+		sweep := func() {
+			n, err := s.SweepReminders(ctx, time.Now())
+			switch {
+			case err != nil:
+				s.log.Warn("crm: todo reminder sweep failed", "err", err.Error())
+			case n > 0 && d.Log != nil:
+				d.Log.Sugar().Infow("crm: todo reminders sent", "count", n)
+			}
+		}
+		sweep()
+		t := time.NewTicker(30 * time.Minute)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				sweep()
+			}
+		}
+	}()
 	return nil
 }

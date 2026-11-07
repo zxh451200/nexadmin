@@ -53,8 +53,10 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	if d.OnClose != nil {
 		d.OnClose(func() { auth.SetRegisterEnabledSource(nil) })
 	}
-	// 「登录验证码」的运行时开关来自「参数设置」的 login.captcha_enabled（出厂 true = 默认强制）；
-	// 关闭后回落到自适应策略（连续失败达到阈值才要求）。/auth/login 与 /auth/methods 都从这里取。
+	// 「登录验证码」的运行时开关来自「参数设置」的 login.captcha_enabled（出厂 false = 无感优先，
+	// 同用户名或同 IP 连续失败达到阈值才要求）。注入的 fallback 只在读库失败时兜底，刻意保持
+	// true（fail-closed）：拿不到配置时宁可多要一次验证码，也不给脚本敞门。/auth/login 与
+	// /auth/methods 都从这里取。
 	auth.SetLoginCaptchaSource(svc.loginCaptchaSourceFn(true))
 	if d.OnClose != nil {
 		d.OnClose(func() { auth.SetLoginCaptchaSource(nil) })
@@ -112,7 +114,7 @@ var factoryRows = []struct {
 	{3, "版权信息", "site.copyright", "© 2026 NexAdmin", TypeString, true, "页脚展示"},
 	{4, "用户初始密码", "user.default_password", "Nex@123456", TypeString, false, "新建用户及重置密码时使用"},
 	{5, "开放注册", "user.register_enabled", "false", TypeBoolean, true, ""},
-	{6, "登录验证码", "login.captcha_enabled", "true", TypeBoolean, true, "开启=登录必须先过图形验证码；关闭=连续失败达到阈值后才要求"},
+	{6, "登录验证码", "login.captcha_enabled", "false", TypeBoolean, true, "开启=登录必须先过验证码（滑块或图形）；关闭=同用户名或同 IP 连续失败达到阈值后才要求（出厂默认，无感优先）"},
 	{9, "登录验证码位数", "login.captcha_length", strconv.Itoa(auth.CaptchaLenDefault), TypeNumber, true,
 		// 出厂值与上下限都取自 core/auth：改一处三处（默认值、保存校验、运行时钳制）不会分家。
 		fmt.Sprintf("%d-%d 位；改后对新生成的验证码生效", auth.CaptchaLenMin, auth.CaptchaLenMax)},

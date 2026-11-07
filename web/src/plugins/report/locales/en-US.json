@@ -222,7 +222,13 @@
       "deleteConfirm": "Delete dataset \"{{name}}\"? It cannot be deleted while charts still use it.",
       "deleteBatchConfirm": "Delete the {{count}} selected dataset(s)? Any still used by charts will be left in place.",
       "deletedPartial": "Deleted {{deleted}} of {{total}} dataset(s) (the rest are still used by charts or already gone)",
-      "safeHint": "Choose only from the admin-approved tables and fields. Raw SQL is not supported. The current tenant condition is added to every query automatically."
+      "safeHint": "Choose only from the admin-approved tables and fields. Raw SQL is not supported. The current tenant condition is added to every query automatically.",
+      "joinN": "Joined table {{n}}",
+      "addJoin": "Add joined table",
+      "joinTable": "Joined table",
+      "joinLeft": "Left column (this table)",
+      "joinRight": "Right column (joined table)",
+      "joinHint": "Once declared, its columns can be checked above (referenced as “table.column”). Inner equi-join; both sides are tenant-filtered."
     },
     "chart": {
       "create": "New chart",

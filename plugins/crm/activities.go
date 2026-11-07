@@ -145,3 +145,16 @@ func (s *Service) DeleteActivity(ctx context.Context, sc *datascope.Scope, id id
 	}
 	return s.db.WithContext(ctx).Delete(&Activity{}, id).Error
 }
+
+// noteSystem 往客户时间线写一条系统留痕（归属变更/合并/标签/批量操作等）。
+// author 取当前账号（内部调用可为空）；写入失败只记日志不拦主操作——主数据已经落了，
+// 留痕是锦上添花。内容是存档文本，按部署主语言（中文）落库。
+func (s *Service) noteSystem(ctx context.Context, customerID idgen.ID, content string) {
+	a := Activity{CustomerID: customerID, Kind: KindSystem, Content: truncate(content, 2000)}
+	if _, name, ok := auth.UserFromContext(ctx); ok {
+		a.Author = truncate(name, 64)
+	}
+	if err := s.db.WithContext(ctx).Create(&a).Error; err != nil && s.log != nil {
+		s.log.Warn("crm: record system activity failed", "customerId", customerID.String(), "err", err.Error())
+	}
+}

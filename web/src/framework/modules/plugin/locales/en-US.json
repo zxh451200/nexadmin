@@ -83,6 +83,24 @@
     "clearFilters": "Clear filters",
     "market": {
       "search": "Search plugins / repos",
+      "confirmRestart": "This operation builds the frontend and backend and restarts the service, briefly interrupting access. Continue?",
+      "modifiedConfirm": "These plugins have local changes or no installation baseline: {{names}}. Continuing backs up the source to data/plugins/backups before replacing the plugin directories; custom changes are not merged. Allow overwrite?",
+      "pendingActivation": "Build or restart, then verify",
+      "versions": "Source v{{source}} / running v{{running}}",
+      "environment": {
+        "ready": "This node supports source installation and automatic restart",
+        "unavailable": "One-click installation is unavailable on this node",
+        "checking": "Checking build and restart prerequisites…",
+        "failed": "Environment check failed. Installation controls remain visible but unavailable; retry the check.",
+        "guidance": "Plugins ship as source, not hot-loadable binaries. For production, install and verify on a build machine, then deploy the artifacts. Installing here requires source, Go, npm, frontend dependencies and a service managed with start.",
+        "issue": {
+          "source": "Complete project source is missing.",
+          "go": "Go toolchain was not found.",
+          "npm": "npm was not found.",
+          "dependencies": "Frontend build dependencies are not installed.",
+          "restart": "This process is not managed with start, or its managed identity does not match; automatic restart is unavailable."
+        }
+      },
       "install": "Install",
       "update": "Reinstall",
       "remove": "Uninstall",
@@ -95,7 +113,7 @@
       "updateAvailable": "Update available: v{{version}}",
       "updateAll": {
         "button": "Update all ({{count}})",
-        "confirm": "{{count}} plugins have updates. Each update rebuilds and restarts the service; they run one at a time and continue automatically after each restart. Start now?"
+        "confirm": "{{count}} plugins have updates. All packages are downloaded and checked first, backed up and installed, then built and restarted once. Build failure restores source and the installation ledger, not the database. Start now?"
       },
       "upload": {
         "button": "Upload package",
@@ -126,7 +144,10 @@
         "title": "Working",
         "desc": "Download → install → rebuild → restart. Full log below; keep this page open",
         "running": "Running…",
-        "restarting": "Service is restarting, waiting for it to come back…",
+        "restarting": "Service is restarting, waiting for a new instance…",
+        "restartTimeout": "A new running instance has not been confirmed. Check service logs or restart manually; installation success is not confirmed.",
+        "requestFailed": "Task status is unavailable, so the installation result is not confirmed. Check the connection and refresh to verify versions.",
+        "verify": "Refresh and verify versions",
         "done": "Done",
         "failed": "Failed: check the log for details",
         "empty": "Job submitted, waiting for output…",

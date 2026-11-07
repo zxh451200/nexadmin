@@ -9,6 +9,7 @@ package crm
 import (
 	"context"
 	"strings"
+	"time"
 
 	"gorm.io/gorm"
 
@@ -18,7 +19,7 @@ import (
 	"nexadmin/pkg/idgen"
 )
 
-// applyCustomerFilter 是客户列表/公海/导出共用的业务筛选（关键词与类型/状态/来源）。
+// applyCustomerFilter 是客户列表/公海/导出共用的业务筛选（关键词与类型/状态/来源/等级/标签/建档时间）。
 // 数据范围与「只看我的」是调用方的语义，不在这里。
 func applyCustomerFilter(db *gorm.DB, q CustomerQuery) *gorm.DB {
 	if kw := strings.TrimSpace(q.Keyword); kw != "" {
@@ -35,6 +36,25 @@ func applyCustomerFilter(db *gorm.DB, q CustomerQuery) *gorm.DB {
 	}
 	if q.Source != "" {
 		db = db.Where("external_source = ?", q.Source)
+	}
+	if q.Level != "" {
+		db = db.Where("level = ?", q.Level)
+	}
+	// 标签按逗号边界匹配：存储是「,a,b,」，查「vip」时 LIKE '%,vip,%' 不会命中 viptag。
+	// 两侧 LOWER 折叠大小写（PG 的 LIKE 区分大小写；标签词大小写本来就不承载语义）。
+	if tag := strings.TrimSpace(q.Tag); tag != "" {
+		db = db.Where("LOWER(tags) LIKE LOWER(?)", "%,"+tag+",%")
+	}
+	// 建档时间范围：to 按天取，含端点（< to+1day）。
+	if q.CreatedFrom != "" {
+		if t, err := time.Parse("2006-01-02", q.CreatedFrom); err == nil {
+			db = db.Where("created_at >= ?", t)
+		}
+	}
+	if q.CreatedTo != "" {
+		if t, err := time.Parse("2006-01-02", q.CreatedTo); err == nil {
+			db = db.Where("created_at < ?", t.AddDate(0, 0, 1))
+		}
 	}
 	return db
 }
@@ -85,6 +105,7 @@ func (s *Service) ClaimCustomer(ctx context.Context, id idgen.ID) (*Customer, er
 	if err := s.db.WithContext(ctx).Take(&c, id).Error; err != nil {
 		return nil, err
 	}
+	s.noteSystem(ctx, id, "从公海领取客户")
 	return &c, nil
 }
 
@@ -98,9 +119,11 @@ func (s *Service) ReleaseCustomer(ctx context.Context, sc *datascope.Scope, id i
 	if c.Owner == "" {
 		return c, nil
 	}
+	previousOwner := c.Owner
 	if err := s.db.WithContext(ctx).Model(&Customer{}).Where("id = ?", int64(id)).Update("owner", "").Error; err != nil {
 		return nil, err
 	}
 	c.Owner = ""
+	s.noteSystem(ctx, id, "释放回公海（原归属："+previousOwner+"）")
 	return c, nil
 }

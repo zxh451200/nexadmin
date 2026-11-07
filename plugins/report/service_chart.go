@@ -56,13 +56,13 @@ func chartView(c Chart) ChartView {
 		CreatedAt: c.CreatedAt.UTC().Format(timeFmt), UpdatedAt: c.UpdatedAt.UTC().Format(timeFmt)}
 }
 
-// datasetTarget 读取数据集并解析成查询目标（每次都重新过白名单/拒绝列表）。
+// datasetTarget 读取数据集并解析成查询目标（每次都重新过白名单/拒绝列表，含声明的关联）。
 func (s *Service) datasetTarget(ctx context.Context, id idgen.ID) (*DatasetConfig, *Target, error) {
 	ds, cfg, err := s.loadDataset(ctx, id)
 	if err != nil {
 		return nil, nil, err
 	}
-	tg, err := s.reg.Target(ds.Source, cfg.Columns)
+	tg, err := s.reg.DatasetTarget(ds.Source, cfg.Columns, cfg.Joins)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -108,6 +108,8 @@ export interface MarketEntry {
   /** 随二进制编译进来的内置插件（不在安装台账里）：市场页只展示，不给覆盖/卸载 */
   bundled: boolean
   installedVersion?: string
+  sourceVersion?: string
+  needRestart?: boolean
   /** 运行期授权状态；未注册为空 */
   status?: string | null
 }
@@ -143,8 +145,35 @@ export function useMarketJob(id: string | null) {
 
 export function useInstallPlugin() {
   return useMutation({
-    mutationFn: ({ id, force }: { id: string; force?: boolean }) =>
-      api.post<{ jobId: string }>('/plugins/market/install', { id, force }),
+    mutationFn: ({ id, force, allowModified }: { id: string; force?: boolean; allowModified?: boolean }) =>
+      api.post<{ jobId: string }>('/plugins/market/install', { id, force, allowModified }),
+  })
+}
+
+export interface MarketEnvironment {
+  ready: boolean
+  canRestart: boolean
+  issues: string[]
+}
+
+export interface PluginUpdateStatus {
+  exists: boolean
+  modified: boolean
+  baselineKnown: boolean
+}
+
+export function useMarketEnvironment() {
+  return useQuery({ queryKey: ['plugins', 'environment'], queryFn: () => api.get<MarketEnvironment>('/plugins/market/environment') })
+}
+
+export function useCheckPluginUpdates() {
+  return useMutation({ mutationFn: (ids: string[]) => api.post<Record<string, PluginUpdateStatus>>('/plugins/market/check', { ids }) })
+}
+
+export function useInstallPluginBatch() {
+  return useMutation({
+    mutationFn: ({ ids, allowModified }: { ids: string[]; allowModified: boolean }) =>
+      api.post<{ jobId: string }>('/plugins/market/install-batch', { ids, allowModified }),
   })
 }
 

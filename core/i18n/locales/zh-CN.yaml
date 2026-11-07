@@ -261,12 +261,25 @@ crm:
   export_too_many: 导出超过 10000 行上限，请缩小筛选范围
   country_invalid: 国家/地区代码需为 2 位字母（ISO 3166-1 alpha-2，如 CN、US）
   nationality_invalid: 国籍代码需为 2 位字母（ISO 3166-1 alpha-2，如 CN、US）
+  tag_invalid: 标签最多 10 个、每个不超过 20 字，且不能含逗号
+  ids_required: 请先选择要操作的客户
+  batch_nothing: 请选择要批量修改的字段（归属/状态/等级至少一项）
+  owner_invalid: 归属人不能为空（最长 64 字）
   customer_in_use: 客户名下还有商机，不能删除
   not_found: 客户或商机不存在
   contact_name_required: 联系人姓名不能为空
   contact_customer_mismatch: 联系人不属于该客户（清空所属客户时需一并清空联系人）
   activity_content_required: 跟进内容不能为空
   activity_kind_invalid: 跟进类型无效
+  todo_notify_title: "客户跟进提醒：有 %d 条待跟进到期"
+  todo_notify_content: "待跟进客户：%s"
+  field_code_invalid: 字段编码只能用小写字母开头的字母/数字/下划线（≤32 位）
+  field_label_required: 字段名称不能为空（≤64 字）
+  field_type_invalid: 字段类型无效
+  field_option_invalid: 候选项最多 50 个、每个不超过 64 字，且不能含逗号；单选必须至少一个候选项
+  field_value_invalid: 字段值不符合该字段的类型要求
+  field_required: 必填的自定义字段还没有填
+  field_code_conflict: 已存在同编码的自定义字段
   date_invalid: 日期格式必须是 YYYY-MM-DD
   plugin_inactive: 客户主数据插件未启用或授权已失效
 aigateway:
@@ -523,6 +536,8 @@ plugin:
   not_found: "插件不存在"
   disabled: "插件未启用"
   market_not_found: "市场目录里没有该插件"
+  environment_unavailable: "当前节点不能执行插件构建与自动重启（%s）；请在具备源码和工具链的构建环境安装验证后部署，或使用 start 托管服务后重试"
+  market_ids_invalid: "请选择 1 至 64 个不重复的合法插件 ID"
   upload_file_required: "请选择要上传的安装包"
   upload_too_large: "安装包超过 %dMB 上限"
   upload_zip_only: "只能上传 .zip 安装包"
@@ -737,6 +752,7 @@ website:
   home_slug_missing: "设为首页的页面不存在，请先在「页面管理」创建"
   notify_inquiry_title: "官网留言：%s 发来新询盘"
   notify_content_empty: "（空）"
+  joins_too_many: "一张数据集最多声明 2 张关联表"
 codegen:
   table_not_found: "数据表不存在：%s"
   invalid_input: "参数不正确，请检查后重试"

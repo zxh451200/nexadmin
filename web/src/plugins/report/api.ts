@@ -28,19 +28,28 @@ export interface Filter {
   value: unknown
 }
 
+/** 数据集声明的一条等值内连接：主表.left = table.right（表与列都必须在白名单内）。 */
+export interface DatasetJoin {
+  table: string
+  left: string
+  right: string
+}
+
 export interface Dataset {
   id: string
   name: string
   source: string
   columns: string[]
   filters: Filter[]
+  /** 声明的关联表（≤2）；columns 里可出现 "关联表.列" 形态的引用 */
+  joins?: DatasetJoin[]
   remark: string
   /** 编辑器下拉接口附带：所选列的元数据（label/type），图表与报表编辑者无需读取完整白名单 */
   fields?: SourceCol[]
   createdAt: string
   updatedAt: string
 }
-export type DatasetForm = Pick<Dataset, 'name' | 'source' | 'columns' | 'filters' | 'remark'>
+export type DatasetForm = Pick<Dataset, 'name' | 'source' | 'columns' | 'filters' | 'joins' | 'remark'>
 
 export interface ChartConfig {
   dimensions: { column: string; bucket?: Bucket }[]

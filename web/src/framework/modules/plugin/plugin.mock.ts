@@ -104,6 +104,26 @@ defineMock([
       }),
   },
   {
+    method: 'GET',
+    url: '/plugins/market/environment',
+    handler: () => ({ ready: true, canRestart: true, issues: [] }),
+  },
+  {
+    method: 'POST',
+    url: '/plugins/market/check',
+    handler: ({ body }) => Object.fromEntries(((body?.ids ?? []) as string[]).map((id) => [id, { exists: mockLedger.has(id), modified: false, baselineKnown: true }])),
+  },
+  {
+    method: 'POST',
+    url: '/plugins/market/install-batch',
+    handler: ({ body }) => startMockJob('', 'install', (body?.ids ?? []) as string[]),
+  },
+  {
+    method: 'POST',
+    url: '/plugins/market/upload',
+    handler: () => startMockJob('', 'install'),
+  },
+  {
     method: 'POST',
     url: '/plugins/market/install',
     handler: ({ body }): { jobId: string } => startMockJob(String(body?.id ?? ''), 'install'),
@@ -163,6 +183,7 @@ const catalog: Omit<MarketEntry, 'installed' | 'bundled'>[] = [
 ]
 
 const mockJobs = new Map<string, MarketJob>()
+const mockJobTargets = new Map<string, string[]>()
 let mockJobSeq = 0
 // 安装台账（真后端在 data/ 下的 json）：只有这里的 id 算「本机装过」，其余注册表里的是内置。
 const mockLedger = new Set<string>()
@@ -182,10 +203,11 @@ const MOCK_STEPS: Record<MarketJob['kind'], (id: string) => string[]> = {
   rebuild: () => ['$ 构建前端', '$ go mod tidy', '$ go build', '二进制已替换', '2 秒后重启服务…'],
 }
 
-function startMockJob(id: string, kind: MarketJob['kind']): { jobId: string } {
+function startMockJob(id: string, kind: MarketJob['kind'], ids: string[] = id ? [id] : []): { jobId: string } {
   mockJobSeq += 1
   const job: MarketJob = { id: `${kind}-${mockJobSeq}-${id}`, kind, state: 'running', log: [] }
   mockJobs.set(job.id, job)
+  mockJobTargets.set(job.id, ids)
   return { jobId: job.id }
 }
 
@@ -202,8 +224,7 @@ function pollMockJob(jobId: string): MarketJob {
   } else {
     job.state = 'done'
     // 任务跑完才改台账：市场页下一次拉取就能看到「已安装 / 内置」的换位
-    const target = jobId.split('-').pop() ?? ''
-    if (target) {
+    for (const target of mockJobTargets.get(jobId) ?? []) {
       if (job.kind === 'install') mockLedger.add(target)
       if (job.kind === 'remove') mockLedger.delete(target)
     }

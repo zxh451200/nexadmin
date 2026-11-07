@@ -11,7 +11,8 @@
     },
     "tabs": {
       "customers": "客户",
-      "opportunities": "线索/商机"
+      "opportunities": "线索/商机",
+      "stats": "统计"
     },
     "all": "全部",
     "filter": {
@@ -19,7 +20,58 @@
       "allSources": "全部来源",
       "allStatuses": "全部状态",
       "allOwners": "全部负责人",
+      "allLevels": "全部等级",
+      "allTags": "全部标签",
+      "createdFrom": "建档从",
+      "createdTo": "建档到",
+      "sortKey": "排序字段",
+      "sortDefault": "默认排序（新建在前）",
+      "sortDir": "切换为{{dir}}",
       "allStages": "全部阶段"
+    },
+    "sort": {
+      "asc": "升序",
+      "desc": "降序",
+      "created_at": "按建档时间",
+      "name": "按客户名称",
+      "code": "按客户编码",
+      "level": "按等级",
+      "owner": "按负责人"
+    },
+    "duplicates": {
+      "action": "疑似重复",
+      "title": "疑似重复客户",
+      "hint": "同手机号 / 证件号 / 信用代码挂了多个客户。保存时的查重拦不住历史数据——确认是同一家的，用工具栏「合并」收拢成一个。",
+      "empty": "没有发现疑似重复：每把身份证据都只挂了一个客户。",
+      "count": "{{count}} 个客户",
+      "mergeHint": "确认后用工具栏「合并」收拢",
+      "key": {
+        "phone": "同手机号",
+        "id_no": "同证件号",
+        "tax_no": "同信用代码"
+      }
+    },
+    "batch": {
+      "title": "批量操作",
+      "assignToMe": "派给我",
+      "setLevel": "等级改为 {{level}}",
+      "addTags": "追加标签…",
+      "updated": "已更新 {{updated}} 个客户（不在你范围内的已跳过）"
+    },
+    "todos": {
+      "action": "待跟进",
+      "title": "我的待跟进",
+      "hint": "到期未完成的跟进记录，按到期日排——先处理拖得最久的。",
+      "empty": "没有到期的待跟进。给跟进记录填「下次跟进日期」，到期待办会出现在这里。",
+      "overdue": "已过期",
+      "open": "查看客户",
+      "total": "共 {{total}} 条，最多显示 200 条"
+    },
+    "tags": {
+      "title": "「{{name}}」的标签",
+      "batchTitle": "给 {{count}} 个客户追加标签",
+      "inputPlaceholder": "输入标签，回车添加（最多 10 个、每个 20 字）",
+      "suggestions": "常用："
     },
     "empty": "暂无数据",
     "mineOnly": "只看我的",
@@ -33,7 +85,11 @@
     },
     "stats": {
       "openDeals": "在途商机",
-      "pool": "公海客户"
+      "pool": "公海客户",
+      "createdSeries": "新建客户",
+      "bySource": "客户来源分布",
+      "byStage": "商机阶段分布",
+      "byStageAmount": "商机金额"
     },
     "searchPlaceholder": "客户名称 / 编码 / 证件号 / 信用代码 / 外部编号",
     "nameRequired": "请填写客户名称",
@@ -74,7 +130,8 @@
       "hotel": "酒店系统",
       "mall": "商城系统",
       "order": "订单系统",
-      "manual": "手工指定编号"
+      "manual": "手工指定编号",
+      "none": "无锚点（手工录入）"
     },
     "picker": {
       "country": "请选择国家/地区",
@@ -105,6 +162,10 @@
       "industry": "所属行业",
       "address": "注册地址",
       "remark": "备注",
+      "tags": "标签",
+      "custom": "自定义字段",
+      "manage": "自定义字段",
+      "platformOnly": "自定义字段的定义是平台级配置，仅平台管理员可改",
       "customerId": "所属客户",
       "contact": "主对接联系人",
       "contactName": "联系人姓名",
@@ -128,10 +189,44 @@
         "company": "与营业执照上的名称一致"
       },
       "taxNoPlaceholder": "18 位统一社会信用代码",
-      "typeHintPerson": "个人客户以证件识别：国籍 + 证件类型/号码可对上酒店入住、跨境订单的实名信息。国家/地区存的都是 ISO 代码，名称按界面语言显示。",
+      "typeHintPerson": "个人客户以证件识别：国籍 + 证件类型/号码可对上酒店入住、跨境订单的实名信息。",
+      "nationalityHint": "法定国籍（人是哪国人），与证件类型/号码配套用于实名",
+      "countryHint": "客户所在国家/地区（人在哪），个人与企业通用；ISO 代码按界面语言显示",
       "typeHintCompany": "企业客户以统一社会信用代码识别；具体对接的人记在下方「联系人」里，一人一条，商机的默认对接人也从那里选。",
       "codeHint": "客户编码留空会自动生成（C- 前缀），仅用于列表展示与搜索；也可以填你们自己的编号。等级只影响展示，不做业务判定。",
       "anchorHint": "选择外部系统并填写对方系统的客户编号后，该会员会对应到同一个客户；创建后不可修改。",
+      "field": {
+        "title": "自定义字段",
+        "hint": "给所有客户加业务附加信息（如会员来源、意向等级）。值随客户保存，删除定义不清洗已存的历史值。",
+        "add": "新建字段",
+        "empty": "还没有自定义字段。",
+        "label": "字段名称",
+        "codeLabel": "编码（提交后不可改）",
+        "codeHint": "小写字母开头的字母/数字/下划线，≤32 位；用于导出表头与检索",
+        "typeLabel": "类型",
+        "optionsLabel": "候选项",
+        "optionsPlaceholder": "选项1,选项2,选项3",
+        "optionsHint": "逗号分隔；单选值必须精确命中其中一项",
+        "sortLabel": "显示顺序（小的在前）",
+        "required": "必填",
+        "enabledLabel": "启用",
+        "disabled": "已停用",
+        "deleteConfirm": "删除自定义字段「{{label}}」？已存的值只是不再显示，不会被清洗。",
+        "type": {
+          "text": "文本",
+          "number": "数字",
+          "select": "单选",
+          "date": "日期",
+          "bool": "是/否"
+        }
+      },
+      "merge": {
+        "previewTitle": "合并预览",
+        "migrateSummary": "将从客户带走：联系人 {{contacts}} 条、商机 {{opportunities}} 个、跟进记录 {{activities}} 条。",
+        "fillTitle": "主客户空着、将从客户补上的字段",
+        "noFill": "两边主数据没有互补的空字段。",
+        "tagsTitle": "从客户带入的标签"
+      },
       "notBound": "未绑定",
       "bind": "绑定外部系统",
       "bindHint": "绑定后该外部会员会对应到同一个客户；绑定关系创建后不可修改。",

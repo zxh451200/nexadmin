@@ -142,8 +142,13 @@ func (h *Handler) LoginVerify(c *gin.Context) {
 // ReasonCaptchaRequired 是登录响应里的 reason：前端据此显示图形验证码输入。
 const ReasonCaptchaRequired = "CAPTCHA_REQUIRED"
 
+// ReasonCaptchaRequiredHard 是升级档 reason：失败计数达到硬阈值（hardAfterFails），
+// 前端把默认形态从滑块换成点选——来者连滑块都过不了还坚持在试，值得更重的形式。
+const ReasonCaptchaRequiredHard = "CAPTCHA_REQUIRED_HARD"
+
 // afterLoginFailure 只对“用户名或密码错误”计数（账号锁定等其它错误原样返回，锁定逻辑由 Provider 负责）；
-// 达到阈值时在同一个错误上带 reason，下一次请求起要求验证码。对存在与不存在的账号完全一致。
+// 达到阈值时在同一个错误上带 reason，下一次请求起要求验证码（滑块）；达到硬阈值则升级为
+// 点选档 reason。对存在与不存在的账号完全一致。
 func (h *Handler) afterLoginFailure(c *gin.Context, req LoginRequest, err error, pwd bool) error {
 	var e *response.Error
 	if !pwd || !errors.As(err, &e) || e.Key != "auth.invalid_credentials" {
@@ -154,7 +159,16 @@ func (h *Handler) afterLoginFailure(c *gin.Context, req LoginRequest, err error,
 		return err
 	}
 	cp := *e
-	cp.Reason = ReasonCaptchaRequired
+	hard, herr := h.Svc.LoginNeedsHardCaptcha(c.Request.Context(), req.Username, req.IP)
+	if herr != nil {
+		hard = false // 判级失败不拦升级路径：回落到滑块档，验证码照常要求
+	}
+	if hard {
+		cp.Reason = ReasonCaptchaRequiredHard
+	} else {
+		cp.Reason = ReasonCaptchaRequired
+	}
+	captchaEscalate(hard)
 	return &cp
 }
 
@@ -227,6 +241,47 @@ func (h *Handler) SliderVerify(c *gin.Context) {
 		case errors.Is(err, errSliderFailed):
 			response.Fail(c, response.BadRequest("auth.captcha_invalid"))
 		case errors.Is(err, errSliderUnavailable):
+			response.Fail(c, response.NotFound("auth.captcha_invalid"))
+		default:
+			response.Fail(c, err)
+		}
+		return
+	}
+	response.OK(c, gin.H{"token": token})
+}
+
+// ClickCaptcha GET /auth/click：点选挑战（第三档），返回 {key, image, thumb, width, height,
+// thumbWidth, thumbHeight}——点位只存服务端，与滑块同一套下发口径。
+func (h *Handler) ClickCaptcha(c *gin.Context) {
+	key, img, thumb, w, ht, tw, th, err := h.Svc.NewClickCaptcha(c.Request.Context(), c.ClientIP())
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	c.Header("Cache-Control", "no-store")
+	response.OK(c, gin.H{
+		"key": key, "image": img, "thumb": thumb,
+		"width": w, "height": ht, "thumbWidth": tw, "thumbHeight": th,
+	})
+}
+
+// ClickVerify POST /auth/click/verify  body: {key, dots:[{x,y}]}
+// 与 SliderVerify 同一套响应形状：通过 {token}（走 captchaKey 消费通道），失败统一
+// auth.captcha_invalid，不区分子原因也不泄露挑战是否还存在。
+func (h *Handler) ClickVerify(c *gin.Context) {
+	var body struct {
+		Key  string       `json:"key"`
+		Dots []clickPoint `json:"dots"`
+	}
+	if !response.BindJSON(c, &body) {
+		return
+	}
+	token, err := h.Svc.VerifyClickCaptcha(c.Request.Context(), body.Key, body.Dots, c.ClientIP())
+	if err != nil {
+		switch {
+		case errors.Is(err, errClickFailed):
+			response.Fail(c, response.BadRequest("auth.captcha_invalid"))
+		case errors.Is(err, errClickUnavailable):
 			response.Fail(c, response.NotFound("auth.captcha_invalid"))
 		default:
 			response.Fail(c, err)

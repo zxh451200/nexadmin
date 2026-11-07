@@ -1,37 +1,55 @@
-import { useState, type ReactNode } from 'react'
-import { Combine, Download, Eye, Hand, Pencil, Plus, Trash2, UserMinus } from 'lucide-react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { ArrowDownUp, CalendarClock, Combine, CopyPlus, Download, Eye, Hand, Pencil, Plus, Settings2, Tag as TagIcon, Trash2, UserMinus, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+import { useQueryClient } from '@tanstack/react-query'
+import { useAuth } from '@/framework/auth/useAuth'
 import { Can } from '@/framework/auth/Can'
+import { usePermission } from '@/framework/auth/usePermission'
 import { CountrySelect, useCountryNames } from '@/framework/components/CountrySelect'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
+import { DatePicker } from '@/framework/components/DatePicker'
 import { DataTable, type Column } from '@/framework/components/DataTable'
-import { StatCard } from '@/framework/components/StatCard'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { RequiredMark } from '@/framework/components/RequiredMark'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/framework/ui/dropdown-menu'
 import { Input } from '@/framework/ui/input'
 import { Label } from '@/framework/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/framework/ui/radio-group'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
+import { Skeleton } from '@/framework/ui/skeleton'
+import { Switch } from '@/framework/ui/switch'
 import { Textarea } from '@/framework/ui/textarea'
 import {
+  fetchCustomer,
   fetchCustomersForExport,
+  useBatchAddCustomerTags,
+  useBatchUpdateCustomers,
   useClaimCustomer,
-  useCrmStats,
+  useCustomerDuplicates,
+  useCustomerTodos,
   useCustomerPool,
+  useCustomerTags,
   useRevealIdNo,
   useBindExternal,
   useCustomers,
   useDeleteCustomer,
   useDeleteCustomers,
   useMergeCustomers,
+  useMergePreview,
   useOpportunities,
   useReleaseCustomer,
   useSaveCustomer,
+  useSaveCustomerField,
+  useDeleteCustomerField,
+  useCustomerFields,
+  useSetCustomerTags,
   type CrmCustomer,
+  type CrmField,
   type IdNoReveal,
   type CrmCustomerForm,
   type CustomerQuery,
@@ -54,11 +72,38 @@ const STATUSES = ['active', 'inactive'] as const
 // 等级是收口过的三档；历史/导入数据里的其它值在编辑时仍原样保留。
 const LEVELS = ['A', 'B', 'C'] as const
 
+// 排序白名单与后端 customerSortCols 同一套键；created_at 是默认口径（新建在前），仍列出可选
+const SORT_KEYS = ['created_at', 'name', 'code', 'level', 'owner'] as const
+
 // 客户类型与证件类型：与后端 TypeSet / IdTypeSet 同一套码。
 const TYPES: CustomerType[] = ['person', 'company']
 const ID_TYPES = ['id_card', 'passport', 'officer_card', 'hmt_permit', 'other'] as const
 
 const isLinked = (cu: CrmCustomer) => !!cu.externalSource && !!cu.externalNo
+
+// 合并预览里「将补空的字段」的列名 → 展示名（与 fields.* 同一份文案，不造第二套）
+const MERGE_FIELD_LABELS: Record<string, string> = {
+  level: 'plugin_crm.fields.level',
+  owner: 'plugin_crm.fields.owner',
+  phone: 'plugin_crm.fields.phone',
+  email: 'plugin_crm.fields.email',
+  remark: 'plugin_crm.fields.remark',
+  nationality: 'plugin_crm.fields.nationality',
+  id_type: 'plugin_crm.fields.idType',
+  id_no: 'plugin_crm.fields.idNo',
+  tax_no: 'plugin_crm.fields.taxNo',
+  industry: 'plugin_crm.fields.industry',
+  address: 'plugin_crm.fields.address',
+  country: 'plugin_crm.fields.country',
+  external_source: 'plugin_crm.fields.externalSource',
+  external_no: 'plugin_crm.fields.externalNo',
+  tags: 'plugin_crm.fields.tags',
+}
+
+function mergeFieldLabel(col: string, t: (key: string) => string) {
+  const key = MERGE_FIELD_LABELS[col]
+  return key ? t(key) : col
+}
 
 // 类型徽标：客户是个人还是单位，列表、详情、商机三处都要一眼分得清。
 export function TypeBadge({ type }: { type?: CustomerType }) {
@@ -102,6 +147,7 @@ function CustomerFormDialog({
           industry: editing.industry,
           address: editing.address,
           remark: editing.remark,
+          custom: (editing.customValues ?? {}) as CrmCustomerForm['custom'],
         }
       : { type: 'person' },
   )
@@ -246,6 +292,7 @@ function CustomerFormDialog({
                   onChange={(v) => set({ country: v })}
                   placeholder={t('plugin_crm.picker.country')}
                 />
+                <span className="text-[11px] text-muted-foreground">{t('plugin_crm.customer.countryHint')}</span>
               </label>
               <label className="flex flex-col gap-1">
                 {t('plugin_crm.fields.address')}
@@ -263,6 +310,7 @@ function CustomerFormDialog({
                   onChange={(v) => set({ nationality: v })}
                   placeholder={t('plugin_crm.picker.nationality')}
                 />
+                <span className="text-[11px] text-muted-foreground">{t('plugin_crm.customer.nationalityHint')}</span>
               </label>
               <label className="flex flex-col gap-1">
                 {t('plugin_crm.fields.country')}
@@ -271,6 +319,7 @@ function CustomerFormDialog({
                   onChange={(v) => set({ country: v })}
                   placeholder={t('plugin_crm.picker.country')}
                 />
+                <span className="text-[11px] text-muted-foreground">{t('plugin_crm.customer.countryHint')}</span>
               </label>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -366,8 +415,87 @@ function CustomerFormDialog({
           {t('plugin_crm.fields.remark')}
           <Textarea rows={3} maxLength={500} value={value.remark ?? ''} onChange={(e) => set({ remark: e.target.value })} />
         </label>
+        <CustomFieldsEditor
+          values={(value.custom ?? {}) as Record<string, unknown>}
+          onChange={(custom) => set({ custom: custom as CrmCustomerForm['custom'] })}
+        />
       </div>
     </ResponsiveDialog>
+  )
+}
+
+/**
+ * 自定义字段的表单渲染：按启用中的字段定义逐个出控件（text=Input / number=Input /
+ * select=Select / date=DatePicker / bool=Switch）。值随手改、随表单一起整份提交，
+ * 必填/类型校验由后端在保存时把关（crm.field_required / crm.field_value_invalid）。
+ */
+function CustomFieldsEditor({
+  values,
+  onChange,
+}: {
+  values: Record<string, unknown>
+  onChange: (values: Record<string, unknown>) => void
+}) {
+  const { t } = useTranslation()
+  const { data: fields, isLoading } = useCustomerFields(true)
+  if (isLoading) return <Skeleton className="h-20 w-full" />
+  if (!fields?.length) return null
+  return (
+    <div className="flex flex-col gap-3 rounded-md border border-border/60 p-3">
+      <div className="text-xs font-medium text-muted-foreground">{t('plugin_crm.fields.custom')}</div>
+      {fields.map((f) => (
+        <label key={f.code} className="flex flex-col gap-1">
+          <span>
+            {f.label}
+            {f.required ? <RequiredMark /> : null}
+          </span>
+          {f.type === 'select' ? (
+            <Select
+              value={typeof values[f.code] === 'string' ? (values[f.code] as string) : ''}
+              onValueChange={(v) => onChange({ ...values, [f.code]: v || undefined })}
+            >
+              <SelectTrigger aria-label={f.label}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">{t('common.clear')}</SelectItem>
+                {f.options.map((opt) => (
+                  <SelectItem key={opt} value={opt}>
+                    {opt}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : f.type === 'date' ? (
+            <DatePicker
+              value={typeof values[f.code] === 'string' ? (values[f.code] as string) : null}
+              onChange={(v) => onChange({ ...values, [f.code]: v || undefined })}
+              ariaLabel={f.label}
+            />
+          ) : f.type === 'bool' ? (
+            <Switch
+              checked={values[f.code] === true}
+              onCheckedChange={(v) => onChange({ ...values, [f.code]: v })}
+              aria-label={f.label}
+            />
+          ) : (
+            <Input
+              value={values[f.code] == null ? '' : String(values[f.code])}
+              inputMode={f.type === 'number' ? 'decimal' : 'text'}
+              aria-label={f.label}
+              onChange={(e) => {
+                const raw = e.target.value
+                if (f.type === 'number') {
+                  onChange({ ...values, [f.code]: raw === '' ? undefined : Number(raw) })
+                } else {
+                  onChange({ ...values, [f.code]: raw === '' ? undefined : raw })
+                }
+              }}
+            />
+          )}
+        </label>
+      ))}
+    </div>
   )
 }
 
@@ -480,8 +608,9 @@ function MergeDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: 
   const merge = useMergeCustomers()
   const [targetId, setTargetId] = useState('')
   const [sourceId, setSourceId] = useState('')
-
   const canMerge = !!targetId && !!sourceId && targetId !== sourceId
+  // 选定两边就拉预览：确认前看到「带走什么、补上什么」——预览与合并是同一份规则的两个投影
+  const { data: preview, isLoading: previewLoading } = useMergePreview(open ? targetId : undefined, open ? sourceId : undefined)
 
   const submit = async () => {
     if (!canMerge) return
@@ -537,6 +666,45 @@ function MergeDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: 
             <p className="text-xs text-muted-foreground">{t('plugin_crm.customer.mergeSourceHint')}</p>
           </div>
         </div>
+        {canMerge ? (
+          <div className="rounded-md border border-border p-3">
+            <div className="mb-2 text-xs font-medium text-foreground">{t('plugin_crm.merge.previewTitle')}</div>
+            {previewLoading || !preview ? (
+              <p className="text-xs text-muted-foreground">{t('common.loading')}</p>
+            ) : (
+              <div className="space-y-2 text-xs">
+                <p>
+                  {t('plugin_crm.merge.migrateSummary', {
+                    contacts: preview.contacts,
+                    opportunities: preview.opportunities,
+                    activities: preview.activities,
+                  })}
+                </p>
+                {preview.fillFields.length ? (
+                  <div>
+                    <span className="text-muted-foreground">{t('plugin_crm.merge.fillTitle')}：</span>
+                    <ul className="mt-1 space-y-0.5">
+                      {preview.fillFields.map((f) => (
+                        <li key={f.column} className="flex gap-2">
+                          <span className="text-muted-foreground">{mergeFieldLabel(f.column, t)}</span>
+                          <span className="num truncate">← {f.value}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground">{t('plugin_crm.merge.noFill')}</p>
+                )}
+                {preview.newTags.length ? (
+                  <p>
+                    <span className="text-muted-foreground">{t('plugin_crm.merge.tagsTitle')}：</span>
+                    {preview.newTags.join('、')}
+                  </p>
+                ) : null}
+              </div>
+            )}
+          </div>
+        ) : null}
       </div>
     </ResponsiveDialog>
   )
@@ -639,6 +807,7 @@ function CustomerDetailDialog({ customer, onClose }: { customer: CrmCustomer | n
               <p className="mt-1 break-words whitespace-pre-wrap text-sm text-foreground">{customer.remark}</p>
             </div>
           ) : null}
+          <CustomValuesDetail customer={customer} />
           {!isLinked(customer) ? (
             <Can perm="crm:edit">
               <div className="rounded-md border border-border p-3">
@@ -708,11 +877,28 @@ export function CustomersTab() {
   const { t, i18n } = useTranslation()
   const nameOf = useCountryNames()
   const confirm = useConfirm()
-  const [draft, setDraft] = useState<CustomerQuery>({})
-  const [filters, setFilters] = useState<CustomerQuery>({})
+  // 字段定义是平台级表：写入口按平台调用方收口（与分组/规则/SLA 同一判据）。
+  const { isPlatform } = usePermission()
+  const [params, setParams] = useSearchParams()
+  // URL 是筛选/排序/页码的真源初值：深链与刷新都从 ?keyword=…&mine=1&page=2 恢复同一份视图。
+  // 之后状态变化写回 URL（replace，不压历史栈）。
+  const initial = useMemo(() => {
+    const f: CustomerQuery = {}
+    for (const key of ['keyword', 'type', 'status', 'source', 'level', 'tag', 'createdFrom', 'createdTo', 'sortKey'] as const) {
+      const v = params.get(key)
+      if (v) f[key] = v
+    }
+    if (params.get('sort') === 'asc') f.sort = 'asc'
+    const owner = params.get('pool') === '1' ? POOL : params.get('mine') === '1' ? MINE : ALL
+    return { f, owner, page: Math.max(1, Number(params.get('page')) || 1) }
+    // 只在挂载时读一次：之后 URL 跟着状态走，不再反向驱动状态
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  const [draft, setDraft] = useState<CustomerQuery>(initial.f)
+  const [filters, setFilters] = useState<CustomerQuery>(initial.f)
   // 归属筛选：全部 / 只看我的 / 公海。公海走独立接口（不做数据范围），不与 mine 叠加。
-  const [ownerFilter, setOwnerFilter] = useState<string>(ALL)
-  const [page, setPage] = useState(1)
+  const [ownerFilter, setOwnerFilter] = useState<string>(initial.owner)
+  const [page, setPage] = useState(initial.page)
   const [pageSize, setPageSize] = useState(10)
   const [formOpen, setFormOpen] = useState(false)
   const [mergeOpen, setMergeOpen] = useState(false)
@@ -720,6 +906,27 @@ export function CustomersTab() {
   const [detail, setDetail] = useState<CrmCustomer | null>(null)
   // 多选状态叫 picked：detail 已经是「当前详情面板选中的行」，别再占一个 selected。
   const [picked, setPicked] = useState<string[]>([])
+  // 打标签：单客户整份替换（tagTarget）与批量追加（batchTags， picked 里全选 id）共用一套输入形态。
+  const [tagTarget, setTagTarget] = useState<CrmCustomer | null>(null)
+  const [batchTagOpen, setBatchTagOpen] = useState(false)
+  const [fieldsOpen, setFieldsOpen] = useState(false)
+  const me = useAuth((s) => s.user?.username ?? '')
+  const batchUpdate = useBatchUpdateCustomers()
+  const batchAddTags = useBatchAddCustomerTags()
+  const queryClient = useQueryClient()
+  // 待跟进清单「查看客户」：先拉完整资料再开详情面板（清单行只有 id 和名字）。
+  const onOpenTodoCustomer = async (id: string) => {
+    try {
+      const cu = await queryClient.fetchQuery({
+        queryKey: ['plugin_crm', 'customer', id],
+        queryFn: () => fetchCustomer(id),
+      })
+      setDetail(cu)
+      setTodosOpen(false)
+    } catch {
+      // 错误提示由请求层统一 toast，这里只负责不往下走
+    }
+  }
 
   const { data: owned, isLoading: ownedLoading } = useCustomers({
     ...filters,
@@ -740,16 +947,40 @@ export function CustomersTab() {
   const claim = useClaimCustomer()
   const release = useReleaseCustomer()
   const [exporting, setExporting] = useState(false)
-  const { data: stats } = useCrmStats()
+  const { data: tagOptions } = useCustomerTags()
+  const [duplicatesOpen, setDuplicatesOpen] = useState(false)
+  // 待跟进弹窗：站内信的深链是 /crm/customers?todo=1，落地即弹（之后 URL 清掉、状态接管）。
+  const [todosOpen, setTodosOpen] = useState(() => params.get('todo') === '1')
 
-  const statCards = [
-    { label: t('plugin_crm.type.person'), value: stats?.persons ?? 0, tone: 'primary' as const },
-    { label: t('plugin_crm.type.company'), value: stats?.companies ?? 0, tone: 'info' as const },
-    { label: t('plugin_crm.status.active'), value: stats?.active ?? 0, tone: 'success' as const },
-    { label: t('plugin_crm.status.inactive'), value: stats?.inactive ?? 0, tone: 'warning' as const },
-    { label: t('plugin_crm.stats.pool'), value: stats?.pool ?? 0, tone: 'chart-3' as const },
-    { label: t('plugin_crm.stats.openDeals'), value: stats?.openDeals ?? 0, tone: 'chart-2' as const },
-  ]
+  // 状态 → URL（replace 不压历史栈）：分享/刷新/切页回来都是同一份视图
+  useEffect(() => {
+    const p = new URLSearchParams()
+    for (const key of ['keyword', 'type', 'status', 'source', 'level', 'tag', 'createdFrom', 'createdTo', 'sortKey'] as const) {
+      const v = filters[key]
+      if (typeof v === 'string' && v) p.set(key, v)
+    }
+    if (filters.sort === 'asc') p.set('sort', 'asc')
+    if (ownerFilter === MINE) p.set('mine', '1')
+    if (ownerFilter === POOL) p.set('pool', '1')
+    if (page > 1) p.set('page', String(page))
+    setParams(p, { replace: true })
+  }, [filters, ownerFilter, page, setParams])
+
+  // 批量改动作共用一个提交壳：成功提示实改数（范围外的 id 后端静默跳过，不是全成功）。
+  const runBatch = async (run: () => Promise<{ updated: number }>) => {
+    try {
+      const { updated } = await run()
+      setPicked([])
+      toast.success(t('plugin_crm.batch.updated', { updated }))
+    } catch {
+      // 失败原因已由请求层统一提示。
+    }
+  }
+
+  const onBatchUpdate = (ids: string[], patch: { owner?: string; status?: 'active' | 'inactive'; level?: string }) =>
+    runBatch(() => batchUpdate.mutateAsync({ ids, ...patch }))
+
+  const onBatchAddTags = (ids: string[], tags: string[]) => runBatch(() => batchAddTags.mutateAsync({ ids, tags }))
 
   const onClaim = async (cu: CrmCustomer) => {
     try {
@@ -828,9 +1059,20 @@ export function CustomersTab() {
       title: t('plugin_crm.fields.name'),
       mobile: 'title',
       render: (cu) => (
-        <div>
+        <div className="min-w-0">
           <span className="font-medium text-foreground">{cu.name}</span>
           <div className="text-xs text-muted-foreground">{cu.code || cu.id}</div>
+          {(cu.tags?.length ?? 0) > 0 ? (
+            // 标签挂在名字副行而不是独立一列：标签数不定，一列会被撑得忽宽忽窄
+            <div className="mt-0.5 flex flex-wrap gap-1">
+              {cu.tags!.slice(0, 3).map((tag) => (
+                <Badge key={tag} variant="secondary" className="px-1.5 py-0 text-[10px]">
+                  {tag}
+                </Badge>
+              ))}
+              {cu.tags!.length > 3 ? <span className="text-[10px] text-muted-foreground">+{cu.tags!.length - 3}</span> : null}
+            </div>
+          ) : null}
         </div>
       ),
     },
@@ -915,11 +1157,6 @@ export function CustomersTab() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        {statCards.map((c) => (
-          <StatCard key={c.label} title={c.label} value={c.value} tone={c.tone} />
-        ))}
-      </div>
       <FilterBar
         onSearch={() => {
           setFilters(draft)
@@ -989,6 +1226,77 @@ export function CustomersTab() {
             <SelectItem value={POOL}>{t('plugin_crm.pool.only')}</SelectItem>
           </SelectContent>
         </Select>
+        <Select value={draft.level ?? ALL} onValueChange={(v) => setDraft((d) => ({ ...d, level: v === ALL ? undefined : v }))}>
+          <SelectTrigger className="md:w-28" aria-label={t('plugin_crm.fields.level')}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>{t('plugin_crm.filter.allLevels')}</SelectItem>
+            {LEVELS.map((lv) => (
+              <SelectItem key={lv} value={lv}>
+                {t(`plugin_crm.level.${lv}`, { defaultValue: lv })}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={draft.tag ?? ALL} onValueChange={(v) => setDraft((d) => ({ ...d, tag: v === ALL ? undefined : v }))}>
+          <SelectTrigger className="md:w-32" aria-label={t('plugin_crm.fields.tags')}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>{t('plugin_crm.filter.allTags')}</SelectItem>
+            {(tagOptions ?? []).map((tag) => (
+              <SelectItem key={tag} value={tag}>
+                {tag}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {/* 建档时间范围：含端点，后端按「to 当天结束前」收口 */}
+        <div className="flex items-center gap-1.5">
+          <DatePicker
+            value={draft.createdFrom ?? null}
+            onChange={(v) => setDraft((d) => ({ ...d, createdFrom: v || undefined }))}
+            ariaLabel={t('plugin_crm.filter.createdFrom')}
+            placeholder={t('plugin_crm.filter.createdFrom')}
+            className="md:w-36"
+          />
+          <span className="text-xs text-muted-foreground">–</span>
+          <DatePicker
+            value={draft.createdTo ?? null}
+            onChange={(v) => setDraft((d) => ({ ...d, createdTo: v || undefined }))}
+            ariaLabel={t('plugin_crm.filter.createdTo')}
+            placeholder={t('plugin_crm.filter.createdTo')}
+            className="md:w-36"
+          />
+        </div>
+        {/* 排序：白名单字段 + 方向切换（与工单筛选同款交互，不用点列头） */}
+        <Select value={draft.sortKey ?? ALL} onValueChange={(v) => setDraft((d) => ({ ...d, sortKey: v === ALL ? undefined : v }))}>
+          <SelectTrigger className="md:w-36" aria-label={t('plugin_crm.filter.sortKey')}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>{t('plugin_crm.filter.sortDefault')}</SelectItem>
+            {SORT_KEYS.map((k) => (
+              <SelectItem key={k} value={k}>
+                {t(`plugin_crm.sort.${k}`)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {draft.sortKey ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="size-9"
+            aria-label={t('plugin_crm.filter.sortDir', { dir: draft.sort === 'asc' ? t('plugin_crm.sort.asc') : t('plugin_crm.sort.desc') })}
+            title={draft.sort === 'asc' ? t('plugin_crm.sort.asc') : t('plugin_crm.sort.desc')}
+            onClick={() => setDraft((d) => ({ ...d, sort: d.sort === 'asc' ? 'desc' : 'asc' }))}
+          >
+            <ArrowDownUp aria-hidden="true" className="size-4" />
+          </Button>
+        ) : null}
       </FilterBar>
       <DataTable
         columns={columns}
@@ -1008,12 +1316,45 @@ export function CustomersTab() {
         emptyText={t('plugin_crm.empty')}
         selection={{ selected: picked, onChange: setPicked }}
         batchActions={(ids) => (
-          <Can perm="crm:edit">
-            <Button variant="destructive" size="sm" onClick={() => void onDeleteBatch(ids)}>
-              <Trash2 aria-hidden="true" />
-              {t('common.delete')}
-            </Button>
-          </Can>
+          <>
+            <Can perm="crm:edit">
+              {/* 批量条第二动作：派给我/状态/等级/追加标签。派给我 = owner 填当前账号，
+                  公海客户也能用它一键认领整批。 */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    {t('plugin_crm.batch.title')}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="min-w-40">
+                  <DropdownMenuItem onSelect={() => void onBatchUpdate(ids, { owner: me })}>
+                    {t('plugin_crm.batch.assignToMe')}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => void onBatchUpdate(ids, { status: 'active' })}>
+                    {t('plugin_crm.status.active')}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => void onBatchUpdate(ids, { status: 'inactive' })}>
+                    {t('plugin_crm.status.inactive')}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  {LEVELS.map((lv) => (
+                    <DropdownMenuItem key={lv} onSelect={() => void onBatchUpdate(ids, { level: lv })}>
+                      {t('plugin_crm.batch.setLevel', { level: t(`plugin_crm.level.${lv}`, { defaultValue: lv }) })}
+                    </DropdownMenuItem>
+                  ))}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onSelect={() => setBatchTagOpen(true)}>
+                    <TagIcon aria-hidden="true" />
+                    {t('plugin_crm.batch.addTags')}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Button variant="destructive" size="sm" onClick={() => void onDeleteBatch(ids)}>
+                <Trash2 aria-hidden="true" />
+                {t('common.delete')}
+              </Button>
+            </Can>
+          </>
         )}
         toolbar={
           <>
@@ -1036,6 +1377,20 @@ export function CustomersTab() {
               <Download className="me-2 size-4" aria-hidden="true" />
               {t('common.export')}
             </Button>
+            <Button variant="outline" onClick={() => setDuplicatesOpen(true)}>
+              <CopyPlus aria-hidden="true" />
+              {t('plugin_crm.duplicates.action')}
+            </Button>
+            <Button variant="outline" onClick={() => setTodosOpen(true)}>
+              <CalendarClock aria-hidden="true" />
+              {t('plugin_crm.todos.action')}
+            </Button>
+            <Can perm="crm:edit">
+              <Button variant="outline" onClick={() => setFieldsOpen(true)} disabled={!isPlatform} title={!isPlatform ? t('plugin_crm.fields.platformOnly') : undefined}>
+                <Settings2 aria-hidden="true" />
+                {t('plugin_crm.fields.manage')}
+              </Button>
+            </Can>
           </>
         }
         rowActions={(cu) => (
@@ -1059,6 +1414,15 @@ export function CustomersTab() {
             ) : (
               <>
                 <Can perm="crm:edit">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={t('plugin_crm.fields.tags')}
+                    title={t('plugin_crm.fields.tags')}
+                    onClick={() => setTagTarget(cu)}
+                  >
+                    <TagIcon aria-hidden="true" />
+                  </Button>
                   <Button
                     variant="ghost"
                     size="icon"
@@ -1109,6 +1473,452 @@ export function CustomersTab() {
       />
       {mergeOpen ? <MergeDialog open={mergeOpen} onOpenChange={setMergeOpen} /> : null}
       {detail ? <CustomerDetailDialog key={detail.id} customer={detail} onClose={() => setDetail(null)} /> : null}
+      <CustomerTagDialog
+        key={tagTarget?.id ?? 'tags-closed'}
+        open={!!tagTarget}
+        customer={tagTarget}
+        suggestions={tagOptions ?? []}
+        onOpenChange={(v) => !v && setTagTarget(null)}
+      />
+      <BatchTagDialog open={batchTagOpen} onOpenChange={setBatchTagOpen} count={picked.length} suggestions={tagOptions ?? []} onSave={(tags) => void onBatchAddTags(picked, tags)} />
+      {fieldsOpen ? <FieldsDialog open={fieldsOpen} onOpenChange={setFieldsOpen} /> : null}
+      <DuplicatesDialog open={duplicatesOpen} onOpenChange={setDuplicatesOpen} />
+      {todosOpen ? (
+        <TodosDialog
+          open={todosOpen}
+          onOpenChange={setTodosOpen}
+          onOpenCustomer={(id) => void onOpenTodoCustomer(id)}
+        />
+      ) : null}
     </div>
+  )
+}
+
+/** 疑似重复巡检：手机号/证件号/信用代码同值多客户的分组，引导去合并。 */
+function DuplicatesDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+  const { t } = useTranslation()
+  const { data: groups, isLoading } = useCustomerDuplicates(open)
+  return (
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange} size="lg" title={t('plugin_crm.duplicates.title')} description={t('plugin_crm.duplicates.hint')}>
+      <div className="flex flex-col gap-3 p-4">
+        {isLoading ? (
+          <p className="text-xs text-muted-foreground">{t('common.loading')}</p>
+        ) : !groups?.length ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">{t('plugin_crm.duplicates.empty')}</p>
+        ) : (
+          groups.map((g) => (
+            <div key={`${g.key}:${g.value}`} className="rounded-md border border-border">
+              <div className="flex items-center gap-2 border-b border-border px-3 py-2 text-sm">
+                <Badge variant="warning">{t(`plugin_crm.duplicates.key.${g.key}`)}</Badge>
+                <span className="num font-mono">{g.value}</span>
+                <span className="text-xs text-muted-foreground">{t('plugin_crm.duplicates.count', { count: g.customers.length })}</span>
+                <span className="ms-auto text-xs text-muted-foreground">{t('plugin_crm.duplicates.mergeHint')}</span>
+              </div>
+              <ul className="divide-y divide-border">
+                {g.customers.map((cu) => (
+                  <li key={cu.id} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 px-3 py-2 text-sm">
+                    <span className="font-medium text-foreground">{cu.name}</span>
+                    <span className="num text-xs text-muted-foreground">{cu.code || cu.id}</span>
+                    <span className="text-xs text-muted-foreground">{t(`plugin_crm.type.${cu.type}`)}</span>
+                    <span className="text-xs text-muted-foreground">{cu.owner ? t('plugin_crm.fields.owner') + ': ' + cu.owner : t('plugin_crm.pool.only')}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))
+        )}
+      </div>
+    </ResponsiveDialog>
+  )
+}
+
+/**
+ * 我的待跟进：到期未完成的跟进记录（可见性继承客户归属，后端按 owner 裁）。
+ * 行动只有一个——去处理：点「查看客户」拉完整资料开详情面板。
+ */
+function TodosDialog({
+  open,
+  onOpenChange,
+  onOpenCustomer,
+}: {
+  open: boolean
+  onOpenChange: (v: boolean) => void
+  onOpenCustomer: (id: string) => void
+}) {
+  const { t } = useTranslation()
+  const { data, isLoading } = useCustomerTodos(open)
+  const items = data?.items ?? []
+  return (
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange} size="lg" title={t('plugin_crm.todos.title')} description={t('plugin_crm.todos.hint')}>
+      <div className="flex flex-col gap-3 p-4">
+        {isLoading ? (
+          <Skeleton className="h-40 w-full" />
+        ) : !items.length ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">{t('plugin_crm.todos.empty')}</p>
+        ) : (
+          <>
+            {data && data.total > items.length ? (
+              <p className="text-xs text-muted-foreground">{t('plugin_crm.todos.total', { total: data.total })}</p>
+            ) : null}
+            <ul className="divide-y divide-border">
+              {items.map((td) => (
+                <li key={td.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 py-2.5 text-sm">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate font-medium text-foreground">{td.customerName}</span>
+                      <Badge variant="outline">{t(`plugin_crm.activity.kind.${td.kind}`)}</Badge>
+                      {td.overdue ? <Badge variant="destructive">{t('plugin_crm.todos.overdue')}</Badge> : null}
+                    </div>
+                    <p className="truncate text-xs text-muted-foreground">{td.content}</p>
+                  </div>
+                  <span className="num text-xs text-muted-foreground">{td.nextAt}</span>
+                  <Button variant="outline" size="sm" onClick={() => onOpenCustomer(td.customerId)}>
+                    {t('plugin_crm.todos.open')}
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </div>
+    </ResponsiveDialog>
+  )
+}
+
+/** TagEditor 是标签输入的最小形态：回车/逗号添加、点 X 移除、来自全站使用中标签的建议。 */
+function TagEditor({ tags, onChange, suggestions }: { tags: string[]; onChange: (tags: string[]) => void; suggestions: string[] }) {
+  const { t } = useTranslation()
+  const [draft, setDraft] = useState('')
+  const add = () => {
+    const tag = draft.trim()
+    if (!tag || tags.includes(tag)) {
+      setDraft('')
+      return
+    }
+    onChange([...tags, tag])
+    setDraft('')
+  }
+  const rest = suggestions.filter((s) => !tags.includes(s)).slice(0, 8)
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        <Input
+          value={draft}
+          maxLength={20}
+          placeholder={t('plugin_crm.tags.inputPlaceholder')}
+          aria-label={t('plugin_crm.fields.tags')}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              add()
+            }
+          }}
+          onBlur={add}
+        />
+        <Button type="button" variant="outline" size="sm" onClick={add}>
+          {t('common.add')}
+        </Button>
+      </div>
+      {tags.length > 0 ? (
+        <div className="flex flex-wrap gap-1.5">
+          {tags.map((tag) => (
+            <Badge key={tag} variant="secondary" className="gap-1 px-2 py-0.5 text-xs">
+              {tag}
+              <button
+                type="button"
+                aria-label={`${t('common.remove')} ${tag}`}
+                onClick={() => onChange(tags.filter((x) => x !== tag))}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <X aria-hidden="true" className="size-3" />
+              </button>
+            </Badge>
+          ))}
+        </div>
+      ) : null}
+      {rest.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+          <span>{t('plugin_crm.tags.suggestions')}</span>
+          {rest.map((s) => (
+            <button
+              key={s}
+              type="button"
+              className="rounded-full border border-border px-2 py-0.5 text-xs hover:bg-muted"
+              onClick={() => onChange([...tags, s])}
+            >
+              + {s}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+/**
+ * 详情里的自定义字段展示：只显示有值的 code，名称按启用中的字段定义翻译；
+ * 定义已停用/删除的旧值不显示（与工单同一口径），而不是显示一个没人认识的 code。
+ */
+function CustomValuesDetail({ customer }: { customer: CrmCustomer }) {
+  const { t } = useTranslation()
+  const entries = Object.entries(customer.customValues ?? {}).filter(([, v]) => v !== null && v !== '')
+  const { data: fields } = useCustomerFields(entries.length > 0)
+  if (!entries.length) return null
+  const labelOf = (code: string) => fields?.find((f) => f.code === code)?.label ?? code
+  const show = (v: unknown) => (typeof v === 'boolean' ? t(v ? 'common.yes' : 'common.no') : String(v))
+  return (
+    <dl className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
+      {entries.map(([code, v]) => (
+        <DetailRow key={code} label={labelOf(code)} value={show(v)} />
+      ))}
+    </dl>
+  )
+}
+
+/** 单客户打标：整份替换该客户的标签（与后端 PUT /customers/:id/tags 同语义）。 */function CustomerTagDialog({
+  open,
+  onOpenChange,
+  customer,
+  suggestions,
+}: {
+  open: boolean
+  onOpenChange: (v: boolean) => void
+  customer: CrmCustomer | null
+  suggestions: string[]
+}) {
+  const { t } = useTranslation()
+  const save = useSetCustomerTags()
+  // 弹窗在调用处以 key={customer.id} 挂载：每个客户各挂一次，初值天然是它的当前标签，
+  // 关闭即丢草稿，不需要额外的 hydration 状态。
+  const [tags, setTags] = useState<string[]>(customer?.tags ?? [])
+  if (!open || !customer) return null
+  return (
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange} size="sm" title={t('plugin_crm.tags.title', { name: customer.name })}>
+      <div className="space-y-3 p-4">
+        <TagEditor tags={tags} onChange={setTags} suggestions={suggestions} />
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            {t('common.cancel')}
+          </Button>
+          <Button
+            disabled={save.isPending}
+            onClick={() => {
+              void save
+                .mutateAsync({ id: customer.id, tags })
+                .then(() => {
+                  toast.success(t('common.operateSuccess'))
+                  onOpenChange(false)
+                })
+                .catch(() => undefined)
+            }}
+          >
+            {t('common.save')}
+          </Button>
+        </div>
+      </div>
+    </ResponsiveDialog>
+  )
+}
+
+const FIELD_TYPES = ['text', 'number', 'select', 'date', 'bool'] as const
+
+function emptyField(): CrmField {
+  return { id: '', code: '', label: '', type: 'text', options: [], required: false, enabled: true, sort: 0 }
+}
+
+/**
+ * 自定义字段管理：列表（含停用）+ 内嵌的增改表单 + 删除。字段定义是平台级表，
+ * 入口只在平台调用方可见（isPlatform 已在工具栏门控），后端也以 crm:edit 二次把关。
+ */
+function FieldsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+  const { t } = useTranslation()
+  const confirm = useConfirm()
+  const { data: fields, isLoading } = useCustomerFields(open)
+  const save = useSaveCustomerField()
+  const del = useDeleteCustomerField()
+  const [draft, setDraft] = useState<CrmField | null>(null)
+
+  const closeForm = () => setDraft(null)
+
+  const onDelete = async (f: CrmField) => {
+    if (!(await confirm({ destructive: true, description: t('plugin_crm.field.deleteConfirm', { label: f.label }) }))) return
+    try {
+      await del.mutateAsync(f.id)
+      toast.success(t('common.operateSuccess'))
+    } catch {
+      // 失败原因已由请求层统一提示。
+    }
+  }
+
+  return (
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange} size="lg" title={t('plugin_crm.field.title')} description={t('plugin_crm.field.hint')}>
+      <div className="flex flex-col gap-3 p-4 text-sm">
+        {draft === null ? (
+          <>
+            <Button variant="outline" size="sm" className="self-start" onClick={() => setDraft({ ...emptyField() })}>
+              <Plus aria-hidden="true" />
+              {t('plugin_crm.field.add')}
+            </Button>
+            {isLoading ? (
+              <p className="text-xs text-muted-foreground">{t('common.loading')}</p>
+            ) : !fields?.length ? (
+              <p className="py-6 text-center text-xs text-muted-foreground">{t('plugin_crm.field.empty')}</p>
+            ) : (
+              <ul className="divide-y divide-border rounded-md border border-border">
+                {fields.map((f) => (
+                  <li key={f.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
+                    <span className="font-medium text-foreground">{f.label}</span>
+                    <span className="num font-mono text-xs text-muted-foreground">{f.code}</span>
+                    <Badge variant="outline">{t(`plugin_crm.field.type.${f.type}`)}</Badge>
+                    {f.required ? <Badge variant="warning">{t('plugin_crm.field.required')}</Badge> : null}
+                    {!f.enabled ? <Badge variant="secondary">{t('plugin_crm.field.disabled')}</Badge> : null}
+                    <div className="ms-auto flex items-center gap-1">
+                      <Button variant="ghost" size="icon" aria-label={t('common.edit')} onClick={() => setDraft(f)}>
+                        <Pencil aria-hidden="true" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-destructive"
+                        aria-label={t('common.delete')}
+                        onClick={() => void onDelete(f)}
+                      >
+                        <Trash2 aria-hidden="true" />
+                      </Button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
+        ) : (
+          <form
+            className="flex flex-col gap-3"
+            onSubmit={(e) => {
+              e.preventDefault()
+              void save
+                .mutateAsync(draft)
+                .then(() => {
+                  toast.success(t('common.operateSuccess'))
+                  closeForm()
+                })
+                .catch(() => undefined)
+            }}
+          >
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="flex flex-col gap-1">
+                <span>
+                  {t('plugin_crm.field.label')}
+                  <RequiredMark />
+                </span>
+                <Input maxLength={64} value={draft.label} onChange={(e) => setDraft({ ...draft, label: e.target.value })} />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span>{t('plugin_crm.field.codeLabel')}</span>
+                <Input
+                  className="font-mono"
+                  value={draft.code}
+                  disabled={!!draft.id}
+                  placeholder="vip_level"
+                  onChange={(e) => setDraft({ ...draft, code: e.target.value })}
+                />
+                <span className="text-[11px] text-muted-foreground">{t('plugin_crm.field.codeHint')}</span>
+              </label>
+              <label className="flex flex-col gap-1">
+                <span>{t('plugin_crm.field.typeLabel')}</span>
+                <Select value={draft.type} onValueChange={(v) => setDraft({ ...draft, type: v as CrmField['type'], options: [] })}>
+                  <SelectTrigger aria-label={t('plugin_crm.field.typeLabel')}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {FIELD_TYPES.map((tp) => (
+                      <SelectItem key={tp} value={tp}>
+                        {t(`plugin_crm.field.type.${tp}`)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </label>
+              {draft.type === 'select' ? (
+                <label className="flex flex-col gap-1">
+                  <span>
+                    {t('plugin_crm.field.optionsLabel')}
+                    <RequiredMark />
+                  </span>
+                  <Input
+                    value={draft.options.join(',')}
+                    placeholder={t('plugin_crm.field.optionsPlaceholder')}
+                    onChange={(e) => setDraft({ ...draft, options: e.target.value.split(',') })}
+                  />
+                  <span className="text-[11px] text-muted-foreground">{t('plugin_crm.field.optionsHint')}</span>
+                </label>
+              ) : null}
+              <label className="flex flex-col gap-1">
+                <span>{t('plugin_crm.field.sortLabel')}</span>
+                <Input inputMode="numeric" value={draft.sort} onChange={(e) => setDraft({ ...draft, sort: Number(e.target.value) || 0 })} />
+              </label>
+              <label className="flex items-center gap-2 pt-5 text-sm">
+                <Switch checked={draft.required} onCheckedChange={(v) => setDraft({ ...draft, required: v })} />
+                {t('plugin_crm.field.required')}
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <Switch checked={draft.enabled} onCheckedChange={(v) => setDraft({ ...draft, enabled: v })} />
+                {t('plugin_crm.field.enabledLabel')}
+              </label>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={closeForm}>
+                {t('common.cancel')}
+              </Button>
+              <Button type="submit" disabled={save.isPending}>
+                {t('common.save')}
+              </Button>
+            </div>
+          </form>
+        )}
+      </div>
+    </ResponsiveDialog>
+  )
+}
+
+/** 批量追加标签：给勾选的客户每人补上这些词（已有该词的自动跳过）。 */
+function BatchTagDialog({
+  open,
+  onOpenChange,
+  count,
+  suggestions,
+  onSave,
+}: {
+  open: boolean
+  onOpenChange: (v: boolean) => void
+  count: number
+  suggestions: string[]
+  onSave: (tags: string[]) => void
+}) {
+  const { t } = useTranslation()
+  const [tags, setTags] = useState<string[]>([])
+  if (!open) return null
+  return (
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange} size="sm" title={t('plugin_crm.tags.batchTitle', { count })}>
+      <div className="space-y-3 p-4">
+        <TagEditor tags={tags} onChange={setTags} suggestions={suggestions} />
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            {t('common.cancel')}
+          </Button>
+          <Button
+            disabled={tags.length === 0}
+            onClick={() => {
+              onSave(tags)
+              setTags([])
+              onOpenChange(false)
+            }}
+          >
+            {t('common.save')}
+          </Button>
+        </div>
+      </div>
+    </ResponsiveDialog>
   )
 }

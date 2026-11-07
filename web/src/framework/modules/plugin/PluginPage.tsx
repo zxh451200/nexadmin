@@ -315,7 +315,7 @@ function PlatformPluginPage() {
   return (
     <PageContainer>
       <PageHeader title={t('pluginMgr.title')} description={t('pluginMgr.description')} />
-      <Tabs defaultValue={initialTab}>
+      <Tabs value={initialTab} onValueChange={(tab) => setParams({ tab })}>
         <TabsList>
           <TabsTrigger value="installed">{t('pluginMgr.tab.installed')}</TabsTrigger>
           <TabsTrigger value="market">{t('pluginMgr.tab.market')}</TabsTrigger>

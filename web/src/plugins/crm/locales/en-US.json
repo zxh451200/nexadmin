@@ -11,7 +11,8 @@
     },
     "tabs": {
       "customers": "Customers",
-      "opportunities": "Leads / Opportunities"
+      "opportunities": "Leads / Opportunities",
+      "stats": "Statistics"
     },
     "all": "All",
     "filter": {
@@ -19,7 +20,58 @@
       "allSources": "All sources",
       "allStatuses": "All statuses",
       "allOwners": "All owners",
+      "allLevels": "All levels",
+      "allTags": "All tags",
+      "createdFrom": "Created from",
+      "createdTo": "Created to",
+      "sortKey": "Sort by",
+      "sortDefault": "Default (newest first)",
+      "sortDir": "Switch to {{dir}}",
       "allStages": "All stages"
+    },
+    "sort": {
+      "asc": "ascending",
+      "desc": "descending",
+      "created_at": "Created time",
+      "name": "Customer name",
+      "code": "Customer code",
+      "level": "Level",
+      "owner": "Owner"
+    },
+    "duplicates": {
+      "action": "Duplicates",
+      "title": "Suspected duplicate customers",
+      "hint": "Several customers share the same phone / ID number / credit code. Save-time dedupe cannot catch historical rows — confirm they are the same one and merge them via \"Merge\" in the toolbar.",
+      "empty": "No suspected duplicates: every identity key resolves to a single customer.",
+      "count": "{{count}} customers",
+      "mergeHint": "Confirm, then merge via the toolbar",
+      "key": {
+        "phone": "Same phone",
+        "id_no": "Same ID number",
+        "tax_no": "Same credit code"
+      }
+    },
+    "batch": {
+      "title": "Batch actions",
+      "assignToMe": "Assign to me",
+      "setLevel": "Set level to {{level}}",
+      "addTags": "Add tags…",
+      "updated": "Updated {{updated}} customers (ones outside your scope were skipped)"
+    },
+    "todos": {
+      "action": "Follow-ups",
+      "title": "My follow-ups",
+      "hint": "Due, unfinished follow-ups sorted by due date — deal with the oldest first.",
+      "empty": "Nothing due. Set a \"next follow-up date\" on a follow-up and it will appear here when due.",
+      "overdue": "Overdue",
+      "open": "Open customer",
+      "total": "{{total}} in total, showing at most 200"
+    },
+    "tags": {
+      "title": "Tags of \"{{name}}\"",
+      "batchTitle": "Add tags to {{count}} customers",
+      "inputPlaceholder": "Type a tag, press Enter (max 10, 20 chars each)",
+      "suggestions": "Frequently used:"
     },
     "empty": "No data",
     "mineOnly": "Mine only",
@@ -33,7 +85,11 @@
     },
     "stats": {
       "openDeals": "Open deals",
-      "pool": "Pool customers"
+      "pool": "Pool customers",
+      "createdSeries": "New customers",
+      "bySource": "Customers by source",
+      "byStage": "Opportunities by stage",
+      "byStageAmount": "Deal amounts"
     },
     "searchPlaceholder": "Name / code / ID no / credit code / external no",
     "nameRequired": "Customer name is required",
@@ -74,7 +130,8 @@
       "hotel": "Hotel system",
       "mall": "Mall system",
       "order": "Order system",
-      "manual": "Manual ID"
+      "manual": "Manual ID",
+      "none": "No anchor (manually entered)"
     },
     "picker": {
       "country": "Select country / region",
@@ -105,6 +162,10 @@
       "industry": "Industry",
       "address": "Registered address",
       "remark": "Remark",
+      "tags": "Tags",
+      "custom": "Custom fields",
+      "manage": "Custom fields",
+      "platformOnly": "Custom field definitions are platform-level; only platform admins can change them",
       "customerId": "Customer",
       "contact": "Primary contact",
       "contactName": "Contact name",
@@ -129,9 +190,43 @@
       },
       "taxNoPlaceholder": "18-character unified social credit code",
       "typeHintPerson": "Individuals are identified by document: nationality plus ID type and number line up with hotel check-in and cross-border order records.",
+      "nationalityHint": "Legal nationality (which country the person holds), paired with ID type/number for real-name checks",
+      "countryHint": "Where the customer is based, for both persons and companies; ISO codes shown in the UI language",
       "typeHintCompany": "Companies are identified by the unified social credit code; the people you deal with go in Contacts below, one per person, and the opportunity's default contact is picked from there.",
       "codeHint": "Leave the code empty to auto-generate one (C- prefix); it is only used for list display and search. You can also enter your own code. Level is for display only.",
       "anchorHint": "Pick the external system and enter its customer number so the member resolves to the same customer; it cannot be changed after creation.",
+      "field": {
+        "title": "Custom fields",
+        "hint": "Attach extra business info to every customer (e.g. member source, intent level). Values save with the customer; deleting a definition keeps stored history values.",
+        "add": "New field",
+        "empty": "No custom fields yet.",
+        "label": "Field label",
+        "codeLabel": "Code (immutable after save)",
+        "codeHint": "Lowercase-starting letters/digits/underscore, max 32; used in export headers and search",
+        "typeLabel": "Type",
+        "optionsLabel": "Options",
+        "optionsPlaceholder": "Option 1,Option 2,Option 3",
+        "optionsHint": "Comma-separated; a select value must exactly match one option",
+        "sortLabel": "Display order (smaller first)",
+        "required": "Required",
+        "enabledLabel": "Enabled",
+        "disabled": "Disabled",
+        "deleteConfirm": "Delete custom field \"{{label}}\"? Stored values just stop showing; they are not wiped.",
+        "type": {
+          "text": "Text",
+          "number": "Number",
+          "select": "Select",
+          "date": "Date",
+          "bool": "Yes / No"
+        }
+      },
+      "merge": {
+        "previewTitle": "Merge preview",
+        "migrateSummary": "Will move from the source customer: {{contacts}} contacts, {{opportunities}} opportunities, {{activities}} activities.",
+        "fillTitle": "Empty target fields that will be filled from the source",
+        "noFill": "No complementary empty fields between the two records.",
+        "tagsTitle": "Tags brought in from the source"
+      },
       "notBound": "Not linked",
       "bind": "Link external system",
       "bindHint": "After linking, that external member resolves to this same customer; the link cannot be changed once created.",

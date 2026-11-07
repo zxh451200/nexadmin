@@ -16,8 +16,10 @@ import (
 // 与 sliderTolerance 比较，两侧不能各用一套 CSS 像素。
 
 const (
-	sliderBgW   = 280 // 背景图宽
-	sliderBgH   = 110 // 背景图高
+	// sliderBgW 取登录表单的内容宽（max-w-sm = 384，输入框通栏同宽）：滑块与用户名/密码
+	// 输入框对齐，对齐竞品内嵌面板的排版；手机窄屏由前端按容器宽缩放显示并换算落点。
+	sliderBgW   = 384 // 背景图宽
+	sliderBgH   = 150 // 背景图高（384x110 曾偏扁，宽高比 3.5:1；150 使比例落在竞品 2~2.6:1 区间）
 	sliderPiece = 52  // 拼图块方身边长
 	sliderTab   = 11  // 凸出半圆的半径（右侧与上侧各一个）
 )

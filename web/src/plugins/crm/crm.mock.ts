@@ -1,7 +1,8 @@
 import { defineMock, mockError } from '@/framework/request/mock'
-import type { CrmCustomer, CrmOpportunity } from './api'
+import type { CrmActivity, CrmCustomer, CrmOpportunity } from './api'
 
 const ago = (min: number) => new Date(Date.now() - min * 60_000).toISOString()
+const dayFromNow = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10)
 
 let customers: CrmCustomer[] = [
   {
@@ -77,6 +78,29 @@ let opportunities: CrmOpportunity[] = [
 const customerName = (id: string) => customers.find((c) => c.id === id)?.name
 const customerType = (id: string) => customers.find((c) => c.id === id)?.type
 
+let activities: CrmActivity[] = [
+  {
+    id: '7432000000000000001',
+    customerId: '7430000000000000001',
+    kind: 'todo',
+    content: '回访扩容方案报价，敲定预算区间',
+    nextAt: dayFromNow(-3), // 已过期：待跟进清单的第一条
+    done: false,
+    author: '王五',
+    createdAt: ago(60 * 24 * 6),
+  },
+  {
+    id: '7432000000000000002',
+    customerId: '7430000000000000001',
+    kind: 'call',
+    content: '电话沟通下一阶段验收标准',
+    nextAt: dayFromNow(0), // 恰好今天：不算过期
+    done: false,
+    author: '王五',
+    createdAt: ago(60 * 22),
+  },
+]
+
 const withCustomerBrief = (o: CrmOpportunity): CrmOpportunity => ({
   ...o,
   customerName: o.customerId && o.customerId !== '0' ? customerName(o.customerId) : undefined,
@@ -107,16 +131,65 @@ defineMock([
   {
     method: 'GET',
     url: '/plugins/crm/stats',
-    // 与后端 Stats 同口径：类型/状态分桶计数 + 未到终态的商机数。
-    // 没有这条规则时 mock 下五张卡恒为 0，看板改动在开发态完全看不出来。
-    handler: () => ({
-      persons: customers.filter((c) => c.type === 'person').length,
-      companies: customers.filter((c) => c.type === 'company').length,
-      active: customers.filter((c) => c.status === 'active').length,
-      inactive: customers.filter((c) => c.status === 'inactive').length,
-      pool: customers.filter((c) => !c.owner).length,
-      openDeals: opportunities.filter((o) => o.stage !== 'won' && o.stage !== 'lost').length,
-    }),
+    // 与后端 Stats 同口径：类型/状态分桶计数 + 未到终态的商机数 + 六阶段计数与金额
+    // （金额按币种分开，与后端 stage×currency 分组一致）。
+    // 没有这条规则时 mock 下六张卡与漏斗恒为 0，看板改动在开发态完全看不出来。
+    handler: () => {
+      const stageOf = (stage: string) => opportunities.filter((o) => o.stage === stage).length
+      const amountsOf = (stage: string) => {
+        const out: Record<string, number> = {}
+        opportunities
+          .filter((o) => o.stage === stage && o.amountMinor > 0)
+          .forEach((o) => {
+            out[o.currency] = (out[o.currency] ?? 0) + o.amountMinor
+          })
+        return out
+      }
+      const day = (offset: number) => new Date(Date.now() - offset * 86_400_000).toISOString().slice(0, 10)
+      const createdDaily = Array.from({ length: 30 }, (_, i) => {
+        const d = day(29 - i)
+        return {
+          date: d,
+          count: customers.filter((c) => (c.createdAt ?? '').slice(0, 10) === d).length,
+        }
+      })
+      return {
+        persons: customers.filter((c) => c.type === 'person').length,
+        companies: customers.filter((c) => c.type === 'company').length,
+        active: customers.filter((c) => c.status === 'active').length,
+        inactive: customers.filter((c) => c.status === 'inactive').length,
+        pool: customers.filter((c) => !c.owner).length,
+        openDeals: opportunities.filter((o) => o.stage !== 'won' && o.stage !== 'lost').length,
+        stages: Object.fromEntries(['lead', 'qualified', 'proposal', 'negotiate', 'won', 'lost'].map((s) => [s, stageOf(s)])),
+        stageAmounts: Object.fromEntries(['lead', 'qualified', 'proposal', 'negotiate', 'won', 'lost'].map((s) => [s, amountsOf(s)])),
+        sources: Object.fromEntries(
+          ['hotel', 'mall', 'order', 'manual'].map((src) => [src, customers.filter((c) => c.externalSource === src).length]),
+        ),
+        createdDaily,
+      }
+    },
+  },
+  {
+    method: 'GET',
+    url: '/plugins/crm/customers/todos',
+    // 与后端同口径：done=false 且 next_at 非空并已到期（含当天），客户名回填，按到期日升序。
+    handler: () => {
+      const today = new Date().toISOString().slice(0, 10)
+      const rows = activities
+        .filter((a) => !a.done && a.nextAt && a.nextAt <= today)
+        .sort((x, y) => ((x.nextAt ?? '') < (y.nextAt ?? '') ? -1 : (x.nextAt ?? '') > (y.nextAt ?? '') ? 1 : 0))
+        .map((a) => ({
+          id: a.id,
+          customerId: a.customerId,
+          customerName: customerName(a.customerId) ?? '',
+          kind: a.kind,
+          content: a.content,
+          nextAt: a.nextAt ?? '',
+          author: a.author,
+          overdue: (a.nextAt ?? '') < today,
+        }))
+      return { items: rows.slice(0, 200), total: rows.length }
+    },
   },
   {
     method: 'GET',
@@ -410,6 +483,52 @@ defineMock([
     url: '/plugins/crm/opportunities/:id',
     handler: ({ params }) => {
       opportunities = opportunities.filter((x) => x.id !== params.id)
+      return { ok: true }
+    },
+  },
+  {
+    method: 'GET',
+    url: '/plugins/crm/customers/:id/activities',
+    handler: ({ params, query }) => {
+      let rows = activities.filter((a) => a.customerId === params.id)
+      if (query.kind) rows = rows.filter((a) => a.kind === query.kind)
+      if (query.openOnly === '1' || query.openOnly === 'true') rows = rows.filter((a) => !a.done)
+      return paginate([...rows].reverse(), query)
+    },
+  },
+  {
+    method: 'POST',
+    url: '/plugins/crm/customers/:id/activities',
+    handler: ({ params, body }) => {
+      if (!String(body.content ?? '').trim()) mockError(400, 'content required')
+      const a: CrmActivity = {
+        id: String(7432000000000000000n + BigInt(activities.length + 1)),
+        customerId: params.id,
+        kind: body.kind ?? 'note',
+        content: body.content,
+        nextAt: body.nextAt ?? '',
+        done: false,
+        author: '王五',
+        createdAt: new Date().toISOString(),
+      }
+      activities = [...activities, a]
+      return a
+    },
+  },
+  {
+    method: 'PUT',
+    url: '/plugins/crm/activities/:id/done',
+    handler: ({ params, body }) => {
+      const a = activities.find((x) => x.id === params.id) ?? mockError(404, 'not found')
+      a.done = !!body.done
+      return a
+    },
+  },
+  {
+    method: 'DELETE',
+    url: '/plugins/crm/activities/:id',
+    handler: ({ params }) => {
+      activities = activities.filter((x) => x.id !== params.id)
       return { ok: true }
     },
   },

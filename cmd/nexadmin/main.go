@@ -1,5 +1,6 @@
 // Command nexadmin 是 NexAdmin 的命令行工具（plugin / upgrade / new / add / i18n / release 子命令）。
 //
+//	nexadmin plugin create <id> [--out <目录>] [--name <名称>] [--edition free|pro]
 //	nexadmin plugin list
 //	nexadmin plugin install [--force] <目录或zip>
 //	nexadmin plugin remove <id>
@@ -43,6 +44,8 @@ func main() {
 }
 
 const usage = `用法:
+  nexadmin plugin create <id> [--out <目录,默认 ./id>] [--name <名称>] [--edition free|pro]
+                      创建独立全栈插件包（不修改框架；安装到派生项目后构建）
   nexadmin plugin list
   nexadmin plugin install [--force] <目录或zip>
   nexadmin plugin remove [--purge] <id>
@@ -56,7 +59,7 @@ const usage = `用法:
   nexadmin plugin verify --sig <签名文件> --key <公钥文件> <zip>
                       校验官网市场下载包的 ed25519 签名
   nexadmin plugin lint <插件目录（含 plugin.yaml）>
-                      上架前自检：清单校验、迁移三方言齐全、菜单权限码前缀
+                      上架前自检：Go 注册、路由/菜单、mock/双语词条、有迁移时三方言同名集合
   nexadmin upgrade --from <源码包目录或zip> [--to <版本>] [--dry-run] [--manifest .nexadmin.manifest.json] [--allow-dirty]
   nexadmin new <名称> [--out <目录,默认 ../名称>] [--module <go模块路径,默认 名称>] [--plugins <id,id>|basic|standard | --with-plugins] [--without-totp] [--git]
                       派生新项目：默认只带 totp 安全基线；--plugins 点名要带哪几个，或写预设 basic（全部 free）/ standard（basic + 报表·审计·安全）
@@ -87,6 +90,8 @@ func run(args []string, out io.Writer) error {
 	}
 	cmd, rest := args[1], args[2:]
 	switch cmd {
+	case "create":
+		return cmdPluginCreate(rest, out)
 	case "list":
 		return cmdList(out)
 	case "install":

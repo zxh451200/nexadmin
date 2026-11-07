@@ -24,6 +24,7 @@ require (
 	github.com/dchest/captcha v1.1.0
 	github.com/eclipse/paho.mqtt.golang v1.5.1
 	github.com/go-ldap/ldap/v3 v3.4.15
+	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0
 	github.com/gopcua/opcua v0.9.1
 	github.com/gorilla/websocket v1.5.3
 	github.com/grid-x/modbus v1.5.1
@@ -31,6 +32,8 @@ require (
 	github.com/robinson/gos7 v0.0.0-20261030170303-153d631d8881
 	github.com/russellhaering/goxmldsig v1.6.0
 	github.com/tjfoc/gmsm v1.4.1
+	github.com/wenlng/go-captcha-assets v1.0.7
+	github.com/wenlng/go-captcha/v2 v2.0.5
 	github.com/xuri/excelize/v2 v2.11.1-0.20260930021559-01a9ff32fb3c
 	github.com/yuin/goldmark v1.7.17
 	github.com/yuin/goldmark-highlighting/v2 v2.0.0-20230729083705-37449abec8cc

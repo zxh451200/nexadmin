@@ -120,7 +120,7 @@ export function BpmnDesigner({
         await modeler.importXML(source)
         if (cancelled) return
         const canvas = modeler.get('canvas') as any
-        canvas.zoom('fit-viewport')
+        canvas.zoom('fit-viewport', 'auto')
         setError('')
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e))

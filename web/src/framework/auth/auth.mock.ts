@@ -179,18 +179,27 @@ function svgCaptcha(text: string) {
 }
 
 /**
- * 滑块形态的假数据：与后端同一套尺寸（背景 280x110、拼图块方身 52、凸出 11），
+ * 滑块形态的假数据：与后端同一套尺寸（背景 384x150、拼图块方身 52、凸出 11），
  * 前端换算落点时用的是响应里的 width/pieceWidth，所以这里必须保持同口径。
  * 落点 X 与后端一样只留在 mock 进程内，不出现在响应里。
  */
-const SLIDER_BG_W = 280
-const SLIDER_BG_H = 110
+const SLIDER_BG_W = 384
+const SLIDER_BG_H = 150
 const SLIDER_PIECE = 52
 const SLIDER_TAB = 11
 /** 与后端相同的容差（图片像素）与轨迹点数下限 */
 const SLIDER_TOLERANCE = 6
 const SLIDER_TRAIL_MIN = 6
 const sliderXs = new Map<string, number>()
+
+/** 点选形态：画布与后端同口径；容差 = 字块半径 + 2（与 core/auth 同一套判定） */
+const CLICK_W = 384
+const CLICK_H = 150
+const CLICK_TOLERANCE = 15
+const clickDots = new Map<string, { x: number; y: number; size: number }[]>()
+
+/** btoa 只收 Latin1，点选主图里的汉字是 BMP 外……不对，是 BMP 内的非 ASCII——走 UTF-8 字节再编码 */
+const svgB64 = (svg: string) => btoa(String.fromCharCode(...new TextEncoder().encode(svg)))
 
 function puzzleShapes(cx: number, cy: number, style: string) {
   return (
@@ -247,10 +256,35 @@ function checkCaptcha(key?: string, text?: string, reason?: string) {
   if (!expected || !text || expected.toLowerCase() !== text.toLowerCase()) mockError(400, '验证码错误', reason)
 }
 
-/** 与后端一致：同一用户名连续密码错误达到该次数后，登录必须带图形验证码（锁定逻辑不变，仍按安全设置） */
+/** 与后端一致：同一用户名或同一 IP 连续密码错误达到该次数后，登录必须带验证码（锁定按用户名，仍按安全设置） */
 const CAPTCHA_AFTER_FAILS = 3
+/** 与后端一致：达到硬阈值后验证码从滑块升级为点选（第三档）。双维度计数意味着
+ *  「换号不换 IP」的撞库也会升档，且不会先触发任何单账号的锁定——这正是点选档要接的流量。 */
+const CAPTCHA_HARD_AFTER_FAILS = 6
 export const CAPTCHA_REQUIRED = 'CAPTCHA_REQUIRED'
+export const CAPTCHA_REQUIRED_HARD = 'CAPTCHA_REQUIRED_HARD'
 const loginFails = new Map<string, number>()
+/** IP 维度的失败计数：mock 单客户端，一个键即代表「本机 IP」。与后端的双维度口径对齐。 */
+const loginFailsIP = new Map<string, number>()
+
+/** 登录失败双维度计数（用户名 + IP），返回两维里的较大值 */
+function recordFailBoth(username: string): number {
+  const u = (loginFails.get(username) ?? 0) + 1
+  loginFails.set(username, u)
+  const ip = (loginFailsIP.get('ip') ?? 0) + 1
+  loginFailsIP.set('ip', ip)
+  return Math.max(u, ip)
+}
+
+/** 软/硬档位判定：双维度取大者与阈值比 */
+function captchaLevel(username: string): 'none' | 'soft' | 'hard' {
+  const u = loginFails.get(username) ?? 0
+  const ip = loginFailsIP.get('ip') ?? 0
+  const n = Math.max(u, ip)
+  if (n >= CAPTCHA_HARD_AFTER_FAILS) return 'hard'
+  if (n >= CAPTCHA_AFTER_FAILS) return 'soft'
+  return 'none'
+}
 
 function issue(u: AuthUser & { password?: string; phone?: string }) {
   return { accessToken: tokenFor(u.username, 'a'), refreshToken: tokenFor(u.username, 'r'), user: pub(u) }
@@ -336,6 +370,76 @@ defineMock([
     },
   },
   {
+    method: 'GET',
+    url: '/auth/click',
+    handler: () => {
+      // 点选形态的假数据：与后端同一套画布（384x150），主图混入干扰字、候选字条给点选顺序。
+      // 点位只留在 mock 进程内；目标坐标同时挂到 window 供 e2e 取用。
+      const key = Math.random().toString(36).slice(2)
+      const targets = Array.from({ length: 2 + Math.floor(Math.random() * 2) }, () => {
+        const col = Math.floor(Math.random() * 5)
+        const row = Math.floor(Math.random() * 2)
+        return {
+          x: 46 + col * 74 + Math.floor(Math.random() * 20),
+          y: 44 + row * 58 + Math.floor(Math.random() * 16),
+          size: 26,
+        }
+      })
+      const distract = Array.from({ length: 3 }, (_, i) => ({
+        x: 60 + i * 110 + Math.floor(Math.random() * 30),
+        y: 40 + Math.floor(Math.random() * 80),
+        size: 26,
+      }))
+      const chars = ['风', '月', '同', '天', '山', '河', '春', '秋', '湖', '光']
+      const pick = () => chars[Math.floor(Math.random() * chars.length)]
+      const render = (c: string, x: number, y: number, target: boolean) =>
+        `<text x="${x}" y="${y + 9}" font-size="26" font-weight="700" fill="#${target ? 'fde98e' : 'ffffff'}" opacity="${target ? 1 : 0.55}" transform="rotate(${Math.floor(Math.random() * 50) - 25} ${x} ${y})">${c}</text>`
+      const master =
+        `<svg xmlns="http://www.w3.org/2000/svg" width="${CLICK_W}" height="${CLICK_H}" viewBox="0 0 ${CLICK_W} ${CLICK_H}">` +
+        `<defs><linearGradient id="cg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7c89c9"/><stop offset="1" stop-color="#5b68a8"/></linearGradient></defs>` +
+        `<rect width="${CLICK_W}" height="${CLICK_H}" fill="url(#cg)"/>` +
+        targets.map((t) => render(pick(), t.x, t.y, true)).join('') +
+        distract.map((d) => render(pick(), d.x, d.y, false)).join('') +
+        `</svg>`
+      const thumbChars = Array.from({ length: targets.length }, () => pick())
+      const thumb =
+        `<svg xmlns="http://www.w3.org/2000/svg" width="150" height="40" viewBox="0 0 150 40">` +
+        `<rect width="150" height="40" rx="4" fill="#eef2f8"/>` +
+        thumbChars.map((c, i) => `<text x="${22 + i * 44}" y="28" font-size="22" font-weight="700" fill="#334155">${c}</text>`).join('') +
+        `</svg>`
+      clickDots.set(key, targets)
+      ;(window as unknown as { __nexClickTargets?: unknown }).__nexClickTargets = targets
+      return {
+        key,
+        image: `data:image/svg+xml;base64,${svgB64(master)}`,
+        thumb: `data:image/svg+xml;base64,${svgB64(thumb)}`,
+        width: CLICK_W,
+        height: CLICK_H,
+        thumbWidth: 150,
+        thumbHeight: 40,
+      }
+    },
+  },
+  {
+    method: 'POST',
+    url: '/auth/click/verify',
+    handler: ({ body }) => {
+      ;(window as unknown as { __nexClickVerify?: unknown }).__nexClickVerify = body
+      const expected = clickDots.get(body?.key)
+      if (expected === undefined) mockError(404, '验证码已失效')
+      const dots: { x: number; y: number }[] = Array.isArray(body?.dots) ? body.dots : []
+      if (dots.length !== expected.length) mockError(400, '验证码错误')
+      for (let i = 0; i < expected.length; i++) {
+        if (Math.abs((dots[i]?.x ?? Number.NaN) - expected[i].x) > CLICK_TOLERANCE) mockError(400, '验证码错误')
+        if (Math.abs((dots[i]?.y ?? Number.NaN) - expected[i].y) > CLICK_TOLERANCE) mockError(400, '验证码错误')
+      }
+      clickDots.delete(body.key)
+      const token = Math.random().toString(16).slice(2).padEnd(16, '0')
+      captchas.set(body.key, token)
+      return { token }
+    },
+  },
+  {
     method: 'POST',
     url: '/auth/sms-code',
     handler: ({ body }) => {
@@ -358,15 +462,24 @@ defineMock([
       const lockedLeft = lockRemainingSec(body?.username)
       if (lockedLeft > 0) mockError(LOCKED_CODE, `LOCKED:${lockedLeft}`)
       const name = String(body?.username ?? '')
-      // 防枚举：是否要求验证码只看提交的用户名，与账号是否存在无关
-      if ((loginFails.get(name) ?? 0) >= CAPTCHA_AFTER_FAILS) checkCaptcha(body?.captchaKey, body?.captcha, CAPTCHA_REQUIRED)
+      // 防枚举：是否要求验证码看「用户名 + IP」双维度的失败计数（取大者），与账号是否存在无关
+      if (captchaLevel(name) !== 'none') {
+        checkCaptcha(body?.captchaKey, body?.captcha, captchaLevel(name) === 'hard' ? CAPTCHA_REQUIRED_HARD : CAPTCHA_REQUIRED)
+      }
       const u = users[body?.username ?? '']
       if (!u || u.password !== body.password) {
-        const fails = (loginFails.get(name) ?? 0) + 1
-        loginFails.set(name, fails)
+        const fails = recordFailBoth(name) // 双维度计数，取大者
         const left = recordFailure(body?.username)
         if (left > 0) mockError(LOCKED_CODE, `LOCKED:${left}`)
-        mockError(400, '用户名或密码错误', fails >= CAPTCHA_AFTER_FAILS ? CAPTCHA_REQUIRED : undefined)
+        mockError(
+          400,
+          '用户名或密码错误',
+          fails >= CAPTCHA_HARD_AFTER_FAILS
+            ? CAPTCHA_REQUIRED_HARD
+            : fails >= CAPTCHA_AFTER_FAILS
+              ? CAPTCHA_REQUIRED
+              : undefined,
+        )
       }
       loginFails.delete(name)
       locks.delete(u.username)
@@ -416,7 +529,8 @@ defineMock([
       forgotEnabled: true,
       forgotChannels: ['email', 'phone'],
       registerEnabled: true,
-      captchaEnabled: true,
+      // 与后端出厂默认同口径：无感优先，同用户名/同 IP 连错 3 次后才要求验证码
+      captchaEnabled: false,
       providers: [
         { key: 'wecom', name: '企业微信' },
         { key: 'dingtalk', name: '钉钉' },

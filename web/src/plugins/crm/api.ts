@@ -32,6 +32,10 @@ export interface CrmCustomer {
   industry?: string
   address?: string
   remark?: string
+  /** 客户标签（规范化存储，最多 10 个、每个 20 字）。 */
+  tags?: string[]
+  /** 自定义字段值（code → 值），由启用中的字段定义渲染。 */
+  customValues?: Record<string, unknown>
   createdAt: string
 }
 
@@ -54,6 +58,8 @@ export interface CrmCustomerForm {
   industry?: string
   address?: string
   remark?: string
+  /** 自定义字段整份值（未定义/停用的 code 后端会 400）。 */
+  custom?: Record<string, unknown>
 }
 
 export interface CrmOpportunity {
@@ -92,6 +98,17 @@ export interface CustomerQuery extends PageQuery {
   source?: string
   /** 客户类型：person / company，空 = 不限。 */
   type?: string
+  /** 等级（A/B/C…），空 = 不限。 */
+  level?: string
+  /** 单个标签筛选（后端按逗号边界匹配）。 */
+  tag?: string
+  /** 建档时间范围（YYYY-MM-DD，含端点）。 */
+  createdFrom?: string
+  createdTo?: string
+  /** 排序字段（后端白名单：created_at / name / code / level / owner），空 = 默认 id DESC。 */
+  sortKey?: string
+  /** 排序方向；false = 倒序（默认）。 */
+  sort?: 'asc' | 'desc'
   /** 只看我的：owner = 当前账号（与角色数据范围叠加）。 */
   mine?: boolean
 }
@@ -123,7 +140,8 @@ export interface CrmContactForm {
 }
 
 // 跟进记录：call/visit/note/todo；todo 用 done/nextAt 表待办。
-export type ActivityKind = 'call' | 'visit' | 'note' | 'todo'
+/** system 只由服务层写入（归属/合并/状态变更等留痕），不出现在人工写跟进的类型里。 */
+export type ActivityKind = 'call' | 'visit' | 'note' | 'todo' | 'system'
 
 export interface CrmActivity {
   id: string
@@ -172,6 +190,11 @@ export function useCustomers(query: CustomerQuery) {
 }
 
 /** CRM 概览：按类型/状态的客户计数 + 公海与在途商机数。 */
+export interface CrmDailyCount {
+  date: string
+  count: number
+}
+
 export interface CrmStats {
   persons: number
   companies: number
@@ -179,6 +202,14 @@ export interface CrmStats {
   inactive: number
   pool: number
   openDeals: number
+  /** 六阶段商机计数（含 won/lost 终态，漏斗才看得出转化）。 */
+  stages: Record<string, number>
+  /** 六阶段金额漏斗：stage → 币种 → 金额（amountMinor 累加；不同币种的钱不相加）。 */
+  stageAmounts: Record<string, Record<string, number>>
+  /** 客户来源分布（none = 无锚点/手工录入）。 */
+  sources: Record<string, number>
+  /** 近 30 天建档趋势，缺天补零。 */
+  createdDaily: CrmDailyCount[]
 }
 
 export function useCrmStats() {
@@ -195,6 +226,32 @@ export function useCustomerPool(query: CustomerQuery) {
     queryFn: () => api.get<Page<CrmCustomer>>(`${BASE}/customers/pool`, query),
     placeholderData: keepPreviousData,
   })
+}
+
+/** 我的待跟进：到期未完成的跟进记录（可见性继承客户归属）。 */
+export interface CrmTodo {
+  id: string
+  customerId: string
+  customerName: string
+  kind: ActivityKind
+  content: string
+  nextAt: string
+  author?: string
+  /** 已过期（next_at 早于今天），清单里标红。 */
+  overdue: boolean
+}
+
+export function useCustomerTodos(enabled = true) {
+  return useQuery({
+    queryKey: [...KEY, 'todos'],
+    queryFn: () => api.get<{ items: CrmTodo[]; total: number }>(`${BASE}/customers/todos`),
+    enabled,
+  })
+}
+
+/** 拉单个客户（待跟进清单「查看客户」用）：清单行只有 id + 名，详情面板要完整资料。 */
+export function fetchCustomer(id: string): Promise<CrmCustomer> {
+  return api.get<CrmCustomer>(`${BASE}/customers/${id}`)
 }
 
 export function useClaimCustomer() {
@@ -279,6 +336,100 @@ export function useDeleteCustomers() {
   })
 }
 
+/** 使用中的标签（按使用次数倒序）：筛选下拉与打标建议共用。 */
+export function useCustomerTags(enabled = true) {
+  return useQuery({
+    queryKey: [...KEY, 'tags'],
+    queryFn: () => api.get<string[]>(`${BASE}/customers/tags`),
+    enabled,
+  })
+}
+
+/** 整份替换客户标签（最多 10 个、每个 20 字，后端校验）。 */
+export function useSetCustomerTags() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: ({ id, tags }: { id: string; tags: string[] }) =>
+      api.put<CrmCustomer>(`${BASE}/customers/${id}/tags`, { tags }),
+    onSuccess: invalidate,
+  })
+}
+
+/** 批量改归属/状态/等级：范围外的 id 由后端静默跳过，返回实改数。 */
+export function useBatchUpdateCustomers() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (input: { ids: string[]; owner?: string; status?: CustomerStatus; level?: string }) =>
+      api.post<{ updated: number }>(`${BASE}/customers/batch-update`, input),
+    onSuccess: invalidate,
+  })
+}
+
+/** 批量追加标签：已有该词的客户跳过，返回实改数。 */
+export function useBatchAddCustomerTags() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (input: { ids: string[]; tags: string[] }) =>
+      api.post<{ updated: number }>(`${BASE}/customers/batch-tags`, input),
+    onSuccess: invalidate,
+  })
+}
+
+/** 疑似重复分组（手机号/证件号/信用代码同值多客户），打开时拉一次。 */
+export interface CrmDuplicateGroup {
+  key: 'phone' | 'id_no' | 'tax_no'
+  value: string
+  customers: CrmCustomer[]
+}
+
+export function useCustomerDuplicates(enabled: boolean) {
+  return useQuery({
+    queryKey: [...KEY, 'duplicates'],
+    queryFn: () => api.get<CrmDuplicateGroup[]>(`${BASE}/customers/duplicates`),
+    enabled,
+  })
+}
+
+/** 一条自定义字段定义（平台级，全租户共享）。 */
+export interface CrmField {
+  id: string
+  code: string
+  label: string
+  type: 'text' | 'number' | 'select' | 'date' | 'bool'
+  options: string[]
+  required: boolean
+  enabled: boolean
+  sort: number
+}
+
+/** 全部字段定义（含停用的：管理页要能重新启用）。 */
+export function useCustomerFields(enabled = true) {
+  return useQuery({
+    queryKey: [...KEY, 'fields'],
+    queryFn: () => api.get<CrmField[]>(`${BASE}/customers/fields`),
+    enabled,
+  })
+}
+
+export function useSaveCustomerField() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (data: CrmField & { id?: string }) =>
+      data.id
+        ? api.put<CrmField>(`${BASE}/customers/fields/${data.id}`, data)
+        : api.post<CrmField>(`${BASE}/customers/fields`, data),
+    onSuccess: invalidate,
+  })
+}
+
+export function useDeleteCustomerField() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (id: string) => api.del(`${BASE}/customers/fields/${id}`),
+    onSuccess: invalidate,
+  })
+}
+
 export function useBindExternal() {
   const invalidate = useInvalidate()
   return useMutation({
@@ -295,6 +446,30 @@ export function useMergeCustomers() {
     mutationFn: (data: { targetId: string; sourceId: string }) =>
       api.post<CrmCustomer>(`${BASE}/customers/merge`, data),
     onSuccess: invalidate,
+  })
+}
+
+export interface CrmMergeFieldPreview {
+  column: string
+  value: string
+}
+
+/** 合并预览：与合并同一套规则的只读投影（补空字段 / 标签并集 / 关联迁移量）。 */
+export interface CrmMergePreview {
+  target: CrmCustomer
+  source: CrmCustomer
+  contacts: number
+  opportunities: number
+  activities: number
+  fillFields: CrmMergeFieldPreview[]
+  newTags: string[]
+}
+
+export function useMergePreview(targetId?: string, sourceId?: string) {
+  return useQuery({
+    queryKey: [...KEY, 'merge-preview', targetId, sourceId],
+    queryFn: () => api.post<CrmMergePreview>(`${BASE}/customers/merge-preview`, { targetId, sourceId }),
+    enabled: !!targetId && !!sourceId && targetId !== sourceId,
   })
 }
 

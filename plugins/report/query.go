@@ -82,9 +82,13 @@ var opSQL = map[string]string{
 var aggSQL = map[string]string{"count": "COUNT", "sum": "SUM", "avg": "AVG", "min": "MIN", "max": "MAX"}
 
 // Target 是一次查询可用的表与列：白名单表 ∩ 数据集选中的列。
+// joins/joined 是数据集声明的关联（见 joins.go）：build 按 joins 生成 JOIN，
+// 列引用（含图表筛选）经 resolveCol 解析到所属表并带上表限定符。
 type Target struct {
 	Src  *Source
 	cols map[string]Column
+	joins []resolvedJoin
+	joined map[string]*joinedTable
 }
 
 // Target 在白名单里解析表与列。每次使用都会重新校验（拒绝列表 + 白名单），
@@ -100,7 +104,7 @@ func (r *Registry) Target(table string, cols []string) (*Target, error) {
 	if len(cols) == 0 {
 		return nil, specErr("report.dataset_columns_required")
 	}
-	tg := &Target{Src: src, cols: map[string]Column{}}
+		tg := &Target{Src: src, cols: map[string]Column{}, joined: map[string]*joinedTable{}}
 	for _, name := range cols {
 		c, ok := src.Col(name) // 精确匹配：大小写/引号/schema 变体都找不到
 		if !ok || !validIdent(name) || deniedColumn(name) {
@@ -223,15 +227,26 @@ func (e *Engine) build(ctx context.Context, tg *Target, sp Spec, env Env) (*gorm
 
 	q := quoteFor(e.db)
 	dialect := dialectName(e.db)
+	// colRef 把列引用（主表裸列名或 "关联表.列"）解析成带表限定符的 SQL 片段：
+	// 有 JOIN 的查询里裸列名可能二义，所以所有列引用一律限定到所属表。
+	colRef := func(ref string) (string, Column, error) {
+		table, c, ok := tg.resolveCol(ref)
+		if !ok || !validIdent(c.Name) || deniedColumn(c.Name) {
+			return "", Column{}, errNotAllowed
+		}
+		if table == "" {
+			table = src.Table
+		}
+		return q(table) + "." + q(c.Name), c, nil
+	}
 	var sel []clause.Column
 	var cols []ResultCol
 
 	for i, d := range sp.Dimensions {
-		c, ok := tg.cols[d.Column]
-		if !ok || !validIdent(c.Name) || deniedColumn(c.Name) {
-			return nil, nil, errNotAllowed
+		expr, c, err := colRef(d.Column)
+		if err != nil {
+			return nil, nil, err
 		}
-		expr := q(c.Name)
 		typ := c.Type
 		if d.Bucket != "" {
 			f, ok := bucketFmt[d.Bucket]
@@ -257,9 +272,9 @@ func (e *Engine) build(ctx context.Context, tg *Target, sp Spec, env Env) (*gorm
 		arg := "*"
 		label := m.Label
 		if m.Column != "" {
-			c, ok := tg.cols[m.Column]
-			if !ok || !validIdent(c.Name) || deniedColumn(c.Name) {
-				return nil, nil, errNotAllowed
+			argExpr, c, err := colRef(m.Column)
+			if err != nil {
+				return nil, nil, err
 			}
 			switch m.Agg {
 			case "sum", "avg":
@@ -271,7 +286,7 @@ func (e *Engine) build(ctx context.Context, tg *Target, sp Spec, env Env) (*gorm
 					return nil, nil, specErr("report.aggregate_numeric_or_time_only")
 				}
 			}
-			arg = q(c.Name)
+			arg = argExpr
 			if label == "" {
 				label = c.Label
 			}
@@ -284,12 +299,20 @@ func (e *Engine) build(ctx context.Context, tg *Target, sp Spec, env Env) (*gorm
 	}
 
 	tx := e.db.WithContext(ctx).Table(src.Table)
+	// 关联表：等值内连接，ON 来自数据集配置；关联表也强制租户条件（数据范围仍按主表裁剪）。
+	for _, j := range tg.joins {
+		tx = tx.Joins("JOIN " + q(j.table) + " ON " + q(src.Table) + "." + q(j.left) + " = " + q(j.table) + "." + q(j.right))
+		if j.src.TenantCol != "" {
+			tx = tx.Where(q(j.table)+"."+q(j.src.TenantCol)+" = ?", env.TenantID)
+		}
+	}
 	distinct := sp.Distinct && len(sp.Measures) == 0
 	tx = tx.Clauses(clause.Select{Distinct: distinct, Columns: sel})
 
 	// 租户条件：来自上下文，永远第一个、永远存在；过滤条件只能用 AND 追加，无法覆盖或绕开它。
+	// 列引用全部带表限定符：有 JOIN 时裸列名会同名二义。
 	if src.TenantCol != "" {
-		tx = tx.Where(q(src.TenantCol)+" = ?", env.TenantID)
+		tx = tx.Where(q(src.Table)+"."+q(src.TenantCol)+" = ?", env.TenantID)
 	}
 	// 数据范围：能复用 core/datascope 的就复用（归属列来自元数据）。
 	var scopeCond string
@@ -297,9 +320,9 @@ func (e *Engine) build(ctx context.Context, tg *Target, sp Spec, env Env) (*gorm
 	var scoped bool
 	switch {
 	case src.OwnerCol != "":
-		scopeCond, scopeArgs, scoped = env.Scope.UserIDCond(q(src.OwnerCol))
+		scopeCond, scopeArgs, scoped = env.Scope.UserIDCond(q(src.Table) + "." + q(src.OwnerCol))
 	case src.UsernameCol != "":
-		scopeCond, scopeArgs, scoped = env.Scope.UsernameCond(q(src.UsernameCol))
+		scopeCond, scopeArgs, scoped = env.Scope.UsernameCond(q(src.Table) + "." + q(src.UsernameCol))
 	default:
 		if env.Scope.Limited() && src.ScopeRequired {
 			return nil, nil, response.Forbidden("report.datascope_denied")
@@ -369,8 +392,9 @@ func (e *Engine) build(ctx context.Context, tg *Target, sp Spec, env Env) (*gorm
 }
 
 // filterSQL 把一个过滤条件翻成「带占位符的片段 + 参数」。列名取自元数据，值全部参数化。
+// 列引用带表限定符（有 JOIN 时裸列名二义）。
 func (t *Target) filterSQL(f Filter, q func(string) string) (string, []any, error) {
-	c, ok := t.cols[f.Column]
+	table, c, ok := t.resolveCol(f.Column)
 	if !ok || !validIdent(c.Name) || deniedColumn(c.Name) {
 		return "", nil, errNotAllowed
 	}
@@ -378,7 +402,10 @@ func (t *Target) filterSQL(f Filter, q func(string) string) (string, []any, erro
 	if !ok {
 		return "", nil, specErr("report.filter_operator_not_allowed")
 	}
-	col := q(c.Name)
+	if table == "" {
+		table = t.Src.Table
+	}
+	col := q(table) + "." + q(c.Name)
 	switch f.Op {
 	case "in":
 		list, ok := f.Value.([]any)

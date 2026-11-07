@@ -261,12 +261,25 @@ crm:
   export_too_many: Export exceeds the 10000-row limit; narrow the filters.
   country_invalid: Country must be a 2-letter ISO 3166-1 alpha-2 code (e.g. CN, US)
   nationality_invalid: Nationality must be a 2-letter ISO 3166-1 alpha-2 code (e.g. CN, US)
+  tag_invalid: At most 10 tags, 20 characters each, no commas
+  ids_required: Select the customers to operate on first
+  batch_nothing: Choose at least one field to batch update (owner / status / level)
+  owner_invalid: Owner is required (max 64 characters)
   customer_in_use: Customer still has opportunities and cannot be deleted
   not_found: Customer or opportunity not found
   contact_name_required: Contact name is required
   contact_customer_mismatch: The contact does not belong to this customer (clear the customer together with the contact)
   activity_content_required: Follow-up content is required
   activity_kind_invalid: Invalid follow-up kind
+  todo_notify_title: "Customer follow-up reminder: %d item(s) due"
+  todo_notify_content: "Customers due for follow-up: %s"
+  field_code_invalid: Field code must be snake_case starting with a lowercase letter (max 32)
+  field_label_required: Field label is required (max 64 characters)
+  field_type_invalid: Invalid field type
+  field_option_invalid: At most 50 options, 64 characters each, no commas; select fields need at least one option
+  field_value_invalid: The value does not match the field type
+  field_required: A required custom field is empty
+  field_code_conflict: A custom field with the same code already exists
   date_invalid: Date must be in YYYY-MM-DD format
   plugin_inactive: CRM plugin is not enabled or its license has lapsed
 aigateway:
@@ -523,6 +536,8 @@ plugin:
   not_found: "Plugin not found."
   disabled: "Plugin is not enabled."
   market_not_found: "This plugin is not in the marketplace catalog."
+  environment_unavailable: "This node cannot build plugins and restart automatically (%s). Install and verify in a source build environment before deployment, or manage this service with start and retry."
+  market_ids_invalid: "Select 1 to 64 distinct, valid plugin IDs."
   upload_file_required: "Pick a plugin package (.zip) to upload."
   upload_too_large: "The package exceeds the %dMB limit."
   upload_zip_only: "Only .zip packages can be uploaded."
@@ -737,6 +752,7 @@ website:
   home_slug_missing: "The page chosen as homepage does not exist; create it under Pages first."
   notify_inquiry_title: "Website enquiry from %s"
   notify_content_empty: "(empty)"
+  joins_too_many: "A dataset can declare at most 2 joined tables."
 codegen:
   table_not_found: "Table not found: %s"
   invalid_input: "Invalid input. Please check and try again."

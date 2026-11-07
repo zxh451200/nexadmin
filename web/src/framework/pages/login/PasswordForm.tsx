@@ -12,7 +12,7 @@ import { Button } from '@/framework/ui/button'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/framework/ui/form'
 import { Input } from '@/framework/ui/input'
 import type { LoginChallenge } from '@/framework/auth/types'
-import { CaptchaField, useCaptcha } from './CaptchaField'
+import { CaptchaField, useCaptcha, type CaptchaMode } from './CaptchaField'
 
 export function PasswordForm({
   onSuccess,
@@ -27,7 +27,7 @@ export function PasswordForm({
   onSuccess: () => void
   onForgot?: () => void
   onChallenge?: (c: LoginChallenge) => void
-  /** 「登录验证码」强制开启（/auth/methods 的 captchaEnabled）：首屏就要求图形验证码 */
+  /** 「登录验证码」强制开启（/auth/methods 的 captchaEnabled）：首屏就要求验证码（默认滑块，可切图形） */
   captchaAlways?: boolean
   /** 演示站凭据（/system/status 下发）：非 null 时预填账号与密码 */
   demoCredentials?: { account: string; password: string } | null
@@ -37,11 +37,14 @@ export function PasswordForm({
   const { t } = useTranslation()
   const login = useAuth((s) => s.login)
   const verifyLogin = useAuth((s) => s.verifyLogin)
-  // captchaAlways（参数设置「登录验证码」开启）时首屏即要求验证码；
-  // 否则默认不要求，服务端在同一用户名/IP 连续失败后返回 reason=CAPTCHA_REQUIRED，此时才出现验证码输入
+  // captchaAlways（参数设置「登录验证码」开启，出厂关闭 = 无感优先）时首屏即要求验证码；
+  // 否则默认不要求，服务端在同一用户名/IP 连续失败后返回 reason=CAPTCHA_REQUIRED，此时才出现验证码区
   const [needCaptcha, setNeedCaptcha] = useState(!!captchaAlways)
   useEffect(() => setNeedCaptcha(!!captchaAlways), [captchaAlways])
-  const { captcha, refresh, mode, setMode } = useCaptcha(needCaptcha)
+  // baseMode 是服务端指派的形态：软阈值（3 次）滑块、硬阈值（6 次）点选；用户只能在
+  // 当前形态与图形码兜底之间切换，不能降级（见 CaptchaField 的切换链接）
+  const [baseMode, setBaseMode] = useState<CaptchaMode>('slider')
+  const { captcha, refresh, mode, setMode } = useCaptcha(needCaptcha, baseMode)
   const [show, setShow] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [verifying, setVerifying] = useState(false)
@@ -126,7 +129,17 @@ export function PasswordForm({
       }
     } catch (e) {
       if (e instanceof ApiError && e.code === 423) setLockLeft(Number(e.message.split(':')[1]) || 0)
-      if (e instanceof ApiError && e.reason === 'CAPTCHA_REQUIRED') setNeedCaptcha(true)
+      if (e instanceof ApiError && e.reason === 'CAPTCHA_REQUIRED') {
+        setNeedCaptcha(true)
+        setBaseMode('slider')
+      }
+      // 升级档：连错达到硬阈值（hardAfterFails）后，服务端指派形态换成点选——滑块专用的
+      // 自动化工具到这儿一并被筛出去。用户不能降级，只能切图形码兜底。
+      if (e instanceof ApiError && e.reason === 'CAPTCHA_REQUIRED_HARD') {
+        setNeedCaptcha(true)
+        setBaseMode('click')
+        setMode('click')
+      }
       if (needCaptcha) {
         form.setValue('captcha', '')
         void refresh()
@@ -181,7 +194,7 @@ export function PasswordForm({
             </FormItem>
           )}
         />
-        {needCaptcha && !challenge ? <CaptchaField form={form} captcha={captcha} onRefresh={refresh} mode={mode} onModeChange={setMode} required={needCaptcha} /> : null}
+        {needCaptcha && !challenge ? <CaptchaField form={form} captcha={captcha} onRefresh={refresh} mode={mode} onModeChange={setMode} baseMode={baseMode} required={needCaptcha} /> : null}
 
         {challenge ? (
           <div className="space-y-2">

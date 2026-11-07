@@ -232,7 +232,7 @@ export const routes: ModuleRoute[] = [
 
 ## 6. 本地开发流程
 
-1. 先按[快速开始](quickstart.md)派生开发项目，在项目外准备上面的插件安装包结构，或以取得的免费 cron 包为参考；自己的插件须更换 ID、权限码与表前缀，不在框架母版里写业务代码。示例里的 `nexadmin/...` 导入路径应使用派生项目的实际 Go module 路径。
+1. 先按[快速开始](quickstart.md)派生开发项目，在项目外准备上面的插件安装包结构，或以取得的免费 cron 包为参考；也可以用 `go run ./cmd/nexadmin plugin create <id> --out <目录> [--name <名称>] [--edition free|pro]` 直接生成全栈骨架（清单、后端入口与权限单测、前端路由/页面/api/mock、双语词条），目标已存在时拒绝覆盖。自己的插件须更换 ID、权限码与表前缀，不在框架母版里写业务代码。示例里的 `nexadmin/...` 导入路径应使用派生项目的实际 Go module 路径。
 2. 前端：把 `web/` 放到 `web/src/plugins/<id>/`，`npm run dev`，打开页面用 mock 数据调试。
 3. 后端：把 `backend/` 放到 `plugins/<id>/`，并把包根的 `plugin.yaml` 复制到 `plugins/<id>/plugin.yaml`。目录名必须与清单 `id` 完全一致（如 `i18n-editor` 不能写成 `i18neditor`，Go 的 package 名可以不同）；管理器按 ID 查找清单和 `migrations/`。在 `plugins/plugins.go` 的标记行之间加一行 `_ "nexadmin/plugins/<id>"`（用安装命令会自动加）。
 4. 用开发密钥签一份授权（pro 插件必需），放进 `data/licenses/<id>.lic`：
@@ -257,12 +257,21 @@ zip -r cron-1.0.0.zip cron/        # 目录名 = 插件 id；包内不要带 nod
 在一个干净的派生项目里验证安装（使用实际包文件名与插件 ID 替换下例）：
 
 ```bash
+go run ./cmd/nexadmin plugin lint <插件目录>   # 上架前静态自检，见下
 go run ./cmd/nexadmin plugin install cron-1.0.0.zip
 go build ./... && go vet ./... && go test ./plugins/<id>/...
 cd web && npx tsc --noEmit && npx eslint src
 ```
 
-覆盖安装使用 `go run ./cmd/nexadmin plugin install --force <目录或zip>`；`--force` 必须在路径之前（安装子命令使用标准 `flag.Parse`，不解析路径之后的选项）。把已安装插件重新打成发行包：`go run ./cmd/nexadmin plugin pack [--out <路径.zip>] <id>`（产出 `plugin.yaml + backend/ + web/` 的 zip，与 install 输入格式互逆；`--out` 同样要在位置参数之前）。`release pack` 打的是框架包。`plugin list` 读取磁盘清单与离线授权，不证明 Go 空导入、迁移和运行时挂载成功；还需核对 `plugins/plugins.go`、启动日志与运行时 `GET /api/v1/plugins`。
+`plugin lint` 不执行插件代码，静态核对：Go `plugin.Register` 的 ID/Version/Edition 与清单一致（支持字符串常量与 `plugin.Free/Pro`，动态注册拒绝）；路由 `export const routes` 的 path/perm 与清单菜单一一对应；mock 文件存在且非空；中英文词条键集合一致且覆盖全部静态 `t(...)`/`i18nKey` 与菜单标题；有迁移时 mysql/mariadb/postgres 三方言同名文件集合一致。它不做 TS 类型检查，发布前仍须构建与测试。
+
+覆盖安装使用 `go run ./cmd/nexadmin plugin install --force <目录或zip>`。三个放宽开关彼此独立，都必须在路径之前（安装子命令使用标准 `flag.Parse`，不解析路径之后的选项）：
+
+- `--force`：仅允许覆盖已安装的插件。覆盖前旧源码自动持久备份到 `data/plugins/backups/`（不含数据库与授权）。
+- `--allow-incompatible`：跳过 `requires_nexadmin` 版本检查。仅 CLI 提供；后台市场安装永远不跳过。
+- `--allow-modified`：已装源码相对安装台账的 SHA-256 指纹有本地改动（或旧台账没有基线）时仍允许覆盖；不加则拒绝，防止冲掉二次开发。
+
+把已安装插件重新打成发行包：`go run ./cmd/nexadmin plugin pack [--out <路径.zip>] <id>`（产出 `plugin.yaml + backend/ + web/` 的 zip，与 install 输入格式互逆；`--out` 同样要在位置参数之前）。`release pack` 打的是框架包。`plugin list` 读取磁盘清单与离线授权，不证明 Go 空导入、迁移和运行时挂载成功；还需核对 `plugins/plugins.go`、启动日志与运行时 `GET /api/v1/plugins`。
 
 安装命令会拒绝路径穿越的压缩包，并限制解压后的文件数量和总大小。卸载与停用：
 
@@ -271,6 +280,16 @@ cd web && npx tsc --noEmit && npx eslint src
 - 临时停用（不删代码不动数据）：两条路。
   - 配置：`config/config.yaml` 里 `disabled_plugins: [<id>]`，重启后该插件完全不挂载，插件管理页显示“已停用”，`plugin list` 显示 `disabled`。从配置移除并重启即恢复。
   - 运行期：插件管理页卡片上的启用开关（`POST /api/v1/plugins/<id>/enabled`，权限点 `plugin:edit`），停用清单落盘在**节点本地**的 `data/licenses/disabled.json`，重启后保持。两条来源取并集，**配置优先**：配置里停用的插件，页面上的开关打不开（回 400 并说明要改配置）。free 插件没有授权闸门，停用全走这两条；pro 插件也可用（不必撤授权，但停用期间没有授权导入入口，要导先启用）。多节点不会自动同步，见下一节的边界清单。
+
+### 后台市场安装（批量、环境预检与更新保护）
+
+后台「插件管理 → 插件市场」的安装/更新/上传/卸载/重建共用一套保护：
+
+- **环境预检**：页面加载时请求 `GET /api/v1/plugins/market/environment`，核对项目源码树、`go`/`npm` 可用性、web 依赖（`node_modules` 里的 vite/typescript）与受管重启能力；不就绪时按项给出修复指引，相关操作按钮置灰。生产单二进制部署没有源码与工具链，应在构建机派生项目里操作后再发布。
+- **批量更新**：「全部更新」先把所有包下载并逐个通过安装前检查（此阶段不写项目），再在一个回滚边界内落盘全部源码，最后只构建、重启一次；中途失败恢复本次改动的源码、依赖与产物（数据库与授权不在回滚范围）。
+- **本地改动保护**：安装台账（`data/plugins/installed.json`）记录每个插件源码的 SHA-256 指纹；更新前后台比对，有本地改动或基线未知时弹出确认，显式同意才覆盖。覆盖前的旧源码持久备份在 `data/plugins/backups/`。
+- **包身份核对**：市场目录条目的 id/edition/version 与包内清单不一致即拒绝安装。
+- 上传安装的临时 zip 在任务接手后无论成败都会删除，不再残留。
 
 ### 官网插件市场（website 插件）
 
@@ -302,7 +321,7 @@ cd web && npx tsc --noEmit && npx eslint src
 | 三者都没有（GitHub `repo` zipball、无侧文件的普通直链） | —— | 默认策略：放行并写显式告警（`NEXADMIN_MARKET_REQUIRE_CHECKSUM=1` 改为拒绝） |
 
 - 默认选“告警放行”的理由：`repo` 且 `ref` 留空的条目跟随默认分支，字节每次推送都变，本质上无法预先固定校验值；直接拒绝会让现网的一键安装全部失败。放行不等于安全——它只是把“这个包没被完整性校验过”写进告警日志，而不是假装校验通过。对完整性有要求部署把 `NEXADMIN_MARKET_REQUIRE_CHECKSUM=1` 打开，或给条目补 `checksum`/`checksum_url`、把下载改走官网端点。
-- 校验失败即拒绝安装：**不解压、不写 `plugins/`、不动 `plugins.go`**，下载的临时 zip 当场删除；没有 `--force` 之类的绕过口子（`--force` 只放宽清单与已安装检查）。错误文案走 i18n（`plugin.market.checksum_*`，`core/i18n/locales/{zh-CN,en-US}.yaml` 同步维护）。
+- 校验失败即拒绝安装：**不解压、不写 `plugins/`、不动 `plugins.go`**，下载的临时 zip 当场删除；没有绕过口子（CLI 的 `--force`/`--allow-incompatible`/`--allow-modified` 都不影响完整性校验）。错误文案走 i18n（`plugin.market.checksum_*`，`core/i18n/locales/{zh-CN,en-US}.yaml` 同步维护）。
 - SHA-256 只回答“下载到的字节是不是我打算核对的那个包”，防的是传输与缓存被换、目录与包不一致。校验值与包来自同一下载通道时它**不能证明发布者身份**；来源认证仍是 Ed25519 签名（`.sig` + 固定公钥），两者互补，不要拿 SHA-256 当签名用。
 - 产出侧与消费侧分开：官网 `/plugins/<id>/download` 自己拉上游源码重打包（`market.Package`）时不校验——它正是产出 `.sha256` 的一侧，没有期望值可对；校验只在客户端 `Download` 上做。
 - `nexadmin plugin install <本地 zip>` 没有目录条目可比对，包的可信度由提供文件的人负责；需要校验先 `nexadmin plugin verify`。
@@ -398,7 +417,7 @@ cd web && npx tsc --noEmit && npx eslint src
 
 ## 11. 常见问题
 
-**能不能只做前端或只做后端？** 可以。纯前端插件没有 `backend/`，纯后端插件没有 `web/`，清单里的 `menus` 按需填写。
+**能不能只做前端或只做后端？** 纯后端插件可以没有 `web/`，清单里的 `menus` 按需填写。纯前端包目前不被安装器支持：缺少 `backend/` 目录会直接拒绝安装（`plugin lint` 同样拦截）；只改前端页面的需求应走框架的页面覆盖机制。
 
 **插件要改内置功能怎么办？** 不允许改。需要框架提供扩展点的，请向框架提需求，不要通过修改 core 或 framework 的方式绕过去。
 
@@ -411,7 +430,7 @@ cd web && npx tsc --noEmit && npx eslint src
 **已知限制（框架当前版本）**
 - 域名校验已实现：授权里的 `domains` 会与当前站点域名比对（精确或 `*.example.com` 通配；站点域名取自 `site.domain` / `site.domains` / `sso.issuer`，都没配时用第一次请求的 `Host`，`license.allow_dev_hosts` 可放行本机地址）。不匹配时插件状态为 `invalid`，路由返回 403，原因显示在插件管理页。授权里没写 `domains` 表示不绑定域名。
 - 授权到期会自动下线：后台定时检查（`CheckEvery`，默认每小时）加每次进入插件路由前的检查，到期的插件被标为 `expired`，路由返回 403，不需要重启；定时检查只影响插件管理页的状态刷新，请求路径上是实时判定的。
-- `requires_nexadmin` 已校验：插件挂载时（以及 `nexadmin plugin install`）会按它检查框架版本，不满足则不挂载（状态 `invalid`，授权再有效也没用），`plugin install` 可用 `--force` 跳过。该项为空，或框架版本未知（开发环境没有版本号）时放行；写错而无法解析的范围视为不满足。
+- `requires_nexadmin` 已校验：插件挂载时（以及 `nexadmin plugin install`）会按它检查框架版本，不满足则不挂载（状态 `invalid`，授权再有效也没用），`plugin install` 可用 `--allow-incompatible` 跳过（仅 CLI；后台市场不提供该开关）。该项为空，或框架版本未知（开发环境没有版本号）时放行；写错而无法解析的范围视为不满足。
 - 授权不联网回查，只有离线吊销：发行方用 `plugin revoke`（或授权后台导出）生成签名的吊销清单 `config/license-revoked.json`，随升级包分发；框架验签后把序列号命中的授权标为 `revoked`（路由返回 403，原因显示在插件管理页），文件变化后无需重启。这只是辅助手段，不是强保护：源码交付下买家可以删除清单或改掉校验代码；没有序列号的旧授权不能被单独吊销。仍应缩短授权有效期、按期续签；发行方私钥泄露或需要整体作废时，从公钥集合里去掉对应公钥（`config/license-keys.pub` 或内置列表），由该钥签发的授权会全部失效。
 - 支持多把公钥：校验时用内置公钥加 `config/license-keys.pub`（每行一把 base64，`#` 起为注释）里追加的公钥，授权文件里的 `kid` 指明用哪一把（旧授权文件没有 `kid`，依次尝试全部公钥）。发行方轮换密钥时先追加新公钥，等旧授权都过期后再去掉旧公钥，不必改源码。内置的是开发公钥，正式发行前必须替换（`nexadmin release check` 会拦截）。
 - 运行期启停（插件管理页开关）能立刻生效的和不能立刻生效的，划开写：

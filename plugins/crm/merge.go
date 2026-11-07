@@ -40,6 +40,7 @@ func (s *Service) MergeCustomers(ctx context.Context, sc *datascope.Scope, in Me
 	}
 
 	var merged *Customer
+	var mergedFromName, mergedFromCode string
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var target, source Customer
 		if err := tx.Take(&target, int64(in.Target)).Error; err != nil {
@@ -74,15 +75,27 @@ func (s *Service) MergeCustomers(ctx context.Context, sc *datascope.Scope, in Me
 		}
 		// 主客户空着的字段用从客户的补上：先到的主数据说了算，缺失的细节不丢。
 		fills := mergeFills(&target, &source)
+		// 标签做并集：两边都不丢词（不覆盖、不替换，单客户 10 个上限由 normalize 兜住）。
+		unionTags, err := normalizeTags(append(splitTags(target.Tags), splitTags(source.Tags)...))
+		if err != nil {
+			return err
+		}
+		if canonicalTags(unionTags) != target.Tags {
+			fills["tags"] = canonicalTags(unionTags)
+		}
 		if len(fills) > 0 {
 			if err := tx.Model(&Customer{}).Where("id = ?", int64(in.Target)).Updates(fills).Error; err != nil {
 				return err
 			}
 		}
-		// 从客户删除（直接删行；其关联记录已迁走，无需级联）。
-		if err := tx.Delete(&Customer{}, int64(in.Source)).Error; err != nil {
+		// 从客户删除：数据（联系人/跟进/商机/标签）已整体迁走，这里必须物理删——
+		// GORM 会把普通 Delete 翻译成软删除，被并方会变成回收站里的一具空壳，Unscoped 绕开。
+		if err := tx.Unscoped().Delete(&Customer{}, int64(in.Source)).Error; err != nil {
 			return err
 		}
+		// 留痕要的从客户身份先记下（行马上就删了）；留痕本身在事务提交后写，
+		// 不让一条「合并了」的跟进挂在可能回滚的事务外面变成孤儿。
+		mergedFromName, mergedFromCode = source.Name, source.Code
 		if err := tx.Take(&target, int64(in.Target)).Error; err != nil {
 			return err
 		}
@@ -92,6 +105,7 @@ func (s *Service) MergeCustomers(ctx context.Context, sc *datascope.Scope, in Me
 	if err != nil {
 		return nil, err
 	}
+	s.noteSystem(ctx, in.Target, "合并了客户「"+mergedFromName+"」（"+mergedFromCode+"）的资料与关联记录")
 	s.publishCustomer(ctx, EventCustomerUpdated, merged)
 	return merged, nil
 }

@@ -58,7 +58,7 @@ const seed: ConfigRow[] = [
   row(3, '版权信息', 'site.copyright', '© 2026 NexAdmin', 'string', true, '页脚展示'),
   row(4, '用户初始密码', 'user.default_password', 'Nex@123456', 'string', false, '新建用户及重置密码时使用'),
   row(5, '开放注册', 'user.register_enabled', 'false', 'boolean', true),
-  row(6, '登录验证码', 'login.captcha_enabled', 'true', 'boolean', true, '关闭后登录页不再出现验证码'),
+  row(6, '登录验证码', 'login.captcha_enabled', 'false', 'boolean', true, '关闭（出厂默认）=同用户名或同 IP 连续失败达到阈值后才要求；开启=登录必须先过验证码'),
   row(7, '登录最大重试次数', 'login.max_retry', '5', 'number', false),
   row(8, '账号锁定时长(分钟)', 'login.lock_minutes', '30', 'number', false),
   row(11, '图片上传大小上限(MB)', KEY_IMAGE, '0', 'number', true, '0 或留空表示不限制'),

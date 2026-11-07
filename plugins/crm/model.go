@@ -1,6 +1,10 @@
 package crm
 
 import (
+	"time"
+
+	"gorm.io/gorm"
+
 	"nexadmin/core/database"
 	"nexadmin/pkg/idgen"
 )
@@ -85,6 +89,24 @@ type Customer struct {
 	Industry string `gorm:"size:64;not null;default:''" json:"industry"`
 	Address  string `gorm:"size:200;not null;default:''" json:"address"`
 	Remark   string `gorm:"size:500;not null;default:''" json:"remark"`
+	// Tags 以逗号包裹存储（,vip,大客户,），对外用 TagList 数组；与工单标签同一套约定。
+	Tags    string   `gorm:"size:240;not null;default:''" json:"-"`
+	TagList []string `gorm:"-" json:"tags"`
+	// CustomValuesRaw 是自定义字段的值（JSON 对象文本，列 custom_values）。
+	// 值不进独立列，管理员加字段不需要迁移历史客户。
+	CustomValuesRaw string `gorm:"column:custom_values;type:text;not null" json:"-"`
+	// CustomValues 是对外形态；读路径由 AfterFind 解码，写路径在 service 里显式编码。
+	CustomValues map[string]any `gorm:"-" json:"customValues"`
+	// DeletedAt 软删除列：删除即进回收站（recbin.TypeCustomer），联系人/跟进原样保留等还原。
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
+}
+
+// AfterFind 把存储串拆回标签数组、把 custom_values 拆回值映射：
+// 所有读路径（列表/详情）自动生效；坏 JSON 一律当「没有值」而不是报错。
+func (c *Customer) AfterFind(*gorm.DB) error {
+	c.TagList = splitTags(c.Tags)
+	c.CustomValues = DecodeCustomValues(c.CustomValuesRaw)
+	return nil
 }
 
 func (Customer) TableName() string { return "plg_crm_customer" }
@@ -111,17 +133,19 @@ type Opportunity struct {
 
 func (Opportunity) TableName() string { return "plg_crm_opportunity" }
 
-// 跟进记录类型（P0 四种：电话/拜访/备注/待办；todo 用 done 与 next_at 表达）。
+// 跟进记录类型（电话/拜访/备注/待办由人工写；system 是归属/合并/状态变更等操作留痕，
+// 只能由服务层写入，不出现在写跟进的类型选择里）。
 const (
-	KindCall  = "call"
-	KindVisit = "visit"
-	KindNote  = "note"
-	KindTodo  = "todo"
+	KindCall   = "call"
+	KindVisit  = "visit"
+	KindNote   = "note"
+	KindTodo   = "todo"
+	KindSystem = "system"
 )
 
 // ActivityKindSet 是合法跟进类型集合（i18n 与校验共用）。
 var ActivityKindSet = map[string]bool{
-	KindCall: true, KindVisit: true, KindNote: true, KindTodo: true,
+	KindCall: true, KindVisit: true, KindNote: true, KindTodo: true, KindSystem: true,
 }
 
 // Contact 是客户下的联系人：一个客户可以有多个联系人，is_primary 标主联系人
@@ -150,6 +174,9 @@ type Activity struct {
 	NextAt        string   `gorm:"size:16;not null;default:''" json:"nextAt"`
 	Done          bool     `gorm:"not null;default:false" json:"done"`
 	Author        string   `gorm:"size:64;not null;default:''" json:"author"`
+	// RemindedAt 是到期提醒的发送时间（清扫器写）；NULL = 还没提醒过。
+	// 跟进记录建后不可编辑（next_at 不变），所以一次即止：发过就不再发。
+	RemindedAt *time.Time `gorm:"column:reminded_at" json:"-"`
 }
 
 func (Activity) TableName() string { return "plg_crm_activity" }

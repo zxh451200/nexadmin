@@ -30,18 +30,22 @@ func findRoot() (string, error) {
 
 func cmdInstall(args []string, out io.Writer) error {
 	fl := newFlags("install")
-	force := fl.Bool("force", false, "已安装时覆盖")
+	force := fl.Bool("force", false, "已安装时覆盖，仍检查兼容性与本地改动")
+	allowIncompatible := fl.Bool("allow-incompatible", false, "显式跳过框架版本兼容检查（运行时仍会拒绝不兼容插件）")
+	allowModified := fl.Bool("allow-modified", false, "允许备份后覆盖本地修改或没有安装基线的插件")
 	if err := fl.Parse(args); err != nil {
 		return err
 	}
 	if fl.NArg() != 1 {
-		return errors.New("用法: nexadmin plugin install [--force] <目录或zip>")
+		return errors.New("用法: nexadmin plugin install [--force] [--allow-modified] [--allow-incompatible] <目录或zip>")
 	}
 	root, err := findRoot()
 	if err != nil {
 		return err
 	}
-	id, err := market.Install(root, fl.Arg(0), *force)
+	id, err := market.Install(root, fl.Arg(0), market.InstallOptions{
+		Overwrite: *force, AllowIncompatible: *allowIncompatible, AllowModified: *allowModified,
+	})
 	if err != nil {
 		return err
 	}

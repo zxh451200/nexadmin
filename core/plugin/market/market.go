@@ -355,128 +355,95 @@ func exists(p string) bool {
 	return err == nil
 }
 
-// Install 校验清单 -> 拷贝 backend/ 与 web/ -> 更新 plugins.go。返回插件 id。
-func Install(root, src string, force bool) (string, error) {
-	return InstallSub(root, src, "", force)
+// Install 校验清单 -> 拷贝 backend/ 与 web/ -> 更新 plugins.go 和安装指纹。返回插件 id。
+func Install(root, src string, opts InstallOptions) (string, error) {
+	return InstallSub(root, src, "", opts)
 }
 
-// InstallSub 在 Install 之上支持从多插件包（monorepo zip）里按子目录安装：
-// sub 为空时 src 是单插件包（根或唯一一级子目录含 plugin.yaml）；
-// sub 非空时 src 的该子目录就是插件包（如 nexadmin-plugins 仓库 zip 里的 cron/）。
-func InstallSub(root, src, sub string, force bool) (string, error) {
-	st, err := os.Stat(src)
+// InstallSub 支持从多插件包（目录或 monorepo zip）的 sub 子目录安装。
+// 与 CheckInstall 共用完整检查；获准覆盖时永久保留旧源码，写入失败时恢复本次文件改动。
+// 调用方应串行执行同一项目的源码变更（批量操作可外包 ChangeSourcesBatch）。
+func InstallSub(root, src, sub string, opts InstallOptions) (string, error) {
+	plan, err := prepareInstall(root, src, sub, opts)
 	if err != nil {
 		return "", err
 	}
-	dir := src
-	if !st.IsDir() {
-		tmp, err := os.MkdirTemp("", "nexadmin-plugin-")
+	defer os.RemoveAll(plan.temp) //nolint:errcheck
+	if plan.incompatible != nil {
+		fmt.Fprintf(installWarn, "警告：%v；已显式设置 AllowIncompatible 跳过\n", plan.incompatible)
+	}
+	man := plan.manifest
+	var backup string
+	if plan.status.Exists {
+		backup, err = backupInstalledSources(root, man.ID)
 		if err != nil {
 			return "", err
 		}
-		defer os.RemoveAll(tmp) //nolint:errcheck
-		if err := extractZip(src, tmp); err != nil {
-			return "", err
-		}
-		if sub != "" {
-			// monorepo：zip 根下可能有一层仓库目录（GitHub zipball 的 <repo>-<ref>/ 前缀），
-			// 先定位到仓库根，再进入子目录。
-			base, err := locateRepoRoot(tmp)
-			if err != nil {
-				return "", err
-			}
-			dir = filepath.Join(base, filepath.FromSlash(sub))
-			if !isDir(dir) {
-				return "", fmt.Errorf("包里找不到子目录 %q", sub)
-			}
-		} else if dir, err = locatePackage(tmp); err != nil {
-			return "", err
-		}
+		fmt.Fprintf(installWarn, "插件 %s 覆盖前源码备份: %s（不含数据库和授权）\n", man.ID, backup)
 	}
-	man, err := plugin.LoadManifest(dir)
+	// 单个安装也有回滚边界；外层批量回滚另外保护构建可能改写的依赖和产物。
+	err = changeSourcePaths(root, []string{
+		"plugins/" + man.ID, "web/src/plugins/" + man.ID, "plugins/plugins.go", "data/plugins/installed.json",
+	}, func() error {
+		return applyInstall(root, plan)
+	})
 	if err != nil {
+		if backup != "" {
+			return "", fmt.Errorf("%w；覆盖前源码备份: %s", err, backup)
+		}
 		return "", err
 	}
-	if err := plugin.CheckRequires(man.RequiresNexadmin, plugin.FrameworkVersion(root, "")); err != nil {
-		if !force {
-			return "", fmt.Errorf("%w（用 --force 跳过校验，但插件可能无法运行）", err)
-		}
-		fmt.Fprintf(installWarn, "警告：%v；已用 --force 跳过\n", err)
-	}
-	backend, web := filepath.Join(dir, "backend"), filepath.Join(dir, "web")
-	if !isDir(backend) {
-		return "", errors.New("插件包缺少 backend/ 目录")
-	}
-	mod, err := modulePath(root)
-	if err != nil {
-		return "", err
-	}
+	return man.ID, nil
+}
+
+func applyInstall(root string, plan *installPlan) error {
+	man := plan.manifest
 	dstBackend := filepath.Join(root, "plugins", man.ID)
 	dstWeb := filepath.Join(root, "web", "src", "plugins", man.ID)
-	if !force && (exists(dstBackend) || exists(dstWeb)) {
-		return "", fmt.Errorf("插件 %s 已安装（用 --force 覆盖，或先 remove）", man.ID)
-	}
-	// 先算出新的 plugins.go：标记行有问题就在动文件之前失败。
-	goFile := filepath.Join(root, "plugins", "plugins.go")
-	oldGo, err := os.ReadFile(goFile)
-	if err != nil {
-		return "", err
-	}
-	newGo, err := updatePluginsFile(oldGo, mod+"/plugins/"+man.ID, true)
-	if err != nil {
-		return "", err
-	}
-
-	// 先拷到同盘的临时目录，成功后再换入，避免半成品。
+	// 先拷到目标同盘的临时目录，成功后再换入，避免半成品。
 	stageB, err := os.MkdirTemp(filepath.Join(root, "plugins"), ".install-")
 	if err != nil {
-		return "", err
+		return err
 	}
 	defer os.RemoveAll(stageB) //nolint:errcheck
-	if err := copyTree(backend, stageB); err != nil {
-		return "", err
-	}
-	// 插件包按框架母版模块名（nexadmin/...）编写；派生工程模块名不同，安装时按目标 go.mod 改写。
-	if err := rewriteModuleImports(stageB, mod); err != nil {
-		return "", err
-	}
-	if err := copyFile(filepath.Join(dir, plugin.ManifestFile), filepath.Join(stageB, plugin.ManifestFile)); err != nil {
-		return "", err
+	if err := copyTree(plan.backend, stageB); err != nil {
+		return err
 	}
 	var stageW string
-	if isDir(web) {
+	if plan.web != "" {
 		if err := os.MkdirAll(filepath.Dir(dstWeb), 0o755); err != nil {
-			return "", err
+			return err
 		}
 		if stageW, err = os.MkdirTemp(filepath.Dir(dstWeb), ".install-"); err != nil {
-			return "", err
+			return err
 		}
 		defer os.RemoveAll(stageW) //nolint:errcheck
-		if err := copyTree(web, stageW); err != nil {
-			return "", err
+		if err := copyTree(plan.web, stageW); err != nil {
+			return err
 		}
 	}
 	if err := os.RemoveAll(dstBackend); err != nil {
-		return "", err
+		return err
 	}
 	if err := os.Rename(stageB, dstBackend); err != nil {
-		return "", err
+		return err
+	}
+	// 无 web 的新版本也必须删除旧前端。
+	if err := os.RemoveAll(dstWeb); err != nil {
+		return err
 	}
 	if stageW != "" {
-		if err := os.RemoveAll(dstWeb); err != nil {
-			return "", err
-		}
 		if err := os.Rename(stageW, dstWeb); err != nil {
-			return "", err
+			return err
 		}
 	}
-	if err := os.WriteFile(goFile, newGo, 0o644); err != nil {
-		return "", err
+	if err := os.WriteFile(filepath.Join(root, "plugins", "plugins.go"), plan.newGo, 0o644); err != nil {
+		return err
 	}
 	if err := AddLedger(root, man.ID, man.Version); err != nil {
-		return "", fmt.Errorf("写入安装台账失败: %w", err)
+		return fmt.Errorf("写入安装台账失败: %w", err)
 	}
-	return man.ID, nil
+	return nil
 }
 
 // HasWeb 报告插件包（目录或 zip）是否带前端：决定重建时是否需要 npm 构建。

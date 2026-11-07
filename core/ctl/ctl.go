@@ -180,13 +180,20 @@ func (c *Ctl) Restart() error {
 // ScheduleRestart 由独立进程执行重启，避免关停宿主时一并终止重启任务。
 func (c *Ctl) ScheduleRestart() error { return c.scheduleRestart(exec.Command) }
 
-func (c *Ctl) scheduleRestart(command func(string, ...string) *exec.Cmd) error {
+func (c *Ctl) CheckRestart() error {
 	p, err := ReadPid(c.pidPath())
 	if err != nil {
 		return fmt.Errorf("当前服务不是由 start 托管，请手动重启: %w", err)
 	}
 	if p.PID != os.Getpid() || p.Port != c.Cfg.Server.Port || !TokenOK(p.Token, os.Getenv(TokenEnv)) {
 		return fmt.Errorf("pid 文件与当前服务身份不一致，拒绝自动重启")
+	}
+	return nil
+}
+
+func (c *Ctl) scheduleRestart(command func(string, ...string) *exec.Cmd) error {
+	if err := c.CheckRestart(); err != nil {
+		return err
 	}
 	if err := os.MkdirAll("logs", 0o755); err != nil {
 		return err

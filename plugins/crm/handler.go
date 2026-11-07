@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"nexadmin/core/auth"
+	"nexadmin/core/database"
 	"nexadmin/core/datascope"
 	"nexadmin/core/region"
 	"nexadmin/core/response"
@@ -50,24 +51,25 @@ func idParam(c *gin.Context) (idgen.ID, bool) {
 }
 
 type customerForm struct {
-	Name           string `json:"name"`
-	Code           string `json:"code"`
-	Level          string `json:"level"`
-	Status         string `json:"status"`
-	Type           string `json:"type"`
-	ExternalSource string `json:"externalSource"`
-	ExternalNo     string `json:"externalNo"`
-	Owner          string `json:"owner"`
-	Phone          string `json:"phone"`
-	Email          string `json:"email"`
-	Country        string `json:"country"`
-	Nationality    string `json:"nationality"`
-	IdType         string `json:"idType"`
-	IdNo           string `json:"idNo"`
-	TaxNo          string `json:"taxNo"`
-	Industry       string `json:"industry"`
-	Address        string `json:"address"`
-	Remark         string `json:"remark"`
+	Name           string         `json:"name"`
+	Code           string         `json:"code"`
+	Level          string         `json:"level"`
+	Status         string         `json:"status"`
+	Type           string         `json:"type"`
+	ExternalSource string         `json:"externalSource"`
+	ExternalNo     string         `json:"externalNo"`
+	Owner          string         `json:"owner"`
+	Phone          string         `json:"phone"`
+	Email          string         `json:"email"`
+	Country        string         `json:"country"`
+	Nationality    string         `json:"nationality"`
+	IdType         string         `json:"idType"`
+	IdNo           string         `json:"idNo"`
+	TaxNo          string         `json:"taxNo"`
+	Industry       string         `json:"industry"`
+	Address        string         `json:"address"`
+	Remark         string         `json:"remark"`
+	Custom         map[string]any `json:"custom"`
 }
 
 func (f customerForm) input() CustomerInput {
@@ -78,6 +80,7 @@ func (f customerForm) input() CustomerInput {
 		Country: f.Country, Nationality: f.Nationality,
 		IdType: f.IdType, IdNo: f.IdNo,
 		TaxNo: f.TaxNo, Industry: f.Industry, Address: f.Address,
+		Custom: f.Custom,
 	}
 }
 
@@ -144,8 +147,29 @@ func customerQueryFrom(c *gin.Context, sc *datascope.Scope) CustomerQuery {
 	return CustomerQuery{
 		Keyword: c.Query("keyword"), Type: c.Query("type"),
 		Status: c.Query("status"), Source: c.Query("source"),
+		Level: c.Query("level"), Tag: c.Query("tag"),
+		CreatedFrom: c.Query("createdFrom"), CreatedTo: c.Query("createdTo"),
+		SortKey: c.Query("sortKey"), SortAsc: c.Query("sort") == "asc",
 		Scope: sc, Mine: c.Query("mine") == "1",
 	}
+}
+
+// GET /plugins/crm/customers/duplicates —— 疑似重复客户巡检（手机号/证件号/信用代码同值多客户）。
+func (h *handler) listDuplicates(c *gin.Context) {
+	sc, ok := h.scopeOf(c)
+	if !ok {
+		return
+	}
+	groups, err := h.svc.ListDuplicates(c.Request.Context(), sc)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	// 与导出同一口径：证件号不跟着清单批量出去，明文逐条按权限看
+	for i := range groups {
+		maskIDRows(c, groups[i].Rows)
+	}
+	response.OK(c, groups)
 }
 
 // GET /plugins/crm/customers/export?<同列表筛选> —— 导出当前筛选下的全部客户。
@@ -321,6 +345,20 @@ func (h *handler) mergeCustomers(c *gin.Context) {
 	}
 	cu, err := h.svc.MergeCustomers(c.Request.Context(), sc, f)
 	respond(c, cu, err)
+}
+
+// POST /plugins/crm/customers/merge-preview —— 合并预览：同一套规则的只读投影，确认前先看到会带走什么。
+func (h *handler) previewMerge(c *gin.Context) {
+	sc, ok := h.scopeOf(c)
+	if !ok {
+		return
+	}
+	var f MergeInput
+	if !response.BindJSON(c, &f) {
+		return
+	}
+	pv, err := h.svc.PreviewMerge(c.Request.Context(), sc, f.Target, f.Source)
+	respond(c, pv, err)
 }
 
 // GET /plugins/crm/customers/resolve-external?source=hotel&externalNo=M0001&fallbackName=...
@@ -523,6 +561,21 @@ func (f activityForm) input(customerID idgen.ID) ActivityInput {
 	return ActivityInput{CustomerID: customerID, OpportunityID: f.OpportunityID, Kind: f.Kind, Content: f.Content, NextAt: f.NextAt}
 }
 
+// GET /plugins/crm/customers/todos —— 我的待跟进：到期未完成的跟进记录，
+// 可见性继承客户归属（静态段注册在 /customers/:id 之前）。
+func (h *handler) listTodos(c *gin.Context) {
+	sc, ok := h.scopeOf(c)
+	if !ok {
+		return
+	}
+	items, total, err := h.svc.ListDueTodos(c.Request.Context(), sc)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, gin.H{"items": items, "total": total})
+}
+
 // GET /plugins/crm/customers/:id/activities?opportunityId=&kind=&openOnly=&page=&pageSize=
 func (h *handler) listActivities(c *gin.Context) {
 	sc, ok := h.scopeOf(c)
@@ -594,4 +647,134 @@ func (h *handler) deleteActivity(c *gin.Context) {
 		return
 	}
 	respond(c, nil, h.svc.DeleteActivity(c.Request.Context(), sc, id))
+}
+
+// GET /plugins/crm/customers/tags —— 使用中的标签（按使用次数倒序），供筛选与建议。
+// 数据范围生效：受限账号看到的标签来自自己范围内的客户。
+func (h *handler) listCustomerTags(c *gin.Context) {
+	sc, ok := h.scopeOf(c)
+	if !ok {
+		return
+	}
+	names, err := h.svc.ListCustomerTags(c.Request.Context(), sc)
+	respond(c, names, err)
+}
+
+// GET /plugins/crm/customers/fields —— 自定义字段定义（含停用的，管理页要能重新启用）。
+// 字段定义是平台级表：读 crm:list、写 crm:edit，与工单字段同口径。
+func (h *handler) listFields(c *gin.Context) {
+	fields, err := h.svc.ListFields(c.Request.Context())
+	respond(c, fields, err)
+}
+
+type fieldForm struct {
+	Code     string   `json:"code"`
+	Label    string   `json:"label"`
+	Type     string   `json:"type"`
+	Options  []string `json:"options"`
+	Required bool     `json:"required"`
+	Enabled  bool     `json:"enabled"`
+	Sort     int      `json:"sort"`
+}
+
+func (f fieldForm) field(id int64) Field {
+	return Field{PlatformModel: database.PlatformModel{ID: idgen.ID(id)}, Code: f.Code, Label: f.Label,
+		Type: f.Type, OptionList: f.Options, Required: f.Required, Enabled: f.Enabled, Sort: f.Sort}
+}
+
+// POST /plugins/crm/customers/fields —— 新增自定义字段定义。
+func (h *handler) createField(c *gin.Context) {
+	var f fieldForm
+	if !response.BindJSON(c, &f) {
+		return
+	}
+	field, err := h.svc.SaveField(c.Request.Context(), f.field(0))
+	respond(c, field, err)
+}
+
+// PUT /plugins/crm/customers/fields/:id —— 修改自定义字段定义。
+func (h *handler) updateField(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		response.Fail(c, response.BadRequest("error.bad_request"))
+		return
+	}
+	var f fieldForm
+	if !response.BindJSON(c, &f) {
+		return
+	}
+	field, err := h.svc.SaveField(c.Request.Context(), f.field(id))
+	respond(c, field, err)
+}
+
+// DELETE /plugins/crm/customers/fields/:id —— 删除自定义字段定义（存量客户的值不清洗）。
+func (h *handler) deleteField(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		response.Fail(c, response.BadRequest("error.bad_request"))
+		return
+	}
+	respond(c, nil, h.svc.DeleteField(c.Request.Context(), id))
+}
+
+// PUT /plugins/crm/customers/:id/tags —— 整份替换客户标签（最多 10 个、每个 20 字）。
+func (h *handler) setCustomerTags(c *gin.Context) {
+	sc, ok := h.scopeOf(c)
+	if !ok {
+		return
+	}
+	id, ok := idParam(c)
+	if !ok {
+		return
+	}
+	var f struct {
+		Tags []string `json:"tags"`
+	}
+	if err := c.ShouldBindJSON(&f); err != nil {
+		response.Fail(c, response.BadRequest("error.bad_request").Wrap(err))
+		return
+	}
+	cu, err := h.svc.SetCustomerTags(c.Request.Context(), sc, id, f.Tags)
+	respond(c, cu, err)
+}
+
+// POST /plugins/crm/customers/batch-update —— 批量改归属/状态/等级（范围外的 id 静默跳过）。
+func (h *handler) batchUpdateCustomers(c *gin.Context) {
+	sc, ok := h.scopeOf(c)
+	if !ok {
+		return
+	}
+	var in BatchUpdateInput
+	if err := c.ShouldBindJSON(&in); err != nil {
+		response.Fail(c, response.BadRequest("error.bad_request").Wrap(err))
+		return
+	}
+	updated, err := h.svc.BatchUpdateCustomers(c.Request.Context(), sc, in)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, gin.H{"updated": updated})
+}
+
+// POST /plugins/crm/customers/batch-tags —— 批量追加标签（已有该词的跳过）。
+func (h *handler) batchAddTags(c *gin.Context) {
+	sc, ok := h.scopeOf(c)
+	if !ok {
+		return
+	}
+	var in struct {
+		IDs  []idgen.ID `json:"ids"`
+		Tags []string   `json:"tags"`
+	}
+	if err := c.ShouldBindJSON(&in); err != nil {
+		response.Fail(c, response.BadRequest("error.bad_request").Wrap(err))
+		return
+	}
+	updated, err := h.svc.AddCustomerTags(c.Request.Context(), sc, in.IDs, in.Tags)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, gin.H{"updated": updated})
 }

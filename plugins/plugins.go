@@ -23,6 +23,7 @@ import (
 	_ "nexadmin/plugins/report"
 	_ "nexadmin/plugins/scim"
 	_ "nexadmin/plugins/security"
+	_ "nexadmin/plugins/saml"
 	_ "nexadmin/plugins/ticket"
 	_ "nexadmin/plugins/totp"
 	_ "nexadmin/plugins/website"

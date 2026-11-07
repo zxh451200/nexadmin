@@ -40,10 +40,13 @@ const (
 	maxRefreshSec = 3600
 )
 
-// DatasetConfig 是数据集配置：选中的列 + 管理员固定的过滤条件（对使用该数据集的所有图表生效）。
+// DatasetConfig 是数据集配置：选中的列 + 管理员固定的过滤条件 + 可选的关联表声明
+// （对使用该数据集的所有图表生效）。列引用可以是 "关联表.列" 形态，但指向的关联必须
+// 在 Joins 里声明过——图表与运行时筛选都无法新增关联，安全边界与单表一致。
 type DatasetConfig struct {
 	Columns []string `json:"columns"`
 	Filters []Filter `json:"filters"`
+	Joins   []Join   `json:"joins,omitempty"`
 }
 
 // ChartConfig 是图表配置：查询描述 + 展示选项。

@@ -4,6 +4,7 @@ import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/framework/ui/tabs'
 import { CustomersTab } from './CustomersTab'
 import { OpportunitiesTab } from './OpportunitiesTab'
+import { CrmStatsPanel } from './CrmStatsPanel'
 
 export default function CrmPage() {
   const { t } = useTranslation()
@@ -16,12 +17,16 @@ export default function CrmPage() {
         <TabsList>
           <TabsTrigger value="customers">{t('plugin_crm.tabs.customers')}</TabsTrigger>
           <TabsTrigger value="opportunities">{t('plugin_crm.tabs.opportunities')}</TabsTrigger>
+          <TabsTrigger value="stats">{t('plugin_crm.tabs.stats')}</TabsTrigger>
         </TabsList>
         <TabsContent value="customers" className="m-0">
           <CustomersTab />
         </TabsContent>
         <TabsContent value="opportunities" className="m-0">
           <OpportunitiesTab />
+        </TabsContent>
+        <TabsContent value="stats" className="m-0">
+          <CrmStatsPanel />
         </TabsContent>
       </Tabs>
     </PageContainer>

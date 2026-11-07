@@ -67,6 +67,7 @@ const PUBLIC_PREFIXES = [
   '/auth/login',
   '/auth/captcha',
   '/auth/slider',
+  '/auth/click',
   '/auth/sms-code',
   '/auth/refresh',
   '/auth/methods',
