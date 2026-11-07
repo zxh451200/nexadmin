@@ -381,7 +381,7 @@ func TestIsolationRoutingIT(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	platformGorm, err := openRaw(platCfg, "", logger.Silent)
+	platformGorm, err := openRaw(platCfg, platformName, logger.Silent)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -391,7 +391,7 @@ func TestIsolationRoutingIT(t *testing.T) {
 	if err := platformGorm.Exec("CREATE TABLE `" + platformName + "`.sys_user (id BIGINT PRIMARY KEY, name VARCHAR(100))").Error; err != nil {
 		t.Fatal(err)
 	}
-	tenantGorm, err := openRaw(tenantCfg, "", logger.Silent)
+	tenantGorm, err := openRaw(tenantCfg, tenantName, logger.Silent)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -447,8 +447,8 @@ func TestIsolationRoutingIT(t *testing.T) {
 		t.Errorf("skipped tenant should be rejected for business table, got %v", err)
 	}
 
-	// Platform table query should work without tenant context.
-	if err := platformGorm.Exec("INSERT INTO sys_user (id, name) VALUES (1, 'admin')").Error; err != nil {
+	// Platform table writes work without tenant context, but only through GORM (raw SQL is rejected by design).
+	if err := platformGorm.Table("sys_user").Create(map[string]any{"id": 1, "name": "admin"}).Error; err != nil {
 		t.Fatalf("platform insert: %v", err)
 	}
 	var platformResult struct {
