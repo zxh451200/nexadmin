@@ -7,6 +7,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"nexadmin/core/metrics"
 )
 
 func policyGW(t *testing.T, p *TenantPolicy) (*Gateway, *atomic.Int32) {
@@ -162,6 +164,23 @@ func TestQuotaKeyIsPerTenantPerSiteDay(t *testing.T) {
 	}
 	if ttl := quotaTTL(d); ttl <= time.Hour || ttl > 2*time.Hour+time.Minute {
 		t.Fatalf("ttl = %v", ttl)
+	}
+}
+
+// fail-open 是成本控制的静默缺口：两次放行都必须计入导出指标。
+func TestFailOpenMetricIsExported(t *testing.T) {
+	g, _ := policyGW(t, &TenantPolicy{DailyQuota: 1})
+	g.Policy = func(context.Context, Caller) (*TenantPolicy, error) { return nil, errors.New("db down") }
+	if err := filter(g, tester); err != nil {
+		t.Fatalf("policy error must fail open: %v", err)
+	}
+	g.Policy = func(context.Context, Caller) (*TenantPolicy, error) { return &TenantPolicy{DailyQuota: 1}, nil }
+	g.Quota = failingCounter{}
+	if err := filter(g, tester); err != nil {
+		t.Fatalf("counter error must fail open: %v", err)
+	}
+	if out := string(metrics.Render()); !strings.Contains(out, "nexadmin_ai_quota_fail_open_total 2") {
+		t.Fatalf("fail-open metric missing or wrong:\n%s", out)
 	}
 }
 

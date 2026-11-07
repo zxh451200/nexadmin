@@ -168,42 +168,70 @@ func (a *App) prepareData(db *gorm.DB) error {
 	if err := a.migrateTenants(db, a.cfg.App.AutoMigrate && a.cfg.Database.Isolation.AutoMigrate); err != nil {
 		return err
 	}
-	a.checkIsolationConsistency(db)
+	if err := a.checkIsolationConsistency(db); err != nil {
+		return err
+	}
 	return nil
 }
 
-// checkIsolationConsistency warns about configured tenant pools that have no matching sys_tenant record.
-func (a *App) checkIsolationConsistency(db *gorm.DB) {
+// checkIsolationConsistency refuses startup when a configured tenant pool has no sys_tenant row:
+// deleting a tenant leaves a dead pool behind, which is configuration drift rather than a working route.
+func (a *App) checkIsolationConsistency(db *gorm.DB) error {
 	if !a.cfg.Database.Isolation.Enabled {
-		return
+		return nil
 	}
-	configured := database.TenantDatabases(db)
+	return checkTenantPools(database.Platform(db), database.TenantDatabases(db))
+}
+
+// checkTenantPools 报错列出配置了池、但 sys_tenant 里不存在的租户。
+func checkTenantPools(q *gorm.DB, pools map[string]*gorm.DB) error {
+	if len(pools) == 0 {
+		return nil
+	}
+	ids := make([]string, 0, len(pools))
+	for id := range pools {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	missing, err := missingTenantIDs(q, ids)
+	if err != nil {
+		return fmt.Errorf("isolation: cannot verify configured tenant pools: %w", err)
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("isolation: configured tenant pool(s) %s have no sys_tenant record; remove the database.isolation.tenants entries or recreate the tenants", strings.Join(missing, ", "))
+	}
+	return nil
+}
+
+// missingTenantIDs 返回 configured 里在 sys_tenant 没有对应行的 ID。
+// configureIsolation 只接受规范正整数键，这里仍把解析失败当配置错误，避免静默放过。
+func missingTenantIDs(q *gorm.DB, configured []string) ([]string, error) {
 	if len(configured) == 0 {
-		return
+		return nil, nil
 	}
 	ids := make([]int64, 0, len(configured))
-	for id := range configured {
+	for _, id := range configured {
 		n, err := strconv.ParseInt(id, 10, 64)
 		if err != nil {
-			continue
+			return nil, fmt.Errorf("invalid tenant ID %q", id)
 		}
 		ids = append(ids, n)
 	}
 	var existing []int64
-	if err := database.Platform(db).Table("sys_tenant").Where("id IN ?", ids).Pluck("id", &existing).Error; err != nil {
-		a.log.Warn("isolation: cannot verify tenant consistency", zap.Error(err))
-		return
+	if err := q.Table("sys_tenant").Where("id IN ?", ids).Pluck("id", &existing).Error; err != nil {
+		return nil, err
 	}
-	existSet := make(map[int64]bool, len(existing))
-	for _, id := range existing {
-		existSet[id] = true
+	seen := make(map[int64]bool, len(existing))
+	for _, n := range existing {
+		seen[n] = true
 	}
-	for id := range configured {
-		n, _ := strconv.ParseInt(id, 10, 64)
-		if !existSet[n] {
-			a.log.Warn("isolation: configured tenant pool has no matching sys_tenant record", zap.String("tenant_id", id))
+	var missing []string
+	for i, id := range configured {
+		if !seen[ids[i]] {
+			missing = append(missing, id)
 		}
 	}
+	return missing, nil
 }
 
 // seedStartup 依次运行实现了 StartupSeeder 的模块种子。

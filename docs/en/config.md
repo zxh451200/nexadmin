@@ -33,7 +33,7 @@ This document lists every configuration key of `config/default.yaml`. Content co
 | `database.user` / `database.password` | string | `root` / empty | Database credentials; the password never enters logs, and the wizard writes `config.yaml` with file mode 0600 | Pass passwords via env in production |
 | `database.name` | string | `nexadmin` | Database name; the wizard can optionally auto-create it | Match your database |
 | `database.node_id` | int | `0` | Snowflake ID node number 0–1023. Multi-instance instances must differ; with redis cache, startup uses a TTL lease to detect duplicates and refuses startup when another live instance holds it (no detection with `memory`), see Deployment Guide §10 | Multi-instance deployments |
-| `cache.driver` | string | `memory` | `memory` (in-process) or `redis` (Valkey-compatible). Token revocation, captchas, login lockout, rate-limit counters and online sessions all live in cache | Multi-instance should use `redis` |
+| `cache.driver` | string | `memory` | `memory` (in-process) or `redis` (Valkey-compatible). Token revocation, captchas, login lockout, rate-limit counters and online sessions all live in cache | Multi-instance should use `redis`; atomic storage-quota reservation requires the cache to implement `cache.Lease` (both built-in drivers do; a custom implementation without it makes quota-gated uploads return 503) |
 | `cache.addr` / `cache.password` | string | empty / empty | Redis address (e.g. `valkey:6379`) and password; `driver=redis` requires addr, and unreachable fails startup with `cache: redis/valkey at <addr> is unavailable` | When using redis |
 
 ### 2.1 database.isolation (optional, off by default)
@@ -47,7 +47,7 @@ Fields are defined in `core/config/config.go`; pool and table boundaries are val
 | `max_pools` / `max_open` / `max_idle` / `lifetime` | `16` / `10` / `0` / `30m` | The first two and lifetime fall back to defaults when 0; configured tenant count must not exceed max_pools, and max_idle must not exceed max_open |
 | `tables` | empty | Required list of tenant business tables; must not start with `sys_` nor overlap platform tables |
 | `platform_tables` | empty | Platform tables beyond the built-in control-plane ones; must match actual model and SQL table names |
-| `tenants` | empty | Required connection map; keys are canonical tenant IDs (no leading zeros), values contain `type`, `host`, `port`, `user`, `name`, `password_env` |
+| `tenants` | empty | Required connection map; keys are canonical tenant IDs (no leading zeros), values contain `type`, `host`, `port`, `user`, `name`, `password_env`. At startup every pool must have a matching `sys_tenant` row; otherwise startup is refused (e.g. a tenant was deleted but its config entry remains) |
 
 Configuration shape example (for future reference only — not a validated configuration):
 
