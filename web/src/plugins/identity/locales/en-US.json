@@ -1,7 +1,7 @@
 {
   "plugin_identity": {
-    "menu": "Identity sources",
-    "title": "Identity sources",
+    "menu": "LDAP / CAS sources",
+    "title": "LDAP / CAS sources",
     "description": "Per-tenant LDAP/AD login and CAS single sign-on. LDAP is tried after a local password fails; CAS uses its own entry link.",
     "btn": {
       "addMapping": "Add mapping",

@@ -297,7 +297,11 @@ export default function SamlPage() {
 
   return (
     <PageContainer>
-      <PageHeader title={t('plugin_saml.title')} description={t('plugin_saml.description')} actions={newButton} />
+      <PageHeader
+        title={t('plugin_saml.title')}
+        description={t('plugin_saml.description')}
+        actions={data.length > 0 ? newButton : undefined}
+      />
 
       {isLoading ? (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -308,7 +312,17 @@ export default function SamlPage() {
         <EmptyState
           icon={<ShieldCheck className="size-6" aria-hidden="true" />}
           title={t('plugin_saml.empty')}
-          description={t('plugin_saml.emptyHint')}
+          action={newButton}
+          description={
+            <div className="space-y-2">
+              <p>{t('plugin_saml.emptyHint')}</p>
+              <ol className="mx-auto max-w-sm list-decimal space-y-1 ps-5 text-start text-xs">
+                <li>{t('plugin_saml.emptySteps.get')}</li>
+                <li>{t('plugin_saml.emptySteps.create')}</li>
+                <li>{t('plugin_saml.emptySteps.enable')}</li>
+              </ol>
+            </div>
+          }
         />
       ) : (
         <div className="space-y-3">
@@ -337,15 +351,9 @@ export default function SamlPage() {
                     />
                   </Can>
                   <Can perm="saml:edit">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      aria-label={t('plugin_saml.btn.test')}
-                      title={t('plugin_saml.btn.test')}
-                      disabled={test.isPending}
-                      onClick={() => void onTest(s)}
-                    >
-                      <Plug aria-hidden="true" />
+                    <Button variant="outline" size="sm" disabled={test.isPending} onClick={() => void onTest(s)}>
+                      <Plug className="size-4" aria-hidden="true" />
+                      {t('plugin_saml.btn.test')}
                     </Button>
                   </Can>
                   <Can perm="saml:edit">

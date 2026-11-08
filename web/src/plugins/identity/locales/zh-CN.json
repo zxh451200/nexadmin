@@ -1,7 +1,7 @@
 {
   "plugin_identity": {
-    "menu": "身份源",
-    "title": "身份源",
+    "menu": "LDAP / CAS 身份源",
+    "title": "LDAP / CAS 身份源",
     "description": "按租户配置 LDAP/AD 登录与 CAS 单点登录。LDAP 在密码登录失败后自动尝试；CAS 通过独立入口链接登录。",
     "btn": {
       "addMapping": "添加映射",

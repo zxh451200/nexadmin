@@ -4,10 +4,15 @@
     "description": "Enterprise IdP sign-in (SAML 2.0 SP): import IdP metadata or fetch it by URL, map attributes and groups; hand the ACS, SP metadata and certificate to the IdP.",
     "menu": "SAML SSO",
     "ssoLogin": "Enterprise SSO",
-    "add": "New identity source",
-    "edit": "Edit identity source",
-    "empty": "No identity source configured yet",
-    "emptyHint": "Create an identity source and import the IdP metadata; the enterprise SSO entry then appears on the sign-in page.",
+    "add": "New SAML identity source",
+    "edit": "Edit SAML identity source",
+    "empty": "No SAML identity source configured yet",
+    "emptyHint": "Ask your IdP administrator for the metadata to get started; no extra setup is needed on the sign-in page.",
+    "emptySteps": {
+      "get": "Ask your IdP administrator for the SAML metadata (XML file or metadata URL)",
+      "create": "Create a SAML identity source: paste the XML, import a file, or fetch it by URL",
+      "enable": "Save and enable it; the enterprise SSO entry appears on the sign-in page"
+    },
     "on": "Enabled",
     "off": "Disabled",
     "deleteConfirm": "Delete identity source \"{{name}}\"? Bindings of users who signed in through it are kept.",
@@ -55,6 +60,7 @@
       "rejectUnknownConditions": "Reject unknown Conditions",
       "authnContext": "Authentication context class",
       "authnContextCustom": "Custom authentication context classes",
+      "requireAuthnContext": "Require matching authentication context",
       "idpEntityId": "Entity ID to use",
       "idpSso": "IdP sign-in endpoint",
       "idpSlo": "IdP logout endpoint",
@@ -100,6 +106,12 @@
       "idp": "IdP and metadata",
       "account": "Sign-in and accounts",
       "advanced": "Advanced"
+    },
+    "tabs": {
+      "basic": "Basics",
+      "account": "Account & mapping",
+      "advanced": "Security & advanced",
+      "errors": "{{count}} to fix"
     },
     "binding": {
       "redirect": "HTTP-Redirect",

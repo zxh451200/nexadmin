@@ -4,10 +4,15 @@
     "description": "企业 IdP 单点登录（SAML 2.0 SP）：导入或按 URL 拉取 IdP 元数据，配置属性与组映射；把 ACS、SP 元数据与证书交给 IdP。",
     "menu": "SAML 单点登录",
     "ssoLogin": "企业单点登录",
-    "add": "新建身份源",
-    "edit": "编辑身份源",
-    "empty": "还没有配置身份源",
-    "emptyHint": "新建身份源并导入 IdP 元数据后，登录页会出现企业单点登录入口。",
+    "add": "新建 SAML 身份源",
+    "edit": "编辑 SAML 身份源",
+    "empty": "还没有配置 SAML 身份源",
+    "emptyHint": "向 IdP 管理员索取元数据即可开始；登录页不需要额外配置。",
+    "emptySteps": {
+      "get": "向 IdP 管理员索取 SAML 元数据（XML 文件或元数据地址）",
+      "create": "新建 SAML 身份源：粘贴 XML、从文件导入，或按 URL 拉取",
+      "enable": "保存并启用后，登录页出现「企业单点登录」入口"
+    },
     "on": "已启用",
     "off": "未启用",
     "deleteConfirm": "删除身份源「{{name}}」？已通过它登录的用户绑定不会被清除。",
@@ -55,6 +60,7 @@
       "rejectUnknownConditions": "拒绝未知 Conditions",
       "authnContext": "认证上下文类",
       "authnContextCustom": "自定义认证上下文类",
+      "requireAuthnContext": "要求认证上下文匹配",
       "idpEntityId": "使用的 IdP Entity ID",
       "idpSso": "IdP 登录端点",
       "idpSlo": "IdP 登出端点",
@@ -100,6 +106,12 @@
       "idp": "IdP 与元数据",
       "account": "登录与账号",
       "advanced": "高级"
+    },
+    "tabs": {
+      "basic": "基础信息",
+      "account": "账号与映射",
+      "advanced": "安全与高级",
+      "errors": "{{count}} 项待修正"
     },
     "binding": {
       "redirect": "HTTP-Redirect",
