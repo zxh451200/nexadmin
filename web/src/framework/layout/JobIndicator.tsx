@@ -21,7 +21,7 @@ export function JobIndicator() {
       <Link to="/jobs" aria-label={count > 0 ? t('jobs.indicator.label', { count }) : t('jobs.indicator.none')}>
         <Download className="size-4" aria-hidden="true" />
         {count > 0 ? (
-          <span className="absolute -end-0.5 -top-0.5 flex min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-medium leading-4 text-primary-foreground">
+          <span className="absolute -inset-e-0.5 -top-0.5 flex min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-medium leading-4 text-primary-foreground">
             {count > 99 ? '99+' : count}
           </span>
         ) : null}

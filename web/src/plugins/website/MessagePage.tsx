@@ -295,11 +295,11 @@ export default function MessagePage() {
             </div>
             <div className="flex gap-2">
               <dt className="w-20 shrink-0 text-muted-foreground">{t('plugin_website.message.name')}</dt>
-              <dd className="min-w-0 break-words">{view.name}</dd>
+              <dd className="min-w-0 wrap-break-word">{view.name}</dd>
             </div>
             <div className="flex gap-2">
               <dt className="w-20 shrink-0 text-muted-foreground">{t('plugin_website.message.contact')}</dt>
-              <dd className="min-w-0 break-words">
+              <dd className="min-w-0 wrap-break-word">
                 <a className="underline" href={`mailto:${view.email}`}>{view.email}</a>
                 {view.phone ? <span className="text-muted-foreground"> · {view.phone}</span> : null}
               </dd>
@@ -308,7 +308,7 @@ export default function MessagePage() {
               <dt className="w-20 shrink-0 text-muted-foreground">{t('plugin_website.message.createdAt')}</dt>
               <dd className="num">{formatTime(view.createdAt, i18n.language)}</dd>
             </div>
-            <div className="whitespace-pre-wrap break-words rounded-md border bg-muted/40 p-3">{view.content}</div>
+            <div className="whitespace-pre-wrap wrap-break-word rounded-md border bg-muted/40 p-3">{view.content}</div>
             <div className="text-xs text-muted-foreground">{[view.ip, view.ua].filter(Boolean).join(' · ')}</div>
           </dl>
         </ResponsiveDialog>

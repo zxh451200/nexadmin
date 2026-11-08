@@ -72,11 +72,11 @@ export default function DashboardPage() {
 
   return (
     <PageContainer>
-      <section className="relative overflow-hidden rounded-2xl border bg-card p-5 shadow-sm md:p-8">
+      <section className="relative overflow-hidden rounded-2xl border bg-card p-5 shadow-xs md:p-8">
         {/* 装饰：点阵 + 一团品牌柔光，亮暗主题自适应，不再整块涂品牌渐变 */}
-        <div aria-hidden="true" className="tech-grid pointer-events-none absolute inset-0 opacity-70 [mask-image:linear-gradient(to_bottom_left,black,transparent_70%)]" />
-        <div aria-hidden="true" className="pointer-events-none absolute -end-16 -top-24 size-72 rounded-full bg-primary/10 blur-3xl" />
-        <div aria-hidden="true" className="pointer-events-none absolute -bottom-24 start-1/3 size-64 rounded-full bg-primary/5 blur-3xl" />
+        <div aria-hidden="true" className="tech-grid pointer-events-none absolute inset-0 opacity-70 mask-[linear-gradient(to_bottom_left,black,transparent_70%)]" />
+        <div aria-hidden="true" className="pointer-events-none absolute -inset-e-16 -top-24 size-72 rounded-full bg-primary/10 blur-3xl" />
+        <div aria-hidden="true" className="pointer-events-none absolute -bottom-24 inset-s-1/3 size-64 rounded-full bg-primary/5 blur-3xl" />
         <div className="relative flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div className="min-w-0">
             <h1 className="text-xl font-semibold tracking-tight md:text-3xl">

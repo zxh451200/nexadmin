@@ -1,9 +1,138 @@
-@import './framework/theme/tokens.css';
-@import './theme.css';
+@import './framework/theme/tokens.css' layer(base);
+@import './framework/theme/tokens.utilities.css';
+@import './theme.css' layer(base);
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme inline {
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+
+  --color-success: hsl(var(--success));
+  --color-success-foreground: hsl(var(--success-foreground));
+
+  --color-warning: hsl(var(--warning));
+  --color-warning-foreground: hsl(var(--warning-foreground));
+
+  --color-info: hsl(var(--info));
+  --color-info-foreground: hsl(var(--info-foreground));
+
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+
+  --color-sidebar: hsl(var(--sidebar));
+  --color-sidebar-foreground: hsl(var(--sidebar-foreground));
+  --color-sidebar-accent: hsl(var(--sidebar-accent));
+  --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
+  --color-sidebar-border: hsl(var(--sidebar-border));
+
+  --color-chart-1: hsl(var(--chart-1));
+  --color-chart-2: hsl(var(--chart-2));
+  --color-chart-3: hsl(var(--chart-3));
+  --color-chart-4: hsl(var(--chart-4));
+  --color-chart-5: hsl(var(--chart-5));
+
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+
+  --font-sans:
+    'Inter Variable', ui-sans-serif, system-ui, 'PingFang SC',
+    'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+  --font-mono:
+    'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --shadow-glow:
+    0 0 0 1px hsl(var(--primary) / 0.35),
+    0 0 24px -6px hsl(var(--primary) / 0.5);
+
+  --animate-accordion-down: accordion-down 0.2s ease-out;
+  --animate-accordion-up: accordion-up 0.2s ease-out;
+
+  @keyframes accordion-down {
+    from {
+      height: 0;
+    }
+    to {
+      height: var(--radix-accordion-content-height);
+    }
+  }
+  @keyframes accordion-up {
+    from {
+      height: var(--radix-accordion-content-height);
+    }
+    to {
+      height: 0;
+    }
+  }
+}
+
+/* Tailwind v4 默认边框色改为 currentcolor；沿用 v3 的 borderColor.DEFAULT = border token（含伪元素） */
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: hsl(var(--border));
+  }
+}
+
+@utility pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+@utility ps-safe {
+  padding-inline-start: env(safe-area-inset-left);
+}
+
+@utility pe-safe {
+  padding-inline-end: env(safe-area-inset-right);
+}
+
+@utility h-screen-dvh {
+  height: 100vh;
+  height: 100dvh;
+}
+
+@utility min-h-screen-dvh {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+@utility page-enter {
+  /* 路由入场：新页面挂载时 180ms 淡入 + 4px 上浮（Linear 式短促入场）。
+     keep-alive 缓存页切回时不重挂载、不重播，只有新开页面才有；reduced-motion 由全局规则归零。 */
+  animation: page-enter 0.18s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
 
 @layer base {
   * {
@@ -102,31 +231,6 @@
 }
 
 @layer utilities {
-  .pt-safe {
-    padding-top: env(safe-area-inset-top);
-  }
-  .pb-safe {
-    padding-bottom: env(safe-area-inset-bottom);
-  }
-  .ps-safe {
-    padding-inline-start: env(safe-area-inset-left);
-  }
-  .pe-safe {
-    padding-inline-end: env(safe-area-inset-right);
-  }
-  .h-screen-dvh {
-    height: 100vh;
-    height: 100dvh;
-  }
-  .min-h-screen-dvh {
-    min-height: 100vh;
-    min-height: 100dvh;
-  }
-  /* 路由入场：新页面挂载时 180ms 淡入 + 4px 上浮（Linear 式短促入场）。
-     keep-alive 缓存页切回时不重挂载、不重播，只有新开页面才有；reduced-motion 由全局规则归零。 */
-  .page-enter {
-    animation: page-enter 0.18s cubic-bezier(0.16, 1, 0.3, 1) both;
-  }
   @keyframes page-enter {
     from {
       opacity: 0;

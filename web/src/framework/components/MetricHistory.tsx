@@ -93,7 +93,7 @@ export function MetricHistory({
           />
           {keys.length > 0 ? (
             <Select value={active} onValueChange={(v) => setPicked(String(v))}>
-              <SelectTrigger className="h-8 w-[9.5rem] text-xs md:h-7" aria-label={t('monitorHistory.metric')}>
+              <SelectTrigger className="h-8 w-38 text-xs md:h-7" aria-label={t('monitorHistory.metric')}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

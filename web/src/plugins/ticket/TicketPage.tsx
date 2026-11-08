@@ -1210,8 +1210,8 @@ export default function TicketPage() {
               高度约束只给桌面双栏：移动端单列下 calc 高度会把队列和会话各压成半屏。
               桌面再给一个下限：窗口矮到算出来的高度装不下「头部+次级面板+会话保底+回复框」时，
               让整页滚，而不是把会话挤成一条缝。 */}
-          <div className="grid h-auto min-h-96 grid-cols-1 gap-4 md:h-[calc(100vh-14rem)] md:min-h-[36rem] md:grid-cols-[24rem_1fr]">
-            <Card className="flex max-h-[32rem] min-h-0 flex-col gap-2 p-2 md:max-h-none">
+          <div className="grid h-auto min-h-96 grid-cols-1 gap-4 md:h-[calc(100vh-14rem)] md:min-h-144 md:grid-cols-[24rem_1fr]">
+            <Card className="flex max-h-128 min-h-0 flex-col gap-2 p-2 md:max-h-none">
               <div className="flex flex-wrap items-center gap-2">
                 <Input
                   value={keyword}
@@ -3136,7 +3136,7 @@ function TicketThread({
                 </span>
               }
             >
-              <div className="whitespace-pre-wrap break-words">{r.content}</div>
+              <div className="whitespace-pre-wrap wrap-break-word">{r.content}</div>
             </ChatBubble>
           )
         })}

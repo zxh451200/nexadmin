@@ -47,13 +47,13 @@ export function OptionList({
     <div className={cn('flex min-h-0 flex-col', className)}>
       {onSearchChange && (
         <div className="relative border-b border-border p-2">
-          <Search className="pointer-events-none absolute start-5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+          <Search className="pointer-events-none absolute inset-s-5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
           <input
             value={search ?? ''}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder={t('picker.searchPlaceholder')}
             aria-label={t('common.search')}
-            className="h-11 w-full rounded-md border border-input bg-background ps-9 pe-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:h-9 md:text-sm"
+            className="h-11 w-full rounded-md border border-input bg-background ps-9 pe-3 text-base focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring md:h-9 md:text-sm"
           />
         </div>
       )}
@@ -69,12 +69,12 @@ export function OptionList({
                 className={cn(
                   // 与 SelectItem 同尺寸同视觉：勾选在右、ps-2/pe-8、hover 用 accent
                   'relative flex min-h-11 w-full items-center rounded-sm py-1.5 ps-2 pe-8 text-start text-base',
-                  'hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground focus-visible:outline-none',
+                  'hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground focus-visible:outline-hidden',
                   'disabled:pointer-events-none disabled:opacity-50 md:min-h-0 md:text-sm',
                 )}
               >
                 <span className="min-w-0 flex-1 truncate">{o.node ?? o.label}</span>
-                <span className="absolute end-2 flex size-3.5 items-center justify-center">
+                <span className="absolute inset-e-2 flex size-3.5 items-center justify-center">
                   {selected ? <Check className="size-4" aria-hidden="true" /> : null}
                 </span>
               </button>

@@ -235,7 +235,7 @@ export function Uploader({ kind, multiple, maxCount, crop, visibility = 'private
                 onClick={() => addRef.current?.click()}
                 aria-label={t('common.upload')}
                 className={cn(
-                  'flex flex-col items-center justify-center gap-1 rounded-md border border-dashed border-input bg-background text-sm text-muted-foreground transition-colors hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none',
+                  'flex flex-col items-center justify-center gap-1 rounded-md border border-dashed border-input bg-background text-sm text-muted-foreground transition-colors hover:border-primary hover:text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none',
                   kind === 'file' ? 'min-h-14 w-full flex-row' : kind === 'video' ? 'aspect-video w-full max-w-xs sm:w-56' : tileSize('image'),
                 )}
               >

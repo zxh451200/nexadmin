@@ -233,7 +233,7 @@ function Chat({ conversationId }: { conversationId: string }) {
       {!snapshot?.session.messages.length && <p className="text-muted-foreground">{t('plugin_assistant.empty')}</p>}
       {snapshot?.session.messages.map((message, index) => <article key={index} className={`rounded-md border p-3 ${message.role === 'user' ? 'bg-muted' : ''}`}>
         <p className="mb-2 text-sm font-medium">{t(message.role === 'user' ? 'plugin_assistant.you' : 'plugin_assistant.title')}</p>
-        <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{message.content}</p>
+        <p className="whitespace-pre-wrap wrap-break-word wrap-anywhere">{message.content}</p>
       </article>)}
       <div ref={bottom} />
     </div>

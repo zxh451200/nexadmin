@@ -93,7 +93,7 @@ export function PreviewStep({ output }: Props) {
                           onClick={() => setCurrent(f.path)}
                           aria-current={active ? 'true' : undefined}
                           className={cn(
-                            'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-start transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                            'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-start transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring',
                             active ? 'bg-primary/10 text-primary' : 'text-foreground hover:bg-muted',
                           )}
                         >

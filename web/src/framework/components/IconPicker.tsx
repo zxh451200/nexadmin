@@ -55,7 +55,7 @@ export function IconPicker({ value, onChange, allowClear = true, placeholder, di
           onChange={(e) => setSearch(e.target.value)}
           placeholder={t('picker.searchIcon')}
           aria-label={t('common.search')}
-          className="h-11 w-full rounded-md border border-input bg-background px-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:h-9 md:text-sm"
+          className="h-11 w-full rounded-md border border-input bg-background px-3 text-base focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring md:h-9 md:text-sm"
         />
       </div>
       <div className="grid max-h-72 grid-cols-5 gap-1 overflow-y-auto p-2 md:grid-cols-6">
@@ -73,7 +73,7 @@ export function IconPicker({ value, onChange, allowClear = true, placeholder, di
                 setOpen(false)
               }}
               className={cn(
-                'flex size-11 items-center justify-center rounded-md hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:size-10',
+                'flex size-11 items-center justify-center rounded-md hover:bg-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring md:size-10',
                 value === n && 'bg-primary text-primary-foreground hover:bg-primary',
               )}
             >

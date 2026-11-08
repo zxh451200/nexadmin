@@ -66,7 +66,7 @@ export default function AboutPage() {
               {items.map((it) => (
                 <div key={it.label} className="min-w-0">
                   <dt className="text-xs text-muted-foreground">{it.label}</dt>
-                  <dd className="num mt-1 break-words text-sm font-medium text-foreground">{it.value}</dd>
+                  <dd className="num mt-1 wrap-break-word text-sm font-medium text-foreground">{it.value}</dd>
                 </div>
               ))}
             </dl>

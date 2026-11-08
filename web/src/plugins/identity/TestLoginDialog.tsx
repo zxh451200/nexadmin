@@ -105,7 +105,7 @@ export function TestLoginDialog({ source, onClose }: Props) {
                   ))}
               </dl>
             ) : (
-              <p className="break-words text-foreground">{result.message}</p>
+              <p className="wrap-break-word text-foreground">{result.message}</p>
             )}
           </div>
         ) : null}

@@ -32,7 +32,7 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex min-w-0 flex-col gap-0.5">
       <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="min-w-0 break-words text-sm">{children}</dd>
+      <dd className="min-w-0 wrap-break-word text-sm">{children}</dd>
     </div>
   )
 }

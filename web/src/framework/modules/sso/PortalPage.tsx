@@ -36,7 +36,7 @@ function AppCard({ app }: { app: PortalApp }) {
       href={app.homeUrl}
       target="_blank"
       rel="noopener noreferrer"
-      className={`${cls} hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
+      className={`${cls} hover:shadow-md focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring`}
     >
       {body}
     </a>
@@ -66,7 +66,7 @@ export default function PortalPage() {
         <ul className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4 lg:grid-cols-4 xl:grid-cols-5">
           {data.map((app) => (
             <li key={app.id} className="flex">
-              <div className="flex w-full flex-col [&>*]:flex-1">
+              <div className="flex w-full flex-col *:flex-1">
                 <AppCard app={app} />
               </div>
             </li>

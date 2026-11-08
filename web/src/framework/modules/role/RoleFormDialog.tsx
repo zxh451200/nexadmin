@@ -43,7 +43,7 @@ export function RoleFormDialog({ open, onOpenChange, role, nextSort }: RoleFormD
             .min(1, t('role.v.codeRequired'))
             .max(32)
             .regex(/^[A-Za-z][A-Za-z0-9_]*$/, t('role.v.codeFormat')),
-          sort: z.number({ invalid_type_error: t('role.v.sortNumber') }).int(t('role.v.sortNumber')),
+          sort: z.number({ error: t('role.v.sortNumber') }).int(t('role.v.sortNumber')),
           enabled: z.boolean(),
           assignable: z.boolean(),
           dataScope: z.string().min(1),

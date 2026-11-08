@@ -52,7 +52,7 @@ export default function DesignerPage() {
   const [dirty, setDirty] = useState(false)
   const [selected, setSelected] = useState(-1)
   const [tab, setTab] = useState('design')
-  const loadedId = useRef<string>()
+  const loadedId = useRef<string>(undefined)
   const propsRef = useRef<HTMLDivElement>(null)
 
   // 只在首次拿到某个表单时灌入本地状态；之后以本地编辑为准（保存成功也不覆盖，避免打断正在进行的编辑）

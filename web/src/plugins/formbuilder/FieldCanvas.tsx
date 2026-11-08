@@ -103,7 +103,7 @@ function CanvasRow({ field, selected, onSelect }: { field: FormField; selected: 
         {...listeners}
         aria-label={t('plugin_formbuilder.designer.drag', { name: field.title || field.key })}
         title={t('plugin_formbuilder.designer.drag', { name: field.title || field.key })}
-        className="flex size-10 shrink-0 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing"
+        className="flex size-10 shrink-0 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground hover:bg-accent focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing"
       >
         <GripVertical className="size-4" aria-hidden="true" />
       </button>
@@ -111,7 +111,7 @@ function CanvasRow({ field, selected, onSelect }: { field: FormField; selected: 
         type="button"
         onClick={onSelect}
         aria-pressed={selected}
-        className="flex min-h-10 min-w-0 flex-1 items-center gap-2 rounded-md py-2 pe-3 text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="flex min-h-10 min-w-0 flex-1 items-center gap-2 rounded-md py-2 pe-3 text-start focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
       >
         <Icon className="size-4 shrink-0 text-primary" aria-hidden="true" />
         <span className="min-w-0 flex-1">

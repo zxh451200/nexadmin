@@ -34,8 +34,8 @@ export function SectionCard<K extends SectionKey>({ section, value, schema, test
   const test = useTestSection()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const form = useForm<any>({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    resolver: zodResolver(schema) as any,
+    // zod 4 的 ZodTypeAny 输入是 unknown，resolvers 7 要求输入收窄到 FieldValues；表单本身是 any
+    resolver: zodResolver(schema as never) as never,
     defaultValues: value,
   })
   useEffect(() => {

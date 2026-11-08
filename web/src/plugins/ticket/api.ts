@@ -311,7 +311,7 @@ export async function exportTickets(query: Omit<TicketQueryParams, 'page' | 'pag
   const data = res.data
   const isBlob = data instanceof Blob
   const blob = isBlob ? data : new Blob(['\uFEFF', String(data)], { type: 'text/csv;charset=utf-8' })
-  const stamp = new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '')
+  const stamp = new Date().toISOString().slice(0, 19).replace(/-|:|T/g, '')
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url

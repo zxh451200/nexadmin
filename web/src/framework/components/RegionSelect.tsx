@@ -96,7 +96,7 @@ export function RegionSelect({ level = 3, value, onChange, allowClear = true, pl
               type="button"
               onClick={() => choose(depth, n)}
               className={cn(
-                'flex min-h-11 w-full items-center justify-between gap-2 rounded-sm px-2 text-start text-base hover:bg-muted focus-visible:bg-muted focus-visible:outline-none md:min-h-8 md:text-sm',
+                'flex min-h-11 w-full items-center justify-between gap-2 rounded-sm px-2 text-start text-base hover:bg-muted focus-visible:bg-muted focus-visible:outline-hidden md:min-h-8 md:text-sm',
                 sel && 'bg-muted font-medium text-primary',
               )}
             >
@@ -116,7 +116,7 @@ export function RegionSelect({ level = 3, value, onChange, allowClear = true, pl
       onOpenChange={onOpen}
       disabled={disabled}
       title={placeholder ?? t('picker.selectRegion')}
-      contentClassName="w-auto min-w-[36rem]"
+      contentClassName="w-auto min-w-xl"
       trigger={
         <PickerTrigger
           id={id}
@@ -131,13 +131,13 @@ export function RegionSelect({ level = 3, value, onChange, allowClear = true, pl
       }
     >
       <div className="relative border-b border-border p-2">
-        <Search className="pointer-events-none absolute start-5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+        <Search className="pointer-events-none absolute inset-s-5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder={t('picker.regionSearch')}
           aria-label={t('common.search')}
-          className="h-11 w-full rounded-md border border-input bg-background ps-9 pe-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:h-9 md:text-sm"
+          className="h-11 w-full rounded-md border border-input bg-background ps-9 pe-3 text-base focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring md:h-9 md:text-sm"
         />
       </div>
       {kw ? (

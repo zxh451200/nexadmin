@@ -72,7 +72,7 @@ export function Sidebar({ menu, collapsed = false, onNavigate, onToggleCollapse 
         className={({ isActive }) =>
           cn(
             'relative flex min-h-11 items-center gap-3 rounded-md px-3 text-sm transition-colors md:min-h-9',
-            'hover:bg-sidebar-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            'hover:bg-sidebar-accent/60 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring',
             // 一级行（含单项与目录标题）统一字重，层级差交给缩进与引导线，不用字重表达
             !nested && 'font-medium',
             isActive
@@ -80,7 +80,7 @@ export function Sidebar({ menu, collapsed = false, onNavigate, onToggleCollapse 
                   'bg-sidebar-accent font-medium text-sidebar-accent-foreground',
                   'before:absolute before:inset-y-2 before:w-0.5 before:rounded-full before:bg-brand-gradient',
                   // 二级的激活竖条压在引导线上，免得同一条轨道上出现两条竖线
-                  nested ? 'before:start-[-9px]' : 'before:start-0',
+                  nested ? 'before:inset-s-[-9px]' : 'before:inset-s-0',
                 )
               : nested
                 ? 'text-sidebar-foreground/80'
@@ -96,7 +96,7 @@ export function Sidebar({ menu, collapsed = false, onNavigate, onToggleCollapse 
         {/* 徽标：展开态是行尾计数，收起态是图标上的圆点；0 时不渲染 */}
         {badge > 0 &&
           (collapsed ? (
-            <span aria-hidden="true" className="absolute end-2 top-2 size-2 rounded-full bg-primary" />
+            <span aria-hidden="true" className="absolute inset-e-2 top-2 size-2 rounded-full bg-primary" />
           ) : (
             <span className="ms-auto inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 py-0.5 text-[11px] leading-none font-medium text-primary-foreground">
               {badge > 99 ? '99+' : badge}
@@ -129,7 +129,7 @@ export function Sidebar({ menu, collapsed = false, onNavigate, onToggleCollapse 
         onClick={onNavigate}
         aria-label={settings?.siteName || t('layout.appName')}
         className={cn(
-          'flex h-14 shrink-0 items-center gap-2 border-b border-border px-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+          'flex h-14 shrink-0 items-center gap-2 border-b border-border px-4 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
           collapsed && 'justify-center px-0',
         )}
       >
@@ -163,7 +163,7 @@ export function Sidebar({ menu, collapsed = false, onNavigate, onToggleCollapse 
                   onClick={() => toggleGroup(group.key)}
                   aria-expanded={open}
                   data-tone={groupTone(group.key)}
-                  className="flex min-h-11 w-full items-center gap-3 rounded-md px-3 text-sm font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-9"
+                  className="flex min-h-11 w-full items-center gap-3 rounded-md px-3 text-sm font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-accent/60 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring md:min-h-9"
                 >
                   {/* 一级目录图标按分组色调着色：--tone 由 button 上的 data-tone 提供，仅颜色层 */}
                   <DynamicIcon name={group.icon} className="tone-text size-5 shrink-0 md:size-4" />
@@ -175,7 +175,7 @@ export function Sidebar({ menu, collapsed = false, onNavigate, onToggleCollapse 
                 </button>
                 {/* 引导线用绝对定位画，不占布局：这样二级图标正好落在一级标题文字的下一条竖线上 */}
                 {open && (
-                  <ul className="relative ms-5 mt-1 space-y-1 ps-2 before:absolute before:inset-y-0 before:start-0 before:w-px before:bg-sidebar-border">
+                  <ul className="relative ms-5 mt-1 space-y-1 ps-2 before:absolute before:inset-y-0 before:inset-s-0 before:w-px before:bg-sidebar-border">
                     {group.children?.map((item) => renderItem(item, true))}
                   </ul>
                 )}

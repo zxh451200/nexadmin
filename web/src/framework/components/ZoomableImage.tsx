@@ -31,7 +31,7 @@ export function ZoomableImage({ src, alt = '', className, title }: ZoomableImage
         onClick={() => setZoom(true)}
         aria-label={label}
         title={label}
-        className="block shrink-0 cursor-zoom-in rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="block shrink-0 cursor-zoom-in rounded-md focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
       >
         <img
           src={src}

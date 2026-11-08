@@ -100,7 +100,7 @@ export function OutboxTab() {
       title: t('plugin_pay.outbox.lastError'),
       render: (r) =>
         r.lastError ? (
-          <span className="block max-w-xs break-words text-xs text-destructive">{r.lastError}</span>
+          <span className="block max-w-xs wrap-break-word text-xs text-destructive">{r.lastError}</span>
         ) : (
           <span className="text-muted-foreground">-</span>
         ),
@@ -115,7 +115,7 @@ export function OutboxTab() {
           : r.deadAt
             ? `${t('plugin_pay.outbox.deadAt')} ${time(r.deadAt)}`
             : `${t('plugin_pay.outbox.nextRetryAt')} ${time(r.nextRetryAt) || '-'}`
-        return <span className="num block break-words text-xs text-muted-foreground">{shown}</span>
+        return <span className="num block wrap-break-word text-xs text-muted-foreground">{shown}</span>
       },
     },
     {
@@ -224,7 +224,7 @@ function DetailField({ label, value }: { label: string; value?: string }) {
   return (
     <div className="min-w-0">
       <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="mt-0.5 break-words text-sm text-foreground">{value || '-'}</dd>
+      <dd className="mt-0.5 wrap-break-word text-sm text-foreground">{value || '-'}</dd>
     </div>
   )
 }
@@ -271,7 +271,7 @@ function OutboxDetailDialog({ row, onClose }: { row: PayOutboxEvent; onClose: ()
         <div className="min-w-0">
           <p className="text-xs text-muted-foreground">{t('plugin_pay.outbox.payload')}</p>
           {payload ? (
-            <pre className="mt-1 max-h-80 max-w-full overflow-auto rounded-md bg-muted p-2 text-xs break-words whitespace-pre-wrap">{payload}</pre>
+            <pre className="mt-1 max-h-80 max-w-full overflow-auto rounded-md bg-muted p-2 text-xs wrap-break-word whitespace-pre-wrap">{payload}</pre>
           ) : (
             <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
               <Inbox aria-hidden="true" className="h-3.5 w-3.5" />

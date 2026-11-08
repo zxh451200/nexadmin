@@ -261,7 +261,7 @@ export function MessageTab({ unread }: { unread: number }) {
               <DictTag dict="message_category" value={detail.category} />
               <span className="num">{formatTime(detail.createdAt, i18n.language)}</span>
             </div>
-            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground">{detail.content}</p>
+            <p className="whitespace-pre-wrap wrap-break-word text-sm leading-relaxed text-foreground">{detail.content}</p>
           </div>
         ) : null}
       </ResponsiveDialog>

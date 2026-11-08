@@ -321,7 +321,7 @@ export default function FilePage() {
               {isLoading ? (
                 <div className={GRID_CLASS}>
                   {Array.from({ length: 10 }, (_, i) => (
-                    <Skeleton key={i} className="aspect-[4/3] w-full rounded-lg" />
+                    <Skeleton key={i} className="aspect-4/3 w-full rounded-lg" />
                   ))}
                 </div>
               ) : rows.length === 0 ? (
@@ -334,26 +334,26 @@ export default function FilePage() {
                       return (
                         <li key={f.id}>
                           <Card className={cn('group h-full overflow-hidden transition-shadow hover:shadow-md motion-reduce:transition-none', checked && 'ring-2 ring-primary')}>
-                            <div className="relative aspect-[4/3] overflow-hidden border-b border-border">
+                            <div className="relative aspect-4/3 overflow-hidden border-b border-border">
                               <button type="button" aria-label={`${t('common.preview')} ${f.name}`} className="block size-full" onClick={() => setPreview(f)}>
                                 <FileThumb file={f} />
                               </button>
-                              <div className="absolute start-1 top-1 flex size-11 items-center justify-center md:size-8">
+                              <div className="absolute inset-s-1 top-1 flex size-11 items-center justify-center md:size-8">
                                 <Checkbox
                                   checked={checked}
                                   aria-label={t('fileMgr.selectFile', { name: f.name })}
-                                  className="border-border bg-background shadow-sm"
+                                  className="border-border bg-background shadow-xs"
                                   onCheckedChange={() => setSelected((s) => (checked ? s.filter((x) => x !== f.id) : [...s, f.id]))}
                                 />
                               </div>
                               {f.visibility === 'private' && (
-                                <Badge variant="outline" className="absolute end-1.5 top-1.5 gap-1 border-border bg-background/90 px-1.5 py-0.5 text-[11px] font-medium shadow-sm backdrop-blur-sm">
+                                <Badge variant="outline" className="absolute inset-e-1.5 top-1.5 gap-1 border-border bg-background/90 px-1.5 py-0.5 text-[11px] font-medium shadow-xs backdrop-blur-xs">
                                   <Lock className="size-3" aria-hidden="true" />
                                   {t('fileMgr.private')}
                                 </Badge>
                               )}
-                              <div className="absolute end-1 bottom-1 transition-opacity motion-reduce:transition-none md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
-                                {actions(f, 'bg-background/90 shadow-sm backdrop-blur-sm hover:bg-background')}
+                              <div className="absolute inset-e-1 bottom-1 transition-opacity motion-reduce:transition-none md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
+                                {actions(f, 'bg-background/90 shadow-xs backdrop-blur-xs hover:bg-background')}
                               </div>
                             </div>
                             <div className="min-w-0 p-2.5">

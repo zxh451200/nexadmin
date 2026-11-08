@@ -216,10 +216,10 @@ export function ChartSpecEditor({ table, type, columns, value, onChange }: Props
                 aria-label={t(`plugin_report.color.${tok}`)}
                 title={t(`plugin_report.color.${tok}`)}
                 onClick={() => patch({ colors: idx >= 0 ? value.colors.filter((c) => c !== tok) : [...value.colors, tok] })}
-                className={cn('relative size-10 rounded-full border-2 border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:size-8', idx >= 0 && 'ring-2 ring-ring ring-offset-2 ring-offset-background')}
+                className={cn('relative size-10 rounded-full border-2 border-border focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring md:size-8', idx >= 0 && 'ring-2 ring-ring ring-offset-2 ring-offset-background')}
                 style={{ backgroundColor: colorVar(tok) }}
               >
-                {idx >= 0 ? <span className="absolute -end-1 -top-1 flex size-4 items-center justify-center rounded-full bg-foreground text-[10px] text-background">{idx + 1}</span> : null}
+                {idx >= 0 ? <span className="absolute -inset-e-1 -top-1 flex size-4 items-center justify-center rounded-full bg-foreground text-[10px] text-background">{idx + 1}</span> : null}
               </button>
             )
           })}

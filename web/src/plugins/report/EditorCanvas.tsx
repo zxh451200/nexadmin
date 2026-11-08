@@ -66,7 +66,7 @@ function CanvasItem({ item, name, selected, cellW, onSelect, onChange, onRemove 
       onFocus={onSelect}
       onKeyDown={onKey}
       className={cn(
-        'absolute flex touch-none select-none flex-col overflow-hidden rounded-lg border bg-card text-xs text-card-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        'absolute flex touch-none select-none flex-col overflow-hidden rounded-lg border bg-card text-xs text-card-foreground shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring',
         selected ? 'border-primary' : 'border-border',
         isDragging && 'z-10 opacity-80',
       )}
@@ -79,7 +79,7 @@ function CanvasItem({ item, name, selected, cellW, onSelect, onChange, onRemove 
       <span
         aria-hidden="true"
         onPointerDown={startResize}
-        className="absolute bottom-0 end-0 size-4 cursor-se-resize rounded-ss-md bg-primary"
+        className="absolute bottom-0 inset-e-0 size-4 cursor-se-resize rounded-ss-md bg-primary"
       />
     </div>
   )

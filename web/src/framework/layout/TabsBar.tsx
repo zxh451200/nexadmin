@@ -183,7 +183,7 @@ export function TabsBar({ menu, onRefresh }: TabsBarProps) {
               data-tabs-scroll="start"
               aria-label={t('tabs.scrollBack')}
               onClick={() => nudge(-1)}
-              className="absolute start-0 top-1/2 z-10 size-6 -translate-y-1/2 rounded-full bg-background/95 shadow-sm backdrop-blur"
+              className="absolute inset-s-0 top-1/2 z-10 size-6 -translate-y-1/2 rounded-full bg-background/95 shadow-xs backdrop-blur-sm"
             >
               <ChevronLeft className="size-3.5 rtl:rotate-180" aria-hidden="true" />
             </Button>
@@ -193,7 +193,7 @@ export function TabsBar({ menu, onRefresh }: TabsBarProps) {
             role="tablist"
             aria-label={t('tabs.bar')}
             onScroll={measure}
-            className="-my-1 flex items-center gap-1.5 overflow-x-auto overflow-y-hidden py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            className="-my-1 flex items-center gap-1.5 overflow-x-auto overflow-y-hidden py-1 scrollbar-none [&::-webkit-scrollbar]:hidden"
           >
             {tabs.map((tab) => {
               const active = tab.path === current.path
@@ -207,7 +207,7 @@ export function TabsBar({ menu, onRefresh }: TabsBarProps) {
                     className={cn(
                       'group/tab flex h-8 shrink-0 items-center rounded-md ps-3 text-sm transition-colors',
                       active
-                        ? 'bg-primary font-medium text-primary-foreground shadow-sm'
+                        ? 'bg-primary font-medium text-primary-foreground shadow-xs'
                         : 'text-muted-foreground hover:bg-accent hover:text-foreground',
                       pinned && 'pe-3',
                     )}
@@ -222,7 +222,7 @@ export function TabsBar({ menu, onRefresh }: TabsBarProps) {
                       aria-selected={active}
                       aria-current={active ? 'page' : undefined}
                       onClick={() => navigate(tab.path)}
-                      className="max-w-40 truncate rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className="max-w-40 truncate rounded-full focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       {titleOf(tab)}
                     </button>
@@ -234,7 +234,7 @@ export function TabsBar({ menu, onRefresh }: TabsBarProps) {
                             data-tab-more=""
                             aria-label={t('tabs.more')}
                             className={cn(
-                              'ms-1 flex size-5 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                              'ms-1 flex size-5 items-center justify-center rounded-full focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring',
                               active ? 'text-primary-foreground/85 hover:bg-white/15 hover:text-primary-foreground' : 'hover:bg-muted',
                             )}
                           >
@@ -277,7 +277,7 @@ export function TabsBar({ menu, onRefresh }: TabsBarProps) {
               data-tabs-scroll="end"
               aria-label={t('tabs.scrollForward')}
               onClick={() => nudge(1)}
-              className="absolute end-0 top-1/2 z-10 size-6 -translate-y-1/2 rounded-full bg-background/95 shadow-sm backdrop-blur"
+              className="absolute inset-e-0 top-1/2 z-10 size-6 -translate-y-1/2 rounded-full bg-background/95 shadow-xs backdrop-blur-sm"
             >
               <ChevronRight className="size-3.5 rtl:rotate-180" aria-hidden="true" />
             </Button>

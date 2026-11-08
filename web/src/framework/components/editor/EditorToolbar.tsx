@@ -46,7 +46,7 @@ function ColorBtn({ label, icon, onPick, onClear }: { label: string; icon: React
       <PopoverContent className="w-64 p-3">
         <div className="grid grid-cols-7 gap-2">
           {PRESET_COLORS.map((c) => (
-            <button key={c} type="button" aria-label={c} style={{ backgroundColor: c }} className="size-8 rounded-md border border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => onPick(c)} />
+            <button key={c} type="button" aria-label={c} style={{ backgroundColor: c }} className="size-8 rounded-md border border-border focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring" onClick={() => onPick(c)} />
           ))}
         </div>
         <Button type="button" variant="outline" size="sm" className="mt-3 w-full" onClick={onClear}>
@@ -80,7 +80,7 @@ function LinkBtn({ editor }: { editor: Editor }) {
           onChange={(e) => setUrl(e.target.value)}
           placeholder="https://"
           aria-label={t('editor.link')}
-          className="h-11 w-full rounded-md border border-input bg-background px-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:h-9 md:text-sm"
+          className="h-11 w-full rounded-md border border-input bg-background px-3 text-base focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring md:h-9 md:text-sm"
         />
         <div className="flex justify-end gap-2">
           <Button

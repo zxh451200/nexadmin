@@ -46,7 +46,7 @@ function FillList() {
               <Card className="flex h-full flex-col">
                 <CardHeader className="pb-2">
                   <CardTitle className="flex items-start justify-between gap-2 text-base">
-                    <span className="min-w-0 break-words">{f.name}</span>
+                    <span className="min-w-0 wrap-break-word">{f.name}</span>
                     {f.closed ? <Badge variant={closedVariant(f.closed)}>{t(`plugin_formbuilder.closed.${f.closed}`)}</Badge> : null}
                   </CardTitle>
                 </CardHeader>

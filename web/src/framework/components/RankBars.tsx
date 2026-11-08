@@ -50,7 +50,7 @@ export function RankBars({
               <button
                 type="button"
                 onClick={() => onSelect(i.name)}
-                className={`grid w-full cursor-pointer ${grid} items-center gap-3 rounded-md px-1 py-0.5 text-start transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40`}
+                className={`grid w-full cursor-pointer ${grid} items-center gap-3 rounded-md px-1 py-0.5 text-start transition-colors hover:bg-muted/50 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/40`}
               >
                 {body}
               </button>

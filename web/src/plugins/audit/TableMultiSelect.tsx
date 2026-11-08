@@ -46,7 +46,7 @@ export function TableMultiSelect({ options, value, onChange, disabled, 'aria-lab
             <ChevronsUpDown className="ms-2 h-4 w-4 shrink-0 opacity-50" aria-hidden="true" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-[--radix-popover-trigger-width] min-w-64 p-0" align="start">
+        <PopoverContent className="w-(--radix-popover-trigger-width) min-w-64 p-0" align="start">
           <Command>
             <CommandInput placeholder={t('plugin_audit.scope.search')} />
             <CommandList>

@@ -142,7 +142,7 @@ export default function SetupWizard() {
 
   return (
     <div className="tech-grid relative min-h-dvh bg-background px-4 pb-[max(2rem,env(safe-area-inset-bottom))] pt-16 lg:py-8">
-      <div className="absolute end-4 top-4 flex items-center gap-1">
+      <div className="absolute inset-e-4 top-4 flex items-center gap-1">
         <LanguageSwitch />
         <ThemeToggle />
       </div>
@@ -206,7 +206,7 @@ export default function SetupWizard() {
                     type="button"
                     onClick={() => setShowToken((s) => !s)}
                     aria-label={showToken ? t('setup.hidePassword') : t('setup.showPassword')}
-                    className="absolute inset-y-0 end-0 flex w-11 items-center justify-center text-muted-foreground hover:text-foreground md:w-9"
+                    className="absolute inset-y-0 inset-e-0 flex w-11 items-center justify-center text-muted-foreground hover:text-foreground md:w-9"
                   >
                     {showToken ? <Eye className="size-4" aria-hidden="true" /> : <EyeOff className="size-4" aria-hidden="true" />}
                   </button>

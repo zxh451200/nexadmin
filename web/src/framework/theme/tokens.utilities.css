@@ -1,0 +1,174 @@
+@utility bg-brand-gradient {
+  /* 品牌渐变：靛蓝为主，尾端带一点青 */
+  background-image: linear-gradient(
+    135deg,
+    hsl(var(--brand-from)) 0%,
+    hsl(var(--primary)) 55%,
+    hsl(var(--brand-to)) 170%
+  );
+  /* 深色下的品牌面板（登录页左栏等大面积使用）：渐变压暗到与深色背景同一亮度家族，
+     保留靛蓝→青的色相走向，避免亮蓝面板在近黑背景旁刺眼。小面积点缀（边框/光晕）仍用亮色变量。 */
+  .dark & {
+    background-image: linear-gradient(
+      135deg,
+      hsl(243 55% 26%) 0%,
+      hsl(236 48% 19%) 55%,
+      hsl(215 55% 14%) 170%
+    );
+  }
+}
+
+@utility login-brand {
+  /* 登录页斜切品牌面板专属（不能用 bg-brand-gradient，它被侧边栏/按钮/统计卡等小面积复用）：
+     亮色=原品牌渐变斜切；深色=面板不再自涂色，由整页 .login-page-bg 铺同一族渐变，
+     斜切线两侧颜色连续，消除亮蓝面板与近黑背景的硬拼接。 */
+  background-image: linear-gradient(
+    135deg,
+    hsl(var(--brand-from)) 0%,
+    hsl(var(--primary)) 55%,
+    hsl(var(--brand-to)) 170%
+  );
+  .dark & {
+    background-image: none;
+  }
+}
+
+@utility login-brand-underlay {
+  .dark & {
+    /* 底衬只为亮色斜切边抗锯齿存在；深色无渐变面板，亮 primary 底衬必须隐掉 */
+    background-color: transparent;
+  }
+}
+
+@utility login-page-bg {
+  .dark & {
+    /* 深色整页底色：靛蓝头部在左，向右下压暗到接近背景色，右半区只留一点冷色倾向 */
+    background-image: linear-gradient(
+      135deg,
+      hsl(243 48% 20%) 0%,
+      hsl(234 40% 11%) 55%,
+      hsl(230 36% 6.5%) 120%
+    );
+  }
+}
+
+@utility text-gradient {
+  background-image: linear-gradient(
+    90deg,
+    hsl(var(--brand-from)),
+    hsl(var(--brand-to))
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+@utility card-edge {
+  /* 卡片质感：亮色柔和投影，暗色顶部 1px 高光边 */
+  box-shadow:
+    0 1px 2px hsl(232 40% 20% / 0.04),
+    0 10px 28px -14px hsl(232 40% 20% / 0.14);
+  .dark & {
+    box-shadow:
+      inset 0 1px 0 0 hsl(0 0% 100% / 0.05),
+      0 12px 32px -16px hsl(232 60% 2% / 0.8);
+  }
+}
+
+@utility glass {
+  /* 毛玻璃：暗色轻透明 + 品牌色细边 */
+  background-color: hsl(var(--card) / 0.8);
+  border: 1px solid hsl(var(--border) / 0.8);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  .dark & {
+    background-color: hsl(var(--card) / 0.6);
+    border-color: hsl(var(--brand-from) / 0.22);
+    box-shadow:
+      inset 0 1px 0 0 hsl(0 0% 100% / 0.05),
+      0 24px 48px -24px hsl(var(--brand-from) / 0.35);
+  }
+}
+
+@utility glow {
+  /* 品牌色柔和光晕 */
+  box-shadow:
+    0 0 0 1px hsl(var(--brand-from) / 0.4),
+    0 0 28px -6px hsl(var(--brand-from) / 0.6);
+}
+
+@utility tech-grid {
+  /* 极淡点阵背景 */
+  background-image: radial-gradient(
+    hsl(var(--foreground) / 0.09) 1px,
+    transparent 1px
+  );
+  background-size: 22px 22px;
+}
+
+@utility dot-grid-light {
+  /* 渐变底上的浅色点阵（工作台顶部横幅） */
+  background-image: radial-gradient(
+    hsl(var(--primary-foreground) / 0.28) 1px,
+    transparent 1px
+  );
+  background-size: 20px 20px;
+}
+
+@utility tone-chip {
+  /* 图标胶囊：色调底 + 同色描边，替代原来清一色的品牌渐变方块 */
+  background-color: hsl(var(--tone) / 0.14);
+  border: 1px solid hsl(var(--tone) / 0.3);
+  color: hsl(var(--tone));
+  .dark & {
+    background-color: hsl(var(--tone) / 0.2);
+    border-color: hsl(var(--tone) / 0.38);
+  }
+}
+
+@utility tone-rule {
+  /* 卡片顶边色线：成排 KPI 卡靠它做色彩分区。
+     末端不能淡到透明——否则每张卡右侧三分之一都没有线，冷色（紫/青）在浅底上更看不出来。 */
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 2px;
+    background-image: linear-gradient(
+      90deg,
+      hsl(var(--tone)) 0%,
+      hsl(var(--tone) / 0.5) 100%
+    );
+  }
+}
+
+@utility tone-bar {
+  /* 色调进度条与迷你趋势线 */
+  background-image: linear-gradient(
+    90deg,
+    hsl(var(--tone)) 0%,
+    hsl(var(--tone) / 0.55) 100%
+  );
+}
+
+@utility tone-text {
+  /* 色调文字/图标：读最近 [data-tone] 祖先（或自身）给出的 --tone，无色调祖先时退回 primary。
+     侧边栏分组图标用它着色——lucide 图标走 currentColor，只动颜色不动结构。 */
+  color: hsl(var(--tone, var(--primary)));
+}
+
+@utility tree-row-in {
+  /* 树表展开：新露出的行做一小段淡入 + 位移（收起是瞬间的，行高没有可过渡的容器） */
+  animation: tree-row-in 180ms ease-out both;
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+@utility num {
+  /* 数字：等宽 */
+  font-family:
+    'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+}

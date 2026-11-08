@@ -27,7 +27,7 @@ export function FillView({ id }: { id: string }) {
   const [done, setDone] = useState<SubmitResult | null>(null)
   const idemKey = useRef(newIdemKey())
   const formRef = useRef<HTMLFormElement>(null)
-  const loadedFor = useRef<string>()
+  const loadedFor = useRef<string>(undefined)
 
   useEffect(() => {
     if (data && loadedFor.current !== `${data.id}:${data.publishedVersion}`) {
@@ -108,7 +108,7 @@ export function FillView({ id }: { id: string }) {
           <h1 className="text-lg font-semibold" role="status">
             {t('plugin_formbuilder.fill.submitted')}
           </h1>
-          <p className="max-w-md whitespace-pre-wrap break-words text-sm text-muted-foreground">{done.message || t('plugin_formbuilder.fill.successDefault')}</p>
+          <p className="max-w-md whitespace-pre-wrap wrap-break-word text-sm text-muted-foreground">{done.message || t('plugin_formbuilder.fill.successDefault')}</p>
           <div className="flex flex-wrap justify-center gap-2">
             <Button onClick={back}>{t('plugin_formbuilder.fill.backToList')}</Button>
             {data.allowRepeat && !closed ? (

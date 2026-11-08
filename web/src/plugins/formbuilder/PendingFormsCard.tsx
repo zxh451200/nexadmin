@@ -18,7 +18,7 @@ export default function PendingFormsCard() {
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2 text-base font-medium">
           <ClipboardList className="size-4 text-primary" aria-hidden="true" />
-          <Link to="/system/formbuilder/fill" className="rounded-sm hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <Link to="/system/formbuilder/fill" className="rounded-sm hover:text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
             {t('plugin_formbuilder.card.pending')}
           </Link>
         </CardTitle>

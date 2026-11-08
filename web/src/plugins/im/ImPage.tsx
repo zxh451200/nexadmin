@@ -477,8 +477,8 @@ export default function ImPage() {
         </TabsList>
         <TabsContent value="workbench">
       {/* 分栏几何与工单中心同款（24rem 列 + 桌面定高 + 移动端左栏限高）：两套坐席工作台并排打开不会互相打架 */}
-      <div className="grid h-auto min-h-96 grid-cols-1 gap-4 md:h-[calc(100vh-14rem)] md:min-h-[36rem] md:grid-cols-[24rem_1fr]">
-        <Card className="flex max-h-[32rem] min-h-0 flex-col gap-2 p-2 md:max-h-none">
+      <div className="grid h-auto min-h-96 grid-cols-1 gap-4 md:h-[calc(100vh-14rem)] md:min-h-144 md:grid-cols-[24rem_1fr]">
+        <Card className="flex max-h-128 min-h-0 flex-col gap-2 p-2 md:max-h-none">
           <div className="flex flex-wrap items-center gap-2">
             <Input
               value={keyword}
@@ -766,7 +766,7 @@ function ImageAttachment({ att, url, onZoom }: { att: ImAttachment; url: string;
       onClick={onZoom}
       aria-label={att.name}
       title={att.name}
-      className="block max-w-full cursor-zoom-in rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="block max-w-full cursor-zoom-in rounded-md focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
     >
       <img
         src={url}
@@ -1096,7 +1096,7 @@ function ChatPane({
                   <FileAttachment att={att} url={attUrl} />
                 )
               ) : null}
-              {m.content ? <div className="whitespace-pre-wrap break-words">{m.content}</div> : null}
+              {m.content ? <div className="whitespace-pre-wrap wrap-break-word">{m.content}</div> : null}
             </ChatBubble>
           )
         })}

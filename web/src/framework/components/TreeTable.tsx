@@ -60,7 +60,7 @@ export interface TreeTableProps<T extends { id: string; children?: T[] }> {
 }
 
 /** 按深度缩进（逻辑类 ps-，静态列出以便 Tailwind 扫描） */
-const INDENT = ['ps-0', 'ps-6', 'ps-12', 'ps-[4.5rem]', 'ps-24', 'ps-[7.5rem]', 'ps-36', 'ps-[10.5rem]', 'ps-48']
+const INDENT = ['ps-0', 'ps-6', 'ps-12', 'ps-18', 'ps-24', 'ps-30', 'ps-36', 'ps-42', 'ps-48']
 /** 横向位移超过多少像素视为「改变层级」而不是排序 */
 const NEST_OFFSET = 24
 /** 一层缩进的宽度（与 INDENT 的步进一致）：往左拖过几档缩进就升几级；落位线每级也缩这么多 */
@@ -861,7 +861,7 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
                 className={cn(
                   'whitespace-nowrap text-end',
                   pinActions &&
-                    'sticky end-0 z-10 bg-card shadow-[inset_1px_0_0_hsl(var(--border))] group-hover:bg-muted',
+                    'sticky inset-e-0 z-10 bg-card shadow-[inset_1px_0_0_hsl(var(--border))] group-hover:bg-muted',
                 )}
                 onClick={(e) => e.stopPropagation()}
               >
@@ -918,7 +918,7 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
               <TableHead
                 className={cn(
                   'text-end',
-                  pinActions && 'sticky end-0 z-20 bg-muted shadow-[inset_1px_0_0_hsl(var(--border))]',
+                  pinActions && 'sticky inset-e-0 z-20 bg-muted shadow-[inset_1px_0_0_hsl(var(--border))]',
                 )}
               >
                 {t('common.actions')}
@@ -1130,7 +1130,7 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
             ? createPortal(
                 <div
                   data-drop-line="1"
-                  className="pointer-events-none fixed z-[60]"
+                  className="pointer-events-none fixed z-60"
                   style={{ left: drop.left - scrollShift.x, top: drop.y - 1 - scrollShift.y, width: drop.width }}
                   role="status"
                   aria-live="polite"
@@ -1147,20 +1147,20 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
                   >
                     <span
                       className={cn(
-                        'absolute -start-2 -top-[5px] size-[13px] rounded-full ring-2 ring-background',
+                        'absolute -inset-s-2 top-[-5px] size-[13px] rounded-full ring-2 ring-background',
                         drop.mode === 'blocked' ? 'bg-destructive' : 'bg-primary',
                       )}
                     />
                     <span
                       className={cn(
-                        'absolute -end-2 -top-[5px] size-[13px] rounded-full ring-2 ring-background',
+                        'absolute -inset-e-2 top-[-5px] size-[13px] rounded-full ring-2 ring-background',
                         drop.mode === 'blocked' ? 'bg-destructive' : 'bg-primary',
                       )}
                     />
                     {/* 落点层级一律标出来（顶级也标「第 1 级」）：树形拖拽最容易搞不清的就是会落到第几级 */}
                     <span
                       className={cn(
-                        'absolute start-4 -top-[11px] whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-medium shadow-sm',
+                        'absolute inset-s-4 top-[-11px] whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-medium shadow-xs',
                         drop.mode === 'blocked'
                           ? 'bg-destructive text-white'
                           : 'bg-primary text-primary-foreground',

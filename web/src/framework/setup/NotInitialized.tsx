@@ -10,7 +10,7 @@ export default function NotInitialized() {
   const navigate = useNavigate()
   return (
     <div className="tech-grid relative flex min-h-dvh items-center justify-center bg-background p-4 pt-16 sm:pt-4">
-      <div className="absolute end-4 top-4 flex items-center gap-1">
+      <div className="absolute inset-e-4 top-4 flex items-center gap-1">
         <LanguageSwitch />
         <ThemeToggle />
       </div>

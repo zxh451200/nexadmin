@@ -26,7 +26,7 @@ export function ValueRow({ label, value }: RevealField) {
 export function CodeBlock({ code, label }: { code: string; label: string }) {
   return (
     <div className="relative rounded-md border border-border bg-muted/40">
-      <div className="absolute end-1 top-1">
+      <div className="absolute inset-e-1 top-1">
         <CopyButton text={code} label={label} />
       </div>
       <pre className="overflow-x-auto p-3 pe-12 text-xs leading-relaxed text-foreground">

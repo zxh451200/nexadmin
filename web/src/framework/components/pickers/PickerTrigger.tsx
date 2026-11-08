@@ -28,8 +28,8 @@ export const PickerTrigger = React.forwardRef<HTMLButtonElement, PickerTriggerPr
         type="button"
         disabled={disabled}
         className={cn(
-          'flex h-10 w-full items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-start text-base shadow-sm',
-          'transition-[color,box-shadow,border-color] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 md:h-9 md:text-sm',
+          'flex h-10 w-full items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-start text-base shadow-xs',
+          'transition-[color,box-shadow,border-color] duration-150 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/40 md:h-9 md:text-sm',
           'disabled:cursor-not-allowed disabled:opacity-50',
         )}
         {...rest}
@@ -47,7 +47,7 @@ export const PickerTrigger = React.forwardRef<HTMLButtonElement, PickerTriggerPr
         <button
           type="button"
           aria-label={t('common.clear')}
-          className="absolute end-8 top-1/2 inline-flex size-10 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:text-foreground md:size-7"
+          className="absolute inset-e-8 top-1/2 inline-flex size-10 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:text-foreground md:size-7"
           onClick={(e) => {
             e.stopPropagation()
             onClear?.()

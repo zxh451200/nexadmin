@@ -21,7 +21,7 @@ export const tileSize = (cat: 'image' | 'video' | 'file') =>
   cat === 'file' ? 'w-full' : cat === 'video' ? 'w-full max-w-xs sm:w-56' : 'size-28 md:size-32'
 
 const barBtn =
-  'inline-flex h-11 flex-1 items-center justify-center text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:h-8'
+  'inline-flex h-11 flex-1 items-center justify-center text-foreground hover:bg-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring md:h-8'
 
 export function FileTile({
   file,
@@ -46,8 +46,8 @@ export function FileTile({
       type="button"
       aria-label={t('uploader.drag')}
       className={cn(
-        'inline-flex size-11 touch-none items-center justify-center rounded-md bg-background/80 text-muted-foreground backdrop-blur hover:text-foreground md:size-8',
-        cat === 'file' ? 'shrink-0' : 'absolute start-1 top-1 z-10',
+        'inline-flex size-11 touch-none items-center justify-center rounded-md bg-background/80 text-muted-foreground backdrop-blur-sm hover:text-foreground md:size-8',
+        cat === 'file' ? 'shrink-0' : 'absolute inset-s-1 top-1 z-10',
       )}
       {...attributes}
       {...listeners}
@@ -67,7 +67,7 @@ export function FileTile({
         </button>
       </div>
     ) : (
-      <div className="absolute inset-x-0 bottom-0 z-10 flex divide-x divide-border border-t border-border bg-background/85 backdrop-blur rtl:divide-x-reverse">
+      <div className="absolute inset-x-0 bottom-0 z-10 flex divide-x divide-border border-t border-border bg-background/85 backdrop-blur-sm rtl:divide-x-reverse">
         <button type="button" aria-label={t('common.replace')} className={barBtn} onClick={onReplace}>
           <RefreshCw className="size-4" aria-hidden="true" />
         </button>

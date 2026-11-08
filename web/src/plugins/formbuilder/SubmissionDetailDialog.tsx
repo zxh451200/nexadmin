@@ -54,7 +54,7 @@ export function SubmissionDetailDialog({ formId, submissionId, onClose }: Props)
               return (
                 <div key={f.key} className="flex flex-col gap-0.5">
                   <dt className="text-xs text-muted-foreground">{f.title}</dt>
-                  <dd className="break-words text-sm">
+                  <dd className="wrap-break-word text-sm">
                     {f.type === 'file' && Array.isArray(v) ? <FileLinks files={v} /> : f.type === 'rating' ? `${String(v)} / ${f.max ?? 5}` : displayValue(f, v, yes, no) || '-'}
                   </dd>
                 </div>
@@ -82,7 +82,7 @@ function FileLinks({ files }: { files: unknown[] }) {
     <ul className="flex flex-col gap-1">
       {(files as Array<{ name?: string; url?: string }>).map((f, i) => (
         <li key={i}>
-          <a href={f.url} target="_blank" rel="noopener noreferrer" className="text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <a href={f.url} target="_blank" rel="noopener noreferrer" className="text-primary underline-offset-2 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
             {f.name || f.url}
           </a>
         </li>

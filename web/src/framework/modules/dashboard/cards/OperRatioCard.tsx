@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { Cell, Legend, Pie, PieChart, Sector, Tooltip } from 'recharts'
 import type { PieSectorDataItem } from 'recharts/types/polar/Pie'
 import { useTranslation } from 'react-i18next'
@@ -11,8 +10,6 @@ import { useDashboardStats } from '../api'
 export default function OperRatioCard() {
   const { t } = useTranslation()
   const { data } = useDashboardStats()
-  // Recharts 默认只弹 Tooltip，扇区本身不动；hover 时把那一片推出来一圈。
-  const [active, setActive] = useState<number>()
   // 图例点击切显隐；饼图各扇区共用 dataKey，按名称取 key，并把隐藏项置 0 而不是删掉数据（否则图例点不回来）。
   const sliceNames = (data?.operTypes ?? []).map((o) => t(`dashboard.oper.${o.type}`, { defaultValue: o.type }))
   const { hidden, formatter } = useLegendToggle((value) => String(value ?? ''), sliceNames)
@@ -27,6 +24,7 @@ export default function OperRatioCard() {
         <ChartBox height={260}>
           {({ width, height }) => (
             <PieChart width={width} height={height}>
+              {/* recharts 3：hover 激活由组件内部状态驱动，activeShape 自动生效 */}
               <Pie
                 data={slices}
                 dataKey="value"
@@ -35,10 +33,7 @@ export default function OperRatioCard() {
                 outerRadius="80%"
                 paddingAngle={2}
                 stroke="hsl(var(--card))"
-                activeIndex={active}
                 activeShape={(p: PieSectorDataItem) => <Sector {...p} outerRadius={Number(p.outerRadius) + 6} />}
-                onMouseEnter={(_, i) => setActive(i)}
-                onMouseLeave={() => setActive(undefined)}
               >
                 {slices.map((o) => (
                   <Cell key={o.name} fill={o.color} />

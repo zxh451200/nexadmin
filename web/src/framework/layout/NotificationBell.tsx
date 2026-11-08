@@ -122,7 +122,7 @@ export function NotificationBell() {
           <Bell className="size-5 md:size-4" aria-hidden="true" />
           {total > 0 && (
             <span
-              className="num absolute end-1.5 top-1.5 flex min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-medium leading-4 text-destructive-foreground md:end-0.5 md:top-0.5"
+              className="num absolute inset-e-1.5 top-1.5 flex min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-medium leading-4 text-destructive-foreground md:inset-e-0.5 md:top-0.5"
               aria-hidden="true"
             >
               {total > 99 ? '99+' : total}
@@ -143,7 +143,7 @@ export function NotificationBell() {
           <button
             type="button"
             onClick={() => go('/message?tab=notices')}
-            className="flex min-h-11 w-full items-center gap-2 border-b border-border px-4 py-2.5 text-start text-sm hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
+            className="flex min-h-11 w-full items-center gap-2 border-b border-border px-4 py-2.5 text-start text-sm hover:bg-muted focus-visible:bg-muted focus-visible:outline-hidden"
           >
             <span className="size-2 shrink-0 rounded-full bg-destructive" aria-hidden="true" />
             <span className="min-w-0 flex-1 truncate">{t('layout.noticeUnread', { count: unreadNotices })}</span>
@@ -159,7 +159,7 @@ export function NotificationBell() {
               <button
                 type="button"
                 onClick={() => openItem(m)}
-                className="flex min-h-11 w-full items-start gap-3 px-4 py-3 text-start hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
+                className="flex min-h-11 w-full items-start gap-3 px-4 py-3 text-start hover:bg-muted focus-visible:bg-muted focus-visible:outline-hidden"
               >
                 <span className={m.unread ? 'mt-1.5 size-2 shrink-0 rounded-full bg-destructive' : 'mt-1.5 size-2 shrink-0'} aria-hidden="true" />
                 <span className="min-w-0 flex-1">

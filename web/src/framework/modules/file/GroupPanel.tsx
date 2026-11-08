@@ -84,7 +84,7 @@ export function GroupPanel({ value, onChange }: Props) {
         {/* 悬停操作浮在行尾并自带卡色底：不预留通道，所有行的选中底色和计数列才在同一宽度上 */}
         {editable && (
           <Can perm="file:upload">
-            <div className="flex shrink-0 items-center gap-0.5 opacity-100 focus-within:opacity-100 [@media(hover:hover)]:absolute [@media(hover:hover)]:inset-y-0 [@media(hover:hover)]:end-0 [@media(hover:hover)]:rounded-md [@media(hover:hover)]:bg-card [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:transition-opacity [@media(hover:hover)]:group-hover/item:opacity-100 [@media(hover:hover)]:motion-reduce:transition-none">
+            <div className="flex shrink-0 items-center gap-0.5 opacity-100 focus-within:opacity-100 [@media(hover:hover)]:absolute [@media(hover:hover)]:inset-y-0 [@media(hover:hover)]:inset-e-0 [@media(hover:hover)]:rounded-md [@media(hover:hover)]:bg-card [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:transition-opacity [@media(hover:hover)]:group-hover/item:opacity-100 [@media(hover:hover)]:motion-reduce:transition-none">
               <Button variant="ghost" size="icon" aria-label={t('fileMgr.renameGroup')} className="size-11 shrink-0 md:size-8" onClick={() => setEditing({ id: editable.id, name: editable.name })}>
                 <Pencil className="size-3.5" aria-hidden="true" />
               </Button>

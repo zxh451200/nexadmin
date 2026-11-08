@@ -68,7 +68,7 @@ export function AiFilterBox({ scope, onApply, className }: AiFilterBoxProps) {
           placeholder={t('ai.filter.placeholder')}
           aria-label={t('ai.filter.label')}
           disabled={loading}
-          className="min-w-0 flex-1 bg-transparent py-2 text-base outline-none placeholder:text-muted-foreground md:text-sm"
+          className="min-w-0 flex-1 bg-transparent py-2 text-base outline-hidden placeholder:text-muted-foreground md:text-sm"
         />
         <Button type="submit" size="sm" className="shrink-0 rounded-full" disabled={loading || !text.trim()} aria-label={t('ai.filter.submit')}>
           {loading ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Sparkles className="size-4" aria-hidden="true" />}
@@ -78,7 +78,7 @@ export function AiFilterBox({ scope, onApply, className }: AiFilterBoxProps) {
       {chip ? (
         <div className="flex">
           <span className="inline-flex max-w-full items-center gap-1 rounded-full bg-secondary py-1 ps-3 pe-1 text-sm text-secondary-foreground">
-            <span className="min-w-0 break-words">{t('ai.filter.applied', { text: chip.text, explanation: chip.explanation })}</span>
+            <span className="min-w-0 wrap-break-word">{t('ai.filter.applied', { text: chip.text, explanation: chip.explanation })}</span>
             <button
               type="button"
               onClick={clear}

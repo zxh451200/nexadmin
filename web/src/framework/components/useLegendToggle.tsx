@@ -56,7 +56,7 @@ export function useLegendToggle(
         }}
         // 关掉态不能只压透明度：recharts 已把 inactive 项刷成 muted 色，再叠 opacity 才和图例里"隐身"区分开
         className={cn(
-          'cursor-pointer select-none rounded-sm px-0.5 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
+          'cursor-pointer select-none rounded-sm px-0.5 transition-opacity focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/40',
           off ? 'opacity-40 hover:opacity-70' : 'hover:opacity-80',
         )}
       >

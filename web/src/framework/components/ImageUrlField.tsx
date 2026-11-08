@@ -126,7 +126,7 @@ export function ImageUrlField({
             onClick={() => setZoom(true)}
             aria-label={t('common.preview')}
             title={t('common.preview')}
-            className="block rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed"
+            className="block rounded-md focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed"
           >
             <img
               src={value}

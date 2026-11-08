@@ -32,7 +32,7 @@ export function PluginFilterBar({
   return (
     <div className="flex flex-wrap items-center gap-2">
       <div className="relative w-64 max-w-full">
-        <Search className="absolute start-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+        <Search className="absolute inset-s-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
         <Input className="ps-8" placeholder={placeholder} value={keyword} onChange={(e) => onKeyword(e.target.value)} />
       </div>
       {onEdition ? (

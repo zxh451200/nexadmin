@@ -144,7 +144,7 @@ export default function SubmissionsPage() {
         title: f.title,
         render: (r) => {
           const text = displayValue(f, r.data[f.key], yes, no)
-          return text ? <span className="line-clamp-2 max-w-64 break-words">{text}</span> : <span className="text-muted-foreground">-</span>
+          return text ? <span className="line-clamp-2 max-w-64 wrap-break-word">{text}</span> : <span className="text-muted-foreground">-</span>
         },
       }),
     ),

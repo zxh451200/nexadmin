@@ -2,6 +2,8 @@ import { createLogger, defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'node:path'
 
+const here = import.meta.dirname
+
 const logger = createLogger()
 const postcssFromWarning = 'A PostCSS plugin did not pass the `from` option to `postcss.parse`'
 const warn = logger.warn.bind(logger)
@@ -18,7 +20,7 @@ export default defineConfig({
   plugins: [react()],
   define: { __APP_VERSION__: JSON.stringify(process.env.npm_package_version ?? 'dev') },
   resolve: {
-    alias: { '@': path.resolve(__dirname, 'src') },
+    alias: { '@': path.resolve(here, 'src') },
   },
   server: {
     port: 5173,

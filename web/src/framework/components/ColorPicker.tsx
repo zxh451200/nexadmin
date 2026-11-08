@@ -62,7 +62,7 @@ export function ColorPicker({ value, onChange, presets = PRESET_COLORS, allowCle
             }}
             style={{ backgroundColor: c }}
             className={cn(
-              'flex size-11 items-center justify-center rounded-md border border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:size-8',
+              'flex size-11 items-center justify-center rounded-md border border-border focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring md:size-8',
             )}
           >
             {value?.toLowerCase() === c.toLowerCase() && <Check className="size-4 mix-blend-difference" aria-hidden="true" />}
@@ -90,7 +90,7 @@ export function ColorPicker({ value, onChange, presets = PRESET_COLORS, allowCle
           placeholder="#RRGGBB"
           maxLength={7}
           aria-label={t('picker.customColor')}
-          className="num h-11 min-w-0 flex-1 rounded-md border border-input bg-background px-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:h-9 md:text-sm"
+          className="num h-11 min-w-0 flex-1 rounded-md border border-input bg-background px-3 text-base focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring md:h-9 md:text-sm"
         />
       </div>
     </PickerShell>

@@ -111,7 +111,7 @@ export function TreeSelect({
               <button
                 type="button"
                 aria-label={isOpen ? t('picker.collapse') : t('picker.expand')}
-                className="inline-flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:bg-muted focus-visible:outline-none md:size-6"
+                className="inline-flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:bg-muted focus-visible:outline-hidden md:size-6"
                 onClick={() => toggle(v)}
               >
                 <ChevronRight className={cn('size-3.5 transition-transform motion-reduce:transition-none rtl:rotate-180', isOpen && 'rotate-90 rtl:rotate-90')} aria-hidden="true" />
@@ -124,7 +124,7 @@ export function TreeSelect({
               disabled={isDisabled?.(n as Record<string, unknown>)}
               onClick={() => pick(v)}
               className={cn(
-                'flex min-h-8 flex-1 items-center gap-2 rounded-sm px-2 text-start text-sm hover:bg-muted focus-visible:bg-muted focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 md:min-h-8',
+                'flex min-h-8 flex-1 items-center gap-2 rounded-sm px-2 text-start text-sm hover:bg-muted focus-visible:bg-muted focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50 md:min-h-8',
                 isSel && 'bg-muted/60',
               )}
             >
@@ -157,13 +157,13 @@ export function TreeSelect({
       }
     >
       <div className="relative border-b border-border p-2">
-        <Search className="pointer-events-none absolute start-5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+        <Search className="pointer-events-none absolute inset-s-5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder={t('picker.searchPlaceholder')}
           aria-label={t('common.search')}
-          className="h-11 w-full rounded-md border border-input bg-background ps-9 pe-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:h-9 md:text-sm"
+          className="h-11 w-full rounded-md border border-input bg-background ps-9 pe-3 text-base focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring md:h-9 md:text-sm"
         />
       </div>
       <ul role="tree" aria-multiselectable={multiple} className="max-h-72 overflow-y-auto p-1">

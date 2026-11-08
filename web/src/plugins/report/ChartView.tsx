@@ -75,8 +75,6 @@ export function ChartView({ type, result, config, height, loading, error, classN
   const cart = useMemo(() => (result && (type === 'bar' || type === 'line' || type === 'area') ? toCartesian(result) : null), [result, type])
   const pie = useMemo(() => (result && type === 'pie' ? toPie(result) : []), [result, type])
   const metric = useMemo(() => (result && type === 'metric' ? toMetric(result) : null), [result, type])
-  // Recharts 默认只弹 Tooltip；hover 时把被指到的那一片推出来一圈，否则图表"点不动"。
-  const [activeSlice, setActiveSlice] = useState<number>()
   const cartKeys = useMemo(() => cart?.series.map((s) => s.key) ?? [], [cart])
   const pieNames = useMemo(() => pie.map((p) => p.name), [pie])
   const { hidden, formatter } = useLegendToggle(undefined, cartKeys)
@@ -92,7 +90,6 @@ export function ChartView({ type, result, config, height, loading, error, classN
 
   useEffect(() => {
     setPicked(null)
-    setActiveSlice(undefined)
   }, [result])
 
   if (loading && !result) return <Skeleton className={cn('w-full', className)} style={{ height }} />
@@ -168,7 +165,7 @@ export function ChartView({ type, result, config, height, loading, error, classN
         <button
           type="button"
           onClick={() => setPicked(null)}
-          className="absolute end-1 top-0 z-10 flex items-center gap-1 rounded-full border border-border bg-card px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground"
+          className="absolute inset-e-1 top-0 z-10 flex items-center gap-1 rounded-full border border-border bg-card px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground"
         >
           {t('plugin_report.filteredBy', { name: picked })}
           <span aria-hidden="true">×</span>
@@ -179,6 +176,7 @@ export function ChartView({ type, result, config, height, loading, error, classN
         if (type === 'pie') {
           return (
             <PieChart width={width} height={h}>
+              {/* recharts 3：hover 激活由组件内部状态驱动，activeShape 自动生效 */}
               <Pie
                 data={visiblePie}
                 dataKey="value"
@@ -187,10 +185,7 @@ export function ChartView({ type, result, config, height, loading, error, classN
                 outerRadius="75%"
                 stroke="hsl(var(--card))"
                 paddingAngle={2}
-                activeIndex={activeSlice}
                 activeShape={(p: PieSectorDataItem) => <Sector {...p} outerRadius={Number(p.outerRadius) + 6} />}
-                onMouseEnter={(_, i) => setActiveSlice(i)}
-                onMouseLeave={() => setActiveSlice(undefined)}
               >
                 {visiblePie.map((p) => (
                   <Cell key={p.name} fill={colorAt(config.colors, pie.findIndex((o) => o.name === p.name))} />

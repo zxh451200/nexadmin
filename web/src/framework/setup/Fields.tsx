@@ -67,7 +67,7 @@ export function TextField({ name, label, type = 'text', placeholder, autoComplet
                 type="button"
                 onClick={() => setShow((s) => !s)}
                 aria-label={show ? t('setup.hidePassword') : t('setup.showPassword')}
-                className="absolute inset-y-0 end-0 flex w-11 items-center justify-center text-muted-foreground hover:text-foreground md:w-9"
+                className="absolute inset-y-0 inset-e-0 flex w-11 items-center justify-center text-muted-foreground hover:text-foreground md:w-9"
               >
                 {show ? <Eye className="size-4" aria-hidden="true" /> : <EyeOff className="size-4" aria-hidden="true" />}
               </button>

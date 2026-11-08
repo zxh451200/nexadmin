@@ -196,7 +196,7 @@ export function AppLayout() {
     <div className="flex h-dvh bg-background text-foreground">
       <a
         href="#main-content"
-        className="sr-only z-50 rounded-md bg-primary px-3 py-2 text-primary-foreground focus:not-sr-only focus:absolute focus:start-2 focus:top-2"
+        className="sr-only z-50 rounded-md bg-primary px-3 py-2 text-primary-foreground focus:not-sr-only focus:absolute focus:inset-s-2 focus:top-2"
       >
         {t('layout.skipToContent')}
       </a>
@@ -214,7 +214,7 @@ export function AppLayout() {
       </Sheet>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 shrink-0 items-center gap-1 border-b border-border bg-background/80 px-2 backdrop-blur md:gap-2 md:px-4">
+        <header className="flex h-14 shrink-0 items-center gap-1 border-b border-border bg-background/80 px-2 backdrop-blur-sm md:gap-2 md:px-4">
           <Button variant="ghost" size="icon" className="size-11 md:hidden" aria-label={t('layout.openMenu')} onClick={() => setMobileOpen(true)}>
             <Menu className="size-5" aria-hidden="true" />
           </Button>
@@ -303,7 +303,7 @@ export function AppLayout() {
         <main
           id="main-content"
           ref={mainRef}
-          className="min-h-0 flex-1 overflow-y-auto pb-[env(safe-area-inset-bottom)]"
+          className="min-h-0 flex-1 overflow-y-auto pb-safe"
           tabIndex={-1}
           onScroll={(e) => scrollTops.current.set(activeKey, e.currentTarget.scrollTop)}
         >

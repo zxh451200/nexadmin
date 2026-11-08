@@ -65,7 +65,7 @@ export function Lightbox({ open, onOpenChange, slides, index = 0, caption, onSli
           ? {
               slideFooter: () => (
                 <div className="flex justify-center px-4 pb-2">
-                  <div className="w-full max-w-xl rounded-lg border border-border bg-card/95 p-3 shadow-lg backdrop-blur">
+                  <div className="w-full max-w-xl rounded-lg border border-border bg-card/95 p-3 shadow-lg backdrop-blur-sm">
                     {caption}
                   </div>
                 </div>

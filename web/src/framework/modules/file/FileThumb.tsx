@@ -19,7 +19,7 @@ export function FileThumb({ file, className, iconClassName }: { file: FileItem; 
       <div className={cn('relative size-full bg-muted', className)}>
         {file.posterUrl ? <img src={file.posterUrl} alt={file.name} loading="lazy" className="size-full object-cover" /> : null}
         <span className="absolute inset-0 flex items-center justify-center">
-          <span className="flex size-10 items-center justify-center rounded-full bg-background/70 text-foreground backdrop-blur-sm">
+          <span className="flex size-10 items-center justify-center rounded-full bg-background/70 text-foreground backdrop-blur-xs">
             <Play className="size-5" aria-hidden="true" />
           </span>
         </span>

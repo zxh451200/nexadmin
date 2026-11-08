@@ -25,7 +25,7 @@ function useRequiredKeys(props: Record<string, unknown>): RequiredKeys {
   const control = props.control as { _options?: { resolver?: unknown } } | undefined
   const getValues = props.getValues as (() => Record<string, unknown>) | undefined
   const resolver = control?._options?.resolver as ResolverLike | undefined
-  const signature = React.useRef<string>()
+  const signature = React.useRef<string>(undefined)
   const seq = React.useRef(0)
 
   // 不写依赖数组：resolver 每次渲染都是新函数，靠签名判断「值真的变了才算」。

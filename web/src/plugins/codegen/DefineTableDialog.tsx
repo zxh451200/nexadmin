@@ -133,7 +133,7 @@ export function DefineTableDialog({ open, onOpenChange, pending, onSubmit }: Pro
               {t('plugin_codegen.define.name')}
               <RequiredMark />
             </Label>
-            <div className="flex h-10 items-center rounded-md border border-input bg-background ps-3 shadow-sm transition-[color,box-shadow,border-color] focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/40 md:h-9">
+            <div className="flex h-10 items-center rounded-md border border-input bg-background ps-3 shadow-xs transition-[color,box-shadow,border-color] focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/40 md:h-9">
               <span className="me-1.5 border-e border-input pe-2 font-mono text-sm text-muted-foreground">biz_</span>
               <Input
                 id="codegen-def-name"

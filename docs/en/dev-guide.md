@@ -31,7 +31,7 @@ The project root `.nexadmin.manifest.json` is authoritative (`framework_paths` /
 
 The revocation list (`config/license-revoked.json`) and additional public keys (`config/license-keys.pub`) are distributed by the vendor with release packages and overwritten as framework files on upgrade; the revocation list has sequence-number rollback protection (a signed list whose seq is lower than the currently trusted version is ignored with a warning; this guard is in-process only — after a restart the on-disk file wins). When the upgrade package does not contain these two files they are kept and not moved into `.nexadmin-trash/`; the `--dry-run` listing marks them `K`.
 
-Under `web/`, the following also belong to the framework area (per the manifest) and must not be modified: `src/App.tsx`, `src/main.tsx`, `src/index.css`, `src/lib/`, `src/vite-env.d.ts`, `public/`, `.env.production`, `.env.development`, `embed.go`, `embed_dev.go`, `vite.config.ts`, `tailwind.config.ts`, `postcss.config.js`, `tsconfig.json`, `eslint.config.js`, `index.html`. Meanwhile `.github/`, `AGENTS.md`, `CLAUDE.md`, `README.md`, `.gitignore`, `.dockerignore` and `.dev-keys/` belong to the user area.
+Under `web/`, the following also belong to the framework area (per the manifest) and must not be modified: `src/App.tsx`, `src/main.tsx`, `src/index.css`, `src/lib/`, `src/vite-env.d.ts`, `public/`, `.env.production`, `.env.development`, `embed.go`, `embed_dev.go`, `vite.config.ts`, `postcss.config.js`, `scripts/`, `tsconfig.json`, `eslint.config.js`, `index.html`. Meanwhile `.github/`, `AGENTS.md`, `CLAUDE.md`, `README.md`, `.gitignore`, `.dockerignore` and `.dev-keys/` belong to the user area.
 
 ## 3. Customization paths and minimal examples
 

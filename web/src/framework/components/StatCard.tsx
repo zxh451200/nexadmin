@@ -56,7 +56,7 @@ export function StatCard({ title, value, hint, delta, deltaLabel, icon, spark, p
             </p>
           </div>
           {icon ? (
-            <div className="tone-chip flex size-9 shrink-0 items-center justify-center rounded-xl shadow-sm transition-colors duration-200 group-hover:shadow-md md:size-11 [&_svg]:size-4 md:[&_svg]:size-5">
+            <div className="tone-chip flex size-9 shrink-0 items-center justify-center rounded-xl shadow-xs transition-colors duration-200 group-hover:shadow-md md:size-11 [&_svg]:size-4 md:[&_svg]:size-5">
               {icon}
             </div>
           ) : null}

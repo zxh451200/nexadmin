@@ -134,7 +134,7 @@ export function RefundsTab() {
     },
     { key: 'amount', title: t('plugin_pay.fields.amount'), align: 'end', render: (r) => <span className="num">{formatMoney(r.amountMinor, r.currency)}</span> },
     { key: 'status', title: t('plugin_pay.fields.status'), render: (r) => <Badge variant={refundStatusVariant(r.status)}>{t(`plugin_pay.refundStatus.${r.status}`)}</Badge> },
-    { key: 'reason', title: t('plugin_pay.fields.reason'), render: (r) => <span className="text-xs break-words">{r.reason || r.failReason || '-'}</span> },
+    { key: 'reason', title: t('plugin_pay.fields.reason'), render: (r) => <span className="text-xs wrap-break-word">{r.reason || r.failReason || '-'}</span> },
     { key: 'operator', title: t('plugin_pay.fields.operator'), mobile: 'hidden', render: (r) => r.operatorId || '-' },
     {
       key: 'sync',

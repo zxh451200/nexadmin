@@ -70,31 +70,31 @@ function BrandPanel({ name, logoUrl, copyright }: { name: string; logoUrl?: stri
         </defs>
       </svg>
       <div className="dot-grid-light absolute inset-0" style={{ maskImage: mask, WebkitMaskImage: mask }} aria-hidden="true" />
-      <div className="pointer-events-none absolute -start-24 -top-24 size-96 rounded-full bg-primary-foreground/20 blur-3xl" aria-hidden="true" />
-      <div className="pointer-events-none absolute -bottom-32 end-0 size-[28rem] rounded-full bg-accent/30 blur-3xl" aria-hidden="true" />
-      <div className="pointer-events-none absolute start-1/3 top-1/2 size-64 rounded-full bg-primary/40 blur-3xl" aria-hidden="true" />
+      <div className="pointer-events-none absolute -inset-s-24 -top-24 size-96 rounded-full bg-primary-foreground/20 blur-3xl" aria-hidden="true" />
+      <div className="pointer-events-none absolute -bottom-32 inset-e-0 size-112 rounded-full bg-accent/30 blur-3xl" aria-hidden="true" />
+      <div className="pointer-events-none absolute inset-s-1/3 top-1/2 size-64 rounded-full bg-primary/40 blur-3xl" aria-hidden="true" />
 
       {/* 几何装饰：双层六边形（呼应品牌 logo）+ 轨道环 + 实心小点缀；克制的透明度，保持大留白 */}
       <div
-        className="pointer-events-none absolute end-12 top-20 size-36 animate-[login-float_14s_ease-in-out_infinite] motion-reduce:animate-none"
+        className="pointer-events-none absolute inset-e-12 top-20 size-36 animate-[login-float_14s_ease-in-out_infinite] motion-reduce:animate-none"
         aria-hidden="true"
       >
         <Hexagon className="absolute inset-0 text-primary-foreground/20" strokeWidth={0.6} />
-        <Hexagon className="absolute inset-0 m-auto size-24 text-primary-foreground/[0.13]" strokeWidth={0.6} />
+        <Hexagon className="absolute inset-0 m-auto size-24 text-primary-foreground/13" strokeWidth={0.6} />
       </div>
       <Hexagon
-        className="pointer-events-none absolute end-52 top-64 size-5 animate-[login-float-slow_18s_ease-in-out_infinite] fill-primary-foreground/20 text-transparent motion-reduce:animate-none"
+        className="pointer-events-none absolute inset-e-52 top-64 size-5 animate-[login-float-slow_18s_ease-in-out_infinite] fill-primary-foreground/20 text-transparent motion-reduce:animate-none"
         aria-hidden="true"
       />
       <div
-        className="pointer-events-none absolute bottom-44 end-40 size-20 animate-[login-orbit_20s_linear_infinite] motion-reduce:animate-none"
+        className="pointer-events-none absolute bottom-44 inset-e-40 size-20 animate-[login-orbit_20s_linear_infinite] motion-reduce:animate-none"
         aria-hidden="true"
       >
-        <div className="absolute inset-0 rounded-full border border-primary-foreground/[0.22]" />
-        <div className="absolute -top-[3px] left-1/2 size-1.5 -translate-x-1/2 rounded-full bg-primary-foreground/60" />
+        <div className="absolute inset-0 rounded-full border border-primary-foreground/22" />
+        <div className="absolute top-[-3px] left-1/2 size-1.5 -translate-x-1/2 rounded-full bg-primary-foreground/60" />
       </div>
       <div
-        className="pointer-events-none absolute bottom-28 start-[46%] size-2.5 animate-[login-float_12s_ease-in-out_infinite] rounded-full bg-primary-foreground/35 motion-reduce:animate-none"
+        className="pointer-events-none absolute bottom-28 inset-s-[46%] size-2.5 animate-[login-float_12s_ease-in-out_infinite] rounded-full bg-primary-foreground/35 motion-reduce:animate-none"
         aria-hidden="true"
       />
 

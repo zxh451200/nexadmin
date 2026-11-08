@@ -35,7 +35,7 @@ export function ClientErrorsTab() {
       title: t('serverMonitor.clientErrors.col.message'),
       mobile: 'title',
       render: (r) => (
-        <span className="line-clamp-2 max-w-md break-words" title={r.message}>
+        <span className="line-clamp-2 max-w-md wrap-break-word" title={r.message}>
           {r.message}
         </span>
       ),

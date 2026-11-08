@@ -422,7 +422,7 @@ function PayoutsPanel() {
           {r.channelCode ? <div className="break-all text-muted-foreground">{r.channelCode}</div> : null}
           {r.channelBatchNo ? <div className="num break-all text-muted-foreground">{r.channelBatchNo}</div> : null}
           {r.receiptNo ? <div className="num break-all text-muted-foreground">{t('plugin_pay.settle.receiptNo')}: {r.receiptNo}</div> : null}
-          {r.failReason ? <div className="break-words text-destructive">{r.failReason}</div> : null}
+          {r.failReason ? <div className="wrap-break-word text-destructive">{r.failReason}</div> : null}
         </div>
       ),
     },
@@ -550,7 +550,7 @@ function PayoutItemsDialog({ batch, onClose }: { batch: PayPayoutBatch; onClose:
                   {t('plugin_pay.settle.channelNo')}: {it.channelNo}
                 </div>
               ) : null}
-              {it.failReason ? <div className="break-words text-destructive">{it.failReason}</div> : null}
+              {it.failReason ? <div className="wrap-break-word text-destructive">{it.failReason}</div> : null}
             </li>
           ))}
         </ul>

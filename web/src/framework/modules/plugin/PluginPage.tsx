@@ -92,7 +92,7 @@ function PluginCard({
           {p.reason ? (
             <div className="flex items-start justify-between gap-4 py-2">
               <dt className="shrink-0 text-muted-foreground">{t('pluginMgr.field.reason')}</dt>
-              <dd className="min-w-0 break-words text-end text-destructive">{p.reason}</dd>
+              <dd className="min-w-0 wrap-break-word text-end text-destructive">{p.reason}</dd>
             </div>
           ) : null}
         </dl>

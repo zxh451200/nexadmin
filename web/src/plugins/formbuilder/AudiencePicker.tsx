@@ -79,7 +79,7 @@ export function AudiencePicker({ value, onChange }: Props) {
                   {names[id] ?? id}
                   <button
                     type="button"
-                    className="flex size-6 items-center justify-center rounded-sm hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="flex size-6 items-center justify-center rounded-sm hover:bg-accent focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                     aria-label={t('plugin_formbuilder.audience.removeUser', { name: names[id] ?? id })}
                     onClick={() => onChange({ ...value, users: value.users.filter((x) => x !== id) })}
                   >

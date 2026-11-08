@@ -79,7 +79,7 @@ export function HealthCard() {
                     <StatusBadge status={c.status} />
                   </div>
                   <p className="num text-xs text-muted-foreground">{t('serverMonitor.health.latency', { ms: c.latencyMs })}</p>
-                  <p className="break-words text-xs text-muted-foreground">{c.message || '-'}</p>
+                  <p className="wrap-break-word text-xs text-muted-foreground">{c.message || '-'}</p>
                 </li>
               )
             })}

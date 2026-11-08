@@ -95,7 +95,7 @@ function ProbeResultView({ r, fmt }: { r: PayChannelProbe; fmt: (v?: string) => 
               <span className="text-sm">{t(`plugin_pay.probeCheck.${c.name}`, { defaultValue: c.name })}</span>
             </dt>
             {/* 诊断原文照 failReason 口径透出：它是渠道给的话，翻译了反而对不上工单 */}
-            {c.detail ? <dd className="break-words text-xs text-muted-foreground">{c.detail}</dd> : null}
+            {c.detail ? <dd className="wrap-break-word text-xs text-muted-foreground">{c.detail}</dd> : null}
           </div>
         ))}
       </dl>

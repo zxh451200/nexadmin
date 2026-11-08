@@ -82,10 +82,10 @@ export function MobileCardContent<T>({ columns, row, index, leading, actions, on
           }
         >
           {titleCol ? (
-            <div className="break-words text-[15px] font-semibold leading-snug text-foreground">{renderCell(titleCol, row, index)}</div>
+            <div className="wrap-break-word text-[15px] font-semibold leading-snug text-foreground">{renderCell(titleCol, row, index)}</div>
           ) : null}
           {subCols.map((c) => (
-            <div key={c.key} className="mt-0.5 break-words text-xs text-muted-foreground">
+            <div key={c.key} className="mt-0.5 wrap-break-word text-xs text-muted-foreground">
               {renderCell(c, row, index)}
             </div>
           ))}
@@ -94,7 +94,7 @@ export function MobileCardContent<T>({ columns, row, index, leading, actions, on
               {shownCols.map((c) => (
                 <div key={c.key} className="min-w-0">
                   <dt className="text-xs text-muted-foreground">{c.title}</dt>
-                  <dd className="mt-0.5 min-w-0 break-words text-sm text-foreground">{renderCell(c, row, index)}</dd>
+                  <dd className="mt-0.5 min-w-0 wrap-break-word text-sm text-foreground">{renderCell(c, row, index)}</dd>
                 </div>
               ))}
             </dl>
@@ -109,7 +109,7 @@ export function MobileCardContent<T>({ columns, row, index, leading, actions, on
               type="button"
               aria-expanded={expanded}
               onClick={() => setExpanded((v) => !v)}
-              className="inline-flex h-9 items-center gap-1 rounded-md px-2 text-xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="inline-flex h-9 items-center gap-1 rounded-md px-2 text-xs text-muted-foreground hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
             >
               {expanded ? t('dataTable.collapse') : t('common.more')}
               <ChevronDown className={cn('size-3.5 transition-transform motion-reduce:transition-none', expanded && 'rotate-180')} aria-hidden="true" />

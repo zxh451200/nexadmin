@@ -384,7 +384,7 @@ export function ActivitiesSection({ customerId }: { customerId: string }) {
                   <span className="num text-xs text-muted-foreground">{formatTime(a.createdAt, i18n.language)}</span>
                   {a.author ? <span className="text-xs text-muted-foreground">{a.author}</span> : null}
                 </div>
-                <p className="mt-1 break-words whitespace-pre-wrap text-sm text-foreground">{a.content}</p>
+                <p className="mt-1 wrap-break-word whitespace-pre-wrap text-sm text-foreground">{a.content}</p>
               </div>
               <div className="flex shrink-0 items-center gap-1">
                 {a.kind === 'todo' ? (

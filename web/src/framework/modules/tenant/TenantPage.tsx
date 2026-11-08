@@ -64,7 +64,7 @@ const schema = z
   .superRefine((v, ctx) => {
     if (!v.isNew || !v.createAdmin) return
     const bad = (path: string, key: string) =>
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message: i18n.t(key) })
+      ctx.addIssue({ code: 'custom', path: [path], message: i18n.t(key) })
     if (!/^[A-Za-z0-9_.@-]{2,64}$/.test(v.adminUsername)) bad('adminUsername', 'tenant.err.username')
     if (!v.adminPassword) bad('adminPassword', 'tenant.err.password')
     if (v.adminEmail && !/^[^@\s]+@[^@\s]+$/.test(v.adminEmail)) bad('adminEmail', 'tenant.err.email')

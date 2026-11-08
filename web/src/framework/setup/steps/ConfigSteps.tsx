@@ -98,7 +98,7 @@ export function ConfirmSummary() {
         {rows.map(([k, val]) => (
           <div key={k} className="flex flex-col gap-1 px-3 py-2 md:flex-row md:gap-4">
             <dt className="shrink-0 text-muted-foreground md:w-40">{k}</dt>
-            <dd className="min-w-0 break-words">{val}</dd>
+            <dd className="min-w-0 wrap-break-word">{val}</dd>
           </div>
         ))}
       </dl>

@@ -79,7 +79,7 @@ export function SortableHandle({ className }: { className?: string }) {
       aria-label={t('dataTable.dragHandle')}
       onClick={(e) => e.stopPropagation()}
       className={cn(
-        'flex h-10 w-8 shrink-0 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing md:h-9 md:w-9',
+        'flex h-10 w-8 shrink-0 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing md:h-9 md:w-9',
         className,
       )}
     >

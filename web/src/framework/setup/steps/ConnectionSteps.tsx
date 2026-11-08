@@ -64,7 +64,7 @@ export function EnvStep() {
                 <XCircle className="size-4 shrink-0 text-destructive" aria-hidden="true" />
               )}
               <span className="min-w-0 flex-1">{t(`setup.env.${c.key}`)}</span>
-              <span className="num min-w-0 max-w-[50%] break-words text-end text-xs text-muted-foreground">{c.detail}</span>
+              <span className="num min-w-0 max-w-[50%] wrap-break-word text-end text-xs text-muted-foreground">{c.detail}</span>
             </li>
           ))}
         </ul>
@@ -115,7 +115,7 @@ function TestConnection({ url, payload }: { url: string; payload: unknown }) {
         {t('setup.testConnection')}
       </Button>
       {result && (
-        <p role="status" className={result.ok ? 'flex min-w-0 items-start gap-2 break-words text-sm text-success' : 'flex min-w-0 items-start gap-2 break-words text-sm text-destructive'}>
+        <p role="status" className={result.ok ? 'flex min-w-0 items-start gap-2 wrap-break-word text-sm text-success' : 'flex min-w-0 items-start gap-2 wrap-break-word text-sm text-destructive'}>
           {result.ok ? <CheckCircle2 className="mt-0.5 size-4 shrink-0" aria-hidden="true" /> : <XCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />}
           <span className="min-w-0">{result.ok ? `${t('setup.testOk')}${result.version ? ` · ${result.version}` : ''}` : `${t('setup.testFailed')}${result.message ? `: ${result.message}` : ''}`}</span>
         </p>
@@ -173,7 +173,7 @@ export function CacheStep() {
                   <Label
                     key={v}
                     htmlFor={`cache-${v}`}
-                    className="flex min-h-11 cursor-pointer items-start gap-3 rounded-lg border border-border p-3 has-[:checked]:border-primary has-[:checked]:bg-primary/5"
+                    className="flex min-h-11 cursor-pointer items-start gap-3 rounded-lg border border-border p-3 has-checked:border-primary has-checked:bg-primary/5"
                   >
                     <RadioGroupItem id={`cache-${v}`} value={v} className="mt-0.5" />
                     <span className="space-y-1">

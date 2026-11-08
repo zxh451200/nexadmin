@@ -59,7 +59,7 @@ function EditTile({ card, title, index, total, onMove, onHide }: TileProps) {
           {...listeners}
           aria-label={t('dashboard.layout.dragHandle', { title })}
           title={t('dashboard.layout.dragHandle', { title })}
-          className="flex size-10 shrink-0 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing"
+          className="flex size-10 shrink-0 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing"
         >
           <GripVertical className="size-5" aria-hidden="true" />
         </button>
@@ -226,7 +226,7 @@ export function LayoutEditor({ cards, base, saving, onSave, onExit, onReset }: P
         {live}
       </p>
 
-      <div className="sticky bottom-0 z-20 -mx-3 flex flex-wrap items-center justify-between gap-2 border-t border-border bg-background/95 px-3 py-3 backdrop-blur md:-mx-6 md:px-6">
+      <div className="sticky bottom-0 z-20 -mx-3 flex flex-wrap items-center justify-between gap-2 border-t border-border bg-background/95 px-3 py-3 backdrop-blur-sm md:-mx-6 md:px-6">
         <Button type="button" variant="ghost" className="min-h-10" disabled={saving} onClick={() => void reset()}>
           <RotateCcw className="me-1.5 size-4" aria-hidden="true" />
           {t('dashboard.layout.reset')}

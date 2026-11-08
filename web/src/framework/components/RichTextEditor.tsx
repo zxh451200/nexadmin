@@ -1,18 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
-import Underline from '@tiptap/extension-underline'
-import Link from '@tiptap/extension-link'
 import Image from '@tiptap/extension-image'
-import { Table } from '@tiptap/extension-table'
-import TableRow from '@tiptap/extension-table-row'
-import TableHeader from '@tiptap/extension-table-header'
-import TableCell from '@tiptap/extension-table-cell'
+import { Table, TableRow, TableHeader, TableCell } from '@tiptap/extension-table'
 import TextAlign from '@tiptap/extension-text-align'
-import { Color } from '@tiptap/extension-color'
-import { TextStyle } from '@tiptap/extension-text-style'
+import { TextStyle, Color } from '@tiptap/extension-text-style'
 import Highlight from '@tiptap/extension-highlight'
-import Placeholder from '@tiptap/extension-placeholder'
+import { Placeholder } from '@tiptap/extensions'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import { Video } from './editor/video'
@@ -43,9 +37,11 @@ export function RichTextEditor({ value, onChange, placeholder, className, disabl
   const editor = useEditor({
     extensions: [
       // 放开到 h6：工具栏只给 h1–h3 按钮，但粘贴/导入进来的 h4–h6 不能被降级成段落。
-      StarterKit.configure({ heading: { levels: [1, 2, 3, 4, 5, 6] } }),
-      Underline,
-      Link.configure({ openOnClick: false, autolink: true, HTMLAttributes: { rel: 'noopener noreferrer', target: '_blank' } }),
+      // v3 的 StarterKit 自带 Link / Underline，链接配置挪进 configure。
+      StarterKit.configure({
+        heading: { levels: [1, 2, 3, 4, 5, 6] },
+        link: { openOnClick: false, autolink: true, HTMLAttributes: { rel: 'noopener noreferrer', target: '_blank' } },
+      }),
       Image,
       Video,
       Embed,
@@ -61,6 +57,8 @@ export function RichTextEditor({ value, onChange, placeholder, className, disabl
     ],
     content: sanitizeHtml(value ?? ''),
     editable: !disabled,
+    // 工具栏的 isActive/can 依赖每次事务后的重渲染；v3 默认关闭
+    shouldRerenderOnTransaction: true,
     editorProps: { attributes: { class: 'nex-richtext', 'aria-label': t('editor.label') } },
     onUpdate: ({ editor: e }) => {
       const html = e.isEmpty ? '' : sanitizeHtml(e.getHTML())
@@ -75,7 +73,7 @@ export function RichTextEditor({ value, onChange, placeholder, className, disabl
     const next = value ?? ''
     if (next !== lastEmitted.current) {
       lastEmitted.current = next
-      editor.commands.setContent(sanitizeHtml(next), false)
+      editor.commands.setContent(sanitizeHtml(next), { emitUpdate: false })
     }
   }, [value, editor])
 

@@ -63,7 +63,7 @@ export function PickerShell({
       <PopoverTrigger asChild disabled={disabled}>
         {trigger}
       </PopoverTrigger>
-      <PopoverContent align={align} className={cn('w-[var(--radix-popover-trigger-width)] min-w-[8rem] p-0', contentClassName)}>
+      <PopoverContent align={align} className={cn('w-(--radix-popover-trigger-width) min-w-32 p-0', contentClassName)}>
         {children}
       </PopoverContent>
     </Popover>

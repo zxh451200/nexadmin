@@ -241,7 +241,7 @@ export async function exportHistory(deviceNo: string, query: { pointId: string; 
   const data = res.data
   const blob = data instanceof Blob ? data : new Blob(['\uFEFF', String(data)], { type: 'text/csv;charset=utf-8' })
   const ext = blob.type.includes('csv') ? 'csv' : 'xlsx'
-  const stamp = new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '')
+  const stamp = new Date().toISOString().slice(0, 19).replace(/-|:|T/g, '')
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url

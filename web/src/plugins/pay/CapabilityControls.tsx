@@ -26,7 +26,7 @@ export function CapabilityNote({ children, tone = 'muted' }: { children: ReactNo
       }
     >
       <TriangleAlert aria-hidden="true" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-      <span className="min-w-0 break-words">{children}</span>
+      <span className="min-w-0 wrap-break-word">{children}</span>
     </p>
   )
 }
@@ -70,11 +70,11 @@ export function CapabilitySummary({ caps, provider }: { caps: ProviderCapabiliti
       <dl className="grid grid-cols-1 gap-1 text-xs sm:grid-cols-2">
         <div className="min-w-0">
           <dt className="text-muted-foreground">{t('plugin_pay.capabilities.currencies')}</dt>
-          <dd className="break-words text-foreground">{currenciesOf(caps).join(', ') || '-'}</dd>
+          <dd className="wrap-break-word text-foreground">{currenciesOf(caps).join(', ') || '-'}</dd>
         </div>
         <div className="min-w-0">
           <dt className="text-muted-foreground">{t('plugin_pay.capabilities.methods')}</dt>
-          <dd className="break-words text-foreground">
+          <dd className="wrap-break-word text-foreground">
             {methodsOf(caps)
               .map((m) => t(`plugin_pay.method.${m}`, { defaultValue: m }))
               .join(', ') || t('plugin_pay.capabilities.noMethod')}

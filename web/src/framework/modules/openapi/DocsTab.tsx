@@ -83,7 +83,7 @@ export function DocsTab() {
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="relative w-full md:w-80">
-          <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+          <Search className="pointer-events-none absolute inset-s-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
           <Input
             value={kw}
             onChange={(e) => setKw(e.target.value)}
@@ -122,7 +122,7 @@ export function DocsTab() {
                   <button
                     type="button"
                     onClick={() => setDetail(r)}
-                    className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-start hover:bg-muted/40 focus-visible:bg-muted/40 focus-visible:outline-none"
+                    className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-start hover:bg-muted/40 focus-visible:bg-muted/40 focus-visible:outline-hidden"
                   >
                     <MethodBadge method={r.method} />
                     <code className="min-w-0 flex-1 font-mono text-xs break-all text-foreground">{r.path}</code>

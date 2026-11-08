@@ -36,7 +36,7 @@ export default function CronOverviewCard() {
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2 text-base font-medium">
           <Timer className="size-4 text-primary" aria-hidden="true" />
-          <Link to="/system/cron" className="rounded-sm hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <Link to="/system/cron" className="rounded-sm hover:text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
             {t('plugin_cron.card.overview')}
           </Link>
         </CardTitle>

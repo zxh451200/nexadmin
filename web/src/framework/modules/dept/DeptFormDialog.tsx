@@ -61,7 +61,7 @@ export function DeptFormDialog({ open, onOpenChange, editing, defaultParentId, t
         leaderId: z.string(),
         phone: z.string().regex(/^[0-9+\-\s()]*$/, t('dept.validation.phoneInvalid')),
         email: z.string().refine((v) => !v || z.string().email().safeParse(v).success, t('dept.validation.emailInvalid')),
-        sort: z.coerce.number({ invalid_type_error: t('dept.validation.sortInvalid') }).int(t('dept.validation.sortInvalid')),
+        sort: z.coerce.number({ error: t('dept.validation.sortInvalid') }).int(t('dept.validation.sortInvalid')),
         status: z.enum(['1', '0']),
       }),
     [t],

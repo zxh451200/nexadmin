@@ -437,7 +437,7 @@ export async function exportConversations(query: ConvQuery): Promise<void> {
       : new Blob([String(res.data)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
-  const stamp = new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '')
+  const stamp = new Date().toISOString().slice(0, 19).replace(/-|:|T/g, '')
   a.href = url
   a.download = `im-conversations-${stamp}.xlsx`
   document.body.appendChild(a)

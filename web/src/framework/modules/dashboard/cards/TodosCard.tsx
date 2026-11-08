@@ -29,7 +29,7 @@ export default function TodosCard() {
               <li key={todo.id}>
                 <Link
                   to={todo.kind === 'message' ? '/message' : '/content/notice'}
-                  className="flex min-h-11 items-center gap-2 rounded-md py-2 text-sm hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="flex min-h-11 items-center gap-2 rounded-md py-2 text-sm hover:text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <Badge variant={todo.kind === 'message' ? 'info' : 'warning'} className="shrink-0">
                     {t(todo.kind === 'message' ? 'dashboard.todoMessage' : 'dashboard.todoNotice')}

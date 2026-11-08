@@ -60,7 +60,7 @@ export function OptionalProbe({ kind, payload }: { kind: 's3' | 'ai'; payload: u
   const token = useSetupToken()
   const [running, setRunning] = useState(false)
   const [result, setResult] = useState<{ ok: boolean; code: ProbeCode } | null>(null)
-  const active = useRef<AbortController>()
+  const active = useRef<AbortController>(undefined)
   const key = JSON.stringify(payload)
 
   useEffect(() => {

@@ -75,7 +75,7 @@ export function MenuFormDialog({ open, onOpenChange, editing, defaultParentId, t
           path: z.string(),
           component: z.string(),
           perm: z.string(),
-          sort: z.coerce.number({ invalid_type_error: t('sysMenu.validation.sortInvalid') }).int(t('sysMenu.validation.sortInvalid')),
+          sort: z.coerce.number({ error: t('sysMenu.validation.sortInvalid') }).int(t('sysMenu.validation.sortInvalid')),
           keepAlive: z.boolean(),
           hidden: z.boolean(),
           external: z.boolean(),

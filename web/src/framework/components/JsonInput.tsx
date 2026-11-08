@@ -71,7 +71,7 @@ const Editor = React.forwardRef<HTMLTextAreaElement, EditorProps>(function Edito
   return (
     <div
       className={cn(
-        'relative flex rounded-md border border-input bg-background shadow-sm transition-[color,box-shadow,border-color] duration-150 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/40',
+        'relative flex rounded-md border border-input bg-background shadow-xs transition-[color,box-shadow,border-color] duration-150 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/40',
         error && 'border-destructive focus-within:border-destructive focus-within:ring-destructive/30',
         boxClassName,
       )}
@@ -80,7 +80,7 @@ const Editor = React.forwardRef<HTMLTextAreaElement, EditorProps>(function Edito
       <div
         ref={gutterRef}
         aria-hidden="true"
-        className="pointer-events-none absolute inset-y-0 start-0 w-[var(--json-gutter-w)] select-none overflow-hidden border-e border-border/60 bg-muted py-2 ps-2 pe-1.5 text-end font-mono text-base leading-relaxed text-muted-foreground/70 tabular-nums md:text-sm"
+        className="pointer-events-none absolute inset-y-0 inset-s-0 w-(--json-gutter-w) select-none overflow-hidden border-e border-border/60 bg-muted py-2 ps-2 pe-1.5 text-end font-mono text-base leading-relaxed text-muted-foreground/70 tabular-nums md:text-sm"
       >
         {numbers.map((n) => (
           <div key={n} className={cn(n === invalidLine && 'font-medium text-destructive')}>
