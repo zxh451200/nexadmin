@@ -172,7 +172,17 @@ func NewService(cfg *config.Config, c cache.Cache) (*Service, error) {
 			return nil, errors.New("auth: single_session requires atomic cache.Lease")
 		}
 	}
+	// 预热验证码素材：21 张背景解码 + 滑块/点选两个照片版 builder 构建约 0.3s，放后台
+	// 跑，进程起来后的第一个用户请求不必扛冷启动（机器繁忙时冷启动曾观测到秒级尾刺）。
+	go warmCaptchaAssets()
 	return &Service{secret: []byte(secret), accessTTL: cfg.Auth.AccessTTL, refreshTTL: cfg.Auth.RefreshTTL, cache: c, singleSession: cfg.Auth.SingleSession}, nil
+}
+
+// warmCaptchaAssets 预热验证码的惰性素材（见 slider_render_photo.go 的 sync.Once 池）。
+// 失败静默：素材挂了各出题入口本就有手绘回退，预热不改变任何失败路径。
+func warmCaptchaAssets() {
+	_, _ = slidePhotoCaptcha()
+	_, _ = clickCaptcha()
 }
 
 func loadOrCreateSecret(path string) (string, error) {
