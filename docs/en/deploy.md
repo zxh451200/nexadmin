@@ -43,7 +43,7 @@ Build context is the project root:
 docker build -f deploy/Dockerfile -t nexadmin:latest .
 ```
 
-Multi-stage: `node:22-alpine` builds the frontend → `golang:1.25-alpine` builds with `CGO_ENABLED=0 go build -tags embedweb` → `alpine:3.20` runs. Runtime image points:
+Multi-stage: `node:22-alpine` builds the frontend → `golang:1.27.3-alpine` builds with `CGO_ENABLED=0 go build -tags embedweb` → `alpine:3.20` runs. Runtime image points:
 
 - Non-root user `nexadmin` (uid/gid 10001); working directory `/app`.
 - Binary `/app/nexadmin-server`; `/app/migrations` ships with the image; default config at `/app/defaults/default.yaml`.
@@ -52,7 +52,7 @@ Multi-stage: `node:22-alpine` builds the frontend → `golang:1.25-alpine` build
 - Volumes: `/app/config`, `/app/data`, `/app/logs`; exposes 8080; `HEALTHCHECK` uses `wget` against `http://127.0.0.1:8080/healthz` (unchanged).
 - Backup directory: the image creates and grants `/app/data/backup` (writable by `nexadmin`, inside the data volume) and sets `ENV NEXADMIN_BACKUP_DIR=/app/data/backup`. Note the environment variable takes precedence over `config.yaml` — to change the directory, change this variable (or override in compose), not just `config.yaml`'s `backup.dir`. The backup page, `reinit` and `restore` all use the same directory.
 
-Image builds and real runtime behavior still need validation. The current Dockerfile's `golang:1.25-alpine` base is older than the Go 1.26 requirement in `go.mod`; it is not a matched offline toolchain. Deployment maintainers must align versions and validate the build before release.
+Image builds and real runtime behavior still need validation. The base image is now `golang:1.27.3-alpine` (above the Go 1.26 requirement in `go.mod`, and includes the stdlib GO-2026-6809 fix); deployment maintainers must still run a build acceptance before release.
 
 ### 2.4 deploy/docker-compose.example.yml
 

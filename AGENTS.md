@@ -36,6 +36,8 @@ cd web && npm run typecheck && npm run lint
 
 涉及迁移时补跑 `nexadmin-server migrate --dry-run`；涉及官网时截图验证浅色/深色两套主题。
 
+构建与发布机统一 Go ≥ 1.27.3（标准库 GO-2026-6809）：`security.yml` / `ci.yml` / `derive.yml` / `deploy/Dockerfile` 已钉死，新增构建路径按同一版本对齐。
+
 **Go 与前端自动化用例已整体清理（2026-11-08，commit 22ff72c）**：Go 单测、`TestIT*`、契约 golden、
 web e2e/playwright 都随 `go test` 步骤一起移除了（`scripts/ci` 的 Python 助手用例仍留在 CI 里），
 `go test ./...` 现在只剩 `core/auth` 两个纯函数用例，不能当作行为验证。
