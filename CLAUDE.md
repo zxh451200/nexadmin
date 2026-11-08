@@ -27,11 +27,14 @@ NexAdmin 框架母版：后端 Gin + GORM、前端 React + shadcn/ui，生产构
 每次改动后：
 
 ```
-go build ./... && go vet ./... && go test ./...
+go build ./... && go vet ./...
+cd flowlite && go build ./... && go vet ./...
 cd web && npx tsc --noEmit && npx eslint src
 ```
 
 涉及迁移时补跑 `nexadmin-server migrate --dry-run`；涉及官网时截图验证浅色/深色两套主题。
+Go 与前端自动化用例已于 2026-11-08 整体清理（commit 22ff72c），行为验证按 `AGENTS.md` 第 3 节与
+`docs/功能与权限清单.md` 的手工/真库复跑配方执行。
 
 ## 4. 常用命令
 

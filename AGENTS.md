@@ -40,7 +40,7 @@ cd web && npm run typecheck && npm run lint
 web e2e/playwright 都随 `go test` 步骤一起移除了（`scripts/ci` 的 Python 助手用例仍留在 CI 里），
 `go test ./...` 现在只剩 `core/auth` 两个纯函数用例，不能当作行为验证。
 拖拽几何、迁移、登录链路这类物理/真库/整链行为按 `docs/功能与权限清单.md` 里的手工复跑配方实测，
-并在提交说明里写清验证方式；新加代码不要恢复测试基础设施。
+并在提交说明里写清验证方式；新加代码不要顺手恢复测试基础设施。
 
 ## 4. 常用命令
 
