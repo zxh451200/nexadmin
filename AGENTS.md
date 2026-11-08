@@ -29,26 +29,18 @@ NexAdmin 框架母版：后端 Gin + GORM、前端 React + shadcn/ui，生产构
 每次改动后：
 
 ```
-go build ./... && go vet ./... && go test ./...
-cd flowlite && go build ./... && go vet ./... && go test ./...
-cd web && npm run typecheck && npm run lint   # 已含 e2e 与 playwright.config
+go build ./... && go vet ./...
+cd flowlite && go build ./... && go vet ./...
+cd web && npm run typecheck && npm run lint
 ```
 
 涉及迁移时补跑 `nexadmin-server migrate --dry-run`；涉及官网时截图验证浅色/深色两套主题。
-改动树形表格/拖拽几何（落位线、缩进、书写方向）时跑 `cd web && npm run e2e`——这类坐标是物理算的，
-改错不报错只画歪，`tsc`/`eslint` 照不出来（用例含 LTR、RTL、移动端卡片三档）。
 
-跑真引擎集成测试（`TestIT*`）时 MySQL DSN 的库名要留空：
-`NEXADMIN_IT_MYSQL_DSN='root:pass@tcp(127.0.0.1:3306)/?charset=utf8mb4&parseTime=true&loc=UTC'`。
-各包把库名换成一次性测试库的写法不同（替换 `)/`、在末个 `/` 后插名字、解析 DSN 后换 `DBName`），
-DSN 里写了库名要么连出一个不存在的库、要么直接跑进你命名的那个库；totp 与 ticket 的用例会在这种 DSN 上
-主动失败，不要改成静默跳过。PG 侧 `NEXADMIN_IT_PG_DSN` 用 `host=localhost`（避开 pgx 连 127.0.0.1 的超时），
-但库名不能留空——pgx 的 keyword DSN 没有空值写法，`dbname=` 会把下一个 token（`sslmode=disable`）当成库名，
-连不上就删不掉自己建的一次性库；写 `dbname=postgres`（只用于建/删库的管理连接，被测库名由用例生成）。
-
-Windows 上若 `TestContract*` 报 "contract changed" 而自己没动契约，那是 golden 被 checkout 成 CRLF：
-`rm core/testdata/contracts/*.golden && git checkout -- core/testdata/contracts` 重新按 LF 检出即可，
-**不要重写 golden**（`.gitattributes` 已把 `*.golden` 钉成 `eol=lf`，新克隆不会再有这个问题）。
+**Go 与前端自动化用例已整体清理（2026-11-08，commit 22ff72c）**：Go 单测、`TestIT*`、契约 golden、
+web e2e/playwright 都随 `go test` 步骤一起移除了（`scripts/ci` 的 Python 助手用例仍留在 CI 里），
+`go test ./...` 现在只剩 `core/auth` 两个纯函数用例，不能当作行为验证。
+拖拽几何、迁移、登录链路这类物理/真库/整链行为按 `docs/功能与权限清单.md` 里的手工复跑配方实测，
+并在提交说明里写清验证方式；新加代码不要恢复测试基础设施。
 
 ## 4. 常用命令
 

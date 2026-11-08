@@ -44,7 +44,7 @@ Disable the original module in `config/config.yaml` via `disabled_modules`, and 
 
 - Registering the same method+path from two modules makes Gin panic while assembling routes, so the original module must be disabled first.
 - A built-in module and a business module sharing a name fails startup with `core: duplicate module name` (not a panic); a replacement module named the same as the disabled module is disabled together with it.
-- Verify route uniqueness and permission compatibility after replacement; related tests live in `core/modules_test.go`.
+- Verify route uniqueness and permission compatibility after replacement.
 
 ```yaml
 # config/config.yaml

@@ -58,7 +58,7 @@
 | `openapi` | 开放平台：PAT、应用签名、Webhook、事件 | 见功能清单 §3 | `openapi/` |
 | `plugin` | 插件管理器：安装/卸载/授权闸门/热挂载/市场下载 | `nexadmin plugin ...` | `plugin/` |
 | `cache` | 缓存抽象（memory / redis）+ GetDel/Incr/Lease 原子原语 | `d.Cache` | `cache/` |
-| `testkit` `testdata` | 测试辅助（构造 App/固件） | 各 `*_test.go` | `testkit/` |
+| `testkit` `testdata` | 测试辅助（构造 App/固件）；当前仓库无自动化用例引用 | `testkit/` |
 | `health`（health.go） | `/healthz` 与健康详情（db/cache/storage/migrations/plugins/disk） | `GET /healthz`、`GET /monitor/health` | `health.go`、`health_probes.go` |
 
 ## 常见"我想…"速查

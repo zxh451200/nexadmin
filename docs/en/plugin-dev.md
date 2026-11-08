@@ -142,7 +142,7 @@ Watch the engine differences: auto-increment/primary-key types, `TEXT` defaults,
 
 ### 4.5 Tests
 
-The backend needs at least one unit test covering your most error-prone pure logic (the cron example tests expression parsing, next-run calculation and SSRF blocking). If parts that need a real database cannot run in unit tests, say so in the submission notes.
+The repository no longer keeps Go/frontend automated tests (removed in commit 22ff72c on 2026-11-08; the Python helper tests under `scripts/ci` still run in CI). A plugin must at least pass `go build ./...` and `go vet ./...`; for parts that need a real database, state the manual verification method and result in the submission notes.
 
 ### 4.6 Providing import sources (optional)
 

@@ -1,5 +1,7 @@
 # SECURITY-GATES-HANDOFF — GitHub Actions security 工作流修复交接文档
 
+> **历史交接文档（2026-11-01 状态快照）**：CI/门禁状态此后已变化，仓库自动化用例已于 2026-11-08 整体移除（commit 22ff72c）；当前完成标准与验证方式见 `AGENTS.md`，不要按本文的测试步骤执行。
+
 > 更新时间：2026-11-01（第四轮，**CI 已验证**）。写给下一个接手的 AI / 开发者。
 > 目标：让 https://github.com/zxh451200/nexadmin 的 `security` 工作流全绿。
 > 现状：`ci` 工作流全绿。`security` 工作流 5 个门禁中 **4 个已在 CI 上通过**（Worktree secrets 历史首次、Go vulnerabilities、Go license allowlist、npm license allowlist；验证于 commit `e76824d`，第四轮明细见「已修复（第四轮）」），**仅剩 npm vulnerabilities**（53 个漏洞，需 zod4/react-router7/vite7/tiptap3.32 前端迁移，见「待办任务」）。
