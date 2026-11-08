@@ -131,5 +131,5 @@ func (s *service) unlock(ctx context.Context, id idgen.ID, me actor) error {
 	if err := s.guardTarget(ctx, me, u); err != nil {
 		return err
 	}
-	return clearLock(ctx, s.cache, u.Username)
+	return clearLock(ctx, s.db, s.cache, u.Username)
 }

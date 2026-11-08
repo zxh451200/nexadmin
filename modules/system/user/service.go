@@ -207,6 +207,27 @@ func (s *service) toDTOs(ctx context.Context, rows []User) ([]*userDTO, error) {
 		postIDs[p.UserID] = append(postIDs[p.UserID], p.PostID)
 	}
 
+	// 锁定状态一次查全：逐用户回查 DB 在 200 行/页时会放大成 200 条点查询。
+	// 平台视角（SkipTenant）下列表可能跨租户，按 (租户, 用户名) 精确配对，不能只看用户名。
+	type lockKeyID struct {
+		tid  idgen.ID
+		name string
+	}
+	lockedByName := map[lockKeyID]time.Time{}
+	if len(rows) > 0 {
+		names := make([]string, 0, len(rows))
+		for i := range rows {
+			names = append(names, strings.ToLower(rows[i].Username))
+		}
+		var locks []loginLock
+		if err := db.Where("username IN ? AND locked_until > ?", names, time.Now().UTC()).Find(&locks).Error; err != nil {
+			return nil, err
+		}
+		for _, l := range locks {
+			lockedByName[lockKeyID{tid: l.TenantID, name: l.Username}] = l.LockedUntil
+		}
+	}
+
 	for i := range rows {
 		u := &rows[i]
 		d := &userDTO{
@@ -225,11 +246,7 @@ func (s *service) toDTOs(ctx context.Context, rows []User) ([]*userDTO, error) {
 		if d.RoleIDs == nil {
 			d.RoleIDs, d.RoleNames = []idgen.ID{}, []string{}
 		}
-		until, err := lockedUntil(ctx, s.cache, u.Username)
-		if err != nil {
-			return nil, err
-		}
-		if !until.IsZero() {
+		if until, ok := lockedByName[lockKeyID{tid: u.TenantID, name: strings.ToLower(u.Username)}]; ok {
 			d.Locked, d.LockedUntil = true, &until
 		}
 		out[i] = d

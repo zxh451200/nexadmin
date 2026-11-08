@@ -14,10 +14,12 @@ type Error struct {
 	Status int
 	Code   int
 	Reason string
-	Key    string
-	Args   []any
-	Msg    string
-	Err    error // 仅进日志
+	// RetryAfter 非 0 时作为 Retry-After 响应头（秒）下发，供前端展示倒计时。
+	RetryAfter int
+	Key        string
+	Args       []any
+	Msg        string
+	Err        error // 仅进日志
 }
 
 func (e *Error) Error() string {
@@ -72,9 +74,11 @@ func Unavailable(key string, args ...any) *Error {
 	return New(http.StatusServiceUnavailable, key, args...)
 }
 
-// Locked 表示账号被锁定（423），message 为 "LOCKED:<剩余秒数>"，前端据此展示倒计时。
+// Locked 表示账号被锁定（423）。文案按请求语言本地化，剩余秒数同时走 Retry-After 响应头供前端倒计时。
 func Locked(seconds int) *Error {
-	return New(423, "error.locked").WithMsg(fmt.Sprintf("LOCKED:%d", seconds))
+	e := New(423, "error.locked", seconds)
+	e.RetryAfter = seconds
+	return e
 }
 
 // NotInitialized 是系统未初始化时业务 API 的统一响应：503 + reason NOT_INITIALIZED。

@@ -4,7 +4,7 @@ import { QRCodeSVG } from 'qrcode.react'
 import { ShieldCheck } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { api } from '@/framework/request/http'
+import { api, ApiError } from '@/framework/request/http'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { RequiredMark } from '@/framework/components/RequiredMark'
 import { Badge } from '@/framework/ui/badge'
@@ -30,12 +30,12 @@ export default function TotpPage() {
   const confirm = useMutation({
     mutationFn: () => api.post('/plugins/totp/confirm', { code }),
     onSuccess: () => { toast.success(t('plugin_totp.confirmed')); setSecret(''); setUri(''); setCode(''); void qc.invalidateQueries({ queryKey: ['totp'] }) },
-    onError: () => toast.error(t('plugin_totp.codeWrong')),
+    onError: (e) => toast.error(e instanceof ApiError && e.code === 423 ? e.message : t('plugin_totp.codeWrong')),
   })
   const disable = useMutation({
     mutationFn: () => api.post('/plugins/totp/disable', { code, password }),
     onSuccess: () => { toast.success(t('plugin_totp.disabled')); setCode(''); setPassword(''); void qc.invalidateQueries({ queryKey: ['totp'] }) },
-    onError: () => toast.error(t('plugin_totp.codeWrong')),
+    onError: (e) => toast.error(e instanceof ApiError && e.code === 423 ? e.message : t('plugin_totp.codeWrong')),
   })
 
   const enabled = status.data?.enabled ?? false

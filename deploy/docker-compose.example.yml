@@ -2,7 +2,7 @@
 # 用法：
 #   在项目根目录写 .env（POSTGRES_PASSWORD=...，必填）或直接 export
 #   docker compose -f deploy/docker-compose.example.yml up -d --build
-#   docker compose -f deploy/docker-compose.example.yml --profile cache up -d   # 同时启用 valkey
+#   valkey 固定随栈启动：生产（NEXADMIN_APP_ENV=production）要求 cache.driver=redis，memory 会拒绝启动。
 # 首次部署用非交互初始化（容器内不开放远程向导）：
 #   docker compose -f deploy/docker-compose.example.yml run --rm app init --config /app/config/init.yaml
 services:
@@ -22,7 +22,9 @@ services:
       NEXADMIN_DATABASE_USER: nexadmin
       NEXADMIN_DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?请设置 POSTGRES_PASSWORD}
       NEXADMIN_DATABASE_NAME: nexadmin
-      # 启用 valkey profile 时改为：NEXADMIN_CACHE_DRIVER=redis、NEXADMIN_CACHE_ADDR=valkey:6379
+      NEXADMIN_CACHE_DRIVER: redis
+      NEXADMIN_CACHE_ADDR: valkey:6379
+      NEXADMIN_CACHE_PASSWORD: ${VALKEY_PASSWORD:-change-me}
       # 备份目录（镜像里已默认指向这里，写出来是为了一目了然；环境变量优先于 config.yaml 的 backup.dir）
       NEXADMIN_BACKUP_DIR: /app/data/backup
       # 前面有 nginx 等反向代理时，必须把代理地址写进 server.trusted_proxies（否则限流 / 登录日志 / IP 白名单看到的都是代理 IP），例如：
@@ -34,6 +36,8 @@ services:
       - nexadmin_logs:/app/logs
     depends_on:
       postgres:
+        condition: service_healthy
+      valkey:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
@@ -57,11 +61,10 @@ services:
       timeout: 5s
       retries: 5
 
-  valkey:  # 可选：--profile cache 才启动；单实例用默认 memory 缓存即可
+  valkey:  # 生产必须：缓存里的验证码、令牌吊销、在线会话、限流计数要跨重启/多实例共享
     image: valkey/valkey:8
-    profiles: ["cache"]
     restart: unless-stopped
-    command: ["valkey-server", "--requirepass", "${VALKEY_PASSWORD:-change-me}"]
+    command: ["valkey-server", "--requirepass", "${VALKEY_PASSWORD:-change-me}", "--appendonly", "yes"]
     environment:
       VALKEY_PASSWORD: ${VALKEY_PASSWORD:-change-me}
     volumes:

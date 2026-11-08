@@ -30,6 +30,7 @@ error:
   mcp_confirmation_revoked: This MCP confirmation was revoked after too many attempts. Please start the operation again
   stale_list: "The list has changed. Please refresh."
   rate_limited: "Too many requests. Please try again later."
+  locked: "Account locked. Try again in %d seconds."
 auth:
   oauth_failed: Third-party login failed. Try again later or use another method
   provider_missing: Sign-in service is not enabled

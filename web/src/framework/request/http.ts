@@ -40,12 +40,15 @@ export class ApiError extends Error {
   status?: number
   /** 服务端返回的机器可识别原因，如 CAPTCHA_REQUIRED */
   reason?: string
-  constructor(code: number, message: string, status?: number, reason?: string) {
+  /** 建议等待秒数（Retry-After 响应头 / data.retryAfter），锁定倒计时用 */
+  retryAfter?: number
+  constructor(code: number, message: string, status?: number, reason?: string, retryAfter?: number) {
     super(message)
     this.name = 'ApiError'
     this.code = code
     this.status = status
     this.reason = reason
+    this.retryAfter = retryAfter
   }
 }
 
@@ -116,6 +119,13 @@ function notify(message: string) {
   toast.error(message)
 }
 
+/** 等待秒数：优先 body.data.retryAfter（mock），其次 Retry-After 响应头（真后端） */
+function retryAfterOf(res: AxiosResponse, body?: ApiResponse): number | undefined {
+  const fromBody = (body?.data as { retryAfter?: unknown } | null | undefined)?.retryAfter
+  const n = Math.ceil(Number(fromBody ?? res.headers?.['retry-after']))
+  return Number.isFinite(n) && n > 0 ? n : undefined
+}
+
 async function handleUnauthorized(config: AxiosRequestConfig | undefined, err: ApiError): Promise<AxiosResponse> {
   if (config?.preserveSessionOnUnauthorized) throw err
   if (config && !config._retry && tokenStore.refresh) {
@@ -146,10 +156,10 @@ http.interceptors.response.use(
         res.data = body.data
         return res
       }
-      const err = new ApiError(body.code, body.message, res.status, body.reason)
+      const err = new ApiError(body.code, body.message, res.status, body.reason, retryAfterOf(res, body))
       if (body.code === 401) return handleUnauthorized(res.config, err)
       if (body.reason === TENANT_EXPIRED) return Promise.reject(handleTenantExpired(err, res.config.silent))
-      // 423 账号锁定由登录页内联展示剩余时间，不弹 toast
+      // 423 账号锁定由调用方内联展示剩余时间，不弹 toast
       if (!res.config.silent && body.code !== 423) notify(body.message || i18n.t('error.unknown'))
       return Promise.reject(err)
     }
@@ -171,11 +181,11 @@ http.interceptors.response.use(
       return Promise.reject(new ApiError(-1, i18n.t('error.network')))
     }
     const message = res.data?.message || error.message
-    const err = new ApiError(res.data?.code ?? res.status, message, res.status, res.data?.reason)
+    const err = new ApiError(res.data?.code ?? res.status, message, res.status, res.data?.reason, retryAfterOf(res, res.data))
     if (res.status === 401) return handleUnauthorized(config, err)
     if (res.status === 403 && err.reason === TENANT_EXPIRED) return Promise.reject(handleTenantExpired(err, config?.silent))
-    // 503 NOT_INITIALIZED 由 SetupGate 处理，不弹 toast
-    if (res.status !== 503 && !config?.silent) {
+    // 503 NOT_INITIALIZED 由 SetupGate 处理；423 账号锁定由调用方内联展示剩余时间：都不弹 toast
+    if (res.status !== 503 && res.status !== 423 && !config?.silent) {
       notify(res.status >= 500 ? i18n.t('error.server') : message)
     }
     return Promise.reject(err)

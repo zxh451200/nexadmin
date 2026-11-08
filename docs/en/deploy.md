@@ -59,12 +59,12 @@ Image builds and real runtime behavior still need validation. The current Docker
 ```
 # Write .env in the project root: POSTGRES_PASSWORD=... (required)
 docker compose -f deploy/docker-compose.example.yml up -d --build
-docker compose -f deploy/docker-compose.example.yml --profile cache up -d   # also start valkey
+docker compose -f deploy/docker-compose.example.yml up -d --build   # valkey starts with the stack (production requires redis)
 # First deployment uses non-interactive init (the container does not expose the remote wizard)
 docker compose -f deploy/docker-compose.example.yml run --rm app init --config /app/config/init.yaml
 ```
 
-File content: services `app` (`context: ..`, `dockerfile: deploy/Dockerfile`, port `8080:8080`), `postgres` (`postgres:16` with a `pg_isready` health check, `app` depends on it being healthy), `valkey` (`valkey/valkey:8`, only started with `--profile cache`, password `VALKEY_PASSWORD`, default `change-me`). The `app` environment: `NEXADMIN_APP_ENV=production`, `NEXADMIN_DATABASE_TYPE=postgres`, `..._HOST=postgres`, `..._PORT=5432`, `..._USER=nexadmin`, `..._PASSWORD=${POSTGRES_PASSWORD}`, `..._NAME=nexadmin`, plus `NEXADMIN_BACKUP_DIR=/app/data/backup` (already the image default, spelled out for visibility); the file also has a commented-out `NEXADMIN_SERVER_TRUSTED_PROXIES` example which must be configured when a reverse proxy sits in front (§11.1). When using valkey, add `NEXADMIN_CACHE_DRIVER=redis`, `NEXADMIN_CACHE_ADDR=valkey:6379` and `NEXADMIN_CACHE_PASSWORD` yourself (the file's comments only mention the first two; the password entry comes from the config key `cache.password` and valkey's `--requirepass`). Four named volumes `nexadmin_config`, `nexadmin_data`, `nexadmin_backup`, `nexadmin_logs` map to `/app/config`, `/app/data`, `/app/data/backup` (backups get their own volume, mounted as a subdirectory inside the data volume for easy copying off), `/app/logs`.
+File content: services `app` (`context: ..`, `dockerfile: deploy/Dockerfile`, port `8080:8080`), `postgres` (`postgres:16` with a `pg_isready` health check, `app` depends on it being healthy), `valkey` (`valkey/valkey:8`, always started with AOF on, password `VALKEY_PASSWORD`, default `change-me`; production requires redis). The `app` environment: `NEXADMIN_APP_ENV=production`, `NEXADMIN_DATABASE_TYPE=postgres`, `..._HOST=postgres`, `..._PORT=5432`, `..._USER=nexadmin`, `..._PASSWORD=${POSTGRES_PASSWORD}`, `..._NAME=nexadmin`, plus `NEXADMIN_BACKUP_DIR=/app/data/backup` (already the image default, spelled out for visibility); the file also has a commented-out `NEXADMIN_SERVER_TRUSTED_PROXIES` example which must be configured when a reverse proxy sits in front (§11.1). The three cache entries are part of the `app` environment: `NEXADMIN_CACHE_DRIVER=redis`, `NEXADMIN_CACHE_ADDR=valkey:6379`, `NEXADMIN_CACHE_PASSWORD` (the config key `cache.password` paired with valkey's `--requirepass`); `app` waits for valkey to be healthy. Four named volumes `nexadmin_config`, `nexadmin_data`, `nexadmin_backup`, `nexadmin_logs` map to `/app/config`, `/app/data`, `/app/data/backup` (backups get their own volume, mounted as a subdirectory inside the data volume for easy copying off), `/app/logs`.
 
 `init --config /app/config/init.yaml` requires that file to already exist in the `nexadmin_config` volume (format in §3.2). The sample `postgres` / `valkey` passwords and image versions must be replaced and pinned in production.
 
@@ -123,9 +123,9 @@ db:
   database: nexadmin      # letters, digits, underscore only, max 64
   autoCreate: false       # true: create the database if absent
 cache:
-  type: memory            # memory | valkey (redis accepted)
-  # addr: valkey:6379     # required for valkey / redis
-  # password: ""
+  type: redis             # production must use redis (memory refuses to start); memory is dev-only
+  addr: valkey:6379
+  password: "<cache password>"
 admin:
   username: admin
   password: "<non-empty, max 72 bytes; no strength rules>"
@@ -351,7 +351,7 @@ The frontend `POST`s runtime errors to `/api/v1/client-errors` (reported with or
 Each item below comes from code or code comments:
 
 - `database.node_id` must be unique per instance (snowflake node 0–1023; the export center also uses it to distinguish nodes). With a redis cache, startup uses a TTL lease (30 seconds, renewed every 10) to detect duplicates: a claim by another live instance refuses startup; restarting a crashed instance with the same node_id may be refused for up to 30 seconds. `memory` cache (single instance) skips detection.
-- `cache.driver=redis` is required: token revocation, captchas, login-failure lockout, rate-limit counters and online sessions all live in cache; `memory` is per-process and invisible across instances (e.g. a token logged out on instance A stays valid on B; a captcha generated on A fails validation on B).
+- `cache.driver=redis` is required, and `app.env=production` with `memory` is rejected at startup validation (see the Configuration Reference): token revocation, captchas, rate-limit counters and online sessions all live in cache; `memory` is per-process and invisible across instances (e.g. a token logged out on instance A stays valid on B; a captcha generated on A fails validation on B). Login lockout is additionally persisted in `sys_login_lock` (per tenant + username) with cache as the fast path: a locked account still rejects the correct password after a restart or on another instance, and expired rows are swept at most hourly (on the next lock creation).
 - `auth.jwt_secret` must match across instances: left empty, each instance reads its own `data/jwt.secret` — either share that file or configure the same value explicitly. Same for `data/secret.key` (or `NEXADMIN_SECRET_KEY`) so encrypted values decrypt everywhere.
 - Migrations serialize via database locks — multi-instance simultaneous starts are safe; backups and export jobs use optimistic claiming and never run twice.
 - Already atomicized (only one winner under concurrency; noted in code comments):

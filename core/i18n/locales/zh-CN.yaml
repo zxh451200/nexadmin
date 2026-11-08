@@ -30,6 +30,7 @@ error:
   mcp_confirmation_revoked: MCP 确认已因多次校验作废，请重新发起操作
   stale_list: "列表已变化，请刷新"
   rate_limited: "请求过于频繁，请稍后再试"
+  locked: "账号已锁定，请 %d 秒后再试"
 auth:
   oauth_failed: 第三方登录失败，请稍后重试或改用其他登录方式
   provider_missing: 登录服务未启用

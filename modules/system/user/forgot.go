@@ -93,6 +93,7 @@ type smsSender interface {
 
 type forgotService struct {
 	store  forgotStore
+	db     *gorm.DB
 	sms    smsSender
 	cache  cache.Cache
 	notify *notify.Service
@@ -105,9 +106,9 @@ type forgotService struct {
 	sessions *session.Store
 }
 
-func newForgotService(st forgotStore, c cache.Cache, n *notify.Service, sms smsSender, log *zap.Logger) *forgotService {
+func newForgotService(st forgotStore, db *gorm.DB, c cache.Cache, n *notify.Service, sms smsSender, log *zap.Logger) *forgotService {
 	return &forgotService{
-		store: st, sms: sms, cache: c, notify: n, log: log, now: time.Now,
+		store: st, db: db, sms: sms, cache: c, notify: n, log: log, now: time.Now,
 		ipSend: middleware.NewLimiter(c, log, "forgot_send_ip", 10, time.Hour),
 		ipRst:  middleware.NewLimiter(c, log, "forgot_reset_ip", 30, time.Hour),
 		acct:   middleware.NewLimiter(c, log, "forgot_acct", 5, time.Hour),

@@ -409,6 +409,11 @@ func (c *Config) validate() error {
 	default:
 		return fmt.Errorf("config: cache.driver must be memory or redis, got %q", c.Cache.Driver)
 	}
+	// memory 缓存各进程一份：验证码答案、令牌吊销、在线会话、限流计数都会随重启丢失、
+	// 多实例互相看不见。生产不允许静默降级成单进程语义。
+	if c.App.Env == "production" && c.Cache.Driver != "redis" {
+		return fmt.Errorf("config: cache.driver must be redis when app.env is production (memory is per-process: captcha secrets, token revocations, sessions and rate-limit counters would be lost on restart and invisible across instances)")
+	}
 	if len(c.Languages) == 0 {
 		return fmt.Errorf("config: languages must not be empty")
 	}

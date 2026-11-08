@@ -28,7 +28,7 @@ database:
   # 初始化入口的平台迁移显式执行，租户迁移单独由 isolation.auto_migrate 控制。
   # 独立库模式 restore/reinit 必须显式 --platform-only；全库备份恢复使用 backup / restore-bundle。
 cache:
-  driver: memory      # memory | redis（Valkey 兼容）
+  driver: memory      # memory | redis（Valkey 兼容）；memory 仅 dev，production 必须 redis（启动校验）
   addr: ""
   password: ""
 languages:                # 平台语言清单的种子：首次启动写入 sys_language，之后以表为准（后台「系统设置 → 高级 → 语言」可改）

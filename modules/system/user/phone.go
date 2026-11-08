@@ -84,7 +84,7 @@ func (m *module) phoneLogin(ctx context.Context, d *core.Deps, req auth.LoginReq
 		return nil, invalid
 	}
 	u := &us[0]
-	if until, err := lockedUntil(ctx, d.Cache, u.Username); err != nil {
+	if until, err := lockedUntil(ctx, d.DB, d.Cache, u.Username); err != nil {
 		return nil, err
 	} else if !until.IsZero() {
 		d.Log.Info("phone login rejected: account locked", zap.String("username", u.Username))

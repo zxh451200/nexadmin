@@ -21,15 +21,17 @@ export interface MockRule {
 class MockError extends Error {
   code: number
   reason?: string
-  constructor(code: number, message: string, reason?: string) {
+  data?: unknown
+  constructor(code: number, message: string, reason?: string, data?: unknown) {
     super(message)
     this.code = code
     this.reason = reason
+    this.data = data
   }
 }
 
-export function mockError(code: number, message: string, reason?: string): never {
-  throw new MockError(code, message, reason)
+export function mockError(code: number, message: string, reason?: string, data?: unknown): never {
+  throw new MockError(code, message, reason, data)
 }
 
 interface CompiledRule extends MockRule {
@@ -138,7 +140,7 @@ export const mockAdapter: AxiosAdapter = async (config) => {
     })
     return respond(config, 0, 'ok', await data)
   } catch (e) {
-    if (e instanceof MockError) return respond(config, e.code, e.message, null, e.reason)
+    if (e instanceof MockError) return respond(config, e.code, e.message, e.data ?? null, e.reason)
     throw e
   }
 }

@@ -424,7 +424,7 @@ func (m *module) externalLogin(ctx context.Context, d *core.Deps, req auth.Login
 	if err != nil {
 		return nil, true, err
 	}
-	if err := clearLock(ctx, d.Cache, username); err != nil {
+	if err := clearLock(ctx, d.DB, d.Cache, username); err != nil {
 		return nil, true, err
 	}
 	return au, true, nil

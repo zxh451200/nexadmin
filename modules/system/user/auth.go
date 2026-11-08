@@ -38,10 +38,19 @@ func failKey(ctx context.Context, username string) string {
 }
 
 // lockedUntil 返回账号的锁定截止时间；未锁定返回零值。
-func lockedUntil(ctx context.Context, c cache.Cache, username string) (time.Time, error) {
+// 缓存是快路径；进程刚重启或别的实例建的锁在缓存里没有，回查 DB 并回填，
+// 这样锁定跨重启、跨实例仍然生效（memory 缓存时尤其重要）。
+func lockedUntil(ctx context.Context, db *gorm.DB, c cache.Cache, username string) (time.Time, error) {
 	v, err := c.Get(ctx, lockKey(ctx, username))
 	if errors.Is(err, cache.ErrNotFound) {
-		return time.Time{}, nil
+		until, derr := loadLock(ctx, db, username)
+		if derr != nil || until.IsZero() {
+			return time.Time{}, derr
+		}
+		if serr := c.Set(ctx, lockKey(ctx, username), until.UTC().Format(time.RFC3339Nano), time.Until(until)); serr != nil {
+			zap.L().Warn("login lock cache backfill failed", zap.Error(serr))
+		}
+		return until, nil
 	}
 	if err != nil {
 		return time.Time{}, err
@@ -62,8 +71,11 @@ func lockedUntil(ctx context.Context, c cache.Cache, username string) (time.Time
 }
 
 // clearLock 清除失败计数与锁定（登录成功、管理员解锁时调用）。
-func clearLock(ctx context.Context, c cache.Cache, username string) error {
-	return c.Del(ctx, failKey(ctx, username), lockKey(ctx, username))
+func clearLock(ctx context.Context, db *gorm.DB, c cache.Cache, username string) error {
+	if err := c.Del(ctx, failKey(ctx, username), lockKey(ctx, username)); err != nil {
+		return err
+	}
+	return dropLock(ctx, db, username)
 }
 
 // readConfigInt 读取 sys_config 里的整数参数，缺失、非法或表不存在时返回默认值。
@@ -107,7 +119,7 @@ func loginPolicy(db *gorm.DB) (int, time.Duration) {
 
 // recordFailure 记一次密码错误；达到上限则锁定并返回锁定秒数，否则返回 0。
 func recordFailure(ctx context.Context, db *gorm.DB, c cache.Cache, username string) (int, error) {
-	if until, err := lockedUntil(ctx, c, username); err != nil {
+	if until, err := lockedUntil(ctx, db, c, username); err != nil {
 		return 0, err
 	} else if !until.IsZero() {
 		return lockSeconds(until), nil
@@ -131,10 +143,14 @@ func recordFailure(ctx context.Context, db *gorm.DB, c cache.Cache, username str
 			return 0, err
 		}
 		if created {
+			if err := persistLock(ctx, db, username, until); err != nil {
+				return 0, err
+			}
+			sweepExpiredLocks(ctx, db, c)
 			return lockSeconds(until), nil
 		}
 		// 返回首次锁定的剩余时间，不让后续失败延长锁定。
-		until, err = lockedUntil(ctx, c, username)
+		until, err = lockedUntil(ctx, db, c, username)
 		if err != nil {
 			return 0, err
 		}
@@ -180,7 +196,7 @@ func (m *module) passwordLogin(ctx context.Context, req auth.LoginRequest) (*aut
 	}
 	db := d.DB.WithContext(ctx)
 
-	until, err := lockedUntil(ctx, d.Cache, username)
+	until, err := lockedUntil(ctx, db, d.Cache, username)
 	if err != nil {
 		return nil, err
 	}
@@ -228,7 +244,7 @@ func (m *module) passwordLogin(ctx context.Context, req auth.LoginRequest) (*aut
 		return nil, invalid
 	}
 
-	if err := clearLock(ctx, d.Cache, username); err != nil {
+	if err := clearLock(ctx, db, d.Cache, username); err != nil {
 		return nil, err
 	}
 	if err := db.Model(&User{}).Where("id = ?", int64(u.ID)).UpdateColumn("last_login_at", time.Now().UTC()).Error; err != nil {
@@ -248,7 +264,7 @@ func (m *module) VerifyPassword(ctx context.Context, uid idgen.ID, password stri
 	if err := db.First(&u, "id = ?", int64(uid)).Error; err != nil {
 		return response.Unauthorized("auth.invalid_credentials")
 	}
-	until, err := lockedUntil(ctx, d.Cache, u.Username)
+	until, err := lockedUntil(ctx, db, d.Cache, u.Username)
 	if err != nil {
 		return err
 	}
@@ -266,7 +282,7 @@ func (m *module) VerifyPassword(ctx context.Context, uid idgen.ID, password stri
 		}
 		return response.Unauthorized("auth.invalid_credentials")
 	}
-	return clearLock(ctx, d.Cache, u.Username)
+	return clearLock(ctx, db, d.Cache, u.Username)
 }
 
 // Profile 按用户 ID 读取最新信息与权限；用户不存在、已删除或已停用都按未登录处理，令牌随之失效。
