@@ -41,8 +41,12 @@ MODEL_DIR = os.environ.get(
 # 单字合成更快，也缓解"合成文本比参考文本短"的时长失配警告）。
 REF_TEXT_ZH = "秋日的阳光洒在书桌上，安静而从容。"
 REF_TEXT_EN = "The afternoon light feels calm and quiet."
+# 换 take 后必须回听声调：8 曾被合成成第四声「爸」（基频 -4 半音下滑，正确读法
+# 「八」是第一声，基频应基本持平）。同音节换字（如「捌」「巴」）也要按声调复核。
 DIGITS = {
-    "zh": (["零", "幺", "二", "三", "四", "五", "六", "七", "八", "九"], "zh-CN", 8),
+    # 1/2/3 用正式数字：普通「一/二/三」的单字 take 会读出降调或怪音（见 ATTRIBUTION
+    # 「当前 zh 成品」）。5 的成品取自整串合成切分，单字「五」需重新校验后再用。
+    "zh": (["零", "壹", "贰", "叁", "四", "五", "六", "七", "八", "九"], "zh-CN", 8),
     "en": (["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"], "en-US", 1),
 }
 
@@ -61,6 +65,36 @@ def shape(pcm: np.ndarray) -> np.ndarray:
     pcm[:fin] *= np.linspace(0, 1, fin)
     pcm[-fout:] *= np.linspace(1, 0, fout)
     return pcm
+
+
+def tail_ratio(pcm: np.ndarray) -> float:
+    """末 20ms 能量 / 整段 RMS。模型偶尔提前吐 EOS，把字尾切掉——半截音听起来
+    就是"语音验证码听不清"（历史音源里的"五"曾只剩一个突兀的"wu"）。"""
+    rms = np.sqrt(np.mean(pcm**2)) + 1e-12
+    n = int(0.020 * SAMPLE_RATE)
+    return float(np.sqrt(np.mean(pcm[-n:] ** 2)) / rms)
+
+
+MAX_TAIL_RATIO = 0.15
+
+
+def synth_take(cv, text, ref_text, ref_path):
+    """合成并复核字尾：最多试 3 次，取尾音收得最干净的一条。"""
+    best = None
+    for _ in range(3):
+        outs = list(cv.inference_zero_shot(text, ref_text, str(ref_path), stream=False))
+        if not outs:
+            continue
+        pcm = shape(outs[0]["tts_speech"].numpy())
+        ratio = tail_ratio(pcm)
+        if best is None or ratio < best[0]:
+            best = (ratio, pcm)
+        if ratio <= MAX_TAIL_RATIO:
+            break
+        print(f"  尾音被截断（tail={ratio:.2f}），重新合成", flush=True)
+    if best is None:
+        raise RuntimeError(f"{text}: 空输出")
+    return best[1]
 
 
 def main():
@@ -86,13 +120,13 @@ def main():
         sf.write(ref_path, np.asarray(ra.samples), ra.sample_rate, subtype="PCM_16")
         for d, text in enumerate(words):
             out = HERE / lang / f"{d}.wav"
-            if out.is_file() and out.stat().st_size > 10000:  # 断点续跑：已有成品跳过
-                print(f"{lang}/{d}.wav  已存在，跳过", flush=True)
-                continue
-            outs = list(cv.inference_zero_shot(text, ref_text, str(ref_path), stream=False))
-            if not outs:
-                raise RuntimeError(f"{lang}/{d}: 空输出")
-            pcm = shape(outs[0]["tts_speech"].numpy())
+            if out.is_file() and out.stat().st_size > 10000:  # 断点续跑
+                pcm, _ = sf.read(out, dtype="float64")
+                if tail_ratio(pcm) <= MAX_TAIL_RATIO:
+                    print(f"{lang}/{d}.wav  已存在，跳过", flush=True)
+                    continue
+                print(f"{lang}/{d}.wav  尾音被截断，重新合成", flush=True)
+            pcm = synth_take(cv, text, ref_text, ref_path)
             sf.write(out, pcm, SAMPLE_RATE, subtype="PCM_16")
             print(f"{lang}/{d}.wav  {text}  {len(pcm) / SAMPLE_RATE:.2f}s", flush=True)
         ref_path.unlink()

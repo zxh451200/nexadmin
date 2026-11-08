@@ -56,22 +56,24 @@ func TestCaptchaAudioComposition(t *testing.T) {
 	dataLen := checkWav(t, wav)
 	pcm := wav[44:]
 
-	want := len(silenceMs(200))
 	pauses, repeat := audioGaps(key, len(text)-1)
+	round := 0
 	for i := range text {
 		s, err := digitSound(lang, text[i:i+1])
 		if err != nil {
 			t.Fatalf("digitSound(%s,%c): %v", lang, text[i], err)
 		}
-		want += len(s)
+		round += len(s)
 		if i > 0 {
-			want += len(pauses[i-1])
+			round += len(pauses[i-1])
 		}
 	}
-	want += len(silenceMs(200))
+	// 每一遍都是「数字 + 数字间停顿」，两遍之间再加 repeat 间隔。
+	want := len(silenceMs(200)) + round
 	if audioPlayTimes > 1 {
-		want += (audioPlayTimes - 1) * len(repeat)
+		want += (audioPlayTimes - 1) * (len(repeat) + round)
 	}
+	want += len(silenceMs(200))
 	if dataLen != want {
 		t.Fatalf("PCM 总长 = %d，按拼接应为 %d（audioPlayTimes=%d）", dataLen, want, audioPlayTimes)
 	}

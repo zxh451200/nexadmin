@@ -12,7 +12,7 @@
 # ~/.kokoro-models/kokoro-multi-lang-v1_1/（不进仓库；可用 KOKORO_MODEL_DIR 重定向）。
 # 产出：24 kHz / 16-bit / 单声道 PCM WAV，与 core/auth/captcha_audio.go 常量对应。
 #
-# 各语言读法避开易混音：zh 的 1 读「幺」（避开「一/七」混淆）；en 用标准 zero..nine。
+# 各语言读法用标准数字读法（zh 的 1 读「一」）；en 用标准 zero..nine。
 
 import os
 import pathlib
@@ -30,7 +30,7 @@ PEAK = 0.70
 
 # 数字读法。zh 走中文词，en 走英文词；kokoro 多语种模型按文本自动分派 G2P。
 DIGITS = {
-    "zh": ["零", "幺", "二", "三", "四", "五", "六", "七", "八", "九"],
+    "zh": ["零", "一", "二", "三", "四", "五", "六", "七", "八", "九"],
     "en": ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"],
 }
 

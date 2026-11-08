@@ -25,11 +25,11 @@ const (
 	audioSampleRate = 24000
 	// 单声道样本的字节数（16-bit）。
 	audioSampleBytes = 2
-	// 整串语音的重复次数：改回 2 即恢复"读两遍"的老行为；两遍之间的间隔与抖动
-	// （audioRepeatPauseMs 与 audioGaps 的 repeat 档）常驻不删，升高次数即可用。
+	// 整串语音读一遍；两遍之间的间隔与抖动（audioRepeatPauseMs 与 audioGaps 的
+	// repeat 档）常驻不删，需要时改这里即可。
 	audioPlayTimes = 1
 	// 数字之间的停顿与两遍之间的间隔（毫秒）。
-	audioDigitPauseMs  = 250
+	audioDigitPauseMs  = 300
 	audioRepeatPauseMs = 600
 	// 停顿再按 key 加 0–3 档、每档 audioGapStepMs 的抖动（见 audioGaps）。
 	audioGapStepMs = 50
