@@ -3,6 +3,7 @@ package saml
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"encoding/json"
 	"encoding/xml"
 	"net/http"
@@ -17,6 +18,19 @@ import (
 	"nexadmin/core/response"
 	"nexadmin/pkg/idgen"
 )
+
+// parseResponseSafe 包装 ParseResponse：GO-2026-6909（截至 crewjam/saml v0.6.2 上游
+// 仍无修复版）可让构造的断言在库内 validateAssertion 触发 nil 指针 panic。ACS 是
+// 未认证可达的端点，这里 recover 掉 panic、转成一次普通校验失败，防止打崩进程；
+// 上游发修复版后可移除此包装。
+func parseResponseSafe(sp *saml.ServiceProvider, r *http.Request, possibleIDs []string) (a *saml.Assertion, err error) {
+	defer func() {
+		if p := recover(); p != nil {
+			a, err = nil, fmt.Errorf("saml: ParseResponse panicked: %v", p)
+		}
+	}()
+	return sp.ParseResponse(r, possibleIDs)
+}
 
 func newRelay() string {
 	var b [16]byte
@@ -144,7 +158,7 @@ func (s *Service) acs(c *gin.Context) {
 			_ = s.cache.Del(c.Request.Context(), "saml:req:"+relay)
 		}
 	}
-	assertion, err := sp.ParseResponse(c.Request, possibleIDs)
+	assertion, err := parseResponseSafe(sp, c.Request, possibleIDs)
 	if err != nil {
 		msg := "SAML 响应校验失败"
 		// 底层原因（签名/受众/时限）对配置排障必要；不包含断言原文。
