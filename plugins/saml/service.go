@@ -14,8 +14,10 @@ import (
 	"net/url"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/crewjam/saml"
+	"github.com/russellhaering/goxmldsig"
 	"gorm.io/gorm"
 
 	"nexadmin/core/auth"
@@ -50,15 +52,23 @@ func NewService(db *gorm.DB, issuer Issuer, c cache.Cache) *Service {
 }
 
 type SourceForm struct {
-	Name          string `json:"name"`
-	Enabled       bool   `json:"enabled"`
-	IdPMetadata   string `json:"idpMetadata"`
-	AttrUsername  string `json:"attrUsername"`
-	AttrEmail     string `json:"attrEmail"`
-	AttrNickname  string `json:"attrNickname"`
-	AutoCreate    bool   `json:"autoCreate"`
-	MatchExisting bool   `json:"matchExisting"`
-	DefaultRole   string `json:"defaultRole"`
+	Name           string             `json:"name"`
+	Enabled        bool               `json:"enabled"`
+	IdPMetadata    string             `json:"idpMetadata"`
+	IdPMetadataURL string             `json:"idpMetadataUrl"`
+	AttrUsername   string             `json:"attrUsername"`
+	AttrEmail      string             `json:"attrEmail"`
+	AttrNickname   string             `json:"attrNickname"`
+	AttrGroups     string             `json:"attrGroups"`
+	AttrPhone      string             `json:"attrPhone"`
+	AutoCreate     bool               `json:"autoCreate"`
+	MatchExisting  bool               `json:"matchExisting"`
+	DefaultRole    string             `json:"defaultRole"`
+	GroupMappings  []GroupRoleMapping `json:"groupRoleMappings"`
+	RequireMapped  bool               `json:"requireMappedGroup"`
+	AllowIDPInit   bool               `json:"allowIdpInitiated"`
+	SignRequests   bool               `json:"signAuthnRequest"`
+	NameIDFormat   string             `json:"nameIdFormat"`
 }
 
 func (s *Service) List(ctx context.Context) ([]Source, error) {
@@ -77,25 +87,26 @@ func (s *Service) Get(ctx context.Context, id string) (*Source, error) {
 
 // Create 新建源并生成 SP 密钥对（RSA 2048，自签证书，私钥加密落库）。
 func (s *Service) Create(ctx context.Context, f SourceForm) (*Source, error) {
-	f.Name = strings.TrimSpace(f.Name)
-	if f.Name == "" {
-		return nil, errors.New("saml: name required")
-	}
-	if f.IdPMetadata != "" {
-		if err := validateMetadata(f.IdPMetadata); err != nil {
-			return nil, err
-		}
+	if err := f.validate(); err != nil {
+		return nil, err
 	}
 	certPEM, keyEnc, err := newSPKeyPair()
 	if err != nil {
 		return nil, err
 	}
+	if f.Enabled {
+		// 直接以启用态保存时也要过一遍「真的能登录」，避免绕过快捷启停的检查。
+		if err := (&Source{IdPMetadata: f.IdPMetadata, SPCert: certPEM}).ready(); err != nil {
+			return nil, err
+		}
+	}
 	m := Source{
-		Name: f.Name, Enabled: f.Enabled, IdPMetadata: f.IdPMetadata,
+		Name: f.Name, Enabled: f.Enabled, IdPMetadata: f.IdPMetadata, IdPMetadataURL: f.IdPMetadataURL,
 		SPCert: certPEM, SPKeyEnc: keyEnc,
-		AttrUsername: defAttr(f.AttrUsername, "uid"), AttrEmail: defAttr(f.AttrEmail, "mail"),
-		AttrNickname: defAttr(f.AttrNickname, "displayName"),
-		AutoCreate:   f.AutoCreate, MatchExisting: f.MatchExisting, DefaultRole: f.DefaultRole,
+		AttrUsername: f.AttrUsername, AttrEmail: f.AttrEmail, AttrNickname: f.AttrNickname, AttrGroups: f.AttrGroups, AttrPhone: f.AttrPhone,
+		AutoCreate: f.AutoCreate, MatchExisting: f.MatchExisting, DefaultRole: f.DefaultRole,
+		GroupRoleMappings: f.GroupMappings, RequireMappedGroup: f.RequireMapped,
+		AllowIDPInitiated: f.AllowIDPInit, SignAuthnRequest: f.SignRequests, NameIDFormat: f.NameIDFormat,
 	}
 	if err := s.db.WithContext(ctx).Create(&m).Error; err != nil {
 		return nil, err
@@ -108,28 +119,121 @@ func (s *Service) Update(ctx context.Context, id string, f SourceForm) (*Source,
 	if err != nil {
 		return nil, err
 	}
-	if f.IdPMetadata != "" {
-		if err := validateMetadata(f.IdPMetadata); err != nil {
+	if err := f.validate(); err != nil {
+		return nil, err
+	}
+	m.Name = f.Name
+	m.Enabled = f.Enabled
+	m.IdPMetadata = f.IdPMetadata
+	m.IdPMetadataURL = f.IdPMetadataURL
+	m.AttrUsername = f.AttrUsername
+	m.AttrEmail = f.AttrEmail
+	m.AttrNickname = f.AttrNickname
+	m.AttrGroups = f.AttrGroups
+	m.AttrPhone = f.AttrPhone
+	m.AutoCreate = f.AutoCreate
+	m.MatchExisting = f.MatchExisting
+	m.DefaultRole = f.DefaultRole
+	m.GroupRoleMappings = f.GroupMappings
+	m.RequireMappedGroup = f.RequireMapped
+	m.AllowIDPInitiated = f.AllowIDPInit
+	m.SignAuthnRequest = f.SignRequests
+	m.NameIDFormat = f.NameIDFormat
+	if m.Enabled {
+		if err := m.ready(); err != nil {
 			return nil, err
 		}
-		m.IdPMetadata = f.IdPMetadata
 	}
-	if f.Name != "" {
-		m.Name = strings.TrimSpace(f.Name)
-	}
-	m.Enabled = f.Enabled
-	m.AttrUsername = defAttr(f.AttrUsername, m.AttrUsername)
-	m.AttrEmail = defAttr(f.AttrEmail, m.AttrEmail)
-	m.AttrNickname = defAttr(f.AttrNickname, m.AttrNickname)
-	m.AutoCreate, m.MatchExisting, m.DefaultRole = f.AutoCreate, f.MatchExisting, f.DefaultRole
 	if err := s.db.WithContext(ctx).Save(m).Error; err != nil {
 		return nil, err
 	}
 	return m, nil
 }
 
+func (s *Service) SetEnabled(ctx context.Context, id string, enabled bool) error {
+	m, err := s.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+	if enabled {
+		if err := m.ready(); err != nil {
+			return err
+		}
+	}
+	return s.db.WithContext(ctx).Model(&Source{}).Where("id = ?", id).Update("enabled", enabled).Error
+}
+
 func (s *Service) Delete(ctx context.Context, id string) error {
 	return s.db.WithContext(ctx).Where("id = ?", id).Delete(&Source{}).Error
+}
+
+const (
+	maxMetadataBytes = 1 << 20 // 1 MiB：常见 IdP 元数据在几 KB 量级
+	maxAttrName      = 255
+)
+
+// validate 归一化并校验表单；创建与更新都走这里，避免两套规则。
+func (f *SourceForm) validate() error {
+	f.Name = strings.TrimSpace(f.Name)
+	if f.Name == "" {
+		return errors.New("saml: 名称不能为空")
+	}
+	if utf8.RuneCountInString(f.Name) > 100 {
+		return errors.New("saml: 名称不能超过 100 个字符")
+	}
+	f.IdPMetadata = strings.TrimSpace(f.IdPMetadata)
+	if f.IdPMetadata == "" {
+		return errors.New("saml: IdP 元数据不能为空（可粘贴 XML，或先按 URL 拉取）")
+	}
+	if len(f.IdPMetadata) > maxMetadataBytes {
+		return errors.New("saml: IdP 元数据超过 1 MiB")
+	}
+	if err := validateMetadata(f.IdPMetadata); err != nil {
+		return err
+	}
+	f.IdPMetadataURL = strings.TrimSpace(f.IdPMetadataURL)
+	if err := validateMetadataURL(f.IdPMetadataURL); err != nil {
+		return err
+	}
+	f.AttrUsername = defAttr(f.AttrUsername, "uid")
+	f.AttrEmail = defAttr(f.AttrEmail, "mail")
+	f.AttrNickname = defAttr(f.AttrNickname, "displayName")
+	f.AttrGroups = strings.TrimSpace(f.AttrGroups)
+	f.AttrPhone = strings.TrimSpace(f.AttrPhone)
+	for _, name := range []string{f.AttrUsername, f.AttrEmail, f.AttrNickname, f.AttrGroups, f.AttrPhone} {
+		if !validAttrName(name) {
+			return fmt.Errorf("saml: 属性名不合法: %q", name)
+		}
+	}
+	if _, ok := nameIDFormats[f.NameIDFormat]; !ok {
+		return fmt.Errorf("saml: 不支持的 NameID 格式: %q", f.NameIDFormat)
+	}
+	f.DefaultRole = strings.TrimSpace(f.DefaultRole)
+	if f.DefaultRole != "" && !validRoleCode(f.DefaultRole) {
+		return fmt.Errorf("saml: 默认角色编码无效: %q", f.DefaultRole)
+	}
+	return validateGroupMappings(f.GroupMappings, f.RequireMapped)
+}
+
+// ready 判断这个源现在能否真正完成一次登录（启用前检查，避免「已启用但一登就错」）。
+func (m *Source) ready() error {
+	info, err := parseIdP(m.IdPMetadata)
+	if err != nil {
+		return err
+	}
+	if info.SSOURL == "" {
+		return errors.New("saml: IdP 元数据里没有可用的 SingleSignOnService 地址")
+	}
+	if info.CertCount == 0 {
+		return errors.New("saml: IdP 元数据里没有签名证书，无法校验断言")
+	}
+	if info.CertExpired {
+		return errors.New("saml: IdP 签名证书已过期，请先更新元数据")
+	}
+	if _, err := spCertNotAfter(m.SPCert); err != nil {
+		return err
+	}
+	return nil
 }
 
 func defAttr(v, fallback string) string {
@@ -137,6 +241,90 @@ func defAttr(v, fallback string) string {
 		return fallback
 	}
 	return strings.TrimSpace(v)
+}
+
+func validAttrName(v string) bool {
+	if v == "" {
+		return true
+	}
+	if len(v) > maxAttrName || !utf8.ValidString(v) {
+		return false
+	}
+	return !strings.ContainsFunc(v, func(r rune) bool { return r < 0x20 || r == 0x7f || r == ' ' })
+}
+
+func validRoleCode(code string) bool {
+	return len(code) <= 64 && utf8.ValidString(code) && code == strings.TrimSpace(code) &&
+		!strings.EqualFold(code, "super") &&
+		!strings.ContainsFunc(code, func(r rune) bool { return r < 0x20 || r == 0x7f })
+}
+
+// validateGroupMappings 与 LDAP/CAS 身份源同一套约束：启用「必须命中组」时至少一条，组值原样精确匹配。
+func validateGroupMappings(ms []GroupRoleMapping, required bool) error {
+	if len(ms) > 100 || (required && len(ms) == 0) {
+		return errors.New("saml: 组映射数量无效（启用「必须命中组」时至少一条）")
+	}
+	groups, total := map[string]bool{}, 0
+	for _, m := range ms {
+		g := m.ExternalGroup
+		if strings.TrimSpace(g) == "" || len(g) > 2048 || !utf8.ValidString(g) ||
+			strings.ContainsFunc(g, func(r rune) bool { return r < 0x20 || r == 0x7f }) || groups[g] {
+			return errors.New("saml: 组映射里的组值无效或重复")
+		}
+		groups[g] = true
+		if len(m.RoleCodes) == 0 || len(m.RoleCodes) > 100 {
+			return errors.New("saml: 每个组映射需要 1-100 个角色编码")
+		}
+		seen := map[string]bool{}
+		for _, code := range m.RoleCodes {
+			if !validRoleCode(code) || seen[code] {
+				return fmt.Errorf("saml: 角色编码无效或重复: %q", code)
+			}
+			seen[code] = true
+		}
+		total += len(m.RoleCodes)
+	}
+	if total > 1000 {
+		return errors.New("saml: 映射角色总数不能超过 1000")
+	}
+	return nil
+}
+
+// mappedRoleCodes 登录时按组值取角色；required 且零命中即拒绝登录。
+func mappedRoleCodes(groups []string, ms []GroupRoleMapping, required bool) ([]string, error) {
+	if err := validateGroupMappings(ms, required); err != nil {
+		return nil, err
+	}
+	set := make(map[string]bool, len(groups))
+	for _, g := range groups {
+		set[g] = true
+	}
+	var out []string
+	seen := map[string]bool{}
+	for _, m := range ms {
+		if !set[m.ExternalGroup] {
+			continue
+		}
+		for _, code := range m.RoleCodes {
+			if !seen[code] {
+				seen[code] = true
+				out = append(out, code)
+			}
+		}
+	}
+	if required && len(out) == 0 {
+		return nil, errors.New("账号不属于允许登录的组")
+	}
+	return out, nil
+}
+
+var nameIDFormats = map[string]saml.NameIDFormat{
+	"":             "",
+	"persistent":   saml.PersistentNameIDFormat,
+	"transient":    saml.TransientNameIDFormat,
+	"emailAddress": saml.EmailAddressNameIDFormat,
+	"unspecified":  saml.UnspecifiedNameIDFormat,
+	"entity":       saml.NameIDFormat("urn:oasis:names:tc:SAML:2.0:nameid-format:entity"),
 }
 
 // validateMetadata 只接受可解析且含 IdP SSO 描述的元数据。
@@ -147,6 +335,20 @@ func validateMetadata(raw string) error {
 	}
 	if len(meta.IDPSSODescriptors) == 0 {
 		return errors.New("saml: 元数据缺少 IDPSSODescriptor")
+	}
+	return nil
+}
+
+func validateMetadataURL(raw string) error {
+	if raw == "" {
+		return nil
+	}
+	if len(raw) > 500 {
+		return errors.New("saml: 元数据地址过长")
+	}
+	u, err := url.Parse(raw)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil {
+		return errors.New("saml: 元数据地址必须是 http(s) URL")
 	}
 	return nil
 }
@@ -239,21 +441,79 @@ func (s *Service) provider(m *Source, base string) (*saml.ServiceProvider, error
 		Key:            key,
 		Certificate:    cert,
 		IDPMetadata:    &meta,
+		// 每个源单独的防重放命名空间，避免不同 IdP 的断言 ID 相撞。
+		ReplayCache:       replayCache{c: s.cache, scope: id},
+		AllowIDPInitiated: m.AllowIDPInitiated,
+		AuthnNameIDFormat: nameIDFormats[m.NameIDFormat],
+	}
+	// 只有显式开启时才签 AuthnRequest；默认与升级前一致（不签）。
+	if m.SignAuthnRequest {
+		sp.SignatureMethod = dsig.RSASHA256SignatureMethod
 	}
 	return sp, nil
 }
 
+// replayCache 把断言 ID 记进共享缓存；多实例下也只有一个请求能消费成功。
+type replayCache struct {
+	c     cache.Cache
+	scope string
+}
+
+func (r replayCache) Consume(assertionID string, expiresAt time.Time) error {
+	if r.c == nil {
+		return errors.New("saml: 缓存不可用，无法做断言防重放")
+	}
+	ttl := time.Until(expiresAt)
+	if ttl <= 0 {
+		ttl = time.Minute
+	}
+	key := "saml:replay:" + r.scope + ":" + assertionID
+	ctx := context.Background()
+	if c, ok := r.c.(cache.Counter); ok {
+		n, _, err := c.Incr(ctx, key, ttl)
+		if err != nil {
+			return err
+		}
+		if n > 1 {
+			return saml.ErrAssertionReplayed
+		}
+		return nil
+	}
+	// 后端不支持原子自增时退化为 Get+Set：有并发窗口，但仍能挡住重复提交。
+	if _, err := r.c.Get(ctx, key); err == nil {
+		return saml.ErrAssertionReplayed
+	}
+	return r.c.Set(ctx, key, "1", ttl)
+}
+
 // attr 从断言属性里取第一个值；未配置属性名时返回空。
 func attr(a *saml.Assertion, name string) string {
-	if a == nil || strings.TrimSpace(name) == "" {
+	vs := attrValues(a, name)
+	if len(vs) == 0 {
 		return ""
+	}
+	return vs[0]
+}
+
+// attrValues 取断言里某个属性的全部值（组映射需要多值）。
+func attrValues(a *saml.Assertion, name string) []string {
+	name = strings.TrimSpace(name)
+	if a == nil || name == "" {
+		return nil
 	}
 	for _, st := range a.AttributeStatements {
 		for _, at := range st.Attributes {
-			if at.Name == name && len(at.Values) > 0 {
-				return strings.TrimSpace(at.Values[0].Value)
+			if at.Name != name {
+				continue
 			}
+			out := make([]string, 0, len(at.Values))
+			for _, v := range at.Values {
+				if s := strings.TrimSpace(v.Value); s != "" {
+					out = append(out, s)
+				}
+			}
+			return out
 		}
 	}
-	return ""
+	return nil
 }

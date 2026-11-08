@@ -1,22 +1,144 @@
 {
   "plugin_saml": {
     "title": "SAML single sign-on",
-    "description": "Enterprise IdP sign-in (SAML 2.0 SP): import IdP metadata and hand the ACS/SP metadata to the IdP.",
+    "description": "Enterprise IdP sign-in (SAML 2.0 SP): import IdP metadata or fetch it by URL, map attributes and groups; hand the ACS, SP metadata and certificate to the IdP.",
     "menu": "SAML SSO",
+    "ssoLogin": "Enterprise SSO",
     "add": "New identity source",
     "edit": "Edit identity source",
-    "name": "Name",
-    "enabled": "Enabled",
-    "idpMetadata": "IdP metadata (XML)",
-    "autoCreate": "Auto-create users",
-    "matchExisting": "Link same-name local account",
-    "defaultRole": "Default role",
+    "empty": "No identity source configured yet",
+    "emptyHint": "Create an identity source and import the IdP metadata; the enterprise SSO entry then appears on the sign-in page.",
     "on": "Enabled",
     "off": "Disabled",
-    "empty": "No identity source configured yet",
+    "deleteConfirm": "Delete identity source \"{{name}}\"? Bindings of users who signed in through it are kept.",
     "btn": {
-      "edit": "Edit"
+      "edit": "Edit",
+      "test": "Self-test",
+      "copy": "Copy",
+      "copied": "Copied",
+      "copyFailed": "Copy failed",
+      "copyLogin": "Copy sign-in URL",
+      "downloadMetadata": "Download SP metadata",
+      "viewCert": "View SP certificate",
+      "fetch": "Fetch from URL",
+      "parse": "Parse preview",
+      "addMapping": "Add group mapping",
+      "removeMapping": "Remove mapping"
     },
-    "ssoLogin": "Enterprise SSO"
+    "fields": {
+      "name": "Name",
+      "enabled": "Enabled",
+      "idpMetadata": "IdP metadata (XML)",
+      "idpMetadataUrl": "IdP metadata URL (optional)",
+      "metadataSource": "Metadata source",
+      "loginUrl": "Sign-in entry",
+      "cert": "IdP signing certificate",
+      "attrUsername": "Username attribute",
+      "attrEmail": "Email attribute",
+      "attrNickname": "Nickname attribute",
+      "attrPhone": "Phone attribute",
+      "attrGroups": "Groups attribute",
+      "autoCreate": "Auto-create users",
+      "matchExisting": "Link same-name local account",
+      "defaultRole": "Default role code",
+      "groupRoleMappings": "Group → role mappings",
+      "group": "IdP group value",
+      "roles": "Local role codes",
+      "requireMappedGroup": "Require a mapped group to sign in",
+      "allowIdpInitiated": "Allow IdP-initiated sign-in",
+      "signAuthnRequest": "Sign AuthnRequest",
+      "nameIdFormat": "NameID format",
+      "idpEntityId": "IdP Entity ID",
+      "idpSso": "IdP sign-in endpoint",
+      "idpSlo": "IdP logout endpoint",
+      "spEntityId": "SP Entity ID",
+      "acs": "ACS",
+      "metadata": "SP metadata",
+      "slo": "SP logout endpoint"
+    },
+    "hints": {
+      "enabled": "Only enabled sources appear on the sign-in page.",
+      "idpMetadataUrl": "After filling this in, use \"Fetch from URL\" to refresh the metadata; the self-test also checks that the remote copy still matches.",
+      "idpMetadata": "Paste the EntityDescriptor XML from the IdP; saving requires a parsable IDPSSODescriptor.",
+      "attrUsername": "Attribute used as the local username; leave empty to use the NameID.",
+      "attrGroups": "Attribute holding the user's groups (multi-valued); group mappings read from here.",
+      "autoCreate": "Create a local account (no password) on first sign-in, subject to the tenant user quota.",
+      "matchExisting": "Allow linking this identity to an existing same-name account that is not yet bound to SAML. Super admins and built-in role holders are never matched.",
+      "defaultRole": "Role code granted when a user is auto-created; matched group mappings take precedence.",
+      "defaultRoleOff": "Only applies when auto-create is on.",
+      "groupRoleMappings": "Enter the full group values exactly as returned by the IdP; matching is case- and whitespace-sensitive, DN parsing and nested groups are not performed. Roles are granted only when a user is auto-created; existing users' local roles are never overwritten.",
+      "roleCodes": "One role code per line (the code shown in role management).",
+      "requireMappedGroup": "When on, sign-in is refused if none of the assertion's groups match a mapping; at least one mapping is required.",
+      "allowIdpInitiated": "Allow the IdP portal to start sign-in without an SP AuthnRequest. After success the user lands on the admin home; assertion replay protection needs a shared cache.",
+      "signAuthnRequest": "Sign the AuthnRequest with the SP private key (RSA-SHA256). Configure the SP certificate at the IdP first, or requests may be rejected.",
+      "nameIdFormat": "NameID format requested in the AuthnRequest; keep \"unspecified\" if unsure."
+    },
+    "preview": {
+      "title": "Metadata preview",
+      "noCert": "No signing certificate found",
+      "ok": "Metadata parsed",
+      "entityId": "Entity ID",
+      "sso": "SSO endpoint"
+    },
+    "sections": {
+      "idp": "IdP and metadata",
+      "account": "Sign-in and accounts",
+      "advanced": "Advanced"
+    },
+    "binding": {
+      "redirect": "HTTP-Redirect",
+      "post": "HTTP-POST"
+    },
+    "nameId": {
+      "default": "Unspecified (IdP default)"
+    },
+    "cert": {
+      "ok": "IdP certificate expires {{date}}",
+      "expiring": "IdP certificate expires soon ({{date}})",
+      "expired": "IdP certificate expired ({{date}})",
+      "title": "SP signing certificate",
+      "download": "Download certificate",
+      "expires": "Expires: {{date}}"
+    },
+    "test": {
+      "title": "Configuration self-test",
+      "passed": "Configuration is usable",
+      "failed": "Blocking problems found",
+      "check": {
+        "metadata": "IdP metadata",
+        "ssoUrl": "IdP sign-in endpoint",
+        "idpCert": "IdP signing certificate",
+        "spKey": "SP private key",
+        "spCert": "SP certificate",
+        "metadataUrl": "Remote metadata consistency",
+        "enabled": "Enabled state"
+      }
+    },
+    "summary": {
+      "attrs": "Attribute mapping",
+      "policy": "Account policy",
+      "autoCreate": "Auto-create",
+      "matchExisting": "Link by name",
+      "defaultRole": "Default role {{role}}",
+      "requireGroup": "Group required",
+      "idpInitiated": "IdP-initiated allowed"
+    },
+    "source": {
+      "pasted": "Pasted manually"
+    },
+    "errors": {
+      "nameRequired": "Name is required",
+      "nameTooLong": "Name must be at most 100 characters",
+      "metadataRequired": "Paste the IdP metadata or fetch it by URL first",
+      "urlInvalid": "Enter an http(s) metadata URL",
+      "attrInvalid": "Attribute names cannot contain spaces or control characters and must be at most 255 bytes",
+      "defaultRole": "Invalid role code (at most 64 bytes, not super)",
+      "mappingGroup": "Group value must not be empty and must be at most 2048 bytes",
+      "mappingRole": "One role code per line, no duplicates, not super",
+      "mappingCount": "At most 100 group mappings",
+      "mappingRequired": "At least one mapping is required when a mapped group is mandatory",
+      "mappingTotal": "At most 1000 mapped roles",
+      "mappingDuplicate": "Group values must be unique"
+    }
   }
 }

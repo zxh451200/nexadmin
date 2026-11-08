@@ -196,6 +196,7 @@ The following keys are read by their owning modules directly from `config/defaul
 | `site.domain` / `site.domains` | `core/plugin` | Site domains, used only for plugin-license `domains` comparison. With none configured, the first request carrying a Host is used |
 | `license.allow_dev_hosts` | `core/plugin` | When `true`, license domain checks treat `localhost`, `127.0.0.1`, `::1` and `*.localhost` as matches (local development) |
 | `identity.allow_private_hosts` | `plugins/identity` | Default `false`: LDAP addresses and CAS `serverUrl` refuse loopback / private / link-local / CGNAT / cloud-metadata addresses (literal check on save, all A/AAAA resolved before connect and actual IPs re-checked at connect). Internal directory and CAS deployments are naturally on private networks — set explicitly to `true` to connect. Env `NEXADMIN_IDENTITY_ALLOW_PRIVATE_HOSTS`; hot-mounting grants but never withdraws it |
+| `saml.allow_private_hosts` | `plugins/saml` | Default `false`: the IdP metadata URL of a SAML source is fetched by the server (form "fetch from URL" and "test"), and loopback / private / link-local / CGNAT / cloud-metadata addresses are refused (all A/AAAA resolved before connect, actual IPs re-checked at connect, at most 2 redirects, 10s timeout, 1 MiB cap). Enable explicitly when the internal IdP publishes metadata on a private address. Env `NEXADMIN_SAML_ALLOW_PRIVATE_HOSTS` |
 
 ## 10. Environment-variable-only items
 

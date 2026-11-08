@@ -11,7 +11,7 @@ import (
 
 func init() {
 	plugin.Register(plugin.Plugin{
-		ID: "saml", Name: "SAML 单点登录", Version: "0.1.0", Edition: plugin.Pro,
+		ID: "saml", Name: "SAML 单点登录", Version: "0.2.0", Edition: plugin.Pro,
 		Module: &module{},
 	})
 }
@@ -21,6 +21,9 @@ type module struct{}
 func (*module) Name() string { return "saml" }
 
 func (*module) Register(r *gin.RouterGroup, d *core.Deps) {
+	if loadAllowPrivateHosts() { // 只放行，不收回：避免热挂载 / 测试把全局开关改回去
+		setAllowPrivateHosts(true)
+	}
 	s := NewService(d.DB, d.Auth, d.Cache)
 
 	admin := r.Group("/plugins/saml")
@@ -28,7 +31,11 @@ func (*module) Register(r *gin.RouterGroup, d *core.Deps) {
 	admin.POST("/sources", core.Perm("saml:edit"), s.createSource)
 	admin.PUT("/sources/:id", core.Perm("saml:edit"), s.updateSource)
 	admin.DELETE("/sources/:id", core.Perm("saml:edit"), s.deleteSource)
+	admin.PUT("/sources/:id/enabled", core.Perm("saml:edit"), s.setEnabled)
+	admin.POST("/sources/:id/test", core.Perm("saml:edit"), s.testSource)
+	admin.GET("/sources/:id/sp-cert", core.Perm("saml:list"), s.spCert)
 	admin.GET("/sources/:id/urls", core.Perm("saml:list"), s.sourceURLs)
+	admin.POST("/metadata/inspect", core.Perm("saml:edit"), s.inspectMetadata)
 	admin.GET("/sources/:id/logout", s.logout)
 	admin.POST("/sources/:id/logout", s.logoutJSON)
 

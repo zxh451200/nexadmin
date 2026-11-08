@@ -3,9 +3,9 @@ package saml
 import (
 	"crypto/rand"
 	"encoding/hex"
-	"fmt"
 	"encoding/json"
 	"encoding/xml"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -79,6 +79,9 @@ func (s *Service) metadata(c *gin.Context) {
 	if err != nil {
 		response.Fail(c, err)
 		return
+	}
+	if c.Query("download") != "" {
+		c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="saml-sp-%s.xml"`, m.ID.String()))
 	}
 	c.Data(http.StatusOK, "application/samlmetadata+xml; charset=utf-8", raw)
 }
@@ -177,17 +180,25 @@ func (s *Service) acs(c *gin.Context) {
 	if username == "" {
 		username = subject
 	}
+	// 组映射：仅自动建号时授予角色；开了「必须命中组」而一个都没命中时拒绝登录。
+	mapped, err := mappedRoleCodes(attrValues(assertion, m.AttrGroups), m.GroupRoleMappings, m.RequireMappedGroup)
+	if err != nil {
+		response.Fail(c, response.Forbidden("error.forbidden").WithMsg(err.Error()))
+		return
+	}
 	// ProviderKey 留空：框架只接受 ldap-<数字> 或旧 ldap/cas 键，自定义键会被拒。
 	// 多源隔离靠 Subject 前缀（源 ID），绑定键仍是 (saml, "<源ID>:<NameID>")。
 	out, err := s.issuer.LoginAs(c.Request.Context(), auth.LoginAsRequest{
 		Identity: auth.ExternalIdentity{
-			Subject:       m.ID.String() + ":" + subject,
-			Username:      username,
-			Email:         attr(assertion, m.AttrEmail),
-			Nickname:      attr(assertion, m.AttrNickname),
-			MatchExisting: m.MatchExisting,
-			AutoCreate:    m.AutoCreate,
-			DefaultRole:   m.DefaultRole,
+			Subject:         m.ID.String() + ":" + subject,
+			Username:        username,
+			Email:           attr(assertion, m.AttrEmail),
+			Nickname:        attr(assertion, m.AttrNickname),
+			Phone:           attr(assertion, m.AttrPhone),
+			MatchExisting:   m.MatchExisting,
+			AutoCreate:      m.AutoCreate,
+			DefaultRole:     m.DefaultRole,
+			MappedRoleCodes: mapped,
 		},
 		Method:    "saml",
 		IP:        c.ClientIP(),
@@ -203,20 +214,41 @@ func (s *Service) acs(c *gin.Context) {
 			assertion.Subject.NameID.Value, 7*24*time.Hour)
 	}
 	payload := out.Payload()
-	if redirect != "" && s.cache != nil {
-		code := newRelay()
-		if b, err := json.Marshal(map[string]any{"payload": payload, "sourceId": m.ID.String()}); err == nil {
-			if err := s.cache.Set(c.Request.Context(), "saml:code:"+code, string(b), time.Minute); err == nil {
-				sep := "?"
-				if strings.Contains(redirect, "?") {
-					sep = "&"
-				}
-				c.Redirect(http.StatusFound, redirect+sep+"samlCode="+url.QueryEscape(code))
-				return
-			}
+	if redirect != "" {
+		// SP 发起：回到发起页，用一次性 code 换登录态（避免 token 出现在 URL）。
+		if u := s.redeemURL(c, m.ID, payload, redirect); u != "" {
+			c.Redirect(http.StatusFound, u)
+			return
+		}
+	}
+	// IdP 发起：没有我们生成的 redirect，回到后台登录页，由 SPA 兑换 code。
+	if m.AllowIDPInitiated {
+		if u := s.redeemURL(c, m.ID, payload, baseURL(c)+"/admin/login"); u != "" {
+			c.Redirect(http.StatusFound, u)
+			return
 		}
 	}
 	response.OK(c, payload)
+}
+
+// redeemURL 把登录结果存成一次性 code，追加到目标地址上。
+func (s *Service) redeemURL(c *gin.Context, srcID idgen.ID, payload any, target string) string {
+	if s.cache == nil {
+		return ""
+	}
+	code := newRelay()
+	b, err := json.Marshal(map[string]any{"payload": payload, "sourceId": srcID.String()})
+	if err != nil {
+		return ""
+	}
+	if err := s.cache.Set(c.Request.Context(), "saml:code:"+code, string(b), time.Minute); err != nil {
+		return ""
+	}
+	sep := "?"
+	if strings.Contains(target, "?") {
+		sep = "&"
+	}
+	return target + sep + "samlCode=" + url.QueryEscape(code)
 }
 
 // publicSources 返回本租户已启用的 SAML 源（登录页入口用，只含 id/name）。
@@ -369,7 +401,12 @@ func (s *Service) listSources(c *gin.Context) {
 		response.Fail(c, err)
 		return
 	}
-	response.OK(c, list)
+	base := baseURL(c)
+	out := make([]SourceInfo, 0, len(list))
+	for i := range list {
+		out = append(out, inspectSource(&list[i], base))
+	}
+	response.OK(c, out)
 }
 
 func (s *Service) createSource(c *gin.Context) {
@@ -416,17 +453,96 @@ func (s *Service) deleteSource(c *gin.Context) {
 	response.OK(c, nil)
 }
 
-// sourceURLs 返回 IdP 侧要填的 SP 信息（EntityID / ACS / 元数据地址）。
+// sourceURLs 返回 IdP 侧要填的 SP 信息（EntityID / ACS / SLO / 元数据 / 登录入口）。
 func (s *Service) sourceURLs(c *gin.Context) {
 	m, ok := s.sourceOrFail(c)
 	if !ok {
 		return
 	}
-	base := baseURL(c)
+	sp := spInfo(m, baseURL(c))
 	response.OK(c, gin.H{
-		"entityId":    base + "/api/v1/auth/saml/" + m.ID.String() + "/metadata",
-		"acsUrl":      base + "/api/v1/auth/saml/" + m.ID.String() + "/acs",
-		"metadataUrl": base + "/api/v1/auth/saml/" + m.ID.String() + "/metadata",
-		"loginUrl":    base + "/api/v1/auth/saml/" + m.ID.String() + "/login",
+		"entityId":    sp.EntityID,
+		"acsUrl":      sp.ACSUrl,
+		"sloUrl":      sp.SLOUrl,
+		"metadataUrl": sp.MetadataURL,
+		"loginUrl":    sp.LoginURL,
 	})
+}
+
+// setEnabled 快捷启停；启用前先确认元数据 / 证书 / SP 密钥真的可用。
+func (s *Service) setEnabled(c *gin.Context) {
+	id := c.Param("id")
+	if _, err := idgen.Parse(id); err != nil {
+		response.Fail(c, response.NotFound("error.not_found"))
+		return
+	}
+	var f struct {
+		Enabled bool `json:"enabled"`
+	}
+	if !response.BindJSON(c, &f) {
+		return
+	}
+	if err := s.SetEnabled(c.Request.Context(), id, f.Enabled); err != nil {
+		response.Fail(c, response.BadRequest("error.bad_request").WithMsg(err.Error()))
+		return
+	}
+	response.OK(c, nil)
+}
+
+// testSource 配置自检：不发起登录，只校验元数据、端点、证书与（配置了 URL 时的）远程一致性。
+func (s *Service) testSource(c *gin.Context) {
+	m, ok := s.sourceOrFail(c)
+	if !ok {
+		return
+	}
+	response.OK(c, s.testSourceChecks(c.Request.Context(), m))
+}
+
+// spCert 返回 SP 证书 PEM（IdP 需要时复制或下载）。
+func (s *Service) spCert(c *gin.Context) {
+	m, ok := s.sourceOrFail(c)
+	if !ok {
+		return
+	}
+	notAfter, err := spCertNotAfter(m.SPCert)
+	if err != nil {
+		response.Fail(c, response.BadRequest("error.bad_request").WithMsg("SP 证书不可用: "+err.Error()))
+		return
+	}
+	response.OK(c, gin.H{"cert": m.SPCert, "notAfter": notAfter.UTC().Format(time.RFC3339)})
+}
+
+// inspectMetadata 解析/拉取 IdP 元数据并返回摘要，供表单「拉取并预览」使用。
+func (s *Service) inspectMetadata(c *gin.Context) {
+	var f struct {
+		URL string `json:"url"`
+		XML string `json:"xml"`
+	}
+	if !response.BindJSON(c, &f) {
+		return
+	}
+	raw := strings.TrimSpace(f.XML)
+	if raw == "" {
+		if strings.TrimSpace(f.URL) == "" {
+			response.Fail(c, response.BadRequest("error.bad_request").WithMsg("请提供元数据 XML 或 URL"))
+			return
+		}
+		b, err := fetchMetadata(c.Request.Context(), strings.TrimSpace(f.URL))
+		if err != nil {
+			response.Fail(c, response.BadRequest("error.bad_request").WithMsg(err.Error()))
+			return
+		}
+		raw = string(b)
+	}
+	if len(raw) > maxMetadataBytes {
+		response.Fail(c, response.BadRequest("error.bad_request").WithMsg("元数据超过 1 MiB"))
+		return
+	}
+	info, err := parseIdP(raw)
+	if err != nil {
+		response.Fail(c, response.BadRequest("error.bad_request").WithMsg(err.Error()))
+		return
+	}
+	info.MetadataURL = strings.TrimSpace(f.URL)
+	response.OK(c, gin.H{"metadata": raw, "idp": info})
 }
