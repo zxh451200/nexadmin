@@ -10,7 +10,7 @@ var agentsMD = strings.ReplaceAll(`# AI 开发规则（AGENTS.md）
 详细做法与例子见 ^docs/二次开发指南.md^。
 
 ## 1. 目录所有权（三分，以 ^.nexadmin.manifest.json^ 为准）
-- 框架区（升级覆盖，**禁止改**）：^core/^ ^modules/^ ^pkg/^ ^cmd/^（含 ^cmd/server/main.go^）^web/src/framework/^ ^migrations/framework/^ ^docs/^ ^deploy/^ ^scripts/^ ^config/default.yaml^；另有 ^web/^ 下的 ^src/App.tsx^ ^src/main.tsx^ ^src/index.css^ ^src/lib/^ ^public/^ ^embed.go^ ^embed_dev.go^ ^.env.production^ ^.env.development^ ^vite.config.ts^ ^tailwind.config.ts^ ^postcss.config.js^ ^tsconfig.json^ ^eslint.config.js^ ^index.html^ 也不要改。
+- 框架区（升级覆盖，**禁止改**）：^core/^ ^modules/^ ^pkg/^ ^cmd/^（含 ^cmd/server/main.go^）^web/src/framework/^ ^migrations/framework/^ ^docs/^ ^deploy/^ ^scripts/^ ^config/default.yaml^；另有 ^web/^ 下的 ^src/App.tsx^ ^src/main.tsx^ ^src/index.css^ ^src/lib/^ ^public/^ ^embed.go^ ^embed_dev.go^ ^.env.production^ ^.env.development^ ^vite.config.ts^ ^postcss.config.js^ ^scripts/^ ^tsconfig.json^ ^eslint.config.js^ ^index.html^ 也不要改。
 - 合并区（只能**加**自己的依赖，不改框架已有条目）：^go.mod^ ^go.sum^ ^web/package.json^ ^web/package-lock.json^。
 - 用户区（你的地盘，升级不碰）：^internal/^ ^plugins/^ ^web/src/pages/^ ^web/src/plugins/^ ^web/src/locales/^ ^web/src/theme.css^ ^config/config.yaml^ ^config/locales/^ ^migrations/business/^ ^data/^。
 - 新文件一律放用户区；拿不准归属就读清单，别猜。
