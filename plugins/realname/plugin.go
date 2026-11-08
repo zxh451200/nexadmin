@@ -20,6 +20,7 @@ const (
 	PermList   = "realname:list"
 	PermVerify = "realname:verify"
 	PermConfig = "realname:config"
+	PermDelete = "realname:delete"
 )
 
 // 建表由运行时执行 plugins/realname/migrations/<引擎>/*.sql（安装时 CLI 拷贝），插件自己不做迁移。
@@ -42,6 +43,12 @@ func (*module) Register(r *gin.RouterGroup, d *core.Deps) {
 	g := r.Group("/plugins/realname")
 	g.POST("/parse", core.Perm(PermList), h.parse)
 	g.GET("/verifications", core.Perm(PermList), h.list)
+	// 台账是审计留痕：删除本身也要进操作日志。
+	g.DELETE("/verifications",
+		core.Perm(PermDelete),
+		d.OperLogMiddleware("realname", "delete"),
+		h.deleteVerifications,
+	)
 	g.GET("/config", core.Perm(PermConfig), h.getConfig)
 	g.PUT("/config", core.Perm(PermConfig), h.putConfig)
 	// 在线核验是按次计费的外部调用：限流 + 每日额度 + 行为留痕，缺任一层都会把账单和审计敞着。

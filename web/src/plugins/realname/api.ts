@@ -61,6 +61,14 @@ export function useParse() {
   return useMutation({ mutationFn: (data: { idType?: string; number: string }) => api.post<ParseResult>(`${BASE}/parse`, data) })
 }
 
+export function useDeleteVerifications() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (ids: string[]) => api.del<{ deleted: number }>(`${BASE}/verifications`, { ids: ids.join(',') }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: KEY }),
+  })
+}
+
 export interface VerifyResult {
   verification: Verification
   parse: ParseResult

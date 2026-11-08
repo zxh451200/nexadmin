@@ -1,14 +1,17 @@
 import { useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ShieldCheck, Settings2 } from 'lucide-react'
+import { ShieldCheck, Settings2, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
+import { usePermission } from '@/framework/auth/usePermission'
+import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { RequiredMark } from '@/framework/components/RequiredMark'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { SwitchRow } from '@/framework/components/SwitchField'
+import { pageAfterDelete } from '@/framework/hooks/page-fallback'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Card } from '@/framework/ui/card'
@@ -18,6 +21,7 @@ import { useCountryNames } from '@/framework/components/CountrySelect'
 import {
   STATUSES,
   useConfig,
+  useDeleteVerifications,
   useParse,
   useSaveConfig,
   useVerifications,
@@ -171,6 +175,8 @@ function ConfigDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v:
 export default function RealnamePage() {
   const { t } = useTranslation()
   const countryName = useCountryNames()
+  const confirm = useConfirm()
+  const { has } = usePermission()
   const [name, setName] = useState('')
   const [number, setNumber] = useState('')
   const [remark, setRemark] = useState('')
@@ -184,6 +190,19 @@ export default function RealnamePage() {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const { data, isLoading } = useVerifications({ ...filters, page, pageSize })
+  const del = useDeleteVerifications()
+
+  async function onDelete(row: Verification) {
+    if (!(await confirm({ destructive: true, description: t('plugin_realname.deleteConfirm') }))) return
+    try {
+      const rows = data?.list ?? []
+      await del.mutateAsync([row.id])
+      setPage(pageAfterDelete(page, rows.length, 1))
+      toast.success(t('common.operateSuccess'))
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+    }
+  }
 
   async function onParse() {
     if (!number.trim()) {
@@ -422,6 +441,21 @@ export default function RealnamePage() {
         rowKey="id"
         loading={isLoading}
         columnSettingsKey="plugin-realname-verifications"
+        rowActions={
+          has('realname:delete')
+            ? (r) => (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label={t('common.delete')}
+                  onClick={() => void onDelete(r)}
+                >
+                  <Trash2 className="h-4 w-4 text-destructive" aria-hidden="true" />
+                </Button>
+              )
+            : undefined
+        }
         pagination={{
           page,
           pageSize,

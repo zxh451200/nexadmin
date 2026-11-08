@@ -21,6 +21,7 @@ import (
 	"nexadmin/core/secret"
 	"nexadmin/core/tenant"
 	"nexadmin/pkg/idcard"
+	"nexadmin/pkg/idgen"
 	"nexadmin/pkg/mask"
 )
 
@@ -322,6 +323,43 @@ func (s *Service) foldLatest(ctx context.Context, tx *gorm.DB, q ListQuery, kw s
 		inner = inner.Where("LOWER(name_masked) LIKE LOWER(?) OR LOWER(number_masked) LIKE LOWER(?) OR LOWER(remark) LIKE LOWER(?)", like, like, like)
 	}
 	return tx.Where("id IN (?)", inner.Group("number_hash")), true
+}
+
+// DeleteVerifications 删除台账行。受限账号只能删自己发起的记录：
+// 只要有一个 id 不在范围内就整批拒绝，避免"删了一半"之后调用方不知道哪些已删。
+func (s *Service) DeleteVerifications(ctx context.Context, ids []idgen.ID, scope *datascope.Scope) (int64, error) {
+	uniq := make([]idgen.ID, 0, len(ids))
+	seen := make(map[idgen.ID]bool, len(ids))
+	for _, id := range ids {
+		if id == 0 || seen[id] {
+			continue
+		}
+		seen[id] = true
+		uniq = append(uniq, id)
+	}
+	if len(uniq) == 0 {
+		return 0, response.BadRequest("error.bad_request")
+	}
+	build := func() *gorm.DB {
+		tx := s.db.WithContext(ctx).Model(&Verification{}).Where("id IN ?", uniq)
+		if scope != nil {
+			if cond, args, limited := scope.UserIDCond("operator_id"); limited {
+				tx = tx.Where(cond, args...)
+			}
+		}
+		return tx
+	}
+	if scope.Limited() {
+		var n int64
+		if err := build().Count(&n).Error; err != nil {
+			return 0, err
+		}
+		if denied := len(uniq) - int(n); denied > 0 {
+			return 0, datascope.Forbidden(ctx, "datascope.resource.realname", denied)
+		}
+	}
+	res := build().Delete(&Verification{})
+	return res.RowsAffected, res.Error
 }
 
 // ConfigView 是配置回显：密钥只回「有没有」，真值不下发浏览器。

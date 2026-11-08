@@ -1,11 +1,14 @@
 package realname
 
 import (
+	"strings"
+
 	"github.com/gin-gonic/gin"
 
 	"nexadmin/core/auth"
 	"nexadmin/core/datascope"
 	"nexadmin/core/response"
+	"nexadmin/pkg/idgen"
 )
 
 // 路由前缀 /api/v1/plugins/realname。权限码：realname:list 查看与解析、
@@ -72,6 +75,46 @@ func (h *handler) list(c *gin.Context) {
 		return
 	}
 	response.Page(c, rows, total, page, size)
+}
+
+// idsParam 解析 ?ids=1,2 形式的批量 id，与日志模块的批量删除保持一致。
+func idsParam(c *gin.Context) ([]idgen.ID, bool) {
+	var ids []idgen.ID
+	for _, s := range strings.Split(c.Query("ids"), ",") {
+		if s = strings.TrimSpace(s); s == "" {
+			continue
+		}
+		id, err := idgen.Parse(s)
+		if err != nil {
+			response.Fail(c, response.BadRequest("error.bad_request"))
+			return nil, false
+		}
+		ids = append(ids, id)
+	}
+	if len(ids) == 0 {
+		response.Fail(c, response.BadRequest("error.bad_request"))
+		return nil, false
+	}
+	return ids, true
+}
+
+// DELETE /plugins/realname/verifications?ids=1,2
+func (h *handler) deleteVerifications(c *gin.Context) {
+	ids, ok := idsParam(c)
+	if !ok {
+		return
+	}
+	sc, err := h.scopeOf(c)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	n, err := h.svc.DeleteVerifications(c.Request.Context(), ids, sc)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, gin.H{"deleted": n})
 }
 
 // scopeOf 解析当前请求者的数据范围；无身份 401，解析失败即整请求失败（不放宽成"看全部"）。

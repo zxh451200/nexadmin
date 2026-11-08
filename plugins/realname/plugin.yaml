@@ -23,6 +23,10 @@ menus:
     type: button
     title: plugin_realname.perm.config
     perm: realname:config
+  - parent: realname:list
+    type: button
+    title: plugin_realname.perm.delete
+    perm: realname:delete
   # 明文证件号的查看权：宿主业务（如 CRM 客户详情）单独挂这条权限点，
   # 每次查看都进操作日志，所以它必须能在角色分配界面里被单独勾出来。
   - parent: realname:list

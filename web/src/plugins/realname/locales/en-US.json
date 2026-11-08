@@ -48,6 +48,7 @@
     "detail": "Detail",
     "operator": "Operator",
     "time": "Time",
+    "deleteConfirm": "Delete this verification record? This cannot be undone.",
     "empty": "No verification yet. Submit one above and it is recorded here.",
     "reason": {
       "empty": "Number is empty",
@@ -64,6 +65,7 @@
     "perm": {
       "verify": "Run verification",
       "config": "Verification settings",
+      "delete": "Delete verification records",
       "reveal": "View plaintext ID number"
     },
     "dedup": "Repeat submissions",

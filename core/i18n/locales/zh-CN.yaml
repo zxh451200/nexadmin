@@ -575,6 +575,7 @@ datascope:
   resource.dept: "部门"
   resource.user: "用户"
   resource.customer: "客户"
+  resource.realname: "核验记录"
 backup:
   busy: "已有备份正在进行，请稍后再试"
   not_ready: "该备份未完成或已失败，没有可下载的文件"

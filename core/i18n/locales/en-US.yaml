@@ -575,6 +575,7 @@ datascope:
   resource.dept: "Departments"
   resource.user: "Users"
   resource.customer: "Customers"
+  resource.realname: "Verification records"
 backup:
   busy: "A backup is already running. Please try again later."
   not_ready: "This backup is not finished or has failed, so there is no file to download."

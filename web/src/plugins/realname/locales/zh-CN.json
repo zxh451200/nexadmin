@@ -48,6 +48,7 @@
     "detail": "详情",
     "operator": "操作人",
     "time": "时间",
+    "deleteConfirm": "删除这条核验记录？删除后不可恢复。",
     "empty": "还没有核验记录：上方提交一次，这里就会留痕。",
     "reason": {
       "empty": "号码为空",
@@ -64,6 +65,7 @@
     "perm": {
       "verify": "发起核验",
       "config": "核验设置",
+      "delete": "删除核验记录",
       "reveal": "查看明文证件号"
     },
     "dedup": "重复提交",
