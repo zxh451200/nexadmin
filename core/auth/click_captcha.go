@@ -9,7 +9,8 @@ package auth
 //   NewClickCaptcha 出题 → 图片 + 候选字条 + 点位（只存服务端）；
 //   VerifyClickCaptcha 按提交顺序逐点比对（点位容差 = 字块半径 + 2px），通过后把
 //   一次性 token 写进 captchaKey，登录/短信/注册的 VerifyCaptcha 原样消费。
-// 防爆破与滑块同口径：TTL 120s、单挑战最多 5 次校验、IP 绑定。
+// 防爆破：TTL 120s、IP 绑定、单挑战最多 5 次校验（点选盲猜难度远高于滑块，
+// 不跟着滑块一起收紧到 3 次）。
 //
 // 渲染走 go-captcha v2 click 包（与滑块同一家库）：字体为 captchafonts/ 内嵌的
 // 思源黑体子集（OFL 许可，商用可再分发——官方素材包的方正字体商用需授权，不能
@@ -81,7 +82,7 @@ const (
 var errClickUnavailable = errors.New("click captcha unavailable")
 var errClickFailed = errors.New("click captcha failed")
 
-func clickKey(key string) string { return cache.GlobalKey("auth", "click", key) }
+func clickKey(key string) string   { return cache.GlobalKey("auth", "click", key) }
 func clickTries(key string) string { return cache.GlobalKey("auth", "click-tries", key) }
 
 var (
@@ -284,7 +285,9 @@ func (s *Service) VerifyClickCaptcha(ctx context.Context, key string, points []c
 		return "", err
 	}
 	token := hex.EncodeToString(tok)
-	if err := s.cache.Set(ctx, captchaKey(key), ip+"|"+token, captchaTTL); err != nil {
+	// 形态标记 c：登录硬档只消费点选 token（见 VerifyCaptchaHard），滑块的 s 与
+	// 图形码文本都不得冒用。
+	if err := s.cache.Set(ctx, captchaKey(key), ip+"|c|"+token, captchaTTL); err != nil {
 		return "", err
 	}
 	_ = s.cache.Del(ctx, clickKey(key))

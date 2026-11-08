@@ -256,10 +256,17 @@ function svgSlider() {
   return { x, pieceTop: y - SLIDER_TAB, bg: `data:image/svg+xml;base64,${btoa(bg)}`, piece: `data:image/svg+xml;base64,${btoa(piece)}` }
 }
 
-function checkCaptcha(key?: string, text?: string, reason?: string) {
+function checkCaptcha(key?: string, text?: string, reason?: string, requireKind?: 'click') {
   const expected = key ? captchas.get(key) : undefined
   if (key) captchas.delete(key)
-  if (!expected || !text || expected.toLowerCase() !== text.toLowerCase()) mockError(400, '验证码错误', reason)
+  if (!expected || !text) mockError(400, '验证码错误', reason)
+  // 与后端一致：交互 token 带形态前缀（滑块 s|、点选 c|），图形码是无前缀的纯文本
+  const cut = expected.indexOf('|')
+  const kind = cut > 0 ? expected.slice(0, cut) : 'image'
+  const want = cut > 0 ? expected.slice(cut + 1) : expected
+  // 硬档只认点选 token：滑块 token 即使有效也判错，并带 CAPTCHA_REQUIRED_HARD 让前端升级
+  if (requireKind && kind !== requireKind) mockError(400, '验证码错误', reason)
+  if (want.toLowerCase() !== text.toLowerCase()) mockError(400, '验证码错误', reason)
 }
 
 /** 与后端一致：同一用户名或同一 IP 连续密码错误达到该次数后，登录必须带验证码（锁定按用户名，仍按安全设置） */
@@ -369,9 +376,10 @@ defineMock([
       if (trail.length < SLIDER_TRAIL_MIN) mockError(400, '验证码错误')
       if (Math.abs((body?.x ?? Number.NaN) - expected) > SLIDER_TOLERANCE) mockError(400, '验证码错误')
       sliderXs.delete(body.key)
-      // token 写进与图形验证码同一张表：登录/短信/注册的 checkCaptcha 才能原样消费
+      // token 写进与图形验证码同一张表：登录/短信/注册的 checkCaptcha 才能原样消费；
+      // s 前缀标明形态，登录硬档只接受点选的 c 前缀 token
       const token = Math.random().toString(16).slice(2).padEnd(16, '0')
-      captchas.set(body.key, token)
+      captchas.set(body.key, `s|${token}`)
       return { token }
     },
   },
@@ -441,7 +449,7 @@ defineMock([
       }
       clickDots.delete(body.key)
       const token = Math.random().toString(16).slice(2).padEnd(16, '0')
-      captchas.set(body.key, token)
+      captchas.set(body.key, `c|${token}`)
       return { token }
     },
   },
@@ -469,8 +477,15 @@ defineMock([
       if (lockedLeft > 0) lockError(lockedLeft)
       const name = String(body?.username ?? '')
       // 防枚举：是否要求验证码看「用户名 + IP」双维度的失败计数（取大者），与账号是否存在无关
-      if (captchaLevel(name) !== 'none') {
-        checkCaptcha(body?.captchaKey, body?.captcha, captchaLevel(name) === 'hard' ? CAPTCHA_REQUIRED_HARD : CAPTCHA_REQUIRED)
+      const level = captchaLevel(name)
+      if (level !== 'none') {
+        // 硬档只消费点选 token（与后端 VerifyCaptchaHard 同契约）：滑块 token 与图形码文本都过不了
+        checkCaptcha(
+          body?.captchaKey,
+          body?.captcha,
+          level === 'hard' ? CAPTCHA_REQUIRED_HARD : CAPTCHA_REQUIRED,
+          level === 'hard' ? 'click' : undefined,
+        )
       }
       const u = users[body?.username ?? '']
       if (!u || u.password !== body.password) {

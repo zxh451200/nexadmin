@@ -27,10 +27,13 @@ import (
 // 签发与消费都绑定 IP。
 
 const (
-	sliderTTL       = 120 * time.Second // 拖拽比输密码慢，给 2 分钟
-	sliderTriesMax  = 5                 // 单个挑战最多校验 5 次
-	sliderTolerance = 6                 // 落点与孔位的容差（px，前后端同尺寸）
-	sliderTrailMin  = 6                 // 轨迹点数下限
+	sliderTTL = 120 * time.Second // 拖拽比输密码慢，给 2 分钟
+	// 单个挑战最多校验 3 次：前端拖错会自动换发新挑战，单挑战实际 ≤1~2 次；收紧后
+	// 单挑战盲猜成功率 3×13/245≈16%（±6 容差覆盖 13px、孔位区间 245px），
+	// 配合限流与一次性 token 兜底。
+	sliderTriesMax  = 3
+	sliderTolerance = 6 // 落点与孔位的容差（px，前后端同尺寸）
+	sliderTrailMin  = 6 // 轨迹点数下限
 	sliderDurMin    = 150 * time.Millisecond
 	sliderDurMax    = 15 * time.Second
 
@@ -138,13 +141,15 @@ func (s *Service) VerifySliderCaptcha(ctx context.Context, key string, x int, tr
 		return "", errSliderFailed
 	}
 	// 签发一次性 token：写到图形验证码同一个键下（captchaKey），登录侧才能用
-	// VerifyCaptcha 原样消费；挑战本身作废，避免同一 key 二次拖拽。
+	// VerifyCaptcha 原样消费；挑战本身作废，避免同一 key 二次拖拽。token 带
+	// 形态标记 s（点选为 c、图形码无标记）：登录硬档只消费 c，能拖滑块的自动化
+	// 升级到点选后，拿直接调滑块接口换来的 token 蒙混不过（见 VerifyCaptchaHard）。
 	tok := make([]byte, 16)
 	if _, err = rand.Read(tok); err != nil {
 		return "", err
 	}
 	token := hex.EncodeToString(tok)
-	if err = s.cache.Set(ctx, captchaKey(key), ip+"|"+token, captchaTTL); err != nil {
+	if err = s.cache.Set(ctx, captchaKey(key), ip+"|s|"+token, captchaTTL); err != nil {
 		return "", err
 	}
 	_ = s.cache.Del(ctx, sliderKey(key))

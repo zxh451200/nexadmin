@@ -77,15 +77,33 @@ func (h *Handler) Login(c *gin.Context) {
 		if !need {
 			need = LoginCaptcha(ctx)
 		}
+		// 硬档（连错达到 hardAfterFails）在服务端只认点选 token：前端的形态切换只是
+		// 表现层，直接调 /auth/slider 换 token 的脚本也必须被挡住。计数读取失败按软档
+		// 处理——不因计数故障把正常人挡在门外。
+		hard := false
 		if need {
-			ok, err := h.Svc.VerifyCaptcha(ctx, req.CaptchaKey, req.Captcha, req.IP)
+			if v, herr := h.Svc.LoginNeedsHardCaptcha(ctx, req.Username, req.IP); herr == nil {
+				hard = v
+			}
+		}
+		if need {
+			verify := h.Svc.VerifyCaptcha
+			if hard {
+				verify = h.Svc.VerifyCaptchaHard
+			}
+			ok, err := verify(ctx, req.CaptchaKey, req.Captcha, req.IP)
 			if err != nil {
 				response.Fail(c, err)
 				return
 			}
 			if !ok {
 				e := response.BadRequest("auth.captcha_invalid")
-				e.Reason = ReasonCaptchaRequired
+				if hard {
+					// 带上硬档 reason：页面刷新后前端默认回到滑块，这一步让它当场切点选。
+					e.Reason = ReasonCaptchaRequiredHard
+				} else {
+					e.Reason = ReasonCaptchaRequired
+				}
 				response.Fail(c, e)
 				return
 			}

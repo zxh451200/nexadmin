@@ -27,13 +27,13 @@ const (
 	CaptchaLenDefault = 5
 	// CaptchaLenMin / CaptchaLenMax 是允许配置的上下限：设置页按它做保存校验，
 	// 本包按它做运行时钳制——两处必须同源，否则界面存的值和实际生成的位数会分家。
-	CaptchaLenMin = 4
-	CaptchaLenMax = 8
+	CaptchaLenMin     = 4
+	CaptchaLenMax     = 8
 	captchaAfterFails = 3
 	// hardAfterFails 是「点选验证码」的升级阈值（滑块阈值的两倍）：连错到这个量级说明
 	// 来者不是手滑——验证形式本身升级成点选，把专攻滑块的自动化工具一并筛出去。
-	hardAfterFails    = captchaAfterFails * 2
-	failWindow        = 15 * time.Minute
+	hardAfterFails = captchaAfterFails * 2
+	failWindow     = 15 * time.Minute
 )
 
 // errCaptchaUnavailable 表示这张验证码取不到内容（不存在、已过期或来源 IP 不符）。
@@ -97,8 +97,25 @@ func (s *Service) NewCaptcha(ctx context.Context, ip string) (key, dataURI strin
 }
 
 // VerifyCaptcha 校验并作废验证码（一次性：无论对错，同一个 key 只能校验一次）。
-// ip 与签发时不一致即失败（签发时未带 IP 的记录不绑定，答案为整串值）。
+// ip 与签发时不一致即失败。缓存值三种形态（见 verifyCaptcha）：图形码文本、
+// 滑块 token（s 标记）、点选 token（c 标记）——本方法三种都收。
 func (s *Service) VerifyCaptcha(ctx context.Context, key, answer, ip string) (bool, error) {
+	return s.verifyCaptcha(ctx, key, answer, ip, false)
+}
+
+// VerifyCaptchaHard 同 VerifyCaptcha，但只接受点选形态 token（点选升级档专用）：
+// 能拖滑块的自动化被升级到点选后，不得拿直接调滑块接口换来的 token 蒙混过关。
+// 图形码文本与滑块 token 在此一律判失败。
+func (s *Service) VerifyCaptchaHard(ctx context.Context, key, answer, ip string) (bool, error) {
+	return s.verifyCaptcha(ctx, key, answer, ip, true)
+}
+
+// verifyCaptcha 是形态感知的校验实现。缓存值形态：
+//
+//	ip|text      图形码文本（answer 比文本）
+//	ip|s|token   滑块签发的一次性 token
+//	ip|c|token   点选签发的一次性 token
+func (s *Service) verifyCaptcha(ctx context.Context, key, answer, ip string, requireClick bool) (bool, error) {
 	key, answer = strings.TrimSpace(key), strings.TrimSpace(answer)
 	if key == "" || len(key) > 64 {
 		return false, nil
@@ -111,19 +128,36 @@ func (s *Service) VerifyCaptcha(ctx context.Context, key, answer, ip string) (bo
 	if err != nil {
 		return false, err
 	}
-	boundIP, wantText, found := strings.Cut(want, "|")
+	boundIP, rest, found := strings.Cut(want, "|")
 	if !found {
-		boundIP, wantText = "", want
+		boundIP, rest = "", want
 	}
 	if boundIP != "" && subtle.ConstantTimeCompare([]byte(boundIP), []byte(ip)) != 1 {
 		captchaFail(captchaKindImage)
 		return false, nil
 	}
+	// 形态判定：rest 带「s|/c|」前缀的是交互 token，否则是图形码文本（图形码答案
+	// 是 4~8 位数字，不会含「|」）。
+	metricKind := captchaKindImage
+	wantText := rest
+	if k, v, has := strings.Cut(rest, "|"); has && (k == "s" || k == "c") {
+		wantText = v
+		if k == "s" {
+			metricKind = captchaKindSlider
+		} else {
+			metricKind = captchaKindClick
+		}
+	}
+	if requireClick && metricKind != captchaKindClick {
+		// 硬档只收点选 token：滑块 token、图形码文本都过不了
+		captchaFail(captchaKindClick)
+		return false, nil
+	}
 	if subtle.ConstantTimeCompare([]byte(wantText), []byte(answer)) == 1 {
-		captchaPass(captchaKindImage)
+		captchaPass(metricKind)
 		return true, nil
 	}
-	captchaFail(captchaKindImage)
+	captchaFail(metricKind)
 	return false, nil
 }
 
@@ -145,6 +179,10 @@ func (s *Service) CaptchaAudio(ctx context.Context, key, ip, lang string) ([]byt
 	boundIP, text, found := strings.Cut(want, "|")
 	if !found {
 		boundIP, text = "", want
+	}
+	// 交互形态（滑块/点选）的缓存值是 token，没有音频可读：text 带 s|/c| 前缀即是。
+	if k, _, has := strings.Cut(text, "|"); has && (k == "s" || k == "c") {
+		return nil, errCaptchaUnavailable
 	}
 	if boundIP != "" && subtle.ConstantTimeCompare([]byte(boundIP), []byte(ip)) != 1 {
 		return nil, errCaptchaUnavailable
