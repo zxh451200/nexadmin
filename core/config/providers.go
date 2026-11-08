@@ -6,7 +6,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/mitchellh/mapstructure"
+	// go-viper/mapstructure/v2 是已归档的 mitchellh/mapstructure 的维护继任，API 同构。
+	"github.com/go-viper/mapstructure/v2"
 )
 
 // ProviderConf 是 auth.providers.<name> 的强类型视图（字符串里的 ${ENV} 已展开）。

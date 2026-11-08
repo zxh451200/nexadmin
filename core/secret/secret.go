@@ -23,7 +23,9 @@ import (
 	"strings"
 	"sync/atomic"
 
-	"github.com/tjfoc/gmsm/sm4"
+	// emmansun/gmsm 是已停更的 tjfoc/gmsm 的维护继任；sm4.NewCipher 同签名实现
+	// cipher.Block，SM4-GCM 为规范算法定义，存量 v2 密文解密不受实现切换影响。
+	"github.com/emmansun/gmsm/sm4"
 )
 
 const (

@@ -954,8 +954,12 @@ func (m *Manager) Dispatch(c *gin.Context, id string) {
 		return
 	}
 	keys := make(map[string]any, len(c.Keys))
+	// gin v1.12 起 Context.Keys 是 map[any]any：插件侧登记表仍是 string 键，
+	// 非 string 键（框架/中间件自定义）不透传。
 	for k, v := range c.Keys {
-		keys[k] = v
+		if s, ok := k.(string); ok {
+			keys[s] = v
+		}
 	}
 	c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), keysCtxKey{}, keys))
 	sub.HandleContext(c)
