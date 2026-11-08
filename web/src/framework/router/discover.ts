@@ -101,3 +101,23 @@ export function findMenuTrail(tree: MenuNode[], pathname: string): MenuNode[] {
   }
   return []
 }
+
+/** 目录节点没有自己的页面，取它下面第一个有路径的页面 */
+export function firstLeafPath(node: MenuNode): string | undefined {
+  if (node.path) return node.path
+  for (const c of node.children ?? []) {
+    const p = firstLeafPath(c)
+    if (p) return p
+  }
+  return undefined
+}
+
+/** 菜单里第一个能进的页面：Logo 与面包屑「首页」直接指向它，
+ *  别再经 index 路由（那条只是重定向，会让标签条多出一个 "/" 空标签、内容区闪一帧空）。 */
+export function homePathOf(tree: MenuNode[], fallback: string): string {
+  for (const group of tree) {
+    const p = firstLeafPath(group)
+    if (p) return p
+  }
+  return fallback
+}

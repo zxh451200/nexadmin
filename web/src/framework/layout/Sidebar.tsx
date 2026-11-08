@@ -11,6 +11,7 @@ import type { MenuNode } from '@/framework/router/types'
 import { usePersistedSet } from '@/framework/hooks/use-persisted-set'
 import { DynamicIcon } from './DynamicIcon'
 import { useMenuBadges } from './menuBadge'
+import { HOME_PATH } from './tabs-store'
 import { usePublicSettings } from './Watermark'
 
 const GROUPS_KEY = 'nex-sidebar-groups' // 记住哪些一级目录是收起的
@@ -29,6 +30,8 @@ function groupTone(key: string) {
 
 interface SidebarProps {
   menu: MenuNode[]
+  /** Logo 的落点（菜单里第一个能进的页面）；缺省回落到工作台 */
+  homePath?: string
   collapsed?: boolean
   /** 点击菜单项后的回调（手机抽屉用来关闭） */
   onNavigate?: () => void
@@ -36,7 +39,7 @@ interface SidebarProps {
   onToggleCollapse?: () => void
 }
 
-export function Sidebar({ menu, collapsed = false, onNavigate, onToggleCollapse }: SidebarProps) {
+export function Sidebar({ menu, homePath = HOME_PATH, collapsed = false, onNavigate, onToggleCollapse }: SidebarProps) {
   const { t } = useTranslation()
   const { pathname } = useLocation()
   // 收起的目录记在 localStorage，刷新、切页、重进后台都保持
@@ -125,7 +128,7 @@ export function Sidebar({ menu, collapsed = false, onNavigate, onToggleCollapse 
   return (
     <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
       <NavLink
-        to="/"
+        to={homePath}
         onClick={onNavigate}
         aria-label={settings?.siteName || t('layout.appName')}
         className={cn(

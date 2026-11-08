@@ -64,7 +64,17 @@ export const useTabs = create<TabsState>()(
         }),
       closeAll: () => set({ tabs: [HOME_TAB] }),
     }),
-    { name: 'nex-tabs', storage: createJSONStorage(() => sessionStorage), version: 1 },
+    {
+      name: 'nex-tabs',
+      storage: createJSONStorage(() => sessionStorage),
+      version: 1,
+      // 旧版本点 Logo / 面包屑「首页」会记下标题为 "/" 的空标签（index 只是重定向），读回来时清掉
+      merge: (persisted, current) => {
+        const saved = (persisted as { tabs?: TabItem[] } | null)?.tabs ?? []
+        const tabs = saved.filter((t) => t.path && t.path !== '/')
+        return { ...current, tabs: tabs.length > 0 ? tabs : current.tabs }
+      },
+    },
   ),
 )
 

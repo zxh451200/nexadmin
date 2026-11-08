@@ -8,7 +8,7 @@ import { useAuth } from '@/framework/auth/useAuth'
 import { LanguageSwitch } from '@/framework/i18n/LanguageSwitch'
 import { api } from '@/framework/request/http'
 import { useActivePlugins } from '@/framework/modules/plugin/active'
-import { buildMenuFromServer, buildMenuTree, findMenuTrail, type ServerMenu } from '@/framework/router/discover'
+import { buildMenuFromServer, buildMenuTree, findMenuTrail, firstLeafPath, homePathOf, type ServerMenu } from '@/framework/router/discover'
 import { ThemeToggle } from '@/framework/theme/ThemeToggle'
 import { Avatar, AvatarFallback, AvatarImage } from '@/framework/ui/avatar'
 import { Badge } from '@/framework/ui/badge'
@@ -38,7 +38,7 @@ import { NotificationBell } from './NotificationBell'
 import { Sidebar } from './Sidebar'
 import { TabsBar } from './TabsBar'
 import { TenantExpireBanner } from './TenantExpireBanner'
-import { MAX_CACHED_PAGES, resolveTab, useTabs } from './tabs-store'
+import { HOME_PATH, MAX_CACHED_PAGES, resolveTab, useTabs } from './tabs-store'
 import { Watermark } from './Watermark'
 import { useIsMobile } from '@/framework/hooks/use-mobile'
 import { PageActiveContext } from '@/framework/hooks/use-page-active'
@@ -46,16 +46,6 @@ import { useDemoMode } from '@/framework/hooks/use-demo-mode'
 import { useIosInstallHint, usePwaInstall } from '@/framework/pwa/install'
 
 const COLLAPSE_KEY = 'nex-sidebar-collapsed'
-
-/** 目录节点没有自己的页面，取它下面第一个有路径的页面 */
-function firstLeafPath(node: { path?: string; children?: { path?: string; children?: unknown[] }[] }): string | undefined {
-  if (node.path) return node.path
-  for (const c of node.children ?? []) {
-    const p = firstLeafPath(c as Parameters<typeof firstLeafPath>[0])
-    if (p) return p
-  }
-  return undefined
-}
 
 const pageFallback = (
   <div className="space-y-4 p-4 md:p-6">
@@ -158,6 +148,8 @@ export function AppLayout() {
     [serverMenu, isError, perms, activeSet],
   )
   const activeKey = resolveTab(menu, location.pathname).path
+  // Logo 与面包屑「首页」的落点：菜单里第一个能进的页面（无权限进工作台时也能落到自己的首页）
+  const homePath = useMemo(() => homePathOf(menu, HOME_PATH), [menu])
   const refresh = useCallback(() => setRefreshes((r) => ({ ...r, [activeKey]: (r[activeKey] ?? 0) + 1 })), [activeKey])
 
   // keep-alive：记录每个标签最近一次渲染的 outlet 元素；LRU 上限 MAX_CACHED_PAGES，已关闭的标签随即卸载
@@ -202,14 +194,14 @@ export function AppLayout() {
       </a>
 
       <aside className={cn('hidden shrink-0 border-e border-border transition-[width] duration-200 motion-reduce:transition-none md:block', collapsed ? 'w-16' : 'w-64')}>
-        <Sidebar menu={menu} collapsed={collapsed} onToggleCollapse={toggleCollapsed} />
+        <Sidebar menu={menu} homePath={homePath} collapsed={collapsed} onToggleCollapse={toggleCollapsed} />
       </aside>
 
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
         <SheetContent side="start" className="w-72 p-0" closeLabel={t('common.close')}>
           <SheetTitle className="sr-only">{t('layout.navigation')}</SheetTitle>
           <SheetDescription className="sr-only">{t('layout.navigation')}</SheetDescription>
-          <Sidebar menu={menu} onNavigate={() => setMobileOpen(false)} />
+          <Sidebar menu={menu} homePath={homePath} onNavigate={() => setMobileOpen(false)} />
         </SheetContent>
       </Sheet>
 
@@ -232,7 +224,7 @@ export function AppLayout() {
             <BreadcrumbList className="flex-nowrap">
               <BreadcrumbItem className="hidden md:inline-flex">
                 <BreadcrumbLink asChild>
-                  <Link to="/">{t('layout.home')}</Link>
+                  <Link to={homePath}>{t('layout.home')}</Link>
                 </BreadcrumbLink>
               </BreadcrumbItem>
               {trail.map((node, i) => (

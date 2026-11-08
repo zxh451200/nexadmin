@@ -107,6 +107,8 @@ export function TabsBar({ menu, onRefresh }: TabsBarProps) {
 
   // 路由变化时自动打开/激活；菜单尚未加载时先不记录，避免标题被写成 pathname
   useEffect(() => {
+    // index 路由（/）只是重定向壳，不是页面：记成标签会留下一个标题为 "/" 的空标签
+    if (current.path === '/') return
     if (menu.length === 0 && pathname !== HOME_PATH) return
     open(current)
     // eslint-disable-next-line react-hooks/exhaustive-deps
