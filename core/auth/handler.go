@@ -225,7 +225,9 @@ func (h *Handler) SliderCaptcha(c *gin.Context) {
 // 校验通过返回 {token}：前端把它当作 captcha 字段连同 captchaKey 提交，
 // 于是登录、短信、注册仍走 VerifyCaptcha 同一条消费通道。
 // 失败（落点偏、轨迹不像人）与挑战不存在（过期、超次数、IP 不符）都回原句文案，
-// 前端拿到任何非 2xx 都重画一张，不区分子原因也不泄露挑战是否还存在。
+// 前端拿到任何非 2xx 都重画一张，不区分子原因也不泄露挑战是否还存在——唯一的
+// 例外是拖错把 IP 升级计数推过硬阈值：响应带 CAPTCHA_REQUIRED_HARD，前端当场
+// 把验证形态切成点选，而不是等下一次密码失败才升级。
 func (h *Handler) SliderVerify(c *gin.Context) {
 	var body struct {
 		Key   string       `json:"key"`
@@ -239,7 +241,14 @@ func (h *Handler) SliderVerify(c *gin.Context) {
 	if err != nil {
 		switch {
 		case errors.Is(err, errSliderFailed):
-			response.Fail(c, response.BadRequest("auth.captcha_invalid"))
+			e := response.BadRequest("auth.captcha_invalid")
+			// VerifySliderCaptcha 已把本次拖错计入 IP 升级计数，这里只读 IP 维度的
+			// 更新值（不读用户名维度：交卷时还没有登录尝试，且空用户名会在
+			// failUserKey("") 留下人人共享的假桶）。
+			if n, herr := h.Svc.failCount(c.Request.Context(), failIPKey(c.ClientIP())); herr == nil && n >= hardAfterFails {
+				e.Reason = ReasonCaptchaRequiredHard
+			}
+			response.Fail(c, e)
 		case errors.Is(err, errSliderUnavailable):
 			response.Fail(c, response.NotFound("auth.captcha_invalid"))
 		default:

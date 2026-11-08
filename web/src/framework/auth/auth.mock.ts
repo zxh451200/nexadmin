@@ -74,6 +74,12 @@ function lockRemainingSec(username?: string) {
   return l && l.until > Date.now() ? Math.ceil((l.until - Date.now()) / 1000) : 0
 }
 
+/** 与真后端一致：message 给人看，剩余秒数放 data.retryAfter 供倒计时 */
+function lockError(seconds: number): never {
+  const time = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
+  return mockError(LOCKED_CODE, `账号已锁定，请 ${time} 后重试`, undefined, { retryAfter: seconds })
+}
+
 /** 记一次密码错误；达到上限则锁定并返回锁定秒数，否则返回 0 */
 function recordFailure(username?: string) {
   const name = username ?? ''
@@ -460,7 +466,7 @@ defineMock([
         return session(u)
       }
       const lockedLeft = lockRemainingSec(body?.username)
-      if (lockedLeft > 0) mockError(LOCKED_CODE, `LOCKED:${lockedLeft}`)
+      if (lockedLeft > 0) lockError(lockedLeft)
       const name = String(body?.username ?? '')
       // 防枚举：是否要求验证码看「用户名 + IP」双维度的失败计数（取大者），与账号是否存在无关
       if (captchaLevel(name) !== 'none') {
@@ -470,7 +476,7 @@ defineMock([
       if (!u || u.password !== body.password) {
         const fails = recordFailBoth(name) // 双维度计数，取大者
         const left = recordFailure(body?.username)
-        if (left > 0) mockError(LOCKED_CODE, `LOCKED:${left}`)
+        if (left > 0) lockError(left)
         mockError(
           400,
           '用户名或密码错误',

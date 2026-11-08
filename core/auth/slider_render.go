@@ -38,6 +38,11 @@ const (
 	sliderPieceH = sliderPiece + sliderTab
 )
 
+// 背景上的缺口个数（go-captcha 的 genGraphNumber）：1 = 只有真洞；≥2 = 真洞 + 干扰洞
+// （假洞），拼图随机取其一——「按暗块找洞」的脚本出现歧义，须拿拼图像素逐个比对。
+// 假洞由库按均分段落位，与真洞天然不重叠；改这个值不需要动校验逻辑（校验只认真洞 X）。
+const sliderGraphNumber = 2
+
 // inSliderPiece 判断拼图块局部坐标 (dx,dy) 是否落在形状内。原点取方身左上角，
 // 因此 dy 可以为负（上凸部分），dx 可以到 sliderPieceW（右凸部分）。
 func inSliderPiece(dx, dy int) bool {
@@ -75,6 +80,21 @@ func renderSlider(seed []byte) (bgPNG, piecePNG []byte, secretX, pieceTop int, e
 
 	piece := cutSliderPiece(src, x, y)
 	punchSliderHole(bg, x, y)
+	// 干扰洞：与照片版同构（同排、异段，见 sliderGraphNumber），让回退路径同样有
+	// 「两洞歧义」。假洞不参与校验（校验只认真洞 X），位置用装饰随机源 r 取即可；
+	// 与真洞至少隔一个块宽，避免视觉上连成一片。
+	for i := 0; i < 16; i++ {
+		dx := sliderXMin + r.Intn(sliderXMax-sliderXMin+1)
+		d := dx - x
+		if d < 0 {
+			d = -d
+		}
+		if d < sliderPieceW+8 {
+			continue
+		}
+		punchSliderHole(bg, dx, y)
+		break
+	}
 
 	bgPNG, err = encodePNG(bg)
 	if err != nil {

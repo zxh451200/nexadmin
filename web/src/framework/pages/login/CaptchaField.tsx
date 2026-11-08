@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import type { UseFormReturn } from 'react-hook-form'
 import { toast } from 'sonner'
 import SliderCaptchaLib, { type VerifyParam } from 'rc-slider-captcha'
-import { api } from '@/framework/request/http'
+import { api, ApiError } from '@/framework/request/http'
 import type { CaptchaResult } from '@/framework/auth/types'
 import { RequiredMark } from '@/framework/components/RequiredMark'
 import { Button } from '@/framework/ui/button'
@@ -31,16 +31,26 @@ export function useCaptcha(enabled = true, baseMode: CaptchaMode = 'slider') {
   // 请求序号：切形态、点刷新都会让上一发请求还在路上。没有这道守卫，先发的图形请求
   // 后到达就会把滑块挑战覆盖掉——表现是滑轨里挂着数字验证码，永远拖不到位。
   const seq = useRef(0)
+  // 换挑战走「原子换血」：不清空当前挑战，后台取到新挑战后一次性替换。旧图多停片刻
+  // 无害（马上被换掉）；先清空则会让滑块挂进「永不 resolve 的 request」（见下方
+  // SliderCaptcha 的 request），拖错重试换图时闪出一段长短不定的「加载中」——机器或
+  // 浏览器繁忙时可达一两秒。取新挑战失败也保留旧挑战：后端校验失败不消费挑战
+  // （VerifySliderCaptcha），旧图还能重拖，不该把用户挂死。形态切换例外：旧挑战属于
+  // 旧形态，必须先清（滑块底图不能被当图形码/点选图展示），见下方 mode 监听。
   const refresh = useCallback(async () => {
     const mine = ++seq.current
-    setCaptcha(null)
     try {
       const url = mode === 'slider' ? '/auth/slider' : mode === 'click' ? '/auth/click' : '/auth/captcha'
       const data = await api.get<CaptchaResult>(url, undefined, { silent: true })
       if (mine === seq.current) setCaptcha({ ...data, kind: mode })
     } catch {
-      if (mine === seq.current) setCaptcha(null)
+      // 保留当前挑战；首拉失败时 captcha 仍为 null，jigsawContent 的刷新按钮仍可点，
+      // 不会出现没有出口的永久加载。
     }
+  }, [mode])
+  // 形态变化（滑块↔点选↔图形码）时清掉旧挑战再取新形态的挑战
+  useEffect(() => {
+    setCaptcha(null)
   }, [mode])
   useEffect(() => {
     if (enabled) void refresh()
@@ -59,9 +69,11 @@ interface CaptchaFieldProps {
   baseMode?: CaptchaMode
   /** 服务端要求验证码时显示必填星号 */
   required?: boolean
+  /** 服务端在交卷失败响应里带 CAPTCHA_REQUIRED_HARD 时触发：当场升级成点选形态 */
+  onEscalate?: () => void
 }
 
-export function CaptchaField({ form, captcha, onRefresh, mode, onModeChange, baseMode = 'slider', required }: CaptchaFieldProps) {
+export function CaptchaField({ form, captcha, onRefresh, mode, onModeChange, baseMode = 'slider', required, onEscalate }: CaptchaFieldProps) {
   const { t, i18n } = useTranslation()
   const [audioBusy, setAudioBusy] = useState(false)
 
@@ -107,6 +119,7 @@ export function CaptchaField({ form, captcha, onRefresh, mode, onModeChange, bas
                 field.onChange('')
                 onRefresh()
               }}
+              onEscalate={onEscalate}
             />
           ) : mode === 'click' ? (
             <ClickCaptcha
@@ -233,6 +246,8 @@ interface SliderCaptchaProps {
   onRefresh: () => void
   onToken: (token: string) => void
   onFailed: () => void
+  /** 交卷失败响应带 CAPTCHA_REQUIRED_HARD：服务端指派升级，当场切点选形态 */
+  onEscalate?: () => void
 }
 
 /**
@@ -250,7 +265,7 @@ interface SliderCaptchaProps {
  * 这一层诚实语义，不挂 role="slider"——那会向读屏承诺一个操作不了的控件。
  * 键盘与语音的出路是「改用图形验证码」，那条路可输入、有语音，语义上不缺门。
  */
-function SliderCaptcha({ captcha, onRefresh, onToken, onFailed }: SliderCaptchaProps) {
+function SliderCaptcha({ captcha, onRefresh, onToken, onFailed, onEscalate }: SliderCaptchaProps) {
   const { t } = useTranslation()
   const imgW = captcha?.width ?? 384
   const imgH = captcha?.height ?? 150
@@ -306,11 +321,17 @@ function SliderCaptcha({ captcha, onRefresh, onToken, onFailed }: SliderCaptchaP
       onToken(token)
     } catch (e) {
       // 失败就地换血：清掉未定 token、父级取新挑战（key 变化 → 组件重挂）；
-      // 抛出让组件走完它的失败动画再消失。
+      // 抛出让组件走完它的失败动画再消失。唯一例外：交卷失败响应带
+      // CAPTCHA_REQUIRED_HARD（拖错把 IP 升级计数推过硬阈值）——升级当场生效，
+      // 切点选形态（mode 变化会清掉挑战并取点选新题），不再走滑块的刷新。
       setPhase('failed')
       toast.error(t('login.sliderFailed'))
       onToken('')
-      onFailed()
+      if (e instanceof ApiError && e.reason === 'CAPTCHA_REQUIRED_HARD' && onEscalate) {
+        onEscalate()
+      } else {
+        onFailed()
+      }
       throw e
     }
   }
@@ -387,16 +408,16 @@ function SliderCaptcha({ captcha, onRefresh, onToken, onFailed }: SliderCaptchaP
                 error: t('login.sliderFailed'),
               }}
               jigsawContent={
-                captcha ? (
-                  <button
-                    type="button"
-                    onClick={onRefresh}
-                    aria-label={t('login.refreshCaptcha')}
-                    className="absolute end-1 top-1 z-10 flex size-7 items-center justify-center rounded-md bg-background/70 text-foreground transition-colors hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    <RefreshCw className="size-3.5" aria-hidden="true" />
-                  </button>
-                ) : undefined
+                /* 首拉失败时 captcha 为 null，挑战区会停在加载态——刷新钮常驻，
+                   用户永远有「换一张」的出口，不会挂死在「加载中」。 */
+                <button
+                  type="button"
+                  onClick={onRefresh}
+                  aria-label={t('login.refreshCaptcha')}
+                  className="absolute inset-e-1 top-1 z-10 flex size-7 items-center justify-center rounded-md bg-background/70 text-foreground transition-colors hover:bg-background focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <RefreshCw className="size-3.5" aria-hidden="true" />
+                </button>
               }
             />
           </div>
@@ -505,23 +526,22 @@ function ClickCaptcha({ captcha, onRefresh, onToken, onFailed }: ClickCaptchaPro
             className="relative w-full cursor-pointer select-none overflow-hidden rounded-lg border border-border"
           >
             <img src={captcha?.image} alt={t('login.clickPrompt')} className="block w-full" draggable={false} />
-            {/* 换一张：与滑块/图形码同一颗刷新钮（右上角）；key 变化会清掉已点标记 */}
-            {captcha ? (
-              <button
-                type="button"
-                onClick={onRefresh}
-                aria-label={t('login.refreshCaptcha')}
-                className="absolute end-1 top-1 z-10 flex size-7 items-center justify-center rounded-md bg-background/70 text-foreground transition-colors hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <RefreshCw className="size-3.5" aria-hidden="true" />
-              </button>
-            ) : null}
+            {/* 换一张：与滑块/图形码同一颗刷新钮（右上角）；key 变化会清掉已点标记。
+                首拉失败时同样常驻，保证「换一张」出口永远在。 */}
+            <button
+              type="button"
+              onClick={onRefresh}
+              aria-label={t('login.refreshCaptcha')}
+              className="absolute inset-e-1 top-1 z-10 flex size-7 items-center justify-center rounded-md bg-background/70 text-foreground transition-colors hover:bg-background focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <RefreshCw className="size-3.5" aria-hidden="true" />
+            </button>
             {/* 序号标记用百分比定位：随图片等比缩放，手机端不用另算 */}
             {points.map((p, i) => (
               <span
                 key={`${p.x}-${p.y}-${i}`}
                 aria-hidden="true"
-                className="absolute flex size-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground shadow"
+                className="absolute flex size-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground shadow-sm"
                 style={{ left: `${(p.x / imgW) * 100}%`, top: `${(p.y / imgH) * 100}%` }}
               >
                 {i + 1}

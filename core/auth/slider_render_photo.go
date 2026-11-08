@@ -89,6 +89,12 @@ func slidePhotoCaptcha() (slide.Captcha, error) {
 			// 拼图整体（方身 + 凸起都在形状画布内）钉到 sliderPieceW：挑战响应里的
 			// pieceWidth/pieceHeight 常量、前端摆块尺寸与抠块实际边界三方一致。
 			slide.WithRangeGraphSize(option.RangeVal{Min: sliderPieceW, Max: sliderPieceW}),
+			// 干扰缺口：画 sliderGraphNumber 个相同的暗色缺口，拼图随机取其中一个的
+			// 像素（Generate 返回的 block 即真洞），其余是假洞——「找暗块定位缺口」的
+			// 简单脚本有了歧义，必须拿拼图像素逐个比对才能分辨真洞。库按
+			// (bgW-pieceW-20)/n 均分段落位，各洞天然不重叠；X 合法区间的约束重试
+			// 只作用真洞（renderSliderPhoto 的 attempt 循环），假洞落在邻段无需再约束。
+			slide.WithGenGraphNumber(sliderGraphNumber),
 		)
 		b.SetResources(slide.WithBackgrounds(bgs), slide.WithGraphImages(graphs))
 		slidePhotoCap = b.Make()

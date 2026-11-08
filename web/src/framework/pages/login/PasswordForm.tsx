@@ -45,6 +45,14 @@ export function PasswordForm({
   // 当前形态与图形码兜底之间切换，不能降级（见 CaptchaField 的切换链接）
   const [baseMode, setBaseMode] = useState<CaptchaMode>('slider')
   const { captcha, refresh, mode, setMode } = useCaptcha(needCaptcha, baseMode)
+  // 升级档：服务端指派形态换成点选（密码失败响应、滑块交卷失败响应里带
+  // CAPTCHA_REQUIRED_HARD 都会走到这里）——滑块专用的自动化工具到这儿一并被筛出去。
+  // 用户不能降级，只能切图形码兜底。
+  const escalateToClick = () => {
+    setNeedCaptcha(true)
+    setBaseMode('click')
+    setMode('click')
+  }
   const [show, setShow] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [verifying, setVerifying] = useState(false)
@@ -128,18 +136,13 @@ export function PasswordForm({
         onSuccess()
       }
     } catch (e) {
-      if (e instanceof ApiError && e.code === 423) setLockLeft(Number(e.message.split(':')[1]) || 0)
+      if (e instanceof ApiError && e.code === 423) setLockLeft(e.retryAfter ?? 0)
       if (e instanceof ApiError && e.reason === 'CAPTCHA_REQUIRED') {
         setNeedCaptcha(true)
         setBaseMode('slider')
       }
-      // 升级档：连错达到硬阈值（hardAfterFails）后，服务端指派形态换成点选——滑块专用的
-      // 自动化工具到这儿一并被筛出去。用户不能降级，只能切图形码兜底。
-      if (e instanceof ApiError && e.reason === 'CAPTCHA_REQUIRED_HARD') {
-        setNeedCaptcha(true)
-        setBaseMode('click')
-        setMode('click')
-      }
+      // 升级档：连错达到硬阈值（hardAfterFails）后，服务端指派形态换成点选（见 escalateToClick）。
+      if (e instanceof ApiError && e.reason === 'CAPTCHA_REQUIRED_HARD') escalateToClick()
       if (needCaptcha) {
         form.setValue('captcha', '')
         void refresh()
@@ -185,7 +188,7 @@ export function PasswordForm({
                   type="button"
                   onClick={() => setShow((s) => !s)}
                   aria-label={show ? t('login.hidePassword') : t('login.showPassword')}
-                  className="absolute inset-y-0 end-0 flex w-11 items-center justify-center text-muted-foreground hover:text-foreground md:w-9"
+                  className="absolute inset-y-0 inset-e-0 flex w-11 items-center justify-center text-muted-foreground hover:text-foreground md:w-9"
                 >
                   {show ? <Eye className="size-4" aria-hidden="true" /> : <EyeOff className="size-4" aria-hidden="true" />}
                 </button>
@@ -194,7 +197,7 @@ export function PasswordForm({
             </FormItem>
           )}
         />
-        {needCaptcha && !challenge ? <CaptchaField form={form} captcha={captcha} onRefresh={refresh} mode={mode} onModeChange={setMode} baseMode={baseMode} required={needCaptcha} /> : null}
+        {needCaptcha && !challenge ? <CaptchaField form={form} captcha={captcha} onRefresh={refresh} mode={mode} onModeChange={setMode} baseMode={baseMode} required={needCaptcha} onEscalate={escalateToClick} /> : null}
 
         {challenge ? (
           <div className="space-y-2">

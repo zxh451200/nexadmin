@@ -129,6 +129,12 @@ func (s *Service) VerifySliderCaptcha(ctx context.Context, key string, x int, tr
 	}
 	if !trailLooksHuman(trail, x, secretX) {
 		captchaFail(captchaKindSlider)
+		// 拖错计入 IP 维度升级计数（与密码失败共用 captcha.go 的 3/6 阈值）：磨滑块的
+		// 自动化会先被升级成点选，而不是永远只吃限流。只升验证形态、不碰锁定——锁定
+		// 只数密码失败且按用户名（modules/system/user），真人手滑不该被锁号；NAT 场景
+		// 的误伤由 15 分钟固定窗口自愈，且可切图形验证码兜底。计数失败就少计一次，
+		// 不拦校验结果。
+		_, _ = cache.Incr(s.cache, ctx, failIPKey(ip), failWindow)
 		return "", errSliderFailed
 	}
 	// 签发一次性 token：写到图形验证码同一个键下（captchaKey），登录侧才能用
