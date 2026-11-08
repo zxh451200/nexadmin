@@ -297,8 +297,7 @@ export default function SamlPage() {
 
   return (
     <PageContainer>
-      <PageHeader title={t('plugin_saml.title')} description={t('plugin_saml.description')} />
-      <div className="mb-4 flex justify-end">{newButton}</div>
+      <PageHeader title={t('plugin_saml.title')} description={t('plugin_saml.description')} actions={newButton} />
 
       {isLoading ? (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -310,7 +309,6 @@ export default function SamlPage() {
           icon={<ShieldCheck className="size-6" aria-hidden="true" />}
           title={t('plugin_saml.empty')}
           description={t('plugin_saml.emptyHint')}
-          action={newButton}
         />
       ) : (
         <div className="space-y-3">
@@ -450,11 +448,26 @@ export default function SamlPage() {
                     s.matchExisting ? t('plugin_saml.summary.matchExisting') : null,
                     s.defaultRole ? t('plugin_saml.summary.defaultRole', { role: s.defaultRole }) : null,
                     s.requireMappedGroup ? t('plugin_saml.summary.requireGroup') : null,
+                    s.forceAuthn ? t('plugin_saml.summary.forceAuthn') : null,
                   ]
                     .filter(Boolean)
                     .join(' · ')}
                 </span>
                 {s.allowIdpInitiated ? <span>{t('plugin_saml.summary.idpInitiated')}</span> : null}
+                {s.requireAuthnContext && s.authnContextClassRef ? (
+                  <span>{t('plugin_saml.summary.authnContext', { value: s.authnContextClassRef })}</span>
+                ) : null}
+                {s.requireSignedResponseForCBC || s.rejectUnknownConditions ? (
+                  <span>
+                    {t('plugin_saml.summary.hardening')}:{' '}
+                    {[
+                      s.requireSignedResponseForCBC ? t('plugin_saml.summary.signedCBC') : null,
+                      s.rejectUnknownConditions ? t('plugin_saml.summary.unknownConditions') : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </span>
+                ) : null}
               </div>
             </Card>
           ))}

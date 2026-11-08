@@ -62,6 +62,11 @@ export interface SamlSource {
   allowIdpInitiated: boolean
   signAuthnRequest: boolean
   nameIdFormat: string
+  requireSignedResponseForCBC: boolean
+  rejectUnknownConditions: boolean
+  forceAuthn: boolean
+  authnContextClassRef: string
+  requireAuthnContext: boolean
   metadataRefreshedAt?: string
   idp: IdPInfo
   sp: SPInfo
@@ -88,6 +93,11 @@ export interface SourceForm {
   allowIdpInitiated: boolean
   signAuthnRequest: boolean
   nameIdFormat: string
+  requireSignedResponseForCBC: boolean
+  rejectUnknownConditions: boolean
+  forceAuthn: boolean
+  authnContextClassRef: string
+  requireAuthnContext: boolean
 }
 
 export interface Check {

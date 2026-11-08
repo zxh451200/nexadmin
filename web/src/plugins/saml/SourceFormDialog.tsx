@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Download, Link2, Loader2 } from 'lucide-react'
+import { Download, Link2, Loader2, Upload } from 'lucide-react'
 import { useFieldArray, useForm, useWatch, type Control, type FieldPath } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -25,6 +25,10 @@ const fmtDate = (v?: string) => {
   return Number.isNaN(d.getTime()) ? v : d.toLocaleDateString()
 }
 const validAttr = (value: string) => byteLength(value) <= 255 && !hasControl(value) && !value.includes(' ')
+
+// 预置键与后端 authnContextPresets 一一对应；custom 时存逗号分隔的 URI 列表。
+const AUTHN_PRESETS = ['', 'passwordProtectedTransport', 'password', 'mfa', 'sfa'] as const
+const validContextURI = (value: string) => /^(urn:[^\s,]+|https?:\/\/[^\s,]+)$/i.test(value)
 
 function buildSchema(t: (k: string) => string) {
   return z
@@ -72,6 +76,16 @@ function buildSchema(t: (k: string) => string) {
       allowIdpInitiated: z.boolean(),
       signAuthnRequest: z.boolean(),
       nameIdFormat: z.enum(['', 'persistent', 'transient', 'emailAddress', 'unspecified', 'entity']),
+      forceAuthn: z.boolean(),
+      requireSignedResponseForCBC: z.boolean(),
+      rejectUnknownConditions: z.boolean(),
+      requireAuthnContext: z.boolean(),
+      authnContextPreset: z.enum(['', 'passwordProtectedTransport', 'password', 'mfa', 'sfa', 'custom']),
+      authnContextCustom: z
+        .string()
+        .trim()
+        .max(500, t('plugin_saml.errors.authnContextInvalid'))
+        .refine((v) => !hasControl(v), t('plugin_saml.errors.authnContextInvalid')),
     })
     .superRefine((v, ctx) => {
       if (v.requireMappedGroup && v.groupRoleMappings.length === 0) {
@@ -88,6 +102,22 @@ function buildSchema(t: (k: string) => string) {
         }
         groups.add(m.externalGroup)
       })
+      if (v.authnContextPreset === 'custom') {
+        const refs = v.authnContextCustom.split(',').map((s) => s.trim()).filter(Boolean)
+        if (refs.length === 0) {
+          ctx.addIssue({ code: 'custom', path: ['authnContextCustom'], message: t('plugin_saml.errors.authnContextRequired') })
+        } else if (refs.length > 10) {
+          ctx.addIssue({ code: 'custom', path: ['authnContextCustom'], message: t('plugin_saml.errors.authnContextCount') })
+        } else if (refs.some((r) => !validContextURI(r))) {
+          ctx.addIssue({ code: 'custom', path: ['authnContextCustom'], message: t('plugin_saml.errors.authnContextInvalid') })
+        } else if (new Set(refs).size !== refs.length) {
+          ctx.addIssue({ code: 'custom', path: ['authnContextCustom'], message: t('plugin_saml.errors.authnContextDuplicate') })
+        }
+      }
+      const resolvedContext = v.authnContextPreset === 'custom' ? v.authnContextCustom.trim() : v.authnContextPreset
+      if (v.requireAuthnContext && !resolvedContext) {
+        ctx.addIssue({ code: 'custom', path: ['authnContextPreset'], message: t('plugin_saml.errors.authnContextRequired') })
+      }
     })
 }
 
@@ -112,6 +142,12 @@ const empty: FormValues = {
   allowIdpInitiated: false,
   signAuthnRequest: false,
   nameIdFormat: '',
+  forceAuthn: false,
+  requireSignedResponseForCBC: false,
+  rejectUnknownConditions: false,
+  requireAuthnContext: false,
+  authnContextPreset: '',
+  authnContextCustom: '',
 }
 
 function toValues(s?: SamlSource | null): FormValues {
@@ -135,16 +171,31 @@ function toValues(s?: SamlSource | null): FormValues {
     allowIdpInitiated: s.allowIdpInitiated,
     signAuthnRequest: s.signAuthnRequest,
     nameIdFormat: (s.nameIdFormat ?? '') as FormValues['nameIdFormat'],
+    forceAuthn: s.forceAuthn ?? false,
+    requireSignedResponseForCBC: s.requireSignedResponseForCBC ?? false,
+    rejectUnknownConditions: s.rejectUnknownConditions ?? false,
+    requireAuthnContext: s.requireAuthnContext ?? false,
+    ...toAuthnContextForm(s.authnContextClassRef ?? ''),
   }
 }
 
+function toAuthnContextForm(value: string): Pick<FormValues, 'authnContextPreset' | 'authnContextCustom'> {
+  if (!value) return { authnContextPreset: '', authnContextCustom: '' }
+  if ((AUTHN_PRESETS as readonly string[]).includes(value)) {
+    return { authnContextPreset: value as FormValues['authnContextPreset'], authnContextCustom: '' }
+  }
+  return { authnContextPreset: 'custom', authnContextCustom: value }
+}
+
 function toPayload(v: FormValues): SourceForm {
+  const { authnContextPreset, authnContextCustom, ...rest } = v
   return {
-    ...v,
+    ...rest,
     attrUsername: v.attrUsername || 'uid',
     attrEmail: v.attrEmail || 'mail',
     attrNickname: v.attrNickname || 'displayName',
     groupRoleMappings: v.groupRoleMappings.map((m) => ({ externalGroup: m.externalGroup, roleCodes: splitRoles(m.roleCodes) })),
+    authnContextClassRef: authnContextPreset === 'custom' ? authnContextCustom.trim() : authnContextPreset,
   }
 }
 
@@ -202,8 +253,10 @@ export default function SourceFormDialog({ open, onOpenChange, editing }: Props)
   const idpMetadata = useWatch({ control: form.control, name: 'idpMetadata' })
   const idpMetadataUrl = useWatch({ control: form.control, name: 'idpMetadataUrl' })
   const idpEntityId = useWatch({ control: form.control, name: 'idpEntityId' })
+  const authnContextPreset = useWatch({ control: form.control, name: 'authnContextPreset' })
   const [preview, setPreview] = useState<IdPInfo | null>(null)
   const [fetching, setFetching] = useState<'url' | 'xml' | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
   const candidates = preview?.candidates ?? []
   const shown = candidates.find((c) => c.entityId === idpEntityId) ?? preview
 
@@ -254,6 +307,22 @@ export default function SourceFormDialog({ open, onOpenChange, editing }: Props)
   const h = (k: string) => t(`plugin_saml.hints.${k}`)
   const c = form.control
 
+  const onPickFile = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    if (file.size > 1024 * 1024) {
+      toast.error(t('plugin_saml.errors.fileTooLarge'))
+      return
+    }
+    try {
+      form.setValue('idpMetadata', await file.text(), { shouldValidate: true, shouldDirty: true })
+      await runInspect('xml')
+    } catch {
+      toast.error(t('plugin_saml.errors.fileReadFailed'))
+    }
+  }
+
   return (
     <ResponsiveDialog
       open={open}
@@ -289,6 +358,24 @@ export default function SourceFormDialog({ open, onOpenChange, editing }: Props)
                   placeholder="https://idp.example.com/metadata"
                 />
                 <div className="flex flex-wrap gap-2">
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    accept=".xml,application/xml,text/xml"
+                    className="hidden"
+                    aria-label={t('plugin_saml.btn.importFile')}
+                    onChange={(e) => void onPickFile(e)}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={!!fetching}
+                    onClick={() => fileRef.current?.click()}
+                  >
+                    <Upload aria-hidden="true" />
+                    {t('plugin_saml.btn.importFile')}
+                  </Button>
                   <Button
                     type="button"
                     variant="outline"
@@ -504,6 +591,66 @@ export default function SourceFormDialog({ open, onOpenChange, editing }: Props)
                       <FormMessage />
                     </FormItem>
                   )}
+                />
+                <SwitchField control={c} name="forceAuthn" label={p('forceAuthn')} description={h('forceAuthn')} bare />
+                <SwitchField
+                  control={c}
+                  name="requireSignedResponseForCBC"
+                  label={p('requireSignedResponseForCBC')}
+                  description={h('requireSignedResponseForCBC')}
+                  bare
+                />
+                <SwitchField
+                  control={c}
+                  name="rejectUnknownConditions"
+                  label={p('rejectUnknownConditions')}
+                  description={h('rejectUnknownConditions')}
+                  bare
+                />
+                <FormField
+                  control={c}
+                  name="authnContextPreset"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{p('authnContext')}</FormLabel>
+                      <Select value={field.value || 'none'} onValueChange={(v) => field.onChange(v === 'none' ? '' : v)}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="none">{t('plugin_saml.authnContext.none')}</SelectItem>
+                          <SelectItem value="passwordProtectedTransport">
+                            {t('plugin_saml.authnContext.passwordProtectedTransport')}
+                          </SelectItem>
+                          <SelectItem value="password">{t('plugin_saml.authnContext.password')}</SelectItem>
+                          <SelectItem value="mfa">{t('plugin_saml.authnContext.mfa')}</SelectItem>
+                          <SelectItem value="sfa">{t('plugin_saml.authnContext.sfa')}</SelectItem>
+                          <SelectItem value="custom">{t('plugin_saml.authnContext.custom')}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>{h('authnContext')}</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                {authnContextPreset === 'custom' ? (
+                  <TextField
+                    control={c}
+                    name="authnContextCustom"
+                    label={p('authnContextCustom')}
+                    hint={h('authnContextCustom')}
+                    mono
+                    placeholder="urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport"
+                  />
+                ) : null}
+                <SwitchField
+                  control={c}
+                  name="requireAuthnContext"
+                  label={p('requireAuthnContext')}
+                  description={h('requireAuthnContext')}
+                  bare
                 />
               </fieldset>
             </FormGridFull>

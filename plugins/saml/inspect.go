@@ -285,7 +285,7 @@ func inspectSource(m *Source, base string) SourceInfo {
 
 // testSourceChecks 做不依赖 IdP 交互的配置自检：元数据、端点、证书、SP 密钥，以及（配置了 URL 时）远程元数据一致性。
 func (s *Service) testSourceChecks(ctx context.Context, m *Source) TestResult {
-	res := TestResult{Checks: make([]Check, 0, 8)}
+	res := TestResult{Checks: make([]Check, 0, 10)}
 	add := func(key string, ok, warning bool, detail string) {
 		res.Checks = append(res.Checks, Check{Key: key, OK: ok, Warning: warning, Detail: detail})
 	}
@@ -361,6 +361,21 @@ func (s *Service) testSourceChecks(ctx context.Context, m *Source) TestResult {
 		} else {
 			add("metadataUrl", true, false, "远程元数据与已保存内容一致")
 		}
+	}
+
+	if refs, err := authnContextClassRefs(m.AuthnContextClassRef); err != nil {
+		add("authnContext", false, false, err.Error())
+		res.OK = false
+	} else if len(refs) > 0 {
+		detail := strings.Join(refs, ", ")
+		if m.RequireAuthnContext {
+			add("authnContext", true, false, "断言必须命中其中之一："+detail)
+		} else {
+			add("authnContext", true, true, "只在 AuthnRequest 里声明，未强制校验断言："+detail)
+		}
+	} else if m.RequireAuthnContext {
+		add("authnContext", false, false, "已开启强制校验但没有指定认证上下文类")
+		res.OK = false
 	}
 
 	if !m.Enabled {

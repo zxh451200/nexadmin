@@ -48,6 +48,13 @@ type Source struct {
 	AllowIDPInitiated bool   `gorm:"column:allow_idp_initiated;not null;default:false"`
 	SignAuthnRequest  bool   `gorm:"column:sign_authn_request;not null;default:false"`
 	NameIDFormat      string `gorm:"column:name_id_format;size:128;not null;default:''"`
+
+	// 协议级加固默认关闭：开启前需确认 IdP 行为，否则会把原本能登录的源拒掉。
+	RequireSignedCBC        bool   `gorm:"column:require_signed_cbc;not null;default:false"`
+	RejectUnknownConditions bool   `gorm:"column:reject_unknown_conditions;not null;default:false"`
+	ForceAuthn              bool   `gorm:"column:force_authn;not null;default:false"`
+	AuthnContextClassRef    string `gorm:"column:authn_context_class_ref;size:500;not null;default:''"`
+	RequireAuthnContext     bool   `gorm:"column:require_authn_context;not null;default:false"`
 }
 
 func (Source) TableName() string { return "plg_saml_source" }

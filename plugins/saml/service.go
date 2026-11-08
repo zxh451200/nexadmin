@@ -69,6 +69,12 @@ type SourceForm struct {
 	AllowIDPInit   bool               `json:"allowIdpInitiated"`
 	SignRequests   bool               `json:"signAuthnRequest"`
 	NameIDFormat   string             `json:"nameIdFormat"`
+
+	RequireSignedCBC        bool   `json:"requireSignedResponseForCBC"`
+	RejectUnknownConditions bool   `json:"rejectUnknownConditions"`
+	ForceAuthn              bool   `json:"forceAuthn"`
+	AuthnContextClassRef    string `json:"authnContextClassRef"`
+	RequireAuthnContext     bool   `json:"requireAuthnContext"`
 }
 
 func (s *Service) List(ctx context.Context) ([]Source, error) {
@@ -107,6 +113,8 @@ func (s *Service) Create(ctx context.Context, f SourceForm) (*Source, error) {
 		AutoCreate: f.AutoCreate, MatchExisting: f.MatchExisting, DefaultRole: f.DefaultRole,
 		GroupRoleMappings: f.GroupMappings, RequireMappedGroup: f.RequireMapped,
 		AllowIDPInitiated: f.AllowIDPInit, SignAuthnRequest: f.SignRequests, NameIDFormat: f.NameIDFormat,
+		RequireSignedCBC: f.RequireSignedCBC, RejectUnknownConditions: f.RejectUnknownConditions,
+		ForceAuthn: f.ForceAuthn, AuthnContextClassRef: f.AuthnContextClassRef, RequireAuthnContext: f.RequireAuthnContext,
 	}
 	if err := s.db.WithContext(ctx).Create(&m).Error; err != nil {
 		return nil, err
@@ -140,6 +148,11 @@ func (s *Service) Update(ctx context.Context, id string, f SourceForm) (*Source,
 	m.AllowIDPInitiated = f.AllowIDPInit
 	m.SignAuthnRequest = f.SignRequests
 	m.NameIDFormat = f.NameIDFormat
+	m.RequireSignedCBC = f.RequireSignedCBC
+	m.RejectUnknownConditions = f.RejectUnknownConditions
+	m.ForceAuthn = f.ForceAuthn
+	m.AuthnContextClassRef = f.AuthnContextClassRef
+	m.RequireAuthnContext = f.RequireAuthnContext
 	if m.Enabled {
 		if err := m.ready(); err != nil {
 			return nil, err
@@ -229,6 +242,14 @@ func (f *SourceForm) validate() error {
 	}
 	if _, ok := nameIDFormats[f.NameIDFormat]; !ok {
 		return fmt.Errorf("saml: 不支持的 NameID 格式: %q", f.NameIDFormat)
+	}
+	f.AuthnContextClassRef = strings.TrimSpace(f.AuthnContextClassRef)
+	refs, err := authnContextClassRefs(f.AuthnContextClassRef)
+	if err != nil {
+		return err
+	}
+	if f.RequireAuthnContext && len(refs) == 0 {
+		return errors.New("saml: 要求校验认证上下文时必须先指定认证上下文类")
 	}
 	f.DefaultRole = strings.TrimSpace(f.DefaultRole)
 	if f.DefaultRole != "" && !validRoleCode(f.DefaultRole) {
@@ -377,6 +398,61 @@ var nameIDFormats = map[string]saml.NameIDFormat{
 	"entity":       saml.NameIDFormat("urn:oasis:names:tc:SAML:2.0:nameid-format:entity"),
 }
 
+// authnContextPresets 是常见认证上下文类。exact 比较下用列表表达「这些都可接受」，
+// 避免 IdP 回了更强的上下文（如 Password 之外又支持 PPT）时被误拒。
+var authnContextPresets = map[string][]string{
+	"passwordProtectedTransport": {"urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport"},
+	"password": {
+		"urn:oasis:names:tc:SAML:2.0:ac:classes:Password",
+		"urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport",
+	},
+	"mfa": {"https://refeds.org/profile/mfa"},
+	"sfa": {"https://refeds.org/profile/sfa"},
+}
+
+const maxAuthnContextRefs = 10
+
+// authnContextClassRefs 把配置值解析成可接受的类列表：预置键直接展开，其余按逗号分隔的自定义 URI 处理。
+func authnContextClassRefs(v string) ([]string, error) {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return nil, nil
+	}
+	if refs, ok := authnContextPresets[v]; ok {
+		return refs, nil
+	}
+	if len(v) > 500 || !utf8.ValidString(v) ||
+		strings.ContainsFunc(v, func(r rune) bool { return r < 0x20 || r == 0x7f }) {
+		return nil, errors.New("saml: 认证上下文类不合法")
+	}
+	var out []string
+	seen := make(map[string]bool)
+	for _, part := range strings.Split(v, ",") {
+		uri := strings.TrimSpace(part)
+		if uri == "" {
+			continue
+		}
+		if !strings.HasPrefix(uri, "urn:") && !strings.HasPrefix(uri, "http://") && !strings.HasPrefix(uri, "https://") {
+			return nil, fmt.Errorf("saml: 认证上下文类必须是 urn: 或 http(s):// URI: %q", uri)
+		}
+		if strings.ContainsAny(uri, " \t\r\n") {
+			return nil, fmt.Errorf("saml: 认证上下文类不能含空白: %q", uri)
+		}
+		if seen[uri] {
+			return nil, fmt.Errorf("saml: 认证上下文类重复: %q", uri)
+		}
+		seen[uri] = true
+		out = append(out, uri)
+	}
+	if len(out) == 0 {
+		return nil, errors.New("saml: 认证上下文类不能为空")
+	}
+	if len(out) > maxAuthnContextRefs {
+		return nil, fmt.Errorf("saml: 认证上下文类最多 %d 个", maxAuthnContextRefs)
+	}
+	return out, nil
+}
+
 // validateMetadata 接受单实体或 EntitiesDescriptor 打包，至少要有一个 IDPSSODescriptor。
 func validateMetadata(raw string) error {
 	_, err := metadataIDPEntities(raw)
@@ -500,6 +576,22 @@ func (s *Service) provider(m *Source, base string) (*saml.ServiceProvider, error
 	// 只有显式开启时才签 AuthnRequest；默认与升级前一致（不签）。
 	if m.SignAuthnRequest {
 		sp.SignatureMethod = dsig.RSASHA256SignatureMethod
+	}
+	sp.RequireSignedResponseForCBC = m.RequireSignedCBC
+	sp.RejectUnknownConditions = m.RejectUnknownConditions
+	// ForceAuthn 为 nil 时请求里不带该属性；显式 false 会被部分 IdP 当成「不要强制」之外的语义。
+	if m.ForceAuthn {
+		force := true
+		sp.ForceAuthn = &force
+	}
+	refs, err := authnContextClassRefs(m.AuthnContextClassRef)
+	if err != nil {
+		return nil, err
+	}
+	if len(refs) > 0 {
+		// crewjam 不带自定义比较器时只支持 exact，所以用「可接受类列表」表达「至少这么强」。
+		sp.RequestedAuthnContext = &saml.RequestedAuthnContext{Comparison: "exact", AuthnContextClassRefs: refs}
+		sp.ValidateAuthnContextClassRef = m.RequireAuthnContext
 	}
 	return sp, nil
 }

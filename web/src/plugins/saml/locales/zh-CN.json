@@ -24,7 +24,8 @@
       "parse": "解析预览",
       "addMapping": "添加组映射",
       "removeMapping": "删除映射",
-      "refreshMetadata": "刷新元数据"
+      "refreshMetadata": "刷新元数据",
+      "importFile": "从文件导入"
     },
     "fields": {
       "name": "名称",
@@ -49,6 +50,11 @@
       "allowIdpInitiated": "允许 IdP 发起登录",
       "signAuthnRequest": "签名 AuthnRequest",
       "nameIdFormat": "NameID 格式",
+      "forceAuthn": "强制重新认证",
+      "requireSignedResponseForCBC": "CBC 加密断言要求响应已签名",
+      "rejectUnknownConditions": "拒绝未知 Conditions",
+      "authnContext": "认证上下文类",
+      "authnContextCustom": "自定义认证上下文类",
       "idpEntityId": "使用的 IdP Entity ID",
       "idpSso": "IdP 登录端点",
       "idpSlo": "IdP 登出端点",
@@ -74,6 +80,12 @@
       "allowIdpInitiated": "允许 IdP 门户直接发起登录（无 SP 侧 AuthnRequest）。成功后回到后台首页；断言防重放依赖共享缓存。",
       "signAuthnRequest": "用 SP 私钥对 AuthnRequest 签名（RSA-SHA256）。开启前先把 SP 证书配置到 IdP，否则可能被拒。",
       "nameIdFormat": "AuthnRequest 里请求的 NameID 格式；不确定时保持「不指定」。",
+      "forceAuthn": "每次登录都要求 IdP 重新认证（ForceAuthn），不复用 IdP 侧已有会话；部分 IdP 需额外开通。",
+      "requireSignedResponseForCBC": "开启后，用 AES-CBC 加密的断言必须先有 IdP 对响应的签名才会解密，按 SAML errata E93 阻断 XML Encryption 的 padding/格式预言。多数 IdP 只签断言，开启前请确认它也会签响应，否则登录会被拒。",
+      "rejectUnknownConditions": "断言 Conditions 里出现本系统不认识的子元素时拒绝登录（saml-core 要求判为 Indeterminate）；只在 IdP 不下发扩展条件时开启。",
+      "authnContext": "在 AuthnRequest 里声明可接受的认证上下文（例如要求 MFA）；开启下面的强制校验后，断言必须命中其中之一。",
+      "authnContextCustom": "逗号分隔的类 URI（urn: 或 http(s)://），按 exact 精确匹配，最多 10 个。",
+      "requireAuthnContext": "断言里的 AuthnContextClassRef 必须命中上面选择的类，否则拒绝登录。",
       "idpEntityId": "打包元数据里包含多个 IdP 时，选择本系统要信任的那一个；单实体导入会自动选中。"
     },
     "preview": {
@@ -95,6 +107,14 @@
     },
     "nameId": {
       "default": "不指定（IdP 默认）"
+    },
+    "authnContext": {
+      "none": "不指定",
+      "passwordProtectedTransport": "PasswordProtectedTransport（口令传输保护）",
+      "password": "Password 或 PasswordProtectedTransport",
+      "mfa": "REFEDS MFA（多因素）",
+      "sfa": "REFEDS SFA（单因素）",
+      "custom": "自定义 URI 列表"
     },
     "cert": {
       "ok": "IdP 证书 {{date}} 到期",
@@ -120,7 +140,8 @@
         "spCert": "SP 证书",
         "metadataUrl": "远程元数据一致性",
         "enabled": "启用状态",
-        "entity": "选用的 IdP 实体"
+        "entity": "选用的 IdP 实体",
+        "authnContext": "认证上下文"
       }
     },
     "summary": {
@@ -130,7 +151,12 @@
       "matchExisting": "绑定同名",
       "defaultRole": "默认角色 {{role}}",
       "requireGroup": "必须命中组",
-      "idpInitiated": "允许 IdP 发起登录"
+      "idpInitiated": "允许 IdP 发起登录",
+      "forceAuthn": "强制重新认证",
+      "authnContext": "认证上下文 {{value}}",
+      "hardening": "协议加固",
+      "signedCBC": "CBC 需签名响应",
+      "unknownConditions": "拒绝未知 Conditions"
     },
     "source": {
       "pasted": "手动粘贴"
@@ -149,7 +175,13 @@
       "mappingTotal": "映射角色总数不能超过 1000",
       "mappingDuplicate": "组值不能重复",
       "entityInvalid": "Entity ID 无效（不超过 500 字节，不能包含控制字符）",
-      "entityRequired": "请选择要使用的 Entity ID"
+      "entityRequired": "请选择要使用的 Entity ID",
+      "authnContextRequired": "开启强制校验前请先选择认证上下文类",
+      "authnContextCount": "认证上下文类最多 10 个",
+      "authnContextInvalid": "认证上下文类必须是 urn: 或 http(s):// URI，逗号分隔",
+      "authnContextDuplicate": "认证上下文类不能重复",
+      "fileTooLarge": "元数据文件不能超过 1 MiB",
+      "fileReadFailed": "读取文件失败"
     },
     "refresh": {
       "changed": "元数据已更新",

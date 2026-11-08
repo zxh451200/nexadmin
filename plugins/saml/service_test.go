@@ -208,6 +208,81 @@ func TestProviderSecurityOptions(t *testing.T) {
 	}
 }
 
+func TestProviderProtocolOptions(t *testing.T) {
+	meta := metadataXML(certB64(t))
+	certPEM, keyEnc, err := newSPKeyPair()
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := &Source{Name: "corp", IdPMetadata: meta, SPCert: certPEM, SPKeyEnc: keyEnc,
+		RequireSignedCBC: true, RejectUnknownConditions: true, ForceAuthn: true,
+		AuthnContextClassRef: "mfa", RequireAuthnContext: true}
+	m.ID = 124
+	sp, err := (&Service{}).provider(m, "https://admin.example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !sp.RequireSignedResponseForCBC || !sp.RejectUnknownConditions {
+		t.Error("hardening options not applied")
+	}
+	if sp.ForceAuthn == nil || !*sp.ForceAuthn {
+		t.Error("ForceAuthn not applied")
+	}
+	if !sp.ValidateAuthnContextClassRef {
+		t.Error("ValidateAuthnContextClassRef not applied")
+	}
+	if sp.RequestedAuthnContext == nil || sp.RequestedAuthnContext.Comparison != "exact" {
+		t.Fatalf("RequestedAuthnContext: %+v", sp.RequestedAuthnContext)
+	}
+	if got := sp.RequestedAuthnContext.ClassRefs(); len(got) != 1 || got[0] != "https://refeds.org/profile/mfa" {
+		t.Errorf("class refs: %v", got)
+	}
+
+	// 默认必须保持关闭，否则升级后原本能登录的源会突然被拒。
+	m2 := &Source{Name: "corp", IdPMetadata: meta, SPCert: certPEM, SPKeyEnc: keyEnc}
+	m2.ID = 125
+	sp2, err := (&Service{}).provider(m2, "https://admin.example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sp2.RequireSignedResponseForCBC || sp2.RejectUnknownConditions || sp2.ForceAuthn != nil ||
+		sp2.RequestedAuthnContext != nil || sp2.ValidateAuthnContextClassRef {
+		t.Error("protocol options must stay off by default")
+	}
+}
+
+func TestAuthnContextClassRefs(t *testing.T) {
+	cases := []struct {
+		in      string
+		want    []string
+		wantErr bool
+	}{
+		{"", nil, false},
+		{"mfa", []string{"https://refeds.org/profile/mfa"}, false},
+		{"passwordProtectedTransport", []string{"urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport"}, false},
+		{"urn:a, https://b", []string{"urn:a", "https://b"}, false},
+		{"aes", nil, true},
+		{"urn:a,urn:a", nil, true},
+		{"ftp://x", nil, true},
+	}
+	for _, c := range cases {
+		got, err := authnContextClassRefs(c.in)
+		if c.wantErr {
+			if err == nil {
+				t.Errorf("%q: want error", c.in)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("%q: %v", c.in, err)
+			continue
+		}
+		if strings.Join(got, "|") != strings.Join(c.want, "|") {
+			t.Errorf("%q: got %v want %v", c.in, got, c.want)
+		}
+	}
+}
+
 func TestAttrValuesMulti(t *testing.T) {
 	a := &saml.Assertion{AttributeStatements: []saml.AttributeStatement{{
 		Attributes: []saml.Attribute{{

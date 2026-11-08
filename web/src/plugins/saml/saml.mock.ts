@@ -121,6 +121,11 @@ const okta: SamlSource = {
   allowIdpInitiated: true,
   signAuthnRequest: false,
   nameIdFormat: '',
+  requireSignedResponseForCBC: false,
+  rejectUnknownConditions: false,
+  forceAuthn: false,
+  authnContextClassRef: '',
+  requireAuthnContext: false,
   metadataRefreshedAt: ago(60 * 24 * 2),
   idp: infoFor(C1, [C1]),
   sp: SP(ID_OKTA),
@@ -143,6 +148,9 @@ const azure: SamlSource = {
   defaultRole: '',
   groupRoleMappings: [] as GroupRoleMapping[],
   allowIdpInitiated: false,
+  forceAuthn: true,
+  authnContextClassRef: 'mfa',
+  requireAuthnContext: true,
   metadataRefreshedAt: undefined,
   idp: infoFor(C1, [C1]),
   sp: SP(ID_AZURE),
@@ -158,6 +166,8 @@ const federation: SamlSource = {
   idpMetadata: BUNDLE_METADATA,
   idpMetadataUrl: 'https://federation.example.com/metadata',
   idpEntityId: C2.entityId,
+  requireSignedResponseForCBC: true,
+  rejectUnknownConditions: true,
   idp: infoFor(C2, [C1, C2]),
   sp: SP(ID_FED),
   createdAt: ago(60 * 24 * 3),
@@ -207,6 +217,15 @@ const CHECKS = (s: SamlSource): TestResult => {
     { key: 'spCert', ok: true, detail: `到期时间 ${s.sp.certNotAfter ?? ''}` },
   ]
   if (s.idpMetadataUrl) checks.push({ key: 'metadataUrl', ok: true, detail: '远程元数据与已保存内容一致' })
+  if (s.authnContextClassRef)
+    checks.push({
+      key: 'authnContext',
+      ok: true,
+      warning: !s.requireAuthnContext,
+      detail: s.requireAuthnContext
+        ? `断言必须命中其中之一：${s.authnContextClassRef}`
+        : `只在 AuthnRequest 里声明，未强制校验断言：${s.authnContextClassRef}`,
+    })
   if (!s.enabled) checks.push({ key: 'enabled', ok: true, warning: true, detail: '该身份源当前未启用，测试与登录入口不会出现在登录页' })
   return { ok: checks.every((c) => c.ok), checks }
 }

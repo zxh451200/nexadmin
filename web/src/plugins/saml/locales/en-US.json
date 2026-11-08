@@ -24,7 +24,8 @@
       "parse": "Parse preview",
       "addMapping": "Add group mapping",
       "removeMapping": "Remove mapping",
-      "refreshMetadata": "Refresh metadata"
+      "refreshMetadata": "Refresh metadata",
+      "importFile": "Import file"
     },
     "fields": {
       "name": "Name",
@@ -49,6 +50,11 @@
       "allowIdpInitiated": "Allow IdP-initiated sign-in",
       "signAuthnRequest": "Sign AuthnRequest",
       "nameIdFormat": "NameID format",
+      "forceAuthn": "Force re-authentication",
+      "requireSignedResponseForCBC": "Require a signed response for CBC-encrypted assertions",
+      "rejectUnknownConditions": "Reject unknown Conditions",
+      "authnContext": "Authentication context class",
+      "authnContextCustom": "Custom authentication context classes",
       "idpEntityId": "Entity ID to use",
       "idpSso": "IdP sign-in endpoint",
       "idpSlo": "IdP logout endpoint",
@@ -74,6 +80,12 @@
       "allowIdpInitiated": "Allow the IdP portal to start sign-in without an SP AuthnRequest. After success the user lands on the admin home; assertion replay protection needs a shared cache.",
       "signAuthnRequest": "Sign the AuthnRequest with the SP private key (RSA-SHA256). Configure the SP certificate at the IdP first, or requests may be rejected.",
       "nameIdFormat": "NameID format requested in the AuthnRequest; keep \"unspecified\" if unsure.",
+      "forceAuthn": "Ask the IdP to re-authenticate on every sign-in (ForceAuthn) instead of reusing its session; some IdPs must enable this first.",
+      "requireSignedResponseForCBC": "When on, an AES-CBC encrypted assertion is decrypted only after the IdP has signed the response, blocking XML Encryption padding/format oracles per SAML errata E93. Most IdPs sign only the assertion, so confirm the IdP signs the response before enabling, or sign-ins will be rejected.",
+      "rejectUnknownConditions": "Reject sign-in when the assertion's Conditions contain child elements this system does not understand (saml-core requires treating them as Indeterminate); enable only if the IdP sends no extension conditions.",
+      "authnContext": "Declare acceptable authentication contexts in the AuthnRequest (for example require MFA); with the enforcement switch below on, the assertion must match one of them.",
+      "authnContextCustom": "Comma-separated class URIs (urn: or http(s)://), matched exactly, at most 10.",
+      "requireAuthnContext": "The assertion's AuthnContextClassRef must match one of the selected classes, or sign-in is rejected.",
       "idpEntityId": "When the metadata bundles several IdPs, pick the one this system should trust; a single entity is selected automatically."
     },
     "preview": {
@@ -95,6 +107,14 @@
     },
     "nameId": {
       "default": "Unspecified (IdP default)"
+    },
+    "authnContext": {
+      "none": "Unspecified",
+      "passwordProtectedTransport": "PasswordProtectedTransport",
+      "password": "Password or PasswordProtectedTransport",
+      "mfa": "REFEDS MFA (multi-factor)",
+      "sfa": "REFEDS SFA (single-factor)",
+      "custom": "Custom URI list"
     },
     "cert": {
       "ok": "IdP certificate expires {{date}}",
@@ -120,7 +140,8 @@
         "spCert": "SP certificate",
         "metadataUrl": "Remote metadata consistency",
         "enabled": "Enabled state",
-        "entity": "Selected IdP entity"
+        "entity": "Selected IdP entity",
+        "authnContext": "Authentication context"
       }
     },
     "summary": {
@@ -130,7 +151,12 @@
       "matchExisting": "Link by name",
       "defaultRole": "Default role {{role}}",
       "requireGroup": "Group required",
-      "idpInitiated": "IdP-initiated allowed"
+      "idpInitiated": "IdP-initiated allowed",
+      "forceAuthn": "Re-auth forced",
+      "authnContext": "Authn context {{value}}",
+      "hardening": "Protocol hardening",
+      "signedCBC": "CBC needs signed response",
+      "unknownConditions": "Reject unknown Conditions"
     },
     "source": {
       "pasted": "Pasted manually"
@@ -149,7 +175,13 @@
       "mappingTotal": "At most 1000 mapped roles",
       "mappingDuplicate": "Group values must be unique",
       "entityInvalid": "Invalid Entity ID (at most 500 bytes, no control characters)",
-      "entityRequired": "Choose the Entity ID to use"
+      "entityRequired": "Choose the Entity ID to use",
+      "authnContextRequired": "Choose an authentication context class before enabling enforcement",
+      "authnContextCount": "At most 10 authentication context classes",
+      "authnContextInvalid": "Authentication context classes must be urn: or http(s):// URIs, comma-separated",
+      "authnContextDuplicate": "Authentication context classes must be unique",
+      "fileTooLarge": "Metadata file must be at most 1 MiB",
+      "fileReadFailed": "Failed to read the file"
     },
     "refresh": {
       "changed": "Metadata updated",
