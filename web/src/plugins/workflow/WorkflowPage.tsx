@@ -747,7 +747,7 @@ function InstanceDrawer({ id, onClose }: { id?: string; onClose: () => void }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/40" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex justify-end" onClick={onClose}>
       <div
         ref={drawerRef}
         className="flex h-full w-full max-w-2xl flex-col border-l bg-card shadow-xl"
