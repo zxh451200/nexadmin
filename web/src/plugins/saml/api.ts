@@ -7,6 +7,16 @@ export interface GroupRoleMapping {
   roleCodes: string[]
 }
 
+export interface IdPCandidate {
+  entityId: string
+  ssoUrl: string
+  ssoBinding: string
+  certNotAfter?: string
+  certCount: number
+  certExpired: boolean
+  certExpiringSoon: boolean
+}
+
 export interface IdPInfo {
   entityId: string
   ssoUrl: string
@@ -17,6 +27,7 @@ export interface IdPInfo {
   certExpired: boolean
   certExpiringSoon: boolean
   metadataUrl?: string
+  candidates?: IdPCandidate[]
   error?: string
 }
 
@@ -37,6 +48,7 @@ export interface SamlSource {
   enabled: boolean
   idpMetadata: string
   idpMetadataUrl: string
+  idpEntityId: string
   attrUsername: string
   attrEmail: string
   attrNickname: string
@@ -50,6 +62,7 @@ export interface SamlSource {
   allowIdpInitiated: boolean
   signAuthnRequest: boolean
   nameIdFormat: string
+  metadataRefreshedAt?: string
   idp: IdPInfo
   sp: SPInfo
   createdAt: string
@@ -61,6 +74,7 @@ export interface SourceForm {
   enabled: boolean
   idpMetadata: string
   idpMetadataUrl: string
+  idpEntityId: string
   attrUsername: string
   attrEmail: string
   attrNickname: string
@@ -146,6 +160,14 @@ export function useTestSource() {
 
 export function getSPCert(id: string) {
   return api.get<SPCert>(`${BASE}/sources/${id}/sp-cert`, undefined, { silent: true })
+}
+
+export function rotateSPCert(id: string) {
+  return api.post<SPCert>(`${BASE}/sources/${id}/rotate-sp-cert`, {}, { silent: true })
+}
+
+export function refreshMetadata(id: string) {
+  return api.post<{ changed: boolean; source: SamlSource }>(`${BASE}/sources/${id}/refresh`, {}, { silent: true })
 }
 
 export function inspectMetadata(input: { url?: string; xml?: string }) {

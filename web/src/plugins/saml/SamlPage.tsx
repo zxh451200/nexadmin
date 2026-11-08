@@ -10,12 +10,14 @@ import {
   Pencil,
   Plug,
   Plus,
+  RefreshCw,
   ShieldCheck,
   Trash2,
   XCircle,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+import { useQueryClient } from '@tanstack/react-query'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { EmptyState } from '@/framework/components/EmptyState'
@@ -27,6 +29,8 @@ import { Card } from '@/framework/ui/card'
 import { Switch } from '@/framework/ui/switch'
 import {
   getSPCert,
+  refreshMetadata,
+  rotateSPCert,
   useDeleteSource,
   useSetEnabled,
   useSources,
@@ -133,9 +137,12 @@ function TestDialog({ result, onClose }: { result: TestResult | null; onClose: (
 
 function CertDialog({ source, onClose }: { source: SamlSource | null; onClose: () => void }) {
   const { t } = useTranslation()
+  const confirm = useConfirm()
+  const qc = useQueryClient()
   const [data, setData] = useState<SPCert | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [rotating, setRotating] = useState(false)
 
   useEffect(() => {
     if (!source) return
@@ -147,6 +154,21 @@ function CertDialog({ source, onClose }: { source: SamlSource | null; onClose: (
       .catch((e: Error) => setErr(e.message))
       .finally(() => setLoading(false))
   }, [source])
+
+  const rotate = async () => {
+    if (!source) return
+    if (!(await confirm({ destructive: true, description: t('plugin_saml.cert.rotateConfirm', { name: source.name }) }))) return
+    setRotating(true)
+    try {
+      setData(await rotateSPCert(source.id))
+      toast.success(t('plugin_saml.cert.rotated'))
+      void qc.invalidateQueries({ queryKey: ['plugin_saml'] })
+    } catch (e) {
+      toast.error((e as Error).message)
+    } finally {
+      setRotating(false)
+    }
+  }
 
   const download = () => {
     if (!data || !source) return
@@ -169,6 +191,12 @@ function CertDialog({ source, onClose }: { source: SamlSource | null; onClose: (
           <Button type="button" variant="outline" onClick={onClose}>
             {t('common.close')}
           </Button>
+          <Can perm="saml:edit">
+            <Button type="button" variant="outline" onClick={() => void rotate()} disabled={rotating || !data}>
+              {rotating ? <Loader2 className="animate-spin" aria-hidden="true" /> : <RefreshCw aria-hidden="true" />}
+              {t('plugin_saml.cert.rotate')}
+            </Button>
+          </Can>
           <Button type="button" onClick={download} disabled={!data}>
             <Download aria-hidden="true" />
             {t('plugin_saml.cert.download')}
@@ -191,6 +219,9 @@ function CertDialog({ source, onClose }: { source: SamlSource | null; onClose: (
             </span>
             <CopyButton text={data.cert} label={t('plugin_saml.btn.copy')} />
           </div>
+          <p className="rounded-md border border-warning/40 bg-warning/10 p-2 text-xs text-muted-foreground">
+            {t('plugin_saml.cert.rotateHint')}
+          </p>
           <pre className="max-h-80 overflow-auto rounded-md bg-muted/40 p-3 font-mono text-xs whitespace-pre-wrap break-all">
             {data.cert}
           </pre>
@@ -203,6 +234,7 @@ function CertDialog({ source, onClose }: { source: SamlSource | null; onClose: (
 export default function SamlPage() {
   const { t } = useTranslation()
   const confirm = useConfirm()
+  const qc = useQueryClient()
   const { data = [], isLoading } = useSources()
   const setEnabled = useSetEnabled()
   const remove = useDeleteSource()
@@ -211,6 +243,7 @@ export default function SamlPage() {
   const [formOpen, setFormOpen] = useState(false)
   const [testResult, setTestResult] = useState<TestResult | null>(null)
   const [certSource, setCertSource] = useState<SamlSource | null>(null)
+  const [refreshing, setRefreshing] = useState<string | null>(null)
 
   const openForm = (s: SamlSource | null) => {
     setEditing(s)
@@ -231,6 +264,18 @@ export default function SamlPage() {
       toast.success(t('common.operateSuccess'))
     } catch {
       toast.error(t('common.operateFailed'))
+    }
+  }
+  const onRefresh = async (s: SamlSource) => {
+    setRefreshing(s.id)
+    try {
+      const r = await refreshMetadata(s.id)
+      toast.success(r.changed ? t('plugin_saml.refresh.changed') : t('plugin_saml.refresh.unchanged'))
+      void qc.invalidateQueries({ queryKey: ['plugin_saml'] })
+    } catch (e) {
+      toast.error((e as Error).message)
+    } finally {
+      setRefreshing(null)
     }
   }
   const onTest = async (s: SamlSource) => {
@@ -338,6 +383,12 @@ export default function SamlPage() {
                   />
                   <ValueRow label={t('plugin_saml.fields.idpSlo')} value={s.idp?.sloUrl} />
                   <ValueRow label={t('plugin_saml.fields.metadataSource')} value={s.idpMetadataUrl || t('plugin_saml.source.pasted')} />
+                  {s.metadataRefreshedAt ? (
+                    <ValueRow
+                      label={t('plugin_saml.fields.lastSync')}
+                      value={new Date(s.metadataRefreshedAt).toLocaleString()}
+                    />
+                  ) : null}
                 </div>
               )}
 
@@ -368,11 +419,23 @@ export default function SamlPage() {
                 <ValueRow label={t('plugin_saml.fields.slo')} value={s.sp?.sloUrl}>
                   <CopyButton text={s.sp?.sloUrl ?? ''} label={t('plugin_saml.btn.copy')} />
                 </ValueRow>
-                <div className="pt-1">
+                <div className="flex flex-wrap gap-2 pt-1">
                   <Button variant="outline" size="sm" onClick={() => setCertSource(s)}>
                     <ShieldCheck aria-hidden="true" />
                     {t('plugin_saml.btn.viewCert')}
                   </Button>
+                  {s.idpMetadataUrl ? (
+                    <Can perm="saml:edit">
+                      <Button variant="outline" size="sm" disabled={refreshing === s.id} onClick={() => void onRefresh(s)}>
+                        {refreshing === s.id ? (
+                          <Loader2 className="animate-spin" aria-hidden="true" />
+                        ) : (
+                          <RefreshCw aria-hidden="true" />
+                        )}
+                        {t('plugin_saml.btn.refreshMetadata')}
+                      </Button>
+                    </Can>
+                  ) : null}
                 </div>
               </div>
 

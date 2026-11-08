@@ -23,7 +23,8 @@
       "fetch": "按 URL 拉取",
       "parse": "解析预览",
       "addMapping": "添加组映射",
-      "removeMapping": "删除映射"
+      "removeMapping": "删除映射",
+      "refreshMetadata": "刷新元数据"
     },
     "fields": {
       "name": "名称",
@@ -48,13 +49,14 @@
       "allowIdpInitiated": "允许 IdP 发起登录",
       "signAuthnRequest": "签名 AuthnRequest",
       "nameIdFormat": "NameID 格式",
-      "idpEntityId": "IdP Entity ID",
+      "idpEntityId": "使用的 IdP Entity ID",
       "idpSso": "IdP 登录端点",
       "idpSlo": "IdP 登出端点",
       "spEntityId": "SP Entity ID",
       "acs": "ACS",
       "metadata": "SP 元数据",
-      "slo": "SP 登出端点"
+      "slo": "SP 登出端点",
+      "lastSync": "元数据最后同步"
     },
     "hints": {
       "enabled": "只有已启用的身份源会出现在登录页。",
@@ -71,14 +73,16 @@
       "requireMappedGroup": "开启后，断言里的组一个都没命中映射时拒绝登录；此时至少要配置一条映射。",
       "allowIdpInitiated": "允许 IdP 门户直接发起登录（无 SP 侧 AuthnRequest）。成功后回到后台首页；断言防重放依赖共享缓存。",
       "signAuthnRequest": "用 SP 私钥对 AuthnRequest 签名（RSA-SHA256）。开启前先把 SP 证书配置到 IdP，否则可能被拒。",
-      "nameIdFormat": "AuthnRequest 里请求的 NameID 格式；不确定时保持「不指定」。"
+      "nameIdFormat": "AuthnRequest 里请求的 NameID 格式；不确定时保持「不指定」。",
+      "idpEntityId": "打包元数据里包含多个 IdP 时，选择本系统要信任的那一个；单实体导入会自动选中。"
     },
     "preview": {
       "title": "元数据预览",
       "noCert": "未找到签名证书",
       "ok": "元数据解析成功",
       "entityId": "Entity ID",
-      "sso": "SSO 端点"
+      "sso": "SSO 端点",
+      "selectEntity": "请选择要使用的 Entity ID"
     },
     "sections": {
       "idp": "IdP 与元数据",
@@ -98,7 +102,11 @@
       "expired": "IdP 证书已过期（{{date}}）",
       "title": "SP 签名证书",
       "download": "下载证书",
-      "expires": "到期时间：{{date}}"
+      "expires": "到期时间：{{date}}",
+      "rotate": "重新生成证书",
+      "rotateConfirm": "重新生成 SP 证书？IdP 侧必须同步更新证书，否则已配置的登录会立即失败。",
+      "rotateHint": "重新生成后请立即把新证书或 SP 元数据更新到 IdP；旧证书立即失效。",
+      "rotated": "SP 证书已重新生成，请更新 IdP 侧证书"
     },
     "test": {
       "title": "配置自检",
@@ -111,7 +119,8 @@
         "spKey": "SP 私钥",
         "spCert": "SP 证书",
         "metadataUrl": "远程元数据一致性",
-        "enabled": "启用状态"
+        "enabled": "启用状态",
+        "entity": "选用的 IdP 实体"
       }
     },
     "summary": {
@@ -138,7 +147,16 @@
       "mappingCount": "组映射最多 100 条",
       "mappingRequired": "开启「必须命中组」后至少需要一条映射",
       "mappingTotal": "映射角色总数不能超过 1000",
-      "mappingDuplicate": "组值不能重复"
+      "mappingDuplicate": "组值不能重复",
+      "entityInvalid": "Entity ID 无效（不超过 500 字节，不能包含控制字符）",
+      "entityRequired": "请选择要使用的 Entity ID"
+    },
+    "refresh": {
+      "changed": "元数据已更新",
+      "unchanged": "元数据已是最新"
+    },
+    "idp": {
+      "selectRequired": "元数据包含 {{count}} 个 IdP，请编辑并选择要使用的 Entity ID。"
     }
   }
 }

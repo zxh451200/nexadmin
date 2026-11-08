@@ -6,6 +6,8 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
@@ -30,9 +32,9 @@ func certB64(t *testing.T) string {
 	return base64.StdEncoding.EncodeToString(block.Bytes)
 }
 
-func metadataXML(cert string) string {
+func metadataXMLFor(entityID, cert string) string {
 	return fmt.Sprintf(`<?xml version="1.0"?>
-<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="https://idp.example.com">
+<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="%s">
   <IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
     <KeyDescriptor use="signing">
       <ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
@@ -43,7 +45,17 @@ func metadataXML(cert string) string {
     <SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://idp.example.com/sso/redirect"/>
     <SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://idp.example.com/slo"/>
   </IDPSSODescriptor>
-</EntityDescriptor>`, cert)
+</EntityDescriptor>`, entityID, cert)
+}
+
+func metadataXML(cert string) string { return metadataXMLFor("https://idp.example.com", cert) }
+
+// bundleXML 是两个 EntityDescriptor 的打包元数据（模拟 ADFS/联邦导出）。
+func bundleXML(cert string) string {
+	one := strings.TrimPrefix(metadataXMLFor("https://idp1.example.com", cert), `<?xml version="1.0"?>`)
+	two := strings.TrimPrefix(metadataXMLFor("https://idp2.example.com", cert), `<?xml version="1.0"?>`)
+	return `<?xml version="1.0"?>
+<EntitiesDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata">` + one + two + `</EntitiesDescriptor>`
 }
 
 func TestValidateMetadata(t *testing.T) {
@@ -63,7 +75,7 @@ func TestValidateMetadata(t *testing.T) {
 
 func TestParseIdPExtractsEndpointsAndCert(t *testing.T) {
 	cert := certB64(t)
-	info, err := parseIdP(metadataXML(cert))
+	info, err := parseIdP(metadataXML(cert), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +95,7 @@ func TestParseIdPExtractsEndpointsAndCert(t *testing.T) {
 }
 
 func TestParseIdPRejectsMissingDescriptor(t *testing.T) {
-	if _, err := parseIdP(`<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata"/>`); err == nil {
+	if _, err := parseIdP(`<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata"/>`, ""); err == nil {
 		t.Fatal("metadata without IDPSSODescriptor must be rejected")
 	}
 }
@@ -333,4 +345,149 @@ func (c *memCache) Incr(_ context.Context, key string, ttl time.Duration) (int64
 	}
 	c.m[key] = fmt.Sprint(n)
 	return n, ttl, nil
+}
+
+func TestParseIdPBundle(t *testing.T) {
+	cert := certB64(t)
+	info, err := parseIdP(bundleXML(cert), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.EntityID != "" {
+		t.Errorf("ambiguous bundle must not auto-select, got %q", info.EntityID)
+	}
+	if len(info.Candidates) != 2 {
+		t.Fatalf("candidates: %d", len(info.Candidates))
+	}
+	sel, err := parseIdP(bundleXML(cert), "https://idp2.example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sel.EntityID != "https://idp2.example.com" || len(sel.Candidates) != 2 {
+		t.Errorf("selected: %q candidates=%d", sel.EntityID, len(sel.Candidates))
+	}
+	if _, err := parseIdP(bundleXML(cert), "https://nope.example.com"); err == nil {
+		t.Fatal("unknown entity id must be rejected")
+	}
+	if err := validateMetadata(bundleXML(cert)); err != nil {
+		t.Fatalf("bundle metadata rejected: %v", err)
+	}
+}
+
+func TestValidateEntitySelection(t *testing.T) {
+	cert := certB64(t)
+	f := SourceForm{Name: "corp", IdPMetadata: metadataXML(cert)}
+	if err := f.validate(); err != nil {
+		t.Fatal(err)
+	}
+	if f.IDPEntityID != "https://idp.example.com" {
+		t.Errorf("single entity must be auto-selected, got %q", f.IDPEntityID)
+	}
+	// 打包元数据未选择时允许存草稿（启用会被 ready 拒绝）。
+	f = SourceForm{Name: "corp", IdPMetadata: bundleXML(cert)}
+	if err := f.validate(); err != nil {
+		t.Fatalf("draft bundle should be accepted: %v", err)
+	}
+	if f.IDPEntityID != "" {
+		t.Errorf("bundle must not auto-select, got %q", f.IDPEntityID)
+	}
+	f.IDPEntityID = "https://idp2.example.com"
+	if err := f.validate(); err != nil {
+		t.Fatal(err)
+	}
+	f.IDPEntityID = "https://nope.example.com"
+	if err := f.validate(); err == nil {
+		t.Fatal("unknown entity id must be rejected")
+	}
+}
+
+func TestReadyBundleNeedsSelection(t *testing.T) {
+	cert := certB64(t)
+	certPEM, keyEnc, err := newSPKeyPair()
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := &Source{IdPMetadata: bundleXML(cert), SPCert: certPEM, SPKeyEnc: keyEnc}
+	if err := m.ready(); err == nil {
+		t.Fatal("ambiguous bundle must not be ready")
+	}
+	m.IDPEntityID = "https://idp2.example.com"
+	if err := m.ready(); err != nil {
+		t.Fatalf("selected bundle rejected: %v", err)
+	}
+}
+
+func TestRotateKeyPairProducesNewCert(t *testing.T) {
+	a, _, err := newSPKeyPair()
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _, err := newSPKeyPair()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a == b {
+		t.Fatal("rotated key pair must produce a different certificate")
+	}
+}
+
+func TestPlanRefresh(t *testing.T) {
+	cert := certB64(t)
+	bundle := bundleXML(cert)
+	m := &Source{IdPMetadata: bundle, IDPEntityID: "https://idp2.example.com"}
+	id, changed, err := planRefresh(m, bundle)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id != "https://idp2.example.com" || changed {
+		t.Errorf("id=%q changed=%v", id, changed)
+	}
+	// 远端元数据里已没有选中的 IdP：拒绝替换，不静默切到另一个。
+	if _, _, err := planRefresh(m, metadataXMLFor("https://idp1.example.com", cert)); err == nil {
+		t.Fatal("missing selected entity must be rejected")
+	}
+	// 打包元数据未选择 Entity ID 时不能自动刷新。
+	if _, _, err := planRefresh(&Source{}, bundle); err == nil {
+		t.Fatal("ambiguous bundle must be rejected")
+	}
+	// 缺少签名证书的远端内容不替换。
+	if _, _, err := planRefresh(m, metadataXMLFor("https://idp2.example.com", "")); err == nil {
+		t.Fatal("metadata without cert must be rejected")
+	}
+}
+
+func TestFetchMetadataLocal(t *testing.T) {
+	body := metadataXML(certB64(t))
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(body))
+	}))
+	defer srv.Close()
+	setAllowPrivateHosts(true)
+	t.Cleanup(func() { setAllowPrivateHosts(false) })
+	raw, err := fetchMetadata(context.Background(), srv.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(raw) != body {
+		t.Fatalf("body mismatch: %d bytes", len(raw))
+	}
+
+	big := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(strings.Repeat("x", maxMetadataBytes+16)))
+	}))
+	defer big.Close()
+	if _, err := fetchMetadata(context.Background(), big.URL); err == nil {
+		t.Fatal("oversized metadata must be rejected")
+	}
+}
+
+func TestMetadataRefreshHours(t *testing.T) {
+	t.Setenv("NEXADMIN_SAML_METADATA_REFRESH_HOURS", "0")
+	if got := loadMetadataRefreshHours(); got != 0 {
+		t.Errorf("explicit 0 must disable, got %d", got)
+	}
+	t.Setenv("NEXADMIN_SAML_METADATA_REFRESH_HOURS", "6")
+	if got := loadMetadataRefreshHours(); got != 6 {
+		t.Errorf("env override: got %d", got)
+	}
 }

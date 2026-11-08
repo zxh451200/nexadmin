@@ -18,17 +18,29 @@ import (
 // certWarnWindow 是证书「即将过期」的提示窗口（仍可登录，只在界面上提示）。
 const certWarnWindow = 30 * 24 * time.Hour
 
-type IdPInfo struct {
+// IdPCandidate 是打包元数据（EntitiesDescriptor）里的一个可选 IdP。
+type IdPCandidate struct {
 	EntityID         string `json:"entityId"`
 	SSOURL           string `json:"ssoUrl"`
 	SSOBinding       string `json:"ssoBinding"`
-	SLOURL           string `json:"sloUrl"`
 	CertNotAfter     string `json:"certNotAfter,omitempty"`
 	CertCount        int    `json:"certCount"`
 	CertExpired      bool   `json:"certExpired"`
 	CertExpiringSoon bool   `json:"certExpiringSoon"`
-	MetadataURL      string `json:"metadataUrl,omitempty"`
-	Error            string `json:"error,omitempty"`
+}
+
+type IdPInfo struct {
+	EntityID         string         `json:"entityId"`
+	SSOURL           string         `json:"ssoUrl"`
+	SSOBinding       string         `json:"ssoBinding"`
+	SLOURL           string         `json:"sloUrl"`
+	CertNotAfter     string         `json:"certNotAfter,omitempty"`
+	CertCount        int            `json:"certCount"`
+	CertExpired      bool           `json:"certExpired"`
+	CertExpiringSoon bool           `json:"certExpiringSoon"`
+	MetadataURL      string         `json:"metadataUrl,omitempty"`
+	Candidates       []IdPCandidate `json:"candidates,omitempty"`
+	Error            string         `json:"error,omitempty"`
 }
 
 type SPInfo struct {
@@ -61,21 +73,66 @@ type TestResult struct {
 	Checks []Check `json:"checks"`
 }
 
-// parseIdP 解析元数据并提取 IdP 侧真正要用的信息；元数据坏了也返回尽力解析的部分。
-func parseIdP(raw string) (*IdPInfo, error) {
-	info := &IdPInfo{}
+// metadataIDPEntities 解析单实体或打包元数据，返回其中所有带 IDPSSODescriptor 的实体。
+// 打包元数据允许嵌套 EntitiesDescriptor，逐层展开。
+func metadataIDPEntities(raw string) ([]saml.EntityDescriptor, error) {
 	if strings.TrimSpace(raw) == "" {
-		return info, errors.New("尚未导入 IdP 元数据")
+		return nil, errors.New("尚未导入 IdP 元数据")
 	}
-	var meta saml.EntityDescriptor
-	if err := xml.Unmarshal([]byte(raw), &meta); err != nil {
-		return info, fmt.Errorf("元数据解析失败: %w", err)
+	var out []saml.EntityDescriptor
+	var bundle saml.EntitiesDescriptor
+	if err := xml.Unmarshal([]byte(raw), &bundle); err == nil {
+		flattenIDPs(bundle, &out)
 	}
-	if len(meta.IDPSSODescriptors) == 0 {
-		return info, errors.New("元数据缺少 IDPSSODescriptor")
+	if len(out) == 0 {
+		var one saml.EntityDescriptor
+		if err := xml.Unmarshal([]byte(raw), &one); err != nil {
+			return nil, fmt.Errorf("元数据解析失败: %w", err)
+		}
+		if len(one.IDPSSODescriptors) > 0 && strings.TrimSpace(one.EntityID) != "" {
+			out = append(out, one)
+		}
 	}
-	d := meta.IDPSSODescriptors[0]
-	info.EntityID = meta.EntityID
+	if len(out) == 0 {
+		return nil, errors.New("元数据缺少 IDPSSODescriptor")
+	}
+	return out, nil
+}
+
+func flattenIDPs(in saml.EntitiesDescriptor, out *[]saml.EntityDescriptor) {
+	for _, ed := range in.EntityDescriptors {
+		if len(ed.IDPSSODescriptors) > 0 && strings.TrimSpace(ed.EntityID) != "" {
+			*out = append(*out, ed)
+		}
+	}
+	for _, nested := range in.EntitiesDescriptors {
+		flattenIDPs(nested, out)
+	}
+}
+
+// selectEntity 按 Entity ID 选实体；want 为空且只有一个 IdP 时自动选中，多个时返回 nil 让调用方提示选择。
+func selectEntity(entities []saml.EntityDescriptor, want string) (*saml.EntityDescriptor, error) {
+	if want != "" {
+		for i := range entities {
+			if entities[i].EntityID == want {
+				return &entities[i], nil
+			}
+		}
+		return nil, fmt.Errorf("元数据里没有 Entity ID 为 %q 的 IdP", want)
+	}
+	if len(entities) == 1 {
+		return &entities[0], nil
+	}
+	return nil, nil
+}
+
+// describeEntity 提取一个 IdP 实体真正要用的信息。
+func describeEntity(ed *saml.EntityDescriptor) IdPInfo {
+	info := IdPInfo{EntityID: ed.EntityID}
+	if len(ed.IDPSSODescriptors) == 0 {
+		return info
+	}
+	d := ed.IDPSSODescriptors[0]
 
 	var post string
 	for _, ep := range d.SingleSignOnServices {
@@ -144,7 +201,37 @@ func parseIdP(raw string) (*IdPInfo, error) {
 		info.CertExpired = now.After(earliest)
 		info.CertExpiringSoon = !info.CertExpired && earliest.Sub(now) < certWarnWindow
 	}
-	return info, nil
+	return info
+}
+
+func candidateOf(i IdPInfo) IdPCandidate {
+	return IdPCandidate{
+		EntityID: i.EntityID, SSOURL: i.SSOURL, SSOBinding: i.SSOBinding,
+		CertNotAfter: i.CertNotAfter, CertCount: i.CertCount,
+		CertExpired: i.CertExpired, CertExpiringSoon: i.CertExpiringSoon,
+	}
+}
+
+// parseIdP 解析元数据并按 want 选择实体；want 为空且打包里有多 IdP 时只返回候选列表（EntityID 为空）。
+func parseIdP(raw, want string) (*IdPInfo, error) {
+	entities, err := metadataIDPEntities(raw)
+	if err != nil {
+		return &IdPInfo{}, err
+	}
+	candidates := make([]IdPCandidate, 0, len(entities))
+	for i := range entities {
+		candidates = append(candidates, candidateOf(describeEntity(&entities[i])))
+	}
+	selected, err := selectEntity(entities, want)
+	if err != nil {
+		return &IdPInfo{Candidates: candidates}, err
+	}
+	if selected == nil {
+		return &IdPInfo{Candidates: candidates}, nil
+	}
+	info := describeEntity(selected)
+	info.Candidates = candidates
+	return &info, nil
 }
 
 // validEndpoint 只接受 http(s) 端点，避免把奇怪的 scheme 写进跳转地址。
@@ -187,7 +274,7 @@ func spInfo(m *Source, base string) SPInfo {
 // inspectSource 组装单个源的展示形状；IdP 解析失败不吞掉，放进 idp.error 让界面提示。
 func inspectSource(m *Source, base string) SourceInfo {
 	info := SourceInfo{Source: *m, SP: spInfo(m, base)}
-	idp, err := parseIdP(m.IdPMetadata)
+	idp, err := parseIdP(m.IdPMetadata, m.IDPEntityID)
 	idp.MetadataURL = m.IdPMetadataURL
 	if err != nil {
 		idp.Error = err.Error()
@@ -198,18 +285,25 @@ func inspectSource(m *Source, base string) SourceInfo {
 
 // testSourceChecks 做不依赖 IdP 交互的配置自检：元数据、端点、证书、SP 密钥，以及（配置了 URL 时）远程元数据一致性。
 func (s *Service) testSourceChecks(ctx context.Context, m *Source) TestResult {
-	res := TestResult{Checks: make([]Check, 0, 7)}
+	res := TestResult{Checks: make([]Check, 0, 8)}
 	add := func(key string, ok, warning bool, detail string) {
 		res.Checks = append(res.Checks, Check{Key: key, OK: ok, Warning: warning, Detail: detail})
 	}
 
-	idp, err := parseIdP(m.IdPMetadata)
+	idp, err := parseIdP(m.IdPMetadata, m.IDPEntityID)
 	if err != nil {
 		add("metadata", false, false, err.Error())
 		res.OK = false
 		return res
 	}
+	if idp.EntityID == "" {
+		add("metadata", false, false, fmt.Sprintf("元数据包含 %d 个 IdP，请先选择 Entity ID", len(idp.Candidates)))
+		add("entity", false, false, "未选择 Entity ID")
+		res.OK = false
+		return res
+	}
 	add("metadata", true, false, fmt.Sprintf("Entity ID: %s", idp.EntityID))
+	add("entity", true, false, fmt.Sprintf("已选择 %s（元数据共 %d 个 IdP）", idp.EntityID, len(idp.Candidates)))
 
 	if idp.SSOURL == "" {
 		add("ssoUrl", false, false, "元数据里没有 HTTP-Redirect / HTTP-POST 的 SingleSignOnService")
@@ -258,7 +352,7 @@ func (s *Service) testSourceChecks(ctx context.Context, m *Source) TestResult {
 		if err != nil {
 			add("metadataUrl", false, false, err.Error())
 			res.OK = false
-		} else if remote, err := parseIdP(string(raw)); err != nil {
+		} else if remote, err := parseIdP(string(raw), idp.EntityID); err != nil {
 			add("metadataUrl", false, false, "远程元数据不可用："+err.Error())
 			res.OK = false
 		} else if remote.EntityID != idp.EntityID {

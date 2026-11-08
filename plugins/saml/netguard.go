@@ -29,7 +29,8 @@ var errBlockedHost = errors.New("saml: 地址不被允许（回环 / 私网 / �
 
 func setAllowPrivateHosts(v bool) { allowPrivateHosts.Store(v) }
 
-func loadAllowPrivateHosts() bool {
+// samlViper 只读配置文件的 saml.* 段（core/config 没有这个段）。
+func samlViper() *viper.Viper {
 	v := viper.New()
 	v.SetConfigType("yaml")
 	for _, name := range []string{"default.yaml", "config.yaml"} {
@@ -42,7 +43,24 @@ func loadAllowPrivateHosts() bool {
 	v.SetEnvPrefix("NEXADMIN")
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	v.AutomaticEnv()
-	return v.GetBool("saml.allow_private_hosts")
+	return v
+}
+
+func loadAllowPrivateHosts() bool {
+	return samlViper().GetBool("saml.allow_private_hosts")
+}
+
+// loadMetadataRefreshHours 默认每 24 小时同步一次；显式配置 0 关闭后台刷新。
+func loadMetadataRefreshHours() int {
+	v := samlViper()
+	if !v.IsSet("saml.metadata_refresh_hours") {
+		return 24
+	}
+	n := v.GetInt("saml.metadata_refresh_hours")
+	if n < 0 {
+		return 0
+	}
+	return n
 }
 
 var blockedNets = func() []*net.IPNet {

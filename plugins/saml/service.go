@@ -7,7 +7,6 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
-	"encoding/xml"
 	"errors"
 	"fmt"
 	"math/big"
@@ -56,6 +55,7 @@ type SourceForm struct {
 	Enabled        bool               `json:"enabled"`
 	IdPMetadata    string             `json:"idpMetadata"`
 	IdPMetadataURL string             `json:"idpMetadataUrl"`
+	IDPEntityID    string             `json:"idpEntityId"`
 	AttrUsername   string             `json:"attrUsername"`
 	AttrEmail      string             `json:"attrEmail"`
 	AttrNickname   string             `json:"attrNickname"`
@@ -102,7 +102,7 @@ func (s *Service) Create(ctx context.Context, f SourceForm) (*Source, error) {
 	}
 	m := Source{
 		Name: f.Name, Enabled: f.Enabled, IdPMetadata: f.IdPMetadata, IdPMetadataURL: f.IdPMetadataURL,
-		SPCert: certPEM, SPKeyEnc: keyEnc,
+		IDPEntityID: f.IDPEntityID, SPCert: certPEM, SPKeyEnc: keyEnc,
 		AttrUsername: f.AttrUsername, AttrEmail: f.AttrEmail, AttrNickname: f.AttrNickname, AttrGroups: f.AttrGroups, AttrPhone: f.AttrPhone,
 		AutoCreate: f.AutoCreate, MatchExisting: f.MatchExisting, DefaultRole: f.DefaultRole,
 		GroupRoleMappings: f.GroupMappings, RequireMappedGroup: f.RequireMapped,
@@ -126,6 +126,7 @@ func (s *Service) Update(ctx context.Context, id string, f SourceForm) (*Source,
 	m.Enabled = f.Enabled
 	m.IdPMetadata = f.IdPMetadata
 	m.IdPMetadataURL = f.IdPMetadataURL
+	m.IDPEntityID = f.IDPEntityID
 	m.AttrUsername = f.AttrUsername
 	m.AttrEmail = f.AttrEmail
 	m.AttrNickname = f.AttrNickname
@@ -147,6 +148,24 @@ func (s *Service) Update(ctx context.Context, id string, f SourceForm) (*Source,
 	if err := s.db.WithContext(ctx).Save(m).Error; err != nil {
 		return nil, err
 	}
+	return m, nil
+}
+
+// RotateSPKey 重新生成 SP 密钥对；IdP 侧必须同步更新证书，否则登录会被拒绝。
+func (s *Service) RotateSPKey(ctx context.Context, id string) (*Source, error) {
+	m, err := s.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	certPEM, keyEnc, err := newSPKeyPair()
+	if err != nil {
+		return nil, err
+	}
+	if err := s.db.WithContext(ctx).Model(&Source{}).Where("id = ?", id).
+		Updates(map[string]any{"sp_cert": certPEM, "sp_key_enc": keyEnc}).Error; err != nil {
+		return nil, err
+	}
+	m.SPCert, m.SPKeyEnc = certPEM, keyEnc
 	return m, nil
 }
 
@@ -205,6 +224,9 @@ func (f *SourceForm) validate() error {
 			return fmt.Errorf("saml: 属性名不合法: %q", name)
 		}
 	}
+	if err := f.normalizeEntity(); err != nil {
+		return err
+	}
 	if _, ok := nameIDFormats[f.NameIDFormat]; !ok {
 		return fmt.Errorf("saml: 不支持的 NameID 格式: %q", f.NameIDFormat)
 	}
@@ -215,11 +237,39 @@ func (f *SourceForm) validate() error {
 	return validateGroupMappings(f.GroupMappings, f.RequireMapped)
 }
 
-// ready 判断这个源现在能否真正完成一次登录（启用前检查，避免「已启用但一登就错」）。
-func (m *Source) ready() error {
-	info, err := parseIdP(m.IdPMetadata)
+// normalizeEntity 校验并补全打包元数据里选用的 Entity ID；单实体自动选中。
+func (f *SourceForm) normalizeEntity() error {
+	f.IDPEntityID = strings.TrimSpace(f.IDPEntityID)
+	if len(f.IDPEntityID) > 500 || !utf8.ValidString(f.IDPEntityID) ||
+		strings.ContainsFunc(f.IDPEntityID, func(r rune) bool { return r < 0x20 || r == 0x7f }) {
+		return errors.New("saml: Entity ID 不合法")
+	}
+	entities, err := metadataIDPEntities(f.IdPMetadata)
 	if err != nil {
 		return err
+	}
+	if f.IDPEntityID == "" {
+		if len(entities) == 1 {
+			f.IDPEntityID = entities[0].EntityID
+		}
+		return nil
+	}
+	for _, e := range entities {
+		if e.EntityID == f.IDPEntityID {
+			return nil
+		}
+	}
+	return fmt.Errorf("saml: 元数据里没有 Entity ID 为 %q 的 IdP", f.IDPEntityID)
+}
+
+// ready 判断这个源现在能否真正完成一次登录（启用前检查，避免「已启用但一登就错」）。
+func (m *Source) ready() error {
+	info, err := parseIdP(m.IdPMetadata, m.IDPEntityID)
+	if err != nil {
+		return err
+	}
+	if info.EntityID == "" {
+		return fmt.Errorf("saml: 元数据包含 %d 个 IdP，请先选择 Entity ID", len(info.Candidates))
 	}
 	if info.SSOURL == "" {
 		return errors.New("saml: IdP 元数据里没有可用的 SingleSignOnService 地址")
@@ -327,16 +377,10 @@ var nameIDFormats = map[string]saml.NameIDFormat{
 	"entity":       saml.NameIDFormat("urn:oasis:names:tc:SAML:2.0:nameid-format:entity"),
 }
 
-// validateMetadata 只接受可解析且含 IdP SSO 描述的元数据。
+// validateMetadata 接受单实体或 EntitiesDescriptor 打包，至少要有一个 IDPSSODescriptor。
 func validateMetadata(raw string) error {
-	var meta saml.EntityDescriptor
-	if err := xml.Unmarshal([]byte(raw), &meta); err != nil {
-		return fmt.Errorf("saml: IdP 元数据解析失败: %w", err)
-	}
-	if len(meta.IDPSSODescriptors) == 0 {
-		return errors.New("saml: 元数据缺少 IDPSSODescriptor")
-	}
-	return nil
+	_, err := metadataIDPEntities(raw)
+	return err
 }
 
 func validateMetadataURL(raw string) error {
@@ -401,9 +445,16 @@ func (s *Service) provider(m *Source, base string) (*saml.ServiceProvider, error
 	if strings.TrimSpace(m.IdPMetadata) == "" {
 		return nil, errors.New("saml: 尚未导入 IdP 元数据")
 	}
-	var meta saml.EntityDescriptor
-	if err := xml.Unmarshal([]byte(m.IdPMetadata), &meta); err != nil {
-		return nil, fmt.Errorf("saml: IdP 元数据解析失败: %w", err)
+	entities, err := metadataIDPEntities(m.IdPMetadata)
+	if err != nil {
+		return nil, fmt.Errorf("saml: %w", err)
+	}
+	selected, err := selectEntity(entities, m.IDPEntityID)
+	if err != nil {
+		return nil, fmt.Errorf("saml: %w", err)
+	}
+	if selected == nil {
+		return nil, errors.New("saml: 元数据包含多个 IdP，请先选择 Entity ID")
 	}
 	plain, err := decryptSecret(m.SPKeyEnc)
 	if err != nil {
@@ -440,7 +491,7 @@ func (s *Service) provider(m *Source, base string) (*saml.ServiceProvider, error
 		LogoutBindings: []string{saml.HTTPRedirectBinding, saml.HTTPPostBinding},
 		Key:            key,
 		Certificate:    cert,
-		IDPMetadata:    &meta,
+		IDPMetadata:    selected,
 		// 每个源单独的防重放命名空间，避免不同 IdP 的断言 ID 相撞。
 		ReplayCache:       replayCache{c: s.cache, scope: id},
 		AllowIDPInitiated: m.AllowIDPInitiated,

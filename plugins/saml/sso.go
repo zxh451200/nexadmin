@@ -498,6 +498,44 @@ func (s *Service) testSource(c *gin.Context) {
 	response.OK(c, s.testSourceChecks(c.Request.Context(), m))
 }
 
+// refreshMetadata 手动按 URL 重新拉取元数据；changed 表示内容真的变了。
+func (s *Service) refreshMetadata(c *gin.Context) {
+	m, ok := s.sourceOrFail(c)
+	if !ok {
+		return
+	}
+	changed, err := s.RefreshMetadata(c.Request.Context(), m)
+	if err != nil {
+		response.Fail(c, response.BadRequest("error.bad_request").WithMsg(err.Error()))
+		return
+	}
+	fresh, err := s.Get(c.Request.Context(), m.ID.String())
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, gin.H{"changed": changed, "source": inspectSource(fresh, baseURL(c))})
+}
+
+// rotateSPCert 重新生成 SP 密钥对；IdP 侧必须同步更新证书。
+func (s *Service) rotateSPCert(c *gin.Context) {
+	m, ok := s.sourceOrFail(c)
+	if !ok {
+		return
+	}
+	fresh, err := s.RotateSPKey(c.Request.Context(), m.ID.String())
+	if err != nil {
+		response.Fail(c, response.BadRequest("error.bad_request").WithMsg(err.Error()))
+		return
+	}
+	notAfter, err := spCertNotAfter(fresh.SPCert)
+	if err != nil {
+		response.Fail(c, response.BadRequest("error.bad_request").WithMsg("SP 证书不可用: "+err.Error()))
+		return
+	}
+	response.OK(c, gin.H{"cert": fresh.SPCert, "notAfter": notAfter.UTC().Format(time.RFC3339)})
+}
+
 // spCert 返回 SP 证书 PEM（IdP 需要时复制或下载）。
 func (s *Service) spCert(c *gin.Context) {
 	m, ok := s.sourceOrFail(c)
@@ -538,7 +576,7 @@ func (s *Service) inspectMetadata(c *gin.Context) {
 		response.Fail(c, response.BadRequest("error.bad_request").WithMsg("元数据超过 1 MiB"))
 		return
 	}
-	info, err := parseIdP(raw)
+	info, err := parseIdP(raw, "")
 	if err != nil {
 		response.Fail(c, response.BadRequest("error.bad_request").WithMsg(err.Error()))
 		return

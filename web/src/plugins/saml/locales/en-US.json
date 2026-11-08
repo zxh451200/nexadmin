@@ -23,7 +23,8 @@
       "fetch": "Fetch from URL",
       "parse": "Parse preview",
       "addMapping": "Add group mapping",
-      "removeMapping": "Remove mapping"
+      "removeMapping": "Remove mapping",
+      "refreshMetadata": "Refresh metadata"
     },
     "fields": {
       "name": "Name",
@@ -48,13 +49,14 @@
       "allowIdpInitiated": "Allow IdP-initiated sign-in",
       "signAuthnRequest": "Sign AuthnRequest",
       "nameIdFormat": "NameID format",
-      "idpEntityId": "IdP Entity ID",
+      "idpEntityId": "Entity ID to use",
       "idpSso": "IdP sign-in endpoint",
       "idpSlo": "IdP logout endpoint",
       "spEntityId": "SP Entity ID",
       "acs": "ACS",
       "metadata": "SP metadata",
-      "slo": "SP logout endpoint"
+      "slo": "SP logout endpoint",
+      "lastSync": "Metadata last synced"
     },
     "hints": {
       "enabled": "Only enabled sources appear on the sign-in page.",
@@ -71,14 +73,16 @@
       "requireMappedGroup": "When on, sign-in is refused if none of the assertion's groups match a mapping; at least one mapping is required.",
       "allowIdpInitiated": "Allow the IdP portal to start sign-in without an SP AuthnRequest. After success the user lands on the admin home; assertion replay protection needs a shared cache.",
       "signAuthnRequest": "Sign the AuthnRequest with the SP private key (RSA-SHA256). Configure the SP certificate at the IdP first, or requests may be rejected.",
-      "nameIdFormat": "NameID format requested in the AuthnRequest; keep \"unspecified\" if unsure."
+      "nameIdFormat": "NameID format requested in the AuthnRequest; keep \"unspecified\" if unsure.",
+      "idpEntityId": "When the metadata bundles several IdPs, pick the one this system should trust; a single entity is selected automatically."
     },
     "preview": {
       "title": "Metadata preview",
       "noCert": "No signing certificate found",
       "ok": "Metadata parsed",
       "entityId": "Entity ID",
-      "sso": "SSO endpoint"
+      "sso": "SSO endpoint",
+      "selectEntity": "Choose the Entity ID to use"
     },
     "sections": {
       "idp": "IdP and metadata",
@@ -98,7 +102,11 @@
       "expired": "IdP certificate expired ({{date}})",
       "title": "SP signing certificate",
       "download": "Download certificate",
-      "expires": "Expires: {{date}}"
+      "expires": "Expires: {{date}}",
+      "rotate": "Rotate certificate",
+      "rotateConfirm": "Rotate the SP certificate? The IdP must be updated at the same time, or configured sign-ins fail immediately.",
+      "rotateHint": "After rotating, update the new certificate or SP metadata at the IdP immediately; the old one stops working.",
+      "rotated": "SP certificate rotated; update the IdP side now"
     },
     "test": {
       "title": "Configuration self-test",
@@ -111,7 +119,8 @@
         "spKey": "SP private key",
         "spCert": "SP certificate",
         "metadataUrl": "Remote metadata consistency",
-        "enabled": "Enabled state"
+        "enabled": "Enabled state",
+        "entity": "Selected IdP entity"
       }
     },
     "summary": {
@@ -138,7 +147,16 @@
       "mappingCount": "At most 100 group mappings",
       "mappingRequired": "At least one mapping is required when a mapped group is mandatory",
       "mappingTotal": "At most 1000 mapped roles",
-      "mappingDuplicate": "Group values must be unique"
+      "mappingDuplicate": "Group values must be unique",
+      "entityInvalid": "Invalid Entity ID (at most 500 bytes, no control characters)",
+      "entityRequired": "Choose the Entity ID to use"
+    },
+    "refresh": {
+      "changed": "Metadata updated",
+      "unchanged": "Metadata is already up to date"
+    },
+    "idp": {
+      "selectRequired": "The metadata bundles {{count}} IdPs; edit the source and choose the Entity ID to use."
     }
   }
 }

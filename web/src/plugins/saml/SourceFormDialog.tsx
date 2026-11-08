@@ -36,6 +36,11 @@ function buildSchema(t: (k: string) => string) {
         .string()
         .trim()
         .refine((v) => !v || /^https?:\/\/[^/?#@\s]+[^\s]*$/i.test(v), t('plugin_saml.errors.urlInvalid')),
+      idpEntityId: z
+        .string()
+        .trim()
+        .max(500, t('plugin_saml.errors.entityInvalid'))
+        .refine((v) => !hasControl(v), t('plugin_saml.errors.entityInvalid')),
       attrUsername: z.string().trim().refine(validAttr, t('plugin_saml.errors.attrInvalid')),
       attrEmail: z.string().trim().refine(validAttr, t('plugin_saml.errors.attrInvalid')),
       attrNickname: z.string().trim().refine(validAttr, t('plugin_saml.errors.attrInvalid')),
@@ -93,6 +98,7 @@ const empty: FormValues = {
   enabled: false,
   idpMetadata: '',
   idpMetadataUrl: '',
+  idpEntityId: '',
   attrUsername: 'uid',
   attrEmail: 'mail',
   attrNickname: 'displayName',
@@ -115,6 +121,7 @@ function toValues(s?: SamlSource | null): FormValues {
     enabled: s.enabled,
     idpMetadata: s.idpMetadata,
     idpMetadataUrl: s.idpMetadataUrl ?? '',
+    idpEntityId: s.idpEntityId ?? '',
     attrUsername: s.attrUsername,
     attrEmail: s.attrEmail,
     attrNickname: s.attrNickname,
@@ -194,8 +201,11 @@ export default function SourceFormDialog({ open, onOpenChange, editing }: Props)
   const autoCreate = useWatch({ control: form.control, name: 'autoCreate' })
   const idpMetadata = useWatch({ control: form.control, name: 'idpMetadata' })
   const idpMetadataUrl = useWatch({ control: form.control, name: 'idpMetadataUrl' })
+  const idpEntityId = useWatch({ control: form.control, name: 'idpEntityId' })
   const [preview, setPreview] = useState<IdPInfo | null>(null)
   const [fetching, setFetching] = useState<'url' | 'xml' | null>(null)
+  const candidates = preview?.candidates ?? []
+  const shown = candidates.find((c) => c.entityId === idpEntityId) ?? preview
 
   useEffect(() => {
     if (!open) return
@@ -204,6 +214,10 @@ export default function SourceFormDialog({ open, onOpenChange, editing }: Props)
   }, [open, editing, form])
 
   const onSubmit = form.handleSubmit(async (v) => {
+    if (v.enabled && (preview?.candidates?.length ?? 0) > 1 && !v.idpEntityId) {
+      form.setError('idpEntityId', { message: t('plugin_saml.errors.entityRequired') })
+      return
+    }
     try {
       await save.mutateAsync({ id: editing?.id, data: toPayload(v) })
       toast.success(t('common.operateSuccess'))
@@ -222,6 +236,10 @@ export default function SourceFormDialog({ open, onOpenChange, editing }: Props)
           : { xml: form.getValues('idpMetadata').trim() }
       const r = await inspectMetadata(input)
       if (mode === 'url') form.setValue('idpMetadata', r.metadata, { shouldValidate: true, shouldDirty: true })
+      const candidates = r.idp.candidates ?? []
+      const current = form.getValues('idpEntityId').trim()
+      const keep = candidates.some((c) => c.entityId === current) ? current : candidates.length === 1 ? candidates[0].entityId : ''
+      form.setValue('idpEntityId', keep, { shouldValidate: true, shouldDirty: true })
       setPreview(r.idp)
       toast.success(t('plugin_saml.preview.ok'))
     } catch (e) {
@@ -312,19 +330,59 @@ export default function SourceFormDialog({ open, onOpenChange, editing }: Props)
                     </FormItem>
                   )}
                 />
+                {candidates.length > 1 ? (
+                  <FormField
+                    control={c}
+                    name="idpEntityId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{p('idpEntityId')}</FormLabel>
+                        <Select
+                          value={field.value || undefined}
+                          onValueChange={(v) => {
+                            field.onChange(v)
+                            const cand = candidates.find((x) => x.entityId === v)
+                            if (cand) setPreview((prev) => (prev ? { ...prev, ...cand } : prev))
+                          }}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder={t('plugin_saml.preview.selectEntity')} />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {candidates.map((cand) => (
+                              <SelectItem key={cand.entityId} value={cand.entityId}>
+                                {cand.entityId}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormDescription>{h('idpEntityId')}</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                ) : null}
                 {preview ? (
                   <div className="space-y-1 rounded-md border border-border bg-background p-3 text-xs">
                     <div className="font-medium text-foreground">{t('plugin_saml.preview.title')}</div>
-                    <div className="break-all">
-                      {t('plugin_saml.preview.entityId')}: <code>{preview.entityId}</code>
-                    </div>
-                    <div className="break-all">
-                      {t('plugin_saml.preview.sso')}: <code>{preview.ssoUrl || '—'}</code>
-                      {preview.ssoBinding ? ` (${t(`plugin_saml.binding.${preview.ssoBinding}`)})` : ''}
-                    </div>
-                    <div className="break-all">
-                      {t('plugin_saml.fields.cert')}: {preview.certCount > 0 ? fmtDate(preview.certNotAfter) : t('plugin_saml.preview.noCert')}
-                    </div>
+                    {shown?.entityId ? (
+                      <>
+                        <div className="break-all">
+                          {t('plugin_saml.preview.entityId')}: <code>{shown.entityId}</code>
+                        </div>
+                        <div className="break-all">
+                          {t('plugin_saml.preview.sso')}: <code>{shown.ssoUrl || '—'}</code>
+                          {shown.ssoBinding ? ` (${t(`plugin_saml.binding.${shown.ssoBinding}`)})` : ''}
+                        </div>
+                        <div className="break-all">
+                          {t('plugin_saml.fields.cert')}: {shown.certCount > 0 ? fmtDate(shown.certNotAfter) : t('plugin_saml.preview.noCert')}
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-muted-foreground">{t('plugin_saml.preview.selectEntity')}</p>
+                    )}
                   </div>
                 ) : null}
               </fieldset>

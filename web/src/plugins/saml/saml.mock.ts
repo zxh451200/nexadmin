@@ -1,6 +1,6 @@
 import { defineMock, genId, mockError } from '@/framework/request/mock'
 import { mockIssueSession } from '@/framework/auth/auth.mock'
-import type { GroupRoleMapping, IdPInfo, SamlSource, SourceForm, SPInfo, TestResult } from './api'
+import type { GroupRoleMapping, IdPCandidate, IdPInfo, SamlSource, SourceForm, SPInfo, TestResult } from './api'
 
 /**
  * 登录页的 SAML 入口在真后端是匿名路由（plugins/saml/plugin.go 用 d.Public.Group("/auth/saml")
@@ -35,31 +35,58 @@ const ORIGIN = 'https://admin.example.com'
 const ago = (min: number) => new Date(Date.now() - min * 60_000).toISOString()
 const inDays = (days: number) => new Date(Date.now() + days * 24 * 60 * 60_000).toISOString()
 
+const entityXML = (entityID: string, sso: string, cert: string) => `  <EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="${entityID}">
+    <IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+      <KeyDescriptor use="signing">
+        <ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
+          <ds:X509Data><ds:X509Certificate>${cert}</ds:X509Certificate></ds:X509Data>
+        </ds:KeyInfo>
+      </KeyDescriptor>
+      <SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="${sso}"/>
+      <SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="${sso}/slo"/>
+    </IDPSSODescriptor>
+  </EntityDescriptor>
+`
+
+const CERT_B64 = 'MIIBszCCAVmgAwIBAgIUeE4Q1xwZ3J2d0u0UxW1w7qKkKnMwCgYIKoZIzj0EAwIw'
+
 const IDP_METADATA = `<?xml version="1.0"?>
 <EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="https://idp.example.com/metadata">
-  <IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
-    <KeyDescriptor use="signing">
-      <ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
-        <ds:X509Data><ds:X509Certificate>MIIBszCCAVmgAwIBAgIUeE4Q1xwZ3J2d0u0UxW1w7qKkKnMwCgYIKoZIzj0EAwIw</ds:X509Certificate></ds:X509Data>
-      </ds:KeyInfo>
-    </KeyDescriptor>
-    <SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://idp.example.com/sso"/>
-    <SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://idp.example.com/slo"/>
-  </IDPSSODescriptor>
+${entityXML('https://idp.example.com/metadata', 'https://idp.example.com/sso', CERT_B64).trim()}
 </EntityDescriptor>`
 
-const IDP: IdPInfo = {
+// 打包元数据（模拟 ADFS / 联邦导出）：一个 EntitiesDescriptor 里放两个 IdP。
+const BUNDLE_METADATA = `<?xml version="1.0"?>
+<EntitiesDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata">
+${entityXML('https://idp.example.com/metadata', 'https://idp.example.com/sso', CERT_B64)}${entityXML('https://idp2.example.com/metadata', 'https://idp2.example.com/sso', CERT_B64)}</EntitiesDescriptor>`
+
+const C1: IdPCandidate = {
   entityId: 'https://idp.example.com/metadata',
   ssoUrl: 'https://idp.example.com/sso',
   ssoBinding: 'redirect',
-  sloUrl: 'https://idp.example.com/slo',
   certNotAfter: inDays(240),
   certCount: 1,
   certExpired: false,
   certExpiringSoon: false,
 }
 
-const sp = (id: string): SPInfo => ({
+const C2: IdPCandidate = {
+  entityId: 'https://idp2.example.com/metadata',
+  ssoUrl: 'https://idp2.example.com/sso',
+  ssoBinding: 'redirect',
+  certNotAfter: inDays(12),
+  certCount: 1,
+  certExpired: false,
+  certExpiringSoon: true,
+}
+
+const infoFor = (candidate: IdPCandidate, candidates: IdPCandidate[]): IdPInfo => ({
+  ...candidate,
+  sloUrl: `${candidate.ssoUrl}/slo`,
+  candidates,
+})
+
+const SP = (id: string): SPInfo => ({
   entityId: `${ORIGIN}/api/v1/auth/saml/${id}/metadata`,
   acsUrl: `${ORIGIN}/api/v1/auth/saml/${id}/acs`,
   sloUrl: `${ORIGIN}/api/v1/auth/saml/${id}/slo`,
@@ -72,6 +99,7 @@ const sp = (id: string): SPInfo => ({
 
 const ID_OKTA = '7610000000000000001'
 const ID_AZURE = '7610000000000000002'
+const ID_FED = '7610000000000000003'
 
 const okta: SamlSource = {
   id: ID_OKTA,
@@ -79,6 +107,7 @@ const okta: SamlSource = {
   enabled: true,
   idpMetadata: IDP_METADATA,
   idpMetadataUrl: 'https://idp.example.com/metadata',
+  idpEntityId: C1.entityId,
   attrUsername: 'uid',
   attrEmail: 'mail',
   attrNickname: 'displayName',
@@ -92,8 +121,9 @@ const okta: SamlSource = {
   allowIdpInitiated: true,
   signAuthnRequest: false,
   nameIdFormat: '',
-  idp: IDP,
-  sp: sp(ID_OKTA),
+  metadataRefreshedAt: ago(60 * 24 * 2),
+  idp: infoFor(C1, [C1]),
+  sp: SP(ID_OKTA),
   createdAt: ago(60 * 24 * 20),
   updatedAt: ago(60 * 24 * 2),
 }
@@ -108,33 +138,51 @@ const azure: SamlSource = {
   attrEmail: 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress',
   attrNickname: 'http://schemas.microsoft.com/identity/claims/displayname',
   attrGroups: '',
-  attrPhone: '',
   autoCreate: false,
   matchExisting: true,
   defaultRole: '',
   groupRoleMappings: [] as GroupRoleMapping[],
-  requireMappedGroup: false,
   allowIdpInitiated: false,
-  idp: { ...IDP, certNotAfter: inDays(12), certExpiringSoon: true },
-  sp: sp(ID_AZURE),
+  metadataRefreshedAt: undefined,
+  idp: infoFor(C1, [C1]),
+  sp: SP(ID_AZURE),
   createdAt: ago(60 * 24 * 6),
   updatedAt: ago(60 * 24),
 }
 
-let sources: SamlSource[] = [okta, azure]
+const federation: SamlSource = {
+  ...okta,
+  id: ID_FED,
+  name: '联邦打包元数据（示例）',
+  enabled: false,
+  idpMetadata: BUNDLE_METADATA,
+  idpMetadataUrl: 'https://federation.example.com/metadata',
+  idpEntityId: C2.entityId,
+  idp: infoFor(C2, [C1, C2]),
+  sp: SP(ID_FED),
+  createdAt: ago(60 * 24 * 3),
+  updatedAt: ago(60 * 24),
+}
+
+let sources: SamlSource[] = [okta, azure, federation]
 
 const find = (id: string) => sources.find((s) => s.id === id) ?? mockError(404, 'Not found')
 
 function build(form: SourceForm, id: string, old?: SamlSource): SamlSource {
   if (!form.name?.trim()) mockError(400, 'name is required')
   if (!form.idpMetadata?.trim()) mockError(400, 'IdP metadata is required')
+  const candidates = form.idpMetadata.includes('EntitiesDescriptor') ? [C1, C2] : [C1]
+  if (form.enabled && candidates.length > 1 && !form.idpEntityId) mockError(400, '请先选择 Entity ID')
+  const selected = candidates.find((c) => c.entityId === form.idpEntityId) ?? candidates[0]
   const now = new Date().toISOString()
   return {
     ...form,
     name: form.name.trim(),
     id,
-    idp: IDP,
-    sp: sp(id),
+    idpEntityId: selected.entityId,
+    idp: infoFor(selected, candidates),
+    metadataRefreshedAt: old?.metadataRefreshedAt,
+    sp: SP(id),
     createdAt: old?.createdAt ?? now,
     updatedAt: now,
   }
@@ -143,6 +191,11 @@ function build(form: SourceForm, id: string, old?: SamlSource): SamlSource {
 const CHECKS = (s: SamlSource): TestResult => {
   const checks: TestResult['checks'] = [
     { key: 'metadata', ok: true, detail: `Entity ID: ${s.idp.entityId}` },
+    {
+      key: 'entity',
+      ok: true,
+      detail: `已选择 ${s.idp.entityId}（元数据共 ${s.idp.candidates?.length ?? 1} 个 IdP）`,
+    },
     { key: 'ssoUrl', ok: !!s.idp.ssoUrl, detail: s.idp.ssoUrl },
     {
       key: 'idpCert',
@@ -220,13 +273,37 @@ defineMock([
   },
   {
     method: 'POST',
+    url: '/plugins/saml/sources/:id/rotate-sp-cert',
+    handler: ({ params }) => {
+      const notAfter = inDays(3650)
+      const row = { ...find(params.id), sp: { ...find(params.id).sp, certNotAfter: notAfter } }
+      sources = sources.map((s) => (s.id === row.id ? row : s))
+      return { cert: CERT, notAfter }
+    },
+  },
+  {
+    method: 'POST',
+    url: '/plugins/saml/sources/:id/refresh',
+    handler: ({ params }) => {
+      const row = { ...find(params.id), metadataRefreshedAt: new Date().toISOString() }
+      sources = sources.map((s) => (s.id === row.id ? row : s))
+      return { changed: false, source: row }
+    },
+  },
+  {
+    method: 'POST',
     url: '/plugins/saml/metadata/inspect',
     handler: ({ body }) => {
       const xml = String(body?.xml ?? '').trim()
       const url = String(body?.url ?? '').trim()
       if (!xml && !url) mockError(400, '请提供元数据 XML 或 URL')
       if (xml && !xml.includes('IDPSSODescriptor')) mockError(400, '元数据缺少 IDPSSODescriptor')
-      return { metadata: xml || IDP_METADATA, idp: { ...IDP, metadataUrl: url } }
+      const isBundle = (xml || url).includes('EntitiesDescriptor') || url.includes('federation')
+      const candidates = isBundle ? [C1, C2] : [C1]
+      const idp: IdPInfo = isBundle
+        ? { entityId: '', ssoUrl: '', ssoBinding: '', sloUrl: '', certCount: 0, certExpired: false, certExpiringSoon: false, candidates }
+        : infoFor(C1, candidates)
+      return { metadata: xml || (isBundle ? BUNDLE_METADATA : IDP_METADATA), idp }
     },
   },
 ])

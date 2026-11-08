@@ -3,6 +3,7 @@ package saml
 import (
 	"encoding/json"
 	"strings"
+	"time"
 
 	"gorm.io/gorm"
 
@@ -23,8 +24,11 @@ type Source struct {
 	Enabled        bool   `gorm:"not null;default:false"`
 	IdPMetadata    string `gorm:"column:idp_metadata;type:text"`
 	IdPMetadataURL string `gorm:"column:idp_metadata_url;size:500;not null;default:''"`
-	SPCert         string `gorm:"column:sp_cert;type:text"`
-	SPKeyEnc       string `gorm:"column:sp_key_enc;type:text"`
+	// IDPEntityID 在多 IdP 打包元数据里指定用哪一个；单实体导入时自动填上。
+	IDPEntityID         string     `gorm:"column:idp_entity_id;size:500;not null;default:''"`
+	MetadataRefreshedAt *time.Time `gorm:"column:metadata_refreshed_at"`
+	SPCert              string     `gorm:"column:sp_cert;type:text"`
+	SPKeyEnc            string     `gorm:"column:sp_key_enc;type:text"`
 
 	AttrUsername string `gorm:"column:attr_username;size:255;not null;default:''"`
 	AttrEmail    string `gorm:"column:attr_email;size:255;not null;default:''"`
