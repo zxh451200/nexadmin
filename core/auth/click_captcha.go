@@ -28,6 +28,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	gimage "image"
+	gdraw "image/draw"
 	"image/png"
 	"sort"
 	"strings"
@@ -118,12 +120,24 @@ func clickCaptcha() (click.Captcha, error) {
 			click.WithRangeAnglePos([]option.RangeVal{{Min: -25, Max: 25}}),
 			click.WithRangeVerifyLen(option.RangeVal{Min: 2, Max: 3}),
 			click.WithRangeThumbSize(option.RangeVal{Min: 26, Max: 32}),
-			// 候选字条去干扰：波浪线与圆点会压在字上（实测「子」被线穿成认不出），
-			// 干净的浅底 + 彩色字才是「照着找」的正确形态
+			// 候选字条去干扰：波浪线与细线会压在字上（实测「子」被线穿成认不出）。
+			// 底色圆点也关掉——铺底改由下方出题时垫不透明浅底完成（调色板画布基底
+			// 全透明，库自带的圆点铺不满，透明区在页面上显示为黑底）
 			click.WithRangeThumbBgDistort(0),
 			click.WithRangeThumbBgCirclesNum(0),
 			click.WithRangeThumbBgSlimLineNum(0),
 			click.WithRangeThumbImageSize(option.Size{Width: clickThumbW, Height: clickThumbH}),
+			// 关掉非形变模式：它把字条底取自主图背景裁片，深色素材就出深条（实测黑底
+			// 深字几乎不可读）。调色板模式用上面的浅底 + 深字，「照着找」的参照物稳定可读
+			click.WithIsThumbNonDeformAbility(false),
+			// 候选字条显式配色：库默认字与底同取一组深色调色板（实测黑底深字几乎不可读），
+			// 固定为浅底 + 深字——「照着找」的参照物必须一眼可读
+			click.WithRangeThumbColors([]string{
+				"#1f55c4", "#910000", "#2f6b00", "#864401", "#780592",
+			}),
+			click.WithRangeThumbBgColors([]string{
+				"#f6f9ff", "#fff7e6", "#eefbf0", "#fdeef2", "#f0f6ff",
+			}),
 			// 高亮字色 + 深投影：见上方可读性第四件
 			click.WithRangeColors([]string{
 				"#ffffff", // 白：任意底上的万能高对比
@@ -143,7 +157,8 @@ func clickCaptcha() (click.Captcha, error) {
 	return clickCap, clickErr
 }
 
-// clickDot 是一个期望点击点：X/Y 为字块中心附近的落点口径（字块包围盒），Size 是字块边长。
+// clickDot 是一个期望点击点：X/Y 为字块「中心」（包围盒几何中心，用户点的视觉目标），
+// Size 是字块边长。
 type clickDot struct {
 	X    int `json:"x"`
 	Y    int `json:"y"`
@@ -172,6 +187,8 @@ func (s *Service) NewClickCaptcha(ctx context.Context, ip string) (key, image, t
 		return "", "", "", 0, 0, 0, 0, fmt.Errorf("click captcha: empty dots")
 	}
 	// map[int]*Dot 按 Index 升序即期望点击顺序（Index 是绘制序，候选字条同序）。
+	// 库的 Dot.X/Y 是包围盒左上角（Y = 基线 - 字高，见 go-captcha genDots），校验必须
+	// 对「用户点的视觉中心」——这里换算成中心存入，别让容差去吃半字块的系统性偏移。
 	idx := make([]int, 0, len(dots))
 	for i := range dots {
 		idx = append(idx, i)
@@ -180,7 +197,7 @@ func (s *Service) NewClickCaptcha(ctx context.Context, ip string) (key, image, t
 	ordered := make([]clickDot, 0, len(dots))
 	for _, i := range idx {
 		d := dots[i]
-		ordered = append(ordered, clickDot{X: d.X, Y: d.Y, Size: d.Size})
+		ordered = append(ordered, clickDot{X: d.X + d.Width/2, Y: d.Y + d.Height/2, Size: d.Size})
 	}
 	raw := make([]byte, 16)
 	if _, err = crand.Read(raw); err != nil {
@@ -201,15 +218,23 @@ func (s *Service) NewClickCaptcha(ctx context.Context, ip string) (key, image, t
 	}
 	image = "data:image/png;base64," + base64.StdEncoding.EncodeToString(buf.Bytes())
 	buf.Reset()
-	if err = png.Encode(&buf, data.GetThumbImage().Get()); err != nil {
+	// 字条垫不透明浅底：调色板画布基底全透明，库自带的底色圆点铺不满整条，
+	// 透明区在页面上显示为黑底。统一垫 #f6f9ff，字条永远是「浅底深字」。
+	thumbImg := data.GetThumbImage().Get()
+	baseBg := gimage.NewNRGBA(thumbImg.Bounds())
+	for i := 0; i < len(baseBg.Pix); i += 4 {
+		baseBg.Pix[i], baseBg.Pix[i+1], baseBg.Pix[i+2], baseBg.Pix[i+3] = 0xf6, 0xf9, 0xff, 0xff
+	}
+	gdraw.Draw(baseBg, baseBg.Bounds(), thumbImg, gimage.Point{}, gdraw.Over)
+	if err = png.Encode(&buf, baseBg); err != nil {
 		return "", "", "", 0, 0, 0, 0, err
 	}
 	thumb = "data:image/png;base64," + base64.StdEncoding.EncodeToString(buf.Bytes())
 	return key, image, thumb, sliderBgW, clickImgH, clickFontW, clickFontH, nil
 }
 
-// VerifyClickCaptcha 按提交顺序校验点位：数目必须与点位数一致，每个点落在对应字块的
-// 「半径 + 2px」内。通过则签发一次性 token（写 captchaKey 通道，与滑块/图形码同消费口），
+// VerifyClickCaptcha 按提交顺序校验点位：数目必须与点位数一致，每个点落在对应字块
+// 中心的圆形容差内。通过则签发一次性 token（写 captchaKey 通道，与滑块/图形码同消费口），
 // 挑战作废；失败只计次数不消费挑战，超过 5 次作废整个挑战。
 func (s *Service) VerifyClickCaptcha(ctx context.Context, key string, points []clickPoint, ip string) (string, error) {
 	key = strings.TrimSpace(key)
@@ -244,10 +269,12 @@ func (s *Service) VerifyClickCaptcha(ctx context.Context, key string, points []c
 		return "", errClickFailed
 	}
 	for i, d := range expected {
-		// 容差 = 字块半径 + 3px：字形有 ±25° 倾斜，视觉中心与包围盒中心略有偏移，多留一点余量
-		tol := d.Size/2 + 3
+		// 容差 = 字块半径 + 6px，按圆形距离判：点位已是字块中心（见 NewClickCaptcha），
+		// 字形带 ±25° 倾斜时视觉中心还会在包围盒内再偏几个像素；字块之间间隔 ≥100px，
+		// 放宽不会串到相邻字。
+		tol := d.Size/2 + 6
 		dx, dy := points[i].X-d.X, points[i].Y-d.Y
-		if absClick(dx) > tol || absClick(dy) > tol {
+		if dx*dx+dy*dy > tol*tol {
 			captchaFail(captchaKindClick)
 			return "", errClickFailed
 		}
@@ -263,11 +290,4 @@ func (s *Service) VerifyClickCaptcha(ctx context.Context, key string, points []c
 	_ = s.cache.Del(ctx, clickKey(key))
 	captchaPass(captchaKindClick)
 	return token, nil
-}
-
-func absClick(v int) int {
-	if v < 0 {
-		return -v
-	}
-	return v
 }
