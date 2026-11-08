@@ -1,10 +1,10 @@
 # captchasounds
 
-数字音源（`zh|en/0-9.wav`）由 [Kokoro-82M](https://huggingface.co/hexgrad/kokoro)
-（**Apache-2.0**）经 sherpa-onnx 的 `kokoro-multi-lang-v1_1` 中英双语导出模型本地离线
-合成；**可随商业产品再分发**。生成脚本与再生成步骤同在本目录：`gen_kokoro.py`
-（模型拉到 `~/.kokoro-models/`，不进仓库；音色 sid 见脚本内注释，0=af_maple 英女声、
-3=zf_001 中女声，不满意换同段位 sid 重跑即可）。
+数字音源（`zh|en/0-9.wav`）由 **CosyVoice2-0.5B**（[FunAudioLLM](https://huggingface.co/FunAudioLLM/CosyVoice2-0.5B)，
+**Apache-2.0**）零样本模式本地离线合成；参考音频由 **Kokoro-82M**（**Apache-2.0**）的实测最干净
+音色（zh sid8 / en sid1）合成——许可链全程可随商业产品再分发。**运行时不依赖任何模型**：
+生成脚本与音源再生成方法同在本目录 `gen_cosyvoice.py`（模型经 hf-mirror 拉到
+`~/.cosyvoice-models/`，不进仓库；环境与跑法见脚本头注释）。
 
 格式：24 kHz、16-bit、单声道 PCM（44 字节标准 WAV 头），与
 `core/auth/captcha_audio.go` 的 `audioSampleRate` 等常量一一对应，改一边要同步另一边。
@@ -12,6 +12,12 @@
 打包语言只有 zh/en（其余界面语言由 `digitSound` 自动回落英文——语音只是无障碍兜底，
 图形码不受影响）；数字读法有意避开易混音：zh 的 1 读「幺」（避开「一/七」韵母混淆，
 电话报号惯例）。
+
+音源选型实测结论（换音源前先看，别走回头路）：
+- Kokoro 直出：底噪可干净（音色由 voice_scan 全量实测选出），但数字韵律差；
+- MeloTTS / ZipVoice：单字与短文本的时长建模失败（空音频或黏连）；
+- CosyVoice-300M-SFT：真录音音色但 v1 hift 声码器底噪大（SNR 27-36dB，可闻嘶声）；
+- CosyVoice2 零样本：单字时长健康（~0.4s）、底噪数字零（SNR 89-104dB）——采用。
 
 历史出处（均已弃用，保留以备忘）：
 - 最初音源取自 [dchest/captcha](https://github.com/dchest/captcha) v1.1.0 的
