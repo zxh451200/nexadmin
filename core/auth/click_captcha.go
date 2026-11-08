@@ -11,15 +11,18 @@ package auth
 //   一次性 token 写进 captchaKey，登录/短信/注册的 VerifyCaptcha 原样消费。
 // 防爆破与滑块同口径：TTL 120s、单挑战最多 5 次校验、IP 绑定。
 //
-// 渲染走 go-captcha v2 click 包（与滑块同一家库）：字体取官方素材包的 yrdzst-bold，
-// 字符集用库默认的汉字集。命中不了素材（字体解码失败）时生成报错——点选是升级路径，
-// 不像滑块是默认路径，没有手绘回退的必要（上层拿错误照常回 5xx，登录入口不受影响）。
+// 渲染走 go-captcha v2 click 包（与滑块同一家库）：字体为 captchafonts/ 内嵌的
+// 思源黑体子集（OFL 许可，商用可再分发——官方素材包的方正字体商用需授权，不能
+// 随产品分发），字符池来自 captchafonts/charset.txt（约 200 字，远大于库默认的
+// 15 字，猜字空间才有意义）。字体解码失败时生成报错——点选是升级路径，不像滑块
+// 是默认路径，没有手绘回退的必要（上层拿错误照常回 5xx，登录入口不受影响）。
 
 import (
 	"bytes"
 	"context"
 	crand "crypto/rand"
 	"crypto/subtle"
+	_ "embed" // //go:embed 读取 string/[]byte 变量需要空白导入
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -32,11 +35,36 @@ import (
 	"time"
 
 	"github.com/golang/freetype/truetype"
-	"github.com/wenlng/go-captcha-assets/bindata/fonts/fzshengsksjw_cu"
 	"github.com/wenlng/go-captcha/v2/base/option"
 	"github.com/wenlng/go-captcha/v2/click"
 	"nexadmin/core/cache"
 )
+
+//go:embed captchafonts/clickfont.ttf
+var clickFontTTF []byte
+
+//go:embed captchafonts/charset.txt
+var clickCharsetTxt string
+
+// clickCharset 从 charset.txt 读字符池：跳过注释行与空行，逐字去重保序。
+// 该文件同时是字体子集（gen_subset.py）与字形覆盖测试的唯一来源。
+func clickCharset() []string {
+	seen := make(map[rune]bool, 256)
+	var chars []string
+	for _, line := range strings.Split(clickCharsetTxt, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		for _, r := range line {
+			if !seen[r] {
+				seen[r] = true
+				chars = append(chars, string(r))
+			}
+		}
+	}
+	return chars
+}
 
 const (
 	clickTTL      = 120 * time.Second // 点选比拖拽还慢，给 2 分钟
@@ -64,18 +92,16 @@ var (
 
 // clickCaptcha 惰性构建点选验证码：字体解析只做一次，全进程复用同一个 builder。
 // 画布与滑块同宽（384×150，通栏对齐）；主图 3~4 个字、要求点选其中 2~3 个。
-// 可读性三件套（实测 384×150 + 库默认参数时字几乎认不出）：
-//   - 标准印刷体（方正书宋）而非艺术字，花底上也能一眼认出；
+// 可读性四件套（实测 384×150 + 库默认参数时字几乎认不出）：
+//   - 标准印刷体（思源黑体 Medium）而非艺术字，花底上也能一眼认出；
 //   - 字号放大到 30~38，倾斜限制在 ±25°（库默认最大到 60°，转过头就认不出了）；
-//   - 干扰字压到 0~1 个（画 3~4 个字里点 2~3 个），找字的搜索面积减半。
+//   - 干扰字压到 0~1 个（画 3~4 个字里点 2~3 个），找字的搜索面积减半；
+//   - 高亮字色 + 深色投影：库默认调色板全是马卡龙淡色，在彩色照片底上直接融掉
+//     （实测「名」和背景黄球一个亮度）——白/亮黄/亮绿等高亮色加 3px 深投影，
+//     字在任意底上都浮起来。
 func clickCaptcha() (click.Captcha, error) {
 	clickOnce.Do(func() {
-		fontBytes, err := fzshengsksjw_cu.Asset("sourcedata/fonts/fzshengsksjw_cu/font.ttf")
-		if err != nil {
-			clickErr = err
-			return
-		}
-		ttf, err := truetype.Parse(fontBytes)
+		ttf, err := truetype.Parse(clickFontTTF)
 		if err != nil {
 			clickErr = err
 			return
@@ -88,7 +114,7 @@ func clickCaptcha() (click.Captcha, error) {
 		b := click.NewBuilder(
 			click.WithImageSize(option.Size{Width: sliderBgW, Height: clickImgH}),
 			click.WithRangeLen(option.RangeVal{Min: 3, Max: 4}),
-			click.WithRangeSize(option.RangeVal{Min: 28, Max: 36}),
+			click.WithRangeSize(option.RangeVal{Min: 30, Max: 38}),
 			click.WithRangeAnglePos([]option.RangeVal{{Min: -25, Max: 25}}),
 			click.WithRangeVerifyLen(option.RangeVal{Min: 2, Max: 3}),
 			click.WithRangeThumbSize(option.RangeVal{Min: 26, Max: 32}),
@@ -98,8 +124,19 @@ func clickCaptcha() (click.Captcha, error) {
 			click.WithRangeThumbBgCirclesNum(0),
 			click.WithRangeThumbBgSlimLineNum(0),
 			click.WithRangeThumbImageSize(option.Size{Width: clickThumbW, Height: clickThumbH}),
+			// 高亮字色 + 深投影：见上方可读性第四件
+			click.WithRangeColors([]string{
+				"#ffffff", // 白：任意底上的万能高对比
+				"#ffde59", // 亮黄
+				"#7dff8a", // 亮绿
+				"#ffb14d", // 亮橙
+				"#6fe3ff", // 亮青
+			}),
+			click.WithDisplayShadow(true),
+			click.WithShadowColor("#111318"),
+			click.WithShadowPoint(option.Point{X: 3, Y: 3}),
 		)
-		b.SetResources(click.WithFonts([]*truetype.Font{ttf}), click.WithBackgrounds(bgs))
+		b.SetResources(click.WithFonts([]*truetype.Font{ttf}), click.WithChars(clickCharset()), click.WithBackgrounds(bgs))
 		clickCap = b.Make()
 		clickFontW, clickFontH = clickThumbW, clickThumbH
 	})

@@ -64,14 +64,16 @@ func fixPalette(pal color.Palette) {
 
 // renderCaptchaAudio 移至 captcha_audio.go：自绘合成替代 dchest NewAudio 的噪声混音。
 
-// audioLang 把界面语言映射到 captchasounds/ 打包的语音（en/ja/ru/zh/pt），其余回落英文。
+// audioLang 把界面语言映射到 captchasounds/ 打包的语音（zh/en）。语音包只有这两种
+// （音源须带可再分发的商用许可，见 captchasounds/ATTRIBUTION），其余语言回落英文——
+// 语音只是无障碍兜底，图形码不受影响。
 func audioLang(lang string) string {
 	prefix := lang
 	if i := strings.IndexByte(lang, '-'); i >= 0 {
 		prefix = strings.ToLower(lang[:i])
 	}
 	switch prefix {
-	case "zh", "en", "ja", "ru", "pt":
+	case "zh", "en":
 		return prefix
 	}
 	return "en"
