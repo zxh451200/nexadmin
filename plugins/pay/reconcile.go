@@ -17,7 +17,9 @@ import (
 
 // 对账（源自 nexHotel biz_reconcile_task/diff 骨架，hotel_id 泛化为 subject_id）、
 // 结算与打款（源自 nexMall biz_settlement/biz_payout，维度泛化为「主体 + 业务类型」）。
-// Phase 0 渠道金额由入参提供（source=manual）；Phase 4 改为渠道账单 API 自动拉取。
+// 渠道金额来源两条路：人工录入（source=manual，本文件）与渠道账单驱动
+// （source=channel，见 bill.go RunChannelReconcileTask）；打款可走渠道代付
+// （bill.go PayPayoutViaChannel）或人工回执（MarkPayoutPaid）。
 
 // 对账任务与差异状态。
 const (
@@ -30,7 +32,8 @@ const (
 	DiffResolved    = "resolved"
 	DiffIgnored     = "ignored"
 
-	ReconcileSourceManual = "manual"
+	ReconcileSourceManual  = "manual"
+	ReconcileSourceChannel = "channel"
 )
 
 // 结算与打款状态。
@@ -40,6 +43,16 @@ const (
 	SettlementPaid      = "paid"
 	PayoutDraft         = "draft"
 	PayoutPaid          = "paid"
+	// PayoutPartial / PayoutFailed 只在渠道代付（PayPayoutViaChannel）路径出现：
+	// 一笔失败不拖垮整批，批次用这两个状态把「部分/全部未成功」摆到台面上供重试。
+	PayoutPartial = "partial"
+	PayoutFailed  = "failed"
+	// PayoutItem 状态闸门：pending 未发起；initiated 已发起待渠道终局（不许重复发起，
+	// 由 QueryTransfer 清扫收敛）；success / failed 终局可辨（failed 可用同 ItemNo 重试）。
+	PayoutItemPending   = "pending"
+	PayoutItemInitiated = "initiated"
+	PayoutItemSuccess   = "success"
+	PayoutItemFailed    = "failed"
 )
 
 // billDateRe 账期/账单日期：YYYY-MM-DD。
@@ -65,8 +78,32 @@ type ChannelAmountEntry struct {
 	AmountMinor int64
 }
 
+// reconcileSection 是对账比对的一个段：键 = 单据号（支付段为 PaymentNo、
+// 退款段为 RefundNo），值 = 归并后的金额。isRefund 决定差异行写
+// ReconcileDiff.PaymentNo 还是 RefundNo。
+type reconcileSection struct {
+	isRefund bool
+	local    map[string]int64
+	channel  map[string]int64
+}
+
+// reconcileRun 是一次对账结论的完整输入。failReason 非空表示「这次对账没能
+// 得出结论」（账单下载失败、解析 0 行等）：任务照落但只做留痕，不比对、
+// 不出「对平」结论——绝不把没拿到的账单当成对平。
+type reconcileRun struct {
+	channelCode string
+	billDate    string
+	subjectID   string
+	source      string
+	billDigest  string
+	billRows    int
+	failReason  string
+	sections    []reconcileSection
+}
+
 // RunReconcileTask 生成（或复用）一张对账任务：本地按 billDate + 渠道聚合
-// 已成功支付单，与渠道金额逐笔比对，产出 long/short/missing 差异行。
+// 已成功支付单，与渠道金额（人工录入，source=manual）逐笔比对，产出
+// long/short/missing 差异行。口径不变：DiffAmountMinor = local - channel。
 func (s *Service) RunReconcileTask(ctx context.Context, channelCode, billDate, subjectID string, entries []ChannelAmountEntry) (*ReconcileTask, error) {
 	channelCode, billDate = strings.TrimSpace(channelCode), strings.TrimSpace(billDate)
 	subjectID = strings.TrimSpace(subjectID)
@@ -77,7 +114,26 @@ func (s *Service) RunReconcileTask(ctx context.Context, channelCode, billDate, s
 	if err != nil {
 		return nil, response.BadRequest(errInvalidAmount)
 	}
-	local := map[string]int64{}
+	local, err := s.localReconcilePayments(ctx, channelCode, subjectID, startAt, endAt)
+	if err != nil {
+		return nil, err
+	}
+	channel := map[string]int64{}
+	for _, e := range entries {
+		no := strings.TrimSpace(e.PaymentNo)
+		if no != "" {
+			channel[no] += e.AmountMinor
+		}
+	}
+	return s.applyReconcile(ctx, reconcileRun{
+		channelCode: channelCode, billDate: billDate, subjectID: subjectID,
+		source:   ReconcileSourceManual,
+		sections: []reconcileSection{{local: local, channel: channel}},
+	})
+}
+
+// localReconcilePayments 聚合账期内该渠道（可限定主体）已成功支付单的渠道金额输入。
+func (s *Service) localReconcilePayments(ctx context.Context, channelCode, subjectID string, startAt, endAt time.Time) (map[string]int64, error) {
 	db := s.db.WithContext(ctx).Model(&Order{}).
 		Where("channel_code = ? AND status IN ?", channelCode,
 			[]string{StatusSucceeded, StatusPartiallyRefunded, StatusRefunded}).
@@ -89,21 +145,22 @@ func (s *Service) RunReconcileTask(ctx context.Context, channelCode, billDate, s
 	if err := db.Find(&rows).Error; err != nil {
 		return nil, err
 	}
+	local := map[string]int64{}
 	for i := range rows {
 		local[rows[i].PaymentNo] += rows[i].AmountMinor
 	}
-	channel := map[string]int64{}
-	for _, e := range entries {
-		no := strings.TrimSpace(e.PaymentNo)
-		if no != "" {
-			channel[no] += e.AmountMinor
-		}
-	}
+	return local, nil
+}
 
+// applyReconcile 落任务并对账：同键已有 open 任务复用（重跑刷新差异与来源），
+// closed 任务撞同键报冲突。差异分类口径唯一：
+// 双边金额不等 → 渠道多为 long、渠道少为 short；单边缺失 → missing；
+// DiffAmountMinor = local - channel。
+func (s *Service) applyReconcile(ctx context.Context, in reconcileRun) (*ReconcileTask, error) {
 	var task ReconcileTask
-	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// 同键已有 open 任务则复用（重跑刷新差异）；closed 任务撞同键报冲突。
-		err := tx.Where("channel_code = ? AND bill_date = ? AND subject_id = ?", channelCode, billDate, subjectID).
+		err := tx.Where("channel_code = ? AND bill_date = ? AND subject_id = ?", in.channelCode, in.billDate, in.subjectID).
 			Take(&task).Error
 		if err == nil {
 			if task.Status != ReconcileOpen {
@@ -118,8 +175,8 @@ func (s *Service) RunReconcileTask(ctx context.Context, channelCode, billDate, s
 				return ierr
 			}
 			task = ReconcileTask{
-				ChannelCode: channelCode, BillDate: billDate, SubjectID: subjectID,
-				Status: ReconcileOpen, Source: ReconcileSourceManual,
+				ChannelCode: in.channelCode, BillDate: in.billDate, SubjectID: in.subjectID,
+				Status: ReconcileOpen, Source: in.source,
 			}
 			task.ID = id
 			if err := tx.Create(&task).Error; err != nil {
@@ -129,58 +186,84 @@ func (s *Service) RunReconcileTask(ctx context.Context, channelCode, billDate, s
 			return err
 		}
 
-		paymentNos := make([]string, 0, len(local)+len(channel))
-		for no := range local {
-			paymentNos = append(paymentNos, no)
-		}
-		for no := range channel {
-			if _, ok := local[no]; !ok {
-				paymentNos = append(paymentNos, no)
-			}
-		}
-		sort.Strings(paymentNos)
 		totalLocal, totalChannel, diffCount := int64(0), int64(0), 0
-		for _, no := range paymentNos {
-			l, hasLocal := local[no]
-			c, hasChannel := channel[no]
-			totalLocal += l
-			totalChannel += c
-			if hasLocal && hasChannel && l == c {
-				continue
-			}
-			kind := DiffMissing
-			if hasLocal && hasChannel {
-				if c > l {
-					kind = DiffLong
-				} else {
-					kind = DiffShort
+		if in.failReason == "" {
+			for _, sec := range in.sections {
+				l, c, n, err := writeReconcileDiffs(tx, int64(task.ID), task.TenantID, sec)
+				if err != nil {
+					return err
 				}
+				totalLocal += l
+				totalChannel += c
+				diffCount += n
 			}
-			id, ierr := idgen.Next()
-			if ierr != nil {
-				return ierr
-			}
-			diff := ReconcileDiff{
-				TaskID: int64(task.ID), Kind: kind, PaymentNo: no,
-				LocalAmountMinor: l, ChannelAmountMinor: c, DiffAmountMinor: l - c,
-				Status: DiffOpen,
-			}
-			diff.ID = id
-			diff.TenantID = task.TenantID
-			if err := tx.Create(&diff).Error; err != nil {
-				return err
-			}
-			diffCount++
 		}
 		task.TotalLocalMinor, task.TotalChannelMinor, task.DiffCount = totalLocal, totalChannel, diffCount
+		task.Source, task.BillDigest, task.BillRows = in.source, truncate(in.billDigest, 64), in.billRows
+		task.FailReason = truncate(in.failReason, 200)
 		return tx.Model(&ReconcileTask{}).Where("id = ?", int64(task.ID)).Updates(map[string]any{
 			"total_local_minor": totalLocal, "total_channel_minor": totalChannel, "diff_count": diffCount,
+			"source": task.Source, "bill_digest": task.BillDigest, "bill_rows": task.BillRows,
+			"fail_reason": task.FailReason,
 		}).Error
 	})
 	if err != nil {
 		return nil, err
 	}
 	return &task, nil
+}
+
+// writeReconcileDiffs 比对一段（支付或退款）双边金额并落差异行，返回双边合计与差异数。
+func writeReconcileDiffs(tx *gorm.DB, taskID int64, tenantID idgen.ID, sec reconcileSection) (int64, int64, int, error) {
+	keys := make([]string, 0, len(sec.local)+len(sec.channel))
+	for no := range sec.local {
+		keys = append(keys, no)
+	}
+	for no := range sec.channel {
+		if _, ok := sec.local[no]; !ok {
+			keys = append(keys, no)
+		}
+	}
+	sort.Strings(keys)
+	totalLocal, totalChannel, diffCount := int64(0), int64(0), 0
+	for _, no := range keys {
+		l, hasLocal := sec.local[no]
+		c, hasChannel := sec.channel[no]
+		totalLocal += l
+		totalChannel += c
+		if hasLocal && hasChannel && l == c {
+			continue
+		}
+		kind := DiffMissing
+		if hasLocal && hasChannel {
+			if c > l {
+				kind = DiffLong
+			} else {
+				kind = DiffShort
+			}
+		}
+		id, ierr := idgen.Next()
+		if ierr != nil {
+			return totalLocal, totalChannel, diffCount, ierr
+		}
+		diff := ReconcileDiff{
+			TaskID: taskID, Kind: kind,
+			LocalAmountMinor: l, ChannelAmountMinor: c, DiffAmountMinor: l - c,
+			Status: DiffOpen,
+		}
+		if sec.isRefund {
+			diff.RefundNo = truncate(no, 40)
+		} else {
+			diff.PaymentNo = truncate(no, 40)
+		}
+		diff.ID = id
+		diff.TenantID = tenantID
+		if err := tx.Create(&diff).Error; err != nil {
+			return totalLocal, totalChannel, diffCount, err
+		}
+		diffCount++
+	}
+	return totalLocal, totalChannel, diffCount, nil
 }
 
 // ResolveDiffInput 是差异处置入参。
