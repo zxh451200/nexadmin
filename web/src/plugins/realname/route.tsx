@@ -6,6 +6,6 @@ export const routes: ModuleRoute[] = [
     path: 'realname',
     component: lazy(() => import('./RealnamePage')),
     perm: 'realname:list',
-    menu: { title: 'plugin_realname.menu', icon: 'Fingerprint', order: 75 },
+    menu: { title: 'plugin_realname.menu', icon: 'FingerprintPattern', order: 75 },
   },
 ]

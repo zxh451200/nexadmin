@@ -12,7 +12,7 @@ menus:
     path: /realname
     component: plugins/realname/RealnamePage
     perm: realname:list
-    icon: Fingerprint
+    icon: FingerprintPattern
     sort: 75
     keep_alive: true
   - parent: realname:list
