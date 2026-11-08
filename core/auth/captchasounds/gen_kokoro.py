@@ -34,9 +34,11 @@ DIGITS = {
     "en": ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"],
 }
 
-# 音色 sid（sherpa-onnx k2-fsa PR #1942 的顺序：英文音色在前、中文从 3 起）：
-#   0 = af_maple（英语女声），3 = zf_001（中文女声）。不满意换同段位的其他 sid。
-VOICE_SID = {"zh": 3, "en": 0}
+# 音色 sid（sherpa-onnx k2-fsa PR #1942 的顺序：英文音色在前、中文从 3 起）。
+# 由 voice_scan 全量实测选出：zh sid 8 信噪比 165dB、语内嘶声 0%、响度与语速正常
+# （原 zf_001=sid3 的语内底噪比它高约三个数量级）；en sid 1 = af_sol，英文组最干净响度足。
+# 不满意就跑 D:\tmp\voice_scan.py 按数据换 sid，不要加滤波补丁。
+VOICE_SID = {"zh": 8, "en": 1}
 
 
 def ensure_model():
@@ -73,7 +75,12 @@ def build_tts():
 
 
 def shape(pcm: np.ndarray) -> np.ndarray:
-    """去首尾静音 → 归一响度 → 淡入淡出（与旧管线同口径，Go 端拼接逻辑零改动）。"""
+    """去首尾静音 → 归一响度 → 淡入淡出（与旧管线同口径，Go 端拼接逻辑零改动）。
+
+    底噪治理走根修：gen_kokoro 的音色 sid 由 voice_scan 实测信噪比/嘶声选出
+    （候选音色的静音段与语内背景都接近数字零，无需任何滤波）；若日后换到
+    带底噪的音色，优先换 sid 而不是在这里加滤波补丁。
+    """
     pcm = np.asarray(pcm, dtype=np.float64).flatten()
     loud = np.flatnonzero(np.abs(pcm) > 0.004)
     if loud.size == 0:
