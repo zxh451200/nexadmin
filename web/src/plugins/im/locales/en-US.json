@@ -155,6 +155,10 @@
       "retentionHint": "Only closed conversations are purged, together with their messages and attachments; checked hourly",
       "readonlyHint": "You can view these settings but not save them"
     },
-    "pickConversationMobile": "Pick a conversation above to reply"
+    "pickConversationMobile": "Pick a conversation above to reply",
+    "pickConversationTitle": "Select a conversation",
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "bizRef": "Business reference {{no}}"
   }
 }

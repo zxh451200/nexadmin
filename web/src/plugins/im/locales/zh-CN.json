@@ -155,6 +155,10 @@
       "retentionHint": "只清理已结束的会话，消息与附件一并删除；每小时检查一次",
       "readonlyHint": "你可以查看这些设置，但没有保存权限"
     },
-    "pickConversationMobile": "选择上方会话开始回复"
+    "pickConversationMobile": "选择上方会话开始回复",
+    "pickConversationTitle": "选择一个会话",
+    "today": "今天",
+    "yesterday": "昨天",
+    "bizRef": "业务单号 {{no}}"
   }
 }

@@ -1208,9 +1208,10 @@ export default function TicketPage() {
         <TabsContent value="logs">
           {/* 队列与会话是一体两面：选中哪张单就看哪段对话，整体算「列表」视图，不拆散。
               高度约束只给桌面双栏：移动端单列下 calc 高度会把队列和会话各压成半屏。
+              17rem = 顶部栏+页签条+页头+「列表/统计」页签行+间距，与 ImPage 同步改。
               桌面再给一个下限：窗口矮到算出来的高度装不下「头部+次级面板+会话保底+回复框」时，
               让整页滚，而不是把会话挤成一条缝。 */}
-          <div className="grid h-auto min-h-96 grid-cols-1 gap-4 md:h-[calc(100vh-14rem)] md:min-h-144 md:grid-cols-[24rem_1fr]">
+          <div className="grid h-auto min-h-96 grid-cols-1 gap-4 md:h-[calc(100vh-17rem)] md:min-h-144 md:grid-cols-[24rem_1fr]">
             <Card className="flex max-h-128 min-h-0 flex-col gap-2 p-2 md:max-h-none">
               <div className="flex flex-wrap items-center gap-2">
                 <Input

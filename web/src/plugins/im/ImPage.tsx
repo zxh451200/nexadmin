@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { ArrowRightLeft, Ban, Bell, BellOff, ChevronLeft, ChevronRight, ChevronUp, Download, Ellipsis, FileText, Lock, Merge, MessageSquare, Paperclip, Pencil, Send, Settings2, Star, StickyNote, Tag, Trash2, Undo2, UserMinus, UserPlus, X } from 'lucide-react'
+import { ArrowRightLeft, Ban, Bell, BellOff, ChevronLeft, ChevronRight, ChevronUp, Download, Ellipsis, FileText, Lock, Merge, MessageSquare, MessagesSquare, Paperclip, Pencil, Send, Settings2, Star, StickyNote, Tag, Trash2, Undo2, UserMinus, UserPlus, UserRound, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
@@ -23,6 +23,7 @@ import { useWs } from '@/framework/hooks/useWs'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Card } from '@/framework/ui/card'
+import { Avatar, AvatarFallback } from '@/framework/ui/avatar'
 import { Checkbox } from '@/framework/ui/checkbox'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/framework/ui/dropdown-menu'
 import { Input } from '@/framework/ui/input'
@@ -68,7 +69,7 @@ import {
   type SenderType,
 } from './api'
 import { formatSize } from '@/framework/upload/precheck'
-import { formatTime, statusVariant } from './format'
+import { daySeparator, formatClock, formatTime, initials, relativeStamp, statusVariant } from './format'
 
 const ALL = '__all'
 /** 会话队列每页条数：与工单列表同一档 */
@@ -83,6 +84,12 @@ function asStreamEvent(v: unknown): StreamEvent | null {
 
 function isMessage(v: unknown): v is ImMessage {
   return typeof v === 'object' && v !== null && typeof (v as ImMessage).seq === 'number'
+}
+
+/** 本地日历日：跨天判定用，别用 UTC 的 toISOString（东八区凌晨会被算到前一天）。 */
+function dayOf(iso: string): string {
+  const d = new Date(iso)
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
 }
 
 /** 提示音：短促双音，不依赖音频资源。 */
@@ -476,8 +483,9 @@ export default function ImPage() {
           <TabsTrigger value="stats">{t('plugin_im.view.stats')}</TabsTrigger>
         </TabsList>
         <TabsContent value="workbench">
-      {/* 分栏几何与工单中心同款（24rem 列 + 桌面定高 + 移动端左栏限高）：两套坐席工作台并排打开不会互相打架 */}
-      <div className="grid h-auto min-h-96 grid-cols-1 gap-4 md:h-[calc(100vh-14rem)] md:min-h-144 md:grid-cols-[24rem_1fr]">
+      {/* 分栏几何与工单中心同款（24rem 列 + 桌面定高 + 移动端左栏限高）：两套坐席工作台并排打开不会互相打架。
+          17rem = 顶部栏+页签条+页头+「会话/统计」页签行+间距；两处常量必须同步改 */}
+      <div className="grid h-auto min-h-96 grid-cols-1 gap-4 md:h-[calc(100vh-17rem)] md:min-h-144 md:grid-cols-[24rem_1fr]">
         <Card className="flex max-h-128 min-h-0 flex-col gap-2 p-2 md:max-h-none">
           <div className="flex flex-wrap items-center gap-2">
             <Input
@@ -666,36 +674,72 @@ function ConvListItem({
   onTogglePick: (on: boolean) => void
   onSelect: () => void
 }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const tags = (conv.tags || '').split(',').filter(Boolean)
+  const visitor = conv.visitorName || conv.visitorToken
+  const stamp = relativeStamp(conv.lastMsgAt, i18n.language)
+  // 一行最多三枚元信息：归属、业务单号优先，标签按余位截断（标签在会话头部仍全量可见）
+  const tagSlots = Math.max(0, 3 - (conv.assigneeName ? 1 : 0) - (conv.bizNo ? 1 : 0))
   const row = (
     <button
       type="button"
       onClick={onSelect}
       className={cn(
-        'flex w-full flex-col gap-1 rounded-md px-3 py-2 text-start text-sm transition-colors hover:bg-accent',
+        'flex w-full items-start gap-2.5 rounded-md px-2.5 py-2 text-start text-sm transition-colors hover:bg-accent',
         active && 'bg-accent',
       )}
     >
-      <div className="flex w-full items-center gap-2">
-        <span className="min-w-0 flex-1 truncate font-medium text-foreground">{conv.visitorName || conv.visitorToken}</span>
-        {conv.unread > 0 ? <Badge variant="destructive">{conv.unread}</Badge> : null}
-        <Badge variant={statusVariant(conv.status)}>{t(`plugin_im.status.${conv.status}`)}</Badge>
-      </div>
-      <div className="truncate text-xs text-muted-foreground">
-        {conv.assigneeName ? `${conv.assigneeName} · ` : ''}
-        {conv.bizNo ? `${conv.bizType}/${conv.bizNo} · ` : ''}
-        {conv.lastPreview || t('plugin_im.noMessages')}
-      </div>
-      {tags.length > 0 ? (
-        <div className="flex flex-wrap gap-1">
-          {tags.slice(0, 3).map((tag) => (
-            <Badge key={tag} variant="outline" className="px-1.5 py-0 text-[10px] font-normal">
-              {tag}
+      <Avatar className="mt-0.5 size-8 shrink-0">
+        <AvatarFallback className="text-xs">{initials(visitor)}</AvatarFallback>
+      </Avatar>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className="min-w-0 flex-1 truncate font-medium text-foreground">{visitor}</span>
+          {conv.unread > 0 ? (
+            <Badge variant="destructive" className="shrink-0 px-1.5 py-0 text-[10px] tabular-nums">
+              {conv.unread}
             </Badge>
-          ))}
+          ) : null}
+          {stamp ? (
+            <span className="shrink-0 text-[11px] text-muted-foreground tabular-nums">
+              {stamp.kind === 'yesterday' ? t('plugin_im.yesterday') : stamp.text}
+            </span>
+          ) : null}
         </div>
-      ) : null}
+        <div className="flex items-center gap-2">
+          <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+            {conv.lastPreview || t('plugin_im.noMessages')}
+          </span>
+          <Badge variant={statusVariant(conv.status)} className="shrink-0">
+            {t(`plugin_im.status.${conv.status}`)}
+          </Badge>
+        </div>
+        {conv.assigneeName || conv.bizNo || tags.length > 0 ? (
+          <div className="mt-1 flex flex-wrap items-center gap-1">
+            {conv.assigneeName ? (
+              <Badge variant="outline" className="gap-1 px-1.5 py-0 text-[10px] font-normal">
+                <UserRound aria-hidden="true" className="size-3" />
+                {conv.assigneeName}
+              </Badge>
+            ) : null}
+            {conv.bizNo ? (
+              <Badge
+                variant="outline"
+                className="px-1.5 py-0 font-mono text-[10px] font-normal"
+                title={conv.bizType ? conv.bizType.replace(/_/g, ' ') : undefined}
+                aria-label={t('plugin_im.bizRef', { no: conv.bizNo })}
+              >
+                {conv.bizNo}
+              </Badge>
+            ) : null}
+            {tags.slice(0, tagSlots).map((tag) => (
+              <Badge key={tag} variant="outline" className="px-1.5 py-0 text-[10px] font-normal">
+                {tag}
+              </Badge>
+            ))}
+          </div>
+        ) : null}
+      </div>
     </button>
   )
   if (!canPick) return row
@@ -707,7 +751,7 @@ function ConvListItem({
         checked={picked}
         disabled={conv.status !== 'closed'}
         title={conv.status === 'closed' ? undefined : t('plugin_im.batch.onlyClosed')}
-        aria-label={conv.visitorName || conv.visitorToken}
+        aria-label={visitor}
         onCheckedChange={(v) => onTogglePick(v === true)}
       />
       <div className="min-w-0 flex-1">{row}</div>
@@ -727,8 +771,18 @@ function systemLabel(m: ImMessage, t: (key: string) => string): string {
   return m.content
 }
 
-function RatingStars({ value, className }: { value: number; className?: string }) {
+/** 消息流的日期分隔：细线夹日期，与系统事件胶囊区分开。 */
+function DayDivider({ label }: { label: string }) {
   return (
+    <div className="flex items-center gap-2 py-2 text-[11px] text-muted-foreground">
+      <span className="h-px flex-1 bg-border" aria-hidden="true" />
+      <span>{label}</span>
+      <span className="h-px flex-1 bg-border" aria-hidden="true" />
+    </div>
+  )
+}
+
+function RatingStars({ value, className }: { value: number; className?: string }) {  return (
     <span className={cn('inline-flex items-center gap-0.5', className)} aria-label={`${value}/5`}>
       {[1, 2, 3, 4, 5].map((n) => (
         <Star
@@ -826,6 +880,7 @@ function ChatPane({
   const { t, i18n } = useTranslation()
   const isMobile = useIsMobile()
   const userId = useAuth((s) => s.user?.id)
+  const myName = useAuth((s) => s.user?.nickname || s.user?.username)
   const { has } = usePermission()
   // 「更多」只在真有可收项时出现，别给没权限的坐席摆一个空菜单
   const showMoreMenu = has('im:edit') || (canDelete && conv?.status === 'closed')
@@ -865,10 +920,15 @@ function ChatPane({
   }, [messages.length, conv?.convNo])
 
   if (!conv) {
+    // 移动端会话列表在上方，空态文案不提「左侧」
     return (
-      <Card className="flex items-center justify-center text-sm text-muted-foreground">
-        {/* 移动端会话列表在上方，空态文案不提「左侧」 */}
-        {t(isMobile ? 'plugin_im.pickConversationMobile' : 'plugin_im.pickConversation')}
+      <Card className="flex items-center justify-center">
+        <EmptyState
+          icon={<MessagesSquare aria-hidden="true" className="size-6" />}
+          title={t('plugin_im.pickConversationTitle')}
+          description={t(isMobile ? 'plugin_im.pickConversationMobile' : 'plugin_im.pickConversation')}
+          className="py-16"
+        />
       </Card>
     )
   }
@@ -892,6 +952,9 @@ function ChatPane({
   return (
     <Card className="flex min-h-0 flex-col">
       <div className="flex flex-wrap items-center gap-2 border-b px-4 py-2">
+        <Avatar className="size-9 shrink-0">
+          <AvatarFallback className="text-xs">{initials(conv.visitorName || conv.visitorToken)}</AvatarFallback>
+        </Avatar>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 truncate text-sm font-medium text-foreground">
             {conv.visitorName || conv.visitorToken}
@@ -1048,12 +1111,23 @@ function ChatPane({
         {loading && messages.length === 0 ? (
           <div className="text-center text-sm text-muted-foreground">{t('plugin_im.loading')}</div>
         ) : null}
-        {messages.map((m) => {
+        {messages.map((m, i) => {
+          const prev = i > 0 ? messages[i - 1] : undefined
+          const newDay = !prev || dayOf(prev.createdAt) !== dayOf(m.createdAt)
+          const day = newDay ? daySeparator(m.createdAt, i18n.language) : null
+          const separator = day ? (
+            <DayDivider
+              label={day.kind === 'today' ? t('plugin_im.today') : day.kind === 'yesterday' ? t('plugin_im.yesterday') : day.text}
+            />
+          ) : null
           if (m.kind === 'system') {
             return (
-              <SystemPill key={m.id}>
-                {systemLabel(m, (key) => t(key))} · {formatTime(m.createdAt, i18n.language)}
-              </SystemPill>
+              <Fragment key={m.id}>
+                {separator}
+                <SystemPill>
+                  {systemLabel(m, (key) => t(key))} · {formatTime(m.createdAt, i18n.language)}
+                </SystemPill>
+              </Fragment>
             )
           }
           const mine = m.senderType === 'agent'
@@ -1062,42 +1136,59 @@ function ChatPane({
           const recallable =
             mine && !m.recalledAt && m.senderId && m.senderId === userId &&
             Date.now() - new Date(m.createdAt).getTime() < 120_000
+          // 同一人连发只在一组的第一条露头像与姓名，否则气泡上方全是重复信息
+          const groupStart =
+            newDay || !prev || prev.kind === 'system' || prev.senderType !== m.senderType || prev.senderId !== m.senderId
+          const who = mine ? myName || t('plugin_im.senders.agent') : conv.visitorName || conv.visitorToken
           return (
-            <ChatBubble
-              key={m.id}
-              side={mine ? 'end' : 'start'}
-              tone={mine ? 'primary' : 'default'}
-              meta={
-                <>
-                  <span>{m.senderName || t(`plugin_im.senders.${m.senderType}`)}</span>
-                  <span>{formatTime(m.createdAt, i18n.language)}</span>
-                  {mine ? (
-                    <span>{conv.visitorReadSeq >= m.seq ? t('plugin_im.read') : t('plugin_im.unread')}</span>
-                  ) : null}
-                </>
-              }
-              footer={
-                recallable ? (
-                  <button
-                    type="button"
-                    onClick={() => onRecall(conv, m)}
-                    className="mt-0.5 flex items-center gap-0.5 text-[11px] opacity-70 hover:opacity-100"
-                  >
-                    <Undo2 aria-hidden="true" className="size-3" />
-                    {t('plugin_im.recall.action')}
-                  </button>
-                ) : undefined
-              }
-            >
-              {att ? (
-                att.mime.startsWith('image/') ? (
-                  <ImageAttachment att={att} url={attUrl} onZoom={() => setZoomImageId(m.id)} />
+            <Fragment key={m.id}>
+              {separator}
+              <div className={cn('flex items-end gap-2', mine ? 'flex-row-reverse' : 'flex-row')}>
+                {groupStart ? (
+                  <Avatar className="mb-0.5 size-7 shrink-0" aria-hidden="true">
+                    <AvatarFallback className="text-[10px]">{initials(who)}</AvatarFallback>
+                  </Avatar>
                 ) : (
-                  <FileAttachment att={att} url={attUrl} />
-                )
-              ) : null}
-              {m.content ? <div className="whitespace-pre-wrap wrap-break-word">{m.content}</div> : null}
-            </ChatBubble>
+                  <span className="size-7 shrink-0" aria-hidden="true" />
+                )}
+                <div className="min-w-0 flex-1">
+                  <ChatBubble
+                    side={mine ? 'end' : 'start'}
+                    tone={mine ? 'primary' : 'default'}
+                    meta={
+                      <>
+                        {groupStart ? <span>{m.senderName || t(`plugin_im.senders.${m.senderType}`)}</span> : null}
+                        <span title={formatTime(m.createdAt, i18n.language)}>{formatClock(m.createdAt, i18n.language)}</span>
+                        {mine ? (
+                          <span>{conv.visitorReadSeq >= m.seq ? t('plugin_im.read') : t('plugin_im.unread')}</span>
+                        ) : null}
+                      </>
+                    }
+                    footer={
+                      recallable ? (
+                        <button
+                          type="button"
+                          onClick={() => onRecall(conv, m)}
+                          className="mt-0.5 flex items-center gap-0.5 text-[11px] opacity-70 hover:opacity-100"
+                        >
+                          <Undo2 aria-hidden="true" className="size-3" />
+                          {t('plugin_im.recall.action')}
+                        </button>
+                      ) : undefined
+                    }
+                  >
+                    {att ? (
+                      att.mime.startsWith('image/') ? (
+                        <ImageAttachment att={att} url={attUrl} onZoom={() => setZoomImageId(m.id)} />
+                      ) : (
+                        <FileAttachment att={att} url={attUrl} />
+                      )
+                    ) : null}
+                    {m.content ? <div className="whitespace-pre-wrap wrap-break-word">{m.content}</div> : null}
+                  </ChatBubble>
+                </div>
+              </div>
+            </Fragment>
           )
         })}
         <div ref={bottomRef} />
