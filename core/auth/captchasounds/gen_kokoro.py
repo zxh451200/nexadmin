@@ -36,9 +36,13 @@ DIGITS = {
 
 # 音色 sid（sherpa-onnx k2-fsa PR #1942 的顺序：英文音色在前、中文从 3 起）。
 # 由 voice_scan 全量实测选出：zh sid 8 信噪比 165dB、语内嘶声 0%、响度与语速正常
-# （原 zf_001=sid3 的语内底噪比它高约三个数量级）；en sid 2（six 不会被读成 sex，
-# 5/6/7/8 用 speed=1.1 时长更利落）。不满意就跑 D:\tmp\voice_scan.py 按数据换 sid。
+# （原 zf_001=sid3 的语内底噪比它高约三个数量级）；en sid 2（six 不会被读成 sex）。
+# 不满意就跑 D:\tmp\voice_scan.py 按数据换 sid。
 VOICE_SID = {"zh": 8, "en": 2}
+
+# 按数字覆盖语速（未列的走 1.0）。en 5/6/7/8 用 1.1：sid2 下 seven 在 1.0 读 1.01s，
+# 验证码里连读两个 7 拖沓；1.1 降到 0.63s。改语速或换音色后必须逐字 ASR 复听。
+SPEED = {"en": {5: 1.1, 6: 1.1, 7: 1.1, 8: 1.1}}
 
 
 def ensure_model():
@@ -100,7 +104,7 @@ def main():
     tts = build_tts()
     for lang, words in DIGITS.items():
         for d, text in enumerate(words):
-            audio = tts.generate(text, sid=VOICE_SID[lang], speed=1.0)
+            audio = tts.generate(text, sid=VOICE_SID[lang], speed=SPEED.get(lang, {}).get(d, 1.0))
             pcm = np.asarray(audio.samples, dtype=np.float64)
             if audio.sample_rate != SAMPLE_RATE:
                 raise RuntimeError(f"{lang}/{d}: 采样率 {audio.sample_rate} != {SAMPLE_RATE}")
