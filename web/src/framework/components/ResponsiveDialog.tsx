@@ -26,6 +26,8 @@ export interface ResponsiveDialogProps {
   footer?: ReactNode
   /** 桌面弹窗宽度 */
   size?: 'sm' | 'md' | 'lg' | 'xl'
+  /** 高度固定为 85dvh（手机 92dvh），正文占满余下空间；多页签表单切换时弹窗不再变高变矮 */
+  fixedHeight?: boolean
   className?: string
 }
 
@@ -45,6 +47,7 @@ export function ResponsiveDialog({
   children,
   footer,
   size = 'md',
+  fixedHeight,
   className,
 }: ResponsiveDialogProps) {
   const isMobile = useIsMobile()
@@ -52,7 +55,7 @@ export function ResponsiveDialog({
   if (isMobile) {
     return (
       <Drawer open={open} onOpenChange={onOpenChange}>
-        <DrawerContent className="flex max-h-[92dvh] flex-col">
+        <DrawerContent className={cn('flex flex-col', fixedHeight ? 'h-[92dvh]' : 'max-h-[92dvh]')}>
           <DrawerHeader className="text-start">
             <DrawerTitle>{title}</DrawerTitle>
             {description ? (
@@ -61,7 +64,9 @@ export function ResponsiveDialog({
               <DrawerDescription className="sr-only">{title}</DrawerDescription>
             )}
           </DrawerHeader>
-          <div className={cn('min-h-0 flex-1 overflow-y-auto px-4 pb-4', className)}>{children}</div>
+          <div className={cn('min-h-0 flex-1 px-4 pb-4', fixedHeight ? 'overflow-hidden' : 'overflow-y-auto', className)}>
+            {children}
+          </div>
           {footer ? (
             <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-border bg-background px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] [&>button]:w-full">
               {footer}
@@ -75,7 +80,13 @@ export function ResponsiveDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {/* 正文自己带滚动区，外层不能再滚一次，否则弹窗右侧会出现两条滚动条 */}
-      <DialogContent className={cn('flex max-h-[85dvh] flex-col gap-0 p-0 overflow-hidden!', sizeClass[size])}>
+      <DialogContent
+        className={cn(
+          'flex flex-col gap-0 p-0 overflow-hidden!',
+          fixedHeight ? 'h-[85dvh]' : 'max-h-[85dvh]',
+          sizeClass[size],
+        )}
+      >
         <DialogHeader className="shrink-0 p-6 pb-4 text-start">
           <DialogTitle>{title}</DialogTitle>
           {description ? (
@@ -84,7 +95,9 @@ export function ResponsiveDialog({
             <DialogDescription className="sr-only">{title}</DialogDescription>
           )}
         </DialogHeader>
-        <div className={cn('min-h-0 flex-1 overflow-y-auto px-6 pb-6', className)}>{children}</div>
+        <div className={cn('min-h-0 flex-1 px-6 pb-6', fixedHeight ? 'overflow-hidden' : 'overflow-y-auto', className)}>
+          {children}
+        </div>
         {footer ? (
           <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border px-6 py-4">{footer}</div>
         ) : null}

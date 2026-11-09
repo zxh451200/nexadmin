@@ -56,18 +56,26 @@ export function PasswordForm({
   const [show, setShow] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [verifying, setVerifying] = useState(false)
+  // 锁定倒计时按绝对截止时间算剩余：后台标签页定时器节流、机器睡眠恢复后不会多报（多报会让用户以为还在锁定期）
+  const [lockUntil, setLockUntil] = useState(0)
   const [lockLeft, setLockLeft] = useState(0)
   // 服务端要求 TOTP 二次验证时的挑战；非 null 时密码下方出现动态码输入，登录按钮变「验证」
   const [challenge, setChallenge] = useState<LoginChallenge | null>(null)
   const [totpCode, setTotpCode] = useState('')
   const [totpError, setTotpError] = useState('')
 
-  // 锁定倒计时：每秒递减，归零后提示自动消失
+  // 锁定倒计时：每秒按截止时间重算，归零后提示自动消失
   useEffect(() => {
-    if (lockLeft <= 0) return
-    const timer = window.setTimeout(() => setLockLeft((s) => s - 1), 1000)
-    return () => window.clearTimeout(timer)
-  }, [lockLeft])
+    if (lockUntil <= 0) return
+    const tick = () => {
+      const left = Math.max(0, Math.ceil((lockUntil - Date.now()) / 1000))
+      setLockLeft(left)
+      if (left <= 0) setLockUntil(0)
+    }
+    tick()
+    const timer = window.setInterval(tick, 1000)
+    return () => window.clearInterval(timer)
+  }, [lockUntil])
   const lockTime = `${Math.floor(lockLeft / 60)}:${String(lockLeft % 60).padStart(2, '0')}`
   const schema = useMemo(
     () =>
@@ -136,7 +144,7 @@ export function PasswordForm({
         onSuccess()
       }
     } catch (e) {
-      if (e instanceof ApiError && e.code === 423) setLockLeft(e.retryAfter ?? 0)
+      if (e instanceof ApiError && e.code === 423) setLockUntil(Date.now() + (e.retryAfter ?? 0) * 1000)
       if (e instanceof ApiError && e.reason === 'CAPTCHA_REQUIRED') {
         setNeedCaptcha(true)
         setBaseMode('slider')
