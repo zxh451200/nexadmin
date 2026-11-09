@@ -27,7 +27,9 @@
       "sortKey": "排序字段",
       "sortDefault": "默认排序（新建在前）",
       "sortDir": "切换为{{dir}}",
-      "allStages": "全部阶段"
+      "allStages": "全部阶段",
+      "more": "更多筛选",
+      "less": "收起筛选"
     },
     "sort": {
       "asc": "升序",

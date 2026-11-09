@@ -27,7 +27,9 @@
       "sortKey": "Sort by",
       "sortDefault": "Default (newest first)",
       "sortDir": "Switch to {{dir}}",
-      "allStages": "All stages"
+      "allStages": "All stages",
+      "more": "More filters",
+      "less": "Fewer filters"
     },
     "sort": {
       "asc": "ascending",

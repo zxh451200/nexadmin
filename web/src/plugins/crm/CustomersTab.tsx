@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { ArrowDownUp, CalendarClock, Combine, CopyPlus, Download, Eye, Hand, Pencil, Plus, Settings2, Tag as TagIcon, Trash2, UserMinus, X } from 'lucide-react'
+import { ArrowDownUp, CalendarClock, ChevronDown, Combine, CopyPlus, Download, Eye, Hand, Pencil, Plus, Settings2, SlidersHorizontal, Tag as TagIcon, Trash2, UserMinus, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { useQueryClient } from '@tanstack/react-query'
@@ -12,6 +12,7 @@ import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DatePicker } from '@/framework/components/DatePicker'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { FilterBar } from '@/framework/components/FilterBar'
+import { useIsMobile } from '@/framework/hooks/use-mobile'
 import { RequiredMark } from '@/framework/components/RequiredMark'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Badge } from '@/framework/ui/badge'
@@ -877,6 +878,7 @@ export function CustomersTab() {
   const { t, i18n } = useTranslation()
   const nameOf = useCountryNames()
   const confirm = useConfirm()
+  const isMobile = useIsMobile()
   // 字段定义是平台级表：写入口按平台调用方收口（与分组/规则/SLA 同一判据）。
   const { isPlatform } = usePermission()
   const [params, setParams] = useSearchParams()
@@ -898,6 +900,9 @@ export function CustomersTab() {
   const [filters, setFilters] = useState<CustomerQuery>(initial.f)
   // 归属筛选：全部 / 只看我的 / 公海。公海走独立接口（不做数据范围），不与 mine 叠加。
   const [ownerFilter, setOwnerFilter] = useState<string>(initial.owner)
+  // 低频筛选（来源/等级/标签/建档时间/排序）收在「更多筛选」里：首屏只留四个主条件，
+  // 否则 9 个控件会在 1240px 宽度里折成三行，把动作按钮和表格挤成一片。
+  const [moreOpen, setMoreOpen] = useState(false)
   const [page, setPage] = useState(initial.page)
   const [pageSize, setPageSize] = useState(10)
   const [formOpen, setFormOpen] = useState(false)
@@ -940,6 +945,8 @@ export function CustomersTab() {
     pageSize,
   })
   const inPool = ownerFilter === POOL
+  // 「更多筛选」上的数字：收起时也能看出低频条件里还有生效项，避免以为筛选被重置了。
+  const moreActive = [draft.source, draft.level, draft.tag, draft.createdFrom, draft.createdTo, draft.sortKey].filter(Boolean).length
   const data = inPool ? pool : owned
   const isLoading = inPool ? poolLoading : ownedLoading
   const remove = useDeleteCustomer()
@@ -1170,7 +1177,7 @@ export function CustomersTab() {
         }}
       >
         <Input
-          className="md:w-56"
+          className="md:w-80"
           value={draft.keyword ?? ''}
           onChange={(e) => setDraft((d) => ({ ...d, keyword: e.target.value }))}
           placeholder={t('plugin_crm.searchPlaceholder')}
@@ -1185,19 +1192,6 @@ export function CustomersTab() {
             {TYPES.map((tp) => (
               <SelectItem key={tp} value={tp}>
                 {t(`plugin_crm.type.${tp}`)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={draft.source ?? ALL} onValueChange={(v) => setDraft((d) => ({ ...d, source: v === ALL ? undefined : v }))}>
-          <SelectTrigger className="md:w-40" aria-label={t('plugin_crm.fields.externalSource')}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_crm.filter.allSources')}</SelectItem>
-            {SOURCES.map((s) => (
-              <SelectItem key={s} value={s}>
-                {t(`plugin_crm.source.${s}`, { defaultValue: s })}
               </SelectItem>
             ))}
           </SelectContent>
@@ -1226,76 +1220,119 @@ export function CustomersTab() {
             <SelectItem value={POOL}>{t('plugin_crm.pool.only')}</SelectItem>
           </SelectContent>
         </Select>
-        <Select value={draft.level ?? ALL} onValueChange={(v) => setDraft((d) => ({ ...d, level: v === ALL ? undefined : v }))}>
-          <SelectTrigger className="md:w-28" aria-label={t('plugin_crm.fields.level')}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_crm.filter.allLevels')}</SelectItem>
-            {LEVELS.map((lv) => (
-              <SelectItem key={lv} value={lv}>
-                {t(`plugin_crm.level.${lv}`, { defaultValue: lv })}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={draft.tag ?? ALL} onValueChange={(v) => setDraft((d) => ({ ...d, tag: v === ALL ? undefined : v }))}>
-          <SelectTrigger className="md:w-32" aria-label={t('plugin_crm.fields.tags')}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_crm.filter.allTags')}</SelectItem>
-            {(tagOptions ?? []).map((tag) => (
-              <SelectItem key={tag} value={tag}>
-                {tag}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {/* 建档时间范围：含端点，后端按「to 当天结束前」收口 */}
-        <div className="flex items-center gap-1.5">
-          <DatePicker
-            value={draft.createdFrom ?? null}
-            onChange={(v) => setDraft((d) => ({ ...d, createdFrom: v || undefined }))}
-            ariaLabel={t('plugin_crm.filter.createdFrom')}
-            placeholder={t('plugin_crm.filter.createdFrom')}
-            className="md:w-36"
-          />
-          <span className="text-xs text-muted-foreground">–</span>
-          <DatePicker
-            value={draft.createdTo ?? null}
-            onChange={(v) => setDraft((d) => ({ ...d, createdTo: v || undefined }))}
-            ariaLabel={t('plugin_crm.filter.createdTo')}
-            placeholder={t('plugin_crm.filter.createdTo')}
-            className="md:w-36"
-          />
-        </div>
-        {/* 排序：白名单字段 + 方向切换（与工单筛选同款交互，不用点列头） */}
-        <Select value={draft.sortKey ?? ALL} onValueChange={(v) => setDraft((d) => ({ ...d, sortKey: v === ALL ? undefined : v }))}>
-          <SelectTrigger className="md:w-36" aria-label={t('plugin_crm.filter.sortKey')}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_crm.filter.sortDefault')}</SelectItem>
-            {SORT_KEYS.map((k) => (
-              <SelectItem key={k} value={k}>
-                {t(`plugin_crm.sort.${k}`)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {draft.sortKey ? (
+        {!isMobile ? (
           <Button
             type="button"
-            variant="outline"
-            size="icon"
-            className="size-9"
-            aria-label={t('plugin_crm.filter.sortDir', { dir: draft.sort === 'asc' ? t('plugin_crm.sort.asc') : t('plugin_crm.sort.desc') })}
-            title={draft.sort === 'asc' ? t('plugin_crm.sort.asc') : t('plugin_crm.sort.desc')}
-            onClick={() => setDraft((d) => ({ ...d, sort: d.sort === 'asc' ? 'desc' : 'asc' }))}
+            variant={moreOpen ? 'secondary' : 'outline'}
+            aria-expanded={moreOpen}
+            aria-controls="crm-more-filters"
+            onClick={() => setMoreOpen((v) => !v)}
           >
-            <ArrowDownUp aria-hidden="true" className="size-4" />
+            <SlidersHorizontal className="me-2 size-4" aria-hidden="true" />
+            {t(moreOpen ? 'plugin_crm.filter.less' : 'plugin_crm.filter.more')}
+            {moreActive > 0 ? (
+              <Badge variant="secondary" className="ms-1.5">
+                {moreActive}
+              </Badge>
+            ) : null}
+            <ChevronDown
+              aria-hidden="true"
+              className={moreOpen ? 'ms-1 size-4 rotate-180 transition-transform' : 'ms-1 size-4 transition-transform'}
+            />
           </Button>
+        ) : null}
+        {moreOpen || isMobile ? (
+          <div
+            id="crm-more-filters"
+            className="order-1 flex w-full basis-full flex-col gap-3 md:flex-row md:flex-wrap md:items-center md:rounded-lg md:border md:border-border md:bg-muted/30 md:p-3"
+          >
+            <Select value={draft.source ?? ALL} onValueChange={(v) => setDraft((d) => ({ ...d, source: v === ALL ? undefined : v }))}>
+              <SelectTrigger className="md:w-36" aria-label={t('plugin_crm.fields.externalSource')}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>{t('plugin_crm.filter.allSources')}</SelectItem>
+                {SOURCES.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {t(`plugin_crm.source.${s}`, { defaultValue: s })}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={draft.level ?? ALL} onValueChange={(v) => setDraft((d) => ({ ...d, level: v === ALL ? undefined : v }))}>
+              <SelectTrigger className="md:w-32" aria-label={t('plugin_crm.fields.level')}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>{t('plugin_crm.filter.allLevels')}</SelectItem>
+                {LEVELS.map((lv) => (
+                  <SelectItem key={lv} value={lv}>
+                    {t(`plugin_crm.level.${lv}`, { defaultValue: lv })}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={draft.tag ?? ALL} onValueChange={(v) => setDraft((d) => ({ ...d, tag: v === ALL ? undefined : v }))}>
+              <SelectTrigger className="md:w-36" aria-label={t('plugin_crm.fields.tags')}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>{t('plugin_crm.filter.allTags')}</SelectItem>
+                {(tagOptions ?? []).map((tag) => (
+                  <SelectItem key={tag} value={tag}>
+                    {tag}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {/* 建档时间范围：含端点，后端按「to 当天结束前」收口 */}
+            <div className="flex items-center gap-1.5">
+              <DatePicker
+                value={draft.createdFrom ?? null}
+                onChange={(v) => setDraft((d) => ({ ...d, createdFrom: v || undefined }))}
+                ariaLabel={t('plugin_crm.filter.createdFrom')}
+                placeholder={t('plugin_crm.filter.createdFrom')}
+                className="md:w-40"
+              />
+              <span className="text-xs text-muted-foreground">–</span>
+              <DatePicker
+                value={draft.createdTo ?? null}
+                onChange={(v) => setDraft((d) => ({ ...d, createdTo: v || undefined }))}
+                ariaLabel={t('plugin_crm.filter.createdTo')}
+                placeholder={t('plugin_crm.filter.createdTo')}
+                className="md:w-40"
+              />
+            </div>
+            {/* 排序：白名单字段 + 方向切换（与工单筛选同款交互，不用点列头） */}
+            <div className="flex items-center gap-1.5">
+              <Select value={draft.sortKey ?? ALL} onValueChange={(v) => setDraft((d) => ({ ...d, sortKey: v === ALL ? undefined : v }))}>
+                <SelectTrigger className="md:w-48" aria-label={t('plugin_crm.filter.sortKey')}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL}>{t('plugin_crm.filter.sortDefault')}</SelectItem>
+                  {SORT_KEYS.map((k) => (
+                    <SelectItem key={k} value={k}>
+                      {t(`plugin_crm.sort.${k}`)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {draft.sortKey ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="size-9"
+                  aria-label={t('plugin_crm.filter.sortDir', { dir: draft.sort === 'asc' ? t('plugin_crm.sort.asc') : t('plugin_crm.sort.desc') })}
+                  title={draft.sort === 'asc' ? t('plugin_crm.sort.asc') : t('plugin_crm.sort.desc')}
+                  onClick={() => setDraft((d) => ({ ...d, sort: d.sort === 'asc' ? 'desc' : 'asc' }))}
+                >
+                  <ArrowDownUp aria-hidden="true" className="size-4" />
+                </Button>
+              ) : null}
+            </div>
+          </div>
         ) : null}
       </FilterBar>
       <DataTable
@@ -1368,6 +1405,8 @@ export function CustomersTab() {
                 <Plus aria-hidden="true" />
                 {t('plugin_crm.customer.create')}
               </Button>
+            </Can>
+            <Can perm="crm:edit">
               <Button variant="outline" disabled={inPool} onClick={() => setMergeOpen(true)}>
                 <Combine aria-hidden="true" />
                 {t('plugin_crm.customer.mergeTitle')}
@@ -1377,20 +1416,36 @@ export function CustomersTab() {
               <Download className="me-2 size-4" aria-hidden="true" />
               {t('common.export')}
             </Button>
-            <Button variant="outline" onClick={() => setDuplicatesOpen(true)}>
-              <CopyPlus aria-hidden="true" />
-              {t('plugin_crm.duplicates.action')}
-            </Button>
-            <Button variant="outline" onClick={() => setTodosOpen(true)}>
-              <CalendarClock aria-hidden="true" />
-              {t('plugin_crm.todos.action')}
-            </Button>
-            <Can perm="crm:edit">
-              <Button variant="outline" onClick={() => setFieldsOpen(true)} disabled={!isPlatform} title={!isPlatform ? t('plugin_crm.fields.platformOnly') : undefined}>
-                <Settings2 aria-hidden="true" />
-                {t('plugin_crm.fields.manage')}
-              </Button>
-            </Can>
+            {/* 低频动作收进「更多」：疑似重复是巡检工具、待跟进是当日清单、自定义字段是平台设置，
+                都不该和新客户/合并/导出抢同一排视觉重量。 */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline">
+                  {t('common.more')}
+                  <ChevronDown aria-hidden="true" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                <DropdownMenuItem onSelect={() => setDuplicatesOpen(true)}>
+                  <CopyPlus aria-hidden="true" />
+                  {t('plugin_crm.duplicates.action')}
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setTodosOpen(true)}>
+                  <CalendarClock aria-hidden="true" />
+                  {t('plugin_crm.todos.action')}
+                </DropdownMenuItem>
+                <Can perm="crm:edit">
+                  <DropdownMenuItem
+                    disabled={!isPlatform}
+                    title={!isPlatform ? t('plugin_crm.fields.platformOnly') : undefined}
+                    onSelect={() => setFieldsOpen(true)}
+                  >
+                    <Settings2 aria-hidden="true" />
+                    {t('plugin_crm.fields.manage')}
+                  </DropdownMenuItem>
+                </Can>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </>
         }
         rowActions={(cu) => (
