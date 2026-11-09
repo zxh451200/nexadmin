@@ -120,7 +120,15 @@ No real IdP is available in this repository, so the flow below can only be rerun
 | Attribute names as urn:oid (Okta / Entra default) | Pass | map attributes to the OIDs |
 | SHA-1 signatures | Rejected with 400 by default; passes after enabling "Allow SHA-1 signatures" per source | secure default, explicit opt-in for legacy IdPs
 
-A reusable vendor-tenant simulator ships in the repo: `go run ./scripts/saml-vendor-e2e -base <SP> -admin-user <u> -admin-pass <p>` runs sign-in, role sync and SLO for Okta / Microsoft Entra / Keycloak attribute and signature shapes (all three passed on 2026-11-09). It posts straight to ACS and skips the vendor login page; the redirect chain is covered above. |
+A reusable vendor-tenant simulator ships in the repo: `go run ./scripts/saml-vendor-e2e -base <SP> -admin-user <u> -admin-pass <p>` runs sign-in, role sync and SLO for Okta / Microsoft Entra / Keycloak attribute and signature shapes (all three passed on 2026-11-09). It posts straight to ACS and skips the vendor login page; the redirect chain is covered above.
+
+**Console setup checklists for the big three (fill them without owning a tenant)**
+
+- **Okta**: Create App Integration → SAML 2.0; put our ACS in Single sign-on URL, the SP Entity ID in Audience URI, choose EmailAddress or Persistent for Name ID; add `uid` / `mail` / `displayName` under Attribute Statements and emit filtered groups as `groups`; set the SP logout URL for SLO; assertion encryption is off by default — enable it in Okta and import the SP certificate if needed.
+- **Microsoft Entra**: Enterprise applications → Single sign-on → SAML; take Identifier (Entity ID) and Reply URL (ACS) from the SP metadata and set the Logout URL to SLO; under Attributes & Claims choose persistent or email for NameID, and map our attribute fields to the claim URIs when URIs are used; alternatively paste the Federation Metadata XML.
+- **Keycloak**: Clients → new SAML client; Valid redirect URIs = ACS, Client ID = SP Entity ID, Name ID format persistent/email; turn on Sign documents and Sign assertions, plus Encrypt assertions when needed; add mappers user property → `uid`/`mail` and group list → `groups`.
+
+In all three, export or copy the IdP Metadata / Federation Metadata XML first (or just paste the metadata URL). The group mapping value must be the group name exactly as the vendor emits it (`Everyone`, `Okta Group Name`, `/ops`). When a real test tenant is available later, configure it and rerun the same `scripts/saml-vendor-e2e`. |
 | RelayState site-path deep link | Pass | returns to the original page after sign-in |
 
 For the big three, fill according to their docs: Okta (expose `uid/mail/groups` or OIDs in the app profile; use the SP metadata for ACS and Entity ID), Microsoft Entra (NameID persistent/email, claim URIs for attributes, configure the Logout URL for SLO), Keycloak (tick Sign documents/assertions, enable assertion encryption when needed, emit groups from an attributes mapper).
