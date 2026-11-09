@@ -89,6 +89,19 @@ func (s *Service) metadata(c *gin.Context) {
 		response.Fail(c, err)
 		return
 	}
+	if m.SignMetadata {
+		// 用当前 SP 私钥签整份元数据；IdP 侧按同一张证书验签（元数据里已列出当前证书）。
+		keyPEM, err := decryptSecret(m.SPKeyEnc)
+		if err != nil {
+			response.Fail(c, response.BadRequest("error.bad_request").WithMsg("读取 SP 私钥失败: "+err.Error()))
+			return
+		}
+		raw, err = signMetadataXML(raw, m.SPCert, keyPEM)
+		if err != nil {
+			response.Fail(c, response.BadRequest("error.bad_request").WithMsg(err.Error()))
+			return
+		}
+	}
 	if c.Query("download") != "" {
 		c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="saml-sp-%s.xml"`, m.ID.String()))
 	}
@@ -194,6 +207,11 @@ func (s *Service) acs(c *gin.Context) {
 		return
 	}
 	subject := assertion.Subject.NameID.Value
+	// SessionIndex 让 IdP 发起的登出能只吊销这一次 IdP 会话；IdP 没给就按 NameID 全量吊销。
+	sessionIndex := ""
+	if len(assertion.AuthnStatements) > 0 {
+		sessionIndex = assertion.AuthnStatements[0].SessionIndex
+	}
 	username := attr(assertion, m.AttrUsername)
 	if username == "" {
 		username = subject
@@ -222,7 +240,7 @@ func (s *Service) acs(c *gin.Context) {
 		Method:         "saml",
 		IP:             c.ClientIP(),
 		UserAgent:      c.Request.UserAgent(),
-		SessionBinding: samlBinding(m.ID, subject),
+		SessionBinding: samlBinding(m.ID, subject, sessionIndex),
 	})
 	if err != nil {
 		s.failACS(c, asResponseError(err), "")
@@ -245,14 +263,32 @@ func (s *Service) acs(c *gin.Context) {
 			return
 		}
 	}
-	// IdP 发起：没有我们生成的 redirect，回到后台登录页，由 SPA 兑换 code。
+	// IdP 发起：RelayState 是站内路径时作为深链（登录后回到该页），否则回后台登录页；
+	// 两种情况都由 SPA 兑换一次性 code。RelayState 的站内校验与 SP 发起侧同一口径。
 	if m.AllowIDPInitiated {
-		if u := s.redeemURL(c, m.ID, payload, baseURL(c)+"/admin/login"); u != "" {
+		if u := s.redeemURL(c, m.ID, payload, idpInitiatedTarget(baseURL(c), c.Request.PostForm.Get("RelayState"))); u != "" {
 			c.Redirect(http.StatusFound, u)
 			return
 		}
 	}
 	response.OK(c, payload)
+}
+
+// idpInitiatedTarget 构造 IdP 发起登录的回跳地址：RelayState 是站内路径时作为深链，
+// 登录页兑换完 code 后回到该页；没有或不是站内路径时回后台登录页。
+func idpInitiatedTarget(base, relay string) string {
+	target := base + "/admin/login"
+	next := safeRedirect(relay)
+	if next == "" {
+		return target
+	}
+	// 同时接受带部署前缀的写法（/admin/...）与 SPA 内部路径（/...）。
+	if rest, ok := strings.CutPrefix(next, "/admin/"); ok {
+		next = "/" + rest
+	} else if next == "/admin" {
+		next = "/"
+	}
+	return target + "?returnTo=" + url.QueryEscape(next)
 }
 
 // redeemURL 把登录结果存成一次性 code，追加到目标地址上。
@@ -448,7 +484,14 @@ func (s *Service) idpInitiatedLogout(c *gin.Context, m *Source, sp *saml.Service
 	if req.NameID != nil {
 		nameID = req.NameID.Value
 	}
-	s.revokeSessionsByNameID(c.Request.Context(), m, nameID)
+	// 带 SessionIndex 时只吊销对应的 IdP 会话；不带才按 NameID 全量吊销。
+	indexes := make([]string, 0, 2)
+	for _, si := range req.AllSessionIndexes() {
+		if v := strings.TrimSpace(si.Value); v != "" {
+			indexes = append(indexes, v)
+		}
+	}
+	s.revokeSessionsByNameID(c.Request.Context(), m, nameID, indexes)
 	relay := c.Query("RelayState")
 	if relay == "" {
 		_ = c.Request.ParseForm()
@@ -468,9 +511,10 @@ func (s *Service) idpInitiatedLogout(c *gin.Context, m *Source, sp *saml.Service
 	response.OK(c, gin.H{"ok": true})
 }
 
-// revokeSessionsByNameID 吊销某 NameID 在本来源上的全部本地会话。NameID 找不到（会话已过期 /
-// 从未在这里登录）按成功处理：SAML 规范里登出未知会话不算失败。
-func (s *Service) revokeSessionsByNameID(ctx context.Context, m *Source, nameID string) {
+// revokeSessionsByNameID 吊销某 NameID 在本来源上的本地会话。indexes 非空时只吊销 SessionIndex
+// 命中的那些（IdP 只结束了其中一次会话），为空时吊销全部（IdP 没给索引）。
+// NameID 找不到（会话已过期 / 从未在这里登录）按成功处理：SAML 规范里登出未知会话不算失败。
+func (s *Service) revokeSessionsByNameID(ctx context.Context, m *Source, nameID string, indexes []string) {
 	if s.cache == nil || nameID == "" {
 		return
 	}
@@ -479,7 +523,6 @@ func (s *Service) revokeSessionsByNameID(ctx context.Context, m *Source, nameID 
 	if err != nil || raw == "" {
 		return
 	}
-	_ = s.cache.Del(ctx, key)
 	rev, ok := s.issuer.(TokenRevoker)
 	if !ok {
 		return
@@ -488,9 +531,26 @@ func (s *Service) revokeSessionsByNameID(ctx context.Context, m *Source, nameID 
 	if json.Unmarshal([]byte(raw), &list) != nil {
 		return
 	}
+	want := make(map[string]bool, len(indexes))
+	for _, v := range indexes {
+		want[v] = true
+	}
+	kept := make([]samlSession, 0, len(list))
 	for _, sess := range list {
+		// 升级前签发、还没有 SessionIndex 的会话无法按索引匹配，保留到自然过期。
+		if len(want) > 0 && !(sess.SID != "" && want[sess.SID]) {
+			kept = append(kept, sess)
+			continue
+		}
 		_ = rev.RevokeByJTI(ctx, sess.JTI, sess.RID)
 		_ = s.cache.Del(ctx, sloKey(sess.TenantID, m.ID, sess.UserID))
+	}
+	if len(kept) == 0 {
+		_ = s.cache.Del(ctx, key)
+		return
+	}
+	if b, err := json.Marshal(kept); err == nil {
+		_ = s.cache.Set(ctx, key, string(b), samlSessionTTL)
 	}
 }
 
@@ -506,6 +566,7 @@ type samlSession struct {
 	JTI      string    `json:"j"`
 	RID      string    `json:"r"`
 	Exp      time.Time `json:"e"`
+	SID      string    `json:"s,omitempty"`
 }
 
 // sessionKey 以 NameID 的摘要做键：NameID 可能很长或含空白，直接拼进缓存键不便于排查。
@@ -514,30 +575,39 @@ func sessionKey(srcID idgen.ID, nameID string) string {
 	return "saml:sess:" + srcID.String() + ":" + hex.EncodeToString(sum[:])
 }
 
-// samlBinding 是带给 auth.SessionTracker 的不透明会话归属：源 ID + NameID（NameID 放最后，允许含冒号）。
-func samlBinding(srcID idgen.ID, nameID string) string {
-	return "saml:" + srcID.String() + ":" + nameID
+// bindingSIDSep 把可选的 SessionIndex 附在绑定串末尾。NameID 允许含冒号，所以用控制字符作分隔，
+// 旧格式（没有 SessionIndex）也能按同一套逻辑解析。
+const bindingSIDSep = "\x1f"
+
+// samlBinding 是带给 auth.SessionTracker 的不透明会话归属：源 ID + NameID（+ AuthnStatement.SessionIndex）。
+func samlBinding(srcID idgen.ID, nameID, sessionIndex string) string {
+	b := "saml:" + srcID.String() + ":" + nameID
+	if sessionIndex != "" {
+		b += bindingSIDSep + sessionIndex
+	}
+	return b
 }
 
-func parseSAMLBinding(binding string) (idgen.ID, string, bool) {
+func parseSAMLBinding(binding string) (idgen.ID, string, string, bool) {
 	rest, ok := strings.CutPrefix(binding, "saml:")
 	if !ok {
-		return 0, "", false
+		return 0, "", "", false
 	}
+	rest, sid, _ := strings.Cut(rest, bindingSIDSep)
 	idPart, nameID, ok := strings.Cut(rest, ":")
 	if !ok || nameID == "" {
-		return 0, "", false
+		return 0, "", "", false
 	}
 	id, err := idgen.Parse(idPart)
 	if err != nil || id == 0 {
-		return 0, "", false
+		return 0, "", "", false
 	}
-	return id, nameID, true
+	return id, nameID, sid, true
 }
 
 // appendSession 记下一次签发（含二次验证后的签发与刷新轮换）的 access / refresh 令牌 ID，
 // 供 IdP 发起 SLO 时按 NameID 吊销。同一 NameID 最多保留 20 条未过期会话，重复 jti 只留一条。
-func appendSession(ctx context.Context, c cache.Cache, srcID idgen.ID, nameID string, cl *auth.Claims) {
+func appendSession(ctx context.Context, c cache.Cache, srcID idgen.ID, nameID, sessionIndex string, cl *auth.Claims) {
 	if c == nil || cl == nil || cl.ID == "" || nameID == "" {
 		return
 	}
@@ -556,7 +626,7 @@ func appendSession(ctx context.Context, c cache.Cache, srcID idgen.ID, nameID st
 	if len(kept) >= maxTrackedSessions {
 		kept = kept[len(kept)-maxTrackedSessions+1:]
 	}
-	kept = append(kept, samlSession{TenantID: cl.TenantID, UserID: cl.UserID, JTI: cl.ID, RID: cl.RID, Exp: cl.ExpiresAt.Time})
+	kept = append(kept, samlSession{TenantID: cl.TenantID, UserID: cl.UserID, JTI: cl.ID, RID: cl.RID, Exp: cl.ExpiresAt.Time, SID: sessionIndex})
 	if b, err := json.Marshal(kept); err == nil {
 		_ = c.Set(ctx, key, string(b), samlSessionTTL)
 	}
@@ -565,11 +635,11 @@ func appendSession(ctx context.Context, c cache.Cache, srcID idgen.ID, nameID st
 // recordBindingSession 是注册给 core/auth 的 SessionTracker：普通登录、二次验证后签发、
 // 刷新轮换都会走到这里，所以 IdP 发起的登出能吊销当前真正有效的令牌。
 func recordBindingSession(ctx context.Context, c cache.Cache, cl *auth.Claims) {
-	srcID, nameID, ok := parseSAMLBinding(cl.SessionBinding)
+	srcID, nameID, sid, ok := parseSAMLBinding(cl.SessionBinding)
 	if !ok {
 		return
 	}
-	appendSession(ctx, c, srcID, nameID, cl)
+	appendSession(ctx, c, srcID, nameID, sid, cl)
 }
 
 // ---- 管理接口 ----
@@ -769,6 +839,32 @@ func (s *Service) promoteSPCert(c *gin.Context) {
 	response.OK(c, info)
 }
 
+// importSPKey 用管理员导入的证书 / 私钥替换当前 SP 密钥对（IdP 侧需同步换成这张证书）。
+func (s *Service) importSPKey(c *gin.Context) {
+	m, ok := s.sourceOrFail(c)
+	if !ok {
+		return
+	}
+	var f struct {
+		Cert string `json:"cert"`
+		Key  string `json:"key"`
+	}
+	if !response.BindJSON(c, &f) {
+		return
+	}
+	fresh, err := s.ImportSPKey(c.Request.Context(), m.ID.String(), f.Cert, f.Key)
+	if err != nil {
+		response.Fail(c, response.BadRequest("error.bad_request").WithMsg(err.Error()))
+		return
+	}
+	info, err := certInfo(fresh)
+	if err != nil {
+		response.Fail(c, response.BadRequest("error.bad_request").WithMsg("SP 证书不可用: "+err.Error()))
+		return
+	}
+	response.OK(c, info)
+}
+
 // spCert 返回 SP 证书状态（IdP 需要时复制或下载当前证书）。
 func (s *Service) spCert(c *gin.Context) {
 	m, ok := s.sourceOrFail(c)
@@ -786,8 +882,10 @@ func (s *Service) spCert(c *gin.Context) {
 // inspectMetadata 解析/拉取 IdP 元数据并返回摘要，供表单「拉取并预览」使用。
 func (s *Service) inspectMetadata(c *gin.Context) {
 	var f struct {
-		URL string `json:"url"`
-		XML string `json:"xml"`
+		URL      string `json:"url"`
+		XML      string `json:"xml"`
+		CACert   string `json:"caCert"`
+		SignCert string `json:"signCert"`
 	}
 	if !response.BindJSON(c, &f) {
 		return
@@ -798,7 +896,7 @@ func (s *Service) inspectMetadata(c *gin.Context) {
 			response.Fail(c, response.BadRequest("error.bad_request").WithMsg("请提供元数据 XML 或 URL"))
 			return
 		}
-		b, err := fetchMetadata(c.Request.Context(), strings.TrimSpace(f.URL))
+		b, err := fetchMetadata(c.Request.Context(), strings.TrimSpace(f.URL), f.CACert)
 		if err != nil {
 			response.Fail(c, response.BadRequest("error.bad_request").WithMsg(err.Error()))
 			return
@@ -808,6 +906,13 @@ func (s *Service) inspectMetadata(c *gin.Context) {
 	if len(raw) > maxMetadataBytes {
 		response.Fail(c, response.BadRequest("error.bad_request").WithMsg("元数据超过 1 MiB"))
 		return
+	}
+	// 表单里填了钉住的签名证书就先验一眼：Preview 阶段就能看到「元数据未签名 / 证书不匹配」。
+	if strings.TrimSpace(f.SignCert) != "" {
+		if err := verifyMetadataSignature(raw, f.SignCert); err != nil {
+			response.Fail(c, response.BadRequest("error.bad_request").WithMsg(err.Error()))
+			return
+		}
 	}
 	info, err := parseIdP(raw, "")
 	if err != nil {

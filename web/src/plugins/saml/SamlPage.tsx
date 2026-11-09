@@ -13,6 +13,7 @@ import {
   RefreshCw,
   ShieldCheck,
   Trash2,
+  Upload,
   XCircle,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -27,8 +28,10 @@ import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Card } from '@/framework/ui/card'
 import { Switch } from '@/framework/ui/switch'
+import { Textarea } from '@/framework/ui/textarea'
 import {
   getSPCert,
+  importSPKey,
   promoteSPCert,
   refreshMetadata,
   rotateSPCert,
@@ -144,6 +147,10 @@ function CertDialog({ source, onClose }: { source: SamlSource | null; onClose: (
   const [err, setErr] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [rotating, setRotating] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const [importingBusy, setImportingBusy] = useState(false)
+  const [importCert, setImportCert] = useState('')
+  const [importKey, setImportKey] = useState('')
   const [promoting, setPromoting] = useState(false)
 
   useEffect(() => {
@@ -185,6 +192,24 @@ function CertDialog({ source, onClose }: { source: SamlSource | null; onClose: (
       toast.error((e as Error).message)
     } finally {
       setPromoting(false)
+    }
+  }
+
+  const onImport = async () => {
+    if (!source) return
+    if (!(await confirm({ destructive: true, description: t('plugin_saml.cert.importConfirm', { name: source.name }) }))) return
+    setImportingBusy(true)
+    try {
+      setData(await importSPKey(source.id, { cert: importCert, key: importKey }))
+      setImporting(false)
+      setImportCert('')
+      setImportKey('')
+      toast.success(t('plugin_saml.cert.imported'))
+      void qc.invalidateQueries({ queryKey: ['plugin_saml'] })
+    } catch (e) {
+      toast.error((e as Error).message)
+    } finally {
+      setImportingBusy(false)
     }
   }
 
@@ -269,6 +294,47 @@ function CertDialog({ source, onClose }: { source: SamlSource | null; onClose: (
               })}
             </p>
           ) : null}
+          <div className="space-y-2 rounded-md border border-border p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-sm font-medium">{t('plugin_saml.cert.importTitle')}</span>
+              <Can perm="saml:edit">
+                <Button type="button" variant="outline" size="sm" onClick={() => setImporting((v) => !v)}>
+                  {importing ? t('common.cancel') : t('plugin_saml.cert.importToggle')}
+                </Button>
+              </Can>
+            </div>
+            {importing ? (
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground">{t('plugin_saml.cert.importHint')}</p>
+                <Textarea
+                  rows={4}
+                  spellCheck={false}
+                  className="font-mono text-xs"
+                  placeholder="-----BEGIN CERTIFICATE-----"
+                  aria-label={t('plugin_saml.cert.importCert')}
+                  value={importCert}
+                  onChange={(e) => setImportCert(e.target.value)}
+                />
+                <Textarea
+                  rows={4}
+                  spellCheck={false}
+                  className="font-mono text-xs"
+                  placeholder="-----BEGIN PRIVATE KEY-----"
+                  aria-label={t('plugin_saml.cert.importKey')}
+                  value={importKey}
+                  onChange={(e) => setImportKey(e.target.value)}
+                />
+                <Button
+                  type="button"
+                  onClick={() => void onImport()}
+                  disabled={importingBusy || !importCert.trim() || !importKey.trim()}
+                >
+                  {importingBusy ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Upload aria-hidden="true" />}
+                  {t('plugin_saml.cert.importBtn')}
+                </Button>
+              </div>
+            ) : null}
+          </div>
         </div>
       ) : null}
     </ResponsiveDialog>

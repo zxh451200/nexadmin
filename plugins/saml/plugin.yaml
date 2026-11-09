@@ -1,7 +1,7 @@
 id: saml
 name: SAML 单点登录
-version: 0.6.0
-description: 企业 IdP 单点登录（SAML 2.0 SP）：导入或按 URL 拉取 IdP 元数据，SP 元数据 / ACS / 证书可复制下载，多 IdP 打包选择、元数据定时刷新、SP 证书轮换、属性与组→角色映射、登录时按组同步角色、配置自检、IdP 发起登录与登出、登录时同步资料、自动建号/绑定。官方专业版插件。
+version: 0.8.0
+description: 企业 IdP 单点登录（SAML 2.0 SP）：导入或按 URL 拉取 IdP 元数据，SP 元数据 / ACS / 证书可复制下载，多 IdP 打包选择、元数据定时刷新、SP 证书轮换与自有证书导入、SP 元数据签名、属性与组→角色映射、登录时按组同步角色、元数据签名校验与内网 CA、SP Entity ID 覆盖、配置自检、IdP 发起登录与登出（含深链与 SessionIndex 粒度）、登录时同步资料、自动建号/绑定。官方专业版插件。
 author: NexAdmin
 edition: pro
 requires_nexadmin: ">=0.1.0"

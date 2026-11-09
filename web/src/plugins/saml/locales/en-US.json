@@ -37,6 +37,9 @@
       "enabled": "Enabled",
       "idpMetadata": "IdP metadata (XML)",
       "idpMetadataUrl": "IdP metadata URL (optional)",
+      "spEntityIdOverride": "SP Entity ID (optional)",
+      "metadataCaCert": "Metadata CA (PEM, optional)",
+      "metadataSignCert": "Metadata signing certificate (PEM, optional)",
       "metadataSource": "Metadata source",
       "loginUrl": "Sign-in entry",
       "cert": "IdP signing certificate",
@@ -70,7 +73,8 @@
       "metadata": "SP metadata",
       "slo": "SP logout endpoint",
       "lastSync": "Metadata last synced",
-      "requireEncryptedAssertion": "Require encrypted assertions"
+      "requireEncryptedAssertion": "Require encrypted assertions",
+      "signMetadata": "Sign SP metadata"
     },
     "hints": {
       "enabled": "Only enabled sources appear on the sign-in page.",
@@ -97,7 +101,14 @@
       "requireAuthnContext": "The assertion's AuthnContextClassRef must match one of the selected classes, or sign-in is rejected.",
       "idpEntityId": "When the metadata bundles several IdPs, pick the one this system should trust; a single entity is selected automatically.",
       "syncProfile": "Bound accounts take nickname / email / phone from the assertion on every login; empty values never overwrite, and username, status and roles stay local.",
-      "requireEncryptedAssertion": "The IdP must encrypt assertions with the SP certificate; plaintext assertions are rejected. Make sure the IdP has encryption enabled first."
+      "requireEncryptedAssertion": "The IdP must encrypt assertions with the SP certificate; plaintext assertions are rejected. Make sure the IdP has encryption enabled first.",
+      "signMetadata": "Sign the SP metadata with the SP private key (RSA-SHA256); enable when the IdP verifies metadata signatures.",
+      "spEntityIdOverride": "Leave empty to use the SP metadata URL as the Entity ID. Some IdPs require a fixed value; it must be a URI with a scheme (https://… or urn:…).",
+      "metadataCaCert": "When IdP metadata is issued by an internal CA, paste its root/intermediate certificates; metadata fetches then trust only this CA.",
+      "metadataSignCert": "With a pinned certificate, saving, refreshing and self-test all require the metadata root element to carry a matching XML signature; leave empty to rely on TLS only."
+    },
+    "placeholder": {
+      "spEntityId": "Default: the SP metadata URL"
     },
     "preview": {
       "title": "Metadata preview",
@@ -148,6 +159,14 @@
       "promoted": "Switched to the new certificate; the old one remains for 7 days",
       "nextTitle": "New certificate (not yet active)",
       "nextHint": "Published but not used for signing yet. Update trust at the IdP first. Expires: {{date}}",
+      "importTitle": "Use your own certificate",
+      "importToggle": "Import certificate and key",
+      "importHint": "Paste a PEM SP certificate and private key (RSA ≥ 2048 or EC ≥ P-256). The current pair is replaced immediately and kept for 7 days for decryption; update the IdP with this certificate too.",
+      "importCert": "SP certificate (PEM)",
+      "importKey": "SP private key (PEM)",
+      "importBtn": "Import",
+      "importConfirm": "Importing replaces the SP certificate and key of \"{{name}}\" immediately and the IdP must be updated. Continue?",
+      "imported": "Certificate and key imported; update the SP certificate at the IdP",
       "prevHint": "Previous certificate kept until {{date}}: decrypt-only, and listed in the metadata during that window."
     },
     "test": {

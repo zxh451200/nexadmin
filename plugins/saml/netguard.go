@@ -2,6 +2,7 @@ package saml
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -15,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/crewjam/saml"
 	"github.com/spf13/viper"
 )
 
@@ -48,6 +50,36 @@ func samlViper() *viper.Viper {
 
 func loadAllowPrivateHosts() bool {
 	return samlViper().GetBool("saml.allow_private_hosts")
+}
+
+// loadACSRatePerMinute 是 ACS 端点按 IP 的每分钟上限；0 关闭。默认 120：
+// 正常一个用户一分钟内不可能回调这么多次，超出的多半是重放/探测。
+func loadACSRatePerMinute() int {
+	v := samlViper()
+	if !v.IsSet("saml.acs_rate_per_minute") {
+		return 120
+	}
+	n := v.GetInt("saml.acs_rate_per_minute")
+	if n < 0 {
+		return 0
+	}
+	return n
+}
+
+// applyClockSkew 允许部署方按 IdP 时钟漂移调整容差（库用包级变量，只在启动时设置一次）。
+// 不配置时保持库默认（时钟偏移 180s、断言签发延迟 90s）。
+func applyClockSkew() {
+	v := samlViper()
+	if v.IsSet("saml.clock_skew_seconds") {
+		if n := v.GetInt("saml.clock_skew_seconds"); n >= 0 {
+			saml.MaxClockSkew = time.Duration(n) * time.Second
+		}
+	}
+	if v.IsSet("saml.max_issue_delay_seconds") {
+		if n := v.GetInt("saml.max_issue_delay_seconds"); n >= 0 {
+			saml.MaxIssueDelay = time.Duration(n) * time.Second
+		}
+	}
 }
 
 // loadMetadataRefreshHours 默认每 24 小时同步一次；显式配置 0 关闭后台刷新。
@@ -146,7 +178,8 @@ func guardDial(_, address string, _ syscall.RawConn) error {
 }
 
 // fetchMetadata 拉取 IdP 元数据：只允许 http(s)、最多 2 次重定向、10 秒超时、1 MiB 上限。
-func fetchMetadata(ctx context.Context, raw string) ([]byte, error) {
+// caPEM 非空时只信任这组 CA（内网 IdP 场景），否则走系统根证书。
+func fetchMetadata(ctx context.Context, raw, caPEM string) ([]byte, error) {
 	if err := validateMetadataURL(raw); err != nil {
 		return nil, err
 	}
@@ -158,14 +191,22 @@ func fetchMetadata(ctx context.Context, raw string) ([]byte, error) {
 		return nil, err
 	}
 	req.Header.Set("Accept", "application/xml, text/xml, */*")
+	roots, err := tlsRootCAs(caPEM)
+	if err != nil {
+		return nil, err
+	}
+	transport := &http.Transport{
+		// 不走环境代理：代理会把连接变成「到代理」，SSRF 校验就失去意义。
+		Proxy:               nil,
+		DialContext:         (&net.Dialer{Timeout: 5 * time.Second, Control: guardDial}).DialContext,
+		TLSHandshakeTimeout: 5 * time.Second,
+	}
+	if roots != nil {
+		transport.TLSClientConfig = &tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS12}
+	}
 	client := &http.Client{
-		Timeout: 10 * time.Second,
-		Transport: &http.Transport{
-			// 不走环境代理：代理会把连接变成「到代理」，SSRF 校验就失去意义。
-			Proxy:               nil,
-			DialContext:         (&net.Dialer{Timeout: 5 * time.Second, Control: guardDial}).DialContext,
-			TLSHandshakeTimeout: 5 * time.Second,
-		},
+		Timeout:   10 * time.Second,
+		Transport: transport,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) >= 2 {
 				return errors.New("saml: 元数据地址重定向过多")

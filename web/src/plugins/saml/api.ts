@@ -49,6 +49,9 @@ export interface SamlSource {
   idpMetadata: string
   idpMetadataUrl: string
   idpEntityId: string
+  spEntityIdOverride: string
+  metadataCaCert: string
+  metadataSignCert: string
   attrUsername: string
   attrEmail: string
   attrNickname: string
@@ -64,6 +67,7 @@ export interface SamlSource {
   signAuthnRequest: boolean
   nameIdFormat: string
   requireEncryptedAssertion: boolean
+  signMetadata: boolean
   requireSignedResponseForCBC: boolean
   rejectUnknownConditions: boolean
   forceAuthn: boolean
@@ -82,6 +86,9 @@ export interface SourceForm {
   idpMetadata: string
   idpMetadataUrl: string
   idpEntityId: string
+  spEntityIdOverride: string
+  metadataCaCert: string
+  metadataSignCert: string
   attrUsername: string
   attrEmail: string
   attrNickname: string
@@ -97,6 +104,7 @@ export interface SourceForm {
   signAuthnRequest: boolean
   nameIdFormat: string
   requireEncryptedAssertion: boolean
+  signMetadata: boolean
   requireSignedResponseForCBC: boolean
   rejectUnknownConditions: boolean
   forceAuthn: boolean
@@ -192,10 +200,14 @@ export function promoteSPCert(id: string) {
   return api.post<SPCert>(`${BASE}/sources/${id}/promote-sp-cert`, {}, { silent: true })
 }
 
+export function importSPKey(id: string, input: { cert: string; key: string }) {
+  return api.post<SPCert>(`${BASE}/sources/${id}/import-sp-key`, input, { silent: true })
+}
+
 export function refreshMetadata(id: string) {
   return api.post<{ changed: boolean; source: SamlSource }>(`${BASE}/sources/${id}/refresh`, {}, { silent: true })
 }
 
-export function inspectMetadata(input: { url?: string; xml?: string }) {
+export function inspectMetadata(input: { url?: string; xml?: string; caCert?: string; signCert?: string }) {
   return api.post<MetadataPreview>(`${BASE}/metadata/inspect`, input, { silent: true })
 }

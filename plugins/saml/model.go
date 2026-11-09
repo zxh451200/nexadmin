@@ -10,8 +10,9 @@ import (
 	"nexadmin/core/database"
 )
 
-// GroupRoleMapping 仅在自动建号时授予角色：命中的组值替代默认角色，未命中回退默认角色。
-// 组值按 IdP 断言里的原值精确匹配（区分大小写与空格），不解析 DN、不展开嵌套组。
+// GroupRoleMapping 把 IdP 组值映射成本地角色：自动建号时命中的组值替代默认角色；
+// 开启 SyncRolesOnLogin 后每次登录都与本地角色对齐。组值按原值精确匹配（区分大小写与空格），
+// 不解析 DN、不展开嵌套组。
 type GroupRoleMapping struct {
 	ExternalGroup string   `json:"externalGroup"`
 	RoleCodes     []string `json:"roleCodes"`
@@ -27,8 +28,14 @@ type Source struct {
 	// IDPEntityID 在多 IdP 打包元数据里指定用哪一个；单实体导入时自动填上。
 	IDPEntityID         string     `gorm:"column:idp_entity_id;size:500;not null;default:''"`
 	MetadataRefreshedAt *time.Time `gorm:"column:metadata_refreshed_at"`
-	SPCert              string     `gorm:"column:sp_cert;type:text"`
-	SPKeyEnc            string     `gorm:"column:sp_key_enc;type:text"`
+	// SPEntityID 覆盖 SP 的 Entity ID（默认 = SP 元数据地址）；部分 IdP 只接受固定值。
+	SPEntityID string `gorm:"column:sp_entity_id;size:500;not null;default:''"`
+	// 元数据信任（可选）：MetadataCACert 让我们拉元数据时信任内网 CA；
+	// MetadataSignCert 钉住签名证书，保存 / 刷新 / 自检时要求元数据带匹配的 XML 签名。
+	MetadataCACert   string `gorm:"column:metadata_ca_cert;type:text"`
+	MetadataSignCert string `gorm:"column:metadata_sign_cert;type:text"`
+	SPCert           string `gorm:"column:sp_cert;type:text"`
+	SPKeyEnc         string `gorm:"column:sp_key_enc;type:text"`
 	// 两段式轮换：next 已发布但尚未启用（元数据同时列出，签发仍用 current）；
 	// 切换后旧证书落到 prev，保留一段时间用于解密 IdP 仍按旧证书加密的断言。
 	NextSPCert      string     `gorm:"column:next_sp_cert;type:text"`
@@ -38,6 +45,8 @@ type Source struct {
 	PrevSPExpiresAt *time.Time `gorm:"column:prev_sp_expires_at"`
 	// RequireEncryptedAssertion 要求 IdP 必须用 SP 证书加密断言，明文断言直接拒绝。
 	RequireEncryptedAssertion bool `gorm:"column:require_encrypted_assertion;not null;default:false"`
+	// SignMetadata 对外输出的 SP 元数据用 SP 私钥做 XML 签名。
+	SignMetadata bool `gorm:"column:sign_metadata;not null;default:false"`
 
 	AttrUsername string `gorm:"column:attr_username;size:255;not null;default:''"`
 	AttrEmail    string `gorm:"column:attr_email;size:255;not null;default:''"`

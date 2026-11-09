@@ -79,6 +79,10 @@ function buildSchema(t: (k: string) => string) {
       signAuthnRequest: z.boolean(),
       nameIdFormat: z.enum(['', 'persistent', 'transient', 'emailAddress', 'unspecified', 'entity']),
       requireEncryptedAssertion: z.boolean(),
+      signMetadata: z.boolean(),
+      spEntityIdOverride: z.string().trim().max(500, t('plugin_saml.errors.entityInvalid')),
+      metadataCaCert: z.string().trim(),
+      metadataSignCert: z.string().trim(),
       forceAuthn: z.boolean(),
       requireSignedResponseForCBC: z.boolean(),
       rejectUnknownConditions: z.boolean(),
@@ -147,6 +151,10 @@ const empty: FormValues = {
   signAuthnRequest: false,
   nameIdFormat: '',
   requireEncryptedAssertion: false,
+  signMetadata: false,
+  spEntityIdOverride: '',
+  metadataCaCert: '',
+  metadataSignCert: '',
   forceAuthn: false,
   requireSignedResponseForCBC: false,
   rejectUnknownConditions: false,
@@ -178,6 +186,10 @@ function toValues(s?: SamlSource | null): FormValues {
     signAuthnRequest: s.signAuthnRequest,
     nameIdFormat: (s.nameIdFormat ?? '') as FormValues['nameIdFormat'],
     requireEncryptedAssertion: s.requireEncryptedAssertion ?? false,
+    signMetadata: s.signMetadata ?? false,
+    spEntityIdOverride: s.spEntityIdOverride ?? '',
+    metadataCaCert: s.metadataCaCert ?? '',
+    metadataSignCert: s.metadataSignCert ?? '',
     forceAuthn: s.forceAuthn ?? false,
     requireSignedResponseForCBC: s.requireSignedResponseForCBC ?? false,
     rejectUnknownConditions: s.rejectUnknownConditions ?? false,
@@ -323,10 +335,12 @@ export default function SourceFormDialog({ open, onOpenChange, editing }: Props)
   const runInspect = async (mode: 'url' | 'xml') => {
     setFetching(mode)
     try {
+      const caCert = form.getValues('metadataCaCert').trim()
+      const signCert = form.getValues('metadataSignCert').trim()
       const input =
         mode === 'url'
-          ? { url: form.getValues('idpMetadataUrl').trim() }
-          : { xml: form.getValues('idpMetadata').trim() }
+          ? { url: form.getValues('idpMetadataUrl').trim(), caCert, signCert }
+          : { xml: form.getValues('idpMetadata').trim(), signCert }
       const r = await inspectMetadata(input)
       if (mode === 'url') form.setValue('idpMetadata', r.metadata, { shouldValidate: true, shouldDirty: true })
       const candidates = r.idp.candidates ?? []
@@ -538,6 +552,59 @@ export default function SourceFormDialog({ open, onOpenChange, editing }: Props)
                     ) : null}
                   </div>
                 </FormGridFull>
+
+                <FormGridFull>
+                  <div className="space-y-3 rounded-md bg-muted/40 p-3">
+                    <TextField
+                      control={c}
+                      name="spEntityIdOverride"
+                      label={p('spEntityIdOverride')}
+                      hint={h('spEntityIdOverride')}
+                      mono
+                      placeholder={t('plugin_saml.placeholder.spEntityId')}
+                    />
+                    <FormField
+                      control={c}
+                      name="metadataCaCert"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{p('metadataCaCert')}</FormLabel>
+                          <FormControl>
+                            <Textarea
+                              {...field}
+                              rows={3}
+                              spellCheck={false}
+                              className="font-mono text-xs"
+                              placeholder="-----BEGIN CERTIFICATE-----"
+                            />
+                          </FormControl>
+                          <FormDescription>{h('metadataCaCert')}</FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={c}
+                      name="metadataSignCert"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{p('metadataSignCert')}</FormLabel>
+                          <FormControl>
+                            <Textarea
+                              {...field}
+                              rows={3}
+                              spellCheck={false}
+                              className="font-mono text-xs"
+                              placeholder="-----BEGIN CERTIFICATE-----"
+                            />
+                          </FormControl>
+                          <FormDescription>{h('metadataSignCert')}</FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </FormGridFull>
               </FormGrid>
             </TabsContent>
 
@@ -647,6 +714,13 @@ export default function SourceFormDialog({ open, onOpenChange, editing }: Props)
                       name="requireEncryptedAssertion"
                       label={p('requireEncryptedAssertion')}
                       description={h('requireEncryptedAssertion')}
+                      bare
+                    />
+                    <SwitchField
+                      control={c}
+                      name="signMetadata"
+                      label={p('signMetadata')}
+                      description={h('signMetadata')}
                       bare
                     />
                     <FormField

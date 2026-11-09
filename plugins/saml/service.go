@@ -69,6 +69,9 @@ type SourceForm struct {
 	IdPMetadata    string             `json:"idpMetadata"`
 	IdPMetadataURL string             `json:"idpMetadataUrl"`
 	IDPEntityID    string             `json:"idpEntityId"`
+	SPEntityID     string             `json:"spEntityIdOverride"`
+	MetadataCACert string             `json:"metadataCaCert"`
+	MetadataSign   string             `json:"metadataSignCert"`
 	AttrUsername   string             `json:"attrUsername"`
 	AttrEmail      string             `json:"attrEmail"`
 	AttrNickname   string             `json:"attrNickname"`
@@ -85,6 +88,8 @@ type SourceForm struct {
 	NameIDFormat   string             `json:"nameIdFormat"`
 	// RequireEncrypted 要求断言必须加密（明文断言拒绝登录）。
 	RequireEncrypted bool `json:"requireEncryptedAssertion"`
+	// SignMetadata 对外输出的 SP 元数据带 XML 签名。
+	SignMetadata bool `json:"signMetadata"`
 
 	RequireSignedCBC        bool   `json:"requireSignedResponseForCBC"`
 	RejectUnknownConditions bool   `json:"rejectUnknownConditions"`
@@ -118,18 +123,21 @@ func (s *Service) Create(ctx context.Context, f SourceForm) (*Source, error) {
 	}
 	if f.Enabled {
 		// 直接以启用态保存时也要过一遍「真的能登录」，避免绕过快捷启停的检查。
-		if err := (&Source{IdPMetadata: f.IdPMetadata, SPCert: certPEM}).ready(); err != nil {
+		if err := (&Source{IdPMetadata: f.IdPMetadata, SPCert: certPEM, MetadataSignCert: f.MetadataSign}).ready(); err != nil {
 			return nil, err
 		}
 	}
 	m := Source{
 		Name: f.Name, Enabled: f.Enabled, IdPMetadata: f.IdPMetadata, IdPMetadataURL: f.IdPMetadataURL,
-		IDPEntityID: f.IDPEntityID, SPCert: certPEM, SPKeyEnc: keyEnc,
+		IDPEntityID: f.IDPEntityID, SPEntityID: f.SPEntityID,
+		MetadataCACert: f.MetadataCACert, MetadataSignCert: f.MetadataSign,
+		SPCert: certPEM, SPKeyEnc: keyEnc,
 		AttrUsername: f.AttrUsername, AttrEmail: f.AttrEmail, AttrNickname: f.AttrNickname, AttrGroups: f.AttrGroups, AttrPhone: f.AttrPhone,
 		AutoCreate: f.AutoCreate, MatchExisting: f.MatchExisting, DefaultRole: f.DefaultRole,
 		GroupRoleMappings: f.GroupMappings, RequireMappedGroup: f.RequireMapped, SyncRolesOnLogin: f.SyncRoles,
 		AllowIDPInitiated: f.AllowIDPInit, SignAuthnRequest: f.SignRequests, NameIDFormat: f.NameIDFormat,
 		RequireEncryptedAssertion: f.RequireEncrypted,
+		SignMetadata:              f.SignMetadata,
 		RequireSignedCBC:          f.RequireSignedCBC, RejectUnknownConditions: f.RejectUnknownConditions,
 		ForceAuthn: f.ForceAuthn, AuthnContextClassRef: f.AuthnContextClassRef, RequireAuthnContext: f.RequireAuthnContext,
 	}
@@ -152,6 +160,9 @@ func (s *Service) Update(ctx context.Context, id string, f SourceForm) (*Source,
 	m.IdPMetadata = f.IdPMetadata
 	m.IdPMetadataURL = f.IdPMetadataURL
 	m.IDPEntityID = f.IDPEntityID
+	m.SPEntityID = f.SPEntityID
+	m.MetadataCACert = f.MetadataCACert
+	m.MetadataSignCert = f.MetadataSign
 	m.AttrUsername = f.AttrUsername
 	m.AttrEmail = f.AttrEmail
 	m.AttrNickname = f.AttrNickname
@@ -167,6 +178,7 @@ func (s *Service) Update(ctx context.Context, id string, f SourceForm) (*Source,
 	m.SignAuthnRequest = f.SignRequests
 	m.NameIDFormat = f.NameIDFormat
 	m.RequireEncryptedAssertion = f.RequireEncrypted
+	m.SignMetadata = f.SignMetadata
 	m.RequireSignedCBC = f.RequireSignedCBC
 	m.RejectUnknownConditions = f.RejectUnknownConditions
 	m.ForceAuthn = f.ForceAuthn
@@ -292,6 +304,25 @@ func (f *SourceForm) validate() error {
 	if err := validateMetadataURL(f.IdPMetadataURL); err != nil {
 		return err
 	}
+	f.MetadataCACert = strings.TrimSpace(f.MetadataCACert)
+	if f.MetadataCACert != "" {
+		if _, err := parseCertPEM(f.MetadataCACert); err != nil {
+			return fmt.Errorf("saml: 元数据 CA 证书无效: %w", err)
+		}
+	}
+	f.MetadataSign = strings.TrimSpace(f.MetadataSign)
+	if f.MetadataSign != "" {
+		if _, err := parseCertPEM(f.MetadataSign); err != nil {
+			return fmt.Errorf("saml: 元数据签名证书无效: %w", err)
+		}
+		if err := verifyMetadataSignature(f.IdPMetadata, f.MetadataSign); err != nil {
+			return err
+		}
+	}
+	f.SPEntityID = strings.TrimSpace(f.SPEntityID)
+	if err := validateSPEntityID(f.SPEntityID); err != nil {
+		return err
+	}
 	f.AttrUsername = defAttr(f.AttrUsername, "uid")
 	f.AttrEmail = defAttr(f.AttrEmail, "mail")
 	f.AttrNickname = defAttr(f.AttrNickname, "displayName")
@@ -321,6 +352,22 @@ func (f *SourceForm) validate() error {
 		return fmt.Errorf("saml: 默认角色编码无效: %q", f.DefaultRole)
 	}
 	return validateGroupMappings(f.GroupMappings, f.RequireMapped)
+}
+
+// validateSPEntityID 校验可选的 SP Entity ID 覆盖值：必须是带 scheme 的 URI，且不含空白/控制字符。
+func validateSPEntityID(v string) error {
+	if v == "" {
+		return nil
+	}
+	if len(v) > 500 || !utf8.ValidString(v) ||
+		strings.ContainsFunc(v, func(r rune) bool { return r < 0x20 || r == 0x7f || r == ' ' }) {
+		return errors.New("saml: SP Entity ID 不合法（最长 500 字符，不能含空白或控制字符）")
+	}
+	u, err := url.Parse(v)
+	if err != nil || u.Scheme == "" {
+		return errors.New("saml: SP Entity ID 必须是带 scheme 的 URI（如 https://… 或 urn:…）")
+	}
+	return nil
 }
 
 // normalizeEntity 校验并补全打包元数据里选用的 Entity ID；单实体自动选中。
@@ -367,6 +414,9 @@ func (m *Source) ready() error {
 		return errors.New("saml: IdP 签名证书已过期，请先更新元数据")
 	}
 	if _, err := spCertNotAfter(m.SPCert); err != nil {
+		return err
+	}
+	if err := verifyMetadataSignature(m.IdPMetadata, m.MetadataSignCert); err != nil {
 		return err
 	}
 	return nil
@@ -674,8 +724,12 @@ func (s *Service) provider(m *Source, base string) (*saml.ServiceProvider, error
 	}
 	id := m.ID.String()
 	u := func(p string) url.URL { v, _ := url.Parse(base + p); return *v }
+	entityID := base + "/api/v1/auth/saml/" + id + "/metadata"
+	if m.SPEntityID != "" {
+		entityID = m.SPEntityID
+	}
 	sp := &saml.ServiceProvider{
-		EntityID:    base + "/api/v1/auth/saml/" + id + "/metadata",
+		EntityID:    entityID,
 		AcsURL:      u("/api/v1/auth/saml/" + id + "/acs"),
 		MetadataURL: u("/api/v1/auth/saml/" + id + "/metadata"),
 		// SLO：登出需要 IdP 侧能回 LogoutResponse 到本端点。

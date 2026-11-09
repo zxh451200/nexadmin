@@ -11,13 +11,14 @@ import (
 
 	"nexadmin/core"
 	"nexadmin/core/auth"
+	"nexadmin/core/middleware"
 	"nexadmin/core/plugin"
 	"nexadmin/core/tenant"
 )
 
 func init() {
 	plugin.Register(plugin.Plugin{
-		ID: "saml", Name: "SAML 单点登录", Version: "0.6.0", Edition: plugin.Pro,
+		ID: "saml", Name: "SAML 单点登录", Version: "0.8.0", Edition: plugin.Pro,
 		Module: &module{},
 	})
 }
@@ -31,6 +32,7 @@ var _ plugin.Starter = (*module)(nil)
 // Start 启动元数据后台同步：默认每 24 小时一次，saml.metadata_refresh_hours: 0 关闭。
 // 同时注册会话跟踪：普通登录、二次验证后的签发、刷新轮换都会回调，IdP 发起的 SLO 才能吊销到当前令牌。
 func (*module) Start(ctx context.Context, d *core.Deps) error {
+	applyClockSkew()
 	auth.RegisterSessionTracker(func(ctx context.Context, cl *auth.Claims) {
 		recordBindingSession(ctx, d.Cache, cl)
 	})
@@ -78,6 +80,7 @@ func (*module) Start(ctx context.Context, d *core.Deps) error {
 }
 
 func (*module) Register(r *gin.RouterGroup, d *core.Deps) {
+	applyClockSkew()
 	if loadAllowPrivateHosts() { // 只放行，不收回：避免热挂载 / 测试把全局开关改回去
 		setAllowPrivateHosts(true)
 	}
@@ -93,18 +96,27 @@ func (*module) Register(r *gin.RouterGroup, d *core.Deps) {
 	admin.POST("/sources/:id/refresh", core.Perm("saml:edit"), s.refreshMetadata)
 	admin.POST("/sources/:id/rotate-sp-cert", core.Perm("saml:edit"), s.rotateSPCert)
 	admin.POST("/sources/:id/promote-sp-cert", core.Perm("saml:edit"), s.promoteSPCert)
+	admin.POST("/sources/:id/import-sp-key", core.Perm("saml:edit"), s.importSPKey)
 	admin.GET("/sources/:id/sp-cert", core.Perm("saml:list"), s.spCert)
 	admin.GET("/sources/:id/urls", core.Perm("saml:list"), s.sourceURLs)
 	admin.POST("/metadata/inspect", core.Perm("saml:edit"), s.inspectMetadata)
 	admin.GET("/sources/:id/logout", s.logout)
 	admin.POST("/sources/:id/logout", s.logoutJSON)
 
+	// 发起登录沿用全局 login 规则；ACS 是匿名可达端点，按 IP 单独限流（saml.acs_rate_per_minute）。
+	limLogin := middleware.RateLimitRule(d.Cache, d.Log, d.Config.RateLimit, "login", middleware.ByIP())
+	acsHandlers := make([]gin.HandlerFunc, 0, 2)
+	if n := loadACSRatePerMinute(); n > 0 {
+		acsHandlers = append(acsHandlers, middleware.RateLimit(d.Cache, d.Log, "saml_acs", middleware.ByIP(), n, time.Minute))
+	}
+	acsHandlers = append(acsHandlers, s.acs)
+
 	pub := d.Public.Group("/auth/saml")
 	pub.GET("/sources", s.publicSources)
 	pub.POST("/exchange", s.exchange)
 	pub.GET("/:id/metadata", s.metadata)
-	pub.GET("/:id/login", s.login)
-	pub.POST("/:id/acs", s.acs)
+	pub.GET("/:id/login", limLogin, s.login)
+	pub.POST("/:id/acs", acsHandlers...)
 	pub.GET("/:id/slo", s.slo)
 	pub.POST("/:id/slo", s.slo)
 }

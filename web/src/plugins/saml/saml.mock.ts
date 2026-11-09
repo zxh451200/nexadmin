@@ -108,6 +108,9 @@ const okta: SamlSource = {
   idpMetadata: IDP_METADATA,
   idpMetadataUrl: 'https://idp.example.com/metadata',
   idpEntityId: C1.entityId,
+  spEntityIdOverride: '',
+  metadataCaCert: '',
+  metadataSignCert: '',
   attrUsername: 'uid',
   attrEmail: 'mail',
   attrNickname: 'displayName',
@@ -123,6 +126,7 @@ const okta: SamlSource = {
   signAuthnRequest: false,
   nameIdFormat: '',
   requireEncryptedAssertion: false,
+  signMetadata: false,
   requireSignedResponseForCBC: false,
   rejectUnknownConditions: false,
   forceAuthn: false,
@@ -266,6 +270,19 @@ defineMock([
       const row = build(body as SourceForm, old.id, old)
       sources = sources.map((s) => (s.id === row.id ? row : s))
       return row
+    },
+  },
+  {
+    method: 'POST',
+    url: '/plugins/saml/sources/:id/import-sp-key',
+    handler: ({ params, body }) => {
+      const cert = String(body?.cert ?? '').trim()
+      const key = String(body?.key ?? '').trim()
+      if (!cert.includes('BEGIN CERTIFICATE') || !key.includes('PRIVATE KEY')) {
+        mockError(400, 'saml: 证书或私钥不是 PEM 格式')
+      }
+      find(params.id)
+      return { cert, notAfter: inDays(3650) }
     },
   },
   {

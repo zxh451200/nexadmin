@@ -23,7 +23,7 @@ func (s *Service) RefreshMetadata(ctx context.Context, m *Source) (bool, error) 
 	if strings.TrimSpace(m.IdPMetadataURL) == "" {
 		return false, errors.New("saml: 该身份源没有配置元数据地址")
 	}
-	raw, err := fetchMetadata(ctx, m.IdPMetadataURL)
+	raw, err := fetchMetadata(ctx, m.IdPMetadataURL, m.MetadataCACert)
 	if err != nil {
 		return false, err
 	}
@@ -53,6 +53,9 @@ func planRefresh(m *Source, raw string) (entityID string, changed bool, err erro
 	}
 	if info.SSOURL == "" || info.CertCount == 0 {
 		return "", false, errors.New("saml: 远程元数据缺少 SSO 端点或签名证书，拒绝替换")
+	}
+	if err := verifyMetadataSignature(raw, m.MetadataSignCert); err != nil {
+		return "", false, err
 	}
 	return info.EntityID, strings.TrimSpace(raw) != strings.TrimSpace(m.IdPMetadata), nil
 }

@@ -296,8 +296,12 @@ func hasEncryptedAssertion(raw []byte) bool {
 
 func spInfo(m *Source, base string) SPInfo {
 	prefix := base + "/api/v1/auth/saml/" + m.ID.String()
+	entityID := prefix + "/metadata"
+	if m.SPEntityID != "" {
+		entityID = m.SPEntityID
+	}
 	out := SPInfo{
-		EntityID:    prefix + "/metadata",
+		EntityID:    entityID,
 		ACSUrl:      prefix + "/acs",
 		SLOUrl:      prefix + "/slo",
 		MetadataURL: prefix + "/metadata",
@@ -388,10 +392,30 @@ func (s *Service) testSourceChecks(ctx context.Context, m *Source) TestResult {
 		add("spCert", true, false, "到期时间 "+notAfter.UTC().Format("2006-01-02"))
 	}
 
+	if m.MetadataSignCert != "" {
+		if err := verifyMetadataSignature(m.IdPMetadata, m.MetadataSignCert); err != nil {
+			add("metadataSignature", false, false, err.Error())
+			res.OK = false
+		} else {
+			add("metadataSignature", true, false, "已保存的元数据由钉住的证书签名")
+		}
+	}
+	if m.MetadataCACert != "" {
+		if _, err := parseCertPEM(m.MetadataCACert); err != nil {
+			add("metadataCa", false, false, "内网 CA 不可用："+err.Error())
+			res.OK = false
+		} else {
+			add("metadataCa", true, false, "拉取元数据时只信任配置的内网 CA")
+		}
+	}
+
 	if m.IdPMetadataURL != "" {
-		raw, err := fetchMetadata(ctx, m.IdPMetadataURL)
+		raw, err := fetchMetadata(ctx, m.IdPMetadataURL, m.MetadataCACert)
 		if err != nil {
 			add("metadataUrl", false, false, err.Error())
+			res.OK = false
+		} else if verr := verifyMetadataSignature(string(raw), m.MetadataSignCert); verr != nil {
+			add("metadataUrl", false, false, "远程元数据签名不可信："+verr.Error())
 			res.OK = false
 		} else if remote, err := parseIdP(string(raw), idp.EntityID); err != nil {
 			add("metadataUrl", false, false, "远程元数据不可用："+err.Error())

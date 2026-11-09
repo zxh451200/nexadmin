@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/base64"
@@ -552,7 +553,7 @@ func TestFetchMetadataLocal(t *testing.T) {
 	defer srv.Close()
 	setAllowPrivateHosts(true)
 	t.Cleanup(func() { setAllowPrivateHosts(false) })
-	raw, err := fetchMetadata(context.Background(), srv.URL)
+	raw, err := fetchMetadata(context.Background(), srv.URL, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -564,7 +565,7 @@ func TestFetchMetadataLocal(t *testing.T) {
 		_, _ = w.Write([]byte(strings.Repeat("x", maxMetadataBytes+16)))
 	}))
 	defer big.Close()
-	if _, err := fetchMetadata(context.Background(), big.URL); err == nil {
+	if _, err := fetchMetadata(context.Background(), big.URL, ""); err == nil {
 		t.Fatal("oversized metadata must be rejected")
 	}
 }
@@ -622,14 +623,14 @@ func TestRecordAndRevokeSAMLSessions(t *testing.T) {
 	m.ID = idgen.ID(9)
 	const nameID = "alice@example.com"
 
-	appendSession(context.Background(), c, m.ID, nameID, claimsFor("acc-1"))
-	appendSession(context.Background(), c, m.ID, nameID, claimsFor("acc-2"))
+	appendSession(context.Background(), c, m.ID, nameID, "", claimsFor("acc-1"))
+	appendSession(context.Background(), c, m.ID, nameID, "", claimsFor("acc-2"))
 	if len(iss.revoked) != 0 {
 		t.Fatalf("recording must not revoke anything, got %v", iss.revoked)
 	}
 
 	// IdP 发起的 SLO 只有 NameID：两条本地会话都要被吊销。
-	svc.revokeSessionsByNameID(context.Background(), m, nameID)
+	svc.revokeSessionsByNameID(context.Background(), m, nameID, nil)
 	if len(iss.revoked) != 2 {
 		t.Fatalf("want 2 revoked sessions, got %v", iss.revoked)
 	}
@@ -638,9 +639,9 @@ func TestRecordAndRevokeSAMLSessions(t *testing.T) {
 	}
 
 	// 会话记录消费后应删除：重复 SLO 不再吊销，也不报错。
-	svc.revokeSessionsByNameID(context.Background(), m, nameID)
+	svc.revokeSessionsByNameID(context.Background(), m, nameID, nil)
 	// 未知 NameID 按规范当作成功（没有可登出的会话）。
-	svc.revokeSessionsByNameID(context.Background(), m, "nobody@example.com")
+	svc.revokeSessionsByNameID(context.Background(), m, "nobody@example.com", nil)
 	if len(iss.revoked) != 2 {
 		t.Fatalf("repeat/unknown logout must be a no-op, got %v", iss.revoked)
 	}
@@ -743,7 +744,7 @@ func TestIDPInitiatedLogoutRejectsUnsignedAndRevokesSigned(t *testing.T) {
 	}
 	destination := base + "/api/v1/auth/saml/42/slo"
 	const nameID = "alice@example.com"
-	appendSession(context.Background(), c, m.ID, nameID, claimsFor("acc-1"))
+	appendSession(context.Background(), c, m.ID, nameID, "", claimsFor("acc-1"))
 
 	post := func(payload string) (*httptest.ResponseRecorder, *gin.Context) {
 		form := url.Values{"SAMLRequest": {payload}}
@@ -782,12 +783,17 @@ func TestIDPInitiatedLogoutRejectsUnsignedAndRevokesSigned(t *testing.T) {
 }
 
 func TestParseSAMLBinding(t *testing.T) {
-	id, nameID, ok := parseSAMLBinding(samlBinding(idgen.ID(9), "urn:alice:example.com"))
-	if !ok || id != 9 || nameID != "urn:alice:example.com" {
-		t.Fatalf("binding round-trip failed: %d %q %v", id, nameID, ok)
+	id, nameID, sid, ok := parseSAMLBinding(samlBinding(idgen.ID(9), "urn:alice:example.com", "_sid-1"))
+	if !ok || id != 9 || nameID != "urn:alice:example.com" || sid != "_sid-1" {
+		t.Fatalf("binding round-trip failed: %d %q %q %v", id, nameID, sid, ok)
+	}
+	// 没有 SessionIndex 的绑定（升级前签发的令牌）仍按旧语义解析。
+	id, nameID, sid, ok = parseSAMLBinding(samlBinding(idgen.ID(9), "urn:alice:example.com", ""))
+	if !ok || id != 9 || nameID != "urn:alice:example.com" || sid != "" {
+		t.Fatalf("legacy binding failed: %d %q %q %v", id, nameID, sid, ok)
 	}
 	for _, bad := range []string{"", "saml:", "saml:9", "saml:x:alice", "ldap:9:alice"} {
-		if _, _, ok := parseSAMLBinding(bad); ok {
+		if _, _, _, ok := parseSAMLBinding(bad); ok {
 			t.Fatalf("%q must be rejected", bad)
 		}
 	}
@@ -799,8 +805,8 @@ func TestAppendSessionDedupesRotatedToken(t *testing.T) {
 		t.Fatal(err)
 	}
 	cl := claimsFor("acc-1")
-	appendSession(context.Background(), c, idgen.ID(9), "alice@example.com", cl)
-	appendSession(context.Background(), c, idgen.ID(9), "alice@example.com", cl)
+	appendSession(context.Background(), c, idgen.ID(9), "alice@example.com", "", cl)
+	appendSession(context.Background(), c, idgen.ID(9), "alice@example.com", "", cl)
 	raw, err := c.Get(context.Background(), sessionKey(idgen.ID(9), "alice@example.com"))
 	if err != nil {
 		t.Fatal(err)
@@ -976,5 +982,296 @@ func TestRolloverPublishesAndDecryptsAllKeys(t *testing.T) {
 	}
 	if len(sp.DecryptionKeys) != 1 {
 		t.Fatalf("expired prev must not decrypt, got %d keys", len(sp.DecryptionKeys))
+	}
+}
+
+func TestRevokeSessionsBySessionIndex(t *testing.T) {
+	c, err := cache.New(config.Cache{Driver: "memory"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	iss := &fakeSAMLIssuer{claims: claimsFor("acc-1")}
+	svc := NewService(nil, iss, c)
+	m := &Source{}
+	m.ID = idgen.ID(9)
+	const nameID = "alice@example.com"
+
+	appendSession(context.Background(), c, m.ID, nameID, "sid-1", claimsFor("acc-1"))
+	appendSession(context.Background(), c, m.ID, nameID, "sid-2", claimsFor("acc-2"))
+
+	// IdP 只结束了 sid-1：只吊销对应的那条本地会话。
+	svc.revokeSessionsByNameID(context.Background(), m, nameID, []string{"sid-1"})
+	if !slices.Equal(iss.revoked, []string{"acc-1/ref-acc-1"}) {
+		t.Fatalf("only sid-1 must be revoked, got %v", iss.revoked)
+	}
+	// 未命中的会话仍保留，下一次不带索引的登出能把它清掉。
+	svc.revokeSessionsByNameID(context.Background(), m, nameID, nil)
+	if !slices.Equal(iss.revoked, []string{"acc-1/ref-acc-1", "acc-2/ref-acc-2"}) {
+		t.Fatalf("full logout must revoke the rest, got %v", iss.revoked)
+	}
+	svc.revokeSessionsByNameID(context.Background(), m, nameID, nil)
+	if len(iss.revoked) != 2 {
+		t.Fatalf("repeat logout must be a no-op, got %v", iss.revoked)
+	}
+}
+
+func TestRevokeKeepsLegacySessionWithoutSessionIndex(t *testing.T) {
+	c, err := cache.New(config.Cache{Driver: "memory"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	iss := &fakeSAMLIssuer{claims: claimsFor("acc-1")}
+	svc := NewService(nil, iss, c)
+	m := &Source{}
+	m.ID = idgen.ID(9)
+	const nameID = "alice@example.com"
+
+	// 升级前签发：没有 SessionIndex，按索引登出时不误杀，按 NameID 登出时会清掉。
+	appendSession(context.Background(), c, m.ID, nameID, "", claimsFor("acc-1"))
+	svc.revokeSessionsByNameID(context.Background(), m, nameID, []string{"sid-9"})
+	if len(iss.revoked) != 0 {
+		t.Fatalf("unmatched index must not revoke legacy sessions, got %v", iss.revoked)
+	}
+	svc.revokeSessionsByNameID(context.Background(), m, nameID, nil)
+	if !slices.Equal(iss.revoked, []string{"acc-1/ref-acc-1"}) {
+		t.Fatalf("nameID-wide logout must revoke legacy session, got %v", iss.revoked)
+	}
+}
+
+func TestIdpInitiatedTarget(t *testing.T) {
+	const base = "https://admin.example.com"
+	cases := []struct{ name, relay, want string }{
+		{"no relay", "", base + "/admin/login"},
+		{"spa path", "/system/saml", base + "/admin/login?returnTo=%2Fsystem%2Fsaml"},
+		{"deployment prefix", "/admin/system/saml", base + "/admin/login?returnTo=%2Fsystem%2Fsaml"},
+		{"bare admin root", "/admin", base + "/admin/login?returnTo=%2F"},
+		{"external url", "https://evil.example.com/x", base + "/admin/login"},
+		{"protocol relative", "//evil.example.com/x", base + "/admin/login"},
+		{"control chars", "/system\nsaml", base + "/admin/login"},
+	}
+	for _, c := range cases {
+		if got := idpInitiatedTarget(base, c.relay); got != c.want {
+			t.Errorf("%s: got %q want %q", c.name, got, c.want)
+		}
+	}
+}
+
+// signedMetadata 生成一份带根元素 XML 签名的 IdP 元数据，返回 XML 与签名证书 PEM。
+func signedMetadata(t *testing.T) (xmlText, certPEM string) {
+	t.Helper()
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmpl := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject:      pkix.Name{CommonName: "idp-metadata-signer"},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Now().Add(24 * time.Hour),
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc := etree.NewDocument()
+	if err := doc.ReadFromString(`<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="https://idp.example.com" ID="_md-1"><IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol"/></EntityDescriptor>`); err != nil {
+		t.Fatal(err)
+	}
+	sc := dsig.NewDefaultSigningContext(dsig.TLSCertKeyStore(tls.Certificate{Certificate: [][]byte{der}, PrivateKey: key}))
+	signed, err := sc.SignEnveloped(doc.Root())
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := etree.NewDocument()
+	out.SetRoot(signed)
+	xmlText, err = out.WriteToString()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return xmlText, string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}))
+}
+
+func TestVerifyMetadataSignature(t *testing.T) {
+	xmlText, certPEM := signedMetadata(t)
+	if err := verifyMetadataSignature(xmlText, certPEM); err != nil {
+		t.Fatalf("signed metadata must verify: %v", err)
+	}
+	const unsigned = `<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="https://idp.example.com" ID="_x"><IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol"/></EntityDescriptor>`
+	if err := verifyMetadataSignature(unsigned, ""); err != nil {
+		t.Fatalf("no pinned certificate must be a no-op: %v", err)
+	}
+	if err := verifyMetadataSignature(unsigned, certPEM); err == nil {
+		t.Fatal("unsigned metadata must fail when a certificate is pinned")
+	}
+	tampered := strings.Replace(xmlText, "https://idp.example.com", "https://evil.example.com", 1)
+	if err := verifyMetadataSignature(tampered, certPEM); err == nil {
+		t.Fatal("tampered metadata must fail")
+	}
+	_, other := signedMetadata(t)
+	if err := verifyMetadataSignature(xmlText, other); err == nil {
+		t.Fatal("metadata signed by another certificate must fail")
+	}
+}
+
+func TestMetadataTrustFormValidation(t *testing.T) {
+	xmlText, certPEM := signedMetadata(t)
+	base := func() SourceForm {
+		return SourceForm{Name: "corp", IdPMetadata: xmlText, AttrUsername: "uid", AttrEmail: "mail", AttrNickname: "displayName"}
+	}
+
+	f := base()
+	f.MetadataSign = certPEM
+	if err := f.validate(); err != nil {
+		t.Fatalf("signed metadata with pinned cert must validate: %v", err)
+	}
+
+	f = base()
+	f.MetadataSign = certPEM
+	f.IdPMetadata = `<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="https://idp.example.com"><IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol"/></EntityDescriptor>`
+	if err := f.validate(); err == nil {
+		t.Fatal("unsigned metadata must fail when a certificate is pinned")
+	}
+
+	f = base()
+	f.MetadataCACert = "not a pem"
+	if err := f.validate(); err == nil {
+		t.Fatal("invalid CA pem must fail")
+	}
+	f.MetadataCACert = certPEM
+	if err := f.validate(); err != nil {
+		t.Fatalf("valid CA pem must pass: %v", err)
+	}
+}
+
+func TestValidateSPEntityID(t *testing.T) {
+	for _, ok := range []string{"", "https://sp.example.com/entity", "urn:example:sp"} {
+		if err := validateSPEntityID(ok); err != nil {
+			t.Errorf("%q must be accepted: %v", ok, err)
+		}
+	}
+	for _, bad := range []string{"sp.example.com/entity", "https://sp.example.com/a b", strings.Repeat("a", 501)} {
+		if err := validateSPEntityID(bad); err == nil {
+			t.Errorf("%q must be rejected", bad)
+		}
+	}
+}
+
+func TestProviderEntityIDOverride(t *testing.T) {
+	certPEM, keyEnc, err := newSPKeyPair()
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := &Source{
+		IdPMetadata:    `<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="https://idp.example.com"><IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol"/></EntityDescriptor>`,
+		IdPMetadataURL: "https://idp.example.com/metadata",
+		SPCert:         certPEM,
+		SPKeyEnc:       keyEnc,
+		SPEntityID:     "https://sp.example.com/custom",
+	}
+	m.ID = idgen.ID(5)
+	const base = "https://admin.example.com"
+	svc := NewService(nil, nil, nil)
+
+	sp, err := svc.provider(m, base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sp.EntityID != "https://sp.example.com/custom" {
+		t.Fatalf("provider must use the override, got %q", sp.EntityID)
+	}
+	if md := sp.Metadata(); md.EntityID != "https://sp.example.com/custom" {
+		t.Fatalf("metadata must advertise the override, got %q", md.EntityID)
+	}
+	if got := spInfo(m, base).EntityID; got != "https://sp.example.com/custom" {
+		t.Fatalf("SP info must show the override, got %q", got)
+	}
+
+	m.SPEntityID = ""
+	sp, err = svc.provider(m, base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := base + "/api/v1/auth/saml/5/metadata"; sp.EntityID != want {
+		t.Fatalf("default EntityID = %q, want %q", sp.EntityID, want)
+	}
+}
+
+func TestBuildImportedSPKeyPair(t *testing.T) {
+	certPEM, keyPEM, err := newSPKeyPair()
+	if err != nil {
+		t.Fatal(err)
+	}
+	certOut, keyEnc, err := buildImportedSPKeyPair(certPEM, keyPEM)
+	if err != nil {
+		t.Fatalf("valid pair must be accepted: %v", err)
+	}
+	if _, err := parseSingleCert(certOut); err != nil {
+		t.Fatalf("normalized certificate must parse: %v", err)
+	}
+	plain, err := decryptSecret(keyEnc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := parseSigner(plain); err != nil {
+		t.Fatalf("stored key must parse back: %v", err)
+	}
+
+	// 换一把私钥：公私钥不匹配必须拒绝。
+	_, otherKey, err := newSPKeyPair()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := buildImportedSPKeyPair(certPEM, otherKey); err == nil {
+		t.Fatal("mismatched key must be rejected")
+	}
+	if _, _, err := buildImportedSPKeyPair(certPEM, "not a key"); err == nil {
+		t.Fatal("garbage key must be rejected")
+	}
+	if _, _, err := buildImportedSPKeyPair("not a cert", keyPEM); err == nil {
+		t.Fatal("garbage certificate must be rejected")
+	}
+
+	// 过期证书必须拒绝。
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmpl := &x509.Certificate{
+		SerialNumber: big.NewInt(2),
+		Subject:      pkix.Name{CommonName: "expired-sp"},
+		NotBefore:    time.Now().Add(-48 * time.Hour),
+		NotAfter:     time.Now().Add(-24 * time.Hour),
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expiredCert := string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}))
+	pkcs8, err := x509.MarshalPKCS8PrivateKey(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expiredKey := string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: pkcs8}))
+	if _, _, err := buildImportedSPKeyPair(expiredCert, expiredKey); err == nil {
+		t.Fatal("expired certificate must be rejected")
+	}
+}
+
+func TestSignMetadataXML(t *testing.T) {
+	certPEM, keyPEM, err := newSPKeyPair()
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw := []byte(`<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="https://sp.example.com/metadata" ID="_sp-1"><SPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol"/></EntityDescriptor>`)
+	signed, err := signMetadataXML(raw, certPEM, keyPEM)
+	if err != nil {
+		t.Fatalf("signing must succeed: %v", err)
+	}
+	if err := verifyMetadataSignature(string(signed), certPEM); err != nil {
+		t.Fatalf("signed metadata must verify with the same certificate: %v", err)
+	}
+	if err := verifyMetadataSignature(strings.Replace(string(signed), "https://sp.example.com/metadata", "https://evil.example.com/metadata", 1), certPEM); err == nil {
+		t.Fatal("tampered signed metadata must fail")
 	}
 }
