@@ -151,6 +151,9 @@ func signMetadataXML(raw []byte, certPEM, keyPEM string) ([]byte, error) {
 		Certificate: [][]byte{cert.Raw},
 		PrivateKey:  signer,
 	}))
+	// 用 exclusive C14N 1.0（SAML 生态的通行口径）：默认的 C14N11 会和按 exclusive
+	// 规范化 SignedInfo 的验签方不匹配，实测表现为 crypto/rsa: verification error。
+	sc.Canonicalizer = dsig.MakeC14N10ExclusiveCanonicalizerWithPrefixList("")
 	signed, err := sc.SignEnveloped(doc.Root())
 	if err != nil {
 		return nil, errors.New("saml: 元数据签名失败: " + err.Error())
