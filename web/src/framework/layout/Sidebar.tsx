@@ -145,18 +145,21 @@ export function Sidebar({ menu, homePath = HOME_PATH, collapsed = false, onNavig
           {menu.map((group, gi) => {
             const bare = !group.title // 顶级单项（如工作台）：没有分组标题，直接是一级菜单
             const open = !isClosed(group.key)
+            // 色调只属于「有标题的目录」：目录标题行用它做锚点，收起成图标轨时下放到子项。
+            // 顶级单项各自成组（key 由菜单 id 派生），跟着上色等于按 id 哈希出一串随机颜色。
+            const tone = bare ? undefined : groupTone(group.key)
 
             // 图标模式：所有菜单只显示图标，分组之间用细线隔开（图标轨也按分组着色，收展开两套观感一致）
             if (collapsed) {
               return (
                 <div key={group.key}>
                   {!bare && gi > 0 && <div className="mx-2 my-2 h-px bg-sidebar-border" role="separator" />}
-                  <ul className="space-y-1">{group.children?.map((item) => renderItem(item, false, groupTone(group.key)))}</ul>
+                  <ul className="space-y-1">{group.children?.map((item) => renderItem(item, false, tone))}</ul>
                 </div>
               )
             }
 
-            if (bare) return <ul key={group.key} className="space-y-1">{group.children?.map((item) => renderItem(item, false, groupTone(group.key)))}</ul>
+            if (bare) return <ul key={group.key} className="space-y-1">{group.children?.map((item) => renderItem(item, false))}</ul>
 
             // 一级目录：图标 + 标题 + 折叠箭头（箭头是唯一的分组标记，字重与单项一致）；二级菜单缩进并带一条竖向引导线
             return (
