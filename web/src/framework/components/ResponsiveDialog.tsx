@@ -29,6 +29,8 @@ export interface ResponsiveDialogProps {
   /** 高度固定为 85dvh（手机 92dvh），正文占满余下空间；多页签表单切换时弹窗不再变高变矮 */
   fixedHeight?: boolean
   className?: string
+  /** 透传到桌面 DialogContent 外壳的类名（覆盖居中/定位）；正文类名请用 className */
+  contentClassName?: string
 }
 
 const sizeClass = {
@@ -49,6 +51,7 @@ export function ResponsiveDialog({
   size = 'md',
   fixedHeight,
   className,
+  contentClassName,
 }: ResponsiveDialogProps) {
   const isMobile = useIsMobile()
 
@@ -85,6 +88,7 @@ export function ResponsiveDialog({
           'flex flex-col gap-0 p-0 overflow-hidden!',
           fixedHeight ? 'h-[85dvh]' : 'max-h-[85dvh]',
           sizeClass[size],
+          contentClassName,
         )}
       >
         <DialogHeader className="shrink-0 p-6 pb-4 text-start">

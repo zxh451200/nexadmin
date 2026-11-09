@@ -181,6 +181,39 @@ export function BpmnDesigner({
     return () => eventBus.off('selection.changed', onSelection)
   }, [])
 
+  // bpmn-js 的替换菜单用视口坐标定位，窄屏时 _ensureVisible 只翻转不夹取，
+  // left 会算成负值把菜单左侧裁掉。打开/刷新后把弹层夹回视口内。
+  useEffect(() => {
+    const modeler = modelerRef.current
+    if (!modeler) return
+    const eventBus = modeler.get('eventBus') as any
+    let raf = 0
+    const clamp = () => {
+      cancelAnimationFrame(raf)
+      raf = requestAnimationFrame(() => {
+        const popup = containerRef.current?.querySelector('.djs-popup') as HTMLElement | null
+        if (!popup) return
+        const r = popup.getBoundingClientRect()
+        const m = 8
+        let left = r.left
+        let top = r.top
+        if (r.right > window.innerWidth - m) left = window.innerWidth - m - r.width
+        if (left < m) left = m
+        if (r.bottom > window.innerHeight - m) top = window.innerHeight - m - r.height
+        if (top < m) top = m
+        if (left !== r.left) popup.style.left = `${left}px`
+        if (top !== r.top) popup.style.top = `${top}px`
+      })
+    }
+    eventBus.on('popupMenu.opened', clamp)
+    eventBus.on('popupMenu.refresh', clamp)
+    return () => {
+      cancelAnimationFrame(raf)
+      eventBus.off('popupMenu.opened', clamp)
+      eventBus.off('popupMenu.refresh', clamp)
+    }
+  }, [])
+
   const update = (patch: Partial<SelectedTask>) => {
     const modeler = modelerRef.current
     if (!modeler || !selected) return

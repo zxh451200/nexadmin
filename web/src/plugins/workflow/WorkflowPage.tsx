@@ -546,6 +546,8 @@ function DefEditor({
       title={def ? t('plugin_workflow.defEdit') : t('plugin_workflow.defCreate')}
       size="xl"
       className="space-y-4"
+      // bpmn-js 替换菜单(.djs-popup)是 position:fixed + 视口坐标；DialogContent 的 translate 会为 fixed 子元素建立定位基准，把菜单偏移出弹窗。去掉 translate 改 margin 居中后恢复正常。
+      contentClassName="[translate:none]! inset-0 m-auto h-fit"
       footer={
         <>
           <Button variant="outline" onClick={onClose}>
