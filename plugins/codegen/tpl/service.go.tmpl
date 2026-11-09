@@ -6,7 +6,7 @@ import (
 [[- if .UsesStrings]]
 	"strings"
 [[- end]]
-[[- if .HasFormTime]]
+[[- if .UsesTimeService]]
 	"time"
 [[- end]]
 
@@ -165,13 +165,29 @@ func (s *Service) get(ctx context.Context, id idgen.ID) (*[[.Pascal]], error) {
 func (s *Service) List(ctx context.Context, q ListQuery) ([]View, int64, error) {
 	base := s.db.WithContext(ctx).Model(&[[.Pascal]]{})
 [[- range .QueryFields]]
-[[- if eq .Kind "string"]]
+[[- if eq .QueryOp "like"]]
 	if q.[[.Pascal]] != "" {
 		base = base.Where(clause.Like{Column: clause.Column{Name: "[[.Name]]"}, Value: likeArg(q.[[.Pascal]])})
 	}
+[[- else if eq .QueryOp "between"]]
+	if q.[[.Pascal]]From != nil {
+		base = base.Where(clause.Gte{Column: clause.Column{Name: "[[.Name]]"}, Value: *q.[[.Pascal]]From})
+	}
+	if q.[[.Pascal]]To != nil {
+[[- if eq .Kind "datetime"]]
+		// 日期时间区间按天：右端取次日零点（不含），否则当天 00:00 之后的数据会被漏掉。
+		base = base.Where(clause.Lt{Column: clause.Column{Name: "[[.Name]]"}, Value: q.[[.Pascal]]To.Add(24 * time.Hour)})
+[[- else]]
+		base = base.Where(clause.Lte{Column: clause.Column{Name: "[[.Name]]"}, Value: *q.[[.Pascal]]To})
+[[- end]]
+	}
+[[- else if eq .Kind "string"]]
+	if q.[[.Pascal]] != "" {
+		base = base.Where(clause.[[clause .QueryOp]]{Column: clause.Column{Name: "[[.Name]]"}, Value: q.[[.Pascal]]})
+	}
 [[- else]]
 	if q.[[.Pascal]] != nil {
-		base = base.Where(clause.Eq{Column: clause.Column{Name: "[[.Name]]"}, Value: *q.[[.Pascal]]})
+		base = base.Where(clause.[[clause .QueryOp]]{Column: clause.Column{Name: "[[.Name]]"}, Value: *q.[[.Pascal]]})
 	}
 [[- end]]
 [[- end]]

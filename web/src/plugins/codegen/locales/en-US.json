@@ -79,6 +79,10 @@
       "comment": "Comment",
       "list": "In list",
       "query": "Filter",
+      "queryOp": "Operator",
+      "sort": "Order",
+      "moveUp": "Move up",
+      "moveDown": "Move down",
       "form": "In form",
       "required": "Required",
       "control": "Control",
@@ -90,6 +94,16 @@
       "showSystemHint": "System columns (id, tenant_id, timestamps) are generated automatically and need no configuration here"
     },
     "controls": { "input": "Input", "textarea": "Textarea", "number": "Number", "switch": "Switch", "date": "Date", "datetime": "Date & time", "dict": "Dictionary" },
+    "queryOps": {
+      "like": "Contains",
+      "eq": "Equals",
+      "ne": "Not equal",
+      "gt": "Greater than",
+      "ge": "Greater or equal",
+      "lt": "Less than",
+      "le": "Less or equal",
+      "between": "Between"
+    },
     "preview": {
       "files": "Files",
       "empty": "No files were generated",
@@ -103,7 +117,7 @@
       "downloaded": "File downloaded"
     },
     "notes": {
-      "import_line": "Add one blank import to internal/modules/modules.go; rebuild and restart to seed the menu:",
+      "import_line": "Add one blank import to internal/modules/modules.go; rebuild and restart to seed the menu (or tick auto-register when writing to the project):",
       "api_prefix": "All endpoints are mounted under{{value}}",
       "migration": "Three migrations are included; drop them into migrations/business with your project's number and restart to create the table:",
       "null_zero": "The table already exists, so no migration is generated; NULL columns are read as zero values and written back as zero values."
@@ -125,9 +139,21 @@
       "title": "Write to project",
       "desc": "Writes the generated files into the project root (the backend working directory; override with the NEXADMIN_ROOT environment variable; the directory must contain go.mod).",
       "overwrite": "Overwrite existing files",
-      "overwriteHint": "By default only new files are written: existing ones are skipped and listed in the receipt, so multiple generated modules can coexist safely.",
+      "overwriteHint": "By default only new files are written: existing ones are skipped and listed one by one in the receipt.",
+      "register": "Register module automatically",
+      "registerHint": "Adds one blank import inside the marker block of internal/modules/modules.go so routes and menus take effect after a restart; does nothing if it is already registered.",
       "restartHint": "Rebuild and restart the backend afterwards. Drop new-table migrations into migrations/business and they apply on restart.",
-      "done": "Wrote {{written}} files, skipped {{skipped}} existing ones"
+      "resultTitle": "Write receipt",
+      "resultSummary": "Wrote {{written}} files, skipped {{skipped}} existing ones",
+      "resultRoot": "Target directory",
+      "resultWritten": "Written ({{count}})",
+      "resultSkipped": "Already existed, skipped ({{count}})",
+      "overwriteRetry": "Overwrite and rewrite",
+      "registerDone": "Added the module's blank import to internal/modules/modules.go.",
+      "registerAlready": "internal/modules/modules.go already imports this module; nothing was written.",
+      "registerNoFile": "internal/modules/modules.go was not found, so the module was not registered; add the blank import manually as shown on the preview page.",
+      "registerNoMarkers": "internal/modules/modules.go has no nexadmin:modules marker block, so the module was not registered; add the blank import manually.",
+      "registerFailed": "Module registration failed ({{error}}). Files were written; add the blank import manually as shown on the preview page."
     },
     "sub": {
       "title": "Master-detail (optional)",

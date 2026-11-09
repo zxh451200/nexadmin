@@ -1,15 +1,16 @@
 import { useState } from 'react'
-import { Info } from 'lucide-react'
+import { ArrowDown, ArrowUp, Info } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { FormGrid, FormLayout } from '@/framework/components/FormLayout'
 import { RequiredMark } from '@/framework/components/RequiredMark'
 import { Badge } from '@/framework/ui/badge'
+import { Button } from '@/framework/ui/button'
 import { Checkbox } from '@/framework/ui/checkbox'
 import { Input } from '@/framework/ui/input'
 import { Label } from '@/framework/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
-import { CONTROLS, QUERYABLE, REQUIRABLE, type ColumnConfig, type ColumnInfo, type Control, type TableSchema } from './api'
+import { CONTROLS, QUERYABLE, QUERY_OPS, REQUIRABLE, type ColumnConfig, type ColumnInfo, type Control, type QueryOp, type TableSchema } from './api'
 
 interface Props {
   schema: TableSchema
@@ -32,14 +33,31 @@ export function ColumnsStep({ schema, cfg, onCfgChange, module, onModuleChange, 
   // 系统列（id/tenant_id/时间戳）不可配置、每张表必然存在，默认收起——不收起的话
   // 四行灰行 × 四个禁用空勾选框把真正要配置的业务行淹没在一排排短横线里。
   const [showSystem, setShowSystem] = useState(false)
-  const rows = showSystem ? schema.columns : schema.columns.filter((c) => !c.system)
+  // 行顺序跟生成物字段顺序走（sort）：上移 / 下移后表格当场重排，用户能直接看到结果。
+  const ordered = [...schema.columns].sort(
+    (a, b) => (byName.get(a.name)?.sort ?? 0) - (byName.get(b.name)?.sort ?? 0),
+  )
+  const rows = showSystem ? ordered : ordered.filter((c) => !c.system)
+  // 上移 / 下移按当前显示顺序算，而不是 table 原始列顺序：移动后端点要跟着换。
+  const business = ordered.filter((c) => c.supported && !c.system).map((c) => c.name)
+
+  const move = (name: string, dir: -1 | 1) => {
+    const target = business[business.indexOf(name) + dir]
+    if (!target) return
+    const a = cfg.findIndex((c) => c.name === name)
+    const b = cfg.findIndex((c) => c.name === target)
+    if (a < 0 || b < 0) return
+    const next = [...cfg]
+    ;[next[a], next[b]] = [next[b], next[a]]
+    onCfgChange(next.map((c, i) => ({ ...c, sort: i + 1 })))
+  }
 
   // 系统列/不支持的列不做勾选，与控件列一致画短横线：一排能点但禁用的空框，比 "-" 更吵。
   const flag = (key: 'list' | 'query' | 'form' | 'required', allow: (c: ColumnInfo, cur: ColumnConfig) => boolean): Column<ColumnInfo> => ({
     key,
     title: t(`plugin_codegen.col.${key}`),
     align: 'center',
-    width: 88,
+    width: 76,
     render: (c) => {
       const cur = byName.get(c.name)
       if (!cur || c.system || !c.supported) return <span className="text-muted-foreground">-</span>
@@ -58,7 +76,7 @@ export function ColumnsStep({ schema, cfg, onCfgChange, module, onModuleChange, 
     {
       key: 'name',
       title: t('plugin_codegen.col.name'),
-      width: 200,
+      width: 180,
       mobile: 'title',
       render: (c) => (
         <span className="flex flex-wrap items-center gap-2">
@@ -72,7 +90,7 @@ export function ColumnsStep({ schema, cfg, onCfgChange, module, onModuleChange, 
     {
       key: 'type',
       title: t('plugin_codegen.col.type'),
-      width: 150,
+      width: 120,
       mobile: 'sub',
       render: (c) => <span className="font-mono text-xs text-muted-foreground">{c.type}{c.nullable ? ' · NULL' : ''}</span>,
     },
@@ -82,9 +100,35 @@ export function ColumnsStep({ schema, cfg, onCfgChange, module, onModuleChange, 
     flag('form', () => true),
     flag('required', (c, cur) => REQUIRABLE.includes(c.kind) && cur.form),
     {
+      key: 'queryOp',
+      title: t('plugin_codegen.col.queryOp'),
+      width: 132,
+      render: (c) => {
+        const cur = byName.get(c.name)
+        if (!cur || !c.supported || c.system || !cur.query) return <span className="text-muted-foreground">-</span>
+        const ops = QUERY_OPS[c.kind] ?? []
+        if (ops.length === 0) return <span className="text-muted-foreground">-</span>
+        if (ops.length === 1) return <span className="text-xs text-muted-foreground">{t(`plugin_codegen.queryOps.${ops[0]}`)}</span>
+        return (
+          <Select value={cur.queryOp || ops[0]} onValueChange={(v) => patch(c.name, { queryOp: v as QueryOp })}>
+            <SelectTrigger className="w-28" aria-label={`${c.name} ${t('plugin_codegen.col.queryOp')}`}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {ops.map((op) => (
+                <SelectItem key={op} value={op}>
+                  {t(`plugin_codegen.queryOps.${op}`)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )
+      },
+    },
+    {
       key: 'control',
       title: t('plugin_codegen.col.control'),
-      width: 190,
+      width: 260,
       render: (c) => {
         const cur = byName.get(c.name)
         const options = CONTROLS[c.kind] ?? []
@@ -105,7 +149,7 @@ export function ColumnsStep({ schema, cfg, onCfgChange, module, onModuleChange, 
             </Select>
             {cur.control === 'dict' ? (
               <Input
-                className="w-32 font-mono"
+                className="w-40 font-mono"
                 value={cur.dict ?? ''}
                 onChange={(e) => patch(c.name, { dict: e.target.value.trim().toLowerCase() })}
                 placeholder="sys_status"
@@ -113,6 +157,42 @@ export function ColumnsStep({ schema, cfg, onCfgChange, module, onModuleChange, 
                 maxLength={48}
               />
             ) : null}
+          </div>
+        )
+      },
+    },
+    {
+      key: 'sort',
+      title: t('plugin_codegen.col.sort'),
+      align: 'center',
+      width: 76,
+      render: (c) => {
+        if (!c.supported || c.system) return <span className="text-muted-foreground">-</span>
+        const i = business.indexOf(c.name)
+        return (
+          <div className="flex items-center justify-center gap-0.5">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-7"
+              disabled={i <= 0}
+              aria-label={`${c.name} ${t('plugin_codegen.col.moveUp')}`}
+              title={t('plugin_codegen.col.moveUp')}
+              onClick={() => move(c.name, -1)}
+            >
+              <ArrowUp aria-hidden="true" className="size-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-7"
+              disabled={i < 0 || i >= business.length - 1}
+              aria-label={`${c.name} ${t('plugin_codegen.col.moveDown')}`}
+              title={t('plugin_codegen.col.moveDown')}
+              onClick={() => move(c.name, 1)}
+            >
+              <ArrowDown aria-hidden="true" className="size-3.5" />
+            </Button>
           </div>
         )
       },

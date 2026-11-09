@@ -3,6 +3,7 @@ import { api, http } from '@/framework/request/http'
 
 export type Kind = 'string' | 'text' | 'int' | 'float' | 'bool' | 'date' | 'datetime' | 'id' | ''
 export type Control = 'input' | 'textarea' | 'number' | 'switch' | 'date' | 'datetime' | 'dict'
+export type QueryOp = 'like' | 'eq' | 'ne' | 'gt' | 'ge' | 'lt' | 'le' | 'between'
 export type FieldKind = 'string' | 'text' | 'int' | 'float' | 'bool' | 'date' | 'datetime'
 
 export interface TableInfo {
@@ -16,6 +17,10 @@ export interface ColumnConfig {
   form: boolean
   required: boolean
   control: Control | ''
+  /** 查询方式（query 为真时生效）：短文本默认 like，其余默认 eq */
+  queryOp?: QueryOp
+  /** 生成物里的字段顺序（1 起）；0/缺省 = 按表列顺序 */
+  sort?: number
   /** 字典编码（control = dict 时必填）：选项在运行时从 /dicts/:code/items 按语言取 */
   dict?: string
 }
@@ -162,15 +167,23 @@ export function useDownload() {
   return useMutation({ mutationFn: downloadZip })
 }
 
-/** 直写项目回执：written 是已写入的文件，skipped 是因已存在被跳过的（overwrite=false 时）。 */
+/** 直写项目回执：written 是已写入的文件，skipped 是因已存在被跳过的（overwrite=false 时）。
+ *  registered 表示本次是否把模块空导入写进了 modules.go；registerNote 说明未写的原因。 */
 export interface InstallResult {
+  root: string
   written: string[]
   skipped: string[]
+  registered: boolean
+  registerNote?: 'already' | 'no_file' | 'no_markers' | 'failed'
+  registerError?: string
 }
 
 /** 写入项目根目录：后端进程工作目录（可用 NEXADMIN_ROOT 指定），默认不覆盖已有文件。 */
 export function useInstall() {
-  return useMutation({ mutationFn: (req: GenRequest & { overwrite: boolean }) => api.post<InstallResult>(`${BASE}/install`, req) })
+  return useMutation({
+    mutationFn: (req: GenRequest & { overwrite: boolean; register: boolean }) =>
+      api.post<InstallResult>(`${BASE}/install`, req),
+  })
 }
 
 /** 保存下来的生成配置：载入后向导恢复到保存时的状态，继续改。 */
@@ -230,7 +243,7 @@ export function useDeleteConfigs() {
 }
 
 /** 与服务端一致：哪些类型支持作为查询条件 / 必填，以及每种类型允许的表单控件（第一个是默认）。 */
-export const QUERYABLE: Kind[] = ['string', 'int', 'id', 'bool', 'date']
+export const QUERYABLE: Kind[] = ['string', 'int', 'float', 'id', 'bool', 'date', 'datetime']
 export const REQUIRABLE: Kind[] = ['string', 'text', 'date', 'datetime']
 export const CONTROLS: Record<string, Control[]> = {
   string: ['input', 'textarea', 'dict'],
@@ -241,4 +254,15 @@ export const CONTROLS: Record<string, Control[]> = {
   bool: ['switch'],
   date: ['date'],
   datetime: ['datetime'],
+}
+
+/** 与服务端 queryOpsByKind 一致：每种列类型可选的查询方式（第一个是默认）。 */
+export const QUERY_OPS: Record<string, QueryOp[]> = {
+  string: ['like', 'eq', 'ne'],
+  int: ['eq', 'ne', 'gt', 'ge', 'lt', 'le', 'between'],
+  float: ['eq', 'ne', 'gt', 'ge', 'lt', 'le', 'between'],
+  id: ['eq', 'ne'],
+  bool: ['eq'],
+  date: ['eq', 'ne', 'gt', 'ge', 'lt', 'le', 'between'],
+  datetime: ['eq', 'ne', 'gt', 'ge', 'lt', 'le', 'between'],
 }

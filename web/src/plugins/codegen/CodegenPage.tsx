@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ArrowLeft, ArrowRight, Database, Download, FolderInput, Plus, Save, Trash2 } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Database, Download, FolderInput, Plus, RefreshCw, Save, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
@@ -34,6 +34,7 @@ import {
   type ColumnConfig,
   type GenOutput,
   type GenRequest,
+  type InstallResult,
   type SavedGenConfig,
   type SubTableSpec,
   type TableDef,
@@ -71,6 +72,9 @@ export default function CodegenPage() {
   const [saveName, setSaveName] = useState('')
   const [installOpen, setInstallOpen] = useState(false)
   const [overwrite, setOverwrite] = useState(false)
+  const [autoRegister, setAutoRegister] = useState(true)
+  const [result, setResult] = useState<InstallResult>()
+  const [resultOpen, setResultOpen] = useState(false)
   const install = useInstall()
 
   const tables = useTables()
@@ -99,7 +103,7 @@ export default function CodegenPage() {
       setOutput(undefined)
       return
     }
-    setCfg(loaded.columns.map((c) => c.config))
+    setCfg(loaded.columns.map((c, i) => ({ ...c.config, sort: c.config.sort || i + 1 })))
     setModule(loaded.suggestedModule)
     setSub(undefined)
     setOutput(undefined)
@@ -108,6 +112,17 @@ export default function CodegenPage() {
   const moduleError = module && !MODULE_RE.test(module) ? t('plugin_codegen.errors.module') : undefined
   const goModuleError = goModule && !GO_MODULE_RE.test(goModule) ? t('plugin_codegen.errors.goModule') : undefined
   const canPreview = !!source && !!loaded && !!module && !moduleError && !goModuleError
+  const registerText = result?.registered
+    ? t('plugin_codegen.install.registerDone')
+    : result?.registerNote === 'already'
+      ? t('plugin_codegen.install.registerAlready')
+      : result?.registerNote === 'no_file'
+        ? t('plugin_codegen.install.registerNoFile')
+        : result?.registerNote === 'no_markers'
+          ? t('plugin_codegen.install.registerNoMarkers')
+          : result?.registerNote === 'failed'
+            ? t('plugin_codegen.install.registerFailed', { error: result.registerError ?? '' })
+            : ''
 
   const request = (): GenRequest => {
     const base = { module, goModule: goModule || undefined, columns: cfg, sub: sub?.foreignKey ? sub : undefined }
@@ -135,13 +150,13 @@ export default function CodegenPage() {
     }
   }
 
-  const onInstall = async () => {
+  const onInstall = async (ow = overwrite) => {
     try {
-      const res = await install.mutateAsync({ ...request(), overwrite })
+      const res = await install.mutateAsync({ ...request(), overwrite: ow, register: autoRegister })
+      setOverwrite(ow)
       setInstallOpen(false)
-      toast.success(
-        t('plugin_codegen.install.done', { written: res.written.length, skipped: res.skipped.length }),
-      )
+      setResult(res)
+      setResultOpen(true)
     } catch {
       toast.error(t('common.operateFailed'))
     }
@@ -176,7 +191,7 @@ export default function CodegenPage() {
       }
       setPending({
         sig: c.define ? `define:${c.define.name}` : `table:${c.table}`,
-        cfg: c.columns ?? [],
+        cfg: (c.columns ?? []).map((x, i) => ({ ...x, sort: x.sort || i + 1 })),
         module: c.module,
         sub: c.sub,
         nonce: Date.now(),
@@ -297,10 +312,16 @@ export default function CodegenPage() {
             <>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-sm text-muted-foreground">{t('plugin_codegen.tables.hint')}</p>
-                <Button onClick={() => setDefineOpen(true)}>
-                  <Plus aria-hidden="true" />
-                  {t('plugin_codegen.tables.new')}
-                </Button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button variant="outline" onClick={() => void tables.refetch()} disabled={tables.isFetching}>
+                    <RefreshCw className={tables.isFetching ? 'animate-spin' : undefined} aria-hidden="true" />
+                    {t('plugin_codegen.tables.refresh')}
+                  </Button>
+                  <Button onClick={() => setDefineOpen(true)}>
+                    <Plus aria-hidden="true" />
+                    {t('plugin_codegen.tables.new')}
+                  </Button>
+                </div>
               </div>
               <FilterBar
                 onSearch={() => setKeyword(draft)}
@@ -490,7 +511,44 @@ export default function CodegenPage() {
             {t('plugin_codegen.install.overwrite')}
           </label>
           <p className="text-xs text-muted-foreground">{t('plugin_codegen.install.overwriteHint')}</p>
+          <label className="flex items-center gap-2">
+            <Checkbox checked={autoRegister} onCheckedChange={(v) => setAutoRegister(v === true)} />
+            {t('plugin_codegen.install.register')}
+          </label>
+          <p className="text-xs text-muted-foreground">{t('plugin_codegen.install.registerHint')}</p>
           <p className="text-xs text-muted-foreground">{t('plugin_codegen.install.restartHint')}</p>
+        </div>
+      </ResponsiveDialog>
+
+      <ResponsiveDialog
+        open={resultOpen}
+        onOpenChange={setResultOpen}
+        title={t('plugin_codegen.install.resultTitle')}
+        description={t('plugin_codegen.install.resultSummary', {
+          written: result?.written.length ?? 0,
+          skipped: result?.skipped.length ?? 0,
+        })}
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setResultOpen(false)}>{t('common.close')}</Button>
+            {result && result.skipped.length > 0 ? (
+              <Button onClick={() => void onInstall(true)} disabled={install.isPending}>
+                {t('plugin_codegen.install.overwriteRetry')}
+              </Button>
+            ) : null}
+          </>
+        }
+      >
+        <div className="flex flex-col gap-3 text-sm">
+          <div className="flex flex-col gap-1">
+            <p className="text-xs text-muted-foreground">{t('plugin_codegen.install.resultRoot')}</p>
+            <code className="break-all rounded bg-muted px-2 py-1 font-mono text-xs">{result?.root}</code>
+          </div>
+          <PathList title={t('plugin_codegen.install.resultWritten', { count: result?.written.length ?? 0 })} paths={result?.written ?? []} />
+          {result && result.skipped.length > 0 ? (
+            <PathList title={t('plugin_codegen.install.resultSkipped', { count: result.skipped.length })} paths={result.skipped} warn />
+          ) : null}
+          {registerText ? <p className="text-xs text-muted-foreground">{registerText}</p> : null}
         </div>
       </ResponsiveDialog>
 
@@ -511,5 +569,22 @@ export default function CodegenPage() {
         </ul>
       </ResponsiveDialog>
     </PageContainer>
+  )
+}
+
+/** 安装回执里的路径清单：长路径折行，列表超高后独立滚动（不把弹窗撑到屏幕外）。 */
+function PathList({ title, paths, warn }: { title: string; paths: string[]; warn?: boolean }) {
+  if (paths.length === 0) return null
+  return (
+    <div className="flex flex-col gap-1">
+      <p className={warn ? 'text-xs font-medium text-destructive' : 'text-xs font-medium'}>{title}</p>
+      <ul className="max-h-40 overflow-y-auto overscroll-contain rounded-md border border-border p-2 font-mono text-[11px]">
+        {paths.map((p) => (
+          <li key={p} className="break-all">
+            {p}
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }

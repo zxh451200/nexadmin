@@ -14,7 +14,7 @@ import (
 
 func init() {
 	plugin.Register(plugin.Plugin{
-		ID: "codegen", Name: "代码生成器", Version: "1.2.0", Edition: plugin.Free,
+		ID: "codegen", Name: "代码生成器", Version: "1.3.0", Edition: plugin.Free,
 		Module: &module{},
 	})
 }

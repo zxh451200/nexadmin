@@ -36,14 +36,24 @@ defineMock([
     handler: ({ query }) => {
       [[if .QueryFields]]let[[else]]const[[end]] rows = items.slice()
 [[- range .QueryFields]]
-[[- if eq .Kind "string"]]
+[[- if eq .QueryOp "like"]]
       if (query.[[.Camel]]) rows = rows.filter((x) => x.[[.Camel]].toLowerCase().includes(String(query.[[.Camel]]).trim().toLowerCase()))
+[[- else if eq .QueryOp "between"]]
+[[- if or (eq .Kind "int") (eq .Kind "float")]]
+      if (query.[[.Camel]]From) rows = rows.filter((x) => Number(x.[[.Camel]] ?? 0) >= Number(query.[[.Camel]]From))
+      if (query.[[.Camel]]To) rows = rows.filter((x) => Number(x.[[.Camel]] ?? 0) <= Number(query.[[.Camel]]To))
+[[- else]]
+      if (query.[[.Camel]]From) rows = rows.filter((x) => String(x.[[.Camel]] ?? '').slice(0, 10) >= String(query.[[.Camel]]From))
+      if (query.[[.Camel]]To) rows = rows.filter((x) => String(x.[[.Camel]] ?? '').slice(0, 10) <= String(query.[[.Camel]]To))
+[[- end]]
 [[- else if eq .Kind "bool"]]
       if (query.[[.Camel]] === '1' || query.[[.Camel]] === '0') rows = rows.filter((x) => x.[[.Camel]] === (query.[[.Camel]] === '1'))
-[[- else if eq .Kind "date"]]
-      if (query.[[.Camel]]) rows = rows.filter((x) => (x.[[.Camel]] ?? '').slice(0, 10) === String(query.[[.Camel]]))
+[[- else if or (eq .Kind "date") (eq .Kind "datetime")]]
+      if (query.[[.Camel]]) rows = rows.filter((x) => String(x.[[.Camel]] ?? '').slice(0, 10) [[jsOp .QueryOp]] String(query.[[.Camel]]))
+[[- else if or (eq .Kind "int") (eq .Kind "float")]]
+      if (query.[[.Camel]]) rows = rows.filter((x) => Number(x.[[.Camel]] ?? 0) [[jsOp .QueryOp]] Number(query.[[.Camel]]))
 [[- else]]
-      if (query.[[.Camel]]) rows = rows.filter((x) => String(x.[[.Camel]]) === String(query.[[.Camel]]).trim())
+      if (query.[[.Camel]]) rows = rows.filter((x) => String(x.[[.Camel]]) [[jsOp .QueryOp]] String(query.[[.Camel]]).trim())
 [[- end]]
 [[- end]]
       rows.sort((a, b) => b.id.localeCompare(a.id))

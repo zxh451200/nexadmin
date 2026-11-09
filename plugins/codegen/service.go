@@ -5,8 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"go/format"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"gorm.io/gorm"
@@ -152,48 +155,61 @@ func (s *Service) resolve(ctx context.Context, table string, def *TableDef) (*An
 
 // Generate 校验请求并渲染全部文件（内存中，不落盘）。
 func (s *Service) Generate(ctx context.Context, req GenRequest) (*Output, error) {
+	_, out, err := s.generate(ctx, req)
+	return out, err
+}
+
+// generate 同 Generate，但同时返回已校验的 Spec（安装时要用它的模块路径注册空导入）。
+func (s *Service) generate(ctx context.Context, req GenRequest) (*Spec, *Output, error) {
 	if err := ValidModule(req.Module); err != nil {
-		return nil, badReq(err)
+		return nil, nil, badReq(err)
 	}
 	a, def, err := s.resolve(ctx, req.Table, req.Define)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	spec, err := buildSpec(a, req.GoModule, req.Module, req.Columns)
 	if err != nil {
-		return nil, badReq(err)
+		return nil, nil, badReq(err)
 	}
 	if def != nil {
 		spec.Migrations = def.migrations()
 	}
 	if req.Sub != nil {
 		if req.Sub.Table == a.Table {
-			return nil, badReq(fmt.Errorf("sub table must differ from the main table"))
+			return nil, nil, badReq(fmt.Errorf("sub table must differ from the main table"))
 		}
 		subA, err := s.analyze(ctx, req.Sub.Table)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		sub, err := buildSubSpec(subA, req.Sub.ForeignKey, req.Sub.Columns, spec.Pascal)
 		if err != nil {
-			return nil, badReq(err)
+			return nil, nil, badReq(err)
 		}
 		if sub.Tenant && !spec.Tenant {
-			return nil, badReq(fmt.Errorf("sub table %q is tenant-scoped but the main table is not", sub.Table))
+			return nil, nil, badReq(fmt.Errorf("sub table %q is tenant-scoped but the main table is not", sub.Table))
 		}
 		spec.Sub = sub
 	}
 	out, err := Render(spec)
 	if err != nil {
-		return nil, response.Internal().Wrap(err)
+		return nil, nil, response.Internal().Wrap(err)
 	}
-	return out, nil
+	return spec, out, nil
 }
 
-// InstallResult 是直写项目的回执：写入了哪些文件、哪些因已存在被跳过。
+// InstallResult 是直写项目的回执：写入了哪些文件、哪些因已存在被跳过，
+// 以及模块是否已注册进 internal/modules/modules.go。
 type InstallResult struct {
-	Written []string `json:"written"`
-	Skipped []string `json:"skipped"`
+	Root     string   `json:"root"`
+	Written  []string `json:"written"`
+	Skipped  []string `json:"skipped"`
+	// Registered 表示本次是否新写了 modules.go 的空导入。
+	Registered bool `json:"registered"`
+	// RegisterNote 说明未写入的原因：already（已有）/ no_file / no_markers / failed。
+	RegisterNote  string `json:"registerNote,omitempty"`
+	RegisterError string `json:"registerError,omitempty"`
 }
 
 // projectRoot 解析写入根目录：优先 NEXADMIN_ROOT 环境变量，否则用后端进程的工作目录
@@ -253,9 +269,11 @@ func goModuleLine(path string) (string, bool) {
 }
 
 // Install 把渲染结果写进项目根目录；已存在的文件默认跳过（overwrite=false）。
+// register=true 时再把模块空导入写进 internal/modules/modules.go 的标记区（幂等）：
+// 生成的模块靠 init 里的 RegisterBuiltin 挂路由，不注册的话接口在重启后依然 404。
 // 路径在渲染层已过白名单，这里再核一道并确保没有逃逸出根目录。
-func (s *Service) Install(ctx context.Context, req GenRequest, overwrite bool) (*InstallResult, error) {
-	out, err := s.Generate(ctx, req)
+func (s *Service) Install(ctx context.Context, req GenRequest, overwrite, register bool) (*InstallResult, error) {
+	spec, out, err := s.generate(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -263,7 +281,7 @@ func (s *Service) Install(ctx context.Context, req GenRequest, overwrite bool) (
 	if err != nil {
 		return nil, response.BadRequest("codegen.install_no_root").Wrap(err)
 	}
-	res := &InstallResult{Written: []string{}, Skipped: []string{}}
+	res := &InstallResult{Root: root, Written: []string{}, Skipped: []string{}}
 	for _, f := range out.Files {
 		if !validOutPath(f.Path) {
 			return nil, response.Internal().Wrap(fmt.Errorf("unsafe output path %q", f.Path))
@@ -286,7 +304,73 @@ func (s *Service) Install(ctx context.Context, req GenRequest, overwrite bool) (
 		}
 		res.Written = append(res.Written, f.Path)
 	}
+	if register {
+		changed, note, rerr := registerModule(root, spec.GoModule+"/internal/modules/"+spec.Module)
+		res.Registered, res.RegisterNote = changed, note
+		if rerr != nil {
+			// 文件已经写下去了：不让整个安装回执变成失败，但把原因如实带回界面。
+			res.RegisterNote = "failed"
+			res.RegisterError = rerr.Error()
+		}
+	}
 	return res, nil
+}
+
+const (
+	modulesMarkBegin = "// nexadmin:modules:begin"
+	modulesMarkEnd   = "// nexadmin:modules:end"
+)
+
+// registerModule 在 internal/modules/modules.go 的标记区里幂等追加空导入。
+// 未改写时 note 说明原因（already / no_file / no_markers），不当作错误。
+func registerModule(root, importPath string) (changed bool, note string, err error) {
+	file := filepath.Join(root, "internal", "modules", "modules.go")
+	src, err := os.ReadFile(file)
+	if errors.Is(err, fs.ErrNotExist) {
+		return false, "no_file", nil
+	}
+	if err != nil {
+		return false, "", err
+	}
+	line := fmt.Sprintf(`_ %q`, importPath)
+	lines := strings.Split(string(src), "\n")
+	begin, end := -1, -1
+	for i, l := range lines {
+		switch strings.TrimSpace(l) {
+		case modulesMarkBegin:
+			begin = i
+		case modulesMarkEnd:
+			end = i
+		}
+	}
+	if begin < 0 || end <= begin {
+		return false, "no_markers", nil
+	}
+	specs := make([]string, 0, end-begin)
+	for _, l := range lines[begin+1 : end] {
+		if t := strings.TrimSpace(l); t != "" {
+			if t == line {
+				return false, "already", nil
+			}
+			specs = append(specs, t)
+		}
+	}
+	specs = append(specs, line)
+	sort.Strings(specs)
+	out := make([]string, 0, len(lines))
+	out = append(out, lines[:begin+1]...)
+	for _, s := range specs {
+		out = append(out, "\t"+s)
+	}
+	out = append(out, lines[end:]...)
+	formatted, err := format.Source([]byte(strings.Join(out, "\n")))
+	if err != nil {
+		return false, "", err
+	}
+	if err := os.WriteFile(file, formatted, 0o644); err != nil {
+		return false, "", err
+	}
+	return true, "", nil
 }
 
 // ---- 保存的生成配置 ----

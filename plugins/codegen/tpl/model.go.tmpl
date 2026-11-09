@@ -68,7 +68,11 @@ type ListQuery struct {
 	Page     int
 	PageSize int
 [[- range .QueryFields]]
+[[- if eq .QueryOp "between"]]
+	[[.Pascal]]From, [[.Pascal]]To [[queryType .]]
+[[- else]]
 	[[.Pascal]] [[queryType .]]
+[[- end]]
 [[- end]]
 }
 [[- if .Sub]]

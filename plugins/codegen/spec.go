@@ -2,6 +2,7 @@ package codegen
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -18,7 +19,9 @@ type Field struct {
 	MaxLen                int
 	Nullable              bool
 	Required, List, Query bool
-	Form                  bool
+	// QueryOp 是查询运算符（like / eq / ne / gt / ge / lt / le / between），只在 Query 为真时有意义。
+	QueryOp string
+	Form    bool
 }
 
 // Label 返回中文文案。
@@ -181,6 +184,23 @@ func buildSpec(a *Analysis, goModule, module string, cfg []ColumnConfig) (*Spec,
 		}
 		s.Fields = append(s.Fields, newField(col, eff[col.Name]))
 	}
+	// 列顺序由客户端给的 sort 决定（1 起）；没给的列保持表列顺序。
+	sortOf := map[string]int{}
+	for _, cc := range cfg {
+		if cc.Sort > 0 {
+			sortOf[cc.Name] = cc.Sort
+		}
+	}
+	if len(sortOf) > 0 {
+		sort.SliceStable(s.Fields, func(i, j int) bool {
+			si, iok := sortOf[s.Fields[i].Name]
+			sj, jok := sortOf[s.Fields[j].Name]
+			if !iok || !jok {
+				return false
+			}
+			return si < sj
+		})
+	}
 	return s, nil
 }
 
@@ -188,6 +208,18 @@ func buildSpec(a *Analysis, goModule, module string, cfg []ColumnConfig) (*Spec,
 func validateColumnCfg(col *ColumnInfo, cc ColumnConfig) (ColumnConfig, error) {
 	if cc.Query && !queryable(col.Kind) {
 		return cc, fmt.Errorf("column %q (%s) does not support query", cc.Name, col.Kind)
+	}
+	if cc.Query {
+		op := cc.QueryOp
+		if op == "" {
+			op = defaultQueryOp(col.Kind)
+		}
+		if !contains(queryOpsByKind[col.Kind], op) {
+			return cc, fmt.Errorf("column %q: query operator %q not allowed for %s", cc.Name, op, col.Kind)
+		}
+		cc.QueryOp = op
+	} else {
+		cc.QueryOp = ""
 	}
 	if cc.Required && !requirable(col.Kind) {
 		return cc, fmt.Errorf("column %q (%s) cannot be required", cc.Name, col.Kind)
@@ -222,7 +254,7 @@ func newField(col ColumnInfo, c ColumnConfig) Field {
 		Name: col.Name, Pascal: Pascal(col.Name), Camel: Camel(col.Name), Title: Title(col.Name),
 		Comment: col.Comment, Kind: col.Kind, GoType: goType(col.Kind), FormType: formType(col.Kind),
 		TSType: tsType(col.Kind), Control: c.Control, Dict: c.Dict, Nullable: col.Nullable,
-		Required: c.Required, List: c.List, Query: c.Query, Form: c.Form, MaxLen: 255,
+		Required: c.Required, List: c.List, Query: c.Query, QueryOp: c.QueryOp, Form: c.Form, MaxLen: 255,
 	}
 	if col.Length > 0 && col.Length <= 4000 {
 		f.MaxLen = int(col.Length)
@@ -350,17 +382,41 @@ func (s *Spec) HasStringQuery() bool {
 	return s.has(func(f Field) bool { return f.Query && f.Kind == KindString })
 }
 
-// HasInputQuery: 有用 Input 渲染的查询条件（除 bool / date 外）。
+// HasInputQuery: 有用 Input 渲染的查询条件（布尔、日期与字典列走专用控件）。
 func (s *Spec) HasInputQuery() bool {
-	return s.has(func(f Field) bool { return f.Query && f.Kind != KindBool && f.Kind != KindDate })
+	return s.has(func(f Field) bool {
+		return f.Query && f.Kind != KindBool && f.Kind != KindDate && f.Kind != KindDateTime && !f.IsDict()
+	})
 }
 func (s *Spec) HasKindQuery(k string) bool {
 	return s.has(func(f Field) bool { return f.Query && string(f.Kind) == k })
 }
 
+// HasDateQuery: 查询条件里有日期 / 日期时间列（生成页要引 DatePicker）。
+func (s *Spec) HasDateQuery() bool {
+	return s.has(func(f Field) bool { return f.Query && (f.Kind == KindDate || f.Kind == KindDateTime) })
+}
+
+// UsesStrconvQuery: handler 解析查询参数要用 strconv。
+func (s *Spec) UsesStrconvQuery() bool {
+	return s.has(func(f Field) bool { return f.Query && (f.Kind == KindInt || f.Kind == KindFloat) })
+}
+
+// UsesTimeQuery: handler 解析查询参数要用 time。
+func (s *Spec) UsesTimeQuery() bool {
+	return s.has(func(f Field) bool { return f.Query && (f.Kind == KindDate || f.Kind == KindDateTime) })
+}
+
 // UsesParseTime: 主表或子表表单里有时间字段（service.go 需要 parseTime 助手）。
 func (s *Spec) UsesParseTime() bool {
 	return s.HasFormTime() || (s.Sub != nil && s.Sub.HasFormTime())
+}
+
+// UsesTimeService: service.go 需要 import time（表单时间字段，或日期区间右端加一天）。
+func (s *Spec) UsesTimeService() bool {
+	return s.HasFormTime() || s.has(func(f Field) bool {
+		return f.Query && f.QueryOp == "between" && f.Kind == KindDateTime
+	})
 }
 
 // UsesStrings: service.go 是否用到 strings。

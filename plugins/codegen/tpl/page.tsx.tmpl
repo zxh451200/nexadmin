@@ -11,7 +11,7 @@ import { DictTag } from '@/framework/components/DictTag'
 [[- if .HasDictQuery]]
 import { DictSelect } from '@/framework/components/DictSelect'
 [[- end]]
-[[- if .HasKindQuery "date"]]
+[[- if .HasDateQuery]]
 import { DatePicker } from '@/framework/components/DatePicker'
 [[- end]]
 [[- if .QueryFields]]
@@ -164,7 +164,45 @@ export default function [[.Pascal]]Page() {
         }}
       >
 [[- range .QueryFields]]
-[[- if .IsDict]]
+[[- if eq .QueryOp "between"]]
+[[- if or (eq .Kind "date") (eq .Kind "datetime")]]
+        <div className="flex items-center gap-1.5">
+          <DatePicker
+            value={(draft.[[.Camel]]From as string | undefined) ?? ''}
+            onChange={(v) => setDraft((d) => ({ ...d, [[.Camel]]From: v || undefined }))}
+            placeholder={t('[[$.Module]].range.from')}
+            ariaLabel={t('[[$.Module]].field.[[.Camel]]') + ' ' + t('[[$.Module]].range.from')}
+          />
+          <span className="text-muted-foreground">-</span>
+          <DatePicker
+            value={(draft.[[.Camel]]To as string | undefined) ?? ''}
+            onChange={(v) => setDraft((d) => ({ ...d, [[.Camel]]To: v || undefined }))}
+            placeholder={t('[[$.Module]].range.to')}
+            ariaLabel={t('[[$.Module]].field.[[.Camel]]') + ' ' + t('[[$.Module]].range.to')}
+          />
+        </div>
+[[- else]]
+        <div className="flex items-center gap-1.5">
+          <Input
+            type="number"
+            className="md:w-28"
+            value={(draft.[[.Camel]]From as string | undefined) ?? ''}
+            onChange={(e) => setDraft((d) => ({ ...d, [[.Camel]]From: e.target.value }))}
+            placeholder={t('[[$.Module]].range.from')}
+            aria-label={t('[[$.Module]].field.[[.Camel]]') + ' ' + t('[[$.Module]].range.from')}
+          />
+          <span className="text-muted-foreground">-</span>
+          <Input
+            type="number"
+            className="md:w-28"
+            value={(draft.[[.Camel]]To as string | undefined) ?? ''}
+            onChange={(e) => setDraft((d) => ({ ...d, [[.Camel]]To: e.target.value }))}
+            placeholder={t('[[$.Module]].range.to')}
+            aria-label={t('[[$.Module]].field.[[.Camel]]') + ' ' + t('[[$.Module]].range.to')}
+          />
+        </div>
+[[- end]]
+[[- else if .IsDict]]
         <DictSelect
           dict="[[.Dict]]"
           allLabel={t('[[$.Module]].field.[[.Camel]]')}
@@ -182,8 +220,22 @@ export default function [[.Pascal]]Page() {
             <SelectItem value="0">{t('common.no')}</SelectItem>
           </SelectContent>
         </Select>
-[[- else if eq .Kind "date"]]
-        <DatePicker value={(draft.[[.Camel]] as string | undefined) ?? ''} onChange={(v) => setDraft((d) => ({ ...d, [[.Camel]]: v || undefined }))} />
+[[- else if or (eq .Kind "date") (eq .Kind "datetime")]]
+        <DatePicker
+          value={(draft.[[.Camel]] as string | undefined) ?? ''}
+          onChange={(v) => setDraft((d) => ({ ...d, [[.Camel]]: v || undefined }))}
+          placeholder={t('[[$.Module]].field.[[.Camel]]')}
+          ariaLabel={t('[[$.Module]].field.[[.Camel]]')}
+        />
+[[- else if or (eq .Kind "int") (eq .Kind "float")]]
+        <Input
+          type="number"
+          className="md:w-48"
+          value={(draft.[[.Camel]] as string | undefined) ?? ''}
+          onChange={(e) => setDraft((d) => ({ ...d, [[.Camel]]: e.target.value }))}
+          placeholder={t('[[$.Module]].field.[[.Camel]]')}
+          aria-label={t('[[$.Module]].field.[[.Camel]]')}
+        />
 [[- else]]
         <Input
           className="md:w-48"

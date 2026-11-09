@@ -84,14 +84,50 @@ func queryType(f Field) string {
 	switch f.Kind {
 	case KindInt:
 		return "*int64"
+	case KindFloat:
+		return "*float64"
 	case KindID:
 		return "*idgen.ID"
 	case KindBool:
 		return "*bool"
-	case KindDate:
+	case KindDate, KindDateTime:
 		return "*time.Time"
 	}
 	return "string"
+}
+
+// clauseOp 把查询运算符映射到 gorm clause 类型（like / between 单独处理）。
+func clauseOp(op string) string {
+	switch op {
+	case "ne":
+		return "Neq"
+	case "gt":
+		return "Gt"
+	case "ge":
+		return "Gte"
+	case "lt":
+		return "Lt"
+	case "le":
+		return "Lte"
+	}
+	return "Eq"
+}
+
+// jsOp 把查询运算符映射到 JS 比较运算符（生成 mock 的筛选逻辑用）。
+func jsOp(op string) string {
+	switch op {
+	case "ne":
+		return "!=="
+	case "gt":
+		return ">"
+	case "ge":
+		return ">="
+	case "lt":
+		return "<"
+	case "le":
+		return "<="
+	}
+	return "==="
 }
 
 func mockValue(f Field, i int) string {
@@ -140,7 +176,7 @@ func (s *Spec) HasTimeList() bool {
 
 func parseTemplates() (*template.Template, error) {
 	funcs := template.FuncMap{
-		"bind": bindTag, "queryType": queryType, "isTime": isTime,
+		"bind": bindTag, "queryType": queryType, "isTime": isTime, "clause": clauseOp, "jsOp": jsOp,
 		"mock": mockValue, "mockEmpty": mockEmpty,
 		"mockid": func(i int) string { return fmt.Sprintf("188000000000%07d", i) },
 	}
@@ -163,6 +199,8 @@ func localeJSON(s *Spec, zh bool) string {
 	fmt.Fprintf(&b, "    \"description\": %s,\n", str(pick("管理 "+title, "Manage "+strings.ToLower(title))))
 	fmt.Fprintf(&b, "    \"empty\": %s,\n", str(pick("暂无数据", "No data yet")))
 	fmt.Fprintf(&b, "    \"all\": %s,\n", str(pick("全部", "All")))
+	fmt.Fprintf(&b, "    \"range\": {\n      \"from\": %s,\n      \"to\": %s\n    },\n",
+		str(pick("从", "From")), str(pick("到", "To")))
 	fmt.Fprintf(&b, "    \"action\": {\n      \"add\": %s,\n      \"edit\": %s\n    },\n",
 		str(pick("新增 "+title, "Add "+strings.ToLower(title))), str(pick("编辑 "+title, "Edit "+strings.ToLower(title))))
 	b.WriteString("    \"field\": {\n")

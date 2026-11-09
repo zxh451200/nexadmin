@@ -35,6 +35,11 @@ type ColumnConfig struct {
 	Form     bool   `json:"form"`
 	Required bool   `json:"required"`
 	Control  string `json:"control" binding:"max=16"`
+	// QueryOp 是查询条件运算符：like / eq / ne / gt / ge / lt / le / between。
+	// 空 = 按列类型取默认（短文本 like，其余 eq）。between 在服务端拆成 XFrom / XTo 两个参数。
+	QueryOp string `json:"queryOp" binding:"max=16"`
+	// Sort 是生成物里的字段顺序（1 起）；0 = 未指定，按表列顺序。
+	Sort int `json:"sort"`
 	// Dict 是字典编码（control = dict 时必填）：列表渲染 DictTag，表单 / 筛选渲染
 	// DictSelect，选项在运行时从 /dicts/:code/items 按请求语言取。
 	Dict string `json:"dict" binding:"max=48"`
@@ -77,8 +82,27 @@ var controlsByKind = map[Kind][]string{
 	KindBool: {"switch"}, KindDate: {"date"}, KindDateTime: {"datetime"},
 }
 
+// queryOpsByKind 是每种列类型允许的查询方式。字符串额外支持 LIKE；数值与日期支持
+// 比较和区间；ID / 开关只做等值。
+var queryOpsByKind = map[Kind][]string{
+	KindString:   {"like", "eq", "ne"},
+	KindInt:      {"eq", "ne", "gt", "ge", "lt", "le", "between"},
+	KindFloat:    {"eq", "ne", "gt", "ge", "lt", "le", "between"},
+	KindID:       {"eq", "ne"},
+	KindBool:     {"eq"},
+	KindDate:     {"eq", "ne", "gt", "ge", "lt", "le", "between"},
+	KindDateTime: {"eq", "ne", "gt", "ge", "lt", "le", "between"},
+}
+
+func defaultQueryOp(k Kind) string {
+	if k == KindString {
+		return "like"
+	}
+	return "eq"
+}
+
 func queryable(k Kind) bool {
-	return k == KindString || k == KindInt || k == KindID || k == KindBool || k == KindDate
+	return len(queryOpsByKind[k]) > 0
 }
 
 func requirable(k Kind) bool {
@@ -257,6 +281,9 @@ func (a *Analysis) recommend() {
 			c.Config.Query, strQueries, queries = true, strQueries+1, queries+1
 		case c.Kind == KindBool, isStateName(c.Name) && (c.Kind == KindInt || c.Kind == KindString):
 			c.Config.Query, queries = true, queries+1
+		}
+		if c.Config.Query {
+			c.Config.QueryOp = defaultQueryOp(c.Kind)
 		}
 	}
 }

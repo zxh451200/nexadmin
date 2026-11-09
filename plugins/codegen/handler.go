@@ -75,20 +75,22 @@ func (h *handler) download(c *gin.Context) {
 	c.Data(200, "application/zip", data)
 }
 
-// InstallForm 是直写项目的入参：渲染入参 + 是否覆盖已存在文件（默认不覆盖，只新增）。
+// InstallForm 是直写项目的入参：渲染入参 + 是否覆盖已存在文件（默认不覆盖，只新增）
+// + 是否把模块空导入注册进 internal/modules/modules.go（默认注册）。
 type InstallForm struct {
 	GenRequest
 	Overwrite bool `json:"overwrite"`
+	Register  bool `json:"register"`
 }
 
 // POST /plugins/codegen/install：把渲染结果写进项目根目录（后端进程工作目录，
-// 可用 NEXADMIN_ROOT 指定）。路径白名单在渲染层把关，这里只做落盘。
+// 可用 NEXADMIN_ROOT 指定）。路径白名单在渲染层把关，这里只做落盘与模块注册。
 func (h *handler) install(c *gin.Context) {
 	var f InstallForm
 	if !response.BindJSON(c, &f) {
 		return
 	}
-	res, err := h.svc.Install(c.Request.Context(), f.GenRequest, f.Overwrite)
+	res, err := h.svc.Install(c.Request.Context(), f.GenRequest, f.Overwrite, f.Register)
 	respond(c, res, err)
 }
 

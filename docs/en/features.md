@@ -347,7 +347,7 @@ Generated from source. Paths omit the `/api/v1` prefix (`/healthz` and `/metrics
 | audit (plugin) | `audit:list` | `GET /plugins/audit/log-tables`<br>`GET /plugins/audit/logs`<br>`GET /plugins/audit/logs/:id` |
 | codegen (plugin, prefix `/plugins/codegen`) | `codegen:list` | `GET /plugins/codegen/tables`<br>`GET /plugins/codegen/tables/:name/columns`<br>`GET /plugins/codegen/configs`<br>`POST /plugins/codegen/schema`<br>`POST /plugins/codegen/preview` (`schema` / `preview` are stateless rendering and carry no platform gate) |
 | codegen (plugin) | `codegen:download` | `POST /plugins/codegen/download` (stateless rendering as well) |
-| codegen (plugin) | `codegen:install` (also platform-level) | `POST /plugins/codegen/install` (renders files into the project root, which belongs to no tenant; a non-platform caller gets 403 even holding `codegen:install`) |
+| codegen (plugin) | `codegen:install` (also platform-level) | `POST /plugins/codegen/install` (renders files into the project root, which belongs to no tenant; by default it also adds the module's blank import inside the marker block of `internal/modules/modules.go`, which can be turned off; a non-platform caller gets 403 even holding `codegen:install`) |
 | codegen (plugin) | `codegen:edit` (also platform-level) | `POST /plugins/codegen/configs`<br>`DELETE /plugins/codegen/configs/:id`<br>`DELETE /plugins/codegen/configs` (stored in `plg_codegen_config`, which has no `tenant_id`) |
 | cron (plugin, prefix `/plugins/cron`) | `cron:edit` | `DELETE /plugins/cron/jobs/:id`<br>`POST /plugins/cron/jobs`<br>`PUT /plugins/cron/jobs/:id`<br>`PUT /plugins/cron/jobs/:id/enabled` |
 | cron (plugin) | `cron:clean` | `DELETE /plugins/cron/logs` |

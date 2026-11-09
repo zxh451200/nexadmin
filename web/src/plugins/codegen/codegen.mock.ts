@@ -76,10 +76,10 @@ function toSchema(table: string, defs: Def[]): TableSchema {
   let lists = 0
   let queries = 0
   let strQueries = 0
-  const columns: ColumnInfo[] = defs.map(([name, type, kind, o = {}]) => {
+  const columns: ColumnInfo[] = defs.map(([name, type, kind, o = {}], idx) => {
     const supported = kind !== ''
     const system = name === 'id' || name === 'tenant_id' || (stamps && (name === 'created_at' || name === 'updated_at')) || name === 'deleted_at'
-    const cfg: ColumnConfig = { name, list: false, query: false, form: false, required: false, control: '' }
+    const cfg: ColumnConfig = { name, list: false, query: false, form: false, required: false, control: '', sort: idx + 1 }
     if (supported && !system) {
       cfg.control = CONTROLS[kind][0]
       if (o.dict) {
@@ -102,6 +102,7 @@ function toSchema(table: string, defs: Def[]): TableSchema {
           cfg.query = true
           queries++
         }
+        if (cfg.query) cfg.queryOp = kind === 'string' ? 'like' : 'eq'
       }
     }
     return {
@@ -295,8 +296,8 @@ defineMock([
     url: '/plugins/codegen/install',
     handler: ({ body }) => {
       const out = generate(body as GenRequest)
-      // mock 模式没有真实磁盘：全部算写入，给界面走通回执链路。
-      return { written: out.files.map((f) => f.path), skipped: [] }
+      // mock 模式没有真实磁盘：全部算写入、模拟注册成功，给界面走通回执链路。
+      return { root: '(mock)', written: out.files.map((f) => f.path), skipped: [], registered: true }
     },
   },
   { method: 'GET', url: '/plugins/codegen/configs', handler: () => savedConfigs },

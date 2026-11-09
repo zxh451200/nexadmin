@@ -79,6 +79,10 @@
       "comment": "注释",
       "list": "列表显示",
       "query": "查询条件",
+      "queryOp": "查询方式",
+      "sort": "排序",
+      "moveUp": "上移",
+      "moveDown": "下移",
       "form": "表单字段",
       "required": "必填",
       "control": "控件",
@@ -90,6 +94,16 @@
       "showSystemHint": "系统列（id、tenant_id、时间戳）自动生成，不需要在这里配置"
     },
     "controls": { "input": "输入框", "textarea": "多行文本", "number": "数字", "switch": "开关", "date": "日期", "datetime": "日期时间", "dict": "字典下拉" },
+    "queryOps": {
+      "like": "包含",
+      "eq": "等于",
+      "ne": "不等于",
+      "gt": "大于",
+      "ge": "大于等于",
+      "lt": "小于",
+      "le": "小于等于",
+      "between": "区间"
+    },
     "preview": {
       "files": "文件",
       "empty": "没有生成任何文件",
@@ -103,7 +117,7 @@
       "downloaded": "文件已下载"
     },
     "notes": {
-      "import_line": "在 internal/modules/modules.go 加一行空导入，重新编译并重启后自动补菜单：",
+      "import_line": "在 internal/modules/modules.go 加一行空导入，重新编译并重启后自动补菜单（「写入项目」可勾选自动注册）：",
       "api_prefix": "所有接口都挂在{{value}}下",
       "migration": "已附带三份建表迁移，按你项目的编号放进 migrations/business 后重启自动建表：",
       "null_zero": "表已存在，不生成迁移；值为 NULL 的列读出为零值，保存时写回零值。"
@@ -125,9 +139,21 @@
       "title": "写入项目",
       "desc": "把生成的文件写入项目根目录（后端进程的工作目录，可用环境变量 NEXADMIN_ROOT 指定；目录里必须有 go.mod）。",
       "overwrite": "覆盖已存在的文件",
-      "overwriteHint": "默认只新增不覆盖：已存在的文件会跳过并在回执里列出，多份生成物可以安全并存。",
+      "overwriteHint": "默认只新增不覆盖：已存在的文件会跳过，并在写入回执里逐个列出。",
+      "register": "自动注册模块",
+      "registerHint": "在 internal/modules/modules.go 的标记区加一行空导入，重启后路由与菜单才会生效；已注册过则不动。",
       "restartHint": "写入后需要重新编译并重启后端；新建表的迁移文件放进 migrations/business 后重启自动建表。",
-      "done": "已写入 {{written}} 个文件，跳过 {{skipped}} 个已存在文件"
+      "resultTitle": "写入回执",
+      "resultSummary": "写入 {{written}} 个文件，跳过 {{skipped}} 个已存在文件",
+      "resultRoot": "写入目录",
+      "resultWritten": "已写入（{{count}}）",
+      "resultSkipped": "已存在、已跳过（{{count}}）",
+      "overwriteRetry": "覆盖并重写",
+      "registerDone": "已把模块空导入写进 internal/modules/modules.go。",
+      "registerAlready": "internal/modules/modules.go 里已有该模块的空导入，未重复写入。",
+      "registerNoFile": "没找到 internal/modules/modules.go，模块未自动注册；请按预览页的提示手工加一行空导入。",
+      "registerNoMarkers": "internal/modules/modules.go 缺少 nexadmin:modules 标记区，模块未自动注册；请手工加一行空导入。",
+      "registerFailed": "模块注册失败（{{error}}）；文件已写入，请按预览页的提示手工加一行空导入。"
     },
     "sub": {
       "title": "主子表（可选）",
