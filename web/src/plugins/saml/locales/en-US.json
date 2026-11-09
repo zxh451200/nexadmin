@@ -74,7 +74,8 @@
       "slo": "SP logout endpoint",
       "lastSync": "Metadata last synced",
       "requireEncryptedAssertion": "Require encrypted assertions",
-      "signMetadata": "Sign SP metadata"
+      "signMetadata": "Sign SP metadata",
+      "allowSha1Signatures": "Allow SHA-1 signatures (not recommended)"
     },
     "hints": {
       "enabled": "Only enabled sources appear on the sign-in page.",
@@ -103,6 +104,7 @@
       "syncProfile": "Bound accounts take nickname / email / phone from the assertion on every login; empty values never overwrite, and username, status and roles stay local.",
       "requireEncryptedAssertion": "The IdP must encrypt assertions with the SP certificate; plaintext assertions are rejected. Make sure the IdP has encryption enabled first.",
       "signMetadata": "Sign the SP metadata with the SP private key (RSA-SHA256); enable when the IdP verifies metadata signatures.",
+      "allowSha1Signatures": "SHA-1 signed assertions / responses / logout messages are rejected by default; enable only for legacy IdPs, and only for this source.",
       "spEntityIdOverride": "Leave empty to use the SP metadata URL as the Entity ID. Some IdPs require a fixed value; it must be a URI with a scheme (https://… or urn:…).",
       "metadataCaCert": "When IdP metadata is issued by an internal CA, paste its root/intermediate certificates; metadata fetches then trust only this CA.",
       "metadataSignCert": "With a pinned certificate, saving, refreshing and self-test all require the metadata root element to carry a matching XML signature; leave empty to rely on TLS only."

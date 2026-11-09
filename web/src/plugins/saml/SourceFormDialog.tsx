@@ -80,6 +80,7 @@ function buildSchema(t: (k: string) => string) {
       nameIdFormat: z.enum(['', 'persistent', 'transient', 'emailAddress', 'unspecified', 'entity']),
       requireEncryptedAssertion: z.boolean(),
       signMetadata: z.boolean(),
+      allowSha1Signatures: z.boolean(),
       spEntityIdOverride: z.string().trim().max(500, t('plugin_saml.errors.entityInvalid')),
       metadataCaCert: z.string().trim(),
       metadataSignCert: z.string().trim(),
@@ -152,6 +153,7 @@ const empty: FormValues = {
   nameIdFormat: '',
   requireEncryptedAssertion: false,
   signMetadata: false,
+  allowSha1Signatures: false,
   spEntityIdOverride: '',
   metadataCaCert: '',
   metadataSignCert: '',
@@ -187,6 +189,7 @@ function toValues(s?: SamlSource | null): FormValues {
     nameIdFormat: (s.nameIdFormat ?? '') as FormValues['nameIdFormat'],
     requireEncryptedAssertion: s.requireEncryptedAssertion ?? false,
     signMetadata: s.signMetadata ?? false,
+    allowSha1Signatures: s.allowSha1Signatures ?? false,
     spEntityIdOverride: s.spEntityIdOverride ?? '',
     metadataCaCert: s.metadataCaCert ?? '',
     metadataSignCert: s.metadataSignCert ?? '',
@@ -721,6 +724,13 @@ export default function SourceFormDialog({ open, onOpenChange, editing }: Props)
                       name="signMetadata"
                       label={p('signMetadata')}
                       description={h('signMetadata')}
+                      bare
+                    />
+                    <SwitchField
+                      control={c}
+                      name="allowSha1Signatures"
+                      label={p('allowSha1Signatures')}
+                      description={h('allowSha1Signatures')}
                       bare
                     />
                     <FormField

@@ -68,6 +68,7 @@ export interface SamlSource {
   nameIdFormat: string
   requireEncryptedAssertion: boolean
   signMetadata: boolean
+  allowSha1Signatures: boolean
   requireSignedResponseForCBC: boolean
   rejectUnknownConditions: boolean
   forceAuthn: boolean
@@ -105,6 +106,7 @@ export interface SourceForm {
   nameIdFormat: string
   requireEncryptedAssertion: boolean
   signMetadata: boolean
+  allowSha1Signatures: boolean
   requireSignedResponseForCBC: boolean
   rejectUnknownConditions: boolean
   forceAuthn: boolean

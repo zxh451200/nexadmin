@@ -74,7 +74,8 @@
       "slo": "SP 登出端点",
       "lastSync": "元数据最后同步",
       "requireEncryptedAssertion": "要求加密断言",
-      "signMetadata": "签名 SP 元数据"
+      "signMetadata": "签名 SP 元数据",
+      "allowSha1Signatures": "允许 SHA-1 签名（不推荐）"
     },
     "hints": {
       "enabled": "只有已启用的身份源会出现在登录页。",
@@ -105,7 +106,8 @@
       "spEntityIdOverride": "留空时用 SP 元数据地址作为 Entity ID；IdP 只接受固定值时在此覆盖（必须是带 scheme 的 URI）。",
       "metadataCaCert": "IdP 元数据由内部 CA 签发时填其根证书 / 中间证书；配置后拉取元数据只信任这组 CA。",
       "metadataSignCert": "填 IdP 元数据签名证书后，保存、刷新与自检都要求元数据根元素带匹配的 XML 签名；留空则只依赖 TLS。",
-      "signMetadata": "对外输出的 SP 元数据用 SP 私钥做 XML 签名（RSA-SHA256）；IdP 支持验证元数据签名时开启。"
+      "signMetadata": "对外输出的 SP 元数据用 SP 私钥做 XML 签名（RSA-SHA256）；IdP 支持验证元数据签名时开启。",
+      "allowSha1Signatures": "默认拒绝任何 SHA-1 签名的断言 / 响应 / 登出消息；只有老 IdP 只能 SHA-1 时才开启，开启后只影响该身份源。"
     },
     "placeholder": {
       "spEntityId": "默认：SP 元数据地址"

@@ -110,6 +110,19 @@ No real IdP is available in this repository, so the flow below can only be rerun
 
 **Already executed (2026-11-09)**: throwaway instances of MySQL 8.0.12 (port 3310) and PostgreSQL 18.6 (port 55432) were started, migrations `001_init` through `008_sp_metadata_sign` were applied in order, and the role-reconciliation SQL was exercised (2 grants, 1 revoke, shared role kept, built-in role never granted) with identical results on both engines; `mariadb/` is byte-identical to `mysql/`, so the MySQL run covers it, but MariaDB itself was not started. Later the same day, a throwaway MySQL instance plus a standalone server process ran the protocol chain: create the source → POST an assertion signed with the IdP private key straight to ACS → user auto-created with the mapped role → group change replaces the role → SLO with SessionIndex revokes only that session, without it revokes all → signed SP metadata verifies with the SP certificate → importing an own certificate works → a disabled source makes ACS return the HTML error page; all 10 steps passed. Then a local real IdP was started with crewjam `samlidp` (login form included) and the browser chain passed: SP-initiated → 302 to IdP `/sso` → submit `alice/alice123` on the login form → IdP POSTs the assertion back to ACS → server 302s to the deep link `/system/user?samlCode=…` → after exchange `roles=[ops-role]`; switching the IdP-side group to `dev` and logging in again yields `ops-admin` and revokes `ops-role`; two login-log rows carry `login_type=saml`. The protocol and server chain are now covered end to end; only commercial IdP UI/config differences remain.
 
+**Commercial IdP compatibility matrix (measured 2026-11-09 with synthetic assertions and a real samlidp IdP)**
+
+| Scenario | Result | Notes |
+| --- | --- | --- |
+| Signed Response only, plaintext assertion (common in Okta / Entra) | Pass | — |
+| Metadata carries two signing certificates, assertion signed by the 2nd | Pass | every certificate in the metadata is a trust anchor |
+| Encrypted assertion (IdP encrypts to the SP encryption KeyDescriptor) | Pass | current / staged / previous private keys all decrypt |
+| Attribute names as urn:oid (Okta / Entra default) | Pass | map attributes to the OIDs |
+| SHA-1 signatures | Rejected with 400 by default; passes after enabling "Allow SHA-1 signatures" per source | secure default, explicit opt-in for legacy IdPs |
+| RelayState site-path deep link | Pass | returns to the original page after sign-in |
+
+For the big three, fill according to their docs: Okta (expose `uid/mail/groups` or OIDs in the app profile; use the SP metadata for ACS and Entity ID), Microsoft Entra (NameID persistent/email, claim URIs for attributes, configure the Logout URL for SLO), Keycloak (tick Sign documents/assertions, enable assertion encryption when needed, emit groups from an attributes mapper).
+
 1. **Start**: run on a throwaway database (`NEXADMIN_DATABASE_NAME=<new db>`); startup applies migrations 005/007/008 under `plugins/saml/migrations` — check `migrate --dry-run` first.
 2. **Configure**: paste a test IdP's EntityDescriptor (a self-signed certificate is fine), enable the source, turn on "Sync roles on sign-in" and add one group→role mapping.
 3. **First sign-in**: complete one IdP-initiated or SP-initiated login. The log must show `saml role sync finished` with `desired/added` matching the mapping; `sys_user_role` has the row and `plg_saml_role_grant` records (user, source, role).

@@ -47,6 +47,8 @@ type Source struct {
 	RequireEncryptedAssertion bool `gorm:"column:require_encrypted_assertion;not null;default:false"`
 	// SignMetadata 对外输出的 SP 元数据用 SP 私钥做 XML 签名。
 	SignMetadata bool `gorm:"column:sign_metadata;not null;default:false"`
+	// AllowSHA1 允许 IdP 用 SHA-1 签消息；默认 false（SAML 生态已弃用 SHA-1）。
+	AllowSHA1 bool `gorm:"column:allow_sha1_signatures;not null;default:false"`
 
 	AttrUsername string `gorm:"column:attr_username;size:255;not null;default:''"`
 	AttrEmail    string `gorm:"column:attr_email;size:255;not null;default:''"`

@@ -127,6 +127,7 @@ const okta: SamlSource = {
   nameIdFormat: '',
   requireEncryptedAssertion: false,
   signMetadata: false,
+  allowSha1Signatures: false,
   requireSignedResponseForCBC: false,
   rejectUnknownConditions: false,
   forceAuthn: false,

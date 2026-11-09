@@ -18,7 +18,7 @@ import (
 
 func init() {
 	plugin.Register(plugin.Plugin{
-		ID: "saml", Name: "SAML 单点登录", Version: "0.8.0", Edition: plugin.Pro,
+		ID: "saml", Name: "SAML 单点登录", Version: "0.9.0", Edition: plugin.Pro,
 		Module: &module{},
 	})
 }

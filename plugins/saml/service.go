@@ -90,6 +90,8 @@ type SourceForm struct {
 	RequireEncrypted bool `json:"requireEncryptedAssertion"`
 	// SignMetadata 对外输出的 SP 元数据带 XML 签名。
 	SignMetadata bool `json:"signMetadata"`
+	// AllowSHA1 允许 IdP 用 SHA-1 签名（仅老 IdP 兼容用）。
+	AllowSHA1 bool `json:"allowSha1Signatures"`
 
 	RequireSignedCBC        bool   `json:"requireSignedResponseForCBC"`
 	RejectUnknownConditions bool   `json:"rejectUnknownConditions"`
@@ -138,6 +140,7 @@ func (s *Service) Create(ctx context.Context, f SourceForm) (*Source, error) {
 		AllowIDPInitiated: f.AllowIDPInit, SignAuthnRequest: f.SignRequests, NameIDFormat: f.NameIDFormat,
 		RequireEncryptedAssertion: f.RequireEncrypted,
 		SignMetadata:              f.SignMetadata,
+		AllowSHA1:                 f.AllowSHA1,
 		RequireSignedCBC:          f.RequireSignedCBC, RejectUnknownConditions: f.RejectUnknownConditions,
 		ForceAuthn: f.ForceAuthn, AuthnContextClassRef: f.AuthnContextClassRef, RequireAuthnContext: f.RequireAuthnContext,
 	}
@@ -179,6 +182,7 @@ func (s *Service) Update(ctx context.Context, id string, f SourceForm) (*Source,
 	m.NameIDFormat = f.NameIDFormat
 	m.RequireEncryptedAssertion = f.RequireEncrypted
 	m.SignMetadata = f.SignMetadata
+	m.AllowSHA1 = f.AllowSHA1
 	m.RequireSignedCBC = f.RequireSignedCBC
 	m.RejectUnknownConditions = f.RejectUnknownConditions
 	m.ForceAuthn = f.ForceAuthn
@@ -754,6 +758,8 @@ func (s *Service) provider(m *Source, base string) (*saml.ServiceProvider, error
 	}
 	sp.RequireSignedResponseForCBC = m.RequireSignedCBC
 	sp.RejectUnknownConditions = m.RejectUnknownConditions
+	// SHA-1 默认拒绝；只有该源显式放行才接受。
+	sp.RejectSHA1Signatures = !m.AllowSHA1
 	// ForceAuthn 为 nil 时请求里不带该属性；显式 false 会被部分 IdP 当成「不要强制」之外的语义。
 	if m.ForceAuthn {
 		force := true
