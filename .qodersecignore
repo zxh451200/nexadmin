@@ -1,14 +1,19 @@
-# 本地工具状态与运行产物，不参与云扫描上传
+# 本地工具状态、运行产物与编译二进制，不参与云扫描上传
+# 路径按根目录锚定，避免误伤同名源码目录（如 modules/system/backup）
 .mimosa/
 .zcode/
 .qoder/
+.dev-keys/
 .e2e-artifacts/
 test-results/
 playwright-report/
-data/
-logs/
-bin/
-backup/
+/data/
+/logs/
+/bin/
+/backup/
 web/dist/
 node_modules/
+/nexadmin
+/server
+/cmd/nexadmin/nexadmin
 *.exe
