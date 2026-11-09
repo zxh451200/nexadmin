@@ -985,3 +985,14 @@ devicehub:
   alarm_op_invalid: 比较符无效，可选 gt / lt / ge / le / eq / ne
   alarm_level_invalid: 告警级别只能是 info / warn / critical
   alarm_not_found: 告警规则不存在
+saml:
+  acs:
+    title: 单点登录未完成
+    reason: 原因
+    hint: 请重新登录；如果反复失败，请联系管理员检查该身份源的配置。
+    back: 返回登录
+    err_source_disabled: 该 SAML 身份源已停用
+    err_metadata: 该身份源的配置不可用
+    err_response: 无法验证 IdP 返回的响应
+    err_nameid: IdP 返回的断言缺少 NameID
+    err_group: 当前账号不在允许登录的组内

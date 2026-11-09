@@ -10,13 +10,14 @@ import (
 	"go.uber.org/zap"
 
 	"nexadmin/core"
+	"nexadmin/core/auth"
 	"nexadmin/core/plugin"
 	"nexadmin/core/tenant"
 )
 
 func init() {
 	plugin.Register(plugin.Plugin{
-		ID: "saml", Name: "SAML 单点登录", Version: "0.3.0", Edition: plugin.Pro,
+		ID: "saml", Name: "SAML 单点登录", Version: "0.5.0", Edition: plugin.Pro,
 		Module: &module{},
 	})
 }
@@ -28,7 +29,11 @@ func (*module) Name() string { return "saml" }
 var _ plugin.Starter = (*module)(nil)
 
 // Start 启动元数据后台同步：默认每 24 小时一次，saml.metadata_refresh_hours: 0 关闭。
+// 同时注册会话跟踪：普通登录、二次验证后的签发、刷新轮换都会回调，IdP 发起的 SLO 才能吊销到当前令牌。
 func (*module) Start(ctx context.Context, d *core.Deps) error {
+	auth.RegisterSessionTracker(func(ctx context.Context, cl *auth.Claims) {
+		recordBindingSession(ctx, d.Cache, cl)
+	})
 	hours := loadMetadataRefreshHours()
 	if hours <= 0 {
 		if d.Log != nil {
@@ -36,7 +41,7 @@ func (*module) Start(ctx context.Context, d *core.Deps) error {
 		}
 		return nil
 	}
-	svc := NewService(d.DB, d.Auth, d.Cache)
+	svc := NewService(d.DB, d.Auth, d.Cache).SetLogger(d.Log)
 	go func() {
 		sweep := func() {
 			checked, updated, failures, err := svc.SweepMetadata(tenant.Skip(ctx))
@@ -76,7 +81,7 @@ func (*module) Register(r *gin.RouterGroup, d *core.Deps) {
 	if loadAllowPrivateHosts() { // 只放行，不收回：避免热挂载 / 测试把全局开关改回去
 		setAllowPrivateHosts(true)
 	}
-	s := NewService(d.DB, d.Auth, d.Cache)
+	s := NewService(d.DB, d.Auth, d.Cache).SetLogger(d.Log)
 
 	admin := r.Group("/plugins/saml")
 	admin.GET("/sources", core.Perm("saml:list"), s.listSources)

@@ -2,21 +2,34 @@ package saml
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/base64"
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"math/big"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/beevik/etree"
 	"github.com/crewjam/saml"
+	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/russellhaering/goxmldsig"
 
+	"nexadmin/core/auth"
 	"nexadmin/core/cache"
+	"nexadmin/core/config"
+	"nexadmin/pkg/idgen"
 )
 
 func certB64(t *testing.T) string {
@@ -564,5 +577,321 @@ func TestMetadataRefreshHours(t *testing.T) {
 	t.Setenv("NEXADMIN_SAML_METADATA_REFRESH_HOURS", "6")
 	if got := loadMetadataRefreshHours(); got != 6 {
 		t.Errorf("env override: got %d", got)
+	}
+}
+
+// fakeSAMLIssuer 只实现会话相关能力：签发结果由测试直接构造，不启动 DB。
+type fakeSAMLIssuer struct {
+	claims  *auth.Claims
+	revoked []string
+}
+
+func (*fakeSAMLIssuer) LoginAs(context.Context, auth.LoginAsRequest) (*auth.LoginOutcome, error) {
+	return nil, nil
+}
+
+func (f *fakeSAMLIssuer) ParseAccess(context.Context, string) (*auth.Claims, error) {
+	return f.claims, nil
+}
+
+func (f *fakeSAMLIssuer) RevokeByJTI(_ context.Context, accessJTI, refreshJTI string) error {
+	f.revoked = append(f.revoked, accessJTI+"/"+refreshJTI)
+	return nil
+}
+
+func claimsFor(id string) *auth.Claims {
+	return &auth.Claims{
+		UserID:   idgen.ID(5),
+		TenantID: idgen.ID(1),
+		RID:      "ref-" + id,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        id,
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
+		},
+	}
+}
+
+func TestRecordAndRevokeSAMLSessions(t *testing.T) {
+	c, err := cache.New(config.Cache{Driver: "memory"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	iss := &fakeSAMLIssuer{claims: claimsFor("acc-1")}
+	svc := NewService(nil, iss, c)
+	m := &Source{}
+	m.ID = idgen.ID(9)
+	const nameID = "alice@example.com"
+
+	appendSession(context.Background(), c, m.ID, nameID, claimsFor("acc-1"))
+	appendSession(context.Background(), c, m.ID, nameID, claimsFor("acc-2"))
+	if len(iss.revoked) != 0 {
+		t.Fatalf("recording must not revoke anything, got %v", iss.revoked)
+	}
+
+	// IdP 发起的 SLO 只有 NameID：两条本地会话都要被吊销。
+	svc.revokeSessionsByNameID(context.Background(), m, nameID)
+	if len(iss.revoked) != 2 {
+		t.Fatalf("want 2 revoked sessions, got %v", iss.revoked)
+	}
+	if iss.revoked[0] != "acc-1/ref-acc-1" || iss.revoked[1] != "acc-2/ref-acc-2" {
+		t.Fatalf("unexpected revocations: %v", iss.revoked)
+	}
+
+	// 会话记录消费后应删除：重复 SLO 不再吊销，也不报错。
+	svc.revokeSessionsByNameID(context.Background(), m, nameID)
+	// 未知 NameID 按规范当作成功（没有可登出的会话）。
+	svc.revokeSessionsByNameID(context.Background(), m, "nobody@example.com")
+	if len(iss.revoked) != 2 {
+		t.Fatalf("repeat/unknown logout must be a no-op, got %v", iss.revoked)
+	}
+}
+
+func TestIsLogoutRequest(t *testing.T) {
+	get := httptest.NewRequest(http.MethodGet, "https://sp.example.com/slo?SAMLRequest=abc", nil)
+	if !isLogoutRequest(get) {
+		t.Fatal("GET SAMLRequest must be recognized as LogoutRequest")
+	}
+	post := httptest.NewRequest(http.MethodPost, "https://sp.example.com/slo", strings.NewReader("SAMLRequest=abc"))
+	post.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if !isLogoutRequest(post) {
+		t.Fatal("POST SAMLRequest must be recognized as LogoutRequest")
+	}
+	resp := httptest.NewRequest(http.MethodPost, "https://sp.example.com/slo", strings.NewReader("SAMLResponse=abc"))
+	resp.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if isLogoutRequest(resp) {
+		t.Fatal("LogoutResponse must not be treated as LogoutRequest")
+	}
+}
+
+// idpSigner 是测试用的 IdP 密钥对：用它签发 metadata 与 LogoutRequest。
+type idpSigner struct {
+	key   *rsa.PrivateKey
+	cert  *x509.Certificate
+	certB string
+}
+
+func newIDPSigner(t *testing.T) *idpSigner {
+	t.Helper()
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmpl := &x509.Certificate{
+		SerialNumber: big.NewInt(7),
+		Subject:      pkix.Name{CommonName: "test-idp"},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Now().Add(time.Hour),
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cert, err := x509.ParseCertificate(der)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &idpSigner{key: key, cert: cert, certB: base64.StdEncoding.EncodeToString(der)}
+}
+
+func (s *idpSigner) signedLogoutRequest(t *testing.T, entityID, destination, nameID string) string {
+	t.Helper()
+	raw := fmt.Sprintf(`<samlp:LogoutRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="lr-1" Version="2.0" IssueInstant="%s" Destination="%s"><saml:Issuer>%s</saml:Issuer><saml:NameID>%s</saml:NameID></samlp:LogoutRequest>`,
+		time.Now().UTC().Format(time.RFC3339), destination, entityID, nameID)
+	doc := etree.NewDocument()
+	if err := doc.ReadFromString(raw); err != nil {
+		t.Fatal(err)
+	}
+	ctx, err := dsig.NewSigningContext(s.key, [][]byte{s.cert.Raw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	signed, err := ctx.SignEnveloped(doc.Root())
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := etree.NewDocument()
+	out.SetRoot(signed)
+	buf, err := out.WriteToBytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return base64.StdEncoding.EncodeToString(buf)
+}
+
+func TestIDPInitiatedLogoutRejectsUnsignedAndRevokesSigned(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	const entityID = "https://idp.example.com"
+	signer := newIDPSigner(t)
+	certPEM, keyEnc, err := newSPKeyPair()
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := &Source{Name: "idp", Enabled: true, IDPEntityID: entityID, IdPMetadata: metadataXMLFor(entityID, signer.certB), SPCert: certPEM, SPKeyEnc: keyEnc}
+	m.ID = idgen.ID(42)
+
+	c, err := cache.New(config.Cache{Driver: "memory"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	iss := &fakeSAMLIssuer{claims: claimsFor("acc-1")}
+	svc := NewService(nil, iss, c)
+	const base = "http://sp.example.com"
+	sp, err := svc.provider(m, base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	destination := base + "/api/v1/auth/saml/42/slo"
+	const nameID = "alice@example.com"
+	appendSession(context.Background(), c, m.ID, nameID, claimsFor("acc-1"))
+
+	post := func(payload string) (*httptest.ResponseRecorder, *gin.Context) {
+		form := url.Values{"SAMLRequest": {payload}}
+		r := httptest.NewRequest(http.MethodPost, destination, strings.NewReader(form.Encode()))
+		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		w := httptest.NewRecorder()
+		gc, _ := gin.CreateTestContext(w)
+		gc.Request = r
+		return w, gc
+	}
+
+	// 未签名的 LogoutRequest 必须被拒，且不吊销任何会话。
+	w, gc := post(base64.StdEncoding.EncodeToString([]byte(strings.ReplaceAll(
+		fmt.Sprintf(`<samlp:LogoutRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="lr-x" Version="2.0" IssueInstant="%s" Destination="%s"><saml:Issuer>%s</saml:Issuer><saml:NameID>%s</saml:NameID></samlp:LogoutRequest>`,
+			time.Now().UTC().Format(time.RFC3339), destination, entityID, nameID), "\n", ""))))
+	svc.idpInitiatedLogout(gc, m, sp)
+	if w.Code == http.StatusFound || len(iss.revoked) != 0 {
+		t.Fatalf("unsigned LogoutRequest must be rejected (code=%d revoked=%v)", w.Code, iss.revoked)
+	}
+
+	// 签名正确的 LogoutRequest：吊销会话并回重定向到 IdP 的 SLO 端点（带 SAMLResponse）。
+	signedPayload := signer.signedLogoutRequest(t, entityID, destination, nameID)
+	w, gc = post(signedPayload)
+	svc.idpInitiatedLogout(gc, m, sp)
+	// gin 的测试上下文不会把仅写头的 302 刷到 Recorder，这里读 gin 自己记录的 status。
+	if got := gc.Writer.Status(); got != http.StatusFound {
+		t.Fatalf("want 302 LogoutResponse, got %d body=%s", got, w.Body.String())
+	}
+	loc := w.Header().Get("Location")
+	if !strings.Contains(loc, "SAMLResponse=") {
+		t.Fatalf("LogoutResponse missing: %s", loc)
+	}
+	if len(iss.revoked) != 1 || iss.revoked[0] != "acc-1/ref-acc-1" {
+		t.Fatalf("session not revoked: %v", iss.revoked)
+	}
+}
+
+func TestParseSAMLBinding(t *testing.T) {
+	id, nameID, ok := parseSAMLBinding(samlBinding(idgen.ID(9), "urn:alice:example.com"))
+	if !ok || id != 9 || nameID != "urn:alice:example.com" {
+		t.Fatalf("binding round-trip failed: %d %q %v", id, nameID, ok)
+	}
+	for _, bad := range []string{"", "saml:", "saml:9", "saml:x:alice", "ldap:9:alice"} {
+		if _, _, ok := parseSAMLBinding(bad); ok {
+			t.Fatalf("%q must be rejected", bad)
+		}
+	}
+}
+
+func TestAppendSessionDedupesRotatedToken(t *testing.T) {
+	c, err := cache.New(config.Cache{Driver: "memory"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cl := claimsFor("acc-1")
+	appendSession(context.Background(), c, idgen.ID(9), "alice@example.com", cl)
+	appendSession(context.Background(), c, idgen.ID(9), "alice@example.com", cl)
+	raw, err := c.Get(context.Background(), sessionKey(idgen.ID(9), "alice@example.com"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(raw, `"j":"acc-1"`) != 1 {
+		t.Fatalf("same jti must be stored once: %s", raw)
+	}
+}
+
+func TestRoleGrantDiff(t *testing.T) {
+	cases := []struct {
+		name    string
+		desired []string
+		prev    []string
+		add     []string
+		remove  []string
+	}{
+		{"first login adds all", []string{"a", "b"}, nil, []string{"a", "b"}, nil},
+		{"group switch swaps roles", []string{"b", "c"}, []string{"a", "b"}, []string{"c"}, []string{"a"}},
+		{"empty assertion leaves roles alone", nil, []string{"a"}, nil, nil},
+		{"no change", []string{"a"}, []string{"a"}, nil, nil},
+	}
+	for _, c := range cases {
+		add, remove := roleGrantDiff(c.desired, c.prev)
+		if !slices.Equal(add, c.add) || !slices.Equal(remove, c.remove) {
+			t.Errorf("%s: add=%v remove=%v, want add=%v remove=%v", c.name, add, remove, c.add, c.remove)
+		}
+	}
+}
+
+func TestEnsureSigningKeyDescriptor(t *testing.T) {
+	cert := &x509.Certificate{Raw: []byte("der-bytes")}
+	md := &saml.EntityDescriptor{SPSSODescriptors: []saml.SPSSODescriptor{{}}}
+	ensureSigningKeyDescriptor(md, cert)
+	kds := md.SPSSODescriptors[0].KeyDescriptors
+	if len(kds) != 1 || kds[0].Use != "signing" {
+		t.Fatalf("want one signing KeyDescriptor, got %+v", kds)
+	}
+	if len(kds[0].KeyInfo.X509Data.X509Certificates) != 1 ||
+		kds[0].KeyInfo.X509Data.X509Certificates[0].Data != base64.StdEncoding.EncodeToString(cert.Raw) {
+		t.Fatalf("signing KeyDescriptor must carry the SP certificate: %+v", kds[0])
+	}
+	ensureSigningKeyDescriptor(md, cert)
+	if len(md.SPSSODescriptors[0].KeyDescriptors) != 1 {
+		t.Fatal("must be idempotent")
+	}
+	present := &saml.EntityDescriptor{SPSSODescriptors: []saml.SPSSODescriptor{{}}}
+	present.SPSSODescriptors[0].KeyDescriptors = []saml.KeyDescriptor{{Use: "signing"}}
+	ensureSigningKeyDescriptor(present, cert)
+	if len(present.SPSSODescriptors[0].KeyDescriptors) != 1 {
+		t.Fatal("must not duplicate an existing signing KeyDescriptor")
+	}
+	ensureSigningKeyDescriptor(nil, cert)
+	ensureSigningKeyDescriptor(&saml.EntityDescriptor{}, cert)
+}
+
+func TestWantsHTML(t *testing.T) {
+	cases := map[string]bool{
+		"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8": true,
+		"application/xhtml+xml": true,
+		"application/json":      false,
+		"*/*":                   false,
+		"":                      false,
+	}
+	for accept, want := range cases {
+		r := httptest.NewRequest(http.MethodPost, "/acs", nil)
+		if accept != "" {
+			r.Header.Set("Accept", accept)
+		}
+		if got := wantsHTML(r); got != want {
+			t.Errorf("Accept %q: got %v want %v", accept, got, want)
+		}
+	}
+}
+
+func TestRenderACSErrorPageEscapes(t *testing.T) {
+	page := renderACSErrorPage(acsErrorView{
+		Lang:        "zh-CN",
+		Title:       `<script>alert(1)</script>`,
+		ReasonLabel: "原因",
+		Reason:      `bad <b>reason</b>`,
+		Hint:        "hint",
+		BackLabel:   "返回登录",
+		BackURL:     `/admin/login?x="y"`,
+	})
+	if strings.Contains(page, "<script>alert(1)</script>") || strings.Contains(page, "<b>reason</b>") {
+		t.Fatalf("dynamic values must be escaped: %s", page)
+	}
+	for _, want := range []string{"&lt;script&gt;alert(1)&lt;/script&gt;", "bad &lt;b&gt;reason&lt;/b&gt;", "返回登录", `href="/admin/login?x=&#34;y&#34;"`} {
+		if !strings.Contains(page, want) {
+			t.Fatalf("page must contain %q: %s", want, page)
+		}
 	}
 }

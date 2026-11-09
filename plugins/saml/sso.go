@@ -1,7 +1,9 @@
 package saml
 
 import (
+	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"encoding/xml"
@@ -15,6 +17,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"nexadmin/core/auth"
+	"nexadmin/core/cache"
 	"nexadmin/core/response"
 	"nexadmin/pkg/idgen"
 )
@@ -75,7 +78,9 @@ func (s *Service) metadata(c *gin.Context) {
 		response.Fail(c, response.BadRequest("error.bad_request").WithMsg(err.Error()))
 		return
 	}
-	raw, err := xml.MarshalIndent(sp.Metadata(), "", "  ")
+	md := sp.Metadata()
+	ensureSigningKeyDescriptor(md, sp.Certificate)
+	raw, err := xml.MarshalIndent(md, "", "  ")
 	if err != nil {
 		response.Fail(c, err)
 		return
@@ -134,17 +139,17 @@ func (s *Service) acs(c *gin.Context) {
 		return
 	}
 	if !m.Enabled {
-		response.Fail(c, response.BadRequest("error.bad_request").WithMsg("SAML 源未启用"))
+		s.failACS(c, response.BadRequest("saml.acs.err_source_disabled"), "")
 		return
 	}
 	sp, err := s.provider(m, baseURL(c))
 	if err != nil {
-		response.Fail(c, response.BadRequest("error.bad_request").WithMsg(err.Error()))
+		s.failACS(c, response.BadRequest("saml.acs.err_metadata"), err.Error())
 		return
 	}
 	// 库从 req.PostForm 读取 SAMLResponse：必须先解析表单，否则真实 IdP 回调一律失败。
 	if err := c.Request.ParseForm(); err != nil {
-		response.Fail(c, response.BadRequest("error.bad_request").WithMsg("SAML 回调表单解析失败"))
+		s.failACS(c, response.BadRequest("saml.acs.err_response"), "SAML 回调表单解析失败")
 		return
 	}
 	// SP-initiated：按 RelayState 找回本次 AuthnRequest ID，库才会接受 InResponseTo。
@@ -163,16 +168,16 @@ func (s *Service) acs(c *gin.Context) {
 	}
 	assertion, err := parseResponseSafe(sp, c.Request, possibleIDs)
 	if err != nil {
-		msg := "SAML 响应校验失败"
 		// 底层原因（签名/受众/时限）对配置排障必要；不包含断言原文。
+		detail := ""
 		if ivr, ok := err.(*saml.InvalidResponseError); ok && ivr.PrivateErr != nil {
-			msg += ": " + ivr.PrivateErr.Error()
+			detail = ivr.PrivateErr.Error()
 		}
-		response.Fail(c, response.BadRequest("error.bad_request").WithMsg(msg))
+		s.failACS(c, response.BadRequest("saml.acs.err_response"), detail)
 		return
 	}
 	if assertion.Subject == nil || assertion.Subject.NameID == nil {
-		response.Fail(c, response.BadRequest("error.bad_request").WithMsg("SAML 断言缺少 NameID"))
+		s.failACS(c, response.BadRequest("saml.acs.err_nameid"), "")
 		return
 	}
 	subject := assertion.Subject.NameID.Value
@@ -183,7 +188,7 @@ func (s *Service) acs(c *gin.Context) {
 	// 组映射：仅自动建号时授予角色；开了「必须命中组」而一个都没命中时拒绝登录。
 	mapped, err := mappedRoleCodes(attrValues(assertion, m.AttrGroups), m.GroupRoleMappings, m.RequireMappedGroup)
 	if err != nil {
-		response.Fail(c, response.Forbidden("error.forbidden").WithMsg(err.Error()))
+		s.failACS(c, response.Forbidden("saml.acs.err_group"), "")
 		return
 	}
 	// ProviderKey 留空：框架只接受 ldap-<数字> 或旧 ldap/cas 键，自定义键会被拒。
@@ -199,19 +204,25 @@ func (s *Service) acs(c *gin.Context) {
 			AutoCreate:      m.AutoCreate,
 			DefaultRole:     m.DefaultRole,
 			MappedRoleCodes: mapped,
+			SyncProfile:     true,
 		},
-		Method:    "saml",
-		IP:        c.ClientIP(),
-		UserAgent: c.Request.UserAgent(),
+		Method:         "saml",
+		IP:             c.ClientIP(),
+		UserAgent:      c.Request.UserAgent(),
+		SessionBinding: samlBinding(m.ID, subject),
 	})
 	if err != nil {
-		response.Fail(c, err)
+		s.failACS(c, asResponseError(err), "")
 		return
 	}
 	// 保存 NameID 供 SP 发起登出使用（需二次验证的挑战阶段还没有本地用户，跳过）。
 	if out.User != nil && s.cache != nil && assertion.Subject.NameID.Value != "" {
 		_ = s.cache.Set(c.Request.Context(), sloKey(out.User.TenantID, m.ID, out.User.ID),
 			assertion.Subject.NameID.Value, 7*24*time.Hour)
+	}
+	if out.User != nil {
+		// 角色对账放在会话签发之后：失败只留日志，不回滚这次登录。
+		s.SyncRolesOnLogin(c.Request.Context(), m, out.User, mapped)
 	}
 	payload := out.Payload()
 	if redirect != "" {
@@ -362,7 +373,9 @@ func (s *Service) logoutURL(c *gin.Context) (string, bool) {
 	return u.String(), true
 }
 
-// slo 接收 IdP 的 LogoutResponse（SP 发起登出的回执），校验后确认完成。
+// slo 同时处理两个方向：
+//   - IdP 发起：带 SAMLRequest 的 LogoutRequest（重定向 / POST 表单），验签后吊销本地会话并回 LogoutResponse；
+//   - SP 发起：带 SAMLResponse 的 LogoutResponse 回执，校验后回到发起页。
 func (s *Service) slo(c *gin.Context) {
 	m, ok := s.sourceOrFail(c)
 	if !ok {
@@ -371,6 +384,10 @@ func (s *Service) slo(c *gin.Context) {
 	sp, err := s.provider(m, baseURL(c))
 	if err != nil {
 		response.Fail(c, response.BadRequest("error.bad_request").WithMsg(err.Error()))
+		return
+	}
+	if isLogoutRequest(c.Request) {
+		s.idpInitiatedLogout(c, m, sp)
 		return
 	}
 	if err := sp.ValidateLogoutResponseRequest(c.Request); err != nil {
@@ -391,6 +408,155 @@ func (s *Service) slo(c *gin.Context) {
 		}
 	}
 	response.OK(c, gin.H{"ok": true})
+}
+
+// isLogoutRequest 判断到达 SLO 端点的是 IdP 的 LogoutRequest 还是 SP 发起的 LogoutResponse。
+// 两种绑定都把消息放在 SAMLRequest / SAMLResponse 里，按参数名区分，比按「校验哪种成功」猜更可靠。
+func isLogoutRequest(r *http.Request) bool {
+	if r.URL.Query().Get("SAMLRequest") != "" {
+		return true
+	}
+	if r.Method == http.MethodPost {
+		_ = r.ParseForm()
+		return r.PostForm.Get("SAMLRequest") != ""
+	}
+	return false
+}
+
+// idpInitiatedLogout 处理 IdP 发起的登出：LogoutRequest 必须来自元数据里的 IdP 且带有效签名
+// （crewjam 校验 Issuer / Destination / 时限 / 重放），随后按 NameID 吊销该来源下已记录的本地会话。
+func (s *Service) idpInitiatedLogout(c *gin.Context, m *Source, sp *saml.ServiceProvider) {
+	req, err := sp.ValidateLogoutRequest(c.Request)
+	if err != nil {
+		response.Fail(c, response.BadRequest("error.bad_request").WithMsg("SLO 请求校验失败: "+err.Error()))
+		return
+	}
+	nameID := ""
+	if req.NameID != nil {
+		nameID = req.NameID.Value
+	}
+	s.revokeSessionsByNameID(c.Request.Context(), m, nameID)
+	relay := c.Query("RelayState")
+	if relay == "" {
+		_ = c.Request.ParseForm()
+		relay = c.Request.PostForm.Get("RelayState")
+	}
+	// 应答绑定以 IdP 元数据为准：有 HTTP-Redirect 就 302，否则退回 POST 自动提交页。
+	if sp.GetSLOBindingLocation(saml.HTTPRedirectBinding) != "" {
+		if u, err := sp.MakeRedirectLogoutResponse(req.ID, relay); err == nil {
+			c.Redirect(http.StatusFound, u.String())
+			return
+		}
+	}
+	if html, err := sp.MakePostLogoutResponse(req.ID, relay); err == nil {
+		c.Data(http.StatusOK, "text/html; charset=utf-8", html)
+		return
+	}
+	response.OK(c, gin.H{"ok": true})
+}
+
+// revokeSessionsByNameID 吊销某 NameID 在本来源上的全部本地会话。NameID 找不到（会话已过期 /
+// 从未在这里登录）按成功处理：SAML 规范里登出未知会话不算失败。
+func (s *Service) revokeSessionsByNameID(ctx context.Context, m *Source, nameID string) {
+	if s.cache == nil || nameID == "" {
+		return
+	}
+	key := sessionKey(m.ID, nameID)
+	raw, err := s.cache.Get(ctx, key)
+	if err != nil || raw == "" {
+		return
+	}
+	_ = s.cache.Del(ctx, key)
+	rev, ok := s.issuer.(TokenRevoker)
+	if !ok {
+		return
+	}
+	var list []samlSession
+	if json.Unmarshal([]byte(raw), &list) != nil {
+		return
+	}
+	for _, sess := range list {
+		_ = rev.RevokeByJTI(ctx, sess.JTI, sess.RID)
+		_ = s.cache.Del(ctx, sloKey(sess.TenantID, m.ID, sess.UserID))
+	}
+}
+
+const (
+	samlSessionTTL     = 7 * 24 * time.Hour
+	maxTrackedSessions = 20
+)
+
+// samlSession 是登录时记下的本地会话标识；IdP 发起的 SLO 只有 NameID，没有本地令牌上下文。
+type samlSession struct {
+	TenantID idgen.ID  `json:"t"`
+	UserID   idgen.ID  `json:"u"`
+	JTI      string    `json:"j"`
+	RID      string    `json:"r"`
+	Exp      time.Time `json:"e"`
+}
+
+// sessionKey 以 NameID 的摘要做键：NameID 可能很长或含空白，直接拼进缓存键不便于排查。
+func sessionKey(srcID idgen.ID, nameID string) string {
+	sum := sha256.Sum256([]byte(nameID))
+	return "saml:sess:" + srcID.String() + ":" + hex.EncodeToString(sum[:])
+}
+
+// samlBinding 是带给 auth.SessionTracker 的不透明会话归属：源 ID + NameID（NameID 放最后，允许含冒号）。
+func samlBinding(srcID idgen.ID, nameID string) string {
+	return "saml:" + srcID.String() + ":" + nameID
+}
+
+func parseSAMLBinding(binding string) (idgen.ID, string, bool) {
+	rest, ok := strings.CutPrefix(binding, "saml:")
+	if !ok {
+		return 0, "", false
+	}
+	idPart, nameID, ok := strings.Cut(rest, ":")
+	if !ok || nameID == "" {
+		return 0, "", false
+	}
+	id, err := idgen.Parse(idPart)
+	if err != nil || id == 0 {
+		return 0, "", false
+	}
+	return id, nameID, true
+}
+
+// appendSession 记下一次签发（含二次验证后的签发与刷新轮换）的 access / refresh 令牌 ID，
+// 供 IdP 发起 SLO 时按 NameID 吊销。同一 NameID 最多保留 20 条未过期会话，重复 jti 只留一条。
+func appendSession(ctx context.Context, c cache.Cache, srcID idgen.ID, nameID string, cl *auth.Claims) {
+	if c == nil || cl == nil || cl.ID == "" || nameID == "" {
+		return
+	}
+	key := sessionKey(srcID, nameID)
+	var list []samlSession
+	if raw, err := c.Get(ctx, key); err == nil && raw != "" {
+		_ = json.Unmarshal([]byte(raw), &list)
+	}
+	now := time.Now()
+	kept := make([]samlSession, 0, len(list)+1)
+	for _, x := range list {
+		if x.Exp.After(now) && x.JTI != cl.ID {
+			kept = append(kept, x)
+		}
+	}
+	if len(kept) >= maxTrackedSessions {
+		kept = kept[len(kept)-maxTrackedSessions+1:]
+	}
+	kept = append(kept, samlSession{TenantID: cl.TenantID, UserID: cl.UserID, JTI: cl.ID, RID: cl.RID, Exp: cl.ExpiresAt.Time})
+	if b, err := json.Marshal(kept); err == nil {
+		_ = c.Set(ctx, key, string(b), samlSessionTTL)
+	}
+}
+
+// recordBindingSession 是注册给 core/auth 的 SessionTracker：普通登录、二次验证后签发、
+// 刷新轮换都会走到这里，所以 IdP 发起的登出能吊销当前真正有效的令牌。
+func recordBindingSession(ctx context.Context, c cache.Cache, cl *auth.Claims) {
+	srcID, nameID, ok := parseSAMLBinding(cl.SessionBinding)
+	if !ok {
+		return
+	}
+	appendSession(ctx, c, srcID, nameID, cl)
 }
 
 // ---- 管理接口 ----

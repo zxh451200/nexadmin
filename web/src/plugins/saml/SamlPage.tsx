@@ -456,6 +456,7 @@ export default function SamlPage() {
                     s.matchExisting ? t('plugin_saml.summary.matchExisting') : null,
                     s.defaultRole ? t('plugin_saml.summary.defaultRole', { role: s.defaultRole }) : null,
                     s.requireMappedGroup ? t('plugin_saml.summary.requireGroup') : null,
+                    s.syncRolesOnLogin ? t('plugin_saml.summary.roleSync') : null,
                     s.forceAuthn ? t('plugin_saml.summary.forceAuthn') : null,
                   ]
                     .filter(Boolean)

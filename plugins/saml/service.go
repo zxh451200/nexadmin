@@ -17,6 +17,7 @@ import (
 
 	"github.com/crewjam/saml"
 	"github.com/russellhaering/goxmldsig"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"nexadmin/core/auth"
@@ -35,6 +36,11 @@ type SessionRevoker interface {
 	RevokeSession(ctx context.Context, cl *auth.Claims) error
 }
 
+// TokenRevoker 按令牌 ID 吊销会话：IdP 发起的 SLO 只有 NameID，本地只能靠登录时记下的 jti。
+type TokenRevoker interface {
+	RevokeByJTI(ctx context.Context, accessJTI, refreshJTI string) error
+}
+
 // sloKey 保存「本地用户在某 SAML 源上的 NameID」，供 SP 发起登出时构造 LogoutRequest。
 func sloKey(tid, srcID, uid idgen.ID) string {
 	return "saml:slo:" + tid.String() + ":" + srcID.String() + ":" + uid.String()
@@ -44,10 +50,17 @@ type Service struct {
 	db     *gorm.DB
 	issuer Issuer
 	cache  cache.Cache
+	log    *zap.Logger
 }
 
 func NewService(db *gorm.DB, issuer Issuer, c cache.Cache) *Service {
 	return &Service{db: db, issuer: issuer, cache: c}
+}
+
+// SetLogger 给后台同步与登录时角色对账留审计线索；不设置时只跳过日志，不跳过动作。
+func (s *Service) SetLogger(l *zap.Logger) *Service {
+	s.log = l
+	return s
 }
 
 type SourceForm struct {
@@ -66,6 +79,7 @@ type SourceForm struct {
 	DefaultRole    string             `json:"defaultRole"`
 	GroupMappings  []GroupRoleMapping `json:"groupRoleMappings"`
 	RequireMapped  bool               `json:"requireMappedGroup"`
+	SyncRoles      bool               `json:"syncRolesOnLogin"`
 	AllowIDPInit   bool               `json:"allowIdpInitiated"`
 	SignRequests   bool               `json:"signAuthnRequest"`
 	NameIDFormat   string             `json:"nameIdFormat"`
@@ -111,7 +125,7 @@ func (s *Service) Create(ctx context.Context, f SourceForm) (*Source, error) {
 		IDPEntityID: f.IDPEntityID, SPCert: certPEM, SPKeyEnc: keyEnc,
 		AttrUsername: f.AttrUsername, AttrEmail: f.AttrEmail, AttrNickname: f.AttrNickname, AttrGroups: f.AttrGroups, AttrPhone: f.AttrPhone,
 		AutoCreate: f.AutoCreate, MatchExisting: f.MatchExisting, DefaultRole: f.DefaultRole,
-		GroupRoleMappings: f.GroupMappings, RequireMappedGroup: f.RequireMapped,
+		GroupRoleMappings: f.GroupMappings, RequireMappedGroup: f.RequireMapped, SyncRolesOnLogin: f.SyncRoles,
 		AllowIDPInitiated: f.AllowIDPInit, SignAuthnRequest: f.SignRequests, NameIDFormat: f.NameIDFormat,
 		RequireSignedCBC: f.RequireSignedCBC, RejectUnknownConditions: f.RejectUnknownConditions,
 		ForceAuthn: f.ForceAuthn, AuthnContextClassRef: f.AuthnContextClassRef, RequireAuthnContext: f.RequireAuthnContext,
@@ -145,6 +159,7 @@ func (s *Service) Update(ctx context.Context, id string, f SourceForm) (*Source,
 	m.DefaultRole = f.DefaultRole
 	m.GroupRoleMappings = f.GroupMappings
 	m.RequireMappedGroup = f.RequireMapped
+	m.SyncRolesOnLogin = f.SyncRoles
 	m.AllowIDPInitiated = f.AllowIDPInit
 	m.SignAuthnRequest = f.SignRequests
 	m.NameIDFormat = f.NameIDFormat
@@ -196,7 +211,14 @@ func (s *Service) SetEnabled(ctx context.Context, id string, enabled bool) error
 }
 
 func (s *Service) Delete(ctx context.Context, id string) error {
-	return s.db.WithContext(ctx).Where("id = ?", id).Delete(&Source{}).Error
+	// 授予记账跟着来源一起删：来源没了，它授过的角色不再属于任何映射，
+	// 但用户身上已生效的角色保持现状（删配置不等于收权）。
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("source_id = ?", id).Delete(&roleGrant{}).Error; err != nil {
+			return err
+		}
+		return tx.Where("id = ?", id).Delete(&Source{}).Error
+	})
 }
 
 const (
@@ -565,9 +587,12 @@ func (s *Service) provider(m *Source, base string) (*saml.ServiceProvider, error
 		// SLO：登出需要 IdP 侧能回 LogoutResponse 到本端点。
 		SloURL:         u("/api/v1/auth/saml/" + id + "/slo"),
 		LogoutBindings: []string{saml.HTTPRedirectBinding, saml.HTTPPostBinding},
-		Key:            key,
-		Certificate:    cert,
-		IDPMetadata:    selected,
+		// 登出消息（请求与应答）都用 SP 私钥签名，IdP 按元数据里的证书验签；
+		// 与「是否签 AuthnRequest」解耦，否则关闭请求签名会让 LogoutResponse 也变成裸的。
+		LogoutSignatureMethod: dsig.RSASHA256SignatureMethod,
+		Key:                   key,
+		Certificate:           cert,
+		IDPMetadata:           selected,
 		// 每个源单独的防重放命名空间，避免不同 IdP 的断言 ID 相撞。
 		ReplayCache:       replayCache{c: s.cache, scope: id},
 		AllowIDPInitiated: m.AllowIDPInitiated,

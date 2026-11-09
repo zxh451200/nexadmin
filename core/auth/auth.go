@@ -99,6 +99,9 @@ type Claims struct {
 	// 避免每次刷新都把计时重新推后（那样等于永不过期）。
 	SessionStart    int64           `json:"sst,omitempty"`
 	ExternalSession ExternalSession `json:"ext,omitempty"`
+	// SessionBinding 是登录发起方（插件）提供的不透明会话归属（SAML = "saml:<源ID>:<NameID>"）。
+	// 刷新时原样带走，SessionTracker 据此继续跟踪轮换后的令牌。
+	SessionBinding string `json:"sb,omitempty"`
 	// Principal / Perms 不进 JWT，只由开放平台中间件为个人访问令牌（PrincipalPAT）与签名调用的应用（PrincipalApp）填充。
 	// PrincipalApp 没有对应的用户，权限直接取 Perms（见 middleware.Perm）。
 	Principal string   `json:"-"`
@@ -255,14 +258,15 @@ func newJTI() string {
 func (s *Service) IssuePair(u *User) (Pair, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	return s.issuePair(ctx, u, "", 0)
+	return s.issuePair(ctx, u, "", 0, "")
 }
 
+// singleSessionKey 是单会话租约的名称。
 func singleSessionKey(u *User) string {
 	return cache.GlobalKey("auth", "single-session", u.TenantID.String(), u.ID.String())
 }
 
-func (s *Service) issuePair(ctx context.Context, u *User, previousRefresh string, sessionStart int64) (Pair, error) {
+func (s *Service) issuePair(ctx context.Context, u *User, previousRefresh string, sessionStart int64, binding string) (Pair, error) {
 	session := externalSessionFrom(ctx)
 	if err := s.checkExternalSession(ctx, session); err != nil {
 		return Pair{}, err
@@ -298,6 +302,7 @@ func (s *Service) issuePair(ctx context.Context, u *User, previousRefresh string
 			UserID: u.ID, TenantID: u.TenantID, Username: u.Username, Super: u.Super, Kind: kind, RID: pair,
 			SessionStart:     sessionStart,
 			ExternalSession:  session,
+			SessionBinding:   binding,
 			RegisteredClaims: jwt.RegisteredClaims{ID: jti, IssuedAt: jwt.NewNumericDate(now), ExpiresAt: jwt.NewNumericDate(exp)},
 		}
 		return jwt.NewWithClaims(jwt.SigningMethodHS256, cl).SignedString(s.secret)
@@ -450,7 +455,13 @@ func (s *Service) Refresh(ctx context.Context, refreshToken string) (Pair, error
 	if err := s.revoke(ctx, cl.ID, time.Until(cl.ExpiresAt.Time)); err != nil {
 		return Pair{}, err
 	}
-	return s.issuePair(WithExternalSession(ctx, cl.ExternalSession), u, cl.ID, cl.SessionStart)
+	pair, err := s.issuePair(WithExternalSession(ctx, cl.ExternalSession), u, cl.ID, cl.SessionStart, cl.SessionBinding)
+	if err != nil {
+		return Pair{}, err
+	}
+	// 轮换后的令牌继续挂同一个会话归属，外部 IdP 发起的登出才能吊销到它。
+	s.notifySessionTrackers(ctx, pair)
+	return pair, nil
 }
 
 // RevokeSession 登出：吊销当前 access 及其配对的 refresh。
@@ -459,6 +470,20 @@ func (s *Service) RevokeSession(ctx context.Context, cl *Claims) error {
 		return err
 	}
 	return s.revoke(ctx, cl.RID, s.refreshTTL)
+}
+
+// RevokeByJTI 按令牌 ID 吊销一对 access / refresh。外部 IdP 发起的单点登出只拿得到
+// NameID（没有本地会话上下文），调用方按登录时记下的 jti 调这里。
+func (s *Service) RevokeByJTI(ctx context.Context, accessJTI, refreshJTI string) error {
+	if accessJTI != "" {
+		if err := s.revoke(ctx, accessJTI, s.accessTTL); err != nil {
+			return err
+		}
+	}
+	if refreshJTI != "" {
+		return s.revoke(ctx, refreshJTI, s.refreshTTL)
+	}
+	return nil
 }
 
 var def atomic.Pointer[Service]

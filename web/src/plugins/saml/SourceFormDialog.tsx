@@ -55,6 +55,7 @@ function buildSchema(t: (k: string) => string) {
       matchExisting: z.boolean(),
       defaultRole: z.string().trim().refine((v) => !v || validRole(v), t('plugin_saml.errors.defaultRole')),
       requireMappedGroup: z.boolean(),
+      syncRolesOnLogin: z.boolean(),
       groupRoleMappings: z
         .array(
           z.object({
@@ -139,6 +140,7 @@ const empty: FormValues = {
   matchExisting: false,
   defaultRole: '',
   requireMappedGroup: false,
+  syncRolesOnLogin: false,
   groupRoleMappings: [],
   allowIdpInitiated: false,
   signAuthnRequest: false,
@@ -168,6 +170,7 @@ function toValues(s?: SamlSource | null): FormValues {
     matchExisting: s.matchExisting,
     defaultRole: s.defaultRole ?? '',
     requireMappedGroup: s.requireMappedGroup,
+    syncRolesOnLogin: s.syncRolesOnLogin ?? false,
     groupRoleMappings: (s.groupRoleMappings ?? []).map((m) => ({ externalGroup: m.externalGroup, roleCodes: m.roleCodes.join('\n') })),
     allowIdpInitiated: s.allowIdpInitiated,
     signAuthnRequest: s.signAuthnRequest,
@@ -362,6 +365,7 @@ export default function SourceFormDialog({ open, onOpenChange, editing }: Props)
       open={open}
       onOpenChange={onOpenChange}
       size="lg"
+      fixedHeight
       title={editing ? t('plugin_saml.edit') : t('plugin_saml.add')}
       footer={
         <>
@@ -375,8 +379,9 @@ export default function SourceFormDialog({ open, onOpenChange, editing }: Props)
       }
     >
       <Form {...form}>
-        <FormLayout id="saml-source-form" onSubmit={onSubmit} showRequiredHint>
-          <Tabs value={tab} onValueChange={(v) => setTab(v as TabKey)}>
+        <FormLayout id="saml-source-form" onSubmit={onSubmit} showRequiredHint className="flex h-full min-h-0 flex-col">
+          {/* 面板各自滚动：页签高度固定，切换时弹窗不会跟着变高变矮 */}
+          <Tabs value={tab} onValueChange={(v) => setTab(v as TabKey)} className="flex min-h-0 flex-1 flex-col">
             <TabsList>
               <TabsTrigger value="basic" aria-invalid={hasError(BASIC_ERROR_KEYS) || undefined}>
                 {t('plugin_saml.tabs.basic')}
@@ -398,7 +403,7 @@ export default function SourceFormDialog({ open, onOpenChange, editing }: Props)
               </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="basic">
+            <TabsContent value="basic" className="min-h-0 flex-1 overflow-y-auto pe-1">
               <FormGrid cols={2}>
                 <TextField control={c} name="name" label={p('name')} placeholder={t('common.pleaseInput')} />
                 <SwitchField control={c} name="enabled" label={p('enabled')} description={h('enabled')} />
@@ -533,7 +538,7 @@ export default function SourceFormDialog({ open, onOpenChange, editing }: Props)
               </FormGrid>
             </TabsContent>
 
-            <TabsContent value="account">
+            <TabsContent value="account" className="min-h-0 flex-1 overflow-y-auto pe-1">
               <FormGrid cols={2}>
                 <TextField control={c} name="attrUsername" label={p('attrUsername')} hint={h('attrUsername')} mono placeholder="uid" />
                 <TextField control={c} name="attrEmail" label={p('attrEmail')} mono placeholder="mail" />
@@ -553,6 +558,7 @@ export default function SourceFormDialog({ open, onOpenChange, editing }: Props)
                       mono
                       placeholder="guest"
                     />
+                    <p className="text-xs text-muted-foreground">{h('syncProfile')}</p>
                   </div>
                 </FormGridFull>
 
@@ -566,6 +572,14 @@ export default function SourceFormDialog({ open, onOpenChange, editing }: Props)
                       label={p('requireMappedGroup')}
                       description={h('requireMappedGroup')}
                       bare
+                    />
+                    <SwitchField
+                      control={c}
+                      name="syncRolesOnLogin"
+                      label={p('syncRolesOnLogin')}
+                      description={h('syncRolesOnLogin')}
+                      bare
+                      disabled={mappings.fields.length === 0}
                     />
                     {mappings.fields.map((mapping, index) => (
                       <div key={mapping.id} className="grid gap-3 rounded-md bg-background p-3 sm:grid-cols-2">
@@ -607,7 +621,7 @@ export default function SourceFormDialog({ open, onOpenChange, editing }: Props)
               </FormGrid>
             </TabsContent>
 
-            <TabsContent value="advanced">
+            <TabsContent value="advanced" className="min-h-0 flex-1 overflow-y-auto pe-1">
               <FormGrid cols={1}>
                 <FormGridFull>
                   <div className="space-y-3 rounded-md bg-muted/40 p-3">

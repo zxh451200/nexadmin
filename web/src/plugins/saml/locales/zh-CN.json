@@ -52,6 +52,7 @@
       "group": "IdP 组值",
       "roles": "本地角色编码",
       "requireMappedGroup": "必须命中组才允许登录",
+      "syncRolesOnLogin": "登录时同步角色",
       "allowIdpInitiated": "允许 IdP 发起登录",
       "signAuthnRequest": "签名 AuthnRequest",
       "nameIdFormat": "NameID 格式",
@@ -80,9 +81,10 @@
       "matchExisting": "允许把该身份绑定到同名且尚未绑定 SAML 的已有账号；超管与内置角色账号永不匹配。",
       "defaultRole": "自动建号时授予的角色编码，组映射命中时优先使用映射角色。",
       "defaultRoleOff": "仅在开启自动建号时生效。",
-      "groupRoleMappings": "逐条填写 IdP 实际返回的完整组值，按原值精确匹配（区分大小写与空格），不解析 DN、不展开嵌套组。角色仅在自动建号时授予，已有用户的本地角色不会被覆盖。",
+      "groupRoleMappings": "逐条填写 IdP 实际返回的完整组值，按原值精确匹配（区分大小写与空格），不解析 DN、不展开嵌套组。默认只在自动建号时授予角色；打开「登录时同步角色」后改为每次登录与本地角色对齐。",
       "roleCodes": "每行一个角色编码（对应「角色管理」里的编码）。",
       "requireMappedGroup": "开启后，断言里的组一个都没命中映射时拒绝登录；此时至少要配置一条映射。",
+      "syncRolesOnLogin": "每次登录按组映射重算角色：不再命中的角色会被收回，但只收回本来源记过的；用户身上的其它角色（手工分配、其它身份源授予）不受影响。本次断言没带组属性时不做任何变更。",
       "allowIdpInitiated": "允许 IdP 门户直接发起登录（无 SP 侧 AuthnRequest）。成功后回到后台首页；断言防重放依赖共享缓存。",
       "signAuthnRequest": "用 SP 私钥对 AuthnRequest 签名（RSA-SHA256）。开启前先把 SP 证书配置到 IdP，否则可能被拒。",
       "nameIdFormat": "AuthnRequest 里请求的 NameID 格式；不确定时保持「不指定」。",
@@ -92,7 +94,8 @@
       "authnContext": "在 AuthnRequest 里声明可接受的认证上下文（例如要求 MFA）；开启下面的强制校验后，断言必须命中其中之一。",
       "authnContextCustom": "逗号分隔的类 URI（urn: 或 http(s)://），按 exact 精确匹配，最多 10 个。",
       "requireAuthnContext": "断言里的 AuthnContextClassRef 必须命中上面选择的类，否则拒绝登录。",
-      "idpEntityId": "打包元数据里包含多个 IdP 时，选择本系统要信任的那一个；单实体导入会自动选中。"
+      "idpEntityId": "打包元数据里包含多个 IdP 时，选择本系统要信任的那一个；单实体导入会自动选中。",
+      "syncProfile": "已绑定账号每次登录会按断言回写昵称 / 邮箱 / 手机号；空值不覆盖，用户名、状态与角色保持本地。"
     },
     "preview": {
       "title": "元数据预览",
@@ -163,6 +166,7 @@
       "matchExisting": "绑定同名",
       "defaultRole": "默认角色 {{role}}",
       "requireGroup": "必须命中组",
+      "roleSync": "登录同步角色",
       "idpInitiated": "允许 IdP 发起登录",
       "forceAuthn": "强制重新认证",
       "authnContext": "认证上下文 {{value}}",

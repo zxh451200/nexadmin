@@ -59,6 +59,7 @@ export interface SamlSource {
   defaultRole: string
   groupRoleMappings: GroupRoleMapping[]
   requireMappedGroup: boolean
+  syncRolesOnLogin: boolean
   allowIdpInitiated: boolean
   signAuthnRequest: boolean
   nameIdFormat: string
@@ -90,6 +91,7 @@ export interface SourceForm {
   defaultRole: string
   groupRoleMappings: GroupRoleMapping[]
   requireMappedGroup: boolean
+  syncRolesOnLogin: boolean
   allowIdpInitiated: boolean
   signAuthnRequest: boolean
   nameIdFormat: string

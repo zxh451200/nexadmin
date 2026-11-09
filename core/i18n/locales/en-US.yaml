@@ -985,3 +985,14 @@ devicehub:
   alarm_op_invalid: Invalid comparison operator; pick gt, lt, ge, le, eq or ne
   alarm_level_invalid: The alarm level must be info, warn or critical
   alarm_not_found: The alarm rule does not exist
+saml:
+  acs:
+    title: Sign-in did not complete
+    reason: Reason
+    hint: Please sign in again. If this keeps happening, ask your administrator to check this identity source.
+    back: Back to sign-in
+    err_source_disabled: This SAML identity source is disabled
+    err_metadata: The identity source configuration is not usable
+    err_response: The response from the IdP could not be validated
+    err_nameid: The IdP assertion has no NameID
+    err_group: This account is not in an allowed group

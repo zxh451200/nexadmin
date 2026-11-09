@@ -99,6 +99,12 @@ func (m *module) ResolveExternalUser(ctx context.Context, method string, ext aut
 		return nil, errExternalDenied
 	}
 	db := d.DB.WithContext(ctx)
+	if ext.SyncProfile {
+		// 资料回写失败不阻断登录：IDP 本次断言的属性有问题时，账号仍按本地已有资料进入。
+		if err := syncExternalProfile(ctx, d, u, ext); err != nil {
+			d.Log.Warn("external profile sync failed", zap.String("method", method), zap.Error(err))
+		}
+	}
 	if err := db.Model(&User{}).Where("id = ?", int64(u.ID)).UpdateColumn("last_login_at", time.Now().UTC()).Error; err != nil {
 		d.Log.Warn("update last_login_at failed", zap.Error(err))
 	}
@@ -108,6 +114,77 @@ func (m *module) ResolveExternalUser(ctx context.Context, method string, ext aut
 	}
 	au.LoginMethod = method
 	return au, nil
+}
+
+// syncExternalProfile 按每次登录带来的外部资料回写昵称 / 邮箱 / 手机号。
+// 只动资料列：用户名、状态、角色、部门都是本地策略；空值不覆盖、非法值跳过（记日志），
+// 内置角色持有者与超管不回写（否则目录侧可借资料改动影响受保护账号）。
+func syncExternalProfile(ctx context.Context, d *core.Deps, u *User, ext auth.ExternalIdentity) error {
+	protected, err := isProtectedUser(ctx, d.DB, u)
+	if err != nil || protected {
+		return err
+	}
+	patch, warnings := profilePatch(u, ext)
+	for _, w := range warnings {
+		d.Log.Warn("external profile sync skipped invalid value", zap.String("method", "saml"), zap.String("field", w))
+	}
+	if phone, ok := patch["phone"].(string); ok {
+		var n int64
+		if err := d.DB.WithContext(ctx).Model(&User{}).
+			Where("tenant_id = ? AND id <> ? AND phone = ?", u.TenantID, u.ID, phone).Count(&n).Error; err != nil {
+			return err
+		}
+		if n != 0 {
+			delete(patch, "phone")
+			d.Log.Warn("external profile sync skipped phone already in use", zap.String("method", "saml"))
+		}
+	}
+	if len(patch) == 0 {
+		return nil
+	}
+	if err := d.DB.WithContext(ctx).Model(&User{}).
+		Where("tenant_id = ? AND id = ? AND is_super = ?", u.TenantID, u.ID, false).
+		Updates(patch).Error; err != nil {
+		return err
+	}
+	// buildAuthUser 直接读内存里的 u，登录响应要带上刚同步的资料。
+	if v, ok := patch["nickname"].(string); ok {
+		u.Nickname = v
+	}
+	if v, ok := patch["email"].(string); ok {
+		u.Email = v
+	}
+	if v, ok := patch["phone"].(string); ok {
+		u.Phone = v
+	}
+	return nil
+}
+
+// profilePatch 只做纯校验与差异计算，方便单测：返回待写列与非法字段名。
+// 空值不覆盖本地值；邮箱必须合法；手机号必须能归一化。
+func profilePatch(u *User, ext auth.ExternalIdentity) (map[string]any, []string) {
+	patch := map[string]any{}
+	var warnings []string
+	if nickname := clip(strings.TrimSpace(ext.Nickname), 64); nickname != "" && nickname != u.Nickname {
+		patch["nickname"] = nickname
+	}
+	if email := strings.ToLower(strings.TrimSpace(ext.Email)); email != "" && email != strings.ToLower(u.Email) {
+		if len(email) > 100 || !emailRe.MatchString(email) {
+			warnings = append(warnings, "email")
+		} else {
+			patch["email"] = email
+		}
+	}
+	if raw := strings.TrimSpace(ext.Phone); raw != "" {
+		if phone := normalizePhone(raw); phone != u.Phone {
+			if phone == "" {
+				warnings = append(warnings, "phone")
+			} else {
+				patch["phone"] = phone
+			}
+		}
+	}
+	return patch, warnings
 }
 
 // 绑定键前缀：ldap-<id> 目录作用域（稳定 GUID 主体）；ldapu-<id> / cas-<id> 为按源隔离的登录名主体。

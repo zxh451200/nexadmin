@@ -253,6 +253,32 @@ func spCertNotAfter(certPEM string) (time.Time, error) {
 	return cert.NotAfter, nil
 }
 
+// ensureSigningKeyDescriptor 保证 SP 元数据里有一张标记为 signing 的证书。
+// crewjam 只在 SignatureMethod 非空（即开启了 AuthnRequest 签名）时才输出 use="signing"，
+// 但 LogoutRequest / LogoutResponse 始终用 SP 私钥签名；不补这一条时，
+// 严格按用途取证书的 IdP 无法验证 SLO 消息，登出会静默失败。
+func ensureSigningKeyDescriptor(md *saml.EntityDescriptor, cert *x509.Certificate) {
+	if md == nil || cert == nil || len(md.SPSSODescriptors) == 0 {
+		return
+	}
+	d := &md.SPSSODescriptors[0]
+	for _, kd := range d.KeyDescriptors {
+		if kd.Use == "signing" {
+			return
+		}
+	}
+	d.KeyDescriptors = append(d.KeyDescriptors, saml.KeyDescriptor{
+		Use: "signing",
+		KeyInfo: saml.KeyInfo{
+			X509Data: saml.X509Data{
+				X509Certificates: []saml.X509Certificate{{
+					Data: base64.StdEncoding.EncodeToString(cert.Raw),
+				}},
+			},
+		},
+	})
+}
+
 func spInfo(m *Source, base string) SPInfo {
 	prefix := base + "/api/v1/auth/saml/" + m.ID.String()
 	out := SPInfo{

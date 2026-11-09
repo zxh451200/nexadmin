@@ -39,6 +39,9 @@ type ExternalIdentity struct {
 	Nickname    string
 	Email       string
 	Phone       string
+	// SyncProfile 允许在已绑定账号上按外部资料回写昵称 / 邮箱 / 手机号（SAML 这类每次登录都带
+	// 最新属性的来源）。只回写这三个资料列，不改用户名、状态与角色；空值不覆盖本地值。
+	SyncProfile bool
 
 	// MatchExisting 允许把该身份绑定到“同名且尚未绑定该方式”的已有本地账号（超级管理员永不匹配）。默认 false：不猜。
 	MatchExisting bool

@@ -52,6 +52,7 @@
       "group": "IdP group value",
       "roles": "Local role codes",
       "requireMappedGroup": "Require a mapped group to sign in",
+      "syncRolesOnLogin": "Sync roles on sign-in",
       "allowIdpInitiated": "Allow IdP-initiated sign-in",
       "signAuthnRequest": "Sign AuthnRequest",
       "nameIdFormat": "NameID format",
@@ -80,9 +81,10 @@
       "matchExisting": "Allow linking this identity to an existing same-name account that is not yet bound to SAML. Super admins and built-in role holders are never matched.",
       "defaultRole": "Role code granted when a user is auto-created; matched group mappings take precedence.",
       "defaultRoleOff": "Only applies when auto-create is on.",
-      "groupRoleMappings": "Enter the full group values exactly as returned by the IdP; matching is case- and whitespace-sensitive, DN parsing and nested groups are not performed. Roles are granted only when a user is auto-created; existing users' local roles are never overwritten.",
+      "groupRoleMappings": "Enter the full group values exactly as returned by the IdP; matching is case- and whitespace-sensitive, DN parsing and nested groups are not performed. Roles are granted only when a user is auto-created by default; turn on \"Sync roles on sign-in\" to reconcile them on every sign-in.",
       "roleCodes": "One role code per line (the code shown in role management).",
       "requireMappedGroup": "When on, sign-in is refused if none of the assertion's groups match a mapping; at least one mapping is required.",
+      "syncRolesOnLogin": "Reconcile roles from the group mappings on every sign-in: roles no longer mapped are revoked, but only those recorded as granted by this source; other roles on the user (assigned by hand or by another identity source) are untouched. Nothing changes when the assertion carries no groups.",
       "allowIdpInitiated": "Allow the IdP portal to start sign-in without an SP AuthnRequest. After success the user lands on the admin home; assertion replay protection needs a shared cache.",
       "signAuthnRequest": "Sign the AuthnRequest with the SP private key (RSA-SHA256). Configure the SP certificate at the IdP first, or requests may be rejected.",
       "nameIdFormat": "NameID format requested in the AuthnRequest; keep \"unspecified\" if unsure.",
@@ -92,7 +94,8 @@
       "authnContext": "Declare acceptable authentication contexts in the AuthnRequest (for example require MFA); with the enforcement switch below on, the assertion must match one of them.",
       "authnContextCustom": "Comma-separated class URIs (urn: or http(s)://), matched exactly, at most 10.",
       "requireAuthnContext": "The assertion's AuthnContextClassRef must match one of the selected classes, or sign-in is rejected.",
-      "idpEntityId": "When the metadata bundles several IdPs, pick the one this system should trust; a single entity is selected automatically."
+      "idpEntityId": "When the metadata bundles several IdPs, pick the one this system should trust; a single entity is selected automatically.",
+      "syncProfile": "Bound accounts take nickname / email / phone from the assertion on every login; empty values never overwrite, and username, status and roles stay local."
     },
     "preview": {
       "title": "Metadata preview",
@@ -163,6 +166,7 @@
       "matchExisting": "Link by name",
       "defaultRole": "Default role {{role}}",
       "requireGroup": "Group required",
+      "roleSync": "Roles synced at sign-in",
       "idpInitiated": "IdP-initiated allowed",
       "forceAuthn": "Re-auth forced",
       "authnContext": "Authn context {{value}}",

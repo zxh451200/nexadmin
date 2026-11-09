@@ -26,6 +26,8 @@ type LoginMeta struct {
 	Method    string // 凭据校验方式，写入登录日志与门的入参
 	IP        string
 	UserAgent string
+	// SessionBinding 是登录发起方（插件）提供的会话归属，二次验证后签发令牌时原样落到 Claims。
+	SessionBinding string
 }
 
 // Challenge 是要求二次验证时返回给前端的短期挑战（不含令牌）。
@@ -87,6 +89,9 @@ type challengeRec struct {
 	Gate            string          `json:"g"`
 	IP              string          `json:"i"`
 	Exp             int64           `json:"e"`
+	// Binding 是发起登录的插件给的不透明会话归属（如 SAML 源+NameID），
+	// 二次验证通过后签发令牌时要继续带上，否则 IdP 发起的登出吊销不到这段会话。
+	Binding string `json:"b,omitempty"`
 }
 
 // 缓存里只放挑战 ID 的哈希，明文只在响应里出现一次。
@@ -129,10 +134,11 @@ func (s *Service) passGates(ctx context.Context, u *User, meta LoginMeta, from i
 		return &LoginOutcome{Challenge: ch}, nil
 	}
 	s.Decorate(ctx, u)
-	pair, err := s.issuePair(ctx, u, "", 0)
+	pair, err := s.issuePair(ctx, u, "", 0, meta.SessionBinding)
 	if err != nil {
 		return nil, err
 	}
+	s.notifySessionTrackers(ctx, pair)
 	return &LoginOutcome{Pair: pair, User: u}, nil
 }
 
@@ -146,7 +152,7 @@ func (s *Service) newChallenge(ctx context.Context, u *User, meta LoginMeta, gat
 	}
 	id := hex.EncodeToString(b)
 	ttl, _ := s.limits()
-	rec := challengeRec{UID: u.ID.String(), TID: u.TenantID.String(), Username: u.Username, Method: meta.Method, Gate: gate, IP: meta.IP, Exp: time.Now().Add(ttl).Unix()}
+	rec := challengeRec{UID: u.ID.String(), TID: u.TenantID.String(), Username: u.Username, Method: meta.Method, Gate: gate, IP: meta.IP, Exp: time.Now().Add(ttl).Unix(), Binding: meta.SessionBinding}
 	rec.ExternalSession = externalSessionFrom(ctx)
 	raw, _ := json.Marshal(rec)
 	if err := s.cache.Set(ctx, challengeKey(id), string(raw), ttl); err != nil {

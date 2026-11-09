@@ -44,6 +44,9 @@ type Source struct {
 	GroupRoleMappingsJSON string             `gorm:"column:group_role_mappings;type:text" json:"-"`
 	GroupRoleMappings     []GroupRoleMapping `gorm:"-" json:"groupRoleMappings"`
 	RequireMappedGroup    bool               `gorm:"column:require_mapped_group;not null;default:false"`
+	// SyncRolesOnLogin 每次登录按组映射重算角色：只收回本来源授过的角色，
+	// 手工授权与其它来源授予的角色都不动；本次断言没命中任何组时整体不动。
+	SyncRolesOnLogin bool `gorm:"column:sync_roles_on_login;not null;default:false"`
 
 	AllowIDPInitiated bool   `gorm:"column:allow_idp_initiated;not null;default:false"`
 	SignAuthnRequest  bool   `gorm:"column:sign_authn_request;not null;default:false"`
