@@ -1,5 +1,23 @@
 {
   "timezone": {
-    "select": "Select time zone"
+    "select": "Select time zone",
+    "aliases": {
+      "Asia/Shanghai": "beijing shanghai shenzhen guangzhou",
+      "Asia/Chongqing": "chongqing",
+      "Asia/Harbin": "harbin",
+      "Asia/Urumqi": "urumqi xinjiang",
+      "Asia/Hong_Kong": "hongkong",
+      "Asia/Taipei": "taipei taiwan",
+      "Asia/Tokyo": "japan",
+      "Asia/Seoul": "korea",
+      "Asia/Kolkata": "delhi mumbai bangalore india",
+      "Asia/Dubai": "uae",
+      "Europe/London": "uk britain",
+      "America/New_York": "nyc boston washington dc",
+      "America/Los_Angeles": "sf san francisco silicon valley seattle",
+      "America/Argentina/Buenos_Aires": "argentina",
+      "Australia/Sydney": "australia",
+      "Pacific/Auckland": "new zealand"
+    }
   }
 }
