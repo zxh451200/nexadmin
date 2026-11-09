@@ -139,6 +139,9 @@ btns(sendlog, 'sendlog', ['delete'])
 const tenantSelf = menu(tenantDir, 'tenantSelf.menu', '/tenant/self', 'tenantSelf/TenantSelfPage', 'tenantSelf:view', 'Building2', 30)
 btns(tenantSelf, 'tenantSelf', ['update'])
 
+// 业务中心（证件实名 / 支付中台 / 在线客服 / 工单中心 / 审批中心的公共分组，子项由各插件清单挂入）
+dir('sysMenu.dir.biz', 'Briefcase', '/biz', 55)
+
 const bySort = (a: SysMenu, b: SysMenu) => a.sort - b.sort || a.id.localeCompare(b.id)
 
 function buildTree(list: SysMenu[], parentId: string | null): SysMenu[] {

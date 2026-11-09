@@ -15,6 +15,7 @@ import (
 //  1. 导出中心（menu:jobs）与导入中心（imports:list）曾经各占一个顶级项，现在同属 dir:/io；
 //  2. 支付中台曾经是「目录 dir:/pay + 同名子项」，现在子项直接在一级；
 //  3. LDAP 配置、单点登录应用、地图服务曾各占一个侧栏项，现在并进「系统设置」的分区。
+//  4. 证件实名、支付中台、在线客服、工单中心、审批中心曾各占一个顶级项，现在同属 dir:/biz。
 //
 // 播种只补不改（core/seed 按 code 判断，已存在的一律不动），所以老库必须在这里收敛一次。
 // 条件只匹配「坏形状」本身（顶级 / 挂在旧目录下），管理员自己挪过位置的菜单不会被拽回来；
@@ -65,6 +66,27 @@ func reconcileMenuShape(db *gorm.DB) (checked, fixed int, err error) {
 					return e
 				}
 				fixed++
+			}
+		}
+
+		// 证件实名、支付中台、在线客服、工单中心、审批中心原先各占一个顶级项，现在同属「业务中心」。
+		// 目录由出厂种子建好；这里只把「还留在顶级」的老行挂上去，管理员自己挪到别处的不动。
+		checked++
+		var bizDirID int64
+		if e := tx.Raw(`SELECT id FROM sys_menu WHERE code = ? AND type = 'dir' LIMIT 1`, "dir:/biz").Scan(&bizDirID).Error; e != nil {
+			return e
+		}
+		if bizDirID != 0 {
+			for _, item := range []struct {
+				code string
+				sort int
+			}{{"realname:list", 10}, {"pay:list", 20}, {"im:list", 30}, {"ticket:list", 40}, {"workflow:list", 50}} {
+				checked++
+				res := tx.Exec(`UPDATE sys_menu SET parent_id = ?, sort = ? WHERE code = ? AND parent_id = 0`, bizDirID, item.sort, item.code)
+				if res.Error != nil {
+					return res.Error
+				}
+				fixed += int(res.RowsAffected)
 			}
 		}
 

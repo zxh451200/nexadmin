@@ -7,14 +7,14 @@ edition: pro
 requires_nexadmin: ">=0.1.0"
 migration_target: tenant
 menus:
-  - parent: /
+  - parent: /biz
     type: menu
     title: plugin_pay.menu
     path: /pay/orders
     component: plugins/pay/PayPage
     perm: pay:list
     icon: CreditCard
-    sort: 60
+    sort: 20
     keep_alive: true
   - parent: pay:list
     type: button

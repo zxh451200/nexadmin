@@ -6,14 +6,14 @@ author: NexAdmin
 edition: pro
 requires_nexadmin: ">=0.1.0"
 menus:
-  - parent: /
+  - parent: /biz
     type: menu
     title: plugin_ticket.menu
     path: /ticket/tickets
     component: plugins/ticket/TicketPage
     perm: ticket:list
     icon: Inbox
-    sort: 62
+    sort: 40
     keep_alive: true
   - parent: ticket:list
     type: button

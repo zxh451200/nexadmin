@@ -6,14 +6,14 @@ author: NexAdmin
 edition: free
 requires_nexadmin: ">=0.1.0"
 menus:
-  - parent: /
+  - parent: /biz
     type: menu
     title: plugin_realname.menu
     path: /realname
     component: plugins/realname/RealnamePage
     perm: realname:list
     icon: FingerprintPattern
-    sort: 75
+    sort: 10
     keep_alive: true
   - parent: realname:list
     type: button
