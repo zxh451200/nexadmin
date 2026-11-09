@@ -9,6 +9,7 @@ package crm
 import (
 	"context"
 	"errors"
+	"sort"
 
 	"gorm.io/gorm"
 
@@ -82,6 +83,15 @@ func (s *Service) MergeCustomers(ctx context.Context, sc *datascope.Scope, in Me
 		}
 		if canonicalTags(unionTags) != target.Tags {
 			fills["tags"] = canonicalTags(unionTags)
+		}
+		// 自定义字段值同样「补空不覆盖」：从客户整行随后会被物理删除，
+		// 不在这里并进去，它的值就永久丢了。
+		if mergedValues, added := mergeCustomValues(&target, &source); len(added) > 0 {
+			raw, err := EncodeCustomValues(mergedValues)
+			if err != nil {
+				return err
+			}
+			fills["custom_values"] = raw
 		}
 		if len(fills) > 0 {
 			if err := tx.Model(&Customer{}).Where("id = ?", int64(in.Target)).Updates(fills).Error; err != nil {
@@ -162,4 +172,23 @@ func mergeFills(target, source *Customer) map[string]any {
 		}
 	}
 	return fills
+}
+
+// mergeCustomValues 把从客户的自定义字段值并进主客户：主客户没有的 code 补上，已有的不覆盖。
+// 返回合并结果与被补入的 code（升序，预览按它逐项展示）。
+func mergeCustomValues(target, source *Customer) (map[string]any, []string) {
+	merged := make(map[string]any, len(target.CustomValues)+len(source.CustomValues))
+	for code, v := range target.CustomValues {
+		merged[code] = v
+	}
+	added := make([]string, 0, len(source.CustomValues))
+	for code, v := range source.CustomValues {
+		if _, ok := merged[code]; ok {
+			continue
+		}
+		merged[code] = v
+		added = append(added, code)
+	}
+	sort.Strings(added)
+	return merged, added
 }

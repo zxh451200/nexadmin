@@ -4,6 +4,25 @@
     "description": "免费统一维护客户资料与线索/商机；酒店、商城等系统的会员可对应到同一个客户，不做销售自动化",
     "dir": "客户主数据",
     "menu": "客户主数据",
+    "import": {
+      "action": "导入",
+      "title": "导入客户",
+      "description": "用 Excel / CSV 批量建档或更新客户；同一份文件重复导入不会重复建档",
+      "template": "下载导入模板",
+      "templateXlsx": "Excel 模板（.xlsx）",
+      "templateCsv": "CSV 模板（.csv）",
+      "templateFilename": "客户导入模板",
+      "file": "选择文件",
+      "fileHint": "支持 .xlsx / .csv。表头见模板；客户名称必填；手机号、证件号、统一社会信用代码任一命中即更新已有客户。",
+      "start": "开始导入",
+      "starting": "导入中…",
+      "needFile": "请先选择要导入的文件",
+      "result": "共 {{total}} 行：成功 {{ok}} 行，失败 {{fail}} 行",
+      "errorRow": "第 {{row}} 行：{{reason}}",
+      "moreErrors": "另有 {{count}} 条失败明细，见下载报告",
+      "downloadErrors": "下载失败明细",
+      "errorsFilename": "客户导入失败明细"
+    },
     "perm": {
       "edit": "维护客户",
       "opp": "维护线索/商机",
@@ -227,7 +246,8 @@
         "migrateSummary": "将从客户带走：联系人 {{contacts}} 条、商机 {{opportunities}} 个、跟进记录 {{activities}} 条。",
         "fillTitle": "主客户空着、将从客户补上的字段",
         "noFill": "两边主数据没有互补的空字段。",
-        "tagsTitle": "从客户带入的标签"
+        "tagsTitle": "从客户带入的标签",
+        "customTitle": "从客户补上的自定义字段"
       },
       "notBound": "未绑定",
       "bind": "绑定外部系统",

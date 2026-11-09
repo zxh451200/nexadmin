@@ -4,6 +4,25 @@
     "description": "Free Customer master data and lead/opportunity ledger; members from hotel, mall and other systems can resolve to the same customer, without sales automation",
     "dir": "Customer Master",
     "menu": "Customer Master",
+    "import": {
+      "action": "Import",
+      "title": "Import customers",
+      "description": "Create or update customers in bulk from Excel / CSV; re-importing the same file does not create duplicates",
+      "template": "Download template",
+      "templateXlsx": "Excel template (.xlsx)",
+      "templateCsv": "CSV template (.csv)",
+      "templateFilename": "customer-import-template",
+      "file": "Choose file",
+      "fileHint": "Supports .xlsx / .csv. Headers follow the template; name is required; a matching phone, ID number or unified social credit code updates the existing customer.",
+      "start": "Start import",
+      "starting": "Importing…",
+      "needFile": "Choose a file to import first",
+      "result": "{{total}} rows: {{ok}} imported, {{fail}} failed",
+      "errorRow": "Row {{row}}: {{reason}}",
+      "moreErrors": "{{count}} more errors in the report",
+      "downloadErrors": "Download failed rows",
+      "errorsFilename": "customer-import-errors"
+    },
     "perm": {
       "edit": "Manage customers",
       "opp": "Manage leads/opportunities",
@@ -227,7 +246,8 @@
         "migrateSummary": "Will move from the source customer: {{contacts}} contacts, {{opportunities}} opportunities, {{activities}} activities.",
         "fillTitle": "Empty target fields that will be filled from the source",
         "noFill": "No complementary empty fields between the two records.",
-        "tagsTitle": "Tags brought in from the source"
+        "tagsTitle": "Tags brought in from the source",
+        "customTitle": "Custom fields filled from the source"
       },
       "notBound": "Not linked",
       "bind": "Link external system",

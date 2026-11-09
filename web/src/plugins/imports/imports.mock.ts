@@ -7,12 +7,21 @@ const SOURCES: ImportSourceMeta[] = [
   {
     name: 'crm_customers',
     title: '客户导入',
+    // 与 plugins/crm/import.go 的 ImportSources 同列同序：mock 的模板与列提示也是契约的一部分。
     columns: [
       { key: 'name', label: '客户名称', required: true, example: '张三' },
+      { key: 'type', label: '客户类型（个人/企业）', required: false, example: '个人' },
       { key: 'phone', label: '手机号', required: false, example: '13800138000' },
       { key: 'email', label: '邮箱', required: false, example: 'zhangsan@example.com' },
-      { key: 'level', label: '客户等级', required: false, example: 'VIP' },
+      { key: 'level', label: '客户等级', required: false, example: 'A' },
       { key: 'owner', label: '负责人', required: false, example: '王五' },
+      { key: 'country', label: '国家/地区', required: false, example: 'CN' },
+      { key: 'nationality', label: '国籍', required: false, example: 'CN' },
+      { key: 'id_type', label: '证件类型', required: false, example: '身份证' },
+      { key: 'id_no', label: '证件号', required: false, example: '33010619900101001X' },
+      { key: 'tax_no', label: '统一社会信用代码', required: false, example: '91330100MA2AB1CD3X' },
+      { key: 'industry', label: '所属行业', required: false, example: '住宿业' },
+      { key: 'address', label: '企业注册地址', required: false, example: '' },
       { key: 'remark', label: '备注', required: false, example: '' },
     ],
   },
@@ -80,11 +89,18 @@ defineMock([
       return paginate(rows, query)
     },
   },
-  // mock 环境只给 CSV 文本桩；真实 XLSX 由后端生成。排在 /:id 之前，避免被通配路由吃掉。
+  // mock 环境只给 CSV 文本桩；真实 XLSX 由后端生成。表头按请求的来源拼，不能所有来源都发商品模板。
+  // 排在 /:id 之前，避免被通配路由吃掉。
   {
     method: 'GET',
     url: '/plugins/imports/template',
-    handler: () => '\uFEFF商品标题(必填),价格(元)(必填),币种,库存,SKU编码(重复则更新)\r\n云南小粒咖啡,29.90,CNY,100,SKU-001\r\n',
+    handler: ({ query }) => {
+      const src = SOURCES.find((s) => s.name === String(query.source ?? ''))
+      if (!src) mockError(404, 'unknown source')
+      const head = src.columns.map((c) => `${c.label}${c.required ? '(必填)' : ''}`).join(',')
+      const sample = src.columns.map((c) => c.example).join(',')
+      return `\uFEFF${head}\r\n${sample}\r\n`
+    },
   },
   {
     method: 'GET',
@@ -94,11 +110,15 @@ defineMock([
   {
     method: 'POST',
     url: '/plugins/imports',
-    handler: () => {
+    handler: ({ body }) => {
+      // 上传走 multipart，body 是 FormData；来源与文件名按真实请求回填，台账才和页面对得上。
+      const form = body instanceof FormData ? body : null
+      const source = String(form?.get('source') ?? '') || 'crm_customers'
+      const file = form?.get('file')
       const job: ImportJob = {
         id: String(7450000000000010000n + BigInt(jobs.length + 1)),
-        source: 'crm_customers',
-        fileName: 'upload.csv',
+        source,
+        fileName: file instanceof File ? file.name : 'upload.csv',
         totalRows: 3,
         okRows: 2,
         failRows: 1,

@@ -1,5 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { api } from '@/framework/request/http'
+import { api, http } from '@/framework/request/http'
 import type { Page, PageQuery } from '@/framework/request/types'
 
 // 客户主数据 + 线索/商机台账（收敛方案第 3 步最小骨架）。
@@ -454,7 +454,14 @@ export interface CrmMergeFieldPreview {
   value: string
 }
 
-/** 合并预览：与合并同一套规则的只读投影（补空字段 / 标签并集 / 关联迁移量）。 */
+/** 自定义字段的补空预览：列名是管理员起的 label，值可能是数字/布尔（已转成文本）。 */
+export interface CrmMergeCustomFieldPreview {
+  code: string
+  label: string
+  value: string
+}
+
+/** 合并预览：与合并同一套规则的只读投影（补空字段 / 标签并集 / 自定义字段 / 关联迁移量）。 */
 export interface CrmMergePreview {
   target: CrmCustomer
   source: CrmCustomer
@@ -463,6 +470,7 @@ export interface CrmMergePreview {
   activities: number
   fillFields: CrmMergeFieldPreview[]
   newTags: string[]
+  newCustomFields: CrmMergeCustomFieldPreview[]
 }
 
 export function useMergePreview(targetId?: string, sourceId?: string) {
@@ -563,4 +571,51 @@ export function useDeleteActivity() {
     mutationFn: (id: string) => api.del(`${BASE}/activities/${id}`),
     onSuccess: invalidate,
   })
+}
+
+// ---- Excel / CSV 导入 ----
+// 解析、模板、逐行校验、失败行报告与台账都由通用导入中心负责；crm 只是已注册的导入源
+// （source=crm_customers，列定义见 plugins/crm/import.go 的 ImportSources）。
+
+export const CRM_IMPORT_SOURCE = 'crm_customers'
+
+export interface CrmImportJob {
+  id: string
+  source: string
+  fileName: string
+  totalRows: number
+  okRows: number
+  failRows: number
+  status: 'pending' | 'running' | 'done' | 'failed' | 'cancelled'
+  /** 失败明细只带前若干条；完整报告走 errors.csv。 */
+  errors?: { row: number; key?: string; message: string }[]
+}
+
+export function useImportCustomers() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (file: File) => {
+      const form = new FormData()
+      form.append('source', CRM_IMPORT_SOURCE)
+      form.append('file', file)
+      return api.post<CrmImportJob>('/plugins/imports', form)
+    },
+    onSuccess: invalidate,
+  })
+}
+
+// 下载接口要带 Bearer 令牌，window.open 拿不到，只能取 Blob 再触发保存。
+async function fetchBlob(url: string, params?: Record<string, string>): Promise<Blob> {
+  const res = await http.get<unknown>(url, { params, responseType: 'blob' })
+  return res.data instanceof Blob ? res.data : new Blob([String(res.data)], { type: 'text/csv;charset=utf-8' })
+}
+
+/** 模板由服务端按导入源生成：表头、必填标记与示例行和真实校验口径同源。 */
+export function fetchCustomerImportTemplate(format: 'xlsx' | 'csv') {
+  return fetchBlob('/plugins/imports/template', { source: CRM_IMPORT_SOURCE, format })
+}
+
+/** 失败行报告（行号 / 列 / 原因），修正原文件后可整份重导。 */
+export function fetchCustomerImportErrors(jobId: string) {
+  return fetchBlob(`/plugins/imports/${jobId}/errors.csv`)
 }

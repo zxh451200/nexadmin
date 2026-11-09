@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { ArrowDownUp, CalendarClock, ChevronDown, Combine, CopyPlus, Download, Eye, Hand, Pencil, Plus, Settings2, SlidersHorizontal, Tag as TagIcon, Trash2, UserMinus, X } from 'lucide-react'
+import { ArrowDownUp, CalendarClock, ChevronDown, Combine, CopyPlus, Download, Eye, Hand, Pencil, Plus, Settings2, SlidersHorizontal, Tag as TagIcon, Trash2, Upload, UserMinus, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { useQueryClient } from '@tanstack/react-query'
@@ -57,6 +57,7 @@ import {
   type CustomerType,
 } from './api'
 import { ActivitiesSection, ContactsSection } from './CustomerProfile'
+import { CustomerImportDialog } from './CustomerImportDialog'
 import { formatMoney, formatTime, stageVariant } from './format'
 import { downloadCsv } from '@/framework/components/export/csv'
 
@@ -303,6 +304,8 @@ function CustomerFormDialog({
           </>
         ) : (
           <>
+            {/* 个人只收法定国籍（配证件做实名）。「国家/地区」是企业侧的所在地、跟着注册地址走，
+                个人表单不再放第二个同款国家下拉——并排看就是重复字段（历史/导入数据仍照常展示）。 */}
             <div className="grid grid-cols-2 gap-3">
               <label className="flex flex-col gap-1">
                 {t('plugin_crm.fields.nationality')}
@@ -313,17 +316,6 @@ function CustomerFormDialog({
                 />
                 <span className="text-[11px] text-muted-foreground">{t('plugin_crm.customer.nationalityHint')}</span>
               </label>
-              <label className="flex flex-col gap-1">
-                {t('plugin_crm.fields.country')}
-                <CountrySelect
-                  value={value.country}
-                  onChange={(v) => set({ country: v })}
-                  placeholder={t('plugin_crm.picker.country')}
-                />
-                <span className="text-[11px] text-muted-foreground">{t('plugin_crm.customer.countryHint')}</span>
-              </label>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
               <label className="flex flex-col gap-1">
                 {t('plugin_crm.fields.idType')}
                 <Select value={value.idType || NO_ID_TYPE} onValueChange={(v) => set({ idType: v === NO_ID_TYPE ? '' : v })}>
@@ -340,11 +332,11 @@ function CustomerFormDialog({
                   </SelectContent>
                 </Select>
               </label>
-              <label className="flex flex-col gap-1">
-                {t('plugin_crm.fields.idNo')}
-                <Input maxLength={64} value={value.idNo ?? ''} onChange={(e) => set({ idNo: e.target.value })} />
-              </label>
             </div>
+            <label className="flex flex-col gap-1">
+              {t('plugin_crm.fields.idNo')}
+              <Input maxLength={64} value={value.idNo ?? ''} onChange={(e) => set({ idNo: e.target.value })} />
+            </label>
           </>
         )}
         <p className="text-xs text-muted-foreground">
@@ -669,13 +661,13 @@ function MergeDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: 
         </div>
         {canMerge ? (
           <div className="rounded-md border border-border p-3">
-            <div className="mb-2 text-xs font-medium text-foreground">{t('plugin_crm.merge.previewTitle')}</div>
+            <div className="mb-2 text-xs font-medium text-foreground">{t('plugin_crm.customer.merge.previewTitle')}</div>
             {previewLoading || !preview ? (
               <p className="text-xs text-muted-foreground">{t('common.loading')}</p>
             ) : (
               <div className="space-y-2 text-xs">
                 <p>
-                  {t('plugin_crm.merge.migrateSummary', {
+                  {t('plugin_crm.customer.merge.migrateSummary', {
                     contacts: preview.contacts,
                     opportunities: preview.opportunities,
                     activities: preview.activities,
@@ -683,7 +675,7 @@ function MergeDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: 
                 </p>
                 {preview.fillFields.length ? (
                   <div>
-                    <span className="text-muted-foreground">{t('plugin_crm.merge.fillTitle')}：</span>
+                    <span className="text-muted-foreground">{t('plugin_crm.customer.merge.fillTitle')}：</span>
                     <ul className="mt-1 space-y-0.5">
                       {preview.fillFields.map((f) => (
                         <li key={f.column} className="flex gap-2">
@@ -694,13 +686,26 @@ function MergeDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: 
                     </ul>
                   </div>
                 ) : (
-                  <p className="text-muted-foreground">{t('plugin_crm.merge.noFill')}</p>
+                  <p className="text-muted-foreground">{t('plugin_crm.customer.merge.noFill')}</p>
                 )}
                 {preview.newTags.length ? (
                   <p>
-                    <span className="text-muted-foreground">{t('plugin_crm.merge.tagsTitle')}：</span>
+                    <span className="text-muted-foreground">{t('plugin_crm.customer.merge.tagsTitle')}：</span>
                     {preview.newTags.join('、')}
                   </p>
+                ) : null}
+                {preview.newCustomFields.length ? (
+                  <div>
+                    <span className="text-muted-foreground">{t('plugin_crm.customer.merge.customTitle')}：</span>
+                    <ul className="mt-1 space-y-0.5">
+                      {preview.newCustomFields.map((f) => (
+                        <li key={f.code} className="flex gap-2">
+                          <span className="text-muted-foreground">{f.label}</span>
+                          <span className="num truncate">← {f.value}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 ) : null}
               </div>
             )}
@@ -907,6 +912,7 @@ export function CustomersTab() {
   const [pageSize, setPageSize] = useState(10)
   const [formOpen, setFormOpen] = useState(false)
   const [mergeOpen, setMergeOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
   const [editing, setEditing] = useState<CrmCustomer | null>(null)
   const [detail, setDetail] = useState<CrmCustomer | null>(null)
   // 多选状态叫 picked：detail 已经是「当前详情面板选中的行」，别再占一个 selected。
@@ -955,6 +961,8 @@ export function CustomersTab() {
   const release = useReleaseCustomer()
   const [exporting, setExporting] = useState(false)
   const { data: tagOptions } = useCustomerTags()
+  // 导出要带自定义字段：表头用字段定义里的 label，值按 code 从客户身上取。
+  const { data: customFields = [] } = useCustomerFields()
   const [duplicatesOpen, setDuplicatesOpen] = useState(false)
   // 待跟进弹窗：站内信的深链是 /crm/customers?todo=1，落地即弹（之后 URL 清掉、状态接管）。
   const [todosOpen, setTodosOpen] = useState(() => params.get('todo') === '1')
@@ -1013,18 +1021,30 @@ export function CustomersTab() {
     try {
       const rows = await fetchCustomersForExport({ ...filters })
       const stamp = new Date().toISOString().slice(0, 10)
+      // 自定义字段按定义顺序追加在固定列之后；国家/国籍导出 ISO 代码而非译名，
+      // 导出的文件才能按同一张导入模板原样回灌（导入只认两字母代码）。
+      const extraFields = customFields.filter((f) => f.enabled)
+      const customValue = (cu: CrmCustomer, f: CrmField) => {
+        const v = cu.customValues?.[f.code]
+        if (v === undefined || v === null) return ''
+        return typeof v === 'boolean' ? (v ? 'true' : 'false') : String(v)
+      }
       downloadCsv(`crm-customers-${stamp}.csv`, [
         [
           t('plugin_crm.fields.name'), t('plugin_crm.fields.type'), t('plugin_crm.fields.code'),
           t('plugin_crm.fields.level'), t('plugin_crm.fields.identity'), t('plugin_crm.fields.phone'),
-          t('plugin_crm.fields.email'), t('plugin_crm.fields.owner'), t('plugin_crm.fields.status'),
-          t('plugin_crm.fields.externalAnchor'), t('plugin_crm.fields.createdAt'),
+          t('plugin_crm.fields.email'), t('plugin_crm.fields.country'), t('plugin_crm.fields.nationality'),
+          t('plugin_crm.fields.tags'), t('plugin_crm.fields.owner'), t('plugin_crm.fields.status'),
+          t('plugin_crm.fields.externalAnchor'), ...extraFields.map((f) => f.label),
+          t('plugin_crm.fields.createdAt'),
         ],
         ...rows.map((cu) => [
           cu.name, t(`plugin_crm.type.${cu.type ?? 'person'}`), cu.code ?? '',
           cu.level ?? '', cu.type === 'company' ? (cu.taxNo ?? '') : (cu.idNo ?? ''), cu.phone ?? '',
-          cu.email ?? '', cu.owner ?? '', t(`plugin_crm.status.${cu.status}`),
+          cu.email ?? '', cu.country ?? '', cu.nationality ?? '', (cu.tags ?? []).join('、'),
+          cu.owner ?? '', t(`plugin_crm.status.${cu.status}`),
           cu.externalSource ? `${cu.externalSource}/${cu.externalNo ?? ''}` : '',
+          ...extraFields.map((f) => customValue(cu, f)),
           formatTime(cu.createdAt, i18n.language),
         ]),
       ])
@@ -1412,6 +1432,13 @@ export function CustomersTab() {
                 {t('plugin_crm.customer.mergeTitle')}
               </Button>
             </Can>
+            {/* 导入与导出入对出现；执行权限归导入中心（imports:run），没有它的人看不到入口。 */}
+            <Can perm="imports:run">
+              <Button variant="outline" onClick={() => setImportOpen(true)}>
+                <Upload aria-hidden="true" />
+                {t('plugin_crm.import.action')}
+              </Button>
+            </Can>
             <Button variant="outline" onClick={() => void onExport()} disabled={exporting || inPool} title={inPool ? t('plugin_crm.pool.exportDisabled') : undefined}>
               <Download className="me-2 size-4" aria-hidden="true" />
               {t('common.export')}
@@ -1527,6 +1554,7 @@ export function CustomersTab() {
         editing={editing}
       />
       {mergeOpen ? <MergeDialog open={mergeOpen} onOpenChange={setMergeOpen} /> : null}
+      <CustomerImportDialog open={importOpen} onOpenChange={setImportOpen} />
       {detail ? <CustomerDetailDialog key={detail.id} customer={detail} onClose={() => setDetail(null)} /> : null}
       <CustomerTagDialog
         key={tagTarget?.id ?? 'tags-closed'}
