@@ -55,45 +55,52 @@
   color-scheme: light;
 }
 
+/* 深色：同一色相（≈230）但大幅降饱和——原来 32–45% 的饱和度让画布、卡片、侧栏
+   三种“深藏青”互相打架，远看是一块发蓝的黑泥。这里改成低饱和岩板灰，
+   靛蓝只留给主色/激活态；三层高度各差 3 个明度点，保证卡片、浮层能立起来。 */
 .dark {
-  --background: 232 40% 5.5%;
-  --foreground: 220 25% 94%;
-  --card: 232 32% 8.5%;
-  --card-foreground: 220 25% 94%;
-  --popover: 232 34% 10%;
-  --popover-foreground: 220 25% 94%;
+  --background: 228 16% 7.5%;
+  --foreground: 220 16% 95%;
+  --card: 228 15% 10.5%;
+  --card-foreground: 220 16% 95%;
+  --popover: 228 15% 16%;
+  --popover-foreground: 220 16% 95%;
 
-  --primary: 238 85% 63%;
+  --primary: 238 84% 64%;
   --primary-foreground: 0 0% 100%;
-  --secondary: 232 24% 14%;
-  --secondary-foreground: 220 25% 94%;
-  --muted: 232 24% 12%;
-  --muted-foreground: 225 14% 68%;
-  --accent: 240 45% 18%;
-  --accent-foreground: 235 100% 93%;
+  --secondary: 228 14% 16.5%;
+  --secondary-foreground: 220 16% 95%;
+  --muted: 228 14% 13%;
+  --muted-foreground: 222 10% 66%;
+  --accent: 236 34% 21%;
+  --accent-foreground: 235 100% 94%;
 
-  --destructive: 0 84% 62%;
-  --destructive-foreground: 232 40% 6%;
-  --success: 152 60% 50%;
-  --success-foreground: 232 40% 6%;
-  --warning: 34 95% 56%;
-  --warning-foreground: 232 40% 6%;
-  --info: 192 90% 55%;
-  --info-foreground: 232 40% 6%;
+  /* 危险色：62% 亮红只会配出「红底黑字」，和主按钮的「彩底白字」不是一套语言；
+     降到 50% 才能让白字过 AA（≈4.9:1），图标直接当文字用也有 3.6:1 */
+  --destructive: 0 70% 50%;
+  --destructive-foreground: 0 0% 100%;
+  --success: 152 55% 52%;
+  --success-foreground: 228 16% 7%;
+  --warning: 34 92% 58%;
+  --warning-foreground: 228 16% 7%;
+  --info: 192 85% 56%;
+  --info-foreground: 228 16% 7%;
 
-  --border: 232 22% 17%;
-  --input: 232 22% 21%;
+  --border: 228 12% 19%;
+  --input: 228 12% 23%;
   --ring: 238 90% 70%;
 
   --brand-from: 243 90% 66%;
   --brand-to: 192 95% 52%;
 
-  --sidebar: 233 45% 4.5%;
-  --sidebar-foreground: 225 18% 78%;
-  /* 激活/hover 底色：原 16% 亮度在近黑栏底上几乎不可见（表现为“有的有背景有的没有”），提亮一档 */
-  --sidebar-accent: 238 42% 21%;
-  --sidebar-accent-foreground: 230 100% 95%;
-  --sidebar-border: 232 25% 12%;
+  /* 侧栏与画布同色：深色下再压一档就变成“三块近黑并排”（栏 5.5 / 画布 7.5 / 卡片 10.5），
+     空页面时尤其像补丁。改由边框分栏，全屏只留「画布 / 卡片」两层。 */
+  --sidebar: 228 16% 7.5%;
+  --sidebar-foreground: 222 12% 79%;
+  /* 激活底色：低饱和靛蓝，足够在近黑栏底上读出“当前在哪”，又不和主色按钮抢注意力 */
+  --sidebar-accent: 236 30% 20%;
+  --sidebar-accent-foreground: 230 100% 96%;
+  --sidebar-border: 228 16% 13%;
 
   --chart-1: 238 90% 70%;
   --chart-2: 192 95% 52%;

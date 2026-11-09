@@ -11,7 +11,9 @@ const buttonVariants = cva(
       variant: {
         default: 'bg-brand-gradient text-primary-foreground shadow-xs hover:brightness-110 hover:shadow-glow',
         destructive: 'bg-destructive text-destructive-foreground hover:bg-destructive/90',
-        outline: 'border border-input bg-background hover:bg-accent hover:text-accent-foreground',
+        // 深色下描边按钮走“透明底 + 亮边”（Linear 的 secondary 就是这样）：
+        // 用 bg-background 会把它变成画布色的洞，在弹窗这类更亮的浮层上尤其明显
+        outline: 'border border-input bg-background hover:bg-accent hover:text-accent-foreground dark:bg-transparent',
         secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
         ghost: 'hover:bg-accent hover:text-accent-foreground',
         link: 'text-primary underline-offset-4 hover:underline',

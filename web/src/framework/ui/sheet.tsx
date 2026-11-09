@@ -14,10 +14,8 @@ const SheetOverlay = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof SheetPrimitive.Overlay>
 >(({ className, ...props }, ref) => (
   <SheetPrimitive.Overlay
-    className={cn(
-      'fixed inset-0 z-50',
-      className,
-    )}
+    // 手机侧栏抽屉同理：没有遮罩时抽屉只是“浮”在内容上，看不出层级
+    className={cn('fixed inset-0 z-50 bg-black/40 dark:bg-black/70', className)}
     {...props}
     ref={ref}
   />
@@ -25,7 +23,7 @@ const SheetOverlay = React.forwardRef<
 SheetOverlay.displayName = SheetPrimitive.Overlay.displayName
 
 const sheetVariants = cva(
-  'fixed z-50 gap-4 bg-background p-6 shadow-lg transition ease-in-out data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:duration-200 data-[state=open]:duration-300',
+  'fixed z-50 gap-4 bg-background p-6 overlay-panel transition ease-in-out data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:duration-200 data-[state=open]:duration-300',
   {
     variants: {
       side: {

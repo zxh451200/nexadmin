@@ -71,7 +71,7 @@ export function ResponsiveDialog({
             {children}
           </div>
           {footer ? (
-            <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-border bg-background px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] [&>button]:w-full">
+            <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-border px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] [&>button]:w-full">
               {footer}
             </div>
           ) : null}
@@ -91,7 +91,7 @@ export function ResponsiveDialog({
           contentClassName,
         )}
       >
-        <DialogHeader className="shrink-0 p-6 pb-4 text-start">
+        <DialogHeader className="shrink-0 border-b border-border p-6 pb-4 text-start">
           <DialogTitle>{title}</DialogTitle>
           {description ? (
             <DialogDescription>{description}</DialogDescription>

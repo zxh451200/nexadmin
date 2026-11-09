@@ -1,21 +1,14 @@
 @utility bg-brand-gradient {
-  /* 品牌渐变：靛蓝为主，尾端带一点青 */
+  /* 品牌渐变：靛蓝为主，尾端带一点青。
+     只用于按钮/logo/进度条/激活竖条这类小面积元素，深色下同样保持满强度——
+     之前深色把渐变压到 19–26% 明度，主按钮变成一坨发灰的藏青（和亮靛蓝激活标签并列时尤其明显）。
+     大面积品牌面板（登录页左栏）走 login-brand / login-page-bg，那里才需要压暗。 */
   background-image: linear-gradient(
     135deg,
     hsl(var(--brand-from)) 0%,
     hsl(var(--primary)) 55%,
     hsl(var(--brand-to)) 170%
   );
-  /* 深色下的品牌面板（登录页左栏等大面积使用）：渐变压暗到与深色背景同一亮度家族，
-     保留靛蓝→青的色相走向，避免亮蓝面板在近黑背景旁刺眼。小面积点缀（边框/光晕）仍用亮色变量。 */
-  .dark & {
-    background-image: linear-gradient(
-      135deg,
-      hsl(243 55% 26%) 0%,
-      hsl(236 48% 19%) 55%,
-      hsl(215 55% 14%) 170%
-    );
-  }
 }
 
 @utility login-brand {
@@ -62,6 +55,23 @@
   background-clip: text;
   -webkit-text-fill-color: transparent;
   color: transparent;
+}
+
+@utility overlay-panel {
+  /* 浮层质感（弹窗 / 下拉 / 气泡 / 抽屉）。
+     深色下纯黑投影几乎看不见，层级只能靠「1px 亮边 + 顶部内高光 + 多层深投影」——
+     这是 GitHub Primer（border.default 比浮层本身更亮）和 Linear（elevation 由发丝亮边承担）的共同做法。
+     边框色只在深色覆盖，亮色继续用 --border。 */
+  box-shadow:
+    0 1px 2px hsl(232 40% 20% / 0.05),
+    0 16px 40px -16px hsl(232 40% 20% / 0.18);
+  .dark & {
+    border-color: hsl(0 0% 100% / 0.1);
+    box-shadow:
+      inset 0 1px 0 0 hsl(0 0% 100% / 0.07),
+      0 2px 6px hsl(0 0% 0% / 0.3),
+      0 20px 48px -16px hsl(0 0% 0% / 0.75);
+  }
 }
 
 @utility card-edge {

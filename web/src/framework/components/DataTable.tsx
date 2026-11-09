@@ -243,7 +243,7 @@ export function DataTable<T>({
               <TableHead
                 className={cn(
                   'text-end',
-                  pinActions && 'sticky inset-e-0 z-20 bg-muted shadow-[inset_1px_0_0_hsl(var(--border))]',
+                  pinActions && 'sticky inset-e-0 z-20 bg-card shadow-[inset_1px_0_0_hsl(var(--border))]',
                 )}
               >
                 {t('common.actions')}

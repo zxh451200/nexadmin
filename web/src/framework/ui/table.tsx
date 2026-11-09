@@ -8,8 +8,10 @@ const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableE
 ))
 Table.displayName = 'Table'
 
+// 表头不带底色：深色下 bg-muted/40 只在卡片上抬 2 个明度点，读起来是“接缝”而不是分区；
+// 浅色下本来就几乎看不见。统一成同一张面，靠底部分隔线与弱化文字区分表头。
 const TableHeader = React.forwardRef<HTMLTableSectionElement, React.HTMLAttributes<HTMLTableSectionElement>>(
-  ({ className, ...props }, ref) => <thead ref={ref} className={cn('bg-muted/40 [&_tr]:border-b', className)} {...props} />,
+  ({ className, ...props }, ref) => <thead ref={ref} className={cn('[&_tr]:border-b', className)} {...props} />,
 )
 TableHeader.displayName = 'TableHeader'
 
