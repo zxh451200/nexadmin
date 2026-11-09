@@ -134,6 +134,12 @@
   animation: page-enter 0.18s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+@utility logo-breathe {
+  /* 页面加载占位：logo 缓慢呼吸。reduced-motion 下全局规则把动画归零，
+     iteration 为 1 且无 fill，结束后回到常态（不透明度 1），不会停在半透明。 */
+  animation: logo-breathe 1.8s ease-in-out infinite;
+}
+
 @layer base {
   * {
     @apply border-border;
@@ -235,6 +241,18 @@
     from {
       opacity: 0;
       transform: translateY(4px);
+    }
+  }
+
+  @keyframes logo-breathe {
+    0%,
+    100% {
+      opacity: 0.45;
+      transform: scale(0.94);
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1);
     }
   }
 }

@@ -9,7 +9,7 @@ import LoginPage from '@/framework/pages/LoginPage'
 import NotFoundPage from '@/framework/pages/NotFoundPage'
 import PlatformOnlyPage from '@/framework/pages/PlatformOnlyPage'
 import PluginInactivePage from '@/framework/pages/PluginInactivePage'
-import { Skeleton } from '@/framework/ui/skeleton'
+import { PageLoading } from '@/framework/components/PageLoading'
 import { useActivePlugins } from '@/framework/modules/plugin/active'
 import { allRoutes, buildMenuTree } from './discover'
 import type { ModuleRoute } from './types'
@@ -19,15 +19,6 @@ const SsoAuthorizePage = lazy(() => import('@/framework/modules/sso/AuthorizePag
 // 第三方登录 / 绑定的授权回调落地页：不要求已登录（登录场景尚无令牌）
 const OAuthCallbackPage = lazy(() => import('@/framework/pages/OAuthCallbackPage'))
 const McpConfirmationPage = lazy(() => import('@/framework/pages/McpConfirmationPage'))
-
-function Fallback() {
-  return (
-    <div className="space-y-4 p-4 md:p-6" role="status" aria-busy="true">
-      <Skeleton className="h-8 w-48" />
-      <Skeleton className="h-64 w-full" />
-    </div>
-  )
-}
 
 function Guarded({ route }: { route: ModuleRoute }) {
   const perms = useAuth((s) => s.perms)
@@ -41,12 +32,12 @@ function Guarded({ route }: { route: ModuleRoute }) {
   // 插件页：先确认插件已启用，再渲染页面本身（否则未启用插件的页面会发出一串必然 404 的请求）。
   // active.data 为 null 表示问不到（mock / 旧后端 / 网络错误），按未知处理，不拦。
   if (route.plugin) {
-    if (active.isPending) return <Fallback />
+    if (active.isPending) return <PageLoading />
     if (active.data && !active.data.includes(route.plugin)) return <PluginInactivePage />
   }
   const Component = route.component
   return (
-    <Suspense fallback={<Fallback />}>
+    <Suspense fallback={<PageLoading />}>
       <Component />
     </Suspense>
   )
@@ -65,7 +56,7 @@ export function AppRoutes() {
       <Route
         path="/login/oauth/:provider"
         element={
-          <Suspense fallback={<Fallback />}>
+          <Suspense fallback={<PageLoading />}>
             <OAuthCallbackPage />
           </Suspense>
         }
@@ -76,7 +67,7 @@ export function AppRoutes() {
         path="/mcp/confirmations/:id"
         element={
           <RequireAuth>
-            <Suspense fallback={<Fallback />}>
+            <Suspense fallback={<PageLoading />}>
               <McpConfirmationPage />
             </Suspense>
           </RequireAuth>
@@ -86,7 +77,7 @@ export function AppRoutes() {
         path="/sso/authorize"
         element={
           <RequireAuth>
-            <Suspense fallback={<Fallback />}>
+            <Suspense fallback={<PageLoading />}>
               <SsoAuthorizePage />
             </Suspense>
           </RequireAuth>

@@ -30,7 +30,7 @@ import {
   DropdownMenuTrigger,
 } from '@/framework/ui/dropdown-menu'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/framework/ui/sheet'
-import { Skeleton } from '@/framework/ui/skeleton'
+import { PageLoading } from '@/framework/components/PageLoading'
 import { AnnouncementPopup } from './AnnouncementPopup'
 import { CommandMenu } from './CommandMenu'
 import { JobIndicator } from './JobIndicator'
@@ -46,13 +46,6 @@ import { useDemoMode } from '@/framework/hooks/use-demo-mode'
 import { useIosInstallHint, usePwaInstall } from '@/framework/pwa/install'
 
 const COLLAPSE_KEY = 'nex-sidebar-collapsed'
-
-const pageFallback = (
-  <div className="space-y-4 p-4 md:p-6">
-    <Skeleton className="h-8 w-48" />
-    <Skeleton className="h-64 w-full" />
-  </div>
-)
 
 function UserMenu() {
   const { t } = useTranslation()
@@ -300,13 +293,13 @@ export function AppLayout() {
           onScroll={(e) => scrollTops.current.set(activeKey, e.currentTarget.scrollTop)}
         >
           {isMobile ? (
-            <Suspense fallback={pageFallback}>{outlet}</Suspense>
+            <Suspense fallback={<PageLoading />}>{outlet}</Suspense>
           ) : (
             // 每个标签一个容器，非当前的用 hidden 隐藏而不卸载，状态（筛选、分页等）得以保留
             pageKeys.map((k) => (
               <div key={`${k}#${refreshes[k] ?? 0}`} className={k === activeKey ? undefined : 'hidden'}>
                 <PageActiveContext.Provider value={k === activeKey}>
-                  <Suspense fallback={pageFallback}>{k === activeKey ? outlet : cache.get(k)}</Suspense>
+                  <Suspense fallback={<PageLoading />}>{k === activeKey ? outlet : cache.get(k)}</Suspense>
                 </PageActiveContext.Provider>
               </div>
             ))
