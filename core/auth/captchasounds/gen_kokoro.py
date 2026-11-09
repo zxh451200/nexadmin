@@ -36,9 +36,9 @@ DIGITS = {
 
 # 音色 sid（sherpa-onnx k2-fsa PR #1942 的顺序：英文音色在前、中文从 3 起）。
 # 由 voice_scan 全量实测选出：zh sid 8 信噪比 165dB、语内嘶声 0%、响度与语速正常
-# （原 zf_001=sid3 的语内底噪比它高约三个数量级）；en sid 1 = af_sol，英文组最干净响度足。
-# 不满意就跑 D:\tmp\voice_scan.py 按数据换 sid，不要加滤波补丁。
-VOICE_SID = {"zh": 8, "en": 1}
+# （原 zf_001=sid3 的语内底噪比它高约三个数量级）；en sid 2（six 不会被读成 sex，
+# 5/6/7/8 用 speed=1.1 时长更利落）。不满意就跑 D:\tmp\voice_scan.py 按数据换 sid。
+VOICE_SID = {"zh": 8, "en": 2}
 
 
 def ensure_model():

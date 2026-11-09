@@ -1,10 +1,11 @@
 # captchasounds
 
-数字音源（`zh|en/0-9.wav`）由 **CosyVoice2-0.5B**（[FunAudioLLM](https://huggingface.co/FunAudioLLM/CosyVoice2-0.5B)，
-**Apache-2.0**）零样本模式本地离线合成；参考音频由 **Kokoro-82M**（**Apache-2.0**）的实测最干净
-音色（zh sid8 / en sid1）合成——许可链全程可随商业产品再分发。**运行时不依赖任何模型**：
-生成脚本与音源再生成方法同在本目录 `gen_cosyvoice.py`（模型经 hf-mirror 拉到
-`~/.cosyvoice-models/`，不进仓库；环境与跑法见脚本头注释）。
+中文数字（`zh/0-9.wav`）由 **CosyVoice2-0.5B**（[FunAudioLLM](https://huggingface.co/FunAudioLLM/CosyVoice2-0.5B)，
+**Apache-2.0**）零样本模式本地离线合成，参考音频由 **Kokoro-82M**（**Apache-2.0**）zh sid8
+合成；英文数字（`en/0-9.wav`）直接由 **Kokoro-82M** en sid2 合成——英文是它的原生语言，
+比零样本克隆更干净。许可链全程可随商业产品再分发，**运行时不依赖任何模型**：
+生成脚本与音源再生成方法同在本目录 `gen_cosyvoice.py` / `gen_kokoro.py`（模型经 hf-mirror
+拉到 `~/.cosyvoice-models/`、`~/.kokoro-models/`，不进仓库；环境与跑法见脚本头注释）。
 
 格式：24 kHz、16-bit、单声道 PCM（44 字节标准 WAV 头），与
 `core/auth/captcha_audio.go` 的 `audioSampleRate` 等常量一一对应，改一边要同步另一边。
@@ -17,6 +18,10 @@
 - 5 从「零，一，…，九」整串合成中切出（单字「五」曾被读成「如」）；
 - 其余为单字合成；全表按声调分组做 PSOLA 音高归一（一声≈224、三声≈175、四声≈250 Hz），
   再统一响度到 -15 dBFS——否则同一串里各数字的基频能差上百赫兹，听起来像几个人轮流念。
+
+当前 en 成品（2026-11-09）：Kokoro sid2；5/6/7/8 用 speed=1.1（seven 从 1.01s 降到 0.63s，
+连续两个 7 不再拖沓）；响度统一 -15 dBFS。注意部分 Kokoro 英文音色会把 six 读成 sex，
+换音色后必须逐字 ASR 复听。
 
 音源选型实测结论（换音源前先看，别走回头路）：
 - Kokoro 直出：底噪可干净（音色由 voice_scan 全量实测选出），但数字韵律差；
