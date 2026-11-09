@@ -69,7 +69,8 @@
       "acs": "ACS",
       "metadata": "SP 元数据",
       "slo": "SP 登出端点",
-      "lastSync": "元数据最后同步"
+      "lastSync": "元数据最后同步",
+      "requireEncryptedAssertion": "要求加密断言"
     },
     "hints": {
       "enabled": "只有已启用的身份源会出现在登录页。",
@@ -95,7 +96,8 @@
       "authnContextCustom": "逗号分隔的类 URI（urn: 或 http(s)://），按 exact 精确匹配，最多 10 个。",
       "requireAuthnContext": "断言里的 AuthnContextClassRef 必须命中上面选择的类，否则拒绝登录。",
       "idpEntityId": "打包元数据里包含多个 IdP 时，选择本系统要信任的那一个；单实体导入会自动选中。",
-      "syncProfile": "已绑定账号每次登录会按断言回写昵称 / 邮箱 / 手机号；空值不覆盖，用户名、状态与角色保持本地。"
+      "syncProfile": "已绑定账号每次登录会按断言回写昵称 / 邮箱 / 手机号；空值不覆盖，用户名、状态与角色保持本地。",
+      "requireEncryptedAssertion": "IdP 必须用 SP 证书加密断言；明文断言直接拒绝登录。开启前先确认 IdP 已配置加密断言。"
     },
     "preview": {
       "title": "元数据预览",
@@ -138,10 +140,15 @@
       "title": "SP 签名证书",
       "download": "下载证书",
       "expires": "到期时间：{{date}}",
-      "rotate": "重新生成证书",
-      "rotateConfirm": "重新生成 SP 证书？IdP 侧必须同步更新证书，否则已配置的登录会立即失败。",
-      "rotateHint": "重新生成后请立即把新证书或 SP 元数据更新到 IdP；旧证书立即失效。",
-      "rotated": "SP 证书已重新生成，请更新 IdP 侧证书"
+      "rotateHint": "两段式轮换：先发布新证书并把 SP 元数据或证书更新到 IdP，确认后再切换；切换后旧证书保留 7 天。",
+      "publish": "发布新证书",
+      "published": "已发布新证书，请先把新证书或 SP 元数据导入 IdP，再切换到新证书",
+      "promote": "切换到新证书",
+      "promoteConfirm": "切换到已发布的新证书？切换后签名改用新证书，旧证书保留 7 天用于解密，之后失效。",
+      "promoted": "已切换到新证书，旧证书保留 7 天",
+      "nextTitle": "待切换的新证书",
+      "nextHint": "已发布但尚未用于签名；请先到 IdP 更新信任。新证书到期时间：{{date}}",
+      "prevHint": "上一代证书保留至 {{date}}：仅用于解密 IdP 仍按旧证书加密的断言，元数据期间同时列出。"
     },
     "test": {
       "title": "配置自检",

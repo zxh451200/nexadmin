@@ -122,6 +122,7 @@ const okta: SamlSource = {
   allowIdpInitiated: true,
   signAuthnRequest: false,
   nameIdFormat: '',
+  requireEncryptedAssertion: false,
   requireSignedResponseForCBC: false,
   rejectUnknownConditions: false,
   forceAuthn: false,
@@ -240,6 +241,12 @@ YW1sLXNwMB4XDTI2MDEwMTAwMDAwMFoXDTM2MDEwMTAwMDAwMFowgY8xCzAJBgNV
 -----END CERTIFICATE-----
 `
 
+const CERT_NEXT = `-----BEGIN CERTIFICATE-----
+MIIBszCCAVmgAwIBAgIUeE4Q1xwZ3J2d0u0UxW1w7qKkKnMwCgYIKoZIzj0EAwIw
+TkVYVC1DRVJUSUZJQ0FURS1NT0NL
+-----END CERTIFICATE-----
+`
+
 defineMock([
   { method: 'GET', url: '/plugins/saml/sources', handler: () => sources },
   {
@@ -296,10 +303,19 @@ defineMock([
     method: 'POST',
     url: '/plugins/saml/sources/:id/rotate-sp-cert',
     handler: ({ params }) => {
+      find(params.id)
+      // 两段式轮换第一步：只发布，不改变当前签名证书。
+      return { cert: CERT, notAfter: inDays(3600), nextCert: CERT_NEXT, nextNotAfter: inDays(3650) }
+    },
+  },
+  {
+    method: 'POST',
+    url: '/plugins/saml/sources/:id/promote-sp-cert',
+    handler: ({ params }) => {
       const notAfter = inDays(3650)
       const row = { ...find(params.id), sp: { ...find(params.id).sp, certNotAfter: notAfter } }
       sources = sources.map((s) => (s.id === row.id ? row : s))
-      return { cert: CERT, notAfter }
+      return { cert: CERT_NEXT, notAfter, prevCert: CERT, prevNotAfter: inDays(3600), prevUntil: inDays(7) }
     },
   },
   {

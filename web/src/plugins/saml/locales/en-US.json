@@ -69,7 +69,8 @@
       "acs": "ACS",
       "metadata": "SP metadata",
       "slo": "SP logout endpoint",
-      "lastSync": "Metadata last synced"
+      "lastSync": "Metadata last synced",
+      "requireEncryptedAssertion": "Require encrypted assertions"
     },
     "hints": {
       "enabled": "Only enabled sources appear on the sign-in page.",
@@ -95,7 +96,8 @@
       "authnContextCustom": "Comma-separated class URIs (urn: or http(s)://), matched exactly, at most 10.",
       "requireAuthnContext": "The assertion's AuthnContextClassRef must match one of the selected classes, or sign-in is rejected.",
       "idpEntityId": "When the metadata bundles several IdPs, pick the one this system should trust; a single entity is selected automatically.",
-      "syncProfile": "Bound accounts take nickname / email / phone from the assertion on every login; empty values never overwrite, and username, status and roles stay local."
+      "syncProfile": "Bound accounts take nickname / email / phone from the assertion on every login; empty values never overwrite, and username, status and roles stay local.",
+      "requireEncryptedAssertion": "The IdP must encrypt assertions with the SP certificate; plaintext assertions are rejected. Make sure the IdP has encryption enabled first."
     },
     "preview": {
       "title": "Metadata preview",
@@ -138,10 +140,15 @@
       "title": "SP signing certificate",
       "download": "Download certificate",
       "expires": "Expires: {{date}}",
-      "rotate": "Rotate certificate",
-      "rotateConfirm": "Rotate the SP certificate? The IdP must be updated at the same time, or configured sign-ins fail immediately.",
-      "rotateHint": "After rotating, update the new certificate or SP metadata at the IdP immediately; the old one stops working.",
-      "rotated": "SP certificate rotated; update the IdP side now"
+      "rotateHint": "Two-step rollover: publish the new certificate, update the IdP with it (or with the SP metadata), then switch. The old one stays for 7 days.",
+      "publish": "Publish new certificate",
+      "published": "New certificate published. Import it (or the SP metadata) at the IdP, then switch.",
+      "promote": "Switch to new certificate",
+      "promoteConfirm": "Switch to the published certificate? Signing moves to the new one; the old certificate stays for decryption for 7 days.",
+      "promoted": "Switched to the new certificate; the old one remains for 7 days",
+      "nextTitle": "New certificate (not yet active)",
+      "nextHint": "Published but not used for signing yet. Update trust at the IdP first. Expires: {{date}}",
+      "prevHint": "Previous certificate kept until {{date}}: decrypt-only, and listed in the metadata during that window."
     },
     "test": {
       "title": "Configuration self-test",

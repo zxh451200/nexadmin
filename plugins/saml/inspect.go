@@ -1,6 +1,7 @@
 package saml
 
 import (
+	"bytes"
 	"context"
 	"crypto/x509"
 	"encoding/base64"
@@ -242,29 +243,26 @@ func validEndpoint(loc string) bool {
 
 // spCertNotAfter 读取 SP 证书的到期时间。
 func spCertNotAfter(certPEM string) (time.Time, error) {
-	block, _ := pem.Decode([]byte(certPEM))
-	if block == nil {
-		return time.Time{}, errors.New("saml: SP 证书格式错误")
-	}
-	cert, err := x509.ParseCertificate(block.Bytes)
+	cert, err := parseSPCertPEM(certPEM)
 	if err != nil {
 		return time.Time{}, err
 	}
 	return cert.NotAfter, nil
 }
 
-// ensureSigningKeyDescriptor 保证 SP 元数据里有一张标记为 signing 的证书。
-// crewjam 只在 SignatureMethod 非空（即开启了 AuthnRequest 签名）时才输出 use="signing"，
-// 但 LogoutRequest / LogoutResponse 始终用 SP 私钥签名；不补这一条时，
-// 严格按用途取证书的 IdP 无法验证 SLO 消息，登出会静默失败。
+// ensureSigningKeyDescriptor 保证元数据里列出某张签名证书（轮换期间会调用多次：
+// 当前 / 已发布未切换 / 上一代兜底）。按证书内容去重，而不是「已有任意 signing 就跳过」。
 func ensureSigningKeyDescriptor(md *saml.EntityDescriptor, cert *x509.Certificate) {
 	if md == nil || cert == nil || len(md.SPSSODescriptors) == 0 {
 		return
 	}
 	d := &md.SPSSODescriptors[0]
+	data := base64.StdEncoding.EncodeToString(cert.Raw)
 	for _, kd := range d.KeyDescriptors {
-		if kd.Use == "signing" {
-			return
+		for _, c := range kd.KeyInfo.X509Data.X509Certificates {
+			if strings.Join(strings.Fields(c.Data), "") == data {
+				return
+			}
 		}
 	}
 	d.KeyDescriptors = append(d.KeyDescriptors, saml.KeyDescriptor{
@@ -272,11 +270,28 @@ func ensureSigningKeyDescriptor(md *saml.EntityDescriptor, cert *x509.Certificat
 		KeyInfo: saml.KeyInfo{
 			X509Data: saml.X509Data{
 				X509Certificates: []saml.X509Certificate{{
-					Data: base64.StdEncoding.EncodeToString(cert.Raw),
+					Data: data,
 				}},
 			},
 		},
 	})
+}
+
+// hasEncryptedAssertion 检查原始 SAMLResponse 里是否有 saml:EncryptedAssertion：
+// 开了「要求加密断言」的源必须在库解密前先拒绝明文断言（库本身两种都接受）。
+func hasEncryptedAssertion(raw []byte) bool {
+	dec := xml.NewDecoder(bytes.NewReader(raw))
+	for {
+		tok, err := dec.Token()
+		if err != nil {
+			return false
+		}
+		if se, ok := tok.(xml.StartElement); ok &&
+			se.Name.Local == "EncryptedAssertion" &&
+			se.Name.Space == "urn:oasis:names:tc:SAML:2.0:assertion" {
+			return true
+		}
+	}
 }
 
 func spInfo(m *Source, base string) SPInfo {

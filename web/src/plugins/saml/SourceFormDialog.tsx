@@ -78,6 +78,7 @@ function buildSchema(t: (k: string) => string) {
       allowIdpInitiated: z.boolean(),
       signAuthnRequest: z.boolean(),
       nameIdFormat: z.enum(['', 'persistent', 'transient', 'emailAddress', 'unspecified', 'entity']),
+      requireEncryptedAssertion: z.boolean(),
       forceAuthn: z.boolean(),
       requireSignedResponseForCBC: z.boolean(),
       rejectUnknownConditions: z.boolean(),
@@ -145,6 +146,7 @@ const empty: FormValues = {
   allowIdpInitiated: false,
   signAuthnRequest: false,
   nameIdFormat: '',
+  requireEncryptedAssertion: false,
   forceAuthn: false,
   requireSignedResponseForCBC: false,
   rejectUnknownConditions: false,
@@ -175,6 +177,7 @@ function toValues(s?: SamlSource | null): FormValues {
     allowIdpInitiated: s.allowIdpInitiated,
     signAuthnRequest: s.signAuthnRequest,
     nameIdFormat: (s.nameIdFormat ?? '') as FormValues['nameIdFormat'],
+    requireEncryptedAssertion: s.requireEncryptedAssertion ?? false,
     forceAuthn: s.forceAuthn ?? false,
     requireSignedResponseForCBC: s.requireSignedResponseForCBC ?? false,
     rejectUnknownConditions: s.rejectUnknownConditions ?? false,
@@ -637,6 +640,13 @@ export default function SourceFormDialog({ open, onOpenChange, editing }: Props)
                       name="signAuthnRequest"
                       label={p('signAuthnRequest')}
                       description={h('signAuthnRequest')}
+                      bare
+                    />
+                    <SwitchField
+                      control={c}
+                      name="requireEncryptedAssertion"
+                      label={p('requireEncryptedAssertion')}
+                      description={h('requireEncryptedAssertion')}
                       bare
                     />
                     <FormField

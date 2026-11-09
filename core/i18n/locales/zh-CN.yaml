@@ -996,3 +996,4 @@ saml:
     err_response: 无法验证 IdP 返回的响应
     err_nameid: IdP 返回的断言缺少 NameID
     err_group: 当前账号不在允许登录的组内
+    err_encrypted: 该身份源要求 IdP 加密断言，但响应里没有加密断言

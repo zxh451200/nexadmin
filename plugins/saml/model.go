@@ -29,6 +29,15 @@ type Source struct {
 	MetadataRefreshedAt *time.Time `gorm:"column:metadata_refreshed_at"`
 	SPCert              string     `gorm:"column:sp_cert;type:text"`
 	SPKeyEnc            string     `gorm:"column:sp_key_enc;type:text"`
+	// 两段式轮换：next 已发布但尚未启用（元数据同时列出，签发仍用 current）；
+	// 切换后旧证书落到 prev，保留一段时间用于解密 IdP 仍按旧证书加密的断言。
+	NextSPCert      string     `gorm:"column:next_sp_cert;type:text"`
+	NextSPKeyEnc    string     `gorm:"column:next_sp_key_enc;type:text"`
+	PrevSPCert      string     `gorm:"column:prev_sp_cert;type:text"`
+	PrevSPKeyEnc    string     `gorm:"column:prev_sp_key_enc;type:text"`
+	PrevSPExpiresAt *time.Time `gorm:"column:prev_sp_expires_at"`
+	// RequireEncryptedAssertion 要求 IdP 必须用 SP 证书加密断言，明文断言直接拒绝。
+	RequireEncryptedAssertion bool `gorm:"column:require_encrypted_assertion;not null;default:false"`
 
 	AttrUsername string `gorm:"column:attr_username;size:255;not null;default:''"`
 	AttrEmail    string `gorm:"column:attr_email;size:255;not null;default:''"`

@@ -83,6 +83,8 @@ type SourceForm struct {
 	AllowIDPInit   bool               `json:"allowIdpInitiated"`
 	SignRequests   bool               `json:"signAuthnRequest"`
 	NameIDFormat   string             `json:"nameIdFormat"`
+	// RequireEncrypted 要求断言必须加密（明文断言拒绝登录）。
+	RequireEncrypted bool `json:"requireEncryptedAssertion"`
 
 	RequireSignedCBC        bool   `json:"requireSignedResponseForCBC"`
 	RejectUnknownConditions bool   `json:"rejectUnknownConditions"`
@@ -127,7 +129,8 @@ func (s *Service) Create(ctx context.Context, f SourceForm) (*Source, error) {
 		AutoCreate: f.AutoCreate, MatchExisting: f.MatchExisting, DefaultRole: f.DefaultRole,
 		GroupRoleMappings: f.GroupMappings, RequireMappedGroup: f.RequireMapped, SyncRolesOnLogin: f.SyncRoles,
 		AllowIDPInitiated: f.AllowIDPInit, SignAuthnRequest: f.SignRequests, NameIDFormat: f.NameIDFormat,
-		RequireSignedCBC: f.RequireSignedCBC, RejectUnknownConditions: f.RejectUnknownConditions,
+		RequireEncryptedAssertion: f.RequireEncrypted,
+		RequireSignedCBC:          f.RequireSignedCBC, RejectUnknownConditions: f.RejectUnknownConditions,
 		ForceAuthn: f.ForceAuthn, AuthnContextClassRef: f.AuthnContextClassRef, RequireAuthnContext: f.RequireAuthnContext,
 	}
 	if err := s.db.WithContext(ctx).Create(&m).Error; err != nil {
@@ -163,6 +166,7 @@ func (s *Service) Update(ctx context.Context, id string, f SourceForm) (*Source,
 	m.AllowIDPInitiated = f.AllowIDPInit
 	m.SignAuthnRequest = f.SignRequests
 	m.NameIDFormat = f.NameIDFormat
+	m.RequireEncryptedAssertion = f.RequireEncrypted
 	m.RequireSignedCBC = f.RequireSignedCBC
 	m.RejectUnknownConditions = f.RejectUnknownConditions
 	m.ForceAuthn = f.ForceAuthn
@@ -179,21 +183,60 @@ func (s *Service) Update(ctx context.Context, id string, f SourceForm) (*Source,
 	return m, nil
 }
 
-// RotateSPKey 重新生成 SP 密钥对；IdP 侧必须同步更新证书，否则登录会被拒绝。
-func (s *Service) RotateSPKey(ctx context.Context, id string) (*Source, error) {
+// spPrevGrace 是切换后旧证书继续出现在元数据、并继续用于解密断言的时长。
+const spPrevGrace = 7 * 24 * time.Hour
+
+// StageSPKey 发布下一张 SP 证书（两段式轮换第一步）：元数据同时列出当前与下一张，
+// 签发仍用当前证书，给 IdP 留出更新信任的时间；确认后再 Promote。
+func (s *Service) StageSPKey(ctx context.Context, id string) (*Source, error) {
 	m, err := s.Get(ctx, id)
 	if err != nil {
 		return nil, err
+	}
+	if strings.TrimSpace(m.NextSPCert) != "" {
+		return nil, errors.New("saml: 已经发布过新证书，请先切换到新证书")
 	}
 	certPEM, keyEnc, err := newSPKeyPair()
 	if err != nil {
 		return nil, err
 	}
-	if err := s.db.WithContext(ctx).Model(&Source{}).Where("id = ?", id).
-		Updates(map[string]any{"sp_cert": certPEM, "sp_key_enc": keyEnc}).Error; err != nil {
+	updates := map[string]any{"next_sp_cert": certPEM, "next_sp_key_enc": keyEnc}
+	// 过期的上一代证书顺手清掉，避免轮换多次后一直带着旧私钥。
+	if m.PrevSPExpiresAt != nil && time.Now().After(*m.PrevSPExpiresAt) {
+		updates["prev_sp_cert"], updates["prev_sp_key_enc"], updates["prev_sp_expires_at"] = "", "", nil
+	}
+	if err := s.db.WithContext(ctx).Model(&Source{}).Where("id = ?", id).Updates(updates).Error; err != nil {
 		return nil, err
 	}
-	m.SPCert, m.SPKeyEnc = certPEM, keyEnc
+	m.NextSPCert, m.NextSPKeyEnc = certPEM, keyEnc
+	return m, nil
+}
+
+// PromoteSPKey 切换到已发布的证书（第二步）：新证书变成签名证书，旧证书保留为解密兜底。
+func (s *Service) PromoteSPKey(ctx context.Context, id string) (*Source, error) {
+	m, err := s.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(m.NextSPCert) == "" || strings.TrimSpace(m.NextSPKeyEnc) == "" {
+		return nil, errors.New("saml: 还没有已发布的新证书，请先发布")
+	}
+	until := time.Now().Add(spPrevGrace)
+	updates := map[string]any{
+		"sp_cert":            m.NextSPCert,
+		"sp_key_enc":         m.NextSPKeyEnc,
+		"next_sp_cert":       "",
+		"next_sp_key_enc":    "",
+		"prev_sp_cert":       m.SPCert,
+		"prev_sp_key_enc":    m.SPKeyEnc,
+		"prev_sp_expires_at": until,
+	}
+	if err := s.db.WithContext(ctx).Model(&Source{}).Where("id = ?", id).Updates(updates).Error; err != nil {
+		return nil, err
+	}
+	m.PrevSPCert, m.PrevSPKeyEnc, m.PrevSPExpiresAt = m.SPCert, m.SPKeyEnc, &until
+	m.SPCert, m.SPKeyEnc = m.NextSPCert, m.NextSPKeyEnc
+	m.NextSPCert, m.NextSPKeyEnc = "", ""
 	return m, nil
 }
 
@@ -523,6 +566,73 @@ func newSPKeyPair() (certPEM, keyEnc string, err error) {
 	return string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})), keyEnc, nil
 }
 
+// parseSPPrivateKey 解密并解析 SP 私钥（PKCS#8 PEM）。
+func parseSPPrivateKey(keyEnc string) (*rsa.PrivateKey, error) {
+	plain, err := decryptSecret(keyEnc)
+	if err != nil {
+		return nil, err
+	}
+	block, _ := pem.Decode([]byte(plain))
+	if block == nil {
+		return nil, errors.New("SP 私钥格式错误")
+	}
+	parsed, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+	if err != nil {
+		return nil, err
+	}
+	key, ok := parsed.(*rsa.PrivateKey)
+	if !ok {
+		return nil, errors.New("SP 私钥类型错误")
+	}
+	return key, nil
+}
+
+func parseSPCertPEM(certPEM string) (*x509.Certificate, error) {
+	block, _ := pem.Decode([]byte(certPEM))
+	if block == nil {
+		return nil, errors.New("saml: SP 证书格式错误")
+	}
+	return x509.ParseCertificate(block.Bytes)
+}
+
+// decryptionKeys 返回当前、已发布未切换、上一代（未过期）三把私钥：
+// 轮换期间 IdP 可能按其中任意一张证书加密断言。解析失败的额外密钥跳过，不阻断登录。
+func (m *Source) decryptionKeys() []*rsa.PrivateKey {
+	var out []*rsa.PrivateKey
+	add := func(enc string) {
+		if strings.TrimSpace(enc) == "" {
+			return
+		}
+		if k, err := parseSPPrivateKey(enc); err == nil {
+			out = append(out, k)
+		}
+	}
+	add(m.NextSPKeyEnc)
+	if m.PrevSPExpiresAt == nil || time.Now().Before(*m.PrevSPExpiresAt) {
+		add(m.PrevSPKeyEnc)
+	}
+	return out
+}
+
+// publishedSPCerts 是元数据里要列出的签名证书：当前 + 已发布未切换 + 上一代（未过期）。
+func publishedSPCerts(m *Source) []*x509.Certificate {
+	var out []*x509.Certificate
+	add := func(certPEM string) {
+		if strings.TrimSpace(certPEM) == "" {
+			return
+		}
+		if c, err := parseSPCertPEM(certPEM); err == nil {
+			out = append(out, c)
+		}
+	}
+	add(m.SPCert)
+	add(m.NextSPCert)
+	if m.PrevSPExpiresAt == nil || time.Now().Before(*m.PrevSPExpiresAt) {
+		add(m.PrevSPCert)
+	}
+	return out
+}
+
 // 未初始化主密钥时退化为明文（与其它插件的测试/本地装配约定一致）。
 func encryptSecret(v string) (string, error) {
 	if secret.Default() == nil {
@@ -554,27 +664,11 @@ func (s *Service) provider(m *Source, base string) (*saml.ServiceProvider, error
 	if selected == nil {
 		return nil, errors.New("saml: 元数据包含多个 IdP，请先选择 Entity ID")
 	}
-	plain, err := decryptSecret(m.SPKeyEnc)
+	key, err := parseSPPrivateKey(m.SPKeyEnc)
 	if err != nil {
 		return nil, fmt.Errorf("saml: 读取 SP 私钥失败: %w", err)
 	}
-	block, _ := pem.Decode([]byte(plain))
-	if block == nil {
-		return nil, errors.New("saml: SP 私钥格式错误")
-	}
-	parsed, err := x509.ParsePKCS8PrivateKey(block.Bytes)
-	if err != nil {
-		return nil, err
-	}
-	key, ok := parsed.(*rsa.PrivateKey)
-	if !ok {
-		return nil, errors.New("saml: SP 私钥类型错误")
-	}
-	certBlock, _ := pem.Decode([]byte(m.SPCert))
-	if certBlock == nil {
-		return nil, errors.New("saml: SP 证书格式错误")
-	}
-	cert, err := x509.ParseCertificate(certBlock.Bytes)
+	cert, err := parseSPCertPEM(m.SPCert)
 	if err != nil {
 		return nil, err
 	}
@@ -592,7 +686,9 @@ func (s *Service) provider(m *Source, base string) (*saml.ServiceProvider, error
 		LogoutSignatureMethod: dsig.RSASHA256SignatureMethod,
 		Key:                   key,
 		Certificate:           cert,
-		IDPMetadata:           selected,
+		// 轮换期间 IdP 可能仍按下一张或上一张证书加密断言，三把私钥都参与解密。
+		DecryptionKeys: m.decryptionKeys(),
+		IDPMetadata:    selected,
 		// 每个源单独的防重放命名空间，避免不同 IdP 的断言 ID 相撞。
 		ReplayCache:       replayCache{c: s.cache, scope: id},
 		AllowIDPInitiated: m.AllowIDPInitiated,

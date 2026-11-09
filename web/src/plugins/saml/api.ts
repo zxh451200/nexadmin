@@ -63,6 +63,7 @@ export interface SamlSource {
   allowIdpInitiated: boolean
   signAuthnRequest: boolean
   nameIdFormat: string
+  requireEncryptedAssertion: boolean
   requireSignedResponseForCBC: boolean
   rejectUnknownConditions: boolean
   forceAuthn: boolean
@@ -95,6 +96,7 @@ export interface SourceForm {
   allowIdpInitiated: boolean
   signAuthnRequest: boolean
   nameIdFormat: string
+  requireEncryptedAssertion: boolean
   requireSignedResponseForCBC: boolean
   rejectUnknownConditions: boolean
   forceAuthn: boolean
@@ -122,6 +124,13 @@ export interface MetadataPreview {
 export interface SPCert {
   cert: string
   notAfter: string
+  /** 已发布、尚未切换的新证书（两段式轮换第一步） */
+  nextCert?: string
+  nextNotAfter?: string
+  /** 切换后保留的上一代证书（仅用于解密，到期自动不再公布） */
+  prevCert?: string
+  prevNotAfter?: string
+  prevUntil?: string
 }
 
 const BASE = '/plugins/saml'
@@ -176,6 +185,11 @@ export function getSPCert(id: string) {
 
 export function rotateSPCert(id: string) {
   return api.post<SPCert>(`${BASE}/sources/${id}/rotate-sp-cert`, {}, { silent: true })
+}
+
+/** 切换到已发布的新证书（两段式轮换第二步），旧证书保留 7 天做解密兜底。 */
+export function promoteSPCert(id: string) {
+  return api.post<SPCert>(`${BASE}/sources/${id}/promote-sp-cert`, {}, { silent: true })
 }
 
 export function refreshMetadata(id: string) {

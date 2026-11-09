@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"encoding/xml"
@@ -79,7 +80,10 @@ func (s *Service) metadata(c *gin.Context) {
 		return
 	}
 	md := sp.Metadata()
-	ensureSigningKeyDescriptor(md, sp.Certificate)
+	// 轮换期间元数据同时列出当前 / 待切换 / 上一代签名证书，IdP 任意一份都算可信。
+	for _, cert := range publishedSPCerts(m) {
+		ensureSigningKeyDescriptor(md, cert)
+	}
 	raw, err := xml.MarshalIndent(md, "", "  ")
 	if err != nil {
 		response.Fail(c, err)
@@ -151,6 +155,15 @@ func (s *Service) acs(c *gin.Context) {
 	if err := c.Request.ParseForm(); err != nil {
 		s.failACS(c, response.BadRequest("saml.acs.err_response"), "SAML 回调表单解析失败")
 		return
+	}
+	if m.RequireEncryptedAssertion {
+		raw := c.Request.PostForm.Get("SAMLResponse")
+		data, derr := base64.StdEncoding.DecodeString(raw)
+		if raw == "" || derr != nil || !hasEncryptedAssertion(data) {
+			// 库对明文与加密断言都接受，要求加密时必须先看原始响应再交给库。
+			s.failACS(c, response.BadRequest("saml.acs.err_encrypted"), "")
+			return
+		}
 	}
 	// SP-initiated：按 RelayState 找回本次 AuthnRequest ID，库才会接受 InResponseTo。
 	// 找不到（含 IdP-initiated）时传空，带 InResponseTo 的响应会被拒绝（fail closed）。
@@ -683,37 +696,91 @@ func (s *Service) refreshMetadata(c *gin.Context) {
 	response.OK(c, gin.H{"changed": changed, "source": inspectSource(fresh, baseURL(c))})
 }
 
-// rotateSPCert 重新生成 SP 密钥对；IdP 侧必须同步更新证书。
+// SPCertInfo 是证书弹窗需要的状态：当前证书 + 已发布待切换 + 上一代兜底（含保留截止）。
+type SPCertInfo struct {
+	Cert         string `json:"cert"`
+	NotAfter     string `json:"notAfter"`
+	NextCert     string `json:"nextCert,omitempty"`
+	NextNotAfter string `json:"nextNotAfter,omitempty"`
+	PrevCert     string `json:"prevCert,omitempty"`
+	PrevNotAfter string `json:"prevNotAfter,omitempty"`
+	PrevUntil    string `json:"prevUntil,omitempty"`
+}
+
+func certInfo(m *Source) (SPCertInfo, error) {
+	notAfter, err := spCertNotAfter(m.SPCert)
+	if err != nil {
+		return SPCertInfo{}, err
+	}
+	out := SPCertInfo{Cert: m.SPCert, NotAfter: notAfter.UTC().Format(time.RFC3339)}
+	if strings.TrimSpace(m.NextSPCert) != "" {
+		out.NextCert = m.NextSPCert
+		if t, err := spCertNotAfter(m.NextSPCert); err == nil {
+			out.NextNotAfter = t.UTC().Format(time.RFC3339)
+		}
+	}
+	if strings.TrimSpace(m.PrevSPCert) != "" && (m.PrevSPExpiresAt == nil || time.Now().Before(*m.PrevSPExpiresAt)) {
+		out.PrevCert = m.PrevSPCert
+		if t, err := spCertNotAfter(m.PrevSPCert); err == nil {
+			out.PrevNotAfter = t.UTC().Format(time.RFC3339)
+		}
+		if m.PrevSPExpiresAt != nil {
+			out.PrevUntil = m.PrevSPExpiresAt.UTC().Format(time.RFC3339)
+		}
+	}
+	return out, nil
+}
+
+// rotateSPCert 发布下一张 SP 证书（轮换第一步）；IdP 更新信任后再 promote。
 func (s *Service) rotateSPCert(c *gin.Context) {
 	m, ok := s.sourceOrFail(c)
 	if !ok {
 		return
 	}
-	fresh, err := s.RotateSPKey(c.Request.Context(), m.ID.String())
+	fresh, err := s.StageSPKey(c.Request.Context(), m.ID.String())
 	if err != nil {
 		response.Fail(c, response.BadRequest("error.bad_request").WithMsg(err.Error()))
 		return
 	}
-	notAfter, err := spCertNotAfter(fresh.SPCert)
+	info, err := certInfo(fresh)
 	if err != nil {
 		response.Fail(c, response.BadRequest("error.bad_request").WithMsg("SP 证书不可用: "+err.Error()))
 		return
 	}
-	response.OK(c, gin.H{"cert": fresh.SPCert, "notAfter": notAfter.UTC().Format(time.RFC3339)})
+	response.OK(c, info)
 }
 
-// spCert 返回 SP 证书 PEM（IdP 需要时复制或下载）。
+// promoteSPCert 切换到已发布的新证书（轮换第二步），旧证书保留 7 天用于解密兜底。
+func (s *Service) promoteSPCert(c *gin.Context) {
+	m, ok := s.sourceOrFail(c)
+	if !ok {
+		return
+	}
+	fresh, err := s.PromoteSPKey(c.Request.Context(), m.ID.String())
+	if err != nil {
+		response.Fail(c, response.BadRequest("error.bad_request").WithMsg(err.Error()))
+		return
+	}
+	info, err := certInfo(fresh)
+	if err != nil {
+		response.Fail(c, response.BadRequest("error.bad_request").WithMsg("SP 证书不可用: "+err.Error()))
+		return
+	}
+	response.OK(c, info)
+}
+
+// spCert 返回 SP 证书状态（IdP 需要时复制或下载当前证书）。
 func (s *Service) spCert(c *gin.Context) {
 	m, ok := s.sourceOrFail(c)
 	if !ok {
 		return
 	}
-	notAfter, err := spCertNotAfter(m.SPCert)
+	info, err := certInfo(m)
 	if err != nil {
 		response.Fail(c, response.BadRequest("error.bad_request").WithMsg("SP 证书不可用: "+err.Error()))
 		return
 	}
-	response.OK(c, gin.H{"cert": m.SPCert, "notAfter": notAfter.UTC().Format(time.RFC3339)})
+	response.OK(c, info)
 }
 
 // inspectMetadata 解析/拉取 IdP 元数据并返回摘要，供表单「拉取并预览」使用。

@@ -996,3 +996,4 @@ saml:
     err_response: The response from the IdP could not be validated
     err_nameid: The IdP assertion has no NameID
     err_group: This account is not in an allowed group
+    err_encrypted: This identity source requires encrypted assertions, but the response contains none

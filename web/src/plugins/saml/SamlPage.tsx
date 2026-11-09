@@ -29,6 +29,7 @@ import { Card } from '@/framework/ui/card'
 import { Switch } from '@/framework/ui/switch'
 import {
   getSPCert,
+  promoteSPCert,
   refreshMetadata,
   rotateSPCert,
   useDeleteSource,
@@ -143,6 +144,7 @@ function CertDialog({ source, onClose }: { source: SamlSource | null; onClose: (
   const [err, setErr] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [rotating, setRotating] = useState(false)
+  const [promoting, setPromoting] = useState(false)
 
   useEffect(() => {
     if (!source) return
@@ -157,16 +159,32 @@ function CertDialog({ source, onClose }: { source: SamlSource | null; onClose: (
 
   const rotate = async () => {
     if (!source) return
-    if (!(await confirm({ destructive: true, description: t('plugin_saml.cert.rotateConfirm', { name: source.name }) }))) return
+    if (!(await confirm({ description: t('plugin_saml.cert.rotateConfirm', { name: source.name }) }))) return
     setRotating(true)
     try {
       setData(await rotateSPCert(source.id))
-      toast.success(t('plugin_saml.cert.rotated'))
+      toast.success(t('plugin_saml.cert.published'))
       void qc.invalidateQueries({ queryKey: ['plugin_saml'] })
     } catch (e) {
       toast.error((e as Error).message)
     } finally {
       setRotating(false)
+    }
+  }
+
+  // 两段式轮换第二步：确认 IdP 已导入新证书后再切换签名证书，旧证书自动保留 7 天做解密兜底。
+  const promote = async () => {
+    if (!source) return
+    if (!(await confirm({ description: t('plugin_saml.cert.promoteConfirm', { name: source.name }) }))) return
+    setPromoting(true)
+    try {
+      setData(await promoteSPCert(source.id))
+      toast.success(t('plugin_saml.cert.promoted'))
+      void qc.invalidateQueries({ queryKey: ['plugin_saml'] })
+    } catch (e) {
+      toast.error((e as Error).message)
+    } finally {
+      setPromoting(false)
     }
   }
 
@@ -192,10 +210,16 @@ function CertDialog({ source, onClose }: { source: SamlSource | null; onClose: (
             {t('common.close')}
           </Button>
           <Can perm="saml:edit">
-            <Button type="button" variant="outline" onClick={() => void rotate()} disabled={rotating || !data}>
+            <Button type="button" variant="outline" onClick={() => void rotate()} disabled={rotating || !data || !!data.nextCert}>
               {rotating ? <Loader2 className="animate-spin" aria-hidden="true" /> : <RefreshCw aria-hidden="true" />}
-              {t('plugin_saml.cert.rotate')}
+              {t('plugin_saml.cert.publish')}
             </Button>
+            {data?.nextCert ? (
+              <Button type="button" onClick={() => void promote()} disabled={promoting}>
+                {promoting ? <Loader2 className="animate-spin" aria-hidden="true" /> : <ShieldCheck aria-hidden="true" />}
+                {t('plugin_saml.cert.promote')}
+              </Button>
+            ) : null}
           </Can>
           <Button type="button" onClick={download} disabled={!data}>
             <Download aria-hidden="true" />
@@ -212,7 +236,7 @@ function CertDialog({ source, onClose }: { source: SamlSource | null; onClose: (
       ) : err ? (
         <p className="text-sm text-destructive">{err}</p>
       ) : data ? (
-        <div className="space-y-2">
+        <div className="space-y-3">
           <div className="flex items-center justify-between gap-2">
             <span className="text-sm text-muted-foreground">
               {t('plugin_saml.cert.expires', { date: new Date(data.notAfter).toLocaleString() })}
@@ -222,9 +246,29 @@ function CertDialog({ source, onClose }: { source: SamlSource | null; onClose: (
           <p className="rounded-md border border-warning/40 bg-warning/10 p-2 text-xs text-muted-foreground">
             {t('plugin_saml.cert.rotateHint')}
           </p>
+          {data.nextCert ? (
+            <div className="space-y-2 rounded-md border border-info/40 bg-info/10 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-sm font-medium">{t('plugin_saml.cert.nextTitle')}</span>
+                <CopyButton text={data.nextCert} label={t('plugin_saml.btn.copy')} />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {t('plugin_saml.cert.nextHint', {
+                  date: data.nextNotAfter ? new Date(data.nextNotAfter).toLocaleString() : '—',
+                })}
+              </p>
+            </div>
+          ) : null}
           <pre className="max-h-80 overflow-auto rounded-md bg-muted/40 p-3 font-mono text-xs whitespace-pre-wrap break-all">
             {data.cert}
           </pre>
+          {data.prevCert ? (
+            <p className="rounded-md border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
+              {t('plugin_saml.cert.prevHint', {
+                date: data.prevUntil ? new Date(data.prevUntil).toLocaleString() : '—',
+              })}
+            </p>
+          ) : null}
         </div>
       ) : null}
     </ResponsiveDialog>

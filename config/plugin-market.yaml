@@ -216,10 +216,10 @@ plugins:
         description: 'Reports and data walls: structured datasets, parameterized queries, tenant and data-scope isolation, charts, tables, metric cards, and a canvas-style dashboard.'
   - id: saml
     name: SAML 单点登录
-    description: 企业 IdP 单点登录（SAML 2.0 SP）：导入或按 URL 拉取 IdP 元数据，SP 元数据 / ACS / 证书可复制下载，多 IdP 打包选择、元数据定时刷新、SP 证书轮换、属性与组→角色映射、登录时按组同步角色、配置自检、IdP 发起登录与登出、登录时同步资料、自动建号/绑定。
+    description: 企业 IdP 单点登录（SAML 2.0 SP）：导入或按 URL 拉取 IdP 元数据，SP 元数据 / ACS / 证书可复制下载，多 IdP 打包选择、元数据定时刷新、SP 证书两段式轮换、要求加密断言、属性与组→角色映射、登录时按组同步角色、配置自检、IdP 发起登录与登出、登录时同步资料、自动建号/绑定。
     category: identity
     edition: pro
-    version: 0.5.0
+    version: 0.6.0
     price: 待定
     author: NexAdmin
     repo: zxh451200/nexadmin-plugins
@@ -227,7 +227,7 @@ plugins:
     i18n:
       en-US:
         name: SAML Single Sign-On
-        description: 'Enterprise IdP sign-in (SAML 2.0 SP): import or fetch IdP metadata, copy/download SP metadata, ACS and certificate, choose from bundled multi-IdP metadata, auto-refresh metadata, rotate the SP certificate, map attributes and groups to roles, sync roles on sign-in, self-test, IdP-initiated login and logout, profile sync on login, auto-create or link accounts.'
+        description: 'Enterprise IdP sign-in (SAML 2.0 SP): import or fetch IdP metadata, copy/download SP metadata, ACS and certificate, choose from bundled multi-IdP metadata, auto-refresh metadata, two-step SP certificate rollover, require encrypted assertions, map attributes and groups to roles, sync roles on sign-in, self-test, IdP-initiated login and logout, profile sync on login, auto-create or link accounts.'
   - id: scim
     name: SCIM 用户同步
     description: 企业身份平台 SCIM 2.0 用户同步。

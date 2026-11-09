@@ -848,10 +848,21 @@ func TestEnsureSigningKeyDescriptor(t *testing.T) {
 		t.Fatal("must be idempotent")
 	}
 	present := &saml.EntityDescriptor{SPSSODescriptors: []saml.SPSSODescriptor{{}}}
-	present.SPSSODescriptors[0].KeyDescriptors = []saml.KeyDescriptor{{Use: "signing"}}
+	present.SPSSODescriptors[0].KeyDescriptors = []saml.KeyDescriptor{{
+		Use: "signing",
+		KeyInfo: saml.KeyInfo{X509Data: saml.X509Data{
+			X509Certificates: []saml.X509Certificate{{Data: base64.StdEncoding.EncodeToString(cert.Raw)}},
+		}},
+	}}
 	ensureSigningKeyDescriptor(present, cert)
 	if len(present.SPSSODescriptors[0].KeyDescriptors) != 1 {
-		t.Fatal("must not duplicate an existing signing KeyDescriptor")
+		t.Fatal("same certificate must not be duplicated")
+	}
+	// 轮换期间元数据允许同时列出多张 signing 证书（当前 / 待切换 / 上一代）。
+	another := &x509.Certificate{Raw: []byte("der-bytes-next")}
+	ensureSigningKeyDescriptor(present, another)
+	if len(present.SPSSODescriptors[0].KeyDescriptors) != 2 {
+		t.Fatal("a different rollover certificate must be added")
 	}
 	ensureSigningKeyDescriptor(nil, cert)
 	ensureSigningKeyDescriptor(&saml.EntityDescriptor{}, cert)
@@ -893,5 +904,77 @@ func TestRenderACSErrorPageEscapes(t *testing.T) {
 		if !strings.Contains(page, want) {
 			t.Fatalf("page must contain %q: %s", want, page)
 		}
+	}
+}
+
+func TestHasEncryptedAssertion(t *testing.T) {
+	plain := []byte(`<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"><saml:Assertion/></samlp:Response>`)
+	if hasEncryptedAssertion(plain) {
+		t.Fatal("plain assertion must not count as encrypted")
+	}
+	enc := []byte(`<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"><saml:EncryptedAssertion/></samlp:Response>`)
+	if !hasEncryptedAssertion(enc) {
+		t.Fatal("EncryptedAssertion in assertion namespace must be detected")
+	}
+	other := []byte(`<x:EncryptedAssertion xmlns:x="urn:example"/>`)
+	if hasEncryptedAssertion(other) {
+		t.Fatal("foreign namespace must not count")
+	}
+}
+
+func TestRolloverPublishesAndDecryptsAllKeys(t *testing.T) {
+	curCert, curKey, err := newSPKeyPair()
+	if err != nil {
+		t.Fatal(err)
+	}
+	nextCert, nextKey, err := newSPKeyPair()
+	if err != nil {
+		t.Fatal(err)
+	}
+	prevCert, prevKey, err := newSPKeyPair()
+	if err != nil {
+		t.Fatal(err)
+	}
+	until := time.Now().Add(spPrevGrace)
+	m := &Source{
+		Name: "idp", Enabled: true, IDPEntityID: "https://idp.example.com",
+		IdPMetadata: metadataXML(certB64(t)),
+		SPCert:      curCert, SPKeyEnc: curKey,
+		NextSPCert: nextCert, NextSPKeyEnc: nextKey,
+		PrevSPCert: prevCert, PrevSPKeyEnc: prevKey, PrevSPExpiresAt: &until,
+	}
+	m.ID = idgen.ID(42)
+	svc := NewService(nil, nil, nil)
+	sp, err := svc.provider(m, "https://sp.example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sp.DecryptionKeys) != 2 {
+		t.Fatalf("want next+prev decryption keys, got %d", len(sp.DecryptionKeys))
+	}
+	certs := publishedSPCerts(m)
+	if len(certs) != 3 {
+		t.Fatalf("want 3 published certs during rollover, got %d", len(certs))
+	}
+	md := sp.Metadata()
+	for _, c := range certs {
+		ensureSigningKeyDescriptor(md, c)
+	}
+	if got := len(md.SPSSODescriptors[0].KeyDescriptors); got < 3 {
+		t.Fatalf("metadata should list all rollover certs, got %d descriptors", got)
+	}
+
+	// 上一代过期后不再出现在元数据，也不再参与解密。
+	past := time.Now().Add(-time.Hour)
+	m.PrevSPExpiresAt = &past
+	if got := len(publishedSPCerts(m)); got != 2 {
+		t.Fatalf("expired prev must not be published, got %d", got)
+	}
+	sp, err = svc.provider(m, "https://sp.example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sp.DecryptionKeys) != 1 {
+		t.Fatalf("expired prev must not decrypt, got %d keys", len(sp.DecryptionKeys))
 	}
 }

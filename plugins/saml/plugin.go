@@ -17,7 +17,7 @@ import (
 
 func init() {
 	plugin.Register(plugin.Plugin{
-		ID: "saml", Name: "SAML 单点登录", Version: "0.5.0", Edition: plugin.Pro,
+		ID: "saml", Name: "SAML 单点登录", Version: "0.6.0", Edition: plugin.Pro,
 		Module: &module{},
 	})
 }
@@ -92,6 +92,7 @@ func (*module) Register(r *gin.RouterGroup, d *core.Deps) {
 	admin.POST("/sources/:id/test", core.Perm("saml:edit"), s.testSource)
 	admin.POST("/sources/:id/refresh", core.Perm("saml:edit"), s.refreshMetadata)
 	admin.POST("/sources/:id/rotate-sp-cert", core.Perm("saml:edit"), s.rotateSPCert)
+	admin.POST("/sources/:id/promote-sp-cert", core.Perm("saml:edit"), s.promoteSPCert)
 	admin.GET("/sources/:id/sp-cert", core.Perm("saml:list"), s.spCert)
 	admin.GET("/sources/:id/urls", core.Perm("saml:list"), s.sourceURLs)
 	admin.POST("/metadata/inspect", core.Perm("saml:edit"), s.inspectMetadata)
