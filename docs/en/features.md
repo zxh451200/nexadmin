@@ -118,7 +118,9 @@ No real IdP is available in this repository, so the flow below can only be rerun
 | Metadata carries two signing certificates, assertion signed by the 2nd | Pass | every certificate in the metadata is a trust anchor |
 | Encrypted assertion (IdP encrypts to the SP encryption KeyDescriptor) | Pass | current / staged / previous private keys all decrypt |
 | Attribute names as urn:oid (Okta / Entra default) | Pass | map attributes to the OIDs |
-| SHA-1 signatures | Rejected with 400 by default; passes after enabling "Allow SHA-1 signatures" per source | secure default, explicit opt-in for legacy IdPs |
+| SHA-1 signatures | Rejected with 400 by default; passes after enabling "Allow SHA-1 signatures" per source | secure default, explicit opt-in for legacy IdPs
+
+A reusable vendor-tenant simulator ships in the repo: `go run ./scripts/saml-vendor-e2e -base <SP> -admin-user <u> -admin-pass <p>` runs sign-in, role sync and SLO for Okta / Microsoft Entra / Keycloak attribute and signature shapes (all three passed on 2026-11-09). It posts straight to ACS and skips the vendor login page; the redirect chain is covered above. |
 | RelayState site-path deep link | Pass | returns to the original page after sign-in |
 
 For the big three, fill according to their docs: Okta (expose `uid/mail/groups` or OIDs in the app profile; use the SP metadata for ACS and Entity ID), Microsoft Entra (NameID persistent/email, claim URIs for attributes, configure the Logout URL for SLO), Keycloak (tick Sign documents/assertions, enable assertion encryption when needed, emit groups from an attributes mapper).
