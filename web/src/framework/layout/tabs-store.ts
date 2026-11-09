@@ -24,7 +24,7 @@ interface TabsState {
 }
 
 /** keep-alive 最多同时缓存的页面数（含当前页） */
-export const MAX_CACHED_PAGES = 10
+export const MAX_CACHED_PAGES = 20
 
 /** 在菜单里找 pathname 对应的叶子，返回其 path 与标题 key；找不到时退回 pathname 本身 */
 export function resolveTab(menu: MenuNode[], pathname: string): TabItem {
