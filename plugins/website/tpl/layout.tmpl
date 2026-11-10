@@ -198,7 +198,7 @@
   </div>
 </footer>
 <!-- 在线客服挂件：默认隐藏，由 site.js 探测 /api/v1/plugins/im/visitor/status 后再显示（没装 im 插件时整组 404）。 -->
-<div class="chat" data-chat hidden>
+<div class="chat" data-chat data-online="1" hidden>
   <button class="chat-launcher" type="button" data-chat-open aria-haspopup="dialog" aria-expanded="false" aria-controls="chat-panel" aria-label="{{.T "chat.open"}}">
     {{uiIcon "message"}}
     <span>{{.T "chat.launcher"}}</span>
@@ -206,7 +206,7 @@
   <section class="chat-panel" id="chat-panel" data-chat-panel role="dialog" aria-modal="false" aria-labelledby="chat-title" hidden>
     <header class="chat-head">
       <div class="chat-identity">
-        <span class="chat-dot" aria-hidden="true"></span>
+        <span class="chat-avatar" aria-hidden="true">{{uiIcon "message"}}</span>
         <div class="chat-identity-text">
           <strong id="chat-title">{{.T "chat.title"}}</strong>
           <span class="chat-sub">{{.T "chat.subtitle"}}</span>
@@ -218,19 +218,32 @@
     </header>
     <p class="chat-offline" data-chat-offline hidden>{{.T "chat.offline"}}</p>
     <div class="chat-log" data-chat-log role="log" aria-live="polite" aria-relevant="additions">
-      <p class="chat-empty" data-chat-empty>{{.T "chat.empty"}}</p>
+      <div class="chat-empty" data-chat-empty>
+        <span class="chat-empty-mark" aria-hidden="true">{{uiIcon "message"}}</span>
+        <p class="chat-empty-title">{{.T "chat.empty"}}</p>
+        <p class="chat-empty-sub">{{.T "chat.emptySub"}}</p>
+        <div class="chat-suggests">
+          <button type="button" data-chat-suggest>{{.T "chat.suggestDeploy"}}</button>
+          <button type="button" data-chat-suggest>{{.T "chat.suggestCustom"}}</button>
+        </div>
+      </div>
     </div>
     <p class="chat-typing" data-chat-typing hidden>{{.T "chat.typing"}}</p>
     <form class="chat-form" data-chat-form>
-      <button class="chat-attach" type="button" data-chat-attach aria-label="{{.T "chat.attach"}}" title="{{.T "chat.attach"}}">
-        {{uiIcon "paperclip"}}
-      </button>
-      <input type="file" data-chat-file hidden accept="image/png,image/jpeg,image/gif,image/webp,application/pdf,text/plain,.zip,.docx,.xlsx,.pptx">
       <label class="sr-only" for="chat-input">{{.T "chat.inputLabel"}}</label>
-      <textarea id="chat-input" data-chat-input rows="1" maxlength="2000" placeholder="{{.T "chat.placeholder"}}" aria-label="{{.T "chat.placeholder"}}"></textarea>
-      <button class="chat-send" type="submit" data-chat-send aria-label="{{.T "chat.send"}}">
-        {{uiIcon "send"}}
-      </button>
+      <div class="chat-compose">
+        <textarea id="chat-input" data-chat-input rows="1" maxlength="2000" placeholder="{{.T "chat.placeholder"}}" aria-label="{{.T "chat.inputLabel"}}"></textarea>
+        <div class="chat-compose-bar">
+          <button class="chat-attach" type="button" data-chat-attach aria-label="{{.T "chat.attach"}}" title="{{.T "chat.attach"}}">
+            {{uiIcon "paperclip"}}
+          </button>
+          <span class="chat-hint" aria-hidden="true">{{.T "chat.inputHint"}}</span>
+          <button class="chat-send" type="submit" data-chat-send aria-label="{{.T "chat.send"}}">
+            {{uiIcon "send"}}
+          </button>
+        </div>
+      </div>
+      <input type="file" data-chat-file hidden accept="image/png,image/jpeg,image/gif,image/webp,application/pdf,text/plain,.zip,.docx,.xlsx,.pptx">
     </form>
     <div class="chat-closed" data-chat-closed hidden>
       <p class="chat-closed-title" data-chat-closed-title>{{.T "chat.closedTitle"}}</p>

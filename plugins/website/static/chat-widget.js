@@ -579,11 +579,26 @@
         }
       });
       input.addEventListener('input', function () {
-        input.style.height = 'auto';
-        input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+        growInput();
         sendTyping();
       });
     }
+
+    function growInput() {
+      if (!input) return;
+      input.style.height = 'auto';
+      input.style.height = Math.min(input.scrollHeight, 128) + 'px';
+    }
+
+    // 空态常见问题：点一下填进输入框，让访客还能改词再发
+    Array.prototype.forEach.call(root.querySelectorAll('[data-chat-suggest]'), function (btn) {
+      btn.addEventListener('click', function () {
+        if (!input) return;
+        input.value = btn.textContent || '';
+        growInput();
+        input.focus();
+      });
+    });
 
     // 探测：整组路由 404 表示没装 im 插件，挂件保持隐藏。
     // 命中后顺带取回服务时间与主动邀请配置（离线时挂出提示条，在线时按延迟主动打招呼）。
@@ -595,6 +610,7 @@
       })
       .then(function (body) {
         var cfg = (body && body.data) || {};
+        root.setAttribute('data-online', cfg.online === false ? '0' : '1');
         if (cfg.online === false) {
           if (offlineEl) {
             offlineEl.hidden = false;
