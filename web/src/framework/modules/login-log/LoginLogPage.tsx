@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Download, Trash2 } from 'lucide-react'
+import { Download, Eraser, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -13,9 +13,11 @@ import { DictTag } from '@/framework/components/DictTag'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import type { Column } from '@/framework/components/table/types'
+import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Badge, type BadgeProps } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
+import { Label } from '@/framework/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/framework/ui/tabs'
 import { isExportTooMany } from '../oper-log/api'
@@ -25,6 +27,7 @@ import { saveBlob } from '@/framework/components/export/csv'
 import {
   LOGIN_TYPES,
   exportLoginLogs,
+  useCleanLoginLogs,
   useDeleteLoginLogs,
   useLoginLogList,
   type LoginLog,
@@ -41,6 +44,10 @@ interface Filters {
 }
 
 const emptyFilters: Filters = { keyword: '', status: '', loginType: 'all', range: {} }
+
+// 清理档位与文案映射，与操作日志页同口径
+const CLEAN_OPTIONS = ['7', '30', '90', '0'] as const
+const cleanKey = { '7': 'd7', '30': 'd30', '90': 'd90', '0': 'all' } as const
 
 function toQuery(f: Filters): Omit<LoginLogQuery, 'page' | 'pageSize'> {
   return {
@@ -83,6 +90,9 @@ export default function LoginLogPage() {
 
   const { data, isLoading } = useLoginLogList({ page, pageSize, ...toQuery(applied) })
   const del = useDeleteLoginLogs()
+  const clean = useCleanLoginLogs()
+  const [cleanOpen, setCleanOpen] = useState(false)
+  const [cleanDays, setCleanDays] = useState<string>('30')
 
   const search = () => {
     setApplied(draft)
@@ -105,6 +115,19 @@ export default function LoginLogPage() {
       setPage(pageAfterDelete(page, rows.length, removed))
       setSelected([])
       toast.success(t('common.operateSuccess'))
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+    }
+  }
+
+  const onClean = async () => {
+    if (!(await confirm({ destructive: true, description: t('loginLog.clean.confirm') }))) return
+    try {
+      const res = await clean.mutateAsync(Number(cleanDays))
+      setCleanOpen(false)
+      setSelected([])
+      setPage(1)
+      toast.success(t('loginLog.clean.done', { count: res.removed }))
     } catch (e) {
       toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
     }
@@ -181,12 +204,20 @@ export default function LoginLogPage() {
       </FilterBar>
       <DataTable<LoginLog>
         toolbar={
-          <Can perm="loginLog:export">
-            <Button type="button" variant="outline" disabled={exporting} onClick={onExport}>
-              <Download className="me-2 size-4" aria-hidden="true" />
-              {t('loginLog.action.export')}
-            </Button>
-          </Can>
+          <>
+            <Can perm="loginLog:export">
+              <Button type="button" variant="outline" disabled={exporting} onClick={onExport}>
+                <Download className="me-2 size-4" aria-hidden="true" />
+                {t('loginLog.action.export')}
+              </Button>
+            </Can>
+            <Can perm="loginLog:delete">
+              <Button type="button" variant="outline" onClick={() => setCleanOpen(true)}>
+                <Eraser className="me-2 size-4" aria-hidden="true" />
+                {t('loginLog.clean.title')}
+              </Button>
+            </Can>
+          </>
         }
         columns={columns}
         data={data?.list ?? []}
@@ -218,6 +249,39 @@ export default function LoginLogPage() {
           <LoginStatsPanel />
         </TabsContent>
       </Tabs>
+      <ResponsiveDialog
+        open={cleanOpen}
+        onOpenChange={setCleanOpen}
+        title={t('loginLog.clean.title')}
+        description={t('loginLog.clean.description')}
+        size="sm"
+        footer={
+          <>
+            <Button type="button" variant="outline" onClick={() => setCleanOpen(false)}>
+              {t('common.cancel')}
+            </Button>
+            <Button type="button" variant="destructive" disabled={clean.isPending} onClick={onClean}>
+              {t('common.confirm')}
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-1.5">
+          <Label>{t('loginLog.clean.range')}</Label>
+          <Select value={cleanDays} onValueChange={setCleanDays}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {CLEAN_OPTIONS.map((d) => (
+                <SelectItem key={d} value={d}>
+                  {t(`loginLog.clean.${cleanKey[d]}`)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </ResponsiveDialog>
     </PageContainer>
   )
 }

@@ -61,4 +61,5 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	r.GET("/login-logs/stats", core.Perm("loginLog:list"), h.StatsLogin)
 	r.GET("/login-logs/export", core.Perm("loginLog:export"), exportLimit, h.ExportLogin)
 	r.DELETE("/login-logs", core.Perm("loginLog:delete"), h.DeleteLogin)
+	r.POST("/login-logs/clean", core.Perm("loginLog:delete"), h.CleanLogin)
 }

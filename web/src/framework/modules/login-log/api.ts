@@ -3,8 +3,8 @@ import { api, http } from '@/framework/request/http'
 import type { Page } from '@/framework/request/types'
 import { asBlob, exportRequest } from '../oper-log/api'
 
-/** 已知的登录方式：内置两种 + 各登录插件写进 login_type 的门名（ldap / cas / saml / 2fa） */
-export const LOGIN_TYPES = ['password', 'phone', 'wecom', 'dingtalk', 'feishu', 'google', 'github', 'oidc', 'ldap', 'cas', 'saml', '2fa'] as const
+/** 已知的登录方式：内置两种 + 各登录插件写进 login_type 的门名（ldap / saml / 2fa / cas） */
+export const LOGIN_TYPES = ['password', 'phone', 'wecom', 'dingtalk', 'feishu', 'google', 'github', 'oidc', 'ldap', 'saml', 'cas', '2fa'] as const
 export type LoginType = (typeof LOGIN_TYPES)[number]
 /** 登录方式是开放集合：任何插件的 authenticator 名都会落到 login_type，没词条时按原值显示 */
 export type LoginTypeValue = LoginType | (string & {})
@@ -53,6 +53,15 @@ export function useDeleteLoginLogs() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (ids: string[]) => api.del<null>('/login-logs', { ids: ids.join(',') }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['loginLog'] }),
+  })
+}
+
+/** 清理 days 天前的登录日志（days=0 清空），与操作日志 clean 同口径。 */
+export function useCleanLoginLogs() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (days: number) => api.post<{ removed: number }>('/login-logs/clean', { days }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['loginLog'] }),
   })
 }

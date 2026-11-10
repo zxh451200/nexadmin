@@ -166,3 +166,10 @@ func (s *Service) CleanOper(ctx context.Context, days int) (int64, error) {
 	res := s.db.WithContext(ctx).Where("created_at < ?", cutoff).Delete(&OperLog{})
 	return res.RowsAffected, res.Error
 }
+
+// CleanLogin 清理 days 天前的登录日志，与 CleanOper 同口径。
+func (s *Service) CleanLogin(ctx context.Context, days int) (int64, error) {
+	cutoff := cleanCutoff(days)
+	res := s.db.WithContext(ctx).Where("created_at < ?", cutoff).Delete(&LoginLog{})
+	return res.RowsAffected, res.Error
+}

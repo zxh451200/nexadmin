@@ -65,13 +65,22 @@ func (s *Service) CheckLoginIDs(ctx context.Context, sc *datascope.Scope, ids []
 
 // CheckCleanOper 校验清理：待清理的日志里只要有范围外的，整批拒绝并报数量。
 func (s *Service) CheckCleanOper(ctx context.Context, sc *datascope.Scope, days int) error {
+	return s.checkClean(ctx, sc, days, &OperLog{}, operCol)
+}
+
+// CheckCleanLogin 校验登录日志清理，与 CheckCleanOper 同口径。
+func (s *Service) CheckCleanLogin(ctx context.Context, sc *datascope.Scope, days int) error {
+	return s.checkClean(ctx, sc, days, &LoginLog{}, loginCol)
+}
+
+func (s *Service) checkClean(ctx context.Context, sc *datascope.Scope, days int, model any, col string) error {
 	if !sc.Limited() {
 		return nil
 	}
 	cutoff := cleanCutoff(days)
-	cond, args, _ := sc.UsernameCond(operCol)
+	cond, args, _ := sc.UsernameCond(col)
 	var n int64
-	if err := s.db.WithContext(ctx).Model(&OperLog{}).Where("created_at < ?", cutoff).Where("NOT ("+cond+")", args...).Count(&n).Error; err != nil {
+	if err := s.db.WithContext(ctx).Model(model).Where("created_at < ?", cutoff).Where("NOT ("+cond+")", args...).Count(&n).Error; err != nil {
 		return err
 	}
 	if n > 0 {

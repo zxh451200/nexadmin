@@ -22,6 +22,7 @@ import {
   createExportJob,
   exportUsersFile,
   fetchExportPlan,
+  useBatchUserStatus,
   useDeleteUsers,
   useUnlockUser,
   useUpdateUserStatus,
@@ -56,6 +57,7 @@ export default function UserPage() {
   const list = useUserList({ page, pageSize, ...applied })
   const del = useDeleteUsers()
   const setStatus = useUpdateUserStatus()
+  const batch = useBatchUserStatus()
   const unlock = useUnlockUser()
 
   const search = () => {
@@ -93,6 +95,19 @@ export default function UserPage() {
     try {
       await setStatus.mutateAsync({ id: u.id, status: on ? '1' : '0' })
       toast.success(t('user.statusChanged'))
+    } catch (e) {
+      toast.error(errMsg(e, t('common.operateFailed')))
+    }
+  }
+
+  // 批量启停：后端逐个走单条护栏，自己/超管会被跳过并如实回报
+  const batchStatus = async (ids: string[], on: boolean) => {
+    try {
+      const res = await batch.mutateAsync({ ids, status: on ? '1' : '0' })
+      setSelected([])
+      toast.success(
+        res.skipped > 0 ? t('user.batchStatusPartial', { updated: res.updated, skipped: res.skipped }) : t('user.statusChanged'),
+      )
     } catch (e) {
       toast.error(errMsg(e, t('common.operateFailed')))
     }
@@ -251,17 +266,27 @@ export default function UserPage() {
         }}
         selection={{ selected, onChange: setSelected }}
         batchActions={(ids) => (
-          <Can perm="user:delete">
-            <Button
-              type="button"
-              variant="destructive"
-              size="sm"
-              onClick={() => remove(ids, t('user.deleteBatch', { count: ids.length }))}
-            >
-              <Trash2 className="me-2 h-4 w-4" aria-hidden="true" />
-              {t('common.delete')}
-            </Button>
-          </Can>
+          <>
+            <Can perm="user:update">
+              <Button type="button" variant="outline" size="sm" disabled={batch.isPending} onClick={() => void batchStatus(ids, true)}>
+                {t('user.batchEnable')}
+              </Button>
+              <Button type="button" variant="outline" size="sm" disabled={batch.isPending} onClick={() => void batchStatus(ids, false)}>
+                {t('user.batchDisable')}
+              </Button>
+            </Can>
+            <Can perm="user:delete">
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                onClick={() => remove(ids, t('user.deleteBatch', { count: ids.length }))}
+              >
+                <Trash2 className="me-2 h-4 w-4" aria-hidden="true" />
+                {t('common.delete')}
+              </Button>
+            </Can>
+          </>
         )}
         rowActions={(u) => (
           <>

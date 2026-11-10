@@ -172,6 +172,28 @@ func (h *handler) setStatus(c *gin.Context) {
 	response.OK(c, nil)
 }
 
+// batchStatus PUT /users/status  body: {ids, status} —— 批量启用/停用。
+func (h *handler) batchStatus(c *gin.Context) {
+	var body struct {
+		IDs    []string `json:"ids"`
+		Status string   `json:"status"`
+	}
+	if !response.BindJSON(c, &body) {
+		return
+	}
+	ids, err := parseIDs(body.IDs, "user.id_invalid")
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	updated, skipped, err := h.svc.batchStatus(c.Request.Context(), ids, body.Status, me(c))
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, gin.H{"updated": updated, "skipped": skipped})
+}
+
 // resetPassword POST /users/:id/reset-password  body: {password}
 func (h *handler) resetPassword(c *gin.Context) {
 	id, ok := pathID(c)

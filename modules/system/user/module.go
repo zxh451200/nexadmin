@@ -53,6 +53,7 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	r.PUT("/users/:id", core.Perm("user:update"), h.update)
 	r.DELETE("/users/:id", core.Perm("user:delete"), h.remove)
 	r.PUT("/users/:id/status", core.Perm("user:update"), h.setStatus)
+	r.PUT("/users/status", core.Perm("user:update"), h.batchStatus)
 	r.POST("/users/:id/reset-password", core.Perm("user:resetPwd"), h.resetPassword)
 	r.POST("/users/:id/unlock", core.Perm("user:unlock"), h.unlock)
 }

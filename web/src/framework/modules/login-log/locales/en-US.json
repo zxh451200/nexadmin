@@ -52,6 +52,17 @@
       "export": "Export Excel",
       "deleteSelected": "Delete selected"
     },
+    "clean": {
+      "title": "Clean login logs",
+      "description": "Choose a retention window; logs older than it are permanently deleted.",
+      "range": "Retention window",
+      "d7": "Logs older than 7 days",
+      "d30": "Logs older than 30 days",
+      "d90": "Logs older than 90 days",
+      "all": "All logs",
+      "confirm": "Clean up now? This cannot be undone.",
+      "done": "Removed {{count}} logs"
+    },
     "confirm": {
       "delete": "Delete the {{count}} selected logs?"
     },

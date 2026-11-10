@@ -60,6 +60,9 @@
       "success": "Account unlocked"
     },
     "statusChanged": "Status updated",
+    "batchEnable": "Enable selected",
+    "batchDisable": "Disable selected",
+    "batchStatusPartial": "Updated {{updated}}, skipped {{skipped}} (self/superadmin or out of your data scope)",
     "export": {
       "success": "Exported {{count}} records",
       "done": "Export completed",

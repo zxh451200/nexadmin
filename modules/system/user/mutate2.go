@@ -93,6 +93,30 @@ func (s *service) setStatus(ctx context.Context, id idgen.ID, status string, me 
 	return nil
 }
 
+// batchStatus 批量启用/停用：逐个走 setStatus 的完整护栏（数据范围、超管/自己不可停用）。
+// 个体失败（不在范围、停用了自己/超管）不阻断其余，结果如实报 updated/skipped；
+// 全部失败时把第一个错误抛回，让调用方看到原因。
+func (s *service) batchStatus(ctx context.Context, ids []idgen.ID, status string, me actor) (updated, skipped int, err error) {
+	if status != statusOn && status != statusOff {
+		return 0, 0, bad("user.status_invalid")
+	}
+	var firstErr error
+	for _, id := range ids {
+		if e := s.setStatus(ctx, id, status, me); e != nil {
+			skipped++
+			if firstErr == nil {
+				firstErr = e
+			}
+			continue
+		}
+		updated++
+	}
+	if updated == 0 && firstErr != nil {
+		return 0, skipped, firstErr
+	}
+	return updated, skipped, nil
+}
+
 // resetPassword 重置密码。不设强度规则，只要求非空；bcrypt 只取前 72 字节，所以上限 72。
 func (s *service) resetPassword(ctx context.Context, id idgen.ID, password string, me actor) error {
 	if password == "" || len(password) > 72 {

@@ -165,6 +165,16 @@ export function useUpdateUserStatus() {
   })
 }
 
+/** 批量启用/停用：后端逐个走单条护栏，返回 updated/skipped（越权或停自己/超管的会被跳过）。 */
+export function useBatchUserStatus() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: ({ ids, status }: { ids: string[]; status: string }) =>
+      api.put<{ updated: number; skipped: number }>('/users/status', { ids, status }),
+    onSuccess: invalidate,
+  })
+}
+
 export function useResetPassword() {
   return useMutation({
     mutationFn: ({ id, password }: { id: string; password: string }) =>

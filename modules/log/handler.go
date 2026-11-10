@@ -158,3 +158,27 @@ func (h *Handler) CleanOper(c *gin.Context) {
 	}
 	response.OK(c, gin.H{"removed": n})
 }
+
+// CleanLogin POST /login-logs/clean  body: {days}，与 CleanOper 同口径。
+func (h *Handler) CleanLogin(c *gin.Context) {
+	var body struct {
+		Days int `json:"days" binding:"min=0,max=36500"`
+	}
+	if !response.BindJSON(c, &body) {
+		return
+	}
+	sc, ok := h.scope(c)
+	if !ok {
+		return
+	}
+	if err := h.svc.CheckCleanLogin(c.Request.Context(), sc, body.Days); err != nil {
+		response.Fail(c, err)
+		return
+	}
+	n, err := h.svc.CleanLogin(c.Request.Context(), body.Days)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, gin.H{"removed": n})
+}

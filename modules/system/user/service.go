@@ -72,7 +72,17 @@ func (s *service) filtered(ctx context.Context, q listQuery, me actor) (*gorm.DB
 		if err != nil {
 			return nil, bad("user.dept_id_invalid")
 		}
-		tx = tx.Where("dept_id = ?", int64(id))
+		// 本部门及以下：与 datascope 的 deptAndChild 同一语义，点父部门能看到子部门的用户。
+		// 物化路径（sys_dept.path）前缀匹配；部门不存在时返回空集，与旧等值匹配的行为一致。
+		var path string
+		if err := s.db.WithContext(ctx).Table("sys_dept").Select("path").Where("id = ?", int64(id)).Scan(&path).Error; err != nil {
+			return nil, err
+		}
+		if path == "" {
+			tx = tx.Where("1 = 0")
+		} else {
+			tx = tx.Where("dept_id IN (SELECT id FROM sys_dept WHERE path LIKE ?)", escapeLike(path)+"%")
+		}
 	}
 	if q.CreatedFrom != "" {
 		t, err := time.Parse("2006-01-02", q.CreatedFrom)
