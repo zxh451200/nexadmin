@@ -13,6 +13,7 @@ import { Skeleton } from '@/framework/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/framework/ui/table'
 import { cn } from '@/lib/utils'
 import { EmptyState } from './EmptyState'
+import { BatchBar } from './table/BatchBar'
 import { ColumnSettings } from './table/ColumnSettings'
 import { MobileCardContent } from './table/MobileCard'
 import { DragChip, SortableHandle, SortableItem } from './table/SortableItem'
@@ -432,22 +433,6 @@ export function DataTable<T>({
         </div>
       ) : null}
 
-      {selection && selected.length > 0 ? (
-        <div
-          className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted px-3 py-2"
-          role="region"
-          aria-label={t('dataTable.batchActions')}
-        >
-          <span className="num text-sm text-foreground">{t('dataTable.selectedCount', { count: selected.length })}</span>
-          <Button type="button" variant="ghost" size="sm" onClick={() => selection.onChange([])}>
-            {t('common.clear')}
-          </Button>
-          <div className="ms-auto flex flex-wrap items-center gap-2">
-            {typeof batchActions === 'function' ? batchActions(selected) : batchActions}
-          </div>
-        </div>
-      ) : null}
-
       {sortEnabled ? (
         <DndContext
           sensors={sensors}
@@ -475,6 +460,12 @@ export function DataTable<T>({
       )}
 
       {pagination && pagination.total > 0 ? <TablePagination {...pagination} /> : null}
+
+      {selection && selected.length > 0 ? (
+        <BatchBar count={selected.length} onClear={() => selection.onChange([])}>
+          {typeof batchActions === 'function' ? batchActions(selected) : batchActions}
+        </BatchBar>
+      ) : null}
     </div>
   )
 }
