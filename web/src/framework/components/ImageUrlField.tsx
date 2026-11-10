@@ -116,7 +116,7 @@ export function ImageUrlField({
         ) : null}
       </div>
       {hint && !crop ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
-      {/* 缩略图与文件管理同一交互：点开是居中弹窗预览——Logo/图标类小图不整屏盖灯箱。
+      {/* 缩略图点开是居中小弹窗预览（放大看一眼，不铺满视口）。
           功能直接落在预览卡上：悬停浮现放大/清除；空值时是可点的上传卡，而不是一块空白。 */}
       {value ? (
         <div className="group relative w-fit">
