@@ -1,13 +1,13 @@
-import { useEffect, useRef, useState } from 'react'
-import { ChevronDown, Download } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { ChevronDown, CircleAlert, CircleCheck, Download } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+import { FileDropField } from '@/framework/components/FileDropField'
 import { RequiredMark } from '@/framework/components/RequiredMark'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { blobExt, saveBlob } from '@/framework/components/export/csv'
 import { Button } from '@/framework/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/framework/ui/dropdown-menu'
-import { Input } from '@/framework/ui/input'
 import { Label } from '@/framework/ui/label'
 import {
   fetchCustomerImportErrors,
@@ -25,7 +25,6 @@ export interface CustomerImportDialogProps {
 export function CustomerImportDialog({ open, onOpenChange }: CustomerImportDialogProps) {
   const { t } = useTranslation()
   const importCustomers = useImportCustomers()
-  const fileInput = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File | null>(null)
   const [job, setJob] = useState<CrmImportJob | null>(null)
   const [downloading, setDownloading] = useState(false)
@@ -34,7 +33,6 @@ export function CustomerImportDialog({ open, onOpenChange }: CustomerImportDialo
     if (open) {
       setFile(null)
       setJob(null)
-      if (fileInput.current) fileInput.current.value = ''
     }
   }, [open])
 
@@ -94,42 +92,46 @@ export function CustomerImportDialog({ open, onOpenChange }: CustomerImportDialo
         </>
       }
     >
-      <div className="flex flex-col gap-4">
-        <div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button type="button" variant="outline" disabled={downloading}>
-                <Download aria-hidden="true" className="me-2 size-4" />
-                {t('plugin_crm.import.template')}
-                <ChevronDown aria-hidden="true" className="opacity-60" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
-              <DropdownMenuItem onSelect={() => void onTemplate('xlsx')}>{t('plugin_crm.import.templateXlsx')}</DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => void onTemplate('csv')}>{t('plugin_crm.import.templateCsv')}</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+      <div className="flex flex-col gap-5">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="crm-import-file">
-            {t('plugin_crm.import.file')}
-            <RequiredMark />
-          </Label>
-          <Input
-            id="crm-import-file"
-            ref={fileInput}
-            type="file"
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <Label id="crm-import-file-label">
+              {t('plugin_crm.import.file')}
+              <RequiredMark />
+            </Label>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button type="button" variant="ghost" size="sm" className="-me-2 text-muted-foreground" disabled={downloading}>
+                  <Download aria-hidden="true" />
+                  {t('plugin_crm.import.template')}
+                  <ChevronDown aria-hidden="true" className="opacity-60" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={() => void onTemplate('xlsx')}>{t('plugin_crm.import.templateXlsx')}</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => void onTemplate('csv')}>{t('plugin_crm.import.templateCsv')}</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+          <FileDropField
             accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
-            onChange={(e) => {
-              setFile(e.target.files?.[0] ?? null)
+            labelledBy="crm-import-file-label"
+            files={file ? [file] : []}
+            onChange={(fs) => {
+              setFile(fs[0] ?? null)
               setJob(null)
             }}
           />
-          <p className="text-xs text-muted-foreground">{t('plugin_crm.import.fileHint')}</p>
+          <p className="text-xs leading-relaxed text-muted-foreground">{t('plugin_crm.import.fileHint')}</p>
         </div>
         {job ? (
-          <div className="flex flex-col gap-2 rounded-lg border border-border bg-muted p-3" role="status">
-            <p className="text-sm font-medium text-foreground">
+          <div className="flex flex-col gap-2.5 rounded-lg border border-border bg-muted/50 p-3" role="status">
+            <p className="flex items-center gap-2 text-sm font-medium text-foreground">
+              {job.failRows > 0 ? (
+                <CircleAlert className="size-4 shrink-0 text-warning" aria-hidden="true" />
+              ) : (
+                <CircleCheck className="size-4 shrink-0 text-success" aria-hidden="true" />
+              )}
               {t('plugin_crm.import.result', { total: job.totalRows, ok: job.okRows, fail: job.failRows })}
             </p>
             {errors.length ? (
@@ -144,7 +146,7 @@ export function CustomerImportDialog({ open, onOpenChange }: CustomerImportDialo
                 ) : null}
                 <div>
                   <Button type="button" variant="outline" size="sm" disabled={downloading} onClick={() => void onErrors()}>
-                    <Download aria-hidden="true" className="me-2 size-4" />
+                    <Download aria-hidden="true" />
                     {t('plugin_crm.import.downloadErrors')}
                   </Button>
                 </div>

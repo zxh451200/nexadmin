@@ -13,7 +13,7 @@
       "templateCsv": "CSV 模板（.csv）",
       "templateFilename": "客户导入模板",
       "file": "选择文件",
-      "fileHint": "支持 .xlsx / .csv。表头见模板；客户名称必填；手机号、证件号、统一社会信用代码任一命中即更新已有客户。",
+      "fileHint": "表头见模板；客户名称必填；手机号、证件号、统一社会信用代码任一命中即更新已有客户。",
       "start": "开始导入",
       "starting": "导入中…",
       "needFile": "请先选择要导入的文件",

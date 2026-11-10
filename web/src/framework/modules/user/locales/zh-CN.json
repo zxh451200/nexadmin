@@ -72,7 +72,7 @@
       "templateFilename": "用户导入模板",
       "start": "开始导入",
       "file": "选择文件",
-      "fileHint": "支持 .xlsx 与 .csv（CSV 为 UTF-8），读取 Excel 的第一个工作表。部门、角色、岗位按名称填写，多个用分号分隔。",
+      "fileHint": "CSV 需为 UTF-8；读取 Excel 的第一个工作表。部门、角色、岗位按名称填写，多个用分号分隔。",
       "result": "导入完成：成功 {{success}} 条，失败 {{failed}} 条",
       "errorRow": "第 {{row}} 行：{{reason}}",
       "downloadFailed": "下载失败行",

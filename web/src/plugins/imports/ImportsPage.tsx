@@ -1,10 +1,11 @@
-import { useRef, useState } from 'react'
-import { ChevronDown, FileDown, FilePen, FileUp, OctagonX, Trash2, Upload, X } from 'lucide-react'
+import { useState } from 'react'
+import { ChevronDown, FileDown, FilePen, OctagonX, Trash2, Upload } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { ExportCsvButton } from '@/framework/components/export/ExportCsvButton'
+import { FileDropField } from '@/framework/components/FileDropField'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { RequiredMark } from '@/framework/components/RequiredMark'
 import { Badge } from '@/framework/ui/badge'
@@ -50,7 +51,6 @@ export default function ImportsPage() {
   const cancelJob = useCancelImport()
   const confirm = useConfirm()
   const [selected, setSelected] = useState<string[]>([])
-  const fileRef = useRef<HTMLInputElement | null>(null)
   const [pendingSource, setPendingSource] = useState<string | undefined>()
   const [files, setFiles] = useState<File[]>([])
 
@@ -93,14 +93,7 @@ export default function ImportsPage() {
     }
     if (files.length > 1) toast.success(t('plugin_imports.batchDone', { ok, fail }))
     else if (last) toast.success(t('plugin_imports.doneSummary', { ok: last.okRows, fail: last.failRows }))
-    if (fileRef.current) fileRef.current.value = ''
     setFiles([])
-  }
-
-  // 选错一个不该逼着重新选整批；同时清掉 input 的值，否则再选同一个文件不触发 change。
-  const dropFile = (idx: number) => {
-    setFiles((prev) => prev.filter((_, i) => i !== idx))
-    if (fileRef.current) fileRef.current.value = ''
   }
 
   const deleteJob = async (j: ImportJob) => {    const ok = await confirm({
@@ -218,62 +211,9 @@ export default function ImportsPage() {
               </DropdownMenuContent>
             </DropdownMenu>
           ) : null}
-          <input
-            ref={fileRef}
-            type="file"
-            multiple
-            accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            aria-label={t('plugin_imports.fields.file')}
-            className="sr-only"
-            onChange={(e) => setFiles([...(e.target.files ?? [])])}
-          />
-          <label className="flex flex-col gap-1">
-            <span className="text-xs text-muted-foreground">
-              {t('plugin_imports.fields.file')}
-              <RequiredMark />
-            </span>
-            <Button variant="outline" className="max-w-64" onClick={() => fileRef.current?.click()} disabled={noSources}>
-            <FileUp aria-hidden="true" />
-            <span className="truncate">
-              {files.length === 0
-                ? t('plugin_imports.fields.file')
-                : files.length === 1
-                  ? files[0].name
-                  : t('plugin_imports.filesSelected', { count: files.length })}
-            </span>
-            </Button>
-          </label>
-          <Can perm="imports:run">
-            <Button onClick={() => void submit()} disabled={run.isPending || noSources}>
-              <Upload aria-hidden="true" />
-              {t('plugin_imports.run')}
-            </Button>
-          </Can>
         </div>
-        {files.length ? (
-          <ul className="flex flex-wrap gap-1.5">
-            {files.map((f, i) => (
-              <li
-                key={`${f.name}-${i}`}
-                className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/40 py-1 pe-1 ps-2 text-xs"
-              >
-                <span className="max-w-56 truncate">{f.name}</span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="size-6"
-                  aria-label={t('plugin_imports.removeFile', { name: f.name })}
-                  onClick={() => dropFile(i)}
-                >
-                  <X aria-hidden="true" className="size-3.5" />
-                </Button>
-              </li>
-            ))}
-          </ul>
-        ) : null}
         {pendingSource ? (
-          <div className="mt-2 flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap gap-1.5">
             {(sources.data ?? []).find((s) => s.name === pendingSource)?.columns.map((c) => (
               <Badge key={c.key} variant={c.required ? 'secondary' : 'outline'}>
                 {c.label}
@@ -282,6 +222,33 @@ export default function ImportsPage() {
             ))}
           </div>
         ) : null}
+        <div className="flex max-w-2xl flex-col gap-1.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span id="imports-file-label" className="text-xs text-muted-foreground">
+              {t('plugin_imports.fields.file')}
+              <RequiredMark />
+            </span>
+            {files.length > 1 ? (
+              <span className="text-xs text-muted-foreground">{t('plugin_imports.filesSelected', { count: files.length })}</span>
+            ) : null}
+          </div>
+          <FileDropField
+            multiple
+            accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            labelledBy="imports-file-label"
+            disabled={noSources}
+            files={files}
+            onChange={setFiles}
+          />
+        </div>
+        <Can perm="imports:run">
+          <div>
+            <Button onClick={() => void submit()} disabled={run.isPending || noSources}>
+              <Upload aria-hidden="true" />
+              {t('plugin_imports.run')}
+            </Button>
+          </div>
+        </Can>
         {noSources ? <p className="text-xs text-muted-foreground">{t('plugin_imports.noSources')}</p> : null}
       </div>
 

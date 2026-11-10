@@ -13,7 +13,7 @@
       "templateCsv": "CSV template (.csv)",
       "templateFilename": "customer-import-template",
       "file": "Choose file",
-      "fileHint": "Supports .xlsx / .csv. Headers follow the template; name is required; a matching phone, ID number or unified social credit code updates the existing customer.",
+      "fileHint": "Headers follow the template; name is required; a matching phone, ID number or unified social credit code updates the existing customer.",
       "start": "Start import",
       "starting": "Importing…",
       "needFile": "Choose a file to import first",

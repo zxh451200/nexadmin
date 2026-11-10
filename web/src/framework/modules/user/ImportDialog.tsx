@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
-import { Download } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { CircleAlert, CircleCheck, Download } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+import { FileDropField } from '@/framework/components/FileDropField'
 import { RequiredMark } from '@/framework/components/RequiredMark'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Button } from '@/framework/ui/button'
-import { Input } from '@/framework/ui/input'
 import { Label } from '@/framework/ui/label'
 import { downloadCsv, saveBlob } from '@/framework/components/export/csv'
 import { blobExt, fetchImportTemplate, useImportUsers, type ImportResult } from './api'
@@ -18,7 +18,6 @@ export interface ImportDialogProps {
 export function ImportDialog({ open, onOpenChange }: ImportDialogProps) {
   const { t } = useTranslation()
   const importUsers = useImportUsers()
-  const fileInput = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File | null>(null)
   const [result, setResult] = useState<ImportResult | null>(null)
 
@@ -26,7 +25,6 @@ export function ImportDialog({ open, onOpenChange }: ImportDialogProps) {
     if (open) {
       setFile(null)
       setResult(null)
-      if (fileInput.current) fileInput.current.value = ''
     }
   }, [open])
 
@@ -77,33 +75,37 @@ export function ImportDialog({ open, onOpenChange }: ImportDialogProps) {
         </>
       }
     >
-      <div className="flex flex-col gap-4">
-        <div>
-          <Button type="button" variant="outline" onClick={downloadTemplate}>
-            <Download className="me-2 h-4 w-4" aria-hidden="true" />
-            {t('user.import.template')}
-          </Button>
-        </div>
+      <div className="flex flex-col gap-5">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="user-import-file">
-            {t('user.import.file')}
-            <RequiredMark />
-          </Label>
-          <Input
-            id="user-import-file"
-            ref={fileInput}
-            type="file"
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <Label id="user-import-file-label">
+              {t('user.import.file')}
+              <RequiredMark />
+            </Label>
+            <Button type="button" variant="ghost" size="sm" className="-me-2 text-muted-foreground" onClick={downloadTemplate}>
+              <Download aria-hidden="true" />
+              {t('user.import.template')}
+            </Button>
+          </div>
+          <FileDropField
             accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
-            onChange={(e) => {
-              setFile(e.target.files?.[0] ?? null)
+            labelledBy="user-import-file-label"
+            files={file ? [file] : []}
+            onChange={(fs) => {
+              setFile(fs[0] ?? null)
               setResult(null)
             }}
           />
-          <p className="text-xs text-muted-foreground">{t('user.import.fileHint')}</p>
+          <p className="text-xs leading-relaxed text-muted-foreground">{t('user.import.fileHint')}</p>
         </div>
         {result ? (
-          <div className="flex flex-col gap-2 rounded-lg border border-border bg-muted p-3" role="status">
-            <p className="text-sm font-medium text-foreground">
+          <div className="flex flex-col gap-2.5 rounded-lg border border-border bg-muted/50 p-3" role="status">
+            <p className="flex items-center gap-2 text-sm font-medium text-foreground">
+              {result.failed.length ? (
+                <CircleAlert className="size-4 shrink-0 text-warning" aria-hidden="true" />
+              ) : (
+                <CircleCheck className="size-4 shrink-0 text-success" aria-hidden="true" />
+              )}
               {t('user.import.result', { success: result.success, failed: result.failed.length })}
             </p>
             {result.failed.length ? (
@@ -115,7 +117,7 @@ export function ImportDialog({ open, onOpenChange }: ImportDialogProps) {
                 </ul>
                 <div>
                   <Button type="button" variant="outline" size="sm" onClick={downloadFailed}>
-                    <Download className="me-2 h-4 w-4" aria-hidden="true" />
+                    <Download aria-hidden="true" />
                     {t('user.import.downloadFailed')}
                   </Button>
                 </div>

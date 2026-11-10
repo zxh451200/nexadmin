@@ -23,7 +23,6 @@
     "errorsCsv": "Failed rows",
     "retryCsv": "Fixable rows CSV",
     "filesSelected": "{{count}} files selected",
-    "removeFile": "Remove {{name}}",
     "batchDone": "{{ok}} file(s) submitted, {{fail}} failed",
     "delete": "Delete",
     "deleteConfirm": "Delete the import record for \"{{name}}\"? Imported data is not affected.",

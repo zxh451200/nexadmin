@@ -72,7 +72,7 @@
       "templateFilename": "user-import-template",
       "start": "Start import",
       "file": "Choose file",
-      "fileHint": "Supports .xlsx and .csv (CSV must be UTF-8); only the first worksheet of an Excel file is read. Fill department, roles and posts by name; separate multiple values with semicolons.",
+      "fileHint": "CSV must be UTF-8; only the first worksheet of an Excel file is read. Fill department, roles and posts by name; separate multiple values with semicolons.",
       "result": "Import finished: {{success}} succeeded, {{failed}} failed",
       "errorRow": "Row {{row}}: {{reason}}",
       "downloadFailed": "Download failed rows",
