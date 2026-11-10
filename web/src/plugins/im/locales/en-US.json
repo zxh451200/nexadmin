@@ -52,6 +52,11 @@
       "unassigned": "Unassigned",
       "ownedBy": "Assigned to {{name}}"
     },
+    "filter": {
+      "title": "Filters",
+      "activeCount": "{{count}} filters active",
+      "remove": "Remove filter"
+    },
     "tags": {
       "action": "Tags",
       "placeholder": "Comma separated, up to 10, e.g. refund,logistics"

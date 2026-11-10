@@ -52,6 +52,11 @@
       "unassigned": "未分配",
       "ownedBy": "归属 {{name}}"
     },
+    "filter": {
+      "title": "筛选",
+      "activeCount": "已启用 {{count}} 项筛选",
+      "remove": "移除筛选"
+    },
     "tags": {
       "action": "标签",
       "placeholder": "逗号分隔，最多 10 个，如：退款,物流"

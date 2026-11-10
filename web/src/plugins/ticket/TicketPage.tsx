@@ -22,6 +22,7 @@ import {
   Trash2,
   Unlink,
   Timer,
+  UserRound,
   UserRoundCheck,
   Users,
   X,
@@ -41,6 +42,7 @@ import { DatePicker } from '@/framework/components/DatePicker'
 import { EmptyState } from '@/framework/components/EmptyState'
 import { useInvalidateMenuBadges } from '@/framework/layout/menuBadge'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
+import { QueueRow, QueueStatus } from '@/framework/components/QueueRow'
 import { RequiredMark } from '@/framework/components/RequiredMark'
 import { ChatBubble, SystemPill } from '@/framework/components/chat/MessageBubble'
 import { RemoteSelect } from '@/framework/components/RemoteSelect'
@@ -130,7 +132,7 @@ import {
   type TicketReply,
   type TicketRule,
 } from './api'
-import { formatTime, priorityVariant, statusVariant } from './format'
+import { formatTime, priorityTone, statusTone, statusVariant } from './format'
 import { TicketStatsPanel } from './TicketStatsPanel'
 
 const ALL = '__all'
@@ -2601,59 +2603,68 @@ function TicketListItem({
   onOpenTarget: (ticketNo: string) => void
 }) {
   const { t, i18n } = useTranslation()
-  return (
-    <div
-      className={cn(
-        'flex flex-col gap-1 rounded-md px-2 py-2 transition-colors hover:bg-accent',
-        active && 'bg-accent',
-      )}
-    >
-      <div className="flex items-start gap-2">
-        <Checkbox
-          checked={checked}
-          onCheckedChange={(v) => onToggle(v === true)}
-          aria-label={t('dataTable.selectRow')}
-          className="mt-1"
-        />
-        <button type="button" onClick={onSelect} className="flex min-w-0 flex-1 flex-col gap-1 text-start text-sm">
-          <div className="flex w-full items-center gap-2">
-            <span className="min-w-0 flex-1 truncate font-medium text-foreground">{ticket.title}</span>
-            {/* 超时是红字不是药丸：三枚药丸挤在同一列会把右边缘啃得参差不齐 */}
-            {ticket.overdue ? <span className="shrink-0 text-xs font-medium text-destructive">{t('plugin_ticket.overdue')}</span> : null}
-            <Badge variant={statusVariant(ticket.status)} className="shrink-0">
-              {t(`plugin_ticket.status.${ticket.status}`)}
-            </Badge>
-          </div>
-          {/* 一行一个右对齐锚点：状态在上、时间在下，工单号再长也只省略自己 */}
-          <div className="flex w-full items-center gap-2 text-xs text-muted-foreground">
-            <Badge variant={priorityVariant(ticket.priority)} className="shrink-0">
-              {t(`plugin_ticket.priority.${ticket.priority}`)}
-            </Badge>
-            <span className="min-w-0 flex-1 truncate font-mono">
-              {ticket.ticketNo}
-              {ticket.bizNo ? ` · ${ticket.bizNo}` : ''}
+  const meta = [
+    ticket.bizNo ? { key: 'biz', node: <span className="font-mono">{ticket.bizNo}</span> } : null,
+    ticket.assigneeName ? { key: 'assignee', node: <><UserRound aria-hidden="true" className="size-3" />{ticket.assigneeName}</> } : null,
+  ].filter(Boolean) as { key: string; node: React.ReactNode }[]
+  const row = (
+    <>
+      <span className="flex w-full items-center gap-2">
+        <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{ticket.title}</span>
+        {/* 超时是红字不是药丸：三枚药丸挤在同一行会把右边缘啃得参差不齐 */}
+        {ticket.overdue ? <span className="shrink-0 text-[11px] font-medium text-destructive">{t('plugin_ticket.overdue')}</span> : null}
+        <span className="shrink-0 text-[11px] text-muted-foreground tabular-nums">
+          {formatTime(ticket.lastReplyAt ?? ticket.createdAt, i18n.language)}
+        </span>
+      </span>
+      <span className="mt-1 flex w-full items-center gap-2 text-xs text-muted-foreground">
+        <QueueStatus tone={priorityTone(ticket.priority)}>{t(`plugin_ticket.priority.${ticket.priority}`)}</QueueStatus>
+        {/* 队列里只留尾号：工单号是 18 位数字串，整串铺开一眼扫不出区别（区分度全在尾号），
+            悬停补全、点开右侧面板也是全号 */}
+        <span className="min-w-0 flex-1 truncate font-mono text-[11px]" title={ticket.ticketNo}>
+          {ticket.ticketNo.length > 8 ? `#${ticket.ticketNo.slice(-6)}` : ticket.ticketNo}
+        </span>
+        <QueueStatus tone={statusTone(ticket.status)}>{t(`plugin_ticket.status.${ticket.status}`)}</QueueStatus>
+      </span>
+      {meta.length > 0 ? (
+        <span className="mt-1 flex min-w-0 items-center gap-1 text-[11px] text-muted-foreground">
+          {meta.map((m) => (
+            <span key={m.key} className="inline-flex min-w-0 items-center gap-1">
+              {m.node}
             </span>
-            <span className="shrink-0 tabular-nums">{formatTime(ticket.lastReplyAt ?? ticket.createdAt, i18n.language)}</span>
-          </div>
-        </button>
-      </div>
-      {/* 被合并的单在队列里要一眼认出来，并且一点就到主单；独立成行，避免按钮里套按钮 */}
-      {ticket.mergedIntoNo ? (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-6 self-start max-w-full justify-start gap-1 px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
-          onClick={() => onOpenTarget(ticket.mergedIntoNo as string)}
-        >
-          <GitMerge aria-hidden="true" className="h-3 w-3 shrink-0" />
-          <span className="truncate">
-            {t('plugin_ticket.merge.mergedBadge', { no: ticket.mergedIntoNo })}
-            <ArrowUpRight aria-hidden="true" className="ms-1 inline h-3 w-3" />
-          </span>
-        </Button>
+          ))}
+        </span>
       ) : null}
-    </div>
+    </>
+  )
+  return (
+    <QueueRow
+      selected={active}
+      onSelect={onSelect}
+      checkbox={
+        <Checkbox checked={checked} onCheckedChange={(v) => onToggle(v === true)} aria-label={t('dataTable.selectRow')} />
+      }
+      footer={
+        // 被合并的单在队列里要一眼认出来，并且一点就到主单；独立成行，避免按钮里套按钮
+        ticket.mergedIntoNo ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-6 max-w-full justify-start gap-1 px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
+            onClick={() => onOpenTarget(ticket.mergedIntoNo as string)}
+          >
+            <GitMerge aria-hidden="true" className="h-3 w-3 shrink-0" />
+            <span className="truncate">
+              {t('plugin_ticket.merge.mergedBadge', { no: ticket.mergedIntoNo })}
+              <ArrowUpRight aria-hidden="true" className="ms-1 inline h-3 w-3" />
+            </span>
+          </Button>
+        ) : null
+      }
+    >
+      {row}
+    </QueueRow>
   )
 }
 

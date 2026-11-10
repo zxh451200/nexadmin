@@ -26,3 +26,19 @@ export function priorityVariant(p: string): 'success' | 'destructive' | 'info' |
   if (p === 'low') return 'secondary'
   return 'success'
 }
+
+// 队列行里的「圆点 + 灰字」只要颜色语义，不直接用 Badge variant：两处（状态/优先级）
+// 都从同一张映射表取色，避免药丸版和圆点版对同一个状态给出不同的颜色。
+const TONE_OF: Record<'success' | 'destructive' | 'info' | 'warning' | 'secondary', 'success' | 'destructive' | 'info' | 'warning' | 'neutral'> = {
+  success: 'success',
+  destructive: 'destructive',
+  info: 'info',
+  warning: 'warning',
+  secondary: 'neutral',
+}
+export function statusTone(s: string) {
+  return TONE_OF[statusVariant(s)]
+}
+export function priorityTone(p: string) {
+  return TONE_OF[priorityVariant(p)]
+}

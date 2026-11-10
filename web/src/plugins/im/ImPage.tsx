@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { ArrowRightLeft, Ban, Bell, BellOff, ChevronLeft, ChevronRight, ChevronUp, Download, Ellipsis, FileText, Lock, Merge, MessageSquare, MessagesSquare, Paperclip, Pencil, Send, Settings2, Star, StickyNote, Tag, Trash2, Undo2, UserMinus, UserPlus, UserRound, X } from 'lucide-react'
+import { ArrowRightLeft, Ban, Bell, BellOff, ChevronLeft, ChevronRight, ChevronUp, Download, Ellipsis, FileText, Lock, Merge, MessageSquare, MessagesSquare, Paperclip, Pencil, Send, Settings2, SlidersHorizontal, Star, StickyNote, Tag, Trash2, Undo2, UserMinus, UserPlus, UserRound, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
@@ -12,6 +12,7 @@ import { EmptyState } from '@/framework/components/EmptyState'
 import { StatCard } from '@/framework/components/StatCard'
 import { TrendChart } from '@/framework/components/TrendChart'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
+import { QueueAvatar, QueueRow, QueueStatus } from '@/framework/components/QueueRow'
 import { RequiredMark } from '@/framework/components/RequiredMark'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { ChatBubble, SystemPill } from '@/framework/components/chat/MessageBubble'
@@ -69,7 +70,7 @@ import {
   type SenderType,
 } from './api'
 import { formatSize } from '@/framework/upload/precheck'
-import { daySeparator, formatClock, formatTime, initials, relativeStamp, statusVariant } from './format'
+import { daySeparator, formatClock, formatTime, initials, relativeStamp } from './format'
 
 const ALL = '__all'
 /** 会话队列每页条数：与工单列表同一档 */
@@ -140,11 +141,14 @@ export default function ImPage() {
   const [status, setStatus] = useState<string | undefined>()
   const [assignee, setAssignee] = useState<'all' | 'me' | 'unassigned'>('all')
   const [keyword, setKeyword] = useState('')
-  // 生效中的筛选 chips + 一键重置：与工单中心同一交互（点 chip 撤销对应维度）
-  const activeFilters = [
-    ...(keyword ? [{ key: 'keyword', label: keyword, clear: () => setKeyword('') }] : []),
-    ...(status ? [{ key: 'status', label: t(`plugin_im.status.${status}`), clear: () => setStatus(undefined) }] : []),
-    ...(assignee !== 'all' ? [{ key: 'assignee', label: t(`plugin_im.assignee.${assignee}`), clear: () => setAssignee('all') }] : []),
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  // 生效中的筛选 chips + 一键重置：与工单中心同一交互（点 chip 撤销对应维度）。
+  // 关键词不算 chip——它本身就在搜索框里看得见，再列一枚等于同一件事说两遍。
+  const activeFilters: { key: string; label: string; value: string; clear: () => void }[] = [
+    ...(status ? [{ key: 'status', label: t('plugin_im.fields.status'), value: t(`plugin_im.status.${status}`), clear: () => setStatus(undefined) }] : []),
+    ...(assignee !== 'all'
+      ? [{ key: 'assignee', label: t('plugin_im.fields.assignee'), value: t(`plugin_im.assignee.${assignee}`), clear: () => setAssignee('all') }]
+      : []),
   ]
   const resetFilters = () => {
     setKeyword('')
@@ -495,34 +499,60 @@ export default function ImPage() {
               aria-label={t('common.keyword')}
               className="min-w-32 flex-1"
             />
-            <SimpleSelect
-              aria-label={t('plugin_im.fields.status')}
-              className="w-20"
-              value={status ?? ALL}
-              onChange={(v) => setStatus(v === ALL ? undefined : v)}
-              options={[
-                { value: ALL, label: t('plugin_im.all') },
-                { value: 'open', label: t('plugin_im.status.open') },
-                { value: 'closed', label: t('plugin_im.status.closed') },
-              ]}
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <SimpleSelect
-              aria-label={t('plugin_im.fields.assignee')}
-              className="flex-1"
-              value={assignee}
-              onChange={(v) => setAssignee(v as 'all' | 'me' | 'unassigned')}
-              options={[
-                { value: 'all', label: t('plugin_im.assignee.all') },
-                { value: 'me', label: t('plugin_im.assignee.me') },
-                { value: 'unassigned', label: t('plugin_im.assignee.unassigned') },
-              ]}
-            />
+            {/* 筛选收进弹层、选中的显示成 chips：与工单中心同一套（24rem 窄栏铺不下几个常驻控件） */}
+            <Popover open={filtersOpen} onOpenChange={setFiltersOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="h-10 shrink-0 md:h-9">
+                  <SlidersHorizontal aria-hidden="true" />
+                  {t('plugin_im.filter.title')}
+                  {activeFilters.length > 0 ? (
+                    <>
+                      <Badge variant="secondary" aria-hidden="true" className="ms-1 min-w-5 justify-center">
+                        {activeFilters.length}
+                      </Badge>
+                      {/* 屏下只念「筛选 1」听不出 1 是什么，补一句可读的计数 */}
+                      <span className="sr-only">{t('plugin_im.filter.activeCount', { count: activeFilters.length })}</span>
+                    </>
+                  ) : null}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-72 space-y-2">
+                <SimpleSelect
+                  aria-label={t('plugin_im.fields.status')}
+                  label={t('plugin_im.fields.status')}
+                  className="w-full"
+                  value={status ?? ALL}
+                  onChange={(v) => setStatus(v === ALL ? undefined : v)}
+                  options={[
+                    { value: ALL, label: t('plugin_im.all') },
+                    { value: 'open', label: t('plugin_im.status.open') },
+                    { value: 'closed', label: t('plugin_im.status.closed') },
+                  ]}
+                />
+                <SimpleSelect
+                  aria-label={t('plugin_im.fields.assignee')}
+                  label={t('plugin_im.fields.assignee')}
+                  className="w-full"
+                  value={assignee}
+                  onChange={(v) => setAssignee(v as 'all' | 'me' | 'unassigned')}
+                  options={[
+                    { value: 'all', label: t('plugin_im.assignee.all') },
+                    { value: 'me', label: t('plugin_im.assignee.me') },
+                    { value: 'unassigned', label: t('plugin_im.assignee.unassigned') },
+                  ]}
+                />
+                <div className="flex items-center justify-end border-t pt-2">
+                  <Button variant="ghost" size="sm" onClick={resetFilters} disabled={activeFilters.length === 0}>
+                    {t('common.reset')}
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
             <Button
               type="button"
               variant={notifyOn ? 'secondary' : 'outline'}
               size="icon"
+              className="shrink-0"
               onClick={() => void toggleNotify()}
               aria-pressed={notifyOn}
               aria-label={notifyOn ? t('plugin_im.notify.on') : t('plugin_im.notify.off')}
@@ -540,22 +570,20 @@ export default function ImPage() {
             </Badge>
           </div>
           {activeFilters.length > 0 ? (
-            <div className="flex flex-wrap items-center gap-1.5 border-b px-1 pb-1.5">
+            <div className="flex flex-wrap items-center gap-1.5">
               {activeFilters.map((f) => (
                 <button
                   key={f.key}
                   type="button"
                   onClick={f.clear}
-                  aria-label={`${t('common.remove')} ${f.label}`}
+                  aria-label={`${t('plugin_im.filter.remove')} ${f.label}${f.value ? ` ${f.value}` : ''}`}
                   className="flex h-7 max-w-full items-center gap-1 rounded-full border border-input bg-muted/60 px-2.5 text-xs hover:bg-muted"
                 >
-                  <span className="truncate">{f.label}</span>
+                  <span className="shrink-0 text-muted-foreground">{f.label}</span>
+                  <span className="truncate">{f.value}</span>
                   <X aria-hidden="true" className="size-3 shrink-0" />
                 </button>
               ))}
-              <Button type="button" variant="ghost" size="sm" className="ms-auto h-6 px-2 text-xs" onClick={resetFilters}>
-                {t('common.reset')}
-              </Button>
             </div>
           ) : null}
           {canPick ? (
@@ -680,83 +708,64 @@ function ConvListItem({
   const stamp = relativeStamp(conv.lastMsgAt, i18n.language)
   // 一行最多三枚元信息：归属、业务单号优先，标签按余位截断（标签在会话头部仍全量可见）
   const tagSlots = Math.max(0, 3 - (conv.assigneeName ? 1 : 0) - (conv.bizNo ? 1 : 0))
-  const row = (
-    <button
-      type="button"
-      onClick={onSelect}
-      className={cn(
-        'flex w-full items-start gap-2.5 rounded-md px-2.5 py-2 text-start text-sm transition-colors hover:bg-accent',
-        active && 'bg-accent',
-      )}
-    >
-      <Avatar className="mt-0.5 size-8 shrink-0">
-        <AvatarFallback className="text-xs">{initials(visitor)}</AvatarFallback>
-      </Avatar>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <span className="min-w-0 flex-1 truncate font-medium text-foreground">{visitor}</span>
-          {conv.unread > 0 ? (
-            <Badge variant="destructive" className="shrink-0 px-1.5 py-0 text-[10px] tabular-nums">
-              {conv.unread}
-            </Badge>
-          ) : null}
-          {stamp ? (
-            <span className="shrink-0 text-[11px] text-muted-foreground tabular-nums">
-              {stamp.kind === 'yesterday' ? t('plugin_im.yesterday') : stamp.text}
+  const meta = [
+    conv.assigneeName ? { key: 'assignee', node: <><UserRound aria-hidden="true" className="size-3" />{conv.assigneeName}</> } : null,
+    conv.bizNo
+      ? {
+          key: 'biz',
+          node: (
+            <span className="font-mono" title={conv.bizType ? conv.bizType.replace(/_/g, ' ') : undefined} aria-label={t('plugin_im.bizRef', { no: conv.bizNo })}>
+              {conv.bizNo}
             </span>
-          ) : null}
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-            {conv.lastPreview || t('plugin_im.noMessages')}
+          ),
+        }
+      : null,
+    ...tags.slice(0, tagSlots).map((tag) => ({ key: `tag-${tag}`, node: <>{tag}</> })),
+  ].filter(Boolean) as { key: string; node: React.ReactNode }[]
+
+  const row = (
+    <>
+      <span className="flex w-full items-center gap-2">
+        <QueueAvatar>{initials(visitor)}</QueueAvatar>
+        <span className={cn('min-w-0 flex-1 truncate text-sm text-foreground', conv.unread > 0 ? 'font-semibold' : 'font-medium')}>
+          {visitor}
+        </span>
+        {conv.unread > 0 ? (
+          <span className="shrink-0 rounded-full bg-destructive px-1.5 text-[10px] font-medium leading-4 text-destructive-foreground tabular-nums">
+            {conv.unread}
           </span>
-          <Badge variant={statusVariant(conv.status)} className="shrink-0">
-            {t(`plugin_im.status.${conv.status}`)}
-          </Badge>
-        </div>
-        {conv.assigneeName || conv.bizNo || tags.length > 0 ? (
-          <div className="mt-1 flex flex-wrap items-center gap-1">
-            {conv.assigneeName ? (
-              <Badge variant="outline" className="gap-1 px-1.5 py-0 text-[10px] font-normal">
-                <UserRound aria-hidden="true" className="size-3" />
-                {conv.assigneeName}
-              </Badge>
-            ) : null}
-            {conv.bizNo ? (
-              <Badge
-                variant="outline"
-                className="px-1.5 py-0 font-mono text-[10px] font-normal"
-                title={conv.bizType ? conv.bizType.replace(/_/g, ' ') : undefined}
-                aria-label={t('plugin_im.bizRef', { no: conv.bizNo })}
-              >
-                {conv.bizNo}
-              </Badge>
-            ) : null}
-            {tags.slice(0, tagSlots).map((tag) => (
-              <Badge key={tag} variant="outline" className="px-1.5 py-0 text-[10px] font-normal">
-                {tag}
-              </Badge>
-            ))}
-          </div>
         ) : null}
-      </div>
-    </button>
+        {stamp ? (
+          <span className="shrink-0 text-[11px] text-muted-foreground tabular-nums">
+            {stamp.kind === 'yesterday' ? t('plugin_im.yesterday') : stamp.text}
+          </span>
+        ) : null}
+      </span>
+      <span className="mt-1 flex w-full items-center gap-2">
+        <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{conv.lastPreview || t('plugin_im.noMessages')}</span>
+        <QueueStatus tone={conv.status === 'open' ? 'success' : 'neutral'}>{t(`plugin_im.status.${conv.status}`)}</QueueStatus>
+      </span>
+      {meta.length > 0 ? (
+        <span className="mt-1 flex min-w-0 items-center gap-1 text-[11px] text-muted-foreground">
+          {meta.map((m) => (
+            <span key={m.key} className="inline-flex min-w-0 items-center gap-1">
+              {m.node}
+            </span>
+          ))}
+        </span>
+      ) : null}
+    </>
   )
-  if (!canPick) return row
-  // 勾选框必须是按钮的兄弟节点：套在 <button> 里既是无效 HTML，点了也会连带选中会话
-  return (
-    <div className="flex items-start gap-1">
-      <Checkbox
-        className="mt-2.5 shrink-0"
-        checked={picked}
-        disabled={conv.status !== 'closed'}
-        title={conv.status === 'closed' ? undefined : t('plugin_im.batch.onlyClosed')}
-        aria-label={visitor}
-        onCheckedChange={(v) => onTogglePick(v === true)}
-      />
-      <div className="min-w-0 flex-1">{row}</div>
-    </div>
-  )
+  const checkbox = canPick ? (
+    <Checkbox
+      checked={picked}
+      disabled={conv.status !== 'closed'}
+      title={conv.status === 'closed' ? undefined : t('plugin_im.batch.onlyClosed')}
+      aria-label={visitor}
+      onCheckedChange={(v) => onTogglePick(v === true)}
+    />
+  ) : null
+  return <QueueRow selected={active} onSelect={onSelect} checkbox={checkbox}>{row}</QueueRow>
 }
 
 function systemLabel(m: ImMessage, t: (key: string) => string): string {
