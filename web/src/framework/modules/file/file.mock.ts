@@ -148,7 +148,8 @@ defineMock([
       if (kw) rows = rows.filter((f) => f.name.toLowerCase().includes(kw) || f.uploader.toLowerCase().includes(kw))
       if (query.from) rows = rows.filter((f) => f.createdAt.slice(0, 10) >= String(query.from))
       if (query.to) rows = rows.filter((f) => f.createdAt.slice(0, 10) <= String(query.to))
-      const dir = query.desc === 'false' ? 1 : -1
+      // config.params 里 desc 是布尔，URL 串里是 'false'：两种都认，否则升序会被当成降序
+      const dir = query.desc === 'false' || query.desc === false ? 1 : -1
       rows.sort((a, b) => {
         switch (query.sort) {
           case 'name':

@@ -185,7 +185,7 @@ export default function FilePage() {
   )
 
   const batchBar = selected.length > 0 && (
-    <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/50 px-3 py-2">
+    <div className="flex flex-wrap items-center gap-2">
       <span className="text-sm">{t('fileMgr.selectedCount', { count: selected.length })}</span>
       {batchActions(selected)}
       <Button variant="ghost" size="sm" className="h-11 md:h-8" onClick={() => setSelected([])}>
@@ -196,9 +196,9 @@ export default function FilePage() {
 
   const filterBar = (
     <FilterBar onSearch={search} onReset={reset}>
-      <Input value={draft.keyword} placeholder={t('fileMgr.keywordPlaceholder')} className="text-base md:w-44 md:text-sm" onChange={(e) => setDraft((d) => ({ ...d, keyword: e.target.value }))} aria-label={t('common.keyword')} />
+      <Input value={draft.keyword} placeholder={t('fileMgr.keywordPlaceholder')} className="text-base md:min-w-40 md:flex-1 md:text-sm" onChange={(e) => setDraft((d) => ({ ...d, keyword: e.target.value }))} aria-label={t('common.keyword')} />
       <Select value={draft.category} onValueChange={(v) => setDraft((d) => ({ ...d, category: v }))}>
-        <SelectTrigger className="md:w-40" aria-label={t('fileMgr.filterType')}>
+        <SelectTrigger className="md:w-36 md:shrink-0" aria-label={t('fileMgr.filterType')}>
           <SelectValue placeholder={t('fileMgr.filterType')} />
         </SelectTrigger>
         <SelectContent>
@@ -210,28 +210,12 @@ export default function FilePage() {
           ))}
         </SelectContent>
       </Select>
-      <DateRangePicker value={draft.range} onChange={(range) => setDraft((d) => ({ ...d, range }))} ariaLabel={t('fileMgr.timeRange')} className="md:w-64" placeholder={t('fileMgr.timeRange')} />
-      <Select value={`${draft.sort}:${draft.desc ? 'desc' : 'asc'}`} onValueChange={(v) => {
-        const [sort, dir] = v.split(':')
-        setDraft((d) => ({ ...d, sort: sort as FileSort, desc: dir === 'desc' }))
-      }}>
-        <SelectTrigger className="md:w-40" aria-label={t('fileMgr.sortBy')}>
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="created_at:desc">{t('fileMgr.sortNewest')}</SelectItem>
-          <SelectItem value="created_at:asc">{t('fileMgr.sortOldest')}</SelectItem>
-          <SelectItem value="name:asc">{t('fileMgr.sortNameAsc')}</SelectItem>
-          <SelectItem value="size:desc">{t('fileMgr.sortSizeDesc')}</SelectItem>
-          <SelectItem value="size:asc">{t('fileMgr.sortSizeAsc')}</SelectItem>
-        </SelectContent>
-      </Select>
+      <DateRangePicker value={draft.range} onChange={(range) => setDraft((d) => ({ ...d, range }))} ariaLabel={t('fileMgr.timeRange')} className="md:w-52 md:shrink-0" placeholder={t('fileMgr.timeRange')} />
     </FilterBar>
   )
 
-  const viewToggle = (className?: string) => (
+  const viewToggle = () => (
     <Segmented
-      className={className}
       ariaLabel={t('fileMgr.viewGrid')}
       value={view}
       onChange={(v) => {
@@ -253,6 +237,42 @@ export default function FilePage() {
         },
       ]}
     />
+  )
+
+  // 排序属于「结果怎么展示」，不进筛选表单；改了就立即重排，不必再点搜索
+  const sortSelect = (
+    <Select
+      value={`${draft.sort}:${draft.desc ? 'desc' : 'asc'}`}
+      onValueChange={(v) => {
+        const [sort, dir] = v.split(':')
+        const next = { sort: sort as FileSort, desc: dir === 'desc' }
+        setDraft((d) => ({ ...d, ...next }))
+        setApplied((a) => ({ ...a, ...next }))
+        setPage(1)
+        setSelected([])
+      }}
+    >
+      <SelectTrigger className="w-40 shrink-0" aria-label={t('fileMgr.sortBy')}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="created_at:desc">{t('fileMgr.sortNewest')}</SelectItem>
+        <SelectItem value="created_at:asc">{t('fileMgr.sortOldest')}</SelectItem>
+        <SelectItem value="name:asc">{t('fileMgr.sortNameAsc')}</SelectItem>
+        <SelectItem value="size:desc">{t('fileMgr.sortSizeDesc')}</SelectItem>
+        <SelectItem value="size:asc">{t('fileMgr.sortSizeAsc')}</SelectItem>
+      </SelectContent>
+    </Select>
+  )
+
+  const resultBar = (
+    <>
+      <span className="num text-sm text-muted-foreground">{t('common.total', { count: total })}</span>
+      <div className="ms-auto flex items-center gap-2">
+        {sortSelect}
+        {viewToggle()}
+      </div>
+    </>
   )
 
   const uploadBtn = (
@@ -285,12 +305,7 @@ export default function FilePage() {
 
           {view === 'list' ? (
             <DataTable
-              toolbar={
-                <>
-                  <span className="num text-sm text-muted-foreground">{t('common.total', { count: total })}</span>
-                  {viewToggle('ms-auto')}
-                </>
-              }
+              toolbar={resultBar}
               columns={columns}
               columnSettingsKey="file"
               data={rows}
@@ -311,23 +326,22 @@ export default function FilePage() {
               }}
             />
           ) : (
-            <>
-              {batchBar}
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="num text-sm text-muted-foreground">{t('common.total', { count: total })}</span>
-                <div className="ms-auto shrink-0">{viewToggle()}</div>
-              </div>
+            <Card className="overflow-hidden rounded-xl">
+              {/* 与列表视图同构：一张卡片 = 表头（计数+视图切换）/ 内容 / 页脚，页面不再散着三段裸元素 */}
+              <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2">{resultBar}</div>
 
-              {isLoading ? (
-                <div className={GRID_CLASS}>
-                  {Array.from({ length: 10 }, (_, i) => (
-                    <Skeleton key={i} className="aspect-4/3 w-full rounded-lg" />
-                  ))}
-                </div>
-              ) : rows.length === 0 ? (
-                <EmptyState title={t('fileMgr.empty')} />
-              ) : (
-                <>
+              {batchBar ? <div className="border-b border-border bg-muted/50 px-3 py-2">{batchBar}</div> : null}
+
+              <div className="p-3">
+                {isLoading ? (
+                  <div className={GRID_CLASS}>
+                    {Array.from({ length: 10 }, (_, i) => (
+                      <Skeleton key={i} className="aspect-4/3 w-full rounded-lg" />
+                    ))}
+                  </div>
+                ) : rows.length === 0 ? (
+                  <EmptyState title={t('fileMgr.empty')} />
+                ) : (
                   <ul className={GRID_CLASS}>
                     {rows.map((f) => {
                       const checked = selected.includes(f.id)
@@ -372,22 +386,24 @@ export default function FilePage() {
                       )
                     })}
                   </ul>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="num text-sm text-muted-foreground">{t('fileMgr.pageInfo', { page, pages, total })}</span>
-                    {pages > 1 && (
-                      <div className="flex gap-2">
-                        <Button variant="outline" size="icon" className="size-11 md:size-9" aria-label={t('common.prev')} disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-                          <ChevronLeft className="size-4 rtl:rotate-180" aria-hidden="true" />
-                        </Button>
-                        <Button variant="outline" size="icon" className="size-11 md:size-9" aria-label={t('common.next')} disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>
-                          <ChevronRight className="size-4 rtl:rotate-180" aria-hidden="true" />
-                        </Button>
-                      </div>
-                    )}
+                )}
+              </div>
+
+              {/* 只有一页时不占一行页脚；总数已在表头，页脚只说页码 */}
+              {pages > 1 ? (
+                <div className="flex items-center justify-between gap-2 border-t border-border px-3 py-2">
+                  <span className="num text-sm text-muted-foreground">{t('dataTable.pageInfo', { page, pages })}</span>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="icon" className="size-11 md:size-9" aria-label={t('common.prev')} disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+                      <ChevronLeft className="size-4 rtl:rotate-180" aria-hidden="true" />
+                    </Button>
+                    <Button variant="outline" size="icon" className="size-11 md:size-9" aria-label={t('common.next')} disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>
+                      <ChevronRight className="size-4 rtl:rotate-180" aria-hidden="true" />
+                    </Button>
                   </div>
-                </>
-              )}
-            </>
+                </div>
+              ) : null}
+            </Card>
           )}
         </div>
       </div>

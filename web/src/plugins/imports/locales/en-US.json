@@ -3,6 +3,9 @@
     "title": "Import Center",
     "description": "Free CSV / XLSX import: template download, row validation, error report. Multiple files at once.",
     "menu": "Import Center",
+    "newImport": "New import",
+    "sourcePlaceholder": "Choose a source",
+    "columnsHint": "Template columns (* required)",
     "perm": {
       "run": "Run imports"
     },
@@ -48,6 +51,7 @@
       "done": "Done",
       "failed": "Failed",
       "cancelled": "Cancelled"
-    }
+    },
+    "multiHint": "Multiple files allowed"
   }
 }

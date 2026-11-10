@@ -65,7 +65,6 @@
     "sortOldest": "最早优先",
     "sortNameAsc": "按名称 A-Z",
     "sortSizeDesc": "按大小 从大到小",
-    "sortSizeAsc": "按大小 从小到大",
-    "pageInfo": "第 {{page}} / {{pages}} 页，共 {{total}} 项"
+    "sortSizeAsc": "按大小 从小到大"
   }
 }

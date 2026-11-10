@@ -3,6 +3,9 @@
     "title": "导入中心",
     "description": "免费通用 CSV / XLSX 导入：模板下载、逐行校验、错误行报告，支持一次选多个文件",
     "menu": "导入中心",
+    "newImport": "新建导入",
+    "sourcePlaceholder": "选择数据源",
+    "columnsHint": "模板列（* 为必填）",
     "perm": {
       "run": "执行导入"
     },
@@ -48,6 +51,7 @@
       "done": "已完成",
       "failed": "失败",
       "cancelled": "已取消"
-    }
+    },
+    "multiHint": "支持一次选择多个文件"
   }
 }

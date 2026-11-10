@@ -8,6 +8,7 @@ import { ExportCsvButton } from '@/framework/components/export/ExportCsvButton'
 import { FileDropField } from '@/framework/components/FileDropField'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { RequiredMark } from '@/framework/components/RequiredMark'
+import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { DataTable, type Column } from '@/framework/components/DataTable'
@@ -31,10 +32,160 @@ import {
   useRunImport,
   useSources,
   type ImportJob,
+  type ImportSourceMeta,
 } from './api'
 import { formatTime, statusVariant } from './format'
 
 const ALL = '__all'
+
+/**
+ * 导入是一次性动作，台账是长期列表：表单放进弹窗（与文件管理的「上传文件」同构），
+ * 列表页只留筛选 + 台账，页头一个主按钮进入导入。
+ */
+function NewImportDialog({
+  open,
+  onOpenChange,
+  sources,
+  noSources,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  sources: ImportSourceMeta[]
+  noSources: boolean
+}) {
+  const { t } = useTranslation()
+  const run = useRunImport()
+  const [sourceName, setSourceName] = useState('')
+  const [files, setFiles] = useState<File[]>([])
+  const source = sources.find((s) => s.name === sourceName)
+  const ready = !!sourceName && files.length > 0 && !noSources
+
+  // 多选时逐个提交：每个文件一条台账，任何一个失败不影响其余文件
+  const submit = async () => {
+    if (!ready) return
+    let ok = 0
+    let fail = 0
+    let last: ImportJob | null = null
+    for (const file of files) {
+      try {
+        last = await run.mutateAsync({ source: sourceName, file })
+        ok++
+      } catch (e) {
+        fail++
+        toast.error(`${file.name}: ${(e as Error).message}`)
+      }
+    }
+    if (files.length > 1) toast.success(t('plugin_imports.batchDone', { ok, fail }))
+    else if (last) toast.success(t('plugin_imports.doneSummary', { ok: last.okRows, fail: last.failRows }))
+    // 成功就关窗；全部失败时留在弹窗里换文件重试
+    if (ok > 0) onOpenChange(false)
+  }
+
+  return (
+    <ResponsiveDialog
+      open={open}
+      onOpenChange={(o) => {
+        if (!o) {
+          setSourceName('')
+          setFiles([])
+        }
+        onOpenChange(o)
+      }}
+      title={t('plugin_imports.newImport')}
+      description={t('plugin_imports.description')}
+      size="lg"
+      footer={
+        <>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            {t('common.cancel')}
+          </Button>
+          <Button onClick={() => void submit()} disabled={run.isPending || !ready}>
+            <Upload className="me-2 size-4" aria-hidden="true" />
+            {t('plugin_imports.run')}
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+          <div className="flex flex-col gap-1">
+            <span className="text-xs text-muted-foreground">
+              {t('plugin_imports.fields.source')}
+              <RequiredMark />
+            </span>
+            <Select value={sourceName} onValueChange={setSourceName} disabled={noSources}>
+              <SelectTrigger aria-label={t('plugin_imports.fields.source')}>
+                <SelectValue placeholder={t('plugin_imports.sourcePlaceholder')} />
+              </SelectTrigger>
+              <SelectContent>
+                {sources.map((s) => (
+                  <SelectItem key={s.name} value={s.name}>
+                    {s.title}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" disabled={!sourceName}>
+                <FileDown aria-hidden="true" />
+                {t('plugin_imports.downloadTemplate')}
+                <ChevronDown aria-hidden="true" className="opacity-60" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => sourceName && void downloadTemplate(sourceName, 'csv')}>
+                {t('plugin_imports.templateCsv')}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => sourceName && void downloadTemplate(sourceName, 'xlsx')}>
+                {t('plugin_imports.templateXlsx')}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span id="imports-file-label" className="text-xs text-muted-foreground">
+              {t('plugin_imports.fields.file')}
+              <RequiredMark />
+            </span>
+            <span className="text-xs text-muted-foreground">
+              {files.length > 1
+                ? t('plugin_imports.filesSelected', { count: files.length })
+                : t('plugin_imports.multiHint')}
+            </span>
+          </div>
+          <FileDropField
+            multiple
+            accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            labelledBy="imports-file-label"
+            disabled={noSources}
+            files={files}
+            onChange={setFiles}
+          />
+        </div>
+
+        {source ? (
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs text-muted-foreground">{t('plugin_imports.columnsHint')}</span>
+            <div className="flex flex-wrap gap-1.5">
+              {source.columns.map((c) => (
+                <Badge key={c.key} variant={c.required ? 'secondary' : 'outline'}>
+                  {c.label}
+                  {c.required ? ' *' : ''}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {noSources ? <p className="text-xs text-muted-foreground">{t('plugin_imports.noSources')}</p> : null}
+      </div>
+    </ResponsiveDialog>
+  )
+}
 
 export default function ImportsPage() {
   const { t, i18n } = useTranslation()
@@ -42,17 +193,16 @@ export default function ImportsPage() {
   const [status, setStatus] = useState<string | undefined>()
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
+  const [importOpen, setImportOpen] = useState(false)
 
   const sources = useSources()
   const jobs = useJobs({ source, status, page, pageSize })
-  const run = useRunImport()
   const remove = useDeleteImport()
   const removeBatch = useDeleteImports()
   const cancelJob = useCancelImport()
   const confirm = useConfirm()
   const [selected, setSelected] = useState<string[]>([])
-  const [pendingSource, setPendingSource] = useState<string | undefined>()
-  const [files, setFiles] = useState<File[]>([])
+  const noSources = sources.isSuccess && (sources.data ?? []).length === 0
 
   // 取消：已处理的部分保留，台账记为 cancelled；正在消失前的 404/409 由 toast 展示。
   const onCancel = async (j: ImportJob) => {
@@ -69,34 +219,8 @@ export default function ImportsPage() {
     }
   }
 
-  // 没有数据源时工具栏照常渲染（来源下拉与「开始导入」置灰），避免页面像坏掉一样
-  const noSources = sources.isSuccess && (sources.data ?? []).length === 0
-
-  // 多选时逐个提交：每个文件一条台账，任何一个失败不影响其余文件
-  const submit = async () => {
-    const src = pendingSource ?? source
-    if (!files.length || !src) {
-      toast.error(t('plugin_imports.pickFileFirst'))
-      return
-    }
-    let ok = 0
-    let fail = 0
-    let last: ImportJob | null = null
-    for (const file of files) {
-      try {
-        last = await run.mutateAsync({ source: src, file })
-        ok++
-      } catch (e) {
-        fail++
-        toast.error(`${file.name}: ${(e as Error).message}`)
-      }
-    }
-    if (files.length > 1) toast.success(t('plugin_imports.batchDone', { ok, fail }))
-    else if (last) toast.success(t('plugin_imports.doneSummary', { ok: last.okRows, fail: last.failRows }))
-    setFiles([])
-  }
-
-  const deleteJob = async (j: ImportJob) => {    const ok = await confirm({
+  const deleteJob = async (j: ImportJob) => {
+    const ok = await confirm({
       title: t('plugin_imports.delete'),
       description: t('plugin_imports.deleteConfirm', { name: j.fileName }),
       destructive: true,
@@ -170,115 +294,18 @@ export default function ImportsPage() {
 
   return (
     <PageContainer>
-      <PageHeader title={t('plugin_imports.title')} description={t('plugin_imports.description')} />
-
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-end gap-2">
-          <label className="flex flex-col gap-1">
-            <span className="text-xs text-muted-foreground">
-              {t('plugin_imports.fields.source')}
-              <RequiredMark />
-            </span>
-            <Select value={pendingSource ?? ''} onValueChange={setPendingSource} disabled={noSources}>
-              <SelectTrigger className="md:w-56" aria-label={t('plugin_imports.fields.source')}>
-                <SelectValue placeholder={t('plugin_imports.fields.source')} />
-              </SelectTrigger>
-              <SelectContent>
-                {(sources.data ?? []).map((s) => (
-                  <SelectItem key={s.name} value={s.name}>
-                    {s.title}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </label>
-          {pendingSource ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline">
-                  <FileDown aria-hidden="true" />
-                  {t('plugin_imports.downloadTemplate')}
-                  <ChevronDown aria-hidden="true" className="opacity-60" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
-                <DropdownMenuItem onSelect={() => void downloadTemplate(pendingSource, 'csv')}>
-                  {t('plugin_imports.templateCsv')}
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => void downloadTemplate(pendingSource, 'xlsx')}>
-                  {t('plugin_imports.templateXlsx')}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : null}
-        </div>
-        {pendingSource ? (
-          <div className="flex flex-wrap gap-1.5">
-            {(sources.data ?? []).find((s) => s.name === pendingSource)?.columns.map((c) => (
-              <Badge key={c.key} variant={c.required ? 'secondary' : 'outline'}>
-                {c.label}
-                {c.required ? ' *' : ''}
-              </Badge>
-            ))}
-          </div>
-        ) : null}
-        <div className="flex max-w-2xl flex-col gap-1.5">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <span id="imports-file-label" className="text-xs text-muted-foreground">
-              {t('plugin_imports.fields.file')}
-              <RequiredMark />
-            </span>
-            {files.length > 1 ? (
-              <span className="text-xs text-muted-foreground">{t('plugin_imports.filesSelected', { count: files.length })}</span>
-            ) : null}
-          </div>
-          <FileDropField
-            multiple
-            accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            labelledBy="imports-file-label"
-            disabled={noSources}
-            files={files}
-            onChange={setFiles}
-          />
-        </div>
-        <Can perm="imports:run">
-          <div>
-            <Button onClick={() => void submit()} disabled={run.isPending || noSources}>
-              <Upload aria-hidden="true" />
-              {t('plugin_imports.run')}
+      <PageHeader
+        title={t('plugin_imports.title')}
+        description={t('plugin_imports.description')}
+        actions={
+          <Can perm="imports:run">
+            <Button onClick={() => setImportOpen(true)}>
+              <Upload className="me-2 size-4" aria-hidden="true" />
+              {t('plugin_imports.newImport')}
             </Button>
-          </div>
-        </Can>
-        {noSources ? <p className="text-xs text-muted-foreground">{t('plugin_imports.noSources')}</p> : null}
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <Select value={source ?? ALL} onValueChange={(v) => { setSource(v === ALL ? undefined : v); setPage(1) }}>
-          <SelectTrigger className="md:w-56" aria-label={t('plugin_imports.fields.source')}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_imports.filter.allSources')}</SelectItem>
-            {(sources.data ?? []).map((s) => (
-              <SelectItem key={s.name} value={s.name}>
-                {s.title}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={status ?? ALL} onValueChange={(v) => { setStatus(v === ALL ? undefined : v); setPage(1) }}>
-          <SelectTrigger className="md:w-40" aria-label={t('plugin_imports.fields.status')}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_imports.filter.allStatuses')}</SelectItem>
-            <SelectItem value="pending">{t('plugin_imports.status.pending')}</SelectItem>
-            <SelectItem value="running">{t('plugin_imports.status.running')}</SelectItem>
-            <SelectItem value="done">{t('plugin_imports.status.done')}</SelectItem>
-            <SelectItem value="failed">{t('plugin_imports.status.failed')}</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+          </Can>
+        }
+      />
 
       <DataTable
         columns={columns}
@@ -306,36 +333,79 @@ export default function ImportsPage() {
           </Can>
         )}
         toolbar={
-          // 台账是「谁在什么时候导入哪个文件、成功/失败多少行」的凭据，导出用于核对与归档：
-          // 走列表同一个分页接口按筛选捞全，密钥类字段本来就不在台账里。
-          <ExportCsvButton
-            filename="import-jobs"
-            perm="imports:list"
-            getRows={() => fetchJobsForExport({ source, status })}
-            columns={[
-              { header: t('plugin_imports.fields.fileName'), value: (j) => j.fileName },
-              { header: t('plugin_imports.fields.source'), value: (j) => sourceTitle(j.source) },
-              { header: t('plugin_imports.fields.totalRows'), value: (j) => j.totalRows },
-              { header: t('plugin_imports.fields.okRows'), value: (j) => j.okRows },
-              { header: t('plugin_imports.fields.failRows'), value: (j) => j.failRows },
-              { header: t('plugin_imports.fields.status'), value: (j) => t(`plugin_imports.status.${j.status}`) },
-              { header: t('plugin_imports.fields.createdBy'), value: (j) => j.createdBy },
-              { header: t('plugin_imports.fields.createdAt'), value: (j) => formatTime(j.createdAt, i18n.language) },
-            ]}
-          />
+          <>
+            <Select value={source ?? ALL} onValueChange={(v) => { setSource(v === ALL ? undefined : v); setPage(1) }}>
+              <SelectTrigger className="w-40 md:w-52" aria-label={t('plugin_imports.fields.source')}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>{t('plugin_imports.filter.allSources')}</SelectItem>
+                {(sources.data ?? []).map((s) => (
+                  <SelectItem key={s.name} value={s.name}>
+                    {s.title}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={status ?? ALL} onValueChange={(v) => { setStatus(v === ALL ? undefined : v); setPage(1) }}>
+              <SelectTrigger className="w-36 md:w-40" aria-label={t('plugin_imports.fields.status')}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>{t('plugin_imports.filter.allStatuses')}</SelectItem>
+                <SelectItem value="pending">{t('plugin_imports.status.pending')}</SelectItem>
+                <SelectItem value="running">{t('plugin_imports.status.running')}</SelectItem>
+                <SelectItem value="done">{t('plugin_imports.status.done')}</SelectItem>
+                <SelectItem value="failed">{t('plugin_imports.status.failed')}</SelectItem>
+              </SelectContent>
+            </Select>
+            {/* 台账是「谁在什么时候导入哪个文件、成功/失败多少行」的凭据，导出用于核对与归档：
+                走列表同一个分页接口按筛选捞全，密钥类字段本来就不在台账里。 */}
+            <div className="ms-auto">
+              <ExportCsvButton
+                filename="import-jobs"
+                perm="imports:list"
+                getRows={() => fetchJobsForExport({ source, status })}
+                columns={[
+                  { header: t('plugin_imports.fields.fileName'), value: (j) => j.fileName },
+                  { header: t('plugin_imports.fields.source'), value: (j) => sourceTitle(j.source) },
+                  { header: t('plugin_imports.fields.totalRows'), value: (j) => j.totalRows },
+                  { header: t('plugin_imports.fields.okRows'), value: (j) => j.okRows },
+                  { header: t('plugin_imports.fields.failRows'), value: (j) => j.failRows },
+                  { header: t('plugin_imports.fields.status'), value: (j) => t(`plugin_imports.status.${j.status}`) },
+                  { header: t('plugin_imports.fields.createdBy'), value: (j) => j.createdBy },
+                  { header: t('plugin_imports.fields.createdAt'), value: (j) => formatTime(j.createdAt, i18n.language) },
+                ]}
+              />
+            </div>
+          </>
         }
         rowActions={(j) => (
           <div className="flex items-center justify-end gap-1">
             {j.failRows > 0 ? (
               <>
-                <Button variant="ghost" size="sm" onClick={() => void downloadErrorsCsv(j.id)}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="px-2 md:px-3"
+                  aria-label={t('plugin_imports.errorsCsv')}
+                  title={t('plugin_imports.errorsCsv')}
+                  onClick={() => void downloadErrorsCsv(j.id)}
+                >
                   <FileDown aria-hidden="true" />
-                  {t('plugin_imports.errorsCsv')}
+                  <span className="hidden md:inline">{t('plugin_imports.errorsCsv')}</span>
                 </Button>
                 {/* 待修复 CSV：失败行按模板口径原样导出，修正后可直接再导入 */}
-                <Button variant="ghost" size="sm" onClick={() => void downloadRetryCsv(j.id)}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="px-2 md:px-3"
+                  aria-label={t('plugin_imports.retryCsv')}
+                  title={t('plugin_imports.retryCsv')}
+                  onClick={() => void downloadRetryCsv(j.id)}
+                >
                   <FilePen aria-hidden="true" />
-                  {t('plugin_imports.retryCsv')}
+                  <span className="hidden md:inline">{t('plugin_imports.retryCsv')}</span>
                 </Button>
               </>
             ) : null}
@@ -367,6 +437,8 @@ export default function ImportsPage() {
           </div>
         )}
       />
+
+      <NewImportDialog open={importOpen} onOpenChange={setImportOpen} sources={sources.data ?? []} noSources={noSources} />
     </PageContainer>
   )
 }

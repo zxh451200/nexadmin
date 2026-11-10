@@ -65,7 +65,6 @@
     "sortOldest": "Oldest first",
     "sortNameAsc": "Name A-Z",
     "sortSizeDesc": "Size, largest first",
-    "sortSizeAsc": "Size, smallest first",
-    "pageInfo": "Page {{page}} / {{pages}}, {{total}} total"
+    "sortSizeAsc": "Size, smallest first"
   }
 }
