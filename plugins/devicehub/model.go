@@ -62,14 +62,16 @@ type Device struct {
 	Endpoint string `gorm:"size:255;not null;default:''" json:"endpoint"`
 	// Config 是协议特定参数（JSON）：modbus-tcp → {unitId, pollIntervalMs}；
 	// mqtt → {username, password, upstreamPrefix}。密码字段序列化时由 handler 剥除。
-	Config     string     `gorm:"type:text;not null" json:"config"`
-	Status     string     `gorm:"size:16;not null;default:offline" json:"status"`
-	Enabled    bool       `gorm:"not null;default:1" json:"enabled"`
+	Config string `gorm:"type:text;not null" json:"config"`
+	Status string `gorm:"size:16;not null;default:offline" json:"status"`
+	// 不能带 gorm default:1：带默认值时 GORM 会在 INSERT 前把显式 false 改写成 1，
+	// 「新增时取消勾选启用」永远存不进去。默认启用由表单和 DDL 各自保证。
+	Enabled    bool       `gorm:"not null" json:"enabled"`
 	LastSeenAt *time.Time `json:"lastSeenAt,omitempty"`
 	// 安装位置：LocationField 选点或手填。坐标统一存 WGS-84 原值（前端按所选地图厂商转换显示）。
-	Lng      *float64   `json:"lng,omitempty"`
-	Lat      *float64   `json:"lat,omitempty"`
-	Location string     `gorm:"size:255;not null;default:''" json:"location"`
+	Lng      *float64 `json:"lng,omitempty"`
+	Lat      *float64 `json:"lat,omitempty"`
+	Location string   `gorm:"size:255;not null;default:''" json:"location"`
 }
 
 func (Device) TableName() string { return "plg_devhub_device" }
@@ -86,7 +88,7 @@ type Point struct {
 	Scale    float64  `gorm:"not null;default:1" json:"scale"`
 	PollMs   int      `gorm:"column:poll_interval_ms;not null;default:0" json:"pollIntervalMs"`
 	Deadband float64  `gorm:"not null;default:0" json:"deadband"`
-	Enabled  bool     `gorm:"not null;default:1" json:"enabled"`
+	Enabled  bool     `gorm:"not null" json:"enabled"`
 	Sort     int      `gorm:"not null;default:0" json:"sort"`
 	// LastValueNum/LastValueStr 是最近一次采集值（内存缓存不丢时用它渲染监控页），
 	// last_ts 为空表示从未采到。
@@ -145,7 +147,7 @@ type AlarmRule struct {
 	Op        string   `gorm:"size:8;not null" json:"op"`
 	Threshold float64  `gorm:"not null" json:"threshold"`
 	Level     string   `gorm:"size:8;not null;default:warn" json:"level"`
-	Enabled   bool     `gorm:"not null;default:1" json:"enabled"`
+	Enabled   bool     `gorm:"not null" json:"enabled"`
 	// CooldownSeconds 触发后冷却期内不重复发事件/通知，避免秒级采集刷屏。
 	CooldownSeconds int        `gorm:"not null;default:300" json:"cooldownSeconds"`
 	LastFiredAt     *time.Time `json:"lastFiredAt,omitempty"`

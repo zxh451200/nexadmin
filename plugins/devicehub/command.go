@@ -9,6 +9,7 @@ package devicehub
 
 import (
 	"context"
+	"errors"
 	"strconv"
 	"time"
 
@@ -61,8 +62,8 @@ func (s *Service) CreateCommand(ctx context.Context, in CommandInput) (*Command,
 	return &row, nil
 }
 
-// commandLoop 是指令执行 worker：拉 queued 指令逐条执行（串行——Modbus 单连接串行语义天然匹配）。
-// 超时 5s 没回执判 timeout。由 plugin.Start 起，ctx 取消即退出。
+// commandLoop 是指令执行 worker：每秒认领一批 queued 指令，按设备分组并发执行。
+// 超时 5s 没回执判 timeout（见 execCommand）。由 plugin.Start 起，ctx 取消即退出。
 func (s *Service) commandLoop(ctx context.Context) {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
@@ -76,20 +77,104 @@ func (s *Service) commandLoop(ctx context.Context) {
 	}
 }
 
-// drainCommands 处理当前所有 queued 指令（一轮最多 20 条，防止单轮过长）。
+// cmdScanBatch 是一轮扫描的上限：够覆盖「一批控制点同时下发」的突发，
+// 又不至于把积压几万条的队列一次拉进内存。
+const cmdScanBatch = 200
+
+// cmdDeviceSem 限制同时在执行的设备数。一台设备一个 goroutine，掉线设备的每条指令都要等满 5s，
+// 设备多时不设闸门会起上千个 goroutine 各自开连接做 IO；8 台并行已能把
+// 「一台掉线堵住全局」收敛成「最多堵住 1/8 的并发额度」。
+var cmdDeviceSem = make(chan struct{}, 8)
+
+// drainCommands 认领当前 queued 指令（一轮最多 200 条），按设备分组并发执行。
+//
+// 并发粒度取「设备」：改造前是单循环顺序执行，一台掉线设备每条指令等满 5s，
+// 排在它后面的所有设备的指令一起被堵住。而同一台设备只有一条连接（Modbus 尤甚），
+// 写操作必须串行，所以组内按 id 顺序串行、组间并行。
+//
+// 不等待 goroutine：下一轮（1s 后）靠 cmdInFlight 去重跳过还在跑的单号，
+// 单轮耗时不再取决于最慢的设备。
 func (s *Service) drainCommands(ctx context.Context) {
+	if ctx.Err() != nil {
+		return // 插件在停：不再认领新指令
+	}
 	var cmds []Command
-	if err := s.db.WithContext(ctx).Where("status = ?", CmdQueued).Order("id").Limit(20).Find(&cmds).Error; err != nil {
+	if err := s.db.WithContext(ctx).Where("status = ?", CmdQueued).Order("id").Limit(cmdScanBatch).Find(&cmds).Error; err != nil {
 		s.logWarn("devicehub: load commands failed", "err", err.Error())
 		return
 	}
+	// 分组时保持 id 升序（cmds 已按 id 排序），devices 记首现顺序，让每轮的并发顺序稳定可读。
+	devices := make([]idgen.ID, 0, 8)
+	groups := make(map[idgen.ID][]*Command, 8)
+	var roundClaimed []idgen.ID
 	for i := range cmds {
+		if ctx.Err() != nil {
+			// 认领到一半插件在停：本轮已认领但还没派发的单号必须回滚，
+			// 否则它们会永远留在 cmdInFlight 里，重启后的下一轮再也认领不到。
+			s.releaseCmdClaims(roundClaimed)
+			return
+		}
+		cmd := &cmds[i]
+		s.cmdMu.Lock()
+		if s.cmdInFlight[cmd.ID] {
+			// 上一轮已经认领、还在执行：跳过。这里的标记属于另一个 goroutine，
+			// 绝不能在这里删——删了下一轮会把它再认领一次，同一台设备上出现并发写。
+			s.cmdMu.Unlock()
+			continue
+		}
+		s.cmdInFlight[cmd.ID] = true
+		s.cmdMu.Unlock()
+		roundClaimed = append(roundClaimed, cmd.ID)
+		if _, ok := groups[cmd.DeviceID]; !ok {
+			devices = append(devices, cmd.DeviceID)
+		}
+		groups[cmd.DeviceID] = append(groups[cmd.DeviceID], cmd)
+	}
+	for _, deviceID := range devices {
+		go s.runDeviceCommands(ctx, groups[deviceID])
+	}
+}
+
+// releaseCmdClaims 清掉本 goroutine 认领过的单号。只删传进来的单号——标记是「谁认领谁释放」，
+// 别人的在途标记由别人的 defer 清，这里不能一把清空整个 map。
+func (s *Service) releaseCmdClaims(ids []idgen.ID) {
+	s.cmdMu.Lock()
+	for _, id := range ids {
+		delete(s.cmdInFlight, id)
+	}
+	s.cmdMu.Unlock()
+}
+
+// runDeviceCommands 执行一台设备本轮认领到的指令：组内按 id 串行，组结束释放本组全部认领标记。
+//
+// 在途语义只放内存（cmdInFlight）而不新增 status=running：指令状态是前端状态映射与历史列表的
+// 一部分（queued/done/failed/timeout 四态），多一个中间态要同时改前端映射、筛选与统计口径，
+// 历史数据里还会留下进程重启时永远停在 running 的悬挂行；内存标记进程内有效、重启即归零，
+// queued 行自然被下一轮重新认领。
+func (s *Service) runDeviceCommands(ctx context.Context, cmds []*Command) {
+	claimed := make([]idgen.ID, 0, len(cmds))
+	for _, cmd := range cmds {
+		claimed = append(claimed, cmd.ID)
+	}
+	// 组结束（正常跑完 / ctx 取消 / 拿不到信号量）都要释放本组标记，下一轮才能重新认领未执行的单。
+	defer s.releaseCmdClaims(claimed)
+
+	// 信号量获取要能被 ctx 打断：插件停的时候不能卡在这里等别的设备跑完 5s 超时。
+	// 拿不到就返回，defer 回滚本组标记，指令保持 queued，重启后重新排队。
+	select {
+	case cmdDeviceSem <- struct{}{}:
+	case <-ctx.Done():
+		return
+	}
+	defer func() { <-cmdDeviceSem }()
+
+	for _, cmd := range cmds {
 		select {
 		case <-ctx.Done():
-			return
+			return // 剩余指令不回执：仍是 queued，插件重启后继续
 		default:
 		}
-		s.execCommand(ctx, &cmds[i])
+		s.execCommand(ctx, cmd)
 	}
 }
 
@@ -97,16 +182,16 @@ func (s *Service) drainCommands(ctx context.Context) {
 func (s *Service) execCommand(ctx context.Context, cmd *Command) {
 	var d Device
 	if err := s.db.WithContext(ctx).Take(&d, "id = ?", cmd.DeviceID).Error; err != nil {
-		s.finishCommand(ctx, cmd, "", CmdFailed, "设备不存在或已被删除")
+		s.finishCommand(ctx, cmd, "", CmdFailed, s.text("设备不存在或已被删除", "Device no longer exists"))
 		return
 	}
 	if !d.Enabled {
-		s.finishCommand(ctx, cmd, d.DeviceNo, CmdFailed, "设备已停用")
+		s.finishCommand(ctx, cmd, d.DeviceNo, CmdFailed, s.text("设备已停用", "Device is disabled"))
 		return
 	}
 	var p Point
 	if err := s.db.WithContext(ctx).Take(&p, "id = ?", cmd.PointID).Error; err != nil {
-		s.finishCommand(ctx, cmd, d.DeviceNo, CmdFailed, "测点不存在或已被删除")
+		s.finishCommand(ctx, cmd, d.DeviceNo, CmdFailed, s.text("测点不存在或已被删除", "Point no longer exists"))
 		return
 	}
 	drv, err := driver.New(d.Protocol, d.Endpoint, []byte(d.Config))
@@ -116,16 +201,42 @@ func (s *Service) execCommand(ctx context.Context, cmd *Command) {
 	}
 	execCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	if err := drv.Connect(execCtx); err != nil {
-		s.finishCommand(ctx, cmd, d.DeviceNo, CmdFailed, err.Error())
-		return
+	// 驱动内部有自己的网络超时（Modbus 默认 2s、S7 2s、OPC UA 5s），且多数阻塞在
+	// 自己的 socket deadline 上、不认 execCtx。放在单独的 goroutine 里执行并 select
+	// 到点就回 timeout：否则一台设备的慢 IO 会占住整组到驱动自己放弃为止，5s 执行窗形同虚设。
+	// 结果通道带缓冲：超时返回后 goroutine 仍可把迟到结果写进去并自行关闭连接，不泄漏。
+	done := make(chan error, 1)
+	go func() {
+		defer func() { _ = drv.Close() }()
+		if err := drv.Connect(execCtx); err != nil {
+			done <- err
+			return
+		}
+		done <- drv.Write(execCtx, p.Address, p.DataType, cmd.RawValue)
+	}()
+	select {
+	case <-execCtx.Done():
+		// 驱动可能仍在写：回执先按超时落库，迟到结果不覆盖状态（设备端是否真执行以现场为准）。
+		s.finishCommand(ctx, cmd, d.DeviceNo, CmdTimeout, s.text("执行超时（5 秒）", "Timed out after 5 seconds"))
+	case err := <-done:
+		if err != nil {
+			status, result := s.cmdExecResult(err)
+			s.finishCommand(ctx, cmd, d.DeviceNo, status, result)
+			return
+		}
+		s.finishCommand(ctx, cmd, d.DeviceNo, CmdDone, "")
 	}
-	defer func() { _ = drv.Close() }()
-	if err := drv.Write(execCtx, p.Address, p.DataType, cmd.RawValue); err != nil {
-		s.finishCommand(ctx, cmd, d.DeviceNo, CmdFailed, err.Error())
-		return
+}
+
+// cmdExecResult 把执行错误翻译成回执（状态 + 文案）：5s 执行窗到点（Connect/Write 拿到
+// DeadlineExceeded，驱动用 %w 包装也算）归 timeout，其余（拒连、寄存器非法、写被拒）归 failed。
+// 两者在运维口径上不是一回事——混成 failed 就看不出「设备慢/掉线」与「参数写错」。
+// 文案走 s.text：指令协程没有请求上下文，跟随应用默认语言。
+func (s *Service) cmdExecResult(err error) (string, string) {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return CmdTimeout, s.text("执行超时（5 秒）", "Timed out after 5 seconds")
 	}
-	s.finishCommand(ctx, cmd, d.DeviceNo, CmdDone, "")
+	return CmdFailed, err.Error()
 }
 
 // finishCommand 写回执并推送（前端指令列表轮询/WS 均可感知）。

@@ -37,6 +37,7 @@ func responseUnavailable() error {
 }
 
 // GetDevice 按设备号取设备（含在线状态与最近上线时间）。包级函数不能叫 Device：会和 Device 类型同名冲突。
+// Config 里的密码字段只回显占位串——宿主侧要连设备请用库里的值，不要靠这里读密码。
 func GetDevice(ctx context.Context, deviceNo string) (*Device, error) {
 	s := current()
 	if s == nil {
@@ -46,6 +47,7 @@ func GetDevice(ctx context.Context, deviceNo string) (*Device, error) {
 	if err := s.db.WithContext(ctx).Where("device_no = ?", deviceNo).Take(&d).Error; err != nil {
 		return nil, err
 	}
+	d.Config = maskDeviceConfig(d.Config)
 	return &d, nil
 }
 

@@ -30,7 +30,14 @@
       "endpointHint": "Modbus 形如 192.168.1.20:502；RTU 形如 COM3:9600,8,E,1",
       "endpointMqttHint": "broker 地址，形如 tcp://192.168.1.10:1883",
       "config": "协议配置（JSON）",
-      "configHint": "Modbus：{\"unitId\":1,\"pollIntervalMs\":5000}；MQTT：{\"username\":\"\",\"password\":\"\",\"upstreamPrefix\":\"devicehub/up/DEV1\"}；S7：{\"rack\":0,\"slot\":1,\"pollIntervalMs\":5000}（1200/1500 slot=0，300/400 slot=1 或 2）；OPC UA：{\"securityPolicy\":\"None\",\"username\":\"\",\"password\":\"\"}",
+      "configExample": {
+        "modbus-tcp": "示例：{\"unitId\":1,\"pollIntervalMs\":5000}",
+        "modbus-rtu": "示例：{\"unitId\":1,\"pollIntervalMs\":5000}",
+        "mqtt": "示例：{\"username\":\"\",\"password\":\"\",\"upstreamPrefix\":\"devicehub/up/DEV1\"}",
+        "s7": "示例：{\"rack\":0,\"slot\":1,\"pollIntervalMs\":5000}（1200/1500 slot=0，300/400 slot=1 或 2）",
+        "opcua": "示例：{\"securityPolicy\":\"None\",\"username\":\"\",\"password\":\"\"}"
+      },
+      "configSecretHint": "密码类字段显示为 ***；保持 *** 提交即沿用已保存的密码",
       "enabled": "启用",
       "location": "安装位置",
       "locationAddress": "安装地址",
@@ -75,7 +82,10 @@
       "avg": "均值",
       "min": "最小",
       "max": "最大",
-      "export": "导出 xlsx"
+      "export": "导出 xlsx",
+      "raw": "原始读数",
+      "hour": "小时聚合",
+      "resolution": "采样间隔 {{bucket}}"
     },
     "command": {
       "point": "目标测点",

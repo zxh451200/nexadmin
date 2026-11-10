@@ -3,7 +3,8 @@ package devicehub
 // 采集调度：每台启用的设备一个 goroutine（配置变更时重启该设备的 worker）。
 //
 // 两种采集形态：
-//   - 轮询（Modbus）：按设备 pollIntervalMs 周期读全部启用测点；连续失败判 offline，恢复判 online。
+//   - 轮询（Modbus）：ticker 取设备 pollIntervalMs 与最短点级 poll_interval_ms 的较小值，
+//     每轮只读已到期的启用测点；连续失败判 offline，恢复判 online。
 //   - 推送（MQTT）：driver.PushDriver.Subscribe 一条通配订阅，收到帧即落库；离线靠 Ping 的静默判定。
 //
 // 与 ticket 的超时清扫器同一套模式：module.Start 起 goroutine，ctx 取消即整体退出；
@@ -88,37 +89,81 @@ func (c *collector) deviceLoop(ctx context.Context, d *Device) {
 
 	// 推送型：订阅后阻塞等 ctx，不轮询。
 	if push, ok := drv.(driver.PushDriver); ok {
-		c.svc.setDeviceStatus(ctx, d, StatusOnline)
-		_ = push.Subscribe(ctx, func(address string, v driver.Value) {
+		// 建连成功才算在线：先前无条件先标 online，broker 连不上的设备会先亮一下再被
+		// offlineWatch（30s 巡检）翻回离线，状态在界面上闪一个假在线。
+		if err := push.Subscribe(ctx, func(address string, v driver.Value) {
 			c.svc.onReading(context.Background(), d, address, v, interval)
-		})
+		}); err != nil {
+			c.svc.logWarn("devicehub: subscribe failed", "deviceNo", d.DeviceNo, "err", err.Error())
+			c.svc.setDeviceStatus(ctx, d, StatusOffline)
+		} else {
+			c.svc.setDeviceStatus(ctx, d, StatusOnline)
+		}
+		// 即使刚才订阅失败也起巡检：paho 会自动重连，重连成功后由 Ping/静默判定翻回在线。
 		go c.offlineWatch(ctx, d, drv)
 		<-ctx.Done()
 		_ = drv.Close()
 		return
 	}
 
-	ticker := time.NewTicker(interval)
+	// 轮询型：ticker 是这台设备唯一的调度心跳，周期取「设备默认间隔」与「最短点级间隔」的较小值；
+	// 点级 pollIntervalMs 只决定这一轮读不读它（见 pollOnce），不单独起 ticker——
+	// 一台设备一条连接，多 ticker 会在同一条链路上并发 IO。
+	points := c.svc.pointsOf(d.ID)
+	ticker := time.NewTicker(pollCycle(interval, points))
 	defer ticker.Stop()
 	defer func() { _ = drv.Close() }()
+	// next 记录每个测点下一次到期时间，跨轮复用（deviceLoop 存活期间只有这一份，pollOnce 串行访问）。
+	next := make(map[idgen.ID]time.Time, len(points))
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			c.pollOnce(ctx, d, drv)
+			c.pollOnce(ctx, d, drv, points, next)
 		}
 	}
 }
 
-// pollOnce 轮询一轮：读全部启用测点，逐点落库。
-func (c *collector) pollOnce(ctx context.Context, d *Device, drv driver.Driver) {
-	points := c.svc.pointsOf(d.ID)
+// pollCycle 计算轮询周期：设备默认间隔与所有启用测点里最小的点级间隔取小。
+//
+// 下限 200ms：ticker 驱动的是单条设备连接上的串行 IO（一次往返 + 落库写放大），
+// 再快就变成对设备的高频轰炸；200ms 已是「单连接可承受 + 秒级监控够用」的折中，
+// 同时兜住配置误填 1ms 这种把驱动打爆的值。
+func pollCycle(def time.Duration, points []Point) time.Duration {
+	const minCycle = 200 * time.Millisecond
+	cycle := def
+	for i := range points {
+		if points[i].PollMs <= 0 {
+			continue
+		}
+		if d := time.Duration(points[i].PollMs) * time.Millisecond; d < cycle {
+			cycle = d
+		}
+	}
+	if cycle < minCycle {
+		cycle = minCycle
+	}
+	return cycle
+}
+
+// pollOnce 轮询一轮：只读已到期的启用测点，逐点落库。
+//
+// next 是「测点 → 下次到期时间」表，由 deviceLoop 创建并跨轮复用：ticker 按最短点级间隔跳，
+// 长周期的测点在多数 tick 里还没到期，直接跳过。点级间隔 = PollMs > 0 ? PollMs : 设备默认间隔。
+//
+// 无论读取成功还是失败，尝试后都把 next 推到 now+该间隔：失败通常是瞬时的（单点寄存器错误、
+// 网关抖动），每个 tick 都重试等于把故障期的实际采集频率抬到 tick 频率，反而压垮链路、刷满日志；
+// 等一个周期再试，代价只是该点晚一个周期恢复。
+//
+// points 由 deviceLoop 在起 ticker 时取一次并缓存：测点/设备配置变更会 Reload 重启 worker，
+// 缓存不会过期；放在这里每 tick 查库的话，200ms 周期下等于每台设备每秒查 5 次测点表。
+func (c *collector) pollOnce(ctx context.Context, d *Device, drv driver.Driver, points []Point, next map[idgen.ID]time.Time) {
 	if len(points) == 0 {
 		return
 	}
-	interval := devicePollInterval(d)
-	fail := 0
+	def := devicePollInterval(d)
+	fail, attempted := 0, 0
 	for i := range points {
 		select {
 		case <-ctx.Done():
@@ -126,16 +171,29 @@ func (c *collector) pollOnce(ctx context.Context, d *Device, drv driver.Driver) 
 		default:
 		}
 		p := &points[i]
+		every := def
+		if p.PollMs > 0 {
+			every = time.Duration(p.PollMs) * time.Millisecond
+		}
+		now := time.Now()
+		if due, ok := next[p.ID]; ok && now.Before(due) {
+			continue
+		}
+		attempted++
+		next[p.ID] = now.Add(every)
 		v, err := drv.Read(ctx, p.Address, p.DataType)
 		if err != nil {
 			fail++
 			c.svc.logWarn("devicehub: read failed", "deviceNo", d.DeviceNo, "point", p.Address, "err", err.Error())
 			continue
 		}
-		c.svc.onReading(ctx, d, p.Address, v, interval)
+		c.svc.onReading(ctx, d, p.Address, v, def)
+	}
+	if attempted == 0 {
+		return // 这轮没有到期的测点：无从判断链路，不动状态（也省掉每 tick 刷 last_seen）
 	}
 	// 一轮里全部失败大概率是断线：标记 offline；有成功就是 online。
-	if fail == len(points) {
+	if fail == attempted {
 		if err := drv.Ping(); err != nil {
 			c.svc.setDeviceStatus(ctx, d, StatusOffline)
 			return
@@ -199,7 +257,9 @@ func (c *collector) downsampleOnce(ctx context.Context) {
 	cutoff := time.Now().UTC().Add(-48 * time.Hour).Truncate(time.Hour)
 	for {
 		var rows []Reading
-		if err := c.svc.db.WithContext(ctx).Where("ts < ?", cutoff).Order("id").Limit(downsampleBatch).Find(&rows).Error; err != nil {
+		// 按 ts 取批（idx_plg_devhub_reading_ts）：条件与排序同列，扫描走该索引，
+		// 不必回主键索引再排序；id 顺序对聚合结果无意义，桶按 Truncate(hour) 自算。
+		if err := c.svc.db.WithContext(ctx).Where("ts < ?", cutoff).Order("ts").Limit(downsampleBatch).Find(&rows).Error; err != nil {
 			c.svc.logWarn("devicehub: downsample load failed", "err", err.Error())
 			return
 		}

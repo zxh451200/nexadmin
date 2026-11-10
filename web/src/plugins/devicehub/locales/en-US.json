@@ -30,7 +30,14 @@
       "endpointHint": "Modbus like 192.168.1.20:502; RTU like COM3:9600,8,E,1",
       "endpointMqttHint": "Broker URL like tcp://192.168.1.10:1883",
       "config": "Protocol config (JSON)",
-      "configHint": "Modbus: {\"unitId\":1,\"pollIntervalMs\":5000}; MQTT: {\"username\":\"\",\"password\":\"\",\"upstreamPrefix\":\"devicehub/up/DEV1\"}",
+      "configExample": {
+        "modbus-tcp": "Example: {\"unitId\":1,\"pollIntervalMs\":5000}",
+        "modbus-rtu": "Example: {\"unitId\":1,\"pollIntervalMs\":5000}",
+        "mqtt": "Example: {\"username\":\"\",\"password\":\"\",\"upstreamPrefix\":\"devicehub/up/DEV1\"}",
+        "s7": "Example: {\"rack\":0,\"slot\":1,\"pollIntervalMs\":5000} (1200/1500 slot=0, 300/400 slot=1 or 2)",
+        "opcua": "Example: {\"securityPolicy\":\"None\",\"username\":\"\",\"password\":\"\"}"
+      },
+      "configSecretHint": "Secret fields are shown as ***; submit *** to keep the saved password",
       "enabled": "Enabled",
       "location": "Install location",
       "locationAddress": "Install address",
@@ -75,7 +82,10 @@
       "avg": "Avg",
       "min": "Min",
       "max": "Max",
-      "export": "Export xlsx"
+      "export": "Export xlsx",
+      "raw": "Raw readings",
+      "hour": "Hourly aggregate",
+      "resolution": "Interval {{bucket}}"
     },
     "command": {
       "point": "Target point",

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"gorm.io/gorm"
@@ -31,6 +32,11 @@ type Service struct {
 	notifier   notifySender
 	recipients recipientsFunc
 	lang       string
+
+	// 指令在途集合：commandLoop 每轮扫 queued 时认领单号，已在执行的跳过。
+	// 按设备分组并发后，下一轮扫描不能再把同一台设备上还在跑的指令领一遍。
+	cmdMu       sync.Mutex
+	cmdInFlight map[idgen.ID]bool
 }
 
 // logger 是最小日志面（便于测试注入空实现），与 ticket 同款。
@@ -49,7 +55,7 @@ type recipientsFunc func(ctx context.Context) ([]alarmRecipient, error)
 
 // NewService 创建服务；采集 worker 由 plugin.Start 起。
 func NewService(db *gorm.DB, log logger) *Service {
-	s := &Service{db: db, log: log}
+	s := &Service{db: db, log: log, cmdInFlight: map[idgen.ID]bool{}}
 	s.collector = newCollector(s)
 	return s
 }
@@ -66,13 +72,116 @@ func (s *Service) logWarn(msg string, keysAndValues ...any) {
 	}
 }
 
+// text 按应用默认语言取文案：采集/指令协程没有请求上下文，落库与回执文案跟随默认语言。
+func (s *Service) text(zh, en string) string {
+	if strings.HasPrefix(strings.ToLower(s.lang), "en") {
+		return en
+	}
+	return zh
+}
+
 // ---- 设备 CRUD ----
 
-// ListDevices 返回全部设备（含最近值统计用的状态字段）。
+// configSecretMask 是协议配置里密码回显的占位串。
+const configSecretMask = "***"
+
+// maskDeviceConfig 把协议配置 JSON 里的密码字段替换成占位串（键名不区分大小写）。
+// 只改顶层的 password：协议配置是各驱动自己解析的扁平对象，嵌套里没有密码概念。
+// 解析失败原样返回——配置坏时把原文交还前端，至少能让人看见并改对，不影响其他字段。
+func maskDeviceConfig(cfg string) string {
+	if strings.TrimSpace(cfg) == "" {
+		return cfg
+	}
+	var obj map[string]any
+	if err := json.Unmarshal([]byte(cfg), &obj); err != nil || obj == nil {
+		return cfg
+	}
+	masked := false
+	for k, v := range obj {
+		if !strings.EqualFold(k, "password") || v == nil {
+			continue
+		}
+		if s, ok := v.(string); ok && s == "" {
+			continue // 空密码不算秘密，保持原值
+		}
+		obj[k] = configSecretMask
+		masked = true
+	}
+	if !masked {
+		return cfg // 没有密码字段就不重排 JSON，省得前端/日志里配置形状无谓变化
+	}
+	out, err := json.Marshal(obj)
+	if err != nil {
+		return cfg
+	}
+	return string(out)
+}
+
+// mergeMaskedConfig 处理「回显的占位密码」：incoming 中 password == "***" 视作未修改，
+// 用 stored 里的同名（不区分大小写）字段还原；其他值一律按用户输入处理——空串 = 清空密码。
+// incoming 解析失败原样返回，交给 SaveDevice 的 json.Valid 校验拦成 400。
+//
+// 关键不变式：库里永远只能存真实密码。所以 stored 解析失败 / 找不到同名密码 / 它本身就是占位串时，
+// 直接删掉该键（等效「保持无密码」），绝不把 "***" 写回库。
+func mergeMaskedConfig(incoming, stored string) string {
+	if !strings.Contains(incoming, configSecretMask) {
+		return incoming // 没有占位串就不用解析，保持用户提交的原文
+	}
+	var in map[string]any
+	if err := json.Unmarshal([]byte(incoming), &in); err != nil || in == nil {
+		return incoming
+	}
+	var old map[string]any
+	if err := json.Unmarshal([]byte(stored), &old); err != nil {
+		old = nil // 旧配置不可解析 = 没有可还原的真值，走下面的删除分支
+	}
+	var real any
+	hasReal := false
+	for k, v := range old {
+		if strings.EqualFold(k, "password") {
+			if v != nil {
+				if s, ok := v.(string); !ok || s != configSecretMask {
+					real, hasReal = v, true
+				}
+			}
+			break
+		}
+	}
+	changed := false
+	for k, v := range in {
+		if !strings.EqualFold(k, "password") {
+			continue
+		}
+		if s, ok := v.(string); !ok || s != configSecretMask {
+			continue // 用户真的改了密码 / 清空了密码：按输入落库
+		}
+		if hasReal {
+			in[k] = real
+		} else {
+			delete(in, k)
+		}
+		changed = true
+	}
+	if !changed {
+		return incoming
+	}
+	out, err := json.Marshal(in)
+	if err != nil {
+		return incoming
+	}
+	return string(out)
+}
+
+// ListDevices 返回全部设备（含最近值统计用的状态字段）；密码字段只回显占位串。
 func (s *Service) ListDevices(ctx context.Context) ([]Device, error) {
 	var rows []Device
-	err := s.db.WithContext(ctx).Order("id").Find(&rows).Error
-	return rows, err
+	if err := s.db.WithContext(ctx).Order("id").Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	for i := range rows {
+		rows[i].Config = maskDeviceConfig(rows[i].Config)
+	}
+	return rows, nil
 }
 
 // DeviceInput 是设备表单。Config 是协议 JSON 文本（前端已按协议拼好）。
@@ -109,6 +218,15 @@ func (s *Service) SaveDevice(ctx context.Context, id idgen.ID, in DeviceInput) (
 	case in.Endpoint == "" || len(in.Endpoint) > 255:
 		return nil, response.BadRequest("devicehub.endpoint_required")
 	}
+	// 更新分支先取旧行：回传的配置可能带着占位密码（***），要在合法性校验之前还原成库里的真值。
+	// 新建没有旧行可比，不 merge（提交什么就是什么）。
+	var row Device
+	if id != 0 {
+		if err := s.db.WithContext(ctx).Take(&row, "id = ?", id).Error; err != nil {
+			return nil, err
+		}
+		in.Config = mergeMaskedConfig(in.Config, row.Config)
+	}
 	// 配置必须是合法 JSON 对象：坏配置到采集循环才爆不如在保存时就拦下
 	if in.Config != "" && !json.Valid([]byte(in.Config)) {
 		return nil, response.BadRequest("devicehub.config_invalid")
@@ -116,12 +234,6 @@ func (s *Service) SaveDevice(ctx context.Context, id idgen.ID, in DeviceInput) (
 	// 位置坐标范围校验：越界一律 400，不静默钳位（错位的设备定位比报错更难排查）
 	if in.Location != nil && (in.Location.Lng < -180 || in.Location.Lng > 180 || in.Location.Lat < -90 || in.Location.Lat > 90) {
 		return nil, response.BadRequest("devicehub.location_invalid")
-	}
-	var row Device
-	if id != 0 {
-		if err := s.db.WithContext(ctx).Take(&row, "id = ?", id).Error; err != nil {
-			return nil, err
-		}
 	}
 	row.Name, row.Protocol, row.Endpoint, row.Config, row.Enabled = in.Name, in.Protocol, in.Endpoint, in.Config, in.Enabled
 	if in.Location != nil {
@@ -143,7 +255,10 @@ func (s *Service) SaveDevice(ctx context.Context, id idgen.ID, in DeviceInput) (
 	if s.collector != nil {
 		s.collector.Reload(ctx, row.ID)
 	}
-	return &row, nil
+	// 回给前端的是脱敏副本：collector.Reload 读的是数据库，不受影响；库里始终是真实密码。
+	out := row
+	out.Config = maskDeviceConfig(out.Config)
+	return &out, nil
 }
 
 // DeleteDevice 级联删除测点/读数/聚合/指令/告警（设备删除没有保留价值，与 nav 级联同口径）。
@@ -369,18 +484,43 @@ func (s *Service) setDeviceStatus(ctx context.Context, d *Device, status string)
 		return // 状态没变就不写库（online 的 last_seen 每轮都刷）
 	}
 	now := time.Now().UTC()
+	// 首次上线前 LastSeenAt 为空：用它区分「恢复」与「第一次连上」，避免新设备上线就报一条恢复。
+	hadSeen := d.LastSeenAt != nil
 	updates := map[string]any{"status": status}
 	if status == StatusOnline {
 		updates["last_seen_at"] = now
 	}
-	if err := s.db.Model(&Device{}).Where("id = ?", int64(d.ID)).Updates(updates).Error; err != nil {
+	if err := s.db.WithContext(ctx).Model(&Device{}).Where("id = ?", int64(d.ID)).Updates(updates).Error; err != nil {
 		s.logWarn("devicehub: update status failed", "err", err.Error())
 		return
 	}
-	if d.Status != status {
-		d.Status = status
-		ws.Publish("device:feed", wsFrame{Type: "status", DeviceNo: d.DeviceNo, DeviceID: d.ID, Status: status})
-		s.publish(ctx, EventStatus, EventData{DeviceNo: d.DeviceNo, DeviceID: int64(d.ID), Message: status})
+	if status == StatusOnline {
+		d.LastSeenAt = &now
+	}
+	if d.Status == status {
+		return // online 心跳：状态没变，不重复发 WS/事件/告警
+	}
+	prev := d.Status
+	d.Status = status
+	ws.Publish("device:feed", wsFrame{Type: "status", DeviceNo: d.DeviceNo, DeviceID: d.ID, Status: status})
+	s.publish(ctx, EventStatus, EventData{DeviceNo: d.DeviceNo, DeviceID: int64(d.ID), Message: status})
+
+	// 状态真正变化才补设备级告警事件（RuleID=0 表示不是阈值规则触发）。
+	// 离线给 critical、恢复给 info；事件写失败只记日志——状态已经提交，不回头撤销。
+	recordStatusAlarm := func(level, msg string) {
+		event := AlarmEvent{RuleID: 0, DeviceID: d.ID, PointID: 0, Value: 0, Level: level, Message: msg}
+		if err := s.db.WithContext(ctx).Create(&event).Error; err != nil {
+			s.logWarn("devicehub: store status alarm failed", "deviceNo", d.DeviceNo, "err", err.Error())
+			return
+		}
+		s.notifyAlarm(ctx, d, level, msg)
+	}
+	switch {
+	case status == StatusOffline:
+		recordStatusAlarm(LevelCritical, s.text("设备离线："+d.Name, "Device offline: "+d.Name))
+	case status == StatusOnline && prev == StatusOffline && hadSeen:
+		// 只有「在线过 → 离线 → 再上线」算恢复；从没上线过的设备首次连上不报喜
+		recordStatusAlarm(LevelInfo, s.text("设备恢复在线："+d.Name, "Device back online: "+d.Name))
 	}
 }
 
@@ -408,7 +548,90 @@ type HistoryRow struct {
 	Avg float64   `json:"avg"`
 }
 
-// History 查历史趋势：窗口 ≤48h 走原始表，否则走降采样桶。
+// 趋势图点数上限与原始表扫描上限。
+//
+// Why 查询期聚合：默认窗口 24h、5s 采集约 1.7 万行，原先 Limit(5000) 会静默截断成最早
+// 约 7 小时的数据——前端无从得知被截断，趋势图缺后半段比画得粗更糟。现在「取整个窗口 +
+// 查询期按整齐间隔降采样」：返回行数有上限，但覆盖完整窗口，拿到什么画什么。
+//
+// Why 不再抬高 LIMIT：抬高只是把截断点往后推（覆盖 24h 要 2 万行、48h 要 4 万行），
+// 传输与前端渲染都白花，窗口一放大照样截断。点数的上限交给自适应间隔，扫描上限单独放宽到
+// historyScanLimit 兜住内存；真扫满说明单窗口数据量异常，按已扫到的行聚合仍是「覆盖窗口
+// 前段 + 明确告诉调用方桶间隔」，不会退化成静默只画开头。
+const (
+	historyMaxPoints = 800
+	historyScanLimit = 200000
+)
+
+// historyIntervals 是查询期聚合的候选间隔（严格升序）。
+var historyIntervals = []time.Duration{
+	time.Second, 2 * time.Second, 5 * time.Second, 10 * time.Second, 15 * time.Second, 30 * time.Second,
+	time.Minute, 2 * time.Minute, 5 * time.Minute, 10 * time.Minute, 15 * time.Minute, 30 * time.Minute,
+	time.Hour, 2 * time.Hour, 6 * time.Hour, 12 * time.Hour, 24 * time.Hour,
+}
+
+// historyStep 取第一个让「窗口/间隔 ≤ historyMaxPoints」的候选间隔（升序找）。
+func historyStep(span time.Duration) time.Duration {
+	for _, step := range historyIntervals {
+		if span/step <= historyMaxPoints {
+			return step
+		}
+	}
+	return historyIntervals[len(historyIntervals)-1]
+}
+
+// historyIntervalLabel 把聚合间隔渲染成桶标签：整小时 %dh、整分钟 %dm、否则 %ds。
+func historyIntervalLabel(step time.Duration) string {
+	switch {
+	case step%time.Hour == 0:
+		return fmt.Sprintf("%dh", int64(step/time.Hour))
+	case step%time.Minute == 0:
+		return fmt.Sprintf("%dm", int64(step/time.Minute))
+	default:
+		return fmt.Sprintf("%ds", int64(step/time.Second))
+	}
+}
+
+// downsampleHistory 把按 ts 升序的原始读数按 step 聚合 min/max/avg。
+// 桶键用 TS.Truncate(step)（UTC），保证同一时间片落的桶稳定；输入有序，输出也就有序，
+// 不需要再排序（空桶不补行，趋势图按实际点连线）。
+func downsampleHistory(readings []Reading, step time.Duration) []HistoryRow {
+	rows := make([]HistoryRow, 0, historyMaxPoints)
+	var cur HistoryRow
+	var key time.Time
+	var sum float64
+	var cnt int
+	for i := range readings {
+		r := &readings[i]
+		if r.NumValue == nil {
+			continue
+		}
+		k := r.TS.Truncate(step)
+		if cnt == 0 || !k.Equal(key) {
+			if cnt > 0 {
+				cur.Avg = sum / float64(cnt)
+				rows = append(rows, cur)
+			}
+			key, sum, cnt = k, 0, 0
+			cur = HistoryRow{TS: k, Min: *r.NumValue, Max: *r.NumValue}
+		}
+		if v := *r.NumValue; v < cur.Min {
+			cur.Min = v
+		} else if v > cur.Max {
+			cur.Max = v
+		}
+		sum += *r.NumValue
+		cnt++
+	}
+	if cnt > 0 {
+		cur.Avg = sum / float64(cnt)
+		rows = append(rows, cur)
+	}
+	return rows
+}
+
+// History 查历史趋势：显式 hour 或窗口 >48h 走小时桶；其余走原始表，并在查询期降到
+// ≤ historyMaxPoints 个点，返回的 bucket 是实际聚合间隔标签（"raw" 表示未降采样）。
 func (s *Service) History(ctx context.Context, q HistoryQuery) ([]HistoryRow, string, error) {
 	if q.PointID == 0 {
 		return nil, "", response.BadRequest("devicehub.point_required")
@@ -419,35 +642,43 @@ func (s *Service) History(ctx context.Context, q HistoryQuery) ([]HistoryRow, st
 	if q.From.IsZero() {
 		q.From = q.To.Add(-24 * time.Hour)
 	}
+	span := q.To.Sub(q.From)
 	bucket := q.Bucket
 	if bucket == "" {
-		if q.To.Sub(q.From) <= 48*time.Hour {
+		if span <= 48*time.Hour {
 			bucket = "raw"
 		} else {
 			bucket = "hour"
 		}
 	}
-	var rows []HistoryRow
-	if bucket == "raw" {
-		var readings []Reading
+	// 只有显式 hour 才走聚合桶；其余（含前端把我们回传的间隔标签原样带回来）都走原始表——
+	// 原始表里能按请求窗口重新聚合，比误读小时桶更贴近调用方意图。
+	if bucket == "hour" {
+		var rows []HistoryRow
 		if err := s.db.WithContext(ctx).
-			Where("point_id = ? AND ts >= ? AND ts <= ? AND num_value IS NOT NULL", q.PointID, q.From, q.To).
-			Order("ts").Limit(5000).Find(&readings).Error; err != nil {
+			Where("point_id = ? AND bucket >= ? AND bucket <= ?", q.PointID, q.From.Truncate(time.Hour), q.To).
+			Order("bucket").Limit(5000).Find(&rows).Error; err != nil {
 			return nil, "", err
 		}
-		for _, r := range readings {
-			if r.NumValue != nil {
-				rows = append(rows, HistoryRow{TS: r.TS, Min: *r.NumValue, Max: *r.NumValue, Avg: *r.NumValue})
-			}
-		}
-		return rows, bucket, nil
+		return rows, "hour", nil
 	}
+	var readings []Reading
 	if err := s.db.WithContext(ctx).
-		Where("point_id = ? AND bucket >= ? AND bucket <= ?", q.PointID, q.From.Truncate(time.Hour), q.To).
-		Order("bucket").Limit(5000).Find(&rows).Error; err != nil {
+		Where("point_id = ? AND ts >= ? AND ts <= ? AND num_value IS NOT NULL", q.PointID, q.From, q.To).
+		Order("ts").Limit(historyScanLimit).Find(&readings).Error; err != nil {
 		return nil, "", err
 	}
-	return rows, bucket, nil
+	if len(readings) <= historyMaxPoints {
+		rows := make([]HistoryRow, 0, len(readings))
+		for i := range readings {
+			if v := readings[i].NumValue; v != nil {
+				rows = append(rows, HistoryRow{TS: readings[i].TS, Min: *v, Max: *v, Avg: *v})
+			}
+		}
+		return rows, "raw", nil
+	}
+	step := historyStep(span)
+	return downsampleHistory(readings, step), historyIntervalLabel(step), nil
 }
 
 // HistoryRowsForExport 供 xlsx 导出复用（与 History 同源）。
@@ -498,7 +729,11 @@ func (s *Service) evaluateAlarms(ctx context.Context, d *Device, p *Point, tick 
 		if err := s.db.Model(&AlarmRule{}).Where("id = ?", r.ID).Update("last_fired_at", now).Error; err != nil {
 			continue
 		}
-		msg := fmt.Sprintf("%s / %s = %.3g %s（%s %.3g）", d.Name, p.Name, *tick.Num, p.Unit, opLabel(r.Op), r.Threshold)
+		// 文案跟随应用默认语言：前端两套模板只差括号全半角与空格，操作符继续走 opLabel。
+		msg := s.text(
+			fmt.Sprintf("%s / %s = %.3g %s（%s %.3g）", d.Name, p.Name, *tick.Num, p.Unit, opLabel(r.Op), r.Threshold),
+			fmt.Sprintf("%s / %s = %.3g %s (%s %.3g)", d.Name, p.Name, *tick.Num, p.Unit, opLabel(r.Op), r.Threshold),
+		)
 		event := AlarmEvent{RuleID: r.ID, DeviceID: d.ID, PointID: p.ID, Value: *tick.Num, Level: r.Level, Message: msg}
 		if err := s.db.Create(&event).Error; err != nil {
 			s.logWarn("devicehub: store alarm event failed", "err", err.Error())
@@ -538,10 +773,7 @@ func (s *Service) notifyAlarm(ctx context.Context, d *Device, level, msg string)
 	if s.notifier == nil || s.recipients == nil {
 		return
 	}
-	title := "设备告警：" + d.Name
-	if strings.HasPrefix(strings.ToLower(s.lang), "en") {
-		title = "Device alarm: " + d.Name
-	}
+	title := s.text("设备告警："+d.Name, "Device alarm: "+d.Name)
 	holders, err := s.recipients(ctx)
 	if err != nil {
 		s.logWarn("devicehub: resolve alarm recipients failed", "err", err.Error())

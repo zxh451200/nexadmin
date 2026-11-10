@@ -20,7 +20,7 @@ import { Input } from '@/framework/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/framework/ui/tabs'
 import { Textarea } from '@/framework/ui/textarea'
 import { cn } from '@/lib/utils'
-import { formatTime } from './format'
+import { formatTime, formatTimeSec } from './format'
 import {
   exportHistory,
   useAlarmEvents,
@@ -477,15 +477,15 @@ function PointFormDialog({ deviceNo, point, onOpenChange }: { deviceNo: string; 
   )
 }
 
-function Field({ label, required, hint, children }: { label: string; required?: boolean; hint?: string; children: React.ReactNode }) {
+function Field({ label, required, hint, children }: { label: string; required?: boolean; hint?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <label className="block space-y-1">
+    <label className="block space-y-1.5">
       <span className="text-xs font-medium text-foreground">
         {label}
         {required ? <span className="text-destructive"> *</span> : null}
       </span>
       {children}
-      {hint ? <span className="block text-xs text-muted-foreground">{hint}</span> : null}
+      {hint ? <span className="block text-[11px] leading-relaxed text-muted-foreground">{hint}</span> : null}
     </label>
   )
 }
@@ -504,6 +504,18 @@ function HistoryPanel({ deviceNo, points }: { deviceNo: string; points: Point[] 
   }, [pointId, hours])
   const history = useHistory(deviceNo, query)
   const rows = history.data?.rows ?? []
+  // 后端按查询窗口降采样，bucket 回传实际采样间隔（raw/hour/5s/2m…），展示出来避免误读
+  const bucket = history.data?.bucket ?? ''
+  const resolution =
+    bucket === 'raw'
+      ? t('plugin_devicehub.history.raw')
+      : bucket === 'hour'
+        ? t('plugin_devicehub.history.hour')
+        : bucket
+          ? t('plugin_devicehub.history.resolution', { bucket })
+          : ''
+  // 秒级间隔精确到秒，其余沿用分钟粒度
+  const fmtTs = bucket.endsWith('s') ? formatTimeSec : formatTime
 
   return (
     <div className="space-y-3">
@@ -532,13 +544,14 @@ function HistoryPanel({ deviceNo, points }: { deviceNo: string; points: Point[] 
         <EmptyState title={t('plugin_devicehub.history.empty')} className="py-8" />
       ) : (
         <>
-          <div className="flex justify-end">
-            <Button size="sm" variant="outline" onClick={() => void exportHistory(deviceNo, query)}>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            {resolution ? <span className="text-xs text-muted-foreground">{resolution}</span> : null}
+            <Button size="sm" variant="outline" className="ms-auto" onClick={() => void exportHistory(deviceNo, query)}>
               {t('plugin_devicehub.history.export')}
             </Button>
           </div>
           <TrendChart
-            data={rows.map((r) => ({ ts: formatTime(r.ts), avg: r.avg, min: r.min, max: r.max }))}
+            data={rows.map((r) => ({ ts: fmtTs(r.ts), avg: r.avg, min: r.min, max: r.max }))}
             series={[
               { key: 'avg', label: t('plugin_devicehub.history.avg') },
               { key: 'min', label: t('plugin_devicehub.history.min') },
@@ -856,7 +869,7 @@ function DeviceFormDialog({ device, onOpenChange }: { device: Device | null; onO
         </>
       }
     >
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-2">
         <Field label={t('plugin_devicehub.device.name')} required>
           <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} maxLength={100} />
         </Field>
@@ -892,7 +905,16 @@ function DeviceFormDialog({ device, onOpenChange }: { device: Device | null; onO
           </Field>
         </div>
         <div className="sm:col-span-2">
-          <Field label={t('plugin_devicehub.device.config')} hint={t('plugin_devicehub.device.configHint')}>
+          <Field
+            label={t('plugin_devicehub.device.config')}
+            hint={
+              <>
+                <span className="block">{t(`plugin_devicehub.device.configExample.${form.protocol}`)}</span>
+                {/* 密码字段回显为 ***：原样提交即沿用已保存的密码，改密才需重填 */}
+                <span className="block">{t('plugin_devicehub.device.configSecretHint')}</span>
+              </>
+            }
+          >
             <Textarea
               rows={3}
               className="font-mono"

@@ -60,6 +60,11 @@ func newClient(endpoint string, raw []byte) (driver.Driver, error) {
 		cfg:      cfg,
 		endpoint: strings.TrimSpace(endpoint),
 		prefix:   strings.TrimSuffix(strings.TrimSpace(cfg.UpstreamPrefix), "/"),
+		// lastMsgAt 从建连时刻起算，而不是留零值：Ping 的静默判定要先看 lastMsgAt 非零
+		// （零值代表「从未收到帧」，直接跳过判断）。留零值的话，broker 连上但设备一帧不发
+		// 会被永远当成 online；从 create 时刻起算，offlineAfterSeconds（默认 60s）内
+		// 无上行即判离线。
+		lastMsgAt: time.Now(),
 	}, nil
 }
 
@@ -89,6 +94,10 @@ func (c *client) Subscribe(ctx context.Context, fn func(address string, v driver
 		c.mu.Lock()
 		defer c.mu.Unlock()
 		c.connected = true
+		// 与 newClient 同理：断线重连会先清空 lastMsgAt（见 ConnectionLostHandler），
+		// 重连后留零值就又会跳过静默判定。以重连时刻为新起点，重连后依然一帧不发的设备
+		// 一个静默窗口后照常判离线。
+		c.lastMsgAt = time.Now()
 		// 断线重连后重订（CleanSession=false 时 broker 会补发 QoS1，这里兜底重订一次）
 		_ = cl.Subscribe(c.prefix+"/#", 1, c.onMessage)
 	}).SetConnectionLostHandler(func(_ paho.Client, err error) {

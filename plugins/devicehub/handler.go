@@ -222,6 +222,9 @@ func (h *handler) createCommand(c *gin.Context) {
 	if !response.BindJSON(c, &in) {
 		return
 	}
+	// 设备号以路径为准：前端只提交测点与值，body 里的 deviceNo 不可信，缺了这一步
+	// CreateCommand 会按空设备号查库，指令在界面上永远报「设备不存在」。
+	in.DeviceNo = c.Param("no")
 	uid, name := claimsOperator(c)
 	in.OperatorID, in.OperatorName = uid, name
 	row, err := h.svc.CreateCommand(c.Request.Context(), in)
