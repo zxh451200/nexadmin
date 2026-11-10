@@ -16,18 +16,6 @@ import { usePublicSettings } from './Watermark'
 
 const GROUPS_KEY = 'nex-sidebar-groups' // 记住哪些一级目录是收起的
 
-/** 一级分组 → 色调的确定性映射：纯函数取 group.key（与标题译文无关），渲染与语言切换间稳定。
-    只用 chart/success/info/warning，不用 destructive（红色留给失败/危险语义）。 */
-const GROUP_TONES = ['chart-1', 'chart-2', 'chart-3', 'chart-4', 'chart-5', 'success', 'info', 'warning'] as const
-function groupTone(key: string) {
-  let h = 2166136261 // FNV-1a 32 位
-  for (let i = 0; i < key.length; i++) {
-    h = Math.imul(h ^ key.charCodeAt(i), 16777619) >>> 0
-  }
-  return GROUP_TONES[h % GROUP_TONES.length]
-}
-
-
 interface SidebarProps {
   menu: MenuNode[]
   /** Logo 的落点（菜单里第一个能进的页面）；缺省回落到工作台 */
@@ -64,14 +52,13 @@ export function Sidebar({ menu, homePath = HOME_PATH, collapsed = false, onNavig
   )
   const badges = useMenuBadges(leafPaths)
 
-  const renderItem = (item: MenuNode, nested: boolean, tone?: string) => {
+  const renderItem = (item: MenuNode, nested: boolean) => {
     const badge = item.path ? (badges[item.path] ?? 0) : 0
     const link = (
       <NavLink
         to={item.path!}
         onClick={onNavigate}
         aria-label={collapsed ? t(item.title) : undefined}
-        data-tone={tone}
         className={({ isActive }) =>
           cn(
             'relative flex min-h-11 items-center gap-3 rounded-md px-3 text-sm transition-colors md:min-h-9',
@@ -93,8 +80,8 @@ export function Sidebar({ menu, homePath = HOME_PATH, collapsed = false, onNavig
           )
         }
       >
-        {/* 图标按分组色调着色（.tone-text 读 data-tone 的 --tone）；文字与激活底色仍走 sidebar-accent 令牌，不替换 */}
-        <DynamicIcon name={item.icon} className={cn('size-5 shrink-0', !collapsed && 'md:size-4', tone && 'tone-text')} />
+        {/* 图标与文字同色：侧栏不上分组色调，层级只靠缩进、引导线与激活态表达 */}
+        <DynamicIcon name={item.icon} className={cn('size-5 shrink-0', !collapsed && 'md:size-4')} />
         {!collapsed && <span className="truncate">{t(item.title)}</span>}
         {/* 徽标：展开态是行尾计数，收起态是图标上的圆点；0 时不渲染 */}
         {badge > 0 &&
@@ -145,16 +132,13 @@ export function Sidebar({ menu, homePath = HOME_PATH, collapsed = false, onNavig
           {menu.map((group, gi) => {
             const bare = !group.title // 顶级单项（如工作台）：没有分组标题，直接是一级菜单
             const open = !isClosed(group.key)
-            // 色调只属于「有标题的目录」：目录标题行用它做锚点，收起成图标轨时下放到子项。
-            // 顶级单项各自成组（key 由菜单 id 派生），跟着上色等于按 id 哈希出一串随机颜色。
-            const tone = bare ? undefined : groupTone(group.key)
 
-            // 图标模式：所有菜单只显示图标，分组之间用细线隔开（图标轨也按分组着色，收展开两套观感一致）
+            // 图标模式：所有菜单只显示图标，分组之间用细线隔开
             if (collapsed) {
               return (
                 <div key={group.key}>
                   {!bare && gi > 0 && <div className="mx-2 my-2 h-px bg-sidebar-border" role="separator" />}
-                  <ul className="space-y-1">{group.children?.map((item) => renderItem(item, false, tone))}</ul>
+                  <ul className="space-y-1">{group.children?.map((item) => renderItem(item, false))}</ul>
                 </div>
               )
             }
@@ -168,11 +152,9 @@ export function Sidebar({ menu, homePath = HOME_PATH, collapsed = false, onNavig
                   type="button"
                   onClick={() => toggleGroup(group.key)}
                   aria-expanded={open}
-                  data-tone={groupTone(group.key)}
                   className="flex min-h-11 w-full items-center gap-3 rounded-md px-3 text-sm font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-accent/60 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring md:min-h-9"
                 >
-                  {/* 一级目录图标按分组色调着色：--tone 由 button 上的 data-tone 提供，仅颜色层 */}
-                  <DynamicIcon name={group.icon} className="tone-text size-5 shrink-0 md:size-4" />
+                  <DynamicIcon name={group.icon} className="size-5 shrink-0 md:size-4" />
                   <span className="flex-1 truncate text-start">{t(group.title)}</span>
                   <ChevronDown
                     className={cn('size-4 shrink-0 text-muted-foreground transition-transform duration-200 motion-reduce:transition-none', !open && '-rotate-90 rtl:rotate-90')}
