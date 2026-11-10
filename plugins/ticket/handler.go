@@ -145,10 +145,12 @@ func (h *handler) setStatus(c *gin.Context) {
 }
 
 // POST /plugins/ticket/tickets/:no/assign  {"assigneeId":0,"assigneeName":""} —— assigneeId=0 表示认领给自己。
+// 用 idgen.ID 接收：雪花 ID 远超 JS 安全整数，前端只传字符串；int64 字段配合前端的
+// Number() 转换会把 ID 静默变成另一个数（改派给错误的人）。
 func (h *handler) assign(c *gin.Context) {
 	var f struct {
-		AssigneeID   int64  `json:"assigneeId"`
-		AssigneeName string `json:"assigneeName"`
+		AssigneeID   idgen.ID `json:"assigneeId"`
+		AssigneeName string   `json:"assigneeName"`
 	}
 	if !response.BindJSON(c, &f) {
 		return
@@ -160,12 +162,12 @@ func (h *handler) assign(c *gin.Context) {
 			response.Fail(c, response.Forbidden("error.forbidden"))
 			return
 		}
-		assigneeID = int64(uid)
+		assigneeID = uid
 		if assigneeName == "" {
 			assigneeName = name
 		}
 	}
-	t, err := h.svc.Assign(c.Request.Context(), c.Param("no"), idgen.ID(assigneeID), assigneeName, uid)
+	t, err := h.svc.Assign(c.Request.Context(), c.Param("no"), assigneeID, assigneeName, uid)
 	respond(c, t, err)
 }
 
@@ -421,15 +423,15 @@ func (h *handler) setGroupMembers(c *gin.Context) {
 	respond(c, view, err)
 }
 
-// POST /plugins/ticket/tickets/:no/group {"groupId":0} —— 0 表示移出分组。
+// POST /plugins/ticket/tickets/:no/group {"groupId":0} —— 0 表示移出分组。idgen.ID 同 assign。
 func (h *handler) assignGroup(c *gin.Context) {
 	var f struct {
-		GroupID int64 `json:"groupId"`
+		GroupID idgen.ID `json:"groupId"`
 	}
 	if !response.BindJSON(c, &f) {
 		return
 	}
-	t, err := h.svc.AssignGroup(c.Request.Context(), c.Param("no"), idgen.ID(f.GroupID))
+	t, err := h.svc.AssignGroup(c.Request.Context(), c.Param("no"), f.GroupID)
 	respond(c, t, err)
 }
 

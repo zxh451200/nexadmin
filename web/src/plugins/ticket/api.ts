@@ -153,7 +153,8 @@ export interface BulkTicketsInput {
   action: 'assign' | 'status' | 'priority'
   status?: string
   priority?: string
-  assigneeId?: number
+  /** 雪花 ID 用字符串传，理由同 useAssignTicket */
+  assigneeId?: string
   assigneeName?: string
 }
 
@@ -229,7 +230,8 @@ export interface RuleInput {
   matchKeyword: string
   matchTags: string[]
   setPriority: string
-  setGroupId: number
+  /** 群组雪花 ID 用字符串传（后端 idgen.ID 兼容），0/空串 = 不改派分组 */
+  setGroupId: string | 0
   note: string
   addTags: string[]
 }
@@ -348,7 +350,8 @@ export function useSetTicketStatus() {
 export function useAssignTicket() {
   const invalidate = useInvalidate()
   return useMutation({
-    mutationFn: ({ ticketNo, assigneeId, assigneeName }: { ticketNo: string; assigneeId: number; assigneeName: string }) =>
+    // assigneeId 保持字符串：雪花 ID 远超 JS 安全整数，过 Number() 会静默变成另一个 ID
+    mutationFn: ({ ticketNo, assigneeId, assigneeName }: { ticketNo: string; assigneeId: string; assigneeName: string }) =>
       api.post<Ticket>(`${BASE}/tickets/${ticketNo}/assign`, { assigneeId, assigneeName }),
     onSuccess: invalidate,
   })
@@ -447,7 +450,8 @@ export function useSetGroupMembers() {
 export function useAssignGroup() {
   const invalidate = useInvalidate()
   return useMutation({
-    mutationFn: ({ ticketNo, groupId }: { ticketNo: string; groupId: number }) =>
+    // groupId 保持字符串，理由同 assigneeId
+    mutationFn: ({ ticketNo, groupId }: { ticketNo: string; groupId: string }) =>
       api.post<Ticket>(`${BASE}/tickets/${ticketNo}/group`, { groupId }),
     onSuccess: invalidate,
   })

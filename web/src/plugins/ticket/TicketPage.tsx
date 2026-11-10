@@ -36,6 +36,7 @@ import { Can } from '@/framework/auth/Can'
 import { PlatformNotice } from '@/framework/components/PlatformNotice'
 import { usePermission } from '@/framework/auth/usePermission'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
+import { BatchBar } from '@/framework/components/table/BatchBar'
 import { useIsMobile } from '@/framework/hooks/use-mobile'
 import { useWs } from '@/framework/hooks/useWs'
 import { DatePicker } from '@/framework/components/DatePicker'
@@ -513,7 +514,7 @@ export default function TicketPage() {
 
   const claim = async (ticketNo: string) => {
     try {
-      await assign.mutateAsync({ ticketNo, assigneeId: 0, assigneeName: '' })
+      await assign.mutateAsync({ ticketNo, assigneeId: '', assigneeName: '' })
       toast.success(t('common.operateSuccess'))
       invalidateBadges()
     } catch {
@@ -529,7 +530,8 @@ export default function TicketPage() {
   const submitAssign = async () => {
     if (!assignTarget || !assignUserId) return
     try {
-      await assign.mutateAsync({ ticketNo: assignTarget.ticketNo, assigneeId: Number(assignUserId), assigneeName: '' })
+      // assigneeId 保持字符串：雪花 ID 过 Number() 会丢精度（改派给错误的人）
+      await assign.mutateAsync({ ticketNo: assignTarget.ticketNo, assigneeId: assignUserId, assigneeName: '' })
       toast.success(t('common.operateSuccess'))
       invalidateBadges()
       setAssignTarget(null)
@@ -982,7 +984,7 @@ export default function TicketPage() {
       return
     }
     try {
-      await assignGroupMut.mutateAsync({ ticketNo: moveTarget.ticketNo, groupId: Number(moveGroupId) })
+      await assignGroupMut.mutateAsync({ ticketNo: moveTarget.ticketNo, groupId: moveGroupId })
       toast.success(t('common.operateSuccess'))
       setMoveTarget(null)
     } catch {
@@ -1039,7 +1041,8 @@ export default function TicketPage() {
         matchKeyword: ruleForm.matchKeyword.trim(),
         matchTags: ruleForm.matchTags,
         setPriority: ruleForm.setPriority,
-        setGroupId: Number(ruleForm.setGroupId || 0),
+        // 群组 ID 是雪花，保持字符串；空串 = 不改派分组
+        setGroupId: ruleForm.setGroupId ? String(ruleForm.setGroupId) : '',
         note: ruleForm.note.trim(),
         addTags: ruleForm.addTags,
       }
@@ -1214,7 +1217,8 @@ export default function TicketPage() {
               桌面再给一个下限：窗口矮到算出来的高度装不下「头部+次级面板+会话保底+回复框」时，
               让整页滚，而不是把会话挤成一条缝。 */}
           <div className="grid h-auto min-h-96 grid-cols-1 gap-4 md:h-[calc(100vh-17rem)] md:min-h-144 md:grid-cols-[24rem_1fr]">
-            <Card className="flex max-h-128 min-h-0 flex-col gap-2 p-2 md:max-h-none">
+            {/* relative：批量条 anchored 锚定在队列卡片底边，不盖住右侧会话区 */}
+            <Card className="relative flex max-h-128 min-h-0 flex-col gap-2 p-2 md:max-h-none">
               <div className="flex flex-wrap items-center gap-2">
                 <Input
                   value={keyword}
@@ -1368,17 +1372,12 @@ export default function TicketPage() {
               ) : null}
 
               {checked.length > 0 ? (
-                // 24rem 窄栏里「计数 + 四个动作」挤一行会折出「关闭 / 清除」的孤行：
-                // 计数与清除占一行，批量动作单独一行。
-                <div className="space-y-1.5 rounded-md bg-muted px-2 py-1.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs text-muted-foreground">{t('common.selected', { count: checked.length })}</span>
-                    <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => setChecked([])}>
-                      {t('common.clear')}
-                    </Button>
-                  </div>
+                // 批量条走全站统一的浮动 BatchBar（portal 到视口底边），不再在列表上方
+                // 插入一块把内容下推的 bg-muted 区块——工单工作台是左右双栏工作面，
+                // 中间被插一行会同时挤压列表与详情。
+                <BatchBar count={checked.length} onClear={() => setChecked([])} mode="absolute">
                   <Can perm="ticket:edit">
-                    <div className="flex flex-wrap items-center gap-1.5">
+                    <>
                       <Button size="sm" variant="outline" onClick={() => void runBulk({ action: 'assign' })}>
                         {t('plugin_ticket.actions.assignToMe')}
                       </Button>
@@ -1402,9 +1401,9 @@ export default function TicketPage() {
                       <Button size="sm" variant="outline" className="text-destructive" onClick={() => void bulkClose()}>
                         {t('plugin_ticket.bulk.close')}
                       </Button>
-                    </div>
+                    </>
                   </Can>
-                </div>
+                </BatchBar>
               ) : null}
 
               <div className="min-h-0 flex-1 overflow-y-auto">
