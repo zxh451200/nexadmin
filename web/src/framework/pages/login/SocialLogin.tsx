@@ -9,18 +9,21 @@ import { Button } from '@/framework/ui/button'
 interface Props {
   providers: { key: string; name: string }[]
   redirect: string
+  /** register：注册页的快捷注册，服务端按自助注册建号（见 oauth.ts 的 intent） */
+  intent?: 'login' | 'register'
 }
 
-export function SocialLogin({ providers, redirect }: Props) {
+export function SocialLogin({ providers, redirect, intent = 'login' }: Props) {
   const { t } = useTranslation()
   if (providers.length === 0) return null
+  const register = intent === 'register'
 
   // 向服务端要授权地址（一次性 state、回调白名单都在服务端），再整页跳转；回来后由 /login/oauth/:provider 页完成登录
   const go = async (p: { key: string; name: string }) => {
     try {
-      await startOAuthLogin(p.key, redirect)
+      await startOAuthLogin(p.key, redirect, intent)
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : t('login.oauthStartFailed', { name: p.name }))
+      toast.error(e instanceof Error ? e.message : t(register ? 'login.register.oauthStartFailed' : 'login.oauthStartFailed', { name: p.name }))
     }
   }
 
@@ -28,7 +31,7 @@ export function SocialLogin({ providers, redirect }: Props) {
     <div className="mt-8">
       <div className="flex items-center gap-3 text-xs text-muted-foreground">
         <span className="h-px flex-1 bg-border" />
-        <span>{t('login.quickLogin')}</span>
+        <span>{t(register ? 'login.register.quickRegister' : 'login.quickLogin')}</span>
         <span className="h-px flex-1 bg-border" />
       </div>
       <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
@@ -39,7 +42,7 @@ export function SocialLogin({ providers, redirect }: Props) {
             variant="outline"
             size="icon"
             className="size-11 rounded-full"
-            aria-label={t('login.loginWith', { name: p.name })}
+            aria-label={t(register ? 'login.register.registerWith' : 'login.loginWith', { name: p.name })}
             title={p.name}
             onClick={() => void go(p)}
           >
@@ -47,6 +50,7 @@ export function SocialLogin({ providers, redirect }: Props) {
           </Button>
         ))}
       </div>
+      {register && <p className="mt-3 text-center text-xs text-muted-foreground">{t('login.register.socialHint')}</p>}
     </div>
   )
 }

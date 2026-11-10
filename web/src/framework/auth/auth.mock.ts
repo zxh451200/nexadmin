@@ -560,6 +560,8 @@ defineMock([
         { key: 'github', name: 'GitHub' },
         { key: 'oidc', name: 'OIDC' },
       ],
+      // 开放自助注册时每个 provider 都能快捷注册（与后端 /auth/methods 同口径）
+      registerProviders: OAUTH_PROVIDERS,
     }),
   },
   {
@@ -595,7 +597,7 @@ const OAUTH_PROVIDERS = [
 const NEED_BIND = new Set(['google', 'oidc'])
 
 interface OAuthStore {
-  states: Record<string, { provider: string; purpose: 'login' | 'bind' }>
+  states: Record<string, { provider: string; purpose: 'login' | 'bind' | 'register' }>
   binds: Record<string, string>
 }
 
@@ -615,7 +617,7 @@ export function onOAuthBound(fn: (provider: string) => void) {
 }
 
 /** 登记一次性 state 并返回授权地址（演示里授权页就是回调页本身，带上 code 和 state） */
-export function mockOAuthStart(provider: string, redirect: string, purpose: 'login' | 'bind') {
+export function mockOAuthStart(provider: string, redirect: string, purpose: 'login' | 'bind' | 'register') {
   if (redirect !== `${window.location.origin}/admin/login/oauth/${provider}`) mockError(400, '回调地址不在允许范围内')
   const s = loadOAuth()
   const state = Math.random().toString(36).slice(2)
@@ -633,7 +635,7 @@ defineMock([
     url: '/auth/oauth/:provider/start',
     handler: ({ params, query }) => {
       if (!OAUTH_PROVIDERS.some((p) => p.key === params.provider)) mockError(404, 'Not found')
-      return mockOAuthStart(params.provider, String(query.redirect ?? ''), 'login')
+      return mockOAuthStart(params.provider, String(query.redirect ?? ''), query.intent === 'register' ? 'register' : 'login')
     },
   },
   {
@@ -650,6 +652,12 @@ defineMock([
         userFromCtx(ctx) // 绑定必须带登录令牌
         boundListeners.forEach((fn) => fn(rec.provider))
         return { bound: true, provider: rec.provider }
+      }
+      // 快捷注册：匹配不上也建号，不走「绑定已有账号」（与后端 resolveLogin 的 register 意图一致）
+      if (rec.purpose === 'register') {
+        const username = `${rec.provider}_${Math.random().toString(36).slice(2, 8)}`
+        users[username] = { ...users.demo, username, id: String(Date.now()), nickname: username, password: '' }
+        return session(users[username])
       }
       if (NEED_BIND.has(rec.provider)) {
         const bindToken = `mock-bind-${Math.random().toString(36).slice(2)}`

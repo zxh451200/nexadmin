@@ -38,9 +38,12 @@ function go(authUrl: string, pending: OAuthPending) {
   window.location.assign(authUrl)
 }
 
-/** 登录页：向服务端要授权地址（服务端生成一次性 state 并校验回调白名单），然后整页跳转 */
-export async function startOAuthLogin(provider: string, next: string) {
-  const res = await api.get<{ authUrl: string }>(`/auth/oauth/${provider}/start`, { redirect: oauthRedirectUri(provider) })
+/** 登录页 / 注册页：向服务端要授权地址（服务端生成一次性 state 并校验回调白名单），然后整页跳转。
+ *  intent=register 时服务端记下注册意图：授权回来匹配不上就建号，而不是要求绑定已有账号。 */
+export async function startOAuthLogin(provider: string, next: string, intent: 'login' | 'register' = 'login') {
+  const query: Record<string, string> = { redirect: oauthRedirectUri(provider) }
+  if (intent === 'register') query.intent = 'register'
+  const res = await api.get<{ authUrl: string }>(`/auth/oauth/${provider}/start`, query)
   go(res.authUrl, { mode: 'login', next })
 }
 

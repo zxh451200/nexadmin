@@ -21,11 +21,14 @@ type oauthHandler struct {
 	m    *module
 	d    *core.Deps
 	flow *oauthflow.Flow
+	// 快捷注册与 /auth/register 同口径的 IP 闸门（每小时 10 次），所有 provider 共用一个桶
+	regLimiter *middleware.Limiter
 }
 
 // registerOAuth 注册 /auth/providers 与 /auth/oauth/*（匿名可访问；靠一次性 state、白名单与统一失败提示防护）。
 func (m *module) registerOAuth(r *gin.RouterGroup, d *core.Deps) {
-	h := &oauthHandler{m: m, d: d, flow: oauthflow.Shared(d.Config, d.Cache, d.Log)}
+	h := &oauthHandler{m: m, d: d, flow: oauthflow.Shared(d.Config, d.Cache, d.Log),
+		regLimiter: middleware.NewLimiter(d.Cache, d.Log, "oauth_register", 10, time.Hour)}
 	lim := middleware.RateLimitRule(d.Cache, d.Log, d.Config.RateLimit, "login", middleware.ByIPAndPath())
 	r.GET("/auth/providers", h.providers)
 	r.GET("/auth/oauth/:provider/start", lim, h.start)
@@ -52,10 +55,25 @@ func (h *oauthHandler) providers(c *gin.Context) {
 	response.OK(c, out)
 }
 
-// start GET /auth/oauth/:provider/start?redirect=<回调地址>：返回第三方授权地址 {authUrl}。
+// start GET /auth/oauth/:provider/start?redirect=<回调地址>&intent=register：返回第三方授权地址 {authUrl}。
 // redirect 就是授权完成后第三方跳回的前端页面，必须与 auth.providers.<name>.redirect_uris 之一完全一致。
+// intent=register 是注册页发起的快捷注册：与 /auth/register 同一道运行时开关和 IP 闸门，
+// 授权回来后匹配不上就建号（见 resolveLogin），而不是要求绑定已有账号。
 func (h *oauthHandler) start(c *gin.Context) {
-	u, err := h.flow.Start(c.Request.Context(), c.Param("provider"), c.Query("redirect"), oauthflow.PurposeLogin, 0)
+	ctx := c.Request.Context()
+	purpose := oauthflow.PurposeLogin
+	if c.Query("intent") == "register" {
+		if !auth.RegisterEnabled(ctx) { // 与 /auth/register 关闭时的表现一致
+			response.Fail(c, response.NotFound("error.not_found"))
+			return
+		}
+		if ok, retry := h.regLimiter.Hit(ctx, "ip:"+c.ClientIP()); !ok {
+			middleware.TooManyRequests(c, retry)
+			return
+		}
+		purpose = oauthflow.PurposeRegister
+	}
+	u, err := h.flow.Start(ctx, c.Param("provider"), c.Query("redirect"), purpose, 0)
 	if err = startError(err); err != nil {
 		response.Fail(c, err)
 		return

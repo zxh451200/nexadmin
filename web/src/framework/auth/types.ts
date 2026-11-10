@@ -59,6 +59,8 @@ export type OAuthCallbackResult = LoginResult | ChallengeResult | { needBind: tr
 export interface AuthMethods {
   methods: LoginType[]
   providers: { key: string; name: string }[]
+  /** 注册页「快捷注册」可用的 provider：开放自助注册时与 providers 相同，否则为空 */
+  registerProviders?: { key: string; name: string }[]
   /** 邮件或短信任一可用时为 true；登录页据此显示「忘记密码」入口 */
   forgotEnabled?: boolean
   /** 可用的找回渠道：email（SMTP 已配置）/ phone（短信已配置）；找回对话框据此适配输入 */

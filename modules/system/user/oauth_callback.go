@@ -58,7 +58,7 @@ func (h *oauthHandler) callback(c *gin.Context) {
 		h.completeBind(c, key, rec, id, conf.AllowedEmailDomains)
 		return
 	}
-	out, reason, err := h.m.resolveLogin(ctx, h.d, h.flow, conf, id)
+	out, reason, err := h.m.resolveLogin(ctx, h.d, h.flow, conf, id, rec.Purpose)
 	if err != nil {
 		if reason != "" {
 			h.d.Log.Warn("oauth login refused", zap.String("provider", key), zap.String("reason", reason), zap.String("external", identLabel(id)), zap.String("ip", ip))

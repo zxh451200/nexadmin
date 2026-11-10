@@ -12,7 +12,9 @@ import (
 	"gorm.io/gorm"
 
 	"nexadmin/core"
+	"nexadmin/core/auth"
 	"nexadmin/core/config"
+	"nexadmin/core/event"
 	"nexadmin/core/response"
 	"nexadmin/core/tenant"
 	"nexadmin/modules/internal/oauthflow"
@@ -125,9 +127,11 @@ func newUsername(ctx context.Context, db *gorm.DB, id *oauth.Identity) (string, 
 	return "", errors.New("oauth: cannot allocate username")
 }
 
-// autoCreate 为匹配不上的第三方身份自动建号（仅 auto_create: true）：无密码（不可密码登录），
-// 角色为 default_role（默认 guest）。内置角色永不自动赋予；找不到该角色则不赋角色（最小权限）并记警告。
-func autoCreate(ctx context.Context, d *core.Deps, conf config.ProviderConf, id *oauth.Identity) (*User, error) {
+// autoCreate 为匹配不上的第三方身份建号：无密码（不可密码登录），受租户用户数上限约束。
+// 两条通道各有角色来源——快捷注册（register）按 auth.register_roles，与账号密码注册完全一致；
+// 登录侧自动建号按 provider 的 default_role（默认 guest）。内置角色永不自动赋予；
+// 找不到该角色则不赋角色（最小权限）并记警告。
+func autoCreate(ctx context.Context, d *core.Deps, conf config.ProviderConf, id *oauth.Identity, register bool) (*User, error) {
 	db := d.DB.WithContext(ctx)
 	name, err := newUsername(ctx, db, id)
 	if err != nil {
@@ -143,19 +147,30 @@ func autoCreate(ctx context.Context, d *core.Deps, conf config.ProviderConf, id 
 			u.Phone = p
 		}
 	}
-	roleID, err := defaultRoleID(ctx, d, conf.DefaultRole)
-	if err != nil {
-		return nil, err
-	}
 	err = db.Transaction(func(tx *gorm.DB) error {
+		var roleIDs []idgen.ID
+		if register {
+			var err error
+			if roleIDs, err = registerRoleIDs(ctx, tx, d.Config.Auth.RegisterRoles); err != nil {
+				return err
+			}
+		} else {
+			rid, err := defaultRoleID(ctx, d, conf.DefaultRole)
+			if err != nil {
+				return err
+			}
+			if rid != 0 {
+				roleIDs = []idgen.ID{rid}
+			}
+		}
 		if err := ensureUserQuota(ctx, tx, 1); err != nil { // 自动建号同样受套餐用户数限制
 			return err
 		}
 		if err := tx.Create(u).Error; err != nil {
 			return err
 		}
-		if roleID != 0 {
-			if err := tx.Create(&userRole{UserID: u.ID, RoleID: roleID}).Error; err != nil {
+		for _, rid := range roleIDs {
+			if err := tx.Create(&userRole{UserID: u.ID, RoleID: rid}).Error; err != nil {
 				return err
 			}
 		}
@@ -163,6 +178,9 @@ func autoCreate(ctx context.Context, d *core.Deps, conf config.ProviderConf, id 
 	})
 	if err != nil {
 		return nil, err
+	}
+	if register { // 快捷注册也是注册：与 /auth/register 一样发事件（载荷不含密码）
+		event.Publish(ctx, event.UserCreated, userEvent(u))
 	}
 	return u, nil
 }
@@ -192,9 +210,10 @@ func firstNonEmpty(ss ...string) string {
 	return ""
 }
 
-// resolveLogin 把第三方身份落到本地账号：已绑定 → 登录；首次 → 按 match_by 匹配；再不行 auto_create；
-// 否则返回 NeedBind + bindToken。任何“不允许”都返回统一的 errOAuthFailed，并带内部原因给日志。
-func (m *module) resolveLogin(ctx context.Context, d *core.Deps, flow *oauthflow.Flow, conf config.ProviderConf, id *oauth.Identity) (*loginOutcome, string, error) {
+// resolveLogin 把第三方身份落到本地账号：已绑定 → 登录；首次 → 按 match_by 匹配；再不行建号
+// （provider 的 auto_create，或注册页发起的快捷注册）；都不允许才返回 NeedBind + bindToken。
+// 任何“不允许”都返回统一的 errOAuthFailed，并带内部原因给日志。
+func (m *module) resolveLogin(ctx context.Context, d *core.Deps, flow *oauthflow.Flow, conf config.ProviderConf, id *oauth.Identity, purpose string) (*loginOutcome, string, error) {
 	if !domainAllowed(conf.AllowedEmailDomains, id) {
 		return nil, "blocked", errOAuthFailed()
 	}
@@ -226,10 +245,13 @@ func (m *module) resolveLogin(ctx context.Context, d *core.Deps, flow *oauthflow
 			}
 		}
 	}
-	if conf.AutoCreate {
-		u, err := autoCreate(ctx, d, conf, id)
+	// 授权期间管理员关掉自助注册：state 里的 register 意图作废，退回登录语义（不建号），
+	// 而不是把已经授权完的用户挡在门外。
+	register := purpose == oauthflow.PurposeRegister && auth.RegisterEnabled(ctx)
+	if conf.AutoCreate || register {
+		u, err := autoCreate(ctx, d, conf, id, register)
 		if err != nil {
-			d.Log.Error("oauth auto_create failed", zap.String("provider", id.Provider), zap.Error(err))
+			d.Log.Error("oauth account creation failed", zap.String("provider", id.Provider), zap.Bool("register", register), zap.Error(err))
 			var re *response.Error
 			if errors.As(err, &re) && re.Reason == tenant.ReasonQuotaUsers { // 套餐用户数已满：给出明确原因
 				return nil, "other", err

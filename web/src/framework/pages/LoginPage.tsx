@@ -249,7 +249,12 @@ export default function LoginPage() {
             {continuationError && <p role="alert" className="mb-4 text-sm text-destructive">{continuationError.message || t('login.otpFailed')}</p>}
 
             {registering ? (
-              <RegisterForm onSuccess={done} onLogin={() => setRegistering(false)} onChallenge={setChallenge} />
+              <RegisterForm
+                onSuccess={done}
+                onLogin={() => setRegistering(false)}
+                onChallenge={setChallenge}
+                social={<SocialLogin providers={data.registerProviders ?? []} redirect={redirect} intent="register" />}
+              />
             ) : methodsPending ? (
               // 登录方式还没落到手里：给骨架，不给一副看起来可以直接提交、又没有验证码的表单
               <div className="space-y-5" role="status" aria-busy="true">

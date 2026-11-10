@@ -31,8 +31,9 @@ const (
 
 // Purpose 区分 state 的用途。
 const (
-	PurposeLogin = "login"
-	PurposeBind  = "bind"
+	PurposeLogin    = "login"
+	PurposeBind     = "bind"
+	PurposeRegister = "register" // 注册页发起：匹配不上时按自助注册建号，不受 provider 的 auto_create 约束
 )
 
 // 错误。回调阶段的所有错误对外统一成同一条提示，具体原因只写日志。

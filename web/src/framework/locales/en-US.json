@@ -186,7 +186,11 @@
       "noAccount": "No account yet?",
       "toRegister": "Register",
       "hasAccount": "Already have an account?",
-      "toLogin": "Back to sign in"
+      "toLogin": "Back to sign in",
+      "quickRegister": "Quick sign-up",
+      "registerWith": "Sign up with {{name}}",
+      "socialHint": "An account is created automatically on first use",
+      "oauthStartFailed": "Could not start {{name}} sign-up. Please try again later."
     },
     "phone": "Phone number",
     "phonePlaceholder": "Enter your phone number",

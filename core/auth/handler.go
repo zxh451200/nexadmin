@@ -379,6 +379,7 @@ func (h *Handler) Methods(c *gin.Context) {
 		Key  string `json:"key"`
 		Name string `json:"name"`
 	}
+	registerEnabled := RegisterEnabled(c.Request.Context())
 	providers := make([]provider, 0, len(keys))
 	for _, k := range keys {
 		if !KnownProvider(k) {
@@ -393,6 +394,12 @@ func (h *Handler) Methods(c *gin.Context) {
 		}
 		providers = append(providers, provider{Key: k, Name: name})
 	}
+	// 开放自助注册时每个 provider 都能快捷注册（授权回来匹配不上就建号，见 resolveLogin 的 register 意图），
+	// 与账号密码注册同一道开关；关闭时注册页本身不可达，这里也就为空。
+	registerProviders := providers
+	if !registerEnabled {
+		registerProviders = []provider{}
+	}
 	forgotChannels := make([]string, 0, 2)
 	if h.ForgotEnabled != nil && h.ForgotEnabled(c.Request.Context()) {
 		forgotChannels = append(forgotChannels, "email")
@@ -402,9 +409,11 @@ func (h *Handler) Methods(c *gin.Context) {
 	}
 	response.OK(c, gin.H{
 		"methods": methods, "providers": providers,
+		// 注册页「快捷注册」可用的 provider：开放自助注册时与 providers 相同，否则为空
+		"registerProviders": registerProviders,
 		"forgotEnabled": len(forgotChannels) > 0, "forgotChannels": forgotChannels,
 		// 运行时开关（设置页「参数设置」的 user.register_enabled，默认关闭），与 /auth/register 的闸门同源
-		"registerEnabled": RegisterEnabled(c.Request.Context()),
+		"registerEnabled": registerEnabled,
 		// 「登录验证码」强制开启（设置页 login.captcha_enabled，出厂 true）：前端据此首屏显示验证码输入；
 		// 关闭时仍是自适应（连续失败达到阈值后要求），由失败响应的 reason 通知前端
 		"captchaEnabled": LoginCaptcha(c.Request.Context()),

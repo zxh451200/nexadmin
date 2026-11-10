@@ -38,8 +38,8 @@ languages:                # 平台语言清单的种子：首次启动写入 sys
 auth:
   methods: [password]       # password | phone；phone 还需要配置下面的 sms.provider，否则自动隐藏
   single_session: false     # true = 同一用户只保留最后一次登录，旧 access/refresh token 会立即失效
-  allow_register: false     # 自助注册的兜底值：运行时真源是后台「参数设置」的 user.register_enabled（默认关闭，改完即时生效），仅该参数行缺失时读本项。强制图形验证码 + IP 限流；注册用户进当前租户并受套餐用户数上限约束
-  register_roles: []        # 注册用户默认挂的角色码（当前租户内解析，如 [guest]）；空 = 不挂角色，注册后待管理员分配权限
+  allow_register: false     # 自助注册的兜底值：运行时真源是后台「参数设置」的 user.register_enabled（默认关闭，改完即时生效），仅该参数行缺失时读本项。账号密码注册强制图形验证码 + IP 限流；开启后注册页同时出现第三方「快捷注册」（同一开关、同一 IP 额度口径）；两条通道都进当前租户并受套餐用户数上限约束
+  register_roles: []        # 注册用户默认挂的角色码（当前租户内解析，如 [guest]）；账号密码注册与快捷注册共用；空 = 不挂角色，注册后待管理员分配权限
   # 第三方快捷登录（OAuth2 授权码流程）。没配置的不显示；缺 client_id / client_secret / redirect_uris 视为未配置。
   # 在 config/config.yaml 里按需取消注释。密钥务必用 ${ENV} 引用环境变量，不要明文写进仓库。
   # 通用字段（每个 provider 都支持）：
@@ -47,8 +47,8 @@ auth:
   #   redirect_uris               回调地址白名单（精确匹配）= 前端回调页 /admin/login/oauth/<provider> 的完整 URL
   #   match_by                    首次登录自动匹配已有账号的依据：phone | email | employee_no（空 = 不自动匹配）
   #                               email 只认“已验证”邮箱；employee_no 对应本地用户名；匹配不上提示“绑定已有账号”
-  #   auto_create                 匹配不上时自动建号（无密码），默认 false
-  #   default_role                auto_create 赋予的角色编码，默认 guest；内置角色不会被自动赋予
+  #   auto_create                 登录侧匹配不上时自动建号（无密码），默认 false；注册页的快捷注册不看它
+  #   default_role                auto_create 赋予的角色编码，默认 guest；内置角色不会被自动赋予（快捷注册取 auth.register_roles）
   #   allowed_email_domains       只允许这些邮箱域名登录（要求邮箱已验证），默认不限制，如 [corp.com]
   providers: {}
   #   wecom:                      # 企业微信扫码：client_id=CorpID，client_secret=应用 Secret

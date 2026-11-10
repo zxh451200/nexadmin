@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -22,10 +22,13 @@ export function RegisterForm({
   onSuccess,
   onLogin,
   onChallenge,
+  social,
 }: {
   onSuccess: () => void
   onLogin: () => void
   onChallenge?: (c: LoginChallenge) => void
+  /** 快捷注册区（第三方 provider 按钮），排在注册按钮与「返回登录」之间，与登录页同序 */
+  social?: ReactNode
 }) {
   const { t } = useTranslation()
   const acceptLogin = useAuth((s) => s.acceptLogin)
@@ -143,6 +146,7 @@ export function RegisterForm({
           {submitting && <Loader2 className="me-2 size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />}
           {t('login.register.submit')}
         </Button>
+        {social}
         <p className="text-center text-sm text-muted-foreground">
           {t('login.register.hasAccount')}{' '}
           <Button type="button" variant="link" className="h-auto p-0" onClick={onLogin}>
