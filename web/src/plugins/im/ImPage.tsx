@@ -741,12 +741,12 @@ function ConvListItem({
           </span>
         ) : null}
       </span>
-      <span className="mt-1 flex w-full items-center gap-2">
+      <span className="mt-0.5 flex w-full items-center gap-2">
         <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{conv.lastPreview || t('plugin_im.noMessages')}</span>
         <QueueStatus tone={conv.status === 'open' ? 'success' : 'neutral'}>{t(`plugin_im.status.${conv.status}`)}</QueueStatus>
       </span>
       {meta.length > 0 ? (
-        <span className="mt-1 flex min-w-0 items-center gap-1 text-[11px] text-muted-foreground">
+        <span className="mt-0.5 flex min-w-0 items-center gap-1 text-[11px] text-muted-foreground">
           {meta.map((m) => (
             <span key={m.key} className="inline-flex min-w-0 items-center gap-1">
               {m.node}

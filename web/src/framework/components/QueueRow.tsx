@@ -23,14 +23,25 @@ export function QueueRow({
   footer?: ReactNode
 }) {
   return (
-    <div className={cn('rounded-lg transition-colors', selected ? 'bg-accent/60' : 'hover:bg-accent/40')}>
+    // 选中态用 primary 色底 + 内描边：accent/60 在浅色下和悬停几乎一个色，扫一眼分不出选没选中
+    <div
+      className={cn(
+        'rounded-lg transition-colors',
+        selected ? 'bg-primary/10 ring-1 ring-inset ring-primary/30 hover:bg-primary/15' : 'hover:bg-accent/40',
+      )}
+    >
       <div className="flex items-start gap-2">
-        {checkbox ? <div className="flex ps-2.5 pt-3">{checkbox}</div> : null}
-        <button type="button" onClick={onSelect} className={cn('min-w-0 flex-1 py-2 text-start', checkbox ? 'pe-2.5' : 'px-2.5')}>
+        {checkbox ? <div className="flex ps-2.5 pt-2">{checkbox}</div> : null}
+        <button
+          type="button"
+          onClick={onSelect}
+          aria-pressed={selected}
+          className={cn('min-w-0 flex-1 py-1.5 text-start', checkbox ? 'pe-2.5' : 'px-2.5')}
+        >
           {children}
         </button>
       </div>
-      {footer ? <div className={cn('pb-2', checkbox ? 'ps-9 pe-2.5' : 'px-2.5')}>{footer}</div> : null}
+      {footer ? <div className={cn('pb-1.5', checkbox ? 'ps-9 pe-2.5' : 'px-2.5')}>{footer}</div> : null}
     </div>
   )
 }
@@ -59,7 +70,7 @@ export function QueueStatus({ tone = 'neutral', children }: { tone?: keyof typeo
 /** 行首头像位：品牌渐变小方块，和主按钮、Logo 同一套形状与配色语言 */
 export function QueueAvatar({ children }: { children: ReactNode }) {
   return (
-    <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-brand-gradient text-sm font-semibold text-primary-foreground">
+    <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-brand-gradient text-xs font-semibold text-primary-foreground">
       {children}
     </span>
   )

@@ -2616,7 +2616,7 @@ function TicketListItem({
           {formatTime(ticket.lastReplyAt ?? ticket.createdAt, i18n.language)}
         </span>
       </span>
-      <span className="mt-1 flex w-full items-center gap-2 text-xs text-muted-foreground">
+      <span className="mt-0.5 flex w-full items-center gap-2 text-xs text-muted-foreground">
         <QueueStatus tone={priorityTone(ticket.priority)}>{t(`plugin_ticket.priority.${ticket.priority}`)}</QueueStatus>
         {/* 队列里只留尾号：工单号是 18 位数字串，整串铺开一眼扫不出区别（区分度全在尾号），
             悬停补全、点开右侧面板也是全号 */}
@@ -2626,7 +2626,7 @@ function TicketListItem({
         <QueueStatus tone={statusTone(ticket.status)}>{t(`plugin_ticket.status.${ticket.status}`)}</QueueStatus>
       </span>
       {meta.length > 0 ? (
-        <span className="mt-1 flex min-w-0 items-center gap-1 text-[11px] text-muted-foreground">
+        <span className="mt-0.5 flex min-w-0 items-center gap-1 text-[11px] text-muted-foreground">
           {meta.map((m) => (
             <span key={m.key} className="inline-flex min-w-0 items-center gap-1">
               {m.node}
