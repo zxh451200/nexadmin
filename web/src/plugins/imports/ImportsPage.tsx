@@ -6,6 +6,7 @@ import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { ExportCsvButton } from '@/framework/components/export/ExportCsvButton'
 import { FileDropField } from '@/framework/components/FileDropField'
+import { FilterBar } from '@/framework/components/FilterBar'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { RequiredMark } from '@/framework/components/RequiredMark'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
@@ -189,6 +190,7 @@ function NewImportDialog({
 
 export default function ImportsPage() {
   const { t, i18n } = useTranslation()
+  const [draft, setDraft] = useState<{ source?: string; status?: string }>({})
   const [source, setSource] = useState<string | undefined>()
   const [status, setStatus] = useState<string | undefined>()
   const [page, setPage] = useState(1)
@@ -294,18 +296,53 @@ export default function ImportsPage() {
 
   return (
     <PageContainer>
-      <PageHeader
-        title={t('plugin_imports.title')}
-        description={t('plugin_imports.description')}
-        actions={
-          <Can perm="imports:run">
-            <Button onClick={() => setImportOpen(true)}>
-              <Upload className="me-2 size-4" aria-hidden="true" />
-              {t('plugin_imports.newImport')}
-            </Button>
-          </Can>
-        }
-      />
+      <PageHeader title={t('plugin_imports.title')} description={t('plugin_imports.description')} />
+
+      <FilterBar
+        onSearch={() => {
+          setSource(draft.source)
+          setStatus(draft.status)
+          setPage(1)
+        }}
+        onReset={() => {
+          setDraft({})
+          setSource(undefined)
+          setStatus(undefined)
+          setPage(1)
+        }}
+      >
+        <Select
+          value={draft.source ?? ALL}
+          onValueChange={(v) => setDraft((d) => ({ ...d, source: v === ALL ? undefined : v }))}
+        >
+          <SelectTrigger className="md:w-52" aria-label={t('plugin_imports.fields.source')}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>{t('plugin_imports.filter.allSources')}</SelectItem>
+            {(sources.data ?? []).map((s) => (
+              <SelectItem key={s.name} value={s.name}>
+                {s.title}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select
+          value={draft.status ?? ALL}
+          onValueChange={(v) => setDraft((d) => ({ ...d, status: v === ALL ? undefined : v }))}
+        >
+          <SelectTrigger className="md:w-40" aria-label={t('plugin_imports.fields.status')}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>{t('plugin_imports.filter.allStatuses')}</SelectItem>
+            <SelectItem value="pending">{t('plugin_imports.status.pending')}</SelectItem>
+            <SelectItem value="running">{t('plugin_imports.status.running')}</SelectItem>
+            <SelectItem value="done">{t('plugin_imports.status.done')}</SelectItem>
+            <SelectItem value="failed">{t('plugin_imports.status.failed')}</SelectItem>
+          </SelectContent>
+        </Select>
+      </FilterBar>
 
       <DataTable
         columns={columns}
@@ -334,50 +371,29 @@ export default function ImportsPage() {
         )}
         toolbar={
           <>
-            <Select value={source ?? ALL} onValueChange={(v) => { setSource(v === ALL ? undefined : v); setPage(1) }}>
-              <SelectTrigger className="w-40 md:w-52" aria-label={t('plugin_imports.fields.source')}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>{t('plugin_imports.filter.allSources')}</SelectItem>
-                {(sources.data ?? []).map((s) => (
-                  <SelectItem key={s.name} value={s.name}>
-                    {s.title}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={status ?? ALL} onValueChange={(v) => { setStatus(v === ALL ? undefined : v); setPage(1) }}>
-              <SelectTrigger className="w-36 md:w-40" aria-label={t('plugin_imports.fields.status')}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>{t('plugin_imports.filter.allStatuses')}</SelectItem>
-                <SelectItem value="pending">{t('plugin_imports.status.pending')}</SelectItem>
-                <SelectItem value="running">{t('plugin_imports.status.running')}</SelectItem>
-                <SelectItem value="done">{t('plugin_imports.status.done')}</SelectItem>
-                <SelectItem value="failed">{t('plugin_imports.status.failed')}</SelectItem>
-              </SelectContent>
-            </Select>
+            <Can perm="imports:run">
+              <Button onClick={() => setImportOpen(true)}>
+                <Upload className="me-2 size-4" aria-hidden="true" />
+                {t('plugin_imports.newImport')}
+              </Button>
+            </Can>
             {/* 台账是「谁在什么时候导入哪个文件、成功/失败多少行」的凭据，导出用于核对与归档：
                 走列表同一个分页接口按筛选捞全，密钥类字段本来就不在台账里。 */}
-            <div className="ms-auto">
-              <ExportCsvButton
-                filename="import-jobs"
-                perm="imports:list"
-                getRows={() => fetchJobsForExport({ source, status })}
-                columns={[
-                  { header: t('plugin_imports.fields.fileName'), value: (j) => j.fileName },
-                  { header: t('plugin_imports.fields.source'), value: (j) => sourceTitle(j.source) },
-                  { header: t('plugin_imports.fields.totalRows'), value: (j) => j.totalRows },
-                  { header: t('plugin_imports.fields.okRows'), value: (j) => j.okRows },
-                  { header: t('plugin_imports.fields.failRows'), value: (j) => j.failRows },
-                  { header: t('plugin_imports.fields.status'), value: (j) => t(`plugin_imports.status.${j.status}`) },
-                  { header: t('plugin_imports.fields.createdBy'), value: (j) => j.createdBy },
-                  { header: t('plugin_imports.fields.createdAt'), value: (j) => formatTime(j.createdAt, i18n.language) },
-                ]}
-              />
-            </div>
+            <ExportCsvButton
+              filename="import-jobs"
+              perm="imports:list"
+              getRows={() => fetchJobsForExport({ source, status })}
+              columns={[
+                { header: t('plugin_imports.fields.fileName'), value: (j) => j.fileName },
+                { header: t('plugin_imports.fields.source'), value: (j) => sourceTitle(j.source) },
+                { header: t('plugin_imports.fields.totalRows'), value: (j) => j.totalRows },
+                { header: t('plugin_imports.fields.okRows'), value: (j) => j.okRows },
+                { header: t('plugin_imports.fields.failRows'), value: (j) => j.failRows },
+                { header: t('plugin_imports.fields.status'), value: (j) => t(`plugin_imports.status.${j.status}`) },
+                { header: t('plugin_imports.fields.createdBy'), value: (j) => j.createdBy },
+                { header: t('plugin_imports.fields.createdAt'), value: (j) => formatTime(j.createdAt, i18n.language) },
+              ]}
+            />
           </>
         }
         rowActions={(j) => (
