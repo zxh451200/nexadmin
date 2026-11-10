@@ -12,6 +12,7 @@ import { EmptyState } from '@/framework/components/EmptyState'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { Segmented } from '@/framework/components/Segmented'
+import { BatchBar } from '@/framework/components/table/BatchBar'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Card } from '@/framework/ui/card'
@@ -184,16 +185,6 @@ export default function FilePage() {
     </>
   )
 
-  const batchBar = selected.length > 0 && (
-    <div className="flex flex-wrap items-center gap-2">
-      <span className="text-sm">{t('fileMgr.selectedCount', { count: selected.length })}</span>
-      {batchActions(selected)}
-      <Button variant="ghost" size="sm" className="h-11 md:h-8" onClick={() => setSelected([])}>
-        {t('common.clear')}
-      </Button>
-    </div>
-  )
-
   const filterBar = (
     <FilterBar onSearch={search} onReset={reset}>
       <Input value={draft.keyword} placeholder={t('fileMgr.keywordPlaceholder')} className="text-base md:min-w-40 md:flex-1 md:text-sm" onChange={(e) => setDraft((d) => ({ ...d, keyword: e.target.value }))} aria-label={t('common.keyword')} />
@@ -330,8 +321,6 @@ export default function FilePage() {
               {/* 与列表视图同构：一张卡片 = 表头（计数+视图切换）/ 内容 / 页脚，页面不再散着三段裸元素 */}
               <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2">{resultBar}</div>
 
-              {batchBar ? <div className="border-b border-border bg-muted/50 px-3 py-2">{batchBar}</div> : null}
-
               <div className="p-3">
                 {isLoading ? (
                   <div className={GRID_CLASS}>
@@ -402,6 +391,13 @@ export default function FilePage() {
                     </Button>
                   </div>
                 </div>
+              ) : null}
+
+              {/* 批量操作条与列表视图同一套：浮在卡片底部，勾选不再把宫格下推 */}
+              {selected.length > 0 ? (
+                <BatchBar count={selected.length} onClear={() => setSelected([])}>
+                  {batchActions(selected)}
+                </BatchBar>
               ) : null}
             </Card>
           )}

@@ -111,7 +111,9 @@ func (s *Service) UpdateContact(ctx context.Context, sc *datascope.Scope, id idg
 	return &ct, nil
 }
 
-// DeleteContact 删除联系人。删掉主联系人后客户暂时没有主联系人，是合法状态。
+// DeleteContact 删除联系人。删掉主联系人后客户暂时没有主联系人，是合法状态；
+// 但商机上指向该联系人的 contact_id 必须清掉——与删商机时清 activity.opportunity_id
+// 同一口径，否则商机详情里挂着指向已删行的死引用。
 func (s *Service) DeleteContact(ctx context.Context, sc *datascope.Scope, id idgen.ID) error {
 	var ct Contact
 	if err := s.db.WithContext(ctx).Take(&ct, id).Error; err != nil {
@@ -123,5 +125,10 @@ func (s *Service) DeleteContact(ctx context.Context, sc *datascope.Scope, id idg
 	if _, err := s.visibleCustomer(ctx, sc, ct.CustomerID); err != nil {
 		return err
 	}
-	return s.db.WithContext(ctx).Delete(&Contact{}, id).Error
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Delete(&Contact{}, id).Error; err != nil {
+			return err
+		}
+		return tx.Model(&Opportunity{}).Where("contact_id = ?", int64(id)).Update("contact_id", 0).Error
+	})
 }

@@ -650,3 +650,150 @@ func (h *handler) uploadMedia(c *gin.Context) {
 		"url": "/website-assets/media/" + m.ID.String(), "mime": m.Mime, "size": m.Size,
 	})
 }
+
+// ---- 产品中心 ----
+
+// GET /plugins/website/products?keyword=&status=&categoryId=&page=&pageSize=
+func (h *handler) listProducts(c *gin.Context) {
+	q := contentQuery(c)
+	list, total, err := h.svc.ListProducts(c.Request.Context(), q)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.Page(c, list, total, q.Page, q.PageSize)
+}
+
+// POST /plugins/website/products
+func (h *handler) createProduct(c *gin.Context) {
+	var f ProductForm
+	if !response.BindJSON(c, &f) {
+		return
+	}
+	row, err := h.svc.SaveProduct(c.Request.Context(), 0, f)
+	respond(c, row, err)
+}
+
+// PUT /plugins/website/products/:id
+func (h *handler) updateProduct(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	var f ProductForm
+	if !response.BindJSON(c, &f) {
+		return
+	}
+	row, err := h.svc.SaveProduct(c.Request.Context(), id, f)
+	respond(c, row, err)
+}
+
+// DELETE /plugins/website/products/:id
+func (h *handler) deleteProduct(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	respond(c, nil, h.svc.DeleteProduct(c.Request.Context(), id))
+}
+
+// DELETE /plugins/website/products?ids=1,2,3 —— 批量删除（形状与 /posts 一致）。
+func (h *handler) deleteProducts(c *gin.Context) {
+	ids, err := parseIDs(c.Query("ids"))
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	n, err := h.svc.DeleteProducts(c.Request.Context(), ids)
+	respond(c, map[string]int64{"deleted": n}, err)
+}
+
+// PUT /plugins/website/products/status —— 批量上架/下线（单条就是长度为 1 的 ids）。
+func (h *handler) setProductStatus(c *gin.Context) {
+	var f PostStatusForm
+	if !response.BindJSON(c, &f) {
+		return
+	}
+	n, err := h.svc.SetProductsStatus(c.Request.Context(), f.IDs, strings.TrimSpace(f.Status))
+	respond(c, map[string]int64{"updated": n}, err)
+}
+
+// GET /plugins/website/products/:id/preview —— 签发草稿预览链接（previewTTL 内有效）。
+// 返回 /products/:slug?preview=<token>：前端新开标签页即可看到未上架商品的真实版式。
+func (h *handler) productPreview(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	row, err := h.svc.ProductByID(c.Request.Context(), id)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	token, err := signProductPreview(h.previewKey, row.Slug, time.Now())
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, gin.H{"url": "/products/" + row.Slug + "?preview=" + token})
+}
+
+// POST /plugins/website/products/:id/copy —— 复制为草稿（对标阿里的「发布类似」）。
+func (h *handler) copyProduct(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	row, err := h.svc.CopyProduct(c.Request.Context(), id)
+	respond(c, row, err)
+}
+
+// ---- 产品类目 ----
+
+// GET /plugins/website/product-categories —— 平铺清单（前端组树），带每个类目的商品数。
+func (h *handler) listProductCategories(c *gin.Context) {
+	list, err := h.svc.ListProductCategories(c.Request.Context())
+	respond(c, list, err)
+}
+
+// POST /plugins/website/product-categories
+func (h *handler) createProductCategory(c *gin.Context) {
+	var f ProductCategoryForm
+	if !response.BindJSON(c, &f) {
+		return
+	}
+	row, err := h.svc.SaveProductCategory(c.Request.Context(), 0, f)
+	respond(c, row, err)
+}
+
+// PUT /plugins/website/product-categories/:id
+func (h *handler) updateProductCategory(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	var f ProductCategoryForm
+	if !response.BindJSON(c, &f) {
+		return
+	}
+	row, err := h.svc.SaveProductCategory(c.Request.Context(), id, f)
+	respond(c, row, err)
+}
+
+// DELETE /plugins/website/product-categories/:id —— 子树里有商品时拒绝删除。
+func (h *handler) deleteProductCategory(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	respond(c, nil, h.svc.DeleteProductCategory(c.Request.Context(), id))
+}
+
+// PUT /plugins/website/product-categories/reorder —— 拖拽排序 / 改上级，一个事务批量写。
+func (h *handler) reorderProductCategories(c *gin.Context) {
+	var f ProductCategoryOrderForm
+	if !response.BindJSON(c, &f) {
+		return
+	}
+	respond(c, nil, h.svc.ReorderProductCategories(c.Request.Context(), f.Items))
+}

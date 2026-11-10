@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"nexadmin/core/response"
 	"nexadmin/core/tenant"
@@ -230,4 +231,22 @@ func (s *Service) MarkRead(ctx context.Context, uid, id idgen.ID) error {
 		return nil
 	}
 	return err
+}
+
+// ReadAll 把当前用户可见且未读的公告全部标记已读（与站内信 read-all 对齐）。
+func (s *Service) ReadAll(ctx context.Context, uid idgen.ID) error {
+	var ids []idgen.ID
+	if err := s.visible(ctx, uid).Where("id NOT IN (?)", s.readSub(uid)).Pluck("id", &ids).Error; err != nil {
+		return err
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	now := time.Now().UTC()
+	rows := make([]Read, 0, len(ids))
+	for _, id := range ids {
+		rows = append(rows, Read{NoticeID: id, UserID: uid, ReadAt: now})
+	}
+	// 批量插入 + OnConflict DoNothing：与单条已读同一套幂等语义
+	return s.db.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(&rows).Error
 }

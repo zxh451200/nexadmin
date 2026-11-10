@@ -9,6 +9,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 
+import { SESSION_CLEARED_EVENT } from '@/framework/auth/session-events'
 import { api } from '@/framework/request/http'
 
 export type WsStatus = 'connecting' | 'open' | 'closed' | 'error'
@@ -35,6 +36,27 @@ function setStatus(s: WsStatus) {
 
 let connectInFlight = false
 
+// teardown 彻底拆掉连接与所有定时器：登出、最后订阅者卸载都走它，
+// 否则会留下无人使用的连接 + 永久 ping 心跳 + 在途重连定时器（僵尸连接）。
+function teardown() {
+  if (reconnectTimer) {
+    window.clearTimeout(reconnectTimer)
+    reconnectTimer = null
+  }
+  if (pingTimer) {
+    window.clearInterval(pingTimer)
+    pingTimer = null
+  }
+  if (wsInstance) {
+    const ws = wsInstance
+    wsInstance = null
+    ws.onclose = null
+    ws.close()
+  }
+  connectInFlight = false
+  setStatus('closed')
+}
+
 // 建连前先换一张一次性入场票：WebSocket 的握手 URL 会进反代日志与浏览器网络面板，
 // 长寿命访问令牌不能出现在那里。
 async function connect() {
@@ -58,6 +80,12 @@ async function connect() {
   }
   connectInFlight = false
   if (wsInstance && (wsInstance.readyState === WebSocket.OPEN || wsInstance.readyState === WebSocket.CONNECTING)) {
+    return
+  }
+  // 换票等 await 期间订阅者可能已全部退订：没有人听的连接不再建立，
+  // 否则每 30s 一次 ping 的空连接永不关闭。
+  if (topicHandlers.size === 0) {
+    setStatus('closed')
     return
   }
   const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
@@ -111,6 +139,8 @@ async function connect() {
 }
 
 function scheduleReconnect() {
+  // 没有订阅者就不再重连：登出后换票恒 401，这里不拦的话就是每 1s→30s 一次的永久 POST 循环
+  if (topicHandlers.size === 0) return
   if (reconnectTimer) return
   reconnectTimer = window.setTimeout(() => {
     reconnectTimer = null
@@ -137,15 +167,16 @@ export function useWs() {
 
   useEffect(() => {
     const listener = (s: WsStatus) => setStatusState(s)
+    const onSessionCleared = () => teardown() // 登出/会话失效：断开并停掉全部定时器，不留僵尸连接
     statusListeners.add(listener)
+    window.addEventListener(SESSION_CLEARED_EVENT, onSessionCleared)
     void connect()
     return () => {
       statusListeners.delete(listener)
-      // 最后一个组件卸载时断开(无订阅者的连接没有意义)
+      window.removeEventListener(SESSION_CLEARED_EVENT, onSessionCleared)
+      // 最后一个组件卸载时彻底拆掉(无订阅者的连接没有意义，含在途重连定时器)
       if (statusListeners.size === 0 && topicHandlers.size === 0) {
-        wsInstance?.close()
-        wsInstance = null
-        setStatus('closed')
+        teardown()
       }
     }
   }, [])

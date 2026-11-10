@@ -2,6 +2,7 @@ package realname
 
 import (
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -58,7 +59,7 @@ func (h *handler) verify(c *gin.Context) {
 	respond(c, res, err)
 }
 
-// GET /plugins/realname/verifications?keyword=&status=&page=&pageSize=
+// GET /plugins/realname/verifications?keyword=&status=&from=&to=&page=&pageSize=
 func (h *handler) list(c *gin.Context) {
 	sc, err := h.scopeOf(c)
 	if err != nil {
@@ -66,15 +67,74 @@ func (h *handler) list(c *gin.Context) {
 		return
 	}
 	page, size := response.ParsePage(c)
-	rows, total, err := h.svc.ListVerifications(c.Request.Context(), ListQuery{
-		Keyword: c.Query("keyword"), Status: c.Query("status"),
-		Scope: sc, Latest: c.Query("all") != "1", Page: page, PageSize: size,
-	})
+	q, err := listQueryFrom(c, sc)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	q.Page, q.PageSize = page, size
+	rows, total, err := h.svc.ListVerifications(c.Request.Context(), *q)
 	if err != nil {
 		response.Fail(c, err)
 		return
 	}
 	response.Page(c, rows, total, page, size)
+}
+
+// GET /plugins/realname/verifications/export —— 按当前筛选导出台账 xlsx（与列表同筛选、同数据范围）。
+func (h *handler) exportVerifications(c *gin.Context) {
+	sc, err := h.scopeOf(c)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	q, err := listQueryFrom(c, sc)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	rows, err := h.svc.ExportVerifications(c.Request.Context(), *q)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	c.Header("Content-Disposition", `attachment; filename="realname-`+time.Now().Format("20060102150405")+`.xlsx"`)
+	c.Header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	if err := h.svc.WriteVerificationsXLSX(c.Request.Context(), c.Writer, rows); err != nil {
+		response.Fail(c, err)
+	}
+}
+
+// listQueryFrom 汇总列表/导出共用的筛选参数：keyword、status、from/to（yyyy-MM-dd，左闭右开）。
+func listQueryFrom(c *gin.Context, sc *datascope.Scope) (*ListQuery, error) {
+	from, err := parseDay(c.Query("from"))
+	if err != nil {
+		return nil, err
+	}
+	to, err := parseDay(c.Query("to"))
+	if err != nil {
+		return nil, err
+	}
+	if !to.IsZero() {
+		to = to.AddDate(0, 0, 1) // 右端开区间到次日零点，含 to 当天
+	}
+	return &ListQuery{
+		Keyword: c.Query("keyword"), Status: c.Query("status"),
+		Scope: sc, Latest: c.Query("all") != "1",
+		From: from, To: to,
+	}, nil
+}
+
+// parseDay 解析 yyyy-MM-dd（UTC 零点）；空串 = 不限，格式不对直接 400。
+func parseDay(s string) (time.Time, error) {
+	if s == "" {
+		return time.Time{}, nil
+	}
+	t, err := time.Parse("2006-01-02", s)
+	if err != nil {
+		return time.Time{}, response.BadRequest("error.bad_request")
+	}
+	return t, nil
 }
 
 // idsParam 解析 ?ids=1,2 形式的批量 id，与日志模块的批量删除保持一致。

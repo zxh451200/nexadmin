@@ -8,7 +8,28 @@
       "bindings": "账号绑定",
       "sessions": "登录设备",
       "preferences": "偏好",
-      "tokens": "访问令牌"
+      "tokens": "访问令牌",
+      "twofactor": "两步验证"
+    },
+    "twofactor": {
+      "description": "绑定验证器（RFC 6238）后，登录需要输入 6 位动态码，防止密码泄露被冒用。",
+      "enabledOn": "已开启",
+      "enabledOff": "未开启",
+      "recoveryLeft": "剩余恢复码 {{count}} 枚",
+      "startEnroll": "开始绑定",
+      "secretLabel": "密钥（手动输入用）",
+      "uriLabel": "otpauth 链接（验证器不支持扫码时复制）",
+      "copied": "已复制",
+      "codeLabel": "输入 6 位动态码确认",
+      "confirm": "确认绑定",
+      "confirmDone": "绑定成功，请立即保存恢复码（只显示这一次）",
+      "regen": "重新生成恢复码",
+      "regenDone": "恢复码已重新生成，旧码已作废",
+      "disable": "解绑",
+      "disableConfirm": "解绑后登录不再需要动态码。需要当前密码与验证码。",
+      "disabled": "已解绑",
+      "saveHint": "点击任意一枚即复制。恢复码只在生成时显示一次，验证器丢失时可用它登录。",
+      "required": "请输入 6 位动态码"
     },
     "tokens": {
       "description": "访问令牌用于脚本或第三方程序以你的身份调用开放接口，权限不会超过你自己的权限。",

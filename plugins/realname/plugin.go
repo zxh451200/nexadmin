@@ -43,6 +43,7 @@ func (*module) Register(r *gin.RouterGroup, d *core.Deps) {
 	g := r.Group("/plugins/realname")
 	g.POST("/parse", core.Perm(PermList), h.parse)
 	g.GET("/verifications", core.Perm(PermList), h.list)
+	g.GET("/verifications/export", core.Perm(PermList), h.exportVerifications)
 	// 台账是审计留痕：删除本身也要进操作日志。
 	g.DELETE("/verifications",
 		core.Perm(PermDelete),

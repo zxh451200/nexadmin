@@ -598,7 +598,7 @@ func (s *Service) ListAuths(ctx context.Context, status, keyword string, page, p
 		db = db.Where("status = ?", status)
 	}
 	if kw := strings.TrimSpace(keyword); kw != "" {
-		like := "%" + kw + "%"
+		like := "%" + escapeLike(kw) + "%"
 		db = db.Where("LOWER(auth_no) LIKE LOWER(?) OR LOWER(biz_no) LIKE LOWER(?)", like, like)
 	}
 	var total int64

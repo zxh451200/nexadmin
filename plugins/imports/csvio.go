@@ -227,8 +227,22 @@ func BuildErrorsCSV(errs []RowError) []byte {
 	w := csv.NewWriter(&buf)
 	_ = w.Write([]string{"row", "key", "message"})
 	for _, e := range errs {
-		_ = w.Write([]string{fmt.Sprintf("%d", e.Row), e.Key, e.Message})
+		_ = w.Write([]string{fmt.Sprintf("%d", e.Row), csvCell(e.Key), csvCell(e.Message)})
 	}
 	w.Flush()
 	return buf.Bytes()
+}
+
+// csvCell 处理一个文本单元格：先挡公式注入，引号转义交给 encoding/csv。
+// 注入面按 pkg/excel / cron 导出的口径来（= + - @ 之外还有制表符与回车——
+// Excel 会把 "\t=cmd" 也当公式）。失败明细里可能拼接用户上传的原始单元格，
+// 不挡的话下载 errors.csv 在 Excel 里打开即触发公式注入。
+func csvCell(v string) string {
+	if v == "" {
+		return ""
+	}
+	if c := v[0]; c == '=' || c == '+' || c == '-' || c == '@' || c == '\t' || c == '\r' {
+		v = "'" + v
+	}
+	return v
 }

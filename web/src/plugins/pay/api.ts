@@ -145,6 +145,18 @@ export interface PayCallback {
   createdAt: string
 }
 
+/** 重放回调的可行判定（与后端 replayableResult 同口径）：只有已验签且落账失败的。 */
+export const callbackReplayable = (cb: PayCallback): boolean =>
+  cb.ok && (cb.result === 'order_not_found' || cb.result === 'amount_mismatch' || cb.result.startsWith('ignored_state:'))
+
+export function useReplayCallback() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: (id: string) => api.post<PayCallback>(`${BASE}/callbacks/${id}/replay`),
+    onSuccess: invalidate,
+  })
+}
+
 export interface PayRefund {
   id: string
   refundNo: string
@@ -589,8 +601,10 @@ export function useDeleteChannelsBatch() {
 export function useCreateRefund() {
   const invalidate = useInvalidate()
   return useMutation({
-    mutationFn: (data: { paymentNo: string; amountMinor: number; reason: string }) =>
-      api.post<PayRefund>(`${BASE}/refunds`, data),
+    // idempotencyKey 必传：退款是真实出款，超时/失败重试必须复用同一个键，
+    // 否则每次重试都是新键，渠道侧各拿各的 out_request_no，第一笔已到达时第二笔就重复出款。
+    mutationFn: ({ data, idempotencyKey }: { data: { paymentNo: string; amountMinor: number; reason: string }; idempotencyKey: string }) =>
+      api.post<PayRefund>(`${BASE}/refunds`, data, { headers: { 'Idempotency-Key': idempotencyKey } }),
     onSuccess: invalidate,
   })
 }

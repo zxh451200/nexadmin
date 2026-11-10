@@ -16,7 +16,7 @@ import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
 import { Label } from '@/framework/ui/label'
 import { Switch } from '@/framework/ui/switch'
-import { fetchNoticesForExport, useClearNotices, useDeleteNotice, useDismissNotices, useMyNotices, useReadNotice, type MyNotice } from './api'
+import { fetchNoticesForExport, useClearNotices, useDeleteNotice, useDismissNotices, useMyNotices, useReadAllNotices, useReadNotice, type MyNotice } from './api'
 import { formatTime } from './format'
 
 interface Filters {
@@ -55,9 +55,19 @@ export function NoticeTab() {
     unread: applied.onlyUnread ? '1' : undefined,
   })
   const readNotice = useReadNotice()
+  const readAll = useReadAllNotices()
   const clear = useClearNotices()
   const remove = useDeleteNotice()
   const dismissBatch = useDismissNotices()
+
+  const onReadAll = async () => {
+    try {
+      await readAll.mutateAsync()
+      toast.success(t('common.operateSuccess'))
+    } catch {
+      toast.error(t('common.operateFailed'))
+    }
+  }
   // 导出的类型/级别列要和页面上的 DictTag 用同一份字典，否则中英文对不上
   const { data: typeItems } = useDictItems('notice_type')
   const { data: levelItems } = useDictItems('notice_level')
@@ -156,6 +166,9 @@ export function NoticeTab() {
         </div>
       </FilterBar>
       <div className="flex flex-wrap gap-2 md:justify-end">
+        <Button variant="outline" onClick={onReadAll} disabled={readAll.isPending || !data?.total}>
+          {t('message.readAll')}
+        </Button>
         <ExportCsvButton
           filename="notices"
           columns={[

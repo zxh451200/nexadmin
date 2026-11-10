@@ -53,6 +53,20 @@ export const routes: ModuleRoute[] = [
     menu: { title: 'plugin_website.menu.posts', icon: 'Newspaper', order: 69, group: 'system' },
   },
   {
+    path: 'website/products',
+    component: lazy(() => import('./ProductPage')),
+    perm: 'website:product',
+    platform: true,
+    menu: { title: 'plugin_website.menu.products', icon: 'Package', order: 71, group: 'system' },
+  },
+  {
+    path: 'website/product-categories',
+    component: lazy(() => import('./ProductCategoryPage')),
+    perm: 'website:product-category',
+    platform: true,
+    menu: { title: 'plugin_website.menu.productCategories', icon: 'FolderTree', order: 72, group: 'system' },
+  },
+  {
     path: 'website/messages',
     component: lazy(() => import('./MessagePage')),
     perm: 'website:message',

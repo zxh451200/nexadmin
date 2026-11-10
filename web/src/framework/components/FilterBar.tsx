@@ -70,11 +70,12 @@ export function FilterBar({ children, onSearch, onReset, className }: FilterBarP
     >
       {children}
       <div className="flex items-center gap-2">
-        <Button type="submit">
+        {/* 与筛选控件同高：Input/Select 桌面端 md:h-8，按钮默认 md:h-9 会高出一截 */}
+        <Button type="submit" className="md:h-8">
           <Search className="me-2 h-4 w-4" aria-hidden="true" />
           {t('common.search')}
         </Button>
-        <Button type="button" variant="outline" onClick={onReset}>
+        <Button type="button" variant="outline" className="md:h-8" onClick={onReset}>
           <RotateCcw className="me-2 h-4 w-4" aria-hidden="true" />
           {t('common.reset')}
         </Button>

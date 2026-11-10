@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ListChecks, Plus, Trash2 } from 'lucide-react'
+import { Download, ListChecks, Plus, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
@@ -75,7 +75,7 @@ export function ReconciliationTab() {
       render: (r) => <Badge variant="outline">{t(`plugin_pay.reconcile.sourceValue.${r.source}`, { defaultValue: r.source })}</Badge>,
     },
     {
-      // 取数留痕：账单行数与摘要能区分「账单本来为空」与「取数/解析失败」
+      // 取数留痕：账单行数与摘要能区分「账单本来为空」与「取数/解析失败」；渠道来源的行有归档可下载
       key: 'bill',
       title: t('plugin_pay.reconcile.bill'),
       render: (r) => (
@@ -83,6 +83,16 @@ export function ReconciliationTab() {
           <span className="num text-muted-foreground">{t('plugin_pay.reconcile.billRows')}: {r.billRows ?? '-'}</span>
           {r.billDigest ? <div className="num break-all text-muted-foreground">{r.billDigest.slice(0, 12)}…</div> : null}
           {r.failReason ? <div className="wrap-break-word text-destructive">{r.failReason}</div> : null}
+          {r.source === 'channel' && (r.billRows ?? 0) > 0 ? (
+            <a
+              className="mt-0.5 inline-flex items-center gap-1 text-primary hover:underline"
+              href={`/api/v1/plugins/pay/reconcile/tasks/${r.id}/bill`}
+              download
+            >
+              <Download className="size-3" aria-hidden="true" />
+              {t('plugin_pay.reconcile.downloadBill')}
+            </a>
+          ) : null}
         </div>
       ),
     },

@@ -8,7 +8,28 @@
       "bindings": "Linked accounts",
       "sessions": "Devices",
       "preferences": "Preferences",
-      "tokens": "Access tokens"
+      "tokens": "Access tokens",
+      "twofactor": "Two-factor"
+    },
+    "twofactor": {
+      "description": "After pairing an authenticator (RFC 6238), login requires a 6-digit code so a leaked password alone cannot get in.",
+      "enabledOn": "Enabled",
+      "enabledOff": "Not enabled",
+      "recoveryLeft": "{{count}} recovery codes left",
+      "startEnroll": "Start pairing",
+      "secretLabel": "Secret (manual entry)",
+      "uriLabel": "otpauth link (copy if your app can't scan)",
+      "copied": "Copied",
+      "codeLabel": "Enter the 6-digit code to confirm",
+      "confirm": "Confirm pairing",
+      "confirmDone": "Paired. Save the recovery codes now — they are shown only once",
+      "regen": "Regenerate recovery codes",
+      "regenDone": "Recovery codes regenerated; old ones are void",
+      "disable": "Unpair",
+      "disableConfirm": "Login will no longer require a code. Your current password and a code are required.",
+      "disabled": "Unpaired",
+      "saveHint": "Click any code to copy it. Codes are shown only once; use one to log in if you lose your authenticator.",
+      "required": "Enter the 6-digit code"
     },
     "tokens": {
       "description": "Access tokens let scripts or third-party programs call open APIs on your behalf, never beyond your own permissions.",

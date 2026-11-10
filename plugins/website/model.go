@@ -263,6 +263,107 @@ type Tag struct {
 
 func (Tag) TableName() string { return "plg_website_tag" }
 
+// ---- 产品中心 ----
+
+// 产品状态：对齐阿里国际站的商品状态机。本地一期只用 draft / online / offline；
+// pending / rejected 留给二期同步——商品提交到阿里审核后回写「审核中 / 审核不通过」。
+const (
+	ProductDraft    = "draft"    // 草稿
+	ProductOnline   = "online"   // 上架：公开站可见
+	ProductOffline  = "offline"  // 下架：曾上架后撤下，与草稿区分（对齐阿里的页签）
+	ProductPending  = "pending"  // 审核中（预留：同步到阿里后回写）
+	ProductRejected = "rejected" // 审核不通过（预留）
+)
+
+// productStatuses 是合法状态集；保存与批量操作都按它校验。
+var productStatuses = map[string]bool{
+	ProductDraft: true, ProductOnline: true, ProductOffline: true,
+	ProductPending: true, ProductRejected: true,
+}
+
+// 产品同步状态：一期只落库展示，二期接阿里开放平台 API 后由同步任务写入。
+const (
+	ProductSyncNone    = "none"    // 从未同步
+	ProductSyncPending = "pending" // 已提交同步，待确认
+	ProductSyncSynced  = "synced"  // 已发布到阿里
+	ProductSyncFailed  = "failed"  // 上次同步失败
+)
+
+// ProductCategory 是产品类目：对标阿里的「商品分组」，但支持最多 3 级树形层级。
+// 标题只存默认语言：与新闻分类一样，类目是组织维度，跨语言展示时直接落原文。
+type ProductCategory struct {
+	database.PlatformModel
+	// ParentID 是上级类目 ID，0 = 顶级；JSON 里按字符串传输（雪花 ID 超出 JS 安全整数）。
+	ParentID NavParentID `gorm:"index:idx_plg_website_prod_cat_parent;not null;default:0" json:"parentId"`
+	Title    string      `gorm:"size:100;not null" json:"title"`
+	Slug     string      `gorm:"size:64;not null;uniqueIndex:uk_plg_website_product_category_slug" json:"slug"`
+	Sort     int         `json:"sort"`
+	// ProductCount 是该类目（不含子类目）下的商品数：保存时回填，不落库。
+	ProductCount int64 `gorm:"-" json:"productCount"`
+	// Children 只在树装配时填充，不入库。
+	Children []ProductCategory `gorm:"-" json:"children,omitempty"`
+}
+
+func (ProductCategory) TableName() string { return "plg_website_product_category" }
+
+// Product 是产品中心的一条商品：字段对标阿里发品表单（名称/关键词/图集/价格区间/
+// 起订量/发货期/港口/动态属性/详情富文本），多语言与发布机制与新闻同口径。
+// AlibabaProductID / SyncStatus / SyncedAt 是二期「一键同步到阿里」的预留位，
+// 一期只落库与展示，不发起任何对阿里的请求。
+type Product struct {
+	database.PlatformModel
+	Slug     string `gorm:"size:64;not null;uniqueIndex:uk_plg_website_product_slug" json:"slug"`
+	Title    string `gorm:"size:200;not null" json:"title"`
+	// Keywords 是搜索关键词（对标阿里的 1-3 个关键词）：保存时按空白/逗号拆分、去重、取前 3 个。
+	Keywords string `gorm:"size:300;not null;default:''" json:"keywords"`
+	Summary  string `gorm:"size:500;not null;default:''" json:"summary"`
+	Content  string `gorm:"type:mediumtext" json:"content"`
+	// SeoTitle 是独立的 meta 标题：留空回退「标题 - 站点名」；非默认语言存 i18nJson。
+	SeoTitle    string `gorm:"size:200;not null;default:''" json:"seoTitle"`
+	SeoDesc     string `gorm:"size:300;not null;default:''" json:"seoDesc"`
+	SeoKeywords string `gorm:"size:300;not null;default:''" json:"seoKeywords"`
+	// Noindex 关闭搜索引擎收录：<meta robots> 与 sitemap 同步生效，站内列表照常展示。
+	Noindex bool `gorm:"not null;default:false" json:"noindex"`
+	I18nJSON      string `gorm:"type:text" json:"i18nJson"`
+	// PublishedJSON 是非默认语言的发布态，语义同 Page；默认语言沿用 status 列（online 即发布）。
+	PublishedJSON string `gorm:"type:text" json:"publishedJson"`
+	CoverURL string `gorm:"size:255;not null;default:''" json:"coverUrl"`
+	// ImagesJSON 是图集 URL 数组（[]string 的 JSON 文本）：走 text 列三库行为一致，前端自己解析。
+	ImagesJSON string `gorm:"column:images;type:text" json:"imagesJson"`
+	VideoURL   string `gorm:"size:255;not null;default:''" json:"videoUrl"`
+	// 贸易字段：对标阿里发品的「价格与物流」。价格 0 = 未定价（只展示询盘）。
+	PriceMin   float64 `gorm:"not null;default:0" json:"priceMin"`
+	PriceMax   float64 `gorm:"not null;default:0" json:"priceMax"`
+	Currency   string  `gorm:"size:8;not null;default:'USD'" json:"currency"`
+	PriceUnit  string  `gorm:"size:32;not null;default:''" json:"priceUnit"` // 计量单位：piece / set…
+	Moq        int     `gorm:"column:moq;not null;default:0" json:"moq"`     // 最小起订量
+	LeadTimeDays int   `gorm:"column:lead_time_days;not null;default:0" json:"leadTimeDays"`
+	Port       string  `gorm:"size:64;not null;default:''" json:"port"`
+	// PaymentTerms 是付款方式（对标阿里商详「交易信息」的 Payment Terms）：如 "T/T, L/C"。
+	PaymentTerms string `gorm:"column:payment_terms;size:100;not null;default:''" json:"paymentTerms"`
+	// SpecsJSON 是动态属性键值对（[{"label":"Brand Name","value":"…"}] 的 JSON 文本）：
+	// 阿里的类目属性各行业不同，本地不建属性字典，存成有序键值对最贴近同步语义。
+	SpecsJSON string `gorm:"column:specs;type:text" json:"specsJson"`
+	// Status 取 ProductDraft / ProductOnline / … 之一；online 即「上架」，公开站唯一可见状态。
+	Status string `gorm:"size:16;not null;default:'draft';index" json:"status"`
+	// 阿里同步预留：阿里侧商品 ID（回写后本地据此更新）、同步状态与最近同步时间。
+	AlibabaProductID string     `gorm:"column:alibaba_product_id;size:64;not null;default:'';index" json:"alibabaProductId"`
+	SyncStatus       string     `gorm:"column:sync_status;size:16;not null;default:'none'" json:"syncStatus"`
+	SyncedAt         *time.Time `gorm:"column:synced_at" json:"syncedAt,omitempty"`
+	// Categories 是商品所属类目；关联表 plg_website_product_category_rel，保存时整体替换。
+	Categories []ProductCategory `gorm:"many2many:plg_website_product_category_rel" json:"categories,omitempty"`
+	// Views 是公开详情的浏览量：公开详情命中自增，只增不清（要清零走 SQL）。
+	Views int64 `gorm:"not null;default:0" json:"views"`
+	// Author 是展示名（如「外贸部」），不关联后台账号。
+	Author string `gorm:"size:64;not null;default:''" json:"author"`
+}
+
+func (Product) TableName() string { return "plg_website_product" }
+
+// Published 报告商品的默认语言是否处于上架态：多语言发布机制（published_json 的
+// NormalizePublish / Published 判定）需要一个「整篇是否发布」的布尔，产品由状态机推导。
+func (p Product) Published() bool { return p.Status == ProductOnline }
+
 // Media 是官网自管的小型媒体文件（logo / 封面），平台级、按 id 不可变。
 // 官网代表整个部署主体，不能放租户隔离的文件模块，所以插件自己存（只存小图）。
 // 只按主键取单个，不存在列表场景，blob 字段不会批量加载。

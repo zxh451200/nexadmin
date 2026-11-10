@@ -8,7 +8,7 @@ import type { EntitySchema, LocaleOption } from '@/framework/components/i18n'
 import type { Page, PageQuery } from '@/framework/request/types'
 
 /** 后端 entityViews 的键；新增内容类型时同步。 */
-export type I18nEntity = 'setting' | 'nav' | 'feature' | 'page' | 'post'
+export type I18nEntity = 'setting' | 'nav' | 'feature' | 'page' | 'post' | 'product'
 
 /** 页脚社交图标可选平台；键集合与后端 socialPlatforms 一致。 */
 export type SocialPlatform =
@@ -257,6 +257,128 @@ export interface ContentQuery extends PageQuery {
   missing?: string
   /** 新闻分类筛选（只对新闻列表生效） */
   categoryId?: string
+}
+
+/** 商品动态属性的一条键值对（对标阿里的类目属性）。 */
+export interface ProductSpec {
+  label: string
+  value: string
+}
+
+/**
+ * 产品状态机，对齐阿里国际站：本地一期只用 draft / online / offline；
+ * pending / rejected 留给二期同步——商品提交到阿里审核后回写「审核中 / 审核不通过」。
+ */
+export type ProductStatus = 'draft' | 'online' | 'offline' | 'pending' | 'rejected'
+
+/** 同步状态：none=从未同步，pending=已提交待确认，synced=已发布到阿里，failed=上次失败。 */
+export type ProductSyncStatus = 'none' | 'pending' | 'synced' | 'failed'
+
+export interface SiteProduct {
+  id: string
+  slug: string
+  title: string
+  /** 搜索关键词（对标阿里的 1-3 个关键词，空格分隔） */
+  keywords: string
+  summary: string
+  /** 独立 meta 标题；空 = 用「标题 - 站点名」 */
+  seoTitle: string
+  seoDesc: string
+  seoKeywords: string
+  content: string
+  noindex: boolean
+  /** 主图 */
+  coverUrl: string
+  /** 图集 URL 数组的 JSON 文本（后端 text 列，前端自己解析） */
+  imagesJson: string
+  videoUrl: string
+  /** 价格区间；0 = 未定价（只展示询盘） */
+  priceMin: number
+  priceMax: number
+  currency: string
+  /** 计量单位：piece / set… */
+  priceUnit: string
+  /** 最小起订量 */
+  moq: number
+  /** 发货天数 */
+  leadTimeDays: number
+  port: string
+  /** 付款方式（如 "T/T, L/C"），详情页「交易信息」块展示 */
+  paymentTerms: string
+  /** 动态属性键值对的 JSON 文本 */
+  specsJson: string
+  status: ProductStatus
+  /** 阿里同步预留（一期只读展示） */
+  alibabaProductId: string
+  syncStatus: ProductSyncStatus
+  syncedAt?: string | null
+  /** 所属类目；保存时按完整列表整体替换 */
+  categories?: ProductCategoryNode[]
+  i18nJson: string
+  /** 非默认语言发布态；空 = 所有语言沿用 status（online 即发布） */
+  publishedJson: string
+  views: number
+  author: string
+  updatedAt: string
+}
+
+export interface ProductForm {
+  slug: string
+  title: string
+  keywords: string
+  summary: string
+  seoTitle: string
+  seoDesc: string
+  seoKeywords: string
+  content: string
+  /** 表单里只出 draft / online；offline 由列表的上下架动作写入 */
+  status: 'draft' | 'online'
+  coverUrl: string
+  images: string[]
+  videoUrl: string
+  priceMin: number
+  priceMax: number
+  currency: string
+  priceUnit: string
+  moq: number
+  leadTimeDays: number
+  port: string
+  paymentTerms: string
+  specs: ProductSpec[]
+  /** 所属类目的完整 ID 列表；空 = 清空类目 */
+  categoryIds: string[]
+  i18nJson: string
+  publishedJson: string
+  noindex: boolean
+  author: string
+}
+
+/**
+ * 产品类目：对标阿里的「商品分组」，但支持最多 3 级树形层级。
+ * 后端给平铺清单，前端自己组树（与导航同款）。
+ */
+export interface ProductCategoryNode {
+  id: string
+  parentId: string
+  title: string
+  slug: string
+  sort: number
+  /** 类目（不含子类目）下的商品数：删类目前先让人看见影响面 */
+  productCount: number
+}
+
+export interface ProductCategoryForm {
+  parentId: string
+  title: string
+  slug: string
+  sort: number
+}
+
+/** 拖拽排序：一次提交整棵树的完整顺序（与导航同款）。 */
+export interface ProductCategoryOrderItem {
+  id: string
+  parentId: string
+  sort: number
 }
 
 /** 特性卡片内置图标：名称 + SVG 内部标记。路径以后端 iconPaths 为准，前端不另存一份。 */
@@ -792,5 +914,125 @@ export function useDeleteMessages() {
   return useMutation({
     mutationFn: (ids: string[]) => api.del<{ deleted: number }>(`${BASE}/messages`, { ids: ids.join(',') }),
     onSuccess: invalidate,
+  })
+}
+
+// ---- 产品中心 ----
+
+/** 产品增删改都会挪动类目下的商品数，两份清单要跟着刷。 */
+function invalidateProductTaxonomies(qc: QueryClient) {
+  void qc.invalidateQueries({ queryKey: [...KEY, 'product-categories'] })
+}
+
+export function useProducts(query: ContentQuery) {
+  return useQuery({
+    queryKey: [...KEY, 'products', query],
+    queryFn: () => api.get<Page<SiteProduct>>(`${BASE}/products`, query),
+    placeholderData: keepPreviousData,
+  })
+}
+
+export function useSaveProduct() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, data }: { id?: string; data: ProductForm }) =>
+      id ? api.put<SiteProduct>(`${BASE}/products/${id}`, data) : api.post<SiteProduct>(`${BASE}/products`, data),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [...KEY, 'products'] })
+      invalidateProductTaxonomies(qc)
+    },
+  })
+}
+
+export function useDeleteProduct() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.del(`${BASE}/products/${id}`),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [...KEY, 'products'] })
+      invalidateProductTaxonomies(qc)
+    },
+  })
+}
+
+/** 批量上架/下线：单条操作就是长度为 1 的 ids。updated 是服务端实际改动条数。 */
+export function useSetProductStatus() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ ids, status }: { ids: string[]; status: 'online' | 'offline' }) =>
+      api.put<{ updated: number }>(`${BASE}/products/status`, { ids, status }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: [...KEY, 'products'] }),
+  })
+}
+
+export function useDeleteProducts() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (ids: string[]) => api.del<{ deleted: number }>(`${BASE}/products`, { ids: ids.join(',') }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [...KEY, 'products'] })
+      invalidateProductTaxonomies(qc)
+    },
+  })
+}
+
+/** 签发草稿预览链接（24h 有效）：返回 /products/:slug?preview=<token>，新开标签页打开。 */
+export function fetchProductPreview(id: string): Promise<string> {
+  return api.get<{ url: string }>(`${BASE}/products/${id}/preview`, undefined, { silent: true }).then((d) => d.url)
+}
+
+/** 复制为草稿（对标阿里的「发布类似」）：内容/译文/类目带走，状态归草稿、同步信息清零。 */
+export function useCopyProduct() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.post<SiteProduct>(`${BASE}/products/${id}/copy`),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [...KEY, 'products'] })
+      invalidateProductTaxonomies(qc)
+    },
+  })
+}
+
+/** 产品类目：产品表单与类目管理页共用一份平铺清单（前端组树）。 */
+export function useProductCategories() {
+  return useQuery({
+    queryKey: [...KEY, 'product-categories'],
+    queryFn: () => api.get<ProductCategoryNode[]>(`${BASE}/product-categories`),
+  })
+}
+
+export function useSaveProductCategory() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, data }: { id?: string; data: ProductCategoryForm }) =>
+      id
+        ? api.put<ProductCategoryNode>(`${BASE}/product-categories/${id}`, data)
+        : api.post<ProductCategoryNode>(`${BASE}/product-categories`, data),
+    // 商品类目改名/移动后，产品列表的类目徽标带的是行内副本，两份都要刷
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [...KEY, 'product-categories'] })
+      void qc.invalidateQueries({ queryKey: [...KEY, 'products'] })
+    },
+  })
+}
+
+export function useDeleteProductCategory() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.del(`${BASE}/product-categories/${id}`),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [...KEY, 'product-categories'] })
+      void qc.invalidateQueries({ queryKey: [...KEY, 'products'] })
+    },
+  })
+}
+
+/** 拖拽排序 / 改上级：后端在一个事务里批量写 sort 与 parentId。 */
+export function useReorderProductCategories() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (items: ProductCategoryOrderItem[]) => api.put<null>(`${BASE}/product-categories/reorder`, { items }),
+    // 失败时 TreeTable 会回滚乐观数据并 toast，这里只保证最终与库一致
+    onSettled: () => void qc.invalidateQueries({ queryKey: [...KEY, 'product-categories'] }),
   })
 }

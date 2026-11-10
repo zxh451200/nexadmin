@@ -89,8 +89,9 @@ func (s *Service) rowByUser(ctx context.Context, uid uint64) (*TOTPSecret, strin
 
 // StatusView 是个人中心的两步验证状态。
 type StatusView struct {
-	Enrolled bool `json:"enrolled"`
-	Enabled  bool `json:"enabled"`
+	Enrolled     bool  `json:"enrolled"`
+	Enabled      bool  `json:"enabled"`
+	RecoveryLeft int64 `json:"recoveryLeft"`
 }
 
 // Status 查询当前用户的绑定状态。
@@ -99,7 +100,7 @@ func (s *Service) Status(ctx context.Context, uid uint64) StatusView {
 	if err != nil {
 		return StatusView{}
 	}
-	return StatusView{Enrolled: true, Enabled: row.Enabled}
+	return StatusView{Enrolled: true, Enabled: row.Enabled, RecoveryLeft: s.RecoveryLeft(ctx, uid)}
 }
 
 // ---- 失败限次(全部走缓存,多实例共享)----
@@ -214,28 +215,38 @@ func (s *Service) EnrollStart(ctx context.Context, uid uint64, account, issuer s
 	return sec, OTPAuthURI(issuer, account, sec), nil
 }
 
+// ConfirmResult 是确认绑定的返回：新明文恢复码只在这里出现一次，前端提示用户离线保存。
+type ConfirmResult struct {
+	RecoveryCodes []string `json:"recoveryCodes"`
+}
+
 // Confirm 用验证码确认绑定(密钥必须已生成且未启用)。验证码猜测按「用户+IP」限次。
-func (s *Service) Confirm(ctx context.Context, uid uint64, code, ip string) error {
+// 确认成功即生成第一批恢复码：验证器丢了不至于锁死。
+func (s *Service) Confirm(ctx context.Context, uid uint64, code, ip string) (*ConfirmResult, error) {
 	if err := s.checkLock(ctx, uid, ip); err != nil {
-		return err
+		return nil, err
 	}
 	row, sec, err := s.rowByUser(ctx, uid)
 	if err != nil {
-		return response.BadRequest("totp.not_enrolled")
+		return nil, response.BadRequest("totp.not_enrolled")
 	}
 	if row.Enabled {
-		return response.Conflict("totp.already_enabled")
+		return nil, response.Conflict("totp.already_enabled")
 	}
 	step, verr := Verify(sec, code, time.Now().UTC())
 	if verr != nil {
-		return s.recordFail(ctx, uid, ip)
+		return nil, s.recordFail(ctx, uid, ip)
 	}
 	if err := s.db.WithContext(ctx).Model(&TOTPSecret{}).Where("id = ?", int64(row.ID)).
 		Updates(map[string]any{"enabled": true, "last_step": step, "updated_at": time.Now().UTC()}).Error; err != nil {
-		return err
+		return nil, err
 	}
 	s.clearFails(ctx, uid, ip)
-	return nil
+	codes, err := s.replaceRecovery(ctx, row.TenantID, uid)
+	if err != nil {
+		return nil, err
+	}
+	return &ConfirmResult{RecoveryCodes: codes}, nil
 }
 
 // Disable 解绑:先验当前登录密码(防被盗会话直接关掉二次验证),再验动态码;两者都过才删绑定。
@@ -260,6 +271,8 @@ func (s *Service) Disable(ctx context.Context, uid uint64, code, password, ip st
 	if err := s.db.WithContext(ctx).Where("id = ?", int64(row.ID)).Delete(&TOTPSecret{}).Error; err != nil {
 		return err
 	}
+	// 绑定没了恢复码就是死数据，一并清掉
+	s.wipeRecovery(ctx, uid)
 	s.clearFails(ctx, uid, ip)
 	return nil
 }
@@ -276,6 +289,17 @@ func (s *Service) VerifyForGate(ctx context.Context, uid uint64, code string) er
 	}
 	step, verr := Verify(sec, code, time.Now().UTC())
 	if verr != nil {
+		// 恢复码兜底：形状与 6 位动态码天然不同，TOTP 失败且输入长得像恢复码时
+		// 尝试消费一枚（一次性、原子防重放）——验证器丢失时的自救通道。
+		if looksLikeRecovery(code) {
+			ok, cerr := s.consumeRecovery(ctx, uid, code)
+			if cerr != nil {
+				return cerr
+			}
+			if ok {
+				return nil
+			}
+		}
 		return response.BadRequest("totp.code_invalid")
 	}
 	if step <= row.LastStep {

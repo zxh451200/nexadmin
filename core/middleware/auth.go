@@ -89,7 +89,10 @@ func Perm(code string) gin.HandlerFunc {
 	}
 }
 
-// DefaultTenantResolver 是默认解析链：域名绑定 > X-Tenant-ID > JWT claim > 默认租户。
+// DefaultTenantResolver 是默认解析链：域名绑定 > JWT claim > X-Tenant-ID > 默认租户。
+// 已登录用户锁定令牌租户——普通用户任何情况下不能离开自己的租户；X-Tenant-ID 只对
+// 超管（切换租户的运维视图）与匿名请求（公开租户站的渲染上下文）生效。原来的顺序把
+// 请求头放在 claim 之前，匿名接口的租户上下文、按租户的限流桶就全由请求头决定。
 // lookup 可为 nil（跳过域名这一级）。
 func DefaultTenantResolver(lookup tenant.DomainLookup) tenant.Resolver {
 	return func(c *gin.Context) (idgen.ID, bool) {
@@ -102,13 +105,21 @@ func DefaultTenantResolver(lookup tenant.DomainLookup) tenant.Resolver {
 				return id, true
 			}
 		}
+		if cl := auth.ClaimsFrom(c); cl != nil && cl.TenantID != 0 {
+			if !cl.Super {
+				return cl.TenantID, true
+			}
+			if h := c.GetHeader("X-Tenant-ID"); h != "" {
+				if id, err := idgen.Parse(h); err == nil && id != 0 {
+					return id, true
+				}
+			}
+			return cl.TenantID, true
+		}
 		if h := c.GetHeader("X-Tenant-ID"); h != "" {
 			if id, err := idgen.Parse(h); err == nil && id != 0 {
 				return id, true
 			}
-		}
-		if cl := auth.ClaimsFrom(c); cl != nil && cl.TenantID != 0 {
-			return cl.TenantID, true
 		}
 		return tenant.DefaultID, true
 	}

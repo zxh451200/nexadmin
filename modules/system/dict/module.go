@@ -20,7 +20,7 @@ func (module) Name() string { return "dict" }
 
 // Register 注册字典路由，权限码 dict:list|create|update|delete（类型与数据共用）。
 func (module) Register(r *gin.RouterGroup, d *core.Deps) {
-	h := &Handler{svc: NewService(d.DB)}
+	h := &Handler{svc: NewService(d.DB, d.Cache)}
 	r.GET("/dicts/:code/items", h.Items) // 登录即可，前端所有下拉/标签都走它
 
 	t := r.Group("/dict/types")

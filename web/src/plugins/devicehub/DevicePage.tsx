@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { CircleCheck, CircleX, Loader2, MapPin, Pencil, Plus, Trash2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, CircleCheck, CircleX, Loader2, MapPin, Pencil, Plus, Power, Trash2 } from 'lucide-react'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { EmptyState } from '@/framework/components/EmptyState'
@@ -25,13 +25,15 @@ import { formatAgo, formatTime, formatTimeSec } from './format'
 import {
   exportHistory,
   useAlarmEvents,
-  useAlarmRules,
   useCommands,
   useCreateCommand,
   useDeleteAlarmRule,
   useDeleteDevice,
   useDeletePoint,
+  useDevice,
   useDeviceFeed,
+  useDeviceRules,
+  useDeviceStats,
   useDeviceStream,
   useDevices,
   useHistory,
@@ -41,6 +43,7 @@ import {
   useSavePoint,
   type AlarmLevel,
   type AlarmOp,
+  type AlarmRule,
   type CommandRow,
   type Device,
   type DeviceProtocol,
@@ -71,8 +74,24 @@ export default function DevicePage() {
   const confirm = useConfirm()
   const queryClient = useQueryClient()
   const [params, setParams] = useSearchParams()
-  const devices = useDevices()
-  const list = useMemo(() => devices.data ?? [], [devices.data])
+  // 左栏设备列表：服务端搜索 + 分页（设备多了以后全量拉取扛不住）；
+  // 在线在前、离线其次、停用沉底由后端排序，前端不再二次排。
+  const DEVICES_PAGE_SIZE = 20
+  const [kw, setKw] = useState('')
+  const [kwQuery, setKwQuery] = useState('')
+  const [page, setPage] = useState(1)
+  // 搜索防抖：输入停 300ms 才打接口，且翻回第一页
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setKwQuery(kw.trim())
+      setPage(1)
+    }, 300)
+    return () => clearTimeout(t)
+  }, [kw])
+  const devices = useDevices({ kw: kwQuery, page, pageSize: DEVICES_PAGE_SIZE })
+  const list = useMemo(() => devices.data?.list ?? [], [devices.data])
+  const total = devices.data?.total ?? 0
+  const pages = Math.max(1, Math.ceil(total / DEVICES_PAGE_SIZE))
 
   // URL ?device=DEV... 直达某台设备（站内信/书签）；默认选第一台
   const [selectedNo, setSelectedNo] = useState<string | undefined>(params.get('device') ?? undefined)
@@ -86,27 +105,15 @@ export default function DevicePage() {
     setParams(next, { replace: true })
   }
 
-  // 左栏设备列表的本地搜索：按名称或编号过滤（设备多了以后没有搜索就没法用）。
-  // 在线在前、离线其次、停用沉底——监控页默认关心活着的设备；同档内按名称排。
-  const [kw, setKw] = useState('')
-  const filtered = useMemo(() => {
-    const k = kw.trim().toLowerCase()
-    const rows = k ? list.filter((d) => d.name.toLowerCase().includes(k) || d.deviceNo.toLowerCase().includes(k)) : [...list]
-    const rank = (s: string) => (s === 'online' ? 0 : s === 'offline' ? 1 : 2)
-    return rows.sort((a, b) => rank(a.status) - rank(b.status) || a.name.localeCompare(b.name))
-  }, [list, kw])
+  // 顶部总览：不点进详情就知道机群整体健不健康
+  const stats = useDeviceStats()
 
-  // WS：命中帧即刷对应查询（8s 轮询兜底）
+  // WS：命中帧即刷全部查询（8s 轮询兜底）；统计、列表、规则、事件都在 KEY 前缀下
   useDeviceFeed(() => {
-    void queryClient.invalidateQueries({ queryKey: ['plugin_devicehub', 'devices'] })
+    void queryClient.invalidateQueries({ queryKey: ['plugin_devicehub'] })
   })
-  useDeviceStream(selectedNo, (f) => {
-    if (f.type === 'status') {
-      void queryClient.invalidateQueries({ queryKey: ['plugin_devicehub', 'devices'] })
-      return
-    }
-    void queryClient.invalidateQueries({ queryKey: ['plugin_devicehub', 'points', selectedNo] })
-    void queryClient.invalidateQueries({ queryKey: ['plugin_devicehub', 'alarms', selectedNo] })
+  useDeviceStream(selectedNo, () => {
+    void queryClient.invalidateQueries({ queryKey: ['plugin_devicehub'] })
   })
 
   const [formOpen, setFormOpen] = useState(false)
@@ -146,13 +153,24 @@ export default function DevicePage() {
           </Can>
         }
       />
+      {stats.data ? (
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-1 rounded-xl border border-border bg-card px-4 py-2.5 text-sm">
+          <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+            {t('plugin_devicehub.overview.total')}
+            <span className="font-semibold text-foreground tabular-nums">{stats.data.total}</span>
+          </span>
+          <StatDot tone="success" label={t('plugin_devicehub.status.online')} value={stats.data.online} />
+          <StatDot tone="destructive" label={t('plugin_devicehub.status.offline')} value={stats.data.offline} />
+          <StatDot tone="neutral" label={t('plugin_devicehub.status.disabled')} value={stats.data.disabled} />
+        </div>
+      ) : null}
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[20rem_1fr]">
         {/* 设备列表：标题 + 搜索 + 滚动列表。self-start：卡随内容收口，不被右侧详情的行高拉长成一块空板；
             高度仍封顶，设备多了在卡内滚动。 */}
         <Card className="flex max-h-[70vh] min-h-0 flex-col gap-2 self-start p-2 xl:max-h-[calc(100dvh-11rem)]">
           <div className="flex items-center justify-between gap-2 px-1 pt-1">
             <span className="text-sm font-medium text-foreground">{t('plugin_devicehub.device.list')}</span>
-            <span className="num text-xs text-muted-foreground">{filtered.length}</span>
+            <span className="num text-xs text-muted-foreground tabular-nums">{total}</span>
           </div>
           <Input
             className="h-8"
@@ -163,13 +181,15 @@ export default function DevicePage() {
           />
           {devices.isLoading ? (
             <p className="py-8 text-center text-sm text-muted-foreground">{t('common.loading')}</p>
-          ) : list.length === 0 ? (
-            <EmptyState title={t('plugin_devicehub.device.empty')} className="py-8" />
-          ) : filtered.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">{t('plugin_devicehub.device.noMatch')}</p>
+          ) : total === 0 ? (
+            kwQuery ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">{t('plugin_devicehub.device.noMatch')}</p>
+            ) : (
+              <EmptyState title={t('plugin_devicehub.device.empty')} className="py-8" />
+            )
           ) : (
             <div className="min-h-0 flex-1 overflow-y-auto">
-              {filtered.map((d) => (
+              {list.map((d) => (
                 <button
                   key={d.id}
                   type="button"
@@ -191,6 +211,33 @@ export default function DevicePage() {
               ))}
             </div>
           )}
+          {total > DEVICES_PAGE_SIZE ? (
+            <div className="flex items-center justify-between px-1 pb-1 text-xs text-muted-foreground">
+              <span className="tabular-nums">{t('plugin_devicehub.device.pageInfo', { page, pages })}</span>
+              <span className="flex items-center">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-7"
+                  disabled={page <= 1}
+                  aria-label={t('plugin_devicehub.device.pagePrev')}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                >
+                  <ChevronLeft aria-hidden="true" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-7"
+                  disabled={page >= pages}
+                  aria-label={t('plugin_devicehub.device.pageNext')}
+                  onClick={() => setPage((p) => Math.min(pages, p + 1))}
+                >
+                  <ChevronRight aria-hidden="true" />
+                </Button>
+              </span>
+            </div>
+          ) : null}
         </Card>
 
         {/* 详情 */}
@@ -218,10 +265,9 @@ function DeviceDetail({
   onDelete: (d: Device) => void
 }) {
   const { t } = useTranslation()
-  const devices = useDevices()
-  const d = (devices.data ?? []).find((x) => x.deviceNo === deviceNo)
+  // 列表分页后设备行不在当前页也得能看详情：单查这一台
+  const d = useDevice(deviceNo).data
   const points = usePoints(deviceNo)
-  const alarms = useAlarmEvents(deviceNo)
   // 告警/指令用 Tab 切换，实时值常驻上方
   const [tab, setTab] = useState('points')
 
@@ -341,7 +387,7 @@ function DeviceDetail({
           <CommandsPanel key={deviceNo} deviceNo={deviceNo} points={points.data ?? []} />
         </TabsContent>
         <TabsContent value="alarms">
-          <AlarmsPanel key={deviceNo} points={points.data ?? []} events={alarms.data ?? []} />
+          <AlarmsPanel key={deviceNo} deviceNo={deviceNo} points={points.data ?? []} />
         </TabsContent>
       </Tabs>
     </Card>
@@ -351,6 +397,18 @@ function DeviceDetail({
 function fmtNum(v?: number | null): string {
   if (v === null || v === undefined) return '—'
   return Math.abs(v - Math.trunc(v)) < 1e-9 ? String(Math.trunc(v)) : String(Math.round(v * 1000) / 1000)
+}
+
+/** 总览条上的一格：圆点定调（同 QueueStatus 的语言），数字说话。 */
+function StatDot({ tone, label, value }: { tone: 'success' | 'destructive' | 'neutral'; label: string; value: number }) {
+  const color = tone === 'success' ? 'bg-success' : tone === 'destructive' ? 'bg-destructive' : 'bg-muted-foreground/50'
+  return (
+    <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+      <span className={cn('size-1.5 shrink-0 rounded-full', color)} aria-hidden="true" />
+      {label}
+      <span className="font-semibold text-foreground tabular-nums">{value}</span>
+    </span>
+  )
 }
 
 // ---- 测点管理 ----
@@ -437,8 +495,7 @@ function PointFormDialog({ deviceNo, point, onOpenChange }: { deviceNo: string; 
   const { t } = useTranslation()
   const save = useSavePoint(deviceNo)
   // 地址格式按当前设备的协议给：四种协议并列成一段会把首行撑成半屏，也逼用户自己挑
-  const devices = useDevices()
-  const protocol = (devices.data ?? []).find((d) => d.deviceNo === deviceNo)?.protocol ?? 'modbus-tcp'
+  const protocol = useDevice(deviceNo).data?.protocol ?? 'modbus-tcp'
   const [form, setForm] = useState<PointInput>(
     point
       ? {
@@ -561,13 +618,27 @@ function HistoryPanel({ deviceNo, points }: { deviceNo: string; points: Point[] 
   // 换设备后面板不会重挂，选中项必须按当前设备的测点校验：否则还拿着上一台的 pointId 去查，
   // 图表要么空、要么是别人的数据。测点被删掉时同理回落到第一个。
   const pointId = numeric.some((p) => p.id === pickedId) ? pickedId : (numeric[0]?.id ?? '')
-  const [hours, setHours] = useState(24)
+  // 预设档 + 自定义窗口；自定义两端都解析出有效区间才发查询，跨度 >48h 与预设同一判据落到小时聚合
+  const [range, setRange] = useState('24')
+  const [customFrom, setCustomFrom] = useState('')
+  const [customTo, setCustomTo] = useState('')
   const query = useMemo(() => {
+    const pick = (from: Date, to: Date) => ({
+      pointId,
+      from: from.toISOString(),
+      to: to.toISOString(),
+      bucket: (to.getTime() - from.getTime()) / 3600_000 > 48 ? 'hour' : 'raw',
+    })
+    if (range === 'custom') {
+      const from = customFrom ? new Date(customFrom) : null
+      const to = customTo ? new Date(customTo) : null
+      if (!from || !to || Number.isNaN(from.getTime()) || Number.isNaN(to.getTime()) || from >= to) return null
+      return pick(from, to)
+    }
     const to = new Date()
-    const from = new Date(to.getTime() - hours * 3600_000)
-    return { pointId, from: from.toISOString(), to: to.toISOString(), bucket: hours > 48 ? 'hour' : 'raw' }
-  }, [pointId, hours])
-  const history = useHistory(deviceNo, query)
+    return pick(new Date(to.getTime() - Number(range) * 3600_000), to)
+  }, [pointId, range, customFrom, customTo])
+  const history = useHistory(deviceNo, query ?? { pointId: '' })
   const rows = history.data?.rows ?? []
   // 后端按查询窗口降采样，bucket 回传实际采样间隔（raw/hour/5s/2m…），展示出来避免误读
   const bucket = history.data?.bucket ?? ''
@@ -598,17 +669,41 @@ function HistoryPanel({ deviceNo, points }: { deviceNo: string; points: Point[] 
         <SimpleSelect
           className="w-36"
           aria-label={t('plugin_devicehub.history.range')}
-          value={String(hours)}
-          onChange={(v) => setHours(Number(v))}
+          value={range}
+          onChange={setRange}
           options={[
             { value: '1', label: t('plugin_devicehub.history.h1') },
             { value: '24', label: t('plugin_devicehub.history.h24') },
             { value: '168', label: t('plugin_devicehub.history.d7') },
             { value: '720', label: t('plugin_devicehub.history.d30') },
+            { value: 'custom', label: t('plugin_devicehub.history.custom') },
           ]}
         />
+        {range === 'custom' ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <Input
+              type="datetime-local"
+              className="w-56"
+              value={customFrom}
+              aria-label={t('plugin_devicehub.history.from')}
+              onChange={(e) => setCustomFrom(e.target.value)}
+            />
+            <span className="text-xs text-muted-foreground" aria-hidden="true">
+              →
+            </span>
+            <Input
+              type="datetime-local"
+              className="w-56"
+              value={customTo}
+              aria-label={t('plugin_devicehub.history.to')}
+              onChange={(e) => setCustomTo(e.target.value)}
+            />
+          </div>
+        ) : null}
       </div>
-      {rows.length === 0 ? (
+      {query === null ? (
+        <p className="py-8 text-center text-sm text-muted-foreground">{t('plugin_devicehub.history.customIncomplete')}</p>
+      ) : rows.length === 0 ? (
         <EmptyState title={t('plugin_devicehub.history.empty')} className="py-8" />
       ) : (
         <>
@@ -743,15 +838,25 @@ function CommandsPanel({ deviceNo, points }: { deviceNo: string; points: Point[]
 
 // ---- 告警 ----
 
-function AlarmsPanel({
-  points,
-  events,
-}: {
-  points: Point[]
-  events: { id: string; level: string; message: string; createdAt: string }[]
-}) {
+function AlarmsPanel({ deviceNo, points }: { deviceNo: string; points: Point[] }) {
   const { t } = useTranslation()
   const [ruleOpen, setRuleOpen] = useState(false)
+  const [editingRule, setEditingRule] = useState<AlarmRule | null>(null)
+  // 规则一次拉回、按测点分组；没有规则的测点整块不渲染，避免出现一堆空标题
+  const rules = useDeviceRules(deviceNo).data
+  const rulesByPoint = useMemo(() => {
+    const m: Record<string, AlarmRule[]> = {}
+    for (const r of rules ?? []) (m[r.pointId] ??= []).push(r)
+    return m
+  }, [rules])
+  // 事件流：级别筛选 + 分页——事件只增不删，不翻页五十条以后就翻不动了
+  const EVENTS_PAGE_SIZE = 10
+  const [level, setLevel] = useState('')
+  const [page, setPage] = useState(1)
+  const events = useAlarmEvents(deviceNo, { level: level || undefined, page, pageSize: EVENTS_PAGE_SIZE })
+  const eventRows = events.data?.list ?? []
+  const eventTotal = events.data?.total ?? 0
+  const eventPages = Math.max(1, Math.ceil(eventTotal / EVENTS_PAGE_SIZE))
 
   return (
     <div className="space-y-5">
@@ -760,25 +865,55 @@ function AlarmsPanel({
         <div className="flex items-center justify-between gap-2">
           <h3 className="text-sm font-medium text-foreground">{t('plugin_devicehub.alarm.rulesTitle')}</h3>
           <Can perm="devicehub:edit">
-            <Button size="sm" variant="outline" onClick={() => setRuleOpen(true)}>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setEditingRule(null)
+                setRuleOpen(true)
+              }}
+            >
               <Plus aria-hidden="true" />
               {t('plugin_devicehub.alarm.addRule')}
             </Button>
           </Can>
         </div>
-        {/* 已配置的规则：能建就要能看、能删，否则改阈值只能靠重建（没有删除入口，规则会越堆越多）。
-            没有规则的测点整块不渲染，避免出现一堆空标题。 */}
-        {points.map((p) => (
-          <PointRules key={p.id} point={p} />
-        ))}
+        {points
+          .filter((p) => (rulesByPoint[p.id]?.length ?? 0) > 0)
+          .map((p) => (
+            <PointRules
+              key={p.id}
+              point={p}
+              rules={rulesByPoint[p.id]}
+              onEdit={(r) => {
+                setEditingRule(r)
+                setRuleOpen(true)
+              }}
+            />
+          ))}
       </section>
       <section className="space-y-2">
-        <h3 className="text-sm font-medium text-foreground">{t('plugin_devicehub.alarm.eventsTitle')}</h3>
-        {events.length === 0 ? (
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="text-sm font-medium text-foreground">{t('plugin_devicehub.alarm.eventsTitle')}</h3>
+          <SimpleSelect
+            className="w-32"
+            aria-label={t('plugin_devicehub.alarm.levelText')}
+            value={level}
+            onChange={(v) => {
+              setLevel(v)
+              setPage(1)
+            }}
+            options={[
+              { value: '', label: t('plugin_devicehub.alarm.levelAll') },
+              ...LEVELS.map((l) => ({ value: l, label: t(`plugin_devicehub.alarm.level.${l}`) })),
+            ]}
+          />
+        </div>
+        {eventRows.length === 0 ? (
           <EmptyState title={t('plugin_devicehub.alarm.empty')} className="py-6" />
         ) : (
           <div className="divide-y divide-border rounded-lg border border-border">
-            {events.map((e) => (
+            {eventRows.map((e) => (
               <div key={e.id} className="flex flex-wrap items-center gap-2 px-3 py-2 text-sm">
                 <Badge variant={levelVariant(e.level)}>{t(`plugin_devicehub.alarm.level.${e.level}`)}</Badge>
                 <span className="min-w-0 flex-1 truncate">{e.message}</span>
@@ -787,23 +922,47 @@ function AlarmsPanel({
             ))}
           </div>
         )}
+        {eventTotal > EVENTS_PAGE_SIZE ? (
+          <div className="flex items-center justify-end gap-1 text-xs text-muted-foreground">
+            <span className="me-auto tabular-nums">{t('plugin_devicehub.alarm.eventsTotal', { total: eventTotal })}</span>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-7"
+              disabled={page <= 1}
+              aria-label={t('plugin_devicehub.device.pagePrev')}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+            >
+              <ChevronLeft aria-hidden="true" />
+            </Button>
+            <span className="tabular-nums">{t('plugin_devicehub.device.pageInfo', { page, pages: eventPages })}</span>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-7"
+              disabled={page >= eventPages}
+              aria-label={t('plugin_devicehub.device.pageNext')}
+              onClick={() => setPage((p) => Math.min(eventPages, p + 1))}
+            >
+              <ChevronRight aria-hidden="true" />
+            </Button>
+          </div>
+        ) : null}
       </section>
-      {ruleOpen ? <AlarmRuleDialog points={points} onOpenChange={setRuleOpen} /> : null}
+      {ruleOpen ? <AlarmRuleDialog points={points} rule={editingRule} onOpenChange={setRuleOpen} /> : null}
     </div>
   )
 }
 
-// PointRules 是某个测点的告警规则行：没有规则就整块不渲染（避免出现空标题）。
-function PointRules({ point }: { point: Point }) {
+// PointRules 是某个测点的告警规则行：规则由父级一次拉回后分组传入，没有规则的测点不渲染。
+function PointRules({ point, rules, onEdit }: { point: Point; rules: AlarmRule[]; onEdit: (r: AlarmRule) => void }) {
   const { t } = useTranslation()
   const confirm = useConfirm()
+  const save = useSaveAlarmRule()
   const del = useDeleteAlarmRule()
-  const rules = useAlarmRules(point.id)
-  const rows = useMemo(() => rules.data ?? [], [rules.data])
-  if (!rows.length) return null
   return (
     <div className="divide-y divide-border rounded-lg border border-border">
-      {rows.map((r) => (
+      {rules.map((r) => (
         <div key={r.id} className="flex flex-wrap items-center gap-2 px-3 py-2 text-sm">
           <Badge variant={levelVariant(r.level)}>{t(`plugin_devicehub.alarm.level.${r.level}`)}</Badge>
           <span className="min-w-0 truncate font-medium">{point.name}</span>
@@ -818,6 +977,33 @@ function PointRules({ point }: { point: Point }) {
             </span>
           ) : null}
           <Can perm="devicehub:edit">
+            {/* 启停做成一条开关，不进表单：停用规则不该走「编辑 → 翻开关 → 保存」三步 */}
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={r.enabled ? t('plugin_devicehub.alarm.disableRule') : t('plugin_devicehub.alarm.enableRule')}
+              disabled={save.isPending}
+              onClick={() => {
+                save
+                  .mutateAsync({
+                    ruleId: r.id,
+                    pointId: r.pointId,
+                    name: r.name,
+                    op: r.op,
+                    threshold: r.threshold,
+                    level: r.level,
+                    enabled: !r.enabled,
+                    cooldownSeconds: r.cooldownSeconds,
+                  })
+                  .then(() => toast.success(t('common.operateSuccess')))
+                  .catch((e: unknown) => toast.error(e instanceof Error && e.message ? e.message : t('common.operateFailed')))
+              }}
+            >
+              <Power aria-hidden="true" />
+            </Button>
+            <Button variant="ghost" size="icon" aria-label={t('common.edit')} onClick={() => onEdit(r)}>
+              <Pencil aria-hidden="true" />
+            </Button>
             <Button
               variant="ghost"
               size="icon"
@@ -842,15 +1028,16 @@ function PointRules({ point }: { point: Point }) {
   )
 }
 
-function AlarmRuleDialog({ points, onOpenChange }: { points: Point[]; onOpenChange: (v: boolean) => void }) {
+function AlarmRuleDialog({ points, rule, onOpenChange }: { points: Point[]; rule: AlarmRule | null; onOpenChange: (v: boolean) => void }) {
   const { t } = useTranslation()
   const save = useSaveAlarmRule()
-  const [pointId, setPointId] = useState(points[0]?.id ?? '')
-  const [name, setName] = useState('')
-  const [op, setOp] = useState<AlarmOp>('gt')
-  const [threshold, setThreshold] = useState('')
-  const [level, setLevel] = useState<AlarmLevel>('warn')
-  const [cooldown, setCooldown] = useState(300)
+  const [pointId, setPointId] = useState(rule?.pointId ?? points[0]?.id ?? '')
+  const [name, setName] = useState(rule?.name ?? '')
+  const [op, setOp] = useState<AlarmOp>(rule?.op ?? 'gt')
+  const [threshold, setThreshold] = useState(rule ? String(rule.threshold) : '')
+  const [level, setLevel] = useState<AlarmLevel>(rule?.level ?? 'warn')
+  const [cooldown, setCooldown] = useState(rule?.cooldownSeconds ?? 300)
+  const [enabled, setEnabled] = useState(rule?.enabled ?? true)
 
   const submit = async () => {
     if (!pointId || !name.trim() || threshold === '') {
@@ -859,7 +1046,8 @@ function AlarmRuleDialog({ points, onOpenChange }: { points: Point[]; onOpenChan
     }
     try {
       await save.mutateAsync({
-        pointId, name: name.trim(), op, threshold: Number(threshold), level, enabled: true, cooldownSeconds: cooldown,
+        ruleId: rule?.id,
+        pointId, name: name.trim(), op, threshold: Number(threshold), level, enabled, cooldownSeconds: cooldown,
       })
       toast.success(t('common.operateSuccess'))
       onOpenChange(false)
@@ -872,7 +1060,7 @@ function AlarmRuleDialog({ points, onOpenChange }: { points: Point[]; onOpenChan
     <ResponsiveDialog
       open
       onOpenChange={onOpenChange}
-      title={t('plugin_devicehub.alarm.addRule')}
+      title={rule ? t('plugin_devicehub.alarm.editRule') : t('plugin_devicehub.alarm.addRule')}
       size="md"
       footer={
         <>
@@ -881,41 +1069,49 @@ function AlarmRuleDialog({ points, onOpenChange }: { points: Point[]; onOpenChan
         </>
       }
     >
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Field label={t('plugin_devicehub.point.name')} required>
-          <SimpleSelect
-            className="w-full"
-            aria-label={t('plugin_devicehub.point.name')}
-            value={pointId}
-            onChange={setPointId}
-            options={points.map((p) => ({ value: p.id, label: p.name }))}
-          />
-        </Field>
-        <Field label={t('plugin_devicehub.alarm.name')} required>
-          <Input value={name} onChange={(e) => setName(e.target.value)} maxLength={100} />
-        </Field>
-        <Field label={t('plugin_devicehub.alarm.op')}>
-          <SimpleSelect
-            value={op}
-            onChange={(v) => setOp(v as AlarmOp)}
-            options={OPS.map((o) => ({ value: o, label: opSymbol(o) }))}
-            aria-label={t('plugin_devicehub.alarm.op')}
-          />
-        </Field>
-        <Field label={t('plugin_devicehub.alarm.threshold')} required>
-          <Input type="number" step="0.001" value={threshold} onChange={(e) => setThreshold(e.target.value)} />
-        </Field>
-        <Field label={t('plugin_devicehub.alarm.levelText')}>
-          <SimpleSelect
-            value={level}
-            onChange={(v) => setLevel(v as AlarmLevel)}
-            options={LEVELS.map((l) => ({ value: l, label: t(`plugin_devicehub.alarm.level.${l}`) }))}
-            aria-label={t('plugin_devicehub.alarm.levelText')}
-          />
-        </Field>
-        <Field label={t('plugin_devicehub.alarm.cooldown')} hint={t('plugin_devicehub.alarm.cooldownHint')}>
-          <Input type="number" min="0" value={cooldown} onChange={(e) => setCooldown(Math.trunc(Number(e.target.value)) || 0)} />
-        </Field>
+      <div className="flex flex-col gap-4">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label={t('plugin_devicehub.point.name')} required>
+            <SimpleSelect
+              className="w-full"
+              aria-label={t('plugin_devicehub.point.name')}
+              value={pointId}
+              onChange={setPointId}
+              options={points.map((p) => ({ value: p.id, label: p.name }))}
+            />
+          </Field>
+          <Field label={t('plugin_devicehub.alarm.name')} required>
+            <Input value={name} onChange={(e) => setName(e.target.value)} maxLength={100} />
+          </Field>
+          <Field label={t('plugin_devicehub.alarm.op')}>
+            <SimpleSelect
+              value={op}
+              onChange={(v) => setOp(v as AlarmOp)}
+              options={OPS.map((o) => ({ value: o, label: opSymbol(o) }))}
+              aria-label={t('plugin_devicehub.alarm.op')}
+            />
+          </Field>
+          <Field label={t('plugin_devicehub.alarm.threshold')} required>
+            <Input type="number" step="0.001" value={threshold} onChange={(e) => setThreshold(e.target.value)} />
+          </Field>
+          <Field label={t('plugin_devicehub.alarm.levelText')}>
+            <SimpleSelect
+              value={level}
+              onChange={(v) => setLevel(v as AlarmLevel)}
+              options={LEVELS.map((l) => ({ value: l, label: t(`plugin_devicehub.alarm.level.${l}`) }))}
+              aria-label={t('plugin_devicehub.alarm.levelText')}
+            />
+          </Field>
+          <Field label={t('plugin_devicehub.alarm.cooldown')} hint={t('plugin_devicehub.alarm.cooldownHint')}>
+            <Input type="number" min="0" value={cooldown} onChange={(e) => setCooldown(Math.trunc(Number(e.target.value)) || 0)} />
+          </Field>
+        </div>
+        <SwitchRow
+          label={t('plugin_devicehub.alarm.enabled')}
+          description={t('plugin_devicehub.alarm.enabledHint')}
+          checked={enabled}
+          onCheckedChange={setEnabled}
+        />
       </div>
     </ResponsiveDialog>
   )

@@ -177,6 +177,11 @@ http.interceptors.response.use(
       }
     }
     if (!res) {
+      // 主动取消（react-query 卸载/失效时 abort 带 signal 的请求）不是网络异常：
+      // 弹「网络异常」toast 纯属误报，也不该计入错误重试。
+      if (axios.isCancel(error) || error?.code === 'ERR_CANCELED') {
+        return Promise.reject(error)
+      }
       if (!config?.silent) notify(i18n.t('error.network'))
       return Promise.reject(new ApiError(-1, i18n.t('error.network')))
     }

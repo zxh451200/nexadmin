@@ -5,7 +5,9 @@ import (
 	"encoding/hex"
 	"errors"
 	"net/http"
+	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -19,8 +21,16 @@ import (
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 4096,
+	// Origin 同源校验：非浏览器客户端（无 Origin 头）放行；带 Origin 的必须与 Host 同源。
+	// 恒 true 等于任意网页都能对本站发起 WS 握手（跨站 WS 劫持），注释里的「反代管 CORS」
+	// 在默认部署里并不存在。
 	CheckOrigin: func(r *http.Request) bool {
-		return true // P0 同源部署；跨域场景由反向代理管 CORS
+		o := r.Header.Get("Origin")
+		if o == "" {
+			return true
+		}
+		u, err := url.Parse(o)
+		return err == nil && u.Host == r.Host
 	},
 }
 
@@ -89,7 +99,15 @@ func (h *Handler) Handle(c *gin.Context) {
 		_ = wsConn.Close()
 	}()
 
-	// 写循环：消费出站队列 + 应用层 pong + 协议层 ping。
+	// 写循环：消费出站队列 + 协议层 ping。gorilla 只允许一个写者：错误帧/应用层 pong
+	// 来自读循环，必须与这里的 WriteJSON 互斥（writeMu）；WriteControl 文档明确可并发，不参与。
+	var writeMu sync.Mutex
+	writeFrame := func(frame Frame) bool {
+		writeMu.Lock()
+		defer writeMu.Unlock()
+		_ = wsConn.SetWriteDeadline(time.Now().Add(WriteWait))
+		return wsConn.WriteJSON(frame) == nil
+	}
 	writeDone := make(chan struct{})
 	go func() {
 		defer close(writeDone)
@@ -102,8 +120,7 @@ func (h *Handler) Handle(c *gin.Context) {
 					websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""), time.Now().Add(WriteWait))
 				return
 			case frame := <-conn.Send:
-				_ = wsConn.SetWriteDeadline(time.Now().Add(WriteWait))
-				if err := wsConn.WriteJSON(frame); err != nil {
+				if !writeFrame(frame) {
 					conn.Close()
 					return
 				}
@@ -130,8 +147,7 @@ func (h *Handler) Handle(c *gin.Context) {
 				continue
 			}
 			if !AllowTopic(cl, f.Topic) {
-				_ = wsConn.SetWriteDeadline(time.Now().Add(WriteWait))
-				_ = wsConn.WriteJSON(Frame{Type: TypeError, Topic: f.Topic, Data: map[string]any{"message": "topic not allowed"}})
+				writeFrame(Frame{Type: TypeError, Topic: f.Topic, Data: map[string]any{"message": "topic not allowed"}})
 				continue
 			}
 			h.hub.Subscribe(connID, f.Topic)
@@ -140,8 +156,7 @@ func (h *Handler) Handle(c *gin.Context) {
 				h.hub.Unsubscribe(connID, f.Topic)
 			}
 		case TypePing:
-			_ = wsConn.SetWriteDeadline(time.Now().Add(WriteWait))
-			_ = wsConn.WriteJSON(Frame{Type: TypePong})
+			writeFrame(Frame{Type: TypePong})
 		}
 	}
 	<-writeDone

@@ -120,6 +120,9 @@ type ReadingAgg struct {
 	NumMax  float64   `gorm:"not null" json:"max"`
 	NumAvg  float64   `gorm:"not null" json:"avg"`
 	Cnt     int       `gorm:"not null" json:"cnt"`
+	// StrLast 是该小时内最后一条字符串读数（MQTT 裸字符串帧等）：字符串没有 min/max/avg，
+	// 只留最后值与数值桶同寿命。批次按 ts 升序处理，跨批覆盖即时间序上的「后值覆盖前值」。
+	StrLast string `gorm:"column:str_last;size:255;not null;default:''" json:"-"`
 }
 
 func (ReadingAgg) TableName() string { return "plg_devhub_reading_agg" }

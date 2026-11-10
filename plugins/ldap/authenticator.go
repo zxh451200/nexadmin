@@ -3,8 +3,10 @@ package ldap
 import (
 	"context"
 	"fmt"
+	"net"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-ldap/ldap/v3"
 
@@ -72,8 +74,10 @@ func (a *authenticator) Authenticate(_ context.Context, username, password strin
 }
 
 // dial 按 host/port/use_tls 建立连接(ldaps 直连或 ldap + StartTLS)。
+// 建连必须带超时（net.Dialer）：ldap.Dial 默认靠 TCP 系统超时，配置错了连接会挂死很久。
 func dial(cfg *LdapConfig) (*ldap.Conn, error) {
 	addr := cfg.Host + ":" + strconv.Itoa(cfg.Port)
+	dialer := &net.Dialer{Timeout: dialTimeout(cfg.TimeoutMS)}
 	var conn *ldap.Conn
 	var err error
 	if cfg.UseTLS {
@@ -81,9 +85,9 @@ func dial(cfg *LdapConfig) (*ldap.Conn, error) {
 		if terr != nil {
 			return nil, terr
 		}
-		conn, err = ldap.DialURL("ldaps://"+addr, ldap.DialWithTLSConfig(tc))
+		conn, err = ldap.DialURL("ldaps://"+addr, ldap.DialWithTLSConfig(tc), ldap.DialWithDialer(dialer))
 	} else {
-		conn, err = ldap.Dial("tcp", addr)
+		conn, err = ldap.DialURL("ldap://"+addr, ldap.DialWithDialer(dialer))
 	}
 	if err != nil {
 		return nil, err
@@ -99,15 +103,20 @@ func dial(cfg *LdapConfig) (*ldap.Conn, error) {
 			return nil, fmt.Errorf("ldap: starttls: %w", err)
 		}
 	}
-	_ = dialTimeout(cfg.TimeoutMS)
 	return conn, nil
 }
 
 // ldapSearch 组装用户查找请求(filter 里 %s 已替换为用户名)。
+// timeLimit 的单位是**秒**（go-ldap 的 SearchRequest 签名如此）：把毫秒原样传进去
+// 5000ms 会变成 5000 秒，搜索时限形同虚设。
 func ldapSearch(cfg *LdapConfig, username string) *ldap.SearchRequest {
 	filter := strings.ReplaceAll(cfg.UserFilter, "%s", ldap.EscapeFilter(username))
+	seconds := int(dialTimeout(cfg.TimeoutMS) / time.Second)
+	if seconds < 1 {
+		seconds = 1
+	}
 	return ldap.NewSearchRequest(
-		cfg.BaseDN, ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 2, int(cfg.TimeoutMS), false,
+		cfg.BaseDN, ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 2, seconds, false,
 		filter,
 		[]string{cfg.AttrUsername, cfg.AttrEmail, cfg.AttrNickname},
 		nil,

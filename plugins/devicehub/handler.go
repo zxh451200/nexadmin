@@ -5,10 +5,12 @@ package devicehub
 // 访客侧没有端点——工业数据不对外。
 
 import (
+	"errors"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 
 	"nexadmin/core"
 	"nexadmin/core/auth"
@@ -62,7 +64,9 @@ func (h *handler) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.Use(core.RequirePlatformFeature())
 
 	// 设备
+	g.GET("/stats", core.Perm("devicehub:list"), h.stats)
 	g.GET("/devices", core.Perm("devicehub:list"), h.listDevices)
+	g.GET("/devices/:no", core.Perm("devicehub:list"), h.getDevice)
 	g.POST("/devices", core.Perm("devicehub:edit"), d.OperLogMiddleware("devicehub", "create"), h.saveDevice)
 	g.PUT("/devices/:no", core.Perm("devicehub:edit"), d.OperLogMiddleware("devicehub", "update"), h.saveDevice)
 	g.DELETE("/devices/:no", core.Perm("devicehub:edit"), d.OperLogMiddleware("devicehub", "delete"), h.deleteDevice)
@@ -83,6 +87,7 @@ func (h *handler) Register(r *gin.RouterGroup, d *core.Deps) {
 
 	// 告警
 	g.GET("/alarms", core.Perm("devicehub:list"), h.listAlarms)
+	g.GET("/devices/:no/rules", core.Perm("devicehub:list"), h.listDeviceRules)
 	g.GET("/points/:pid/rules", core.Perm("devicehub:list"), h.listRules)
 	g.POST("/points/:pid/rules", core.Perm("devicehub:edit"), d.OperLogMiddleware("devicehub", "create"), h.saveRule)
 	g.PUT("/rules/:id", core.Perm("devicehub:edit"), d.OperLogMiddleware("devicehub", "update"), h.saveRule)
@@ -119,8 +124,31 @@ func (h *handler) saveDevice(c *gin.Context) {
 }
 
 func (h *handler) listDevices(c *gin.Context) {
-	rows, err := h.svc.ListDevices(c.Request.Context())
-	respond(c, rows, err)
+	page, pageSize := response.ParsePage(c)
+	rows, total, err := h.svc.ListDevices(c.Request.Context(), c.Query("kw"), page, pageSize)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.Page(c, rows, total, page, pageSize)
+}
+
+func (h *handler) getDevice(c *gin.Context) {
+	row, err := h.svc.GetDevice(c.Request.Context(), c.Param("no"))
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			response.Fail(c, response.NotFound("devicehub.device_not_found"))
+			return
+		}
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, row)
+}
+
+func (h *handler) stats(c *gin.Context) {
+	st, err := h.svc.DeviceStats(c.Request.Context())
+	respond(c, st, err)
 }
 
 func (h *handler) deleteDevice(c *gin.Context) {
@@ -232,7 +260,7 @@ func (h *handler) createCommand(c *gin.Context) {
 }
 
 func (h *handler) listAlarms(c *gin.Context) {
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
+	page, pageSize := response.ParsePage(c)
 	var deviceID idgen.ID
 	if raw := c.Query("deviceNo"); raw != "" {
 		var d Device
@@ -240,7 +268,21 @@ func (h *handler) listAlarms(c *gin.Context) {
 			deviceID = d.ID
 		}
 	}
-	rows, err := h.svc.ListAlarmEvents(c.Request.Context(), deviceID, limit)
+	rows, total, err := h.svc.ListAlarmEvents(c.Request.Context(), deviceID, c.Query("level"), page, pageSize)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.Page(c, rows, total, page, pageSize)
+}
+
+// listDeviceRules 一次拉回设备全部告警规则：监控页不再对每个测点单独发请求。
+func (h *handler) listDeviceRules(c *gin.Context) {
+	id, ok := h.deviceIDByNo(c)
+	if !ok {
+		return
+	}
+	rows, err := h.svc.ListAlarmRulesByDevice(c.Request.Context(), id)
 	respond(c, rows, err)
 }
 

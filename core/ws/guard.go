@@ -30,8 +30,13 @@ func AddTopicGuard(g TopicGuard) {
 	guardMu.Unlock()
 }
 
-// AllowTopic 是所有守卫都没结论时的默认策略：匿名连接只能订阅 public: 前缀的公开主题，
-// 已登录连接可以订阅未被守卫认领的主题（守卫认领后即以守卫结论为准，包括拒绝）。
+// UserTopicPrefix 是私有推送主题前缀：PublishToUser 向 "user:<uid>" 投递。
+const UserTopicPrefix = "user:"
+
+// AllowTopic 是所有守卫都没结论时的判定：user:<uid> 私有推送只允许订阅自己的
+// （core 与宿主业务的私有通知都走 PublishToUser）；public: 前缀对所有人开放；
+// 其余未认领主题一律拒绝——「已登录就能订阅」等于把忘了登记守卫的主题向全体
+// 用户裸奔（他人的私有推送可被直接订阅），新主题接入必须显式登记守卫（fail closed）。
 func AllowTopic(cl *auth.Claims, topic string) bool {
 	if topic == "" {
 		return false
@@ -43,5 +48,8 @@ func AllowTopic(cl *auth.Claims, topic string) bool {
 			return allowed
 		}
 	}
-	return cl != nil || strings.HasPrefix(topic, "public:")
+	if strings.HasPrefix(topic, UserTopicPrefix) {
+		return cl != nil && cl.UserID.String() == strings.TrimPrefix(topic, UserTopicPrefix)
+	}
+	return strings.HasPrefix(topic, "public:")
 }

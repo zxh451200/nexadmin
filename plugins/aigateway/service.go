@@ -87,7 +87,7 @@ func (in *ModelInput) normalize() error {
 func (s *Service) ListModels(ctx context.Context, keyword, kind string, page, pageSize int) ([]ModelView, int64, error) {
 	db := s.db.WithContext(ctx).Model(&Model{})
 	if kw := strings.TrimSpace(keyword); kw != "" {
-		like := "%" + kw + "%"
+		like := "%" + escapeLike(kw) + "%"
 		db = db.Where("LOWER(name) LIKE LOWER(?) OR LOWER(model) LIKE LOWER(?)", like, like)
 	}
 	if k := strings.TrimSpace(kind); k != "" {
@@ -330,6 +330,12 @@ func (s *Service) logWarn(msg string, keysAndValues ...any) {
 	if s.log != nil {
 		s.log.Warn(msg, keysAndValues...)
 	}
+}
+
+// escapeLike 转义 LIKE 通配符（与 cron 的同名助手同口径）：关键字里的 %/_ 是
+// 通配符不是字面量，不转义会让搜索结果与预期不符并放大扫描范围。
+func escapeLike(s string) string {
+	return strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(s)
 }
 
 func truncate(s string, n int) string {

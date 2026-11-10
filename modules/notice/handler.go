@@ -228,3 +228,8 @@ func (h *Handler) MarkRead(c *gin.Context) {
 		respond(c, nil, h.svc.MarkRead(c.Request.Context(), auth.ClaimsFrom(c).UserID, id))
 	}
 }
+
+// ReadAll POST /notices/mine/read-all —— 我的未读公告全部标记已读。
+func (h *Handler) ReadAll(c *gin.Context) {
+	respond(c, nil, h.svc.ReadAll(c.Request.Context(), auth.ClaimsFrom(c).UserID))
+}

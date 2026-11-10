@@ -856,7 +856,30 @@ func (s *Service) MarkOverdue(ctx context.Context, now time.Time) (int64, error)
 		s.notifyOverdue(ctx, resRows, "resolution")
 		s.publishOverdueEvents(ctx, resRows, "resolution")
 	}
+	// 两个超时维度统一做一次升级：刚标记超时的工单优先级升一档，让超时单更抢眼。
+	// 通知/事件是「提醒负责人」，升级是「抬高处理顺序」，两者互补。
+	s.escalateOverdue(ctx, append(append([]Ticket{}, respRows...), resRows...))
 	return total, nil
+}
+
+// escalateOverdue 把刚标记超时的工单优先级升一档（urgent 已到顶不动）：
+// 条件更新避免并发清扫重复升档；活动流水用 system actor（清扫器没有请求态）。
+func (s *Service) escalateOverdue(ctx context.Context, rows []Ticket) {
+	next := map[string]string{PriorityLow: PriorityNormal, PriorityNormal: PriorityHigh, PriorityHigh: PriorityUrgent}
+	for _, t := range rows {
+		to, ok := next[t.Priority]
+		if !ok {
+			continue
+		}
+		res := s.db.WithContext(ctx).Model(&Ticket{}).
+			Where("id = ? AND priority = ?", int64(t.ID), t.Priority).Update("priority", to)
+		if res.Error != nil || res.RowsAffected == 0 {
+			continue
+		}
+		_ = s.recordActivity(ctx, nil, &t, systemActor(s.notifyText(ctx, "ticket.sla_escalation")), ActPriorityChanged, t.Priority, to, "sla")
+		s.sendNotify(ctx, t.AssigneeID, s.notifyText(ctx, "ticket.notify_escalated_title"),
+			t.TicketNo+" · "+t.Title, "/ticket/tickets?ticket="+url.QueryEscape(t.TicketNo), t.TicketNo)
+	}
 }
 
 // findOverdueCandidates 先取「未标记且已过期」的候选；pending 已停表，不参与。

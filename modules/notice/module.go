@@ -32,6 +32,7 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	r.DELETE("/notices/mine", h.ClearMine)
 	r.DELETE("/notices/mine/:id", h.DismissMine)
 	r.POST("/notices/:id/read", h.MarkRead)
+	r.POST("/notices/mine/read-all", h.ReadAll)
 
 	// 管理端
 	r.GET("/notices", core.Perm("notice:list"), h.List)

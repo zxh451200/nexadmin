@@ -30,6 +30,7 @@ var translateRoutes = []entityPerm{
 	{"feature", "website:feature"},
 	{"page", "website:page"},
 	{"post", "website:post"},
+	{"product", "website:product"},
 }
 
 // newAIGateway 装配翻译用的 AI 网关。AI 未配置时调用会失败，接口回 503 而不是静默无响应。

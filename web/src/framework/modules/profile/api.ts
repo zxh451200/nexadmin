@@ -171,3 +171,47 @@ export const fetchAllAccessTokens = () =>
     const list = res ?? []
     return { list, total: list.length }
   })
+
+// ---- 两步验证（TOTP 插件：/plugins/totp/*，登录即可，自己的数据自己读写）----
+
+export interface TotpStatus {
+  enrolled: boolean
+  enabled: boolean
+  recoveryLeft: number
+}
+
+export interface TotpConfirmResult {
+  recoveryCodes: string[]
+}
+
+export function useTotpStatus() {
+  return useQuery({ queryKey: ['profile', 'twofactor'], queryFn: () => api.get<TotpStatus>('/plugins/totp/status') })
+}
+
+export function useTotpEnroll() {
+  return useMutation({
+    mutationFn: () => api.post<{ secret: string; uri: string }>('/plugins/totp/enroll', {}),
+  })
+}
+
+export function useTotpConfirm() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (code: string) => api.post<TotpConfirmResult>('/plugins/totp/confirm', { code }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['profile', 'twofactor'] }),
+  })
+}
+
+export function useTotpRegenRecovery() {
+  return useMutation({
+    mutationFn: () => api.post<TotpConfirmResult>('/plugins/totp/recovery-codes', {}),
+  })
+}
+
+export function useTotpDisable() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { code: string; password: string }) => api.post<null>('/plugins/totp/disable', body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['profile', 'twofactor'] }),
+  })
+}

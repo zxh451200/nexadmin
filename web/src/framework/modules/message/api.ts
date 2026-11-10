@@ -157,6 +157,15 @@ export function useReadNotice() {
   })
 }
 
+/** 公告「全部已读」：与站内信 read-all 对齐。 */
+export function useReadAllNotices() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: () => api.post('/notices/mine/read-all', undefined),
+    onSuccess: invalidate,
+  })
+}
+
 /**
  * 导出用的全量取数：与列表同一套筛选条件，只是不分页（逐页捞齐）。
  * 这两个接口本来就是「只返回当前用户自己的数据」，所以导出不会绕过数据范围。

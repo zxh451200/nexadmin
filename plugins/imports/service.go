@@ -253,11 +253,14 @@ func (s *Service) processAsync(src Source, m *Job, rows []map[string]string, act
 
 	errs := make([]RowError, 0, 8)
 	okRows, failRows := 0, 0
+	// wctx 保留 ctx 里的租户/语言值但脱离其取消：取消分支与最终收尾的写库都必须用它，
+	// 否则收尾 UPDATE 在 ctx 已取消时直接 context canceled，台账永久卡在 running。
+	wctx := context.WithoutCancel(ctx)
 	for i, row := range rows {
 		if ctx.Err() != nil {
 			// 已取消：处理过的批次已经落库，如实收尾，不虚报 done。
 			raw, _ := json.Marshal(errs)
-			s.db.WithContext(ctx).Model(&Job{}).Where("id = ?", int64(m.ID)).Updates(map[string]any{
+			s.db.WithContext(wctx).Model(&Job{}).Where("id = ?", int64(m.ID)).Updates(map[string]any{
 				"ok_rows": okRows, "fail_rows": failRows, "status": StatusCancelled,
 				"duration_ms": time.Since(start).Milliseconds(), "error_json": string(raw),
 			})
@@ -299,7 +302,7 @@ func (s *Service) processAsync(src Source, m *Job, rows []map[string]string, act
 		"ok_rows": okRows, "fail_rows": failRows, "status": StatusDone,
 		"duration_ms": time.Since(start).Milliseconds(), "error_json": raw,
 	}
-	if err := s.db.WithContext(ctx).Model(&Job{}).Where("id = ?", int64(m.ID)).Updates(updates).Error; err != nil {
+	if err := s.db.WithContext(wctx).Model(&Job{}).Where("id = ?", int64(m.ID)).Updates(updates).Error; err != nil {
 		s.logWarn("imports: async update failed", "jobId", m.ID, "err", err.Error())
 		return
 	}

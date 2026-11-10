@@ -260,60 +260,73 @@ func (s *Service) runDirectorySync(ctx context.Context, j *job.Job, report job.R
 		return job.ResultFile{}, err
 	}
 	var workErr error
+	// 事务只包「锁源行 + 读配置 + 复位 run 统计」这些快操作：LDAP 网络枚举（最长 5 分钟）
+	// 和最多 5000 次外部用户写如果包进来，源行的 FOR UPDATE 锁会横跨整个网络会话，
+	// 还占着连接池连接——而用户写入实际走 s.auth 的独立连接，本来就不享受本事务的原子性。
+	var src *Source
+	var cfg LDAPConfig
+	var identities []auth.ExternalIdentity
 	err = db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		src, err := lockDirectory(ctx, tx, j.TenantID, params.SourceID)
+		locked, err := lockDirectory(ctx, tx, j.TenantID, params.SourceID)
 		if err != nil {
 			return err
 		}
+		src = locked
 		var run directoryRun
 		if err := tx.Where("tenant_id = ? AND source_id = ? AND job_id = ?", j.TenantID, src.ID, j.ID).First(&run).Error; err != nil {
 			return err
 		}
-		cfg, err := directoryConfig(src)
+		cfg, err = directoryConfig(src)
 		if err != nil {
 			return err
 		}
+		return tx.Model(&directoryRun{}).Where("tenant_id = ? AND source_id = ? AND job_id = ?", j.TenantID, src.ID, j.ID).
+			Updates(map[string]any{"scanned": 0, "created": 0, "updated": 0, "deactivated": 0, "complete": false}).Error
+	})
+	if err != nil {
+		return job.ResultFile{}, err
+	}
+	{
 		a := &ldapAuthenticator{svc: s, dial: s.dial, log: s.log}
 		sess, err := a.connect(ctx, cfg)
 		if err != nil {
-			return err
+			return job.ResultFile{}, err
 		}
-		defer sess.Close()
 		var entries []ldapEntry
 		if ps, ok := sess.(pagedSearcher); ok {
 			entries, err = ps.SearchPaged(cfg.BaseDN, scopeSub, cfg.DirectorySync.Filter, cfg.attrs(), maxDirectoryEntries)
 		} else {
 			entries, err = sess.Search(cfg.BaseDN, scopeSub, cfg.DirectorySync.Filter, cfg.attrs(), maxLDAPEntries)
 		}
+		closeErr := sess.Close()
 		if err != nil {
-			return err
+			return job.ResultFile{}, err
 		}
 		if len(entries) > maxDirectoryEntries {
-			return job.Errorf("Directory exceeds %d entries", maxDirectoryEntries)
+			return job.ResultFile{}, job.Errorf("Directory exceeds %d entries", maxDirectoryEntries)
 		}
 		// Validate every subject and account before the first user write.
-		identities := make([]auth.ExternalIdentity, 0, len(entries))
+		identities = make([]auth.ExternalIdentity, 0, len(entries))
 		subjects, names := map[string]bool{}, map[string]bool{}
 		for _, e := range entries {
 			sub, err := directorySubject(e, cfg.DirectorySync.SubjectAttr)
 			if err != nil {
-				return err
+				return job.ResultFile{}, err
 			}
 			name := strings.TrimSpace(e.first(cfg.AttrUsername))
 			if e.DN == "" || !localUsernameRe.MatchString(name) || subjects[sub] || names[strings.ToLower(name)] {
-				return job.Errorf("Directory contains invalid or duplicate accounts/subjects")
+				return job.ResultFile{}, job.Errorf("Directory contains invalid or duplicate accounts/subjects")
 			}
 			codes, err := mappedGroupRoles(e.Attrs[strings.ToLower(cfg.AttrGroups)], cfg.GroupRoleMappings, cfg.RequireMappedGroup)
 			if err != nil {
-				return err
+				return job.ResultFile{}, err
 			}
 			subjects[sub], names[strings.ToLower(name)] = true, true
 			identities = append(identities, auth.ExternalIdentity{ProviderKey: directoryProvider(src.ID), Subject: sub,
 				Username: name, Nickname: clip(e.first(cfg.AttrNickname), 64), Email: clip(e.first(cfg.AttrEmail), 100),
 				Phone: clip(e.first(cfg.AttrPhone), 32), DefaultRole: cfg.DefaultRole, MappedRoleCodes: codes})
 		}
-		run.Scanned = len(entries)
-		run.Created, run.Updated, run.Deactivated, run.Complete = 0, 0, 0, false
+		run := directoryRun{Scanned: len(entries), Created: 0, Updated: 0, Deactivated: 0, Complete: false}
 		for i, id := range identities {
 			if workErr = ctx.Err(); workErr != nil {
 				break
@@ -342,14 +355,18 @@ func (s *Service) runDirectorySync(ctx context.Context, j *job.Job, report job.R
 			run.Deactivated, workErr = s.deactivateMissing(ctx, directoryProvider(src.ID), keep)
 		}
 		run.Complete = workErr == nil
-		return tx.Model(&directoryRun{}).Where("tenant_id = ? AND source_id = ? AND job_id = ?", j.TenantID, src.ID, j.ID).
+		if uerr := db.WithContext(ctx).Model(&directoryRun{}).
+			Where("tenant_id = ? AND source_id = ? AND job_id = ?", j.TenantID, src.ID, j.ID).
 			Updates(map[string]any{"scanned": run.Scanned, "created": run.Created, "updated": run.Updated,
-				"deactivated": run.Deactivated, "complete": run.Complete}).Error
-	})
-	if err != nil {
-		return job.ResultFile{}, err
+				"deactivated": run.Deactivated, "complete": run.Complete}).Error; uerr != nil {
+			return job.ResultFile{}, uerr
+		}
+		_ = closeErr
 	}
-	return job.ResultFile{}, workErr
+	if workErr != nil {
+		return job.ResultFile{}, workErr
+	}
+	return job.ResultFile{}, nil
 }
 
 func (s *Service) deactivateMissing(ctx context.Context, provider string, keep map[string]bool) (int, error) {

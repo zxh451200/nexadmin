@@ -860,6 +860,56 @@ html[data-scheme="light"] .shot-light { display: block; }
 .post-row:hover .post-row-arrow { opacity: 1; }
 .empty { color: var(--text-3); padding: 40px 0; }
 
+/* 产品列表：卡片网格（对标阿里商详的缩略图 + 标题 + 价格区间）。
+   auto-fill 让卡片按容器宽度自适应列数，手机一列、桌面三到四列。 */
+.product-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 20px;
+}
+.product-card {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.product-card:hover { border-color: var(--border-strong); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08); }
+.product-card-cover { display: block; aspect-ratio: 4 / 3; overflow: hidden; background: var(--panel); }
+.product-card-cover img { width: 100%; height: 100%; object-fit: cover; }
+.product-card-fallback { display: flex; align-items: center; justify-content: center; height: 100%; font-size: 40px; font-weight: 600; color: var(--text-3); }
+.product-card-body { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px 14px; }
+.product-card-title { font-size: 15px; font-weight: 600; color: var(--text); }
+.product-card-summary { font-size: 13px; color: var(--text-2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.product-card-terms { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.product-card-price { font-family: var(--mono); font-size: 14px; color: var(--accent); font-variant-numeric: tabular-nums; }
+
+/* 产品详情：图集（主图 + 缩略图流，点缩略图切换主图）、视频、价格行、交易信息与属性表。 */
+.product-price-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 14px; margin: 0 0 8px; }
+.product-price { font-family: var(--mono); font-size: 22px; font-weight: 600; color: var(--accent); font-variant-numeric: tabular-nums; }
+.product-moq, .product-lead { font-size: 13px; color: var(--text-3); }
+.product-summary { margin: 0 0 12px; font-size: 15px; color: var(--text-2); }
+.product-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; margin-bottom: 24px; }
+.product-gallery-main { grid-column: 1 / -1; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 12px; border: 1px solid var(--border); }
+.product-gallery-plain .product-gallery-main { grid-column: auto; }
+/* 缩略图是按钮（点它切主图）：重置按钮默认样式，选中态描一圈主题色。 */
+.product-gallery-thumb { padding: 0; border: 2px solid var(--border); border-radius: 8px; background: none; cursor: zoom-in; overflow: hidden; aspect-ratio: 1; }
+.product-gallery-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.product-gallery-thumb:hover { border-color: var(--border-strong); }
+.product-gallery-thumb.active { border-color: var(--accent); cursor: default; }
+.product-video { width: 100%; aspect-ratio: 16 / 9; border-radius: 12px; border: 1px solid var(--border); margin-bottom: 24px; background: var(--panel); }
+.product-video-link { margin: 0 0 24px; }
+.product-trade { margin-top: 8px; }
+.product-specs { width: 100%; border-collapse: collapse; margin: 0 0 24px; font-size: 14px; }
+.product-specs caption { text-align: left; font-weight: 600; color: var(--text); padding: 0 0 8px; }
+.product-specs th, .product-specs td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; color: var(--text-2); }
+.product-specs th { width: 30%; font-weight: 500; color: var(--text-3); background: var(--panel); }
+
+/* 同类产品推荐：标题 + 复用列表的卡片网格。 */
+.product-related { margin: 8px 0 32px; }
+.product-related h2 { font-size: 20px; margin: 0 0 14px; }
+
 /* 置顶标记：列表标题前的小徽章。 */
 .post-pin {
   display: inline-block;

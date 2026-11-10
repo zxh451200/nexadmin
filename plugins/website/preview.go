@@ -28,6 +28,9 @@ const previewScope = "website-page-preview"
 // 一个 slug 在两边可以同时存在，作用域分开后令牌不能跨内容类型复用。
 const previewScopePost = "website-post-preview"
 
+// previewScopeProduct 与页面/新闻预览隔离：三类内容的 slug 三张表各自唯一，同理分域。
+const previewScopeProduct = "website-product-preview"
+
 // previewKeyOf 取预览令牌的签名密钥：复用框架 JWT 签名密钥。测试手工构造 Deps
 // 没有 Config 时返回 nil，预览功能随之关闭（签发报错、校验一律拒绝）。
 func previewKeyOf(d *core.Deps) []byte {
@@ -83,4 +86,13 @@ func signPostPreview(key []byte, slug string, now time.Time) (string, error) {
 
 func verifyPostPreview(key []byte, slug, token string, now time.Time) bool {
 	return verifyPreview(key, previewScopePost, slug, token, now)
+}
+
+// signProductPreview / verifyProductPreview 是产品详情的预览令牌，语义同页面版。
+func signProductPreview(key []byte, slug string, now time.Time) (string, error) {
+	return signPreview(key, previewScopeProduct, slug, now)
+}
+
+func verifyProductPreview(key []byte, slug, token string, now time.Time) bool {
+	return verifyPreview(key, previewScopeProduct, slug, token, now)
 }

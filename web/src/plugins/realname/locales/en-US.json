@@ -49,6 +49,10 @@
     "operator": "Operator",
     "time": "Time",
     "deleteConfirm": "Delete this verification record? This cannot be undone.",
+    "deleteSelected": "Delete selected",
+    "deleteSelectedConfirm": "Delete {{count}} selected verification records? This cannot be undone.",
+    "timeRange": "Verified at",
+    "export": "Export xlsx",
     "empty": "No verification yet. Submit one above and it is recorded here.",
     "reason": {
       "empty": "Number is empty",

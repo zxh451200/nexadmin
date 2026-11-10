@@ -43,10 +43,10 @@ func (s *Service) SetConfigImageMaxMB(mb int) { s.cfgImageMaxMB = float64(mb) }
 // slugReg 允许小写字母、数字、连字符。
 var slugReg = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,63}$`)
 
-// reservedSlugs 只保留插件自己的路由段（/news、/p）。页面与新闻分别挂在 /p/:slug 与
-// /news/:slug 下，天然带命名空间，不会与后台 SPA 路径（/about、/system 等）冲突，
-// 因此后台路径不必保留——about、login-guide 这类自然 slug 都允许。
-var reservedSlugs = map[string]bool{"news": true, "p": true}
+// reservedSlugs 只保留插件自己的路由段（/news、/products、/p）。页面、新闻与产品分别挂在
+// /p/:slug、/news/:slug 与 /products/:slug 下，天然带命名空间，不会与后台 SPA 路径
+//（/about、/system 等）冲突，因此后台路径不必保留——about、login-guide 这类自然 slug 都允许。
+var reservedSlugs = map[string]bool{"news": true, "p": true, "products": true}
 
 // ValidateSlug 校验 slug 合法且不占用本插件的路由段。
 func ValidateSlug(s string) error {
@@ -915,13 +915,20 @@ func summaryFromHTML(s string, max int) string {
 	return plain
 }
 
-// DeletePost 删除新闻并级联清掉它的版本历史：彻底删除不留快照孤儿。
+// DeletePost 删除新闻并级联清掉它的版本历史与分类/标签关联：彻底删除不留孤儿。
+// 关联表不清的话，分类/标签的「新闻数」计数（join 行 COUNT）会永久虚高。
 func (s *Service) DeletePost(ctx context.Context, id idgen.ID) error {
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Delete(&Post{}, "id = ?", int64(id)).Error; err != nil {
 			return err
 		}
-		return tx.Where("post_id = ?", int64(id)).Delete(&PostVersion{}).Error
+		if err := tx.Where("post_id = ?", int64(id)).Delete(&PostVersion{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Exec("DELETE FROM plg_website_post_category WHERE post_id = ?", int64(id)).Error; err != nil {
+			return err
+		}
+		return tx.Exec("DELETE FROM plg_website_post_tag WHERE post_id = ?", int64(id)).Error
 	})
 }
 
@@ -1004,7 +1011,7 @@ func (s *Service) SetPostsStatus(ctx context.Context, ids []idgen.ID, status str
 }
 
 // DeletePosts 批量删除新闻，返回实际删除条数；部分没命中是并发下的常态，如实返回。
-// 与单条删除同口径：版本历史级联清掉，不留孤儿快照。
+// 与单条删除同口径：版本历史与分类/标签关联级联清掉，不留孤儿。
 func (s *Service) DeletePosts(ctx context.Context, ids []idgen.ID) (int64, error) {
 	if len(ids) == 0 {
 		return 0, response.BadRequest("website.post_ids_empty")
@@ -1019,7 +1026,13 @@ func (s *Service) DeletePosts(ctx context.Context, ids []idgen.ID) (int64, error
 		if deleted == 0 {
 			return nil
 		}
-		return tx.Where("post_id IN ?", int64IDs(ids)).Delete(&PostVersion{}).Error
+		if err := tx.Where("post_id IN ?", int64IDs(ids)).Delete(&PostVersion{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Exec("DELETE FROM plg_website_post_category WHERE post_id IN ?", int64IDs(ids)).Error; err != nil {
+			return err
+		}
+		return tx.Exec("DELETE FROM plg_website_post_tag WHERE post_id IN ?", int64IDs(ids)).Error
 	})
 	if err != nil {
 		return 0, err
@@ -1609,9 +1622,9 @@ func publishedLocales(published bool, publishedJSON string) []string {
 	return codes
 }
 
-// SitemapEntries 汇总官网全部已发布页面（首页、新闻列表、新闻、自定义页）。
+// SitemapEntries 汇总官网全部已发布页面（首页、新闻列表、新闻、产品列表、产品、自定义页）。
 func (s *Service) SitemapEntries(ctx context.Context) ([]SitemapEntry, error) {
-	out := []SitemapEntry{{Loc: "/"}, {Loc: "/news"}}
+	out := []SitemapEntry{{Loc: "/"}, {Loc: "/news"}, {Loc: "/products"}}
 	var posts []Post
 	// noindex 的新闻不进 sitemap（<meta robots> 已拒绝收录，list 里再给条目只会浪费抓取配额）。
 	if err := livePostTx(s.db.WithContext(ctx)).Where("noindex = ?", false).
@@ -1635,6 +1648,18 @@ func (s *Service) SitemapEntries(ctx context.Context) ([]SitemapEntry, error) {
 		out = append(out, SitemapEntry{
 			Loc: "/p/" + p.Slug, Lastmod: &p.UpdatedAt,
 			Locales: publishedLocales(p.Published, p.PublishedJSON),
+		})
+	}
+	// 产品与新闻同口径：noindex 的不进 sitemap，避免与 meta robots 打架。
+	products, err := s.publishedProductSitemapEntries(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, p := range products {
+		lastmod := p.UpdatedAt
+		out = append(out, SitemapEntry{
+			Loc: "/products/" + p.Slug, Lastmod: &lastmod,
+			Locales: publishedLocales(p.Published(), p.PublishedJSON),
 		})
 	}
 	return out, nil

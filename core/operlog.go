@@ -1,6 +1,7 @@
 package core
 
 import (
+	"sync"
 	"sync/atomic"
 
 	"github.com/gin-gonic/gin"
@@ -17,6 +18,10 @@ type OperationLogProvider interface {
 // 注册期间取不到属正常现象，业务路由应无条件挂载，由本包装在请求期完成解析。
 var operLogProvider atomic.Pointer[OperationLogProvider]
 
+// operLogHandlers 缓存请求期解析出的中间件：key 为 module\x00action。
+// 不缓存的话每个请求都要经过 provider.Middleware() 造一遍 handler。
+var operLogHandlers sync.Map
+
 // SetOperationLogProvider 由 log 模块在 Register 里调用；重复注册后者覆盖。
 func SetOperationLogProvider(p OperationLogProvider) { operLogProvider.Store(&p) }
 
@@ -24,11 +29,20 @@ func SetOperationLogProvider(p OperationLogProvider) { operLogProvider.Store(&p)
 //
 //	g.POST("/articles", core.Perm("article:create"), d.OperLogMiddleware("article", "create"), h.create)
 //
-// 不需要关心 log 模块的注册时序，也不需要判空：log 模块尚未注册（时序）或被停用时，
-// 返回一个直通中间件（不记日志）。替代旧的“请求时取 logmod.Default()”写法。
+// 不需要关心 log 模块的注册时序，也不需要判空。provider 必须在**请求期**解析：
+// 注册期一次性解析的话，注册序早于 log 模块的模块拿到的全是直通中间件，操作日志
+// 系统性缺失。log 模块尚未注册（时序）或被停用时，直通放行（不记日志）。
 func (d *Deps) OperLogMiddleware(module, action string) gin.HandlerFunc {
-	if p := operLogProvider.Load(); p != nil {
-		return (*p).Middleware(module, action)
+	key := module + "\x00" + action
+	if h, ok := operLogHandlers.Load(key); ok {
+		return h.(gin.HandlerFunc)
 	}
-	return func(c *gin.Context) { c.Next() }
+	return func(c *gin.Context) {
+		if p := operLogProvider.Load(); p != nil {
+			h, _ := operLogHandlers.LoadOrStore(key, (*p).Middleware(module, action))
+			h.(gin.HandlerFunc)(c)
+			return
+		}
+		c.Next()
+	}
 }

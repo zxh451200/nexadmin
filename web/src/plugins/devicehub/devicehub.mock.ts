@@ -40,8 +40,48 @@ const points: MockPoint[] = [
 
 const deviceOf = (no: string) => devices.find((d) => d.deviceNo === no)
 
+// 与真后端同口径的分页：page/pageSize + total，形状对齐 framework 的 Page<T>
+const paginate = <T,>(rows: T[], query: Record<string, unknown>) => {
+  const page = Math.max(1, Number(query.page) || 1)
+  const pageSize = Math.max(1, Number(query.pageSize) || 10)
+  return {
+    list: rows.slice((page - 1) * pageSize, page * pageSize),
+    total: rows.length,
+    page,
+    pageSize,
+  }
+}
+
+const alarmRules = [
+  { id: '1', pointId: '1', name: '超频告警', op: 'gt', threshold: 50, level: 'warn', enabled: true, cooldownSeconds: 300, lastFiredAt: new Date(Date.now() - 7200_000).toISOString() },
+  { id: '2', pointId: '2', name: '母线过压', op: 'gt', threshold: 550, level: 'critical', enabled: false, cooldownSeconds: 600, lastFiredAt: null },
+]
+
 defineMock([
-  { method: 'GET', url: '/plugins/devicehub/devices', handler: () => devices },
+  {
+    // 设备列表：kw 模糊匹配 + 分页；在线在前、离线其次、停用沉底，同后端排序
+    method: 'GET', url: '/plugins/devicehub/devices',
+    handler: ({ query }) => {
+      const kw = String(query.kw ?? '').trim().toLowerCase()
+      let rows = devices.filter(
+        (d) => !kw || d.name.toLowerCase().includes(kw) || d.deviceNo.toLowerCase().includes(kw),
+      )
+      const rank = (s: string) => (s === 'online' ? 0 : s === 'offline' ? 1 : 2)
+      rows = [...rows].sort((a, b) => rank(a.status) - rank(b.status) || a.name.localeCompare(b.name))
+      return paginate(rows, query)
+    },
+  },
+  { method: 'GET', url: '/plugins/devicehub/stats', handler: () => ({
+    total: devices.length,
+    online: devices.filter((d) => d.status === 'online').length,
+    offline: devices.filter((d) => d.status === 'offline').length,
+    disabled: devices.filter((d) => d.status === 'disabled').length,
+  }) },
+  { method: 'GET', url: '/plugins/devicehub/devices/:no', handler: ({ params }) => {
+    const d = deviceOf(params.no)
+    if (!d) throw new Error('device not found')
+    return d
+  } },
   {
     method: 'POST', url: '/plugins/devicehub/devices',
     handler: ({ body }) => {
@@ -152,20 +192,33 @@ defineMock([
       status: 'queued', result: '', operatorName: 'admin', createdAt: new Date().toISOString(), doneAt: null,
     }),
   },
-  { method: 'GET', url: '/plugins/devicehub/alarms', handler: () => [
-    { id: '1', ruleId: '1', deviceId: '901', pointId: '1', value: 52.3, level: 'warn', message: '1# 变频器 / 输出频率 = 52.3 Hz（> 50）', createdAt: new Date(Date.now() - 7200_000).toISOString() },
-  ] },
+  {
+    // 告警事件：deviceNo + level 筛选 + 分页，与真后端同形状（Page）
+    method: 'GET', url: '/plugins/devicehub/alarms',
+    handler: ({ query }) => {
+      let rows = [
+        { id: '1', ruleId: '1', deviceId: '901', pointId: '1', value: 52.3, level: 'warn', message: '1# 变频器 / 输出频率 = 52.3 Hz（> 50）', createdAt: new Date(Date.now() - 7200_000).toISOString() },
+      ]
+      if (query.deviceNo) rows = rows.filter((e) => e.deviceId === deviceOf(String(query.deviceNo))?.id)
+      if (query.level) rows = rows.filter((e) => e.level === query.level)
+      return paginate(rows, query)
+    },
+  },
+  { method: 'GET', url: '/plugins/devicehub/devices/:no/rules', handler: ({ params }) => {
+    const d = deviceOf(params.no)
+    if (!d) throw new Error('device not found')
+    const pointIds = points.filter((p) => p.deviceId === d.id).map((p) => p.id)
+    return alarmRules.filter((r) => pointIds.includes(r.pointId))
+  } },
   {
     method: 'GET', url: '/plugins/devicehub/points/:pid/rules',
-    handler: () => [
-      { id: '1', pointId: '1', name: '超频告警', op: 'gt', threshold: 50, level: 'warn', enabled: true, cooldownSeconds: 300, lastFiredAt: new Date(Date.now() - 7200_000).toISOString() },
-    ],
+    handler: ({ params }) => alarmRules.filter((r) => r.pointId === params.pid),
   },
   {
     method: 'POST', url: '/plugins/devicehub/points/:pid/rules',
     handler: ({ params, body }) => ({
       id: String(Date.now()), pointId: params.pid, name: body.name, op: body.op,
-      threshold: Number(body.threshold), level: body.level ?? 'warn', enabled: true,
+      threshold: Number(body.threshold), level: body.level ?? 'warn', enabled: body.enabled !== false,
       cooldownSeconds: Number(body.cooldownSeconds ?? 300), lastFiredAt: null,
     }),
   },

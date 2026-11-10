@@ -23,14 +23,20 @@ const (
 	wsTopicFeed   = "device:feed"
 )
 
-// registerWSTopicGuard 登记 devicehub: 前缀的订阅判定：匿名一律拒绝；单台设备必须存在；
-// 主体必须能查看设备列表。device:feed 是平台级列表主题，只验权限不验设备存在性。
+// registerWSTopicGuard 登记 devicehub: 前缀的订阅判定：匿名一律拒绝；非平台调用方一律拒绝
+// （与 HTTP 侧 RequirePlatformFeature 同一条线——设备台账是平台共享表，多租户下不能因为
+// 持有 devicehub:list 就能收到别人的读数帧）；单台设备必须存在；主体必须能查看设备列表。
+// device:feed 是平台级列表主题，只验门槛与权限不验设备存在性。
 func registerWSTopicGuard(svc *Service, authSvc *auth.Service) {
 	ws.AddTopicGuard(func(cl *auth.Claims, topic string) (bool, bool) {
 		if !strings.HasPrefix(topic, wsTopicPrefix) {
 			return false, false
 		}
 		if cl == nil {
+			return true, false
+		}
+		// 平台判据走 tenant.IsPlatformCallerID 单源，与 core.IsPlatformCaller 同口径。
+		if !tenant.IsPlatformCallerID(cl.TenantID, cl.Super) {
 			return true, false
 		}
 		if no := strings.TrimPrefix(topic, wsTopicPrefix); no != "feed" {

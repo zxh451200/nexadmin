@@ -21,8 +21,10 @@ import (
 const ImportSourceData = "dict_data"
 
 // ImportSources 实现 importspec.Provider，由导入中心在挂载时自动收集。
+// svc 不带 cache：导入走数据变更路径，bump 在 cache 为 nil 时是 no-op，宿主页面的
+// 缓存由 TTL 兜底过期（字典导入是低频运维操作，可接受）。
 func (module) ImportSources(db *gorm.DB) []importspec.Source {
-	svc := NewService(db)
+	svc := NewService(db, nil)
 	return []importspec.Source{{
 		Name:     ImportSourceData,
 		Title:    "字典数据导入",

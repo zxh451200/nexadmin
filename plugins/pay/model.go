@@ -117,21 +117,23 @@ func (Channel) TableName() string { return "plg_pay_channel" }
 // Refund 是一笔退款单。fx 沿用原单快照，不重新取牌价。
 type Refund struct {
 	database.TenantModel
-	RefundNo        string     `gorm:"size:40;not null;uniqueIndex:uk_pay_refund_no" json:"refundNo"`
-	PaymentNo       string     `gorm:"size:40;not null;index" json:"paymentNo"`
-	SubjectID       string     `gorm:"size:64;not null;default:''" json:"subjectId"`
-	BizType         string     `gorm:"size:32;not null;uniqueIndex:uk_pay_refund_biz,priority:2" json:"bizType"`
-	BizNo           string     `gorm:"size:64;not null;uniqueIndex:uk_pay_refund_biz,priority:3" json:"bizNo"`
-	AmountMinor     int64      `gorm:"not null" json:"amountMinor"`
-	FeeRefundMinor  int64      `gorm:"not null;default:0" json:"feeRefundMinor"`
-	Currency        string     `gorm:"size:8;not null" json:"currency"`
-	FxRateMicro     int64      `gorm:"not null;default:1000000" json:"fxRateMicro"`
-	Status          string     `gorm:"size:16;not null;index" json:"status"`
-	ChannelRefundID string     `gorm:"size:128;not null;default:''" json:"channelRefundId"`
-	Reason          string     `gorm:"size:200;not null;default:''" json:"reason"`
-	FailReason      string     `gorm:"size:200;not null;default:''" json:"failReason"`
-	OperatorID      string     `gorm:"size:64;not null;default:''" json:"operatorId"`
-	SucceededAt     *time.Time `json:"succeededAt,omitempty"`
+	RefundNo        string `gorm:"size:40;not null;uniqueIndex:uk_pay_refund_no" json:"refundNo"`
+	PaymentNo       string `gorm:"size:40;not null;index" json:"paymentNo"`
+	SubjectID       string `gorm:"size:64;not null;default:''" json:"subjectId"`
+	BizType         string `gorm:"size:32;not null;uniqueIndex:uk_pay_refund_biz,priority:2" json:"bizType"`
+	BizNo           string `gorm:"size:64;not null;uniqueIndex:uk_pay_refund_biz,priority:3" json:"bizNo"`
+	AmountMinor     int64  `gorm:"not null" json:"amountMinor"`
+	FeeRefundMinor  int64  `gorm:"not null;default:0" json:"feeRefundMinor"`
+	Currency        string `gorm:"size:8;not null" json:"currency"`
+	FxRateMicro     int64  `gorm:"not null;default:1000000" json:"fxRateMicro"`
+	Status          string `gorm:"size:16;not null;index" json:"status"`
+	ChannelRefundID string `gorm:"size:128;not null;default:''" json:"channelRefundId"`
+	// ChannelCode 是原单的渠道编码冗余：列表页显示所属渠道，不用每行回查一次原单。
+	ChannelCode string     `gorm:"size:32;not null;default:''" json:"channelCode"`
+	Reason      string     `gorm:"size:200;not null;default:''" json:"reason"`
+	FailReason  string     `gorm:"size:200;not null;default:''" json:"failReason"`
+	OperatorID  string     `gorm:"size:64;not null;default:''" json:"operatorId"`
+	SucceededAt *time.Time `json:"succeededAt,omitempty"`
 	// IdempotencyKey 是发给渠道的退款幂等号；补偿查询必须带同一个号，渠道才认得出是同一笔。
 	IdempotencyKey string `gorm:"size:80;not null;default:''" json:"-"`
 	// 退款长期停在 pending 时（回调丢失）由 SyncStuckRefunds 主动查渠道收敛；
@@ -198,10 +200,13 @@ type ReconcileTask struct {
 	TotalChannelMinor int64  `gorm:"not null;default:0" json:"totalChannelMinor"`
 	DiffCount         int    `gorm:"not null;default:0" json:"diffCount"`
 	Source            string `gorm:"size:16;not null;default:'manual'" json:"source"`
-	// BillDigest 是渠道账单原文的 SHA-256（账单本体不落库，可达数 MB）；
+	// BillDigest 是渠道账单原文的 SHA-256（原文不落库，可达数 MB）；
 	// BillRows 是解析出的行数，用来区分「账单为空」与「解析失败」。
 	BillDigest string `gorm:"size:64;not null;default:''" json:"billDigest"`
 	BillRows   int    `gorm:"not null;default:0" json:"billRows"`
+	// BillBody 是 source=channel 时解析后参与比对的账单行归档（CSV，逗号转义）：
+	// 财务复核要有可下载的账单留存；与 Digest 一一对应。manual 来源为空。
+	BillBody   string `json:"-"`
 	FailReason string `gorm:"size:200;not null;default:''" json:"failReason"`
 }
 

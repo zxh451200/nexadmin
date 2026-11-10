@@ -97,6 +97,7 @@ type reconcileRun struct {
 	source      string
 	billDigest  string
 	billRows    int
+	billBody    string
 	failReason  string
 	sections    []reconcileSection
 }
@@ -200,17 +201,31 @@ func (s *Service) applyReconcile(ctx context.Context, in reconcileRun) (*Reconci
 		}
 		task.TotalLocalMinor, task.TotalChannelMinor, task.DiffCount = totalLocal, totalChannel, diffCount
 		task.Source, task.BillDigest, task.BillRows = in.source, truncate(in.billDigest, 64), in.billRows
+		task.BillBody = in.billBody
 		task.FailReason = truncate(in.failReason, 200)
 		return tx.Model(&ReconcileTask{}).Where("id = ?", int64(task.ID)).Updates(map[string]any{
 			"total_local_minor": totalLocal, "total_channel_minor": totalChannel, "diff_count": diffCount,
 			"source": task.Source, "bill_digest": task.BillDigest, "bill_rows": task.BillRows,
-			"fail_reason": task.FailReason,
+			"bill_body": task.BillBody, "fail_reason": task.FailReason,
 		}).Error
 	})
 	if err != nil {
 		return nil, err
 	}
 	return &task, nil
+}
+
+// ReconcileBillBody 取对账任务的账单归档（CSV）。source=manual 或解析失败的任务没有
+// 归档可下。下载走 pay:settle（与对账入口同级，不单独开权限点）。
+func (s *Service) ReconcileBillBody(ctx context.Context, id int64) (string, error) {
+	var t ReconcileTask
+	if err := s.db.WithContext(ctx).Select("id", "source", "bill_body").Take(&t, "id = ?", id).Error; err != nil {
+		return "", err
+	}
+	if t.BillBody == "" {
+		return "", response.BadRequest("pay.PAY_BILL_BODY_MISSING")
+	}
+	return t.BillBody, nil
 }
 
 // writeReconcileDiffs 比对一段（支付或退款）双边金额并落差异行，返回双边合计与差异数。
@@ -645,6 +660,10 @@ func (s *Service) ListPayouts(ctx context.Context, status string) ([]PayoutBatch
 }
 
 // settlementOrders 取账期内已成功收款单（供结算汇总）。
+// settlementMaxRows 是结算汇总的单表行数上限。与导出同一口径：宁可要求缩小账期，
+// 也不能静默截断——少算一行就是结算金额差错。
+const settlementMaxRows = 10000
+
 func (s *Service) settlementOrders(ctx context.Context, subjectID, periodStart, periodEnd string) ([]Order, error) {
 	startAt, _, err := s.dayBounds(periodStart)
 	if err != nil {
@@ -660,8 +679,15 @@ func (s *Service) settlementOrders(ctx context.Context, subjectID, periodStart, 
 	if subjectID != "" {
 		db = db.Where("subject_id = ?", subjectID)
 	}
+	var total int64
+	if err := db.Count(&total).Error; err != nil {
+		return nil, err
+	}
+	if total > settlementMaxRows {
+		return nil, response.BadRequest(errSettlementTooMany)
+	}
 	var rows []Order
-	err = db.Order("id").Limit(10000).Find(&rows).Error
+	err = db.Order("id").Limit(settlementMaxRows).Find(&rows).Error
 	return rows, err
 }
 
@@ -681,7 +707,14 @@ func (s *Service) settlementRefunds(ctx context.Context, subjectID, periodStart,
 	if subjectID != "" {
 		db = db.Where("subject_id = ?", subjectID)
 	}
+	var total int64
+	if err := db.Count(&total).Error; err != nil {
+		return nil, err
+	}
+	if total > settlementMaxRows {
+		return nil, response.BadRequest(errSettlementTooMany)
+	}
 	var rows []Refund
-	err = db.Order("id").Limit(10000).Find(&rows).Error
+	err = db.Order("id").Limit(settlementMaxRows).Find(&rows).Error
 	return rows, err
 }

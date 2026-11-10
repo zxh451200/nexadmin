@@ -218,6 +218,11 @@ func (s *Service) Delete(ctx context.Context, id idgen.ID) error {
 		if err := tx.Where("path LIKE ?", d.Path+"%").Find(&gone).Error; err != nil {
 			return err
 		}
+		// 角色的自定义数据范围读的是 sys_role_dept：部门删了还留着引用，
+		// 角色编辑弹窗会把死 ID 回显在部门树里。删部门时一并清掉这些引用。
+		if err := tx.Exec("DELETE FROM sys_role_dept WHERE dept_id IN (?)", sub).Error; err != nil {
+			return err
+		}
 		return tx.Where("path LIKE ?", d.Path+"%").Delete(&Dept{}).Error
 	})
 	if err != nil {

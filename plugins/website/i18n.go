@@ -509,6 +509,16 @@ func (p *Page) localize(code string) {
 	p.Content = pi18n.Pick(tr, "content", p.Content)
 }
 
+func (p *Product) localize(code string) {
+	tr := translations(p.I18nJSON, code)
+	p.Title = pi18n.Pick(tr, "title", p.Title)
+	p.Keywords = pi18n.Pick(tr, "keywords", p.Keywords)
+	p.Summary = pi18n.Pick(tr, "summary", p.Summary)
+	p.SeoTitle = pi18n.Pick(tr, "seoTitle", p.SeoTitle)
+	p.SeoDesc = pi18n.Pick(tr, "seoDesc", p.SeoDesc)
+	p.Content = pi18n.Pick(tr, "content", p.Content)
+}
+
 // 各内容的可翻译字段白名单：Max=0 表示不限长度，Rich 表示按富文本清洗后入库。
 // 这是官网的内容模型，所以留在插件里；算法在 pkg/i18n。
 var (
@@ -525,6 +535,10 @@ var (
 	}
 	postI18nFields = pi18n.Fields{
 		"title": {Max: 200}, "summary": {Max: 500}, "seoTitle": {Max: 200}, "seoDesc": {Max: 300}, "content": {Rich: true},
+	}
+	productI18nFields = pi18n.Fields{
+		"title": {Max: 200}, "keywords": {Max: 300}, "summary": {Max: 500},
+		"seoTitle": {Max: 200}, "seoDesc": {Max: 300}, "content": {Rich: true},
 	}
 )
 

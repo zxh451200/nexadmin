@@ -2,6 +2,7 @@
 import { useEffect, useRef } from 'react'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/framework/request/http'
+import type { Page } from '@/framework/request/types'
 import { useWs } from '@/framework/hooks/useWs'
 
 const BASE = '/plugins/devicehub'
@@ -166,12 +167,38 @@ function useInvalidate() {
   return () => void qc.invalidateQueries({ queryKey: KEY })
 }
 
-export function useDevices() {
+export function useDevices(query: { kw?: string; page: number; pageSize: number }) {
   return useQuery({
-    queryKey: [...KEY, 'devices'],
-    queryFn: () => api.get<Device[]>(`${BASE}/devices`),
+    queryKey: [...KEY, 'devices', query],
+    queryFn: () => api.get<Page<Device>>(`${BASE}/devices`, query),
+    placeholderData: keepPreviousData,
     refetchInterval: 8000, // WS 兜底轮询
   })
+}
+
+/** 单台设备：列表分页后详情面板不能再从当前页里捞，得有自己的入口。 */
+export function useDevice(deviceNo?: string) {
+  return useQuery({
+    queryKey: [...KEY, 'device', deviceNo],
+    queryFn: () => api.get<Device>(`${BASE}/devices/${deviceNo}`),
+    enabled: !!deviceNo,
+  })
+}
+
+/** 监控页顶部的总览计数。 */
+export function useDeviceStats() {
+  return useQuery({
+    queryKey: [...KEY, 'stats'],
+    queryFn: () => api.get<DeviceStats>(`${BASE}/stats`),
+    refetchInterval: 8000,
+  })
+}
+
+export interface DeviceStats {
+  total: number
+  online: number
+  offline: number
+  disabled: number
 }
 
 export function useSaveDevice() {
@@ -268,19 +295,22 @@ export function useCreateCommand(deviceNo: string) {
   })
 }
 
-export function useAlarmEvents(deviceNo?: string) {
+export function useAlarmEvents(deviceNo?: string, query: { level?: string; page?: number; pageSize?: number } = {}) {
   return useQuery({
-    queryKey: [...KEY, 'alarms', deviceNo],
-    queryFn: () => api.get<AlarmEvent[]>(`${BASE}/alarms`, deviceNo ? { deviceNo, limit: 50 } : { limit: 50 }),
+    queryKey: [...KEY, 'alarms', deviceNo, query],
+    queryFn: () =>
+      api.get<Page<AlarmEvent>>(`${BASE}/alarms`, deviceNo ? { deviceNo, ...query } : query),
+    placeholderData: keepPreviousData,
     refetchInterval: 8000,
   })
 }
 
-export function useAlarmRules(pointId?: string) {
+/** 设备的全部告警规则一次拉回（按测点分组在页面做），替代原来的每测点一请求。 */
+export function useDeviceRules(deviceNo?: string) {
   return useQuery({
-    queryKey: [...KEY, 'rules', pointId],
-    queryFn: () => api.get<AlarmRule[]>(`${BASE}/points/${pointId}/rules`),
-    enabled: !!pointId,
+    queryKey: [...KEY, 'rules', deviceNo],
+    queryFn: () => api.get<AlarmRule[]>(`${BASE}/devices/${deviceNo}/rules`),
+    enabled: !!deviceNo,
   })
 }
 

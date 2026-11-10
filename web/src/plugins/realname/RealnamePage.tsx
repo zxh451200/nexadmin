@@ -1,11 +1,12 @@
 import { useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ShieldCheck, Settings2, Trash2 } from 'lucide-react'
+import { Download, ShieldCheck, Settings2, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { usePermission } from '@/framework/auth/usePermission'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { DateRangePicker, type DateRangeValue } from '@/framework/components/DateRangePicker'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { RequiredMark } from '@/framework/components/RequiredMark'
@@ -20,6 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useCountryNames } from '@/framework/components/CountrySelect'
 import {
   STATUSES,
+  exportVerifications,
   useConfig,
   useDeleteVerifications,
   useParse,
@@ -185,12 +187,17 @@ export default function RealnamePage() {
   const parse = useParse()
   const verify = useVerify()
 
-  const [draft, setDraft] = useState<{ keyword?: string; status?: VerifyStatus; all?: '1' }>({})
-  const [filters, setFilters] = useState<{ keyword?: string; status?: VerifyStatus; all?: '1' }>({})
+  const [draft, setDraft] = useState<{ keyword?: string; status?: VerifyStatus; all?: '1'; range?: DateRangeValue }>({})
+  const [filters, setFilters] = useState<{ keyword?: string; status?: VerifyStatus; all?: '1'; range?: DateRangeValue }>({})
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
-  const { data, isLoading } = useVerifications({ ...filters, page, pageSize })
+  const { data, isLoading } = useVerifications({
+    keyword: filters.keyword, status: filters.status, all: filters.all,
+    from: filters.range?.from, to: filters.range?.to,
+    page, pageSize,
+  })
   const del = useDeleteVerifications()
+  const [selected, setSelected] = useState<string[]>([])
 
   async function onDelete(row: Verification) {
     if (!(await confirm({ destructive: true, description: t('plugin_realname.deleteConfirm') }))) return
@@ -201,6 +208,27 @@ export default function RealnamePage() {
       toast.success(t('common.operateSuccess'))
     } catch (e) {
       toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+    }
+  }
+
+  async function onBatchDelete(ids: string[]) {
+    if (!(await confirm({ destructive: true, description: t('plugin_realname.deleteSelectedConfirm', { count: ids.length }) }))) return
+    try {
+      await del.mutateAsync(ids)
+      setPage(pageAfterDelete(page, data?.list?.length ?? 0, ids.length))
+      setSelected([])
+      toast.success(t('common.operateSuccess'))
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+    }
+  }
+
+  async function onExport() {
+    try {
+      await exportVerifications({ keyword: filters.keyword, status: filters.status, from: filters.range?.from, to: filters.range?.to, all: filters.all })
+      toast.success(t('common.operateSuccess'))
+    } catch {
+      // 失败原因已由请求层统一提示。
     }
   }
 
@@ -254,6 +282,7 @@ export default function RealnamePage() {
     { key: 'idType', title: t('plugin_realname.typeLabel'), mobile: 'hidden', render: (r) => t(`plugin_realname.kind.${r.idType}`, { defaultValue: r.idType }) },
     { key: 'status', title: t('plugin_realname.statusLabel'), render: (r) => <StatusBadge status={r.status} /> },
     { key: 'detail', title: t('plugin_realname.detail'), mobile: 'normal', render: renderDetail },
+    { key: 'remark', title: t('plugin_realname.remark'), mobile: 'hidden', render: (r) => r.remark || '-' },
     { key: 'provider', title: t('plugin_realname.provider'), mobile: 'hidden', render: (r) => r.provider || '-' },
     { key: 'operatorName', title: t('plugin_realname.operator'), mobile: 'hidden', render: (r) => r.operatorName || '-' },
     { key: 'createdAt', title: t('plugin_realname.time'), mobile: 'normal', render: (r) => formatTime(r.createdAt) },
@@ -433,6 +462,13 @@ export default function RealnamePage() {
             <SelectItem value={ALL}>{t('plugin_realname.dedupAll')}</SelectItem>
           </SelectContent>
         </Select>
+        <DateRangePicker
+          value={draft.range}
+          onChange={(range) => setDraft((d) => ({ ...d, range }))}
+          ariaLabel={t('plugin_realname.timeRange')}
+          className="md:w-60"
+          placeholder={t('plugin_realname.timeRange')}
+        />
       </FilterBar>
 
       <DataTable
@@ -441,6 +477,21 @@ export default function RealnamePage() {
         rowKey="id"
         loading={isLoading}
         columnSettingsKey="plugin-realname-verifications"
+        toolbar={
+          <Button variant="outline" size="sm" onClick={() => void onExport()} disabled={isLoading}>
+            <Download className="me-1 size-4" aria-hidden="true" />
+            {t('plugin_realname.export')}
+          </Button>
+        }
+        selection={{ selected, onChange: setSelected }}
+        batchActions={(ids) => (
+          <Can perm="realname:delete">
+            <Button variant="destructive" size="sm" onClick={() => void onBatchDelete(ids)}>
+              <Trash2 className="me-1 size-4" aria-hidden="true" />
+              {t('plugin_realname.deleteSelected')}
+            </Button>
+          </Can>
+        )}
         rowActions={
           has('realname:delete')
             ? (r) => (

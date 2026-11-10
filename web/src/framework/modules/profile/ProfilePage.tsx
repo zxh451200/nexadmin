@@ -8,11 +8,13 @@ import { PasswordTab } from './PasswordTab'
 import { PreferencesTab } from './PreferencesTab'
 import { SessionsTab } from './SessionsTab'
 import { TokensTab } from './TokensTab'
+import { TwofactorTab } from './TwofactorTab'
 
 const TABS = [
   { key: 'basic', Comp: BasicTab },
   { key: 'password', Comp: PasswordTab },
   { key: 'bindings', Comp: BindingsTab },
+  { key: 'twofactor', Comp: TwofactorTab },
   { key: 'sessions', Comp: SessionsTab },
   { key: 'tokens', Comp: TokensTab },
   { key: 'preferences', Comp: PreferencesTab },

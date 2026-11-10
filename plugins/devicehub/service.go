@@ -172,16 +172,58 @@ func mergeMaskedConfig(incoming, stored string) string {
 	return string(out)
 }
 
-// ListDevices 返回全部设备（含最近值统计用的状态字段）；密码字段只回显占位串。
-func (s *Service) ListDevices(ctx context.Context) ([]Device, error) {
+// ListDevices 分页返回设备：kw 按名称/编号模糊匹配；在线在前、离线其次、停用沉底
+// （监控页默认关心活着的设备），同档按名称排。密码字段只回显占位串。
+func (s *Service) ListDevices(ctx context.Context, kw string, page, pageSize int) ([]Device, int64, error) {
+	q := s.db.WithContext(ctx).Model(&Device{})
+	if kw = strings.TrimSpace(kw); kw != "" {
+		like := "%" + kw + "%"
+		q = q.Where("name LIKE ? OR device_no LIKE ?", like, like)
+	}
+	var total int64
+	if err := q.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
 	var rows []Device
-	if err := s.db.WithContext(ctx).Order("id").Find(&rows).Error; err != nil {
-		return nil, err
+	err := q.
+		Order("CASE status WHEN 'online' THEN 0 WHEN 'offline' THEN 1 ELSE 2 END, name").
+		Offset((page - 1) * pageSize).Limit(pageSize).Find(&rows).Error
+	if err != nil {
+		return nil, 0, err
 	}
 	for i := range rows {
 		rows[i].Config = maskDeviceConfig(rows[i].Config)
 	}
-	return rows, nil
+	return rows, total, nil
+}
+
+// GetDevice 按设备号取单台。列表分页后详情面板不能再从当前页里捞，得有自己的入口。
+func (s *Service) GetDevice(ctx context.Context, deviceNo string) (*Device, error) {
+	var row Device
+	if err := s.db.WithContext(ctx).Where("device_no = ?", deviceNo).Take(&row).Error; err != nil {
+		return nil, err
+	}
+	row.Config = maskDeviceConfig(row.Config)
+	return &row, nil
+}
+
+// DeviceStats 是监控页顶部的总览计数：不进详情就该知道机群整体健不健康。
+type DeviceStats struct {
+	Total    int64 `json:"total"`
+	Online   int64 `json:"online"`
+	Offline  int64 `json:"offline"`
+	Disabled int64 `json:"disabled"`
+}
+
+func (s *Service) DeviceStats(ctx context.Context) (*DeviceStats, error) {
+	var st DeviceStats
+	err := s.db.WithContext(ctx).Model(&Device{}).Select(
+		"COUNT(*) AS total",
+		"COALESCE(SUM(CASE WHEN status = 'online' THEN 1 ELSE 0 END), 0) AS online",
+		"COALESCE(SUM(CASE WHEN status = 'offline' THEN 1 ELSE 0 END), 0) AS offline",
+		"COALESCE(SUM(CASE WHEN status = 'disabled' THEN 1 ELSE 0 END), 0) AS disabled",
+	).Scan(&st).Error
+	return &st, err
 }
 
 // DeviceInput 是设备表单。Config 是协议 JSON 文本（前端已按协议拼好）。
@@ -253,7 +295,7 @@ func (s *Service) SaveDevice(ctx context.Context, id idgen.ID, in DeviceInput) (
 		}
 	}
 	if s.collector != nil {
-		s.collector.Reload(ctx, row.ID)
+		s.collector.Reload(row.ID)
 	}
 	// 回给前端的是脱敏副本：collector.Reload 读的是数据库，不受影响；库里始终是真实密码。
 	out := row
@@ -363,7 +405,7 @@ func (s *Service) SavePoint(ctx context.Context, deviceID idgen.ID, id idgen.ID,
 	if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
 		return nil, err
 	}
-	s.collector.Reload(ctx, deviceID)
+	s.collector.Reload(deviceID)
 	return &row, nil
 }
 
@@ -391,7 +433,7 @@ func (s *Service) DeletePoint(ctx context.Context, deviceID idgen.ID, id idgen.I
 		return err
 	}
 	if s.collector != nil {
-		s.collector.Reload(ctx, deviceID)
+		s.collector.Reload(deviceID)
 	}
 	return nil
 }
@@ -653,12 +695,19 @@ func (s *Service) History(ctx context.Context, q HistoryQuery) ([]HistoryRow, st
 	}
 	// 只有显式 hour 才走聚合桶；其余（含前端把我们回传的间隔标签原样带回来）都走原始表——
 	// 原始表里能按请求窗口重新聚合，比误读小时桶更贴近调用方意图。
+	// 查询必须落在 ReadingAgg 上：HistoryRow 是纯 DTO 没有 TableName，直接 Find 会去查
+	// 不存在的 history_rows 表，>48h 的历史与导出必 500。列名也不同（bucket/num_min/num_max/num_avg），
+	// 查完按列映射成 DTO。
 	if bucket == "hour" {
-		var rows []HistoryRow
+		var aggs []ReadingAgg
 		if err := s.db.WithContext(ctx).
 			Where("point_id = ? AND bucket >= ? AND bucket <= ?", q.PointID, q.From.Truncate(time.Hour), q.To).
-			Order("bucket").Limit(5000).Find(&rows).Error; err != nil {
+			Order("bucket").Limit(5000).Find(&aggs).Error; err != nil {
 			return nil, "", err
+		}
+		rows := make([]HistoryRow, 0, len(aggs))
+		for i := range aggs {
+			rows = append(rows, HistoryRow{TS: aggs[i].Bucket, Min: aggs[i].NumMin, Max: aggs[i].NumMax, Avg: aggs[i].NumAvg})
 		}
 		return rows, "hour", nil
 	}
@@ -721,6 +770,11 @@ func (s *Service) evaluateAlarms(ctx context.Context, d *Device, p *Point, tick 
 	now := time.Now().UTC()
 	for _, r := range rules {
 		if !validOps[r.Op] || !opMatches(r.Op, *tick.Num, r.Threshold) {
+			// 恢复事件：这条规则上次触发过、现在回到阈值内——补一条 info 级恢复并清 last_fired_at。
+			// 不清标记，恢复永远无人知晓，且下一次越限会被旧冷却吞掉；清了之后恢复事件也天然只发一次。
+			if r.LastFiredAt != nil && validOps[r.Op] {
+				s.recoverAlarm(ctx, d, p, r, *tick.Num)
+			}
 			continue
 		}
 		if r.LastFiredAt != nil && now.Sub(*r.LastFiredAt) < time.Duration(r.CooldownSeconds)*time.Second {
@@ -747,6 +801,30 @@ func (s *Service) evaluateAlarms(ctx context.Context, d *Device, p *Point, tick 
 		ws.Publish("device:"+d.DeviceNo, wsFrame{Type: "alarm", DeviceNo: d.DeviceNo, DeviceID: d.ID,
 			Points: []pointTick{{PointID: p.ID, Address: p.Address, Name: p.Name, Unit: p.Unit, Num: tick.Num, TS: now}}})
 	}
+}
+
+// recoverAlarm 写告警恢复事件（info 级）并清规则的触发标记；随后照常走通知与事件总线，
+// 订阅方按 Level 区分触发/恢复。
+func (s *Service) recoverAlarm(ctx context.Context, d *Device, p *Point, r AlarmRule, v float64) {
+	msg := s.text(
+		fmt.Sprintf("%s / %s 已恢复（阈值 %s %.3g，当前 %.3g）", d.Name, p.Name, opLabel(r.Op), r.Threshold, v),
+		fmt.Sprintf("%s / %s recovered (threshold %s %.3g, now %.3g)", d.Name, p.Name, opLabel(r.Op), r.Threshold, v),
+	)
+	event := AlarmEvent{RuleID: r.ID, DeviceID: d.ID, PointID: p.ID, Value: v, Level: LevelInfo, Message: msg}
+	if err := s.db.Create(&event).Error; err != nil {
+		s.logWarn("devicehub: store alarm recovery failed", "err", err.Error())
+		return
+	}
+	if err := s.db.Model(&AlarmRule{}).Where("id = ?", r.ID).Update("last_fired_at", nil).Error; err != nil {
+		s.logWarn("devicehub: clear alarm last_fired_at failed", "err", err.Error())
+	}
+	s.notifyAlarm(ctx, d, LevelInfo, msg)
+	s.publish(ctx, EventAlarm, EventData{
+		DeviceNo: d.DeviceNo, DeviceID: int64(d.ID), PointID: int64(p.ID),
+		Address: p.Address, Value: v, Level: LevelInfo, Message: msg,
+	})
+	ws.Publish("device:"+d.DeviceNo, wsFrame{Type: "alarm", DeviceNo: d.DeviceNo, DeviceID: d.ID,
+		Points: []pointTick{{PointID: p.ID, Address: p.Address, Name: p.Name, Unit: p.Unit, Num: &v, TS: time.Now().UTC()}}})
 }
 
 func opLabel(op string) string {
@@ -811,17 +889,34 @@ type AlarmRuleInput struct {
 	CooldownSeconds int      `json:"cooldownSeconds"`
 }
 
-// ListAlarmEvents 返回最近告警事件（监控页的告警流）。
-func (s *Service) ListAlarmEvents(ctx context.Context, deviceID idgen.ID, limit int) ([]AlarmEvent, error) {
-	if limit <= 0 || limit > 200 {
-		limit = 50
-	}
-	var rows []AlarmEvent
-	q := s.db.WithContext(ctx).Order("id DESC").Limit(limit)
+// validLevels 是合法告警级别（筛选参数只认这几个，其余一律当「全部」）。
+var validLevels = map[string]bool{LevelInfo: true, LevelWarn: true, LevelCritical: true}
+
+// ListAlarmEvents 分页返回告警事件（监控页的告警流）：level 为空 = 全部级别。
+func (s *Service) ListAlarmEvents(ctx context.Context, deviceID idgen.ID, level string, page, pageSize int) ([]AlarmEvent, int64, error) {
+	q := s.db.WithContext(ctx).Model(&AlarmEvent{})
 	if deviceID > 0 {
 		q = q.Where("device_id = ?", deviceID)
 	}
-	err := q.Find(&rows).Error
+	if validLevels[level] {
+		q = q.Where("level = ?", level)
+	}
+	var total int64
+	if err := q.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	var rows []AlarmEvent
+	err := q.Order("id DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&rows).Error
+	return rows, total, err
+}
+
+// ListAlarmRulesByDevice 一次返回设备的全部告警规则（按测点分组在消费端做）。
+// 监控页告警 Tab 原来对每个测点单独发一次请求，测点一多打开就是一串请求。
+func (s *Service) ListAlarmRulesByDevice(ctx context.Context, deviceID idgen.ID) ([]AlarmRule, error) {
+	var rows []AlarmRule
+	err := s.db.WithContext(ctx).
+		Where("point_id IN (?)", s.db.Model(&Point{}).Select("id").Where("device_id = ?", deviceID)).
+		Order("id").Find(&rows).Error
 	return rows, err
 }
 

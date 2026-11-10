@@ -2,12 +2,15 @@ package dict
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
+	"time"
 
 	"gorm.io/gorm"
 
 	"nexadmin/core"
+	"nexadmin/core/cache"
 	"nexadmin/core/response"
 	"nexadmin/modules/internal/recbin"
 	pi18n "nexadmin/pkg/i18n"
@@ -43,10 +46,13 @@ func (platformLocales) All() []pi18n.Language {
 }
 
 // Service 封装字典的数据访问与业务规则。
-type Service struct{ db *gorm.DB }
+type Service struct {
+	db    *gorm.DB
+	cache cache.Cache
+}
 
-// NewService 创建服务。
-func NewService(db *gorm.DB) *Service { return &Service{db: db} }
+// NewService 创建服务；cache 可为 nil（直查，无缓存）。
+func NewService(db *gorm.DB, c cache.Cache) *Service { return &Service{db: db, cache: c} }
 
 func conflict(key string, args ...any) error { return response.Conflict(key, args...) }
 func notFound() error                        { return response.NotFound("error.not_found") }
@@ -147,7 +153,7 @@ func (s *Service) CreateType(ctx context.Context, in TypeInput) (*Type, error) {
 	return t, s.db.WithContext(ctx).Create(t).Error
 }
 
-// UpdateType 修改字典类型。
+// UpdateType 修改字典类型。状态/编码变更会影响 Items，旧编码与新编码都 bump。
 func (s *Service) UpdateType(ctx context.Context, id idgen.ID, in TypeInput) (*Type, error) {
 	cur, err := s.GetType(ctx, id)
 	if err != nil {
@@ -167,6 +173,7 @@ func (s *Service) UpdateType(ctx context.Context, id idgen.ID, in TypeInput) (*T
 	if err != nil {
 		return nil, err
 	}
+	s.bumpItems(ctx, cur.Code, in.Code)
 	return s.GetType(ctx, id)
 }
 
@@ -186,7 +193,7 @@ func (s *Service) DeleteTypes(ctx context.Context, ids []idgen.ID) error {
 			return builtinErr()
 		}
 	}
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	if err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		for _, t := range types {
 			if err := tx.Delete(&Type{}, "id = ?", int64(t.ID)).Error; err != nil {
 				return err
@@ -197,7 +204,16 @@ func (s *Service) DeleteTypes(ctx context.Context, ids []idgen.ID) error {
 			}
 		}
 		return nil
-	})
+	}); err != nil {
+		return err
+	}
+	// 软删的类型 Items 查不到，缓存跟着失效
+	codes := make([]string, 0, len(types))
+	for _, t := range types {
+		codes = append(codes, t.Code)
+	}
+	s.bumpItems(ctx, codes...)
+	return nil
 }
 
 // SortTypes 按 ids 顺序重写 sort（10、20、30…）。
@@ -296,7 +312,11 @@ func (s *Service) CreateData(ctx context.Context, in DataInput) (*Data, error) {
 	}
 	d := &Data{TypeID: in.TypeID, Label: in.Label, I18nJSON: i18nJSON, Value: in.Value, Tag: tagOr(in.Tag),
 		Sort: in.Sort, Status: statusOr(in.Status), Remark: in.Remark}
-	return d, s.db.WithContext(ctx).Create(d).Error
+	if err := s.db.WithContext(ctx).Create(d).Error; err != nil {
+		return nil, err
+	}
+	s.bumpItems(ctx, s.codeOfTypeID(ctx, in.TypeID))
+	return d, nil
 }
 
 // UpdateData 修改字典数据。
@@ -329,6 +349,8 @@ func (s *Service) UpdateData(ctx context.Context, id idgen.ID, in DataInput) (*D
 	if err != nil {
 		return nil, err
 	}
+	// 条目可能被挪到别的类型：新旧两个编码都失效
+	s.bumpItems(ctx, s.codeOfTypeID(ctx, cur.TypeID), s.codeOfTypeID(ctx, in.TypeID))
 	return s.GetData(ctx, id)
 }
 
@@ -339,6 +361,7 @@ func (s *Service) DeleteData(ctx context.Context, ids []idgen.ID) error {
 	if err := s.db.WithContext(ctx).Select("id", "type_id", "dict_label", "dict_value").Where("id IN ?", raw).Find(&rows).Error; err != nil {
 		return err
 	}
+	codes := make([]string, 0, 2)
 	if len(rows) > 0 {
 		tids := make([]int64, 0, len(rows))
 		for _, r := range rows {
@@ -351,6 +374,7 @@ func (s *Service) DeleteData(ctx context.Context, ids []idgen.ID) error {
 		codeOf := make(map[idgen.ID]string, len(types))
 		for _, t := range types {
 			codeOf[t.ID] = t.Code
+			codes = append(codes, t.Code)
 		}
 		for _, r := range rows {
 			if isBuiltinItem(codeOf[r.TypeID], r.Value) {
@@ -358,7 +382,7 @@ func (s *Service) DeleteData(ctx context.Context, ids []idgen.ID) error {
 			}
 		}
 	}
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	if err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		for _, r := range rows {
 			if err := tx.Delete(&Data{}, "id = ?", int64(r.ID)).Error; err != nil {
 				return err
@@ -368,18 +392,62 @@ func (s *Service) DeleteData(ctx context.Context, ids []idgen.ID) error {
 			}
 		}
 		return nil
-	})
+	}); err != nil {
+		return err
+	}
+	s.bumpItems(ctx, codes...)
+	return nil
 }
 
-// SortData 按 ids 顺序重写 sort。
+// SortData 按 ids 顺序重写 sort（Items 按 sort 排序，排序变更同样失效缓存）。
 func (s *Service) SortData(ctx context.Context, ids []idgen.ID) error {
-	return sortIDs(s.db.WithContext(ctx), &Data{}, ids)
+	if err := sortIDs(s.db.WithContext(ctx), &Data{}, ids); err != nil {
+		return err
+	}
+	codes := make([]string, 0, len(ids))
+	for _, id := range ids {
+		var typeID int64
+		if err := s.db.WithContext(ctx).Model(&Data{}).Select("type_id").Where("id = ?", int64(id)).Scan(&typeID).Error; err != nil {
+			return err
+		}
+		codes = append(codes, s.codeOfTypeID(ctx, idgen.ID(typeID)))
+	}
+	s.bumpItems(ctx, codes...)
+	return nil
 }
 
 // Items 返回某字典下启用的数据（前端下拉/标签渲染），标签按请求语言取：
 // 先查 i18n_json 里这门语言的译文，没有则回退默认语言的 dict_label；
 // 老数据的 label_en 在没有 i18n_json 时当英文兜底（升级前写进去的译文不能丢）。
+//
+// 结果走缓存（这是全站下拉/标签的高频接口，原来每次请求两条 DB 查询）：
+// 缓存键带类型版本号，任何数据/类型变更 bump 版本即全语言失效；TTL 兜底自愈。
 func (s *Service) Items(ctx context.Context, code, lang string) ([]Item, error) {
+	if s.cache == nil {
+		return s.itemsFromDB(ctx, code, lang)
+	}
+	ver, err := s.cache.Get(ctx, dictVerKey(code))
+	if err != nil {
+		ver = "0" // 没有版本键（从没变更过）视作 0
+	}
+	key := cache.Key(ctx, "dict", "items", code, ver, lang)
+	if v, gerr := s.cache.Get(ctx, key); gerr == nil {
+		var out []Item
+		if json.Unmarshal([]byte(v), &out) == nil {
+			return out, nil
+		}
+	}
+	out, err := s.itemsFromDB(ctx, code, lang)
+	if err != nil {
+		return nil, err
+	}
+	if b, jerr := json.Marshal(out); jerr == nil {
+		_ = s.cache.Set(ctx, key, string(b), dictItemsTTL)
+	}
+	return out, nil
+}
+
+func (s *Service) itemsFromDB(ctx context.Context, code, lang string) ([]Item, error) {
 	var t Type
 	err := s.db.WithContext(ctx).Where("code = ? AND status = ?", code, "1").First(&t).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -398,6 +466,35 @@ func (s *Service) Items(ctx context.Context, code, lang string) ([]Item, error) 
 		out = append(out, Item{Value: r.Value, Label: label, Tag: r.Tag})
 	}
 	return out, nil
+}
+
+// dictItemsTTL 是条目缓存的兜底过期：失效漏了（如手工改库）最多 5 分钟后自愈。
+const dictItemsTTL = 5 * time.Minute
+
+func dictVerKey(code string) string { return cache.GlobalKey("dict", "ver", code) }
+
+// bumpItems 把受影响字典的版本号 +1，Items 的全部语言缓存随即失效。cache 不可用或
+// 不支持计数时静默跳过（TTL 兜底）。
+func (s *Service) bumpItems(ctx context.Context, codes ...string) {
+	if s.cache == nil {
+		return
+	}
+	ctr, ok := cache.As[cache.Counter](s.cache)
+	if !ok {
+		return
+	}
+	for _, code := range codes {
+		if code = strings.TrimSpace(code); code != "" {
+			_, _, _ = ctr.Incr(ctx, dictVerKey(code), 30*24*time.Hour)
+		}
+	}
+}
+
+// codeOfTypeID 查类型编码（bump 用）；查不到返回空串，bump 会跳过。
+func (s *Service) codeOfTypeID(ctx context.Context, typeID idgen.ID) string {
+	var code string
+	_ = s.db.WithContext(ctx).Model(&Type{}).Select("code").Where("id = ?", int64(typeID)).Scan(&code).Error
+	return code
 }
 
 // dictLabelOf 按语言取一条字典数据的标签。

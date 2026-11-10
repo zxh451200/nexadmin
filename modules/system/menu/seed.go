@@ -97,9 +97,10 @@ func buildSeed() []seedItem {
 	notice := b.menu(content, "notice.menu", "/content/notice", "notice/NoticePage", "notice:list", "Megaphone", 10)
 	b.btns(notice, "notice", with("publish", "platform")...)
 	// 消息中心是个人收件箱，不是内容管理；顶栏铃铛已有「查看全部」，侧栏不再重复列（权限点保留）。
-	message := b.menu(content, "message.menu", "/message", "message/MessagePage", "message:list", "Bell", 20,
+	// 不再种 message:delete 按钮权限：删除接口本来就只动自己的收件箱（登录即可），
+	// 后端从不校验这个码，种出来只会让管理员误以为勾选有实际作用。
+	b.menu(content, "message.menu", "/message", "message/MessagePage", "message:list", "Bell", 20,
 		func(m *Menu) { m.Hidden = true })
-	b.btns(message, "message", "delete")
 	file := b.menu(content, "fileMgr.menu", "/content/file", "file/FilePage", "file:list", "FolderOpen", 30)
 	b.btns(file, "file", "upload", "delete")
 

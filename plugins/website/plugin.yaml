@@ -1,7 +1,7 @@
 id: website
 name: 企业官网
 version: 0.6.0
-description: 可售卖的企业官网：匿名公开官网（服务端渲染、SEO 友好，未登录即可访问）+ 后台内容管理（站点设置、导航、特性、页面、新闻）+ 官网插件市场（浏览、搜索、下载、后台一键安装入口）。默认内容即 NexAdmin 官网。
+description: 可售卖的企业官网：匿名公开官网（服务端渲染、SEO 友好，未登录即可访问）+ 后台内容管理（站点设置、导航、特性、页面、新闻、产品中心）+ 官网插件市场（浏览、搜索、下载、后台一键安装入口）。默认内容即 NexAdmin 官网。
 author: NexAdmin
 edition: pro
 requires_nexadmin: ">=0.1.0"
@@ -60,10 +60,28 @@ menus:
     keep_alive: true
   - parent: /website
     type: menu
+    title: plugin_website.menu.products
+    path: /website/products
+    component: plugins/website/ProductPage
+    perm: website:product
+    icon: Package
+    sort: 6
+    keep_alive: true
+  - parent: /website
+    type: menu
+    title: plugin_website.menu.productCategories
+    path: /website/product-categories
+    component: plugins/website/ProductCategoryPage
+    perm: website:product-category
+    icon: FolderTree
+    sort: 7
+    keep_alive: true
+  - parent: /website
+    type: menu
     title: plugin_website.menu.messages
     path: /website/messages
     component: plugins/website/MessagePage
     perm: website:message
     icon: Inbox
-    sort: 6
+    sort: 8
     keep_alive: true

@@ -422,12 +422,37 @@ func (h *handler) listCallbacks(c *gin.Context) {
 	response.Page(c, out, total, page, size)
 }
 
+// POST /plugins/pay/callbacks/:id/replay —— 人工重放一条已验签回调（pay:edit + 操作日志）。
+func (h *handler) replayCallback(c *gin.Context) {
+	id, ok := idParam(c, "id")
+	if !ok {
+		return
+	}
+	v, err := h.svc.ReplayCallback(c.Request.Context(), idgen.ID(id))
+	respond(c, v, err)
+}
+
 // ---- reconcile ----
 
 // GET /plugins/pay/reconcile/tasks —— 契约 listReconcileTasks。
 func (h *handler) listReconcileTasks(c *gin.Context) {
 	rows, err := h.svc.ListReconcileTasks(c.Request.Context(), c.Query("billDate"), c.Query("channelCode"), c.Query("status"))
 	respond(c, rows, err)
+}
+
+// GET /plugins/pay/reconcile/tasks/:id/bill —— 下载该任务归档的渠道账单 CSV（source=channel 才有）。
+func (h *handler) downloadReconcileBill(c *gin.Context) {
+	id, ok := idParam(c, "id")
+	if !ok {
+		return
+	}
+	body, err := h.svc.ReconcileBillBody(c.Request.Context(), id)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	c.Header("Content-Disposition", `attachment; filename="reconcile-bill-`+c.Param("id")+`.csv"`)
+	c.Data(http.StatusOK, "text/csv; charset=utf-8", []byte(body))
 }
 
 // POST /plugins/pay/reconcile/tasks —— 契约 runReconcileTask。

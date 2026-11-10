@@ -89,6 +89,14 @@ var Children = map[string][]Child{
 	TypePost: {
 		{Table: "sys_user_post", Column: "post_id"},
 	},
+	// 用户：彻底删除时物理清角色/岗位/第三方身份绑定。sys_user_identity 有
+	// (provider, external_id) 唯一键，残留会让该外部身份此后每次登录都撞
+	// 「查无此人 → 重新绑定 → 唯一键冲突」，永久无法再登录。
+	TypeUser: {
+		{Table: "sys_user_role", Column: "user_id"},
+		{Table: "sys_user_post", Column: "user_id"},
+		{Table: "sys_user_identity", Column: "user_id"},
+	},
 	TypeDictType: {
 		{Table: "sys_dict_data", Column: "type_id"},
 	},

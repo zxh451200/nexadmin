@@ -120,6 +120,23 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.PUT("/tags/:id", core.Perm("website:post"), core.Desc("更新新闻标签"), h.updateTag)
 	g.DELETE("/tags/:id", core.Perm("website:post"), core.Desc("删除新闻标签"), h.deleteTag)
 
+	g.GET("/products", core.Perm("website:product"), core.Desc("产品列表"), h.listProducts)
+	g.PUT("/products/status", core.Perm("website:product"), core.Desc("批量上架/下线产品"), h.setProductStatus)
+	g.DELETE("/products", core.Perm("website:product"), core.Desc("批量删除产品"), h.deleteProducts)
+	g.POST("/products", core.Perm("website:product"), core.Desc("新增产品"), h.createProduct)
+	g.PUT("/products/:id", core.Perm("website:product"), core.Desc("更新产品"), h.updateProduct)
+	g.GET("/products/:id/preview", core.Perm("website:product"), core.Desc("签发产品预览链接"), h.productPreview)
+	g.POST("/products/:id/copy", core.Perm("website:product"), core.Desc("复制产品"), h.copyProduct)
+	g.DELETE("/products/:id", core.Perm("website:product"), core.Desc("删除产品"), h.deleteProduct)
+
+	// 类目清单挂在 website:product 下：商品表单的类目复选框要读它；
+	// 变更动作走独立的 website:product-category（后台单独一个菜单项）。
+	g.GET("/product-categories", core.Perm("website:product"), core.Desc("产品类目列表"), h.listProductCategories)
+	g.POST("/product-categories", core.Perm("website:product-category"), core.Desc("新增产品类目"), h.createProductCategory)
+	g.PUT("/product-categories/reorder", core.Perm("website:product-category"), core.Desc("产品类目拖拽排序"), h.reorderProductCategories)
+	g.PUT("/product-categories/:id", core.Perm("website:product-category"), core.Desc("更新产品类目"), h.updateProductCategory)
+	g.DELETE("/product-categories/:id", core.Perm("website:product-category"), core.Desc("删除产品类目"), h.deleteProductCategory)
+
 	g.POST("/media", core.Perm("website:setting"), core.Desc("上传 logo/封面图片"), h.uploadMedia)
 	g.GET("/limits", core.Perm("website:setting"), core.Desc("读取官网生效上限"), h.limits)
 	// 语言清单的管理接口在框架（/api/v1/languages，见 modules/system/language）：
@@ -206,6 +223,11 @@ func (h *siteHandler) registerPages(g *gin.RouterGroup, bareHome bool) {
 	g.HEAD("/news", h.newsList)
 	g.GET("/news/:slug", h.postDetail)
 	g.HEAD("/news/:slug", h.postDetail)
+	// 产品中心：列表 /products（?category=<slug> 归档），详情 /products/:slug。
+	g.GET("/products", h.productsList)
+	g.HEAD("/products", h.productsList)
+	g.GET("/products/:slug", h.productDetail)
+	g.HEAD("/products/:slug", h.productDetail)
 	g.GET("/p/:slug", h.pageDetail)
 	g.HEAD("/p/:slug", h.pageDetail)
 	// 在线留言：GET 是联系页，POST 是同一个地址的投稿入口（无 JS 也能直接表单提交）。

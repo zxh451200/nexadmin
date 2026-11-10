@@ -125,6 +125,7 @@ type RefundView struct {
 	Currency        string     `json:"currency"`
 	FxRateMicro     int64      `json:"fxRateMicro"`
 	ChannelRefundID string     `json:"channelRefundId,omitempty"`
+	ChannelCode     string     `json:"channelCode,omitempty"`
 	Reason          string     `json:"reason,omitempty"`
 	FailReason      string     `json:"failReason,omitempty"`
 	OperatorID      string     `json:"operatorId,omitempty"`
@@ -141,7 +142,7 @@ func refundView(r *Refund) RefundView {
 		SubjectID: r.SubjectID, BizType: r.BizType, BizNo: r.BizNo, Status: r.Status,
 		AmountMinor: r.AmountMinor, FeeRefundMinor: r.FeeRefundMinor,
 		Currency: r.Currency, FxRateMicro: r.FxRateMicro,
-		ChannelRefundID: r.ChannelRefundID, Reason: r.Reason, FailReason: r.FailReason,
+		ChannelRefundID: r.ChannelRefundID, ChannelCode: r.ChannelCode, Reason: r.Reason, FailReason: r.FailReason,
 		OperatorID: r.OperatorID, SucceededAt: r.SucceededAt, CreatedAt: r.CreatedAt,
 		SyncAttempts: r.SyncAttempts, LastSyncAt: r.LastSyncAt,
 	}

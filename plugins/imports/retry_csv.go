@@ -28,7 +28,8 @@ func BuildRetryCSV(ctx context.Context, s Source, errs []RowError) []byte {
 		}
 		row := make([]string, len(loc.Columns))
 		for i, c := range loc.Columns {
-			row[i] = e.Data[c.Key]
+			// 原样回吐用户上传的单元格，必须先挡公式注入（与 errors.csv 同一道）
+			row[i] = csvCell(e.Data[c.Key])
 		}
 		_ = w.Write(row)
 	}

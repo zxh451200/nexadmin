@@ -8,6 +8,9 @@
       "control": "指令下发"
     },
     "pickDevice": "选择左侧设备查看实时数据",
+    "overview": {
+      "total": "设备总数"
+    },
     "status": {
       "online": "在线",
       "offline": "离线",
@@ -53,6 +56,9 @@
       "search": "搜索名称 / 编号",
       "list": "设备",
       "noMatch": "没有匹配的设备",
+      "pageInfo": "第 {{page}} / {{pages}} 页",
+      "pagePrev": "上一页",
+      "pageNext": "下一页",
       "lastSeenAgo": "最后在线 {{ago}}",
       "neverSeen": "从未在线"
     },
@@ -107,6 +113,10 @@
       "min": "最小",
       "max": "最大",
       "export": "导出 xlsx",
+      "custom": "自定义",
+      "from": "开始时间",
+      "to": "结束时间",
+      "customIncomplete": "选择开始与结束时间后查看趋势",
       "raw": "原始读数",
       "hour": "小时聚合",
       "resolution": "采样间隔 {{bucket}}"
@@ -130,8 +140,15 @@
     },
     "alarm": {
       "addRule": "新增告警规则",
+      "editRule": "编辑告警规则",
       "rulesTitle": "告警规则",
       "eventsTitle": "最近事件",
+      "levelAll": "全部级别",
+      "eventsTotal": "共 {{total}} 条",
+      "enableRule": "启用规则",
+      "disableRule": "停用规则",
+      "enabled": "启用",
+      "enabledHint": "停用后规则保留，但不再评估告警",
       "empty": "暂无告警事件",
       "name": "规则名称",
       "op": "比较",

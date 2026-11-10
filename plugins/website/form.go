@@ -175,3 +175,67 @@ type PostStatusForm struct {
 	IDs    []idgen.ID `json:"ids"`
 	Status string     `json:"status"`
 }
+
+// SpecItem 是商品的一条动态属性（对标阿里的类目属性）：各行业属性不同，
+// 本地不建属性字典，存成有序键值对最贴近同步语义。
+type SpecItem struct {
+	Label string `json:"label"`
+	Value string `json:"value"`
+}
+
+// ProductForm 是产品表单；Content 为富文本 HTML，落库前 Sanitize。
+type ProductForm struct {
+	Slug        string `json:"slug"`
+	Title       string `json:"title"`
+	Keywords    string `json:"keywords"`
+	Summary     string `json:"summary"`
+	SeoTitle    string `json:"seoTitle"`
+	SeoDesc     string `json:"seoDesc"`
+	SeoKeywords string `json:"seoKeywords"`
+	Content     string `json:"content"`
+	// Status 只接受 draft / online（上架）；offline 及审核态由列表动作与同步回写维护。
+	Status string `json:"status"`
+	// CoverURL 是主图；Images 是图集 URL 列表（保存时整体替换，上限 10 张）。
+	CoverURL string   `json:"coverUrl"`
+	Images   []string `json:"images"`
+	VideoURL string   `json:"videoUrl"`
+	// 贸易字段：负数一律按 0 处理；PriceMax 小于 PriceMin 时取 PriceMin。
+	PriceMin     float64 `json:"priceMin"`
+	PriceMax     float64 `json:"priceMax"`
+	Currency     string  `json:"currency"`
+	PriceUnit    string  `json:"priceUnit"`
+	Moq          int     `json:"moq"`
+	LeadTimeDays int     `json:"leadTimeDays"`
+	Port         string  `json:"port"`
+	// PaymentTerms 是付款方式：如 "T/T, L/C"，详情页「交易信息」块展示。
+	PaymentTerms string  `json:"paymentTerms"`
+	// Specs 是动态属性键值对（上限 50 条）；CategoryIDs 是所属类目的完整列表，保存时整体替换。
+	Specs       []SpecItem `json:"specs"`
+	CategoryIDs []idgen.ID `json:"categoryIds"`
+	I18nJSON    string     `json:"i18nJson"`
+	// PublishedJSON 是非默认语言发布态；服务层会剔除缺译语言的 true。
+	PublishedJSON string `json:"publishedJson"`
+	NoIndex       bool   `json:"noindex"`
+	Author        string `json:"author"`
+}
+
+// ProductCategoryForm 是产品类目表单。
+type ProductCategoryForm struct {
+	// ParentID 为上级类目 ID，0 = 顶级；最多 3 级（与导航同一套层级校验）。
+	ParentID NavParentID `json:"parentId"`
+	Title    string      `json:"title"`
+	Slug     string      `json:"slug"`
+	Sort     int         `json:"sort"`
+}
+
+// ProductCategoryOrderItem 是一条类目拖拽排序指令：把 ID 挂到 ParentID 下并写入 Sort。
+type ProductCategoryOrderItem struct {
+	ID       idgen.ID    `json:"id"`
+	ParentID NavParentID `json:"parentId"`
+	Sort     int         `json:"sort"`
+}
+
+// ProductCategoryOrderForm 是一次批量排序请求。
+type ProductCategoryOrderForm struct {
+	Items []ProductCategoryOrderItem `json:"items"`
+}

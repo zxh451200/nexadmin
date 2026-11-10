@@ -160,6 +160,24 @@
     }
   });
 
+  // ---- 商品详情图集：点缩略图切换主图（SSR 页面无框架，原生事件委托） ----
+  document.addEventListener('click', function (e) {
+    var thumb = e.target.closest('.product-gallery-thumb');
+    if (!thumb) return;
+    var src = thumb.getAttribute('data-gallery-src');
+    var gallery = thumb.parentElement;
+    var main = gallery && gallery.querySelector('.product-gallery-main');
+    if (!src || !main) return;
+    if (main.getAttribute('src') === src) return;
+    main.src = src;
+    gallery.querySelectorAll('.product-gallery-thumb').forEach(function (t) {
+      var on = t === thumb;
+      t.classList.toggle('active', on);
+      if (on) t.setAttribute('aria-current', 'true');
+      else t.removeAttribute('aria-current');
+    });
+  });
+
   // ---- 页面级绑定 ----
   function initSite() {
     i18n = readI18n();

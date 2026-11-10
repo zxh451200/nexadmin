@@ -8,6 +8,9 @@
       "control": "Send commands"
     },
     "pickDevice": "Pick a device on the left to see live values",
+    "overview": {
+      "total": "Devices"
+    },
     "status": {
       "online": "Online",
       "offline": "Offline",
@@ -53,6 +56,9 @@
       "search": "Search name / no.",
       "list": "Devices",
       "noMatch": "No devices match",
+      "pageInfo": "Page {{page}} / {{pages}}",
+      "pagePrev": "Previous page",
+      "pageNext": "Next page",
       "lastSeenAgo": "Last online {{ago}}",
       "neverSeen": "Never connected"
     },
@@ -107,6 +113,10 @@
       "min": "Min",
       "max": "Max",
       "export": "Export xlsx",
+      "custom": "Custom",
+      "from": "From",
+      "to": "To",
+      "customIncomplete": "Pick a start and an end time to see the trend",
       "raw": "Raw readings",
       "hour": "Hourly aggregate",
       "resolution": "Interval {{bucket}}"
@@ -130,8 +140,15 @@
     },
     "alarm": {
       "addRule": "Add alarm rule",
+      "editRule": "Edit alarm rule",
       "rulesTitle": "Alert rules",
       "eventsTitle": "Recent events",
+      "levelAll": "All levels",
+      "eventsTotal": "{{total}} events",
+      "enableRule": "Enable rule",
+      "disableRule": "Disable rule",
+      "enabled": "Enabled",
+      "enabledHint": "Disabled rules are kept but no longer evaluated",
       "empty": "No alarm events",
       "name": "Rule name",
       "op": "Compare",

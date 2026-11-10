@@ -43,23 +43,25 @@ type TenantModel struct {
 }
 
 // BeforeCreate 生成 ID 并填入当前租户。
+// 租户以 context 为唯一真相：调用方显式设置的 TenantID 只在 Skip 上下文（平台侧豁免，
+// 如种子数据、跨租户运维）里保留——否则请求体里带进来的 "tenantId" 字段就能把行写进
+// 别的租户，绕过整个隔离（Create 路径的租户闸只有这一道，tenantPlugin 不管 Create）。
 func (m *TenantModel) BeforeCreate(tx *gorm.DB) error {
 	if err := m.PlatformModel.BeforeCreate(tx); err != nil {
 		return err
-	}
-	if m.TenantID != 0 {
-		return nil
 	}
 	ctx := tx.Statement.Context
 	if tenant.Skipped(ctx) {
 		return nil
 	}
-	id, ok := tenant.From(ctx)
-	if !ok {
-		return ErrNoTenant
+	if id, ok := tenant.From(ctx); ok {
+		m.TenantID = id
+		return nil
 	}
-	m.TenantID = id
-	return nil
+	if m.TenantID != 0 {
+		return nil
+	}
+	return ErrNoTenant
 }
 
 // tenantPlugin 给带 tenant_id 列的模型的查询/更新/删除自动追加 WHERE tenant_id = ?。

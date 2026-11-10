@@ -1,6 +1,6 @@
 import { defineMock, mockError } from '@/framework/request/mock'
 import type { EntitySchema } from '@/framework/components/i18n'
-import type { FeatureItem, MessageStatus, NavItem, PostCategory, PostTag, SiteMessage, SitePage, SitePost, SiteSettings } from './api'
+import type { FeatureItem, MessageStatus, NavItem, PostCategory, PostTag, ProductCategoryNode, SiteMessage, SitePage, SitePost, SiteProduct, SiteSettings } from './api'
 
 const ago = (min: number) => new Date(Date.now() - min * 60_000).toISOString()
 const id = (n: number) => String(8100000000000000000n + BigInt(n))
@@ -336,6 +336,16 @@ const mockSchemas: Record<string, EntitySchema> = {
       { key: 'content', labelKey: 'plugin_website.fields.content', widget: 'rich' },
     ],
   },
+  product: {
+    entity: 'product',
+    publishable: true,
+    translatable: [
+      { key: 'title', labelKey: 'plugin_website.fields.postTitle', widget: 'text', max: 200 },
+      { key: 'keywords', labelKey: 'plugin_website.fields.productKeywords', widget: 'text', max: 300 },
+      { key: 'summary', labelKey: 'plugin_website.fields.summary', widget: 'textarea', max: 500, rows: 2 },
+      { key: 'content', labelKey: 'plugin_website.fields.content', widget: 'rich' },
+    ],
+  },
 }
 
 const machineTranslate = (text: string, to: string, format: string) =>
@@ -353,6 +363,67 @@ function aiEnabled(): boolean {
 }
 
 const maxBatchItems = 50
+
+// ---- 产品中心 ----
+// 行内嵌的类目副本 productCount 恒为 0（对齐新闻 mock 的注释口径），计数只在清单接口回填。
+let productCategories: ProductCategoryNode[] = [
+  { id: id(801), parentId: '0', title: '工业设备', slug: 'industrial', sort: 10, productCount: 0 },
+  { id: id(802), parentId: id(801), title: '水泵', slug: 'pumps', sort: 10, productCount: 0 },
+  { id: id(803), parentId: '0', title: '备用电源', slug: 'power', sort: 20, productCount: 0 },
+]
+
+let products: SiteProduct[] = [
+  {
+    id: id(601), slug: 'industrial-water-pump', title: '工业离心水泵（不锈钢泵体）',
+    keywords: 'water pump centrifugal stainless', summary: '大流量工业离心水泵，304 不锈钢泵体，支持定制。',
+    seoTitle: '', seoDesc: 'Industrial centrifugal water pump, 304 stainless steel body, OEM available.',
+    seoKeywords: 'water pump', content: '<p>大流量、高扬程，支持 OEM 定制与批量询价。</p>',
+    noindex: false, coverUrl: '', imagesJson: '', videoUrl: '',
+    priceMin: 120, priceMax: 260, currency: 'USD', priceUnit: 'piece', moq: 10, leadTimeDays: 15, port: 'Shanghai', paymentTerms: 'T/T, L/C',
+    specsJson: JSON.stringify([{ label: 'Brand Name', value: 'NexFlow' }, { label: 'Place of Origin', value: 'China' }]),
+    status: 'online', alibabaProductId: '', syncStatus: 'none', syncedAt: null,
+    categories: [{ id: id(802), parentId: id(801), title: '水泵', slug: 'pumps', sort: 10, productCount: 0 }],
+    i18nJson: JSON.stringify({
+      'en-US': {
+        title: 'Industrial Centrifugal Water Pump (Stainless Steel)',
+        keywords: 'water pump centrifugal stainless',
+        summary: 'High-flow industrial centrifugal pump with 304 stainless steel body, OEM available.',
+        content: '<p>High flow and head, OEM and bulk inquiries welcome.</p>',
+      },
+    }),
+    publishedJson: '', views: 32, author: '外贸部', updatedAt: ago(60 * 24),
+  },
+  {
+    id: id(602), slug: 'portable-power-station', title: '便携式户外电源 1000W',
+    keywords: 'power station portable', summary: '1000Wh 磷酸铁锂户外电源，支持太阳能充电。',
+    seoTitle: '', seoDesc: '1000Wh LiFePO4 portable power station with solar charging.',
+    seoKeywords: '', content: '<p>露营、应急备电两相宜，支持太阳能板直充。</p>',
+    noindex: false, coverUrl: '', imagesJson: '', videoUrl: '',
+    priceMin: 0, priceMax: 0, currency: 'USD', priceUnit: 'piece', moq: 5, leadTimeDays: 20, port: 'Shenzhen', paymentTerms: '',
+    specsJson: '', status: 'draft', alibabaProductId: '', syncStatus: 'none', syncedAt: null,
+    categories: [{ id: id(803), parentId: '0', title: '备用电源', slug: 'power', sort: 20, productCount: 0 }],
+    i18nJson: '', publishedJson: '', views: 0, author: '', updatedAt: ago(60 * 3),
+  },
+]
+
+let nextProductId = 650
+let nextProductCategoryId = 860
+
+/** 类目子树 ID 集（含自身），删除校验与级联共用。 */
+const productCategorySubtree = (roots: string[]): Set<string> => {
+  const doomed = new Set(roots)
+  let grew = true
+  while (grew) {
+    grew = false
+    for (const n of productCategories) {
+      if (!doomed.has(n.id) && doomed.has(n.parentId)) {
+        doomed.add(n.id)
+        grew = true
+      }
+    }
+  }
+  return doomed
+}
 
 defineMock([
   {
@@ -926,6 +997,176 @@ defineMock([
       const before = messages.length
       messages = messages.filter((m) => !ids.has(m.id))
       return { deleted: before - messages.length }
+    },
+  },
+
+  // ---- 产品中心 ----
+  {
+    method: 'GET',
+    url: '/plugins/website/products',
+    handler: ({ query }) => {
+      const kw = String(query.keyword ?? '').trim().toLowerCase()
+      let rows = products.filter((p) => !kw || p.title.toLowerCase().includes(kw) || p.slug.includes(kw))
+      if (query.status) rows = rows.filter((p) => p.status === query.status)
+      if (query.categoryId) rows = rows.filter((p) => (p.categories ?? []).some((c) => c.id === query.categoryId))
+      return paginate([...rows].reverse(), query)
+    },
+  },
+  {
+    method: 'PUT',
+    url: '/plugins/website/products/status',
+    handler: ({ body }) => {
+      const ids = new Set<string>((body.ids ?? []).map(String))
+      const status = String(body.status ?? '') as SiteProduct['status']
+      if (!ids.size || !['online', 'offline'].includes(status)) return mockError(400, 'bad request')
+      let updated = 0
+      for (const row of products) {
+        if (ids.has(row.id) && row.status !== status) {
+          row.status = status
+          row.updatedAt = new Date().toISOString()
+          updated++
+        }
+      }
+      return { updated }
+    },
+  },
+  {
+    method: 'DELETE',
+    url: '/plugins/website/products',
+    handler: ({ query }) => {
+      const ids = new Set(String(query.ids ?? '').split(',').map((s) => s.trim()).filter(Boolean))
+      const before = products.length
+      products = products.filter((p) => !ids.has(p.id))
+      return { deleted: before - products.length }
+    },
+  },
+  {
+    method: 'POST',
+    url: '/plugins/website/products',
+    handler: ({ body }) => {
+      const now = new Date().toISOString()
+      const catIds: string[] = Array.isArray(body.categoryIds) ? body.categoryIds.map(String) : []
+      const row: SiteProduct = {
+        id: id(nextProductId++), slug: body.slug, title: body.title,
+        keywords: body.keywords ?? '', summary: body.summary ?? '',
+        seoTitle: body.seoTitle ?? '', seoDesc: body.seoDesc ?? '', seoKeywords: body.seoKeywords ?? '',
+        content: body.content ?? '', noindex: !!body.noindex,
+        coverUrl: body.coverUrl ?? '', imagesJson: JSON.stringify(Array.isArray(body.images) ? body.images : []),
+        videoUrl: body.videoUrl ?? '',
+        priceMin: Number(body.priceMin) || 0, priceMax: Number(body.priceMax) || 0,
+        currency: body.currency || 'USD', priceUnit: body.priceUnit ?? '',
+        moq: Number(body.moq) || 0, leadTimeDays: Number(body.leadTimeDays) || 0,
+        port: body.port ?? '', paymentTerms: body.paymentTerms ?? '',
+        specsJson: JSON.stringify(Array.isArray(body.specs) ? body.specs : []),
+        status: body.status === 'online' ? 'online' : 'draft',
+        alibabaProductId: '', syncStatus: 'none', syncedAt: null,
+        categories: productCategories.filter((c) => catIds.includes(c.id)),
+        i18nJson: body.i18nJson ?? '', publishedJson: body.publishedJson ?? '',
+        views: 0, author: body.author ?? '', updatedAt: now,
+      }
+      products = [...products, row]
+      return row
+    },
+  },
+  {
+    method: 'GET',
+    url: '/plugins/website/products/:id/preview',
+    handler: ({ params }) => {
+      const row = products.find((x) => x.id === params.id) ?? mockError(404, 'not found')
+      return { url: `/products/${row.slug}` }
+    },
+  },
+  {
+    method: 'POST',
+    url: '/plugins/website/products/:id/copy',
+    handler: ({ params }) => {
+      const src = products.find((x) => x.id === params.id) ?? mockError(404, 'not found')
+      let slug = `${src.slug}-copy`
+      for (let i = 2; products.some((x) => x.slug === slug); i++) slug = `${src.slug}-copy-${i}`
+      const row: SiteProduct = {
+        ...src, id: id(nextProductId++), slug, status: 'draft',
+        alibabaProductId: '', syncStatus: 'none', syncedAt: null, views: 0,
+        updatedAt: new Date().toISOString(),
+      }
+      products = [...products, row]
+      return row
+    },
+  },
+  {
+    method: 'PUT',
+    url: '/plugins/website/products/:id',
+    handler: ({ params, body }) => {
+      const row = products.find((x) => x.id === params.id) ?? mockError(404, 'not found')
+      const { images, specs, categoryIds: catIds, ...rest } = body
+      Object.assign(row, rest, { updatedAt: new Date().toISOString() })
+      if (Array.isArray(images)) row.imagesJson = JSON.stringify(images)
+      if (Array.isArray(specs)) row.specsJson = JSON.stringify(specs)
+      if (Array.isArray(catIds)) {
+        const ids = catIds.map(String)
+        row.categories = productCategories.filter((c) => ids.includes(c.id))
+      }
+      if (row.status !== 'online' && row.status !== 'draft') row.status = 'draft'
+      return row
+    },
+  },
+  {
+    method: 'DELETE',
+    url: '/plugins/website/products/:id',
+    handler: ({ params }) => {
+      products = products.filter((x) => x.id !== params.id)
+      return { ok: true }
+    },
+  },
+  { method: 'GET', url: '/plugins/website/product-categories', handler: () => productCategories },
+  {
+    method: 'POST',
+    url: '/plugins/website/product-categories',
+    handler: ({ body }) => {
+      const row: ProductCategoryNode = {
+        id: id(nextProductCategoryId++), parentId: String(body.parentId ?? '0'),
+        title: body.title, slug: body.slug, sort: body.sort ?? 0, productCount: 0,
+      }
+      productCategories = [...productCategories, row]
+      return row
+    },
+  },
+  {
+    method: 'PUT',
+    url: '/plugins/website/product-categories/reorder',
+    handler: ({ body }) => {
+      for (const item of body.items ?? []) {
+        const row = productCategories.find((x) => x.id === item.id)
+        if (row) {
+          row.parentId = String(item.parentId ?? '0')
+          row.sort = item.sort ?? row.sort
+        }
+      }
+      return { ok: true }
+    },
+  },
+  {
+    method: 'PUT',
+    url: '/plugins/website/product-categories/:id',
+    handler: ({ params, body }) => {
+      const row = productCategories.find((x) => x.id === params.id) ?? mockError(404, 'not found')
+      row.parentId = String(body.parentId ?? '0')
+      row.title = body.title
+      row.slug = body.slug
+      row.sort = body.sort ?? 0
+      return row
+    },
+  },
+  {
+    method: 'DELETE',
+    url: '/plugins/website/product-categories/:id',
+    handler: ({ params }) => {
+      // 与后端同口径：子树里有商品就拒绝删除
+      const doomed = productCategorySubtree([params.id])
+      if (products.some((p) => (p.categories ?? []).some((c) => doomed.has(c.id)))) {
+        return mockError(400, 'category in use')
+      }
+      productCategories = productCategories.filter((x) => !doomed.has(x.id))
+      return { ok: true }
     },
   },
 ])

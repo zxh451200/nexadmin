@@ -29,7 +29,7 @@ import {
   useCapabilityIndex,
   useChannelDirectory,
 } from './capabilities'
-import { formatMoney, formatTime, refundStatusVariant } from './format'
+import { formatMoney, formatTime, refundStatusVariant, toMinor } from './format'
 import { ListErrorBanner } from './ListErrorBanner'
 
 const ALL = '__all'
@@ -46,7 +46,7 @@ function RefundSyncCell({ refund }: { refund: PayRefund }) {
   const index = useCapabilityIndex()
   const { providerOf } = useChannelDirectory()
   const sync = useSyncRefund()
-  // 退款单视图暂未带 channelCode（契约缺口）：缺省时回查一次支付单拿渠道。
+  // channelCode 已随退款单下发；老数据列为空时回查一次原单兜底。
   const { data: order } = useOrder(refund.channelCode ? null : refund.paymentNo)
   const channelCode = refund.channelCode || order?.channelCode || ''
   const provider = providerOf(channelCode)
@@ -214,11 +214,14 @@ export function RefundsTab() {
       <RefundDialog
         open={formOpen}
         initialPaymentNo={initialNo}
+        submitting={create.isPending}
         onClose={() => setFormOpen(false)}
-        onSubmit={async (paymentNo, amountMinor, reason) => {
+        onSubmit={async (paymentNo, amountMinor, reason, idempotencyKey) => {
           if (!(await confirm({ destructive: true, description: t('plugin_pay.refundConfirm', { no: paymentNo }) }))) return false
           try {
-            await create.mutateAsync({ paymentNo, amountMinor, reason })
+            // 幂等键由弹窗在每次打开时生成、成功前不变：失败重试/网络重发都落在同一个键上，
+            // 后端首次响应可重放，渠道侧 out_request_no 也稳定（真出款的接口不能裸奔）。
+            await create.mutateAsync({ data: { paymentNo, amountMinor, reason }, idempotencyKey })
             toast.success(t('common.operateSuccess'))
             return true
           } catch {
@@ -234,33 +237,44 @@ export function RefundsTab() {
 function RefundDialog({
   open,
   initialPaymentNo,
+  submitting,
   onClose,
   onSubmit,
 }: {
   open: boolean
   /** 从订单页带过来的预填单号；每次打开时重置为它 */
   initialPaymentNo?: string
+  /** 提交中：禁用确认按钮，双击不再产生第二笔请求 */
+  submitting?: boolean
   onClose: () => void
-  onSubmit: (paymentNo: string, amountMinor: number, reason: string) => Promise<boolean>
+  onSubmit: (paymentNo: string, amountMinor: number, reason: string, idempotencyKey: string) => Promise<boolean>
 }) {
   const { t } = useTranslation()
   const [paymentNo, setPaymentNo] = useState('')
   const [amount, setAmount] = useState('')
   const [reason, setReason] = useState('')
+  // 幂等键每次打开弹窗重新生成、弹窗存活期间不变：重试复用，重开才换新
+  const [idempotencyKey, setIdempotencyKey] = useState('')
+  // 按单号回查原单拿币种：录入端「元 → minor」必须按币种小数位换算
+  // （JPY 等零小数位币种 ×100 会把金额放大 100 倍），查不到时按两位小数兜底。
+  const trimmedNo = paymentNo.trim()
+  const { data: order } = useOrder(open && trimmedNo ? trimmedNo : null)
+  const currency = order?.currency ?? ''
   // 每次打开都按预填单号重置：弹窗常挂载，上一次的输入不能漏进这一次
   useEffect(() => {
     if (!open) return
     setPaymentNo(initialPaymentNo ?? '')
     setAmount('')
     setReason('')
+    setIdempotencyKey(crypto.randomUUID())
   }, [open, initialPaymentNo])
   const submit = async () => {
-    const minor = Math.round(Number(amount) * 100)
-    if (!paymentNo.trim() || !minor || minor <= 0) {
+    const minor = toMinor(Number(amount), currency)
+    if (!trimmedNo || !minor || minor <= 0) {
       toast.error(t('plugin_pay.amountInvalid'))
       return
     }
-    if (await onSubmit(paymentNo.trim(), minor, reason)) onClose()
+    if (await onSubmit(trimmedNo, minor, reason, idempotencyKey)) onClose()
   }
   return (
     <ResponsiveDialog
@@ -273,7 +287,7 @@ function RefundDialog({
           <Button variant="outline" onClick={onClose}>
             {t('common.cancel')}
           </Button>
-          <Button onClick={() => void submit()}>
+          <Button onClick={() => void submit()} disabled={submitting}>
             <RotateCcw aria-hidden="true" />
             {t('plugin_pay.refund')}
           </Button>

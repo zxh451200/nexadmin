@@ -580,6 +580,8 @@ func (s *Service) CreateRefund(ctx context.Context, in RefundInput) (*Refund, er
 			Currency: o.Currency, FxRateMicro: o.FxRateMicro,
 			Reason: truncate(in.Reason, 200), OperatorID: truncate(in.OperatorID, 64),
 			Status: RefundPending,
+			// 渠道编码从原单冗余一份：列表页显示所属渠道不用每行回查原单
+			ChannelCode: o.ChannelCode,
 			// 发给渠道的幂等号必须落库：回调丢失后的补偿查询要带同一个号，
 			// 渠道才认得出这是同一笔退款（否则查出来是「查无此退款」）。
 			IdempotencyKey: truncate(idem, 80),
@@ -619,8 +621,13 @@ func (s *Service) CreateRefund(ctx context.Context, in RefundInput) (*Refund, er
 			if err := tx.Create(&out).Error; err != nil {
 				return err
 			}
+			// 拒绝的退款失败事件同样要进出站箱：只进进程内总线的话，缓冲一丢下游
+			// （如业务侧撤销发货）就永远收不到——与成功路径、回调翻转路径同一口径。
 			ev, err = buildEvent(EventRefundFailed, out.TenantID, refundPayload(&out, &o))
-			return err
+			if err != nil {
+				return err
+			}
+			return publishOutbox(ctx, tx, ev)
 		}
 		out.Status = RefundSucceeded
 		now := time.Now().UTC()
@@ -971,7 +978,7 @@ func (s *Service) orderFilter(ctx context.Context, q OrderQuery) (*gorm.DB, time
 	}
 	db := s.db.WithContext(ctx).Model(&Order{})
 	if kw := strings.TrimSpace(q.Keyword); kw != "" {
-		like := "%" + kw + "%"
+		like := "%" + escapeLike(kw) + "%"
 		db = db.Where("LOWER(payment_no) LIKE LOWER(?) OR LOWER(biz_no) LIKE LOWER(?)", like, like)
 	}
 	if q.Status != "" {
@@ -1062,7 +1069,7 @@ func (s *Service) ListCallbacks(ctx context.Context, q CallbackQuery) ([]Callbac
 		db = db.Where("ok = ?", *q.OK)
 	}
 	if kw := strings.TrimSpace(q.Keyword); kw != "" {
-		db = db.Where("LOWER(payment_no) LIKE LOWER(?)", "%"+kw+"%")
+		db = db.Where("LOWER(payment_no) LIKE LOWER(?)", "%"+escapeLike(kw)+"%")
 	}
 	var total int64
 	if err := db.Count(&total).Error; err != nil {
@@ -1090,7 +1097,7 @@ func (s *Service) ListRefunds(ctx context.Context, q RefundQuery) ([]Refund, int
 		db = db.Where("status = ?", q.Status)
 	}
 	if kw := strings.TrimSpace(q.Keyword); kw != "" {
-		like := "%" + kw + "%"
+		like := "%" + escapeLike(kw) + "%"
 		db = db.Where("LOWER(refund_no) LIKE LOWER(?) OR LOWER(payment_no) LIKE LOWER(?) OR LOWER(biz_no) LIKE LOWER(?)", like, like, like)
 	}
 	var total int64
@@ -1212,6 +1219,45 @@ func (s *Service) matchRule(db *gorm.DB, ctx context.Context, subjectID, bizType
 		return nil, err
 	}
 	return &rule, nil
+}
+
+// replayableResult 判断一条已验签回调是否值得重放：渠道已验签但落账失败的处理类结果
+// （原单后来才建好、金额修正后）。duplicate / ignored_state:* 是幂等终态，重放只会
+// 得到同一结论；sign_invalid / stale 没有可信签名可重放（原始头没存），一律拒绝。
+func replayableResult(result string) bool {
+	switch result {
+	case ResultOrderMissing, ResultAmountMismatch:
+		return true
+	}
+	return strings.HasPrefix(result, ResultIgnoredStatePrefix)
+}
+
+// ReplayCallback 人工重放一条已验签回调：用留存的原始报文原样再走一遍
+// HandleCallback（验签重跑——报文没变，签名依旧成立；重放窗口过期的渠道会如实报错）。
+// 幂等由翻转层保证：已经处理过的回调重放只会得到 duplicate，不会重复发事件。
+func (s *Service) ReplayCallback(ctx context.Context, id idgen.ID) (*CallbackView, error) {
+	var cb Callback
+	if err := s.db.WithContext(ctx).Take(&cb, "id = ?", int64(id)).Error; err != nil {
+		return nil, err
+	}
+	if !cb.OK {
+		return nil, response.BadRequest("pay.PAY_CALLBACK_NOT_REPLAYABLE")
+	}
+	if !replayableResult(cb.Result) {
+		return nil, response.BadRequest("pay.PAY_CALLBACK_NOT_REPLAYABLE")
+	}
+	if _, err := s.HandleCallback(ctx, CallbackInput{Channel: cb.ChannelCode, Body: []byte(cb.Payload)}); err != nil {
+		return nil, err
+	}
+	// 重放会落一条新的审计行：取同一单号下最新一条回给前端，直接看到重放结论。
+	var fresh Callback
+	q := s.db.WithContext(ctx).Where("channel_code = ? AND payment_no = ?", cb.ChannelCode, cb.PaymentNo)
+	if err := q.Order("id DESC").Take(&fresh).Error; err != nil {
+		return nil, err
+	}
+	v := callbackView(&fresh)
+	v.Payload = ""
+	return &v, nil
 }
 
 // callbackAuditRow 是一条回调审计的落库内容。用结构体而不是八个位置参数：

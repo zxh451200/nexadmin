@@ -283,7 +283,8 @@ func (a *App) buildFull() (*gin.Engine, error) {
 	api.GET("/auth/click", rl("captcha", middleware.ByIPAndPath()), h.ClickCaptcha)
 	api.POST("/auth/click/verify", rl("captcha", middleware.ByIPAndPath()), h.ClickVerify)
 	api.POST("/auth/refresh", rl("refresh", middleware.ByIPAndPath()), h.Refresh)
-	api.GET("/auth/methods", h.Methods)
+	// methods 暴露登录方式/第三方 provider/注册与验证码开关：与 captcha 同级限流，否则可被无限速枚举
+	api.GET("/auth/methods", rl("captcha", middleware.ByIPAndPath()), h.Methods)
 	api.POST("/auth/logout", middleware.RequireLogin(), h.Logout)
 	api.GET("/auth/me", middleware.RequireLogin(), h.Me)
 

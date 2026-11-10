@@ -77,6 +77,13 @@ func (c *client) Subscribe(ctx context.Context, fn func(address string, v driver
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.onFrame = fn
+	return c.connectLocked(true)
+}
+
+// connectLocked 建连，调用方须持 c.mu。
+// upstream 为真时订阅上行前缀（采集路径）；指令下发只要一条能 publish 的连接，
+// 订了反而会把设备上行帧收进这条临时连接、白白多一路流量。
+func (c *client) connectLocked(upstream bool) error {
 	if c.client != nil && c.client.IsConnectionOpen() {
 		return nil
 	}
@@ -98,8 +105,10 @@ func (c *client) Subscribe(ctx context.Context, fn func(address string, v driver
 		// 重连后留零值就又会跳过静默判定。以重连时刻为新起点，重连后依然一帧不发的设备
 		// 一个静默窗口后照常判离线。
 		c.lastMsgAt = time.Now()
-		// 断线重连后重订（CleanSession=false 时 broker 会补发 QoS1，这里兜底重订一次）
-		_ = cl.Subscribe(c.prefix+"/#", 1, c.onMessage)
+		if upstream {
+			// 断线重连后重订（CleanSession=false 时 broker 会补发 QoS1，这里兜底重订一次）
+			_ = cl.Subscribe(c.prefix+"/#", 1, c.onMessage)
+		}
 	}).SetConnectionLostHandler(func(_ paho.Client, err error) {
 		c.mu.Lock()
 		defer c.mu.Unlock()
@@ -108,8 +117,15 @@ func (c *client) Subscribe(ctx context.Context, fn func(address string, v driver
 		_ = err // 断线由 Ping 上报，这里没有 logger 可用
 	})
 	c.client = paho.NewClient(opts)
-	if token := c.client.Connect(); token.WaitTimeout(5*time.Second) && token.Error() != nil {
-		return fmt.Errorf("mqtt: 连接 broker 失败: %w", token.Error())
+	// SetConnectRetry 会让 Connect 的 token 一直重试到连上为止，WaitTimeout 到点返回 false
+	// 而不是带 error 的 true。只判 token.Error() 会把「5s 内没连上」当成连接成功，
+	// 后面 Write 才报「broker 未连接」，错误信息指不到真正的原因。
+	token := c.client.Connect()
+	if !token.WaitTimeout(5 * time.Second) {
+		return fmt.Errorf("mqtt: 连接 broker 超时: %s", c.endpoint)
+	}
+	if err := token.Error(); err != nil {
+		return fmt.Errorf("mqtt: 连接 broker 失败: %w", err)
 	}
 	return nil
 }
@@ -231,12 +247,11 @@ func (c *client) Close() error {
 	return nil
 }
 
-// Connect 实现接口要求（非推送路径不用它）；推送路径的建连在 Subscribe 里。
+// Connect 建一条只用于下行的连接，不订阅上行。
+// 指令下发（command.go）走的是这条路径：它为每条指令新建一个驱动实例，那个实例从没 Subscribe 过。
+// 早先这里直接返回「请先 Subscribe」，于是 MQTT 设备的指令从落地起 100% 失败。
 func (c *client) Connect(_ context.Context) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.connected && c.client != nil && c.client.IsConnectionOpen() {
-		return nil
-	}
-	return fmt.Errorf("mqtt: 请先 Subscribe 建立订阅连接")
+	return c.connectLocked(false)
 }

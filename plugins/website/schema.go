@@ -98,6 +98,18 @@ var entityViews = map[string]entityDef{
 		},
 		publishable: true,
 	},
+	"product": {
+		fields: productI18nFields,
+		views: []fieldView{
+			{"title", "plugin_website.fields.postTitle", widgetText, 0},
+			{"keywords", "plugin_website.fields.productKeywords", widgetText, 0},
+			{"summary", "plugin_website.fields.summary", widgetTextarea, 2},
+			{"seoTitle", "plugin_website.fields.seoTitle", widgetText, 0},
+			{"seoDesc", "plugin_website.fields.seoDesc", widgetTextarea, 2},
+			{"content", "plugin_website.fields.content", widgetRich, 0},
+		},
+		publishable: true,
+	},
 }
 
 // i18nSchemaFor 生成某实体的表单元数据；实体未知返回 false。

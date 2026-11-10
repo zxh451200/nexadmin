@@ -39,6 +39,9 @@ const (
 	// 静默忽略：财务按天对账，一个手滑的日期少筛一天就是要出事的数据。
 	errDateInvalid            = "pay.PAY_DATE_INVALID"
 	errExportTooMany          = "pay.PAY_EXPORT_TOO_MANY"
+	// errSettlementTooMany 是结算汇总的行数超限（账期内明细 > settlementMaxRows）。
+	// 结算金额必须全量，超限报错让财务缩小账期，绝不静默截断少算。
+	errSettlementTooMany      = "pay.PAY_SETTLEMENT_TOO_MANY"
 	errNotRefundable          = errStateConflict
 	errNotClosable            = errStateConflict
 	errRefundRejected         = errChannelError

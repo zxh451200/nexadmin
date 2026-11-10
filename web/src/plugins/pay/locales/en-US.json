@@ -47,6 +47,10 @@
     "configSet": "Configured",
     "verifyOk": "Signature OK",
     "verifyFail": "Signature failed",
+    "callbackReplay": {
+      "action": "Replay callback",
+      "done": "Replayed; latest result: {{result}}"
+    },
     "enabledOn": "Enabled",
     "enabledOff": "Disabled",
     "providers": {
@@ -333,6 +337,7 @@
       "bill": "Bill fetch",
       "billRows": "Bill rows",
       "billDigest": "Bill digest",
+      "downloadBill": "Download archived bill",
       "failedWithReason": "This reconciliation failed: {{reason}}",
       "emptyBecauseFailed": "The run failed and produced no differences; fix the reason above and run it again.",
       "channelBillEmpty": "The channel bill has 0 rows: it may not be generated yet or the day had no transactions. Verify the bill date and re-run."

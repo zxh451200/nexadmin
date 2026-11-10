@@ -341,13 +341,24 @@ func (s *service) listGroups(c *gin.Context) {
 		}
 	}
 	out := make([]groupResource, 0, len(rows))
+	// 一次取全页成员、按组装配：原来每组一条成员查询，一页 100 组就是 101 条 SQL
+	ids := make([]idgen.ID, 0, len(rows))
 	for _, g := range rows {
-		r, err := s.groupResource(c, g)
-		if err != nil {
+		ids = append(ids, g.ID)
+	}
+	var ms []groupMember
+	if len(ids) > 0 {
+		if err := s.db.WithContext(c.Request.Context()).Where("group_id IN ? AND tenant_id = ?", ids, mustTenant(c)).Find(&ms).Error; err != nil {
 			scimError(c, 500, "internal error")
 			return
 		}
-		out = append(out, r)
+	}
+	byGroup := make(map[idgen.ID][]groupMember, len(rows))
+	for _, m := range ms {
+		byGroup[m.GroupID] = append(byGroup[m.GroupID], m)
+	}
+	for _, g := range rows {
+		out = append(out, s.assembleGroup(g, byGroup[g.ID]))
 	}
 	c.JSON(200, gin.H{"schemas": []string{"urn:ietf:params:scim:api:messages:2.0:ListResponse"}, "totalResults": total, "startIndex": start, "itemsPerPage": len(out), "Resources": out})
 }
@@ -431,6 +442,11 @@ func (s *service) groupResource(c *gin.Context, g group) (groupResource, error) 
 	if err := s.db.WithContext(c.Request.Context()).Where("group_id = ? AND tenant_id = ?", g.ID, mustTenant(c)).Find(&ms).Error; err != nil {
 		return groupResource{}, err
 	}
+	return s.assembleGroup(g, ms), nil
+}
+
+// assembleGroup 把已查出的成员装配成 SCIM Group 资源（单条与列表共用）。
+func (s *service) assembleGroup(g group, ms []groupMember) groupResource {
 	r := groupResource{Schemas: []string{"urn:ietf:params:scim:schemas:core:2.0:Group"}, ID: g.ID.String(), ExternalID: g.ExternalID, DisplayName: g.DisplayName}
 	for _, m := range ms {
 		r.Members = append(r.Members, struct {
@@ -438,5 +454,5 @@ func (s *service) groupResource(c *gin.Context, g group) (groupResource, error) 
 			Display string `json:"display,omitempty"`
 		}{Value: m.UserID.String()})
 	}
-	return r, nil
+	return r
 }

@@ -47,6 +47,9 @@ export interface VerificationQuery extends PageQuery {
   status?: VerifyStatus
   /** '1' = 显示全部留痕；缺省按号码折叠成最新一次 */
   all?: '1'
+  /** 核验时间窗（yyyy-MM-dd，含两端）；缺省不限 */
+  from?: string
+  to?: string
 }
 
 export function useVerifications(query: VerificationQuery) {
@@ -55,6 +58,20 @@ export function useVerifications(query: VerificationQuery) {
     queryFn: () => api.get<Page<Verification>>(`${BASE}/verifications`, query),
     placeholderData: keepPreviousData,
   })
+}
+
+/** 台账导出：真后端回 xlsx Blob。失败由拦截器解码 Blob 里的 JSON 错误体并弹提示。 */
+export async function exportVerifications(query: Pick<VerificationQuery, 'keyword' | 'status' | 'from' | 'to' | 'all'>): Promise<void> {
+  const { http } = await import('@/framework/request/http')
+  const res = await http.get<unknown>(`${BASE}/verifications/export`, { params: { ...query }, responseType: 'blob' })
+  const blob = res.data instanceof Blob ? res.data : new Blob(['\uFEFF', String(res.data)], { type: 'text/csv;charset=utf-8' })
+  const stamp = new Date().toISOString().slice(0, 19).replace(/-|:|T/g, '')
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `realname-${stamp}.xlsx`
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 export function useParse() {

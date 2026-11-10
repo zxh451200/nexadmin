@@ -1,0 +1,46 @@
+{{define "content"}}
+<section class="section page-head">
+  <div class="container">
+    <p class="fig">{{.T "products.fig"}}</p>
+    <h1 class="page-title">{{if .ProductTermName}}{{.TF "products.categoryTitleTag" .ProductTermName}}{{else}}{{.T "products.title"}}{{end}}</h1>
+    {{if .ProductCategories}}
+    <nav class="chips term-nav" aria-label="{{.T "products.categoryNavAria"}}">
+      <a class="chip{{if not .ProductTermName}} active{{end}}" href="{{.URL "/products"}}">{{.T "products.allProducts"}}</a>
+      {{range .ProductCategories}}<a class="chip{{if .Active}} active{{end}}" href="{{$.URL "/products"}}?category={{.Slug}}"{{if .Active}} aria-current="true"{{end}}>{{.Name}}</a>{{end}}
+    </nav>
+    {{end}}
+  </div>
+</section>
+<section class="section" style="padding-top:0">
+  <div class="container">
+    {{if .Products}}
+    <div class="product-grid">
+      {{range .Products}}
+      <a class="product-card" href="{{$.URL "/products"}}/{{.Slug}}">
+        <span class="product-card-cover">
+          {{if .CoverURL}}<img src="{{.CoverURL}}" alt="" loading="lazy">{{else}}<span class="product-card-fallback" aria-hidden="true">{{initial .Title}}</span>{{end}}
+        </span>
+        <span class="product-card-body">
+          <span class="product-card-title">{{.Title}}</span>
+          {{if .Summary}}<span class="product-card-summary">{{.Summary}}</span>{{end}}
+          {{if .Categories}}<span class="product-card-terms">{{range .Categories}}<span class="term-badge">{{.Title}}</span>{{end}}</span>{{end}}
+          {{if .PriceMin}}<span class="product-card-price">
+            {{if and .PriceMax (gt .PriceMax .PriceMin)}}{{printf "%.2f" .PriceMin}} - {{printf "%.2f" .PriceMax}}{{else}}{{printf "%.2f" .PriceMin}}{{end}} {{.Currency}}{{if .PriceUnit}} / {{.PriceUnit}}{{end}}
+          </span>{{end}}
+        </span>
+      </a>
+      {{end}}
+    </div>
+    {{else}}
+    <p class="empty">{{.T "products.empty"}}</p>
+    {{end}}
+    {{if gt .ProductsTotalPages 1}}
+    <nav class="pager" aria-label="{{.T "products.pagerAria"}}">
+      {{if .ProductsPrevURL}}<a class="pager-link" rel="prev" href="{{.ProductsPrevURL}}">← {{.T "products.prev"}}</a>{{end}}
+      <span class="pager-status">{{.TF "products.pageOf" .ProductsPage .ProductsTotalPages}}</span>
+      {{if .ProductsNextURL}}<a class="pager-link" rel="next" href="{{.ProductsNextURL}}">{{.T "products.next"}} →</a>{{end}}
+    </nav>
+    {{end}}
+  </div>
+</section>
+{{end}}

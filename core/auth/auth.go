@@ -347,6 +347,22 @@ func (s *Service) issuePair(ctx context.Context, u *User, previousRefresh string
 
 func revokedKey(jti string) string { return cache.GlobalKey("auth", "revoked", jti) }
 
+// rotatedKey 记录「这个 refresh 已被轮换、后继是谁」（value = 新 refresh 的 JTI）。
+// refresh token 是 bearer 凭证：轮换后旧值再次出现即被盗/重放，按被盗处理——
+// 吊销后继对并拒绝，合法用户与攻击者都强制重新登录（对齐 OAuth 轮换复用检测的通行做法）。
+func rotatedKey(jti string) string { return cache.GlobalKey("auth", "rotated", jti) }
+
+// revokeRefreshTTL / revokeAccessTTL 是吊销键的存活期：取配置与运行时 policy 的较大值。
+// policy 可被调大（SetSessionPolicyProvider），只按配置值存吊销键会在令牌仍有效时
+// 提前过期——登出后的令牌就「复活」了。
+func (s *Service) revokeRefreshTTL() time.Duration {
+	return max(s.refreshTTL, s.sessionPolicy().IdleTTL)
+}
+
+func (s *Service) revokeAccessTTL() time.Duration {
+	return max(s.accessTTL, s.sessionPolicy().AccessTTL)
+}
+
 func (s *Service) parse(ctx context.Context, token, kind string) (*Claims, error) {
 	var cl Claims
 	t, err := jwt.ParseWithClaims(token, &cl, func(*jwt.Token) (any, error) { return s.secret, nil },
@@ -431,11 +447,20 @@ func (s *Service) Decorate(ctx context.Context, u *User) {
 	}
 }
 
-// Refresh 用 refresh token 换一对新令牌（旧 refresh 立即作废）。
+// Refresh 用 refresh token 换一对新令牌（旧 refresh 立即作废，并留下轮换标记）。
 func (s *Service) Refresh(ctx context.Context, refreshToken string) (Pair, error) {
 	cl, err := s.parse(ctx, refreshToken, kindRefresh)
 	if err != nil {
 		return Pair{}, err
+	}
+	// 轮换复用检测：这个 refresh 之前已经轮换过（标记里存着后继 JTI）——本次使用是被盗
+	// 或重放，把后继对一并吊销并拒绝。非 singleSession 模式没有租约保护，全靠这道闸。
+	if s.cache != nil {
+		if succ, gerr := s.cache.Get(ctx, rotatedKey(cl.ID)); gerr == nil && succ != "" {
+			_ = s.revoke(ctx, succ, s.revokeRefreshTTL())
+			_ = s.revoke(ctx, cl.ID, s.revokeRefreshTTL())
+			return Pair{}, ErrInvalidToken
+		}
 	}
 	u, err := s.Profile(ctx, cl)
 	if err != nil {
@@ -459,6 +484,12 @@ func (s *Service) Refresh(ctx context.Context, refreshToken string) (Pair, error
 	if err != nil {
 		return Pair{}, err
 	}
+	// 记录轮换链：旧 refresh JTI → 新 refresh JTI，标记活到旧令牌自然过期为止。
+	if s.cache != nil {
+		if ncl, perr := s.parse(ctx, pair.RefreshToken, kindRefresh); perr == nil {
+			_ = s.cache.Set(ctx, rotatedKey(cl.ID), ncl.ID, time.Until(cl.ExpiresAt.Time))
+		}
+	}
 	// 轮换后的令牌继续挂同一个会话归属，外部 IdP 发起的登出才能吊销到它。
 	s.notifySessionTrackers(ctx, pair)
 	return pair, nil
@@ -469,19 +500,19 @@ func (s *Service) RevokeSession(ctx context.Context, cl *Claims) error {
 	if err := s.revoke(ctx, cl.ID, time.Until(cl.ExpiresAt.Time)); err != nil {
 		return err
 	}
-	return s.revoke(ctx, cl.RID, s.refreshTTL)
+	return s.revoke(ctx, cl.RID, s.revokeRefreshTTL())
 }
 
 // RevokeByJTI 按令牌 ID 吊销一对 access / refresh。外部 IdP 发起的单点登出只拿得到
 // NameID（没有本地会话上下文），调用方按登录时记下的 jti 调这里。
 func (s *Service) RevokeByJTI(ctx context.Context, accessJTI, refreshJTI string) error {
 	if accessJTI != "" {
-		if err := s.revoke(ctx, accessJTI, s.accessTTL); err != nil {
+		if err := s.revoke(ctx, accessJTI, s.revokeAccessTTL()); err != nil {
 			return err
 		}
 	}
 	if refreshJTI != "" {
-		return s.revoke(ctx, refreshJTI, s.refreshTTL)
+		return s.revoke(ctx, refreshJTI, s.revokeRefreshTTL())
 	}
 	return nil
 }

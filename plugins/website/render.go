@@ -143,6 +143,17 @@ var tplFuncs = template.FuncMap{
 	},
 	"fmtDate":   func(l Language, v any) string { return formatDate(l, v) },
 	"hasPrefix": strings.HasPrefix,
+	// isMediaURL 判断视频地址是不是浏览器能直接播放的媒体文件（.mp4/.webm/.ogg/.m4v）：
+	// 是就渲染 <video> 控件，否则（YouTube 等页面地址）渲染一条外链按钮。
+	"isMediaURL": func(s string) bool {
+		u := strings.ToLower(strings.TrimSpace(s))
+		for _, ext := range []string{".mp4", ".webm", ".ogg", ".m4v"} {
+			if strings.HasSuffix(u, ext) {
+				return true
+			}
+		}
+		return false
+	},
 	"titleLines": func(s string) []string {
 		return strings.Split(strings.TrimSpace(s), "\n")
 	},
@@ -171,6 +182,8 @@ var pageTmpl = map[string]*template.Template{
 	"plugin":     mustPage("plugin"),
 	"news":       mustPage("news"),
 	"post":       mustPage("post"),
+	"products":   mustPage("products"),
+	"product":    mustPage("product"),
 	"page":       mustPage("page"),
 	"contact":    mustPage("contact"),
 	"notfound":   mustPage("notfound"),
@@ -220,6 +233,19 @@ type siteView struct {
 	OGImage  string // 绝对地址；空 = 用站点默认分享图
 	Noindex  bool
 	Posts    []Post
+	// ProductsPage / ProductsTotalPages 是公开产品列表的分页状态（products.tmpl 渲染翻页链接）。
+	Products          []Product
+	ProductsPage      int
+	ProductsTotalPages int
+	// ProductCategories 是产品页的类目导航（含当前高亮那一项）。
+	ProductCategories []termLink
+	// ProductTermName / ProductTermQuery 说明这一页是类目归档：空 = 全部产品；
+	// 归档筛选必须进 canonical 与翻页链接，语义同 NewsTermQuery。
+	ProductTermName  string
+	ProductTermQuery string
+	Product          *Product
+	// ProductsRelated 是详情页的「同类产品」推荐（同类目已上架商品，不含自身）。
+	ProductsRelated []Product
 	// NewsPage / NewsTotalPages 是公开新闻列表的分页状态（news.tmpl 渲染翻页链接）。
 	NewsPage       int
 	NewsTotalPages int
@@ -393,6 +419,34 @@ func (v *siteView) newsURL(page int) string {
 		vals.Set("page", strconv.Itoa(page))
 	}
 	base := v.URL("/news")
+	if enc := vals.Encode(); enc != "" {
+		return base + "?" + enc
+	}
+	return base
+}
+
+// ProductsPrevURL / ProductsNextURL 返回公开产品列表的上一页/下一页链接，语义同新闻列表。
+func (v *siteView) ProductsPrevURL() string {
+	if v.ProductsPage <= 1 {
+		return ""
+	}
+	return v.productsURL(v.ProductsPage - 1)
+}
+
+func (v *siteView) ProductsNextURL() string {
+	if v.ProductsPage < 1 || v.ProductsPage >= v.ProductsTotalPages {
+		return ""
+	}
+	return v.productsURL(v.ProductsPage + 1)
+}
+
+// productsURL 拼公开产品列表的链接：类目归档筛选跟着翻页走（口径同 newsURL）。
+func (v *siteView) productsURL(page int) string {
+	vals, _ := url.ParseQuery(v.ProductTermQuery)
+	if page > 1 {
+		vals.Set("page", strconv.Itoa(page))
+	}
+	base := v.URL("/products")
 	if enc := vals.Encode(); enc != "" {
 		return base + "?" + enc
 	}

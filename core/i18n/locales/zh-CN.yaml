@@ -71,6 +71,7 @@ tenant:
   package_in_use: "套餐仍被租户使用，不能删除"
   package_not_found: "租户套餐不存在"
   status_invalid: "租户状态不正确"
+  tenant_in_use: "该租户名下仍有 %s 等数据，先清空租户内用户与业务数据后再删除"
 notice:
   audience_all_forbidden: 您的数据范围不是“全部”，不能向全员发布公告，请改为指定角色、部门或用户
   audience_dept_forbidden: 所选发布部门中包含超出您数据范围的部门
@@ -238,6 +239,9 @@ pay:
   PAY_PAYOUT_SETTLEMENT_TAKEN: 这张结算单已进入其他打款批次，不能重复出款
   PAY_DATE_INVALID: 日期格式必须是 YYYY-MM-DD
   PAY_EXPORT_TOO_MANY: 导出超过 10000 行上限，请缩小日期或筛选范围
+  PAY_SETTLEMENT_TOO_MANY: 账期内资金单超过 10000 行上限，请缩小账期范围再生成结算
+  PAY_CALLBACK_NOT_REPLAYABLE: 这条回调不能重放：只有验签通过且落账失败（原单缺失/金额不符）的回调才支持
+  PAY_BILL_BODY_MISSING: 这张对账任务没有归档账单（仅渠道来源的对账有），请改用渠道后台导出
   plugin_inactive: 支付中台插件未启用或授权已失效
   id_no_invalid: 证件号不合法：请核对出生日期、地区码与末位校验码
   id_no_masked: 证件号是脱敏回显值，请重新输入完整号码
@@ -360,6 +364,8 @@ ticket:
   notify_new_ticket_title: 有新工单待认领
   notify_overdue_response_title: "%d 张工单已超响应时限"
   notify_overdue_resolution_title: "%d 张工单已超解决时限"
+  notify_escalated_title: "超时工单已升级优先级"
+  sla_escalation: "SLA 超时自动升级"
 totp:
   already_enabled: 两步验证已开启
   not_enrolled: 尚未绑定两步验证，请先扫码绑定

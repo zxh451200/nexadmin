@@ -13,6 +13,7 @@ package devicehub
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"sync"
 	"time"
 
@@ -26,16 +27,23 @@ import (
 type collector struct {
 	svc *Service
 
+	// base 是采集 worker 的父 ctx：插件生命周期（Start 注入），兜底 Background。
+	// Reload 绝不能拿 HTTP 请求的 ctx 派生 worker——响应一结束它就被取消，
+	// 刚重启的 worker 会静默退出，表现为「改完配置曲线不再更新」且无任何报错。
+	base    context.Context
 	mu      sync.Mutex
 	cancels map[idgen.ID]context.CancelFunc // deviceId → 该设备 worker 的取消函数
 }
 
 func newCollector(svc *Service) *collector {
-	return &collector{svc: svc, cancels: map[idgen.ID]context.CancelFunc{}}
+	return &collector{svc: svc, base: context.Background(), cancels: map[idgen.ID]context.CancelFunc{}}
 }
 
 // Start 起全部启用设备的 worker；由 plugin.Start 调用。
 func (c *collector) Start(ctx context.Context) {
+	c.mu.Lock()
+	c.base = ctx
+	c.mu.Unlock()
 	var devices []Device
 	if err := c.svc.db.WithContext(ctx).Where("enabled = ?", true).Find(&devices).Error; err != nil {
 		c.svc.logWarn("devicehub: load devices failed", "err", err.Error())
@@ -46,14 +54,23 @@ func (c *collector) Start(ctx context.Context) {
 	}
 }
 
+// workerParent 返回 worker 的父 ctx；Start 之前（单测/未启程）兜底 Background。
+func (c *collector) workerParent() context.Context {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.base
+}
+
 // Reload 重启一台设备的 worker（设备/测点配置变更后调用）。
-func (c *collector) Reload(ctx context.Context, deviceID idgen.ID) {
+// 故意不收 ctx：调用方手里的是 HTTP 请求 ctx，worker 的生命周期必须挂在插件上。
+func (c *collector) Reload(deviceID idgen.ID) {
+	parent := c.workerParent()
 	c.stopDevice(deviceID)
 	var d Device
-	if err := c.svc.db.WithContext(ctx).Where("id = ? AND enabled = ?", deviceID, true).Take(&d).Error; err != nil {
+	if err := c.svc.db.WithContext(parent).Where("id = ? AND enabled = ?", deviceID, true).Take(&d).Error; err != nil {
 		return // 已停用/不存在：worker 保持停止
 	}
-	c.startDevice(ctx, &d)
+	c.startDevice(parent, &d)
 }
 
 func (c *collector) stopDevice(deviceID idgen.ID) {
@@ -273,31 +290,64 @@ func (c *collector) downsampleOnce(ctx context.Context) {
 		type agg struct {
 			min, max, sum float64
 			cnt           int
+			// str / hasStr 记录本批该桶最后一条字符串读数（rows 按 ts 升序，后者覆盖前者）。
+			// 字符串没有 min/max/avg，只留最后值进小时桶，否则 sweeper 删原始行后字符串读数就没有长期历史。
+			str    string
+			hasStr bool
 		}
 		acc := map[bucketKey]*agg{}
 		for _, r := range rows {
-			if r.NumValue == nil {
-				continue
-			}
 			k := bucketKey{r.PointID, r.TS.Truncate(time.Hour)}
 			a := acc[k]
 			if a == nil {
-				a = &agg{min: *r.NumValue, max: *r.NumValue, sum: *r.NumValue, cnt: 1}
+				a = &agg{}
 				acc[k] = a
+			}
+			if r.NumValue == nil {
+				if r.StrValue != "" {
+					a.str, a.hasStr = r.StrValue, true
+				}
+				continue
+			}
+			if a.cnt == 0 {
+				a.min, a.max, a.sum = *r.NumValue, *r.NumValue, *r.NumValue
 			} else {
 				a.min = min64(a.min, *r.NumValue)
 				a.max = max64(a.max, *r.NumValue)
 				a.sum += *r.NumValue
-				a.cnt++
 			}
+			a.cnt++
 		}
 		err := c.svc.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 			for k, a := range acc {
-				row := ReadingAgg{PointID: k.pointID, Bucket: k.bucket, NumMin: a.min, NumMax: a.max, NumAvg: a.sum / float64(a.cnt), Cnt: a.cnt}
-				if err := tx.Where("point_id = ? AND bucket = ?", k.pointID, k.bucket).
-					Assign(ReadingAgg{NumMin: a.min, NumMax: a.max, NumAvg: a.sum / float64(a.cnt), Cnt: a.cnt}).
-					FirstOrCreate(&row).Error; err != nil {
+				// 同桶跨批次必须合并而不是覆盖：批的边界按 ts 切，一个小时的读数完全可能横跨两批，
+				// Assign 整行覆盖会把上一批已经聚合进去的 min/max/cnt 丢掉。
+				var old ReadingAgg
+				err := tx.Where("point_id = ? AND bucket = ?", k.pointID, k.bucket).Take(&old).Error
+				switch {
+				case errors.Is(err, gorm.ErrRecordNotFound):
+					row := ReadingAgg{PointID: k.pointID, Bucket: k.bucket, NumMin: a.min, NumMax: a.max, NumAvg: a.sum / float64(a.cnt), Cnt: a.cnt, StrLast: a.str}
+					if err := tx.Create(&row).Error; err != nil {
+						return err
+					}
+				case err != nil:
 					return err
+				default:
+					cnt := old.Cnt + a.cnt
+					updates := map[string]any{
+						"num_min": min64(old.NumMin, a.min),
+						"num_max": max64(old.NumMax, a.max),
+						"num_avg": (old.NumAvg*float64(old.Cnt) + a.sum) / float64(cnt),
+						"cnt":     cnt,
+					}
+					if a.hasStr {
+						updates["str_last"] = a.str
+					}
+					if err := tx.Model(&ReadingAgg{}).
+						Where("point_id = ? AND bucket = ?", k.pointID, k.bucket).
+						Updates(updates).Error; err != nil {
+						return err
+					}
 				}
 			}
 			ids := make([]idgen.ID, 0, len(rows))

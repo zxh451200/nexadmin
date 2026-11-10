@@ -345,9 +345,115 @@ func absURL(base, u string) string {
 	return strings.TrimSuffix(base, "/") + u
 }
 
-// GET /p/:slug —— 自定义页。
-func (h *siteHandler) pageDetail(c *gin.Context) {
+// GET /products —— 产品列表：?category=类目 收窄，?page=N 翻页。
+// 与新闻列表同构：查询式归档不占 /products/:slug 的下一段，不会和商品 slug 抢路由。
+func (h *siteHandler) productsList(c *gin.Context) {
+	ctx := c.Request.Context()
 	lang := langOf(c)
+	v, err := h.baseView(ctx, lang.Code, 0)
+	if err != nil {
+		c.String(http.StatusInternalServerError, "site unavailable")
+		return
+	}
+	page, _ := strconv.Atoi(c.Query("page"))
+	term := termFilter{}
+	// 类目不存在就是 404，而不是「这个筛选下暂时没内容」：前者是链接写错了，
+	// 后者是还没上商品，两者给访客的信息完全不同。
+	if slug := strings.TrimSpace(c.Query("category")); slug != "" {
+		row, cerr := h.svc.ProductCategoryBySlug(ctx, slug)
+		if cerr != nil {
+			h.notFound(c, nil)
+			return
+		}
+		term = termFilter{Kind: "category", Slug: row.Slug}
+		v.ProductTermName = row.Title
+		v.ProductTermQuery = url.Values{"category": {row.Slug}}.Encode()
+		v.Title = v.composeTitle(v.TF("products.categoryTitleTag", row.Title))
+	}
+	products, total, err := h.svc.PublishedProductsPage(ctx, lang.Code, term, page, productsPageSize)
+	if err != nil {
+		c.String(http.StatusInternalServerError, "site unavailable")
+		return
+	}
+	cats, err := h.svc.ListProductCategories(ctx)
+	if err != nil {
+		c.String(http.StatusInternalServerError, "site unavailable")
+		return
+	}
+	active := ""
+	if term.Kind == "category" {
+		active = term.Slug
+	}
+	v.ProductCategories = ProductCategoryLinks(cats, active)
+	v.Products = products
+	v.ProductsPage, v.ProductsTotalPages = pageOf(page), pagesOf(total, productsPageSize)
+	// 第 1 页才是规范地址：?page=2 不进 canonical，避免搜索引擎把每页当独立页面收录。
+	v.Noindex = v.ProductsPage > 1
+	if v.ProductTermName == "" {
+		v.Title = v.composeTitle(v.T("products.pageTitleTag"))
+	}
+	v.Desc = v.TF("products.pageDesc", v.SiteName)
+	h.render(c, "products", http.StatusOK, v)
+}
+
+// GET /products/:slug —— 产品详情（对标阿里商详：图集 / 价格 / 起订量 / 属性 / 富文本详情）。
+func (h *siteHandler) productDetail(c *gin.Context) {
+	lang := langOf(c)
+	slug := c.Param("slug")
+	p, err := h.svc.PublishedProductBy(c.Request.Context(), slug, lang.Code)
+	if err != nil {
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			c.String(http.StatusInternalServerError, "site unavailable")
+			return
+		}
+		// 未上架（不存在、草稿或该语言未发布）按 404 走；唯一例外是
+		// 管理端签发的预览链接：令牌有效就照常渲染，发布前能看到真实版式。
+		draft, derr := h.svc.ProductBySlug(c.Request.Context(), slug, lang.Code)
+		if derr != nil || !verifyProductPreview(h.previewKey, slug, c.Query("preview"), time.Now()) {
+			h.notFound(c, nil)
+			return
+		}
+		p = draft
+	}
+	v, err := h.baseView(c.Request.Context(), lang.Code, 0)
+	if err != nil {
+		c.String(http.StatusInternalServerError, "site unavailable")
+		return
+	}
+	v.Title = v.composeTitle(p.Title)
+	// SEO 标题是完整标题的覆盖：填了就替换「商品标题」，站点名后缀保持一致的组合规律。
+	if p.SeoTitle != "" {
+		v.SeoTitle = v.composeTitle(p.SeoTitle)
+	}
+	switch {
+	case p.SeoDesc != "":
+		v.Desc = p.SeoDesc
+	case p.Summary != "":
+		v.Desc = p.Summary
+	default:
+		v.Desc = v.SiteDesc
+	}
+	// 商品级关键词优先：留空才回退站点设置，与新闻详情的取舍一致。
+	if p.SeoKeywords != "" {
+		v.SeoKeywords = p.SeoKeywords
+	}
+	v.Product = p
+	// 同类产品推荐：同类目已上架商品（不含自身）；加载失败不挡详情，推荐区静默缺席。
+	if related, rerr := h.svc.PublishedRelatedProducts(c.Request.Context(), lang.Code, p); rerr == nil {
+		v.ProductsRelated = related
+	} else if h.log != nil {
+		h.log.Warn("website: 产品同类推荐加载失败", zap.Error(rerr), zap.String("slug", slug))
+	}
+	// og:image 只认绝对 URL；商品设了主图就用主图，否则模板回退站点默认图。
+	v.OGImage = absURL(v.BaseURL, p.CoverURL)
+	v.Noindex = p.Noindex
+	// hreflang、og:locale:alternate 与语言切换器都遍历 v.Languages：未发布的语言不能出现在这里。
+	v.Languages = visibleLanguages(p.Published(), p.PublishedJSON)
+	h.render(c, "product", http.StatusOK, v)
+}
+
+// GET /p/:slug —— 自定义页。
+func (h *siteHandler) pageDetail(c *gin.Context) {	lang := langOf(c)
 	slug := c.Param("slug")
 	p, err := h.svc.PublishedPageBy(c.Request.Context(), slug, lang.Code)
 	if err != nil {

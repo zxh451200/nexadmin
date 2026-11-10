@@ -71,6 +71,7 @@ tenant:
   package_in_use: "This package is still used by tenants and cannot be deleted."
   package_not_found: "The tenant package does not exist."
   status_invalid: "Invalid tenant status."
+  tenant_in_use: "This tenant still has data (e.g. %s). Clear its users and business data before deleting."
 notice:
   audience_all_forbidden: Your data scope is not "All", so you cannot publish to everyone. Choose specific roles, departments or users instead
   audience_dept_forbidden: The selected departments include some outside your data scope
@@ -238,6 +239,9 @@ pay:
   PAY_PAYOUT_SETTLEMENT_TAKEN: This settlement already belongs to another payout batch; duplicate disbursement is not allowed
   PAY_DATE_INVALID: Date must be in YYYY-MM-DD format.
   PAY_EXPORT_TOO_MANY: Export exceeds the 10000-row limit; narrow the date or filter range.
+  PAY_SETTLEMENT_TOO_MANY: More than 10000 records in this period; narrow the settlement period and try again.
+  PAY_CALLBACK_NOT_REPLAYABLE: This callback cannot be replayed; only verified callbacks that failed to apply (missing order / amount mismatch) are supported.
+  PAY_BILL_BODY_MISSING: No archived bill for this task (channel-sourced reconciliation only); export it from the channel portal instead.
   plugin_inactive: Pay plugin is not enabled or its license has lapsed
   id_no_invalid: Invalid ID number - check the birth date, region code and check digit
   id_no_masked: The ID number is the masked display value; enter the full number
@@ -360,6 +364,8 @@ ticket:
   notify_new_ticket_title: New ticket needs an owner
   notify_overdue_response_title: "Response SLA breached: %d"
   notify_overdue_resolution_title: "Resolution SLA breached: %d"
+  notify_escalated_title: "Overdue ticket priority escalated"
+  sla_escalation: "SLA escalation"
 totp:
   already_enabled: Two-factor authentication is already enabled
   not_enrolled: Two-factor authentication is not enrolled yet; scan the QR code first

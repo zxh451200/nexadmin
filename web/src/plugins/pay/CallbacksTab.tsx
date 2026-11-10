@@ -1,6 +1,8 @@
 import { useState } from 'react'
-import { Eye } from 'lucide-react'
+import { Eye, RotateCcw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
+import { Can } from '@/framework/auth/Can'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
@@ -8,7 +10,7 @@ import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
-import { useCallbacks, useChannels, type CallbackQuery, type PayCallback } from './api'
+import { callbackReplayable, useCallbacks, useChannels, useReplayCallback, type CallbackQuery, type PayCallback } from './api'
 import { formatTime } from './format'
 import { ListErrorBanner } from './ListErrorBanner'
 
@@ -21,9 +23,20 @@ export function CallbacksTab() {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [detail, setDetail] = useState<PayCallback | null>(null)
+  const replay = useReplayCallback()
 
   const { data, isLoading, isError, refetch } = useCallbacks({ ...filters, page, pageSize })
   const { data: channels = [] } = useChannels()
+
+  // 重放：后端幂等（重复回调得 duplicate 不发事件），前端只做一次确认
+  const onReplay = async (cb: PayCallback) => {
+    try {
+      const fresh = await replay.mutateAsync(cb.id)
+      toast.success(t('plugin_pay.callbackReplay.done', { result: fresh.result }))
+    } catch (e) {
+      toast.error(e instanceof Error && e.message ? e.message : t('common.operateFailed'))
+    }
+  }
 
   const columns: Column<PayCallback>[] = [
     {
@@ -110,9 +123,25 @@ export function CallbacksTab() {
         }}
         emptyText={t('plugin_pay.empty')}
         rowActions={(r) => (
-          <Button variant="ghost" size="icon" aria-label={t('common.detail')} onClick={() => setDetail(r)}>
-            <Eye aria-hidden="true" />
-          </Button>
+          <>
+            <Button variant="ghost" size="icon" aria-label={t('common.detail')} onClick={() => setDetail(r)}>
+              <Eye aria-hidden="true" />
+            </Button>
+            {callbackReplayable(r) ? (
+              <Can perm="pay:edit">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={t('plugin_pay.callbackReplay.action')}
+                  title={t('plugin_pay.callbackReplay.action')}
+                  disabled={replay.isPending}
+                  onClick={() => void onReplay(r)}
+                >
+                  <RotateCcw aria-hidden="true" />
+                </Button>
+              </Can>
+            ) : null}
+          </>
         )}
       />
       <ResponsiveDialog

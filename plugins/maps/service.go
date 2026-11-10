@@ -112,7 +112,11 @@ func (s *service) Config(ctx context.Context) (Config, error) {
 	}
 	get := func(p Provider) ProviderConfig {
 		keys := settingKeys[p]
-		return ProviderConfig{Enabled: m[keys[0]] == "true", PublicKey: m[keys[1]], ServerKey: m[serverKeyName(p)]}
+		sk, err := secretDecrypt(m[serverKeyName(p)])
+		if err != nil {
+			sk = "" // 解密失败（密钥轮换/数据损坏）按未配置处理，不把密文当 key 用
+		}
+		return ProviderConfig{Enabled: m[keys[0]] == "true", PublicKey: m[keys[1]], ServerKey: sk}
 	}
 	return Config{ProviderAMap: get(ProviderAMap), ProviderBaidu: get(ProviderBaidu), ProviderGoogle: get(ProviderGoogle)}, nil
 }
@@ -149,8 +153,13 @@ func (s *service) SaveConfig(ctx context.Context, in configReq) (ConfigView, err
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		for p, cfg := range next {
 			keys := settingKeys[p]
+			// 服务端 Key 是可计费凭据：落库前加密（DB 备份/拖库不泄露）；空值沿用旧值已在上面处理
+			sk, err := secretEncrypt(cfg.ServerKey)
+			if err != nil {
+				return err
+			}
 			for k, v := range map[string]string{
-				keys[0]: boolText(cfg.Enabled), keys[1]: cfg.PublicKey, serverKeyName(p): cfg.ServerKey,
+				keys[0]: boolText(cfg.Enabled), keys[1]: cfg.PublicKey, serverKeyName(p): sk,
 			} {
 				if err := tx.Save(&setting{Key: k, Value: v}).Error; err != nil {
 					return err

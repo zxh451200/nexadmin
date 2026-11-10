@@ -44,9 +44,14 @@ func (s *service) VideoConfig(ctx context.Context) (VideoConfig, error) {
 	if provider == "" {
 		provider = ProviderCloudflare
 	}
+	// KeyB 是签名/调用凭据：落库时已加密，这里解密；解密失败按未配置处理，不把密文当 key 用
+	keyB, err := secretDecrypt(m[keyKeyB])
+	if err != nil {
+		keyB = ""
+	}
 	return VideoConfig{
 		Enabled: m[keyEnabled] == "true", Provider: provider,
-		KeyA: m[keyKeyA], KeyB: m[keyKeyB], KeyC: m[keyKeyC],
+		KeyA: m[keyKeyA], KeyB: keyB, KeyC: m[keyKeyC],
 	}, nil
 }
 
@@ -82,9 +87,14 @@ func (s *service) SaveVideoConfig(ctx context.Context, in configReq) (VideoConfi
 		}
 	}
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// KeyB 是可计费凭据：落库前加密（DB 备份/拖库不泄露）
+		keyB, err := secretEncrypt(next.KeyB)
+		if err != nil {
+			return err
+		}
 		for k, v := range map[string]string{
 			keyEnabled: boolText(next.Enabled), keyProvider: next.Provider,
-			keyKeyA: next.KeyA, keyKeyB: next.KeyB, keyKeyC: next.KeyC,
+			keyKeyA: next.KeyA, keyKeyB: keyB, keyKeyC: next.KeyC,
 		} {
 			if err := tx.Save(&setting{Key: k, Value: v}).Error; err != nil {
 				return err

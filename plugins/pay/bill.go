@@ -1,11 +1,14 @@
 package pay
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/csv"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -103,11 +106,27 @@ func (s *Service) RunChannelReconcileTask(ctx context.Context, channelCode, bill
 	return s.applyReconcile(ctx, reconcileRun{
 		channelCode: channelCode, billDate: billDate, subjectID: subjectID,
 		source: ReconcileSourceChannel, billDigest: digest, billRows: len(rows),
+		// 归档解析后的账单行（与 Digest 对应）：财务复核要能下载留存
+		billBody: billRowsCSV(rows),
 		sections: []reconcileSection{
 			{local: localPays, channel: channelPays},
 			{isRefund: true, local: localRefunds, channel: channelRefunds},
 		},
 	})
+}
+
+// billRowsCSV 把参与比对的账单行序列化成 CSV（表头 + 行，逗号转义）。
+// 这是「对账用到的渠道流水」的留存物，与原始渠道文件内容可能有解析差异，以 Digest 关联。
+func billRowsCSV(rows []BillRow) string {
+	var buf bytes.Buffer
+	w := csv.NewWriter(&buf)
+	_ = w.Write([]string{"kind", "payment_no", "refund_no", "amount_minor", "fee_minor", "channel_txn_id"})
+	for _, r := range rows {
+		_ = w.Write([]string{r.Kind, r.PaymentNo, r.RefundNo,
+			strconv.FormatInt(r.AmountMinor, 10), strconv.FormatInt(r.FeeMinor, 10), r.ChannelTxnID})
+	}
+	w.Flush()
+	return buf.String()
 }
 
 // reconcileBillFailure 把一次「没得出结论」的对账显式落盘：任务复用/新建，

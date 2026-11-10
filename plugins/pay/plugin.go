@@ -94,6 +94,8 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.GET("/capabilities", core.Perm("pay:list"), h.capabilities)
 	// 回调审计
 	g.GET("/callbacks", core.Perm("pay:list"), h.listCallbacks)
+	// 人工重放已验签但落账失败的回调（高危独立动作 + 操作日志）
+	g.POST("/callbacks/:id/replay", core.Perm("pay:edit"), d.OperLogMiddleware("pay", "callback_replay"), h.replayCallback)
 	// 资金事件出站箱（投递台账与死信处置）
 	g.GET("/outbox", core.Perm("pay:list"), h.listOutbox)
 	// 静态段注册在 /outbox/:eventId 之前（与 /orders/stats 同一套匹配约定）。
@@ -105,6 +107,7 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.GET("/reconcile/tasks", core.Perm("pay:settle"), h.listReconcileTasks)
 	g.POST("/reconcile/tasks", core.Perm("pay:settle"), h.runReconcileTask)
 	g.GET("/reconcile/tasks/:id/diffs", core.Perm("pay:settle"), h.listReconcileDiffs)
+	g.GET("/reconcile/tasks/:id/bill", core.Perm("pay:settle"), h.downloadReconcileBill)
 	g.POST("/reconcile/diffs/:id/resolve", core.Perm("pay:settle"), h.resolveReconcileDiff)
 	// 结算与打款
 	g.GET("/commission-rules", core.Perm("pay:settle"), h.listCommissionRules)

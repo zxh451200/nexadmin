@@ -55,4 +55,5 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.POST("/enroll", h.enroll)
 	g.POST("/confirm", h.confirm)
 	g.POST("/disable", h.disable)
+	g.POST("/recovery-codes", h.regenRecovery)
 }

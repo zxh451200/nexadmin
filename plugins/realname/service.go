@@ -250,7 +250,10 @@ type ListQuery struct {
 	Status  string
 	Scope   *datascope.Scope
 	// Latest 为真时同一号码只展示最近一次结论（默认），重复提交折叠成一行。
-	Latest   bool
+	Latest bool
+	// From/To 是核验时间窗（created_at，左闭右开）；零值 = 不限。
+	From     time.Time
+	To       time.Time
 	Page     int
 	PageSize int
 }
@@ -271,6 +274,7 @@ func (s *Service) ListVerifications(ctx context.Context, q ListQuery) ([]Verific
 		like := "%" + kw + "%"
 		tx = tx.Where("LOWER(name_masked) LIKE LOWER(?) OR LOWER(number_masked) LIKE LOWER(?) OR LOWER(remark) LIKE LOWER(?)", like, like, like)
 	}
+	tx = applyRange(tx, q)
 	if q.Latest {
 		folded, ok := s.foldLatest(ctx, tx, q, kw)
 		if ok {
@@ -322,7 +326,30 @@ func (s *Service) foldLatest(ctx context.Context, tx *gorm.DB, q ListQuery, kw s
 		like := "%" + kw + "%"
 		inner = inner.Where("LOWER(name_masked) LIKE LOWER(?) OR LOWER(number_masked) LIKE LOWER(?) OR LOWER(remark) LIKE LOWER(?)", like, like, like)
 	}
+	inner = applyRange(inner, q)
 	return tx.Where("id IN (?)", inner.Group("number_hash")), true
+}
+
+// applyRange 把时间窗条件加到台账查询上；折叠子查询与外层必须同条件，语义才是
+// 「时间窗内每个号码最新一次结论」。
+func applyRange(tx *gorm.DB, q ListQuery) *gorm.DB {
+	if !q.From.IsZero() {
+		tx = tx.Where("created_at >= ?", q.From)
+	}
+	if !q.To.IsZero() {
+		tx = tx.Where("created_at < ?", q.To)
+	}
+	return tx
+}
+
+// exportMaxRows 是台账导出的行数上限：台账是审计流水，超出上限就该用更窄的筛选分批导。
+const exportMaxRows = 20000
+
+// ExportVerifications 按当前筛选导出台账（复用列表查询与数据范围裁剪，只放大页容量）。
+func (s *Service) ExportVerifications(ctx context.Context, q ListQuery) ([]Verification, error) {
+	q.Page, q.PageSize = 1, exportMaxRows
+	rows, _, err := s.ListVerifications(ctx, q)
+	return rows, err
 }
 
 // DeleteVerifications 删除台账行。受限账号只能删自己发起的记录：

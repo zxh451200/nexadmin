@@ -47,6 +47,10 @@
     "configSet": "已配置",
     "verifyOk": "验签通过",
     "verifyFail": "验签失败",
+    "callbackReplay": {
+      "action": "重放回调",
+      "done": "重放完成，最新结论：{{result}}"
+    },
     "enabledOn": "启用",
     "enabledOff": "停用",
     "providers": {
@@ -333,6 +337,7 @@
       "bill": "账单取数",
       "billRows": "账单行数",
       "billDigest": "账单摘要",
+      "downloadBill": "下载账单归档",
       "failedWithReason": "本次对账失败：{{reason}}",
       "emptyBecauseFailed": "对账失败，未生成差异行；请按上面的失败原因处理后重跑。",
       "channelBillEmpty": "渠道账单为 0 行：可能账单尚未生成或当日确实没有成交，请核对账单日期后重跑。"

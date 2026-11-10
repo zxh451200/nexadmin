@@ -324,8 +324,26 @@ func (s *Service) SetStatus(ctx context.Context, id idgen.ID, status string) (*T
 	return s.GetTenant(ctx, id)
 }
 
-// DeleteTenants 批量删除租户记录（不会清理该租户下的业务数据）。
+// DeleteTenants 批量删除租户记录。租户行可以删，但名下还有用户/角色/文件时拒绝：
+// 租户删除没有级联清业务数据的能力（各业务表逐表清理的口径没有任何一处定义过），
+// 静默留下悬挂数据比报错更危险。真要清空一个租户，先在租户内把用户清完再删。
 func (s *Service) DeleteTenants(ctx context.Context, ids []idgen.ID) error {
+	for table, column := range map[string]string{
+		"sys_user":   "tenant_id",
+		"sys_role":   "tenant_id",
+		"sys_dept":   "tenant_id",
+		"sys_file":   "tenant_id",
+		"sys_notice": "tenant_id",
+	} {
+		var n int64
+		if err := s.db.WithContext(ctx).Table(table).
+			Where(column+" IN ?", toInt64(ids)).Count(&n).Error; err != nil {
+			return err
+		}
+		if n > 0 {
+			return conflict("tenant.tenant_in_use", table)
+		}
+	}
 	err := s.db.WithContext(ctx).Where("id IN ?", toInt64(ids)).Delete(&Tenant{}).Error
 	ctenant.Invalidate(ids...)
 	return err
