@@ -23,7 +23,7 @@ export function QueueRow({
   footer?: ReactNode
 }) {
   return (
-    <div className={cn('rounded-lg transition-colors', selected ? 'bg-accent' : 'hover:bg-accent/60')}>
+    <div className={cn('rounded-lg transition-colors', selected ? 'bg-accent/60' : 'hover:bg-accent/40')}>
       <div className="flex items-start gap-2">
         {checkbox ? <div className="flex ps-2.5 pt-3">{checkbox}</div> : null}
         <button type="button" onClick={onSelect} className={cn('min-w-0 flex-1 py-2 text-start', checkbox ? 'pe-2.5' : 'px-2.5')}>
@@ -56,10 +56,10 @@ export function QueueStatus({ tone = 'neutral', children }: { tone?: keyof typeo
   )
 }
 
-/** 行首头像位：统一圆角方块 + 比页面亮一档的底色，和品牌标识、菜单图标同一套形状语言 */
+/** 行首头像位：品牌渐变小方块，和主按钮、Logo 同一套形状与配色语言 */
 export function QueueAvatar({ children }: { children: ReactNode }) {
   return (
-    <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent text-sm font-semibold text-foreground/80">
+    <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-brand-gradient text-sm font-semibold text-primary-foreground">
       {children}
     </span>
   )

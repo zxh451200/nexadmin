@@ -208,7 +208,7 @@ export function DictDataPanel({ type, onBack }: Props) {
           <ExportCsvButton
             filename={`${t('dict.data.exportFilename')}-${type.code}`}
             perm="dict:list"
-            size="sm"
+            iconOnly
             getRows={() => fetchDictDataForExport(type.id)}
             columns={[
               { header: t('dict.data.label'), value: (r) => r.label },
@@ -221,19 +221,23 @@ export function DictDataPanel({ type, onBack }: Props) {
           />
         </div>
       </div>
-      <Input
-        value={keyword}
-        onChange={(e) => setKeyword(e.target.value)}
-        placeholder={t('dict.data.searchPlaceholder')}
-        aria-label={t('common.search')}
-      />
       <DataTable<DictDataRow>
         columns={columns}
         columnSettingsKey="dictData"
+        toolbar={
+          <Input
+            value={keyword}
+            onChange={(e) => setKeyword(e.target.value)}
+            placeholder={t('dict.data.searchPlaceholder')}
+            aria-label={t('common.search')}
+            className="h-8 w-full max-w-72"
+          />
+        }
         data={shown}
         rowKey="id"
         loading={isLoading}
         pagination={false}
+        batchBarPlacement="root"
         sortable={has('dict:update') && isPlatform ? { onReorder: (ids) => sort.mutateAsync(ids) } : undefined}
         selection={{ selected, onChange: setSelected }}
         batchActions={(ids) => (

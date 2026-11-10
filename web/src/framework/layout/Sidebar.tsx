@@ -157,7 +157,7 @@ export function Sidebar({ menu, homePath = HOME_PATH, collapsed = false, onNavig
                   <DynamicIcon name={group.icon} className="size-5 shrink-0 md:size-4" />
                   <span className="flex-1 truncate text-start">{t(group.title)}</span>
                   <ChevronDown
-                    className={cn('size-4 shrink-0 text-muted-foreground transition-transform duration-200 motion-reduce:transition-none', !open && '-rotate-90 rtl:rotate-90')}
+                    className={cn('size-4 shrink-0 text-muted-foreground transition-transform duration-(--motion-base) ease-(--ease-standard) motion-reduce:transition-none', !open && '-rotate-90 rtl:rotate-90')}
                     aria-hidden="true"
                   />
                 </button>

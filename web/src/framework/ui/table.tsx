@@ -11,7 +11,7 @@ Table.displayName = 'Table'
 // 表头不带底色：深色下 bg-muted/40 只在卡片上抬 2 个明度点，读起来是“接缝”而不是分区；
 // 浅色下本来就几乎看不见。统一成同一张面，靠底部分隔线与弱化文字区分表头。
 const TableHeader = React.forwardRef<HTMLTableSectionElement, React.HTMLAttributes<HTMLTableSectionElement>>(
-  ({ className, ...props }, ref) => <thead ref={ref} className={cn('[&_tr]:border-b', className)} {...props} />,
+  ({ className, ...props }, ref) => <thead ref={ref} className={cn('[&_tr]:border-b [&_tr]:border-border', className)} {...props} />,
 )
 TableHeader.displayName = 'TableHeader'
 
@@ -27,10 +27,12 @@ const TableFooter = React.forwardRef<HTMLTableSectionElement, React.HTMLAttribut
 )
 TableFooter.displayName = 'TableFooter'
 
+// 行线只用边框色的一半：满强度边框在深色卡面上跳 23 个明度点，十几行叠起来读成 ruled 笼子。
+// 表头保持满强度，于是「表头一条实线 + 行间发丝线」成了唯一的强弱层级。
 const TableRow = React.forwardRef<HTMLTableRowElement, React.HTMLAttributes<HTMLTableRowElement>>(({ className, ...props }, ref) => (
   <tr
     ref={ref}
-    className={cn('border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted', className)}
+    className={cn('border-b border-border/50 transition-colors hover:row-hover data-[state=selected]:row-selected', className)}
     {...props}
   />
 ))
@@ -46,7 +48,7 @@ const TableHead = React.forwardRef<HTMLTableCellElement, React.ThHTMLAttributes<
 TableHead.displayName = 'TableHead'
 
 const TableCell = React.forwardRef<HTMLTableCellElement, React.TdHTMLAttributes<HTMLTableCellElement>>(({ className, ...props }, ref) => (
-  <td ref={ref} className={cn('px-3 py-2 align-middle has-[[role=checkbox]]:pe-0', className)} {...props} />
+  <td ref={ref} className={cn('px-3 py-1.5 align-middle has-[[role=checkbox]]:pe-0', className)} {...props} />
 ))
 TableCell.displayName = 'TableCell'
 

@@ -127,13 +127,46 @@
 }
 
 @utility tone-chip {
-  /* 图标胶囊：色调底 + 同色描边，替代原来清一色的品牌渐变方块 */
+  /* 图标胶囊：色调底 + 同色描边，替代原来清一色的品牌渐变方块。
+     深色不再单独加重（原 0.2/0.38）：状态列十几枚同色 chip 叠起来时，
+     加重档会把右缘拉成一条彩带；收回到与浅色同档后彩字本身在近黑底上
+     仍有 3:1 以上对比，胶囊只是辅助分区。 */
   background-color: hsl(var(--tone) / 0.14);
   border: 1px solid hsl(var(--tone) / 0.3);
   color: hsl(var(--tone));
+}
+
+@utility row-hover {
+  /* 行悬停层：把前景墨色按 6% 混进卡面（不透明）。
+     之前 hover:bg-muted/50 在深色卡面（12.5%）上只抬约 0.3 个明度点，
+     鼠标扫过表格是「死」的；混墨后深色抬到 ≈17%，浅色落在 ≈94% 灰，
+     两主题同一个来源。行尾钉住的 sticky 单元格也用同一个类，永不脱色。 */
+  background-color: color-mix(in oklab, hsl(var(--foreground)) 6%, hsl(var(--card)));
+}
+
+@utility row-selected {
+  /* 选中层：hover 的两倍墨量（深色 ≈21% 亮面，与 sidebar-accent 同档）。
+     勾选一行要明显强于扫过一行——之前选中 bg-muted/50 反而比 hover 还浅。 */
+  background-color: color-mix(in oklab, hsl(var(--foreground)) 12%, hsl(var(--card)));
+}
+
+@utility dark-atmo {
+  /* 深色画布氛围：主区顶部一层极淡的品牌色渐晕（靛蓝 + 青），往下极缓衰减。
+     纯平的 9.5% 岩板底在大面积留白页上读作「死黑平地」；渐晕给黑底一点纵深。
+     半透明压得很低、半径铺得很宽——氛围要的是「察觉不到但少了会平」，一旦能看出
+     光斑边界就变成了脏。只覆盖 .dark；侧栏/卡片是实底，会自然挡住渐晕。 */
   .dark & {
-    background-color: hsl(var(--tone) / 0.2);
-    border-color: hsl(var(--tone) / 0.38);
+    background-image:
+      radial-gradient(90rem 44rem at 20% -16rem, hsl(var(--brand-from) / 0.055), transparent 68%),
+      radial-gradient(100rem 48rem at 80% -18rem, hsl(var(--brand-to) / 0.045), transparent 68%);
+  }
+}
+
+@utility touch-only {
+  /* 只在无 hover 指针（触屏）显示：桌面窄栏的紧凑卡片有拖拽把手，
+     上/下移按钮是触屏端的排序替代品，在桌面上每卡两枚箭头是纯噪声。 */
+  @media (hover: hover) and (pointer: fine) {
+    display: none;
   }
 }
 
@@ -181,4 +214,42 @@
   font-family:
     'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;
   font-variant-numeric: tabular-nums;
+}
+
+@utility row-actions {
+  /* 表格行尾操作区（DataTable / TreeTable 的桌面分支共用）。
+     36px 图标按钮 + 8px 单元格内边距把行距顶到 53px；压到 28px 后行距 41px，
+     一屏多装三分之一行，触屏仍走 md 以下的卡片布局，触控区不受影响。
+     只认 size="icon" 的签名（h-10 w-10）——行里也有 size="sm" 的带文字按钮
+     （消息「删除」、代码生成器「选表」），把它们压成方块会截掉文案。 */
+  @media (width >= 48rem) {
+    & > button.h-10.w-10 {
+      block-size: calc(var(--spacing) * 7);
+      inline-size: calc(var(--spacing) * 7);
+    }
+  }
+  /* 危险色只在指向该按钮时出现：每行一个饱和红垃圾桶会把表格右缘拉成一条红点线，
+     删除成了整页最抢眼的重复元素。指针不支持 hover 时保持原样，语义不丢。 */
+  @media (hover: hover) and (pointer: fine) {
+    & > :is(button, a):not(:hover):not(:focus-visible).text-destructive,
+    & > :is(button, a):not(:hover):not(:focus-visible) .text-destructive {
+      color: hsl(var(--muted-foreground));
+    }
+  }
+}
+
+@utility drag-handle-quiet {
+  /* 把手静默：十几行拖拽点阵是标题列前最响的噪声，静止时藏起来，指到行上再浮现。
+     只在有真 hover 的指针上生效——触屏靠长按把手拖动，藏了就再也找不到。 */
+  @media (hover: hover) and (pointer: fine) {
+    opacity: 0;
+    transition: opacity 120ms ease-out;
+    .group:hover &,
+    &:focus-visible {
+      opacity: 1;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      transition: none;
+    }
+  }
 }

@@ -41,7 +41,7 @@ export function StatCard({ title, value, hint, delta, deltaLabel, icon, spark, p
     <Card
       data-tone={tone}
       className={cn(
-        'tone-rule group relative overflow-hidden pt-px transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg motion-reduce:transition-none motion-reduce:hover:translate-y-0',
+        'tone-rule group relative overflow-hidden pt-px transition-all duration-(--motion-base) ease-(--ease-standard) hover:-translate-y-0.5 hover:shadow-lg motion-reduce:transition-none motion-reduce:hover:translate-y-0',
         className,
       )}
     >
@@ -56,7 +56,7 @@ export function StatCard({ title, value, hint, delta, deltaLabel, icon, spark, p
             </p>
           </div>
           {icon ? (
-            <div className="tone-chip flex size-9 shrink-0 items-center justify-center rounded-xl shadow-xs transition-colors duration-200 group-hover:shadow-md md:size-11 [&_svg]:size-4 md:[&_svg]:size-5">
+            <div className="tone-chip flex size-9 shrink-0 items-center justify-center rounded-xl shadow-xs transition-colors duration-(--motion-base) ease-(--ease-standard) group-hover:shadow-md md:size-11 [&_svg]:size-4 md:[&_svg]:size-5">
               {icon}
             </div>
           ) : null}

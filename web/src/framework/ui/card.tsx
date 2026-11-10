@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils'
  * 卡片底板的类串。`Card` 用它；宿主必须是 li / section / form / a 这类语义标签时，
  * 直接 `cn(cardSurface, ...)` 复用同一份样式，别再手抄一遍类名（抄了迟早和 Card 漂移）。
  */
-export const cardSurface = 'card-edge rounded-lg border bg-card text-card-foreground transition-shadow duration-200'
+export const cardSurface = 'card-edge rounded-lg border bg-card text-card-foreground transition-shadow duration-(--motion-base) ease-(--ease-standard)'
 
 const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(({ className, ...props }, ref) => (
   <div ref={ref} className={cn(cardSurface, className)} {...props} />

@@ -178,7 +178,7 @@ export function AppLayout() {
   }
 
   return (
-    <div className="flex h-dvh bg-background text-foreground">
+    <div className="dark-atmo flex h-dvh bg-background text-foreground">
       <a
         href="#main-content"
         className="sr-only z-50 rounded-md bg-primary px-3 py-2 text-primary-foreground focus:not-sr-only focus:absolute focus:inset-s-2 focus:top-2"
@@ -186,7 +186,7 @@ export function AppLayout() {
         {t('layout.skipToContent')}
       </a>
 
-      <aside className={cn('hidden shrink-0 border-e border-border transition-[width] duration-200 motion-reduce:transition-none md:block', collapsed ? 'w-16' : 'w-64')}>
+      <aside className={cn('hidden shrink-0 border-e border-border transition-[width] duration-(--motion-base) ease-(--ease-standard) motion-reduce:transition-none md:block', collapsed ? 'w-16' : 'w-64')}>
         <Sidebar menu={menu} homePath={homePath} collapsed={collapsed} onToggleCollapse={toggleCollapsed} />
       </aside>
 

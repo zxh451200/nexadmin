@@ -65,7 +65,7 @@ export function FileDropField({ files, onChange, multiple, accept, labelledBy, d
     return (
       <div
         key={`${f.name}-${f.size}`}
-        className="flex items-center gap-3 rounded-lg border border-border bg-muted/40 px-3 py-2.5 dark:bg-black/20"
+        className="flex items-center gap-3 rounded-lg border border-border bg-muted/40 px-3 py-2.5 dark:bg-white/[0.05]"
       >
         <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary ring-1 ring-inset ring-primary/15">
           <Icon className="size-4" aria-hidden="true" />
@@ -147,7 +147,7 @@ export function FileDropField({ files, onChange, multiple, accept, labelledBy, d
                 ? 'border-destructive/60 bg-destructive/5'
                 : dragging
                   ? 'border-primary bg-accent/60'
-                  : 'border-input bg-muted/40 hover:border-primary/60 hover:bg-accent/40 dark:bg-black/20',
+                  : 'border-input bg-muted/40 hover:border-primary/60 hover:bg-accent/40 dark:border-white/16 dark:bg-white/[0.04] dark:hover:border-primary/60 dark:hover:bg-accent/40',
               disabled && 'cursor-not-allowed opacity-60',
             )}
           >

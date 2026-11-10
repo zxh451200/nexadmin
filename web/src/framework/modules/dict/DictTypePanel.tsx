@@ -158,7 +158,7 @@ export function DictTypePanel({ selectedId, onSelect, onDeleted }: Props) {
           <ExportCsvButton
             filename={t('dict.type.exportFilename')}
             perm="dict:list"
-            size="sm"
+            iconOnly
             getRows={() => fetchDictTypesForExport(keyword)}
             columns={[
               { header: t('dict.type.name'), value: (r) => r.name },
@@ -172,22 +172,26 @@ export function DictTypePanel({ selectedId, onSelect, onDeleted }: Props) {
           />
         </div>
       </div>
+      {/* 回车提交；放大镜作为前缀图标收进输入框，不再单独占一枚按钮 */}
       <form
-        className="flex gap-2"
         onSubmit={(e) => {
           e.preventDefault()
           setKeyword(input.trim())
         }}
       >
-        <Input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder={t('dict.type.searchPlaceholder')}
-          aria-label={t('common.search')}
-        />
-        <Button type="submit" variant="outline" size="icon" aria-label={t('common.search')} className="shrink-0">
-          <Search className="h-4 w-4" aria-hidden="true" />
-        </Button>
+        <div className="relative">
+          <Search
+            className="pointer-events-none absolute inset-s-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+            aria-hidden="true"
+          />
+          <Input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder={t('dict.type.searchPlaceholder')}
+            aria-label={t('common.search')}
+            className="ps-8"
+          />
+        </div>
       </form>
       <DataTable<DictTypeRow>
         columns={columns}
@@ -196,6 +200,7 @@ export function DictTypePanel({ selectedId, onSelect, onDeleted }: Props) {
         loading={isLoading}
         pagination={false}
         onRowClick={onSelect}
+        batchBarPlacement="root"
         sortable={keyword || !has('dict:update') || !isPlatform ? undefined : { onReorder: (ids) => sort.mutateAsync(ids) }}
         selection={{ selected, onChange: setSelected }}
         batchActions={(ids) => (

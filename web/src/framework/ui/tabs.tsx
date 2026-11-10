@@ -12,7 +12,8 @@ export const segmentedListClass =
   'inline-flex h-auto w-fit max-w-full items-center justify-start gap-0.5 overflow-x-auto overflow-y-hidden rounded-lg border bg-transparent p-0.5 text-muted-foreground'
 
 export const segmentedItemClass =
-  'inline-flex min-h-10 items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-3.5 py-1.5 text-sm font-medium transition-colors hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-xs md:min-h-8'
+  // 不带 transition-colors：选中底色一渐变，内容已切、胶囊还紫在上一格，看起来像切换有延迟
+  'inline-flex min-h-10 items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-3.5 py-1.5 text-sm font-medium hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-xs md:min-h-8'
 
 const TabsList = React.forwardRef<
   React.ElementRef<typeof TabsPrimitive.List>,

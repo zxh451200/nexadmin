@@ -721,7 +721,7 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
   // 这是树形表拖动「发涩/乱跳」的主因。布局保持稳定，只有被拖行压暗。
 
   const renderToggle = (node: T, big?: boolean) => {
-    const size = big ? 'h-9 w-9' : 'h-8 w-8'
+    const size = big ? 'h-9 w-9' : 'h-7 w-7'
     if (!node.children?.length) return <span className={cn('inline-block shrink-0', size)} aria-hidden="true" />
     const open = forceExpandAll || expanded.has(node.id)
     return (
@@ -739,7 +739,7 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
       >
         <ChevronRight
           className={cn(
-            'h-4 w-4 transition-transform duration-150 motion-reduce:transition-none rtl:rotate-180',
+            'h-4 w-4 transition-transform duration-(--motion-fast) ease-(--ease-standard) motion-reduce:transition-none rtl:rotate-180',
             open ? 'rotate-90 rtl:rotate-90' : 'rotate-0 rtl:rotate-180',
           )}
           aria-hidden="true"
@@ -748,7 +748,7 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
     )
   }
 
-  const colSpan = visibleColumns.length + (onReorder ? 1 : 0) + (selection ? 1 : 0) + (rowActions ? 1 : 0)
+  const colSpan = visibleColumns.length + (selection ? 1 : 0) + (rowActions ? 1 : 0)
   // 只有表格真的横向溢出时才吸附操作列
   const { ref: scrollRef, overflowing } = useOverflowX<HTMLDivElement>()
   const pinActions = overflowing && !!rowActions
@@ -826,20 +826,10 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
       parentId,
       nodes,
       nodes.map((node, index) => {
-        // 有拖动列时缩进加在拖动列上：箭头/名称自然跟随，层级一眼可见
+        // 缩进加在标题格上：箭头/名称自然跟随，层级一眼可见；拖动把手并进同一格，不设独立空白列
         const indent = INDENT[Math.min(depth, INDENT.length - 1)]
         const cells = (
           <>
-            {onReorder ? (
-              // 把手也按深度缩进（用 padding 而非单元格宽度，避免把后面的列整体推走）
-              <TableCell className="w-14 py-0">
-                <div className={indent}>
-                  <span className="inline-flex" onKeyDown={(e) => onRowKeyDown(e, node.id)}>
-                    <SortableHandle />
-                  </span>
-                </div>
-              </TableCell>
-            ) : null}
             {selection ? (
               <TableCell className="w-12 py-0">
                 <SelectBox checked={rowChecked(node)} onChange={() => toggleRowSelection(node)} label={t('dataTable.selectRow')} />
@@ -849,6 +839,12 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
               <TableCell key={c.key} className={cn('whitespace-nowrap', alignClass(c.align))}>
                 {ci === 0 ? (
                   <div className={cn('flex items-center gap-1', indent)}>
+                    {onReorder ? (
+                      // 把手静默（见 drag-handle-quiet），hover 浮现；占的 24px 折进首列左内边距的观感里
+                      <span className="inline-flex" onKeyDown={(e) => onRowKeyDown(e, node.id)}>
+                        <SortableHandle className="drag-handle-quiet h-8 w-6 md:h-8 md:w-6" />
+                      </span>
+                    ) : null}
                     {renderToggle(node)}
                     <div className="min-w-0">{renderCell(c, node, index)}</div>
                   </div>
@@ -862,11 +858,14 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
                 className={cn(
                   'whitespace-nowrap text-end',
                   pinActions &&
-                    'sticky inset-e-0 z-10 bg-card shadow-[inset_1px_0_0_hsl(var(--border))] group-hover:bg-muted',
+                    (selectedSet.has(node.id)
+                      ? // 选中行不挂 hover 色：row-selected 不透明，行体与钉住的行尾同色
+                        'sticky inset-e-0 z-10 row-selected shadow-[inset_1px_0_0_hsl(var(--border))]'
+                      : 'sticky inset-e-0 z-10 bg-card shadow-[inset_1px_0_0_hsl(var(--border))] group-hover:row-hover'),
                 )}
                 onClick={(e) => e.stopPropagation()}
               >
-                <div className="flex items-center justify-end gap-1">{rowActions(node)}</div>
+                <div className="row-actions flex items-center justify-end gap-1">{rowActions(node)}</div>
               </TableCell>
             ) : null}
           </>
@@ -874,11 +873,11 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
         return (
           <Fragment key={node.id}>
             {onReorder ? (
-              <SortableItem id={node.id} as="tr" className={cn('group', onRowClick && 'cursor-pointer', selectedSet.has(node.id) && 'bg-muted/50', revealed.has(node.id) && 'tree-row-in')} {...clickProps(node)}>
+              <SortableItem id={node.id} as="tr" className={cn('group', onRowClick && 'cursor-pointer', selectedSet.has(node.id) && 'row-selected', revealed.has(node.id) && 'tree-row-in')} {...clickProps(node)}>
                 {cells}
               </SortableItem>
             ) : (
-              <TableRow className={cn('group', onRowClick && 'cursor-pointer', selectedSet.has(node.id) && 'bg-muted/50', revealed.has(node.id) && 'tree-row-in')} {...clickProps(node)}>
+              <TableRow className={cn('group', onRowClick && 'cursor-pointer', selectedSet.has(node.id) && 'row-selected', revealed.has(node.id) && 'tree-row-in')} {...clickProps(node)}>
                 {cells}
               </TableRow>
             )}
@@ -895,11 +894,6 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
         <Table>
         <TableHeader>
           <TableRow>
-            {onReorder ? (
-              <TableHead className="w-14">
-                <span className="sr-only">{t('dataTable.dragHandle')}</span>
-              </TableHead>
-            ) : null}
             {selection ? (
               <TableHead className="w-12">
                 <SelectBox checked={headChecked} onChange={toggleAllRows} label={t('dataTable.selectAllRows')} />
@@ -962,9 +956,9 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
           <div
             className={cn(
               dense
-                ? 'rounded-lg border border-border bg-card px-2 py-1 transition-colors hover:bg-muted/50'
+                ? 'rounded-lg border border-border bg-card px-2 py-1 transition-colors hover:row-hover'
                 : 'card-edge rounded-xl border border-border bg-card px-3 py-2.5',
-              selectedSet.has(node.id) && 'bg-muted/50',
+              selectedSet.has(node.id) && 'row-selected',
               revealed.has(node.id) && 'tree-row-in',
             )}
           >

@@ -22,6 +22,8 @@ export interface ExportCsvButtonProps<T> {
   perm?: string
   variant?: ButtonProps['variant']
   size?: ButtonProps['size']
+  /** 只显示下载图标（aria-label + title 兜底）：页头按钮组挤（主从双栏的左栏）时用 */
+  iconOnly?: boolean
 }
 
 /**
@@ -46,7 +48,7 @@ export async function collectAllPages<T>(
  * 导出当前筛选结果为 CSV：表头与取值都留在前端，因此列名天然跟字典、跟语言走。
  * 数据量可能超过同步上限的列表请改走导出中心（后端 job），不要用这个按钮兜大表。
  */
-export function ExportCsvButton<T>({ filename, columns, getRows, perm, variant = 'outline', size }: ExportCsvButtonProps<T>) {
+export function ExportCsvButton<T>({ filename, columns, getRows, perm, variant = 'outline', size, iconOnly }: ExportCsvButtonProps<T>) {
   const { t } = useTranslation()
   const [busy, setBusy] = useState(false)
 
@@ -68,9 +70,16 @@ export function ExportCsvButton<T>({ filename, columns, getRows, perm, variant =
   }
 
   const button = (
-    <Button variant={variant} size={size} disabled={busy} onClick={() => void run()}>
+    <Button
+      variant={variant}
+      size={iconOnly ? 'icon' : size}
+      disabled={busy}
+      onClick={() => void run()}
+      aria-label={iconOnly ? t('common.export') : undefined}
+      title={iconOnly ? t('common.export') : undefined}
+    >
       <Download aria-hidden="true" />
-      {t('common.export')}
+      {iconOnly ? <span className="sr-only">{t('common.export')}</span> : t('common.export')}
     </Button>
   )
   return perm ? <Can perm={perm}>{button}</Can> : button

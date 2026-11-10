@@ -44,6 +44,11 @@ export interface DataTableProps<T> {
   className?: string
   /** 嵌在已有卡片/分区里时用：不再自带边框与投影，避免"卡片里再画一圈" */
   bare?: boolean
+  /**
+   * 批量条放哪：viewport（默认）浮在视口底边；root 锚定在表格容器底边。
+   * 主从双栏页（字典管理）必须用 root——两个表格都往视口 portal 会叠在一起。
+   */
+  batchBarPlacement?: 'viewport' | 'root'
 }
 
 function SelectBox({
@@ -81,6 +86,7 @@ export function DataTable<T>({
   emptyText,
   className,
   bare,
+  batchBarPlacement,
 }: DataTableProps<T>) {
   const { t } = useTranslation()
   const { ref: rootRef, compact: isMobile, phone } = useCompactLayout()
@@ -203,7 +209,7 @@ export function DataTable<T>({
         }
       : {}
 
-  const colSpan = visibleColumns.length + (sortEnabled ? 1 : 0) + (selection ? 1 : 0) + (rowActions ? 1 : 0)
+  const colSpan = visibleColumns.length + (selection ? 1 : 0) + (rowActions ? 1 : 0)
   // 只有表格真的横向溢出时才吸附操作列，避免窄表里出现一块游离的白色块
   const { ref: scrollRef, overflowing } = useOverflowX<HTMLDivElement>()
   const pinActions = overflowing && !!rowActions
@@ -220,11 +226,6 @@ export function DataTable<T>({
         <Table>
         <TableHeader>
           <TableRow>
-            {sortEnabled ? (
-              <TableHead className="w-14">
-                <span className="sr-only">{t('dataTable.dragHandle')}</span>
-              </TableHead>
-            ) : null}
             {selection ? (
               <TableHead className="w-12">
                 <SelectBox checked={headState} onChange={toggleAll} label={t('dataTable.selectAllRows')} />
@@ -272,14 +273,9 @@ export function DataTable<T>({
           {!loading
             ? rows.map((row, index) => {
                 const id = getKey(row)
-                const cls = cn('group', onRowClick && 'cursor-pointer', selected.includes(id) && 'bg-muted/50')
+                const cls = cn('group', onRowClick && 'cursor-pointer', selected.includes(id) && 'row-selected')
                 const cells = (
                   <>
-                    {sortEnabled ? (
-                      <TableCell className="w-14 py-0">
-                        <SortableHandle />
-                      </TableCell>
-                    ) : null}
                     {selection ? (
                       <TableCell className="w-12 py-0">
                         <SelectBox
@@ -289,9 +285,19 @@ export function DataTable<T>({
                         />
                       </TableCell>
                     ) : null}
-                    {visibleColumns.map((c) => (
+                    {visibleColumns.map((c, ci) => (
                       <TableCell key={c.key} className={cn('whitespace-nowrap', alignClass(c.align))}>
-                        {renderCell(c, row, index)}
+                        {ci === 0 && sortEnabled ? (
+                          // 把手并进首列，不设独立空白列：静默时只折进首列左内边距的观感，hover 浮现
+                          <div className="flex items-center gap-1">
+                            <span className="inline-flex">
+                              <SortableHandle className="drag-handle-quiet h-8 w-6 md:h-8 md:w-6" />
+                            </span>
+                            <span className="min-w-0">{renderCell(c, row, index)}</span>
+                          </div>
+                        ) : (
+                          renderCell(c, row, index)
+                        )}
                       </TableCell>
                     ))}
                     {rowActions ? (
@@ -299,11 +305,14 @@ export function DataTable<T>({
                         className={cn(
                           'whitespace-nowrap text-end',
                           pinActions &&
-                            'sticky inset-e-0 z-10 bg-card shadow-[inset_1px_0_0_hsl(var(--border))] group-hover:bg-muted',
+                            (selected.includes(id)
+                              ? // 选中行不挂 hover 色：row-selected 不透明，行体与钉住的行尾同色
+                                'sticky inset-e-0 z-10 row-selected shadow-[inset_1px_0_0_hsl(var(--border))]'
+                              : 'sticky inset-e-0 z-10 bg-card shadow-[inset_1px_0_0_hsl(var(--border))] group-hover:row-hover'),
                         )}
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <div className="flex items-center justify-end gap-1">{rowActions(row)}</div>
+                        <div className="row-actions flex items-center justify-end gap-1">{rowActions(row)}</div>
                       </TableCell>
                     ) : null}
                   </>
@@ -348,11 +357,11 @@ export function DataTable<T>({
             const id = getKey(row)
             const cls = cn(
               dense
-                ? 'rounded-lg border border-border bg-card px-2 py-1 transition-colors hover:bg-muted/50'
+                ? 'rounded-lg border border-border bg-card px-2 py-1 transition-colors hover:row-hover'
                 : bare
-                  ? 'border-b border-border/60 px-3 py-2.5 transition-colors last:border-0 hover:bg-muted/50'
+                  ? 'border-b border-border/60 px-3 py-2.5 transition-colors last:border-0 hover:row-hover'
                   : 'card-edge rounded-xl border border-border bg-card px-3 py-2.5',
-              selected.includes(id) && 'bg-muted/50',
+              selected.includes(id) && 'row-selected',
             )
             const body = (
               <MobileCardContent
@@ -363,7 +372,7 @@ export function DataTable<T>({
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
                 leading={
                   <>
-                    {sortEnabled ? <SortableHandle /> : null}
+                    {sortEnabled ? <SortableHandle className="drag-handle-quiet" /> : null}
                     {selection ? (
                       <SelectBox
                         checked={selected.includes(id)}
@@ -376,12 +385,14 @@ export function DataTable<T>({
                 actions={
                   sortEnabled ? (
                     <>
-                      {/* 上/下移放在底部操作行（与编辑同排）：竖堆在把手旁会把卡片撑高 */}
+                      {/* 上/下移放在底部操作行（与编辑同排）：竖堆在把手旁会把卡片撑高。
+                          触屏没有长按拖拽的确定性，靠它们排序；桌面窄栏有把手 + hover，
+                          两枚箭头每卡都挂是纯噪声，touch-only 收掉。 */}
                       <Button
                         type="button"
                         variant="ghost"
                         size="icon"
-                        className="size-8"
+                        className="size-8 touch-only"
                         disabled={index <= 0}
                         aria-label={t('dataTable.moveUp')}
                         onClick={() => void nudge(id, -1)}
@@ -392,7 +403,7 @@ export function DataTable<T>({
                         type="button"
                         variant="ghost"
                         size="icon"
-                        className="size-8"
+                        className="size-8 touch-only"
                         disabled={index >= rows.length - 1}
                         aria-label={t('dataTable.moveDown')}
                         onClick={() => void nudge(id, 1)}
@@ -425,7 +436,7 @@ export function DataTable<T>({
   const showToolbar = !!toolbar || !!settingsNode
 
   return (
-    <div ref={rootRef} className={cn('flex flex-col gap-3', className)}>
+    <div ref={rootRef} className={cn('relative flex flex-col gap-3', className)}>
       {showToolbar ? (
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">{toolbar}</div>
@@ -462,7 +473,7 @@ export function DataTable<T>({
       {pagination && pagination.total > 0 ? <TablePagination {...pagination} /> : null}
 
       {selection && selected.length > 0 ? (
-        <BatchBar count={selected.length} onClear={() => selection.onChange([])}>
+        <BatchBar count={selected.length} onClear={() => selection.onChange([])} mode={batchBarPlacement === 'root' ? 'sticky' : 'viewport'}>
           {typeof batchActions === 'function' ? batchActions(selected) : batchActions}
         </BatchBar>
       ) : null}
