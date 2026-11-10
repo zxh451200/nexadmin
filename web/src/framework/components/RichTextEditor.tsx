@@ -84,7 +84,7 @@ export function RichTextEditor({ value, onChange, placeholder, className, disabl
   if (!editor) return null
 
   return (
-    <div className={cn('nex-richtext-editor min-w-0 overflow-hidden rounded-md border border-input bg-background focus-within:ring-2 focus-within:ring-ring', className)}>
+    <div className={cn('nex-richtext-editor min-w-0 overflow-hidden rounded-md border border-input bg-background focus-within:ring-2 focus-within:ring-ring dark:border-white/14 dark:bg-white/[0.045]', className)}>
       {!disabled && <EditorToolbar editor={editor} onMedia={setMedia} />}
       <EditorContent editor={editor} />
       <MediaDialog

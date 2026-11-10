@@ -163,7 +163,7 @@ export function TreeSelect({
           onChange={(e) => setSearch(e.target.value)}
           placeholder={t('picker.searchPlaceholder')}
           aria-label={t('common.search')}
-          className="h-11 w-full rounded-md border border-input bg-background ps-9 pe-3 text-base focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring md:h-9 md:text-sm"
+          className="h-11 w-full rounded-md border border-input bg-background ps-9 pe-3 text-base focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring dark:border-white/14 dark:bg-white/[0.045] md:h-8 md:text-sm"
         />
       </div>
       <ul role="tree" aria-multiselectable={multiple} className="max-h-72 overflow-y-auto p-1">

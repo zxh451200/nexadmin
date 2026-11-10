@@ -15,7 +15,7 @@ const SheetOverlay = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <SheetPrimitive.Overlay
     // 手机侧栏抽屉同理：没有遮罩时抽屉只是“浮”在内容上，看不出层级
-    className={cn('fixed inset-0 z-50 bg-black/40 dark:bg-black/70', className)}
+    className={cn('fixed inset-0 z-50 bg-black/40 dark:bg-black/50', className)}
     {...props}
     ref={ref}
   />

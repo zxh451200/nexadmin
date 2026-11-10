@@ -56,7 +56,7 @@ export function FormGrid({ children, cols = 'auto', className }: FormGridProps) 
   } else {
     effective = cols
   }
-  return <div className={cn('grid grid-cols-1 gap-4', colsClass[effective], className)}>{children}</div>
+  return <div className={cn('grid grid-cols-1 gap-3', colsClass[effective], className)}>{children}</div>
 }
 
 /** FormGrid 的整行子项（如 Textarea、富文本、上传） */

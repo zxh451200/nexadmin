@@ -59,7 +59,7 @@ export function AiFilterBox({ scope, onApply, className }: AiFilterBoxProps) {
     <div className={cn('flex w-full flex-col gap-2', className)}>
       <form
         onSubmit={submit}
-        className="flex min-h-11 w-full items-center gap-2 rounded-full border border-input bg-background ps-4 pe-1.5 focus-within:ring-2 focus-within:ring-ring"
+        className="flex min-h-11 w-full items-center gap-2 rounded-full border border-input bg-background ps-4 pe-1.5 focus-within:ring-2 focus-within:ring-ring dark:border-white/14 dark:bg-white/[0.045]"
       >
         <Sparkles className="size-4 shrink-0 text-primary" aria-hidden="true" />
         <input

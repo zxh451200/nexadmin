@@ -13,7 +13,7 @@ const AlertDialogOverlay = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <AlertDialogPrimitive.Overlay
     // 同 dialog：Radix overlay 不带底色，必须自己铺遮罩，否则弹窗与页面同亮度
-    className={cn('fixed inset-0 z-50 bg-black/40 dark:bg-black/70', className)}
+    className={cn('fixed inset-0 z-50 bg-black/40 dark:bg-black/50', className)}
     {...props}
     ref={ref}
   />

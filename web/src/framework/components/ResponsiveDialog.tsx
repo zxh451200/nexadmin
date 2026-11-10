@@ -91,7 +91,7 @@ export function ResponsiveDialog({
           contentClassName,
         )}
       >
-        <DialogHeader className="shrink-0 border-b border-border p-6 pb-4 text-start">
+        <DialogHeader className="shrink-0 border-b border-border px-4 py-3 text-start dark:border-white/10">
           <DialogTitle>{title}</DialogTitle>
           {description ? (
             <DialogDescription>{description}</DialogDescription>
@@ -99,11 +99,11 @@ export function ResponsiveDialog({
             <DialogDescription className="sr-only">{title}</DialogDescription>
           )}
         </DialogHeader>
-        <div className={cn('min-h-0 flex-1 px-6 pb-6', fixedHeight ? 'overflow-hidden' : 'overflow-y-auto', className)}>
+        <div className={cn('min-h-0 flex-1 px-4 pt-4 pb-4', fixedHeight ? 'overflow-hidden' : 'overflow-y-auto', className)}>
           {children}
         </div>
         {footer ? (
-          <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border px-6 py-4">{footer}</div>
+          <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border px-4 py-2.5 dark:border-white/10">{footer}</div>
         ) : null}
       </DialogContent>
     </Dialog>

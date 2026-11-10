@@ -71,7 +71,7 @@ const Editor = React.forwardRef<HTMLTextAreaElement, EditorProps>(function Edito
   return (
     <div
       className={cn(
-        'relative flex rounded-md border border-input bg-background shadow-xs transition-[color,box-shadow,border-color] duration-150 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/40',
+        'relative flex rounded-md border border-input bg-background shadow-xs transition-[color,box-shadow,border-color] duration-150 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/40 dark:border-white/14 dark:bg-white/[0.045]',
         error && 'border-destructive focus-within:border-destructive focus-within:ring-destructive/30',
         boxClassName,
       )}

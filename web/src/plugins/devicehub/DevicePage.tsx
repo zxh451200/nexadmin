@@ -869,7 +869,7 @@ function DeviceFormDialog({ device, onOpenChange }: { device: Device | null; onO
         </>
       }
     >
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-3 sm:grid-cols-2">
         <Field label={t('plugin_devicehub.device.name')} required>
           <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} maxLength={100} />
         </Field>

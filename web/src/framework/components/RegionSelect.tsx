@@ -137,7 +137,7 @@ export function RegionSelect({ level = 3, value, onChange, allowClear = true, pl
           onChange={(e) => setSearch(e.target.value)}
           placeholder={t('picker.regionSearch')}
           aria-label={t('common.search')}
-          className="h-11 w-full rounded-md border border-input bg-background ps-9 pe-3 text-base focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring md:h-9 md:text-sm"
+          className="h-11 w-full rounded-md border border-input bg-background ps-9 pe-3 text-base focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring dark:border-white/14 dark:bg-white/[0.045] md:h-8 md:text-sm"
         />
       </div>
       {kw ? (

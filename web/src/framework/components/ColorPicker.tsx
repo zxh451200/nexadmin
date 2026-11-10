@@ -78,7 +78,7 @@ export function ColorPicker({ value, onChange, presets = PRESET_COLORS, allowCle
             setHex(e.target.value)
             onChange?.(e.target.value)
           }}
-          className="size-11 shrink-0 cursor-pointer rounded-md border border-input bg-background p-1 md:size-9"
+          className="size-11 shrink-0 cursor-pointer rounded-md border border-input bg-background p-1 dark:border-white/14 dark:bg-white/[0.045] md:size-8"
         />
         <input
           value={hex}
@@ -90,7 +90,7 @@ export function ColorPicker({ value, onChange, presets = PRESET_COLORS, allowCle
           placeholder="#RRGGBB"
           maxLength={7}
           aria-label={t('picker.customColor')}
-          className="num h-11 min-w-0 flex-1 rounded-md border border-input bg-background px-3 text-base focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring md:h-9 md:text-sm"
+          className="num h-11 min-w-0 flex-1 rounded-md border border-input bg-background px-3 text-base focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring dark:border-white/14 dark:bg-white/[0.045] md:h-8 md:text-sm"
         />
       </div>
     </PickerShell>
