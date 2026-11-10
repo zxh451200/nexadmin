@@ -26,6 +26,10 @@
       "empty": "还没有设备，先接入一台",
       "name": "设备名称",
       "protocol": "协议",
+      "section": {
+        "basic": "基本信息",
+        "connection": "连接"
+      },
       "endpoint": "连接地址",
       "endpointHint": "Modbus 形如 192.168.1.20:502；RTU 形如 COM3:9600,8,E,1",
       "endpointMqttHint": "broker 地址，形如 tcp://192.168.1.10:1883",
@@ -39,6 +43,7 @@
       },
       "configSecretHint": "密码类字段显示为 ***；保持 *** 提交即沿用已保存的密码",
       "enabled": "启用",
+      "enabledHint": "停用后不再采集，也不再接受控制指令",
       "location": "安装位置",
       "locationAddress": "安装地址",
       "required": "请填写设备名称与连接地址",
@@ -47,7 +52,14 @@
       "endpointOpcuaHint": "OPC UA 形如 opc.tcp://192.168.1.40:4840",
       "search": "搜索名称 / 编号",
       "list": "设备",
-      "noMatch": "没有匹配的设备"
+      "noMatch": "没有匹配的设备",
+      "lastSeenAgo": "最后在线 {{ago}}",
+      "neverSeen": "从未在线"
+    },
+    "live": {
+      "updated": "采集更新于 {{ago}}",
+      "stale": "数据滞后 · 采集更新于 {{ago}}",
+      "none": "暂无采集数据"
     },
     "point": {
       "add": "新增测点",
@@ -55,18 +67,29 @@
       "empty": "还没有测点，先配一个采集地址",
       "name": "测点名称",
       "address": "采集地址",
-      "addressHint": "Modbus：hr:40001 / ir:30001 / co:1 / di:1；MQTT：相对主题（motor/frequency）；S7：DB1.DBX0.0 / DB1.DBW2 / DB1.DBD4、M0.0 / MW10；OPC UA：ns=2;s=Tag1",
+      "addressFormat": {
+        "modbus-tcp": "hr:40001 / ir:30001 / co:1 / di:1",
+        "modbus-rtu": "hr:40001 / ir:30001 / co:1 / di:1",
+        "mqtt": "相对主题，如 motor/frequency",
+        "s7": "DB1.DBX0.0 / DB1.DBW2 / DB1.DBD4、M0.0 / MW10",
+        "opcua": "ns=2;s=Tag1"
+      },
       "unit": "单位",
+      "unitPlaceholder": "如 Hz",
       "dataType": "数据类型",
       "rw": "可写",
       "readonly": "只读",
       "readwrite": "可写",
+      "section": {
+        "basic": "基本信息",
+        "collect": "采集参数"
+      },
+      "collectHint": "显示值 = 原始值 ÷ 缩放系数（变频器 427.0→42.7Hz 填 10）；与上次存储值的偏差不超过死区就不落库（0 = 全存）",
       "scale": "缩放系数",
-      "scaleHint": "显示值 = 原始值 ÷ 系数（变频器 427.0→42.7Hz 填 10）",
       "deadband": "死区",
-      "deadbandHint": "与上次存储值偏差不超过它就不落库（0 = 全存）",
       "sort": "排序",
       "enabled": "启用",
+      "enabledHint": "停用后不再采集，历史数据保留",
       "disabled": "停用",
       "never": "从未采集",
       "required": "测点名称与采集地址必填",
@@ -79,6 +102,7 @@
       "d7": "近 7 天",
       "d30": "近 30 天",
       "empty": "这个时间窗内没有数据",
+      "noNumeric": "这台设备还没有数值型测点，没有可画的趋势",
       "avg": "均值",
       "min": "最小",
       "max": "最大",
@@ -91,6 +115,7 @@
       "point": "目标测点",
       "value": "下发值",
       "valuePlaceholder": "0 ~ 1 / 数字",
+      "current": "当前值 {{value}}",
       "send": "下发",
       "required": "请选择测点并填写下发值",
       "boolOnly": "布尔测点只接受 0 或 1",
@@ -105,6 +130,8 @@
     },
     "alarm": {
       "addRule": "新增告警规则",
+      "rulesTitle": "告警规则",
+      "eventsTitle": "最近事件",
       "empty": "暂无告警事件",
       "name": "规则名称",
       "op": "比较",

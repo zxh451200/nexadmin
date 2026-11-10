@@ -26,6 +26,10 @@
       "empty": "No devices yet — connect one first",
       "name": "Device name",
       "protocol": "Protocol",
+      "section": {
+        "basic": "Basics",
+        "connection": "Connection"
+      },
       "endpoint": "Endpoint",
       "endpointHint": "Modbus like 192.168.1.20:502; RTU like COM3:9600,8,E,1",
       "endpointMqttHint": "Broker URL like tcp://192.168.1.10:1883",
@@ -39,6 +43,7 @@
       },
       "configSecretHint": "Secret fields are shown as ***; submit *** to keep the saved password",
       "enabled": "Enabled",
+      "enabledHint": "Disabled devices stop collecting and reject control commands",
       "location": "Install location",
       "locationAddress": "Install address",
       "required": "Device name and endpoint are required",
@@ -47,7 +52,14 @@
       "endpointOpcuaHint": "OPC UA like opc.tcp://192.168.1.40:4840",
       "search": "Search name / no.",
       "list": "Devices",
-      "noMatch": "No devices match"
+      "noMatch": "No devices match",
+      "lastSeenAgo": "Last online {{ago}}",
+      "neverSeen": "Never connected"
+    },
+    "live": {
+      "updated": "Updated {{ago}}",
+      "stale": "Stale · updated {{ago}}",
+      "none": "No data collected yet"
     },
     "point": {
       "add": "Add point",
@@ -55,18 +67,29 @@
       "empty": "No points yet — configure a collection address first",
       "name": "Point name",
       "address": "Address",
-      "addressHint": "Modbus: hr:40001 / ir:30001 / co:1 / di:1; MQTT: relative topic (motor/frequency); S7: DB1.DBX0.0 / DB1.DBW2 / DB1.DBD4, M0.0 / MW10; OPC UA: ns=2;s=Tag1",
+      "addressFormat": {
+        "modbus-tcp": "hr:40001 / ir:30001 / co:1 / di:1",
+        "modbus-rtu": "hr:40001 / ir:30001 / co:1 / di:1",
+        "mqtt": "Relative topic, e.g. motor/frequency",
+        "s7": "DB1.DBX0.0 / DB1.DBW2 / DB1.DBD4, M0.0 / MW10",
+        "opcua": "ns=2;s=Tag1"
+      },
       "unit": "Unit",
+      "unitPlaceholder": "e.g. Hz",
       "dataType": "Data type",
       "rw": "Writable",
       "readonly": "Read-only",
       "readwrite": "Writable",
+      "section": {
+        "basic": "Basics",
+        "collect": "Collection"
+      },
+      "collectHint": "Displayed = raw ÷ scale (VFD 427.0→42.7Hz uses 10); a change within the deadband is not persisted (0 = store all)",
       "scale": "Scale",
-      "scaleHint": "Displayed = raw ÷ scale (VFD 427.0→42.7Hz uses 10)",
       "deadband": "Deadband",
-      "deadbandHint": "Deviation within deadband is not persisted (0 = store all)",
       "sort": "Sort",
       "enabled": "Enabled",
+      "enabledHint": "Disabled points stop collecting; history is kept",
       "disabled": "Disabled",
       "never": "Never collected",
       "required": "Point name and address are required",
@@ -79,6 +102,7 @@
       "d7": "Last 7 days",
       "d30": "Last 30 days",
       "empty": "No data in this window",
+      "noNumeric": "This device has no numeric points yet, so there is no trend to chart",
       "avg": "Avg",
       "min": "Min",
       "max": "Max",
@@ -91,6 +115,7 @@
       "point": "Target point",
       "value": "Value",
       "valuePlaceholder": "0 ~ 1 / number",
+      "current": "Current value {{value}}",
       "send": "Send",
       "required": "Pick a point and fill the value",
       "boolOnly": "Boolean points accept 0 or 1 only",
@@ -105,6 +130,8 @@
     },
     "alarm": {
       "addRule": "Add alarm rule",
+      "rulesTitle": "Alert rules",
+      "eventsTitle": "Recent events",
       "empty": "No alarm events",
       "name": "Rule name",
       "op": "Compare",
