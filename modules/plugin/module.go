@@ -44,11 +44,11 @@ type module struct{}
 
 func (module) Name() string { return "plugin" }
 
-// menus 是本模块的菜单与按钮种子，挂在“系统管理”目录下；每次启动幂等写入（已存在的不动）。
+// menus 是本模块的菜单与按钮种子，挂在“开发与安全”目录下；每次启动幂等写入（已存在的不动）。
 func menus() []plugin.MenuSpec {
 	return []plugin.MenuSpec{
-		{Parent: "/system", Type: "menu", Title: "plugin.menu", Icon: "Puzzle", Path: "/system/plugin",
-			Component: "plugin/PluginPage", Perm: PermList, Sort: 100, KeepAlive: true},
+		{Parent: "/dev", Type: "menu", Title: "plugin.menu", Icon: "Puzzle", Path: "/system/plugin",
+			Component: "plugin/PluginPage", Perm: PermList, Sort: 10, KeepAlive: true},
 		{Parent: PermList, Type: "button", Title: "plugin.btn.license", Perm: PermLicense, Sort: 10},
 		{Parent: PermList, Type: "button", Title: "plugin.btn.toggle", Perm: PermEdit, Sort: 15},
 		{Parent: PermList, Type: "button", Title: "plugin.btn.install", Perm: PermInstall, Sort: 20},

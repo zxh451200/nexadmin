@@ -6,14 +6,14 @@ author: NexAdmin
 edition: pro
 requires_nexadmin: ">=0.1.0"
 menus:
-  - parent: /system
+  - parent: /dev
     type: menu
     title: plugin_scim.menu
     path: /system/scim
     component: plugins/scim/ScimPage
     perm: scim:list
     icon: UsersRound
-    sort: 120
+    sort: 90
   - parent: scim:list
     type: button
     title: plugin_scim.btn.token

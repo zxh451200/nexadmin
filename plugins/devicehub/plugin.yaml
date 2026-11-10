@@ -10,14 +10,15 @@ requires_nexadmin: ">=0.1.0"
 # title 是 i18n key，文案在 web/src/plugins/devicehub/locales 的 plugin_devicehub 命名空间里。
 # edit / control 是按钮级权限点：设备写操作（下发指令）与配置改动分开授权，不挂根级。
 menus:
-  - parent: /
+  # 业务插件入口统一收在「业务中心」：设备监控不是运维监控，不单独占一级。
+  - parent: /biz
     type: menu
     title: plugin_devicehub.menu
     path: /devicehub/monitor
     component: plugins/devicehub/DevicePage
     perm: devicehub:list
     icon: Gauge
-    sort: 64
+    sort: 60
     keep_alive: true
   - parent: devicehub:list
     type: button

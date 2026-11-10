@@ -7,20 +7,15 @@ edition: free
 requires_nexadmin: ">=0.1.0"
 migration_target: tenant
 menus:
+  # 只有一张页面：直接做一级单项，不再套「客户主数据 > 客户主数据」的同名空目录。
   - parent: /
-    type: dir
-    title: plugin_crm.dir
-    path: /crm
-    icon: Users
-    sort: 70
-  - parent: /crm
     type: menu
     title: plugin_crm.menu
     path: /crm/customers
     component: plugins/crm/CrmPage
     perm: crm:list
-    icon: Contact
-    sort: 1
+    icon: Users
+    sort: 150
     keep_alive: true
   - parent: crm:list
     type: button

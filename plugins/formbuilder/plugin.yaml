@@ -8,14 +8,14 @@ requires_nexadmin: ">=0.1.0"
 
 # 安装时写入 sys_menu；title 是 i18n key，文案在 web/locales 的 plugin_formbuilder 命名空间里。
 menus:
-  - parent: /system
+  - parent: /dev
     type: menu
     title: plugin_formbuilder.menu
     path: /system/formbuilder
     component: plugins/formbuilder/FormbuilderPage
     perm: formbuilder:design
     icon: ClipboardList
-    sort: 130
+    sort: 40
     keep_alive: true
   - parent: formbuilder:design
     type: button

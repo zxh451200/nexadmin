@@ -9,6 +9,7 @@
       "monitor": "Monitoring",
       "tenant": "Tenants",
       "io": "Import & Export",
+      "dev": "Developer & Security",
       "biz": "Business"
     },
     "btn": {

@@ -9,7 +9,8 @@ requires_nexadmin: ">=0.1.0"
 # 安装时写入 sys_menu；title 是 i18n key，文案在 web/locales 的 plugin_report 命名空间里。
 # 页面内的页签（报表 / 数据大屏 / 图表 / 数据集）按下面的权限点显示；大屏展示页是隐藏路由，不进菜单。
 menus:
-  - parent: /monitor
+  # 报表是业务分析，不是系统运维监控；和业务插件同组。
+  - parent: /biz
     type: menu
     title: plugin_report.menu
     path: /monitor/report

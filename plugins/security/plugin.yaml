@@ -8,14 +8,14 @@ requires_nexadmin: ">=0.1.0"
 
 # 安装时写入 sys_menu；title 是 i18n key，文案在 web/locales 的 plugin_security 命名空间里。
 menus:
-  - parent: /system
+  - parent: /dev
     type: menu
     title: plugin_security.menu
     path: /system/security
     component: plugins/security/SecurityPage
     perm: security:self
     icon: ShieldCheck
-    sort: 110
+    sort: 70
     keep_alive: true
   - parent: security:self
     type: button

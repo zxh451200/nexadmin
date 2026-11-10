@@ -8,14 +8,14 @@ requires_nexadmin: ">=0.1.0"
 
 # 安装时写入 sys_menu；title 是 i18n key，文案在 web/locales 的 plugin_identity 命名空间里。
 menus:
-  - parent: /system
+  - parent: /dev
     type: menu
     title: plugin_identity.menu
     path: /system/identity
     component: plugins/identity/IdentityPage
     perm: identity:list
     icon: KeyRound
-    sort: 110
+    sort: 80
     keep_alive: true
   - parent: identity:list
     type: button

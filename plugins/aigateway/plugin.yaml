@@ -7,20 +7,15 @@ edition: pro
 requires_nexadmin: ">=0.1.0"
 migration_target: tenant
 menus:
+  # 只有一张页面：直接做一级单项，不再套「AI 网关 > AI 网关」的同名空目录。
   - parent: /
-    type: dir
-    title: plugin_aigateway.dir
-    path: /ai
-    icon: Sparkles
-    sort: 65
-  - parent: /ai
     type: menu
     title: plugin_aigateway.menu
     path: /ai/models
     component: plugins/aigateway/AiGatewayPage
     perm: aigateway:list
-    icon: BrainCircuit
-    sort: 1
+    icon: Sparkles
+    sort: 65
     keep_alive: true
   - parent: aigateway:list
     type: button

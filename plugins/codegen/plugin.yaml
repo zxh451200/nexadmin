@@ -8,14 +8,14 @@ requires_nexadmin: ">=0.1.0"
 
 # 安装时写入 sys_menu；title 是 i18n key，文案在 web/locales 的 plugin_codegen 命名空间里。
 menus:
-  - parent: /system
+  - parent: /dev
     type: menu
     title: plugin_codegen.menu
     path: /system/codegen
     component: plugins/codegen/CodegenPage
     perm: codegen:list
     icon: Code
-    sort: 120
+    sort: 30
     keep_alive: true
   - parent: codegen:list
     type: button

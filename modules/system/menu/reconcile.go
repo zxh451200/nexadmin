@@ -11,11 +11,15 @@ import (
 // reconcileMenuShape 修「已知的历史形状」——不是新增出厂数据，所以不进迁移：
 // 本仓库的规则是迁移只做结构变更，菜单这类出厂数据由 Seeder 负责（core/migrate 会警告 DML）。
 //
-// 三处形状：
+// 目前收敛这些形状：
 //  1. 导出中心（menu:jobs）与导入中心（imports:list）曾经各占一个顶级项，现在同属 dir:/io；
 //  2. 支付中台曾经是「目录 dir:/pay + 同名子项」，现在子项直接在一级；
-//  3. LDAP 配置、单点登录应用、地图服务曾各占一个侧栏项，现在并进「系统设置」的分区。
-//  4. 证件实名、支付中台、在线客服、工单中心、审批中心曾各占一个顶级项，现在同属 dir:/biz。
+//  3. LDAP 配置、单点登录应用、地图服务曾各占一个侧栏项，现在并进「系统设置」的分区；
+//  4. 证件实名、支付中台、在线客服、工单中心、审批中心曾各占一个顶级项，现在同属 dir:/biz；
+//  5. 设备监控（顶级）、报表中心（曾挂系统监控）归入 dir:/biz，AI 助手从系统监控提到顶级；
+//  6. 客户主数据、AI 网关曾是「同名目录 + 唯一子项」，现在子项直接在一级；
+//  7. 消息中心曾列在「内容管理」下，与顶栏铃铛重复，现在隐藏侧栏入口；
+//  8. 插件/定时任务/代码生成/表单/多语言/审计与单点登录/开放平台曾在「系统管理」下，现在同属 dir:/dev。
 //
 // 播种只补不改（core/seed 按 code 判断，已存在的一律不动），所以老库必须在这里收敛一次。
 // 条件只匹配「坏形状」本身（顶级 / 挂在旧目录下），管理员自己挪过位置的菜单不会被拽回来；
@@ -80,7 +84,7 @@ func reconcileMenuShape(db *gorm.DB) (checked, fixed int, err error) {
 			for _, item := range []struct {
 				code string
 				sort int
-			}{{"realname:list", 10}, {"pay:list", 20}, {"im:list", 30}, {"ticket:list", 40}, {"workflow:list", 50}} {
+			}{{"realname:list", 10}, {"pay:list", 20}, {"im:list", 30}, {"ticket:list", 40}, {"workflow:list", 50}, {"devicehub:list", 60}} {
 				checked++
 				res := tx.Exec(`UPDATE sys_menu SET parent_id = ?, sort = ? WHERE code = ? AND parent_id = 0`, bizDirID, item.sort, item.code)
 				if res.Error != nil {
@@ -88,6 +92,124 @@ func reconcileMenuShape(db *gorm.DB) (checked, fixed int, err error) {
 				}
 				fixed += int(res.RowsAffected)
 			}
+		}
+
+		// 报表中心曾挂在「系统监控」下（业务分析不是运维监控），AI 助手也是个人入口而不是监控项。
+		// 只认「仍挂在系统监控目录」的旧形状，管理员自己挪过的不动。
+		var monitorDirID int64
+		if e := tx.Raw(`SELECT id FROM sys_menu WHERE code = ? AND type = 'dir' LIMIT 1`, "dir:/monitor").Scan(&monitorDirID).Error; e != nil {
+			return e
+		}
+		if monitorDirID != 0 {
+			if bizDirID != 0 {
+				checked++
+				res := tx.Exec(`UPDATE sys_menu SET parent_id = ?, sort = 70 WHERE code = ? AND parent_id = ?`, bizDirID, "report:view", monitorDirID)
+				if res.Error != nil {
+					return res.Error
+				}
+				fixed += int(res.RowsAffected)
+			}
+			checked++
+			res := tx.Exec(`UPDATE sys_menu SET parent_id = 0, sort = 25 WHERE code = ? AND parent_id = ?`, "assistant:use", monitorDirID)
+			if res.Error != nil {
+				return res.Error
+			}
+			fixed += int(res.RowsAffected)
+		}
+
+		// 客户主数据、AI 网关曾各是「同名目录 + 唯一子项」：子项提到顶级，空目录连同授权一起删。
+		// 只在目录下恰好一个子项时收敛这个旧形状；管理员自己加过页面的目录不动。
+		for _, item := range []struct {
+			dir   string
+			child string
+			sort  int
+		}{{"dir:/crm", "crm:list", 150}, {"dir:/ai", "aigateway:list", 65}} {
+			checked++
+			var dirID int64
+			if e := tx.Raw(`SELECT id FROM sys_menu WHERE code = ? AND type = 'dir' LIMIT 1`, item.dir).Scan(&dirID).Error; e != nil {
+				return e
+			}
+			if dirID == 0 {
+				continue
+			}
+			var kids int64
+			if e := tx.Raw(`SELECT COUNT(*) FROM sys_menu WHERE parent_id = ?`, dirID).Scan(&kids).Error; e != nil {
+				return e
+			}
+			if kids != 1 {
+				continue
+			}
+			res := tx.Exec(`UPDATE sys_menu SET parent_id = 0, sort = ? WHERE code = ? AND parent_id = ?`, item.sort, item.child, dirID)
+			if res.Error != nil {
+				return res.Error
+			}
+			if res.RowsAffected == 0 {
+				continue
+			}
+			fixed += int(res.RowsAffected)
+			if e := tx.Exec(`DELETE FROM sys_role_menu WHERE menu_id = ?`, dirID).Error; e != nil {
+				return e
+			}
+			if e := tx.Exec(`DELETE FROM sys_menu WHERE id = ?`, dirID).Error; e != nil {
+				return e
+			}
+			fixed++
+		}
+
+		// 消息中心是个人收件箱（顶栏铃铛已有「查看全部」），不再列在「内容管理」下。
+		// 只隐藏、不删行：权限点与角色授权仍引用它。条件匹配「仍可见」的旧形状，收敛后不再写库。
+		checked++
+		var msgVisible int64
+		if e := tx.Raw(`SELECT COUNT(*) FROM sys_menu WHERE code = ? AND hidden = false`, "message:list").Scan(&msgVisible).Error; e != nil {
+			return e
+		}
+		if msgVisible > 0 {
+			res := tx.Exec(`UPDATE sys_menu SET hidden = true WHERE code = ? AND hidden = false`, "message:list")
+			if res.Error != nil {
+				return res.Error
+			}
+			fixed += int(res.RowsAffected)
+		}
+
+		// 「开发与安全」从系统管理拆出：插件、定时任务、代码生成、表单设计、多语言、审计/身份/单点登录、
+		// 开放平台曾全堆在系统管理。只挪「还挂在系统管理目录」的行，管理员自己挪过的不动。
+		checked++
+		var devDirID, systemDirID int64
+		if e := tx.Raw(`SELECT id FROM sys_menu WHERE code = ? AND type = 'dir' LIMIT 1`, "dir:/dev").Scan(&devDirID).Error; e != nil {
+			return e
+		}
+		if e := tx.Raw(`SELECT id FROM sys_menu WHERE code = ? AND type = 'dir' LIMIT 1`, "dir:/system").Scan(&systemDirID).Error; e != nil {
+			return e
+		}
+		if devDirID != 0 && systemDirID != 0 {
+			for _, item := range []struct {
+				code string
+				sort int
+			}{
+				{"plugin:list", 10}, {"cron:list", 20}, {"codegen:list", 30}, {"formbuilder:design", 40},
+				{"i18n-editor:list", 50}, {"audit:list", 60}, {"security:self", 70}, {"identity:list", 80},
+				{"scim:list", 90}, {"saml:list", 100}, {"openapi:list", 110},
+			} {
+				checked++
+				res := tx.Exec(`UPDATE sys_menu SET parent_id = ?, sort = ? WHERE code = ? AND parent_id = ?`, devDirID, item.sort, item.code, systemDirID)
+				if res.Error != nil {
+					return res.Error
+				}
+				fixed += int(res.RowsAffected)
+			}
+
+			// 老库一级排序还是旧号段（系统管理 = 40），新目录按出厂值 25 会排到导入导出前面；
+			// 只在「仍是出厂排序值」时贴到系统管理后面，管理员自己调过顺序就不动。
+			checked++
+			var sysSort int
+			if e := tx.Raw(`SELECT sort FROM sys_menu WHERE id = ?`, systemDirID).Scan(&sysSort).Error; e != nil {
+				return e
+			}
+			res := tx.Exec(`UPDATE sys_menu SET sort = ? WHERE code = ? AND sort = 25`, sysSort+1, "dir:/dev")
+			if res.Error != nil {
+				return res.Error
+			}
+			fixed += int(res.RowsAffected)
 		}
 
 		// LDAP 配置、单点登录应用、地图服务已并进「系统设置」的分区：老库里它们还是侧栏可见的独立菜单。

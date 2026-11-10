@@ -6,14 +6,14 @@ author: NexAdmin
 edition: pro
 requires_nexadmin: ">=0.1.0"
 menus:
-  - parent: /system
+  - parent: /dev
     type: menu
     title: plugin_i18n_editor.menu
     path: /system/i18n-editor
     component: plugins/i18n-editor/I18nEditorPage
     perm: i18n-editor:list
     icon: Languages
-    sort: 130
+    sort: 50
   - parent: i18n-editor:list
     type: button
     title: plugin_i18n_editor.btn.edit

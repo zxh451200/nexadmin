@@ -7,12 +7,13 @@ edition: pro
 requires_nexadmin: ">=0.1.0"
 migration_target: platform
 menus:
-  - parent: /monitor
+  # 个人 AI 入口，不是运维监控：像工作台/应用中心一样占一级单项。
+  - parent: /
     type: menu
     title: plugin_assistant.menu
     path: /monitor/assistant
     component: plugins/assistant/AssistantPage
     perm: assistant:use
     icon: MessageSquare
-    sort: 80
+    sort: 25
     keep_alive: false

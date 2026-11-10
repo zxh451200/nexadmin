@@ -96,7 +96,9 @@ func buildSeed() []seedItem {
 	content := b.dir("sysMenu.dir.content", "FileText", "/content", 30)
 	notice := b.menu(content, "notice.menu", "/content/notice", "notice/NoticePage", "notice:list", "Megaphone", 10)
 	b.btns(notice, "notice", with("publish", "platform")...)
-	message := b.menu(content, "message.menu", "/message", "message/MessagePage", "message:list", "Bell", 20)
+	// 消息中心是个人收件箱，不是内容管理；顶栏铃铛已有「查看全部」，侧栏不再重复列（权限点保留）。
+	message := b.menu(content, "message.menu", "/message", "message/MessagePage", "message:list", "Bell", 20,
+		func(m *Menu) { m.Hidden = true })
 	b.btns(message, "message", "delete")
 	file := b.menu(content, "fileMgr.menu", "/content/file", "file/FilePage", "file:list", "FolderOpen", 30)
 	b.btns(file, "file", "upload", "delete")
@@ -140,10 +142,6 @@ func buildSeed() []seedItem {
 		Component: "exportcenter/ExportCenterPage", Sort: 10})
 	b.add(jobs, Menu{Type: typeButton, Title: "jobs.btn.all", Perm: "job:all", Sort: 10})
 
-	// 开放平台（系统管理下；追加在末尾，不挪动已有出厂 ID）。
-	openapi := b.menu(system, "openapi.menu", "/system/openapi", "openapi/OpenApiPage", "openapi:list", "Webhook", 130)
-	b.btns(openapi, "openapi", "edit")
-
 	// 单点登录应用已并进「系统设置 → 安全与登录 → 单点登录」：侧栏不再单列，只隐藏菜单行。
 	// 不能改挂到设置菜单下——角色分配会自动带上祖先节点，等于顺手授予了 settings:list。
 	// 菜单行保留在原处，权限点与角色授权仍引用它（旧地址由前端路由重定向到对应分区）。
@@ -161,6 +159,15 @@ func buildSeed() []seedItem {
 	// 目录由框架种下、不归任何插件声明——挂到某个插件名下，它一卸载就会把整组带走。
 	// 没装这几个插件时空目录由前端丢弃，侧栏不会留一个空壳。
 	b.dir("sysMenu.dir.biz", "Briefcase", "/biz", 55)
+
+	// 开发与安全：插件管理 / 定时任务 / 代码生成 / 表单设计 / 多语言编辑 / 审计与单点登录 / 开放平台。
+	// 这些页面对的是开发者与安全管理员，和「系统管理」里的组织、权限、基础配置不是一类，拆开避免列表越滚越长。
+	dev := b.dir("sysMenu.dir.dev", "Wrench", "/dev", 25)
+
+	// 追加在末尾：已发出的 ID 不因中间插入而平移；sort 控制侧栏顺序。
+	// 开放平台要挂到「开发与安全」下，所以定义必须排在该目录之后（种子按 code 解析父节点）。
+	openapi := b.menu(dev, "openapi.menu", "/system/openapi", "openapi/OpenApiPage", "openapi:list", "Webhook", 110)
+	b.btns(openapi, "openapi", "edit")
 
 	return b.items
 }
