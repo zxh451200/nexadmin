@@ -147,7 +147,7 @@ export function FileDropField({ files, onChange, multiple, accept, labelledBy, d
                 ? 'border-destructive/60 bg-destructive/5'
                 : dragging
                   ? 'border-primary bg-accent/60'
-                  : 'border-input bg-muted/40 hover:border-primary/60 hover:bg-accent/40 dark:border-white/16 dark:bg-white/[0.04] dark:hover:border-primary/60 dark:hover:bg-accent/40',
+                  : 'border-input bg-muted/40 hover:border-primary/60 hover:bg-accent/40 dark:border-white/26 dark:bg-white/[0.04] dark:hover:border-primary/60 dark:hover:bg-accent/40',
               disabled && 'cursor-not-allowed opacity-60',
             )}
           >

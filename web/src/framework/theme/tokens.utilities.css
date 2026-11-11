@@ -137,17 +137,18 @@
 }
 
 @utility row-hover {
-  /* 行悬停层：把前景墨色按 6% 混进卡面（不透明）。
+  /* 行悬停层：把前景墨色按 8% 混进卡面（不透明）。
      之前 hover:bg-muted/50 在深色卡面（12.5%）上只抬约 0.3 个明度点，
-     鼠标扫过表格是「死」的；混墨后深色抬到 ≈17%，浅色落在 ≈94% 灰，
+     鼠标扫过表格是「死」的；混墨后深色抬到 ≈15%，浅色落在 ≈92% 灰，
      两主题同一个来源。行尾钉住的 sticky 单元格也用同一个类，永不脱色。 */
-  background-color: color-mix(in oklab, hsl(var(--foreground)) 6%, hsl(var(--card)));
+  background-color: color-mix(in oklab, hsl(var(--foreground)) 8%, hsl(var(--card)));
 }
 
 @utility row-selected {
-  /* 选中层：hover 的两倍墨量（深色 ≈21% 亮面，与 sidebar-accent 同档）。
-     勾选一行要明显强于扫过一行——之前选中 bg-muted/50 反而比 hover 还浅。 */
-  background-color: color-mix(in oklab, hsl(var(--foreground)) 12%, hsl(var(--card)));
+  /* 选中层：hover 的两倍墨量（深色 ≈19% 亮面，与 sidebar-accent 同档）。
+     勾选一行要明显强于扫过一行——之前选中 bg-muted/50 反而比 hover 还浅。
+     两档差 1.22:1 → 1.57:1，扫过与勾选才在灰阶屏上也分得开。 */
+  background-color: color-mix(in oklab, hsl(var(--foreground)) 16%, hsl(var(--card)));
 }
 
 @utility dark-atmo {
