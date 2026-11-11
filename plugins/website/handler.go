@@ -363,7 +363,9 @@ func (h *handler) pagePreview(c *gin.Context) {
 		response.Fail(c, err)
 		return
 	}
-	response.OK(c, gin.H{"url": "/p/" + row.Slug + "?preview=" + token})
+	// 返回绝对地址：生产单二进制里与相对路径同源等价；开发时后台 SPA 跑在 Vite（5173），
+	// 相对路径会被 SPA 路由吞掉，绝对地址落到公开站所在的 API 端口才打得开。
+	response.OK(c, gin.H{"url": baseURL(c) + "/p/" + row.Slug + "?preview=" + token})
 }
 
 // POST /plugins/website/pages/:id/copy —— 复制为草稿（内容与译文带走，发布态归零）。
@@ -468,7 +470,7 @@ func (h *handler) postPreview(c *gin.Context) {
 		response.Fail(c, err)
 		return
 	}
-	response.OK(c, gin.H{"url": "/news/" + row.Slug + "?preview=" + token})
+	response.OK(c, gin.H{"url": baseURL(c) + "/news/" + row.Slug + "?preview=" + token})
 }
 
 // POST /plugins/website/posts/:id/copy —— 复制为草稿（内容/译文/分类带走，发布态归零）。
@@ -737,7 +739,7 @@ func (h *handler) productPreview(c *gin.Context) {
 		response.Fail(c, err)
 		return
 	}
-	response.OK(c, gin.H{"url": "/products/" + row.Slug + "?preview=" + token})
+	response.OK(c, gin.H{"url": baseURL(c) + "/products/" + row.Slug + "?preview=" + token})
 }
 
 // POST /plugins/website/products/:id/copy —— 复制为草稿（对标阿里的「发布类似」）。

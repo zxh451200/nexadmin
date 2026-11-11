@@ -529,7 +529,7 @@ function ProductFormBody({
         <LocalizedField fieldKey="seoTitle" />
         <LocalizedField fieldKey="seoDesc" />
         <LocaleFormActions />
-        <SharedFieldShell labelKey="plugin_website.fields.postSeoKeywords">
+        <SharedFieldShell labelKey="plugin_website.fields.productSeoKeywords">
           <Input
             value={seoKeywords}
             maxLength={300}
@@ -979,8 +979,6 @@ export default function ProductPage() {
   const effectiveStatus = statusTab === ALL ? filters.status : statusTab
   const { data, isLoading } = useProducts({ ...filters, status: effectiveStatus, page, pageSize })
   const extraLocales = languages.filter((l) => !l.default)
-  // 英文是同步母本（对齐阿里）：新建时默认展开英文页签，英文必填的提示也落在那个语种上。
-  const enLocale = languages.find((l) => l.code.toLowerCase().startsWith('en'))
   const remove = useDeleteProduct()
   const removeBatch = useDeleteProducts()
   const setStatus = useSetProductStatus()
@@ -1032,8 +1030,10 @@ export default function ProductPage() {
     try {
       const url = await fetchProductPreview(row.id)
       window.open(url, '_blank', 'noopener')
-    } catch {
-      // 服务端原因由 http 拦截器统一弹出，这里再补一条「操作失败」就是同一件事说两遍
+    } catch (err) {
+      // fetchProductPreview 是 silent 请求，不走全局拦截器：这里不弹的话点预览就是毫无反应
+      const msg = err instanceof Error ? err.message : ''
+      toast.error(msg || t('common.operateFailed'))
     }
   }
 
@@ -1221,7 +1221,9 @@ export default function ProductPage() {
         emptyText={t('plugin_website.empty')}
         toolbar={
           <Can perm="website:product">
-            <Button onClick={() => openAt(null, enLocale && !enLocale.default ? enLocale.code : undefined)}>
+            {/* 新建落在默认（源）语言：开在英文页签会把 slug/价格/图片等共用字段全部置灰，
+                第一眼就是一张点不动的表单；英文母本由上架时的必填校验兜底（会自动跳到英文页签）。 */}
+            <Button onClick={() => openAt(null)}>
               <Plus aria-hidden="true" />
               {t('plugin_website.product.create')}
             </Button>

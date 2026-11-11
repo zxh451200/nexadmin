@@ -208,6 +208,11 @@ func loadOrCreateSecret(path string) (string, error) {
 	return secret, nil
 }
 
+// SigningSecret 返回解析后的签名密钥（配置值，或配置为空时自动生成并落盘 data/jwt.secret 的那把）。
+// 插件要复用同一把密钥签发本地令牌（如官网草稿预览链接）时从这里取：
+// 直接读 cfg.Auth.JWTSecret 拿不到自动生成的那把，密钥为空就永远签不出来。
+func (s *Service) SigningSecret() []byte { return s.secret }
+
 // SetProvider 注册登录提供者。
 func (s *Service) SetProvider(p Provider) { s.provider.Store(&p) }
 

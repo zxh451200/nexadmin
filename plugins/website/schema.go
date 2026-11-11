@@ -101,7 +101,7 @@ var entityViews = map[string]entityDef{
 	"product": {
 		fields: productI18nFields,
 		views: []fieldView{
-			{"title", "plugin_website.fields.postTitle", widgetText, 0},
+			{"title", "plugin_website.fields.productTitle", widgetText, 0},
 			{"keywords", "plugin_website.fields.productKeywords", widgetText, 0},
 			{"summary", "plugin_website.fields.summary", widgetTextarea, 2},
 			{"seoTitle", "plugin_website.fields.seoTitle", widgetText, 0},

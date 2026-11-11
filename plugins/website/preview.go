@@ -31,9 +31,14 @@ const previewScopePost = "website-post-preview"
 // previewScopeProduct 与页面/新闻预览隔离：三类内容的 slug 三张表各自唯一，同理分域。
 const previewScopeProduct = "website-product-preview"
 
-// previewKeyOf 取预览令牌的签名密钥：复用框架 JWT 签名密钥。测试手工构造 Deps
-// 没有 Config 时返回 nil，预览功能随之关闭（签发报错、校验一律拒绝）。
+// previewKeyOf 取预览令牌的签名密钥：复用框架 JWT 签名密钥。密钥解析走 auth 服务——
+// 配置里 auth.jwt_secret 为空时 auth 会自动生成并落盘 data/jwt.secret，直接读配置字段
+// 拿到的是空串，预览按钮就永远报「未配置签名密钥」（2026-11-12 实测）。手工构造 Deps
+// 没有 Auth/Config 时返回 nil，预览功能随之关闭（签发报错、校验一律拒绝）。
 func previewKeyOf(d *core.Deps) []byte {
+	if d != nil && d.Auth != nil {
+		return d.Auth.SigningSecret()
+	}
 	if d == nil || d.Config == nil {
 		return nil
 	}
