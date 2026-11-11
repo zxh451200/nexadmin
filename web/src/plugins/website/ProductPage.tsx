@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState, type ReactNode } from 'react'
-import { Copy, ExternalLink, Eye, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { CloudUpload, Copy, ExternalLink, Eye, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -30,8 +31,13 @@ import { Tabs, TabsList, TabsTrigger } from '@/framework/ui/tabs'
 import { EditorSchemaGate } from './EditorSchemaGate'
 import TranslationStatus from './TranslationStatus'
 import {
+  fetchAliCategories,
+  fetchAliTest,
   fetchProductPreview,
   translateContent,
+  useAliConfig,
+  useAliSyncStatus,
+  useBindAliCategory,
   useCopyProduct,
   useDeleteProduct,
   useDeleteProducts,
@@ -39,8 +45,13 @@ import {
   useLanguages,
   useProductCategories,
   useProducts,
+  useSaveAliConfig,
   useSaveProduct,
   useSetProductStatus,
+  useSyncProduct,
+  useSyncProductBatch,
+  type AliCategoryNode,
+  type AliMarket,
   type ContentQuery,
   type ProductCategoryNode,
   type ProductSpec,
@@ -567,6 +578,309 @@ function SharedGroup({ labelKey, children }: { labelKey: string; children: React
   )
 }
 
+/**
+ * 阿里开放平台凭据卡：AppKey 明文，Secret/SessionKey 密码框（已配置时占位提示「留空保持不变」）。
+ * 保存走独立 PUT（凭据三态在后端处理），连接测试调 category 接口验证网关+签名。
+ */
+function AliConfigCard() {
+  const { t } = useTranslation()
+  const { data: config, isLoading } = useAliConfig()
+  const save = useSaveAliConfig()
+  const [appKey, setAppKey] = useState('')
+  const [appSecret, setAppSecret] = useState('')
+  const [sessionKey, setSessionKey] = useState('')
+  const [apiGateway, setApiGateway] = useState('')
+  const [testState, setTestState] = useState<'idle' | 'testing' | 'ok' | 'fail'>('idle')
+  // 配置到货时回填非敏感字段一次（后续用户编辑不覆盖）。
+  const [loaded, setLoaded] = useState<string>('')
+  if (config && loaded !== config.appKey) {
+    setLoaded(config.appKey)
+    setAppKey(config.appKey)
+    setApiGateway(config.apiGateway)
+  }
+
+  const submit = async () => {
+    try {
+      await save.mutateAsync({
+        appKey,
+        appSecret,
+        sessionKey,
+        apiGateway,
+      })
+      setAppSecret('')
+      setSessionKey('')
+      toast.success(t('common.operateSuccess'))
+    } catch {
+      // 服务端原因由 http 拦截器统一弹出
+    }
+  }
+
+  const test = async () => {
+    setTestState('testing')
+    try {
+      await fetchAliTest()
+      setTestState('ok')
+      toast.success(t('plugin_website.ali.testOk'))
+    } catch {
+      setTestState('fail')
+      toast.error(t('plugin_website.ali.testFail'))
+    }
+  }
+
+  if (isLoading) return null
+  return (
+    <div className="rounded-lg border border-border p-3 text-sm">
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="font-medium">{t('plugin_website.ali.configTitle')}</p>
+        <span className="text-xs text-muted-foreground">
+          {config?.hasSecret ? t('plugin_website.ali.secretConfigured') : t('plugin_website.ali.secretMissing')}
+          {' · '}
+          {config?.hasSession ? t('plugin_website.ali.sessionConfigured') : t('plugin_website.ali.sessionMissing')}
+        </span>
+      </div>
+      <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3">
+        <Input
+          value={appKey}
+          onChange={(e) => setAppKey(e.target.value)}
+          placeholder={t('plugin_website.ali.appKey')}
+          aria-label={t('plugin_website.ali.appKey')}
+        />
+        <Input
+          type="password"
+          value={appSecret}
+          onChange={(e) => setAppSecret(e.target.value)}
+          placeholder={config?.hasSecret ? t('plugin_website.ali.configuredAlready') : t('plugin_website.ali.appSecret')}
+          aria-label={t('plugin_website.ali.appSecret')}
+        />
+        <Input
+          type="password"
+          value={sessionKey}
+          onChange={(e) => setSessionKey(e.target.value)}
+          placeholder={config?.hasSession ? t('plugin_website.ali.configuredAlready') : t('plugin_website.ali.sessionKey')}
+          aria-label={t('plugin_website.ali.sessionKey')}
+        />
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <Input
+          value={apiGateway}
+          onChange={(e) => setApiGateway(e.target.value)}
+          placeholder="https://gw.api.taobao.com/router/rest"
+          aria-label={t('plugin_website.ali.apiGateway')}
+          className="min-w-0 flex-1 font-mono text-xs md:w-96 md:flex-none"
+        />
+        <Button variant="outline" size="sm" onClick={() => void test()} disabled={testState === 'testing'}>
+          {testState === 'testing' ? t('common.loading') : t('plugin_website.ali.test')}
+        </Button>
+        <Button size="sm" onClick={() => void submit()} disabled={save.isPending}>
+          {t('plugin_website.ali.save')}
+        </Button>
+        {testState === 'ok' ? <Badge variant="success">{t('plugin_website.ali.testOk')}</Badge> : null}
+        {testState === 'fail' ? <Badge variant="destructive">{t('plugin_website.ali.testFail')}</Badge> : null}
+      </div>
+    </div>
+  )
+}
+
+/** 类目浏览状态：面包屑路径（push 进入子级，pop 返回）。 */
+interface CatPathEntry {
+  id: string
+  label: string
+}
+
+/**
+ * 阿里类目树选择器：按需展开拉子级，叶子才可选。
+ * current 列表用 useQuery 缓存（key=父 ID），切语言/重开弹窗不重复拉。
+ */
+function AliCategoryPicker({
+  selected, onSelect, path, onPathChange,
+}: {
+  selected: AliCategoryNode | null
+  onSelect: (node: AliCategoryNode | null) => void
+  path: CatPathEntry[]
+  onPathChange: (path: CatPathEntry[]) => void
+}) {
+  const { t } = useTranslation()
+  const parent = path.length ? path[path.length - 1].id : '0'
+  const { data: nodes = [], isLoading } = useQuery({
+    queryKey: ['plugin_website', 'ali-categories', parent],
+    queryFn: () => fetchAliCategories(parent),
+  })
+  const enter = (node: AliCategoryNode) => {
+    onPathChange([...path, { id: node.id, label: node.cnName || node.name }])
+    onSelect(null)
+  }
+  const rootLabel = t('plugin_website.ali.categoryRoot')
+  return (
+    <div className="rounded-md border border-border">
+      <div className="flex flex-wrap items-center gap-1 border-b border-border px-2 py-1.5 text-xs text-muted-foreground">
+        <button type="button" className="hover:text-foreground" onClick={() => onPathChange([])}>
+          {rootLabel}
+        </button>
+        {path.map((p, i) => (
+          <span key={p.id} className="inline-flex items-center gap-1">
+            <span aria-hidden="true">/</span>
+            {i === path.length - 1 ? (
+              <span className="text-foreground">{p.label}</span>
+            ) : (
+              <button type="button" className="hover:text-foreground" onClick={() => onPathChange(path.slice(0, i + 1))}>
+                {p.label}
+              </button>
+            )}
+          </span>
+        ))}
+      </div>
+      <div className="max-h-56 overflow-y-auto">
+        {isLoading ? <p className="px-2 py-3 text-xs text-muted-foreground">{t('common.loading')}</p> : null}
+        {!isLoading && !nodes.length ? <p className="px-2 py-3 text-xs text-muted-foreground">{t('plugin_website.ali.categoryEmpty')}</p> : null}
+        {nodes.map((n) => (
+          <button
+            key={n.id}
+            type="button"
+            className={cn(
+              'flex min-h-9 w-full items-center gap-2 px-2 text-start text-sm hover:bg-accent/60',
+              selected?.id === n.id && 'bg-accent/60',
+            )}
+            onClick={() => (n.leaf ? onSelect(n) : enter(n))}
+          >
+            <span className="min-w-0 flex-1 truncate">{n.cnName || n.name}</span>
+            {n.leaf ? (
+              <Badge variant="success">{t('plugin_website.ali.categoryLeaf')}</Badge>
+            ) : (
+              <span className="text-xs text-muted-foreground" aria-hidden="true">›</span>
+            )}
+          </button>
+        ))}
+      </div>
+      <p className="border-t border-border px-2 py-1.5 text-xs text-muted-foreground">{t('plugin_website.ali.categoryLeafHint')}</p>
+    </div>
+  )
+}
+
+/** 同步对话框目标：单个商品或一批。 */
+export interface AliSyncTarget {
+  mode: 'single' | 'batch'
+  product?: SiteProduct
+  ids?: string[]
+}
+
+/**
+ * 同步到阿里对话框：选阿里叶子类目（选中即回填商品）+ 发品类型，确认后执行。
+ * 单个同步等待结果（成功带阿里商品 ID）；批量提交 job 后切换到进度视图（轮询 ali/sync-status）。
+ */
+function AliSyncDialog({ target, onOpenChange }: { target: AliSyncTarget; onOpenChange: (v: boolean) => void }) {
+  const { t } = useTranslation()
+  const bindCategory = useBindAliCategory()
+  const syncOne = useSyncProduct()
+  const syncBatch = useSyncProductBatch()
+  const [market, setMarket] = useState<AliMarket>('inquiry')
+  const [selected, setSelected] = useState<AliCategoryNode | null>(null)
+  const [path, setPath] = useState<CatPathEntry[]>([])
+  const [jobId, setJobId] = useState<string | null>(null)
+  const { data: jobStatus } = useAliSyncStatus(jobId ?? undefined)
+
+  const count = target.mode === 'single' ? 1 : (target.ids?.length ?? 0)
+  const busy = syncOne.isPending || syncBatch.isPending || (!!jobId && (jobStatus?.status === 'queued' || jobStatus?.status === 'running'))
+  const done = !!jobStatus && (jobStatus.status === 'success' || jobStatus.status === 'failed' || jobStatus.status === 'canceled')
+
+  const confirm = async () => {
+    if (!selected) {
+      toast.error(t('plugin_website.ali.categoryRequired'))
+      return
+    }
+    if (target.mode === 'single' && target.product) {
+      try {
+        if (target.product.alibabaCategoryId !== selected.id) {
+          await bindCategory.mutateAsync({ id: target.product.id, categoryId: selected.id })
+        }
+        const res = await syncOne.mutateAsync({ id: target.product.id, market })
+        toast.success(t('plugin_website.ali.syncDone', { id: res.alibabaProductId }))
+        onOpenChange(false)
+      } catch (err) {
+        // 后端已把失败原因写回商品行；这里把报错读出来 toast（silent 请求不走全局拦截器）
+        const msg = err instanceof Error ? err.message : ''
+        toast.error(msg || t('plugin_website.ali.syncFailed'))
+      }
+      return
+    }
+    try {
+      const res = await syncBatch.mutateAsync({ ids: target.ids ?? [], market })
+      if (selected && target.ids?.length) {
+        // 批量也把所选类目回填到每个商品上（后台逐个同步时按它发品）
+        await Promise.all(target.ids.map((id) => bindCategory.mutateAsync({ id, categoryId: selected.id }).catch(() => null)))
+      }
+      toast.success(t('plugin_website.ali.syncSubmitted'))
+      setJobId(res.jobId)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : ''
+      toast.error(msg || t('plugin_website.ali.syncFailed'))
+    }
+  }
+
+  return (
+    <ResponsiveDialog
+      open
+      onOpenChange={onOpenChange}
+      title={t('plugin_website.ali.syncTitle')}
+      description={target.mode === 'single'
+        ? t('plugin_website.ali.syncOneHint', { name: target.product?.title ?? '' })
+        : t('plugin_website.ali.syncCount', { count })}
+      size="md"
+      footer={
+        <>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
+          {jobId && !done ? (
+            <Button disabled>{t('common.loading')}</Button>
+          ) : (
+            <Button onClick={() => void confirm()} disabled={busy}>{t('plugin_website.ali.confirm')}</Button>
+          )}
+        </>
+      }
+    >
+      <div className="flex flex-col gap-3 text-sm">
+        {jobId ? (
+          <div className="flex flex-col gap-1 rounded-md border border-border p-3">
+            <p className="font-medium">{t('plugin_website.ali.progressTitle')}</p>
+            <p className="num text-xs text-muted-foreground">{jobStatus?.message || t('common.loading')}</p>
+            {done && jobStatus?.status === 'failed' ? (
+              <p className="text-xs text-destructive">{jobStatus.error}</p>
+            ) : null}
+            {done ? <p className="text-xs text-muted-foreground">{t('plugin_website.ali.jobDone')}</p> : null}
+          </div>
+        ) : (
+          <>
+            <div>
+              <p className="mb-1">{t('plugin_website.ali.category')}</p>
+              <AliCategoryPicker selected={selected} onSelect={setSelected} path={path} onPathChange={setPath} />
+              {selected ? (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {t('plugin_website.ali.selectedCategory', { name: selected.cnName || selected.name, id: selected.id })}
+                </p>
+              ) : target.mode === 'single' && target.product?.alibabaCategoryId ? (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {t('plugin_website.ali.boundCategory', { id: target.product.alibabaCategoryId })}
+                </p>
+              ) : null}
+            </div>
+            <div>
+              <p className="mb-1">{t('plugin_website.ali.market')}</p>
+              <Select value={market} onValueChange={(v) => setMarket(v as AliMarket)}>
+                <SelectTrigger className="w-full" aria-label={t('plugin_website.ali.market')}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="inquiry">{t('plugin_website.ali.marketInquiry')}</SelectItem>
+                  <SelectItem value="wholesale">{t('plugin_website.ali.marketWholesale')}</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="mt-1 text-xs text-muted-foreground">{t('plugin_website.ali.englishHint')}</p>
+            </div>
+          </>
+        )}
+      </div>
+    </ResponsiveDialog>
+  )
+}
+
 function safeParseArray(raw?: string): string[] {
   if (!raw) return []
   try {
@@ -662,6 +976,8 @@ export default function ProductPage() {
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<SiteProduct | null>(null)
   const [focus, setFocus] = useState<{ code: string; nonce: number } | null>(null)
+  // 阿里同步对话框的目标：单个商品或一批；null = 关闭。
+  const [syncTarget, setSyncTarget] = useState<AliSyncTarget | null>(null)
 
   const openAt = (row: SiteProduct | null, code?: string) => {
     setEditing(row)
@@ -775,7 +1091,11 @@ export default function ProductPage() {
       key: 'sync',
       title: t('plugin_website.product.syncColumn'),
       mobile: 'hidden',
-      render: (r) => syncBadge(r, t),
+      render: (r) => (
+        <span title={r.syncError || undefined} className="inline-flex">
+          {syncBadge(r, t)}
+        </span>
+      ),
     },
     {
       key: 'i18n',
@@ -818,6 +1138,9 @@ export default function ProductPage() {
   return (
     <PageContainer>
       <PageHeader title={t('plugin_website.product.title')} description={t('plugin_website.product.desc')} />
+      <Can perm="website:setting">
+        <AliConfigCard />
+      </Can>
       <FilterBar
         onSearch={() => { setFilters(draft); setPage(1); setSelected([]) }}
         onReset={() => { setDraft({}); setFilters({}); setStatusTab(ALL); setPage(1); setSelected([]) }}
@@ -901,6 +1224,10 @@ export default function ProductPage() {
             <Button variant="outline" size="sm" onClick={() => void applyStatus(ids, 'offline')}>
               {t('plugin_website.product.offlineBatch')}
             </Button>
+            <Button variant="outline" size="sm" onClick={() => setSyncTarget({ mode: 'batch', ids })}>
+              <CloudUpload className="me-2 size-4" aria-hidden="true" />
+              {t('plugin_website.ali.syncBatch')}
+            </Button>
             <Button variant="destructive" size="sm" onClick={() => void onDelete(selectedRows)}>
               <Trash2 className="me-2 size-4" aria-hidden="true" />
               {t('common.delete')}
@@ -918,6 +1245,9 @@ export default function ProductPage() {
             <Button variant="ghost" size="icon" aria-label={t('common.edit')} onClick={() => openAt(row)}>
               <Pencil aria-hidden="true" />
             </Button>
+            <Button variant="ghost" size="icon" aria-label={t('plugin_website.ali.syncAction')} onClick={() => setSyncTarget({ mode: 'single', product: row })}>
+              <CloudUpload aria-hidden="true" />
+            </Button>
             <Button variant="ghost" size="icon" className="text-destructive" aria-label={t('common.delete')} onClick={() => void onDelete([row])}>
               <Trash2 aria-hidden="true" />
             </Button>
@@ -932,6 +1262,7 @@ export default function ProductPage() {
           initialLocale={focus?.code}
         />
       )}
+      {syncTarget && <AliSyncDialog target={syncTarget} onOpenChange={(v) => !v && setSyncTarget(null)} />}
     </PageContainer>
   )
 }

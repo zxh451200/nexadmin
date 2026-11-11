@@ -9,6 +9,8 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"nexadmin/core/ai"
+	"nexadmin/core/auth"
+	"nexadmin/core/job"
 	"nexadmin/core/response"
 	"nexadmin/pkg/idgen"
 )
@@ -796,4 +798,103 @@ func (h *handler) reorderProductCategories(c *gin.Context) {
 		return
 	}
 	respond(c, nil, h.svc.ReorderProductCategories(c.Request.Context(), f.Items))
+}
+
+// ---- 阿里国际站同步（二期） ----
+
+// GET /plugins/website/ali-config —— 凭据视图（Secret/Session 只回「已配置」布尔）。
+func (h *handler) getAliConfig(c *gin.Context) {
+	row, err := h.svc.GetAliConfig(c.Request.Context())
+	respond(c, row, err)
+}
+
+// PUT /plugins/website/ali-config —— 保存凭据（Secret/Session 三态：空或掩码 = 保持旧值）。
+func (h *handler) saveAliConfig(c *gin.Context) {
+	var f AliConfigForm
+	if !response.BindJSON(c, &f) {
+		return
+	}
+	row, err := h.svc.SaveAliConfig(c.Request.Context(), f)
+	respond(c, row, err)
+}
+
+// POST /plugins/website/ali/test —— 连接测试（网关可达 + AppKey/Secret 签名通过）。
+func (h *handler) testAliConnection(c *gin.Context) {
+	respond(c, gin.H{"ok": true}, h.svc.TestAliConnection(c.Request.Context()))
+}
+
+// GET /plugins/website/ali/categories?parentId=0 —— 阿里类目子级（带缓存）。
+func (h *handler) listAliCategories(c *gin.Context) {
+	list, err := h.svc.AliCategories(c.Request.Context(), c.Query("parentId"))
+	respond(c, list, err)
+}
+
+// POST /plugins/website/products/:id/ali-category —— 绑定阿里叶子类目。
+func (h *handler) bindAliCategory(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	var f AliCategoryBindForm
+	if !response.BindJSON(c, &f) {
+		return
+	}
+	respond(c, nil, h.svc.BindAliCategory(c.Request.Context(), id, f.CategoryID))
+}
+
+// POST /plugins/website/products/:id/sync —— 单个商品发到阿里（同步等待，返回阿里商品 ID）。
+func (h *handler) syncProduct(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	var f ProductSyncForm
+	if !response.BindJSON(c, &f) {
+		return
+	}
+	aliPID, err := h.svc.SyncProduct(c.Request.Context(), id, f.Market, baseURL(c))
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, gin.H{"alibabaProductId": aliPID})
+}
+
+// POST /plugins/website/products/sync-batch —— 批量同步：提交后台 job，返回 jobId 供轮询。
+func (h *handler) syncProductBatch(c *gin.Context) {
+	var f ProductSyncForm
+	if !response.BindJSON(c, &f) {
+		return
+	}
+	claims := auth.ClaimsFrom(c)
+	if claims == nil || claims.UserID <= 0 {
+		response.Fail(c, response.Forbidden("auth.login_denied"))
+		return
+	}
+	jid, err := h.svc.SubmitAliSync(c.Request.Context(), f.IDs, f.Market, idgen.ID(claims.UserID), baseURL(c))
+	respond(c, gin.H{"jobId": jid.String()}, err)
+}
+
+// GET /plugins/website/ali/sync-status?jobId= —— 批量同步进度（后端代理 job 状态）。
+func (h *handler) syncProductStatus(c *gin.Context) {
+	m := job.Default()
+	if m == nil {
+		response.Fail(c, response.BadRequest("website.ali_sync_unavailable"))
+		return
+	}
+	jid, err := strconv.ParseInt(c.Query("jobId"), 10, 64)
+	if err != nil || jid <= 0 {
+		response.Fail(c, response.BadRequest("error.bad_request"))
+		return
+	}
+	j, err := m.Get(c.Request.Context(), job.Actor{Admin: true}, idgen.ID(jid))
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, gin.H{
+		"jobId": j.ID.String(), "status": j.Status, "progress": j.Progress,
+		"message": j.Message, "error": j.Error,
+		"startedAt": j.StartedAt, "finishedAt": j.FinishedAt,
+	})
 }

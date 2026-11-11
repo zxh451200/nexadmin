@@ -350,6 +350,10 @@ type Product struct {
 	AlibabaProductID string     `gorm:"column:alibaba_product_id;size:64;not null;default:'';index" json:"alibabaProductId"`
 	SyncStatus       string     `gorm:"column:sync_status;size:16;not null;default:'none'" json:"syncStatus"`
 	SyncedAt         *time.Time `gorm:"column:synced_at" json:"syncedAt,omitempty"`
+	// AlibabaCategoryID 是商品绑定的阿里叶子类目 ID（同步对话框选完回填，二期同步用）。
+	AlibabaCategoryID string `gorm:"column:alibaba_category_id;size:32;not null;default:''" json:"alibabaCategoryId"`
+	// SyncError 是最近一次同步失败的原因（code+文案，截 500）：列表悬停展示，成功同步后清空。
+	SyncError string `gorm:"column:sync_error;size:500;not null;default:''" json:"syncError"`
 	// Categories 是商品所属类目；关联表 plg_website_product_category_rel，保存时整体替换。
 	Categories []ProductCategory `gorm:"many2many:plg_website_product_category_rel" json:"categories,omitempty"`
 	// Views 是公开详情的浏览量：公开详情命中自增，只增不清（要清零走 SQL）。
@@ -359,6 +363,21 @@ type Product struct {
 }
 
 func (Product) TableName() string { return "plg_website_product" }
+
+// AliConfig 是阿里国际站开放平台的接入凭据（单行表，二期同步用）。
+// AppSecret 与 SessionKey 加密落库（core/secret，AES-256-GCM，密文列 json:"-" 不出接口）；
+// 接口视图只回「已配置」布尔，参照 plugins/realname 的 ConfigView 模式。
+type AliConfig struct {
+	database.PlatformModel
+	AppKey string `gorm:"size:64;not null;default:''" json:"appKey"`
+	// AppSecretEnc / SessionKeyEnc 是 core/secret 密文（enc:v1:…）；明文永不落库、不出接口。
+	AppSecretEnc string `gorm:"column:app_secret_enc;type:text" json:"-"`
+	SessionKeyEnc string `gorm:"column:session_key_enc;type:text" json:"-"`
+	// ApiGateway 是 TOP 网关地址：默认正式环境，留沙箱切换口。
+	ApiGateway string `gorm:"column:api_gateway;size:100;not null;default:'https://gw.api.taobao.com/router/rest'" json:"apiGateway"`
+}
+
+func (AliConfig) TableName() string { return "plg_website_ali_config" }
 
 // Published 报告商品的默认语言是否处于上架态：多语言发布机制（published_json 的
 // NormalizePublish / Published 判定）需要一个「整篇是否发布」的布尔，产品由状态机推导。

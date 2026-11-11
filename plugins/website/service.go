@@ -21,6 +21,7 @@ import (
 
 	"nexadmin/core"
 	"nexadmin/core/auth"
+	"nexadmin/core/cache"
 	"nexadmin/core/response"
 	"nexadmin/pkg/htmlsafe"
 	pi18n "nexadmin/pkg/i18n"
@@ -33,9 +34,14 @@ type Service struct {
 	// cfgImageMaxMB 是 config.yaml 的 upload.max_size_image_mb（<=0 = 未配），由模块注册时登记，
 	// 系统参数「上传限制」没设时用它兜底。
 	cfgImageMaxMB float64
+	// cache 是共享缓存（阿里类目树等外部数据）；nil 时直连不缓存。
+	cache cache.Cache
 }
 
 func NewService(db *gorm.DB) *Service { return &Service{db: db} }
+
+// SetCache 登记共享缓存（可选）。
+func (s *Service) SetCache(c cache.Cache) { s.cache = c }
 
 // SetConfigImageMaxMB 登记 config.yaml 的图片大小上限（MB）作为媒体上传的兜底值。
 func (s *Service) SetConfigImageMaxMB(mb int) { s.cfgImageMaxMB = float64(mb) }

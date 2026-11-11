@@ -16,6 +16,7 @@ import (
 
 	"nexadmin/core"
 	"nexadmin/core/event"
+	"nexadmin/core/job"
 	"nexadmin/core/middleware"
 	"nexadmin/core/plugin"
 	"nexadmin/core/plugin/market"
@@ -42,6 +43,8 @@ func (m *module) service(d *core.Deps) *Service {
 		if d.Config != nil {
 			m.svc.SetConfigImageMaxMB(d.Config.Upload.MaxSizeImageMB)
 		}
+		// 共享缓存（阿里类目树等外部数据）：cache 未装配时服务层自动降级直连。
+		m.svc.SetCache(d.Cache)
 	})
 	return m.svc
 }
@@ -138,6 +141,22 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.DELETE("/product-categories/:id", core.Perm("website:product-category"), core.Desc("删除产品类目"), h.deleteProductCategory)
 
 	g.POST("/media", core.Perm("website:setting"), core.Desc("上传 logo/封面图片"), h.uploadMedia)
+
+	// 阿里国际站同步（二期）：凭据管理挂 website:setting（改的是全站凭据），
+	// 发品动作挂 website:product（和商品编辑同一动作面）。
+	g.GET("/ali-config", core.Perm("website:setting"), core.Desc("读取阿里开放平台凭据"), h.getAliConfig)
+	g.PUT("/ali-config", core.Perm("website:setting"), core.Desc("保存阿里开放平台凭据"), h.saveAliConfig)
+	g.POST("/ali/test", core.Perm("website:setting"), core.Desc("阿里开放平台连接测试"), h.testAliConnection)
+	g.GET("/ali/categories", core.Perm("website:product"), core.Desc("阿里类目子级"), h.listAliCategories)
+	g.GET("/ali/sync-status", core.Perm("website:product"), core.Desc("批量同步进度"), h.syncProductStatus)
+	g.POST("/products/:id/sync", core.Perm("website:product"), core.Desc("同步商品到阿里国际站"), h.syncProduct)
+	g.POST("/products/:id/ali-category", core.Perm("website:product"), core.Desc("绑定商品阿里类目"), h.bindAliCategory)
+	g.POST("/products/sync-batch", core.Perm("website:product"), core.Desc("批量同步商品到阿里国际站"), h.syncProductBatch)
+
+	// 批量同步的任务体：闭包捕获 svc。注册是覆盖写，热挂载下幂等。
+	job.Register("website.ali-sync", func(ctx context.Context, j *job.Job, report job.Report) (job.ResultFile, error) {
+		return m.service(d).RunAliSyncJob(ctx, j, report)
+	})
 	g.GET("/limits", core.Perm("website:setting"), core.Desc("读取官网生效上限"), h.limits)
 	// 语言清单的管理接口在框架（/api/v1/languages，见 modules/system/language）：
 	// 官网不再重复提供一份，否则又变成两份互不可见的清单。

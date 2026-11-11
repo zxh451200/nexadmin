@@ -314,6 +314,10 @@ export interface SiteProduct {
   syncedAt?: string | null
   /** 所属类目；保存时按完整列表整体替换 */
   categories?: ProductCategoryNode[]
+  /** 绑定的阿里叶子类目 ID（同步对话框选完回填） */
+  alibabaCategoryId: string
+  /** 最近一次同步失败原因（成功同步后清空） */
+  syncError: string
   i18nJson: string
   /** 非默认语言发布态；空 = 所有语言沿用 status（online 即发布） */
   publishedJson: string
@@ -379,6 +383,46 @@ export interface ProductCategoryOrderItem {
   id: string
   parentId: string
   sort: number
+}
+
+// ---- 阿里国际站同步（二期） ----
+
+/** 阿里发品类型：询盘品（信息要求低，默认）/ 下单品（需要价格/SKU/物流）。 */
+export type AliMarket = 'inquiry' | 'wholesale'
+
+/** 阿里开放平台凭据视图：Secret/Session 只回「已配置」，明文永不出接口。 */
+export interface AliConfig {
+  appKey: string
+  hasSecret: boolean
+  hasSession: boolean
+  apiGateway: string
+}
+
+export interface AliConfigForm {
+  appKey: string
+  /** 空或 "********" = 保持旧值 */
+  appSecret: string
+  /** 空或 "********" = 保持旧值 */
+  sessionKey: string
+  /** TOP 网关；留空 = 沿用默认（正式环境） */
+  apiGateway: string
+}
+
+/** 阿里类目树节点（后端代理 alibaba.icbu.category.get.new 并缓存）。 */
+export interface AliCategoryNode {
+  id: string
+  name: string
+  cnName: string
+  leaf: boolean
+}
+
+/** 批量同步的 job 进度视图（后端代理 job.Get）。 */
+export interface AliSyncStatus {
+  jobId: string
+  status: 'queued' | 'running' | 'success' | 'failed' | 'canceled'
+  progress: number
+  message: string
+  error: string
 }
 
 /** 特性卡片内置图标：名称 + SVG 内部标记。路径以后端 iconPaths 为准，前端不另存一份。 */
@@ -1034,5 +1078,81 @@ export function useReorderProductCategories() {
     mutationFn: (items: ProductCategoryOrderItem[]) => api.put<null>(`${BASE}/product-categories/reorder`, { items }),
     // 失败时 TreeTable 会回滚乐观数据并 toast，这里只保证最终与库一致
     onSettled: () => void qc.invalidateQueries({ queryKey: [...KEY, 'product-categories'] }),
+  })
+}
+
+/** 阿里开放平台凭据视图（Secret/Session 只有 has 布尔）。 */
+export function useAliConfig() {
+  return useQuery({
+    queryKey: [...KEY, 'ali-config'],
+    queryFn: () => api.get<AliConfig>(`${BASE}/ali-config`),
+  })
+}
+
+/** 保存凭据：Secret/Session 空或掩码 = 保持旧值。 */
+export function useSaveAliConfig() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: AliConfigForm) => api.put<AliConfig>(`${BASE}/ali-config`, data),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: [...KEY, 'ali-config'] }),
+  })
+}
+
+/** 连接测试（网关可达 + AppKey/Secret 签名通过）；silent：结果由页面 toast。 */
+export function fetchAliTest(): Promise<void> {
+  return api.post<{ ok: boolean }>(`${BASE}/ali/test`, undefined, { silent: true }).then(() => undefined)
+}
+
+/**
+ * 阿里类目子级（parentId "0" = 一级），后端缓存 24h。
+ * 类目树是同步对话框按需展开才拉的：不 prefetch、加载态由调用方渲染。
+ */
+export function fetchAliCategories(parentId: string): Promise<AliCategoryNode[]> {
+  return api.get<AliCategoryNode[]>(`${BASE}/ali/categories`, { parentId }, { silent: true })
+}
+
+/** 把选好的阿里叶子类目 ID 回填到商品。 */
+export function useBindAliCategory() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, categoryId }: { id: string; categoryId: string }) =>
+      api.post<null>(`${BASE}/products/${id}/ali-category`, { categoryId }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: [...KEY, 'products'] }),
+  })
+}
+
+/** 单个商品发到阿里（同步等待）；错误由调用方捕获 toast（后端已把失败原因写回商品行）。 */
+export function useSyncProduct() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, market }: { id: string; market: AliMarket }) =>
+      api.post<{ alibabaProductId: string }>(`${BASE}/products/${id}/sync`, { market }, { silent: true }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: [...KEY, 'products'] }),
+  })
+}
+
+/** 批量同步：提交后台 job，返回 jobId。 */
+export function useSyncProductBatch() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ ids, market }: { ids: string[]; market: AliMarket }) =>
+      api.post<{ jobId: string }>(`${BASE}/products/sync-batch`, { ids, market }, { silent: true }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: [...KEY, 'products'] }),
+  })
+}
+
+/**
+ * 批量同步进度轮询：job 未结束时 2s 刷新，结束（success/failed/canceled）后停止。
+ * silent：失败由对话框读取 error 展示，不走全局 toast。
+ */
+export function useAliSyncStatus(jobId?: string) {
+  return useQuery({
+    queryKey: [...KEY, 'ali-sync-status', jobId],
+    queryFn: () => api.get<AliSyncStatus>(`${BASE}/ali/sync-status`, { jobId }, { silent: true }),
+    enabled: !!jobId,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status
+      return status === 'success' || status === 'failed' || status === 'canceled' ? false : 2000
+    },
   })
 }

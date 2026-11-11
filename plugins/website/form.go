@@ -239,3 +239,24 @@ type ProductCategoryOrderItem struct {
 type ProductCategoryOrderForm struct {
 	Items []ProductCategoryOrderItem `json:"items"`
 }
+
+// AliConfigForm 是阿里开放平台凭据表单：Secret/SessionKey 三态
+//（空或掩码 = 保持旧值，其余 = 重新加密），参照 realname/aigateway 的凭据模式。
+type AliConfigForm struct {
+	AppKey     string `json:"appKey"`
+	AppSecret  string `json:"appSecret"`
+	SessionKey string `json:"sessionKey"`
+	// ApiGateway 是 TOP 网关地址；留空 = 沿用默认（正式环境）。
+	ApiGateway string `json:"apiGateway"`
+}
+
+// ProductSyncForm 是同步到阿里的入参：Market 取 inquiry（询盘品，默认）/ wholesale（下单品）。
+type ProductSyncForm struct {
+	IDs    []idgen.ID `json:"ids"`
+	Market string     `json:"market"`
+}
+
+// AliCategoryBindForm 是商品绑定阿里类目的入参（同步对话框选完叶子类目回填）。
+type AliCategoryBindForm struct {
+	CategoryID string `json:"categoryId"`
+}

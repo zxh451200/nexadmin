@@ -1,6 +1,6 @@
 import { defineMock, mockError } from '@/framework/request/mock'
 import type { EntitySchema } from '@/framework/components/i18n'
-import type { FeatureItem, MessageStatus, NavItem, PostCategory, PostTag, ProductCategoryNode, SiteMessage, SitePage, SitePost, SiteProduct, SiteSettings } from './api'
+import type { AliCategoryNode, AliConfig, FeatureItem, MessageStatus, NavItem, PostCategory, PostTag, ProductCategoryNode, SiteMessage, SitePage, SitePost, SiteProduct, SiteSettings } from './api'
 
 const ago = (min: number) => new Date(Date.now() - min * 60_000).toISOString()
 const id = (n: number) => String(8100000000000000000n + BigInt(n))
@@ -381,8 +381,9 @@ let products: SiteProduct[] = [
     noindex: false, coverUrl: '', imagesJson: '', videoUrl: '',
     priceMin: 120, priceMax: 260, currency: 'USD', priceUnit: 'piece', moq: 10, leadTimeDays: 15, port: 'Shanghai', paymentTerms: 'T/T, L/C',
     specsJson: JSON.stringify([{ label: 'Brand Name', value: 'NexFlow' }, { label: 'Place of Origin', value: 'China' }]),
-    status: 'online', alibabaProductId: '', syncStatus: 'none', syncedAt: null,
-    categories: [{ id: id(802), parentId: id(801), title: '水泵', slug: 'pumps', sort: 10, productCount: 0 }],
+      status: 'online', alibabaProductId: '', syncStatus: 'none', syncedAt: null,
+      alibabaCategoryId: '', syncError: '',
+      categories: [{ id: id(802), parentId: id(801), title: '水泵', slug: 'pumps', sort: 10, productCount: 0 }],
     i18nJson: JSON.stringify({
       'en-US': {
         title: 'Industrial Centrifugal Water Pump (Stainless Steel)',
@@ -401,6 +402,7 @@ let products: SiteProduct[] = [
     noindex: false, coverUrl: '', imagesJson: '', videoUrl: '',
     priceMin: 0, priceMax: 0, currency: 'USD', priceUnit: 'piece', moq: 5, leadTimeDays: 20, port: 'Shenzhen', paymentTerms: '',
     specsJson: '', status: 'draft', alibabaProductId: '', syncStatus: 'none', syncedAt: null,
+    alibabaCategoryId: '', syncError: '',
     categories: [{ id: id(803), parentId: '0', title: '备用电源', slug: 'power', sort: 20, productCount: 0 }],
     i18nJson: '', publishedJson: '', views: 0, author: '', updatedAt: ago(60 * 3),
   },
@@ -423,6 +425,23 @@ const productCategorySubtree = (roots: string[]): Set<string> => {
     }
   }
   return doomed
+}
+
+// ---- 阿里国际站同步（二期） ----
+let aliConfig: AliConfig = { appKey: 'test-app-key', hasSecret: true, hasSession: true, apiGateway: 'https://gw.api.taobao.com/router/rest' }
+// 两级假类目树（叶子才可选，覆盖「进子级再选」的交互路径）
+const aliCategoryTree: Record<string, AliCategoryNode[]> = {
+  '0': [
+    { id: '150001', name: 'Machinery', cnName: '机械设备', leaf: false },
+    { id: '150002', name: 'Consumer Electronics', cnName: '消费电子', leaf: false },
+  ],
+  '150001': [
+    { id: '150101', name: 'Pumps', cnName: '泵', leaf: false },
+    { id: '150102', name: 'Generators', cnName: '发电机', leaf: false },
+  ],
+  '150002': [{ id: '150201', name: 'Power Banks', cnName: '移动电源', leaf: true }],
+  '150101': [{ id: '150111', name: 'Centrifugal Pumps', cnName: '离心泵', leaf: true }],
+  '150102': [{ id: '150121', name: 'Portable Generators', cnName: '便携式发电机', leaf: true }],
 }
 
 defineMock([
@@ -1060,6 +1079,7 @@ defineMock([
         specsJson: JSON.stringify(Array.isArray(body.specs) ? body.specs : []),
         status: body.status === 'online' ? 'online' : 'draft',
         alibabaProductId: '', syncStatus: 'none', syncedAt: null,
+        alibabaCategoryId: '', syncError: '',
         categories: productCategories.filter((c) => catIds.includes(c.id)),
         i18nJson: body.i18nJson ?? '', publishedJson: body.publishedJson ?? '',
         views: 0, author: body.author ?? '', updatedAt: now,
@@ -1168,5 +1188,89 @@ defineMock([
       productCategories = productCategories.filter((x) => !doomed.has(x.id))
       return { ok: true }
     },
+  },
+
+  // ---- 阿里国际站同步（二期） ----
+  {
+    method: 'GET',
+    url: '/plugins/website/ali-config',
+    handler: () => aliConfig,
+  },
+  {
+    method: 'PUT',
+    url: '/plugins/website/ali-config',
+    handler: ({ body }) => {
+      const appSecret = String(body.appSecret ?? '')
+      const sessionKey = String(body.sessionKey ?? '')
+      aliConfig = {
+        appKey: body.appKey || aliConfig.appKey,
+        apiGateway: body.apiGateway || aliConfig.apiGateway,
+        hasSecret: aliConfig.hasSecret || (!!appSecret && appSecret !== '********'),
+        hasSession: aliConfig.hasSession || (!!sessionKey && sessionKey !== '********'),
+      }
+      return aliConfig
+    },
+  },
+  {
+    method: 'POST',
+    url: '/plugins/website/ali/test',
+    handler: () => {
+      if (!aliConfig.hasSecret) return mockError(400, 'ali not configured')
+      return { ok: true }
+    },
+  },
+  {
+    method: 'GET',
+    url: '/plugins/website/ali/categories',
+    handler: ({ query }) => aliCategoryTree[String(query.parentId ?? '0')] ?? [],
+  },
+  {
+    method: 'POST',
+    url: '/plugins/website/products/:id/ali-category',
+    handler: ({ params, body }) => {
+      const row = products.find((x) => x.id === params.id) ?? mockError(404, 'not found')
+      row.alibabaCategoryId = String(body.categoryId ?? '')
+      return { ok: true }
+    },
+  },
+  {
+    method: 'POST',
+    url: '/plugins/website/products/:id/sync',
+    handler: ({ params }) => {
+      const row = products.find((x) => x.id === params.id) ?? mockError(404, 'not found')
+      if (!aliConfig.hasSecret) return mockError(400, 'ali not configured')
+      if (!row.alibabaCategoryId) return mockError(400, 'ali category required')
+      row.status = 'online'
+      row.syncStatus = 'synced'
+      row.syncError = ''
+      row.syncedAt = new Date().toISOString()
+      row.alibabaProductId = '1000000' + row.id.slice(-3)
+      return { alibabaProductId: row.alibabaProductId }
+    },
+  },
+  {
+    method: 'POST',
+    url: '/plugins/website/products/sync-batch',
+    handler: ({ body }) => {
+      if (!aliConfig.hasSecret) return mockError(400, 'ali not configured')
+      const ids = (body.ids ?? []).map(String)
+      if (!ids.length) return mockError(400, 'no ids')
+      // mock 的批量同步直接逐个落地（真接口走后台 job + 轮询）；返回假 jobId 保持形状一致
+      for (const id of ids) {
+        const row = products.find((x) => x.id === id)
+        if (row && row.alibabaCategoryId) {
+          row.syncStatus = 'synced'
+          row.syncError = ''
+          row.syncedAt = new Date().toISOString()
+          row.alibabaProductId = '1000000' + row.id.slice(-3)
+        }
+      }
+      return { jobId: id(999) }
+    },
+  },
+  {
+    method: 'GET',
+    url: '/plugins/website/ali/sync-status',
+    handler: () => ({ jobId: id(999), status: 'success', progress: 100, message: 'mock 完成', error: '' }),
   },
 ])
