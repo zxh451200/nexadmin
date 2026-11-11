@@ -644,6 +644,12 @@ function AliConfigCard() {
           onChange={(e) => setAppKey(e.target.value)}
           placeholder={t('plugin_website.ali.appKey')}
           aria-label={t('plugin_website.ali.appKey')}
+          // 这张卡形似登录表单（多个输入 + 密码框），浏览器会把站内账号密码自动填进来：
+          // 截图里的 AppKey=admin、AppSecret=10 个圆点就是这么来的。Chrome 的自动填充底色是冷蓝，
+          // 两个框因此比同排其它控件亮一档；更糟的是点「保存凭据」会把这串站点密码当成
+          // AppSecret 加密存库。new-password 是 Chrome 唯一遵从而不填充的写法。
+          autoComplete="off"
+          name="ali-app-key"
         />
         <Input
           type="password"
@@ -651,6 +657,8 @@ function AliConfigCard() {
           onChange={(e) => setAppSecret(e.target.value)}
           placeholder={config?.hasSecret ? t('plugin_website.ali.configuredAlready') : t('plugin_website.ali.appSecret')}
           aria-label={t('plugin_website.ali.appSecret')}
+          autoComplete="new-password"
+          name="ali-app-secret"
         />
         <Input
           type="password"
@@ -658,6 +666,8 @@ function AliConfigCard() {
           onChange={(e) => setSessionKey(e.target.value)}
           placeholder={config?.hasSession ? t('plugin_website.ali.configuredAlready') : t('plugin_website.ali.sessionKey')}
           aria-label={t('plugin_website.ali.sessionKey')}
+          autoComplete="new-password"
+          name="ali-session-key"
         />
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -667,6 +677,8 @@ function AliConfigCard() {
           placeholder="https://gw.api.taobao.com/router/rest"
           aria-label={t('plugin_website.ali.apiGateway')}
           className="min-w-0 flex-1 font-mono text-xs md:w-96 md:flex-none"
+          autoComplete="off"
+          name="ali-api-gateway"
         />
         <Button variant="outline" size="sm" onClick={() => void test()} disabled={testState === 'testing'}>
           {testState === 'testing' ? t('common.loading') : t('plugin_website.ali.test')}

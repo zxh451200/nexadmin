@@ -214,6 +214,8 @@
       "syncSynced": "已同步",
       "syncPending": "同步中",
       "syncFailed": "同步失败",
+      "statusColumn": "状态",
+      "copy": "复制为新草稿",
       "basicSection": "基本信息",
       "imageSection": "图片与视频",
       "tradeSection": "价格与贸易",

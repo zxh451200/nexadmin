@@ -214,6 +214,8 @@
       "syncSynced": "Synced",
       "syncPending": "Syncing",
       "syncFailed": "Failed",
+      "statusColumn": "Status",
+      "copy": "Duplicate as draft",
       "basicSection": "Basics",
       "imageSection": "Images & video",
       "tradeSection": "Price & trade",
