@@ -8,6 +8,7 @@ logs/*
 /backup/
 config/config.yaml
 .env.local
+.env.*.local
 *.log
 
 # 鎻掍欢鎺堟潈绉侀挜锛堝紑鍙戠敤锛岀姝㈡彁浜わ級

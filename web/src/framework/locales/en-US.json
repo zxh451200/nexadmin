@@ -308,6 +308,8 @@
       "aiScope": "Only calls GET /models with the configured credentials and checks whether the selected model is listed. Sends no generation request. A public models endpoint does not prove key validity or generation access.",
       "s3Ok": "Bucket HEAD check passed. Object read/write permissions are not verified.",
       "aiOk": "Models endpoint responded and the selected model is listed. Generation and its authorization are not verified.",
+      "failed": "Probe failed",
+      "modelsUnsupported": "The endpoint does not support a models probe. Generation remains unverified.",
       "invalid": "Check the endpoint, required fields and credentials.",
       "connection": "Could not connect. Check address, network and TLS configuration.",
       "timeout": "The check timed out.",

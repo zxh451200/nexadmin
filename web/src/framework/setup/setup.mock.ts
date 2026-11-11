@@ -41,6 +41,37 @@ defineMock([
     },
   },
   {
+    // 与后端 core/setup/probe.go 同形：{ok, code, scope}；无效配置回 invalid，其余一律成功。
+    method: 'POST',
+    url: '/setup/test-s3',
+    handler: ({ body }) => {
+      guard()
+      const b = body ?? {}
+      if (!b.s3Endpoint || !b.s3Bucket || !b.s3AccessKey || !b.s3SecretKey) return { ok: false, code: 'invalid', scope: 's3' }
+      return { ok: true, code: 'ok', scope: 's3' }
+    },
+  },
+  {
+    // 对齐后端 Config.Ready()：模型名 + http(s) 地址必填；API key 缺失时仅 localhost 放行。
+    method: 'POST',
+    url: '/setup/test-ai',
+    handler: ({ body }) => {
+      guard()
+      const b = body ?? {}
+      let host = ''
+      try {
+        const u = new URL(String(b.aiBaseUrl || ''))
+        host = (u.protocol === 'http:' || u.protocol === 'https:') ? u.hostname : ''
+      } catch {
+        host = ''
+      }
+      if (!host || !b.aiModel || (!b.aiApiKey && !['localhost', '127.0.0.1', '::1'].includes(host))) {
+        return { ok: false, code: 'invalid', scope: 'ai' }
+      }
+      return { ok: true, code: 'ok', scope: 'ai' }
+    },
+  },
+  {
     method: 'POST',
     url: '/setup/execute',
     handler: async ({ body }) => {
