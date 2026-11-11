@@ -84,6 +84,12 @@ func (h *handler) list(c *gin.Context) {
 	response.Page(c, list, total, page, size)
 }
 
+// GET /plugins/im/badge —— 侧栏菜单徽标：进行中会话的访客未读消息数。
+func (h *handler) badge(c *gin.Context) {
+	n, err := h.svc.UnreadTotal(c.Request.Context())
+	respond(c, map[string]int64{"count": n}, err)
+}
+
 // convQueryFrom 解析列表/导出共用的筛选条件（分页由调用方补）。
 func convQueryFrom(c *gin.Context) ConversationQuery {
 	q := ConversationQuery{
@@ -578,6 +584,8 @@ func (h *handler) Register(r *gin.RouterGroup, d *core.Deps) {
 	// ——Host→租户的解析链已有（core/router.go 的 tenant resolver），缺的是把结果落到会话上。
 	g.Use(core.RequirePlatformFeature())
 	g.GET("/conversations", core.Perm("im:list"), h.list)
+	// 菜单徽标走静默轮询，不进操作日志。
+	g.GET("/badge", core.Perm("im:list"), h.badge)
 	g.GET("/conversations/:no/messages", core.Perm("im:list"), h.adminMessages)
 	g.POST("/conversations/:no/messages", core.Perm("im:reply"), h.adminSend)
 	g.POST("/conversations/:no/close", core.Perm("im:edit"), h.close)

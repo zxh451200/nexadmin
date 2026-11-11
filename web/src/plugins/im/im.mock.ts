@@ -93,6 +93,11 @@ defineMock([
   },
   {
     method: 'GET',
+    url: '/plugins/im/badge',
+    handler: () => ({ count: convs.filter((c) => c.status === 'open').reduce((n, c) => n + c.unread, 0) }),
+  },
+  {
+    method: 'GET',
     url: '/plugins/im/conversations/:no/messages',
     handler: ({ params }) => {
       const conv = find(params.no)

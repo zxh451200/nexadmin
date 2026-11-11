@@ -21,6 +21,7 @@ import { Skeleton } from '@/framework/ui/skeleton'
 import { TimeField } from '@/framework/components/pickers/TimeField'
 import { Lightbox, type LightboxSlide } from '@/framework/upload/Lightbox'
 import { useWs } from '@/framework/hooks/useWs'
+import { useInvalidateMenuBadges } from '@/framework/layout/menuBadge'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Card } from '@/framework/ui/card'
@@ -433,6 +434,37 @@ export default function ImPage() {
     })
   }, [list])
 
+  // 新消息提醒：队列里任何会话涨了未读都提示一次。此前只有「当前打开的那个会话」走实时流会响，
+  // 坐席盯着别的会话时红点涨了却毫无动静。首屏只登记基线——已有的未读不是新消息，不该进页面就刷一屏。
+  const unreadSeen = useRef(new Map<string, number>())
+  const invalidateBadges = useInvalidateMenuBadges()
+  useEffect(() => {
+    const seen = unreadSeen.current
+    const fresh: ImConversation[] = []
+    for (const c of list) {
+      const prev = seen.get(c.convNo)
+      seen.set(c.convNo, c.unread)
+      if (prev === undefined || c.unread <= prev || c.convNo === selected) continue
+      fresh.push(c)
+    }
+    if (fresh.length === 0) return
+    // 队列 5 秒一轮，比徽标自己的 60 秒快得多：既然已经知道涨了，顺手把菜单徽标也刷新。
+    invalidateBadges()
+    const first = fresh[0]
+    const body =
+      fresh.length > 1
+        ? t('plugin_im.notify.multi', { count: fresh.length })
+        : t('plugin_im.notify.from', {
+            name: first.visitorName || first.convNo,
+            preview: first.lastPreview || t('plugin_im.newVisitorMessage'),
+          })
+    toast(body, { action: { label: t('plugin_im.notify.view'), onClick: () => setSelected(first.convNo) } })
+    if (notifyOn && (document.hidden || !document.hasFocus())) {
+      playBeep()
+      notifyDesktop(t('plugin_im.title'), body)
+    }
+  }, [list, selected, notifyOn, t, invalidateBadges])
+
   const togglePicked = (convNo: string, on: boolean) =>
     setPicked((p) => (on ? [...new Set([...p, convNo])] : p.filter((x) => x !== convNo)))
 
@@ -742,18 +774,19 @@ function ConvListItem({
         ) : null}
       </span>
       <span className="mt-0.5 flex w-full items-center gap-2">
-        <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{conv.lastPreview || t('plugin_im.noMessages')}</span>
+        <span className="min-w-0 flex-1 truncate text-xs leading-4 text-muted-foreground">{conv.lastPreview || t('plugin_im.noMessages')}</span>
+        {/* 归属/单号/标签并到摘要行右侧：独立成第三行时每行 81px，一屏只看得到 7 条会话 */}
+        {meta.length > 0 ? (
+          <span className="flex min-w-0 max-w-40 shrink items-center gap-1 overflow-hidden text-[11px] leading-none text-muted-foreground">
+            {meta.map((m) => (
+              <span key={m.key} className="inline-flex max-w-full min-w-0 items-center gap-1">
+                {m.node}
+              </span>
+            ))}
+          </span>
+        ) : null}
         <QueueStatus tone={conv.status === 'open' ? 'success' : 'neutral'}>{t(`plugin_im.status.${conv.status}`)}</QueueStatus>
       </span>
-      {meta.length > 0 ? (
-        <span className="mt-0.5 flex min-w-0 items-center gap-1 text-[11px] text-muted-foreground">
-          {meta.map((m) => (
-            <span key={m.key} className="inline-flex min-w-0 items-center gap-1">
-              {m.node}
-            </span>
-          ))}
-        </span>
-      ) : null}
     </>
   )
   const checkbox = canPick ? (

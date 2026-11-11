@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { MENU_BADGES_KEY } from '@/framework/layout/menuBadge'
 import { api, http } from '@/framework/request/http'
 import type { Page, PageQuery } from '@/framework/request/types'
 
@@ -130,6 +131,11 @@ export interface ImQuickReply {
 const BASE = '/plugins/im'
 const KEY = ['plugin_im'] as const
 
+/** 侧栏菜单徽标：进行中会话里访客未读的消息条数（与队列每行红点同一口径）。 */
+export function fetchUnreadCount(): Promise<number> {
+  return api.get<{ count: number }>(`${BASE}/badge`, undefined, { silent: true }).then((d) => d.count)
+}
+
 export function useConversations(query: ConvQuery) {
   return useQuery({
     queryKey: [...KEY, 'convs', query],
@@ -156,6 +162,7 @@ export interface ChatSession {
 }
 
 export function useChatSession(convNo: string | undefined, pollMs = 5000): ChatSession {
+  const qc = useQueryClient()
   const [conv, setConv] = useState<ImConversation>()
   const [messages, setMessages] = useState<ImMessage[]>([])
   const [hasMore, setHasMore] = useState(false)
@@ -179,10 +186,19 @@ export function useChatSession(convNo: string | undefined, pollMs = 5000): ChatS
       return uniq
     })
     if (mode !== 'prepend') {
-      for (const m of r.messages) if (m.seq > lastSeq.current) lastSeq.current = m.seq
+      let advanced = false
+      for (const m of r.messages) {
+        if (m.seq > lastSeq.current) {
+          lastSeq.current = m.seq
+          advanced = true
+        }
+      }
+      // 拉消息会推进服务端已读游标，菜单徽标要跟着掉；只在真读到新序号时失效，
+      // 否则 2 秒一轮的聊天轮询会把徽标接口打成常驻请求。
+      if (advanced) void qc.invalidateQueries({ queryKey: MENU_BADGES_KEY })
     }
     if (mode !== 'append') setHasMore(r.hasMore)
-  }, [])
+  }, [qc])
 
   useEffect(() => {
     current.current = convNo
@@ -290,7 +306,11 @@ export async function openImStream(
 
 function useInvalidate() {
   const qc = useQueryClient()
-  return () => void qc.invalidateQueries({ queryKey: KEY })
+  return () => {
+    void qc.invalidateQueries({ queryKey: KEY })
+    // 关闭/删除/合并会话都会改变未读总数，菜单徽标跟着刷新。
+    void qc.invalidateQueries({ queryKey: MENU_BADGES_KEY })
+  }
 }
 
 export function useSendReply() {

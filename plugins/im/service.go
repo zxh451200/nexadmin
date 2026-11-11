@@ -601,6 +601,19 @@ func (s *Service) ListConversations(ctx context.Context, q ConversationQuery) ([
 	return out, total, nil
 }
 
+// UnreadTotal 是侧栏菜单徽标：进行中会话里访客发出、坐席还没读到的消息条数。
+// 与列表每行未读同一口径（visitor 消息 seq > agent_read_seq），所以徽标等于队列里红点之和；
+// 已结束会话不算——没人在读的会话不该长期占着一枚红点。
+func (s *Service) UnreadTotal(ctx context.Context) (int64, error) {
+	var n int64
+	err := s.db.WithContext(ctx).Model(&Message{}).
+		Joins("JOIN plg_im_conversation c ON c.id = plg_im_message.conv_id").
+		Where("c.status = ? AND plg_im_message.sender_type = ? AND plg_im_message.seq > c.agent_read_seq",
+			StatusOpen, SenderVisitor).
+		Count(&n).Error
+	return n, err
+}
+
 // Close 关闭会话（坐席或自动关闭）：写入一条系统消息、推进序号、落结束信息，
 // 提交后把系统消息与会话结束事件推给双方实时通道。只有 open 可以关。
 func (s *Service) Close(ctx context.Context, convNo, byID string) (*Conversation, *Message, error) {

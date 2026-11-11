@@ -118,7 +118,10 @@
       "on": "Desktop alerts on",
       "off": "Enable desktop alerts",
       "unsupported": "This browser does not support desktop notifications",
-      "denied": "Notification permission was not granted; enable it in browser settings"
+      "denied": "Notification permission was not granted; enable it in browser settings",
+      "from": "{{name}}: {{preview}}",
+      "multi": "{{count}} conversations have new messages",
+      "view": "View"
     },
     "quickReply": {
       "title": "Quick replies",
