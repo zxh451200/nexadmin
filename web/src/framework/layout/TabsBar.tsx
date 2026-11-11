@@ -208,9 +208,11 @@ export function TabsBar({ menu, onRefresh }: TabsBarProps) {
                     data-tab-item=""
                     className={cn(
                       'group/tab flex h-8 shrink-0 items-center rounded-md ps-3 text-sm transition-colors',
+                      // 与 ui/tabs 的 segmentedItemClass 同口径：选中用抬起的中性底 + 发丝边，
+                      // 品牌色只留给动作按钮（两处必须一起改，否则同页出现两种「选中」）。
                       active
-                        ? 'bg-primary font-medium text-primary-foreground shadow-xs'
-                        : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                        ? 'border border-border bg-secondary font-medium text-foreground shadow-xs'
+                        : 'border border-transparent text-muted-foreground hover:bg-accent hover:text-foreground',
                       pinned && 'pe-3',
                     )}
                     onContextMenu={(e) => {

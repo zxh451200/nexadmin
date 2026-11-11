@@ -13,7 +13,10 @@ export const segmentedListClass =
 
 export const segmentedItemClass =
   // 不带 transition-colors：选中底色一渐变，内容已切、胶囊还紫在上一格，看起来像切换有延迟
-  'inline-flex min-h-10 items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-3.5 py-1.5 text-sm font-medium hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-xs md:min-h-8'
+  // 选中态不再填品牌色：一屏里「激活页签 + 状态筛选 + 主按钮」三处都上主色，主色就变成底色，
+  // 反而看不出哪个是动作。选中只表达「在哪一格」，改用抬起的中性底 + 发丝边；
+  // 品牌色留给真正能点的按钮（搜索/新建/保存）。
+  'inline-flex min-h-10 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-transparent px-3.5 py-1.5 text-sm font-medium hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 data-[state=active]:border-border data-[state=active]:bg-secondary data-[state=active]:text-foreground data-[state=active]:shadow-xs md:min-h-8'
 
 const TabsList = React.forwardRef<
   React.ElementRef<typeof TabsPrimitive.List>,
