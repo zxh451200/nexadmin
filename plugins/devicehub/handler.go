@@ -264,9 +264,13 @@ func (h *handler) listAlarms(c *gin.Context) {
 	var deviceID idgen.ID
 	if raw := c.Query("deviceNo"); raw != "" {
 		var d Device
-		if err := h.svc.db.WithContext(c.Request.Context()).Select("id").Where("device_no = ?", raw).Take(&d).Error; err == nil {
-			deviceID = d.ID
+		if err := h.svc.db.WithContext(c.Request.Context()).Select("id").Where("device_no = ?", raw).Take(&d).Error; err != nil {
+			// 查不到就 404，不能退回 deviceID=0：那等于按「不限设备」返回全部告警，
+			// 一个拼错的设备号会静默变成跨设备列表。
+			response.Fail(c, response.NotFound("devicehub.device_not_found"))
+			return
 		}
+		deviceID = d.ID
 	}
 	rows, total, err := h.svc.ListAlarmEvents(c.Request.Context(), deviceID, c.Query("level"), page, pageSize)
 	if err != nil {
