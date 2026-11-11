@@ -37,7 +37,13 @@ export function Segmented({ value, onChange, options, ariaLabel, className }: Se
           aria-label={o.ariaLabel}
           data-state={value === o.value ? 'active' : 'inactive'}
           onClick={() => onChange(o.value)}
-          className={cn(segmentedItemClass, o.className)}
+          // 纯点击激活：键盘聚焦不改变选中，焦点环是键盘用户唯一的落点指示（Radix Tabs
+          // 焦点即激活、蓝底即指示，所以 segmentedItemClass 里不带环）。
+          className={cn(
+            segmentedItemClass,
+            'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+            o.className,
+          )}
         >
           {o.label}
         </button>
