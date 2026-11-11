@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { ArrowRightLeft, Ban, Bell, BellOff, ChevronLeft, ChevronRight, ChevronUp, Download, Ellipsis, FileText, Lock, Merge, MessageSquare, MessagesSquare, Paperclip, Pencil, Send, Settings2, SlidersHorizontal, Star, StickyNote, Tag, Trash2, Undo2, UserMinus, UserPlus, UserRound, X } from 'lucide-react'
+import { ArrowRightLeft, Ban, Bell, BellOff, ChevronLeft, ChevronRight, ChevronUp, CircleCheck, Download, Ellipsis, FileText, Lock, Merge, MessageSquare, MessagesSquare, Paperclip, Pencil, Send, Settings2, SlidersHorizontal, Star, StickyNote, Tag, Timer, Trash2, Undo2, UserMinus, UserPlus, UserRound, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
@@ -8,7 +8,9 @@ import { useAuth } from '@/framework/auth/useAuth'
 import { useIsMobile } from '@/framework/hooks/use-mobile'
 import { usePermission } from '@/framework/auth/usePermission'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
+import { BatchBar } from '@/framework/components/table/BatchBar'
 import { EmptyState } from '@/framework/components/EmptyState'
+import { ChartCard } from '@/framework/components/ChartCard'
 import { StatCard } from '@/framework/components/StatCard'
 import { TrendChart } from '@/framework/components/TrendChart'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
@@ -251,7 +253,7 @@ export default function ImPage() {
       onEvent,
       () => !cancelled && setLive(false),
     ).then((closeFn) => {
-      if (cancelled) closeFn()
+      if (cancelled) closeFn?.()
       else {
         closeStream = closeFn
         setLive(true)
@@ -522,7 +524,8 @@ export default function ImPage() {
       {/* 分栏几何与工单中心同款（24rem 列 + 桌面定高 + 移动端左栏限高）：两套坐席工作台并排打开不会互相打架。
           17rem = 顶部栏+页签条+页头+「会话/统计」页签行+间距；两处常量必须同步改 */}
       <div className="grid h-auto min-h-96 grid-cols-1 gap-4 md:h-[calc(100vh-17rem)] md:min-h-144 md:grid-cols-[24rem_1fr]">
-        <Card className="flex max-h-128 min-h-0 flex-col gap-2 p-2 md:max-h-none">
+        {/* relative 是浮动 BatchBar（absolute）的定位锚：批量条贴卡片底边，不挤压内部滚动列表（与工单队列同款） */}
+        <Card className="relative flex max-h-128 min-h-0 flex-col gap-2 p-2 md:max-h-none">
           <div className="flex flex-wrap items-center gap-2">
             <Input
               value={keyword}
@@ -619,6 +622,8 @@ export default function ImPage() {
             </div>
           ) : null}
           {canPick ? (
+            // 全选框留在列表上方（相当于表格的全选列）；删除动作下沉到浮动 BatchBar，
+            // 不再把列表往下推——与工单队列同一套。
             <div className="flex items-center gap-2 border-b px-1 pb-1.5">
               <Checkbox
                 id="im-pick-all"
@@ -627,22 +632,24 @@ export default function ImPage() {
                 onCheckedChange={(v) => setPicked(v === true ? deletable : [])}
               />
               <label htmlFor="im-pick-all" className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-                {picked.length > 0 ? t('common.selected', { count: picked.length }) : t('plugin_im.batch.selectAllClosed')}
+                {t('plugin_im.batch.selectAllClosed')}
               </label>
-              {picked.length > 0 ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="shrink-0 text-destructive"
-                  disabled={deleteConvs.isPending}
-                  onClick={() => void onDeletePicked()}
-                >
-                  <Trash2 aria-hidden="true" />
-                  {t('plugin_im.batch.delete')}
-                </Button>
-              ) : null}
             </div>
+          ) : null}
+          {picked.length > 0 ? (
+            <BatchBar count={picked.length} onClear={() => setPicked([])} mode="absolute">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="text-destructive"
+                disabled={deleteConvs.isPending}
+                onClick={() => void onDeletePicked()}
+              >
+                <Trash2 aria-hidden="true" />
+                {t('plugin_im.batch.delete')}
+              </Button>
+            </BatchBar>
           ) : null}
           <div className="min-h-0 flex-1 overflow-y-auto">
             {list.map((c) => (
@@ -1823,56 +1830,60 @@ function StatsPanel() {
         <div className="flex flex-col gap-4 py-4">
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             {Array.from({ length: 4 }, (_, i) => (
-              <Skeleton key={i} className="h-24 w-full" />
+              <Skeleton key={i} className="h-28 w-full" />
             ))}
           </div>
           <Skeleton className="h-64 w-full" />
         </div>
       ) : (
         <div className="flex flex-col gap-4">
-          <div className="flex gap-2">
-            {[7, 30, 90].map((d) => (
-              <Button
-                key={d}
-                type="button"
-                size="sm"
-                variant={days === d ? 'secondary' : 'outline'}
-                aria-pressed={days === d}
-                onClick={() => setDays(d)}
-              >
-                {t('plugin_im.stats.days', { count: d })}
-              </Button>
-            ))}
+          {/* 时间窗与工单统计同款：右上下拉，而不是一排按钮——两处复盘面板保持一个形态 */}
+          <div className="flex justify-end">
+            <SimpleSelect
+              aria-label={t('plugin_im.stats.days', { count: days })}
+              className="w-32"
+              value={String(days)}
+              onChange={(v) => setDays(Number(v))}
+              options={[7, 30, 90].map((d) => ({ value: String(d), label: t('plugin_im.stats.days', { count: d }) }))}
+            />
           </div>
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-            <StatCard title={t('plugin_im.stats.total')} value={s.total} hint={t('plugin_im.stats.openHint', { count: s.open })} />
-            <StatCard title={t('plugin_im.stats.closed')} value={s.closed} />
+          {/* tone/icon 与工单 KPI 卡同一语言：色条与图标色块来自 [data-tone] 语义令牌 */}
+          <div className="grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-4">
             <StatCard
+              tone="chart-1"
+              title={t('plugin_im.stats.total')}
+              value={s.total}
+              hint={t('plugin_im.stats.openHint', { count: s.open })}
+              icon={<MessageSquare aria-hidden="true" />}
+            />
+            <StatCard tone="chart-2" title={t('plugin_im.stats.closed')} value={s.closed} icon={<CircleCheck aria-hidden="true" />} />
+            <StatCard
+              tone="info"
               title={t('plugin_im.stats.firstResponse')}
               value={fmtDuration(s.avgFirstResponseSec)}
               hint={t('plugin_im.stats.samples', { count: s.firstResponseCount })}
+              icon={<Timer aria-hidden="true" />}
             />
             <StatCard
+              tone="warning"
               title={t('plugin_im.stats.rating')}
               value={s.ratingCount ? s.avgRating.toFixed(1) : '—'}
               hint={t('plugin_im.stats.samples', { count: s.ratingCount })}
+              icon={<Star aria-hidden="true" />}
             />
           </div>
-          <Card className="p-3">
+          <ChartCard title={t('plugin_im.stats.daily')}>
             <TrendChart
               data={s.daily}
               xKey="date"
-              type="bar"
-              switchable={false}
-              height={220}
+              type="line"
               series={[
                 { key: 'created', label: t('plugin_im.stats.createdSeries') },
                 { key: 'closed', label: t('plugin_im.stats.closedSeries') },
               ]}
             />
-          </Card>
-          <section className="flex flex-col gap-2">
-            <h3 className="text-sm font-semibold text-foreground">{t('plugin_im.stats.agents')}</h3>
+          </ChartCard>
+          <ChartCard title={t('plugin_im.stats.agents')}>
             <div className="divide-y divide-border rounded-md border border-border">
               {s.agents.map((a) => (
                 <div key={a.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-sm">
@@ -1892,7 +1903,7 @@ function StatsPanel() {
                 <div className="px-3 py-4 text-center text-xs text-muted-foreground">{t('plugin_im.stats.noAgents')}</div>
               ) : null}
             </div>
-          </section>
+          </ChartCard>
           {s.truncated ? <p className="text-xs text-warning">{t('plugin_im.stats.truncated', { count: 5000 })}</p> : null}
         </div>
       )}

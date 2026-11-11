@@ -264,19 +264,37 @@ export function useChatSession(convNo: string | undefined, pollMs = 5000): ChatS
 const API_BASE = import.meta.env.VITE_API_BASE || '/api/v1'
 
 /**
- * 打开某会话的 SSE 实时流（先认证换一次性流票）。返回关闭函数。
+ * 打开某会话的 SSE 实时流（先认证换一次性流票）。
+ * 成功建流后返回关闭函数；换票/建流失败返回 null（调用方据此退避重试）。
  * 事件既可能是消息（含 seq），也可能是控制帧（type: typing / closed / read / assigned）。
- * 断流时通过 onError 通知调用方回落到轮询；组件重挂/切换会话时调用关闭函数。
+ * 建流成功后断流通过 onError 通知调用方；组件重挂/切换会话时调用关闭函数。
  */
 export async function openImStream(
   convNo: string,
   onEvent: (evt: unknown) => void,
   onError: () => void,
-): Promise<() => void> {
+): Promise<(() => void) | null> {
+  let ticket: string
   try {
-    const { ticket } = await api.post<{ ticket: string }>(`${BASE}/stream-ticket`)
+    // silent：SSE 只是兜底通道，换票失败不该弹错误提示（mock 环境没有这张票，重试时会刷屏）。
+    ticket = (await api.post<{ ticket: string }>(`${BASE}/stream-ticket`, undefined, { silent: true })).ticket
+  } catch {
+    return null
+  }
+  return new Promise((resolve) => {
     const es = new EventSource(`${API_BASE}/plugins/im/stream/${encodeURIComponent(convNo)}?ticket=${encodeURIComponent(ticket)}`)
     let closed = false
+    let opened = false
+    const close = () => {
+      if (!closed) {
+        closed = true
+        es.close()
+      }
+    }
+    es.onopen = () => {
+      opened = true
+      resolve(close)
+    }
     es.onmessage = (e) => {
       if (closed) return
       try {
@@ -286,22 +304,13 @@ export async function openImStream(
       }
     }
     es.onerror = () => {
-      if (!closed) {
-        closed = true
-        es.close()
-        onError()
-      }
+      if (closed) return
+      close()
+      // 没建成过就失败：走 resolve(null) 让调用方统一重试，避免 onError 与 null 双重重试。
+      if (opened) onError()
+      else resolve(null)
     }
-    return () => {
-      if (!closed) {
-        closed = true
-        es.close()
-      }
-    }
-  } catch {
-    onError()
-    return () => {}
-  }
+  })
 }
 
 function useInvalidate() {

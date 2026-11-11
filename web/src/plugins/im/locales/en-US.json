@@ -92,6 +92,7 @@
       "rating": "Rating",
       "createdSeries": "Created",
       "closedSeries": "Closed",
+      "daily": "Daily conversations",
       "agents": "Agent workload",
       "assignedShort": "Assigned {{count}}",
       "closedShort": "Closed {{count}}",

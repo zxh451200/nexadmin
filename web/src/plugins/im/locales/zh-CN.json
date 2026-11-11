@@ -92,6 +92,7 @@
       "rating": "满意度",
       "createdSeries": "新建会话",
       "closedSeries": "结束会话",
+      "daily": "每日会话",
       "agents": "坐席工作量",
       "assignedShort": "分配 {{count}}",
       "closedShort": "结束 {{count}}",
