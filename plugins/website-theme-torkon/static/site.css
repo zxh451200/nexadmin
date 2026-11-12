@@ -84,9 +84,10 @@ h1, h2, h3, h4 { line-height: 1.2; margin: 0; }
 .tk-navsub ul a { display: block; padding: 8px 12px; border-radius: 6px; color: var(--tk-ink); font-size: 14px; }
 .tk-navsub ul a:hover { background: var(--tk-bg); color: var(--tk-red); }
 .tk-header-actions { display: flex; align-items: center; gap: 10px; }
+.tk-lang { position: relative; }
 .tk-lang summary { display: inline-flex; align-items: center; gap: 4px; color: #c9cbd1; font-size: 13px; padding: 8px 10px; border-radius: 6px; cursor: pointer; list-style: none; border: 1px solid rgba(255, 255, 255, .18); }
 .tk-lang summary:hover { color: #fff; }
-.tk-langmenu { position: absolute; right: 24px; top: 64px; background: #fff; border: 1px solid var(--tk-line); border-radius: 8px; box-shadow: var(--tk-shadow); padding: 6px; min-width: 150px; z-index: 60; }
+.tk-langmenu { position: absolute; inset-inline-end: 0; top: calc(100% + 8px); background: #fff; border: 1px solid var(--tk-line); border-radius: 8px; box-shadow: var(--tk-shadow); padding: 6px; min-width: 150px; z-index: 60; }
 .tk-langmenu a { display: block; padding: 8px 12px; border-radius: 6px; color: var(--tk-ink); font-size: 14px; }
 .tk-langmenu a:hover { background: var(--tk-bg); color: var(--tk-red); }
 .tk-mnav-btn { display: none; }

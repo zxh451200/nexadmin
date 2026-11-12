@@ -83,9 +83,10 @@ h1, h2, h3, h4 { line-height: 1.2; margin: 0; }
 .au-navsub ul a { display: block; padding: 8px 12px; border-radius: 6px; color: var(--au-ink); font-size: 14px; }
 .au-navsub ul a:hover { background: var(--au-bg); color: var(--au-blue); }
 .au-header-actions { display: flex; align-items: center; gap: 10px; }
+.au-lang { position: relative; }
 .au-lang summary { display: inline-flex; align-items: center; gap: 4px; color: #3c4550; font-size: 13px; padding: 8px 10px; border-radius: 6px; cursor: pointer; list-style: none; border: 1px solid var(--au-line); }
 .au-lang summary:hover { color: var(--au-blue); }
-.au-langmenu { position: absolute; right: 24px; top: 64px; background: #fff; border: 1px solid var(--au-line); border-radius: 8px; box-shadow: var(--au-shadow); padding: 6px; min-width: 150px; z-index: 60; }
+.au-langmenu { position: absolute; inset-inline-end: 0; top: calc(100% + 8px); background: #fff; border: 1px solid var(--au-line); border-radius: 8px; box-shadow: var(--au-shadow); padding: 6px; min-width: 150px; z-index: 60; }
 .au-langmenu a { display: block; padding: 8px 12px; border-radius: 6px; color: var(--au-ink); font-size: 14px; }
 .au-langmenu a:hover { background: var(--au-bg); color: var(--au-blue); }
 .au-mnav-btn { display: none; }

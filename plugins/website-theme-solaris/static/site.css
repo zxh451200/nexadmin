@@ -82,9 +82,10 @@ h1, h2, h3, h4 { line-height: 1.2; margin: 0; }
 .sl-navsub ul a { display: block; padding: 8px 12px; border-radius: 6px; color: var(--sl-ink); font-size: 14px; }
 .sl-navsub ul a:hover { background: var(--sl-bg); color: var(--sl-blue); }
 .sl-header-actions { display: flex; align-items: center; gap: 10px; }
+.sl-lang { position: relative; }
 .sl-lang summary { display: inline-flex; align-items: center; gap: 4px; color: #3c4550; font-size: 13px; padding: 8px 10px; border-radius: 6px; cursor: pointer; list-style: none; border: 1px solid var(--sl-line); }
 .sl-lang summary:hover { color: var(--sl-blue); }
-.sl-langmenu { position: absolute; right: 24px; top: 64px; background: #fff; border: 1px solid var(--sl-line); border-radius: 8px; box-shadow: var(--sl-shadow); padding: 6px; min-width: 150px; z-index: 60; }
+.sl-langmenu { position: absolute; inset-inline-end: 0; top: calc(100% + 8px); background: #fff; border: 1px solid var(--sl-line); border-radius: 8px; box-shadow: var(--sl-shadow); padding: 6px; min-width: 150px; z-index: 60; }
 .sl-langmenu a { display: block; padding: 8px 12px; border-radius: 6px; color: var(--sl-ink); font-size: 14px; }
 .sl-langmenu a:hover { background: var(--sl-bg); color: var(--sl-blue); }
 .sl-mnav-btn { display: none; }
