@@ -663,4 +663,33 @@ h1, h2, h3, h4 { line-height: 1.2; margin: 0; }
 .tk-rail-fallback svg { width: 40px; height: 40px; color: var(--tk-red); }
 .tk-filter { justify-content: center; }
 .tk-story-line { text-shadow: 0 2px 24px rgba(0, 0, 0, .25); }
+/* ---- 特效层：玻璃拟态 + 氛围光 ---- */
+::selection { background: var(--tk-red); color: #fff; }
+section[id] { scroll-margin-top: 96px; }
+.tk-header { background: rgba(17, 18, 20, .72); backdrop-filter: blur(14px) saturate(1.2); }
+.tk-hero { position: relative; overflow: hidden; }
+.tk-hero > .tk-wrap, .tk-hero > .tk-hero-stats { position: relative; z-index: 1; }
+.tk-hero::before {
+  content: ""; position: absolute; width: 560px; height: 560px;
+  inset-block-start: -160px; inset-inline-start: -180px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(214, 41, 46, .30), transparent 65%);
+  filter: blur(46px); pointer-events: none;
+  animation: tk-pulse 9s ease-in-out infinite alternate;
+}
+@keyframes tk-pulse { to { transform: translate(70px, 46px) scale(1.18); opacity: .82; } }
+.tk-hero-side { background: rgba(255, 255, 255, .06); backdrop-filter: blur(12px) saturate(1.1); border: 1px solid rgba(255, 255, 255, .12); }
+.tk-flagship-specs li { background: rgba(255, 255, 255, .07); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, .14); }
+.tk-btn { position: relative; overflow: hidden; }
+.tk-btn::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(105deg, transparent 42%, rgba(255, 255, 255, .28) 50%, transparent 58%);
+  transform: translateX(-130%); transition: transform .55s ease;
+}
+.tk-btn:hover::after { transform: translateX(130%); }
+.tk-product-card:hover, .tk-news-card:hover { box-shadow: 0 18px 44px -16px rgba(214, 41, 46, .35); }
+.tk-chat-glass, .chat-panel { background: rgba(255, 255, 255, .94); backdrop-filter: blur(16px); }
 
+@media (prefers-reduced-motion: reduce) {
+  [class*="-hero"]::before, [class*="-hero"]::after { animation: none !important; }
+  .tk-btn::after { display: none; }
+}

@@ -627,4 +627,39 @@ h1, h2, h3, h4 { line-height: 1.2; margin: 0; }
 .au-hero { background: radial-gradient(900px 420px at 8% 115%, rgba(8, 127, 201, .18), transparent 62%), radial-gradient(1100px 540px at 76% -8%, #1d242e 0%, var(--au-dark) 58%), var(--au-dark); }
 .au-case-body .au-term-badge { align-self: flex-start; }
 .au-hero-title .au-hero-accent1 { color: #4aa6dd; }
+/* ---- 特效层：玻璃拟态 + 氛围光 + 蓝图网格 ---- */
+::selection { background: var(--au-blue); color: #fff; }
+section[id] { scroll-margin-top: 96px; }
+.au-header { background: rgba(255, 255, 255, .78); backdrop-filter: blur(14px) saturate(1.15); }
+.au-hero { position: relative; overflow: hidden; }
+.au-hero > .au-wrap, .au-hero > .au-hero-stats { position: relative; z-index: 1; }
+.au-hero::before {
+  content: ""; position: absolute; width: 560px; height: 560px;
+  inset-block-start: -160px; inset-inline-start: -180px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(8, 127, 201, .30), transparent 65%);
+  filter: blur(46px); pointer-events: none;
+  animation: au-pulse 9s ease-in-out infinite alternate;
+}
+@keyframes au-pulse { to { transform: translate(70px, 46px) scale(1.18); opacity: .82; } }
+.au-hero-shot img { box-shadow: 0 34px 70px -24px rgba(0, 0, 0, .55); }
+.au-solutions {
+  background-color: #fff;
+  background-image: linear-gradient(rgba(8, 127, 201, .05) 1px, transparent 1px), linear-gradient(90deg, rgba(8, 127, 201, .05) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+.au-btn { position: relative; overflow: hidden; }
+.au-btn::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(105deg, transparent 42%, rgba(255, 255, 255, .3) 50%, transparent 58%);
+  transform: translateX(-130%); transition: transform .55s ease;
+}
+.au-btn:hover::after { transform: translateX(130%); }
+.au-product-card:hover, .au-news-card:hover { box-shadow: 0 18px 44px -16px rgba(8, 127, 201, .35); }
+.au-case-card img { transition: transform .35s ease; }
+.au-case-card:hover img { transform: scale(1.05); }
+.chat-panel { background: rgba(255, 255, 255, .94); backdrop-filter: blur(16px); }
 
+@media (prefers-reduced-motion: reduce) {
+  [class*="-hero"]::before, [class*="-hero"]::after { animation: none !important; }
+  .au-btn::after { display: none; }
+}

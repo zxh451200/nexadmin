@@ -693,4 +693,41 @@ h1, h2, h3, h4 { line-height: 1.2; margin: 0; }
 .sl-term-badge { align-self: flex-start; }
 .sl-news-card, .sl-product-card, .sl-project-card { border-radius: 12px; }
 .sl-bigfig { color: #cfddd2; }
+/* ---- 特效层：浅色玻璃拟态 + 漂浮光斑 ---- */
+::selection { background: var(--sl-amber); color: #fff; }
+section[id] { scroll-margin-top: 96px; }
+.sl-header { background: rgba(255, 255, 255, .78); backdrop-filter: blur(14px) saturate(1.15); }
+.sl-hero { position: relative; overflow: hidden; }
+.sl-hero > .sl-wrap, .sl-hero > .sl-hero-stats { position: relative; z-index: 1; }
+.sl-hero::before {
+  content: ""; position: absolute; width: 480px; height: 480px;
+  inset-block-start: -140px; inset-inline-start: -160px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(36, 79, 61, .12), transparent 65%);
+  filter: blur(40px); pointer-events: none;
+  animation: sl-float-a 11s ease-in-out infinite alternate;
+}
+.sl-hero::after {
+  content: ""; position: absolute; width: 420px; height: 420px;
+  inset-block-end: -180px; inset-inline-end: -140px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(214, 141, 60, .14), transparent 65%);
+  filter: blur(44px); pointer-events: none;
+  animation: sl-float-b 13s ease-in-out infinite alternate;
+}
+@keyframes sl-float-a { to { transform: translate(60px, 50px) scale(1.12); } }
+@keyframes sl-float-b { to { transform: translate(-50px, -40px) scale(1.1); } }
+.sl-hero-shot img { border-radius: 14px; box-shadow: 0 30px 60px -24px rgba(20, 46, 34, .35); animation: sl-float-a 9s ease-in-out infinite alternate; }
+.sl-btn { position: relative; overflow: hidden; }
+.sl-btn::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(105deg, transparent 42%, rgba(255, 255, 255, .3) 50%, transparent 58%);
+  transform: translateX(-130%); transition: transform .55s ease;
+}
+.sl-btn:hover::after { transform: translateX(130%); }
+.sl-product-card:hover, .sl-news-card:hover, .sl-project-card:hover { box-shadow: 0 18px 44px -16px rgba(36, 79, 61, .3); }
+.sl-case-body .sl-term-badge, .sl-project-body .sl-term-badge { align-self: flex-start; }
+.chat-panel { background: rgba(255, 255, 255, .94); backdrop-filter: blur(16px); }
 
+@media (prefers-reduced-motion: reduce) {
+  [class*="-hero"]::before, [class*="-hero"]::after { animation: none !important; }
+  .sl-btn::after { display: none; }
+}
