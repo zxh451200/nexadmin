@@ -115,12 +115,14 @@ func (h *handler) seedThemeDemo(c *gin.Context) {
 // GET /plugins/website/messages?keyword=&status=&page=&pageSize=
 func (h *handler) listMessages(c *gin.Context) {
 	page, size := response.ParsePage(c)
-	status := strings.TrimSpace(c.Query("status"))
-	if status != "" && !ValidMessageStatus(status) {
-		response.Fail(c, response.BadRequest("website.message_status_invalid"))
-		return
+	statuses := response.ParseList(c.Query("status"), response.MaxFilterValues)
+	for _, st := range statuses {
+		if !ValidMessageStatus(st) {
+			response.Fail(c, response.BadRequest("website.message_status_invalid"))
+			return
+		}
 	}
-	q := MessageQuery{Page: page, PageSize: size, Keyword: c.Query("keyword"), Status: status}
+	q := MessageQuery{Page: page, PageSize: size, Keyword: c.Query("keyword"), Status: statuses}
 	list, total, err := h.svc.ListMessages(c.Request.Context(), q)
 	if err != nil {
 		response.Fail(c, err)
@@ -138,12 +140,14 @@ func (h *handler) unreadMessageCount(c *gin.Context) {
 // GET /plugins/website/messages/export?keyword=&status= —— 导出当前筛选下的全部留言。
 // 返回 JSON 列表（不带分页），CSV 由前端生成，与 /users/export 的默认分支同款形状。
 func (h *handler) exportMessages(c *gin.Context) {
-	status := strings.TrimSpace(c.Query("status"))
-	if status != "" && !ValidMessageStatus(status) {
-		response.Fail(c, response.BadRequest("website.message_status_invalid"))
-		return
+	statuses := response.ParseList(c.Query("status"), response.MaxFilterValues)
+	for _, st := range statuses {
+		if !ValidMessageStatus(st) {
+			response.Fail(c, response.BadRequest("website.message_status_invalid"))
+			return
+		}
 	}
-	rows, err := h.svc.ExportMessages(c.Request.Context(), MessageQuery{Keyword: c.Query("keyword"), Status: status})
+	rows, err := h.svc.ExportMessages(c.Request.Context(), MessageQuery{Keyword: c.Query("keyword"), Status: statuses})
 	respond(c, rows, err)
 }
 
@@ -313,12 +317,22 @@ func (h *handler) deleteFeatures(c *gin.Context) {
 func contentQuery(c *gin.Context) ContentQuery {
 	page, size := response.ParsePage(c)
 	q := ContentQuery{
-		Keyword: c.Query("keyword"), Status: c.Query("status"), Missing: c.Query("missing"),
-		Page: page, PageSize: size,
+		Keyword: c.Query("keyword"),
+		// 多值 CSV：?status=published,draft；单值旧链接天然兼容
+		Statuses: response.ParseList(c.Query("status"), response.MaxFilterValues),
+		Missings: response.ParseList(c.Query("missing"), response.MaxFilterValues),
+		Page:     page, PageSize: size,
 	}
-	// 分类筛选只对新闻生效；非法值当没有这个筛选，不让一个手改的 URL 500。
-	if id, err := idgen.Parse(c.Query("categoryId")); err == nil && id > 0 {
-		q.CategoryID = id
+	// 分类筛选只对新闻生效；categoryIds 多选 + 兼容历史单值 categoryId；非法值当没有这个筛选，不让一个手改的 URL 500。
+	raw := c.Query("categoryIds")
+	if strings.TrimSpace(raw) == "" {
+		raw = c.Query("categoryId")
+	}
+	if ids := response.ParseFilterIDs(raw, response.MaxFilterValues); len(ids) > 0 {
+		q.CategoryIDs = make([]idgen.ID, 0, len(ids))
+		for _, id := range ids {
+			q.CategoryIDs = append(q.CategoryIDs, idgen.ID(id))
+		}
 	}
 	return q
 }

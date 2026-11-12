@@ -10,7 +10,7 @@
       "createdAt": "创建时间",
       "duration": "耗时"
     },
-    "type": { "all": "全部类型", "user.export": "用户导出" },
+    "type": { "all": "全部类型", "user.export": "用户导出", "website.product-export": "产品导出" },
     "status": {
       "all": "全部状态",
       "queued": "排队中",

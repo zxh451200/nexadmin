@@ -38,6 +38,37 @@ const SOURCES: ImportSourceMeta[] = [
       { key: 'remark', label: '备注', required: false, example: '' },
     ],
   },
+  {
+    // 与 plugins/website/product_io.go 的 ImportSources 同列同序：mock 的模板与列提示也是契约的一部分。
+    name: 'website_products',
+    title: '产品导入',
+    columns: [
+      { key: 'title', label: '商品名称', required: true, example: '18V 无刷冲击扳手' },
+      { key: 'slug', label: 'Slug', required: false, example: '18v-brushless-impact-wrench' },
+      { key: 'categories', label: '产品类目', required: false, example: '电动工具|冲击扳手' },
+      { key: 'status', label: '状态', required: false, example: 'draft' },
+      { key: 'keywords', label: '关键词', required: false, example: 'impact wrench 18V brushless' },
+      { key: 'summary', label: '摘要', required: false, example: '18V 无刷冲击扳手，最大扭矩 300N·m' },
+      { key: 'content', label: '详情', required: false, example: '<p>详情富文本 HTML</p>' },
+      { key: 'coverUrl', label: '主图', required: false, example: 'https://example.com/cover.jpg' },
+      { key: 'images', label: '图集', required: false, example: 'https://example.com/1.jpg|https://example.com/2.jpg' },
+      { key: 'videoUrl', label: '视频地址', required: false, example: 'https://example.com/demo.mp4' },
+      { key: 'priceMin', label: '价格（起）', required: false, example: '49.90' },
+      { key: 'priceMax', label: '价格（止）', required: false, example: '59.90' },
+      { key: 'currency', label: '币种', required: false, example: 'USD' },
+      { key: 'priceUnit', label: '计量单位', required: false, example: 'piece' },
+      { key: 'moq', label: '最小起订量', required: false, example: '100' },
+      { key: 'leadTimeDays', label: '发货天数', required: false, example: '15' },
+      { key: 'port', label: '装运港口', required: false, example: 'Shanghai' },
+      { key: 'paymentTerms', label: '付款方式', required: false, example: 'T/T, L/C' },
+      { key: 'specs', label: '动态属性', required: false, example: '[{"label":"Voltage","value":"18V"}] 或 电压:18V|品牌:NexTool' },
+      { key: 'seoTitle', label: 'SEO 标题', required: false, example: '' },
+      { key: 'seoDesc', label: 'SEO 描述', required: false, example: '' },
+      { key: 'seoKeywords', label: 'SEO 关键词', required: false, example: '' },
+      { key: 'author', label: '作者', required: false, example: '外贸部' },
+      { key: 'i18n', label: '多语言', required: false, example: '{"en":{"title":"18V Brushless Impact Wrench"}}' },
+    ],
+  },
 ]
 
 let jobs: ImportJob[] = [

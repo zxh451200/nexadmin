@@ -10,13 +10,21 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
+	"math"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
+	"nexadmin/core/auth"
 	"nexadmin/core/i18n"
+	"nexadmin/core/job"
 	"nexadmin/core/response"
+	"nexadmin/pkg/excel"
 	"nexadmin/pkg/idgen"
 	"nexadmin/pkg/importspec"
 )
@@ -38,6 +46,37 @@ func (s *Service) ExportProducts(ctx context.Context, q ContentQuery, ids []idge
 	return rows, err
 }
 
+// productImportColumns 是导入模板的列定义（键/标签/示例）：导入中心与异步导出共用同一份，
+// 这样导出的 .xlsx 表头天然就是导入模板的表头，导出的文件可以直接改完再导回去。
+func productImportColumns() []importspec.Column {
+	return []importspec.Column{
+		{Key: "title", Label: "商品名称", LabelKey: "website.import_col_title", Required: true, Example: "18V 无刷冲击扳手"},
+		{Key: "slug", Label: "Slug", LabelKey: "website.import_col_slug", Example: "18v-brushless-impact-wrench"},
+		{Key: "categories", Label: "产品类目", LabelKey: "website.import_col_categories", Example: "电动工具|冲击扳手"},
+		{Key: "status", Label: "状态", LabelKey: "website.import_col_status", Example: "draft"},
+		{Key: "keywords", Label: "关键词", LabelKey: "website.import_col_keywords", Example: "impact wrench 18V brushless"},
+		{Key: "summary", Label: "摘要", LabelKey: "website.import_col_summary", Example: "18V 无刷冲击扳手，最大扭矩 300N·m"},
+		{Key: "content", Label: "详情", LabelKey: "website.import_col_content", Example: "<p>详情富文本 HTML</p>"},
+		{Key: "coverUrl", Label: "主图", LabelKey: "website.import_col_cover", Example: "https://example.com/cover.jpg"},
+		{Key: "images", Label: "图集", LabelKey: "website.import_col_images", Example: "https://example.com/1.jpg|https://example.com/2.jpg"},
+		{Key: "videoUrl", Label: "视频地址", LabelKey: "website.import_col_video", Example: "https://example.com/demo.mp4"},
+		{Key: "priceMin", Label: "价格（起）", LabelKey: "website.import_col_price_min", Example: "49.90"},
+		{Key: "priceMax", Label: "价格（止）", LabelKey: "website.import_col_price_max", Example: "59.90"},
+		{Key: "currency", Label: "币种", LabelKey: "website.import_col_currency", Example: "USD"},
+		{Key: "priceUnit", Label: "计量单位", LabelKey: "website.import_col_unit", Example: "piece"},
+		{Key: "moq", Label: "最小起订量", LabelKey: "website.import_col_moq", Example: "100"},
+		{Key: "leadTimeDays", Label: "发货天数", LabelKey: "website.import_col_lead_time", Example: "15"},
+		{Key: "port", Label: "装运港口", LabelKey: "website.import_col_port", Example: "Shanghai"},
+		{Key: "paymentTerms", Label: "付款方式", LabelKey: "website.import_col_payment", Example: "T/T, L/C"},
+		{Key: "specs", Label: "动态属性", LabelKey: "website.import_col_specs", Example: `[{"label":"Voltage","value":"18V"}] 或 电压:18V|品牌:NexTool`},
+		{Key: "seoTitle", Label: "SEO 标题", LabelKey: "website.import_col_seo_title"},
+		{Key: "seoDesc", Label: "SEO 描述", LabelKey: "website.import_col_seo_desc"},
+		{Key: "seoKeywords", Label: "SEO 关键词", LabelKey: "website.import_col_seo_keywords"},
+		{Key: "author", Label: "作者", LabelKey: "website.import_col_author", Example: "外贸部"},
+		{Key: "i18n", Label: "多语言", LabelKey: "website.import_col_i18n", Example: `{"en":{"title":"18V Brushless Impact Wrench"}}`},
+	}
+}
+
 // ImportSources 实现 importspec.Provider：导入中心启动时自动收集，无需第二处接线。
 func (m *module) ImportSources(db *gorm.DB) []importspec.Source {
 	svc := NewService(db)
@@ -45,32 +84,7 @@ func (m *module) ImportSources(db *gorm.DB) []importspec.Source {
 		Name:     SourceProducts,
 		Title:    "产品导入",
 		TitleKey: "website.import_products_title",
-		Columns: []importspec.Column{
-			{Key: "title", Label: "商品名称", LabelKey: "website.import_col_title", Required: true, Example: "18V 无刷冲击扳手"},
-			{Key: "slug", Label: "Slug", LabelKey: "website.import_col_slug", Example: "18v-brushless-impact-wrench"},
-			{Key: "categories", Label: "产品类目", LabelKey: "website.import_col_categories", Example: "电动工具|冲击扳手"},
-			{Key: "status", Label: "状态", LabelKey: "website.import_col_status", Example: "draft"},
-			{Key: "keywords", Label: "关键词", LabelKey: "website.import_col_keywords", Example: "impact wrench 18V brushless"},
-			{Key: "summary", Label: "摘要", LabelKey: "website.import_col_summary", Example: "18V 无刷冲击扳手，最大扭矩 300N·m"},
-			{Key: "content", Label: "详情", LabelKey: "website.import_col_content", Example: "<p>详情富文本 HTML</p>"},
-			{Key: "coverUrl", Label: "主图", LabelKey: "website.import_col_cover", Example: "https://example.com/cover.jpg"},
-			{Key: "images", Label: "图集", LabelKey: "website.import_col_images", Example: "https://example.com/1.jpg|https://example.com/2.jpg"},
-			{Key: "videoUrl", Label: "视频地址", LabelKey: "website.import_col_video", Example: "https://example.com/demo.mp4"},
-			{Key: "priceMin", Label: "价格（起）", LabelKey: "website.import_col_price_min", Example: "49.90"},
-			{Key: "priceMax", Label: "价格（止）", LabelKey: "website.import_col_price_max", Example: "59.90"},
-			{Key: "currency", Label: "币种", LabelKey: "website.import_col_currency", Example: "USD"},
-			{Key: "priceUnit", Label: "计量单位", LabelKey: "website.import_col_unit", Example: "piece"},
-			{Key: "moq", Label: "最小起订量", LabelKey: "website.import_col_moq", Example: "100"},
-			{Key: "leadTimeDays", Label: "发货天数", LabelKey: "website.import_col_lead_time", Example: "15"},
-			{Key: "port", Label: "装运港口", LabelKey: "website.import_col_port", Example: "Shanghai"},
-			{Key: "paymentTerms", Label: "付款方式", LabelKey: "website.import_col_payment", Example: "T/T, L/C"},
-			{Key: "specs", Label: "动态属性", LabelKey: "website.import_col_specs", Example: `[{"label":"Voltage","value":"18V"}] 或 电压:18V|品牌:NexTool`},
-			{Key: "seoTitle", Label: "SEO 标题", LabelKey: "website.import_col_seo_title"},
-			{Key: "seoDesc", Label: "SEO 描述", LabelKey: "website.import_col_seo_desc"},
-			{Key: "seoKeywords", Label: "SEO 关键词", LabelKey: "website.import_col_seo_keywords"},
-			{Key: "author", Label: "作者", LabelKey: "website.import_col_author", Example: "外贸部"},
-			{Key: "i18n", Label: "多语言", LabelKey: "website.import_col_i18n", Example: `{"en":{"title":"18V Brushless Impact Wrench"}}`},
-		},
+		Columns:  productImportColumns(),
 		Handler: func(ctx context.Context, _ int, row map[string]string) error {
 			return importProductRow(ctx, svc, row)
 		},
@@ -276,4 +290,268 @@ func rowError(ctx context.Context, err error) error {
 		return errors.New(i18n.T(ctx, re.Key, re.Args...))
 	}
 	return err
+}
+
+// ---- 异步导出：大数据量不再同步阻塞请求，而是登记 core/job 任务，worker 流式写 xlsx 到存储，
+// 用户在「导出中心」看进度与下载（与 system/user 的 user.export 同一套机制）。 ----
+
+const (
+	jobTypeProductExport = "website.product-export"
+	// productExportSyncLimitDef 是同步直出的默认行数上限：与 system/user 的 export.sync_limit 同一个参数，
+	// 超过它前端改走异步任务。0/缺省回落到这个值。
+	productExportSyncLimitDef = 5000
+	// productExportMax 是单次异步导出的行数上限（xlsx 单表上限约 104 万行，留足余量）。
+	productExportMax = 500000
+	// productExportBatch 是每批读取行数。
+	productExportBatch = 500
+	// maxContentCellRunes 是详情列写进单元格的最大字符数（xlsx 单元格上限 32767，留出富余防写坏文件）。
+	maxContentCellRunes = 20000
+)
+
+const productXlsxContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+// productExportParams 是任务参数：只含筛选条件与操作者，不含凭据。
+// Status / CategoryIds 是逗号拼接多值（与 query 参数同一契约）；CategoryID 是旧单值，兼容在途任务。
+type productExportParams struct {
+	Keyword     string   `json:"keyword,omitempty"`
+	Status      string   `json:"status,omitempty"`
+	CategoryID  idgen.ID `json:"categoryId,omitempty"`
+	CategoryIds string   `json:"categoryIds,omitempty"`
+	IDs         []int64  `json:"ids,omitempty"`
+	ActorID     int64    `json:"actorId"`
+}
+
+// query 把任务参数还原成列表查询：多值按 CSV 解析，旧单值兜底。
+func (p productExportParams) query() ContentQuery {
+	q := ContentQuery{Keyword: p.Keyword, Statuses: response.ParseList(p.Status, response.MaxFilterValues)}
+	catRaw := p.CategoryIds
+	if strings.TrimSpace(catRaw) == "" && p.CategoryID > 0 {
+		catRaw = p.CategoryID.String()
+	}
+	if ids := response.ParseFilterIDs(catRaw, response.MaxFilterValues); len(ids) > 0 {
+		q.CategoryIDs = make([]idgen.ID, 0, len(ids))
+		for _, id := range ids {
+			q.CategoryIDs = append(q.CategoryIDs, idgen.ID(id))
+		}
+	}
+	return q
+}
+
+// productExportBody 是 POST /products/export-async 的请求体（与查询参数同形）。
+type productExportBody struct {
+	Keyword     string `json:"keyword"`
+	Status      string `json:"status"`      // 逗号拼接多值
+	CategoryId  string `json:"categoryId"`  // 兼容旧单值
+	CategoryIds string `json:"categoryIds"` // 逗号拼接多值
+	IDs         []string `json:"ids"`
+}
+
+// categoryIdCSV 把类目 id 列表转成任务参数里的字符串列表。
+func categoryIdCSV(ids []idgen.ID) []string {
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		out = append(out, id.String())
+	}
+	return out
+}
+
+// productExportSyncLimit 读系统参数 export.sync_limit（与 user 模块同参数），没设回落默认值。
+func (s *Service) productExportSyncLimit(ctx context.Context) int {
+	var v string
+	if err := s.db.WithContext(ctx).Table("sys_config").Select("config_value").
+		Where("config_key = ?", "export.sync_limit").Limit(1).Scan(&v).Error; err == nil {
+		if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil && n > 0 {
+			return n
+		}
+	}
+	return productExportSyncLimitDef
+}
+
+// exportProductTx 组出导出范围的查询：ids 优先（勾选行），否则按筛选条件。
+func exportProductTx(tx *gorm.DB, q ContentQuery, ids []int64) *gorm.DB {
+	if len(ids) > 0 {
+		return tx.Where("id IN ?", ids)
+	}
+	return productTx(tx, q)
+}
+
+// PlanProductExport 按同样的筛选统计匹配行数，告诉前端该走同步还是异步。
+func (s *Service) PlanProductExport(ctx context.Context, q ContentQuery, ids []idgen.ID) (total, syncLimit int64, err error) {
+	tx := exportProductTx(s.db.WithContext(ctx).Model(&Product{}), q, int64IDs(ids))
+	if err = tx.Count(&total).Error; err != nil {
+		return 0, 0, err
+	}
+	return total, int64(s.productExportSyncLimit(ctx)), nil
+}
+
+// productExportAsyncBody 把请求体解析成参数；ids 字符串转 int64。
+func productExportAsyncBody(b productExportBody) (ContentQuery, []idgen.ID, error) {
+	q := ContentQuery{
+		Keyword:  strings.TrimSpace(b.Keyword),
+		Statuses: response.ParseList(b.Status, response.MaxFilterValues),
+	}
+	catRaw := b.CategoryIds
+	if strings.TrimSpace(catRaw) == "" {
+		catRaw = b.CategoryId
+	}
+	if ids := response.ParseFilterIDs(catRaw, response.MaxFilterValues); len(ids) > 0 {
+		q.CategoryIDs = make([]idgen.ID, 0, len(ids))
+		for _, id := range ids {
+			q.CategoryIDs = append(q.CategoryIDs, idgen.ID(id))
+		}
+	}
+	var ids []idgen.ID
+	for _, raw := range b.IDs {
+		id, err := idgen.Parse(strings.TrimSpace(raw))
+		if err != nil || id <= 0 {
+			return q, nil, response.BadRequest("website.ids_invalid")
+		}
+		ids = append(ids, id)
+	}
+	return q, ids, nil
+}
+
+// productExportAsync POST /products/export-async：创建导出任务并立即返回任务 ID。
+func (h *handler) productExportAsync(c *gin.Context) {
+	m := job.Default()
+	if m == nil {
+		response.Fail(c, response.Unavailable("website.export_center_disabled"))
+		return
+	}
+	var b productExportBody
+	if !response.BindJSON(c, &b) {
+		return
+	}
+	q, ids, err := productExportAsyncBody(b)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	var owner idgen.ID
+	if cl := auth.ClaimsFrom(c); cl != nil {
+		owner = cl.UserID
+	}
+	j, err := m.Submit(c.Request.Context(), job.Submit{
+		Type:  jobTypeProductExport,
+		Owner: owner,
+		Params: productExportParams{
+			Keyword: q.Keyword, Status: strings.Join(q.Statuses, ","), CategoryIds: strings.Join(categoryIdCSV(q.CategoryIDs), ","),
+			IDs: int64IDs(ids), ActorID: int64(owner),
+		},
+	})
+	switch {
+	case errors.Is(err, job.ErrTooMany):
+		response.Fail(c, response.New(429, "error.too_many"))
+		return
+	case err != nil:
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, gin.H{"id": j.ID.String(), "type": j.Type, "status": j.Status})
+}
+
+// productExportPlan GET /products/export-plan：按同样筛选统计行数，前端据此选同步直出或异步任务。
+func (h *handler) productExportPlan(c *gin.Context) {
+	var ids []idgen.ID
+	if raw := strings.TrimSpace(c.Query("ids")); raw != "" {
+		var err error
+		if ids, err = parseIDs(raw); err != nil {
+			response.Fail(c, err)
+			return
+		}
+	}
+	total, syncLimit, err := h.svc.PlanProductExport(c.Request.Context(), contentQuery(c), ids)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, gin.H{"total": total, "syncLimit": syncLimit, "async": total > syncLimit})
+}
+
+// RunProductExportJob 是 website.product-export 的任务处理器：流式分批写 xlsx，逐批汇报进度。
+// 数据范围以任务所有者在执行时的权限为准已由提交时的权限点把守（website:product）；这里只做数据装配。
+func (s *Service) RunProductExportJob(ctx context.Context, j *job.Job, report job.Report) (job.ResultFile, error) {
+	var p productExportParams
+	if err := j.Decode(&p); err != nil {
+		return job.ResultFile{}, job.Errorf("任务参数无效")
+	}
+	q := p.query()
+	tx := exportProductTx(s.db.WithContext(ctx).Model(&Product{}), q, p.IDs)
+	var total int64
+	if err := tx.Count(&total).Error; err != nil {
+		return job.ResultFile{}, err
+	}
+	total = min(total, productExportMax)
+	report(0, fmt.Sprintf("共 %d 行", total))
+
+	name := fmt.Sprintf("products-%s.xlsx", time.Now().Format("20060102"))
+	return job.WriteResult(ctx, j, name, productXlsxContentType, func(w io.Writer) error {
+		x := excel.NewWriter(w)
+		cols := productImportColumns()
+		headers := make([]string, len(cols))
+		for i, c := range cols {
+			headers[i] = c.Label
+		}
+		sh, err := x.NewSheet("产品", excel.SheetOptions{Header: headers})
+		if err != nil {
+			return err
+		}
+		var done int64
+		last := int64(math.MaxInt64)
+		for done < total {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			var rows []Product
+			if err := tx.Where("id < ?", last).Order("id DESC").
+				Preload("Categories").Limit(int(min(productExportBatch, total-done))).Find(&rows).Error; err != nil {
+				return err
+			}
+			if len(rows) == 0 {
+				break
+			}
+			for i := range rows {
+				if err := writeProductExportRow(sh, &rows[i]); err != nil {
+					return err
+				}
+			}
+			done += int64(len(rows))
+			last = int64(rows[len(rows)-1].ID)
+			report(int(done*100/max(total, 1)), fmt.Sprintf("已导出 %d / %d 行", done, total))
+		}
+		return x.Close()
+	})
+}
+
+// writeProductExportRow 写一行导出数据：列序与 productImportColumns 一致，单元格格式
+// （类目/图集竖线分隔、specs 与多语言 JSON）与导入模板同款，导出的文件可以直接改完再导回去。
+func writeProductExportRow(sh *excel.Sheet, p *Product) error {
+	specs := ""
+	if p.SpecsJSON != "" {
+		specs = p.SpecsJSON
+	}
+	i18n := p.I18nJSON
+	cats := make([]string, 0, len(p.Categories))
+	for _, c := range p.Categories {
+		cats = append(cats, c.Title)
+	}
+	return sh.WriteRow(
+		p.Title, p.Slug, strings.Join(cats, "|"), p.Status, p.Keywords, p.Summary,
+		trimRunes(p.Content, maxContentCellRunes), p.CoverURL,
+		strings.Join(safeImageList(p.ImagesJSON), "|"), p.VideoURL,
+		p.PriceMin, p.PriceMax, p.Currency, p.PriceUnit, p.Moq, p.LeadTimeDays,
+		p.Port, p.PaymentTerms, specs, p.SeoTitle, p.SeoDesc, p.SeoKeywords, p.Author, i18n,
+	)
+}
+
+// safeImageList 解图集 JSON 文本列；坏 JSON 当空列表（导出不该因为一行脏数据失败）。
+func safeImageList(raw string) []string {
+	if raw == "" {
+		return nil
+	}
+	var out []string
+	if err := json.Unmarshal([]byte(raw), &out); err != nil {
+		return nil
+	}
+	return out
 }

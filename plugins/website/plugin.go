@@ -130,6 +130,8 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 
 	g.GET("/products", core.Perm("website:product"), core.Desc("产品列表"), h.listProducts)
 	g.GET("/products/export", core.Perm("website:product"), core.Desc("导出产品"), h.exportProducts)
+	g.GET("/products/export-plan", core.Perm("website:product"), core.Desc("产品导出计划（同步/异步分流）"), h.productExportPlan)
+	g.POST("/products/export-async", core.Perm("website:product"), core.Desc("提交产品异步导出任务"), h.productExportAsync)
 	g.PUT("/products/status", core.Perm("website:product"), core.Desc("批量上架/下线产品"), h.setProductStatus)
 	g.DELETE("/products", core.Perm("website:product"), core.Desc("批量删除产品"), h.deleteProducts)
 	g.POST("/products", core.Perm("website:product"), core.Desc("新增产品"), h.createProduct)
@@ -162,6 +164,10 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	// 批量同步的任务体：闭包捕获 svc。注册是覆盖写，热挂载下幂等。
 	job.Register("website.ali-sync", func(ctx context.Context, j *job.Job, report job.Report) (job.ResultFile, error) {
 		return m.service(d).RunAliSyncJob(ctx, j, report)
+	})
+	// 产品异步导出的任务体：worker 流式写 xlsx，进度与下载在导出中心。
+	job.Register(jobTypeProductExport, func(ctx context.Context, j *job.Job, report job.Report) (job.ResultFile, error) {
+		return m.service(d).RunProductExportJob(ctx, j, report)
 	})
 	g.GET("/limits", core.Perm("website:setting"), core.Desc("读取官网生效上限"), h.limits)
 	// 语言清单的管理接口在框架（/api/v1/languages，见 modules/system/language）：
@@ -227,6 +233,8 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 		pub.HEAD("/robots.txt", site.robots)
 		pub.GET("/sitemap.xml", site.sitemap)
 		pub.HEAD("/sitemap.xml", site.sitemap)
+		pub.GET("/rss.xml", site.rss)
+		pub.HEAD("/rss.xml", site.rss)
 	}
 }
 

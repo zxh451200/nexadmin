@@ -778,6 +778,7 @@ website:
   ali_sync_unavailable: "Batch sync is unavailable: the background job service is not ready."
   rating_invalid: "The rating must be between 1 and 5."
   import_products_title: "Product import"
+  export_center_disabled: "The export center is disabled; async export jobs cannot be submitted."
   import_status_invalid: "Status must be draft / online / offline."
   import_number_invalid: "Price, MOQ and lead time must be numbers."
   import_specs_invalid: "Invalid attribute format: use a JSON array of {\"label\":\"…\",\"value\":\"…\"}, or \"Name:Value\" pairs separated by |."

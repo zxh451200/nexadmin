@@ -225,6 +225,8 @@
       "basicSection": "基本信息",
       "imageSection": "图片与视频",
       "tradeSection": "价格与贸易",
+      "detailSection": "详情与 SEO",
+      "publishSection": "发布",
       "categories": "产品类目",
       "categoriesPlaceholder": "选择类目…",
       "importEntry": "导入",

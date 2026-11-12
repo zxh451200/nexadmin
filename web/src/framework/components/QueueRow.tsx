@@ -30,13 +30,15 @@ export function QueueRow({
         selected ? 'bg-primary/10 ring-1 ring-inset ring-primary/30 hover:bg-primary/15' : 'hover:bg-accent/40',
       )}
     >
-      <div className="flex items-start gap-2">
-        {checkbox ? <div className="flex ps-2.5 pt-1.5">{checkbox}</div> : null}
+      {/* 勾选列整行等高：勾选框在列内垂直居中，热区由调用方的 label 纵向撑满，
+          不再用负边距外扩——负边距会把不可见点击区压到相邻行和行按钮上，又重叠又误触 */}
+      <div className="flex items-stretch gap-1.5">
+        {checkbox ? <div className="flex shrink-0 items-stretch ps-2">{checkbox}</div> : null}
         <button
           type="button"
           onClick={onSelect}
           aria-pressed={selected}
-          className={cn('min-w-0 flex-1 py-1 text-start', checkbox ? 'pe-2.5' : 'px-2.5')}
+          className={cn('min-w-0 flex-1 py-1.5 text-start', checkbox ? 'pe-2.5' : 'ps-0.5 pe-2.5')}
         >
           {children}
         </button>

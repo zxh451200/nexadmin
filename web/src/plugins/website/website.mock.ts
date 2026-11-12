@@ -1,4 +1,5 @@
 import { defineMock, mockError } from '@/framework/request/mock'
+import { createMockJob } from '@/framework/modules/exportcenter/exportcenter.mock'
 import type { EntitySchema } from '@/framework/components/i18n'
 import type { AliCategoryNode, AliConfig, FeatureItem, MessageStatus, NavItem, PostCategory, PostTag, ProductCategoryNode, SiteMessage, SitePage, SitePost, SiteProduct, SiteSettings } from './api'
 
@@ -411,6 +412,22 @@ let products: SiteProduct[] = [
 
 let nextProductId = 650
 let nextProductCategoryId = 860
+
+// mock 的导出同步上限：真实后端读 export.sync_limit（默认 5000），这里用 20 让演示数据就能走到异步分支。
+const MOCK_EXPORT_SYNC_LIMIT = 20
+
+/** 导出行的筛选：与列表接口同口径（ids= 勾选行优先，其次 keyword/status/categoryId）。 */
+const exportRows = (query: Record<string, unknown>): SiteProduct[] => {
+  if (query.ids) {
+    const ids = new Set(String(query.ids).split(',').map((s) => s.trim()).filter(Boolean))
+    return products.filter((p) => ids.has(p.id))
+  }
+  const kw = String(query.keyword ?? '').trim().toLowerCase()
+  let rows = products.filter((p) => !kw || p.title.toLowerCase().includes(kw) || p.slug.includes(kw))
+  if (query.status) rows = rows.filter((p) => p.status === query.status)
+  if (query.categoryId) rows = rows.filter((p) => (p.categories ?? []).some((c) => c.id === query.categoryId))
+  return [...rows].reverse()
+}
 
 /** 类目子树 ID 集（含自身），删除校验与级联共用。 */
 const productCategorySubtree = (roots: string[]): Set<string> => {
@@ -1049,6 +1066,30 @@ defineMock([
       if (query.status) rows = rows.filter((p) => p.status === query.status)
       if (query.categoryId) rows = rows.filter((p) => (p.categories ?? []).some((c) => c.id === query.categoryId))
       return paginate([...rows].reverse(), query)
+    },
+  },
+  {
+    // 导出当前筛选（或 ids= 勾选行）下的全部商品：返回 JSON 列表，CSV 由前端生成（与真后端同形状）。
+    method: 'GET',
+    url: '/plugins/website/products/export',
+    handler: ({ query }) => exportRows(query),
+  },
+  {
+    // 同步/异步分流：真实后端读 export.sync_limit（默认 5000），mock 用 20 让演示数据就能走到异步分支。
+    method: 'GET',
+    url: '/plugins/website/products/export-plan',
+    handler: ({ query }) => {
+      const total = exportRows(query).length
+      return { total, syncLimit: MOCK_EXPORT_SYNC_LIMIT, async: total > MOCK_EXPORT_SYNC_LIMIT }
+    },
+  },
+  {
+    method: 'POST',
+    url: '/plugins/website/products/export-async',
+    handler: () => {
+      const day = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+      const j = createMockJob('website.product-export', `products-${day}.csv`, 120, '商品名称,Slug\r\n…\r\n')
+      return { id: j.id, type: j.type, status: j.status }
     },
   },
   {

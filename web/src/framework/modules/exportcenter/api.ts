@@ -6,7 +6,7 @@ export const JOB_STATUSES = ['queued', 'running', 'success', 'failed', 'canceled
 export type JobStatus = (typeof JOB_STATUSES)[number]
 
 /** 已知任务类型；其它业务模块新增类型时，在 jobs.type.<type> 里补文案即可（缺省显示原始类型名） */
-export const JOB_TYPES = ['user.export'] as const
+export const JOB_TYPES = ['user.export', 'website.product-export'] as const
 
 export interface Job {
   id: string

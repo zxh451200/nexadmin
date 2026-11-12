@@ -1,10 +1,12 @@
-import { useCallback, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { CloudUpload, Copy, ExternalLink, Eye, Pencil, Plus, Trash2, Upload, X } from 'lucide-react'
+import { ChevronDown, CircleAlert, CircleCheck, CloudUpload, Copy, Download, ExternalLink, Eye, FileUp, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Can } from '@/framework/auth/Can'
+import { OptionPicker } from '@/framework/components/OptionPicker'
+import { useAsyncJob } from '@/framework/hooks/use-async-job'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { FilterBar } from '@/framework/components/FilterBar'
@@ -21,14 +23,23 @@ import {
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { SwitchRow } from '@/framework/components/SwitchField'
+import { Lightbox } from '@/framework/upload/Lightbox'
+import { FileDropField } from '@/framework/components/FileDropField'
 import { ImageUrlField } from '@/framework/components/ImageUrlField'
-import { Uploader, type UploadedFile } from '@/framework/components/Uploader'
+import { Uploader } from '@/framework/components/Uploader'
 import { VideoUrlField } from '@/framework/components/VideoUrlField'
-import { slugify } from './format'
+import { RemoteSelect } from '@/framework/components/RemoteSelect'
+import { OptionList, type Option } from '@/framework/components/pickers/OptionList'
+import { PickerShell } from '@/framework/components/pickers/PickerShell'
+import { PickerTrigger } from '@/framework/components/pickers/PickerTrigger'
+import { CURRENCIES, PAYMENT_TERMS, PORTS, UNITS } from './constants'
+import { downloadCsv, saveBlob } from '@/framework/components/export/csv'
+import { formatTime, slugify } from './format'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
-import { Checkbox } from '@/framework/ui/checkbox'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/framework/ui/collapsible'
 import { Input } from '@/framework/ui/input'
+import { Label } from '@/framework/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import { Tabs, TabsList, TabsTrigger } from '@/framework/ui/tabs'
 import { EditorSchemaGate } from './EditorSchemaGate'
@@ -36,7 +47,12 @@ import TranslationStatus from './TranslationStatus'
 import {
   fetchAliCategories,
   fetchAliTest,
+  fetchProductExportPlan,
+  fetchProductImportJob,
+  fetchProductImportTemplate,
   fetchProductPreview,
+  fetchProductsForExport,
+  createProductExportJob,
   translateContent,
   useAliConfig,
   useAliSyncStatus,
@@ -48,15 +64,19 @@ import {
   useLanguages,
   useProductCategories,
   useProducts,
+  useRunProductImport,
   useSaveAliConfig,
   useSaveProduct,
   useSetProductStatus,
   useSyncProduct,
   useSyncProductBatch,
+  toContentQuery,
   type AliCategoryNode,
   type AliMarket,
+  type ContentDraft,
   type ContentQuery,
   type ProductCategoryNode,
+  type ProductImportJob,
   type ProductSpec,
   type ProductStatus,
   type SiteProduct,
@@ -66,6 +86,9 @@ const ALL = '__all'
 
 /** 图集上限，与后端 maxImagesPerProduct 同值：界面先挡住，别等保存才报错。 */
 const IMAGES_MAX = 10
+
+/** 关键词个数上限，与后端 maxKeywordsPerProduct 同值：预览与提示都以它为准。 */
+const maxKeywords = 3
 
 function statusBadge(status: ProductStatus, t: (k: string) => string) {
   switch (status) {
@@ -92,6 +115,20 @@ function syncBadge(r: SiteProduct, t: (k: string) => string) {
       return <Badge variant="destructive">{t('plugin_website.product.syncFailed')}</Badge>
     default:
       return <span className="text-xs text-muted-foreground">{t('plugin_website.product.syncNone')}</span>
+  }
+}
+
+/** 同步状态的纯文本形态（CSV 导出用）：键与 syncBadge 同源。 */
+function syncText(r: SiteProduct, t: (k: string) => string): string {
+  switch (r.syncStatus) {
+    case 'synced':
+      return t('plugin_website.product.syncSynced')
+    case 'pending':
+      return t('plugin_website.product.syncPending')
+    case 'failed':
+      return t('plugin_website.product.syncFailed')
+    default:
+      return t('plugin_website.product.syncNone')
   }
 }
 
@@ -142,7 +179,216 @@ function parseNum(v: string): number {
   return Number.isFinite(n) && n > 0 ? n : 0
 }
 
-/** 图集：一组 ImageUrlField + 删除，上限与后端 maxImagesPerProduct 对齐；「批量上传」走 Uploader 一次选多张。 */
+/** 关键词拆分预览：与后端 normalizeProductKeywords 同口径——空格/中英文逗号/顿号/分号都算分隔符，忽略大小写去重。 */
+function splitKeywordsPreview(s: string): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const raw of s.split(/[ \t\n\r,，、;；]+/)) {
+    const f = raw.trim()
+    if (!f) continue
+    const k = f.toLowerCase()
+    if (seen.has(k)) continue
+    seen.add(k)
+    out.push(f)
+  }
+  return out
+}
+
+/** 关键词实时回显：忘了打空格时，「只识别出 1 个」当场就能看见，而不是等同步阿里才发现。 */
+function KeywordHint({ value }: { value: string }) {
+  const { t } = useTranslation()
+  const words = useMemo(() => splitKeywordsPreview(value), [value])
+  if (!value.trim() || !words.length) return null
+  const over = words.length > maxKeywords
+  return (
+    <p className={cn('text-xs', over ? 'text-warning' : 'text-muted-foreground')}>
+      {t(
+        over ? 'plugin_website.fields.keywordsPreviewOver' : 'plugin_website.fields.keywordsPreview',
+        { count: words.length, words: words.slice(0, maxKeywords).join(' / ') },
+      )}
+    </p>
+  )
+}
+
+/** 币种选项：代码 + Intl 现算的本地化名称（USD · 美元），随界面语言变。 */
+function useCurrencyOptions(): Option[] {
+  const { i18n } = useTranslation()
+  return useMemo(() => {
+    let dn: Intl.DisplayNames | undefined
+    try {
+      dn = new Intl.DisplayNames([i18n.language], { type: 'currency' })
+    } catch {
+      dn = undefined
+    }
+    return CURRENCIES.map((c) => ({ value: c, label: `${c} · ${dn?.of(c) ?? c}` }))
+  }, [i18n.language])
+}
+
+/**
+ * 贸易字段选项：value 存的永远是行业通用英文（落库 + 同步阿里 + 官网展示都用它），
+ * 界面文案在译文里给了中文名时显示「value · 中文名」，随界面语言变。
+ * 译文缺失或与值相同（英文界面）就只显示英文值，不会出现「T/T · T/T」。
+ */
+function useEnumOptions(values: readonly string[], keyPrefix: string): Option[] {
+  const { t, i18n } = useTranslation()
+  return useMemo(
+    () =>
+      values.map((v) => {
+        const local = t(`${keyPrefix}.${v}`, { defaultValue: v })
+        return { value: v, label: local && local !== v ? `${v} · ${local}` : v }
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- values/keyPrefix 是模块级常量，t 随语言变化已覆盖重算时机
+    [t, i18n.language, keyPrefix, values],
+  )
+}
+
+const useUnitOptions = () => useEnumOptions(UNITS, 'plugin_website.unit')
+const usePortOptions = () => useEnumOptions(PORTS, 'plugin_website.port')
+const usePaymentTermOptions = () => useEnumOptions(PAYMENT_TERMS, 'plugin_website.payment')
+
+/** 枚举字段下拉（可搜）：币种/装运港口/付款方式不再手写。
+ * 多选时按「逗号+空格」拼接回原字符串，与老数据的 "T/T, L/C" 存储格式互通；
+ * 存量手写值不在列表里时补进选项，编辑老数据不会丢显示。 */
+function ConstantPicker({
+  value,
+  onChange,
+  options,
+  multiple,
+  placeholder,
+  disabled,
+  className,
+}: {
+  value: string
+  onChange: (v: string) => void
+  options: Option[]
+  multiple?: boolean
+  placeholder?: string
+  disabled?: boolean
+  className?: string
+}) {
+  const { t } = useTranslation()
+  const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState('')
+  const selected = useMemo(() => value.split(',').map((s) => s.trim()).filter(Boolean), [value])
+  const all = useMemo(() => {
+    const list = [...options]
+    for (const v of selected) {
+      if (!list.some((o) => o.value === v)) list.push({ value: v, label: v })
+    }
+    return list
+  }, [options, selected])
+  const kw = search.trim().toLowerCase()
+  const shown = kw ? all.filter((o) => o.label.toLowerCase().includes(kw) || o.value.toLowerCase().includes(kw)) : all
+  const pick = (v: string) => {
+    if (multiple) {
+      onChange((selected.includes(v) ? selected.filter((x) => x !== v) : [...selected, v]).join(', '))
+    } else {
+      onChange(v)
+      setOpen(false)
+    }
+  }
+  return (
+    <PickerShell
+      open={open}
+      onOpenChange={setOpen}
+      disabled={disabled}
+      title={placeholder ?? t('common.pleaseSelect')}
+      trigger={
+        <PickerTrigger
+          className={className}
+          disabled={disabled}
+          placeholder={placeholder}
+          hasValue={selected.length > 0}
+          allowClear={false}
+          display={selected.map((v) => all.find((o) => o.value === v)?.label ?? v).join(', ')}
+        />
+      }
+    >
+      <OptionList options={shown} value={selected} multiple={multiple} onSelect={pick} search={search} onSearchChange={setSearch} />
+    </PickerShell>
+  )
+}
+
+/**
+ * 产品类目多选（可搜）：与付款方式同款的弹出选择器，收起时只占一行，
+ * 展开才见树形清单（缩进表层级、右侧商品数）；搜索命中时连同祖先链一起保留，层级不丢。
+ */
+function CategoryPicker({
+  value, onChange, categories, disabled, className,
+}: {
+  value: string[]
+  onChange: (ids: string[]) => void
+  categories: CatNode[]
+  disabled?: boolean
+  className?: string
+}) {
+  const { t } = useTranslation()
+  const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState('')
+  const byId = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories])
+  const kw = search.trim().toLowerCase()
+  const shown = useMemo(() => {
+    if (!kw) return categories
+    const keep = new Set<string>()
+    for (const c of categories) {
+      if (c.title.toLowerCase().includes(kw)) {
+        keep.add(c.id)
+        for (
+          let p = c.parentId && c.parentId !== '0' ? byId.get(c.parentId) : undefined;
+          p;
+          p = p.parentId && p.parentId !== '0' ? byId.get(p.parentId) : undefined
+        ) {
+          keep.add(p.id)
+        }
+      }
+    }
+    return categories.filter((c) => keep.has(c.id))
+  }, [categories, byId, kw])
+  const options: Option[] = shown.map((c) => ({
+    value: c.id,
+    label: c.title,
+    node: (
+      <span className="flex w-full items-center gap-2">
+        <span className="truncate" style={{ paddingInlineStart: `${(c.depth - 1) * 16}px` }}>{c.title}</span>
+        <span className="num ms-auto text-xs text-muted-foreground">{c.productCount}</span>
+      </span>
+    ),
+  }))
+  const toggle = (id: string) => onChange(value.includes(id) ? value.filter((x) => x !== id) : [...value, id])
+  // 触发器按树形顺序显示已选名称，与清单里的视觉一致。
+  const selectedTitles = categories.filter((c) => value.includes(c.id)).map((c) => c.title)
+  return (
+    <PickerShell
+      open={open}
+      onOpenChange={setOpen}
+      disabled={disabled}
+      title={t('plugin_website.product.categories')}
+      trigger={
+        <PickerTrigger
+          className={className}
+          disabled={disabled}
+          placeholder={t('plugin_website.product.categoriesPlaceholder')}
+          hasValue={value.length > 0}
+          allowClear={false}
+          display={selectedTitles.join('、')}
+        />
+      }
+    >
+      <OptionList
+        options={options}
+        value={value}
+        multiple
+        onSelect={toggle}
+        search={search}
+        onSearchChange={setSearch}
+        emptyText={t(kw ? 'plugin_website.product.categoryNoMatch' : 'plugin_website.product.categoriesEmpty')}
+      />
+    </PickerShell>
+  )
+}
+
+/** 图集：宫格图块（批量直传、拖拽排序、点块看大图、悬停删除），上限与后端 maxImagesPerProduct 对齐；
+ * 「从文件库选择」另开弹窗勾选已有图片，关弹窗统一追加（上限在打开时就锁死，不会超）。 */
 function ImagesField({
   images, onChange, disabled,
 }: {
@@ -151,79 +397,71 @@ function ImagesField({
   disabled?: boolean
 }) {
   const { t } = useTranslation()
-  const [batchOpen, setBatchOpen] = useState(false)
-  const [batchFiles, setBatchFiles] = useState<UploadedFile[]>([])
-  const update = (index: number, value: string) => {
-    onChange(images.map((img, i) => (i === index ? value : img)))
-  }
-  const remove = (index: number) => {
-    onChange(images.filter((_, i) => i !== index))
-  }
+  const [pickOpen, setPickOpen] = useState(false)
+  const [pickedUrls, setPickedUrls] = useState<string[]>([])
   const atLimit = images.length >= IMAGES_MAX
-  const openBatch = () => {
-    setBatchFiles([])
-    setBatchOpen(true)
+  const room = IMAGES_MAX - images.length
+  const openPick = () => {
+    setPickedUrls([])
+    setPickOpen(true)
   }
-  // 关弹窗才算提交：此时已上传完成的 URL 追加进图集（上限在打开时就用 maxCount 锁死，不会超）。
-  const closeBatch = (open: boolean) => {
-    if (!open) {
-      const urls = batchFiles.map((f) => f.url).filter(Boolean)
-      if (urls.length) onChange([...images, ...urls])
-    }
-    setBatchOpen(open)
+  // 关弹窗才算提交：文件库勾选的 URL 追加进图集（不覆盖已有的）。
+  const closePick = (open: boolean) => {
+    if (!open && pickedUrls.length) onChange([...images, ...pickedUrls])
+    setPickOpen(open)
+  }
+  // RemoteSelect 多选回传的是完整数组（它内部已做过勾选切换），这里只做字符串化、去重并按剩余额度截断
+  const togglePick = (v: string | string[]) => {
+    const incoming = (Array.isArray(v) ? v : [String(v ?? '')]).filter(Boolean)
+    setPickedUrls((urls) => {
+      const next = [...urls]
+      for (const u of incoming) {
+        if (!next.includes(u) && next.length < room) next.push(u)
+      }
+      return next
+    })
   }
   return (
     <div className="flex flex-col gap-2">
-      {images.map((img, i) => (
-        <div key={i} className="flex items-start gap-2">
-          <ImageUrlField
-            value={img}
-            onChange={(v) => update(i, v)}
-            disabled={disabled}
-            title={t('plugin_website.product.imageUpload')}
-            previewClassName="h-16 w-16 object-cover p-0"
-            aria-label={`${t('plugin_website.product.images')} ${i + 1}`}
-          />
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-destructive"
-            disabled={disabled}
-            aria-label={t('common.delete')}
-            onClick={() => remove(i)}
-          >
-            <X aria-hidden="true" />
-          </Button>
-        </div>
-      ))}
+      <Uploader
+        kind="image"
+        visibility="public"
+        multiple
+        maxCount={IMAGES_MAX}
+        disabled={disabled}
+        value={images.map((url) => ({
+          id: url,
+          url,
+          name: decodeURIComponent(url.split('/').pop() ?? url),
+          size: 0,
+          type: 'image/*',
+        }))}
+        onChange={(files) => onChange(files.map((f) => f.url))}
+      />
       {atLimit ? (
         <span className="text-xs text-muted-foreground">{t('plugin_website.product.imageLimit', { max: IMAGES_MAX })}</span>
       ) : (
-        <div className="flex items-center gap-3">
-          <Button variant="link" size="sm" className="h-auto w-fit p-0" disabled={disabled} onClick={() => onChange([...images, ''])}>
-            <Plus aria-hidden="true" />
-            {t('plugin_website.product.imageAdd')}
-          </Button>
-          <Button variant="link" size="sm" className="h-auto w-fit p-0" disabled={disabled} onClick={openBatch}>
-            <Upload aria-hidden="true" />
-            {t('plugin_website.product.imageBatch')}
-          </Button>
-        </div>
+        <Button variant="link" size="sm" className="h-auto w-fit p-0" disabled={disabled} onClick={openPick}>
+          {t('uploader.pickFromLibrary')}
+        </Button>
       )}
       <ResponsiveDialog
-        open={batchOpen}
-        onOpenChange={closeBatch}
+        open={pickOpen}
+        onOpenChange={closePick}
         size="md"
-        title={t('plugin_website.product.imageBatch')}
+        title={t('uploader.pickFromLibrary')}
         description={t('plugin_website.product.imageLimit', { max: IMAGES_MAX })}
       >
-        <Uploader
-          kind="image"
-          visibility="public"
+        <RemoteSelect
+          url="/files"
+          params={{ category: 'image' }}
+          valueKey="url"
+          labelKey="name"
           multiple
-          maxCount={IMAGES_MAX - images.length}
-          value={batchFiles}
-          onChange={setBatchFiles}
+          value={pickedUrls}
+          onChange={togglePick}
+          allowClear={false}
+          disabled={pickedUrls.length >= room}
         />
       </ResponsiveDialog>
     </div>
@@ -310,38 +548,21 @@ function ProductFormBody({
   const [priceMin, setPriceMin] = useState(editing?.priceMin ? String(editing.priceMin) : '')
   const [priceMax, setPriceMax] = useState(editing?.priceMax ? String(editing.priceMax) : '')
   const [currency, setCurrency] = useState(editing?.currency ?? 'USD')
+  const currencyOptions = useCurrencyOptions()
+  const unitOptions = useUnitOptions()
   const [priceUnit, setPriceUnit] = useState(editing?.priceUnit ?? '')
   const [moq, setMoq] = useState(editing?.moq ? String(editing.moq) : '')
   const [leadTimeDays, setLeadTimeDays] = useState(editing?.leadTimeDays ? String(editing.leadTimeDays) : '')
   const [port, setPort] = useState(editing?.port ?? '')
   const [paymentTerms, setPaymentTerms] = useState(editing?.paymentTerms ?? '')
+  const portOptions = usePortOptions()
+  const paymentTermOptions = usePaymentTermOptions()
   const [specs, setSpecs] = useState<ProductSpec[]>(() => safeParseSpecs(editing?.specsJson))
   const [seoKeywords, setSeoKeywords] = useState(editing?.seoKeywords ?? '')
   const [noindex, setNoindex] = useState(editing?.noindex ?? false)
   const [author, setAuthor] = useState(editing?.author ?? '')
   const [catIds, setCatIds] = useState<string[]>(() => (editing?.categories ?? []).map((c) => c.id))
   const flatCats = useMemo(() => flattenCatTree(buildCatTree(categories)), [categories])
-  // 类目多了以后找类目全靠滚：按名称过滤，命中节点连同祖先链一起保留，缩进层级不丢。
-  const [catQuery, setCatQuery] = useState('')
-  const visibleCats = useMemo(() => {
-    const q = catQuery.trim().toLowerCase()
-    if (!q) return flatCats
-    const byId = new Map(flatCats.map((c) => [c.id, c]))
-    const keep = new Set<string>()
-    for (const c of flatCats) {
-      if (c.title.toLowerCase().includes(q)) {
-        keep.add(c.id)
-        for (
-          let p = c.parentId && c.parentId !== '0' ? byId.get(c.parentId) : undefined;
-          p;
-          p = p.parentId && p.parentId !== '0' ? byId.get(p.parentId) : undefined
-        ) {
-          keep.add(p.id)
-        }
-      }
-    }
-    return flatCats.filter((c) => keep.has(c.id))
-  }, [flatCats, catQuery])
   // slug 是所有语言共用的，但每门语言有各自的路径前缀；提示按当前编辑的语言拼。
   const pathPrefix = lf.locales.find((l) => l.code === lf.active)?.prefix
   const productPath = `${pathPrefix ? `/${pathPrefix}` : ''}/products/${slug || '…'}`
@@ -438,89 +659,63 @@ function ProductFormBody({
         <LocaleSwitcher />
         <span className="text-xs text-muted-foreground">{t('plugin_website.i18n.switchHint')}</span>
       </div>
-      <div className="flex flex-col gap-3">
-        <p className="text-sm font-medium">{t('plugin_website.product.basicSection')}</p>
-        <LocalizedField fieldKey="title" required />
-        <LocalizedField fieldKey="keywords" aiTarget="keywords" placeholder={t('plugin_website.fields.productKeywordsPlaceholder')} />
-        <LocalizedField fieldKey="summary" />
-        <SharedFieldShell labelKey="plugin_website.fields.slug">
-          <Input
-            maxLength={64}
-            value={slug}
-            disabled={sharedDisabled}
-            onChange={(e) => setSlug(e.target.value)}
-            placeholder={t('plugin_website.fields.slugAuto')}
-            className="font-mono"
-          />
-          <span className="text-xs text-muted-foreground">{productPath}</span>
-        </SharedFieldShell>
-        <SharedGroup labelKey="plugin_website.product.categories">
-          <div className="flex flex-col rounded-md border border-border p-1" role="group" aria-label={t('plugin_website.product.categories')}>
-            {flatCats.length ? (
+      <div className="flex flex-col gap-5">
+        <FormSection title={t('plugin_website.product.basicSection')}>
+          <LocalizedField fieldKey="title" required />
+          <LocalizedField fieldKey="keywords" aiTarget="keywords" placeholder={t('plugin_website.fields.productKeywordsPlaceholder')} />
+          <KeywordHint value={lf.field('keywords')} />
+          <LocalizedField fieldKey="summary" />
+          <div className="grid gap-3 md:grid-cols-2">
+            <SharedFieldShell labelKey="plugin_website.fields.slug">
               <Input
-                value={catQuery}
-                onChange={(e) => setCatQuery(e.target.value)}
+                maxLength={64}
+                value={slug}
                 disabled={sharedDisabled}
-                placeholder={t('plugin_website.product.categorySearch')}
-                aria-label={t('plugin_website.product.categorySearch')}
-                className="m-1 h-8"
+                onChange={(e) => setSlug(e.target.value)}
+                placeholder={t('plugin_website.fields.slugAuto')}
+                className="font-mono"
               />
-            ) : null}
-            <div className="flex max-h-56 flex-col overflow-y-auto">
-              {visibleCats.length ? visibleCats.map((c) => (
-                <label
-                  key={c.id}
-                  className="flex min-h-9 cursor-pointer items-center gap-2 rounded-sm text-sm hover:bg-accent/60"
-                  style={{ paddingInlineStart: `${(c.depth - 1) * 16 + 8}px` }}
-                >
-                  <Checkbox
-                    checked={catIds.includes(c.id)}
-                    disabled={sharedDisabled}
-                    onCheckedChange={(on) => setCatIds((ids) => (on ? [...ids, c.id] : ids.filter((x) => x !== c.id)))}
-                    aria-label={c.title}
-                  />
-                  <span className="min-w-0 flex-1 truncate">{c.title}</span>
-                  <span className="num text-xs text-muted-foreground">{c.productCount}</span>
-                </label>
-              )) : (
-                <p className="px-2 py-3 text-xs text-muted-foreground">
-                  {t(flatCats.length ? 'plugin_website.product.categoryNoMatch' : 'plugin_website.product.categoriesEmpty')}
-                </p>
-              )}
-            </div>
+              <span className="truncate text-xs text-muted-foreground">{productPath}</span>
+            </SharedFieldShell>
+            <SharedFieldShell labelKey="plugin_website.product.categories">
+              <CategoryPicker value={catIds} onChange={setCatIds} categories={flatCats} disabled={sharedDisabled} />
+            </SharedFieldShell>
           </div>
-        </SharedGroup>
-        <p className="text-sm font-medium">{t('plugin_website.product.imageSection')}</p>
-        <SharedFieldShell labelKey="plugin_website.fields.coverUrl">
-          <ImageUrlField
-            value={coverUrl}
-            onChange={setCoverUrl}
-            disabled={sharedDisabled}
-            title={t('plugin_website.product.coverUpload')}
-            hint={t('plugin_website.product.coverHint')}
-            crop={{ width: 800, height: 800 }}
-            previewClassName="h-20 w-20 object-cover p-0"
-            aria-label={t('plugin_website.fields.coverUrl')}
-          />
-          {coverInvalid ? (
-            <span className="text-xs text-destructive">{t('plugin_website.fields.coverInvalid')}</span>
-          ) : null}
-        </SharedFieldShell>
-        <SharedGroup labelKey="plugin_website.product.images">
-          <ImagesField images={images} onChange={setImages} disabled={sharedDisabled} />
-        </SharedGroup>
-        <SharedFieldShell labelKey="plugin_website.product.videoUrl">
-          <VideoUrlField
-            value={videoUrl}
-            onChange={setVideoUrl}
-            disabled={sharedDisabled}
-            title={t('plugin_website.product.videoUrl')}
-            hint={t('plugin_website.product.videoHint')}
-            placeholder="https://…"
-            aria-label={t('plugin_website.product.videoUrl')}
-          />
-        </SharedFieldShell>
-        <p className="text-sm font-medium">{t('plugin_website.product.tradeSection')}</p>
+        </FormSection>
+        <FormSection title={t('plugin_website.product.imageSection')}>
+          <div className="grid gap-3 md:grid-cols-2">
+            <SharedFieldShell labelKey="plugin_website.fields.coverUrl">
+              <ImageUrlField
+                value={coverUrl}
+                onChange={setCoverUrl}
+                disabled={sharedDisabled}
+                title={t('plugin_website.product.coverUpload')}
+                hint={t('plugin_website.product.coverHint')}
+                crop={{ width: 800, height: 800 }}
+                previewClassName="h-20 w-20 object-cover p-0"
+                aria-label={t('plugin_website.fields.coverUrl')}
+              />
+              {coverInvalid ? (
+                <span className="text-xs text-destructive">{t('plugin_website.fields.coverInvalid')}</span>
+              ) : null}
+            </SharedFieldShell>
+            <SharedFieldShell labelKey="plugin_website.product.videoUrl">
+              <VideoUrlField
+                value={videoUrl}
+                onChange={setVideoUrl}
+                disabled={sharedDisabled}
+                title={t('plugin_website.product.videoUrl')}
+                hint={t('plugin_website.product.videoHint')}
+                placeholder="https://…"
+                aria-label={t('plugin_website.product.videoUrl')}
+              />
+            </SharedFieldShell>
+          </div>
+          <SharedGroup labelKey="plugin_website.product.images">
+            <ImagesField images={images} onChange={setImages} disabled={sharedDisabled} />
+          </SharedGroup>
+        </FormSection>
+        <FormSection title={t('plugin_website.product.tradeSection')}>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
           <SharedFieldShell labelKey="plugin_website.product.priceMin">
             <Input
@@ -543,21 +738,21 @@ function ProductFormBody({
             />
           </SharedFieldShell>
           <SharedFieldShell labelKey="plugin_website.product.currency">
-            <Input
+            <ConstantPicker
               value={currency}
-              maxLength={8}
-              disabled={sharedDisabled}
-              onChange={(e) => setCurrency(e.target.value.toUpperCase())}
+              onChange={setCurrency}
+              options={currencyOptions}
               placeholder="USD"
+              disabled={sharedDisabled}
             />
           </SharedFieldShell>
           <SharedFieldShell labelKey="plugin_website.product.priceUnit">
-            <Input
+            <ConstantPicker
               value={priceUnit}
-              maxLength={32}
-              disabled={sharedDisabled}
-              onChange={(e) => setPriceUnit(e.target.value)}
+              onChange={setPriceUnit}
+              options={unitOptions}
               placeholder="piece"
+              disabled={sharedDisabled}
             />
           </SharedFieldShell>
           <SharedFieldShell labelKey="plugin_website.product.moq">
@@ -579,60 +774,87 @@ function ProductFormBody({
             />
           </SharedFieldShell>
         </div>
-        <SharedFieldShell labelKey="plugin_website.product.port">
-          <Input
-            value={port}
-            maxLength={64}
-            disabled={sharedDisabled}
-            onChange={(e) => setPort(e.target.value)}
-            placeholder={t('plugin_website.product.portPlaceholder')}
-          />
-        </SharedFieldShell>
-        <SharedFieldShell labelKey="plugin_website.product.paymentTerms">
-          <Input
-            value={paymentTerms}
-            maxLength={100}
-            disabled={sharedDisabled}
-            onChange={(e) => setPaymentTerms(e.target.value)}
-            placeholder="T/T, L/C"
-          />
-        </SharedFieldShell>
+        <div className="grid gap-3 md:grid-cols-2">
+          <SharedFieldShell labelKey="plugin_website.product.port">
+            <ConstantPicker
+              value={port}
+              onChange={setPort}
+              options={portOptions}
+              multiple
+              placeholder={t('plugin_website.product.portPlaceholder')}
+              disabled={sharedDisabled}
+            />
+          </SharedFieldShell>
+          <SharedFieldShell labelKey="plugin_website.product.paymentTerms">
+            <ConstantPicker
+              value={paymentTerms}
+              onChange={setPaymentTerms}
+              options={paymentTermOptions}
+              multiple
+              placeholder="T/T, L/C"
+              disabled={sharedDisabled}
+            />
+          </SharedFieldShell>
+        </div>
         <SharedGroup labelKey="plugin_website.product.specs">
           <SpecsEditor specs={specs} onChange={setSpecs} disabled={sharedDisabled} />
         </SharedGroup>
-        <LocalizedField fieldKey="content" className="min-h-40" />
-        <LocalizedField fieldKey="seoTitle" />
-        <LocalizedField fieldKey="seoDesc" />
-        <LocaleFormActions />
-        <SharedFieldShell labelKey="plugin_website.fields.productSeoKeywords">
-          <Input
-            value={seoKeywords}
-            maxLength={300}
-            disabled={sharedDisabled}
-            onChange={(e) => setSeoKeywords(e.target.value)}
-            placeholder={t('plugin_website.fields.seoKeywords')}
-          />
-        </SharedFieldShell>
-        <SwitchRow
-          label={t('plugin_website.fields.published')}
-          checked={online}
-          onCheckedChange={(on) => lf.setPublishedOf(lf.defaultLocale, on)}
-        />
-        <SwitchRow
-          label={t('plugin_website.fields.noindex')}
-          checked={noindex}
-          onCheckedChange={setNoindex}
-        />
-        <SharedFieldShell labelKey="plugin_website.fields.author">
-          <Input
-            value={author}
-            maxLength={64}
-            disabled={sharedDisabled}
-            onChange={(e) => setAuthor(e.target.value)}
-          />
-        </SharedFieldShell>
+        </FormSection>
+        <FormSection title={t('plugin_website.product.detailSection')}>
+          <LocalizedField fieldKey="content" className="min-h-40" />
+          <div className="grid gap-3 md:grid-cols-2">
+            <LocalizedField fieldKey="seoTitle" />
+            <LocalizedField fieldKey="seoDesc" />
+          </div>
+          <LocaleFormActions />
+          <SharedFieldShell labelKey="plugin_website.fields.productSeoKeywords">
+            <Input
+              value={seoKeywords}
+              maxLength={300}
+              disabled={sharedDisabled}
+              onChange={(e) => setSeoKeywords(e.target.value)}
+              placeholder={t('plugin_website.fields.seoKeywords')}
+            />
+          </SharedFieldShell>
+        </FormSection>
+        <FormSection title={t('plugin_website.product.publishSection')}>
+          <div className="grid gap-3 md:grid-cols-3">
+            <SwitchRow
+              label={t('plugin_website.fields.published')}
+              checked={online}
+              onCheckedChange={(on) => lf.setPublishedOf(lf.defaultLocale, on)}
+            />
+            <SwitchRow
+              label={t('plugin_website.fields.noindex')}
+              checked={noindex}
+              onCheckedChange={setNoindex}
+            />
+            <SharedFieldShell labelKey="plugin_website.fields.author">
+              <Input
+                value={author}
+                maxLength={64}
+                disabled={sharedDisabled}
+                onChange={(e) => setAuthor(e.target.value)}
+              />
+            </SharedFieldShell>
+          </div>
+        </FormSection>
       </div>
     </ResponsiveDialog>
+  )
+}
+
+/** 表单分区：竖色条标题 + 延伸分隔线，长表单的视觉锚点（替代裸的加粗一行）。 */
+function FormSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="flex flex-col gap-3">
+      <div className="flex items-center gap-2">
+        <span className="h-4 w-1 shrink-0 rounded-full bg-primary" aria-hidden="true" />
+        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+        <span className="h-px min-w-4 flex-1 bg-border" aria-hidden="true" />
+      </div>
+      {children}
+    </section>
   )
 }
 
@@ -656,11 +878,20 @@ function SharedGroup({ labelKey, children }: { labelKey: string; children: React
 /**
  * 阿里开放平台凭据卡：AppKey 明文，Secret/SessionKey 密码框（已配置时占位提示「留空保持不变」）。
  * 保存走独立 PUT（凭据三态在后端处理），连接测试调 category 接口验证网关+签名。
+ * 默认收起：凭据是一次性配置，不该常驻占掉列表首屏；标题行常显配置状态，缺什么一目了然。
  */
 function AliConfigCard() {
   const { t } = useTranslation()
   const { data: config, isLoading } = useAliConfig()
   const save = useSaveAliConfig()
+  const [open, setOpen] = useState(false)
+  // 还没配过凭据时自动展开一次：首次配置的人不用再找入口；只自动开这一次，用户收起后不打架。
+  const [autoOpened, setAutoOpened] = useState(false)
+  useEffect(() => {
+    if (isLoading || autoOpened) return
+    setAutoOpened(true)
+    if (!config?.hasSecret && !config?.hasSession) setOpen(true)
+  }, [config, isLoading, autoOpened])
   const [appKey, setAppKey] = useState('')
   const [appSecret, setAppSecret] = useState('')
   const [sessionKey, setSessionKey] = useState('')
@@ -704,67 +935,184 @@ function AliConfigCard() {
 
   if (isLoading) return null
   return (
-    <div className="rounded-lg border border-border p-3 text-sm">
-      <div className="flex flex-wrap items-center gap-2">
-        <p className="font-medium">{t('plugin_website.ali.configTitle')}</p>
+    // 两态样式：收起是一行浅色文本（凭据是一次性设置，不该和筛选栏抢视觉）；
+    // 展开才有边框卡片——那时用户正在操作它，该突出了。
+    <Collapsible open={open} onOpenChange={setOpen} className={cn('text-sm', open && 'rounded-lg border border-border')}>
+      <CollapsibleTrigger
+        className={cn(
+          'group flex w-full flex-wrap items-center gap-2 rounded-md text-start transition-colors hover:bg-accent/40',
+          open ? 'p-3' : 'px-2 py-1.5 text-muted-foreground',
+        )}
+      >
+        <p className={cn('font-medium', open && 'text-foreground')}>{t('plugin_website.ali.configTitle')}</p>
         <span className="text-xs text-muted-foreground">
           {config?.hasSecret ? t('plugin_website.ali.secretConfigured') : t('plugin_website.ali.secretMissing')}
           {' · '}
           {config?.hasSession ? t('plugin_website.ali.sessionConfigured') : t('plugin_website.ali.sessionMissing')}
         </span>
+        <ChevronDown aria-hidden="true" className="ms-auto size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <div className="flex flex-col gap-2 px-3 pb-3">
+          <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+            <Input
+              value={appKey}
+              onChange={(e) => setAppKey(e.target.value)}
+              placeholder={t('plugin_website.ali.appKey')}
+              aria-label={t('plugin_website.ali.appKey')}
+              // 这张卡形似登录表单（多个输入 + 密码框），浏览器会把站内账号密码自动填进来：
+              // 截图里的 AppKey=admin、AppSecret=10 个圆点就是这么来的。Chrome 的自动填充底色是冷蓝，
+              // 两个框因此比同排其它控件亮一档；更糟的是点「保存凭据」会把这串站点密码当成
+              // AppSecret 加密存库。new-password 是 Chrome 唯一遵从而不填充的写法。
+              autoComplete="off"
+              name="ali-app-key"
+            />
+            <Input
+              type="password"
+              value={appSecret}
+              onChange={(e) => setAppSecret(e.target.value)}
+              placeholder={config?.hasSecret ? t('plugin_website.ali.configuredAlready') : t('plugin_website.ali.appSecret')}
+              aria-label={t('plugin_website.ali.appSecret')}
+              autoComplete="new-password"
+              name="ali-app-secret"
+            />
+            <Input
+              type="password"
+              value={sessionKey}
+              onChange={(e) => setSessionKey(e.target.value)}
+              placeholder={config?.hasSession ? t('plugin_website.ali.configuredAlready') : t('plugin_website.ali.sessionKey')}
+              aria-label={t('plugin_website.ali.sessionKey')}
+              autoComplete="new-password"
+              name="ali-session-key"
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Input
+              value={apiGateway}
+              onChange={(e) => setApiGateway(e.target.value)}
+              placeholder="https://gw.api.taobao.com/router/rest"
+              aria-label={t('plugin_website.ali.apiGateway')}
+              className="min-w-0 flex-1 font-mono text-xs md:w-96 md:flex-none"
+              autoComplete="off"
+              name="ali-api-gateway"
+            />
+            <Button variant="outline" size="sm" onClick={() => void test()} disabled={testState === 'testing'}>
+              {testState === 'testing' ? t('common.loading') : t('plugin_website.ali.test')}
+            </Button>
+            <Button size="sm" onClick={() => void submit()} disabled={save.isPending}>
+              {t('plugin_website.ali.save')}
+            </Button>
+            {testState === 'ok' ? <Badge variant="success">{t('plugin_website.ali.testOk')}</Badge> : null}
+            {testState === 'fail' ? <Badge variant="destructive">{t('plugin_website.ali.testFail')}</Badge> : null}
+          </div>
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
+  )
+}
+
+/**
+ * 产品导入弹窗（页内完成，不跳导入中心）：模板下载、文件上传、进度与逐行失败清单。
+ * 执行走通用导入中心接口（source=website_products）：行数少同步完成，多时后台跑、这里轮询。
+ */
+function ProductImportDialog({ onOpenChange }: { onOpenChange: (v: boolean) => void }) {
+  const { t } = useTranslation()
+  const run = useRunProductImport()
+  const [file, setFile] = useState<File | null>(null)
+  const [job, setJob] = useState<ProductImportJob | null>(null)
+  const running = job?.status === 'pending' || job?.status === 'running'
+  // 后台任务未结束前每 2s 轮询台账；结束时把最终数据换上（错误明细随单条任务返回）。
+  useEffect(() => {
+    if (!running || !job) return
+    const timer = setInterval(() => {
+      void fetchProductImportJob(job.id)
+        .then(setJob)
+        .catch(() => undefined)
+    }, 2000)
+    return () => clearInterval(timer)
+  }, [job, running])
+
+  const downloadTemplate = async () => {
+    try {
+      const blob = await fetchProductImportTemplate()
+      saveBlob(`${t('plugin_website.product.import.templateFilename')}.csv`, blob)
+    } catch (e) {
+      toast.error(e instanceof Error && e.message ? e.message : t('common.operateFailed'))
+    }
+  }
+
+  const start = async () => {
+    if (!file) return
+    try {
+      setJob(await run.mutateAsync(file))
+    } catch {
+      // 服务端原因（文件不合法、无导入权限等）由 http 拦截器统一弹出
+    }
+  }
+
+  return (
+    <ResponsiveDialog
+      open
+      onOpenChange={onOpenChange}
+      size="md"
+      title={t('plugin_website.product.import.title')}
+      description={t('plugin_website.product.import.description')}
+      footer={
+        <>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.close')}</Button>
+          <Button onClick={() => void start()} disabled={!file || run.isPending || running}>
+            {run.isPending || running ? t('common.loading') : t('plugin_website.product.import.start')}
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-5">
+        <div className="flex flex-col gap-1.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <Label htmlFor="product-import-file">{t('plugin_website.product.import.file')}</Label>
+            <Button type="button" variant="ghost" size="sm" className="-me-2 text-muted-foreground" onClick={() => void downloadTemplate()}>
+              <Download aria-hidden="true" />
+              {t('plugin_website.product.import.template')}
+            </Button>
+          </div>
+          <FileDropField
+            accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
+            labelledBy="product-import-file"
+            files={file ? [file] : []}
+            onChange={(fs) => {
+              setFile(fs[0] ?? null)
+              setJob(null)
+            }}
+          />
+          <p className="text-xs leading-relaxed text-muted-foreground">{t('plugin_website.product.import.fileHint')}</p>
+        </div>
+        {job ? (
+          <div className="flex flex-col gap-2.5 rounded-lg border border-border bg-muted/50 p-3" role="status">
+            <p className="flex items-center gap-2 text-sm font-medium text-foreground">
+              {running ? (
+                <span className="size-4 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />
+              ) : (job.errors?.length ?? 0) > 0 || job.status === 'failed' ? (
+                <CircleAlert className="size-4 shrink-0 text-warning" aria-hidden="true" />
+              ) : (
+                <CircleCheck className="size-4 shrink-0 text-success" aria-hidden="true" />
+              )}
+              {running
+                ? t('plugin_website.product.import.running')
+                : job.status === 'failed'
+                  ? t('plugin_website.product.import.failed')
+                  : t('plugin_website.product.import.result', { ok: job.okRows, failed: job.failRows })}
+            </p>
+            {!running && (job.errors?.length ?? 0) > 0 ? (
+              <ul className="flex max-h-48 flex-col gap-1 overflow-y-auto text-sm text-destructive">
+                {job.errors!.map((e) => (
+                  <li key={e.row}>{t('plugin_website.product.import.errorRow', { row: e.row, message: e.message })}</li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        ) : null}
       </div>
-      <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3">
-        <Input
-          value={appKey}
-          onChange={(e) => setAppKey(e.target.value)}
-          placeholder={t('plugin_website.ali.appKey')}
-          aria-label={t('plugin_website.ali.appKey')}
-          // 这张卡形似登录表单（多个输入 + 密码框），浏览器会把站内账号密码自动填进来：
-          // 截图里的 AppKey=admin、AppSecret=10 个圆点就是这么来的。Chrome 的自动填充底色是冷蓝，
-          // 两个框因此比同排其它控件亮一档；更糟的是点「保存凭据」会把这串站点密码当成
-          // AppSecret 加密存库。new-password 是 Chrome 唯一遵从而不填充的写法。
-          autoComplete="off"
-          name="ali-app-key"
-        />
-        <Input
-          type="password"
-          value={appSecret}
-          onChange={(e) => setAppSecret(e.target.value)}
-          placeholder={config?.hasSecret ? t('plugin_website.ali.configuredAlready') : t('plugin_website.ali.appSecret')}
-          aria-label={t('plugin_website.ali.appSecret')}
-          autoComplete="new-password"
-          name="ali-app-secret"
-        />
-        <Input
-          type="password"
-          value={sessionKey}
-          onChange={(e) => setSessionKey(e.target.value)}
-          placeholder={config?.hasSession ? t('plugin_website.ali.configuredAlready') : t('plugin_website.ali.sessionKey')}
-          aria-label={t('plugin_website.ali.sessionKey')}
-          autoComplete="new-password"
-          name="ali-session-key"
-        />
-      </div>
-      <div className="mt-2 flex flex-wrap items-center gap-2">
-        <Input
-          value={apiGateway}
-          onChange={(e) => setApiGateway(e.target.value)}
-          placeholder="https://gw.api.taobao.com/router/rest"
-          aria-label={t('plugin_website.ali.apiGateway')}
-          className="min-w-0 flex-1 font-mono text-xs md:w-96 md:flex-none"
-          autoComplete="off"
-          name="ali-api-gateway"
-        />
-        <Button variant="outline" size="sm" onClick={() => void test()} disabled={testState === 'testing'}>
-          {testState === 'testing' ? t('common.loading') : t('plugin_website.ali.test')}
-        </Button>
-        <Button size="sm" onClick={() => void submit()} disabled={save.isPending}>
-          {t('plugin_website.ali.save')}
-        </Button>
-        {testState === 'ok' ? <Badge variant="success">{t('plugin_website.ali.testOk')}</Badge> : null}
-        {testState === 'fail' ? <Badge variant="destructive">{t('plugin_website.ali.testFail')}</Badge> : null}
-      </div>
-    </div>
+    </ResponsiveDialog>
   )
 }
 
@@ -1038,13 +1386,14 @@ function ProductFormDialog({
 }
 
 export default function ProductPage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const confirm = useConfirm()
   // 预取字段 schema：点「新建/编辑」时直接命中缓存，不再先闪一个加载弹窗。
   useI18nSchema('product')
   const { data: languages = [] } = useLanguages()
   const { data: categories = [] } = useProductCategories()
-  const [draft, setDraft] = useState<ContentQuery>({})
+  const flatCats = useMemo(() => flattenCatTree(buildCatTree(categories)), [categories])
+  const [draft, setDraft] = useState<ContentDraft>({})
   const [filters, setFilters] = useState<ContentQuery>({})
   // 状态页签（对齐阿里：全部/上架/下架/草稿/审核）与关键词筛选分开：页签是快筛，FilterBar 管关键词与类目。
   const [statusTab, setStatusTab] = useState<string>(ALL)
@@ -1063,6 +1412,8 @@ export default function ProductPage() {
   const [focus, setFocus] = useState<{ code: string; nonce: number } | null>(null)
   // 阿里同步对话框的目标：单个商品或一批；null = 关闭。
   const [syncTarget, setSyncTarget] = useState<AliSyncTarget | null>(null)
+  // 列表缩略图点开看大图：记整行，弹窗同时用 coverUrl 和标题。
+  const [preview, setPreview] = useState<SiteProduct | null>(null)
 
   const openAt = (row: SiteProduct | null, code?: string) => {
     setEditing(row)
@@ -1121,6 +1472,55 @@ export default function ProductPage() {
     }
   }
 
+  const [exporting, setExporting] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
+  const { start: startExportJob } = useAsyncJob()
+  // 导出沿用当前筛选（不是当前页）；勾选了行就只导勾选的（ids 传后端，筛选条件忽略）。
+  // 大数据量分流与用户导出同款：先问 export-plan，超过 export.sync_limit 改走异步任务——
+  // toast 提示「已提交到导出中心」，进度与 .xlsx 下载都在导出中心看，不阻塞页面。
+  const onExport = async () => {
+    setExporting(true)
+    try {
+      const query = selected.length
+        ? { ids: selected }
+        : { keyword: filters.keyword, status: effectiveStatus, categoryIds: filters.categoryIds }
+      const plan = await fetchProductExportPlan(query)
+      if (plan?.async) {
+        await startExportJob(() => createProductExportJob(query))
+        return
+      }
+      const rows = await fetchProductsForExport(query)
+      const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+      downloadCsv(`products-${stamp}.csv`, [
+        [
+          t('plugin_website.product.titleColumn'),
+          t('plugin_website.fields.slug'),
+          t('plugin_website.product.categoryColumn'),
+          t('plugin_website.product.priceColumn'),
+          t('plugin_website.product.moq'),
+          t('plugin_website.product.statusColumn'),
+          t('plugin_website.product.syncColumn'),
+          t('plugin_website.fields.updatedAt'),
+        ],
+        ...rows.map((r) => [
+          r.title,
+          r.slug,
+          (r.categories ?? []).map((c) => c.title).join('、'),
+          priceText(r),
+          r.moq || '',
+          t(`plugin_website.product.status${r.status.charAt(0).toUpperCase()}${r.status.slice(1)}`, { defaultValue: r.status }),
+          syncText(r, t),
+          formatTime(r.updatedAt, i18n.language),
+        ]),
+      ])
+      toast.success(t('common.operateSuccess'))
+    } catch {
+      // 服务端原因由 http 拦截器统一弹出，这里再补一条「操作失败」就是同一件事说两遍
+    } finally {
+      setExporting(false)
+    }
+  }
+
   const selectedRows = (data?.list ?? []).filter((r) => selected.includes(r.id))
 
   const columns: Column<SiteProduct>[] = [
@@ -1131,14 +1531,30 @@ export default function ProductPage() {
       render: (r) => (
         <span className="flex min-w-0 items-center gap-2">
           {r.coverUrl ? (
-            <img src={r.coverUrl} alt="" className="h-10 w-10 flex-none rounded-md border border-border object-cover" />
+            <button
+              type="button"
+              className="flex-none rounded-md focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+              onClick={() => setPreview(r)}
+              aria-label={t('common.preview')}
+              title={t('common.preview')}
+            >
+              <img src={r.coverUrl} alt="" className="h-10 w-10 rounded-md border border-border object-cover" />
+            </button>
           ) : (
             <span className="flex h-10 w-10 flex-none items-center justify-center rounded-md border border-border text-sm text-muted-foreground">
               {r.title.slice(0, 1).toUpperCase()}
             </span>
           )}
           <span className="min-w-0">
-            <span className="block truncate font-medium text-foreground">{r.title}</span>
+            {/* 点名称直接进编辑：列表页最高频的动作，不用再去行尾找铅笔。 */}
+            <button
+              type="button"
+              className="block w-full max-w-full truncate text-start font-medium text-foreground hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+              onClick={() => openAt(r)}
+              title={t('common.edit')}
+            >
+              {r.title}
+            </button>
             <span className="num block text-xs text-muted-foreground">{r.id}</span>
           </span>
         </span>
@@ -1229,7 +1645,7 @@ export default function ProductPage() {
         <AliConfigCard />
       </Can>
       <FilterBar
-        onSearch={() => { setFilters(draft); setPage(1); setSelected([]) }}
+        onSearch={() => { setFilters(toContentQuery(draft)); setPage(1); setSelected([]) }}
         onReset={() => { setDraft({}); setFilters({}); setStatusTab(ALL); setPage(1); setSelected([]) }}
       >
         <Input
@@ -1240,38 +1656,25 @@ export default function ProductPage() {
           aria-label={t('common.keyword')}
         />
         {categories.length ? (
-          <Select
-            value={draft.categoryId ?? ALL}
-            onValueChange={(v) => setDraft((d) => ({ ...d, categoryId: v === ALL ? undefined : v }))}
-          >
-            <SelectTrigger className="md:w-44" aria-label={t('plugin_website.product.categoryColumn')}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>{t('plugin_website.product.categoryAll')}</SelectItem>
-              {categories.map((c) => (
-                <SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <CategoryPicker
+            value={draft.categoryIds ?? []}
+            onChange={(ids) => setDraft((d) => ({ ...d, categoryIds: ids.length ? ids : undefined }))}
+            categories={flatCats}
+            className="md:w-44"
+          />
         ) : null}
         {extraLocales.length ? (
-          <Select
-            value={draft.missing ?? ALL}
-            onValueChange={(v) => setDraft((d) => ({ ...d, missing: v === ALL ? undefined : v }))}
-          >
-            <SelectTrigger className="md:w-48" aria-label={t('plugin_website.i18n.filterLabel')}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>{t('plugin_website.filter.allLanguages')}</SelectItem>
-              {extraLocales.map((l) => (
-                <SelectItem key={l.code} value={l.code}>
-                  {t('plugin_website.i18n.filterNoTranslation', { lang: l.label })}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <OptionPicker
+            title={t('plugin_website.i18n.filterLabel')}
+            value={draft.missing ?? []}
+            onChange={(v) => setDraft((d) => ({ ...d, missing: v.length ? v : undefined }))}
+            options={extraLocales.map((l) => ({
+              value: l.code,
+              label: t('plugin_website.i18n.filterNoTranslation', { lang: l.label }),
+            }))}
+            className="md:w-52"
+            placeholder={t('plugin_website.i18n.filterLabel')}
+          />
         ) : null}
       </FilterBar>
       <Tabs value={statusTab} onValueChange={(v) => { setStatusTab(v); setPage(1); setSelected([]) }}>
@@ -1301,6 +1704,15 @@ export default function ProductPage() {
             <Button onClick={() => openAt(null)}>
               <Plus aria-hidden="true" />
               {t('plugin_website.product.create')}
+            </Button>
+            <Button variant="outline" onClick={() => void onExport()} disabled={exporting}>
+              <Download className="me-2 size-4" aria-hidden="true" />
+              {t('common.export')}
+            </Button>
+            {/* 导入在页内弹窗完成（模板下载/上传/失败清单）；台账与更多来源在导入中心。 */}
+            <Button variant="outline" onClick={() => setImportOpen(true)}>
+              <FileUp className="me-2 size-4" aria-hidden="true" />
+              {t('plugin_website.product.importEntry')}
             </Button>
           </Can>
         }
@@ -1352,6 +1764,12 @@ export default function ProductPage() {
         />
       )}
       {syncTarget && <AliSyncDialog target={syncTarget} onOpenChange={(v) => !v && setSyncTarget(null)} />}
+      {importOpen && <ProductImportDialog onOpenChange={setImportOpen} />}
+      <Lightbox
+        open={!!preview}
+        onOpenChange={(o) => !o && setPreview(null)}
+        slides={preview ? [{ src: preview.coverUrl, alt: preview.title }] : []}
+      />
     </PageContainer>
   )
 }

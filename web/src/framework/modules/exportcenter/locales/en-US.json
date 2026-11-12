@@ -10,7 +10,7 @@
       "createdAt": "Created at",
       "duration": "Duration"
     },
-    "type": { "all": "All types", "user.export": "User export" },
+    "type": { "all": "All types", "user.export": "User export", "website.product-export": "Product export" },
     "status": {
       "all": "All statuses",
       "queued": "Queued",

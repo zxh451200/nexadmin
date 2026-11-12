@@ -254,11 +254,31 @@ export interface TagForm {
 }
 
 export interface ContentQuery extends PageQuery {
+  /** 逗号分隔多值：?status=published,draft */
   status?: string
-  /** 语言码：筛「该语言完全没有译文」的条目（不是缺某个字段，那看列表里的 done/total 徽标） */
+  /** 语言码 CSV 多值：筛「缺任一所选语言译文」的条目（不是缺某个字段，那看列表里的 done/total 徽标） */
   missing?: string
-  /** 新闻分类筛选（只对新闻列表生效） */
+  /** 新闻分类筛选（只对新闻列表生效），兼容旧单值 */
   categoryId?: string
+  /** 分类 CSV 多值 */
+  categoryIds?: string
+}
+
+/** 筛选草稿（页面 state）：枚举字段是多选数组，搜索时用 toContentQuery 序列化成 CSV */
+export interface ContentDraft {
+  keyword?: string
+  status?: string[]
+  missing?: string[]
+  categoryIds?: string[]
+}
+
+export function toContentQuery(d: ContentDraft): ContentQuery {
+  return {
+    keyword: d.keyword,
+    status: d.status?.length ? d.status.join(',') : undefined,
+    missing: d.missing?.length ? d.missing.join(',') : undefined,
+    categoryIds: d.categoryIds?.length ? d.categoryIds.join(',') : undefined,
+  }
 }
 
 /** 商品动态属性的一条键值对（对标阿里的类目属性）。 */
@@ -850,7 +870,7 @@ export function useDeletePosts() {
  * 导出当前筛选下的全部新闻（不带分页，上限见后端 exportMax），CSV 由前端生成；
  * silent：错误由页面捕获后 toast，不走全局报错。
  */
-export function fetchPostsForExport(query: Pick<ContentQuery, 'keyword' | 'status' | 'categoryId'>): Promise<SitePost[]> {
+export function fetchPostsForExport(query: Pick<ContentQuery, 'keyword' | 'status' | 'categoryIds'>): Promise<SitePost[]> {
   return api.get<SitePost[]>(`${BASE}/posts/export`, { ...query }, { silent: true })
 }
 
@@ -944,8 +964,8 @@ export interface MessageQuery {
   page: number
   pageSize: number
   keyword?: string
-  /** 省略 = 全部状态 */
-  status?: MessageStatus
+  /** 逗号分隔多值：?status=new,read；省略 = 全部状态 */
+  status?: string
 }
 
 export function useMessages(query: MessageQuery) {
@@ -1015,12 +1035,87 @@ export function useProducts(query: ContentQuery) {
 
 /**
  * 导出当前筛选（或 ids= 勾选行）下的全部商品（不带分页，上限见后端 exportMax），CSV 由前端生成；
- * silent：错误由页面捕获后 toast，不走全局报错。
+ * 不用 silent：导出点下去「没反应」最伤人，失败必须由拦截器当场 toast 出原因。
  */
 export function fetchProductsForExport(
-  query: Pick<ContentQuery, 'keyword' | 'status' | 'categoryId'> & { ids?: string[] },
+  query: Pick<ContentQuery, 'keyword' | 'status' | 'categoryIds'> & { ids?: string[] },
 ): Promise<SiteProduct[]> {
-  return api.get<SiteProduct[]>(`${BASE}/products/export`, { ...query, ids: query.ids?.join(',') }, { silent: true })
+  return api.get<SiteProduct[]>(`${BASE}/products/export`, { ...query, ids: query.ids?.join(',') })
+}
+
+export interface ProductExportPlan {
+  /** 按当前筛选匹配的行数 */
+  total: number
+  /** 超过它走异步任务（export.sync_limit，与用户导出同参数） */
+  syncLimit: number
+  async: boolean
+}
+
+/** 导出前先问服务端该走同步还是异步（失败时返回 null，调用方退回同步导出） */
+export function fetchProductExportPlan(
+  query: Pick<ContentQuery, 'keyword' | 'status' | 'categoryIds'> & { ids?: string[] },
+): Promise<ProductExportPlan | null> {
+  return api
+    .get<ProductExportPlan>(`${BASE}/products/export-plan`, { ...query, ids: query.ids?.join(',') }, { silent: true })
+    .catch(() => null)
+}
+
+/** 创建异步导出任务（同样的筛选参数），立即返回任务 ID；进度与下载见导出中心 */
+export function createProductExportJob(
+  query: Pick<ContentQuery, 'keyword' | 'status' | 'categoryIds'> & { ids?: string[] },
+) {
+  return api.post<{ id: string }>(`${BASE}/products/export-async`, {
+    keyword: query.keyword ?? '',
+    status: query.status ?? '',
+    categoryIds: query.categoryIds ?? '',
+    ids: query.ids ?? [],
+  })
+}
+
+/**
+ * 产品在导入中心（plugins/imports）的来源标识，与后端 SourceProducts 同源；
+ * 文件解析/模板/逐行报错/台账都由导入中心负责，这里只是它的一个前端调用方。
+ */
+export const PRODUCT_IMPORT_SOURCE = 'website_products'
+
+/** 导入中心任务视图（与 plugins/imports/api.ts 的 ImportJob 同形，只取弹窗用到的字段）。 */
+export interface ProductImportJob {
+  id: string
+  status: 'pending' | 'running' | 'done' | 'failed' | 'cancelled'
+  totalRows: number
+  okRows: number
+  failRows: number
+  /** 失败明细只随单条任务返回；行数少时同步完成直接带在结果里。 */
+  errors?: { row: number; key: string; message: string }[]
+}
+
+/** 上传文件执行产品导入：行数少时同步完成，多时后台跑（用 fetchProductImportJob 轮询）。 */
+export function useRunProductImport() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (file: File) => {
+      const fd = new FormData()
+      fd.append('source', PRODUCT_IMPORT_SOURCE)
+      fd.append('file', file)
+      return api.post<ProductImportJob>('/plugins/imports', fd)
+    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: [...KEY, 'products'] }),
+  })
+}
+
+/** 轮询导入任务（silent：轮询失败不打断界面，下一轮再试）。 */
+export function fetchProductImportJob(id: string) {
+  return api.get<ProductImportJob>(`/plugins/imports/${id}`, undefined, { silent: true })
+}
+
+/** 下载产品导入模板（导入中心按来源生成表头与示例行）。 */
+export async function fetchProductImportTemplate(): Promise<Blob> {
+  const res = await http.get<unknown>(
+    '/plugins/imports/template',
+    { params: { source: PRODUCT_IMPORT_SOURCE, format: 'csv' }, responseType: 'blob' },
+  )
+  // 真实后端返回文件（Blob）；mock 阶段返回 CSV 文本
+  return res.data instanceof Blob ? res.data : new Blob([String(res.data)], { type: 'text/csv;charset=utf-8' })
 }
 
 export function useSaveProduct() {

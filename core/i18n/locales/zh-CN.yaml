@@ -778,6 +778,7 @@ website:
   ali_sync_unavailable: "批量同步暂不可用：后台任务服务未就绪"
   rating_invalid: "评分必须在 1-5 之间"
   import_products_title: "产品导入"
+  export_center_disabled: "导出中心未启用，无法提交异步导出任务"
   import_status_invalid: "状态应为 draft / online / offline（或 草稿 / 上架 / 下架）"
   import_number_invalid: "价格、起订量与发货天数必须是数字"
   import_specs_invalid: "动态属性格式不正确：应为 [{\"label\":\"…\",\"value\":\"…\"}] 的 JSON，或「名称:值」以 | 分隔"

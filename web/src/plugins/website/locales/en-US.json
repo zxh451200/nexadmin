@@ -225,6 +225,8 @@
       "basicSection": "Basics",
       "imageSection": "Images & video",
       "tradeSection": "Price & trade",
+      "detailSection": "Description & SEO",
+      "publishSection": "Publishing",
       "categories": "Categories",
       "categoriesPlaceholder": "Select categories…",
       "importEntry": "Import",

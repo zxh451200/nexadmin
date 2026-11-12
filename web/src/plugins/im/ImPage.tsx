@@ -798,10 +798,11 @@ function ConvListItem({
     </>
   )
   const checkbox = canPick ? (
-    // 勾选框热区外扩 6px（-m/p 同值抵消）：16px 小方块周围一点就点到整行选中按钮上
+    // 勾选列等高热区：label 纵向撑满整行（QueueRow 的勾选列已 items-stretch），
+    // 横向再各留 6px——不重叠相邻行，也不压住行按钮
     <label
       htmlFor={cbId}
-      className="-m-1.5 inline-flex cursor-pointer items-center rounded p-1.5"
+      className="flex cursor-pointer items-center px-1.5"
       title={conv.status === 'closed' ? undefined : t('plugin_im.batch.onlyClosed')}
     >
       <Checkbox

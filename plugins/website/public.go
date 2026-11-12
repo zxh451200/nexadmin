@@ -123,6 +123,14 @@ func (h *siteHandler) render(c *gin.Context, name string, status int, v *siteVie
 	v.Route = stripLangPrefix(c.Request.URL.Path)
 	v.Path = v.Lang.Path(v.Route)
 	v.Query = c.Request.URL.RawQuery
+	// JSON-LD 统一在这里装配：BaseURL 刚就位（handler 阶段还没有），canonical/图片补全才不是相对路径。
+	v.OrgLD = orgJSONLD(v)
+	switch {
+	case v.Product != nil:
+		v.PageLD = productJSONLD(v, v.Product)
+	case v.Post != nil:
+		v.PageLD = articleJSONLD(v, v.Post)
+	}
 	// 站点默认分享图兜底：内容级 OGImage 为空时用站点设置（absURL 补协议），仍空由模板回退内置 og.png。
 	if v.OGImage == "" && v.OgImageURL != "" {
 		v.OGImage = absURL(v.BaseURL, v.OgImageURL)
@@ -342,6 +350,11 @@ func (h *siteHandler) postDetail(c *gin.Context) {
 	v.Post = p
 	// og:image 只认绝对 URL；文章设了封面就用封面，否则模板回退站点默认图。
 	v.OGImage = absURL(v.BaseURL, p.CoverURL)
+	// 详情页的蜘蛛口径：og:type=article + 发布时间（Article/面包屑 JSON-LD 在 render() 装配）。
+	v.OGType = "article"
+	if p.PublishedAt != nil {
+		v.OGPublishedAt = p.PublishedAt.Format(time.RFC3339)
+	}
 	v.Noindex = p.Noindex
 	// hreflang、og:locale:alternate 与语言切换器都遍历 v.Languages：未发布的语言不能出现在这里。
 	v.Languages = visibleLanguages(p.Published, p.PublishedJSON)
@@ -463,6 +476,7 @@ func (h *siteHandler) productDetail(c *gin.Context) {
 		h.log.Warn("website: 产品同类推荐加载失败", zap.Error(rerr), zap.String("slug", slug))
 	}
 	// og:image 只认绝对 URL；商品设了主图就用主图，否则模板回退站点默认图。
+	// （Product/Offer + 面包屑 JSON-LD 在 render() 装配；询盘品无价时不给 offers。）
 	v.OGImage = absURL(v.BaseURL, p.CoverURL)
 	v.Noindex = p.Noindex
 	// hreflang、og:locale:alternate 与语言切换器都遍历 v.Languages：未发布的语言不能出现在这里。

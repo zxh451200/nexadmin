@@ -2642,13 +2642,9 @@ function TicketListItem({
       selected={active}
       onSelect={onSelect}
       checkbox={
-        // 勾选框本体只有 16px，周围一点就会点到整行选中按钮上；label 外扩 6px 内缩同值，
-        // 热区扩大约一倍且不改变行布局（点 label 会转发成勾选框自身的点击）。
-        <label
-          htmlFor={cbId}
-          className="-m-1.5 inline-flex cursor-pointer items-center rounded p-1.5"
-          title={t('dataTable.selectRow')}
-        >
+        // 勾选列等高热区：label 纵向撑满整行（QueueRow 的勾选列已 items-stretch），
+        // 横向再各留 6px——不重叠相邻行，也不压住行按钮（点 label 转发成勾选框自身的点击）。
+        <label htmlFor={cbId} className="flex cursor-pointer items-center px-1.5" title={t('dataTable.selectRow')}>
           <Checkbox
             id={cbId}
             checked={checked}
