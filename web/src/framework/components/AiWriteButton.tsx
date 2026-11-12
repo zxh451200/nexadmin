@@ -21,8 +21,8 @@ type Tone = 'default' | 'formal' | 'friendly' | 'concise'
 const TONES: Tone[] = ['default', 'formal', 'friendly', 'concise']
 
 export interface AiWriteButtonProps {
-  /** title：单行标题；body：正文 */
-  target: 'title' | 'body'
+  /** title：单行标题；body：正文；keywords：搜索关键词（仅起草，无语气选项） */
+  target: 'title' | 'body' | 'keywords'
   /** body 的 html 表示富文本（润色时保留原有标签，起草时由服务端包 <p>） */
   format: 'text' | 'html'
   /** 当前字段内容；润色用它，起草时把它当要点 */
@@ -67,7 +67,15 @@ export function AiWriteButton({ target, format, getText, getBrief, onResult, cla
     try {
       const res = await api.post<{ text: string }>(
         '/ai/write',
-        { mode, target, text, format: target === 'title' ? 'text' : format, tone: tone === 'default' ? '' : tone, lang: mode === 'write' ? i18n.language : '' },
+        {
+          mode,
+          target,
+          text,
+          format: target === 'title' ? 'text' : format,
+          tone: tone === 'default' ? '' : tone,
+          // 关键词永远要英文（发阿里国际站用），不跟随界面语言。
+          lang: target === 'keywords' ? 'en-US' : mode === 'write' ? i18n.language : '',
+        },
         { silent: true },
       )
       onResult(res.text)
@@ -88,18 +96,25 @@ export function AiWriteButton({ target, format, getText, getBrief, onResult, cla
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuLabel>{t('ai.write.menuLabel')}</DropdownMenuLabel>
-        <DropdownMenuItem onSelect={() => run('write')}>{t('ai.write.draft')}</DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => run('polish')}>{t('ai.write.polish')}</DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuLabel>{t('ai.write.toneLabel')}</DropdownMenuLabel>
-        <DropdownMenuRadioGroup value={tone} onValueChange={(v) => setTone(v as Tone)}>
-          {TONES.map((k) => (
-            <DropdownMenuRadioItem key={k} value={k} onSelect={(e) => e.preventDefault()}>
-              {t(`ai.write.tone.${k}`)}
-            </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
+        {target === 'keywords' ? (
+          // 关键词是「按商品信息生成」的固定动作：没有现有内容可润色，语气也不适用，只留起草。
+          <DropdownMenuItem onSelect={() => run('write')}>{t('ai.write.draftKeywords')}</DropdownMenuItem>
+        ) : (
+          <>
+            <DropdownMenuLabel>{t('ai.write.menuLabel')}</DropdownMenuLabel>
+            <DropdownMenuItem onSelect={() => run('write')}>{t('ai.write.draft')}</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => run('polish')}>{t('ai.write.polish')}</DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>{t('ai.write.toneLabel')}</DropdownMenuLabel>
+            <DropdownMenuRadioGroup value={tone} onValueChange={(v) => setTone(v as Tone)}>
+              {TONES.map((k) => (
+                <DropdownMenuRadioItem key={k} value={k} onSelect={(e) => e.preventDefault()}>
+                  {t(`ai.write.tone.${k}`)}
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   )

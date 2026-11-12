@@ -179,6 +179,20 @@ function draft(brief: string, target: string, tone: string, format: string): str
   return format === 'html' ? paras.map((p) => `<p>${escapeHtml(p)}</p>`).join('') : paras.join('\n\n')
 }
 
+/** 关键词模拟：取输入里的英文词，去重取前 3 个；没有英文词就给一组占位词，与服务端的规范形态一致 */
+function draftKeywords(brief: string): string {
+  const words = brief.toLowerCase().match(/[a-z][a-z0-9-]{1,31}/g) ?? []
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const w of words) {
+    if (seen.has(w)) continue
+    seen.add(w)
+    out.push(w)
+    if (out.length === 3) break
+  }
+  return out.length ? out.join(' ') : 'product oem factory'
+}
+
 /** 译文模拟：纯文本加前缀；html 只在文本节点前加前缀，保留标签 */
 function fakeTranslate(text: string, to: string, format: string): string {
   if (format !== 'html') return `[${to}] ${text}`
@@ -229,6 +243,7 @@ defineMock([
       if (text.length > 4000) mockError(400, 'Input is too long')
       guard(headers)
       await sleep(800)
+      if (target === 'keywords') return { text: draftKeywords(text) }
       if (mode === 'polish') {
         const out = polish(text, tone, target === 'title' ? 'text' : format)
         return { text: target === 'title' ? out.replace(/[。.]$/, '').replace(/\n+/g, ' ') : out }

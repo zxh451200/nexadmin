@@ -129,6 +129,7 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.DELETE("/tags/:id", core.Perm("website:post"), core.Desc("删除新闻标签"), h.deleteTag)
 
 	g.GET("/products", core.Perm("website:product"), core.Desc("产品列表"), h.listProducts)
+	g.GET("/products/export", core.Perm("website:product"), core.Desc("导出产品"), h.exportProducts)
 	g.PUT("/products/status", core.Perm("website:product"), core.Desc("批量上架/下线产品"), h.setProductStatus)
 	g.DELETE("/products", core.Perm("website:product"), core.Desc("批量删除产品"), h.deleteProducts)
 	g.POST("/products", core.Perm("website:product"), core.Desc("新增产品"), h.createProduct)

@@ -20,6 +20,7 @@
       "button": "AI write",
       "menuLabel": "AI writing assistant",
       "draft": "Draft from key points",
+      "draftKeywords": "Generate search keywords",
       "polish": "Polish existing text",
       "toneLabel": "Tone",
       "tone": {

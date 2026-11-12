@@ -122,8 +122,8 @@ type handler struct {
 var scopePerm = map[string]string{"user": "user:list", "notice": "notice:list", "operLog": "operLog:list"}
 
 // 写作辅助与翻译所需的业务权限（满足任意一个即可）。权限码以各模块 core.Perm 注册的为准。
-// 官网内容都是多语言字段（新闻/页面/特性/导航/站点文案），能编辑该内容即能用 AI 起草与翻译，不额外放大权限。
-var websiteEditPerms = []string{"website:post", "website:page", "website:feature", "website:nav", "website:setting"}
+// 官网内容都是多语言字段（商品/新闻/页面/特性/导航/站点文案），能编辑该内容即能用 AI 起草与翻译，不额外放大权限。
+var websiteEditPerms = []string{"website:product", "website:post", "website:page", "website:feature", "website:nav", "website:setting"}
 
 var (
 	writePerms     = append([]string{"notice:create", "notice:update"}, websiteEditPerms...)

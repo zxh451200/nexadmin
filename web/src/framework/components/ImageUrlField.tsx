@@ -9,6 +9,7 @@ import { precheckFile, useUploadConfig } from '@/framework/upload/precheck'
 import { uploadFile } from '@/framework/upload/uploadClient'
 import { toWebp, webpName } from '@/framework/upload/toWebp'
 import { ImagePreviewDialog } from './ImagePreviewDialog'
+import { RemoteSelect } from './RemoteSelect'
 import { ResponsiveDialog } from './ResponsiveDialog'
 import { Uploader, type UploadedFile } from './Uploader'
 import type { CropConfig } from './ImageCropDialog'
@@ -30,7 +31,7 @@ export interface ImageUrlFieldProps {
 }
 
 /**
- * 单图字段的统一形态：URL 输入 + 上传按钮 + 预览 + 清除。
+ * 单图字段的统一形态：URL 输入 + 上传/预览卡 + 清除。
  * 站点 Logo、租户 Logo 点「上传」直接开系统选图框，选完即传即回填；
  * 只有配了 crop 的字段（SSO 应用 Logo）才弹窗，因为裁剪要在弹窗里画。
  */
@@ -97,18 +98,22 @@ export function ImageUrlField({
           placeholder={placeholder}
           inputMode="url"
           spellCheck={false}
+          className="min-w-0 flex-1"
           aria-label={ariaLabel ?? title}
         />
-        <Button
-          type="button"
-          variant="outline"
-          className="shrink-0 px-3"
-          disabled={disabled || uploading}
-          onClick={() => (crop ? setOpen(true) : inputRef.current?.click())}
-        >
-          {uploading ? <Loader2 aria-hidden="true" className="animate-spin" /> : <Upload aria-hidden="true" />}
-          {uploading ? t('uploader.uploading') : t('common.upload')}
-        </Button>
+        {/* 文件库下拉：已传过的图片直接选，不用手写 URL（关键词可搜、按上传时间倒序） */}
+        <RemoteSelect
+          url="/files"
+          params={{ category: 'image' }}
+          valueKey="url"
+          labelKey="name"
+          value={value}
+          onChange={(v) => onChange(String(v ?? ''))}
+          allowClear={false}
+          placeholder={t('uploader.pickFromLibrary')}
+          disabled={disabled}
+          className="w-36 shrink-0 sm:w-44"
+        />
         {value ? (
           <Button type="button" variant="ghost" className="shrink-0 px-3" disabled={disabled} onClick={() => onChange('')}>
             {t('common.clear')}

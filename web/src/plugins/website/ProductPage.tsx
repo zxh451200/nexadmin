@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { CloudUpload, Copy, ExternalLink, Eye, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { CloudUpload, Copy, ExternalLink, Eye, Pencil, Plus, Trash2, Upload, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -22,6 +22,8 @@ import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { SwitchRow } from '@/framework/components/SwitchField'
 import { ImageUrlField } from '@/framework/components/ImageUrlField'
+import { Uploader, type UploadedFile } from '@/framework/components/Uploader'
+import { VideoUrlField } from '@/framework/components/VideoUrlField'
 import { slugify } from './format'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
@@ -140,7 +142,7 @@ function parseNum(v: string): number {
   return Number.isFinite(n) && n > 0 ? n : 0
 }
 
-/** 图集：一组 ImageUrlField + 删除，上限与后端 maxImagesPerProduct 对齐。 */
+/** 图集：一组 ImageUrlField + 删除，上限与后端 maxImagesPerProduct 对齐；「批量上传」走 Uploader 一次选多张。 */
 function ImagesField({
   images, onChange, disabled,
 }: {
@@ -149,6 +151,8 @@ function ImagesField({
   disabled?: boolean
 }) {
   const { t } = useTranslation()
+  const [batchOpen, setBatchOpen] = useState(false)
+  const [batchFiles, setBatchFiles] = useState<UploadedFile[]>([])
   const update = (index: number, value: string) => {
     onChange(images.map((img, i) => (i === index ? value : img)))
   }
@@ -156,6 +160,18 @@ function ImagesField({
     onChange(images.filter((_, i) => i !== index))
   }
   const atLimit = images.length >= IMAGES_MAX
+  const openBatch = () => {
+    setBatchFiles([])
+    setBatchOpen(true)
+  }
+  // 关弹窗才算提交：此时已上传完成的 URL 追加进图集（上限在打开时就用 maxCount 锁死，不会超）。
+  const closeBatch = (open: boolean) => {
+    if (!open) {
+      const urls = batchFiles.map((f) => f.url).filter(Boolean)
+      if (urls.length) onChange([...images, ...urls])
+    }
+    setBatchOpen(open)
+  }
   return (
     <div className="flex flex-col gap-2">
       {images.map((img, i) => (
@@ -183,11 +199,33 @@ function ImagesField({
       {atLimit ? (
         <span className="text-xs text-muted-foreground">{t('plugin_website.product.imageLimit', { max: IMAGES_MAX })}</span>
       ) : (
-        <Button variant="link" size="sm" className="h-auto w-fit p-0" disabled={disabled} onClick={() => onChange([...images, ''])}>
-          <Plus aria-hidden="true" />
-          {t('plugin_website.product.imageAdd')}
-        </Button>
+        <div className="flex items-center gap-3">
+          <Button variant="link" size="sm" className="h-auto w-fit p-0" disabled={disabled} onClick={() => onChange([...images, ''])}>
+            <Plus aria-hidden="true" />
+            {t('plugin_website.product.imageAdd')}
+          </Button>
+          <Button variant="link" size="sm" className="h-auto w-fit p-0" disabled={disabled} onClick={openBatch}>
+            <Upload aria-hidden="true" />
+            {t('plugin_website.product.imageBatch')}
+          </Button>
+        </div>
       )}
+      <ResponsiveDialog
+        open={batchOpen}
+        onOpenChange={closeBatch}
+        size="md"
+        title={t('plugin_website.product.imageBatch')}
+        description={t('plugin_website.product.imageLimit', { max: IMAGES_MAX })}
+      >
+        <Uploader
+          kind="image"
+          visibility="public"
+          multiple
+          maxCount={IMAGES_MAX - images.length}
+          value={batchFiles}
+          onChange={setBatchFiles}
+        />
+      </ResponsiveDialog>
     </div>
   )
 }
@@ -283,6 +321,27 @@ function ProductFormBody({
   const [author, setAuthor] = useState(editing?.author ?? '')
   const [catIds, setCatIds] = useState<string[]>(() => (editing?.categories ?? []).map((c) => c.id))
   const flatCats = useMemo(() => flattenCatTree(buildCatTree(categories)), [categories])
+  // 类目多了以后找类目全靠滚：按名称过滤，命中节点连同祖先链一起保留，缩进层级不丢。
+  const [catQuery, setCatQuery] = useState('')
+  const visibleCats = useMemo(() => {
+    const q = catQuery.trim().toLowerCase()
+    if (!q) return flatCats
+    const byId = new Map(flatCats.map((c) => [c.id, c]))
+    const keep = new Set<string>()
+    for (const c of flatCats) {
+      if (c.title.toLowerCase().includes(q)) {
+        keep.add(c.id)
+        for (
+          let p = c.parentId && c.parentId !== '0' ? byId.get(c.parentId) : undefined;
+          p;
+          p = p.parentId && p.parentId !== '0' ? byId.get(p.parentId) : undefined
+        ) {
+          keep.add(p.id)
+        }
+      }
+    }
+    return flatCats.filter((c) => keep.has(c.id))
+  }, [flatCats, catQuery])
   // slug 是所有语言共用的，但每门语言有各自的路径前缀；提示按当前编辑的语言拼。
   const pathPrefix = lf.locales.find((l) => l.code === lf.active)?.prefix
   const productPath = `${pathPrefix ? `/${pathPrefix}` : ''}/products/${slug || '…'}`
@@ -382,7 +441,7 @@ function ProductFormBody({
       <div className="flex flex-col gap-3">
         <p className="text-sm font-medium">{t('plugin_website.product.basicSection')}</p>
         <LocalizedField fieldKey="title" required />
-        <LocalizedField fieldKey="keywords" />
+        <LocalizedField fieldKey="keywords" aiTarget="keywords" placeholder={t('plugin_website.fields.productKeywordsPlaceholder')} />
         <LocalizedField fieldKey="summary" />
         <SharedFieldShell labelKey="plugin_website.fields.slug">
           <Input
@@ -397,24 +456,38 @@ function ProductFormBody({
         </SharedFieldShell>
         <SharedGroup labelKey="plugin_website.product.categories">
           <div className="flex flex-col rounded-md border border-border p-1" role="group" aria-label={t('plugin_website.product.categories')}>
-            {flatCats.length ? flatCats.map((c) => (
-              <label
-                key={c.id}
-                className="flex min-h-9 cursor-pointer items-center gap-2 rounded-sm text-sm hover:bg-accent/60"
-                style={{ paddingInlineStart: `${(c.depth - 1) * 16 + 8}px` }}
-              >
-                <Checkbox
-                  checked={catIds.includes(c.id)}
-                  disabled={sharedDisabled}
-                  onCheckedChange={(on) => setCatIds((ids) => (on ? [...ids, c.id] : ids.filter((x) => x !== c.id)))}
-                  aria-label={c.title}
-                />
-                <span className="min-w-0 flex-1 truncate">{c.title}</span>
-                <span className="num text-xs text-muted-foreground">{c.productCount}</span>
-              </label>
-            )) : (
-              <p className="px-2 py-3 text-xs text-muted-foreground">{t('plugin_website.product.categoriesEmpty')}</p>
-            )}
+            {flatCats.length ? (
+              <Input
+                value={catQuery}
+                onChange={(e) => setCatQuery(e.target.value)}
+                disabled={sharedDisabled}
+                placeholder={t('plugin_website.product.categorySearch')}
+                aria-label={t('plugin_website.product.categorySearch')}
+                className="m-1 h-8"
+              />
+            ) : null}
+            <div className="flex max-h-56 flex-col overflow-y-auto">
+              {visibleCats.length ? visibleCats.map((c) => (
+                <label
+                  key={c.id}
+                  className="flex min-h-9 cursor-pointer items-center gap-2 rounded-sm text-sm hover:bg-accent/60"
+                  style={{ paddingInlineStart: `${(c.depth - 1) * 16 + 8}px` }}
+                >
+                  <Checkbox
+                    checked={catIds.includes(c.id)}
+                    disabled={sharedDisabled}
+                    onCheckedChange={(on) => setCatIds((ids) => (on ? [...ids, c.id] : ids.filter((x) => x !== c.id)))}
+                    aria-label={c.title}
+                  />
+                  <span className="min-w-0 flex-1 truncate">{c.title}</span>
+                  <span className="num text-xs text-muted-foreground">{c.productCount}</span>
+                </label>
+              )) : (
+                <p className="px-2 py-3 text-xs text-muted-foreground">
+                  {t(flatCats.length ? 'plugin_website.product.categoryNoMatch' : 'plugin_website.product.categoriesEmpty')}
+                </p>
+              )}
+            </div>
           </div>
         </SharedGroup>
         <p className="text-sm font-medium">{t('plugin_website.product.imageSection')}</p>
@@ -437,13 +510,14 @@ function ProductFormBody({
           <ImagesField images={images} onChange={setImages} disabled={sharedDisabled} />
         </SharedGroup>
         <SharedFieldShell labelKey="plugin_website.product.videoUrl">
-          <Input
+          <VideoUrlField
             value={videoUrl}
-            maxLength={255}
+            onChange={setVideoUrl}
             disabled={sharedDisabled}
-            onChange={(e) => setVideoUrl(e.target.value)}
+            title={t('plugin_website.product.videoUrl')}
+            hint={t('plugin_website.product.videoHint')}
             placeholder="https://…"
-            className="font-mono"
+            aria-label={t('plugin_website.product.videoUrl')}
           />
         </SharedFieldShell>
         <p className="text-sm font-medium">{t('plugin_website.product.tradeSection')}</p>

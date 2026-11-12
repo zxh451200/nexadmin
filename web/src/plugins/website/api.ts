@@ -1013,6 +1013,16 @@ export function useProducts(query: ContentQuery) {
   })
 }
 
+/**
+ * 导出当前筛选（或 ids= 勾选行）下的全部商品（不带分页，上限见后端 exportMax），CSV 由前端生成；
+ * silent：错误由页面捕获后 toast，不走全局报错。
+ */
+export function fetchProductsForExport(
+  query: Pick<ContentQuery, 'keyword' | 'status' | 'categoryId'> & { ids?: string[] },
+): Promise<SiteProduct[]> {
+  return api.get<SiteProduct[]>(`${BASE}/products/export`, { ...query, ids: query.ids?.join(',') }, { silent: true })
+}
+
 export function useSaveProduct() {
   const qc = useQueryClient()
   return useMutation({

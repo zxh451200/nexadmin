@@ -20,6 +20,7 @@
       "button": "AI 写作",
       "menuLabel": "AI 写作助手",
       "draft": "按要点起草",
+      "draftKeywords": "生成英文搜索关键词",
       "polish": "润色现有内容",
       "toneLabel": "语气",
       "tone": {

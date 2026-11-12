@@ -16,11 +16,13 @@ export interface LocalizedFieldProps {
   placeholder?: string
   /** 星号只在原文语言下出现：译文留空是合法状态，渲染时回退原文 */
   required?: boolean
+  /** 覆盖该字段的 AI 动作类型；缺省按控件形态推断（text→title，其余→body） */
+  aiTarget?: 'title' | 'body' | 'keywords'
   className?: string
 }
 
 /** 可翻译字段的唯一入口：标签 + 控件 + 原文对照。切语言换的是数据源，不是表单结构。 */
-export function LocalizedField({ fieldKey, placeholder, required, className }: LocalizedFieldProps) {
+export function LocalizedField({ fieldKey, placeholder, required, aiTarget, className }: LocalizedFieldProps) {
   const { t } = useTranslation()
   const { spec, field, setField, source, isSource, fieldLabel, active, markMachine } = useLocaleForm()
 
@@ -42,13 +44,15 @@ export function LocalizedField({ fieldKey, placeholder, required, className }: L
 
   // 逐字段 AI 起草/润色：与「按语言批量翻译填充」（LocaleFormActions）互补——
   // 批量那条要有原文才有活可干，起草空字段只能靠这里。未启用 AI 时组件自己返回 null。
+  const target = aiTarget ?? (f.widget === 'text' ? 'title' : 'body')
   const ai = (
     <AiWriteButton
       className="h-7"
-      target={f.widget === 'text' ? 'title' : 'body'}
+      target={target}
       format={rich ? 'html' : 'text'}
       getText={() => field(fieldKey)}
-      getBrief={f.widget === 'text' || fieldKey === 'title' ? undefined : () => field('title')}
+      // 关键词类字段（多词枚举）按标题当要点起草；普通 text 字段自己就是要点。
+      getBrief={target === 'keywords' ? () => field('title') : f.widget === 'text' || fieldKey === 'title' ? undefined : () => field('title')}
       onResult={(text) => {
         setField(fieldKey, rich ? text : text.slice(0, f.max ?? text.length))
         // 写到译文页签下的内容一律把该语言降回「机翻未校对」：已经人工校对过的语言被 AI 改写后

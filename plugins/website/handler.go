@@ -764,6 +764,22 @@ func (h *handler) setProductStatus(c *gin.Context) {
 	respond(c, map[string]int64{"updated": n}, err)
 }
 
+// GET /plugins/website/products/export?ids=&keyword=&status=&categoryId= —— 导出当前筛选
+//（或 ids= 勾选行）下的全部商品。返回 JSON 列表（不带分页），CSV 由前端生成，
+// 与 /posts/export 同款形状。
+func (h *handler) exportProducts(c *gin.Context) {
+	var ids []idgen.ID
+	if raw := strings.TrimSpace(c.Query("ids")); raw != "" {
+		var err error
+		if ids, err = parseIDs(raw); err != nil {
+			response.Fail(c, err)
+			return
+		}
+	}
+	rows, err := h.svc.ExportProducts(c.Request.Context(), contentQuery(c), ids)
+	respond(c, rows, err)
+}
+
 // GET /plugins/website/products/:id/preview —— 签发草稿预览链接（previewTTL 内有效）。
 // 返回 /products/:slug?preview=<token>：前端新开标签页即可看到未上架商品的真实版式。
 func (h *handler) productPreview(c *gin.Context) {
