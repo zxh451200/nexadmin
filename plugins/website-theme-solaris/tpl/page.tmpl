@@ -1,0 +1,10 @@
+{{define "content"}}
+<article class="sl-section sl-article">
+  <div class="sl-wrap sl-article-in">
+    <header class="sl-article-head">
+      <h1 class="sl-page-title">{{.Page.Title}}</h1>
+    </header>
+    <div class="sl-article-body">{{safeHTML .Page.Content}}</div>
+  </div>
+</article>
+{{end}}

@@ -1,0 +1,8 @@
+id: website-theme-solaris
+name: 官网主题 · SOLARIS 储能系统
+version: 1.0.0
+description: 清爽绿白清洁能源风格官网主题：复刻 SOLARIS 参考稿的首页区块（解决方案/应用场景/全球项目/可持续）与全站模板，附带演示内容一键导入。需与官网插件（website）配合使用，安装后在官网设置里切换主题。
+author: NexAdmin
+edition: free
+requires_nexadmin: ">=0.1.0"
+migration_target: platform

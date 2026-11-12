@@ -13,6 +13,7 @@ import {
   type TranslateBatch,
 } from '@/framework/components/i18n'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
+import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { ImageCropDialog, type CropConfig } from '@/framework/components/ImageCropDialog'
 import { SwitchRow } from '@/framework/components/SwitchField'
 import { ZoomableImage } from '@/framework/components/ZoomableImage'
@@ -27,6 +28,8 @@ import {
   useI18nSchema,
   useLanguages,
   usePages,
+  useThemes,
+  useSeedThemeDemo,
   useWebsiteLimits,
   useSaveSettings,
   useSettings,
@@ -40,7 +43,7 @@ import {
 /** 不随语言变化的字段：留在页面本地 state，译文态下置灰。 */
 type SharedTextKey =
   | 'siteName' | 'logoUrl' | 'faviconUrl' | 'ogImageUrl' | 'headCode' | 'titleSuffix' | 'homeSlug' | 'homeCtaHref' | 'contactEmail'
-  | 'contactPhone' | 'qrCodeUrl' | 'qrCodeCaption' | 'icp' | 'contactConsentUrl'
+  | 'contactPhone' | 'qrCodeUrl' | 'qrCodeCaption' | 'icp' | 'contactConsentUrl' | 'theme'
 type SharedSettings = Pick<SiteSettingsForm, SharedTextKey | 'marketEnabled' | 'messageNotifyEmail' | 'contactConsent'> & {
   socials: SocialLink[]
   friendLinks: FriendLink[]
@@ -88,6 +91,9 @@ function SettingsFormBody({
   const { disabled: sharedDisabled } = useSharedField()
   // 「设为首页」候选：全量页面（含草稿，草稿选了也不报错，发布后首页即生效）。
   const { data: pagesData } = usePages({ page: 1, pageSize: 200 })
+  // 主题清单与演示内容导入：主题插件注册进来的模板包，保存设置后公开站生效。
+  const { data: themesData } = useThemes()
+  const seed = useSeedThemeDemo()
   const [uploading, setUploading] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const favRef = useRef<HTMLInputElement>(null)
@@ -132,6 +138,29 @@ function SettingsFormBody({
       toast.error(t('common.operateFailed'))
     } finally {
       setUploading(false)
+    }
+  }
+
+  // 当前选中主题（'' = default）：决定是否显示「导入演示内容」按钮。
+  const selectedTheme = themesData?.items.find((x) => x.id === (shared.theme || 'default'))
+  const confirm = useConfirm()
+  const importDemo = async () => {
+    if (!selectedTheme) return
+    if (
+      !(await confirm({
+        title: t('plugin_website.settings.demoImport'),
+        description: t('plugin_website.settings.demoImportWarn'),
+      }))
+    ) {
+      return
+    }
+    try {
+      const rep = await seed.mutateAsync(selectedTheme.id)
+      const total =
+        rep.settings + rep.navs + rep.features + rep.categories + rep.pages + rep.posts + rep.productCategories + rep.products
+      toast.success(t('plugin_website.settings.demoImported', { total, skipped: rep.skipped }))
+    } catch {
+      toast.error(t('common.operateFailed'))
     }
   }
 
@@ -219,6 +248,39 @@ function SettingsFormBody({
         <span className="text-xs text-muted-foreground">{t('plugin_website.i18n.switchHint')}</span>
       </div>
       {/* 25+ 个控件按「谁在什么时候改它」分成六节，别再一列到底 */}
+      <section className="flex flex-col gap-3 rounded-lg border bg-card p-4">
+        <h3 className="text-sm font-medium">{t('plugin_website.settings.section.theme')}</h3>
+        <SharedFieldShell labelKey="plugin_website.fields.theme">
+          <Select
+            value={shared.theme || '__default'}
+            disabled={sharedDisabled}
+            onValueChange={(v) => set('theme', v === '__default' ? '' : v)}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {(themesData?.items ?? [{ id: 'default', label: t('plugin_website.settings.defaultTheme'), version: '', hasDemo: false, active: true }]).map(
+                (th) => (
+                  <SelectItem key={th.id} value={th.id}>
+                    {th.label}
+                    {th.version ? ` · ${th.version}` : ''}
+                  </SelectItem>
+                ),
+              )}
+            </SelectContent>
+          </Select>
+          <span className="text-xs text-muted-foreground">{t('plugin_website.hint.theme')}</span>
+        </SharedFieldShell>
+        {selectedTheme?.hasDemo ? (
+          <div className="flex items-center gap-2">
+            <Button type="button" variant="outline" size="sm" className="w-fit" disabled={seed.isPending} onClick={() => void importDemo()}>
+              {t('plugin_website.settings.demoImport')}
+            </Button>
+            <span className="text-xs text-muted-foreground">{t('plugin_website.hint.demoImport')}</span>
+          </div>
+        ) : null}
+      </section>
       <section className="flex flex-col gap-3 rounded-lg border bg-card p-4">
         <h3 className="text-sm font-medium">{t('plugin_website.settings.section.identity')}</h3>
         {sharedInput('siteName')}
@@ -531,6 +593,7 @@ export default function SettingsPage() {
         titleSuffix: data.titleSuffix ?? '',
         homeSlug: data.homeSlug ?? '',
         homeCtaHref: data.homeCtaHref,
+        theme: data.theme ?? '',
         contactEmail: data.contactEmail,
         contactPhone: data.contactPhone,
         qrCodeUrl: data.qrCodeUrl,

@@ -1,0 +1,265 @@
+{{define "content"}}
+<section class="tk-hero" id="top-products">
+  <div class="tk-wrap tk-hero-grid">
+    <div class="tk-hero-copy" data-reveal>
+      <p class="tk-eyebrow tk-eyebrow-light">{{.T "theme.torkon.heroBadge"}}</p>
+      <h1 class="tk-hero-title">
+        {{- range $i, $line := titleLines .HomeTitle}}{{if $i}}<br>{{end}}{{$line}}{{end -}}
+      </h1>
+      {{if .HomeSubtitle}}<p class="tk-hero-sub">{{.HomeSubtitle}}</p>{{end}}
+      <div class="tk-hero-cta">
+        {{if .HomeCTALabel}}<a class="tk-btn tk-btn-red" href="{{.URL .HomeCTAHref}}">{{.HomeCTALabel}} <span aria-hidden="true">→</span></a>{{end}}
+        <a class="tk-btn tk-btn-ghost" href="{{.URL "/contact"}}">{{.T "theme.torkon.quote"}} <span aria-hidden="true">→</span></a>
+      </div>
+    </div>
+    <figure class="tk-hero-shot" data-reveal>
+      <img src="/website-assets/theme/torkon/assets/tk-hero-clean.webp" alt="{{.TF "theme.torkon.heroShotAlt" .SiteName}}" width="1536" height="936" decoding="async" fetchpriority="high">
+    </figure>
+  </div>
+  <div class="tk-hero-stats tk-wrap">
+    <div class="tk-stat"><strong>50%</strong><span>{{.T "theme.torkon.statPower"}}</span></div>
+    <div class="tk-stat"><strong>2X</strong><span>{{.T "theme.torkon.statLifespan"}}</span></div>
+    <div class="tk-stat"><strong>IP56</strong><span>{{.T "theme.torkon.statSealed"}}</span></div>
+  </div>
+</section>
+
+{{if .ProductCategories}}
+<section class="tk-rail" aria-label="{{.T "products.categoryNavAria"}}">
+  <div class="tk-wrap tk-rail-grid">
+    {{range $i, $c := .ProductCategories}}
+    {{if lt $i 5}}
+    <a class="tk-rail-card{{if eq $i 0}} is-hot{{end}}" href="{{$.URL "/products"}}?category={{.Slug}}">
+      {{if eq .Slug "drills"}}<img src="/website-assets/theme/torkon/assets/tk-drill-rail.webp" alt="" loading="lazy">
+      {{else if eq .Slug "impact-wrenches"}}<img src="/website-assets/theme/torkon/assets/tk-impact-rail.webp" alt="" loading="lazy">
+      {{else if eq .Slug "grinders"}}<img src="/website-assets/theme/torkon/assets/tk-grinder.webp" alt="" loading="lazy">
+      {{else if eq .Slug "cutting-tools"}}<img src="/website-assets/theme/torkon/assets/tk-saw.webp" alt="" loading="lazy">
+      {{else}}<span class="tk-rail-fallback" aria-hidden="true">{{initial .Name}}</span>{{end}}
+      <span class="tk-rail-name">{{.Name}}</span>
+      <span class="tk-rail-more">{{$.T "theme.torkon.viewAll"}} <span aria-hidden="true">→</span></span>
+    </a>
+    {{end}}
+    {{end}}
+  </div>
+</section>
+{{end}}
+
+{{if .Products}}
+<section class="tk-section" id="products">
+  <div class="tk-wrap">
+    <header class="tk-sect-head" data-reveal>
+      <div>
+        <p class="tk-eyebrow">{{.T "theme.torkon.featuredEyebrow"}}</p>
+        <h2>{{.T "theme.torkon.featuredTitle"}}</h2>
+      </div>
+      <a class="tk-more" href="{{.URL "/products"}}">{{.T "theme.torkon.viewAllProducts"}} <span aria-hidden="true">→</span></a>
+    </header>
+    <div class="tk-product-grid">
+      {{range .Products}}
+      <a class="tk-product-card" href="{{$.URL "/products"}}/{{.Slug}}" data-reveal>
+        {{if hasPrefix .Keywords "new"}}<span class="tk-badge tk-badge-new">{{$.T "theme.torkon.badgeNew"}}</span>
+        {{else if hasPrefix .Keywords "hot"}}<span class="tk-badge tk-badge-hot">{{$.T "theme.torkon.badgeHot"}}</span>{{end}}
+        <span class="tk-product-cover"><img src="{{.CoverURL}}" alt="{{.Title}}" loading="lazy"></span>
+        <span class="tk-product-model">{{specOf . "型号" "Model"}}</span>
+        <span class="tk-product-name">{{.Title}}</span>
+        <span class="tk-product-specs">
+          {{range $s := .ProductSpecs}}{{if eq .Label ($.T "theme.torkon.specPower")}}<span>⚡ {{.Value}}</span>{{end}}{{end}}
+          {{range $s := .ProductSpecs}}{{if eq .Label ($.T "theme.torkon.specSpeed")}}<span>⟳ {{.Value}}</span>{{end}}{{end}}
+        </span>
+        <span class="tk-product-more">{{$.T "theme.torkon.viewProduct"}} <span aria-hidden="true">→</span></span>
+      </a>
+      {{end}}
+    </div>
+  </div>
+</section>
+{{end}}
+
+<section class="tk-story">
+  <div class="tk-wrap tk-story-grid">
+    <div class="tk-story-copy" data-reveal>
+      <p class="tk-eyebrow tk-eyebrow-light">{{.T "theme.torkon.storyBadge"}}</p>
+      <h2>{{range $i, $line := titleLines (.T "theme.torkon.storyTitle")}}{{if $i}}<br>{{end}}<span class="tk-story-line">{{$line}}</span>{{end}}</h2>
+      <p class="tk-story-sub">{{.T "theme.torkon.storySub"}}</p>
+      {{range .Navs}}{{if eq .Href "/p/about"}}<a class="tk-more tk-more-light" href="{{$.URL .Href}}">{{$.T "theme.torkon.ourStory"}} <span aria-hidden="true">→</span></a>{{end}}{{end}}
+    </div>
+    <figure class="tk-story-shot"><img src="/website-assets/theme/torkon/assets/tk-worker.webp" alt="{{.T "theme.torkon.storyShotAlt"}}" loading="lazy"></figure>
+    <ul class="tk-story-points">
+      <li><span aria-hidden="true">🏅</span><div><strong>{{.T "theme.torkon.point1"}}</strong><span>{{.T "theme.torkon.point1Sub"}}</span></div></li>
+      <li><span aria-hidden="true">🛡</span><div><strong>{{.T "theme.torkon.point2"}}</strong><span>{{.T "theme.torkon.point2Sub"}}</span></div></li>
+      <li><span aria-hidden="true">⚙</span><div><strong>{{.T "theme.torkon.point3"}}</strong><span>{{.T "theme.torkon.point3Sub"}}</span></div></li>
+    </ul>
+  </div>
+</section>
+
+<section class="tk-section tk-tech">
+  <div class="tk-wrap tk-tech-grid">
+    <div class="tk-tech-copy" data-reveal>
+      <p class="tk-eyebrow">{{.T "theme.torkon.techBadge"}}</p>
+      <h2>{{range $i, $line := titleLines (.T "theme.torkon.techTitle")}}{{if $i}}<br>{{end}}{{$line}}{{end}}</h2>
+      <p class="tk-tech-sub">{{.T "theme.torkon.techSub"}}</p>
+      <ul class="tk-tech-points">
+        <li><strong>{{.T "theme.torkon.tech1"}}</strong><span>{{.T "theme.torkon.tech1Sub"}}</span></li>
+        <li><strong>{{.T "theme.torkon.tech2"}}</strong><span>{{.T "theme.torkon.tech2Sub"}}</span></li>
+        <li><strong>{{.T "theme.torkon.tech3"}}</strong><span>{{.T "theme.torkon.tech3Sub"}}</span></li>
+      </ul>
+    </div>
+    <figure class="tk-tech-shot" data-reveal><img src="/website-assets/theme/torkon/assets/tk-motor.webp" alt="{{.T "theme.torkon.techShotAlt"}}" loading="lazy"></figure>
+    <ul class="tk-tech-stats">
+      <li><strong>+50%</strong><span>{{.T "theme.torkon.techStat1"}}</span></li>
+      <li><strong>2X</strong><span>{{.T "theme.torkon.techStat2"}}</span></li>
+      <li><strong>85%</strong><span>{{.T "theme.torkon.techStat3"}}</span></li>
+    </ul>
+  </div>
+</section>
+
+<section class="tk-section tk-industries" id="industries">
+  <div class="tk-wrap">
+    <header class="tk-sect-head" data-reveal>
+      <div>
+        <p class="tk-eyebrow">{{.T "theme.torkon.industriesEyebrow"}}</p>
+        <h2>{{.T "theme.torkon.industriesTitle"}}</h2>
+      </div>
+      <a class="tk-more" href="{{.URL "/products"}}">{{.T "theme.torkon.viewAllIndustries"}} <span aria-hidden="true">→</span></a>
+    </header>
+    <div class="tk-industry-grid">
+      <a class="tk-industry-card" href="{{.URL "/products"}}" data-reveal>
+        <img src="/website-assets/theme/torkon/assets/tk-industry-construction.webp" alt="" loading="lazy">
+        <span class="tk-industry-name">{{.T "theme.torkon.ind1"}}</span>
+        <span class="tk-industry-sub">{{.T "theme.torkon.ind1Sub"}}</span>
+      </a>
+      <a class="tk-industry-card" href="{{.URL "/products"}}" data-reveal>
+        <img src="/website-assets/theme/torkon/assets/tk-industry-auto.webp" alt="" loading="lazy">
+        <span class="tk-industry-name">{{.T "theme.torkon.ind2"}}</span>
+        <span class="tk-industry-sub">{{.T "theme.torkon.ind2Sub"}}</span>
+      </a>
+      <a class="tk-industry-card" href="{{.URL "/products"}}" data-reveal>
+        <img src="/website-assets/theme/torkon/assets/tk-industry-metal.webp" alt="" loading="lazy">
+        <span class="tk-industry-name">{{.T "theme.torkon.ind3"}}</span>
+        <span class="tk-industry-sub">{{.T "theme.torkon.ind3Sub"}}</span>
+      </a>
+      <a class="tk-industry-card" href="{{.URL "/products"}}" data-reveal>
+        <img src="/website-assets/theme/torkon/assets/tk-industry-maintenance.webp" alt="" loading="lazy">
+        <span class="tk-industry-name">{{.T "theme.torkon.ind4"}}</span>
+        <span class="tk-industry-sub">{{.T "theme.torkon.ind4Sub"}}</span>
+      </a>
+    </div>
+  </div>
+</section>
+
+{{range .Products}}{{if hasPrefix .Keywords "flagship"}}{{$p := .}}
+<section class="tk-flagship" id="flagship">
+  <div class="tk-wrap tk-flagship-grid">
+    <div class="tk-flagship-copy" data-reveal>
+      <p class="tk-eyebrow tk-eyebrow-light">{{$.T "theme.torkon.flagshipBadge"}}</p>
+      <h2 class="tk-flagship-model">{{$p.Title}}</h2>
+      {{if $p.Summary}}<p class="tk-flagship-sub">{{$p.Summary}}</p>{{end}}
+      <div class="tk-hero-cta">
+        <a class="tk-btn tk-btn-red" href="{{$.URL "/products"}}/{{$p.Slug}}">{{$.T "theme.torkon.viewDetails"}} <span aria-hidden="true">→</span></a>
+        <a class="tk-btn tk-btn-ghost" href="{{$.URL "/contact"}}">{{$.T "theme.torkon.getInquiry"}}</a>
+      </div>
+    </div>
+    <figure class="tk-flagship-shot"><img src="/website-assets/theme/torkon/assets/tk-flagship.webp" alt="{{$p.Title}}" loading="lazy"></figure>
+    <ul class="tk-flagship-specs">
+      {{range $s := $p.ProductSpecs}}<li><strong>{{.Value}}</strong><span>{{.Label}}</span></li>{{end}}
+    </ul>
+  </div>
+</section>
+{{end}}{{end}}
+
+{{if .Products}}
+<section class="tk-section tk-selection" id="selection">
+  <div class="tk-wrap">
+    <header class="tk-sect-head" data-reveal>
+      <div>
+        <p class="tk-eyebrow">{{.T "theme.torkon.selectionEyebrow"}}</p>
+        <h2>{{.T "theme.torkon.selectionTitle"}}</h2>
+      </div>
+    </header>
+    <div class="tk-tablewrap" data-reveal>
+      <table class="tk-table">
+        <thead>
+          <tr>
+            <th>{{.T "theme.torkon.colModel"}}</th>
+            <th>{{.T "theme.torkon.specPower"}}</th>
+            <th>{{.T "theme.torkon.specSpeed"}}</th>
+            <th>{{.T "theme.torkon.specFeature"}}</th>
+            <th>{{.T "theme.torkon.specApp"}}</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .Products}}
+          <tr>
+            <td class="tk-td-model">{{.Title}}</td>
+            <td>{{specOf . ($.T "theme.torkon.specPower") "Power"}}</td>
+            <td>{{specOf . ($.T "theme.torkon.specSpeed") "No-load speed"}}</td>
+            <td>{{specOf . ($.T "theme.torkon.specFeature") "Key features"}}</td>
+            <td>{{specOf . ($.T "theme.torkon.specApp") "Application"}}</td>
+            <td><a class="tk-table-link" href="{{$.URL "/products"}}/{{.Slug}}">{{$.T "theme.torkon.viewProduct"}} →</a></td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+{{end}}
+
+<section class="tk-section tk-factory" id="factory">
+  <div class="tk-wrap tk-factory-grid">
+    <div class="tk-factory-copy" data-reveal>
+      <p class="tk-eyebrow">{{.T "theme.torkon.factoryEyebrow"}}</p>
+      <h2>{{.T "theme.torkon.factoryTitle"}}</h2>
+      <p class="tk-tech-sub">{{.T "theme.torkon.factorySub"}}</p>
+      <ul class="tk-factory-stats">
+        <li><strong>200,000+</strong><span>{{.T "theme.torkon.factoryStat1"}}</span></li>
+        <li><strong>100+</strong><span>{{.T "theme.torkon.factoryStat2"}}</span></li>
+        <li><strong>ISO 9001</strong><span>{{.T "theme.torkon.factoryStat3"}}</span></li>
+      </ul>
+    </div>
+    <figure class="tk-factory-shot" data-reveal>
+      <img src="/website-assets/theme/torkon/assets/tk-factory.webp" alt="{{.T "theme.torkon.factoryShotAlt"}}" loading="lazy">
+      <a class="tk-btn tk-btn-dark" href="{{.URL "/p/about"}}">{{.T "theme.torkon.viewFactory"}} <span aria-hidden="true">→</span></a>
+    </figure>
+  </div>
+</section>
+
+{{if .Posts}}
+<section class="tk-section" id="news">
+  <div class="tk-wrap">
+    <header class="tk-sect-head" data-reveal>
+      <div>
+        <p class="tk-eyebrow">{{.T "theme.torkon.newsEyebrow"}}</p>
+        <h2>{{.T "theme.torkon.newsTitle"}}</h2>
+      </div>
+      <a class="tk-more" href="{{.URL "/news"}}">{{.T "home.news.more"}}</a>
+    </header>
+    <div class="tk-news-grid">
+      {{range .Posts}}
+      <a class="tk-news-card" href="{{$.URL "/news"}}/{{.Slug}}" data-reveal>
+        {{if .CoverURL}}<span class="tk-news-cover"><img src="{{.CoverURL}}" alt="" loading="lazy"></span>{{end}}
+        <span class="tk-news-date">{{if .PublishedAt}}{{fmtDate $.Lang .PublishedAt}}{{else}}{{fmtDate $.Lang .UpdatedAt}}{{end}}</span>
+        <span class="tk-news-title">{{.Title}}</span>
+        {{if .Summary}}<span class="tk-news-sub">{{.Summary}}</span>{{end}}
+        <span class="tk-news-more">{{$.T "theme.torkon.readMore"}} <span aria-hidden="true">→</span></span>
+      </a>
+      {{end}}
+    </div>
+  </div>
+</section>
+{{end}}
+
+<section class="tk-cta">
+  <div class="tk-wrap tk-cta-grid">
+    <div>
+      <h2>{{.T "theme.torkon.ctaTitle"}}</h2>
+      <p>{{.T "theme.torkon.ctaSub"}}</p>
+    </div>
+    <div class="tk-cta-actions">
+      <a class="tk-btn tk-btn-red" href="{{.URL "/contact"}}">{{.T "theme.torkon.quote"}} <span aria-hidden="true">→</span></a>
+      {{if .ContactPhone}}<a class="tk-cta-item" href="tel:{{.ContactPhone}}"><strong>{{.T "contact.phone"}}</strong><span>{{.ContactPhone}}</span></a>{{end}}
+      {{if .ContactEmail}}<a class="tk-cta-item" href="mailto:{{.ContactEmail}}"><strong>{{.T "contact.email"}}</strong><span>{{.ContactEmail}}</span></a>{{end}}
+      {{if .QRCodeURL}}<a class="tk-cta-item" href="{{.URL "/contact"}}"><strong>{{.T "theme.torkon.ctaGlobal"}}</strong><span>{{.T "theme.torkon.ctaGlobalSub"}}</span></a>{{end}}
+    </div>
+  </div>
+</section>
+{{end}}

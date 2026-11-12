@@ -1,0 +1,10 @@
+{{define "content"}}
+<article class="au-section au-article">
+  <div class="au-wrap au-article-in">
+    <header class="au-article-head">
+      <h1 class="au-page-title">{{.Page.Title}}</h1>
+    </header>
+    <div class="au-article-body">{{safeHTML .Page.Content}}</div>
+  </div>
+</article>
+{{end}}

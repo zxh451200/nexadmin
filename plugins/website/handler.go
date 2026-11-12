@@ -68,6 +68,48 @@ func (h *handler) saveSettings(c *gin.Context) {
 	response.OK(c, newSettingView(row))
 }
 
+// ---- 主题 ----
+
+// themeView 是主题清单条目：设置页下拉 + 「导入演示内容」按钮的可用性都从这里来。
+type themeView struct {
+	ID      string `json:"id"`
+	Label   string `json:"label"`
+	Version string `json:"version"`
+	HasDemo bool   `json:"hasDemo"`
+	Active  bool   `json:"active"`
+}
+
+// GET /plugins/website/themes —— 已注册主题清单（default 恒在最前）与当前选中的主题。
+func (h *handler) listThemes(c *gin.Context) {
+	row, err := h.svc.Settings(c.Request.Context())
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	items := []themeView{{
+		ID: "default", Label: "默认主题",
+		Active: row.Theme == "",
+	}}
+	for _, t := range Themes() {
+		items = append(items, themeView{
+			ID: t.ID, Label: t.Label, Version: t.Version,
+			HasDemo: t.seed != nil,
+			Active:  row.Theme == t.ID,
+		})
+	}
+	response.OK(c, gin.H{"theme": row.Theme, "items": items})
+}
+
+// POST /plugins/website/themes/:id/seed-demo —— 导入该主题的演示内容（insert-only，可重复调用）。
+func (h *handler) seedThemeDemo(c *gin.Context) {
+	rep, err := SeedDemoByID(c.Request.Context(), c.Param("id"), h.svc, nil)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, rep)
+}
+
 // ---- 在线留言 ----
 
 // GET /plugins/website/messages?keyword=&status=&page=&pageSize=

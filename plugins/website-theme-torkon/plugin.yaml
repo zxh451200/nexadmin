@@ -1,0 +1,8 @@
+id: website-theme-torkon
+name: 官网主题 · TORKON 工业工具
+version: 1.0.0
+description: 深红黑工业风格官网主题：复刻 TORKON 参考稿的首页区块、产品选型表与全站模板，附带演示内容（产品/新闻/导航/设置）一键导入。需与官网插件（website）配合使用，安装后在官网设置里切换主题。
+author: NexAdmin
+edition: free
+requires_nexadmin: ">=0.1.0"
+migration_target: platform

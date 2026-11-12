@@ -1,0 +1,24 @@
+{{define "content"}}
+<article class="tk-section tk-article">
+  <div class="tk-wrap tk-article-in">
+    <header class="tk-article-head">
+      {{if .Post.PublishedAt}}<time class="tk-article-date">{{fmtDate .Lang .Post.PublishedAt}}</time>{{end}}
+      {{if or .Post.Author .Post.Views}}<p class="tk-article-meta">{{if .Post.Author}}{{.Post.Author}} · {{end}}{{if .Post.Views}}{{.T "post.views"}}：{{.Post.Views}}{{end}}</p>{{end}}
+      <h1 class="tk-page-title">{{.Post.Title}}</h1>
+    </header>
+    {{if .Post.CoverURL}}<img class="tk-article-cover" src="{{.Post.CoverURL}}" alt="">{{end}}
+    <div class="tk-article-body">{{safeHTML .Post.Content}}</div>
+    {{if or .Post.Categories .Post.Tags}}
+    <footer class="tk-article-terms">
+      {{if .Post.Categories}}
+      <p class="tk-article-term"><span class="tk-article-term-label">{{.T "post.categoryLabel"}}</span>{{range .Post.Categories}}<a class="tk-chip" href="{{$.URL "/news"}}?category={{.Slug}}">{{.Title}}</a>{{end}}</p>
+      {{end}}
+      {{if .Post.Tags}}
+      <p class="tk-article-term"><span class="tk-article-term-label">{{.T "post.tagLabel"}}</span>{{range .Post.Tags}}<a class="tk-chip" href="{{$.URL "/news"}}?tag={{.Slug}}">{{.Name}}</a>{{end}}</p>
+      {{end}}
+    </footer>
+    {{end}}
+    <p class="tk-back"><a href="{{.URL "/news"}}">← {{.T "news.back"}}</a></p>
+  </div>
+</article>
+{{end}}

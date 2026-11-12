@@ -1,0 +1,43 @@
+{{define "content"}}
+<section class="tk-section tk-pagehead">
+  <div class="tk-wrap">
+    <p class="tk-eyebrow">{{.T "news.fig"}}</p>
+    <h1 class="tk-page-title">{{if eq .NewsKind "category"}}{{.TF "news.categoryTitleTag" .NewsTermName}}{{else if eq .NewsKind "tag"}}{{.TF "news.tagTitleTag" .NewsTermName}}{{else}}{{.T "news.title"}}{{end}}</h1>
+    {{if .NewsCategories}}
+    <nav class="tk-chips term-nav" aria-label="{{.T "news.categoryNavAria"}}">
+      <a class="tk-chip{{if not .NewsTermName}} active{{end}}" href="{{.URL "/news"}}">{{.T "news.allPosts"}}</a>
+      {{range .NewsCategories}}<a class="tk-chip{{if .Active}} active{{end}}" href="{{$.URL "/news"}}?category={{.Slug}}"{{if .Active}} aria-current="true"{{end}}>{{.Name}}</a>{{end}}
+    </nav>
+    {{end}}
+  </div>
+</section>
+<section class="tk-section tk-listbody">
+  <div class="tk-wrap">
+    {{if .Posts}}
+    <div class="tk-postlist">
+      {{range .Posts}}
+      <a class="tk-postrow" href="{{$.URL "/news"}}/{{.Slug}}" data-reveal>
+        <time class="tk-postrow-date">{{if .PublishedAt}}{{fmtDate $.Lang .PublishedAt}}{{else}}{{fmtDate $.Lang .UpdatedAt}}{{end}}</time>
+        <div class="tk-postrow-main">
+          <h2>{{if .Pinned}}<span class="tk-term-badge tk-badge-hot">{{$.T "news.pinned"}}</span>{{end}}{{.Title}}</h2>
+          {{if .Summary}}<p>{{.Summary}}</p>{{end}}
+          {{if .Categories}}<span class="tk-postrow-terms">{{range .Categories}}<span class="tk-term-badge">{{.Title}}</span>{{end}}</span>{{end}}
+        </div>
+        {{if .CoverURL}}<img class="tk-postrow-cover" src="{{.CoverURL}}" alt="" loading="lazy">{{end}}
+        <span class="tk-postrow-arrow" aria-hidden="true">→</span>
+      </a>
+      {{end}}
+    </div>
+    {{else}}
+    <p class="tk-empty">{{.T "news.empty"}}</p>
+    {{end}}
+    {{if gt .NewsTotalPages 1}}
+    <nav class="tk-pager" aria-label="{{.T "news.pagerAria"}}">
+      {{if .NewsPrevURL}}<a class="tk-pager-link" rel="prev" href="{{.NewsPrevURL}}">← {{.T "news.prev"}}</a>{{end}}
+      <span class="tk-pager-status">{{.TF "news.pageOf" .NewsPage .NewsTotalPages}}</span>
+      {{if .NewsNextURL}}<a class="tk-pager-link" rel="next" href="{{.NewsNextURL}}">{{.T "news.next"}} →</a>{{end}}
+    </nav>
+    {{end}}
+  </div>
+</section>
+{{end}}

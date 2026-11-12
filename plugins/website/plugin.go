@@ -71,6 +71,11 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.GET("/settings", core.Perm("website:setting"), core.Desc("读取站点设置"), h.getSettings)
 	g.PUT("/settings", core.Perm("website:setting"), core.Desc("更新站点设置"), h.saveSettings)
 
+	// 主题：公开站外观由主题插件注册（RegisterTheme），设置页下拉切换；
+	// 演示内容导入挂在主题 id 上（insert-only，可重复调用）。
+	g.GET("/themes", core.Perm("website:setting"), core.Desc("已注册主题清单"), h.listThemes)
+	g.POST("/themes/:id/seed-demo", core.Perm("website:setting"), core.Desc("导入主题演示内容"), h.seedThemeDemo)
+
 	g.GET("/messages", core.Perm("website:message"), core.Desc("留言列表"), h.listMessages)
 	g.GET("/messages/unread-count", core.Perm("website:message"), core.Desc("留言未读数"), h.unreadMessageCount)
 	g.GET("/messages/export", core.Perm("website:message"), core.Desc("导出留言"), h.exportMessages)

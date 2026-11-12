@@ -5,7 +5,9 @@ import (
 	"embed"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"html/template"
+	"io/fs"
 	"net/url"
 	"strconv"
 	"strings"
@@ -22,6 +24,7 @@ var staticFS embed.FS
 // assetVersion 返回内嵌静态资源的内容哈希（前 8 字节十六进制），模板拿它当 ?v=。
 // 原来 ?v= 是手写的字面量，改完 CSS 忘了改它，浏览器就一直用缓存；
 // 内容哈希让地址随文件内容自动变化，不需要手动硬刷新。
+// 主题资产用 "theme/<id>/<file>" 形式的名字：从主题插件的文件系统里取。
 // 文件不存在时返回空串（地址退化成不带版本，至少不会 404）。
 var assetCache sync.Map // name -> string
 
@@ -30,7 +33,15 @@ func assetVersion(name string) string {
 		return v.(string)
 	}
 	sum := ""
-	if b, err := staticFS.ReadFile("static/" + name); err == nil {
+	if rest, ok := strings.CutPrefix(name, "theme/"); ok {
+		id, file, _ := strings.Cut(rest, "/")
+		if t := lookupTheme(id); t != nil && file != "" {
+			if b, err := fs.ReadFile(t.FS, "static/"+file); err == nil {
+				h := sha256.Sum256(b)
+				sum = hex.EncodeToString(h[:8])
+			}
+		}
+	} else if b, err := staticFS.ReadFile("static/" + name); err == nil {
 		h := sha256.Sum256(b)
 		sum = hex.EncodeToString(h[:8])
 	}
@@ -165,6 +176,20 @@ var tplFuncs = template.FuncMap{
 		r := []rune(s)
 		return string(unicode.ToUpper(r[0]))
 	},
+	// specOf 按一组候选标签取商品的第一个匹配规格值（主题选型表用）：
+	// 标签在库里的写法与语言相关，传入多个语言的写法（如 "功率", "Power"）谁先命中用谁。
+	"specOf": func(p Product, labels ...string) string {
+		want := map[string]bool{}
+		for _, l := range labels {
+			want[strings.TrimSpace(l)] = true
+		}
+		for _, spec := range p.ProductSpecs() {
+			if want[strings.TrimSpace(spec.Label)] && spec.Value != "" {
+				return spec.Value
+			}
+		}
+		return ""
+	},
 }
 
 // layout 是所有页面共用的骨架；各页面模板定义自己的 "content"。
@@ -190,9 +215,47 @@ var pageTmpl = map[string]*template.Template{
 	"error":      mustPage("error"),
 }
 
+// themePacks 是主题插件注册的已编译模板集；default 恒用 pageTmpl 本身（见 theme.go）。
+var themePacks = map[string]*themePack{}
+
+// themePack 是一套主题编译后的模板集：[页面名] → 模板。缺页面回退 default 的模板，
+// 所以主题只需要覆盖自己关心的页面（layout/home/内容页等）。
+type themePack struct {
+	tmpl map[string]*template.Template
+}
+
+// mustThemePage 解析主题的一张页面模板：layout 与页面都来自主题自己的文件系统。
+func mustThemePage(fsys fs.FS, name string) *template.Template {
+	layout := template.Must(template.New("layout").Funcs(tplFuncs).ParseFS(fsys, "tpl/layout.tmpl"))
+	return template.Must(template.Must(layout.Clone()).ParseFS(fsys, "tpl/"+name+".tmpl"))
+}
+
+// buildThemePack 编译一套主题模板集；layout 缺失报错（没有骨架就没法渲染）。
+func buildThemePack(t *Theme) (*themePack, error) {
+	if _, err := fs.Stat(t.FS, "tpl/layout.tmpl"); err != nil {
+		return nil, fmt.Errorf("theme %s 缺少 tpl/layout.tmpl", t.ID)
+	}
+	pack := &themePack{tmpl: map[string]*template.Template{}}
+	for _, name := range pageNames {
+		if _, err := fs.Stat(t.FS, "tpl/"+name+".tmpl"); err == nil {
+			pack.tmpl[name] = mustThemePage(t.FS, name)
+			continue
+		}
+		def, ok := pageTmpl[name]
+		if !ok {
+			return nil, fmt.Errorf("theme %s 缺少模板 %s 且 default 也没有", t.ID, name)
+		}
+		pack.tmpl[name] = def
+	}
+	return pack, nil
+}
+
 // siteView 是模板数据。公共字段来自站点设置与导航；Title/Desc 用于 <title> 与 meta。
 type siteView struct {
-	SiteName string
+	// ThemeID 是站点设置选中的主题 id：render 据此选模板集（"" = default）。
+	// 不进模板逻辑，仅渲染出口消费；主题模板可以用 {{.ThemeID}} 区分自己。
+	ThemeID   string
+	SiteName  string
 	SiteDesc string
 	LogoURL  string
 	// FaviconURL / OgImageURL 是站点设置里的资产：浏览器标签图标与默认分享图（og:image 兜底），

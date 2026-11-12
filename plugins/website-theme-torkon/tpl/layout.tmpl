@@ -1,0 +1,205 @@
+{{define "layout"}}<!doctype html>
+<html lang="{{.Lang.HTMLLang}}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{if .SeoTitle}}{{.SeoTitle}}{{else}}{{.Title}}{{end}}</title>
+{{if .Desc}}<meta name="description" content="{{.Desc}}">{{end}}
+{{if .SeoKeywords}}<meta name="keywords" content="{{.SeoKeywords}}">{{end}}
+{{if .Noindex}}<meta name="robots" content="noindex">{{end}}
+<link rel="canonical" href="{{.Canonical}}">
+{{range .Languages}}<link rel="alternate" hreflang="{{.HTMLLang}}" href="{{$.BaseURL}}{{$.Alternate .}}">{{end}}
+{{range .Languages}}{{if .Default}}<link rel="alternate" hreflang="x-default" href="{{$.BaseURL}}{{$.Alternate .}}">{{end}}{{end}}
+<meta name="theme-color" content="#111214">
+<link rel="icon" href="{{if .FaviconURL}}{{.FaviconURL}}{{else}}/website-assets/theme/torkon/favicon.svg{{end}}" type="image/svg+xml">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="{{.SiteName}}">
+<meta property="og:title" content="{{if .SeoTitle}}{{.SeoTitle}}{{else}}{{.Title}}{{end}}">
+<meta property="og:description" content="{{.Desc}}">
+<meta property="og:url" content="{{.Canonical}}">
+<meta property="og:image" content="{{if .OGImage}}{{.OGImage}}{{else}}{{.BaseURL}}/website-assets/og.png{{end}}">
+{{if not .OGImage}}<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">{{end}}
+<meta property="og:locale" content="{{.Lang.OGLocale}}">
+{{range .Languages}}{{if ne .Code $.Lang.Code}}<meta property="og:locale:alternate" content="{{.OGLocale}}">{{end}}{{end}}
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{{if .SeoTitle}}{{.SeoTitle}}{{else}}{{.Title}}{{end}}">
+<meta name="twitter:description" content="{{.Desc}}">
+<meta name="twitter:image" content="{{if .OGImage}}{{.OGImage}}{{else}}{{.BaseURL}}/website-assets/og.png{{end}}">
+{{if .PluginLD}}<script type="application/ld+json">{{.PluginLD}}</script>{{end}}
+{{if .HeadCode}}{{.HeadCode}}{{end}}
+<link rel="stylesheet" href="/website-assets/theme/torkon/site.css?v={{assetV "theme/torkon/site.css"}}">
+<noscript><style>[data-reveal]{opacity:1;transform:none}[role="tabpanel"][hidden]{display:block !important}.tk-mnav[hidden]{display:block !important}</style></noscript>
+</head>
+<body>
+<a class="skip-link" href="#main">{{.T "layout.skip"}}</a>
+{{if .Suggest}}
+<div class="tk-langbanner" data-lang-banner>
+  <div class="tk-wrap tk-langbanner-in">
+    <span>{{.TF "lang.suggest" .SuggestLang.Label}}</span>
+    <a class="tk-langbanner-cta" href="{{.Alternate .SuggestLang}}" hreflang="{{.SuggestLang.HTMLLang}}" lang="{{.SuggestLang.HTMLLang}}">{{.TF "lang.suggestCta" .SuggestLang.Label}} →</a>
+    <button class="tk-langbanner-close" type="button" data-lang-banner-close aria-label="{{.T "lang.close"}}">×</button>
+  </div>
+</div>
+{{end}}
+<!-- 顶部信息条：电话与邮箱来自站点设置，空则整条隐藏 -->
+{{if or .ContactPhone .ContactEmail}}
+<div class="tk-utility">
+  <div class="tk-wrap tk-utility-in">
+    <span class="tk-utility-note">{{.T "theme.torkon.utilityNote"}}</span>
+    <span class="tk-utility-contacts">
+      {{if .ContactPhone}}<a href="tel:{{.ContactPhone}}">☎ {{.ContactPhone}}</a>{{end}}
+      {{if .ContactEmail}}<a href="mailto:{{.ContactEmail}}" data-copy-email="{{.ContactEmail}}" title="{{.T "site.js.emailCopy"}}">✉ {{.ContactEmail}}</a>{{end}}
+    </span>
+  </div>
+</div>
+{{end}}
+<header class="tk-header" id="top">
+  <div class="tk-wrap tk-header-in">
+    <a class="tk-brand" href="{{.Home}}" aria-label="{{.TF "layout.homeAria" .SiteName}}">
+      {{if .LogoURL}}<img class="tk-brand-logo" src="{{.LogoURL}}" alt="{{.SiteName}}">{{else}}<span class="tk-brand-text">{{initial .SiteName}}</span>{{end}}
+    </a>
+    <nav class="tk-nav" aria-label="{{.T "layout.mainNav"}}">
+      {{range .Navs}}{{if .Children}}
+      <details class="tk-navsub">
+        <summary>{{.Label}}</summary>
+        <ul>{{range .Children}}<li><a href="{{$.URL .Href}}">{{.Label}}</a></li>{{end}}</ul>
+      </details>
+      {{else}}<a href="{{$.URL .Href}}"{{if eq .Href $.Route}} aria-current="page"{{end}}>{{.Label}}</a>{{end}}{{end}}
+      {{if .MarketEnabled}}<a href="{{.URL "/plugins"}}"{{if hasPrefix .Route "/plugins"}} aria-current="page"{{end}}>{{.T "layout.market"}}</a>{{end}}
+      {{if .DocsEnabled}}<a href="{{.URL "/docs"}}"{{if hasPrefix .Route "/docs"}} aria-current="page"{{end}}>{{.T "layout.docs"}}</a>{{end}}
+    </nav>
+    <div class="tk-header-actions">
+      <details class="tk-lang">
+        <summary aria-label="{{.T "layout.lang"}}">{{.Lang.Short}}</summary>
+        <div class="tk-langmenu">
+          {{range .Languages}}<a href="{{$.Switch .}}" hreflang="{{.HTMLLang}}" lang="{{.HTMLLang}}"{{if eq .Code $.Lang.Code}} aria-current="true"{{end}}>{{.Label}}</a>{{end}}
+        </div>
+      </details>
+      <a class="tk-btn tk-btn-red" href="{{.URL "/contact"}}">{{.T "theme.torkon.quote"}}</a>
+      <details class="tk-mnav-btn">
+        <summary aria-label="{{.T "layout.openMenu"}}"><span></span><span></span><span></span></summary>
+        <div class="tk-mnav" aria-label="{{.T "layout.mobileNav"}}">
+          {{range .Navs}}<a href="{{$.URL .Href}}">{{.Label}}</a>{{end}}
+          {{if .MarketEnabled}}<a href="{{.URL "/plugins"}}">{{.T "layout.market"}}</a>{{end}}
+          {{if .DocsEnabled}}<a href="{{.URL "/docs"}}">{{.T "layout.docs"}}</a>{{end}}
+          {{range .Languages}}<a href="{{$.Switch .}}" lang="{{.HTMLLang}}">{{.Label}}</a>{{end}}
+          <a href="/admin/login">{{.T "layout.login"}}</a>
+        </div>
+      </details>
+    </div>
+  </div>
+</header>
+<main id="main">
+{{template "content" .}}
+</main>
+<footer class="tk-footer">
+  <div class="tk-wrap tk-footer-grid">
+    <div class="tk-footer-brand">
+      <a class="tk-brand" href="{{.Home}}">
+        {{if .LogoURL}}<img class="tk-brand-logo" src="{{.LogoURL}}" alt="{{.SiteName}}">{{else}}<span class="tk-brand-text">{{initial .SiteName}}</span>{{end}}
+      </a>
+      {{if .SiteDesc}}<p>{{.SiteDesc}}</p>{{end}}
+      {{if .Socials}}
+      <ul class="tk-social" aria-label="{{.T "layout.social"}}">
+        {{range .Socials}}<li><a href="{{.URL}}" target="_blank" rel="noopener noreferrer nofollow" aria-label="{{$.SocialLabel .Platform}}" title="{{$.SocialLabel .Platform}}">{{socialIcon .Platform}}</a></li>{{end}}
+      </ul>
+      {{end}}
+    </div>
+    <nav class="tk-footer-col" aria-label="{{.T "layout.product"}}">
+      <h4>{{.T "layout.product"}}</h4>
+      <a href="{{.URL "/products"}}">{{.T "theme.torkon.allProducts"}}</a>
+      <a href="{{.URL "/news"}}">{{.T "layout.news"}}</a>
+      {{if .MarketEnabled}}<a href="{{.URL "/plugins"}}">{{.T "layout.marketFull"}}</a>{{end}}
+    </nav>
+    <nav class="tk-footer-col" aria-label="{{.T "layout.company"}}">
+      <h4>{{.T "layout.company"}}</h4>
+      {{range .Navs}}{{if eq .Href "/p/about"}}<a href="{{$.URL .Href}}">{{.Label}}</a>{{end}}{{end}}
+      <a href="{{.URL "/contact"}}">{{.T "layout.contactUs"}}</a>
+      {{if .DocsEnabled}}<a href="{{.URL "/docs"}}">{{.T "layout.docsCenter"}}</a>{{end}}
+      <a href="/admin/login">{{.T "layout.admin"}}</a>
+    </nav>
+    <nav class="tk-footer-col" aria-label="{{.T "layout.contact"}}">
+      <h4>{{.T "layout.contact"}}</h4>
+      {{if .ContactEmail}}<a class="tk-footer-mail" href="mailto:{{.ContactEmail}}" data-copy-email="{{.ContactEmail}}" title="{{.T "site.js.emailCopy"}}">{{.ContactEmail}}</a>{{end}}
+      {{if .ContactPhone}}<a href="tel:{{.ContactPhone}}">{{.ContactPhone}}</a>{{end}}
+      {{if .ICP}}<a class="tk-footer-icp" href="https://beian.miit.gov.cn/" rel="noopener noreferrer" target="_blank">{{.ICP}}</a>{{end}}
+      {{if .QRCodeURL}}
+      <figure class="tk-footer-qr">
+        <img src="{{.QRCodeURL}}" alt="{{if .QRCodeCaption}}{{.QRCodeCaption}}{{else}}{{.T "layout.qrAlt"}}{{end}}" loading="lazy" width="96" height="96">
+        {{if .QRCodeCaption}}<figcaption>{{.QRCodeCaption}}</figcaption>{{end}}
+      </figure>
+      {{end}}
+    </nav>
+  </div>
+  <div class="tk-wrap tk-footer-bottom">
+    <span>© {{.Year}} {{.SiteName}} · {{.T "theme.torkon.rights"}}</span>
+    {{if .FooterNote}}<span>{{.FooterNote}}</span>{{end}}
+  </div>
+</footer>
+<!-- 在线客服挂件：沿用 website 插件的挂件与脚本；没装 im 插件时探测 404 自动隐藏。 -->
+<div class="chat" data-chat data-online="1" hidden>
+  <button class="chat-launcher" type="button" data-chat-open aria-haspopup="dialog" aria-expanded="false" aria-controls="chat-panel" aria-label="{{.T "chat.open"}}">
+    {{uiIcon "message"}}
+    <span>{{.T "chat.launcher"}}</span>
+  </button>
+  <section class="chat-panel" id="chat-panel" data-chat-panel role="dialog" aria-modal="false" aria-labelledby="chat-title" hidden>
+    <header class="chat-head">
+      <div class="chat-identity">
+        <span class="chat-avatar" aria-hidden="true">{{uiIcon "message"}}</span>
+        <div class="chat-identity-text">
+          <strong id="chat-title">{{.T "chat.title"}}</strong>
+          <span class="chat-sub">{{.T "chat.subtitle"}}</span>
+        </div>
+      </div>
+      <button class="chat-close" type="button" data-chat-close aria-label="{{.T "chat.close"}}">{{uiIcon "close"}}</button>
+    </header>
+    <p class="chat-offline" data-chat-offline hidden>{{.T "chat.offline"}}</p>
+    <div class="chat-log" data-chat-log role="log" aria-live="polite" aria-relevant="additions">
+      <div class="chat-empty" data-chat-empty>
+        <span class="chat-empty-mark" aria-hidden="true">{{uiIcon "message"}}</span>
+        <p class="chat-empty-title">{{.T "chat.empty"}}</p>
+        <p class="chat-empty-sub">{{.T "chat.emptySub"}}</p>
+        <div class="chat-suggests">
+          <button type="button" data-chat-suggest>{{.T "chat.suggestDeploy"}}</button>
+          <button type="button" data-chat-suggest>{{.T "chat.suggestCustom"}}</button>
+        </div>
+      </div>
+    </div>
+    <p class="chat-typing" data-chat-typing hidden>{{.T "chat.typing"}}</p>
+    <form class="chat-form" data-chat-form>
+      <label class="sr-only" for="chat-input">{{.T "chat.inputLabel"}}</label>
+      <div class="chat-compose">
+        <textarea id="chat-input" data-chat-input rows="1" maxlength="2000" placeholder="{{.T "chat.placeholder"}}" aria-label="{{.T "chat.inputLabel"}}"></textarea>
+        <div class="chat-compose-bar">
+          <button class="chat-attach" type="button" data-chat-attach aria-label="{{.T "chat.attach"}}" title="{{.T "chat.attach"}}">{{uiIcon "paperclip"}}</button>
+          <span class="chat-hint" aria-hidden="true">{{.T "chat.inputHint"}}</span>
+          <button class="chat-send" type="submit" data-chat-send aria-label="{{.T "chat.send"}}">{{uiIcon "send"}}</button>
+        </div>
+      </div>
+      <input type="file" data-chat-file hidden accept="image/png,image/jpeg,image/gif,image/webp,application/pdf,text/plain,.zip,.docx,.xlsx,.pptx">
+    </form>
+    <div class="chat-closed" data-chat-closed hidden>
+      <p class="chat-closed-title" data-chat-closed-title>{{.T "chat.closedTitle"}}</p>
+      <div class="chat-rating" data-chat-rating hidden>
+        <p class="chat-rating-title" data-chat-rating-title>{{.T "chat.rateTitle"}}</p>
+        <div class="chat-stars" data-chat-stars role="group" aria-label="{{.T "chat.rateTitle"}}">
+          <button type="button" data-rate="1" aria-label="1">★</button>
+          <button type="button" data-rate="2" aria-label="2">★</button>
+          <button type="button" data-rate="3" aria-label="3">★</button>
+          <button type="button" data-rate="4" aria-label="4">★</button>
+          <button type="button" data-rate="5" aria-label="5">★</button>
+        </div>
+        <p class="chat-thanks" data-chat-thanks hidden>{{.T "chat.rateThanks"}}</p>
+        <textarea data-chat-rating-comment rows="2" maxlength="500" placeholder="{{.T "chat.rateComment"}}" aria-label="{{.T "chat.rateComment"}}"></textarea>
+        <button type="button" class="chat-new" data-chat-rating-submit disabled>{{.T "chat.rateSubmit"}}</button>
+      </div>
+      <button type="button" class="chat-new" data-chat-new>{{.T "chat.startNew"}}</button>
+    </div>
+  </section>
+</div>
+<script type="application/json" id="site-i18n">{{.JSStrings}}</script>
+<script src="/website-assets/chat-widget.js?v={{assetV "chat-widget.js"}}" defer></script>
+<script src="/website-assets/site.js?v={{assetV "site.js"}}" defer></script>
+</body>
+</html>{{end}}

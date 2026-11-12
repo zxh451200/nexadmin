@@ -46,6 +46,8 @@ type SettingForm struct {
 	TitleSuffix string `json:"titleSuffix"`
 	// HomeSlug 是用作首页的自定义单页 slug；空 = 内置首页。服务层校验页面存在。
 	HomeSlug string `json:"homeSlug"`
+	// Theme 是公开站主题 id；空 = 内置 default。服务层校验主题已注册。
+	Theme string `json:"theme"`
 }
 
 // ItemForm 是导航项表单。

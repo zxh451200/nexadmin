@@ -1,0 +1,10 @@
+{{define "content"}}
+<article class="tk-section tk-article">
+  <div class="tk-wrap tk-article-in">
+    <header class="tk-article-head">
+      <h1 class="tk-page-title">{{.Page.Title}}</h1>
+    </header>
+    <div class="tk-article-body">{{safeHTML .Page.Content}}</div>
+  </div>
+</article>
+{{end}}

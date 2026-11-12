@@ -1,0 +1,188 @@
+{{define "content"}}
+<section class="au-hero">
+  <div class="au-wrap au-hero-grid">
+    <div class="au-hero-copy" data-reveal>
+      <p class="au-eyebrow au-eyebrow-light">{{.T "theme.auvex.heroBadge"}}</p>
+      <h1 class="au-hero-title">
+        {{- range $i, $line := titleLines .HomeTitle}}{{if $i}}<br>{{end}}<span class="au-hero-accent{{$i}}">{{$line}}</span>{{end -}}
+      </h1>
+      {{if .HomeSubtitle}}<p class="au-hero-sub">{{.HomeSubtitle}}</p>{{end}}
+      <div class="au-hero-cta">
+        {{if .HomeCTALabel}}<a class="au-btn au-btn-blue" href="{{.URL .HomeCTAHref}}">{{.HomeCTALabel}} <span aria-hidden="true">→</span></a>{{end}}
+        <a class="au-btn au-btn-ghost" href="{{.URL "/contact"}}">{{.T "theme.auvex.quote"}} <span aria-hidden="true">→</span></a>
+      </div>
+    </div>
+    <figure class="au-hero-shot" data-reveal>
+      <img src="/website-assets/theme/auvex/assets/au-hero.webp" alt="{{.TF "theme.auvex.heroShotAlt" .SiteName}}" width="1024" height="1024" decoding="async" fetchpriority="high">
+      <figcaption class="au-hero-caption"><span class="au-hero-model">VX-650</span><span>5-AXIS</span></figcaption>
+    </figure>
+  </div>
+  <div class="au-hero-stats au-wrap">
+    <div class="au-stat"><strong>±0.003mm</strong><span>{{.T "theme.auvex.stat1"}}</span></div>
+    <div class="au-stat"><strong>24,000</strong><span>{{.T "theme.auvex.stat2"}}</span></div>
+    <div class="au-stat"><strong>5-Axis</strong><span>{{.T "theme.auvex.stat3"}}</span></div>
+    <div class="au-stat"><strong>Ti / Inconel</strong><span>{{.T "theme.auvex.stat4"}}</span></div>
+  </div>
+</section>
+
+{{if .Features}}
+<section class="au-trust">
+  <div class="au-wrap au-trust-grid">
+    {{range .Features}}
+    <div class="au-trust-item" data-reveal>
+      <span class="au-trust-ico" aria-hidden="true">{{icon .Icon}}</span>
+      <div><strong>{{.Title}}</strong><span>{{.Description}}</span></div>
+    </div>
+    {{end}}
+  </div>
+</section>
+{{end}}
+
+{{if .Products}}
+<section class="au-section" id="products">
+  <div class="au-wrap">
+    <header class="au-sect-head" data-reveal>
+      <div>
+        <p class="au-eyebrow">{{.T "theme.auvex.machinesEyebrow"}}</p>
+        <h2>{{.T "theme.auvex.machinesTitle"}}</h2>
+      </div>
+      <a class="au-more" href="{{.URL "/products"}}">{{.T "theme.auvex.viewAllProducts"}} <span aria-hidden="true">→</span></a>
+    </header>
+    <div class="au-product-grid">
+      {{range .Products}}
+      <a class="au-product-card" href="{{$.URL "/products"}}/{{.Slug}}" data-reveal>
+        <span class="au-product-cover"><img src="{{.CoverURL}}" alt="{{.Title}}" loading="lazy"></span>
+        <span class="au-product-name">{{.Title}}</span>
+        {{if .Summary}}<span class="au-product-summary">{{.Summary}}</span>{{end}}
+        <span class="au-product-specs">
+          {{range $s := .ProductSpecs}}{{if eq .Label ($.T "theme.auvex.specPower")}}<span>◎ {{.Value}}</span>{{end}}{{end}}
+          {{range $s := .ProductSpecs}}{{if eq .Label ($.T "theme.auvex.specSpeed")}}<span>⟳ {{.Value}}</span>{{end}}{{end}}
+        </span>
+        <span class="au-product-more">{{$.T "theme.auvex.viewDetails"}} <span aria-hidden="true">→</span></span>
+      </a>
+      {{end}}
+    </div>
+  </div>
+</section>
+{{end}}
+
+<section class="au-technology">
+  <div class="au-wrap au-technology-grid">
+    <figure class="au-technology-shot" data-reveal><img src="/website-assets/theme/auvex/assets/au-precision.webp" alt="{{.T "theme.auvex.techShotAlt"}}" loading="lazy"></figure>
+    <div class="au-technology-copy" data-reveal>
+      <p class="au-eyebrow au-eyebrow-light">{{.T "theme.auvex.techBadge"}}</p>
+      <h2>{{.T "theme.auvex.techTitle"}}</h2>
+      <p class="au-technology-sub">{{.T "theme.auvex.techSub"}}</p>
+      <ul class="au-technology-points">
+        <li><strong>{{.T "theme.auvex.tech1"}}</strong><span>{{.T "theme.auvex.tech1Sub"}}</span></li>
+        <li><strong>{{.T "theme.auvex.tech2"}}</strong><span>{{.T "theme.auvex.tech2Sub"}}</span></li>
+        <li><strong>{{.T "theme.auvex.tech3"}}</strong><span>{{.T "theme.auvex.tech3Sub"}}</span></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="au-section au-industries" id="industries">
+  <div class="au-wrap">
+    <header class="au-sect-head" data-reveal>
+      <div>
+        <p class="au-eyebrow">{{.T "theme.auvex.industriesEyebrow"}}</p>
+        <h2>{{.T "theme.auvex.industriesTitle"}}</h2>
+      </div>
+      <a class="au-more" href="{{.URL "/products"}}">{{.T "theme.auvex.viewAllIndustries"}} <span aria-hidden="true">→</span></a>
+    </header>
+    <div class="au-industry-grid">
+      <a class="au-industry-card" href="{{.URL "/products"}}" data-reveal>
+        <img src="/website-assets/theme/auvex/assets/au-auto.webp" alt="" loading="lazy">
+        <span class="au-industry-name">{{.T "theme.auvex.ind1"}}</span>
+      </a>
+      <a class="au-industry-card" href="{{.URL "/products"}}" data-reveal>
+        <img src="/website-assets/theme/auvex/assets/au-aero.webp" alt="" loading="lazy">
+        <span class="au-industry-name">{{.T "theme.auvex.ind2"}}</span>
+      </a>
+      <a class="au-industry-card" href="{{.URL "/products"}}" data-reveal>
+        <img src="/website-assets/theme/auvex/assets/au-medical.webp" alt="" loading="lazy">
+        <span class="au-industry-name">{{.T "theme.auvex.ind3"}}</span>
+      </a>
+      <a class="au-industry-card" href="{{.URL "/products"}}" data-reveal>
+        <img src="/website-assets/theme/auvex/assets/au-mold.webp" alt="" loading="lazy">
+        <span class="au-industry-name">{{.T "theme.auvex.ind4"}}</span>
+      </a>
+    </div>
+  </div>
+</section>
+
+{{if .Features}}
+<section class="au-section au-solutions" id="solutions">
+  <div class="au-wrap au-solutions-grid">
+    <div class="au-solutions-copy" data-reveal>
+      <p class="au-eyebrow">{{.T "theme.auvex.solutionsEyebrow"}}</p>
+      <h2>{{.T "theme.auvex.solutionsTitle"}}</h2>
+      <p class="au-solutions-sub">{{.T "theme.auvex.solutionsSub"}}</p>
+      <a class="au-btn au-btn-blue" href="{{.URL "/contact"}}">{{.T "theme.auvex.ourSolutions"}} <span aria-hidden="true">→</span></a>
+    </div>
+    <ul class="au-solutions-list" data-reveal>
+      {{range .Features}}<li><strong>{{.Title}}</strong><span>{{.Description}}</span></li>{{end}}
+    </ul>
+  </div>
+</section>
+{{end}}
+
+<section class="au-section au-factory" id="company">
+  <div class="au-wrap au-factory-grid">
+    <div class="au-factory-copy" data-reveal>
+      <p class="au-eyebrow">{{.T "theme.auvex.factoryEyebrow"}}</p>
+      <h2>{{.T "theme.auvex.factoryTitle"}}</h2>
+      <ul class="au-factory-points">
+        <li><strong>{{.T "theme.auvex.fac1"}}</strong><span>{{.T "theme.auvex.fac1Sub"}}</span></li>
+        <li><strong>{{.T "theme.auvex.fac2"}}</strong><span>{{.T "theme.auvex.fac2Sub"}}</span></li>
+        <li><strong>{{.T "theme.auvex.fac3"}}</strong><span>{{.T "theme.auvex.fac3Sub"}}</span></li>
+      </ul>
+    </div>
+    <figure class="au-factory-shot" data-reveal>
+      <img src="/website-assets/theme/auvex/assets/au-factory.webp" alt="{{.T "theme.auvex.factoryShotAlt"}}" loading="lazy">
+      <a class="au-more" href="{{.URL "/p/about"}}">{{.T "theme.auvex.viewFactory"}} <span aria-hidden="true">→</span></a>
+    </figure>
+  </div>
+</section>
+
+{{if .Posts}}
+<section class="au-section" id="news">
+  <div class="au-wrap">
+    <header class="au-sect-head" data-reveal>
+      <div>
+        <p class="au-eyebrow">{{.T "theme.auvex.newsEyebrow"}}</p>
+        <h2>{{.T "theme.auvex.newsTitle"}}</h2>
+      </div>
+      <a class="au-more" href="{{.URL "/news"}}">{{.T "home.news.more"}}</a>
+    </header>
+    <div class="au-news-grid">
+      {{range .Posts}}
+      <a class="au-news-card" href="{{$.URL "/news"}}/{{.Slug}}" data-reveal>
+        {{if .CoverURL}}<span class="au-news-cover"><img src="{{.CoverURL}}" alt="" loading="lazy"></span>{{end}}
+        <span class="au-news-date">{{if .PublishedAt}}{{fmtDate $.Lang .PublishedAt}}{{else}}{{fmtDate $.Lang .UpdatedAt}}{{end}}</span>
+        <span class="au-news-title">{{.Title}}</span>
+        {{if .Summary}}<span class="au-news-sub">{{.Summary}}</span>{{end}}
+        <span class="au-news-more">{{$.T "theme.auvex.readMore"}} <span aria-hidden="true">→</span></span>
+      </a>
+      {{end}}
+    </div>
+  </div>
+</section>
+{{end}}
+
+<section class="au-cta">
+  <div class="au-wrap au-cta-grid">
+    <div>
+      <p class="au-eyebrow au-eyebrow-light">{{.T "theme.auvex.ctaEyebrow"}}</p>
+      <h2>{{.T "theme.auvex.ctaTitle"}}</h2>
+      <p>{{.T "theme.auvex.ctaSub"}}</p>
+    </div>
+    <div class="au-cta-actions">
+      <a class="au-btn au-btn-blue" href="{{.URL "/contact"}}">{{.T "theme.auvex.quote"}} <span aria-hidden="true">→</span></a>
+      {{if .ContactPhone}}<a class="au-cta-item" href="tel:{{.ContactPhone}}"><strong>{{.T "contact.phone"}}</strong><span>{{.ContactPhone}}</span></a>{{end}}
+      {{if .ContactEmail}}<a class="au-cta-item" href="mailto:{{.ContactEmail}}"><strong>{{.T "contact.email"}}</strong><span>{{.ContactEmail}}</span></a>{{end}}
+    </div>
+  </div>
+</section>
+{{end}}

@@ -1,0 +1,137 @@
+{
+  "settings": {
+    "siteName": "SOLARIS ENERGY",
+    "siteDesc": "面向商业与工业场景的先进储能解决方案，帮助全球客户建设更清洁、更有韧性的能源未来。",
+    "logoUrl": "/website-assets/theme/solaris/logo.svg",
+    "homeTitle": "用储能\n点亮更好未来",
+    "homeSubtitle": "面向商业与工业场景的储能解决方案，帮助全球客户走向更清洁、更有韧性与更盈利的能源形态。",
+    "homeCtaLabel": "获取方案报价",
+    "homeCtaHref": "/contact",
+    "seoKeywords": "储能系统,电池储能,BESS,混合逆变器,能源管理,微电网",
+    "contactEmail": "sales@solaris-energy.com",
+    "contactPhone": "+86 755-8635-9000",
+    "footerNote": "清洁能源储能，为更绿色的明天。",
+    "titleSuffix": "Solaris Energy",
+    "socials": [
+      { "platform": "linkedin", "url": "https://www.linkedin.com/company/solaris-energy" },
+      { "platform": "youtube", "url": "https://www.youtube.com/@solaris-energy" },
+      { "platform": "instagram", "url": "https://www.instagram.com/solaris.energy" }
+    ]
+  },
+  "navs": [
+    { "label": "产品中心", "href": "/products", "sort": 10 },
+    { "label": "新闻动态", "href": "/news", "sort": 20 },
+    { "label": "关于我们", "href": "/p/about", "sort": 30 },
+    { "label": "联系我们", "href": "/contact", "sort": 40 }
+  ],
+  "features": [
+    { "icon": "zap", "title": "智能控制", "description": "AI 驱动的能源管理，效率更高、成本更低。", "sort": 10 },
+    { "icon": "shield", "title": "可靠性能", "description": "为安全、稳定与长期运行而构建。", "sort": 20 },
+    { "icon": "chart", "title": "灵活扩展", "description": "从工商业到电网级应用的可扩展解决方案。", "sort": 30 }
+  ],
+  "categories": [
+    { "title": "项目案例", "slug": "cases", "sort": 10 },
+    { "title": "行业洞察", "slug": "insights", "sort": 20 },
+    { "title": "技术解析", "slug": "tech", "sort": 30 }
+  ],
+  "pages": [
+    {
+      "slug": "about",
+      "title": "关于 SOLARIS",
+      "seoDesc": "SOLARIS ENERGY：面向商业与工业场景的储能系统供应商，让清洁能源更聪明、更可靠。",
+      "published": true,
+      "sort": 10,
+      "content": "<h2>更清洁、更安全、更强韧的明天</h2><p>在 SOLARIS ENERGY，储能不只是技术，而是通往繁荣未来的基石。我们与全球的商业、社区与交通伙伴合作，把可靠、可扩展的储能方案带给真实世界。</p><h3>为什么是我们</h3><p>20+ 国家交付、40+ 区域项目、10+ GWh 在网运行的沉淀，让我们的方案从第一天起就经得起电网级考验。</p><h3>可持续承诺</h3><p>每一套交付的系统都以全生命周期碳足迹为设计输入：从电芯来源到退役回收，全程可追溯。</p>"
+    }
+  ],
+  "posts": [
+    {
+      "slug": "storage-transforming-industry",
+      "title": "储能如何变革工业用电",
+      "summary": "峰谷套利、需量管理与绿电消纳：工商业储能的三重经济账。",
+      "coverUrl": "/website-assets/theme/solaris/assets/sl-news-one.webp",
+      "author": "SOLARIS 解决方案团队",
+      "pinned": true,
+      "categories": [{ "slug": "insights" }],
+      "content": "<h2>峰谷套利</h2><p>两充两放的运行策略让工商业储能的投资回收期缩短到 4~5 年，电价差越大、负荷越稳，收益越清晰。</p><h2>需量管理</h2><p>储能削峰可以把月度需量电费降低 20%~35%，对高载制造的账单影响立竿见影。</p><h2>绿电消纳</h2><p>配储后的光伏自发自用率从 60% 提升到 90% 以上，绿电真正变成可调度的资产。</p>"
+    },
+    {
+      "slug": "battery-storage-future",
+      "title": "电池储能技术的未来趋势",
+      "summary": "大电芯、液冷温控与构网型变流器，正在定义下一代储能系统。",
+      "coverUrl": "/website-assets/theme/solaris/assets/sl-news-two.webp",
+      "author": "行业观察",
+      "categories": [{ "slug": "tech" }],
+      "content": "<p>300Ah+ 大电芯把系统成本再压一档；全液冷温控让电芯温差收敛到 3℃ 以内，寿命与安全同步提升。</p><p>构网型变流器让储能在弱电网与孤岛场景下也能支撑电压与频率，微电网从此成为常态选项。</p>"
+    },
+    {
+      "slug": "storage-trends-2026",
+      "title": "2026 年工业储能的 5 个关键趋势",
+      "summary": "从安全标准到 AI 调度，盘点这一年值得关注的五件事。",
+      "coverUrl": "/website-assets/theme/solaris/assets/sl-news-three.webp",
+      "author": "行业观察",
+      "categories": [{ "slug": "insights" }],
+      "content": "<p>1. 安全标准全面收紧，pack 级消防成为标配；2. AI 调度从概念走向返单；3. 长时储能需求抬头；4. 模块化交付缩短工期；5. 绿电长协与储能打包成新的商业模型。</p>"
+    }
+  ],
+  "productCategories": [
+    { "title": "电池储能系统", "slug": "battery-storage", "sort": 10 },
+    { "title": "混合逆变器", "slug": "hybrid-inverters", "sort": 20 },
+    { "title": "能源管理", "slug": "energy-management", "sort": 30 },
+    { "title": "工商业储能", "slug": "commercial-ess", "sort": 40 }
+  ],
+  "products": [
+    {
+      "slug": "bess-215",
+      "title": "215kWh 一体式储能柜",
+      "keywords": "flagship 电池储能 工商业储能",
+      "summary": "集成电池、BMS、液冷温控与消防的一体柜，开箱即用的工商业储能单元。",
+      "coverUrl": "/website-assets/theme/solaris/assets/sl-storage.webp",
+      "priceMin": 0,
+      "currency": "USD",
+      "specsJson": "[{\"label\":\"型号\",\"value\":\"BESS-215\"},{\"label\":\"额定容量\",\"value\":\"215 kWh\"},{\"label\":\"循环寿命\",\"value\":\"8,000 次\"},{\"label\":\"关键特性\",\"value\":\"全液冷温控 · pack 级消防\"},{\"label\":\"应用场景\",\"value\":\"工商业园区\"}]",
+      "categories": [{ "slug": "battery-storage" }, { "slug": "commercial-ess" }],
+      "author": "方案部",
+      "content": "<p>BESS-215 把电芯、BMS、液冷温控、消防与变流器集成进一个 20 尺标准柜，现场并网即用，是工商业储能的基准机型。</p>"
+    },
+    {
+      "slug": "hybrid-inverter-100",
+      "title": "100kW 混合逆变器",
+      "keywords": "混合逆变器 光储一体",
+      "summary": "光储一体逆变器，支持离网与并网无缝切换，弱电网也能稳定构网。",
+      "coverUrl": "/website-assets/theme/solaris/assets/sl-inverter.webp",
+      "priceMin": 0,
+      "currency": "USD",
+      "specsJson": "[{\"label\":\"型号\",\"value\":\"HI-100\"},{\"label\":\"额定容量\",\"value\":\"100 kW\"},{\"label\":\"循环寿命\",\"value\":\"—\"},{\"label\":\"关键特性\",\"value\":\"构网型 · 离并网切换\"},{\"label\":\"应用场景\",\"value\":\"微电网\"}]",
+      "categories": [{ "slug": "hybrid-inverters" }],
+      "author": "方案部",
+      "content": "<p>HI-100 支持构网型运行，弱电网与孤岛场景下依旧稳定输出，与 SOLARIS 储能柜组成即装即用的微电网。</p>"
+    },
+    {
+      "slug": "ems-platform",
+      "title": "EMS 能源管理平台",
+      "keywords": "能源管理 AI调度",
+      "summary": "智能控制发电与储能运行的能源管理系统：效率更高、成本更低。",
+      "coverUrl": "/website-assets/theme/solaris/assets/sl-monitor.webp",
+      "priceMin": 0,
+      "currency": "USD",
+      "specsJson": "[{\"label\":\"型号\",\"value\":\"EMS-Cloud\"},{\"label\":\"额定容量\",\"value\":\"不限\"},{\"label\":\"循环寿命\",\"value\":\"—\"},{\"label\":\"关键特性\",\"value\":\"AI 调度 · 远程运维\"},{\"label\":\"应用场景\",\"value\":\"全场景\"}]",
+      "categories": [{ "slug": "energy-management" }],
+      "author": "方案部",
+      "content": "<p>EMS-Cloud 以 AI 预测负荷与电价，自动编排充放策略，让每一度电都落在最值钱的时段。</p>"
+    },
+    {
+      "slug": "ess-container-mwh",
+      "title": "MWh 级集装箱储能系统",
+      "keywords": "电网级储能 集装箱",
+      "summary": "电网级集装箱方案，为大规模新能源消纳与电网调频而生。",
+      "coverUrl": "/website-assets/theme/solaris/assets/sl-container.webp",
+      "priceMin": 0,
+      "currency": "USD",
+      "specsJson": "[{\"label\":\"型号\",\"value\":\"ESS-MWh\"},{\"label\":\"额定容量\",\"value\":\"3.44 MWh\"},{\"label\":\"循环寿命\",\"value\":\"8,000 次\"},{\"label\":\"关键特性\",\"value\":\"电网级调频\"},{\"label\":\"应用场景\",\"value\":\"新能源电站\"}]",
+      "categories": [{ "slug": "battery-storage" }],
+      "author": "方案部",
+      "content": "<p>ESS-MWh 面向新能源电站与独立储能电站：3.44MWh 单柜、pack 级安全设计与电网级调频响应。</p>"
+    }
+  ]
+}

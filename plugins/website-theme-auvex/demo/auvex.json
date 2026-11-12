@@ -1,0 +1,124 @@
+{
+  "settings": {
+    "siteName": "AUVEX MACHINERY",
+    "siteDesc": "AUVEX MACHINERY 提供高精度数控加工中心与自动化解决方案，让制造更精准、更高效、更可持续。",
+    "logoUrl": "/website-assets/theme/auvex/logo.svg",
+    "homeTitle": "工程化\n精密制造的未来",
+    "homeSubtitle": "AUVEX MACHINERY 提供高性能 CNC 解决方案，让每一次加工都更精准、更高效、更可持续。",
+    "homeCtaLabel": "浏览机床系列",
+    "homeCtaHref": "/products",
+    "seoKeywords": "数控机床,CNC加工中心,五轴加工,精密制造,车削中心",
+    "contactEmail": "sales@auvexcnc.com",
+    "contactPhone": "+86 21-5566-0800",
+    "footerNote": "高性能数控机床与自动化制造方案，为精密工业而生。",
+    "titleSuffix": "AUVEX Machinery",
+    "socials": [
+      { "platform": "linkedin", "url": "https://www.linkedin.com/company/auvex-machinery" },
+      { "platform": "youtube", "url": "https://www.youtube.com/@auvexmachinery" },
+      { "platform": "x", "url": "https://x.com/auvexmachinery" }
+    ]
+  },
+  "navs": [
+    { "label": "产品中心", "href": "/products", "sort": 10 },
+    { "label": "新闻动态", "href": "/news", "sort": 20 },
+    { "label": "关于我们", "href": "/p/about", "sort": 30 },
+    { "label": "联系我们", "href": "/contact", "sort": 40 }
+  ],
+  "features": [
+    { "icon": "chart", "title": "世界级精度", "description": "±0.003mm 定位精度，稳定应对最严苛的公差要求。", "sort": 10 },
+    { "icon": "shield", "title": "可靠性能", "description": "为长期稳定与最短停机时间而构建的重载机身与热补偿系统。", "sort": 20 },
+    { "icon": "globe", "title": "全球支持", "description": "覆盖 60+ 国家的服务网络与备件仓储，支持就地就近。", "sort": 30 },
+    { "icon": "layers", "title": "行业专长", "description": "深耕航空航天、汽车、模具与医疗等制造行业的工艺Know-how。", "sort": 40 }
+  ],
+  "categories": [
+    { "title": "行业案例", "slug": "cases", "sort": 10 },
+    { "title": "新闻观点", "slug": "insights", "sort": 20 },
+    { "title": "技术文章", "slug": "tech", "sort": 30 }
+  ],
+  "pages": [
+    {
+      "slug": "about",
+      "title": "关于 AUVEX",
+      "seoDesc": "AUVEX MACHINERY：高性能数控加工中心制造商，服务航空航天、汽车、医疗与模具制造。",
+      "published": true,
+      "sort": 10,
+      "content": "<h2>无妥协的精密工程</h2><p>AUVEX MACHINERY 集成先进的机床结构、智能控制系统与严格的质检流程，提供高精度加工能力与长寿命主轴稳定性。从五轴联动到精密车削，我们的产品为复杂零件的批量生产而生。</p><h3>制造能力</h3><p>高产能、可扩展的现代制造基地，配合多阶段质检流程：每一台出厂机床都经过 72 小时连续空载与负载老化验证。</p><h3>面向未来</h3><p>我们持续投资于自动化集成、在线检测与能耗优化，让客户在产能、质量与可持续性三个维度同时获益。</p>"
+    }
+  ],
+  "posts": [
+    {
+      "slug": "five-axis-complex-parts",
+      "title": "五轴加工如何提升复杂零件的生产效率",
+      "summary": "一次装夹完成五面加工：五轴联动把复杂零件的工序数与装夹误差同时压下来。",
+      "coverUrl": "/website-assets/theme/auvex/assets/au-news-one.webp",
+      "author": "AUVEX 工程团队",
+      "pinned": true,
+      "categories": [{ "slug": "tech" }],
+      "content": "<h2>为什么是五轴</h2><p>传统三轴加工复杂叶轮与结构件需要多次装夹，每次装夹都引入定位误差。五轴联动在一次装夹内完成五面加工，把累积公差收敛到机床本身的精度等级。</p><h2>效率账怎么算</h2><p>以航空发动机机匣为例：三轴方案 6 道工序、11 小时；五轴方案 2 道工序、5 小时，同时把位置度从 ±0.05mm 提升到 ±0.01mm。</p><h2>选型要点</h2><p>关注主轴刚性、RTCP 精度与后处理生态——机床只是起点，工艺链才决定交付能力。</p>"
+    },
+    {
+      "slug": "cnc-aerospace-trend",
+      "title": "航空航天制造的 CNC 技术趋势",
+      "summary": "轻量化结构件、难加工材料与大尺寸整体件，正在重塑航空制造的机床需求。",
+      "coverUrl": "/website-assets/theme/auvex/assets/au-news-two.webp",
+      "author": "行业观察",
+      "categories": [{ "slug": "insights" }],
+      "content": "<p>钛合金、高温合金与大尺寸整体构件是航空航天制造的三大挑战。高扭矩主轴、大行程龙门结构与在线检测正在成为新标配。</p><p>自动化场景也在快速增长：机器人上下料与多机床柔性线，让夜班也能保持满负荷。</p>"
+    },
+    {
+      "slug": "cnc-maintenance-best-practice",
+      "title": "数控机床长期可靠运行的维护要点",
+      "summary": "从导轨润滑到热补偿校准，一套可执行的保养节奏让精度十年如一日。",
+      "coverUrl": "/website-assets/theme/auvex/assets/au-news-three.webp",
+      "author": "AUVEX 服务部",
+      "categories": [{ "slug": "cases" }],
+      "content": "<h2>润滑与导轨</h2><p>按小时计数而非按天：集中润滑系统的液位与压力要进入每日点检表。</p><h2>热补偿校准</h2><p>季节与环境温度变化会漂移定位精度，建议每季度做一次激光干涉仪校准。</p><h2>备件策略</h2><p>主轴轴承、密封件与过滤器按运行小时建立更换台账，停机成本远高于备件成本。</p>"
+    }
+  ],
+  "productCategories": [
+    { "title": "五轴加工中心", "slug": "five-axis", "sort": 10 },
+    { "title": "立式数控机床", "slug": "vertical-mills", "sort": 20 },
+    { "title": "精密车削中心", "slug": "turning", "sort": 30 }
+  ],
+  "products": [
+    {
+      "slug": "vx-650",
+      "title": "VX-650 五轴加工中心",
+      "keywords": "flagship 五轴加工中心",
+      "summary": "高精度五轴联动加工中心，胜任复杂零件与多面加工的高效率方案。",
+      "coverUrl": "/website-assets/theme/auvex/assets/au-machine-one.webp",
+      "priceMin": 0,
+      "currency": "USD",
+      "specsJson": "[{\"label\":\"型号\",\"value\":\"VX-650\"},{\"label\":\"主轴转速\",\"value\":\"24,000 RPM\"},{\"label\":\"定位精度\",\"value\":\"±0.003mm\"},{\"label\":\"关键特性\",\"value\":\"五轴联动 · RTCP\"},{\"label\":\"应用场景\",\"value\":\"航空航天\"}]",
+      "categories": [{ "slug": "five-axis" }],
+      "author": "外贸部",
+      "content": "<p>VX-650 是 AUVEX 的旗舰五轴机型：直驱双摆头、RTCP 全程补偿与高刚性龙门结构，为复杂零件的一次装夹成形而生。</p><ul><li>24,000 RPM 高速主轴</li><li>±0.003mm 定位精度</li><li>可选机器人上下料集成</li></ul>"
+    },
+    {
+      "slug": "vm-1150",
+      "title": "VM-1150 立式数控机床",
+      "keywords": "立式加工中心 数控机床",
+      "summary": "刚性强、可靠性高的立式加工中心，适合高效率批量生产。",
+      "coverUrl": "/website-assets/theme/auvex/assets/au-machine-two.webp",
+      "priceMin": 0,
+      "currency": "USD",
+      "specsJson": "[{\"label\":\"型号\",\"value\":\"VM-1150\"},{\"label\":\"主轴转速\",\"value\":\"12,000 RPM\"},{\"label\":\"定位精度\",\"value\":\"±0.005mm\"},{\"label\":\"关键特性\",\"value\":\"重载铸铁机身\"},{\"label\":\"应用场景\",\"value\":\"模具制造\"}]",
+      "categories": [{ "slug": "vertical-mills" }],
+      "author": "外贸部",
+      "content": "<p>VM-1150 以重载铸铁机身与热对称结构，为模具与批量零件加工提供长期稳定的精度保障。</p>"
+    },
+    {
+      "slug": "tc-300",
+      "title": "TC-300 精密车削中心",
+      "keywords": "车削中心 精密车削",
+      "summary": "高端精密车削能力，带动力刀塔与副主轴，一机完成车铣复合。",
+      "coverUrl": "/website-assets/theme/auvex/assets/au-machine-three.webp",
+      "priceMin": 0,
+      "currency": "USD",
+      "specsJson": "[{\"label\":\"型号\",\"value\":\"TC-300\"},{\"label\":\"主轴转速\",\"value\":\"6,000 RPM\"},{\"label\":\"定位精度\",\"value\":\"±0.004mm\"},{\"label\":\"关键特性\",\"value\":\"动力刀塔 · 副主轴\"},{\"label\":\"应用场景\",\"value\":\"精密轴类\"}]",
+      "categories": [{ "slug": "turning" }],
+      "author": "外贸部",
+      "content": "<p>TC-300 面向精密轴类与盘类零件：动力刀塔支持车铣复合工序，副主轴实现背面加工一次完成。</p>"
+    }
+  ]
+}

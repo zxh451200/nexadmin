@@ -1,0 +1,305 @@
+{
+  "settings": {
+    "siteName": "TORKON INDUSTRIAL",
+    "siteDesc": "高性能专业电动工具：以功率、精准与耐用性为工程标准，值得全球专业人士信赖。",
+    "logoUrl": "/website-assets/theme/torkon/logo.svg",
+    "homeTitle": "为最严酷的\n工业工况而生",
+    "homeSubtitle": "高性能专业工具，为功率、精准与耐用性而工程化设计。",
+    "homeCtaLabel": "浏览全部产品",
+    "homeCtaHref": "/products",
+    "seoKeywords": "电动工具,工业级,无刷电机,冲击扳手,电钻,切割机",
+    "contactEmail": "sales@torkon-industrial.com",
+    "contactPhone": "+86 400-668-8686",
+    "footerNote": "高性能专业电动工具，为全球工业与制造而生。",
+    "titleSuffix": "TORKON Industrial",
+    "socials": [
+      {
+        "platform": "linkedin",
+        "url": "https://www.linkedin.com/company/torkon-industrial"
+      },
+      {
+        "platform": "youtube",
+        "url": "https://www.youtube.com/@torkon-industrial"
+      },
+      {
+        "platform": "facebook",
+        "url": "https://www.facebook.com/torkon.industrial"
+      }
+    ]
+  },
+  "navs": [
+    {
+      "label": "产品中心",
+      "href": "/products",
+      "sort": 10
+    },
+    {
+      "label": "新闻动态",
+      "href": "/news",
+      "sort": 20
+    },
+    {
+      "label": "关于我们",
+      "href": "/p/about",
+      "sort": 30
+    },
+    {
+      "label": "联系我们",
+      "href": "/contact",
+      "sort": 40
+    }
+  ],
+  "features": [
+    {
+      "icon": "zap",
+      "title": "无刷电机",
+      "description": "功率更大、寿命更长；免维护碳刷结构适应全天候高强度作业。",
+      "sort": 10
+    },
+    {
+      "icon": "shield",
+      "title": "IP56 防尘防水",
+      "description": "全域密封防护，建筑工地与金属加工环境的粉尘、水花都挡在外面。",
+      "sort": 20
+    },
+    {
+      "icon": "chart",
+      "title": "智能速控",
+      "description": "负载感知转速调节，材质变化时自动输出匹配扭矩，切口更干净。",
+      "sort": 30
+    },
+    {
+      "icon": "layers",
+      "title": "模块化设计",
+      "description": "电池、夹头与手柄组件通用互换，一套平台覆盖全系列工具。",
+      "sort": 40
+    },
+    {
+      "icon": "box",
+      "title": "长寿命锂电",
+      "description": "高倍率电芯与智能 BMS，单充续航提升 2 倍，循环寿命 85% 保持率。",
+      "sort": 50
+    },
+    {
+      "icon": "users",
+      "title": "全球联保",
+      "description": "60+ 国家与地区服务网络，专业技师与原厂配件就近可得。",
+      "sort": 60
+    }
+  ],
+  "categories": [
+    {
+      "title": "产品指南",
+      "slug": "guides",
+      "sort": 10
+    },
+    {
+      "title": "使用技巧",
+      "slug": "tips",
+      "sort": 20
+    },
+    {
+      "title": "行业动态",
+      "slug": "industry",
+      "sort": 30
+    }
+  ],
+  "pages": [
+    {
+      "slug": "about",
+      "title": "关于 TORKON",
+      "seoDesc": "TORKON INDUSTRIAL：专业级电动工具制造商，为建筑、汽车、金属加工与工业维护提供可靠工具。",
+      "published": true,
+      "sort": 10,
+      "content": "<h2>专业级工具，源于对工况的敬畏</h2><p>TORKON INDUSTRIAL 为建筑、汽车制造、金属加工与工业维护领域的专业人士打造电动工具。我们的每一款产品都从真实工况出发：更高的功率密度、更长的续航、更严苛的防护等级，让工具在最 demanding 的环境中依然可靠。</p><h3>我们的工厂</h3><p>20 万台的月产能背后，是全自动装配线、全检出厂的质检流程与 ISO 9001 认证制造体系。从电机绕线到整机老化，每一道工序都有追溯记录。</p><h3>研发理念</h3><p>我们相信工具的价值在于「拿下活儿」。无刷电机平台、智能速控与模块化电池系统，都服务于同一个目标：让专业人士在单位时间里完成更多、更好的工作。</p>"
+    }
+  ],
+  "posts": [
+    {
+      "slug": "choose-impact-wrench",
+      "title": "如何为你的应用场景选择合适的冲击扳手",
+      "summary": "扭矩、接口与重量是冲击扳手的三个关键维度。本文用三个真实工况，帮你把选型标准落到具体参数上。",
+      "coverUrl": "/website-assets/theme/torkon/assets/tk-news-one.webp",
+      "author": "TORKON 产品团队",
+      "pinned": true,
+      "categories": [
+        {
+          "slug": "guides"
+        }
+      ],
+      "content": "<h2>从扭矩需求出发</h2><p>选择冲击扳手的第一步不是看峰值扭矩，而是看你的紧固件规格：M16 螺栓一般需要 400Nm 以上的拆松扭矩，重卡与钢结构则要到 850Nm 甚至更高。峰值扭矩是「能拆松」，持续扭矩才是「效率」。</p><h2>接口决定工具形态</h2><p>1/2 英寸方头是最通用的选择；轮毂与轻型装配可考虑 3/8 英寸换取更轻的重量；重型钢结构建议 3/4 英寸配合双锤机构。</p><h2>重量与平衡</h2><p>长时间举升作业下，每 100g 都会被放大。TKI-850 在 850Nm 级别把整机重量控制在 2.1kg，靠的是无刷电机与轻量化外壳。</p><h3>结论</h3><p>先按螺栓规格定扭矩区间，再按作业姿势定形态与重量，最后用电池平台收口——同一品牌同一平台，配件与充电器通用才是长期成本最低的选择。</p>"
+    },
+    {
+      "slug": "tool-maintenance",
+      "title": "延长电动工具寿命的 5 个保养技巧",
+      "summary": "从清洁习惯到电池存储，五个低成本习惯能让你的工具多服役一倍时间。",
+      "coverUrl": "/website-assets/theme/torkon/assets/tk-news-two.webp",
+      "author": "TORKON 服务部",
+      "categories": [
+        {
+          "slug": "tips"
+        }
+      ],
+      "content": "<h2>1. 每天清理散热风道</h2><p>粉尘堵塞风道是电机过热的第一诱因。收工时用干风吹一遍进风口，比任何维修都省钱。</p><h2>2. 电池不要放空再充</h2><p>锂电池没有记忆效应，20% 电量随充随用最健康；长期存放请保持 50% 左右电量并置于阴凉处。</p><h2>3. 按材质选耗材</h2><p>混凝土用硬质合金钻头、金属用 HSS-Co，错配的耗材会把负载全部转嫁到电机与齿轮上。</p><h2>4. 检查碳刷与密封圈</h2><p>有刷机型每 50 小时检查一次碳刷长度；IP56 机型的密封圈老化后防护等级会悄悄失效。</p><h2>5. 让智能速控替你干活</h2><p>不要手动「顶满」转速，负载感知会自动匹配扭矩——既保护齿轮也省电。</p>"
+    },
+    {
+      "slug": "cordless-future",
+      "title": "无绳电钻在工业建造中的未来",
+      "summary": "电池能量密度与智能控制正在改写工业建造的工具清单，无绳化替代已成定局。",
+      "coverUrl": "/website-assets/theme/torkon/assets/tk-news-three.webp",
+      "author": "行业观察",
+      "categories": [
+        {
+          "slug": "industry"
+        }
+      ],
+      "content": "<p>五年前，工业建造现场的重活还依赖电缆与气动；今天，高倍率电芯 + 无刷电机的组合已经把 36V 电锤推到了有线工具的扭矩水平。</p><p>下一阶段的分水岭在智能控制：负载感知、倾角传感与蓝牙工具管理，让项目经理能在后台看到每一台工具的负荷与保养周期。</p><p>TORKON 的 20V 平台已经在工地上验证了这条路线——同样的电池，驱动从电钻到圆锯的全系列工具。</p>"
+    }
+  ],
+  "productCategories": [
+    {
+      "title": "电钻系列",
+      "slug": "drills",
+      "sort": 10
+    },
+    {
+      "title": "冲击扳手",
+      "slug": "impact-wrenches",
+      "sort": 20
+    },
+    {
+      "title": "角磨机",
+      "slug": "grinders",
+      "sort": 30
+    },
+    {
+      "title": "切割工具",
+      "slug": "cutting-tools",
+      "sort": 40
+    },
+    {
+      "title": "配件",
+      "slug": "accessories",
+      "sort": 50
+    }
+  ],
+  "products": [
+    {
+      "slug": "tkd-20v",
+      "title": "TKD-20V 无刷充电电钻",
+      "keywords": "new 无刷电钻 充电电钻",
+      "summary": "20V 无刷平台，150Nm 扭矩，轻量化机身适合长时间举升作业。",
+      "coverUrl": "/website-assets/theme/torkon/assets/tk-drill-cut.webp",
+      "imagesJson": "[\"/website-assets/theme/torkon/assets/tk-drill.webp\",\"/website-assets/theme/torkon/assets/tk-drill-rail.webp\"]",
+      "priceMin": 89,
+      "priceMax": 129,
+      "currency": "USD",
+      "priceUnit": "piece",
+      "moq": 50,
+      "leadTimeDays": 15,
+      "port": "上海港",
+      "paymentTerms": "T/T, L/C",
+      "specsJson": "[{\"label\":\"型号\",\"value\":\"TKD-20V\"},{\"label\":\"功率\",\"value\":\"750W\"},{\"label\":\"空载转速\",\"value\":\"1,200 RPM\"},{\"label\":\"关键特性\",\"value\":\"无刷电机 · 轻量化机身\"},{\"label\":\"应用场景\",\"value\":\"装配与维修\"}]",
+      "categories": [
+        {
+          "slug": "drills"
+        }
+      ],
+      "author": "外贸部",
+      "content": "<p>TKD-20V 是 TORKON 20V 无刷平台的主力机型：150Nm 最大扭矩覆盖 90% 的装配场景，1.4kg 的机身让举升作业一整天也不吃力。</p><ul><li>无刷电机：免维护，发热更低</li><li>20 档扭矩离合 + 钻/起子双模</li><li>全金属齿轮箱与 IP56 密封</li></ul>"
+    },
+    {
+      "slug": "tki-850",
+      "title": "TKI-850 无刷冲击扳手",
+      "keywords": "flagship 无刷冲击扳手 充电扳手",
+      "summary": "旗舰机型：850Nm 最大扭矩，四档速控与 LED 照明，重载拆松一次到位。",
+      "coverUrl": "/website-assets/theme/torkon/assets/tk-impact-cut.webp",
+      "imagesJson": "[\"/website-assets/theme/torkon/assets/tk-impact.webp\",\"/website-assets/theme/torkon/assets/tk-impact-rail.webp\"]",
+      "priceMin": 159,
+      "priceMax": 219,
+      "currency": "USD",
+      "priceUnit": "piece",
+      "moq": 50,
+      "leadTimeDays": 15,
+      "port": "上海港",
+      "paymentTerms": "T/T, L/C",
+      "specsJson": "[{\"label\":\"型号\",\"value\":\"TKI-850\"},{\"label\":\"功率\",\"value\":\"1,100W\"},{\"label\":\"空载转速\",\"value\":\"2,400 RPM\"},{\"label\":\"关键特性\",\"value\":\"850Nm 扭矩 · 四档速控 · LED\"},{\"label\":\"应用场景\",\"value\":\"重载拆装\"}]",
+      "categories": [
+        {
+          "slug": "impact-wrenches"
+        }
+      ],
+      "author": "外贸部",
+      "content": "<p>TKI-850 是 TORKON 旗舰冲击扳手：850Nm 拆松扭矩 + 1,200Nm 断裂扭矩，双锤冲击机构让 M22 螺栓一次到位。</p><ul><li>四档速控：精密装配到重载拆松全覆盖</li><li>LED 环灯：车底与舱内作业无死角</li><li>2.1kg 整机重量，同级最轻之一</li></ul>"
+    },
+    {
+      "slug": "tkg-125",
+      "title": "TKG-125 角磨机",
+      "keywords": "角磨机 切割打磨",
+      "summary": "125mm 锯片，900W 电机，防振手柄让长时间切割更稳。",
+      "coverUrl": "/website-assets/theme/torkon/assets/tk-grinder-cut.webp",
+      "priceMin": 69,
+      "priceMax": 99,
+      "currency": "USD",
+      "priceUnit": "piece",
+      "moq": 50,
+      "leadTimeDays": 15,
+      "port": "上海港",
+      "paymentTerms": "T/T, L/C",
+      "specsJson": "[{\"label\":\"型号\",\"value\":\"TKG-125\"},{\"label\":\"功率\",\"value\":\"900W\"},{\"label\":\"空载转速\",\"value\":\"8,500 RPM\"},{\"label\":\"关键特性\",\"value\":\"防振手柄 · 防重启\"},{\"label\":\"应用场景\",\"value\":\"金属加工\"}]",
+      "categories": [
+        {
+          "slug": "grinders"
+        }
+      ],
+      "author": "外贸部",
+      "content": "<p>TKG-125 面向金属加工车间：900W 有刷电机配 125mm 锯片，防振后手柄与防重启开关让长班次更安全。</p>"
+    },
+    {
+      "slug": "tkh-36s",
+      "title": "TKH-36S 六角电锤",
+      "keywords": "电锤 工业建造",
+      "summary": "3.6J 单击能量，SDS-Max 六角柄，混凝土钻孔与开凿两相宜。",
+      "coverUrl": "/website-assets/theme/torkon/assets/tk-hammer-cut.webp",
+      "priceMin": 189,
+      "priceMax": 249,
+      "currency": "USD",
+      "priceUnit": "piece",
+      "moq": 30,
+      "leadTimeDays": 20,
+      "port": "上海港",
+      "paymentTerms": "T/T, L/C",
+      "specsJson": "[{\"label\":\"型号\",\"value\":\"TKH-36S\"},{\"label\":\"功率\",\"value\":\"1,300W\"},{\"label\":\"空载转速\",\"value\":\"620 RPM\"},{\"label\":\"关键特性\",\"value\":\"3.6J 单击能量 · 减振框架\"},{\"label\":\"应用场景\",\"value\":\"混凝土施工\"}]",
+      "categories": [
+        {
+          "slug": "drills"
+        }
+      ],
+      "author": "外贸部",
+      "content": "<p>TKH-36S 用 3.6J 单击能量与减振框架，把 32mm 混凝土钻孔的工时压缩三分之一；六角柄兼容主流开凿铲。</p>"
+    },
+    {
+      "slug": "tkcs-185",
+      "title": "TKCS-185 圆锯",
+      "keywords": "圆锯 切割工具",
+      "summary": "185mm 锯片，1,400W 电机，0-50° 斜切满足木工与钢结构下料。",
+      "coverUrl": "/website-assets/theme/torkon/assets/tk-saw-cut.webp",
+      "priceMin": 119,
+      "priceMax": 159,
+      "currency": "USD",
+      "priceUnit": "piece",
+      "moq": 50,
+      "leadTimeDays": 15,
+      "port": "上海港",
+      "paymentTerms": "T/T, L/C",
+      "specsJson": "[{\"label\":\"型号\",\"value\":\"TKCS-185\"},{\"label\":\"功率\",\"value\":\"1,400W\"},{\"label\":\"空载转速\",\"value\":\"5,200 RPM\"},{\"label\":\"关键特性\",\"value\":\"0-50° 斜切 · 铝质底板\"},{\"label\":\"应用场景\",\"value\":\"木工与钢结构\"}]",
+      "categories": [
+        {
+          "slug": "cutting-tools"
+        }
+      ],
+      "author": "外贸部",
+      "content": "<p>TKCS-185 以 1,400W 直流电机驱动 185mm 硬质合金锯片，铝质底板与 0-50° 斜切机构兼顾精度与耐用。</p>"
+    }
+  ]
+}

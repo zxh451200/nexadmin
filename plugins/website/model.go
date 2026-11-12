@@ -56,6 +56,9 @@ type Setting struct {
 	// HomeSlug 是用作首页的自定义单页 slug：非空时首页渲染该页内容（替换内置 Hero 页）；空 = 内置首页。
 	// 页面本身仍可通过 /p/:slug 访问，不冲突。
 	HomeSlug string `gorm:"column:home_slug;size:64;not null;default:''" json:"homeSlug"`
+	// Theme 是公开站主题 id（主题插件经 RegisterTheme 注册）；空 = 内置 default 主题。
+	// 主题插件被卸载时渲染自动回退 default，站点不断线，设置里残留的 id 由下次保存清理。
+	Theme string `gorm:"column:theme;size:64;not null;default:''" json:"theme"`
 	// SeedVersion 记录出厂内容补种进度：升级后只补一次新增的出厂条目，不复活管理员删掉的内容。
 	SeedVersion int `gorm:"not null;default:1" json:"-"`
 }
@@ -175,6 +178,8 @@ type Page struct {
 	OgImage string `gorm:"size:255;not null;default:''" json:"ogImage"`
 	// Noindex 关闭搜索引擎收录：<meta robots> 与 sitemap 同步生效，站内列表照常展示。
 	Noindex bool `gorm:"not null;default:false" json:"noindex"`
+	// DemoOf 记录该行由哪个主题插件的演示数据创建（见 theme.go 的 SeedDemo）；空 = 用户自建/出厂内容。
+	DemoOf string `gorm:"column:demo_of;size:48;not null;default:''" json:"-"`
 }
 
 func (Page) TableName() string { return "plg_website_page" }
@@ -209,6 +214,8 @@ type Post struct {
 	Pinned bool `gorm:"not null;default:false" json:"pinned"`
 	// Author 是展示名（如「市场部」），不关联后台账号。
 	Author string `gorm:"size:64;not null;default:''" json:"author"`
+	// DemoOf 记录该行由哪个主题插件的演示数据创建（见 theme.go 的 SeedDemo）；空 = 用户自建/出厂内容。
+	DemoOf string `gorm:"column:demo_of;size:48;not null;default:''" json:"-"`
 }
 
 func (Post) TableName() string { return "plg_website_post" }
@@ -247,6 +254,8 @@ type Category struct {
 	// PostCount 是栏目下的新闻数：保存时回填，不落库。界面用它排栏目，
 	// 也让人在删栏目之前先看见「这里面有 12 篇」。
 	PostCount int64 `gorm:"-" json:"postCount"`
+	// DemoOf 记录该行由哪个主题插件的演示数据创建（见 theme.go 的 SeedDemo）；空 = 用户自建/出厂内容。
+	DemoOf string `gorm:"column:demo_of;size:48;not null;default:''" json:"-"`
 }
 
 func (Category) TableName() string { return "plg_website_category" }
@@ -302,6 +311,8 @@ type ProductCategory struct {
 	ProductCount int64 `gorm:"-" json:"productCount"`
 	// Children 只在树装配时填充，不入库。
 	Children []ProductCategory `gorm:"-" json:"children,omitempty"`
+	// DemoOf 记录该行由哪个主题插件的演示数据创建（见 theme.go 的 SeedDemo）；空 = 用户自建/出厂内容。
+	DemoOf string `gorm:"column:demo_of;size:48;not null;default:''" json:"-"`
 }
 
 func (ProductCategory) TableName() string { return "plg_website_product_category" }
@@ -355,7 +366,11 @@ type Product struct {
 	// SyncError 是最近一次同步失败的原因（code+文案，截 500）：列表悬停展示，成功同步后清空。
 	SyncError string `gorm:"column:sync_error;size:500;not null;default:''" json:"syncError"`
 	// Categories 是商品所属类目；关联表 plg_website_product_category_rel，保存时整体替换。
-	Categories []ProductCategory `gorm:"many2many:plg_website_product_category_rel" json:"categories,omitempty"`
+	// 关联表由迁移 024 建表，列名是 product_id / category_id：类目侧列名必须显式指定——
+	// GORM 默认按关联模型名推导出 product_category_id，与表结构不符，挂类目会报 1054。
+	Categories []ProductCategory `gorm:"many2many:plg_website_product_category_rel;joinForeignKey:product_id;joinReferences:category_id" json:"categories,omitempty"`
+	// DemoOf 记录该行由哪个主题插件的演示数据创建（见 theme.go 的 SeedDemo）；空 = 用户自建/出厂内容。
+	DemoOf string `gorm:"column:demo_of;size:48;not null;default:''" json:"-"`
 	// Views 是公开详情的浏览量：公开详情命中自增，只增不清（要清零走 SQL）。
 	Views int64 `gorm:"not null;default:0" json:"views"`
 	// Author 是展示名（如「外贸部」），不关联后台账号。

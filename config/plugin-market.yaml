@@ -1,4 +1,4 @@
-﻿# NexAdmin 插件市场目录（真实上架清单）。
+﻿# NexAdmin 插件市场目录（真实上架清单，与后台实际编译的插件一一对应）。
 # 数据源唯一：官网 /plugins 与后台「插件市场」都直接读本文件；`plugin market sync` 仅导出 JSON。
 #
 # 发布流程（monorepo 模式，只需 1 个 GitHub 仓库）：
@@ -25,14 +25,29 @@
 #       客户端用 `nexadmin plugin verify --sig <文件> --key <公钥文件> <zip>` 校验。
 # 私有 GitHub：NEXADMIN_MARKET_GITHUB_API 覆盖 API 根地址（GitHub Enterprise）。
 # 注意：edition/version 以各插件 plugin.yaml 为准，下载/安装时交叉校验。
-# 发布状态（2026-11-03 核对）：18 条目录全部已同步到 zxh451200/nexadmin-plugins 的对应 subdir，
-#   包内 edition/version 与这里一致；ref 留空 = 跟随默认分支，要锁版本时再打 tag 并填 ref。
-#   free 8 个：codegen/cron/crm/imports/ldap/maps/realname/totp；pro 10 个：其余。
+# 发布状态（2026-11-12 核对）：25 条目录 = 后台默认编译的全部插件（aigateway 起按字母序）；
+#   ref 留空 = 跟随默认分支，要锁版本时再打 tag 并填 ref。
+#   free 7 个：codegen/crm/imports/ldap/maps/realname/totp；其余 pro。
 #   totp/ldap 未默认编译，用户需按需安装；不要因免费分层自动叠加安全/身份钩子。
+# 文案口径（2026-11-12 重写）：描述面向使用者，一句话说清「装了它能干什么」，技术细节放插件详情页与文档。
 plugins:
+  - id: aigateway
+    name: AI 网关
+    description: 集中管理各家大模型的密钥与配额：按租户记账用量，密钥加密存储、调用留台账。
+    category: ai
+    edition: pro
+    version: 0.1.0
+    price: 待定
+    author: NexAdmin
+    repo: zxh451200/nexadmin-plugins
+    subdir: aigateway
+    i18n:
+      en-US:
+        name: AI Gateway
+        description: 'Manage LLM provider keys and quotas in one place: per-tenant usage accounting, keys encrypted at rest, every call audited.'
   - id: assistant
     name: AI 助手
-    description: 命名会话持久化的 AI 助手，复用平台 AI 配置与审计。
+    description: 在后台直接对话的 AI 助手：会话按名字保存、随时接着聊，调用有台账可查。
     category: ai
     edition: pro
     version: 1.1.0
@@ -43,10 +58,10 @@ plugins:
     i18n:
       en-US:
         name: AI Assistant
-        description: 'Persistent named sessions built on the platform AI configuration and audit trail.'
+        description: 'Chat with AI inside the admin: named sessions are saved and resumable, and every call is audited.'
   - id: audit
     name: 数据变更审计
-    description: 按表开启，记录新增/修改/删除的字段级前后对比，敏感字段脱敏，异步批量写入。面向企业合规。
+    description: 按表开启后，谁在什么时候把哪个字段从什么改成了什么，全部留痕；敏感字段自动脱敏。
     category: security
     edition: pro
     version: 1.0.0
@@ -57,10 +72,10 @@ plugins:
     i18n:
       en-US:
         name: Data Change Audit
-        description: 'Enable per table and record field-level before/after values for inserts, updates, and deletes. Sensitive fields are masked and writes are batched asynchronously. Built for enterprise compliance.'
+        description: 'Enable per table and record who changed which field, when, from what to what. Sensitive fields are masked automatically.'
   - id: codegen
     name: 代码生成器
-    description: 免费代码生成器：读取已有业务表，或在向导里定义新表；按推荐配置生成 Go 模块、前端页面与三引擎迁移，在线预览、打包 zip 下载或直接写入项目根目录（默认不覆盖已有文件）。生成配置可按名字保存复用。
+    description: 挑一张业务表（或在向导里定义一张新表），一键生成后端模块、前端页面与数据库迁移；可先预览再下载。
     category: devops
     edition: free
     version: 1.2.0
@@ -71,10 +86,10 @@ plugins:
     i18n:
       en-US:
         name: Code Generator
-        description: 'Free code generator: read an existing business table or define a new one in the wizard; dict columns, tree tables and master-detail are supported. Generates a Go module, frontend pages and migrations for all three engines; preview online, download a zip or write straight into the project root. Generation configs can be saved and reused by name.'
+        description: 'Pick a business table (or define a new one in the wizard) and generate the Go module, frontend pages and migrations in one click. Preview first, then download or write into the project.'
   - id: crm
     name: 客户主数据
-    description: 免费基础客户主数据 + 线索商机台账：让酒店、商城等外部系统的会员对应到同一个客户；不做销售自动化。
+    description: 把散落在酒店、商城等外部系统的会员归到同一个客户档案，统一管理客户、联系人与跟进记录。
     category: business
     edition: free
     version: 0.1.0
@@ -85,10 +100,10 @@ plugins:
     i18n:
       en-US:
         name: Customer Master
-        description: 'Free basic customer master data and lead/opportunity ledger with two tables and an event contract. External anchors align hotel/mall members to one customer ID; no sales automation.'
+        description: 'Align members from external systems (hotels, malls, …) to one customer profile; manage customers, contacts and follow-ups in one ledger.'
   - id: cron
     name: 定时任务
-    description: 免费定时任务插件：5 段 cron 调度、内置安全处理器、立即执行、失败重试、执行日志，并提供工作台概览卡片。
+    description: 在后台配置定时任务：到点自动执行、失败自动重试、每次执行都有日志，控制台一目了然。
     category: devops
     edition: free
     version: 1.0.0
@@ -99,12 +114,26 @@ plugins:
     i18n:
       en-US:
         name: Scheduled Jobs
-        description: 'Free scheduled jobs: 5-field cron scheduling, built-in safe handlers, run-now, retries, execution logs, and a dashboard card.'
+        description: 'Configure scheduled jobs in the admin: run on cron, retry on failure, log every execution, with a dashboard overview card.'
     screenshots:
       - /website-assets/market/cron.jpg?v=0.9.4
+  - id: devicehub
+    name: 设备接入与监控
+    description: 把变频器、PLC 等工业设备接入后台：秒级采集、实时曲线、超限告警、远程下发指令。
+    category: devops
+    edition: pro
+    version: 0.1.0
+    price: 待定
+    author: NexAdmin
+    repo: zxh451200/nexadmin-plugins
+    subdir: devicehub
+    i18n:
+      en-US:
+        name: Device Hub
+        description: 'Connect industrial devices (inverters, PLCs, gateways) over Modbus, MQTT, S7 or OPC UA: second-level readings, live curves, threshold alerts and remote commands.'
   - id: formbuilder
     name: 表单构建器
-    description: 可视化设计表单、版本化发布、登录用户填写、服务端按发布版本重新校验、提交收集与 xlsx 导出。
+    description: 拖拽设计表单，发布后给登录用户填写；提交自动收集，一键导出 Excel。
     category: business
     edition: pro
     version: 1.0.0
@@ -115,10 +144,10 @@ plugins:
     i18n:
       en-US:
         name: Form Builder
-        description: 'Design forms visually, publish versions, collect signed-in submissions, revalidate server-side against the published version, and export to xlsx.'
+        description: 'Design forms visually and publish them to signed-in users; submissions are collected automatically and exportable to Excel.'
   - id: i18n-editor
     name: 多语言在线编辑
-    description: 多语言词条在线编辑、草稿、发布与版本回滚。
+    description: 在网页上直接改界面文案的翻译：支持草稿、发布和按版本回滚，不用改代码文件。
     category: content
     edition: pro
     version: 1.0.0
@@ -129,10 +158,10 @@ plugins:
     i18n:
       en-US:
         name: Translation Editor
-        description: 'Edit translation entries online with drafts, publishing, and version rollback.'
+        description: 'Edit UI translations in the browser with drafts, publishing and per-version rollback — no code files to touch.'
   - id: identity
     name: 身份源
-    description: 按租户独立的身份源（LDAP/AD 登录、CAS 单点登录），支持测试连接、测试用户登录与自动建号。
+    description: 按租户接入企业自己的账号体系：LDAP/AD 登录、CAS 单点登录，配置好就能用企业账号进后台。
     category: security
     edition: pro
     version: 1.0.0
@@ -143,10 +172,24 @@ plugins:
     i18n:
       en-US:
         name: Identity Sources
-        description: 'Per-tenant identity sources (LDAP/AD sign-in, CAS SSO) with connection tests, test-user sign-in, and automatic account provisioning.'
+        description: 'Per-tenant enterprise sign-in: LDAP/AD login and CAS single sign-on. Configure once and staff sign in with corporate accounts.'
+  - id: im
+    name: 在线客服
+    description: 官网站挂件的访客-坐席聊天：认领、转接、快捷回复、满意度评价、统计看板与对话导出。
+    category: business
+    edition: pro
+    version: 0.6.0
+    price: 待定
+    author: NexAdmin
+    repo: zxh451200/nexadmin-plugins
+    subdir: im
+    i18n:
+      en-US:
+        name: Live Chat
+        description: 'Visitor-to-agent chat for the corporate site widget: claiming, transfer, canned replies, satisfaction ratings, stats and conversation export.'
   - id: imports
     name: 导入中心
-    description: 免费通用 CSV / XLSX 导入：模板下载、表头映射、必填校验、逐行隔离、错误行报告、导入台账；业务模块用 RegisterSource 注册可导入的表。
+    description: 统一的 Excel/CSV 导入入口：下载模板、映射表头、自动校验；错误的行单独报告，不影响正确数据。
     category: devops
     edition: free
     version: 0.1.0
@@ -157,10 +200,10 @@ plugins:
     i18n:
       en-US:
         name: Import Center
-        description: 'Free CSV / XLSX imports with templates, header mapping, required-field validation, per-row isolation, error reports and an import ledger. Business modules register import sources through RegisterSource.'
+        description: 'One place to import Excel/CSV: download a template, map headers, validate automatically. Failed rows are reported separately and never block the good data.'
   - id: ldap
     name: LDAP/AD 登录
-    description: 免费基础 LDAP/AD 登录适配：本地密码失败后尝试 LDAP 校验，支持 LDAPS/StartTLS、服务账号、自定义过滤器与属性映射；身份映射/自动建号由框架用户模块完成，需按需安装。
+    description: 本地密码登录失败后自动尝试企业域账号（LDAP/AD）验证；支持加密连接，按需安装。
     category: security
     edition: free
     version: 0.1.0
@@ -171,10 +214,10 @@ plugins:
     i18n:
       en-US:
         name: LDAP/AD Login
-        description: 'Free basic LDAP/AD login after local password failure, with LDAPS/StartTLS, service accounts, custom filters and attribute mapping. The framework handles identity mapping and account provisioning. Install separately as needed.'
+        description: 'When the local password fails, corporate directory (LDAP/AD) credentials are tried; LDAPS/StartTLS supported. Install separately as needed.'
   - id: maps
     name: 地图服务
-    description: 免费基础地图插件：高德 / 百度 / 谷歌，三家按需启用；地图选点在前端，逆地理编码走后端代理（服务端 Key 不下发）。
+    description: 给表单和详情页加「地图选点」：支持高德、百度、谷歌三家，密钥保存在服务端不下发。
     category: devops
     edition: free
     version: 0.1.0
@@ -185,10 +228,38 @@ plugins:
     i18n:
       en-US:
         name: Map Service
-        description: 'Free basic map plugin: enable AMap, Baidu or Google as needed. Picking runs in the browser; reverse geocoding uses the backend proxy without exposing server keys.'
+        description: 'Add map location picking to forms and detail pages with AMap, Baidu or Google; keys stay on the server and never reach the browser.'
+  - id: media
+    name: 媒体优化
+    description: 给站点已有图片自动生成 WebP 压缩版：浏览器支持就自动用小图，原图不受影响；视频沿用原片播放。
+    category: content
+    edition: pro
+    version: 0.1.0
+    price: 待定
+    author: NexAdmin
+    repo: zxh451200/nexadmin-plugins
+    subdir: media
+    i18n:
+      en-US:
+        name: Media Optimizer
+        description: 'Bulk-generate WebP copies of existing images: browsers get the smaller version via Accept negotiation, originals stay untouched. Videos keep direct playback.'
+  - id: pay
+    name: 支付中台
+    description: 统一对接支付宝、微信支付等渠道：支付、退款、对账、代付一条龙，资金动作全部留痕可回查。
+    category: business
+    edition: pro
+    version: 0.1.0
+    price: 待定
+    author: NexAdmin
+    repo: zxh451200/nexadmin-plugins
+    subdir: pay
+    i18n:
+      en-US:
+        name: Payments
+        description: 'One hub for Alipay, WeChat Pay and more: payments, refunds, reconciliation, payouts and settlements — every money movement recorded and traceable.'
   - id: realname
     name: 证件实名
-    description: 免费基础证件能力：身份证号格式校验与归属地/生日/性别解析、二要素在线核验（厂商 provider 默认关闭，密钥只存服务端）、核验结论台账留痕（只存摘要与脱敏串，不落明文）。
+    description: 身份证号校验与实名二要素核验（姓名 + 证件号）：核验结果留台账，明文不落库，按需安装。
     category: identity
     edition: free
     version: 0.1.0
@@ -199,10 +270,10 @@ plugins:
     i18n:
       en-US:
         name: ID Verification
-        description: 'Free basic ID-card capability: validates mainland resident ID numbers and parses region, birthday and sex; optional two-element name-number verification through a pluggable provider that is off by default with secrets kept server-side; the ledger stores only digests and masked values.'
+        description: 'Validate mainland resident ID numbers and verify name-ID pairs through a pluggable provider (off by default). The ledger stores digests only, never plain values.'
   - id: report
     name: 报表中心
-    description: 报表中心 + 数据大屏（结构化数据集、参数化查询、租户与数据范围隔离；图表/表格/指标卡；画布式大屏；报表订阅提醒）。
+    description: 自助做报表和数据大屏：选数据源、拖字段、出图表；支持定时订阅提醒与全屏投放。
     category: business
     edition: pro
     version: 1.1.0
@@ -213,10 +284,10 @@ plugins:
     i18n:
       en-US:
         name: Reporting Center
-        description: 'Reports and data walls: structured datasets, parameterized queries, tenant and data-scope isolation, charts, tables, metric cards, and a canvas-style dashboard.'
+        description: 'Build reports and data walls yourself: pick a dataset, drag fields, get charts. Scheduled subscriptions and fullscreen display included.'
   - id: saml
     name: SAML 单点登录
-    description: 企业 IdP 单点登录（SAML 2.0 SP）：导入或按 URL 拉取 IdP 元数据，SP 元数据 / ACS / 证书可复制下载，多 IdP 打包选择、元数据定时刷新、SP 证书两段式轮换、要求加密断言、属性与组→角色映射、登录时按组同步角色、元数据签名校验与内网 CA、SP Entity ID 覆盖、自有 SP 证书导入与元数据签名、配置自检、IdP 发起登录与登出（含深链与 SessionIndex 粒度）、登录时同步资料、自动建号/绑定。
+    description: 接企业 IdP（Okta、Azure AD 等）实现单点登录与登出：导入元数据即可用，支持证书轮换与组到角色的映射。
     category: identity
     edition: pro
     version: 0.9.0
@@ -227,10 +298,10 @@ plugins:
     i18n:
       en-US:
         name: SAML Single Sign-On
-        description: 'Enterprise IdP sign-in (SAML 2.0 SP): import or fetch IdP metadata, copy/download SP metadata, ACS and certificate, choose from bundled multi-IdP metadata, auto-refresh metadata, two-step SP certificate rollover, require encrypted assertions, map attributes and groups to roles, sync roles on sign-in, verify metadata signatures and trust a private CA, override the SP Entity ID, import your own SP certificate, sign SP metadata, self-test, IdP-initiated login and logout (deep links, SessionIndex-aware), profile sync on login, auto-create or link accounts.'
+        description: 'Single sign-on and logout with enterprise IdPs (Okta, Azure AD, …): import metadata to start. Certificate rollover and group-to-role mappings included.'
   - id: scim
     name: SCIM 用户同步
-    description: 企业身份平台 SCIM 2.0 用户同步。
+    description: 企业身份平台（Okta 等）里建号或停用，后台账号自动跟着同步（SCIM 2.0）。
     category: security
     edition: pro
     version: 1.0.0
@@ -241,10 +312,10 @@ plugins:
     i18n:
       en-US:
         name: SCIM Provisioning
-        description: 'SCIM 2.0 user provisioning for enterprise identity platforms.'
+        description: 'Accounts created or deactivated in your identity platform (Okta, …) sync to the admin automatically via SCIM 2.0.'
   - id: security
     name: 高级安全
-    description: 二次验证 TOTP + 一次性恢复码、强制策略与宽限期、登录 IP 黑白名单。
+    description: 给后台加二次验证（动态口令）、强制安全策略与登录 IP 黑白名单。
     category: security
     edition: pro
     version: 1.0.0
@@ -255,10 +326,24 @@ plugins:
     i18n:
       en-US:
         name: Advanced Security
-        description: 'TOTP two-factor authentication with one-time recovery codes, enforced policies with a grace period, and login IP allow and deny lists.'
+        description: 'Add two-factor authentication (TOTP), enforced security policies with a grace period, and login IP allow/deny lists.'
+  - id: ticket
+    name: 工单中心
+    description: 客户问题的提交、分派、处理、关闭全流程：SLA 时限、内部备注、附件与满意度回访。
+    category: business
+    edition: pro
+    version: 0.1.0
+    price: 待定
+    author: NexAdmin
+    repo: zxh451200/nexadmin-plugins
+    subdir: ticket
+    i18n:
+      en-US:
+        name: Ticket Center
+        description: 'The full lifecycle for customer issues: triage, assignment and closure with SLA timers, internal notes, attachments and satisfaction follow-ups.'
   - id: totp
     name: 两步验证
-    description: 免费基础两步验证（RFC 6238，兼容 Google Authenticator）：绑定验证器、登录二次验证、步长防重放，通过 LoginGate 接入；需按需安装。
+    description: 登录时加一道动态口令（兼容 Google Authenticator 等验证器 App），按需安装。
     category: security
     edition: free
     version: 0.1.0
@@ -269,10 +354,10 @@ plugins:
     i18n:
       en-US:
         name: Two-Factor Authentication
-        description: 'Free basic RFC 6238 TOTP compatible with Google Authenticator: enrollment, login verification and time-step replay protection via LoginGate. Install separately as needed.'
+        description: 'Require a one-time code at sign-in (works with Google Authenticator and similar apps). Install separately as needed.'
   - id: website
     name: 企业官网
-    description: 匿名公开官网（服务端渲染、SEO 友好）+ 后台内容管理与官网插件市场入口。
+    description: 即装即用的企业官网（你正在看的这个站）：访客免登录浏览，后台直接改文案、新闻与产品。
     category: content
     edition: pro
     version: 0.6.0
@@ -283,6 +368,62 @@ plugins:
     i18n:
       en-US:
         name: Corporate Website
-        description: 'A public, anonymous, server-rendered site with SEO support, admin content management, and a plugin marketplace entry point.'
+        description: 'A ready-to-use corporate website (the one you are reading): anonymous public pages, content managed from the admin — copy, news and products.'
     screenshots:
       - /website-assets/market/website.jpg?v=0.9.4
+  - id: website-theme-torkon
+    name: 官网主题 · TORKON 工业工具
+    description: 深红黑工业风格官网主题：复刻 TORKON 参考稿的首页区块、产品选型表与全站模板，附带演示内容一键导入。需配合官网插件（website）使用，安装后在官网设置里切换主题。
+    category: content
+    edition: free
+    version: 1.0.0
+    price: 免费
+    author: NexAdmin
+    repo: zxh451200/nexadmin-plugins
+    subdir: website-theme-torkon
+    i18n:
+      en-US:
+        name: Site Theme · TORKON Industrial
+        description: 'Industrial red-and-black site theme replicating the TORKON reference homepage, selection table and full page templates, with one-click demo content. Requires the website plugin; switch it in site settings.'
+  - id: website-theme-auvex
+    name: 官网主题 · AUVEX 数控机床
+    description: 深蓝黑精密制造风格官网主题：复刻 AUVEX 参考稿的机床精选、技术蓝图、行业方案与案例区块，附带演示内容一键导入。需配合官网插件（website）使用。
+    category: content
+    edition: free
+    version: 1.0.0
+    price: 免费
+    author: NexAdmin
+    repo: zxh451200/nexadmin-plugins
+    subdir: website-theme-auvex
+    i18n:
+      en-US:
+        name: Site Theme · AUVEX Machinery
+        description: 'Navy-and-blue precision-manufacturing theme replicating the AUVEX reference homepage (machine showcase, technology blueprint, industries and cases), with one-click demo content. Requires the website plugin.'
+  - id: website-theme-solaris
+    name: 官网主题 · SOLARIS 储能系统
+    description: 清爽绿白清洁能源风格官网主题：复刻 SOLARIS 参考稿的解决方案、应用场景、工作原理与洞察区块，附带演示内容一键导入。需配合官网插件（website）使用。
+    category: content
+    edition: free
+    version: 1.0.0
+    price: 免费
+    author: NexAdmin
+    repo: zxh451200/nexadmin-plugins
+    subdir: website-theme-solaris
+    i18n:
+      en-US:
+        name: Site Theme · Solaris Energy
+        description: 'Green-and-white clean-energy theme replicating the SOLARIS reference homepage (solutions, applications, how-it-works and insights), with one-click demo content. Requires the website plugin.'
+  - id: workflow
+    name: 工作流
+    description: 可视化画审批流程（BPMN）：或签/会签、超时自动升级、撤回与回退，实例全程可查。
+    category: business
+    edition: pro
+    version: 0.2.0
+    price: 待定
+    author: NexAdmin
+    repo: zxh451200/nexadmin-plugins
+    subdir: workflow
+    i18n:
+      en-US:
+        name: Workflow
+        description: 'Draw approval flows visually (BPMN): any-sign and counter-sign, timeout escalation, withdrawal and rollback — every instance traceable.'

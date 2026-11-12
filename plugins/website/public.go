@@ -78,6 +78,7 @@ func (h *siteHandler) baseView(ctx context.Context, lang string, postLimit int) 
 		FaviconURL: set.FaviconURL, OgImageURL: set.OgImageURL,
 		HeadCode:    template.HTML(set.HeadCode),
 		TitleSuffix: set.TitleSuffix, HomeSlug: set.HomeSlug,
+		ThemeID:     set.Theme,
 		HomeTitle:   set.HomeTitle, HomeSubtitle: set.HomeSubtitle,
 		HomeCTALabel: set.HomeCTALabel, HomeCTAHref: set.HomeCTAHref,
 		ContactEmail: set.ContactEmail, ContactPhone: set.ContactPhone,
@@ -109,7 +110,9 @@ func (v *siteView) composeTitle(pageTitle string) string {
 }
 
 func (h *siteHandler) render(c *gin.Context, name string, status int, v *siteView) {
-	t, ok := pageTmpl[name]
+	// 模板集按站点设置的主题选；主题被卸载/设置残留时 themePackFor 回退 default，
+	// 站点永远可访问（宁可样式退回内置，也不给访客看 500）。
+	t, ok := themePackFor(v.ThemeID)[name]
 	if !ok {
 		c.String(http.StatusInternalServerError, "template %q missing", name)
 		return
@@ -176,6 +179,16 @@ func (h *siteHandler) home(c *gin.Context) {
 	// 标题用首页主标题（两行合成一行），比整段站点描述更适合 <title> 与搜索结果。
 	v.Title = homePageTitle(v.SiteName, v.HomeTitle, v.SiteDesc)
 	v.Desc = v.SiteDesc
+	// 品牌主题的首页消费产品与类目（精选商品导轨 / 分类导航）；default 首页不用这两个
+	// 字段，所以只在选了主题时多查这两次，不给未换肤的站点加成本。
+	if v.ThemeID != "" {
+		if products, _, perr := h.svc.PublishedProductsPage(c.Request.Context(), lang.Code, termFilter{}, 1, 8); perr == nil {
+			v.Products = products
+		}
+		if cats, cerr := h.svc.ListProductCategories(c.Request.Context()); cerr == nil {
+			v.ProductCategories = ProductCategoryLinks(cats, "")
+		}
+	}
 	if v.MarketEnabled {
 		v.FeaturedPlugins = marketCards(featuredEntries(h.marketEntries(), 3), h.marketStats(c.Request.Context()), lang.Code)
 	}
@@ -628,6 +641,10 @@ func (h *siteHandler) asset(c *gin.Context) {
 		h.mediaAsset(c, rest)
 		return
 	}
+	if rest, ok := strings.CutPrefix(p, "theme/"); ok {
+		h.themeAsset(c, rest)
+		return
+	}
 	sub, err := fs.Sub(staticFS, "static")
 	if err != nil {
 		c.String(http.StatusInternalServerError, "asset unavailable")
@@ -643,6 +660,32 @@ func (h *siteHandler) asset(c *gin.Context) {
 		ctype = "application/octet-stream"
 	}
 	// 文件名带内容版本号（site.css?v=0.6.0），可安全长缓存；插件升级会换版本号。
+	c.Header("Cache-Control", "public, max-age=3600")
+	c.Data(http.StatusOK, ctype, b)
+}
+
+// themeAsset 服务主题插件内嵌的静态资源：rest 是 "<themeID>/<file>"。
+// 缓存口径与 default 相同（文件名带内容哈希版本时可长缓存）。
+func (h *siteHandler) themeAsset(c *gin.Context, rest string) {
+	id, file, ok := strings.Cut(rest, "/")
+	if !ok || file == "" || strings.Contains(file, "..") {
+		c.String(http.StatusNotFound, "not found")
+		return
+	}
+	t := lookupTheme(id)
+	if t == nil {
+		c.String(http.StatusNotFound, "not found")
+		return
+	}
+	b, err := fs.ReadFile(t.FS, "static/"+file)
+	if err != nil {
+		c.String(http.StatusNotFound, "not found")
+		return
+	}
+	ctype := assetTypes[strings.ToLower(path.Ext(file))]
+	if ctype == "" {
+		ctype = "application/octet-stream"
+	}
 	c.Header("Cache-Control", "public, max-age=3600")
 	c.Data(http.StatusOK, ctype, b)
 }

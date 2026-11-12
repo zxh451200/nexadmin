@@ -1,0 +1,46 @@
+{{define "content"}}
+<section class="sl-section sl-pagehead">
+  <div class="sl-wrap">
+    <p class="sl-eyebrow">{{.T "products.fig"}}</p>
+    <h1 class="sl-page-title">{{if .ProductTermName}}{{.TF "products.categoryTitleTag" .ProductTermName}}{{else}}{{.T "products.title"}}{{end}}</h1>
+    {{if .ProductCategories}}
+    <nav class="sl-chips term-nav" aria-label="{{.T "products.categoryNavAria"}}">
+      <a class="sl-chip{{if not .ProductTermName}} active{{end}}" href="{{.URL "/products"}}">{{.T "products.allProducts"}}</a>
+      {{range .ProductCategories}}<a class="sl-chip{{if .Active}} active{{end}}" href="{{$.URL "/products"}}?category={{.Slug}}"{{if .Active}} aria-current="true"{{end}}>{{.Name}}</a>{{end}}
+    </nav>
+    {{end}}
+  </div>
+</section>
+<section class="sl-section sl-listbody">
+  <div class="sl-wrap">
+    {{if .Products}}
+    <div class="sl-product-grid">
+      {{range .Products}}
+      <a class="sl-product-card" href="{{$.URL "/products"}}/{{.Slug}}" data-reveal>
+        {{if hasPrefix .Keywords "new"}}<span class="sl-badge sl-badge-new">{{$.T "theme.solaris.badgeNew"}}</span>
+        {{else if hasPrefix .Keywords "hot"}}<span class="sl-badge sl-badge-hot">{{$.T "theme.solaris.badgeHot"}}</span>{{end}}
+        <span class="sl-product-cover"><img src="{{.CoverURL}}" alt="{{.Title}}" loading="lazy"></span>
+        <span class="sl-product-model">{{specOf . "型号" "Model"}}</span>
+        <span class="sl-product-name">{{.Title}}</span>
+        {{if .Summary}}<span class="sl-product-summary">{{.Summary}}</span>{{end}}
+        {{if .Categories}}<span class="sl-product-terms">{{range .Categories}}<span class="sl-term-badge">{{.Title}}</span>{{end}}</span>{{end}}
+        {{if .PriceMin}}<span class="sl-product-price">
+          {{if and .PriceMax (gt .PriceMax .PriceMin)}}{{printf "%.2f" .PriceMin}} - {{printf "%.2f" .PriceMax}}{{else}}{{printf "%.2f" .PriceMin}}{{end}} {{.Currency}}{{if .PriceUnit}} / {{.PriceUnit}}{{end}}
+        </span>{{end}}
+        <span class="sl-product-more">{{$.T "theme.solaris.viewProduct"}} <span aria-hidden="true">→</span></span>
+      </a>
+      {{end}}
+    </div>
+    {{else}}
+    <p class="sl-empty">{{.T "products.empty"}}</p>
+    {{end}}
+    {{if gt .ProductsTotalPages 1}}
+    <nav class="sl-pager" aria-label="{{.T "products.pagerAria"}}">
+      {{if .ProductsPrevURL}}<a class="sl-pager-link" rel="prev" href="{{.ProductsPrevURL}}">← {{.T "products.prev"}}</a>{{end}}
+      <span class="sl-pager-status">{{.TF "products.pageOf" .ProductsPage .ProductsTotalPages}}</span>
+      {{if .ProductsNextURL}}<a class="sl-pager-link" rel="next" href="{{.ProductsNextURL}}">{{.T "products.next"}} →</a>{{end}}
+    </nav>
+    {{end}}
+  </div>
+</section>
+{{end}}

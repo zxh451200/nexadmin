@@ -27,6 +27,9 @@ import (
 	_ "nexadmin/plugins/ticket"
 	_ "nexadmin/plugins/totp"
 	_ "nexadmin/plugins/website"
+	_ "nexadmin/plugins/website-theme-auvex"
+	_ "nexadmin/plugins/website-theme-solaris"
+	_ "nexadmin/plugins/website-theme-torkon"
 	_ "nexadmin/plugins/workflow"
 	// nexadmin:plugins:end
 )

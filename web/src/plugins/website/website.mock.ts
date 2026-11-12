@@ -33,6 +33,7 @@ const settings: SiteSettings = {
   contactConsent: false,
   contactConsentUrl: '',
   i18nJson: '',
+  theme: '',
   updatedAt: ago(60 * 24),
 }
 
@@ -464,6 +465,25 @@ defineMock([
     },
   },
   { method: 'GET', url: '/plugins/website/settings', handler: () => settings },
+  {
+    // 主题清单：default 恒在最前；hasDemo 与后端注册表一致（演示内容插件带 seed）。
+    method: 'GET',
+    url: '/plugins/website/themes',
+    handler: () => ({
+      theme: settings.theme ?? '',
+      items: [
+        { id: 'default', label: '默认主题', version: '', hasDemo: false, active: (settings.theme ?? '') === '' },
+        { id: 'torkon', label: 'TORKON 工业工具', version: '1.0.0', hasDemo: true, active: settings.theme === 'torkon' },
+        { id: 'auvex', label: 'AUVEX 数控机床', version: '1.0.0', hasDemo: true, active: settings.theme === 'auvex' },
+        { id: 'solaris', label: 'SOLARIS 储能系统', version: '1.0.0', hasDemo: true, active: settings.theme === 'solaris' },
+      ],
+    }),
+  },
+  {
+    method: 'POST',
+    url: '/plugins/website/themes/:id/seed-demo',
+    handler: () => ({ settings: 0, navs: 0, features: 0, categories: 0, pages: 0, posts: 0, productCategories: 0, products: 0, skipped: 0 }),
+  },
   {
     // 与后端出厂值一致：图片 2MB + 位图四类、社交 12、友链 20、导航 3 级、单篇标签 20。
     // 真机上图片大小这一项会跟着系统参数「上传限制」变。

@@ -1,0 +1,77 @@
+{{define "content"}}
+<article class="tk-section tk-article">
+  <div class="tk-wrap tk-article-in">
+    <header class="tk-article-head">
+      {{if .Product.Categories}}
+      <p class="tk-article-term">
+        <span class="tk-article-term-label">{{.T "products.categoryLabel"}}</span>
+        {{range .Product.Categories}}<a class="tk-chip" href="{{$.URL "/products"}}?category={{.Slug}}">{{.Title}}</a>{{end}}
+      </p>
+      {{end}}
+      <h1 class="tk-page-title">{{.Product.Title}}</h1>
+      {{if .Product.PriceMin}}
+      <p class="tk-price-line">
+        <span class="tk-price">
+          {{if and .Product.PriceMax (gt .Product.PriceMax .Product.PriceMin)}}{{printf "%.2f" .Product.PriceMin}} - {{printf "%.2f" .Product.PriceMax}}{{else}}{{printf "%.2f" .Product.PriceMin}}{{end}}
+          {{.Product.Currency}}{{if .Product.PriceUnit}} / {{.Product.PriceUnit}}{{end}}
+        </span>
+      </p>
+      {{end}}
+      {{if .Product.Summary}}<p class="tk-article-lede">{{.Product.Summary}}</p>{{end}}
+    </header>
+    {{if or .Product.CoverURL .Product.ProductImages}}
+    <div class="tk-gallery" data-product-gallery>
+      {{if .Product.CoverURL}}<img class="tk-gallery-main" src="{{.Product.CoverURL}}" alt="{{.Product.Title}}">{{end}}
+      {{range .Product.ProductImages}}<button type="button" class="tk-gallery-thumb" data-gallery-src="{{.}}" aria-label="{{$.T "products.galleryThumbAria"}}"><img src="{{.}}" alt="" loading="lazy"></button>{{end}}
+    </div>
+    {{end}}
+    {{if .Product.VideoURL}}
+      {{if isMediaURL .Product.VideoURL}}
+      <video class="tk-video" src="{{.Product.VideoURL}}" controls preload="metadata"></video>
+      {{else}}
+      <p class="tk-video-link"><a class="tk-chip" href="{{.Product.VideoURL}}" target="_blank" rel="noopener">{{.T "products.watchVideo"}}</a></p>
+      {{end}}
+    {{end}}
+    {{if or .Product.PaymentTerms .Product.Moq .Product.LeadTimeDays .Product.Port}}
+    <table class="tk-table tk-spec-table">
+      <caption>{{.T "products.tradeTitle"}}</caption>
+      <tbody>
+        {{if .Product.PaymentTerms}}<tr><th scope="row">{{.T "products.paymentTerms"}}</th><td>{{.Product.PaymentTerms}}</td></tr>{{end}}
+        {{if .Product.Moq}}<tr><th scope="row">{{.T "products.moqLabel"}}</th><td>{{.Product.Moq}}</td></tr>{{end}}
+        {{if .Product.LeadTimeDays}}<tr><th scope="row">{{.T "products.leadTimeLabel"}}</th><td>{{.TF "products.leadTime" .Product.LeadTimeDays}}</td></tr>{{end}}
+        {{if .Product.Port}}<tr><th scope="row">{{.T "products.portLabel"}}</th><td>{{.Product.Port}}</td></tr>{{end}}
+      </tbody>
+    </table>
+    {{end}}
+    {{if .Product.ProductSpecs}}
+    <table class="tk-table tk-spec-table">
+      <caption>{{.T "products.specsTitle"}}</caption>
+      <tbody>
+        {{range .Product.ProductSpecs}}
+        <tr><th scope="row">{{.Label}}</th><td>{{.Value}}</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{end}}
+    {{if .Product.Content}}<div class="tk-article-body">{{safeHTML .Product.Content}}</div>{{end}}
+    {{if .ProductsRelated}}
+    <section class="tk-related" aria-labelledby="tk-related-title">
+      <h2 id="tk-related-title">{{.T "products.relatedTitle"}}</h2>
+      <div class="tk-product-grid">
+        {{range .ProductsRelated}}
+        <a class="tk-product-card" href="{{$.URL "/products"}}/{{.Slug}}">
+          <span class="tk-product-cover"><img src="{{.CoverURL}}" alt="" loading="lazy"></span>
+          <span class="tk-product-name">{{.Title}}</span>
+          {{if .PriceMin}}<span class="tk-product-price">{{printf "%.2f" .PriceMin}} {{.Currency}}{{if .PriceUnit}} / {{.PriceUnit}}{{end}}</span>{{end}}
+        </a>
+        {{end}}
+      </div>
+    </section>
+    {{end}}
+    <footer class="tk-article-terms">
+      <p class="tk-article-term"><span class="tk-article-term-label">{{.T "products.inquiryLabel"}}</span><a class="tk-btn tk-btn-red" href="{{.URL "/contact"}}">{{.T "products.inquiryCta"}}</a></p>
+    </footer>
+    <p class="tk-back"><a href="{{.URL "/products"}}">← {{.T "products.back"}}</a></p>
+  </div>
+</article>
+{{end}}

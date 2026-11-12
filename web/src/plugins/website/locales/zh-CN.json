@@ -9,12 +9,14 @@
       "posts": "新闻管理",
       "products": "产品管理",
       "productCategories": "产品类目",
-      "messages": "留言管理"
+      "messages": "留言管理",
+      "openSite": "打开官网"
     },
     "settings": {
       "title": "站点设置",
       "desc": "站点名称、首页文案、联系与页脚信息；保存后官网即时生效",
       "section": {
+        "theme": "公开站主题",
         "identity": "站点身份",
         "home": "首页文案",
         "seo": "搜索与分享",
@@ -23,6 +25,9 @@
         "market": "插件市场"
       },
       "emailInvalid": "邮箱格式不正确",
+      "defaultTheme": "默认主题",
+      "demoImport": "导入演示内容",
+      "demoImported": "演示内容导入完成：新增 {{total}} 条，跳过已存在 {{skipped}} 条",
       "homeBuiltin": "内置首页（Hero 页）",
       "unsaved": "有未保存的修改",
       "socials": "社交图标",
@@ -31,7 +36,8 @@
       "friendLinks": "友情链接",
       "friendName": "站点名称",
       "friendUrl": "链接地址",
-      "addFriendLink": "添加友情链接"
+      "addFriendLink": "添加友情链接",
+      "demoImportWarn": "将写入该品牌的示例产品与新闻（只增不删），并整体替换站点名称、首页文案、导航与首页特性卡片等品牌门面内容；可重复执行。"
     },
     "social": {
       "github": "GitHub",
@@ -320,6 +326,7 @@
     "publishedOn": "已发布",
     "publishedOff": "草稿",
     "fields": {
+      "theme": "公开站主题",
       "siteName": "站点名称",
       "siteDesc": "站点描述（SEO）",
       "logoUrl": "Logo 地址",
@@ -362,6 +369,7 @@
       "ogImageHint": "链接发到微信、X 这类聊天软件时，卡片上显示的就是这张图；留空用站点默认分享图",
       "ogHint": "建议 1200×630，上传后按此比例裁剪",
       "coverInvalid": "地址要写全：https:// 开头，或以 / 开头的站内路径",
+      "slugAuto": "留空自动按标题生成",
       "summary": "摘要",
       "content": "正文",
       "published": "发布状态",
@@ -386,6 +394,8 @@
       "ogImageUrl": "内容没配分享图时的兜底图，建议 1200×630；留空使用内置分享图",
       "headCode": "原样注入每个页面的 <head>（GA / 百度统计 / 站点验证）；仅站点设置管理员可配，脚本内容由其自行负责，限 5000 字符",
       "titleSuffix": "拼在页面标题之后替换「 - 站点名」；留空使用站点名",
+      "theme": "主题由主题插件提供，保存设置后官网立即换肤；主题插件被卸载时自动回退默认主题，站点不断线",
+      "demoImport": "写入该品牌的示例产品与新闻（只增不删），并整体替换站点名称/首页文案/导航/特性卡片等品牌门面内容；可重复执行",
       "homeSlug": "选一张自定义单页作为官网首页（替换内置 Hero 页）；页面删除或未发布时自动回退内置首页，草稿页发布后即生效",
       "qrCodeUrl": "展示在页脚与联系页；留空则不显示二维码",
       "socials": "页脚与联系页的社交图标；最多 {{max}} 个，支持 https:// 与 mailto:",

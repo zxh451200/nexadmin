@@ -1,0 +1,8 @@
+id: website-theme-auvex
+name: 官网主题 · AUVEX 数控机床
+version: 1.0.0
+description: 深蓝黑精密制造风格官网主题：复刻 AUVEX 参考稿的首页区块（机床精选/技术蓝图/行业方案/案例）与全站模板，附带演示内容一键导入。需与官网插件（website）配合使用，安装后在官网设置里切换主题。
+author: NexAdmin
+edition: free
+requires_nexadmin: ">=0.1.0"
+migration_target: platform

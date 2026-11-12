@@ -9,12 +9,14 @@
       "posts": "News",
       "products": "Products",
       "productCategories": "Product categories",
-      "messages": "Messages"
+      "messages": "Messages",
+      "openSite": "Open website"
     },
     "settings": {
       "title": "Site settings",
       "desc": "Site name, home copy, contact details and footer; changes go live immediately",
       "section": {
+        "theme": "Public site theme",
         "identity": "Site identity",
         "home": "Home copy",
         "seo": "Search & sharing",
@@ -23,6 +25,9 @@
         "market": "Plugin market"
       },
       "emailInvalid": "Invalid email address.",
+      "defaultTheme": "Default theme",
+      "demoImport": "Import demo content",
+      "demoImported": "Demo content imported: {{total}} added, {{skipped}} existing skipped",
       "homeBuiltin": "Built-in home (hero page)",
       "unsaved": "Unsaved changes",
       "socials": "Social icons",
@@ -31,7 +36,8 @@
       "friendLinks": "Friend links",
       "friendName": "Site name",
       "friendUrl": "URL",
-      "addFriendLink": "Add friend link"
+      "addFriendLink": "Add friend link",
+      "demoImportWarn": "Writes the brand's sample products and news (insert-only), and replaces brand identity content entirely: site name, home copy, navigation and feature cards; safe to repeat."
     },
     "social": {
       "github": "GitHub",
@@ -320,6 +326,7 @@
     "publishedOn": "Published",
     "publishedOff": "Draft",
     "fields": {
+      "theme": "Public site theme",
       "siteName": "Site name",
       "siteDesc": "Site description (SEO)",
       "logoUrl": "Logo URL",
@@ -362,6 +369,7 @@
       "ogImageHint": "The picture shown in the link preview card on WeChat, X and similar chat apps; leave empty to use the site default",
       "ogHint": "1200×630 recommended; uploads are cropped to that ratio",
       "coverInvalid": "Use a full URL (https://…) or a site path starting with /",
+      "slugAuto": "Leave blank to generate from the title",
       "summary": "Summary",
       "content": "Content",
       "published": "Published",
@@ -386,6 +394,8 @@
       "ogImageUrl": "Fallback share image when content has none, 1200×630 recommended; leave empty to use the built-in one",
       "headCode": "Injected as-is into every page's <head> (GA / Baidu Analytics / site verification); configurable only by site-settings admins who own the script content, limited to 5000 characters",
       "titleSuffix": "Appended after page titles, replacing \" - SiteName\"; leave empty to use the site name",
+      "theme": "Themes come from theme plugins and take effect right after saving; when a theme plugin is uninstalled the site falls back to the default theme without downtime",
+      "demoImport": "Writes the brand's sample products and news (insert-only), and replaces brand identity (site name / home copy / navigation / feature cards); safe to repeat",
       "homeSlug": "Pick a custom page to serve as the site homepage (replaces the built-in hero page). Deleted or unpublished pages fall back to the built-in home; a draft takes effect once published",
       "qrCodeUrl": "Shown in the footer and on the contact page; leave empty to hide the QR code",
       "socials": "Social icons in the footer and on the contact page; up to {{max}}, https:// or mailto:",

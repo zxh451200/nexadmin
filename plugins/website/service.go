@@ -26,6 +26,7 @@ import (
 	"nexadmin/pkg/htmlsafe"
 	pi18n "nexadmin/pkg/i18n"
 	"nexadmin/pkg/idgen"
+	"nexadmin/pkg/slug"
 )
 
 // Service 是官网内容业务层：站点设置（单行）、导航、特性、页面、新闻的 CRUD 与公开页数据装配。
@@ -265,6 +266,12 @@ func (s *Service) SaveSettings(ctx context.Context, f SettingForm) (*Setting, er
 		if n == 0 {
 			return nil, response.BadRequest("website.home_slug_missing")
 		}
+	}
+	// 主题只存 id：主题插件被卸载时渲染自动回退 default（站点不断线），
+	// 保存时校验当前进程里已注册，防止手滑把名字敲错导致设置「看起来生效其实没换」。
+	row.Theme = trimLen(f.Theme, 64)
+	if !themeRegistered(row.Theme) {
+		return nil, response.BadRequest("website.theme_not_found")
 	}
 	socials, err := normalizeSocials(f.Socials)
 	if err != nil {
@@ -631,11 +638,12 @@ func (s *Service) SavePage(ctx context.Context, id idgen.ID, f PageForm) (*Page,
 	f.SeoTitle = trimLen(f.SeoTitle, 200)
 	f.SeoDesc = trimLen(f.SeoDesc, 300)
 	f.OgImage = trimLen(f.OgImage, 255)
-	if err := ValidateSlug(f.Slug); err != nil {
-		return nil, err
-	}
 	if f.Title == "" {
 		return nil, response.BadRequest("website.page_title_required")
+	}
+	slugOut, err := s.resolveSlug(ctx, &Page{}, f.Slug, f.Title, id)
+	if err != nil {
+		return nil, err
 	}
 	var row Page
 	if id != 0 {
@@ -649,7 +657,10 @@ func (s *Service) SavePage(ctx context.Context, id idgen.ID, f PageForm) (*Page,
 	if err != nil {
 		return nil, response.BadRequest("website.i18n_invalid").Wrap(err)
 	}
-	row.Slug, row.Title, row.SeoTitle, row.SeoDesc = f.Slug, f.Title, f.SeoTitle, f.SeoDesc
+	if slugOut != "" {
+		row.Slug = slugOut
+	}
+	row.Title, row.SeoTitle, row.SeoDesc = f.Title, f.SeoTitle, f.SeoDesc
 	row.OgImage, row.Noindex, row.Sort = f.OgImage, f.NoIndex, f.Sort
 	row.Content, row.Published, row.I18nJSON = htmlsafe.Sanitize(f.Content), f.Published, i18n
 	pub, err := pi18n.NormalizePublish(f.PublishedJSON, f.Published, pi18n.ParseDoc(i18n),
@@ -756,14 +767,9 @@ func (s *Service) freePageSlug(ctx context.Context, base string) (string, error)
 }
 
 // truncateSlug 把 slug 收进列宽（64）内；截到空串就回退 fallback，保证仍是合法 slug。
+// 规则统一收敛在 pkg/slug（行业标准：限长、去尾部悬空连字符），这里只是旧调用点的别名。
 func truncateSlug(s, fallback string) string {
-	if len(s) > 64 {
-		s = strings.TrimRight(s[:64], "-")
-	}
-	if s == "" {
-		s = fallback
-	}
-	return s
+	return slug.Clamp(s, slug.MaxLen, fallback)
 }
 
 func (s *Service) ListPosts(ctx context.Context, q ContentQuery) ([]Post, int64, error) {
@@ -789,11 +795,12 @@ func (s *Service) SavePost(ctx context.Context, id idgen.ID, f PostForm) (*Post,
 	f.SeoDesc = trimLen(f.SeoDesc, 300)
 	f.SeoKeywords = trimLen(f.SeoKeywords, 300)
 	f.CoverURL = trimLen(f.CoverURL, 255)
-	if err := ValidateSlug(f.Slug); err != nil {
-		return nil, err
-	}
 	if f.Title == "" {
 		return nil, response.BadRequest("website.post_title_required")
+	}
+	slugOut, err := s.resolveSlug(ctx, &Post{}, f.Slug, f.Title, id)
+	if err != nil {
+		return nil, err
 	}
 	// 标签上限先挡住：超出的部分静默丢弃会让人以为都打上了。
 	if len(f.Tags) > maxTagsPerPost {
@@ -830,7 +837,10 @@ func (s *Service) SavePost(ctx context.Context, id idgen.ID, f PostForm) (*Post,
 	if err != nil {
 		return nil, response.BadRequest("website.i18n_invalid").Wrap(err)
 	}
-	row.Slug, row.Title, row.CoverURL, row.SeoDesc = f.Slug, f.Title, f.CoverURL, f.SeoDesc
+	if slugOut != "" {
+		row.Slug = slugOut
+	}
+	row.Title, row.CoverURL, row.SeoDesc = f.Title, f.CoverURL, f.SeoDesc
 	row.SeoKeywords, row.SeoTitle, row.Noindex = f.SeoKeywords, f.SeoTitle, f.NoIndex
 	row.Author, row.Pinned = trimLen(f.Author, 64), f.Pinned
 	row.Content, row.Published, row.I18nJSON = htmlsafe.Sanitize(f.Content), f.Published, i18n
@@ -960,11 +970,12 @@ func (s *Service) ListCategories(ctx context.Context) ([]Category, error) {
 func (s *Service) SaveCategory(ctx context.Context, id idgen.ID, f CategoryForm) (*Category, error) {
 	f.Title = trimLen(f.Title, 100)
 	f.Slug = strings.TrimSpace(f.Slug)
-	if err := ValidateSlug(f.Slug); err != nil {
-		return nil, err
-	}
 	if f.Title == "" {
 		return nil, response.BadRequest("website.category_title_required")
+	}
+	slugOut, err := s.resolveSlug(ctx, &Category{}, f.Slug, f.Title, id)
+	if err != nil {
+		return nil, err
 	}
 	var row Category
 	if id != 0 {
@@ -974,7 +985,10 @@ func (s *Service) SaveCategory(ctx context.Context, id idgen.ID, f CategoryForm)
 	} else {
 		row = Category{}
 	}
-	row.Title, row.Slug, row.Sort = f.Title, f.Slug, f.Sort
+	row.Title, row.Sort = f.Title, f.Sort
+	if slugOut != "" {
+		row.Slug = slugOut
+	}
 	if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
 		return nil, err
 	}
@@ -1699,7 +1713,8 @@ func (s *Service) IncrementDownload(ctx context.Context, pluginID string) error 
 // Rate 记录一次匿名评分：同一 IP 对同一插件只有一行，重复评分会替换旧分。
 func (s *Service) Rate(ctx context.Context, pluginID, ip string, score int) error {
 	if score < 1 || score > 5 {
-		return fmt.Errorf("评分必须在 1-5 之间")
+		// 与 handler 的预校验同一口径走 i18n 键：这里兜的是绕过 handler 的直接调用
+		return response.BadRequest("website.rating_invalid")
 	}
 	voter := ratingVoter(pluginID, ip)
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {

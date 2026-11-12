@@ -1,0 +1,43 @@
+{{define "content"}}
+<section class="au-section au-pagehead">
+  <div class="au-wrap">
+    <p class="au-eyebrow">{{.T "news.fig"}}</p>
+    <h1 class="au-page-title">{{if eq .NewsKind "category"}}{{.TF "news.categoryTitleTag" .NewsTermName}}{{else if eq .NewsKind "tag"}}{{.TF "news.tagTitleTag" .NewsTermName}}{{else}}{{.T "news.title"}}{{end}}</h1>
+    {{if .NewsCategories}}
+    <nav class="au-chips term-nav" aria-label="{{.T "news.categoryNavAria"}}">
+      <a class="au-chip{{if not .NewsTermName}} active{{end}}" href="{{.URL "/news"}}">{{.T "news.allPosts"}}</a>
+      {{range .NewsCategories}}<a class="au-chip{{if .Active}} active{{end}}" href="{{$.URL "/news"}}?category={{.Slug}}"{{if .Active}} aria-current="true"{{end}}>{{.Name}}</a>{{end}}
+    </nav>
+    {{end}}
+  </div>
+</section>
+<section class="au-section au-listbody">
+  <div class="au-wrap">
+    {{if .Posts}}
+    <div class="au-postlist">
+      {{range .Posts}}
+      <a class="au-postrow" href="{{$.URL "/news"}}/{{.Slug}}" data-reveal>
+        <time class="au-postrow-date">{{if .PublishedAt}}{{fmtDate $.Lang .PublishedAt}}{{else}}{{fmtDate $.Lang .UpdatedAt}}{{end}}</time>
+        <div class="au-postrow-main">
+          <h2>{{if .Pinned}}<span class="au-term-badge au-badge-hot">{{$.T "news.pinned"}}</span>{{end}}{{.Title}}</h2>
+          {{if .Summary}}<p>{{.Summary}}</p>{{end}}
+          {{if .Categories}}<span class="au-postrow-terms">{{range .Categories}}<span class="au-term-badge">{{.Title}}</span>{{end}}</span>{{end}}
+        </div>
+        {{if .CoverURL}}<img class="au-postrow-cover" src="{{.CoverURL}}" alt="" loading="lazy">{{end}}
+        <span class="au-postrow-arrow" aria-hidden="true">→</span>
+      </a>
+      {{end}}
+    </div>
+    {{else}}
+    <p class="au-empty">{{.T "news.empty"}}</p>
+    {{end}}
+    {{if gt .NewsTotalPages 1}}
+    <nav class="au-pager" aria-label="{{.T "news.pagerAria"}}">
+      {{if .NewsPrevURL}}<a class="au-pager-link" rel="prev" href="{{.NewsPrevURL}}">← {{.T "news.prev"}}</a>{{end}}
+      <span class="au-pager-status">{{.TF "news.pageOf" .NewsPage .NewsTotalPages}}</span>
+      {{if .NewsNextURL}}<a class="au-pager-link" rel="next" href="{{.NewsNextURL}}">{{.T "news.next"}} →</a>{{end}}
+    </nav>
+    {{end}}
+  </div>
+</section>
+{{end}}

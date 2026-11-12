@@ -1,0 +1,43 @@
+{{define "content"}}
+<section class="sl-section sl-pagehead">
+  <div class="sl-wrap">
+    <p class="sl-eyebrow">{{.T "news.fig"}}</p>
+    <h1 class="sl-page-title">{{if eq .NewsKind "category"}}{{.TF "news.categoryTitleTag" .NewsTermName}}{{else if eq .NewsKind "tag"}}{{.TF "news.tagTitleTag" .NewsTermName}}{{else}}{{.T "news.title"}}{{end}}</h1>
+    {{if .NewsCategories}}
+    <nav class="sl-chips term-nav" aria-label="{{.T "news.categoryNavAria"}}">
+      <a class="sl-chip{{if not .NewsTermName}} active{{end}}" href="{{.URL "/news"}}">{{.T "news.allPosts"}}</a>
+      {{range .NewsCategories}}<a class="sl-chip{{if .Active}} active{{end}}" href="{{$.URL "/news"}}?category={{.Slug}}"{{if .Active}} aria-current="true"{{end}}>{{.Name}}</a>{{end}}
+    </nav>
+    {{end}}
+  </div>
+</section>
+<section class="sl-section sl-listbody">
+  <div class="sl-wrap">
+    {{if .Posts}}
+    <div class="sl-postlist">
+      {{range .Posts}}
+      <a class="sl-postrow" href="{{$.URL "/news"}}/{{.Slug}}" data-reveal>
+        <time class="sl-postrow-date">{{if .PublishedAt}}{{fmtDate $.Lang .PublishedAt}}{{else}}{{fmtDate $.Lang .UpdatedAt}}{{end}}</time>
+        <div class="sl-postrow-main">
+          <h2>{{if .Pinned}}<span class="sl-term-badge sl-badge-hot">{{$.T "news.pinned"}}</span>{{end}}{{.Title}}</h2>
+          {{if .Summary}}<p>{{.Summary}}</p>{{end}}
+          {{if .Categories}}<span class="sl-postrow-terms">{{range .Categories}}<span class="sl-term-badge">{{.Title}}</span>{{end}}</span>{{end}}
+        </div>
+        {{if .CoverURL}}<img class="sl-postrow-cover" src="{{.CoverURL}}" alt="" loading="lazy">{{end}}
+        <span class="sl-postrow-arrow" aria-hidden="true">→</span>
+      </a>
+      {{end}}
+    </div>
+    {{else}}
+    <p class="sl-empty">{{.T "news.empty"}}</p>
+    {{end}}
+    {{if gt .NewsTotalPages 1}}
+    <nav class="sl-pager" aria-label="{{.T "news.pagerAria"}}">
+      {{if .NewsPrevURL}}<a class="sl-pager-link" rel="prev" href="{{.NewsPrevURL}}">← {{.T "news.prev"}}</a>{{end}}
+      <span class="sl-pager-status">{{.TF "news.pageOf" .NewsPage .NewsTotalPages}}</span>
+      {{if .NewsNextURL}}<a class="sl-pager-link" rel="next" href="{{.NewsNextURL}}">{{.T "news.next"}} →</a>{{end}}
+    </nav>
+    {{end}}
+  </div>
+</section>
+{{end}}

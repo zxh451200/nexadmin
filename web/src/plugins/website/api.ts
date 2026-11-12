@@ -56,6 +56,8 @@ export interface SiteSettings {
   titleSuffix: string
   /** 被设为首页的单页 slug；空 = 内置首页。页面被删或未发布时官网自动回退内置首页 */
   homeSlug: string
+  /** 公开站主题 id（主题插件注册）；空 = 内置 default 主题。主题被卸载时官网自动回退 default */
+  theme: string
   homeTitle: string
   homeSubtitle: string
   homeCtaLabel: string
@@ -491,6 +493,41 @@ export function useSaveSettings() {
   return useMutation({
     mutationFn: (data: SiteSettingsForm) => api.put<SiteSettings>(`${BASE}/settings`, data),
     onSuccess: () => void qc.invalidateQueries({ queryKey: [...KEY, 'settings'] }),
+  })
+}
+
+/** 主题清单条目：default 恒在最前；hasDemo = 主题插件带演示内容可一键导入。 */
+export interface ThemeInfo {
+  id: string
+  label: string
+  version: string
+  hasDemo: boolean
+  active: boolean
+}
+
+export function useThemes() {
+  return useQuery({
+    queryKey: [...KEY, 'themes'],
+    queryFn: () => api.get<{ theme: string; items: ThemeInfo[] }>(`${BASE}/themes`),
+  })
+}
+
+/** 导入主题演示内容：insert-only（按 slug/href/标题判重），重复导入不产生重复行。 */
+export interface DemoReport {
+  settings: number
+  navs: number
+  features: number
+  categories: number
+  pages: number
+  posts: number
+  productCategories: number
+  products: number
+  skipped: number
+}
+
+export function useSeedThemeDemo() {
+  return useMutation({
+    mutationFn: (id: string) => api.post<DemoReport>(`${BASE}/themes/${encodeURIComponent(id)}/seed-demo`),
   })
 }
 
