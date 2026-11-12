@@ -367,6 +367,15 @@ type siteView struct {
 	DownloadURL      string
 	DownloadFilename string
 	PluginLD         template.JS
+	// OrgLD 是站级 Organization + WebSite JSON-LD：render() 装配（依赖 BaseURL），layout 恒定输出。
+	OrgLD template.JS
+	// PageLD 是详情页的结构化数据（产品 Product+Offer / 新闻 Article，均带 BreadcrumbList）：
+	// 由各自的详情处理器装配，空 = 该页没有富摘要。
+	PageLD template.JS
+	// OGType 覆盖 og:type（详情页为 article）；空 = website。
+	OGType string
+	// OGPublishedAt 是文章的发布时间（article:published_time，RFC3339）；空 = 不输出。
+	OGPublishedAt string
 	MyScore          int
 	Signed           bool
 	SignatureURL     string
