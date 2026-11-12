@@ -253,6 +253,22 @@
       log.scrollTop = log.scrollHeight;
     }
 
+    // 「连接不上」提示去重：连续失败只保留一条，恢复成功后移除，不再刷屏。
+    var loadErrNote = null;
+    function showLoadErr() {
+      if (loadErrNote && loadErrNote.isConnected) return;
+      if (empty) empty.hidden = true;
+      loadErrNote = document.createElement('p');
+      loadErrNote.className = 'chat-note';
+      loadErrNote.textContent = t('chatErrLoad', '客服连接不上，请刷新页面再试');
+      log.appendChild(loadErrNote);
+      log.scrollTop = log.scrollHeight;
+    }
+    function clearLoadErr() {
+      if (loadErrNote && loadErrNote.isConnected) loadErrNote.remove();
+      loadErrNote = null;
+    }
+
     function renderStars(n) {
       stars.forEach(function (btn) {
         var on = Number(btn.getAttribute('data-rate')) <= n;
@@ -403,10 +419,11 @@
       ensureConv()
         .then(function () { return pull(); })
         .then(function () {
+          clearLoadErr();
           startRealtime();
           if (input) input.focus();
         })
-        .catch(function () { addLocalNote(t('chatErrLoad', '客服连接不上，请刷新页面再试')); })
+        .catch(function () { showLoadErr(); })
         .then(function () { st.starting = false; }, function () { st.starting = false; });
     }
 
@@ -435,8 +452,11 @@
       if (launcher) launcher.setAttribute('aria-expanded', 'true');
       ensureConv()
         .then(function () { return pull(); })
-        .then(function () { startRealtime(); })
-        .catch(function () { addLocalNote(t('chatErrLoad', '客服连接不上，请刷新页面再试')); });
+        .then(function () {
+          clearLoadErr();
+          startRealtime();
+        })
+        .catch(function () { showLoadErr(); });
       if (input) window.setTimeout(function () { input.focus(); }, 30);
     }
 
