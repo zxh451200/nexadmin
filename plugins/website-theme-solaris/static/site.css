@@ -731,3 +731,9 @@ section[id] { scroll-margin-top: 96px; }
   [class*="-hero"]::before, [class*="-hero"]::after { animation: none !important; }
   .sl-btn::after { display: none; }
 }
+
+/* ---- 移动端微调：头部 CTA 不折行 ---- */
+@media (max-width: 900px) {
+  .sl-btn { white-space: nowrap; padding-inline: 16px; font-size: 13.5px; }
+  .sl-header-actions { gap: 8px; }
+}

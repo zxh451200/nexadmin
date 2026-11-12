@@ -98,9 +98,17 @@ h1, h2, h3, h4 { line-height: 1.2; margin: 0; }
 .tk-mnav a { color: #e7e8ea; padding: 10px 0; border-bottom: 1px solid rgba(255, 255, 255, .08); font-size: 15px; }
 
 @media (max-width: 900px) {
-  .tk-nav { display: none; }
-  .tk-lang { display: none; }
-  .tk-mnav-btn { display: block; }
+  /* 移动端：导航折行到 logo 下一行（内页没有 hero 侧栏，顶栏导航是唯一入口），语言切换保留 */
+  .tk-header-in { flex-wrap: wrap; row-gap: 0; }
+  .tk-nav {
+    display: flex; flex-wrap: wrap; gap: 0 14px; order: 3;
+    width: 100%; margin: 0 0 4px; padding-bottom: 6px;
+  }
+  .tk-nav > a, .tk-navsub summary { padding: 6px 0; font-size: 13.5px; }
+  .tk-navsub[open] summary { color: #fff; background: transparent; }
+  .tk-navsub ul { position: static; box-shadow: none; border: 0; background: transparent; padding: 0 0 0 12px; }
+  .tk-navsub ul a { color: #c9cbd1; padding: 6px 0; }
+  .tk-lang { display: inline-flex; }
   .tk-header-actions { margin-left: auto; }
   .tk-langmenu { right: 16px; }
 }
@@ -692,4 +700,10 @@ section[id] { scroll-margin-top: 96px; }
 @media (prefers-reduced-motion: reduce) {
   [class*="-hero"]::before, [class*="-hero"]::after { animation: none !important; }
   .tk-btn::after { display: none; }
+}
+
+/* ---- 移动端微调：头部 CTA 不折行 ---- */
+@media (max-width: 900px) {
+  .tk-btn { white-space: nowrap; padding-inline: 16px; font-size: 13.5px; }
+  .tk-header-actions { gap: 8px; }
 }
