@@ -184,7 +184,7 @@ h1, h2, h3, h4 { line-height: 1.2; margin: 0; }
 
 /* ---- 解决方案 ---- */
 .au-solutions { background: #fff; }
-.au-solutions-grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 40px; align-items: center; }
+.au-solutions-grid { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 4fr) minmax(0, 4fr); gap: 28px; align-items: center; }
 .au-solutions h2 { font-size: clamp(24px, 2.6vw, 32px); font-weight: 800; text-transform: uppercase; }
 .au-solutions-sub { color: var(--au-muted); margin: 14px 0 20px; }
 .au-solutions-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -363,3 +363,18 @@ h1, h2, h3, h4 { line-height: 1.2; margin: 0; }
 .chat-stars button { background: none; border: 0; font-size: 18px; cursor: pointer; color: var(--au-blue); }
 .chat-rating-comment, textarea[data-chat-rating-comment] { width: 100%; border: 1px solid var(--au-line); border-radius: 8px; padding: 8px; font: inherit; margin-top: 8px; }
 .chat-new { background: var(--au-blue); color: #fff; border: 0; border-radius: 8px; padding: 9px 14px; font-weight: 700; cursor: pointer; margin-top: 10px; }
+
+/* ---- 方案蓝图与客户案例 ---- */
+.au-solutions-shot { margin: 0; }
+.au-solutions-shot img { border-radius: 10px; border: 1px solid var(--au-line); }
+.au-cases { background: var(--au-bg); }
+.au-case-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+.au-case-card { display: flex; flex-direction: column; background: #fff; border: 1px solid var(--au-line); border-radius: 10px; overflow: hidden; transition: box-shadow .15s, transform .15s; }
+.au-case-card:hover { box-shadow: var(--au-shadow); transform: translateY(-2px); }
+.au-case-cover { display: block; }
+.au-case-cover img { width: 100%; height: 210px; object-fit: cover; }
+.au-case-body { display: flex; flex-direction: column; padding: 16px; gap: 8px; }
+.au-case-title { font-weight: 700; font-size: 16px; }
+.au-case-sub { color: var(--au-muted); font-size: 13px; }
+.au-case-more { margin-top: 6px; color: var(--au-blue); font-weight: 700; font-size: 13px; }
+@media (max-width: 900px) { .au-solutions-grid { grid-template-columns: 1fr; } .au-case-grid { grid-template-columns: 1fr; } }

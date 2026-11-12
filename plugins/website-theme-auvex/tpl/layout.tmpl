@@ -65,8 +65,6 @@
         <ul>{{range .Children}}<li><a href="{{$.URL .Href}}">{{.Label}}</a></li>{{end}}</ul>
       </details>
       {{else}}<a href="{{$.URL .Href}}"{{if eq .Href $.Route}} aria-current="page"{{end}}>{{.Label}}</a>{{end}}{{end}}
-      {{if .MarketEnabled}}<a href="{{.URL "/plugins"}}"{{if hasPrefix .Route "/plugins"}} aria-current="page"{{end}}>{{.T "layout.market"}}</a>{{end}}
-      {{if .DocsEnabled}}<a href="{{.URL "/docs"}}"{{if hasPrefix .Route "/docs"}} aria-current="page"{{end}}>{{.T "layout.docs"}}</a>{{end}}
     </nav>
     <div class="au-header-actions">
       <details class="au-lang">
@@ -80,10 +78,7 @@
         <summary aria-label="{{.T "layout.openMenu"}}"><span></span><span></span><span></span></summary>
         <div class="au-mnav" aria-label="{{.T "layout.mobileNav"}}">
           {{range .Navs}}<a href="{{$.URL .Href}}">{{.Label}}</a>{{end}}
-          {{if .MarketEnabled}}<a href="{{.URL "/plugins"}}">{{.T "layout.market"}}</a>{{end}}
-          {{if .DocsEnabled}}<a href="{{.URL "/docs"}}">{{.T "layout.docs"}}</a>{{end}}
           {{range .Languages}}<a href="{{$.Switch .}}" lang="{{.HTMLLang}}">{{.Label}}</a>{{end}}
-          <a href="/admin/login">{{.T "layout.login"}}</a>
         </div>
       </details>
     </div>
@@ -109,14 +104,11 @@
       <h4>{{.T "layout.product"}}</h4>
       <a href="{{.URL "/products"}}">{{.T "theme.auvex.allProducts"}}</a>
       <a href="{{.URL "/news"}}">{{.T "layout.news"}}</a>
-      {{if .MarketEnabled}}<a href="{{.URL "/plugins"}}">{{.T "layout.marketFull"}}</a>{{end}}
     </nav>
     <nav class="au-footer-col" aria-label="{{.T "layout.company"}}">
       <h4>{{.T "layout.company"}}</h4>
       {{range .Navs}}{{if eq .Href "/p/about"}}<a href="{{$.URL .Href}}">{{.Label}}</a>{{end}}{{end}}
       <a href="{{.URL "/contact"}}">{{.T "layout.contactUs"}}</a>
-      {{if .DocsEnabled}}<a href="{{.URL "/docs"}}">{{.T "layout.docsCenter"}}</a>{{end}}
-      <a href="/admin/login">{{.T "layout.admin"}}</a>
     </nav>
     <nav class="au-footer-col" aria-label="{{.T "layout.contact"}}">
       <h4>{{.T "layout.contact"}}</h4>

@@ -179,14 +179,19 @@ func (h *siteHandler) home(c *gin.Context) {
 	// 标题用首页主标题（两行合成一行），比整段站点描述更适合 <title> 与搜索结果。
 	v.Title = homePageTitle(v.SiteName, v.HomeTitle, v.SiteDesc)
 	v.Desc = v.SiteDesc
-	// 品牌主题的首页消费产品与类目（精选商品导轨 / 分类导航）；default 首页不用这两个
-	// 字段，所以只在选了主题时多查这两次，不给未换肤的站点加成本。
+	// 品牌主题的首页消费产品/类目/更多新闻（精选导轨、案例区与新闻区各取所需）；
+	// default 首页不用这些字段，所以只在选了主题时多查，不给未换肤的站点加成本。
 	if v.ThemeID != "" {
 		if products, _, perr := h.svc.PublishedProductsPage(c.Request.Context(), lang.Code, termFilter{}, 1, 8); perr == nil {
 			v.Products = products
 		}
 		if cats, cerr := h.svc.ListProductCategories(c.Request.Context()); cerr == nil {
 			v.ProductCategories = ProductCategoryLinks(cats, "")
+		}
+		// 首页新闻区只展示 3 条（模板自己截），案例区还要从最新新闻里按栏目筛案例，
+		// 所以主题首页把窗口放宽到 6 条。
+		if posts, _, perr := h.svc.PublishedPostsPage(c.Request.Context(), lang.Code, termFilter{}, 1, 6); perr == nil {
+			v.Posts = posts
 		}
 	}
 	if v.MarketEnabled {

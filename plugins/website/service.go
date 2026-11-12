@@ -343,7 +343,7 @@ func navHrefValid(href string) bool {
 	if p == "" || p == "/" {
 		return true
 	}
-	for _, prefix := range []string{"/news", "/plugins", "/docs", "/contact"} {
+	for _, prefix := range []string{"/news", "/products", "/plugins", "/docs", "/contact"} {
 		if p == prefix || strings.HasPrefix(p, prefix+"/") {
 			return true
 		}

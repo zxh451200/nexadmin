@@ -156,7 +156,57 @@
         <li><span class="sl-how-num">03</span><div><strong>{{.T "theme.solaris.step3"}}</strong><span>{{.T "theme.solaris.step3Sub"}}</span></div></li>
         <li><span class="sl-how-num">04</span><div><strong>{{.T "theme.solaris.step4"}}</strong><span>{{.T "theme.solaris.step4Sub"}}</span></div></li>
       </ol>
+      <figure class="sl-how-diagram" data-reveal>
+        <img src="/website-assets/theme/solaris/assets/sl-process.webp" alt="{{.T "theme.solaris.howDiagramAlt"}}" loading="lazy">
+      </figure>
     </div>
+  </div>
+</section>
+
+{{if .Posts}}
+<section class="sl-section" id="projects">
+  <div class="sl-wrap">
+    <header class="sl-sect-head" data-reveal>
+      <div>
+        <p class="sl-eyebrow">{{.T "theme.solaris.projectsEyebrow"}}</p>
+        <h2>{{.T "theme.solaris.projectsTitle"}}</h2>
+        <p class="sl-sect-sub">{{.T "theme.solaris.projectsSub"}}</p>
+      </div>
+      <a class="sl-more" href="{{.URL "/news"}}">{{.T "theme.solaris.viewAllProjects"}} <span aria-hidden="true">→</span></a>
+    </header>
+    <div class="sl-project-grid">
+      {{range .Posts}}{{if hasTerm . "cases"}}
+      <a class="sl-project-card" href="{{$.URL "/news"}}/{{.Slug}}" data-reveal>
+        {{if .CoverURL}}<span class="sl-project-cover"><img src="{{.CoverURL}}" alt="" loading="lazy"></span>{{end}}
+        <span class="sl-project-body">
+          {{range .Categories}}{{if eq .Slug "cases"}}<span class="sl-term-badge">{{.Title}}</span>{{end}}{{end}}
+          <span class="sl-project-title">{{.Title}}</span>
+          {{if .Summary}}<span class="sl-project-sub">{{.Summary}}</span>{{end}}
+          <span class="sl-project-more">{{$.T "theme.solaris.viewCase"}} <span aria-hidden="true">→</span></span>
+        </span>
+      </a>
+      {{end}}{{end}}
+    </div>
+  </div>
+</section>
+{{end}}
+
+<section class="sl-section sl-sustainability" id="sustainability">
+  <div class="sl-wrap sl-sustainability-grid">
+    <div class="sl-sustainability-copy" data-reveal>
+      <p class="sl-eyebrow">{{.T "theme.solaris.sustEyebrow"}}</p>
+      <h2>{{.T "theme.solaris.sustTitle"}}</h2>
+      <p class="sl-sustainability-sub">{{.T "theme.solaris.sustSub"}}</p>
+      <a class="sl-btn sl-btn-amber" href="{{.URL "/contact"}}">{{.T "theme.solaris.sustCta"}} <span aria-hidden="true">→</span></a>
+    </div>
+    <figure class="sl-sustainability-shot" data-reveal>
+      <img src="/website-assets/theme/solaris/assets/sl-sustainability.webp" alt="{{.T "theme.solaris.sustShotAlt"}}" loading="lazy">
+    </figure>
+    <ul class="sl-sustainability-stats">
+      <li><strong>1.2M+</strong><span>{{.T "theme.solaris.sustStat1"}}</span></li>
+      <li><strong>10+ GWh</strong><span>{{.T "theme.solaris.sustStat2"}}</span></li>
+      <li><strong>40+</strong><span>{{.T "theme.solaris.sustStat3"}}</span></li>
+    </ul>
   </div>
 </section>
 
@@ -172,15 +222,15 @@
       <a class="sl-more" href="{{.URL "/news"}}">{{.T "home.news.more"}}</a>
     </header>
     <div class="sl-news-grid">
-      {{range .Posts}}
-      <a class="sl-news-card" href="{{$.URL "/news"}}/{{.Slug}}" data-reveal>
-        {{if .CoverURL}}<span class="sl-news-cover"><img src="{{.CoverURL}}" alt="" loading="lazy"></span>{{end}}
-        <span class="sl-news-date">{{if .PublishedAt}}{{fmtDate $.Lang .PublishedAt}}{{else}}{{fmtDate $.Lang .UpdatedAt}}{{end}}</span>
-        <span class="sl-news-title">{{.Title}}</span>
-        {{if .Summary}}<span class="sl-news-sub">{{.Summary}}</span>{{end}}
+      {{range $i, $p := .Posts}}{{if lt $i 3}}
+      <a class="sl-news-card" href="{{$.URL "/news"}}/{{$p.Slug}}" data-reveal>
+        {{if $p.CoverURL}}<span class="sl-news-cover"><img src="{{$p.CoverURL}}" alt="" loading="lazy"></span>{{end}}
+        <span class="sl-news-date">{{if $p.PublishedAt}}{{fmtDate $.Lang $p.PublishedAt}}{{else}}{{fmtDate $.Lang $p.UpdatedAt}}{{end}}</span>
+        <span class="sl-news-title">{{$p.Title}}</span>
+        {{if $p.Summary}}<span class="sl-news-sub">{{$p.Summary}}</span>{{end}}
         <span class="sl-news-more">{{$.T "theme.solaris.readMore"}} <span aria-hidden="true">→</span></span>
       </a>
-      {{end}}
+      {{end}}{{end}}
     </div>
   </div>
 </section>

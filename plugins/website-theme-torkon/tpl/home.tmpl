@@ -1,6 +1,22 @@
 {{define "content"}}
 <section class="tk-hero" id="top-products">
   <div class="tk-wrap tk-hero-grid">
+    <!-- 左侧竖导航：参考稿的标志性格局，站点导航竖排 + 红色询价按钮 -->
+    <aside class="tk-hero-side" data-reveal>
+      <nav aria-label="{{.T "layout.mainNav"}}">
+        {{range .Navs}}
+        <a href="{{$.URL .Href}}">
+          {{if eq .Href "/products"}}{{icon "box"}}
+          {{else if eq .Href "/news"}}{{icon "file"}}
+          {{else if hasPrefix .Href "/p/"}}{{icon "building"}}
+          {{else}}{{icon "mail"}}
+          {{end}}
+          <span>{{.Label}}</span>
+        </a>
+        {{end}}
+      </nav>
+      <a class="tk-btn tk-btn-red" href="{{.URL "/contact"}}">{{.T "theme.torkon.quote"}} <span aria-hidden="true">→</span></a>
+    </aside>
     <div class="tk-hero-copy" data-reveal>
       <p class="tk-eyebrow tk-eyebrow-light">{{.T "theme.torkon.heroBadge"}}</p>
       <h1 class="tk-hero-title">
@@ -53,6 +69,12 @@
       </div>
       <a class="tk-more" href="{{.URL "/products"}}">{{.T "theme.torkon.viewAllProducts"}} <span aria-hidden="true">→</span></a>
     </header>
+    {{if .ProductCategories}}
+    <nav class="tk-chips tk-filter" aria-label="{{.T "products.categoryNavAria"}}">
+      <a class="tk-chip active" href="{{.URL "/products"}}">{{.T "products.allProducts"}}</a>
+      {{range .ProductCategories}}<a class="tk-chip" href="{{$.URL "/products"}}?category={{.Slug}}">{{.Name}}</a>{{end}}
+    </nav>
+    {{end}}
     <div class="tk-product-grid">
       {{range .Products}}
       <a class="tk-product-card" href="{{$.URL "/products"}}/{{.Slug}}" data-reveal>
@@ -234,15 +256,15 @@
       <a class="tk-more" href="{{.URL "/news"}}">{{.T "home.news.more"}}</a>
     </header>
     <div class="tk-news-grid">
-      {{range .Posts}}
-      <a class="tk-news-card" href="{{$.URL "/news"}}/{{.Slug}}" data-reveal>
-        {{if .CoverURL}}<span class="tk-news-cover"><img src="{{.CoverURL}}" alt="" loading="lazy"></span>{{end}}
-        <span class="tk-news-date">{{if .PublishedAt}}{{fmtDate $.Lang .PublishedAt}}{{else}}{{fmtDate $.Lang .UpdatedAt}}{{end}}</span>
-        <span class="tk-news-title">{{.Title}}</span>
-        {{if .Summary}}<span class="tk-news-sub">{{.Summary}}</span>{{end}}
+      {{range $i, $p := .Posts}}{{if lt $i 3}}
+      <a class="tk-news-card" href="{{$.URL "/news"}}/{{$p.Slug}}" data-reveal>
+        {{if $p.CoverURL}}<span class="tk-news-cover"><img src="{{$p.CoverURL}}" alt="" loading="lazy"></span>{{end}}
+        <span class="tk-news-date">{{if $p.PublishedAt}}{{fmtDate $.Lang $p.PublishedAt}}{{else}}{{fmtDate $.Lang $p.UpdatedAt}}{{end}}</span>
+        <span class="tk-news-title">{{$p.Title}}</span>
+        {{if $p.Summary}}<span class="tk-news-sub">{{$p.Summary}}</span>{{end}}
         <span class="tk-news-more">{{$.T "theme.torkon.readMore"}} <span aria-hidden="true">→</span></span>
       </a>
-      {{end}}
+      {{end}}{{end}}
     </div>
   </div>
 </section>

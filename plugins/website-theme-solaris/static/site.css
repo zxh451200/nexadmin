@@ -414,9 +414,32 @@ h1, h2, h3, h4 { line-height: 1.2; margin: 0; }
 @media (max-width: 900px) { .sl-app-grid { grid-template-columns: repeat(2, 1fr); } }
 
 .sl-how { background: #fff; }
-.sl-how-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.sl-how-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
 .sl-how-steps li { background: var(--sl-bg); border: 1px solid var(--sl-line); border-radius: 10px; padding: 16px; display: flex; gap: 12px; }
 .sl-how-num { font-family: Georgia, 'Times New Roman', serif; font-size: 28px; color: var(--sl-amber); line-height: 1; }
 .sl-how-steps strong { display: block; font-size: 14px; }
 .sl-how-steps span { font-size: 12px; color: var(--sl-muted); }
 @media (max-width: 900px) { .sl-how-steps { grid-template-columns: 1fr 1fr; } }
+
+/* ---- 流程图 / 项目案例 / 可持续 ---- */
+.sl-how-diagram { margin: 0; }
+.sl-how-diagram img { border-radius: 10px; border: 1px solid var(--au-line); }
+.sl-project-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.sl-project-card { display: flex; flex-direction: column; background: #fff; border: 1px solid var(--au-line); border-radius: 10px; overflow: hidden; transition: box-shadow .15s, transform .15s; }
+.sl-project-card:hover { box-shadow: var(--au-shadow); transform: translateY(-2px); }
+.sl-project-cover { display: block; }
+.sl-project-cover img { width: 100%; height: 190px; object-fit: cover; }
+.sl-project-body { display: flex; flex-direction: column; padding: 16px; gap: 8px; }
+.sl-project-title { font-weight: 700; font-size: 16px; }
+.sl-project-sub { color: var(--au-muted); font-size: 13px; }
+.sl-project-more { margin-top: 6px; color: var(--sl-amber); font-weight: 700; font-size: 13px; }
+.sl-sustainability { background: #fff; }
+.sl-sustainability-grid { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 5fr) minmax(0, 3fr); gap: 32px; align-items: center; }
+.sl-sustainability h2 { font-size: clamp(24px, 2.6vw, 32px); font-weight: 800; color: var(--sl-dark); }
+.sl-sustainability-sub { color: var(--au-muted); margin: 14px 0 18px; max-width: 40ch; }
+.sl-sustainability-shot { margin: 0; }
+.sl-sustainability-shot img { border-radius: 10px; }
+.sl-sustainability-stats { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+.sl-sustainability-stats strong { font-size: 24px; font-weight: 800; color: var(--sl-green); font-family: var(--au-mono); }
+.sl-sustainability-stats span { display: block; font-size: 13px; color: var(--au-muted); }
+@media (max-width: 900px) { .sl-sustainability-grid { grid-template-columns: 1fr; } .sl-project-grid { grid-template-columns: 1fr; } .sl-how-grid { grid-template-columns: 1fr; } }

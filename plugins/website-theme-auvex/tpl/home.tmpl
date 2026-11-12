@@ -124,6 +124,9 @@
     <ul class="au-solutions-list" data-reveal>
       {{range .Features}}<li><strong>{{.Title}}</strong><span>{{.Description}}</span></li>{{end}}
     </ul>
+    <figure class="au-solutions-shot" data-reveal>
+      <img src="/website-assets/theme/auvex/assets/au-blueprint.webp" alt="{{.T "theme.auvex.blueprintAlt"}}" loading="lazy">
+    </figure>
   </div>
 </section>
 {{end}}
@@ -147,6 +150,32 @@
 </section>
 
 {{if .Posts}}
+<section class="au-section au-cases" id="cases">
+  <div class="au-wrap">
+    <header class="au-sect-head" data-reveal>
+      <div>
+        <p class="au-eyebrow">{{.T "theme.auvex.casesEyebrow"}}</p>
+        <h2>{{.T "theme.auvex.casesTitle"}}</h2>
+      </div>
+      <a class="au-more" href="{{.URL "/news"}}">{{.T "theme.auvex.viewAllCases"}} <span aria-hidden="true">→</span></a>
+    </header>
+    <div class="au-case-grid">
+      {{range .Posts}}{{if hasTerm . "cases"}}
+      <a class="au-case-card" href="{{$.URL "/news"}}/{{.Slug}}" data-reveal>
+        {{if .CoverURL}}<span class="au-case-cover"><img src="{{.CoverURL}}" alt="" loading="lazy"></span>{{end}}
+        <span class="au-case-body">
+          {{range .Categories}}{{if eq .Slug "cases"}}<span class="au-term-badge">{{.Title}}</span>{{end}}{{end}}
+          <span class="au-case-title">{{.Title}}</span>
+          {{if .Summary}}<span class="au-case-sub">{{.Summary}}</span>{{end}}
+          <span class="au-case-more">{{$.T "theme.auvex.viewCase"}} <span aria-hidden="true">→</span></span>
+        </span>
+      </a>
+      {{end}}{{end}}
+    </div>
+  </div>
+</section>
+{{end}}
+{{if .Posts}}
 <section class="au-section" id="news">
   <div class="au-wrap">
     <header class="au-sect-head" data-reveal>
@@ -157,15 +186,15 @@
       <a class="au-more" href="{{.URL "/news"}}">{{.T "home.news.more"}}</a>
     </header>
     <div class="au-news-grid">
-      {{range .Posts}}
-      <a class="au-news-card" href="{{$.URL "/news"}}/{{.Slug}}" data-reveal>
-        {{if .CoverURL}}<span class="au-news-cover"><img src="{{.CoverURL}}" alt="" loading="lazy"></span>{{end}}
-        <span class="au-news-date">{{if .PublishedAt}}{{fmtDate $.Lang .PublishedAt}}{{else}}{{fmtDate $.Lang .UpdatedAt}}{{end}}</span>
-        <span class="au-news-title">{{.Title}}</span>
-        {{if .Summary}}<span class="au-news-sub">{{.Summary}}</span>{{end}}
+      {{range $i, $p := .Posts}}{{if lt $i 3}}
+      <a class="au-news-card" href="{{$.URL "/news"}}/{{$p.Slug}}" data-reveal>
+        {{if $p.CoverURL}}<span class="au-news-cover"><img src="{{$p.CoverURL}}" alt="" loading="lazy"></span>{{end}}
+        <span class="au-news-date">{{if $p.PublishedAt}}{{fmtDate $.Lang $p.PublishedAt}}{{else}}{{fmtDate $.Lang $p.UpdatedAt}}{{end}}</span>
+        <span class="au-news-title">{{$p.Title}}</span>
+        {{if $p.Summary}}<span class="au-news-sub">{{$p.Summary}}</span>{{end}}
         <span class="au-news-more">{{$.T "theme.auvex.readMore"}} <span aria-hidden="true">→</span></span>
       </a>
-      {{end}}
+      {{end}}{{end}}
     </div>
   </div>
 </section>

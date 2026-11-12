@@ -190,6 +190,15 @@ var tplFuncs = template.FuncMap{
 		}
 		return ""
 	},
+	// hasTerm 报告新闻是否挂在某个栏目 slug 下（主题案例区用它从最新新闻里筛案例）。
+	"hasTerm": func(p Post, slug string) bool {
+		for _, c := range p.Categories {
+			if c.Slug == slug {
+				return true
+			}
+		}
+		return false
+	},
 }
 
 // layout 是所有页面共用的骨架；各页面模板定义自己的 "content"。
