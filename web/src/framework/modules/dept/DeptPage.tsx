@@ -45,7 +45,7 @@ export default function DeptPage() {
   const shown = useMemo(() => {
     if (!filter.active) return data
     const f = filter.applied
-    return filterTree(data, (n) => matchText(f.keyword, n.name, n.leaderName, n.phone) && (!f.status || n.status === f.status))
+    return filterTree(data, (n) => matchText(f.keyword, n.name, n.leaderName, n.phone) && (!f.status.length || f.status.includes(n.status)))
   }, [data, filter.active, filter.applied])
 
   const openCreate = (pid: string | null) => {

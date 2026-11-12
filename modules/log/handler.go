@@ -30,7 +30,8 @@ func query(c *gin.Context) Query {
 	if size > maxPageSize {
 		size = maxPageSize
 	}
-	return Query{Keyword: c.Query("keyword"), Status: c.Query("status"), Type: c.Query("type"), LoginType: c.Query("loginType"),
+	return Query{Keyword: c.Query("keyword"), Status: response.ParseList(c.Query("status"), response.MaxFilterValues),
+		Type: response.ParseList(c.Query("type"), response.MaxFilterValues), LoginType: response.ParseList(c.Query("loginType"), response.MaxFilterValues),
 		StartDate: c.Query("startDate"), EndDate: c.Query("endDate"), Page: page, PageSize: size}
 }
 

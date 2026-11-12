@@ -38,18 +38,18 @@ import { OperStatsPanel } from './StatsPanel'
 
 interface Filters {
   keyword: string
-  status: string
-  type: string
+  status: string[]
+  type: string[]
   range: DateRangeValue
 }
 
-const emptyFilters: Filters = { keyword: '', status: '', type: '', range: {} }
+const emptyFilters: Filters = { keyword: '', status: [], type: [], range: {} }
 
 function toQuery(f: Filters): Omit<OperLogQuery, 'page' | 'pageSize'> {
   return {
     keyword: f.keyword.trim() || undefined,
-    status: f.status || undefined,
-    type: f.type || undefined,
+    status: f.status.length ? f.status.join(',') : undefined,
+    type: f.type.length ? f.type.join(',') : undefined,
     startDate: f.range.from,
     endDate: f.range.to,
   }
@@ -156,10 +156,11 @@ export default function OperLogPage() {
       <AiFilterBox
         scope="operLog"
         onApply={(f) => {
+          // AI 筛选产出单值，多选字段统一收进数组
           const next: Filters = {
             keyword: f.keyword ?? '',
-            status: f.status ?? '',
-            type: f.type ?? '',
+            status: f.status ? [f.status] : [],
+            type: f.type ? [f.type] : [],
             range: f.startDate || f.endDate ? { from: f.startDate, to: f.endDate } : {},
           }
           setDraft(next)
@@ -175,8 +176,8 @@ export default function OperLogPage() {
           placeholder={t('operLog.filter.keywordPlaceholder')}
           onChange={(e) => setDraft({ ...draft, keyword: e.target.value })}
         />
-        <DictSelect dict="oper_type" value={draft.type} onChange={(v) => setDraft({ ...draft, type: v })} aria-label={t('operLog.filter.type')} className="md:w-40" placeholder={t('operLog.filter.type')} />
-        <DictSelect dict="login_status" value={draft.status} onChange={(v) => setDraft({ ...draft, status: v })} aria-label={t('operLog.filter.status')} className="md:w-36" placeholder={t('operLog.filter.status')} />
+        <DictSelect dict="oper_type" multiple value={draft.type} onChange={(v) => setDraft({ ...draft, type: v })} aria-label={t('operLog.filter.type')} className="md:w-44" placeholder={t('operLog.filter.type')} />
+        <DictSelect dict="login_status" multiple value={draft.status} onChange={(v) => setDraft({ ...draft, status: v })} aria-label={t('operLog.filter.status')} className="md:w-40" placeholder={t('operLog.filter.status')} />
         <DateRangePicker value={draft.range} onChange={(v) => setDraft({ ...draft, range: v })} ariaLabel={t('operLog.filter.time')} className="md:w-64" placeholder={t('operLog.filter.time')} />
       </FilterBar>
       <DataTable<OperLog>

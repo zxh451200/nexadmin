@@ -247,7 +247,8 @@ func (s *Service) record(ctx context.Context, row *Verification) error {
 // ListQuery 是台账筛选条件。
 type ListQuery struct {
 	Keyword string
-	Status  string
+	// Status 逗号拼接多值（?status=valid,invalid），空 = 不限；取值仍按 StatusSet 校验。
+	Status  []string
 	Scope   *datascope.Scope
 	// Latest 为真时同一号码只展示最近一次结论（默认），重复提交折叠成一行。
 	Latest bool
@@ -260,8 +261,10 @@ type ListQuery struct {
 
 // ListVerifications 按数据范围裁剪台账：受限账号只看自己发起的核验。
 func (s *Service) ListVerifications(ctx context.Context, q ListQuery) ([]Verification, int64, error) {
-	if q.Status != "" && !StatusSet[q.Status] {
-		return nil, 0, response.BadRequest("realname.status_invalid")
+	for _, st := range q.Status {
+		if !StatusSet[st] {
+			return nil, 0, response.BadRequest("realname.status_invalid")
+		}
 	}
 	tx := s.db.WithContext(ctx).Model(&Verification{})
 	if q.Scope != nil {
@@ -283,8 +286,8 @@ func (s *Service) ListVerifications(ctx context.Context, q ListQuery) ([]Verific
 		// 取不到租户上下文时不折叠：折叠必须建立在租户边界上，宁可多列几行也不跨租户取号。
 	}
 	// 结论筛选放在折叠之后：语义是"每个号码最新一次的结论"，而不是"最新一次恰好是该结论的行"。
-	if q.Status != "" {
-		tx = tx.Where("status = ?", q.Status)
+	if len(q.Status) > 0 {
+		tx = tx.Where("status IN ?", q.Status)
 	}
 	var total int64
 	if err := tx.Count(&total).Error; err != nil {

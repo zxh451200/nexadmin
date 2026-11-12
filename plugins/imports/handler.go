@@ -123,7 +123,7 @@ func (h *handler) run(c *gin.Context) {
 func (h *handler) list(c *gin.Context) {
 	page, size := response.ParsePage(c)
 	list, total, err := h.svc.ListJobs(c.Request.Context(), JobQuery{
-		Source: c.Query("source"), Status: c.Query("status"), Page: page, PageSize: size,
+		Source: response.ParseList(c.Query("source"), response.MaxFilterValues), Status: response.ParseList(c.Query("status"), response.MaxFilterValues), Page: page, PageSize: size,
 	})
 	if err != nil {
 		response.Fail(c, err)

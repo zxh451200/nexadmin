@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Can } from '@/framework/auth/Can'
 import { EmptyState } from '@/framework/components/EmptyState'
+import { OptionPicker } from '@/framework/components/OptionPicker'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { FilterBar } from '@/framework/components/FilterBar'
@@ -29,7 +30,6 @@ import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Checkbox } from '@/framework/ui/checkbox'
 import { Input } from '@/framework/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import { EditorSchemaGate } from './EditorSchemaGate'
 import TranslationStatus from './TranslationStatus'
 import { downloadCsv } from '@/framework/components/export/csv'
@@ -57,14 +57,14 @@ import {
   useSaveTag,
   useSetPostStatus,
   useTags,
+  toContentQuery,
+  type ContentDraft,
   type ContentQuery,
   type PostCategory,
   type PostTag,
   type PostVersionDetail,
   type SitePost,
 } from './api'
-
-const ALL = '__all'
 
 /** 栏目 slug 的口径与后端 slugReg 一致：小写字母、数字与连字符，长度 1-64。 */
 const slugReg = /^[a-z0-9][a-z0-9-]{0,63}$/
@@ -814,7 +814,7 @@ export default function PostPage() {
   useI18nSchema('post')
   const { data: languages = [] } = useLanguages()
   const { data: categories = [] } = useCategories()
-  const [draft, setDraft] = useState<ContentQuery>({})
+  const [draft, setDraft] = useState<ContentDraft>({})
   const [filters, setFilters] = useState<ContentQuery>({})
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
@@ -893,7 +893,7 @@ export default function PostPage() {
   const onExport = async () => {
     setExporting(true)
     try {
-      const rows = await fetchPostsForExport({ keyword: filters.keyword, status: filters.status, categoryId: filters.categoryId })
+      const rows = await fetchPostsForExport({ keyword: filters.keyword, status: filters.status, categoryIds: filters.categoryIds })
       const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '')
       downloadCsv(`posts-${stamp}.csv`, [
         [
@@ -1007,7 +1007,7 @@ export default function PostPage() {
     <PageContainer>
       <PageHeader title={t('plugin_website.post.title')} description={t('plugin_website.post.desc')} />
       <FilterBar
-        onSearch={() => { setFilters(draft); setPage(1); setSelected([]) }}
+        onSearch={() => { setFilters(toContentQuery(draft)); setPage(1); setSelected([]) }}
         onReset={() => { setDraft({}); setFilters({}); setPage(1); setSelected([]) }}
       >
         <Input
@@ -1017,44 +1017,40 @@ export default function PostPage() {
           placeholder={t('plugin_website.searchPlaceholder')}
           aria-label={t('common.keyword')}
         />
-        <Select value={draft.status ?? ALL} onValueChange={(v) => setDraft((d) => ({ ...d, status: v === ALL ? undefined : v }))}>
-          <SelectTrigger className="md:w-40" aria-label={t('plugin_website.fields.published')}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_website.filter.allStatuses')}</SelectItem>
-            <SelectItem value="published">{t('plugin_website.publishedOn')}</SelectItem>
-            <SelectItem value="scheduled">{t('plugin_website.post.scheduled')}</SelectItem>
-            <SelectItem value="draft">{t('plugin_website.publishedOff')}</SelectItem>
-          </SelectContent>
-        </Select>
+        <OptionPicker
+          title={t('plugin_website.fields.published')}
+          value={draft.status ?? []}
+          onChange={(v) => setDraft((d) => ({ ...d, status: v.length ? v : undefined }))}
+          options={[
+            { value: 'published', label: t('plugin_website.publishedOn') },
+            { value: 'scheduled', label: t('plugin_website.post.scheduled') },
+            { value: 'draft', label: t('plugin_website.publishedOff') },
+          ]}
+          className="md:w-44"
+          placeholder={t('plugin_website.fields.published')}
+        />
         {categories.length ? (
-          <Select value={draft.categoryId ?? ALL} onValueChange={(v) => setDraft((d) => ({ ...d, categoryId: v === ALL ? undefined : v }))}>
-            <SelectTrigger className="md:w-40" aria-label={t('plugin_website.post.categoryFilter')}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>{t('plugin_website.filter.allCategories')}</SelectItem>
-              {categories.map((c) => (
-                <SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <OptionPicker
+            title={t('plugin_website.post.categoryFilter')}
+            value={draft.categoryIds ?? []}
+            onChange={(v) => setDraft((d) => ({ ...d, categoryIds: v.length ? v : undefined }))}
+            options={categories.map((c) => ({ value: c.id, label: c.title }))}
+            className="md:w-44"
+            placeholder={t('plugin_website.post.categoryFilter')}
+          />
         ) : null}
         {extraLocales.length ? (
-          <Select value={draft.missing ?? ALL} onValueChange={(v) => setDraft((d) => ({ ...d, missing: v === ALL ? undefined : v }))}>
-            <SelectTrigger className="md:w-48" aria-label={t('plugin_website.i18n.filterLabel')}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>{t('plugin_website.filter.allLanguages')}</SelectItem>
-              {extraLocales.map((l) => (
-                <SelectItem key={l.code} value={l.code}>
-                  {t('plugin_website.i18n.filterNoTranslation', { lang: l.label })}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <OptionPicker
+            title={t('plugin_website.i18n.filterLabel')}
+            value={draft.missing ?? []}
+            onChange={(v) => setDraft((d) => ({ ...d, missing: v.length ? v : undefined }))}
+            options={extraLocales.map((l) => ({
+              value: l.code,
+              label: t('plugin_website.i18n.filterNoTranslation', { lang: l.label }),
+            }))}
+            className="md:w-52"
+            placeholder={t('plugin_website.i18n.filterLabel')}
+          />
         ) : null}
       </FilterBar>
       <DataTable

@@ -186,11 +186,11 @@ func (s *Service) List(ctx context.Context, q Query) ([]View, int64, error) {
 	if err != nil {
 		return nil, 0, err
 	}
-	if q.Channel != "" {
-		tx = tx.Where("channel = ?", q.Channel)
+	if len(q.Channel) > 0 {
+		tx = tx.Where("channel IN ?", q.Channel)
 	}
-	if q.Status != "" {
-		tx = tx.Where("status = ?", q.Status)
+	if len(q.Status) > 0 {
+		tx = tx.Where("status IN ?", q.Status)
 	}
 	if kw := strings.TrimSpace(q.Recipient); kw != "" {
 		tx = tx.Where("LOWER(recipient) LIKE LOWER(?)", likeArg(kw))

@@ -75,8 +75,9 @@ type PublishMeta struct {
 
 // FormQuery 是表单列表的查询条件。
 type FormQuery struct {
-	Keyword  string
-	Status   string
+	Keyword string
+	// Status 逗号拼接多值（?status=draft,published），空 = 不限
+	Status   []string
 	Page     int
 	PageSize int
 }

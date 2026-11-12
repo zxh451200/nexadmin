@@ -37,17 +37,14 @@ func (h *Handler) List(c *gin.Context) {
 	filters := map[string]any{}
 [[- range .FilterFields]]
 [[- if eq .Kind "dict"]]
-	if v := c.Query("[[.Camel]]"); v != "" {
-		filters["[[.Name]]"] = v
+	// 枚举筛选支持多选（逗号拼接）：?[[.Camel]]=a,b；单值旧链接天然兼容
+	if vs := response.ParseList(c.Query("[[.Camel]]"), response.MaxFilterValues); len(vs) > 0 {
+		filters["[[.Name]]"] = vs
 	}
 [[- else if eq .Kind "ref"]]
-	if v := c.Query("[[.Camel]]"); v != "" {
-		id, err := idgen.Parse(v)
-		if err != nil {
-			response.Fail(c, response.BadRequest("error.bad_request"))
-			return
-		}
-		filters["[[.Name]]"] = int64(id)
+	// 引用筛选支持多选（逗号拼接）：?[[.Camel]]=1,2,3；非法项忽略（筛选宽容语义）
+	if ids := response.ParseFilterIDs(c.Query("[[.Camel]]"), response.MaxFilterValues); len(ids) > 0 {
+		filters["[[.Name]]"] = ids
 	}
 [[- else if eq .Kind "bool"]]
 	switch c.Query("[[.Camel]]") {

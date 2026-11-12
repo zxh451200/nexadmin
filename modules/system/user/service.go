@@ -61,27 +61,40 @@ func (s *service) filtered(ctx context.Context, q listQuery, me actor) (*gorm.DB
 		like := "%" + escapeLike(kw) + "%"
 		tx = tx.Where("(LOWER(username) LIKE ? OR LOWER(nickname) LIKE ? OR LOWER(phone) LIKE ? OR LOWER(email) LIKE ?)", like, like, like, like)
 	}
-	if q.Status != "" {
-		tx = tx.Where("status = ?", q.Status)
+	if len(q.Status) > 0 {
+		tx = tx.Where("status IN ?", q.Status)
 	}
-	if q.Gender != "" {
-		tx = tx.Where("gender = ?", q.Gender)
+	if len(q.Gender) > 0 {
+		tx = tx.Where("gender IN ?", q.Gender)
 	}
-	if q.DeptID != "" {
-		id, err := idgen.Parse(q.DeptID)
-		if err != nil {
-			return nil, bad("user.dept_id_invalid")
-		}
+	if len(q.DeptIDs) > 0 {
 		// 本部门及以下：与 datascope 的 deptAndChild 同一语义，点父部门能看到子部门的用户。
-		// 物化路径（sys_dept.path）前缀匹配；部门不存在时返回空集，与旧等值匹配的行为一致。
-		var path string
-		if err := s.db.WithContext(ctx).Table("sys_dept").Select("path").Where("id = ?", int64(id)).Scan(&path).Error; err != nil {
-			return nil, err
+		// 多个部门取并集：先把每个部门按物化路径（sys_dept.path）前缀展开成子树，再对
+		// 用户表做一次 dept_id IN。物化路径前缀匹配；不存在的部门贡献空集，不报错。
+		conds := make([]string, 0, len(q.DeptIDs))
+		args := make([]any, 0, len(q.DeptIDs))
+		for _, id := range q.DeptIDs {
+			var path string
+			if err := s.db.WithContext(ctx).Table("sys_dept").Select("path").Where("id = ?", id).Scan(&path).Error; err != nil {
+				return nil, err
+			}
+			if path != "" {
+				conds = append(conds, "path LIKE ?")
+				args = append(args, escapeLike(path)+"%")
+			}
 		}
-		if path == "" {
+		if len(conds) == 0 {
 			tx = tx.Where("1 = 0")
 		} else {
-			tx = tx.Where("dept_id IN (SELECT id FROM sys_dept WHERE path LIKE ?)", escapeLike(path)+"%")
+			var deptIDs []int64
+			if err := s.db.WithContext(ctx).Table("sys_dept").Where(strings.Join(conds, " OR "), args...).Pluck("id", &deptIDs).Error; err != nil {
+				return nil, err
+			}
+			if len(deptIDs) == 0 {
+				tx = tx.Where("1 = 0")
+			} else {
+				tx = tx.Where("dept_id IN ?", deptIDs)
+			}
 		}
 	}
 	if q.CreatedFrom != "" {

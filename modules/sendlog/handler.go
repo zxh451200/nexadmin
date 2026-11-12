@@ -28,10 +28,23 @@ func validDate(s string) bool {
 // List GET /sendlogs?channel=&status=&recipient=&startDate=&endDate=&page=&pageSize=
 func (h *Handler) List(c *gin.Context) {
 	page, size := response.ParsePage(c)
-	q := Query{Channel: c.Query("channel"), Status: c.Query("status"), Recipient: c.Query("recipient"),
+	q := Query{Channel: response.ParseList(c.Query("channel"), response.MaxFilterValues), Status: response.ParseList(c.Query("status"), response.MaxFilterValues),
+		Recipient: c.Query("recipient"),
 		StartDate: c.Query("startDate"), EndDate: c.Query("endDate"), Page: page, PageSize: size}
-	if (q.Channel != "" && !oneOf(q.Channel, channels)) || (q.Status != "" && !oneOf(q.Status, statuses)) ||
-		!validDate(q.StartDate) || !validDate(q.EndDate) {
+	invalid := !validDate(q.StartDate) || !validDate(q.EndDate)
+	for _, ch := range q.Channel {
+		if !oneOf(ch, channels) {
+			invalid = true
+			break
+		}
+	}
+	for _, st := range q.Status {
+		if !oneOf(st, statuses) {
+			invalid = true
+			break
+		}
+	}
+	if invalid {
 		response.Fail(c, badRequest())
 		return
 	}

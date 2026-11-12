@@ -50,7 +50,7 @@ func (h *handler) handlers(c *gin.Context) {
 func (h *handler) listJobs(c *gin.Context) {
 	page, size := response.ParsePage(c)
 	list, total, err := h.svc.ListJobs(c.Request.Context(), JobQuery{
-		Keyword: strings.TrimSpace(c.Query("keyword")), Handler: c.Query("handler"), Enabled: c.Query("enabled"),
+		Keyword: strings.TrimSpace(c.Query("keyword")), Handler: response.ParseList(c.Query("handler"), response.MaxFilterValues), Enabled: c.Query("enabled"),
 		Page: page, PageSize: size,
 	})
 	if err != nil {
@@ -152,7 +152,7 @@ func (h *handler) setJobsEnabled(c *gin.Context) {
 func (h *handler) listLogs(c *gin.Context) {
 	page, size := response.ParsePage(c)
 	list, total, err := h.svc.ListLogs(c.Request.Context(), LogQuery{
-		JobID: c.Query("jobId"), Status: c.Query("status"), Page: page, PageSize: size,
+		JobIDs: response.ParseFilterIDs(c.Query("jobId"), response.MaxFilterValues), Status: response.ParseList(c.Query("status"), response.MaxFilterValues), Page: page, PageSize: size,
 	})
 	if err != nil {
 		response.Fail(c, err)
@@ -172,7 +172,7 @@ func (h *handler) getLog(c *gin.Context) {
 // GET /plugins/cron/logs/export.csv?jobId=&status= —— 按当前筛选导出执行日志 CSV。
 func (h *handler) exportLogs(c *gin.Context) {
 	rows, err := h.svc.ExportLogs(c.Request.Context(), LogQuery{
-		JobID: c.Query("jobId"), Status: c.Query("status"),
+		JobIDs: response.ParseFilterIDs(c.Query("jobId"), response.MaxFilterValues), Status: response.ParseList(c.Query("status"), response.MaxFilterValues),
 	})
 	if err != nil {
 		response.Fail(c, err)

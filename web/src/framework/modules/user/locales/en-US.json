@@ -30,6 +30,7 @@
       "roles": "Roles",
       "status": "Status",
       "avatar": "Avatar",
+      "avatarHint": "Square crop, 256×256 or larger recommended",
       "region": "Region",
       "remark": "Remark",
       "defaultPasswordHint": "New users get the initial password Nex@123456. Ask them to change it after first sign-in."

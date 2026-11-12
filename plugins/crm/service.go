@@ -504,17 +504,29 @@ func (s *Service) GetCustomer(ctx context.Context, sc *datascope.Scope, id idgen
 	return s.visibleCustomer(ctx, sc, id)
 }
 
+// lowerAll 逐项小写化并去空白（type 取值校验用小写键）。
+func lowerAll(vs []string) []string {
+	out := make([]string, 0, len(vs))
+	for _, v := range vs {
+		if v = strings.ToLower(strings.TrimSpace(v)); v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
 // CustomerQuery 过滤客户列表。Scope 由 HTTP 入口解析后传入；nil 表示不裁剪（内部调用）。
+// 枚举/标签类筛选是逗号拼接多值（?status=active,inactive），空切片 = 不限。
 type CustomerQuery struct {
-	Keyword     string // 名称 / 编码 / 锚点 / 证件号 / 信用代码 / 手机 / 邮箱
-	Type        string // person / company，空 = 不限
-	Status      string
-	Source      string
-	Level       string // A / B / C，空 = 不限
-	Tag         string // 单个标签，逗号边界匹配
-	CreatedFrom string // 建档时间下限（YYYY-MM-DD，含端点）
-	CreatedTo   string // 建档时间上限（YYYY-MM-DD，含端点）
-	SortKey     string // 排序字段（白名单见 customerSortCols，空 = 默认 id DESC）
+	Keyword     string   // 名称 / 编码 / 锚点 / 证件号 / 信用代码 / 手机 / 邮箱
+	Type        []string // person / company
+	Status      []string
+	Source      []string
+	Level       []string // A / B / C
+	Tag         []string // 标签（逗号边界匹配，多个取并集）
+	CreatedFrom string   // 建档时间下限（YYYY-MM-DD，含端点）
+	CreatedTo   string   // 建档时间上限（YYYY-MM-DD，含端点）
+	SortKey     string   // 排序字段（白名单见 customerSortCols，空 = 默认 id DESC）
 	SortAsc     bool
 	Scope       *datascope.Scope
 	Mine        bool // 只看我的：owner = 当前账号（与角色范围叠加）
@@ -548,9 +560,11 @@ func (q CustomerQuery) orderOf() string {
 // ListCustomers 分页列出客户。受限操作者按 owner（账号）+ 所属部门裁剪，
 // 复用 core/datascope 的 UsernameCond，与系统模块语义一致。
 func (s *Service) ListCustomers(ctx context.Context, q CustomerQuery) ([]Customer, int64, error) {
-	q.Type = strings.ToLower(strings.TrimSpace(q.Type))
-	if q.Type != "" && !TypeSet[q.Type] {
-		return nil, 0, response.BadRequest("crm.type_invalid")
+	q.Type = lowerAll(q.Type)
+	for _, t := range q.Type {
+		if !TypeSet[t] {
+			return nil, 0, response.BadRequest("crm.type_invalid")
+		}
 	}
 	db := applyCustomerFilter(s.db.WithContext(ctx).Model(&Customer{}), q)
 	if cond, args, limited := q.Scope.UsernameCond("owner"); limited {
@@ -862,7 +876,7 @@ func (s *Service) fillCustomerBrief(ctx context.Context, rows []Opportunity) err
 type OpportunityQuery struct {
 	Keyword    string
 	CustomerID idgen.ID
-	Stage      string
+	Stage      []string // 逗号拼接多值，空 = 不限
 	Scope      *datascope.Scope
 	Mine       bool // 只看我的：owner = 当前账号（与角色范围叠加）
 	Page       int
@@ -878,8 +892,8 @@ func (s *Service) ListOpportunities(ctx context.Context, q OpportunityQuery) ([]
 	if q.CustomerID != 0 {
 		db = db.Where("customer_id = ?", q.CustomerID)
 	}
-	if q.Stage != "" {
-		db = db.Where("stage = ?", q.Stage)
+	if len(q.Stage) > 0 {
+		db = db.Where("stage IN ?", q.Stage)
 	}
 	if cond, args, limited := q.Scope.UsernameCond("owner"); limited {
 		db = db.Where(cond, args...)

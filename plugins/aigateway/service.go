@@ -83,15 +83,15 @@ func (in *ModelInput) normalize() error {
 	return nil
 }
 
-// ListModels 分页列出模型配置（密钥打码）。
-func (s *Service) ListModels(ctx context.Context, keyword, kind string, page, pageSize int) ([]ModelView, int64, error) {
+// ListModels 分页列出模型配置（密钥打码）。kinds 是逗号拼接多值（空 = 不限）。
+func (s *Service) ListModels(ctx context.Context, keyword string, kinds []string, page, pageSize int) ([]ModelView, int64, error) {
 	db := s.db.WithContext(ctx).Model(&Model{})
 	if kw := strings.TrimSpace(keyword); kw != "" {
 		like := "%" + escapeLike(kw) + "%"
 		db = db.Where("LOWER(name) LIKE LOWER(?) OR LOWER(model) LIKE LOWER(?)", like, like)
 	}
-	if k := strings.TrimSpace(kind); k != "" {
-		db = db.Where("kind = ?", k)
+	if len(kinds) > 0 {
+		db = db.Where("kind IN ?", kinds)
 	}
 	var total int64
 	if err := db.Count(&total).Error; err != nil {
@@ -270,7 +270,8 @@ func (s *Service) RecordUsage(ctx context.Context, in UsageInput) {
 
 // UsageQuery 过滤用量列表。
 type UsageQuery struct {
-	Kind     string
+	Kind []string // 逗号拼接多值，空 = 不限
+	// BizType 保持单值：来自统计下钻（自由文本等值），多选语义不清晰
 	BizType  string
 	Page     int
 	PageSize int
@@ -279,8 +280,8 @@ type UsageQuery struct {
 // ListUsage 分页列出用量（最近在前）。
 func (s *Service) ListUsage(ctx context.Context, q UsageQuery) ([]Usage, int64, error) {
 	db := s.db.WithContext(ctx).Model(&Usage{})
-	if q.Kind != "" {
-		db = db.Where("kind = ?", q.Kind)
+	if len(q.Kind) > 0 {
+		db = db.Where("kind IN ?", q.Kind)
 	}
 	if q.BizType != "" {
 		db = db.Where("biz_type = ?", q.BizType)

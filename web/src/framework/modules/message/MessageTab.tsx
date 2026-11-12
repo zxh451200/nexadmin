@@ -21,12 +21,12 @@ import { formatTime } from './format'
 
 interface Filters {
   keyword: string
-  category: string
+  category: string[]
   onlyUnread: boolean
   range: DateRangeValue
 }
 
-const emptyFilters: Filters = { keyword: '', category: '', onlyUnread: false, range: {} }
+const emptyFilters: Filters = { keyword: '', category: [], onlyUnread: false, range: {} }
 
 export function MessageTab({ unread }: { unread: number }) {
   const { t, i18n } = useTranslation()
@@ -52,7 +52,7 @@ export function MessageTab({ unread }: { unread: number }) {
     page,
     pageSize,
     keyword: applied.keyword.trim() || undefined,
-    category: applied.category || undefined,
+    category: applied.category.length ? applied.category.join(',') : undefined,
     unread: applied.onlyUnread ? '1' : undefined,
     from: applied.range.from,
     to: applied.range.to,
@@ -159,11 +159,12 @@ export function MessageTab({ unread }: { unread: number }) {
           aria-label={t('common.keyword')}
         />
         <DictSelect
-          className="md:w-44"
+          className="md:w-48"
           dict="message_category"
+          multiple
           placeholder={t('message.fields.category')}
           value={draft.category}
-          onChange={(v) => setDraft((d) => ({ ...d, category: v ?? '' }))}
+          onChange={(v) => setDraft((d) => ({ ...d, category: v }))}
         />
         <DateRangePicker
           className="md:w-64"
@@ -196,7 +197,7 @@ export function MessageTab({ unread }: { unread: number }) {
               ]}
               getRows={() => fetchMessagesForExport({
                 keyword: applied.keyword.trim() || undefined,
-                category: applied.category || undefined,
+                category: applied.category.length ? applied.category.join(',') : undefined,
                 unread: applied.onlyUnread ? '1' : undefined,
                 from: applied.range.from,
                 to: applied.range.to,
@@ -212,7 +213,7 @@ export function MessageTab({ unread }: { unread: number }) {
             </Button>
           </>
         }
-        emptyText={applied.keyword || applied.category || applied.onlyUnread || applied.range.from || applied.range.to ? t('message.emptyFiltered') : t('message.emptyMessages')}
+        emptyText={applied.keyword || applied.category.length || applied.onlyUnread || applied.range.from || applied.range.to ? t('message.emptyFiltered') : t('message.emptyMessages')}
         pagination={{
           page,
           pageSize,

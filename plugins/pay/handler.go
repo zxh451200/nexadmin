@@ -120,9 +120,13 @@ func (h *handler) createOrder(c *gin.Context) {
 // orderQueryFrom 把列表/导出共用的查询参数收拢成 OrderQuery。
 func orderQueryFrom(c *gin.Context) OrderQuery {
 	return OrderQuery{
-		Keyword: c.Query("keyword"), Status: c.Query("status"), Channel: c.Query("channelCode"),
-		SubjectID: c.Query("subjectId"), BizType: c.Query("bizType"), Scene: c.Query("scene"),
-		FailReason:  c.Query("failReason"),
+		Keyword: c.Query("keyword"),
+		Status:  response.ParseList(c.Query("status"), response.MaxFilterValues),
+		Channel: response.ParseList(c.Query("channelCode"), response.MaxFilterValues),
+		SubjectID: c.Query("subjectId"),
+		BizType: response.ParseList(c.Query("bizType"), response.MaxFilterValues),
+		Scene:   response.ParseList(c.Query("scene"), response.MaxFilterValues),
+		FailReason: response.ParseList(c.Query("failReason"), response.MaxFilterValues),
 		CreatedFrom: c.Query("createdFrom"), CreatedTo: c.Query("createdTo"),
 	}
 }

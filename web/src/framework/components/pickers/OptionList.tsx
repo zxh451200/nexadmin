@@ -70,6 +70,8 @@ export function OptionList({
                   // 与 SelectItem 同尺寸同视觉：勾选在右、ps-2/pe-8、hover 用 accent
                   'relative flex min-h-11 w-full items-center rounded-sm py-1.5 ps-2 pe-8 text-start text-base',
                   'hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground focus-visible:outline-hidden',
+                  // 选中态常驻底色 + 主色文字：宽弹层里右侧的勾离标签几百像素，只靠一个小勾看不出选了哪几行
+                  selected && 'bg-accent text-primary',
                   'disabled:pointer-events-none disabled:opacity-50 md:min-h-0 md:text-sm',
                 )}
               >

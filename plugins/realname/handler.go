@@ -119,7 +119,7 @@ func listQueryFrom(c *gin.Context, sc *datascope.Scope) (*ListQuery, error) {
 		to = to.AddDate(0, 0, 1) // 右端开区间到次日零点，含 to 当天
 	}
 	return &ListQuery{
-		Keyword: c.Query("keyword"), Status: c.Query("status"),
+		Keyword: c.Query("keyword"), Status: response.ParseList(c.Query("status"), response.MaxFilterValues),
 		Scope: sc, Latest: c.Query("all") != "1",
 		From: from, To: to,
 	}, nil

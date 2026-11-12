@@ -57,10 +57,14 @@ func (s *Service) List(ctx context.Context, q ListQuery) ([]View, int64, error) 
 	if q.Keyword != "" {
 		base = base.Where("LOWER(title) LIKE LOWER(?)", likeArg(q.Keyword))
 	}
-	for col, v := range map[string]string{"type": q.Type, "level": q.Level, "status": q.Status} {
-		if v != "" {
-			base = base.Where(col+" = ?", v)
-		}
+	if len(q.Type) > 0 {
+		base = base.Where("type IN ?", q.Type)
+	}
+	if len(q.Level) > 0 {
+		base = base.Where("level IN ?", q.Level)
+	}
+	if len(q.Status) > 0 {
+		base = base.Where("status IN ?", q.Status)
 	}
 	base = base.Session(&gorm.Session{})
 	var total int64

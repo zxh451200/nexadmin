@@ -27,6 +27,7 @@ import {
   useUnlockUser,
   useUpdateUserStatus,
   useUserList,
+  toUserQuery,
   type User,
   type UserFilters,
 } from './api'
@@ -54,7 +55,7 @@ export default function UserPage() {
   const [exporting, setExporting] = useState(false)
   const { start: startExportJob } = useAsyncJob()
 
-  const list = useUserList({ page, pageSize, ...applied })
+  const list = useUserList({ page, pageSize, ...toUserQuery(applied) })
   const del = useDeleteUsers()
   const setStatus = useUpdateUserStatus()
   const batch = useBatchUserStatus()
@@ -125,14 +126,15 @@ export default function UserPage() {
   const exportUsers = async () => {
     setExporting(true)
     try {
+      const q = toUserQuery(applied)
       // 匹配行数超过 export.sync_limit 时改走异步任务：提示「已提交到导出中心」，完成后在导出中心下载
-      const plan = await fetchExportPlan(applied)
+      const plan = await fetchExportPlan(q)
       if (plan?.async) {
-        await startExportJob(() => createExportJob(applied))
+        await startExportJob(() => createExportJob(q))
         return
       }
       // 服务端按当前筛选条件与数据范围生成 .xlsx；列由服务端白名单决定，不含密码等敏感字段
-      const blob = await exportUsersFile(applied)
+      const blob = await exportUsersFile(q)
       saveBlob(`${t('user.export.filename')}.${blobExt(blob)}`, blob)
       toast.success(t('user.export.done'))
     } catch (e) {
@@ -208,8 +210,15 @@ export default function UserPage() {
       <AiFilterBox
         scope="user"
         onApply={(f) => {
-          const next: UserFilters = { keyword: f.keyword, status: f.status, gender: f.gender, createdFrom: f.createdFrom, createdTo: f.createdTo }
-          setDraft({ keyword: next.keyword, status: next.status })
+          // AI 筛选产出的是单值，多选字段统一收进数组
+          const next: UserFilters = {
+            keyword: f.keyword,
+            status: f.status ? [f.status] : undefined,
+            gender: f.gender ? [f.gender] : undefined,
+            createdFrom: f.createdFrom,
+            createdTo: f.createdTo,
+          }
+          setDraft({ keyword: next.keyword, status: next.status, gender: next.gender })
           setApplied(next)
           setPage(1)
           setSelected([])
@@ -223,8 +232,9 @@ export default function UserPage() {
           placeholder={t('user.keywordPlaceholder')}
           onChange={(e) => setDraft((d) => ({ ...d, keyword: e.target.value }))}
         />
-        <DictSelect dict="sys_status" value={draft.status ?? ''} onChange={(v) => setDraft((d) => ({ ...d, status: v || undefined }))} aria-label={t('common.status')} className="md:w-40" placeholder={t('common.status')} />
-        <TreeSelect url="/depts/tree" value={draft.deptId ?? ''} onChange={(v) => setDraft((d) => ({ ...d, deptId: v || undefined }))} aria-label={t('user.dept')} className="md:w-56" placeholder={t('user.dept')} />
+        <DictSelect dict="sys_status" multiple value={draft.status ?? []} onChange={(v) => setDraft((d) => ({ ...d, status: v.length ? v : undefined }))} aria-label={t('common.status')} className="md:w-44" placeholder={t('common.status')} />
+        <DictSelect dict="sys_gender" multiple value={draft.gender ?? []} onChange={(v) => setDraft((d) => ({ ...d, gender: v.length ? v : undefined }))} aria-label={t('user.gender')} className="md:w-36" placeholder={t('user.gender')} />
+        <TreeSelect url="/depts/tree" multiple value={draft.deptIds ?? []} onChange={(v) => setDraft((d) => ({ ...d, deptIds: v.length ? v : undefined }))} aria-label={t('user.dept')} className="md:w-56" placeholder={t('user.dept')} />
       </FilterBar>
 
       <DataTable<User>

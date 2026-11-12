@@ -193,19 +193,31 @@ func notFoundOr(err error) error {
 // List 分页查询文件。
 func (s *Service) List(ctx context.Context, q listQuery, page, pageSize int) ([]FileItem, int64, error) {
 	tx := s.db.WithContext(ctx).Model(&File{}).Where("variant_of = 0")
-	switch q.GroupID {
-	case "":
-	case "none":
-		tx = tx.Where("group_id = ?", 0)
-	default:
-		gid, err := idgen.Parse(q.GroupID)
-		if err != nil {
-			return nil, 0, response.BadRequest("file.group_id_invalid")
+	// 分组多选：CSV 里混着 "none"（未分组）与分组 id；非法项忽略，命中的并集返回
+	var onlyNone, hasGroup bool
+	var groupIDs []int64
+	for _, part := range strings.Split(q.GroupID, ",") {
+		switch part = strings.TrimSpace(part); part {
+		case "":
+		case "none":
+			onlyNone = true
+		default:
+			if gid, err := idgen.Parse(part); err == nil && gid > 0 {
+				hasGroup = true
+				groupIDs = append(groupIDs, int64(gid))
+			}
 		}
-		tx = tx.Where("group_id = ?", gid)
 	}
-	if q.Category != "" {
-		tx = tx.Where("category = ?", q.Category)
+	switch {
+	case onlyNone && !hasGroup:
+		tx = tx.Where("group_id = ?", 0)
+	case hasGroup && !onlyNone:
+		tx = tx.Where("group_id IN ?", groupIDs)
+	case hasGroup && onlyNone:
+		tx = tx.Where("group_id IN ? OR group_id = ?", groupIDs, 0)
+	}
+	if cats := response.ParseList(q.Category, response.MaxFilterValues); len(cats) > 0 {
+		tx = tx.Where("category IN ?", cats)
 	}
 	if kw := strings.TrimSpace(q.Keyword); kw != "" {
 		kw = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(kw)
@@ -342,6 +354,16 @@ func cleanName(n string) string {
 		return "unnamed"
 	}
 	return n
+}
+
+// ResolveUploadURL 把 tus 上传地址（.../files/upload/<id>）解析成真实下载地址。
+// 只放行公开文件：私有文件的签名地址等于绕过鉴权外泄，一律 404。
+func (s *Service) ResolveUploadURL(ctx context.Context, id idgen.ID) (string, error) {
+	var f File
+	if err := s.db.WithContext(ctx).First(&f, "id = ? AND storage_path <> '' AND visibility = 'public'", id).Error; err != nil {
+		return "", notFoundOr(err)
+	}
+	return apiBase + "/files/public/" + f.Token + "/" + url.PathEscape(f.Name), nil
 }
 
 // Update 修改名称 / 可见性 / 分组。

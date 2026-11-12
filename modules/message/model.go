@@ -40,7 +40,7 @@ type UnreadCount struct {
 // ListQuery 是消息列表的查询条件。
 type ListQuery struct {
 	Unread   bool
-	Category string
+	Category []string // 逗号拼接多值（?category=system,pay），空 = 不过滤
 	Keyword  string
 	// From / To 是 '2006-01-02' 的收件时间区间（含首尾两天）；留空不限。
 	From     string

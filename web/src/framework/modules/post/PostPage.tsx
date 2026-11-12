@@ -50,7 +50,7 @@ export function PostSection() {
 
   const filter = useClientFilter()
   const shown = useMemo(
-    () => data.filter((p) => matchText(filter.applied.keyword, p.name, p.code) && (!filter.applied.status || p.status === filter.applied.status)),
+    () => data.filter((p) => matchText(filter.applied.keyword, p.name, p.code) && (!filter.applied.status.length || filter.applied.status.includes(p.status))),
     [data, filter.applied],
   )
 

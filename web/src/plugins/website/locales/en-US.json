@@ -272,6 +272,8 @@
     "ali": {
       "configTitle": "Alibaba sync · Open platform credentials",
       "configDesc": "Credentials of a self-use app on the Alibaba.com open platform; secret and session key are encrypted and never shown again",
+      "configEntry": "Alibaba sync settings",
+      "configMissing": "Not set",
       "appKey": "AppKey",
       "appSecret": "AppSecret",
       "sessionKey": "SessionKey",
@@ -546,15 +548,15 @@
     },
     "hint": {
       "homeTitle": "Use a line break for two lines; the last line renders as gradient text",
-      "logoUrl": "Image URL, or upload with the button ({{types}}, ≤{{max}}); leave empty for the built-in letter mark",
-      "faviconUrl": "{{types}}; leave empty for the built-in favicon.svg",
+      "logoUrl": "≤240×240 square, transparent PNG/SVG recommended (nav shows it ~32–40px tall; {{types}}, ≤{{max}}); leave empty for the built-in letter mark",
+      "faviconUrl": "64×64 or 128×128 square PNG recommended (browser tabs render only 16–32px; {{types}}, ≤{{max}}); leave empty for the built-in favicon.svg",
       "ogImageUrl": "Fallback share image when content has none, 1200×630 recommended; leave empty to use the built-in one",
       "headCode": "Injected as-is into every page's <head> (GA / Baidu Analytics / site verification); configurable only by site-settings admins who own the script content, limited to 5000 characters",
       "titleSuffix": "Appended after page titles, replacing \" - SiteName\"; leave empty to use the site name",
       "theme": "Themes come from theme plugins and take effect right after saving; when a theme plugin is uninstalled the site falls back to the default theme without downtime",
       "demoImport": "Writes the brand's sample products and news (insert-only), and replaces brand identity (site name / home copy / navigation / feature cards); safe to repeat",
       "homeSlug": "Pick a custom page to serve as the site homepage (replaces the built-in hero page). Deleted or unpublished pages fall back to the built-in home; a draft takes effect once published",
-      "qrCodeUrl": "Shown in the footer and on the contact page; leave empty to hide the QR code",
+      "qrCodeUrl": "≥500×500 square PNG with a quiet margin recommended (scanners need it; {{types}}, ≤{{max}}); shown in the footer and on the contact page — leave empty to hide the QR code",
       "socials": "Social icons in the footer and on the contact page; up to {{max}}, https:// or mailto:",
       "friendLinks": "The “Links” column in the footer; up to {{max}}, hidden when empty",
       "navHref": "Pick a site page here. Choose “Custom link” for an external URL (must start with https://) or an in-page anchor."

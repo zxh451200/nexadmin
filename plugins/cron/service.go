@@ -323,9 +323,12 @@ func view(j Job, now time.Time) JobView {
 }
 
 // JobQuery 是任务列表筛选条件。
+// Handler 是逗号拼接多值（?handler=a,b），空切片 = 不限；Enabled 是 bool 三态参数。
 type JobQuery struct {
-	Keyword, Handler, Enabled string
-	Page, PageSize            int
+	Keyword        string
+	Handler        []string
+	Enabled        string
+	Page, PageSize int
 }
 
 func (s *Service) ListJobs(ctx context.Context, q JobQuery) ([]JobView, int64, error) {
@@ -333,8 +336,8 @@ func (s *Service) ListJobs(ctx context.Context, q JobQuery) ([]JobView, int64, e
 	if q.Keyword != "" {
 		tx = tx.Where("LOWER(name) LIKE LOWER(?)", "%"+escapeLike(q.Keyword)+"%")
 	}
-	if q.Handler != "" {
-		tx = tx.Where("handler = ?", q.Handler)
+	if len(q.Handler) > 0 {
+		tx = tx.Where("handler IN ?", q.Handler)
 	}
 	switch q.Enabled {
 	case "1", "true":
@@ -481,8 +484,10 @@ func (s *Service) SetJobsEnabled(ctx context.Context, ids []idgen.ID, enabled bo
 // ---- 执行日志 ----
 
 // LogQuery 是执行日志筛选条件。
+// Status 逗号拼接多值；JobID 同样支持逗号多选（非法项忽略），空 = 不限。
 type LogQuery struct {
-	JobID, Status  string
+	JobIDs         []int64
+	Status         []string
 	Page, PageSize int
 }
 
@@ -494,15 +499,11 @@ const logListColumns = "id, tenant_id, job_id, job_name, handler, trigger_type, 
 // 而「导出的行数和页面上看到的不一样」是最难被发现的那种错。
 func (s *Service) logFilter(ctx context.Context, q LogQuery) (*gorm.DB, error) {
 	tx := s.db.WithContext(ctx).Model(&Log{})
-	if q.JobID != "" {
-		jid, err := idgen.Parse(q.JobID)
-		if err != nil {
-			return nil, badReq("cron.job_id_invalid")
-		}
-		tx = tx.Where("job_id = ?", jid)
+	if len(q.JobIDs) > 0 {
+		tx = tx.Where("job_id IN ?", q.JobIDs)
 	}
-	if q.Status != "" {
-		tx = tx.Where("status = ?", q.Status)
+	if len(q.Status) > 0 {
+		tx = tx.Where("status IN ?", q.Status)
 	}
 	return tx, nil
 }

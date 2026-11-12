@@ -18,7 +18,7 @@ type Handler struct{ svc *Service }
 func (h *Handler) List(c *gin.Context) {
 	page, size := response.ParsePage(c)
 	list, total, err := h.svc.List(c.Request.Context(), ListFilter{
-		Type:    c.Query("type"),
+		Type:    response.ParseList(c.Query("type"), response.MaxFilterValues),
 		Keyword: strings.TrimSpace(c.Query("keyword")),
 		From:    c.Query("from"),
 		To:      c.Query("to"),

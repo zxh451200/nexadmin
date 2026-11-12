@@ -34,6 +34,7 @@ export interface UnreadCount {
 export interface MessageQuery extends PageQuery {
   /** '1' 仅未读 */
   unread?: string
+  /** 逗号分隔多值：?category=system,pay */
   category?: string
   keyword?: string
   /** 'yyyy-MM-dd'，含当天 */

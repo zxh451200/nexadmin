@@ -78,8 +78,8 @@ func (s *Service) filter(tx *gorm.DB, q Query, keywordCols ...string) *gorm.DB {
 		}
 		tx = tx.Where("("+strings.Join(conds, " OR ")+")", args...)
 	}
-	if q.Status != "" {
-		tx = tx.Where("status = ?", q.Status)
+	if len(q.Status) > 0 {
+		tx = tx.Where("status IN ?", q.Status)
 	}
 	if t, err := time.ParseInLocation("2006-01-02", q.StartDate, s.loc); err == nil {
 		tx = tx.Where("created_at >= ?", t.UTC())
@@ -93,16 +93,16 @@ func (s *Service) filter(tx *gorm.DB, q Query, keywordCols ...string) *gorm.DB {
 // operQuery / loginQuery 是列表与导出共用的“筛选 + 数据范围”查询，导出不另写一套条件。
 func (s *Service) operQuery(ctx context.Context, q Query) *gorm.DB {
 	tx := scoped(s.filter(s.db.WithContext(ctx).Model(&OperLog{}), q, "module", "operator", "url"), q.Scope, operCol)
-	if q.Type != "" {
-		tx = tx.Where("type = ?", q.Type)
+	if len(q.Type) > 0 {
+		tx = tx.Where("type IN ?", q.Type)
 	}
 	return tx
 }
 
 func (s *Service) loginQuery(ctx context.Context, q Query) *gorm.DB {
 	tx := scoped(s.filter(s.db.WithContext(ctx).Model(&LoginLog{}), q, "username", "ip"), q.Scope, loginCol)
-	if q.LoginType != "" {
-		tx = tx.Where("login_type = ?", q.LoginType)
+	if len(q.LoginType) > 0 {
+		tx = tx.Where("login_type IN ?", q.LoginType)
 	}
 	return tx
 }

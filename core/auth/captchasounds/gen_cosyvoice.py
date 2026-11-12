@@ -1,5 +1,8 @@
 # captchasounds 数字音源生成脚本（assets provenance）。
 #
+# 【历史脚本】2026-11-12 起 captchasounds/zh 由 TTSMaker 在线合成，见 ATTRIBUTION.md；
+# 本脚本只用于重放当年 CosyVoice2 版音源，跑它不会再产出仓库里当前的 wav。
+#
 # 源：CosyVoice2-0.5B（Apache-2.0，FunAudioLLM），零样本模式合成——
 # 参考音频由 Kokoro-82M（Apache-2.0）的实测最干净音色（zh sid8）生成，许可链全程
 # 可商用。模型与本脚本只在**再生成资产时**使用，运行时不依赖。

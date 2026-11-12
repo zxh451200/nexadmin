@@ -304,23 +304,22 @@ func (h *handler) hookTest(c *gin.Context) {
 }
 
 // GET /openapi/deliveries?webhookId=&status=success|failed|pending&event=&page=&pageSize=
+// webhookId/status 支持逗号拼接多值；status 任一项不在白名单就整体拒绝（与旧单值语义一致）。
 func (h *handler) deliveryList(c *gin.Context) {
 	page, size := response.ParsePage(c)
 	q := h.db.WithContext(c.Request.Context()).Model(&Delivery{})
-	if v := strings.TrimSpace(c.Query("webhookId")); v != "" {
-		id, err := idgen.Parse(v)
-		if err != nil {
-			response.Fail(c, response.BadRequest("openapi.webhook_id_invalid"))
-			return
-		}
-		q = q.Where("webhook_id = ?", int64(id))
+	if ids := response.ParseFilterIDs(c.Query("webhookId"), response.MaxFilterValues); len(ids) > 0 {
+		q = q.Where("webhook_id IN ?", ids)
 	}
-	if st := strings.TrimSpace(c.Query("status")); st != "" {
+	statuses := response.ParseList(c.Query("status"), response.MaxFilterValues)
+	for _, st := range statuses {
 		if st != StatusSuccess && st != StatusFailed && st != StatusPending {
 			response.Fail(c, response.BadRequest("openapi.delivery_status_invalid"))
 			return
 		}
-		q = q.Where("status = ?", st)
+	}
+	if len(statuses) > 0 {
+		q = q.Where("status IN ?", statuses)
 	}
 	// 按事件名精确筛：调试「某个事件到底投出去没有」时，翻页找事件太低效。
 	if ev := strings.TrimSpace(c.Query("event")); ev != "" {

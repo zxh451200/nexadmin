@@ -82,12 +82,13 @@ type LoginView struct {
 }
 
 // Query 是两种日志列表共用的查询条件。
+// 枚举类筛选是逗号拼接多值（?type=create,update），空切片 = 不过滤。
 type Query struct {
 	Keyword   string
-	Status    string
-	Type      string // 操作类型（操作日志）
-	LoginType string // 登录方式（登录日志）
-	StartDate string // YYYY-MM-DD，按应用时区
+	Status    []string
+	Type      []string // 操作类型（操作日志）
+	LoginType []string // 登录方式（登录日志）
+	StartDate string   // YYYY-MM-DD，按应用时区
 	EndDate   string
 	Page      int
 	PageSize  int

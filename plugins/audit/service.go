@@ -34,9 +34,13 @@ type ConfigView struct {
 }
 
 // LogQuery 是列表筛选条件。From/To 是 yyyy-MM-dd（UTC，含当天）。
+// Table/Action 是逗号拼接多值（空切片 = 不限）；Operator 是关键词（保持单值）。
 type LogQuery struct {
-	Table, Operator, Action, From, To string
-	Page, PageSize                    int
+	Tables         []string
+	Operator       string
+	Actions        []string
+	From, To       string
+	Page, PageSize int
 }
 
 func (s *Service) tx(ctx context.Context) *gorm.DB {
@@ -129,11 +133,11 @@ const exportMaxRows = 20000
 // filteredLogs 是列表与导出共用的筛选器（筛选口径完全一致）。
 func (s *Service) filteredLogs(ctx context.Context, q LogQuery) *gorm.DB {
 	tx := s.tx(ctx).Model(&Log{})
-	if q.Table != "" {
-		tx = tx.Where("table_name = ?", q.Table)
+	if len(q.Tables) > 0 {
+		tx = tx.Where("table_name IN ?", q.Tables)
 	}
-	if q.Action != "" {
-		tx = tx.Where("action = ?", q.Action)
+	if len(q.Actions) > 0 {
+		tx = tx.Where("action IN ?", q.Actions)
 	}
 	if q.Operator != "" {
 		tx = tx.Where("LOWER(operator_name) LIKE LOWER(?)", "%"+likeEscape(q.Operator)+"%")

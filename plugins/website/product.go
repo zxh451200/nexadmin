@@ -31,24 +31,29 @@ const (
 )
 
 // productTx 是产品列表的筛选条件，复用页面/新闻的 ContentQuery：
-// Keyword 匹配标题与 slug；Status 取产品状态集（空 = 全部）；CategoryID 收窄到类目。
+// Keyword 匹配标题与 slug；Statuses 取产品状态集（空 = 全部，多值 IN）；CategoryIDs 收窄到类目（多选并集）。
 func productTx(tx *gorm.DB, q ContentQuery) *gorm.DB {
 	if kw := strings.TrimSpace(q.Keyword); kw != "" {
 		tx = tx.Where("LOWER(title) LIKE LOWER(?) OR LOWER(slug) LIKE LOWER(?)", "%"+kw+"%", "%"+kw+"%")
 	}
-	if productStatuses[q.Status] {
-		tx = tx.Where("status = ?", q.Status)
-	}
-	// 类目筛选只对产品生效（关联表固定，无用户输入拼接）。
-	if q.CategoryID > 0 {
-		tx = tx.Where("id IN (SELECT product_id FROM plg_website_product_category_rel WHERE category_id = ?)", int64(q.CategoryID))
-	}
-	if code := strings.TrimSpace(q.Missing); code != "" {
-		if l, ok := LanguageByCode(code); ok {
-			// nexadmin:like-exempt 非关键词筛选：匹配的是配置里的语言 code，两侧同源。
-			tx = tx.Where("i18n_json IS NULL OR i18n_json = '' OR i18n_json NOT LIKE ?", "%\""+l.Code+"\":%")
+	sts := make([]string, 0, len(q.Statuses))
+	for _, st := range q.Statuses {
+		if productStatuses[st] {
+			sts = append(sts, st)
 		}
 	}
+	if len(sts) > 0 {
+		tx = tx.Where("status IN ?", sts)
+	}
+	// 类目筛选只对产品生效（关联表固定，无用户输入拼接）。
+	if len(q.CategoryIDs) > 0 {
+		ids := make([]int64, 0, len(q.CategoryIDs))
+		for _, id := range q.CategoryIDs {
+			ids = append(ids, int64(id))
+		}
+		tx = tx.Where("id IN (SELECT product_id FROM plg_website_product_category_rel WHERE category_id IN ?)", ids)
+	}
+	tx = missingTx(tx, q.Missings)
 	return tx
 }
 
@@ -125,7 +130,7 @@ func (s *Service) SaveProduct(ctx context.Context, id idgen.ID, f ProductForm) (
 	f.SeoKeywords = trimLen(f.SeoKeywords, 300)
 	f.CoverURL = trimLen(f.CoverURL, 255)
 	f.VideoURL = trimLen(f.VideoURL, 255)
-	f.Port = trimLen(f.Port, 64)
+	f.Port = trimLen(f.Port, 100)
 	f.PaymentTerms = trimLen(f.PaymentTerms, 100)
 	f.PriceUnit = trimLen(f.PriceUnit, 32)
 	f.Author = trimLen(f.Author, 64)

@@ -367,11 +367,17 @@ export interface PayChannelProbe {
 }
 
 export interface OrderQuery extends PageQuery {
+  /** 逗号分隔多值：?status=paid,refunded */
   status?: string
+  /** 逗号分隔多值渠道 */
   channelCode?: string
+  /** 统计下钻 chips 的语义是单主体，保持单值 */
   subjectId?: string
+  /** 逗号分隔多值 */
   bizType?: string
+  /** 逗号分隔多值 */
   scene?: string
+  /** 逗号分隔多值 */
   failReason?: string
   /** 下单日期范围（含两端，yyyy-mm-dd，按应用时区）；后端对非法值显式报错 */
   createdFrom?: string

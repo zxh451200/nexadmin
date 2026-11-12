@@ -51,8 +51,11 @@ export interface NoticeReadStats {
 }
 
 export interface NoticeQuery extends PageQuery {
+  /** 逗号分隔多值：?type=alert,info */
   type?: string
+  /** 逗号分隔多值 */
   level?: string
+  /** 逗号分隔多值 */
   status?: string
 }
 

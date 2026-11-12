@@ -35,8 +35,9 @@ type Item struct {
 }
 
 // ListFilter 是回收站列表的筛选：类型 / 关键词 / 删除时间范围（from/to 为 YYYY-MM-DD，含当天）。
+// Type 逗号拼接多值（?type=user,role），空 = 不限。
 type ListFilter struct {
-	Type    string
+	Type    []string
 	Keyword string
 	From    string
 	To      string
@@ -48,8 +49,8 @@ type ListFilter struct {
 // （查不到——操作人也被删了——就回退原始值）。
 func (s *Service) List(ctx context.Context, f ListFilter) ([]Item, int64, error) {
 	tx := s.db.WithContext(ctx).Model(&recbin.Entry{})
-	if f.Type != "" {
-		tx = tx.Where("type = ?", f.Type)
+	if len(f.Type) > 0 {
+		tx = tx.Where("type IN ?", f.Type)
 	}
 	if f.Keyword != "" {
 		r := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)

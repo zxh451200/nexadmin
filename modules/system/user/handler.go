@@ -36,9 +36,17 @@ func me(c *gin.Context) actor {
 
 func queryOf(c *gin.Context) listQuery {
 	page, size := response.ParsePage(c)
+	// deptIds 是多选参数；兼容历史单值 deptId（旧链接/AI 筛选）
+	deptRaw := c.Query("deptIds")
+	if strings.TrimSpace(deptRaw) == "" {
+		deptRaw = c.Query("deptId")
+	}
 	return listQuery{
-		Page: page, PageSize: size, Keyword: c.Query("keyword"), Status: c.Query("status"), DeptID: c.Query("deptId"),
-		Gender: c.Query("gender"), CreatedFrom: c.Query("createdFrom"), CreatedTo: c.Query("createdTo"),
+		Page: page, PageSize: size, Keyword: c.Query("keyword"),
+		Status: response.ParseList(c.Query("status"), response.MaxFilterValues),
+		DeptIDs: response.ParseFilterIDs(deptRaw, response.MaxFilterValues),
+		Gender: response.ParseList(c.Query("gender"), response.MaxFilterValues),
+		CreatedFrom: c.Query("createdFrom"), CreatedTo: c.Query("createdTo"),
 	}
 }
 

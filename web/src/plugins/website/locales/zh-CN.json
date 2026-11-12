@@ -272,6 +272,8 @@
     "ali": {
       "configTitle": "阿里国际站同步 · 开放平台凭据",
       "configDesc": "填入国际站开放平台「自用型应用」的凭据；Secret 与 SessionKey 加密保存，界面上不会再次显示",
+      "configEntry": "阿里同步配置",
+      "configMissing": "未配置",
       "appKey": "AppKey",
       "appSecret": "AppSecret",
       "sessionKey": "SessionKey",
@@ -546,15 +548,15 @@
     },
     "hint": {
       "homeTitle": "两行标题请用换行分隔，末行渲染为渐变文字",
-      "logoUrl": "图片 URL 或点击右侧按钮上传（{{types}}，≤{{max}}）；留空使用内置字母标志",
-      "faviconUrl": "{{types}}；留空使用内置 favicon.svg",
+      "logoUrl": "建议 ≤240×240 正方形、透明底 PNG/SVG（导航栏展示高约 32–40px；{{types}}，≤{{max}}）；留空使用内置字母标志",
+      "faviconUrl": "建议 64×64 或 128×128 正方形 PNG（浏览器标签实际只有 16–32px；{{types}}，≤{{max}}）；留空使用内置 favicon.svg",
       "ogImageUrl": "内容没配分享图时的兜底图，建议 1200×630；留空使用内置分享图",
       "headCode": "原样注入每个页面的 <head>（GA / 百度统计 / 站点验证）；仅站点设置管理员可配，脚本内容由其自行负责，限 5000 字符",
       "titleSuffix": "拼在页面标题之后替换「 - 站点名」；留空使用站点名",
       "theme": "主题由主题插件提供，保存设置后官网立即换肤；主题插件被卸载时自动回退默认主题，站点不断线",
       "demoImport": "写入该品牌的示例产品与新闻（只增不删），并整体替换站点名称/首页文案/导航/特性卡片等品牌门面内容；可重复执行",
       "homeSlug": "选一张自定义单页作为官网首页（替换内置 Hero 页）；页面删除或未发布时自动回退内置首页，草稿页发布后即生效",
-      "qrCodeUrl": "展示在页脚与联系页；留空则不显示二维码",
+      "qrCodeUrl": "建议 ≥500×500 正方形 PNG、四周留白边（扫码需要余量；{{types}}，≤{{max}}）；展示在页脚与联系页，留空则不显示二维码",
       "socials": "页脚与联系页的社交图标；最多 {{max}} 个，支持 https:// 与 mailto:",
       "friendLinks": "页脚「友情链接」列；最多 {{max}} 个，留空则不显示该列",
       "navHref": "站内页面直接选；外部链接或页内锚点选「自定义链接」，外部地址需以 https:// 开头。"

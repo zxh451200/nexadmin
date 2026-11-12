@@ -7,12 +7,12 @@ import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { downloadCsv } from '@/framework/components/export/csv'
 import { FilterBar } from '@/framework/components/FilterBar'
+import { OptionPicker } from '@/framework/components/OptionPicker'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import { formatTime } from './format'
 import {
   MESSAGE_STATUSES,
@@ -24,16 +24,14 @@ import {
   type SiteMessage,
 } from './api'
 
-const ALL = '__all'
-
 /** 官网「在线留言」收件箱：按状态跟进（未读 → 已读 → 已处理），支持批量。 */
 export default function MessagePage() {
   const { t, i18n } = useTranslation()
   const confirm = useConfirm()
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
-  const [draft, setDraft] = useState<{ keyword?: string; status?: MessageStatus }>({})
-  const [filters, setFilters] = useState<{ keyword?: string; status?: MessageStatus }>({})
+  const [draft, setDraft] = useState<{ keyword?: string; status?: string[] }>({})
+  const [filters, setFilters] = useState<{ keyword?: string; status?: string }>({})
   const [selected, setSelected] = useState<string[]>([])
   const [detail, setDetail] = useState<SiteMessage | null>(null)
   const { data, isLoading } = useMessages({
@@ -172,7 +170,7 @@ export default function MessagePage() {
       <PageHeader title={t('plugin_website.message.title')} description={t('plugin_website.message.desc')} />
       <FilterBar
         onSearch={() => {
-          setFilters(draft)
+          setFilters({ keyword: draft.keyword, status: draft.status?.length ? draft.status.join(',') : undefined })
           setPage(1)
           setSelected([])
         }}
@@ -190,22 +188,14 @@ export default function MessagePage() {
           aria-label={t('plugin_website.message.searchPlaceholder')}
           className="md:w-64"
         />
-        <Select
-          value={draft.status ?? ALL}
-          onValueChange={(v) => setDraft((d) => ({ ...d, status: v === ALL ? undefined : (v as MessageStatus) }))}
-        >
-          <SelectTrigger className="md:w-40" aria-label={t('plugin_website.message.status')}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_website.filter.allStatuses')}</SelectItem>
-            {MESSAGE_STATUSES.map((s) => (
-              <SelectItem key={s} value={s}>
-                {statusLabel(s)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <OptionPicker
+          title={t('plugin_website.message.status')}
+          value={draft.status ?? []}
+          onChange={(v) => setDraft((d) => ({ ...d, status: v.length ? v : undefined }))}
+          options={MESSAGE_STATUSES.map((s) => ({ value: s, label: statusLabel(s) }))}
+          className="md:w-44"
+          placeholder={t('plugin_website.message.status')}
+        />
       </FilterBar>
       <DataTable
         toolbar={

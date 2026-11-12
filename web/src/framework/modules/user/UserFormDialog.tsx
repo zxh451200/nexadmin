@@ -16,7 +16,7 @@ import { Uploader } from '@/framework/components/Uploader'
 import { api } from '@/framework/request/http'
 import type { UploadedFile } from '@/framework/upload/types'
 import { Button } from '@/framework/ui/button'
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/framework/ui/form'
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/framework/ui/form'
 import { Input } from '@/framework/ui/input'
 import { Textarea } from '@/framework/ui/textarea'
 import { useCreateUser, useUpdateUser, type User, type UserInput } from './api'
@@ -282,6 +282,7 @@ export function UserFormDialog({ open, onOpenChange, user }: UserFormDialogProps
                   <FormItem>
                     <FormLabel>{t('user.form.avatar')}</FormLabel>
                     <Uploader kind="image" crop={{ aspect: 1 }} visibility="public" value={field.value} onChange={field.onChange} />
+                    <FormDescription>{t('user.form.avatarHint')}</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}

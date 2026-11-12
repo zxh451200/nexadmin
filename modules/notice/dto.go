@@ -49,11 +49,12 @@ type Form struct {
 }
 
 // ListQuery 是管理端列表的查询条件。
+// 枚举类筛选是逗号拼接多值（?type=alert,info），空切片 = 不过滤。
 type ListQuery struct {
 	Keyword  string
-	Type     string
-	Level    string
-	Status   string
+	Type     []string
+	Level    []string
+	Status   []string
 	Page     int
 	PageSize int
 	Scope    *datascope.Scope // 操作者的数据范围；nil = 不裁剪（仅内部调用），HTTP 入口必须设置

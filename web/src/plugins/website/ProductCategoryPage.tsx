@@ -13,6 +13,7 @@ import { TreeTable } from '@/framework/components/TreeTable'
 import type { Column } from '@/framework/components/table/types'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import {
   useDeleteProductCategory,
   useNavMaxDepth,
@@ -197,19 +198,19 @@ function CategoryFormDialog({
         <span className="text-xs text-muted-foreground">/products?category={slug || '…'}</span>
       </SharedRow>
       <SharedRow label={t('plugin_website.productCategory.parent')}>
-        <select
-          value={parentId}
-          onChange={(e) => setParentId(e.target.value)}
-          aria-label={t('plugin_website.productCategory.parent')}
-          className="border-input bg-background flex h-9 w-full rounded-md border px-3 text-sm"
-        >
-          <option value="0">{t('plugin_website.productCategory.parentRoot')}</option>
-          {parentOptions.map((opt) => (
-            <option key={opt.id} value={opt.id}>
-              {'　'.repeat(opt.depth - 1)}{opt.label}
-            </option>
-          ))}
-        </select>
+        <Select value={parentId} onValueChange={setParentId}>
+          <SelectTrigger className="w-full" aria-label={t('plugin_website.productCategory.parent')}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent className="max-h-72">
+            <SelectItem value="0">{t('plugin_website.productCategory.parentRoot')}</SelectItem>
+            {parentOptions.map((opt) => (
+              <SelectItem key={opt.id} value={opt.id}>
+                <span style={{ paddingInlineStart: `${(opt.depth - 1) * 16}px` }}>{opt.label}</span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </SharedRow>
       <SharedRow label={t('plugin_website.fields.sort')}>
         <Input type="number" value={sort} onChange={(e) => setSort(e.target.value)} placeholder="0" />

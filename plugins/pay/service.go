@@ -929,14 +929,16 @@ func (s *Service) ListChannels(ctx context.Context, subjectID string, enabledOnl
 // ---- admin lists ----
 
 // OrderQuery 过滤支付单列表。
+// 枚举类筛选是逗号拼接多值（?status=paid,refunded），空切片 = 不过滤；
+// SubjectID 保留单值（统计下钻 chips 的语义是单主体）。
 type OrderQuery struct {
 	Keyword    string // 支付单号 / 业务单号模糊
-	Status     string
-	Channel    string
+	Status     []string
+	Channel    []string
 	SubjectID  string
-	BizType    string
-	Scene      string
-	FailReason string
+	BizType    []string
+	Scene      []string
+	FailReason []string
 	// CreatedFrom/CreatedTo 是下单日期范围（含两端，yyyy-mm-dd，按应用时区解析）。
 	// 财务查「某天的单」比翻页高频；非法值显式报错而不是静默忽略——
 	// 对账导出里少一天是数据事故，不是体验问题。
@@ -981,23 +983,23 @@ func (s *Service) orderFilter(ctx context.Context, q OrderQuery) (*gorm.DB, time
 		like := "%" + escapeLike(kw) + "%"
 		db = db.Where("LOWER(payment_no) LIKE LOWER(?) OR LOWER(biz_no) LIKE LOWER(?)", like, like)
 	}
-	if q.Status != "" {
-		db = db.Where("status = ?", q.Status)
+	if len(q.Status) > 0 {
+		db = db.Where("status IN ?", q.Status)
 	}
-	if q.Channel != "" {
-		db = db.Where("channel_code = ?", q.Channel)
+	if len(q.Channel) > 0 {
+		db = db.Where("channel_code IN ?", q.Channel)
 	}
 	if q.SubjectID != "" {
 		db = db.Where("subject_id = ?", q.SubjectID)
 	}
-	if q.BizType != "" {
-		db = db.Where("biz_type = ?", q.BizType)
+	if len(q.BizType) > 0 {
+		db = db.Where("biz_type IN ?", q.BizType)
 	}
-	if q.Scene != "" {
-		db = db.Where("scene = ?", q.Scene)
+	if len(q.Scene) > 0 {
+		db = db.Where("scene IN ?", q.Scene)
 	}
-	if q.FailReason != "" {
-		db = db.Where("fail_reason = ?", q.FailReason)
+	if len(q.FailReason) > 0 {
+		db = db.Where("fail_reason IN ?", q.FailReason)
 	}
 	if !from.IsZero() {
 		db = db.Where("created_at >= ?", from)

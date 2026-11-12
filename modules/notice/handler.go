@@ -64,8 +64,9 @@ func (h *Handler) guard(c *gin.Context, ids ...idgen.ID) bool {
 // List GET /notices
 func (h *Handler) List(c *gin.Context) {
 	page, size := response.ParsePage(c)
-	q := ListQuery{Keyword: strings.TrimSpace(c.Query("keyword")), Type: c.Query("type"), Level: c.Query("level"),
-		Status: c.Query("status"), Page: page, PageSize: size}
+	q := ListQuery{Keyword: strings.TrimSpace(c.Query("keyword")),
+		Type: response.ParseList(c.Query("type"), response.MaxFilterValues), Level: response.ParseList(c.Query("level"), response.MaxFilterValues),
+		Status: response.ParseList(c.Query("status"), response.MaxFilterValues), Page: page, PageSize: size}
 	sc, ok := h.scope(c)
 	if !ok {
 		return
@@ -189,7 +190,7 @@ func (h *Handler) Mine(c *gin.Context) {
 	page, size := response.ParsePage(c)
 	unread := c.Query("unread") == "1" || c.Query("unread") == "true"
 	list, total, err := h.svc.Mine(c.Request.Context(), auth.ClaimsFrom(c).UserID,
-		strings.TrimSpace(c.Query("keyword")), c.Query("type"), unread, page, size)
+		strings.TrimSpace(c.Query("keyword")), response.ParseList(c.Query("type"), response.MaxFilterValues), unread, page, size)
 	if err != nil {
 		response.Fail(c, err)
 		return

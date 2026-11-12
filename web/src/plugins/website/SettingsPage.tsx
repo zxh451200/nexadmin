@@ -425,7 +425,7 @@ function SettingsFormBody({
             {uploading ? t('plugin_website.logo.uploading') : t('plugin_website.qr.upload')}
           </Button>
         </div>
-        <span className="text-xs text-muted-foreground">{t('plugin_website.hint.qrCodeUrl')}</span>
+        <span className="text-xs text-muted-foreground">{t('plugin_website.hint.qrCodeUrl', mediaHint)}</span>
       </SharedFieldShell>
       {sharedInput('qrCodeCaption')}
       {sharedInput('icp')}

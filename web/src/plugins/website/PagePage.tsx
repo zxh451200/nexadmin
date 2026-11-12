@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { OptionPicker } from '@/framework/components/OptionPicker'
 import { FilterBar } from '@/framework/components/FilterBar'
 import {
   LocaleFormActions,
@@ -23,7 +24,6 @@ import { ImageUrlField } from '@/framework/components/ImageUrlField'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import { EditorSchemaGate } from './EditorSchemaGate'
 import { formatTime, slugify } from './format'
 import TranslationStatus from './TranslationStatus'
@@ -40,11 +40,11 @@ import {
   useSaveNav,
   useSavePage,
   useSetPagesStatus,
+  toContentQuery,
+  type ContentDraft,
   type ContentQuery,
   type SitePage,
 } from './api'
-
-const ALL = '__all'
 
 /**
  * 表单主体：整份表单只有一套，切语言换的是数据源。
@@ -214,7 +214,7 @@ export default function PagePage() {
   const confirm = useConfirm()
   // 预取字段 schema：点「新建/编辑」时直接命中缓存，不再先闪一个加载弹窗。
   useI18nSchema('page')
-  const [draft, setDraft] = useState<ContentQuery>({})
+  const [draft, setDraft] = useState<ContentDraft>({})
   const [filters, setFilters] = useState<ContentQuery>({})
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
@@ -324,7 +324,7 @@ export default function PagePage() {
     <PageContainer>
       <PageHeader title={t('plugin_website.page.title')} description={t('plugin_website.page.desc')} />
       <FilterBar
-        onSearch={() => { setFilters(draft); setPage(1) }}
+        onSearch={() => { setFilters(toContentQuery(draft)); setPage(1) }}
         onReset={() => { setDraft({}); setFilters({}); setPage(1) }}
       >
         <Input
@@ -334,16 +334,17 @@ export default function PagePage() {
           placeholder={t('plugin_website.searchPlaceholder')}
           aria-label={t('common.keyword')}
         />
-        <Select value={draft.status ?? ALL} onValueChange={(v) => setDraft((d) => ({ ...d, status: v === ALL ? undefined : v }))}>
-          <SelectTrigger className="md:w-40" aria-label={t('plugin_website.fields.published')}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_website.all')}</SelectItem>
-            <SelectItem value="published">{t('plugin_website.publishedOn')}</SelectItem>
-            <SelectItem value="draft">{t('plugin_website.publishedOff')}</SelectItem>
-          </SelectContent>
-        </Select>
+        <OptionPicker
+          title={t('plugin_website.fields.published')}
+          value={draft.status ?? []}
+          onChange={(v) => setDraft((d) => ({ ...d, status: v.length ? v : undefined }))}
+          options={[
+            { value: 'published', label: t('plugin_website.publishedOn') },
+            { value: 'draft', label: t('plugin_website.publishedOff') },
+          ]}
+          className="md:w-44"
+          placeholder={t('plugin_website.fields.published')}
+        />
       </FilterBar>
       <DataTable
         columns={columns}

@@ -1,5 +1,8 @@
 # captchasounds 数字音源生成脚本（assets provenance）。
 #
+# 【历史脚本】2026-11-12 起 captchasounds/zh|en 由 TTSMaker 在线合成，见 ATTRIBUTION.md；
+# 本脚本只用于重放当年 Kokoro 版音源，跑它不会再产出仓库里当前的 wav。
+#
 # 源：Kokoro-82M（Apache-2.0，hexgrad/kokoro），用 sherpa-onnx 的
 # kokoro-multi-lang-v1_1 中英双语导出模型本地离线合成——**商用可再分发**，
 # 替代此前无再分发授权的 Edge TTS 音频（后者仅限本机试听，禁止提交发布）。

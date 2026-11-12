@@ -70,7 +70,7 @@ func (h *handler) ctxActor(c *gin.Context) Actor {
 func (h *handler) listForms(c *gin.Context) {
 	page, size := response.ParsePage(c)
 	list, total, err := h.svc.ListForms(c.Request.Context(), FormQuery{
-		Keyword: strings.TrimSpace(c.Query("keyword")), Status: c.Query("status"), Page: page, PageSize: size,
+		Keyword: strings.TrimSpace(c.Query("keyword")), Status: response.ParseList(c.Query("status"), response.MaxFilterValues), Page: page, PageSize: size,
 	})
 	if err != nil {
 		response.Fail(c, err)

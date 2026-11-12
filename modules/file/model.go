@@ -99,8 +99,8 @@ type moveReq struct {
 
 type listQuery struct {
 	Keyword  string `form:"keyword"`
-	Category string `form:"category"`
-	GroupID  string `form:"groupId"` // "none" = 未分组
+	Category string `form:"category"` // 逗号拼接多值：?category=image,video
+	GroupID  string `form:"groupId"`  // 逗号拼接多值，"none" = 未分组
 	From     string `form:"from"`
 	To       string `form:"to"`
 	// Sort 取 name / size / created_at（白名单外的值静默回退默认排序）；Desc = 倒序

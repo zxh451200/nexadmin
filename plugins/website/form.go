@@ -90,8 +90,8 @@ type MessageQuery struct {
 	Page     int
 	PageSize int
 	Keyword  string
-	// Status 为空 = 全部状态；非空时必须是 MsgNew / MsgRead / MsgHandled 之一。
-	Status string
+	// Status 多值（逗号拼接），空切片 = 全部状态；取值必须是 MsgNew / MsgRead / MsgHandled 之一。
+	Status []string
 }
 
 // MessageStatusForm 是批量改状态：一次把 ids 里的留言置为 status。

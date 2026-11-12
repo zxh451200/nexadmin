@@ -26,6 +26,9 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': { target: 'http://127.0.0.1:8080', changeOrigin: true },
+      // 官网插件资源（上传媒体 /website-assets/media/<id>、主题静态资源）注册在后端根路径，
+      // 不带 /api 前缀；不转发的话管理端里 <img> 在 dev 下全部裂图（生产单二进制同域无此问题）。
+      '/website-assets': { target: 'http://127.0.0.1:8080', changeOrigin: true },
     },
   },
   build: {

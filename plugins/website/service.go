@@ -575,45 +575,82 @@ func (s *Service) DeleteFeatures(ctx context.Context, ids []idgen.ID) (int64, er
 // ---- 页面 / 新闻共用的列表查询 ----
 
 // ContentQuery 是页面/新闻的列表查询。
+// 枚举/类目筛选是逗号拼接多值（?status=published,draft），空切片 = 不过滤。
 type ContentQuery struct {
 	Keyword string
-	// Status："published" | "draft" | "scheduled"（已发布但 published_at 在未来，到点才公开）。
-	Status string
-	// Missing 是语言码：筛「该语言完全没有译文」的条目。不是「缺某个字段」，
+	// Statuses 多值："published" | "draft" | "scheduled"（已发布但 published_at 在未来，到点才公开）。
+	Statuses []string
+	// Missings 是语言码集合：筛「缺任一所选语言译文」的条目（OR）。不是「缺某个字段」，
 	// 那种细粒度要靠译文 JSON 里的键判断，跨引擎不通用，交给界面上的 done/total 徽标。
-	Missing string
-	// CategoryID 是新闻分类筛选；页面列表不消费这个字段。
-	CategoryID idgen.ID
-	Page       int
-	PageSize   int
+	Missings []string
+	// CategoryIDs 是新闻分类筛选（多选取并集）；页面列表不消费这个字段。
+	CategoryIDs []idgen.ID
+	Page        int
+	PageSize    int
+}
+
+// contentStatusTx 追加页面/新闻的状态筛选：三种状态 SQL 语义各不同，多选时按 OR 组合。
+func contentStatusTx(tx *gorm.DB, statuses []string) *gorm.DB {
+	conds, args := []string{}, []any{}
+	seen := map[string]bool{}
+	for _, st := range statuses {
+		if seen[st] {
+			continue
+		}
+		seen[st] = true
+		switch st {
+		case "published":
+			conds = append(conds, "published = ?")
+			args = append(args, true)
+		case "draft":
+			conds = append(conds, "published = ?")
+			args = append(args, false)
+		case "scheduled":
+			// 定时发布：整篇已置发布、但发布时间还在未来。
+			conds = append(conds, "(published = ? AND published_at IS NOT NULL AND published_at > ?)")
+			args = append(args, true, time.Now().UTC())
+		}
+	}
+	if len(conds) > 0 {
+		tx = tx.Where("("+strings.Join(conds, " OR ")+")", args...)
+	}
+	return tx
+}
+
+// missingTx 追加「缺译文语言」筛选：只接受已配置的语言，并用规范 code 匹配。拼出来的是
+// LIKE 的**参数值**，走占位符绑定，不进 SQL 文本；未知 code 就当没有这个取值。
+func missingTx(tx *gorm.DB, codes []string) *gorm.DB {
+	conds, args := []string{}, []any{}
+	for _, code := range codes {
+		l, ok := LanguageByCode(code)
+		if !ok {
+			continue
+		}
+		// nexadmin:like-exempt 非关键词筛选：匹配的是配置里的语言 code，两侧同源、
+		// 大小写天然一致（不是人随手打的大写），折叠没有意义。见 plugins/like_case_insensitive_test.go。
+		conds = append(conds, "i18n_json IS NULL OR i18n_json = '' OR i18n_json NOT LIKE ?")
+		args = append(args, "%\""+l.Code+":\"%")
+	}
+	if len(conds) > 0 {
+		tx = tx.Where("("+strings.Join(conds, " OR ")+")", args...)
+	}
+	return tx
 }
 
 func contentTx(tx *gorm.DB, q ContentQuery) *gorm.DB {
 	if kw := strings.TrimSpace(q.Keyword); kw != "" {
 		tx = tx.Where("LOWER(title) LIKE LOWER(?) OR LOWER(slug) LIKE LOWER(?)", "%"+kw+"%", "%"+kw+"%")
 	}
-	switch q.Status {
-	case "published":
-		tx = tx.Where("published = ?", true)
-	case "draft":
-		tx = tx.Where("published = ?", false)
-	case "scheduled":
-		// 定时发布：整篇已置发布、但发布时间还在未来。
-		tx = tx.Where("published = ? AND published_at IS NOT NULL AND published_at > ?", true, time.Now().UTC())
-	}
-	// 分类筛选只对新闻生效（关联表固定，无用户输入拼接）。
-	if q.CategoryID > 0 {
-		tx = tx.Where("id IN (SELECT post_id FROM plg_website_post_category WHERE category_id = ?)", int64(q.CategoryID))
-	}
-	if code := strings.TrimSpace(q.Missing); code != "" {
-		// 只接受已配置的语言，并且用规范 code 去匹配：拼出来的是 LIKE 的**参数值**，
-		// 走占位符绑定，不进 SQL 文本；未知 code 就当没有这个筛选。
-		if l, ok := LanguageByCode(code); ok {
-			// nexadmin:like-exempt 非关键词筛选：匹配的是配置里的语言 code，两侧同源、
-			// 大小写天然一致（不是人随手打的大写），折叠没有意义。见 plugins/like_case_insensitive_test.go。
-			tx = tx.Where("i18n_json IS NULL OR i18n_json = '' OR i18n_json NOT LIKE ?", "%\""+l.Code+"\":%")
+	tx = contentStatusTx(tx, q.Statuses)
+	// 分类筛选只对新闻生效（关联表固定，无用户输入拼接）；多类目取并集。
+	if len(q.CategoryIDs) > 0 {
+		ids := make([]int64, 0, len(q.CategoryIDs))
+		for _, id := range q.CategoryIDs {
+			ids = append(ids, int64(id))
 		}
+		tx = tx.Where("id IN (SELECT post_id FROM plg_website_post_category WHERE category_id IN ?)", ids)
 	}
+	tx = missingTx(tx, q.Missings)
 	return tx
 }
 
@@ -1806,8 +1843,8 @@ func (s *Service) CreateMessage(ctx context.Context, f ContactForm, ip, ua strin
 
 // messageFilter 是列表与导出共用的筛选条件：保证导出的文件和页面上看到的列表是同一批数据。
 func messageFilter(tx *gorm.DB, q MessageQuery) *gorm.DB {
-	if q.Status != "" {
-		tx = tx.Where("status = ?", q.Status)
+	if len(q.Status) > 0 {
+		tx = tx.Where("status IN ?", q.Status)
 	}
 	if kw := strings.TrimSpace(q.Keyword); kw != "" {
 		like := "%" + kw + "%"

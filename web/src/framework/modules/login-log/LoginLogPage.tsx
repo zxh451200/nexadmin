@@ -11,6 +11,7 @@ import { DateRangePicker, type DateRangeValue } from '@/framework/components/Dat
 import { DictSelect } from '@/framework/components/DictSelect'
 import { DictTag } from '@/framework/components/DictTag'
 import { FilterBar } from '@/framework/components/FilterBar'
+import { OptionPicker } from '@/framework/components/OptionPicker'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import type { Column } from '@/framework/components/table/types'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
@@ -38,12 +39,12 @@ import { LoginStatsPanel } from './StatsPanel'
 
 interface Filters {
   keyword: string
-  status: string
-  loginType: string
+  status: string[]
+  loginType: string[]
   range: DateRangeValue
 }
 
-const emptyFilters: Filters = { keyword: '', status: '', loginType: 'all', range: {} }
+const emptyFilters: Filters = { keyword: '', status: [], loginType: [], range: {} }
 
 // 清理档位与文案映射，与操作日志页同口径
 const CLEAN_OPTIONS = ['7', '30', '90', '0'] as const
@@ -52,8 +53,8 @@ const cleanKey = { '7': 'd7', '30': 'd30', '90': 'd90', '0': 'all' } as const
 function toQuery(f: Filters): Omit<LoginLogQuery, 'page' | 'pageSize'> {
   return {
     keyword: f.keyword.trim() || undefined,
-    status: f.status || undefined,
-    loginType: f.loginType === 'all' ? undefined : f.loginType,
+    status: f.status.length ? f.status.join(',') : undefined,
+    loginType: f.loginType.length ? f.loginType.join(',') : undefined,
     startDate: f.range.from,
     endDate: f.range.to,
   }
@@ -186,20 +187,15 @@ export default function LoginLogPage() {
           placeholder={t('loginLog.filter.keywordPlaceholder')}
           onChange={(e) => setDraft({ ...draft, keyword: e.target.value })}
         />
-        <Select value={draft.loginType} onValueChange={(v) => setDraft({ ...draft, loginType: v })}>
-          <SelectTrigger className="md:w-40" aria-label={t('loginLog.filter.type')}>
-            <SelectValue placeholder={t('loginLog.filter.type')} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">{t('loginLog.filter.allTypes')}</SelectItem>
-            {LOGIN_TYPES.map((k) => (
-              <SelectItem key={k} value={k}>
-                {t(`loginLog.type.${k}`)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <DictSelect dict="login_status" value={draft.status} allLabel={t('loginLog.filter.allStatus')} onChange={(v) => setDraft({ ...draft, status: v })} aria-label={t('loginLog.filter.status')} className="md:w-36" placeholder={t('loginLog.filter.status')} />
+        <OptionPicker
+          title={t('loginLog.filter.type')}
+          value={draft.loginType}
+          onChange={(v) => setDraft({ ...draft, loginType: v })}
+          options={LOGIN_TYPES.map((k) => ({ value: k, label: t(`loginLog.type.${k}`) }))}
+          className="md:w-44"
+          placeholder={t('loginLog.filter.type')}
+        />
+        <DictSelect dict="login_status" multiple value={draft.status} onChange={(v) => setDraft({ ...draft, status: v })} aria-label={t('loginLog.filter.status')} className="md:w-40" placeholder={t('loginLog.filter.status')} />
         <DateRangePicker value={draft.range} onChange={(v) => setDraft({ ...draft, range: v })} ariaLabel={t('loginLog.filter.time')} className="md:w-64" placeholder={t('loginLog.filter.time')} />
       </FilterBar>
       <DataTable<LoginLog>

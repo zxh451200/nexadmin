@@ -25,6 +25,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/framework/ui/skeleton'
 import { Switch } from '@/framework/ui/switch'
 import { Textarea } from '@/framework/ui/textarea'
+import { OptionPicker } from '@/framework/components/OptionPicker'
 import {
   fetchCustomer,
   fetchCustomersForExport,
@@ -54,6 +55,8 @@ import {
   type IdNoReveal,
   type CrmCustomerForm,
   type CustomerQuery,
+  type CustomerDraft,
+  toCustomerQuery,
   type CustomerType,
 } from './api'
 import { ActivitiesSection, ContactsSection } from './CustomerProfile'
@@ -890,19 +893,23 @@ export function CustomersTab() {
   // URL 是筛选/排序/页码的真源初值：深链与刷新都从 ?keyword=…&mine=1&page=2 恢复同一份视图。
   // 之后状态变化写回 URL（replace，不压历史栈）。
   const initial = useMemo(() => {
-    const f: CustomerQuery = {}
-    for (const key of ['keyword', 'type', 'status', 'source', 'level', 'tag', 'createdFrom', 'createdTo', 'sortKey'] as const) {
+    const d: CustomerDraft = {}
+    for (const key of ['keyword', 'createdFrom', 'createdTo', 'sortKey'] as const) {
       const v = params.get(key)
-      if (v) f[key] = v
+      if (v) d[key] = v
     }
-    if (params.get('sort') === 'asc') f.sort = 'asc'
+    for (const key of ['type', 'status', 'source', 'level', 'tag'] as const) {
+      const v = params.get(key)
+      if (v) d[key] = v.split(',').filter(Boolean)
+    }
+    if (params.get('sort') === 'asc') d.sort = 'asc'
     const owner = params.get('pool') === '1' ? POOL : params.get('mine') === '1' ? MINE : ALL
-    return { f, owner, page: Math.max(1, Number(params.get('page')) || 1) }
+    return { d, owner, page: Math.max(1, Number(params.get('page')) || 1) }
     // 只在挂载时读一次：之后 URL 跟着状态走，不再反向驱动状态
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-  const [draft, setDraft] = useState<CustomerQuery>(initial.f)
-  const [filters, setFilters] = useState<CustomerQuery>(initial.f)
+  const [draft, setDraft] = useState<CustomerDraft>(initial.d)
+  const [filters, setFilters] = useState<CustomerQuery>(toCustomerQuery(initial.d))
   // 归属筛选：全部 / 只看我的 / 公海。公海走独立接口（不做数据范围），不与 mine 叠加。
   const [ownerFilter, setOwnerFilter] = useState<string>(initial.owner)
   // 低频筛选（来源/等级/标签/建档时间/排序）收在「更多筛选」里：首屏只留四个主条件，
@@ -952,7 +959,7 @@ export function CustomersTab() {
   })
   const inPool = ownerFilter === POOL
   // 「更多筛选」上的数字：收起时也能看出低频条件里还有生效项，避免以为筛选被重置了。
-  const moreActive = [draft.source, draft.level, draft.tag, draft.createdFrom, draft.createdTo, draft.sortKey].filter(Boolean).length
+  const moreActive = [draft.source, draft.level, draft.tag, draft.createdFrom, draft.createdTo, draft.sortKey].filter((v) => (Array.isArray(v) ? v.length : v)).length
   const data = inPool ? pool : owned
   const isLoading = inPool ? poolLoading : ownedLoading
   const remove = useDeleteCustomer()
@@ -1186,7 +1193,7 @@ export function CustomersTab() {
     <div className="flex flex-col gap-4">
       <FilterBar
         onSearch={() => {
-          setFilters(draft)
+          setFilters(toCustomerQuery(draft))
           setPage(1)
         }}
         onReset={() => {
@@ -1203,32 +1210,22 @@ export function CustomersTab() {
           placeholder={t('plugin_crm.searchPlaceholder')}
           aria-label={t('common.keyword')}
         />
-        <Select value={draft.type ?? ALL} onValueChange={(v) => setDraft((d) => ({ ...d, type: v === ALL ? undefined : v }))}>
-          <SelectTrigger className="md:w-32" aria-label={t('plugin_crm.fields.type')}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_crm.filter.allTypes')}</SelectItem>
-            {TYPES.map((tp) => (
-              <SelectItem key={tp} value={tp}>
-                {t(`plugin_crm.type.${tp}`)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={draft.status ?? ALL} onValueChange={(v) => setDraft((d) => ({ ...d, status: v === ALL ? undefined : v }))}>
-          <SelectTrigger className="md:w-32" aria-label={t('plugin_crm.fields.status')}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_crm.filter.allStatuses')}</SelectItem>
-            {STATUSES.map((s) => (
-              <SelectItem key={s} value={s}>
-                {t(`plugin_crm.status.${s}`)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <OptionPicker
+          title={t('plugin_crm.fields.type')}
+          value={draft.type ?? []}
+          onChange={(v) => setDraft((d) => ({ ...d, type: v.length ? v : undefined }))}
+          options={TYPES.map((tp) => ({ value: tp, label: t(`plugin_crm.type.${tp}`) }))}
+          className="md:w-36"
+          placeholder={t('plugin_crm.fields.type')}
+        />
+        <OptionPicker
+          title={t('plugin_crm.fields.status')}
+          value={draft.status ?? []}
+          onChange={(v) => setDraft((d) => ({ ...d, status: v.length ? v : undefined }))}
+          options={STATUSES.map((s) => ({ value: s, label: t(`plugin_crm.status.${s}`) }))}
+          className="md:w-36"
+          placeholder={t('plugin_crm.fields.status')}
+        />
         {/* 归属：全部 / 只看我的 / 公海。公海走独立列表，对所有人开放。 */}
         <Select value={ownerFilter} onValueChange={setOwnerFilter}>
           <SelectTrigger className="md:w-32" aria-label={t('plugin_crm.fields.owner')}>
@@ -1266,45 +1263,30 @@ export function CustomersTab() {
             id="crm-more-filters"
             className="order-1 flex w-full basis-full flex-col gap-3 md:flex-row md:flex-wrap md:items-center md:rounded-lg md:border md:border-border md:bg-muted/30 md:p-3"
           >
-            <Select value={draft.source ?? ALL} onValueChange={(v) => setDraft((d) => ({ ...d, source: v === ALL ? undefined : v }))}>
-              <SelectTrigger className="md:w-36" aria-label={t('plugin_crm.fields.externalSource')}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>{t('plugin_crm.filter.allSources')}</SelectItem>
-                {SOURCES.map((s) => (
-                  <SelectItem key={s} value={s}>
-                    {t(`plugin_crm.source.${s}`, { defaultValue: s })}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={draft.level ?? ALL} onValueChange={(v) => setDraft((d) => ({ ...d, level: v === ALL ? undefined : v }))}>
-              <SelectTrigger className="md:w-32" aria-label={t('plugin_crm.fields.level')}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>{t('plugin_crm.filter.allLevels')}</SelectItem>
-                {LEVELS.map((lv) => (
-                  <SelectItem key={lv} value={lv}>
-                    {t(`plugin_crm.level.${lv}`, { defaultValue: lv })}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={draft.tag ?? ALL} onValueChange={(v) => setDraft((d) => ({ ...d, tag: v === ALL ? undefined : v }))}>
-              <SelectTrigger className="md:w-36" aria-label={t('plugin_crm.fields.tags')}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>{t('plugin_crm.filter.allTags')}</SelectItem>
-                {(tagOptions ?? []).map((tag) => (
-                  <SelectItem key={tag} value={tag}>
-                    {tag}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <OptionPicker
+              title={t('plugin_crm.fields.externalSource')}
+              value={draft.source ?? []}
+              onChange={(v) => setDraft((d) => ({ ...d, source: v.length ? v : undefined }))}
+              options={SOURCES.map((s) => ({ value: s, label: t(`plugin_crm.source.${s}`, { defaultValue: s }) }))}
+              className="md:w-40"
+              placeholder={t('plugin_crm.fields.externalSource')}
+            />
+            <OptionPicker
+              title={t('plugin_crm.fields.level')}
+              value={draft.level ?? []}
+              onChange={(v) => setDraft((d) => ({ ...d, level: v.length ? v : undefined }))}
+              options={LEVELS.map((lv) => ({ value: lv, label: t(`plugin_crm.level.${lv}`, { defaultValue: lv }) }))}
+              className="md:w-36"
+              placeholder={t('plugin_crm.fields.level')}
+            />
+            <OptionPicker
+              title={t('plugin_crm.fields.tags')}
+              value={draft.tag ?? []}
+              onChange={(v) => setDraft((d) => ({ ...d, tag: v.length ? v : undefined }))}
+              options={(tagOptions ?? []).map((tag) => ({ value: tag, label: tag }))}
+              className="md:w-40"
+              placeholder={t('plugin_crm.fields.tags')}
+            />
             {/* 建档时间范围：含端点，后端按「to 当天结束前」收口 */}
             <div className="flex items-center gap-1.5">
               <DatePicker

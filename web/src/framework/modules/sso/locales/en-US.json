@@ -53,7 +53,7 @@
       "logoUrl": "Logo URL",
       "logoUrlPlaceholder": "Or enter a logo image URL",
       "logoUpload": "Upload logo",
-      "logoUploadHint": "Square (1:1) works best; a transparent PNG or SVG looks cleanest.",
+      "logoUploadHint": "≥128×128 square recommended; a transparent PNG or SVG looks cleanest.",
       "homeUrl": "App URL",
       "homeUrlHint": "Opened in a new tab when the card is clicked in the app center",
       "urlInvalid": "Enter a full URL starting with http(s)://",

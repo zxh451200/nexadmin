@@ -349,7 +349,8 @@ type Product struct {
 	PriceUnit  string  `gorm:"size:32;not null;default:''" json:"priceUnit"` // 计量单位：piece / set…
 	Moq        int     `gorm:"column:moq;not null;default:0" json:"moq"`     // 最小起订量
 	LeadTimeDays int   `gorm:"column:lead_time_days;not null;default:0" json:"leadTimeDays"`
-	Port       string  `gorm:"size:64;not null;default:''" json:"port"`
+	// Port 是装运港口，支持多选（逗号拼接，如 "Shenzhen, Ningbo"），宽度与 PaymentTerms 对齐。
+	Port       string  `gorm:"size:100;not null;default:''" json:"port"`
 	// PaymentTerms 是付款方式（对标阿里商详「交易信息」的 Payment Terms）：如 "T/T, L/C"。
 	PaymentTerms string `gorm:"column:payment_terms;size:100;not null;default:''" json:"paymentTerms"`
 	// SpecsJSON 是动态属性键值对（[{"label":"Brand Name","value":"…"}] 的 JSON 文本）：

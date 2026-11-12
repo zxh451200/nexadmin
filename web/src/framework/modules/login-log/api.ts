@@ -29,7 +29,9 @@ export interface LoginLogQuery {
   page: number
   pageSize: number
   keyword?: string
+  /** 逗号分隔多值：?status=success,failed */
   status?: string
+  /** 逗号分隔多值登录方式 */
   loginType?: string
   startDate?: string
   endDate?: string

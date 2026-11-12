@@ -143,14 +143,14 @@ func (s *Service) UnreadCount(ctx context.Context, uid idgen.ID) (int64, error) 
 	return n, err
 }
 
-// Mine 我的公告分页：置顶在前，其后按发布时间倒序，并带上已读标记。
-func (s *Service) Mine(ctx context.Context, uid idgen.ID, keyword, typ string, unread bool, page, size int) ([]MyNotice, int64, error) {
+// Mine 我的公告分页：置顶在前，其后按发布时间倒序，并带上已读标记。types 是逗号拼接多值。
+func (s *Service) Mine(ctx context.Context, uid idgen.ID, keyword string, types []string, unread bool, page, size int) ([]MyNotice, int64, error) {
 	q := s.visible(ctx, uid)
 	if unread {
 		q = q.Where("id NOT IN (?)", s.readSub(uid))
 	}
-	if typ != "" {
-		q = q.Where("type = ?", typ)
+	if len(types) > 0 {
+		q = q.Where("type IN ?", types)
 	}
 	if keyword != "" {
 		q = q.Where("LOWER(title) LIKE LOWER(?)", likeArg(keyword))

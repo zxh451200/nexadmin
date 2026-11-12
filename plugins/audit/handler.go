@@ -42,16 +42,27 @@ func operatorMiddleware() gin.HandlerFunc {
 	}
 }
 
+// auditActions 校验 action 多值：任一项不在白名单就整体拒绝（与旧单值语义一致）。
+func auditActions(raw string) ([]string, bool) {
+	actions := response.ParseList(raw, response.MaxFilterValues)
+	for _, a := range actions {
+		if a != ActionCreate && a != ActionUpdate && a != ActionDelete {
+			return nil, false
+		}
+	}
+	return actions, true
+}
+
 // GET /plugins/audit/logs?table=&operator=&action=&from=&to=&page=&pageSize=
 func (h *handler) listLogs(c *gin.Context) {
 	page, size := response.ParsePage(c)
-	action := c.Query("action")
-	if action != "" && action != ActionCreate && action != ActionUpdate && action != ActionDelete {
+	actions, ok := auditActions(c.Query("action"))
+	if !ok {
 		response.Fail(c, response.BadRequest("error.bad_request"))
 		return
 	}
 	list, total, err := h.svc.ListLogs(c.Request.Context(), LogQuery{
-		Table: strings.TrimSpace(c.Query("table")), Operator: strings.TrimSpace(c.Query("operator")), Action: action,
+		Tables: response.ParseList(strings.TrimSpace(c.Query("table")), response.MaxFilterValues), Operator: strings.TrimSpace(c.Query("operator")), Actions: actions,
 		From: c.Query("from"), To: c.Query("to"), Page: page, PageSize: size,
 	})
 	if err != nil {
@@ -64,13 +75,13 @@ func (h *handler) listLogs(c *gin.Context) {
 // GET /plugins/audit/logs/export?table=&operator=&action=&from=&to=
 // 与列表同一组筛选；行数封顶 exportMaxRows，导 CSV 由前端拼装。
 func (h *handler) exportLogs(c *gin.Context) {
-	action := c.Query("action")
-	if action != "" && action != ActionCreate && action != ActionUpdate && action != ActionDelete {
+	actions, ok := auditActions(c.Query("action"))
+	if !ok {
 		response.Fail(c, response.BadRequest("error.bad_request"))
 		return
 	}
 	list, err := h.svc.ExportLogs(c.Request.Context(), LogQuery{
-		Table: strings.TrimSpace(c.Query("table")), Operator: strings.TrimSpace(c.Query("operator")), Action: action,
+		Tables: response.ParseList(strings.TrimSpace(c.Query("table")), response.MaxFilterValues), Operator: strings.TrimSpace(c.Query("operator")), Actions: actions,
 		From: c.Query("from"), To: c.Query("to"),
 	})
 	respond(c, list, err)

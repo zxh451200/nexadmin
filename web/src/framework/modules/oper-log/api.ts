@@ -23,7 +23,9 @@ export interface OperLogQuery {
   page: number
   pageSize: number
   keyword?: string
+  /** 逗号分隔多值：?status=1,0 */
   status?: string
+  /** 逗号分隔多值：?type=create,update */
   type?: string
   startDate?: string
   endDate?: string

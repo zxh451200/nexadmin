@@ -11,10 +11,11 @@ import (
 )
 
 // Filter 是列表筛选。Owner 为 0 表示不限所有者（管理员看全部）。
+// Types/Statuses 是逗号拼接多值（空切片 = 不限）；Statuses 里可含 StatusActive（展开为排队+执行）。
 type Filter struct {
 	Owner    idgen.ID
-	Type     string
-	Status   string
+	Types    []string
+	Statuses []string
 	Page     int
 	PageSize int
 }
@@ -73,15 +74,29 @@ func (s *GormStore) List(ctx context.Context, f Filter) ([]*Job, int64, error) {
 	if f.Owner != 0 {
 		q = q.Where("owner_id = ?", int64(f.Owner))
 	}
-	if f.Type != "" {
-		q = q.Where("type = ?", f.Type)
+	if len(f.Types) > 0 {
+		q = q.Where("type IN ?", f.Types)
 	}
-	switch f.Status {
-	case "":
-	case StatusActive: // 进行中 = 排队 + 执行（顶栏徽标用）
-		q = q.Where("status IN ?", []string{StatusQueued, StatusRunning})
-	default:
-		q = q.Where("status = ?", f.Status)
+	if len(f.Statuses) > 0 {
+		seen := map[string]bool{}
+		sts := make([]string, 0, len(f.Statuses)+2)
+		for _, st := range f.Statuses {
+			if st == StatusActive {
+				// 进行中 = 排队 + 执行（顶栏徽标用）；与其它显式状态取并集
+				if !seen[StatusQueued] {
+					seen[StatusQueued] = true
+					sts = append(sts, StatusQueued, StatusRunning)
+				}
+				continue
+			}
+			if !seen[st] {
+				seen[st] = true
+				sts = append(sts, st)
+			}
+		}
+		if len(sts) > 0 {
+			q = q.Where("status IN ?", sts)
+		}
 	}
 	var total int64
 	if err := q.Count(&total).Error; err != nil {

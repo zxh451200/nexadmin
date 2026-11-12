@@ -2,6 +2,7 @@
   "uploader": {
     "add_image": "上传图片",
     "add_video": "上传视频",
+    "pickFromLibrary": "从文件库选择",
     "add_file": "上传文件",
     "kind_image": "图片",
     "kind_video": "视频",

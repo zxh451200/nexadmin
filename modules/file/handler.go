@@ -269,6 +269,21 @@ func writeZipManifest(ctx context.Context, zw *zip.Writer, skipped []zipSkip) er
 	return err
 }
 
+// ResolveUpload GET /files/upload/<id>（公开，无登录）：tus 的 Location 是上传端点不是下载地址，
+// 历史存量把存进了业务数据且 <img> 带不了令牌，这里对公开文件 302 到真实下载地址兜底。
+func (h *Handler) ResolveUpload(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	u, err := h.svc.ResolveUploadURL(c.Request.Context(), id)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	c.Redirect(http.StatusFound, u)
+}
+
 func (h *Handler) Update(c *gin.Context) {
 	id, ok := parseID(c)
 	if !ok {

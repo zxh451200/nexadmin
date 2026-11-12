@@ -94,13 +94,15 @@ export interface CrmOpportunityForm {
 }
 
 export interface CustomerQuery extends PageQuery {
+  /** 逗号分隔多值 */
   status?: string
+  /** 逗号分隔多值 */
   source?: string
-  /** 客户类型：person / company，空 = 不限。 */
+  /** 客户类型：person / company，逗号分隔多值，空 = 不限。 */
   type?: string
-  /** 等级（A/B/C…），空 = 不限。 */
+  /** 等级（A/B/C…），逗号分隔多值，空 = 不限。 */
   level?: string
-  /** 单个标签筛选（后端按逗号边界匹配）。 */
+  /** 标签筛选（逗号分隔多值；后端按逗号边界匹配，多标签并集）。 */
   tag?: string
   /** 建档时间范围（YYYY-MM-DD，含端点）。 */
   createdFrom?: string
@@ -112,7 +114,38 @@ export interface CustomerQuery extends PageQuery {
   /** 只看我的：owner = 当前账号（与角色数据范围叠加）。 */
   mine?: boolean
 }
+
+/** 筛选草稿（页面 state）：枚举/标签字段是多选数组，搜索时用 toCustomerQuery 拼成 CSV */
+export interface CustomerDraft {
+  keyword?: string
+  type?: string[]
+  status?: string[]
+  source?: string[]
+  level?: string[]
+  tag?: string[]
+  createdFrom?: string
+  createdTo?: string
+  sortKey?: string
+  sort?: 'asc' | 'desc'
+}
+
+export function toCustomerQuery(d: CustomerDraft): Omit<CustomerQuery, 'page' | 'pageSize'> {
+  return {
+    keyword: d.keyword,
+    type: d.type?.length ? d.type.join(',') : undefined,
+    status: d.status?.length ? d.status.join(',') : undefined,
+    source: d.source?.length ? d.source.join(',') : undefined,
+    level: d.level?.length ? d.level.join(',') : undefined,
+    tag: d.tag?.length ? d.tag.join(',') : undefined,
+    createdFrom: d.createdFrom,
+    createdTo: d.createdTo,
+    sortKey: d.sortKey,
+    sort: d.sort,
+  }
+}
+
 export interface OpportunityQuery extends PageQuery {
+  /** 逗号分隔多值 */
   stage?: string
   customerId?: string
   mine?: boolean

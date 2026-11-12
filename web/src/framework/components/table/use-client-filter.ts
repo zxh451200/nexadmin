@@ -2,17 +2,18 @@ import { useState } from 'react'
 
 export interface ClientFilterValues {
   keyword: string
-  status: string
-  type: string
+  /** 多选：勾选的取值集合，空 = 全部 */
+  status: string[]
+  type: string[]
 }
 
-const EMPTY: ClientFilterValues = { keyword: '', status: '', type: '' }
+const EMPTY: ClientFilterValues = { keyword: '', status: [], type: [] }
 
 /** 不分页的小列表（角色、岗位、菜单、部门）用的前端筛选：草稿 → 点「搜索」才生效 */
 export function useClientFilter() {
   const [draft, setDraft] = useState<ClientFilterValues>(EMPTY)
   const [applied, setApplied] = useState<ClientFilterValues>(EMPTY)
-  const active = !!(applied.keyword.trim() || applied.status || applied.type)
+  const active = !!(applied.keyword.trim() || applied.status.length || applied.type.length)
   return {
     draft,
     setDraft,

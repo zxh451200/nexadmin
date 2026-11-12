@@ -2,6 +2,7 @@
   "uploader": {
     "add_image": "Upload image",
     "add_video": "Upload video",
+    "pickFromLibrary": "Pick from library",
     "add_file": "Upload file",
     "kind_image": "an image",
     "kind_video": "a video",

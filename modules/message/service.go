@@ -40,8 +40,8 @@ func (s *Service) List(ctx context.Context, uid idgen.ID, q ListQuery) ([]View, 
 	if q.Unread {
 		tx = tx.Where("read_at IS NULL")
 	}
-	if q.Category != "" {
-		tx = tx.Where("category = ?", q.Category)
+	if len(q.Category) > 0 {
+		tx = tx.Where("category IN ?", q.Category)
 	}
 	if q.Keyword != "" {
 		r := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)

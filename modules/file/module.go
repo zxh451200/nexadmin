@@ -68,6 +68,9 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 
 	d.Public.GET("/files/public/:token/:name", h.ServePublic)
 	d.Public.GET("/files/:id/content", h.ServeSigned)
+	// tus 上传地址（/files/upload/<id>）历史上被当图片地址存进了业务数据（头像/图集/聊天等），
+	// <img> 带不了令牌：对公开文件 302 到真实下载地址兜底；私有文件不透传（404）。
+	d.Public.GET("/files/upload/:id", h.ResolveUpload)
 }
 
 func dispositionAttachment(name string) string {

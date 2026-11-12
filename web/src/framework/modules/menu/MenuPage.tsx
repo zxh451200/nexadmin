@@ -42,7 +42,7 @@ export default function MenuPage() {
   const tr = (s: string) => t(s, { defaultValue: s })
 
   const filter = useClientFilter()
-  const showingButtons = filter.applied.type === 'button'
+  const showingButtons = filter.applied.type.length === 1 && filter.applied.type[0] === 'button'
   const visible = useMemo(() => (showingButtons ? data : withoutButtons(data)), [data, showingButtons])
   const shown = useMemo(() => {
     if (!filter.active) return visible
@@ -50,7 +50,7 @@ export default function MenuPage() {
     return filterTree(
       visible,
       (n) =>
-        matchText(f.keyword, t(n.title, { defaultValue: n.title }), n.perm, n.path) && (!f.type || n.type === f.type) && (!f.status || n.status === f.status),
+        matchText(f.keyword, t(n.title, { defaultValue: n.title }), n.perm, n.path) && (!f.type.length || f.type.includes(n.type)) && (!f.status.length || f.status.includes(n.status)),
     )
   }, [visible, filter.active, filter.applied, t])
 

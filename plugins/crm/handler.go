@@ -145,9 +145,12 @@ func (h *handler) listCustomers(c *gin.Context) {
 // customerQueryFrom 把列表/导出共用的查询参数收拢。
 func customerQueryFrom(c *gin.Context, sc *datascope.Scope) CustomerQuery {
 	return CustomerQuery{
-		Keyword: c.Query("keyword"), Type: c.Query("type"),
-		Status: c.Query("status"), Source: c.Query("source"),
-		Level: c.Query("level"), Tag: c.Query("tag"),
+		Keyword: c.Query("keyword"),
+		Type:    response.ParseList(c.Query("type"), response.MaxFilterValues),
+		Status:  response.ParseList(c.Query("status"), response.MaxFilterValues),
+		Source:  response.ParseList(c.Query("source"), response.MaxFilterValues),
+		Level:   response.ParseList(c.Query("level"), response.MaxFilterValues),
+		Tag:     response.ParseList(c.Query("tag"), response.MaxFilterValues),
 		CreatedFrom: c.Query("createdFrom"), CreatedTo: c.Query("createdTo"),
 		SortKey: c.Query("sortKey"), SortAsc: c.Query("sort") == "asc",
 		Scope: sc, Mine: c.Query("mine") == "1",
@@ -401,7 +404,7 @@ func (h *handler) listOpportunities(c *gin.Context) {
 	page, size := response.ParsePage(c)
 	customerID, _ := strconv.ParseInt(c.Query("customerId"), 10, 64)
 	rows, total, err := h.svc.ListOpportunities(c.Request.Context(), OpportunityQuery{
-		Keyword: c.Query("keyword"), CustomerID: idgen.ID(customerID), Stage: c.Query("stage"),
+		Keyword: c.Query("keyword"), CustomerID: idgen.ID(customerID), Stage: response.ParseList(c.Query("stage"), response.MaxFilterValues),
 		Scope: sc, Mine: c.Query("mine") == "1", Page: page, PageSize: size,
 	})
 	if err != nil {

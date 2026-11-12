@@ -10,9 +10,8 @@ import (
 
 // 音频验证码的自绘合成：不再使用 dchest/captcha 的 NewAudio——它把数字语音"混进"
 // 一条随机背景噪声里、数字之间随机隔 1–3 秒，人耳基本听不清（这正是它被诟病的原因）。
-// 这里改为：数字语音（Kokoro 开源模型本地合成，Apache-2.0 可随商用产品再分发，
-// 见 captchasounds/ATTRIBUTION 与 captchasounds/gen_kokoro.py）在干净的静音底上
-// 依次播放，整串重复 audioPlayTimes 遍。
+// 这里改为：数字语音（TTSMaker 在线合成，免费商用可再分发，出处在 captchasounds/ATTRIBUTION）
+// 在干净的静音底上依次播放，整串重复 audioPlayTimes 遍。
 // 安全性不受影响：语音验证码
 // 本来就防不住自动转写，防爆破靠的是一次性 key、IP 绑定、60 秒 TTL 与登录限流。
 
@@ -20,7 +19,7 @@ import (
 var soundFS embed.FS
 
 const (
-	// 音源为 24 kHz、16-bit、单声道 PCM（由 captchasounds/gen_kokoro.py 生成；
+	// 音源为 24 kHz、16-bit、单声道 PCM（现由 TTSMaker 导出即此格式，见 captchasounds/ATTRIBUTION；
 	// 8 kHz/8-bit 的 dchest 老音源已弃用——电话级带宽加老式合成，是"机器人嗓"的主因）。
 	audioSampleRate = 24000
 	// 单声道样本的字节数（16-bit）。
@@ -28,12 +27,13 @@ const (
 	// 整串语音读一遍；两遍之间的间隔与抖动（audioRepeatPauseMs 与 audioGaps 的
 	// repeat 档）常驻不删，需要时改这里即可。
 	audioPlayTimes = 1
-	// 数字之间的停顿与两遍之间的间隔（毫秒）。
-	audioDigitPauseMs  = 300
-	audioRepeatPauseMs = 600
-	// 停顿再按 key 加 0–3 档、每档 audioGapStepMs 的抖动（见 audioGaps）。
-	audioGapStepMs = 50
-	audioGapLevels = 4
+	// 数字之间的停顿与两遍之间的间隔（毫秒）。150ms 起、最多再加 60ms：
+	// 300ms 起时一两个字之间空得像在等下一位，整串听下来节奏拖沓（用户实测反馈）。
+	audioDigitPauseMs  = 150
+	audioRepeatPauseMs = 400
+	// 停顿再按 key 加 0–2 档、每档 audioGapStepMs 的抖动（见 audioGaps）。
+	audioGapStepMs = 30
+	audioGapLevels = 3
 )
 
 // audioSeed 从 key 造一条确定性随机流（splitmix64）。
@@ -159,9 +159,9 @@ func wavBytes(pcm []byte) []byte {
 	binary.Write(riff, binary.LittleEndian, chunk)
 	riff.WriteString("WAVE")
 	riff.WriteString("fmt ")
-	binary.Write(riff, binary.LittleEndian, uint32(16))  // fmt 块长
-	binary.Write(riff, binary.LittleEndian, uint16(1))   // PCM
-	binary.Write(riff, binary.LittleEndian, uint16(1))   // 单声道
+	binary.Write(riff, binary.LittleEndian, uint32(16)) // fmt 块长
+	binary.Write(riff, binary.LittleEndian, uint16(1))  // PCM
+	binary.Write(riff, binary.LittleEndian, uint16(1))  // 单声道
 	binary.Write(riff, binary.LittleEndian, uint32(audioSampleRate))
 	binary.Write(riff, binary.LittleEndian, uint32(audioSampleRate*audioSampleBytes)) // 字节率 = 采样率×声道×位深/8
 	binary.Write(riff, binary.LittleEndian, uint16(audioSampleBytes))                 // 块对齐

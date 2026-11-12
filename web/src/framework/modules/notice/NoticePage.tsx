@@ -36,10 +36,25 @@ function fmt(iso: string | null | undefined, lang: string) {
     : new Intl.DateTimeFormat(lang, { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).format(d)
 }
 
+/** 筛选草稿：枚举字段是多选数组，搜索时序列化成 CSV 传给接口 */
+interface NoticeDraft {
+  keyword?: string
+  type?: string[]
+  level?: string[]
+  status?: string[]
+}
+
+const toNoticeQuery = (d: NoticeDraft): NoticeQuery => ({
+  keyword: d.keyword,
+  type: d.type?.length ? d.type.join(',') : undefined,
+  level: d.level?.length ? d.level.join(',') : undefined,
+  status: d.status?.length ? d.status.join(',') : undefined,
+})
+
 export default function NoticePage() {
   const { t, i18n } = useTranslation()
   const confirm = useConfirm()
-  const [draft, setDraft] = useState<NoticeQuery>({})
+  const [draft, setDraft] = useState<NoticeDraft>({})
   const [filters, setFilters] = useState<NoticeQuery>({})
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(PAGE_SIZE)
@@ -48,7 +63,7 @@ export default function NoticePage() {
   const [editing, setEditing] = useState<Notice | null>(null)
   const [statsFor, setStatsFor] = useState<Notice | null>(null)
 
-  const { data, isLoading } = useNoticeList({ ...filters, page, pageSize })
+  const { data, isLoading } = useNoticeList({ ...toNoticeQuery(draft), ...filters, page, pageSize })
   const publish = usePublishNotice()
   const revoke = useRevokeNotice()
   const remove = useDeleteNotices()
@@ -138,8 +153,9 @@ export default function NoticePage() {
       <AiFilterBox
         scope="notice"
         onApply={(f) => {
+          // AI 筛选产出单值，多选字段统一收进数组
           const next: NoticeQuery = { keyword: f.keyword, type: f.type, level: f.level, status: f.status }
-          setDraft(next)
+          setDraft({ keyword: f.keyword, type: f.type ? [f.type] : undefined, level: f.level ? [f.level] : undefined, status: f.status ? [f.status] : undefined })
           setFilters(next)
           setPage(1)
           setSelected([])
@@ -148,7 +164,7 @@ export default function NoticePage() {
 
       <FilterBar
         onSearch={() => {
-          setFilters(draft)
+          setFilters(toNoticeQuery(draft))
           setPage(1)
         }}
         onReset={() => {
@@ -164,9 +180,9 @@ export default function NoticePage() {
           placeholder={t('notice.searchPlaceholder')}
           aria-label={t('common.keyword')}
         />
-        <DictSelect className="md:w-36" dict="notice_type" placeholder={t('notice.fields.type')} value={draft.type} onChange={(v) => setDraft((d) => ({ ...d, type: v }))} />
-        <DictSelect className="md:w-36" dict="notice_level" placeholder={t('notice.fields.level')} value={draft.level} onChange={(v) => setDraft((d) => ({ ...d, level: v }))} />
-        <DictSelect className="md:w-36" dict="notice_status" placeholder={t('notice.fields.status')} value={draft.status} onChange={(v) => setDraft((d) => ({ ...d, status: v }))} />
+        <DictSelect className="md:w-40" dict="notice_type" multiple placeholder={t('notice.fields.type')} value={draft.type ?? []} onChange={(v) => setDraft((d) => ({ ...d, type: v.length ? v : undefined }))} />
+        <DictSelect className="md:w-40" dict="notice_level" multiple placeholder={t('notice.fields.level')} value={draft.level ?? []} onChange={(v) => setDraft((d) => ({ ...d, level: v.length ? v : undefined }))} />
+        <DictSelect className="md:w-40" dict="notice_status" multiple placeholder={t('notice.fields.status')} value={draft.status ?? []} onChange={(v) => setDraft((d) => ({ ...d, status: v.length ? v : undefined }))} />
       </FilterBar>
 
       <DataTable

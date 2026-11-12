@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -40,7 +41,14 @@ type exportParams struct {
 }
 
 func (p exportParams) query() listQuery {
-	return listQuery{Keyword: p.Keyword, Status: p.Status, DeptID: p.DeptID, Gender: p.Gender, CreatedFrom: p.CreatedFrom, CreatedTo: p.CreatedTo}
+	// Status/DeptID/Gender 是逗号拼接的多值筛选串（与 query 参数同一契约）；旧在途任务的单值天然兼容。
+	return listQuery{
+		Keyword: p.Keyword,
+		Status:  response.ParseList(p.Status, response.MaxFilterValues),
+		DeptIDs: response.ParseFilterIDs(p.DeptID, response.MaxFilterValues),
+		Gender:  response.ParseList(p.Gender, response.MaxFilterValues),
+		CreatedFrom: p.CreatedFrom, CreatedTo: p.CreatedTo,
+	}
 }
 
 func syncLimitOf(n int) int {
@@ -148,11 +156,18 @@ func filterQuery(c *gin.Context) listQuery {
 				}
 			}
 			pick(&q.Keyword, b.Keyword)
-			pick(&q.Status, b.Status)
-			pick(&q.DeptID, b.DeptID)
-			pick(&q.Gender, b.Gender)
 			pick(&q.CreatedFrom, b.CreatedFrom)
 			pick(&q.CreatedTo, b.CreatedTo)
+			// 多值字段（body 里同样是逗号拼接串）：非空才覆盖 query 解析结果
+			if s := response.ParseList(b.Status, response.MaxFilterValues); len(s) > 0 {
+				q.Status = s
+			}
+			if ids := response.ParseFilterIDs(b.DeptID, response.MaxFilterValues); len(ids) > 0 {
+				q.DeptIDs = ids
+			}
+			if s := response.ParseList(b.Gender, response.MaxFilterValues); len(s) > 0 {
+				q.Gender = s
+			}
 		}
 	}
 	return q
@@ -187,10 +202,15 @@ func (h *asyncHandler) create(c *gin.Context) {
 		response.Fail(c, err)
 		return
 	}
+	deptCSV := make([]string, 0, len(q.DeptIDs))
+	for _, id := range q.DeptIDs {
+		deptCSV = append(deptCSV, idgen.ID(id).String())
+	}
 	j, err := m.Submit(c.Request.Context(), job.Submit{
 		Type: jobTypeUserExport, Owner: who.ID,
 		Params: exportParams{
-			Keyword: q.Keyword, Status: q.Status, DeptID: q.DeptID, Gender: q.Gender, CreatedFrom: q.CreatedFrom, CreatedTo: q.CreatedTo,
+			Keyword: q.Keyword, Status: strings.Join(q.Status, ","), DeptID: strings.Join(deptCSV, ","), Gender: strings.Join(q.Gender, ","),
+			CreatedFrom: q.CreatedFrom, CreatedTo: q.CreatedTo,
 			ActorID: who.ID, Super: who.Super,
 		},
 	})

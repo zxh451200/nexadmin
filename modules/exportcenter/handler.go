@@ -131,7 +131,11 @@ func (h *handler) list(c *gin.Context) {
 		return
 	}
 	page, size := response.ParsePage(c)
-	rows, total, err := h.m.List(c.Request.Context(), a, job.Filter{Type: c.Query("type"), Status: c.Query("status"), Page: page, PageSize: size}, all)
+	rows, total, err := h.m.List(c.Request.Context(), a, job.Filter{
+		Types:    response.ParseList(c.Query("type"), response.MaxFilterValues),
+		Statuses: response.ParseList(c.Query("status"), response.MaxFilterValues),
+		Page:     page, PageSize: size,
+	}, all)
 	if err != nil {
 		h.fail(c, err)
 		return

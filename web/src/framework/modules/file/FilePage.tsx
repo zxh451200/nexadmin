@@ -25,6 +25,7 @@ import { cn } from '@/lib/utils'
 import { FileActionsMenu, FilePreviewDialog, MoveDialog, RenameDialog } from './FileActions'
 import { FileThumb } from './FileThumb'
 import { GROUP_ALL, GroupPanel } from './GroupPanel'
+import { OptionPicker } from '@/framework/components/OptionPicker'
 import { UploadDialog } from './UploadDialog'
 import { downloadFilesZip, useDeleteFiles, useFileList, useMoveFiles, useUpdateFile, type FileItem, type FileSort } from './api'
 
@@ -35,12 +36,12 @@ const GRID_CLASS = 'grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-3 xl:grid-cols-
 
 interface Filters {
   keyword: string
-  category: string
+  category: string[]
   range: DateRangeValue
   sort: FileSort
   desc: boolean
 }
-const emptyFilters: Filters = { keyword: '', category: 'all', range: {}, sort: 'created_at', desc: true }
+const emptyFilters: Filters = { keyword: '', category: [], range: {}, sort: 'created_at', desc: true }
 
 export default function FilePage() {
   const { t, i18n } = useTranslation()
@@ -63,7 +64,7 @@ export default function FilePage() {
     page,
     pageSize,
     keyword: applied.keyword || undefined,
-    category: applied.category === 'all' ? undefined : applied.category,
+    category: applied.category.length ? applied.category.join(',') : undefined,
     groupId: group === GROUP_ALL ? undefined : group,
     from: applied.range.from,
     to: applied.range.to,
@@ -188,19 +189,14 @@ export default function FilePage() {
   const filterBar = (
     <FilterBar onSearch={search} onReset={reset}>
       <Input value={draft.keyword} placeholder={t('fileMgr.keywordPlaceholder')} className="text-base md:min-w-40 md:flex-1 md:text-sm" onChange={(e) => setDraft((d) => ({ ...d, keyword: e.target.value }))} aria-label={t('common.keyword')} />
-      <Select value={draft.category} onValueChange={(v) => setDraft((d) => ({ ...d, category: v }))}>
-        <SelectTrigger className="md:w-36 md:shrink-0" aria-label={t('fileMgr.filterType')}>
-          <SelectValue placeholder={t('fileMgr.filterType')} />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">{t('fileMgr.allTypes')}</SelectItem>
-          {CATEGORIES.map((c) => (
-            <SelectItem key={c} value={c}>
-              {t(`fileMgr.kind.${c}`)}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <OptionPicker
+        title={t('fileMgr.filterType')}
+        value={draft.category}
+        onChange={(v) => setDraft((d) => ({ ...d, category: v }))}
+        options={CATEGORIES.map((c) => ({ value: c, label: t(`fileMgr.kind.${c}`) }))}
+        className="md:w-40 md:shrink-0"
+        placeholder={t('fileMgr.filterType')}
+      />
       <DateRangePicker value={draft.range} onChange={(range) => setDraft((d) => ({ ...d, range }))} ariaLabel={t('fileMgr.timeRange')} className="md:w-52 md:shrink-0" placeholder={t('fileMgr.timeRange')} />
     </FilterBar>
   )

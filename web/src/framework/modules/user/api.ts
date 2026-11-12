@@ -33,16 +33,40 @@ export interface UserQuery {
   page: number
   pageSize: number
   keyword?: string
+  /** 逗号分隔多值：?status=1,0 */
   status?: string
+  /** 兼容旧单值（AI 筛选/历史链接）；多选走 deptIds */
   deptId?: string
-  /** sys_gender: 1 男 / 2 女（AI 筛选产出） */
+  /** 逗号分隔多值部门 id */
+  deptIds?: string
+  /** sys_gender: 1 男 / 2 女，逗号分隔多值 */
   gender?: string
   /** YYYY-MM-DD，创建时间闭区间（AI 筛选产出） */
   createdFrom?: string
   createdTo?: string
 }
 
-export type UserFilters = Pick<UserQuery, 'keyword' | 'status' | 'deptId' | 'gender' | 'createdFrom' | 'createdTo'>
+/** 筛选条件（页面 state）：枚举字段是数组，发请求前用 toUserQuery 拼成 CSV */
+export interface UserFilters {
+  keyword?: string
+  status?: string[]
+  gender?: string[]
+  deptIds?: string[]
+  createdFrom?: string
+  createdTo?: string
+}
+
+/** 把页面筛选状态序列化成接口查询参数：枚举数组 join 成逗号串，空数组不传 */
+export function toUserQuery(f: UserFilters): Omit<UserQuery, 'page' | 'pageSize'> {
+  return {
+    keyword: f.keyword || undefined,
+    status: f.status?.length ? f.status.join(',') : undefined,
+    gender: f.gender?.length ? f.gender.join(',') : undefined,
+    deptIds: f.deptIds?.length ? f.deptIds.join(',') : undefined,
+    createdFrom: f.createdFrom || undefined,
+    createdTo: f.createdTo || undefined,
+  }
+}
 
 /** deptName / roleNames 为 mock 阶段由前端补全的冗余展示字段，真实后端由服务端关联查询 */
 export interface UserInput {
@@ -81,7 +105,7 @@ export function useUserList(query: UserQuery) {
   })
 }
 
-export function fetchUsersForExport(filters: UserFilters) {
+export function fetchUsersForExport(filters: Omit<UserQuery, 'page' | 'pageSize'>) {
   return api.get<User[]>('/users/export', filters)
 }
 
@@ -105,7 +129,7 @@ export function blobExt(blob: Blob): 'csv' | 'xlsx' {
 }
 
 /** 服务端导出 .xlsx（沿用同样的筛选条件与数据范围）；真实后端返回文件（Blob），mock 阶段返回 CSV 文本 */
-export async function exportUsersFile(filters: UserFilters): Promise<Blob> {
+export async function exportUsersFile(filters: Omit<UserQuery, 'page' | 'pageSize'>): Promise<Blob> {
   const res = await http.get<unknown>('/users/export', { params: { ...filters, format: 'xlsx' }, responseType: 'blob' })
   return res.data instanceof Blob ? res.data : new Blob([String(res.data)], { type: 'text/csv;charset=utf-8' })
 }
@@ -119,12 +143,12 @@ export interface ExportPlan {
 }
 
 /** 导出前先问服务端该走同步还是异步（失败时返回 null，调用方退回同步导出） */
-export function fetchExportPlan(filters: UserFilters): Promise<ExportPlan | null> {
+export function fetchExportPlan(filters: Omit<UserQuery, 'page' | 'pageSize'>): Promise<ExportPlan | null> {
   return api.get<ExportPlan>('/users/export-plan', filters, { silent: true }).catch(() => null)
 }
 
 /** 创建异步导出任务（同样的筛选参数），立即返回任务 ID；进度与下载见导出中心 */
-export function createExportJob(filters: UserFilters) {
+export function createExportJob(filters: Omit<UserQuery, 'page' | 'pageSize'>) {
   return api.post<{ id: string }>('/users/export-async', filters)
 }
 

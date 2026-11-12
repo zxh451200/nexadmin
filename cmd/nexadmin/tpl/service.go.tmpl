@@ -75,8 +75,17 @@ func (s *Service) List(ctx context.Context, q ListQuery) ([]View, int64, error) 
 		base = base.Where("[[.SearchWhere]]", [[.SearchArgs]])
 	}
 [[- end]]
+	// 列名来自生成代码的白名单（不是请求）：[]string / []int64 是 dict/ref 的多选筛选（IN），
+	// 其余（bool）等值。
 	for col, v := range q.Filters {
-		base = base.Where(col+" = ?", v)
+		switch vals := v.(type) {
+		case []string:
+			base = base.Where(col+" IN ?", vals)
+		case []int64:
+			base = base.Where(col+" IN ?", vals)
+		default:
+			base = base.Where(col+" = ?", v)
+		}
 	}
 	base = base.Session(&gorm.Session{})
 	var total int64

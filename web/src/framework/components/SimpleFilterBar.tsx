@@ -27,16 +27,18 @@ export function SimpleFilterBar({ filter, placeholder, typeDict, typePlaceholder
       />
       {typeDict ? (
         <DictSelect
-          className="md:w-40"
+          className="md:w-44"
           dict={typeDict}
+          multiple
           placeholder={typePlaceholder}
           value={draft.type}
           onChange={(v) => setDraft((d) => ({ ...d, type: v }))}
         />
       ) : null}
       <DictSelect
-        className="md:w-40"
+        className="md:w-44"
         dict="sys_status"
+        multiple
         placeholder={t('common.status')}
         value={draft.status}
         onChange={(v) => setDraft((d) => ({ ...d, status: v }))}

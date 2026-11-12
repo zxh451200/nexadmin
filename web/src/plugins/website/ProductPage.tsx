@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronDown, CircleAlert, CircleCheck, CloudUpload, Copy, Download, ExternalLink, Eye, FileUp, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { CircleAlert, CircleCheck, CloudUpload, Copy, Download, ExternalLink, Eye, FileUp, Pencil, Plus, Settings2, Trash2, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -37,7 +37,6 @@ import { downloadCsv, saveBlob } from '@/framework/components/export/csv'
 import { formatTime, slugify } from './format'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/framework/ui/collapsible'
 import { Input } from '@/framework/ui/input'
 import { Label } from '@/framework/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
@@ -876,22 +875,15 @@ function SharedGroup({ labelKey, children }: { labelKey: string; children: React
 }
 
 /**
- * 阿里开放平台凭据卡：AppKey 明文，Secret/SessionKey 密码框（已配置时占位提示「留空保持不变」）。
+ * 阿里开放平台凭据弹窗：AppKey 明文，Secret/SessionKey 密码框（已配置时占位提示「留空保持不变」）。
  * 保存走独立 PUT（凭据三态在后端处理），连接测试调 category 接口验证网关+签名。
- * 默认收起：凭据是一次性配置，不该常驻占掉列表首屏；标题行常显配置状态，缺什么一目了然。
+ * 入口是页头的「阿里同步配置」按钮：凭据是一次性配置，不该常驻占掉列表首屏；
+ * 按钮上常显「未配置」徽标，缺什么一目了然（原折叠卡的自动展开在此等价为按钮徽标提示）。
  */
-function AliConfigCard() {
+function AliConfigDialog({ onOpenChange }: { onOpenChange: (v: boolean) => void }) {
   const { t } = useTranslation()
   const { data: config, isLoading } = useAliConfig()
   const save = useSaveAliConfig()
-  const [open, setOpen] = useState(false)
-  // 还没配过凭据时自动展开一次：首次配置的人不用再找入口；只自动开这一次，用户收起后不打架。
-  const [autoOpened, setAutoOpened] = useState(false)
-  useEffect(() => {
-    if (isLoading || autoOpened) return
-    setAutoOpened(true)
-    if (!config?.hasSecret && !config?.hasSession) setOpen(true)
-  }, [config, isLoading, autoOpened])
   const [appKey, setAppKey] = useState('')
   const [appSecret, setAppSecret] = useState('')
   const [sessionKey, setSessionKey] = useState('')
@@ -916,6 +908,7 @@ function AliConfigCard() {
       setAppSecret('')
       setSessionKey('')
       toast.success(t('common.operateSuccess'))
+      onOpenChange(false)
     } catch {
       // 服务端原因由 http 拦截器统一弹出
     }
@@ -935,79 +928,81 @@ function AliConfigCard() {
 
   if (isLoading) return null
   return (
-    // 两态样式：收起是一行浅色文本（凭据是一次性设置，不该和筛选栏抢视觉）；
-    // 展开才有边框卡片——那时用户正在操作它，该突出了。
-    <Collapsible open={open} onOpenChange={setOpen} className={cn('text-sm', open && 'rounded-lg border border-border')}>
-      <CollapsibleTrigger
-        className={cn(
-          'group flex w-full flex-wrap items-center gap-2 rounded-md text-start transition-colors hover:bg-accent/40',
-          open ? 'p-3' : 'px-2 py-1.5 text-muted-foreground',
-        )}
-      >
-        <p className={cn('font-medium', open && 'text-foreground')}>{t('plugin_website.ali.configTitle')}</p>
-        <span className="text-xs text-muted-foreground">
-          {config?.hasSecret ? t('plugin_website.ali.secretConfigured') : t('plugin_website.ali.secretMissing')}
-          {' · '}
-          {config?.hasSession ? t('plugin_website.ali.sessionConfigured') : t('plugin_website.ali.sessionMissing')}
-        </span>
-        <ChevronDown aria-hidden="true" className="ms-auto size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
-      </CollapsibleTrigger>
-      <CollapsibleContent>
-        <div className="flex flex-col gap-2 px-3 pb-3">
-          <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
-            <Input
-              value={appKey}
-              onChange={(e) => setAppKey(e.target.value)}
-              placeholder={t('plugin_website.ali.appKey')}
-              aria-label={t('plugin_website.ali.appKey')}
-              // 这张卡形似登录表单（多个输入 + 密码框），浏览器会把站内账号密码自动填进来：
-              // 截图里的 AppKey=admin、AppSecret=10 个圆点就是这么来的。Chrome 的自动填充底色是冷蓝，
-              // 两个框因此比同排其它控件亮一档；更糟的是点「保存凭据」会把这串站点密码当成
-              // AppSecret 加密存库。new-password 是 Chrome 唯一遵从而不填充的写法。
-              autoComplete="off"
-              name="ali-app-key"
-            />
-            <Input
-              type="password"
-              value={appSecret}
-              onChange={(e) => setAppSecret(e.target.value)}
-              placeholder={config?.hasSecret ? t('plugin_website.ali.configuredAlready') : t('plugin_website.ali.appSecret')}
-              aria-label={t('plugin_website.ali.appSecret')}
-              autoComplete="new-password"
-              name="ali-app-secret"
-            />
-            <Input
-              type="password"
-              value={sessionKey}
-              onChange={(e) => setSessionKey(e.target.value)}
-              placeholder={config?.hasSession ? t('plugin_website.ali.configuredAlready') : t('plugin_website.ali.sessionKey')}
-              aria-label={t('plugin_website.ali.sessionKey')}
-              autoComplete="new-password"
-              name="ali-session-key"
-            />
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Input
-              value={apiGateway}
-              onChange={(e) => setApiGateway(e.target.value)}
-              placeholder="https://gw.api.taobao.com/router/rest"
-              aria-label={t('plugin_website.ali.apiGateway')}
-              className="min-w-0 flex-1 font-mono text-xs md:w-96 md:flex-none"
-              autoComplete="off"
-              name="ali-api-gateway"
-            />
-            <Button variant="outline" size="sm" onClick={() => void test()} disabled={testState === 'testing'}>
-              {testState === 'testing' ? t('common.loading') : t('plugin_website.ali.test')}
-            </Button>
-            <Button size="sm" onClick={() => void submit()} disabled={save.isPending}>
-              {t('plugin_website.ali.save')}
-            </Button>
-            {testState === 'ok' ? <Badge variant="success">{t('plugin_website.ali.testOk')}</Badge> : null}
-            {testState === 'fail' ? <Badge variant="destructive">{t('plugin_website.ali.testFail')}</Badge> : null}
-          </div>
+    <ResponsiveDialog
+      open
+      onOpenChange={onOpenChange}
+      title={t('plugin_website.ali.configTitle')}
+      description={t('plugin_website.ali.configDesc')}
+      size="md"
+      footer={
+        <>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
+          <Button onClick={() => void submit()} disabled={save.isPending}>
+            {t('plugin_website.ali.save')}
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-3 text-sm">
+        {/* 凭据三态常显：Secret/SessionKey 配没配，保存/测试结果各一枚徽标 */}
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant={config?.hasSecret ? 'success' : 'warning'}>
+            {config?.hasSecret ? t('plugin_website.ali.secretConfigured') : t('plugin_website.ali.secretMissing')}
+          </Badge>
+          <Badge variant={config?.hasSession ? 'success' : 'warning'}>
+            {config?.hasSession ? t('plugin_website.ali.sessionConfigured') : t('plugin_website.ali.sessionMissing')}
+          </Badge>
         </div>
-      </CollapsibleContent>
-    </Collapsible>
+        <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+          <Input
+            value={appKey}
+            onChange={(e) => setAppKey(e.target.value)}
+            placeholder={t('plugin_website.ali.appKey')}
+            aria-label={t('plugin_website.ali.appKey')}
+            // 这个弹窗形似登录表单（多个输入 + 密码框），浏览器会把站内账号密码自动填进来：
+            // 截图里的 AppKey=admin、AppSecret=10 个圆点就是这么来的。Chrome 的自动填充底色是冷蓝，
+            // 两个框因此比同排其它控件亮一档；更糟的是点「保存凭据」会把这串站点密码当成
+            // AppSecret 加密存库。new-password 是 Chrome 唯一遵从而不填充的写法。
+            autoComplete="off"
+            name="ali-app-key"
+          />
+          <Input
+            type="password"
+            value={appSecret}
+            onChange={(e) => setAppSecret(e.target.value)}
+            placeholder={config?.hasSecret ? t('plugin_website.ali.configuredAlready') : t('plugin_website.ali.appSecret')}
+            aria-label={t('plugin_website.ali.appSecret')}
+            autoComplete="new-password"
+            name="ali-app-secret"
+          />
+          <Input
+            type="password"
+            value={sessionKey}
+            onChange={(e) => setSessionKey(e.target.value)}
+            placeholder={config?.hasSession ? t('plugin_website.ali.configuredAlready') : t('plugin_website.ali.sessionKey')}
+            aria-label={t('plugin_website.ali.sessionKey')}
+            autoComplete="new-password"
+            name="ali-session-key"
+          />
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Input
+            value={apiGateway}
+            onChange={(e) => setApiGateway(e.target.value)}
+            placeholder="https://gw.api.taobao.com/router/rest"
+            aria-label={t('plugin_website.ali.apiGateway')}
+            className="min-w-0 flex-1 font-mono text-xs md:w-96 md:flex-none"
+            autoComplete="off"
+            name="ali-api-gateway"
+          />
+          <Button variant="outline" size="sm" onClick={() => void test()} disabled={testState === 'testing'}>
+            {testState === 'testing' ? t('common.loading') : t('plugin_website.ali.test')}
+          </Button>
+          {testState === 'ok' ? <Badge variant="success">{t('plugin_website.ali.testOk')}</Badge> : null}
+          {testState === 'fail' ? <Badge variant="destructive">{t('plugin_website.ali.testFail')}</Badge> : null}
+        </div>
+      </div>
+    </ResponsiveDialog>
   )
 }
 
@@ -1412,6 +1407,9 @@ export default function ProductPage() {
   const [focus, setFocus] = useState<{ code: string; nonce: number } | null>(null)
   // 阿里同步对话框的目标：单个商品或一批；null = 关闭。
   const [syncTarget, setSyncTarget] = useState<AliSyncTarget | null>(null)
+  // 阿里凭据配置入口在页头：按钮上带「未配置」徽标（页面与弹窗共用同一个 useAliConfig 缓存）。
+  const { data: aliConfig } = useAliConfig()
+  const [aliOpen, setAliOpen] = useState(false)
   // 列表缩略图点开看大图：记整行，弹窗同时用 coverUrl 和标题。
   const [preview, setPreview] = useState<SiteProduct | null>(null)
 
@@ -1640,10 +1638,21 @@ export default function ProductPage() {
 
   return (
     <PageContainer>
-      <PageHeader title={t('plugin_website.product.title')} description={t('plugin_website.product.desc')} />
-      <Can perm="website:setting">
-        <AliConfigCard />
-      </Can>
+      <PageHeader
+        title={t('plugin_website.product.title')}
+        description={t('plugin_website.product.desc')}
+        actions={
+          <Can perm="website:setting">
+            <Button variant="outline" onClick={() => setAliOpen(true)}>
+              <Settings2 aria-hidden="true" />
+              {t('plugin_website.ali.configEntry')}
+              {aliConfig && !(aliConfig.hasSecret && aliConfig.hasSession) ? (
+                <Badge variant="warning">{t('plugin_website.ali.configMissing')}</Badge>
+              ) : null}
+            </Button>
+          </Can>
+        }
+      />
       <FilterBar
         onSearch={() => { setFilters(toContentQuery(draft)); setPage(1); setSelected([]) }}
         onReset={() => { setDraft({}); setFilters({}); setStatusTab(ALL); setPage(1); setSelected([]) }}
@@ -1765,6 +1774,7 @@ export default function ProductPage() {
       )}
       {syncTarget && <AliSyncDialog target={syncTarget} onOpenChange={(v) => !v && setSyncTarget(null)} />}
       {importOpen && <ProductImportDialog onOpenChange={setImportOpen} />}
+      {aliOpen && <AliConfigDialog onOpenChange={setAliOpen} />}
       <Lightbox
         open={!!preview}
         onOpenChange={(o) => !o && setPreview(null)}

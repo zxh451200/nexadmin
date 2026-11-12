@@ -72,9 +72,10 @@ func toView(l SendLog) View {
 }
 
 // Query 是列表查询条件。
+// Channel/Status 逗号拼接多值（?channel=sms,email），空切片 = 不限。
 type Query struct {
-	Channel   string
-	Status    string
+	Channel   []string
+	Status    []string
 	Recipient string // 对（已脱敏的）收件人做模糊匹配
 	StartDate string // YYYY-MM-DD，按应用时区，含当天
 	EndDate   string

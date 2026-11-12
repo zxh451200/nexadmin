@@ -14,7 +14,7 @@ import { Segmented } from '@/framework/components/Segmented'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
+import { OptionPicker } from '@/framework/components/OptionPicker'
 import {
   fetchOrdersForExport,
   useChannels,
@@ -31,8 +31,6 @@ import { cn } from '@/lib/utils'
 import { ListErrorBanner } from './ListErrorBanner'
 import { PayStatsPanel } from './PayStatsPanel'
 
-const ALL = '__all'
-
 const STATUSES = [
   'pending',
   'succeeded',
@@ -43,10 +41,35 @@ const STATUSES = [
   'refunded',
 ] as const
 
+/** 筛选草稿：状态/渠道是多选数组，搜索时 join 成 CSV；其余（关键词/日期/下钻 chips）保持单值 */
+interface OrderDraft {
+  keyword?: string
+  status?: string[]
+  channelCode?: string[]
+  subjectId?: string
+  bizType?: string
+  scene?: string
+  failReason?: string
+  createdFrom?: string
+  createdTo?: string
+}
+
+const toOrderQuery = (d: OrderDraft): OrderQuery => ({
+  keyword: d.keyword,
+  status: d.status?.length ? d.status.join(',') : undefined,
+  channelCode: d.channelCode?.length ? d.channelCode.join(',') : undefined,
+  subjectId: d.subjectId,
+  bizType: d.bizType,
+  scene: d.scene,
+  failReason: d.failReason,
+  createdFrom: d.createdFrom,
+  createdTo: d.createdTo,
+})
+
 export function OrdersTab() {
   const { t, i18n } = useTranslation()
   const confirm = useConfirm()
-  const [draft, setDraft] = useState<OrderQuery>({})
+  const [draft, setDraft] = useState<OrderDraft>({})
   const [filters, setFilters] = useState<OrderQuery>({})
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
@@ -124,10 +147,10 @@ export function OrdersTab() {
     setParams(next)
   }
 
-  // 统计下钻：把同一组条件带进列表，并把视图切回日志。
+  // 统计下钻：把同一组条件带进列表，并把视图切回日志（chips 字段是单值，draft 兼容收下）。
   const onDrillDown = (patch: Partial<OrderQuery>) => {
-    setDraft(patch)
-    setFilters(patch)
+    setDraft((d) => ({ ...d, ...patch, status: patch.status ? [patch.status] : d.status, channelCode: patch.channelCode ? [patch.channelCode] : d.channelCode }))
+    setFilters((f) => ({ ...f, ...patch }))
     setPage(1)
     setView('logs')
   }
@@ -212,7 +235,7 @@ export function OrdersTab() {
       {isError ? <ListErrorBanner onRetry={() => void refetch()} /> : null}
       <FilterBar
         onSearch={() => {
-          setFilters(draft)
+          setFilters(toOrderQuery(draft))
           setPage(1)
         }}
         onReset={() => {
@@ -228,32 +251,22 @@ export function OrdersTab() {
           placeholder={t('plugin_pay.searchPlaceholder')}
           aria-label={t('common.keyword')}
         />
-        <Select value={draft.status ?? ALL} onValueChange={(v) => setDraft((d) => ({ ...d, status: v === ALL ? undefined : v }))}>
-          <SelectTrigger className="md:w-44" aria-label={t('plugin_pay.fields.status')}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_pay.filter.allStatuses')}</SelectItem>
-            {STATUSES.map((s) => (
-              <SelectItem key={s} value={s}>
-                {t(`plugin_pay.status.${s}`)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={draft.channelCode ?? ALL} onValueChange={(v) => setDraft((d) => ({ ...d, channelCode: v === ALL ? undefined : v }))}>
-          <SelectTrigger className="md:w-40" aria-label={t('plugin_pay.fields.channel')}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_pay.filter.allChannels')}</SelectItem>
-            {channels.map((c) => (
-              <SelectItem key={c.code} value={c.code}>
-                {c.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <OptionPicker
+          title={t('plugin_pay.fields.status')}
+          value={draft.status ?? []}
+          onChange={(v) => setDraft((d) => ({ ...d, status: v.length ? v : undefined }))}
+          options={STATUSES.map((s) => ({ value: s, label: t(`plugin_pay.status.${s}`) }))}
+          className="md:w-48"
+          placeholder={t('plugin_pay.fields.status')}
+        />
+        <OptionPicker
+          title={t('plugin_pay.fields.channel')}
+          value={draft.channelCode ?? []}
+          onChange={(v) => setDraft((d) => ({ ...d, channelCode: v.length ? v : undefined }))}
+          options={channels.map((c) => ({ value: c.code, label: c.name }))}
+          className="md:w-44"
+          placeholder={t('plugin_pay.fields.channel')}
+        />
         {/* 下单日期范围（含两端）：财务查「某天的单」比翻页高频 */}
         <DatePicker
           className="md:w-40"

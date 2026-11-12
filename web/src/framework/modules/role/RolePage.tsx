@@ -46,7 +46,7 @@ export default function RolePage() {
 
   const filter = useClientFilter()
   const shown = useMemo(
-    () => rows.filter((r) => matchText(filter.applied.keyword, r.name, r.code) && (!filter.applied.status || r.status === filter.applied.status)),
+    () => rows.filter((r) => matchText(filter.applied.keyword, r.name, r.code) && (!filter.applied.status.length || filter.applied.status.includes(r.status))),
     [rows, filter.applied],
   )
 

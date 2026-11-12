@@ -28,22 +28,33 @@ func applyCustomerFilter(db *gorm.DB, q CustomerQuery) *gorm.DB {
 		db = db.Where("LOWER(name) LIKE LOWER(?) OR LOWER(code) LIKE LOWER(?) OR LOWER(external_no) LIKE LOWER(?) OR LOWER(id_no) LIKE LOWER(?) OR LOWER(tax_no) LIKE LOWER(?) OR LOWER(phone) LIKE LOWER(?) OR LOWER(email) LIKE LOWER(?)",
 			like, like, like, like, like, like, like)
 	}
-	if q.Type != "" {
-		db = db.Where("type = ?", q.Type)
+	if len(q.Type) > 0 {
+		db = db.Where("type IN ?", q.Type)
 	}
-	if q.Status != "" {
-		db = db.Where("status = ?", q.Status)
+	if len(q.Status) > 0 {
+		db = db.Where("status IN ?", q.Status)
 	}
-	if q.Source != "" {
-		db = db.Where("external_source = ?", q.Source)
+	if len(q.Source) > 0 {
+		db = db.Where("external_source IN ?", q.Source)
 	}
-	if q.Level != "" {
-		db = db.Where("level = ?", q.Level)
+	if len(q.Level) > 0 {
+		db = db.Where("level IN ?", q.Level)
 	}
 	// 标签按逗号边界匹配：存储是「,a,b,」，查「vip」时 LIKE '%,vip,%' 不会命中 viptag。
 	// 两侧 LOWER 折叠大小写（PG 的 LIKE 区分大小写；标签词大小写本来就不承载语义）。
-	if tag := strings.TrimSpace(q.Tag); tag != "" {
-		db = db.Where("LOWER(tags) LIKE LOWER(?)", "%,"+tag+",%")
+	// 多标签取并集（OR）：含任一所选标签即命中。
+	if len(q.Tag) > 0 {
+		conds, args := make([]string, 0, len(q.Tag)), make([]any, 0, len(q.Tag))
+		for _, tag := range q.Tag {
+			if tag = strings.TrimSpace(tag); tag == "" {
+				continue
+			}
+			conds = append(conds, "LOWER(tags) LIKE LOWER(?)")
+			args = append(args, "%,"+tag+",%")
+		}
+		if len(conds) > 0 {
+			db = db.Where("("+strings.Join(conds, " OR ")+")", args...)
+		}
 	}
 	// 建档时间范围：to 按天取，含端点（< to+1day）。
 	if q.CreatedFrom != "" {
@@ -62,9 +73,11 @@ func applyCustomerFilter(db *gorm.DB, q CustomerQuery) *gorm.DB {
 // ListPool 分页列出公海客户（owner 为空）。公海对持 crm:list 的所有人可见，
 // 不叠加数据范围；筛选与客户列表一致。
 func (s *Service) ListPool(ctx context.Context, q CustomerQuery) ([]Customer, int64, error) {
-	q.Type = strings.ToLower(q.Type)
-	if q.Type != "" && !TypeSet[q.Type] {
-		return nil, 0, response.BadRequest("crm.type_invalid")
+	q.Type = lowerAll(q.Type)
+	for _, t := range q.Type {
+		if !TypeSet[t] {
+			return nil, 0, response.BadRequest("crm.type_invalid")
+		}
 	}
 	db := applyCustomerFilter(s.db.WithContext(ctx).Model(&Customer{}).Where("owner = ''"), q)
 	var total int64

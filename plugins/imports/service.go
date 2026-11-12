@@ -90,9 +90,10 @@ func (s *Service) jobGet(ctx context.Context, id idgen.ID) (*Job, []RowError, er
 }
 
 // JobQuery 是导入台账过滤条件。
+// Source/Status 逗号拼接多值（?status=running,failed），空 = 不限。
 type JobQuery struct {
-	Source   string
-	Status   string
+	Source   []string
+	Status   []string
 	Page     int
 	PageSize int
 }
@@ -100,11 +101,11 @@ type JobQuery struct {
 // ListJobs 分页列出导入台账。
 func (s *Service) ListJobs(ctx context.Context, q JobQuery) ([]JobView, int64, error) {
 	base := s.db.WithContext(ctx).Model(&Job{})
-	if q.Source != "" {
-		base = base.Where("source = ?", q.Source)
+	if len(q.Source) > 0 {
+		base = base.Where("source IN ?", q.Source)
 	}
-	if q.Status != "" {
-		base = base.Where("status = ?", q.Status)
+	if len(q.Status) > 0 {
+		base = base.Where("status IN ?", q.Status)
 	}
 	var total int64
 	if err := base.Count(&total).Error; err != nil {

@@ -320,10 +320,17 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
     // 树区在 LTR 靠左、RTL 靠右：nameStart 是「这一级的名称从哪条物理边起算」，nameEdge 是落位线的另一头，
     // 两者都按方向取，后面算宽度就不用再分叉。
     const rtl = isRtl()
-    for (const el of document.querySelectorAll<HTMLElement>('[data-sortable-id]')) {
+    // 只扫自己的行：多页签 keep-alive 会把别的页签的 TreeTable 留在 DOM 里（display:none，rect 全 0），
+    // document 级扫描会把它们的坐标混进快照——reorder 落位线的 firstAnchor 兜底取的正是 Map 的第一行，
+    // 拿到 0 之后蓝线就从屏幕左缘画起，横贯侧栏和内容区。
+    const scope = rootRef.current
+    if (!scope) return
+    for (const el of scope.querySelectorAll<HTMLElement>('[data-sortable-id]')) {
       const id = el.dataset.sortableId
       if (!id) continue
       const r = el.getBoundingClientRect()
+      if (!r.width && !r.height) continue // 隐藏行零尺寸：既无法命中也不该当锚点
+
       // 名称列（第一个数据列，把手与勾选列排在它前面）的起始沿 nameStart 是落位线的尺子：
       // 第 N 级的落位线从名称列起始沿往里缩 N 档，正好对齐第 N 级行名称的真实缩进——
       // 「落在第几级」与上方可见的行缩进是同一把尺，肉眼可对。

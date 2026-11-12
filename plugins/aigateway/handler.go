@@ -55,7 +55,7 @@ func (f modelForm) input() ModelInput {
 // GET /plugins/aigateway/models?keyword=&kind=&page=&pageSize=
 func (h *handler) listModels(c *gin.Context) {
 	page, size := response.ParsePage(c)
-	rows, total, err := h.svc.ListModels(c.Request.Context(), c.Query("keyword"), c.Query("kind"), page, size)
+	rows, total, err := h.svc.ListModels(c.Request.Context(), c.Query("keyword"), response.ParseList(c.Query("kind"), response.MaxFilterValues), page, size)
 	if err != nil {
 		response.Fail(c, err)
 		return
@@ -123,7 +123,7 @@ func (h *handler) pingModel(c *gin.Context) {
 func (h *handler) listUsage(c *gin.Context) {
 	page, size := response.ParsePage(c)
 	rows, total, err := h.svc.ListUsage(c.Request.Context(), UsageQuery{
-		Kind: c.Query("kind"), BizType: c.Query("bizType"), Page: page, PageSize: size,
+		Kind: response.ParseList(c.Query("kind"), response.MaxFilterValues), BizType: c.Query("bizType"), Page: page, PageSize: size,
 	})
 	if err != nil {
 		response.Fail(c, err)

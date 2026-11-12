@@ -109,12 +109,13 @@ type userInput struct {
 }
 
 // listQuery 是用户列表/导出的筛选条件。
+// 枚举/ID 类筛选是逗号拼接多值（?status=enabled,disabled），空切片 = 不过滤。
 type listQuery struct {
 	Page, PageSize int
 	Keyword        string
-	Status         string
-	DeptID         string
-	Gender         string
+	Status         []string
+	DeptIDs        []int64
+	Gender         []string
 	CreatedFrom    string // YYYY-MM-DD，闭区间
 	CreatedTo      string
 }
