@@ -129,11 +129,12 @@ func (s *Service) SaveProduct(ctx context.Context, id idgen.ID, f ProductForm) (
 	f.PaymentTerms = trimLen(f.PaymentTerms, 100)
 	f.PriceUnit = trimLen(f.PriceUnit, 32)
 	f.Author = trimLen(f.Author, 64)
-	if err := ValidateSlug(f.Slug); err != nil {
-		return nil, err
-	}
 	if f.Title == "" {
 		return nil, response.BadRequest("website.product_title_required")
+	}
+	slugOut, err := s.resolveSlug(ctx, &Product{}, f.Slug, f.Title, id)
+	if err != nil {
+		return nil, err
 	}
 	if f.Status != ProductOnline {
 		f.Status = ProductDraft
@@ -227,7 +228,10 @@ func (s *Service) SaveProduct(ctx context.Context, id idgen.ID, f ProductForm) (
 	if err != nil {
 		return nil, response.BadRequest("website.i18n_invalid").Wrap(err)
 	}
-	row.Slug, row.Title, row.Keywords, row.Summary = f.Slug, f.Title, keywords, f.Summary
+	if slugOut != "" {
+		row.Slug = slugOut
+	}
+	row.Title, row.Keywords, row.Summary = f.Title, keywords, f.Summary
 	row.SeoTitle, row.SeoDesc, row.SeoKeywords, row.Noindex = f.SeoTitle, f.SeoDesc, f.SeoKeywords, f.NoIndex
 	row.CoverURL, row.ImagesJSON, row.VideoURL = f.CoverURL, imagesJSON, f.VideoURL
 	row.PriceMin, row.PriceMax, row.Currency, row.PriceUnit = f.PriceMin, f.PriceMax, f.Currency, f.PriceUnit
@@ -478,11 +482,12 @@ func (s *Service) ProductCategoryBySlug(ctx context.Context, slug string) (*Prod
 func (s *Service) SaveProductCategory(ctx context.Context, id idgen.ID, f ProductCategoryForm) (*ProductCategory, error) {
 	f.Title = trimLen(f.Title, 100)
 	f.Slug = strings.TrimSpace(f.Slug)
-	if err := ValidateSlug(f.Slug); err != nil {
-		return nil, err
-	}
 	if f.Title == "" {
 		return nil, response.BadRequest("website.product_category_title_required")
+	}
+	slugOut, err := s.resolveSlug(ctx, &ProductCategory{}, f.Slug, f.Title, id)
+	if err != nil {
+		return nil, err
 	}
 	var row ProductCategory
 	if id != 0 {
@@ -511,7 +516,10 @@ func (s *Service) SaveProductCategory(ctx context.Context, id idgen.ID, f Produc
 	if id != 0 && level+navSubtreeHeight(parents, uint64(id))-1 > navMaxDepth {
 		return nil, navBadRequest("website.nav_depth_exceeded", navMaxDepth)
 	}
-	row.ParentID, row.Title, row.Slug, row.Sort = f.ParentID, f.Title, f.Slug, f.Sort
+	row.ParentID, row.Title, row.Sort = f.ParentID, f.Title, f.Sort
+	if slugOut != "" {
+		row.Slug = slugOut
+	}
 	if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
 		return nil, err
 	}

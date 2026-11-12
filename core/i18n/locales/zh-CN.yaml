@@ -761,6 +761,22 @@ website:
   notify_inquiry_title: "官网留言：%s 发来新询盘"
   notify_content_empty: "（空）"
   joins_too_many: "一张数据集最多声明 2 张关联表"
+  product_title_required: "商品需要标题"
+  product_ids_empty: "请至少选择一个商品"
+  product_not_found: "商品不存在或已删除"
+  product_status_invalid: "商品状态不合法"
+  product_category_title_required: "商品类目需要名称"
+  product_category_not_found: "商品类目不存在"
+  product_category_in_use: "该类目（含子类目）下还有商品，请先把商品移到其他类目再删除"
+  ali_market_invalid: "发品类型不合法"
+  ali_gateway_https: "网关地址必须以 https:// 开头"
+  ali_not_configured: "尚未配置阿里国际站凭据：请在产品页顶部的「开放平台凭据」里填写 AppKey 与 AppSecret"
+  ali_category_invalid: "阿里类目 ID 不合法"
+  ali_category_required: "请先选择阿里叶子类目"
+  ali_english_required: "同步阿里需要英文母本：请先在英文页签填写商品标题"
+  ali_price_required: "下单品需要填写价格（起）"
+  ali_sync_unavailable: "批量同步暂不可用：后台任务服务未就绪"
+  rating_invalid: "评分必须在 1-5 之间"
 codegen:
   table_not_found: "数据表不存在：%s"
   invalid_input: "参数不正确，请检查后重试"
@@ -991,6 +1007,7 @@ devicehub:
   alarm_op_invalid: 比较符无效，可选 gt / lt / ge / le / eq / ne
   alarm_level_invalid: 告警级别只能是 info / warn / critical
   alarm_not_found: 告警规则不存在
+  location_invalid: 位置信息不合法（需要 lat/lng 数值）
 saml:
   acs:
     title: 单点登录未完成
@@ -1003,3 +1020,15 @@ saml:
     err_nameid: IdP 返回的断言缺少 NameID
     err_group: 当前账号不在允许登录的组内
     err_encrypted: 该身份源要求 IdP 加密断言，但响应里没有加密断言
+  sso:
+    sp_key_read: "读取 SP 私钥失败：%s"
+    source_disabled: "该 SAML 身份源已停用"
+    code_invalid: "交换码无效或已过期"
+    code_payload_invalid: "交换码内容无效"
+    not_from_source: "当前会话不是通过该 SAML 源登录的"
+    slo_response_invalid: "SLO 回执校验失败：%s"
+    slo_request_invalid: "SLO 请求校验失败：%s"
+    sp_cert_unavailable: "SP 证书不可用：%s"
+    metadata_required: "请提供元数据 XML 或 URL"
+    metadata_too_large: "元数据超过 1 MiB"
+    operation_failed: "操作未完成：%s"

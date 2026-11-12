@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent, type ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   ArrowUpRight,
@@ -2602,6 +2602,7 @@ function TicketListItem({
   onOpenTarget: (ticketNo: string) => void
 }) {
   const { t, i18n } = useTranslation()
+  const cbId = useId()
   const meta = [
     ticket.bizNo ? { key: 'biz', node: <span className="font-mono">{ticket.bizNo}</span> } : null,
     ticket.assigneeName ? { key: 'assignee', node: <><UserRound aria-hidden="true" className="size-3" />{ticket.assigneeName}</> } : null,
@@ -2641,7 +2642,20 @@ function TicketListItem({
       selected={active}
       onSelect={onSelect}
       checkbox={
-        <Checkbox checked={checked} onCheckedChange={(v) => onToggle(v === true)} aria-label={t('dataTable.selectRow')} />
+        // 勾选框本体只有 16px，周围一点就会点到整行选中按钮上；label 外扩 6px 内缩同值，
+        // 热区扩大约一倍且不改变行布局（点 label 会转发成勾选框自身的点击）。
+        <label
+          htmlFor={cbId}
+          className="-m-1.5 inline-flex cursor-pointer items-center rounded p-1.5"
+          title={t('dataTable.selectRow')}
+        >
+          <Checkbox
+            id={cbId}
+            checked={checked}
+            onCheckedChange={(v) => onToggle(v === true)}
+            aria-label={t('dataTable.selectRow')}
+          />
+        </label>
       }
       footer={
         // 被合并的单在队列里要一眼认出来，并且一点就到主单；独立成行，避免按钮里套按钮

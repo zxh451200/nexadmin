@@ -761,6 +761,22 @@ website:
   notify_inquiry_title: "Website enquiry from %s"
   notify_content_empty: "(empty)"
   joins_too_many: "A dataset can declare at most 2 joined tables."
+  product_title_required: "A product needs a title."
+  product_ids_empty: "Select at least one product."
+  product_not_found: "The product does not exist or has been deleted."
+  product_status_invalid: "Invalid product status."
+  product_category_title_required: "A product category needs a name."
+  product_category_not_found: "Product category not found."
+  product_category_in_use: "This category (including children) still has products; move them to another category before deleting."
+  ali_market_invalid: "Invalid publishing type."
+  ali_gateway_https: "The API gateway URL must start with https://."
+  ali_not_configured: "Alibaba credentials are not configured: fill in the AppKey and AppSecret under \"Open platform credentials\" at the top of the products page."
+  ali_category_invalid: "Invalid Alibaba category id."
+  ali_category_required: "Pick an Alibaba leaf category first."
+  ali_english_required: "Publishing to Alibaba requires the English master copy: fill in the product title under the English tab first."
+  ali_price_required: "Wholesale products need a minimum price."
+  ali_sync_unavailable: "Batch sync is unavailable: the background job service is not ready."
+  rating_invalid: "The rating must be between 1 and 5."
 codegen:
   table_not_found: "Table not found: %s"
   invalid_input: "Invalid input. Please check and try again."
@@ -991,6 +1007,7 @@ devicehub:
   alarm_op_invalid: Invalid comparison operator; pick gt, lt, ge, le, eq or ne
   alarm_level_invalid: The alarm level must be info, warn or critical
   alarm_not_found: The alarm rule does not exist
+  location_invalid: Invalid location (numeric lat/lng required)
 saml:
   acs:
     title: Sign-in did not complete
@@ -1003,3 +1020,15 @@ saml:
     err_nameid: The IdP assertion has no NameID
     err_group: This account is not in an allowed group
     err_encrypted: This identity source requires encrypted assertions, but the response contains none
+  sso:
+    sp_key_read: "Failed to read the SP private key: %s"
+    source_disabled: "This SAML identity source is disabled"
+    code_invalid: "The exchange code is invalid or expired"
+    code_payload_invalid: "The exchange code payload is invalid"
+    not_from_source: "This session was not signed in through that SAML identity source"
+    slo_response_invalid: "SLO response validation failed: %s"
+    slo_request_invalid: "SLO request validation failed: %s"
+    sp_cert_unavailable: "SP certificate unavailable: %s"
+    metadata_required: "Provide the IdP metadata XML or a metadata URL"
+    metadata_too_large: "Metadata exceeds 1 MiB"
+    operation_failed: "The operation was not completed: %s"

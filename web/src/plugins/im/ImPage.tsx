@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { ArrowRightLeft, Ban, Bell, BellOff, ChevronLeft, ChevronRight, ChevronUp, CircleCheck, Download, Ellipsis, FileText, Lock, Merge, MessageSquare, MessagesSquare, Paperclip, Pencil, Send, Settings2, SlidersHorizontal, Star, StickyNote, Tag, Timer, Trash2, Undo2, UserMinus, UserPlus, UserRound, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -742,6 +742,7 @@ function ConvListItem({
   onSelect: () => void
 }) {
   const { t, i18n } = useTranslation()
+  const cbId = useId()
   const tags = (conv.tags || '').split(',').filter(Boolean)
   const visitor = conv.visitorName || conv.visitorToken
   const stamp = relativeStamp(conv.lastMsgAt, i18n.language)
@@ -797,13 +798,20 @@ function ConvListItem({
     </>
   )
   const checkbox = canPick ? (
-    <Checkbox
-      checked={picked}
-      disabled={conv.status !== 'closed'}
+    // 勾选框热区外扩 6px（-m/p 同值抵消）：16px 小方块周围一点就点到整行选中按钮上
+    <label
+      htmlFor={cbId}
+      className="-m-1.5 inline-flex cursor-pointer items-center rounded p-1.5"
       title={conv.status === 'closed' ? undefined : t('plugin_im.batch.onlyClosed')}
-      aria-label={visitor}
-      onCheckedChange={(v) => onTogglePick(v === true)}
-    />
+    >
+      <Checkbox
+        id={cbId}
+        checked={picked}
+        disabled={conv.status !== 'closed'}
+        aria-label={visitor}
+        onCheckedChange={(v) => onTogglePick(v === true)}
+      />
+    </label>
   ) : null
   return <QueueRow selected={active} onSelect={onSelect} checkbox={checkbox}>{row}</QueueRow>
 }

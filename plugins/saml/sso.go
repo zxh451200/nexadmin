@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -68,6 +69,17 @@ func (s *Service) sourceOrFail(c *gin.Context) (*Source, bool) {
 	return m, true
 }
 
+// failDetail 把服务层 / 库层错误交给 Fail：已是业务错误（带 i18n key）就原样透传；
+// 原始错误（fmt.Errorf 等）用通用键包一层——主句本地化，错误细节作为参数保留给管理员排障。
+func failDetail(c *gin.Context, err error) {
+	var e *response.Error
+	if errors.As(err, &e) {
+		response.Fail(c, err)
+		return
+	}
+	response.Fail(c, response.BadRequest("saml.sso.operation_failed", err.Error()))
+}
+
 // metadata 输出 SP 元数据（IdP 侧需要导入）。
 func (s *Service) metadata(c *gin.Context) {
 	m, ok := s.sourceOrFail(c)
@@ -76,7 +88,7 @@ func (s *Service) metadata(c *gin.Context) {
 	}
 	sp, err := s.provider(m, baseURL(c))
 	if err != nil {
-		response.Fail(c, response.BadRequest("error.bad_request").WithMsg(err.Error()))
+		failDetail(c, err)
 		return
 	}
 	md := sp.Metadata()
@@ -93,12 +105,12 @@ func (s *Service) metadata(c *gin.Context) {
 		// 用当前 SP 私钥签整份元数据；IdP 侧按同一张证书验签（元数据里已列出当前证书）。
 		keyPEM, err := decryptSecret(m.SPKeyEnc)
 		if err != nil {
-			response.Fail(c, response.BadRequest("error.bad_request").WithMsg("读取 SP 私钥失败: "+err.Error()))
+			response.Fail(c, response.BadRequest("saml.sso.sp_key_read", err.Error()))
 			return
 		}
 		raw, err = signMetadataXML(raw, m.SPCert, keyPEM)
 		if err != nil {
-			response.Fail(c, response.BadRequest("error.bad_request").WithMsg(err.Error()))
+			failDetail(c, err)
 			return
 		}
 	}
@@ -115,12 +127,12 @@ func (s *Service) login(c *gin.Context) {
 		return
 	}
 	if !m.Enabled {
-		response.Fail(c, response.BadRequest("error.bad_request").WithMsg("SAML 源未启用"))
+		response.Fail(c, response.BadRequest("saml.sso.source_disabled"))
 		return
 	}
 	sp, err := s.provider(m, baseURL(c))
 	if err != nil {
-		response.Fail(c, response.BadRequest("error.bad_request").WithMsg(err.Error()))
+		failDetail(c, err)
 		return
 	}
 	req, err := sp.MakeAuthenticationRequest(sp.GetSSOBindingLocation(saml.HTTPRedirectBinding), saml.HTTPRedirectBinding, saml.HTTPRedirectBinding)
@@ -342,7 +354,7 @@ func (s *Service) exchange(c *gin.Context) {
 	key := "saml:code:" + f.Code
 	raw, err := s.cache.Get(c.Request.Context(), key)
 	if err != nil || raw == "" {
-		response.Fail(c, response.BadRequest("error.bad_request").WithMsg("交换码无效或已过期"))
+		response.Fail(c, response.BadRequest("saml.sso.code_invalid"))
 		return
 	}
 	_ = s.cache.Del(c.Request.Context(), key)
@@ -351,7 +363,7 @@ func (s *Service) exchange(c *gin.Context) {
 		SourceID string         `json:"sourceId"`
 	}
 	if json.Unmarshal([]byte(raw), &v) != nil || v.Payload == nil {
-		response.Fail(c, response.BadRequest("error.bad_request").WithMsg("交换码内容无效"))
+		response.Fail(c, response.BadRequest("saml.sso.code_payload_invalid"))
 		return
 	}
 	v.Payload["samlSourceId"] = v.SourceID
@@ -398,12 +410,12 @@ func (s *Service) logoutURL(c *gin.Context) (string, bool) {
 	key := sloKey(cl.TenantID, m.ID, cl.UserID)
 	nameID, err := s.cache.Get(c.Request.Context(), key)
 	if err != nil || nameID == "" {
-		response.Fail(c, response.BadRequest("error.bad_request").WithMsg("当前会话不是通过该 SAML 源登录的"))
+		response.Fail(c, response.BadRequest("saml.sso.not_from_source"))
 		return "", false
 	}
 	sp, err := s.provider(m, baseURL(c))
 	if err != nil {
-		response.Fail(c, response.BadRequest("error.bad_request").WithMsg(err.Error()))
+		failDetail(c, err)
 		return "", false
 	}
 	relay := newRelay()
@@ -432,7 +444,7 @@ func (s *Service) slo(c *gin.Context) {
 	}
 	sp, err := s.provider(m, baseURL(c))
 	if err != nil {
-		response.Fail(c, response.BadRequest("error.bad_request").WithMsg(err.Error()))
+		failDetail(c, err)
 		return
 	}
 	if isLogoutRequest(c.Request) {
@@ -440,7 +452,7 @@ func (s *Service) slo(c *gin.Context) {
 		return
 	}
 	if err := sp.ValidateLogoutResponseRequest(c.Request); err != nil {
-		response.Fail(c, response.BadRequest("error.bad_request").WithMsg("SLO 回执校验失败: "+err.Error()))
+		response.Fail(c, response.BadRequest("saml.sso.slo_response_invalid", err.Error()))
 		return
 	}
 	// 完成回执后回到发起登出的前端页面（next 在白名单校验后写入缓存）。
@@ -477,7 +489,7 @@ func isLogoutRequest(r *http.Request) bool {
 func (s *Service) idpInitiatedLogout(c *gin.Context, m *Source, sp *saml.ServiceProvider) {
 	req, err := sp.ValidateLogoutRequest(c.Request)
 	if err != nil {
-		response.Fail(c, response.BadRequest("error.bad_request").WithMsg("SLO 请求校验失败: "+err.Error()))
+		response.Fail(c, response.BadRequest("saml.sso.slo_request_invalid", err.Error()))
 		return
 	}
 	nameID := ""
@@ -665,7 +677,7 @@ func (s *Service) createSource(c *gin.Context) {
 	}
 	m, err := s.Create(c.Request.Context(), f)
 	if err != nil {
-		response.Fail(c, response.BadRequest("error.bad_request").WithMsg(err.Error()))
+		failDetail(c, err)
 		return
 	}
 	response.OK(c, m)
@@ -683,7 +695,7 @@ func (s *Service) updateSource(c *gin.Context) {
 	}
 	m, err := s.Update(c.Request.Context(), id, f)
 	if err != nil {
-		response.Fail(c, response.BadRequest("error.bad_request").WithMsg(err.Error()))
+		failDetail(c, err)
 		return
 	}
 	response.OK(c, m)
@@ -732,7 +744,7 @@ func (s *Service) setEnabled(c *gin.Context) {
 		return
 	}
 	if err := s.SetEnabled(c.Request.Context(), id, f.Enabled); err != nil {
-		response.Fail(c, response.BadRequest("error.bad_request").WithMsg(err.Error()))
+		failDetail(c, err)
 		return
 	}
 	response.OK(c, nil)
@@ -755,7 +767,7 @@ func (s *Service) refreshMetadata(c *gin.Context) {
 	}
 	changed, err := s.RefreshMetadata(c.Request.Context(), m)
 	if err != nil {
-		response.Fail(c, response.BadRequest("error.bad_request").WithMsg(err.Error()))
+		failDetail(c, err)
 		return
 	}
 	fresh, err := s.Get(c.Request.Context(), m.ID.String())
@@ -809,12 +821,12 @@ func (s *Service) rotateSPCert(c *gin.Context) {
 	}
 	fresh, err := s.StageSPKey(c.Request.Context(), m.ID.String())
 	if err != nil {
-		response.Fail(c, response.BadRequest("error.bad_request").WithMsg(err.Error()))
+		failDetail(c, err)
 		return
 	}
 	info, err := certInfo(fresh)
 	if err != nil {
-		response.Fail(c, response.BadRequest("error.bad_request").WithMsg("SP 证书不可用: "+err.Error()))
+		response.Fail(c, response.BadRequest("saml.sso.sp_cert_unavailable", err.Error()))
 		return
 	}
 	response.OK(c, info)
@@ -828,12 +840,12 @@ func (s *Service) promoteSPCert(c *gin.Context) {
 	}
 	fresh, err := s.PromoteSPKey(c.Request.Context(), m.ID.String())
 	if err != nil {
-		response.Fail(c, response.BadRequest("error.bad_request").WithMsg(err.Error()))
+		failDetail(c, err)
 		return
 	}
 	info, err := certInfo(fresh)
 	if err != nil {
-		response.Fail(c, response.BadRequest("error.bad_request").WithMsg("SP 证书不可用: "+err.Error()))
+		response.Fail(c, response.BadRequest("saml.sso.sp_cert_unavailable", err.Error()))
 		return
 	}
 	response.OK(c, info)
@@ -854,12 +866,12 @@ func (s *Service) importSPKey(c *gin.Context) {
 	}
 	fresh, err := s.ImportSPKey(c.Request.Context(), m.ID.String(), f.Cert, f.Key)
 	if err != nil {
-		response.Fail(c, response.BadRequest("error.bad_request").WithMsg(err.Error()))
+		failDetail(c, err)
 		return
 	}
 	info, err := certInfo(fresh)
 	if err != nil {
-		response.Fail(c, response.BadRequest("error.bad_request").WithMsg("SP 证书不可用: "+err.Error()))
+		response.Fail(c, response.BadRequest("saml.sso.sp_cert_unavailable", err.Error()))
 		return
 	}
 	response.OK(c, info)
@@ -873,7 +885,7 @@ func (s *Service) spCert(c *gin.Context) {
 	}
 	info, err := certInfo(m)
 	if err != nil {
-		response.Fail(c, response.BadRequest("error.bad_request").WithMsg("SP 证书不可用: "+err.Error()))
+		response.Fail(c, response.BadRequest("saml.sso.sp_cert_unavailable", err.Error()))
 		return
 	}
 	response.OK(c, info)
@@ -893,30 +905,30 @@ func (s *Service) inspectMetadata(c *gin.Context) {
 	raw := strings.TrimSpace(f.XML)
 	if raw == "" {
 		if strings.TrimSpace(f.URL) == "" {
-			response.Fail(c, response.BadRequest("error.bad_request").WithMsg("请提供元数据 XML 或 URL"))
+			response.Fail(c, response.BadRequest("saml.sso.metadata_required"))
 			return
 		}
 		b, err := fetchMetadata(c.Request.Context(), strings.TrimSpace(f.URL), f.CACert)
 		if err != nil {
-			response.Fail(c, response.BadRequest("error.bad_request").WithMsg(err.Error()))
+			failDetail(c, err)
 			return
 		}
 		raw = string(b)
 	}
 	if len(raw) > maxMetadataBytes {
-		response.Fail(c, response.BadRequest("error.bad_request").WithMsg("元数据超过 1 MiB"))
+		response.Fail(c, response.BadRequest("saml.sso.metadata_too_large"))
 		return
 	}
 	// 表单里填了钉住的签名证书就先验一眼：Preview 阶段就能看到「元数据未签名 / 证书不匹配」。
 	if strings.TrimSpace(f.SignCert) != "" {
 		if err := verifyMetadataSignature(raw, f.SignCert); err != nil {
-			response.Fail(c, response.BadRequest("error.bad_request").WithMsg(err.Error()))
+			failDetail(c, err)
 			return
 		}
 	}
 	info, err := parseIdP(raw, "")
 	if err != nil {
-		response.Fail(c, response.BadRequest("error.bad_request").WithMsg(err.Error()))
+		failDetail(c, err)
 		return
 	}
 	info.MetadataURL = strings.TrimSpace(f.URL)

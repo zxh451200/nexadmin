@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { z } from 'zod'
 import { FormGrid, FormGridFull, FormLayout } from '@/framework/components/FormLayout'
+import { usePermission } from '@/framework/auth/usePermission'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { SwitchField as SharedSwitchField } from '@/framework/components/SwitchField'
 import { Button } from '@/framework/ui/button'
@@ -200,8 +201,8 @@ function TextField({ control, name, label, hint, type, mono, placeholder, autoCo
   )
 }
 
-function SwitchField({ control, name, label, hint, bare }: { control: Control<FormValues>; name: 'startTls' | 'allowPlaintext' | 'matchExisting' | 'autoCreate' | 'enabled' | 'requireMappedGroup' | 'syncEnabled' | 'syncDeactivate'; label: string; hint?: string; bare?: boolean }) {
-  return <SharedSwitchField control={control} name={name} label={label} description={hint} bare={bare} />
+function SwitchField({ control, name, label, hint, bare, disabled }: { control: Control<FormValues>; name: 'startTls' | 'allowPlaintext' | 'matchExisting' | 'autoCreate' | 'enabled' | 'requireMappedGroup' | 'syncEnabled' | 'syncDeactivate'; label: string; hint?: string; bare?: boolean; disabled?: boolean }) {
+  return <SharedSwitchField control={control} name={name} label={label} description={hint} bare={bare} disabled={disabled} />
 }
 
 interface Props {
@@ -212,6 +213,8 @@ interface Props {
 
 export function SourceFormDialog({ open, onOpenChange, editing }: Props) {
   const { t } = useTranslation()
+  const { has } = usePermission()
+  const canMatch = has('identity:match')
   const save = useSaveSource()
   const schema = useMemo(() => buildSchema(t), [t])
   const form = useForm<FormValues>({ resolver: zodResolver(schema), defaultValues: empty })
@@ -442,7 +445,15 @@ export function SourceFormDialog({ open, onOpenChange, editing }: Props) {
             />
             <TextField control={c} name="defaultRole" label={p('defaultRole')} hint={autoCreate ? h('defaultRole') : h('defaultRoleOff')} />
             <FormGridFull>
-              <SwitchField control={c} name="matchExisting" label={p('matchExisting')} hint={h('matchExisting')} />
+              {/* 后端要求开启 matchExisting 的源必须带 identity:match（requireMatchPerm）：
+                  没有该权限就锁住开关并说明，而不是让人填完长表单提交才吃 403。 */}
+              <SwitchField
+                control={c}
+                name="matchExisting"
+                label={p('matchExisting')}
+                hint={canMatch ? h('matchExisting') : t('plugin_identity.perm.matchNoPerm')}
+                disabled={!canMatch}
+              />
             </FormGridFull>
             <FormGridFull>
               <SwitchField control={c} name="autoCreate" label={p('autoCreate')} hint={h('autoCreate')} />

@@ -59,6 +59,11 @@ export function useLogDetail(id?: string) {
   })
 }
 
+/** 按当前筛选导出（不带分页，服务端行数封顶 20000）；silent：错误由页面捕获后 toast。 */
+export function fetchAuditLogsForExport(query: Omit<LogQuery, 'page' | 'pageSize'>): Promise<AuditLog[]> {
+  return api.get<AuditLog[]>(`${BASE}/logs/export`, query, { silent: true })
+}
+
 export function useLogTables() {
   return useQuery({
     queryKey: [...KEY, 'log-tables'],

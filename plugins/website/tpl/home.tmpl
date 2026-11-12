@@ -19,13 +19,15 @@
           stroke-width="9" stroke-linecap="round" transform="translate(0 -14)"></path>
   </svg>
   <div class="container hero-in">
-    <a class="hero-badge" href="{{.URL "/news"}}" data-reveal>{{.T "home.badge"}}<span class="badge-arrow" aria-hidden="true">→</span></a>
     <h1 class="hero-title" data-reveal>
       {{- range $i, $line := titleLines .HomeTitle}}
       {{- if $i}}<br>{{end}}<span class="title-line">{{$line}}</span>
       {{- end}}
     </h1>
-    {{if .HomeSubtitle}}<p class="hero-sub" data-reveal>{{.HomeSubtitle}}</p>{{end}}
+    <div class="hero-lead" data-reveal>
+      {{if .HomeSubtitle}}<p class="hero-sub">{{.HomeSubtitle}}</p>{{end}}
+      <a class="hero-badge" href="{{.URL "/news"}}">{{.T "home.badge"}}<span class="badge-arrow" aria-hidden="true">→</span></a>
+    </div>
     <div class="hero-cta" data-reveal>
       {{if .HomeCTALabel}}<a class="btn btn-primary" href="{{.URL .HomeCTAHref}}">{{.HomeCTALabel}}</a>{{end}}
       <a class="hero-link" href="#quickstart"><span aria-hidden="true">→</span>{{.T "home.heroQuickstart"}}</a>
@@ -80,6 +82,11 @@
         <p>{{.T "home.editorial.platform.sub"}}</p>
         <a class="learn-more" href="{{.URL "/docs/features"}}">{{.T "home.editorial.platform.link"}}<span aria-hidden="true">→</span></a>
       </div>
+      <figure class="pillar-shot">
+        <img class="shot-dark" src="/website-assets/market/user-dark.jpg?v={{assetV "market/user-dark.jpg"}}" alt="{{.T "home.pillarShot.userAlt"}}" width="1440" height="900" loading="lazy" decoding="async">
+        <img class="shot-light" src="/website-assets/market/user-light.jpg?v={{assetV "market/user-light.jpg"}}" alt="{{.T "home.pillarShot.userAlt"}}" width="1440" height="900" loading="lazy" decoding="async">
+        <figcaption class="hero-caption">{{.T "home.pillarShot.userNote"}}</figcaption>
+      </figure>
     </div>
     <div class="pillar" id="extension" data-reveal>
       <h2>{{range $i, $line := titleLines (.T "home.editorial.extension.title")}}{{if $i}}<br>{{end}}{{$line}}{{end}}</h2>
@@ -87,6 +94,11 @@
         <p>{{.T "home.editorial.extension.sub"}}</p>
         <a class="learn-more" href="{{.URL "/docs/plugin-dev"}}">{{.T "home.editorial.extension.link"}}<span aria-hidden="true">→</span></a>
       </div>
+      <figure class="pillar-shot">
+        <img class="shot-dark" src="/website-assets/market/pluginmarket-dark.jpg?v={{assetV "market/pluginmarket-dark.jpg"}}" alt="{{.T "home.pillarShot.marketAlt"}}" width="1440" height="900" loading="lazy" decoding="async">
+        <img class="shot-light" src="/website-assets/market/pluginmarket-light.jpg?v={{assetV "market/pluginmarket-light.jpg"}}" alt="{{.T "home.pillarShot.marketAlt"}}" width="1440" height="900" loading="lazy" decoding="async">
+        <figcaption class="hero-caption">{{.T "home.pillarShot.marketNote"}}</figcaption>
+      </figure>
     </div>
   </div>
 </section>
@@ -118,8 +130,10 @@
     <div class="cap-grid">
       {{range .Features}}
       <article class="cap" data-reveal>
-        <span class="cap-icon" aria-hidden="true">{{icon .Icon}}</span>
-        <h3>{{.Title}}</h3>
+        <header class="cap-title">
+          <span class="cap-icon" aria-hidden="true">{{icon .Icon}}</span>
+          <h3>{{.Title}}</h3>
+        </header>
         <p>{{.Description}}</p>
       </article>
       {{end}}

@@ -4,6 +4,7 @@ import { CheckCircle2, Download, ExternalLink, KeyRound, Loader2, PackagePlus, R
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
+import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { usePermission } from '@/framework/auth/usePermission'
 import { Alert, AlertDescription, AlertTitle } from '@/framework/ui/alert'
 import { Badge } from '@/framework/ui/badge'
@@ -214,6 +215,7 @@ function isNewer(catalog?: string, installed?: string): boolean {
 
 export default function MarketTab({ focus = '' }: { focus?: string }) {
   const { t } = useTranslation()
+  const confirm = useConfirm()
   const { has } = usePermission()
   const canInstall = has('plugin:install')
   const canLicense = has('plugin:license')
@@ -250,7 +252,7 @@ export default function MarketTab({ focus = '' }: { focus?: string }) {
       toast.error(t('pluginMgr.market.upload.tooLarge', { size: 64 }))
       return
     }
-    if (!window.confirm(t('pluginMgr.market.confirmRestart'))) return
+    if (!(await confirm({ description: t('pluginMgr.market.confirmRestart') }))) return
     setUploading(true)
     const fd = new FormData()
     fd.append('file', file)
@@ -309,7 +311,7 @@ export default function MarketTab({ focus = '' }: { focus?: string }) {
     const status = await checkUpdates.mutateAsync(entries.map((e) => e.id))
     const changed = entries.filter((e) => status[e.id]?.exists && (status[e.id].modified || !status[e.id].baselineKnown))
     if (!changed.length) return false
-    return window.confirm(t('pluginMgr.market.modifiedConfirm', { names: changed.map((e) => e.name).join(', ') })) ? true : null
+    return (await confirm({ description: t('pluginMgr.market.modifiedConfirm', { names: changed.map((e) => e.name).join(', ') }) })) ? true : null
   }
 
   const onInstall = async (e: MarketEntry) => {
@@ -322,7 +324,7 @@ export default function MarketTab({ focus = '' }: { focus?: string }) {
         setInstallTarget(e)
         return
       }
-      if (!window.confirm(t('pluginMgr.market.confirmRestart'))) return
+      if (!(await confirm({ description: t('pluginMgr.market.confirmRestart') }))) return
       setJobEdition('free')
       install.mutate(
         { id: e.id, force: e.installed, allowModified: allow },
@@ -341,9 +343,9 @@ export default function MarketTab({ focus = '' }: { focus?: string }) {
     )
   }
 
-  const onRemove = (e: MarketEntry) => {
+  const onRemove = async (e: MarketEntry) => {
     if (!canBuild || busy) return
-    if (!window.confirm(t('pluginMgr.market.remove.confirm', { name: e.name }))) return
+    if (!(await confirm({ destructive: true, description: t('pluginMgr.market.remove.confirm', { name: e.name }) }))) return
     setJobEdition(null)
     remove.mutate({ id: e.id }, { onSuccess: (res) => setJobId(res.jobId) })
   }
@@ -368,7 +370,7 @@ export default function MarketTab({ focus = '' }: { focus?: string }) {
     try {
       const allow = await confirmChanges(outdated)
       if (allow === null) return
-      if (!window.confirm(t('pluginMgr.market.updateAll.confirm', { count: outdated.length }))) return
+      if (!(await confirm({ description: t('pluginMgr.market.updateAll.confirm', { count: outdated.length }) }))) return
       setJobEdition(null)
       batch.mutate(
         { ids: outdated.map((e) => e.id), allowModified: allow },
@@ -421,11 +423,11 @@ export default function MarketTab({ focus = '' }: { focus?: string }) {
                 size="sm"
                 variant="outline"
                 disabled={!canBuild || busy}
-                onClick={() => {
-                  if (!window.confirm(t('pluginMgr.market.confirmRestart'))) return
+                onClick={() => void (async () => {
+                  if (!(await confirm({ description: t('pluginMgr.market.confirmRestart') }))) return
                   setJobEdition(null)
                   rebuild.mutate(undefined, { onSuccess: (res) => setJobId(res.jobId) })
-                }}
+                })()}
               >
                 <RefreshCw className={rebuild.isPending ? 'animate-spin' : ''} aria-hidden="true" />
                 {t('pluginMgr.market.rebuild')}

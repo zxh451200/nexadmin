@@ -14,8 +14,9 @@ func randomToken(n int) string {
 	return hex.EncodeToString(b)
 }
 
-// hub 是会话 → SSE 订阅者的进程内注册表。P0 单实例；多实例时把 publish
-// 换成 Deps.Bus（cluster.Bus）广播再本地分发即可，订阅接口不变。
+// hub 是会话 → SSE 订阅者的进程内注册表；只管本实例的分发。
+// 跨实例投递已在 Service.push 里做：本地 hub + WebSocket，再经 cluster.Bus
+// 广播给其它实例（对端 Deliver 落地），订阅接口与单实例完全一致。
 type hub struct {
 	mu   sync.RWMutex
 	subs map[string]map[chan []byte]struct{}

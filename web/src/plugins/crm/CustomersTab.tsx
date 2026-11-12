@@ -1825,7 +1825,7 @@ function FieldsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v:
   const closeForm = () => setDraft(null)
 
   const onDelete = async (f: CrmField) => {
-    if (!(await confirm({ destructive: true, description: t('plugin_crm.field.deleteConfirm', { label: f.label }) }))) return
+    if (!(await confirm({ destructive: true, description: t('plugin_crm.customer.field.deleteConfirm', { label: f.label }) }))) return
     try {
       await del.mutateAsync(f.id)
       toast.success(t('common.operateSuccess'))
@@ -1835,27 +1835,27 @@ function FieldsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v:
   }
 
   return (
-    <ResponsiveDialog open={open} onOpenChange={onOpenChange} size="lg" title={t('plugin_crm.field.title')} description={t('plugin_crm.field.hint')}>
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange} size="lg" title={t('plugin_crm.customer.field.title')} description={t('plugin_crm.customer.field.hint')}>
       <div className="flex flex-col gap-3 p-4 text-sm">
         {draft === null ? (
           <>
             <Button variant="outline" size="sm" className="self-start" onClick={() => setDraft({ ...emptyField() })}>
               <Plus aria-hidden="true" />
-              {t('plugin_crm.field.add')}
+              {t('plugin_crm.customer.field.add')}
             </Button>
             {isLoading ? (
               <p className="text-xs text-muted-foreground">{t('common.loading')}</p>
             ) : !fields?.length ? (
-              <p className="py-6 text-center text-xs text-muted-foreground">{t('plugin_crm.field.empty')}</p>
+              <p className="py-6 text-center text-xs text-muted-foreground">{t('plugin_crm.customer.field.empty')}</p>
             ) : (
               <ul className="divide-y divide-border rounded-md border border-border">
                 {fields.map((f) => (
                   <li key={f.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
                     <span className="font-medium text-foreground">{f.label}</span>
                     <span className="num font-mono text-xs text-muted-foreground">{f.code}</span>
-                    <Badge variant="outline">{t(`plugin_crm.field.type.${f.type}`)}</Badge>
-                    {f.required ? <Badge variant="warning">{t('plugin_crm.field.required')}</Badge> : null}
-                    {!f.enabled ? <Badge variant="secondary">{t('plugin_crm.field.disabled')}</Badge> : null}
+                    <Badge variant="outline">{t(`plugin_crm.customer.field.type.${f.type}`)}</Badge>
+                    {f.required ? <Badge variant="warning">{t('plugin_crm.customer.field.required')}</Badge> : null}
+                    {!f.enabled ? <Badge variant="secondary">{t('plugin_crm.customer.field.disabled')}</Badge> : null}
                     <div className="ms-auto flex items-center gap-1">
                       <Button variant="ghost" size="icon" aria-label={t('common.edit')} onClick={() => setDraft(f)}>
                         <Pencil aria-hidden="true" />
@@ -1892,13 +1892,13 @@ function FieldsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v:
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <label className="flex flex-col gap-1">
                 <span>
-                  {t('plugin_crm.field.label')}
+                  {t('plugin_crm.customer.field.label')}
                   <RequiredMark />
                 </span>
                 <Input maxLength={64} value={draft.label} onChange={(e) => setDraft({ ...draft, label: e.target.value })} />
               </label>
               <label className="flex flex-col gap-1">
-                <span>{t('plugin_crm.field.codeLabel')}</span>
+                <span>{t('plugin_crm.customer.field.codeLabel')}</span>
                 <Input
                   className="font-mono"
                   value={draft.code}
@@ -1906,18 +1906,18 @@ function FieldsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v:
                   placeholder="vip_level"
                   onChange={(e) => setDraft({ ...draft, code: e.target.value })}
                 />
-                <span className="text-[11px] text-muted-foreground">{t('plugin_crm.field.codeHint')}</span>
+                <span className="text-[11px] text-muted-foreground">{t('plugin_crm.customer.field.codeHint')}</span>
               </label>
               <label className="flex flex-col gap-1">
-                <span>{t('plugin_crm.field.typeLabel')}</span>
+                <span>{t('plugin_crm.customer.field.typeLabel')}</span>
                 <Select value={draft.type} onValueChange={(v) => setDraft({ ...draft, type: v as CrmField['type'], options: [] })}>
-                  <SelectTrigger aria-label={t('plugin_crm.field.typeLabel')}>
+                  <SelectTrigger aria-label={t('plugin_crm.customer.field.typeLabel')}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     {FIELD_TYPES.map((tp) => (
                       <SelectItem key={tp} value={tp}>
-                        {t(`plugin_crm.field.type.${tp}`)}
+                        {t(`plugin_crm.customer.field.type.${tp}`)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -1926,28 +1926,28 @@ function FieldsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v:
               {draft.type === 'select' ? (
                 <label className="flex flex-col gap-1">
                   <span>
-                    {t('plugin_crm.field.optionsLabel')}
+                    {t('plugin_crm.customer.field.optionsLabel')}
                     <RequiredMark />
                   </span>
                   <Input
                     value={draft.options.join(',')}
-                    placeholder={t('plugin_crm.field.optionsPlaceholder')}
+                    placeholder={t('plugin_crm.customer.field.optionsPlaceholder')}
                     onChange={(e) => setDraft({ ...draft, options: e.target.value.split(',') })}
                   />
-                  <span className="text-[11px] text-muted-foreground">{t('plugin_crm.field.optionsHint')}</span>
+                  <span className="text-[11px] text-muted-foreground">{t('plugin_crm.customer.field.optionsHint')}</span>
                 </label>
               ) : null}
               <label className="flex flex-col gap-1">
-                <span>{t('plugin_crm.field.sortLabel')}</span>
+                <span>{t('plugin_crm.customer.field.sortLabel')}</span>
                 <Input inputMode="numeric" value={draft.sort} onChange={(e) => setDraft({ ...draft, sort: Number(e.target.value) || 0 })} />
               </label>
               <label className="flex items-center gap-2 pt-5 text-sm">
                 <Switch checked={draft.required} onCheckedChange={(v) => setDraft({ ...draft, required: v })} />
-                {t('plugin_crm.field.required')}
+                {t('plugin_crm.customer.field.required')}
               </label>
               <label className="flex items-center gap-2 text-sm">
                 <Switch checked={draft.enabled} onCheckedChange={(v) => setDraft({ ...draft, enabled: v })} />
-                {t('plugin_crm.field.enabledLabel')}
+                {t('plugin_crm.customer.field.enabledLabel')}
               </label>
             </div>
             <div className="flex justify-end gap-2">

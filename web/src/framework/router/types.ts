@@ -38,7 +38,9 @@ export interface MenuNode {
   /** i18n key */
   title: string
   icon?: string
-  /** 带前导斜杠的完整路径；分组节点没有 */
+  /** 带前导斜杠的完整路径；分组节点没有；外链菜单是它要打开的地址 */
   path?: string
+  /** true = 外链菜单：侧边栏渲染成新标签页打开的 <a>，不进路由、不开标签页 */
+  external?: boolean
   children?: MenuNode[]
 }

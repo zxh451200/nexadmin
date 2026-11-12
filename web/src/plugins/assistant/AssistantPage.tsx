@@ -5,6 +5,7 @@ import { usePermission } from '@/framework/auth/usePermission'
 import { ApiError } from '@/framework/request/http'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { RequiredMark } from '@/framework/components/RequiredMark'
+import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { Button } from '@/framework/ui/button'
 import { Textarea } from '@/framework/ui/textarea'
 import { Input } from '@/framework/ui/input'
@@ -18,6 +19,7 @@ export default function AssistantPage() {
 
 function Conversations() {
   const { t } = useTranslation()
+  const confirm = useConfirm()
   const [rows, setRows] = useState<Conversation[]>([])
   const [selected, setSelected] = useState('')
   const [editing, setEditing] = useState<'create' | 'rename'>()
@@ -39,7 +41,7 @@ function Conversations() {
   }, [])
   const mutate = async (remove = false) => {
     if (busy.current || (!remove && !name.trim())) return
-    if (remove && !window.confirm(t('plugin_assistant.conversations.confirmDelete'))) return
+    if (remove && !(await confirm({ destructive: true, description: t('plugin_assistant.conversations.confirmDelete') }))) return
     busy.current = true
     setPending(true)
     try {
@@ -92,6 +94,7 @@ function Conversations() {
 function Chat({ conversationId }: { conversationId: string }) {
   const { t } = useTranslation()
   const { has } = usePermission()
+  const confirm = useConfirm()
   const [snapshot, setSnapshot] = useState<Snapshot>()
   const [text, setText] = useState('')
   const [pending, setPending] = useState(false)
@@ -183,7 +186,7 @@ function Chat({ conversationId }: { conversationId: string }) {
     }
   }
   const clear = async () => {
-    if (inFlight.current || busy || !window.confirm(t('plugin_assistant.confirmClear'))) return
+    if (inFlight.current || busy || !(await confirm({ destructive: true, description: t('plugin_assistant.confirmClear') }))) return
     inFlight.current = true
     setPending(true)
     generation.current++

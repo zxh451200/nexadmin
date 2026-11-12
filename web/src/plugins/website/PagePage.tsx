@@ -77,7 +77,7 @@ function PageFormBody({ onOpenChange, editing }: { onOpenChange: (v: boolean) =>
       await save.mutateAsync({
         id: editing?.id,
         data: {
-          // slug 留空时按标题生成；纯中文标题转写不出来就回退 page-<时间戳>，反正能改
+          // slug 留空时前端按标题预填（与后端 pkg/slug 同一算法）；这里始终非空
           slug: slug.trim() || slugify(base.title ?? ''),
           published: lf.publishedOf(lf.defaultLocale),
           ogImage,
@@ -118,13 +118,12 @@ function PageFormBody({ onOpenChange, editing }: { onOpenChange: (v: boolean) =>
       </div>
       <div className="flex flex-col gap-3">
         <LocalizedField fieldKey="title" required />
-        <SharedFieldShell labelKey="plugin_website.fields.slug" required>
+        <SharedFieldShell labelKey="plugin_website.fields.slug">
           <Input
-            required
             value={slug}
             disabled={sharedDisabled}
             onChange={(e) => setSlug(e.target.value)}
-            placeholder="about"
+            placeholder={t('plugin_website.fields.slugAuto')}
             className="font-mono"
           />
           <span className="text-xs text-muted-foreground">/p/{slug || '…'}</span>

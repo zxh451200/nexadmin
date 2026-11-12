@@ -5,6 +5,8 @@
     "description": "Records inserts, updates and deletes on audited tables with field-level before/after comparison; sensitive fields are masked",
     "tabs": { "logs": "Change records", "scope": "Audit scope" },
     "btn": { "config": "Audit scope", "clean": "Clean records" },
+    "export": "Export CSV",
+    "exportDone": "Exported {{count}} records",
     "all": "All",
     "filter": {
       "allTables": "All tables",

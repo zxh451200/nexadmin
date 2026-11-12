@@ -9,15 +9,15 @@ import (
 
 	"nexadmin/core/response"
 	"nexadmin/pkg/idgen"
+	"nexadmin/pkg/slug"
 
 	"gorm.io/gorm"
 )
 
 // 标签是与栏目分层的第二维度：栏目（Category）是编辑部定好的有限集合，标签（Tag）是
 // 编辑器里打字即长的自由主题词。名字决定身份——去重、复用都按名字，slug 只负责出现在 URL 里。
-// slug 的派生口径对齐 WordPress 的 sanitize_title：拉丁名压成小写连字符；纯中文派生不出
-// 拉丁名，就直接用名字（链接里由浏览器百分号编码，中文维基与中文 WordPress 站点都是这个形态，
-// 比退回一串数字 id 好认也好分享）。
+// slug 的派生口径与全站统一（pkg/slug 行业标准）：拉丁名压成小写连字符；纯中文派生不出
+// 拉丁名时回退随机 base36 串，不再把原始 CJK 字符塞进 URL（2026-11-12 起，旧数据不迁移）。
 
 const (
 	// maxTagsPerPost 是一篇新闻的标签上限：标签是导航线索，堆到几十个等于没有。
@@ -33,31 +33,11 @@ func normalizeTagName(s string) string {
 	return trimRunes(strings.Join(strings.Fields(s), " "), tagMaxRunes)
 }
 
-// asciiSlug 把名字压成小写拉丁 slug：字母数字保留，其余字符压成单个连字符，首尾不留连字符。
-// 非拉丁字符不在这条规则里，会被整体丢掉——中文名的结果是空串，交给 tagSlugOf 兜。
-func asciiSlug(s string) string {
-	var b strings.Builder
-	prevDash := false
-	for _, r := range strings.ToLower(s) {
-		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
-			b.WriteRune(r)
-			prevDash = false
-			continue
-		}
-		if !prevDash && b.Len() > 0 {
-			b.WriteByte('-')
-			prevDash = true
-		}
-	}
-	return strings.Trim(b.String(), "-")
-}
-
-// tagSlugOf 是标签 URL 标识的唯一派生入口：拉丁名走 slug，压不出来的走名字本身。
+// tagSlugOf 是标签 URL 标识的唯一派生入口：走 pkg/slug 的行业标准生成
+// （NFKD 去变音符、小写、非字母数字压单连字符），纯中文等压不出拉丁时回退随机串，
+// 不再把原始 CJK 字符塞进 URL——与全站 slug 口径一致（2026-11-12 统一）。
 func tagSlugOf(name string) string {
-	if slug := asciiSlug(name); slug != "" {
-		return trimRunes(slug, tagMaxRunes)
-	}
-	return name
+	return slug.From(name, slug.MaxLen)
 }
 
 // termCountRow 是「某个栏目/标签下有多少篇新闻」的一行聚合结果。
@@ -234,18 +214,12 @@ func (s *Service) SaveTag(ctx context.Context, id idgen.ID, f TagForm) (*Tag, er
 		}
 		row.Slug = slug
 	} else {
-		slug := trimRunes(strings.TrimSpace(f.Slug), tagMaxRunes)
-		if err := ValidateSlug(slug); err != nil {
+		// 显式 slug 与其他内容同一口径：校验后撞名自动让号（base-2、base-3…），不再报错打断
+		slugOut, err := s.resolveSlug(ctx, &Tag{}, f.Slug, name, id)
+		if err != nil {
 			return nil, err
 		}
-		var cnt int64
-		if err := s.db.WithContext(ctx).Model(&Tag{}).Where("slug = ? AND id <> ?", slug, int64(row.ID)).Count(&cnt).Error; err != nil {
-			return nil, err
-		}
-		if cnt > 0 {
-			return nil, response.BadRequest("website.slug_taken")
-		}
-		row.Slug = slug
+		row.Slug = slugOut
 	}
 	if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
 		return nil, err

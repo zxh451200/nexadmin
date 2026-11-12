@@ -5,6 +5,8 @@
     "description": "记录被审计表的新增、修改、删除，字段级前后对比，敏感字段自动脱敏",
     "tabs": { "logs": "变更记录", "scope": "审计范围" },
     "btn": { "config": "审计范围", "clean": "清理记录" },
+    "export": "导出 CSV",
+    "exportDone": "已导出 {{count}} 条记录",
     "all": "全部",
     "filter": {
       "allTables": "全部数据表",

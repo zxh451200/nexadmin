@@ -22,6 +22,7 @@ import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { SwitchRow } from '@/framework/components/SwitchField'
 import { ImageUrlField } from '@/framework/components/ImageUrlField'
+import { slugify } from './format'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Checkbox } from '@/framework/ui/checkbox'
@@ -291,7 +292,7 @@ function ProductFormBody({
 
   const submit = async () => {
     const base = lf.baseValues()
-    if (!(base.title ?? '').trim() || !slug.trim()) {
+    if (!(base.title ?? '').trim()) {
       toast.error(t('plugin_website.product.required'))
       return
     }
@@ -322,7 +323,8 @@ function ProductFormBody({
       await save.mutateAsync({
         id: editing?.id,
         data: {
-          slug,
+          // slug 留空 = 服务端按标题走 pkg/slug 行业标准生成；前端预填同一算法只是省一次输入
+          slug: slug.trim() || slugify(base.title ?? ''),
           coverUrl,
           images: images.map((img) => img.trim()).filter(Boolean),
           videoUrl,
@@ -382,14 +384,13 @@ function ProductFormBody({
         <LocalizedField fieldKey="title" required />
         <LocalizedField fieldKey="keywords" />
         <LocalizedField fieldKey="summary" />
-        <SharedFieldShell labelKey="plugin_website.fields.slug" required>
+        <SharedFieldShell labelKey="plugin_website.fields.slug">
           <Input
-            required
             maxLength={64}
             value={slug}
             disabled={sharedDisabled}
             onChange={(e) => setSlug(e.target.value)}
-            placeholder="industrial-water-pump"
+            placeholder={t('plugin_website.fields.slugAuto')}
             className="font-mono"
           />
           <span className="text-xs text-muted-foreground">{productPath}</span>

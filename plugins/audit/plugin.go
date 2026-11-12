@@ -57,6 +57,7 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	h := &handler{svc: m.svc}
 	g := r.Group("/plugins/audit")
 	g.GET("/logs", core.Perm("audit:list"), h.listLogs)
+	g.GET("/logs/export", core.Perm("audit:list"), h.exportLogs)
 	g.GET("/logs/:id", core.Perm("audit:list"), h.getLog)
 	g.GET("/log-tables", core.Perm("audit:list"), h.logTables)
 	g.GET("/config", core.Perm("audit:config"), h.getConfig)

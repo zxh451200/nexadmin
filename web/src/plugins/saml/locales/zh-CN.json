@@ -154,6 +154,7 @@
       "download": "下载证书",
       "expires": "到期时间：{{date}}",
       "rotateHint": "两段式轮换：先发布新证书并把 SP 元数据或证书更新到 IdP，确认后再切换；切换后旧证书保留 7 天。",
+      "rotateConfirm": "发布新证书并进入轮换？发布后请把新证书或 SP 元数据导入 IdP，确认 IdP 已用新证书验签后再切换。",
       "publish": "发布新证书",
       "published": "已发布新证书，请先把新证书或 SP 元数据导入 IdP，再切换到新证书",
       "promote": "切换到新证书",

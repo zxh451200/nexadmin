@@ -33,7 +33,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { EditorSchemaGate } from './EditorSchemaGate'
 import TranslationStatus from './TranslationStatus'
 import { downloadCsv } from '@/framework/components/export/csv'
-import { formatTime } from './format'
+import { formatTime, slugify } from './format'
 import {
   MAX_POST_VERSIONS,
   fetchPostPreview,
@@ -68,25 +68,6 @@ const ALL = '__all'
 
 /** 栏目 slug 的口径与后端 slugReg 一致：小写字母、数字与连字符，长度 1-64。 */
 const slugReg = /^[a-z0-9][a-z0-9-]{0,63}$/
-
-/**
- * 后端只给标签按名字派生 slug，栏目不会（公开侧 /news?category= 走的是同一套 slug 校验），
- * 所以栏目那行的「留空自动生成」得由界面做完：拉丁名压成小写连字符，压不出来就要求手填。
- */
-function latinSlug(s: string): string {
-  let out = ''
-  let prevDash = false
-  for (const r of s.toLowerCase()) {
-    if (/[a-z0-9]/.test(r)) {
-      out += r
-      prevDash = false
-    } else if (!prevDash && out) {
-      out += '-'
-      prevDash = true
-    }
-  }
-  return out.replace(/-$/, '')
-}
 
 /** 定时发布：整篇已置发布、但发布时间还在未来——到点前官网不展示，列表里要标出来。 */
 function isScheduled(r: SitePost): boolean {
@@ -169,8 +150,9 @@ function PostFormBody({
       toast.error(t('plugin_website.post.categoryRequired'))
       return
     }
-    const slugValue = newCatSlug.trim() || latinSlug(title)
-    if (!slugReg.test(slugValue)) {
+    // slug 留空 = 服务端按标题走 pkg/slug 行业标准生成；手填了才做本地格式校验
+    const slugValue = newCatSlug.trim()
+    if (slugValue && !slugReg.test(slugValue)) {
       toast.error(t('plugin_website.post.categorySlugInvalid'))
       return
     }
@@ -201,7 +183,7 @@ function PostFormBody({
 
   const submit = async () => {
     const base = lf.baseValues()
-    if (!(base.title ?? '').trim() || !slug.trim()) {
+    if (!(base.title ?? '').trim()) {
       toast.error(t('plugin_website.post.required'))
       return
     }
@@ -213,7 +195,8 @@ function PostFormBody({
       await save.mutateAsync({
         id: editing?.id,
         data: {
-          slug,
+          // slug 留空 = 服务端按标题走 pkg/slug 行业标准生成；前端预填同一算法只是省一次输入
+          slug: slug.trim() || slugify(base.title ?? ''),
           coverUrl,
           published: lf.publishedOf(lf.defaultLocale),
           // 只有发布态才有发布时间；空串表示交给服务端按「首次发布写当前时间」处理，
@@ -261,14 +244,13 @@ function PostFormBody({
       </div>
       <div className="flex flex-col gap-3">
         <LocalizedField fieldKey="title" required />
-        <SharedFieldShell labelKey="plugin_website.fields.slug" required>
+        <SharedFieldShell labelKey="plugin_website.fields.slug">
           <Input
-            required
             maxLength={64}
             value={slug}
             disabled={sharedDisabled}
             onChange={(e) => setSlug(e.target.value)}
-            placeholder="hello-nexadmin"
+            placeholder={t('plugin_website.fields.slugAuto')}
             className="font-mono"
           />
           <span className="text-xs text-muted-foreground">{articlePath}</span>

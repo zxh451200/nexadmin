@@ -29,6 +29,9 @@ export function LocationField({ value, onChange, label, addressLabel, disabled, 
   const [providerId, setProviderId] = useState(providers[0]?.id ?? '')
   const active = providers.find((p) => p.id === providerId) ?? providers[0]
   const point = value ?? null
+  // 厂商名走 i18n（maps 插件里的 providers.* 词条）；第三方注册的厂商没有词条时回落注册时的 title
+  const providerName = (p: { id: string; title: string }) =>
+    t(`plugin_maps.providers.${p.id}`, { defaultValue: p.title })
 
   const setCoord = (key: 'lng' | 'lat', raw: string) => {
     const n = Number(raw)
@@ -97,7 +100,7 @@ export function LocationField({ value, onChange, label, addressLabel, disabled, 
         open={open}
         onOpenChange={setOpen}
         title={t('map.pickTitle')}
-        description={providers.map((p) => p.title).join(' / ')}
+        description={providers.map((p) => providerName(p)).join(' / ')}
         size="lg"
         footer={
           <Button type="button" variant="outline" onClick={() => setOpen(false)}>
@@ -115,7 +118,7 @@ export function LocationField({ value, onChange, label, addressLabel, disabled, 
                 <SelectContent>
                   {providers.map((p) => (
                     <SelectItem key={p.id} value={p.id}>
-                      {p.title}
+                      {providerName(p)}
                     </SelectItem>
                   ))}
                 </SelectContent>

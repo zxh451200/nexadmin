@@ -97,6 +97,8 @@ var docGroups = []docGroup{
 	{Key: "start", Items: []docItem{
 		{Slug: "quickstart", File: "quickstart.md", Title: "快速开始",
 			Summary: "准备开发环境、派生项目并启动服务，完成第一次登录与生产构建。"},
+		{Slug: "overview", File: "后台功能总览.md", Title: "后台功能总览",
+			Summary: "把后台每个页面过一遍：每个页面是干什么的、平时怎么用，读完即可自己上手。"},
 	}},
 	{Key: "dev", Items: []docItem{
 		{Slug: "dev-guide", File: "二次开发指南.md", Title: "二次开发指南",
@@ -106,7 +108,7 @@ var docGroups = []docGroup{
 	}},
 	{Key: "ref", Items: []docItem{
 		{Slug: "features", File: "功能与权限清单.md", Title: "功能与权限清单",
-			Summary: "内置模块、登录方式、权限码与数据范围的完整清单。"},
+			Summary: "内置模块、登录方式、权限码与数据范围的完整清单（精确口径，供核对）。"},
 		{Slug: "config", File: "配置参考.md", Title: "配置参考",
 			Summary: "配置文件加载规则与各分区的键、默认值和运行期开关。"},
 		{Slug: "deploy", File: "部署与运维指南.md", Title: "部署与运维指南",

@@ -154,6 +154,7 @@
       "download": "Download certificate",
       "expires": "Expires: {{date}}",
       "rotateHint": "Two-step rollover: publish the new certificate, update the IdP with it (or with the SP metadata), then switch. The old one stays for 7 days.",
+      "rotateConfirm": "Publish a new certificate and start the rollover? After publishing, import the new certificate (or SP metadata) at the IdP and confirm it verifies signatures with the new certificate before switching.",
       "publish": "Publish new certificate",
       "published": "New certificate published. Import it (or the SP metadata) at the IdP, then switch.",
       "promote": "Switch to new certificate",

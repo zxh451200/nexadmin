@@ -1,6 +1,6 @@
-// Package devicehub 是设备接入与监控 Pro 插件：Modbus TCP/RTU + MQTT 驱动接入变频器、
+// Package devicehub 是设备接入与监控 Pro 插件：Modbus TCP/RTU + MQTT + S7 + OPC UA 驱动接入变频器、
 // PLC 与上位机网关，秒级采集（死区压缩）、实时监控（WS 推送）、指令下发（独立权限）、
-// 阈值告警（站内信）、历史趋势与 xlsx 导出。协议差异收敛在 driver 接口后面，二期扩展 S7/OPC UA。
+// 阈值告警（站内信）、历史趋势与 xlsx 导出。协议差异收敛在 driver 接口后面。
 package devicehub
 
 import (

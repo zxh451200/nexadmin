@@ -32,12 +32,20 @@ type MenuSpec struct {
 	Sort      int    `yaml:"sort" json:"sort"`
 	KeepAlive bool   `yaml:"keep_alive" json:"keepAlive"`
 	Hidden    bool   `yaml:"hidden" json:"hidden"`
+	// External 为 true 表示外链菜单：点击在新标签页打开 Path 指向的地址（相对地址按当前站点 origin 解析），
+	// 不经过前端路由，也不需要 Component。典型用法：官网插件在管理菜单里放一个「打开官网」。
+	External bool `yaml:"external" json:"external"`
 }
 
 // Code 返回菜单的稳定业务键。
 func (m MenuSpec) Code() string {
 	if m.Type == "dir" {
 		return "dir:" + m.Path
+	}
+	if m.External {
+		// 外链菜单的 path 就是它的身份（同一入口可能指向任意地址），不能用 perm——
+		// perm 往往与同组某个真实页面共用（如「打开官网」与「产品管理」都是 website:product）。
+		return "ext:" + m.Path
 	}
 	return m.Perm
 }
@@ -125,6 +133,8 @@ func (m *Manifest) validateMenu(mu MenuSpec) error {
 			return fmt.Errorf("目录必须有 path")
 		}
 	case "menu":
+		// 外链菜单不需要 Component（不经过前端路由），但 path 与 perm 仍然必填：
+		// path 是要打开的地址，perm 决定谁能看到这个入口。
 		if mu.Path == "" || mu.Perm == "" {
 			return fmt.Errorf("菜单必须有 path 与 perm")
 		}

@@ -101,6 +101,7 @@
       "requireMappedGroup": "When enabled, every sign-in through this source must match at least one group mapping, including sign-ins by existing users. This switch does not synchronize or overwrite local roles.",
       "caCert": "Optional. When set, only this CA is trusted. There is no option to skip certificate checks.",
       "matchExisting": "Bind the directory account to an existing user with the same name (super admins are never matched).",
+      "matchNoPerm": "Turning this on requires the \"identity:match\" permission; ask an administrator for the grant first.",
       "autoCreate": "Create the user when none matches. Subject to the tenant user quota; no local password. Off by default.",
       "defaultRole": "Role code granted to auto-created users. Leave empty for the system default low-privilege role.",
       "defaultRoleOff": "Only used when auto-create is on."

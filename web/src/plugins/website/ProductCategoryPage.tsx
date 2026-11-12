@@ -7,6 +7,7 @@ import { usePermission } from '@/framework/auth/usePermission'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { RequiredMark } from '@/framework/components/RequiredMark'
+import { slugify } from './format'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { TreeTable } from '@/framework/components/TreeTable'
 import type { Column } from '@/framework/components/table/types'
@@ -151,14 +152,16 @@ function CategoryFormDialog({
       toast.error(t('plugin_website.productCategory.required'))
       return
     }
-    if (!slugReg.test(slug.trim())) {
+    // 手填了 slug 才做本地格式校验；留空 = 服务端按标题走 pkg/slug 行业标准生成
+    const finalSlug = slug.trim()
+    if (finalSlug && !slugReg.test(finalSlug)) {
       toast.error(t('plugin_website.productCategory.slugInvalid'))
       return
     }
     try {
       await save.mutateAsync({
         id: editing?.id,
-        data: { parentId, title: title.trim(), slug: slug.trim(), sort: Number(sort) || 0 },
+        data: { parentId, title: title.trim(), slug: finalSlug || slugify(title), sort: Number(sort) || 0 },
       })
       toast.success(t('common.operateSuccess'))
       onOpenChange(false)
@@ -183,12 +186,12 @@ function CategoryFormDialog({
       <SharedRow label={t('plugin_website.productCategory.name')} required>
         <Input value={title} maxLength={100} onChange={(e) => setTitle(e.target.value)} placeholder="Water Pumps" />
       </SharedRow>
-      <SharedRow label={t('plugin_website.fields.slug')} required>
+      <SharedRow label={t('plugin_website.fields.slug')}>
         <Input
           value={slug}
           maxLength={64}
           onChange={(e) => setSlug(e.target.value)}
-          placeholder="water-pumps"
+          placeholder={t('plugin_website.fields.slugAuto')}
           className="font-mono"
         />
         <span className="text-xs text-muted-foreground">/products?category={slug || '…'}</span>

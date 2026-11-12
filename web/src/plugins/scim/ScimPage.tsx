@@ -4,10 +4,14 @@ import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { DataTable } from '@/framework/components/DataTable'
+import { usePermission } from '@/framework/auth/usePermission'
 import { useCreateToken, useRevokeToken, useTokens } from './api'
 
 export default function ScimPage() {
   const { t } = useTranslation()
+  // 建发/撤销走 scim:token（与 list 分开授权）：没授权就收掉按钮，而不是点了吃 403
+  const { has } = usePermission()
+  const canManage = has('scim:token')
   const q = useTokens()
   const create = useCreateToken()
   const revoke = useRevokeToken()
@@ -17,13 +21,15 @@ export default function ScimPage() {
   return (
     <PageContainer>
       <PageHeader title={t('plugin_scim.title')} description={t('plugin_scim.description')} />
-      <div className="flex flex-wrap items-center gap-2">
-        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('plugin_scim.tokenName')} className="max-w-xs" />
-        <Button disabled={!name.trim() || create.isPending} onClick={() => create.mutate(name.trim(), { onSuccess: (v) => { setNewToken(v.token); setName('') } })}>
-          {t('plugin_scim.createToken')}
-        </Button>
-        {newToken && <code className="max-w-full break-all rounded bg-muted px-2 py-1 text-sm">{newToken}</code>}
-      </div>
+      {canManage ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('plugin_scim.tokenName')} className="max-w-xs" />
+          <Button disabled={!name.trim() || create.isPending} onClick={() => create.mutate(name.trim(), { onSuccess: (v) => { setNewToken(v.token); setName('') } })}>
+            {t('plugin_scim.createToken')}
+          </Button>
+          {newToken && <code className="max-w-full break-all rounded bg-muted px-2 py-1 text-sm">{newToken}</code>}
+        </div>
+      ) : null}
       <DataTable
         data={rows}
         rowKey="id"
@@ -33,9 +39,11 @@ export default function ScimPage() {
           { key: 'lastUsed', title: t('plugin_scim.columns.lastUsed') },
           { key: 'revoked', title: t('plugin_scim.columns.revoked') },
           { key: 'actions', title: t('plugin_scim.columns.actions'), render: (row) => (
-            <Button variant="outline" size="sm" disabled={row.revoked} onClick={() => revoke.mutate(row.id)}>
-              {t('plugin_scim.revoke')}
-            </Button>
+            canManage ? (
+              <Button variant="outline" size="sm" disabled={row.revoked} onClick={() => revoke.mutate(row.id)}>
+                {t('plugin_scim.revoke')}
+              </Button>
+            ) : null
           ) },
         ]}
       />

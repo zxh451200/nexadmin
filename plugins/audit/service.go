@@ -122,8 +122,12 @@ func likeEscape(s string) string {
 	return strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(s)
 }
 
-// ListLogs 按条件分页（新的在前）。列表不带 changes。
-func (s *Service) ListLogs(ctx context.Context, q LogQuery) ([]Log, int64, error) {
+// exportMaxRows 是单次导出的行数上限：审计记录按月能长到几十万行，一次导全库会把
+// 响应体和前端 CSV 拼串都撑爆；导出用于「当前筛选下带走的存档」，超大量请缩小时间范围。
+const exportMaxRows = 20000
+
+// filteredLogs 是列表与导出共用的筛选器（筛选口径完全一致）。
+func (s *Service) filteredLogs(ctx context.Context, q LogQuery) *gorm.DB {
 	tx := s.tx(ctx).Model(&Log{})
 	if q.Table != "" {
 		tx = tx.Where("table_name = ?", q.Table)
@@ -140,6 +144,12 @@ func (s *Service) ListLogs(ctx context.Context, q LogQuery) ([]Log, int64, error
 	if t, ok := parseDay(q.To); ok {
 		tx = tx.Where("created_at < ?", t.AddDate(0, 0, 1))
 	}
+	return tx
+}
+
+// ListLogs 按条件分页（新的在前）。列表不带 changes。
+func (s *Service) ListLogs(ctx context.Context, q LogQuery) ([]Log, int64, error) {
+	tx := s.filteredLogs(ctx, q)
 	var total int64
 	if err := tx.Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -147,6 +157,17 @@ func (s *Service) ListLogs(ctx context.Context, q LogQuery) ([]Log, int64, error
 	var list []Log
 	err := tx.Omit("changes").Order("created_at DESC, id DESC").Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Find(&list).Error
 	return list, total, err
+}
+
+// ExportLogs 按同一组筛选导出（不带分页，行数封顶 exportMaxRows，不带 changes）。
+func (s *Service) ExportLogs(ctx context.Context, q LogQuery) ([]Log, error) {
+	var list []Log
+	err := s.filteredLogs(ctx, q).
+		Omit("changes").
+		Order("created_at DESC, id DESC").
+		Limit(exportMaxRows).
+		Find(&list).Error
+	return list, err
 }
 
 // GetLog 返回一条记录和它的字段级 diff。

@@ -14,6 +14,9 @@
     "on": "Enabled",
     "off": "Disabled",
     "caCert": "CA certificate (PEM, optional)",
-    "caCertHint": "Leave empty to use system roots; paste your internal CA certificate(s) for self-signed LDAP."
+    "caCertHint": "Leave empty to use system roots; paste your internal CA certificate(s) for self-signed LDAP.",
+    "perm": {
+      "edit": "Edit LDAP config"
+    }
   }
 }

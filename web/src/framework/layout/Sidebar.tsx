@@ -54,17 +54,56 @@ export function Sidebar({ menu, homePath = HOME_PATH, collapsed = false, onNavig
 
   const renderItem = (item: MenuNode, nested: boolean) => {
     const badge = item.path ? (badges[item.path] ?? 0) : 0
-    const link = (
+    // 外链菜单（如官网插件的「打开官网」）：不走路由、不开标签页，新标签页打开目标地址。
+    // 开发环境前端跑在 Vite，同源根路径不是官网——按 vite.config 代理目标拼后端地址。
+    const itemHref = item.external && item.path
+      ? import.meta.env.DEV && item.path.startsWith('/')
+        ? `${location.protocol}//${location.hostname}:8080${item.path}`
+        : item.path
+      : undefined
+    const shared = cn(
+      'relative flex min-h-11 items-center gap-3 rounded-md px-3 text-sm transition-colors md:min-h-9',
+      'hover:bg-sidebar-accent/60 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring',
+      // 一级行（含单项与目录标题）统一字重，层级差交给缩进与引导线，不用字重表达
+      !nested && 'font-medium',
+      nested ? 'text-sidebar-foreground/80' : 'text-sidebar-foreground',
+      // 收起成图标轨时：整行等宽保证图标水平居中；隐藏激活项左侧竖条（那是展开列表的指示器，轨内显得突兀）
+      collapsed && 'w-full justify-center px-0 before:hidden',
+    )
+    const content = (
+      <>
+        {/* 图标与文字同色：侧栏不上分组色调，层级只靠缩进、引导线与激活态表达 */}
+        <DynamicIcon name={item.icon} className={cn('size-5 shrink-0', !collapsed && 'md:size-4')} />
+        {!collapsed && <span className="truncate">{t(item.title)}</span>}
+        {/* 徽标：展开态是行尾计数，收起态是图标上的圆点；0 时不渲染 */}
+        {badge > 0 &&
+          (collapsed ? (
+            <span aria-hidden="true" className="absolute inset-e-2 top-2 size-2 rounded-full bg-primary" />
+          ) : (
+            <span className="ms-auto inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 py-0.5 text-[11px] leading-none font-medium text-primary-foreground">
+              {badge > 99 ? '99+' : badge}
+            </span>
+          ))}
+      </>
+    )
+    const link = item.external ? (
+      <a
+        href={itemHref}
+        target="_blank"
+        rel="noreferrer"
+        aria-label={collapsed ? t(item.title) : undefined}
+        className={shared}
+      >
+        {content}
+      </a>
+    ) : (
       <NavLink
         to={item.path!}
         onClick={onNavigate}
         aria-label={collapsed ? t(item.title) : undefined}
         className={({ isActive }) =>
           cn(
-            'relative flex min-h-11 items-center gap-3 rounded-md px-3 text-sm transition-colors md:min-h-9',
-            'hover:bg-sidebar-accent/60 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring',
-            // 一级行（含单项与目录标题）统一字重，层级差交给缩进与引导线，不用字重表达
-            !nested && 'font-medium',
+            shared,
             isActive
               ? cn(
                   'bg-sidebar-accent font-medium text-sidebar-accent-foreground',
@@ -75,8 +114,6 @@ export function Sidebar({ menu, homePath = HOME_PATH, collapsed = false, onNavig
               : nested
                 ? 'text-sidebar-foreground/80'
                 : 'text-sidebar-foreground',
-            // 收起成图标轨时：整行等宽保证图标水平居中；隐藏激活项左侧竖条（那是展开列表的指示器，轨内显得突兀）
-            collapsed && 'w-full justify-center px-0 before:hidden',
           )
         }
       >

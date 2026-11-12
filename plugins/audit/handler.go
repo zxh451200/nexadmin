@@ -61,6 +61,21 @@ func (h *handler) listLogs(c *gin.Context) {
 	response.Page(c, list, total, page, size)
 }
 
+// GET /plugins/audit/logs/export?table=&operator=&action=&from=&to=
+// 与列表同一组筛选；行数封顶 exportMaxRows，导 CSV 由前端拼装。
+func (h *handler) exportLogs(c *gin.Context) {
+	action := c.Query("action")
+	if action != "" && action != ActionCreate && action != ActionUpdate && action != ActionDelete {
+		response.Fail(c, response.BadRequest("error.bad_request"))
+		return
+	}
+	list, err := h.svc.ExportLogs(c.Request.Context(), LogQuery{
+		Table: strings.TrimSpace(c.Query("table")), Operator: strings.TrimSpace(c.Query("operator")), Action: action,
+		From: c.Query("from"), To: c.Query("to"),
+	})
+	respond(c, list, err)
+}
+
 // GET /plugins/audit/logs/:id
 func (h *handler) getLog(c *gin.Context) {
 	id, err := idgen.Parse(c.Param("id"))

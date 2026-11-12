@@ -70,10 +70,14 @@ export function buildMenuFromServer(
   active?: Set<string> | null,
 ): MenuNode[] {
   const byPath = new Map(routes.map((r) => [r.path, r]))
-  const visible = (m: ServerMenu) => m.type !== 'button' && !m.hidden && !m.external && m.status !== '0' && checkPerm(perms, m.perm)
+  // 外链菜单（如官网插件的「打开官网」）不经过前端路由：放行渲染，由 Sidebar 负责新标签页打开
+  const visible = (m: ServerMenu) => m.type !== 'button' && !m.hidden && m.status !== '0' && checkPerm(perms, m.perm)
   const leaf = (m: ServerMenu): MenuNode | null => {
     const p = (m.path ?? '').replace(/^\/+/, '')
     if (m.type !== 'menu' || !visible(m)) return null
+    if (m.external) {
+      return { key: m.id, title: m.title, icon: m.icon, path: m.path ?? '/', external: true }
+    }
     const route = byPath.get(p)
     if (!route || !pluginUsable(route, active)) return null
     return { key: m.id, title: m.title, icon: m.icon, path: `/${p}` }
@@ -93,18 +97,18 @@ export function buildMenuFromServer(
   return promoteLoneGroups(tree)
 }
 
-/** 在菜单树中按 pathname 找到当前项及其所属分组 */
+/** 在菜单树中按 pathname 找到当前项及其所属分组；外链项不参与匹配（不产生标签页与激活态） */
 export function findMenuTrail(tree: MenuNode[], pathname: string): MenuNode[] {
   for (const group of tree) {
-    const hit = group.children?.find((c) => c.path && (pathname === c.path || pathname.startsWith(c.path + '/')))
+    const hit = group.children?.find((c) => !c.external && c.path && (pathname === c.path || pathname.startsWith(c.path + '/')))
     if (hit) return [group, hit]
   }
   return []
 }
 
-/** 目录节点没有自己的页面，取它下面第一个有路径的页面 */
+/** 目录节点没有自己的页面，取它下面第一个有路径的页面；外链项不是站内页面，跳过 */
 export function firstLeafPath(node: MenuNode): string | undefined {
-  if (node.path) return node.path
+  if (node.path && !node.external) return node.path
   for (const c of node.children ?? []) {
     const p = firstLeafPath(c)
     if (p) return p

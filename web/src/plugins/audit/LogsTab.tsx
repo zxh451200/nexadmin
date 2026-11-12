@@ -1,18 +1,19 @@
 import { useState } from 'react'
-import { Eraser } from 'lucide-react'
+import { Download, Eraser } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { DetailAction } from '@/framework/components/DetailAction'
 import { DateRangePicker, type DateRangeValue } from '@/framework/components/DateRangePicker'
+import { downloadCsv } from '@/framework/components/export/csv'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
-import { useCleanLogs, useLogDetail, useLogs, useLogTables, type AuditAction, type AuditLog, type LogQuery } from './api'
+import { fetchAuditLogsForExport, useCleanLogs, useLogDetail, useLogs, useLogTables, type AuditAction, type AuditLog, type LogQuery } from './api'
 import { DiffView } from './DiffView'
 import { actionVariant, formatTime } from './format'
 
@@ -147,6 +148,33 @@ export function LogsTab() {
   const { data, isLoading } = useLogs(query)
   const { data: tables } = useLogTables()
 
+  // 导出当前筛选下的全部记录（服务端封顶 20000 行）；CSV 由前端拼装，列与列表一致。
+  const onExport = async () => {
+    try {
+      const rows = await fetchAuditLogsForExport({
+        table: applied.table,
+        operator: applied.operator?.trim() || undefined,
+        action: applied.action,
+        from: applied.range.from,
+        to: applied.range.to,
+      })
+      const stamp = new Date().toISOString().slice(0, 10)
+      downloadCsv(`audit-logs-${stamp}.csv`, [
+        [
+          t('plugin_audit.fields.time'), t('plugin_audit.fields.table'), t('plugin_audit.fields.rowPk'),
+          t('plugin_audit.fields.action'), t('plugin_audit.fields.operator'), t('plugin_audit.fields.changedFields'),
+        ],
+        ...rows.map((l) => [
+          formatTime(l.createdAt, i18n.language), l.table, l.rowPk,
+          t(`plugin_audit.action.${l.action}`), operatorLabel(l), l.fields,
+        ]),
+      ])
+      toast.success(t('plugin_audit.exportDone', { count: rows.length }))
+    } catch {
+      toast.error(t('common.operateFailed'))
+    }
+  }
+
   const columns: Column<AuditLog>[] = [
     { key: 'createdAt', title: t('plugin_audit.fields.time'), mobile: 'sub', render: (l) => <span className="num">{formatTime(l.createdAt, i18n.language)}</span> },
     { key: 'table', title: t('plugin_audit.fields.table'), mobile: 'title', render: (l) => <span className="font-mono text-xs font-medium text-foreground">{l.table}</span> },
@@ -230,12 +258,18 @@ export function LogsTab() {
         }}
         emptyText={t('plugin_audit.empty')}
         toolbar={
-          <Can perm="audit:clean">
-            <Button variant="outline" onClick={() => setCleanOpen(true)}>
-              <Eraser aria-hidden="true" />
-              {t('plugin_audit.btn.clean')}
+          <>
+            <Button variant="outline" onClick={() => void onExport()}>
+              <Download aria-hidden="true" />
+              {t('plugin_audit.export')}
             </Button>
-          </Can>
+            <Can perm="audit:clean">
+              <Button variant="outline" onClick={() => setCleanOpen(true)}>
+                <Eraser aria-hidden="true" />
+                {t('plugin_audit.btn.clean')}
+              </Button>
+            </Can>
+          </>
         }
         rowActions={(l) => <DetailAction onClick={() => setDetail(l.id)} />}
       />

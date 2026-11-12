@@ -63,6 +63,7 @@ func SeedMenus(db *gorm.DB, specs []MenuSpec) error {
 		items[i] = seed.MenuItem{
 			Parent: s.Parent, Code: s.Code(), Type: s.Type, Title: s.Title, Icon: s.Icon, Path: s.Path,
 			Component: s.Component, Perm: s.Perm, Sort: s.Sort, KeepAlive: s.KeepAlive, Hidden: s.Hidden,
+			External: s.External,
 		}
 	}
 	_, err := seed.Menus(db, items)
