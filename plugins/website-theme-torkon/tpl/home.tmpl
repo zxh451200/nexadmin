@@ -49,7 +49,7 @@
       {{else if eq .Slug "impact-wrenches"}}<img src="/website-assets/theme/torkon/assets/tk-impact-rail.webp" alt="" loading="lazy">
       {{else if eq .Slug "grinders"}}<img src="/website-assets/theme/torkon/assets/tk-grinder.webp" alt="" loading="lazy">
       {{else if eq .Slug "cutting-tools"}}<img src="/website-assets/theme/torkon/assets/tk-saw.webp" alt="" loading="lazy">
-      {{else}}<span class="tk-rail-fallback" aria-hidden="true">{{initial .Name}}</span>{{end}}
+      {{else}}<span class="tk-rail-fallback" aria-hidden="true">{{icon "box"}}</span>{{end}}
       <span class="tk-rail-name">{{.Name}}</span>
       <span class="tk-rail-more">{{$.T "theme.torkon.viewAll"}} <span aria-hidden="true">→</span></span>
     </a>

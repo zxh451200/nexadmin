@@ -607,3 +607,23 @@ h1, h2, h3, h4 { line-height: 1.2; margin: 0; }
 .au-case-sub { color: var(--au-muted); font-size: 13px; }
 .au-case-more { margin-top: 6px; color: var(--au-blue); font-weight: 700; font-size: 13px; }
 @media (max-width: 900px) { .au-solutions-grid { grid-template-columns: 1fr; } .au-case-grid { grid-template-columns: 1fr; } }
+/* ---- 精修：排版节奏与细节质感 ---- */
+.au-section { padding: 88px 0; }
+.au-eyebrow { display: inline-flex; align-items: center; gap: 10px; }
+.au-eyebrow::before { content: ""; width: 26px; height: 2px; background: var(--au-blue); flex: none; }
+.au-hero-title { letter-spacing: 0; font-weight: 900; line-height: 1.05; }
+.au-sect-head h2 { letter-spacing: .015em; }
+.au-btn { min-height: 44px; padding: 0 24px; border-radius: 8px; }
+.au-btn span[aria-hidden] { display: inline-block; transition: transform .18s ease; }
+.au-btn:hover span[aria-hidden] { transform: translateX(3px); }
+.au-product-card, .au-news-card { border-radius: 12px; }
+.au-product-cover { overflow: hidden; }
+.au-product-cover img { transition: transform .35s ease; }
+.au-product-card:hover .au-product-cover img { transform: scale(1.06); }
+.au-stat { border-inline-start: 2px solid var(--au-blue); padding-inline-start: 14px; }
+.au-footer { background-image: linear-gradient(180deg, rgba(255, 255, 255, .025), transparent 40%); }
+
+.au-hero { background: radial-gradient(900px 420px at 8% 115%, rgba(8, 127, 201, .18), transparent 62%), radial-gradient(1100px 540px at 76% -8%, #1d242e 0%, var(--au-dark) 58%), var(--au-dark); }
+.au-case-body .au-term-badge { align-self: flex-start; }
+.au-hero-title .au-hero-accent1 { color: #4aa6dd; }
+

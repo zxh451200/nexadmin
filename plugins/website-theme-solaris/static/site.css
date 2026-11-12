@@ -670,3 +670,26 @@ h1, h2, h3, h4 { line-height: 1.2; margin: 0; }
 .sl-sustainability-stats strong { font-size: 24px; font-weight: 800; color: var(--sl-green); font-family: var(--sl-mono); }
 .sl-sustainability-stats span { display: block; font-size: 13px; color: var(--sl-muted); }
 @media (max-width: 900px) { .sl-sustainability-grid { grid-template-columns: 1fr; } .sl-project-grid { grid-template-columns: 1fr; } .sl-how-grid { grid-template-columns: 1fr; } }
+/* ---- 精修：排版节奏与细节质感 ---- */
+.sl-section { padding: 88px 0; }
+.sl-eyebrow { display: inline-flex; align-items: center; gap: 10px; }
+.sl-eyebrow::before { content: ""; width: 26px; height: 2px; background: var(--sl-green); flex: none; }
+.sl-hero-title { letter-spacing: 0; font-weight: 900; line-height: 1.05; }
+.sl-sect-head h2 { letter-spacing: .015em; }
+.sl-btn { min-height: 44px; padding: 0 24px; border-radius: 8px; }
+.sl-btn span[aria-hidden] { display: inline-block; transition: transform .18s ease; }
+.sl-btn:hover span[aria-hidden] { transform: translateX(3px); }
+.sl-product-card, .sl-news-card { border-radius: 12px; }
+.sl-product-cover { overflow: hidden; }
+.sl-product-cover img { transition: transform .35s ease; }
+.sl-product-card:hover .sl-product-cover img { transform: scale(1.06); }
+.sl-stat { border-inline-start: 2px solid var(--sl-green); padding-inline-start: 14px; }
+.sl-footer { background-image: linear-gradient(180deg, rgba(255, 255, 255, .025), transparent 40%); }
+
+.sl-hero { background: radial-gradient(800px 400px at 85% 0%, rgba(36, 79, 61, .07), transparent 60%), linear-gradient(105deg, #eef3ee 0%, #f7f8f3 55%); }
+.sl-sect-head h2, .sl-page-title { font-family: Georgia, 'Times New Roman', serif; text-transform: none; letter-spacing: .01em; }
+.sl-eyebrow { font-family: var(--sl-mono); }
+.sl-term-badge { align-self: flex-start; }
+.sl-news-card, .sl-product-card, .sl-project-card { border-radius: 12px; }
+.sl-bigfig { color: #cfddd2; }
+

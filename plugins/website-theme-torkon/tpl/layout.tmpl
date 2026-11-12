@@ -1,4 +1,4 @@
-{{define "layout"}}<!doctype html>
+﻿{{define "layout"}}<!doctype html>
 <html lang="{{.Lang.HTMLLang}}">
 <head>
 <meta charset="utf-8">
@@ -12,7 +12,8 @@
 {{range .Languages}}{{if .Default}}<link rel="alternate" hreflang="x-default" href="{{$.BaseURL}}{{$.Alternate .}}">{{end}}{{end}}
 <meta name="theme-color" content="#111214">
 <link rel="icon" href="{{if .FaviconURL}}{{.FaviconURL}}{{else}}/website-assets/theme/torkon/favicon.svg{{end}}" type="image/svg+xml">
-<meta property="og:type" content="website">
+<link rel="alternate" type="application/rss+xml" title="{{.SiteName}}" href="{{.BaseURL}}/rss.xml">
+<meta property="og:type" content="{{if .OGType}}{{.OGType}}{{else}}website{{end}}">
 <meta property="og:site_name" content="{{.SiteName}}">
 <meta property="og:title" content="{{if .SeoTitle}}{{.SeoTitle}}{{else}}{{.Title}}{{end}}">
 <meta property="og:description" content="{{.Desc}}">
@@ -20,12 +21,15 @@
 <meta property="og:image" content="{{if .OGImage}}{{.OGImage}}{{else}}{{.BaseURL}}/website-assets/og.png{{end}}">
 {{if not .OGImage}}<meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">{{end}}
+{{if .OGPublishedAt}}<meta property="article:published_time" content="{{.OGPublishedAt}}">{{end}}
 <meta property="og:locale" content="{{.Lang.OGLocale}}">
 {{range .Languages}}{{if ne .Code $.Lang.Code}}<meta property="og:locale:alternate" content="{{.OGLocale}}">{{end}}{{end}}
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="{{if .SeoTitle}}{{.SeoTitle}}{{else}}{{.Title}}{{end}}">
 <meta name="twitter:description" content="{{.Desc}}">
 <meta name="twitter:image" content="{{if .OGImage}}{{.OGImage}}{{else}}{{.BaseURL}}/website-assets/og.png{{end}}">
+{{if .OrgLD}}<script type="application/ld+json">{{.OrgLD}}</script>{{end}}
+{{if .PageLD}}<script type="application/ld+json">{{.PageLD}}</script>{{end}}
 {{if .PluginLD}}<script type="application/ld+json">{{.PluginLD}}</script>{{end}}
 {{if .HeadCode}}{{.HeadCode}}{{end}}
 <link rel="stylesheet" href="/website-assets/theme/torkon/site.css?v={{assetV "theme/torkon/site.css"}}">
