@@ -421,7 +421,18 @@ function ImagesField({
     })
   }
   return (
-    <div className="flex flex-col gap-2">
+    <SharedGroup
+      labelKey="plugin_website.product.images"
+      action={
+        atLimit ? (
+          <span className="text-xs text-muted-foreground">{t('plugin_website.product.imageLimit', { max: IMAGES_MAX })}</span>
+        ) : (
+          <Button variant="link" size="sm" className="h-auto p-0 text-xs" disabled={disabled} onClick={openPick}>
+            {t('uploader.pickFromLibrary')}
+          </Button>
+        )
+      }
+    >
       <Uploader
         kind="image"
         visibility="public"
@@ -437,13 +448,6 @@ function ImagesField({
         }))}
         onChange={(files) => onChange(files.map((f) => f.url))}
       />
-      {atLimit ? (
-        <span className="text-xs text-muted-foreground">{t('plugin_website.product.imageLimit', { max: IMAGES_MAX })}</span>
-      ) : (
-        <Button variant="link" size="sm" className="h-auto w-fit p-0" disabled={disabled} onClick={openPick}>
-          {t('uploader.pickFromLibrary')}
-        </Button>
-      )}
       <ResponsiveDialog
         open={pickOpen}
         onOpenChange={closePick}
@@ -463,7 +467,7 @@ function ImagesField({
           disabled={pickedUrls.length >= room}
         />
       </ResponsiveDialog>
-    </div>
+    </SharedGroup>
   )
 }
 
@@ -682,37 +686,34 @@ function ProductFormBody({
           </div>
         </FormSection>
         <FormSection title={t('plugin_website.product.imageSection')}>
-          <div className="grid gap-3 md:grid-cols-2">
-            <SharedFieldShell labelKey="plugin_website.fields.coverUrl">
-              <ImageUrlField
-                value={coverUrl}
-                onChange={setCoverUrl}
-                disabled={sharedDisabled}
-                title={t('plugin_website.product.coverUpload')}
-                hint={t('plugin_website.product.coverHint')}
-                crop={{ width: 800, height: 800 }}
-                previewClassName="h-20 w-20 object-cover p-0"
-                aria-label={t('plugin_website.fields.coverUrl')}
-              />
-              {coverInvalid ? (
-                <span className="text-xs text-destructive">{t('plugin_website.fields.coverInvalid')}</span>
-              ) : null}
-            </SharedFieldShell>
-            <SharedFieldShell labelKey="plugin_website.product.videoUrl">
-              <VideoUrlField
-                value={videoUrl}
-                onChange={setVideoUrl}
-                disabled={sharedDisabled}
-                title={t('plugin_website.product.videoUrl')}
-                hint={t('plugin_website.product.videoHint')}
-                placeholder="https://…"
-                aria-label={t('plugin_website.product.videoUrl')}
-              />
-            </SharedFieldShell>
-          </div>
-          <SharedGroup labelKey="plugin_website.product.images">
-            <ImagesField images={images} onChange={setImages} disabled={sharedDisabled} />
-          </SharedGroup>
+          {/* 封面与视频纵向排：URL 行拿得到整行宽度，两张上传卡左对齐，不再一列方一列横 */}
+          <SharedFieldShell labelKey="plugin_website.fields.coverUrl">
+            <ImageUrlField
+              value={coverUrl}
+              onChange={setCoverUrl}
+              disabled={sharedDisabled}
+              title={t('plugin_website.product.coverUpload')}
+              hint={t('plugin_website.product.coverHint')}
+              crop={{ width: 800, height: 800 }}
+              previewClassName="h-32 w-32 object-cover p-0"
+              aria-label={t('plugin_website.fields.coverUrl')}
+            />
+            {coverInvalid ? (
+              <span className="text-xs text-destructive">{t('plugin_website.fields.coverInvalid')}</span>
+            ) : null}
+          </SharedFieldShell>
+          <SharedFieldShell labelKey="plugin_website.product.videoUrl">
+            <VideoUrlField
+              value={videoUrl}
+              onChange={setVideoUrl}
+              disabled={sharedDisabled}
+              title={t('plugin_website.product.videoUrl')}
+              hint={t('plugin_website.product.videoHint')}
+              placeholder="https://…"
+              aria-label={t('plugin_website.product.videoUrl')}
+            />
+          </SharedFieldShell>
+          <ImagesField images={images} onChange={setImages} disabled={sharedDisabled} />
         </FormSection>
         <FormSection title={t('plugin_website.product.tradeSection')}>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
@@ -817,19 +818,27 @@ function ProductFormBody({
           </SharedFieldShell>
         </FormSection>
         <FormSection title={t('plugin_website.product.publishSection')}>
-          <div className="grid gap-3 md:grid-cols-3">
+          <div className="divide-y divide-border rounded-lg border border-border">
             <SwitchRow
+              bare
+              className="px-3 py-2.5"
               label={t('plugin_website.fields.published')}
               checked={online}
               onCheckedChange={(on) => lf.setPublishedOf(lf.defaultLocale, on)}
             />
             <SwitchRow
+              bare
+              className="px-3 py-2.5"
               label={t('plugin_website.fields.noindex')}
               checked={noindex}
               onCheckedChange={setNoindex}
             />
-            <SharedFieldShell labelKey="plugin_website.fields.author">
+            <SharedFieldShell
+              labelKey="plugin_website.fields.author"
+              className="flex-row items-center justify-between gap-4 px-3 py-2.5"
+            >
               <Input
+                className="h-9 w-full max-w-56"
                 value={author}
                 maxLength={64}
                 disabled={sharedDisabled}
@@ -857,18 +866,46 @@ function FormSection({ title, children }: { title: string; children: ReactNode }
   )
 }
 
-/** 分组外壳：与 SharedFieldShell 同款标签行，但外层是 div（组里第一颗控件不能被 label 认领）。 */
-function SharedGroup({ labelKey, children }: { labelKey: string; children: ReactNode }) {
+/** 分组外壳：与 SharedFieldShell 同款标签行，但外层是 div（组里第一颗控件不能被 label 认领）。
+ * action 挂在标签行右端（如图集的「从文件库选择」），不占内容区高度。 */
+function SharedGroup({ labelKey, action, children }: { labelKey: string; action?: ReactNode; children: ReactNode }) {
   const { t } = useTranslation()
   const { isSource } = useLocaleForm()
   return (
     <div className="flex flex-col gap-1 text-sm">
-      <span className={cn('inline-flex min-h-7 items-center gap-1.5', !isSource && 'text-muted-foreground')}>
-        <span className="inline-flex items-baseline">{t(labelKey)}</span>
-        {!isSource ? (
-          <span className="rounded border px-1 text-[10px] font-semibold">{t('localeForm.sharedTag')}</span>
-        ) : null}
-      </span>
+      <div className="flex min-h-7 items-center justify-between gap-2">
+        <span className={cn('inline-flex items-center gap-1.5', !isSource && 'text-muted-foreground')}>
+          <span className="inline-flex items-baseline">{t(labelKey)}</span>
+          {!isSource ? (
+            <span className="rounded border px-1 text-[10px] font-semibold">{t('localeForm.sharedTag')}</span>
+          ) : null}
+        </span>
+        {action}
+      </div>
+      {children}
+    </div>
+  )
+}
+
+/**
+ * 凭据字段：标签行左标签、右保存状态（小圆点 + 文字，取代占宽的琥珀徽章），输入框顶格对齐。
+ */
+function CredField({ htmlFor, label, ok, children }: { htmlFor: string; label: string; ok: boolean; children: ReactNode }) {
+  const { t } = useTranslation()
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center justify-between gap-2">
+        <Label htmlFor={htmlFor}>{label}</Label>
+        <span
+          className={cn(
+            'inline-flex items-center gap-1.5 text-[11px] font-medium',
+            ok ? 'text-success' : 'text-warning',
+          )}
+        >
+          <span className={cn('size-1.5 rounded-full', ok ? 'bg-success' : 'bg-warning')} aria-hidden="true" />
+          {ok ? t('plugin_website.ali.configured') : t('plugin_website.ali.configMissing')}
+        </span>
+      </div>
       {children}
     </div>
   )
@@ -943,64 +980,86 @@ function AliConfigDialog({ onOpenChange }: { onOpenChange: (v: boolean) => void 
         </>
       }
     >
-      <div className="flex flex-col gap-3 text-sm">
-        {/* 凭据三态常显：Secret/SessionKey 配没配，保存/测试结果各一枚徽标 */}
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant={config?.hasSecret ? 'success' : 'warning'}>
-            {config?.hasSecret ? t('plugin_website.ali.secretConfigured') : t('plugin_website.ali.secretMissing')}
-          </Badge>
-          <Badge variant={config?.hasSession ? 'success' : 'warning'}>
-            {config?.hasSession ? t('plugin_website.ali.sessionConfigured') : t('plugin_website.ali.sessionMissing')}
-          </Badge>
-        </div>
-        <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
-          <Input
-            value={appKey}
-            onChange={(e) => setAppKey(e.target.value)}
-            placeholder={t('plugin_website.ali.appKey')}
-            aria-label={t('plugin_website.ali.appKey')}
-            // 这个弹窗形似登录表单（多个输入 + 密码框），浏览器会把站内账号密码自动填进来：
-            // 截图里的 AppKey=admin、AppSecret=10 个圆点就是这么来的。Chrome 的自动填充底色是冷蓝，
-            // 两个框因此比同排其它控件亮一档；更糟的是点「保存凭据」会把这串站点密码当成
-            // AppSecret 加密存库。new-password 是 Chrome 唯一遵从而不填充的写法。
-            autoComplete="off"
-            name="ali-app-key"
-          />
-          <Input
-            type="password"
-            value={appSecret}
-            onChange={(e) => setAppSecret(e.target.value)}
-            placeholder={config?.hasSecret ? t('plugin_website.ali.configuredAlready') : t('plugin_website.ali.appSecret')}
-            aria-label={t('plugin_website.ali.appSecret')}
-            autoComplete="new-password"
-            name="ali-app-secret"
-          />
-          <Input
-            type="password"
-            value={sessionKey}
-            onChange={(e) => setSessionKey(e.target.value)}
-            placeholder={config?.hasSession ? t('plugin_website.ali.configuredAlready') : t('plugin_website.ali.sessionKey')}
-            aria-label={t('plugin_website.ali.sessionKey')}
-            autoComplete="new-password"
-            name="ali-session-key"
-          />
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Input
-            value={apiGateway}
-            onChange={(e) => setApiGateway(e.target.value)}
-            placeholder="https://gw.api.taobao.com/router/rest"
-            aria-label={t('plugin_website.ali.apiGateway')}
-            className="min-w-0 flex-1 font-mono text-xs md:w-96 md:flex-none"
-            autoComplete="off"
-            name="ali-api-gateway"
-          />
-          <Button variant="outline" size="sm" onClick={() => void test()} disabled={testState === 'testing'}>
-            {testState === 'testing' ? t('common.loading') : t('plugin_website.ali.test')}
-          </Button>
-          {testState === 'ok' ? <Badge variant="success">{t('plugin_website.ali.testOk')}</Badge> : null}
-          {testState === 'fail' ? <Badge variant="destructive">{t('plugin_website.ali.testFail')}</Badge> : null}
-        </div>
+      <div className="flex flex-col gap-6 text-sm">
+        {/* 分区与商品表单同款（竖色条标题）：三项凭据同构，状态挂在标签行右端，不再各自顶一枚琥珀徽章 */}
+        <FormSection title={t('plugin_website.ali.credentialSection')}>
+          <div className="flex flex-col gap-4">
+            <CredField htmlFor="ali-app-key" label={t('plugin_website.ali.appKey')} ok={!!config?.appKey}>
+              <Input
+                id="ali-app-key"
+                value={appKey}
+                onChange={(e) => setAppKey(e.target.value)}
+                // 这个弹窗形似登录表单（多个输入 + 密码框），浏览器会把站内账号密码自动填进来：
+                // 截图里的 AppKey=admin、AppSecret=10 个圆点就是这么来的。Chrome 的自动填充底色是冷蓝，
+                // 两个框因此比同排其它控件亮一档；更糟的是点「保存凭据」会把这串站点密码当成
+                // AppSecret 加密存库。new-password 是 Chrome 唯一遵从而不填充的写法。
+                autoComplete="off"
+                name="ali-app-key"
+              />
+            </CredField>
+            <CredField htmlFor="ali-app-secret" label={t('plugin_website.ali.appSecret')} ok={!!config?.hasSecret}>
+              <Input
+                id="ali-app-secret"
+                type="password"
+                value={appSecret}
+                onChange={(e) => setAppSecret(e.target.value)}
+                placeholder={config?.hasSecret ? t('plugin_website.ali.configuredAlready') : undefined}
+                autoComplete="new-password"
+                name="ali-app-secret"
+              />
+            </CredField>
+            <CredField htmlFor="ali-session-key" label={t('plugin_website.ali.sessionKey')} ok={!!config?.hasSession}>
+              <Input
+                id="ali-session-key"
+                type="password"
+                value={sessionKey}
+                onChange={(e) => setSessionKey(e.target.value)}
+                placeholder={config?.hasSession ? t('plugin_website.ali.configuredAlready') : undefined}
+                autoComplete="new-password"
+                name="ali-session-key"
+              />
+            </CredField>
+            <p className="text-xs leading-relaxed text-muted-foreground">{t('plugin_website.ali.secretHint')}</p>
+          </div>
+        </FormSection>
+        <FormSection title={t('plugin_website.ali.gatewaySection')}>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="ali-api-gateway">{t('plugin_website.ali.apiGateway')}</Label>
+            {/* 测试按钮贴着网关输入（它验的就是网关+签名）；结果占提示行（成功后替换提示，失败时也不会把输入框挤窄） */}
+            <div className="flex items-center gap-2">
+              <Input
+                id="ali-api-gateway"
+                value={apiGateway}
+                onChange={(e) => setApiGateway(e.target.value)}
+                placeholder="https://gw.api.taobao.com/router/rest"
+                className="min-w-0 flex-1 font-mono text-xs"
+                autoComplete="off"
+                name="ali-api-gateway"
+              />
+              <Button
+                variant="outline"
+                onClick={() => void test()}
+                disabled={testState === 'testing'}
+                className="h-10 shrink-0 px-3 md:h-8"
+              >
+                {testState === 'testing' ? t('common.loading') : t('plugin_website.ali.test')}
+              </Button>
+            </div>
+            {testState === 'ok' ? (
+              <p className="flex items-center gap-1.5 text-xs text-success">
+                <CircleCheck className="size-3.5 shrink-0" aria-hidden="true" />
+                {t('plugin_website.ali.testOk')}
+              </p>
+            ) : testState === 'fail' ? (
+              <p className="flex items-center gap-1.5 text-xs text-destructive">
+                <CircleAlert className="size-3.5 shrink-0" aria-hidden="true" />
+                {t('plugin_website.ali.testFail')}
+              </p>
+            ) : (
+              <p className="text-xs leading-relaxed text-muted-foreground">{t('plugin_website.ali.gatewayHint')}</p>
+            )}
+          </div>
+        </FormSection>
       </div>
     </ResponsiveDialog>
   )
