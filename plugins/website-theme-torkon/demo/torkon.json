@@ -25,28 +25,39 @@
         "platform": "facebook",
         "url": "https://www.facebook.com/torkon.industrial"
       }
-    ]
+    ],
+    "i18nJson": "{\"en-US\":{\"siteDesc\":\"High-performance professional tools, engineered for power, precision and durability.\",\"homeTitle\":\"BUILT FOR\\nTHE TOUGHEST JOBS\",\"homeSubtitle\":\"High-performance tools for professionals. Engineered for power, precision and durability.\",\"homeCtaLabel\":\"Explore Products\",\"seoKeywords\":\"power tools,industrial,brushless,impact wrench,drill,cut-off saw\",\"footerNote\":\"High-performance professional power tools, built for global industry and manufacturing.\"}}"
   },
   "navs": [
     {
+      "label": "首页",
+      "href": "/",
+      "sort": 5,
+      "i18nJson": "{\"en-US\":{\"label\":\"Home\"}}"
+    },
+    {
       "label": "产品中心",
       "href": "/products",
-      "sort": 10
+      "sort": 10,
+      "i18nJson": "{\"en-US\":{\"label\":\"Products\"}}"
     },
     {
       "label": "新闻动态",
       "href": "/news",
-      "sort": 20
+      "sort": 20,
+      "i18nJson": "{\"en-US\":{\"label\":\"News\"}}"
     },
     {
       "label": "关于我们",
       "href": "/p/about",
-      "sort": 30
+      "sort": 30,
+      "i18nJson": "{\"en-US\":{\"label\":\"About Us\"}}"
     },
     {
       "label": "联系我们",
       "href": "/contact",
-      "sort": 40
+      "sort": 40,
+      "i18nJson": "{\"en-US\":{\"label\":\"Contact Us\"}}"
     }
   ],
   "features": [
@@ -54,37 +65,43 @@
       "icon": "zap",
       "title": "无刷电机",
       "description": "功率更大、寿命更长；免维护碳刷结构适应全天候高强度作业。",
-      "sort": 10
+      "sort": 10,
+      "i18nJson": "{\"en-US\":{\"title\":\"Brushless Motor\",\"description\":\"More power, less maintenance; a brushless design built for all-day heavy use.\"}}"
     },
     {
       "icon": "shield",
       "title": "IP56 防尘防水",
       "description": "全域密封防护，建筑工地与金属加工环境的粉尘、水花都挡在外面。",
-      "sort": 20
+      "sort": 20,
+      "i18nJson": "{\"en-US\":{\"title\":\"IP56 Dust & Water Sealed\",\"description\":\"Fully sealed against the dust and splash of jobsites and metal shops.\"}}"
     },
     {
       "icon": "chart",
       "title": "智能速控",
       "description": "负载感知转速调节，材质变化时自动输出匹配扭矩，切口更干净。",
-      "sort": 30
+      "sort": 30,
+      "i18nJson": "{\"en-US\":{\"title\":\"Intelligent Speed Control\",\"description\":\"Load-sensing speed adjustment matches torque to the material automatically.\"}}"
     },
     {
       "icon": "layers",
       "title": "模块化设计",
       "description": "电池、夹头与手柄组件通用互换，一套平台覆盖全系列工具。",
-      "sort": 40
+      "sort": 40,
+      "i18nJson": "{\"en-US\":{\"title\":\"Modular Design\",\"description\":\"Shared batteries, chucks and handles — one platform across the whole range.\"}}"
     },
     {
       "icon": "box",
       "title": "长寿命锂电",
       "description": "高倍率电芯与智能 BMS，单充续航提升 2 倍，循环寿命 85% 保持率。",
-      "sort": 50
+      "sort": 50,
+      "i18nJson": "{\"en-US\":{\"title\":\"Long-Life Battery\",\"description\":\"High-rate cells and smart BMS: twice the runtime, 85% capacity retention.\"}}"
     },
     {
       "icon": "users",
       "title": "全球联保",
       "description": "60+ 国家与地区服务网络，专业技师与原厂配件就近可得。",
-      "sort": 60
+      "sort": 60,
+      "i18nJson": "{\"en-US\":{\"title\":\"Global Warranty\",\"description\":\"Service network across 60+ countries with local technicians and genuine parts.\"}}"
     }
   ],
   "categories": [
@@ -111,7 +128,8 @@
       "seoDesc": "TORKON INDUSTRIAL：专业级电动工具制造商，为建筑、汽车、金属加工与工业维护提供可靠工具。",
       "published": true,
       "sort": 10,
-      "content": "<h2>专业级工具，源于对工况的敬畏</h2><p>TORKON INDUSTRIAL 为建筑、汽车制造、金属加工与工业维护领域的专业人士打造电动工具。我们的每一款产品都从真实工况出发：更高的功率密度、更长的续航、更严苛的防护等级，让工具在最 demanding 的环境中依然可靠。</p><h3>我们的工厂</h3><p>20 万台的月产能背后，是全自动装配线、全检出厂的质检流程与 ISO 9001 认证制造体系。从电机绕线到整机老化，每一道工序都有追溯记录。</p><h3>研发理念</h3><p>我们相信工具的价值在于「拿下活儿」。无刷电机平台、智能速控与模块化电池系统，都服务于同一个目标：让专业人士在单位时间里完成更多、更好的工作。</p>"
+      "content": "<h2>专业级工具，源于对工况的敬畏</h2><p>TORKON INDUSTRIAL 为建筑、汽车制造、金属加工与工业维护领域的专业人士打造电动工具。我们的每一款产品都从真实工况出发：更高的功率密度、更长的续航、更严苛的防护等级，让工具在最 demanding 的环境中依然可靠。</p><h3>我们的工厂</h3><p>20 万台的月产能背后，是全自动装配线、全检出厂的质检流程与 ISO 9001 认证制造体系。从电机绕线到整机老化，每一道工序都有追溯记录。</p><h3>研发理念</h3><p>我们相信工具的价值在于「拿下活儿」。无刷电机平台、智能速控与模块化电池系统，都服务于同一个目标：让专业人士在单位时间里完成更多、更好的工作。</p>",
+      "i18nJson": "{\"en-US\":{\"title\":\"About TORKON\",\"content\":\"<h2>Professional tools, built with respect for the jobsite</h2><p>TORKON INDUSTRIAL builds power tools for professionals in construction, automotive, metalworking and industrial maintenance. Every product starts from real working conditions: higher power density, longer runtime and tougher sealing, so the tool stays reliable in the most demanding environments.</p><h3>Our factory</h3><p>Behind a monthly capacity of 200,000 units sits a fully automated assembly line, 100% outgoing inspection and an ISO 9001 certified manufacturing system. From motor winding to final burn-in, every step is traceable.</p><h3>How we engineer</h3><p>We believe a tool is only as good as the work it finishes. Our brushless motor platform, intelligent speed control and modular battery system all serve one goal: helping professionals do more, better work in less time.</p>\"}}"
     }
   ],
   "posts": [
@@ -127,7 +145,8 @@
           "slug": "guides"
         }
       ],
-      "content": "<h2>从扭矩需求出发</h2><p>选择冲击扳手的第一步不是看峰值扭矩，而是看你的紧固件规格：M16 螺栓一般需要 400Nm 以上的拆松扭矩，重卡与钢结构则要到 850Nm 甚至更高。峰值扭矩是「能拆松」，持续扭矩才是「效率」。</p><h2>接口决定工具形态</h2><p>1/2 英寸方头是最通用的选择；轮毂与轻型装配可考虑 3/8 英寸换取更轻的重量；重型钢结构建议 3/4 英寸配合双锤机构。</p><h2>重量与平衡</h2><p>长时间举升作业下，每 100g 都会被放大。TKI-850 在 850Nm 级别把整机重量控制在 2.1kg，靠的是无刷电机与轻量化外壳。</p><h3>结论</h3><p>先按螺栓规格定扭矩区间，再按作业姿势定形态与重量，最后用电池平台收口——同一品牌同一平台，配件与充电器通用才是长期成本最低的选择。</p>"
+      "content": "<h2>从扭矩需求出发</h2><p>选择冲击扳手的第一步不是看峰值扭矩，而是看你的紧固件规格：M16 螺栓一般需要 400Nm 以上的拆松扭矩，重卡与钢结构则要到 850Nm 甚至更高。峰值扭矩是「能拆松」，持续扭矩才是「效率」。</p><h2>接口决定工具形态</h2><p>1/2 英寸方头是最通用的选择；轮毂与轻型装配可考虑 3/8 英寸换取更轻的重量；重型钢结构建议 3/4 英寸配合双锤机构。</p><h2>重量与平衡</h2><p>长时间举升作业下，每 100g 都会被放大。TKI-850 在 850Nm 级别把整机重量控制在 2.1kg，靠的是无刷电机与轻量化外壳。</p><h3>结论</h3><p>先按螺栓规格定扭矩区间，再按作业姿势定形态与重量，最后用电池平台收口——同一品牌同一平台，配件与充电器通用才是长期成本最低的选择。</p>",
+      "i18nJson": "{\"en-US\":{\"title\":\"How to Choose the Right Impact Wrench for Your Application\",\"summary\":\"Torque, drive size and weight are the three dimensions that matter. Three real jobsites turn selection criteria into concrete numbers.\",\"content\":\"<h2>Start from torque demand</h2><p>The first step is not peak torque but fastener size: M16 bolts generally need 400Nm+ of breakaway torque, while heavy trucks and steel structures demand 850Nm or more. Peak torque gets the bolt moving; sustained torque is what delivers productivity.</p><h2>Drive size decides the form factor</h2><p>A 1/2-inch square drive is the most versatile choice; 3/8-inch trades torque for weight on wheel and light assembly work; heavy steel calls for 3/4-inch with a twin-hammer mechanism.</p><h2>Weight and balance</h2><p>Every 100g is amplified during long overhead work. The TKI-850 keeps the whole tool at 2.1kg in the 850Nm class thanks to its brushless motor and lightweight housing.</p>\"}}"
     },
     {
       "slug": "tool-maintenance",
@@ -140,7 +159,8 @@
           "slug": "tips"
         }
       ],
-      "content": "<h2>1. 每天清理散热风道</h2><p>粉尘堵塞风道是电机过热的第一诱因。收工时用干风吹一遍进风口，比任何维修都省钱。</p><h2>2. 电池不要放空再充</h2><p>锂电池没有记忆效应，20% 电量随充随用最健康；长期存放请保持 50% 左右电量并置于阴凉处。</p><h2>3. 按材质选耗材</h2><p>混凝土用硬质合金钻头、金属用 HSS-Co，错配的耗材会把负载全部转嫁到电机与齿轮上。</p><h2>4. 检查碳刷与密封圈</h2><p>有刷机型每 50 小时检查一次碳刷长度；IP56 机型的密封圈老化后防护等级会悄悄失效。</p><h2>5. 让智能速控替你干活</h2><p>不要手动「顶满」转速，负载感知会自动匹配扭矩——既保护齿轮也省电。</p>"
+      "content": "<h2>1. 每天清理散热风道</h2><p>粉尘堵塞风道是电机过热的第一诱因。收工时用干风吹一遍进风口，比任何维修都省钱。</p><h2>2. 电池不要放空再充</h2><p>锂电池没有记忆效应，20% 电量随充随用最健康；长期存放请保持 50% 左右电量并置于阴凉处。</p><h2>3. 按材质选耗材</h2><p>混凝土用硬质合金钻头、金属用 HSS-Co，错配的耗材会把负载全部转嫁到电机与齿轮上。</p><h2>4. 检查碳刷与密封圈</h2><p>有刷机型每 50 小时检查一次碳刷长度；IP56 机型的密封圈老化后防护等级会悄悄失效。</p><h2>5. 让智能速控替你干活</h2><p>不要手动「顶满」转速，负载感知会自动匹配扭矩——既保护齿轮也省电。</p>",
+      "i18nJson": "{\"en-US\":{\"title\":\"5 Tips to Extend the Life of Your Power Tools\",\"summary\":\"From cleaning habits to battery storage, five low-cost habits double the service life of your tools.\",\"content\":\"<h2>1. Clear the air vents daily</h2><p>Clogged vents are the number-one cause of overheated motors. Blow out the intake with dry air at the end of every shift.</p><h2>2. Do not deep-discharge batteries</h2><p>Lithium cells have no memory effect — top up from 20% and store long-term at about 50% in a cool place.</p><h2>3. Match consumables to the material</h2><p>Carbide bits for concrete, HSS-Co for metal. The wrong consumable shifts the load onto the motor and gearbox.</p><h2>4. Check carbon brushes and seals</h2><p>On brushed models inspect brush length every 50 hours; on IP56 models aged seals quietly void the protection rating.</p><h2>5. Let intelligent speed control work</h2><p>Do not hold full trigger — load sensing matches torque automatically, protecting the gearbox and the battery.</p>\"}}"
     },
     {
       "slug": "cordless-future",
@@ -153,7 +173,8 @@
           "slug": "industry"
         }
       ],
-      "content": "<p>五年前，工业建造现场的重活还依赖电缆与气动；今天，高倍率电芯 + 无刷电机的组合已经把 36V 电锤推到了有线工具的扭矩水平。</p><p>下一阶段的分水岭在智能控制：负载感知、倾角传感与蓝牙工具管理，让项目经理能在后台看到每一台工具的负荷与保养周期。</p><p>TORKON 的 20V 平台已经在工地上验证了这条路线——同样的电池，驱动从电钻到圆锯的全系列工具。</p>"
+      "content": "<p>五年前，工业建造现场的重活还依赖电缆与气动；今天，高倍率电芯 + 无刷电机的组合已经把 36V 电锤推到了有线工具的扭矩水平。</p><p>下一阶段的分水岭在智能控制：负载感知、倾角传感与蓝牙工具管理，让项目经理能在后台看到每一台工具的负荷与保养周期。</p><p>TORKON 的 20V 平台已经在工地上验证了这条路线——同样的电池，驱动从电钻到圆锯的全系列工具。</p>",
+      "i18nJson": "{\"en-US\":{\"title\":\"The Future of Cordless Drills in Industrial Construction\",\"summary\":\"Battery energy density and intelligent control are rewriting the tool list of industrial construction.\",\"content\":\"<p>Five years ago heavy work on industrial sites still depended on cords and pneumatics; today high-rate cells and brushless motors have pushed 36V rotary hammers to the torque level of corded tools.</p><p>The next dividing line is intelligent control: load sensing, tilt sensing and Bluetooth tool management let project managers see the load and service interval of every tool on site.</p>\"}}"
     }
   ],
   "productCategories": [
@@ -206,7 +227,8 @@
         }
       ],
       "author": "外贸部",
-      "content": "<p>TKD-20V 是 TORKON 20V 无刷平台的主力机型：150Nm 最大扭矩覆盖 90% 的装配场景，1.4kg 的机身让举升作业一整天也不吃力。</p><ul><li>无刷电机：免维护，发热更低</li><li>20 档扭矩离合 + 钻/起子双模</li><li>全金属齿轮箱与 IP56 密封</li></ul>"
+      "content": "<p>TKD-20V 是 TORKON 20V 无刷平台的主力机型：150Nm 最大扭矩覆盖 90% 的装配场景，1.4kg 的机身让举升作业一整天也不吃力。</p><ul><li>无刷电机：免维护，发热更低</li><li>20 档扭矩离合 + 钻/起子双模</li><li>全金属齿轮箱与 IP56 密封</li></ul>",
+      "i18nJson": "{\"en-US\":{\"title\":\"TKD-20V Brushless Cordless Drill\",\"keywords\":\"brushless drill cordless drill\",\"summary\":\"20V brushless platform, 150Nm torque and a lightweight body for all-day overhead work.\",\"content\":\"<p>The TKD-20V is the workhorse of the TORKON 20V brushless platform: 150Nm of max torque covers 90% of assembly tasks, and the 1.4kg body keeps overhead work comfortable all day.</p><ul><li>Brushless motor: maintenance-free, lower heat</li><li>20-stage torque clutch + drill/driver modes</li><li>All-metal gearbox and IP56 sealing</li></ul>\"}}"
     },
     {
       "slug": "tki-850",
@@ -230,7 +252,8 @@
         }
       ],
       "author": "外贸部",
-      "content": "<p>TKI-850 是 TORKON 旗舰冲击扳手：850Nm 拆松扭矩 + 1,200Nm 断裂扭矩，双锤冲击机构让 M22 螺栓一次到位。</p><ul><li>四档速控：精密装配到重载拆松全覆盖</li><li>LED 环灯：车底与舱内作业无死角</li><li>2.1kg 整机重量，同级最轻之一</li></ul>"
+      "content": "<p>TKI-850 是 TORKON 旗舰冲击扳手：850Nm 拆松扭矩 + 1,200Nm 断裂扭矩，双锤冲击机构让 M22 螺栓一次到位。</p><ul><li>四档速控：精密装配到重载拆松全覆盖</li><li>LED 环灯：车底与舱内作业无死角</li><li>2.1kg 整机重量，同级最轻之一</li></ul>",
+      "i18nJson": "{\"en-US\":{\"title\":\"TKI-850 Brushless Impact Wrench\",\"keywords\":\"flagship brushless impact wrench\",\"summary\":\"The flagship: 850Nm max torque, 4-mode speed control and LED light — heavy fasteners in one pass.\",\"content\":\"<p>The TKI-850 is the TORKON flagship impact wrench: 850Nm breakaway + 1,200Nm nut-busting torque, with a twin-hammer mechanism that frees M22 bolts in one pass.</p><ul><li>4-mode speed control: from precision assembly to heavy removal</li><li>LED ring light: no blind spots under chassis or in bays</li><li>2.1kg tool weight, among the lightest in class</li></ul>\"}}"
     },
     {
       "slug": "tkg-125",
@@ -253,7 +276,8 @@
         }
       ],
       "author": "外贸部",
-      "content": "<p>TKG-125 面向金属加工车间：900W 有刷电机配 125mm 锯片，防振后手柄与防重启开关让长班次更安全。</p>"
+      "content": "<p>TKG-125 面向金属加工车间：900W 有刷电机配 125mm 锯片，防振后手柄与防重启开关让长班次更安全。</p>",
+      "i18nJson": "{\"en-US\":{\"title\":\"TKG-125 Angle Grinder\",\"keywords\":\"angle grinder cutting grinding\",\"summary\":\"125mm disc, 900W motor and an anti-vibration handle for long, steady cuts.\",\"content\":\"<p> Built for metal fabrication shops, the TKG-125 pairs a 900W motor with a 125mm disc; the anti-vibration rear handle and no-restart switch keep long shifts safe.</p>\"}}"
     },
     {
       "slug": "tkh-36s",
@@ -276,7 +300,8 @@
         }
       ],
       "author": "外贸部",
-      "content": "<p>TKH-36S 用 3.6J 单击能量与减振框架，把 32mm 混凝土钻孔的工时压缩三分之一；六角柄兼容主流开凿铲。</p>"
+      "content": "<p>TKH-36S 用 3.6J 单击能量与减振框架，把 32mm 混凝土钻孔的工时压缩三分之一；六角柄兼容主流开凿铲。</p>",
+      "i18nJson": "{\"en-US\":{\"title\":\"TKH-36S SDS-Max Rotary Hammer\",\"keywords\":\"rotary hammer industrial construction\",\"summary\":\"3.6J impact energy and an SDS-Max shank for drilling and chiselling in concrete.\",\"content\":\"<p>The TKH-36S compresses 32mm concrete drilling time by a third with 3.6J impact energy and a vibration-dampening frame; the hex shank accepts mainstream chisels.</p>\"}}"
     },
     {
       "slug": "tkcs-185",
@@ -299,7 +324,8 @@
         }
       ],
       "author": "外贸部",
-      "content": "<p>TKCS-185 以 1,400W 直流电机驱动 185mm 硬质合金锯片，铝质底板与 0-50° 斜切机构兼顾精度与耐用。</p>"
+      "content": "<p>TKCS-185 以 1,400W 直流电机驱动 185mm 硬质合金锯片，铝质底板与 0-50° 斜切机构兼顾精度与耐用。</p>",
+      "i18nJson": "{\"en-US\":{\"title\":\"TKCS-185 Circular Saw\",\"keywords\":\"circular saw cutting tools\",\"summary\":\"185mm blade, 1,400W motor and 0-50° bevel for carpentry and structural steel.\",\"content\":\"<p>The TKCS-185 drives a 185mm carbide blade with a 1,400W motor; the aluminium base and 0-50° bevel mechanism balance precision and durability.</p>\"}}"
     }
   ]
 }

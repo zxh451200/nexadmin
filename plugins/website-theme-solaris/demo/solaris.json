@@ -25,28 +25,39 @@
         "platform": "instagram",
         "url": "https://www.instagram.com/solaris.energy"
       }
-    ]
+    ],
+    "i18nJson": "{\"en-US\":{\"siteDesc\":\"Advanced energy storage for commercial and industrial scenarios, helping customers worldwide build a cleaner, more resilient energy future.\",\"homeTitle\":\"Energy for a\\nBetter Tomorrow\",\"homeSubtitle\":\"Energy storage solutions for commercial and industrial scenarios, moving global customers toward a cleaner, more resilient and more profitable energy mix.\",\"homeCtaLabel\":\"Get a Quote\",\"seoKeywords\":\"energy storage,battery storage,BESS,hybrid inverter,energy management,microgrid\",\"footerNote\":\"Clean energy storage, for a greener tomorrow.\"}}"
   },
   "navs": [
     {
+      "label": "首页",
+      "href": "/",
+      "sort": 5,
+      "i18nJson": "{\"en-US\":{\"label\":\"Home\"}}"
+    },
+    {
       "label": "产品中心",
       "href": "/products",
-      "sort": 10
+      "sort": 10,
+      "i18nJson": "{\"en-US\":{\"label\":\"Products\"}}"
     },
     {
       "label": "新闻动态",
       "href": "/news",
-      "sort": 20
+      "sort": 20,
+      "i18nJson": "{\"en-US\":{\"label\":\"News\"}}"
     },
     {
       "label": "关于我们",
       "href": "/p/about",
-      "sort": 30
+      "sort": 30,
+      "i18nJson": "{\"en-US\":{\"label\":\"About Us\"}}"
     },
     {
       "label": "联系我们",
       "href": "/contact",
-      "sort": 40
+      "sort": 40,
+      "i18nJson": "{\"en-US\":{\"label\":\"Contact Us\"}}"
     }
   ],
   "features": [
@@ -54,19 +65,29 @@
       "icon": "zap",
       "title": "智能控制",
       "description": "AI 驱动的能源管理，效率更高、成本更低。",
-      "sort": 10
+      "sort": 10,
+      "i18nJson": "{\"en-US\":{\"title\":\"Smart Control\",\"description\":\"AI-driven energy management for higher efficiency and lower cost.\"}}"
     },
     {
       "icon": "shield",
       "title": "可靠性能",
       "description": "为安全、稳定与长期运行而构建。",
-      "sort": 20
+      "sort": 20,
+      "i18nJson": "{\"en-US\":{\"title\":\"Reliable Performance\",\"description\":\"Built for safety, stability and long-term operation.\"}}"
     },
     {
       "icon": "chart",
       "title": "灵活扩展",
       "description": "从工商业到电网级应用的可扩展解决方案。",
-      "sort": 30
+      "sort": 30,
+      "i18nJson": "{\"en-US\":{\"title\":\"Scalable Design\",\"description\":\"Flexible solutions from C&I to utility-scale applications.\"}}"
+    },
+    {
+      "icon": "globe",
+      "title": "全球服务",
+      "description": "40+ 国家与地区的本地化交付与运维支持。",
+      "sort": 40,
+      "i18nJson": "{\"en-US\":{\"title\":\"Global Service & Support\",\"description\":\"Service network across 60+ countries and regions.\"}}"
     }
   ],
   "categories": [
@@ -93,7 +114,8 @@
       "seoDesc": "SOLARIS ENERGY：面向商业与工业场景的储能系统供应商，让清洁能源更聪明、更可靠。",
       "published": true,
       "sort": 10,
-      "content": "<h2>更清洁、更安全、更强韧的明天</h2><p>在 SOLARIS ENERGY，储能不只是技术，而是通往繁荣未来的基石。我们与全球的商业、社区与交通伙伴合作，把可靠、可扩展的储能方案带给真实世界。</p><h3>为什么是我们</h3><p>20+ 国家交付、40+ 区域项目、10+ GWh 在网运行的沉淀，让我们的方案从第一天起就经得起电网级考验。</p><h3>可持续承诺</h3><p>每一套交付的系统都以全生命周期碳足迹为设计输入：从电芯来源到退役回收，全程可追溯。</p>"
+      "content": "<h2>更清洁、更安全、更强韧的明天</h2><p>在 SOLARIS ENERGY，储能不只是技术，而是通往繁荣未来的基石。我们与全球的商业、社区与交通伙伴合作，把可靠、可扩展的储能方案带给真实世界。</p><h3>为什么是我们</h3><p>20+ 国家交付、40+ 区域项目、10+ GWh 在网运行的沉淀，让我们的方案从第一天起就经得起电网级考验。</p><h3>可持续承诺</h3><p>每一套交付的系统都以全生命周期碳足迹为设计输入：从电芯来源到退役回收，全程可追溯。</p>",
+      "i18nJson": "{\"en-US\":{\"title\":\"About SOLARIS\",\"content\":\"<h2>A cleaner, safer and stronger tomorrow</h2><p>At SOLARIS ENERGY, energy storage is more than technology — it is the foundation for a prosperous future. We partner with businesses, communities and mobility across the globe to bring reliable, scalable storage to the real world.</p><h3>Why us</h3><p>Delivery in 20+ countries, projects in 40+ regions and 10+ GWh operating in the field mean our systems are proven at grid scale from day one.</p><h3>Our commitment</h3><p>Every delivered system is designed with full-lifecycle carbon footprint as an input: from cell sourcing to retirement and recycling, everything is traceable.</p>\"}}"
     }
   ],
   "posts": [
@@ -109,7 +131,8 @@
           "slug": "insights"
         }
       ],
-      "content": "<h2>峰谷套利</h2><p>两充两放的运行策略让工商业储能的投资回收期缩短到 4~5 年，电价差越大、负荷越稳，收益越清晰。</p><h2>需量管理</h2><p>储能削峰可以把月度需量电费降低 20%~35%，对高载制造的账单影响立竿见影。</p><h2>绿电消纳</h2><p>配储后的光伏自发自用率从 60% 提升到 90% 以上，绿电真正变成可调度的资产。</p>"
+      "content": "<h2>峰谷套利</h2><p>两充两放的运行策略让工商业储能的投资回收期缩短到 4~5 年，电价差越大、负荷越稳，收益越清晰。</p><h2>需量管理</h2><p>储能削峰可以把月度需量电费降低 20%~35%，对高载制造的账单影响立竿见影。</p><h2>绿电消纳</h2><p>配储后的光伏自发自用率从 60% 提升到 90% 以上，绿电真正变成可调度的资产。</p>",
+      "i18nJson": "{\"en-US\":{\"title\":\"How Energy Storage Is Transforming Industrial Power\",\"summary\":\"Arbitrage, demand management and green-power consumption: the three-way economics of C&I storage.\",\"content\":\"<h2>Peak-valley arbitrage</h2><p>A two-charge-two-discharge strategy shortens C&I storage payback to 4-5 years — the wider the spread and steadier the load, the clearer the return.</p><h2>Demand management</h2><p>Peak shaving cuts monthly demand charges by 20-35%, visible on the very next bill for heavy manufacturing.</p><h2>Green-power consumption</h2><p>Storage lifts PV self-consumption from 60% to above 90%, turning green power into a dispatchable asset.</p>\"}}"
     },
     {
       "slug": "battery-storage-future",
@@ -122,7 +145,8 @@
           "slug": "tech"
         }
       ],
-      "content": "<p>300Ah+ 大电芯把系统成本再压一档；全液冷温控让电芯温差收敛到 3℃ 以内，寿命与安全同步提升。</p><p>构网型变流器让储能在弱电网与孤岛场景下也能支撑电压与频率，微电网从此成为常态选项。</p>"
+      "content": "<p>300Ah+ 大电芯把系统成本再压一档；全液冷温控让电芯温差收敛到 3℃ 以内，寿命与安全同步提升。</p><p>构网型变流器让储能在弱电网与孤岛场景下也能支撑电压与频率，微电网从此成为常态选项。</p>",
+      "i18nJson": "{\"en-US\":{\"title\":\"The Future of Battery Storage: Key Trends\",\"summary\":\"Large cells, liquid cooling and grid-forming converters are defining the next generation of storage.\",\"content\":\"<p>300Ah+ cells push system costs down another notch; full liquid cooling converges cell temperature spread to within 3℃, improving lifetime and safety together.</p><p>Grid-forming converters let storage support voltage and frequency in weak grids and islands — microgrids become a standard option.</p>\"}}"
     },
     {
       "slug": "storage-trends-2026",
@@ -135,7 +159,8 @@
           "slug": "insights"
         }
       ],
-      "content": "<p>1. 安全标准全面收紧，pack 级消防成为标配；2. AI 调度从概念走向返单；3. 长时储能需求抬头；4. 模块化交付缩短工期；5. 绿电长协与储能打包成新的商业模型。</p>"
+      "content": "<p>1. 安全标准全面收紧，pack 级消防成为标配；2. AI 调度从概念走向返单；3. 长时储能需求抬头；4. 模块化交付缩短工期；5. 绿电长协与储能打包成新的商业模型。</p>",
+      "i18nJson": "{\"en-US\":{\"title\":\"5 Key Trends for Industrial Energy Storage in 2026\",\"summary\":\"From safety standards to AI dispatch — five things worth watching this year.\",\"content\":\"<p>1. Safety standards tighten across the board, pack-level fire suppression becomes standard; 2. AI dispatch moves from concept to orders; 3. Long-duration demand rises; 4. Modular delivery shortens schedules; 5. Green PPAs bundled with storage become a new business model.</p>\"}}"
     },
     {
       "slug": "ess-100mwh",
@@ -149,7 +174,8 @@
           "slug": "cases"
         }
       ],
-      "content": "<p>为制造园区交付的 100MWh 级储能电站：高峰时段削峰填谷，配合 EMS 需量管理，首年即收回 30% 投资。</p>"
+      "content": "<p>为制造园区交付的 100MWh 级储能电站：高峰时段削峰填谷，配合 EMS 需量管理，首年即收回 30% 投资。</p>",
+      "i18nJson": "{\"en-US\":{\"title\":\"100MWh Commercial Energy Storage Project\",\"summary\":\"Two-charge-two-discharge and EMS dispatch give a manufacturing park a clear storage business case.\",\"content\":\"<p>A 100MWh-class storage plant delivered for a manufacturing park: peak shaving with EMS demand management recovered 30% of the investment in the first year.</p>\"}}"
     },
     {
       "slug": "california-ess",
@@ -162,7 +188,8 @@
           "slug": "cases"
         }
       ],
-      "content": "<p>加州高电价与频繁停电并存，BESS-215 一体柜为商业园区提供需量管理与备用电源双重价值。</p>"
+      "content": "<p>加州高电价与频繁停电并存，BESS-215 一体柜为商业园区提供需量管理与备用电源双重价值。</p>",
+      "i18nJson": "{\"en-US\":{\"title\":\"Commercial Storage Project in California\",\"summary\":\"All-in-one cabinets for the California grid: demand management, backup power and green consumption in one.\",\"content\":\"<p>With high tariffs and frequent outages, BESS-215 cabinets give a commercial park demand management and backup power in one unit.</p>\"}}"
     },
     {
       "slug": "phuket-microgrid",
@@ -175,7 +202,8 @@
           "slug": "cases"
         }
       ],
-      "content": "<p>普吉岛度假村以 HI-100 构网型逆变器 + 储能柜组成微电网，摆脱柴油发电机，供电纯度与成本同步改善。</p>"
+      "content": "<p>普吉岛度假村以 HI-100 构网型逆变器 + 储能柜组成微电网，摆脱柴油发电机，供电纯度与成本同步改善。</p>",
+      "i18nJson": "{\"en-US\":{\"title\":\"Solar + Storage Microgrid in Phuket\",\"summary\":\"A weak-grid island microgrid: grid-forming inverters put a resort in control of its own power.\",\"content\":\"<p>A Phuket resort combines HI-100 grid-forming inverters with storage cabinets to replace diesel generators — cleaner power at lower cost.</p>\"}}"
     }
   ],
   "productCategories": [
@@ -219,7 +247,8 @@
         }
       ],
       "author": "方案部",
-      "content": "<p>BESS-215 把电芯、BMS、液冷温控、消防与变流器集成进一个 20 尺标准柜，现场并网即用，是工商业储能的基准机型。</p>"
+      "content": "<p>BESS-215 把电芯、BMS、液冷温控、消防与变流器集成进一个 20 尺标准柜，现场并网即用，是工商业储能的基准机型。</p>",
+      "i18nJson": "{\"en-US\":{\"title\":\"215kWh All-in-One ESS Cabinet\",\"summary\":\"An integrated cabinet with cells, BMS, liquid cooling and fire suppression — plug-and-play C&I storage.\",\"content\":\"<p>The BESS-215 integrates cells, BMS, liquid cooling, fire suppression and the converter into one 20-foot cabinet: connect and commission, the benchmark unit for commercial and industrial storage.</p>\"}}"
     },
     {
       "slug": "hybrid-inverter-100",
@@ -236,7 +265,8 @@
         }
       ],
       "author": "方案部",
-      "content": "<p>HI-100 支持构网型运行，弱电网与孤岛场景下依旧稳定输出，与 SOLARIS 储能柜组成即装即用的微电网。</p>"
+      "content": "<p>HI-100 支持构网型运行，弱电网与孤岛场景下依旧稳定输出，与 SOLARIS 储能柜组成即装即用的微电网。</p>",
+      "i18nJson": "{\"en-US\":{\"title\":\"100kW Hybrid Inverter\",\"summary\":\"A solar+storage inverter with seamless off-grid and on-grid switching for weak grids.\",\"content\":\"<p>The HI-100 supports grid-forming operation, staying stable in weak grids and islands — pair it with a SOLARIS cabinet for a ready-made microgrid.</p>\"}}"
     },
     {
       "slug": "ems-platform",
@@ -253,7 +283,8 @@
         }
       ],
       "author": "方案部",
-      "content": "<p>EMS-Cloud 以 AI 预测负荷与电价，自动编排充放策略，让每一度电都落在最值钱的时段。</p>"
+      "content": "<p>EMS-Cloud 以 AI 预测负荷与电价，自动编排充放策略，让每一度电都落在最值钱的时段。</p>",
+      "i18nJson": "{\"en-US\":{\"title\":\"EMS Energy Management Platform\",\"summary\":\"An energy management system that intelligently controls generation and storage: higher efficiency, lower cost.\",\"content\":\"<p>EMS-Cloud forecasts load and tariffs with AI and orchestrates charge/discharge strategies automatically, putting every kWh in the most valuable window.</p>\"}}"
     },
     {
       "slug": "ess-container-mwh",
@@ -270,7 +301,8 @@
         }
       ],
       "author": "方案部",
-      "content": "<p>ESS-MWh 面向新能源电站与独立储能电站：3.44MWh 单柜、pack 级安全设计与电网级调频响应。</p>"
+      "content": "<p>ESS-MWh 面向新能源电站与独立储能电站：3.44MWh 单柜、pack 级安全设计与电网级调频响应。</p>",
+      "i18nJson": "{\"en-US\":{\"title\":\"MWh-Class Container Storage System\",\"summary\":\"A grid-scale container solution for large-scale renewable consumption and frequency regulation.\",\"content\":\"<p>The ESS-MWh targets renewable plants and standalone storage: 3.44MWh per container, pack-level safety design and grid-grade frequency response.</p>\"}}"
     }
   ]
 }

@@ -25,28 +25,39 @@
         "platform": "x",
         "url": "https://x.com/auvexmachinery"
       }
-    ]
+    ],
+    "i18nJson": "{\"en-US\":{\"siteDesc\":\"AUVEX MACHINERY delivers high-precision CNC machining centers and automation for a more precise, efficient and sustainable manufacturing world.\",\"homeTitle\":\"Engineering\\nthe Future of Precision\",\"homeSubtitle\":\"AUVEX MACHINERY delivers high-performance CNC solutions so every part is machined more precisely, efficiently and sustainably.\",\"homeCtaLabel\":\"Explore Machines\",\"seoKeywords\":\"CNC machines,5-axis machining,VMC,precision manufacturing,turning centers\",\"footerNote\":\"High-performance CNC machines and automation, engineered for precision industry.\"}}"
   },
   "navs": [
     {
+      "label": "首页",
+      "href": "/",
+      "sort": 5,
+      "i18nJson": "{\"en-US\":{\"label\":\"Home\"}}"
+    },
+    {
       "label": "产品中心",
       "href": "/products",
-      "sort": 10
+      "sort": 10,
+      "i18nJson": "{\"en-US\":{\"label\":\"Products\"}}"
     },
     {
       "label": "新闻动态",
       "href": "/news",
-      "sort": 20
+      "sort": 20,
+      "i18nJson": "{\"en-US\":{\"label\":\"News\"}}"
     },
     {
       "label": "关于我们",
       "href": "/p/about",
-      "sort": 30
+      "sort": 30,
+      "i18nJson": "{\"en-US\":{\"label\":\"About Us\"}}"
     },
     {
       "label": "联系我们",
       "href": "/contact",
-      "sort": 40
+      "sort": 40,
+      "i18nJson": "{\"en-US\":{\"label\":\"Contact Us\"}}"
     }
   ],
   "features": [
@@ -54,25 +65,29 @@
       "icon": "chart",
       "title": "世界级精度",
       "description": "±0.003mm 定位精度，稳定应对最严苛的公差要求。",
-      "sort": 10
+      "sort": 10,
+      "i18nJson": "{\"en-US\":{\"title\":\"World-Class Precision\",\"description\":\"Consistent high accuracy for the most demanding tolerances.\"}}"
     },
     {
       "icon": "shield",
       "title": "可靠性能",
       "description": "为长期稳定与最短停机时间而构建的重载机身与热补偿系统。",
-      "sort": 20
+      "sort": 20,
+      "i18nJson": "{\"en-US\":{\"title\":\"Reliable Performance\",\"description\":\"Heavy-duty structures and thermal compensation built for long-term stability.\"}}"
     },
     {
       "icon": "globe",
       "title": "全球支持",
       "description": "覆盖 60+ 国家的服务网络与备件仓储，支持就地就近。",
-      "sort": 30
+      "sort": 30,
+      "i18nJson": "{\"en-US\":{\"title\":\"Global Support\",\"description\":\"A service network and spare-part hubs across 60+ countries, close to your shop.\"}}"
     },
     {
       "icon": "layers",
       "title": "行业专长",
       "description": "深耕航空航天、汽车、模具与医疗等制造行业的工艺Know-how。",
-      "sort": 40
+      "sort": 40,
+      "i18nJson": "{\"en-US\":{\"title\":\"Industry Expertise\",\"description\":\"Deep process know-how in aerospace, automotive, mold and medical manufacturing.\"}}"
     }
   ],
   "categories": [
@@ -99,7 +114,8 @@
       "seoDesc": "AUVEX MACHINERY：高性能数控加工中心制造商，服务航空航天、汽车、医疗与模具制造。",
       "published": true,
       "sort": 10,
-      "content": "<h2>无妥协的精密工程</h2><p>AUVEX MACHINERY 集成先进的机床结构、智能控制系统与严格的质检流程，提供高精度加工能力与长寿命主轴稳定性。从五轴联动到精密车削，我们的产品为复杂零件的批量生产而生。</p><h3>制造能力</h3><p>高产能、可扩展的现代制造基地，配合多阶段质检流程：每一台出厂机床都经过 72 小时连续空载与负载老化验证。</p><h3>面向未来</h3><p>我们持续投资于自动化集成、在线检测与能耗优化，让客户在产能、质量与可持续性三个维度同时获益。</p>"
+      "content": "<h2>无妥协的精密工程</h2><p>AUVEX MACHINERY 集成先进的机床结构、智能控制系统与严格的质检流程，提供高精度加工能力与长寿命主轴稳定性。从五轴联动到精密车削，我们的产品为复杂零件的批量生产而生。</p><h3>制造能力</h3><p>高产能、可扩展的现代制造基地，配合多阶段质检流程：每一台出厂机床都经过 72 小时连续空载与负载老化验证。</p><h3>面向未来</h3><p>我们持续投资于自动化集成、在线检测与能耗优化，让客户在产能、质量与可持续性三个维度同时获益。</p>",
+      "i18nJson": "{\"en-US\":{\"title\":\"About AUVEX\",\"content\":\"<h2>Precision engineering without compromise</h2><p>AUVEX MACHINERY integrates advanced machine structures, intelligent control systems and rigorous inspection to deliver high-accuracy machining and long-term spindle stability — from 5-axis simultaneous milling to precision turning.</p><h3>Manufacturing capability</h3><p>High-capacity, scalable facilities with a multi-stage inspection process: every machine leaves the floor after 72 hours of continuous loaded burn-in.</p><h3>Looking forward</h3><p>We keep investing in automation integration, in-process measurement and energy efficiency, so customers gain on capacity, quality and sustainability at the same time.</p>\"}}"
     }
   ],
   "posts": [
@@ -115,7 +131,8 @@
           "slug": "tech"
         }
       ],
-      "content": "<h2>为什么是五轴</h2><p>传统三轴加工复杂叶轮与结构件需要多次装夹，每次装夹都引入定位误差。五轴联动在一次装夹内完成五面加工，把累积公差收敛到机床本身的精度等级。</p><h2>效率账怎么算</h2><p>以航空发动机机匣为例：三轴方案 6 道工序、11 小时；五轴方案 2 道工序、5 小时，同时把位置度从 ±0.05mm 提升到 ±0.01mm。</p><h2>选型要点</h2><p>关注主轴刚性、RTCP 精度与后处理生态——机床只是起点，工艺链才决定交付能力。</p>"
+      "content": "<h2>为什么是五轴</h2><p>传统三轴加工复杂叶轮与结构件需要多次装夹，每次装夹都引入定位误差。五轴联动在一次装夹内完成五面加工，把累积公差收敛到机床本身的精度等级。</p><h2>效率账怎么算</h2><p>以航空发动机机匣为例：三轴方案 6 道工序、11 小时；五轴方案 2 道工序、5 小时，同时把位置度从 ±0.05mm 提升到 ±0.01mm。</p><h2>选型要点</h2><p>关注主轴刚性、RTCP 精度与后处理生态——机床只是起点，工艺链才决定交付能力。</p>",
+      "i18nJson": "{\"en-US\":{\"title\":\"How 5-Axis Machining Improves Complex Part Production\",\"summary\":\"Five-face machining in one setup: 5-axis linkage cuts both operation count and stacking error on complex parts.\",\"content\":\"<h2>Why five axes</h2><p>Machining impellers and structural parts on 3-axis machines takes multiple setups, each adding positioning error. 5-axis linkage finishes five faces in one setup, converging cumulative tolerance to the machine's own accuracy class.</p><h2>Running the numbers</h2><p>For an aero-engine casing: 6 operations and 11 hours on 3-axis versus 2 operations and 5 hours on 5-axis, with true position improved from ±0.05mm to ±0.01mm.</p><h2>What to look for</h2><p>Spindle rigidity, RTCP accuracy and the post-processor ecosystem — the machine is the starting point; the process chain delivers.</p>\"}}"
     },
     {
       "slug": "cnc-aerospace-trend",
@@ -128,7 +145,8 @@
           "slug": "insights"
         }
       ],
-      "content": "<p>钛合金、高温合金与大尺寸整体构件是航空航天制造的三大挑战。高扭矩主轴、大行程龙门结构与在线检测正在成为新标配。</p><p>自动化场景也在快速增长：机器人上下料与多机床柔性线，让夜班也能保持满负荷。</p>"
+      "content": "<p>钛合金、高温合金与大尺寸整体构件是航空航天制造的三大挑战。高扭矩主轴、大行程龙门结构与在线检测正在成为新标配。</p><p>自动化场景也在快速增长：机器人上下料与多机床柔性线，让夜班也能保持满负荷。</p>",
+      "i18nJson": "{\"en-US\":{\"title\":\"The Future of CNC Machining in Aerospace Manufacturing\",\"summary\":\"Lightweight structures, hard-to-machine alloys and large monolithic parts are reshaping machine requirements.\",\"content\":\"<p>Titanium, superalloys and large monolithic parts are the three challenges of aerospace manufacturing. High-torque spindles, large-travel gantry structures and in-process measurement are becoming standard.</p><p>Automation is growing fast too: robot loading and multi-machine flexible lines keep night shifts at full load.</p>\"}}"
     },
     {
       "slug": "cnc-maintenance-best-practice",
@@ -141,7 +159,8 @@
           "slug": "cases"
         }
       ],
-      "content": "<h2>润滑与导轨</h2><p>按小时计数而非按天：集中润滑系统的液位与压力要进入每日点检表。</p><h2>热补偿校准</h2><p>季节与环境温度变化会漂移定位精度，建议每季度做一次激光干涉仪校准。</p><h2>备件策略</h2><p>主轴轴承、密封件与过滤器按运行小时建立更换台账，停机成本远高于备件成本。</p>"
+      "content": "<h2>润滑与导轨</h2><p>按小时计数而非按天：集中润滑系统的液位与压力要进入每日点检表。</p><h2>热补偿校准</h2><p>季节与环境温度变化会漂移定位精度，建议每季度做一次激光干涉仪校准。</p><h2>备件策略</h2><p>主轴轴承、密封件与过滤器按运行小时建立更换台账，停机成本远高于备件成本。</p>",
+      "i18nJson": "{\"en-US\":{\"title\":\"CNC Machine Maintenance Best Practices for Long-Term Reliability\",\"summary\":\"From guideway lubrication to thermal calibration — an executable service rhythm keeps accuracy intact for a decade.\",\"content\":\"<h2>Lubrication and guideways</h2><p>Count by hours, not days: central lube level and pressure belong on the daily checklist.</p><h2>Thermal calibration</h2><p>Seasonal temperature shifts drift positioning accuracy — schedule a laser-interferometer check every quarter.</p><h2>Spares strategy</h2><p>Track spindle bearings, seals and filters by running hours; downtime costs far more than spares.</p>\"}}"
     },
     {
       "slug": "aerospace-housing-case",
@@ -154,7 +173,8 @@
           "slug": "cases"
         }
       ],
-      "content": "<p>客户原三轴方案加工钛合金机匣需要 6 道工序、11 小时，装夹误差累积导致位置度徘徊在 ±0.05mm。切换 VX-650 五轴方案后：2 道工序、5 小时，位置度收敛到 ±0.01mm。</p><p>RTCP 全程补偿与切削参数库是关键——机床只是起点，工艺包才是交付能力。</p>"
+      "content": "<p>客户原三轴方案加工钛合金机匣需要 6 道工序、11 小时，装夹误差累积导致位置度徘徊在 ±0.05mm。切换 VX-650 五轴方案后：2 道工序、5 小时，位置度收敛到 ±0.01mm。</p><p>RTCP 全程补偿与切削参数库是关键——机床只是起点，工艺包才是交付能力。</p>",
+      "i18nJson": "{\"en-US\":{\"title\":\"Aerospace Engine Housing Machining Case\",\"summary\":\"Titanium housings: from 6 operations on 3-axis to 2 operations on 5-axis — accuracy and hours converge.\",\"content\":\"<p>The customer's 3-axis process machined titanium housings in 6 operations and 11 hours, with true position stuck at ±0.05mm. Moving to the VX-650: 2 operations, 5 hours, true position converged to ±0.01mm.</p><p>Full-travel RTCP compensation and a cutting-parameter library made the difference — the machine is the start; the process package is the delivery.</p>\"}}"
     },
     {
       "slug": "automotive-mold-case",
@@ -167,7 +187,8 @@
           "slug": "cases"
         }
       ],
-      "content": "<p>模具车间引入机器人上下料柔性线后：两台 VM-1150 夜班无人值守，产能提升 40%，人均看机数从 1 台提升到 4 台。</p>"
+      "content": "<p>模具车间引入机器人上下料柔性线后：两台 VM-1150 夜班无人值守，产能提升 40%，人均看机数从 1 台提升到 4 台。</p>",
+      "i18nJson": "{\"en-US\":{\"title\":\"Automotive Mold Automation Production Line\",\"summary\":\"Robot loading plus two VM-1150s in a flexible line keeps night shifts at full load.\",\"content\":\"<p>After adding a robot tending line, two VM-1150s run night shifts unattended: output up 40%, machines-per-operator from 1 to 4.</p>\"}}"
     }
   ],
   "productCategories": [
@@ -203,7 +224,8 @@
         }
       ],
       "author": "外贸部",
-      "content": "<p>VX-650 是 AUVEX 的旗舰五轴机型：直驱双摆头、RTCP 全程补偿与高刚性龙门结构，为复杂零件的一次装夹成形而生。</p><ul><li>24,000 RPM 高速主轴</li><li>±0.003mm 定位精度</li><li>可选机器人上下料集成</li></ul>"
+      "content": "<p>VX-650 是 AUVEX 的旗舰五轴机型：直驱双摆头、RTCP 全程补偿与高刚性龙门结构，为复杂零件的一次装夹成形而生。</p><ul><li>24,000 RPM 高速主轴</li><li>±0.003mm 定位精度</li><li>可选机器人上下料集成</li></ul>",
+      "i18nJson": "{\"en-US\":{\"title\":\"VX-650 5-Axis Machining Center\",\"keywords\":\"5-axis machining center CNC\",\"summary\":\"High-precision 5-axis simultaneous machining for complex parts and multi-face work.\",\"content\":\"<p>The VX-650 is the AUVEX flagship 5-axis machine: direct-drive dual swivel heads, full-travel RTCP compensation and a rigid gantry structure, built for complex parts in one setup.</p><ul><li>24,000 RPM high-speed spindle</li><li>±0.003mm positioning accuracy</li><li>Optional robot loading integration</li></ul>\"}}"
     },
     {
       "slug": "vm-1150",
@@ -220,7 +242,8 @@
         }
       ],
       "author": "外贸部",
-      "content": "<p>VM-1150 以重载铸铁机身与热对称结构，为模具与批量零件加工提供长期稳定的精度保障。</p>"
+      "content": "<p>VM-1150 以重载铸铁机身与热对称结构，为模具与批量零件加工提供长期稳定的精度保障。</p>",
+      "i18nJson": "{\"en-US\":{\"title\":\"VM-1150 Vertical CNC Machine\",\"keywords\":\"VMC vertical machining\",\"summary\":\"A rigid, reliable vertical machining center for high-efficiency batch production.\",\"content\":\"<p>The VM-1150 pairs a heavy cast-iron body with a thermally symmetric structure for long-term stability in mold and batch part machining.</p>\"}}"
     },
     {
       "slug": "tc-300",
@@ -237,7 +260,8 @@
         }
       ],
       "author": "外贸部",
-      "content": "<p>TC-300 面向精密轴类与盘类零件：动力刀塔支持车铣复合工序，副主轴实现背面加工一次完成。</p>"
+      "content": "<p>TC-300 面向精密轴类与盘类零件：动力刀塔支持车铣复合工序，副主轴实现背面加工一次完成。</p>",
+      "i18nJson": "{\"en-US\":{\"title\":\"TC-300 Precision Turning Center\",\"keywords\":\"turning center precision turning\",\"summary\":\"High-precision turning with a driven tool turret and sub-spindle — turn-mill in one machine.\",\"content\":\"<p>The TC-300 targets precision shafts and discs: a driven tool turret enables turn-mill operations, and the sub-spindle finishes back-side work in one setup.</p>\"}}"
     }
   ]
 }

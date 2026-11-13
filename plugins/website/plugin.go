@@ -299,9 +299,13 @@ func loadMarketSignKey(log *zap.Logger) ed25519.PrivateKey {
 // 并挂上新留言通知（站内信 + 可选邮件抄送）。
 func (m *module) Start(ctx context.Context, d *core.Deps) error {
 	svc := m.service(d)
-	ensureSeed(ctx, svc, d.Log)
-	ensureSeedBackfill(ctx, svc, d.Log)
-	ensureSeedI18n(ctx, svc, d.Log)
+	// 品牌主题激活时官网内容归主题与管理员所有：出厂营销内容（导航/特性/新闻/页面）
+	// 不再补种，否则出厂卡片会在每次重启后混回品牌站。设置行仍要存在（渲染依赖它）。
+	if !themeActive(ctx, svc) {
+		ensureSeed(ctx, svc, d.Log)
+		ensureSeedBackfill(ctx, svc, d.Log)
+		ensureSeedI18n(ctx, svc, d.Log)
+	}
 	// 只订阅一次：重复挂载会把同一个事件挂两遍，一条留言就发多封通知。
 	m.sub.Do(func() {
 		n := newNotifier(ctx, d, svc)

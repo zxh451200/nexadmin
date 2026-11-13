@@ -15,6 +15,7 @@ import (
 	"gorm.io/gorm"
 
 	"nexadmin/core/response"
+	pi18n "nexadmin/pkg/i18n"
 )
 
 // 主题机制：website 自带 default 一套模板（tpl/、static/），主题插件在 init() 里
@@ -108,6 +109,17 @@ func lookupTheme(id string) *Theme {
 	return themeReg[id]
 }
 
+// themeActive 报告站点是否启用了品牌主题（setting.theme 非空且已注册）。
+// 激活时官网出厂营销内容（导航/特性/新闻/页面）不参与启动补种——内容归主题与管理员。
+// 读不到设置时按未激活处理，维持出厂行为。
+func themeActive(ctx context.Context, s *Service) bool {
+	set, err := s.Settings(ctx)
+	if err != nil {
+		return false
+	}
+	return set.Theme != ""
+}
+
 // themePackFor 取主题的已编译模板集；主题不存在（被卸载/设置残留）回退 default。
 func themePackFor(id string) map[string]*template.Template {
 	if id == "" {
@@ -145,6 +157,8 @@ type DemoSettings struct {
 	OgImageURL   string `json:"ogImageUrl"`
 	// Socials 是页脚社交列表；仅在当前 socials 列表为空时整体写入。
 	Socials []SocialLink `json:"socials"`
+	// I18nJSON 是品牌文案的非默认语言译文（{"en-US":{...}}），按 settingI18nFields 清洗后入库。
+	I18nJSON string `json:"i18nJson"`
 }
 
 // DemoData 是一套主题的演示内容。条目全部 insert-only：按 slug/href/title 判重，
@@ -193,25 +207,26 @@ func SeedDemo(ctx context.Context, s *Service, themeID string, data DemoData, lo
 }
 
 func seedDemoTx(ctx context.Context, tx *gorm.DB, themeID string, data DemoData, rep *DemoReport) error {
-	// 0. 清掉其它主题的演示行：切主题不该看到上一个品牌的演示内容；
-	// demo_of 为空的行是用户自建/出厂内容，永远不动。表名是包内常量，主题 id 走占位符。
-	if err := tx.Exec("DELETE FROM plg_website_product_category WHERE demo_of <> '' AND demo_of <> ?", themeID).Error; err != nil {
+	// 0. 清掉全部演示行（含本主题自己的旧版本——重新导入就是刷新演示内容到最新，
+	// 译文/文案的更新才能落库）；demo_of 为空的行是用户自建/出厂内容，永远不动。
+	// 表名是包内常量，主题 id 走占位符。
+	if err := tx.Exec("DELETE FROM plg_website_product_category WHERE demo_of <> ''").Error; err != nil {
 		return err
 	}
-	if err := tx.Exec("DELETE FROM plg_website_category WHERE demo_of <> '' AND demo_of <> ?", themeID).Error; err != nil {
+	if err := tx.Exec("DELETE FROM plg_website_category WHERE demo_of <> ''").Error; err != nil {
 		return err
 	}
 	// 商品的类目关联先删，再删商品行（关联表没有 demo_of，靠商品表的标记圈定范围）。
-	if err := tx.Exec("DELETE FROM plg_website_product_category_rel WHERE product_id IN (SELECT id FROM plg_website_product WHERE demo_of <> '' AND demo_of <> ?)", themeID).Error; err != nil {
+	if err := tx.Exec("DELETE FROM plg_website_product_category_rel WHERE product_id IN (SELECT id FROM plg_website_product WHERE demo_of <> '')").Error; err != nil {
 		return err
 	}
-	if err := tx.Exec("DELETE FROM plg_website_product WHERE demo_of <> '' AND demo_of <> ?", themeID).Error; err != nil {
+	if err := tx.Exec("DELETE FROM plg_website_product WHERE demo_of <> ''").Error; err != nil {
 		return err
 	}
-	if err := tx.Exec("DELETE FROM plg_website_post WHERE demo_of <> '' AND demo_of <> ?", themeID).Error; err != nil {
+	if err := tx.Exec("DELETE FROM plg_website_post WHERE demo_of <> ''").Error; err != nil {
 		return err
 	}
-	if err := tx.Exec("DELETE FROM plg_website_page WHERE demo_of <> '' AND demo_of <> ?", themeID).Error; err != nil {
+	if err := tx.Exec("DELETE FROM plg_website_page WHERE demo_of <> ''").Error; err != nil {
 		return err
 	}
 
@@ -250,6 +265,16 @@ func seedDemoTx(ctx context.Context, tx *gorm.DB, themeID string, data DemoData,
 			if b, err := json.Marshal(data.Settings.Socials); err == nil && cur.SocialsJSON != string(b) {
 				cur.SocialsJSON = string(b)
 				changed++
+			}
+		}
+		if strings.TrimSpace(data.Settings.I18nJSON) != "" {
+			if norm, err := pi18n.Normalize(data.Settings.I18nJSON, siteLocales{}, settingI18nFields); err == nil && norm != "" {
+				if cur.I18nJSON != norm {
+					cur.I18nJSON = norm
+					changed++
+				}
+			} else if err != nil {
+				return err
 			}
 		}
 		if changed > 0 {
