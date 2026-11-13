@@ -178,11 +178,210 @@
     });
   });
 
+  // ---- 图片放大层：产品图集与正文配图共用一套（4 套主题都加载本脚本，样式随脚本注入） ----
+  var lb = null;
+
+  function ensureLbStyles() {
+    if (document.getElementById('site-lightbox-style')) return;
+    var style = document.createElement('style');
+    style.id = 'site-lightbox-style';
+    style.textContent =
+      '.site-lightbox{position:fixed;inset:0;z-index:120;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(8,9,10,.92);opacity:0;visibility:hidden;pointer-events:none;transition:opacity .18s ease,visibility 0s linear .18s}' +
+      '.site-lightbox.open{opacity:1;visibility:visible;pointer-events:auto;transition:opacity .18s ease,visibility 0s linear 0s}' +
+      '.site-lightbox img{max-width:min(94vw,1680px);max-height:calc(100vh - 96px);max-height:calc(100dvh - 96px);width:auto;height:auto;object-fit:contain;border-radius:8px;background:#000;box-shadow:0 24px 80px rgba(0,0,0,.55)}' +
+      '.site-lightbox button{position:absolute;display:flex;align-items:center;justify-content:center;width:44px;height:44px;padding:0;border:1px solid rgba(255,255,255,.22);border-radius:999px;background:rgba(20,22,26,.72);color:#fff;font:inherit;font-size:26px;line-height:1;cursor:pointer;transition:background .15s ease,border-color .15s ease}' +
+      '.site-lightbox button:hover{background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.4)}' +
+      '.site-lightbox button:focus-visible{outline:2px solid #fff;outline-offset:2px}' +
+      '.site-lightbox button[hidden]{display:none}' +
+      '.site-lightbox-close{top:calc(16px + env(safe-area-inset-top));right:16px}' +
+      '.site-lightbox-prev,.site-lightbox-next{top:50%;transform:translateY(-50%)}' +
+      '.site-lightbox-prev{left:16px}' +
+      '.site-lightbox-next{right:16px}' +
+      '.site-lightbox-count{position:absolute;left:50%;bottom:calc(16px + env(safe-area-inset-bottom));transform:translateX(-50%);padding:4px 12px;border-radius:999px;background:rgba(20,22,26,.72);color:#fff;font-size:13px;font-variant-numeric:tabular-nums}' +
+      'body.site-lightbox-open{overflow:hidden}' +
+      '.is-zoomable{cursor:zoom-in}' +
+      '@media (max-width:640px){.site-lightbox{padding:12px}.site-lightbox button{width:40px;height:40px;font-size:22px}.site-lightbox img{max-width:100%;max-height:calc(100dvh - 132px)}.site-lightbox-prev{left:8px}.site-lightbox-next{right:8px}}' +
+      '@media (prefers-reduced-motion:reduce){.site-lightbox{transition:none}}';
+    document.head.appendChild(style);
+  }
+
+  function buildLb() {
+    if (lb) return lb;
+    ensureLbStyles();
+    var root = document.createElement('div');
+    root.className = 'site-lightbox';
+    root.setAttribute('role', 'dialog');
+    root.setAttribute('aria-modal', 'true');
+    root.setAttribute('aria-hidden', 'true');
+    root.setAttribute('aria-label', msg('zoom', '查看大图'));
+    function button(cls, label, text) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = cls;
+      b.setAttribute('aria-label', label);
+      b.textContent = text;
+      return b;
+    }
+    var close = button('site-lightbox-close', msg('zoomClose', '关闭'), '×');
+    var prev = button('site-lightbox-prev', msg('zoomPrev', '上一张'), '‹');
+    var next = button('site-lightbox-next', msg('zoomNext', '下一张'), '›');
+    var img = document.createElement('img');
+    img.alt = '';
+    var count = document.createElement('div');
+    count.className = 'site-lightbox-count';
+    count.hidden = true;
+    [close, prev, img, next, count].forEach(function (n) { root.appendChild(n); });
+    document.body.appendChild(root);
+    lb = { root: root, img: img, count: count, prev: prev, next: next, close: close, items: [], index: 0, lastFocus: null, touchAt: 0, touchX: 0, touchY: 0 };
+
+    root.addEventListener('click', function (e) { if (e.target === root) closeLb(); });
+    close.addEventListener('click', closeLb);
+    prev.addEventListener('click', function () { stepLb(-1); });
+    next.addEventListener('click', function () { stepLb(1); });
+    root.addEventListener('touchstart', function (e) {
+      if (e.touches.length !== 1) { lb.touchAt = 0; return; }
+      lb.touchAt = 1;
+      lb.touchX = e.touches[0].clientX;
+      lb.touchY = e.touches[0].clientY;
+    }, { passive: true });
+    root.addEventListener('touchend', function (e) {
+      if (!lb.touchAt) return;
+      lb.touchAt = 0;
+      var t = e.changedTouches[0];
+      var dx = t.clientX - lb.touchX;
+      var dy = t.clientY - lb.touchY;
+      // 单指横扫翻页；阈值 40px 且明显横向，避免和滚动/点击打架
+      if (lb.items.length > 1 && Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.5) stepLb(dx < 0 ? 1 : -1);
+    }, { passive: true });
+    return lb;
+  }
+
+  function lbSrc(img) { return img.currentSrc || img.getAttribute('src') || ''; }
+
+  /** 取这一组图：图集主图 = 封面 + 缩略图；正文 = 同一 .article-body 内的图（跳过外链图） */
+  function lbCollect(img) {
+    var list = [];
+    var i;
+    var gallery = img.closest('[data-product-gallery]');
+    if (gallery && img.parentElement === gallery) {
+      var main = gallery.querySelector('img');
+      if (main) list.push({ src: lbSrc(main), alt: main.getAttribute('alt') || '' });
+      var thumbs = gallery.querySelectorAll('.product-gallery-thumb');
+      for (i = 0; i < thumbs.length; i++) list.push({ src: thumbs[i].getAttribute('data-gallery-src'), alt: img.getAttribute('alt') || '' });
+    } else {
+      var body = img.closest('.article-body');
+      var nodes = body ? body.querySelectorAll('img') : [img];
+      for (i = 0; i < nodes.length; i++) {
+        var n = nodes[i];
+        if (n.closest('a') || n.hasAttribute('data-no-zoom')) continue;
+        list.push({ src: lbSrc(n), alt: n.getAttribute('alt') || '' });
+      }
+    }
+    var seen = {};
+    list = list.filter(function (it) {
+      if (!it.src || seen[it.src]) return false;
+      seen[it.src] = 1;
+      return true;
+    });
+    if (list.length === 0) list.push({ src: lbSrc(img), alt: img.getAttribute('alt') || '' });
+    return list;
+  }
+
+  function renderLb() {
+    var it = lb.items[lb.index] || { src: '', alt: '' };
+    lb.img.src = it.src;
+    lb.img.alt = it.alt;
+    var many = lb.items.length > 1;
+    lb.prev.hidden = !many;
+    lb.next.hidden = !many;
+    lb.count.hidden = !many;
+    lb.count.textContent = (lb.index + 1) + ' / ' + lb.items.length;
+    if (many) { (new Image()).src = lb.items[(lb.index + 1) % lb.items.length].src; }
+  }
+
+  function openLb(img) {
+    var box = buildLb();
+    var items = lbCollect(img);
+    var want = lbSrc(img);
+    var index = 0;
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].src === want) { index = i; break; }
+    }
+    box.items = items;
+    box.index = index;
+    box.lastFocus = img;
+    box.root.setAttribute('aria-hidden', 'false');
+    box.root.classList.add('open');
+    document.body.classList.add('site-lightbox-open');
+    renderLb();
+    // 等一帧再聚焦：刚显示时 close 还在 visibility 过渡里，直接 focus 会被浏览器忽略
+    requestAnimationFrame(function () { box.close.focus(); });
+  }
+
+  function stepLb(delta) {
+    if (!lb || lb.items.length < 2) return;
+    lb.index = (lb.index + delta + lb.items.length) % lb.items.length;
+    renderLb();
+  }
+
+  function closeLb() {
+    if (!lb) return;
+    lb.root.classList.remove('open');
+    lb.root.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('site-lightbox-open');
+    if (lb.lastFocus && lb.lastFocus.isConnected) lb.lastFocus.focus();
+    lb.lastFocus = null;
+  }
+
+  /** 主图与正文图补上「可点开」语义：键盘可聚焦、Enter/Space 打开 */
+  function decorateZoomables() {
+    var nodes = document.querySelectorAll('[data-product-gallery] > img, .article-body img');
+    for (var i = 0; i < nodes.length; i++) {
+      var img = nodes[i];
+      if (img.closest('a') || img.hasAttribute('data-no-zoom')) continue;
+      img.classList.add('is-zoomable');
+      if (!img.hasAttribute('tabindex')) img.setAttribute('tabindex', '0');
+      img.setAttribute('role', 'button');
+      if (!img.getAttribute('aria-label')) img.setAttribute('aria-label', msg('zoom', '查看大图'));
+    }
+  }
+
+  document.addEventListener('click', function (e) {
+    var img = e.target.closest ? e.target.closest('img.is-zoomable') : null;
+    if (!img || img.closest('a')) return;
+    e.preventDefault();
+    openLb(img);
+  });
+  document.addEventListener('keydown', function (e) {
+    if (lb && lb.root.classList.contains('open')) {
+      if (e.key === 'Escape') { e.preventDefault(); closeLb(); return; }
+      if (e.key === 'ArrowLeft') { e.preventDefault(); stepLb(-1); return; }
+      if (e.key === 'ArrowRight') { e.preventDefault(); stepLb(1); return; }
+      if (e.key === 'Tab') {
+        var ring = [lb.close, lb.prev, lb.next].filter(function (b) { return !b.hidden; });
+        if (!ring.length) return;
+        e.preventDefault();
+        var at = ring.indexOf(document.activeElement);
+        var dir = e.shiftKey ? -1 : 1;
+        ring[at < 0 ? 0 : (at + dir + ring.length) % ring.length].focus();
+      }
+      return;
+    }
+    if (e.key === 'Enter' || e.key === ' ') {
+      var a = document.activeElement;
+      if (a && a.tagName === 'IMG' && a.classList.contains('is-zoomable')) {
+        e.preventDefault();
+        openLb(a);
+      }
+    }
+  });
+
   // ---- 页面级绑定 ----
   function initSite() {
     i18n = readI18n();
     initContactForm();
     initChat();
+    decorateZoomables();
     clearWinHandlers();
     if (revealObserver) { revealObserver.disconnect(); revealObserver = null; }
 

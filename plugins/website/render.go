@@ -557,6 +557,7 @@ func (v *siteView) JSStrings() template.JS {
 	m := map[string]string{}
 	for _, k := range []string{
 		"packaging", "packagingHint", "packFailed", "copied", "copyManual", "menuOpen", "menuClose", "emailCopy", "emailCopied",
+		"zoom", "zoomClose", "zoomPrev", "zoomNext",
 		"contactSending", "contactSent", "contactFailed", "contactRate", "contactErrName", "contactErrEmail", "contactErrContent", "contactErrConsent",
 		"chatErrSend", "chatErrLoad", "chatClosed", "chatGuest", "chatAgent",
 		"chatClosedTitle", "chatClosedAuto", "chatNewNote", "chatRateFailed", "chatUploadFailed", "chatInviteDefault",
