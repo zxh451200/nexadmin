@@ -1,6 +1,9 @@
 {{define "content"}}
 <section class="sl-hero">
-  <div class="sl-wrap sl-hero-grid">
+  <div class="sl-hero-media">
+    <img src="/website-assets/theme/solaris/assets/sl-hero.webp" alt="{{.TF "theme.solaris.heroShotAlt" .SiteName}}" decoding="async" fetchpriority="high">
+  </div>
+  <div class="sl-wrap sl-hero-inner">
     <div class="sl-hero-copy" data-reveal>
       <p class="sl-eyebrow">{{.T "theme.solaris.heroBadge"}}</p>
       <h1 class="sl-hero-title">
@@ -12,14 +15,13 @@
         <a class="sl-btn sl-btn-ghost-green" href="{{.URL "/products"}}">{{.T "theme.solaris.exploreSolutions"}} <span aria-hidden="true">→</span></a>
       </div>
     </div>
-    <figure class="sl-hero-shot" data-reveal>
-      <img src="/website-assets/theme/solaris/assets/sl-hero.webp" alt="{{.TF "theme.solaris.heroShotAlt" .SiteName}}" decoding="async" fetchpriority="high">
-    </figure>
   </div>
-  <div class="sl-hero-stats sl-wrap">
-    <div class="sl-stat"><strong>500+</strong><span>{{.T "theme.solaris.stat1"}}</span></div>
-    <div class="sl-stat"><strong>40+</strong><span>{{.T "theme.solaris.stat2"}}</span></div>
-    <div class="sl-stat"><strong>10+ GWh</strong><span>{{.T "theme.solaris.stat3"}}</span></div>
+  <div class="sl-wrap sl-hero-statswrap">
+    <div class="sl-hero-stats">
+      <div class="sl-stat"><strong>500+</strong><span>{{.T "theme.solaris.stat1"}}</span></div>
+      <div class="sl-stat"><strong>40+</strong><span>{{.T "theme.solaris.stat2"}}</span></div>
+      <div class="sl-stat"><strong>10+ GWh</strong><span>{{.T "theme.solaris.stat3"}}</span></div>
+    </div>
   </div>
 </section>
 
@@ -28,7 +30,10 @@
     {{range .Features}}
     <div class="sl-service-item" data-reveal>
       <span class="sl-service-ico" aria-hidden="true">{{icon .Icon}}</span>
-      <strong>{{.Title}}</strong>
+      <div class="sl-service-text">
+        <strong>{{.Title}}</strong>
+        {{if .Description}}<span>{{.Description}}</span>{{end}}
+      </div>
     </div>
     {{end}}
   </div>
@@ -56,7 +61,7 @@
         <h2>{{.T "theme.solaris.solutionsTitle"}}</h2>
         <p class="sl-sect-sub">{{.T "theme.solaris.solutionsSub"}}</p>
       </div>
-      <a class="sl-more" href="{{.URL "/products"}}">{{.T "home.news.more"}}</a>
+      <a class="sl-more" href="{{.URL "/products"}}">{{.T "theme.solaris.viewAllProducts"}} <span aria-hidden="true">→</span></a>
     </header>
     <div class="sl-product-grid">
       {{range .Products}}
@@ -77,12 +82,11 @@
   <div class="sl-wrap">
     <header class="sl-sect-head" data-reveal>
       <div>
-        <p class="sl-eyebrow">{{.T "theme.solaris.advantagesEyebrow"}}</p>
-        <h2>{{.T "theme.solaris.advantagesTitle"}}</h2>
+        <h2 class="sl-adv-title">{{.T "theme.solaris.advantagesTitle"}}</h2>
       </div>
     </header>
     <div class="sl-adv-grid">
-      {{range .Features}}
+      {{range slice .Features 0 3}}
       <article class="sl-adv-card" data-reveal>
         <span class="sl-adv-ico" aria-hidden="true">{{icon .Icon}}</span>
         <h3>{{.Title}}</h3>
@@ -97,7 +101,7 @@
 <section class="sl-campus">
   <div class="sl-wrap sl-campus-band" data-reveal>
     <div class="sl-campus-copy">
-      <p class="sl-eyebrow sl-eyebrow-light">{{.T "theme.solaris.campusBadge"}}</p>
+      <p class="sl-eyebrow">{{.T "theme.solaris.campusBadge"}}</p>
       <h2>{{.T "theme.solaris.campusTitle"}}</h2>
       <p>{{.T "theme.solaris.campusSub"}}</p>
       <a class="sl-btn sl-btn-amber" href="{{.URL "/products"}}">{{.T "theme.solaris.exploreProjects"}} <span aria-hidden="true">→</span></a>
@@ -163,7 +167,8 @@
   </div>
 </section>
 
-{{if .Posts}}
+{{$hasCases := false}}{{range .Posts}}{{if hasTerm . "cases"}}{{$hasCases = true}}{{end}}{{end}}
+{{if $hasCases}}
 <section class="sl-section" id="projects">
   <div class="sl-wrap">
     <header class="sl-sect-head" data-reveal>
@@ -210,6 +215,43 @@
   </div>
 </section>
 
+<section class="sl-section sl-voices" id="voices">
+  <div class="sl-wrap sl-voices-grid">
+    <div data-reveal>
+      <p class="sl-eyebrow">{{.T "theme.solaris.voicesEyebrow"}}</p>
+      <h2 class="sl-section-title">{{.T "theme.solaris.voicesTitle"}}</h2>
+      <div class="sl-quote-list">
+        <figure class="sl-quote">
+          <span class="sl-quote-avatar" aria-hidden="true">{{.T "theme.solaris.quote1Initial"}}</span>
+          <div>
+            <blockquote class="sl-quote-text">{{.T "theme.solaris.quote1"}}</blockquote>
+            <figcaption class="sl-quote-person"><strong>{{.T "theme.solaris.quote1Name"}}</strong> · {{.T "theme.solaris.quote1Role"}}</figcaption>
+          </div>
+        </figure>
+        <figure class="sl-quote">
+          <span class="sl-quote-avatar" aria-hidden="true">{{.T "theme.solaris.quote2Initial"}}</span>
+          <div>
+            <blockquote class="sl-quote-text">{{.T "theme.solaris.quote2"}}</blockquote>
+            <figcaption class="sl-quote-person"><strong>{{.T "theme.solaris.quote2Name"}}</strong> · {{.T "theme.solaris.quote2Role"}}</figcaption>
+          </div>
+        </figure>
+      </div>
+    </div>
+    <div class="sl-partners" data-reveal>
+      <p class="sl-eyebrow">{{.T "theme.solaris.partnersTitle"}}</p>
+      <div class="sl-partner-grid">
+        <!-- 伙伴为品牌商标，按标识原样呈现，不做翻译 -->
+        <span class="sl-partner">VIRGON</span>
+        <span class="sl-partner">SUNNOVA</span>
+        <span class="sl-partner">ALTERRA</span>
+        <span class="sl-partner">NexGen</span>
+        <span class="sl-partner">TerraVolt</span>
+        <span class="sl-partner">AURORA</span>
+      </div>
+    </div>
+  </div>
+</section>
+
 {{if .Posts}}
 <section class="sl-section" id="insights">
   <div class="sl-wrap">
@@ -219,11 +261,11 @@
         <h2>{{.T "theme.solaris.insightsTitle"}}</h2>
         <p class="sl-sect-sub">{{.T "theme.solaris.insightsSub"}}</p>
       </div>
-      <a class="sl-more" href="{{.URL "/news"}}">{{.T "home.news.more"}}</a>
+      <a class="sl-more" href="{{.URL "/news"}}">{{.T "theme.solaris.viewAllArticles"}} <span aria-hidden="true">→</span></a>
     </header>
     <div class="sl-news-grid">
       {{range $i, $p := .Posts}}{{if lt $i 3}}
-      <a class="sl-news-card" href="{{$.URL "/news"}}/{{$p.Slug}}" data-reveal>
+      <a class="sl-news-card{{if not $p.CoverURL}} is-plain{{end}}" href="{{$.URL "/news"}}/{{$p.Slug}}" data-reveal>
         {{if $p.CoverURL}}<span class="sl-news-cover"><img src="{{$p.CoverURL}}" alt="" loading="lazy"></span>{{end}}
         <span class="sl-news-date">{{if $p.PublishedAt}}{{fmtDate $.Lang $p.PublishedAt}}{{else}}{{fmtDate $.Lang $p.UpdatedAt}}{{end}}</span>
         <span class="sl-news-title">{{$p.Title}}</span>
@@ -242,11 +284,20 @@
       <p class="sl-eyebrow sl-eyebrow-light">{{.T "theme.solaris.ctaEyebrow"}}</p>
       <h2>{{.T "theme.solaris.ctaTitle"}}</h2>
       <p>{{.T "theme.solaris.ctaSub"}}</p>
+      <div class="sl-cta-actions">
+        <a class="sl-btn sl-btn-amber" href="{{.URL "/contact"}}">{{.T "theme.solaris.quote"}} <span aria-hidden="true">→</span></a>
+        {{if .ContactPhone}}<a class="sl-cta-item" href="tel:{{.ContactPhone}}"><strong>{{.T "contact.phone"}}</strong><span>{{.ContactPhone}}</span></a>{{end}}
+      </div>
     </div>
-    <div class="sl-cta-actions">
-      {{if .HomeCTALabel}}<a class="sl-btn sl-btn-amber" href="{{.URL "/contact"}}">{{.T "theme.solaris.quote"}} <span aria-hidden="true">→</span></a>{{end}}
-      {{if .ContactPhone}}<a class="sl-cta-item" href="tel:{{.ContactPhone}}"><strong>{{.T "contact.phone"}}</strong><span>{{.ContactPhone}}</span></a>{{end}}
-      {{if .ContactEmail}}<a class="sl-cta-item" href="mailto:{{.ContactEmail}}"><strong>{{.T "contact.email"}}</strong><span>{{.ContactEmail}}</span></a>{{end}}
+    <div class="sl-cta-card">
+      <h3>{{.T "theme.solaris.ctaCardTitle"}}</h3>
+      <p>{{.T "theme.solaris.ctaCardSub"}}</p>
+      <a class="sl-btn sl-btn-dark" href="{{.URL "/contact"}}">{{.T "theme.solaris.ctaCardCta"}} <span aria-hidden="true">→</span></a>
+      <ul class="sl-cta-list">
+        {{if .ContactEmail}}<li>{{icon "mail"}}<a href="mailto:{{.ContactEmail}}">{{.ContactEmail}}</a></li>{{end}}
+        {{if .ContactPhone}}<li>{{icon "phone"}}<a href="tel:{{.ContactPhone}}">{{.ContactPhone}}</a></li>{{end}}
+        <li>{{icon "file"}}<a href="{{.BaseURL}}/rss.xml">{{.T "theme.solaris.ctaCardDocs"}}</a></li>
+      </ul>
     </div>
   </div>
 </section>
