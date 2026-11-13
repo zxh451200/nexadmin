@@ -67,46 +67,36 @@ func (h *Handler) Login(c *gin.Context) {
 		response.Fail(c, err)
 		return
 	}
-	if pwd { // 「登录验证码」强制开启时必须先过图形验证码；否则同一用户名或 IP 连续失败达到阈值后才要求。
-		// 两种情况都在碰密码校验之前验证，通过前不会去比对密码。
-		need, err := h.Svc.LoginNeedsCaptcha(ctx, req.Username, req.IP)
-		if err != nil {
-			response.Fail(c, err)
-			return
-		}
-		if !need {
-			need = LoginCaptcha(ctx)
-		}
+	// 验证码总开关（设置页「安全与登录 → 登录安全」）关闭时整段跳过：不要求、不计数，
+	// 失败响应也不带 reason；开启时密码登录一律先过验证码，连续失败达到硬阈值再升级成点选。
+	// 在碰密码校验之前验证，通过前不会去比对密码。
+	if pwd && CaptchaEnabled(ctx) {
 		// 硬档（连错达到 hardAfterFails）在服务端只认点选 token：前端的形态切换只是
 		// 表现层，直接调 /auth/slider 换 token 的脚本也必须被挡住。计数读取失败按软档
 		// 处理——不因计数故障把正常人挡在门外。
 		hard := false
-		if need {
-			if v, herr := h.Svc.LoginNeedsHardCaptcha(ctx, req.Username, req.IP); herr == nil {
-				hard = v
-			}
+		if v, herr := h.Svc.LoginNeedsHardCaptcha(ctx, req.Username, req.IP); herr == nil {
+			hard = v
 		}
-		if need {
-			verify := h.Svc.VerifyCaptcha
+		verify := h.Svc.VerifyCaptcha
+		if hard {
+			verify = h.Svc.VerifyCaptchaHard
+		}
+		ok, err := verify(ctx, req.CaptchaKey, req.Captcha, req.IP)
+		if err != nil {
+			response.Fail(c, err)
+			return
+		}
+		if !ok {
+			e := response.BadRequest("auth.captcha_invalid")
 			if hard {
-				verify = h.Svc.VerifyCaptchaHard
+				// 带上硬档 reason：页面刷新后前端默认回到滑块，这一步让它当场切点选。
+				e.Reason = ReasonCaptchaRequiredHard
+			} else {
+				e.Reason = ReasonCaptchaRequired
 			}
-			ok, err := verify(ctx, req.CaptchaKey, req.Captcha, req.IP)
-			if err != nil {
-				response.Fail(c, err)
-				return
-			}
-			if !ok {
-				e := response.BadRequest("auth.captcha_invalid")
-				if hard {
-					// 带上硬档 reason：页面刷新后前端默认回到滑块，这一步让它当场切点选。
-					e.Reason = ReasonCaptchaRequiredHard
-				} else {
-					e.Reason = ReasonCaptchaRequired
-				}
-				response.Fail(c, e)
-				return
-			}
+			response.Fail(c, e)
+			return
 		}
 	}
 	u, err := p.Login(ctx, req)
@@ -165,11 +155,12 @@ const ReasonCaptchaRequired = "CAPTCHA_REQUIRED"
 const ReasonCaptchaRequiredHard = "CAPTCHA_REQUIRED_HARD"
 
 // afterLoginFailure 只对“用户名或密码错误”计数（账号锁定等其它错误原样返回，锁定逻辑由 Provider 负责）；
-// 达到阈值时在同一个错误上带 reason，下一次请求起要求验证码（滑块）；达到硬阈值则升级为
-// 点选档 reason。对存在与不存在的账号完全一致。
+// 验证码总开关关闭时不计数、也不带 reason（关闭后不再出现验证码）。开启时达到阈值就在同一个错误上
+// 带 reason，下一次请求起要求验证码（滑块）；达到硬阈值则升级为点选档 reason。
+// 对存在与不存在的账号完全一致。
 func (h *Handler) afterLoginFailure(c *gin.Context, req LoginRequest, err error, pwd bool) error {
 	var e *response.Error
-	if !pwd || !errors.As(err, &e) || e.Key != "auth.invalid_credentials" {
+	if !pwd || !CaptchaEnabled(c.Request.Context()) || !errors.As(err, &e) || e.Key != "auth.invalid_credentials" {
 		return err
 	}
 	need, ferr := h.Svc.RecordLoginFailure(c.Request.Context(), req.Username, req.IP)
@@ -414,8 +405,8 @@ func (h *Handler) Methods(c *gin.Context) {
 		"forgotEnabled": len(forgotChannels) > 0, "forgotChannels": forgotChannels,
 		// 运行时开关（设置页「参数设置」的 user.register_enabled，默认关闭），与 /auth/register 的闸门同源
 		"registerEnabled": registerEnabled,
-		// 「登录验证码」强制开启（设置页 login.captcha_enabled，出厂 true）：前端据此首屏显示验证码输入；
-		// 关闭时仍是自适应（连续失败达到阈值后要求），由失败响应的 reason 通知前端
-		"captchaEnabled": LoginCaptcha(c.Request.Context()),
+		// 验证码总开关（设置页「安全与登录 → 登录安全」，出厂开启）：前端据此决定登录、注册、
+		// 短信验证码是否出验证码区；关闭后这三条链路都不再使用验证码
+		"captchaEnabled": CaptchaEnabled(c.Request.Context()),
 	})
 }

@@ -39,17 +39,21 @@ func (h *Handler) SendSMS(c *gin.Context) {
 			response.Fail(c, response.Unavailable("sms.disabled"))
 			return
 		}
-		ok, err := h.auth.VerifyCaptcha(ctx, in.CaptchaKey, in.Captcha, c.ClientIP())
-		if err != nil {
-			response.Fail(c, err)
-			return
+		// 验证码总开关（设置页「登录安全」）关闭时匿名取码不再要求验证码。
+		if auth.CaptchaEnabled(ctx) {
+			ok, err := h.auth.VerifyCaptcha(ctx, in.CaptchaKey, in.Captcha, c.ClientIP())
+			if err != nil {
+				response.Fail(c, err)
+				return
+			}
+			if !ok {
+				e := response.BadRequest("auth.captcha_invalid")
+				e.Reason = auth.ReasonCaptchaRequired
+				response.Fail(c, e)
+				return
+			}
 		}
-		if !ok {
-			e := response.BadRequest("auth.captcha_invalid")
-			e.Reason = auth.ReasonCaptchaRequired
-			response.Fail(c, e)
-			return
-		}
+		var err error
 		if deliver, err = h.svc.PhoneBound(ctx, in.Phone); err != nil {
 			response.Fail(c, err)
 			return

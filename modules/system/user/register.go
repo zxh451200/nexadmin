@@ -23,7 +23,8 @@ import (
 // auth.allow_register）。默认角色 auth.register_roles（角色码，在当前租户内解析）。
 //
 // 防滥用与边界（与框架既有约定同一条路径）：
-//   - 图形验证码强制校验（与登录同款：绑定签发 IP、一次性，d.Auth.VerifyCaptcha）；
+//   - 图形验证码校验（与登录同款：绑定签发 IP、一次性，d.Auth.VerifyCaptcha；设置页「登录安全」的
+//     验证码总开关关闭时不要求）；
 //   - IP 限流（register_route：每小时 10 次）；
 //   - 建号在当前解析到的租户（无域名绑定时为默认租户），受该租户套餐用户数上限约束
 //     （ensureUserQuota，与手工创建 / 第三方自动建号同一条路径）；
@@ -62,12 +63,15 @@ func (m *module) registerSelf(d *core.Deps) {
 
 func selfRegister(ctx context.Context, d *core.Deps, username, password, captchaID, captchaAnswer, ip, ua string) (*auth.LoginOutcome, error) {
 	// 验证码先校验：无论后续成败都已被一次性消费，脚本无法反复试。
-	ok, err := d.Auth.VerifyCaptcha(ctx, captchaID, captchaAnswer, ip)
-	if err != nil {
-		return nil, err
-	}
-	if !ok {
-		return nil, bad("auth.captcha_invalid")
+	// 总开关（设置页「登录安全」）关闭时注册不再要求验证码。
+	if auth.CaptchaEnabled(ctx) {
+		ok, err := d.Auth.VerifyCaptcha(ctx, captchaID, captchaAnswer, ip)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, bad("auth.captcha_invalid")
+		}
 	}
 	username = strings.TrimSpace(username)
 	if !registerNameRe.MatchString(username) {

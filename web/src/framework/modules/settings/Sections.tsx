@@ -78,6 +78,7 @@ const securitySchema = z.object({
   lockMinutes: z.enum(LOCK_MINUTE_OPTIONS),
   idleMinutes: z.enum(IDLE_MINUTE_OPTIONS),
   maxHours: z.enum(SESSION_HOUR_OPTIONS),
+  captchaEnabled: z.boolean(),
 })
 
 export function SecuritySection({ value }: { value: AllSettings['security'] }) {
@@ -120,6 +121,14 @@ export function SecuritySection({ value }: { value: AllSettings['security'] }) {
               label: v === '0' ? t('settings.security.unlimited') : t('settings.security.hours', { count: Number(v) }),
             }))}
           />
+          <FormGridFull>
+            <SwitchField
+              control={form.control}
+              name="captchaEnabled"
+              label={t('settings.security.captchaEnabled')}
+              description={t('settings.security.captchaEnabledHint')}
+            />
+          </FormGridFull>
         </FormGrid>
       )}
     </SectionCard>

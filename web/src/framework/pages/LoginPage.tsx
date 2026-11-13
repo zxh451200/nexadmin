@@ -189,6 +189,8 @@ export default function LoginPage() {
     staleTime: 60_000,
   })
   const methods = data.methods.length > 0 ? data.methods : FALLBACK.methods
+  // 验证码总开关缺省按开启处理：与服务端 fail-closed 一致，旧后端没这个字段时宁可多要一次验证码
+  const captchaEnabled = data.captchaEnabled !== false
 
   const { data: site } = useQuery({
     queryKey: ['settings', 'public'],
@@ -253,6 +255,7 @@ export default function LoginPage() {
                 onSuccess={done}
                 onLogin={() => setRegistering(false)}
                 onChallenge={setChallenge}
+                captchaEnabled={captchaEnabled}
                 social={<SocialLogin providers={data.registerProviders ?? []} redirect={redirect} intent="register" />}
               />
             ) : methodsPending ? (
@@ -297,16 +300,16 @@ export default function LoginPage() {
                       ))}
                     </TabsList>
                     <TabsContent value="password" className="mt-6">
-                      <PasswordForm onSuccess={done} onForgot={onForgot} onChallenge={setChallenge} captchaAlways={data.captchaEnabled} demoCredentials={demoAccount} fillNonce={demoFill} />
+                      <PasswordForm onSuccess={done} onForgot={onForgot} onChallenge={setChallenge} captchaAlways={captchaEnabled} demoCredentials={demoAccount} fillNonce={demoFill} />
                     </TabsContent>
                     <TabsContent value="phone" className="mt-6">
-                      <PhoneForm onSuccess={done} onChallenge={setChallenge} />
+                      <PhoneForm onSuccess={done} onChallenge={setChallenge} captchaEnabled={captchaEnabled} />
                     </TabsContent>
                   </Tabs>
                 ) : methods[0] === 'phone' ? (
-                  <PhoneForm onSuccess={done} onChallenge={setChallenge} />
+                  <PhoneForm onSuccess={done} onChallenge={setChallenge} captchaEnabled={captchaEnabled} />
                 ) : (
-                  <PasswordForm onSuccess={done} onForgot={onForgot} onChallenge={setChallenge} captchaAlways={data.captchaEnabled} demoCredentials={demoAccount} fillNonce={demoFill} />
+                  <PasswordForm onSuccess={done} onForgot={onForgot} onChallenge={setChallenge} captchaAlways={captchaEnabled} demoCredentials={demoAccount} fillNonce={demoFill} />
                 )}
 
                 <SocialLogin providers={data.providers} redirect={redirect} />

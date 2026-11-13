@@ -23,17 +23,20 @@ export function RegisterForm({
   onLogin,
   onChallenge,
   social,
+  captchaEnabled = true,
 }: {
   onSuccess: () => void
   onLogin: () => void
   onChallenge?: (c: LoginChallenge) => void
   /** 快捷注册区（第三方 provider 按钮），排在注册按钮与「返回登录」之间，与登录页同序 */
   social?: ReactNode
+  /** 验证码总开关（/auth/methods 的 captchaEnabled）：关闭时不渲染、也不提交验证码 */
+  captchaEnabled?: boolean
 }) {
   const { t } = useTranslation()
   const acceptLogin = useAuth((s) => s.acceptLogin)
-  // 注册验证码始终必填（防脚本批量注册），进入表单即拉取
-  const { captcha, refresh, mode, setMode } = useCaptcha(true)
+  // 注册验证码默认必填（防脚本批量注册），进入表单即拉取；总开关关闭时不拉取
+  const { captcha, refresh, mode, setMode } = useCaptcha(captchaEnabled)
   const [show, setShow] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
@@ -47,10 +50,10 @@ export function RegisterForm({
           .regex(/^[A-Za-z][A-Za-z0-9_]{2,31}$/, t('login.register.usernameRule')),
         password: z.string().min(1, t('login.passwordRequired')),
         confirm: z.string().min(1, t('login.register.confirmRequired')),
-        captcha: z.string().trim().min(1, t('login.captchaRequired')),
+        captcha: captchaEnabled ? z.string().trim().min(1, t('login.captchaRequired')) : z.string().trim(),
       })
       .refine((v) => v.password === v.confirm, { path: ['confirm'], message: t('login.register.passwordMismatch') }),
-    [t],
+    [t, captchaEnabled],
   )
   type Values = z.infer<typeof schema>
   const form = useForm<Values>({
@@ -64,8 +67,7 @@ export function RegisterForm({
       const res = await api.post<LoginResult | ChallengeResult>('/auth/register', {
         username: v.username,
         password: v.password,
-        captchaId: captcha?.key,
-        captcha: v.captcha,
+        ...(captchaEnabled ? { captchaId: captcha?.key, captcha: v.captcha } : {}),
       })
       const step = acceptLogin(res)
       if ('challenge' in step) {
@@ -77,7 +79,7 @@ export function RegisterForm({
     } catch {
       // 错误 toast 由 http 拦截器统一弹出（账号已存在 / 验证码错误 / 额度已满等）
       form.setValue('captcha', '')
-      void refresh()
+      if (captchaEnabled) void refresh()
     } finally {
       setSubmitting(false)
     }
@@ -141,7 +143,7 @@ export function RegisterForm({
             </FormItem>
           )}
         />
-        <CaptchaField form={form} captcha={captcha} onRefresh={refresh} mode={mode} onModeChange={setMode} />
+        {captchaEnabled ? <CaptchaField form={form} captcha={captcha} onRefresh={refresh} mode={mode} onModeChange={setMode} /> : null}
         <Button type="submit" className="w-full" disabled={submitting}>
           {submitting && <Loader2 className="me-2 size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />}
           {t('login.register.submit')}

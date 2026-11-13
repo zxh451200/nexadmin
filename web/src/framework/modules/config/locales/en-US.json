@@ -47,10 +47,6 @@
         "name": "Open registration",
         "remark": ""
       },
-      "login_captcha_enabled": {
-        "name": "Login captcha",
-        "remark": "On: a captcha (slider or image) is required for every sign-in. Off (factory default, friction-first): only required after repeated failures from the same username or IP"
-      },
       "login_captcha_length": {
         "name": "Captcha length",
         "remark": "4-8 digits; takes effect on captchas generated after saving"

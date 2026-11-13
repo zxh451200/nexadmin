@@ -47,10 +47,6 @@
         "name": "开放注册",
         "remark": ""
       },
-      "login_captcha_enabled": {
-        "name": "登录验证码",
-        "remark": "开启=登录必须先过验证码（滑块或图形）；关闭=同用户名或同 IP 连续失败达到阈值后才要求（出厂默认，无感优先）"
-      },
       "login_captcha_length": {
         "name": "登录验证码位数",
         "remark": "4-8 位；改后对新生成的验证码生效"

@@ -28,24 +28,25 @@ func RegisterEnabled(ctx context.Context) bool {
 	return false
 }
 
-// loginCaptchaSource 是「登录验证码」的运行时开关源（设置页「参数设置」的 login.captcha_enabled，
-// 出厂 true）：开启时密码登录必须先过图形验证码；关闭时回落到默认的自适应策略
-// （同一用户名 / IP 连续失败达到阈值后才要求）。由 config 模块启动时注入。
-var loginCaptchaSource atomic.Value // func(context.Context) bool
+// captchaEnabledSource 是「验证码」的运行时总开关源（设置页「安全与登录 → 登录安全」的
+// captchaEnabled，出厂 true）：开启时密码登录、自助注册、匿名获取短信验证码都要先过验证码，
+// 且登录连续失败达到阈值会自适应升级到点选档；关闭时三条链路都不再出现、也不再校验验证码。
+// 由 config 模块启动时注入。
+var captchaEnabledSource atomic.Value // func(context.Context) bool
 
-// SetLoginCaptchaSource 注入 / 清除「登录验证码」运行时开关源；传 nil 清除。
-func SetLoginCaptchaSource(fn func(ctx context.Context) bool) {
+// SetCaptchaEnabledSource 注入 / 清除「验证码」运行时开关源；传 nil 清除。
+func SetCaptchaEnabledSource(fn func(ctx context.Context) bool) {
 	if fn == nil {
-		loginCaptchaSource.Store((func(context.Context) bool)(nil))
+		captchaEnabledSource.Store((func(context.Context) bool)(nil))
 		return
 	}
-	loginCaptchaSource.Store(fn)
+	captchaEnabledSource.Store(fn)
 }
 
-// LoginCaptcha 「登录验证码」是否处于强制开启状态。未注入时返回 false（自适应策略），
-// 保证 config 模块停用 / 单测环境的行为与从前一致。
-func LoginCaptcha(ctx context.Context) bool {
-	if fn, ok := loginCaptchaSource.Load().(func(context.Context) bool); ok && fn != nil {
+// CaptchaEnabled 人机校验当前是否启用。未注入时返回 false：config 模块停用 / 单测环境下
+// 不额外要求验证码（与注入前的行为一致）。
+func CaptchaEnabled(ctx context.Context) bool {
+	if fn, ok := captchaEnabledSource.Load().(func(context.Context) bool); ok && fn != nil {
 		return fn(ctx)
 	}
 	return false

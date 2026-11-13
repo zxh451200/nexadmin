@@ -14,7 +14,7 @@ const defaults = (): AllSettings => ({
     defaultLanguage: 'zh-CN',
     watermark: false,
   },
-  security: { maxAttempts: '5', lockMinutes: '15', idleMinutes: '120', maxHours: '12' },
+  security: { maxAttempts: '5', lockMinutes: '15', idleMinutes: '120', maxHours: '12', captchaEnabled: true },
   cache: { type: 'memory', address: '', password: '' },
   storage: { type: 'local', endpoint: '', bucket: '', region: '', accessKey: '', secretKey: '' },
   ai: { enabled: true, baseUrl: 'https://api.example.com/v1', apiKey: '', model: 'qwen-plus', embedModel: '', timeoutSec: 30, redact: true },
@@ -116,6 +116,11 @@ function maskSecrets(v: unknown): unknown {
 /** 登录锁定策略（auth.mock 读取） */
 export function getSecurity(): { maxAttempts: number; lockMinutes: number } {
   return { maxAttempts: Number(store.security.maxAttempts) || 5, lockMinutes: Number(store.security.lockMinutes) || 15 }
+}
+
+/** 验证码总开关（auth.mock 读取）：与设置页「登录安全」保存的值同源，缺省按开启处理 */
+export function getCaptchaEnabled(): boolean {
+  return store.security.captchaEnabled !== false
 }
 
 const isSection = (s: string): s is SectionKey =>

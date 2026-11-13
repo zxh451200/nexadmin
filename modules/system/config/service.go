@@ -236,7 +236,7 @@ func (s *Service) values(ctx context.Context, keys ...string) (map[string]string
 	return m, nil
 }
 
-// boolConfigValue 解析布尔类参数（user.register_enabled / login.captcha_enabled）的取值：
+// boolConfigValue 解析布尔类参数（如 user.register_enabled）的取值：
 // 行不存在 / 值为空 / 读库失败时回退各自的兜底值。
 func boolConfigValue(v string, present bool, fallback bool) bool {
 	if !present || strings.TrimSpace(v) == "" {
@@ -262,16 +262,20 @@ func (s *Service) registerEnabledSourceFn(fallback bool) func(context.Context) b
 	}
 }
 
-// loginCaptchaSourceFn 返回「登录验证码」的运行时开关（出厂 true：密码登录必须先过图形验证码）。
-// 行缺失 / 读库失败时回退 fallback（一般传 true，保持“默认开启”语义）。
-func (s *Service) loginCaptchaSourceFn(fallback bool) func(context.Context) bool {
+// captchaEnabledSourceFn 返回「验证码」总开关的运行时开关：每次调用现读设置页「登录安全」
+// 分区的 captchaEnabled（出厂开启），后台保存后下一次请求即生效，无需重启。
+// 分区行缺失 / 字段缺失 / 读库失败时回退 fallback（一般传 true，保持 fail-closed）。
+func (s *Service) captchaEnabledSourceFn(fallback bool) func(context.Context) bool {
 	return func(ctx context.Context) bool {
-		m, err := s.values(tenant.Skip(ctx), "login.captcha_enabled")
+		sec, err := s.section(tenant.Skip(ctx), "security")
 		if err != nil {
 			return fallback
 		}
-		v, ok := m["login.captcha_enabled"]
-		return boolConfigValue(v, ok, fallback)
+		v, ok := sec["captchaEnabled"].(bool)
+		if !ok {
+			return fallback
+		}
+		return v
 	}
 }
 

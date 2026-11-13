@@ -67,7 +67,7 @@ export interface AuthMethods {
   forgotChannels?: string[]
   /** 运行时开关（设置页「参数设置」的 user.register_enabled，默认关闭），与 /auth/register 的闸门同源 */
   registerEnabled?: boolean
-  /** 「登录验证码」强制开启（login.captcha_enabled，出厂 false = 无感优先）：关闭时登录首屏不出验证码，同用户名/同 IP 连续失败达到阈值后按失败响应自适应挂出 */
+  /** 验证码总开关（设置页「登录安全」的 captchaEnabled，出厂开启）：关闭后登录、注册、短信取码都不再出现验证码 */
   captchaEnabled?: boolean
 }
 

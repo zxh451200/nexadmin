@@ -15,10 +15,19 @@ import { CaptchaField, useCaptcha } from './CaptchaField'
 
 const COOLDOWN = 60
 
-export function PhoneForm({ onSuccess, onChallenge }: { onSuccess: () => void; onChallenge?: (c: LoginChallenge) => void }) {
+export function PhoneForm({
+  onSuccess,
+  onChallenge,
+  captchaEnabled = true,
+}: {
+  onSuccess: () => void
+  onChallenge?: (c: LoginChallenge) => void
+  /** 验证码总开关（/auth/methods 的 captchaEnabled）：关闭时不再要求、也不提交验证码 */
+  captchaEnabled?: boolean
+}) {
   const { t } = useTranslation()
   const login = useAuth((s) => s.login)
-  const { captcha, refresh, mode, setMode } = useCaptcha()
+  const { captcha, refresh, mode, setMode } = useCaptcha(captchaEnabled)
   const [submitting, setSubmitting] = useState(false)
   const [sending, setSending] = useState(false)
   const [left, setLeft] = useState(0)
@@ -27,10 +36,10 @@ export function PhoneForm({ onSuccess, onChallenge }: { onSuccess: () => void; o
     () =>
       z.object({
         phone: z.string().regex(/^1\d{10}$/, t('login.phoneInvalid')),
-        captcha: z.string().trim().min(1, t('login.captchaRequired')),
+        captcha: captchaEnabled ? z.string().trim().min(1, t('login.captchaRequired')) : z.string().trim(),
         code: z.string().regex(/^\d{6}$/, t('login.smsCodeInvalid')),
       }),
-    [t],
+    [t, captchaEnabled],
   )
   type Values = z.infer<typeof schema>
   const form = useForm<Values>({ resolver: zodResolver(schema), defaultValues: { phone: '', captcha: '', code: '' } })
@@ -42,18 +51,18 @@ export function PhoneForm({ onSuccess, onChallenge }: { onSuccess: () => void; o
   }, [left])
 
   const sendCode = async () => {
-    if (!(await form.trigger(['phone', 'captcha']))) return
+    if (!(await form.trigger(captchaEnabled ? ['phone', 'captcha'] : ['phone']))) return
     const { phone, captcha: text } = form.getValues()
     setSending(true)
     try {
-      await api.post('/auth/sms-code', { phone, captcha: text, captchaKey: captcha?.key })
+      await api.post('/auth/sms-code', { phone, ...(captchaEnabled ? { captcha: text, captchaKey: captcha?.key } : {}) })
       toast.success(t('login.smsSent'))
       setLeft(COOLDOWN)
     } catch {
       // 错误已统一 toast
     } finally {
       form.setValue('captcha', '')
-      void refresh()
+      if (captchaEnabled) void refresh()
       setSending(false)
     }
   }
@@ -87,7 +96,7 @@ export function PhoneForm({ onSuccess, onChallenge }: { onSuccess: () => void; o
             </FormItem>
           )}
         />
-        <CaptchaField form={form} captcha={captcha} onRefresh={refresh} mode={mode} onModeChange={setMode} />
+        {captchaEnabled ? <CaptchaField form={form} captcha={captcha} onRefresh={refresh} mode={mode} onModeChange={setMode} /> : null}
         <FormField
           control={form.control}
           name="code"

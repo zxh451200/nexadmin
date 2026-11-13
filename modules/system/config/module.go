@@ -53,13 +53,13 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	if d.OnClose != nil {
 		d.OnClose(func() { auth.SetRegisterEnabledSource(nil) })
 	}
-	// 「登录验证码」的运行时开关来自「参数设置」的 login.captcha_enabled（出厂 false = 无感优先，
-	// 同用户名或同 IP 连续失败达到阈值才要求）。注入的 fallback 只在读库失败时兜底，刻意保持
-	// true（fail-closed）：拿不到配置时宁可多要一次验证码，也不给脚本敞门。/auth/login 与
-	// /auth/methods 都从这里取。
-	auth.SetLoginCaptchaSource(svc.loginCaptchaSourceFn(true))
+	// 「验证码」的运行时总开关来自设置页「安全与登录 → 登录安全」分区的 captchaEnabled（出厂开启）：
+	// 密码登录、自助注册、匿名获取短信验证码三条链路同一个闸门，后台保存后下一次请求即生效。
+	// 注入的 fallback 只在读库失败时兜底，刻意保持 true（fail-closed）：拿不到配置时宁可多要一次
+	// 验证码，也不给脚本敞门。/auth/login、/auth/register、/auth/sms-code 与 /auth/methods 都从这里取。
+	auth.SetCaptchaEnabledSource(svc.captchaEnabledSourceFn(true))
 	if d.OnClose != nil {
-		d.OnClose(func() { auth.SetLoginCaptchaSource(nil) })
+		d.OnClose(func() { auth.SetCaptchaEnabledSource(nil) })
 	}
 	// 「验证码位数」同样来自参数设置（login.captcha_length，出厂 5，范围 4-8）：
 	// 参数页改完对之后新生成的验证码立即生效，无需重启。
@@ -114,7 +114,6 @@ var factoryRows = []struct {
 	{3, "版权信息", "site.copyright", "© 2026 NexAdmin", TypeString, true, "页脚展示"},
 	{4, "用户初始密码", "user.default_password", "Nex@123456", TypeString, false, "新建用户及重置密码时使用"},
 	{5, "开放注册", "user.register_enabled", "false", TypeBoolean, true, ""},
-	{6, "登录验证码", "login.captcha_enabled", "false", TypeBoolean, true, "开启=登录必须先过验证码（滑块或图形）；关闭=同用户名或同 IP 连续失败达到阈值后才要求（出厂默认，无感优先）"},
 	{9, "登录验证码位数", "login.captcha_length", strconv.Itoa(auth.CaptchaLenDefault), TypeNumber, true,
 		// 出厂值与上下限都取自 core/auth：改一处三处（默认值、保存校验、运行时钳制）不会分家。
 		fmt.Sprintf("%d-%d 位；改后对新生成的验证码生效", auth.CaptchaLenMin, auth.CaptchaLenMax)},
@@ -155,9 +154,11 @@ func (module) Seed(db *gorm.DB) error {
 // 老版本出厂参数里的 site.name / site.logo 是无消费的死配置（站点信息实际由设置页「站点」分区的
 // siteName / logoUrl 提供，默认 logo 也早已统一为 /icon.svg），security.ip_whitelist 同样没有任何
 // 代码读取它（超管端没有 IP 白名单闸），这里一并幂等清掉，让参数页与生效配置一致。
+// login.captcha_enabled 是旧版「登录验证码」开关，现已迁到设置页「登录安全」分区的 captchaEnabled，
+// 留着只会让管理员改到一个没人读的值，同样清掉。
 func (m module) SeedOnStartup(db *gorm.DB) error {
 	db = db.WithContext(tn.Skip(db.Statement.Context))
-	dead := []string{"site.name", "site.logo", "security.ip_whitelist"}
+	dead := []string{"site.name", "site.logo", "security.ip_whitelist", "login.captcha_enabled"}
 	if err := db.Where("config_key IN ?", dead).Delete(&Config{}).Error; err != nil {
 		return err
 	}

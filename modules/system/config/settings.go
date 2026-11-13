@@ -64,7 +64,8 @@ func defaultSettings() map[string]map[string]any {
 	return map[string]map[string]any{
 		"site": {"siteName": "NexAdmin", "logoUrl": "/icon.svg", "copyright": "© 2026 NexAdmin", "defaultLanguage": "zh-CN", "watermark": false},
 		// idleMinutes / maxHours：闲置自动退出、最长会话（0 = 不限制）；登录与刷新时实时生效
-		"security": {"maxAttempts": "5", "lockMinutes": "15", "idleMinutes": "120", "maxHours": "12"},
+		// captchaEnabled：验证码总开关（密码登录 / 自助注册 / 匿名短信取码），每次请求现读，保存即生效
+		"security": {"maxAttempts": "5", "lockMinutes": "15", "idleMinutes": "120", "maxHours": "12", "captchaEnabled": true},
 		"cache":    {"type": "memory", "address": "", "password": ""},
 		"storage":  {"type": "local", "endpoint": "", "bucket": "", "region": "", "accessKey": "", "secretKey": ""},
 		"ai":       {"enabled": true, "baseUrl": "https://api.example.com/v1", "apiKey": "", "model": "qwen-plus", "embedModel": "", "timeoutSec": 30, "maxTokens": 2048, "redact": true},

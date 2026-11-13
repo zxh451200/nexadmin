@@ -81,6 +81,8 @@ export interface SecuritySettings {
   idleMinutes: string
   /** 从登录起最长会话小时数（0 = 不限制） */
   maxHours: string
+  /** 验证码总开关：密码登录 / 自助注册 / 匿名短信取码共用；默认开启，关闭后三条链路都不再使用验证码 */
+  captchaEnabled: boolean
 }
 
 export const ATTEMPT_OPTIONS = ['3', '5', '10'] as const

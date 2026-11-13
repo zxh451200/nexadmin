@@ -1,5 +1,5 @@
 import { defineMock, mockError, type MockContext } from '@/framework/request/mock'
-import { getSecurity } from '@/framework/modules/settings/settings.mock'
+import { getCaptchaEnabled, getSecurity } from '@/framework/modules/settings/settings.mock'
 import { DEMO_TENANT_ID } from '@/framework/modules/tenant/tenant.mock'
 import type { AuthUser } from './types'
 
@@ -458,7 +458,7 @@ defineMock([
     url: '/auth/sms-code',
     handler: ({ body }) => {
       if (!/^1\d{10}$/.test(body?.phone ?? '')) mockError(400, '手机号格式不正确')
-      checkCaptcha(body?.captchaKey, body?.captcha)
+      if (getCaptchaEnabled()) checkCaptcha(body?.captchaKey, body?.captcha)
       console.info(`[mock] SMS code for ${body.phone}: ${SMS_CODE}`)
       return { cooldown: 60 }
     },
@@ -476,8 +476,8 @@ defineMock([
       const lockedLeft = lockRemainingSec(body?.username)
       if (lockedLeft > 0) lockError(lockedLeft)
       const name = String(body?.username ?? '')
-      // 防枚举：是否要求验证码看「用户名 + IP」双维度的失败计数（取大者），与账号是否存在无关
-      const level = captchaLevel(name)
+      // 开关打开时一律要求验证码（连错 6 次升点选）；关闭时完全不要求
+      const level = !getCaptchaEnabled() ? 'none' : captchaLevel(name) === 'hard' ? 'hard' : 'soft'
       if (level !== 'none') {
         // 硬档只消费点选 token（与后端 VerifyCaptchaHard 同契约）：滑块 token 与图形码文本都过不了
         checkCaptcha(
@@ -495,11 +495,13 @@ defineMock([
         mockError(
           400,
           '用户名或密码错误',
-          fails >= CAPTCHA_HARD_AFTER_FAILS
-            ? CAPTCHA_REQUIRED_HARD
-            : fails >= CAPTCHA_AFTER_FAILS
-              ? CAPTCHA_REQUIRED
-              : undefined,
+          !getCaptchaEnabled()
+            ? undefined
+            : fails >= CAPTCHA_HARD_AFTER_FAILS
+              ? CAPTCHA_REQUIRED_HARD
+              : fails >= CAPTCHA_AFTER_FAILS
+                ? CAPTCHA_REQUIRED
+                : undefined,
         )
       }
       loginFails.delete(name)
@@ -550,8 +552,8 @@ defineMock([
       forgotEnabled: true,
       forgotChannels: ['email', 'phone'],
       registerEnabled: true,
-      // 与后端出厂默认同口径：无感优先，同用户名/同 IP 连错 3 次后才要求验证码
-      captchaEnabled: false,
+      // 与设置页「登录安全」的验证码总开关同源（出厂开启）
+      captchaEnabled: getCaptchaEnabled(),
       providers: [
         { key: 'wecom', name: '企业微信' },
         { key: 'dingtalk', name: '钉钉' },
@@ -572,7 +574,7 @@ defineMock([
       const password = String(ctx.body?.password ?? '')
       if (!/^[A-Za-z][A-Za-z0-9_]{2,31}$/.test(username)) mockError(400, '账号需以字母开头，3-32 位，仅限字母、数字、下划线')
       if (!password || password.length > 72) mockError(400, '密码长度为 1-72 字节')
-      if (String(ctx.body?.captcha ?? '').length !== 4) mockError(400, '验证码错误或已过期')
+      if (getCaptchaEnabled() && String(ctx.body?.captcha ?? '').length !== 4) mockError(400, '验证码错误或已过期')
       if (users[username]) mockError(400, '账号已存在')
       users[username] = { ...users.admin, username, id: String(Date.now()), nickname: username }
       // 注册即登录：与 /auth/login 同形返回令牌
