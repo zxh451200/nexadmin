@@ -476,8 +476,8 @@ defineMock([
       const lockedLeft = lockRemainingSec(body?.username)
       if (lockedLeft > 0) lockError(lockedLeft)
       const name = String(body?.username ?? '')
-      // 开关打开时一律要求验证码（连错 6 次升点选）；关闭时完全不要求
-      const level = !getCaptchaEnabled() ? 'none' : captchaLevel(name) === 'hard' ? 'hard' : 'soft'
+      // 开关打开时走自适应（连错 3 次滑块、6 次升点选）；关闭时完全不要求
+      const level = getCaptchaEnabled() ? captchaLevel(name) : 'none'
       if (level !== 'none') {
         // 硬档只消费点选 token（与后端 VerifyCaptchaHard 同契约）：滑块 token 与图形码文本都过不了
         checkCaptcha(

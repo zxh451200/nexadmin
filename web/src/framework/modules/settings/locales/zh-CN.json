@@ -104,7 +104,7 @@
       "maxHours": "最长会话",
       "maxHoursHint": "从登录那一刻开始算，到点必须重新登录，与是否一直使用无关",
       "captchaEnabled": "登录验证码",
-      "captchaEnabledHint": "开启时登录、自助注册、获取短信验证码都要先通过验证码；关闭后这三处都不再出现验证码",
+      "captchaEnabledHint": "开启后：登录按自适应策略要求验证码（平时不打扰，同一用户名或 IP 连续失败达到阈值才出现），自助注册与获取短信验证码仍需验证码；关闭后这三处都不再出现验证码",
       "unlimited": "不限制",
       "hours": "{{count}} 小时",
       "hours_one": "{{count}} 小时",

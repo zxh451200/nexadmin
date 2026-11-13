@@ -68,35 +68,43 @@ func (h *Handler) Login(c *gin.Context) {
 		return
 	}
 	// 验证码总开关（设置页「安全与登录 → 登录安全」）关闭时整段跳过：不要求、不计数，
-	// 失败响应也不带 reason；开启时密码登录一律先过验证码，连续失败达到硬阈值再升级成点选。
+	// 失败响应也不带 reason；开启时沿用自适应策略——正常登录不打扰，同一用户名或 IP
+	// 连续失败达到阈值才要求验证码，达到硬阈值再升级成点选。
 	// 在碰密码校验之前验证，通过前不会去比对密码。
 	if pwd && CaptchaEnabled(ctx) {
-		// 硬档（连错达到 hardAfterFails）在服务端只认点选 token：前端的形态切换只是
-		// 表现层，直接调 /auth/slider 换 token 的脚本也必须被挡住。计数读取失败按软档
-		// 处理——不因计数故障把正常人挡在门外。
-		hard := false
-		if v, herr := h.Svc.LoginNeedsHardCaptcha(ctx, req.Username, req.IP); herr == nil {
-			hard = v
-		}
-		verify := h.Svc.VerifyCaptcha
-		if hard {
-			verify = h.Svc.VerifyCaptchaHard
-		}
-		ok, err := verify(ctx, req.CaptchaKey, req.Captcha, req.IP)
+		need, err := h.Svc.LoginNeedsCaptcha(ctx, req.Username, req.IP)
 		if err != nil {
 			response.Fail(c, err)
 			return
 		}
-		if !ok {
-			e := response.BadRequest("auth.captcha_invalid")
-			if hard {
-				// 带上硬档 reason：页面刷新后前端默认回到滑块，这一步让它当场切点选。
-				e.Reason = ReasonCaptchaRequiredHard
-			} else {
-				e.Reason = ReasonCaptchaRequired
+		if need {
+			// 硬档（连错达到 hardAfterFails）在服务端只认点选 token：前端的形态切换只是
+			// 表现层，直接调 /auth/slider 换 token 的脚本也必须被挡住。计数读取失败按软档
+			// 处理——不因计数故障把正常人挡在门外。
+			hard := false
+			if v, herr := h.Svc.LoginNeedsHardCaptcha(ctx, req.Username, req.IP); herr == nil {
+				hard = v
 			}
-			response.Fail(c, e)
-			return
+			verify := h.Svc.VerifyCaptcha
+			if hard {
+				verify = h.Svc.VerifyCaptchaHard
+			}
+			ok, err := verify(ctx, req.CaptchaKey, req.Captcha, req.IP)
+			if err != nil {
+				response.Fail(c, err)
+				return
+			}
+			if !ok {
+				e := response.BadRequest("auth.captcha_invalid")
+				if hard {
+					// 带上硬档 reason：页面刷新后前端默认回到滑块，这一步让它当场切点选。
+					e.Reason = ReasonCaptchaRequiredHard
+				} else {
+					e.Reason = ReasonCaptchaRequired
+				}
+				response.Fail(c, e)
+				return
+			}
 		}
 	}
 	u, err := p.Login(ctx, req)

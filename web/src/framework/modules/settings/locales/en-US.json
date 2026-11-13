@@ -104,7 +104,7 @@
       "maxHours": "Maximum session",
       "maxHoursHint": "Measured from the moment of sign-in; sign-in is required again when reached, however active you are",
       "captchaEnabled": "Login captcha",
-      "captchaEnabledHint": "When on, sign-in, self-registration and SMS code requests require a captcha first; when off, none of them use a captcha",
+      "captchaEnabledHint": "When on, sign-in requires a captcha adaptively (not on normal attempts, only after repeated failures from the same username or IP), while self-registration and SMS code requests always require one; when off, none of them use a captcha",
       "unlimited": "No limit",
       "hours": "{{count}} hours",
       "hours_one": "{{count}} hour",

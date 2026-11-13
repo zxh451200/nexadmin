@@ -20,15 +20,12 @@ export function PasswordForm({
   // TOTP 挑战由 PasswordForm 内联处理（验证码在密码下方），不再弹 SecondFactorDialog；
   // onChallenge 保留在接口上供 PhoneForm 等其他入口使用，PasswordForm 自身不再调用。
   onChallenge: _onChallenge,
-  captchaAlways,
   demoCredentials,
   fillNonce = 0,
 }: {
   onSuccess: () => void
   onForgot?: () => void
   onChallenge?: (c: LoginChallenge) => void
-  /** 验证码开关（/auth/methods 的 captchaEnabled）：开启时首屏就要求验证码（默认滑块，可切图形）；关闭时整页不出现验证码 */
-  captchaAlways?: boolean
   /** 演示站凭据（/system/status 下发）：非 null 时预填账号与密码 */
   demoCredentials?: { account: string; password: string } | null
   /** 父组件的「填入演示账号」按钮计数：变化时重新预填（用户清空后再填回去） */
@@ -37,10 +34,10 @@ export function PasswordForm({
   const { t } = useTranslation()
   const login = useAuth((s) => s.login)
   const verifyLogin = useAuth((s) => s.verifyLogin)
-  // captchaAlways（设置页「登录安全」的验证码开关，出厂开启）时首屏即要求验证码；
-  // 关闭后服务端不再要求、失败响应也不带 reason，验证码区始终不出现
-  const [needCaptcha, setNeedCaptcha] = useState(!!captchaAlways)
-  useEffect(() => setNeedCaptcha(!!captchaAlways), [captchaAlways])
+  // 首屏不挂验证码：总开关开启时也走自适应——服务端连续失败达到阈值后才在错误响应里
+  // 带 CAPTCHA_REQUIRED（重档带 CAPTCHA_REQUIRED_HARD），这里据此把验证码区打开；
+  // 总开关关闭时服务端永远不要求，验证码区始终不出现。
+  const [needCaptcha, setNeedCaptcha] = useState(false)
   // baseMode 是服务端指派的形态：软阈值（3 次）滑块、硬阈值（6 次）点选；用户只能在
   // 当前形态与图形码兜底之间切换，不能降级（见 CaptchaField 的切换链接）
   const [baseMode, setBaseMode] = useState<CaptchaMode>('slider')

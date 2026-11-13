@@ -18,7 +18,8 @@ import (
 // 出图与出声都在 captcha_render.go：字形渲染带随机缩放/倾斜/波扭曲，
 // 早先用固定 5x7 点阵自绘的版本能被百行模板匹配整图解出，见 captcha_strength_test.go。
 // 登录失败计数同样放在 core/cache，按“用户名”和“IP”两个维度各记一份；验证码总开关打开时，
-// 登录一律要求验证码，任一维度连续失败 >= hardAfterFails 次再升级成点选档（见 handler.go）。
+// 任一维度连续失败 >= captchaAfterFails 次才开始要求验证码（滑块），>= hardAfterFails 次
+// 再升级成点选档；关闭时完全不要求（见 handler.go）。
 // 计数只看提交的用户名字符串，与账号是否存在无关，因此不会泄露账号是否存在。
 
 const (
@@ -201,6 +202,22 @@ func (s *Service) failCount(ctx context.Context, key string) (int, error) {
 	}
 	n, _ := strconv.Atoi(v)
 	return n, nil
+}
+
+// LoginNeedsCaptcha 报告登录是否已到“必须过验证码”的阈值：用户名或 IP 任一维度
+// 连续失败 >= captchaAfterFails 就要求。总开关打开时不代表“每次都要”，
+// 正常登录不打扰，连续失败才挂验证码（见 handler.go）。
+func (s *Service) LoginNeedsCaptcha(ctx context.Context, username, ip string) (bool, error) {
+	for _, k := range []string{failUserKey(username), failIPKey(ip)} {
+		n, err := s.failCount(ctx, k)
+		if err != nil {
+			return false, err
+		}
+		if n >= captchaAfterFails {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // LoginNeedsHardCaptcha 报告是否该把验证码升级成点选：同一组计数器、更高的硬阈值。

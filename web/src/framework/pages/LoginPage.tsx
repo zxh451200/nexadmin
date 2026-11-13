@@ -300,7 +300,7 @@ export default function LoginPage() {
                       ))}
                     </TabsList>
                     <TabsContent value="password" className="mt-6">
-                      <PasswordForm onSuccess={done} onForgot={onForgot} onChallenge={setChallenge} captchaAlways={captchaEnabled} demoCredentials={demoAccount} fillNonce={demoFill} />
+                      <PasswordForm onSuccess={done} onForgot={onForgot} onChallenge={setChallenge} demoCredentials={demoAccount} fillNonce={demoFill} />
                     </TabsContent>
                     <TabsContent value="phone" className="mt-6">
                       <PhoneForm onSuccess={done} onChallenge={setChallenge} captchaEnabled={captchaEnabled} />
@@ -309,7 +309,7 @@ export default function LoginPage() {
                 ) : methods[0] === 'phone' ? (
                   <PhoneForm onSuccess={done} onChallenge={setChallenge} captchaEnabled={captchaEnabled} />
                 ) : (
-                  <PasswordForm onSuccess={done} onForgot={onForgot} onChallenge={setChallenge} captchaAlways={captchaEnabled} demoCredentials={demoAccount} fillNonce={demoFill} />
+                  <PasswordForm onSuccess={done} onForgot={onForgot} onChallenge={setChallenge} demoCredentials={demoAccount} fillNonce={demoFill} />
                 )}
 
                 <SocialLogin providers={data.providers} redirect={redirect} />

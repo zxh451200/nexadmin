@@ -29,9 +29,9 @@ func RegisterEnabled(ctx context.Context) bool {
 }
 
 // captchaEnabledSource 是「验证码」的运行时总开关源（设置页「安全与登录 → 登录安全」的
-// captchaEnabled，出厂 true）：开启时密码登录、自助注册、匿名获取短信验证码都要先过验证码，
-// 且登录连续失败达到阈值会自适应升级到点选档；关闭时三条链路都不再出现、也不再校验验证码。
-// 由 config 模块启动时注入。
+// captchaEnabled，出厂 true）：开启时密码登录按自适应策略要求验证码（连续失败达到阈值才出现，
+// 再达硬阈值升点选），自助注册与匿名获取短信验证码则必须先验证码；关闭时三条链路都不再出现、
+// 也不再校验验证码。由 config 模块启动时注入。
 var captchaEnabledSource atomic.Value // func(context.Context) bool
 
 // SetCaptchaEnabledSource 注入 / 清除「验证码」运行时开关源；传 nil 清除。
