@@ -129,9 +129,13 @@ menu(null, 'sysMenu.docs', 'https://example.com/docs', '', 'docs:view', 'BookOpe
   keepAlive: false,
 })
 
-// 导出中心（顶级，登录即可；管理员「全部任务」用按钮权限 job:all）
-const jobsMenu = menu(null, 'jobs.menu', '/jobs', 'exportcenter/ExportCenterPage', '', 'Download', 16, { keepAlive: false })
+// 导入导出目录（与出厂种子同形状：导出中心 + 导入中心并列，别再挂成菜单下嵌菜单——侧栏只渲染两层）
+const ioDir = dir('sysMenu.dir.io', 'ArrowLeftRight', '/io', 16)
+const jobsMenu = menu(ioDir, 'jobs.menu', '/jobs', 'exportcenter/ExportCenterPage', '', 'Download', 10, { keepAlive: false })
 add(base({ parentId: jobsMenu, type: 'button', title: 'jobs.btn.all', perm: 'job:all', sort: 10 }))
+// 导入中心（imports 免费插件；component/perm 与 plugins/imports/plugin.yaml 同源）
+const importsMenu = menu(ioDir, 'plugin_imports.menu', '/imports/jobs', 'plugins/imports/ImportsPage', 'imports:list', 'FileUp', 20)
+add(base({ parentId: importsMenu, type: 'button', title: 'plugin_imports.perm.run', perm: 'imports:run', sort: 10 }))
 
 // 发送日志（系统监控下；追加在末尾，不挪动已有出厂 ID）
 const sendlog = menu(monitor, 'sendlog.menu', '/monitor/send-log', 'sendlog/SendLogPage', 'sendlog:list', 'Send', 70)

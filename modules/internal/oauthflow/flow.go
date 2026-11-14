@@ -58,11 +58,22 @@ type Flow struct {
 	cfg   *config.Config
 	cache cache.Cache
 	log   *zap.Logger
-	hc    *http.Client
 
 	mu       sync.Mutex // 让同进程内 state / bindToken 的“读后删”不被并发重放
-	adapters map[string]oauth.Provider
-	build    func(name string, c config.ProviderConf) (oauth.Provider, error)
+	adapters map[string]adapterEntry
+	build    func(name string, c config.ProviderConf, hc *http.Client) (oauth.Provider, error)
+
+	// hcMu 保护出站客户端：代理可以在设置页里改，变了下一次流程重建（见 client）。
+	hcMu  sync.Mutex
+	proxy string
+	hc    *http.Client
+}
+
+// adapterEntry 把适配器和它构建时的配置指纹配对：设置页改了凭据 / 端点 / 代理，
+// 指纹变化，下一次就走新配置重建，而不是继续用旧 client_id 去换码。
+type adapterEntry struct {
+	a  oauth.Provider
+	fp string
 }
 
 var (
@@ -70,68 +81,96 @@ var (
 	shared *Flow
 )
 
-// Shared 返回进程内共享的 Flow。auth.proxy 配置无效时只记日志并按直连处理（并让第三方登录因超时自然不可用）。
+// Shared 返回进程内共享的 Flow。config.yaml 的 auth.proxy 无效时不阻塞启动
+// （第三方登录会在发起授权时以「未配置」失败，日志里保留原因）；设置页里有可用代理时照常工作。
 func Shared(cfg *config.Config, c cache.Cache, log *zap.Logger) *Flow {
-	once.Do(func() {
-		f, err := New(cfg, c, log)
-		if err != nil {
-			log.Error("oauth: invalid auth.proxy, third-party login disabled", zap.Error(err))
-			f = &Flow{cfg: &config.Config{}, cache: c, log: log, adapters: map[string]oauth.Provider{}}
-		}
-		shared = f
-	})
+	once.Do(func() { shared = New(cfg, c, log) })
 	return shared
 }
 
-// New 创建 Flow：外部调用统一 10 秒超时，auth.proxy 非空则走代理。
-func New(cfg *config.Config, c cache.Cache, log *zap.Logger) (*Flow, error) {
-	hc, err := oauth.NewHTTPClient(cfg.Auth.Proxy, oauth.DefaultTimeout)
-	if err != nil {
-		return nil, err
+// New 创建 Flow：外部调用统一 10 秒超时，代理按运行时设置（config.yaml 的 auth.proxy 兜底）。
+func New(cfg *config.Config, c cache.Cache, log *zap.Logger) *Flow {
+	f := &Flow{cfg: cfg, cache: c, log: log, adapters: map[string]adapterEntry{}, proxy: cfg.Auth.Proxy}
+	if hc, err := oauth.NewHTTPClient(cfg.Auth.Proxy, oauth.DefaultTimeout); err == nil {
+		f.hc = hc
+	} else {
+		log.Warn("oauth: invalid auth.proxy in config.yaml, waiting for runtime setting", zap.Error(err))
 	}
-	f := &Flow{cfg: cfg, cache: c, log: log, hc: hc, adapters: map[string]oauth.Provider{}}
-	f.build = func(name string, pc config.ProviderConf) (oauth.Provider, error) {
+	f.build = func(name string, pc config.ProviderConf, hc *http.Client) (oauth.Provider, error) {
 		return oauth.New(name, oauth.Config{ClientID: pc.ClientID, ClientSecret: pc.ClientSecret, AgentID: pc.AgentID,
 			Issuer: pc.Issuer, Scopes: pc.Scopes, Display: pc.Name, AuthURL: pc.AuthURL, TokenURL: pc.TokenURL,
-			UserInfoURL: pc.UserInfoURL, JWKSURL: pc.JWKSURL}, f.hc)
+			UserInfoURL: pc.UserInfoURL, JWKSURL: pc.JWKSURL}, hc)
 	}
-	return f, nil
+	return f
 }
 
-// Conf 返回 provider 配置；未配置、缺必填项或不是受支持的 provider 返回 false。
-func (f *Flow) Conf(key string) (config.ProviderConf, bool) {
+// client 返回当前代理对应的 HTTP 客户端；代理没变就复用。代理变了（设置页保存 / 配置回退）重建。
+func (f *Flow) client(ctx context.Context) (*http.Client, string, error) {
+	proxy := auth.OAuthProxy(ctx, f.cfg.Auth.Proxy)
+	f.hcMu.Lock()
+	defer f.hcMu.Unlock()
+	if f.hc != nil && f.proxy == proxy {
+		return f.hc, proxy, nil
+	}
+	hc, err := oauth.NewHTTPClient(proxy, oauth.DefaultTimeout)
+	if err != nil {
+		f.hc, f.proxy = nil, proxy
+		return nil, proxy, err
+	}
+	f.hc, f.proxy = hc, proxy
+	return hc, proxy, nil
+}
+
+// Conf 返回运行时生效的 provider 配置；未配置、缺必填项或不是受支持的 provider 返回 false。
+func (f *Flow) Conf(ctx context.Context, key string) (config.ProviderConf, bool) {
 	if !auth.KnownProvider(key) {
 		return config.ProviderConf{}, false
 	}
-	return f.cfg.Auth.ProviderConf(key)
+	return f.cfg.Auth.ProviderConfFrom(auth.EffectiveProviders(ctx, f.cfg.Auth.Providers), key)
 }
 
 // Available 返回已配置且可用的 provider 键，顺序固定（与 auth.KnownProviders 一致）。
-func (f *Flow) Available() []string {
+func (f *Flow) Available(ctx context.Context) []string {
 	out := []string{}
 	for _, k := range auth.KnownProviders {
-		if _, ok := f.Conf(k); ok {
+		if _, ok := f.Conf(ctx, k); ok {
 			out = append(out, k)
 		}
 	}
 	return out
 }
 
-func (f *Flow) adapter(key string) (oauth.Provider, config.ProviderConf, error) {
-	pc, ok := f.Conf(key)
+// fingerprint 是「provider 配置 + 代理」的稳定摘要，用来判断缓存的适配器是否还对着同一份配置。
+func fingerprint(pc config.ProviderConf, proxy string) string {
+	h := sha256.New()
+	for _, s := range []string{pc.ClientID, pc.ClientSecret, pc.AgentID, pc.Issuer, pc.Name, pc.AuthURL, pc.TokenURL, pc.UserInfoURL, pc.JWKSURL, proxy} {
+		h.Write([]byte(s))
+		h.Write([]byte{0})
+	}
+	h.Write([]byte(strings.Join(pc.Scopes, ",")))
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+func (f *Flow) adapter(ctx context.Context, key string) (oauth.Provider, config.ProviderConf, error) {
+	pc, ok := f.Conf(ctx, key)
 	if !ok || f.build == nil {
 		return nil, pc, ErrNotConfigured
 	}
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	if a, ok := f.adapters[key]; ok {
-		return a, pc, nil
-	}
-	a, err := f.build(key, pc)
+	hc, proxy, err := f.client(ctx)
 	if err != nil {
 		return nil, pc, errors.Join(ErrNotConfigured, err)
 	}
-	f.adapters[key] = a
+	fp := fingerprint(pc, proxy)
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if e, ok := f.adapters[key]; ok && e.fp == fp {
+		return e.a, pc, nil
+	}
+	a, err := f.build(key, pc, hc)
+	if err != nil {
+		return nil, pc, errors.Join(ErrNotConfigured, err)
+	}
+	f.adapters[key] = adapterEntry{a: a, fp: fp}
 	return a, pc, nil
 }
 
@@ -177,7 +216,7 @@ func stateKey(state string) string {
 
 // Start 生成一次性 state（5 分钟）并返回授权地址。redirect 必须在白名单内；OIDC 同时生成 PKCE。
 func (f *Flow) Start(ctx context.Context, key, redirect, purpose string, uid idgen.ID) (string, error) {
-	a, pc, err := f.adapter(key)
+	a, pc, err := f.adapter(ctx, key)
 	if err != nil {
 		return "", err
 	}
@@ -236,7 +275,7 @@ func (f *Flow) Finish(ctx context.Context, key, code, state string) (*oauth.Iden
 	if err != nil {
 		return nil, nil, err
 	}
-	a, pc, err := f.adapter(key)
+	a, pc, err := f.adapter(ctx, key)
 	if err != nil {
 		return nil, nil, err
 	}

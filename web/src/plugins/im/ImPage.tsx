@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { useAuth } from '@/framework/auth/useAuth'
 import { useIsMobile } from '@/framework/hooks/use-mobile'
+import { useAsyncJob } from '@/framework/hooks/use-async-job'
 import { usePermission } from '@/framework/auth/usePermission'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { BatchBar } from '@/framework/components/table/BatchBar'
@@ -19,11 +20,13 @@ import { RequiredMark } from '@/framework/components/RequiredMark'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { ChatBubble, SystemPill } from '@/framework/components/chat/MessageBubble'
 import { SimpleSelect } from '@/framework/components/SimpleSelect'
+import { TimezoneSelect } from '@/framework/components/TimezoneSelect'
 import { Skeleton } from '@/framework/ui/skeleton'
 import { TimeField } from '@/framework/components/pickers/TimeField'
 import { Lightbox, type LightboxSlide } from '@/framework/upload/Lightbox'
 import { useWs } from '@/framework/hooks/useWs'
 import { useInvalidateMenuBadges } from '@/framework/layout/menuBadge'
+import { LiveStatusBadge } from '@/framework/components/LiveStatusBadge'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Card } from '@/framework/ui/card'
@@ -37,7 +40,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/framework/ui/tabs'
 import { Textarea } from '@/framework/ui/textarea'
 import { cn } from '@/lib/utils'
 import {
-  exportConversations,
+  createConversationExportJob,
   heartbeatPresence,
   imAttachmentUrl,
   messageAttachment,
@@ -188,6 +191,7 @@ export default function ImPage() {
   const transfer = useTransferConv()
   const [uploading, setUploading] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const { start: startExportJob } = useAsyncJob()
   const refresh = chat.refresh
 
   useEffect(() => {
@@ -380,15 +384,19 @@ export default function ImPage() {
   const onExport = async () => {
     setExporting(true)
     try {
-      await exportConversations({
-        status,
-        keyword: keyword || undefined,
-        assignee: assignee === 'all' ? undefined : assignee,
-        page: 1,
-        pageSize: 0,
-      })
+      // 统一走异步任务：提交后由 useAsyncJob 提示「已提交到导出中心」，
+      // 进度与下载都在导出中心看；创建失败的原因由 http 拦截器统一弹出。
+      await startExportJob(() =>
+        createConversationExportJob({
+          status,
+          keyword: keyword || undefined,
+          assignee: assignee === 'all' ? undefined : assignee,
+          page: 1,
+          pageSize: 0,
+        }),
+      )
     } catch {
-      toast.error(t('plugin_im.exportFailed'))
+      toast.error(t('common.operateFailed'))
     } finally {
       setExporting(false)
     }
@@ -516,10 +524,14 @@ export default function ImPage() {
       />
       {/* 列表与统计分屏：处理会话的人先看到队列，做复盘的人不被双栏挤走（分屏结构对齐工单中心） */}
       <Tabs value={view} onValueChange={setView}>
-        <TabsList className="w-fit">
-          <TabsTrigger value="workbench">{t('plugin_im.view.workbench')}</TabsTrigger>
-          <TabsTrigger value="stats">{t('plugin_im.view.stats')}</TabsTrigger>
-        </TabsList>
+        <div className="flex items-center justify-between gap-2">
+          <TabsList className="w-fit">
+            <TabsTrigger value="workbench">{t('plugin_im.view.workbench')}</TabsTrigger>
+            <TabsTrigger value="stats">{t('plugin_im.view.stats')}</TabsTrigger>
+          </TabsList>
+          {/* WS hub 已连接 = 新消息帧直达；断线退回增量轮询。与工单中心同一枚指示，住页签行右端留白 */}
+          <LiveStatusBadge live={wsStatus === 'open'} />
+        </div>
         <TabsContent value="workbench">
       {/* 分栏几何与工单中心同款（24rem 列 + 桌面定高 + 移动端左栏限高）：两套坐席工作台并排打开不会互相打架。
           17rem = 顶部栏+页签条+页头+「会话/统计」页签行+间距；两处常量必须同步改 */}
@@ -595,14 +607,6 @@ export default function ImPage() {
             >
               {notifyOn ? <Bell aria-hidden="true" /> : <BellOff aria-hidden="true" />}
             </Button>
-            {/* WS hub 已连接 = 新消息帧直达；断线退回增量轮询。与工单中心同一枚指示。 */}
-            <Badge
-              variant={wsStatus === 'open' ? 'success' : 'secondary'}
-              className="shrink-0"
-              title={wsStatus === 'open' ? t('common.liveRealtime') : t('common.livePolling')}
-            >
-              {wsStatus === 'open' ? t('common.liveRealtime') : t('common.livePolling')}
-            </Badge>
           </div>
           {activeFilters.length > 0 ? (
             <div className="flex flex-wrap items-center gap-1.5">
@@ -621,18 +625,22 @@ export default function ImPage() {
               ))}
             </div>
           ) : null}
-          {canPick ? (
-            // 全选框留在列表上方（相当于表格的全选列）；删除动作下沉到浮动 BatchBar，
-            // 不再把列表往下推——与工单队列同一套。
-            <div className="flex items-center gap-2 border-b px-1 pb-1.5">
-              <Checkbox
-                id="im-pick-all"
-                checked={allPicked ? true : picked.length > 0 ? 'indeterminate' : false}
-                disabled={deletable.length === 0}
-                onCheckedChange={(v) => setPicked(v === true ? deletable : [])}
-              />
-              <label htmlFor="im-pick-all" className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-                {t('plugin_im.batch.selectAllClosed')}
+          {canPick && deletable.length > 0 ? (
+            // 全选框 = 表格的全选列头：只在有可删的已结束会话时出现（没有的话这行纯属占位），
+            // 勾选框与行内勾选框左对齐（行内是 ps-2 + px-1.5，同为 14px）；文案带上可删数量。
+            // 删除动作下沉到浮动 BatchBar，与工单队列同一套。
+            <div className="flex items-center gap-2 border-b pb-1.5 pt-0.5">
+              <span className="flex shrink-0 items-center ps-2">
+                <span className="px-1.5">
+                  <Checkbox
+                    id="im-pick-all"
+                    checked={allPicked ? true : picked.length > 0 ? 'indeterminate' : false}
+                    onCheckedChange={(v) => setPicked(v === true ? deletable : [])}
+                  />
+                </span>
+              </span>
+              <label htmlFor="im-pick-all" className="min-w-0 flex-1 cursor-pointer truncate text-xs text-muted-foreground">
+                {t('plugin_im.batch.selectAllClosed')}（{deletable.length}）
               </label>
             </div>
           ) : null}
@@ -665,30 +673,33 @@ export default function ImPage() {
             ))}
             {!convs.isLoading && list.length === 0 ? <EmptyState title={t('plugin_im.empty')} className="py-8" /> : null}
           </div>
-          <div className="flex items-center justify-between gap-2 border-t pt-2 text-xs text-muted-foreground">
-            <span>{t('dataTable.totalCount', { count: total })}</span>
-            <div className="flex items-center gap-1">
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label={t('dataTable.prevPage')}
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-              >
-                <ChevronLeft aria-hidden="true" />
-              </Button>
-              <span className="whitespace-nowrap">{t('dataTable.pageInfo', { page, pages })}</span>
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label={t('dataTable.nextPage')}
-                disabled={page >= pages}
-                onClick={() => setPage((p) => Math.min(pages, p + 1))}
-              >
-                <ChevronRight aria-hidden="true" />
-              </Button>
+          {/* 批量模式下分页让位给悬浮 BatchBar：勾选时翻页无意义，两者又共享卡片底边会互相压住 */}
+          {picked.length === 0 ? (
+            <div className="flex items-center justify-between gap-2 border-t pt-2 text-xs text-muted-foreground">
+              <span>{t('dataTable.totalCount', { count: total })}</span>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={t('dataTable.prevPage')}
+                  disabled={page <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                >
+                  <ChevronLeft aria-hidden="true" />
+                </Button>
+                <span className="whitespace-nowrap">{t('dataTable.pageInfo', { page, pages })}</span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={t('dataTable.nextPage')}
+                  disabled={page >= pages}
+                  onClick={() => setPage((p) => Math.min(pages, p + 1))}
+                >
+                  <ChevronRight aria-hidden="true" />
+                </Button>
+              </div>
             </div>
-          </div>
+          ) : null}
         </Card>
 
         <ChatPane
@@ -743,30 +754,18 @@ function ConvListItem({
 }) {
   const { t, i18n } = useTranslation()
   const cbId = useId()
-  const tags = (conv.tags || '').split(',').filter(Boolean)
   const visitor = conv.visitorName || conv.visitorToken
   const stamp = relativeStamp(conv.lastMsgAt, i18n.language)
-  // 一行最多三枚元信息：归属、业务单号优先，标签按余位截断（标签在会话头部仍全量可见）
-  const tagSlots = Math.max(0, 3 - (conv.assigneeName ? 1 : 0) - (conv.bizNo ? 1 : 0))
-  const meta = [
-    conv.assigneeName ? { key: 'assignee', node: <><UserRound aria-hidden="true" className="size-3" />{conv.assigneeName}</> } : null,
-    conv.bizNo
-      ? {
-          key: 'biz',
-          node: (
-            <span className="font-mono" title={conv.bizType ? conv.bizType.replace(/_/g, ' ') : undefined} aria-label={t('plugin_im.bizRef', { no: conv.bizNo })}>
-              {conv.bizNo}
-            </span>
-          ),
-        }
-      : null,
-    ...tags.slice(0, tagSlots).map((tag) => ({ key: `tag-${tag}`, node: <>{tag}</> })),
-  ].filter(Boolean) as { key: string; node: React.ReactNode }[]
+  // 摘要行不再标归属人：筛选器里已有「我的/未分配」，列表里重复标一遍只是噪音；
+  // 归属在会话头部与详情里全量可见。
 
   const row = (
     <>
       <span className="flex w-full items-center gap-2">
-        <QueueAvatar>{initials(visitor)}</QueueAvatar>
+        {/* 访客全部叫「访客 xxxx」，首字母没有信息量：统一用访客图标，配色仍按会话区分 */}
+        <QueueAvatar seed={conv.convNo}>
+          <UserRound aria-hidden="true" className="size-3.5" />
+        </QueueAvatar>
         <span className={cn('min-w-0 flex-1 truncate text-sm text-foreground', conv.unread > 0 ? 'font-semibold' : 'font-medium')}>
           {visitor}
         </span>
@@ -783,17 +782,10 @@ function ConvListItem({
       </span>
       <span className="mt-0.5 flex w-full items-center gap-2">
         <span className="min-w-0 flex-1 truncate text-xs leading-4 text-muted-foreground">{conv.lastPreview || t('plugin_im.noMessages')}</span>
-        {/* 归属/单号/标签并到摘要行右侧：独立成第三行时每行 81px，一屏只看得到 7 条会话 */}
-        {meta.length > 0 ? (
-          <span className="flex min-w-0 max-w-40 shrink items-center gap-1 overflow-hidden text-[11px] leading-none text-muted-foreground">
-            {meta.map((m) => (
-              <span key={m.key} className="inline-flex max-w-full min-w-0 items-center gap-1">
-                {m.node}
-              </span>
-            ))}
-          </span>
-        ) : null}
-        <QueueStatus tone={conv.status === 'open' ? 'success' : 'neutral'}>{t(`plugin_im.status.${conv.status}`)}</QueueStatus>
+        {/* 状态与摘要之间一道发丝线：两堆灰字不再连成一串 */}
+        <span className="flex shrink-0 items-center border-s border-border/60 ps-2">
+          <QueueStatus tone={conv.status === 'open' ? 'success' : 'neutral'}>{t(`plugin_im.status.${conv.status}`)}</QueueStatus>
+        </span>
       </span>
     </>
   )
@@ -814,7 +806,7 @@ function ConvListItem({
       />
     </label>
   ) : null
-  return <QueueRow selected={active} onSelect={onSelect} checkbox={checkbox}>{row}</QueueRow>
+  return <QueueRow selected={active} onSelect={onSelect} checkbox={checkbox} accent={conv.unread > 0}>{row}</QueueRow>
 }
 
 function systemLabel(m: ImMessage, t: (key: string) => string): string {
@@ -1188,7 +1180,8 @@ function ChatPane({
               </Fragment>
             )
           }
-          const mine = m.senderType === 'agent'
+          // bot 消息排在坐席一侧（同向气泡），meta 行带 AI 徽标；不可撤回（senderId 为空天然不满足）。
+          const mine = m.senderType === 'agent' || m.senderType === 'bot'
           const att = messageAttachment(m)
           const attUrl = att ? imAttachmentUrl(att.token) : ''
           const recallable =
@@ -1197,7 +1190,12 @@ function ChatPane({
           // 同一人连发只在一组的第一条露头像与姓名，否则气泡上方全是重复信息
           const groupStart =
             newDay || !prev || prev.kind === 'system' || prev.senderType !== m.senderType || prev.senderId !== m.senderId
-          const who = mine ? myName || t('plugin_im.senders.agent') : conv.visitorName || conv.visitorToken
+          const who =
+            m.senderType === 'bot'
+              ? m.senderName || t('plugin_im.senders.bot')
+              : mine
+                ? myName || t('plugin_im.senders.agent')
+                : conv.visitorName || conv.visitorToken
           return (
             <Fragment key={m.id}>
               {separator}
@@ -1215,24 +1213,32 @@ function ChatPane({
                     tone={mine ? 'primary' : 'default'}
                     meta={
                       <>
-                        {groupStart ? <span>{m.senderName || t(`plugin_im.senders.${m.senderType}`)}</span> : null}
+                        {groupStart ? (
+                          <>
+                            {m.senderType === 'bot' ? (
+                              <Badge variant="secondary" className="px-1 py-0 text-[10px]">
+                                AI
+                              </Badge>
+                            ) : null}
+                            <span>{m.senderName || t(`plugin_im.senders.${m.senderType}`)}</span>
+                          </>
+                        ) : null}
                         <span title={formatTime(m.createdAt, i18n.language)}>{formatClock(m.createdAt, i18n.language)}</span>
                         {mine ? (
                           <span>{conv.visitorReadSeq >= m.seq ? t('plugin_im.read') : t('plugin_im.unread')}</span>
                         ) : null}
+                        {/* 撤回放进 meta 行：单独一行会把两行的气泡撑成三行 */}
+                        {recallable ? (
+                          <button
+                            type="button"
+                            onClick={() => onRecall(conv, m)}
+                            className="inline-flex items-center gap-0.5 hover:text-primary-foreground hover:underline underline-offset-2"
+                          >
+                            <Undo2 aria-hidden="true" className="size-3" />
+                            {t('plugin_im.recall.action')}
+                          </button>
+                        ) : null}
                       </>
-                    }
-                    footer={
-                      recallable ? (
-                        <button
-                          type="button"
-                          onClick={() => onRecall(conv, m)}
-                          className="mt-0.5 flex items-center gap-0.5 text-[11px] opacity-70 hover:opacity-100"
-                        >
-                          <Undo2 aria-hidden="true" className="size-3" />
-                          {t('plugin_im.recall.action')}
-                        </button>
-                      ) : undefined
                     }
                   >
                     {att ? (
@@ -1721,6 +1727,27 @@ function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (
             />
           </label>
           <p className="-mt-2 text-xs text-muted-foreground">{t('plugin_im.settings.autoAssignHint')}</p>
+          <label className="flex items-center justify-between gap-3 text-sm">
+            <span>{t('plugin_im.settings.aiEnabled')}</span>
+            <Switch
+              checked={form.aiEnabled}
+              onCheckedChange={(checked) => setForm({ ...form, aiEnabled: checked })}
+              aria-label={t('plugin_im.settings.aiEnabled')}
+            />
+          </label>
+          <p className="-mt-2 text-xs text-muted-foreground">{t('plugin_im.settings.aiEnabledHint')}</p>
+          {form.aiEnabled ? (
+            <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+              {t('plugin_im.settings.aiFallbackText')}
+              <Textarea
+                rows={2}
+                maxLength={500}
+                value={form.aiFallbackText}
+                onChange={(e) => setForm({ ...form, aiFallbackText: e.target.value })}
+                placeholder={t('plugin_im.settings.aiFallbackHint')}
+              />
+            </label>
+          ) : null}
           <div className="grid grid-cols-2 gap-3">
             <label className="flex flex-col gap-1 text-xs text-muted-foreground">
               {t('plugin_im.settings.start')}
@@ -1742,7 +1769,7 @@ function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (
                     key={day}
                     type="button"
                     size="sm"
-                    variant={on ? 'secondary' : 'outline'}
+                    variant={on ? 'default' : 'outline'}
                     aria-pressed={on}
                     onClick={() => toggleDay(day)}
                   >
@@ -1752,10 +1779,14 @@ function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (
               })}
             </div>
           </div>
-          <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-            {t('plugin_im.settings.timezone')}
-            <Input value={form.timezone} onChange={(e) => setForm({ ...form, timezone: e.target.value })} />
-          </label>
+          <div className="flex flex-col gap-1">
+            <span className="text-xs text-muted-foreground">{t('plugin_im.settings.timezone')}</span>
+            <TimezoneSelect
+              value={form.timezone || null}
+              onChange={(v) => setForm({ ...form, timezone: v })}
+              allowClear
+            />
+          </div>
           <label className="flex flex-col gap-1 text-xs text-muted-foreground">
             {t('plugin_im.settings.offlineText')}
             <Textarea rows={2} value={form.offlineText} onChange={(e) => setForm({ ...form, offlineText: e.target.value })} />

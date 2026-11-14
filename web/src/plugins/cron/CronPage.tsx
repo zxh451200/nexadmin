@@ -11,7 +11,7 @@ export default function CronPage() {
   const { t } = useTranslation()
   const { has } = usePermission()
   const [tab, setTab] = useState('jobs')
-  const [logJobId, setLogJobId] = useState<string | undefined>()
+  const [logJobIds, setLogJobIds] = useState<string[] | undefined>()
 
   return (
     <PageContainer>
@@ -24,14 +24,14 @@ export default function CronPage() {
         <TabsContent value="jobs" className="m-0">
           <JobsTab
             onViewLogs={(j) => {
-              setLogJobId(j.id)
+              setLogJobIds([j.id])
               setTab('logs')
             }}
           />
         </TabsContent>
         <Can perm="cron:log">
           <TabsContent value="logs" className="m-0">
-            <LogsTab jobId={logJobId} onJobChange={setLogJobId} />
+            <LogsTab jobIds={logJobIds} onJobsChange={setLogJobIds} />
           </TabsContent>
         </Can>
       </Tabs>

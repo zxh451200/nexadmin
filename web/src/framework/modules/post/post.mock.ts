@@ -1,4 +1,5 @@
 import { defineMock, genId, mockError } from '@/framework/request/mock'
+import { createMockJob } from '../exportcenter/exportcenter.mock'
 import type { SysPost, SysPostInput } from './api'
 
 const pid = (n: number) => '187000000000000' + String(n).padStart(4, '0')
@@ -37,9 +38,29 @@ let items: SysPost[] = [
 
 const bySort = (a: SysPost, b: SysPost) => a.sort - b.sort || a.id.localeCompare(b.id)
 
+const csvCell = (v: string) => (/[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v)
+
 // 固定路径必须先于 /:id 注册
 defineMock([
   { method: 'GET', url: '/posts/options', handler: () => items.filter((x) => x.status === '1').sort(bySort).map((x) => ({ id: x.id, name: x.name })) },
+  {
+    // 统一异步导出：与后端 POST /posts/export-async 同契约，提交 core/job 任务进导出中心。
+    // 真实后端生成 xlsx；mock 生成同样列的 CSV 文本
+    method: 'POST',
+    url: '/posts/export-async',
+    handler: ({ query, body }) => {
+      const kw = String(query.keyword ?? body?.keyword ?? '').trim().toLowerCase()
+      const list = items
+        .filter((x) => !kw || x.name.toLowerCase().includes(kw) || x.code.toLowerCase().includes(kw))
+        .sort(bySort)
+      const head = ['岗位名称', '岗位编码', '状态', '备注']
+      const lines = list.map((x) => [x.name, x.code, x.status === '1' ? '启用' : '停用', x.remark ?? ''].map(csvCell).join(','))
+      const content = `\uFEFF${[head.join(','), ...lines].join('\r\n')}\r\n`
+      const day = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+      const j = createMockJob('post.export', `posts-${day}.csv`, list.length, content)
+      return { id: j.id, type: j.type, status: j.status }
+    },
+  },
   {
     method: 'PUT',
     url: '/posts/sort',

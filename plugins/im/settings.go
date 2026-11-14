@@ -48,6 +48,11 @@ type Settings struct {
 	BannedWords []string `json:"bannedWords"`
 	// AutoAssign 开启后，新会话自动分给在线且手上会话最少的坐席；没有在线坐席时排队，坐席上线后按先后领走。
 	AutoAssign bool `json:"autoAssign"`
+	// AIEnabled 开启后，未接管的会话由 AI 助手（kb 插件，基于知识库检索）自动回答；
+	// 坐席认领或访客转人工即停答。前置条件：系统设置里已配置 AI 与 Embedding 模型，且知识库插件已启用。
+	AIEnabled bool `json:"aiEnabled"`
+	// AIFallbackText 是 AI 检索不到依据时的兜底话术（空 = 用 kb 内置默认文案）。
+	AIFallbackText string `json:"aiFallbackText"`
 }
 
 // DefaultSettings 是未配置时的行为：7×24 在线、不主动邀请。
@@ -104,6 +109,7 @@ func (s *Service) SaveSettings(ctx context.Context, in Settings) (*Settings, err
 	in.OfflineText = truncate(strings.TrimSpace(in.OfflineText), 500)
 	in.InviteText = truncate(strings.TrimSpace(in.InviteText), 500)
 	in.WelcomeText = truncate(strings.TrimSpace(in.WelcomeText), 500)
+	in.AIFallbackText = truncate(strings.TrimSpace(in.AIFallbackText), 500)
 	in.BannedWords = normalizeWords(in.BannedWords)
 	raw, err := json.Marshal(in)
 	if err != nil {

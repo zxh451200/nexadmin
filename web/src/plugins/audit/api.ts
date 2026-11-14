@@ -33,8 +33,10 @@ export interface AuditConfig {
 }
 
 export interface LogQuery extends PageQuery {
+  /** 逗号分隔多值表名 */
   table?: string
   operator?: string
+  /** 逗号分隔多值：create,update,delete */
   action?: string
   from?: string
   to?: string

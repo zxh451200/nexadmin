@@ -123,7 +123,7 @@
       "account": "Username and password",
       "phone": "Phone verification code",
       "thirdParty": "Third-party sign-in",
-      "thirdPartyHint": "Fill in the app credentials below after enabling",
+      "thirdPartyHint": "Fill in the app credentials and redirect URI after enabling; changes apply on save",
       "providers": {
         "wecom": "WeCom",
         "dingtalk": "DingTalk",
@@ -140,8 +140,23 @@
         "github": "Create a GitHub OAuth App and configure its callback URL",
         "oidc": "Connect any standard OpenID Connect provider; fill in the Issuer"
       },
+      "credentials": {
+        "wecom": { "id": "CorpID", "secret": "App Secret" },
+        "dingtalk": { "id": "AppKey", "secret": "AppSecret" },
+        "feishu": { "id": "App ID", "secret": "App Secret" },
+        "google": { "id": "Client ID", "secret": "Client Secret" },
+        "github": { "id": "Client ID", "secret": "Client Secret" },
+        "oidc": { "id": "Client ID", "secret": "Client Secret" }
+      },
+      "fields": {
+        "agentId": "App AgentId",
+        "redirectUris": "Redirect URIs",
+        "redirectUrisHint": "The page the browser returns to after authorization; it must match the callback registered in the provider console exactly. One URL per line, e.g. {{url}}",
+        "secretHint": "Saved secrets are shown masked; leave empty to keep the value from the config file or the last save"
+      },
+      "required": "Required when enabled",
       "matchLimit": "Matching & restrictions",
-      "matchLimitHint": "How third-party identities map to local accounts",
+      "matchLimitHint": "How third-party identities map to local accounts; applies to providers that do not set these keys in config.yaml",
       "matchBy": "Account matching",
       "matchByHint": "Existing users are matched by this field after third-party sign-in",
       "matchPhone": "Phone",
@@ -152,7 +167,7 @@
       "allowedDomains": "Allowed email domains",
       "allowedDomainsHint": "Separate multiple domains with commas; leave empty for no restriction",
       "proxy": "Outbound proxy",
-      "proxyHint": "Used when reaching overseas services such as Google and GitHub"
+      "proxyHint": "Used when reaching overseas services such as Google and GitHub; empty keeps the value from config.yaml"
     },
     "notify": {
       "title": "Notification channels",

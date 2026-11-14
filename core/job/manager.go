@@ -17,6 +17,7 @@ import (
 	"go.uber.org/zap"
 
 	"nexadmin/core/auth"
+	"nexadmin/core/event"
 	"nexadmin/core/storage"
 	"nexadmin/core/tenant"
 	"nexadmin/pkg/idgen"
@@ -85,6 +86,9 @@ func New(o Options) *Manager {
 
 // Storage 返回结果文件存储。
 func (m *Manager) Storage() storage.Storage { return m.o.Files }
+
+// KeepDays 返回结果文件保留天数（导出中心据此下发 expiresAt）。
+func (m *Manager) KeepDays() int { return m.o.KeepDays }
 
 // Workers 返回并发 worker 数。
 func (m *Manager) Workers() int { return m.o.Workers }
@@ -483,6 +487,14 @@ func (m *Manager) execute(j *Job) {
 	}
 	if (!ok || status != StatusSuccess) && res.Key != "" {
 		m.removeFile(res.Key) // 已被取消 / 落库失败 / 失败：不留孤儿文件
+	}
+	// 落库成功后发布终态事件：完成通知（exportcenter 订阅后发站内信/邮件）与 Webhook 订阅者都从这里接。
+	// fctx 没带租户，载荷自身实现 EventTenant 补上。发布不阻塞、失败只丢事件，不影响任务结果。
+	if ok && err == nil {
+		event.Publish(fctx, event.JobFinished, event.JobData{
+			ID: j.ID, TenantID: j.TenantID, OwnerID: j.OwnerID, Type: j.Type,
+			Status: status, FileName: res.Name, Error: errMsg,
+		})
 	}
 }
 

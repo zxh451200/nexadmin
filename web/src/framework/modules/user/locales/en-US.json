@@ -64,11 +64,6 @@
     "batchEnable": "Enable selected",
     "batchDisable": "Disable selected",
     "batchStatusPartial": "Updated {{updated}}, skipped {{skipped}} (self/superadmin or out of your data scope)",
-    "export": {
-      "success": "Exported {{count}} records",
-      "done": "Export completed",
-      "filename": "users"
-    },
     "import": {
       "title": "Import users",
       "description": "Download the template, fill it in, then upload an Excel (.xlsx) or CSV file. Failed rows do not affect the others",

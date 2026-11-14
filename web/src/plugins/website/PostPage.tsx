@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Can } from '@/framework/auth/Can'
+import { useAsyncJob } from '@/framework/hooks/use-async-job'
 import { EmptyState } from '@/framework/components/EmptyState'
 import { OptionPicker } from '@/framework/components/OptionPicker'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
@@ -32,13 +33,12 @@ import { Checkbox } from '@/framework/ui/checkbox'
 import { Input } from '@/framework/ui/input'
 import { EditorSchemaGate } from './EditorSchemaGate'
 import TranslationStatus from './TranslationStatus'
-import { downloadCsv } from '@/framework/components/export/csv'
 import { formatTime, slugify } from './format'
 import {
   MAX_POST_VERSIONS,
+  createPostExportJob,
   fetchPostPreview,
   fetchPostVersion,
-  fetchPostsForExport,
   translateContent,
   useCategories,
   useCopyPost,
@@ -264,7 +264,6 @@ function PostFormBody({
             hint={t('plugin_website.fields.coverHint')}
             placeholder={t('plugin_website.fields.coverPlaceholder')}
             crop={{ width: 1200, height: 630 }}
-            previewClassName="h-24 w-40 object-cover p-0"
             aria-label={t('plugin_website.fields.coverUrl')}
           />
           {coverInvalid ? (
@@ -808,8 +807,9 @@ function PostVersionsDialog({ post, onClose }: { post: SitePost | null; onClose:
 }
 
 export default function PostPage() {
-  const { t, i18n } = useTranslation()
+  const { t } = useTranslation()
   const confirm = useConfirm()
+  const { start: startExportJob } = useAsyncJob()
   // 预取字段 schema：点「新建/编辑」时直接命中缓存，不再先闪一个加载弹窗。
   useI18nSchema('post')
   const { data: languages = [] } = useLanguages()
@@ -889,31 +889,14 @@ export default function PostPage() {
     }
   }
 
-  // 导出沿用当前筛选（不是当前页）：后端按同一套条件取全量，前端生成带 BOM 的 CSV。
+  // 导出沿用当前筛选（不是当前页）：统一走异步任务，提交后由 useAsyncJob
+  // 提示「已提交到导出中心」，进度与下载都在导出中心看。
   const onExport = async () => {
     setExporting(true)
     try {
-      const rows = await fetchPostsForExport({ keyword: filters.keyword, status: filters.status, categoryIds: filters.categoryIds })
-      const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '')
-      downloadCsv(`posts-${stamp}.csv`, [
-        [
-          t('plugin_website.fields.postTitle'),
-          t('plugin_website.fields.slug'),
-          t('plugin_website.post.categoryColumn'),
-          t('plugin_website.fields.published'),
-          t('plugin_website.fields.publishedAt'),
-          t('plugin_website.fields.updatedAt'),
-        ],
-        ...rows.map((r) => [
-          r.title,
-          r.slug,
-          (r.categories ?? []).map((c) => c.title).join('、'),
-          isScheduled(r) ? t('plugin_website.post.scheduled') : r.published ? t('plugin_website.publishedOn') : t('plugin_website.publishedOff'),
-          r.publishedAt ? formatTime(r.publishedAt, i18n.language) : '',
-          formatTime(r.updatedAt, i18n.language),
-        ]),
-      ])
-      toast.success(t('common.operateSuccess'))
+      await startExportJob(() =>
+        createPostExportJob({ keyword: filters.keyword, status: filters.status, categoryIds: filters.categoryIds }),
+      )
     } catch {
       // 服务端原因由 http 拦截器统一弹出，这里再补一条「操作失败」就是同一件事说两遍
     } finally {
@@ -931,22 +914,35 @@ export default function PostPage() {
       render: (r) => (
         <span className="flex flex-wrap items-center gap-1.5 font-medium text-foreground">
           {r.pinned ? <Badge variant="info">{t('plugin_website.post.pinnedTag')}</Badge> : null}
-          {r.title}
+          <span className="min-w-0 max-w-[18rem] truncate" title={r.title}>
+            {r.title}
+          </span>
         </span>
       ),
     },
-    { key: 'slug', title: t('plugin_website.fields.slug'), mobile: 'sub', render: (r) => <span className="font-mono text-xs">/news/{r.slug}</span> },
+    {
+      key: 'slug',
+      title: t('plugin_website.fields.slug'),
+      mobile: 'sub',
+      render: (r) => (
+        <span className="block max-w-48 truncate font-mono text-xs" title={`/news/${r.slug}`}>
+          /news/{r.slug}
+        </span>
+      ),
+    },
     {
       key: 'categories',
       title: t('plugin_website.post.categoryColumn'),
+      // 分类多时只露前两枚、其余收进「+N」：行高不随分类数乱涨，全量名单悬停可看
       render: (r) => {
         const list = r.categories ?? []
         if (!list.length) return <span className="text-muted-foreground">—</span>
         return (
-          <div className="flex flex-wrap gap-1">
-            {list.map((c) => (
+          <div className="flex max-w-56 flex-wrap gap-1" title={list.map((c) => c.title).join('、')}>
+            {list.slice(0, 2).map((c) => (
               <Badge key={c.id} variant="outline">{c.title}</Badge>
             ))}
+            {list.length > 2 ? <Badge variant="secondary">+{list.length - 2}</Badge> : null}
           </div>
         )
       },
@@ -960,10 +956,11 @@ export default function PostPage() {
         const list = r.tags ?? []
         if (!list.length) return <span className="text-muted-foreground">—</span>
         return (
-          <div className="flex flex-wrap gap-1">
-            {list.map((x) => (
+          <div className="flex max-w-56 flex-wrap gap-1" title={list.map((x) => `#${x.name}`).join('、')}>
+            {list.slice(0, 2).map((x) => (
               <Badge key={x.id} variant="outline">{x.name}</Badge>
             ))}
+            {list.length > 2 ? <Badge variant="secondary">+{list.length - 2}</Badge> : null}
           </div>
         )
       },

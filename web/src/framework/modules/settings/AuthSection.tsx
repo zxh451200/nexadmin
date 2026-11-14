@@ -1,7 +1,9 @@
-import type { ReactNode } from 'react'
+import { useMemo, type ReactNode } from 'react'
 import { KeyRound, Smartphone } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import type { UseFormReturn } from 'react-hook-form'
 import { z } from 'zod'
+import { oauthRedirectUri } from '@/framework/auth/oauth'
 import { ProviderIcon } from '@/framework/components/BrandIcon'
 import { FormGrid, FormGridFull } from '@/framework/components/FormLayout'
 import { cn } from '@/lib/utils'
@@ -23,6 +25,7 @@ function MethodRow({
   enabled,
   label,
   description,
+  onEnable,
   panel,
 }: {
   control: AnyControl
@@ -31,6 +34,8 @@ function MethodRow({
   enabled: boolean
   label: ReactNode
   description?: ReactNode
+  /** 开关打开时的联动（例如把回调地址填成当前站点） */
+  onEnable?: () => void
   panel?: ReactNode
 }) {
   return (
@@ -45,7 +50,17 @@ function MethodRow({
         >
           {icon}
         </span>
-        <SwitchField control={control} name={name} bare label={label} description={description} className="min-w-0 flex-1" />
+        <SwitchField
+          control={control}
+          name={name}
+          bare
+          label={label}
+          description={description}
+          onCheckedChange={(on) => {
+            if (on) onEnable?.()
+          }}
+          className="min-w-0 flex-1"
+        />
       </div>
       {panel}
     </div>
@@ -66,143 +81,208 @@ const providerSchema = z.object({
   enabled: z.boolean(),
   clientId: z.string().trim(),
   clientSecret: z.string(),
+  /** 每行一个完整 URL；与开放平台登记的回调地址精确一致 */
+  redirectUris: z.string(),
+  /** 仅企业微信 */
+  agentId: z.string().trim().optional(),
+  /** 仅 OIDC */
   issuer: z.string().trim().optional(),
 })
 
-const authSchema = z.object({
-  account: z.boolean(),
-  phone: z.boolean(),
-  providers: z.object({
-    wecom: providerSchema,
-    dingtalk: providerSchema,
-    feishu: providerSchema,
-    google: providerSchema,
-    github: providerSchema,
-    oidc: providerSchema,
-  }),
-  matchBy: z.enum(['phone', 'email', 'employeeNo']),
-  autoCreate: z.boolean(),
-  allowedDomains: z.string(),
-  proxy: z.string().trim(),
-})
+// 开启的 provider 必须当场填全，否则服务端也会拒绝（config.auth.provider_incomplete）：
+// 提前在表单里说清楚，比保存后只收到一句报错好。
+function authSchema(required: string) {
+  return z
+    .object({
+      account: z.boolean(),
+      phone: z.boolean(),
+      providers: z.object({
+        wecom: providerSchema,
+        dingtalk: providerSchema,
+        feishu: providerSchema,
+        google: providerSchema,
+        github: providerSchema,
+        oidc: providerSchema,
+      }),
+      matchBy: z.enum(['phone', 'email', 'employeeNo']),
+      autoCreate: z.boolean(),
+      allowedDomains: z.string(),
+      proxy: z.string().trim(),
+    })
+    .superRefine((v, ctx) => {
+      const issue = (key: string, field: string) =>
+        ctx.addIssue({ code: 'custom', path: ['providers', key, field], message: required })
+      for (const key of PROVIDER_KEYS) {
+        const p = v.providers[key]
+        if (!p.enabled) continue
+        if (!p.clientId) issue(key, 'clientId')
+        if (!p.redirectUris.trim()) issue(key, 'redirectUris')
+        if (key === 'wecom' && !p.agentId) issue(key, 'agentId')
+        if (key === 'oidc' && !p.issuer) issue(key, 'issuer')
+      }
+    })
+}
 
 export function AuthSection({ value }: { value: AllSettings['auth'] }) {
   const { t } = useTranslation()
+  const schema = useMemo(() => authSchema(t('settings.auth.required')), [t])
   return (
-    <SectionCard section="auth" value={value} schema={authSchema}>
-      {(form) => (
-        <>
-          <fieldset className="flex flex-col gap-1">
-            <GroupLegend title={t('settings.auth.basicMethods')} />
-            <div className="-mx-2">
-              <MethodRow
-                control={form.control}
-                name="account"
-                icon={<KeyRound className="size-[18px]" />}
-                enabled={form.watch('account')}
-                label={t('settings.auth.account')}
-              />
-              <MethodRow
-                control={form.control}
-                name="phone"
-                icon={<Smartphone className="size-[18px]" />}
-                enabled={form.watch('phone')}
-                label={t('settings.auth.phone')}
-              />
-            </div>
-          </fieldset>
+    <SectionCard section="auth" value={value} schema={schema}>
+      {(form) => <AuthFields form={form} />}
+    </SectionCard>
+  )
+}
 
-          <fieldset className="flex flex-col gap-1">
-            <GroupLegend title={t('settings.auth.thirdParty')} hint={t('settings.auth.thirdPartyHint')} />
-            <div className="-mx-2">
-              {PROVIDER_KEYS.map((key) => {
-                const enabled = form.watch(`providers.${key}.enabled`)
-                return (
-                  <MethodRow
-                    key={key}
-                    control={form.control}
-                    name={`providers.${key}.enabled`}
-                    icon={<ProviderIcon provider={key} className="size-[18px]" />}
-                    enabled={enabled}
-                    label={t(`settings.auth.providers.${key}`)}
-                    description={t(`settings.auth.providerHints.${key}`)}
-                    panel={
-                      enabled ? (
-                        <div className={cn('rounded-lg border border-border/60 bg-muted/50 p-3', INDENT)}>
-                          <FormGrid cols={2}>
-                            <TextField control={form.control} name={`providers.${key}.clientId`} label="Client ID" />
+// 表单本身跨多个 provider 动态字段，控制面类型放宽（与 SectionCard 的 children 签名一致）
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AuthForm = UseFormReturn<any>
+
+function AuthFields({ form }: { form: AuthForm }) {
+  const { t } = useTranslation()
+  // 打开开关时把回调地址填成当前站点的默认值（授权完成后前端回跳页），管理员按需改成对外域名。
+  // 只在「打开」这一下补空值：已经填过（含 config.yaml 回填、或用户自己改过）就保持原样。
+  const fillRedirect = (key: string) => {
+    const cur = form.getValues(`providers.${key}.redirectUris`)
+    if (!String(cur ?? '').trim()) {
+      form.setValue(`providers.${key}.redirectUris`, oauthRedirectUri(key), { shouldValidate: false })
+    }
+  }
+
+  return (
+    <>
+      <fieldset className="flex flex-col gap-1">
+        <GroupLegend title={t('settings.auth.basicMethods')} />
+        <div className="-mx-2">
+          <MethodRow
+            control={form.control}
+            name="account"
+            icon={<KeyRound className="size-[18px]" />}
+            enabled={form.watch('account')}
+            label={t('settings.auth.account')}
+          />
+          <MethodRow
+            control={form.control}
+            name="phone"
+            icon={<Smartphone className="size-[18px]" />}
+            enabled={form.watch('phone')}
+            label={t('settings.auth.phone')}
+          />
+        </div>
+      </fieldset>
+
+      <fieldset className="flex flex-col gap-1">
+        <GroupLegend title={t('settings.auth.thirdParty')} hint={t('settings.auth.thirdPartyHint')} />
+        <div className="-mx-2">
+          {PROVIDER_KEYS.map((key) => {
+            const enabled = form.watch(`providers.${key}.enabled`)
+            return (
+              <MethodRow
+                key={key}
+                control={form.control}
+                name={`providers.${key}.enabled`}
+                icon={<ProviderIcon provider={key} className="size-[18px]" />}
+                enabled={enabled}
+                label={t(`settings.auth.providers.${key}`)}
+                description={t(`settings.auth.providerHints.${key}`)}
+                onEnable={() => fillRedirect(key)}
+                panel={
+                  enabled ? (
+                    <div className={cn('rounded-lg border border-border/60 bg-muted/50 p-3', INDENT)}>
+                      <FormGrid cols={2}>
+                        <TextField
+                          control={form.control}
+                          name={`providers.${key}.clientId`}
+                          label={t(`settings.auth.credentials.${key}.id`)}
+                        />
+                        <TextField
+                          control={form.control}
+                          name={`providers.${key}.clientSecret`}
+                          label={t(`settings.auth.credentials.${key}.secret`)}
+                          type="password"
+                          description={t('settings.auth.fields.secretHint')}
+                        />
+                        {key === 'wecom' ? (
+                          <FormGridFull>
                             <TextField
                               control={form.control}
-                              name={`providers.${key}.clientSecret`}
-                              label="Client Secret"
-                              type="password"
+                              name="providers.wecom.agentId"
+                              label={t('settings.auth.fields.agentId')}
                             />
-                            {key === 'oidc' ? (
-                              <FormGridFull>
-                                <TextField
-                                  control={form.control}
-                                  name="providers.oidc.issuer"
-                                  label="Issuer"
-                                  type="url"
-                                  inputMode="url"
-                                  placeholder="https://idp.example.com"
-                                />
-                              </FormGridFull>
-                            ) : null}
-                          </FormGrid>
-                        </div>
-                      ) : null
-                    }
-                  />
-                )
-              })}
-            </div>
-          </fieldset>
+                          </FormGridFull>
+                        ) : null}
+                        {key === 'oidc' ? (
+                          <FormGridFull>
+                            <TextField
+                              control={form.control}
+                              name="providers.oidc.issuer"
+                              label="Issuer"
+                              type="url"
+                              inputMode="url"
+                              placeholder="https://idp.example.com"
+                            />
+                          </FormGridFull>
+                        ) : null}
+                        <FormGridFull>
+                          <TextareaField
+                            control={form.control}
+                            name={`providers.${key}.redirectUris`}
+                            label={t('settings.auth.fields.redirectUris')}
+                            description={t('settings.auth.fields.redirectUrisHint', { url: oauthRedirectUri(key) })}
+                            placeholder={oauthRedirectUri(key)}
+                          />
+                        </FormGridFull>
+                      </FormGrid>
+                    </div>
+                  ) : null
+                }
+              />
+            )
+          })}
+        </div>
+      </fieldset>
 
-          <fieldset className="flex flex-col gap-3">
-            <GroupLegend title={t('settings.auth.matchLimit')} hint={t('settings.auth.matchLimitHint')} />
-            <FormGrid cols={2}>
-              <SelectField
-                control={form.control}
-                name="matchBy"
-                label={t('settings.auth.matchBy')}
-                description={t('settings.auth.matchByHint')}
-                options={[
-                  { value: 'phone', label: t('settings.auth.matchPhone') },
-                  { value: 'email', label: t('settings.auth.matchEmail') },
-                  { value: 'employeeNo', label: t('settings.auth.matchEmployeeNo') },
-                ]}
-              />
-              <TextField
-                control={form.control}
-                name="proxy"
-                label={t('settings.auth.proxy')}
-                description={t('settings.auth.proxyHint')}
-                type="url"
-                inputMode="url"
-                placeholder="http://proxy.example.com:8080"
-              />
-              <FormGridFull>
-                <SwitchField
-                  control={form.control}
-                  name="autoCreate"
-                  label={t('settings.auth.autoCreate')}
-                  description={t('settings.auth.autoCreateHint')}
-                />
-              </FormGridFull>
-              <FormGridFull>
-                <TextareaField
-                  control={form.control}
-                  name="allowedDomains"
-                  label={t('settings.auth.allowedDomains')}
-                  description={t('settings.auth.allowedDomainsHint')}
-                  placeholder="example.com, corp.example.com"
-                />
-              </FormGridFull>
-            </FormGrid>
-          </fieldset>
-        </>
-      )}
-    </SectionCard>
+      <fieldset className="flex flex-col gap-3">
+        <GroupLegend title={t('settings.auth.matchLimit')} hint={t('settings.auth.matchLimitHint')} />
+        <FormGrid cols={2}>
+          <SelectField
+            control={form.control}
+            name="matchBy"
+            label={t('settings.auth.matchBy')}
+            description={t('settings.auth.matchByHint')}
+            options={[
+              { value: 'phone', label: t('settings.auth.matchPhone') },
+              { value: 'email', label: t('settings.auth.matchEmail') },
+              { value: 'employeeNo', label: t('settings.auth.matchEmployeeNo') },
+            ]}
+          />
+          <TextField
+            control={form.control}
+            name="proxy"
+            label={t('settings.auth.proxy')}
+            description={t('settings.auth.proxyHint')}
+            type="url"
+            inputMode="url"
+            placeholder="http://proxy.example.com:8080"
+          />
+          <FormGridFull>
+            <SwitchField
+              control={form.control}
+              name="autoCreate"
+              label={t('settings.auth.autoCreate')}
+              description={t('settings.auth.autoCreateHint')}
+            />
+          </FormGridFull>
+          <FormGridFull>
+            <TextareaField
+              control={form.control}
+              name="allowedDomains"
+              label={t('settings.auth.allowedDomains')}
+              description={t('settings.auth.allowedDomainsHint')}
+              placeholder="example.com, corp.example.com"
+            />
+          </FormGridFull>
+        </FormGrid>
+      </fieldset>
+    </>
   )
 }

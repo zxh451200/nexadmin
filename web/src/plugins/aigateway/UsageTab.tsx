@@ -2,17 +2,15 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { FilterBar } from '@/framework/components/FilterBar'
+import { OptionPicker } from '@/framework/components/OptionPicker'
 import { Badge } from '@/framework/ui/badge'
 import { Input } from '@/framework/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import { AI_KINDS, useUsage, useUsageSummary, type AiUsage, type UsageQuery } from './api'
 import { formatTime } from './format'
 
-const ALL = '__all'
-
 export function UsageTab() {
   const { t, i18n } = useTranslation()
-  const [draft, setDraft] = useState<UsageQuery>({})
+  const [draft, setDraft] = useState<{ kind?: string[]; bizType?: string }>({})
   const [filters, setFilters] = useState<UsageQuery>({})
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
@@ -49,7 +47,7 @@ export function UsageTab() {
     <div className="flex flex-wrap items-center gap-2">
       <FilterBar
         onSearch={() => {
-          setFilters(draft)
+          setFilters({ kind: draft.kind?.length ? draft.kind.join(',') : undefined, bizType: draft.bizType || undefined })
           setPage(1)
         }}
         onReset={() => {
@@ -65,19 +63,14 @@ export function UsageTab() {
           placeholder={t('plugin_aigateway.fields.biz')}
           aria-label={t('plugin_aigateway.fields.biz')}
         />
-        <Select value={draft.kind ?? ALL} onValueChange={(v) => setDraft((d) => ({ ...d, kind: v === ALL ? undefined : v }))}>
-          <SelectTrigger className="md:w-44" aria-label={t('plugin_aigateway.fields.kind')}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_aigateway.filter.allKinds')}</SelectItem>
-            {AI_KINDS.map((k) => (
-              <SelectItem key={k} value={k}>
-                {t(`plugin_aigateway.kind.${k}`)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <OptionPicker
+          title={t('plugin_aigateway.fields.kind')}
+          value={draft.kind ?? []}
+          onChange={(v) => setDraft((d) => ({ ...d, kind: v.length ? v : undefined }))}
+          options={AI_KINDS.map((k) => ({ value: k, label: t(`plugin_aigateway.kind.${k}`) }))}
+          className="md:w-48"
+          placeholder={t('plugin_aigateway.fields.kind')}
+        />
       </FilterBar>
     </div>
   )

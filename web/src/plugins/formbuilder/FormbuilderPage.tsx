@@ -12,7 +12,7 @@ import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/framework/ui/dropdown-menu'
 import { Input } from '@/framework/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
+import { OptionPicker } from '@/framework/components/OptionPicker'
 import {
   downloadDefinition,
   useCopyForm,
@@ -28,8 +28,13 @@ import {
 import { CreateFormDialog } from './CreateFormDialog'
 import { formatTime, statusVariant } from './format'
 
-const ALL = '__all'
 const MAX_IMPORT_BYTES = 64 * 1024
+
+/** 草稿的枚举字段是多选数组；生效筛选（filters）是 CSV 字符串，直接进 query */
+interface Draft {
+  keyword?: string
+  status?: string[]
+}
 
 interface Filters {
   keyword?: string
@@ -41,7 +46,7 @@ export default function FormbuilderPage() {
   const navigate = useNavigate()
   const confirm = useConfirm()
   const fileRef = useRef<HTMLInputElement>(null)
-  const [draft, setDraft] = useState<Filters>({})
+  const [draft, setDraft] = useState<Draft>({})
   const [filters, setFilters] = useState<Filters>({})
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
@@ -166,7 +171,7 @@ export default function FormbuilderPage() {
       <input ref={fileRef} type="file" accept=".json,application/json" className="hidden" aria-label={t('plugin_formbuilder.import.title')} onChange={(e) => void onImportFile(e.target.files?.[0])} />
       <FilterBar
         onSearch={() => {
-          setFilters(draft)
+          setFilters({ keyword: draft.keyword, status: draft.status?.length ? draft.status.join(',') : undefined })
           setPage(1)
         }}
         onReset={() => {
@@ -182,21 +187,14 @@ export default function FormbuilderPage() {
           placeholder={t('plugin_formbuilder.searchPlaceholder')}
           aria-label={t('common.keyword')}
         />
-        <Select value={draft.status ?? ALL} onValueChange={(v) => setDraft((d) => ({ ...d, status: v === ALL ? undefined : v }))}>
-          <SelectTrigger className="md:w-44" aria-label={t('plugin_formbuilder.fields.status')}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>
-              {t('plugin_formbuilder.all')}
-            </SelectItem>
-            {(['draft', 'published', 'offline'] as const).map((s) => (
-              <SelectItem key={s} value={s}>
-                {t(`plugin_formbuilder.status.${s}`)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <OptionPicker
+          title={t('plugin_formbuilder.fields.status')}
+          value={draft.status ?? []}
+          onChange={(v) => setDraft((d) => ({ ...d, status: v.length ? v : undefined }))}
+          options={['draft', 'published', 'offline'].map((s) => ({ value: s, label: t(`plugin_formbuilder.status.${s}`) }))}
+          className="md:w-44"
+          placeholder={t('plugin_formbuilder.fields.status')}
+        />
       </FilterBar>
       <DataTable
         columns={columns}

@@ -78,7 +78,7 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 
 	g.GET("/messages", core.Perm("website:message"), core.Desc("留言列表"), h.listMessages)
 	g.GET("/messages/unread-count", core.Perm("website:message"), core.Desc("留言未读数"), h.unreadMessageCount)
-	g.GET("/messages/export", core.Perm("website:message"), core.Desc("导出留言"), h.exportMessages)
+	g.POST("/messages/export-async", core.Perm("website:message"), core.Desc("提交留言异步导出任务"), h.MessageExportAsync)
 	g.PUT("/messages/status", core.Perm("website:message"), core.Desc("批量修改留言状态"), h.setMessageStatus)
 	g.DELETE("/messages", core.Perm("website:message"), core.Desc("批量删除留言"), h.deleteMessages)
 
@@ -106,7 +106,7 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.DELETE("/pages/:id", core.Perm("website:page"), core.Desc("删除页面"), h.deletePage)
 
 	g.GET("/posts", core.Perm("website:post"), core.Desc("新闻列表"), h.listPosts)
-	g.GET("/posts/export", core.Perm("website:post"), core.Desc("导出新闻"), h.exportPosts)
+	g.POST("/posts/export-async", core.Perm("website:post"), core.Desc("提交新闻异步导出任务"), h.PostExportAsync)
 	g.PUT("/posts/status", core.Perm("website:post"), core.Desc("批量发布/下线新闻"), h.setPostStatus)
 	g.DELETE("/posts", core.Perm("website:post"), core.Desc("批量删除新闻"), h.deletePosts)
 	g.POST("/posts", core.Perm("website:post"), core.Desc("新增新闻"), h.createPost)
@@ -129,8 +129,6 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.DELETE("/tags/:id", core.Perm("website:post"), core.Desc("删除新闻标签"), h.deleteTag)
 
 	g.GET("/products", core.Perm("website:product"), core.Desc("产品列表"), h.listProducts)
-	g.GET("/products/export", core.Perm("website:product"), core.Desc("导出产品"), h.exportProducts)
-	g.GET("/products/export-plan", core.Perm("website:product"), core.Desc("产品导出计划（同步/异步分流）"), h.productExportPlan)
 	g.POST("/products/export-async", core.Perm("website:product"), core.Desc("提交产品异步导出任务"), h.productExportAsync)
 	g.PUT("/products/status", core.Perm("website:product"), core.Desc("批量上架/下线产品"), h.setProductStatus)
 	g.DELETE("/products", core.Perm("website:product"), core.Desc("批量删除产品"), h.deleteProducts)
@@ -168,6 +166,13 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	// 产品异步导出的任务体：worker 流式写 xlsx，进度与下载在导出中心。
 	job.Register(jobTypeProductExport, func(ctx context.Context, j *job.Job, report job.Report) (job.ResultFile, error) {
 		return m.service(d).RunProductExportJob(ctx, j, report)
+	})
+	// 新闻 / 留言异步导出：与商品导出同一套机制（列与页面列表一致，进度在导出中心）。
+	job.Register(jobTypePostExport, func(ctx context.Context, j *job.Job, report job.Report) (job.ResultFile, error) {
+		return m.service(d).RunPostExportJob(ctx, j, report)
+	})
+	job.Register(jobTypeMessageExport, func(ctx context.Context, j *job.Job, report job.Report) (job.ResultFile, error) {
+		return m.service(d).RunMessageExportJob(ctx, j, report)
 	})
 	g.GET("/limits", core.Perm("website:setting"), core.Desc("读取官网生效上限"), h.limits)
 	// 语言清单的管理接口在框架（/api/v1/languages，见 modules/system/language）：

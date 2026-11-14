@@ -42,10 +42,11 @@ func (h *oauthHandler) providers(c *gin.Context) {
 		Key  string `json:"key"`
 		Name string `json:"name"`
 	}
+	ctx := c.Request.Context()
 	out := []item{}
-	for _, k := range h.flow.Available() {
-		name := i18n.T(c.Request.Context(), "auth.provider."+k)
-		if pc, ok := h.flow.Conf(k); ok && k == "oidc" && pc.Name != "" {
+	for _, k := range h.flow.Available(ctx) {
+		name := i18n.T(ctx, "auth.provider."+k)
+		if pc, ok := h.flow.Conf(ctx, k); ok && k == "oidc" && pc.Name != "" {
 			name = pc.Name
 		} else if name == "" || name == "auth.provider."+k {
 			name = auth.ProviderDisplay(k)
@@ -81,6 +82,10 @@ func (h *oauthHandler) start(c *gin.Context) {
 	response.OK(c, gin.H{"authUrl": u})
 }
 
+// ReasonOAuthRedirect 是 start / bind 失败时的 reason：前端据此给出可照做的提示
+// （当前页面地址不在回调地址白名单里，去设置页添加），而不是一句笼统的“回调地址不在允许范围内”。
+const ReasonOAuthRedirect = "OAUTH_REDIRECT_NOT_ALLOWED"
+
 // startError 把流程错误翻成对外的 HTTP 错误；供登录与个人中心绑定共用。
 func startError(err error) error {
 	switch {
@@ -89,7 +94,9 @@ func startError(err error) error {
 	case errors.Is(err, oauthflow.ErrNotConfigured):
 		return response.NotFound("error.not_found")
 	case errors.Is(err, oauthflow.ErrRedirect):
-		return response.BadRequest("auth.redirect_uri_invalid")
+		e := response.BadRequest("auth.redirect_uri_invalid")
+		e.Reason = ReasonOAuthRedirect
+		return e
 	}
 	return err
 }

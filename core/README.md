@@ -21,7 +21,7 @@
 | `database` | GORM 引擎创建（mysql/mariadb/postgres）、连接池、isolation（租户独立库路由） | 由框架调用；业务代码只拿 `d.DB` | `database/` |
 | `tenant` | 租户解析链（header/域名/登录态）、`WithTenant` context、默认租户 | 查询已由 `TenantModel` 自动带租户；特殊场景 `tenant.With(ctx, id)` | `tenant/` |
 | `datascope` | 数据范围裁剪（all/deptAndChild/dept/self/custom） | 参考 `modules/notice/scope.go` | `datascope/` |
-| `region` | 省市区数据：随包内置大陆三级树 + 港澳台补全（go:embed，生效 34 个省级），运行时可切换成同步下来的快照 | `GET /regions/tree`；同步接口见 `modules/region` | `region/` |
+| `region` | 省市区数据：随包内置大陆三级树 + 港澳台补全（go:embed，生效 34 个省级）+ 街道/乡镇增强层（Tree(4)，不进存储契约），运行时可切换成同步下来的快照 | `GET /regions/tree`；同步接口见 `modules/region` | `region/` |
 | `secret` | 静态加密（AES-256-GCM，主密钥 `data/secret.key` / `NEXADMIN_SECRET_KEY`） | 存第三方密钥等敏感值 | `secret/secret.go` |
 
 ## 认证与安全

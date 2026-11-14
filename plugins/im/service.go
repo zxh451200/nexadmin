@@ -285,7 +285,7 @@ func (s *Service) Send(ctx context.Context, convNo string, in SendInput) (*Messa
 	switch {
 	case convNo == "":
 		return nil, response.BadRequest("error.bad_request")
-	case in.SenderType != SenderVisitor && in.SenderType != SenderAgent && in.SenderType != SenderSystem:
+	case in.SenderType != SenderVisitor && in.SenderType != SenderAgent && in.SenderType != SenderBot && in.SenderType != SenderSystem:
 		return nil, response.BadRequest("im.sender_invalid")
 	case in.Content == "" && in.Attachment == "":
 		return nil, response.BadRequest("im.content_required")
@@ -678,7 +678,11 @@ func (s *Service) Claim(ctx context.Context, convNo, userID, userName string) (*
 	}
 	res := s.db.WithContext(ctx).Model(&Conversation{}).
 		Where("conv_no = ? AND (assignee_id = '' OR assignee_id = ?)", strings.TrimSpace(convNo), userID).
-		Updates(map[string]any{"assignee_id": userID, "assignee_name": truncate(strings.TrimSpace(userName), 64)})
+		Updates(map[string]any{
+			"assignee_id": userID, "assignee_name": truncate(strings.TrimSpace(userName), 64),
+			// 认领即人工接管：AI 自动回答从这一刻起停答（与访客转人工同口径）。
+			"bot_paused": true,
+		})
 	if res.Error != nil {
 		return nil, res.Error
 	}
@@ -1225,6 +1229,88 @@ func (s *Service) AssignNext(ctx context.Context, agentID, agentName string) (st
 	}
 	s.publishControl(c.ConvNo, map[string]any{"type": "assigned", "assigneeId": agentID, "assigneeName": truncate(agentName, 64)})
 	return c.ConvNo, nil
+}
+
+// Handoff 访客主动转人工：置「人工接管」标记（AI 停答）、发系统提示帧，并尝试按自动分配落人
+//（没有在线坐席或未开自动分配时排队，等坐席心跳领走或手动认领）。重复调用幂等。
+func (s *Service) Handoff(ctx context.Context, convNo string) (*Conversation, error) {
+	convNo = strings.TrimSpace(convNo)
+	var (
+		c   Conversation
+		out Message
+	)
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("conv_no = ?", convNo).Take(&c).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return response.NotFound("im.conv_not_found")
+			}
+			return err
+		}
+		if c.Status != StatusOpen {
+			return response.Conflict("im.conv_closed")
+		}
+		if !c.BotPaused { // 幂等：已转过人工就不再发第二帧
+			id, err := idgen.Next()
+			if err != nil {
+				return err
+			}
+			now := time.Now().UTC()
+			out = Message{
+				ConvID: c.ID, Seq: c.MsgSeq + 1, SenderType: SenderSystem, Kind: KindSystem,
+				Meta: `{"code":"` + MetaCodeHandoff + `"}`, Content: "",
+			}
+			out.ID = id
+			out.CreatedAt = now
+			if err := tx.Create(&out).Error; err != nil {
+				return err
+			}
+			if err := tx.Model(&Conversation{}).Where("id = ?", int64(c.ID)).Updates(map[string]any{
+				"bot_paused": true, "msg_seq": out.Seq, "last_msg_at": now,
+			}).Error; err != nil {
+				return err
+			}
+			c.BotPaused = true
+			c.MsgSeq = out.Seq
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	if out.ID != 0 {
+		raw, _ := json.Marshal(out)
+		s.push(convNo, raw)
+		s.publishCreated(ctx, &c, &out)
+	}
+	s.autoAssign(ctx, &c)
+	return s.reload(ctx, convNo)
+}
+
+// RequestAgent 转人工排队：把未分配的会话交给自动分配（在线坐席直接落人，否则排队）。
+// 供 AI 兜底使用；幂等（已分配直接成功）。
+func (s *Service) RequestAgent(ctx context.Context, convNo string) error {
+	convNo = strings.TrimSpace(convNo)
+	var c Conversation
+	if err := s.db.WithContext(ctx).Where("conv_no = ?", convNo).Take(&c).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return response.NotFound("im.conv_not_found")
+		}
+		return err
+	}
+	if c.Status != StatusOpen || c.AssigneeID != "" {
+		return nil
+	}
+	s.autoAssign(ctx, &c)
+	return nil
+}
+
+func (s *Service) reload(ctx context.Context, convNo string) (*Conversation, error) {
+	var c Conversation
+	if err := s.db.WithContext(ctx).Where("conv_no = ?", convNo).Take(&c).Error; err != nil {
+		return nil, err
+	}
+	return &c, nil
 }
 
 // Transfer 把会话转给指定坐席（覆盖原归属），并通知双方刷新。

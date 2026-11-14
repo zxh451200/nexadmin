@@ -9,6 +9,7 @@
     "province": "省/直辖市",
     "city": "市",
     "district": "区/县",
+    "street": "街道/乡镇",
     "selectCountry": "请选择国家/地区",
     "selectIcon": "请选择图标",
     "searchIcon": "搜索图标名",
@@ -22,6 +23,9 @@
     "minute": "分钟",
     "addressDetail": "详细地址",
     "addressFull": "完整地址",
-    "addressPasteHint": "粘贴完整地址可自动识别省市区"
+    "addressPasteHint": "粘贴完整地址可自动识别省市区",
+    "mapPick": "地图选点",
+    "recent": "最近使用",
+    "clear": "清空"
   }
 }

@@ -71,6 +71,7 @@ const seed: User[] = rows.map(([i, username, nickname, phone, email, gender, d, 
   roleNames: roles.map((r) => roleName.get(r) ?? r),
   status,
   region,
+  address: '',
   remark: i === 1 ? '系统内置管理员' : '',
   locked: false,
   lockedUntil: null,
@@ -88,8 +89,6 @@ function inCreatedRange(u: User, query: Record<string, unknown>): boolean {
   return true
 }
 
-const MOCK_SYNC_LIMIT = 20
-
 function filtered(query: Record<string, unknown>): User[] {
   let list = store.all().slice()
   const kw = String(query.keyword ?? '').trim().toLowerCase()
@@ -104,7 +103,7 @@ function filtered(query: Record<string, unknown>): User[] {
 }
 
 // ---- 用户导入（.xlsx / CSV）：与后端 POST /users/import 同一契约，部分成功、失败行带原因 ----
-// mock 无法生成 .xlsx：模板与 format=xlsx 的导出都返回 CSV 文本（前端按 Content-Type 决定扩展名）；导入则两种格式都能读。
+// mock 无法生成 .xlsx：导入模板返回 CSV 文本（前端按 Content-Type 决定扩展名）；导入则两种格式都能读。
 
 const IMPORT_TEMPLATE =
   '\uFEFF账号,姓名,手机,邮箱,性别,部门,角色,岗位,备注\r\ndemo_user,演示用户,13800000000,demo@example.com,男,研发中心,运营;审计,,\r\n'
@@ -186,7 +185,7 @@ function importRows(rows: string[][]): ImportResult {
     store.insert({
       id: genId(), username, nickname: get('nickname') || username, avatar: '', phone, email, gender,
       deptId: d?.[0] ?? '', deptName: d?.[1] ?? '', postIds: [], roleIds: roleNames.map((n) => roles.get(n)!), roleNames,
-      status: '1', region: { province: '', city: '', district: '' }, remark: get('remark'), locked: false, lockedUntil: null,
+      status: '1', region: { province: '', city: '', district: '' }, address: '', remark: get('remark'), locked: false, lockedUntil: null,
       createdAt: now, updatedAt: now,
     })
     result.success++
@@ -225,31 +224,6 @@ defineMock([
       if (!u) mockError(404, 'Not found')
       unlockAccount(u.username)
       return null
-    },
-  },
-  {
-    method: 'GET',
-    url: '/users/export',
-    handler: ({ query }) => {
-      const list = filtered(query)
-      if (query.format !== 'xlsx') return list
-      const cell = (v: string) => (/[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v)
-      const head = ['账号', '姓名', '手机', '邮箱', '性别', '部门', '角色', '备注', '状态', '创建时间']
-      const gender: Record<string, string> = { '1': '男', '2': '女' }
-      const lines = list.map((u) =>
-        [u.username, u.nickname, u.phone, u.email, gender[u.gender] ?? '未知', u.deptName, u.roleNames.join(';'), u.remark,
-          u.status === '1' ? '启用' : '停用', u.createdAt].map(cell).join(','),
-      )
-      return `\uFEFF${[head.join(','), ...lines].join('\r\n')}\r\n`
-    },
-  },
-  {
-    // 同步 / 异步分流：真实后端读 export.sync_limit（默认 5000），mock 用 20 让演示数据就能走到异步分支
-    method: 'GET',
-    url: '/users/export-plan',
-    handler: ({ query }) => {
-      const total = filtered(query).length
-      return { total, syncLimit: MOCK_SYNC_LIMIT, async: total > MOCK_SYNC_LIMIT }
     },
   },
   {

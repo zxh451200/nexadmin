@@ -63,8 +63,9 @@ func (s *Service) WithTimezone(tz string) *Service {
 	return s
 }
 
-// logger 是最小日志面（便于测试注入空实现）。
+// logger 是最小日志面（便于测试注入空实现）。Info 用于导出这类「不进操作日志」的审计行。
 type logger interface {
+	Info(msg string, keysAndValues ...any)
 	Warn(msg string, keysAndValues ...any)
 	Error(msg string, keysAndValues ...any)
 }

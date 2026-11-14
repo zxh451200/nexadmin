@@ -160,11 +160,16 @@ func (s *Service) ListTenants(ctx context.Context, q ListQuery, page, size int) 
 		db = db.Where("status IN ?", strings.Split(q.Status, ","))
 	}
 	if q.PackageID != "" {
-		pid, err := idgen.Parse(q.PackageID)
-		if err != nil {
-			return nil, 0, response.BadRequest("error.bad_request").Wrap(err)
+		// 套餐多选（CSV）：非法项忽略（与全局筛选宽容语义一致）
+		var pids []int64
+		for _, part := range strings.Split(q.PackageID, ",") {
+			if pid, err := idgen.Parse(strings.TrimSpace(part)); err == nil && pid > 0 {
+				pids = append(pids, int64(pid))
+			}
 		}
-		db = db.Where("package_id = ?", int64(pid))
+		if len(pids) > 0 {
+			db = db.Where("package_id IN ?", pids)
+		}
 	}
 	var total int64
 	if err := db.Count(&total).Error; err != nil {

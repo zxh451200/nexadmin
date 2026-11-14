@@ -7,7 +7,7 @@ import (
 
 	"nexadmin/core"
 	"nexadmin/core/auth"
-	"nexadmin/core/middleware"
+	"nexadmin/core/job"
 )
 
 func init() { core.RegisterBuiltin(module{}) }
@@ -26,9 +26,9 @@ func (module) Seed(db *gorm.DB) error {
 }
 
 // Register 注册路由，并设置全局 Default() 供其他模块写日志。
-// 导出走服务端接口 GET /oper-logs/export、/login-logs/export（xlsx 流式写出），强制 operLog:export / loginLog:export，
-// 复用列表的筛选与数据范围，行数受 log.export_max_rows 限制，按用户限流（ratelimit.log_export），并记一条 type=export 的操作日志。
-// 列表接口的 pageSize 上限（5000）只服务于页面分页，不再承担导出。
+// 导出统一走异步任务（POST /oper-logs/export-async、/login-logs/export-async，权限 operLog:export / loginLog:export）：
+// 提交即登记 core/job 任务进导出中心，worker 沿用列表的筛选与数据范围（执行时按任务所有者重算），
+// 行数受 log.export_max_rows 限制（任务内上限，超过整个任务失败）；提交动作经操作日志中间件留痕。
 func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	svc := NewService(d.DB, d.Config.App.Timezone, d.Log).WithExportMaxRows(d.Config.Log.ExportMaxRows)
 	svc.adoptAsDefault()
@@ -48,18 +48,18 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	h := &Handler{svc: svc}
 	auth.RegisterPerm("operLog:export")
 	auth.RegisterPerm("loginLog:export")
-
-	exportLimit := middleware.RateLimitRule(d.Cache, d.Log, d.Config.RateLimit, "log_export", middleware.ByUser())
+	job.Register(jobTypeOperExport, svc.exportJob(false))
+	job.Register(jobTypeLoginExport, svc.exportJob(true))
 
 	r.GET("/oper-logs", core.Perm("operLog:list"), h.ListOper)
 	r.GET("/oper-logs/stats", core.Perm("operLog:list"), h.StatsOper)
-	r.GET("/oper-logs/export", core.Perm("operLog:export"), exportLimit, h.ExportOper)
+	r.POST("/oper-logs/export-async", core.Perm("operLog:export"), d.OperLogMiddleware("操作日志", "export"), h.ExportOperAsync)
 	r.DELETE("/oper-logs", core.Perm("operLog:delete"), h.DeleteOper)
 	r.POST("/oper-logs/clean", core.Perm("operLog:delete"), h.CleanOper)
 
 	r.GET("/login-logs", core.Perm("loginLog:list"), h.ListLogin)
 	r.GET("/login-logs/stats", core.Perm("loginLog:list"), h.StatsLogin)
-	r.GET("/login-logs/export", core.Perm("loginLog:export"), exportLimit, h.ExportLogin)
+	r.POST("/login-logs/export-async", core.Perm("loginLog:export"), d.OperLogMiddleware("登录日志", "export"), h.ExportLoginAsync)
 	r.DELETE("/login-logs", core.Perm("loginLog:delete"), h.DeleteLogin)
 	r.POST("/login-logs/clean", core.Perm("loginLog:delete"), h.CleanLogin)
 }

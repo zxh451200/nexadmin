@@ -52,8 +52,9 @@ export default function TenantPackagePage() {
   const confirm = useConfirm()
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
-  const [draft, setDraft] = useState({ keyword: '', status: '' })
-  const [filters, setFilters] = useState({ keyword: '', status: '' })
+  // 状态是多选数组，搜索时 join 成 CSV（后端 status IN）
+  const [draft, setDraft] = useState<{ keyword: string; status: string[] }>({ keyword: '', status: [] })
+  const [filters, setFilters] = useState<{ keyword?: string; status?: string }>({})
   const [selected, setSelected] = useState<string[]>([])
   const [editing, setEditing] = useState<TenantPackageRow | null>(null)
   const [open, setOpen] = useState(false)
@@ -62,7 +63,7 @@ export default function TenantPackagePage() {
     page,
     pageSize,
     keyword: filters.keyword || undefined,
-    status: filters.status || undefined,
+    status: filters.status,
   })
   const menus = useMenuOptions()
   const save = useSaveTenantPackage()
@@ -173,12 +174,11 @@ export default function TenantPackagePage() {
       <FilterBar
         onSearch={() => {
           setPage(1)
-          setFilters(draft)
+          setFilters({ keyword: draft.keyword || undefined, status: draft.status.length ? draft.status.join(',') : undefined })
         }}
         onReset={() => {
-          const init = { keyword: '', status: '' }
-          setDraft(init)
-          setFilters(init)
+          setDraft({ keyword: '', status: [] })
+          setFilters({})
           setPage(1)
         }}
       >
@@ -190,8 +190,9 @@ export default function TenantPackagePage() {
           aria-label={t('common.keyword')}
         />
         <DictSelect
-          className="md:w-40"
+          className="md:w-44"
           dict="sys_status"
+          multiple
           value={draft.status}
           onChange={(v) => setDraft((d) => ({ ...d, status: v }))}
           placeholder={t('common.status')}

@@ -1027,31 +1027,6 @@ func (s *Service) ListOrders(ctx context.Context, q OrderQuery) ([]Order, int64,
 	return rows, total, nil
 }
 
-// exportMax 是单次导出的行数上限。财务导出宁可被要求缩窄范围，也不能拿到一份
-// 静默截断的对账单——少一行就是差异，所以超限报错而不是截断。
-const exportMax = 10000
-
-// ExportOrders 取当前筛选下的全部支付单（不带分页，上限 exportMax），
-// 前端据此生成 CSV；与留言导出同款形状。
-func (s *Service) ExportOrders(ctx context.Context, q OrderQuery) ([]Order, int64, error) {
-	db, _, _, err := s.orderFilter(ctx, q)
-	if err != nil {
-		return nil, 0, err
-	}
-	var total int64
-	if err := db.Count(&total).Error; err != nil {
-		return nil, 0, err
-	}
-	if total > exportMax {
-		return nil, total, response.BadRequest(errExportTooMany)
-	}
-	var rows []Order
-	if err := db.Order("id DESC").Limit(exportMax).Find(&rows).Error; err != nil {
-		return nil, 0, err
-	}
-	return rows, total, nil
-}
-
 // CallbackQuery 过滤回调审计列表。
 type CallbackQuery struct {
 	Channel  string

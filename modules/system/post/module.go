@@ -8,6 +8,7 @@ import (
 	"gorm.io/gorm"
 
 	"nexadmin/core"
+	"nexadmin/core/job"
 	tn "nexadmin/core/tenant"
 	"nexadmin/pkg/idgen"
 )
@@ -27,6 +28,8 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.PUT("/sort", core.Perm("post:update"), h.Sort)
 	g.DELETE("", core.Perm("post:delete"), h.DeleteBatch) // 批量删除：?ids=1,2,3，权限码与单条删除同一个
 	g.GET("", core.Perm("post:list"), h.List)
+	job.Register(jobTypePostExport, h.svc.ExportJob) // 导出统一走导出中心（异步任务）
+	g.POST("/export-async", core.Perm("post:list"), h.ExportAsync)
 	g.GET("/:id", core.Perm("post:list"), h.Get)
 	g.POST("", core.Perm("post:create"), h.Create)
 	g.PUT("/:id", core.Perm("post:update"), h.Update)

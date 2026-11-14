@@ -66,11 +66,6 @@
     "confirm": {
       "delete": "Delete the {{count}} selected logs?"
     },
-    "export": {
-      "done": "Export complete",
-      "tooMany": "Too many rows to export. Narrow the filters (e.g. the time range) or use the Export Center",
-      "filename": "login-log"
-    },
     "stats": {
       "rangeLabel": "Time range",
       "ranges": {

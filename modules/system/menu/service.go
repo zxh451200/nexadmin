@@ -193,8 +193,11 @@ func (in *menuInput) apply(m *Menu, pid idgen.ID) {
 	m.KeepAlive, m.Hidden, m.External, m.Status = in.KeepAlive, in.Hidden, in.External, in.Status
 }
 
-// checkParent 上级必须存在且不能是按钮。
-func (s *service) checkParent(ctx context.Context, pid idgen.ID) error {
+// checkParent 上级必须存在且不能是按钮；可见的目录/菜单不能挂到菜单下。
+// 侧栏只渲染「目录 → 菜单」两层，挂在菜单下的目录/菜单永远不可见（历史上导入中心就被
+// 拖进导出中心菜单下、入口凭空消失）。hidden 行例外：出厂把权限点行（sso.list、maps:config）
+// 挂在设置菜单下、只藏不入侧栏，这类行要保持可编辑。新增、修改和拖拽共用这条判定。
+func (s *service) checkParent(ctx context.Context, childType string, childHidden bool, pid idgen.ID) error {
 	if pid == 0 {
 		return nil
 	}
@@ -208,6 +211,9 @@ func (s *service) checkParent(ctx context.Context, pid idgen.ID) error {
 	}
 	if p.Type == typeButton {
 		return bad("menu.child_under_button")
+	}
+	if childType != typeButton && p.Type == typeMenu && !childHidden {
+		return bad("menu.child_under_menu")
 	}
 	return nil
 }
@@ -227,7 +233,7 @@ func (s *service) createLocked(ctx context.Context, in menuInput) (*Menu, error)
 	if err != nil {
 		return nil, err
 	}
-	if err := s.checkParent(ctx, pid); err != nil {
+	if err := s.checkParent(ctx, in.Type, in.Hidden, pid); err != nil {
 		return nil, err
 	}
 	id, err := idgen.Next()
@@ -269,7 +275,7 @@ func (s *service) updateLocked(ctx context.Context, id idgen.ID, in menuInput) (
 		if pid == id || descendants(rows, id)[pid] {
 			return nil, bad("menu.parent_self_or_child")
 		}
-		if err := s.checkParent(ctx, pid); err != nil {
+		if err := s.checkParent(ctx, in.Type, in.Hidden, pid); err != nil {
 			return nil, err
 		}
 	}
@@ -448,6 +454,10 @@ func (s *service) moveLocked(ctx context.Context, id idgen.ID, in moveInput) err
 		}
 		if parent.Type == typeButton {
 			return bad("menu.child_under_button")
+		}
+		// 可见的目录/菜单不能拖进菜单下（判定与 checkParent 同款，见其注释）
+		if current.Type != typeButton && parent.Type == typeMenu && !current.Hidden {
+			return bad("menu.child_under_menu")
 		}
 	}
 	if in.AfterID != nil {

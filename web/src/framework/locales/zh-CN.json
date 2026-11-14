@@ -205,6 +205,7 @@
     "loginWith": "使用 {{name}} 登录",
     "oauthMock": "演示环境不支持 {{name}} 登录",
     "oauthStartFailed": "无法发起 {{name}} 登录，请稍后再试",
+    "oauthRedirectNotAllowed": "当前地址 {{url}} 不在 {{name}} 的回调地址白名单里，请到「系统设置 → 登录方式 → {{name}} → 回调地址」添加它后重试",
     "oauthFailed": "第三方登录失败，请重试",
     "oauthProcessing": "正在登录…",
     "backToLogin": "返回登录",

@@ -1,7 +1,6 @@
 package formbuilder
 
 import (
-	"bytes"
 	"io"
 	"net/http"
 	"strconv"
@@ -362,21 +361,6 @@ func langOf(c *gin.Context) string {
 		return l
 	}
 	return core.DefaultLanguage().Code
-}
-
-// GET /forms/:id/export  同步导出（最多 MaxSyncExport 行，更多请用 export-job）
-func (h *handler) exportSync(c *gin.Context) {
-	id, ok := paramID(c, "id")
-	if !ok {
-		return
-	}
-	var buf bytes.Buffer
-	if _, err := h.svc.WriteExport(c.Request.Context(), &buf, subQuery(c, id), MaxSyncExport, langOf(c)); err != nil {
-		response.Fail(c, err)
-		return
-	}
-	c.Header("Content-Disposition", `attachment; filename="formbuilder-`+id.String()+`.xlsx"`)
-	c.Data(http.StatusOK, xlsxContentType, buf.Bytes())
 }
 
 // POST /forms/:id/export-job  提交到导出中心，返回任务 ID

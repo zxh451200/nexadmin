@@ -6,23 +6,21 @@ export interface ChatBubbleProps {
   side: 'start' | 'end'
   /** 配色：default=对方（muted）；primary=自己（品牌色）；warning=内部备注；system=系统回复（灰字） */
   tone?: 'default' | 'primary' | 'warning' | 'system'
-  /** meta 行内容：发送者 · 时间 · 已读等 */
+  /** meta 行内容：发送者 · 时间 · 已读等（撤回这类轻操作也放这行，别撑出第三行） */
   meta?: ReactNode
   /** meta 行的前置徽标（如「内部备注」） */
   badge?: ReactNode
   /** 气泡正文（文本 / 附件） */
   children?: ReactNode
-  /** 正文之下的气泡内附加（如撤回按钮） */
-  footer?: ReactNode
   className?: string
 }
 
 /**
  * 会话气泡：工单中心与在线客服的对话流共用。
  * 工单中心在用它的地方：客服回复（primary）、客户回复（default）、内部备注（warning）、系统回复（system）；
- * 在线客服在用它的地方：坐席消息（primary）、访客消息（default）。meta/正文/撤回等差异都从 props 进来。
+ * 在线客服在用它的地方：坐席消息（primary）、访客消息（default）。meta/正文等差异都从 props 进来。
  */
-export function ChatBubble({ side, tone = 'default', meta, badge, children, footer, className }: ChatBubbleProps) {
+export function ChatBubble({ side, tone = 'default', meta, badge, children, className }: ChatBubbleProps) {
   return (
     <div className={cn('flex', side === 'end' ? 'justify-end' : 'justify-start')}>
       <div
@@ -46,7 +44,6 @@ export function ChatBubble({ side, tone = 'default', meta, badge, children, foot
           </div>
         ) : null}
         {children}
-        {footer}
       </div>
     </div>
   )

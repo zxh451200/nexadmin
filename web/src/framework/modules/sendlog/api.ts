@@ -30,7 +30,9 @@ export interface SendLog {
 export interface SendLogQuery {
   page: number
   pageSize: number
+  /** 逗号分隔多值：sms,email,robot */
   channel?: string
+  /** 逗号分隔多值 */
   status?: string
   recipient?: string
   startDate?: string

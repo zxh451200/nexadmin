@@ -51,11 +51,6 @@
     "confirm": {
       "delete": "确认删除所选的 {{count}} 条日志？"
     },
-    "export": {
-      "done": "已导出到文件",
-      "tooMany": "导出行数超过上限，请缩小筛选范围（如时间范围），或使用导出中心",
-      "filename": "操作日志"
-    },
     "stats": {
       "rangeLabel": "时间范围",
       "ranges": {

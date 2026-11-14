@@ -297,8 +297,26 @@ export default function PagePage() {
   }
 
   const columns: Column<SitePage>[] = [
-    { key: 'title', title: t('plugin_website.fields.pageTitle'), mobile: 'title', render: (r) => <span className="font-medium text-foreground">{r.title}</span> },
-    { key: 'slug', title: t('plugin_website.fields.slug'), mobile: 'sub', render: (r) => <span className="font-mono text-xs">/p/{r.slug}</span> },
+    {
+      key: 'title',
+      title: t('plugin_website.fields.pageTitle'),
+      mobile: 'title',
+      render: (r) => (
+        <span className="block max-w-[18rem] truncate font-medium text-foreground" title={r.title}>
+          {r.title}
+        </span>
+      ),
+    },
+    {
+      key: 'slug',
+      title: t('plugin_website.fields.slug'),
+      mobile: 'sub',
+      render: (r) => (
+        <span className="block max-w-48 truncate font-mono text-xs" title={`/p/${r.slug}`}>
+          /p/{r.slug}
+        </span>
+      ),
+    },
     { key: 'i18n', title: t('plugin_website.i18n.status'), render: (r) => <TranslationStatus value={r.i18nJson} fields={['title', 'seoTitle', 'seoDesc', 'content']} /> },
     { key: 'published', title: t('plugin_website.fields.published'), render: (r) => (r.published ? <Badge variant="success">{t('plugin_website.publishedOn')}</Badge> : <Badge variant="outline">{t('plugin_website.publishedOff')}</Badge>) },
     { key: 'updatedAt', title: t('plugin_website.fields.updatedAt'), render: (r) => <span className="num text-xs text-muted-foreground">{formatTime(r.updatedAt, i18n.language)}</span> },

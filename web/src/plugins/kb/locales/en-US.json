@@ -1,0 +1,51 @@
+{
+  "plugin_kb": {
+    "title": "Knowledge Base",
+    "description": "The AI's source of truth for live chat: upload txt/md documents to be split and embedded automatically; the AI answers only from this content and hands off to a human when nothing matches",
+    "menu": "Knowledge Base",
+    "perm": {
+      "edit": "Edit documents",
+      "delete": "Delete documents"
+    },
+    "upload": "Upload",
+    "uploadTitle": "Upload documents",
+    "uploadDesc": "txt / md plain text only (≤2MB); documents are split and embedded automatically after upload",
+    "uploadHint": "Organize content as FAQs or self-contained paragraphs: blank lines become natural chunk boundaries; use the test question box below to verify retrieval after upload",
+    "uploadDone": "\"{{name}}\" ingested with {{count}} chunks",
+    "uploadAllFailed": "All uploads failed ({{fail}})",
+    "deleteConfirm": "Delete \"{{name}}\"? Its chunks will be removed and the AI will no longer answer from it.",
+    "reembed": "Re-embed",
+    "reembedDone": "\"{{name}}\" re-embedded with the current model",
+    "needReembed": "Model changed; re-embed required",
+    "fields": {
+      "title": "Title",
+      "status": "Status",
+      "chunks": "Chunks",
+      "model": "Embedding model",
+      "createdAt": "Uploaded at",
+      "actions": "Actions",
+      "threshold": "Similarity threshold",
+      "thresholdHint": "0~1, higher is stricter: if the best score falls below it, the AI declares \"cannot answer\" and hands off",
+      "topK": "TopK",
+      "topKHint": "Max knowledge chunks injected per answer (1~10)",
+      "systemPrompt": "Answer style (optional)",
+      "systemPromptHint": "e.g. \"keep answers within three sentences\", \"use a friendly tone\"",
+      "systemPromptNote": "Style hints only; the hard rule \"answer from the material only, admit when unknown\" cannot be changed here"
+    },
+    "status": {
+      "ready": "Ready",
+      "failed": "Failed"
+    },
+    "settingsTitle": "Retrieval settings",
+    "settingsDesc": "Tune when the AI admits it doesn't know, and how it sounds",
+    "missingEmbed": "Embedding is not enabled: configure an Embedding model under System Settings → Advanced → AI first, or uploads will fail",
+    "missingChat": "Chat model is not configured: complete the AI settings under System Settings → Advanced → AI first, or the AI cannot answer",
+    "empty": "No documents yet: upload product notes or FAQs so the AI can answer customer questions from them",
+    "askTitle": "Test question",
+    "askPlaceholder": "Ask like a visitor to verify the AI answers from the knowledge base",
+    "ask": "Ask",
+    "askDone": "Matched \"{{title}}\" (score {{score}})",
+    "askHandoff": "No trustworthy match in the knowledge base — live chat would politely explain and hand off to a human, never fabricate",
+    "hitScore": "{{score}}"
+  }
+}

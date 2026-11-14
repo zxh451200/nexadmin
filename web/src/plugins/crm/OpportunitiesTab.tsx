@@ -7,6 +7,7 @@ import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { DatePicker } from '@/framework/components/DatePicker'
 import { FilterBar } from '@/framework/components/FilterBar'
+import { OptionPicker } from '@/framework/components/OptionPicker'
 import { RemoteSelect } from '@/framework/components/RemoteSelect'
 import { RequiredMark } from '@/framework/components/RequiredMark'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
@@ -28,7 +29,6 @@ import {
 import { TypeBadge } from './CustomersTab'
 import { formatMoney, formatTime, stageVariant } from './format'
 
-const ALL = '__all'
 const MINE = '__mine'
 
 const STAGES = ['lead', 'qualified', 'proposal', 'negotiate', 'won', 'lost'] as const
@@ -185,7 +185,7 @@ function OpportunityFormDialog({
 export function OpportunitiesTab() {
   const { t, i18n } = useTranslation()
   const confirm = useConfirm()
-  const [draft, setDraft] = useState<OpportunityQuery>({})
+  const [draft, setDraft] = useState<{ keyword?: string; stage?: string[]; mine?: boolean }>({})
   const [filters, setFilters] = useState<OpportunityQuery>({})
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
@@ -267,7 +267,7 @@ export function OpportunitiesTab() {
     <div className="flex flex-col gap-4">
       <FilterBar
         onSearch={() => {
-          setFilters(draft)
+          setFilters({ keyword: draft.keyword, stage: draft.stage?.length ? draft.stage.join(',') : undefined })
           setPage(1)
         }}
         onReset={() => {
@@ -283,26 +283,21 @@ export function OpportunitiesTab() {
           placeholder={t('plugin_crm.opp.searchPlaceholder')}
           aria-label={t('common.keyword')}
         />
-        <Select value={draft.stage ?? ALL} onValueChange={(v) => setDraft((d) => ({ ...d, stage: v === ALL ? undefined : v }))}>
-          <SelectTrigger className="md:w-44" aria-label={t('plugin_crm.fields.stage')}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_crm.filter.allStages')}</SelectItem>
-            {STAGES.map((s) => (
-              <SelectItem key={s} value={s}>
-                {t(`plugin_crm.stage.${s}`)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <OptionPicker
+          title={t('plugin_crm.fields.stage')}
+          value={draft.stage ?? []}
+          onChange={(v) => setDraft((d) => ({ ...d, stage: v.length ? v : undefined }))}
+          options={STAGES.map((s) => ({ value: s, label: t(`plugin_crm.stage.${s}`) }))}
+          className="md:w-48"
+          placeholder={t('plugin_crm.fields.stage')}
+        />
         {/* 只看我的：owner = 当前账号，与角色数据范围叠加。 */}
-        <Select value={draft.mine ? MINE : ALL} onValueChange={(v) => setDraft((d) => ({ ...d, mine: v === MINE }))}>
+        <Select value={draft.mine ? MINE : '__all'} onValueChange={(v) => setDraft((d) => ({ ...d, mine: v === MINE }))}>
           <SelectTrigger className="md:w-32" aria-label={t('plugin_crm.fields.owner')}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_crm.filter.allOwners')}</SelectItem>
+            <SelectItem value="__all">{t('plugin_crm.filter.allOwners')}</SelectItem>
             <SelectItem value={MINE}>{t('plugin_crm.mineOnly')}</SelectItem>
           </SelectContent>
         </Select>

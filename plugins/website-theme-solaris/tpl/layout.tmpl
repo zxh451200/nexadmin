@@ -46,17 +46,6 @@
   </div>
 </div>
 {{end}}
-{{if or .ContactPhone .ContactEmail}}
-<div class="sl-utility">
-  <div class="sl-wrap sl-utility-in">
-    <span class="sl-utility-note">{{.T "theme.solaris.utilityNote"}}</span>
-    <span class="sl-utility-contacts">
-      {{if .ContactEmail}}<a href="mailto:{{.ContactEmail}}" data-copy-email="{{.ContactEmail}}" title="{{.T "site.js.emailCopy"}}">✉ {{.ContactEmail}}</a>{{end}}
-      {{if .ContactPhone}}<a href="tel:{{.ContactPhone}}">☎ {{.ContactPhone}}</a>{{end}}
-    </span>
-  </div>
-</div>
-{{end}}
 <header class="sl-header" id="top">
   <div class="sl-wrap sl-header-in">
     <a class="sl-brand" href="{{.Home}}" aria-label="{{.TF "layout.homeAria" .SiteName}}">

@@ -1,5 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ApiError, api, http } from '@/framework/request/http'
+import { api } from '@/framework/request/http'
 import type { Page } from '@/framework/request/types'
 
 export interface OperLog {
@@ -39,28 +39,9 @@ export function useOperLogList(query: OperLogQuery) {
   })
 }
 
-/** 导出请求的公共配置：format=xlsx，响应是文件（Blob）；错误由页面按 isExportTooMany 等本地化，所以请求本身静默 */
-export function exportRequest(query: object) {
-  return { params: { ...query, format: 'xlsx' }, responseType: 'blob' as const, silent: true }
-}
-
-/** 真实后端返回文件（Blob），mock 阶段返回 CSV 文本 */
-export function asBlob(data: unknown): Blob {
-  return data instanceof Blob ? data : new Blob([String(data)], { type: 'text/csv;charset=utf-8' })
-}
-
-/** 服务端因匹配行数超过 log.export_max_rows 拒绝导出 */
-export function isExportTooMany(e: unknown): boolean {
-  return e instanceof ApiError && e.reason === 'EXPORT_TOO_MANY'
-}
-
-/**
- * 服务端导出 .xlsx：沿用列表的筛选条件与数据范围，需要 operLog:export 权限，行数受 log.export_max_rows 限制。
- * 出错（如超限）时抛出 ApiError。
- */
-export async function exportOperLogs(query: Omit<OperLogQuery, 'page' | 'pageSize'>): Promise<Blob> {
-  const res = await http.get<unknown>('/oper-logs/export', exportRequest(query))
-  return asBlob(res.data)
+/** 创建异步导出任务（筛选参数同列表），立即返回任务 ID；进度与下载见导出中心 */
+export function createOperLogExportJob(query: Omit<OperLogQuery, 'page' | 'pageSize'>) {
+  return api.post<{ id: string }>('/oper-logs/export-async', null, { params: query })
 }
 
 export function useDeleteOperLogs() {

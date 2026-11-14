@@ -1,21 +1,19 @@
 import { useMemo, useState } from 'react'
-import { Pencil, Plus, ShieldCheck, Trash2 } from 'lucide-react'
+import { Download, Pencil, Plus, ShieldCheck, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { usePermission } from '@/framework/auth/usePermission'
+import { useAsyncJob } from '@/framework/hooks/use-async-job'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { DictTag } from '@/framework/components/DictTag'
-import { ExportCsvButton, type CsvColumn } from '@/framework/components/export/ExportCsvButton'
-import { useDictItems } from '@/framework/components/pickers/useDictItems'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { SimpleFilterBar } from '@/framework/components/SimpleFilterBar'
 import { matchText, useClientFilter } from '@/framework/components/table/use-client-filter'
-import type { DictItem } from '@/framework/request/types'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
-import { useDeleteRole, useDeleteRoles, useRoleList, useSortRoles, type Role } from './api'
+import { createRoleExportJob, useDeleteRole, useDeleteRoles, useRoleList, useSortRoles, type Role } from './api'
 import { AssignPermissionDialog } from './AssignPermissionDialog'
 import { formatTime } from './format'
 import { RoleFormDialog } from './RoleFormDialog'
@@ -30,16 +28,11 @@ export default function RolePage() {
   const del = useDeleteRole()
   const delBatch = useDeleteRoles()
   const sort = useSortRoles()
+  const { start: startExportJob } = useAsyncJob()
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<Role | null>(null)
   const [assigning, setAssigning] = useState<Role | null>(null)
   const [selected, setSelected] = useState<string[]>([])
-
-  // 导出用的字典文本与表格里的 DictTag 同一份字典（同一 query key，不额外发请求）。
-  const { data: scopeItems } = useDictItems('data_scope')
-  const { data: statusItems } = useDictItems('sys_status')
-  const dictText = (items: DictItem[] | undefined, v: string) =>
-    items?.find((d) => String(d.value) === String(v))?.label ?? v
 
   const rows = useMemo(() => list.data?.list ?? [], [list.data?.list])
   const nextSort = rows.reduce((m, r) => Math.max(m, r.sort), 0) + 10
@@ -78,6 +71,17 @@ export default function RolePage() {
     }
   }
 
+  // 统一异步导出：提交 core/job 任务进导出中心，提交/完成提示由 useAsyncJob 统一给出
+  const onExport = async () => {
+    try {
+      await startExportJob(() =>
+        createRoleExportJob({ keyword: filter.applied.keyword || undefined, status: filter.applied.status.join(',') || undefined }),
+      )
+    } catch (e) {
+      toast.error(e instanceof Error && e.message ? e.message : t('common.operateFailed'))
+    }
+  }
+
   const columns: Column<Role>[] = [
     {
       key: 'name',
@@ -104,27 +108,23 @@ export default function RolePage() {
           <Badge variant="outline">{t('role.assignable.no')}</Badge>
         ),
     },
-    { key: 'remark', title: t('role.col.remark') },
+    {
+      key: 'remark',
+      title: t('role.col.remark'),
+      render: (r) =>
+        r.remark ? (
+          <span className="block max-w-xs truncate" title={r.remark}>
+            {r.remark}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">-</span>
+        ),
+    },
     {
       key: 'createdAt',
       title: t('role.col.createdAt'),
       render: (r) => <span className="num">{formatTime(r.createdAt, i18n.language)}</span>,
     },
-  ]
-
-  // 导出列与可见列一一对应：枚举取字典文本、时间走同一个 formatTime，导出的文件与页面看到的是同一份人读文本。
-  const exportColumns: CsvColumn<Role>[] = [
-    { header: t('role.col.name'), value: (r) => r.name },
-    { header: t('role.col.code'), value: (r) => r.code },
-    { header: t('role.col.sort'), value: (r) => r.sort },
-    { header: t('role.col.dataScope'), value: (r) => dictText(scopeItems, r.dataScope) },
-    { header: t('role.col.status'), value: (r) => dictText(statusItems, r.status) },
-    {
-      header: t('role.col.assignable'),
-      value: (r) => (r.assignable && !r.builtin ? t('role.assignable.yes') : t('role.assignable.no')),
-    },
-    { header: t('role.col.remark'), value: (r) => r.remark },
-    { header: t('role.col.createdAt'), value: (r) => formatTime(r.createdAt, i18n.language) },
   ]
 
   return (
@@ -142,12 +142,12 @@ export default function RolePage() {
                 {t('common.create')}
               </Button>
             </Can>
-            <ExportCsvButton<Role>
-              filename="roles"
-              perm="role:list"
-              columns={exportColumns}
-              getRows={async () => shown}
-            />
+            <Can perm="role:list">
+              <Button type="button" variant="outline" onClick={() => void onExport()}>
+                <Download className="me-2 h-4 w-4" aria-hidden="true" />
+                {t('common.export')}
+              </Button>
+            </Can>
           </>
         }
         columns={columns}

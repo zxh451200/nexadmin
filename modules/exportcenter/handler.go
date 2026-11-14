@@ -3,6 +3,7 @@ package exportcenter
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"mime"
 	"net/http"
@@ -17,13 +18,15 @@ import (
 	"nexadmin/core/job"
 	"nexadmin/core/response"
 	"nexadmin/core/storage"
+	logmod "nexadmin/modules/log"
 	"nexadmin/pkg/idgen"
 )
 
 type handler struct {
-	m   *job.Manager
-	db  *gorm.DB
-	log *zap.Logger
+	m    *job.Manager
+	db   *gorm.DB
+	log  *zap.Logger
+	keep int // 结果文件保留天数（expiresAt 下发用）
 }
 
 // jobDTO 是对外字段：不含参数、对象键和节点信息。
@@ -39,18 +42,25 @@ type jobDTO struct {
 	FileName     string     `json:"fileName"`
 	FileSize     int64      `json:"fileSize"`
 	Downloadable bool       `json:"downloadable"`
+	ExpiresAt    *time.Time `json:"expiresAt"`
 	CreatedAt    time.Time  `json:"createdAt"`
 	StartedAt    *time.Time `json:"startedAt"`
 	FinishedAt   *time.Time `json:"finishedAt"`
 }
 
-func toDTO(j *job.Job, names map[idgen.ID]string) jobDTO {
-	return jobDTO{
+func (h *handler) toDTO(j *job.Job, names map[idgen.ID]string) jobDTO {
+	out := jobDTO{
 		ID: j.ID.String(), Type: j.Type, Status: j.Status, Progress: j.Progress, Message: j.Message, Error: j.Error,
 		OwnerID: j.OwnerID.String(), OwnerName: names[j.OwnerID], FileName: j.ResultName, FileSize: j.ResultSize,
 		Downloadable: j.Status == job.StatusSuccess && j.ResultFile != "",
 		CreatedAt:    j.CreatedAt, StartedAt: j.StartedAt, FinishedAt: j.FinishedAt,
 	}
+	// 终态任务下发过期时间（与后台 Cleanup 的 keep_days 同一口径），前端提示「保留至 xx」
+	if job.IsFinal(j.Status) && j.FinishedAt != nil && h.keep > 0 {
+		t := j.FinishedAt.Add(time.Duration(h.keep) * 24 * time.Hour)
+		out.ExpiresAt = &t
+	}
+	return out
 }
 
 // ownerNames 批量取所有者账号名（用户表属于用户模块，取不到只是不显示名字）。
@@ -143,7 +153,7 @@ func (h *handler) list(c *gin.Context) {
 	names := h.ownerNames(c, rows)
 	out := make([]jobDTO, len(rows))
 	for i, j := range rows {
-		out[i] = toDTO(j, names)
+		out[i] = h.toDTO(j, names)
 	}
 	response.Page(c, out, total, page, size)
 }
@@ -163,7 +173,7 @@ func (h *handler) get(c *gin.Context) {
 		h.fail(c, err)
 		return
 	}
-	response.OK(c, toDTO(j, h.ownerNames(c, []*job.Job{j})))
+	response.OK(c, h.toDTO(j, h.ownerNames(c, []*job.Job{j})))
 }
 
 // cancel POST /jobs/:id/cancel
@@ -255,6 +265,7 @@ func (h *handler) download(c *gin.Context) {
 		h.fail(c, err)
 		return
 	}
+	h.writeDownloadAudit(c, j)
 	ctype := j.ResultMime
 	if ctype == "" {
 		ctype = "application/octet-stream"
@@ -292,4 +303,25 @@ func (h *handler) download(c *gin.Context) {
 	hd.Set("Content-Length", strconv.FormatInt(obj.Length, 10))
 	c.Status(http.StatusOK)
 	_, _ = io.Copy(c.Writer, obj.Body)
+}
+
+// writeDownloadAudit 同步写下载操作日志（对齐数据备份的下载审计；日志模块停用时跳过）。
+// 同步写：下载是低频重操作，保证审计在字节真正输出前落库；失败不阻断下载但要记日志。
+// ctx 脱离请求取消，避免客户端断开丢掉这条审计。
+func (h *handler) writeDownloadAudit(c *gin.Context, j *job.Job) {
+	cl := auth.ClaimsFrom(c)
+	if cl == nil {
+		return
+	}
+	s := logmod.Default()
+	if s == nil {
+		return // 日志模块被停用
+	}
+	l := &logmod.OperLog{Module: "导出中心", Type: "download", Operator: cl.Username, IP: c.ClientIP(), Status: logmod.StatusSuccess,
+		Method: c.Request.Method, URL: c.Request.URL.Path,
+		Params: fmt.Sprintf(`{"id":%q,"type":%q,"file":%q}`, j.ID.String(), j.Type, j.ResultName)}
+	l.TenantID = cl.TenantID
+	if err := s.WriteOper(context.WithoutCancel(c.Request.Context()), l); err != nil {
+		h.log.Warn("exportcenter: download audit write failed", zap.String("id", j.ID.String()), zap.Error(err))
+	}
 }

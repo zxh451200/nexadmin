@@ -341,9 +341,9 @@ function DefList() {
       title: t('plugin_workflow.fields.defName'),
       mobile: 'title',
       render: (d) => (
-        <div>
+        <div className="min-w-0">
           <span className="font-medium text-foreground">{d.name}</span>
-          <div className="text-xs text-muted-foreground">
+          <div className="max-w-[16rem] truncate text-xs text-muted-foreground" title={`${d.key} · v${d.version}`}>
             {d.key} · v{d.version}
           </div>
         </div>

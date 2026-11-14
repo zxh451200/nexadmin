@@ -1,6 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef } from 'react'
-import { ApiError, api, http, tokenStore } from '@/framework/request/http'
+import { api, tokenStore } from '@/framework/request/http'
 import type { Page, PageQuery } from '@/framework/request/types'
 import { useWs } from '@/framework/hooks/useWs'
 
@@ -295,33 +295,12 @@ export async function downloadAttachment(ticketNo: string, att: TicketAttachment
   URL.revokeObjectURL(url)
 }
 
-/** 命中后端「超过导出行数上限」错误（reason=TICKET_EXPORT_TOO_MANY）。 */
-export function isExportTooMany(e: unknown): boolean {
-  return e instanceof ApiError && e.reason === 'TICKET_EXPORT_TOO_MANY'
-}
-
 /**
- * 按当前筛选导出工单：服务端写 xlsx（最多 5000 行），需要 ticket:list 权限。
- * mock 阶段没有二进制能力，退回带 BOM 的 CSV 文本，文件名跟着换扩展名。
+ * 创建工单导出任务：按当前筛选提交到导出中心，立即返回任务 ID（需要 ticket:list 权限）；
+ * 进度与下载见导出中心，创建失败由 http 拦截器统一弹出原因。
  */
-export async function exportTickets(query: Omit<TicketQueryParams, 'page' | 'pageSize'>): Promise<void> {
-  const res = await http.get<unknown>(`${BASE}/tickets-export`, {
-    params: { ...query },
-    responseType: 'blob',
-    silent: true,
-  })
-  const data = res.data
-  const isBlob = data instanceof Blob
-  const blob = isBlob ? data : new Blob(['\uFEFF', String(data)], { type: 'text/csv;charset=utf-8' })
-  const stamp = new Date().toISOString().slice(0, 19).replace(/-|:|T/g, '')
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `tickets-${stamp}.${isBlob ? 'xlsx' : 'csv'}`
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  URL.revokeObjectURL(url)
+export function createTicketExportJob(query: Omit<TicketQueryParams, 'page' | 'pageSize'>) {
+  return api.post<{ id: string }>(`${BASE}/tickets-export-async`, null, { params: { ...query } })
 }
 
 function useInvalidate() {

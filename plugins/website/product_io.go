@@ -1,8 +1,8 @@
 package website
 
 // product_io.go 是产品中心的「进出」两条通道：
-//   - 导出：GET /products/export 返回 JSON 全量（不带分页），CSV 由前端生成，
-//     形状与 posts / messages 的导出同款；支持 ids= 只导勾选行。
+//   - 导出：POST /products/export-async 提交 website.product-export 异步任务（与 posts / messages
+//     的导出同一套机制），进度与下载在导出中心。
 //   - 导入：实现 importspec.Provider 把商品接进通用导入中心（plugins/imports），
 //     文件解析、模板下载、逐行报错与导入台账都由导入中心负责，这里只写业务映射。
 
@@ -31,20 +31,6 @@ import (
 
 // SourceProducts 是产品导入源在导入中心台账里的标识。
 const SourceProducts = "website_products"
-
-// ExportProducts 取当前筛选（或 ids= 勾选行）下的全部商品，形状与 ExportPosts 同源：
-// 筛选与 ListProducts 复用 productTx，导出文件和页面上看到的列表对得上。
-func (s *Service) ExportProducts(ctx context.Context, q ContentQuery, ids []idgen.ID) ([]Product, error) {
-	tx := s.db.WithContext(ctx).Model(&Product{})
-	if len(ids) > 0 {
-		tx = tx.Where("id IN ?", int64IDs(ids))
-	} else {
-		tx = productTx(tx, q)
-	}
-	var rows []Product
-	err := tx.Preload("Categories").Order("updated_at DESC, id DESC").Limit(exportMax).Find(&rows).Error
-	return rows, err
-}
 
 // productImportColumns 是导入模板的列定义（键/标签/示例）：导入中心与异步导出共用同一份，
 // 这样导出的 .xlsx 表头天然就是导入模板的表头，导出的文件可以直接改完再导回去。
@@ -297,10 +283,7 @@ func rowError(ctx context.Context, err error) error {
 
 const (
 	jobTypeProductExport = "website.product-export"
-	// productExportSyncLimitDef 是同步直出的默认行数上限：与 system/user 的 export.sync_limit 同一个参数，
-	// 超过它前端改走异步任务。0/缺省回落到这个值。
-	productExportSyncLimitDef = 5000
-	// productExportMax 是单次异步导出的行数上限（xlsx 单表上限约 104 万行，留足余量）。
+	// productExportMax 是单次异步导出的行数上限（任务内上限：xlsx 单表上限约 104 万行，留足余量）。
 	productExportMax = 500000
 	// productExportBatch 是每批读取行数。
 	productExportBatch = 500
@@ -355,33 +338,12 @@ func categoryIdCSV(ids []idgen.ID) []string {
 	return out
 }
 
-// productExportSyncLimit 读系统参数 export.sync_limit（与 user 模块同参数），没设回落默认值。
-func (s *Service) productExportSyncLimit(ctx context.Context) int {
-	var v string
-	if err := s.db.WithContext(ctx).Table("sys_config").Select("config_value").
-		Where("config_key = ?", "export.sync_limit").Limit(1).Scan(&v).Error; err == nil {
-		if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil && n > 0 {
-			return n
-		}
-	}
-	return productExportSyncLimitDef
-}
-
 // exportProductTx 组出导出范围的查询：ids 优先（勾选行），否则按筛选条件。
 func exportProductTx(tx *gorm.DB, q ContentQuery, ids []int64) *gorm.DB {
 	if len(ids) > 0 {
 		return tx.Where("id IN ?", ids)
 	}
 	return productTx(tx, q)
-}
-
-// PlanProductExport 按同样的筛选统计匹配行数，告诉前端该走同步还是异步。
-func (s *Service) PlanProductExport(ctx context.Context, q ContentQuery, ids []idgen.ID) (total, syncLimit int64, err error) {
-	tx := exportProductTx(s.db.WithContext(ctx).Model(&Product{}), q, int64IDs(ids))
-	if err = tx.Count(&total).Error; err != nil {
-		return 0, 0, err
-	}
-	return total, int64(s.productExportSyncLimit(ctx)), nil
 }
 
 // productExportAsyncBody 把请求体解析成参数；ids 字符串转 int64。
@@ -448,24 +410,6 @@ func (h *handler) productExportAsync(c *gin.Context) {
 		return
 	}
 	response.OK(c, gin.H{"id": j.ID.String(), "type": j.Type, "status": j.Status})
-}
-
-// productExportPlan GET /products/export-plan：按同样筛选统计行数，前端据此选同步直出或异步任务。
-func (h *handler) productExportPlan(c *gin.Context) {
-	var ids []idgen.ID
-	if raw := strings.TrimSpace(c.Query("ids")); raw != "" {
-		var err error
-		if ids, err = parseIDs(raw); err != nil {
-			response.Fail(c, err)
-			return
-		}
-	}
-	total, syncLimit, err := h.svc.PlanProductExport(c.Request.Context(), contentQuery(c), ids)
-	if err != nil {
-		response.Fail(c, err)
-		return
-	}
-	response.OK(c, gin.H{"total": total, "syncLimit": syncLimit, "async": total > syncLimit})
 }
 
 // RunProductExportJob 是 website.product-export 的任务处理器：流式分批写 xlsx，逐批汇报进度。

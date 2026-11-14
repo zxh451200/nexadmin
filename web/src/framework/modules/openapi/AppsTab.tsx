@@ -96,7 +96,9 @@ export function AppsTab() {
       mobile: 'sub',
       render: (a) => (
         <span className="inline-flex items-center gap-1">
-          <code className="font-mono text-xs">{a.appKey}</code>
+          <code className="max-w-[12rem] truncate font-mono text-xs" title={a.appKey}>
+            {a.appKey}
+          </code>
           <CopyButton text={a.appKey} label={`${t('sso.copy')} ${t('openapi.apps.fields.appKey')}`} />
         </span>
       ),
@@ -118,18 +120,21 @@ export function AppsTab() {
     {
       key: 'roles',
       title: t('openapi.apps.fields.roles'),
-      render: (a) =>
-        a.roleIds.length === 0 ? (
-          <span className="text-muted-foreground">-</span>
-        ) : (
-          <div className="flex flex-wrap gap-1">
-            {a.roleIds.map((id) => (
-              <Badge key={id} variant="secondary">
-                {roleName.get(id) ?? id}
+      render: (a) => {
+        if (a.roleIds.length === 0) return <span className="text-muted-foreground">-</span>
+        // 角色多时收进「+N」；角色被删时兜底是原始 id——截断显示，悬停看全量
+        const names = a.roleIds.map((id) => roleName.get(id) ?? `${id.slice(0, 8)}…`)
+        return (
+          <div className="flex max-w-56 flex-wrap gap-1" title={names.join('、')}>
+            {names.slice(0, 2).map((n, i) => (
+              <Badge key={a.roleIds[i]} variant="secondary">
+                {n}
               </Badge>
             ))}
+            {names.length > 2 ? <Badge variant="outline">+{names.length - 2}</Badge> : null}
           </div>
-        ),
+        )
+      },
     },
     {
       key: 'ipAllow',

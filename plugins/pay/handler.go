@@ -117,7 +117,7 @@ func (h *handler) createOrder(c *gin.Context) {
 	respond(c, orderView(o, params), nil)
 }
 
-// orderQueryFrom 把列表/导出共用的查询参数收拢成 OrderQuery。
+// orderQueryFrom 把列表/异步导出任务共用的查询参数收拢成 OrderQuery。
 func orderQueryFrom(c *gin.Context) OrderQuery {
 	return OrderQuery{
 		Keyword: c.Query("keyword"),
@@ -146,21 +146,6 @@ func (h *handler) listOrders(c *gin.Context) {
 		out[i] = orderView(&rows[i], nil)
 	}
 	response.Page(c, out, total, page, size)
-}
-
-// GET /plugins/pay/orders/export?<同列表筛选> —— 导出当前筛选下的全部支付单。
-// 返回 JSON 列表（不带分页），CSV 由前端生成；与留言导出同款形状。
-func (h *handler) exportOrders(c *gin.Context) {
-	rows, _, err := h.svc.ExportOrders(c.Request.Context(), orderQueryFrom(c))
-	if err != nil {
-		fail(c, err)
-		return
-	}
-	out := make([]OrderView, len(rows))
-	for i := range rows {
-		out[i] = orderView(&rows[i], nil)
-	}
-	response.OK(c, out)
 }
 
 // GET /plugins/pay/orders/by-biz —— 契约 getPayOrderByBiz（收款侧主查询入口）。

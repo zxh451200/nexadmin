@@ -166,13 +166,38 @@ export function DictDataPanel({ type, onBack }: Props) {
       key: 'label',
       title: t('dict.data.label'),
       mobile: 'title',
-      render: (r) => <Badge variant={tagVariant(r.tag)}>{r.label}</Badge>,
+      render: (r) => (
+        <Badge variant={tagVariant(r.tag)} className="max-w-[12rem] truncate" title={r.label}>
+          {r.label}
+        </Badge>
+      ),
     },
-    { key: 'value', title: t('dict.data.value'), mobile: 'sub', render: (r) => <span className="num">{r.value}</span> },
+    {
+      key: 'value',
+      title: t('dict.data.value'),
+      mobile: 'sub',
+      render: (r) => (
+        <span className="num block max-w-[12rem] truncate" title={r.value}>
+          {r.value}
+        </span>
+      ),
+    },
     { key: 'tag', title: t('dict.data.tag'), render: (r) => t(`dict.tag.${r.tag}`) },
     { key: 'sort', title: t('common.sort'), align: 'end', render: (r) => <span className="num">{r.sort}</span> },
     { key: 'status', title: t('common.status'), render: (r) => <DictTag dict="sys_status" value={r.status} /> },
-    { key: 'remark', title: t('common.remark'), mobile: 'hidden' },
+    {
+      key: 'remark',
+      title: t('common.remark'),
+      mobile: 'hidden',
+      render: (r) =>
+        r.remark ? (
+          <span className="block max-w-xs truncate" title={r.remark}>
+            {r.remark}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">-</span>
+        ),
+    },
   ]
 
   if (!type) {

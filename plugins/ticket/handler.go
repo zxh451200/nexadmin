@@ -1,8 +1,6 @@
 package ticket
 
 import (
-	"mime"
-	"net/http"
 	"strconv"
 	"time"
 
@@ -23,7 +21,8 @@ import (
 type handler struct {
 	svc   *Service
 	store storage.Storage
-	// log 只用于导出这类「不进操作日志」的审计行；测试里手工构造 handler 时为 nil。
+	// log 预留给不进操作日志中间件的审计行（导出审计已随异步任务落在 Service.log，见 exportjob.go）；
+	// 测试里手工构造 handler 时为 nil。
 	log *zap.Logger
 }
 
@@ -496,36 +495,6 @@ func (h *handler) setTags(c *gin.Context) {
 	respond(c, t, err)
 }
 
-// GET /plugins/ticket/tickets-export?<与列表完全相同的筛选> —— 导出工单记录（xlsx，最多 5000 行）。
-// 不挂 OperLogMiddleware：操作日志中间件会把响应体前 8KB 当文本入库，对 zip 容器没有意义
-// （clip 会裁到合法 UTF-8，存进去是一堆乱码），所以这里改成往应用日志记一条结构化审计：
-// 谁、按什么条件、导出了几行。
-func (h *handler) export(c *gin.Context) {
-	ctx := c.Request.Context()
-	rows, err := h.svc.ExportTickets(ctx, ticketQueryFrom(c), maxExportRows())
-	if err != nil {
-		response.Fail(c, err)
-		return
-	}
-	hd := c.Writer.Header()
-	hd.Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-	hd.Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": h.svc.ExportFilename()}))
-	hd.Set("Cache-Control", "no-store")
-	hd.Set("X-Content-Type-Options", "nosniff")
-	c.Status(http.StatusOK)
-	if err := h.svc.WriteTicketsXLSX(ctx, c.Writer, rows); err != nil {
-		if h.svc.log != nil {
-			h.svc.log.Warn("ticket: export failed midway", "rows", len(rows), "err", err.Error())
-		}
-		return
-	}
-	if h.log != nil {
-		_, operator := claimsOperator(c)
-		h.log.Info("ticket export", zap.String("operator", operator),
-			zap.Int("rows", len(rows)), zap.String("filters", c.Request.URL.RawQuery))
-	}
-}
-
 // DELETE /plugins/ticket/tickets/:no —— 删除工单（回复/活动/关联/附件一并清理，见 delete.go）。
 func (h *handler) deleteTicket(c *gin.Context) {
 	respond(c, nil, h.svc.DeleteTicket(c.Request.Context(), c.Param("no")))
@@ -583,8 +552,8 @@ func (h *handler) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.GET("/tickets", core.Perm("ticket:list"), h.list)
 	// 统计与列表同一组筛选条件；注册在 /tickets/:no 之前，静态段优先匹配。
 	g.GET("/tickets/stats", core.Perm("ticket:list"), h.Stats)
-	// 导出沿用列表的全部筛选（静态段 /tickets-export 与 :no 不冲突）。
-	g.GET("/tickets-export", core.Perm("ticket:list"), h.export)
+	// 导出统一异步：提交进导出中心（core/job），任务体在 exportjob.go；权限沿用列表的 ticket:list。
+	g.POST("/tickets-export-async", core.Perm("ticket:list"), h.exportAsync)
 	// 后台代客建单与批量操作（静态段 /tickets/bulk 在 :no 之前注册）。
 	g.POST("/tickets", core.Perm("ticket:create"), d.OperLogMiddleware("ticket", "create"), h.create)
 	g.POST("/tickets/bulk", core.Perm("ticket:edit"), d.OperLogMiddleware("ticket", "update"), h.bulk)

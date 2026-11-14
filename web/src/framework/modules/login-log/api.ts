@@ -1,7 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { api, http } from '@/framework/request/http'
+import { api } from '@/framework/request/http'
 import type { Page } from '@/framework/request/types'
-import { asBlob, exportRequest } from '../oper-log/api'
 
 /** 已知的登录方式：内置两种 + 各登录插件写进 login_type 的门名（ldap / saml / 2fa / cas） */
 export const LOGIN_TYPES = ['password', 'phone', 'wecom', 'dingtalk', 'feishu', 'google', 'github', 'oidc', 'ldap', 'saml', 'cas', '2fa'] as const
@@ -45,10 +44,9 @@ export function useLoginLogList(query: LoginLogQuery) {
   })
 }
 
-/** 服务端导出 .xlsx（需要 loginLog:export 权限），筛选条件与数据范围同列表 */
-export async function exportLoginLogs(query: Omit<LoginLogQuery, 'page' | 'pageSize'>): Promise<Blob> {
-  const res = await http.get<unknown>('/login-logs/export', exportRequest(query))
-  return asBlob(res.data)
+/** 创建异步导出任务（筛选参数同列表，需要 loginLog:export 权限），立即返回任务 ID；进度与下载见导出中心 */
+export function createLoginLogExportJob(query: Omit<LoginLogQuery, 'page' | 'pageSize'>) {
+  return api.post<{ id: string }>('/login-logs/export-async', null, { params: query })
 }
 
 export function useDeleteLoginLogs() {

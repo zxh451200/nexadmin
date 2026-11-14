@@ -301,7 +301,7 @@ func (s *Service) DeleteProducts(ctx context.Context, ids []idgen.ID) (int64, er
 }
 
 // SetProductsStatus 批量上架/下线商品，返回实际改动条数。草稿可以直接下线成 offline
-//（阿里的「下架」页签就是这么算的），上架则把任何状态都顶到 online。
+// （阿里的「下架」页签就是这么算的），上架则把任何状态都顶到 online。
 func (s *Service) SetProductsStatus(ctx context.Context, ids []idgen.ID, status string) (int64, error) {
 	if len(ids) == 0 {
 		return 0, response.BadRequest("website.product_ids_empty")
@@ -391,8 +391,9 @@ func (s *Service) PublishedProductBy(ctx context.Context, slug, lang string) (*P
 }
 
 // PublishedProductsPage 是公开产品列表的分页查询：返回该语言已上架的商品与总数。
-// 窗口内先按语言筛出真实集合再切片取页，总数是筛完的准确值；term 按类目 slug 收窄。
-func (s *Service) PublishedProductsPage(ctx context.Context, lang string, term termFilter, page, pageSize int) ([]Product, int64, error) {
+// 窗口内先按语言筛出真实集合再切片取页，总数是筛完的准确值；term 按类目 slug 收窄，
+// keyword 是站内检索词（空 = 不检索）。两者可叠加，且都在分页前生效，翻页不会掉筛选。
+func (s *Service) PublishedProductsPage(ctx context.Context, lang string, term termFilter, keyword string, page, pageSize int) ([]Product, int64, error) {
 	if page < 1 {
 		page = 1
 	}
@@ -402,6 +403,14 @@ func (s *Service) PublishedProductsPage(ctx context.Context, lang string, term t
 	windowTx := liveProductTx(s.db.WithContext(ctx))
 	if term.Kind == "category" {
 		windowTx = windowTx.Where("id IN (SELECT pr.product_id FROM plg_website_product_category_rel pr JOIN plg_website_product_category pc ON pc.id = pr.category_id WHERE pc.slug = ?)", term.Slug)
+	}
+	// 检索范围覆盖「名称 / 型号(slug) / 摘要 / 搜索关键词 / 规格属性 / 译文」：
+	// 两侧 LOWER 折叠大小写，PG 上大写词也能命中；全部走占位参数，不拼用户输入进 SQL。
+	if kw := strings.TrimSpace(keyword); kw != "" {
+		like := "%" + kw + "%"
+		windowTx = windowTx.Where(
+			"LOWER(title) LIKE LOWER(?) OR LOWER(slug) LIKE LOWER(?) OR LOWER(summary) LIKE LOWER(?) OR LOWER(keywords) LIKE LOWER(?) OR LOWER(specs) LIKE LOWER(?) OR LOWER(i18n_json) LIKE LOWER(?)",
+			like, like, like, like, like, like)
 	}
 	var window []Product
 	if err := windowTx.

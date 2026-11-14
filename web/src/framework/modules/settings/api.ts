@@ -53,6 +53,10 @@ export interface OAuthProvider {
   enabled: boolean
   clientId: string
   clientSecret: string
+  /** 回调地址白名单：授权完成后跳回的前端页面完整 URL，每行一个；必须与开放平台登记的一致 */
+  redirectUris: string
+  /** 仅企业微信：应用 AgentId */
+  agentId?: string
   /** 仅 OIDC */
   issuer?: string
 }

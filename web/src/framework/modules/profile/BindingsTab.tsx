@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+import { isOAuthRedirectRejected, oauthRedirectUri } from '@/framework/auth/oauth'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { RequiredMark } from '@/framework/components/RequiredMark'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
@@ -108,7 +109,7 @@ function PhoneDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
               value={code}
               onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
             />
-            <Button type="button" variant="outline" className="shrink-0" disabled={left > 0 || send.isPending} onClick={onSend}>
+            <Button type="button" variant="outline" className="shrink-0 md:h-8" disabled={left > 0 || send.isPending} onClick={onSend}>
               {left > 0 ? t('profile.bindings.resend', { count: left }) : t('profile.bindings.sendCode')}
             </Button>
           </div>
@@ -137,11 +138,17 @@ export function BindingsTab() {
   }
 
   // 跳转到第三方授权页；回来后由 /login/oauth/:provider 页完成绑定并回到本页
-  const onBind = async (key: string) => {
+  const onBind = async (key: string, name: string) => {
     try {
       await bindProvider.mutateAsync(key)
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+      toast.error(
+        isOAuthRedirectRejected(e)
+          ? t('login.oauthRedirectNotAllowed', { url: oauthRedirectUri(key), name })
+          : e instanceof Error
+            ? e.message
+            : t('common.operateFailed'),
+      )
     }
   }
 
@@ -191,7 +198,7 @@ export function BindingsTab() {
                 {t('profile.bindings.unbind')}
               </Button>
             ) : (
-              <Button type="button" className="shrink-0" disabled={bindProvider.isPending} onClick={() => void onBind(p.key)}>
+              <Button type="button" className="shrink-0" disabled={bindProvider.isPending} onClick={() => void onBind(p.key, p.name)}>
                 {t('profile.bindings.bind')}
               </Button>
             )}

@@ -17,6 +17,7 @@ import (
 
 	"nexadmin/core"
 	"nexadmin/core/event"
+	"nexadmin/core/job"
 	"nexadmin/core/plugin"
 	"nexadmin/core/storage"
 )
@@ -87,6 +88,11 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	}
 	h := &handler{svc: svc, tickets: newStreamTicket(30 * time.Second), cache: d.Cache, store: svc.Storage()}
 	m.wsGuard.Do(func() { registerWSTopicGuard(svc, d.Auth) })
+	// 会话异步导出的任务体：worker 流式写双 sheet xlsx，进度与下载在导出中心（见 exportjob.go）。
+	// 注册是覆盖写，热挂载下幂等。
+	job.Register(jobTypeConversationExport, func(ctx context.Context, j *job.Job, report job.Report) (job.ResultFile, error) {
+		return svc.RunConversationExportJob(ctx, j, report)
+	})
 	h.Register(r, d)
 }
 

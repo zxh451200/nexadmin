@@ -44,7 +44,8 @@ export interface Verification {
 }
 
 export interface VerificationQuery extends PageQuery {
-  status?: VerifyStatus
+  /** 逗号分隔多值：?status=valid,invalid */
+  status?: string
   /** '1' = 显示全部留痕；缺省按号码折叠成最新一次 */
   all?: '1'
   /** 核验时间窗（yyyy-MM-dd，含两端）；缺省不限 */

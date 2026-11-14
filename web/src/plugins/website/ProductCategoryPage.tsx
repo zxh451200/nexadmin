@@ -304,8 +304,26 @@ export default function ProductCategoryPage() {
   }
 
   const columns: Column<CatNode>[] = [
-    { key: 'title', title: t('plugin_website.productCategory.nameColumn'), mobile: 'title', render: (r) => <span className="font-medium text-foreground">{r.title}</span> },
-    { key: 'slug', title: t('plugin_website.fields.slug'), mobile: 'sub', render: (r) => <span className="font-mono text-xs">{r.slug}</span> },
+    {
+      key: 'title',
+      title: t('plugin_website.productCategory.nameColumn'),
+      mobile: 'title',
+      render: (r) => (
+        <span className="block max-w-[18rem] truncate font-medium text-foreground" title={r.title}>
+          {r.title}
+        </span>
+      ),
+    },
+    {
+      key: 'slug',
+      title: t('plugin_website.fields.slug'),
+      mobile: 'sub',
+      render: (r) => (
+        <span className="block max-w-48 truncate font-mono text-xs" title={r.slug}>
+          {r.slug}
+        </span>
+      ),
+    },
     {
       key: 'count',
       title: t('plugin_website.productCategory.countColumn'),

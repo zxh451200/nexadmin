@@ -36,13 +36,10 @@ func isSection(s string) bool {
 // readonlySections：值由 config/config.yaml 在启动时决定（storage.* 决定文件存放，
 // cache.* 决定缓存驱动，core/router.go 据此构造缓存），设置页保存下来的这份没有任何地方会读。
 // 让它显示「保存成功」却不生效比直接拒绝更糟，所以这两个分区明确拒绝写入，前端也只展示不给编辑入口。
-// 注意：sms / auth 同样是「保存下来的这份没有任何地方会读」（smscode.New / core/auth 只取 config.yaml），
-// 但把它们并进上面那张表之前，得先解决一个更根本的问题：本服务拿不到 config.Config（NewService 只有 db 句柄），
-// section() 返回的是「库里的值 / 出厂默认」，不是「这台机器真正生效的值」。storage / cache 两张只读卡片
-// 现在就因为这个原因在展示不生效的数字。先给只读分区接上生效值来源，再谈把 sms / auth 收进来；
-// 否则只是把「保存成功却不生效」换成「显示得很确定」。
-// （settings_readonly_test.go 的正控制表里 sms / auth 只是随手取的分区名，连 params / language 这种
-// 不存在的分区都列进去了——那条不构成「sms / auth 必须可写」的决定。）
+//
+// sms 分区同样是「保存下来的这份没有任何地方会读」（smscode.New 只取 config.yaml），仍在只读清单之外；
+// auth 分区不再是：设置页的登录方式 / provider 凭据 / 代理经 core/auth 的运行时源注入（auth_runtime.go），
+// 保存后下一次请求即生效，config.yaml 退为回退与种子。
 var readonlySections = map[string]string{
 	"storage": "config.storage_readonly",
 	"cache":   "config.cache_readonly",
@@ -53,8 +50,10 @@ func readonlySection(name string) (string, bool) {
 	return key, ok
 }
 
+// provider 是第三方登录 provider 的默认值（与前端 mock 一致）。redirectUris 每行一个完整 URL；
+// agentId 只对企业微信有意义、issuer 只对 OIDC 有意义，其余 provider 留空。
 func provider() map[string]any {
-	return map[string]any{"enabled": false, "clientId": "", "clientSecret": ""}
+	return map[string]any{"enabled": false, "clientId": "", "clientSecret": "", "redirectUris": "", "agentId": ""}
 }
 
 // defaultSettings 是各分区的默认值（与前端 mock 一致），同时决定每个分区允许哪些字段。
@@ -284,6 +283,9 @@ func (s *Service) AllSettings(ctx context.Context) (map[string]any, error) {
 		if err != nil {
 			return nil, err
 		}
+		if name == "auth" {
+			s.hydrateAuth(ctx, v) // 设置页展示的是运行时生效值，config.yaml 里配好的登录方式也看得见
+		}
 		out[name] = maskSecrets(v)
 	}
 	return out, nil
@@ -309,6 +311,13 @@ func (s *Service) SaveSection(ctx context.Context, name string, body map[string]
 	}
 	if name == "ai" {
 		if err := s.validateAI(ctx, cur, body, merged); err != nil {
+			return nil, err
+		}
+	}
+	if name == "auth" {
+		// 「保存成功却不生效」在这个分区代价最大：开关打开但凭据/回调地址不全，登录页一行都不会出现。
+		// 所以保存前就按同一套合并规则算一遍，不完整直接拒绝并说明是哪一家。
+		if err := s.validateAuth(ctx, merged); err != nil {
 			return nil, err
 		}
 	}

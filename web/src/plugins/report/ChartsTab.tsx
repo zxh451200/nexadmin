@@ -68,7 +68,7 @@ export function ChartsTab() {
         </span>
       ),
     },
-    { key: 'remark', title: t('common.remark'), render: (c) => <span className="text-muted-foreground">{c.remark || '-'}</span> },
+    { key: 'remark', title: t('common.remark'), render: (c) => (c.remark ? <span className="block max-w-64 truncate text-muted-foreground" title={c.remark}>{c.remark}</span> : <span className="text-muted-foreground">-</span>) },
   ]
 
   return (

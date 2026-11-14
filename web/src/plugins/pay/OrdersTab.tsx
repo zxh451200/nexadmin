@@ -5,6 +5,7 @@ import { useSearchParams } from 'react-router-dom'
 import { parseISO } from 'date-fns'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
+import { useAsyncJob } from '@/framework/hooks/use-async-job'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { DatePicker } from '@/framework/components/DatePicker'
@@ -16,7 +17,7 @@ import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
 import { OptionPicker } from '@/framework/components/OptionPicker'
 import {
-  fetchOrdersForExport,
+  createOrderExportJob,
   useChannels,
   useCloseOrder,
   useOrder,
@@ -25,7 +26,6 @@ import {
   type OrderQuery,
   type PayOrder,
 } from './api'
-import { downloadCsv } from '@/framework/components/export/csv'
 import { formatMoney, formatTime, payStatusVariant } from './format'
 import { cn } from '@/lib/utils'
 import { ListErrorBanner } from './ListErrorBanner'
@@ -69,6 +69,7 @@ const toOrderQuery = (d: OrderDraft): OrderQuery => ({
 export function OrdersTab() {
   const { t, i18n } = useTranslation()
   const confirm = useConfirm()
+  const { start: startExportJob } = useAsyncJob()
   const [draft, setDraft] = useState<OrderDraft>({})
   const [filters, setFilters] = useState<OrderQuery>({})
   const [page, setPage] = useState(1)
@@ -109,28 +110,13 @@ export function OrdersTab() {
     }
   }
 
-  // 导出当前筛选下的全部支付单：财务归档与对账的刚需。上限与超限报错在后端。
+  // 导出当前筛选下的全部支付单：财务归档与对账的刚需。统一走异步任务：
+  // 提交后由 useAsyncJob 提示「已提交到导出中心」，进度与下载都在导出中心看。
   const [exporting, setExporting] = useState(false)
   const onExport = async () => {
     setExporting(true)
     try {
-      const rows = await fetchOrdersForExport({ ...filters })
-      const stamp = new Date().toISOString().slice(0, 10)
-      downloadCsv(`pay-orders-${stamp}.csv`, [
-        [
-          t('plugin_pay.fields.paymentNo'), t('plugin_pay.fields.bizType'), t('plugin_pay.fields.subject'),
-          t('plugin_pay.fields.channel'), t('plugin_pay.fields.method'), t('plugin_pay.fields.status'),
-          t('plugin_pay.fields.amount'), t('plugin_pay.fields.refunded'), t('plugin_pay.fields.fee'),
-          t('plugin_pay.fields.channelTxnId'), t('plugin_pay.fields.createdAt'), t('plugin_pay.fields.paidAt'),
-        ],
-        ...rows.map((o) => [
-          o.paymentNo, `${o.bizType}/${o.bizNo}`, o.subject || o.subjectId || '',
-          o.channelCode, o.method || '', t(`plugin_pay.status.${o.status}`),
-          formatMoney(o.amountMinor, o.currency), formatMoney(o.refundedMinor, o.currency),
-          formatMoney(o.feeMinor, o.currency), o.channelTxnId || '',
-          formatTime(o.createdAt, i18n.language), o.paidAt ? formatTime(o.paidAt, i18n.language) : '',
-        ]),
-      ])
+      await startExportJob(() => createOrderExportJob({ ...filters }))
     } catch {
       toast.error(t('common.operateFailed'))
     } finally {
@@ -172,15 +158,31 @@ export function OrdersTab() {
       title: t('plugin_pay.fields.paymentNo'),
       mobile: 'title',
       render: (o) => (
-        <div>
-          <span className="font-medium text-foreground">{o.paymentNo}</span>
-          <div className="text-xs text-muted-foreground">
+        <div className="min-w-0">
+          <span className="block max-w-[16rem] truncate font-medium text-foreground" title={o.paymentNo}>
+            {o.paymentNo}
+          </span>
+          <div className="max-w-[16rem] truncate text-xs text-muted-foreground" title={`${o.bizType}/${o.bizNo}`}>
             {o.bizType}/{o.bizNo}
           </div>
         </div>
       ),
     },
-    { key: 'subject', title: t('plugin_pay.fields.subject'), mobile: 'sub', render: (o) => o.subject || o.subjectId || '-' },
+    {
+      key: 'subject',
+      title: t('plugin_pay.fields.subject'),
+      mobile: 'sub',
+      render: (o) => {
+        const text = o.subject || o.subjectId
+        return text ? (
+          <span className="block max-w-[14rem] truncate" title={text}>
+            {text}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">-</span>
+        )
+      },
+    },
     { key: 'amount', title: t('plugin_pay.fields.amount'), align: 'end', render: (o) => <span className="num">{formatMoney(o.amountMinor, o.currency)}</span> },
     {
       key: 'refunded',

@@ -205,6 +205,7 @@
     "loginWith": "Sign in with {{name}}",
     "oauthMock": "Sign-in with {{name}} is not available in the demo",
     "oauthStartFailed": "Could not start {{name}} sign-in. Please try again later",
+    "oauthRedirectNotAllowed": "{{url}} is not in the {{name}} redirect URI list. Add it under Settings → Sign-in methods → {{name}} → Redirect URIs and try again",
     "oauthFailed": "Third-party sign-in failed. Please try again",
     "oauthProcessing": "Signing you in…",
     "backToLogin": "Back to sign-in",

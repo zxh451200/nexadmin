@@ -1095,10 +1095,12 @@ export function CustomersTab() {
       render: (cu) => (
         <div className="min-w-0">
           <span className="font-medium text-foreground">{cu.name}</span>
-          <div className="text-xs text-muted-foreground">{cu.code || cu.id}</div>
+          <div className="max-w-[14rem] truncate text-xs text-muted-foreground" title={cu.code || cu.id}>
+            {cu.code || cu.id}
+          </div>
           {(cu.tags?.length ?? 0) > 0 ? (
             // 标签挂在名字副行而不是独立一列：标签数不定，一列会被撑得忽宽忽窄
-            <div className="mt-0.5 flex flex-wrap gap-1">
+            <div className="mt-0.5 flex flex-wrap gap-1" title={cu.tags!.join('、')}>
               {cu.tags!.slice(0, 3).map((tag) => (
                 <Badge key={tag} variant="secondary" className="px-1.5 py-0 text-[10px]">
                   {tag}
@@ -1136,7 +1138,14 @@ export function CustomersTab() {
             : cu.idNo
               ? `${t(`plugin_crm.idType.${cu.idType ?? ''}`, { defaultValue: cu.idType ?? '' })} ${cu.idNo}`
               : ''
-        return value ? <span className="num">{value}</span> : <span className="text-muted-foreground">-</span>
+        // 证件号是 15-64 位不可断数字：截断 + 悬停看全量
+        return value ? (
+          <span className="num block max-w-[14rem] truncate" title={value}>
+            {value}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">-</span>
+        )
       },
     },
     {
@@ -1162,14 +1171,16 @@ export function CustomersTab() {
       key: 'external',
       title: t('plugin_crm.fields.externalAnchor'),
       mobile: 'sub',
-      render: (cu) =>
-        cu.externalSource ? (
-          <Badge variant="outline">
-            {t(`plugin_crm.source.${cu.externalSource}`, { defaultValue: cu.externalSource })}/{cu.externalNo}
+      render: (cu) => {
+        if (!cu.externalSource) return <span className="text-muted-foreground">-</span>
+        // externalNo 无长度上限：徽章限宽截断，悬停看全量
+        const text = `${t(`plugin_crm.source.${cu.externalSource}`, { defaultValue: cu.externalSource })}/${cu.externalNo}`
+        return (
+          <Badge variant="outline" className="max-w-48" title={text}>
+            <span className="min-w-0 truncate">{text}</span>
           </Badge>
-        ) : (
-          <span className="text-muted-foreground">-</span>
-        ),
+        )
+      },
     },
     {
       key: 'status',

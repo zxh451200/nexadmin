@@ -63,7 +63,7 @@ export function IpRulesTab() {
     },
     { key: 'cidr', title: t('plugin_security.ip.cidr'), mobile: 'title', render: (r) => <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{r.cidr}</code> },
     { key: 'scope', title: t('plugin_security.ip.scope'), mobile: 'sub', render: (r) => t(`plugin_security.ip.scopes.${r.scope}`) },
-    { key: 'remark', title: t('plugin_security.ip.remark'), render: (r) => r.remark || <span className="text-muted-foreground">-</span> },
+    { key: 'remark', title: t('plugin_security.ip.remark'), render: (r) => (r.remark ? <span className="block max-w-xs truncate" title={r.remark}>{r.remark}</span> : <span className="text-muted-foreground">-</span>) },
     {
       key: 'enabled',
       title: t('plugin_security.ip.enabled'),

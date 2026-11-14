@@ -1,0 +1,25 @@
+id: kb
+name: 知识库
+version: 0.1.0
+description: 客服 AI 知识库：上传 txt/md 文档自动切分并向量化；在线客服的 AI 助手只依据这里的知识回答，检索不到就转人工，不凭空编造。
+author: NexAdmin
+edition: free
+requires_nexadmin: ">=0.1.0"
+menus:
+  - parent: /biz
+    type: menu
+    title: plugin_kb.menu
+    path: /kb/documents
+    component: plugins/kb/KbPage
+    perm: kb:list
+    icon: BookOpen
+    sort: 70
+    keep_alive: true
+  - parent: kb:list
+    type: button
+    title: plugin_kb.perm.edit
+    perm: kb:edit
+  - parent: kb:list
+    type: button
+    title: plugin_kb.perm.delete
+    perm: kb:delete

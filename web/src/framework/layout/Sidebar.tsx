@@ -106,8 +106,10 @@ export function Sidebar({ menu, homePath = HOME_PATH, collapsed = false, onNavig
             shared,
             isActive
               ? cn(
-                  'bg-sidebar-accent font-medium text-sidebar-accent-foreground',
-                  'before:absolute before:inset-y-2 before:w-0.5 before:rounded-full before:bg-brand-gradient',
+                  // 激活态整体走品牌色：底色/文字/左条同源，和 hover 的中性 accent 拉开对比——
+                  // 之前的 sidebar-accent 底色与 hover 几乎同调，选中看不出来
+                  'bg-primary/10 font-medium text-primary hover:bg-primary/15',
+                  'before:absolute before:inset-y-2 before:w-0.5 before:rounded-full before:bg-primary',
                   // 二级的激活竖条压在引导线上，免得同一条轨道上出现两条竖线
                   nested ? 'before:inset-s-[-9px]' : 'before:inset-s-0',
                 )

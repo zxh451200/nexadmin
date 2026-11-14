@@ -100,7 +100,10 @@ export function OutboxTab() {
       title: t('plugin_pay.outbox.lastError'),
       render: (r) =>
         r.lastError ? (
-          <span className="block max-w-xs wrap-break-word text-xs text-destructive">{r.lastError}</span>
+          // wrap-break-word 在 nowrap 单元格里是死代码：改 line-clamp-2 + 悬停看全文
+          <span className="line-clamp-2 max-w-xs text-xs text-destructive" title={r.lastError}>
+            {r.lastError}
+          </span>
         ) : (
           <span className="text-muted-foreground">-</span>
         ),

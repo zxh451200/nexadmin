@@ -1100,15 +1100,6 @@ func (s *Service) DeletePosts(ctx context.Context, ids []idgen.ID) (int64, error
 	return deleted, nil
 }
 
-// ExportPosts 取当前筛选下的全部新闻（不带分页，上限 exportMax），前端据此生成 CSV；
-// 筛选与 ListPosts 同源，导出文件和页面上看到的列表对得上。
-func (s *Service) ExportPosts(ctx context.Context, q ContentQuery) ([]Post, error) {
-	var rows []Post
-	err := contentTx(s.db.WithContext(ctx).Model(&Post{}), q).Preload("Categories").Preload("Tags").
-		Order("updated_at DESC, id DESC").Limit(exportMax).Find(&rows).Error
-	return rows, err
-}
-
 // PostByID 按主键取新闻（含草稿）；管理端签发预览链接用。
 func (s *Service) PostByID(ctx context.Context, id idgen.ID) (*Post, error) {
 	var row Post
@@ -1873,19 +1864,6 @@ func (s *Service) CountNewMessages(ctx context.Context) (int64, error) {
 	var n int64
 	err := s.db.WithContext(ctx).Model(&Message{}).Where("status = ?", MsgNew).Count(&n).Error
 	return n, err
-}
-
-// exportMax 是单次导出的行数上限。留言是人工跟进的低频数据，超过这个量级说明
-// 该接入导出中心走异步任务了，同步一把梭反而拖垮请求。
-const exportMax = 10000
-
-// ExportMessages 取当前筛选下的全部留言（不带分页），前端据此生成 CSV；
-// 筛选与 ListMessages 同源，导出文件和页面上看到的列表对得上。
-func (s *Service) ExportMessages(ctx context.Context, q MessageQuery) ([]Message, error) {
-	var rows []Message
-	err := messageFilter(s.db.WithContext(ctx).Model(&Message{}), q).
-		Order("created_at DESC, id DESC").Limit(exportMax).Find(&rows).Error
-	return rows, err
 }
 
 // SetMessagesStatus 批量把 ids 里的留言置为某个状态，返回实际改动条数。

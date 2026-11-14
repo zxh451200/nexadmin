@@ -17,6 +17,7 @@ import { FormGrid, FormGridFull, FormLayout } from '@/framework/components/FormL
 import { JsonInput } from '@/framework/components/JsonInput'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { SwitchField } from '@/framework/components/SwitchField'
+import { OptionPicker } from '@/framework/components/OptionPicker'
 import { Button } from '@/framework/ui/button'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/framework/ui/form'
 import { Input } from '@/framework/ui/input'
@@ -47,7 +48,6 @@ const schema = z.object({
 })
 type FormValues = z.infer<typeof schema>
 const empty: FormValues = { name: '', key: '', value: '', type: 'string', isPublic: false, remark: '' }
-const ALL = 'all'
 
 export function ParamsSection() {
   const { t } = useTranslation()
@@ -56,8 +56,9 @@ export function ParamsSection() {
   const confirm = useConfirm()
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
-  const [draft, setDraft] = useState({ keyword: '', type: ALL })
-  const [filters, setFilters] = useState({ keyword: '', type: ALL })
+  // 类型是多选数组，搜索时 join 成 CSV（后端 config_type IN）
+  const [draft, setDraft] = useState<{ keyword: string; type: string[] }>({ keyword: '', type: [] })
+  const [filters, setFilters] = useState<{ keyword?: string; type?: string }>({})
   const [selected, setSelected] = useState<string[]>([])
   const [editing, setEditing] = useState<ConfigRow | null>(null)
   const [open, setOpen] = useState(false)
@@ -66,7 +67,7 @@ export function ParamsSection() {
     page,
     pageSize,
     keyword: filters.keyword || undefined,
-    type: filters.type === ALL ? undefined : filters.type,
+    type: filters.type,
   })
   const save = useSaveConfig()
   const del = useDeleteConfigs()
@@ -135,7 +136,17 @@ export function ParamsSection() {
 
   const columns: Column<ConfigRow>[] = [
     { key: 'name', title: t('sysConfig.name'), mobile: 'title', render: (r) => cfgText(r.key, 'name', r.name) },
-    { key: 'key', title: t('sysConfig.key'), mobile: 'sub', render: (r) => <span className="num break-all">{r.key}</span> },
+    {
+      key: 'key',
+      title: t('sysConfig.key'),
+      mobile: 'sub',
+      // break-all 在 nowrap 单元格里是死代码：改 truncate + title，列宽有界
+      render: (r) => (
+        <span className="num block max-w-[16rem] truncate" title={r.key}>
+          {r.key}
+        </span>
+      ),
+    },
     {
       key: 'value',
       title: t('sysConfig.value'),
@@ -152,7 +163,21 @@ export function ParamsSection() {
       title: t('sysConfig.isPublic'),
       render: (r) => <DictTag dict="yes_no" value={r.isPublic ? '1' : '0'} />,
     },
-    { key: 'remark', title: t('common.remark'), mobile: 'hidden', render: (r) => cfgText(r.key, 'remark', r.remark) },
+    {
+      key: 'remark',
+      title: t('common.remark'),
+      mobile: 'hidden',
+      render: (r) => {
+        const text = cfgText(r.key, 'remark', r.remark)
+        return text ? (
+          <span className="block max-w-xs truncate" title={text}>
+            {text}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">-</span>
+        )
+      },
+    },
   ]
 
   return (
@@ -163,12 +188,11 @@ export function ParamsSection() {
       <FilterBar
         onSearch={() => {
           setPage(1)
-          setFilters(draft)
+          setFilters({ keyword: draft.keyword || undefined, type: draft.type.length ? draft.type.join(',') : undefined })
         }}
         onReset={() => {
-          const init = { keyword: '', type: ALL }
-          setDraft(init)
-          setFilters(init)
+          setDraft({ keyword: '', type: [] })
+          setFilters({})
           setPage(1)
         }}
       >
@@ -179,19 +203,14 @@ export function ParamsSection() {
           placeholder={t('sysConfig.searchPlaceholder')}
           aria-label={t('common.keyword')}
         />
-        <Select value={draft.type} onValueChange={(v) => setDraft((d) => ({ ...d, type: v }))}>
-          <SelectTrigger className="md:w-40" aria-label={t('sysConfig.type')}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>{t('sysConfig.allTypes')}</SelectItem>
-            {CONFIG_VALUE_TYPES.map((v) => (
-              <SelectItem key={v} value={v}>
-                {t(`sysConfig.types.${v}`)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <OptionPicker
+          title={t('sysConfig.type')}
+          value={draft.type}
+          onChange={(v) => setDraft((d) => ({ ...d, type: v }))}
+          options={CONFIG_VALUE_TYPES.map((v) => ({ value: v, label: t(`sysConfig.types.${v}`) }))}
+          className="md:w-44"
+          placeholder={t('sysConfig.type')}
+        />
       </FilterBar>
 
       <DataTable<ConfigRow>

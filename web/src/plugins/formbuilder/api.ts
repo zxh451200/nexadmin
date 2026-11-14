@@ -1,5 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { http, api } from '@/framework/request/http'
+import { api } from '@/framework/request/http'
 import type { Page, PageQuery } from '@/framework/request/types'
 
 export type FieldType =
@@ -395,20 +395,10 @@ export function useDeleteSubmissions() {
   })
 }
 
-/** 提交到导出中心；返回任务 ID */
+/** 提交到导出中心；返回任务 ID，进度与下载见导出中心 */
 export function useExportJob() {
   return useMutation({
     mutationFn: ({ id, query }: { id: string; query: SubmissionQuery }) =>
       api.post<{ id: string }>(`${BASE}/forms/${id}/export-job`, undefined, { params: query }),
   })
-}
-
-/** 直接导出 xlsx（行数有上限，超出请用导出中心） */
-export async function downloadXlsx(id: string, name: string, query: SubmissionQuery) {
-  const res = await http.get<unknown>(`${BASE}/forms/${id}/export`, { params: query, responseType: 'blob' })
-  if (res.data instanceof Blob) {
-    saveBlob(res.data, `${name || 'form'}.xlsx`)
-    return
-  }
-  saveBlob(new Blob([JSON.stringify(res.data, null, 2)], { type: 'application/json' }), `${name || 'form'}.mock.json`)
 }

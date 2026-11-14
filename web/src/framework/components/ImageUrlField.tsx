@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils'
 import { precheckFile, useUploadConfig } from '@/framework/upload/precheck'
 import { uploadFile } from '@/framework/upload/uploadClient'
 import { toWebp, webpName } from '@/framework/upload/toWebp'
-import { ImagePreviewDialog } from './ImagePreviewDialog'
+import { Lightbox } from '@/framework/upload/Lightbox'
 import { RemoteSelect } from './RemoteSelect'
 import { ResponsiveDialog } from './ResponsiveDialog'
 import { Uploader, type UploadedFile } from './Uploader'
@@ -89,42 +89,10 @@ export function ImageUrlField({
   }
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2">
-        <Input
-          value={value}
-          disabled={disabled}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
-          inputMode="url"
-          spellCheck={false}
-          className="min-w-0 flex-1"
-          aria-label={ariaLabel ?? title}
-        />
-        {/* 文件库下拉：已传过的图片直接选，不用手写 URL（关键词可搜、按上传时间倒序） */}
-        <RemoteSelect
-          url="/files"
-          params={{ category: 'image' }}
-          valueKey="url"
-          labelKey="name"
-          value={value}
-          onChange={(v) => onChange(String(v ?? ''))}
-          allowClear={false}
-          placeholder={t('uploader.pickFromLibrary')}
-          disabled={disabled}
-          className="w-36 shrink-0 sm:w-44"
-        />
-        {value ? (
-          <Button type="button" variant="ghost" className="shrink-0 px-3" disabled={disabled} onClick={() => onChange('')}>
-            {t('common.clear')}
-          </Button>
-        ) : null}
-      </div>
-      {hint && !crop ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
-      {/* 缩略图点开是居中小弹窗预览（放大看一眼，不铺满视口）。
-          功能直接落在预览卡上：悬停浮现放大/清除；空值时是可点的上传卡，而不是一块空白。 */}
+    <div className="flex items-center gap-3">
+      {/* 卡在左、URL 行在右：上传卡不再孤零零吊在左下角，右侧一行正好吃掉整行宽度 */}
       {value ? (
-        <div className="group relative w-fit">
+        <div className="group relative shrink-0">
           <button
             type="button"
             disabled={disabled}
@@ -175,7 +143,7 @@ export function ImageUrlField({
           onClick={() => (crop ? setOpen(true) : inputRef.current?.click())}
           aria-label={ariaLabel ?? title}
           className={cn(
-            'flex items-center justify-center gap-1 rounded-md border border-dashed text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:bg-muted/50 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50',
+            'flex shrink-0 items-center justify-center gap-1 rounded-md border border-dashed text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:bg-muted/50 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50',
             previewClassName,
           )}
         >
@@ -187,8 +155,45 @@ export function ImageUrlField({
           {uploading ? t('uploader.uploading') : t('common.upload')}
         </button>
       )}
+      <div className="flex min-w-0 flex-1 flex-col gap-2">
+        <div className="flex items-center gap-2">
+          <Input
+            value={value}
+            disabled={disabled}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={placeholder}
+            inputMode="url"
+            spellCheck={false}
+            className="min-w-0 flex-1"
+            aria-label={ariaLabel ?? title}
+          />
+          {/* 文件库下拉：已传过的图片直接选，不用手写 URL（关键词可搜、按上传时间倒序） */}
+          <RemoteSelect
+            url="/files"
+            params={{ category: 'image' }}
+            valueKey="url"
+            labelKey="name"
+            value={value}
+            onChange={(v) => onChange(String(v ?? ''))}
+            allowClear={false}
+            placeholder={t('uploader.pickFromLibrary')}
+            disabled={disabled}
+            className="w-36 shrink-0 sm:w-44"
+          />
+          {value ? (
+            <Button type="button" variant="ghost" className="shrink-0 px-3" disabled={disabled} onClick={() => onChange('')}>
+              {t('common.clear')}
+            </Button>
+          ) : null}
+        </div>
+        {hint && !crop ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
+      </div>
       {value ? (
-        <ImagePreviewDialog open={zoom} onOpenChange={setZoom} src={value} alt={ariaLabel ?? title} />
+        <Lightbox
+          open={zoom}
+          onOpenChange={setZoom}
+          slides={[{ src: value, alt: ariaLabel ?? title }]}
+        />
       ) : null}
       <input
         ref={inputRef}

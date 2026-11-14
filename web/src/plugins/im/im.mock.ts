@@ -1,4 +1,5 @@
 import { defineMock } from '@/framework/request/mock'
+import { createMockJob } from '@/framework/modules/exportcenter/exportcenter.mock'
 import type { ImConversation, ImMessage } from './api'
 
 const ago = (min: number) => new Date(Date.now() - min * 60_000).toISOString()
@@ -89,6 +90,18 @@ defineMock([
       if (query.status) rows = rows.filter((c) => c.status === query.status)
       if (query.bizType) rows = rows.filter((c) => c.bizType === query.bizType)
       return { list: rows, total: rows.length, page: 1, pageSize: rows.length }
+    },
+  },
+  {
+    method: 'POST',
+    url: '/plugins/im/conversations-export-async',
+    handler: ({ query }) => {
+      const kw = String(query.keyword ?? '').trim().toLowerCase()
+      const rows = convs.filter(
+        (c) => !kw || c.convNo.toLowerCase().includes(kw) || c.visitorName.toLowerCase().includes(kw) || c.lastPreview.toLowerCase().includes(kw),
+      )
+      const j = createMockJob('im.conversation-export', `im-conversations-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.csv`, rows.length, '会话号,访客,状态\r\n…\r\n')
+      return { id: j.id, type: j.type, status: j.status }
     },
   },
   {

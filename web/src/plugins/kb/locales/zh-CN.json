@@ -1,0 +1,51 @@
+{
+  "plugin_kb": {
+    "title": "知识库",
+    "description": "客服 AI 的知识来源：上传 txt/md 文档自动切分并向量化；AI 只依据这里的内容回答，检索不到就转人工，不编造",
+    "menu": "知识库",
+    "perm": {
+      "edit": "编辑文档",
+      "delete": "删除文档"
+    },
+    "upload": "上传文档",
+    "uploadTitle": "上传文档",
+    "uploadDesc": "支持 txt / md 纯文本（≤2MB），上传后自动切分并向量化",
+    "uploadHint": "建议按 FAQ / 主题段落组织内容：空行分段会被自然切成独立知识块；上传后即可在下方用「测试提问」验证检索效果",
+    "uploadDone": "《{{name}}》已入库，切分 {{count}} 块",
+    "uploadAllFailed": "全部文件上传失败（{{fail}} 个）",
+    "deleteConfirm": "确定删除《{{name}}》？其知识块将一并移除，AI 不再依据它回答。",
+    "reembed": "重新向量化",
+    "reembedDone": "《{{name}}》已用当前模型重新向量化",
+    "needReembed": "模型已变更，需重新向量化",
+    "fields": {
+      "title": "标题",
+      "status": "状态",
+      "chunks": "知识块",
+      "model": "向量模型",
+      "createdAt": "上传时间",
+      "actions": "操作",
+      "threshold": "相似度阈值",
+      "thresholdHint": "0~1，越高越严格：topK 最高分低于它视为「知识库答不了」，直接转人工",
+      "topK": "TopK",
+      "topKHint": "每次回答最多带入的知识块数（1~10）",
+      "systemPrompt": "回答风格要求（可选）",
+      "systemPromptHint": "例如「回答控制在三句话以内」「语气亲切一些」",
+      "systemPromptNote": "只追加风格要求；「只依据资料回答、没有就承认不知道」是硬约束，不受这里影响"
+    },
+    "status": {
+      "ready": "已就绪",
+      "failed": "失败"
+    },
+    "settingsTitle": "检索设置",
+    "settingsDesc": "调整「AI 什么时候承认不知道」与回答风格",
+    "missingEmbed": "向量化未启用：请先到「系统设置 → 高级 → AI」配置 Embedding 模型，否则无法上传文档",
+    "missingChat": "对话模型未配置：请先到「系统设置 → 高级 → AI」完成 AI 配置，否则无法自动回答",
+    "empty": "还没有文档：上传产品说明、常见问题等资料，AI 就能依据它们回答客服咨询",
+    "askTitle": "测试提问",
+    "askPlaceholder": "像访客一样提问，验证 AI 能否依据知识库回答",
+    "ask": "提问",
+    "askDone": "命中《{{title}}》（相似度 {{score}}）",
+    "askHandoff": "知识库里没有找到可信的依据——线上客服会礼貌说明并转人工，不会编造",
+    "hitScore": "{{score}}"
+  }
+}

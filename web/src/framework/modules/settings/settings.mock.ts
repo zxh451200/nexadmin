@@ -4,7 +4,7 @@ import type { AllSettings, PublicSettings, SectionKey, TestResult } from './api'
 const MASK = '********'
 const STORE_KEY = 'mock-settings'
 
-const provider = () => ({ enabled: false, clientId: '', clientSecret: '' })
+const provider = () => ({ enabled: false, clientId: '', clientSecret: '', redirectUris: '', agentId: '' })
 
 const defaults = (): AllSettings => ({
   site: {

@@ -138,21 +138,6 @@ func (s *service) list(ctx context.Context, q listQuery, me actor) ([]*userDTO, 
 	return out, total, err
 }
 
-// exportLimit 是一次导出的行数上限，防止拖垮服务。
-const exportLimit = 10000
-
-func (s *service) export(ctx context.Context, q listQuery, me actor) ([]*userDTO, error) {
-	tx, err := s.filtered(ctx, q, me)
-	if err != nil {
-		return nil, err
-	}
-	var rows []User
-	if err := tx.Order("created_at DESC, id DESC").Limit(exportLimit).Find(&rows).Error; err != nil {
-		return nil, err
-	}
-	return s.toDTOs(ctx, rows)
-}
-
 func (s *service) find(ctx context.Context, id idgen.ID) (*User, error) {
 	var u User
 	if err := s.db.WithContext(ctx).First(&u, "id = ?", int64(id)).Error; err != nil {
@@ -258,7 +243,7 @@ func (s *service) toDTOs(ctx context.Context, rows []User) ([]*userDTO, error) {
 			ID:         u.ID, Username: u.Username, Nickname: u.Nickname, Avatar: u.Avatar, Phone: u.Phone, Email: u.Email,
 			Gender: u.Gender, DeptName: deptName[u.DeptID], PostIDs: postIDs[u.ID], RoleIDs: roleIDs[u.ID],
 			RoleNames: roleNames[u.ID], Status: u.Status, Remark: u.Remark, CreatedAt: u.CreatedAt, UpdatedAt: u.UpdatedAt,
-			Region: regionDTO{Province: u.Province, City: u.City, District: u.District},
+			Region: regionDTO{Province: u.Province, City: u.City, District: u.District}, Address: u.Address,
 		}
 		if u.DeptID != 0 {
 			d.DeptID = u.DeptID.String()

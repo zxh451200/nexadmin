@@ -14,8 +14,9 @@ export function LogsTab() {
     { key: 'createdAt', title: t('plugin_security.logs.time'), mobile: 'sub', render: (l) => <span className="num">{formatTime(l.createdAt, i18n.language)}</span> },
     { key: 'operatorName', title: t('plugin_security.logs.operator'), render: (l) => l.operatorName },
     { key: 'action', title: t('plugin_security.logs.action'), mobile: 'title', render: (l) => t(`plugin_security.logs.actions.${l.action}`, { defaultValue: l.action }) },
-    { key: 'target', title: t('plugin_security.logs.target'), render: (l) => <span className="break-all">{l.target}</span> },
-    { key: 'detail', title: t('plugin_security.logs.detail'), render: (l) => <span className="break-all text-muted-foreground">{l.detail}</span> },
+    // break-all 在 nowrap 单元格里是死代码：对象/详情（JSON 串）改截断 + 悬停看全文
+    { key: 'target', title: t('plugin_security.logs.target'), render: (l) => (l.target ? <span className="block max-w-[14rem] truncate" title={l.target}>{l.target}</span> : <span className="text-muted-foreground">-</span>) },
+    { key: 'detail', title: t('plugin_security.logs.detail'), render: (l) => (l.detail ? <span className="line-clamp-2 max-w-72 text-muted-foreground" title={l.detail}>{l.detail}</span> : <span className="text-muted-foreground">-</span>) },
     { key: 'ip', title: 'IP', render: (l) => <span className="num">{l.ip}</span> },
   ]
 

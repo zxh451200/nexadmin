@@ -67,9 +67,16 @@ function UserMenu() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuLabel className="font-normal">
-          <p className="truncate text-sm font-medium">{name}</p>
-          <p className="truncate text-xs text-muted-foreground">{user?.username}</p>
+        {/* 头部：头像 + 两行文字块（昵称/账号），shadcn 用户菜单标准布局，替代原来挤在一起的两行裸文字 */}
+        <DropdownMenuLabel className="flex items-center gap-3 px-2 py-2 font-normal">
+          <Avatar className="size-8">
+            {user?.avatar && <AvatarImage src={user.avatar} alt="" />}
+            <AvatarFallback className="text-xs">{name.slice(0, 1).toUpperCase()}</AvatarFallback>
+          </Avatar>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm leading-tight font-medium">{name}</p>
+            <p className="mt-0.5 truncate text-xs leading-tight text-muted-foreground">{user?.username}</p>
+          </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem className="min-h-11 md:min-h-8" onSelect={() => navigate('/profile')}>

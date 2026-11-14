@@ -38,6 +38,7 @@ import { usePermission } from '@/framework/auth/usePermission'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { BatchBar } from '@/framework/components/table/BatchBar'
 import { useIsMobile } from '@/framework/hooks/use-mobile'
+import { useAsyncJob } from '@/framework/hooks/use-async-job'
 import { useWs } from '@/framework/hooks/useWs'
 import { DatePicker } from '@/framework/components/DatePicker'
 import { EmptyState } from '@/framework/components/EmptyState'
@@ -47,6 +48,7 @@ import { QueueRow, QueueStatus } from '@/framework/components/QueueRow'
 import { RequiredMark } from '@/framework/components/RequiredMark'
 import { ChatBubble, SystemPill } from '@/framework/components/chat/MessageBubble'
 import { RemoteSelect } from '@/framework/components/RemoteSelect'
+import { LiveStatusBadge } from '@/framework/components/LiveStatusBadge'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { SimpleSelect } from '@/framework/components/SimpleSelect'
 // 附件大小与 IM 会话同一份共享实现（framework/upload/precheck），不再各写一版
@@ -69,9 +71,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/framework/ui/tabs'
 import { Textarea } from '@/framework/ui/textarea'
 import { cn } from '@/lib/utils'
 import {
+  createTicketExportJob,
   downloadAttachment,
-  exportTickets,
-  isExportTooMany,
   useAddLink,
   useAssignGroup,
   useAssignTicket,
@@ -304,6 +305,7 @@ export default function TicketPage() {
   // 这里把写按钮置灰并给一行说明，读与队列操作照常。
   const { isPlatform } = usePermission()
   const confirm = useConfirm()
+  const { start: startExportJob } = useAsyncJob()
   const [params, setParams] = useSearchParams()
   const view = params.get('view') === 'stats' ? 'stats' : 'logs'
   // WS hub 连接状态：决定列表/详情是帧直达还是轮询兜底，徽标照实说
@@ -398,13 +400,14 @@ export default function TicketPage() {
     if (page > pages) setPage(pages)
   }, [page, pages])
 
-  // 导出复用列表当前的筛选对象：看到的和导出的必须同源，最多 5000 行由服务端把关。
+  // 导出复用列表当前的筛选对象：看到的和导出的必须同源。统一走异步任务：
+  // 提交后由 useAsyncJob 提示「已提交到导出中心」，进度与下载都在导出中心看。
   const onExport = async () => {
     setExporting(true)
     try {
-      await exportTickets(listFilters)
-    } catch (e) {
-      toast.error(isExportTooMany(e) ? t('plugin_ticket.export.tooMany') : t('plugin_ticket.export.failed'))
+      await startExportJob(() => createTicketExportJob(listFilters))
+    } catch {
+      // 创建失败的具体原因（超出上限、筛选太宽等）由 http 拦截器统一弹出，这里不再叠加
     } finally {
       setExporting(false)
     }
@@ -1206,10 +1209,15 @@ export default function TicketPage() {
       />
       {/* 列表与统计分屏：处理工单的人要先看到队列，做复盘的人也不该被双栏挤走 */}
       <Tabs value={view} onValueChange={setView}>
-        <TabsList className="w-fit">
-          <TabsTrigger value="logs">{t('plugin_ticket.view.logs')}</TabsTrigger>
-          <TabsTrigger value="stats">{t('plugin_ticket.view.stats')}</TabsTrigger>
-        </TabsList>
+        <div className="flex items-center justify-between gap-2">
+          <TabsList className="w-fit">
+            <TabsTrigger value="logs">{t('plugin_ticket.view.logs')}</TabsTrigger>
+            <TabsTrigger value="stats">{t('plugin_ticket.view.stats')}</TabsTrigger>
+          </TabsList>
+          {/* WS hub 已连接 = 帧直达（列表/详情收到即刷）；断线退回 8s/3s 轮询。
+              与 IM 会话同一枚指示：两套坐席工作台用同一种说法讲「现在的消息是不是实时的」。 */}
+          <LiveStatusBadge live={wsLive} />
+        </div>
         <TabsContent value="logs">
           {/* 队列与会话是一体两面：选中哪张单就看哪段对话，整体算「列表」视图，不拆散。
               高度约束只给桌面双栏：移动端单列下 calc 高度会把队列和会话各压成半屏。
@@ -1342,15 +1350,6 @@ export default function TicketPage() {
                     </div>
                   </PopoverContent>
                 </Popover>
-                {/* WS hub 已连接 = 帧直达（列表/详情收到即刷）；断线退回 8s/3s 轮询。
-                    与 IM 会话同一枚指示：两套坐席工作台用同一种说法讲「现在的消息是不是实时的」。 */}
-                <Badge
-                  variant={wsLive ? 'success' : 'secondary'}
-                  className="shrink-0"
-                  title={wsLive ? t('common.liveRealtime') : t('common.livePolling')}
-                >
-                  {wsLive ? t('common.liveRealtime') : t('common.livePolling')}
-                </Badge>
               </div>
 
               {activeFilters.length > 0 ? (
@@ -2255,8 +2254,8 @@ export default function TicketPage() {
               <p className="text-sm text-muted-foreground">{t('plugin_ticket.rules.empty')}</p>
             )}
           </div>
-          <div className="space-y-2 rounded-md bg-muted/50 p-3">
-            <p className="text-xs font-medium">
+          <div className="space-y-3 rounded-md bg-muted/50 p-3">
+            <p className="text-sm font-medium">
               {ruleForm.id ? t('plugin_ticket.rules.edit') : t('plugin_ticket.rules.add')}
             </p>
             <Field label={t('plugin_ticket.rules.name')} required>
@@ -2266,7 +2265,7 @@ export default function TicketPage() {
                 onChange={(e) => setRuleForm((f) => ({ ...f, name: e.target.value }))}
               />
             </Field>
-            <p className="pt-1 text-xs font-medium text-muted-foreground">{t('plugin_ticket.rules.match')}</p>
+            <p className="border-t pt-3 text-sm font-medium text-foreground">{t('plugin_ticket.rules.match')}</p>
             <div className="grid gap-3 sm:grid-cols-3">
               <Field label={t('plugin_ticket.rules.matchPriority')}>
                 <SimpleSelect
@@ -2321,11 +2320,11 @@ export default function TicketPage() {
                 value={ruleForm.matchTags}
                 onChange={(tags) => setRuleForm((f) => ({ ...f, matchTags: tags }))}
                 options={allTags.data ?? []}
-                hint={t('plugin_ticket.rules.matchTagsHint')}
+                hint={allTags.data?.length ? t('plugin_ticket.rules.matchTagsHint') : undefined}
               />
             </div>
             {/* 组必填：四个动作至少要配一个，提交前 hasAction 把关 */}
-            <p className="flex items-center gap-1 pt-1 text-xs font-medium text-muted-foreground">
+            <p className="flex items-center gap-1 border-t pt-3 text-sm font-medium text-foreground">
               {t('plugin_ticket.rules.action')}
               <RequiredMark />
             </p>
@@ -2371,40 +2370,42 @@ export default function TicketPage() {
                 onChange={(tags) => setRuleForm((f) => ({ ...f, addTags: tags }))}
                 options={allTags.data ?? []}
                 allowCreate
-                hint={t('plugin_ticket.rules.addTagsHint')}
+                hint={allTags.data?.length ? t('plugin_ticket.rules.addTagsHint') : undefined}
               />
             </div>
-            <div className="flex flex-wrap items-center gap-4">
-              <label className="flex items-center gap-1.5 text-sm">
-                <Checkbox
-                  checked={ruleForm.enabled}
-                  onCheckedChange={(v) => setRuleForm((f) => ({ ...f, enabled: v === true }))}
-                />
-                {t('plugin_ticket.rules.enabled')}
-              </label>
-              <label className="flex items-center gap-1.5 text-sm">
-                {t('plugin_ticket.rules.sort')}
-                <Input
-                  type="number"
-                  min={0}
-                  className="w-20"
-                  value={String(ruleForm.sort)}
-                  onChange={(e) => setRuleForm((f) => ({ ...f, sort: Math.max(0, Number(e.target.value) || 0) }))}
-                />
-              </label>
-            </div>
-            <div className="flex justify-end gap-2">
-              {ruleForm.id ? (
-                <Button variant="ghost" onClick={() => setRuleForm(emptyRuleForm)}>
-                  {t('common.cancel')}
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3">
+              <div className="flex flex-wrap items-center gap-4">
+                <label className="flex items-center gap-1.5 text-sm">
+                  <Checkbox
+                    checked={ruleForm.enabled}
+                    onCheckedChange={(v) => setRuleForm((f) => ({ ...f, enabled: v === true }))}
+                  />
+                  {t('plugin_ticket.rules.enabled')}
+                </label>
+                <label className="flex items-center gap-1.5 text-sm">
+                  {t('plugin_ticket.rules.sort')}
+                  <Input
+                    type="number"
+                    min={0}
+                    className="w-20"
+                    value={String(ruleForm.sort)}
+                    onChange={(e) => setRuleForm((f) => ({ ...f, sort: Math.max(0, Number(e.target.value) || 0) }))}
+                  />
+                </label>
+              </div>
+              <div className="flex justify-end gap-2">
+                {ruleForm.id ? (
+                  <Button variant="ghost" onClick={() => setRuleForm(emptyRuleForm)}>
+                    {t('common.cancel')}
+                  </Button>
+                ) : null}
+                <Button
+                  disabled={!isPlatform || !ruleForm.name.trim() || createRule.isPending || updateRule.isPending}
+                  onClick={() => void submitRule()}
+                >
+                  {t('plugin_ticket.rules.save')}
                 </Button>
-              ) : null}
-              <Button
-                disabled={!isPlatform || !ruleForm.name.trim() || createRule.isPending || updateRule.isPending}
-                onClick={() => void submitRule()}
-              >
-                {t('plugin_ticket.rules.save')}
-              </Button>
+              </div>
             </div>
           </div>
         </div>
@@ -2604,8 +2605,9 @@ function TicketListItem({
   const { t, i18n } = useTranslation()
   const cbId = useId()
   const meta = [
-    ticket.bizNo ? { key: 'biz', node: <span className="font-mono">{ticket.bizNo}</span> } : null,
-    ticket.assigneeName ? { key: 'assignee', node: <><UserRound aria-hidden="true" className="size-3" />{ticket.assigneeName}</> } : null,
+    // bizNo 可达 64 位不可断：截断 + 悬停看全量，别把 24rem 队列卡撑爆、把负责人挤出卡片
+    ticket.bizNo ? { key: 'biz', node: <span className="max-w-40 truncate font-mono" title={ticket.bizNo}>{ticket.bizNo}</span> } : null,
+    ticket.assigneeName ? { key: 'assignee', node: <><UserRound aria-hidden="true" className="size-3 shrink-0" /><span className="max-w-24 truncate">{ticket.assigneeName}</span></> } : null,
   ].filter(Boolean) as { key: string; node: React.ReactNode }[]
   const row = (
     <>

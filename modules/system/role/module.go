@@ -6,6 +6,7 @@ import (
 	"gorm.io/gorm"
 
 	"nexadmin/core"
+	"nexadmin/core/job"
 )
 
 func init() { core.RegisterBuiltin(Module()) }
@@ -25,6 +26,8 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	h := &handler{svc: &service{db: d.DB}}
 	r.GET("/roles", core.Perm("role:list"), h.list)
 	r.GET("/roles/options", h.options) // 下拉选项：登录即可，只返回启用角色的 id 与名称
+	job.Register(jobTypeRoleExport, h.svc.ExportJob) // 导出统一走导出中心（异步任务）
+	r.POST("/roles/export-async", core.Perm("role:list"), h.ExportAsync)
 	r.PUT("/roles/sort", core.Perm("role:update"), h.sort)
 	r.DELETE("/roles", core.Perm("role:delete"), h.removeAll) // 批量删除：?ids=1,2,3，权限码与单条删除同一个
 	r.GET("/roles/:id", core.Perm("role:list"), h.get)

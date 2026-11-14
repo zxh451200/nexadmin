@@ -409,16 +409,16 @@ export function useOrders(query: OrderQuery) {
 }
 
 /**
- * 导出当前筛选下的全部支付单（不带分页，上限 10000；超限后端报错），
- * CSV 由前端生成；silent：错误由页面捕获后 toast，不走全局报错。
+ * 创建支付单导出任务：按当前筛选提交到导出中心，立即返回任务 ID；
+ * 进度与下载见导出中心，创建失败由 http 拦截器统一弹出原因。
  */
-export function fetchOrdersForExport(query: OrderQuery): Promise<PayOrder[]> {
+export function createOrderExportJob(query: OrderQuery) {
   const filters: Record<string, unknown> = {
     status: query.status, channelCode: query.channelCode, subjectId: query.subjectId,
     bizType: query.bizType, scene: query.scene, failReason: query.failReason,
     createdFrom: query.createdFrom, createdTo: query.createdTo,
   }
-  return api.get<PayOrder[]>(`${BASE}/orders/export`, filters, { silent: true })
+  return api.post<{ id: string }>(`${BASE}/orders/export-async`, null, { params: filters })
 }
 
 export function useChannels() {

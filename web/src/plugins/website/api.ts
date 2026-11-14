@@ -867,11 +867,15 @@ export function useDeletePosts() {
 }
 
 /**
- * 导出当前筛选下的全部新闻（不带分页，上限见后端 exportMax），CSV 由前端生成；
- * silent：错误由页面捕获后 toast，不走全局报错。
+ * 创建新闻导出任务：按当前筛选提交到导出中心，立即返回任务 ID；
+ * 进度与下载见导出中心，创建失败由 http 拦截器统一弹出原因。
  */
-export function fetchPostsForExport(query: Pick<ContentQuery, 'keyword' | 'status' | 'categoryIds'>): Promise<SitePost[]> {
-  return api.get<SitePost[]>(`${BASE}/posts/export`, { ...query }, { silent: true })
+export function createPostExportJob(query: Pick<ContentQuery, 'keyword' | 'status' | 'categoryIds'>) {
+  return api.post<{ id: string }>(
+    `${BASE}/posts/export-async`,
+    null,
+    { params: { keyword: query.keyword ?? '', status: query.status ?? '', categoryIds: query.categoryIds ?? '' } },
+  )
 }
 
 /** 签发草稿预览链接（24h 有效）：返回 /news/:slug?preview=<token>，新开标签页打开。 */
@@ -984,11 +988,15 @@ export function fetchUnreadMessageCount(): Promise<number> {
 }
 
 /**
- * 导出当前筛选下的全部留言（不带分页，上限见后端 exportMax），CSV 由前端生成；
- * silent：错误由页面捕获后 toast，不走全局报错。
+ * 创建留言导出任务：按当前筛选提交到导出中心，立即返回任务 ID；
+ * 进度与下载见导出中心，创建失败由 http 拦截器统一弹出原因。
  */
-export function fetchMessagesForExport(query: Pick<MessageQuery, 'keyword' | 'status'>): Promise<SiteMessage[]> {
-  return api.get<SiteMessage[]>(`${BASE}/messages/export`, { keyword: query.keyword, status: query.status }, { silent: true })
+export function createMessageExportJob(query: Pick<MessageQuery, 'keyword' | 'status'>) {
+  return api.post<{ id: string }>(
+    `${BASE}/messages/export-async`,
+    null,
+    { params: { keyword: query.keyword ?? '', status: query.status ?? '' } },
+  )
 }
 
 /** 批量改状态 / 删除都会影响未读数：把侧边栏徽标也刷一遍。 */
@@ -1033,34 +1041,7 @@ export function useProducts(query: ContentQuery) {
   })
 }
 
-/**
- * 导出当前筛选（或 ids= 勾选行）下的全部商品（不带分页，上限见后端 exportMax），CSV 由前端生成；
- * 不用 silent：导出点下去「没反应」最伤人，失败必须由拦截器当场 toast 出原因。
- */
-export function fetchProductsForExport(
-  query: Pick<ContentQuery, 'keyword' | 'status' | 'categoryIds'> & { ids?: string[] },
-): Promise<SiteProduct[]> {
-  return api.get<SiteProduct[]>(`${BASE}/products/export`, { ...query, ids: query.ids?.join(',') })
-}
-
-export interface ProductExportPlan {
-  /** 按当前筛选匹配的行数 */
-  total: number
-  /** 超过它走异步任务（export.sync_limit，与用户导出同参数） */
-  syncLimit: number
-  async: boolean
-}
-
-/** 导出前先问服务端该走同步还是异步（失败时返回 null，调用方退回同步导出） */
-export function fetchProductExportPlan(
-  query: Pick<ContentQuery, 'keyword' | 'status' | 'categoryIds'> & { ids?: string[] },
-): Promise<ProductExportPlan | null> {
-  return api
-    .get<ProductExportPlan>(`${BASE}/products/export-plan`, { ...query, ids: query.ids?.join(',') }, { silent: true })
-    .catch(() => null)
-}
-
-/** 创建异步导出任务（同样的筛选参数），立即返回任务 ID；进度与下载见导出中心 */
+/** 创建商品导出任务（同样的筛选参数），立即返回任务 ID；进度与下载见导出中心 */
 export function createProductExportJob(
   query: Pick<ContentQuery, 'keyword' | 'status' | 'categoryIds'> & { ids?: string[] },
 ) {

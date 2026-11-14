@@ -1,4 +1,5 @@
 import { defineMock, mockError } from '@/framework/request/mock'
+import { createMockJob } from '@/framework/modules/exportcenter/exportcenter.mock'
 import type {
   CannedReply,
   LinkedTicket,
@@ -463,11 +464,6 @@ function mockSortTickets(rows: Ticket[], sort: string, order: string): Ticket[] 
   })
 }
 
-function csvCell(v: unknown): string {
-  const s = v === null || v === undefined ? '' : String(v)
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
-}
-
 defineMock([
   {
     method: 'GET',
@@ -481,25 +477,13 @@ defineMock([
     },
   },
   {
-    // 真后端返回 xlsx；mock 没有二进制，退回同样筛选的 CSV 文本。
-    method: 'GET',
-    url: '/plugins/ticket/tickets-export',
+    // 真后端流式写 xlsx；mock 返回 job：按同样筛选出一条导出任务。
+    method: 'POST',
+    url: '/plugins/ticket/tickets-export-async',
     handler: ({ query }) => {
-      const head = ['工单号', '标题', '状态', '优先级', '分组', '处理人', '报告人', '创建人', '业务对象', '标签',
-        '满意度', '响应超时', '解决超时', '提交时间', '首次响应', '解决时间', '关闭时间', '最后回复']
-      const lines = [head.join(',')].concat(
-        mockFilterTickets(query).map((tk) =>
-          [
-            tk.ticketNo, tk.title, tk.status, tk.priority, tk.groupName ?? '', tk.assigneeName,
-            tk.reporterName || tk.reporterId, tk.creatorName ?? '',
-            tk.bizType && tk.bizNo ? `${tk.bizType}: ${tk.bizNo}` : `${tk.bizType}${tk.bizNo}`,
-            (tk.tags ?? []).join(','), tk.rating ?? '', tk.overdue ? 'TRUE' : 'FALSE',
-            tk.resolutionOverdue ? 'TRUE' : 'FALSE',
-            tk.createdAt, tk.firstReplyAt ?? '', tk.resolvedAt ?? '', tk.closedAt ?? '', tk.lastReplyAt ?? '',
-          ].map(csvCell).join(','),
-        ),
-      )
-      return lines.join('\r\n')
+      const rows = mockFilterTickets(query)
+      const j = createMockJob('ticket.export', `tickets-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.csv`, rows.length, '工单号,标题,状态\r\n…\r\n')
+      return { id: j.id, type: j.type, status: j.status }
     },
   },
   {

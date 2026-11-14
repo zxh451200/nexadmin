@@ -47,7 +47,8 @@ export function CallbacksTab() {
     },
     { key: 'channel', title: t('plugin_pay.fields.channel'), mobile: 'sub', render: (r) => <Badge variant="outline">{r.channelCode}</Badge> },
     { key: 'ok', title: t('plugin_pay.fields.verify'), render: (r) => (r.ok ? <Badge variant="success">{t('plugin_pay.verifyOk')}</Badge> : <Badge variant="destructive">{t('plugin_pay.verifyFail')}</Badge>) },
-    { key: 'result', title: t('plugin_pay.fields.result'), render: (r) => <span className="text-xs">{r.result}</span> },
+    // 网关返回的消息长度不限：截两行 + 悬停看全文（详情弹窗里已有完整报文）
+    { key: 'result', title: t('plugin_pay.fields.result'), render: (r) => (r.result ? <span className="line-clamp-2 max-w-72 text-xs" title={r.result}>{r.result}</span> : <span className="text-muted-foreground">-</span>) },
     {
       key: 'createdAt',
       title: t('plugin_pay.fields.createdAt'),

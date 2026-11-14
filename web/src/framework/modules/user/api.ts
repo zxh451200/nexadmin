@@ -20,6 +20,7 @@ export interface User {
   /** sys_status: '1' 启用 / '0' 停用 */
   status: string
   region: RegionValue
+  address: string
   remark: string
   /** 是否被登录锁定（连续密码错误） */
   locked?: boolean
@@ -83,6 +84,7 @@ export interface UserInput {
   roleNames: string[]
   status: string
   region: RegionValue
+  address: string
   remark: string
 }
 
@@ -105,10 +107,6 @@ export function useUserList(query: UserQuery) {
   })
 }
 
-export function fetchUsersForExport(filters: Omit<UserQuery, 'page' | 'pageSize'>) {
-  return api.get<User[]>('/users/export', filters)
-}
-
 /**
  * RemoteSelect 的 resolveLabel 扩展点实现：按 id 走 GET /users/:id 取展示名（nickname 优先）。
  * 列表接口（GET /users）不支持按 id 精确取回，详情接口是现成能力；失败（已删除/无权限/超时）
@@ -121,30 +119,6 @@ export async function resolveUserLabel(id: string, signal: AbortSignal): Promise
   } catch {
     return undefined
   }
-}
-
-/** 由 Content-Type 推断下载文件扩展名：mock 阶段返回 CSV 文本，真实后端返回 .xlsx */
-export function blobExt(blob: Blob): 'csv' | 'xlsx' {
-  return blob.type.includes('csv') ? 'csv' : 'xlsx'
-}
-
-/** 服务端导出 .xlsx（沿用同样的筛选条件与数据范围）；真实后端返回文件（Blob），mock 阶段返回 CSV 文本 */
-export async function exportUsersFile(filters: Omit<UserQuery, 'page' | 'pageSize'>): Promise<Blob> {
-  const res = await http.get<unknown>('/users/export', { params: { ...filters, format: 'xlsx' }, responseType: 'blob' })
-  return res.data instanceof Blob ? res.data : new Blob([String(res.data)], { type: 'text/csv;charset=utf-8' })
-}
-
-export interface ExportPlan {
-  /** 按当前筛选条件与数据范围匹配的行数 */
-  total: number
-  /** export.sync_limit：不超过它时同步直出 */
-  syncLimit: number
-  async: boolean
-}
-
-/** 导出前先问服务端该走同步还是异步（失败时返回 null，调用方退回同步导出） */
-export function fetchExportPlan(filters: Omit<UserQuery, 'page' | 'pageSize'>): Promise<ExportPlan | null> {
-  return api.get<ExportPlan>('/users/export-plan', filters, { silent: true }).catch(() => null)
 }
 
 /** 创建异步导出任务（同样的筛选参数），立即返回任务 ID；进度与下载见导出中心 */

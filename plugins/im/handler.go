@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"crypto/subtle"
 	"io"
-	"mime"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -16,11 +15,9 @@ import (
 	"nexadmin/core"
 	"nexadmin/core/auth"
 	"nexadmin/core/cache"
-	"nexadmin/core/i18n"
 	"nexadmin/core/middleware"
 	"nexadmin/core/response"
 	"nexadmin/core/storage"
-	"nexadmin/pkg/excel"
 	"nexadmin/pkg/idgen"
 )
 
@@ -271,93 +268,6 @@ func (h *handler) merge(c *gin.Context) {
 	respond(c, res, err)
 }
 
-// exportLimit 是一次导出的行数上限（与列表筛选一致，避免拖垮接口）。
-const exportLimit = 5000
-
-// GET /plugins/im/conversations-export?<与列表相同筛选> —— 导出会话记录（xlsx，含完整对话）。
-func (h *handler) export(c *gin.Context) {
-	ctx := c.Request.Context()
-	rows, err := h.svc.ExportConversations(ctx, convQueryFrom(c), exportLimit)
-	if err != nil {
-		response.Fail(c, err)
-		return
-	}
-	ids := make([]idgen.ID, 0, len(rows))
-	for _, r := range rows {
-		ids = append(ids, r.ID)
-	}
-	// 消息要在写响应头之前取完：取失败还能回一个 JSON 错误，而不是发下半个 xlsx。
-	msgs, err := h.svc.ExportMessages(ctx, ids, exportMsgLimit)
-	if err != nil {
-		response.Fail(c, err)
-		return
-	}
-	hd := c.Writer.Header()
-	hd.Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-	hd.Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{
-		"filename": "im-conversations-" + time.Now().Format("20060102-150405") + ".xlsx",
-	}))
-	hd.Set("Cache-Control", "no-store")
-	hd.Set("X-Content-Type-Options", "nosniff")
-
-	x := excel.NewWriter(c.Writer)
-	sh, err := x.NewSheet(i18n.T(ctx, "im.export_sheet"), excel.SheetOptions{Header: []string{
-		i18n.T(ctx, "im.export_conv_no"), i18n.T(ctx, "im.export_visitor"), i18n.T(ctx, "im.export_biz"),
-		i18n.T(ctx, "im.export_assignee"), i18n.T(ctx, "im.export_status"), i18n.T(ctx, "im.export_tags"),
-		i18n.T(ctx, "im.export_note"), i18n.T(ctx, "im.export_rating"), i18n.T(ctx, "im.export_created_at"),
-		i18n.T(ctx, "im.export_closed_at"),
-	}})
-	if err != nil {
-		if h.svc.log != nil {
-			h.svc.log.Warn("im: export open sheet failed", "err", err.Error())
-		}
-		return
-	}
-	for _, r := range rows {
-		visitor := r.VisitorName
-		if visitor == "" {
-			visitor = r.VisitorToken
-		}
-		biz := r.BizNo
-		if r.BizType != "" && biz != "" {
-			biz = r.BizType + ": " + biz
-		}
-		closed, rating := "", ""
-		if r.ClosedAt != nil {
-			closed = r.ClosedAt.Local().Format("2006-01-02 15:04:05")
-		}
-		if r.Rating > 0 {
-			rating = strconv.Itoa(r.Rating)
-		}
-		if err := sh.WriteRow(r.ConvNo, visitor, biz, r.AssigneeName, i18n.T(ctx, "im.status_"+r.Status),
-			r.Tags, r.Note, rating, r.CreatedAt.Local().Format("2006-01-02 15:04:05"), closed); err != nil {
-			break
-		}
-	}
-	ms, err := x.NewSheet(i18n.T(ctx, "im.export_msgs_sheet"), excel.SheetOptions{Header: []string{
-		i18n.T(ctx, "im.export_conv_no"), i18n.T(ctx, "im.export_seq"), i18n.T(ctx, "im.export_time"),
-		i18n.T(ctx, "im.export_sender"), i18n.T(ctx, "im.export_name"), i18n.T(ctx, "im.export_content"),
-	}})
-	if err == nil {
-		for _, m := range msgs {
-			content := m.Content
-			if m.RecalledAt != nil {
-				content = i18n.T(ctx, "im.export_recalled")
-			}
-			if err := ms.WriteRow(m.ConvNo, m.Seq, m.CreatedAt.Local().Format("2006-01-02 15:04:05"),
-				i18n.T(ctx, "im.sender_"+m.SenderType), m.SenderName, content); err != nil {
-				break
-			}
-		}
-		if len(msgs) >= exportMsgLimit {
-			_ = ms.WriteRow("", int64(0), "", "", "", i18n.T(ctx, "im.export_truncated"))
-		}
-	}
-	if err := x.Close(); err != nil && h.svc.log != nil {
-		h.svc.log.Warn("im: export failed midway", "rows", len(rows), "err", err.Error())
-	}
-}
-
 // GET /plugins/im/quick-replies
 func (h *handler) quickReplyList(c *gin.Context) {
 	rows, err := h.svc.QuickReplyList(c.Request.Context())
@@ -565,6 +475,20 @@ func (h *handler) visitorRate(c *gin.Context) {
 	respondConv(c, conv, err)
 }
 
+// POST /plugins/im/visitor/conversations/:no/handoff —— 访客转人工：AI 停答 + 系统提示帧 + 自动分配。
+func (h *handler) visitorHandoff(c *gin.Context) {
+	conv, err := h.svc.Conversation(c.Request.Context(), c.Param("no"))
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	if !h.checkVisitor(c, conv) {
+		return
+	}
+	conv, err = h.svc.Handoff(c.Request.Context(), conv.ConvNo)
+	respondConv(c, conv, err)
+}
+
 func messageQuery(c *gin.Context) MessageQuery {
 	since, _ := strconv.ParseInt(c.Query("since"), 10, 64)
 	before, _ := strconv.ParseInt(c.Query("before"), 10, 64)
@@ -577,7 +501,7 @@ func (h *handler) Register(r *gin.RouterGroup, d *core.Deps) {
 	g := r.Group("/plugins/im")
 	// 会话、消息、附件、快捷回复、设置五张表都嵌 PlatformModel——一张都没有 tenant_id。
 	// 于是「谁能在后台看会话列表」不是数据范围问题而是归属问题：任何持 im:list 的租户
-	// 一次 GET /conversations 或一次 /conversations-export 就把所有租户的完整聊天记录带走，
+	// 一次 GET /conversations 或一次 /conversations-export-async 就把所有租户的完整聊天记录带走，
 	// 服务层的 convFilter 里没有任何租户谓词（plugins/im/service.go:493）。
 	// 所以整个坐席后台只对平台调用方开放；访客公开接口在下面 d.Public 分组，不受影响。
 	// 真要按租户开放：给这五张表补 tenant_id（三引擎迁移 + 唯一键改形），并给匿名进线补归属
@@ -601,7 +525,8 @@ func (h *handler) Register(r *gin.RouterGroup, d *core.Deps) {
 	// 删除是超管专属：会话含客户隐私与纠纷证据，运营角色不给删除入口；操作记操作日志。
 	g.DELETE("/conversations/:no", middleware.RequireSuper(), d.OperLogMiddleware("im", "delete"), h.deleteConv)
 	g.POST("/conversations-delete", middleware.RequireSuper(), d.OperLogMiddleware("im", "delete"), h.batchDelete)
-	g.GET("/conversations-export", core.Perm("im:list"), h.export)
+	// 导出统一异步：提交进导出中心（core/job），任务体在 exportjob.go；权限沿用列表的 im:list。
+	g.POST("/conversations-export-async", core.Perm("im:list"), h.exportAsync)
 	g.POST("/conversations/:no/attachments", core.Perm("im:reply"), h.uploadAdmin)
 	g.GET("/attachment-limits", core.Perm("im:reply"), h.attachmentLimits)
 	g.GET("/agents", core.Perm("im:list"), h.agents)
@@ -633,6 +558,8 @@ func (h *handler) Register(r *gin.RouterGroup, d *core.Deps) {
 		middleware.RateLimit(d.Cache, d.Log, "im-typing", middleware.ByIP(), 240, time.Minute), h.visitorTyping)
 	p.POST("/conversations/:no/rating",
 		middleware.RateLimit(d.Cache, d.Log, "im-rating", middleware.ByIP(), 30, time.Minute), h.visitorRate)
+	p.POST("/conversations/:no/handoff",
+		middleware.RateLimit(d.Cache, d.Log, "im-handoff", middleware.ByIP(), 30, time.Minute), h.visitorHandoff)
 	p.POST("/conversations/:no/attachments",
 		middleware.RateLimit(d.Cache, d.Log, "im-upload", middleware.ByIP(), 30, time.Minute), h.uploadVisitor)
 	p.GET("/attachments/:token",

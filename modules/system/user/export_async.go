@@ -17,11 +17,10 @@ import (
 	"nexadmin/pkg/idgen"
 )
 
-// 异步导出：大数据量不再同步阻塞请求，而是登记一个 core/job 任务，worker 流式写 xlsx 到存储，
-// 用户在“导出中心”下载。小数据量仍走 GET /users/export?format=xlsx 同步直出。
+// 异步导出：导出一律登记 core/job 任务，worker 流式写 xlsx 到存储，
+// 用户在“导出中心”下载（无论数据量大小，行为一致；小任务几秒完成）。
 const (
 	jobTypeUserExport = "user.export"
-	defaultSyncLimit  = 5000   // export.sync_limit 默认值
 	asyncExportMax    = 500000 // 单次异步导出行数上限（xlsx 单表上限约 104 万行，留足余量）
 	exportBatch       = 1000   // 每批读取行数
 )
@@ -49,13 +48,6 @@ func (p exportParams) query() listQuery {
 		Gender:  response.ParseList(p.Gender, response.MaxFilterValues),
 		CreatedFrom: p.CreatedFrom, CreatedTo: p.CreatedTo,
 	}
-}
-
-func syncLimitOf(n int) int {
-	if n <= 0 {
-		return defaultSyncLimit
-	}
-	return n
 }
 
 // exportJob 是 user.export 的任务处理器。
@@ -129,10 +121,9 @@ func (s *service) ownerActor(ctx context.Context, id idgen.ID) (actor, error) {
 	return actor{ID: u.ID, Super: u.IsSuper}, nil
 }
 
-// asyncHandler 提供 POST /users/export-async 与 GET /users/export-plan。
+// asyncHandler 提供 POST /users/export-async。
 type asyncHandler struct {
-	svc       *service
-	syncLimit int
+	svc *service
 }
 
 type filterBody struct {
@@ -144,7 +135,7 @@ type filterBody struct {
 	CreatedTo   string `json:"createdTo"`
 }
 
-// filterQuery 取筛选条件：查询参数与 GET /users/export 相同；POST 时也接受同名 JSON 字段（非空者优先）。
+// filterQuery 取筛选条件：查询参数与列表接口相同；POST 时也接受同名 JSON 字段（非空者优先）。
 func filterQuery(c *gin.Context) listQuery {
 	q := queryOf(c)
 	if c.Request.Method == "POST" && c.Request.ContentLength != 0 {
@@ -171,21 +162,6 @@ func filterQuery(c *gin.Context) listQuery {
 		}
 	}
 	return q
-}
-
-// plan GET /users/export-plan：按同样的筛选条件和数据范围统计匹配行数，告诉前端该走同步还是异步。
-func (h *asyncHandler) plan(c *gin.Context) {
-	tx, err := h.svc.filtered(c.Request.Context(), filterQuery(c), me(c))
-	if err != nil {
-		response.Fail(c, err)
-		return
-	}
-	var total int64
-	if err := tx.Count(&total).Error; err != nil {
-		response.Fail(c, err)
-		return
-	}
-	response.OK(c, gin.H{"total": total, "syncLimit": h.syncLimit, "async": total > int64(h.syncLimit)})
 }
 
 // create POST /users/export-async：创建导出任务并立即返回任务 ID。

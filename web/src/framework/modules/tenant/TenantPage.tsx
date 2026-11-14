@@ -13,6 +13,7 @@ import { pageAfterDelete } from '@/framework/hooks/page-fallback'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { DatePicker } from '@/framework/components/DatePicker'
 import { DictSelect } from '@/framework/components/DictSelect'
+import { OptionPicker } from '@/framework/components/OptionPicker'
 import { DictTag } from '@/framework/components/DictTag'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { FormGrid, FormGridFull, FormLayout, FormSection } from '@/framework/components/FormLayout'
@@ -24,7 +25,6 @@ import { api } from '@/framework/request/http'
 import { Button } from '@/framework/ui/button'
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/framework/ui/form'
 import { Input } from '@/framework/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import {
   useDeleteTenants,
   useRenewTenant,
@@ -36,8 +36,6 @@ import {
 import { ExpireBadge, TenantUsageCell } from './TenantUsage'
 
 const quota = z.number().int().min(0).nullable()
-// Radix Select 选项值不能是空串：「全部套餐」用非空哨兵值
-const ALL = '__all'
 const schema = z
   .object({
     isNew: z.boolean(),
@@ -102,8 +100,9 @@ export default function TenantPage() {
   const confirm = useConfirm()
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
-  const [draft, setDraft] = useState({ keyword: '', status: '', packageId: '' })
-  const [filters, setFilters] = useState({ keyword: '', status: '', packageId: '' })
+  // 状态/套餐是多选数组，搜索时 join 成 CSV（后端按 IN 收窄）
+  const [draft, setDraft] = useState<{ keyword: string; status: string[]; packageId: string[] }>({ keyword: '', status: [], packageId: [] })
+  const [filters, setFilters] = useState<{ keyword?: string; status?: string; packageId?: string }>({})
   const [selected, setSelected] = useState<string[]>([])
   const [editing, setEditing] = useState<TenantRow | null>(null)
   const [open, setOpen] = useState(false)
@@ -114,8 +113,8 @@ export default function TenantPage() {
     page,
     pageSize,
     keyword: filters.keyword || undefined,
-    status: filters.status || undefined,
-    packageId: filters.packageId || undefined,
+    status: filters.status,
+    packageId: filters.packageId,
   })
   const save = useSaveTenant()
   const renew = useRenewTenant()
@@ -219,8 +218,34 @@ export default function TenantPage() {
 
   const columns: Column<TenantRow>[] = [
     { key: 'name', title: t('tenant.name'), mobile: 'title' },
-    { key: 'domain', title: t('tenant.domain'), mobile: 'sub', render: (r) => <span className="num break-all">{r.domain}</span> },
-    { key: 'packageId', title: t('tenant.package'), render: (r) => pkgName.get(r.packageId) ?? r.packageId },
+    {
+      key: 'domain',
+      title: t('tenant.domain'),
+      mobile: 'sub',
+      // break-all 在 nowrap 单元格里是死代码：改 truncate + title
+      render: (r) =>
+        r.domain ? (
+          <span className="num block max-w-[14rem] truncate" title={r.domain}>
+            {r.domain}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">-</span>
+        ),
+    },
+    {
+      key: 'packageId',
+      title: t('tenant.package'),
+      // 套餐被删/未加载时兜底显示原始 id：截断 + 悬停看全量
+      render: (r) => {
+        const name = pkgName.get(r.packageId)
+        if (name) return name
+        return (
+          <span className="num block max-w-[10rem] truncate text-muted-foreground" title={r.packageId}>
+            {r.packageId}
+          </span>
+        )
+      },
+    },
     {
       key: 'expireAt',
       title: t('tenant.expireAt'),
@@ -248,12 +273,15 @@ export default function TenantPage() {
       <FilterBar
         onSearch={() => {
           setPage(1)
-          setFilters(draft)
+          setFilters({
+            keyword: draft.keyword || undefined,
+            status: draft.status.length ? draft.status.join(',') : undefined,
+            packageId: draft.packageId.length ? draft.packageId.join(',') : undefined,
+          })
         }}
         onReset={() => {
-          const init = { keyword: '', status: '', packageId: '' }
-          setDraft(init)
-          setFilters(init)
+          setDraft({ keyword: '', status: [], packageId: [] })
+          setFilters({})
           setPage(1)
         }}
       >
@@ -265,29 +293,22 @@ export default function TenantPage() {
           aria-label={t('common.keyword')}
         />
         <DictSelect
-          className="md:w-40"
+          className="md:w-44"
           dict="tenant_status"
+          multiple
           value={draft.status}
           onChange={(v) => setDraft((d) => ({ ...d, status: v }))}
           placeholder={t('common.status')}
         />
         {/* 按套餐筛：后端 ListTenants 一直支持 packageId，界面上从来没有入口 */}
-        <Select
-          value={draft.packageId || ALL}
-          onValueChange={(v) => setDraft((d) => ({ ...d, packageId: v === ALL ? '' : v }))}
-        >
-          <SelectTrigger className="md:w-44" aria-label={t('tenant.package')}>
-            <SelectValue placeholder={t('tenant.package')} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>{t('tenant.allPackages')}</SelectItem>
-            {(pkgs.data ?? []).map((p) => (
-              <SelectItem key={p.id} value={p.id}>
-                {p.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <OptionPicker
+          title={t('tenant.package')}
+          value={draft.packageId}
+          onChange={(v) => setDraft((d) => ({ ...d, packageId: v }))}
+          options={(pkgs.data ?? []).map((p) => ({ value: p.id, label: p.name }))}
+          className="md:w-44"
+          placeholder={t('tenant.package')}
+        />
       </FilterBar>
 
       <DataTable<TenantRow>

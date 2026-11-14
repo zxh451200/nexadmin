@@ -10,7 +10,23 @@
       "createdAt": "创建时间",
       "duration": "耗时"
     },
-    "type": { "all": "全部类型", "user.export": "用户导出", "website.product-export": "产品导出" },
+    "type": {
+      "all": "全部类型",
+      "user.export": "用户导出",
+      "website.product-export": "产品导出",
+      "website.post-export": "新闻导出",
+      "website.message-export": "留言导出",
+      "formbuilder.export": "表单导出",
+      "operlog.export": "操作日志导出",
+      "loginlog.export": "登录日志导出",
+      "cron.log-export": "执行日志导出",
+      "im.conversation-export": "会话记录导出",
+      "ticket.export": "工单导出",
+      "pay.order-export": "支付订单导出",
+      "post.export": "岗位导出",
+      "role.export": "角色导出"
+    },
+    "keepUntil": "保留至 {{date}}",
     "status": {
       "all": "全部状态",
       "queued": "排队中",

@@ -2,14 +2,18 @@ package formbuilder
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"nexadmin/core/auth"
+	corei18n "nexadmin/core/i18n"
 	"nexadmin/core/job"
 	"nexadmin/core/response"
+	"nexadmin/pkg/excel"
 	"nexadmin/pkg/idgen"
 )
 
@@ -102,15 +106,166 @@ func (s *Service) exportJob(ctx context.Context, j *job.Job, report job.Report) 
 	report(0, "导出中")
 	name := fmt.Sprintf("formbuilder-%s-%s.xlsx", p.FormID, time.Now().Format("20060102"))
 	return job.WriteResult(ctx, j, name, xlsxContentType, func(w io.Writer) error {
-		n, err := s.WriteExport(ctx, w, p.query(), MaxAsyncExport, p.Lang)
+		n, err := s.writeExport(ctx, w, p.query(), MaxAsyncExport, p.Lang)
 		if err != nil {
 			var re *response.Error
-			if errors.As(err, &re) && re.Msg != "" {
-				return job.Errorf("%s", re.Msg)
+			if errors.As(err, &re) {
+				// response.Error 只带 i18n key；job 行里存的是给任务所有者看的一句话，
+				// 翻成文案落库（job ctx 不带语言时回落默认语言），而不是存 key 本身。
+				if re.Msg != "" {
+					return job.Errorf("%s", re.Msg)
+				}
+				return job.Errorf("%s", corei18n.T(ctx, re.Key, re.Args...))
 			}
 			return err
 		}
 		report(100, fmt.Sprintf("已导出 %d 行", n))
 		return nil
 	})
+}
+
+// ---- 导出文件的装配（只服务导出中心任务，同步直出端点已下线） ----
+
+type exportCol struct{ Key, Title string }
+
+// exportColumns 取所有版本字段的并集：按首次出现的顺序排列，标题取最新出现的版本，所以改版删字段后历史数据仍能导出。
+func exportColumns(defs map[int]*Definition, versions []int) []exportCol {
+	var cols []exportCol
+	idx := map[string]int{}
+	for _, v := range versions {
+		for _, f := range defs[v].Fields {
+			if !f.hasValue() {
+				continue
+			}
+			if i, ok := idx[f.Key]; ok {
+				cols[i].Title = f.Title
+				continue
+			}
+			idx[f.Key] = len(cols)
+			cols = append(cols, exportCol{f.Key, f.Title})
+		}
+	}
+	return cols
+}
+
+// exportFixedCols 是导出表头里由框架固定的前四列，词条在 core/i18n/locales 的
+// formbuilder 命名空间下。加一门语言只需补四个键（或放进部署级 config/locales），
+// 不用像旧的 map[string][4]string 那样改 Go 代码——那种写法字面上只认两种语言，
+// 第三种会掉进兜底分支拿到简体中文，而英文其实是写死在第二行的。
+var exportFixedCols = [...]string{
+	"formbuilder.head_id",
+	"formbuilder.head_submitter",
+	"formbuilder.head_time",
+	"formbuilder.head_version",
+}
+
+// writeExport 把符合条件的提交写成 xlsx（最新的在前），最多 maxRows 行，超过则返回 errExportTooLarge 且不应使用已写内容。
+// 文本以 = + - @ 开头时由 excel 包加前缀，防 CSV/公式注入。
+func (s *Service) writeExport(ctx context.Context, w io.Writer, q SubQuery, maxRows int, lang string) (int, error) {
+	if err := checkFilter(q); err != nil {
+		return 0, err
+	}
+	if _, err := s.store.GetForm(ctx, q.FormID); err != nil {
+		return 0, err
+	}
+	vs, err := s.store.ListVersions(ctx, q.FormID)
+	if err != nil {
+		return 0, err
+	}
+	defs := make(map[int]*Definition, len(vs))
+	order := make([]int, 0, len(vs))
+	for _, v := range vs {
+		d, err := decodeDefinition([]byte(v.Definition))
+		if err != nil {
+			return 0, err
+		}
+		defs[v.Version] = d
+		order = append(order, v.Version)
+	}
+	cols := exportColumns(defs, order)
+	header := make([]string, 0, len(exportFixedCols)+len(cols))
+	for _, key := range exportFixedCols {
+		header = append(header, corei18n.T(corei18n.WithLang(ctx, lang), key))
+	}
+	for _, c := range cols {
+		header = append(header, c.Title)
+	}
+	x := excel.NewWriter(w, excel.Options{FormulaGuard: excel.GuardPrefix})
+	sh, err := x.NewSheet("Submissions", excel.SheetOptions{Header: header})
+	if err != nil {
+		return 0, err
+	}
+	rows := 0
+	var werr error
+	_, err = s.iterate(ctx, q, 1<<30, func(sub *Submission) bool {
+		if rows >= maxRows {
+			werr = errExportTooLarge
+			return false
+		}
+		def := defs[sub.Version]
+		var data map[string]any
+		_ = json.Unmarshal([]byte(sub.Data), &data)
+		vals := []any{sub.ID.String(), sub.Username, sub.CreatedAt.UTC(), sub.Version}
+		for _, c := range cols {
+			vals = append(vals, cellValue(def, c.Key, data[c.Key]))
+		}
+		if werr = sh.WriteRow(vals...); werr != nil {
+			return false
+		}
+		rows++
+		return ctx.Err() == nil
+	})
+	if err == nil {
+		err = werr
+	}
+	if err == nil {
+		err = ctx.Err()
+	}
+	if err != nil {
+		return rows, err
+	}
+	return rows, x.Close()
+}
+
+// cellValue 把一个提交值转成单元格值：选项换成名称，多值用顿号连接，文件取文件名。
+func cellValue(def *Definition, key string, v any) any {
+	if v == nil || def == nil {
+		return nil
+	}
+	var f *Field
+	for i := range def.Fields {
+		if def.Fields[i].Key == key {
+			f = &def.Fields[i]
+			break
+		}
+	}
+	label := func(val any) string {
+		s, _ := val.(string)
+		if f != nil {
+			for _, o := range f.Options {
+				if o.Value == s {
+					return o.Label
+				}
+			}
+		}
+		return s
+	}
+	switch x := v.(type) {
+	case string:
+		return label(x)
+	case float64, bool:
+		return x
+	case []any:
+		parts := make([]string, 0, len(x))
+		for _, e := range x {
+			if m, ok := e.(map[string]any); ok {
+				n, _ := m["name"].(string)
+				parts = append(parts, n)
+			} else {
+				parts = append(parts, label(e))
+			}
+		}
+		return strings.Join(parts, "、")
+	}
+	return fmt.Sprint(v)
 }

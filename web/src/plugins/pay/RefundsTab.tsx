@@ -134,7 +134,8 @@ export function RefundsTab() {
     },
     { key: 'amount', title: t('plugin_pay.fields.amount'), align: 'end', render: (r) => <span className="num">{formatMoney(r.amountMinor, r.currency)}</span> },
     { key: 'status', title: t('plugin_pay.fields.status'), render: (r) => <Badge variant={refundStatusVariant(r.status)}>{t(`plugin_pay.refundStatus.${r.status}`)}</Badge> },
-    { key: 'reason', title: t('plugin_pay.fields.reason'), render: (r) => <span className="text-xs wrap-break-word">{r.reason || r.failReason || '-'}</span> },
+    // wrap-break-word 在 nowrap 单元格里是死代码：改 line-clamp-1 + title
+    { key: 'reason', title: t('plugin_pay.fields.reason'), render: (r) => { const text = r.reason || r.failReason; return text ? <span className="block max-w-[14rem] truncate text-xs" title={text}>{text}</span> : <span className="text-muted-foreground">-</span> } },
     { key: 'operator', title: t('plugin_pay.fields.operator'), mobile: 'hidden', render: (r) => r.operatorId || '-' },
     {
       key: 'sync',

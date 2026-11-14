@@ -21,37 +21,37 @@ import { formatTime } from './format'
 
 interface Filters {
   keyword: string
-  type: string
+  type: string[]
   onlyUnread: boolean
 }
 
-const emptyFilters: Filters = { keyword: '', type: '', onlyUnread: false }
+const emptyFilters: Filters = { keyword: '', type: [], onlyUnread: false }
 
 export function NoticeTab() {
   const { t, i18n } = useTranslation()
   const confirm = useConfirm()
   const [draft, setDraft] = useState<Filters>(emptyFilters)
-  const [applied, setApplied] = useState<Filters>(emptyFilters)
+  const [applied, setApplied] = useState<{ keyword?: string; type?: string; onlyUnread?: boolean }>({})
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [detail, setDetail] = useState<MyNotice | null>(null)
   const [selected, setSelected] = useState<string[]>([])
 
   const search = () => {
-    setApplied(draft)
+    setApplied({ keyword: draft.keyword, type: draft.type.length ? draft.type.join(',') : undefined, onlyUnread: draft.onlyUnread || undefined })
     setPage(1)
   }
   const reset = () => {
     setDraft(emptyFilters)
-    setApplied(emptyFilters)
+    setApplied({})
     setPage(1)
   }
 
   const { data, isLoading } = useMyNotices({
     page,
     pageSize,
-    keyword: applied.keyword.trim() || undefined,
-    type: applied.type || undefined,
+    keyword: applied.keyword?.trim() || undefined,
+    type: applied.type,
     unread: applied.onlyUnread ? '1' : undefined,
   })
   const readNotice = useReadNotice()
@@ -154,11 +154,12 @@ export function NoticeTab() {
           aria-label={t('common.keyword')}
         />
         <DictSelect
-          className="md:w-44"
+          className="md:w-48"
           dict="notice_type"
+          multiple
           placeholder={t('message.fields.type')}
           value={draft.type}
-          onChange={(v) => setDraft((d) => ({ ...d, type: v ?? '' }))}
+          onChange={(v) => setDraft((d) => ({ ...d, type: v }))}
         />
         <div className="flex min-h-11 items-center gap-2">
           <Switch id="notice-only-unread" checked={draft.onlyUnread} onCheckedChange={(v) => setDraft((d) => ({ ...d, onlyUnread: v }))} />
@@ -180,7 +181,7 @@ export function NoticeTab() {
             { header: t('message.fields.content'), value: (n) => n.content },
           ]}
           getRows={() => fetchNoticesForExport({
-            keyword: applied.keyword.trim() || undefined,
+            keyword: applied.keyword?.trim() || undefined,
             type: applied.type || undefined,
             unread: applied.onlyUnread ? '1' : undefined,
           })}

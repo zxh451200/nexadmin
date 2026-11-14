@@ -157,8 +157,9 @@ export function BasicTab() {
             render={({ field }) => (
               <FormItem className="md:col-span-2">
                 <FormLabel>{t('profile.basic.region')}</FormLabel>
-                {/* 地址是三段一体的复合字段：区划/详细地址任一变化都同时写回两个表单字段 */}
+                {/* 地址是三段一体的复合字段：区划/详细地址任一变化都同时写回两个表单字段；街道层折进详细地址 */}
                 <AddressField
+                  level={4}
                   value={{ region: field.value, address: addressValue }}
                   onChange={({ region, address }) => {
                     field.onChange(region)

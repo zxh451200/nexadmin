@@ -52,6 +52,7 @@ type Historical struct {
 }
 
 // Info 描述当前生效的数据版本；Builtin 为 true 表示仍在用随包发布的快照。
+// Streets 是随包街道层的数据量（0 = 缺失，Tree(4) 退化为三级）。
 type Info struct {
 	Builtin     bool   `json:"builtin"`
 	SourceURL   string `json:"sourceUrl"`
@@ -61,6 +62,7 @@ type Info struct {
 	Provinces   int    `json:"provinces"`
 	Prefectures int    `json:"prefectures"`
 	Counties    int    `json:"counties"`
+	Streets     int    `json:"streets,omitempty"`
 	SyncedBy    string `json:"syncedBy"`
 	SyncedAt    string `json:"syncedAt"`
 }
@@ -340,6 +342,7 @@ func build(raw []byte, meta Info) (*snapshot, error) {
 	}
 	meta.SHA256 = sha256Hex(raw)
 	meta.Provinces, meta.Prefectures, meta.Counties = counts[0], counts[1], counts[2]
+	meta.Streets = StreetCount()
 	return &snapshot{roots: roots, byCode: byCode, info: meta}, nil
 }
 
@@ -393,16 +396,22 @@ func trim(list []*Node, depth int) []*Node {
 	return out
 }
 
-// Tree 返回前 level（1-3）级的完整树。
+// Tree 返回前 level（1-4）级的完整树；level >= 4 时把街道/乡镇层挂到县级节点下
+//（见 streets.go：街道不进存储契约，只供选择与展示）。
 func Tree(level int) ([]*Node, error) {
 	snap := current()
 	if snap == nil {
 		return nil, load()
 	}
-	if level < 1 || level > 3 {
-		level = 3
+	if level < 1 || level > 4 {
+		level = 4
 	}
-	return trim(snap.roots, level), nil
+	if level <= 3 {
+		return trim(snap.roots, level), nil
+	}
+	roots := trim(snap.roots, 3)
+	attachStreets(roots)
+	return roots, nil
 }
 
 // Children 返回 parent 的直接下级（不含更深层）；parent 为空返回省级列表，代码不存在返回 false。

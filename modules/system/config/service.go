@@ -16,6 +16,7 @@ import (
 	"nexadmin/core"
 	coreai "nexadmin/core/ai"
 	"nexadmin/core/auth"
+	"nexadmin/core/config"
 	"nexadmin/core/notify"
 	"nexadmin/core/response"
 	"nexadmin/core/tenant"
@@ -32,6 +33,11 @@ type Service struct {
 	// aiAllowPrivate 对应 ai.allow_private_base_url；aiResolver 仅供测试替换（nil = 系统解析器）。
 	aiAllowPrivate bool
 	aiResolver     coreai.Resolver
+
+	// authCfg / smsProvider 是 config.yaml 的登录相关配置：设置页 auth 分区的覆盖以它为回退与校验基准
+	// （没动过的 provider、没保存过的登录方式都按它走）。见 auth_runtime.go。
+	authCfg     config.Auth
+	smsProvider string
 
 	// 文件模块每次上传都要读上传限制：这里缓存 uploadCacheTTL，本进程保存后立即失效，其他实例最多晚一个 TTL 生效。
 	upMu    sync.Mutex

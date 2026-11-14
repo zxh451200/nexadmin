@@ -6,11 +6,11 @@ import { Can } from '@/framework/auth/Can'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { DetailAction } from '@/framework/components/DetailAction'
 import { FilterBar } from '@/framework/components/FilterBar'
+import { OptionPicker } from '@/framework/components/OptionPicker'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Badge, type BadgeProps } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import { fmtDateTime } from '../oper-log/format'
 import { DELIVERY_STATUSES, useDeliveries, useRetryDelivery, useWebhooks, type Delivery, type DeliveryStatus } from './api'
 
@@ -24,14 +24,13 @@ const STATUS_VARIANT: Record<DeliveryStatus, BadgeProps['variant']> = {
 const BODY_LIMIT = 2000
 
 interface Filters {
-  webhookId: string
-  status: string
+  webhookId: string[]
+  status: string[]
   event: string
 }
 
-const ALL = 'all'
 const ANY = '__any'
-const emptyFilters: Filters = { webhookId: ALL, status: ALL, event: ANY }
+const emptyFilters: Filters = { webhookId: [], status: [], event: ANY }
 
 function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -56,8 +55,8 @@ export function DeliveriesTab() {
   const { data, isLoading } = useDeliveries({
     page,
     pageSize,
-    webhookId: applied.webhookId === ALL ? undefined : applied.webhookId,
-    status: applied.status === ALL ? undefined : applied.status,
+    webhookId: applied.webhookId.length ? applied.webhookId.join(',') : undefined,
+    status: applied.status.length ? applied.status.join(',') : undefined,
     event: applied.event === ANY ? undefined : applied.event,
   })
   const retry = useRetryDelivery()
@@ -118,32 +117,22 @@ export function DeliveriesTab() {
   return (
     <div className="flex flex-col gap-4">
       <FilterBar onSearch={search} onReset={reset}>
-        <Select value={draft.webhookId} onValueChange={(v) => setDraft({ ...draft, webhookId: v })}>
-          <SelectTrigger className="md:w-56" aria-label={t('openapi.deliveries.filter.webhook')}>
-            <SelectValue placeholder={t('openapi.deliveries.filter.webhook')} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>{t('openapi.deliveries.filter.allWebhooks')}</SelectItem>
-            {(webhooks ?? []).map((w) => (
-              <SelectItem key={w.id} value={w.id}>
-                {w.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={draft.status} onValueChange={(v) => setDraft({ ...draft, status: v })}>
-          <SelectTrigger className="md:w-40" aria-label={t('openapi.deliveries.filter.status')}>
-            <SelectValue placeholder={t('openapi.deliveries.filter.status')} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>{t('openapi.deliveries.filter.allStatus')}</SelectItem>
-            {DELIVERY_STATUSES.map((s) => (
-              <SelectItem key={s} value={s}>
-                {t(`openapi.deliveries.status.${s}`)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <OptionPicker
+          title={t('openapi.deliveries.filter.webhook')}
+          value={draft.webhookId}
+          onChange={(v) => setDraft({ ...draft, webhookId: v })}
+          options={(webhooks ?? []).map((w) => ({ value: w.id, label: w.name }))}
+          className="md:w-56"
+          placeholder={t('openapi.deliveries.filter.webhook')}
+        />
+        <OptionPicker
+          title={t('openapi.deliveries.filter.status')}
+          value={draft.status}
+          onChange={(v) => setDraft({ ...draft, status: v })}
+          options={DELIVERY_STATUSES.map((s) => ({ value: s, label: t(`openapi.deliveries.status.${s}`) }))}
+          className="md:w-44"
+          placeholder={t('openapi.deliveries.filter.status')}
+        />
         <Input
           className="md:w-52 font-mono"
           value={draft.event === ANY ? '' : draft.event}

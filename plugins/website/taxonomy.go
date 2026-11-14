@@ -238,10 +238,13 @@ func (s *Service) DeleteTag(ctx context.Context, id idgen.ID) error {
 }
 
 // termLink 是公开侧栏目/标签导航的一项。
+// Href 可选：需要带附加查询参数（如产品中心的检索词）时由后端拼好完整链接，
+// 避免模板里「文本 + 动作」拼 URL 被 html/template 二次转义。
 type termLink struct {
 	Name   string
 	Slug   string
 	Active bool
+	Href   string
 }
 
 // termFilter 是公开新闻列表的收窄条件：Kind 为 category/tag 时按对应 slug 过滤，空 = 全部新闻。

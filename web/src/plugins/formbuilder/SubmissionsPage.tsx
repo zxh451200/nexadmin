@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { ArrowLeft, Download, FileDown, Trash2 } from 'lucide-react'
+import { ArrowLeft, FileDown, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
+import { useAsyncJob } from '@/framework/hooks/use-async-job'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { DetailAction } from '@/framework/components/DetailAction'
@@ -15,7 +16,6 @@ import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import {
-  downloadXlsx,
   useDeleteSubmission,
   useDeleteSubmissions,
   useExportJob,
@@ -69,6 +69,7 @@ export default function SubmissionsPage() {
   const remove = useDeleteSubmission()
   const removeBatch = useDeleteSubmissions()
   const exportJob = useExportJob()
+  const { start: startExportJob } = useAsyncJob()
   const fields = (meta?.definition.fields ?? []).filter(hasValue)
   const back = () => navigate('/system/formbuilder')
 
@@ -101,16 +102,9 @@ export default function SubmissionsPage() {
   const onExport = async () => {
     if (!id) return
     try {
-      await downloadXlsx(id, meta?.name ?? '', toQuery(filters))
-    } catch {
-      /* 已提示 */
-    }
-  }
-  const onExportJob = async () => {
-    if (!id) return
-    try {
-      await exportJob.mutateAsync({ id, query: toQuery(filters) })
-      toast.success(t('plugin_formbuilder.submissions.exportJobSubmitted'))
+      // 统一走异步任务：提交后由 useAsyncJob 提示「已提交到导出中心」，
+      // 进度与下载都在导出中心看，不再有同步 xlsx 下载。
+      await startExportJob(() => exportJob.mutateAsync({ id, query: toQuery(filters) }))
     } catch {
       /* 已提示 */
     }
@@ -251,13 +245,9 @@ export default function SubmissionsPage() {
               {t('common.back')}
             </Button>
             <Can perm="formbuilder:export">
-              <Button variant="outline" onClick={() => void onExport()}>
-                <Download aria-hidden="true" />
-                {t('plugin_formbuilder.submissions.exportXlsx')}
-              </Button>
-              <Button variant="outline" disabled={exportJob.isPending} onClick={() => void onExportJob()}>
+              <Button variant="outline" disabled={exportJob.isPending} onClick={() => void onExport()}>
                 <FileDown aria-hidden="true" />
-                {t('plugin_formbuilder.submissions.exportJob')}
+                {t('common.export')}
               </Button>
             </Can>
           </>

@@ -63,7 +63,7 @@
     <a class="tk-brand" href="{{.Home}}" aria-label="{{.TF "layout.homeAria" .SiteName}}">
       {{if .LogoURL}}<img class="tk-brand-logo" src="{{.LogoURL}}" alt="{{.SiteName}}">{{else}}<span class="tk-brand-text">{{initial .SiteName}}</span>{{end}}
     </a>
-    <!-- 首页导航住在 hero 左侧竖栏里（参考稿的顶栏是搜索框，不是链接排）；内页没有侧栏，顶栏保留导航 -->
+    <!-- 首页导航住在 hero 左侧竖栏里（参考稿的顶栏是搜索/账户簇，不是链接排）；内页没有侧栏，顶栏保留导航 -->
     {{if ne .Route "/"}}
     <nav class="tk-nav" aria-label="{{.T "layout.mainNav"}}">
       {{range .Navs}}{{if .Children}}
@@ -74,14 +74,29 @@
       {{else}}<a href="{{$.URL .Href}}"{{if eq .Href $.Route}} aria-current="page"{{end}}>{{.Label}}</a>{{end}}{{end}}
     </nav>
     {{end}}
+    <!-- 搜索位：参考稿顶栏是一枚横跨的搜索框；这里没有全文检索后端，落到产品中心当型号检索入口 -->
+    <a class="tk-search" href="{{.URL "/products"}}">
+      <span>{{.T "theme.torkon.searchPlaceholder"}}</span>
+      {{icon "search"}}
+    </a>
     <div class="tk-header-actions">
+      <a class="tk-hlink" href="{{.URL "/products"}}">{{icon "users"}}<span>{{.T "theme.torkon.findDealer"}}</span></a>
+      <span class="tk-hsep" aria-hidden="true"></span>
+      <a class="tk-hlink" href="{{.URL "/contact"}}">{{icon "mail"}}<span>{{.T "theme.torkon.account"}}</span></a>
       <details class="tk-lang">
         <summary aria-label="{{.T "layout.lang"}}">{{.Lang.Short}}</summary>
         <div class="tk-langmenu">
           {{range .Languages}}<a href="{{$.Switch .}}" hreflang="{{.HTMLLang}}" lang="{{.HTMLLang}}"{{if eq .Code $.Lang.Code}} aria-current="true"{{end}}>{{.Label}}</a>{{end}}
         </div>
       </details>
-      <a class="tk-btn tk-btn-red" href="{{.URL "/contact"}}">{{.T "theme.torkon.quote"}}</a>
+      {{if ne .Route "/"}}<a class="tk-btn tk-btn-red" href="{{.URL "/contact"}}">{{.T "theme.torkon.quote"}}</a>{{end}}
+      <details class="tk-mnav-btn">
+        <summary aria-label="{{.T "layout.mainNav"}}"><span></span><span></span><span></span></summary>
+        <div class="tk-mnav">
+          {{range .Navs}}<a href="{{$.URL .Href}}">{{.Label}}</a>{{end}}
+          <a href="{{$.URL "/contact"}}">{{$.T "theme.torkon.quote"}}</a>
+        </div>
+      </details>
     </div>
   </div>
 </header>
@@ -111,21 +126,28 @@
       {{range .Navs}}{{if eq .Href "/p/about"}}<a href="{{$.URL .Href}}">{{.Label}}</a>{{end}}{{end}}
       <a href="{{.URL "/contact"}}">{{.T "layout.contactUs"}}</a>
     </nav>
-    <nav class="tk-footer-col" aria-label="{{.T "layout.contact"}}">
-      <h4>{{.T "layout.contact"}}</h4>
-      {{if .ContactEmail}}<a class="tk-footer-mail" href="mailto:{{.ContactEmail}}" data-copy-email="{{.ContactEmail}}" title="{{.T "site.js.emailCopy"}}">{{.ContactEmail}}</a>{{end}}
-      {{if .ContactPhone}}<a href="tel:{{.ContactPhone}}">{{.ContactPhone}}</a>{{end}}
-      {{if .ICP}}<a class="tk-footer-icp" href="https://beian.miit.gov.cn/" rel="noopener noreferrer" target="_blank">{{.ICP}}</a>{{end}}
+    <nav class="tk-footer-col" aria-label="{{.T "theme.torkon.footerSupport"}}">
+      <h4>{{.T "theme.torkon.footerSupport"}}</h4>
+      <a href="{{.URL "/contact"}}">{{.T "theme.torkon.catalogTitle"}}</a>
+      <a href="{{.URL "/products"}}">{{.T "theme.torkon.selectionTitle"}}</a>
+      <a href="{{.URL "/contact"}}">{{.T "theme.torkon.findDealer"}}</a>
+    </nav>
+    <div class="tk-footer-col tk-footer-sub">
+      <h4>{{.T "theme.torkon.footerSubscribe"}}</h4>
+      <p>{{.T "theme.torkon.footerSubscribeSub"}}</p>
+      <a class="tk-btn tk-btn-red" href="{{.BaseURL}}/rss.xml">{{.T "theme.torkon.footerRss"}} <span aria-hidden="true">→</span></a>
       {{if .QRCodeURL}}
       <figure class="tk-footer-qr">
-        <img src="{{.QRCodeURL}}" alt="{{if .QRCodeCaption}}{{.QRCodeCaption}}{{else}}{{.T "layout.qrAlt"}}{{end}}" loading="lazy" width="96" height="96">
+        <img src="{{.QRCodeURL}}" alt="{{if .QRCodeCaption}}{{.QRCodeCaption}}{{else}}{{.T "layout.qrAlt"}}{{end}}" loading="lazy" width="104" height="104">
         {{if .QRCodeCaption}}<figcaption>{{.QRCodeCaption}}</figcaption>{{end}}
       </figure>
       {{end}}
-    </nav>
+    </div>
   </div>
   <div class="tk-wrap tk-footer-bottom">
     <span>© {{.Year}} {{.SiteName}} · {{.T "theme.torkon.rights"}}</span>
+    {{if .ContactEmail}}<a class="tk-footer-mail" href="mailto:{{.ContactEmail}}" data-copy-email="{{.ContactEmail}}" title="{{.T "site.js.emailCopy"}}">{{.ContactEmail}}</a>{{end}}
+    {{if .ICP}}<a class="tk-footer-icp" href="https://beian.miit.gov.cn/" rel="noopener noreferrer" target="_blank">{{.ICP}}</a>{{end}}
     {{if .FooterNote}}<span>{{.FooterNote}}</span>{{end}}
   </div>
 </footer>

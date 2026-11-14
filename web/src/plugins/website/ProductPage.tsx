@@ -33,8 +33,8 @@ import { OptionList, type Option } from '@/framework/components/pickers/OptionLi
 import { PickerShell } from '@/framework/components/pickers/PickerShell'
 import { PickerTrigger } from '@/framework/components/pickers/PickerTrigger'
 import { CURRENCIES, PAYMENT_TERMS, PORTS, UNITS } from './constants'
-import { downloadCsv, saveBlob } from '@/framework/components/export/csv'
-import { formatTime, slugify } from './format'
+import { saveBlob } from '@/framework/components/export/csv'
+import { slugify } from './format'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
@@ -46,11 +46,9 @@ import TranslationStatus from './TranslationStatus'
 import {
   fetchAliCategories,
   fetchAliTest,
-  fetchProductExportPlan,
   fetchProductImportJob,
   fetchProductImportTemplate,
   fetchProductPreview,
-  fetchProductsForExport,
   createProductExportJob,
   translateContent,
   useAliConfig,
@@ -114,20 +112,6 @@ function syncBadge(r: SiteProduct, t: (k: string) => string) {
       return <Badge variant="destructive">{t('plugin_website.product.syncFailed')}</Badge>
     default:
       return <span className="text-xs text-muted-foreground">{t('plugin_website.product.syncNone')}</span>
-  }
-}
-
-/** 同步状态的纯文本形态（CSV 导出用）：键与 syncBadge 同源。 */
-function syncText(r: SiteProduct, t: (k: string) => string): string {
-  switch (r.syncStatus) {
-    case 'synced':
-      return t('plugin_website.product.syncSynced')
-    case 'pending':
-      return t('plugin_website.product.syncPending')
-    case 'failed':
-      return t('plugin_website.product.syncFailed')
-    default:
-      return t('plugin_website.product.syncNone')
   }
 }
 
@@ -695,7 +679,6 @@ function ProductFormBody({
               title={t('plugin_website.product.coverUpload')}
               hint={t('plugin_website.product.coverHint')}
               crop={{ width: 800, height: 800 }}
-              previewClassName="h-32 w-32 object-cover p-0"
               aria-label={t('plugin_website.fields.coverUrl')}
             />
             {coverInvalid ? (
@@ -802,10 +785,9 @@ function ProductFormBody({
         </FormSection>
         <FormSection title={t('plugin_website.product.detailSection')}>
           <LocalizedField fieldKey="content" className="min-h-40" />
-          <div className="grid gap-3 md:grid-cols-2">
-            <LocalizedField fieldKey="seoTitle" />
-            <LocalizedField fieldKey="seoDesc" />
-          </div>
+          {/* SEO 标题/描述纵向排：两列并排时短输入框配高文本域，高低参差看着乱 */}
+          <LocalizedField fieldKey="seoTitle" />
+          <LocalizedField fieldKey="seoDesc" />
           <LocaleFormActions />
           <SharedFieldShell labelKey="plugin_website.fields.productSeoKeywords">
             <Input
@@ -818,6 +800,7 @@ function ProductFormBody({
           </SharedFieldShell>
         </FormSection>
         <FormSection title={t('plugin_website.product.publishSection')}>
+          {/* 卡片里只放开关：作者是个普通文本框，混进开关卡片只会变成「标签在左、小输入框挂在右边缘」的怪行 */}
           <div className="divide-y divide-border rounded-lg border border-border">
             <SwitchRow
               bare
@@ -833,19 +816,15 @@ function ProductFormBody({
               checked={noindex}
               onCheckedChange={setNoindex}
             />
-            <SharedFieldShell
-              labelKey="plugin_website.fields.author"
-              className="flex-row items-center justify-between gap-4 px-3 py-2.5"
-            >
-              <Input
-                className="h-9 w-full max-w-56"
-                value={author}
-                maxLength={64}
-                disabled={sharedDisabled}
-                onChange={(e) => setAuthor(e.target.value)}
-              />
-            </SharedFieldShell>
           </div>
+          <SharedFieldShell labelKey="plugin_website.fields.author">
+            <Input
+              value={author}
+              maxLength={64}
+              disabled={sharedDisabled}
+              onChange={(e) => setAuthor(e.target.value)}
+            />
+          </SharedFieldShell>
         </FormSection>
       </div>
     </ResponsiveDialog>
@@ -1440,7 +1419,7 @@ function ProductFormDialog({
 }
 
 export default function ProductPage() {
-  const { t, i18n } = useTranslation()
+  const { t } = useTranslation()
   const confirm = useConfirm()
   // 预取字段 schema：点「新建/编辑」时直接命中缓存，不再先闪一个加载弹窗。
   useI18nSchema('product')
@@ -1533,44 +1512,14 @@ export default function ProductPage() {
   const [importOpen, setImportOpen] = useState(false)
   const { start: startExportJob } = useAsyncJob()
   // 导出沿用当前筛选（不是当前页）；勾选了行就只导勾选的（ids 传后端，筛选条件忽略）。
-  // 大数据量分流与用户导出同款：先问 export-plan，超过 export.sync_limit 改走异步任务——
-  // toast 提示「已提交到导出中心」，进度与 .xlsx 下载都在导出中心看，不阻塞页面。
+  // 统一走异步任务：提交后由 useAsyncJob 提示「已提交到导出中心」，进度与下载都在导出中心看。
   const onExport = async () => {
     setExporting(true)
     try {
       const query = selected.length
         ? { ids: selected }
         : { keyword: filters.keyword, status: effectiveStatus, categoryIds: filters.categoryIds }
-      const plan = await fetchProductExportPlan(query)
-      if (plan?.async) {
-        await startExportJob(() => createProductExportJob(query))
-        return
-      }
-      const rows = await fetchProductsForExport(query)
-      const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '')
-      downloadCsv(`products-${stamp}.csv`, [
-        [
-          t('plugin_website.product.titleColumn'),
-          t('plugin_website.fields.slug'),
-          t('plugin_website.product.categoryColumn'),
-          t('plugin_website.product.priceColumn'),
-          t('plugin_website.product.moq'),
-          t('plugin_website.product.statusColumn'),
-          t('plugin_website.product.syncColumn'),
-          t('plugin_website.fields.updatedAt'),
-        ],
-        ...rows.map((r) => [
-          r.title,
-          r.slug,
-          (r.categories ?? []).map((c) => c.title).join('、'),
-          priceText(r),
-          r.moq || '',
-          t(`plugin_website.product.status${r.status.charAt(0).toUpperCase()}${r.status.slice(1)}`, { defaultValue: r.status }),
-          syncText(r, t),
-          formatTime(r.updatedAt, i18n.language),
-        ]),
-      ])
-      toast.success(t('common.operateSuccess'))
+      await startExportJob(() => createProductExportJob(query))
     } catch {
       // 服务端原因由 http 拦截器统一弹出，这里再补一条「操作失败」就是同一件事说两遍
     } finally {
@@ -1621,7 +1570,11 @@ export default function ProductPage() {
       key: 'slug',
       title: t('plugin_website.fields.slug'),
       mobile: 'sub',
-      render: (r) => <span className="font-mono text-xs">/products/{r.slug}</span>,
+      render: (r) => (
+        <span className="block max-w-48 truncate font-mono text-xs" title={`/products/${r.slug}`}>
+          /products/{r.slug}
+        </span>
+      ),
     },
     {
       key: 'categories',
@@ -1629,11 +1582,18 @@ export default function ProductPage() {
       render: (r) => {
         const list = r.categories ?? []
         if (!list.length) return <span className="text-muted-foreground">—</span>
+        // 类目多时只露前两枚、其余收进「+N」：列表行高不随类目数乱涨，全量名单悬停可看
+        const shown = list.slice(0, 2)
+        const rest = list.length - shown.length
         return (
-          <div className="flex flex-wrap gap-1">
-            {list.map((c) => (
+          <div
+            className="flex max-w-56 flex-wrap gap-1"
+            title={list.map((c) => c.title).join('、')}
+          >
+            {shown.map((c) => (
               <Badge key={c.id} variant="outline">{c.title}</Badge>
             ))}
+            {rest > 0 ? <Badge variant="secondary">+{rest}</Badge> : null}
           </div>
         )
       },

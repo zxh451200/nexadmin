@@ -160,6 +160,21 @@ im:
   sender_agent: 坐席
   sender_system: 系统
   settings_invalid: 设置不合法（时间、时区或工作日）
+kb:
+  plugin_inactive: 知识库插件未启用
+  document_required: 请选择要上传的文档
+  document_too_large: 文档超出大小限制（上限 2MB）
+  document_type: 只支持 txt / md 纯文本文档
+  document_empty: 文档没有可用内容
+  document_not_found: 文档不存在
+  embed_unavailable: 向量化未启用：请先在「系统设置 → 高级 → AI」里配置 Embedding 模型
+  embed_failed: 向量化调用失败，请检查 AI 配置或稍后重试
+  chat_unavailable: 对话模型未配置：请先在「系统设置 → 高级 → AI」里完成 AI 配置
+  answer_failed: AI 调用失败，请稍后重试
+  rate_limited: 请求过于频繁，请稍后再试
+  question_required: 请输入要测试的问题
+  question_too_long: 问题过长（上限 %s 字）
+  settings_invalid: 阈值需在 0~1 之间、TopK 需在 1~10 之间
 imports:
   job_not_found: 导入任务不存在
   actor_required: 缺少操作者身份
@@ -600,6 +615,9 @@ config:
   value_not_boolean: "布尔参数值只能是 true 或 false"
   value_not_json: "参数值不是有效 JSON"
   value_out_of_range: "参数值超出可设置范围（只接受 %d 到 %d）；请改成范围内的值再保存"
+  auth.provider_incomplete: "第三方登录「%s」配置不完整：开启后必须填写 Client ID、Client Secret，以及至少一个与开放平台登记一致的回调地址（企业微信还要 AgentId，OIDC 还要 Issuer）"
+  auth.no_login_method: "至少要保留一种登录方式（账号密码、手机号或第三方登录），否则谁也登不进后台"
+  auth.proxy_invalid: "出站代理地址不合法：需为 http:// 或 https:// 开头的完整地址，留空表示直连"
   notify.mail_invalid: "邮件配置无效"
   notify.too_many_robots: "机器人最多 20 个"
   notify.robot_name_invalid: "机器人名称只能包含字母、数字、汉字、下划线和连字符，长度 1-32"
@@ -697,6 +715,11 @@ log:
   export_format_invalid: "format 仅支持 xlsx"
 exportcenter:
   job_bad_state: "当前状态不允许该操作"
+  notify_done_title: "导出完成"
+  notify_done_content: "任务已完成，结果文件 %s 已生成，保留 %d 天，请到导出中心下载。"
+  notify_failed_title: "导出失败"
+  notify_failed_content: "任务执行失败：%s"
+  notify_failed_unknown: "原因未知，请到导出中心查看详情"
 region:
   source_insecure: "数据源地址不可用（只接受 HTTPS，且不能包含账号密码）：%s"
   source_unreachable: "拉取数据源失败：%s"
@@ -986,6 +1009,7 @@ menu:
   parent_not_found: "上级菜单不存在"
   parent_self_or_child: "上级菜单不能是自己或其下级"
   child_under_button: "按钮下不能再建子菜单"
+  child_under_menu: "目录和菜单不能挂到菜单下（侧栏只渲染两层，挂进去入口会消失；菜单下只放按钮权限点）"
   button_needs_parent: "按钮是权限点，必须挂在某个菜单下"
 license:
   public_key_missing: "框架未内置有效的授权公钥"

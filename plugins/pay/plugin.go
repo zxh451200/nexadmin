@@ -15,6 +15,7 @@ import (
 
 	"nexadmin/core"
 	"nexadmin/core/event"
+	"nexadmin/core/job"
 	"nexadmin/core/plugin"
 	"nexadmin/core/tenant"
 )
@@ -59,14 +60,16 @@ func (*module) Name() string { return "pay" }
 
 // Register 注册管理端与公开路由。
 func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
-	h := &handler{svc: m.service(d)}
+	svc := m.service(d)
+	job.Register(jobTypeOrderExport, svc.RunOrderExportJob) // 导出中心任务处理器
+	h := &handler{svc: svc}
 
 	g := r.Group("/plugins/pay")
 	// 订单
 	g.POST("/orders", idempotency(d.DB), core.Perm("pay:edit"), h.createOrder)
 	g.GET("/orders", core.Perm("pay:list"), h.listOrders)
 	// 静态段注册在 /orders/:no 之前（与 /orders/stats 同一套匹配约定）。
-	g.GET("/orders/export", core.Perm("pay:list"), h.exportOrders)
+	g.POST("/orders/export-async", core.Perm("pay:list"), h.exportOrdersAsync)
 	g.GET("/orders/stats", core.Perm("pay:list"), h.Stats)
 	g.GET("/orders/by-biz", core.Perm("pay:list"), h.orderByBiz)
 	g.GET("/orders/:no", core.Perm("pay:list"), h.getOrder)

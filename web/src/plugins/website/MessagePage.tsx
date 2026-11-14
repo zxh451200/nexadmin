@@ -3,9 +3,9 @@ import { CheckCheck, Download, Inbox, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
+import { useAsyncJob } from '@/framework/hooks/use-async-job'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
-import { downloadCsv } from '@/framework/components/export/csv'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { OptionPicker } from '@/framework/components/OptionPicker'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
@@ -16,7 +16,7 @@ import { Input } from '@/framework/ui/input'
 import { formatTime } from './format'
 import {
   MESSAGE_STATUSES,
-  fetchMessagesForExport,
+  createMessageExportJob,
   useDeleteMessages,
   useMessages,
   useSetMessageStatus,
@@ -28,6 +28,7 @@ import {
 export default function MessagePage() {
   const { t, i18n } = useTranslation()
   const confirm = useConfirm()
+  const { start: startExportJob } = useAsyncJob()
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [draft, setDraft] = useState<{ keyword?: string; status?: string[] }>({})
@@ -70,33 +71,12 @@ export default function MessagePage() {
   }
 
   const [exporting, setExporting] = useState(false)
-  // 导出沿用当前筛选（不是当前页）：后端按同一套条件取全量，前端生成带 BOM 的 CSV。
+  // 导出沿用当前筛选（不是当前页）：统一走异步任务，提交后由 useAsyncJob
+  // 提示「已提交到导出中心」，进度与下载都在导出中心看。
   const onExport = async () => {
     setExporting(true)
     try {
-      const rows = await fetchMessagesForExport({ keyword: filters.keyword, status: filters.status })
-      const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '')
-      downloadCsv(`messages-${stamp}.csv`, [
-        [
-          t('plugin_website.message.status'),
-          t('plugin_website.message.name'),
-          t('plugin_website.message.email'),
-          t('plugin_website.message.phone'),
-          t('plugin_website.message.content'),
-          t('plugin_website.message.ip'),
-          t('plugin_website.message.createdAt'),
-        ],
-        ...rows.map((r) => [
-          statusLabel(r.status),
-          r.name,
-          r.email,
-          r.phone,
-          r.content,
-          r.ip,
-          formatTime(r.createdAt, i18n.language),
-        ]),
-      ])
-      toast.success(t('common.operateSuccess'))
+      await startExportJob(() => createMessageExportJob({ keyword: filters.keyword, status: filters.status }))
     } catch {
       toast.error(t('common.operateFailed'))
     } finally {
@@ -146,12 +126,15 @@ export default function MessagePage() {
       key: 'contact',
       title: t('plugin_website.message.contact'),
       mobile: 'sub',
-      render: (r) => (
-        <span className="text-muted-foreground">
-          {r.email}
-          {r.phone ? ` · ${r.phone}` : ''}
-        </span>
-      ),
+      // 邮箱是不可断的长串：截断 + 悬停看全量
+      render: (r) => {
+        const text = `${r.email}${r.phone ? ` · ${r.phone}` : ''}`
+        return (
+          <span className="block max-w-[14rem] truncate text-muted-foreground" title={text}>
+            {text}
+          </span>
+        )
+      },
     },
     {
       key: 'content',

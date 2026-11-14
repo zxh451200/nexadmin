@@ -534,28 +534,9 @@ func (s *Service) GetLog(ctx context.Context, id idgen.ID) (*Log, error) {
 	return &l, nil
 }
 
-// logExportMax 是单次导出的日志行数上限：日志是低频运维数据，超量说明该接清理了。
+// logExportMax 是单次异步导出（cron.log-export 任务）的日志行数上限：日志是低频运维数据，
+// 超量说明该接清理了。命中行数超过上限时任务直接失败，提示缩小筛选范围。
 const logExportMax = 20000
-
-// ExportLogs 按与 ListLogs 同一套筛选导出执行日志（不带分页，上限 logExportMax），供 CSV 生成。
-// 先数一遍再取：命中行数超过上限时直接返回错误，此时响应头还没写，能把一条明确的
-// JSON 错误发回界面；静默截断会让使用者以为拿到的是全部日志。
-func (s *Service) ExportLogs(ctx context.Context, q LogQuery) ([]Log, error) {
-	tx, err := s.logFilter(ctx, q)
-	if err != nil {
-		return nil, err
-	}
-	var total int64
-	if err := tx.Count(&total).Error; err != nil {
-		return nil, err
-	}
-	if total > logExportMax {
-		return nil, badReq("cron.export_too_many_rows", total, logExportMax)
-	}
-	var rows []Log
-	err = tx.Select(logListColumns).Order("started_at DESC, id DESC").Limit(logExportMax).Find(&rows).Error
-	return rows, err
-}
 
 // CleanLogs 删除 days 天前的日志（days = 0 表示全部已结束的日志）；可限定某个任务；不会删除仍在运行的记录。
 func (s *Service) CleanLogs(ctx context.Context, days int, jobID idgen.ID) (int64, error) {

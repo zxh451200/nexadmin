@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import BaseLightbox from 'yet-another-react-lightbox'
 import Counter from 'yet-another-react-lightbox/plugins/counter'
@@ -28,6 +28,25 @@ export interface LightboxProps {
 /** 图片大图预览：缩放（滚轮/双击/捏合）、拖拽平移、90° 旋转、Esc 关闭；多图时左右翻页。 */
 export function Lightbox({ open, onOpenChange, slides, index = 0, caption, onSlideView }: LightboxProps) {
   const { t } = useTranslation()
+  // 弹窗里的图片预览（ImageUrlField、富文本等）叠加在 Radix Dialog 之上；
+  // Radix 在 document 捕获阶段监听 Esc、在 document 冒泡阶段监听 pointerdown，
+  // 不拦住的话 Esc/点背景会把预览和底下那层表单一起关掉。
+  // 这里在 window 捕获阶段收 Esc，在 body 冒泡阶段截 pointerdown（灯箱自己的处理器在更里层，已先跑过）。
+  useEffect(() => {
+    if (!open) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      e.stopPropagation()
+      onOpenChange(false)
+    }
+    const stopPointerDown = (e: Event) => e.stopPropagation()
+    window.addEventListener('keydown', onKeyDown, true)
+    document.body.addEventListener('pointerdown', stopPointerDown)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown, true)
+      document.body.removeEventListener('pointerdown', stopPointerDown)
+    }
+  }, [open, onOpenChange])
   if (!open || slides.length === 0) return null
   const grouped = slides.length > 1
   return (
@@ -37,6 +56,8 @@ export function Lightbox({ open, onOpenChange, slides, index = 0, caption, onSli
       close={() => onOpenChange(false)}
       slides={slides}
       plugins={grouped ? [Zoom, Rotate, Counter] : [Zoom, Rotate]}
+      // 点暗色背景关闭（库默认关着）；弹窗里的表单靠上面的 pointerdown 拦截免于被连带关掉
+      controller={{ closeOnBackdropClick: true }}
       zoom={{ scrollToZoom: true, maxZoomPixelRatio: 4 }}
       rotate={{ buttons: 'both' }}
       // 库的翻页状态是自己的，view 回调（含打开时那一次）把位置交还给调用方，
@@ -46,7 +67,6 @@ export function Lightbox({ open, onOpenChange, slides, index = 0, caption, onSli
       styles={{
         navigationPrev: { display: grouped ? undefined : 'none' },
         navigationNext: { display: grouped ? undefined : 'none' },
-        container: caption ? { backgroundColor: 'hsl(var(--background) / 0.92)' } : undefined,
       }}
       labels={{
         Lightbox: slides[index]?.alt ?? t('common.preview'),
@@ -63,9 +83,11 @@ export function Lightbox({ open, onOpenChange, slides, index = 0, caption, onSli
       render={
         caption
           ? {
+              // yarl 的 slide 是横向 flex，footer 作为 flex 项只会缩成内容宽、居中失效，
+              // 这里改成绝对定位，贴住当前 slide 的底部居中
               slideFooter: () => (
-                <div className="flex justify-center px-4 pb-2">
-                  <div className="w-full max-w-xl rounded-lg border border-border bg-card/95 p-3 shadow-lg backdrop-blur-sm">
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center px-4 pb-2">
+                  <div className="pointer-events-auto w-full max-w-xl rounded-lg border border-border bg-card/95 p-3 shadow-lg backdrop-blur-sm">
                     {caption}
                   </div>
                 </div>

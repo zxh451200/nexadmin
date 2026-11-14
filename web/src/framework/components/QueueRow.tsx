@@ -13,6 +13,7 @@ export function QueueRow({
   checkbox,
   children,
   footer,
+  accent,
 }: {
   selected: boolean
   onSelect: () => void
@@ -21,15 +22,18 @@ export function QueueRow({
   children: ReactNode
   /** 行内按钮之外的内容（如「已并入…」跳转），不参与点击选中 */
   footer?: ReactNode
+  /** 左缘主题色竖条（如未读标记）：绝对定位于行左缘，不参与布局 */
+  accent?: boolean
 }) {
   return (
     // 选中态用 primary 色底 + 内描边：accent/60 在浅色下和悬停几乎一个色，扫一眼分不出选没选中
     <div
       className={cn(
-        'rounded-md transition-colors',
+        'relative rounded-md transition-colors',
         selected ? 'bg-primary/10 ring-1 ring-inset ring-primary/30 hover:bg-primary/15' : 'hover:bg-accent/40',
       )}
     >
+      {accent ? <span aria-hidden="true" className="absolute inset-y-1 start-0 w-[3px] rounded-full bg-primary" /> : null}
       {/* 勾选列整行等高：勾选框在列内垂直居中，热区由调用方的 label 纵向撑满，
           不再用负边距外扩——负边距会把不可见点击区压到相邻行和行按钮上，又重叠又误触 */}
       <div className="flex items-stretch gap-1.5">
@@ -70,10 +74,32 @@ export function QueueStatus({ tone = 'neutral', children }: { tone?: keyof typeo
   )
 }
 
-/** 行首头像位：品牌渐变小方块，和主按钮、Logo 同一套形状与配色语言 */
-export function QueueAvatar({ children }: { children: ReactNode }) {
+/** 会话头像的渐变色板：按 seed 稳定取色，同一会话永远同一个颜色，扫一眼能区分不同会话 */
+const AVATAR_GRADIENTS = [
+  'from-violet-500 to-indigo-500',
+  'from-sky-500 to-cyan-400',
+  'from-emerald-500 to-teal-400',
+  'from-amber-500 to-orange-400',
+  'from-rose-500 to-pink-400',
+  'from-fuchsia-500 to-purple-500',
+] as const
+
+/** 行首头像位：品牌渐变小方块，和主按钮、Logo 同一套形状与配色语言；给 seed 时按会话稳定着色 */
+export function QueueAvatar({ children, seed }: { children: ReactNode; seed?: string }) {
+  let h = 0
+  if (seed) {
+    for (let i = 0; i < seed.length; i++) {
+      h = (h * 31 + seed.charCodeAt(i)) >>> 0
+    }
+  }
+  const g = seed ? AVATAR_GRADIENTS[h % AVATAR_GRADIENTS.length] : null
   return (
-    <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-brand-gradient text-[11px] font-semibold text-primary-foreground">
+    <span
+      className={cn(
+        'flex size-7 shrink-0 items-center justify-center rounded-md bg-gradient-to-br text-[11px] font-semibold text-white',
+        g ?? 'bg-brand-gradient text-primary-foreground',
+      )}
+    >
       {children}
     </span>
   )

@@ -455,7 +455,17 @@ export default function NavPage() {
 
   const columns: Column<NavNode>[] = [
     { key: 'label', title: t('plugin_website.fields.navLabel'), mobile: 'title', render: (r) => <span className="font-medium text-foreground">{r.label}</span> },
-    { key: 'href', title: t('plugin_website.fields.navHref'), mobile: 'sub', render: (r) => <span className="font-mono text-xs">{r.href}</span> },
+    {
+      key: 'href',
+      title: t('plugin_website.fields.navHref'),
+      mobile: 'sub',
+      // 外链地址长度不限：截断 + 悬停看全量
+      render: (r) => (
+        <span className="block max-w-56 truncate font-mono text-xs" title={r.href}>
+          {r.href}
+        </span>
+      ),
+    },
     { key: 'i18n', title: t('plugin_website.i18n.status'), render: (r) => <TranslationStatus value={r.i18nJson} fields={['label']} /> },
     { key: 'enabled', title: t('plugin_website.fields.enabled'), render: (r) => (r.enabled ? <Badge variant="success">{t('plugin_website.enabledOn')}</Badge> : <Badge variant="outline">{t('plugin_website.enabledOff')}</Badge>) },
     // 排序由拖拽承担，不再单独摆一列数字（数字仍在编辑弹窗里可改）

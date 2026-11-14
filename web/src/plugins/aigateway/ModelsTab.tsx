@@ -7,6 +7,7 @@ import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { ExportCsvButton } from '@/framework/components/export/ExportCsvButton'
 import { FilterBar } from '@/framework/components/FilterBar'
+import { OptionPicker } from '@/framework/components/OptionPicker'
 import { RequiredMark } from '@/framework/components/RequiredMark'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { SwitchRow } from '@/framework/components/SwitchField'
@@ -29,7 +30,6 @@ import {
 } from './api'
 import { formatTime } from './format'
 
-const ALL = '__all'
 const MASK = '********'
 
 function ModelFormDialog({
@@ -167,7 +167,7 @@ function ModelFormDialog({
 export function ModelsTab() {
   const { t, i18n } = useTranslation()
   const confirm = useConfirm()
-  const [draft, setDraft] = useState<ModelQuery>({})
+  const [draft, setDraft] = useState<{ keyword?: string; kind?: string[] }>({})
   const [filters, setFilters] = useState<ModelQuery>({})
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
@@ -253,7 +253,7 @@ export function ModelsTab() {
     <div className="flex flex-wrap items-center gap-2">
       <FilterBar
         onSearch={() => {
-          setFilters(draft)
+          setFilters({ keyword: draft.keyword, kind: draft.kind?.length ? draft.kind.join(',') : undefined })
           setPage(1)
         }}
         onReset={() => {
@@ -269,19 +269,14 @@ export function ModelsTab() {
           placeholder={t('plugin_aigateway.searchPlaceholder')}
           aria-label={t('common.keyword')}
         />
-        <Select value={draft.kind ?? ALL} onValueChange={(v) => setDraft((d) => ({ ...d, kind: v === ALL ? undefined : v }))}>
-          <SelectTrigger className="md:w-44" aria-label={t('plugin_aigateway.fields.kind')}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_aigateway.filter.allKinds')}</SelectItem>
-            {AI_KINDS.map((k) => (
-              <SelectItem key={k} value={k}>
-                {t(`plugin_aigateway.kind.${k}`)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <OptionPicker
+          title={t('plugin_aigateway.fields.kind')}
+          value={draft.kind ?? []}
+          onChange={(v) => setDraft((d) => ({ ...d, kind: v.length ? v : undefined }))}
+          options={AI_KINDS.map((k) => ({ value: k, label: t(`plugin_aigateway.kind.${k}`) }))}
+          className="md:w-48"
+          placeholder={t('plugin_aigateway.fields.kind')}
+        />
       </FilterBar>
       <Can perm="aigateway:edit">
         <Button

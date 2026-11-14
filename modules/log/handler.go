@@ -77,6 +77,26 @@ func (h *Handler) ListLogin(c *gin.Context) {
 	response.Page(c, list, total, q.Page, q.PageSize)
 }
 
+// ExportOperAsync POST /oper-logs/export-async
+func (h *Handler) ExportOperAsync(c *gin.Context) {
+	h.submitExport(c, jobTypeOperExport, exportJobParams{
+		Keyword:   c.Query("keyword"),
+		Status:    response.ParseList(c.Query("status"), response.MaxFilterValues),
+		Type:      response.ParseList(c.Query("type"), response.MaxFilterValues),
+		StartDate: c.Query("startDate"), EndDate: c.Query("endDate"),
+	})
+}
+
+// ExportLoginAsync POST /login-logs/export-async
+func (h *Handler) ExportLoginAsync(c *gin.Context) {
+	h.submitExport(c, jobTypeLoginExport, exportJobParams{
+		Keyword:   c.Query("keyword"),
+		Status:    response.ParseList(c.Query("status"), response.MaxFilterValues),
+		LoginType: response.ParseList(c.Query("loginType"), response.MaxFilterValues),
+		StartDate: c.Query("startDate"), EndDate: c.Query("endDate"),
+	})
+}
+
 // idsParam 解析 ?ids=1,2,3；为空或有非法值时已写入 400。
 func idsParam(c *gin.Context) ([]idgen.ID, bool) {
 	var ids []idgen.ID

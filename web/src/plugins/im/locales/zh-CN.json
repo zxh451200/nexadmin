@@ -134,6 +134,7 @@
     "senders": {
       "visitor": "访客",
       "agent": "客服",
+      "bot": "AI 助手",
       "system": "系统"
     },
     "system": {
@@ -141,7 +142,8 @@
       "conv_reopened": "会话已重新开启",
       "message_recalled": "消息已撤回",
       "conv_merged": "已并入其他会话",
-      "conv_merged_into": "会话已合并到其他会话"
+      "conv_merged_into": "会话已合并到其他会话",
+      "handoff": "已转人工客服，请稍候"
     },
     "settings": {
       "action": "客服设置",
@@ -160,6 +162,10 @@
       "bannedWords": "敏感词（每行一个，命中后替换为 ***，只过滤访客消息）",
       "autoAssign": "自动分配会话",
       "autoAssignHint": "新会话分给在线且进行中会话最少的坐席；没人在线时排队，坐席上线后按先后领取",
+      "aiEnabled": "AI 自动回答",
+      "aiEnabledHint": "知识库插件（免费版）基于上传的文档自动回答未接管的会话；检索不到就礼貌说明并转人工。坐席认领或访客转人工即停答。前置条件：系统设置里已配好 AI 与 Embedding 模型",
+      "aiFallbackText": "AI 兜底话术（检索不到时使用，留空用默认文案）",
+      "aiFallbackHint": "抱歉，这个问题我暂时回答不了，已为您转接人工客服。",
       "retentionDays": "会话保留天数（0 = 永久保留）",
       "retentionHint": "只清理已结束的会话，消息与附件一并删除；每小时检查一次",
       "readonlyHint": "你可以查看这些设置，但没有保存权限"

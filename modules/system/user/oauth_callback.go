@@ -49,7 +49,7 @@ func (h *oauthHandler) callback(c *gin.Context) {
 		response.Fail(c, errOAuthFailed())
 		return
 	}
-	conf, ok := h.flow.Conf(key)
+	conf, ok := h.flow.Conf(ctx, key)
 	if !ok {
 		response.Fail(c, errOAuthFailed())
 		return
@@ -117,7 +117,7 @@ func (h *oauthHandler) bind(c *gin.Context) {
 		response.Fail(c, err)
 		return
 	}
-	conf, ok := h.flow.Conf(id.Provider)
+	conf, ok := h.flow.Conf(ctx, id.Provider)
 	if !ok || !domainAllowed(conf.AllowedEmailDomains, id) {
 		response.Fail(c, errOAuthFailed())
 		return

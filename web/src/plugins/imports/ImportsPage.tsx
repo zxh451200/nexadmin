@@ -7,6 +7,7 @@ import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { ExportCsvButton } from '@/framework/components/export/ExportCsvButton'
 import { FileDropField } from '@/framework/components/FileDropField'
 import { FilterBar } from '@/framework/components/FilterBar'
+import { OptionPicker } from '@/framework/components/OptionPicker'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { RequiredMark } from '@/framework/components/RequiredMark'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
@@ -36,8 +37,6 @@ import {
   type ImportSourceMeta,
 } from './api'
 import { formatTime, statusVariant } from './format'
-
-const ALL = '__all'
 
 /**
  * 导入是一次性动作，台账是长期列表：表单放进弹窗（与文件管理的「上传文件」同构），
@@ -190,7 +189,7 @@ function NewImportDialog({
 
 export default function ImportsPage() {
   const { t, i18n } = useTranslation()
-  const [draft, setDraft] = useState<{ source?: string; status?: string }>({})
+  const [draft, setDraft] = useState<{ source?: string[]; status?: string[] }>({})
   const [source, setSource] = useState<string | undefined>()
   const [status, setStatus] = useState<string | undefined>()
   const [page, setPage] = useState(1)
@@ -258,8 +257,10 @@ export default function ImportsPage() {
       title: t('plugin_imports.fields.fileName'),
       mobile: 'title',
       render: (j) => (
-        <div>
-          <span className="font-medium text-foreground">{j.fileName || '—'}</span>
+        <div className="min-w-0">
+          <span className="block max-w-[18rem] truncate font-medium text-foreground" title={j.fileName}>
+            {j.fileName || '—'}
+          </span>
           {/* 台账里存的是来源标识（crm_customers），上屏要换成来源的显示名 */}
           <div className="text-xs text-muted-foreground">{sourceTitle(j.source)}</div>
         </div>
@@ -300,8 +301,8 @@ export default function ImportsPage() {
 
       <FilterBar
         onSearch={() => {
-          setSource(draft.source)
-          setStatus(draft.status)
+          setSource(draft.source?.length ? draft.source.join(',') : undefined)
+          setStatus(draft.status?.length ? draft.status.join(',') : undefined)
           setPage(1)
         }}
         onReset={() => {
@@ -311,37 +312,22 @@ export default function ImportsPage() {
           setPage(1)
         }}
       >
-        <Select
-          value={draft.source ?? ALL}
-          onValueChange={(v) => setDraft((d) => ({ ...d, source: v === ALL ? undefined : v }))}
-        >
-          <SelectTrigger className="md:w-52" aria-label={t('plugin_imports.fields.source')}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_imports.filter.allSources')}</SelectItem>
-            {(sources.data ?? []).map((s) => (
-              <SelectItem key={s.name} value={s.name}>
-                {s.title}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select
-          value={draft.status ?? ALL}
-          onValueChange={(v) => setDraft((d) => ({ ...d, status: v === ALL ? undefined : v }))}
-        >
-          <SelectTrigger className="md:w-40" aria-label={t('plugin_imports.fields.status')}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_imports.filter.allStatuses')}</SelectItem>
-            <SelectItem value="pending">{t('plugin_imports.status.pending')}</SelectItem>
-            <SelectItem value="running">{t('plugin_imports.status.running')}</SelectItem>
-            <SelectItem value="done">{t('plugin_imports.status.done')}</SelectItem>
-            <SelectItem value="failed">{t('plugin_imports.status.failed')}</SelectItem>
-          </SelectContent>
-        </Select>
+        <OptionPicker
+          title={t('plugin_imports.fields.source')}
+          value={draft.source ?? []}
+          onChange={(v) => setDraft((d) => ({ ...d, source: v.length ? v : undefined }))}
+          options={(sources.data ?? []).map((s) => ({ value: s.name, label: s.title }))}
+          className="md:w-52"
+          placeholder={t('plugin_imports.fields.source')}
+        />
+        <OptionPicker
+          title={t('plugin_imports.fields.status')}
+          value={draft.status ?? []}
+          onChange={(v) => setDraft((d) => ({ ...d, status: v.length ? v : undefined }))}
+          options={['pending', 'running', 'done', 'failed'].map((s) => ({ value: s, label: t(`plugin_imports.status.${s}`) }))}
+          className="md:w-44"
+          placeholder={t('plugin_imports.fields.status')}
+        />
       </FilterBar>
 
       <DataTable

@@ -1,4 +1,5 @@
 import { createCrudMock, defineMock, mockError } from '@/framework/request/mock'
+import { createMockJob } from '../exportcenter/exportcenter.mock'
 import type { Role } from './api'
 
 const ids = {
@@ -96,11 +97,38 @@ export const roleSeed: Role[] = [
 
 export const roleIds = ids
 
+const csvCell = (v: string) => (/[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v)
+
 // 角色 -> 菜单/按钮权限 id 集合（id 来自 B2 的 /menus/tree，种子里先为空）
 const roleMenus = new Map<string, string[]>(roleSeed.map((r) => [r.id, []]))
 
 // 固定路径必须先于 createCrudMock 的 /roles/:id 注册
 defineMock([
+  {
+    // 统一异步导出：与后端 POST /roles/export-async 同契约，提交 core/job 任务进导出中心。
+    // 真实后端生成 xlsx（枚举列翻成字典文本）；mock 生成同样列的 CSV 文本
+    method: 'POST',
+    url: '/roles/export-async',
+    handler: ({ query, body }) => {
+      const q = { ...query, ...(body ?? {}) }
+      const kw = String(q.keyword ?? '').trim().toLowerCase()
+      const st = String(q.status ?? '')
+      const list = store
+        .all()
+        .filter((r) => !kw || r.name.toLowerCase().includes(kw) || r.code.toLowerCase().includes(kw))
+        .filter((r) => !st || r.status === st)
+        .sort((a, b) => a.sort - b.sort)
+      const head = ['角色名称', '角色编码', '排序', '数据范围', '状态', '可分配', '备注', '创建时间']
+      const lines = list.map((r) =>
+        [r.name, r.code, String(r.sort), r.dataScope, r.status === '1' ? '启用' : '停用',
+          r.assignable && !r.builtin ? '是' : '否', r.remark, r.createdAt].map(csvCell).join(','),
+      )
+      const content = `\uFEFF${[head.join(','), ...lines].join('\r\n')}\r\n`
+      const day = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+      const j = createMockJob('role.export', `roles-${day}.csv`, list.length, content)
+      return { id: j.id, type: j.type, status: j.status }
+    },
+  },
   {
     method: 'GET',
     url: '/roles/options',

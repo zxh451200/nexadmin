@@ -33,6 +33,16 @@ interface PublicSettings {
 
 const DEFAULT_NAME = 'NexAdmin'
 
+// 记住上次选的登录方式（账号 / 手机号），刷新后回到同一个 tab；不可用（被设置页关掉）时回落第一个。
+const METHOD_KEY = 'nex-login-method'
+function readPreferredMethod(): string | null {
+  try {
+    return localStorage.getItem(METHOD_KEY)
+  } catch {
+    return null
+  }
+}
+
 const features: { icon: LucideIcon; title: string; desc: string }[] = [
   { icon: Users, title: 'loginPage.featureTenantTitle', desc: 'loginPage.featureTenantDesc' },
   { icon: Languages, title: 'loginPage.featureI18nTitle', desc: 'loginPage.featureI18nDesc' },
@@ -142,6 +152,8 @@ export default function LoginPage() {
   const continuation = useRef<Promise<LoginContinuation> | null | undefined>(undefined)
   // 注册模式（auth.allow_register 开启时登录页提供注册入口）；注册即登录，成功直接进系统
   const [registering, setRegistering] = useState(false)
+  // 上次选中的登录方式；null = 没选过，按服务端返回的第一个
+  const [preferredMethod, setPreferredMethod] = useState<string | null>(readPreferredMethod)
 
   useEffect(() => {
     let active = true
@@ -188,7 +200,11 @@ export default function LoginPage() {
     queryFn: () => api.get<AuthMethods>('/auth/methods', undefined, { silent: true }),
     staleTime: 60_000,
   })
-  const methods = data.methods.length > 0 ? data.methods : FALLBACK.methods
+  // 服务端返回的列表就是权威结果：设置页可以把账号密码 / 手机号都关掉、只留第三方登录，
+  // 此时 methods 为空是合法状态，不能再回退成密码表单（那会把已关闭的登录方式又摆出来）。
+  const methods = data.methods
+  // 记住的选择只在该方式仍可用时生效，否则回到第一个可用方式
+  const activeMethod = preferredMethod && methods.some((m) => m === preferredMethod) ? preferredMethod : methods[0]
   // 验证码总开关缺省按开启处理：与服务端 fail-closed 一致，旧后端没这个字段时宁可多要一次验证码
   const captchaEnabled = data.captchaEnabled !== false
 
@@ -291,7 +307,17 @@ export default function LoginPage() {
                     固定 384px 的图片宽撑破（手机窄屏整页横向溢出），放开让它随容器收缩 */}
                 <fieldset disabled={continuing || challenge !== null} className="min-w-0">
                 {methods.length > 1 ? (
-                  <Tabs defaultValue={methods[0]}>
+                  <Tabs
+                    value={activeMethod}
+                    onValueChange={(v) => {
+                      setPreferredMethod(v)
+                      try {
+                        localStorage.setItem(METHOD_KEY, v)
+                      } catch {
+                        // 隐私模式 / 存储被禁用：只在本次页面内记住
+                      }
+                    }}
+                  >
                     <TabsList className="grid w-full grid-cols-2">
                       {methods.map((m) => (
                         <TabsTrigger key={m} value={m} className="min-h-11 md:min-h-0">
@@ -308,9 +334,9 @@ export default function LoginPage() {
                   </Tabs>
                 ) : methods[0] === 'phone' ? (
                   <PhoneForm onSuccess={done} onChallenge={setChallenge} captchaEnabled={captchaEnabled} />
-                ) : (
+                ) : methods[0] === 'password' ? (
                   <PasswordForm onSuccess={done} onForgot={onForgot} onChallenge={setChallenge} demoCredentials={demoAccount} fillNonce={demoFill} />
-                )}
+                ) : null}
 
                 <SocialLogin providers={data.providers} redirect={redirect} />
                 {loginPanels.map((Panel, i) => (

@@ -1,4 +1,5 @@
 import { defineMock, genId, mockError } from '@/framework/request/mock'
+import { createMockJob } from '@/framework/modules/exportcenter/exportcenter.mock'
 import type { CronHandler, CronJob, CronJobForm, CronLog } from './api'
 import { parseCron } from './cron'
 
@@ -217,25 +218,15 @@ defineMock([
     },
   },
   {
-    method: 'GET',
-    // 与真实后端同形状：UTF-8 BOM + CRLF 的 CSV，筛选与列表同源，output / error 取前 500 字。
-    // 必须排在 /logs/:id 之前，否则这段路径会被当成日志 ID 匹配掉。
-    url: '/plugins/cron/logs/export.csv',
+    method: 'POST',
+    url: '/plugins/cron/logs/export-async',
     handler: ({ query }) => {
       let rows = logs
       if (query.jobId) rows = rows.filter((l) => l.jobId === query.jobId)
       if (query.status) rows = rows.filter((l) => l.status === query.status)
-      rows = [...rows].sort((a, b) => b.startedAt.localeCompare(a.startedAt)).slice(0, 20000)
-      const cell = (v: string) => {
-        const guarded = /^[\=\+\-\@\t\r]/.test(v) ? `'${v}'` : v
-        return /[",\r\n]/.test(guarded) ? `"${guarded.replace(/"/g, '""')}"` : guarded
-      }
-      const head = ['started_at', 'job', 'handler', 'trigger', 'status', 'attempts', 'cost_ms', 'output', 'error']
-      const lines = rows.map((l) =>
-        [l.startedAt, l.jobName, l.handler, l.trigger, l.status, String(l.attempts), String(l.costMs),
-          l.output.slice(0, 500), l.error.slice(0, 500)].map(cell).join(','),
-      )
-      return `\uFEFF${[head.join(','), ...lines].join('\r\n')}\r\n`
+      const day = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+      const j = createMockJob('cron.log-export', `cron-logs-${day}.csv`, rows.length, '开始时间,任务,处理器,状态\r\n…\r\n')
+      return { id: j.id, type: j.type, status: j.status }
     },
   },
   {

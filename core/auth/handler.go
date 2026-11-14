@@ -366,29 +366,32 @@ func (h *Handler) Me(c *gin.Context) {
 
 // Methods GET /auth/methods：登录页据此决定展示哪些登录方式。
 func (h *Handler) Methods(c *gin.Context) {
-	methods := make([]string, 0, len(h.Cfg.Auth.Methods))
-	for _, m := range h.Cfg.Auth.Methods {
+	ctx := c.Request.Context()
+	// 登录方式与第三方 provider 都是「运行时视图」：设置页保存过就以库里的为准，没保存过沿用 config.yaml。
+	methods := make([]string, 0, 2)
+	for _, m := range LoginMethods(ctx, h.Cfg.Auth.Methods) {
 		if m == "phone" && h.Cfg.SMS.Provider == "" { // 未配置短信则不启用手机号登录
 			continue
 		}
 		methods = append(methods, m)
 	}
-	keys := h.Cfg.Auth.ProviderNames() // 只返回配置完整可用的；没配置或缺必填项的不显示，也不报错
+	providersMap := EffectiveProviders(ctx, h.Cfg.Auth.Providers)
+	keys := h.Cfg.Auth.ProviderNamesFrom(providersMap) // 只返回配置完整可用的；没配置或缺必填项的不显示，也不报错
 	type provider struct {
 		Key  string `json:"key"`
 		Name string `json:"name"`
 	}
-	registerEnabled := RegisterEnabled(c.Request.Context())
+	registerEnabled := RegisterEnabled(ctx)
 	providers := make([]provider, 0, len(keys))
 	for _, k := range keys {
 		if !KnownProvider(k) {
 			continue
 		}
-		name := i18n.T(c.Request.Context(), "auth.provider."+k)
+		name := i18n.T(ctx, "auth.provider."+k)
 		if name == "" || name == "auth.provider."+k {
 			name = ProviderDisplay(k)
 		}
-		if pc, ok := h.Cfg.Auth.ProviderConf(k); ok && k == "oidc" && pc.Name != "" {
+		if pc, ok := h.Cfg.Auth.ProviderConfFrom(providersMap, k); ok && k == "oidc" && pc.Name != "" {
 			name = pc.Name
 		}
 		providers = append(providers, provider{Key: k, Name: name})

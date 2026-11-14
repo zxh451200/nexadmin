@@ -12,7 +12,7 @@ import (
 	"go.uber.org/zap"
 
 	"nexadmin/core"
-	"nexadmin/core/middleware"
+	"nexadmin/core/job"
 	"nexadmin/core/plugin"
 	"nexadmin/core/tenant"
 )
@@ -41,10 +41,10 @@ func (*module) Name() string { return "cron" }
 
 // Register 注册路由。
 func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
-	h := &handler{svc: m.service(d)}
+	svc := m.service(d)
+	job.Register(jobTypeLogExport, svc.runLogExportJob) // 导出中心任务处理器
+	h := &handler{svc: svc}
 	g := r.Group("/plugins/cron")
-	// 导出是「一次拉最多 2 万行、每次都要扫日志表」的读操作，单独按用户限流（与日志导出同口径）。
-	exportLimit := middleware.RateLimitRule(d.Cache, d.Log, d.Config.RateLimit, "cron_export", middleware.ByUser())
 	g.GET("/handlers", core.Perm("cron:list"), h.handlers)
 	g.GET("/stats", core.Perm("cron:list"), h.stats) // 工作台卡片 cron-overview
 	g.GET("/jobs", core.Perm("cron:list"), h.listJobs)
@@ -58,7 +58,7 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.DELETE("/jobs", core.Perm("cron:edit"), h.deleteJobs)
 	g.POST("/jobs/:id/run", core.Perm("cron:run"), h.runJob)
 	g.GET("/logs", core.Perm("cron:log"), h.listLogs)
-	g.GET("/logs/export.csv", core.Perm("cron:log"), exportLimit, core.Desc("导出执行日志"), h.exportLogs)
+	g.POST("/logs/export-async", core.Perm("cron:log"), core.Desc("导出执行日志"), h.exportLogsAsync)
 	g.GET("/logs/:id", core.Perm("cron:log"), h.getLog)
 	g.DELETE("/logs", core.Perm("cron:clean"), h.cleanLogs)
 }

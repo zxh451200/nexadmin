@@ -64,11 +64,6 @@
     "batchEnable": "批量启用",
     "batchDisable": "批量停用",
     "batchStatusPartial": "已更新 {{updated}} 个，跳过 {{skipped}} 个（自己/超管或超出数据范围）",
-    "export": {
-      "success": "已导出 {{count}} 条记录",
-      "done": "导出完成",
-      "filename": "用户列表"
-    },
     "import": {
       "title": "导入用户",
       "description": "下载模板，按格式填写后上传 Excel（.xlsx）或 CSV 文件；部分失败不影响其它行",

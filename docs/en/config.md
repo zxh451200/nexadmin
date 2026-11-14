@@ -85,9 +85,9 @@ MCP session metadata and four concurrency slots per session live in the configur
 | Key | Type | Default | Purpose | When to change |
 | --- | --- | --- | --- | --- |
 | `languages` | list | `zh-CN` (default), `en-US` | Seeds only an empty `sys_language`; entries may contain `code, name, dir, default, short, htmlLang, ogLocale, prefix, dateFormat`. Once populated, `sys_language` governs switching, negotiation and the website; YAML does not overwrite it | Platform super admins maintain initialized systems through System Settings → Advanced → Languages. Language-set or prefix changes require restart; source dictionaries and Markdown require rebuilding |
-| `auth.methods` | list | `[password]` | Login methods: `password`, `phone`. `phone` additionally requires `sms.provider`, otherwise hidden | Enabling phone login |
-| `auth.providers` | map | `{}` | Third-party login keyed by `wecom` / `dingtalk` / `feishu` / `google` / `github` / `oidc`; missing `client_id` / `client_secret` / `redirect_uris` counts as unconfigured — hidden from the login page without errors. `wecom` also needs `agent_id`; `oidc` needs `issuer`, or all of `auth_url`, `token_url`, `jwks_url`. Fields in 3.1 | Enabling third-party login |
-| `auth.proxy` | string | empty | HTTP(S) proxy for outbound requests (third-party login, SMS etc.); empty = direct | When the server cannot reach Google / GitHub |
+| `auth.methods` | list | `[password]` | Login methods: `password`, `phone`. `phone` additionally requires `sms.provider`, otherwise hidden. Once Settings → Sign-in methods has been saved, that section wins (effective immediately); this key is used only before the section is saved | Enabling phone login |
+| `auth.providers` | map | `{}` | Third-party login keyed by `wecom` / `dingtalk` / `feishu` / `google` / `github` / `oidc`; missing `client_id` / `client_secret` / `redirect_uris` counts as unconfigured — hidden from the login page without errors. `wecom` also needs `agent_id`; `oidc` needs `issuer`, or all of `auth_url`, `token_url`, `jwks_url`. Fields in 3.1. **Settings → Sign-in methods is the runtime source of truth**: toggles, credentials, redirect URIs and matching rules saved there take effect on the next request, and this key becomes the fallback/seed (used when the section was never saved, and for fields left empty there) | Enabling third-party login |
+| `auth.proxy` | string | empty | HTTP(S) proxy for outbound requests (third-party login, SMS etc.); empty = direct. A non-empty proxy saved on the settings page wins | When the server cannot reach Google / GitHub |
 | `auth.jwt_secret` | string | empty | JWT signing key, at least 32 characters. Empty auto-generates on first start and saves to `data/jwt.secret` (mode 0600) | Multi-instance must match everywhere (share the file or configure explicitly) |
 | `auth.access_ttl` | duration | `30m` | Access token validity, must be positive | Per security requirements |
 | `auth.refresh_ttl` | duration | `168h` | Refresh token validity (fallback for the idle window), must be positive. "Sign out when idle" in Settings → Security takes precedence (`0` = use this value); "Maximum session" lives in the same section and applies immediately on sign-in/refresh | Per security requirements |
@@ -134,8 +134,7 @@ Tencent Cloud SMS: `sms.tencent.secret_id`, `secret_key`, `sdk_app_id`, `sign_na
 | `job.workers` | int | `2` | Async task (export center etc.) worker concurrency; `<=0` uses the default | With many export jobs |
 | `job.keep_days` | int | `7` | Task record and result file retention; files cleaned together at expiry | Adjusting retention |
 | `job.max_per_user` | int | `3` | Per-user in-flight (queued + running) task cap | Anti-abuse tuning |
-| `export.sync_limit` | int | `5000` | Matched rows up to this export synchronously; beyond, async export; `<=0` uses 5000 | Tuning sync export size |
-| `log.export_max_rows` | int | `50000` | Row cap for operation / login log server exports (`GET /oper-logs/export`, `GET /login-logs/export`); exceeding returns 400 suggesting narrower filters or the export center; `<=0` uses 50000 | Large log volumes or tightening exports |
+| `log.export_max_rows` | int | `50000` | Row cap for operation / login log export jobs (in-task cap; exceeding fails the whole task and suggests narrower filters); `<=0` uses 50000 | Large log volumes or tightening exports |
 | `setup.allow_remote` | bool | `false` | Whether non-local machines may access the setup wizard. Local requires a TCP loopback peer without forwarding headers. When allowed, the console-printed `X-Setup-Token` is required; the wizard page can input the token and attach it to all setup requests — the token lives only in component memory | Usually `false`; only for remote or proxied initialization |
 | `ai.base_url` / `ai.api_key` / `ai.model` | string | empty | OpenAI-compatible endpoint, key and model name. These are fallbacks: once the settings page "AI" section is saved it wins; if neither is configured the AI entries hide | Enabling AI capabilities |
 | `disabled_modules` | list | `[]` | Disable modules by `Name()` (routes not assembled, absent from API docs) without deleting code; menus are data — already-written menu rows remain, hide them in "Menu Management". Names in the Features & Permissions document | When a built-in module is unneeded |
@@ -168,7 +167,6 @@ Fixed-window rate limiting: the same key allows at most `limit` requests per `wi
 | `ratelimit.openapi_sign` | 30 / `1m` | IP; open-platform token / app-signature validation failures |
 | `ratelimit.client_error` | 30 / `1m` | IP; `POST /api/v1/client-errors` frontend error reports |
 | `ratelimit.dashboard_layout` | 30 / `1m` | Logged-in users; `/api/v1/dashboard/layout` reads & writes |
-| `ratelimit.log_export` | 10 / `1m` | Logged-in users; operation & login log exports (both endpoints share one counter) |
 
 ## 7. metrics
 

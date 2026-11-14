@@ -13,7 +13,7 @@ import { usePageLive, useRefreshOnResume } from '@/framework/hooks/use-page-acti
 import { Badge, type BadgeProps } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Progress } from '@/framework/ui/progress'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
+import { OptionPicker } from '@/framework/components/OptionPicker'
 import { cn } from '@/lib/utils'
 import { fmtDateTime } from '../oper-log/format'
 import {
@@ -30,7 +30,6 @@ import {
   type JobStatus,
 } from './api'
 
-const ALL = 'all'
 const POLL_MS = 2000
 const STATUS_VARIANT: Record<JobStatus, BadgeProps['variant']> = {
   queued: 'secondary',
@@ -46,9 +45,9 @@ export default function ExportCenterPage() {
   const { t, i18n } = useTranslation()
   const confirm = useConfirm()
   const live = usePageLive()
-  const [type, setType] = useState(ALL)
-  const [status, setStatus] = useState(ALL)
-  const [applied, setApplied] = useState({ type: ALL, status: ALL })
+  const [type, setType] = useState<string[]>([])
+  const [status, setStatus] = useState<string[]>([])
+  const [applied, setApplied] = useState<{ type?: string; status?: string }>({})
   const [all, setAll] = useState(false)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
@@ -61,8 +60,8 @@ export default function ExportCenterPage() {
     {
       page,
       pageSize,
-      type: applied.type === ALL ? undefined : applied.type,
-      status: applied.status === ALL ? undefined : applied.status,
+      type: applied.type,
+      status: applied.status,
       all,
     },
     (q) => (live && q.state.data?.list.some((j) => isActive(j.status)) ? POLL_MS : false),
@@ -161,7 +160,15 @@ export default function ExportCenterPage() {
     {
       key: 'createdAt',
       title: t('jobs.col.createdAt'),
-      render: (j) => <span className="num">{fmtDateTime(j.createdAt, i18n.language)}</span>,
+      render: (j) => (
+        <div className="flex flex-col items-start gap-0.5">
+          <span className="num">{fmtDateTime(j.createdAt, i18n.language)}</span>
+          {/* 结果文件保留期：终态任务在创建时间下补一行小字，不挤坏表格 */}
+          {!isActive(j.status) && j.expiresAt ? (
+            <span className="text-xs text-muted-foreground">{t('jobs.keepUntil', { date: fmtDateTime(j.expiresAt, i18n.language) })}</span>
+          ) : null}
+        </div>
+      ),
     },
     { key: 'duration', title: t('jobs.col.duration'), render: (j) => <span className="num">{duration(j)}</span> },
   ]
@@ -171,42 +178,32 @@ export default function ExportCenterPage() {
       <PageHeader title={t('jobs.menu')} description={t('jobs.description')} />
       <FilterBar
         onSearch={() => {
-          setApplied({ type, status })
+          setApplied({ type: type.length ? type.join(',') : undefined, status: status.length ? status.join(',') : undefined })
           setPage(1)
         }}
         onReset={() => {
-          setType(ALL)
-          setStatus(ALL)
-          setApplied({ type: ALL, status: ALL })
+          setType([])
+          setStatus([])
+          setApplied({})
           setPage(1)
         }}
       >
-        <Select value={type} onValueChange={setType}>
-          <SelectTrigger id="job-type" className="md:w-48" aria-label={t('jobs.filter.type')}>
-            <SelectValue placeholder={t('jobs.filter.type')} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>{t('jobs.type.all')}</SelectItem>
-            {JOB_TYPES.map((k) => (
-              <SelectItem key={k} value={k}>
-                {typeLabel(k)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={status} onValueChange={setStatus}>
-          <SelectTrigger id="job-status" className="md:w-48" aria-label={t('jobs.filter.status')}>
-            <SelectValue placeholder={t('jobs.filter.status')} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>{t('jobs.status.all')}</SelectItem>
-            {JOB_STATUSES.map((k) => (
-              <SelectItem key={k} value={k}>
-                {t(`jobs.status.${k}`)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <OptionPicker
+          title={t('jobs.filter.type')}
+          value={type}
+          onChange={setType}
+          options={JOB_TYPES.map((k) => ({ value: k, label: typeLabel(k) }))}
+          className="md:w-48"
+          placeholder={t('jobs.filter.type')}
+        />
+        <OptionPicker
+          title={t('jobs.filter.status')}
+          value={status}
+          onChange={setStatus}
+          options={JOB_STATUSES.map((k) => ({ value: k, label: t(`jobs.status.${k}`) }))}
+          className="md:w-48"
+          placeholder={t('jobs.filter.status')}
+        />
       </FilterBar>
       <DataTable<Job>
         toolbar={

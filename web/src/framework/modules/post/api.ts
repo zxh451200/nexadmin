@@ -19,6 +19,11 @@ export function usePostList() {
   return useQuery({ queryKey: ['post', 'list'], queryFn: () => api.get<SysPost[]>('/posts') })
 }
 
+/** 创建异步导出任务（keyword 筛选同列表），立即返回任务 ID；进度与下载见导出中心 */
+export function createPostExportJob(query: { keyword?: string } = {}) {
+  return api.post<{ id: string }>('/posts/export-async', null, { params: query })
+}
+
 export interface DeptNode {
   id: string
   name: string

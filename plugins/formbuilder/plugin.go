@@ -81,6 +81,5 @@ func routes(r *gin.RouterGroup, h *handler) {
 	g.DELETE("/forms/:id/submissions", core.Perm("formbuilder:submission"), h.deleteSubmissions)
 
 	// 导出
-	g.GET("/forms/:id/export", core.Perm("formbuilder:export"), h.exportSync)
 	g.POST("/forms/:id/export-job", core.Perm("formbuilder:export"), h.exportJobSubmit)
 }

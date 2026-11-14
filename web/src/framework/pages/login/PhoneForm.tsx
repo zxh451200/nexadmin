@@ -7,7 +7,7 @@ import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
 import type { LoginChallenge } from '@/framework/auth/types'
 import { useAuth } from '@/framework/auth/useAuth'
-import { api } from '@/framework/request/http'
+import { api, ApiError } from '@/framework/request/http'
 import { Button } from '@/framework/ui/button'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/framework/ui/form'
 import { Input } from '@/framework/ui/input'
@@ -27,7 +27,9 @@ export function PhoneForm({
 }) {
   const { t } = useTranslation()
   const login = useAuth((s) => s.login)
-  const { captcha, refresh, mode, setMode } = useCaptcha(captchaEnabled)
+  // 与账号登录同款自适应：首屏不出现；发码接口按 IP 发码次数返回 CAPTCHA_REQUIRED 时才出现
+  const [needCaptcha, setNeedCaptcha] = useState(false)
+  const { captcha, refresh, mode, setMode } = useCaptcha(captchaEnabled && needCaptcha)
   const [submitting, setSubmitting] = useState(false)
   const [sending, setSending] = useState(false)
   const [left, setLeft] = useState(0)
@@ -36,10 +38,10 @@ export function PhoneForm({
     () =>
       z.object({
         phone: z.string().regex(/^1\d{10}$/, t('login.phoneInvalid')),
-        captcha: captchaEnabled ? z.string().trim().min(1, t('login.captchaRequired')) : z.string().trim(),
+        captcha: captchaEnabled && needCaptcha ? z.string().trim().min(1, t('login.captchaRequired')) : z.string().trim(),
         code: z.string().regex(/^\d{6}$/, t('login.smsCodeInvalid')),
       }),
-    [t, captchaEnabled],
+    [t, captchaEnabled, needCaptcha],
   )
   type Values = z.infer<typeof schema>
   const form = useForm<Values>({ resolver: zodResolver(schema), defaultValues: { phone: '', captcha: '', code: '' } })
@@ -51,18 +53,20 @@ export function PhoneForm({
   }, [left])
 
   const sendCode = async () => {
-    if (!(await form.trigger(captchaEnabled ? ['phone', 'captcha'] : ['phone']))) return
+    const withCaptcha = captchaEnabled && needCaptcha
+    if (!(await form.trigger(withCaptcha ? ['phone', 'captcha'] : ['phone']))) return
     const { phone, captcha: text } = form.getValues()
     setSending(true)
     try {
-      await api.post('/auth/sms-code', { phone, ...(captchaEnabled ? { captcha: text, captchaKey: captcha?.key } : {}) })
+      await api.post('/auth/sms-code', { phone, ...(withCaptcha ? { captcha: text, captchaKey: captcha?.key } : {}) })
       toast.success(t('login.smsSent'))
       setLeft(COOLDOWN)
-    } catch {
-      // 错误已统一 toast
+    } catch (e) {
+      // 服务端按 IP 发码次数判定需要人机验证：当场打开验证码区并拉取挑战（与账号登录同款）
+      if (e instanceof ApiError && e.reason === 'CAPTCHA_REQUIRED') setNeedCaptcha(true)
     } finally {
       form.setValue('captcha', '')
-      if (captchaEnabled) void refresh()
+      if (captchaEnabled && needCaptcha) void refresh()
       setSending(false)
     }
   }
@@ -96,7 +100,6 @@ export function PhoneForm({
             </FormItem>
           )}
         />
-        {captchaEnabled ? <CaptchaField form={form} captcha={captcha} onRefresh={refresh} mode={mode} onModeChange={setMode} /> : null}
         <FormField
           control={form.control}
           name="code"
@@ -107,7 +110,7 @@ export function PhoneForm({
                 <FormControl>
                   <Input {...field} inputMode="numeric" maxLength={6} autoComplete="one-time-code" placeholder={t('login.smsCodePlaceholder')} />
                 </FormControl>
-                <Button type="button" variant="outline" className="w-28 shrink-0" disabled={left > 0 || sending} onClick={sendCode}>
+                <Button type="button" variant="outline" className="h-10 w-28 shrink-0 md:h-10" disabled={left > 0 || sending} onClick={sendCode}>
                   {sending ? (
                     <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
                   ) : left > 0 ? (
@@ -121,6 +124,7 @@ export function PhoneForm({
             </FormItem>
           )}
         />
+        {captchaEnabled && needCaptcha ? <CaptchaField form={form} captcha={captcha} onRefresh={refresh} mode={mode} onModeChange={setMode} /> : null}
         <Button type="submit" className="w-full" disabled={submitting}>
           {submitting && <Loader2 className="me-2 size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />}
           {t('login.submit')}

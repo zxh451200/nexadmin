@@ -2,17 +2,11 @@ package user
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"path/filepath"
 	"strings"
-	"time"
-
-	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 
 	"nexadmin/core"
-	"nexadmin/core/response"
 	"nexadmin/pkg/excel"
 )
 
@@ -100,7 +94,7 @@ func genderText(g string) string {
 	return "未知"
 }
 
-// writeUserRow 写一行导出数据（同步与异步导出共用，列顺序对应 exportHeader）。
+// writeUserRow 写一行导出数据（异步导出任务用，列顺序对应 exportHeader）。
 func writeUserRow(s *excel.Sheet, u *userDTO) error {
 	status := "停用"
 	if u.Status == statusOn {
@@ -108,38 +102,4 @@ func writeUserRow(s *excel.Sheet, u *userDTO) error {
 	}
 	return s.WriteRow(u.Username, u.Nickname, u.Phone, u.Email, genderText(u.Gender), u.DeptName,
 		strings.Join(u.RoleNames, ";"), u.Remark, status, u.CreatedAt)
-}
-
-// writeUsersXLSX 把用户列表流式写成 .xlsx。列是显式白名单：只有 exportHeader 里的字段，
-// 密码哈希等敏感字段既不在 userDTO 里，也不会被写出。
-func writeUsersXLSX(w io.Writer, list []*userDTO) error {
-	x := excel.NewWriter(w)
-	s, err := x.NewSheet("用户", excel.SheetOptions{Header: exportHeader})
-	if err != nil {
-		return err
-	}
-	for _, u := range list {
-		if err := writeUserRow(s, u); err != nil {
-			return err
-		}
-	}
-	return x.Close()
-}
-
-// exportXLSX 沿用 service.export（同样的筛选条件、数据范围和行数上限），仅改变输出格式。
-func (h *handler) exportXLSX(c *gin.Context) {
-	list, err := h.svc.export(c.Request.Context(), queryOf(c), me(c))
-	if err != nil {
-		response.Fail(c, err)
-		return
-	}
-	c.Header("Content-Type", xlsxContentType)
-	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="users-%s.xlsx"`, time.Now().Format("20060102")))
-	c.Header("Cache-Control", "no-store")
-	c.Header("X-Content-Type-Options", "nosniff")
-	c.Status(200)
-	if err := writeUsersXLSX(c.Writer, list); err != nil && h.log != nil {
-		// 响应头已发出，无法再改状态码；记录日志，客户端会拿到不完整的文件
-		h.log.Warn("user export xlsx failed", zap.Error(err))
-	}
 }

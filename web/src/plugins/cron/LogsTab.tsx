@@ -3,18 +3,19 @@ import { Download, Eraser, RotateCcw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
+import { useAsyncJob } from '@/framework/hooks/use-async-job'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { DetailAction } from '@/framework/components/DetailAction'
 import { FilterBar } from '@/framework/components/FilterBar'
+import { OptionPicker } from '@/framework/components/OptionPicker'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import { Switch } from '@/framework/ui/switch'
-import { downloadLogsCsv, useCleanLogs, useJobs, useLogDetail, useLogs, useRunJob, type CronLog, type LogQuery } from './api'
+import { createLogExportJob, useCleanLogs, useJobs, useLogDetail, useLogs, useRunJob, type CronLog, type LogQuery } from './api'
 import { formatTime, statusVariant } from './format'
 
-const ALL = '__all'
 const STATUSES = ['running', 'success', 'failed'] as const
 
 function Snippet({ text, tone }: { text: string; tone?: 'error' }) {
@@ -130,15 +131,16 @@ function CleanDialog({ open, onOpenChange, jobId }: { open: boolean; onOpenChang
 }
 
 interface Props {
-  /** 从任务列表跳转过来时预置的任务筛选 */
-  jobId?: string
-  onJobChange: (jobId: string | undefined) => void
+  /** 从任务列表跳转过来时预置的任务筛选（多选数组） */
+  jobIds?: string[]
+  onJobsChange: (jobIds: string[] | undefined) => void
 }
 
-export function LogsTab({ jobId, onJobChange }: Props) {
+export function LogsTab({ jobIds, onJobsChange }: Props) {
   const { t, i18n } = useTranslation()
-  const [status, setStatus] = useState<string | undefined>()
-  const [applied, setApplied] = useState<string | undefined>()
+  const { start: startExportJob } = useAsyncJob()
+  const [status, setStatus] = useState<string[] | undefined>()
+  const [applied, setApplied] = useState<string[] | undefined>()
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [detail, setDetail] = useState<string | null>(null)
@@ -146,7 +148,7 @@ export function LogsTab({ jobId, onJobChange }: Props) {
   // 自动刷新：运行中恒 3s 紧盯，平时 10s 慢刷；可关
   const [autoRefresh, setAutoRefresh] = useState(true)
 
-  const query: LogQuery = { jobId, status: applied, page, pageSize }
+  const query: LogQuery = { jobId: jobIds?.length ? jobIds.join(',') : undefined, status: applied?.length ? applied.join(',') : undefined, page, pageSize }
   const { data, isLoading } = useLogs(query, autoRefresh)
   const { data: jobs } = useJobs({ page: 1, pageSize: 200 })
   const runJob = useRunJob()
@@ -163,10 +165,13 @@ export function LogsTab({ jobId, onJobChange }: Props) {
 
   const onExport = async () => {
     try {
-      await downloadLogsCsv({ jobId, status: applied })
-      toast.success(t('common.operateSuccess'))
+      // 统一走异步任务：提交后由 useAsyncJob 提示「已提交到导出中心」，
+      // 进度与下载都在导出中心看；创建失败的具体原因由请求层弹过，不再叠加。
+      await startExportJob(() =>
+        createLogExportJob({ jobId: jobIds?.length ? jobIds.join(',') : undefined, status: applied?.length ? applied.join(',') : undefined }),
+      )
     } catch {
-      // 具体原因（超出导出上限、筛选太宽等）请求层已经按服务端文案弹过了，这里不再叠一条更空的
+      // 具体原因（筛选太宽等）请求层已经按服务端文案弹过了，这里不再叠一条更空的
     }
   }
 
@@ -191,42 +196,26 @@ export function LogsTab({ jobId, onJobChange }: Props) {
         onReset={() => {
           setStatus(undefined)
           setApplied(undefined)
-          onJobChange(undefined)
+          onJobsChange(undefined)
           setPage(1)
         }}
       >
-        <Select
-          value={jobId ?? ALL}
-          onValueChange={(v) => {
-            onJobChange(v === ALL ? undefined : v)
-            setPage(1)
-          }}
-        >
-          <SelectTrigger className="md:w-56" aria-label={t('plugin_cron.fields.job')}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_cron.filter.allJobs')}</SelectItem>
-            {(jobs?.list ?? []).map((j) => (
-              <SelectItem key={j.id} value={j.id}>
-                {j.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={status ?? ALL} onValueChange={(v) => setStatus(v === ALL ? undefined : v)}>
-          <SelectTrigger className="md:w-40" aria-label={t('plugin_cron.fields.status')}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_cron.filter.allStatuses')}</SelectItem>
-            {STATUSES.map((s) => (
-              <SelectItem key={s} value={s}>
-                {t(`plugin_cron.status.${s}`)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <OptionPicker
+          title={t('plugin_cron.fields.job')}
+          value={jobIds ?? []}
+          onChange={onJobsChange}
+          options={(jobs?.list ?? []).map((j) => ({ value: j.id, label: j.name }))}
+          className="md:w-56"
+          placeholder={t('plugin_cron.fields.job')}
+        />
+        <OptionPicker
+          title={t('plugin_cron.fields.status')}
+          value={status ?? []}
+          onChange={(v) => setStatus(v.length ? v : undefined)}
+          options={STATUSES.map((s) => ({ value: s, label: t(`plugin_cron.status.${s}`) }))}
+          className="md:w-44"
+          placeholder={t('plugin_cron.fields.status')}
+        />
       </FilterBar>
       <DataTable
         columns={columns}
@@ -286,7 +275,7 @@ export function LogsTab({ jobId, onJobChange }: Props) {
       />
 
       <LogDetailDialog id={detail} onClose={() => setDetail(null)} />
-      <CleanDialog open={cleanOpen} onOpenChange={setCleanOpen} jobId={jobId} />
+      <CleanDialog open={cleanOpen} onOpenChange={setCleanOpen} jobId={jobIds?.length ? jobIds.join(',') : undefined} />
     </div>
   )
 }

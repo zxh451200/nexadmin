@@ -46,6 +46,11 @@ export function useRoleList() {
   })
 }
 
+/** 创建异步导出任务（keyword / status 筛选同列表），立即返回任务 ID；进度与下载见导出中心 */
+export function createRoleExportJob(query: { keyword?: string; status?: string } = {}) {
+  return api.post<{ id: string }>('/roles/export-async', null, { params: query })
+}
+
 function useInvalidate() {
   const qc = useQueryClient()
   return () =>

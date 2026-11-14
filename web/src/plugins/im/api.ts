@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { MENU_BADGES_KEY } from '@/framework/layout/menuBadge'
-import { api, http } from '@/framework/request/http'
+import { api } from '@/framework/request/http'
 import type { Page, PageQuery } from '@/framework/request/types'
 
 export type ConvStatus = 'open' | 'closed'
-export type SenderType = 'visitor' | 'agent' | 'system'
+export type SenderType = 'visitor' | 'agent' | 'bot' | 'system'
 export type MessageKind = 'text' | 'system'
 
 export interface ImConversation {
@@ -97,6 +97,10 @@ export interface ImSettings {
   bannedWords: string[]
   /** 新会话自动分给在线且最闲的坐席；没人在线时排队，坐席上线后按先后领走 */
   autoAssign: boolean
+  /** AI 自动回答（kb 知识库插件）：只在无人接管时回答，检索不到就转人工；坐席认领或访客转人工即停答 */
+  aiEnabled: boolean
+  /** AI 检索不到依据时的兜底话术；空 = 用内置默认文案 */
+  aiFallbackText: string
 }
 
 /** 会话统计：窗口内的总量、首响、满意度、按天趋势与坐席工作量 */
@@ -457,22 +461,12 @@ export function useDeleteConvsBatch() {
   })
 }
 
-/** 按当前筛选条件导出会话记录（xlsx，会话清单 + 完整对话两个 sheet，最多 5000 个会话）。 */
-export async function exportConversations(query: ConvQuery): Promise<void> {
-  const res = await http.get<unknown>(`${BASE}/conversations-export`, { params: query, responseType: 'blob' })
-  const blob =
-    res.data instanceof Blob
-      ? res.data
-      : new Blob([String(res.data)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  const stamp = new Date().toISOString().slice(0, 19).replace(/-|:|T/g, '')
-  a.href = url
-  a.download = `im-conversations-${stamp}.xlsx`
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  URL.revokeObjectURL(url)
+/**
+ * 创建会话导出任务：按当前筛选提交到导出中心，立即返回任务 ID；
+ * 进度与下载见导出中心，创建失败由 http 拦截器统一弹出原因。
+ */
+export function createConversationExportJob(query: ConvQuery) {
+  return api.post<{ id: string }>(`${BASE}/conversations-export-async`, null, { params: query })
 }
 
 /** 输入中提示：不等待结果、失败静默。 */

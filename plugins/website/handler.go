@@ -137,20 +137,6 @@ func (h *handler) unreadMessageCount(c *gin.Context) {
 	respond(c, map[string]int64{"count": n}, err)
 }
 
-// GET /plugins/website/messages/export?keyword=&status= —— 导出当前筛选下的全部留言。
-// 返回 JSON 列表（不带分页），CSV 由前端生成，与 /users/export 的默认分支同款形状。
-func (h *handler) exportMessages(c *gin.Context) {
-	statuses := response.ParseList(c.Query("status"), response.MaxFilterValues)
-	for _, st := range statuses {
-		if !ValidMessageStatus(st) {
-			response.Fail(c, response.BadRequest("website.message_status_invalid"))
-			return
-		}
-	}
-	rows, err := h.svc.ExportMessages(c.Request.Context(), MessageQuery{Keyword: c.Query("keyword"), Status: statuses})
-	respond(c, rows, err)
-}
-
 // PUT /plugins/website/messages/status —— 批量改状态（单条就是长度为 1 的 ids）。
 // 返回实际改动条数：并发下有人先删了几条，界面据实刷新而不是报假成功。
 func (h *handler) setMessageStatus(c *gin.Context) {
@@ -502,13 +488,6 @@ func (h *handler) deletePosts(c *gin.Context) {
 	respond(c, map[string]int64{"deleted": n}, err)
 }
 
-// GET /plugins/website/posts/export?keyword=&status=&categoryId= —— 导出当前筛选下的全部新闻。
-// 返回 JSON 列表（不带分页），CSV 由前端生成，与 /messages/export 同款形状。
-func (h *handler) exportPosts(c *gin.Context) {
-	rows, err := h.svc.ExportPosts(c.Request.Context(), contentQuery(c))
-	respond(c, rows, err)
-}
-
 // GET /plugins/website/posts/:id/preview —— 签发草稿预览链接（previewTTL 内有效）。
 // 返回 /news/:slug?preview=<token>：前端新开标签页即可看到未发布新闻的真实版式。
 func (h *handler) postPreview(c *gin.Context) {
@@ -776,22 +755,6 @@ func (h *handler) setProductStatus(c *gin.Context) {
 	}
 	n, err := h.svc.SetProductsStatus(c.Request.Context(), f.IDs, strings.TrimSpace(f.Status))
 	respond(c, map[string]int64{"updated": n}, err)
-}
-
-// GET /plugins/website/products/export?ids=&keyword=&status=&categoryId= —— 导出当前筛选
-//（或 ids= 勾选行）下的全部商品。返回 JSON 列表（不带分页），CSV 由前端生成，
-// 与 /posts/export 同款形状。
-func (h *handler) exportProducts(c *gin.Context) {
-	var ids []idgen.ID
-	if raw := strings.TrimSpace(c.Query("ids")); raw != "" {
-		var err error
-		if ids, err = parseIDs(raw); err != nil {
-			response.Fail(c, err)
-			return
-		}
-	}
-	rows, err := h.svc.ExportProducts(c.Request.Context(), contentQuery(c), ids)
-	respond(c, rows, err)
 }
 
 // GET /plugins/website/products/:id/preview —— 签发草稿预览链接（previewTTL 内有效）。

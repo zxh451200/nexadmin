@@ -80,7 +80,9 @@ export interface Delivery {
 export interface DeliveryQuery {
   page: number
   pageSize: number
+  /** 逗号分隔多值 webhook id */
   webhookId?: string
+  /** 逗号分隔多值：success,failed,pending */
   status?: string
   /** 事件名精确筛选（如 user.created） */
   event?: string

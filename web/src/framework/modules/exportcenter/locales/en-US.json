@@ -10,7 +10,23 @@
       "createdAt": "Created at",
       "duration": "Duration"
     },
-    "type": { "all": "All types", "user.export": "User export", "website.product-export": "Product export" },
+    "type": {
+      "all": "All types",
+      "user.export": "User export",
+      "website.product-export": "Product export",
+      "website.post-export": "Post export",
+      "website.message-export": "Message export",
+      "formbuilder.export": "Form export",
+      "operlog.export": "Operation log export",
+      "loginlog.export": "Login log export",
+      "cron.log-export": "Execution log export",
+      "im.conversation-export": "Conversation export",
+      "ticket.export": "Ticket export",
+      "pay.order-export": "Order export",
+      "post.export": "Post export",
+      "role.export": "Role export"
+    },
+    "keepUntil": "Kept until {{date}}",
     "status": {
       "all": "All statuses",
       "queued": "Queued",

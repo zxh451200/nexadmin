@@ -29,6 +29,8 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	svc.aiAllowPrivate = d.Config.AI.AllowPrivateBaseURL
 	svc.log = d.Log
 	svc.notifier = d.Notify
+	svc.authCfg = d.Config.Auth
+	svc.smsProvider = d.Config.SMS.Provider
 	d.Notify.SetSettings(svc.notifySettings) // 邮件 / 机器人渠道的配置来自设置页「通知渠道」分区
 	h := &Handler{svc: svc}
 	// 动态 manifest（core/static.go）用的公开站点信息：站点名与 Logo 来自设置页「站点」分区。
@@ -66,6 +68,18 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	auth.SetLoginCaptchaLengthSource(svc.captchaLengthSourceFn(auth.CaptchaLenDefault))
 	if d.OnClose != nil {
 		d.OnClose(func() { auth.SetLoginCaptchaLengthSource(nil) })
+	}
+	// 设置页「登录方式」分区的开关 / 凭据 / 回调地址 / 匹配规则 / 出站代理：每次请求现读库，
+	// 保存后下一次请求即生效。没保存过的项（或找不到库）回退 config.yaml——见 auth_runtime.go。
+	auth.SetProviderOverrideSource(svc.providerOverrides)
+	auth.SetLoginMethodsSource(svc.loginMethods)
+	auth.SetOAuthProxySource(svc.oauthProxy)
+	if d.OnClose != nil {
+		d.OnClose(func() {
+			auth.SetProviderOverrideSource(nil)
+			auth.SetLoginMethodsSource(nil)
+			auth.SetOAuthProxySource(nil)
+		})
 	}
 
 	r.GET("/config/upload", h.GetUpload) // 上传组件读取限制，登录即可

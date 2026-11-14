@@ -1,20 +1,18 @@
 import { useMemo, useState } from 'react'
-import { Pencil, Plus, Trash2 } from 'lucide-react'
+import { Download, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { usePermission } from '@/framework/auth/usePermission'
 import { DataTable } from '@/framework/components/DataTable'
 import { DictTag } from '@/framework/components/DictTag'
-import { ExportCsvButton, type CsvColumn } from '@/framework/components/export/ExportCsvButton'
-import { useDictItems } from '@/framework/components/pickers/useDictItems'
+import { useAsyncJob } from '@/framework/hooks/use-async-job'
 import { SimpleFilterBar } from '@/framework/components/SimpleFilterBar'
 import { matchText, useClientFilter } from '@/framework/components/table/use-client-filter'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
-import type { DictItem } from '@/framework/request/types'
 import type { Column } from '@/framework/components/table/types'
 import { Button } from '@/framework/ui/button'
-import { useDeletePost, useDeletePosts, useDeptNodes, usePostList, useSortPosts, type DeptNode, type SysPost } from './api'
+import { createPostExportJob, useDeletePost, useDeletePosts, useDeptNodes, usePostList, useSortPosts, type DeptNode, type SysPost } from './api'
 import { PostFormDialog } from './PostFormDialog'
 
 function flatten(nodes: DeptNode[], map = new Map<string, string>()) {
@@ -36,15 +34,11 @@ export function PostSection() {
   const del = useDeletePost()
   const delBatch = useDeletePosts()
   const sort = useSortPosts()
+  const { start: startExportJob } = useAsyncJob()
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<SysPost | null>(null)
   const [selected, setSelected] = useState<string[]>([])
-
-  // 导出用的状态文本与表格里 DictTag 同一份字典（同 query key，不额外发请求）。
-  const { data: statusItems } = useDictItems('sys_status')
-  const dictText = (items: DictItem[] | undefined, v: string) =>
-    items?.find((d) => String(d.value) === String(v))?.label ?? v
 
   const deptNames = useMemo(() => flatten(depts), [depts])
 
@@ -87,17 +81,29 @@ export function PostSection() {
     { key: 'code', title: t('post.col.code'), mobile: 'sub' },
     { key: 'deptId', title: t('post.col.dept'), render: (r) => (r.deptId ? deptNames.get(r.deptId) ?? '-' : '-') },
     { key: 'status', title: t('post.col.status'), render: (r) => <DictTag dict="sys_status" value={r.status} /> },
-    { key: 'remark', title: t('post.col.remark'), mobile: 'hidden' },
+    {
+      key: 'remark',
+      title: t('post.col.remark'),
+      mobile: 'hidden',
+      render: (r) =>
+        r.remark ? (
+          <span className="block max-w-xs truncate" title={r.remark}>
+            {r.remark}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">-</span>
+        ),
+    },
   ]
 
-  // 导出列与可见列一致：部门取名称（没有 dept:list 时与页面同样落回「-」），状态取字典文本而不是原始码。
-  const exportColumns: CsvColumn<SysPost>[] = [
-    { header: t('post.col.name'), value: (r) => r.name },
-    { header: t('post.col.code'), value: (r) => r.code },
-    { header: t('post.col.dept'), value: (r) => (r.deptId ? deptNames.get(r.deptId) ?? '-' : '-') },
-    { header: t('post.col.status'), value: (r) => dictText(statusItems, r.status) },
-    { header: t('post.col.remark'), value: (r) => r.remark ?? '' },
-  ]
+  // 统一异步导出：提交 core/job 任务进导出中心，提交/完成提示由 useAsyncJob 统一给出
+  const onExport = async () => {
+    try {
+      await startExportJob(() => createPostExportJob({ keyword: filter.applied.keyword || undefined }))
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+    }
+  }
 
   return (
     <div className="flex flex-col gap-3">
@@ -112,12 +118,12 @@ export function PostSection() {
                 {t('post.action.add')}
               </Button>
             </Can>
-            <ExportCsvButton<SysPost>
-              filename="posts"
-              perm="post:list"
-              columns={exportColumns}
-              getRows={async () => shown}
-            />
+            <Can perm="post:list">
+              <Button type="button" variant="outline" onClick={() => void onExport()}>
+                <Download className="me-2 size-4" aria-hidden="true" />
+                {t('common.export')}
+              </Button>
+            </Can>
           </>
         }
         columns={columns}

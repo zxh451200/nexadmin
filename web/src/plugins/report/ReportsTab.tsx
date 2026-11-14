@@ -72,7 +72,7 @@ export function ReportsTab() {
   const columns: Column<Report>[] = [
     { key: 'name', title: t('common.name'), mobile: 'title', render: (r) => <span className="font-medium text-foreground">{builtinText(t, r.name)}</span> },
     { key: 'group', title: t('plugin_report.report.group'), mobile: 'sub', render: (r) => <span>{builtinText(t, r.groupName) || '-'}</span> },
-    { key: 'remark', title: t('common.remark'), render: (r) => <span className="text-muted-foreground">{r.remark || '-'}</span> },
+    { key: 'remark', title: t('common.remark'), render: (r) => (r.remark ? <span className="block max-w-64 truncate text-muted-foreground" title={r.remark}>{r.remark}</span> : <span className="text-muted-foreground">-</span>) },
   ]
 
   return (

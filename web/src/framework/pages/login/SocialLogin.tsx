@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
-import { startOAuthLogin } from '@/framework/auth/oauth'
+import { isOAuthRedirectRejected, oauthRedirectUri, startOAuthLogin } from '@/framework/auth/oauth'
 import { ProviderIcon } from '@/framework/components/BrandIcon'
 import { Button } from '@/framework/ui/button'
 
@@ -23,7 +23,14 @@ export function SocialLogin({ providers, redirect, intent = 'login' }: Props) {
     try {
       await startOAuthLogin(p.key, redirect, intent)
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : t(register ? 'login.register.oauthStartFailed' : 'login.oauthStartFailed', { name: p.name }))
+      // 请求层已经静音，这里只弹一条：白名单拒绝时给出可照做的地址，其余沿用服务端文案
+      toast.error(
+        isOAuthRedirectRejected(e)
+          ? t('login.oauthRedirectNotAllowed', { url: oauthRedirectUri(p.key), name: p.name })
+          : e instanceof Error
+            ? e.message
+            : t(register ? 'login.register.oauthStartFailed' : 'login.oauthStartFailed', { name: p.name }),
+      )
     }
   }
 

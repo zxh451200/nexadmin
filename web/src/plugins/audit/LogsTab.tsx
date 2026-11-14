@@ -8,6 +8,7 @@ import { DetailAction } from '@/framework/components/DetailAction'
 import { DateRangePicker, type DateRangeValue } from '@/framework/components/DateRangePicker'
 import { downloadCsv } from '@/framework/components/export/csv'
 import { FilterBar } from '@/framework/components/FilterBar'
+import { OptionPicker } from '@/framework/components/OptionPicker'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
@@ -17,13 +18,12 @@ import { fetchAuditLogsForExport, useCleanLogs, useLogDetail, useLogs, useLogTab
 import { DiffView } from './DiffView'
 import { actionVariant, formatTime } from './format'
 
-const ALL = '__all'
 const ACTIONS: AuditAction[] = ['create', 'update', 'delete']
 
 interface Draft {
-  table?: string
+  table?: string[]
   operator?: string
-  action?: string
+  action?: string[]
   range: DateRangeValue
 }
 
@@ -137,9 +137,9 @@ export function LogsTab() {
   const [cleanOpen, setCleanOpen] = useState(false)
 
   const query: LogQuery = {
-    table: applied.table,
+    table: applied.table?.length ? applied.table.join(',') : undefined,
     operator: applied.operator?.trim() || undefined,
-    action: applied.action,
+    action: applied.action?.length ? applied.action.join(',') : undefined,
     from: applied.range.from,
     to: applied.range.to,
     page,
@@ -152,9 +152,9 @@ export function LogsTab() {
   const onExport = async () => {
     try {
       const rows = await fetchAuditLogsForExport({
-        table: applied.table,
+        table: applied.table?.length ? applied.table.join(',') : undefined,
         operator: applied.operator?.trim() || undefined,
-        action: applied.action,
+        action: applied.action?.length ? applied.action.join(',') : undefined,
         from: applied.range.from,
         to: applied.range.to,
       })
@@ -205,19 +205,14 @@ export function LogsTab() {
           setPage(1)
         }}
       >
-        <Select value={draft.table ?? ALL} onValueChange={(v) => setDraft({ ...draft, table: v === ALL ? undefined : v })}>
-          <SelectTrigger className="md:w-52" aria-label={t('plugin_audit.fields.table')}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_audit.filter.allTables')}</SelectItem>
-            {(tables ?? []).map((n) => (
-              <SelectItem key={n} value={n}>
-                {n}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <OptionPicker
+          title={t('plugin_audit.fields.table')}
+          value={draft.table ?? []}
+          onChange={(v) => setDraft({ ...draft, table: v.length ? v : undefined })}
+          options={(tables ?? []).map((n) => ({ value: n, label: n }))}
+          className="md:w-56"
+          placeholder={t('plugin_audit.fields.table')}
+        />
         <Input
           className="md:w-44"
           value={draft.operator ?? ''}
@@ -226,19 +221,14 @@ export function LogsTab() {
           placeholder={t('plugin_audit.operatorPlaceholder')}
           onChange={(e) => setDraft({ ...draft, operator: e.target.value })}
         />
-        <Select value={draft.action ?? ALL} onValueChange={(v) => setDraft({ ...draft, action: v === ALL ? undefined : v })}>
-          <SelectTrigger className="md:w-40" aria-label={t('plugin_audit.fields.action')}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_audit.filter.allActions')}</SelectItem>
-            {ACTIONS.map((a) => (
-              <SelectItem key={a} value={a}>
-                {t(`plugin_audit.action.${a}`)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <OptionPicker
+          title={t('plugin_audit.fields.action')}
+          value={draft.action ?? []}
+          onChange={(v) => setDraft({ ...draft, action: v.length ? v : undefined })}
+          options={ACTIONS.map((a) => ({ value: a, label: t(`plugin_audit.action.${a}`) }))}
+          className="md:w-44"
+          placeholder={t('plugin_audit.fields.action')}
+        />
         <DateRangePicker value={draft.range} onChange={(range) => setDraft({ ...draft, range })} placeholder={t('plugin_audit.fields.timeRange')} className="md:w-64" />
       </FilterBar>
       <DataTable

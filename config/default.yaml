@@ -36,11 +36,13 @@ languages:                # 平台语言清单的种子：首次启动写入 sys
   - { code: zh-CN, name: 简体中文, dir: ltr, short: 中, htmlLang: zh-CN, ogLocale: zh_CN, prefix: "", dateFormat: "2006-01-02", default: true }
   - { code: en-US, name: English, dir: ltr, short: EN, htmlLang: en, ogLocale: en_US, prefix: en, dateFormat: "Jan 2, 2006" }
 auth:
-  methods: [password]       # password | phone；phone 还需要配置下面的 sms.provider，否则自动隐藏
+  methods: [password]       # password | phone；phone 还需要配置下面的 sms.provider，否则自动隐藏。后台「设置 → 登录方式」保存过以后以设置页为准（保存即生效），本项只是回退与种子
   single_session: false     # true = 同一用户只保留最后一次登录，旧 access/refresh token 会立即失效
   allow_register: false     # 自助注册的兜底值：运行时真源是后台「参数设置」的 user.register_enabled（默认关闭，改完即时生效），仅该参数行缺失时读本项。账号密码注册强制图形验证码 + IP 限流；开启后注册页同时出现第三方「快捷注册」（同一开关、同一 IP 额度口径）；两条通道都进当前租户并受套餐用户数上限约束
   register_roles: []        # 注册用户默认挂的角色码（当前租户内解析，如 [guest]）；账号密码注册与快捷注册共用；空 = 不挂角色，注册后待管理员分配权限
   # 第三方快捷登录（OAuth2 授权码流程）。没配置的不显示；缺 client_id / client_secret / redirect_uris 视为未配置。
+  # 后台「设置 → 登录方式」同样能配（开关、凭据、回调地址、匹配规则、代理），那份是运行时数据源、保存即生效；
+  # 这里退为回退与种子：设置页没保存过的 provider 按本文件走，设置页里留空的字段也按本文件（含 ${ENV}）。
   # 在 config/config.yaml 里按需取消注释。密钥务必用 ${ENV} 引用环境变量，不要明文写进仓库。
   # 通用字段（每个 provider 都支持）：
   #   client_id / client_secret   应用凭据，如 client_secret: ${GOOGLE_CLIENT_SECRET}
@@ -136,10 +138,8 @@ job:                        # 异步任务运行器（导出中心等）
   workers: 2                # 并发 worker 数
   keep_days: 7              # 任务记录与结果文件保留天数，到期连文件一并清理
   max_per_user: 3           # 每个用户同时进行中（排队 + 执行）的任务上限，防刷
-export:
-  sync_limit: 5000          # 匹配行数不超过它时同步直出；超过则前端改用异步导出
 log:
-  export_max_rows: 50000    # 操作日志 / 登录日志服务端导出（GET /oper-logs/export、/login-logs/export）的行数上限，超过则拒绝，需缩小筛选范围
+  export_max_rows: 50000    # 操作日志 / 登录日志导出任务的行数上限（任务内上限，超过整个任务失败，需缩小筛选范围）
 ticket:
   attachment_max_count: 0   # 单张工单的附件份数上限；0 或留空 = 出厂默认 20 份
   attachment_max_mb: 0      # 单张工单的附件总字节上限（MB）；0 或留空 = 出厂默认 100MB
@@ -173,8 +173,6 @@ ratelimit:                  # 固定窗口限流；计数放 cache（redis 多�
   openapi_sign: { limit: 30, window: 1m }  # 按 IP；令牌/签名校验失败次数，超限 429
   client_error: { limit: 30, window: 1m }  # 按 IP；前端错误上报 POST /api/v1/client-errors，超限 429
   dashboard_layout: { limit: 30, window: 1m }  # 按用户；工作台布局 /api/v1/dashboard/layout，超限 429
-  log_export:   { limit: 10, window: 1m }  # 按用户；操作日志 / 登录日志导出，超限 429
-  cron_export:  { limit: 10, window: 1m }  # 按用户；定时任务执行日志导出，超限 429
   tenant_api:   { limit: 0,  window: 1m }  # 按租户；后台全部接口的总量上限（0 = 不限流），用于隔离单个租户的流量
   mcp:          { limit: 120, window: 1m } # 按用户；POST /api/v1/mcp，超限 429
   mcp_confirm:  { limit: 5,   window: 10m } # 按用户+确认 ID；MCP 写确认密码失败次数，超限作废该确认

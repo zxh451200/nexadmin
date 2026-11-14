@@ -7,6 +7,7 @@ import { Can } from '@/framework/auth/Can'
 import { AiFilterBox } from '@/framework/components/AiFilterBox'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { pageAfterDelete } from '@/framework/hooks/page-fallback'
+import { useAsyncJob } from '@/framework/hooks/use-async-job'
 import { DataTable } from '@/framework/components/DataTable'
 import { DetailAction } from '@/framework/components/DetailAction'
 import { DateRangePicker, type DateRangeValue } from '@/framework/components/DateRangePicker'
@@ -22,8 +23,7 @@ import { Label } from '@/framework/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/framework/ui/tabs'
 import {
-  exportOperLogs,
-  isExportTooMany,
+  createOperLogExportJob,
   useCleanOperLogs,
   useDeleteOperLogs,
   useOperLogList,
@@ -31,9 +31,7 @@ import {
   type OperLogQuery,
 } from './api'
 import { OperLogDetailDialog } from './OperLogDetailDialog'
-import { blobExt } from '../user/api'
-import { saveBlob } from '@/framework/components/export/csv'
-import { fmtDateTime, stamp } from './format'
+import { fmtDateTime } from './format'
 import { OperStatsPanel } from './StatsPanel'
 
 interface Filters {
@@ -73,7 +71,7 @@ export default function OperLogPage() {
   const view = params.get('view') === 'stats' ? 'stats' : 'logs'
   const setView = (v: string) => setParams(v === 'stats' ? { view: v } : {}, { replace: true })
   const [cleanDays, setCleanDays] = useState<string>('30')
-  const [exporting, setExporting] = useState(false)
+  const { start: startExportJob } = useAsyncJob()
 
   const { data, isLoading } = useOperLogList({ page, pageSize, ...toQuery(applied) })
   const del = useDeleteOperLogs()
@@ -118,17 +116,12 @@ export default function OperLogPage() {
     }
   }
 
+  // 统一异步导出：提交 core/job 任务进导出中心（需要 operLog:export 权限），提交/完成提示由 useAsyncJob 统一给出
   const onExport = async () => {
-    setExporting(true)
     try {
-      // 服务端按当前筛选条件与数据范围生成文件（需要 operLog:export 权限），列由服务端白名单决定
-      const blob = await exportOperLogs(toQuery(applied))
-      saveBlob(`${t('operLog.export.filename')}-${stamp()}.${blobExt(blob)}`, blob)
-      toast.success(t('operLog.export.done'))
+      await startExportJob(() => createOperLogExportJob(toQuery(applied)))
     } catch (e) {
-      toast.error(isExportTooMany(e) ? t('operLog.export.tooMany') : e instanceof Error && e.message ? e.message : t('common.operateFailed'))
-    } finally {
-      setExporting(false)
+      toast.error(e instanceof Error && e.message ? e.message : t('common.operateFailed'))
     }
   }
 
@@ -184,7 +177,7 @@ export default function OperLogPage() {
         toolbar={
           <>
             <Can perm="operLog:export">
-              <Button type="button" variant="outline" disabled={exporting} onClick={onExport}>
+              <Button type="button" variant="outline" onClick={() => void onExport()}>
                 <Download className="me-2 size-4" aria-hidden="true" />
                 {t('operLog.action.export')}
               </Button>

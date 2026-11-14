@@ -30,6 +30,7 @@ function run(e: Entry) {
   e.error = ''
   e.startedAt = null
   e.finishedAt = null
+  e.expiresAt = null
   e.downloadable = false
   setTimeout(() => {
     if (e.status !== 'queued') return
@@ -46,16 +47,20 @@ function run(e: Entry) {
         e.finishedAt = new Date().toISOString()
         e.fileSize = new Blob([e.content]).size
         e.downloadable = true
+        e.expiresAt = keepUntil(e.finishedAt)
       }
     }, TICK_MS)
   }, 400)
 }
 
+/** 结果文件保留 7 天（与后端 export.keep_days 的默认值同口径），到期后需重新导出 */
+const keepUntil = (iso: string) => new Date(new Date(iso).getTime() + 7 * 24 * 3600 * 1000).toISOString()
+
 /** 其它模块的 mock 用它创建一个模拟异步任务（content 是下载到的文件内容） */
 export function createMockJob(type: string, fileName: string, total: number, content: string): Job {
   const e: Entry = {
     id: genId(), type, status: 'queued', progress: 0, message: '', error: '', ownerId: MOCK_OWNER.id, ownerName: MOCK_OWNER.name,
-    fileName, fileSize: 0, downloadable: false, createdAt: new Date().toISOString(), startedAt: null, finishedAt: null,
+    fileName, fileSize: 0, downloadable: false, createdAt: new Date().toISOString(), startedAt: null, finishedAt: null, expiresAt: null,
     content, total,
   }
   entries = [e, ...entries]
@@ -64,11 +69,15 @@ export function createMockJob(type: string, fileName: string, total: number, con
 }
 
 const ago = (min: number) => new Date(Date.now() - min * 60000).toISOString()
-const doneSeed = (type: string, fileName: string, minAgo: number): Entry => ({
-  id: genId(), type, status: 'success', progress: 100, message: '', error: '', ownerId: MOCK_OWNER.id, ownerName: MOCK_OWNER.name,
-  fileName, fileSize: 2048, downloadable: true, createdAt: ago(minAgo), startedAt: ago(minAgo - 0.1), finishedAt: ago(minAgo - 0.5),
-  content: '\uFEFF账号,姓名\r\ndemo,演示\r\n', total: 100,
-})
+const doneSeed = (type: string, fileName: string, minAgo: number): Entry => {
+  const finishedAt = ago(minAgo - 0.5)
+  return {
+    id: genId(), type, status: 'success', progress: 100, message: '', error: '', ownerId: MOCK_OWNER.id, ownerName: MOCK_OWNER.name,
+    fileName, fileSize: 2048, downloadable: true, createdAt: ago(minAgo), startedAt: ago(minAgo - 0.1), finishedAt,
+    expiresAt: keepUntil(finishedAt),
+    content: '\uFEFF账号,姓名\r\ndemo,演示\r\n', total: 100,
+  }
+}
 entries = [
   doneSeed('user.export', 'users-20260116.csv', 60 * 26),
   {

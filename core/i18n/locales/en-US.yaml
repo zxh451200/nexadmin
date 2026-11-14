@@ -159,7 +159,23 @@ im:
   sender_visitor: Visitor
   sender_agent: Agent
   sender_system: System
+  sender_bot: AI
   settings_invalid: Invalid settings (time, timezone or workdays)
+kb:
+  plugin_inactive: Knowledge base plugin is not enabled
+  document_required: Please choose a document to upload
+  document_too_large: Document exceeds the size limit (2MB max)
+  document_type: Only plain-text txt / md documents are supported
+  document_empty: The document has no usable content
+  document_not_found: Document not found
+  embed_unavailable: Embedding is not enabled; configure an Embedding model under System Settings → Advanced → AI first
+  embed_failed: Embedding call failed; check the AI settings or retry later
+  chat_unavailable: Chat model is not configured; complete the AI settings under System Settings → Advanced → AI first
+  answer_failed: AI call failed; please retry later
+  rate_limited: Too many requests; please retry later
+  question_required: Please enter a question to test
+  question_too_long: Question is too long (max %s characters)
+  settings_invalid: Threshold must be within 0~1 and TopK within 1~10
 imports:
   job_not_found: Import job not found
   actor_required: Missing operator identity
@@ -600,6 +616,9 @@ config:
   value_not_boolean: "A boolean value must be either true or false."
   value_not_json: "The value must be valid JSON."
   value_out_of_range: "The value is outside the allowed range (only %d to %d); set a value inside the range and save again"
+  auth.provider_incomplete: "The \"%s\" sign-in provider is incomplete: when enabled it needs a Client ID, a Client Secret, and at least one redirect URI that matches the provider console (plus AgentId for WeCom and Issuer for OIDC)."
+  auth.no_login_method: "Keep at least one sign-in method (password, phone, or a third-party provider); otherwise nobody can sign in."
+  auth.proxy_invalid: "The outbound proxy must be a full http:// or https:// URL; leave it empty for a direct connection."
   notify.mail_invalid: "The email settings are invalid."
   notify.too_many_robots: "You can add at most 20 robots."
   notify.robot_name_invalid: "Robot names may only contain letters, digits, Chinese characters, underscores and hyphens, and must be 1-32 characters long."
@@ -697,6 +716,11 @@ log:
   export_format_invalid: "format only supports xlsx."
 exportcenter:
   job_bad_state: "This action is not allowed in the current state."
+  notify_done_title: "Export finished"
+  notify_done_content: "Your export is ready: %s. The file is kept for %d days — download it from Export Center."
+  notify_failed_title: "Export failed"
+  notify_failed_content: "The export task failed: %s"
+  notify_failed_unknown: "Unknown reason — check Export Center for details."
 region:
   source_insecure: "The data source URL is not usable (HTTPS only, no credentials): %s"
   source_unreachable: "Failed to fetch the data source: %s"
@@ -986,6 +1010,7 @@ menu:
   parent_not_found: "The parent menu does not exist."
   parent_self_or_child: "The parent menu cannot be the menu itself or one of its descendants."
   child_under_button: "You cannot create a child menu under a button."
+  child_under_menu: "Directories and menus cannot be nested under a menu (the sidebar renders two levels only, so the entry would vanish; a menu holds button permissions only)."
   button_needs_parent: "A button is a permission point and must sit under a menu."
 license:
   public_key_missing: "No valid built-in license public key"

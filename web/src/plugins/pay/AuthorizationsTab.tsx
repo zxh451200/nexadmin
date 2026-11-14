@@ -82,13 +82,29 @@ export function AuthorizationsTab() {
       title: t('plugin_pay.fields.authNo'),
       mobile: 'title',
       render: (a) => (
-        <div>
-          <span className="font-medium text-foreground">{a.authNo}</span>
-          <div className="text-xs text-muted-foreground">{a.bizType}/{a.bizNo}</div>
+        <div className="min-w-0">
+          <span className="block max-w-[16rem] truncate font-medium text-foreground" title={a.authNo}>
+            {a.authNo}
+          </span>
+          <div className="max-w-[16rem] truncate text-xs text-muted-foreground" title={`${a.bizType}/${a.bizNo}`}>
+            {a.bizType}/{a.bizNo}
+          </div>
         </div>
       ),
     },
-    { key: 'subjectId', title: t('plugin_pay.fields.subject'), mobile: 'sub', render: (a) => a.subjectId || '-' },
+    {
+      key: 'subjectId',
+      title: t('plugin_pay.fields.subject'),
+      mobile: 'sub',
+      render: (a) =>
+        a.subjectId ? (
+          <span className="block max-w-[14rem] truncate" title={a.subjectId}>
+            {a.subjectId}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">-</span>
+        ),
+    },
     { key: 'channelCode', title: t('plugin_pay.fields.channel'), render: (a) => <Badge variant="outline">{a.channelCode}</Badge> },
     { key: 'amount', title: t('plugin_pay.fields.amount'), align: 'end', render: (a) => <span className="num">{formatMoney(a.amountMinor, a.currency)}</span> },
     {

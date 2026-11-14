@@ -71,3 +71,23 @@ func Send(ctx context.Context, convNo string, in SendInput) (*Message, error) {
 	}
 	return s.Send(ctx, convNo, in)
 }
+
+// LoadSettings 读取插件设置（含 AI 自动回答开关与兜底话术；kb 插件的机器人据此决定是否应答）。
+// 名字避开 Settings 类型（settings.go 的同名结构体）。
+func LoadSettings(ctx context.Context) (Settings, error) {
+	s := current()
+	if s == nil {
+		return Settings{}, responseUnavailable()
+	}
+	return s.Settings(ctx), nil
+}
+
+// RequestAgent 转人工排队：把未分配的会话交给自动分配（在线坐席直接落人，否则排队）。
+// AI 兜底用：检索答不出来时礼貌说明并把它交给人工。
+func RequestAgent(ctx context.Context, convNo string) error {
+	s := current()
+	if s == nil {
+		return responseUnavailable()
+	}
+	return s.RequestAgent(ctx, convNo)
+}

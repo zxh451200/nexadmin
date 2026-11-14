@@ -134,6 +134,7 @@
     "senders": {
       "visitor": "Visitor",
       "agent": "Agent",
+      "bot": "AI Assistant",
       "system": "System"
     },
     "system": {
@@ -141,7 +142,8 @@
       "conv_reopened": "Conversation reopened",
       "message_recalled": "Message recalled",
       "conv_merged": "Merged into another conversation",
-      "conv_merged_into": "Conversation merged into another one"
+      "conv_merged_into": "Conversation merged into another one",
+      "handoff": "Handed over to a human agent, please hold on"
     },
     "settings": {
       "action": "Chat settings",
@@ -160,6 +162,10 @@
       "bannedWords": "Banned words (one per line; matches in visitor messages are replaced with ***)",
       "autoAssign": "Auto-assign conversations",
       "autoAssignHint": "New conversations go to the online agent with the fewest open chats; with nobody online they queue and are claimed in order as agents come online",
+      "aiEnabled": "AI auto answers",
+      "aiEnabledHint": "The Knowledge Base plugin (free) answers unclaimed conversations from uploaded documents; when nothing matches it politely explains and hands off. Claiming the conversation or a visitor handoff stops the AI. Requires AI and Embedding models in system settings",
+      "aiFallbackText": "AI fallback wording (used when nothing matches; blank for default)",
+      "aiFallbackHint": "Sorry, I can't answer this one yet. I've connected you with a human agent.",
       "retentionDays": "Keep closed conversations for (days, 0 = forever)",
       "retentionHint": "Only closed conversations are purged, together with their messages and attachments; checked hourly",
       "readonlyHint": "You can view these settings but not save them"

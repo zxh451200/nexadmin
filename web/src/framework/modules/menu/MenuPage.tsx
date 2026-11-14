@@ -119,8 +119,8 @@ export default function MenuPage() {
       },
     },
     { key: 'type', title: t('sysMenu.col.type'), mobile: 'sub', render: (r) => <DictTag dict="menu_type" value={r.type} /> },
-    { key: 'perm', title: t('sysMenu.col.perm') },
-    { key: 'path', title: t('sysMenu.col.path') },
+    { key: 'perm', title: t('sysMenu.col.perm'), render: (r) => <span className="block max-w-[14rem] truncate" title={r.perm}>{r.perm}</span> },
+    { key: 'path', title: t('sysMenu.col.path'), render: (r) => <span className="block max-w-[14rem] truncate" title={r.path}>{r.path}</span> },
     // 拖拽可用时排序由拖动承担，再摆一列数字等于两套机制；只在拖拽被筛选禁用时露出来
     ...(canDrag ? [] : [sortColumn]),
     { key: 'status', title: t('sysMenu.col.status'), render: (r) => <DictTag dict="sys_status" value={r.status} /> },

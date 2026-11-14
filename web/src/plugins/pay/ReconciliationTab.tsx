@@ -82,7 +82,7 @@ export function ReconciliationTab() {
         <div className="min-w-0 text-xs">
           <span className="num text-muted-foreground">{t('plugin_pay.reconcile.billRows')}: {r.billRows ?? '-'}</span>
           {r.billDigest ? <div className="num break-all text-muted-foreground">{r.billDigest.slice(0, 12)}…</div> : null}
-          {r.failReason ? <div className="wrap-break-word text-destructive">{r.failReason}</div> : null}
+          {r.failReason ? <div className="max-w-[16rem] truncate text-destructive" title={r.failReason}>{r.failReason}</div> : null}
           {r.source === 'channel' && (r.billRows ?? 0) > 0 ? (
             <a
               className="mt-0.5 inline-flex items-center gap-1 text-primary hover:underline"

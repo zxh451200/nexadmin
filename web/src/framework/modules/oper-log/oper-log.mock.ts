@@ -1,4 +1,5 @@
 import { defineMock } from '@/framework/request/mock'
+import { createMockJob } from '../exportcenter/exportcenter.mock'
 import { localDate } from './format'
 import type { OperLog } from './api'
 
@@ -162,17 +163,21 @@ defineMock([
     },
   },
   {
-    // 真实后端返回 xlsx 文件（列为服务端白名单，不含请求参数 / 响应 / 异常）；mock 返回同样列的 CSV 文本
-    method: 'GET',
-    url: '/oper-logs/export',
-    handler: ({ query }) => {
+    // 统一异步导出：与后端 POST /oper-logs/export-async 同契约，提交 core/job 任务进导出中心。
+    // 真实后端生成 xlsx（列为服务端白名单，不含请求参数 / 响应 / 异常）；mock 生成同样列的 CSV 文本
+    method: 'POST',
+    url: '/oper-logs/export-async',
+    handler: ({ query, body }) => {
       const head = ['模块', '操作类型', '操作人', 'IP', '归属地', '状态', '耗时(ms)', '请求方法', '请求地址', '时间']
-      const lines = filtered(query).map((r) =>
+      const lines = filtered({ ...query, ...(body ?? {}) }).map((r) =>
         [r.module, r.type, r.operator, r.ip, r.location ?? '', r.status === 'success' ? '成功' : '失败', String(r.costMs), r.method, r.url, r.createdAt]
           .map(csvCell)
           .join(','),
       )
-      return `\uFEFF${[head.join(','), ...lines].join('\r\n')}\r\n`
+      const content = `\uFEFF${[head.join(','), ...lines].join('\r\n')}\r\n`
+      const day = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+      const j = createMockJob('operlog.export', `oper-logs-${day}.csv`, lines.length, content)
+      return { id: j.id, type: j.type, status: j.status }
     },
   },
   {

@@ -39,6 +39,7 @@
     var attachBtn = root.querySelector('[data-chat-attach]');
     var fileInput = root.querySelector('[data-chat-file]');
     var offlineEl = root.querySelector('[data-chat-offline]');
+    var handoffBtn = root.querySelector('[data-chat-handoff]');
 
     var st = {
       convNo: '',
@@ -174,6 +175,7 @@
       if (code === 'conv_reopened') return t('chatReopened', '会话已重新开启');
       if (code === 'conv_merged_into') return t('chatMergedInto', '会话已合并，发送新消息将开启新会话');
       if (code === 'message_recalled') return t('chatRecalled', '消息已撤回');
+      if (code === 'handoff') return t('chatHandoff', '已转人工客服，请稍候');
       return m.content || '';
     }
 
@@ -234,7 +236,10 @@
         if (m.content) bubble.appendChild(document.createTextNode(m.content));
         var meta = document.createElement('span');
         meta.className = 'chat-meta';
-        var who = from === 'agent' ? (m.senderName || t('chatAgent', '客服')) + ' · ' : '';
+        // AI 回复（kb 插件的机器人）与坐席同侧渲染，meta 里标 AI 区分身份
+        var who = from === 'agent'
+          ? (m.senderType === 'bot' ? 'AI · ' : (m.senderName || t('chatAgent', '客服')) + ' · ')
+          : '';
         meta.textContent = who + fmtTime(m.createdAt);
         row.appendChild(bubble);
         row.appendChild(meta);
@@ -298,6 +303,8 @@
       st.rating = conv.rating || 0;
       if (closedBox) closedBox.hidden = st.open;
       if (form) form.hidden = !st.open;
+      // 转人工按钮只在会话进行中且 AI 还没被接管时显示（botPaused 后服务端幂等，按钮也就没意义了）
+      if (handoffBtn) handoffBtn.hidden = !st.open || !!conv.botPaused;
       if (closedTitle) {
         closedTitle.textContent = conv.closedBy === 'auto'
           ? t('chatClosedAuto', '会话因长时间无消息结束')
@@ -562,6 +569,22 @@
         var file = fileInput.files && fileInput.files[0];
         fileInput.value = '';
         if (file) sendFile(file);
+      });
+    }
+
+    // 转人工：置「人工接管」（AI 停答），系统提示帧与「已接入」由拉取/SSE 带回；服务端幂等。
+    if (handoffBtn) {
+      handoffBtn.addEventListener('click', function () {
+        if (!st.convNo || handoffBtn.disabled) return;
+        handoffBtn.disabled = true;
+        api('/conversations/' + encodeURIComponent(st.convNo) + '/handoff', { method: 'POST' })
+          .then(function () {
+            return pull();
+          })
+          .catch(function () {
+            addLocalNote(t('chatHandoffFailed', '转人工失败，请稍后再试'));
+          })
+          .then(function () { handoffBtn.disabled = false; });
       });
     }
 

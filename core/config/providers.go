@@ -40,7 +40,13 @@ func ExpandEnv(s string) string {
 // ProviderConf 返回 auth.providers.<name>。未配置、配置不是对象或缺少必填项（client_id / client_secret /
 // 至少一个 redirect_uris；oidc 还要 issuer 或手工端点）时 ok=false —— 这样的 provider 视为“没配置”，登录页不显示。
 func (a Auth) ProviderConf(name string) (ProviderConf, bool) {
-	raw, found := a.Providers[name]
+	return a.ProviderConfFrom(a.Providers, name)
+}
+
+// ProviderConfFrom 同 ProviderConf，但 provider 表由调用方给出：运行时视图是 config.yaml 叠加
+// 设置页（sys_setting.auth）的覆盖，两者都不改本结构体。
+func (a Auth) ProviderConfFrom(providers map[string]any, name string) (ProviderConf, bool) {
+	raw, found := providers[name]
 	m, isMap := raw.(map[string]any)
 	if !found || !isMap {
 		return ProviderConf{}, false
@@ -81,9 +87,14 @@ func (a Auth) ProviderConf(name string) (ProviderConf, bool) {
 
 // ProviderNames 返回已配置且可用的第三方登录 provider 键（按字母序）。
 func (a Auth) ProviderNames() []string {
-	out := make([]string, 0, len(a.Providers))
-	for k := range a.Providers {
-		if _, ok := a.ProviderConf(k); ok {
+	return a.ProviderNamesFrom(a.Providers)
+}
+
+// ProviderNamesFrom 同 ProviderNames，但 provider 表由调用方给出（运行时视图）。
+func (a Auth) ProviderNamesFrom(providers map[string]any) []string {
+	out := make([]string, 0, len(providers))
+	for k := range providers {
+		if _, ok := a.ProviderConfFrom(providers, k); ok {
 			out = append(out, k)
 		}
 	}

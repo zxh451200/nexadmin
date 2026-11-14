@@ -423,17 +423,6 @@ defineMock([
     },
   },
   {
-    // 同步导出：真实后端返回 xlsx 二进制；mock 返回 JSON，由 downloadXlsx 落成 .mock.json
-    method: 'GET',
-    url: `${B}/forms/:id/export`,
-    handler: ({ params, query }) => {
-      const f = need(params.id)
-      const rows = filterSubs(f, query)
-      if (rows.length > 10000) mockError(400, '导出的行数超过上限，请缩小筛选范围')
-      return { name: f.draft.name, total: rows.length, csv: csvOf(latest(f)?.definition ?? f.draft, rows) }
-    },
-  },
-  {
     method: 'POST',
     url: `${B}/forms/:id/export-job`,
     handler: ({ params, query }) => {

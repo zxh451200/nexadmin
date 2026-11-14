@@ -36,6 +36,12 @@ const (
 	DailyLimit  = 10
 	IPHourLimit = 10
 	MaxAttempts = 5
+	// SendCaptchaAfter 是匿名发码的「IP 自适应验证码」阈值：同一 IP 窗口内的发码次数
+	// 达到它之后，后续每次发码都必须先过人机验证。对齐密码登录「连续失败才出验证码」的
+	// 体验——正常用户前 SendCaptchaAfter 次发码无感；防短信轰炸只让渡了每 IP 这么多条免费短信。
+	SendCaptchaAfter = 2
+	// sendWindow 是发码计数的滑动窗口（与 IPHourLimit 同窗）。
+	sendWindow = time.Hour
 )
 
 // Service 发送与校验验证码。零值不可用，请用 New / Shared。
@@ -139,6 +145,29 @@ func (s *Service) bump(ctx context.Context, key string, limit int, ttl time.Dura
 		return false, err
 	}
 	return n <= int64(limit), nil
+}
+
+func ipSendKey(ip string) string { return cache.GlobalKey("sms", "ipcap", digest(ip)) }
+
+// SendCaptchaRequired 报告该 IP 窗口内的匿名发码次数是否已达到要求人机验证的阈值（SendCaptchaAfter）。
+// 计数器不存在（窗口外/从未发过）时返回 false。缓存故障按「需要验证码」处理：发码是花钱的动作，宁可多拦。
+func (s *Service) SendCaptchaRequired(ctx context.Context, ip string) (bool, error) {
+	raw, err := s.cache.Get(ctx, ipSendKey(ip))
+	if errors.Is(err, cache.ErrNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return true, err
+	}
+	n, _ := strconv.ParseInt(raw, 10, 64)
+	return n >= SendCaptchaAfter, nil
+}
+
+// BumpSendCount 记一次匿名发码尝试（过了人机验证的、或阈值未到免验证码的都算），滑动窗口 sendWindow。
+// 被防枚举吞掉（deliver=false）的请求同样计数：它对调用方就是一次成功发码。
+func (s *Service) BumpSendCount(ctx context.Context, ip string) error {
+	_, err := cache.Incr(s.cache, ctx, ipSendKey(ip), sendWindow)
+	return err
 }
 
 // codeKey/triesKey 带场景：同一手机号在登录、绑定手机号、忘记密码等场景的验证码互不通用；

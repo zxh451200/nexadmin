@@ -13,6 +13,7 @@ import (
 	_ "nexadmin/plugins/devicehub"
 	_ "nexadmin/plugins/formbuilder"
 	_ "nexadmin/plugins/i18n-editor"
+	_ "nexadmin/plugins/kb"
 	_ "nexadmin/plugins/identity"
 	_ "nexadmin/plugins/im"
 	_ "nexadmin/plugins/imports"

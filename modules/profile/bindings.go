@@ -13,7 +13,7 @@ import (
 )
 
 // SendSMS POST /auth/sms-code  body: {phone, captcha?, captchaKey?}
-// 匿名请求（手机号登录）必须先过图形验证码；登录用户（绑定手机号）不需要。
+// 匿名请求（手机号登录）按 IP 发码次数自适应要求人机验证（SendCaptchaAfter）；登录用户（绑定手机号）不需要。
 // 登录场景下手机号没绑定任何账号时，限流照常计数、响应与成功发送完全一致，但不真正发短信（防枚举，也不浪费费用）。
 func (h *Handler) SendSMS(c *gin.Context) {
 	var in struct {
@@ -40,16 +40,31 @@ func (h *Handler) SendSMS(c *gin.Context) {
 			return
 		}
 		// 验证码总开关（设置页「登录安全」）关闭时匿名取码不再要求验证码。
+		// IP 自适应：同一 IP 窗口内发码次数达到 SendCaptchaAfter 后才要求过验证码——
+		// 对齐密码登录「连续失败才出验证码」的体验，正常用户前两次发码无感；
+		// 之后每次发码都必须过滑块，防短信轰炸。发码请求不产生登录失败计数，
+		// 所以不能直接复用登录的失败阈值，这里按 IP 发码次数单独计。
 		if auth.CaptchaEnabled(ctx) {
-			ok, err := h.auth.VerifyCaptcha(ctx, in.CaptchaKey, in.Captcha, c.ClientIP())
+			required, err := h.sms.SendCaptchaRequired(ctx, c.ClientIP())
 			if err != nil {
 				response.Fail(c, err)
 				return
 			}
-			if !ok {
-				e := response.BadRequest("auth.captcha_invalid")
-				e.Reason = auth.ReasonCaptchaRequired
-				response.Fail(c, e)
+			if required {
+				ok, err := h.auth.VerifyCaptcha(ctx, in.CaptchaKey, in.Captcha, c.ClientIP())
+				if err != nil {
+					response.Fail(c, err)
+					return
+				}
+				if !ok {
+					e := response.BadRequest("auth.captcha_invalid")
+					e.Reason = auth.ReasonCaptchaRequired
+					response.Fail(c, e)
+					return
+				}
+			}
+			if err := h.sms.BumpSendCount(ctx, c.ClientIP()); err != nil {
+				response.Fail(c, err)
 				return
 			}
 		}

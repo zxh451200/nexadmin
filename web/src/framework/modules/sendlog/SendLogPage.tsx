@@ -9,12 +9,12 @@ import { DataTable } from '@/framework/components/DataTable'
 import { DetailAction } from '@/framework/components/DetailAction'
 import { DateRangePicker, type DateRangeValue } from '@/framework/components/DateRangePicker'
 import { FilterBar } from '@/framework/components/FilterBar'
+import { OptionPicker } from '@/framework/components/OptionPicker'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import type { Column } from '@/framework/components/table/types'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import { fmtDateTime } from '../oper-log/format'
 import {
   SEND_CHANNELS,
@@ -30,18 +30,18 @@ import { CHANNEL_VARIANT, STATUS_VARIANT } from './status'
 
 interface Filters {
   recipient: string
-  channel: string
-  status: string
+  channel: string[]
+  status: string[]
   range: DateRangeValue
 }
 
-const emptyFilters: Filters = { recipient: '', channel: 'all', status: 'all', range: {} }
+const emptyFilters: Filters = { recipient: '', channel: [], status: [], range: {} }
 
 function toQuery(f: Filters): Omit<SendLogQuery, 'page' | 'pageSize'> {
   return {
     recipient: f.recipient.trim() || undefined,
-    channel: f.channel === 'all' ? undefined : f.channel,
-    status: f.status === 'all' ? undefined : f.status,
+    channel: f.channel.length ? f.channel.join(',') : undefined,
+    status: f.status.length ? f.status.join(',') : undefined,
     startDate: f.range.from,
     endDate: f.range.to,
   }
@@ -101,7 +101,18 @@ export default function SendLogPage() {
       render: (r) => t(`sendlog.scene.${r.scene}`, { defaultValue: r.scene }),
     },
     { key: 'recipient', title: t('sendlog.col.recipient'), render: (r) => <span className="num">{r.recipient || '-'}</span> },
-    { key: 'subject', title: t('sendlog.col.subject'), render: (r) => r.subject || '-' },
+    {
+      key: 'subject',
+      title: t('sendlog.col.subject'),
+      render: (r) =>
+        r.subject ? (
+          <span className="block max-w-xs truncate" title={r.subject}>
+            {r.subject}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">-</span>
+        ),
+    },
     {
       key: 'status',
       title: t('sendlog.col.status'),
@@ -133,32 +144,22 @@ export default function SendLogPage() {
           placeholder={t('sendlog.filter.recipientPlaceholder')}
           onChange={(e) => setDraft({ ...draft, recipient: e.target.value })}
         />
-        <Select value={draft.channel} onValueChange={(v) => setDraft({ ...draft, channel: v })}>
-          <SelectTrigger className="md:w-40" aria-label={t('sendlog.filter.channel')}>
-            <SelectValue placeholder={t('sendlog.filter.channel')} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">{t('sendlog.filter.allChannels')}</SelectItem>
-            {SEND_CHANNELS.map((k) => (
-              <SelectItem key={k} value={k}>
-                {t(`sendlog.channel.${k}`)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={draft.status} onValueChange={(v) => setDraft({ ...draft, status: v })}>
-          <SelectTrigger className="md:w-40" aria-label={t('sendlog.filter.status')}>
-            <SelectValue placeholder={t('sendlog.filter.status')} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">{t('sendlog.filter.allStatuses')}</SelectItem>
-            {SEND_STATUSES.map((k) => (
-              <SelectItem key={k} value={k}>
-                {t(`sendlog.status.${k}`)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <OptionPicker
+          title={t('sendlog.filter.channel')}
+          value={draft.channel}
+          onChange={(v) => setDraft({ ...draft, channel: v })}
+          options={SEND_CHANNELS.map((k) => ({ value: k, label: t(`sendlog.channel.${k}`) }))}
+          className="md:w-44"
+          placeholder={t('sendlog.filter.channel')}
+        />
+        <OptionPicker
+          title={t('sendlog.filter.status')}
+          value={draft.status}
+          onChange={(v) => setDraft({ ...draft, status: v })}
+          options={SEND_STATUSES.map((k) => ({ value: k, label: t(`sendlog.status.${k}`) }))}
+          className="md:w-44"
+          placeholder={t('sendlog.filter.status')}
+        />
         <DateRangePicker value={draft.range} onChange={(v) => setDraft({ ...draft, range: v })} ariaLabel={t('sendlog.filter.time')} className="md:w-64" placeholder={t('sendlog.filter.time')} />
       </FilterBar>
       <DataTable<SendLog>

@@ -53,6 +53,8 @@ export interface SwitchFieldProps<T extends FieldValues> {
   /** 字段值不是布尔时指定开/关对应的值，如 '1' / '0' */
   valueOn?: unknown
   valueOff?: unknown
+  /** 额外的开关回调（字段值仍由 react-hook-form 维护）；用于开启后联动填充其它字段 */
+  onCheckedChange?: (checked: boolean) => void
   className?: string
 }
 
@@ -66,6 +68,7 @@ export function SwitchField<T extends FieldValues>({
   bare,
   valueOn = true,
   valueOff = false,
+  onCheckedChange,
   className,
 }: SwitchFieldProps<T>) {
   return (
@@ -80,7 +83,14 @@ export function SwitchField<T extends FieldValues>({
             <FormMessage />
           </div>
           <FormControl>
-            <Switch checked={field.value === valueOn} onCheckedChange={(c) => field.onChange(c ? valueOn : valueOff)} disabled={disabled} />
+            <Switch
+              checked={field.value === valueOn}
+              onCheckedChange={(c) => {
+                field.onChange(c ? valueOn : valueOff)
+                onCheckedChange?.(c)
+              }}
+              disabled={disabled}
+            />
           </FormControl>
         </FormItem>
       )}

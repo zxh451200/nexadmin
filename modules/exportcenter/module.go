@@ -9,6 +9,7 @@
 package exportcenter
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 
@@ -17,9 +18,13 @@ import (
 
 	"nexadmin/core"
 	"nexadmin/core/auth"
+	"nexadmin/core/event"
+	"nexadmin/core/i18n"
 	"nexadmin/core/job"
 	"nexadmin/core/metrics"
+	"nexadmin/core/notify"
 	"nexadmin/core/storage"
+	"nexadmin/core/tenant"
 	"nexadmin/pkg/idgen"
 )
 
@@ -56,7 +61,7 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 		d.OnClose(func() { metrics.SetQueueSource(nil); job.SetDefault(nil); m.Stop() })
 	}
 
-	h := &handler{m: m, db: d.DB, log: d.Log}
+	h := &handler{m: m, db: d.DB, log: d.Log, keep: m.KeepDays()}
 	r.GET("/jobs", h.list)
 	// 批量删：与单条 DELETE /jobs/:id 一样不设权限点（登录即可，作用域靠所有者 / job:all 收紧在 Service 层）
 	r.DELETE("/jobs", h.removeBatch)
@@ -65,4 +70,42 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 	r.POST("/jobs/:id/retry", h.retry)
 	r.GET("/jobs/:id/download", h.download)
 	r.DELETE("/jobs/:id", h.remove)
+
+	subscribeJobFinished(d, m.KeepDays())
+}
+
+// subscribeJobFinished 订阅任务终态事件，给任务所有者发完成/失败通知：站内信始终发，
+// 邮件渠道在设置页配好 SMTP 后自动接管（未配置时渠道跳过、只记一条跳过日志，不影响站内信）。
+// 取消是用户自己操作的，不发通知。core/job 只发布事件不依赖 notify，解耦在这里完成。
+// 文案按站点默认语言渲染（事件里没有请求上下文，拿不到调用方的 Accept-Language）。
+func subscribeJobFinished(d *core.Deps, keep int) {
+	if d.Notify == nil {
+		return
+	}
+	event.Subscribe(event.SubscriberFunc(func(e event.Event) {
+		data, ok := e.Data.(event.JobData)
+		if !ok || (data.Status != job.StatusSuccess && data.Status != job.StatusFailed) {
+			return
+		}
+		ctx := tenant.With(context.Background(), data.TenantID)
+		var title, content string
+		if data.Status == job.StatusSuccess {
+			title = i18n.T(ctx, "exportcenter.notify_done_title")
+			content = i18n.T(ctx, "exportcenter.notify_done_content", data.FileName, keep)
+		} else {
+			reason := data.Error
+			if reason == "" {
+				reason = i18n.T(ctx, "exportcenter.notify_failed_unknown")
+			}
+			title = i18n.T(ctx, "exportcenter.notify_failed_title")
+			content = i18n.T(ctx, "exportcenter.notify_failed_content", reason)
+		}
+		if err := d.Notify.Send(ctx, notify.Msg{
+			To: []idgen.ID{data.OwnerID}, Category: "job",
+			Title: title, Content: content, Link: "/jobs",
+			Channels: []string{notify.ChannelInApp, notify.ChannelEmail},
+		}); err != nil {
+			d.Log.Warn("exportcenter: job notify failed", zap.String("id", data.ID.String()), zap.Error(err))
+		}
+	}))
 }

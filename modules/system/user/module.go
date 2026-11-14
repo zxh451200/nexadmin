@@ -40,10 +40,8 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	m.registerForgot(d)                          // POST /auth/forgot/send-code、/auth/forgot/reset（匿名）
 	m.registerSelf(d)                            // POST /auth/register（匿名，auth.allow_register 开启时才有）
 	r.GET("/users", core.Perm("user:list"), h.list)
-	r.GET("/users/export", core.Perm("user:export"), h.export)
-	ah := &asyncHandler{svc: h.svc, syncLimit: syncLimitOf(d.Config.Export.SyncLimit)}
+	ah := &asyncHandler{svc: h.svc}
 	job.Register(jobTypeUserExport, h.svc.exportJob) // 异步导出：处理器注册只需这一行
-	r.GET("/users/export-plan", core.Perm("user:export"), ah.plan)
 	r.POST("/users/export-async", core.Perm("user:export"), ah.create)
 	r.GET("/users/import-template", core.Perm("user:import"), h.importTemplate)
 	r.POST("/users/import", core.Perm("user:import"), h.importFile)

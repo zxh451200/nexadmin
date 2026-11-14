@@ -3,44 +3,64 @@
   <div class="sl-wrap">
     <p class="sl-eyebrow">{{.T "products.fig"}}</p>
     <h1 class="sl-page-title">{{if .ProductTermName}}{{.TF "products.categoryTitleTag" .ProductTermName}}{{else}}{{.T "products.title"}}{{end}}</h1>
-    {{if .ProductCategories}}
-    <nav class="sl-chips term-nav" aria-label="{{.T "products.categoryNavAria"}}">
-      <a class="sl-chip{{if not .ProductTermName}} active{{end}}" href="{{.URL "/products"}}">{{.T "products.allProducts"}}</a>
-      {{range .ProductCategories}}<a class="sl-chip{{if .Active}} active{{end}}" href="{{$.URL "/products"}}?category={{.Slug}}"{{if .Active}} aria-current="true"{{end}}>{{.Name}}</a>{{end}}
-    </nav>
-    {{end}}
   </div>
 </section>
 <section class="sl-section sl-listbody">
-  <div class="sl-wrap">
-    {{if .Products}}
-    <div class="sl-product-grid">
-      {{range .Products}}
-      <a class="sl-product-card" href="{{$.URL "/products"}}/{{.Slug}}" data-reveal>
-        {{if hasPrefix .Keywords "new"}}<span class="sl-badge sl-badge-new">{{$.T "theme.solaris.badgeNew"}}</span>
-        {{else if hasPrefix .Keywords "hot"}}<span class="sl-badge sl-badge-hot">{{$.T "theme.solaris.badgeHot"}}</span>{{end}}
-        <span class="sl-product-cover"><img src="{{.CoverURL}}" alt="{{.Title}}" loading="lazy"></span>
-        <span class="sl-product-model">{{specOf . "型号" "Model"}}</span>
-        <span class="sl-product-name">{{.Title}}</span>
-        {{if .Summary}}<span class="sl-product-summary">{{.Summary}}</span>{{end}}
-        {{if .Categories}}<span class="sl-product-terms">{{range .Categories}}<span class="sl-term-badge">{{.Title}}</span>{{end}}</span>{{end}}
-        {{if .PriceMin}}<span class="sl-product-price">
-          {{if and .PriceMax (gt .PriceMax .PriceMin)}}{{printf "%.2f" .PriceMin}} - {{printf "%.2f" .PriceMax}}{{else}}{{printf "%.2f" .PriceMin}}{{end}} {{.Currency}}{{if .PriceUnit}} / {{.PriceUnit}}{{end}}
-        </span>{{end}}
-        <span class="sl-product-more">{{$.T "theme.solaris.viewProduct"}} <span aria-hidden="true">→</span></span>
-      </a>
+  <div class="sl-wrap pc-layout">
+    <aside class="pc-side" aria-label="{{.T "products.searchAria"}}">
+      <form class="pc-search" method="get" action="{{.URL "/products"}}" role="search">
+        {{if .ProductTermSlug}}<input type="hidden" name="category" value="{{.ProductTermSlug}}">{{end}}
+        <label class="pc-search-label" for="pc-q">{{.T "products.searchLabel"}}</label>
+        <div class="pc-search-row">
+          <input id="pc-q" type="search" name="q" value="{{.ProductQuery}}" placeholder="{{.T "products.searchPlaceholder"}}" autocomplete="off">
+          <button type="submit" aria-label="{{.T "products.searchSubmit"}}">{{uiIcon "search"}}<span>{{.T "products.searchSubmit"}}</span></button>
+        </div>
+      </form>
+      {{if .ProductCategories}}
+      <nav class="pc-cats" aria-label="{{.T "products.categoryNavAria"}}">
+        <h2 class="pc-side-title">{{.T "products.filterTitle"}}</h2>
+        <a class="pc-cat{{if not .ProductTermName}} active{{end}}" href="{{.ProductAllURL}}"{{if not .ProductTermName}} aria-current="true"{{end}}>{{.T "products.allProducts"}}</a>
+        {{range .ProductCategories}}<a class="pc-cat{{if .Active}} active{{end}}" href="{{.Href}}"{{if .Active}} aria-current="true"{{end}}>{{.Name}}</a>{{end}}
+      </nav>
+      {{end}}
+    </aside>
+    <div class="pc-main">
+      <div class="pc-meta">
+        <span class="pc-meta-title">{{if .ProductQuery}}{{.TF "products.searchResultTitle" .ProductQuery}}{{else if .ProductTermName}}{{.ProductTermName}}{{else}}{{.T "products.allProducts"}}{{end}}</span>
+        <span class="pc-meta-count">{{.TF "products.resultCount" .ProductsTotal}}</span>
+        {{if or .ProductQuery .ProductTermName}}<a class="pc-clear" href="{{.URL "/products"}}">{{.T "products.clearFilter"}}</a>{{end}}
+      </div>
+      {{if .Products}}
+      <div class="pc-grid">
+        {{range .Products}}
+        <a class="pc-card" href="{{$.URL "/products"}}/{{.Slug}}">
+          {{if hasPrefix .Keywords "new"}}<span class="pc-badge">{{$.T "products.badgeNew"}}</span>
+          {{else if hasPrefix .Keywords "hot"}}<span class="pc-badge pc-badge-hot">{{$.T "products.badgeHot"}}</span>{{end}}
+          <span class="pc-card-cover">{{if .CoverURL}}<img src="{{.CoverURL}}" alt="{{.Title}}" loading="lazy">{{else}}<span class="pc-card-fallback" aria-hidden="true">{{initial .Title}}</span>{{end}}</span>
+          <span class="pc-card-body">
+            <span class="pc-card-model">{{specOf . "型号" "Model"}}</span>
+            <span class="pc-card-title">{{.Title}}</span>
+            {{if .Summary}}<span class="pc-card-summary">{{.Summary}}</span>{{end}}
+            {{if .Categories}}<span class="pc-card-terms">{{range .Categories}}<span class="pc-term">{{.Title}}</span>{{end}}</span>{{end}}
+            {{if .PriceMin}}<span class="pc-card-price">
+              {{if and .PriceMax (gt .PriceMax .PriceMin)}}{{printf "%.2f" .PriceMin}} - {{printf "%.2f" .PriceMax}}{{else}}{{printf "%.2f" .PriceMin}}{{end}} {{.Currency}}{{if .PriceUnit}} / {{.PriceUnit}}{{end}}
+            </span>{{end}}
+            <span class="pc-card-more">{{$.T "products.viewProduct"}} <span aria-hidden="true">→</span></span>
+          </span>
+        </a>
+        {{end}}
+      </div>
+      {{else}}
+      <p class="pc-empty">{{if .ProductQuery}}{{.TF "products.searchEmpty" .ProductQuery}}{{else}}{{.T "products.empty"}}{{end}}</p>
+      {{end}}
+      {{if gt .ProductsTotalPages 1}}
+      <nav class="sl-pager" aria-label="{{.T "products.pagerAria"}}">
+        {{if .ProductsPrevURL}}<a class="sl-pager-link" rel="prev" href="{{.ProductsPrevURL}}">← {{.T "products.prev"}}</a>{{end}}
+        <span class="sl-pager-status">{{.TF "products.pageOf" .ProductsPage .ProductsTotalPages}}</span>
+        {{if .ProductsNextURL}}<a class="sl-pager-link" rel="next" href="{{.ProductsNextURL}}">{{.T "products.next"}} →</a>{{end}}
+      </nav>
       {{end}}
     </div>
-    {{else}}
-    <p class="sl-empty">{{.T "products.empty"}}</p>
-    {{end}}
-    {{if gt .ProductsTotalPages 1}}
-    <nav class="sl-pager" aria-label="{{.T "products.pagerAria"}}">
-      {{if .ProductsPrevURL}}<a class="sl-pager-link" rel="prev" href="{{.ProductsPrevURL}}">← {{.T "products.prev"}}</a>{{end}}
-      <span class="sl-pager-status">{{.TF "products.pageOf" .ProductsPage .ProductsTotalPages}}</span>
-      {{if .ProductsNextURL}}<a class="sl-pager-link" rel="next" href="{{.ProductsNextURL}}">{{.T "products.next"}} →</a>{{end}}
-    </nav>
-    {{end}}
   </div>
 </section>
 {{end}}

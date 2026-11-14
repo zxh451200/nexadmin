@@ -18,10 +18,7 @@ import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
 import { Switch } from '@/framework/ui/switch'
 import {
-  blobExt,
   createExportJob,
-  exportUsersFile,
-  fetchExportPlan,
   useBatchUserStatus,
   useDeleteUsers,
   useUnlockUser,
@@ -31,7 +28,6 @@ import {
   type User,
   type UserFilters,
 } from './api'
-import { saveBlob } from '@/framework/components/export/csv'
 import { ImportDialog } from './ImportDialog'
 import { ResetPasswordDialog } from './ResetPasswordDialog'
 import { UserFormDialog } from './UserFormDialog'
@@ -52,7 +48,6 @@ export default function UserPage() {
   const [editing, setEditing] = useState<User | null>(null)
   const [resetTarget, setResetTarget] = useState<User | null>(null)
   const [importOpen, setImportOpen] = useState(false)
-  const [exporting, setExporting] = useState(false)
   const { start: startExportJob } = useAsyncJob()
 
   const list = useUserList({ page, pageSize, ...toUserQuery(applied) })
@@ -123,24 +118,13 @@ export default function UserPage() {
     }
   }
 
+  // 统一异步导出：提交 core/job 任务进导出中心，提交/完成提示由 useAsyncJob 统一给出
   const exportUsers = async () => {
-    setExporting(true)
     try {
       const q = toUserQuery(applied)
-      // 匹配行数超过 export.sync_limit 时改走异步任务：提示「已提交到导出中心」，完成后在导出中心下载
-      const plan = await fetchExportPlan(q)
-      if (plan?.async) {
-        await startExportJob(() => createExportJob(q))
-        return
-      }
-      // 服务端按当前筛选条件与数据范围生成 .xlsx；列由服务端白名单决定，不含密码等敏感字段
-      const blob = await exportUsersFile(q)
-      saveBlob(`${t('user.export.filename')}.${blobExt(blob)}`, blob)
-      toast.success(t('user.export.done'))
+      await startExportJob(() => createExportJob(q))
     } catch (e) {
       toast.error(errMsg(e, t('common.operateFailed')))
-    } finally {
-      setExporting(false)
     }
   }
 
@@ -163,15 +147,20 @@ export default function UserPage() {
     {
       key: 'roleNames',
       title: t('user.col.roles'),
-      render: (u) => (
-        <div className="flex flex-wrap gap-1">
-          {u.roleNames.map((r) => (
-            <Badge key={r} variant="outline">
-              {r}
-            </Badge>
-          ))}
-        </div>
-      ),
+      // 角色多时只露前两枚、其余收进「+N」：行高不随角色数乱涨，全量名单悬停可看
+      render: (u) =>
+        u.roleNames.length ? (
+          <div className="flex max-w-56 flex-wrap gap-1" title={u.roleNames.join('、')}>
+            {u.roleNames.slice(0, 2).map((r) => (
+              <Badge key={r} variant="outline">
+                {r}
+              </Badge>
+            ))}
+            {u.roleNames.length > 2 ? <Badge variant="secondary">+{u.roleNames.length - 2}</Badge> : null}
+          </div>
+        ) : (
+          <span className="text-muted-foreground">-</span>
+        ),
     },
     { key: 'phone', title: t('user.col.phone') },
     {
@@ -253,7 +242,7 @@ export default function UserPage() {
               </Button>
             </Can>
             <Can perm="user:export">
-              <Button type="button" variant="outline" onClick={exportUsers} disabled={exporting}>
+              <Button type="button" variant="outline" onClick={() => void exportUsers()}>
                 <Download className="me-2 h-4 w-4" aria-hidden="true" />
                 {t('common.export')}
               </Button>

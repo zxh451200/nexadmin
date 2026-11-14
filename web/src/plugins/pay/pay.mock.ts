@@ -1,4 +1,5 @@
 import { defineMock, mockError } from '@/framework/request/mock'
+import { createMockJob } from '@/framework/modules/exportcenter/exportcenter.mock'
 import type {
   OutboxCounts,
   PayAuthorization,
@@ -493,8 +494,8 @@ defineMock([
     },
   },
   {
-    method: 'GET',
-    url: '/plugins/pay/orders/export',
+    method: 'POST',
+    url: '/plugins/pay/orders/export-async',
     handler: ({ query }) => {
       const kw = String(query.keyword ?? '').trim().toLowerCase()
       let rows = orders.filter((o) => !kw || o.paymentNo.toLowerCase().includes(kw) || o.bizNo.toLowerCase().includes(kw))
@@ -502,7 +503,9 @@ defineMock([
       if (query.channelCode) rows = rows.filter((o) => o.channelCode === query.channelCode)
       if (query.bizType) rows = rows.filter((o) => o.bizType === query.bizType)
       if (query.scene) rows = rows.filter((o) => o.scene === query.scene)
-      return [...rows].reverse()
+      const day = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+      const j = createMockJob('pay.order-export', `orders-${day}.csv`, rows.length, '支付单号,业务类型,状态,金额\r\n…\r\n')
+      return { id: j.id, type: j.type, status: j.status }
     },
   },
   {

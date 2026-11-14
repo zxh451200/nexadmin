@@ -12,6 +12,7 @@ import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { RequiredMark } from '@/framework/components/RequiredMark'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { SwitchRow } from '@/framework/components/SwitchField'
+import { OptionPicker } from '@/framework/components/OptionPicker'
 import { pageAfterDelete } from '@/framework/hooks/page-fallback'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
@@ -187,8 +188,8 @@ export default function RealnamePage() {
   const parse = useParse()
   const verify = useVerify()
 
-  const [draft, setDraft] = useState<{ keyword?: string; status?: VerifyStatus; all?: '1'; range?: DateRangeValue }>({})
-  const [filters, setFilters] = useState<{ keyword?: string; status?: VerifyStatus; all?: '1'; range?: DateRangeValue }>({})
+  const [draft, setDraft] = useState<{ keyword?: string; status?: string[]; all?: '1'; range?: DateRangeValue }>({})
+  const [filters, setFilters] = useState<{ keyword?: string; status?: string; all?: '1'; range?: DateRangeValue }>({})
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const { data, isLoading } = useVerifications({
@@ -418,7 +419,7 @@ export default function RealnamePage() {
 
       <FilterBar
         onSearch={() => {
-          setFilters(draft)
+          setFilters({ keyword: draft.keyword, status: draft.status?.length ? draft.status.join(',') : undefined, all: draft.all, range: draft.range })
           setPage(1)
         }}
         onReset={() => {
@@ -434,22 +435,14 @@ export default function RealnamePage() {
           placeholder={t('plugin_realname.searchPlaceholder')}
           aria-label={t('common.keyword')}
         />
-        <Select
-          value={draft.status ?? ALL}
-          onValueChange={(v) => setDraft((d) => ({ ...d, status: v === ALL ? undefined : (v as VerifyStatus) }))}
-        >
-          <SelectTrigger className="md:w-40" aria-label={t('plugin_realname.statusLabel')}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_realname.allStatuses')}</SelectItem>
-            {STATUSES.map((s) => (
-              <SelectItem key={s} value={s}>
-                {t(`plugin_realname.status.${s}`)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <OptionPicker
+          title={t('plugin_realname.statusLabel')}
+          value={draft.status ?? []}
+          onChange={(v) => setDraft((d) => ({ ...d, status: v.length ? v : undefined }))}
+          options={STATUSES.map((s) => ({ value: s, label: t(`plugin_realname.status.${s}`) }))}
+          className="md:w-44"
+          placeholder={t('plugin_realname.statusLabel')}
+        />
         <Select
           value={draft.all ?? FOLD}
           onValueChange={(v) => setDraft((d) => ({ ...d, all: v === ALL ? '1' : undefined }))}

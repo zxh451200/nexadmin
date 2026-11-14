@@ -61,26 +61,6 @@ func (h *handler) list(c *gin.Context) {
 	response.Page(c, list, total, q.Page, q.PageSize)
 }
 
-// export GET /users/export：按同样的筛选条件返回全部匹配行。
-// 默认返回 JSON 列表（前端自行生成 CSV，保持兼容）；format=xlsx 直接返回 .xlsx 文件。
-func (h *handler) export(c *gin.Context) {
-	switch strings.ToLower(c.Query("format")) {
-	case "", "json":
-	case "xlsx":
-		h.exportXLSX(c)
-		return
-	default:
-		response.Fail(c, bad("user.export_format_invalid"))
-		return
-	}
-	list, err := h.svc.export(c.Request.Context(), queryOf(c), me(c))
-	if err != nil {
-		response.Fail(c, err)
-		return
-	}
-	response.OK(c, list)
-}
-
 // get GET /users/:id
 func (h *handler) get(c *gin.Context) {
 	id, ok := pathID(c)

@@ -413,22 +413,6 @@ let products: SiteProduct[] = [
 let nextProductId = 650
 let nextProductCategoryId = 860
 
-// mock 的导出同步上限：真实后端读 export.sync_limit（默认 5000），这里用 20 让演示数据就能走到异步分支。
-const MOCK_EXPORT_SYNC_LIMIT = 20
-
-/** 导出行的筛选：与列表接口同口径（ids= 勾选行优先，其次 keyword/status/categoryId）。 */
-const exportRows = (query: Record<string, unknown>): SiteProduct[] => {
-  if (query.ids) {
-    const ids = new Set(String(query.ids).split(',').map((s) => s.trim()).filter(Boolean))
-    return products.filter((p) => ids.has(p.id))
-  }
-  const kw = String(query.keyword ?? '').trim().toLowerCase()
-  let rows = products.filter((p) => !kw || p.title.toLowerCase().includes(kw) || p.slug.includes(kw))
-  if (query.status) rows = rows.filter((p) => p.status === query.status)
-  if (query.categoryId) rows = rows.filter((p) => (p.categories ?? []).some((c) => c.id === query.categoryId))
-  return [...rows].reverse()
-}
-
 /** 类目子树 ID 集（含自身），删除校验与级联共用。 */
 const productCategorySubtree = (roots: string[]): Set<string> => {
   const doomed = new Set(roots)
@@ -846,14 +830,18 @@ defineMock([
     },
   },
   {
-    method: 'GET',
-    url: '/plugins/website/posts/export',
+    method: 'POST',
+    url: '/plugins/website/posts/export-async',
     handler: ({ query }) => {
       const kw = String(query.keyword ?? '').trim().toLowerCase()
       let rows = posts.filter((p) => !kw || p.title.toLowerCase().includes(kw) || p.slug.includes(kw))
       if (query.status === 'published') rows = rows.filter((p) => p.published)
       if (query.status === 'draft') rows = rows.filter((p) => !p.published)
-      return [...rows].reverse()
+      const lines = rows.map((p) => [p.title, p.slug, (p.categories ?? []).map((c) => c.title).join('、'), p.published ? '已发布' : '草稿', p.publishedAt ?? '', p.updatedAt].join(','))
+      const content = `\uFEFF标题,Slug,分类,状态,发布时间,更新时间\r\n${lines.join('\r\n')}\r\n`
+      const day = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+      const j = createMockJob('website.post-export', `posts-${day}.csv`, rows.length, content)
+      return { id: j.id, type: j.type, status: j.status }
     },
   },
   {
@@ -1018,13 +1006,16 @@ defineMock([
     handler: () => ({ count: messages.filter((m) => m.status === 'new').length }),
   },
   {
-    method: 'GET',
-    url: '/plugins/website/messages/export',
+    method: 'POST',
+    url: '/plugins/website/messages/export-async',
     handler: ({ query }) => {
       const kw = String(query.keyword ?? '').trim().toLowerCase()
       let rows = messages.filter((m) => !kw || m.name.toLowerCase().includes(kw) || m.email.includes(kw) || m.content.toLowerCase().includes(kw))
       if (query.status) rows = rows.filter((m) => m.status === query.status)
-      return [...rows].reverse()
+      const day = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+      const content = '状态,姓名,邮箱,电话,内容,IP,时间\r\n' + [...rows].reverse().map((m) => `${m.status},${m.name},${m.email},${m.phone},…,${m.ip},${m.createdAt}`).join('\r\n')
+      const j = createMockJob('website.message-export', `messages-${day}.csv`, rows.length, content)
+      return { id: j.id, type: j.type, status: j.status }
     },
   },
   {
@@ -1066,21 +1057,6 @@ defineMock([
       if (query.status) rows = rows.filter((p) => p.status === query.status)
       if (query.categoryId) rows = rows.filter((p) => (p.categories ?? []).some((c) => c.id === query.categoryId))
       return paginate([...rows].reverse(), query)
-    },
-  },
-  {
-    // 导出当前筛选（或 ids= 勾选行）下的全部商品：返回 JSON 列表，CSV 由前端生成（与真后端同形状）。
-    method: 'GET',
-    url: '/plugins/website/products/export',
-    handler: ({ query }) => exportRows(query),
-  },
-  {
-    // 同步/异步分流：真实后端读 export.sync_limit（默认 5000），mock 用 20 让演示数据就能走到异步分支。
-    method: 'GET',
-    url: '/plugins/website/products/export-plan',
-    handler: ({ query }) => {
-      const total = exportRows(query).length
-      return { total, syncLimit: MOCK_EXPORT_SYNC_LIMIT, async: total > MOCK_EXPORT_SYNC_LIMIT }
     },
   },
   {

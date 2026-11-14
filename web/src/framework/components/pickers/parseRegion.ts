@@ -10,8 +10,11 @@ export interface ParsedRegionAddress {
 /** 「市辖区」「县」这类占位节点：地址文本里一般不写，匹配时直接跳到它们的下级 */
 const PLACEHOLDER = new Set(['市辖区', '县', '省直辖县级行政区划', '自治区直辖县级行政区划'])
 
-/** 常用后缀：全名剥掉后缀得到短别名（广西壮族自治区 ↔ 广西、中牟县 ↔ 中牟） */
-const SUFFIXES = ['特别行政区', '维吾尔自治区', '壮族自治区', '回族自治区', '自治区', '省', '市', '盟', '地区', '县', '旗']
+/** 常用后缀：全名剥掉后缀得到短别名（广西壮族自治区 ↔ 广西、中牟县 ↔ 中牟、东风路街道 ↔ 东风路） */
+const SUFFIXES = [
+	'特别行政区', '维吾尔自治区', '壮族自治区', '回族自治区', '自治区',
+	'街道', '苏木', '省', '市', '盟', '地区', '县', '旗', '乡', '镇',
+]
 
 function aliasesOf(name: string): string[] {
 	const out = [name]
@@ -32,6 +35,12 @@ function matchNode(text: string, node: RegionNode): number {
   for (const alias of aliasesOf(node.name)) {
     if (lower.startsWith(alias.toLowerCase())) return alias.length
   }
+  // 曾用名（民政局整建制改名的老地名，如“思茅”→“普洱市”）：老单据、老地址里常见。
+  // 只收录市级整建制改名且新名唯一的条目，避免歧义命中；命中时连同紧随的「市」一起吃掉。
+  for (const [oldName, newName] of OLD_NAMES) {
+    if (newName !== node.name || !lower.startsWith(oldName)) continue
+    return oldName.length + (text[oldName.length] === '市' ? 1 : 0)
+  }
   // 拼音：ü 在数据里写作 v（输入法习惯）。文本以完整拼音开头就直接吃掉；
   // 首词是拼音的前缀（“guangdong shenzhen”没拼完）也按词吃掉，剩下的词留给下一层。
   const p = node.pinyin?.toLowerCase()
@@ -43,13 +52,20 @@ function matchNode(text: string, node: RegionNode): number {
   return 0
 }
 
+/** 市级整建制曾用名：老名 → 现名（节点名）。之后改区划时按民政局公告续表即可。 */
+const OLD_NAMES = new Map<string, string>([
+  ['思茅', '普洱市'],
+  ['襄樊', '襄阳市'],
+  ['大庸', '张家界市'],
+])
+
 /**
  * 从一段完整地址里贪心解析省市区：逐层用名称/别名/拼音前缀匹配，
  * 占位节点（市辖区/县）不吃文本直接下钻，命中几层写几层，剩余文本即详细地址。
  * 区划之间的空白不参与匹配（拼音地址 “guangdong shenzhen” 靠它断词），
  * 详细地址保留原文里的空格。解析对着调用方传入的运行时区划树做（区划快照可能被同步替换，不写死名字）。
  */
-export function parseRegionAddress(tree: RegionNode[], text: string, level: 2 | 3 = 3): ParsedRegionAddress {
+export function parseRegionAddress(tree: RegionNode[], text: string, level: 2 | 3 | 4 = 3): ParsedRegionAddress {
   const src = text.trim()
   const path: RegionNode[] = []
   let nodes: RegionNode[] | undefined = tree
@@ -87,7 +103,7 @@ export function parseRegionAddress(tree: RegionNode[], text: string, level: 2 | 
 function matchUniqueAtDepth(
   tree: RegionNode[],
   text: string,
-  level: 2 | 3,
+  level: 2 | 3 | 4,
 ): { path: RegionNode[]; len: number } | null {
   const hits: { path: RegionNode[]; len: number }[] = []
   const walk = (nodes: RegionNode[], path: RegionNode[], depth: number) => {

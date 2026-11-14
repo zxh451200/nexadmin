@@ -16,6 +16,7 @@ import (
 
 	"nexadmin/core"
 	"nexadmin/core/event"
+	"nexadmin/core/job"
 	"nexadmin/core/plugin"
 	"nexadmin/core/storage"
 )
@@ -34,6 +35,7 @@ func init() {
 // zapLog 把 *zap.Logger 适配成 Service 需要的最小日志面。
 type zapLog struct{ l *zap.Logger }
 
+func (z zapLog) Info(msg string, kv ...any)  { z.l.Sugar().Infow(msg, kv...) }
 func (z zapLog) Warn(msg string, kv ...any)  { z.l.Sugar().Warnw(msg, kv...) }
 func (z zapLog) Error(msg string, kv ...any) { z.l.Sugar().Errorw(msg, kv...) }
 
@@ -86,6 +88,11 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	h := &handler{svc: svc, store: svc.Storage(), log: d.Log}
 	// WS 订阅守卫：ticket: 前缀的准入判定（匿名拒绝 / 工单存在 / ticket:list），见 ws_guard.go。
 	m.wsGuard.Do(func() { registerWSTopicGuard(svc, d.Auth) })
+	// 工单异步导出的任务体：worker 流式写 xlsx，进度与下载在导出中心（见 exportjob.go）。
+	// 注册是覆盖写，热挂载下幂等。
+	job.Register(jobTypeTicketExport, func(ctx context.Context, j *job.Job, report job.Report) (job.ResultFile, error) {
+		return svc.RunExportJob(ctx, j, report)
+	})
 	h.Register(r, d)
 }
 

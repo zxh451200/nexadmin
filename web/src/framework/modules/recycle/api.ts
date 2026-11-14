@@ -28,7 +28,8 @@ export interface RecycleQuery {
   page: number
   pageSize: number
   keyword?: string
-  type?: RecycleType
+  /** 逗号分隔多值：?type=user,role */
+  type?: string
   /** 删除日期范围（YYYY-MM-DD，含当天），任一可省 */
   from?: string
   to?: string

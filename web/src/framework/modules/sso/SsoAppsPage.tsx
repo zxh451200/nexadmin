@@ -97,7 +97,9 @@ export function SsoSection() {
       mobile: 'sub',
       render: (a) => (
         <span className="inline-flex items-center gap-1">
-          <code className="font-mono text-xs">{a.clientId}</code>
+          <code className="max-w-[12rem] truncate font-mono text-xs" title={a.clientId}>
+            {a.clientId}
+          </code>
           <CopyButton text={a.clientId} label={`${t('sso.copy')} ${t('sso.fields.clientId')}`} />
         </span>
       ),
@@ -119,18 +121,21 @@ export function SsoSection() {
     {
       key: 'roles',
       title: t('sso.fields.roles'),
-      render: (a) =>
-        a.roleIds.length === 0 ? (
-          <Badge variant="outline">{t('sso.allUsers')}</Badge>
-        ) : (
-          <div className="flex flex-wrap gap-1">
-            {a.roleIds.map((id) => (
-              <Badge key={id} variant="secondary">
-                {roleName.get(id) ?? id}
+      render: (a) => {
+        if (a.roleIds.length === 0) return <Badge variant="outline">{t('sso.allUsers')}</Badge>
+        // 角色多时收进「+N」；角色被删时兜底是原始 id——截断显示，悬停看全量
+        const names = a.roleIds.map((id) => roleName.get(id) ?? `${id.slice(0, 8)}…`)
+        return (
+          <div className="flex max-w-56 flex-wrap gap-1" title={names.join('、')}>
+            {names.slice(0, 2).map((n, i) => (
+              <Badge key={a.roleIds[i]} variant="secondary">
+                {n}
               </Badge>
             ))}
+            {names.length > 2 ? <Badge variant="outline">+{names.length - 2}</Badge> : null}
           </div>
-        ),
+        )
+      },
     },
     {
       key: 'redirectCount',

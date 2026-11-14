@@ -6,7 +6,21 @@ export const JOB_STATUSES = ['queued', 'running', 'success', 'failed', 'canceled
 export type JobStatus = (typeof JOB_STATUSES)[number]
 
 /** 已知任务类型；其它业务模块新增类型时，在 jobs.type.<type> 里补文案即可（缺省显示原始类型名） */
-export const JOB_TYPES = ['user.export', 'website.product-export'] as const
+export const JOB_TYPES = [
+  'user.export',
+  'website.product-export',
+  'website.post-export',
+  'website.message-export',
+  'formbuilder.export',
+  'operlog.export',
+  'loginlog.export',
+  'cron.log-export',
+  'im.conversation-export',
+  'ticket.export',
+  'pay.order-export',
+  'post.export',
+  'role.export',
+] as const
 
 export interface Job {
   id: string
@@ -24,12 +38,16 @@ export interface Job {
   createdAt: string
   startedAt: string | null
   finishedAt: string | null
+  /** 结果文件保留截止时间（终态任务才有；到期后端清理，届时需重新导出） */
+  expiresAt: string | null
 }
 
 export interface JobQuery {
   page: number
   pageSize: number
+  /** 逗号分隔多值任务类型 */
   type?: string
+  /** 逗号分隔多值；active 展开为排队+执行 */
   status?: string
   /** 管理员（job:all）查看全部任务 */
   all?: boolean

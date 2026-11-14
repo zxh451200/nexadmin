@@ -78,8 +78,8 @@ func (h *siteHandler) baseView(ctx context.Context, lang string, postLimit int) 
 		FaviconURL: set.FaviconURL, OgImageURL: set.OgImageURL,
 		HeadCode:    template.HTML(set.HeadCode),
 		TitleSuffix: set.TitleSuffix, HomeSlug: set.HomeSlug,
-		ThemeID:     set.Theme,
-		HomeTitle:   set.HomeTitle, HomeSubtitle: set.HomeSubtitle,
+		ThemeID:   set.Theme,
+		HomeTitle: set.HomeTitle, HomeSubtitle: set.HomeSubtitle,
 		HomeCTALabel: set.HomeCTALabel, HomeCTAHref: set.HomeCTAHref,
 		ContactEmail: set.ContactEmail, ContactPhone: set.ContactPhone,
 		QRCodeURL: set.QRCodeURL, QRCodeCaption: set.QRCodeCaption,
@@ -190,7 +190,7 @@ func (h *siteHandler) home(c *gin.Context) {
 	// 品牌主题的首页消费产品/类目/更多新闻（精选导轨、案例区与新闻区各取所需）；
 	// default 首页不用这些字段，所以只在选了主题时多查，不给未换肤的站点加成本。
 	if v.ThemeID != "" {
-		if products, _, perr := h.svc.PublishedProductsPage(c.Request.Context(), lang.Code, termFilter{}, 1, 8); perr == nil {
+		if products, _, perr := h.svc.PublishedProductsPage(c.Request.Context(), lang.Code, termFilter{}, "", 1, 8); perr == nil {
 			v.Products = products
 		}
 		if cats, cerr := h.svc.ListProductCategories(c.Request.Context()); cerr == nil {
@@ -376,7 +376,7 @@ func absURL(base, u string) string {
 	return strings.TrimSuffix(base, "/") + u
 }
 
-// GET /products —— 产品列表：?category=类目 收窄，?page=N 翻页。
+// GET /products —— 产品列表：?category=类目 收窄，?q=关键词 检索，?page=N 翻页。
 // 与新闻列表同构：查询式归档不占 /products/:slug 的下一段，不会和商品 slug 抢路由。
 func (h *siteHandler) productsList(c *gin.Context) {
 	ctx := c.Request.Context()
@@ -387,7 +387,13 @@ func (h *siteHandler) productsList(c *gin.Context) {
 		return
 	}
 	page, _ := strconv.Atoi(c.Query("page"))
+	// 检索词限长，避免超长 query 打到 LIKE 和标题上；超长直接截断而不是报错。
+	q := strings.TrimSpace(c.Query("q"))
+	if r := []rune(q); len(r) > 80 {
+		q = string(r[:80])
+	}
 	term := termFilter{}
+	vals := url.Values{}
 	// 类目不存在就是 404，而不是「这个筛选下暂时没内容」：前者是链接写错了，
 	// 后者是还没上商品，两者给访客的信息完全不同。
 	if slug := strings.TrimSpace(c.Query("category")); slug != "" {
@@ -398,10 +404,17 @@ func (h *siteHandler) productsList(c *gin.Context) {
 		}
 		term = termFilter{Kind: "category", Slug: row.Slug}
 		v.ProductTermName = row.Title
-		v.ProductTermQuery = url.Values{"category": {row.Slug}}.Encode()
+		v.ProductTermSlug = row.Slug
+		vals.Set("category", row.Slug)
 		v.Title = v.composeTitle(v.TF("products.categoryTitleTag", row.Title))
 	}
-	products, total, err := h.svc.PublishedProductsPage(ctx, lang.Code, term, page, productsPageSize)
+	if q != "" {
+		vals.Set("q", q)
+	}
+	// 筛选串同时喂给 canonical 与翻页链接：分类 + 关键词 + 分页不会互相丢。
+	v.ProductTermQuery = vals.Encode()
+	v.ProductQuery = q
+	products, total, err := h.svc.PublishedProductsPage(ctx, lang.Code, term, q, page, productsPageSize)
 	if err != nil {
 		c.String(http.StatusInternalServerError, "site unavailable")
 		return
@@ -416,11 +429,28 @@ func (h *siteHandler) productsList(c *gin.Context) {
 		active = term.Slug
 	}
 	v.ProductCategories = ProductCategoryLinks(cats, active)
+	// 分类链接在后端拼完整 URL：html/template 对「文本 + 动作」拼出的 href 会二次转义
+	// 查询串里的 = / &，模板里只放一个动作最稳。
+	v.ProductAllURL = v.URL("/products")
+	if q != "" {
+		v.ProductAllURL += "?q=" + url.QueryEscape(q)
+	}
+	for i := range v.ProductCategories {
+		u := v.URL("/products") + "?category=" + url.QueryEscape(v.ProductCategories[i].Slug)
+		if q != "" {
+			u += "&q=" + url.QueryEscape(q)
+		}
+		v.ProductCategories[i].Href = u
+	}
 	v.Products = products
+	v.ProductsTotal = int(total)
 	v.ProductsPage, v.ProductsTotalPages = pageOf(page), pagesOf(total, productsPageSize)
-	// 第 1 页才是规范地址：?page=2 不进 canonical，避免搜索引擎把每页当独立页面收录。
-	v.Noindex = v.ProductsPage > 1
-	if v.ProductTermName == "" {
+	// 第 1 页才是规范地址：?page=2 不进 canonical；搜索结果页也不收录，
+	// 否则任意关键词都能生成一条可索引的站内 URL。
+	v.Noindex = v.ProductsPage > 1 || q != ""
+	if q != "" {
+		v.Title = v.composeTitle(v.TF("products.searchTitleTag", q))
+	} else if v.ProductTermName == "" {
 		v.Title = v.composeTitle(v.T("products.pageTitleTag"))
 	}
 	v.Desc = v.TF("products.pageDesc", v.SiteName)
@@ -485,7 +515,8 @@ func (h *siteHandler) productDetail(c *gin.Context) {
 }
 
 // GET /p/:slug —— 自定义页。
-func (h *siteHandler) pageDetail(c *gin.Context) {	lang := langOf(c)
+func (h *siteHandler) pageDetail(c *gin.Context) {
+	lang := langOf(c)
 	slug := c.Param("slug")
 	p, err := h.svc.PublishedPageBy(c.Request.Context(), slug, lang.Code)
 	if err != nil {

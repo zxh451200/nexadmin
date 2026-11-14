@@ -15,7 +15,7 @@ import type { Column } from '@/framework/components/table/types'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
+import { OptionPicker } from '@/framework/components/OptionPicker'
 import { fmtDateTime } from '../oper-log/format'
 import {
   RECYCLE_TYPES,
@@ -26,10 +26,8 @@ import {
   useRestoreBatch,
   type RecycleBatchResult,
   type RecycleItem,
-  type RecycleType,
 } from './api'
 
-const ALL = 'all'
 
 export default function RecyclePage() {
   const { t, i18n } = useTranslation()
@@ -41,7 +39,8 @@ export default function RecyclePage() {
   const confirm = useConfirm()
   const [draft, setDraft] = useState('')
   const [keyword, setKeyword] = useState('')
-  const [type, setType] = useState<string>(ALL)
+  const [type, setType] = useState<string[]>([])
+  const [typeApplied, setTypeApplied] = useState<string | undefined>()
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
   const [appliedRange, setAppliedRange] = useState<{ from?: string; to?: string }>({})
@@ -53,7 +52,7 @@ export default function RecyclePage() {
     page,
     pageSize,
     keyword: keyword || undefined,
-    type: type === ALL ? undefined : (type as RecycleType),
+    type: typeApplied,
     from: appliedRange.from || undefined,
     to: appliedRange.to || undefined,
   })
@@ -115,7 +114,17 @@ export default function RecyclePage() {
   const selectedRows = (data?.list ?? []).filter((r) => selected.includes(r.id))
 
   const columns: Column<RecycleItem>[] = [
-    { key: 'name', title: t('recycle.col.name'), mobile: 'title' },
+    {
+      key: 'name',
+      title: t('recycle.col.name'),
+      mobile: 'title',
+      // 名称来自被删的任意实体（公告标题/字典标签/昵称）——截断 + 悬停看全名
+      render: (r) => (
+        <span className="block max-w-xs truncate" title={r.name}>
+          {r.name}
+        </span>
+      ),
+    },
     {
       key: 'type',
       title: t('recycle.col.type'),
@@ -137,13 +146,15 @@ export default function RecyclePage() {
       <FilterBar
         onSearch={() => {
           setKeyword(draft.trim())
+          setTypeApplied(type.length ? type.join(',') : undefined)
           setAppliedRange({ from: from || undefined, to: to || undefined })
           setPage(1)
         }}
         onReset={() => {
           setDraft('')
           setKeyword('')
-          setType(ALL)
+          setType([])
+          setTypeApplied(undefined)
           setFrom('')
           setTo('')
           setAppliedRange({})
@@ -156,25 +167,17 @@ export default function RecyclePage() {
           placeholder={t('recycle.filter.keywordPlaceholder')}
           onChange={(e) => setDraft(e.target.value)}
         />
-        <Select
+        <OptionPicker
+          title={t('recycle.filter.type')}
           value={type}
-          onValueChange={(v) => {
+          onChange={(v) => {
             setType(v)
             setPage(1)
           }}
-        >
-          <SelectTrigger id="rc-type" className="md:w-48" aria-label={t('recycle.filter.type')}>
-            <SelectValue placeholder={t('recycle.filter.type')} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>{t('recycle.type.all')}</SelectItem>
-            {RECYCLE_TYPES.map((k) => (
-              <SelectItem key={k} value={k}>
-                {t(`recycle.type.${k}`)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          options={RECYCLE_TYPES.map((k) => ({ value: k, label: t(`recycle.type.${k}`) }))}
+          className="md:w-52"
+          placeholder={t('recycle.filter.type')}
+        />
         {/* 删除时间范围：用共享 DatePicker，不用原生 type=date——原生弹窗是浏览器自己的
             控件，跟主题令牌、语言包、其它筛选栏都不是一套长相（这条是全仓规矩）。 */}
         <DatePicker

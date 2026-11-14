@@ -20,6 +20,7 @@ import (
 //  6. 客户主数据、AI 网关曾是「同名目录 + 唯一子项」，现在子项直接在一级；
 //  7. 消息中心曾列在「内容管理」下，与顶栏铃铛重复，现在隐藏侧栏入口；
 //  8. 插件/定时任务/代码生成/表单/多语言/审计与单点登录/开放平台曾在「系统管理」下，现在同属 dir:/dev。
+//  9. 导入中心曾被拖进「导出中心」菜单下（拖拽没拦 menu-under-menu 的时期留下的），侧栏渲染不出来，拽回 dir:/io。
 //
 // 播种只补不改（core/seed 按 code 判断，已存在的一律不动），所以老库必须在这里收敛一次。
 // 条件只匹配「坏形状」本身（顶级 / 挂在旧目录下），管理员自己挪过位置的菜单不会被拽回来；
@@ -39,6 +40,30 @@ func reconcileMenuShape(db *gorm.DB) (checked, fixed int, err error) {
 			}{{"menu:jobs", 10}, {"imports:list", 20}} {
 				checked++
 				res := tx.Exec(`UPDATE sys_menu SET parent_id = ?, sort = ? WHERE code = ? AND parent_id = 0`, ioID, item.sort, item.code)
+				if res.Error != nil {
+					return res.Error
+				}
+				fixed += int(res.RowsAffected)
+			}
+
+			// 导入中心曾被拖进「导出中心」菜单下：旧版插件清单把它种在顶级，而菜单管理的拖拽
+			// 当时没拦「菜单挂菜单」。侧栏只渲染「目录 → 菜单」两层，挂在菜单下的菜单永远不可见——
+			// 这个形状不可能是管理员的故意安排，所以不像目录之间的挪动，无条件拽回 dir:/io。
+			// sort 跟在导出中心当前值之后（出厂值是 jobs=10、imports=20；管理员若调过 jobs 的
+			// sort，按它 +10 排列，避免固定 20 与调过的 jobs 打平导致并列顺序不稳定）。
+			checked++
+			var underMenu int64
+			if e := tx.Raw(`SELECT c.parent_id FROM sys_menu c JOIN sys_menu p ON p.id = c.parent_id
+				WHERE c.code = ? AND c.type = 'menu' AND p.type = 'menu'`, "imports:list").Scan(&underMenu).Error; e != nil {
+				return e
+			}
+			if underMenu != 0 {
+				var jobsSort int
+				if e := tx.Raw(`SELECT sort FROM sys_menu WHERE code = ? AND type = 'menu'`, "menu:jobs").Scan(&jobsSort).Error; e != nil {
+					return e
+				}
+				res := tx.Exec(`UPDATE sys_menu SET parent_id = ?, sort = ? WHERE code = ? AND parent_id = ?`,
+					ioID, jobsSort+10, "imports:list", underMenu)
 				if res.Error != nil {
 					return res.Error
 				}

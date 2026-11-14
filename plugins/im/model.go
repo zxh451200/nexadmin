@@ -14,6 +14,7 @@ const (
 
 	SenderVisitor = "visitor" // 客户侧（游客/会员，用 visitorToken 标识）
 	SenderAgent   = "agent"   // 宿主系统坐席（管理员/客服）
+	SenderBot     = "bot"     // AI 助手（知识库插件自动回答；不触发自动认领与离线提醒）
 	SenderSystem  = "system"  // 系统提示（预留）
 )
 
@@ -44,6 +45,9 @@ type Conversation struct {
 	// 认领：空串表示未分配；坐席认领或首次回复后落人。
 	AssigneeID   string `gorm:"size:64;not null;default:''" json:"assigneeId,omitempty"`
 	AssigneeName string `gorm:"size:64;not null;default:''" json:"assigneeName,omitempty"`
+	// BotPaused 是「人工接管」标记：坐席认领或访客转人工后置位，AI 自动回答停答直到会话结束。
+	// 置位不可逆（转接/释放不恢复）——回给 AI 需要新会话，避免人工与 AI 交替发言打架。
+	BotPaused bool `gorm:"not null;default:false" json:"botPaused,omitempty"`
 	// 满意度：1~5；0 表示未评价。
 	Rating        int        `gorm:"not null;default:0" json:"rating"`
 	RatingComment string     `gorm:"size:500;not null;default:''" json:"ratingComment,omitempty"`
@@ -87,6 +91,8 @@ const (
 
 	// MetaCodeConvClosed 是"会话已结束"系统消息的 meta.code。
 	MetaCodeConvClosed = "conv_closed"
+	// MetaCodeHandoff 是"已转人工"系统消息的 meta.code（AI 停答 + 自动分配，见 Service.Handoff）。
+	MetaCodeHandoff = "handoff"
 )
 
 // QuickReply 是坐席共享的快捷回复话术。

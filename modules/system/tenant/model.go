@@ -187,6 +187,7 @@ type UsageDaily struct {
 func (UsageDaily) TableName() string { return "sys_tenant_usage_daily" }
 
 // ListQuery 是 GET /tenants 与 GET /tenant-packages 的查询参数。
+// Status/PackageID 是逗号拼接多值（status 已是 IN 语义；packageId 由 handler 解析后按 IN 收窄）。
 type ListQuery struct {
 	Keyword   string `form:"keyword"`
 	Status    string `form:"status"`

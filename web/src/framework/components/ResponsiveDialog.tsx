@@ -91,8 +91,11 @@ export function ResponsiveDialog({
           contentClassName,
         )}
       >
-        <DialogHeader className="shrink-0 border-b border-border px-4 py-3 text-start dark:border-white/10">
-          <DialogTitle>{title}</DialogTitle>
+        {/* × 是 DialogContent 绝对定位的（inset-e-4 top-4，占 16-48px）：头部 pt-4 + 标题行 min-h-8
+            让标题与 × 同高同起点（图标居中对齐标题），不再悬在标题与描述之间的半空；
+            pe-12 给 × 留位，长标题/描述不再从按钮下面穿过 */}
+        <DialogHeader className="shrink-0 border-b border-border px-4 pt-4 pb-3 pe-12 text-start dark:border-white/10">
+          <DialogTitle className="flex min-h-8 items-center">{title}</DialogTitle>
           {description ? (
             <DialogDescription>{description}</DialogDescription>
           ) : (

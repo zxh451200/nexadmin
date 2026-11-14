@@ -9,6 +9,7 @@
     "province": "Province",
     "city": "City",
     "district": "District",
+    "street": "Street / Township",
     "selectCountry": "Select country / region",
     "selectIcon": "Select an icon",
     "searchIcon": "Search icon name",
@@ -22,6 +23,9 @@
     "minute": "Minute",
     "addressDetail": "Detailed address",
     "addressFull": "Full address",
-    "addressPasteHint": "Paste a full address to auto-fill region fields"
+    "addressPasteHint": "Paste a full address to auto-fill region fields",
+    "mapPick": "Pick on map",
+    "recent": "Recent",
+    "clear": "Clear"
   }
 }

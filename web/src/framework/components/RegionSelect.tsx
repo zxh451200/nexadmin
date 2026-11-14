@@ -9,7 +9,8 @@ import { PickerTrigger } from './pickers/PickerTrigger'
 import { findRegionPath, useRegionTree, type RegionValue } from './pickers/useRegionTree'
 
 export interface RegionSelectProps {
-  level?: 2 | 3
+  /** 3 = 省/市/区县；4 = 加街道/乡镇（街道名由调用方折进详细地址，不单独存储） */
+  level?: 2 | 3 | 4
   value?: RegionValue | null
   onChange?: (value: RegionValue) => void
   allowClear?: boolean
@@ -19,7 +20,7 @@ export interface RegionSelectProps {
   id?: string
 }
 
-const KEYS = ['province', 'city', 'district'] as const
+const KEYS = ['province', 'city', 'district', 'street'] as const
 
 // 直辖市、港澳与省直辖县级市没有地级这一层，选中省级后只需再选一级，第三列不该空着出现；
 // 台湾省只到省级（没有公开的下级区划），选完就该收在省级这一列。
@@ -30,7 +31,7 @@ function widthFor(path: RegionNode[], level: number): number {
 }
 
 function toValue(path: RegionNode[]): RegionValue {
-  return { province: path[0]?.code, city: path[1]?.code, district: path[2]?.code }
+  return { province: path[0]?.code, city: path[1]?.code, district: path[2]?.code, street: path[3]?.code }
 }
 
 export function RegionSelect({ level = 3, value, onChange, allowClear = true, placeholder, disabled, className, id }: RegionSelectProps) {
@@ -56,7 +57,9 @@ export function RegionSelect({ level = 3, value, onChange, allowClear = true, pl
   const choose = (depth: number, node: RegionNode) => {
     const next = [...draft.slice(0, depth), node]
     setDraft(next)
-    if (depth + 1 >= level || !node.children?.length) {
+    // 到达该路径的有效层数（直辖市/省直辖县级市天然少一层）或叶子节点即收口；
+    // widthFor 按「已选路径」算，街道层挂上后选到街道正好是第 4 步
+    if (!node.children?.length || depth + 1 >= widthFor(next, level)) {
       onChange?.(toValue(next))
       setOpen(false)
     } else {
@@ -125,7 +128,10 @@ export function RegionSelect({ level = 3, value, onChange, allowClear = true, pl
       onOpenChange={onOpen}
       disabled={disabled}
       title={placeholder ?? t('picker.selectRegion')}
-      contentClassName={cn('w-auto', columns.length === 1 ? 'w-64' : columns.length === 2 ? 'w-[28rem]' : 'min-w-xl')}
+      contentClassName={cn(
+        'w-auto',
+        columns.length === 1 ? 'w-64' : columns.length === 2 ? 'w-[28rem]' : columns.length === 3 ? 'min-w-xl' : 'min-w-[44rem]',
+      )}
       trigger={
         <PickerTrigger
           id={id}

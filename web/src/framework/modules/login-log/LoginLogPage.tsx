@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { pageAfterDelete } from '@/framework/hooks/page-fallback'
+import { useAsyncJob } from '@/framework/hooks/use-async-job'
 import { DataTable } from '@/framework/components/DataTable'
 import { DateRangePicker, type DateRangeValue } from '@/framework/components/DateRangePicker'
 import { DictSelect } from '@/framework/components/DictSelect'
@@ -21,13 +22,10 @@ import { Input } from '@/framework/ui/input'
 import { Label } from '@/framework/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/framework/ui/tabs'
-import { isExportTooMany } from '../oper-log/api'
-import { fmtDateTime, stamp } from '../oper-log/format'
-import { blobExt } from '../user/api'
-import { saveBlob } from '@/framework/components/export/csv'
+import { fmtDateTime } from '../oper-log/format'
 import {
   LOGIN_TYPES,
-  exportLoginLogs,
+  createLoginLogExportJob,
   useCleanLoginLogs,
   useDeleteLoginLogs,
   useLoginLogList,
@@ -87,7 +85,7 @@ export default function LoginLogPage() {
   const view = params.get('view') === 'stats' ? 'stats' : 'logs'
   const setView = (v: string) => setParams(v === 'stats' ? { view: v } : {}, { replace: true })
   const [selected, setSelected] = useState<string[]>([])
-  const [exporting, setExporting] = useState(false)
+  const { start: startExportJob } = useAsyncJob()
 
   const { data, isLoading } = useLoginLogList({ page, pageSize, ...toQuery(applied) })
   const del = useDeleteLoginLogs()
@@ -134,17 +132,12 @@ export default function LoginLogPage() {
     }
   }
 
+  // 统一异步导出：提交 core/job 任务进导出中心（需要 loginLog:export 权限），提交/完成提示由 useAsyncJob 统一给出
   const onExport = async () => {
-    setExporting(true)
     try {
-      // 服务端按当前筛选条件与数据范围生成文件（需要 loginLog:export 权限），列由服务端白名单决定
-      const blob = await exportLoginLogs(toQuery(applied))
-      saveBlob(`${t('loginLog.export.filename')}-${stamp()}.${blobExt(blob)}`, blob)
-      toast.success(t('loginLog.export.done'))
+      await startExportJob(() => createLoginLogExportJob(toQuery(applied)))
     } catch (e) {
-      toast.error(isExportTooMany(e) ? t('loginLog.export.tooMany') : e instanceof Error && e.message ? e.message : t('common.operateFailed'))
-    } finally {
-      setExporting(false)
+      toast.error(e instanceof Error && e.message ? e.message : t('common.operateFailed'))
     }
   }
 
@@ -157,14 +150,35 @@ export default function LoginLogPage() {
       render: (r) => <Badge variant={TYPE_VARIANT[r.loginType as LoginType]}>{t(`loginLog.type.${r.loginType}`, { defaultValue: r.loginType })}</Badge>,
     },
     { key: 'ip', title: t('loginLog.col.ip'), render: (r) => <span className="num">{r.ip}</span> },
-    { key: 'location', title: t('loginLog.col.location') },
-    { key: 'browser', title: t('loginLog.col.browser') },
-    { key: 'os', title: t('loginLog.col.os') },
+    {
+      key: 'location',
+      title: t('loginLog.col.location'),
+      render: (r) => (r.location ? <span className="block max-w-[10rem] truncate" title={r.location}>{r.location}</span> : <span className="text-muted-foreground">-</span>),
+    },
+    {
+      key: 'browser',
+      title: t('loginLog.col.browser'),
+      render: (r) => (r.browser ? <span className="block max-w-[10rem] truncate" title={r.browser}>{r.browser}</span> : <span className="text-muted-foreground">-</span>),
+    },
+    {
+      key: 'os',
+      title: t('loginLog.col.os'),
+      render: (r) => (r.os ? <span className="block max-w-[10rem] truncate" title={r.os}>{r.os}</span> : <span className="text-muted-foreground">-</span>),
+    },
     { key: 'status', title: t('loginLog.col.status'), render: (r) => <DictTag dict="login_status" value={r.status} /> },
     {
       key: 'failReason',
       title: t('loginLog.col.reason'),
-      render: (r) => (r.failReason ? t(`loginLog.reason.${r.failReason}`, { defaultValue: r.failReason }) : <span className="text-muted-foreground">-</span>),
+      // 未映射的原因会把原始错误串直接显示出来——截断 + 悬停看全文
+      render: (r) => {
+        if (!r.failReason) return <span className="text-muted-foreground">-</span>
+        const text = t(`loginLog.reason.${r.failReason}`, { defaultValue: r.failReason })
+        return (
+          <span className="block max-w-xs truncate" title={text}>
+            {text}
+          </span>
+        )
+      },
     },
     { key: 'createdAt', title: t('loginLog.col.time'), render: (r) => <span className="num">{fmtDateTime(r.createdAt, i18n.language)}</span> },
   ]
@@ -202,7 +216,7 @@ export default function LoginLogPage() {
         toolbar={
           <>
             <Can perm="loginLog:export">
-              <Button type="button" variant="outline" disabled={exporting} onClick={onExport}>
+              <Button type="button" variant="outline" onClick={() => void onExport()}>
                 <Download className="me-2 size-4" aria-hidden="true" />
                 {t('loginLog.action.export')}
               </Button>

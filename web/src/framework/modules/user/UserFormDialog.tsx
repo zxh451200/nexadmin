@@ -7,7 +7,7 @@ import { toast } from 'sonner'
 import { z } from 'zod'
 import { DictSelect } from '@/framework/components/DictSelect'
 import { FormGrid, FormGridFull, FormLayout } from '@/framework/components/FormLayout'
-import { RegionSelect } from '@/framework/components/RegionSelect'
+import { AddressField } from '@/framework/components/AddressField'
 import { RemoteSelect } from '@/framework/components/RemoteSelect'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { SwitchField } from '@/framework/components/SwitchField'
@@ -77,6 +77,7 @@ export function UserFormDialog({ open, onOpenChange, user }: UserFormDialogProps
         enabled: z.boolean(),
         avatar: z.array(z.custom<UploadedFile>()),
         region: z.object({ province: z.string().optional(), city: z.string().optional(), district: z.string().optional() }),
+        address: z.string().max(255),
         remark: z.string().max(200),
       }),
     [t],
@@ -95,6 +96,7 @@ export function UserFormDialog({ open, onOpenChange, user }: UserFormDialogProps
     enabled: (u?.status ?? '1') === '1',
     avatar: u?.avatar ? [{ id: 'avatar', url: u.avatar, name: 'avatar', size: 0, type: 'image/*' }] : [],
     region: u?.region ?? {},
+    address: u?.address ?? '',
     remark: u?.remark ?? '',
   })
 
@@ -123,6 +125,7 @@ export function UserFormDialog({ open, onOpenChange, user }: UserFormDialogProps
       roleNames: v.roleIds.map((id) => roleMap.get(id) ?? id),
       status: v.enabled ? '1' : '0',
       region: v.region,
+      address: v.address,
       remark: v.remark,
     }
     try {
@@ -260,17 +263,27 @@ export function UserFormDialog({ open, onOpenChange, user }: UserFormDialogProps
                 </FormItem>
               )}
             />
-            <FormField
-              control={form.control}
-              name="region"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('user.form.region')}</FormLabel>
-                  <RegionSelect level={3} value={field.value} onChange={field.onChange} />
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <FormGridFull>
+              <FormField
+                control={form.control}
+                name="region"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('user.form.region')}</FormLabel>
+                    {/* 地址是三段一体的复合字段：区划/详细地址任一变化都同时写回两个表单字段；街道层折进详细地址 */}
+                    <AddressField
+                      level={4}
+                      value={{ region: field.value, address: form.watch('address') }}
+                      onChange={({ region, address }) => {
+                        field.onChange(region)
+                        form.setValue('address', address ?? '', { shouldValidate: true })
+                      }}
+                    />
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </FormGridFull>
             <FormGridFull>
               <SwitchField control={form.control} name="enabled" label={t('user.form.status')} />
             </FormGridFull>

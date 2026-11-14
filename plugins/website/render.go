@@ -263,8 +263,8 @@ func buildThemePack(t *Theme) (*themePack, error) {
 type siteView struct {
 	// ThemeID 是站点设置选中的主题 id：render 据此选模板集（"" = default）。
 	// 不进模板逻辑，仅渲染出口消费；主题模板可以用 {{.ThemeID}} 区分自己。
-	ThemeID   string
-	SiteName  string
+	ThemeID  string
+	SiteName string
 	SiteDesc string
 	LogoURL  string
 	// FaviconURL / OgImageURL 是站点设置里的资产：浏览器标签图标与默认分享图（og:image 兜底），
@@ -278,8 +278,8 @@ type siteView struct {
 	TitleSuffix string
 	// HomeSlug 是被设为首页的单页 slug（站点设置）；空 = 内置首页。
 	// 不进模板，由 home 处理器读取决定渲染哪张页面。
-	HomeSlug     string
-	HomeTitle    string
+	HomeSlug      string
+	HomeTitle     string
 	HomeSubtitle  string
 	HomeCTALabel  string
 	HomeCTAHref   string
@@ -306,16 +306,23 @@ type siteView struct {
 	Noindex  bool
 	Posts    []Post
 	// ProductsPage / ProductsTotalPages 是公开产品列表的分页状态（products.tmpl 渲染翻页链接）。
-	Products          []Product
-	ProductsPage      int
+	Products           []Product
+	ProductsPage       int
 	ProductsTotalPages int
 	// ProductCategories 是产品页的类目导航（含当前高亮那一项）。
 	ProductCategories []termLink
-	// ProductTermName / ProductTermQuery 说明这一页是类目归档：空 = 全部产品；
-	// 归档筛选必须进 canonical 与翻页链接，语义同 NewsTermQuery。
+	// ProductTermName / ProductTermQuery 说明这一页的筛选状态（类目 + 检索词）：
+	// 空 = 全部产品；筛选串必须进 canonical 与翻页链接，语义同 NewsTermQuery。
 	ProductTermName  string
 	ProductTermQuery string
-	Product          *Product
+	// ProductTermSlug 是当前类目 slug，供搜索表单以 hidden 字段保留分类；
+	// ProductQuery 是当前检索词，ProductAllURL 是带检索词的「全部产品」链接。
+	ProductTermSlug string
+	ProductQuery    string
+	ProductAllURL   string
+	// ProductsTotal 是筛选后的命中数，结果栏展示「共 N 个产品」。
+	ProductsTotal int
+	Product       *Product
 	// ProductsRelated 是详情页的「同类产品」推荐（同类目已上架商品，不含自身）。
 	ProductsRelated []Product
 	// NewsPage / NewsTotalPages 是公开新闻列表的分页状态（news.tmpl 渲染翻页链接）。
@@ -376,10 +383,10 @@ type siteView struct {
 	OGType string
 	// OGPublishedAt 是文章的发布时间（article:published_time，RFC3339）；空 = 不输出。
 	OGPublishedAt string
-	MyScore          int
-	Signed           bool
-	SignatureURL     string
-	PublicKeyURL     string
+	MyScore       int
+	Signed        bool
+	SignatureURL  string
+	PublicKeyURL  string
 
 	// 文档区（/docs，渲染 nexadmin/docs 内嵌的框架使用文档）
 	DocsEnabled bool
@@ -470,6 +477,11 @@ func (v *siteView) Alternate(l Language) string {
 // 搜索引擎当成 /news 的重复页。整串在 Go 里拼好、模板只放一个动作——
 // html/template 对「文本 + 动作」拼接的 URL 会把动作里的 `=` 编码成 %3d，链接就废了。
 func (v *siteView) Canonical() string {
+	// 产品中心的分类 / 检索筛选同样要进 canonical，否则 /products?category=x
+	// 会被当成 /products 的重复页；整串在 Go 里拼好，模板只放一个动作。
+	if v.Route == "/products" && v.ProductTermQuery != "" {
+		return v.BaseURL + v.Path + "?" + v.ProductTermQuery
+	}
 	if v.NewsTermQuery == "" {
 		return v.BaseURL + v.Path
 	}

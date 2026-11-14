@@ -6,6 +6,7 @@ import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { FilterBar } from '@/framework/components/FilterBar'
+import { OptionPicker } from '@/framework/components/OptionPicker'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
@@ -41,7 +42,7 @@ interface Props {
 export function JobsTab({ onViewLogs }: Props) {
   const { t, i18n } = useTranslation()
   const confirm = useConfirm()
-  const [draft, setDraft] = useState<JobQuery>({})
+  const [draft, setDraft] = useState<{ keyword?: string; handler?: string[]; enabled?: string }>({})
   const [filters, setFilters] = useState<JobQuery>({})
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
@@ -157,7 +158,7 @@ export function JobsTab({ onViewLogs }: Props) {
     <div className="flex flex-col gap-4">
       <FilterBar
         onSearch={() => {
-          setFilters(draft)
+          setFilters({ keyword: draft.keyword, handler: draft.handler?.length ? draft.handler.join(',') : undefined, enabled: draft.enabled })
           setPage(1)
         }}
         onReset={() => {
@@ -173,19 +174,14 @@ export function JobsTab({ onViewLogs }: Props) {
           placeholder={t('plugin_cron.searchPlaceholder')}
           aria-label={t('common.keyword')}
         />
-        <Select value={draft.handler ?? ALL} onValueChange={(v) => setDraft((d) => ({ ...d, handler: v === ALL ? undefined : v }))}>
-          <SelectTrigger className="md:w-44" aria-label={t('plugin_cron.fields.handler')}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>{t('plugin_cron.filter.allHandlers')}</SelectItem>
-            {handlers.map((h) => (
-              <SelectItem key={h.name} value={h.name}>
-                {handlerLabel(h.name)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <OptionPicker
+          title={t('plugin_cron.fields.handler')}
+          value={draft.handler ?? []}
+          onChange={(v) => setDraft((d) => ({ ...d, handler: v.length ? v : undefined }))}
+          options={handlers.map((h) => ({ value: h.name, label: handlerLabel(h.name) }))}
+          className="md:w-48"
+          placeholder={t('plugin_cron.fields.handler')}
+        />
         <Select value={draft.enabled ?? ALL} onValueChange={(v) => setDraft((d) => ({ ...d, enabled: v === ALL ? undefined : v }))}>
           <SelectTrigger className="md:w-40" aria-label={t('plugin_cron.fields.enabled')}>
             <SelectValue />

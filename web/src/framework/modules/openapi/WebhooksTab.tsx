@@ -115,7 +115,12 @@ export function WebhooksTab() {
       key: 'url',
       title: t('openapi.webhooks.fields.url'),
       mobile: 'sub',
-      render: (w) => <code className="break-all font-mono text-xs">{w.url}</code>,
+      // break-all 在 nowrap 单元格里是死代码：改 truncate + title，回调 URL 长度不限
+      render: (w) => (
+        <code className="block max-w-xs truncate font-mono text-xs md:max-w-sm" title={w.url}>
+          {w.url}
+        </code>
+      ),
     },
     {
       key: 'events',

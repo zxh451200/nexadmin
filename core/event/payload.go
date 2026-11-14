@@ -20,6 +20,7 @@ const (
 	RoleUpdated     = "role.updated"
 	RoleDeleted     = "role.deleted"
 	NoticePublished = "notice.published"
+	JobFinished     = "job.finished"
 )
 
 // Info 是事件目录里的一项（GET /openapi/events）。
@@ -39,6 +40,7 @@ var catalog = []Info{
 	{RoleUpdated, "角色已更新"},
 	{RoleDeleted, "角色已删除"},
 	{NoticePublished, "公告已发布"},
+	{JobFinished, "异步任务已结束（导出完成或失败）"},
 }
 
 // Register 向事件目录追加条目，供插件在 init/Register 阶段声明自己的事件。
@@ -117,6 +119,20 @@ type NoticeData struct {
 
 // EventTenant 实现 tenantOwner。
 func (d NoticeData) EventTenant() idgen.ID { return d.TenantID }
+
+// JobData 是 job.finished 事件载荷：不含任务参数与存储对象键，Error 是给用户看的失败原因。
+type JobData struct {
+	ID       idgen.ID `json:"id"`
+	TenantID idgen.ID `json:"tenantId"`
+	OwnerID  idgen.ID `json:"ownerId"`
+	Type     string   `json:"type,omitempty"`
+	Status   string   `json:"status,omitempty"`
+	FileName string   `json:"fileName,omitempty"`
+	Error    string   `json:"error,omitempty"`
+}
+
+// EventTenant 实现 tenantOwner。
+func (d JobData) EventTenant() idgen.ID { return d.TenantID }
 
 // sensitiveKeys 命中（不区分大小写、子串匹配）的字段会被 Scrub 删掉。
 var sensitiveKeys = []string{"password", "passwd", "secret", "token", "hash", "salt", "credential", "apikey", "api_key", "privatekey", "private_key"}

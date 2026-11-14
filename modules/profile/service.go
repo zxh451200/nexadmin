@@ -136,7 +136,7 @@ func (s *Service) Bindings(ctx context.Context, uid idgen.ID) (*Bindings, error)
 	}
 	out := &Bindings{Phone: maskPhone(u.Phone), Providers: []ProviderBinding{}}
 	for _, k := range providerKeys {
-		pc, configured := s.cfg.Auth.ProviderConf(k)
+		pc, configured := auth.EffectiveProviderConf(ctx, s.cfg.Auth, k)
 		if !configured {
 			continue
 		}
