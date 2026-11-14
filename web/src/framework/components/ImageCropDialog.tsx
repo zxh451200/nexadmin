@@ -57,6 +57,38 @@ export function ImageCropDialog({ open, file, crop, onCancel, onConfirm }: Image
   const aspect = crop === 'free' ? NaN : crop.aspect ?? (crop.width && crop.height ? crop.width / crop.height : NaN)
   const fixedOut = crop !== 'free' && !!(crop.width && crop.height)
 
+  /** 旋转 90° 时把裁剪框跟着图片一起变换。cropperjs v1 的 rotate 只转画布不动裁剪框，
+   *  原地留下的框会悬在转好的图外/错位。映射：旧画布上的相对坐标 (u,v)，顺时针转 90°
+   *  后落到新画布的 (1-v, u)，框宽高对调；锁比例的裁剪按映射框面积以原比例重取
+   *  （旋转后宽高比对调，不重取会破坏比例锁）。 */
+  const rotateCropBox = (c: Cropper, deg: 90 | -90) => {
+    const C0 = c.getCanvasData()
+    const B = c.getCropBoxData()
+    c.rotate(deg)
+    const C1 = c.getCanvasData()
+    const relL = (B.left - C0.left) / C0.width
+    const relT = (B.top - C0.top) / C0.height
+    const relR = relL + B.width / C0.width
+    const relB = relT + B.height / C0.height
+    const box =
+      deg === 90
+        ? { l: 1 - relB, t: relL, r: 1 - relT, b: relR }
+        : { l: relT, t: 1 - relR, r: relB, b: 1 - relL }
+    let width = (box.r - box.l) * C1.width
+    let height = (box.b - box.t) * C1.height
+    let left = C1.left + box.l * C1.width
+    let top = C1.top + box.t * C1.height
+    if (!Number.isNaN(aspect)) {
+      const cx = left + width / 2
+      const cy = top + height / 2
+      width = Math.round(Math.sqrt(width * height * aspect))
+      height = Math.round(width / aspect)
+      left = cx - width / 2
+      top = cy - height / 2
+    }
+    c.setCropBoxData({ left, top, width, height })
+  }
+
   // 裁剪框变化（含拖动、就绪）→ 同步浮标与输入框
   const syncLive = useCallback((c: Cropper) => {
     const b = c.getCropBoxData()
@@ -229,7 +261,7 @@ export function ImageCropDialog({ open, file, crop, onCancel, onConfirm }: Image
           <Button type="button" variant="outline" size="icon" aria-label={t('uploader.zoomOut')} onClick={() => cropperRef.current?.zoom(-0.1)}>
             <ZoomOut className="size-4" aria-hidden="true" />
           </Button>
-          <Button type="button" variant="outline" size="icon" aria-label={t('uploader.rotate')} onClick={() => cropperRef.current?.rotate(90)}>
+          <Button type="button" variant="outline" size="icon" aria-label={t('uploader.rotate')} onClick={() => { const c = cropperRef.current; if (c) rotateCropBox(c, 90) }}>
             <RotateCw className="size-4" aria-hidden="true" />
           </Button>
         </div>
