@@ -24,7 +24,11 @@
     "zoomIn": "Zoom in",
     "zoomOut": "Zoom out",
     "rotate": "Rotate",
-    "cropReset": "Reset crop"
+    "cropReset": "Reset crop",
+    "previewLabel": "Preview",
+    "outputSize": "Output size",
+    "ratioLabel": "Ratio",
+    "cropRatioFree": "Free"
   },
   "lightbox": {
     "prev": "Previous",

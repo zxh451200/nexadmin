@@ -24,7 +24,11 @@
     "zoomIn": "放大",
     "zoomOut": "缩小",
     "rotate": "旋转",
-    "cropReset": "重置裁剪"
+    "cropReset": "重置裁剪",
+    "previewLabel": "实时预览",
+    "outputSize": "输出尺寸",
+    "ratioLabel": "比例",
+    "cropRatioFree": "自由"
   },
   "lightbox": {
     "prev": "上一张",
