@@ -11,6 +11,7 @@ import { BrandMark } from '@/framework/components/BrandMark'
 import { useDemoAccount, useDemoMode } from '@/framework/hooks/use-demo-mode'
 import { LanguageSwitch } from '@/framework/i18n/LanguageSwitch'
 import { api } from '@/framework/request/http'
+import { cn } from '@/lib/utils'
 import { ThemeToggle } from '@/framework/theme/ThemeToggle'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
@@ -227,7 +228,7 @@ export default function LoginPage() {
   const onForgot = data.forgotEnabled ? () => setForgotOpen(true) : undefined
 
   return (
-    <div className="relative flex min-h-dvh flex-col bg-background lg:flex-row">
+    <div className="relative flex min-h-dvh flex-col bg-background lg:h-dvh lg:flex-row lg:overflow-hidden">
       {/* 深色：整页铺同一族品牌渐变，斜切线两侧同色（亮色不渲染，保持蓝色斜切面板）。
           定位元素按 DOM 顺序绘制，后续 BrandPanel 与右栏都带 relative 才能盖住这层。 */}
       <div className="login-page-bg absolute inset-0 hidden lg:dark:block" aria-hidden="true" />
@@ -250,8 +251,10 @@ export default function LoginPage() {
           <ThemeToggle />
         </div>
 
-        <main className="flex flex-1 items-center justify-center px-6 pb-[max(2rem,env(safe-area-inset-bottom))] pt-4 lg:pb-12">
-          <div className="w-full max-w-sm">
+        {/* lg 起右栏钉在视口内自己滚动（切滑块验证把表单撑高时左侧品牌面板不动）：
+            滚动容器里 items-center 会把超高内容顶部裁到够不着，改 items-start + 内容 my-auto */}
+        <main className="flex flex-1 items-center justify-center px-6 pb-[max(2rem,env(safe-area-inset-bottom))] pt-4 lg:min-h-0 lg:overflow-y-auto lg:items-start lg:pb-12">
+          <div className="w-full max-w-sm lg:my-auto">
             <BrandMark name={name} logoUrl={logoUrl} className="mb-8 hidden size-10 rounded-xl lg:flex" iconClassName="size-5" />
             <div className="mb-8">
               <div className="flex flex-wrap items-center gap-3">
@@ -325,10 +328,12 @@ export default function LoginPage() {
                         </TabsTrigger>
                       ))}
                     </TabsList>
-                    <TabsContent value="password" className="mt-6">
+                    {/* 两个面板 forceMount 常驻、用 hidden 切换：容器高度恒等于较高的那个表单，
+                        切换 tab 时下面的社交登录/注册入口不上下跳；已输入的内容也得以保留 */}
+                    <TabsContent value="password" forceMount className={cn('mt-6', activeMethod !== 'password' && 'hidden')}>
                       <PasswordForm onSuccess={done} onForgot={onForgot} onChallenge={setChallenge} demoCredentials={demoAccount} fillNonce={demoFill} />
                     </TabsContent>
-                    <TabsContent value="phone" className="mt-6">
+                    <TabsContent value="phone" forceMount className={cn('mt-6', activeMethod !== 'phone' && 'hidden')}>
                       <PhoneForm onSuccess={done} onChallenge={setChallenge} captchaEnabled={captchaEnabled} />
                     </TabsContent>
                   </Tabs>
