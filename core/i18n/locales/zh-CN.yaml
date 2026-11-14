@@ -505,6 +505,7 @@ user:
   gender_invalid: "性别不正确"
   status_invalid: "状态不正确"
   region_invalid: "地区编码不正确"
+  address_too_long: "详细地址过长"
   roles_not_found: "所选角色不存在"
   username_exists: "账号已存在"
   super_self_cannot_disable: "超级管理员和自己不能被停用"

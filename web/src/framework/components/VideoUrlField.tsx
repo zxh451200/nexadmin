@@ -35,60 +35,77 @@ export function VideoUrlField({
 }: VideoUrlFieldProps) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
+  const [zoom, setZoom] = useState(false)
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2">
-        <Input
-          value={value}
-          disabled={disabled}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
-          inputMode="url"
-          spellCheck={false}
-          className="min-w-0 flex-1 font-mono"
-          aria-label={ariaLabel ?? title}
-        />
-        {/* 文件库下拉：已传过的视频直接选，不用手写 URL（关键词可搜、按上传时间倒序） */}
-        <RemoteSelect
-          url="/files"
-          params={{ category: 'video' }}
-          valueKey="url"
-          labelKey="name"
-          value={value}
-          onChange={(v) => onChange(String(v ?? ''))}
-          allowClear={false}
-          placeholder={t('uploader.pickFromLibrary')}
-          disabled={disabled}
-          className="w-36 shrink-0 sm:w-44"
-        />
-        {value ? (
-          <Button type="button" variant="ghost" className="shrink-0 px-3" disabled={disabled} onClick={() => onChange('')}>
-            {t('common.clear')}
-          </Button>
-        ) : null}
-      </div>
-      {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
-      {/* 空值是可点的上传卡，有值时变内联播放的预览；两态同尺寸，不跳版 */}
+    <div className="flex items-center gap-3">
+      {/* 卡在左、URL 行在右：对齐 ImageUrlField 的横向形态；卡片统一 96px 方形，与封面/Logo 同规格。
+          有值时是帧缩略（去 controls），点击开弹层播放——96px 里塞播放条会挤成一坨 */}
       {value ? (
-        <video
-          src={value}
-          controls
-          preload="metadata"
-          className="aspect-video w-full max-w-xs rounded-md border border-border bg-muted/40 sm:w-56"
-        />
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => setZoom(true)}
+          aria-label={t('common.preview')}
+          title={t('common.preview')}
+          className="block shrink-0 rounded-md focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed"
+        >
+          <video
+            src={value}
+            preload="metadata"
+            muted
+            className="size-24 rounded-md border border-border bg-muted/40 object-cover"
+          />
+        </button>
       ) : (
         <button
           type="button"
           disabled={disabled}
           onClick={() => setOpen(true)}
           aria-label={ariaLabel ?? title}
-          className="flex aspect-video w-full max-w-xs flex-col items-center justify-center gap-1 rounded-md border border-dashed text-sm text-muted-foreground transition-colors hover:border-primary/50 hover:bg-muted/50 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50 sm:w-56"
+          className="flex size-24 shrink-0 flex-col items-center justify-center gap-1 rounded-md border border-dashed text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:bg-muted/50 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
         >
           <VideoIcon aria-hidden="true" className="size-5" />
           {t('uploader.add_video')}
         </button>
       )}
+      <div className="flex min-w-0 flex-1 flex-col gap-2">
+        <div className="flex items-center gap-2">
+          <Input
+            value={value}
+            disabled={disabled}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={placeholder}
+            inputMode="url"
+            spellCheck={false}
+            className="min-w-0 flex-1 font-mono"
+            aria-label={ariaLabel ?? title}
+          />
+          {/* 文件库下拉：已传过的视频直接选，不用手写 URL（关键词可搜、按上传时间倒序） */}
+          <RemoteSelect
+            url="/files"
+            params={{ category: 'video' }}
+            valueKey="url"
+            labelKey="name"
+            value={value}
+            onChange={(v) => onChange(String(v ?? ''))}
+            allowClear={false}
+            placeholder={t('uploader.pickFromLibrary')}
+            disabled={disabled}
+            className="w-36 shrink-0 sm:w-44"
+          />
+          {value ? (
+            <Button type="button" variant="ghost" className="shrink-0 px-3" disabled={disabled} onClick={() => onChange('')}>
+              {t('common.clear')}
+            </Button>
+          ) : null}
+        </div>
+        {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
+      </div>
+      {/* 点缩略放大播放：与 ImageUrlField 点图放大同一交互 */}
+      <ResponsiveDialog open={zoom} onOpenChange={setZoom} size="md" title={title}>
+        <video src={value} controls autoPlay className="max-h-[70vh] w-full rounded-md bg-black" />
+      </ResponsiveDialog>
       <ResponsiveDialog open={open} onOpenChange={setOpen} size="md" title={title} description={hint}>
         <Uploader
           kind="video"

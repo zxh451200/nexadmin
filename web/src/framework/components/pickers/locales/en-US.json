@@ -19,6 +19,9 @@
     "selectDateRange": "Select a date range",
     "time": "Time",
     "hour": "Hour",
-    "minute": "Minute"
+    "minute": "Minute",
+    "addressDetail": "Detailed address",
+    "addressFull": "Full address",
+    "addressPasteHint": "Paste a full address to auto-fill region fields"
   }
 }

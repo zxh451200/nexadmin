@@ -37,7 +37,8 @@ export function SimpleSelect({
     <Select value={value} onValueChange={onChange} disabled={disabled}>
       <SelectTrigger
         aria-label={rest['aria-label'] ?? label}
-        className={cn('w-auto min-w-24 whitespace-nowrap', className)}
+        // max-w-56：长字典标签把触发器撑到无限宽、挤走工具栏兄弟元素；省略号由 ui/select 的 line-clamp-1 兜底
+        className={cn('w-auto min-w-24 max-w-56 whitespace-nowrap', className)}
       >
         {label ? <span className="shrink-0 text-muted-foreground">{label}</span> : null}
         <SelectValue placeholder={placeholder} />

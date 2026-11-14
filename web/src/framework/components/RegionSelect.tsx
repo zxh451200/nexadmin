@@ -71,11 +71,15 @@ export function RegionSelect({ level = 3, value, onChange, allowClear = true, pl
     const walk = (nodes: RegionNode[], path: RegionNode[]) => {
       for (const n of nodes) {
         const p = [...path, n]
-        const isLeaf = p.length >= level || !n.children?.length
         // ü 在数据里写作 v（输入法习惯），按拼音搜索时 u 的写法也要能命中
         const hay = `${n.pinyin} ${n.pinyin.replace(/v/g, 'u')}`
-        if (isLeaf && (n.name.toLowerCase().includes(kw) || hay.includes(kw))) out.push(p)
-        if (!isLeaf && n.children) walk(n.children, p)
+        // 任意层级命中即入列：只认叶子的话，北海市这类带区县的地级市永远搜不到。
+        // 命中自身就不再下钻，免得同名父子（北海市 → 北海市辖区）重复占行。
+        if (n.name.toLowerCase().includes(kw) || hay.includes(kw)) {
+          out.push(p)
+          continue
+        }
+        if (p.length < level && n.children) walk(n.children, p)
         if (out.length >= 50) return
       }
     }
@@ -83,7 +87,12 @@ export function RegionSelect({ level = 3, value, onChange, allowClear = true, pl
     return out
   }, [kw, tree, level])
 
-  const columns = [tree, draft[0]?.children ?? [], draft[1]?.children ?? []].slice(0, widthFor(draft, level))
+  // 列数随已选层级展开：没选省份时只有省一列，选了省才长出市列——
+  // 空列渲染成「暂无数据」占满整块面板，比窄列更难看
+  const columns = [tree, draft[0]?.children ?? [], draft[1]?.children ?? []].slice(
+    0,
+    Math.min(widthFor(draft, level), draft.length + 1),
+  )
 
   const list = (depth: number) => (
     <ul role="listbox" className="max-h-72 overflow-y-auto p-1">
@@ -116,7 +125,7 @@ export function RegionSelect({ level = 3, value, onChange, allowClear = true, pl
       onOpenChange={onOpen}
       disabled={disabled}
       title={placeholder ?? t('picker.selectRegion')}
-      contentClassName="w-auto min-w-xl"
+      contentClassName={cn('w-auto', columns.length === 1 ? 'w-64' : columns.length === 2 ? 'w-[28rem]' : 'min-w-xl')}
       trigger={
         <PickerTrigger
           id={id}

@@ -62,9 +62,10 @@ const TONE: Record<'neutral' | 'success' | 'warning' | 'destructive' | 'info', s
  */
 export function QueueStatus({ tone = 'neutral', children }: { tone?: keyof typeof TONE; children: ReactNode }) {
   return (
-    <span className="inline-flex shrink-0 items-center gap-1.5 text-[11px] text-muted-foreground">
+    // 外层不 shrink-0：长状态词（字典驱动）会把标题/摘要挤没了；圆点仍固定
+    <span className="inline-flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
       <span className={cn('size-1.5 shrink-0 rounded-full', TONE[tone])} aria-hidden="true" />
-      {children}
+      <span className="min-w-0 max-w-24 truncate">{children}</span>
     </span>
   )
 }

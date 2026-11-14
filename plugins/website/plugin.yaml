@@ -65,7 +65,7 @@ menus:
     component: plugins/website/ProductPage
     perm: website:product
     icon: Package
-    sort: 6
+    sort: 7
     keep_alive: true
   - parent: /website
     type: menu
@@ -74,7 +74,7 @@ menus:
     component: plugins/website/ProductCategoryPage
     perm: website:product-category
     icon: FolderTree
-    sort: 7
+    sort: 8
     keep_alive: true
   - parent: /website
     type: menu
@@ -83,15 +83,16 @@ menus:
     component: plugins/website/MessagePage
     perm: website:message
     icon: Inbox
-    sort: 8
+    sort: 9
     keep_alive: true
   # 外链菜单：在新标签页打开公开官网（生产为同源根路径；开发由前端拼后端端口）。
   # 不经过前端路由，所以不需要 component；perm 决定哪些角色能看到这个入口。
+  # sort 排在产品管理之前：进官网组先看到「打开网站」这个出口，再进内容管理。
   - parent: /website
     type: menu
     title: plugin_website.menu.openSite
     path: /
     perm: website:product
     icon: ExternalLink
-    sort: 9
+    sort: 6
     external: true

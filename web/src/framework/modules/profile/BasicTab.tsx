@@ -4,9 +4,9 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+import { AddressField } from '@/framework/components/AddressField'
 import { DictSelect } from '@/framework/components/DictSelect'
 import { FormLayout } from '@/framework/components/FormLayout'
-import { RegionSelect } from '@/framework/components/RegionSelect'
 import { Uploader, type UploadedFile } from '@/framework/components/Uploader'
 import { Button } from '@/framework/ui/button'
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/framework/ui/form'
@@ -21,6 +21,7 @@ interface Values {
   gender: string
   email: string
   region: { province?: string; city?: string; district?: string }
+  address: string
   bio: string
 }
 
@@ -40,6 +41,7 @@ export function BasicTab() {
         gender: z.string(),
         email: z.string().trim().email(t('profile.basic.emailInvalid')).or(z.literal('')),
         region: z.object({ province: z.string().optional(), city: z.string().optional(), district: z.string().optional() }),
+        address: z.string().max(255),
         bio: z.string().max(200),
       }),
     [t],
@@ -47,8 +49,9 @@ export function BasicTab() {
 
   const form = useForm<Values>({
     resolver: zodResolver(schema),
-    defaultValues: { avatar: '', nickname: '', gender: '0', email: '', region: {}, bio: '' },
+    defaultValues: { avatar: '', nickname: '', gender: '0', email: '', region: {}, address: '', bio: '' },
   })
+  const addressValue = form.watch('address')
 
   useEffect(() => {
     if (!profile) return
@@ -58,6 +61,7 @@ export function BasicTab() {
       gender: profile.gender,
       email: profile.email ?? '',
       region: { province: profile.province, city: profile.city, district: profile.district },
+      address: profile.address ?? '',
       bio: profile.bio ?? '',
     })
   }, [profile, form])
@@ -72,6 +76,7 @@ export function BasicTab() {
         province: v.region.province,
         city: v.region.city,
         district: v.region.district,
+        address: v.address,
         bio: v.bio,
       })
       toast.success(t('profile.basic.saved'))
@@ -150,9 +155,16 @@ export function BasicTab() {
             control={form.control}
             name="region"
             render={({ field }) => (
-              <FormItem>
+              <FormItem className="md:col-span-2">
                 <FormLabel>{t('profile.basic.region')}</FormLabel>
-                <RegionSelect level={3} value={field.value} onChange={field.onChange} />
+                {/* 地址是三段一体的复合字段：区划/详细地址任一变化都同时写回两个表单字段 */}
+                <AddressField
+                  value={{ region: field.value, address: addressValue }}
+                  onChange={({ region, address }) => {
+                    field.onChange(region)
+                    form.setValue('address', address ?? '', { shouldValidate: true })
+                  }}
+                />
               </FormItem>
             )}
           />

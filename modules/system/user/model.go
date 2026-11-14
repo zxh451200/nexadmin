@@ -32,6 +32,7 @@ type User struct {
 	Province    string
 	City        string
 	District    string
+	Address     string // 详细地址：路名门牌等自由文本；完整地址由前端用区划树 + address 推导，不落库
 	Remark      string
 	IsSuper     bool // 超管：可进 /api/v1/admin，可跨租户
 	LastLoginAt *time.Time
@@ -80,6 +81,7 @@ type userDTO struct {
 	RoleNames   []string   `json:"roleNames"`
 	Status      string     `json:"status"`
 	Region      regionDTO  `json:"region"`
+	Address     string     `json:"address"`
 	Remark      string     `json:"remark"`
 	Locked      bool       `json:"locked"`
 	LockedUntil *time.Time `json:"lockedUntil"`
@@ -105,6 +107,7 @@ type userInput struct {
 	RoleIDs    []string  `json:"roleIds"`
 	Status     string    `json:"status"`
 	Region     regionDTO `json:"region"`
+	Address    string    `json:"address"`
 	Remark     string    `json:"remark"`
 }
 

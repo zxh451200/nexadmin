@@ -62,6 +62,7 @@ func (p userProvisioner) UpdateProvisionedUser(ctx context.Context, id idgen.ID,
 		ExternalID:    in.ExternalID, Username: in.Username, Nickname: in.Nickname, Email: in.Email, Phone: in.Phone, Status: status,
 		Avatar: u.Avatar, Gender: u.Gender, Remark: u.Remark,
 		Region: regionDTO{Province: u.Province, City: u.City, District: u.District},
+		Address: u.Address,
 	}
 	if u.DeptID != 0 {
 		input.DeptID = u.DeptID.String()

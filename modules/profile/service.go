@@ -48,7 +48,7 @@ func (s *Service) Update(ctx context.Context, uid idgen.ID, in ProfileInput) (*P
 	}
 	err := s.db.WithContext(ctx).Model(&userRow{}).Where("id = ?", int64(uid)).Updates(map[string]any{
 		"nickname": in.Nickname, "avatar": in.Avatar, "gender": in.Gender, "email": in.Email,
-		"province": in.Province, "city": in.City, "district": in.District, "remark": in.Bio,
+		"province": in.Province, "city": in.City, "district": in.District, "address": in.Address, "remark": in.Bio,
 		"updated_at": time.Now().UTC(),
 	}).Error
 	if err != nil {

@@ -505,6 +505,7 @@ user:
   gender_invalid: "Invalid gender."
   status_invalid: "Invalid status."
   region_invalid: "Invalid region code."
+  address_too_long: "The detailed address is too long."
   roles_not_found: "The selected roles do not exist."
   username_exists: "The username already exists."
   super_self_cannot_disable: "Super administrators and yourself cannot be disabled."

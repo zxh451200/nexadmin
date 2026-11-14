@@ -129,6 +129,10 @@ export function RemoteSelect({
     }
   }
 
+  // 多选触发器只露前两个标签 + 「+N」：勾一堆文件名时触发器被撑成一大坨逗号串
+  const labels = selected.map(labelOf)
+  const display = labels.length > 2 ? `${labels.slice(0, 2).join(', ')} +${labels.length - 2}` : labels.join(', ')
+
   return (
     <PickerShell
       open={open}
@@ -144,7 +148,7 @@ export function RemoteSelect({
           hasValue={selected.length > 0}
           allowClear={allowClear}
           onClear={() => onChange?.(multiple ? [] : '')}
-          display={selected.map(labelOf).join(', ')}
+          display={display}
         />
       }
     >

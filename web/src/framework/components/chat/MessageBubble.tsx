@@ -27,7 +27,8 @@ export function ChatBubble({ side, tone = 'default', meta, badge, children, foot
     <div className={cn('flex', side === 'end' ? 'justify-end' : 'justify-start')}>
       <div
         className={cn(
-          'max-w-[75%] rounded-lg px-3 py-2 text-sm',
+          // overflow-wrap:anywhere：长 URL/无空格长串在气泡内折行，不顶破 75% 气泡
+          'max-w-[75%] rounded-lg px-3 py-2 text-sm [overflow-wrap:anywhere]',
           tone === 'primary'
             ? 'bg-primary text-primary-foreground'
             : tone === 'warning'
@@ -55,7 +56,7 @@ export function ChatBubble({ side, tone = 'default', meta, badge, children, foot
 export function SystemPill({ children, className }: { children: ReactNode; className?: string }) {
   return (
     <div className={cn('flex justify-center py-1', className)}>
-      <span className="max-w-[85%] rounded-full bg-muted px-2.5 py-1 text-center text-[11px] text-muted-foreground">
+      <span className="max-w-[85%] rounded-full bg-muted px-2.5 py-1 text-center text-[11px] text-muted-foreground [overflow-wrap:anywhere]">
         {children}
       </span>
     </div>

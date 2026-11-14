@@ -19,6 +19,9 @@
     "selectDateRange": "请选择日期范围",
     "time": "时间",
     "hour": "小时",
-    "minute": "分钟"
+    "minute": "分钟",
+    "addressDetail": "详细地址",
+    "addressFull": "完整地址",
+    "addressPasteHint": "粘贴完整地址可自动识别省市区"
   }
 }

@@ -82,6 +82,9 @@ func (in *userInput) check() (p parsedInput, err error) {
 	if !regionRe.MatchString(in.Region.Province) || !regionRe.MatchString(in.Region.City) || !regionRe.MatchString(in.Region.District) {
 		return p, bad("user.region_invalid")
 	}
+	if in.Address = strings.TrimSpace(in.Address); utf8.RuneCountInString(in.Address) > 255 {
+		return p, bad("user.address_too_long")
+	}
 	if strings.TrimSpace(in.DeptID) != "" {
 		if p.dept, err = idgen.Parse(in.DeptID); err != nil {
 			return p, bad("user.dept_id_invalid")
@@ -183,7 +186,7 @@ func (s *service) create(ctx context.Context, in userInput, me actor) (*userDTO,
 	u := &User{
 		ExternalID: in.ExternalID, Username: in.Username, Password: hash, Nickname: in.Nickname, Avatar: in.Avatar, Phone: in.Phone, Email: in.Email,
 		Gender: in.Gender, DeptID: p.dept, Status: in.Status, Remark: in.Remark,
-		Province: in.Region.Province, City: in.Region.City, District: in.Region.District,
+		Province: in.Region.Province, City: in.Region.City, District: in.Region.District, Address: in.Address,
 	}
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := ensureUserQuota(ctx, tx, 1); err != nil {
@@ -238,7 +241,7 @@ func (s *service) update(ctx context.Context, id idgen.ID, in userInput, me acto
 		u.ExternalID = in.ExternalID
 	}
 	u.DeptID, u.Status, u.Remark = p.dept, in.Status, in.Remark
-	u.Province, u.City, u.District = in.Region.Province, in.Region.City, in.Region.District
+	u.Province, u.City, u.District, u.Address = in.Region.Province, in.Region.City, in.Region.District, in.Address
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Save(u).Error; err != nil {
 			return err

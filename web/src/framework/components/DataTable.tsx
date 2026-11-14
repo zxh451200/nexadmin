@@ -286,7 +286,10 @@ export function DataTable<T>({
                       </TableCell>
                     ) : null}
                     {visibleColumns.map((c, ci) => (
-                      <TableCell key={c.key} className={cn('whitespace-nowrap', alignClass(c.align))}>
+                      // max-w + truncate 全局兜底：单元格内容最长占 28rem，超限省略——
+                      // 没有它，任何漏网的長串（URL/JSON/备注）都会把列宽撑爆整张表；
+                      // 自带限宽的 render（max-w-* truncate / line-clamp-N）在此之内不受影响
+                      <TableCell key={c.key} className={cn('max-w-[28rem] truncate', alignClass(c.align))}>
                         {ci === 0 && sortEnabled ? (
                           // 把手并进首列，不设独立空白列：静默时只折进首列左内边距的观感，hover 浮现
                           <div className="flex items-center gap-1">

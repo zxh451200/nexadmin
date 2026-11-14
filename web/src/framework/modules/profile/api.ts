@@ -15,6 +15,7 @@ export interface Profile {
   province?: string
   city?: string
   district?: string
+  address?: string
   bio?: string
 }
 

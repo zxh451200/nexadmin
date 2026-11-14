@@ -21,6 +21,7 @@ type userRow struct {
 	Province string
 	City     string
 	District string
+	Address  string // 详细地址：完整地址由前端用区划树 + address 推导，不落库
 	Bio      string `gorm:"column:remark"`
 }
 
@@ -38,6 +39,7 @@ type Profile struct {
 	Province string   `json:"province,omitempty"`
 	City     string   `json:"city,omitempty"`
 	District string   `json:"district,omitempty"`
+	Address  string   `json:"address,omitempty"`
 	Bio      string   `json:"bio,omitempty"`
 }
 
@@ -50,6 +52,7 @@ type ProfileInput struct {
 	Province string `json:"province" binding:"max=12"`
 	City     string `json:"city" binding:"max=12"`
 	District string `json:"district" binding:"max=12"`
+	Address  string `json:"address" binding:"max=255"`
 	Bio      string `json:"bio" binding:"max=500"`
 }
 
@@ -81,7 +84,7 @@ type LoginSession struct {
 
 func toProfile(u *userRow) *Profile {
 	return &Profile{ID: u.ID, Username: u.Username, Nickname: u.Nickname, Avatar: u.Avatar, Gender: u.Gender,
-		Phone: u.Phone, Email: u.Email, Province: u.Province, City: u.City, District: u.District, Bio: u.Bio}
+		Phone: u.Phone, Email: u.Email, Province: u.Province, City: u.City, District: u.District, Address: u.Address, Bio: u.Bio}
 }
 
 // maskPhone 138****8000。
