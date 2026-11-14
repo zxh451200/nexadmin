@@ -11,7 +11,6 @@ import { BrandMark } from '@/framework/components/BrandMark'
 import { useDemoAccount, useDemoMode } from '@/framework/hooks/use-demo-mode'
 import { LanguageSwitch } from '@/framework/i18n/LanguageSwitch'
 import { api } from '@/framework/request/http'
-import { cn } from '@/lib/utils'
 import { ThemeToggle } from '@/framework/theme/ThemeToggle'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
@@ -312,6 +311,7 @@ export default function LoginPage() {
                 {methods.length > 1 ? (
                   <Tabs
                     value={activeMethod}
+                    className="grid"
                     onValueChange={(v) => {
                       setPreferredMethod(v)
                       try {
@@ -321,19 +321,21 @@ export default function LoginPage() {
                       }
                     }}
                   >
-                    <TabsList className="grid w-full grid-cols-2">
+                    {/* 两个面板 forceMount 常驻并叠进同一个 grid 格：容器高度恒等于较高的那个表单
+                        （账号登录多一行「忘记密码？」），切换 tab 时下面的社交登录/注册入口不上下跳，
+                        已输入的内容也得以保留。inactive 用 invisible 而不是 hidden——display:none
+                        不占位，高度稳定性就没了 */}
+                    <TabsList className="grid w-full grid-cols-2 [grid-area:1/1]">
                       {methods.map((m) => (
                         <TabsTrigger key={m} value={m} className="min-h-11 md:min-h-0">
                           {t(m === 'password' ? 'login.tabPassword' : 'login.tabPhone')}
                         </TabsTrigger>
                       ))}
                     </TabsList>
-                    {/* 两个面板 forceMount 常驻、用 hidden 切换：容器高度恒等于较高的那个表单，
-                        切换 tab 时下面的社交登录/注册入口不上下跳；已输入的内容也得以保留 */}
-                    <TabsContent value="password" forceMount className={cn('mt-6', activeMethod !== 'password' && 'hidden')}>
+                    <TabsContent value="password" forceMount className="mt-6 [grid-area:2/1] data-[state=inactive]:invisible">
                       <PasswordForm onSuccess={done} onForgot={onForgot} onChallenge={setChallenge} demoCredentials={demoAccount} fillNonce={demoFill} />
                     </TabsContent>
-                    <TabsContent value="phone" forceMount className={cn('mt-6', activeMethod !== 'phone' && 'hidden')}>
+                    <TabsContent value="phone" forceMount className="mt-6 [grid-area:2/1] data-[state=inactive]:invisible">
                       <PhoneForm onSuccess={done} onChallenge={setChallenge} captchaEnabled={captchaEnabled} />
                     </TabsContent>
                   </Tabs>
