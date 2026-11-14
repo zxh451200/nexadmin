@@ -7,7 +7,16 @@ type Raw = [string, string, string, Raw[]?]
 
 const raw: Raw[] = [
   ['110000', '北京市', 'beijing', [
-    ['110101', '东城区', 'dongcheng'],
+    // 街道样本（真实国标编码）：演示模式也能看到 level=4 的街道列
+    ['110101', '东城区', 'dongcheng', [
+      ['110101001', '东华门街道', 'donghuamen'],
+      ['110101002', '景山街道', 'jingshan'],
+      ['110101003', '交道口街道', 'jiaodaokou'],
+      ['110101004', '安定门街道', 'andingmen'],
+      ['110101005', '北新桥街道', 'beixinqiao'],
+      ['110101006', '东四街道', 'dongsi'],
+      ['110101007', '朝阳门街道', 'chaoyangmen'],
+    ]],
     ['110102', '西城区', 'xicheng'],
     ['110105', '朝阳区', 'chaoyang'],
     ['110106', '丰台区', 'fengtai'],
@@ -2158,7 +2167,16 @@ const raw: Raw[] = [
     ['440300', '深圳市', 'shenzhen', [
       ['440303', '罗湖区', 'luohu'],
       ['440304', '福田区', 'futian'],
-      ['440305', '南山区', 'nanshan'],
+      ['440305', '南山区', 'nanshan', [
+        ['440305001', '南头街道', 'nantou'],
+        ['440305002', '南山街道', 'nanshan'],
+        ['440305003', '沙河街道', 'shahe'],
+        ['440305004', '蛇口街道', 'shekou'],
+        ['440305005', '招商街道', 'zhaoshang'],
+        ['440305006', '粤海街道', 'yuehai'],
+        ['440305007', '桃源街道', 'taoyuan'],
+        ['440305008', '西丽街道', 'xili'],
+      ]],
       ['440306', '宝安区', 'baoan'],
       ['440307', '龙岗区', 'longgang'],
       ['440308', '盐田区', 'yantian'],
@@ -3636,7 +3654,7 @@ defineMock([
   {
     method: 'GET',
     url: '/regions/tree',
-    handler: ({ query }) => build(raw, 1, Math.min(3, Math.max(1, Number(query.level) || 3))),
+    handler: ({ query }) => build(raw, 1, Math.min(4, Math.max(1, Number(query.level) || 3))),
   },
   {
     method: 'GET',

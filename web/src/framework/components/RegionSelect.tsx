@@ -91,8 +91,8 @@ export function RegionSelect({ level = 3, value, onChange, allowClear = true, pl
   }, [kw, tree, level])
 
   // 列数随已选层级展开：没选省份时只有省一列，选了省才长出市列——
-  // 空列渲染成「暂无数据」占满整块面板，比窄列更难看
-  const columns = [tree, draft[0]?.children ?? [], draft[1]?.children ?? []].slice(
+  // 空列渲染成「暂无数据」占满整块面板，比窄列更难看；level=4 时第 4 列是街道/乡镇
+  const columns = [tree, draft[0]?.children ?? [], draft[1]?.children ?? [], draft[2]?.children ?? []].slice(
     0,
     Math.min(widthFor(draft, level), draft.length + 1),
   )
