@@ -33,11 +33,13 @@ export interface UploaderProps {
   className?: string
   /** 开启后监听剪贴板粘贴（Ctrl+V 直接把截图/复制的文件加入上传）；默认关，避免多实例互相劫持 */
   enablePaste?: boolean
+  /** 渲染在上传按钮右侧的附加入口（如「从文件库选择」）；上限已满/译文态时随入口行一起置灰 */
+  entryExtra?: React.ReactNode
 }
 
 const NO_CROP_TYPES = ['image/gif', 'image/svg+xml']
 
-export function Uploader({ kind, multiple, maxCount, crop, visibility = 'private', value, onChange, disabled, className, enablePaste }: UploaderProps) {
+export function Uploader({ kind, multiple, maxCount, crop, visibility = 'private', value, onChange, disabled, className, enablePaste, entryExtra }: UploaderProps) {
   const { t } = useTranslation()
   const { data: cfg } = useUploadConfig()
   const limit = maxCount ?? (multiple ? 9 : 1)
@@ -274,38 +276,39 @@ export function Uploader({ kind, multiple, maxCount, crop, visibility = 'private
         </SortableContext>
       </DndContext>
 
-      {/* 上传入口行：上传按钮 + 图片地址导入（拖拽上传在整个容器上仍可用） */}
-      {canAdd && (
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="h-9"
-            onClick={() => addRef.current?.click()}
-            aria-label={t('common.upload')}
-          >
-            <AddIcon className="size-4" aria-hidden="true" />
-            {t(`uploader.add_${kind}`)}
-          </Button>
-          {kind === 'image' && (
-            <Input
-              value={urlText}
-              disabled={disabled || importing}
-              onChange={(e) => setUrlText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault()
-                  void addByUrl()
-                }
-              }}
-              placeholder={t('uploader.urlPlaceholder')}
-              aria-label={t('uploader.urlPlaceholder')}
-              className="h-9 min-w-56 flex-1 text-sm sm:max-w-sm"
-            />
-          )}
-        </div>
-      )}
+      {/* 上传入口行：上传按钮 + 图片地址导入 + 附加入口（如从文件库）。
+          常驻渲染（满额/译文态只置灰不消失，与其他字段行为一致）；拖拽上传在整个容器上仍可用 */}
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-9"
+          disabled={disabled || !canAdd}
+          onClick={() => addRef.current?.click()}
+          aria-label={t('common.upload')}
+        >
+          <AddIcon className="size-4" aria-hidden="true" />
+          {t(`uploader.add_${kind}`)}
+        </Button>
+        {kind === 'image' && (
+          <Input
+            value={urlText}
+            disabled={disabled || importing || !canAdd}
+            onChange={(e) => setUrlText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                void addByUrl()
+              }
+            }}
+            placeholder={t('uploader.urlPlaceholder')}
+            aria-label={t('uploader.urlPlaceholder')}
+            className="h-9 min-w-56 flex-1 text-sm sm:max-w-sm"
+          />
+        )}
+        {entryExtra}
+      </div>
 
       <input ref={addRef} type="file" hidden accept={accepts} multiple={!!multiple && limit > 1} onChange={(e) => onPick(e)} />
       <input

@@ -405,18 +405,7 @@ function ImagesField({
     })
   }
   return (
-    <SharedGroup
-      labelKey="plugin_website.product.images"
-      action={
-        atLimit ? (
-          <span className="text-xs text-muted-foreground">{t('plugin_website.product.imageLimit', { max: IMAGES_MAX })}</span>
-        ) : (
-          <Button variant="link" size="sm" className="h-auto p-0 text-xs" disabled={disabled} onClick={openPick}>
-            {t('uploader.pickFromLibrary')}
-          </Button>
-        )
-      }
-    >
+    <SharedGroup labelKey="plugin_website.product.images">
       <Uploader
         kind="image"
         visibility="public"
@@ -431,6 +420,15 @@ function ImagesField({
           type: 'image/*',
         }))}
         onChange={(files) => onChange(files.map((f) => f.url))}
+        entryExtra={
+          atLimit ? (
+            <span className="text-xs text-muted-foreground">{t('plugin_website.product.imageLimit', { max: IMAGES_MAX })}</span>
+          ) : (
+            <Button variant="link" size="sm" className="h-auto p-0 text-xs" disabled={disabled} onClick={openPick}>
+              {t('uploader.pickFromLibrary')}
+            </Button>
+          )
+        }
       />
       <ResponsiveDialog
         open={pickOpen}
@@ -670,7 +668,7 @@ function ProductFormBody({
           </div>
         </FormSection>
         <FormSection title={t('plugin_website.product.imageSection')}>
-          {/* 封面与视频纵向排：URL 行拿得到整行宽度，两张上传卡左对齐，不再一列方一列横 */}
+          {/* 封面与视频：输入行在上、预览/上传卡在下——先填地址再看效果（previewBelow 纵向形态） */}
           <SharedFieldShell labelKey="plugin_website.fields.coverUrl">
             <ImageUrlField
               value={coverUrl}
@@ -679,6 +677,7 @@ function ProductFormBody({
               title={t('plugin_website.product.coverUpload')}
               hint={t('plugin_website.product.coverHint')}
               crop={{ width: 800, height: 800 }}
+              previewBelow
               aria-label={t('plugin_website.fields.coverUrl')}
             />
             {coverInvalid ? (
@@ -693,6 +692,7 @@ function ProductFormBody({
               title={t('plugin_website.product.videoUrl')}
               hint={t('plugin_website.product.videoHint')}
               placeholder="https://…"
+              previewBelow
               aria-label={t('plugin_website.product.videoUrl')}
             />
           </SharedFieldShell>

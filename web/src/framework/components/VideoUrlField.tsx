@@ -41,63 +41,66 @@ export function VideoUrlField({
   const [open, setOpen] = useState(false)
   const [zoom, setZoom] = useState(false)
 
-  // 卡片：有值=帧缩略（点开放大播放），无值=上传入口
-  const cardEl =
-    value ? (
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={() => setZoom(true)}
-        aria-label={t('common.preview')}
-        title={t('common.preview')}
-        className={cn('block shrink-0 rounded-md focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed', previewBelow && 'self-start')}
-      >
-        <video
-          src={value}
-          preload="metadata"
-          muted
-          className="size-24 rounded-md border border-border bg-muted/40 object-cover"
-        />
-      </button>
-    ) : (
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className="h-9 self-start"
-        disabled={disabled}
-        onClick={() => setOpen(true)}
-        aria-label={ariaLabel ?? title}
-      >
-        <VideoIcon aria-hidden="true" className="size-4" />
-        {t('uploader.add_video')}
-      </Button>
-    )
+  // 卡片：有值=帧缩略（点开放大播放）。无值时不再渲染独立的虚线/按钮块——上传入口并入输入行行首
+  const cardEl = value ? (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={() => setZoom(true)}
+      aria-label={t('common.preview')}
+      title={t('common.preview')}
+      className={cn('block shrink-0 rounded-md focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed', previewBelow && 'self-start')}
+    >
+      <video
+        src={value}
+        preload="metadata"
+        muted
+        className="size-24 rounded-md border border-border bg-muted/40 object-cover"
+      />
+    </button>
+  ) : null
+  const uploadBtn = (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      className="h-9 shrink-0"
+      disabled={disabled}
+      onClick={() => setOpen(true)}
+      aria-label={ariaLabel ?? title}
+    >
+      <VideoIcon aria-hidden="true" className="size-4" />
+      {t('uploader.add_video')}
+    </Button>
+  )
   const inputEl = (
     <div className={previewBelow ? 'flex items-center gap-2' : 'flex min-w-0 flex-1 flex-col gap-2'}>
-      <Input
-        value={value}
-        disabled={disabled}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        inputMode="url"
-        spellCheck={false}
-        className="min-w-0 flex-1 font-mono"
-        aria-label={ariaLabel ?? title}
-      />
-      {/* 文件库下拉：已传过的视频直接选，不用手写 URL（关键词可搜、按上传时间倒序） */}
-      <RemoteSelect
-        url="/files"
-        params={{ category: 'video' }}
-        valueKey="url"
-        labelKey="name"
-        value={value}
-        onChange={(v) => onChange(String(v ?? ''))}
-        allowClear={false}
-        placeholder={t('uploader.pickFromLibrary')}
-        disabled={disabled}
-        className="w-36 shrink-0 sm:w-44"
-      />
+      <div className="flex min-w-0 flex-1 items-center gap-2">
+        {!value ? uploadBtn : null}
+        <Input
+          value={value}
+          disabled={disabled}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          inputMode="url"
+          spellCheck={false}
+          className="min-w-0 flex-1 font-mono"
+          aria-label={ariaLabel ?? title}
+        />
+        {/* 文件库下拉：已传过的视频直接选，不用手写 URL（关键词可搜、按上传时间倒序） */}
+        <RemoteSelect
+          url="/files"
+          params={{ category: 'video' }}
+          valueKey="url"
+          labelKey="name"
+          value={value}
+          onChange={(v) => onChange(String(v ?? ''))}
+          allowClear={false}
+          placeholder={t('uploader.pickFromLibrary')}
+          disabled={disabled}
+          className="w-36 shrink-0 sm:w-44"
+        />
+      </div>
       {value ? (
         <Button type="button" variant="ghost" className="shrink-0 px-3" disabled={disabled} onClick={() => onChange('')}>
           {t('common.clear')}
