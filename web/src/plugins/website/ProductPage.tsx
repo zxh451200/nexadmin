@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { CircleAlert, CircleCheck, CloudUpload, Copy, Download, ExternalLink, Eye, FileUp, Pencil, Plus, Settings2, Trash2, X } from 'lucide-react'
+import { ChevronDown, CircleAlert, CircleCheck, CloudUpload, Copy, Download, ExternalLink, Eye, FileUp, Pencil, Plus, Settings2, Trash2, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -424,8 +424,15 @@ function ImagesField({
           atLimit ? (
             <span className="text-xs text-muted-foreground">{t('plugin_website.product.imageLimit', { max: IMAGES_MAX })}</span>
           ) : (
-            <Button variant="link" size="sm" className="h-auto p-0 text-xs" disabled={disabled} onClick={openPick}>
+            /* 外观对齐 RemoteSelect 的触发器（同宽同高 + 尾部箭头）：三区的「从文件库选择」视觉一致 */
+            <Button
+              variant="outline"
+              className="h-10 w-36 justify-between text-base font-normal md:h-8 md:text-sm sm:w-44"
+              disabled={disabled}
+              onClick={openPick}
+            >
               {t('uploader.pickFromLibrary')}
+              <ChevronDown className="size-4 shrink-0 opacity-50" aria-hidden="true" />
             </Button>
           )
         }

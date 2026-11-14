@@ -246,6 +246,41 @@ export function Uploader({ kind, multiple, maxCount, crop, visibility = 'private
       }}
       onDrop={onDropFiles}
     >
+      {/* 上传入口行：地址导入 + 上传按钮 + 附加入口（如从文件库）。
+          常驻渲染（满额/译文态只置灰不消失，与其他字段行为一致）；拖拽上传在整个容器上仍可用。
+          入口行在缩略图上方：先选导入方式，下面按顺序铺结果（对齐登录表单「先输入后结果」的阅读顺序） */}
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        {kind === 'image' && (
+          <Input
+            value={urlText}
+            disabled={disabled || importing || !canAdd}
+            onChange={(e) => setUrlText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                void addByUrl()
+              }
+            }}
+            placeholder={t('uploader.urlPlaceholder')}
+            aria-label={t('uploader.urlPlaceholder')}
+            className="h-9 min-w-56 flex-1 text-sm sm:max-w-sm"
+          />
+        )}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-9"
+          disabled={disabled || !canAdd}
+          onClick={() => addRef.current?.click()}
+          aria-label={t('common.upload')}
+        >
+          <AddIcon className="size-4" aria-hidden="true" />
+          {t(`uploader.add_${kind}`)}
+        </Button>
+        {entryExtra}
+      </div>
+
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <DragCursorHost />
         <SortableContext items={value.map((f) => f.id)} strategy={kind === 'image' ? rectSortingStrategy : verticalListSortingStrategy}>
@@ -275,40 +310,6 @@ export function Uploader({ kind, multiple, maxCount, crop, visibility = 'private
           </div>
         </SortableContext>
       </DndContext>
-
-      {/* 上传入口行：上传按钮 + 图片地址导入 + 附加入口（如从文件库）。
-          常驻渲染（满额/译文态只置灰不消失，与其他字段行为一致）；拖拽上传在整个容器上仍可用 */}
-      <div className="mt-2 flex flex-wrap items-center gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="h-9"
-          disabled={disabled || !canAdd}
-          onClick={() => addRef.current?.click()}
-          aria-label={t('common.upload')}
-        >
-          <AddIcon className="size-4" aria-hidden="true" />
-          {t(`uploader.add_${kind}`)}
-        </Button>
-        {kind === 'image' && (
-          <Input
-            value={urlText}
-            disabled={disabled || importing || !canAdd}
-            onChange={(e) => setUrlText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                void addByUrl()
-              }
-            }}
-            placeholder={t('uploader.urlPlaceholder')}
-            aria-label={t('uploader.urlPlaceholder')}
-            className="h-9 min-w-56 flex-1 text-sm sm:max-w-sm"
-          />
-        )}
-        {entryExtra}
-      </div>
 
       <input ref={addRef} type="file" hidden accept={accepts} multiple={!!multiple && limit > 1} onChange={(e) => onPick(e)} />
       <input
