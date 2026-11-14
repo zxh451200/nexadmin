@@ -176,7 +176,7 @@
       "categoryDeleteConfirm": "Delete category \"{{name}}\"? {{count}} posts will no longer belong to it.",
       "tags": "Tags",
       "postsCount": "{{count}} posts",
-      "tagsEmpty": "No tags yet",
+      "tagsEmpty": "No tags yet. Type in the Tags field while creating or editing a news post — tags are created on the fly; rename or remove them here.",
       "tagInputPlaceholder": "Type a topic, then Enter or comma to add",
       "tagAdd": "Add tag",
       "tagRemove": "Remove tag {{name}}",

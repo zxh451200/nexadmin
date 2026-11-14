@@ -176,7 +176,7 @@
       "categoryDeleteConfirm": "确认删除分类「{{name}}」？{{count}} 篇新闻将不再属于该栏目。",
       "tags": "标签",
       "postsCount": "{{count}} 篇新闻",
-      "tagsEmpty": "还没有标签",
+      "tagsEmpty": "还没有标签。在发布 / 编辑新闻的「标签」输入框里输入即可创建，创建后可在这里改名或删除。",
       "tagInputPlaceholder": "输入主题词，回车或逗号添加",
       "tagAdd": "添加标签",
       "tagRemove": "移除标签 {{name}}",
