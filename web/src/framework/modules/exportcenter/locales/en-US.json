@@ -37,7 +37,7 @@
     },
     "filter": { "type": "Task type", "status": "Status" },
     "scope": { "mine": "My tasks", "all": "All tasks" },
-    "action": { "download": "Download", "cancel": "Cancel", "retry": "Retry", "delete": "Delete", "refresh": "Refresh" },
+    "action": { "download": "Download", "downloadBatch": "Download files", "cancel": "Cancel", "retry": "Retry", "delete": "Delete", "refresh": "Refresh" },
     "confirm": {
       "cancel": "Cancel this task?",
       "delete": "Delete this task and its result file? This cannot be undone.",
@@ -52,7 +52,9 @@
       "canceled": "Task canceled",
       "retried": "Resubmitted",
       "deleted": "Deleted",
-      "deletedPartial": "Deleted {{deleted}} of {{total}} tasks (the rest may already be gone)"
+      "deletedPartial": "Deleted {{deleted}} of {{total}} tasks (the rest may already be gone)",
+      "downloadedBatch": "Downloaded {{n}} result files",
+      "noneDownloadable": "None of the selected tasks has a downloadable result file (only completed tasks with result files are supported)"
     },
     "duration": { "sec": "{{n}} s", "min": "{{m}} min {{s}} s" },
     "indicator": { "label": "Export center, {{count}} tasks in progress", "none": "Export center" },

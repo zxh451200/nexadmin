@@ -8,6 +8,7 @@ package kb
 
 import (
 	"context"
+	"encoding/json"
 	"strconv"
 	"strings"
 	"time"
@@ -166,8 +167,25 @@ func (b *bot) answer(data im.EventData) {
 		b.fallback(data.ConvNo, st.AIFallbackText)
 		return
 	}
+	// 命中来源进 meta：访客挂件据此展示「AI 依据了哪些资料」，答案可追溯、不像凭空捏造。
+	// 同一文档多个块命中时标题只出现一次。
+	meta := ""
+	if len(res.Hits) > 0 {
+		seen := map[string]bool{}
+		titles := make([]string, 0, len(res.Hits))
+		for _, h := range res.Hits {
+			if seen[h.Title] {
+				continue
+			}
+			seen[h.Title] = true
+			titles = append(titles, h.Title)
+		}
+		if raw, merr := json.Marshal(map[string]any{"sources": titles}); merr == nil {
+			meta = string(raw)
+		}
+	}
 	if _, err := im.Send(ctx, data.ConvNo, im.SendInput{
-		SenderType: im.SenderBot, SenderName: botName, Content: res.Answer,
+		SenderType: im.SenderBot, SenderName: botName, Content: res.Answer, Meta: meta,
 	}); err != nil && b.log != nil {
 		b.log.Warn("kb: send answer failed", "convNo", data.ConvNo, "err", err.Error())
 	}

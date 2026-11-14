@@ -37,7 +37,7 @@
     },
     "filter": { "type": "任务类型", "status": "状态" },
     "scope": { "mine": "我的任务", "all": "全部任务" },
-    "action": { "download": "下载", "cancel": "取消", "retry": "重试", "delete": "删除", "refresh": "刷新" },
+    "action": { "download": "下载", "downloadBatch": "批量下载", "cancel": "取消", "retry": "重试", "delete": "删除", "refresh": "刷新" },
     "confirm": {
       "cancel": "确定取消该任务？",
       "delete": "确定删除该任务及其结果文件？此操作不可恢复。",
@@ -52,7 +52,9 @@
       "canceled": "任务已取消",
       "retried": "已重新提交",
       "deleted": "已删除",
-      "deletedPartial": "已删除 {{deleted}}/{{total}} 个任务（其余可能已被删除）"
+      "deletedPartial": "已删除 {{deleted}}/{{total}} 个任务（其余可能已被删除）",
+      "downloadedBatch": "已下载 {{n}} 个结果文件",
+      "noneDownloadable": "选中的任务里没有可下载的结果文件（只支持已完成且有结果文件的任务）"
     },
     "duration": { "sec": "{{n}} 秒", "min": "{{m}} 分 {{s}} 秒" },
     "indicator": { "label": "导出中心，{{count}} 个任务进行中", "none": "导出中心" },

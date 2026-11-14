@@ -2461,6 +2461,7 @@ html[data-scheme="light"] .chat-panel { box-shadow: 0 28px 64px -18px rgba(8, 9,
 .chat-msg[data-from="visitor"] .chat-bubble { background: var(--accent); border-color: transparent; color: #fff; border-end-end-radius: 4px; }
 .chat-msg[data-from="agent"] .chat-bubble { border-end-start-radius: 4px; }
 .chat-meta { font-size: 11px; color: var(--text-3); }
+.chat-sources { display: block; margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--border, rgba(127, 127, 127, 0.3)); font-size: 11px; color: var(--text-3); }
 .chat-note {
   align-self: center;
   padding: 3px 10px;

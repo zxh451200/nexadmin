@@ -403,6 +403,7 @@
   "site.js.chatClosed": "会话已结束，发送新消息会开启新会话",
   "site.js.chatGuest": "访客",
   "site.js.chatAgent": "客服",
+  "site.js.chatSources": "知识库来源：",
   "site.js.chatHandoff": "已转人工客服，请稍候",
   "site.js.chatHandoffFailed": "转人工失败，请稍后再试",
   "chat.handoff": "转人工",

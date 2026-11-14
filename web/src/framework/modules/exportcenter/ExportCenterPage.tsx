@@ -19,6 +19,7 @@ import { cn } from '@/lib/utils'
 import { fmtDateTime } from '../oper-log/format'
 import {
   downloadJobFile,
+  downloadJobFiles,
   isActive,
   JOB_STATUSES,
   JOB_TYPES,
@@ -119,6 +120,26 @@ export default function ExportCenterPage() {
     } catch (e) {
       // 具体原因（如「有任务还没结束」）由 http 拦截器弹出，这里补一条通用失败提示
       toast.error(errMsg(e, t('common.operateFailed')))
+    }
+  }
+
+  // 批量下载：只挑选中里可下载的任务（已完成且有结果文件），后端再逐条校验所有者，
+  // 打包成一个 zip 返回；一条都不可下载时不发请求，直接提示。
+  const onDownloadBatch = async (ids: string[]) => {
+    const targets = (data?.list ?? []).filter((j) => ids.includes(j.id) && j.downloadable).map((j) => j.id)
+    if (!targets.length) {
+      toast.info(t('jobs.toast.noneDownloadable'))
+      return
+    }
+    setBusy('batch')
+    try {
+      await downloadJobFiles(targets)
+      toast.success(t('jobs.toast.downloadedBatch', { n: targets.length }))
+    } catch (e) {
+      // 具体原因（如所有者校验失败）由 http 拦截器弹出，这里补一条通用失败提示
+      toast.error(errMsg(e, t('common.operateFailed')))
+    } finally {
+      setBusy(null)
     }
   }
 
@@ -245,10 +266,22 @@ export default function ExportCenterPage() {
         columnSettingsKey="jobs"
         selection={{ selected, onChange: setSelected }}
         batchActions={(ids) => (
-          <Button variant="destructive" size="sm" disabled={delBatch.isPending} onClick={() => void onDeleteBatch(ids)}>
-            <Trash2 aria-hidden="true" />
-            {t('jobs.action.delete')}
-          </Button>
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={busy === 'batch' || !(data?.list ?? []).some((j) => ids.includes(j.id) && j.downloadable)}
+              onClick={() => void onDownloadBatch(ids)}
+            >
+              <Download className="me-2 size-4" aria-hidden="true" />
+              {t('jobs.action.downloadBatch')}
+            </Button>
+            <Button variant="destructive" size="sm" disabled={delBatch.isPending} onClick={() => void onDeleteBatch(ids)}>
+              <Trash2 aria-hidden="true" />
+              {t('jobs.action.delete')}
+            </Button>
+          </>
         )}
         rowActions={(j) => (
           <div className="flex items-center">

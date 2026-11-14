@@ -96,7 +96,11 @@ func tenantPolicy(ctx context.Context, _ coreai.Caller) (*coreai.TenantPolicy, e
 // loader 读取 AI 配置：设置页保存在 sys_setting(section=ai)；没有保存过时回落到向导写入 config.yaml 的 ai.*。
 func loader(db *gorm.DB, cfg *config.Config) func(ctx context.Context) (coreai.Config, error) {
 	return func(ctx context.Context) (coreai.Config, error) {
-		fb := coreai.Config{BaseURL: cfg.AI.BaseURL, APIKey: cfg.AI.APIKey, Model: cfg.AI.Model, Redact: coreai.DefaultRedact(), AllowPrivate: cfg.AI.AllowPrivateBaseURL}
+		fb := coreai.Config{
+			BaseURL: cfg.AI.BaseURL, APIKey: cfg.AI.APIKey, Model: cfg.AI.Model,
+			EmbedBaseURL: cfg.AI.EmbedBaseURL, EmbedAPIKey: cfg.AI.EmbedAPIKey,
+			Redact: coreai.DefaultRedact(), AllowPrivate: cfg.AI.AllowPrivateBaseURL,
+		}
 		var rows []string
 		err := db.WithContext(tn.Skip(ctx)).Table("sys_setting").Where("section = ?", "ai").Limit(1).Pluck("content", &rows).Error
 		if err != nil {

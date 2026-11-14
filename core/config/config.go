@@ -94,8 +94,13 @@ type Config struct {
 		BaseURL string `mapstructure:"base_url"`
 		APIKey  string `mapstructure:"api_key"`
 		Model   string `mapstructure:"model"`
+		// EmbedBaseURL / EmbedAPIKey 是向量化（embeddings）的独立地址与密钥：向量化可能走另一家
+		// 供应商（如对话用千问、向量用 OpenAI）。留空 = 沿用 base_url / api_key。
+		EmbedBaseURL string `mapstructure:"embed_base_url"`
+		EmbedAPIKey  string `mapstructure:"embed_api_key"`
 		// AllowPrivateBaseURL 允许 base_url 指向私网 / 回环地址（Ollama、vLLM、内网网关）。默认 false；
 		// 链路本地与云元数据地址（169.254.0.0/16、fd00:ec2::254 等）无论如何都拒绝。
+		// 对 embed_base_url 同样生效。
 		AllowPrivateBaseURL bool `mapstructure:"allow_private_base_url"`
 	} `mapstructure:"ai"`
 	DisabledModules []string  `mapstructure:"disabled_modules"`

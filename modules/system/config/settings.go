@@ -22,7 +22,7 @@ var sections = []string{"site", "security", "cache", "storage", "ai", "sms", "au
 const secretMask = "********"
 
 // secretFields 是需要打码的字段名（任意层级）。
-var secretFields = map[string]bool{"password": true, "secretKey": true, "apiKey": true, "clientSecret": true}
+var secretFields = map[string]bool{"password": true, "secretKey": true, "apiKey": true, "embedApiKey": true, "clientSecret": true}
 
 func isSection(s string) bool {
 	for _, x := range sections {
@@ -67,7 +67,7 @@ func defaultSettings() map[string]map[string]any {
 		"security": {"maxAttempts": "5", "lockMinutes": "15", "idleMinutes": "120", "maxHours": "12", "captchaEnabled": true},
 		"cache":    {"type": "memory", "address": "", "password": ""},
 		"storage":  {"type": "local", "endpoint": "", "bucket": "", "region": "", "accessKey": "", "secretKey": ""},
-		"ai":       {"enabled": true, "baseUrl": "https://api.example.com/v1", "apiKey": "", "model": "qwen-plus", "embedModel": "", "timeoutSec": 30, "maxTokens": 2048, "redact": true},
+		"ai":       {"enabled": true, "baseUrl": "https://api.example.com/v1", "apiKey": "", "model": "qwen-plus", "embedBaseUrl": "", "embedApiKey": "", "embedModel": "", "timeoutSec": 30, "maxTokens": 2048, "redact": true},
 		"sms":      {"provider": "none", "accessKey": "", "secretKey": "", "signName": "", "templateCode": ""},
 		"notify":   notifyDefaults(),
 		"auth": {
@@ -439,6 +439,8 @@ func trimURL(v any) string {
 
 // validateAI 校验 ai 分区：baseUrl 必须通过 SSRF 检查（scheme、链路本地 / 云元数据、默认私网与回环）；
 // 修改 baseUrl 时必须同时重新提交 apiKey（不是占位符），不得把旧密钥发往新地址。
+// embedBaseUrl / embedApiKey（向量化独立地址与密钥）同一套规则：换地址必须换密钥；
+// 留空 = 沿用对话模型的地址与密钥，此时新地址必须与对话地址一致。
 func (s *Service) validateAI(ctx context.Context, cur, body, merged map[string]any) error {
 	next := trimURL(merged["baseUrl"])
 	if next != "" {
@@ -450,6 +452,20 @@ func (s *Service) validateAI(ctx context.Context, cur, body, merged map[string]a
 		key, present := body["apiKey"].(string)
 		if !present || key == secretMask {
 			return bad("config.ai.apikey_required")
+		}
+	}
+	embedNext := trimURL(merged["embedBaseUrl"])
+	if embedNext != "" {
+		if err := coreai.ValidateBaseURL(ctx, embedNext, s.aiAllowPrivate, s.aiResolver); err != nil {
+			return bad("config.ai.base_url_invalid")
+		}
+		// 独立向量地址换成了新地址（既不是旧向量地址，也不是对话地址）：
+		// 必须同时重新提交该地址自己的 embedApiKey，不收占位符，也不沿用任何旧密钥。
+		if embedNext != trimURL(cur["embedBaseUrl"]) && embedNext != next {
+			key, present := body["embedApiKey"].(string)
+			if !present || key == secretMask || strings.TrimSpace(key) == "" {
+				return bad("config.ai.embed_apikey_required")
+			}
 		}
 	}
 	return nil

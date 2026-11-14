@@ -150,7 +150,9 @@ ai:
   base_url: ""
   api_key: ""
   model: ""
-  allow_private_base_url: false  # true 才允许 base_url 指向私网 / 回环（Ollama、vLLM、内网网关）；链路本地与云元数据地址永远拒绝
+  embed_base_url: ""         # 向量化（embeddings）的独立地址；留空 = 沿用 base_url（对话与向量同供应商时不用填）
+  embed_api_key: ""          # 向量化的独立密钥；留空时：地址沿用 base_url 则沿用 api_key，换了地址则必须单独填写
+  allow_private_base_url: false  # true 才允许 base_url / embed_base_url 指向私网 / 回环（Ollama、vLLM、内网网关）；链路本地与云元数据地址永远拒绝
 disabled_modules: []
 disabled_plugins: []        # 按插件 id 停用插件（如 [website]）：不挂载、不迁移、接口文档不出现；free 插件的软停用开关，pro 插件也可用
 backup:                     # 数据库备份（需要本机有 mysqldump / pg_dump）；恢复用命令行 nexadmin-server restore

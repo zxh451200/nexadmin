@@ -133,3 +133,20 @@ export async function downloadJobFile(job: Pick<Job, 'id' | 'fileName'>): Promis
   a.remove()
   setTimeout(() => URL.revokeObjectURL(url), 0)
 }
+
+/**
+ * 批量下载：POST /jobs/download-batch 把可下载的结果文件打进一个 zip 返回。
+ * 后端逐条校验所有者与可下载状态（越权 / 无结果文件的任务跳过，一条都没有报 404）。
+ */
+export async function downloadJobFiles(ids: string[]): Promise<void> {
+  const res = await http.post<unknown>(`/jobs/download-batch`, { ids }, { responseType: 'blob' })
+  const blob = res.data instanceof Blob ? res.data : new Blob([String(res.data)], { type: 'application/zip' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'export-jobs.zip'
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 0)
+}

@@ -171,6 +171,8 @@ const aiSchema = z.object({
   baseUrl: z.string().trim(),
   apiKey: z.string(),
   model: z.string().trim(),
+  embedBaseUrl: z.string().trim(),
+  embedApiKey: z.string(),
   embedModel: z.string().trim(),
   timeoutSec: z.number().int().min(1).max(600),
   redact: z.boolean(),
@@ -192,13 +194,30 @@ export function AiSection({ value }: { value: AllSettings['ai'] }) {
             <TextField control={form.control} name="baseUrl" label="Base URL" type="url" inputMode="url" />
             <TextField control={form.control} name="apiKey" label="API Key" type="password" />
             <TextField control={form.control} name="model" label={t('settings.ai.model')} description={t('settings.ai.modelHint')} />
+            <TextField control={form.control} name="timeoutSec" label={t('settings.ai.timeoutSec')} type="number" inputMode="numeric" />
+            <FormGridFull>
+              <TextField
+                control={form.control}
+                name="embedBaseUrl"
+                label={t('settings.ai.embedBaseUrl')}
+                description={t('settings.ai.embedBaseUrlHint')}
+                type="url"
+                inputMode="url"
+              />
+            </FormGridFull>
+            <TextField
+              control={form.control}
+              name="embedApiKey"
+              label={t('settings.ai.embedApiKey')}
+              description={t('settings.ai.embedApiKeyHint')}
+              type="password"
+            />
             <TextField
               control={form.control}
               name="embedModel"
               label={t('settings.ai.embedModel')}
               description={t('settings.ai.embedModelHint')}
             />
-            <TextField control={form.control} name="timeoutSec" label={t('settings.ai.timeoutSec')} type="number" inputMode="numeric" />
           </FormGrid>
         </>
       )}

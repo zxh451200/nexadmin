@@ -81,7 +81,7 @@ function UploadDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v:
       <div className="space-y-4">
         <FileDropField
           multiple
-          accept=".txt,.md,.markdown,text/plain,text/markdown"
+          accept=".txt,.md,.markdown,.pdf,.docx,text/plain,text/markdown,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
           files={files}
           onChange={setFiles}
         />

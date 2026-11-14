@@ -63,8 +63,9 @@ func (module) Register(r *gin.RouterGroup, d *core.Deps) {
 
 	h := &handler{m: m, db: d.DB, log: d.Log, keep: m.KeepDays()}
 	r.GET("/jobs", h.list)
-	// 批量删：与单条 DELETE /jobs/:id 一样不设权限点（登录即可，作用域靠所有者 / job:all 收紧在 Service 层）
+	// 批量删 / 批量下载：与单条 DELETE /jobs/:id 一样不设权限点（登录即可，作用域靠所有者 / job:all 收紧在 Service 层）
 	r.DELETE("/jobs", h.removeBatch)
+	r.POST("/jobs/download-batch", h.downloadBatch)
 	r.GET("/jobs/:id", h.get)
 	r.POST("/jobs/:id/cancel", h.cancel)
 	r.POST("/jobs/:id/retry", h.retry)

@@ -78,7 +78,11 @@
       "redactHint": "Phone numbers, emails, ID card numbers and bank card numbers are replaced with placeholders before being sent to the model and are not restored in the result. Keeping this on is recommended",
       "modelHint": "Chat/completion model (AI Q&A, filtering and translation)",
       "embedModel": "Embedding model",
-      "embedModelHint": "Vector model (semantic search / knowledge base), shares Base URL and API Key with the chat model; leave empty to disable"
+      "embedModelHint": "Vector model (semantic search / knowledge base); leave empty to disable",
+      "embedBaseUrl": "Embedding Base URL",
+      "embedBaseUrlHint": "Endpoint for embeddings, may be a different provider than the chat model; leave blank to reuse the Base URL above",
+      "embedApiKey": "Embedding API Key",
+      "embedApiKeyHint": "Key for the standalone endpoint; leave blank to reuse the API Key above (same URL only). Changing the URL requires re-entering it"
     },
     "sms": {
       "title": "SMS",

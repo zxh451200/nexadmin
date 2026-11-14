@@ -1,7 +1,9 @@
 package exportcenter
 
 import (
+	"archive/zip"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -309,6 +311,11 @@ func (h *handler) download(c *gin.Context) {
 // 同步写：下载是低频重操作，保证审计在字节真正输出前落库；失败不阻断下载但要记日志。
 // ctx 脱离请求取消，避免客户端断开丢掉这条审计。
 func (h *handler) writeDownloadAudit(c *gin.Context, j *job.Job) {
+	h.writeAudit(c, "download", fmt.Sprintf(`{"id":%q,"type":%q,"file":%q}`, j.ID.String(), j.Type, j.ResultName))
+}
+
+// writeAudit 写一条导出中心的操作日志；ctx 脱离请求取消，失败只进日志不阻断业务。
+func (h *handler) writeAudit(c *gin.Context, typ, params string) {
 	cl := auth.ClaimsFrom(c)
 	if cl == nil {
 		return
@@ -317,11 +324,96 @@ func (h *handler) writeDownloadAudit(c *gin.Context, j *job.Job) {
 	if s == nil {
 		return // 日志模块被停用
 	}
-	l := &logmod.OperLog{Module: "导出中心", Type: "download", Operator: cl.Username, IP: c.ClientIP(), Status: logmod.StatusSuccess,
-		Method: c.Request.Method, URL: c.Request.URL.Path,
-		Params: fmt.Sprintf(`{"id":%q,"type":%q,"file":%q}`, j.ID.String(), j.Type, j.ResultName)}
+	l := &logmod.OperLog{Module: "导出中心", Type: typ, Operator: cl.Username, IP: c.ClientIP(), Status: logmod.StatusSuccess,
+		Method: c.Request.Method, URL: c.Request.URL.Path, Params: params}
 	l.TenantID = cl.TenantID
 	if err := s.WriteOper(context.WithoutCancel(c.Request.Context()), l); err != nil {
-		h.log.Warn("exportcenter: download audit write failed", zap.String("id", j.ID.String()), zap.Error(err))
+		h.log.Warn("exportcenter: audit write failed", zap.String("type", typ), zap.Error(err))
 	}
+}
+
+// downloadBatch POST /jobs/download-batch {"ids":[...]} —— 批量下载：把选中任务里
+// 可下载的结果文件打进一个 zip 流式返回。逐条过 Manager.Downloadable（非管理员只看得到
+// 自己的任务，别人的按不存在跳过；无结果文件 / 未完成的也跳过），一条都不可下载报 404。
+// zip 内同名结果文件按「任务ID-文件名」去重；zip 包内不放目录结构，全部平铺。
+func (h *handler) downloadBatch(c *gin.Context) {
+	a, ok := h.actor(c)
+	if !ok {
+		return
+	}
+	var in struct {
+		IDs []idgen.ID `json:"ids"`
+	}
+	if err := c.ShouldBindJSON(&in); err != nil || len(in.IDs) == 0 {
+		response.Fail(c, response.BadRequest("error.bad_request"))
+		return
+	}
+	ctx := c.Request.Context()
+	st := h.m.Storage()
+	jobs := make([]*job.Job, 0, len(in.IDs))
+	for _, id := range in.IDs {
+		j, err := h.m.Downloadable(ctx, a, id)
+		if err != nil {
+			continue // 越权 / 不存在 / 无结果文件：跳过，不中断整批
+		}
+		if _, err := st.Stat(ctx, j.ResultFile); err != nil {
+			continue // 结果文件已不在（保留期已过 / 存储异常）：跳过
+		}
+		jobs = append(jobs, j)
+	}
+	if len(jobs) == 0 {
+		response.Fail(c, response.NotFound("error.not_found"))
+		return
+	}
+	name := fmt.Sprintf("export-jobs-%s.zip", time.Now().UTC().Format("20060102-150405"))
+	hd := c.Writer.Header()
+	hd.Set("Content-Type", "application/zip")
+	hd.Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": name}))
+	hd.Set("Cache-Control", "no-store")
+	hd.Set("X-Content-Type-Options", "nosniff")
+	c.Status(http.StatusOK)
+
+	ids := make([]string, 0, len(jobs))
+	used := map[string]bool{}
+	zw := zip.NewWriter(c.Writer)
+	defer func() {
+		xerr := zw.Close()
+		if xerr != nil {
+			h.log.Warn("exportcenter: batch zip close failed", zap.Error(xerr))
+		}
+		h.writeAudit(c, "download_batch", fmt.Sprintf(`{"count":%d,"ids":%s}`, len(jobs), mustJSON(ids)))
+	}()
+	for _, j := range jobs {
+		entry := j.ResultName
+		if entry == "" {
+			entry = "download"
+		}
+		if used[entry] {
+			entry = j.ID.String() + "-" + entry
+		}
+		used[entry] = true
+		ids = append(ids, j.ID.String())
+		obj, err := st.Get(ctx, j.ResultFile, nil)
+		if err != nil {
+			// 预检到流式输出之间文件被清理：zip 里放一条说明，不打断整包
+			w, _ := zw.Create(entry + ".missing.txt")
+			_, _ = w.Write([]byte("result file is no longer available"))
+			continue
+		}
+		w, err := zw.Create(entry)
+		if err != nil {
+			continue
+		}
+		_, _ = io.Copy(w, obj.Body)
+		_ = obj.Body.Close()
+	}
+}
+
+// mustJSON 是 downloadBatch 审计参数的小工具：审计失败只进日志，序列化失败不该 panic。
+func mustJSON(v any) string {
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return "[]"
+	}
+	return string(raw)
 }

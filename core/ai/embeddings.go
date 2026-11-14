@@ -1,8 +1,9 @@
 package ai
 
-// Embeddings：OpenAI 兼容的向量化接口（POST {base}/embeddings）。
-// 与对话共用 BaseURL / APIKey / SSRF 防护，模型名取 cfg.EmbedModel（设置页 AI 分区的
-// 「Embedding 模型」字段，空 = 未配置向量化）。知识库 / 语义检索等特性从这里取向量。
+// Embeddings：OpenAI 兼容的向量化接口（POST {embedBase}/embeddings）。
+// 地址与密钥默认沿用对话配置，也可以在设置页 AI 分区单独配置 Embedding 的
+// Base URL / API Key（向量化走另一家供应商的形态）；模型名取 cfg.EmbedModel
+//（空 = 未配置向量化）。知识库 / 语义检索等特性从这里取向量。
 
 import (
 	"bytes"
@@ -54,14 +55,14 @@ func (c *Client) Embeddings(ctx context.Context, cfg Config, inputs []string) ([
 	}
 	ctx, cancel := context.WithTimeout(ctx, cfg.Timeout)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, cfg.endpoint("embeddings"), bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, cfg.embedEndpoint("embeddings"), bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("%w: bad request", ErrUpstream)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
-	if cfg.APIKey != "" {
-		req.Header.Set("Authorization", "Bearer "+cfg.APIKey)
+	if key := cfg.EmbedEndpointKey(); key != "" {
+		req.Header.Set("Authorization", "Bearer "+key)
 	}
 	resp, err := c.httpClient(cfg).Do(req)
 	if err != nil {

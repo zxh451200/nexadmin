@@ -164,7 +164,8 @@ kb:
   plugin_inactive: 知识库插件未启用
   document_required: 请选择要上传的文档
   document_too_large: 文档超出大小限制（上限 2MB）
-  document_type: 只支持 txt / md 纯文本文档
+  document_type: 只支持 txt / md / pdf / docx 文档
+  document_no_text: 这个 PDF 没有文本层（典型是扫描件/纯图片），请先用 OCR 或转成 Word/文本再上传
   document_empty: 文档没有可用内容
   document_not_found: 文档不存在
   embed_unavailable: 向量化未启用：请先在「系统设置 → 高级 → AI」里配置 Embedding 模型
@@ -625,6 +626,7 @@ config:
   notify.robot_invalid: "机器人 %s 配置无效"
   ai.base_url_invalid: "AI 地址不合法：仅支持 http/https，且不能指向链路本地、云元数据地址（默认也不能指向私网 / 回环，需部署方开启 ai.allow_private_base_url）"
   ai.apikey_required: "修改 AI 地址时必须同时重新填写 API Key"
+  ai.embed_apikey_required: "修改 Embedding 独立地址时必须同时重新填写该地址的 API Key（或让地址与对话地址一致）"
 language:
   save_failed: "语言配置保存失败，请检查语言代码与前缀"
   conflict: "语言清单刚被其他人修改过，请刷新页面后再保存"

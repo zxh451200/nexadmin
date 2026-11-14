@@ -403,6 +403,7 @@
   "site.js.chatClosed": "This conversation ended. Sending a message starts a new one.",
   "site.js.chatGuest": "Visitor",
   "site.js.chatAgent": "Support",
+  "site.js.chatSources": "Sources: ",
   "site.js.chatHandoff": "Handed over to a human agent, please hold on",
   "site.js.chatHandoffFailed": "Handoff failed. Please try again later.",
   "chat.handoff": "Talk to a human",

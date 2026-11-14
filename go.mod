@@ -30,6 +30,7 @@ require (
 	github.com/gopcua/opcua v0.9.1
 	github.com/gorilla/websocket v1.5.3
 	github.com/grid-x/modbus v1.5.1
+	github.com/ledongthuc/pdf v0.0.0-20261020125853-5e46805f718e
 	github.com/mozillazg/go-pinyin v0.21.0
 	github.com/robinson/gos7 v0.0.0-20261030170303-153d631d8881
 	github.com/russellhaering/goxmldsig v1.6.1

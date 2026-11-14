@@ -78,7 +78,11 @@
       "redactHint": "把手机号、邮箱、身份证号、银行卡号替换为占位符后再发给模型，返回内容不还原；建议保持开启",
       "modelHint": "对话/补全模型（智能问答、AI 筛选与翻译用）",
       "embedModel": "Embedding 模型",
-      "embedModelHint": "向量化模型（语义检索/知识库用），与对话模型同 Base URL 与 API Key；留空 = 不启用向量化"
+      "embedModelHint": "向量化模型（语义检索 / 知识库用）；留空 = 不启用向量化",
+      "embedBaseUrl": "Embedding Base URL",
+      "embedBaseUrlHint": "向量化服务地址，可与对话模型不同供应商；留空 = 沿用上方 Base URL",
+      "embedApiKey": "Embedding API Key",
+      "embedApiKeyHint": "独立地址的密钥；留空 = 沿用上方 API Key（仅当地址一致），换地址后保存需重新填写"
     },
     "sms": {
       "title": "短信",

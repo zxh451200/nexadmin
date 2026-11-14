@@ -274,6 +274,10 @@ type SendInput struct {
 	SenderName string
 	Content    string
 	Attachment string
+	// Meta 是 bot / system 消息的机器可读载荷（如 kb 的 {"sources":[...]}）。
+	// 只对这两类发送方生效：visitor / agent 的 meta 永远由服务端派生（附件信息），
+	// 不给 HTTP 调用方注入任意 JSON 的口子。
+	Meta string
 }
 
 // Send 在会话内发一条消息：行锁下取序号、更新会话摘要，事务提交后发事件。
@@ -321,6 +325,9 @@ func (s *Service) Send(ctx context.Context, convNo string, in SendInput) (*Messa
 			return err
 		}
 		meta := ""
+		if in.SenderType == SenderBot || in.SenderType == SenderSystem {
+			meta = truncate(strings.TrimSpace(in.Meta), 1000)
+		}
 		previewText := preview(in.Content)
 		if in.Attachment != "" {
 			var att Attachment

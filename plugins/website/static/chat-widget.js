@@ -234,6 +234,18 @@
           }
         }
         if (m.content) bubble.appendChild(document.createTextNode(m.content));
+        // AI 回答的命中来源（kb 插件写在 meta.sources）：展示「依据了哪些资料」，答案可追溯
+        if (m.senderType === 'bot' && m.meta) {
+          try {
+            var sources = (JSON.parse(m.meta) || {}).sources;
+            if (sources && sources.length) {
+              var srcEl = document.createElement('span');
+              srcEl.className = 'chat-sources';
+              srcEl.textContent = t('chatSources', '知识库来源：') + sources.join('、');
+              bubble.appendChild(srcEl);
+            }
+          } catch (e) { /* meta 非 JSON 时忽略 */ }
+        }
         var meta = document.createElement('span');
         meta.className = 'chat-meta';
         // AI 回复（kb 插件的机器人）与坐席同侧渲染，meta 里标 AI 区分身份

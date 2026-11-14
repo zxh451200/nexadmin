@@ -18,9 +18,10 @@ import (
 	"strconv"
 )
 
-// 纯文本白名单：一期只收 txt / markdown（解析链路最稳）；PDF/DOCX 二期。
+// 支持的文档格式：txt / md 直接读；pdf、docx 走文本抽取（见 extract.go）。
 var acceptExt = map[string]string{
 	".txt": "text/plain", ".md": "text/markdown", ".markdown": "text/markdown",
+	".pdf": "application/pdf", ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 }
 
 type handler struct {
@@ -84,19 +85,19 @@ func (h *handler) upload(c *gin.Context) {
 		return
 	}
 	defer func() { _ = f.Close() }()
-	raw, err := io.ReadAll(io.LimitReader(f, maxDocBytes+1))
+	rawBytes, err := io.ReadAll(io.LimitReader(f, maxDocBytes+1))
 	if err != nil {
 		response.Fail(c, err)
 		return
 	}
-	if len(raw) > maxDocBytes {
+	if len(rawBytes) > maxDocBytes {
 		response.Fail(c, response.BadRequest("kb.document_too_large"))
 		return
 	}
-	text := strings.TrimPrefix(string(raw), "\uFEFF") // 去 BOM
-	// 二进制防线：UTF-8 校验不过、含 NUL 或控制字符占比异常，都按「不是文本」拒收。
-	if !utf8.ValidString(text) || strings.ContainsRune(text, '\x00') {
-		response.Fail(c, response.BadRequest("kb.document_type"))
+	// 文本抽取按格式分流（txt/md 直读，pdf/docx 解析；扫描件 / 老 .doc 在这里明确报错）。
+	text, err := extractText(ext, string(rawBytes))
+	if err != nil {
+		response.Fail(c, err)
 		return
 	}
 	title := strings.TrimSpace(c.PostForm("title"))

@@ -156,7 +156,6 @@ export function ImageUrlField({
   const inputEl = (
     <div className={previewBelow ? 'flex items-center gap-2' : 'flex min-w-0 flex-1 flex-col gap-2'}>
       <div className="flex min-w-0 flex-1 items-center gap-2">
-        {!value ? uploadBtn : null}
         <Input
           value={value}
           disabled={disabled}
@@ -167,6 +166,7 @@ export function ImageUrlField({
           className="min-w-0 flex-1"
           aria-label={ariaLabel ?? title}
         />
+        {!value ? uploadBtn : null}
         {/* 文件库下拉：已传过的图片直接选，不用手写 URL（关键词可搜、按上传时间倒序） */}
         <RemoteSelect
           url="/files"

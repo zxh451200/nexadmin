@@ -165,7 +165,8 @@ kb:
   plugin_inactive: Knowledge base plugin is not enabled
   document_required: Please choose a document to upload
   document_too_large: Document exceeds the size limit (2MB max)
-  document_type: Only plain-text txt / md documents are supported
+  document_type: Only txt / md / pdf / docx documents are supported
+  document_no_text: This PDF has no text layer (typically a scan / image-only PDF); run OCR or convert it to Word/text first
   document_empty: The document has no usable content
   document_not_found: Document not found
   embed_unavailable: Embedding is not enabled; configure an Embedding model under System Settings → Advanced → AI first
@@ -626,6 +627,7 @@ config:
   notify.robot_invalid: "The settings for robot %s are invalid."
   ai.base_url_invalid: "The AI base URL is invalid: only http/https is allowed, and it must not point to link-local or cloud metadata addresses (private network and loopback addresses are blocked by default; deployers can enable ai.allow_private_base_url)."
   ai.apikey_required: "Changing the AI base URL requires re-entering the API key."
+  ai.embed_apikey_required: "Changing the Embedding base URL requires re-entering that URL's API key (or make it match the chat base URL)."
 language:
   save_failed: "Failed to save language settings. Please check the language codes and prefixes."
   conflict: "The language list was just changed by someone else. Refresh the page before saving."
