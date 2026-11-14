@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, arrayMove, rectSortingStrategy, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable'
-import { ImagePlus, Plus, Upload, VideoIcon } from 'lucide-react'
+import { ImagePlus, Upload, VideoIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { api } from '@/framework/request/http'
+import { Button } from '@/framework/ui/button'
+import { Input } from '@/framework/ui/input'
 import { DragCursorHost } from './table/use-sortable-sensors'
 import { ImageCropDialog, type CropConfig } from './ImageCropDialog'
-import { FileTile, PendingTile, tileSize, type PendingItem } from '@/framework/upload/UploaderTiles'
+import { FileTile, PendingTile, type PendingItem } from '@/framework/upload/UploaderTiles'
 import { isAbortError, uploadFile } from '@/framework/upload/uploadClient'
 import { precheckFile, useUploadConfig } from '@/framework/upload/precheck'
 import { captureVideoPoster } from '@/framework/upload/videoPoster'
@@ -49,6 +52,9 @@ export function Uploader({ kind, multiple, maxCount, crop, visibility = 'private
   valueRef.current = value
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
+  /** 图片地址导入：粘贴外链图片 URL 回车，登记进媒体库后加入列表（外链图不经裁剪） */
+  const [urlText, setUrlText] = useState('')
+  const [importing, setImporting] = useState(false)
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
@@ -190,6 +196,41 @@ export function Uploader({ kind, multiple, maxCount, crop, visibility = 'private
   const AddIcon = kind === 'image' ? ImagePlus : kind === 'video' ? VideoIcon : Upload
   const curCrop = cropQueue[0] ?? null
 
+  /** 地址导入：把外链图片登记进媒体库（POST /files 支持外链 URL，后端校验协议）。
+   *  外链图不经过裁剪管线（拿不到本地 blob），用原始地址直接进列表。 */
+  const addByUrl = async () => {
+    const url = urlText.trim()
+    if (!url) return
+    if (!/^https?:\/\//i.test(url)) {
+      toast.error(t('uploader.urlInvalid'))
+      return
+    }
+    setImporting(true)
+    try {
+      const name = decodeURIComponent(new URL(url).pathname.split('/').pop() ?? '') || 'image'
+      const ext = name.includes('.') ? name.split('.').pop()?.toLowerCase() : ''
+      const type = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : ext === 'gif' ? 'image/gif' : 'image/jpeg'
+      const items = await api.post<Array<{ id: string; name: string; url: string; type: string; size: number }>>('/files', {
+        files: [{ url, name, type, size: 0 }],
+        visibility,
+      })
+      const room = limit - valueRef.current.length - pending.length
+      if (room <= 0) {
+        toast.error(t('uploader.maxCount', { count: limit }))
+        return
+      }
+      const next = [...valueRef.current, ...items.slice(0, Math.max(0, room)).map((f) => ({ id: f.id, url: f.url, name: f.name, size: f.size ?? 0, type: f.type ?? type }))]
+      valueRef.current = next
+      onChangeRef.current(next)
+      setUrlText('')
+      toast.success(t('common.operateSuccess'))
+    } catch {
+      // 服务端原因由 http 拦截器统一弹出
+    } finally {
+      setImporting(false)
+    }
+  }
+
   return (
     <div
       className={cn('w-full', className, dragOver && 'rounded-md outline-2 outline-dashed outline-primary outline-offset-4')}
@@ -229,23 +270,42 @@ export function Uploader({ kind, multiple, maxCount, crop, visibility = 'private
                 onRetry={() => void run(p)}
               />
             ))}
-            {canAdd && (
-              <button
-                type="button"
-                onClick={() => addRef.current?.click()}
-                aria-label={t('common.upload')}
-                className={cn(
-                  'flex flex-col items-center justify-center gap-1 rounded-md border border-dashed border-input bg-background text-sm text-muted-foreground transition-colors hover:border-primary hover:text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none',
-                  kind === 'file' ? 'min-h-14 w-full flex-row' : kind === 'video' ? 'aspect-video w-full max-w-xs sm:w-56' : tileSize('image'),
-                )}
-              >
-                {kind === 'image' && !value.length ? <Plus className="size-6" aria-hidden="true" /> : <AddIcon className="size-5" aria-hidden="true" />}
-                <span>{t(`uploader.add_${kind}`)}</span>
-              </button>
-            )}
           </div>
         </SortableContext>
       </DndContext>
+
+      {/* 上传入口行：上传按钮 + 图片地址导入（拖拽上传在整个容器上仍可用） */}
+      {canAdd && (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-9"
+            onClick={() => addRef.current?.click()}
+            aria-label={t('common.upload')}
+          >
+            <AddIcon className="size-4" aria-hidden="true" />
+            {t(`uploader.add_${kind}`)}
+          </Button>
+          {kind === 'image' && (
+            <Input
+              value={urlText}
+              disabled={disabled || importing}
+              onChange={(e) => setUrlText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  void addByUrl()
+                }
+              }}
+              placeholder={t('uploader.urlPlaceholder')}
+              aria-label={t('uploader.urlPlaceholder')}
+              className="h-9 min-w-56 flex-1 text-sm sm:max-w-sm"
+            />
+          )}
+        </div>
+      )}
 
       <input ref={addRef} type="file" hidden accept={accepts} multiple={!!multiple && limit > 1} onChange={(e) => onPick(e)} />
       <input

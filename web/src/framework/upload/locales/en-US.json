@@ -28,7 +28,9 @@
     "previewLabel": "Preview",
     "outputSize": "Output size",
     "ratioLabel": "Ratio",
-    "cropRatioFree": "Free"
+    "cropRatioFree": "Free",
+    "urlPlaceholder": "Paste an image URL, press Enter to import",
+    "urlInvalid": "The URL must start with http:// or https://"
   },
   "lightbox": {
     "prev": "Previous",

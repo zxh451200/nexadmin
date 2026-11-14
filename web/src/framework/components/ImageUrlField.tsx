@@ -27,6 +27,8 @@ export interface ImageUrlFieldProps {
   disabled?: boolean
   /** 预览框尺寸类，默认正方形——logo 一律完整显示，不裁切 */
   previewClassName?: string
+  /** true = 输入行在上、预览/上传卡在下（长表单里先看到输入再看到图）；默认横排（卡在左、输入在右） */
+  previewBelow?: boolean
   'aria-label'?: string
 }
 
@@ -44,6 +46,7 @@ export function ImageUrlField({
   crop,
   disabled,
   previewClassName = 'size-24',
+  previewBelow = false,
   'aria-label': ariaLabel,
 }: ImageUrlFieldProps) {
   const { t } = useTranslation()
@@ -88,106 +91,118 @@ export function ImageUrlField({
     }
   }
 
-  return (
-    <div className="flex items-center gap-3">
-      {/* 卡在左、URL 行在右：上传卡不再孤零零吊在左下角，右侧一行正好吃掉整行宽度 */}
-      {value ? (
-        <div className="group relative shrink-0">
-          <button
+  // 卡片：有值=预览（点开放大，悬停浮现清除），无值=上传入口
+  const cardEl =
+    value ? (
+      <div className={cn('group relative shrink-0', previewBelow && 'self-start')}>
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => setZoom(true)}
+          aria-label={t('common.preview')}
+          title={t('common.preview')}
+          className="block rounded-md focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed"
+        >
+          <img
+            src={value}
+            alt=""
+            loading="lazy"
+            className={cn('rounded-md border border-border bg-muted/40 object-contain p-1', previewClassName)}
+          />
+        </button>
+        {/* 悬停/聚焦时浮现操作；触屏没有 hover，仍走卡片点开放大 + 行内「清除」按钮 */}
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center gap-1 rounded-md bg-black/50 opacity-0 transition-opacity group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100">
+          <Button
             type="button"
+            size="icon"
+            variant="ghost"
+            className="size-7 text-white hover:bg-white/20 hover:text-white"
             disabled={disabled}
             onClick={() => setZoom(true)}
             aria-label={t('common.preview')}
             title={t('common.preview')}
-            className="block rounded-md focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed"
           >
-            <img
-              src={value}
-              alt=""
-              loading="lazy"
-              className={cn('rounded-md border border-border bg-muted/40 object-contain p-1', previewClassName)}
-            />
-          </button>
-          {/* 悬停/聚焦时浮现操作；触屏没有 hover，仍走卡片点开放大 + 行内「清除」按钮 */}
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center gap-1 rounded-md bg-black/50 opacity-0 transition-opacity group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100">
-            <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              className="size-7 text-white hover:bg-white/20 hover:text-white"
-              disabled={disabled}
-              onClick={() => setZoom(true)}
-              aria-label={t('common.preview')}
-              title={t('common.preview')}
-            >
-              <ZoomIn aria-hidden="true" />
-            </Button>
-            <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              className="size-7 text-white hover:bg-white/20 hover:text-white"
-              disabled={disabled}
-              onClick={() => onChange('')}
-              aria-label={t('common.clear')}
-              title={t('common.clear')}
-            >
-              <Trash2 aria-hidden="true" />
-            </Button>
-          </div>
-        </div>
-      ) : (
-        <button
-          type="button"
-          disabled={disabled || uploading}
-          onClick={() => (crop ? setOpen(true) : inputRef.current?.click())}
-          aria-label={ariaLabel ?? title}
-          className={cn(
-            'flex shrink-0 items-center justify-center gap-1 rounded-md border border-dashed text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:bg-muted/50 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50',
-            previewClassName,
-          )}
-        >
-          {uploading ? (
-            <Loader2 aria-hidden="true" className="size-4 animate-spin" />
-          ) : (
-            <Upload aria-hidden="true" className="size-4" />
-          )}
-          {uploading ? t('uploader.uploading') : t('common.upload')}
-        </button>
-      )}
-      <div className="flex min-w-0 flex-1 flex-col gap-2">
-        <div className="flex items-center gap-2">
-          <Input
-            value={value}
+            <ZoomIn aria-hidden="true" />
+          </Button>
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className="size-7 text-white hover:bg-white/20 hover:text-white"
             disabled={disabled}
-            onChange={(e) => onChange(e.target.value)}
-            placeholder={placeholder}
-            inputMode="url"
-            spellCheck={false}
-            className="min-w-0 flex-1"
-            aria-label={ariaLabel ?? title}
-          />
-          {/* 文件库下拉：已传过的图片直接选，不用手写 URL（关键词可搜、按上传时间倒序） */}
-          <RemoteSelect
-            url="/files"
-            params={{ category: 'image' }}
-            valueKey="url"
-            labelKey="name"
-            value={value}
-            onChange={(v) => onChange(String(v ?? ''))}
-            allowClear={false}
-            placeholder={t('uploader.pickFromLibrary')}
-            disabled={disabled}
-            className="w-36 shrink-0 sm:w-44"
-          />
-          {value ? (
-            <Button type="button" variant="ghost" className="shrink-0 px-3" disabled={disabled} onClick={() => onChange('')}>
-              {t('common.clear')}
-            </Button>
-          ) : null}
+            onClick={() => onChange('')}
+            aria-label={t('common.clear')}
+            title={t('common.clear')}
+          >
+            <Trash2 aria-hidden="true" />
+          </Button>
         </div>
-        {hint && !crop ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
       </div>
+    ) : (
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="h-9 self-start"
+        disabled={disabled || uploading}
+        onClick={() => (crop ? setOpen(true) : inputRef.current?.click())}
+        aria-label={ariaLabel ?? title}
+      >
+        {uploading ? <Loader2 aria-hidden="true" className="size-4 animate-spin" /> : <Upload aria-hidden="true" className="size-4" />}
+        {uploading ? t('uploader.uploading') : t('common.upload')}
+      </Button>
+    )
+  const hintEl = hint && !crop ? <p className="text-xs text-muted-foreground">{hint}</p> : null
+  const inputEl = (
+    <div className={previewBelow ? 'flex items-center gap-2' : 'flex min-w-0 flex-1 flex-col gap-2'}>
+      <Input
+        value={value}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        inputMode="url"
+        spellCheck={false}
+        className="min-w-0 flex-1"
+        aria-label={ariaLabel ?? title}
+      />
+      {/* 文件库下拉：已传过的图片直接选，不用手写 URL（关键词可搜、按上传时间倒序） */}
+      <RemoteSelect
+        url="/files"
+        params={{ category: 'image' }}
+        valueKey="url"
+        labelKey="name"
+        value={value}
+        onChange={(v) => onChange(String(v ?? ''))}
+        allowClear={false}
+        placeholder={t('uploader.pickFromLibrary')}
+        disabled={disabled}
+        className="w-36 shrink-0 sm:w-44"
+      />
+      {value ? (
+        <Button type="button" variant="ghost" className="shrink-0 px-3" disabled={disabled} onClick={() => onChange('')}>
+          {t('common.clear')}
+        </Button>
+      ) : null}
+      {previewBelow ? null : hintEl}
+    </div>
+  )
+
+  return (
+    <div className={previewBelow ? 'flex flex-col gap-2' : 'flex items-center gap-3'}>
+      {previewBelow ? (
+        <>
+          {/* 输入行在上、预览卡在下：长表单里先填地址再看效果（商品封面/视频的形态） */}
+          {inputEl}
+          {hintEl}
+          {cardEl}
+        </>
+      ) : (
+        <>
+          {/* 卡在左、URL 行在右：上传卡不再孤零零吊在左下角，右侧一行正好吃掉整行宽度 */}
+          {cardEl}
+          {inputEl}
+        </>
+      )}
       {value ? (
         <Lightbox
           open={zoom}

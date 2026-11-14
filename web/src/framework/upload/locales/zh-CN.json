@@ -28,7 +28,9 @@
     "previewLabel": "实时预览",
     "outputSize": "输出尺寸",
     "ratioLabel": "比例",
-    "cropRatioFree": "自由"
+    "cropRatioFree": "自由",
+    "urlPlaceholder": "粘贴图片地址，回车导入",
+    "urlInvalid": "地址需以 http:// 或 https:// 开头"
   },
   "lightbox": {
     "prev": "上一张",
