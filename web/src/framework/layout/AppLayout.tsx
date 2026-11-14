@@ -67,16 +67,13 @@ function UserMenu() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
-        {/* 头部：头像 + 两行文字块（昵称/账号）。底色块把头部与菜单项区隔开，行距放宽避免挤成两行裸文字 */}
+        {/* 头部：头像 + 账号单行。昵称已在顶栏展示，这里不重复；底色块把头部与菜单项区隔开 */}
         <DropdownMenuLabel className="flex items-center gap-3 rounded-sm bg-muted/60 px-2 py-2.5 font-normal">
           <Avatar className="size-9 border border-border shadow-xs">
             {user?.avatar && <AvatarImage src={user.avatar} alt="" />}
             <AvatarFallback className="text-sm font-medium">{name.slice(0, 1).toUpperCase()}</AvatarFallback>
           </Avatar>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium leading-5">{name}</p>
-            <p className="mt-0.5 truncate text-xs leading-4 text-muted-foreground">{user?.username}</p>
-          </div>
+          <p className="min-w-0 flex-1 truncate text-sm font-medium leading-5">{user?.username}</p>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem className="min-h-11 md:min-h-8" onSelect={() => navigate('/profile')}>
