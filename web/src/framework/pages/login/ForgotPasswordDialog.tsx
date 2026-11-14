@@ -201,7 +201,7 @@ export function ForgotPasswordDialog({ open, onOpenChange, channels }: Props) {
               <Button
                 type="button"
                 variant="outline"
-                className="h-10 w-28 shrink-0 md:h-10"
+                className="h-10 w-28 shrink-0 md:h-8"
                 disabled={left > 0 || busy}
                 onClick={() => void send()}
               >

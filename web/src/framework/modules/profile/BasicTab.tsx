@@ -135,8 +135,16 @@ export function BasicTab() {
           />
           <div className="flex flex-col gap-2">
             <Label htmlFor="pf-phone">{t('profile.basic.phone')}</Label>
-            <Input id="pf-phone" value={profile?.phone ?? ''} readOnly disabled inputMode="tel" />
-            <p className="text-sm text-muted-foreground">{t('profile.basic.phoneHint')}</p>
+            {/* 没绑手机号时提示语进 placeholder 占位；已绑定时号码之外保留一行小字说明为何只读 */}
+            <Input
+              id="pf-phone"
+              value={profile?.phone ?? ''}
+              readOnly
+              disabled
+              inputMode="tel"
+              placeholder={t('profile.basic.phoneHint')}
+            />
+            {profile?.phone ? <p className="text-sm text-muted-foreground">{t('profile.basic.phoneHint')}</p> : null}
           </div>
           <FormField
             control={form.control}

@@ -110,7 +110,7 @@ export function PhoneForm({
                 <FormControl>
                   <Input {...field} inputMode="numeric" maxLength={6} autoComplete="one-time-code" placeholder={t('login.smsCodePlaceholder')} />
                 </FormControl>
-                <Button type="button" variant="outline" className="h-10 w-28 shrink-0 md:h-10" disabled={left > 0 || sending} onClick={sendCode}>
+                <Button type="button" variant="outline" className="h-10 w-28 shrink-0 md:h-8" disabled={left > 0 || sending} onClick={sendCode}>
                   {sending ? (
                     <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
                   ) : left > 0 ? (

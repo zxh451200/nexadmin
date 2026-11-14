@@ -11,6 +11,7 @@ import { Segmented } from '@/framework/components/Segmented'
 import type { Column } from '@/framework/components/table/types'
 import { usePageLive, useRefreshOnResume } from '@/framework/hooks/use-page-active'
 import { Badge, type BadgeProps } from '@/framework/ui/badge'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/framework/ui/tooltip'
 import { Button } from '@/framework/ui/button'
 import { Progress } from '@/framework/ui/progress'
 import { OptionPicker } from '@/framework/components/OptionPicker'
@@ -135,12 +136,21 @@ export default function ExportCenterPage() {
       key: 'status',
       title: t('jobs.col.status'),
       mobile: 'sub',
-      render: (j) => (
-        <div className="flex flex-col items-start gap-1">
-          <Badge variant={STATUS_VARIANT[j.status]}>{t(`jobs.status.${j.status}`)}</Badge>
-          {j.status === 'failed' && j.error ? <span className="max-w-64 text-xs text-destructive">{j.error}</span> : null}
-        </div>
-      ),
+      render: (j) => {
+        const badge = <Badge variant={STATUS_VARIANT[j.status]}>{t(`jobs.status.${j.status}`)}</Badge>
+        // 失败原因收进悬浮提示，避免徽章下再压一行红字把行高撑开
+        if (j.status !== 'failed' || !j.error) return badge
+        return (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="inline-flex cursor-help" aria-label={j.error}>
+                {badge}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>{j.error}</TooltipContent>
+          </Tooltip>
+        )
+      },
     },
     {
       key: 'progress',

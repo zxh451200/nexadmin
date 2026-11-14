@@ -58,10 +58,12 @@ function UserMenu() {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" className="h-11 gap-2 px-2 md:h-9" aria-label={t('layout.userMenu')}>
-          <Avatar className="size-7">
-            {user?.avatar && <AvatarImage src={user.avatar} alt="" />}
-            <AvatarFallback className="text-xs">{name.slice(0, 1).toUpperCase()}</AvatarFallback>
-          </Avatar>
+          {/* 没传头像图时不再渲染首字圆圈：昵称就在旁边，字母头像纯属重复 */}
+          {user?.avatar && (
+            <Avatar className="size-7">
+              <AvatarImage src={user.avatar} alt="" />
+            </Avatar>
+          )}
           <span className="hidden max-w-28 truncate text-sm md:inline">{name}</span>
           <ChevronsUpDown className="hidden size-3.5 text-muted-foreground md:inline" aria-hidden="true" />
         </Button>

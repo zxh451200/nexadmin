@@ -76,9 +76,9 @@ function saveRecent(tree: RegionNode[], v: AddressValue): RecentAddress[] {
 
 /**
  * 顺丰/电商式地址字段：省市区选择 + 详细地址 + 完整地址三段联动，外加地图选点与最近使用。
- * - 往完整地址里输入（如「中牟散大声地111」）会**边打边解析**：区划选择器实时跟进（区县名认
- *   短别名“中牟”、曾用名“思茅”，不带省市时按全树唯一命中补全），详细地址等失焦时再回填，
- *   避免打字过程中输入框内容被推导值顶掉；粘贴一段完整地址立即解析回填；解析不命中时整串
+ * - 往完整地址里输入（如「中牟散大声地111」）会**边打边解析**：区划选择器与详细地址实时跟进
+ *   （区县名认短别名“中牟”、曾用名“思茅”，不带省市时按全树唯一命中补全；完整地址输入框自身
+ *   有草稿保护，联动不会顶掉正在输入的内容）；粘贴一段完整地址立即解析回填；解析不命中时整串
  *   进详细地址，不丢内容。
  * - 装了地图插件（任一厂商已启用）时出现「地图选点」：选点确认后按逆地理地址回填省市区与
  *   详细地址，坐标不落库。
@@ -151,11 +151,15 @@ export function AddressField({ value, onChange, level = 3, disabled, className }
     setRecent(saveRecent(tree, next))
   }
 
-  // 打字过程的实时反馈：只把区划选择器跟上去，详细地址留到失焦再回填
+  // 打字过程的实时反馈：区划选择器与详细地址同步跟进。完整地址输入框自身有
+  // fullDraft 草稿保护，联动不会顶掉正在输入的内容；解析不命中（删到没有区划
+  // 前缀）时不动当前值，整串进详细地址留给失焦时兜底
   const liveParseRegion = (text: string) => {
-    const { path } = parseRegionAddress(tree, text.trim(), level)
-    if (path.length && !sameRegion(toRegionValue(path), region)) {
-      emit({ region: toRegionValue(path), address }, true)
+    const { path, rest } = parseRegionAddress(tree, text.trim(), level)
+    if (!path.length) return
+    const next = toAddressValue(path, rest, region)
+    if (!sameRegion(next.region, region) || (next.address ?? '') !== address) {
+      emit(next, true)
     }
   }
 

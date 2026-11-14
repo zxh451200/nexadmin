@@ -25,6 +25,9 @@ export function useAsyncJob() {
   const finish = useCallback(
     (job: Job) => {
       void qc.invalidateQueries({ queryKey: jobKeys.all })
+      // 任务在「已提交」toast 还挂着时就完成了（快任务第一次轮询即结束）：
+      // 先撤掉那条，只留结果提示，不叠两条
+      toast.dismiss(`job-${job.id}`)
       if (job.status === 'success') {
         toast.success(t('jobs.toast.done'), { action: { label: t('jobs.toast.goDownload'), onClick: () => navigate(CENTER_PATH) } })
       } else if (job.status === 'failed') {
@@ -67,7 +70,11 @@ export function useAsyncJob() {
     async (create: () => Promise<{ id: string }>) => {
       const { id } = await create()
       void qc.invalidateQueries({ queryKey: jobKeys.all })
-      toast.success(t('jobs.toast.submitted'), { action: { label: t('jobs.toast.goCenter'), onClick: () => navigate(CENTER_PATH) } })
+      // id 与任务绑定：finish 时能按 id 撤掉未消失的「已提交」，避免快任务叠两条提示
+      toast.success(t('jobs.toast.submitted'), {
+        id: `job-${id}`,
+        action: { label: t('jobs.toast.goCenter'), onClick: () => navigate(CENTER_PATH) },
+      })
       setIds((cur) => (cur.includes(id) ? cur : [...cur, id]))
       return id
     },

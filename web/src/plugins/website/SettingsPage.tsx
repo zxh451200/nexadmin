@@ -249,7 +249,8 @@ function SettingsFormBody({
       </div>
       {/* 25+ 个控件按「谁在什么时候改它」分成六节，别再一列到底 */}
       <section className="flex flex-col gap-3 rounded-lg border bg-card p-4">
-        <h3 className="text-sm font-medium">{t('plugin_website.settings.section.theme')}</h3>
+        {/* 小节眉题用弱化小字，与字段标签（text-sm 前景色）拉开层级，不再像两个标题叠着 */}
+        <h3 className="text-xs font-medium text-muted-foreground">{t('plugin_website.settings.section.theme')}</h3>
         <SharedFieldShell labelKey="plugin_website.fields.theme">
           <Select
             value={shared.theme || '__default'}
@@ -282,7 +283,7 @@ function SettingsFormBody({
         ) : null}
       </section>
       <section className="flex flex-col gap-3 rounded-lg border bg-card p-4">
-        <h3 className="text-sm font-medium">{t('plugin_website.settings.section.identity')}</h3>
+        <h3 className="text-xs font-medium text-muted-foreground">{t('plugin_website.settings.section.identity')}</h3>
         {sharedInput('siteName')}
         {localizedField('siteDesc')}
       <SharedFieldShell labelKey="plugin_website.fields.logoUrl">
@@ -324,7 +325,7 @@ function SettingsFormBody({
       </SharedFieldShell>
       </section>
       <section className="flex flex-col gap-3 rounded-lg border bg-card p-4">
-        <h3 className="text-sm font-medium">{t('plugin_website.settings.section.home')}</h3>
+        <h3 className="text-xs font-medium text-muted-foreground">{t('plugin_website.settings.section.home')}</h3>
         <div className="flex flex-col gap-1">
         {localizedField('homeTitle')}
         <span className="text-xs text-muted-foreground">{t('plugin_website.hint.homeTitle')}</span>
@@ -356,7 +357,7 @@ function SettingsFormBody({
       </SharedFieldShell>
       </section>
       <section className="flex flex-col gap-3 rounded-lg border bg-card p-4">
-        <h3 className="text-sm font-medium">{t('plugin_website.settings.section.seo')}</h3>
+        <h3 className="text-xs font-medium text-muted-foreground">{t('plugin_website.settings.section.seo')}</h3>
         {localizedField('seoKeywords')}
       {sharedInput('titleSuffix')}
       <SharedFieldShell labelKey="plugin_website.fields.ogImageUrl">
@@ -389,7 +390,7 @@ function SettingsFormBody({
       </SharedFieldShell>
       </section>
       <section className="flex flex-col gap-3 rounded-lg border bg-card p-4">
-        <h3 className="text-sm font-medium">{t('plugin_website.settings.section.contact')}</h3>
+        <h3 className="text-xs font-medium text-muted-foreground">{t('plugin_website.settings.section.contact')}</h3>
       {sharedInput('contactEmail', emailInvalid ? t('plugin_website.settings.emailInvalid') : undefined)}
       <SwitchRow
         label={t('plugin_website.message.notifyEmail')}
@@ -410,7 +411,7 @@ function SettingsFormBody({
       {sharedInput('contactPhone')}
       </section>
       <section className="flex flex-col gap-3 rounded-lg border bg-card p-4">
-        <h3 className="text-sm font-medium">{t('plugin_website.settings.section.footer')}</h3>
+        <h3 className="text-xs font-medium text-muted-foreground">{t('plugin_website.settings.section.footer')}</h3>
       <SharedFieldShell labelKey="plugin_website.fields.qrCodeUrl">
         <div className="flex items-center gap-2">
           <Input
@@ -512,7 +513,7 @@ function SettingsFormBody({
       </div>
       </section>
       <section className="flex flex-col gap-3 rounded-lg border bg-card p-4">
-        <h3 className="text-sm font-medium">{t('plugin_website.settings.section.market')}</h3>
+        <h3 className="text-xs font-medium text-muted-foreground">{t('plugin_website.settings.section.market')}</h3>
         <SwitchRow
           label={t('plugin_website.market.enabled')}
           description={t('plugin_website.market.enabledHint')}

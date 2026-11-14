@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Copy, Download, ExternalLink, Eye, History, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -8,6 +8,9 @@ import { Can } from '@/framework/auth/Can'
 import { useAsyncJob } from '@/framework/hooks/use-async-job'
 import { EmptyState } from '@/framework/components/EmptyState'
 import { OptionPicker } from '@/framework/components/OptionPicker'
+import { OptionList } from '@/framework/components/pickers/OptionList'
+import { PickerShell } from '@/framework/components/pickers/PickerShell'
+import { PickerTrigger } from '@/framework/components/pickers/PickerTrigger'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { FilterBar } from '@/framework/components/FilterBar'
@@ -29,7 +32,6 @@ import { SwitchRow } from '@/framework/components/SwitchField'
 import { ImageUrlField } from '@/framework/components/ImageUrlField'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
-import { Checkbox } from '@/framework/ui/checkbox'
 import { Input } from '@/framework/ui/input'
 import { EditorSchemaGate } from './EditorSchemaGate'
 import TranslationStatus from './TranslationStatus'
@@ -132,6 +134,7 @@ function PostFormBody({
   const [catIds, setCatIds] = useState<string[]>(() => (editing?.categories ?? []).map((c) => c.id))
   const [tags, setTags] = useState<string[]>(() => (editing?.tags ?? []).map((x) => x.name))
   const [tagInput, setTagInput] = useState('')
+  const tagInputRef = useRef<HTMLInputElement>(null)
   const [newCatTitle, setNewCatTitle] = useState('')
   const [newCatSlug, setNewCatSlug] = useState('')
   const [catFormOpen, setCatFormOpen] = useState(false)
@@ -277,27 +280,13 @@ function PostFormBody({
         <LocaleFormActions />
         <SharedGroup labelKey="plugin_website.post.categories">
           <div className="flex flex-col gap-1.5" role="group" aria-label={t('plugin_website.post.categories')}>
-            <div
-              className={cn(
-                'flex flex-col rounded-md border border-border p-1',
-                categories.length > 6 ? 'max-h-40 overflow-y-auto' : undefined,
-              )}
-            >
-              {categories.length ? categories.map((c) => (
-                <label key={c.id} className="flex min-h-9 cursor-pointer items-center gap-2 rounded-sm px-2 text-sm hover:bg-accent/60">
-                  <Checkbox
-                    checked={catIds.includes(c.id)}
-                    disabled={sharedDisabled}
-                    onCheckedChange={(on) => setCatIds((ids) => (on ? [...ids, c.id] : ids.filter((x) => x !== c.id)))}
-                    aria-label={c.title}
-                  />
-                  <span className="min-w-0 flex-1 truncate">{c.title}</span>
-                  <span className="num text-xs text-muted-foreground">{c.postCount}</span>
-                </label>
-              )) : (
-                <p className="px-2 py-3 text-xs text-muted-foreground">{t('plugin_website.post.categoriesEmpty')}</p>
-              )}
-            </div>
+            {/* select 式触发器 + 可搜索多选弹层：分类多时搜索定位，行尾文章数保留 */}
+            <PostCategoryPicker
+              value={catIds}
+              onChange={setCatIds}
+              categories={categories}
+              disabled={sharedDisabled}
+            />
             <div className="flex flex-wrap items-center gap-2">
               <Button variant="link" size="sm" className="h-auto p-0" onClick={() => setCatFormOpen((v) => !v)}>
                 <Plus aria-hidden="true" />
@@ -344,27 +333,34 @@ function PostFormBody({
         </SharedGroup>
         <SharedGroup labelKey="plugin_website.post.tags">
           <div className="flex flex-col gap-1.5" role="group" aria-label={t('plugin_website.post.tags')}>
-            {tags.length ? (
-              <div className="flex flex-wrap gap-1.5">
-                {tags.map((name) => (
-                  <Badge key={name} variant="secondary" className="ps-2.5 pe-0.5">
-                    <span className="max-w-40 truncate">{name}</span>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="size-6"
-                      disabled={sharedDisabled}
-                      aria-label={t('plugin_website.post.tagRemove', { name })}
-                      onClick={() => setTags((cur) => cur.filter((x) => x !== name))}
-                    >
-                      <X aria-hidden="true" />
-                    </Button>
-                  </Badge>
-                ))}
-              </div>
-            ) : null}
-            <div className="flex items-center gap-2">
-              <Input
+            {/* 标签输入二合一：已建标签以芯片嵌在输入框内，回车/逗号添加，空值 Backspace 删最后一个 */}
+            <div
+              className={cn(
+                'flex min-h-11 w-full flex-wrap items-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-base shadow-xs',
+                'transition-[color,box-shadow,border-color] duration-(--motion-fast) ease-(--ease-standard)',
+                'focus-within:border-ring focus-within:outline-hidden focus-within:ring-2 focus-within:ring-ring/40',
+                'dark:border-white/26 dark:bg-white/[0.06] md:min-h-8 md:py-1 md:text-sm',
+                (sharedDisabled || atTagLimit) && 'cursor-not-allowed opacity-50',
+              )}
+              onClick={() => tagInputRef.current?.focus()}
+            >
+              {tags.map((name) => (
+                <Badge key={name} variant="secondary" className="ps-2.5 pe-0.5">
+                  <span className="max-w-40 truncate">{name}</span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-6"
+                    disabled={sharedDisabled}
+                    aria-label={t('plugin_website.post.tagRemove', { name })}
+                    onClick={() => setTags((cur) => cur.filter((x) => x !== name))}
+                  >
+                    <X aria-hidden="true" />
+                  </Button>
+                </Badge>
+              ))}
+              <input
+                ref={tagInputRef}
                 value={tagInput}
                 maxLength={64}
                 list="post-tag-options"
@@ -374,20 +370,14 @@ function PostFormBody({
                   if (e.key === 'Enter' || e.key === ',') {
                     e.preventDefault()
                     commitTags(tagInput)
+                  } else if (e.key === 'Backspace' && !tagInput && tags.length) {
+                    setTags((cur) => cur.slice(0, -1))
                   }
                 }}
-                placeholder={t('plugin_website.post.tagInputPlaceholder')}
+                className="min-w-16 flex-1 bg-transparent outline-hidden placeholder:text-muted-foreground"
+                placeholder={tags.length ? '' : t('plugin_website.post.tagInputPlaceholder')}
                 aria-label={t('plugin_website.post.tags')}
               />
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={sharedDisabled || atTagLimit || !tagInput.trim()}
-                onClick={() => commitTags(tagInput)}
-              >
-                <Plus aria-hidden="true" />
-                {t('plugin_website.post.tagAdd')}
-              </Button>
             </div>
             {atTagLimit ? (
               <span className="text-xs text-muted-foreground">{t('plugin_website.post.tagLimit', { max: tagsMax })}</span>
@@ -446,6 +436,67 @@ function PostFormBody({
         ) : null}
       </div>
     </ResponsiveDialog>
+  )
+}
+
+/** 分类多选（select 式）：收起只占一行，展开是带搜索的多选清单，行尾保留文章数；勾选不关弹层。 */
+function PostCategoryPicker({
+  value, onChange, categories, disabled,
+}: {
+  value: string[]
+  onChange: (ids: string[]) => void
+  categories: PostCategory[]
+  disabled?: boolean
+}) {
+  const { t } = useTranslation()
+  const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState('')
+  const kw = search.trim().toLowerCase()
+  const shown = useMemo(
+    () => (kw ? categories.filter((c) => c.title.toLowerCase().includes(kw)) : categories),
+    [categories, kw],
+  )
+  const toggle = (id: string) => onChange(value.includes(id) ? value.filter((x) => x !== id) : [...value, id])
+  // 触发器按清单顺序显示已选名称；没选时回占位文案
+  const selectedTitles = categories.filter((c) => value.includes(c.id)).map((c) => c.title)
+  return (
+    <PickerShell
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o)
+        if (!o) setSearch('') // 关弹层清掉搜索词，下次打开回到全量清单
+      }}
+      disabled={disabled}
+      title={t('plugin_website.post.categories')}
+      trigger={
+        <PickerTrigger
+          disabled={disabled}
+          placeholder={t('plugin_website.post.categoryFilter')}
+          hasValue={value.length > 0}
+          allowClear={false}
+          display={selectedTitles.join('、')}
+        />
+      }
+    >
+      <OptionList
+        options={shown.map((c) => ({
+          value: c.id,
+          label: c.title,
+          node: (
+            <span className="flex w-full items-center gap-2">
+              <span className="truncate">{c.title}</span>
+              <span className="num ms-auto text-xs text-muted-foreground">{c.postCount}</span>
+            </span>
+          ),
+        }))}
+        value={value}
+        multiple
+        onSelect={toggle}
+        search={search}
+        onSearchChange={setSearch}
+        emptyText={t(kw ? 'plugin_website.post.categoryNoMatch' : 'plugin_website.post.categoriesEmpty')}
+      />
+    </PickerShell>
   )
 }
 
@@ -1034,6 +1085,7 @@ export default function PostPage() {
             options={categories.map((c) => ({ value: c.id, label: c.title }))}
             className="md:w-44"
             placeholder={t('plugin_website.post.categoryFilter')}
+            searchable
           />
         ) : null}
         {extraLocales.length ? (
