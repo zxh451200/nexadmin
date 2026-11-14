@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Cropper from 'cropperjs'
 import 'cropperjs/dist/cropper.css'
-import { RotateCw, ZoomIn, ZoomOut } from 'lucide-react'
+import { RotateCcw, RotateCw, ZoomIn, ZoomOut } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/framework/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/framework/ui/dialog'
@@ -193,6 +193,9 @@ export function ImageCropDialog({ open, file, crop, onCancel, onConfirm }: Image
     type: 'number' as const,
     min: 1,
     value: which === 'w' ? wText : hText,
+    // 输出尺寸固定时输入框只读：实时显示选框在原图上的尺寸（输出会缩放到固定尺寸）
+    readOnly: fixedOut,
+    title: fixedOut ? t('uploader.cropFixedInput') : undefined,
     onFocus: () => {
       editing.current = which
     },
@@ -230,18 +233,16 @@ export function ImageCropDialog({ open, file, crop, onCancel, onConfirm }: Image
               </>
             )}
           </div>
-          {!fixedOut && (
-            <div className="flex items-center gap-2">
-              <label className="text-muted-foreground flex items-center gap-1.5 text-xs">
-                {t('uploader.cropWidth')}
-                <Input aria-label={t('uploader.cropWidth')} {...numberInputProps('w')} />
-              </label>
-              <label className="text-muted-foreground flex items-center gap-1.5 text-xs">
-                {t('uploader.cropHeight')}
-                <Input aria-label={t('uploader.cropHeight')} {...numberInputProps('h')} />
-              </label>
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            <label className="text-muted-foreground flex items-center gap-1.5 text-xs">
+              {t('uploader.cropWidth')}
+              <Input aria-label={t('uploader.cropWidth')} {...numberInputProps('w')} />
+            </label>
+            <label className="text-muted-foreground flex items-center gap-1.5 text-xs">
+              {t('uploader.cropHeight')}
+              <Input aria-label={t('uploader.cropHeight')} {...numberInputProps('h')} />
+            </label>
+          </div>
         </div>
         <div className="relative h-[50dvh] w-full overflow-hidden rounded-md bg-muted">
           {src && <img ref={setImg} src={src} alt={file?.name ?? ''} className="block max-w-full" />}
@@ -263,6 +264,9 @@ export function ImageCropDialog({ open, file, crop, onCancel, onConfirm }: Image
           </Button>
           <Button type="button" variant="outline" size="icon" aria-label={t('uploader.rotate')} onClick={() => { const c = cropperRef.current; if (c) rotateCropBox(c, 90) }}>
             <RotateCw className="size-4" aria-hidden="true" />
+          </Button>
+          <Button type="button" variant="outline" size="icon" aria-label={t('uploader.cropReset')} onClick={() => cropperRef.current?.reset()}>
+            <RotateCcw className="size-4" aria-hidden="true" />
           </Button>
         </div>
         <DialogFooter className="gap-2">

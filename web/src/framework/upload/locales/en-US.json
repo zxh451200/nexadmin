@@ -20,9 +20,11 @@
     "cropWidth": "W",
     "cropHeight": "H",
     "cropFixed": "Output size is fixed at {{width}} × {{height}}",
+    "cropFixedInput": "Box size on the original image; the output is scaled to the fixed size",
     "zoomIn": "Zoom in",
     "zoomOut": "Zoom out",
-    "rotate": "Rotate"
+    "rotate": "Rotate",
+    "cropReset": "Reset crop"
   },
   "lightbox": {
     "prev": "Previous",

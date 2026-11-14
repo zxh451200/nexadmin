@@ -20,9 +20,11 @@
     "cropWidth": "宽",
     "cropHeight": "高",
     "cropFixed": "输出尺寸固定为 {{width}} × {{height}}",
+    "cropFixedInput": "选框在原图上的尺寸，输出会缩放到固定尺寸",
     "zoomIn": "放大",
     "zoomOut": "缩小",
-    "rotate": "旋转"
+    "rotate": "旋转",
+    "cropReset": "重置裁剪"
   },
   "lightbox": {
     "prev": "上一张",
