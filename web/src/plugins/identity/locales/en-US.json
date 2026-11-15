@@ -51,6 +51,11 @@
       "email": "Email",
       "phone": "Phone"
     },
+    "tabs": {
+      "basic": "Connection",
+      "attributes": "Attribute mapping",
+      "behavior": "Login & sync"
+    },
     "fields": {
       "type": "Type",
       "name": "Name",

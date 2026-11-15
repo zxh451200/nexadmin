@@ -1,17 +1,19 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useFieldArray, useForm, useWatch, type Control, type FieldPath } from 'react-hook-form'
+import { useFieldArray, useForm, useWatch, type Control, type FieldErrors, type FieldPath } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { z } from 'zod'
+import { FieldHint } from '@/framework/components/FieldHint'
 import { FormGrid, FormGridFull, FormLayout } from '@/framework/components/FormLayout'
 import { usePermission } from '@/framework/auth/usePermission'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { SwitchField as SharedSwitchField } from '@/framework/components/SwitchField'
 import { Button } from '@/framework/ui/button'
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/framework/ui/form'
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/framework/ui/form'
 import { Input } from '@/framework/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/framework/ui/tabs'
 import { Textarea } from '@/framework/ui/textarea'
 import { useSaveSource, type CasConfig, type IdentitySource, type LdapConfig, type SourceForm } from './api'
 
@@ -178,7 +180,11 @@ function TextField({ control, name, label, hint, type, mono, placeholder, autoCo
       name={name}
       render={({ field }) => (
         <FormItem>
-          <FormLabel>{label}</FormLabel>
+          {/* 说明挂到标签尾部：LDAP 语法类提示整段铺在输入框下，两三个字段就占掉一屏 */}
+          <FormLabel>
+            {label}
+            <FieldHint text={hint} />
+          </FormLabel>
           <FormControl>
             <Input
               type={type}
@@ -193,7 +199,6 @@ function TextField({ control, name, label, hint, type, mono, placeholder, autoCo
               onChange={field.onChange}
             />
           </FormControl>
-          {hint ? <FormDescription>{hint}</FormDescription> : null}
           <FormMessage />
         </FormItem>
       )}
@@ -210,6 +215,19 @@ interface Props {
   onOpenChange: (open: boolean) => void
   editing?: IdentitySource | null
 }
+
+/** 三个页签的字段归属：提交失败时先切到第一个含错的页签，否则提示落在看不见的面板里。 */
+type TabKey = 'basic' | 'attributes' | 'behavior'
+const BASIC_ERROR_KEYS = [
+  'type', 'name', 'url', 'startTls', 'allowPlaintext', 'bindDn', 'bindPassword', 'baseDn', 'userFilter',
+  'serverUrl', 'version', 'serviceBaseUrl', 'caCert', 'timeoutSec', 'enabled',
+]
+const ATTRIBUTE_ERROR_KEYS = [
+  'attrUsername', 'attrNickname', 'attrEmail', 'attrPhone', 'attrGroups', 'groupRoleMappings', 'requireMappedGroup',
+]
+const BEHAVIOR_ERROR_KEYS = [
+  'defaultRole', 'matchExisting', 'autoCreate', 'syncEnabled', 'syncFilter', 'syncSubjectAttr', 'syncDeactivate',
+]
 
 export function SourceFormDialog({ open, onOpenChange, editing }: Props) {
   const { t } = useTranslation()
@@ -228,10 +246,24 @@ export function SourceFormDialog({ open, onOpenChange, editing }: Props) {
   const cleartext = /^ldap:\/\//i.test(url ?? '') && !startTls
   const hasPassword = !!(editing?.config as LdapConfig | null | undefined)?.hasBindPassword
   const c = form.control
+  const [tab, setTab] = useState<TabKey>('basic')
+  const errors = form.formState.errors
+  // 默认读渲染期的 formState.errors（供页签标记）；提交失败时用 RHF 回传的最新 errors，避免闭包里的旧值。
+  const hasError = (keys: string[], source: Record<string, unknown> = errors as Record<string, unknown>) =>
+    keys.some((k) => Boolean(source[k]))
 
   useEffect(() => {
-    if (open) form.reset(toValues(editing))
+    if (!open) return
+    form.reset(toValues(editing))
+    setTab('basic')
   }, [open, editing, form])
+
+  const onInvalid = (invalid: FieldErrors<FormValues>) => {
+    const source = invalid as Record<string, unknown>
+    if (hasError(BASIC_ERROR_KEYS, source)) setTab('basic')
+    else if (hasError(ATTRIBUTE_ERROR_KEYS, source)) setTab('attributes')
+    else if (hasError(BEHAVIOR_ERROR_KEYS, source)) setTab('behavior')
+  }
 
   const onSubmit = form.handleSubmit(async (v) => {
     try {
@@ -241,7 +273,7 @@ export function SourceFormDialog({ open, onOpenChange, editing }: Props) {
     } catch {
       toast.error(t('common.operateFailed'))
     }
-  })
+  }, onInvalid)
 
   const p = (k: string) => t(`plugin_identity.fields.${k}`)
   const h = (k: string) => t(`plugin_identity.hints.${k}`)
@@ -264,204 +296,244 @@ export function SourceFormDialog({ open, onOpenChange, editing }: Props) {
       }
     >
       <Form {...form}>
-        <FormLayout id="identity-source-form" onSubmit={onSubmit} showRequiredHint>
-          <FormGrid>
-            <FormField
-              control={c}
-              name="type"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{p('type')}</FormLabel>
-                  <Select value={field.value} onValueChange={field.onChange} disabled={!!editing}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="ldap">{t('plugin_identity.type.ldap')}</SelectItem>
-                      <SelectItem value="cas">{t('plugin_identity.type.cas')}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <TextField control={c} name="name" label={p('name')} placeholder={t('common.pleaseInput')} />
-            {type === 'ldap' ? (
-              <>
-                <FormGridFull>
-                  <TextField control={c} name="url" label={p('url')} hint={h('url')} mono placeholder="ldaps://ldap.example.com:636" />
-                </FormGridFull>
-                <FormGridFull>
-                  <SwitchField control={c} name="startTls" label={p('startTls')} hint={h('startTls')} />
-                </FormGridFull>
-                {cleartext ? (
-                  <FormGridFull>
-                    <SwitchField control={c} name="allowPlaintext" label={p('allowPlaintext')} hint={h('allowPlaintext')} />
-                  </FormGridFull>
-                ) : null}
-                <TextField control={c} name="bindDn" label={p('bindDn')} hint={h('bindDn')} mono />
-                <TextField
-                  control={c}
-                  name="bindPassword"
-                  type="password"
-                  label={p('bindPassword')}
-                  hint={editing && hasPassword ? h('bindPasswordKeep') : h('bindPassword')}
-                  autoComplete="new-password"
-                  placeholder={editing && hasPassword ? '••••••••' : undefined}
-                />
-                <TextField control={c} name="baseDn" label={p('baseDn')} mono />
-                <TextField control={c} name="userFilter" label={p('userFilter')} hint={h('userFilter')} mono />
-                <FormGridFull>
-                  <fieldset className="space-y-3 rounded-md bg-muted/40 p-3">
-                    <legend className="px-1 text-sm font-medium">{t('plugin_identity.sync.title')}</legend>
-                    <p className="text-sm text-muted-foreground">{t('plugin_identity.sync.explanation')}</p>
-                    <SwitchField control={c} name="syncEnabled" label={t('plugin_identity.sync.enable')} bare />
-                    <TextField control={c} name="syncFilter" label={t('plugin_identity.sync.filter')} hint={t('plugin_identity.sync.filterHint')} mono />
-                    <FormField control={c} name="syncSubjectAttr" render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t('plugin_identity.sync.subjectAttr')}</FormLabel>
-                        <Select value={field.value} onValueChange={field.onChange}>
-                          <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                          <SelectContent>
-                            <SelectItem value="entryUUID">entryUUID</SelectItem>
-                            <SelectItem value="objectGUID">objectGUID</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormDescription>{t('plugin_identity.sync.subjectHint')}</FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )} />
-                    {syncEnabled ? (
-                      <SwitchField control={c} name="syncDeactivate" label={t('plugin_identity.sync.deactivateMissing')} hint={t('plugin_identity.sync.deactivateHint')} bare />
-                    ) : null}
-                  </fieldset>
-                </FormGridFull>
-              </>
-            ) : (
-              <>
-                <TextField control={c} name="serverUrl" label={p('serverUrl')} hint={h('serverUrl')} mono placeholder="https://cas.example.com/cas" />
+        <FormLayout id="identity-source-form" onSubmit={onSubmit} showRequiredHint className="flex h-full min-h-0 flex-col">
+          {/* 面板各自滚动：页签高度固定，切换时弹窗不会跟着变高变矮 */}
+          <Tabs value={tab} onValueChange={(v) => setTab(v as TabKey)} className="flex min-h-0 flex-1 flex-col">
+            <TabsList>
+              <TabsTrigger value="basic" aria-invalid={hasError(BASIC_ERROR_KEYS) || undefined}>
+                {t('plugin_identity.tabs.basic')}
+                {hasError(BASIC_ERROR_KEYS) ? <span className="size-1.5 rounded-full bg-destructive" aria-hidden="true" /> : null}
+              </TabsTrigger>
+              <TabsTrigger value="attributes" aria-invalid={hasError(ATTRIBUTE_ERROR_KEYS) || undefined}>
+                {t('plugin_identity.tabs.attributes')}
+                {hasError(ATTRIBUTE_ERROR_KEYS) ? <span className="size-1.5 rounded-full bg-destructive" aria-hidden="true" /> : null}
+              </TabsTrigger>
+              <TabsTrigger value="behavior" aria-invalid={hasError(BEHAVIOR_ERROR_KEYS) || undefined}>
+                {t('plugin_identity.tabs.behavior')}
+                {hasError(BEHAVIOR_ERROR_KEYS) ? <span className="size-1.5 rounded-full bg-destructive" aria-hidden="true" /> : null}
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="basic" className="min-h-0 flex-1 overflow-y-auto pe-1">
+              <FormGrid cols={2}>
                 <FormField
                   control={c}
-                  name="version"
+                  name="type"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>{p('version')}</FormLabel>
-                      <Select value={field.value} onValueChange={field.onChange}>
+                      <FormLabel>{p('type')}</FormLabel>
+                      <Select value={field.value} onValueChange={field.onChange} disabled={!!editing}>
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="3">CAS 3.0</SelectItem>
-                          <SelectItem value="2">CAS 2.0</SelectItem>
+                          <SelectItem value="ldap">{t('plugin_identity.type.ldap')}</SelectItem>
+                          <SelectItem value="cas">{t('plugin_identity.type.cas')}</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-                <FormGridFull>
-                  <TextField control={c} name="serviceBaseUrl" label={p('serviceBaseUrl')} hint={h('serviceBaseUrl')} mono placeholder="https://admin.example.com" />
-                </FormGridFull>
-              </>
-            )}
-            <TextField control={c} name="attrUsername" label={p('attrUsername')} hint={type === 'cas' ? h('casUsername') : undefined} mono />
-            <TextField control={c} name="attrNickname" label={p('attrNickname')} mono />
-            <TextField control={c} name="attrEmail" label={p('attrEmail')} mono />
-            <TextField control={c} name="attrPhone" label={p('attrPhone')} mono />
-            <FormGridFull>
-              <TextField control={c} name="attrGroups" label={p('attrGroups')} hint={h('attrGroups')} mono placeholder={type === 'ldap' ? 'memberOf' : 'groups'} />
-            </FormGridFull>
-            <FormGridFull>
-              <fieldset className="space-y-3 rounded-md bg-muted/40 p-3">
-                <legend className="px-1 text-sm font-medium">{p('groupRoleMappings')}</legend>
-                <p className="text-sm text-muted-foreground">{h('groupRoleMappings')}</p>
-                {mappings.fields.map((mapping, index) => (
-                  <div key={mapping.id} className="grid gap-3 rounded-md bg-background p-3 sm:grid-cols-2">
-                    <TextField control={c} name={`groupRoleMappings.${index}.externalGroup`} label={p('group')} mono />
+                <TextField control={c} name="name" label={p('name')} placeholder={t('common.pleaseInput')} />
+                {type === 'ldap' ? (
+                  <>
+                    <FormGridFull>
+                      <TextField control={c} name="url" label={p('url')} hint={h('url')} mono placeholder="ldaps://ldap.example.com:636" />
+                    </FormGridFull>
+                    <FormGridFull>
+                      <SwitchField control={c} name="startTls" label={p('startTls')} hint={h('startTls')} />
+                    </FormGridFull>
+                    {cleartext ? (
+                      <FormGridFull>
+                        <SwitchField control={c} name="allowPlaintext" label={p('allowPlaintext')} hint={h('allowPlaintext')} />
+                      </FormGridFull>
+                    ) : null}
+                    <TextField control={c} name="bindDn" label={p('bindDn')} hint={h('bindDn')} mono />
+                    <TextField
+                      control={c}
+                      name="bindPassword"
+                      type="password"
+                      label={p('bindPassword')}
+                      hint={editing && hasPassword ? h('bindPasswordKeep') : h('bindPassword')}
+                      autoComplete="new-password"
+                      placeholder={editing && hasPassword ? '••••••••' : undefined}
+                    />
+                    <TextField control={c} name="baseDn" label={p('baseDn')} mono />
+                    <TextField control={c} name="userFilter" label={p('userFilter')} hint={h('userFilter')} mono />
+                  </>
+                ) : (
+                  <>
+                    <FormGridFull>
+                      <TextField control={c} name="serverUrl" label={p('serverUrl')} hint={h('serverUrl')} mono placeholder="https://cas.example.com/cas" />
+                    </FormGridFull>
                     <FormField
                       control={c}
-                      name={`groupRoleMappings.${index}.roleCodes`}
+                      name="version"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>{p('role')}</FormLabel>
-                          <FormControl>
-                            <Textarea {...field} rows={2} className="font-mono" spellCheck={false} />
-                          </FormControl>
-                          <FormDescription>{h('roleCodes')}</FormDescription>
+                          <FormLabel>{p('version')}</FormLabel>
+                          <Select value={field.value} onValueChange={field.onChange}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="3">CAS 3.0</SelectItem>
+                              <SelectItem value="2">CAS 2.0</SelectItem>
+                            </SelectContent>
+                          </Select>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
-                    <Button type="button" variant="outline" className="justify-self-start" onClick={() => mappings.remove(index)}>
-                      {t('plugin_identity.btn.removeMapping')} {index + 1}
-                    </Button>
-                  </div>
-                ))}
-                <Button type="button" variant="outline" disabled={mappings.fields.length >= 100} onClick={() => mappings.append({ externalGroup: '', roleCodes: '' })}>
-                  {t('plugin_identity.btn.addMapping')}
-                </Button>
-                {form.formState.errors.groupRoleMappings?.root?.message || form.formState.errors.groupRoleMappings?.message ? (
-                  <p role="alert" className="text-sm font-medium text-destructive">
-                    {form.formState.errors.groupRoleMappings?.root?.message ?? form.formState.errors.groupRoleMappings?.message}
-                  </p>
-                ) : null}
-              </fieldset>
-            </FormGridFull>
-            <FormGridFull>
-              <SwitchField control={c} name="requireMappedGroup" label={p('requireMappedGroup')} hint={h('requireMappedGroup')} />
-            </FormGridFull>
-            <FormGridFull>
-              <FormField
-                control={c}
-                name="caCert"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{p('caCert')}</FormLabel>
-                    <FormControl>
-                      <Textarea {...field} rows={3} className="font-mono text-xs" spellCheck={false} placeholder="-----BEGIN CERTIFICATE-----" />
-                    </FormControl>
-                    <FormDescription>{h('caCert')}</FormDescription>
-                    <FormMessage />
-                  </FormItem>
+                    <FormGridFull>
+                      <TextField control={c} name="serviceBaseUrl" label={p('serviceBaseUrl')} hint={h('serviceBaseUrl')} mono placeholder="https://admin.example.com" />
+                    </FormGridFull>
+                  </>
                 )}
-              />
-            </FormGridFull>
-            <FormField
-              control={c}
-              name="timeoutSec"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{p('timeoutSec')}</FormLabel>
-                  <FormControl>
-                    <Input type="number" inputMode="numeric" min={1} max={30} value={field.value} onChange={(e) => field.onChange(Number(e.target.value) || 0)} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <TextField control={c} name="defaultRole" label={p('defaultRole')} hint={autoCreate ? h('defaultRole') : h('defaultRoleOff')} />
-            <FormGridFull>
-              {/* 后端要求开启 matchExisting 的源必须带 identity:match（requireMatchPerm）：
-                  没有该权限就锁住开关并说明，而不是让人填完长表单提交才吃 403。 */}
-              <SwitchField
-                control={c}
-                name="matchExisting"
-                label={p('matchExisting')}
-                hint={canMatch ? h('matchExisting') : t('plugin_identity.perm.matchNoPerm')}
-                disabled={!canMatch}
-              />
-            </FormGridFull>
-            <FormGridFull>
-              <SwitchField control={c} name="autoCreate" label={p('autoCreate')} hint={h('autoCreate')} />
-            </FormGridFull>
-            <FormGridFull>
-              <SwitchField control={c} name="enabled" label={p('enabled')} />
-            </FormGridFull>
-          </FormGrid>
+                <FormGridFull>
+                  <FormField
+                    control={c}
+                    name="caCert"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>
+                          {p('caCert')}
+                          <FieldHint text={h('caCert')} />
+                        </FormLabel>
+                        <FormControl>
+                          <Textarea {...field} rows={3} className="font-mono text-xs" spellCheck={false} placeholder="-----BEGIN CERTIFICATE-----" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </FormGridFull>
+                <FormField
+                  control={c}
+                  name="timeoutSec"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{p('timeoutSec')}</FormLabel>
+                      <FormControl>
+                        <Input type="number" inputMode="numeric" min={1} max={30} value={field.value} onChange={(e) => field.onChange(Number(e.target.value) || 0)} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormGridFull>
+                  <SwitchField control={c} name="enabled" label={p('enabled')} />
+                </FormGridFull>
+              </FormGrid>
+            </TabsContent>
+
+            <TabsContent value="attributes" className="min-h-0 flex-1 overflow-y-auto pe-1">
+              <FormGrid cols={2}>
+                <TextField control={c} name="attrUsername" label={p('attrUsername')} hint={type === 'cas' ? h('casUsername') : undefined} mono />
+                <TextField control={c} name="attrNickname" label={p('attrNickname')} mono />
+                <TextField control={c} name="attrEmail" label={p('attrEmail')} mono />
+                <TextField control={c} name="attrPhone" label={p('attrPhone')} mono />
+                <FormGridFull>
+                  <TextField control={c} name="attrGroups" label={p('attrGroups')} hint={h('attrGroups')} mono placeholder={type === 'ldap' ? 'memberOf' : 'groups'} />
+                </FormGridFull>
+                <FormGridFull>
+                  <fieldset className="space-y-3 rounded-md bg-muted/40 p-3">
+                    <legend className="px-1 text-sm font-medium">{p('groupRoleMappings')}</legend>
+                    <p className="text-sm text-muted-foreground">{h('groupRoleMappings')}</p>
+                    {mappings.fields.map((mapping, index) => (
+                      <div key={mapping.id} className="grid gap-3 rounded-md bg-background p-3 sm:grid-cols-2">
+                        <TextField control={c} name={`groupRoleMappings.${index}.externalGroup`} label={p('group')} mono />
+                        <FormField
+                          control={c}
+                          name={`groupRoleMappings.${index}.roleCodes`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>
+                                {p('role')}
+                                <FieldHint text={h('roleCodes')} />
+                              </FormLabel>
+                              <FormControl>
+                                <Textarea {...field} rows={2} className="font-mono" spellCheck={false} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <Button type="button" variant="outline" className="justify-self-start" onClick={() => mappings.remove(index)}>
+                          {t('plugin_identity.btn.removeMapping')} {index + 1}
+                        </Button>
+                      </div>
+                    ))}
+                    <Button type="button" variant="outline" disabled={mappings.fields.length >= 100} onClick={() => mappings.append({ externalGroup: '', roleCodes: '' })}>
+                      {t('plugin_identity.btn.addMapping')}
+                    </Button>
+                    {form.formState.errors.groupRoleMappings?.root?.message || form.formState.errors.groupRoleMappings?.message ? (
+                      <p role="alert" className="text-sm font-medium text-destructive">
+                        {form.formState.errors.groupRoleMappings?.root?.message ?? form.formState.errors.groupRoleMappings?.message}
+                      </p>
+                    ) : null}
+                  </fieldset>
+                </FormGridFull>
+                <FormGridFull>
+                  <SwitchField control={c} name="requireMappedGroup" label={p('requireMappedGroup')} hint={h('requireMappedGroup')} />
+                </FormGridFull>
+              </FormGrid>
+            </TabsContent>
+
+            <TabsContent value="behavior" className="min-h-0 flex-1 overflow-y-auto pe-1">
+              <FormGrid cols={2}>
+                <TextField control={c} name="defaultRole" label={p('defaultRole')} hint={autoCreate ? h('defaultRole') : h('defaultRoleOff')} />
+                <FormGridFull>
+                  {/* 后端要求开启 matchExisting 的源必须带 identity:match（requireMatchPerm）：
+                      没有该权限就锁住开关并说明，而不是让人填完长表单提交才吃 403。 */}
+                  <SwitchField
+                    control={c}
+                    name="matchExisting"
+                    label={p('matchExisting')}
+                    hint={canMatch ? h('matchExisting') : t('plugin_identity.perm.matchNoPerm')}
+                    disabled={!canMatch}
+                  />
+                </FormGridFull>
+                <FormGridFull>
+                  <SwitchField control={c} name="autoCreate" label={p('autoCreate')} hint={h('autoCreate')} />
+                </FormGridFull>
+                {type === 'ldap' ? (
+                  <FormGridFull>
+                    <fieldset className="space-y-3 rounded-md bg-muted/40 p-3">
+                      <legend className="px-1 text-sm font-medium">{t('plugin_identity.sync.title')}</legend>
+                      <p className="text-sm text-muted-foreground">{t('plugin_identity.sync.explanation')}</p>
+                      <SwitchField control={c} name="syncEnabled" label={t('plugin_identity.sync.enable')} bare />
+                      <TextField control={c} name="syncFilter" label={t('plugin_identity.sync.filter')} hint={t('plugin_identity.sync.filterHint')} mono />
+                      <FormField control={c} name="syncSubjectAttr" render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>
+                            {t('plugin_identity.sync.subjectAttr')}
+                            <FieldHint text={t('plugin_identity.sync.subjectHint')} />
+                          </FormLabel>
+                          <Select value={field.value} onValueChange={field.onChange}>
+                            <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                            <SelectContent>
+                              <SelectItem value="entryUUID">entryUUID</SelectItem>
+                              <SelectItem value="objectGUID">objectGUID</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )} />
+                      {syncEnabled ? (
+                        <SwitchField control={c} name="syncDeactivate" label={t('plugin_identity.sync.deactivateMissing')} hint={t('plugin_identity.sync.deactivateHint')} bare />
+                      ) : null}
+                    </fieldset>
+                  </FormGridFull>
+                ) : null}
+              </FormGrid>
+            </TabsContent>
+          </Tabs>
         </FormLayout>
       </Form>
     </ResponsiveDialog>

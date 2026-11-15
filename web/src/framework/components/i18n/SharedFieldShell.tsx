@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import { FieldHint } from '@/framework/components/FieldHint'
 import { cn } from '@/lib/utils'
 import { useLocaleForm } from './LocaleFormProvider'
 
@@ -13,11 +14,13 @@ export function useSharedField() {
 export function SharedFieldShell({
   labelKey,
   required,
+  hint,
   children,
   className,
 }: {
   labelKey: string
   required?: boolean
+  hint?: string
   children: ReactNode
   className?: string
 }) {
@@ -33,6 +36,7 @@ export function SharedFieldShell({
             <span aria-hidden="true" className="ms-0.5 text-destructive">*</span>
           ) : null}
         </span>
+        <FieldHint text={hint} />
         {!isSource ? (
           <span className="rounded border px-1 text-[10px] font-semibold">{t('localeForm.sharedTag')}</span>
         ) : null}

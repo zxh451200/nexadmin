@@ -14,6 +14,7 @@ import { PickerTrigger } from '@/framework/components/pickers/PickerTrigger'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { FilterBar } from '@/framework/components/FilterBar'
+import { FormGrid, FormSection } from '@/framework/components/FormLayout'
 import {
   LocaleFormActions,
   LocaleFormProvider,
@@ -245,195 +246,220 @@ function PostFormBody({
         <LocaleSwitcher />
         <span className="text-xs text-muted-foreground">{t('plugin_website.i18n.switchHint')}</span>
       </div>
-      <div className="flex flex-col gap-3">
-        <LocalizedField fieldKey="title" required />
-        <SharedFieldShell labelKey="plugin_website.fields.slug">
-          <Input
-            maxLength={64}
-            value={slug}
-            disabled={sharedDisabled}
-            onChange={(e) => setSlug(e.target.value)}
-            placeholder={t('plugin_website.fields.slugAuto')}
-            className="font-mono"
-          />
-          <span className="text-xs text-muted-foreground">{articlePath}</span>
-        </SharedFieldShell>
-        <SharedFieldShell labelKey="plugin_website.fields.coverUrl">
-          <ImageUrlField
-            value={coverUrl}
-            onChange={setCoverUrl}
-            disabled={sharedDisabled}
-            title={t('plugin_website.fields.coverUpload')}
-            hint={t('plugin_website.fields.coverHint')}
-            placeholder={t('plugin_website.fields.coverPlaceholder')}
-            crop={{ width: 1200, height: 630 }}
-            aria-label={t('plugin_website.fields.coverUrl')}
-          />
-          {coverInvalid ? (
-            <span className="text-xs text-destructive">{t('plugin_website.fields.coverInvalid')}</span>
-          ) : null}
-        </SharedFieldShell>
-        <LocalizedField fieldKey="summary" />
-        <LocalizedField fieldKey="seoTitle" />
-        <LocalizedField fieldKey="seoDesc" />
-        <LocalizedField fieldKey="content" className="min-h-40" />
-        <LocaleFormActions />
-        <SharedGroup labelKey="plugin_website.post.categories">
-          <div className="flex flex-col gap-1.5" role="group" aria-label={t('plugin_website.post.categories')}>
-            {/* select 式触发器 + 可搜索多选弹层：分类多时搜索定位，行尾文章数保留 */}
-            <PostCategoryPicker
-              value={catIds}
-              onChange={setCatIds}
-              categories={categories}
+      <div className="flex flex-col gap-5">
+        <FormSection title={t('plugin_website.post.section.basic')}>
+          <LocalizedField fieldKey="title" required />
+          <SharedFieldShell labelKey="plugin_website.fields.slug">
+            <Input
+              maxLength={64}
+              value={slug}
               disabled={sharedDisabled}
+              onChange={(e) => setSlug(e.target.value)}
+              placeholder={t('plugin_website.fields.slugAuto')}
+              className="font-mono"
             />
-            <div className="flex flex-wrap items-center gap-2">
-              <Button variant="link" size="sm" className="h-auto p-0" onClick={() => setCatFormOpen((v) => !v)}>
-                <Plus aria-hidden="true" />
-                {t('plugin_website.post.categoryAdd')}
-              </Button>
-              {/* 分类与标签是全局清单，译文态下也能进去维护——它不动这篇新闻的挂载 */}
-              <Button variant="link" size="sm" className="ms-auto h-auto p-0" onClick={onManageCategories}>
-                {t('plugin_website.post.manageCategories')}
-              </Button>
-            </div>
-            {catFormShown ? (
-              <div className="flex flex-col gap-1 border-t border-border pt-2">
-                {/* 行内输入没有 label 可挂星号：组提示行承担「标题必填」的标注 */}
-                <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <RequiredMark /> {t('plugin_website.post.categoryTitleRequiredHint')}
-                </p>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Input
-                    value={newCatTitle}
-                    onChange={(e) => setNewCatTitle(e.target.value)}
-                    placeholder={t('plugin_website.post.categoryTitle')}
-                    aria-label={t('plugin_website.post.categoryTitle')}
-                    className="w-40"
-                    maxLength={100}
-                    disabled={sharedDisabled}
-                  />
-                  <Input
-                    value={newCatSlug}
-                    onChange={(e) => setNewCatSlug(e.target.value)}
-                    placeholder={t('plugin_website.post.categorySlugAuto')}
-                    aria-label={t('plugin_website.post.categorySlug')}
-                    className="w-40 font-mono"
-                    maxLength={64}
-                    disabled={sharedDisabled}
-                  />
-                  <Button size="sm" onClick={() => void addCategory()} disabled={sharedDisabled || saveCategory.isPending}>
-                    <Plus aria-hidden="true" />
-                    {t('plugin_website.post.categoryCreate')}
-                  </Button>
-                </div>
-              </div>
+            <span className="text-xs text-muted-foreground">{articlePath}</span>
+          </SharedFieldShell>
+          <LocalizedField fieldKey="summary" />
+        </FormSection>
+        <FormSection title={t('plugin_website.post.section.content')}>
+          <SharedFieldShell labelKey="plugin_website.fields.coverUrl">
+            <ImageUrlField
+              value={coverUrl}
+              onChange={setCoverUrl}
+              disabled={sharedDisabled}
+              title={t('plugin_website.fields.coverUpload')}
+              hint={t('plugin_website.fields.coverHint')}
+              placeholder={t('plugin_website.fields.coverPlaceholder')}
+              crop={{ width: 1200, height: 630 }}
+              aria-label={t('plugin_website.fields.coverUrl')}
+            />
+            {coverInvalid ? (
+              <span className="text-xs text-destructive">{t('plugin_website.fields.coverInvalid')}</span>
             ) : null}
-          </div>
-        </SharedGroup>
-        <SharedGroup labelKey="plugin_website.post.tags">
-          <div className="flex flex-col gap-1.5" role="group" aria-label={t('plugin_website.post.tags')}>
-            {/* 标签输入二合一：已建标签以芯片嵌在输入框内，回车/逗号添加，空值 Backspace 删最后一个 */}
-            <div
-              className={cn(
-                'flex min-h-11 w-full flex-wrap items-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-base shadow-xs',
-                'transition-[color,box-shadow,border-color] duration-(--motion-fast) ease-(--ease-standard)',
-                'focus-within:border-ring focus-within:outline-hidden focus-within:ring-2 focus-within:ring-ring/40',
-                'dark:border-white/26 dark:bg-white/[0.06] md:min-h-8 md:py-1 md:text-sm',
-                (sharedDisabled || atTagLimit) && 'cursor-not-allowed opacity-50',
-              )}
-              onClick={() => tagInputRef.current?.focus()}
-            >
-              {tags.map((name) => (
-                <Badge key={name} variant="secondary" className="ps-2.5 pe-0.5">
-                  <span className="max-w-40 truncate">{name}</span>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-6"
-                    disabled={sharedDisabled}
-                    aria-label={t('plugin_website.post.tagRemove', { name })}
-                    onClick={() => setTags((cur) => cur.filter((x) => x !== name))}
-                  >
-                    <X aria-hidden="true" />
-                  </Button>
-                </Badge>
-              ))}
-              <input
-                ref={tagInputRef}
-                value={tagInput}
-                maxLength={64}
-                list="post-tag-options"
-                disabled={sharedDisabled || atTagLimit}
-                onChange={(e) => setTagInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ',') {
-                    e.preventDefault()
-                    commitTags(tagInput)
-                  } else if (e.key === 'Backspace' && !tagInput && tags.length) {
-                    setTags((cur) => cur.slice(0, -1))
-                  }
-                }}
-                className="min-w-16 flex-1 bg-transparent outline-hidden placeholder:text-muted-foreground"
-                placeholder={tags.length ? '' : t('plugin_website.post.tagInputPlaceholder')}
-                aria-label={t('plugin_website.post.tags')}
+          </SharedFieldShell>
+          <LocalizedField fieldKey="content" className="min-h-40" />
+          <LocaleFormActions />
+        </FormSection>
+        <FormSection title={t('plugin_website.post.section.taxonomy')}>
+          <SharedGroup labelKey="plugin_website.post.categories">
+            <div className="flex flex-col gap-1.5" role="group" aria-label={t('plugin_website.post.categories')}>
+              {/* select 式触发器 + 可搜索多选弹层：分类多时搜索定位，行尾文章数保留 */}
+              <PostCategoryPicker
+                value={catIds}
+                onChange={setCatIds}
+                categories={categories}
+                disabled={sharedDisabled}
               />
+              <div className="flex flex-wrap items-center gap-2">
+                <Button variant="link" size="sm" className="h-auto p-0" onClick={() => setCatFormOpen((v) => !v)}>
+                  <Plus aria-hidden="true" />
+                  {t('plugin_website.post.categoryAdd')}
+                </Button>
+                {/* 分类与标签是全局清单，译文态下也能进去维护——它不动这篇新闻的挂载 */}
+                <Button variant="link" size="sm" className="ms-auto h-auto p-0" onClick={onManageCategories}>
+                  {t('plugin_website.post.manageCategories')}
+                </Button>
+              </div>
+              {catFormShown ? (
+                <div className="flex flex-col gap-1 border-t border-border pt-2">
+                  {/* 行内输入没有 label 可挂星号：组提示行承担「标题必填」的标注 */}
+                  <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <RequiredMark /> {t('plugin_website.post.categoryTitleRequiredHint')}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Input
+                      value={newCatTitle}
+                      onChange={(e) => setNewCatTitle(e.target.value)}
+                      placeholder={t('plugin_website.post.categoryTitle')}
+                      aria-label={t('plugin_website.post.categoryTitle')}
+                      className="w-40"
+                      maxLength={100}
+                      disabled={sharedDisabled}
+                    />
+                    <Input
+                      value={newCatSlug}
+                      onChange={(e) => setNewCatSlug(e.target.value)}
+                      placeholder={t('plugin_website.post.categorySlugAuto')}
+                      aria-label={t('plugin_website.post.categorySlug')}
+                      className="w-40 font-mono"
+                      maxLength={64}
+                      disabled={sharedDisabled}
+                    />
+                    <Button size="sm" onClick={() => void addCategory()} disabled={sharedDisabled || saveCategory.isPending}>
+                      <Plus aria-hidden="true" />
+                      {t('plugin_website.post.categoryCreate')}
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
             </div>
-            {atTagLimit ? (
-              <span className="text-xs text-muted-foreground">{t('plugin_website.post.tagLimit', { max: tagsMax })}</span>
-            ) : null}
-            {/* 补全走已有标签：同一个主题词长成新名字，公开侧就多出两个入口 */}
-            <datalist id="post-tag-options">
-              {knownTags.map((x) => (
-                <option key={x.id} value={x.name} />
-              ))}
-            </datalist>
-          </div>
-        </SharedGroup>
-        <SharedFieldShell labelKey="plugin_website.fields.postSeoKeywords">
-          <Input
-            value={seoKeywords}
-            maxLength={300}
-            disabled={sharedDisabled}
-            onChange={(e) => setSeoKeywords(e.target.value)}
-            placeholder={t('plugin_website.fields.seoKeywords')}
-          />
-        </SharedFieldShell>
-        <SwitchRow
-          label={t('plugin_website.fields.published')}
-          checked={lf.publishedOf(lf.defaultLocale)}
-          onCheckedChange={(on) => lf.setPublishedOf(lf.defaultLocale, on)}
-        />
-        <SwitchRow
-          label={t('plugin_website.fields.noindex')}
-          checked={noindex}
-          onCheckedChange={setNoindex}
-        />
-        <SwitchRow
-          label={t('plugin_website.fields.pinned')}
-          checked={pinned}
-          onCheckedChange={setPinned}
-        />
-        <SharedFieldShell labelKey="plugin_website.fields.author">
-          <Input
-            value={author}
-            maxLength={64}
-            disabled={sharedDisabled}
-            onChange={(e) => setAuthor(e.target.value)}
-            placeholder={t('plugin_website.fields.authorPlaceholder')}
-          />
-        </SharedFieldShell>
-        {/* 发布时间：只在发布时生效；设为未来时间即定时发布 */}
-        {lf.publishedOf(lf.defaultLocale) ? (
-          <SharedFieldShell labelKey="plugin_website.fields.publishedAt">
-            <DateTimePicker
-              value={publishedAt}
-              allowClear
-              onChange={(v) => setPublishedAt(v)}
-              placeholder={t('plugin_website.fields.publishedAtHint')}
+          </SharedGroup>
+          <SharedGroup labelKey="plugin_website.post.tags">
+            <div className="flex flex-col gap-1.5" role="group" aria-label={t('plugin_website.post.tags')}>
+              {/* 标签输入二合一：已建标签以芯片嵌在输入框内，回车/逗号添加，空值 Backspace 删最后一个 */}
+              <div
+                className={cn(
+                  'flex min-h-11 w-full flex-wrap items-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-base shadow-xs',
+                  'transition-[color,box-shadow,border-color] duration-(--motion-fast) ease-(--ease-standard)',
+                  'focus-within:border-ring focus-within:outline-hidden focus-within:ring-2 focus-within:ring-ring/40',
+                  'dark:border-white/26 dark:bg-white/[0.06] md:min-h-8 md:py-1 md:text-sm',
+                  (sharedDisabled || atTagLimit) && 'cursor-not-allowed opacity-50',
+                )}
+                onClick={() => tagInputRef.current?.focus()}
+              >
+                {tags.map((name) => (
+                  /* 芯片收薄到 22px（py-0 + 20px 删除钮 + 描边）：md:size-5 显式压掉 icon 按钮的 md:h-9，
+                     否则 36px 的删除钮会把整框撑到 ~50px，比普通 Input 高出一截 */
+                  <Badge key={name} variant="secondary" className="gap-0.5 py-0 ps-2 pe-1">
+                    <span className="max-w-40 truncate">{name}</span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-5 md:size-5 [&_svg]:size-3"
+                      disabled={sharedDisabled}
+                      aria-label={t('plugin_website.post.tagRemove', { name })}
+                      onClick={() => setTags((cur) => cur.filter((x) => x !== name))}
+                    >
+                      <X aria-hidden="true" />
+                    </Button>
+                  </Badge>
+                ))}
+                <input
+                  ref={tagInputRef}
+                  value={tagInput}
+                  maxLength={64}
+                  list="post-tag-options"
+                  disabled={sharedDisabled || atTagLimit}
+                  onChange={(e) => setTagInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ',') {
+                      e.preventDefault()
+                      commitTags(tagInput)
+                    } else if (e.key === 'Backspace' && !tagInput && tags.length) {
+                      setTags((cur) => cur.slice(0, -1))
+                    }
+                  }}
+                  // 失焦也收词：直接点保存时来不及回车，输入到一半的标签不能丢
+                  onBlur={() => commitTags(tagInput)}
+                  className="min-w-16 flex-1 bg-transparent outline-hidden placeholder:text-muted-foreground"
+                  placeholder={tags.length ? '' : t('plugin_website.post.tagInputPlaceholder')}
+                  aria-label={t('plugin_website.post.tags')}
+                />
+              </div>
+              {atTagLimit ? (
+                <span className="text-xs text-muted-foreground">{t('plugin_website.post.tagLimit', { max: tagsMax })}</span>
+              ) : null}
+              {/* 补全走已有标签：同一个主题词长成新名字，公开侧就多出两个入口 */}
+              <datalist id="post-tag-options">
+                {knownTags.map((x) => (
+                  <option key={x.id} value={x.name} />
+                ))}
+              </datalist>
+            </div>
+          </SharedGroup>
+        </FormSection>
+        <FormSection title={t('plugin_website.post.section.seo')}>
+          <LocalizedField fieldKey="seoTitle" />
+          <LocalizedField fieldKey="seoDesc" />
+          <SharedFieldShell labelKey="plugin_website.fields.postSeoKeywords">
+            <Input
+              value={seoKeywords}
+              maxLength={300}
+              disabled={sharedDisabled}
+              onChange={(e) => setSeoKeywords(e.target.value)}
+              placeholder={t('plugin_website.fields.seoKeywords')}
             />
           </SharedFieldShell>
-        ) : null}
+        </FormSection>
+        <FormSection title={t('plugin_website.post.section.publish')}>
+          {/* 开关归一组：三个都是「这篇要不要出现在公开站」，混在输入框之间只会打断阅读 */}
+          <div className="divide-y divide-border rounded-lg border border-border">
+            <SwitchRow
+              bare
+              className="px-3 py-2.5"
+              label={t('plugin_website.fields.published')}
+              checked={lf.publishedOf(lf.defaultLocale)}
+              onCheckedChange={(on) => lf.setPublishedOf(lf.defaultLocale, on)}
+            />
+            <SwitchRow
+              bare
+              className="px-3 py-2.5"
+              label={t('plugin_website.fields.noindex')}
+              checked={noindex}
+              onCheckedChange={setNoindex}
+            />
+            <SwitchRow
+              bare
+              className="px-3 py-2.5"
+              label={t('plugin_website.fields.pinned')}
+              checked={pinned}
+              onCheckedChange={setPinned}
+            />
+          </div>
+          <FormGrid cols={2}>
+            <SharedFieldShell labelKey="plugin_website.fields.author">
+              <Input
+                value={author}
+                maxLength={64}
+                disabled={sharedDisabled}
+                onChange={(e) => setAuthor(e.target.value)}
+                placeholder={t('plugin_website.fields.authorPlaceholder')}
+              />
+            </SharedFieldShell>
+            {/* 发布时间：只在发布时生效；设为未来时间即定时发布 */}
+            {lf.publishedOf(lf.defaultLocale) ? (
+              <SharedFieldShell labelKey="plugin_website.fields.publishedAt">
+                <DateTimePicker
+                  value={publishedAt}
+                  allowClear
+                  onChange={(v) => setPublishedAt(v)}
+                  placeholder={t('plugin_website.fields.publishedAtHint')}
+                />
+              </SharedFieldShell>
+            ) : null}
+          </FormGrid>
+        </FormSection>
       </div>
     </ResponsiveDialog>
   )

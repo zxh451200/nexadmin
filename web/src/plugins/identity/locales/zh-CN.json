@@ -51,6 +51,11 @@
       "email": "邮箱",
       "phone": "手机"
     },
+    "tabs": {
+      "basic": "连接",
+      "attributes": "属性映射",
+      "behavior": "登录与同步"
+    },
     "fields": {
       "type": "类型",
       "name": "名称",

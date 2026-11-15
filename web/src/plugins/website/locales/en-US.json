@@ -15,16 +15,17 @@
     "settings": {
       "title": "Site settings",
       "desc": "Site name, home copy, contact details and footer; changes go live immediately",
-      "section": {
-        "theme": "Public site theme",
-        "identity": "Site identity",
-        "home": "Home copy",
-        "seo": "Search & sharing",
-        "contact": "Contact & messages",
-        "footer": "Footer",
-        "market": "Plugin market"
+      "sectionNav": "Site settings sections",
+      "tab": {
+        "brand": "Brand & theme",
+        "home": "Homepage",
+        "seo": "SEO & technical",
+        "footer": "Contact & footer",
+        "features": "Feature switches"
       },
       "emailInvalid": "Invalid email address.",
+      "defaultLangAuto": "Follow browser language",
+      "defaultLangSource": "source language",
       "defaultTheme": "Default theme",
       "demoImport": "Import demo content",
       "demoImported": "Demo content imported: {{total}} added, {{skipped}} existing skipped",
@@ -143,6 +144,13 @@
     "post": {
       "title": "News",
       "desc": "Site updates at /news/:slug",
+      "section": {
+        "basic": "Basic info",
+        "content": "Cover & body",
+        "taxonomy": "Categories & tags",
+        "seo": "Search optimization",
+        "publish": "Publishing"
+      },
       "create": "New post",
       "edit": "Edit post",
       "required": "Title and slug are required",
@@ -266,7 +274,11 @@
         "running": "Importing…",
         "failed": "The import job failed",
         "result": "Import finished: {{ok}} succeeded, {{failed}} failed",
-        "errorRow": "Row {{row}}: {{message}}"
+        "errorRow": "Row {{row}}: {{message}}",
+        "source": "Template source",
+        "sourceOwn": "Own template",
+        "sourceAli": "Alibaba template",
+        "sourceHint": "With \"Alibaba template\" the headers are matched via the column mapping, and rows whose Product ID already exists update instead of creating duplicates"
       }
     },
     "ali": {
@@ -310,7 +322,83 @@
       "syncFailed": "Sync failed",
       "syncSubmitted": "Batch sync job submitted",
       "progressTitle": "Batch sync in progress",
-      "jobDone": "Job finished; per-product sync status and failure reasons are updated in the list"
+      "jobDone": "Job finished; per-product sync status and failure reasons are updated in the list",
+      "preview": "Preview submission",
+      "previewTitle": "What will be submitted, built from this category's posting rules",
+      "previewOk": "All required fields are filled — ready to submit",
+      "previewMissing": "This category requires these first: {{fields}}",
+      "previewNotes": "Mapping notes",
+      "previewUpdated": "This product already has an Alibaba product ID, so this run is an incremental update (no duplicate listing)",
+      "previewNew": "This product has no Alibaba product ID yet, so this run creates a new listing",
+      "previewXml": "Submission XML",
+      "previewFailed": "Preview failed",
+      "exportTemplate": "Export Alibaba template",
+      "columnSection": "Alibaba template column mapping",
+      "columnHint": "Both the \"Alibaba template\" import source and \"Export Alibaba template\" read their headers from this table: Alibaba header (plus aliases) → our field. Columns not mapped here (per-category attributes, packaging, supply ability, etc.) fall back into dynamic specs, so switching categories needs no code change. Edit this table once you have the real template — no release required.",
+      "columnAdd": "Add column",
+      "column": {
+        "header": "Alibaba header",
+        "ourKey": "Our field",
+        "sort": "Order",
+        "aliases": "Aliases (comma-separated: Chinese headers, older header names)"
+      },
+      "trade": {
+        "section": "Alibaba trade & logistics",
+        "sectionHint": "These fields are only used by sync / preview / Alibaba template export; they do not affect the public product page. Missing required ones are listed in the preview.",
+        "priceType": "Price type",
+        "priceAuto": "Auto (ladder if any, otherwise FOB)",
+        "priceFob": "FOB price range (inquiry)",
+        "priceLadder": "Ladder price (up to 4 tiers)",
+        "priceSku": "SKU price (wholesale)",
+        "priceTypeHint": "Wholesale products have no FOB price; SKU price needs sale properties and SKUs.",
+        "ladder": "Ladder prices",
+        "ladderQty": "MOQ",
+        "ladderPrice": "Unit price",
+        "ladderAdd": "Add tier",
+        "package": "Package (L/W/H in cm, gross weight in kg)",
+        "pkgLength": "Length",
+        "pkgWidth": "Width",
+        "pkgHeight": "Height",
+        "pkgWeight": "Gross weight",
+        "shippingTemplate": "Shipping template ID",
+        "supply": "Supply ability",
+        "supplyNumber": "Quantity",
+        "supplyUnit": "Quantity unit",
+        "supplyPeriod": "Period unit",
+        "logistics": "Logistics attributes",
+        "logisticsHint": "General cargo and battery attributes cannot be combined; wholesale products need at least one (checked by Alibaba).",
+        "sample": "Sample service",
+        "sampleQty": "Max samples per time",
+        "samplePrice": "Sample price",
+        "sampleDesc": "Sample description",
+        "custom": "Customization",
+        "customType": "Customization item",
+        "customQty": "MOQ",
+        "customAdd": "Add customization",
+        "group": "Alibaba product group (level 1/2/3 IDs)",
+        "groupLevel": "Level {{level}} group ID",
+        "sku": "Sale properties & SKUs (advanced, JSON)",
+        "skuHint": "Shape: {\"skuProps\":[{\"name\":\"Color\",\"values\":[\"Red\"]}],\"skus\":[{\"props\":{\"Color\":\"Red\"},\"price\":12.5,\"stock\":100,\"code\":\"SKU-1\"}]}",
+        "skuJsonInvalid": "Invalid SKU JSON"
+      },
+      "pullButton": "Pull from Alibaba",
+      "pullTitle": "Pull a product from Alibaba",
+      "pullDesc": "Enter the Alibaba product ID: a local product with that ID is updated, otherwise a draft is created.",
+      "pullAliId": "Alibaba product ID",
+      "pullCategoryId": "Alibaba category ID (optional, helps fetch that category's rules)",
+      "pullOk": "Pulled \"{{title}}\"",
+      "pullFailed": "Pull failed",
+      "doctorButton": "Diagnose",
+      "doctorTitle": "Alibaba integration check",
+      "doctorDesc": "Reads the posting rules once with the real credentials: required fields, real options for logistics/unit/price type, and the schema.add parameter shape. Copy the report to the developer.",
+      "doctorCategoryId": "Alibaba leaf category ID",
+      "doctorProductId": "Alibaba product ID (optional: also read one existing product's values)",
+      "doctorProbeAdd": "Probe schema.add parameter shape (sends empty content; creates nothing)",
+      "doctorRun": "Run check",
+      "doctorCopy": "Copy report",
+      "doctorCopied": "Copied",
+      "doctorFailed": "Check failed",
+      "doctorNotes": "Notes"
     },
     "port": {
       "Shanghai": "Shanghai",
@@ -484,6 +572,7 @@
     "publishedOff": "Draft",
     "fields": {
       "theme": "Theme template",
+      "defaultLang": "Default site language",
       "siteName": "Site name",
       "siteDesc": "Site description (SEO)",
       "logoUrl": "Logo URL",
@@ -538,9 +627,7 @@
       "postSeoKeywords": "SEO keywords (post)",
       "productSeoKeywords": "SEO keywords",
       "productKeywords": "Search keywords (1-3)",
-      "productKeywordsPlaceholder": "1-3 English words, space- or comma-separated, used for Alibaba.com publishing, e.g. water pump stainless",
-      "keywordsPreview": "Will save as {{count}} keywords: {{words}}",
-      "keywordsPreviewOver": "{{count}} keywords found — at most 3 are kept, the rest are dropped: {{words}}",
+      "productKeywordsPlaceholder": "Type an English word and press Enter to add it as a tag, 1-3 words, used for Alibaba.com publishing, e.g. water pump",
       "postSummaryAuto": "Left empty, it is derived from the content",
       "pinned": "Pinned",
       "author": "Author",
@@ -548,6 +635,7 @@
       "views": "Views"
     },
     "hint": {
+      "defaultLang": "Follow browser = first visit opens the matching version; pick a language = it owns the root path and the previous default moves under a prefix (e.g. /zh). Public-site routes register at startup, so a restart is required after changing",
       "homeTitle": "Use a line break for two lines; the last line renders as gradient text",
       "logoUrl": "≤240×240 square, transparent PNG/SVG recommended (nav shows it ~32–40px tall; {{types}}, ≤{{max}}); leave empty for the built-in letter mark",
       "faviconUrl": "64×64 or 128×128 square PNG recommended (browser tabs render only 16–32px; {{types}}, ≤{{max}}); leave empty for the built-in favicon.svg",
@@ -561,15 +649,6 @@
       "socials": "Social icons in the footer and on the contact page; up to {{max}}, https:// or mailto:",
       "friendLinks": "The “Links” column in the footer; up to {{max}}, hidden when empty",
       "navHref": "Pick a site page here. Choose “Custom link” for an external URL (must start with https://) or an in-page anchor."
-    },
-    "logo": {
-      "upload": "Upload",
-      "uploading": "Uploading…",
-      "uploaded": "Uploaded — remember to save"
-    },
-    "qr": {
-      "upload": "Upload QR code",
-      "uploaded": "QR code uploaded — remember to save"
     },
     "placeholder": {
       "siteName": "NexAdmin",
@@ -605,6 +684,7 @@
       "filterNoTranslation": "{{lang}}: none"
     },
     "languages": {
+      "manageShort": "The language list is maintained in System settings → Languages.",
       "manageHint": "To add or change languages, go to System settings → Languages: the site and the admin UI share one language list. Restart the server afterwards so the public site registers routes for the new prefixes."
     }
   }
