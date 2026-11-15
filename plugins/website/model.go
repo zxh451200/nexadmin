@@ -248,7 +248,7 @@ func (PostVersion) TableName() string { return "plg_website_post_version" }
 // 标题只存默认语言：栏目是组织维度，跨语言展示时直接落原文即可。
 type Category struct {
 	database.PlatformModel
-	Title string `gorm:"size:100;not null" json:"title"`
+	Title string `gorm:"size:100;not null;uniqueIndex:uk_plg_website_category_title" json:"title"`
 	Slug  string `gorm:"size:64;not null;uniqueIndex:uk_plg_website_category_slug" json:"slug"`
 	Sort  int    `json:"sort"`
 	// PostCount 是栏目下的新闻数：保存时回填，不落库。界面用它排栏目，
@@ -264,7 +264,7 @@ func (Category) TableName() string { return "plg_website_category" }
 // Name 是展示与去重的依据（中文标签很常见），Slug 只负责出现在 URL 里。
 type Tag struct {
 	database.PlatformModel
-	Name string `gorm:"size:64;not null" json:"name"`
+	Name string `gorm:"size:64;not null;uniqueIndex:uk_plg_website_tag_name" json:"name"`
 	Slug string `gorm:"size:64;not null;uniqueIndex:uk_plg_website_tag_slug" json:"slug"`
 	// PostCount 语义同 Category.PostCount。
 	PostCount int64 `gorm:"-" json:"postCount"`

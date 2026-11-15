@@ -213,6 +213,15 @@ func seedDemoTx(ctx context.Context, tx *gorm.DB, themeID string, data DemoData,
 	if err := tx.Exec("DELETE FROM plg_website_product_category WHERE demo_of <> ''").Error; err != nil {
 		return err
 	}
+	// 新闻的分类/标签关联同商品那样先删：关联表没有 demo_of，靠文章行与栏目行上的标记圈定范围。
+	// 漏这一步，每重新导入一次主题就留下一批指向已删文章、已删栏目的悬空关联（旧库实测到 171 条），
+	// 分类与标签的「这里有多少篇」全按关联行数算，计数会虚高、公开侧归档也会数出不存在的文章。
+	if err := tx.Exec("DELETE FROM plg_website_post_category WHERE post_id IN (SELECT id FROM plg_website_post WHERE demo_of <> '') OR category_id IN (SELECT id FROM plg_website_category WHERE demo_of <> '')").Error; err != nil {
+		return err
+	}
+	if err := tx.Exec("DELETE FROM plg_website_post_tag WHERE post_id IN (SELECT id FROM plg_website_post WHERE demo_of <> '')").Error; err != nil {
+		return err
+	}
 	if err := tx.Exec("DELETE FROM plg_website_category WHERE demo_of <> ''").Error; err != nil {
 		return err
 	}

@@ -1010,6 +1010,13 @@ func (s *Service) SaveCategory(ctx context.Context, id idgen.ID, f CategoryForm)
 	if f.Title == "" {
 		return nil, response.BadRequest("website.category_title_required")
 	}
+	taken, err := categoryTitleTaken(s.db.WithContext(ctx), f.Title, id)
+	if err != nil {
+		return nil, err
+	}
+	if taken {
+		return nil, response.BadRequest("website.category_title_taken")
+	}
 	slugOut, err := s.resolveSlug(ctx, &Category{}, f.Slug, f.Title, id)
 	if err != nil {
 		return nil, err
@@ -1027,6 +1034,10 @@ func (s *Service) SaveCategory(ctx context.Context, id idgen.ID, f CategoryForm)
 		row.Slug = slugOut
 	}
 	if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
+		// 与 SaveTag 同：判重到落库之间撞上标题唯一索引，报同一句话而不是 500。
+		if dupKeyOnErr(err, "uk_plg_website_category_title") {
+			return nil, response.BadRequest("website.category_title_taken")
+		}
 		return nil, err
 	}
 	return &row, nil

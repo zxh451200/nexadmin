@@ -3,6 +3,7 @@ package website
 import (
 	"context"
 	"errors"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -115,7 +116,14 @@ func resolveTagsTx(tx *gorm.DB, names []string) ([]Tag, error) {
 			}
 			row = Tag{Name: name, Slug: slug}
 			if cerr := tx.Create(&row).Error; cerr != nil {
-				return nil, cerr
+				// 两个人同时第一次打同一个标签：唯一索引让后到的那个失败，这里当成「已经有人建好了」
+				// 重新取回来复用，别让一篇新闻因为撞车保存失败（撞的是同一主题词，不是真冲突）。
+				if !dupKeyOnErr(cerr, "uk_plg_website_tag_name") {
+					return nil, cerr
+				}
+				if rerr := tx.Where("LOWER(name) = ?", key).First(&row).Error; rerr != nil {
+					return nil, cerr
+				}
 			}
 		default:
 			return nil, err
@@ -123,6 +131,43 @@ func resolveTagsTx(tx *gorm.DB, names []string) ([]Tag, error) {
 		out = append(out, row)
 	}
 	return out, nil
+}
+
+// dupKeyRe 认唯一索引冲突在两引擎上的写法：MySQL/MariaDB 是 1062（Duplicate entry ... for key
+// 'uk_x'），PG 是 23505（duplicate key value violates unique constraint）。框架没开 GORM 的
+// TranslateError，生产路径拿不到 gorm.ErrDuplicatedKey，所以按报文认（与 plugins/pay、plugins/scim 同口径）。
+var dupKeyRe = regexp.MustCompile(`(?i)duplicate entry|error 1062|duplicate key value|unique constraint|sqlstate 23505`)
+
+func isDupKeyErr(err error) bool { return err != nil && dupKeyRe.MatchString(err.Error()) }
+
+// dupKeyOnErr 认出「撞的就是这个唯一索引」：MySQL 报文带 for key 'uk_x'，PG 带 constraint "uk_x"。
+// 只按 duplicate 关键字判断会把 slug 让号撞车也报成同名，索引名到手才敢说是哪一列。
+func dupKeyOnErr(err error, index string) bool {
+	return isDupKeyErr(err) && strings.Contains(err.Error(), index)
+}
+
+// tagNameTaken 按忽略大小写的名字查有没有别的标签占着：标签的身份就是名字，编辑器
+// 保存路径已按名字复用（见 resolveTagsTx），管理面板再不长第二行同名，否则公开侧多出
+// 两个指向同一主题的入口，选标签的地方也分不出该点哪一个。
+func tagNameTaken(db *gorm.DB, name string, self idgen.ID) (bool, error) {
+	var cnt int64
+	q := db.Model(&Tag{}).Where("LOWER(name) = ?", strings.ToLower(name))
+	if self != 0 {
+		q = q.Where("id <> ?", int64(self))
+	}
+	err := q.Count(&cnt).Error
+	return cnt > 0, err
+}
+
+// categoryTitleTaken 同 tagNameTaken，栏目按标题判重。
+func categoryTitleTaken(db *gorm.DB, title string, self idgen.ID) (bool, error) {
+	var cnt int64
+	q := db.Model(&Category{}).Where("LOWER(title) = ?", strings.ToLower(title))
+	if self != 0 {
+		q = q.Where("id <> ?", int64(self))
+	}
+	err := q.Count(&cnt).Error
+	return cnt > 0, err
 }
 
 // CategoryBySlug 按 slug 取栏目：公开归档页用它区分「链接写错了」和「这个栏目还没内容」。
@@ -194,6 +239,13 @@ func (s *Service) SaveTag(ctx context.Context, id idgen.ID, f TagForm) (*Tag, er
 	if name == "" {
 		return nil, response.BadRequest("website.tag_name_required")
 	}
+	taken, err := tagNameTaken(s.db.WithContext(ctx), name, id)
+	if err != nil {
+		return nil, err
+	}
+	if taken {
+		return nil, response.BadRequest("website.tag_name_taken")
+	}
 	var row Tag
 	if id != 0 {
 		if err := s.db.WithContext(ctx).First(&row, "id = ?", int64(id)).Error; err != nil {
@@ -222,6 +274,10 @@ func (s *Service) SaveTag(ctx context.Context, id idgen.ID, f TagForm) (*Tag, er
 		row.Slug = slugOut
 	}
 	if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
+		// 上面的按名判重与落库之间仍有窗口（两个人同时新建同一个标签）：撞了唯一索引就报同一句话，别抛 500。
+		if dupKeyOnErr(err, "uk_plg_website_tag_name") {
+			return nil, response.BadRequest("website.tag_name_taken")
+		}
 		return nil, err
 	}
 	return &row, nil
