@@ -59,6 +59,11 @@ type Setting struct {
 	// Theme 是公开站主题 id（主题插件经 RegisterTheme 注册）；空 = 内置 default 主题。
 	// 主题插件被卸载时渲染自动回退 default，站点不断线，设置里残留的 id 由下次保存清理。
 	Theme string `gorm:"column:theme;size:64;not null;default:''" json:"theme"`
+	// DefaultLang 是官网默认语言（占根路径、无前缀的那门）：空或 auto = 跟随浏览器语言协商；
+	// 具体语言 code = 该语言独占根路径，原平台默认语言在官网侧自动挂前缀（语基，如 /zh）。
+	// 只改公开站的显示与地址结构，内容原文语言锚点（平台默认语言，管发布门与机翻源）不受影响。
+	// 公开站路由按启动时的语言表注册，改完需重启生效；释放的旧前缀由 404 兜底 301 衔接。
+	DefaultLang string `gorm:"column:default_lang;size:16;not null;default:''" json:"defaultLang"`
 	// SeedVersion 记录出厂内容补种进度：升级后只补一次新增的出厂条目，不复活管理员删掉的内容。
 	SeedVersion int `gorm:"not null;default:1" json:"-"`
 }
@@ -364,6 +369,9 @@ type Product struct {
 	SyncedAt         *time.Time `gorm:"column:synced_at" json:"syncedAt,omitempty"`
 	// AlibabaCategoryID 是商品绑定的阿里叶子类目 ID（同步对话框选完回填，二期同步用）。
 	AlibabaCategoryID string `gorm:"column:alibaba_category_id;size:32;not null;default:''" json:"alibabaCategoryId"`
+	// AliTradeJSON 是发品用的交易与规格数据（阶梯价/包装/供货/物流属性/样品/定制/分组/SKU），
+	// 只在同步阿里与阿里模板导出时使用；结构见 ali_trade.go。空 = 没有阿里交易信息。
+	AliTradeJSON string `gorm:"column:ali_trade;type:text" json:"aliTradeJson"`
 	// SyncError 是最近一次同步失败的原因（code+文案，截 500）：列表悬停展示，成功同步后清空。
 	SyncError string `gorm:"column:sync_error;size:500;not null;default:''" json:"syncError"`
 	// Categories 是商品所属类目；关联表 plg_website_product_category_rel，保存时整体替换。

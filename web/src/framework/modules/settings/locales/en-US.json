@@ -82,7 +82,9 @@
       "embedBaseUrl": "Embedding Base URL",
       "embedBaseUrlHint": "Endpoint for embeddings, may be a different provider than the chat model; leave blank to reuse the Base URL above",
       "embedApiKey": "Embedding API Key",
-      "embedApiKeyHint": "Key for the standalone endpoint; leave blank to reuse the API Key above (same URL only). Changing the URL requires re-entering it"
+      "embedApiKeyHint": "Key for the standalone endpoint; leave blank to reuse the API Key above (same URL only). Changing the URL requires re-entering it",
+      "embedTimeoutSec": "Embedding timeout (seconds)",
+      "embedTimeoutSecHint": "Per-request timeout for embedding calls; leave blank to reuse the general timeout above (batch ingestion runs embeddings synchronously and may need a larger value)"
     },
     "sms": {
       "title": "SMS",

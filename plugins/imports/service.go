@@ -139,7 +139,7 @@ func (s *Service) Run(ctx context.Context, in RunInput, actor string) (*JobView,
 	if actor == "" {
 		return nil, response.BadRequest("imports.actor_required")
 	}
-	src, err := getSource(strings.TrimSpace(in.Source))
+	src, err := getSource(ctx, strings.TrimSpace(in.Source))
 	if err != nil {
 		return nil, response.BadRequest("imports.source_unknown").Wrap(err)
 	}
@@ -464,7 +464,7 @@ func (s *Service) GetJobRetryRows(ctx context.Context, id idgen.ID) (Source, []R
 	if err != nil {
 		return Source{}, nil, "", err
 	}
-	src, err := getSource(m.Source)
+	src, err := getSource(ctx, m.Source)
 	if err != nil {
 		return Source{}, nil, "", response.BadRequest("imports.source_unknown").Wrap(err)
 	}

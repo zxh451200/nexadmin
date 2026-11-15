@@ -58,6 +58,8 @@ export interface SiteSettings {
   homeSlug: string
   /** 公开站主题 id（主题插件注册）；空 = 内置 default 主题。主题被卸载时官网自动回退 default */
   theme: string
+  /** 官网默认语言（占根路径）：空 / auto = 跟随浏览器语言协商；具体 code = 该语言独占根路径。改完需重启 */
+  defaultLang: string
   homeTitle: string
   homeSubtitle: string
   homeCtaLabel: string
@@ -329,6 +331,8 @@ export interface SiteProduct {
   paymentTerms: string
   /** 动态属性键值对的 JSON 文本 */
   specsJson: string
+  /** 阿里交易与规格（JSON 文本；表单编辑时解析成 AliTrade） */
+  aliTradeJson?: string
   status: ProductStatus
   /** 阿里同步预留（一期只读展示） */
   alibabaProductId: string
@@ -346,6 +350,44 @@ export interface SiteProduct {
   views: number
   author: string
   updatedAt: string
+}
+
+
+/** 阿里发品用的交易与规格（后端 ali_trade.go 同构）；只在同步/预览/阿里模板导出时使用。 */
+export interface AliLadder {
+  qty: number
+  price: number
+}
+
+export interface AliTrade {
+  priceType?: '' | 'fob' | 'ladder' | 'sku'
+  ladder: AliLadder[]
+  package: { length: number; width: number; height: number; weight: number; shippingTemplate: string }
+  supply: { number: number; quantityUnit: string; timeUnit: string }
+  /** 物流属性：阿里 option value，如 battery.battery.oneLessHundredWh */
+  logistics: string[]
+  sample: { enabled: boolean; maxQty: number; price: number; description: string }
+  custom: { type: string; quantity: number }[]
+  /** 商品分组路径 ID（一/二/三级） */
+  group: string[]
+  skuProps: { name: string; values: string[] }[]
+  skus: { props: Record<string, string>; price: number; stock: number; code: string }[]
+}
+
+/** 表单里的默认值：空交易信息。 */
+export function emptyAliTrade(): AliTrade {
+  return {
+    priceType: '',
+    ladder: [],
+    package: { length: 0, width: 0, height: 0, weight: 0, shippingTemplate: '' },
+    supply: { number: 0, quantityUnit: '', timeUnit: '' },
+    logistics: [],
+    sample: { enabled: false, maxQty: 0, price: 0, description: '' },
+    custom: [],
+    group: [],
+    skuProps: [],
+    skus: [],
+  }
 }
 
 export interface ProductForm {
@@ -371,6 +413,8 @@ export interface ProductForm {
   port: string
   paymentTerms: string
   specs: ProductSpec[]
+  /** 阿里交易与规格（阶梯价/SKU/包装/供货/物流属性/样品/定制/分组）；null = 本次不改 */
+  aliTrade?: AliTrade | null
   /** 所属类目的完整 ID 列表；空 = 清空类目 */
   categoryIds: string[]
   i18nJson: string
@@ -594,15 +638,6 @@ export function useNavMaxDepth(): number {
 export function usePostTagsMax(): number {
   const { data } = useWebsiteLimits()
   return data?.postTagsMax || FALLBACK_POST_TAGS_MAX
-}
-
-/** 上传 logo / 二维码 / favicon 小图；大小与类型上限见 useWebsiteLimits 的 media 字段，超限由请求层 toast 服务端文案。 */
-export function uploadMedia(file: File) {
-  const fd = new FormData()
-  fd.append('file', file)
-  return http
-    .post<{ url: string; mime: string; size: number }>(`${BASE}/media`, fd)
-    .then((r) => r.data)
 }
 
 export function useNavs() {
@@ -1054,10 +1089,98 @@ export function createProductExportJob(
 }
 
 /**
+ * 阿里批量模板列名映射：导入中心的「阿里模板导入」与「导出阿里模板」共用这一张表。
+ * 真实模板到位后改表里的行即可（列名、别名、本站字段、顺序），不用发版。
+ */
+export interface AliColumn {
+  id: string
+  aliHeader: string
+  ourKey: string
+  aliases: string
+  required: boolean
+  sort: number
+  note: string
+}
+
+export type AliColumnInput = Omit<AliColumn, 'id'>
+
+export function useAliColumns() {
+  return useQuery({
+    queryKey: [...KEY, 'ali-columns'],
+    queryFn: () => api.get<AliColumn[]>(`${BASE}/ali-columns`),
+  })
+}
+
+export function useSaveAliColumn() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: AliColumnInput & { id?: string }) =>
+      input.id
+        ? api.put<AliColumn>(`${BASE}/ali-columns/${input.id}`, input)
+        : api.post<AliColumn>(`${BASE}/ali-columns`, input),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: [...KEY, 'ali-columns'] }),
+  })
+}
+
+export function useDeleteAliColumn() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.del<null>(`${BASE}/ali-columns/${id}`),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: [...KEY, 'ali-columns'] }),
+  })
+}
+
+/** 联调自检报告（后端 ali_doctor.go）：管理员原样复制给开发者即可。 */
+export interface AliDoctorReport {
+  categoryId: string
+  fieldCount: number
+  required: string[]
+  logistics: { value: string; displayName: string }[]
+  priceUnit: { value: string; displayName: string }[]
+  priceTypes: Record<string, { value: string; displayName: string }[]>
+  renderSample?: Record<string, string>
+  addShape: string
+  addErrors?: Record<string, string>
+  notes: string[]
+}
+
+export function useAliDoctor() {
+  return useMutation({
+    mutationFn: (body: { categoryId: string; productId?: string; probeAdd?: boolean }) =>
+      api.post<AliDoctorReport>(`${BASE}/ali/doctor`, body, { silent: true }),
+  })
+}
+
+/** 从阿里拉取一个商品到本地（按阿里商品 ID；已有则更新，否则新建草稿）。 */
+export function usePullAliProduct() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { aliProductId: string; categoryId?: string }) =>
+      api.post<{ productId: string; title: string; notes: string[] | null }>(`${BASE}/products/pull-ali`, body, { silent: true }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: [...KEY, 'products'] }),
+  })
+}
+
+/** 创建「阿里模板」导出任务：列名与列序按映射表出 xlsx，下载在导出中心 */
+export function createAliTemplateExportJob(
+  query: Pick<ContentQuery, 'keyword' | 'status' | 'categoryIds'> & { ids?: string[] },
+) {
+  return api.post<{ jobId: string }>(`${BASE}/products/export-ali`, {
+    keyword: query.keyword ?? '',
+    status: query.status ?? '',
+    categoryIds: query.categoryIds ?? '',
+    ids: query.ids ?? [],
+  })
+}
+
+/**
  * 产品在导入中心（plugins/imports）的来源标识，与后端 SourceProducts 同源；
  * 文件解析/模板/逐行报错/台账都由导入中心负责，这里只是它的一个前端调用方。
  */
 export const PRODUCT_IMPORT_SOURCE = 'website_products'
+
+/** 「阿里模板导入」在导入中心的来源标识（与后端 SourceProductsAli 同源）。 */
+export const PRODUCT_ALI_IMPORT_SOURCE = 'website_products_ali'
 
 /** 导入中心任务视图（与 plugins/imports/api.ts 的 ImportJob 同形，只取弹窗用到的字段）。 */
 export interface ProductImportJob {
@@ -1074,9 +1197,9 @@ export interface ProductImportJob {
 export function useRunProductImport() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (file: File) => {
+    mutationFn: ({ file, source = PRODUCT_IMPORT_SOURCE }: { file: File; source?: string }) => {
       const fd = new FormData()
-      fd.append('source', PRODUCT_IMPORT_SOURCE)
+      fd.append('source', source)
       fd.append('file', file)
       return api.post<ProductImportJob>('/plugins/imports', fd)
     },
@@ -1090,10 +1213,10 @@ export function fetchProductImportJob(id: string) {
 }
 
 /** 下载产品导入模板（导入中心按来源生成表头与示例行）。 */
-export async function fetchProductImportTemplate(): Promise<Blob> {
+export async function fetchProductImportTemplate(source = PRODUCT_IMPORT_SOURCE): Promise<Blob> {
   const res = await http.get<unknown>(
     '/plugins/imports/template',
-    { params: { source: PRODUCT_IMPORT_SOURCE, format: 'csv' }, responseType: 'blob' },
+    { params: { source, format: 'csv' }, responseType: 'blob' },
   )
   // 真实后端返回文件（Blob）；mock 阶段返回 CSV 文本
   return res.data instanceof Blob ? res.data : new Blob([String(res.data)], { type: 'text/csv;charset=utf-8' })
@@ -1251,6 +1374,22 @@ export function useSyncProduct() {
     mutationFn: ({ id, market }: { id: string; market: AliMarket }) =>
       api.post<{ alibabaProductId: string }>(`${BASE}/products/${id}/sync`, { market }, { silent: true }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: [...KEY, 'products'] }),
+  })
+}
+
+/** 预览：按该类目发品规则组装提交内容（不传图、不写阿里）。missing 非空即代表现在提交会被拒。 */
+export interface AliPreview {
+  alibabaProductId: string
+  xml: string
+  missing: string[]
+  notes: string[]
+  updated: boolean
+}
+
+export function usePreviewAliSync() {
+  return useMutation({
+    mutationFn: ({ id, market }: { id: string; market: AliMarket }) =>
+      api.post<AliPreview>(`${BASE}/products/${id}/ali-preview`, { market }, { silent: true }),
   })
 }
 

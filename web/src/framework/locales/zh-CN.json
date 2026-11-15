@@ -95,7 +95,6 @@
     "group": {
       "dashboard": "工作台",
       "system": "系统管理",
-      "content": "内容管理",
       "monitor": "系统监控",
       "tenant": "租户管理",
       "mine": "个人中心"

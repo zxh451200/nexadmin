@@ -82,7 +82,9 @@
       "embedBaseUrl": "Embedding Base URL",
       "embedBaseUrlHint": "向量化服务地址，可与对话模型不同供应商；留空 = 沿用上方 Base URL",
       "embedApiKey": "Embedding API Key",
-      "embedApiKeyHint": "独立地址的密钥；留空 = 沿用上方 API Key（仅当地址一致），换地址后保存需重新填写"
+      "embedApiKeyHint": "独立地址的密钥；留空 = 沿用上方 API Key（仅当地址一致），换地址后保存需重新填写",
+      "embedTimeoutSec": "向量化超时时间（秒）",
+      "embedTimeoutSecHint": "单次向量化请求的超时上限；留空 = 沿用上方通用超时时间（批量入库的同步向量化较慢，可单独调大）"
     },
     "sms": {
       "title": "短信",

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronDown, CircleAlert, CircleCheck, CloudUpload, Copy, Download, ExternalLink, Eye, FileUp, Pencil, Plus, Settings2, Trash2, X } from 'lucide-react'
+import { CircleAlert, CircleCheck, CloudDownload, CloudUpload, Copy, Download, ExternalLink, Eye, FileUp, Pencil, Plus, Settings2, Trash2, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -28,7 +28,7 @@ import { FileDropField } from '@/framework/components/FileDropField'
 import { ImageUrlField } from '@/framework/components/ImageUrlField'
 import { Uploader } from '@/framework/components/Uploader'
 import { VideoUrlField } from '@/framework/components/VideoUrlField'
-import { RemoteSelect } from '@/framework/components/RemoteSelect'
+import { FilePickerDialog, PickFromLibraryButton } from '@/framework/components/FilePickerDialog'
 import { OptionList, type Option } from '@/framework/components/pickers/OptionList'
 import { PickerShell } from '@/framework/components/pickers/PickerShell'
 import { PickerTrigger } from '@/framework/components/pickers/PickerTrigger'
@@ -41,6 +41,7 @@ import { Input } from '@/framework/ui/input'
 import { Label } from '@/framework/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import { Tabs, TabsList, TabsTrigger } from '@/framework/ui/tabs'
+import { AliTradeFields, safeParseAliTrade } from './AliTradeFields'
 import { EditorSchemaGate } from './EditorSchemaGate'
 import TranslationStatus from './TranslationStatus'
 import {
@@ -50,6 +51,15 @@ import {
   fetchProductImportTemplate,
   fetchProductPreview,
   createProductExportJob,
+  createAliTemplateExportJob,
+  PRODUCT_ALI_IMPORT_SOURCE,
+  PRODUCT_IMPORT_SOURCE,
+  useAliColumns,
+  useAliDoctor,
+  useDeleteAliColumn,
+  useSaveAliColumn,
+  usePullAliProduct,
+  type AliColumn,
   translateContent,
   useAliConfig,
   useAliSyncStatus,
@@ -70,6 +80,9 @@ import {
   toContentQuery,
   type AliCategoryNode,
   type AliMarket,
+  type AliPreview,
+  type AliTrade,
+  usePreviewAliSync,
   type ContentDraft,
   type ContentQuery,
   type ProductCategoryNode,
@@ -160,37 +173,6 @@ function flattenCatTree(nodes: CatNode[], out: CatNode[] = []): CatNode[] {
 function parseNum(v: string): number {
   const n = Number(v)
   return Number.isFinite(n) && n > 0 ? n : 0
-}
-
-/** 关键词拆分预览：与后端 normalizeProductKeywords 同口径——空格/中英文逗号/顿号/分号都算分隔符，忽略大小写去重。 */
-function splitKeywordsPreview(s: string): string[] {
-  const seen = new Set<string>()
-  const out: string[] = []
-  for (const raw of s.split(/[ \t\n\r,，、;；]+/)) {
-    const f = raw.trim()
-    if (!f) continue
-    const k = f.toLowerCase()
-    if (seen.has(k)) continue
-    seen.add(k)
-    out.push(f)
-  }
-  return out
-}
-
-/** 关键词实时回显：忘了打空格时，「只识别出 1 个」当场就能看见，而不是等同步阿里才发现。 */
-function KeywordHint({ value }: { value: string }) {
-  const { t } = useTranslation()
-  const words = useMemo(() => splitKeywordsPreview(value), [value])
-  if (!value.trim() || !words.length) return null
-  const over = words.length > maxKeywords
-  return (
-    <p className={cn('text-xs', over ? 'text-warning' : 'text-muted-foreground')}>
-      {t(
-        over ? 'plugin_website.fields.keywordsPreviewOver' : 'plugin_website.fields.keywordsPreview',
-        { count: words.length, words: words.slice(0, maxKeywords).join(' / ') },
-      )}
-    </p>
-  )
 }
 
 /** 币种选项：代码 + Intl 现算的本地化名称（USD · 美元），随界面语言变。 */
@@ -371,7 +353,7 @@ function CategoryPicker({
 }
 
 /** 图集：宫格图块（批量直传、拖拽排序、点块看大图、悬停删除），上限与后端 maxImagesPerProduct 对齐；
- * 「从文件库选择」另开弹窗勾选已有图片，关弹窗统一追加（上限在打开时就锁死，不会超）。 */
+ * 「从文件库选择」为缩略图网格弹窗（与封面/视频同款入口）——勾选即增删图集 URL，上限满时入口换成额度提示。 */
 function ImagesField({
   images, onChange, disabled,
 }: {
@@ -381,29 +363,7 @@ function ImagesField({
 }) {
   const { t } = useTranslation()
   const [pickOpen, setPickOpen] = useState(false)
-  const [pickedUrls, setPickedUrls] = useState<string[]>([])
   const atLimit = images.length >= IMAGES_MAX
-  const room = IMAGES_MAX - images.length
-  const openPick = () => {
-    setPickedUrls([])
-    setPickOpen(true)
-  }
-  // 关弹窗才算提交：文件库勾选的 URL 追加进图集（不覆盖已有的）。
-  const closePick = (open: boolean) => {
-    if (!open && pickedUrls.length) onChange([...images, ...pickedUrls])
-    setPickOpen(open)
-  }
-  // RemoteSelect 多选回传的是完整数组（它内部已做过勾选切换），这里只做字符串化、去重并按剩余额度截断
-  const togglePick = (v: string | string[]) => {
-    const incoming = (Array.isArray(v) ? v : [String(v ?? '')]).filter(Boolean)
-    setPickedUrls((urls) => {
-      const next = [...urls]
-      for (const u of incoming) {
-        if (!next.includes(u) && next.length < room) next.push(u)
-      }
-      return next
-    })
-  }
   return (
     <SharedGroup labelKey="plugin_website.product.images">
       <Uploader
@@ -424,38 +384,19 @@ function ImagesField({
           atLimit ? (
             <span className="text-xs text-muted-foreground">{t('plugin_website.product.imageLimit', { max: IMAGES_MAX })}</span>
           ) : (
-            /* 外观对齐 RemoteSelect 的触发器（同宽同高 + 尾部箭头）：三区的「从文件库选择」视觉一致 */
-            <Button
-              variant="outline"
-              className="h-10 w-36 justify-between text-base font-normal md:h-8 md:text-sm sm:w-44"
-              disabled={disabled}
-              onClick={openPick}
-            >
-              {t('uploader.pickFromLibrary')}
-              <ChevronDown className="size-4 shrink-0 opacity-50" aria-hidden="true" />
-            </Button>
+            <PickFromLibraryButton onClick={() => setPickOpen(true)} disabled={disabled} />
           )
         }
       />
-      <ResponsiveDialog
+      <FilePickerDialog
         open={pickOpen}
-        onOpenChange={closePick}
-        size="md"
-        title={t('uploader.pickFromLibrary')}
-        description={t('plugin_website.product.imageLimit', { max: IMAGES_MAX })}
-      >
-        <RemoteSelect
-          url="/files"
-          params={{ category: 'image' }}
-          valueKey="url"
-          labelKey="name"
-          multiple
-          value={pickedUrls}
-          onChange={togglePick}
-          allowClear={false}
-          disabled={pickedUrls.length >= room}
-        />
-      </ResponsiveDialog>
+        onOpenChange={setPickOpen}
+        kind="image"
+        multiple
+        value={images}
+        onConfirm={(urls) => onChange(urls.slice(0, IMAGES_MAX))}
+        disabled={disabled}
+      />
     </SharedGroup>
   )
 }
@@ -550,6 +491,7 @@ function ProductFormBody({
   const portOptions = usePortOptions()
   const paymentTermOptions = usePaymentTermOptions()
   const [specs, setSpecs] = useState<ProductSpec[]>(() => safeParseSpecs(editing?.specsJson))
+  const [aliTrade, setAliTrade] = useState<AliTrade>(() => safeParseAliTrade(editing?.aliTradeJson))
   const [seoKeywords, setSeoKeywords] = useState(editing?.seoKeywords ?? '')
   const [noindex, setNoindex] = useState(editing?.noindex ?? false)
   const [author, setAuthor] = useState(editing?.author ?? '')
@@ -609,6 +551,7 @@ function ProductFormBody({
           port,
           paymentTerms,
           specs: specs.filter((sp) => sp.label.trim() || sp.value.trim()),
+          aliTrade,
           categoryIds: catIds,
           noindex,
           author,
@@ -654,8 +597,7 @@ function ProductFormBody({
       <div className="flex flex-col gap-5">
         <FormSection title={t('plugin_website.product.basicSection')}>
           <LocalizedField fieldKey="title" required />
-          <LocalizedField fieldKey="keywords" aiTarget="keywords" placeholder={t('plugin_website.fields.productKeywordsPlaceholder')} />
-          <KeywordHint value={lf.field('keywords')} />
+          <LocalizedField fieldKey="keywords" aiTarget="keywords" tags={{ max: maxKeywords }} placeholder={t('plugin_website.fields.productKeywordsPlaceholder')} />
           <LocalizedField fieldKey="summary" />
           <div className="grid gap-3 md:grid-cols-2">
             <SharedFieldShell labelKey="plugin_website.fields.slug">
@@ -683,6 +625,7 @@ function ProductFormBody({
               disabled={sharedDisabled}
               title={t('plugin_website.product.coverUpload')}
               hint={t('plugin_website.product.coverHint')}
+              placeholder="https://…"
               crop={{ width: 800, height: 800 }}
               previewBelow
               aria-label={t('plugin_website.fields.coverUrl')}
@@ -789,6 +732,10 @@ function ProductFormBody({
         <SharedGroup labelKey="plugin_website.product.specs">
           <SpecsEditor specs={specs} onChange={setSpecs} disabled={sharedDisabled} />
         </SharedGroup>
+        </FormSection>
+        <FormSection title={t('plugin_website.ali.trade.section')}>
+          <p className="text-xs leading-relaxed text-muted-foreground">{t('plugin_website.ali.trade.sectionHint')}</p>
+          <AliTradeFields key={editing?.id ?? 'new'} value={aliTrade} onChange={setAliTrade} disabled={sharedDisabled} />
         </FormSection>
         <FormSection title={t('plugin_website.product.detailSection')}>
           <LocalizedField fieldKey="content" className="min-h-40" />
@@ -912,6 +859,7 @@ function AliConfigDialog({ onOpenChange }: { onOpenChange: (v: boolean) => void 
   const [sessionKey, setSessionKey] = useState('')
   const [apiGateway, setApiGateway] = useState('')
   const [testState, setTestState] = useState<'idle' | 'testing' | 'ok' | 'fail'>('idle')
+  const [doctorOpen, setDoctorOpen] = useState(false)
   // 配置到货时回填非敏感字段一次（后续用户编辑不覆盖）。
   const [loaded, setLoaded] = useState<string>('')
   if (config && loaded !== config.appKey) {
@@ -951,6 +899,7 @@ function AliConfigDialog({ onOpenChange }: { onOpenChange: (v: boolean) => void 
 
   if (isLoading) return null
   return (
+    <>
     <ResponsiveDialog
       open
       onOpenChange={onOpenChange}
@@ -1030,6 +979,13 @@ function AliConfigDialog({ onOpenChange }: { onOpenChange: (v: boolean) => void 
               >
                 {testState === 'testing' ? t('common.loading') : t('plugin_website.ali.test')}
               </Button>
+              <Button
+                variant="outline"
+                onClick={() => setDoctorOpen(true)}
+                className="h-10 shrink-0 px-3 md:h-8"
+              >
+                {t('plugin_website.ali.doctorButton')}
+              </Button>
             </div>
             {testState === 'ok' ? (
               <p className="flex items-center gap-1.5 text-xs text-success">
@@ -1046,10 +1002,110 @@ function AliConfigDialog({ onOpenChange }: { onOpenChange: (v: boolean) => void 
             )}
           </div>
         </FormSection>
+        <FormSection title={t('plugin_website.ali.columnSection')}>
+          <AliColumnSection />
+        </FormSection>
       </div>
     </ResponsiveDialog>
+    {doctorOpen ? <AliDoctorDialog onOpenChange={setDoctorOpen} /> : null}
+    </>
   )
 }
+
+/** 阿里模板映射可选的本站字段（与后端 aliOurKeys 同一集合）。 */
+const ALI_OUR_KEYS = [
+  'alibabaProductId', 'alibabaCategoryId', 'title', 'keywords', 'summary', 'content', 'categories',
+  'status', 'coverUrl', 'images', 'videoUrl', 'priceMin', 'priceMax', 'currency', 'priceUnit',
+  'moq', 'leadTimeDays', 'port', 'paymentTerms', 'specs', 'author',
+]
+
+/**
+ * 一行「阿里列名 ↔ 本站字段」映射。改完点保存，导入中心的阿里源与「导出阿里模板」立刻按新表头走
+ * ——列名是数据不是代码，拿到真实模板后在这里校对即可，不用发版。
+ */
+function AliColumnRow({ col }: { col: AliColumn }) {
+  const { t } = useTranslation()
+  const save = useSaveAliColumn()
+  const del = useDeleteAliColumn()
+  const [form, setForm] = useState<AliColumn>(col)
+  useEffect(() => setForm(col), [col])
+  const dirty = JSON.stringify(form) !== JSON.stringify(col)
+  const patch = (part: Partial<AliColumn>) => setForm((f) => ({ ...f, ...part }))
+  return (
+    <div className="flex flex-col gap-2 rounded-md border border-border p-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <Input
+          className="min-w-32 flex-1"
+          value={form.aliHeader}
+          onChange={(e) => patch({ aliHeader: e.target.value })}
+          placeholder={t('plugin_website.ali.column.header')}
+          aria-label={t('plugin_website.ali.column.header')}
+        />
+        <Select value={form.ourKey} onValueChange={(v) => patch({ ourKey: v })}>
+          <SelectTrigger className="w-40 shrink-0" aria-label={t('plugin_website.ali.column.ourKey')}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {ALI_OUR_KEYS.map((k) => (
+              <SelectItem key={k} value={k}>{k}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Input
+          className="w-20 shrink-0"
+          type="number"
+          value={form.sort}
+          onChange={(e) => patch({ sort: Number(e.target.value) || 0 })}
+          aria-label={t('plugin_website.ali.column.sort')}
+        />
+        <Button type="button" size="sm" variant="outline" disabled={!dirty || save.isPending} onClick={() => void save.mutateAsync(form)}>
+          {t('common.save')}
+        </Button>
+        <Button type="button" size="sm" variant="ghost" disabled={del.isPending} onClick={() => void del.mutateAsync(col.id)}>
+          {t('common.delete')}
+        </Button>
+      </div>
+      <Input
+        value={form.aliases}
+        onChange={(e) => patch({ aliases: e.target.value })}
+        placeholder={t('plugin_website.ali.column.aliases')}
+        aria-label={t('plugin_website.ali.column.aliases')}
+        className="font-mono text-xs"
+      />
+    </div>
+  )
+}
+
+/** 阿里批量模板的列名映射清单：新增行按 Sort 追加到末尾。 */
+function AliColumnSection() {
+  const { t } = useTranslation()
+  const { data: cols } = useAliColumns()
+  const save = useSaveAliColumn()
+  const rows = cols ?? []
+  const add = () =>
+    void save.mutateAsync({
+      aliHeader: '',
+      ourKey: 'specs',
+      aliases: '',
+      required: false,
+      sort: (rows[rows.length - 1]?.sort ?? 0) + 10,
+      note: '',
+    })
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-xs leading-relaxed text-muted-foreground">{t('plugin_website.ali.columnHint')}</p>
+      <div className="flex max-h-80 flex-col gap-2 overflow-y-auto pe-1">
+        {rows.map((c) => (
+          <AliColumnRow key={c.id} col={c} />
+        ))}
+      </div>
+      <Button type="button" variant="outline" size="sm" className="self-start" disabled={save.isPending} onClick={add}>
+        {t('plugin_website.ali.columnAdd')}
+      </Button>
+    </div>
+  )
+}
+
 
 /**
  * 产品导入弹窗（页内完成，不跳导入中心）：模板下载、文件上传、进度与逐行失败清单。
@@ -1058,6 +1114,8 @@ function AliConfigDialog({ onOpenChange }: { onOpenChange: (v: boolean) => void 
 function ProductImportDialog({ onOpenChange }: { onOpenChange: (v: boolean) => void }) {
   const { t } = useTranslation()
   const run = useRunProductImport()
+  // 模板来源：本站模板（自家列名）或阿里批量模板（列名按「阿里列名映射」识别，属性列自动落动态属性）
+  const [source, setSource] = useState<string>(PRODUCT_IMPORT_SOURCE)
   const [file, setFile] = useState<File | null>(null)
   const [job, setJob] = useState<ProductImportJob | null>(null)
   const running = job?.status === 'pending' || job?.status === 'running'
@@ -1074,7 +1132,7 @@ function ProductImportDialog({ onOpenChange }: { onOpenChange: (v: boolean) => v
 
   const downloadTemplate = async () => {
     try {
-      const blob = await fetchProductImportTemplate()
+      const blob = await fetchProductImportTemplate(source)
       saveBlob(`${t('plugin_website.product.import.templateFilename')}.csv`, blob)
     } catch (e) {
       toast.error(e instanceof Error && e.message ? e.message : t('common.operateFailed'))
@@ -1084,7 +1142,7 @@ function ProductImportDialog({ onOpenChange }: { onOpenChange: (v: boolean) => v
   const start = async () => {
     if (!file) return
     try {
-      setJob(await run.mutateAsync(file))
+      setJob(await run.mutateAsync({ file, source }))
     } catch {
       // 服务端原因（文件不合法、无导入权限等）由 http 拦截器统一弹出
     }
@@ -1107,6 +1165,28 @@ function ProductImportDialog({ onOpenChange }: { onOpenChange: (v: boolean) => v
       }
     >
       <div className="flex flex-col gap-5">
+        <div className="flex flex-col gap-2">
+          <Label>{t('plugin_website.product.import.source')}</Label>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant={source === PRODUCT_IMPORT_SOURCE ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => { setSource(PRODUCT_IMPORT_SOURCE); setJob(null) }}
+            >
+              {t('plugin_website.product.import.sourceOwn')}
+            </Button>
+            <Button
+              type="button"
+              variant={source === PRODUCT_ALI_IMPORT_SOURCE ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => { setSource(PRODUCT_ALI_IMPORT_SOURCE); setJob(null) }}
+            >
+              {t('plugin_website.product.import.sourceAli')}
+            </Button>
+          </div>
+          <p className="text-xs leading-relaxed text-muted-foreground">{t('plugin_website.product.import.sourceHint')}</p>
+        </div>
         <div className="flex flex-col gap-1.5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <Label htmlFor="product-import-file">{t('plugin_website.product.import.file')}</Label>
@@ -1238,6 +1318,115 @@ export interface AliSyncTarget {
   ids?: string[]
 }
 
+/** 联调自检：读一次真实规则并生成报告，管理员复制报告即可，不需要懂 schema。 */
+function AliDoctorDialog({ onOpenChange }: { onOpenChange: (v: boolean) => void }) {
+  const { t } = useTranslation()
+  const doctor = useAliDoctor()
+  const [categoryId, setCategoryId] = useState('')
+  const [productId, setProductId] = useState('')
+  const [probeAdd, setProbeAdd] = useState(false)
+  const [report, setReport] = useState<string>('')
+  const run = async () => {
+    try {
+      const r = await doctor.mutateAsync({ categoryId: categoryId.trim(), productId: productId.trim() || undefined, probeAdd })
+      setReport(JSON.stringify(r, null, 2))
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t('plugin_website.ali.doctorFailed'))
+    }
+  }
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(report)
+      toast.success(t('plugin_website.ali.doctorCopied'))
+    } catch {
+      toast.error(t('common.operateFailed'))
+    }
+  }
+  return (
+    <ResponsiveDialog
+      open
+      onOpenChange={onOpenChange}
+      size="lg"
+      title={t('plugin_website.ali.doctorTitle')}
+      description={t('plugin_website.ali.doctorDesc')}
+      footer={
+        <>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.close')}</Button>
+          {report ? <Button variant="outline" onClick={() => void copy()}>{t('plugin_website.ali.doctorCopy')}</Button> : null}
+          <Button onClick={() => void run()} disabled={!categoryId.trim() || doctor.isPending}>
+            {doctor.isPending ? t('common.loading') : t('plugin_website.ali.doctorRun')}
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-3 text-sm">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="ali-doctor-cat">{t('plugin_website.ali.doctorCategoryId')}</Label>
+          <Input id="ali-doctor-cat" value={categoryId} onChange={(e) => setCategoryId(e.target.value)} placeholder="201274203" autoComplete="off" />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="ali-doctor-pid">{t('plugin_website.ali.doctorProductId')}</Label>
+          <Input id="ali-doctor-pid" value={productId} onChange={(e) => setProductId(e.target.value)} placeholder="1600999000001" autoComplete="off" />
+        </div>
+        <label className="flex items-start gap-2 text-xs text-muted-foreground">
+          <input type="checkbox" className="mt-0.5 size-4 accent-[hsl(var(--primary))]" checked={probeAdd} onChange={(e) => setProbeAdd(e.target.checked)} />
+          {t('plugin_website.ali.doctorProbeAdd')}
+        </label>
+        {report ? (
+          <pre className="max-h-80 overflow-auto rounded-md bg-muted p-2 text-[11px] leading-relaxed">{report}</pre>
+        ) : null}
+      </div>
+    </ResponsiveDialog>
+  )
+}
+
+/** 从阿里拉取：输入阿里商品 ID（可选类目 ID），本地已有则更新、没有则新建草稿。 */
+function AliPullDialog({ onOpenChange }: { onOpenChange: (v: boolean) => void }) {
+  const { t } = useTranslation()
+  const pull = usePullAliProduct()
+  const [aliId, setAliId] = useState('')
+  const [categoryId, setCategoryId] = useState('')
+  const submit = async () => {
+    if (!aliId.trim()) return
+    try {
+      const res = await pull.mutateAsync({ aliProductId: aliId.trim(), categoryId: categoryId.trim() || undefined })
+      toast.success(t('plugin_website.ali.pullOk', { title: res.title }))
+      for (const n of res.notes ?? []) toast.message(n)
+      onOpenChange(false)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t('plugin_website.ali.pullFailed'))
+    }
+  }
+  return (
+    <ResponsiveDialog
+      open
+      onOpenChange={onOpenChange}
+      size="md"
+      title={t('plugin_website.ali.pullTitle')}
+      description={t('plugin_website.ali.pullDesc')}
+      footer={
+        <>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
+          <Button onClick={() => void submit()} disabled={!aliId.trim() || pull.isPending}>
+            {pull.isPending ? t('common.loading') : t('plugin_website.ali.pullButton')}
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-3 text-sm">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="ali-pull-id">{t('plugin_website.ali.pullAliId')}</Label>
+          <Input id="ali-pull-id" value={aliId} onChange={(e) => setAliId(e.target.value)} placeholder="1600999000001" autoComplete="off" />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="ali-pull-cat">{t('plugin_website.ali.pullCategoryId')}</Label>
+          <Input id="ali-pull-cat" value={categoryId} onChange={(e) => setCategoryId(e.target.value)} placeholder="201274203" autoComplete="off" />
+        </div>
+      </div>
+    </ResponsiveDialog>
+  )
+}
+
 /**
  * 同步到阿里对话框：选阿里叶子类目（选中即回填商品）+ 发品类型，确认后执行。
  * 单个同步等待结果（成功带阿里商品 ID）；批量提交 job 后切换到进度视图（轮询 ali/sync-status）。
@@ -1247,6 +1436,8 @@ function AliSyncDialog({ target, onOpenChange }: { target: AliSyncTarget; onOpen
   const bindCategory = useBindAliCategory()
   const syncOne = useSyncProduct()
   const syncBatch = useSyncProductBatch()
+  const preview = usePreviewAliSync()
+  const [previewData, setPreviewData] = useState<AliPreview | null>(null)
   const [market, setMarket] = useState<AliMarket>('inquiry')
   const [selected, setSelected] = useState<AliCategoryNode | null>(null)
   const [path, setPath] = useState<CatPathEntry[]>([])
@@ -1291,6 +1482,24 @@ function AliSyncDialog({ target, onOpenChange }: { target: AliSyncTarget; onOpen
     }
   }
 
+  // 预览：先按所选/已绑定类目取该类目规则，再本地组装提交内容，不写阿里。
+  const runPreview = async () => {
+    if (target.mode !== 'single' || !target.product) return
+    if (!selected && !target.product.alibabaCategoryId) {
+      toast.error(t('plugin_website.ali.categoryRequired'))
+      return
+    }
+    try {
+      if (selected && target.product.alibabaCategoryId !== selected.id) {
+        await bindCategory.mutateAsync({ id: target.product.id, categoryId: selected.id })
+      }
+      setPreviewData(await preview.mutateAsync({ id: target.product.id, market }))
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : ''
+      toast.error(msg || t('plugin_website.ali.previewFailed'))
+    }
+  }
+
   return (
     <ResponsiveDialog
       open
@@ -1303,6 +1512,11 @@ function AliSyncDialog({ target, onOpenChange }: { target: AliSyncTarget; onOpen
       footer={
         <>
           <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
+          {target.mode === 'single' && !jobId ? (
+            <Button variant="outline" onClick={() => void runPreview()} disabled={busy || preview.isPending}>
+              {t('plugin_website.ali.preview')}
+            </Button>
+          ) : null}
           {jobId && !done ? (
             <Button disabled>{t('common.loading')}</Button>
           ) : (
@@ -1349,6 +1563,28 @@ function AliSyncDialog({ target, onOpenChange }: { target: AliSyncTarget; onOpen
               </Select>
               <p className="mt-1 text-xs text-muted-foreground">{t('plugin_website.ali.englishHint')}</p>
             </div>
+            {previewData ? (
+              <div className="flex flex-col gap-2 rounded-md border border-border p-3">
+                <p className="font-medium">{t('plugin_website.ali.previewTitle')}</p>
+                <p className="text-xs text-muted-foreground">
+                  {t(previewData.updated ? 'plugin_website.ali.previewUpdated' : 'plugin_website.ali.previewNew')}
+                </p>
+                {(previewData.missing?.length ?? 0) > 0 ? (
+                  <p className="text-xs text-destructive">{t('plugin_website.ali.previewMissing', { fields: previewData.missing.join('、') })}</p>
+                ) : (
+                  <p className="text-xs text-success">{t('plugin_website.ali.previewOk')}</p>
+                )}
+                {(previewData.notes?.length ?? 0) > 0 ? (
+                  <ul className="list-disc space-y-1 ps-5 text-xs text-muted-foreground">
+                    {previewData.notes.map((n) => (
+                      <li key={n}>{n}</li>
+                    ))}
+                  </ul>
+                ) : null}
+                <p className="text-xs font-medium">{t('plugin_website.ali.previewXml')}</p>
+                <pre className="max-h-48 overflow-auto rounded-md bg-muted p-2 text-[11px] leading-relaxed">{previewData.xml}</pre>
+              </div>
+            ) : null}
           </>
         )}
       </div>
@@ -1455,6 +1691,7 @@ export default function ProductPage() {
   // 阿里凭据配置入口在页头：按钮上带「未配置」徽标（页面与弹窗共用同一个 useAliConfig 缓存）。
   const { data: aliConfig } = useAliConfig()
   const [aliOpen, setAliOpen] = useState(false)
+  const [pullOpen, setPullOpen] = useState(false)
   // 列表缩略图点开看大图：记整行，弹窗同时用 coverUrl 和标题。
   const [preview, setPreview] = useState<SiteProduct | null>(null)
 
@@ -1531,6 +1768,22 @@ export default function ProductPage() {
       // 服务端原因由 http 拦截器统一弹出，这里再补一条「操作失败」就是同一件事说两遍
     } finally {
       setExporting(false)
+    }
+  }
+
+  // 阿里模板导出：同一套筛选/勾选，列名与列序按「阿里列名映射」出，下载在导出中心
+  const [exportingAli, setExportingAli] = useState(false)
+  const onExportAli = async () => {
+    setExportingAli(true)
+    try {
+      const query = selected.length
+        ? { ids: selected }
+        : { keyword: filters.keyword, status: effectiveStatus, categoryIds: filters.categoryIds }
+      await startExportJob(async () => ({ id: (await createAliTemplateExportJob(query)).jobId }))
+    } catch {
+      // 服务端原因由 http 拦截器统一弹出
+    } finally {
+      setExportingAli(false)
     }
   }
 
@@ -1744,6 +1997,14 @@ export default function ProductPage() {
               <Download className="me-2 size-4" aria-hidden="true" />
               {t('common.export')}
             </Button>
+            <Button variant="outline" onClick={() => setPullOpen(true)}>
+              <CloudDownload className="me-2 size-4" aria-hidden="true" />
+              {t('plugin_website.ali.pullButton')}
+            </Button>
+            <Button variant="outline" onClick={() => void onExportAli()} disabled={exportingAli}>
+              <Download className="me-2 size-4" aria-hidden="true" />
+              {t('plugin_website.ali.exportTemplate')}
+            </Button>
             {/* 导入在页内弹窗完成（模板下载/上传/失败清单）；台账与更多来源在导入中心。 */}
             <Button variant="outline" onClick={() => setImportOpen(true)}>
               <FileUp className="me-2 size-4" aria-hidden="true" />
@@ -1801,6 +2062,7 @@ export default function ProductPage() {
       {syncTarget && <AliSyncDialog target={syncTarget} onOpenChange={(v) => !v && setSyncTarget(null)} />}
       {importOpen && <ProductImportDialog onOpenChange={setImportOpen} />}
       {aliOpen && <AliConfigDialog onOpenChange={setAliOpen} />}
+      {pullOpen && <AliPullDialog onOpenChange={setPullOpen} />}
       <Lightbox
         open={!!preview}
         onOpenChange={(o) => !o && setPreview(null)}

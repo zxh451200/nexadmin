@@ -78,6 +78,17 @@ func labelIndex(s Source) map[string]string {
 				idx[label+suf] = c.Key
 			}
 		}
+		// 别名：外部系统（如阿里国际站批量模板）的列名与我们的表头不同，也要认得同一列。
+		for _, a := range c.Aliases {
+			a = strings.TrimSpace(a)
+			if a == "" {
+				continue
+			}
+			idx[a] = c.Key
+			for _, suf := range suffixes {
+				idx[a+suf] = c.Key
+			}
+		}
 	}
 	return idx
 }

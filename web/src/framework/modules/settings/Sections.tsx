@@ -174,6 +174,11 @@ const aiSchema = z.object({
   embedBaseUrl: z.string().trim(),
   embedApiKey: z.string(),
   embedModel: z.string().trim(),
+  // 清空输入框会得到 NaN（valueAsNumber）：NaN 归一成 undefined = 留空沿用通用超时
+  embedTimeoutSec: z.preprocess(
+    (v) => (typeof v === 'number' && Number.isNaN(v) ? undefined : v),
+    z.number().int().min(0).max(600).optional(),
+  ),
   timeoutSec: z.number().int().min(1).max(600),
   redact: z.boolean(),
 })
@@ -195,16 +200,15 @@ export function AiSection({ value }: { value: AllSettings['ai'] }) {
             <TextField control={form.control} name="apiKey" label="API Key" type="password" />
             <TextField control={form.control} name="model" label={t('settings.ai.model')} description={t('settings.ai.modelHint')} />
             <TextField control={form.control} name="timeoutSec" label={t('settings.ai.timeoutSec')} type="number" inputMode="numeric" />
-            <FormGridFull>
-              <TextField
-                control={form.control}
-                name="embedBaseUrl"
-                label={t('settings.ai.embedBaseUrl')}
-                description={t('settings.ai.embedBaseUrlHint')}
-                type="url"
-                inputMode="url"
-              />
-            </FormGridFull>
+            {/* 向量化四项与上面对话四项同构（2×2）：同一张卡片里两套排法会让人以为是两类不同的配置 */}
+            <TextField
+              control={form.control}
+              name="embedBaseUrl"
+              label={t('settings.ai.embedBaseUrl')}
+              description={t('settings.ai.embedBaseUrlHint')}
+              type="url"
+              inputMode="url"
+            />
             <TextField
               control={form.control}
               name="embedApiKey"
@@ -217,6 +221,14 @@ export function AiSection({ value }: { value: AllSettings['ai'] }) {
               name="embedModel"
               label={t('settings.ai.embedModel')}
               description={t('settings.ai.embedModelHint')}
+            />
+            <TextField
+              control={form.control}
+              name="embedTimeoutSec"
+              label={t('settings.ai.embedTimeoutSec')}
+              description={t('settings.ai.embedTimeoutSecHint')}
+              type="number"
+              inputMode="numeric"
             />
           </FormGrid>
         </>

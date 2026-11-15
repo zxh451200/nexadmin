@@ -93,16 +93,18 @@ func (s *Service) ProductBySlug(ctx context.Context, slug, lang string) (*Produc
 	return &row, nil
 }
 
-// normalizeProductKeywords 把关键词压成「最多 3 个、空格分隔」的规范形态：
-// 输入按空白与中英文逗号拆分，忽略大小写去重（Alibaba / alibaba 是同一个词）。
+// normalizeProductKeywords 把关键词压成「最多 3 个、逗号分隔」的规范形态。
+// 只按逗号/顿号/分号/换行拆：关键词是**词组**（阿里官方示例 "Red 8GB mp3 for sports"），
+// 按空格拆会把一个词组拆成若干垃圾词——"energy storage cabinet, 215kwh battery" 之前就是这样
+// 被截成三个单词、第二个词组整条丢掉的。词内多余空白压成一个空格，忽略大小写去重。
 func normalizeProductKeywords(s string) string {
 	fields := strings.FieldsFunc(s, func(r rune) bool {
-		return r == ' ' || r == '\t' || r == '\n' || r == ',' || r == '，' || r == '、'
+		return r == ',' || r == '，' || r == '、' || r == ';' || r == '；' || r == '\n' || r == '\r'
 	})
 	seen := make(map[string]bool, len(fields))
 	out := make([]string, 0, maxKeywordsPerProduct)
 	for _, f := range fields {
-		f = strings.TrimSpace(f)
+		f = strings.Join(strings.Fields(f), " ")
 		if f == "" {
 			continue
 		}
@@ -116,7 +118,7 @@ func normalizeProductKeywords(s string) string {
 			break
 		}
 	}
-	return trimRunes(strings.Join(out, " "), 300)
+	return trimRunes(strings.Join(out, ", "), 300)
 }
 
 // SaveProduct 新建或更新一条商品。Status 只接受 draft / online——offline 由列表的
@@ -242,6 +244,13 @@ func (s *Service) SaveProduct(ctx context.Context, id idgen.ID, f ProductForm) (
 	row.PriceMin, row.PriceMax, row.Currency, row.PriceUnit = f.PriceMin, f.PriceMax, f.Currency, f.PriceUnit
 	row.Moq, row.LeadTimeDays, row.Port, row.PaymentTerms = f.Moq, f.LeadTimeDays, f.Port, f.PaymentTerms
 	row.SpecsJSON, row.Author = specsJSON, f.Author
+	if f.AliTrade != nil {
+		tradeJSON, terr := normalizeAliTrade(f.AliTrade)
+		if terr != nil {
+			return nil, terr
+		}
+		row.AliTradeJSON = tradeJSON
+	}
 	row.Content, row.Status, row.I18nJSON = htmlsafe.Sanitize(f.Content), f.Status, i18n
 	pub, err := pi18n.NormalizePublish(f.PublishedJSON, row.Published(), pi18n.ParseDoc(i18n),
 		map[string]string{"title": row.Title, "keywords": row.Keywords, "summary": row.Summary,
@@ -336,7 +345,8 @@ func (s *Service) CopyProduct(ctx context.Context, id idgen.ID) (*Product, error
 		CoverURL: src.CoverURL, ImagesJSON: src.ImagesJSON, VideoURL: src.VideoURL,
 		PriceMin: src.PriceMin, PriceMax: src.PriceMax, Currency: src.Currency, PriceUnit: src.PriceUnit,
 		Moq: src.Moq, LeadTimeDays: src.LeadTimeDays, Port: src.Port, SpecsJSON: src.SpecsJSON,
-		Status: ProductDraft,
+		AliTradeJSON: src.AliTradeJSON,
+		Status:       ProductDraft,
 	}
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(&row).Error; err != nil {
@@ -390,6 +400,19 @@ func (s *Service) PublishedProductBy(ctx context.Context, slug, lang string) (*P
 	return &row, nil
 }
 
+// productSortOrder 把列表排序参数翻译成 SQL 排序（白名单，杜绝参数拼进 SQL）。
+// 未定价商品（price_min = 0）在价格升序里排到最后，不会冒充「最低价」。
+func productSortOrder(sort string) string {
+	switch sort {
+	case "price_asc":
+		return "CASE WHEN price_min = 0 THEN 1 ELSE 0 END ASC, price_min ASC, id DESC"
+	case "price_desc":
+		return "price_min DESC, id DESC"
+	default:
+		return "updated_at DESC, id DESC"
+	}
+}
+
 // PublishedProductsPage 是公开产品列表的分页查询：返回该语言已上架的商品与总数。
 // 窗口内先按语言筛出真实集合再切片取页，总数是筛完的准确值；term 按类目 slug 收窄，
 // keyword 是站内检索词（空 = 不检索）。两者可叠加，且都在分页前生效，翻页不会掉筛选。
@@ -402,7 +425,12 @@ func (s *Service) PublishedProductsPage(ctx context.Context, lang string, term t
 	}
 	windowTx := liveProductTx(s.db.WithContext(ctx))
 	if term.Kind == "category" {
-		windowTx = windowTx.Where("id IN (SELECT pr.product_id FROM plg_website_product_category_rel pr JOIN plg_website_product_category pc ON pc.id = pr.category_id WHERE pc.slug = ?)", term.Slug)
+		slugs := term.Slugs
+		if len(slugs) == 0 {
+			slugs = []string{term.Slug}
+		}
+		// 类目树：选父类时连同所有后代类目一起命中，父节点不会因为没有直挂商品而空列表。
+		windowTx = windowTx.Where("id IN (SELECT pr.product_id FROM plg_website_product_category_rel pr JOIN plg_website_product_category pc ON pc.id = pr.category_id WHERE pc.slug IN ?)", slugs)
 	}
 	// 检索范围覆盖「名称 / 型号(slug) / 摘要 / 搜索关键词 / 规格属性 / 译文」：
 	// 两侧 LOWER 折叠大小写，PG 上大写词也能命中；全部走占位参数，不拼用户输入进 SQL。
@@ -412,9 +440,10 @@ func (s *Service) PublishedProductsPage(ctx context.Context, lang string, term t
 			"LOWER(title) LIKE LOWER(?) OR LOWER(slug) LIKE LOWER(?) OR LOWER(summary) LIKE LOWER(?) OR LOWER(keywords) LIKE LOWER(?) OR LOWER(specs) LIKE LOWER(?) OR LOWER(i18n_json) LIKE LOWER(?)",
 			like, like, like, like, like, like)
 	}
+	order := productSortOrder(term.Sort)
 	var window []Product
 	if err := windowTx.
-		Select("id", "published_json").Order("updated_at DESC, id DESC").
+		Select("id", "published_json").Order(order).
 		Limit(productPageCap).Find(&window).Error; err != nil {
 		return nil, 0, err
 	}
@@ -437,7 +466,7 @@ func (s *Service) PublishedProductsPage(ctx context.Context, lang string, term t
 	pageIDs := ids[start:end]
 	var rows []Product
 	if err := s.db.WithContext(ctx).Preload("Categories").Where("id IN ?", pageIDs).
-		Order("updated_at DESC, id DESC").Find(&rows).Error; err != nil {
+		Order(order).Find(&rows).Error; err != nil {
 		return nil, 0, err
 	}
 	for i := range rows {
@@ -688,11 +717,128 @@ func (s *Service) PublishedRelatedProducts(ctx context.Context, lang string, pro
 // IsSynced 报告商品已同步到阿里（列表同步徽标的展示语义；一期只读，二期由同步任务写入）。
 func (p Product) IsSynced() bool { return p.SyncStatus == ProductSyncSynced }
 
-// ProductCategoryLinks 把产品类目集合转成模板可渲染的导航项，并标出当前归档的那一项。
-func ProductCategoryLinks(rows []ProductCategory, active string) []termLink {
-	out := make([]termLink, 0, len(rows))
-	for _, c := range rows {
-		out = append(out, termLink{Name: c.Title, Slug: c.Slug, Active: c.Slug == active})
+// productCatLink 是公开站产品中心左侧分类树的一行（先序扁平）。
+// Depth/Parent/HasChildren 让模板一层 range 就能渲染层级、site.js 按 depth 折叠；
+// ActiveTrail 标出当前分类的祖先链，前端据此强制展开，避免当前项被折叠藏起来。
+type productCatLink struct {
+	Name        string
+	Slug        string
+	Href        string
+	Active      bool
+	ActiveTrail bool
+	Depth       int
+	Parent      string
+	HasChildren bool
+	Count       int64
+}
+
+// ProductCategoryLinks 把平铺类目装配成先序扁平列表（保留父子顺序），并标出当前归档项。
+// 输出仍是列表而不是嵌套树：四套模板不必各写递归子模板，折叠状态也只需按深度扫描一遍。
+func ProductCategoryLinks(rows []ProductCategory, active string) []productCatLink {
+	byID := make(map[uint64]int, len(rows))
+	for i := range rows {
+		byID[uint64(rows[i].ID)] = i
 	}
+	children := make(map[uint64][]int, len(rows))
+	top := make([]int, 0, len(rows))
+	parentOf := make([]uint64, len(rows))
+	for i := range rows {
+		pid := uint64(rows[i].ParentID)
+		if _, ok := byID[pid]; !ok {
+			pid = 0 // 父类被删或悬空时降为顶级，和导航的降级口径一致
+		}
+		parentOf[i] = pid
+		if pid == 0 {
+			top = append(top, i)
+		} else {
+			children[pid] = append(children[pid], i)
+		}
+	}
+	// 当前项往上的祖先链：父节点保持展开，视觉上也能看出当前分类挂在谁下面。
+	trail := make(map[uint64]bool)
+	var activeID uint64
+	for i := range rows {
+		if rows[i].Slug == active {
+			activeID = uint64(rows[i].ID)
+			break
+		}
+	}
+	for id := activeID; id != 0; {
+		idx, ok := byID[id]
+		if !ok {
+			break
+		}
+		p := parentOf[idx]
+		if p == 0 {
+			break
+		}
+		trail[p] = true
+		id = p
+	}
+	out := make([]productCatLink, 0, len(rows))
+	seen := make(map[int]bool, len(rows))
+	var walk func(idx, depth int, parent string)
+	walk = func(idx, depth int, parent string) {
+		if seen[idx] || depth > 3 { // 防环 + 与后台一致的层级上限
+			return
+		}
+		seen[idx] = true
+		c := rows[idx]
+		id := uint64(c.ID)
+		out = append(out, productCatLink{
+			Name:        c.Title,
+			Slug:        c.Slug,
+			Active:      c.Slug == active,
+			ActiveTrail: trail[id],
+			Depth:       depth,
+			Parent:      parent,
+			HasChildren: len(children[id]) > 0,
+			Count:       c.ProductCount,
+		})
+		for _, child := range children[id] {
+			walk(child, depth+1, c.Slug)
+		}
+	}
+	for _, idx := range top {
+		walk(idx, 0, "")
+	}
+	// 成环的孤儿节点也要露出来，别让类目凭空消失。
+	for i := range rows {
+		if !seen[i] {
+			walk(i, 0, "")
+		}
+	}
+	return out
+}
+
+// descendantSlugs 返回类目自身与全部后代的 slug：父类归档把子类商品一并列出。
+func descendantSlugs(rows []ProductCategory, active string) []string {
+	if active == "" {
+		return nil
+	}
+	byID := make(map[uint64]string, len(rows))
+	for i := range rows {
+		byID[uint64(rows[i].ID)] = rows[i].Slug
+	}
+	children := make(map[string][]string, len(rows))
+	for i := range rows {
+		if p, ok := byID[uint64(rows[i].ParentID)]; ok {
+			children[p] = append(children[p], rows[i].Slug)
+		}
+	}
+	out := make([]string, 0, 1)
+	seen := make(map[string]bool)
+	var walk func(string)
+	walk = func(s string) {
+		if seen[s] {
+			return
+		}
+		seen[s] = true
+		out = append(out, s)
+		for _, c := range children[s] {
+			walk(c)
+		}
+	}
+	walk(active)
 	return out
 }

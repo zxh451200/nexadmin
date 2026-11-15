@@ -57,14 +57,23 @@ func MustRegisterSource(s Source) {
 	}
 }
 
-// getSource 取一个已注册导入源。
-func getSource(name string) (Source, error) {
+// getSource 取一个已注册导入源；声明了 ColumnsFunc 的来源在此现取列定义
+// （列名映射被管理员改过，下一次上传/下载模板就按新列名走，不用重启）。
+func getSource(ctx context.Context, name string) (Source, error) {
 	mu.RLock()
-	defer mu.RUnlock()
 	s, ok := sources[name]
+	mu.RUnlock()
 	if !ok {
 		return Source{}, fmt.Errorf("imports: unknown source %q", name)
 	}
+	if s.ColumnsFunc == nil {
+		return s, nil
+	}
+	cols := s.ColumnsFunc(ctx)
+	if len(cols) == 0 {
+		return s, nil // 现取失败（映射表被清空）时按注册时的列定义继续，不给一个没有列的模板
+	}
+	s.Columns = cols
 	return s, nil
 }
 
@@ -81,6 +90,11 @@ func ListSources(ctx context.Context) []SourceMeta {
 	defer mu.RUnlock()
 	out := make([]SourceMeta, 0, len(sources))
 	for _, s := range sources {
+		if s.ColumnsFunc != nil {
+			if cols := s.ColumnsFunc(ctx); len(cols) > 0 {
+				s.Columns = cols
+			}
+		}
 		s = localize(ctx, s)
 		out = append(out, SourceMeta{Name: s.Name, Title: s.Title, Columns: append([]Column(nil), s.Columns...)})
 	}

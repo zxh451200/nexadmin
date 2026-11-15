@@ -60,6 +60,17 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	if err := LoadLanguages(core.Languages()); err != nil && d.Log != nil {
 		d.Log.Warn("website: 平台语言清单应用失败，沿用内置语言", zap.Error(err))
 	}
+	// 站点设置里的官网默认语言（跟随浏览器 / 具体语言占根）在路由注册前应用：
+	// 谁占根路径、运行期前缀表长什么样都由它决定。设置在库里，读失败按平台默认兜底不断线。
+	// 与语言清单同一约束：路由是启动期注册的，改完设置要重启才生效。
+	if set, err := m.service(d).Settings(context.Background()); err != nil {
+		if d.Log != nil {
+			d.Log.Warn("website: 读取站点设置失败，官网默认语言沿用平台默认", zap.Error(err))
+		}
+		SetSiteDefault("")
+	} else {
+		SetSiteDefault(set.DefaultLang)
+	}
 
 	g := r.Group("/plugins/website")
 	// 官网 12 张表全嵌 PlatformModel，没有 tenant_id：导航/页面/新闻代表整个部署主体的对外窗口
@@ -153,15 +164,27 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.GET("/ali-config", core.Perm("website:setting"), core.Desc("读取阿里开放平台凭据"), h.getAliConfig)
 	g.PUT("/ali-config", core.Perm("website:setting"), core.Desc("保存阿里开放平台凭据"), h.saveAliConfig)
 	g.POST("/ali/test", core.Perm("website:setting"), core.Desc("阿里开放平台连接测试"), h.testAliConnection)
+	g.POST("/ali/doctor", core.Perm("website:setting"), core.Desc("阿里联调自检（打开发品规则与入参形态）"), h.aliDoctor)
 	g.GET("/ali/categories", core.Perm("website:product"), core.Desc("阿里类目子级"), h.listAliCategories)
+	g.GET("/ali-columns", core.Perm("website:product"), core.Desc("阿里模板列名映射清单"), h.listAliColumns)
+	g.POST("/ali-columns", core.Perm("website:setting"), core.Desc("新增阿里模板列映射"), h.createAliColumn)
+	g.PUT("/ali-columns/:id", core.Perm("website:setting"), core.Desc("修改阿里模板列映射"), h.updateAliColumn)
+	g.DELETE("/ali-columns/:id", core.Perm("website:setting"), core.Desc("删除阿里模板列映射"), h.deleteAliColumn)
+	g.POST("/products/export-ali", core.Perm("website:product"), core.Desc("提交阿里模板导出任务"), h.aliTemplateExport)
 	g.GET("/ali/sync-status", core.Perm("website:product"), core.Desc("批量同步进度"), h.syncProductStatus)
 	g.POST("/products/:id/sync", core.Perm("website:product"), core.Desc("同步商品到阿里国际站"), h.syncProduct)
+	g.POST("/products/:id/ali-preview", core.Perm("website:product"), core.Desc("预览阿里提交内容（不写阿里）"), h.previewAliSync)
+	g.POST("/products/pull-ali", core.Perm("website:product"), core.Desc("从阿里拉取商品到本地"), h.pullAliProduct)
 	g.POST("/products/:id/ali-category", core.Perm("website:product"), core.Desc("绑定商品阿里类目"), h.bindAliCategory)
 	g.POST("/products/sync-batch", core.Perm("website:product"), core.Desc("批量同步商品到阿里国际站"), h.syncProductBatch)
 
 	// 批量同步的任务体：闭包捕获 svc。注册是覆盖写，热挂载下幂等。
 	job.Register("website.ali-sync", func(ctx context.Context, j *job.Job, report job.Report) (job.ResultFile, error) {
 		return m.service(d).RunAliSyncJob(ctx, j, report)
+	})
+	// 产品异步导出的任务体：worker 流式写 xlsx，进度与下载在导出中心。
+	job.Register(jobTypeAliTemplateExport, func(ctx context.Context, j *job.Job, report job.Report) (job.ResultFile, error) {
+		return m.service(d).RunAliTemplateExportJob(ctx, j, report)
 	})
 	// 产品异步导出的任务体：worker 流式写 xlsx，进度与下载在导出中心。
 	job.Register(jobTypeProductExport, func(ctx context.Context, j *job.Job, report job.Report) (job.ResultFile, error) {
@@ -188,7 +211,7 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	// 热挂载时 RootGroup 为 nil——运行中的引擎不能加根路由，此时只挂管理端 API，
 	// 官网页面在授权导入后重启生效。
 	if d.RootGroup != nil {
-		site := &siteHandler{svc: m.service(d), log: d.Log, pkg: newPackageCache(), signKey: loadMarketSignKey(d.Log), previewKey: previewKeyOf(d)}
+		site := &siteHandler{svc: m.service(d), log: d.Log, pkg: newPackageCache(), signKey: loadMarketSignKey(d.Log), previewKey: previewKeyOf(d), gw: h.gw}
 		// 留言是匿名写入口：阈值比普通页面紧（每 IP 每分钟 5 条），和页面浏览分开计数。
 		// 计数走共享 cache，多实例部署时是同一个桶；cache 没装配才退回进程内滑动窗口。
 		if d.Cache != nil {
@@ -197,19 +220,24 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 			site.contactLocal = newIPLimiter(contactRateMax, contactRateWindow)
 		}
 		pub := d.RootGroup.Group("", newIPLimiter(600, time.Minute).Middleware())
-		// 默认语言固定渲染在无前缀路径上；cookie 只影响首页回跳与语言中立端点。
-		pub.Use(LanguageContext(DefaultLanguage()), langNegotiate)
+		// 站点默认语言固定渲染在无前缀路径上（站点设置 DefaultLang，auto 时为平台默认语言）；
+		// cookie / 浏览器语言只影响首页协商与语言中立端点。
+		pub.Use(LanguageContext(SiteDefaultLanguage()), langNegotiate)
 		// 文本资源 gzip：放在最外层，语言页面与静态资源一起受益（zip 下载与图片/字体自动跳过）。
 		pub.Use(gzipFilter())
 		downloadLimit := newIPLimiter(30, time.Minute).Middleware()
 		rateLimit := newIPLimiter(20, time.Minute).Middleware()
+		// 访客聊天翻译会调模型，单独收紧（每 IP 每分钟 10 次）；AI 未配置由 handler 回 503。
+		translateLimit := newIPLimiter(10, time.Minute).Middleware()
+		pub.POST("/website/visitor/translate", translateLimit, site.visitorTranslate)
 
-		// 页面路由按语言各注册一份：默认语言无前缀，其余语言 /<prefix>（不带尾斜杠）。
+		// 页面路由按语言各注册一份：站点默认语言无前缀，其余语言 /<prefix>（不带尾斜杠）；
+		// 前缀表是运行期表——站点默认语言切换后，原平台默认语言带着合成前缀注册。
 		site.registerPages(pub, false)
 		// 后台只占 /admin：未注册的页面路径由官网渲染 404，而不是落进后台 SPA。
 		core.SetSiteNotFoundHandler(site.notFoundPage)
 		for _, l := range Languages() {
-			if l.Default {
+			if l.Code == SiteDefaultLanguage().Code {
 				continue
 			}
 			g := pub.Group("/" + l.Prefix)
@@ -310,6 +338,11 @@ func (m *module) Start(ctx context.Context, d *core.Deps) error {
 		ensureSeed(ctx, svc, d.Log)
 		ensureSeedBackfill(ctx, svc, d.Log)
 		ensureSeedI18n(ctx, svc, d.Log)
+	}
+	// 阿里模板列名映射是数据不是代码：出厂补一份按官方 schema 展示名做的默认映射，
+	// 已有行（含管理员改过的）不动。品牌主题下也要有，否则导入中心拿不到阿里源。
+	if err := svc.ensureAliColumns(ctx); err != nil {
+		d.Log.Warn("website: seed ali column map failed", zap.Error(err))
 	}
 	// 只订阅一次：重复挂载会把同一个事件挂两遍，一条留言就发多封通知。
 	m.sub.Do(func() {

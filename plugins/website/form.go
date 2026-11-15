@@ -48,6 +48,9 @@ type SettingForm struct {
 	HomeSlug string `json:"homeSlug"`
 	// Theme 是公开站主题 id；空 = 内置 default。服务层校验主题已注册。
 	Theme string `json:"theme"`
+	// DefaultLang 是官网默认语言：空 / auto = 跟随浏览器语言协商；具体 code = 该语言占根路径。
+	// 服务层校验 code 在语言清单内；公开站路由在启动期注册，改完需重启。
+	DefaultLang string `json:"defaultLang"`
 }
 
 // ItemForm 是导航项表单。
@@ -211,6 +214,9 @@ type ProductForm struct {
 	Port         string  `json:"port"`
 	// PaymentTerms 是付款方式：如 "T/T, L/C"，详情页「交易信息」块展示。
 	PaymentTerms string  `json:"paymentTerms"`
+	// AliTrade 是发品用的交易与规格数据（阶梯价/包装/供货/物流属性/样品/定制/分组/SKU）；
+	// nil = 本次不改（老客户端不带这个字段），非 nil 时整体替换（结构与校验见 ali_trade.go）。
+	AliTrade *AliTrade `json:"aliTrade"`
 	// Specs 是动态属性键值对（上限 50 条）；CategoryIDs 是所属类目的完整列表，保存时整体替换。
 	Specs       []SpecItem `json:"specs"`
 	CategoryIDs []idgen.ID `json:"categoryIds"`

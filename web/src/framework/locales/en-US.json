@@ -95,7 +95,6 @@
     "group": {
       "dashboard": "Dashboard",
       "system": "System",
-      "content": "Content",
       "monitor": "Monitoring",
       "tenant": "Tenants",
       "mine": "My account"

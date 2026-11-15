@@ -64,9 +64,10 @@ func productImportColumns() []importspec.Column {
 }
 
 // ImportSources 实现 importspec.Provider：导入中心启动时自动收集，无需第二处接线。
+// 两个源：本站模板（自家列名）与阿里模板（列名与列序来自 plg_website_ali_column，可后台改）。
 func (m *module) ImportSources(db *gorm.DB) []importspec.Source {
 	svc := NewService(db)
-	return []importspec.Source{{
+	out := []importspec.Source{{
 		Name:     SourceProducts,
 		Title:    "产品导入",
 		TitleKey: "website.import_products_title",
@@ -75,6 +76,20 @@ func (m *module) ImportSources(db *gorm.DB) []importspec.Source {
 			return importProductRow(ctx, svc, row)
 		},
 	}}
+	// 阿里模板源：注册时用出厂映射兜底（种子在 Start 里补，收集时机可能表还空着），
+	// 真正使用时按库里的映射表现取——管理员改完列名不用重启。
+	out = append(out, importspec.Source{
+		Name:        SourceProductsAli,
+		Title:       "阿里国际站模板导入",
+		TitleKey:    "website.import_ali_title",
+		Columns:     aliColumnsFromDefaults(),
+		ExtraKey:    aliExtraKey,
+		ColumnsFunc: func(ctx context.Context) []importspec.Column { return svc.aliImportColumns(ctx) },
+		Handler: func(ctx context.Context, _ int, row map[string]string) error {
+			return svc.ImportAliRow(ctx, row)
+		},
+	})
+	return out
 }
 
 // importProductRow 把导入中心解析好的一行映射成 ProductForm 落库。

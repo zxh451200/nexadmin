@@ -860,6 +860,21 @@ func (h *handler) testAliConnection(c *gin.Context) {
 	respond(c, gin.H{"ok": true}, h.svc.TestAliConnection(c.Request.Context()))
 }
 
+// POST /plugins/website/ali/doctor —— 联调自检：用真实凭据打出一份报告（必填字段、关键枚举、
+// schema.add 入参形态、可选商品的 render 原始值），管理员直接把报告贴给开发者即可。
+func (h *handler) aliDoctor(c *gin.Context) {
+	var f struct {
+		CategoryID string `json:"categoryId"`
+		ProductID  string `json:"productId"`
+		ProbeAdd   bool   `json:"probeAdd"`
+	}
+	if !response.BindJSON(c, &f) {
+		return
+	}
+	rep, err := h.svc.AliDoctor(c.Request.Context(), f.CategoryID, f.ProductID, f.ProbeAdd)
+	respond(c, rep, err)
+}
+
 // GET /plugins/website/ali/categories?parentId=0 —— 阿里类目子级（带缓存）。
 func (h *handler) listAliCategories(c *gin.Context) {
 	list, err := h.svc.AliCategories(c.Request.Context(), c.Query("parentId"))
@@ -895,6 +910,39 @@ func (h *handler) syncProduct(c *gin.Context) {
 		return
 	}
 	response.OK(c, gin.H{"alibabaProductId": aliPID})
+}
+
+// POST /plugins/website/products/:id/ali-preview —— 取该类目的发品规则并按本地数据组装提交内容，
+// 不上传图片、不提交阿里：把「阿里要求填什么、哪些值映射不上」在真正发品之前摊给管理员看。
+func (h *handler) previewAliSync(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	var f ProductSyncForm
+	if !response.BindJSON(c, &f) {
+		return
+	}
+	res, err := h.svc.PreviewAliSync(c.Request.Context(), id, f.Market, baseURL(c))
+	if res != nil {
+		// 自检没过也回数据：missing / notes 就是这次预览的结论。
+		respond(c, res, err)
+		return
+	}
+	response.Fail(c, err)
+}
+
+// POST /plugins/website/products/pull-ali —— 把阿里侧一个商品拉回本地（按阿里商品 ID，已有则更新）。
+func (h *handler) pullAliProduct(c *gin.Context) {
+	var f struct {
+		AliProductID string `json:"aliProductId"`
+		CategoryID   string `json:"categoryId"`
+	}
+	if !response.BindJSON(c, &f) {
+		return
+	}
+	res, err := h.svc.PullAliProduct(c.Request.Context(), f.AliProductID, f.CategoryID)
+	respond(c, res, err)
 }
 
 // POST /plugins/website/products/sync-batch —— 批量同步：提交后台 job，返回 jobId 供轮询。
@@ -934,4 +982,63 @@ func (h *handler) syncProductStatus(c *gin.Context) {
 		"message": j.Message, "error": j.Error,
 		"startedAt": j.StartedAt, "finishedAt": j.FinishedAt,
 	})
+}
+
+// ---- 阿里批量模板互通（列名映射 + 模板导出）----
+
+// GET /plugins/website/ali-columns —— 阿里模板列名映射（导入中心与导出任务都按它走）。
+func (h *handler) listAliColumns(c *gin.Context) {
+	rows, err := h.svc.aliColumns(c.Request.Context())
+	respond(c, rows, err)
+}
+
+// POST /plugins/website/ali-columns —— 新增一列映射。
+func (h *handler) createAliColumn(c *gin.Context) {
+	var f AliColumnInput
+	if !response.BindJSON(c, &f) {
+		return
+	}
+	row, err := h.svc.SaveAliColumn(c.Request.Context(), 0, f)
+	respond(c, row, err)
+}
+
+// PUT /plugins/website/ali-columns/:id —— 改一列映射（真实模板列名到位后就在这里校对）。
+func (h *handler) updateAliColumn(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	var f AliColumnInput
+	if !response.BindJSON(c, &f) {
+		return
+	}
+	row, err := h.svc.SaveAliColumn(c.Request.Context(), id, f)
+	respond(c, row, err)
+}
+
+// DELETE /plugins/website/ali-columns/:id —— 删一列映射（阿里模板里没这列就删掉）。
+func (h *handler) deleteAliColumn(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	respond(c, nil, h.svc.DeleteAliColumn(c.Request.Context(), id))
+}
+
+// POST /plugins/website/products/export-ali —— 提交「阿里模板」导出任务（导出中心下载）。
+func (h *handler) aliTemplateExport(c *gin.Context) {
+	var b productExportBody
+	if !response.BindJSON(c, &b) {
+		return
+	}
+	var owner idgen.ID
+	if cl := auth.ClaimsFrom(c); cl != nil {
+		owner = cl.UserID
+	}
+	jid, err := h.svc.SubmitAliTemplateExport(c.Request.Context(), b, owner)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, gin.H{"jobId": jid.String()})
 }

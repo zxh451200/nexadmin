@@ -3,12 +3,17 @@ package website
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
+
+	"go.uber.org/zap"
+
+	"nexadmin/core/i18n"
 
 	"gorm.io/gorm"
 
@@ -280,46 +285,161 @@ func aliEnglish(p *Product) (title, keywords, summary, content string) {
 	return title, keywords, summary, content
 }
 
-// SyncProduct 把一个商品发到阿里国际站，返回阿里商品 ID。任何失败都会回写
-// sync_status=failed 与 sync_error 并把错误向上返回（单发场景直接 toast）。
-func (s *Service) SyncProduct(ctx context.Context, id idgen.ID, market string, baseURL string) (string, error) {
-	marketValue, err := aliMarketValue(market)
+// aliSyncResult 是一次同步（或预览）的产物：提交出去的 xml、阿里侧商品 ID、
+// 缺失的必填字段与映射过程中的提醒（枚举匹配不上、图片上传失败等）。
+type aliSyncResult struct {
+	AlibabaProductID string   `json:"alibabaProductId"`
+	XML              string   `json:"xml"`
+	Missing          []string `json:"missing"`
+	Notes            []string `json:"notes"`
+	Updated          bool     `json:"updated"` // true = 走增量更新（已有阿里商品 ID），不会重复建品
+}
+
+// aliLanguageDefault 是提交给阿里的文案语种：我们同步的是英文母本（见 aliEnglish）。
+const aliLanguageDefault = "en_US"
+
+// PreviewAliSync 只做「取规则 + 映射 + 自检」：不传图、不提交，用于发品前把缺什么摊开给管理员看。
+func (s *Service) PreviewAliSync(ctx context.Context, id idgen.ID, market, baseURL string) (*aliSyncResult, error) {
+	return s.aliSync(ctx, id, market, baseURL, true)
+}
+
+// SyncProduct 把一个商品发到阿里国际站（已有阿里商品 ID 时走增量更新），返回阿里商品 ID。
+// 任何失败都会回写 sync_status=failed 与 sync_error 并把错误向上返回（单发场景直接 toast）。
+func (s *Service) SyncProduct(ctx context.Context, id idgen.ID, market, baseURL string) (string, error) {
+	res, err := s.aliSync(ctx, id, market, baseURL, false)
 	if err != nil {
 		return "", err
+	}
+	return res.AlibabaProductID, nil
+}
+
+// aliSync 是发品/更新的唯一实现，dryRun=true 时不产生任何写操作（预览）。
+func (s *Service) aliSync(ctx context.Context, id idgen.ID, market, baseURL string, dryRun bool) (*aliSyncResult, error) {
+	fail := func(err error) (*aliSyncResult, error) { return nil, err }
+	marketValue, err := aliMarketValue(market)
+	if err != nil {
+		return fail(err)
 	}
 	p, err := s.ProductByID(ctx, id)
 	if err != nil {
-		return "", err
+		return fail(err)
 	}
 	if p.AlibabaCategoryID == "" {
-		return "", response.BadRequest("website.ali_category_required")
+		return fail(response.BadRequest("website.ali_category_required"))
 	}
-	title, keywords, summary, content := aliEnglish(p)
+	title, keywords, _, content := aliEnglish(p)
 	if strings.TrimSpace(title) == "" {
-		return "", response.BadRequest("website.ali_english_required")
+		return fail(response.BadRequest("website.ali_english_required"))
 	}
 	if marketValue == "1" && p.PriceMin <= 0 {
-		return "", response.BadRequest("website.ali_price_required")
+		return fail(response.BadRequest("website.ali_price_required"))
 	}
-
 	c, err := s.aliCredentials(ctx)
 	if err != nil {
-		_ = s.markAliSync(ctx, id, "", err.Error())
-		return "", err
+		if !dryRun {
+			_ = s.markAliSync(ctx, id, "", err.Error())
+		}
+		return fail(err)
 	}
 
-	// ① schema.get：验证类目 ID 合法（无效类目在这里就报 isv 错，而不是 add 阶段）。
-	if _, err := aliCall(ctx, c, "alibaba.icbu.product.schema.get",
-		map[string]string{"category_id": p.AlibabaCategoryID}); err != nil {
-		_ = s.markAliSync(ctx, id, "", err.Error())
-		return "", err
+	// ① 取该类目的发品规则：规则就是表单，缺了它我们连「该填什么」都不知道。
+	res, err := aliCallNested(ctx, c, "alibaba.icbu.product.schema.get", aliPublishParam{
+		CatID: p.AlibabaCategoryID, Language: aliLanguageDefault,
+	})
+	if err != nil {
+		if !dryRun {
+			_ = s.markAliSync(ctx, id, "", err.Error())
+		}
+		return fail(err)
+	}
+	getBiz := aliReadBiz(res)
+	if e := getBiz.err(); e != nil {
+		err = response.BadRequest("website.ali_gateway_rejected", e.Error())
+		if !dryRun {
+			_ = s.markAliSync(ctx, id, "", err.Error())
+		}
+		return fail(err)
+	}
+	sc, err := parseAliSchema(getBiz.Data)
+	if err != nil {
+		err = response.BadRequest("website.ali_schema_unreadable", err.Error())
+		if !dryRun {
+			_ = s.markAliSync(ctx, id, "", err.Error())
+		}
+		return fail(err)
 	}
 
-	// ② 图片：主图 + 图集取前 6 张，逐张下载后传图片银行，拿阿里侧 URL。
-	images := append([]string{p.CoverURL}, p.ProductImages()...)
-	images = images[:min(len(images), aliMaxImages)]
-	aliImages := make([]string, 0, len(images))
-	for _, u := range images {
+	// ② 图片：阿里的发品图必须来自图片银行，且值上要挂 fileId（官方 3.4.1）。
+	// 预览不产生写操作，直接用本地/CDN 地址占位并说明。
+	images, notes := s.aliBankImages(ctx, c, p, baseURL, dryRun)
+
+	// ③ 按规则映射本地数据。
+	mapped := aliMap(ctx, sc, p, marketValue, title, keywords, content, images)
+	notes = append(notes, mapped.Notes...)
+	missing := make([]string, 0, len(mapped.Missing))
+	for _, m := range mapped.Missing {
+		missing = append(missing, m.label())
+	}
+	out := &aliSyncResult{XML: mapped.XML, Missing: missing, Notes: notes, Updated: aliNumericID(p.AlibabaProductID)}
+	if len(missing) > 0 {
+		// 提交前就自检：必填缺什么直接列出来，而不是等网关回一句 isv 错误。
+		// 预览模式不报错——missing 列表本身就是这次预览的结论。
+		if dryRun {
+			return out, nil
+		}
+		err = response.BadRequest("website.ali_required_missing", strings.Join(missing, "、"))
+		_ = s.markAliSync(ctx, id, "", err.Error())
+		return out, err
+	}
+	if dryRun {
+		return out, nil
+	}
+
+	// ④ 提交：已有阿里商品 ID 走增量更新，否则新发。
+	var submit map[string]json.RawMessage
+	if out.Updated {
+		submit, err = aliCallNested(ctx, c, "alibaba.icbu.product.schema.update", aliPublishParam{
+			CatID: p.AlibabaCategoryID, ProductID: p.AlibabaProductID, Language: aliLanguageDefault, XML: mapped.XML,
+		})
+	} else {
+		submit, err = aliSubmitAdd(ctx, c, p.AlibabaCategoryID, mapped.XML)
+	}
+	if err != nil {
+		_ = s.markAliSync(ctx, id, "", err.Error())
+		return out, err
+	}
+	biz := aliReadBiz(submit)
+	if e := biz.err(); e != nil {
+		// biz_success=false 时网关仍是 HTTP 200：不看这道就会把失败当成「同步成功」。
+		wrapped := response.BadRequest("website.ali_gateway_rejected", e.Error())
+		_ = s.markAliSync(ctx, id, "", wrapped.Error())
+		return out, wrapped
+	}
+	aliPID := biz.ProductID
+	if aliPID == "" {
+		aliPID = aliStringField(submit, "product_id", "productID", "productId")
+	}
+	if aliPID == "" {
+		aliPID = "ok"
+	}
+	out.AlibabaProductID = aliPID
+	if len(notes) > 0 {
+		zap.L().Info("ali sync submitted with notes", zap.String("slug", p.Slug), zap.Strings("notes", notes))
+	}
+	if err := s.markAliSync(ctx, id, aliPID, ""); err != nil {
+		return out, err
+	}
+	return out, nil
+}
+
+// aliBankImages 把主图 + 图集送进阿里图片银行（上限 6 张），返回可提交的图片与提醒。
+// 预览模式不上传：用原地址占位，让管理员看到「会提交哪几张」。
+func (s *Service) aliBankImages(ctx context.Context, c AliCredentials, p *Product, baseURL string, dryRun bool) ([]aliImage, []string) {
+	urls := append([]string{p.CoverURL}, p.ProductImages()...)
+	urls = urls[:min(len(urls), aliMaxImages)]
+	notes := make([]string, 0, 2)
+	out := make([]aliImage, 0, len(urls))
+	for _, u := range urls {
 		u = strings.TrimSpace(u)
 		if u == "" {
 			continue
@@ -328,36 +448,60 @@ func (s *Service) SyncProduct(ctx context.Context, id idgen.ID, market string, b
 			u = strings.TrimSuffix(baseURL, "/") + u
 		}
 		if !strings.HasPrefix(u, "http://") && !strings.HasPrefix(u, "https://") {
+			notes = append(notes, i18n.T(ctx, "website.ali_note_image_skipped", u))
 			continue
 		}
-		fileID, aliURL, uerr := s.aliUploadImageURL(ctx, c, u)
-		if uerr != nil {
-			// 单张失败不阻断发品：阿里允许 0 图发询盘品，失败原因并入 sync_error 提示。
+		if dryRun {
+			out = append(out, aliImage{URL: u})
 			continue
 		}
-		_ = fileID
-		aliImages = append(aliImages, aliURL)
+		fileID, aliURL, err := s.aliUploadImageURL(ctx, c, u)
+		if err != nil {
+			// 单张失败不阻断发品，但必须让管理员看到——之前是静默 continue，
+			// 表现就是「同步成功了，但阿里那边少了两张图」。
+			notes = append(notes, i18n.T(ctx, "website.ali_note_image_failed", u, err.Error()))
+			continue
+		}
+		out = append(out, aliImage{FileID: fileID, URL: aliURL})
 	}
+	return out, notes
+}
 
-	// ③ 组装值 XML 并提交发品。
-	xml := buildAliProductXML(title, keywords, summary, content, marketValue, p, aliImages)
+// aliSubmitAdd 提交新发品。官方发布文档写的是 flat category_id / xml，
+// 而同族的 get / render / update 在 API 页里都是嵌套 param_product_top_publish_request；
+// 两种形态各试一次，失败时把两段网关原文都带回，联调时一眼看出该用哪种。
+func aliSubmitAdd(ctx context.Context, c AliCredentials, catID, xml string) (map[string]json.RawMessage, error) {
 	res, err := aliCall(ctx, c, "alibaba.icbu.product.schema.add", map[string]string{
-		"category_id": p.AlibabaCategoryID,
-		"xml":         xml,
+		"category_id": catID, "xml": xml, "language": aliLanguageDefault,
 	})
-	if err != nil {
-		_ = s.markAliSync(ctx, id, "", err.Error())
-		return "", err
+	if err == nil {
+		return res, nil
 	}
-	// 响应里的商品 ID 字段名按文档是 product_id；多形态容错（productID/productId）。
-	aliPID := aliStringField(res, "product_id", "productID", "productId")
-	if aliPID == "" {
-		aliPID = "ok"
+	if !aliIsInvalidParam(err) {
+		return nil, err
 	}
-	if err := s.markAliSync(ctx, id, aliPID, ""); err != nil {
-		return aliPID, err
+	res2, err2 := aliCallNested(ctx, c, "alibaba.icbu.product.schema.add", aliPublishParam{
+		CatID: catID, XML: xml, Language: aliLanguageDefault,
+	})
+	if err2 != nil {
+		return nil, fmt.Errorf("%w；改用嵌套入参同样失败：%v", err, err2)
 	}
-	return aliPID, nil
+	return res2, nil
+}
+
+// aliIsInvalidParam 判断网关是否回了「非法参数」——只有这种才值得换一种入参形态重试。
+func aliIsInvalidParam(err error) bool {
+	var e *aliAPIError
+	if !errors.As(err, &e) {
+		return false
+	}
+	return strings.Contains(strings.ToLower(e.SubCode), "invalid-parameter")
+}
+
+// aliNumericID 报告一个 ID 是否像阿里侧的真实商品 ID（历史数据里存过 "ok" 这类占位）。
+func aliNumericID(s string) bool {
+	n, err := strconv.ParseInt(strings.TrimSpace(s), 10, 64)
+	return err == nil && n > 0
 }
 
 // aliUploadImageURL 下载一张图片并传到阿里图片银行。
@@ -413,101 +557,6 @@ func aliStringField(res map[string]json.RawMessage, keys ...string) string {
 func xmlAttrEscape(s string) string {
 	return xmlEscape(s)
 }
-
-// buildAliProductXML 组装 schema.add 的值 XML。
-// 字段与结构按《【新接口】商品发布接入文档》的 field 体系写：每个 field 带 id/type/value。
-// 真实联调若 schema 对某字段的 type/结构有出入，只需要调这里（错误信息带网关原文可对照）。
-func buildAliProductXML(title, keywords, summary, content, market string, p *Product, aliImages []string) string {
-	var b strings.Builder
-	b.WriteString("<fields>\n")
-
-	// market：1=下单品 2=询盘品。
-	b.WriteString("\t<field id=\"market\" type=\"singleCheck\"><value>" + market + "</value></field>\n")
-	// 标题（英文母本，阿里限 128 字符）。
-	b.WriteString("\t<field id=\"productTitle\" type=\"text\"><value>" + xmlAttrEscape(trimRunes(title, 128)) + "</value></field>\n")
-	// 关键词（1-3 个，空格分隔 → 多值）。
-	if kws := strings.Fields(keywords); len(kws) > 0 {
-		b.WriteString("\t<field id=\"productKeywords\" type=\"complex\">\n\t\t<fields>\n")
-		for _, kw := range kws {
-			if len(kw) > 0 {
-				b.WriteString("\t\t\t<field id=\"productKeyword\" type=\"text\"><value>" + xmlAttrEscape(kw) + "</value></field>\n")
-			}
-		}
-		b.WriteString("\t\t</fields>\n\t</field>\n")
-	}
-	// 主图：图片银行的 URL 列表。
-	if len(aliImages) > 0 {
-		b.WriteString("\t<field id=\"scImages\" type=\"complex\">\n\t\t<fields>\n")
-		for _, u := range aliImages {
-			b.WriteString("\t\t\t<field id=\"scImage\" type=\"complex\">\n\t\t\t\t<fields>\n")
-			b.WriteString("\t\t\t\t\t<field id=\"imageUrl\" type=\"text\"><value>" + xmlAttrEscape(u) + "</value></field>\n")
-			b.WriteString("\t\t\t\t</fields>\n\t\t\t</field>\n")
-		}
-		b.WriteString("\t\t</fields>\n\t</field>\n")
-	}
-	// FOB 价：下单品必填；询盘品有价也带上。
-	if p.PriceMin > 0 {
-		b.WriteString("\t<field id=\"fob\" type=\"complex\">\n\t\t<fields>\n")
-		b.WriteString("\t\t\t<field id=\"range_min\" type=\"decimal\"><value>" + strconv.FormatFloat(p.PriceMin, 'f', 2, 64) + "</value></field>\n")
-		if p.PriceMax > p.PriceMin {
-			b.WriteString("\t\t\t<field id=\"range_max\" type=\"decimal\"><value>" + strconv.FormatFloat(p.PriceMax, 'f', 2, 64) + "</value></field>\n")
-		}
-		if p.PriceUnit != "" {
-			b.WriteString("\t\t\t<field id=\"unit_type\" type=\"text\"><value>" + xmlAttrEscape(p.PriceUnit) + "</value></field>\n")
-		}
-		b.WriteString("\t\t</fields>\n\t</field>\n")
-	}
-	// 发货周期：本地发货天数（0 = 不填，走类目默认）。
-	if p.LeadTimeDays > 0 {
-		b.WriteString("\t<field id=\"ladderPeriod\" type=\"complex\">\n\t\t<fields>\n")
-		b.WriteString("\t\t\t<field id=\"period\" type=\"number\"><value>" + strconv.Itoa(p.LeadTimeDays) + "</value></field>\n")
-		b.WriteString("\t\t</fields>\n\t</field>\n")
-	}
-	// 自定义属性：本地 specs（≤10 条，与阿里的 customMoreProperty 上限一致）。
-	if specs := p.ProductSpecs(); len(specs) > 0 {
-		b.WriteString("\t<field id=\"customMoreProperty\" type=\"complex\">\n\t\t<fields>\n")
-		n := 0
-		for _, sp := range specs {
-			if sp.Label == "" || sp.Value == "" {
-				continue
-			}
-			if n == 10 {
-				break
-			}
-			b.WriteString("\t\t\t<field id=\"customProperty\" type=\"complex\">\n\t\t\t\t<fields>\n")
-			b.WriteString("\t\t\t\t\t<field id=\"prop_name\" type=\"text\"><value>" + xmlAttrEscape(sp.Label) + "</value></field>\n")
-			b.WriteString("\t\t\t\t\t<field id=\"prop_value\" type=\"text\"><value>" + xmlAttrEscape(sp.Value) + "</value></field>\n")
-			b.WriteString("\t\t\t\t</fields>\n\t\t\t</field>\n")
-			n++
-		}
-		b.WriteString("\t\t</fields>\n\t</field>\n")
-	}
-	// 交易条件随详情走：详情富文本里带上本地交易信息块（阿里商详的描述区）。
-	var detail strings.Builder
-	detail.WriteString(content)
-	if p.PaymentTerms != "" || p.Moq > 0 {
-		detail.WriteString("<p>")
-		if p.PaymentTerms != "" {
-			detail.WriteString("Payment terms: " + xmlText(p.PaymentTerms) + ". ")
-		}
-		if p.Moq > 0 {
-			detail.WriteString("MOQ: " + strconv.Itoa(p.Moq) + ". ")
-		}
-		if p.Port != "" {
-			detail.WriteString("Port of loading: " + xmlText(p.Port) + ".")
-		}
-		detail.WriteString("</p>")
-	}
-	if detail.Len() > 0 {
-		b.WriteString("\t<field id=\"detail\" type=\"rich\"><value>" + xmlAttrEscape(detail.String()) + "</value></field>\n")
-	}
-	_ = summary // 摘要暂无独立 schema 字段，随详情承载。
-	b.WriteString("</fields>")
-	return b.String()
-}
-
-// xmlText 是 xmlEscape 在纯文本拼接处的别名（读起来更顺）。
-func xmlText(s string) string { return xmlEscape(s) }
 
 // SubmitAliSync 提交批量同步任务：params 只放商品 ID/类型/站点根地址（都不是敏感信息），
 // 凭据由 job 执行时从库里解密读（job.Submit 会拒绝键名含敏感词的参数）。

@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/csv"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -209,9 +210,26 @@ func mapHeaderToRows(s Source, records [][]string) ([]map[string]string, error) 
 			continue // 跳过整行空白
 		}
 		row := map[string]string{}
+		extra := map[string]string{}
 		for j, cell := range rec {
-			if j < len(keys) && keys[j] != "" {
-				row[keys[j]] = strings.TrimSpace(cell)
+			if j >= len(keys) {
+				break
+			}
+			cell = strings.TrimSpace(cell)
+			if k := keys[j]; k != "" {
+				row[k] = cell
+				continue
+			}
+			// 没命中任何列名的表头：来源声明了 ExtraKey 就收进「列名→值」，否则维持原样丢弃
+			if s.ExtraKey != "" && cell != "" && j < len(header) {
+				if name := strings.TrimSpace(strings.TrimPrefix(header[j], utf8BOM)); name != "" {
+					extra[name] = cell
+				}
+			}
+		}
+		if s.ExtraKey != "" && len(extra) > 0 {
+			if b, jerr := json.Marshal(extra); jerr == nil {
+				row[s.ExtraKey] = string(b)
 			}
 		}
 		rows = append(rows, row)

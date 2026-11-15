@@ -46,7 +46,7 @@ func (h *handler) sources(c *gin.Context) {
 
 // GET /plugins/imports/template?source=products&format=csv|xlsx —— 下载导入模板(表头 + 示例行)。
 func (h *handler) template(c *gin.Context) {
-	src, err := getSource(c.Query("source"))
+	src, err := getSource(c.Request.Context(), c.Query("source"))
 	if err != nil {
 		response.Fail(c, response.BadRequest("imports.source_unknown").Wrap(err))
 		return

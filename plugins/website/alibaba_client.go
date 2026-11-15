@@ -87,6 +87,72 @@ func aliCall(ctx context.Context, c AliCredentials, method string, params map[st
 	return aliPost(ctx, c, method, fields, nil)
 }
 
+// aliPublishParam 是 schema 系列接口（get / render / update）的嵌套入参：
+// 官方 API 页把它们统一挂在 param_product_top_publish_request 这一个 JSON 参数下。
+type aliPublishParam struct {
+	CatID     string `json:"cat_id,omitempty"`
+	ProductID string `json:"product_id,omitempty"`
+	Language  string `json:"language,omitempty"`
+	XML       string `json:"xml,omitempty"`
+}
+
+// aliCallNested 用嵌套 JSON 入参调 schema 系列接口。
+func aliCallNested(ctx context.Context, c AliCredentials, method string, p aliPublishParam) (map[string]json.RawMessage, error) {
+	raw, err := json.Marshal(p)
+	if err != nil {
+		return nil, err
+	}
+	return aliCall(ctx, c, method, map[string]string{"param_product_top_publish_request": string(raw)})
+}
+
+// aliBiz 是 schema 系列接口的业务包裹。关键：biz_success=false 时网关照样返回 HTTP 200 且
+// 没有 error_response，失败原因只在 message / msg_code 里，trace_id 官方要求务必记录（工单要用）。
+// 之前这里不看 biz_success，「提交成功」其实可能是业务失败。
+type aliBiz struct {
+	Data       string
+	ProductID  string
+	Message    string
+	MsgCode    string
+	TraceID    string
+	Success    bool
+	HasSuccess bool // 响应里到底有没有 biz_success 字段（旧接口没有）
+}
+
+func aliReadBiz(res map[string]json.RawMessage) aliBiz {
+	b := aliBiz{
+		Data:      aliStringField(res, "data"),
+		ProductID: aliStringField(res, "product_id"),
+		Message:   aliStringField(res, "message"),
+		MsgCode:   aliStringField(res, "msg_code"),
+		TraceID:   aliStringField(res, "trace_id"),
+	}
+	if raw, ok := res["biz_success"]; ok {
+		var v bool
+		if json.Unmarshal(raw, &v) == nil {
+			b.Success, b.HasSuccess = v, true
+		}
+	}
+	return b
+}
+
+// err 把业务失败翻成错误（带 message 与 trace_id）；biz_success 缺失或为 true 时返回 nil。
+func (b aliBiz) err() error {
+	if !b.HasSuccess || b.Success {
+		return nil
+	}
+	msg := strings.TrimSpace(b.Message)
+	if msg == "" {
+		msg = b.MsgCode
+	}
+	if msg == "" {
+		msg = "unknown"
+	}
+	if b.TraceID != "" {
+		return fmt.Errorf("%s（trace_id=%s）", msg, b.TraceID)
+	}
+	return fmt.Errorf("%s", msg)
+}
+
 // aliUploadImage 调 alibaba.icbu.photobank.upload：multipart 上传一张图到图片银行，
 // 返回（file_id, 阿里 CDN URL）。文件字段 image_bytes 不参与签名（byte[] 类型）。
 func aliUploadImage(ctx context.Context, c AliCredentials, name string, data []byte) (int64, string, error) {

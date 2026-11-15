@@ -13,9 +13,10 @@ import (
 type Column struct {
 	Key      string `json:"key"`      // 列标识(表头用 Label,数据行按 Key 映射)
 	Label    string `json:"label"`    // 模板表头(给用户看的名字)
-	LabelKey string `json:"-"`        // 可选 i18n key:有值时按请求语言取文案,Label 作兜底
-	Required bool   `json:"required"` // 缺失/空白即该行失败
-	Example  string `json:"example"`  // 模板里的示例值
+	LabelKey string   `json:"-"`        // 可选 i18n key:有值时按请求语言取文案,Label 作兜底
+	Aliases  []string `json:"aliases"`  // 表头别名:外部系统导出的文件列名与本列不同也认(去空白后精确匹配)
+	Required bool     `json:"required"` // 缺失/空白即该行失败
+	Example  string   `json:"example"`  // 模板里的示例值
 }
 
 // Source 是一个可导入的数据源。
@@ -26,7 +27,15 @@ type Source struct {
 	Title    string // 显示名(如 "客户导入")
 	TitleKey string // 可选 i18n key:有值时按请求语言取文案,Title 作兜底
 	Columns  []Column
-	Handler  func(ctx context.Context, rowIndex int, row map[string]string) error
+	// ExtraKey 非空时，凡是没命中 Columns/Aliases 的表头，其「列名→单元格」会以 JSON 对象文本
+	// 收进 row[ExtraKey]。给「列随类目而变」的外部模板用（如阿里国际站按类目下载的批量模板：
+	// 固定列之外还有一串类目属性列），否则这些列会被静默丢弃。
+	ExtraKey string
+	// ColumnsFunc 非空时，导入中心每次使用这个来源（列清单、模板下载、表头映射、执行）都现取列定义。
+	// 给「列名归管理员在后台维护」的外部模板用（阿里批量模板的列名映射存在库里的映射表）：
+	// 静态 Columns 只是注册校验与读取失败时的兜底，改表不用重启。
+	ColumnsFunc func(ctx context.Context) []Column
+	Handler     func(ctx context.Context, rowIndex int, row map[string]string) error
 }
 
 // Provider 由业务插件实现：导入中心启动时扫描已启用模块，自动收集它们导出的源。

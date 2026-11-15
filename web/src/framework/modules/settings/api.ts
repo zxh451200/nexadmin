@@ -38,6 +38,8 @@ export interface AiSettings {
   embedApiKey: string
   /** 向量化（embeddings）模型名；空 = 未启用向量化 */
   embedModel: string
+  /** 向量化请求的独立超时（秒）；0/缺省 = 沿用通用 timeoutSec */
+  embedTimeoutSec: number
   timeoutSec: number
   /** 发往模型前对手机号 / 邮箱 / 身份证号 / 银行卡号脱敏（默认开启） */
   redact: boolean
