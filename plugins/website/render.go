@@ -260,6 +260,10 @@ var uiIconPaths = map[string]string{
 	"copy":         `<path d="M7 7m0 2.667a2.667 2.667 0 0 1 2.667 -2.667h8.666a2.667 2.667 0 0 1 2.667 2.667v8.666a2.667 2.667 0 0 1 -2.667 2.667h-8.666a2.667 2.667 0 0 1 -2.667 -2.667z" /><path d="M4.012 16.737a2.005 2.005 0 0 1 -1.012 -1.737v-10c0 -1.1 .9 -2 2 -2h10c.75 0 1.158 .385 1.5 1" />`,
 	"check":        `<path d="M5 12l5 5l10 -10" />`,
 	"shield":       `<path d="M12 3a12 12 0 0 0 8.5 3a12 12 0 0 1 -8.5 15a12 12 0 0 1 -8.5 -15a12 12 0 0 0 8.5 -3" />`,
+	// 认证徽章与评价用：盾牌勾（安全合规类认证）、证书（体系类认证）、锯齿徽章（已验证采购）。
+	"shield-check": `<path d="M12 3a12 12 0 0 0 8.5 3a12 12 0 0 1 -8.5 15a12 12 0 0 1 -8.5 -15a12 12 0 0 0 8.5 -3" /><path d="M9 12l2 2l4 -4" />`,
+	"certificate":  `<path d="M14 3v4a1 1 0 0 0 1 1h4" /><path d="M17 21h-10a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2" /><path d="M9 13l2 2l4 -4" />`,
+	"badge-check":  `<path d="M3.85 8.62a4 4 0 0 1 4.78 -4.77a4 4 0 0 1 6.74 0a4 4 0 0 1 4.78 4.78a4 4 0 0 1 0 6.74a4 4 0 0 1 -4.77 4.78a4 4 0 0 1 -6.75 0a4 4 0 0 1 -4.78 -4.77a4 4 0 0 1 0 -6.76" /><path d="M9 12l2 2l4 -4" />`,
 	"lock":         `<path d="M5 13a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v6a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-6z" /><path d="M11 16a1 1 0 1 0 2 0a1 1 0 0 0 -2 0" /><path d="M8 11v-4a4 4 0 1 1 8 0v4" />`,
 	"mood-smile":   `<path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" /><path d="M9 10l.01 0" /><path d="M15 10l.01 0" /><path d="M9.5 15a3.5 3.5 0 0 0 5 0" />`,
 	"language":     `<path d="M4 5h7" /><path d="M9 3v2c0 4.418 -2.239 8 -5 8" /><path d="M5 9c0 2.144 2.952 3.908 6.7 4" /><path d="M12 20l4 -9l4 9" /><path d="M19.1 18h-6.2" />`,
@@ -399,6 +403,26 @@ var tplFuncs = template.FuncMap{
 			return strconv.FormatFloat(v, 'f', 0, 64)
 		}
 		return strconv.FormatFloat(v, 'f', 2, 64)
+	},
+	// starRow 画五颗星：四舍五入到整星，亮的实心、灭的描边。
+	// 只由下面这段固定标记拼成，不含用户输入，所以可以安全地当 HTML 输出。
+	"starRow": func(v float64) template.HTML {
+		n := int(math.Round(v))
+		if n > 5 {
+			n = 5
+		}
+		if n < 0 {
+			n = 0
+		}
+		var b strings.Builder
+		for i := 1; i <= 5; i++ {
+			if i <= n {
+				b.WriteString(`<span class="pd-star is-on">★</span>`)
+			} else {
+				b.WriteString(`<span class="pd-star">★</span>`)
+			}
+		}
+		return template.HTML(b.String())
 	},
 	// specOf 按一组候选标签取商品的第一个匹配规格值（主题选型表用）：
 	// 标签在库里的写法与语言相关，传入多个语言的写法（如 "功率", "Power"）谁先命中用谁。
@@ -836,6 +860,7 @@ func (v *siteView) JSStrings() template.JS {
 		"inqAttachUploading", "inqAttachRemove", "inqAttachTooLarge", "inqAttachType", "inqAttachFailed", "inqAttachLimit",
 		"chatNameCard", "chatAddressCard", "chatCardNameTitle", "chatCardAddressTitle", "chatCardHint", "chatCardName", "chatCardCompany", "chatCardJob", "chatCardEmail", "chatCardPhone",
 		"chatCardRecipient", "chatCardCountry", "chatCardRegion", "chatCardStreet", "chatCardPostcode", "chatCardSend", "chatCardCancel", "chatCardRequired", "chatCardNameLabel", "chatCardAddressLabel",
+		"chatCardCountrySelect", "chatCardCountrySearch", "chatCardRegionSelect", "chatCardRegionSearch", "chatCardSearchEmpty",
 	} {
 		m[k] = v.T("site.js." + k)
 	}

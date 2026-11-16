@@ -159,6 +159,12 @@ type DemoSettings struct {
 	Socials []SocialLink `json:"socials"`
 	// I18nJSON 是品牌文案的非默认语言译文（{"en-US":{...}}），按 settingI18nFields 清洗后入库。
 	I18nJSON string `json:"i18nJson"`
+	// 供应商实力档案：切主题时一并换品牌门面（成立年份 0 = 不写）。
+	EstablishedYear int    `json:"establishedYear"`
+	StaffCount      string `json:"staffCount"`
+	AnnualRevenue   string `json:"annualRevenue"`
+	MainMarkets     string `json:"mainMarkets"`
+	ResponseTime    string `json:"responseTime"`
 }
 
 // DemoData 是一套主题的演示内容。条目全部 insert-only：按 slug/href/title 判重，
@@ -170,6 +176,19 @@ type DemoProductCategory struct {
 }
 
 // 已存在的跳过，重复导入不产生重复行，用户改过的内容一概不动。
+// DemoReview 是主题演示评价：按商品 slug 关联。
+// DaysAgo 让演示评价的日期散开（全挤在导入当天不像真实回访）。
+type DemoReview struct {
+	ProductSlug string `json:"productSlug"`
+	Author      string `json:"author"`
+	Country     string `json:"country"`
+	Rating      int    `json:"rating"`
+	Content     string `json:"content"`
+	Verified    bool   `json:"verified"`
+	Quantity    string `json:"quantity"`
+	DaysAgo     int    `json:"daysAgo"`
+}
+
 type DemoData struct {
 	Settings          *DemoSettings         `json:"settings"`
 	Navs              []Nav                 `json:"navs"`
@@ -179,6 +198,7 @@ type DemoData struct {
 	Posts             []Post                `json:"posts"`
 	ProductCategories []DemoProductCategory `json:"productCategories"`
 	Products          []Product             `json:"products"`
+	Reviews           []DemoReview          `json:"reviews"`
 }
 
 // DemoReport 是导入结果的计数：告诉管理员哪些实体种了几条。
@@ -191,6 +211,7 @@ type DemoReport struct {
 	Posts             int `json:"posts"`
 	ProductCategories int `json:"productCategories"`
 	Products          int `json:"products"`
+	Reviews           int `json:"reviews"`
 	Skipped           int `json:"skipped"`
 }
 
@@ -277,6 +298,15 @@ func seedDemoTx(ctx context.Context, tx *gorm.DB, themeID string, data DemoData,
 		apply(func(x *Setting) string { return x.TitleSuffix }, func(x *Setting, v string) { x.TitleSuffix = v }, data.Settings.TitleSuffix)
 		apply(func(x *Setting) string { return x.FaviconURL }, func(x *Setting, v string) { x.FaviconURL = v }, data.Settings.FaviconURL)
 		apply(func(x *Setting) string { return x.OgImageURL }, func(x *Setting, v string) { x.OgImageURL = v }, data.Settings.OgImageURL)
+		// 供应商实力档案：主题演示值只在当前为空时落笔（同上面各字段口径）。
+		apply(func(x *Setting) string { return x.StaffCount }, func(x *Setting, v string) { x.StaffCount = v }, data.Settings.StaffCount)
+		apply(func(x *Setting) string { return x.AnnualRevenue }, func(x *Setting, v string) { x.AnnualRevenue = v }, data.Settings.AnnualRevenue)
+		apply(func(x *Setting) string { return x.MainMarkets }, func(x *Setting, v string) { x.MainMarkets = v }, data.Settings.MainMarkets)
+		apply(func(x *Setting) string { return x.ResponseTime }, func(x *Setting, v string) { x.ResponseTime = v }, data.Settings.ResponseTime)
+		if data.Settings.EstablishedYear > 0 && cur.EstablishedYear != data.Settings.EstablishedYear {
+			cur.EstablishedYear = data.Settings.EstablishedYear
+			changed++
+		}
 		if len(data.Settings.Socials) > 0 {
 			if b, err := json.Marshal(data.Settings.Socials); err == nil && cur.SocialsJSON != string(b) {
 				cur.SocialsJSON = string(b)
@@ -455,6 +485,43 @@ func seedDemoTx(ctx context.Context, tx *gorm.DB, themeID string, data DemoData,
 			return err
 		}
 		rep.Products++
+	}
+
+	// 8. 商品评价：按商品 slug 关联，且只在该商品还没有任何评价时补种——
+	// 运营录入的真实回访不能被切主题覆盖（评价是独立表，不随商品删除重建）。
+	for i := range data.Reviews {
+		rv := data.Reviews[i]
+		var prod Product
+		if err := tx.Where("slug = ?", rv.ProductSlug).First(&prod).Error; err != nil {
+			continue // 商品不在库里就跳过，演示数据不该把整次导入打断
+		}
+		var n int64
+		if err := tx.Model(&ProductReview{}).Where("product_id = ?", prod.ID).Count(&n).Error; err != nil {
+			return err
+		}
+		if n > 0 {
+			continue
+		}
+		row := ProductReview{
+			ProductID: uint(prod.ID),
+			Author:    trimLen(rv.Author, 64),
+			Country:   trimLen(rv.Country, 64),
+			Rating:    clampRating(defaultInt(rv.Rating, 5)),
+			Content:   trimLen(rv.Content, reviewTextLimit),
+			Verified:  rv.Verified,
+			Quantity:  trimLen(rv.Quantity, 64),
+			Published: true,
+		}
+		if err := tx.Create(&row).Error; err != nil {
+			return err
+		}
+		// 评价日期散开：Create 会把 created_at 写成当下，这里按 DaysAgo 回填。
+		if rv.DaysAgo > 0 {
+			if err := tx.Model(&row).UpdateColumn("created_at", time.Now().AddDate(0, 0, -rv.DaysAgo)).Error; err != nil {
+				return err
+			}
+		}
+		rep.Reviews++
 	}
 	return nil
 }

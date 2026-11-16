@@ -26,7 +26,12 @@
         "url": "https://www.instagram.com/solaris.energy"
       }
     ],
-    "i18nJson": "{\"en-US\":{\"siteDesc\":\"Advanced energy storage for commercial and industrial scenarios, helping customers worldwide build a cleaner, more resilient energy future.\",\"homeTitle\":\"Energy for a\\nBetter Tomorrow\",\"homeSubtitle\":\"Energy storage solutions for commercial and industrial scenarios, moving global customers toward a cleaner, more resilient and more profitable energy mix.\",\"homeCtaLabel\":\"Get a Quote\",\"seoKeywords\":\"energy storage,battery storage,BESS,hybrid inverter,energy management,microgrid\",\"footerNote\":\"Clean energy storage, for a greener tomorrow.\"}}"
+    "i18nJson": "{\"en-US\":{\"siteDesc\":\"Advanced energy storage for commercial and industrial scenarios, helping customers worldwide build a cleaner, more resilient energy future.\",\"homeTitle\":\"Energy for a\\nBetter Tomorrow\",\"homeSubtitle\":\"Energy storage solutions for commercial and industrial scenarios, moving global customers toward a cleaner, more resilient and more profitable energy mix.\",\"homeCtaLabel\":\"Get a Quote\",\"seoKeywords\":\"energy storage,battery storage,BESS,hybrid inverter,energy management,microgrid\",\"footerNote\":\"Clean energy storage, for a greener tomorrow.\"}}",
+    "establishedYear": 2012,
+    "staffCount": "500+",
+    "annualRevenue": "US$50M - US$100M",
+    "mainMarkets": "欧洲、北美、东南亚、中东",
+    "responseTime": "≤4h"
   },
   "navs": [
     {
@@ -268,7 +273,8 @@
       ],
       "author": "方案部",
       "content": "<p>BESS-215 把电芯、BMS、液冷温控、消防与变流器集成进一个 20 尺标准柜，现场并网即用，是工商业储能的基准机型。</p>",
-      "i18nJson": "{\"en-US\":{\"title\":\"215kWh All-in-One ESS Cabinet\",\"summary\":\"An integrated cabinet with cells, BMS, liquid cooling and fire suppression — plug-and-play C&I storage.\",\"content\":\"<p>The BESS-215 integrates cells, BMS, liquid cooling, fire suppression and the converter into one 20-foot cabinet: connect and commission, the benchmark unit for commercial and industrial storage.</p>\"}}"
+      "i18nJson": "{\"en-US\":{\"title\":\"215kWh All-in-One ESS Cabinet\",\"summary\":\"An integrated cabinet with cells, BMS, liquid cooling and fire suppression — plug-and-play C&I storage.\",\"content\":\"<p>The BESS-215 integrates cells, BMS, liquid cooling, fire suppression and the converter into one 20-foot cabinet: connect and commission, the benchmark unit for commercial and industrial storage.</p>\"}}",
+      "certificationsJson": "[\"CE\", \"UL 1973\", \"UN38.3\", \"IEC 62619\", \"ISO 9001\"]"
     },
     {
       "slug": "hybrid-inverter-100",
@@ -276,7 +282,7 @@
       "keywords": "混合逆变器 光储一体",
       "summary": "光储一体逆变器，支持离网与并网无缝切换，弱电网也能稳定构网。",
       "coverUrl": "/website-assets/theme/solaris/assets/sl-inverter.webp",
-      "priceMin": 0,
+      "priceMin": 850,
       "currency": "USD",
       "specsJson": "[{\"label\":\"型号\",\"value\":\"HI-100\"},{\"label\":\"额定容量\",\"value\":\"100 kW\"},{\"label\":\"循环寿命\",\"value\":\"—\"},{\"label\":\"关键特性\",\"value\":\"构网型 · 离并网切换\"},{\"label\":\"应用场景\",\"value\":\"微电网\"}]",
       "categories": [
@@ -286,7 +292,14 @@
       ],
       "author": "方案部",
       "content": "<p>HI-100 支持构网型运行，弱电网与孤岛场景下依旧稳定输出，与 SOLARIS 储能柜组成即装即用的微电网。</p>",
-      "i18nJson": "{\"en-US\":{\"title\":\"100kW Hybrid Inverter\",\"summary\":\"A solar+storage inverter with seamless off-grid and on-grid switching for weak grids.\",\"content\":\"<p>The HI-100 supports grid-forming operation, staying stable in weak grids and islands — pair it with a SOLARIS cabinet for a ready-made microgrid.</p>\"}}"
+      "i18nJson": "{\"en-US\":{\"title\":\"100kW Hybrid Inverter\",\"summary\":\"A solar+storage inverter with seamless off-grid and on-grid switching for weak grids.\",\"content\":\"<p>The HI-100 supports grid-forming operation, staying stable in weak grids and islands — pair it with a SOLARIS cabinet for a ready-made microgrid.</p>\"}}",
+      "priceMax": 1100,
+      "priceUnit": "piece",
+      "moq": 1,
+      "leadTimeDays": 25,
+      "port": "Shenzhen",
+      "paymentTerms": "T/T, L/C",
+      "certificationsJson": "[\"CE\", \"VDE 4105\", \"EN 50549\", \"ISO 9001\"]"
     },
     {
       "slug": "ems-platform",
@@ -294,7 +307,7 @@
       "keywords": "能源管理 AI调度",
       "summary": "智能控制发电与储能运行的能源管理系统：效率更高、成本更低。",
       "coverUrl": "/website-assets/theme/solaris/assets/sl-monitor.webp",
-      "priceMin": 0,
+      "priceMin": 3200,
       "currency": "USD",
       "specsJson": "[{\"label\":\"型号\",\"value\":\"EMS-Cloud\"},{\"label\":\"额定容量\",\"value\":\"不限\"},{\"label\":\"循环寿命\",\"value\":\"—\"},{\"label\":\"关键特性\",\"value\":\"AI 调度 · 远程运维\"},{\"label\":\"应用场景\",\"value\":\"全场景\"}]",
       "categories": [
@@ -304,7 +317,14 @@
       ],
       "author": "方案部",
       "content": "<p>EMS-Cloud 以 AI 预测负荷与电价，自动编排充放策略，让每一度电都落在最值钱的时段。</p>",
-      "i18nJson": "{\"en-US\":{\"title\":\"EMS Energy Management Platform\",\"summary\":\"An energy management system that intelligently controls generation and storage: higher efficiency, lower cost.\",\"content\":\"<p>EMS-Cloud forecasts load and tariffs with AI and orchestrates charge/discharge strategies automatically, putting every kWh in the most valuable window.</p>\"}}"
+      "i18nJson": "{\"en-US\":{\"title\":\"EMS Energy Management Platform\",\"summary\":\"An energy management system that intelligently controls generation and storage: higher efficiency, lower cost.\",\"content\":\"<p>EMS-Cloud forecasts load and tariffs with AI and orchestrates charge/discharge strategies automatically, putting every kWh in the most valuable window.</p>\"}}",
+      "priceMax": 4800,
+      "priceUnit": "set",
+      "moq": 1,
+      "leadTimeDays": 30,
+      "port": "Shanghai",
+      "paymentTerms": "T/T, L/C",
+      "certificationsJson": "[\"CE\", \"IEC 62443\", \"ISO 27001\", \"ISO 9001\"]"
     },
     {
       "slug": "ess-container-mwh",
@@ -312,7 +332,7 @@
       "keywords": "电网级储能 集装箱",
       "summary": "电网级集装箱方案，为大规模新能源消纳与电网调频而生。",
       "coverUrl": "/website-assets/theme/solaris/assets/sl-container.webp",
-      "priceMin": 0,
+      "priceMin": 78000,
       "currency": "USD",
       "specsJson": "[{\"label\":\"型号\",\"value\":\"ESS-MWh\"},{\"label\":\"额定容量\",\"value\":\"3.44 MWh\"},{\"label\":\"循环寿命\",\"value\":\"8,000 次\"},{\"label\":\"关键特性\",\"value\":\"电网级调频\"},{\"label\":\"应用场景\",\"value\":\"新能源电站\"}]",
       "categories": [
@@ -322,7 +342,126 @@
       ],
       "author": "方案部",
       "content": "<p>ESS-MWh 面向新能源电站与独立储能电站：3.44MWh 单柜、pack 级安全设计与电网级调频响应。</p>",
-      "i18nJson": "{\"en-US\":{\"title\":\"MWh-Class Container Storage System\",\"summary\":\"A grid-scale container solution for large-scale renewable consumption and frequency regulation.\",\"content\":\"<p>The ESS-MWh targets renewable plants and standalone storage: 3.44MWh per container, pack-level safety design and grid-grade frequency response.</p>\"}}"
+      "i18nJson": "{\"en-US\":{\"title\":\"MWh-Class Container Storage System\",\"summary\":\"A grid-scale container solution for large-scale renewable consumption and frequency regulation.\",\"content\":\"<p>The ESS-MWh targets renewable plants and standalone storage: 3.44MWh per container, pack-level safety design and grid-grade frequency response.</p>\"}}",
+      "priceMax": 96000,
+      "priceUnit": "set",
+      "moq": 1,
+      "leadTimeDays": 45,
+      "port": "Ningbo",
+      "paymentTerms": "T/T, L/C, O/A",
+      "certificationsJson": "[\"CE\", \"UL 9540\", \"UN38.3\", \"IEC 62933\", \"ISO 9001\"]"
+    }
+  ],
+  "reviews": [
+    {
+      "productSlug": "bess-215",
+      "author": "Markus Weiss",
+      "country": "德国",
+      "rating": 5,
+      "verified": true,
+      "quantity": "6 sets",
+      "daysAgo": 12,
+      "content": "柜体到场后当天完成吊装，EMS 并网调试只用了两天。液冷在 35℃ 环境温度下满载运行，电芯温差控制在 3℃ 以内，比我们上一批风冷方案稳很多。"
+    },
+    {
+      "productSlug": "bess-215",
+      "author": "Emma Laurent",
+      "country": "法国",
+      "rating": 5,
+      "verified": true,
+      "quantity": "2 sets",
+      "daysAgo": 34,
+      "content": "用于削峰填谷，第一个月电费下降约 18%。文档齐全，UL 1973 与 UN38.3 报告随货一起到，本地验收很顺利。"
+    },
+    {
+      "productSlug": "bess-215",
+      "author": "Daniel Ortiz",
+      "country": "西班牙",
+      "rating": 4,
+      "verified": true,
+      "quantity": "3 sets",
+      "daysAgo": 58,
+      "content": "产品本身没问题，通讯协议对接花了些时间。销售响应很快，工程师远程配合到晚上，最终按 Modbus TCP 打通。"
+    },
+    {
+      "productSlug": "bess-215",
+      "author": "Siti Rahman",
+      "country": "马来西亚",
+      "rating": 5,
+      "verified": true,
+      "quantity": "1 set",
+      "daysAgo": 90,
+      "content": "高温高湿环境下运行半年，没有出现降额。售后每季度回访一次，备件清单也给了，整体放心。"
+    },
+    {
+      "productSlug": "bess-215",
+      "author": "Thomas Berg",
+      "country": "瑞典",
+      "rating": 4,
+      "verified": false,
+      "quantity": "",
+      "daysAgo": 140,
+      "content": "样品测试阶段的数据符合标称，-20℃ 低温启动正常。希望后续能提供北欧并网认证的本地化支持。"
+    },
+    {
+      "productSlug": "hybrid-inverter-100",
+      "author": "Lucas Meyer",
+      "country": "德国",
+      "rating": 5,
+      "verified": true,
+      "quantity": "20 pcs",
+      "daysAgo": 18,
+      "content": "三相不平衡带载表现好，VDE 4105 认证直接过了电网公司审核，安装商反馈接线端子布局清楚。"
+    },
+    {
+      "productSlug": "hybrid-inverter-100",
+      "author": "Ana Costa",
+      "country": "葡萄牙",
+      "rating": 4,
+      "verified": true,
+      "quantity": "8 pcs",
+      "daysAgo": 76,
+      "content": "效率符合标称，APP 监控上手快。唯一小问题是壁挂支架的孔位与我们旧机箱不通用，另外补了转接板。"
+    },
+    {
+      "productSlug": "ems-platform",
+      "author": "Kenji Sato",
+      "country": "日本",
+      "rating": 5,
+      "verified": true,
+      "quantity": "1 set",
+      "daysAgo": 25,
+      "content": "多站点集中调度这块做得细，电价策略可以按时段和 SOC 双条件配置，报表能直接导出给财务。"
+    },
+    {
+      "productSlug": "ems-platform",
+      "author": "Ahmed Fahmy",
+      "country": "阿联酋",
+      "rating": 5,
+      "verified": true,
+      "quantity": "2 sets",
+      "daysAgo": 63,
+      "content": "本地部署版本跑在我们的内网，IEC 62443 的安全清单基本对得上，渗透测试没发现高危项。"
+    },
+    {
+      "productSlug": "ess-container-mwh",
+      "author": "Peter Novak",
+      "country": "捷克",
+      "rating": 5,
+      "verified": true,
+      "quantity": "1 set",
+      "daysAgo": 40,
+      "content": "20 尺标准柜，海运和吊装都没有额外手续。从签约到并网 11 周，比合同约定的 13 周还早。"
+    },
+    {
+      "productSlug": "ess-container-mwh",
+      "author": "Grace Lim",
+      "country": "新加坡",
+      "rating": 4,
+      "verified": true,
+      "quantity": "1 set",
+      "daysAgo": 110,
+      "content": "消防联动按当地规范改了一版，厂家配合出了图纸。运行至今 PCS 效率稳定在 98% 以上。"
     }
   ]
 }

@@ -30,6 +30,17 @@
             {{if .ContactEmail}}<span>{{.ContactEmail}}</span>{{end}}
             {{if .ContactPhone}}<span>{{.ContactPhone}}</span>{{end}}
           </div>
+          {{/* 供应商实力档案：对标阿里店铺卡的「成立年份 / 员工 / 年营收 / 主营市场 / 响应」，
+               每项留空就整格不渲染，不会出现「年营收：」这种半行 */}}
+          {{if or .EstablishedYear .StaffCount .AnnualRevenue .MainMarkets .ResponseTime}}
+          <dl class="pd-supplier-stats">
+            {{if .EstablishedYear}}<div><dt>{{.T "product.estYear"}}</dt><dd>{{.EstablishedYear}}</dd></div>{{end}}
+            {{if .StaffCount}}<div><dt>{{.T "product.staffCount"}}</dt><dd>{{.StaffCount}}</dd></div>{{end}}
+            {{if .AnnualRevenue}}<div><dt>{{.T "product.annualRevenue"}}</dt><dd>{{.AnnualRevenue}}</dd></div>{{end}}
+            {{if .MainMarkets}}<div><dt>{{.T "product.mainMarkets"}}</dt><dd>{{.MainMarkets}}</dd></div>{{end}}
+            {{if .ResponseTime}}<div><dt>{{.T "product.responseTime"}}</dt><dd>{{.ResponseTime}}</dd></div>{{end}}
+          </dl>
+          {{end}}
           <button type="button" class="pd-supplier-btn" data-pd-supplier-cta>{{.T "product.contactSupplier"}}</button>
         </div>
         {{end}}
@@ -41,6 +52,11 @@
           {{range .Product.Categories}}<a class="pd-badge" href="{{$.URL "/products"}}?category={{.Slug}}">{{.Title}}</a>{{end}}
           {{if .Product.Views}}<span class="pd-badge pd-badge-quiet">{{.TF "product.views" .Product.Views}}</span>{{end}}
         </div>
+        {{if .Product.Certifications}}
+        <div class="pd-certs" aria-label="{{.T "product.certifications"}}">
+          {{range .Product.Certifications}}<span class="pd-cert">{{uiIcon .Icon "pd-cert-ico"}}<span>{{.Name}}</span></span>{{end}}
+        </div>
+        {{end}}
         <p class="pd-price">{{if .Product.PriceMin}}{{.Product.Currency}}{{if and .Product.PriceMax (gt .Product.PriceMax .Product.PriceMin)}}{{money .Product.PriceMin}}-{{money .Product.PriceMax}}{{else}}{{money .Product.PriceMin}}{{end}}{{if .Product.PriceUnit}}<span class="pd-price-unit"> / {{.Product.PriceUnit}}</span>{{end}}{{else}}{{.T "product.priceOnRequest"}}{{end}}</p>
         {{if .Product.Moq}}<p class="pd-moq">{{.T "products.moqLabel"}}: {{.Product.Moq}}{{if .Product.PriceUnit}} {{.Product.PriceUnit}}{{end}}</p>{{end}}
         {{if .Product.ProductSpecs}}
@@ -156,6 +172,45 @@
       </div>
       <button type="button" class="pd-sticky-cta" data-pd-sticky-go>{{.T "product.sendInquiry"}}</button>
     </div>
+
+    {{with .ProductReviews}}{{if .Total}}
+    <section class="pd-reviews" aria-label="{{$.T "product.reviewsTitle"}}">
+      <h2 class="pd-section-title">{{$.T "product.reviewsTitle"}}</h2>
+      <div class="pd-review-summary">
+        <div class="pd-review-score">
+          <strong>{{.Average}}</strong>
+          <span class="pd-stars" aria-hidden="true">{{starRow .AvgValue}}</span>
+          <span class="pd-review-count">{{$.TF "product.reviewsCount" .Total}}</span>
+        </div>
+        <ul class="pd-review-dist">
+          {{range .Stars}}<li>
+            <span class="pd-review-star">{{.Star}}{{$.T "product.reviewStarUnit"}}</span>
+            <span class="pd-review-bar"><i style="width:{{.Percent}}%"></i></span>
+            <span class="pd-review-num">{{.Count}}</span>
+          </li>{{end}}
+        </ul>
+      </div>
+      <ul class="pd-review-list">
+        {{range .List}}<li class="pd-review-item">
+          <div class="pd-review-head">
+            <span class="pd-review-avatar" aria-hidden="true">{{initial .Author}}</span>
+            <span class="pd-review-who">
+              <span class="pd-review-name">{{if .Author}}{{.Author}}{{else}}{{$.T "product.reviewAnonymous"}}{{end}}</span>
+              {{if .Country}}<span class="pd-review-country">{{.Country}}</span>{{end}}
+            </span>
+            <span class="pd-stars pd-stars-sm" aria-label="{{$.TF "product.reviewRatingAria" .Rating}}">{{starRow .StarsFloat}}</span>
+          </div>
+          {{if .Content}}<p class="pd-review-body">{{.Content}}</p>{{end}}
+          <div class="pd-review-meta">
+            {{if .Verified}}<span class="pd-review-verified">{{uiIcon "badge-check" "pd-review-vico"}}{{$.T "product.reviewVerified"}}</span>{{end}}
+            {{if .Quantity}}<span>{{$.TF "product.reviewQty" .Quantity}}</span>{{end}}
+            <span class="pd-review-date">{{.CreatedAt.Format "2006-01-02"}}</span>
+          </div>
+        </li>{{end}}
+      </ul>
+      {{if gt .Total (len .List)}}<p class="pd-review-more">{{$.TF "product.reviewsMore" .Total}}</p>{{end}}
+    </section>
+    {{end}}{{end}}
 
     {{if .ProductsRelated}}
     <section class="pd-recommend">
