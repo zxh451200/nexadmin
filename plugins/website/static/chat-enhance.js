@@ -68,6 +68,38 @@
     // currentColor 会跟着变成 Canvas，按钮就白底白字消失了；用 CanvasText 显式取反色。
     '.chat-card-actions .is-primary{border-color:transparent;background:var(--pc-accent,CanvasText);color:Canvas;font-weight:600}',
     '.chat-card-actions .is-primary:hover{filter:brightness(1.08)}',
+    // 地址卡片的国家/州省下拉：触发钮长得和输入框一致，展开层浮在表单上面；
+    // 跟 .chat-card-pop 一样用 Canvas/currentColor，浅深主题都不用另配色。
+    '.chat-card-select{position:relative}',
+    '.chat-card-trigger{display:flex;align-items:center;gap:5px;box-sizing:border-box;width:100%;height:30px;padding:0 9px;border:1px solid rgba(128,128,128,.34);border-radius:4px;background:transparent;color:inherit;font:inherit;font-size:12.5px;cursor:pointer;text-align:start;transition:border-color .15s ease,box-shadow .15s ease}',
+    '.chat-card-trigger:hover,.chat-card-trigger:focus-visible{border-color:rgba(128,128,128,.72)}',
+    '.chat-card-trig-flag{flex:none;font-size:13px;line-height:1}',
+    '.chat-card-trig-flag:empty{display:none}',
+    '.chat-card-trig-txt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+    '.chat-card-trig-txt.is-ph{opacity:.5}',
+    '.chat-card-trig-chev{flex:none;display:inline-flex;color:inherit;opacity:.55}',
+    '.chat-card-trig-chev svg{width:14px;height:14px}',
+    '.chat-card-drop{position:absolute;z-index:26;top:100%;inset-inline:0;margin-top:4px;border:1px solid rgba(128,128,128,.34);border-radius:6px;background:Canvas;color:CanvasText;box-shadow:0 10px 26px rgba(0,0,0,.2);overflow:hidden}',
+    '.chat-card-drop[hidden]{display:none}',
+    '.chat-card-search{box-sizing:border-box;width:100%;height:28px;padding:0 9px;border:0;border-block-end:1px solid rgba(128,128,128,.24);background:transparent;color:inherit;font:inherit;font-size:12px}',
+    '.chat-card-search:focus{outline:none;background:rgba(128,128,128,.05)}',
+    '.chat-card-options{max-height:188px;overflow-y:auto}',
+    '.chat-card-options::-webkit-scrollbar{width:6px}',
+    '.chat-card-options::-webkit-scrollbar-thumb{border-radius:3px;background:rgba(128,128,128,.4)}',
+    '.chat-card-options button{display:flex;align-items:center;gap:6px;width:100%;padding:0 9px;border:0;background:transparent;color:inherit;font:inherit;font-size:12px;line-height:28px;cursor:pointer;text-align:start}',
+    '.chat-card-options button:hover{background:rgba(128,128,128,.14)}',
+    '.chat-card-options button.is-sel{font-weight:600}',
+    '.chat-opt-flag{flex:none;line-height:1}',
+    '.chat-opt-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+    '.chat-opt-dial{flex:none;opacity:.55;font-size:11px}',
+    '.chat-opt-empty{display:block;padding:8px 9px;font-size:11.5px;opacity:.55}',
+    // 电话区号前缀：随国家联动，纯展示；提交值里才真正拼上区号
+    '.chat-phone-wrap{display:flex;align-items:center;box-sizing:border-box;width:100%;height:30px;padding:0 9px;border:1px solid rgba(128,128,128,.34);border-radius:4px;background:transparent;transition:border-color .15s ease,box-shadow .15s ease}',
+    '.chat-phone-wrap:focus-within{border-color:rgba(128,128,128,.72);box-shadow:0 0 0 3px rgba(128,128,128,.13);background:rgba(128,128,128,.03)}',
+    '.chat-card-fields .chat-phone-wrap input{height:100%;flex:1;min-width:0;border:0;padding:0;background:transparent;font-size:12.5px}',
+    '.chat-card-fields .chat-phone-wrap input:focus{outline:none;border:0;box-shadow:none;background:transparent}',
+    '.chat-phone-dial{flex:none;padding-inline-end:7px;margin-inline-end:7px;border-inline-end:1px solid rgba(128,128,128,.3);font-size:12px;opacity:.72}',
+    '.chat-phone-dial[hidden]{display:none}',
     '.chat-bubble-card{white-space:pre-wrap;border-inline-start:2px solid currentColor;font-size:11.5px;line-height:1.6}',
     '.chat.is-expanded .chat-panel{width:min(760px,calc(100vw - 40px));max-width:calc(100vw - 40px);height:min(86dvh,840px);max-height:86dvh}',
     '.chat-panel{transition:width .2s ease,height .2s ease}',
@@ -88,8 +120,36 @@
   var CARD_ICON_ATTRS = ' viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"';
   var CARD_ICONS = {
     name: '<svg' + CARD_ICON_ATTRS + '><path d="M3 4m0 3a3 3 0 0 1 3 -3h12a3 3 0 0 1 3 3v10a3 3 0 0 1 -3 3h-12a3 3 0 0 1 -3 -3z" /><path d="M9 10m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0" /><path d="M15 8l2 0" /><path d="M15 12l2 0" /><path d="M7 16l10 0" /></svg>',
-    address: '<svg' + CARD_ICON_ATTRS + '><path d="M9 11a3 3 0 1 0 6 0a3 3 0 0 0 -6 0" /><path d="M17.657 16.657l-4.243 4.243a2 2 0 0 1 -2.827 0l-4.244 -4.243a8 8 0 1 1 11.314 0z" /></svg>'
+    address: '<svg' + CARD_ICON_ATTRS + '><path d="M9 11a3 3 0 1 0 6 0a3 3 0 0 0 -6 0" /><path d="M17.657 16.657l-4.243 4.243a2 2 0 0 1 -2.827 0l-4.244 -4.243a8 8 0 1 1 11.314 0z" /></svg>',
+    // 下拉触发钮右端的 chevron-down，与卡片图标同一套 Tabler 口径
+    chevron: '<svg' + CARD_ICON_ATTRS + '><path d="M6 9l6 6 6-6" /></svg>'
   };
+
+  // 地址卡片的国家/州省数据集（plugins/website/static/country-region.json）：
+  // 由 country-region-data（MIT）+ country-codes-list（MIT）+ i18n-iso-countries 中文国名（MIT）
+  // 合并生成，来源与许可见 docs/功能与权限清单.md。首次打开地址卡才拉取，失败时退回手写输入。
+  var COUNTRY_DATA = null;
+  var COUNTRY_REQ = null;
+  function loadCountries() {
+    if (COUNTRY_DATA) return Promise.resolve(COUNTRY_DATA);
+    if (!COUNTRY_REQ) {
+      COUNTRY_REQ = fetch('/website-assets/country-region.json', { credentials: 'same-origin' })
+        .then(function (res) { if (!res.ok) throw new Error('unavailable'); return res.json(); })
+        .then(function (list) { COUNTRY_DATA = Array.isArray(list) ? list : []; return COUNTRY_DATA; })
+        .catch(function (err) { COUNTRY_REQ = null; throw err; });
+    }
+    return COUNTRY_REQ;
+  }
+  // 国旗不必存数据：ISO2 码的两个字母各加 regional-indicator 偏移就是 emoji
+  function flagEmoji(code) {
+    var out = '';
+    for (var i = 0; i < code.length; i++) out += String.fromCodePoint(0x1F1E6 + code.charCodeAt(i) - 65);
+    return out;
+  }
+  // 站点语言是英文就显示英文国名（州省名本来就是英文，与阿里中文界面下的表现一致）
+  function siteLangEn() {
+    return /^en/i.test(String(document.documentElement.lang || ''));
+  }
 
   function readI18n() {
     try {
@@ -386,6 +446,159 @@
     cardPop.hidden = true;
     if (panel) panel.appendChild(cardPop);
     var activeKind = null;
+    // 地址卡片的下拉状态（国家对象、区号）要跨 openCard/submitCard 两个函数使用
+    var addrState = null;
+
+    // 可搜索下拉（国家/州省）：选项由调用方灌入，选中值放在 hidden input 的
+    // data-field 上 —— submitCard 仍按 [data-field] 取值，普通字段与下拉字段共用一条路径。
+    // 选项不超过 12 个就不出搜索框（多数国家的州省一屏能看全）。
+    function buildSelect(key, placeholder, onPick) {
+      var wrap = document.createElement('div');
+      wrap.className = 'chat-card-select';
+      var trig = document.createElement('button');
+      trig.type = 'button';
+      trig.className = 'chat-card-trigger';
+      trig.setAttribute('aria-haspopup', 'listbox');
+      trig.setAttribute('data-select-trigger', '');
+      var flagEl = document.createElement('span');
+      flagEl.className = 'chat-card-trig-flag';
+      var txtEl = document.createElement('span');
+      txtEl.className = 'chat-card-trig-txt is-ph';
+      txtEl.textContent = placeholder;
+      var chev = document.createElement('span');
+      chev.className = 'chat-card-trig-chev';
+      chev.innerHTML = CARD_ICONS.chevron;
+      trig.appendChild(flagEl); trig.appendChild(txtEl); trig.appendChild(chev);
+      var hidden = document.createElement('input');
+      hidden.type = 'hidden';
+      hidden.setAttribute('data-field', key);
+      var drop = document.createElement('div');
+      drop.className = 'chat-card-drop';
+      drop.hidden = true;
+      var search = document.createElement('input');
+      search.type = 'text';
+      search.className = 'chat-card-search';
+      search.setAttribute('autocomplete', 'off');
+      search.hidden = true;
+      var opts = document.createElement('div');
+      opts.className = 'chat-card-options';
+      opts.setAttribute('role', 'listbox');
+      drop.appendChild(search); drop.appendChild(opts);
+      wrap.appendChild(trig); wrap.appendChild(hidden); wrap.appendChild(drop);
+
+      var items = [];
+      var selKey = null;
+      function render(q) {
+        opts.textContent = '';
+        q = String(q || '').toLowerCase();
+        var n = 0;
+        for (var i = 0; i < items.length; i++) {
+          var it = items[i];
+          if (q && it.needle.indexOf(q) < 0) continue;
+          if (++n > 300) break;
+          var b = document.createElement('button');
+          b.type = 'button';
+          b.setAttribute('role', 'option');
+          b.setAttribute('data-opt', it.key);
+          if (it.key === selKey) b.classList.add('is-sel');
+          if (it.flag) {
+            var fl = document.createElement('span');
+            fl.className = 'chat-opt-flag';
+            fl.textContent = it.flag;
+            b.appendChild(fl);
+          }
+          var nm = document.createElement('span');
+          nm.className = 'chat-opt-name';
+          nm.textContent = it.disp;
+          b.appendChild(nm);
+          if (it.dial) {
+            var dl = document.createElement('span');
+            dl.className = 'chat-opt-dial';
+            dl.textContent = it.dial;
+            b.appendChild(dl);
+          }
+          opts.appendChild(b);
+        }
+        if (!opts.firstChild) {
+          var empty = document.createElement('span');
+          empty.className = 'chat-opt-empty';
+          empty.textContent = t('chatCardSearchEmpty', '无匹配结果');
+          opts.appendChild(empty);
+        }
+      }
+      function apply(it) {
+        selKey = it.key;
+        hidden.value = it.disp;
+        flagEl.textContent = it.flag || '';
+        txtEl.textContent = it.disp;
+        txtEl.classList.remove('is-ph');
+      }
+      trig.addEventListener('click', function () {
+        var open = drop.hidden;
+        // 同时只开一个下拉，别让国家列表压住州省列表
+        Array.prototype.forEach.call(cardPop.querySelectorAll('.chat-card-drop'), function (d) { if (d !== drop) d.hidden = true; });
+        drop.hidden = !open;
+        trig.setAttribute('aria-expanded', open ? 'true' : 'false');
+        if (!drop.hidden) {
+          render(search.value);
+          if (!search.hidden) search.focus();
+        }
+      });
+      search.addEventListener('input', function () { render(search.value); });
+      opts.addEventListener('click', function (e) {
+        var b = e.target.closest ? e.target.closest('[data-opt]') : null;
+        if (!b) return;
+        var it = null;
+        for (var i = 0; i < items.length; i++) {
+          if (String(items[i].key) === b.getAttribute('data-opt')) { it = items[i]; break; }
+        }
+        if (!it) return;
+        apply(it);
+        drop.hidden = true;
+        trig.setAttribute('aria-expanded', 'false');
+        if (onPick) onPick(it);
+      });
+      return {
+        wrap: wrap,
+        apply: apply,
+        setItems: function (list) {
+          items = list;
+          search.hidden = list.length <= 12;
+          search.setAttribute('placeholder', key === 'country'
+            ? t('chatCardCountrySearch', '搜索国家/地区')
+            : t('chatCardRegionSearch', '搜索省/州'));
+          render(search.value);
+        },
+        clear: function () {
+          selKey = null;
+          hidden.value = '';
+          flagEl.textContent = '';
+          txtEl.textContent = placeholder;
+          txtEl.classList.add('is-ph');
+        },
+        // 数据拉不到，或存过的不在数据集里的旧手写值：整体退回普通文本框，不挡发卡
+        fallbackText: function (val) {
+          var inp = document.createElement('input');
+          inp.type = 'text';
+          inp.value = val || '';
+          inp.setAttribute('data-field', key);
+          inp.setAttribute('autocomplete', 'off');
+          wrap.replaceWith(inp);
+          if (val) inp.focus();
+        }
+      };
+    }
+
+    function closeOpenDrops() {
+      var closed = false;
+      Array.prototype.forEach.call(cardPop.querySelectorAll('.chat-card-drop'), function (d) {
+        if (!d.hidden) { d.hidden = true; closed = true; }
+      });
+      Array.prototype.forEach.call(cardPop.querySelectorAll('[data-select-trigger]'), function (tg) {
+        tg.setAttribute('aria-expanded', 'false');
+      });
+      return closed;
+    }
 
     function readCard(kind) {
       try { return JSON.parse(localStorage.getItem('nexchat.card.' + kind) || '{}') || {}; }
@@ -410,17 +623,115 @@
       hint.textContent = t('chatCardHint', '信息仅用于本次询盘沟通');
       cardPop.appendChild(hint);
       var grid = document.createElement('div'); grid.className = 'chat-card-fields';
+      // 地址卡片的国家/州省/电话走专用控件：对齐阿里「添加地址」的形态 ——
+      // 国家带国旗可搜索、州省跟着国家换成下拉、电话自动带区号。
+      // 数据是异步的：先铺好空下拉，拉到数据再灌选项并回填存过的值。
+      var addr = { country: null, dial: '', dialEl: null, pendingRegion: '' };
+      addrState = kind === 'address' ? addr : null;
+      var regionSel = null;
+      function dispName(c) { return siteLangEn() ? c.en : c.zh; }
+      function syncRegion(c) {
+        if (!regionSel || regionSel.dead) return;
+        var rs = c.r || [];
+        if (!rs.length) {
+          // 该国没有州省数据（如一些小国）：退回手写输入，与阿里的行为一致
+          regionSel.fallbackText(addr.pendingRegion || '');
+          return;
+        }
+        regionSel.setItems(rs.map(function (nm) { return { key: nm, disp: nm, needle: nm.toLowerCase() }; }));
+        if (addr.pendingRegion && rs.indexOf(addr.pendingRegion) >= 0) {
+          regionSel.apply({ key: addr.pendingRegion, disp: addr.pendingRegion, needle: addr.pendingRegion.toLowerCase() });
+        } else {
+          regionSel.clear();
+        }
+        addr.pendingRegion = '';
+      }
+      function buildCountry(label, savedVal) {
+        var sel = buildSelect('country', t('chatCardCountrySelect', '选择国家/地区'), function (it) {
+          addr.country = it.raw;
+          addr.dial = it.raw.dial || '';
+          if (addr.dialEl) {
+            addr.dialEl.textContent = addr.dial;
+            addr.dialEl.hidden = !addr.dial;
+          }
+          syncRegion(it.raw);
+        });
+        label.appendChild(sel.wrap);
+        loadCountries().then(function (list) {
+          var items = list.map(function (c) {
+            return {
+              key: c.c, disp: dispName(c), flag: flagEmoji(c.c), dial: c.dial, raw: c,
+              needle: (c.zh + ' ' + c.en + ' ' + c.c + ' ' + (c.dial || '')).toLowerCase()
+            };
+          });
+          sel.setItems(items);
+          var hit = null;
+          for (var i = 0; i < items.length; i++) {
+            if (items[i].raw.zh === savedVal || items[i].raw.en === savedVal) { hit = items[i]; break; }
+          }
+          if (hit) {
+            sel.apply(hit);
+            addr.country = hit.raw;
+            addr.dial = hit.raw.dial || '';
+            if (addr.dialEl) {
+              addr.dialEl.textContent = addr.dial;
+              addr.dialEl.hidden = !addr.dial;
+            }
+            syncRegion(hit.raw);
+          } else if (savedVal) {
+            sel.fallbackText(savedVal); // 旧手写值不在数据集里，保持可编辑
+          }
+        }).catch(function () {
+          sel.fallbackText(savedVal); // 数据不可用也不挡发卡
+        });
+      }
+      function buildRegion(label, savedVal) {
+        addr.pendingRegion = savedVal || '';
+        var sel = buildSelect('region', t('chatCardRegionSelect', '选择省/州'), function () { /* 州省无联动 */ });
+        regionSel = sel;
+        label.appendChild(sel.wrap);
+      }
+      function buildPhone(label, saved) {
+        var raw = String(saved.phone || '');
+        // 上次提交时已拼过区号，回显时剥掉，避免前缀块 + 输入值重复
+        if (saved.phoneDial && raw.indexOf(saved.phoneDial + ' ') === 0) raw = raw.slice(saved.phoneDial.length + 1);
+        var wrap = document.createElement('div');
+        wrap.className = 'chat-phone-wrap';
+        var dial = document.createElement('span');
+        dial.className = 'chat-phone-dial';
+        dial.hidden = true;
+        var inp = document.createElement('input');
+        inp.type = 'tel';
+        inp.value = raw;
+        inp.setAttribute('data-field', 'phone');
+        inp.setAttribute('autocomplete', 'off');
+        wrap.appendChild(dial); wrap.appendChild(inp);
+        label.appendChild(wrap);
+        addr.dialEl = dial;
+        if (saved.phoneDial) {
+          addr.dial = saved.phoneDial;
+          dial.textContent = saved.phoneDial;
+          dial.hidden = false;
+        }
+      }
       def.fields.forEach(function (f) {
         var label = document.createElement('label');
         if (f.wide) label.className = 'wide';
         var span = document.createElement('span');
         span.textContent = f.label + (f.required ? ' *' : '');
-        var inp = document.createElement('input');
-        inp.type = f.key === 'email' ? 'email' : 'text';
-        inp.value = saved[f.key] || '';
-        inp.setAttribute('data-field', f.key);
-        inp.setAttribute('autocomplete', 'off');
-        label.appendChild(span); label.appendChild(inp); grid.appendChild(label);
+        label.appendChild(span);
+        if (kind === 'address' && f.key === 'country') buildCountry(label, saved.country);
+        else if (kind === 'address' && f.key === 'region') buildRegion(label, saved.region);
+        else if (kind === 'address' && f.key === 'phone') buildPhone(label, saved);
+        else {
+          var inp = document.createElement('input');
+          inp.type = f.key === 'email' ? 'email' : 'text';
+          inp.value = saved[f.key] || '';
+          inp.setAttribute('data-field', f.key);
+          inp.setAttribute('autocomplete', 'off');
+          label.appendChild(inp);
+        }
+        grid.appendChild(label);
       });
       cardPop.appendChild(grid);
       var actions = document.createElement('div'); actions.className = 'chat-card-actions';
@@ -434,7 +745,7 @@
       actions.appendChild(cancel); actions.appendChild(send);
       cardPop.appendChild(actions);
       cardPop.hidden = false;
-      var first = cardPop.querySelector('input');
+      var first = cardPop.querySelector('input[type="text"],input[type="tel"],input[type="email"]');
       if (first) first.focus();
     }
 
