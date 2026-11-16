@@ -30,10 +30,10 @@ const (
 
 // postExportParams 是新闻导出任务参数：筛选条件与操作者（与列表 query 参数同契约，多值逗号拼接）。
 type postExportParams struct {
-	Keyword     string   `json:"keyword,omitempty"`
-	Status      string   `json:"status,omitempty"`
-	CategoryIds string   `json:"categoryIds,omitempty"`
-	ActorID     int64    `json:"actorId"`
+	Keyword     string `json:"keyword,omitempty"`
+	Status      string `json:"status,omitempty"`
+	CategoryIds string `json:"categoryIds,omitempty"`
+	ActorID     int64  `json:"actorId"`
 }
 
 func (p postExportParams) query() ContentQuery {
@@ -75,7 +75,7 @@ func (p messageExportParams) query() MessageQuery {
 }
 
 // RunPostExportJob 是 website.post-export 的任务处理器：列与页面上看到的列表一致
-//（标题 / slug / 分类 / 发布状态 / 发布时间 / 更新时间）。
+// （标题 / slug / 分类 / 发布状态 / 发布时间 / 更新时间）。
 func (s *Service) RunPostExportJob(ctx context.Context, j *job.Job, report job.Report) (job.ResultFile, error) {
 	var p postExportParams
 	if err := j.Decode(&p); err != nil {
@@ -124,14 +124,14 @@ func (s *Service) RunPostExportJob(ctx context.Context, j *job.Job, report job.R
 			if err := sh.WriteRow(p.Title, p.Slug, strings.Join(cats, "、"), status, publishedAt, p.UpdatedAt.In(time.Local)); err != nil {
 				return err
 			}
-			report((i + 1) * 100 / max(len(rows), 1), fmt.Sprintf("已导出 %d / %d 行", i+1, len(rows)))
+			report((i+1)*100/max(len(rows), 1), fmt.Sprintf("已导出 %d / %d 行", i+1, len(rows)))
 		}
 		return x.Close()
 	})
 }
 
 // RunMessageExportJob 是 website.message-export 的任务处理器：列与留言页一致
-//（状态 / 姓名 / 邮箱 / 电话 / 内容 / IP / 时间）。
+// （状态 / 姓名 / 邮箱 / 电话 / 内容 / IP / 时间）。
 func (s *Service) RunMessageExportJob(ctx context.Context, j *job.Job, report job.Report) (job.ResultFile, error) {
 	var p messageExportParams
 	if err := j.Decode(&p); err != nil {
@@ -165,7 +165,7 @@ func (s *Service) RunMessageExportJob(ctx context.Context, j *job.Job, report jo
 			if err := sh.WriteRow(messageStatusText(m.Status), m.Name, m.Email, m.Phone, m.Content, m.IP, m.CreatedAt.In(time.Local)); err != nil {
 				return err
 			}
-			report((i + 1) * 100 / max(len(rows), 1), fmt.Sprintf("已导出 %d / %d 行", i+1, len(rows)))
+			report((i+1)*100/max(len(rows), 1), fmt.Sprintf("已导出 %d / %d 行", i+1, len(rows)))
 		}
 		return x.Close()
 	})

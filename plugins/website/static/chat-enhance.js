@@ -37,7 +37,9 @@
     '.chat-emoji-pop,.chat-more-pop{position:absolute;z-index:20;display:flex;flex-wrap:wrap;gap:4px;padding:8px;border:1px solid rgba(128,128,128,.3);border-radius:4px;background:Canvas;color:CanvasText;box-shadow:0 12px 28px rgba(0,0,0,.18)}',
     '.chat-emoji-pop[hidden],.chat-more-pop[hidden]{display:none}',
     '.chat-emoji-pop{inset-inline-start:8px;inset-block-end:96px;display:grid;grid-template-columns:repeat(9,minmax(0,1fr));gap:2px;box-sizing:border-box;width:min(304px,calc(100% - 16px));max-height:216px;overflow-y:auto;padding:8px}',
-    '.chat-emoji-pop button{display:flex;align-items:center;justify-content:center;width:100%;aspect-ratio:1/1;padding:0;border:0;border-radius:4px;background:transparent;color:inherit;font-size:18px;line-height:1;cursor:pointer}',
+    // content-visibility：176 个 emoji 首开时光栅化全部字形，弱机/高负载下点开有可感知的停顿；
+    // 视口内只有 ~45 个，屏外的跳过绘制（滚动到再画），首开绘制量直接砍到 1/4
+    '.chat-emoji-pop button{display:flex;align-items:center;justify-content:center;width:100%;aspect-ratio:1/1;padding:0;border:0;border-radius:4px;background:transparent;color:inherit;font-size:18px;line-height:1;cursor:pointer;content-visibility:auto;contain-intrinsic-size:auto 32px}',
     '.chat-emoji-pop button:hover{background:rgba(128,128,128,.18)}',
     '.chat-emoji-pop::-webkit-scrollbar{width:6px}',
     '.chat-emoji-pop::-webkit-scrollbar-thumb{border-radius:3px;background:rgba(128,128,128,.4)}',
@@ -484,30 +486,39 @@
     }
 
     // ---- 表情与更多菜单 ----
-    if (emojiPop) {
+    // 表情按钮懒构建：不占每次页面加载的成本，第一次点开才铺按钮；
+    // 选中用浮层上的一个事件委托，不再给 176 个按钮各自挂监听。
+    var emojiBuilt = false;
+    var buildEmojis = function () {
+      if (emojiBuilt) return;
+      emojiBuilt = true;
       EMOJIS.forEach(function (em) {
         var b = document.createElement('button');
         b.type = 'button';
         b.textContent = em;
         b.title = em;
         b.setAttribute('aria-label', em);
-        b.addEventListener('click', function () {
-          if (!input) return;
-          input.value = String(input.value || '') + em;
-          // 选完就收起：浮层压在消息区上，留着挡内容；要连发再点一次按钮
-          emojiPop.hidden = true;
-          input.focus();
-        });
+        b.setAttribute('data-em', em);
         emojiPop.appendChild(b);
+      });
+    };
+    if (emojiPop) {
+      emojiPop.addEventListener('click', function (e) {
+        var em = e.target && e.target.getAttribute && e.target.getAttribute('data-em');
+        if (!em || !input) return;
+        input.value = String(input.value || '') + em;
+        // 选完就收起：浮层压在消息区上，留着挡内容；要连发再点一次按钮
+        emojiPop.hidden = true;
+        input.focus();
       });
     }
     if (emojiBtn && emojiPop) {
       emojiBtn.addEventListener('click', function () {
-        emojiPop.hidden = !emojiPop.hidden;
-        if (!emojiPop.hidden) {
-          if (morePop) morePop.hidden = true;
-          if (cardPop) cardPop.hidden = true;
-        }
+        if (!emojiPop.hidden) { emojiPop.hidden = true; return; }
+        buildEmojis();
+        emojiPop.hidden = false;
+        if (morePop) morePop.hidden = true;
+        if (cardPop) cardPop.hidden = true;
       });
     }
     if (moreBtn && morePop) {

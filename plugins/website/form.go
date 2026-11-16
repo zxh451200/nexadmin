@@ -51,6 +51,13 @@ type SettingForm struct {
 	// DefaultLang 是官网默认语言：空 / auto = 跟随浏览器语言协商；具体 code = 该语言占根路径。
 	// 服务层校验 code 在语言清单内；公开站路由在启动期注册，改完需重启。
 	DefaultLang string `json:"defaultLang"`
+	// 供应商实力档案（对标阿里商详供应商卡）：成立年份用指针，设置页分区块保存时不传就不改。
+	// 其余四项是字符串，传空即清空展示（运营可能只想留其中几项）。
+	EstablishedYear *int   `json:"establishedYear"`
+	StaffCount      string `json:"staffCount"`
+	AnnualRevenue   string `json:"annualRevenue"`
+	MainMarkets     string `json:"mainMarkets"`
+	ResponseTime    string `json:"responseTime"`
 }
 
 // ItemForm 是导航项表单。
@@ -234,6 +241,9 @@ type ProductForm struct {
 	PublishedJSON string `json:"publishedJson"`
 	NoIndex       bool   `json:"noindex"`
 	Author        string `json:"author"`
+	// Certifications 是认证资质名称清单（CE / UL / UN38.3 等）：保存时去空去重、
+	// 上限 12 项、每项 24 字，序列化成 JSON 数组文本入库；空数组即清空。
+	Certifications []string `json:"certifications"`
 }
 
 // ProductCategoryForm 是产品类目表单。
@@ -258,7 +268,7 @@ type ProductCategoryOrderForm struct {
 }
 
 // AliConfigForm 是阿里开放平台凭据表单：Secret/SessionKey 三态
-//（空或掩码 = 保持旧值，其余 = 重新加密），参照 realname/aigateway 的凭据模式。
+// （空或掩码 = 保持旧值，其余 = 重新加密），参照 realname/aigateway 的凭据模式。
 type AliConfigForm struct {
 	AppKey     string `json:"appKey"`
 	AppSecret  string `json:"appSecret"`

@@ -176,10 +176,10 @@ func (s *Service) TestAliConnection(ctx context.Context) error {
 
 // AliCategoryNode 是下发给前端的类目树节点（精简：只留选择器需要的字段）。
 type AliCategoryNode struct {
-	ID    string `json:"id"`
-	Name  string `json:"name"`
+	ID     string `json:"id"`
+	Name   string `json:"name"`
 	CnName string `json:"cnName"`
-	Leaf  bool   `json:"leaf"`
+	Leaf   bool   `json:"leaf"`
 }
 
 // aliCategoriesTTL 是类目树缓存时长：类目变化以月计，缓存一天足够。
@@ -216,10 +216,10 @@ func (s *Service) AliCategories(ctx context.Context, parentID string) ([]AliCate
 		return []AliCategoryNode{}, nil
 	}
 	var items []struct {
-		CategoryID  any    `json:"category_id"`
-		Name        string `json:"name"`
-		CnName      string `json:"cn_name"`
-		LeafCategory bool  `json:"leaf_category"`
+		CategoryID   any    `json:"category_id"`
+		Name         string `json:"name"`
+		CnName       string `json:"cn_name"`
+		LeafCategory bool   `json:"leaf_category"`
 	}
 	if err := json.Unmarshal(raw, &items); err != nil {
 		return nil, fmt.Errorf("ali categories parse: %w (%s)", err, aliSnippet(raw))
@@ -227,10 +227,10 @@ func (s *Service) AliCategories(ctx context.Context, parentID string) ([]AliCate
 	out := make([]AliCategoryNode, 0, len(items))
 	for _, it := range items {
 		out = append(out, AliCategoryNode{
-			ID:    fmt.Sprint(it.CategoryID),
-			Name:  it.Name,
+			ID:     fmt.Sprint(it.CategoryID),
+			Name:   it.Name,
 			CnName: it.CnName,
-			Leaf:  it.LeafCategory,
+			Leaf:   it.LeafCategory,
 		})
 	}
 	if s.cache != nil {

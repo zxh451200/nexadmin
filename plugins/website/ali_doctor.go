@@ -25,16 +25,16 @@ type AliDoctorOption struct {
 
 // AliDoctorReport 是自检报告（前端原样展示，可复制给开发者）。
 type AliDoctorReport struct {
-	CategoryID   string              `json:"categoryId"`
-	FieldCount   int                 `json:"fieldCount"`
-	Required     []string            `json:"required"`
-	Logistics    []AliDoctorOption   `json:"logistics"`
-	PriceUnit    []AliDoctorOption   `json:"priceUnit"`
+	CategoryID   string                       `json:"categoryId"`
+	FieldCount   int                          `json:"fieldCount"`
+	Required     []string                     `json:"required"`
+	Logistics    []AliDoctorOption            `json:"logistics"`
+	PriceUnit    []AliDoctorOption            `json:"priceUnit"`
 	PriceTypes   map[string][]AliDoctorOption `json:"priceTypes"`
-	RenderSample map[string]string   `json:"renderSample,omitempty"`
-	AddShape     string              `json:"addShape"` // flat | nested | unknown | skipped
-	AddErrors    map[string]string   `json:"addErrors,omitempty"`
-	Notes        []string            `json:"notes"`
+	RenderSample map[string]string            `json:"renderSample,omitempty"`
+	AddShape     string                       `json:"addShape"` // flat | nested | unknown | skipped
+	AddErrors    map[string]string            `json:"addErrors,omitempty"`
+	Notes        []string                     `json:"notes"`
 }
 
 // AliDoctor 执行联调自检。productID 为空则跳过 render；probeAdd=false 则不试 schema.add 入参形态。

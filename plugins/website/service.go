@@ -318,6 +318,18 @@ func (s *Service) SaveSettings(ctx context.Context, f SettingForm) (*Setting, er
 	if row.ContactConsent && !footerURLValid(row.ContactConsentURL, false) {
 		return nil, response.BadRequest("website.contact_consent_url_invalid")
 	}
+	// 供应商实力档案：成立年份钳到合理区间（0 = 不展示），其余按展示长度截断。
+	if f.EstablishedYear != nil {
+		y := *f.EstablishedYear
+		if y < 0 || y > time.Now().Year() {
+			return nil, response.BadRequest("website.established_year_invalid")
+		}
+		row.EstablishedYear = y
+	}
+	row.StaffCount = trimLen(f.StaffCount, 32)
+	row.AnnualRevenue = trimLen(f.AnnualRevenue, 64)
+	row.MainMarkets = trimLen(f.MainMarkets, 200)
+	row.ResponseTime = trimLen(f.ResponseTime, 32)
 	if err := s.db.WithContext(ctx).Save(row).Error; err != nil {
 		return nil, err
 	}

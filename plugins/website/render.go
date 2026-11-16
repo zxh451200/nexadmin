@@ -185,6 +185,9 @@ func inquiryDialog(v any) template.HTML {
 	}
 
 	b.WriteString(`<form class="inq-form" method="post" action="` + esc(contactURL) + `" data-inquiry-form novalidate>`)
+	// 表单主体单独一层：内容长时只有它滚动，「确认发送」始终钉在卡片底部。
+	// 弹窗加上附件、常问快填、共享名片后内容接近一屏，按钮跟着滚下去会让买家以为只有半张表。
+	b.WriteString(`<div class="inq-body">`)
 	// 详细需求
 	b.WriteString(`<label class="inq-field"><span class="inq-label"><i class="inq-req">*</i>` + esc(t("inquiry.detail")) + `</span>`)
 	b.WriteString(`<textarea name="content" rows="5" required minlength="5" maxlength="2000" placeholder="` + esc(t("inquiry.placeholder")) + `" data-inquiry-content></textarea></label>`)
@@ -219,7 +222,9 @@ func inquiryDialog(v any) template.HTML {
 	b.WriteString(`</div>`)
 	b.WriteString(`<label class="inq-field"><span class="inq-label">` + esc(t("contact.phoneOpt")) + `</span><input name="phone" type="tel" maxlength="32" autocomplete="tel"></label>`)
 	b.WriteString(`<label class="inq-hp" aria-hidden="true"><span>Company</span><input name="company" tabindex="-1" autocomplete="off"></label>`)
+	b.WriteString(`</div>`) // .inq-body
 	// 商品上下文与「共享名片」：后台据此知道这条询盘问的是哪个商品，并能做超时推荐。
+	// 这两项和隐私说明、发送按钮一起钉在底部：勾选项滚出视野等于没提示过。
 	if product != nil {
 		b.WriteString(`<input type="hidden" name="productId" value="` + esc(product.ID.String()) + `">`)
 	}
@@ -497,28 +502,35 @@ type siteView struct {
 	TitleSuffix string
 	// HomeSlug 是被设为首页的单页 slug（站点设置）；空 = 内置首页。
 	// 不进模板，由 home 处理器读取决定渲染哪张页面。
-	HomeSlug      string
-	HomeTitle     string
-	HomeSubtitle  string
-	HomeCTALabel  string
-	HomeCTAHref   string
-	ContactEmail  string
-	ContactPhone  string
-	QRCodeURL     string
-	QRCodeCaption string
-	Socials       []SocialLink
-	FriendLinks   []FriendLink
-	ICP           string
-	FooterNote    string
-	SeoKeywords   string
-	BaseURL       string // 绝对地址，用于 canonical / og:url / og:image
-	Path          string // 当前请求路径（含语言前缀），用于 canonical
-	Route         string // 去掉语言前缀的站内路径，用于导航高亮与语言切换
-	Query         string // 原始 query，语言切换时保留筛选
-	Navs          []Nav
-	Features      []Feature
-	Title         string
-	Desc          string
+	HomeSlug     string
+	HomeTitle    string
+	HomeSubtitle string
+	HomeCTALabel string
+	HomeCTAHref  string
+	ContactEmail string
+	ContactPhone string
+	// 供应商实力档案（对标阿里商详供应商卡）：全部来自站点设置，
+	// 空值由模板逐个判断，缺哪项就不渲染那一格。
+	EstablishedYear int
+	StaffCount      string
+	AnnualRevenue   string
+	MainMarkets     string
+	ResponseTime    string
+	QRCodeURL       string
+	QRCodeCaption   string
+	Socials         []SocialLink
+	FriendLinks     []FriendLink
+	ICP             string
+	FooterNote      string
+	SeoKeywords     string
+	BaseURL         string // 绝对地址，用于 canonical / og:url / og:image
+	Path            string // 当前请求路径（含语言前缀），用于 canonical
+	Route           string // 去掉语言前缀的站内路径，用于导航高亮与语言切换
+	Query           string // 原始 query，语言切换时保留筛选
+	Navs            []Nav
+	Features        []Feature
+	Title           string
+	Desc            string
 	// SeoTitle 是内容级的完整 meta 标题覆盖：空 = 用 Title（「标题 - 站点名」的组合交给装配方）。
 	SeoTitle string
 	OGImage  string // 绝对地址；空 = 用站点默认分享图
@@ -548,6 +560,8 @@ type siteView struct {
 	ProductSort      string
 	ProductsFeatured []Product
 	Product          *Product
+	// ProductReviews 是商详评价区（均分/分布/列表）。Total=0 时模板整段不渲染。
+	ProductReviews productReviewStats
 	// InquiryAccept / InquiryMaxBytes / InquiryMaxText / InquiryMaxFiles 是询盘附件的生效限制，
 	// 只有商详页填（弹窗在那里）；空表示附件不可用（存储未装配）。
 	InquiryAccept   string

@@ -2,10 +2,10 @@
 <article class="pd-page" data-pd-page>
   <div class="pd-wrap">
     <nav class="pd-crumb" aria-label="{{.T "product.crumbAria"}}">
-      <a href="{{.Home}}">{{.T "layout.home"}}</a><span aria-hidden="true">�?/span>
+      <a href="{{.Home}}">{{.T "layout.home"}}</a><span aria-hidden="true">›</span>
       <a href="{{.URL "/products"}}">{{.T "products.title"}}</a>
-      {{if .Product.Categories}}<span aria-hidden="true">�?/span>{{range $i, $c := .Product.Categories}}{{if $i}} / {{end}}<a href="{{$.URL "/products"}}?category={{$c.Slug}}">{{$c.Title}}</a>{{end}}{{end}}
-      <span aria-hidden="true">�?/span><span aria-current="page">{{.Product.Title}}</span>
+      {{if .Product.Categories}}<span aria-hidden="true">›</span>{{range $i, $c := .Product.Categories}}{{if $i}} / {{end}}<a href="{{$.URL "/products"}}?category={{$c.Slug}}">{{$c.Title}}</a>{{end}}{{end}}
+      <span aria-hidden="true">›</span><span aria-current="page">{{.Product.Title}}</span>
     </nav>
 
     <div class="pd-top">
@@ -82,16 +82,16 @@
         <div class="pd-qty" data-pd-qty data-pd-qty-min="{{if gt .Product.Moq 1}}{{.Product.Moq}}{{else}}1{{end}}"{{if .Product.PriceUnit}} data-pd-qty-unit="{{.Product.PriceUnit}}"{{end}}>
           <label class="pd-qty-label" for="pd-qty-input">{{.T "product.quantity"}}</label>
           <div class="pd-stepper">
-            <button type="button" class="pd-step" data-pd-qty-minus aria-label="{{.T "product.qtyDec"}}">�?/button>
+            <button type="button" class="pd-step" data-pd-qty-minus aria-label="{{.T "product.qtyDec"}}">−</button>
             <input class="pd-step-input" id="pd-qty-input" data-pd-qty-input type="text" inputmode="numeric" autocomplete="off" value="{{if gt .Product.Moq 1}}{{.Product.Moq}}{{else}}1{{end}}" aria-label="{{.T "product.quantity"}}">
             <button type="button" class="pd-step" data-pd-qty-plus aria-label="{{.T "product.qtyInc"}}">+</button>
           </div>
           {{if .Product.PriceUnit}}<span class="pd-qty-unit">{{.Product.PriceUnit}}</span>{{end}}
         </div>
         <div class="pd-sum" data-pd-sum data-pd-currency="{{.Product.Currency}}" data-pd-price="{{.Product.PriceMin}}" data-pd-freight="{{.Product.FreightAmount}}"{{if not .Product.PriceMin}} hidden{{end}}>
-          <div class="pd-sum-row"><span>{{.T "product.sumProducts"}}</span><span data-pd-sum-products>�?/span></div>
+          <div class="pd-sum-row"><span>{{.T "product.sumProducts"}}</span><span data-pd-sum-products></span></div>
           <div class="pd-sum-row"><span>{{.T "product.sumFreight"}}</span><span data-pd-sum-freight>{{if gt .Product.FreightAmount 0.0}}{{.Product.Currency}}{{money .Product.FreightAmount}}{{else}}{{.T "product.freightTbd"}}{{end}}</span></div>
-          <div class="pd-sum-total"><span>{{.T "product.sumTotal"}}</span><span data-pd-sum-total>�?/span></div>
+          <div class="pd-sum-total"><span>{{.T "product.sumTotal"}}</span><span data-pd-sum-total></span></div>
         </div>
         <div class="pd-inq-section">
           <strong>{{.T "product.shippingTitle"}}</strong>
@@ -124,9 +124,9 @@
         {{end}}
         <div class="pd-inq-section pd-service">
           <strong>{{.T "product.serviceTitle"}}</strong>
-          <div><span aria-hidden="true">�?/span> {{.T "product.serviceQuote"}}</div>
-          <div><span aria-hidden="true">�?/span> {{.T "product.serviceSpec"}}</div>
-          <div><span aria-hidden="true">�?/span> {{.T "product.serviceDelivery"}}</div>
+          <div><span aria-hidden="true">✓</span> {{.T "product.serviceQuote"}}</div>
+          <div><span aria-hidden="true">✓</span> {{.T "product.serviceSpec"}}</div>
+          <div><span aria-hidden="true">✓</span> {{.T "product.serviceDelivery"}}</div>
         </div>
         {{if .Product.PaymentChips}}
         <div class="pd-inq-section pd-pay">
@@ -140,8 +140,8 @@
         </div>
         {{end}}
         <a id="pd-cta" data-inquiry-open class="pd-cta pd-cta-primary" href="{{.URL "/contact"}}" data-chat-title="{{.Product.Title}}" data-chat-price="{{if .Product.PriceMin}}{{.Product.Currency}}{{money .Product.PriceMin}}{{else}}{{.T "product.priceOnRequest"}}{{end}}" data-chat-moq="{{if .Product.Moq}}{{.T "products.moqLabel"}}: {{.Product.Moq}}{{end}}" data-chat-url="{{.URL "/products"}}/{{.Product.Slug}}" data-chat-cover="{{.Product.CoverURL}}">{{.T "product.sendInquiry"}}</a>
-        {{/* 「联系商家」是直接对话入口：装�?IM 就开客服面板并预填开场白�?
-             没装 IM 时照旧按 href 走邮�?/ 联系页，不能只在 mailto 上挂着等系统邮件客户端 */}}
+        {{/* 「联系商家」是直接对话入口：装了 IM 就开客服面板并预填开场白；
+             没装 IM 时照旧按 href 走邮箱 / 联系页，不能只在 mailto 上挂着等系统邮件客户端 */}}
         <a class="pd-cta pd-cta-secondary" href="{{if .ContactEmail}}mailto:{{.ContactEmail}}{{else}}{{.URL "/contact"}}{{end}}" data-chat-open-product data-chat-intent="contact" data-chat-title="{{.Product.Title}}" data-chat-price="{{if .Product.PriceMin}}{{.Product.Currency}}{{money .Product.PriceMin}}{{else}}{{.T "product.priceOnRequest"}}{{end}}" data-chat-moq="{{if .Product.Moq}}{{.T "products.moqLabel"}}: {{.Product.Moq}}{{end}}" data-chat-url="{{.URL "/products"}}/{{.Product.Slug}}" data-chat-cover="{{.Product.CoverURL}}">{{.T "product.contactSupplier"}}</a>
         <p class="pd-foot-note">{{.TF "product.inquiryNote" .SiteName}}</p>
       </aside>
@@ -207,11 +207,11 @@
     {{shareBar $}}
     {{if or .ProductPrev .ProductNext}}
     <nav class="dt-nav" aria-label="{{.T "detail.navAria"}}">
-      {{if .ProductPrev}}<a class="dt-nav-item dt-prev" href="{{.URL "/products"}}/{{.ProductPrev.Slug}}"><small>�?{{.T "detail.prev"}}</small><span>{{.ProductPrev.Title}}</span></a>{{else}}<span class="dt-nav-item dt-empty"></span>{{end}}
-      {{if .ProductNext}}<a class="dt-nav-item dt-next" href="{{.URL "/products"}}/{{.ProductNext.Slug}}"><small>{{.T "detail.next"}} �?/small><span>{{.ProductNext.Title}}</span></a>{{else}}<span class="dt-nav-item dt-empty"></span>{{end}}
+      {{if .ProductPrev}}<a class="dt-nav-item dt-prev" href="{{.URL "/products"}}/{{.ProductPrev.Slug}}"><small>← {{.T "detail.prev"}}</small><span>{{.ProductPrev.Title}}</span></a>{{else}}<span class="dt-nav-item dt-empty"></span>{{end}}
+      {{if .ProductNext}}<a class="dt-nav-item dt-next" href="{{.URL "/products"}}/{{.ProductNext.Slug}}"><small>{{.T "detail.next"}} →</small><span>{{.ProductNext.Title}}</span></a>{{else}}<span class="dt-nav-item dt-empty"></span>{{end}}
     </nav>
     {{end}}
-    <p class="pd-back"><a href="{{.URL "/products"}}">�?{{.T "products.back"}}</a></p>
+    <p class="pd-back"><a href="{{.URL "/products"}}">← {{.T "products.back"}}</a></p>
   </div>
 {{inquiryDialog $}}
 </article>

@@ -2,7 +2,7 @@ package website
 
 import (
 	"context"
-	"errors"
+
 	"math"
 	"strconv"
 	"strings"
@@ -30,13 +30,18 @@ type reviewStarRow struct {
 // productReviewStats 是商详「评价」区的完整视图。
 // Total=0 时模板整段不渲染（没评价就不摆一个空壳）。
 type productReviewStats struct {
-	Total   int
-	Average string // 保留一位小数，模板直接显示，不在模板里做浮点格式化
-	Stars   []reviewStarRow
-	List    []ProductReview
+	Total int
+	// AvgValue 给模板画星级用（四舍五入到整星），Average 是给人看的一位小数文本。
+	AvgValue float64
+	Average  string // 保留一位小数，模板直接显示，不在模板里做浮点格式化
+	Stars    []reviewStarRow
+	List     []ProductReview
 	// WithText 是有正文的条数：只有星级没有正文的评价，列表里出引用块会很空。
 	WithText int
 }
+
+// StarsFloat 把整数星级转成画星用的浮点值（模板 {{starRow .StarsFloat}}）。
+func (r ProductReview) StarsFloat() float64 { return float64(clampRating(r.Rating)) }
 
 // PublicProductReviews 组装商详评价区：只取 published 的评价，按时间倒序。
 // 查询失败不挡详情页——评价是增强信息，静默降级成不展示。
@@ -67,7 +72,8 @@ func (s *Service) PublicProductReviews(ctx context.Context, productID int64) (pr
 			out.WithText++
 		}
 	}
-	out.Average = formatAvg(float64(sum) / float64(out.Total))
+	out.AvgValue = math.Round(float64(sum)/float64(out.Total)*10) / 10
+	out.Average = formatAvg(out.AvgValue)
 	out.Stars = make([]reviewStarRow, 0, 5)
 	for i, n := range counts {
 		star := 5 - i
@@ -84,14 +90,10 @@ func (s *Service) PublicProductReviews(ctx context.Context, productID int64) (pr
 	return out, nil
 }
 
-// formatAvg 把均分裁到一位小数：4.75 → "4.8"，5.0 → "5.0"（始终带一位，星级视觉才齐）。
+// formatAvg 把均分固定成一位小数：4.75 → "4.8"，5 → "5.0"。
+// 固定位数比「去掉末尾 0」更合适：评价区旁边还有一排星星，宽度不能随分数跳动。
 func formatAvg(v float64) string {
-	r := math.Round(v*10) / 10
-	s := strings.TrimRight(strings.TrimRight(strconv.FormatFloat(r, 'f', -1, 64), "0"), ".")
-	if !strings.Contains(s, ".") {
-		s += ".0"
-	}
-	return s
+	return strconv.FormatFloat(math.Round(v*10)/10, 'f', 1, 64)
 }
 
 // clampRating 把星级钳到 1-5：后台脏数据（0、负数、8 星）不能把分布算穿。
@@ -228,6 +230,3 @@ func defaultInt(v, def int) int {
 	}
 	return v
 }
-
-// errReviewNotFound 供 handler 在只读接口上复用同一文案（保持错误 key 单一来源）。
-var errReviewNotFound = errors.New("website.review_not_found")

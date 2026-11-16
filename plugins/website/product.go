@@ -252,6 +252,11 @@ func (s *Service) SaveProduct(ctx context.Context, id idgen.ID, f ProductForm) (
 	row.Moq, row.LeadTimeDays, row.Port, row.PaymentTerms = f.Moq, f.LeadTimeDays, f.Port, f.PaymentTerms
 	row.FreightAmount = f.FreightAmount
 	row.SpecsJSON, row.Author = specsJSON, f.Author
+	// 认证清单：nil = 本次不改（老客户端不带该字段），空数组 = 运营清空。
+	// 与 AliTrade 同一套「不改 vs 清空」语义，避免升级后老表单把认证刷没了。
+	if f.Certifications != nil {
+		row.CertificationsJSON = normalizeCertifications(f.Certifications)
+	}
 	if f.AliTrade != nil {
 		tradeJSON, terr := normalizeAliTrade(f.AliTrade)
 		if terr != nil {
@@ -353,8 +358,8 @@ func (s *Service) CopyProduct(ctx context.Context, id idgen.ID) (*Product, error
 		CoverURL: src.CoverURL, ImagesJSON: src.ImagesJSON, VideoURL: src.VideoURL,
 		PriceMin: src.PriceMin, PriceMax: src.PriceMax, Currency: src.Currency, PriceUnit: src.PriceUnit,
 		Moq: src.Moq, LeadTimeDays: src.LeadTimeDays, Port: src.Port, SpecsJSON: src.SpecsJSON,
-		AliTradeJSON: src.AliTradeJSON,
-		Status:       ProductDraft,
+		AliTradeJSON: src.AliTradeJSON, CertificationsJSON: src.CertificationsJSON,
+		Status: ProductDraft,
 	}
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(&row).Error; err != nil {
@@ -1029,6 +1034,36 @@ func certIconKey(name string) string {
 		}
 	}
 	return "shield-check"
+}
+
+// normalizeCertifications 把表单提交的认证名称清洗成入库的 JSON 数组文本：
+// 去空白、去重（保持录入顺序）、每项限 24 字、最多 12 项；全空返回空串（列存空，不加 []）。
+func normalizeCertifications(in []string) string {
+	out := make([]string, 0, len(in))
+	seen := make(map[string]bool, len(in))
+	for _, raw := range in {
+		name := strings.Join(strings.Fields(raw), " ")
+		if name == "" {
+			continue
+		}
+		name = trimRunes(name, 24)
+		if seen[name] {
+			continue
+		}
+		seen[name] = true
+		out = append(out, name)
+		if len(out) >= 12 {
+			break
+		}
+	}
+	if len(out) == 0 {
+		return ""
+	}
+	b, err := json.Marshal(out)
+	if err != nil {
+		return ""
+	}
+	return string(b)
 }
 
 // Certifications 解析后台填的认证清单。支持 JSON 数组（后台表单保存的形态）

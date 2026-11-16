@@ -88,7 +88,10 @@ func (h *siteHandler) baseView(ctx context.Context, lang string, postLimit int) 
 		HomeTitle: set.HomeTitle, HomeSubtitle: set.HomeSubtitle,
 		HomeCTALabel: set.HomeCTALabel, HomeCTAHref: set.HomeCTAHref,
 		ContactEmail: set.ContactEmail, ContactPhone: set.ContactPhone,
-		QRCodeURL: set.QRCodeURL, QRCodeCaption: set.QRCodeCaption,
+		EstablishedYear: set.EstablishedYear, StaffCount: set.StaffCount,
+		AnnualRevenue: set.AnnualRevenue, MainMarkets: set.MainMarkets,
+		ResponseTime: set.ResponseTime,
+		QRCodeURL:    set.QRCodeURL, QRCodeCaption: set.QRCodeCaption,
 		Socials: parseSocials(set.SocialsJSON), FriendLinks: parseFriendLinks(set.FriendLinksJSON),
 		ICP: set.ICP, FooterNote: set.FooterNote,
 		SeoKeywords: set.SeoKeywords, MarketEnabled: set.MarketEnabled,
@@ -540,6 +543,12 @@ func (h *siteHandler) productDetail(c *gin.Context) {
 		v.SeoKeywords = p.SeoKeywords
 	}
 	v.Product = p
+	// 评价区：只有已发布评价参与聚合；加载失败不挡详情（评价是增强信息）。
+	if stats, rerr := h.svc.PublicProductReviews(c.Request.Context(), int64(p.ID)); rerr == nil {
+		v.ProductReviews = stats
+	} else if h.log != nil {
+		h.log.Warn("website: 商品评价加载失败", zap.Error(rerr), zap.String("slug", slug))
+	}
 	// 询盘附件的生效限制随页面下发（弹窗里直接渲染 accept 与上限，不再多一次请求）。
 	lim := InquiryAttachmentLimitsFor(c.Request.Context())
 	v.InquiryAccept, v.InquiryMaxBytes, v.InquiryMaxText, v.InquiryMaxFiles =

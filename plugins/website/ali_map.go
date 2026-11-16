@@ -24,9 +24,9 @@ type aliImage struct {
 
 // aliMapResult 是一次映射的产物。
 type aliMapResult struct {
-	XML    string
+	XML     string
 	Missing []aliMissing
-	Notes  []string
+	Notes   []string
 }
 
 // aliMap 按 schema 组装提交 xml。market 是阿里口径（1=下单品 2=询盘品）。

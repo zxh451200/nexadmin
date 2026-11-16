@@ -47,10 +47,10 @@ type AliCredentials struct {
 
 // aliAPIError 是网关返回的 error_response。
 type aliAPIError struct {
-	Code     any    `json:"code"` // TOP 的 code 可能是数字或字符串，统一转文本
-	Msg      string `json:"msg"`
-	SubCode  string `json:"sub_code"`
-	SubMsg   string `json:"sub_msg"`
+	Code      any    `json:"code"` // TOP 的 code 可能是数字或字符串，统一转文本
+	Msg       string `json:"msg"`
+	SubCode   string `json:"sub_code"`
+	SubMsg    string `json:"sub_msg"`
 	RequestID string `json:"request_id"`
 }
 

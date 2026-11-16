@@ -1,4 +1,4 @@
-﻿package website
+package website
 
 // ld.go 是公开站的结构化数据（schema.org JSON-LD）与 RSS 订阅源。
 // 基础标签（canonical/hreflang/og/twitter/sitemap）在 layout.tmpl 与 public.go 已就位，
@@ -181,7 +181,7 @@ func (h *siteHandler) rss(c *gin.Context) {
 		if desc == "" {
 			desc = summaryFromHTML(p.Content, 300)
 		}
-		link := base + lang.Path("/news/" + p.Slug)
+		link := base + lang.Path("/news/"+p.Slug)
 		pub := time.Now()
 		if p.PublishedAt != nil {
 			pub = *p.PublishedAt

@@ -492,11 +492,11 @@ const (
 
 // aliExportParams 是导出任务参数：筛选条件与操作者（与商品导出同契约）。
 type aliExportParams struct {
-	Keyword     string   `json:"keyword,omitempty"`
-	Status      string   `json:"status,omitempty"`
-	CategoryIds string   `json:"categoryIds,omitempty"`
-	IDs         []int64  `json:"ids,omitempty"`
-	ActorID     int64    `json:"actorId"`
+	Keyword     string  `json:"keyword,omitempty"`
+	Status      string  `json:"status,omitempty"`
+	CategoryIds string  `json:"categoryIds,omitempty"`
+	IDs         []int64 `json:"ids,omitempty"`
+	ActorID     int64   `json:"actorId"`
 }
 
 // RunAliTemplateExportJob 按映射表出 xlsx：表头与列序就是阿里批量模板的形态，

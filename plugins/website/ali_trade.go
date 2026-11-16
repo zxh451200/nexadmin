@@ -78,8 +78,8 @@ type AliTrade struct {
 	Supply  AliSupply   `json:"supply"`
 	// Logistics 是物流属性（官方 3.6.5 的 option value，如 battery.battery.oneLessHundredWh）；
 	// 下单品至少一项，普货与带电属性不能同时选（阿里侧校验，这里只做上限与去重）。
-	Logistics []string   `json:"logistics"`
-	Sample    AliSample  `json:"sample"`
+	Logistics []string    `json:"logistics"`
+	Sample    AliSample   `json:"sample"`
 	Custom    []AliCustom `json:"custom"`
 	// Group 是商品分组路径 ID（一级/二级/三级），来自 alibaba.icbu.product.group.get。
 	Group []string `json:"group"`
