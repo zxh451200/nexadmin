@@ -466,9 +466,11 @@
     });
   }
 
-  /** 主图与正文图补上「可点开」语义：键盘可聚焦、Enter/Space 打开 */
+  /** 主图与正文图补上「可点开」语义：键盘可聚焦、Enter/Space 打开。
+   *  新闻详情的封面图（.article-cover）同口径——此前漏了它，封面点不动而正文图能放大。
+   *  主题模板的封面类带品牌前缀（sl-/tk-/au-article-cover），用后缀选择器一并覆盖。 */
   function decorateZoomables() {
-    var nodes = document.querySelectorAll('[data-product-gallery] .pd-main-img, .article-body img');
+    var nodes = document.querySelectorAll('[data-product-gallery] .pd-main-img, .article-body img, .article-cover, [class$="-article-cover"]');
     for (var i = 0; i < nodes.length; i++) {
       var img = nodes[i];
       if (img.closest('a') || img.hasAttribute('data-no-zoom')) continue;
@@ -1673,7 +1675,9 @@
     '[data-tip]:focus-visible{outline:2px solid currentColor;outline-offset:2px}',
     // Viewer.js 的临时图片宿主：不能 display:none（浏览器会跳过图片加载），
     // 挪到视口外即可，翻页时由组件按 data-zoom-src 取原图。
-    '.site-viewer-host{position:absolute;inset-inline-start:-9999px;top:0;width:1px;height:1px;overflow:hidden;pointer-events:none}'
+    '.site-viewer-host{position:absolute;inset-inline-start:-9999px;top:0;width:1px;height:1px;overflow:hidden;pointer-events:none}',
+    // 可点开放大的图给手势提示：商详主图（.pd-stage）自带，新闻封面 / 正文图在这里补
+    'img.is-zoomable{cursor:zoom-in}'
   ].join('');
 
   // 样式表只注入一次；同一 id 已存在就跳过（局部刷新会重复进 initSite）。
