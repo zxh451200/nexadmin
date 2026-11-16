@@ -1907,6 +1907,18 @@ export default function ProductPage() {
       title: t('plugin_website.product.statusColumn'),
       render: (r) => statusBadge(r.status, t),
     },
+    {
+      key: 'link',
+      title: '',
+      align: 'end',
+      render: (r) => (r.status === 'online' ? (
+        <Button asChild variant="ghost" size="icon" aria-label={t('plugin_website.viewSite')}>
+          <a href={`/products/${r.slug}`} target="_blank" rel="noreferrer">
+            <ExternalLink aria-hidden="true" />
+          </a>
+        </Button>
+      ) : null),
+    },
   ]
 
   const tabs: { value: string; label: string }[] = [
@@ -2034,14 +2046,6 @@ export default function ProductPage() {
         )}
         rowActions={(row) => (
           <Can perm="website:product">
-            {/* 外链收进行首操作组：独立列会在表格自动布局下吃进富余宽度，两列图标间留出一大段空白 */}
-            {row.status === 'online' ? (
-              <Button asChild variant="ghost" size="icon" aria-label={t('plugin_website.viewSite')}>
-                <a href={`/products/${row.slug}`} target="_blank" rel="noreferrer">
-                  <ExternalLink aria-hidden="true" />
-                </a>
-              </Button>
-            ) : null}
             <Button variant="ghost" size="icon" aria-label={t('plugin_website.post.preview')} onClick={() => void onPreview(row)}>
               <Eye aria-hidden="true" />
             </Button>

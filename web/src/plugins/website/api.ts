@@ -1010,8 +1010,6 @@ export interface SiteMessage {
   productId?: string
   /** 来源商品精简信息（后端按 productId 批量补齐，含草稿） */
   sourceProduct?: SuggestedProduct
-  /** 来源商品精简信息（后端列表装配时按 productId 批量补齐，含草稿） */
-  sourceProduct?: SuggestedProduct
   /** 买家是否勾选「同意与供应商共享名片信息」 */
   cardConsent?: boolean
   /** 超过 24 小时仍未处理（后端按状态与时间现算） */
