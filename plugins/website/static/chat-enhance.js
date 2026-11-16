@@ -71,22 +71,22 @@
     '.chat-settings-actions .is-primary{border-color:transparent;background:var(--pc-accent,CanvasText);color:Canvas;font-weight:600}',
     '.chat-settings-actions .is-primary:hover{filter:brightness(1.08);border-color:transparent}',
     '.chat-compose textarea{resize:vertical;max-height:220px}',
-    '.chat-card-pop{position:absolute;z-index:22;inset-inline-start:8px;inset-block-end:96px;box-sizing:border-box;width:min(300px,calc(100% - 16px));padding:14px 14px 12px;border:1px solid rgba(128,128,128,.28);border-radius:8px;background:Canvas;color:CanvasText;box-shadow:0 16px 38px rgba(0,0,0,.22);font-size:12px}',
+    '.chat-card-pop{position:absolute;z-index:22;inset-inline-start:8px;inset-block-end:96px;box-sizing:border-box;width:min(324px,calc(100% - 16px));padding:16px 16px 14px;border:1px solid rgba(128,128,128,.28);border-radius:8px;background:Canvas;color:CanvasText;box-shadow:0 16px 38px rgba(0,0,0,.22);font-size:12px}',
     '.chat-card-pop[hidden]{display:none}',
-    '.chat-card-pop h3{margin:0 0 3px;font-size:13.5px;font-weight:600}',
-    '.chat-card-hint{margin:0 0 13px;font-size:11px;line-height:1.5;opacity:.66}',
-    '.chat-card-fields{display:grid;grid-template-columns:1fr 1fr;gap:10px 8px}',
+    '.chat-card-pop h3{margin:0 0 4px;font-size:13.5px;font-weight:600}',
+    '.chat-card-hint{margin:0 0 16px;font-size:11px;line-height:1.5;opacity:.66}',
+    '.chat-card-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px 10px}',
     // 不透明度只能落在字段文字上：label 整体 opacity 会把里面的下拉展开层
     // 一起压成 82% 半透明，底下的「详细地址」就透出来了（opacity 造出的是整组合成）
-    '.chat-card-fields label{display:flex;flex-direction:column;gap:4px;min-width:0;font-size:11.5px}',
+    '.chat-card-fields label{display:flex;flex-direction:column;gap:5px;min-width:0;font-size:11.5px}',
     '.chat-card-fields label>span{opacity:.82}',
     '.chat-card-fields label.wide{grid-column:1/-1}',
-    '.chat-card-fields input{box-sizing:border-box;width:100%;height:30px;padding:0 9px;border:1px solid rgba(128,128,128,.34);border-radius:4px;background:transparent;color:inherit;font:inherit;font-size:12.5px;transition:border-color .15s ease,box-shadow .15s ease}',
+    '.chat-card-fields input{box-sizing:border-box;width:100%;height:32px;padding:0 10px;border:1px solid rgba(128,128,128,.34);border-radius:4px;background:transparent;color:inherit;font:inherit;font-size:12.5px;transition:border-color .15s ease,box-shadow .15s ease}',
     // 聚焦别用深色描边：currentColor 在浅色主题里就是近黑，1px 边框叠 3px 光晕后
     // 比卡片本身还抢眼。改成「边线加深一档 + 一层极淡的光晕」，安静但看得见。
     '.chat-card-fields input:focus{outline:none;border-color:rgba(128,128,128,.72);box-shadow:0 0 0 3px rgba(128,128,128,.13);background:rgba(128,128,128,.03)}',
-    '.chat-card-actions{display:flex;gap:8px;margin-top:14px}',
-    '.chat-card-actions button{flex:1;height:32px;border:1px solid rgba(128,128,128,.36);border-radius:4px;background:transparent;color:inherit;font:inherit;font-size:12.5px;cursor:pointer}',
+    '.chat-card-actions{display:flex;gap:10px;margin-top:18px}',
+    '.chat-card-actions button{flex:1;height:34px;border:1px solid rgba(128,128,128,.36);border-radius:4px;background:transparent;color:inherit;font:inherit;font-size:12.5px;cursor:pointer}',
     '.chat-card-actions button:hover{border-color:currentColor}',
     // 主按钮做反色实心：原来主次都只有一圈边框，只靠字重区分，一眼看不出该点哪个。
     // 注意不能写 background:currentColor 再改 color —— 同一规则里 color 先落值，
@@ -96,7 +96,7 @@
     // 地址卡片的国家/州省下拉：触发钮长得和输入框一致，展开层浮在表单上面；
     // 跟 .chat-card-pop 一样用 Canvas/currentColor，浅深主题都不用另配色。
     '.chat-card-select{position:relative}',
-    '.chat-card-trigger{display:flex;align-items:center;gap:5px;box-sizing:border-box;width:100%;height:30px;padding:0 9px;border:1px solid rgba(128,128,128,.34);border-radius:4px;background:transparent;color:inherit;font:inherit;font-size:12.5px;cursor:pointer;text-align:start;transition:border-color .15s ease,box-shadow .15s ease}',
+    '.chat-card-trigger{display:flex;align-items:center;gap:5px;box-sizing:border-box;width:100%;height:32px;padding:0 10px;border:1px solid rgba(128,128,128,.34);border-radius:4px;background:transparent;color:inherit;font:inherit;font-size:12.5px;cursor:pointer;text-align:start;transition:border-color .15s ease,box-shadow .15s ease}',
     '.chat-card-trigger:hover,.chat-card-trigger:focus-visible{border-color:rgba(128,128,128,.72)}',
     '.chat-card-trig-flag{flex:none;font-size:13px;line-height:1}',
     '.chat-card-trig-flag:empty{display:none}',
@@ -119,7 +119,7 @@
     '.chat-opt-dial{flex:none;opacity:.55;font-size:11px}',
     '.chat-opt-empty{display:block;padding:8px 9px;font-size:11.5px;opacity:.55}',
     // 电话区号前缀：随国家联动，纯展示；提交值里才真正拼上区号
-    '.chat-phone-wrap{display:flex;align-items:center;box-sizing:border-box;width:100%;height:30px;padding:0 9px;border:1px solid rgba(128,128,128,.34);border-radius:4px;background:transparent;transition:border-color .15s ease,box-shadow .15s ease}',
+    '.chat-phone-wrap{display:flex;align-items:center;box-sizing:border-box;width:100%;height:32px;padding:0 10px;border:1px solid rgba(128,128,128,.34);border-radius:4px;background:transparent;transition:border-color .15s ease,box-shadow .15s ease}',
     '.chat-phone-wrap:focus-within{border-color:rgba(128,128,128,.72);box-shadow:0 0 0 3px rgba(128,128,128,.13);background:rgba(128,128,128,.03)}',
     '.chat-card-fields .chat-phone-wrap input{height:100%;flex:1;min-width:0;border:0;padding:0;background:transparent;font-size:12.5px}',
     '.chat-card-fields .chat-phone-wrap input:focus{outline:none;border:0;box-shadow:none;background:transparent}',
