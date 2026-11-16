@@ -1063,18 +1063,6 @@ export default function PostPage() {
         </div>
       ),
     },
-    {
-      key: 'link',
-      title: '',
-      align: 'end',
-      render: (r) => (r.published && !isScheduled(r) ? (
-        <Button asChild variant="ghost" size="icon" aria-label={t('plugin_website.viewSite')}>
-          <a href={`/news/${r.slug}`} target="_blank" rel="noreferrer">
-            <ExternalLink aria-hidden="true" />
-          </a>
-        </Button>
-      ) : null),
-    },
   ]
 
   return (
@@ -1171,6 +1159,14 @@ export default function PostPage() {
         )}
         rowActions={(row) => (
           <Can perm="website:post">
+            {/* 外链收进行首操作组：独立列会在表格自动布局下吃进富余宽度，两列图标间留出一大段空白 */}
+            {row.published && !isScheduled(row) ? (
+              <Button asChild variant="ghost" size="icon" aria-label={t('plugin_website.viewSite')}>
+                <a href={`/news/${row.slug}`} target="_blank" rel="noreferrer">
+                  <ExternalLink aria-hidden="true" />
+                </a>
+              </Button>
+            ) : null}
             <Button variant="ghost" size="icon" aria-label={t('plugin_website.post.preview')} onClick={() => void onPreview(row)}>
               <Eye aria-hidden="true" />
             </Button>

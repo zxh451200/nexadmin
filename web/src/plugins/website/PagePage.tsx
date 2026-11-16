@@ -320,22 +320,6 @@ export default function PagePage() {
     { key: 'i18n', title: t('plugin_website.i18n.status'), render: (r) => <TranslationStatus value={r.i18nJson} fields={['title', 'seoTitle', 'seoDesc', 'content']} /> },
     { key: 'published', title: t('plugin_website.fields.published'), render: (r) => (r.published ? <Badge variant="success">{t('plugin_website.publishedOn')}</Badge> : <Badge variant="outline">{t('plugin_website.publishedOff')}</Badge>) },
     { key: 'updatedAt', title: t('plugin_website.fields.updatedAt'), render: (r) => <span className="num text-xs text-muted-foreground">{formatTime(r.updatedAt, i18n.language)}</span> },
-    {
-      key: 'link',
-      title: '',
-      align: 'end',
-      render: (r) => (r.published ? (
-        <Button asChild variant="ghost" size="icon" aria-label={t('plugin_website.viewSite')}>
-          <a href={`/p/${r.slug}`} target="_blank" rel="noreferrer">
-            <ExternalLink aria-hidden="true" />
-          </a>
-        </Button>
-      ) : (
-        <Button variant="ghost" size="icon" aria-label={t('plugin_website.page.preview')} onClick={() => void onPreview(r)}>
-          <Eye aria-hidden="true" />
-        </Button>
-      )),
-    },
   ]
 
   return (
@@ -402,6 +386,18 @@ export default function PagePage() {
         }
         rowActions={(row) => (
           <Can perm="website:page">
+            {/* 外链/预览收进行首操作组：独立列会在表格自动布局下吃进富余宽度，两列图标间留出一大段空白 */}
+            {row.published ? (
+              <Button asChild variant="ghost" size="icon" aria-label={t('plugin_website.viewSite')}>
+                <a href={`/p/${row.slug}`} target="_blank" rel="noreferrer">
+                  <ExternalLink aria-hidden="true" />
+                </a>
+              </Button>
+            ) : (
+              <Button variant="ghost" size="icon" aria-label={t('plugin_website.page.preview')} onClick={() => void onPreview(row)}>
+                <Eye aria-hidden="true" />
+              </Button>
+            )}
             <Button variant="ghost" size="icon" aria-label={t('common.edit')} onClick={() => { setEditing(row); setFormOpen(true) }}>
               <Pencil aria-hidden="true" />
             </Button>
