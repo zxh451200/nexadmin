@@ -5,6 +5,6 @@ export const routes: ModuleRoute[] = [
   {
     path: 'message',
     component: lazy(() => import('./MessagePage')),
-    menu: { title: 'message.menu', icon: 'Bell', order: 20, group: 'content' },
+    menu: { title: 'message.menu', icon: 'Bell', order: 20, group: 'mine' },
   },
 ]

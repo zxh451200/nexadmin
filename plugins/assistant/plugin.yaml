@@ -15,5 +15,5 @@ menus:
     component: plugins/assistant/AssistantPage
     perm: assistant:use
     icon: MessageSquare
-    sort: 25
+    sort: 80 # 常用优先（2026-11 一级重排）：个人 AI 入口排在业务中心之后，老库由 menu reconcile 按「sort=25」收敛
     keep_alive: false

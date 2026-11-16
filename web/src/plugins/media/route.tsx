@@ -6,6 +6,6 @@ export const routes: ModuleRoute[] = [
     path: 'content/media',
     component: lazy(() => import('./MediaOptimizePage')),
     perm: 'media:optimize',
-    menu: { title: 'plugin_media.menu', icon: 'ImageDown', order: 31, group: 'content' },
+    menu: { title: 'plugin_media.menu', icon: 'ImageDown', order: 100, group: 'system' },
   },
 ]

@@ -13,5 +13,5 @@ menus:
     component: plugins/totp/TotpPage
     perm: totp:manage
     icon: ShieldCheck
-    sort: 90
+    sort: 140 # 2026-11 一级重排：个人安全项收尾，老库由 menu reconcile 按「sort=90」收敛
     keep_alive: true

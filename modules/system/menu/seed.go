@@ -69,7 +69,7 @@ func buildSeed() []seedItem {
 
 	b.menu("", "dashboard.menu", "/dashboard", "dashboard/DashboardPage", "dashboard:view", "LayoutDashboard", 10, noCache)
 
-	system := b.dir("sysMenu.dir.system", "Settings", "/system", 20)
+	system := b.dir("sysMenu.dir.system", "Settings", "/system", 50)
 	user := b.menu(system, "user.menu", "/system/user", "user/UserPage", "user:list", "Users", 10)
 	b.btns(user, "user", with("export", "import", "resetPwd", "unlock")...)
 	role := b.menu(system, "role.menu", "/system/role", "role/RolePage", "role:list", "ShieldCheck", 20)
@@ -93,18 +93,20 @@ func buildSeed() []seedItem {
 	recycle := b.menu(system, "recycle.menu", "/system/recycle", "recycle/RecyclePage", "recycle:list", "Trash2", 90)
 	b.btns(recycle, "recycle", "restore", "delete")
 
-	content := b.dir("sysMenu.dir.content", "FileText", "/content", 30)
-	notice := b.menu(content, "notice.menu", "/content/notice", "notice/NoticePage", "notice:list", "Megaphone", 10)
+	// 通知公告是平台公告（业界惯例放系统管理），文件管理是跨模块存储设施（新闻配图/商品图/工单附件
+	// 共用同一个文件库）——都不是「内容创作」，2026-11 拆掉「内容管理」组归入系统管理（路径不变，
+	// 与工单等插件挪组同口径）。50/70 两个空位正好插在部门与字典、字典与设置之间。
+	notice := b.menu(system, "notice.menu", "/content/notice", "notice/NoticePage", "notice:list", "Megaphone", 50)
 	b.btns(notice, "notice", with("publish", "platform")...)
-	// 消息中心是个人收件箱，不是内容管理；顶栏铃铛已有「查看全部」，侧栏不再重复列（权限点保留）。
-	// 不再种 message:delete 按钮权限：删除接口本来就只动自己的收件箱（登录即可），
-	// 后端从不校验这个码，种出来只会让管理员误以为勾选有实际作用。
-	b.menu(content, "message.menu", "/message", "message/MessagePage", "message:list", "Bell", 20,
+	// 消息中心是个人收件箱；顶栏铃铛已有「查看全部」，侧栏不再列（权限点保留）。
+	// 不种 message:delete 按钮权限：删除接口只动自己的收件箱（登录即可），后端从不校验这个码。
+	// 挂顶级隐藏而不是系统管理下：角色分配会自动带上祖先节点，挂组里等于顺手授予 sysMenu.dir.system。
+	b.menu("", "message.menu", "/message", "message/MessagePage", "message:list", "Bell", 115,
 		func(m *Menu) { m.Hidden = true })
-	file := b.menu(content, "fileMgr.menu", "/content/file", "file/FilePage", "file:list", "FolderOpen", 30)
+	file := b.menu(system, "fileMgr.menu", "/content/file", "file/FilePage", "file:list", "FolderOpen", 70)
 	b.btns(file, "file", "upload", "delete")
 
-	monitor := b.dir("sysMenu.dir.monitor", "Activity", "/monitor", 40)
+	monitor := b.dir("sysMenu.dir.monitor", "Activity", "/monitor", 60)
 	operLog := b.menu(monitor, "operLog.menu", "/monitor/oper-log", "operLog/OperLogPage", "operLog:list", "ScrollText", 10)
 	b.btns(operLog, "operLog", "delete", "export")
 	loginLog := b.menu(monitor, "loginLog.menu", "/monitor/login-log", "loginLog/LoginLogPage", "loginLog:list", "LogIn", 20)
@@ -115,15 +117,15 @@ func buildSeed() []seedItem {
 	b.menu(monitor, "cacheMonitor.menu", "/monitor/cache", "cacheMonitor/CacheMonitorPage", "cacheMonitor:list", "Database", 50)
 	b.menu(monitor, "apiMonitor.menu", "/monitor/api", "apiMonitor/ApiMonitorPage", "apiMonitor:list", "Gauge", 60)
 
-	tenantDir := b.dir("sysMenu.dir.tenant", "Building2", "/tenant", 50)
+	tenantDir := b.dir("sysMenu.dir.tenant", "Building2", "/tenant", 90)
 	tenant := b.menu(tenantDir, "tenant.menu", "/tenant/list", "tenant/TenantPage", "tenant:list", "Building2", 10)
 	b.btns(tenant, "tenant", crud...)
 	tenantPkg := b.menu(tenantDir, "tenantPkg.menu", "/tenant/package", "tenantPkg/TenantPkgPage", "tenantPkg:list", "Package", 20)
 	b.btns(tenantPkg, "tenantPkg", crud...)
 
-	b.menu("", "profile.menu", "/profile", "profile/ProfilePage", "profile:view", "User", 60, noCache, func(m *Menu) { m.Hidden = true })
-	b.menu("", "about.menu", "/about", "about/AboutPage", "about:view", "Info", 65, noCache)
-	b.menu("", "sysMenu.docs", "https://example.com/docs", "", "docs:view", "BookOpen", 70, noCache,
+	b.menu("", "profile.menu", "/profile", "profile/ProfilePage", "profile:view", "User", 105, noCache, func(m *Menu) { m.Hidden = true })
+	b.menu("", "about.menu", "/about", "about/AboutPage", "about:view", "Info", 110, noCache)
+	b.menu("", "sysMenu.docs", "https://example.com/docs", "", "docs:view", "BookOpen", 120, noCache,
 		func(m *Menu) { m.External, m.Status = true, "0" })
 
 	// 追加在末尾：已发出的 ID 不因中间插入而平移；sort 控制侧栏顺序。
@@ -137,7 +139,9 @@ func buildSeed() []seedItem {
 
 	// 导入导出：导出中心（内置免费）与导入中心（plugins/imports，授权后才挂载）同组，
 	// 两者原来各占一个顶级项、相距很远，看着像两个不相干的功能。
-	ioDir := b.dir("sysMenu.dir.io", "ArrowLeftRight", "/io", 16)
+	// 2026-11 一级菜单整体重排（常用优先）：工作台/应用中心/网站管理打头，
+	// 系统类（系统管理/监控/租户/开发）靠后。老库由 reconcileMenuShape 按「sort 仍是出厂值」收敛。
+	ioDir := b.dir("sysMenu.dir.io", "ArrowLeftRight", "/io", 40)
 	// 导出中心：登录即可（无权限码）；管理员“全部任务”用按钮权限 job:all。
 	jobs := b.add(ioDir, Menu{Type: typeMenu, Code: "menu:jobs", Title: "jobs.menu", Icon: "Download", Path: "/jobs",
 		Component: "exportcenter/ExportCenterPage", Sort: 10})
@@ -159,11 +163,11 @@ func buildSeed() []seedItem {
 	// 业务中心：证件实名 / 支付中台 / 在线客服 / 工单中心 / 审批中心这五个插件菜单的公共分组。
 	// 目录由框架种下、不归任何插件声明——挂到某个插件名下，它一卸载就会把整组带走。
 	// 没装这几个插件时空目录由前端丢弃，侧栏不会留一个空壳。
-	b.dir("sysMenu.dir.biz", "Briefcase", "/biz", 55)
+	b.dir("sysMenu.dir.biz", "Briefcase", "/biz", 70)
 
 	// 开发与安全：插件管理 / 定时任务 / 代码生成 / 表单设计 / 多语言编辑 / 审计与单点登录 / 开放平台。
 	// 这些页面对的是开发者与安全管理员，和「系统管理」里的组织、权限、基础配置不是一类，拆开避免列表越滚越长。
-	dev := b.dir("sysMenu.dir.dev", "Wrench", "/dev", 25)
+	dev := b.dir("sysMenu.dir.dev", "Wrench", "/dev", 100)
 
 	// 追加在末尾：已发出的 ID 不因中间插入而平移；sort 控制侧栏顺序。
 	// 开放平台要挂到「开发与安全」下，所以定义必须排在该目录之后（种子按 code 解析父节点）。

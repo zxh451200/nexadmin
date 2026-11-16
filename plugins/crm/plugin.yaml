@@ -7,15 +7,15 @@ edition: free
 requires_nexadmin: ">=0.1.0"
 migration_target: tenant
 menus:
-  # 只有一张页面：直接做一级单项，不再套「客户主数据 > 客户主数据」的同名空目录。
-  - parent: /
+  # 业务插件统一收在「业务中心」（2026-11 从顶级单项归组，路径不变）。
+  - parent: /biz
     type: menu
     title: plugin_crm.menu
     path: /crm/customers
     component: plugins/crm/CrmPage
     perm: crm:list
     icon: Users
-    sort: 150
+    sort: 90
     keep_alive: true
   - parent: crm:list
     type: button

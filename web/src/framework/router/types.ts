@@ -1,6 +1,6 @@
 import type { ComponentType, LazyExoticComponent } from 'react'
 
-export type MenuGroupKey = 'dashboard' | 'system' | 'content' | 'monitor' | 'tenant' | 'mine'
+export type MenuGroupKey = 'dashboard' | 'system' | 'monitor' | 'tenant' | 'mine'
 
 export type SettingsGroupKey = 'site' | 'security' | 'integration' | 'advanced'
 

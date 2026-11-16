@@ -13,7 +13,7 @@ menus:
     component: plugins/kb/KbPage
     perm: kb:list
     icon: BookOpen
-    sort: 70
+    sort: 80 # 报表中心也占 70（reconcile 挪入时设的），撞号靠 ID 兜底不稳定；知识库排其后
     keep_alive: true
   - parent: kb:list
     type: button

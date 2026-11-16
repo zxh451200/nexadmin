@@ -5,7 +5,6 @@
     "description": "Manage directories and menus; drag to reorder within the same parent. Buttons are permission points — filter by type “Button” to view them.",
     "dir": {
       "system": "System",
-      "content": "Content",
       "monitor": "Monitoring",
       "tenant": "Tenants",
       "io": "Import & Export",

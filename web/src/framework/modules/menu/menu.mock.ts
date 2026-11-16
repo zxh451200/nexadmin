@@ -51,7 +51,7 @@ menu(null, 'dashboard.menu', '/dashboard', 'dashboard/DashboardPage', 'dashboard
 menu(null, 'sso.portal.menu', '/portal', 'sso/PortalPage', '', 'LayoutGrid', 15, { keepAlive: false })
 
 // 系统管理
-const system = dir('sysMenu.dir.system', 'Settings', '/system', 20)
+const system = dir('sysMenu.dir.system', 'Settings', '/system', 50)
 const user = menu(system, 'user.menu', '/system/user', 'user/UserPage', 'user:list', 'Users', 10)
 btns(user, 'user', [...CRUD, 'export', 'import', 'resetPwd', 'unlock'])
 const role = menu(system, 'role.menu', '/system/role', 'role/RolePage', 'role:list', 'ShieldCheck', 20)
@@ -60,11 +60,11 @@ const sysMenu = menu(system, 'sysMenu.menu', '/system/menu', 'menu/MenuPage', 'm
 btns(sysMenu, 'menu', CRUD)
 const dept = menu(system, 'dept.menu', '/system/dept', 'dept/DeptPage', 'dept:list', 'Network', 40)
 btns(dept, 'dept', CRUD)
-const post = menu(system, 'post.menu', '/system/post', 'post/PostPage', 'post:list', 'BriefcaseBusiness', 50)
+const post = menu(system, 'post.menu', '/system/post', 'post/PostPage', 'post:list', 'BriefcaseBusiness', 45)
 btns(post, 'post', CRUD)
 const dict = menu(system, 'dict.menu', '/system/dict', 'dict/DictPage', 'dict:list', 'BookA', 60)
 btns(dict, 'dict', CRUD)
-const config = menu(system, 'sysConfig.menu', '/system/config', 'config/ConfigPage', 'config:list', 'Settings', 70)
+const config = menu(system, 'sysConfig.menu', '/system/config', 'config/ConfigPage', 'config:list', 'Settings', 65)
 btns(config, 'config', CRUD)
 const settings = menu(system, 'settings.menu', '/system/settings', 'settings/SettingsPage', 'settings:list', 'SlidersHorizontal', 80)
 btns(settings, 'settings', ['update'])
@@ -72,7 +72,7 @@ btns(settings, 'region', ['sync'])
 const recycle = menu(system, 'recycle.menu', '/system/recycle', 'recycle/RecyclePage', 'recycle:list', 'Trash2', 90)
 btns(recycle, 'recycle', ['restore', 'delete'])
 // 开发与安全（插件、代码生成、定时任务、安全与集成类页面）
-const dev = dir('sysMenu.dir.dev', 'Wrench', '/dev', 25)
+const dev = dir('sysMenu.dir.dev', 'Wrench', '/dev', 100)
 const pluginMgr = menu(dev, 'pluginMgr.menu', '/system/plugin', 'plugin/PluginPage', 'plugin:list', 'Puzzle', 10)
 btns(pluginMgr, 'plugin', ['license'])
 const ssoApps = menu(settings, 'sso.menu', '/system/sso-apps', 'sso/SsoAppsPage', 'sso:list', 'AppWindow', 110, { hidden: true })
@@ -83,17 +83,17 @@ const backup = menu(system, 'backup.menu', '/system/backup', 'backup/BackupPage'
 add(base({ parentId: backup, type: 'button', title: 'backup.btn.edit', perm: 'backup:edit', sort: 10 }))
 add(base({ parentId: backup, type: 'button', title: 'backup.btn.download', perm: 'backup:download', sort: 20 }))
 
-// 内容管理
-const content = dir('sysMenu.dir.content', 'FileText', '/content', 30)
-const notice = menu(content, 'notice.menu', '/content/notice', 'notice/NoticePage', 'notice:list', 'Megaphone', 10)
+// 通知公告 / 文件管理（2026-11 拆「内容管理」组后归系统管理，路径与出厂种子一致不变）
+const notice = menu(system, 'notice.menu', '/content/notice', 'notice/NoticePage', 'notice:list', 'Megaphone', 50)
 btns(notice, 'notice', [...CRUD, 'publish', 'platform'])
-const message = menu(content, 'message.menu', '/message', 'message/MessagePage', 'message:list', 'Bell', 20, { hidden: true })
-btns(message, 'message', ['delete'])
-const file = menu(content, 'fileMgr.menu', '/content/file', 'file/FilePage', 'file:list', 'FolderOpen', 30)
+const file = menu(system, 'fileMgr.menu', '/content/file', 'file/FilePage', 'file:list', 'FolderOpen', 70)
 btns(file, 'file', ['upload', 'delete'])
 
+// 消息中心（顶级隐藏行；权限点保留，侧栏入口已由顶栏铃铛承担）
+menu(null, 'message.menu', '/message', 'message/MessagePage', 'message:list', 'Bell', 115, { hidden: true })
+
 // 系统监控
-const monitor = dir('sysMenu.dir.monitor', 'Activity', '/monitor', 40)
+const monitor = dir('sysMenu.dir.monitor', 'Activity', '/monitor', 60)
 const operLog = menu(monitor, 'operLog.menu', '/monitor/oper-log', 'operLog/OperLogPage', 'operLog:list', 'ScrollText', 10)
 btns(operLog, 'operLog', ['delete', 'export'])
 const loginLog = menu(monitor, 'loginLog.menu', '/monitor/login-log', 'loginLog/LoginLogPage', 'loginLog:list', 'LogIn', 20)
@@ -107,30 +107,30 @@ menu(monitor, 'cacheMonitor.menu', '/monitor/cache', 'cacheMonitor/CacheMonitorP
 menu(monitor, 'apiMonitor.menu', '/monitor/api', 'apiMonitor/ApiMonitorPage', 'apiMonitor:list', 'Gauge', 60)
 
 // 租户管理
-const tenantDir = dir('sysMenu.dir.tenant', 'Building2', '/tenant', 50)
+const tenantDir = dir('sysMenu.dir.tenant', 'Building2', '/tenant', 90)
 const tenant = menu(tenantDir, 'tenant.menu', '/tenant/list', 'tenant/TenantPage', 'tenant:list', 'Building2', 10)
 btns(tenant, 'tenant', CRUD)
 const tenantPkg = menu(tenantDir, 'tenantPkg.menu', '/tenant/package', 'tenantPkg/TenantPkgPage', 'tenantPkg:list', 'Package', 20)
 btns(tenantPkg, 'tenantPkg', CRUD)
 
 // 个人中心（隐藏菜单）
-menu(null, 'profile.menu', '/profile', 'profile/ProfilePage', 'profile:view', 'User', 60, {
+menu(null, 'profile.menu', '/profile', 'profile/ProfilePage', 'profile:view', 'User', 105, {
   hidden: true,
   keepAlive: false,
 })
 
 // 关于（版本与开源许可）
-menu(null, 'about.menu', '/about', 'about/AboutPage', 'about:view', 'Info', 65, { keepAlive: false })
+menu(null, 'about.menu', '/about', 'about/AboutPage', 'about:view', 'Info', 110, { keepAlive: false })
 
 // 外链示例
-menu(null, 'sysMenu.docs', 'https://example.com/docs', '', 'docs:view', 'BookOpen', 70, {
+menu(null, 'sysMenu.docs', 'https://example.com/docs', '', 'docs:view', 'BookOpen', 120, {
   external: true,
   status: '0',
   keepAlive: false,
 })
 
 // 导入导出目录（与出厂种子同形状：导出中心 + 导入中心并列，别再挂成菜单下嵌菜单——侧栏只渲染两层）
-const ioDir = dir('sysMenu.dir.io', 'ArrowLeftRight', '/io', 16)
+const ioDir = dir('sysMenu.dir.io', 'ArrowLeftRight', '/io', 40)
 const jobsMenu = menu(ioDir, 'jobs.menu', '/jobs', 'exportcenter/ExportCenterPage', '', 'Download', 10, { keepAlive: false })
 add(base({ parentId: jobsMenu, type: 'button', title: 'jobs.btn.all', perm: 'job:all', sort: 10 }))
 // 导入中心（imports 免费插件；component/perm 与 plugins/imports/plugin.yaml 同源）
@@ -146,7 +146,7 @@ const tenantSelf = menu(tenantDir, 'tenantSelf.menu', '/tenant/self', 'tenantSel
 btns(tenantSelf, 'tenantSelf', ['update'])
 
 // 业务中心（证件实名 / 支付中台 / 在线客服 / 工单中心 / 审批中心的公共分组，子项由各插件清单挂入）
-dir('sysMenu.dir.biz', 'Briefcase', '/biz', 55)
+dir('sysMenu.dir.biz', 'Briefcase', '/biz', 70)
 
 const bySort = (a: SysMenu, b: SysMenu) => a.sort - b.sort || a.id.localeCompare(b.id)
 

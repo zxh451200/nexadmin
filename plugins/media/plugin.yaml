@@ -6,12 +6,13 @@ author: NexAdmin
 edition: pro
 requires_nexadmin: ">=0.1.0"
 menus:
-  - parent: /content
+  # 「内容管理」组已拆散（2026-11），媒体优化是存量图片的运维工具，跟随归入系统管理（路径不变）。
+  - parent: /system
     type: menu
     title: plugin_media.menu
     path: /content/media
     component: plugins/media/MediaOptimizePage
     perm: media:optimize
     icon: ImageDown
-    sort: 31
+    sort: 100
     keep_alive: true

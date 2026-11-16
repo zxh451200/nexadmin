@@ -6,6 +6,6 @@ export const routes: ModuleRoute[] = [
     path: 'content/notice',
     component: lazy(() => import('./NoticePage')),
     perm: 'notice:list',
-    menu: { title: 'notice.menu', icon: 'Megaphone', order: 10, group: 'content' },
+    menu: { title: 'notice.menu', icon: 'Megaphone', order: 50, group: 'system' },
   },
 ]
