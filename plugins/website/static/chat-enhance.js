@@ -54,7 +54,10 @@
     '.chat-card-pop h3{margin:0 0 3px;font-size:13.5px;font-weight:600}',
     '.chat-card-hint{margin:0 0 13px;font-size:11px;line-height:1.5;opacity:.66}',
     '.chat-card-fields{display:grid;grid-template-columns:1fr 1fr;gap:10px 8px}',
-    '.chat-card-fields label{display:flex;flex-direction:column;gap:4px;min-width:0;font-size:11.5px;opacity:.82}',
+    // 不透明度只能落在字段文字上：label 整体 opacity 会把里面的下拉展开层
+    // 一起压成 82% 半透明，底下的「详细地址」就透出来了（opacity 造出的是整组合成）
+    '.chat-card-fields label{display:flex;flex-direction:column;gap:4px;min-width:0;font-size:11.5px}',
+    '.chat-card-fields label>span{opacity:.82}',
     '.chat-card-fields label.wide{grid-column:1/-1}',
     '.chat-card-fields input{box-sizing:border-box;width:100%;height:30px;padding:0 9px;border:1px solid rgba(128,128,128,.34);border-radius:4px;background:transparent;color:inherit;font:inherit;font-size:12.5px;transition:border-color .15s ease,box-shadow .15s ease}',
     // 聚焦别用深色描边：currentColor 在浅色主题里就是近黑，1px 边框叠 3px 光晕后
@@ -430,11 +433,14 @@
       address: {
         title: t('chatCardAddressTitle', '收货地址'),
         marker: '[' + t('chatCardAddressLabel', '收货地址') + ']',
+        // 对齐 Alibaba 添加地址：国家/地区 → 州/省 → 城市三段（州与城市都是必填），
+        // 城市 在州/省右边并排，详细地址独占一行，邮编收尾。
         fields: [
           { key: 'recipient', label: t('chatCardRecipient', '收件人'), required: true },
           { key: 'phone', label: t('chatCardPhone', '电话'), required: true },
           { key: 'country', label: t('chatCardCountry', '国家/地区'), required: true },
-          { key: 'region', label: t('chatCardRegion', '省/市/区') },
+          { key: 'region', label: t('chatCardRegion', '州/省'), required: true },
+          { key: 'city', label: t('chatCardCity', '城市'), required: true },
           { key: 'street', label: t('chatCardStreet', '详细地址'), required: true, wide: true },
           { key: 'postcode', label: t('chatCardPostcode', '邮编') }
         ]
@@ -599,6 +605,15 @@
       });
       return closed;
     }
+    // Esc 有两个监听器（历史遗留），一次按键两个都会跑：第一个收掉下拉时记下事件
+    // timeStamp，第二个凭同一事件号跳过，才能做到「先收下拉、再收卡片」分两步。
+    var escDropAt = -1;
+    function escForCard(e) {
+      if (!cardPop || cardPop.hidden) return false;
+      if (closeOpenDrops()) { escDropAt = e.timeStamp; return true; }
+      if (e.timeStamp === escDropAt) return true;
+      return false;
+    }
 
     function readCard(kind) {
       try { return JSON.parse(localStorage.getItem('nexchat.card.' + kind) || '{}') || {}; }
@@ -626,7 +641,7 @@
       // 地址卡片的国家/州省/电话走专用控件：对齐阿里「添加地址」的形态 ——
       // 国家带国旗可搜索、州省跟着国家换成下拉、电话自动带区号。
       // 数据是异步的：先铺好空下拉，拉到数据再灌选项并回填存过的值。
-      var addr = { country: null, dial: '', dialEl: null, pendingRegion: '' };
+      var addr = { country: null, dial: '', dialEl: null, cityEl: null, pendingRegion: '' };
       addrState = kind === 'address' ? addr : null;
       var regionSel = null;
       function dispName(c) { return siteLangEn() ? c.en : c.zh; }
@@ -648,6 +663,9 @@
       }
       function buildCountry(label, savedVal) {
         var sel = buildSelect('country', t('chatCardCountrySelect', '选择国家/地区'), function (it) {
+          // 用户换国家：城市跟着清空（阿里同款行为）；开卡回填上次选择时走的是
+          // 下面的 restore 分支，不经过这里，已存的城市值不会被动到
+          if (addr.country && addr.country.c !== it.raw.c && addr.cityEl) addr.cityEl.value = '';
           addr.country = it.raw;
           addr.dial = it.raw.dial || '';
           if (addr.dialEl) {
@@ -691,6 +709,15 @@
         regionSel = sel;
         label.appendChild(sel.wrap);
       }
+      function buildCity(label, savedVal) {
+        var inp = document.createElement('input');
+        inp.type = 'text';
+        inp.value = savedVal || '';
+        inp.setAttribute('data-field', 'city');
+        inp.setAttribute('autocomplete', 'off');
+        label.appendChild(inp);
+        addr.cityEl = inp;
+      }
       function buildPhone(label, saved) {
         var raw = String(saved.phone || '');
         // 上次提交时已拼过区号，回显时剥掉，避免前缀块 + 输入值重复
@@ -722,6 +749,7 @@
         label.appendChild(span);
         if (kind === 'address' && f.key === 'country') buildCountry(label, saved.country);
         else if (kind === 'address' && f.key === 'region') buildRegion(label, saved.region);
+        else if (kind === 'address' && f.key === 'city') buildCity(label, saved.city);
         else if (kind === 'address' && f.key === 'phone') buildPhone(label, saved);
         else {
           var inp = document.createElement('input');
@@ -869,7 +897,7 @@
       if (emojiPop) emojiPop.hidden = true;
       if (morePop) morePop.hidden = true;
       // Esc 先收下拉再收卡片：连按两次才把整个地址卡关掉
-      if (cardPop && !cardPop.hidden && closeOpenDrops()) return;
+      if (escForCard(e)) return;
       if (cardPop && !cardPop.hidden) closeCard();
     });
     // 「更多」菜单贴着头部下沿展开：头部高度会随「客服姓名 + 本地时间」那一行出现而变，
@@ -910,7 +938,7 @@
       if (emojiPop) emojiPop.hidden = true;
       if (morePop) morePop.hidden = true;
       // Esc 先收下拉再收卡片（与上面第一个 Esc 处理器同口径）
-      if (cardPop && !cardPop.hidden && closeOpenDrops()) return;
+      if (escForCard(e)) return;
       closeCard();
       // 放大后的窗口用 Esc 还原，和浮层一样不必再去点菜单。
       if (state.expanded && expandBtn) expandBtn.click();

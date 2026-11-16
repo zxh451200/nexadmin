@@ -860,7 +860,7 @@ func (v *siteView) JSStrings() template.JS {
 		"inqAttachUploading", "inqAttachRemove", "inqAttachTooLarge", "inqAttachType", "inqAttachFailed", "inqAttachLimit",
 		"chatNameCard", "chatAddressCard", "chatCardNameTitle", "chatCardAddressTitle", "chatCardHint", "chatCardName", "chatCardCompany", "chatCardJob", "chatCardEmail", "chatCardPhone",
 		"chatCardRecipient", "chatCardCountry", "chatCardRegion", "chatCardStreet", "chatCardPostcode", "chatCardSend", "chatCardCancel", "chatCardRequired", "chatCardNameLabel", "chatCardAddressLabel",
-		"chatCardCountrySelect", "chatCardCountrySearch", "chatCardRegionSelect", "chatCardRegionSearch", "chatCardSearchEmpty",
+		"chatCardCountrySelect", "chatCardCountrySearch", "chatCardRegionSelect", "chatCardRegionSearch", "chatCardSearchEmpty", "chatCardCity",
 	} {
 		m[k] = v.T("site.js." + k)
 	}
