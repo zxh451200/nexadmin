@@ -23,7 +23,7 @@
         {{if and .Product.VideoURL (not .Product.Video)}}<div class="pd-media-tabs"><a href="{{.Product.VideoURL}}" target="_blank" rel="noopener">{{.T "products.watchVideo"}}</a></div>{{end}}
         {{if or .SiteName .ContactEmail .ContactPhone}}
         <div class="pd-supplier">
-          <div class="pd-supplier-name">{{.SiteName}}</div>
+          <a class="pd-supplier-name" href="{{.Home}}">{{.SiteName}}</a>
           {{if .SiteDesc}}<p class="pd-supplier-desc">{{.SiteDesc}}</p>{{end}}
           {{if .Product.Categories}}<div class="pd-supplier-cats">{{range .Product.Categories}}<span>{{.Title}}</span>{{end}}</div>{{end}}
           <div class="pd-supplier-row">
@@ -41,13 +41,20 @@
             {{if .ResponseTime}}<div><dt>{{.T "product.responseTime"}}</dt><dd>{{.ResponseTime}}</dd></div>{{end}}
           </dl>
           {{end}}
-          <button type="button" class="pd-supplier-btn" data-pd-supplier-cta>{{.T "product.contactSupplier"}}</button>
         </div>
         {{end}}
       </div>
 
       <div class="pd-info">
         <h1>{{.Product.Title}}</h1>
+        {{/* 评分行对标阿里标题下方的「5.0 (N 评价)」：没有评价整行不渲染 */}}
+        {{if .ProductReviews.Total}}
+        <div class="pd-rating-row">
+          <span class="pd-stars" aria-hidden="true">{{starRow .ProductReviews.AvgValue}}</span>
+          <strong>{{.ProductReviews.Average}}</strong>
+          <span class="pd-rating-count">{{$.TF "product.reviewsCount" .ProductReviews.Total}}</span>
+        </div>
+        {{end}}
         <div class="pd-badges">
           {{range .Product.Categories}}<a class="pd-badge" href="{{$.URL "/products"}}?category={{.Slug}}">{{.Title}}</a>{{end}}
           {{if .Product.Views}}<span class="pd-badge pd-badge-quiet">{{.TF "product.views" .Product.Views}}</span>{{end}}
@@ -59,17 +66,17 @@
         {{end}}
         <p class="pd-price">{{if .Product.PriceMin}}{{.Product.Currency}}{{if and .Product.PriceMax (gt .Product.PriceMax .Product.PriceMin)}}{{money .Product.PriceMin}}-{{money .Product.PriceMax}}{{else}}{{money .Product.PriceMin}}{{end}}{{if .Product.PriceUnit}}<span class="pd-price-unit"> / {{.Product.PriceUnit}}</span>{{end}}{{else}}{{.T "product.priceOnRequest"}}{{end}}</p>
         {{if .Product.Moq}}<p class="pd-moq">{{.T "products.moqLabel"}}: {{.Product.Moq}}{{if .Product.PriceUnit}} {{.Product.PriceUnit}}{{end}}</p>{{end}}
-        {{if .Product.ProductSpecs}}
-        <div class="pd-keyattrs">
-          <h2>{{.T "product.keyAttrs"}}</h2>
-          <div class="pd-attr-grid">{{range .Product.ProductSpecs}}<div><span class="pd-attr-label">{{.Label}}</span><span class="pd-attr-value">{{.Value}}</span></div>{{end}}</div>
-        </div>
-        {{end}}
-        {{if .Product.Summary}}<p class="pd-summary">{{.Product.Summary}}</p>{{end}}
-      </div>
-
-      <aside class="pd-inquiry" aria-label="{{.T "product.serviceTitle"}}">
         {{$trade := .Product.TradeInfo}}
+        {{/* 数量紧跟 MOQ（对齐阿里价格块下方就是数量控件）；阶梯价与 SKU 选型随后 */}}
+        <div class="pd-qty" data-pd-qty data-pd-qty-min="{{if gt .Product.Moq 1}}{{.Product.Moq}}{{else}}1{{end}}"{{if .Product.PriceUnit}} data-pd-qty-unit="{{.Product.PriceUnit}}"{{end}}>
+          <label class="pd-qty-label" for="pd-qty-input">{{.T "product.quantity"}}</label>
+          <div class="pd-stepper">
+            <button type="button" class="pd-step" data-pd-qty-minus aria-label="{{.T "product.qtyDec"}}">−</button>
+            <input class="pd-step-input" id="pd-qty-input" data-pd-qty-input type="text" inputmode="numeric" autocomplete="off" value="{{if gt .Product.Moq 1}}{{.Product.Moq}}{{else}}1{{end}}" aria-label="{{.T "product.quantity"}}">
+            <button type="button" class="pd-step" data-pd-qty-plus aria-label="{{.T "product.qtyInc"}}">+</button>
+          </div>
+          {{if .Product.PriceUnit}}<span class="pd-qty-unit">{{.Product.PriceUnit}}</span>{{end}}
+        </div>
         {{if $trade.Ladder}}
         <div class="pd-ladder" data-pd-ladder data-currency="{{.Product.Currency}}" role="table" aria-label="{{.T "product.priceTiers"}}">
           {{range $trade.Ladder}}<div class="pd-ladder-row" role="row" data-ladder-qty="{{.Qty}}" data-ladder-price="{{.Price}}">
@@ -77,10 +84,8 @@
             <span class="pd-ladder-price" role="cell">{{$.Product.Currency}}{{money .Price}}{{if $.Product.PriceUnit}} <small>/ {{$.Product.PriceUnit}}</small>{{end}}</span>
           </div>{{end}}
         </div>
-        {{else}}
-        <p class="pd-price">{{if .Product.PriceMin}}{{.Product.Currency}}{{if and .Product.PriceMax (gt .Product.PriceMax .Product.PriceMin)}}{{money .Product.PriceMin}}-{{money .Product.PriceMax}}{{else}}{{money .Product.PriceMin}}{{end}}{{else}}{{.T "product.priceOnRequest"}}{{end}}</p>
         {{end}}
-{{if $trade.Skus}}
+        {{if $trade.Skus}}
         <div class="pd-skus" data-pd-skus data-currency="{{.Product.Currency}}" data-base-price="{{.Product.PriceMin}}"{{if .Product.PriceUnit}} data-unit="{{.Product.PriceUnit}}"{{end}}>
           {{range $pi, $prop := $trade.SkuProps}}
           <div class="pd-sku-group" data-sku-prop="{{$prop.Name}}">
@@ -94,36 +99,9 @@
           <p class="pd-sku-hint" data-pd-sku-hint hidden></p>
         </div>
         {{end}}
-                {{if .Product.Moq}}<p class="pd-moq">{{.T "products.moqLabel"}}: {{.Product.Moq}}</p>{{end}}
-        <div class="pd-qty" data-pd-qty data-pd-qty-min="{{if gt .Product.Moq 1}}{{.Product.Moq}}{{else}}1{{end}}"{{if .Product.PriceUnit}} data-pd-qty-unit="{{.Product.PriceUnit}}"{{end}}>
-          <label class="pd-qty-label" for="pd-qty-input">{{.T "product.quantity"}}</label>
-          <div class="pd-stepper">
-            <button type="button" class="pd-step" data-pd-qty-minus aria-label="{{.T "product.qtyDec"}}">−</button>
-            <input class="pd-step-input" id="pd-qty-input" data-pd-qty-input type="text" inputmode="numeric" autocomplete="off" value="{{if gt .Product.Moq 1}}{{.Product.Moq}}{{else}}1{{end}}" aria-label="{{.T "product.quantity"}}">
-            <button type="button" class="pd-step" data-pd-qty-plus aria-label="{{.T "product.qtyInc"}}">+</button>
-          </div>
-          {{if .Product.PriceUnit}}<span class="pd-qty-unit">{{.Product.PriceUnit}}</span>{{end}}
-        </div>
-        <div class="pd-sum" data-pd-sum data-pd-currency="{{.Product.Currency}}" data-pd-price="{{.Product.PriceMin}}" data-pd-freight="{{.Product.FreightAmount}}"{{if not .Product.PriceMin}} hidden{{end}}>
-          <div class="pd-sum-row"><span>{{.T "product.sumProducts"}}</span><span data-pd-sum-products></span></div>
-          <div class="pd-sum-row"><span>{{.T "product.sumFreight"}}</span><span data-pd-sum-freight>{{if gt .Product.FreightAmount 0.0}}{{.Product.Currency}}{{money .Product.FreightAmount}}{{else}}{{.T "product.freightTbd"}}{{end}}</span></div>
-          <div class="pd-sum-total"><span>{{.T "product.sumTotal"}}</span><span data-pd-sum-total></span></div>
-        </div>
-        <div class="pd-inq-section">
-          <strong>{{.T "product.shippingTitle"}}</strong>
-          {{if .Product.Port}}<div class="pd-inq-row"><span>{{.T "products.portLabel"}}</span><span>{{.Product.Port}}</span></div>{{end}}
-          {{if .Product.LeadTimeDays}}<div class="pd-inq-row"><span>{{.T "products.leadTimeLabel"}}</span><span>{{.TF "products.leadTime" .Product.LeadTimeDays}}</span></div>{{end}}
-          {{if .Product.PaymentTerms}}<div class="pd-inq-row"><span>{{.T "products.paymentTerms"}}</span><span>{{.Product.PaymentTerms}}</span></div>{{end}}
-          {{with $trade.Supply}}<div class="pd-inq-row"><span>{{$.T "product.supplyCapacity"}}</span><span>{{.Number}} {{.Unit}}{{if .Period}} / {{.Period}}{{end}}</span></div>{{end}}
-          {{with $trade.Pkg}}
-          {{if .Dim}}<div class="pd-inq-row"><span>{{$.T "product.packageSize"}}</span><span>{{.Dim}}</span></div>{{end}}
-          {{if .Weight}}<div class="pd-inq-row"><span>{{$.T "product.grossWeight"}}</span><span>{{.Weight}} kg</span></div>{{end}}
-          {{if .Cubic}}<div class="pd-inq-row"><span>{{$.T "product.volumeLabel"}}</span><span>{{.Cubic}} m³</span></div>{{end}}
-          {{end}}
-        </div>
         {{if or $trade.Sample $trade.Custom}}
-        <div class="pd-inq-section pd-offer">
-          <strong>{{.T "product.sampleAndCustom"}}</strong>
+        <div class="pd-keyattrs pd-offers">
+          <h2>{{.T "product.sampleAndCustom"}}</h2>
           {{with $trade.Sample}}
           <div class="pd-offer-row">
             <span class="pd-offer-name">{{$.T "product.sampleService"}}</span>
@@ -138,6 +116,40 @@
           {{end}}
         </div>
         {{end}}
+        {{if .Product.ProductSpecs}}
+        <div class="pd-keyattrs">
+          <h2>{{.T "product.keyAttrs"}}</h2>
+          <div class="pd-attr-grid">{{range .Product.ProductSpecs}}<div><span class="pd-attr-label">{{.Label}}</span><span class="pd-attr-value">{{.Value}}</span></div>{{end}}</div>
+        </div>
+        {{end}}
+        {{if .Product.Summary}}<p class="pd-summary">{{.Product.Summary}}</p>{{end}}
+      </div>
+
+      <aside class="pd-inquiry" aria-label="{{.T "product.serviceTitle"}}">
+        {{$trade := .Product.TradeInfo}}
+        {{/* 小计卡置顶对标阿里右栏 Shipping：数量在中栏联动，这里只算账 */}}
+        <div class="pd-sum" data-pd-sum data-pd-currency="{{.Product.Currency}}" data-pd-price="{{.Product.PriceMin}}" data-pd-freight="{{.Product.FreightAmount}}"{{if not .Product.PriceMin}} hidden{{end}}>
+          <div class="pd-sum-row"><span>{{.T "product.sumProducts"}}</span><span data-pd-sum-products></span></div>
+          <div class="pd-sum-row"><span>{{.T "product.sumFreight"}}</span><span data-pd-sum-freight>{{if gt .Product.FreightAmount 0.0}}{{.Product.Currency}}{{money .Product.FreightAmount}}{{else}}{{.T "product.freightTbd"}}{{end}}</span></div>
+          <div class="pd-sum-total"><span>{{.T "product.sumTotal"}}</span><span data-pd-sum-total></span></div>
+        </div>
+        <a id="pd-cta" data-inquiry-open class="pd-cta pd-cta-primary" href="{{.URL "/contact"}}" data-chat-title="{{.Product.Title}}" data-chat-price="{{if .Product.PriceMin}}{{.Product.Currency}}{{money .Product.PriceMin}}{{else}}{{.T "product.priceOnRequest"}}{{end}}" data-chat-moq="{{if .Product.Moq}}{{.T "products.moqLabel"}}: {{.Product.Moq}}{{end}}" data-chat-url="{{.URL "/products"}}/{{.Product.Slug}}" data-chat-cover="{{.Product.CoverURL}}">{{.T "product.sendInquiry"}}</a>
+        {{/* 「联系商家」是直接对话入口：装了 IM 就开客服面板并预填开场白；
+             没装 IM 时照旧按 href 走邮箱 / 联系页，不能只在 mailto 上挂着等系统邮件客户端 */}}
+        <a class="pd-cta pd-cta-secondary" href="{{if .ContactEmail}}mailto:{{.ContactEmail}}{{else}}{{.URL "/contact"}}{{end}}" data-chat-open-product data-chat-intent="contact" data-chat-title="{{.Product.Title}}" data-chat-price="{{if .Product.PriceMin}}{{.Product.Currency}}{{money .Product.PriceMin}}{{else}}{{.T "product.priceOnRequest"}}{{end}}" data-chat-moq="{{if .Product.Moq}}{{.T "products.moqLabel"}}: {{.Product.Moq}}{{end}}" data-chat-url="{{.URL "/products"}}/{{.Product.Slug}}" data-chat-cover="{{.Product.CoverURL}}">{{.T "product.contactSupplier"}}</a>
+        <p class="pd-foot-note">{{.TF "product.inquiryNote" .SiteName}}</p>
+        <div class="pd-inq-section">
+          <strong>{{.T "product.shippingTitle"}}</strong>
+          {{if .Product.Port}}<div class="pd-inq-row"><span>{{.T "products.portLabel"}}</span><span>{{.Product.Port}}</span></div>{{end}}
+          {{if .Product.LeadTimeDays}}<div class="pd-inq-row"><span>{{.T "products.leadTimeLabel"}}</span><span>{{.TF "products.leadTime" .Product.LeadTimeDays}}</span></div>{{end}}
+          {{if .Product.PaymentTerms}}<div class="pd-inq-row"><span>{{.T "products.paymentTerms"}}</span><span>{{.Product.PaymentTerms}}</span></div>{{end}}
+          {{with $trade.Supply}}<div class="pd-inq-row"><span>{{$.T "product.supplyCapacity"}}</span><span>{{.Number}} {{.Unit}}{{if .Period}} / {{.Period}}{{end}}</span></div>{{end}}
+          {{with $trade.Pkg}}
+          {{if .Dim}}<div class="pd-inq-row"><span>{{$.T "product.packageSize"}}</span><span>{{.Dim}}</span></div>{{end}}
+          {{if .Weight}}<div class="pd-inq-row"><span>{{$.T "product.grossWeight"}}</span><span>{{.Weight}} kg</span></div>{{end}}
+          {{if .Cubic}}<div class="pd-inq-row"><span>{{$.T "product.volumeLabel"}}</span><span>{{.Cubic}} m³</span></div>{{end}}
+          {{end}}
+        </div>
         <div class="pd-inq-section pd-service">
           <strong>{{.T "product.serviceTitle"}}</strong>
           <div><span aria-hidden="true">✓</span> {{.T "product.serviceQuote"}}</div>
@@ -155,11 +167,6 @@
           <p class="pd-pay-note">{{.TF "product.paymentNote" .SiteName}}</p>
         </div>
         {{end}}
-        <a id="pd-cta" data-inquiry-open class="pd-cta pd-cta-primary" href="{{.URL "/contact"}}" data-chat-title="{{.Product.Title}}" data-chat-price="{{if .Product.PriceMin}}{{.Product.Currency}}{{money .Product.PriceMin}}{{else}}{{.T "product.priceOnRequest"}}{{end}}" data-chat-moq="{{if .Product.Moq}}{{.T "products.moqLabel"}}: {{.Product.Moq}}{{end}}" data-chat-url="{{.URL "/products"}}/{{.Product.Slug}}" data-chat-cover="{{.Product.CoverURL}}">{{.T "product.sendInquiry"}}</a>
-        {{/* 「联系商家」是直接对话入口：装了 IM 就开客服面板并预填开场白；
-             没装 IM 时照旧按 href 走邮箱 / 联系页，不能只在 mailto 上挂着等系统邮件客户端 */}}
-        <a class="pd-cta pd-cta-secondary" href="{{if .ContactEmail}}mailto:{{.ContactEmail}}{{else}}{{.URL "/contact"}}{{end}}" data-chat-open-product data-chat-intent="contact" data-chat-title="{{.Product.Title}}" data-chat-price="{{if .Product.PriceMin}}{{.Product.Currency}}{{money .Product.PriceMin}}{{else}}{{.T "product.priceOnRequest"}}{{end}}" data-chat-moq="{{if .Product.Moq}}{{.T "products.moqLabel"}}: {{.Product.Moq}}{{end}}" data-chat-url="{{.URL "/products"}}/{{.Product.Slug}}" data-chat-cover="{{.Product.CoverURL}}">{{.T "product.contactSupplier"}}</a>
-        <p class="pd-foot-note">{{.TF "product.inquiryNote" .SiteName}}</p>
       </aside>
     </div>
 
