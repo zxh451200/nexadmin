@@ -52,6 +52,7 @@ func productImportColumns() []importspec.Column {
 		{Key: "priceUnit", Label: "计量单位", LabelKey: "website.import_col_unit", Example: "piece"},
 		{Key: "moq", Label: "最小起订量", LabelKey: "website.import_col_moq", Example: "100"},
 		{Key: "leadTimeDays", Label: "发货天数", LabelKey: "website.import_col_lead_time", Example: "15"},
+		{Key: "freightAmount", Label: "运费金额", LabelKey: "website.import_col_freight_amount", Example: "99.00"},
 		{Key: "port", Label: "装运港口", LabelKey: "website.import_col_port", Example: "Shanghai"},
 		{Key: "paymentTerms", Label: "付款方式", LabelKey: "website.import_col_payment", Example: "T/T, L/C"},
 		{Key: "specs", Label: "动态属性", LabelKey: "website.import_col_specs", Example: `[{"label":"Voltage","value":"18V"}] 或 电压:18V|品牌:NexTool`},
@@ -124,35 +125,40 @@ func importProductRow(ctx context.Context, svc *Service, row map[string]string) 
 	if err != nil {
 		return rowError(ctx, response.BadRequest("website.import_number_invalid"))
 	}
+	freightAmount, err := parseImportFloat(row["freightAmount"])
+	if err != nil {
+		return rowError(ctx, response.BadRequest("website.import_number_invalid"))
+	}
 	catIDs, err := svc.importCategoryIDs(ctx, row["categories"])
 	if err != nil {
 		return rowError(ctx, err)
 	}
 	f := ProductForm{
-		Slug:        row["slug"],
-		Title:       row["title"],
-		Keywords:    row["keywords"],
-		Summary:     row["summary"],
-		SeoTitle:    row["seoTitle"],
-		SeoDesc:     row["seoDesc"],
-		SeoKeywords: row["seoKeywords"],
-		Content:     row["content"],
-		Status:      status,
-		CoverURL:    row["coverUrl"],
-		Images:      splitImportList(row["images"]),
-		VideoURL:    row["videoUrl"],
-		PriceMin:    priceMin,
-		PriceMax:    priceMax,
-		Currency:    row["currency"],
-		PriceUnit:   row["priceUnit"],
-		Moq:         moq,
-		LeadTimeDays: leadTimeDays,
-		Port:         row["port"],
-		PaymentTerms: row["paymentTerms"],
-		Specs:        specs,
-		CategoryIDs:  catIDs,
-		I18nJSON:     row["i18n"],
-		Author:       row["author"],
+		Slug:          row["slug"],
+		Title:         row["title"],
+		Keywords:      row["keywords"],
+		Summary:       row["summary"],
+		SeoTitle:      row["seoTitle"],
+		SeoDesc:       row["seoDesc"],
+		SeoKeywords:   row["seoKeywords"],
+		Content:       row["content"],
+		Status:        status,
+		CoverURL:      row["coverUrl"],
+		Images:        splitImportList(row["images"]),
+		VideoURL:      row["videoUrl"],
+		PriceMin:      priceMin,
+		PriceMax:      priceMax,
+		Currency:      row["currency"],
+		PriceUnit:     row["priceUnit"],
+		Moq:           moq,
+		LeadTimeDays:  leadTimeDays,
+		FreightAmount: freightAmount,
+		Port:          row["port"],
+		PaymentTerms:  row["paymentTerms"],
+		Specs:         specs,
+		CategoryIDs:   catIDs,
+		I18nJSON:      row["i18n"],
+		Author:        row["author"],
 	}
 	id, err := svc.productIDBySlug(ctx, f.Slug)
 	if err != nil {
@@ -337,10 +343,10 @@ func (p productExportParams) query() ContentQuery {
 
 // productExportBody 是 POST /products/export-async 的请求体（与查询参数同形）。
 type productExportBody struct {
-	Keyword     string `json:"keyword"`
-	Status      string `json:"status"`      // 逗号拼接多值
-	CategoryId  string `json:"categoryId"`  // 兼容旧单值
-	CategoryIds string `json:"categoryIds"` // 逗号拼接多值
+	Keyword     string   `json:"keyword"`
+	Status      string   `json:"status"`      // 逗号拼接多值
+	CategoryId  string   `json:"categoryId"`  // 兼容旧单值
+	CategoryIds string   `json:"categoryIds"` // 逗号拼接多值
 	IDs         []string `json:"ids"`
 }
 

@@ -79,6 +79,8 @@
     "switcherAria": "切换要编辑的语言",
     "pickHint": "选择要编辑的语言",
     "fieldsMissing": "缺 {{count}} 项",
+    "tagsRemove": "删除 {{word}}",
+    "tagsOver": "已输入 {{count}} 个词，最多 {{max}} 个，超出部分保存时会被丢弃",
     "sharedTag": "共用",
     "sharedFieldNote": "不随语言变化，所有语言共用",
     "fillFromSource": "从原文复制空白",
@@ -96,5 +98,8 @@
   "exportCsv": {
     "noRows": "没有可导出的数据",
     "done": "已导出 {{count}} 行"
+  },
+  "picker": {
+    "loadMore": "加载更多"
   }
 }

@@ -85,6 +85,15 @@
       "notifyEmailHint": "把新收到的留言抄送一封到上面的联系邮箱；未配置 SMTP 时自动跳过。站内信不受这一项影响，始终发送。",
       "consent": "留言需同意隐私政策",
       "consentHint": "打开后，官网联系页的留言表单会多一个必勾项，没勾选就不入库。交付客户的站点建议打开——收集称呼、电话、邮箱属于处理个人信息。",
+      "attachments": "附件",
+      "sourceProduct": "来源商品",
+      "cardConsent": "共享名片",
+      "cardConsentYes": "已同意",
+      "cardConsentNo": "未同意",
+      "overdue": "超时未回复",
+      "overdueHint": "这条询盘超过 24 小时仍未处理。可以直接把下面同品类的商品回给买家，别让线索晾着。",
+      "suggestTitle": "可推荐的同品类商品",
+      "suggestNoPrice": "询价",
       "empty": "暂无留言"
     },
     "nav": {
@@ -255,6 +264,7 @@
       "priceUnit": "计量单位",
       "moq": "最小起订量",
       "leadTimeDays": "发货天数",
+      "freightAmount": "运费金额（0=待定）",
       "port": "装运港口",
       "portPlaceholder": "如：Shanghai",
       "paymentTerms": "付款方式",

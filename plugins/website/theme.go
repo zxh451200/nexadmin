@@ -162,16 +162,23 @@ type DemoSettings struct {
 }
 
 // DemoData 是一套主题的演示内容。条目全部 insert-only：按 slug/href/title 判重，
+// DemoProductCategory 是演示数据里的一个类目：parentSlug 用 slug 指定上级，
+// 导入时再解析成雪花 ID——演示 JSON 里写不了运行时才生成的 ID。
+type DemoProductCategory struct {
+	ProductCategory
+	ParentSlug string `json:"parentSlug"`
+}
+
 // 已存在的跳过，重复导入不产生重复行，用户改过的内容一概不动。
 type DemoData struct {
-	Settings          *DemoSettings     `json:"settings"`
-	Navs              []Nav             `json:"navs"`
-	Features          []Feature         `json:"features"`
-	Categories        []Category        `json:"categories"`
-	Pages             []Page            `json:"pages"`
-	Posts             []Post            `json:"posts"`
-	ProductCategories []ProductCategory `json:"productCategories"`
-	Products          []Product         `json:"products"`
+	Settings          *DemoSettings         `json:"settings"`
+	Navs              []Nav                 `json:"navs"`
+	Features          []Feature             `json:"features"`
+	Categories        []Category            `json:"categories"`
+	Pages             []Page                `json:"pages"`
+	Posts             []Post                `json:"posts"`
+	ProductCategories []DemoProductCategory `json:"productCategories"`
+	Products          []Product             `json:"products"`
 }
 
 // DemoReport 是导入结果的计数：告诉管理员哪些实体种了几条。
@@ -347,8 +354,9 @@ func seedDemoTx(ctx context.Context, tx *gorm.DB, themeID string, data DemoData,
 		}
 	}
 	pcBySlug := map[string]ProductCategory{}
+	pendingParents := map[string]string{}
 	for i := range data.ProductCategories {
-		c := data.ProductCategories[i]
+		c := data.ProductCategories[i].ProductCategory
 		exists, err := demoRowExists(ctx, tx, &ProductCategory{}, c.Slug)
 		if err != nil {
 			return err
@@ -361,10 +369,29 @@ func seedDemoTx(ctx context.Context, tx *gorm.DB, themeID string, data DemoData,
 				return err
 			}
 			rep.ProductCategories++
+			// 只给本次新建的演示行挂层级：用户后来手动改过的树不被重复导入覆盖。
+			if ps := data.ProductCategories[i].ParentSlug; ps != "" {
+				pendingParents[c.Slug] = ps
+			}
 		}
 		var row ProductCategory
 		if err := tx.Where("slug = ?", c.Slug).First(&row).Error; err == nil {
 			pcBySlug[c.Slug] = row
+		}
+	}
+	// 父子关系第二遍回填：父类可能就在同一批刚插入的行里。
+	for slug, parentSlug := range pendingParents {
+		parent, ok := pcBySlug[parentSlug]
+		if !ok {
+			continue
+		}
+		child, ok := pcBySlug[slug]
+		if !ok {
+			continue
+		}
+		if err := tx.Model(&ProductCategory{}).Where("id = ?", int64(child.ID)).
+			Update("parent_id", NavParentID(parent.ID)).Error; err != nil {
+			return err
 		}
 	}
 

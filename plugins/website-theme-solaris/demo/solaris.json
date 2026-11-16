@@ -225,7 +225,20 @@
     {
       "title": "工商业储能",
       "slug": "commercial-ess",
+      "parentSlug": "battery-storage",
       "sort": 40
+    },
+    {
+      "title": "户用储能系统",
+      "slug": "residential-ess",
+      "parentSlug": "battery-storage",
+      "sort": 11
+    },
+    {
+      "title": "EMS 云平台",
+      "slug": "ems-cloud",
+      "parentSlug": "energy-management",
+      "sort": 31
     }
   ],
   "products": [
@@ -235,7 +248,14 @@
       "keywords": "flagship 电池储能 工商业储能",
       "summary": "集成电池、BMS、液冷温控与消防的一体柜，开箱即用的工商业储能单元。",
       "coverUrl": "/website-assets/theme/solaris/assets/sl-storage.webp",
-      "priceMin": 0,
+      "priceMin": 1200,
+      "priceMax": 1500,
+      "priceUnit": "Set",
+      "moq": 1,
+      "leadTimeDays": 25,
+      "port": "Shanghai",
+      "paymentTerms": "T/T, L/C",
+      "aliTradeJson": "{\"priceType\":\"ladder\",\"ladder\":[{\"qty\":1,\"price\":1200},{\"qty\":10,\"price\":1100}],\"package\":{\"length\":120,\"width\":100,\"height\":220,\"weight\":900,\"shippingTemplate\":\"2008472002\"},\"supply\":{\"number\":500,\"quantityUnit\":\"Set/Sets\",\"timeUnit\":\"Month\"},\"logistics\":[\"battery.builtinBatteryLithium.oneLessHundredWh\"],\"sample\":{\"enabled\":true,\"maxQty\":2,\"price\":1500,\"description\":\"sample ok\"},\"custom\":[{\"type\":\"Customized logo\",\"quantity\":100}],\"group\":[\"806382565\"],\"skuProps\":[{\"name\":\"Capacity\",\"values\":[\"215 kWh\",\"100 kWh\",\"3.44 MWh\"]},{\"name\":\"Cooling\",\"values\":[\"Liquid\",\"Air\"]}],\"skus\":[{\"props\":{\"Capacity\":\"215 kWh\",\"Cooling\":\"Liquid\"},\"price\":1200,\"stock\":50,\"code\":\"BESS-215-L\"},{\"props\":{\"Capacity\":\"215 kWh\",\"Cooling\":\"Air\"},\"price\":1100,\"stock\":30,\"code\":\"BESS-215-A\"},{\"props\":{\"Capacity\":\"100 kWh\",\"Cooling\":\"Liquid\"},\"price\":700,\"stock\":20,\"code\":\"BESS-100-L\"},{\"props\":{\"Capacity\":\"100 kWh\",\"Cooling\":\"Air\"},\"price\":650,\"stock\":0,\"code\":\"BESS-100-A\"},{\"props\":{\"Capacity\":\"3.44 MWh\",\"Cooling\":\"Liquid\"},\"price\":1500,\"stock\":12,\"code\":\"ESS-3440-L\"},{\"props\":{\"Capacity\":\"3.44 MWh\",\"Cooling\":\"Air\"},\"price\":1400,\"stock\":8,\"code\":\"ESS-3440-A\"}]}",
       "currency": "USD",
       "specsJson": "[{\"label\":\"型号\",\"value\":\"BESS-215\"},{\"label\":\"额定容量\",\"value\":\"215 kWh\"},{\"label\":\"循环寿命\",\"value\":\"8,000 次\"},{\"label\":\"关键特性\",\"value\":\"全液冷温控 · pack 级消防\"},{\"label\":\"应用场景\",\"value\":\"工商业园区\"}]",
       "categories": [

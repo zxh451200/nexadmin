@@ -86,6 +86,13 @@ type ContactForm struct {
 	Company string `json:"company" form:"company"`
 	// Consent 是「已阅读并同意隐私政策」勾选：站点开启该要求时必须为 true。
 	Consent bool `json:"consent" form:"consent"`
+	// FileTokens 是询盘弹窗里先上传好的附件 token（见 MessageFile）：提交时绑定到这条留言。
+	FileTokens []string `json:"fileTokens" form:"fileTokens"`
+	// ProductID 是询盘来源商品（雪花 ID 字符串）：后台据此知道问的是哪款，
+	// 也是「超时未回复 → 推荐同品类供应商」的依据。非商品页询盘为空。
+	ProductID string `json:"productId" form:"productId"`
+	// CardConsent 是「同意与供应商共享名片信息」：默认勾选、可取消，后台如实展示。
+	CardConsent bool `json:"cardConsent" form:"cardConsent"`
 }
 
 // MessageQuery 是后台留言列表的筛选。
@@ -213,7 +220,9 @@ type ProductForm struct {
 	LeadTimeDays int     `json:"leadTimeDays"`
 	Port         string  `json:"port"`
 	// PaymentTerms 是付款方式：如 "T/T, L/C"，详情页「交易信息」块展示。
-	PaymentTerms string  `json:"paymentTerms"`
+	PaymentTerms string `json:"paymentTerms"`
+	// FreightAmount 是运费金额（与价格同币种）；负数按 0 处理，0 = 详情页标「待定」。
+	FreightAmount float64 `json:"freightAmount"`
 	// AliTrade 是发品用的交易与规格数据（阶梯价/包装/供货/物流属性/样品/定制/分组/SKU）；
 	// nil = 本次不改（老客户端不带这个字段），非 nil 时整体替换（结构与校验见 ali_trade.go）。
 	AliTrade *AliTrade `json:"aliTrade"`

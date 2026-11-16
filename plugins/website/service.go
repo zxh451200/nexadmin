@@ -23,6 +23,7 @@ import (
 	"nexadmin/core/auth"
 	"nexadmin/core/cache"
 	"nexadmin/core/response"
+	"nexadmin/core/storage"
 	"nexadmin/pkg/htmlsafe"
 	pi18n "nexadmin/pkg/i18n"
 	"nexadmin/pkg/idgen"
@@ -37,12 +38,20 @@ type Service struct {
 	cfgImageMaxMB float64
 	// cache 是共享缓存（阿里类目树等外部数据）；nil 时直连不缓存。
 	cache cache.Cache
+	// store 是询盘附件的对象存储；nil 表示未装配（上传接口回 503，其余功能不受影响）。
+	store storage.Storage
 }
 
 func NewService(db *gorm.DB) *Service { return &Service{db: db} }
 
 // SetCache 登记共享缓存（可选）。
 func (s *Service) SetCache(c cache.Cache) { s.cache = c }
+
+// SetStorage 登记询盘附件的对象存储（可选，见 plugin.go 的 storage.New）。
+func (s *Service) SetStorage(st storage.Storage) { s.store = st }
+
+// Storage 返回已装配的附件存储；nil = 附件功能未启用。
+func (s *Service) Storage() storage.Storage { return s.store }
 
 // SetConfigImageMaxMB 登记 config.yaml 的图片大小上限（MB）作为媒体上传的兜底值。
 func (s *Service) SetConfigImageMaxMB(mb int) { s.cfgImageMaxMB = float64(mb) }
@@ -272,6 +281,14 @@ func (s *Service) SaveSettings(ctx context.Context, f SettingForm) (*Setting, er
 	row.Theme = trimLen(f.Theme, 64)
 	if !themeRegistered(row.Theme) {
 		return nil, response.BadRequest("website.theme_not_found")
+	}
+	// 官网默认语言：空 / auto = 跟随浏览器语言协商；具体 code = 该语言占根路径。
+	// 只认当前清单里的启用语言，敲错码比存进去等重启才发现强。
+	row.DefaultLang = trimLen(f.DefaultLang, 16)
+	if row.DefaultLang != "" && row.DefaultLang != "auto" {
+		if _, ok := LanguageByCode(row.DefaultLang); !ok {
+			return nil, response.BadRequest("website.default_lang_invalid")
+		}
 	}
 	socials, err := normalizeSocials(f.Socials)
 	if err != nil {
@@ -1834,9 +1851,21 @@ func (s *Service) CreateMessage(ctx context.Context, f ContactForm, ip, ua strin
 	row := &Message{
 		Name: name, Email: email, Phone: phone, Content: content,
 		IP: trimLen(ip, 64), UA: trimLen(ua, 255),
-		Status: MsgNew,
+		Status: MsgNew, CardConsent: f.CardConsent,
 	}
-	if err := s.db.WithContext(ctx).Create(row).Error; err != nil {
+	// 来源商品：传了且能解析就记下来，解析不了当普通询盘（不能因为一个坏 ID 拒收线索）。
+	if pid, perr := idgen.Parse(strings.TrimSpace(f.ProductID)); perr == nil && pid > 0 {
+		row.ProductID = pid
+	}
+	// 留言与附件绑定在同一个事务里：绑定失败就整条回滚，不能出现「留言进了库、附件丢了」
+	// 还回成功的情况。附件行是上传时先落的（message_id = 0），这里只认领。
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(row).Error; err != nil {
+			return err
+		}
+		return bindMessageFilesTx(tx, row.ID, f.FileTokens)
+	})
+	if err != nil {
 		return nil, err
 	}
 	s.publishCreated(ctx, row)
@@ -1867,6 +1896,23 @@ func (s *Service) ListMessages(ctx context.Context, q MessageQuery) ([]Message, 
 		Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Find(&rows).Error; err != nil {
 		return nil, 0, err
 	}
+	// 附件一次性装配：列表页详情弹窗直接读 row.attachments，不再逐条回查。
+	ids := make([]idgen.ID, 0, len(rows))
+	for _, r := range rows {
+		ids = append(ids, r.ID)
+	}
+	if files, err := s.MessageFilesOf(ctx, ids); err == nil {
+		for i := range rows {
+			rows[i].Attachments = files[int64(rows[i].ID)]
+		}
+	}
+	// 超时未处理的红点在这里现算：状态列是唯一事实来源，不再多存一列「超时」。
+	now := time.Now()
+	for i := range rows {
+		rows[i].Overdue = msgOverdue(&rows[i], now)
+	}
+	// 来源商品一次补齐：后台要知道这条询盘问的是哪款，才能回得准。
+	s.attachMessageSources(ctx, rows)
 	return rows, total, nil
 }
 
@@ -1909,6 +1955,8 @@ func (s *Service) DeleteMessages(ctx context.Context, ids []idgen.ID) (int64, er
 	if res.RowsAffected == 0 {
 		return 0, response.NotFound("website.message_not_found")
 	}
+	// 附件行与存储对象跟着留言一起清：留着只是占空间，也没有别的入口能再看它们。
+	s.deleteMessageFiles(ctx, ids)
 	return res.RowsAffected, nil
 }
 

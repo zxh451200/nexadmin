@@ -21,7 +21,7 @@
       </ul>
       {{if .Socials}}
       <ul class="tk-social tk-contact-social" aria-label="{{.T "layout.social"}}">
-        {{range .Socials}}<li><a href="{{.URL}}" target="_blank" rel="noopener noreferrer nofollow" aria-label="{{$.SocialLabel .Platform}}" title="{{$.SocialLabel .Platform}}">{{socialIcon .Platform}}</a></li>{{end}}
+        {{range .Socials}}<li><a href="{{.URL}}" target="_blank" rel="noopener noreferrer nofollow" aria-label="{{$.SocialLabel .Platform}}" data-tip="{{$.SocialLabel .Platform}}">{{socialIcon .Platform}}</a></li>{{end}}
       </ul>
       {{end}}
       {{if .QRCodeURL}}

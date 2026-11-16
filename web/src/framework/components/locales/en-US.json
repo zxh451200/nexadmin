@@ -79,6 +79,8 @@
     "switcherAria": "Switch the language you are editing",
     "pickHint": "Pick the language to edit",
     "fieldsMissing": "{{count}} missing",
+    "tagsRemove": "Remove {{word}}",
+    "tagsOver": "{{count}} words entered — at most {{max}} are kept, the rest are dropped on save",
     "sharedTag": "Shared",
     "sharedFieldNote": "Not localized — shared by every language",
     "fillFromSource": "Copy blanks from source",
@@ -96,5 +98,8 @@
   "exportCsv": {
     "noRows": "Nothing to export",
     "done": "Exported {{count}} row(s)"
+  },
+  "picker": {
+    "loadMore": "Load more"
   }
 }

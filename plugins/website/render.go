@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"html/template"
 	"io/fs"
+	"math"
 	"net/url"
 	"strconv"
 	"strings"
@@ -98,9 +99,150 @@ var socialIconPaths = map[string]string{
 	"mail":      `<path d="M3 7a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-10z"/><path d="M3 7l9 6l9 -6"/>`,
 }
 
+// inquiryDialog 渲染商详页的「发送询盘」弹窗（对齐阿里商详的表单式询盘）：
+// 详细需求 + 常见问题快填 + 联系方式 + 隐私勾选，提交走现有的 POST /contact（Accept: json）。
+// 结构和文案都在服务端出，site.js 只管开合、快填与提交，四套主题共用一份。
+func inquiryDialog(v any) template.HTML {
+	sv, _ := v.(*siteView)
+	t := func(k string) string { return k }
+	tf := func(k string, args ...any) string { return k }
+	contactURL := ""
+	consent, consentURL := false, ""
+	var product *Product
+	if sv != nil {
+		t = sv.T
+		tf = sv.TF
+		contactURL = sv.URL("/contact")
+		consent, consentURL = sv.Consent, sv.ConsentURL
+		product = sv.Product
+	}
+	esc := template.HTMLEscapeString
+	money := func(v float64) string {
+		if v == math.Trunc(v) {
+			return strconv.FormatFloat(v, 'f', 0, 64)
+		}
+		return strconv.FormatFloat(v, 'f', 2, 64)
+	}
+
+	var b strings.Builder
+	b.WriteString(`<div class="inq" data-inquiry hidden><div class="inq-mask" data-inquiry-close></div>`)
+	b.WriteString(`<div class="inq-card" role="dialog" aria-modal="true" aria-labelledby="inq-title">`)
+	b.WriteString(`<button class="inq-x" type="button" data-inquiry-close aria-label="` + esc(t("inquiry.close")) + `">` + svgWrap(uiIconPaths["close"], "") + `</button>`)
+	b.WriteString(`<h2 class="inq-title" id="inq-title">` + esc(t("inquiry.title")) + `</h2>`)
+	// 收件人：阿里的弹窗第一行就写清楚询盘发给谁。公开站只有一个供应商（站点自己），
+	// 所以用站点名 + 对外邮箱，不画认证徽标（没有资质数据，画了就是假的）。
+	if sv != nil && (sv.SiteName != "" || sv.ContactEmail != "") {
+		b.WriteString(`<div class="inq-to"><span class="inq-to-label">` + esc(t("inquiry.recipient")) + `</span>`)
+		b.WriteString(`<span class="inq-to-body">`)
+		if sv.SiteName != "" {
+			b.WriteString(`<strong>` + esc(sv.SiteName) + `</strong>`)
+		}
+		if sv.ContactEmail != "" {
+			b.WriteString(`<span class="inq-to-mail">` + esc(sv.ContactEmail) + `</span>`)
+		}
+		b.WriteString(`</span></div>`)
+	}
+
+	if product != nil && (product.CoverURL != "" || product.Title != "") {
+		b.WriteString(`<div class="inq-prod">`)
+		if product.CoverURL != "" {
+			b.WriteString(`<img class="inq-prod-cover" src="` + esc(product.CoverURL) + `" alt="" loading="lazy">`)
+		}
+		b.WriteString(`<span class="inq-prod-text"><strong>` + esc(product.Title) + `</strong>`)
+		if product.PriceMin > 0 {
+			price := product.Currency + money(product.PriceMin)
+			if product.PriceMax > product.PriceMin {
+				price += "-" + money(product.PriceMax)
+			}
+			b.WriteString(`<span class="inq-prod-price">` + esc(price))
+			if product.PriceUnit != "" {
+				b.WriteString(` / ` + esc(product.PriceUnit))
+			}
+			b.WriteString(`</span>`)
+		}
+		// 数量：默认取起订量，提交时拼进正文（ContactForm 不认额外字段，供应商在后台只能读到正文）。
+		// 起订量是 0 或 1 时从 1 开始；单位跟商品的价格单位走，没有就不显示。
+		qtyMin := 1
+		if product.Moq > 1 {
+			qtyMin = product.Moq
+		}
+		b.WriteString(`<span class="inq-qty" data-inq-qty data-inq-qty-min="` + strconv.Itoa(qtyMin) + `"`)
+		if product.PriceUnit != "" {
+			b.WriteString(` data-inq-qty-unit="` + esc(product.PriceUnit) + `"`)
+		}
+		b.WriteString(`>`)
+		b.WriteString(`<span class="inq-qty-label">` + esc(t("product.quantity")) + `</span>`)
+		b.WriteString(`<span class="inq-stepper">`)
+		b.WriteString(`<button type="button" class="inq-step" data-inq-qty-minus aria-label="` + esc(t("product.qtyDec")) + `">-</button>`)
+		b.WriteString(`<input class="inq-step-input" type="text" inputmode="numeric" autocomplete="off" value="` + strconv.Itoa(qtyMin) + `" data-inq-qty-input aria-label="` + esc(t("product.quantity")) + `">`)
+		b.WriteString(`<button type="button" class="inq-step" data-inq-qty-plus aria-label="` + esc(t("product.qtyInc")) + `">+</button>`)
+		b.WriteString(`</span>`)
+		if product.PriceUnit != "" {
+			b.WriteString(`<span class="inq-qty-unit">` + esc(product.PriceUnit) + `</span>`)
+		}
+		b.WriteString(`</span>`)
+		b.WriteString(`</span></div>`)
+	}
+
+	b.WriteString(`<form class="inq-form" method="post" action="` + esc(contactURL) + `" data-inquiry-form novalidate>`)
+	// 详细需求
+	b.WriteString(`<label class="inq-field"><span class="inq-label"><i class="inq-req">*</i>` + esc(t("inquiry.detail")) + `</span>`)
+	b.WriteString(`<textarea name="content" rows="5" required minlength="5" maxlength="2000" placeholder="` + esc(t("inquiry.placeholder")) + `" data-inquiry-content></textarea></label>`)
+	b.WriteString(`<p class="inq-hint">` + esc(t("inquiry.detailHint")) + `</p>`)
+	// 附件：买家常要带图纸/规格书/实拍图。文件先传（拿 token），提交时随表单绑定到留言。
+	// 上限随页面下发（siteView.Inquiry*），前端不再手抄一份 accept。
+	accept := ""
+	maxText := ""
+	maxFiles := 0
+	maxBytes := int64(0)
+	if sv != nil {
+		accept, maxText, maxFiles, maxBytes = sv.InquiryAccept, sv.InquiryMaxText, sv.InquiryMaxFiles, sv.InquiryMaxBytes
+	}
+	if maxFiles > 0 {
+		b.WriteString(`<div class="inq-attach" data-inq-attach data-max-files="` + strconv.Itoa(maxFiles) + `" data-max-bytes="` + strconv.FormatInt(maxBytes, 10) + `">`)
+		b.WriteString(`<button class="inq-attach-btn" type="button" data-inq-attach-btn>` + svgWrap(uiIconPaths["paperclip"], "") + `<span>` + esc(t("inquiry.attach")) + `</span></button>`)
+		b.WriteString(`<input class="inq-attach-input" type="file" multiple hidden data-inq-attach-input accept="` + esc(accept) + `">`)
+		b.WriteString(`<p class="inq-attach-hint" data-inq-attach-hint>` + esc(tf("inquiry.attachHint", maxText, strconv.Itoa(maxFiles))) + `</p>`)
+		b.WriteString(`<ul class="inq-attach-list" data-inq-attach-list hidden></ul>`)
+		b.WriteString(`</div>`)
+	}
+	// 常见问题快填
+	b.WriteString(`<div class="inq-suggest"><p class="inq-suggest-title">` + esc(t("inquiry.suggestHint")) + `</p><div class="inq-chips">`)
+	for _, q := range []string{"inquiry.q1", "inquiry.q2", "inquiry.q3", "inquiry.q4"} {
+		b.WriteString(`<button type="button" class="inq-chip" data-inquiry-chip>` + esc(t(q)) + `</button>`)
+	}
+	b.WriteString(`</div></div>`)
+	// 联系方式：公开站是匿名入口，必须留得上联系方式才能回
+	b.WriteString(`<div class="inq-row">`)
+	b.WriteString(`<label class="inq-field"><span class="inq-label"><i class="inq-req">*</i>` + esc(t("contact.name")) + `</span><input name="name" required maxlength="64" autocomplete="name"></label>`)
+	b.WriteString(`<label class="inq-field"><span class="inq-label"><i class="inq-req">*</i>` + esc(t("contact.email")) + `</span><input name="email" type="email" required maxlength="128" autocomplete="email"></label>`)
+	b.WriteString(`</div>`)
+	b.WriteString(`<label class="inq-field"><span class="inq-label">` + esc(t("contact.phoneOpt")) + `</span><input name="phone" type="tel" maxlength="32" autocomplete="tel"></label>`)
+	b.WriteString(`<label class="inq-hp" aria-hidden="true"><span>Company</span><input name="company" tabindex="-1" autocomplete="off"></label>`)
+	// 商品上下文与「共享名片」：后台据此知道这条询盘问的是哪个商品，并能做超时推荐。
+	if product != nil {
+		b.WriteString(`<input type="hidden" name="productId" value="` + esc(product.ID.String()) + `">`)
+	}
+	b.WriteString(`<label class="inq-share"><input type="checkbox" name="cardConsent" value="1" checked><span>` + esc(t("inquiry.cardConsent")) + `</span></label>`)
+	if consent {
+		b.WriteString(`<label class="inq-consent"><input type="checkbox" name="consent" value="1" required><span>` + esc(t("contact.consent")))
+		if consentURL != "" {
+			b.WriteString(` <a href="` + esc(consentURL) + `" target="_blank" rel="noopener noreferrer">` + esc(t("contact.consentPolicy")) + `</a>`)
+		}
+		b.WriteString(`</span></label>`)
+	}
+	b.WriteString(`<p class="inq-err" data-inquiry-err role="alert" hidden></p>`)
+	b.WriteString(`<p class="inq-note">` + esc(t("inquiry.privacy")) + `</p>`)
+	b.WriteString(`<button class="inq-send" type="submit">` + esc(t("inquiry.send")) + `</button>`)
+	b.WriteString(`</form></div></div>`)
+	return template.HTML(b.String())
+}
+
 // uiIconPaths 是官网自己的界面小图标（导航箭头、主题切换、客服挂件、搜索框）：
 // 与 socialIconPaths 同源 Tabler Icons v3.36.0 outline（MIT），统一走 stroke-width 2；
 // 模板里写死一份会让笔画口径各走各的，改由 uiIcon 函数出图，键名与模板的引用由测试兜底。
+// mood-smile / language / dots 专门给客服挂件：那三处以前是 ☺ / 文A / ··· 文本字符，
+// 字号随系统字体变、笔画粗细跟按钮对不上，一排下来最土的就是它们，统一换成同源线框图标。
 var uiIconPaths = map[string]string{
 	"chevron-down": `<path d="M6 9l6 6l6 -6" />`,
 	"sun":          `<path d="M12 12m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0" /><path d="M3 12h1m8 -9v1m8 8h1m-9 8v1m-6.4 -15.4l.7 .7m12.1 -.7l-.7 .7m0 11.4l.7 .7m-12.1 -.7l-.7 .7" />`,
@@ -110,9 +252,74 @@ var uiIconPaths = map[string]string{
 	"paperclip":    `<path d="M15 7l-6.5 6.5a1.5 1.5 0 0 0 3 3l6.5 -6.5a3 3 0 0 0 -6 -6l-6.5 6.5a4.5 4.5 0 0 0 9 9l6.5 -6.5" />`,
 	"send":         `<path d="M10 14l11 -11" /><path d="M21 3l-6.5 18a.55 .55 0 0 1 -1 0l-3.5 -7l-7 -3.5a.55 .55 0 0 1 0 -1l18 -6.5" />`,
 	"search":       `<path d="M10 10m-7 0a7 7 0 1 0 14 0a7 7 0 1 0 -14 0" /><path d="M21 21l-6 -6" />`,
+	"copy":         `<path d="M7 7m0 2.667a2.667 2.667 0 0 1 2.667 -2.667h8.666a2.667 2.667 0 0 1 2.667 2.667v8.666a2.667 2.667 0 0 1 -2.667 2.667h-8.666a2.667 2.667 0 0 1 -2.667 -2.667z" /><path d="M4.012 16.737a2.005 2.005 0 0 1 -1.012 -1.737v-10c0 -1.1 .9 -2 2 -2h10c.75 0 1.158 .385 1.5 1" />`,
+	"check":        `<path d="M5 12l5 5l10 -10" />`,
+	"shield":       `<path d="M12 3a12 12 0 0 0 8.5 3a12 12 0 0 1 -8.5 15a12 12 0 0 1 -8.5 -15a12 12 0 0 0 8.5 -3" />`,
+	"lock":         `<path d="M5 13a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v6a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-6z" /><path d="M11 16a1 1 0 1 0 2 0a1 1 0 0 0 -2 0" /><path d="M8 11v-4a4 4 0 1 1 8 0v4" />`,
+	"mood-smile":   `<path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" /><path d="M9 10l.01 0" /><path d="M15 10l.01 0" /><path d="M9.5 15a3.5 3.5 0 0 0 5 0" />`,
+	"language":     `<path d="M4 5h7" /><path d="M9 3v2c0 4.418 -2.239 8 -5 8" /><path d="M5 9c0 2.144 2.952 3.908 6.7 4" /><path d="M12 20l4 -9l4 9" /><path d="M19.1 18h-6.2" />`,
+	"dots":         `<path d="M5 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" /><path d="M12 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" /><path d="M19 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" />`,
+	// 「安全支付」贸易术语徽标，同样来自 Tabler v3.36.0 outline：
+	// bank=电汇 T/T、file-check=信用证 L/C、file-text=托收 D/P·D/A、
+	// file-invoice=赊账 O/A、wallet=电子钱包（支付宝/微信）、cash=现金。
+	"bank":         `<path d="M3 21l18 0" /><path d="M5 21v-11l7 -5l7 5v11" /><path d="M9 21v-6a2 2 0 0 1 4 0v6" /><path d="M3 10l18 0" />`,
+	"file-check":   `<path d="M14 3v4a1 1 0 0 0 1 1h4" /><path d="M17 21h-10a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2z" /><path d="M9 15l2 2l4 -4" />`,
+	"file-text":    `<path d="M14 3v4a1 1 0 0 0 1 1h4" /><path d="M17 21h-10a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2z" /><path d="M9 9h6" /><path d="M9 13h6" /><path d="M9 17h4" />`,
+	"file-invoice": `<path d="M14 3v4a1 1 0 0 0 1 1h4" /><path d="M18 21h-12a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h8l6 6v10a2 2 0 0 1 -2 2z" /><path d="M9 10h3" /><path d="M9 14h6" /><path d="M9 18h4" />`,
+	"wallet":       `<path d="M3 7m0 3a3 3 0 0 1 3 -3h12a3 3 0 0 1 3 3v7a3 3 0 0 1 -3 3h-12a3 3 0 0 1 -3 -3z" /><path d="M3 10h18" /><path d="M16 14h2" />`,
+	"cash":         `<path d="M7 12m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0" /><path d="M3 16h8" /><path d="M15 8h2a2 2 0 0 1 2 2v6a2 2 0 0 1 -2 2h-3" /><path d="M12 6h9a1 1 0 0 1 1 1v9" />`,
 }
 
 var defaultIcon = `<circle cx="12" cy="12" r="3"/>`
+
+// svgWrap 给路径套上统一的 Tabler 口径（24 网格、stroke-width 2、圆角端点）。
+// 页脚社交、界面小图标、详情页分享条都走这一份，站点上不留第二套图标语言。
+func svgWrap(paths, class string) string {
+	cls := ""
+	if class != "" {
+		cls = ` class="` + template.HTMLEscapeString(class) + `"`
+	}
+	return `<svg` + cls + ` viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">` + paths + `</svg>`
+}
+
+// shareBarPlatforms 是详情页分享条的按钮顺序：图标直接取页脚的 socialIconPaths，
+// 文案走 site.js.* 字典，复制按钮另用 uiIconPaths 的 copy/check/close。
+var shareBarPlatforms = []struct{ key, label string }{
+	{"wechat", "site.js.shareWechat"},
+	{"weibo", "site.js.shareWeibo"},
+	{"facebook", "site.js.shareFacebook"},
+	{"x", "site.js.shareX"},
+	{"linkedin", "site.js.shareLinkedIn"},
+}
+
+// shareBar 在服务端渲染详情页（产品/文章）的分享条，site.js 只负责绑事件。
+// 以前这条分享条的图标是 site.js 里另存的 @ant-design/icons 实心路径，和页脚的 Tabler
+// 线框图标成了两套风格；现在统一回 Tabler，JS 不再自带任何图标数据。
+func shareBar(v any) template.HTML {
+	t := func(k string) string { return k }
+	if sv, ok := v.(*siteView); ok && sv != nil {
+		t = sv.T
+	}
+	var b strings.Builder
+	b.WriteString(`<div class="dt-share" data-share-bar><span class="dt-share-label">`)
+	b.WriteString(template.HTMLEscapeString(t("site.js.shareLabel")))
+	b.WriteString(`</span><div class="dt-share-icons">`)
+	for _, p := range shareBarPlatforms {
+		tip := template.HTMLEscapeString(t(p.label))
+		b.WriteString(`<button class="dt-share-btn" type="button" data-share="` + p.key + `" data-tip="` + tip + `" aria-label="` + tip + `">`)
+		b.WriteString(svgWrap(socialIconPaths[p.key], ""))
+		b.WriteString(`</button>`)
+	}
+	copyTip := template.HTMLEscapeString(t("site.js.shareCopy"))
+	b.WriteString(`<button class="dt-share-btn" type="button" data-share="copy" data-tip="` + copyTip + `" aria-label="` + copyTip + `">`)
+	// 复制成功/失败时只切状态 class，三个图标都常驻 DOM（见 site.js 的 DT_CSS）。
+	b.WriteString(`<span class="dt-ico dt-ico-copy">` + svgWrap(uiIconPaths["copy"], "") + `</span>`)
+	b.WriteString(`<span class="dt-ico dt-ico-check">` + svgWrap(uiIconPaths["check"], "") + `</span>`)
+	b.WriteString(`<span class="dt-ico dt-ico-fail">` + svgWrap(uiIconPaths["close"], "") + `</span>`)
+	b.WriteString(`</button>`)
+	b.WriteString(`</div></div>`)
+	return template.HTML(b.String())
+}
 
 // featureIconOrder 是管理端图标下拉的展示顺序；键集合必须与 iconPaths 完全一致（有测试兜底），
 // 下拉的预览由 /plugins/website/feature-icons 直接读 iconPaths，避免前端另存一份路径后与官网走样。
@@ -131,29 +338,33 @@ var tplFuncs = template.FuncMap{
 		if !ok {
 			p = defaultIcon
 		}
-		return template.HTML(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">` + p + `</svg>`)
+		return template.HTML(svgWrap(p, ""))
 	},
 	"socialIcon": func(platform string) template.HTML {
 		p, ok := socialIconPaths[platform]
 		if !ok {
 			p = socialIconPaths["rss"]
 		}
-		return template.HTML(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">` + p + `</svg>`)
+		return template.HTML(svgWrap(p, ""))
 	},
 	// uiIcon 出界面小图标；第二个参数把 CSS 需要的 class 留在 svg 上（.ico-sun/.ico-moon 靠它切换显隐）。
 	"uiIcon": func(name string, class ...string) template.HTML {
 		cls := ""
-		if len(class) > 0 && class[0] != "" {
-			cls = ` class="` + template.HTMLEscapeString(class[0]) + `"`
+		if len(class) > 0 {
+			cls = class[0]
 		}
 		p, ok := uiIconPaths[name]
 		if !ok {
 			p = defaultIcon
 		}
-		return template.HTML(`<svg` + cls + ` viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">` + p + `</svg>`)
+		return template.HTML(svgWrap(p, cls))
 	},
-	"fmtDate":   func(l Language, v any) string { return formatDate(l, v) },
-	"hasPrefix": strings.HasPrefix,
+	// shareBar 出详情页分享条（图标与页脚同源，见函数注释）。
+	"shareBar": shareBar,
+	// inquiryDialog 出商详页的「发送询盘」弹窗。
+	"inquiryDialog": inquiryDialog,
+	"fmtDate":       func(l Language, v any) string { return formatDate(l, v) },
+	"hasPrefix":     strings.HasPrefix,
 	// isMediaURL 判断视频地址是不是浏览器能直接播放的媒体文件（.mp4/.webm/.ogg/.m4v）：
 	// 是就渲染 <video> 控件，否则（YouTube 等页面地址）渲染一条外链按钮。
 	"isMediaURL": func(s string) bool {
@@ -175,6 +386,14 @@ var tplFuncs = template.FuncMap{
 		}
 		r := []rune(s)
 		return string(unicode.ToUpper(r[0]))
+	},
+	// money 把价格压成阿里商详那种紧凑写法：整数不带小数，非整数保留两位。
+	// 列表卡片窄，9800.00-12200.00 会折行，9800-12200 能一行放下。
+	"money": func(v float64) string {
+		if v == math.Trunc(v) {
+			return strconv.FormatFloat(v, 'f', 0, 64)
+		}
+		return strconv.FormatFloat(v, 'f', 2, 64)
 	},
 	// specOf 按一组候选标签取商品的第一个匹配规格值（主题选型表用）：
 	// 标签在库里的写法与语言相关，传入多个语言的写法（如 "功率", "Power"）谁先命中用谁。
@@ -309,8 +528,11 @@ type siteView struct {
 	Products           []Product
 	ProductsPage       int
 	ProductsTotalPages int
-	// ProductCategories 是产品页的类目导航（含当前高亮那一项）。
-	ProductCategories []termLink
+	// ProductCategories 是产品页的类目清单（先序扁平，含层级与当前高亮/祖先链）。
+	ProductCategories []productCatLink
+	// ProductCategoryTree 是同一份类目的层级树（一级为根、二级挂在 Children 上），
+	// 左栏按阿里店铺的 hover 浮层渲染，不需要前端再按深度拼层级。
+	ProductCategoryTree []productCatLink
 	// ProductTermName / ProductTermQuery 说明这一页的筛选状态（类目 + 检索词）：
 	// 空 = 全部产品；筛选串必须进 canonical 与翻页链接，语义同 NewsTermQuery。
 	ProductTermName  string
@@ -320,9 +542,24 @@ type siteView struct {
 	ProductTermSlug string
 	ProductQuery    string
 	ProductAllURL   string
-	// ProductsTotal 是筛选后的命中数，结果栏展示「共 N 个产品」。
-	ProductsTotal int
-	Product       *Product
+	// ProductsTotal 是筛选后的命中数，结果栏展示「共 N 个产品」；
+	// ProductSort 是当前排序口径，ProductsFeatured 是左栏「精选橱窗」的最新商品。
+	ProductsTotal    int
+	ProductSort      string
+	ProductsFeatured []Product
+	Product          *Product
+	// InquiryAccept / InquiryMaxBytes / InquiryMaxText / InquiryMaxFiles 是询盘附件的生效限制，
+	// 只有商详页填（弹窗在那里）；空表示附件不可用（存储未装配）。
+	InquiryAccept   string
+	InquiryMaxBytes int64
+	InquiryMaxText  string
+	InquiryMaxFiles int
+	// PostPrev/PostNext、ProductPrev/ProductNext 是详情页按各自列表顺序取的相邻两项；
+	// 没有相邻内容（只有一篇、或是预览中的草稿）时为 nil，模板整段不渲染导航。
+	PostPrev    *ContentNeighbor
+	PostNext    *ContentNeighbor
+	ProductPrev *ContentNeighbor
+	ProductNext *ContentNeighbor
 	// ProductsRelated 是详情页的「同类产品」推荐（同类目已上架商品，不含自身）。
 	ProductsRelated []Product
 	// NewsPage / NewsTotalPages 是公开新闻列表的分页状态（news.tmpl 渲染翻页链接）。
@@ -569,10 +806,22 @@ func (v *siteView) JSStrings() template.JS {
 	m := map[string]string{}
 	for _, k := range []string{
 		"packaging", "packagingHint", "packFailed", "copied", "copyManual", "menuOpen", "menuClose", "emailCopy", "emailCopied",
-		"zoom", "zoomClose", "zoomPrev", "zoomNext",
+		"zoom", "zoomClose", "zoomPrev", "zoomNext", "zoomError",
+		"zoomIn", "zoomOut", "zoomOneToOne", "zoomReset", "zoomPlay", "zoomRotateLeft", "zoomRotateRight", "zoomFlipX", "zoomFlipY",
 		"contactSending", "contactSent", "contactFailed", "contactRate", "contactErrName", "contactErrEmail", "contactErrContent", "contactErrConsent",
 		"chatErrSend", "chatErrLoad", "chatClosed", "chatGuest", "chatAgent",
 		"chatClosedTitle", "chatClosedAuto", "chatNewNote", "chatRateFailed", "chatUploadFailed", "chatInviteDefault",
+		"shareLabel", "shareWechat", "shareWeibo", "shareFacebook", "shareX", "shareLinkedIn", "shareCopy",
+		"shareWechatTitle", "shareWechatTip", "shareSystemShare", "shareClose", "shareCopied", "shareCopyFailed",
+		"catExpand", "catCollapse",
+		"shareCopiedShort", "shareFailedShort",
+		"chatTranslateSame", "chatTranslated", "chatTranslateFailed", "chatTranslateIn", "chatTranslateOriginal",
+		"chatLocalTime", "chatProductLabel", "chatQuantity", "chatGreeting", "chatCollapse", "chatExpand", "subtotal",
+		"skuSelected", "skuLowStock", "skuOutOfStock",
+		"inqMetaProduct", "inqMetaQty",
+		"inqAttachUploading", "inqAttachRemove", "inqAttachTooLarge", "inqAttachType", "inqAttachFailed", "inqAttachLimit",
+		"chatNameCard", "chatAddressCard", "chatCardNameTitle", "chatCardAddressTitle", "chatCardHint", "chatCardName", "chatCardCompany", "chatCardJob", "chatCardEmail", "chatCardPhone",
+		"chatCardRecipient", "chatCardCountry", "chatCardRegion", "chatCardStreet", "chatCardPostcode", "chatCardSend", "chatCardCancel", "chatCardRequired", "chatCardNameLabel", "chatCardAddressLabel",
 	} {
 		m[k] = v.T("site.js." + k)
 	}

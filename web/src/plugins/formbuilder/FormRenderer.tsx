@@ -1,7 +1,9 @@
+import { useState } from 'react'
 import { Star } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { DatePicker } from '@/framework/components/DatePicker'
 import { DictSelect } from '@/framework/components/DictSelect'
+import { FilePickerDialog, PickFromLibraryButton, toUploadedFile } from '@/framework/components/FilePickerDialog'
 import { Uploader, type UploadedFile } from '@/framework/components/Uploader'
 import { Button } from '@/framework/ui/button'
 import { Checkbox } from '@/framework/ui/checkbox'
@@ -168,19 +170,45 @@ function Control({ f, id, value, disabled, preview, onChange, describedBy, inval
     case 'rating':
       return <Rating id={id} max={f.max ?? 5} value={typeof value === 'number' ? value : 0} disabled={disabled} onChange={onChange} />
     case 'file':
-      return (
-        <Uploader
-          kind="file"
-          multiple
-          maxCount={f.max ?? 5}
-          value={toUploaded(value)}
-          onChange={(list) => onChange(list.length ? fromUploaded(list) : undefined)}
-          disabled={disabled}
-        />
-      )
+      return <FileFieldControl f={f} value={value} disabled={disabled} onChange={onChange} />
     default:
       return null
   }
+}
+
+/** 文件字段（Control 的 switch 里不能挂 hook，拆出独立组件）：入口行三通道——上传按钮 + 地址导入 + 从文件库选择；
+ *  文件库勾选即增（去重）、取消勾选即删，确认后统一写回。 */
+function FileFieldControl({ f, value, disabled, onChange }: { f: FormField; value: unknown; disabled?: boolean; onChange: (v: unknown) => void }) {
+  const [pickOpen, setPickOpen] = useState(false)
+  const max = f.max ?? 5
+  const uploaded = toUploaded(value)
+  return (
+    <>
+      <Uploader
+        kind="file"
+        multiple
+        maxCount={max}
+        value={uploaded}
+        onChange={(list) => onChange(list.length ? fromUploaded(list) : undefined)}
+        disabled={disabled}
+        entryExtra={<PickFromLibraryButton onClick={() => setPickOpen(true)} disabled={disabled} />}
+      />
+      <FilePickerDialog
+        open={pickOpen}
+        onOpenChange={setPickOpen}
+        kind="file"
+        multiple
+        value={uploaded.map((u) => u.url)}
+        onConfirm={(urls, items) => {
+          const kept = uploaded.filter((u) => urls.includes(u.url))
+          const added = items.filter((i) => !uploaded.some((u) => u.url === i.url)).map(toUploadedFile)
+          const next = [...kept, ...added].slice(0, max)
+          onChange(next.length ? fromUploaded(next) : undefined)
+        }}
+        disabled={disabled}
+      />
+    </>
+  )
 }
 
 function CheckList({ id, opts, value, disabled, onChange }: { id: string; opts: Array<{ label: string; value: string }>; value: unknown; disabled?: boolean; onChange: (v: unknown) => void }) {

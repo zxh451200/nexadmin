@@ -9,7 +9,7 @@ import { precheckFile, useUploadConfig } from '@/framework/upload/precheck'
 import { uploadFile } from '@/framework/upload/uploadClient'
 import { toWebp, webpName } from '@/framework/upload/toWebp'
 import { Lightbox } from '@/framework/upload/Lightbox'
-import { RemoteSelect } from './RemoteSelect'
+import { FilePickerDialog, PickFromLibraryButton } from './FilePickerDialog'
 import { ResponsiveDialog } from './ResponsiveDialog'
 import { Uploader, type UploadedFile } from './Uploader'
 import type { CropConfig } from './ImageCropDialog'
@@ -55,6 +55,7 @@ export function ImageUrlField({
   const [uploading, setUploading] = useState(false)
   const [open, setOpen] = useState(false)
   const [zoom, setZoom] = useState(false)
+  const [pickOpen, setPickOpen] = useState(false)
 
   const pick = async (file: File | undefined) => {
     if (!file) return
@@ -167,19 +168,8 @@ export function ImageUrlField({
           aria-label={ariaLabel ?? title}
         />
         {!value ? uploadBtn : null}
-        {/* 文件库下拉：已传过的图片直接选，不用手写 URL（关键词可搜、按上传时间倒序） */}
-        <RemoteSelect
-          url="/files"
-          params={{ category: 'image' }}
-          valueKey="url"
-          labelKey="name"
-          value={value}
-          onChange={(v) => onChange(String(v ?? ''))}
-          allowClear={false}
-          placeholder={t('uploader.pickFromLibrary')}
-          disabled={disabled}
-          className="w-36 shrink-0 sm:w-44"
-        />
+        {/* 文件库弹窗：已传过的图片直接选（缩略图网格 + 关键词可搜、按上传时间倒序） */}
+        <PickFromLibraryButton className="shrink-0" disabled={disabled} onClick={() => setPickOpen(true)} />
       </div>
       {value ? (
         <Button type="button" variant="ghost" className="shrink-0 px-3" disabled={disabled} onClick={() => onChange('')}>
@@ -213,6 +203,15 @@ export function ImageUrlField({
           slides={[{ src: value, alt: ariaLabel ?? title }]}
         />
       ) : null}
+      {/* 文件库弹窗不随 value 门控：空字段正是「从文件库选一张」的主场景 */}
+      <FilePickerDialog
+        open={pickOpen}
+        onOpenChange={setPickOpen}
+        kind="image"
+        value={value ? [value] : []}
+        onConfirm={(urls) => onChange(urls[0] ?? '')}
+        disabled={disabled}
+      />
       <input
         ref={inputRef}
         type="file"

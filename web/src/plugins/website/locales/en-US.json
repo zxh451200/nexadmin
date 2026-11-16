@@ -85,6 +85,15 @@
       "notifyEmailHint": "Send a copy of every new message to the contact email above. Skipped automatically when SMTP is not configured. In-app notifications are always sent.",
       "consent": "Messages require consent to the privacy policy",
       "consentHint": "When on, the contact page adds a required checkbox and submissions without it are rejected. Recommended for delivered client sites — collecting a name, phone and email is processing personal data.",
+      "attachments": "Attachments",
+      "sourceProduct": "Source product",
+      "cardConsent": "Card sharing",
+      "cardConsentYes": "Agreed",
+      "cardConsentNo": "Not agreed",
+      "overdue": "Overdue",
+      "overdueHint": "This inquiry has been waiting more than 24 hours. Reply with one of the same-category products below instead of letting the lead go cold.",
+      "suggestTitle": "Same-category products to offer",
+      "suggestNoPrice": "Quote",
       "empty": "No messages yet"
     },
     "nav": {
@@ -255,6 +264,7 @@
       "priceUnit": "Unit",
       "moq": "MOQ",
       "leadTimeDays": "Lead time (days)",
+      "freightAmount": "Freight amount (0 = TBD)",
       "port": "Port of loading",
       "portPlaceholder": "e.g. Shanghai",
       "paymentTerms": "Payment terms",

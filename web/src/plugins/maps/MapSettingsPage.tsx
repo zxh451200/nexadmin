@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { LocationField, type GeoPoint } from '@/framework/map'
+import { FieldHint } from '@/framework/components/FieldHint'
 import { PlatformNotice } from '@/framework/components/PlatformNotice'
 import { usePermission } from '@/framework/auth/usePermission'
 import { Badge } from '@/framework/ui/badge'
@@ -71,6 +72,8 @@ export function MapSection() {
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium text-foreground">{t(`plugin_maps.providers.${id}`)}</span>
                     {pv?.enabled ? <Badge variant="success">{t('plugin_maps.enabledTag')}</Badge> : null}
+                    {/* Key 申请与坐标系的说明按厂商各一段（最长 105 字），铺在输入框下面会把四节拉成一列长文 */}
+                    <FieldHint text={t(`plugin_maps.keys.${id}Hint`)} />
                   </div>
                   <Switch checked={form[id].enabled} onCheckedChange={(v) => patch(id, { enabled: v })} aria-label={t(`plugin_maps.providers.${id}`)} />
                 </div>
@@ -94,7 +97,6 @@ export function MapSection() {
                     </div>
                   </div>
                 ) : null}
-                <p className="text-xs text-muted-foreground">{t(`plugin_maps.keys.${id}Hint`)}</p>
               </section>
             )
           })}

@@ -53,7 +53,9 @@ func (c *Client) Embeddings(ctx context.Context, cfg Config, inputs []string) ([
 	if err != nil {
 		return nil, fmt.Errorf("%w: encode", ErrUpstream)
 	}
-	ctx, cancel := context.WithTimeout(ctx, cfg.Timeout)
+	// 向量化用独立超时（Normalize 后必 >0：未配置时沿用对话的 Timeout），
+	// 对话调小超时不该误伤知识库批量入库的同步向量化。
+	ctx, cancel := context.WithTimeout(ctx, cfg.EmbedTimeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, cfg.embedEndpoint("embeddings"), bytes.NewReader(body))
 	if err != nil {

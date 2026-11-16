@@ -4,6 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
+	"net/url"
+	"path"
+	"strconv"
 	"strings"
 
 	"gorm.io/gorm"
@@ -162,6 +166,9 @@ func (s *Service) SaveProduct(ctx context.Context, id idgen.ID, f ProductForm) (
 	if f.LeadTimeDays < 0 {
 		f.LeadTimeDays = 0
 	}
+	if f.FreightAmount < 0 {
+		f.FreightAmount = 0
+	}
 	if f.Currency = strings.TrimSpace(strings.ToUpper(f.Currency)); f.Currency == "" {
 		f.Currency = "USD"
 	}
@@ -243,6 +250,7 @@ func (s *Service) SaveProduct(ctx context.Context, id idgen.ID, f ProductForm) (
 	row.CoverURL, row.ImagesJSON, row.VideoURL = f.CoverURL, imagesJSON, f.VideoURL
 	row.PriceMin, row.PriceMax, row.Currency, row.PriceUnit = f.PriceMin, f.PriceMax, f.Currency, f.PriceUnit
 	row.Moq, row.LeadTimeDays, row.Port, row.PaymentTerms = f.Moq, f.LeadTimeDays, f.Port, f.PaymentTerms
+	row.FreightAmount = f.FreightAmount
 	row.SpecsJSON, row.Author = specsJSON, f.Author
 	if f.AliTrade != nil {
 		tradeJSON, terr := normalizeAliTrade(f.AliTrade)
@@ -708,18 +716,483 @@ func (s *Service) PublishedRelatedProducts(ctx context.Context, lang string, pro
 	if err != nil {
 		return nil, err
 	}
+	// 同类目不够就拿其他已上架商品补齐：一行 4 张卡的位置只挂 1 张，
+	// 详情页底部会空掉一大块（库里新品少的时候最常见）。
+	if len(rows) < relatedProductLimit {
+		skip := make([]int64, 0, len(rows)+1)
+		skip = append(skip, int64(product.ID))
+		for _, r := range rows {
+			skip = append(skip, int64(r.ID))
+		}
+		var extra []Product
+		if eerr := liveProductTx(s.db.WithContext(ctx)).
+			Where("id NOT IN ?", skip).
+			Preload("Categories").
+			Order("updated_at DESC, id DESC").
+			Limit(relatedProductLimit - len(rows)).
+			Find(&extra).Error; eerr != nil {
+			// 补齐失败就用同类目结果，推荐区照常出，不影响详情页
+			extra = nil
+		}
+		rows = append(rows, extra...)
+	}
 	for i := range rows {
 		rows[i].localize(lang)
 	}
 	return rows, nil
 }
 
+// paymentChip 是详情页「安全支付」里的一枚支付方式徽标。
+// Label 是给人看的名字，Kind 决定品牌样式（visa/mc/apple/paypal），Icon 是 uiIconPaths 里的图标名。
+// 阿里那排徽标每枚都带图形，所以贸易术语（T/T、L/C…）也配一枚线框图标；
+// 品牌卡仍走各自的品牌色，未收录的取值退化成无图标的 plain 文本 —— 后台填什么就展示什么。
+type paymentChip struct {
+	Label string
+	Kind  string
+	Icon  string
+}
+
+// paymentAliases 把后台「付款方式」里的常见写法归一成徽标。
+// 键统一小写、去空格；没收录的写法原样展示，不做猜测。
+var paymentAliases = map[string]paymentChip{
+	"t/t":                  {Label: "T/T", Kind: "plain", Icon: "bank"},
+	"tt":                   {Label: "T/T", Kind: "plain", Icon: "bank"},
+	"telegraphic transfer": {Label: "T/T", Kind: "plain", Icon: "bank"},
+	"wire transfer":        {Label: "T/T", Kind: "plain", Icon: "bank"},
+	"bank transfer":        {Label: "T/T", Kind: "plain", Icon: "bank"},
+	"电汇":                   {Label: "T/T", Kind: "plain", Icon: "bank"},
+	"l/c":                  {Label: "L/C", Kind: "plain", Icon: "file-check"},
+	"lc":                   {Label: "L/C", Kind: "plain", Icon: "file-check"},
+	"letter of credit":     {Label: "L/C", Kind: "plain", Icon: "file-check"},
+	"信用证":                  {Label: "L/C", Kind: "plain", Icon: "file-check"},
+	"d/p":                  {Label: "D/P", Kind: "plain", Icon: "file-text"},
+	"dp":                   {Label: "D/P", Kind: "plain", Icon: "file-text"},
+	"d/a":                  {Label: "D/A", Kind: "plain", Icon: "file-text"},
+	"da":                   {Label: "D/A", Kind: "plain", Icon: "file-text"},
+	"o/a":                  {Label: "O/A", Kind: "plain", Icon: "file-invoice"},
+	"oa":                   {Label: "O/A", Kind: "plain", Icon: "file-invoice"},
+	"open account":         {Label: "O/A", Kind: "plain", Icon: "file-invoice"},
+	"paypal":               {Label: "PayPal", Kind: "paypal"},
+	"visa":                 {Label: "VISA", Kind: "visa"},
+	"mastercard":           {Label: "Mastercard", Kind: "mc"},
+	"master card":          {Label: "Mastercard", Kind: "mc"},
+	"apple pay":            {Label: "Apple Pay", Kind: "apple"},
+	"applepay":             {Label: "Apple Pay", Kind: "apple"},
+	"alipay":               {Label: "Alipay", Kind: "plain", Icon: "wallet"},
+	"支付宝":                  {Label: "Alipay", Kind: "plain", Icon: "wallet"},
+	"wechat pay":           {Label: "WeChat Pay", Kind: "plain", Icon: "wallet"},
+	"wechatpay":            {Label: "WeChat Pay", Kind: "plain", Icon: "wallet"},
+	"微信支付":                 {Label: "WeChat Pay", Kind: "plain", Icon: "wallet"},
+	"western union":        {Label: "Western Union", Kind: "plain", Icon: "send"},
+	"moneygram":            {Label: "MoneyGram", Kind: "plain", Icon: "send"},
+	"escrow":               {Label: "Escrow", Kind: "plain", Icon: "lock"},
+	"cash":                 {Label: "Cash", Kind: "plain", Icon: "cash"},
+}
+
+// ---- 商详「交易信息」 ----
+//
+// 阶梯价 / 包装 / 供货能力 / 样品 / 定制这些字段一直存在 AliTradeJSON 里，
+// 但此前只用于「同步阿里发品」和「导出阿里模板」，商详页一个都没露 —— 数据白存。
+// 下面把它们整理成模板能直接 range 的形状；没有数据的项返回零值，模板据此整段不渲染。
+
+// productLadderRow 是阶梯价的一档：从 Qty 起，到下一档的前一件为止。
+type productLadderRow struct {
+	Qty   int
+	Price float64
+	// Range 是给人看的数量区间（"1-9" / "10+"）：数字加符号，四套语言都不用翻。
+	Range string
+	// Last 标最后一档，模板把 "10+" 渲染成「≥10」。
+	Last bool
+}
+
+// productPkg 是包装与体积（尺寸单位 cm、重量 kg，与阿里发品口径一致）。
+type productPkg struct {
+	Dim    string  // "120 × 100 × 220 cm"
+	Cubic  float64 // 体积，m³（海运/拼箱按方计费时的常用口径）
+	Weight float64
+}
+
+// productSupply 是供货能力："500 Set/Sets / Month"。
+type productSupply struct {
+	Number float64
+	Unit   string
+	Period string
+}
+
+// productSample 是样品服务。
+type productSample struct {
+	MaxQty int
+	Price  float64
+}
+
+// productCustom 是一项定制服务：定制类型 + 起订量。
+type productCustom struct {
+	Type     string
+	Quantity int
+}
+
+// productSkuProp 是一条销售属性的展示视图（如「颜色」= [黑, 白]）。
+type productSkuProp struct {
+	Name   string
+	Values []string
+}
+
+// productSku 是一条 SKU 组合的展示视图。Props 用「属性名=值」拼成稳定键供前端比对，
+// 价格/库存直接来自后台；没有 SKU 数据时这两组切片都是空，模板整块不渲染。
+type productSku struct {
+	Key   string
+	Price float64
+	Stock int
+	Code  string
+}
+
+// productTrade 是商详交易信息区的整体视图。
+type productTrade struct {
+	Ladder   []productLadderRow
+	Pkg      *productPkg
+	Supply   *productSupply
+	Sample   *productSample
+	Custom   []productCustom
+	SkuProps []productSkuProp
+	Skus     []productSku
+	Unit     string
+}
+
+// TradeInfo 从 AliTradeJSON 组装商详交易信息。坏数据当「没有」（与 AliTrade 的容错一致），
+// 不让一条脏 JSON 把整块详情页搞挂。
+func (p Product) TradeInfo() productTrade {
+	t := p.AliTrade()
+	out := productTrade{Unit: strings.TrimSpace(p.PriceUnit)}
+
+	rows := make([]productLadderRow, 0, len(t.Ladder))
+	for _, l := range t.Ladder {
+		if l.Qty <= 0 || l.Price <= 0 {
+			continue
+		}
+		rows = append(rows, productLadderRow{Qty: l.Qty, Price: l.Price})
+	}
+	for i := range rows {
+		if i+1 < len(rows) {
+			rows[i].Range = fmt.Sprintf("%d-%d", rows[i].Qty, rows[i+1].Qty-1)
+		} else {
+			rows[i].Range = fmt.Sprintf("%d+", rows[i].Qty)
+			rows[i].Last = true
+		}
+	}
+	out.Ladder = rows
+
+	if t.Package.Length > 0 && t.Package.Width > 0 && t.Package.Height > 0 {
+		out.Pkg = &productPkg{
+			Dim:    fmt.Sprintf("%.0f × %.0f × %.0f cm", t.Package.Length, t.Package.Width, t.Package.Height),
+			Cubic:  math.Round(t.Package.Length*t.Package.Width*t.Package.Height/1e4) / 100,
+			Weight: t.Package.Weight,
+		}
+	} else if t.Package.Weight > 0 {
+		out.Pkg = &productPkg{Weight: t.Package.Weight}
+	}
+
+	if t.Supply.Number > 0 {
+		unit := strings.TrimSpace(t.Supply.QuantityUnit)
+		if unit == "" {
+			unit = out.Unit
+		}
+		out.Supply = &productSupply{Number: t.Supply.Number, Unit: unit, Period: strings.TrimSpace(t.Supply.TimeUnit)}
+	}
+
+	if t.Sample.Enabled {
+		out.Sample = &productSample{MaxQty: t.Sample.MaxQty, Price: t.Sample.Price}
+	}
+
+	for _, c := range t.Custom {
+		if strings.TrimSpace(c.Type) == "" {
+			continue
+		}
+		out.Custom = append(out.Custom, productCustom{Type: strings.TrimSpace(c.Type), Quantity: c.Quantity})
+	}
+
+	// SKU：按后台定义的属性顺序展开，组合键也按同一顺序拼「名称=值」，前端据此比对选中态。
+	// 值去重、跳过空项，避免同一个值渲染两个按钮。
+	for _, prop := range t.SKUProps {
+		name := strings.TrimSpace(prop.Name)
+		if name == "" {
+			continue
+		}
+		vals := make([]string, 0, len(prop.Values))
+		seen := make(map[string]bool, len(prop.Values))
+		for _, raw := range prop.Values {
+			v := strings.TrimSpace(raw)
+			if v == "" || seen[v] {
+				continue
+			}
+			seen[v] = true
+			vals = append(vals, v)
+		}
+		if len(vals) > 0 {
+			out.SkuProps = append(out.SkuProps, productSkuProp{Name: name, Values: vals})
+		}
+	}
+	if len(out.SkuProps) > 0 {
+		for _, s := range t.SKUs {
+			if s.Price <= 0 {
+				continue
+			}
+			parts := make([]string, 0, len(out.SkuProps))
+			for _, prop := range out.SkuProps {
+				parts = append(parts, prop.Name+"="+strings.TrimSpace(s.Props[prop.Name]))
+			}
+			out.Skus = append(out.Skus, productSku{
+				Key: strings.Join(parts, "|"), Price: s.Price, Stock: s.Stock, Code: strings.TrimSpace(s.Code),
+			})
+		}
+	}
+	return out
+}
+
+// PaymentChips 把「T/T, L/C」这类自由文本拆成支付方式徽标：先按逗号/分号/顿号分段
+// （不能按斜杠拆，T/T、L/C、D/P 本身就带斜杠），再按别名表归一，未收录的照原文显示。
+// 同一项多次出现只留一枚；空字符串返回 nil，模板据此整段不渲染。
+func (p Product) PaymentChips() []paymentChip {
+	terms := strings.TrimSpace(p.PaymentTerms)
+	if terms == "" {
+		return nil
+	}
+	fields := strings.FieldsFunc(terms, func(r rune) bool {
+		switch r {
+		case ',', '，', ';', '；', '、', '|', '\n', '\r':
+			return true
+		}
+		return false
+	})
+	out := make([]paymentChip, 0, len(fields))
+	seen := make(map[string]bool, len(fields))
+	for _, raw := range fields {
+		label := strings.Join(strings.Fields(raw), " ")
+		if label == "" {
+			continue
+		}
+		key := strings.ToLower(label)
+		chip, ok := paymentAliases[key]
+		if !ok {
+			// 后台写的是「30% deposit」这类描述，原样展示但要限长，避免把侧栏撑破。
+			chip = paymentChip{Label: trimRunes(label, 18), Kind: "plain"}
+		}
+		if seen[chip.Label] {
+			continue
+		}
+		seen[chip.Label] = true
+		out = append(out, chip)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// productCert 是商详「认证」区的一枚徽章：名称来自后台填的认证清单，
+// Icon 由名称归一得到（见 certIconKey），没有对应图标的仍出文字徽章。
+type productCert struct {
+	Name string
+	Icon string
+}
+
+// certIconGroups 把常见认证按性质归到两种图标：安全/合规类走盾牌勾，体系类走证书。
+// 键是去掉空格与标点后的大写前缀，前缀匹配即可（CE-EMC、UL 1973 都能命中）。
+var certIconGroups = []struct {
+	prefix string
+	icon   string
+}{
+	{"ISO", "certificate"},
+	{"IATF", "certificate"},
+	{"CE", "shield-check"},
+	{"UL", "shield-check"},
+	{"UN38", "shield-check"},
+	{"UN 38", "shield-check"},
+	{"IEC", "shield-check"},
+	{"ROHS", "shield-check"},
+	{"REACH", "shield-check"},
+	{"FCC", "shield-check"},
+	{"MSDS", "shield-check"},
+	{"TUV", "shield-check"},
+	{"CSA", "shield-check"},
+	{"PSE", "shield-check"},
+	{"KC", "shield-check"},
+	{"CB", "shield-check"},
+}
+
+// certIconKey 归一认证名称到图标键：先大写去空格，再按前缀匹配；
+// 认不出就默认 shield-check（认证徽章本身语义就是「通过检验」，比无图标更整齐）。
+func certIconKey(name string) string {
+	up := strings.ToUpper(strings.Join(strings.Fields(name), ""))
+	for _, g := range certIconGroups {
+		if strings.HasPrefix(up, strings.ToUpper(strings.ReplaceAll(g.prefix, " ", ""))) {
+			return g.icon
+		}
+	}
+	return "shield-check"
+}
+
+// Certifications 解析后台填的认证清单。支持 JSON 数组（后台表单保存的形态）
+// 与逗号/顿号/分号分隔的纯文本（阿里同步回写或人工直填），两种都能吃；
+// 去重、去空、限长 24 字，返回 nil 时模板整段不渲染。
+func (p Product) Certifications() []productCert {
+	raw := strings.TrimSpace(p.CertificationsJSON)
+	if raw == "" {
+		return nil
+	}
+	var names []string
+	if strings.HasPrefix(raw, "[") {
+		if err := json.Unmarshal([]byte(raw), &names); err != nil {
+			// 坏 JSON 不整块丢弃：退回按分隔符切，尽量把能认的显示出来。
+			names = strings.FieldsFunc(raw, func(r rune) bool {
+				switch r {
+				case ',', '，', ';', '；', '、', '|', '\n', '\r', '[', ']', '"':
+					return true
+				}
+				return false
+			})
+		}
+	} else {
+		names = strings.FieldsFunc(raw, func(r rune) bool {
+			switch r {
+			case ',', '，', ';', '；', '、', '|', '\n', '\r':
+				return true
+			}
+			return false
+		})
+	}
+	out := make([]productCert, 0, len(names))
+	seen := make(map[string]bool, len(names))
+	for _, n := range names {
+		name := strings.Join(strings.Fields(n), " ")
+		if name == "" {
+			continue
+		}
+		name = trimRunes(name, 24)
+		if seen[name] {
+			continue
+		}
+		seen[name] = true
+		out = append(out, productCert{Name: name, Icon: certIconKey(name)})
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
 // IsSynced 报告商品已同步到阿里（列表同步徽标的展示语义；一期只读，二期由同步任务写入）。
 func (p Product) IsSynced() bool { return p.SyncStatus == ProductSyncSynced }
 
-// productCatLink 是公开站产品中心左侧分类树的一行（先序扁平）。
-// Depth/Parent/HasChildren 让模板一层 range 就能渲染层级、site.js 按 depth 折叠；
-// ActiveTrail 标出当前分类的祖先链，前端据此强制展开，避免当前项被折叠藏起来。
+// productVideo 是详情页能直接播的视频：Kind=file 交给原生 <video>，
+// Kind=embed 交给第三方播放器 iframe。前端据此决定用哪种播放器。
+type productVideo struct {
+	Kind string
+	Src  string
+}
+
+// videoFileExt 是浏览器原生能播的容器扩展名。m3u8 不在内：那要额外加载 hls.js，
+// 而且各家切片鉴权不一致，遇到就回退成「新窗口打开」链接，不假装能播。
+var videoFileExt = map[string]bool{
+	".mp4": true, ".webm": true, ".ogv": true, ".ogg": true, ".m4v": true, ".mov": true,
+}
+
+// youtubeHosts 是 YouTube 的各种落地域名（含无 cookie 版与短链 youtu.be）。
+var youtubeHosts = map[string]bool{
+	"youtube.com": true, "m.youtube.com": true, "music.youtube.com": true,
+	"youtube-nocookie.com": true, "youtu.be": true,
+}
+
+// videoID 只接受字母数字与 -_，长度 6-24：防止把奇怪的路径拼进 iframe src。
+func videoID(s string) string {
+	if len(s) < 6 || len(s) > 24 {
+		return ""
+	}
+	for _, r := range s {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
+			continue
+		}
+		return ""
+	}
+	return s
+}
+
+// Video 解析后台「产品视频」地址，给出可直接内嵌的播放形式：
+//   - 直链文件（.mp4/.webm/…）→ file
+//   - YouTube / Vimeo / Bilibili → embed（各自的嵌入播放器地址，自动播放）
+//   - 其他（第三方落地页、m3u8、空值）→ nil，模板回退成「新窗口打开」链接，不假装能内嵌
+//
+// 只认域名白名单、不接受任意 URL 塞进 iframe：后台字段是自由文本，白名单是必要的边界。
+func (p Product) Video() *productVideo {
+	raw := strings.TrimSpace(p.VideoURL)
+	if raw == "" {
+		return nil
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return nil
+	}
+	host := strings.ToLower(strings.TrimPrefix(u.Hostname(), "www."))
+	if host == "" {
+		// 站内相对路径（比如后台上传到本站媒体库的 mp4）
+		if videoFileExt[strings.ToLower(path.Ext(u.Path))] {
+			return &productVideo{Kind: "file", Src: raw}
+		}
+		return nil
+	}
+	if youtubeHosts[host] {
+		id := ""
+		if host == "youtu.be" {
+			id = videoID(strings.Trim(u.Path, "/"))
+		} else if v := u.Query().Get("v"); v != "" {
+			id = videoID(v)
+		} else {
+			segs := strings.Split(strings.Trim(u.Path, "/"), "/")
+			if len(segs) >= 2 {
+				switch segs[0] {
+				case "embed", "shorts", "live", "v":
+					id = videoID(segs[1])
+				}
+			}
+		}
+		if id == "" {
+			return nil
+		}
+		return &productVideo{Kind: "embed", Src: "https://www.youtube-nocookie.com/embed/" + id + "?autoplay=1&rel=0&playsinline=1"}
+	}
+	if host == "vimeo.com" || host == "player.vimeo.com" {
+		segs := strings.Split(strings.Trim(u.Path, "/"), "/")
+		for i := len(segs) - 1; i >= 0; i-- {
+			if segs[i] == "" {
+				continue
+			}
+			if _, err := strconv.Atoi(segs[i]); err == nil {
+				return &productVideo{Kind: "embed", Src: "https://player.vimeo.com/video/" + segs[i] + "?autoplay=1"}
+			}
+			break
+		}
+		return nil
+	}
+	if host == "bilibili.com" || host == "m.bilibili.com" || host == "player.bilibili.com" {
+		for _, seg := range strings.Split(strings.Trim(u.Path, "/"), "/") {
+			if !strings.HasPrefix(seg, "BV") {
+				continue
+			}
+			if id := videoID(strings.TrimPrefix(seg, "BV")); id != "" {
+				return &productVideo{Kind: "embed", Src: "https://player.bilibili.com/player.html?bvid=BV" + id + "&autoplay=1&high_quality=1&danmaku=0"}
+			}
+		}
+		return nil
+	}
+	if videoFileExt[strings.ToLower(path.Ext(u.Path))] {
+		return &productVideo{Kind: "file", Src: raw}
+	}
+	return nil
+}
+
+// productCatLink 是公开站产品中心左侧分类树的一行。
+// ProductCategoryLinks 产出先序扁平列表（面包屑/芯片等按顺序消费），
+// NestProductCategories 再把它折叠成树：一级平铺、二级 hover 浮层用 Children 渲染。
+// ActiveTrail 标出当前分类的祖先链，模板据此给父级加高亮相。
 type productCatLink struct {
 	Name        string
 	Slug        string
@@ -730,10 +1203,12 @@ type productCatLink struct {
 	Parent      string
 	HasChildren bool
 	Count       int64
+	Children    []productCatLink
 }
 
 // ProductCategoryLinks 把平铺类目装配成先序扁平列表（保留父子顺序），并标出当前归档项。
-// 输出仍是列表而不是嵌套树：四套模板不必各写递归子模板，折叠状态也只需按深度扫描一遍。
+// 输出仍是列表而不是嵌套树：面包屑、首页芯片这类「按顺序取前 N 个」的消费方不必递归。
+// 左栏分类树需要层级时再走 NestProductCategories 折一层。
 func ProductCategoryLinks(rows []ProductCategory, active string) []productCatLink {
 	byID := make(map[uint64]int, len(rows))
 	for i := range rows {
@@ -811,7 +1286,36 @@ func ProductCategoryLinks(rows []ProductCategory, active string) []productCatLin
 	return out
 }
 
-// descendantSlugs 返回类目自身与全部后代的 slug：父类归档把子类商品一并列出。
+// NestProductCategories 把 ProductCategoryLinks 的先序列出折成层级树（只保留一级为根）。
+// 先序列表保证「一个节点的后代紧跟其后、深度大于它」，所以同一遍扫描就能递归收子树，
+// 不需要再查一次父子表。深度跳级（父类被删导致 depth 不连续）的节点按最近的上层挂载，
+// 不会被丢掉。
+func NestProductCategories(flat []productCatLink) []productCatLink {
+	var build func(start, depth int) ([]productCatLink, int)
+	build = func(start, depth int) ([]productCatLink, int) {
+		out := make([]productCatLink, 0, 4)
+		i := start
+		for i < len(flat) {
+			row := flat[i]
+			if row.Depth < depth {
+				break
+			}
+			if row.Depth > depth {
+				// 层级跳级：往上提一层挂载，保持可见。
+				row.Depth = depth
+			}
+			i++
+			if i < len(flat) && flat[i].Depth > depth {
+				row.Children, i = build(i, depth+1)
+			}
+			out = append(out, row)
+		}
+		return out, i
+	}
+	tree, _ := build(0, 0)
+	return tree
+}
+
 func descendantSlugs(rows []ProductCategory, active string) []string {
 	if active == "" {
 		return nil

@@ -2,12 +2,14 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/framework/ui/dialog'
+import { FilePickerDialog, toUploadedFile } from '@/framework/components/FilePickerDialog'
 import { RequiredMark } from '@/framework/components/RequiredMark'
 import { Uploader } from '@/framework/components/Uploader'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
 import { Label } from '@/framework/ui/label'
 import type { UploadedFile } from '@/framework/upload/types'
+import type { FileItem } from '@/framework/modules/file/api'
 
 export interface MediaDialogProps {
   kind: 'image' | 'video' | null
@@ -28,6 +30,20 @@ export function MediaDialog({ kind, onClose, onInsert }: MediaDialogProps) {
   const [url, setUrl] = useState('')
   const [pending, setPending] = useState<UploadedFile | null>(null)
   const [alt, setAlt] = useState('')
+  const [pickOpen, setPickOpen] = useState(false)
+
+  // 文件库选图走与上传相同的「写 alt 再插入」流程；选视频直接插入（与上传后的行为一致）
+  const pickFromLibrary = (items: FileItem[]) => {
+    const item = items[0]
+    if (!item) return
+    const file = toUploadedFile(item)
+    if (kind === 'image') {
+      setPending(file)
+      setAlt(file.name.replace(/\.[^.]+$/, ''))
+    } else {
+      onInsert('video', file)
+    }
+  }
 
   const insertUrl = () => {
     const src = url.trim()
@@ -53,22 +69,28 @@ export function MediaDialog({ kind, onClose, onInsert }: MediaDialogProps) {
           <DialogDescription>{t('editor.mediaHint')}</DialogDescription>
         </DialogHeader>
         {kind && !pending && (
-          <Uploader
-            kind={kind}
-            visibility={kind === 'image' ? 'public' : 'private'}
-            value={files}
-            onChange={(v) => {
-              const last = v[v.length - 1]
-              setFiles([])
-              if (!last) return
-              if (kind === 'video') {
-                onInsert('video', last)
-                return
-              }
-              setPending(last)
-              setAlt(last.name.replace(/\.[^.]+$/, ''))
-            }}
-          />
+          <>
+            <Uploader
+              kind={kind}
+              visibility={kind === 'image' ? 'public' : 'private'}
+              value={files}
+              onChange={(v) => {
+                const last = v[v.length - 1]
+                setFiles([])
+                if (!last) return
+                if (kind === 'video') {
+                  onInsert('video', last)
+                  return
+                }
+                setPending(last)
+                setAlt(last.name.replace(/\.[^.]+$/, ''))
+              }}
+            />
+            {/* 库里已有现成的也能直接插：与 WordPress 插入媒体弹窗同款的双通道 */}
+            <Button type="button" variant="outline" className="w-full" onClick={() => setPickOpen(true)}>
+              {t('uploader.pickFromLibrary')}
+            </Button>
+          </>
         )}
         {kind === 'image' && pending ? (
           <div className="flex flex-col gap-2">
@@ -126,6 +148,7 @@ export function MediaDialog({ kind, onClose, onInsert }: MediaDialogProps) {
             </div>
           </div>
         ) : null}
+        <FilePickerDialog open={pickOpen} onOpenChange={setPickOpen} kind={kind ?? 'image'} onConfirm={(_, items) => pickFromLibrary(items)} />
       </DialogContent>
     </Dialog>
   )

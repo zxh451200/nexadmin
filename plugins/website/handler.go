@@ -148,6 +148,24 @@ func (h *handler) setMessageStatus(c *gin.Context) {
 	respond(c, map[string]int64{"updated": n}, err)
 }
 
+// GET /plugins/website/messages/:id/suggest —— 超时询盘的同品类推荐。
+// 返回这条留言的时效标记与可推荐商品；推荐查不到就返回空数组，前端照常展示线索。
+func (h *handler) suggestForMessage(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	list, err := h.svc.SuggestedProductsForMessage(c.Request.Context(), id, 4)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	if list == nil {
+		list = []SuggestedProduct{}
+	}
+	respond(c, map[string]any{"suggested": list}, nil)
+}
+
 // DELETE /plugins/website/messages?ids=1,2,3 —— 批量删除（形状与 /users、/tenants 一致）。
 func (h *handler) deleteMessages(c *gin.Context) {
 	ids, err := parseIDs(c.Query("ids"))

@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm, useWatch } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -8,6 +8,7 @@ import { Can } from '@/framework/auth/Can'
 import { AiWriteButton } from '@/framework/components/AiWriteButton'
 import { DateTimePicker } from '@/framework/components/DateTimePicker'
 import { DictSelect } from '@/framework/components/DictSelect'
+import { FilePickerDialog, PickFromLibraryButton, toUploadedFile } from '@/framework/components/FilePickerDialog'
 import { FormGrid, FormGridFull, FormLayout } from '@/framework/components/FormLayout'
 import { RemoteSelect } from '@/framework/components/RemoteSelect'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
@@ -107,6 +108,7 @@ export function NoticeFormDialog({ open, onOpenChange, editing }: Props) {
   const schema = useMemo(() => buildSchema(t), [t])
   const form = useForm<FormValues>({ resolver: zodResolver(schema), defaultValues: emptyValues })
   const scope = useWatch({ control: form.control, name: 'scope' })
+  const [pickOpen, setPickOpen] = useState(false)
 
   useEffect(() => {
     if (open) form.reset(toValues(editing))
@@ -328,7 +330,30 @@ export function NoticeFormDialog({ open, onOpenChange, editing }: Props) {
                   <FormItem>
                     <FormLabel>{t('notice.fields.attachments')}</FormLabel>
                     <FormControl>
-                      <Uploader kind="file" multiple maxCount={9} value={field.value} onChange={field.onChange} />
+                      <div className="flex flex-col gap-2">
+                        <Uploader
+                          kind="file"
+                          multiple
+                          maxCount={9}
+                          value={field.value}
+                          onChange={field.onChange}
+                          entryExtra={<PickFromLibraryButton onClick={() => setPickOpen(true)} />}
+                        />
+                        {/* 文件库勾选即增（去重）、取消勾选即删，确认后统一写回附件 */}
+                        <FilePickerDialog
+                          open={pickOpen}
+                          onOpenChange={setPickOpen}
+                          kind="file"
+                          multiple
+                          value={field.value.map((f) => f.url)}
+                          onConfirm={(urls, items) => {
+                            const existing = field.value
+                            const kept = existing.filter((f) => urls.includes(f.url))
+                            const added = items.filter((i) => !existing.some((e) => e.url === i.url)).map(toUploadedFile)
+                            field.onChange([...kept, ...added].slice(0, 9))
+                          }}
+                        />
+                      </div>
                     </FormControl>
                     <FormMessage />
                   </FormItem>

@@ -66,7 +66,38 @@ type Setting struct {
 	DefaultLang string `gorm:"column:default_lang;size:16;not null;default:''" json:"defaultLang"`
 	// SeedVersion 记录出厂内容补种进度：升级后只补一次新增的出厂条目，不复活管理员删掉的内容。
 	SeedVersion int `gorm:"not null;default:1" json:"-"`
+	// ---- 供应商资质：对标阿里商详左侧供应商卡的「实力档案」四项 ----
+	// 全部是字符串而不是数值区间枚举：阿里的年营收/员工数是下拉区间（US$10M-US$50M、500+），
+	// 用字符串能原样存区间写法，也允许运营写本地口径（如「年产能 12GWh」）。
+	EstablishedYear int    `gorm:"column:established_year;not null;default:0" json:"establishedYear"` // 成立年份，0 = 不展示
+	StaffCount      string `gorm:"column:staff_count;size:32;not null;default:''" json:"staffCount"`  // 员工规模，如 500+
+	AnnualRevenue   string `gorm:"column:annual_revenue;size:64;not null;default:''" json:"annualRevenue"`
+	MainMarkets     string `gorm:"column:main_markets;size:200;not null;default:''" json:"mainMarkets"`
+	ResponseTime    string `gorm:"column:response_time;size:32;not null;default:''" json:"responseTime"` // 平均响应，如 ≤4h
 }
+
+// ProductReview 是商品评价（对标阿里商详「评价」区）。
+// 匿名站点没有登录买家，评价由运营在后台录入真实回访内容，公开站只读；
+// 因此这里不挂用户表外键，Author/Country 用展示名，Verified 表示「已验证采购」。
+type ProductReview struct {
+	database.PlatformModel
+	ProductID uint   `gorm:"column:product_id;not null;index" json:"productId"`
+	Author    string `gorm:"size:64;not null;default:''" json:"author"`
+	// Country 是买家所在国家/地区（展示用，如 Germany）；空 = 不显示国旗位。
+	Country string `gorm:"size:64;not null;default:''" json:"country"`
+	// Rating 是 1-5 星；服务层钳制到该区间，0 视为非法。
+	Rating int `gorm:"not null;default:5" json:"rating"`
+	// Content 是评价正文；空评价允许（只有星级），详情页按有正文才出引用块。
+	Content string `gorm:"type:text" json:"content"`
+	// Verified 表示该评价来自已验证的真实采购（阿里显示的 verified 标）。
+	Verified bool `gorm:"not null;default:false" json:"verified"`
+	// Quantity 是这笔采购的数量（如 20 sets），空 = 不显示。
+	Quantity string `gorm:"size:64;not null;default:''" json:"quantity"`
+	// Published 是公开可见：后台草稿（false）不进聚合与列表，方便先录入后放量。
+	Published bool `gorm:"not null;default:true" json:"published"`
+}
+
+func (ProductReview) TableName() string { return "plg_website_product_review" }
 
 func (Setting) TableName() string { return "plg_website_setting" }
 
@@ -108,9 +139,45 @@ type Message struct {
 	UA      string `gorm:"size:255;not null" json:"ua"`
 	// Status 取 MsgNew / MsgRead / MsgHandled 之一，投稿落库时恒为 MsgNew。
 	Status string `gorm:"size:16;not null;default:'new'" json:"status"`
+	// Attachments 是询盘附件（询盘弹窗上传的文件），只在读取时装配，不落这一行。
+	Attachments []MessageFileView `gorm:"-" json:"attachments,omitempty"`
+	// ProductID 是询盘来源商品（0 = 从联系页提交，不是商品询盘）：后台据此知道问的是哪款，
+	// 也是「超时未回复 → 推荐同品类供应商」的依据。
+	ProductID idgen.ID `gorm:"column:product_id;index:idx_plg_website_message_product;not null;default:0" json:"productId"`
+	// CardConsent 记录买家是否勾选「同意与供应商共享名片信息」。
+	CardConsent bool `gorm:"column:card_consent;not null;default:false" json:"cardConsent"`
+	// Overdue 是「超过 24 小时仍未处理」的派生标记：列表读取时按 Status + CreatedAt 现算，
+	// 不落库（落库要额外扫表改状态，而它只是给人看的一个红点）。
+	Overdue bool `gorm:"-" json:"overdue,omitempty"`
+	// SourceProduct 是询盘来源商品的精简信息（列表装配时按 ProductID 批量补齐，含草稿）。
+	SourceProduct *SuggestedProduct `gorm:"-" json:"sourceProduct,omitempty"`
+	// Suggested 只在后台留言详情装配「超时 → 推荐同品类」时填充。
+	Suggested []SuggestedProduct `gorm:"-" json:"suggested,omitempty"`
 }
 
 func (Message) TableName() string { return "plg_website_message" }
+
+// MessageFile 是访客在询盘弹窗里上传的附件。先按 token 落一行（MessageID=0），
+// 提交询盘时再绑定到留言；token 不可枚举，公开下载地址就靠它。
+type MessageFile struct {
+	database.PlatformModel
+	Token      string   `gorm:"size:40;not null;uniqueIndex:uk_plg_website_message_file_token" json:"token"`
+	Name       string   `gorm:"size:255;not null" json:"name"`
+	Mime       string   `gorm:"size:128;not null" json:"mime"`
+	Size       int64    `gorm:"not null;default:0" json:"size"`
+	StorageKey string   `gorm:"size:255;not null" json:"-"`
+	MessageID  idgen.ID `gorm:"index:idx_plg_website_message_file_message;not null;default:0" json:"-"`
+}
+
+func (MessageFile) TableName() string { return "plg_website_message_file" }
+
+// MessageFileView 是附件对外的展示字段：不含存储键，下载走 /inquiry/attachments/<token>。
+type MessageFileView struct {
+	Token string `json:"token"`
+	Name  string `json:"name"`
+	Mime  string `json:"mime"`
+	Size  int64  `json:"size"`
+}
 
 // Nav 是顶部导航项，ParentID 支持最多 3 级。
 type Nav struct {
@@ -328,8 +395,8 @@ func (ProductCategory) TableName() string { return "plg_website_product_category
 // 一期只落库与展示，不发起任何对阿里的请求。
 type Product struct {
 	database.PlatformModel
-	Slug     string `gorm:"size:64;not null;uniqueIndex:uk_plg_website_product_slug" json:"slug"`
-	Title    string `gorm:"size:200;not null" json:"title"`
+	Slug  string `gorm:"size:64;not null;uniqueIndex:uk_plg_website_product_slug" json:"slug"`
+	Title string `gorm:"size:200;not null" json:"title"`
 	// Keywords 是搜索关键词（对标阿里的 1-3 个关键词）：保存时按空白/逗号拆分、去重、取前 3 个。
 	Keywords string `gorm:"size:300;not null;default:''" json:"keywords"`
 	Summary  string `gorm:"size:500;not null;default:''" json:"summary"`
@@ -339,25 +406,27 @@ type Product struct {
 	SeoDesc     string `gorm:"size:300;not null;default:''" json:"seoDesc"`
 	SeoKeywords string `gorm:"size:300;not null;default:''" json:"seoKeywords"`
 	// Noindex 关闭搜索引擎收录：<meta robots> 与 sitemap 同步生效，站内列表照常展示。
-	Noindex bool `gorm:"not null;default:false" json:"noindex"`
-	I18nJSON      string `gorm:"type:text" json:"i18nJson"`
+	Noindex  bool   `gorm:"not null;default:false" json:"noindex"`
+	I18nJSON string `gorm:"type:text" json:"i18nJson"`
 	// PublishedJSON 是非默认语言的发布态，语义同 Page；默认语言沿用 status 列（online 即发布）。
 	PublishedJSON string `gorm:"type:text" json:"publishedJson"`
-	CoverURL string `gorm:"size:255;not null;default:''" json:"coverUrl"`
+	CoverURL      string `gorm:"size:255;not null;default:''" json:"coverUrl"`
 	// ImagesJSON 是图集 URL 数组（[]string 的 JSON 文本）：走 text 列三库行为一致，前端自己解析。
 	ImagesJSON string `gorm:"column:images;type:text" json:"imagesJson"`
 	VideoURL   string `gorm:"size:255;not null;default:''" json:"videoUrl"`
 	// 贸易字段：对标阿里发品的「价格与物流」。价格 0 = 未定价（只展示询盘）。
-	PriceMin   float64 `gorm:"not null;default:0" json:"priceMin"`
-	PriceMax   float64 `gorm:"not null;default:0" json:"priceMax"`
-	Currency   string  `gorm:"size:8;not null;default:'USD'" json:"currency"`
-	PriceUnit  string  `gorm:"size:32;not null;default:''" json:"priceUnit"` // 计量单位：piece / set…
-	Moq        int     `gorm:"column:moq;not null;default:0" json:"moq"`     // 最小起订量
-	LeadTimeDays int   `gorm:"column:lead_time_days;not null;default:0" json:"leadTimeDays"`
+	PriceMin     float64 `gorm:"not null;default:0" json:"priceMin"`
+	PriceMax     float64 `gorm:"not null;default:0" json:"priceMax"`
+	Currency     string  `gorm:"size:8;not null;default:'USD'" json:"currency"`
+	PriceUnit    string  `gorm:"size:32;not null;default:''" json:"priceUnit"` // 计量单位：piece / set…
+	Moq          int     `gorm:"column:moq;not null;default:0" json:"moq"`     // 最小起订量
+	LeadTimeDays int     `gorm:"column:lead_time_days;not null;default:0" json:"leadTimeDays"`
 	// Port 是装运港口，支持多选（逗号拼接，如 "Shenzhen, Ningbo"），宽度与 PaymentTerms 对齐。
-	Port       string  `gorm:"size:100;not null;default:''" json:"port"`
+	Port string `gorm:"size:100;not null;default:''" json:"port"`
 	// PaymentTerms 是付款方式（对标阿里商详「交易信息」的 Payment Terms）：如 "T/T, L/C"。
 	PaymentTerms string `gorm:"column:payment_terms;size:100;not null;default:''" json:"paymentTerms"`
+	// FreightAmount 是运费金额（与 Price 同币种）；0 = 未报价，详情页仍标「待定」。
+	FreightAmount float64 `gorm:"column:freight_amount;not null;default:0" json:"freightAmount"`
 	// SpecsJSON 是动态属性键值对（[{"label":"Brand Name","value":"…"}] 的 JSON 文本）：
 	// 阿里的类目属性各行业不同，本地不建属性字典，存成有序键值对最贴近同步语义。
 	SpecsJSON string `gorm:"column:specs;type:text" json:"specsJson"`
@@ -372,6 +441,10 @@ type Product struct {
 	// AliTradeJSON 是发品用的交易与规格数据（阶梯价/包装/供货/物流属性/样品/定制/分组/SKU），
 	// 只在同步阿里与阿里模板导出时使用；结构见 ali_trade.go。空 = 没有阿里交易信息。
 	AliTradeJSON string `gorm:"column:ali_trade;type:text" json:"aliTradeJson"`
+	// CertificationsJSON 是商品认证资质（[]string 的 JSON 文本，如 ["CE","UL","UN38.3"]）。
+	// 对标阿里商详的「认证」徽章排：只存名称，图标由名称归一（见 certificationIcons）后出图，
+	// 不认识的认证仍以文字徽章展示——和支付方式一样，后台填什么就展示什么。
+	CertificationsJSON string `gorm:"column:certifications;type:text" json:"certificationsJson"`
 	// SyncError 是最近一次同步失败的原因（code+文案，截 500）：列表悬停展示，成功同步后清空。
 	SyncError string `gorm:"column:sync_error;size:500;not null;default:''" json:"syncError"`
 	// Categories 是商品所属类目；关联表 plg_website_product_category_rel，保存时整体替换。
@@ -395,7 +468,7 @@ type AliConfig struct {
 	database.PlatformModel
 	AppKey string `gorm:"size:64;not null;default:''" json:"appKey"`
 	// AppSecretEnc / SessionKeyEnc 是 core/secret 密文（enc:v1:…）；明文永不落库、不出接口。
-	AppSecretEnc string `gorm:"column:app_secret_enc;type:text" json:"-"`
+	AppSecretEnc  string `gorm:"column:app_secret_enc;type:text" json:"-"`
 	SessionKeyEnc string `gorm:"column:session_key_enc;type:text" json:"-"`
 	// ApiGateway 是 TOP 网关地址：默认正式环境，留沙箱切换口。
 	ApiGateway string `gorm:"column:api_gateway;size:100;not null;default:'https://gw.api.taobao.com/router/rest'" json:"apiGateway"`

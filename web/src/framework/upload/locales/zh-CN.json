@@ -1,9 +1,6 @@
 {
   "uploader": {
-    "add_image": "上传图片",
-    "add_video": "上传视频",
     "pickFromLibrary": "从文件库选择",
-    "add_file": "上传文件",
     "kind_image": "图片",
     "kind_video": "视频",
     "kind_file": "文件",
@@ -29,7 +26,7 @@
     "outputSize": "输出尺寸",
     "ratioLabel": "比例",
     "cropRatioFree": "自由",
-    "urlPlaceholder": "粘贴图片地址，回车导入",
+    "urlPlaceholder": "粘贴{{kind}}地址，回车导入",
     "urlInvalid": "地址需以 http:// 或 https:// 开头"
   },
   "lightbox": {

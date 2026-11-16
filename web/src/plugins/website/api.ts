@@ -326,6 +326,8 @@ export interface SiteProduct {
   moq: number
   /** 发货天数 */
   leadTimeDays: number
+  /** 运费金额（与价格同币种）；0 = 未报价 */
+  freightAmount: number
   port: string
   /** 付款方式（如 "T/T, L/C"），详情页「交易信息」块展示 */
   paymentTerms: string
@@ -410,6 +412,7 @@ export interface ProductForm {
   priceUnit: string
   moq: number
   leadTimeDays: number
+  freightAmount: number
   port: string
   paymentTerms: string
   specs: ProductSpec[]
@@ -986,6 +989,14 @@ export type MessageStatus = 'new' | 'read' | 'handled'
 /** 列表筛选与批量操作共用的状态顺序；与后端 MsgNew/MsgRead/MsgHandled 同源。 */
 export const MESSAGE_STATUSES: MessageStatus[] = ['new', 'read', 'handled']
 
+/** 询盘附件：下载走官网公开的 token 链接，后台直接复用（token 不透明且只在授权接口里出现）。 */
+export interface MessageAttachment {
+  token: string
+  name: string
+  mime: string
+  size: number
+}
+
 export interface SiteMessage {
   id: string
   name: string
@@ -995,6 +1006,18 @@ export interface SiteMessage {
   ip: string
   ua: string
   status: MessageStatus
+  /** 询盘来源商品 ID（0/空 = 从联系页提交的普通留言） */
+  productId?: string
+  /** 来源商品精简信息（后端按 productId 批量补齐，含草稿） */
+  sourceProduct?: SuggestedProduct
+  /** 来源商品精简信息（后端列表装配时按 productId 批量补齐，含草稿） */
+  sourceProduct?: SuggestedProduct
+  /** 买家是否勾选「同意与供应商共享名片信息」 */
+  cardConsent?: boolean
+  /** 超过 24 小时仍未处理（后端按状态与时间现算） */
+  overdue?: boolean
+  /** 询盘弹窗上传的附件；来自联系页的普通留言为空 */
+  attachments?: MessageAttachment[]
   createdAt: string
   updatedAt: string
 }
@@ -1012,6 +1035,28 @@ export function useMessages(query: MessageQuery) {
     queryKey: [...KEY, 'messages', query],
     queryFn: () => api.get<Page<SiteMessage>>(`${BASE}/messages`, query),
     placeholderData: keepPreviousData,
+  })
+}
+
+/** 超时询盘的同品类推荐：只在后台打开详情时按需请求，不随列表一起拉。 */
+export interface SuggestedProduct {
+  id: string
+  title: string
+  slug: string
+  currency: string
+  priceMin: number
+  priceMax: number
+  moq: number
+  coverUrl: string
+  path: string
+}
+
+export function useMessageSuggestions(id: string | null) {
+  return useQuery({
+    queryKey: [...KEY, 'messages', 'suggest', id],
+    queryFn: () => api.get<{ suggested: SuggestedProduct[] }>(`${BASE}/messages/suggest/${id}`),
+    enabled: !!id,
+    staleTime: 60_000,
   })
 }
 

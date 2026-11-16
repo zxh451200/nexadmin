@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CheckCheck, Download, Inbox, Trash2 } from 'lucide-react'
+import { CheckCheck, Download, ExternalLink, Inbox, Paperclip, Trash2, TriangleAlert } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
@@ -18,11 +18,20 @@ import {
   MESSAGE_STATUSES,
   createMessageExportJob,
   useDeleteMessages,
+  useMessageSuggestions,
   useMessages,
   useSetMessageStatus,
   type MessageStatus,
   type SiteMessage,
 } from './api'
+
+/** 询盘附件大小：一眼能判断「这张图要不要下载」，>=1MB 给一位小数。 */
+function formatSize(n: number): string {
+  if (!n) return ''
+  if (n < 1024) return `${n} B`
+  if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`
+  return `${(n / 1024 / 1024).toFixed(1)} MB`
+}
 
 /** 官网「在线留言」收件箱：按状态跟进（未读 → 已读 → 已处理），支持批量。 */
 export default function MessagePage() {
@@ -105,12 +114,23 @@ export default function MessagePage() {
   const selectedRows = (data?.list ?? []).filter((r) => selected.includes(r.id))
   // 详情弹窗读实时那一行：标已读后列表刷新，弹窗里的状态徽标跟着变，而不是停在你点开的旧值上。
   const view = detail ? (data?.list.find((r) => r.id === detail.id) ?? detail) : null
+  // 推荐按需拉：打开详情才请求，超时未处理的线索在弹窗里直接给出可回推的商品。
+  const { data: suggestData, isLoading: suggestLoading } = useMessageSuggestions(view?.id ?? null)
 
   const columns: Column<SiteMessage>[] = [
     {
       key: 'status',
       title: t('plugin_website.message.status'),
-      render: (r) => statusBadge(r.status),
+      render: (r) => (
+        <span className="inline-flex flex-wrap items-center gap-1">
+          {statusBadge(r.status)}
+          {r.overdue ? (
+            <Badge variant="destructive" title={t('plugin_website.message.overdueHint')}>
+              {t('plugin_website.message.overdue')}
+            </Badge>
+          ) : null}
+        </span>
+      ),
     },
     {
       key: 'name',
@@ -281,7 +301,88 @@ export default function MessagePage() {
               <dt className="w-20 shrink-0 text-muted-foreground">{t('plugin_website.message.createdAt')}</dt>
               <dd className="num">{formatTime(view.createdAt, i18n.language)}</dd>
             </div>
+            {view.sourceProduct ? (
+              <div className="flex gap-2">
+                <dt className="w-20 shrink-0 text-muted-foreground">{t('plugin_website.message.sourceProduct')}</dt>
+                <dd className="min-w-0">
+                  <a
+                    className="inline-flex items-center gap-1 underline"
+                    href={view.sourceProduct.path}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <span className="wrap-break-word">{view.sourceProduct.title}</span>
+                    <ExternalLink className="size-3 shrink-0" aria-hidden="true" />
+                  </a>
+                </dd>
+              </div>
+            ) : null}
+            {typeof view.cardConsent === 'boolean' ? (
+              <div className="flex gap-2">
+                <dt className="w-20 shrink-0 text-muted-foreground">{t('plugin_website.message.cardConsent')}</dt>
+                <dd>
+                  <Badge variant={view.cardConsent ? 'success' : 'outline'}>
+                    {view.cardConsent
+                      ? t('plugin_website.message.cardConsentYes')
+                      : t('plugin_website.message.cardConsentNo')}
+                  </Badge>
+                </dd>
+              </div>
+            ) : null}
             <div className="whitespace-pre-wrap wrap-break-word rounded-md border bg-muted/40 p-3">{view.content}</div>
+            {view.attachments?.length ? (
+              <div className="flex flex-col gap-2">
+                <span className="text-muted-foreground">{t('plugin_website.message.attachments')}</span>
+                <ul className="flex flex-col gap-1">
+                  {view.attachments.map((f) => (
+                    <li key={f.token}>
+                      <a
+                        className="inline-flex max-w-full items-center gap-1.5 underline"
+                        href={`/website/inquiry/attachments/${f.token}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <Paperclip className="size-3.5 shrink-0" aria-hidden="true" />
+                        <span className="truncate">{f.name}</span>
+                        <span className="num shrink-0 text-xs text-muted-foreground">{formatSize(f.size)}</span>
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            {view.overdue ? (
+              <p className="flex items-start gap-1.5 rounded-md border border-dashed p-2.5 text-xs text-muted-foreground">
+                <TriangleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+                <span>{t('plugin_website.message.overdueHint')}</span>
+              </p>
+            ) : null}
+            {suggestData?.suggested?.length ? (
+              <div className="flex flex-col gap-2">
+                <span className="text-muted-foreground">{t('plugin_website.message.suggestTitle')}</span>
+                <ul className="flex flex-col gap-1.5">
+                  {suggestData.suggested.map((p) => (
+                    <li key={p.id} className="flex items-baseline justify-between gap-2">
+                      <a
+                        className="min-w-0 inline-flex items-center gap-1 underline"
+                        href={p.path}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <span className="truncate">{p.title}</span>
+                        <ExternalLink className="size-3 shrink-0" aria-hidden="true" />
+                      </a>
+                      <span className="num shrink-0 text-xs text-muted-foreground">
+                        {p.priceMin > 0 ? `${p.currency}${p.priceMin}` : t('plugin_website.message.suggestNoPrice')}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            {suggestLoading ? (
+              <p className="text-xs text-muted-foreground">{t('common.loading')}</p>
+            ) : null}
             <div className="text-xs text-muted-foreground">{[view.ip, view.ua].filter(Boolean).join(' · ')}</div>
           </dl>
         </ResponsiveDialog>

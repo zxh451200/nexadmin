@@ -1,7 +1,10 @@
 {{define "content"}}
 <section class="sl-hero">
   <div class="sl-hero-media">
-    <img src="/website-assets/theme/solaris/assets/sl-hero.webp" alt="{{.TF "theme.solaris.heroShotAlt" .SiteName}}" decoding="async" fetchpriority="high">
+    <picture>
+      <source media="(max-width: 980px)" srcset="/website-assets/theme/solaris/assets/sl-hero.webp">
+      <img src="/website-assets/theme/solaris/assets/sl-hero-wide.webp" alt="{{.TF "theme.solaris.heroShotAlt" .SiteName}}" decoding="async" fetchpriority="high">
+    </picture>
   </div>
   <div class="sl-wrap sl-hero-inner">
     <div class="sl-hero-copy" data-reveal>
@@ -20,7 +23,7 @@
     <div class="sl-hero-stats">
       <div class="sl-stat"><strong>500+</strong><span>{{.T "theme.solaris.stat1"}}</span></div>
       <div class="sl-stat"><strong>40+</strong><span>{{.T "theme.solaris.stat2"}}</span></div>
-      <div class="sl-stat"><strong>10+ GWh</strong><span>{{.T "theme.solaris.stat3"}}</span></div>
+      <div class="sl-stat"><strong>10+<em class="sl-stat-unit">GWh</em></strong><span>{{.T "theme.solaris.stat3"}}</span></div>
     </div>
   </div>
 </section>

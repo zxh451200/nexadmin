@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
-import { RemoteSelect } from './RemoteSelect'
+import { FilePickerDialog, PickFromLibraryButton } from './FilePickerDialog'
 import { ResponsiveDialog } from './ResponsiveDialog'
 import { Uploader, type UploadedFile } from './Uploader'
 
@@ -40,6 +40,7 @@ export function VideoUrlField({
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [zoom, setZoom] = useState(false)
+  const [pickOpen, setPickOpen] = useState(false)
 
   // 卡片：有值=帧缩略（点开放大播放）。无值时不再渲染独立的虚线/按钮块——上传入口并入输入行行首
   const cardEl = value ? (
@@ -70,7 +71,7 @@ export function VideoUrlField({
       aria-label={ariaLabel ?? title}
     >
       <VideoIcon aria-hidden="true" className="size-4" />
-      {t('uploader.add_video')}
+      {t('common.upload')}
     </Button>
   )
   const inputEl = (
@@ -87,19 +88,8 @@ export function VideoUrlField({
           aria-label={ariaLabel ?? title}
         />
         {!value ? uploadBtn : null}
-        {/* 文件库下拉：已传过的视频直接选，不用手写 URL（关键词可搜、按上传时间倒序） */}
-        <RemoteSelect
-          url="/files"
-          params={{ category: 'video' }}
-          valueKey="url"
-          labelKey="name"
-          value={value}
-          onChange={(v) => onChange(String(v ?? ''))}
-          allowClear={false}
-          placeholder={t('uploader.pickFromLibrary')}
-          disabled={disabled}
-          className="w-36 shrink-0 sm:w-44"
-        />
+        {/* 文件库弹窗：已传过的视频直接选（缩略图网格 + 关键词可搜、按上传时间倒序） */}
+        <PickFromLibraryButton className="shrink-0" disabled={disabled} onClick={() => setPickOpen(true)} />
       </div>
       {value ? (
         <Button type="button" variant="ghost" className="shrink-0 px-3" disabled={disabled} onClick={() => onChange('')}>
@@ -145,6 +135,14 @@ export function VideoUrlField({
           }}
         />
       </ResponsiveDialog>
+      <FilePickerDialog
+        open={pickOpen}
+        onOpenChange={setPickOpen}
+        kind="video"
+        value={value ? [value] : []}
+        onConfirm={(urls) => onChange(urls[0] ?? '')}
+        disabled={disabled}
+      />
     </div>
   )
 }

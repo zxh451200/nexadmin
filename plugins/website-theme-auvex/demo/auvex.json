@@ -206,6 +206,18 @@
       "title": "精密车削中心",
       "slug": "turning",
       "sort": 30
+    },
+    {
+      "title": "龙门五轴",
+      "slug": "gantry-five-axis",
+      "parentSlug": "five-axis",
+      "sort": 11
+    },
+    {
+      "title": "VMC 系列",
+      "slug": "vmc-series",
+      "parentSlug": "vertical-mills",
+      "sort": 21
     }
   ],
   "products": [

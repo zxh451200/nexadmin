@@ -39,7 +39,10 @@ type Config struct {
 	// EmbedModel 是向量化（embeddings）模型名；空 = 未启用向量化。
 	EmbedModel string
 	Timeout    time.Duration
-	MaxTokens  int
+	// EmbedTimeout 是向量化请求的独立超时：对话要等长回复可以调大，向量化是短请求，
+	// 但知识库批量入库同步向量化要跑十几秒——把对话超时调小不该误伤它。0 = 沿用 Timeout。
+	EmbedTimeout time.Duration
+	MaxTokens    int
 	// AllowPrivate 允许 BaseURL / EmbedBaseURL 指向私网 / 回环（来自 ai.allow_private_base_url）；
 	// 链路本地与云元数据永远拒绝。
 	AllowPrivate bool
@@ -49,8 +52,8 @@ type Config struct {
 
 // String 和 GoString 不含密钥，避免被 %v / %+v / %#v 误打进日志。
 func (c Config) String() string {
-	return fmt.Sprintf("ai.Config{enabled=%t base_url=%s model=%s embed_base_url=%s embed_model=%s key_set=%t embed_key_set=%t}",
-		c.Enabled, c.BaseURL, c.Model, c.EmbedBaseURL, c.EmbedModel, c.APIKey != "", c.EmbedAPIKey != "")
+	return fmt.Sprintf("ai.Config{enabled=%t base_url=%s model=%s embed_base_url=%s embed_model=%s timeout=%s embed_timeout=%s key_set=%t embed_key_set=%t}",
+		c.Enabled, c.BaseURL, c.Model, c.EmbedBaseURL, c.EmbedModel, c.Timeout, c.EmbedTimeout, c.APIKey != "", c.EmbedAPIKey != "")
 }
 
 // GoString 见 String。
@@ -69,6 +72,13 @@ func (c Config) Normalize() Config {
 	}
 	if c.Timeout > MaxTimeout {
 		c.Timeout = MaxTimeout
+	}
+	// EmbedTimeout 在 Timeout 补默认之后算：0 = 沿用对话超时，上限同 MaxTimeout
+	if c.EmbedTimeout <= 0 {
+		c.EmbedTimeout = c.Timeout
+	}
+	if c.EmbedTimeout > MaxTimeout {
+		c.EmbedTimeout = MaxTimeout
 	}
 	if c.MaxTokens <= 0 {
 		c.MaxTokens = DefaultMaxTokens
@@ -196,6 +206,10 @@ func FromSettings(row map[string]any, fallback Config) Config {
 	}
 	if n := num(row["timeoutSec"]); n > 0 {
 		out.Timeout = time.Duration(n) * time.Second
+	}
+	// 向量化独立超时；未配置（0/缺键）= 沿用对话超时（Normalize 里兜底）
+	if n := num(row["embedTimeoutSec"]); n > 0 {
+		out.EmbedTimeout = time.Duration(n) * time.Second
 	}
 	if n := num(row["maxTokens"]); n > 0 {
 		out.MaxTokens = n

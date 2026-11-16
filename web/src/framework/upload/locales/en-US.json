@@ -1,9 +1,6 @@
 {
   "uploader": {
-    "add_image": "Upload image",
-    "add_video": "Upload video",
     "pickFromLibrary": "Pick from library",
-    "add_file": "Upload file",
     "kind_image": "an image",
     "kind_video": "a video",
     "kind_file": "a file",
@@ -29,7 +26,7 @@
     "outputSize": "Output size",
     "ratioLabel": "Ratio",
     "cropRatioFree": "Free",
-    "urlPlaceholder": "Paste an image URL, press Enter to import",
+    "urlPlaceholder": "Paste {{kind}} URL, press Enter to import",
     "urlInvalid": "The URL must start with http:// or https://"
   },
   "lightbox": {

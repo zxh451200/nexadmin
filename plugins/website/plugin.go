@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -20,6 +21,7 @@ import (
 	"nexadmin/core/middleware"
 	"nexadmin/core/plugin"
 	"nexadmin/core/plugin/market"
+	"nexadmin/core/storage"
 )
 
 func init() {
@@ -54,6 +56,18 @@ func (*module) Name() string { return "website" }
 // Register 注册管理端与公开官网路由。
 func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	h := &handler{svc: m.service(d), gw: newAIGateway(d), previewKey: previewKeyOf(d)}
+	// 询盘附件存储：local / S3 跟随 config.storage，与 IM 附件同一套驱动。
+	// 装配失败只是附件不可用（上传接口回 503），留言本身照常入库。
+	if d.Config != nil {
+		st, err := storage.New(d.Config.Storage, filepath.Join(d.Config.DataDir, "uploads", "website"))
+		if err != nil {
+			if d.Log != nil {
+				d.Log.Warn("website: 询盘附件存储初始化失败", zap.Error(err))
+			}
+		} else {
+			h.svc.SetStorage(st)
+		}
+	}
 
 	// 语言清单来自平台（sys_language，core 在迁移后已加载）：官网不再自持一份。
 	// 公开站路由随后按它注册，所以改动清单要重启才生效。
@@ -91,6 +105,7 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.GET("/messages/unread-count", core.Perm("website:message"), core.Desc("留言未读数"), h.unreadMessageCount)
 	g.POST("/messages/export-async", core.Perm("website:message"), core.Desc("提交留言异步导出任务"), h.MessageExportAsync)
 	g.PUT("/messages/status", core.Perm("website:message"), core.Desc("批量修改留言状态"), h.setMessageStatus)
+	g.GET("/messages/suggest/:id", core.Perm("website:message"), core.Desc("超时询盘推荐同类商品"), h.suggestForMessage)
 	g.DELETE("/messages", core.Perm("website:message"), core.Desc("批量删除留言"), h.deleteMessages)
 
 	g.GET("/navs", core.Perm("website:nav"), core.Desc("导航列表"), h.listNavs)
@@ -212,6 +227,7 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	// 官网页面在授权导入后重启生效。
 	if d.RootGroup != nil {
 		site := &siteHandler{svc: m.service(d), log: d.Log, pkg: newPackageCache(), signKey: loadMarketSignKey(d.Log), previewKey: previewKeyOf(d), gw: h.gw}
+		site.uploadLocal = newIPLimiter(20, time.Minute)
 		// 留言是匿名写入口：阈值比普通页面紧（每 IP 每分钟 5 条），和页面浏览分开计数。
 		// 计数走共享 cache，多实例部署时是同一个桶；cache 没装配才退回进程内滑动窗口。
 		if d.Cache != nil {
@@ -230,6 +246,12 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 		// 访客聊天翻译会调模型，单独收紧（每 IP 每分钟 10 次）；AI 未配置由 handler 回 503。
 		translateLimit := newIPLimiter(10, time.Minute).Middleware()
 		pub.POST("/website/visitor/translate", translateLimit, site.visitorTranslate)
+		// 询盘附件：上传/下载都按 IP 计数（上传 20 次/分、下载 120 次/分）。
+		attLimit := newIPLimiter(120, time.Minute).Middleware()
+		pub.POST("/website/inquiry/attachments", site.inquiryUpload)
+		pub.GET("/website/inquiry/attachments/:token", attLimit, site.inquiryAttachment)
+		pub.HEAD("/website/inquiry/attachments/:token", attLimit, site.inquiryAttachment)
+		pub.GET("/website/inquiry/attachment-limits", site.inquiryAttachmentLimits)
 
 		// 页面路由按语言各注册一份：站点默认语言无前缀，其余语言 /<prefix>（不带尾斜杠）；
 		// 前缀表是运行期表——站点默认语言切换后，原平台默认语言带着合成前缀注册。

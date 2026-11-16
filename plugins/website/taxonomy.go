@@ -304,9 +304,13 @@ type termLink struct {
 }
 
 // termFilter 是公开新闻列表的收窄条件：Kind 为 category/tag 时按对应 slug 过滤，空 = 全部新闻。
+// Slugs 只用于产品类目树：选中父类时带上所有后代类目，让父类归档包含子类商品；
+// Sort 是产品列表的排序口径（latest / price_asc / price_desc），新闻列表不用。
 type termFilter struct {
-	Kind string
-	Slug string
+	Kind  string
+	Slug  string
+	Slugs []string
+	Sort  string
 }
 
 // CategoryLinks 把分类集合转成模板可渲染的导航项，并标出当前归档的那一项。

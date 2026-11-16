@@ -486,6 +486,7 @@ function ProductFormBody({
   const [priceUnit, setPriceUnit] = useState(editing?.priceUnit ?? '')
   const [moq, setMoq] = useState(editing?.moq ? String(editing.moq) : '')
   const [leadTimeDays, setLeadTimeDays] = useState(editing?.leadTimeDays ? String(editing.leadTimeDays) : '')
+  const [freightAmount, setFreightAmount] = useState(editing?.freightAmount ? String(editing.freightAmount) : '')
   const [port, setPort] = useState(editing?.port ?? '')
   const [paymentTerms, setPaymentTerms] = useState(editing?.paymentTerms ?? '')
   const portOptions = usePortOptions()
@@ -548,6 +549,7 @@ function ProductFormBody({
           priceUnit,
           moq: parseNum(moq),
           leadTimeDays: parseNum(leadTimeDays),
+          freightAmount: parseNum(freightAmount),
           port,
           paymentTerms,
           specs: specs.filter((sp) => sp.label.trim() || sp.value.trim()),
@@ -704,6 +706,17 @@ function ProductFormBody({
               value={leadTimeDays}
               disabled={sharedDisabled}
               onChange={(e) => setLeadTimeDays(e.target.value)}
+            />
+          </SharedFieldShell>
+          <SharedFieldShell labelKey="plugin_website.product.freightAmount">
+            <Input
+              type="number"
+              min="0"
+              step="0.01"
+              value={freightAmount}
+              placeholder="0"
+              disabled={sharedDisabled}
+              onChange={(e) => setFreightAmount(e.target.value)}
             />
           </SharedFieldShell>
         </div>

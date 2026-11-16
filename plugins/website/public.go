@@ -19,6 +19,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"nexadmin/core/ai"
 	"nexadmin/core/middleware"
 	"nexadmin/core/plugin/market"
 	"nexadmin/core/response"
@@ -44,6 +45,11 @@ type siteHandler struct {
 	contactHits *middleware.Limiter
 	// contactLocal 是 cache 未装配时的进程内兜底计数器。
 	contactLocal *ipLimiter
+	// uploadLocal 是询盘附件的 IP 计数（每 IP 每分钟 20 次）：上传比投稿重，
+	// 但一条询盘可能带几个文件，不能沿用留言的 5 次窗口。
+	uploadLocal *ipLimiter
+	// gw 是 AI 网关（未配置时为 nil）：访客聊天翻译与管理端内容机翻共用同一个实例。
+	gw *ai.Gateway
 }
 
 // contactAllowed 报告这个 IP 还能不能投稿；超限已经写好 Retry-After。
@@ -348,6 +354,12 @@ func (h *siteHandler) postDetail(c *gin.Context) {
 		v.SeoKeywords = p.SeoKeywords
 	}
 	v.Post = p
+	// 上一篇 / 下一篇：按列表顺序取该语言已发布的相邻两篇；加载失败不挡详情，导航静默缺席。
+	if prev, next, nerr := h.svc.PublishedPostNeighbors(c.Request.Context(), lang.Code, slug); nerr == nil {
+		v.PostPrev, v.PostNext = prev, next
+	} else if h.log != nil {
+		h.log.Warn("website: 新闻相邻导航加载失败", zap.Error(nerr), zap.String("slug", slug))
+	}
 	// og:image 只认绝对 URL；文章设了封面就用封面，否则模板回退站点默认图。
 	v.OGImage = absURL(v.BaseURL, p.CoverURL)
 	// 详情页的蜘蛛口径：og:type=article + 发布时间（Article/面包屑 JSON-LD 在 render() 装配）。
@@ -411,14 +423,20 @@ func (h *siteHandler) productsList(c *gin.Context) {
 	if q != "" {
 		vals.Set("q", q)
 	}
-	// 筛选串同时喂给 canonical 与翻页链接：分类 + 关键词 + 分页不会互相丢。
+	// 排序白名单：非法值一律回落到「最新」，避免把用户输入拼进 ORDER BY。
+	sort := c.Query("sort")
+	switch sort {
+	case "price_asc", "price_desc":
+		vals.Set("sort", sort)
+	default:
+		sort = "latest"
+	}
+	term.Sort = sort
+	v.ProductSort = sort
+	// 筛选串同时喂给 canonical 与翻页链接：分类 + 关键词 + 排序 + 分页不会互相丢。
 	v.ProductTermQuery = vals.Encode()
 	v.ProductQuery = q
-	products, total, err := h.svc.PublishedProductsPage(ctx, lang.Code, term, q, page, productsPageSize)
-	if err != nil {
-		c.String(http.StatusInternalServerError, "site unavailable")
-		return
-	}
+	// 类目树先取：选中父类时要拿到它的后代 slug，才能把子类商品一起查出来。
 	cats, err := h.svc.ListProductCategories(ctx)
 	if err != nil {
 		c.String(http.StatusInternalServerError, "site unavailable")
@@ -427,21 +445,44 @@ func (h *siteHandler) productsList(c *gin.Context) {
 	active := ""
 	if term.Kind == "category" {
 		active = term.Slug
+		term.Slugs = descendantSlugs(cats, active)
 	}
 	v.ProductCategories = ProductCategoryLinks(cats, active)
+	products, total, err := h.svc.PublishedProductsPage(ctx, lang.Code, term, q, page, productsPageSize)
+	if err != nil {
+		c.String(http.StatusInternalServerError, "site unavailable")
+		return
+	}
+	// 左栏「精选橱窗」：始终取最新上架的几条，不跟当前筛选走，加载失败静默缺席。
+	if featured, _, ferr := h.svc.PublishedProductsPage(ctx, lang.Code, termFilter{}, "", 1, 5); ferr == nil {
+		v.ProductsFeatured = featured
+	}
 	// 分类链接在后端拼完整 URL：html/template 对「文本 + 动作」拼出的 href 会二次转义
 	// 查询串里的 = / &，模板里只放一个动作最稳。
 	v.ProductAllURL = v.URL("/products")
+	linkVals := url.Values{}
 	if q != "" {
-		v.ProductAllURL += "?q=" + url.QueryEscape(q)
+		linkVals.Set("q", q)
+	}
+	if sort != "latest" {
+		linkVals.Set("sort", sort)
+	}
+	if enc := linkVals.Encode(); enc != "" {
+		v.ProductAllURL += "?" + enc
 	}
 	for i := range v.ProductCategories {
 		u := v.URL("/products") + "?category=" + url.QueryEscape(v.ProductCategories[i].Slug)
 		if q != "" {
 			u += "&q=" + url.QueryEscape(q)
 		}
+		if sort != "latest" {
+			u += "&sort=" + sort
+		}
 		v.ProductCategories[i].Href = u
 	}
+	// 折树放在 href 填完之后：Children 是结构体拷贝，链接跟着一起带过去，
+	// 不用在树里再拼一遍查询串。
+	v.ProductCategoryTree = NestProductCategories(v.ProductCategories)
 	v.Products = products
 	v.ProductsTotal = int(total)
 	v.ProductsPage, v.ProductsTotalPages = pageOf(page), pagesOf(total, productsPageSize)
@@ -499,6 +540,16 @@ func (h *siteHandler) productDetail(c *gin.Context) {
 		v.SeoKeywords = p.SeoKeywords
 	}
 	v.Product = p
+	// 询盘附件的生效限制随页面下发（弹窗里直接渲染 accept 与上限，不再多一次请求）。
+	lim := InquiryAttachmentLimitsFor(c.Request.Context())
+	v.InquiryAccept, v.InquiryMaxBytes, v.InquiryMaxText, v.InquiryMaxFiles =
+		lim.Accept, lim.MaxBytes, lim.MaxText, lim.MaxFiles
+	// 上一条 / 下一条：与产品列表同序取相邻两条；加载失败不挡详情，导航静默缺席。
+	if prev, next, nerr := h.svc.PublishedProductNeighbors(c.Request.Context(), lang.Code, slug); nerr == nil {
+		v.ProductPrev, v.ProductNext = prev, next
+	} else if h.log != nil {
+		h.log.Warn("website: 产品相邻导航加载失败", zap.Error(nerr), zap.String("slug", slug))
+	}
 	// 同类产品推荐：同类目已上架商品（不含自身）；加载失败不挡详情，推荐区静默缺席。
 	if related, rerr := h.svc.PublishedRelatedProducts(c.Request.Context(), lang.Code, p); rerr == nil {
 		v.ProductsRelated = related

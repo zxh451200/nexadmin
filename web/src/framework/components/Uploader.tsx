@@ -39,6 +39,13 @@ export interface UploaderProps {
 
 const NO_CROP_TYPES = ['image/gif', 'image/svg+xml']
 
+/** 地址导入按扩展名猜 mime；猜不中按 kind 兜底（image→jpeg、video→mp4、file→octet-stream） */
+const MIME_BY_EXT: Record<string, string> = {
+  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', svg: 'image/svg+xml', avif: 'image/avif',
+  mp4: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime', ogg: 'video/ogg',
+  pdf: 'application/pdf', zip: 'application/zip',
+}
+
 export function Uploader({ kind, multiple, maxCount, crop, visibility = 'private', value, onChange, disabled, className, enablePaste, entryExtra }: UploaderProps) {
   const { t } = useTranslation()
   const { data: cfg } = useUploadConfig()
@@ -54,7 +61,7 @@ export function Uploader({ kind, multiple, maxCount, crop, visibility = 'private
   valueRef.current = value
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
-  /** 图片地址导入：粘贴外链图片 URL 回车，登记进媒体库后加入列表（外链图不经裁剪） */
+  /** 地址导入：粘贴外链 URL 回车，登记进媒体库后加入列表（外链文件不经裁剪/截帧管线） */
   const [urlText, setUrlText] = useState('')
   const [importing, setImporting] = useState(false)
 
@@ -198,8 +205,8 @@ export function Uploader({ kind, multiple, maxCount, crop, visibility = 'private
   const AddIcon = kind === 'image' ? ImagePlus : kind === 'video' ? VideoIcon : Upload
   const curCrop = cropQueue[0] ?? null
 
-  /** 地址导入：把外链图片登记进媒体库（POST /files 支持外链 URL，后端校验协议）。
-   *  外链图不经过裁剪管线（拿不到本地 blob），用原始地址直接进列表。 */
+  /** 地址导入：把外链文件登记进媒体库（POST /files 支持外链 URL，后端校验协议）。
+   *  外链文件拿不到本地 blob，不经裁剪/截帧管线，按扩展名猜个 mime 直接进列表。 */
   const addByUrl = async () => {
     const url = urlText.trim()
     if (!url) return
@@ -209,9 +216,9 @@ export function Uploader({ kind, multiple, maxCount, crop, visibility = 'private
     }
     setImporting(true)
     try {
-      const name = decodeURIComponent(new URL(url).pathname.split('/').pop() ?? '') || 'image'
+      const name = decodeURIComponent(new URL(url).pathname.split('/').pop() ?? '') || kind
       const ext = name.includes('.') ? name.split('.').pop()?.toLowerCase() : ''
-      const type = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : ext === 'gif' ? 'image/gif' : 'image/jpeg'
+      const type = MIME_BY_EXT[ext ?? ''] ?? (kind === 'image' ? 'image/jpeg' : kind === 'video' ? 'video/mp4' : 'application/octet-stream')
       const items = await api.post<Array<{ id: string; name: string; url: string; type: string; size: number }>>('/files', {
         files: [{ url, name, type, size: 0 }],
         visibility,
@@ -250,22 +257,20 @@ export function Uploader({ kind, multiple, maxCount, crop, visibility = 'private
           常驻渲染（满额/译文态只置灰不消失，与其他字段行为一致）；拖拽上传在整个容器上仍可用。
           入口行在缩略图上方：先选导入方式，下面按顺序铺结果（对齐登录表单「先输入后结果」的阅读顺序） */}
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        {kind === 'image' && (
-          <Input
-            value={urlText}
-            disabled={disabled || importing || !canAdd}
-            onChange={(e) => setUrlText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                void addByUrl()
-              }
-            }}
-            placeholder={t('uploader.urlPlaceholder')}
-            aria-label={t('uploader.urlPlaceholder')}
-            className="h-9 min-w-56 flex-1 text-sm sm:max-w-sm"
-          />
-        )}
+        <Input
+          value={urlText}
+          disabled={disabled || importing || !canAdd}
+          onChange={(e) => setUrlText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              void addByUrl()
+            }
+          }}
+          placeholder={t('uploader.urlPlaceholder', { kind: t(`uploader.kind_${kind}`) })}
+          aria-label={t('uploader.urlPlaceholder', { kind: t(`uploader.kind_${kind}`) })}
+          className="h-9 min-w-56 flex-1 text-sm sm:max-w-sm"
+        />
         <Button
           type="button"
           variant="outline"
@@ -276,7 +281,7 @@ export function Uploader({ kind, multiple, maxCount, crop, visibility = 'private
           aria-label={t('common.upload')}
         >
           <AddIcon className="size-4" aria-hidden="true" />
-          {t(`uploader.add_${kind}`)}
+          {t('common.upload')}
         </Button>
         {entryExtra}
       </div>
