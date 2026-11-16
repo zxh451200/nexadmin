@@ -70,6 +70,15 @@
     '.chat-settings-actions button:hover{border-color:currentColor}',
     '.chat-settings-actions .is-primary{border-color:transparent;background:var(--pc-accent,CanvasText);color:Canvas;font-weight:600}',
     '.chat-settings-actions .is-primary:hover{filter:brightness(1.08);border-color:transparent}',
+    // 翻译快捷浮层（工具栏文A 按钮）：立即翻译主按钮 + 两个自动翻译开关行 + 设置链接
+    '.chat-tr-now{box-sizing:border-box;width:100%;height:32px;margin-bottom:4px;border:1px solid transparent;border-radius:4px;background:var(--pc-accent,CanvasText);color:Canvas;font:inherit;font-size:12.5px;font-weight:600;cursor:pointer}',
+    '.chat-tr-now:hover{filter:brightness(1.08)}',
+    '.chat-tr-now[disabled]{opacity:.5;cursor:default}',
+    '.chat-tr-row{display:flex;align-items:center;gap:8px;padding:7px 2px;font-size:12px;cursor:pointer}',
+    '.chat-tr-row+.chat-tr-row{border-top:1px solid rgba(128,128,128,.14)}',
+    '.chat-tr-row .chat-switch{flex:none}',
+    '.chat-tr-more{margin-top:2px;padding:0;border:0;background:transparent;color:inherit;font:inherit;font-size:11.5px;text-decoration:underline;text-underline-offset:3px;cursor:pointer;opacity:.7}',
+    '.chat-tr-more:hover{opacity:1}',
     '.chat-compose textarea{resize:vertical;max-height:220px}',
     '.chat-card-pop{position:absolute;z-index:22;inset-inline-start:8px;inset-block-end:96px;box-sizing:border-box;width:min(324px,calc(100% - 16px));padding:16px 16px 14px;border:1px solid rgba(128,128,128,.28);border-radius:8px;background:Canvas;color:CanvasText;box-shadow:0 16px 38px rgba(0,0,0,.22);font-size:12px}',
     '.chat-card-pop[hidden]{display:none}',
@@ -322,19 +331,9 @@
       log.scrollTop = log.scrollHeight;
     }
     if (translateBtn) {
-      translateBtn.addEventListener('click', function () {
-        var text = String((input && input.value) || '').trim();
-        if (!text || translateBtn.disabled) return;
-        translateBtn.disabled = true;
-        translateBatch([text], 'out', { from: trSettings.outFrom || '', to: trSettings.outTo || '' })
-          .then(function (data) {
-            if (input && !data.skipped) input.value = data.texts[0];
-            if (data.skipped) note(t('chatTranslateSame', '当前语言一致，无需翻译'));
-            else note(t('chatTranslated', '已翻译为对方语言'));
-          }).catch(function () {
-            note(t('chatTranslateFailed', '翻译失败，请稍后重试'));
-          }).then(function () { translateBtn.disabled = false; });
-      });
+      // 文A 按钮 = 翻译快捷入口：打开快捷浮层（立即翻译输入内容 + 自动翻译开关），
+      // 立即翻译的动作移进了浮层（openSettings 的 compact 分支）。
+      translateBtn.addEventListener('click', function () { openSettings(true); });
     }
 
     // ---- 收到的客服消息：气泡下挂「翻译」按钮（手动），开启设置后自动整批翻译 ----
@@ -1093,7 +1092,10 @@
     // 发送的消息：发送时自动翻成对方语言（capture 拦截在 form submit 上）。
     // 选项数据来自页面 #site-langs；清单拉不到就只显示当前值，设置仍可开关。
     function closeSettings() { settingsPop.hidden = true; }
-    function openSettings() {
+    // compact 模式是工具栏「翻译」按钮的快捷浮层：立即翻译输入内容 + 两个自动翻译
+    // 开关 + 进完整设置的链接——原来文A 按钮直接翻译、设置藏在更多菜单，两个入口
+    // 看起来像同一功能的两份，融合成一个浮层。
+    function openSettings(compact) {
       if (!settingsPop.hidden) { closeSettings(); return; }
       if (cardPop) cardPop.hidden = true;
       if (emojiPop) emojiPop.hidden = true;
@@ -1106,6 +1108,57 @@
         outTo: trSettings.outTo || siteDefaultLang || pageLang
       };
       settingsPop.textContent = '';
+      if (compact) {
+        // 快捷浮层：立即翻译输入内容 + 两个自动翻译开关 + 完整设置入口。
+        // 开关变化即时保存；autoIn 变化后跑一遍管道，把未翻的客服消息补上。
+        settingsPop.appendChild(Object.assign(document.createElement('button'), {
+          type: 'button', className: 'chat-tr-now',
+          textContent: t('chatTranslateNow', '翻译输入内容')
+        }));
+        var nowBtn = settingsPop.lastChild;
+        var quickRow = function (label, key, onChange) {
+          var row = document.createElement('label');
+          row.className = 'chat-tr-row';
+          var sw = document.createElement('input');
+          sw.type = 'checkbox';
+          sw.className = 'chat-switch';
+          sw.checked = trSettings[key];
+          sw.addEventListener('change', function () {
+            trSettings[key] = sw.checked;
+            saveTrSettings();
+            if (onChange) onChange();
+          });
+          row.appendChild(sw);
+          row.appendChild(document.createTextNode(label));
+          settingsPop.appendChild(row);
+        };
+        quickRow(t('chatTranslateAutoIn', '收到的消息自动翻译'), 'autoIn', autoTranslateAgentPass);
+        quickRow(t('chatTranslateAutoOut', '自动翻译我发送的消息'), 'autoOut', null);
+        nowBtn.addEventListener('click', function () {
+          var text = String((input && input.value) || '').trim();
+          if (!text || nowBtn.disabled) return;
+          nowBtn.disabled = true;
+          translateBatch([text], 'out', { from: trSettings.outFrom || '', to: trSettings.outTo || '' })
+            .then(function (data) {
+              if (input && !data.skipped) input.value = data.texts[0];
+              if (data.skipped) note(t('chatTranslateSame', '当前语言一致，无需翻译'));
+              else note(t('chatTranslated', '已翻译为对方语言'));
+            }).catch(function () {
+              note(t('chatTranslateFailed', '翻译失败，请稍后重试'));
+            }).then(function () { nowBtn.disabled = false; });
+        });
+        var link = document.createElement('button');
+        link.type = 'button';
+        link.className = 'chat-tr-more';
+        link.textContent = t('chatTranslateSettings', '翻译设置…');
+        // 外点监听按这个属性豁免入口按钮；没有它，click 冒泡到 document 会把刚打开的表单关掉
+        link.setAttribute('data-chat-translate-settings', '');
+        // openSettings 的 toggle 守卫会拦下「浮层开着时再调 openSettings」——先隐身再进完整表单
+        link.addEventListener('click', function () { settingsPop.hidden = true; openSettings(false); });
+        settingsPop.appendChild(link);
+        settingsPop.hidden = false;
+        return;
+      }
       var h = document.createElement('h3');
       h.textContent = t('chatTranslateSettings', '翻译设置');
       settingsPop.appendChild(h);
@@ -1204,7 +1257,7 @@
       trSettingsBtn.setAttribute('data-chat-translate-settings', '');
       trSettingsBtn.addEventListener('click', function () {
         morePop.hidden = true;
-        openSettings();
+        openSettings(false); // 菜单入口给完整设置表单；快捷开关在工具栏文A 浮层里
       });
       morePop.appendChild(trSettingsBtn);
     }
@@ -1264,9 +1317,9 @@
       var inMore = t && t.closest && t.closest('[data-chat-more]');
       if (emojiPop && !emojiPop.hidden && !emojiPop.contains(t) && !inEmoji) emojiPop.hidden = true;
       if (morePop && !morePop.hidden && !morePop.contains(t) && !inMore) morePop.hidden = true;
-      // 翻译设置：点外面就收（点自己的入口按钮不算外面）
+      // 翻译设置 / 翻译快捷浮层：点外面就收（文A 入口按钮与菜单里的设置项都不算外面）
       if (settingsPop && !settingsPop.hidden &&
-          !settingsPop.contains(t) && !(t && t.closest && t.closest('[data-chat-translate-settings]'))) settingsPop.hidden = true;
+          !settingsPop.contains(t) && !(t && t.closest && t.closest('[data-chat-translate-settings], [data-chat-translate]'))) settingsPop.hidden = true;
       // 下拉展开层点外面就收：卡片区内部的点击（点别的字段）也算外面
       if (cardPop && !cardPop.hidden) {
         Array.prototype.forEach.call(cardPop.querySelectorAll('.chat-card-drop'), function (d) {
