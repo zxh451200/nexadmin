@@ -211,7 +211,7 @@
       {{if .ProductNext}}<a class="dt-nav-item dt-next" href="{{.URL "/products"}}/{{.ProductNext.Slug}}"><small>{{.T "detail.next"}} →</small><span>{{.ProductNext.Title}}</span></a>{{else}}<span class="dt-nav-item dt-empty"></span>{{end}}
     </nav>
     {{end}}
-    <p class="pd-back"><a href="{{.URL "/products"}}">← {{.T "products.back"}}</a></p>
+    <p class="pd-back"><a href="{{.URL "/products"}}">{{.T "products.back"}}</a></p>
   </div>
 {{inquiryDialog $}}
 </article>
