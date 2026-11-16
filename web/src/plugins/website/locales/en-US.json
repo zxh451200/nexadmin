@@ -398,17 +398,9 @@
       "pullCategoryId": "Alibaba category ID (optional, helps fetch that category's rules)",
       "pullOk": "Pulled \"{{title}}\"",
       "pullFailed": "Pull failed",
-      "doctorButton": "Diagnose",
-      "doctorTitle": "Alibaba integration check",
-      "doctorDesc": "Reads the posting rules once with the real credentials: required fields, real options for logistics/unit/price type, and the schema.add parameter shape. Copy the report to the developer.",
-      "doctorCategoryId": "Alibaba leaf category ID",
-      "doctorProductId": "Alibaba product ID (optional: also read one existing product's values)",
-      "doctorProbeAdd": "Probe schema.add parameter shape (sends empty content; creates nothing)",
-      "doctorRun": "Run check",
-      "doctorCopy": "Copy report",
-      "doctorCopied": "Copied",
-      "doctorFailed": "Check failed",
-      "doctorNotes": "Notes"
+      "refreshStatus": "Refresh Ali status",
+      "refreshDone": "Review status refreshed: {{scanned}} scanned, {{updated}} updated",
+      "refreshFailed": "Failed to refresh review status, please try again later"
     },
     "port": {
       "Shanghai": "Shanghai",

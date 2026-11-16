@@ -255,16 +255,212 @@ func (s *Service) BindAliCategory(ctx context.Context, id idgen.ID, catID string
 }
 
 // markAliSync 回写同步结果：成功时写阿里商品 ID 与时间并清错误；失败写原因。
+// 成功标 pending 而不是 synced：阿里发品后有一段审核期，直接标「已发布」会与
+// 实际状态错位——审核结果由 RefreshAliReviewStatus 从阿里侧拉回后流转到 synced / rejected。
 func (s *Service) markAliSync(ctx context.Context, id idgen.ID, aliPID, errText string) error {
 	updates := map[string]any{"sync_status": ProductSyncFailed, "sync_error": trimLen(errText, 500)}
 	if aliPID != "" {
 		now := time.Now().UTC()
 		updates = map[string]any{
-			"sync_status": ProductSyncSynced, "alibaba_product_id": aliPID,
+			"sync_status": ProductSyncPending, "alibaba_product_id": aliPID,
 			"synced_at": &now, "sync_error": "",
 		}
 	}
 	return s.db.WithContext(ctx).Model(&Product{}).Where("id = ?", int64(id)).Updates(updates).Error
+}
+
+// mapAliProductStatus 把阿里侧的商品状态字串映射成本地同步状态；返回 ok=false 表示
+// 该字串不在已知集合里（保持原状，绝不因为认识不了的字串把商品改状态）。
+// 已知值取自阿里国际站的商品状态枚举的常见写法，多形态容错；真实凭据联调后再校准。
+func mapAliProductStatus(raw string) (string, bool) {
+	s := strings.ToLower(strings.TrimSpace(raw))
+	switch {
+	case s == "":
+		return "", false
+	case strings.Contains(s, "approv"), strings.Contains(s, "publish"),
+		strings.Contains(s, "online"), strings.Contains(s, "pass"):
+		return ProductSyncSynced, true
+	case strings.Contains(s, "audit"), strings.Contains(s, "review"),
+		strings.Contains(s, "check"), strings.Contains(s, "pend"), strings.Contains(s, "wait"):
+		return ProductSyncPending, true
+	case strings.Contains(s, "reject"), strings.Contains(s, "invalid"),
+		strings.Contains(s, "deny"), strings.Contains(s, "fail"):
+		return ProductSyncRejected, true
+	}
+	return "", false
+}
+
+// RefreshAliReviewStatus 从阿里侧刷新已发品商品的审核状态：调 product.list 分页拉回
+// 本店商品状态，按 alibaba_product_id 匹配回写 sync_status。只动 pending / synced /
+// rejected 三态的行——failed 的行得先重新发品，拉状态改变不了什么。
+// 返回（扫描的阿里商品行数、回写的本地条数）。
+func (s *Service) RefreshAliReviewStatus(ctx context.Context, baseURL string) (int, int, error) {
+	c, err := s.aliCredentials(ctx)
+	if err != nil {
+		return 0, 0, err
+	}
+	// 本地待刷新集合：aliPID → 商品 ID
+	rows, err := s.db.WithContext(ctx).Model(&Product{}).
+		Where("alibaba_product_id <> '' AND sync_status IN ?", []string{ProductSyncPending, ProductSyncSynced, ProductSyncRejected}).
+		Select("id, alibaba_product_id").Rows()
+	if err != nil {
+		return 0, 0, err
+	}
+	byAli := map[string]idgen.ID{}
+	var ids []idgen.ID
+	for rows.Next() {
+		var id idgen.ID
+		var aliPID string
+		if err := rows.Scan(&id, &aliPID); err != nil {
+			rows.Close()
+			return 0, 0, err
+		}
+		aliPID = strings.TrimSpace(aliPID)
+		if aliPID != "" && aliPID != "ok" {
+			byAli[aliPID] = id
+			ids = append(ids, id)
+		}
+	}
+	rows.Close()
+	if len(byAli) == 0 {
+		return 0, 0, nil
+	}
+
+	scanned := 0
+	updated := 0
+	// 分页拉回本店商品：最多 5 页（250 条），超出说明店铺规模远超演示形态，该走导出了
+	for page := int64(1); page <= 5; page++ {
+		res, err := aliCall(ctx, c, "alibaba.icbu.product.list", map[string]string{
+			"currentPage": strconv.FormatInt(page, 10),
+			"pageSize":    "50",
+		})
+		if err != nil {
+			return scanned, updated, err
+		}
+		list := aliProductStatusRows(res)
+		if len(list) == 0 {
+			break
+		}
+		scanned += len(list)
+		for _, it := range list {
+			id, hit := byAli[it.id]
+			if !hit {
+				continue
+			}
+			status, ok := mapAliProductStatus(it.status)
+			if !ok {
+				continue
+			}
+			res := s.db.WithContext(ctx).Model(&Product{}).Where("id = ?", int64(id)).
+				Update("sync_status", status)
+			if res.Error != nil {
+				return scanned, updated, res.Error
+			}
+			updated += int(res.RowsAffected)
+		}
+		if len(list) < 50 {
+			break
+		}
+	}
+	return scanned, updated, nil
+}
+
+// aliProductStatusRows 从 product.list 的响应里提取商品行的 id 与状态。
+// 阿里同一接口在不同文档版本下的包裹结构不一（result.products / result.list / 直接数组），
+// 多形态容错——自顶向下找第一个「元素同时带 id 与状态」的数组整组收下；
+// 真凭据联调时以网关原文为准校准。
+// aliStatusRow 是 product.list 提取出来的商品行：阿里商品 ID + 侧状态字串。
+type aliStatusRow struct{ id, status string }
+
+func aliProductStatusRows(res map[string]json.RawMessage) []aliStatusRow {
+	var out []aliStatusRow
+	found := false
+	var dig func(raw json.RawMessage)
+	dig = func(raw json.RawMessage) {
+		if found || len(raw) == 0 {
+			return
+		}
+		var v any
+		if json.Unmarshal(raw, &v) != nil {
+			return
+		}
+		switch x := v.(type) {
+		case []any:
+			ids, stats := 0, 0
+			for _, it := range x {
+				m, ok := it.(map[string]any)
+				if !ok {
+					continue
+				}
+				_, st := aliRowIDStatus(m)
+				if _, hasID := m["id"]; hasID {
+					ids++
+				}
+				if st != "" {
+					stats++
+				}
+			}
+			// 数组里多数元素都带 id 与状态：认定这就是商品行列表，整组收下
+			if len(x) > 0 && ids == len(x) && stats == len(x) {
+				for _, it := range x {
+					m, ok := it.(map[string]any)
+					if !ok {
+						continue
+					}
+					id, st := aliRowIDStatus(m)
+					if id != "" {
+						out = append(out, aliStatusRow{id, st})
+					}
+				}
+				found = true
+				return
+			}
+			for _, it := range x {
+				if m, ok := it.(map[string]any); ok {
+					if raw2, err := json.Marshal(m); err == nil {
+						dig(raw2)
+						if found {
+							return
+						}
+					}
+				}
+			}
+		case map[string]any:
+			for _, child := range x {
+				if raw2, err := json.Marshal(child); err == nil {
+					dig(raw2)
+					if found {
+						return
+					}
+				}
+			}
+		}
+	}
+	for _, key := range []string{"result", "data"} {
+		if raw, ok := res[key]; ok {
+			// methodToNode 的包裹（..._result）在 aliParse 里已剥，这里 result 一般即业务体
+			dig(raw)
+		}
+	}
+	return out
+}
+
+// aliRowIDStatus 从商品行里取 id 与状态：status 可能直接在行上，也可能包在 productStatusInfo 里。
+func aliRowIDStatus(m map[string]any) (string, string) {
+	id := ""
+	switch v := m["id"].(type) {
+	case string:
+		id = v
+	case float64:
+		id = strconv.FormatFloat(v, 'f', 0, 64)
+	}
+	status := ""
+	if v, ok := m["status"].(string); ok {
+		status = v
+	} else if psi, ok := m["productStatusInfo"].(map[string]any); ok {
+		status, _ = psi["status"].(string)
+	}
+	return id, status
 }
 
 // aliEnglish 取商品的英文母本内容（对齐阿里发品语言）：

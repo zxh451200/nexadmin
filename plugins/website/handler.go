@@ -878,19 +878,16 @@ func (h *handler) testAliConnection(c *gin.Context) {
 	respond(c, gin.H{"ok": true}, h.svc.TestAliConnection(c.Request.Context()))
 }
 
-// POST /plugins/website/ali/doctor —— 联调自检：用真实凭据打出一份报告（必填字段、关键枚举、
-// schema.add 入参形态、可选商品的 render 原始值），管理员直接把报告贴给开发者即可。
-func (h *handler) aliDoctor(c *gin.Context) {
-	var f struct {
-		CategoryID string `json:"categoryId"`
-		ProductID  string `json:"productId"`
-		ProbeAdd   bool   `json:"probeAdd"`
-	}
-	if !response.BindJSON(c, &f) {
+// POST /plugins/website/ali/refresh-status —— 从阿里刷新已发品商品的审核状态：
+// product.list 拉回本店商品状态，按 alibaba_product_id 回写 sync_status
+// （审核中 → pending、审核通过 → synced、不通过 → rejected）。
+func (h *handler) refreshAliStatus(c *gin.Context) {
+	scanned, updated, err := h.svc.RefreshAliReviewStatus(c.Request.Context(), baseURL(c))
+	if err != nil {
+		respond(c, gin.H{"scanned": scanned, "updated": updated}, err)
 		return
 	}
-	rep, err := h.svc.AliDoctor(c.Request.Context(), f.CategoryID, f.ProductID, f.ProbeAdd)
-	respond(c, rep, err)
+	respond(c, gin.H{"scanned": scanned, "updated": updated}, nil)
 }
 
 // GET /plugins/website/ali/categories?parentId=0 —— 阿里类目子级（带缓存）。

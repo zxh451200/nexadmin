@@ -1173,24 +1173,12 @@ export function useDeleteAliColumn() {
   })
 }
 
-/** 联调自检报告（后端 ali_doctor.go）：管理员原样复制给开发者即可。 */
-export interface AliDoctorReport {
-  categoryId: string
-  fieldCount: number
-  required: string[]
-  logistics: { value: string; displayName: string }[]
-  priceUnit: { value: string; displayName: string }[]
-  priceTypes: Record<string, { value: string; displayName: string }[]>
-  renderSample?: Record<string, string>
-  addShape: string
-  addErrors?: Record<string, string>
-  notes: string[]
-}
-
-export function useAliDoctor() {
+/** 从阿里刷新已发品商品的审核状态：product.list 拉回状态按 alibaba_product_id 回写 sync_status。 */
+export function useRefreshAliStatus() {
+  const qc = useQueryClient()
   return useMutation({
-    mutationFn: (body: { categoryId: string; productId?: string; probeAdd?: boolean }) =>
-      api.post<AliDoctorReport>(`${BASE}/ali/doctor`, body, { silent: true }),
+    mutationFn: () => api.post<{ scanned: number; updated: number }>(`${BASE}/ali/refresh-status`, undefined, { silent: true }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: [...KEY, 'products'] }),
   })
 }
 

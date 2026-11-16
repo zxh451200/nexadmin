@@ -398,17 +398,9 @@
       "pullCategoryId": "阿里类目 ID（可选，便于取该类目的规则）",
       "pullOk": "已拉取「{{title}}」",
       "pullFailed": "拉取失败",
-      "doctorButton": "联调自检",
-      "doctorTitle": "阿里联调自检",
-      "doctorDesc": "用真实凭据读一次发品规则：必填字段、物流属性/单位/价格类型的真实选项、schema.add 的入参形态。报告可直接复制给开发者。",
-      "doctorCategoryId": "阿里叶子类目 ID",
-      "doctorProductId": "阿里商品 ID（可选：额外读一次已有商品的值）",
-      "doctorProbeAdd": "探测 schema.add 入参形态（发一次空内容，不会创建商品）",
-      "doctorRun": "开始自检",
-      "doctorCopy": "复制报告",
-      "doctorCopied": "已复制",
-      "doctorFailed": "自检失败",
-      "doctorNotes": "备注"
+      "refreshStatus": "刷新阿里状态",
+      "refreshDone": "已刷新审核状态：扫描 {{scanned}} 个，更新 {{updated}} 条",
+      "refreshFailed": "刷新审核状态失败，请稍后重试"
     },
     "port": {
       "Shanghai": "上海",

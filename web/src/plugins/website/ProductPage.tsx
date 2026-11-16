@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { CircleAlert, CircleCheck, CloudDownload, CloudUpload, Copy, Download, ExternalLink, Eye, FileUp, Pencil, Plus, Settings2, Star, Trash2, X } from 'lucide-react'
+import { CircleAlert, CircleCheck, CloudDownload, CloudUpload, Copy, Download, ExternalLink, Eye, FileUp, Pencil, Plus, RefreshCw, Settings2, Star, Trash2, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -58,9 +58,9 @@ import {
   PRODUCT_ALI_IMPORT_SOURCE,
   PRODUCT_IMPORT_SOURCE,
   useAliColumns,
-  useAliDoctor,
   useDeleteAliColumn,
   useSaveAliColumn,
+  useRefreshAliStatus,
   usePullAliProduct,
   type AliColumn,
   translateContent,
@@ -879,7 +879,6 @@ function AliConfigDialog({ onOpenChange }: { onOpenChange: (v: boolean) => void 
   const [sessionKey, setSessionKey] = useState('')
   const [apiGateway, setApiGateway] = useState('')
   const [testState, setTestState] = useState<'idle' | 'testing' | 'ok' | 'fail'>('idle')
-  const [doctorOpen, setDoctorOpen] = useState(false)
   // 配置到货时回填非敏感字段一次（后续用户编辑不覆盖）。
   const [loaded, setLoaded] = useState<string>('')
   if (config && loaded !== config.appKey) {
@@ -999,13 +998,6 @@ function AliConfigDialog({ onOpenChange }: { onOpenChange: (v: boolean) => void 
               >
                 {testState === 'testing' ? t('common.loading') : t('plugin_website.ali.test')}
               </Button>
-              <Button
-                variant="outline"
-                onClick={() => setDoctorOpen(true)}
-                className="h-10 shrink-0 px-3 md:h-8"
-              >
-                {t('plugin_website.ali.doctorButton')}
-              </Button>
             </div>
             {testState === 'ok' ? (
               <p className="flex items-center gap-1.5 text-xs text-success">
@@ -1027,7 +1019,6 @@ function AliConfigDialog({ onOpenChange }: { onOpenChange: (v: boolean) => void 
         </FormSection>
       </div>
     </ResponsiveDialog>
-    {doctorOpen ? <AliDoctorDialog onOpenChange={setDoctorOpen} /> : null}
     </>
   )
 }
@@ -1336,68 +1327,6 @@ export interface AliSyncTarget {
   mode: 'single' | 'batch'
   product?: SiteProduct
   ids?: string[]
-}
-
-/** 联调自检：读一次真实规则并生成报告，管理员复制报告即可，不需要懂 schema。 */
-function AliDoctorDialog({ onOpenChange }: { onOpenChange: (v: boolean) => void }) {
-  const { t } = useTranslation()
-  const doctor = useAliDoctor()
-  const [categoryId, setCategoryId] = useState('')
-  const [productId, setProductId] = useState('')
-  const [probeAdd, setProbeAdd] = useState(false)
-  const [report, setReport] = useState<string>('')
-  const run = async () => {
-    try {
-      const r = await doctor.mutateAsync({ categoryId: categoryId.trim(), productId: productId.trim() || undefined, probeAdd })
-      setReport(JSON.stringify(r, null, 2))
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : t('plugin_website.ali.doctorFailed'))
-    }
-  }
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(report)
-      toast.success(t('plugin_website.ali.doctorCopied'))
-    } catch {
-      toast.error(t('common.operateFailed'))
-    }
-  }
-  return (
-    <ResponsiveDialog
-      open
-      onOpenChange={onOpenChange}
-      size="lg"
-      title={t('plugin_website.ali.doctorTitle')}
-      description={t('plugin_website.ali.doctorDesc')}
-      footer={
-        <>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.close')}</Button>
-          {report ? <Button variant="outline" onClick={() => void copy()}>{t('plugin_website.ali.doctorCopy')}</Button> : null}
-          <Button onClick={() => void run()} disabled={!categoryId.trim() || doctor.isPending}>
-            {doctor.isPending ? t('common.loading') : t('plugin_website.ali.doctorRun')}
-          </Button>
-        </>
-      }
-    >
-      <div className="flex flex-col gap-3 text-sm">
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="ali-doctor-cat">{t('plugin_website.ali.doctorCategoryId')}</Label>
-          <Input id="ali-doctor-cat" value={categoryId} onChange={(e) => setCategoryId(e.target.value)} placeholder="201274203" autoComplete="off" />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="ali-doctor-pid">{t('plugin_website.ali.doctorProductId')}</Label>
-          <Input id="ali-doctor-pid" value={productId} onChange={(e) => setProductId(e.target.value)} placeholder="1600999000001" autoComplete="off" />
-        </div>
-        <label className="flex items-start gap-2 text-xs text-muted-foreground">
-          <input type="checkbox" className="mt-0.5 size-4 accent-[hsl(var(--primary))]" checked={probeAdd} onChange={(e) => setProbeAdd(e.target.checked)} />
-          {t('plugin_website.ali.doctorProbeAdd')}
-        </label>
-        {report ? (
-          <pre className="max-h-80 overflow-auto rounded-md bg-muted p-2 text-[11px] leading-relaxed">{report}</pre>
-        ) : null}
-      </div>
-    </ResponsiveDialog>
-  )
 }
 
 /** 从阿里拉取：输入阿里商品 ID（可选类目 ID），本地已有则更新、没有则新建草稿。 */
@@ -1712,8 +1641,7 @@ export default function ProductPage() {
   const { data: aliConfig } = useAliConfig()
   const [aliOpen, setAliOpen] = useState(false)
   const [pullOpen, setPullOpen] = useState(false)
-  const [reviewsOf, setReviewsOf] = useState<SiteProduct | null>(null)
-  // 列表缩略图点开看大图：记整行，弹窗同时用 coverUrl 和标题。
+  const [reviewsOf, setReviewsOf] = useState<SiteProduct | null>(null)  // 列表缩略图点开看大图：记整行，弹窗同时用 coverUrl 和标题。
   const [preview, setPreview] = useState<SiteProduct | null>(null)
 
   const openAt = (row: SiteProduct | null, code?: string) => {
@@ -1770,6 +1698,17 @@ export default function ProductPage() {
       toast.success(t('plugin_website.product.copied', { slug: fresh.slug }))
     } catch {
       // 服务端原因由 http 拦截器统一弹出，这里再补一条「操作失败」就是同一件事说两遍
+    }
+  }
+
+  // 从阿里拉一轮发品审核状态回写（审核中 / 通过 / 不通过），「审核」页签靠它出内容
+  const refreshStatus = useRefreshAliStatus()
+  const onRefreshAliStatus = async () => {
+    try {
+      const r = await refreshStatus.mutateAsync()
+      toast.success(t('plugin_website.ali.refreshDone', { scanned: r.scanned, updated: r.updated }))
+    } catch {
+      toast.error(t('plugin_website.ali.refreshFailed'))
     }
   }
 
@@ -2021,6 +1960,15 @@ export default function ProductPage() {
             <Button variant="outline" onClick={() => setPullOpen(true)}>
               <CloudDownload className="me-2 size-4" aria-hidden="true" />
               {t('plugin_website.ali.pullButton')}
+            </Button>
+            {/* 审核状态不随发品自动到位（阿里有审核期）：按钮主动从阿里拉一轮状态回写 */}
+            <Button
+              variant="outline"
+              onClick={() => void onRefreshAliStatus()}
+              disabled={refreshStatus.isPending}
+            >
+              <RefreshCw className="me-2 size-4" aria-hidden="true" />
+              {refreshStatus.isPending ? t('common.loading') : t('plugin_website.ali.refreshStatus')}
             </Button>
             <Button variant="outline" onClick={() => void onExportAli()} disabled={exportingAli}>
               <Download className="me-2 size-4" aria-hidden="true" />

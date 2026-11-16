@@ -186,7 +186,7 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.GET("/ali-config", core.Perm("website:setting"), core.Desc("读取阿里开放平台凭据"), h.getAliConfig)
 	g.PUT("/ali-config", core.Perm("website:setting"), core.Desc("保存阿里开放平台凭据"), h.saveAliConfig)
 	g.POST("/ali/test", core.Perm("website:setting"), core.Desc("阿里开放平台连接测试"), h.testAliConnection)
-	g.POST("/ali/doctor", core.Perm("website:setting"), core.Desc("阿里联调自检（打开发品规则与入参形态）"), h.aliDoctor)
+	g.POST("/ali/refresh-status", core.Perm("website:product"), core.Desc("从阿里刷新发品审核状态"), h.refreshAliStatus)
 	g.GET("/ali/categories", core.Perm("website:product"), core.Desc("阿里类目子级"), h.listAliCategories)
 	g.GET("/ali-columns", core.Perm("website:product"), core.Desc("阿里模板列名映射清单"), h.listAliColumns)
 	g.POST("/ali-columns", core.Perm("website:setting"), core.Desc("新增阿里模板列映射"), h.createAliColumn)

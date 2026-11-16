@@ -369,6 +369,8 @@ const (
 	ProductSyncPending = "pending" // 已提交同步，待确认
 	ProductSyncSynced  = "synced"  // 已发布到阿里
 	ProductSyncFailed  = "failed"  // 上次同步失败
+	// ProductSyncRejected 是阿里侧审核不通过：由「刷新阿里状态」从 product.list 回写。
+	ProductSyncRejected = "rejected"
 )
 
 // ProductCategory 是产品类目：对标阿里的「商品分组」，但支持最多 3 级树形层级。
