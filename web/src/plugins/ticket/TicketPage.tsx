@@ -492,6 +492,14 @@ export default function TicketPage() {
     setChecked((prev) => (on ? (prev.includes(no) ? prev : [...prev, no]) : prev.filter((x) => x !== no)))
   }
 
+  // 全选作用域是当前页：批量条 / 列表勾选框只对着本页加载出来的工单，跨页凑一起容易误操作
+  const pageNos = list.map((tk) => tk.ticketNo)
+  const pageCheckedCount = pageNos.filter((no) => checked.includes(no)).length
+  const pageAllChecked = list.length > 0 && pageCheckedCount === list.length
+  const togglePageAll = (on: boolean) => {
+    setChecked((prev) => (on ? [...new Set([...prev, ...pageNos])] : prev.filter((x) => !pageNos.includes(x))))
+  }
+
   const onSend = async (content: string, internal: boolean) => {
     if (!selectedNo) return
     try {
@@ -1426,7 +1434,18 @@ export default function TicketPage() {
               </div>
 
               <div className="flex items-center justify-between gap-2 border-t pt-2 text-xs text-muted-foreground">
-                <span>{t('dataTable.totalCount', { count: total })}</span>
+                <div className="flex items-center gap-2">
+                  <label className="flex items-center gap-2">
+                    <Checkbox
+                      checked={pageAllChecked ? true : pageCheckedCount > 0 ? 'indeterminate' : false}
+                      onCheckedChange={(v) => togglePageAll(v === true)}
+                      aria-label={t('common.selectAll')}
+                      disabled={list.length === 0}
+                    />
+                    {t('common.selectAll')}
+                  </label>
+                  <span>{t('dataTable.totalCount', { count: total })}</span>
+                </div>
                 <div className="flex items-center gap-1">
                   <Button
                     variant="ghost"
