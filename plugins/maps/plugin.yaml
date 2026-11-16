@@ -1,7 +1,7 @@
 id: maps
 name: 地图服务
 version: 0.1.0
-description: 免费基础地图插件：高德 / 百度 / 谷歌，三家按需启用；地图选点在前端，逆地理编码走后端代理（服务端 Key 不下发）。
+description: 免费基础地图插件：高德 / 百度 / 谷歌按需启用，OpenStreetMap 免 Key 开箱即用；地图选点在前端，逆地理编码走后端代理（服务端 Key 不下发）。
 author: NexAdmin
 edition: free
 requires_nexadmin: ">=0.1.0"

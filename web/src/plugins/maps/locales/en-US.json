@@ -2,15 +2,16 @@
   "plugin_maps": {
     "menu": "Maps",
     "title": "Map service",
-    "desc": "Free basic map plugin: enable AMap, Baidu or Google as needed. Picking runs in the browser; reverse geocoding goes through the server proxy.",
+    "desc": "Free basic map plugin: enable AMap, Baidu or Google as needed; OpenStreetMap works out of the box without any key. Picking runs in the browser; reverse geocoding goes through the server proxy.",
     "configTitle": "Provider keys",
-    "configDesc": "Fill in the providers you enable. Server keys stay on the backend; the API only reports whether one exists.",
+    "configDesc": "Fill in the providers you enable. Server keys stay on the backend; the API only reports whether one exists. OpenStreetMap needs no key at all.",
     "enabledTag": "Enabled",
     "keySaved": "Saved — leave blank to keep",
     "providers": {
       "amap": "AMap",
       "baidu": "Baidu Maps",
-      "google": "Google Maps"
+      "google": "Google Maps",
+      "osm": "OpenStreetMap (free)"
     },
     "keys": {
       "amapPublic": "JS API key (web)",
@@ -21,7 +22,8 @@
       "baiduHint": "Baidu console: apply for a browser AK and a server AK; enable reverse geocoding for the server AK.",
       "googlePublic": "API key",
       "googleServer": "Server key (blank = same)",
-      "googleHint": "Google Cloud: enable Maps JavaScript API and Geocoding API. Maps usually fail to load in mainland China; intended for overseas deployments."
+      "googleHint": "Google Cloud: enable Maps JavaScript API and Geocoding API. Maps usually fail to load in mainland China; intended for overseas deployments.",
+      "osmHint": "Completely free, no key required: Leaflet + OSM tiles in the browser, search and reverse geocoding via the Nominatim public service. Slower in mainland China and thinner Chinese POI coverage than AMap/Baidu — good as a fallback and for overseas use; swap in a self-hosted endpoint under heavy load."
     },
     "demoTitle": "Picker test",
     "demoDesc": "Pick an enabled provider, click the map or drag the marker, then confirm. The coordinate system follows the provider (gcj02 / bd09 / wgs84).",
@@ -31,6 +33,8 @@
     "searchNoResults": "No matching places. Try different keywords.",
     "searchFailed": "Search failed. Please try again later.",
     "notConfigured": "This provider is disabled or missing its browser key. Save the keys and reopen.",
+    "osmDisabled": "OpenStreetMap is disabled. It needs no key at all — turn on the switch above and save to start picking.",
+    "osmLoadFailed": "Failed to load OpenStreetMap tiles. The official servers can be slow or unreachable from mainland China; retry later or self-host a tile server.",
     "googleLoadFailed": "Failed to load the Google Maps script. Networks in mainland China usually cannot reach it directly.",
     "googleGlobalMissing": "The Google Maps script loaded but its global object is missing. Check that the key allows this domain.",
     "clickHint": "Click the map to pick a location",

@@ -16,9 +16,10 @@ const EMPTY: MapsConfigInput = {
   amap: { enabled: false, publicKey: '', serverKey: '' },
   baidu: { enabled: false, publicKey: '', serverKey: '' },
   google: { enabled: false, publicKey: '', serverKey: '' },
+  osm: { enabled: false, publicKey: '', serverKey: '' },
 }
 
-const ORDER: MapProviderId[] = ['amap', 'baidu', 'google']
+const ORDER: MapProviderId[] = ['amap', 'baidu', 'google', 'osm']
 
 /** 地图服务：作为「系统设置 → 存储与集成」的一个分区渲染，旧地址 /system/map 重定向到 ?tab=maps。 */
 export function MapSection() {
@@ -36,6 +37,8 @@ export function MapSection() {
       amap: { enabled: cfg.data.amap.enabled, publicKey: cfg.data.amap.publicKey, serverKey: '' },
       baidu: { enabled: cfg.data.baidu.enabled, publicKey: cfg.data.baidu.publicKey, serverKey: '' },
       google: { enabled: cfg.data.google.enabled, publicKey: cfg.data.google.publicKey, serverKey: '' },
+      // 旧后端响应里没有 osm 字段（滚动升级期）：缺省当未启用，别让设置页崩掉
+      osm: { enabled: cfg.data.osm?.enabled ?? false, publicKey: '', serverKey: '' },
     })
   }, [cfg.data])
 
@@ -71,23 +74,26 @@ export function MapSection() {
                   </div>
                   <Switch checked={form[id].enabled} onCheckedChange={(v) => patch(id, { enabled: v })} aria-label={t(`plugin_maps.providers.${id}`)} />
                 </div>
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <div className="flex flex-col gap-1.5">
-                    <Label htmlFor={`${id}-public`}>{t(`plugin_maps.keys.${id}Public`)}</Label>
-                    <Input id={`${id}-public`} value={form[id].publicKey} onChange={(e) => patch(id, { publicKey: e.target.value })} />
+                {/* OSM 免 Key：只渲染开关与说明，不出 Key 输入行 */}
+                {id !== 'osm' ? (
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor={`${id}-public`}>{t(`plugin_maps.keys.${id}Public`)}</Label>
+                      <Input id={`${id}-public`} value={form[id].publicKey} onChange={(e) => patch(id, { publicKey: e.target.value })} />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor={`${id}-server`}>{t(`plugin_maps.keys.${id}Server`)}</Label>
+                      <Input
+                        id={`${id}-server`}
+                        type="password"
+                        autoComplete="new-password"
+                        value={form[id].serverKey}
+                        placeholder={pv?.hasServerKey ? t('plugin_maps.keySaved') : ''}
+                        onChange={(e) => patch(id, { serverKey: e.target.value })}
+                      />
+                    </div>
                   </div>
-                  <div className="flex flex-col gap-1.5">
-                    <Label htmlFor={`${id}-server`}>{t(`plugin_maps.keys.${id}Server`)}</Label>
-                    <Input
-                      id={`${id}-server`}
-                      type="password"
-                      autoComplete="new-password"
-                      value={form[id].serverKey}
-                      placeholder={pv?.hasServerKey ? t('plugin_maps.keySaved') : ''}
-                      onChange={(e) => patch(id, { serverKey: e.target.value })}
-                    />
-                  </div>
-                </div>
+                ) : null}
                 <p className="text-xs text-muted-foreground">{t(`plugin_maps.keys.${id}Hint`)}</p>
               </section>
             )

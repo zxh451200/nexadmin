@@ -1,4 +1,4 @@
-// Package maps 是免费基础地图 provider 插件：一家厂商一个适配器（高德 / 百度 / 谷歌），
+// Package maps 是免费基础地图 provider 插件：一家厂商一个适配器（高德 / 百度 / 谷歌 / OpenStreetMap），
 // 前端按配置注册地图选点组件，逆地理编码统一走本插件代理（服务端 Key 不下发浏览器）。
 package maps
 

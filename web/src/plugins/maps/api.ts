@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/framework/request/http'
 
-export type MapProviderId = 'amap' | 'baidu' | 'google'
+export type MapProviderId = 'amap' | 'baidu' | 'google' | 'osm'
 
 export interface ProviderView {
   enabled: boolean

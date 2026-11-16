@@ -7,7 +7,7 @@ import { searchPlaces, type MapPlace, type MapProviderId } from './api'
 
 /**
  * 选点地图的关键字搜索框：关键词 → 后端 POI 代理 → 结果列表。
- * 三家 picker 共用；坐标是厂商原生坐标系，直接落到同厂商地图上。
+ * 各家 picker 共用；坐标是厂商原生坐标系，直接落到同厂商地图上。
  */
 export function PickerSearch({
   provider,
