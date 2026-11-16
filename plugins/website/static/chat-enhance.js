@@ -48,6 +48,28 @@
     '.chat-more-pop button:hover{background:rgba(128,128,128,.14)}',
     '.chat-msg-translate{margin:2px 0 0;padding:0;border:0;background:transparent;color:inherit;font-size:10.5px;text-decoration:underline;cursor:pointer;opacity:.65}',
     '.chat-msg-translate:hover{opacity:1}',
+    // 翻译设置弹层：对齐阿里聊天窗口的「翻译设置」——收到/发送两组开关各带语言选择。
+    // 位置挂在头部下沿（同 more 菜单的 --chat-head-h 口径），配色沿用 Canvas/currentColor。
+    '.chat-settings-pop{position:absolute;z-index:22;inset-inline-end:10px;inset-block-start:calc(var(--chat-head-h,86px) + 4px);box-sizing:border-box;width:min(320px,calc(100% - 16px));padding:14px;border:1px solid rgba(128,128,128,.28);border-radius:8px;background:Canvas;color:CanvasText;box-shadow:0 16px 38px rgba(0,0,0,.22);font-size:12px}',
+    '.chat-settings-pop[hidden]{display:none}',
+    '.chat-settings-pop h3{margin:0 0 10px;font-size:13.5px;font-weight:600}',
+    '.chat-settings-row{display:flex;align-items:center;justify-content:space-between;gap:8px}',
+    '.chat-settings-row strong{font-size:12.5px;font-weight:600}',
+    // 开关用原生 checkbox 拟态：键盘可达，无需脚本画状态；选中色随主题变量
+    '.chat-switch{position:relative;width:36px;height:20px;flex:none;appearance:none;-webkit-appearance:none;margin:0;border:1px solid rgba(128,128,128,.4);border-radius:10px;background:rgba(128,128,128,.22);cursor:pointer;transition:background .15s ease,border-color .15s ease}',
+    '.chat-switch::after{content:"";position:absolute;top:2px;inset-inline-start:2px;width:14px;height:14px;border-radius:50%;background:Canvas;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:inset-inline-start .15s ease}',
+    '.chat-switch:checked{background:var(--pc-accent,CanvasText);border-color:transparent}',
+    '.chat-switch:checked::after{inset-inline-start:18px}',
+    '.chat-settings-fields{display:flex;align-items:center;gap:8px;margin:9px 0 2px}',
+    '.chat-settings-fields span{flex:none;opacity:.72}',
+    '.chat-settings-pop select{box-sizing:border-box;flex:1;min-width:0;height:30px;padding:0 6px;border:1px solid rgba(128,128,128,.34);border-radius:4px;background:transparent;color:inherit;font:inherit;font-size:12.5px}',
+    '.chat-settings-pop select:focus{outline:none;border-color:rgba(128,128,128,.72)}',
+    '.chat-settings-hint{margin:6px 0 13px;font-size:11px;line-height:1.5;opacity:.6}',
+    '.chat-settings-actions{display:flex;justify-content:flex-end;margin-top:2px}',
+    '.chat-settings-actions button{height:32px;padding:0 14px;border:1px solid rgba(128,128,128,.36);border-radius:4px;background:transparent;color:inherit;font:inherit;font-size:12.5px;cursor:pointer}',
+    '.chat-settings-actions button:hover{border-color:currentColor}',
+    '.chat-settings-actions .is-primary{border-color:transparent;background:var(--pc-accent,CanvasText);color:Canvas;font-weight:600}',
+    '.chat-settings-actions .is-primary:hover{filter:brightness(1.08);border-color:transparent}',
     '.chat-compose textarea{resize:vertical;max-height:220px}',
     '.chat-card-pop{position:absolute;z-index:22;inset-inline-start:8px;inset-block-end:96px;box-sizing:border-box;width:min(300px,calc(100% - 16px));padding:14px 14px 12px;border:1px solid rgba(128,128,128,.28);border-radius:8px;background:Canvas;color:CanvasText;box-shadow:0 16px 38px rgba(0,0,0,.22);font-size:12px}',
     '.chat-card-pop[hidden]{display:none}',
@@ -154,6 +176,25 @@
     return /^en/i.test(String(document.documentElement.lang || ''));
   }
 
+  // 城市级联数据（static/cities/<ISO2>.json，GeoNames CC BY 4.0，来源见功能与权限清单）：
+  // 国家 → 州省 → 城市 三级。城市按国家拆文件按需拉取；404 = 该国没有城市数据，
+  // 返回 null，城市字段退回手写输入。
+  var CITY_CACHE = {};
+  var CITY_REQ = {};
+  function loadCities(code) {
+    if (code in CITY_CACHE) return Promise.resolve(CITY_CACHE[code]);
+    if (!CITY_REQ[code]) {
+      CITY_REQ[code] = fetch('/website-assets/cities/' + code + '.json', { credentials: 'same-origin' })
+        .then(function (res) {
+          if (!res.ok) throw new Error('unavailable');
+          return res.json();
+        })
+        .then(function (data) { CITY_CACHE[code] = data && typeof data === 'object' ? data : null; return CITY_CACHE[code]; })
+        .catch(function () { CITY_CACHE[code] = null; CITY_REQ[code] = null; return null; });
+    }
+    return CITY_REQ[code];
+  }
+
   function readI18n() {
     try {
       var el = document.getElementById('site-i18n');
@@ -196,21 +237,79 @@
     var agentTime = root.querySelector('[data-chat-agent-time]');
     var chatTitle = root.querySelector('#chat-title');
 
-    var state = { product: null, sent: false, timezone: '', expanded: false };
+    var state = { product: null, sent: false, timezone: '', expanded: false, outDone: false, trFailUntil: 0 };
 
-    // ---- 翻译：方向由后端按站点默认语言与当前页面语言决定 ----
-    function translate(text, dir) {
+    // ---- 翻译：设置（阿里式「翻译设置」）+ 批量客户端 + 本地缓存 ----
+    // 站点语言清单由页面 #site-langs 下发（Go 侧只认清单内的语言码），前端不自带名单。
+    var LANGS = (function () {
+      try {
+        var el = document.getElementById('site-langs');
+        var list = el ? JSON.parse(el.textContent || '[]') : [];
+        return Array.isArray(list) ? list : [];
+      } catch (e) { return []; }
+    })();
+    var pageLang = String(document.documentElement.lang || '');
+    if (!pageLang && LANGS.length) pageLang = LANGS[0].c;
+    var siteDefaultLang = '';
+    for (var li = 0; li < LANGS.length; li++) {
+      if (LANGS[li].d) { siteDefaultLang = LANGS[li].c; break; }
+    }
+    if (!siteDefaultLang && LANGS.length) siteDefaultLang = LANGS[0].c;
+
+    // 翻译设置持久化在访客侧 localStorage：autoIn/inTo 对应「收到的消息」，
+    // autoOut/outFrom/outTo 对应「发送的消息」，空值回退页面语言与站点默认语言。
+    var trSettings = (function () {
+      var s = {};
+      try { s = JSON.parse(localStorage.getItem('nexchat.translate') || '{}') || {}; } catch (e) { /* 隐私模式忽略 */ }
+      return {
+        autoIn: !!s.autoIn,
+        inTo: String(s.inTo || ''),
+        autoOut: !!s.autoOut,
+        outFrom: String(s.outFrom || ''),
+        outTo: String(s.outTo || '')
+      };
+    })();
+    function saveTrSettings() {
+      try { localStorage.setItem('nexchat.translate', JSON.stringify(trSettings)); } catch (e) { /* 隐私模式忽略 */ }
+    }
+    function curInTo() { return trSettings.inTo || pageLang; }
+
+    // 译文缓存：历史消息每次开面板都重渲染，靠缓存避免重复烧限流额度（10 次/分/IP）。
+    var trCache = (function () {
+      try { return JSON.parse(localStorage.getItem('nexchat.tr.cache') || '{}') || {}; } catch (e) { return {}; }
+    })();
+    var trCacheDirty = false;
+    function trKey(dir, to, text) { return dir + '|' + to + '|' + text; }
+    function trCachePut(key, val) {
+      var keys = Object.keys(trCache);
+      if (keys.length >= 200) delete trCache[keys[0]]; // 简单 FIFO，缓存只求省额度不求命中率高
+      trCache[key] = val;
+      trCacheDirty = true;
+    }
+    function trCacheFlush() {
+      if (!trCacheDirty) return;
+      try { localStorage.setItem('nexchat.tr.cache', JSON.stringify(trCache)); } catch (e) { /* 超配额就放弃 */ }
+      trCacheDirty = false;
+    }
+    // 批量翻完不等下一次操作：离开页面时也落盘，重开面板直接命中缓存
+    window.addEventListener('pagehide', trCacheFlush);
+
+    // 批量机翻：一次请求带 ≤20 条文本，dir 决定默认方向，from/to 是翻译设置的显式覆盖。
+    function translateBatch(texts, dir, opts) {
       return fetch('/website/visitor/translate', {
         method: 'POST', credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ text: text, dir: dir, lang: document.documentElement.lang || '' })
+        body: JSON.stringify({
+          texts: texts, dir: dir, lang: document.documentElement.lang || '',
+          from: (opts && opts.from) || '', to: (opts && opts.to) || ''
+        })
       }).then(function (res) {
         if (res.status === 429) throw new Error('rate');
         if (!res.ok) throw new Error('unavailable');
         return res.json().catch(function () { return {}; });
       }).then(function (body) {
         var data = body && body.data;
-        if (!data || typeof data.text !== 'string') throw new Error('bad');
+        if (!data || !Array.isArray(data.texts) || data.texts.length !== texts.length) throw new Error('bad');
         return data;
       });
     }
@@ -227,17 +326,78 @@
         var text = String((input && input.value) || '').trim();
         if (!text || translateBtn.disabled) return;
         translateBtn.disabled = true;
-        translate(text, 'out').then(function (data) {
-          if (input && !data.skipped) input.value = data.text;
-          if (data.skipped) note(t('chatTranslateSame', '当前语言一致，无需翻译'));
-          else note(t('chatTranslated', '已翻译为对方语言'));
-        }).catch(function () {
-          note(t('chatTranslateFailed', '翻译失败，请稍后重试'));
-        }).then(function () { translateBtn.disabled = false; });
+        translateBatch([text], 'out', { from: trSettings.outFrom || '', to: trSettings.outTo || '' })
+          .then(function (data) {
+            if (input && !data.skipped) input.value = data.texts[0];
+            if (data.skipped) note(t('chatTranslateSame', '当前语言一致，无需翻译'));
+            else note(t('chatTranslated', '已翻译为对方语言'));
+          }).catch(function () {
+            note(t('chatTranslateFailed', '翻译失败，请稍后重试'));
+          }).then(function () { translateBtn.disabled = false; });
       });
     }
 
-    // ---- 收到的客服消息：气泡下挂「翻译」按钮，可来回切换原文/译文 ----
+    // ---- 收到的客服消息：气泡下挂「翻译」按钮（手动），开启设置后自动整批翻译 ----
+    // 把气泡换成译文并记录原文：手动按钮负责「查看原文 ↔ 译文」来回切。
+    function markTranslated(bubble, btn, source, translated, to) {
+      bubble.textContent = translated;
+      btn.setAttribute('data-src', source);
+      btn.setAttribute('data-tr-to', to || curInTo());
+      btn.textContent = t('chatTranslateOriginal', '查看原文');
+      btn.setAttribute('data-done', '1');
+    }
+    // 自动翻译管道：收集未译的客服气泡 → 命中缓存的直接换 → 余下的按 20 条一批
+    // 调批量接口（匿名限流 10 次/分/IP，逐条翻 50 条历史必撞限）。失败提示后本轮停止，
+    // 不自动重试——按钮还在，访客可手动重试。
+    function autoTranslateAgentPass() {
+      if (!log || !trSettings.autoIn) return;
+      // 失败冷却：失败提示（note）追加进消息区会再触发 MutationObserver，
+      // 没有冷却就是「失败→提示→重跑→再失败」的自旋，直到撞限流（实测过）。
+      if (Date.now() < state.trFailUntil) return;
+      var pending = [];
+      Array.prototype.forEach.call(log.querySelectorAll('.chat-msg[data-from="agent"]'), function (row) {
+        var btn = row.querySelector('[data-chat-translate-msg]');
+        var bubble = row.querySelector('.chat-bubble');
+        if (!btn || !bubble || btn.getAttribute('data-done') === '1') return;
+        var to = curInTo();
+        if (btn.getAttribute('data-tr-to') === to) return; // 这个目标语言已经处理过
+        var source = String(bubble.textContent || '').trim();
+        if (!source) return;
+        // 带图片/附件/知识库来源的结构化气泡不自动翻：翻译会吃掉文件名与来源条目
+        if (bubble.querySelector('.chat-image, .chat-file, .chat-sources')) return;
+        var cached = trCache[trKey('in', to, source)];
+        if (cached) {
+          markTranslated(bubble, btn, source, cached, to);
+          return;
+        }
+        btn.setAttribute('data-tr-to', to); // 先占位，批内失败再放开，避免同一轮重复入队
+        pending.push({ bubble: bubble, btn: btn, source: source, to: to });
+      });
+      if (!pending.length) return;
+      var stopped = false;
+      function next() {
+        if (stopped || !pending.length) { trCacheFlush(); return; }
+        var chunk = pending.splice(0, 20);
+        translateBatch(chunk.map(function (p) { return p.source; }), 'in', { to: curInTo() })
+          .then(function (data) {
+            if (data.skipped) return; // 同语言无需翻：占位已标记，本轮跳过即可
+            data.texts.forEach(function (tr, i) {
+              var p = chunk[i];
+              if (!p) return;
+              trCachePut(trKey('in', data.to, p.source), tr);
+              markTranslated(p.bubble, p.btn, p.source, tr, data.to);
+            });
+          })
+          .catch(function () {
+            stopped = true;
+            chunk.forEach(function (p) { p.btn.removeAttribute('data-tr-to'); });
+            state.trFailUntil = Date.now() + 30000; // 冷却 30 秒，期间不再自动重试
+            note(t('chatTranslateFailed', '翻译失败，请稍后重试'));
+          })
+          .then(next);
+      }
+      next();
+    }
     function decorateMessages() {
       if (!log) return;
       // 商品 / 名牌 / 地址这类结构化消息是多行文本，给气泡加一点卡片感
@@ -260,17 +420,31 @@
         btn.addEventListener('click', function () {
           if (btn.disabled) return;
           if (btn.getAttribute('data-done') === '1') {
-            bubble.textContent = source;
+            bubble.textContent = btn.getAttribute('data-src') || source;
             btn.textContent = t('chatTranslateIn', '翻译此消息');
             btn.removeAttribute('data-done');
             return;
           }
+          // 手动翻译：先查缓存（自动翻过又切回原文的场景不再发请求），再走批量接口
+          var to = curInTo();
+          var cached = trCache[trKey('in', to, source)];
+          if (cached) {
+            markTranslated(bubble, btn, source, cached, to);
+            return;
+          }
           btn.disabled = true;
-          translate(source, 'in').then(function (data) {
-            if (!data.skipped) bubble.textContent = data.text;
-            btn.textContent = t('chatTranslateOriginal', '查看原文');
-            btn.setAttribute('data-done', '1');
-            if (data.skipped) note(t('chatTranslateSame', '当前语言一致，无需翻译'));
+          translateBatch([source], 'in', { to: to }).then(function (data) {
+            if (data.skipped) {
+              btn.textContent = t('chatTranslateOriginal', '查看原文');
+              btn.setAttribute('data-src', source);
+              btn.setAttribute('data-tr-to', data.to || to);
+              btn.setAttribute('data-done', '1');
+              note(t('chatTranslateSame', '当前语言一致，无需翻译'));
+              return;
+            }
+            trCachePut(trKey('in', data.to, source), data.texts[0]);
+            trCacheFlush();
+            markTranslated(bubble, btn, source, data.texts[0], data.to);
           }).catch(function () {
             note(t('chatTranslateFailed', '翻译失败，请稍后重试'));
           }).then(function () { btn.disabled = false; });
@@ -292,6 +466,7 @@
           }
         }
       });
+      autoTranslateAgentPass();
     }
     if (log && 'MutationObserver' in window) {
       var mo = new MutationObserver(function () { decorateMessages(); });
@@ -412,6 +587,38 @@
         input.value = lines.join('\n') + '\n\n' + String(input.value || '').trim();
         state.sent = true;
       }, true);
+      // capture 阶段拦截发送：开了「翻译发送的消息」就先翻译再重放提交。
+      // 注册在商品上下文之后，商品卡片行已经拼进输入框，一并翻给客服看。
+      // 翻译失败不挡发送：回退发原文，只提示不静默。
+      form.addEventListener('submit', function (e) {
+        if (state.outDone) { state.outDone = false; return; } // 重放的那次：放行给原挂件 send()
+        if (!input || !trSettings.autoOut) return;
+        var text = String(input.value || '').trim();
+        if (!text) return;
+        e.preventDefault();
+        e.stopPropagation();
+        var sendBtn = root.querySelector('[data-chat-send]');
+        if (sendBtn) sendBtn.disabled = true;
+        translateBatch([text], 'out', { from: trSettings.outFrom || '', to: trSettings.outTo || '' })
+          .then(function (data) {
+            if (!data.skipped) {
+              input.value = data.texts[0];
+              trCachePut(trKey('out', data.to, text), data.texts[0]);
+              trCacheFlush();
+            }
+          })
+          .catch(function () {
+            note(t('chatTranslateFailed', '翻译失败，请稍后重试'));
+          })
+          .then(function () {
+            if (sendBtn) sendBtn.disabled = false;
+            state.outDone = true;
+            // requestSubmit 会重新走一遍 submit：商品上下文已 sent 跳过，
+            // 本监听器看到 outDone 直接放行，原挂件的 send() 正常发出译文。
+            if (typeof form.requestSubmit === 'function') form.requestSubmit();
+            else form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+          });
+      }, true);
     }
 
     // ---- 名牌 / 地址卡片：访客填一次，之后一键复用；发送走原挂件的 send() ----
@@ -455,10 +662,17 @@
     // 地址卡片的下拉状态（国家对象、区号）要跨 openCard/submitCard 两个函数使用
     var addrState = null;
 
+    // 翻译设置弹层：与名牌/地址卡同手法挂在 panel 上，内容每次打开重建（回填当前设置）
+    var settingsPop = document.createElement('div');
+    settingsPop.className = 'chat-settings-pop';
+    settingsPop.setAttribute('data-chat-settings-pop', '');
+    settingsPop.hidden = true;
+    if (panel) panel.appendChild(settingsPop);
+
     // 可搜索下拉（国家/州省）：选项由调用方灌入，选中值放在 hidden input 的
     // data-field 上 —— submitCard 仍按 [data-field] 取值，普通字段与下拉字段共用一条路径。
     // 选项不超过 12 个就不出搜索框（多数国家的州省一屏能看全）。
-    function buildSelect(key, placeholder, onPick) {
+    function buildSelect(key, placeholder, onPick, emptyText) {
       var wrap = document.createElement('div');
       wrap.className = 'chat-card-select';
       var trig = document.createElement('button');
@@ -528,7 +742,7 @@
         if (!opts.firstChild) {
           var empty = document.createElement('span');
           empty.className = 'chat-opt-empty';
-          empty.textContent = t('chatCardSearchEmpty', '无匹配结果');
+          empty.textContent = emptyText || t('chatCardSearchEmpty', '无匹配结果');
           opts.appendChild(empty);
         }
       }
@@ -564,7 +778,7 @@
         trig.setAttribute('aria-expanded', 'false');
         if (onPick) onPick(it);
       });
-      return {
+      var handle = {
         wrap: wrap,
         apply: apply,
         setItems: function (list) {
@@ -572,7 +786,9 @@
           search.hidden = list.length <= 12;
           search.setAttribute('placeholder', key === 'country'
             ? t('chatCardCountrySearch', '搜索国家/地区')
-            : t('chatCardRegionSearch', '搜索省/州'));
+            : key === 'city'
+              ? t('chatCardCitySearch', '搜索城市')
+              : t('chatCardRegionSearch', '搜索省/州'));
           render(search.value);
         },
         clear: function () {
@@ -584,6 +800,7 @@
         },
         // 数据拉不到，或存过的不在数据集里的旧手写值：整体退回普通文本框，不挡发卡
         fallbackText: function (val) {
+          handle.dead = true;
           var inp = document.createElement('input');
           inp.type = 'text';
           inp.value = val || '';
@@ -593,6 +810,7 @@
           if (val) inp.focus();
         }
       };
+      return handle;
     }
 
     function closeOpenDrops() {
@@ -628,6 +846,7 @@
       if (activeKind === kind && !cardPop.hidden) { closeCard(); return; }
       if (emojiPop) emojiPop.hidden = true;
       if (morePop) morePop.hidden = true;
+      if (settingsPop) settingsPop.hidden = true;
       activeKind = kind;
       var def = CARD_DEFS[kind];
       var saved = readCard(kind);
@@ -641,38 +860,82 @@
       // 地址卡片的国家/州省/电话走专用控件：对齐阿里「添加地址」的形态 ——
       // 国家带国旗可搜索、州省跟着国家换成下拉、电话自动带区号。
       // 数据是异步的：先铺好空下拉，拉到数据再灌选项并回填存过的值。
-      var addr = { country: null, dial: '', dialEl: null, cityEl: null, pendingRegion: '' };
+      var addr = { country: null, dial: '', dialEl: null, citySel: null, cityData: null, cityDataReady: false, curRegion: '', pendingRegion: '', pendingCity: '' };
       addrState = kind === 'address' ? addr : null;
       var regionSel = null;
       function dispName(c) { return siteLangEn() ? c.en : c.zh; }
+      // 城市下拉跟随所选州：该州有城市数据（GeoNames，按国家拆文件）就给下拉，
+      // 没有就退回手写输入。城市数据未到位前保持占位，等 loadCityData 回调再灌。
+      function syncCities(stateName) {
+        addr.curRegion = stateName || '';
+        if (!addr.citySel || addr.citySel.dead) return;
+        if (!addr.curRegion || !addr.cityDataReady) { addr.citySel.clear(); return; }
+        var list = addr.cityData[stateName];
+        if (!list || !list.length) {
+          addr.citySel.fallbackText(addr.pendingCity || '');
+          return;
+        }
+        addr.citySel.setItems(list.map(function (nm) { return { key: nm, disp: nm, needle: nm.toLowerCase() }; }));
+        if (addr.pendingCity && list.indexOf(addr.pendingCity) >= 0) {
+          addr.citySel.apply({ key: addr.pendingCity, disp: addr.pendingCity, needle: addr.pendingCity.toLowerCase() });
+        } else {
+          addr.citySel.clear();
+        }
+        addr.pendingCity = '';
+      }
+      function loadCityData(code) {
+        loadCities(code).then(function (data) {
+          // 等待期间国家又被换掉的话以最后一次为准（旧回调直接作废）
+          if (addr.country && addr.country.c === code) {
+            addr.cityData = data;
+            addr.cityDataReady = true;
+            if (!data) {
+              // 该国没有城市数据文件：城市直接退回手写输入，不必等选州
+              if (addr.citySel && !addr.citySel.dead) addr.citySel.fallbackText(addr.pendingCity || '');
+              return;
+            }
+            syncCities(addr.curRegion);
+          }
+        });
+      }
       function syncRegion(c) {
         if (!regionSel || regionSel.dead) return;
         var rs = c.r || [];
         if (!rs.length) {
-          // 该国没有州省数据（如一些小国）：退回手写输入，与阿里的行为一致
+          // 该国没有州省数据（如一些小国）：州与城市一起退回手写输入，与阿里的行为一致
           regionSel.fallbackText(addr.pendingRegion || '');
+          if (addr.citySel && !addr.citySel.dead) addr.citySel.fallbackText(addr.pendingCity || '');
           return;
         }
         regionSel.setItems(rs.map(function (nm) { return { key: nm, disp: nm, needle: nm.toLowerCase() }; }));
         if (addr.pendingRegion && rs.indexOf(addr.pendingRegion) >= 0) {
           regionSel.apply({ key: addr.pendingRegion, disp: addr.pendingRegion, needle: addr.pendingRegion.toLowerCase() });
+          syncCities(addr.pendingRegion);
         } else {
           regionSel.clear();
+          syncCities('');
         }
         addr.pendingRegion = '';
       }
+      function applyCountry(c, isRestore) {
+        // 用户换国家：城市跟着清空重选（阿里同款行为）；开卡回填走 isRestore，
+        // 已存的城市值留在 pendingCity 里等城市数据到位后自动回填
+        if (!isRestore && addr.country && addr.country.c !== c.c && addr.citySel && !addr.citySel.dead) {
+          addr.citySel.clear();
+          addr.pendingCity = '';
+        }
+        addr.country = c;
+        addr.dial = c.dial || '';
+        if (addr.dialEl) {
+          addr.dialEl.textContent = addr.dial;
+          addr.dialEl.hidden = !addr.dial;
+        }
+        syncRegion(c);
+        loadCityData(c.c);
+      }
       function buildCountry(label, savedVal) {
         var sel = buildSelect('country', t('chatCardCountrySelect', '选择国家/地区'), function (it) {
-          // 用户换国家：城市跟着清空（阿里同款行为）；开卡回填上次选择时走的是
-          // 下面的 restore 分支，不经过这里，已存的城市值不会被动到
-          if (addr.country && addr.country.c !== it.raw.c && addr.cityEl) addr.cityEl.value = '';
-          addr.country = it.raw;
-          addr.dial = it.raw.dial || '';
-          if (addr.dialEl) {
-            addr.dialEl.textContent = addr.dial;
-            addr.dialEl.hidden = !addr.dial;
-          }
-          syncRegion(it.raw);
+          applyCountry(it.raw, false);
         });
         label.appendChild(sel.wrap);
         loadCountries().then(function (list) {
@@ -689,13 +952,7 @@
           }
           if (hit) {
             sel.apply(hit);
-            addr.country = hit.raw;
-            addr.dial = hit.raw.dial || '';
-            if (addr.dialEl) {
-              addr.dialEl.textContent = addr.dial;
-              addr.dialEl.hidden = !addr.dial;
-            }
-            syncRegion(hit.raw);
+            applyCountry(hit.raw, true);
           } else if (savedVal) {
             sel.fallbackText(savedVal); // 旧手写值不在数据集里，保持可编辑
           }
@@ -705,18 +962,17 @@
       }
       function buildRegion(label, savedVal) {
         addr.pendingRegion = savedVal || '';
-        var sel = buildSelect('region', t('chatCardRegionSelect', '选择省/州'), function () { /* 州省无联动 */ });
+        var sel = buildSelect('region', t('chatCardRegionSelect', '选择省/州'), function (it) {
+          syncCities(it.key);
+        });
         regionSel = sel;
         label.appendChild(sel.wrap);
       }
       function buildCity(label, savedVal) {
-        var inp = document.createElement('input');
-        inp.type = 'text';
-        inp.value = savedVal || '';
-        inp.setAttribute('data-field', 'city');
-        inp.setAttribute('autocomplete', 'off');
-        label.appendChild(inp);
-        addr.cityEl = inp;
+        addr.pendingCity = savedVal || '';
+        var sel = buildSelect('city', t('chatCardCitySelect', '选择城市'), function () { /* 城市无下级联动 */ }, t('chatCardCityEmpty', '先选择州/省'));
+        addr.citySel = sel;
+        label.appendChild(sel.wrap);
       }
       function buildPhone(label, saved) {
         var raw = String(saved.phone || '');
@@ -832,6 +1088,127 @@
       });
     }
 
+    // ---- 翻译设置弹层（对齐阿里聊天窗口的「翻译设置」）----
+    // 收到的消息：自动把客服消息翻成所选语言（批量管道在 decorateMessages 里）；
+    // 发送的消息：发送时自动翻成对方语言（capture 拦截在 form submit 上）。
+    // 选项数据来自页面 #site-langs；清单拉不到就只显示当前值，设置仍可开关。
+    function closeSettings() { settingsPop.hidden = true; }
+    function openSettings() {
+      if (!settingsPop.hidden) { closeSettings(); return; }
+      if (cardPop) cardPop.hidden = true;
+      if (emojiPop) emojiPop.hidden = true;
+      if (morePop) morePop.hidden = true;
+      var cur = {
+        autoIn: trSettings.autoIn,
+        inTo: curInTo(),
+        autoOut: trSettings.autoOut,
+        outFrom: trSettings.outFrom || pageLang,
+        outTo: trSettings.outTo || siteDefaultLang || pageLang
+      };
+      settingsPop.textContent = '';
+      var h = document.createElement('h3');
+      h.textContent = t('chatTranslateSettings', '翻译设置');
+      settingsPop.appendChild(h);
+
+      function langSelect(value) {
+        var sel = document.createElement('select');
+        var opts = LANGS.length ? LANGS : [{ c: value, n: value }];
+        var hit = false;
+        opts.forEach(function (l) {
+          var o = document.createElement('option');
+          o.value = l.c;
+          o.textContent = l.n;
+          if (l.c === value) { o.selected = true; hit = true; }
+          sel.appendChild(o);
+        });
+        if (!hit && value) { // 存过的语言码不在清单里（站点改过语言配置）：保底显示原值
+          var o = document.createElement('option');
+          o.value = value;
+          o.textContent = value;
+          o.selected = true;
+          sel.appendChild(o);
+        }
+        return sel;
+      }
+      function groupRow(label, checked) {
+        var row = document.createElement('div');
+        row.className = 'chat-settings-row';
+        var strong = document.createElement('strong');
+        strong.textContent = label;
+        var sw = document.createElement('input');
+        sw.type = 'checkbox';
+        sw.className = 'chat-switch';
+        sw.checked = checked;
+        row.appendChild(strong);
+        row.appendChild(sw);
+        return { row: row, sw: sw };
+      }
+      function fieldsRow(parts) {
+        var row = document.createElement('div');
+        row.className = 'chat-settings-fields';
+        parts.forEach(function (p) {
+          if (typeof p === 'string') {
+            var sp = document.createElement('span');
+            sp.textContent = p;
+            row.appendChild(sp);
+          } else row.appendChild(p);
+        });
+        return row;
+      }
+      function hint(text) {
+        var p = document.createElement('p');
+        p.className = 'chat-settings-hint';
+        p.textContent = text;
+        return p;
+      }
+
+      var inGroup = groupRow(t('chatTranslateAutoIn', '翻译收到的消息'), cur.autoIn);
+      var inToSel = langSelect(cur.inTo);
+      settingsPop.appendChild(inGroup.row);
+      settingsPop.appendChild(fieldsRow([t('chatTranslateInTo', '翻译为'), inToSel]));
+      settingsPop.appendChild(hint(t('chatTranslateHintIn', '收到的消息将自动翻译成您选择的语言；原有消息可在气泡下方手动切换原文。')));
+
+      var outGroup = groupRow(t('chatTranslateAutoOut', '翻译发送的消息'), cur.autoOut);
+      var outFromSel = langSelect(cur.outFrom);
+      var outToSel = langSelect(cur.outTo);
+      settingsPop.appendChild(outGroup.row);
+      settingsPop.appendChild(fieldsRow([t('chatTranslateOutFrom', '从'), outFromSel, t('chatTranslateOutTo', '翻译成'), outToSel]));
+      settingsPop.appendChild(hint(t('chatTranslateHintOut', '发送前将自动翻译成所选语言；翻译失败时会发送原文。')));
+
+      var actions = document.createElement('div');
+      actions.className = 'chat-settings-actions';
+      var save = document.createElement('button');
+      save.type = 'button';
+      save.className = 'is-primary';
+      save.textContent = t('chatTranslateSave', '保存并应用');
+      save.addEventListener('click', function () {
+        trSettings.autoIn = inGroup.sw.checked;
+        trSettings.inTo = inToSel.value;
+        trSettings.autoOut = outGroup.sw.checked;
+        trSettings.outFrom = outFromSel.value;
+        trSettings.outTo = outToSel.value;
+        saveTrSettings();
+        closeSettings();
+        // 目标语言变了要让自动管道重新评估：已翻的气泡保留（按钮可切回原文），
+        // 未翻的按新目标语言补翻。
+        autoTranslateAgentPass();
+      });
+      actions.appendChild(save);
+      settingsPop.appendChild(actions);
+      settingsPop.hidden = false;
+    }
+    if (morePop) {
+      var trSettingsBtn = document.createElement('button');
+      trSettingsBtn.type = 'button';
+      trSettingsBtn.textContent = t('chatTranslateSettings', '翻译设置');
+      trSettingsBtn.setAttribute('data-chat-translate-settings', '');
+      trSettingsBtn.addEventListener('click', function () {
+        morePop.hidden = true;
+        openSettings();
+      });
+      morePop.appendChild(trSettingsBtn);
+    }
+
     // ---- 表情与更多菜单 ----
     // 表情按钮懒构建：不占每次页面加载的成本，第一次点开才铺按钮；
     // 选中用浮层上的一个事件委托，不再给 176 个按钮各自挂监听。
@@ -866,6 +1243,7 @@
         emojiPop.hidden = false;
         if (morePop) morePop.hidden = true;
         if (cardPop) cardPop.hidden = true;
+        if (settingsPop) settingsPop.hidden = true;
       });
     }
     if (moreBtn && morePop) {
@@ -874,6 +1252,7 @@
         if (!morePop.hidden) {
           if (emojiPop) emojiPop.hidden = true;
           if (cardPop) cardPop.hidden = true;
+          if (settingsPop) settingsPop.hidden = true;
         }
       });
     }
@@ -885,6 +1264,9 @@
       var inMore = t && t.closest && t.closest('[data-chat-more]');
       if (emojiPop && !emojiPop.hidden && !emojiPop.contains(t) && !inEmoji) emojiPop.hidden = true;
       if (morePop && !morePop.hidden && !morePop.contains(t) && !inMore) morePop.hidden = true;
+      // 翻译设置：点外面就收（点自己的入口按钮不算外面）
+      if (settingsPop && !settingsPop.hidden &&
+          !settingsPop.contains(t) && !(t && t.closest && t.closest('[data-chat-translate-settings]'))) settingsPop.hidden = true;
       // 下拉展开层点外面就收：卡片区内部的点击（点别的字段）也算外面
       if (cardPop && !cardPop.hidden) {
         Array.prototype.forEach.call(cardPop.querySelectorAll('.chat-card-drop'), function (d) {
@@ -896,6 +1278,7 @@
       if (e.key !== 'Escape') return;
       if (emojiPop) emojiPop.hidden = true;
       if (morePop) morePop.hidden = true;
+      if (settingsPop) settingsPop.hidden = true;
       // Esc 先收下拉再收卡片：连按两次才把整个地址卡关掉
       if (escForCard(e)) return;
       if (cardPop && !cardPop.hidden) closeCard();
@@ -937,6 +1320,7 @@
       if (e.key !== 'Escape') return;
       if (emojiPop) emojiPop.hidden = true;
       if (morePop) morePop.hidden = true;
+      if (settingsPop) settingsPop.hidden = true;
       // Esc 先收下拉再收卡片（与上面第一个 Esc 处理器同口径）
       if (escForCard(e)) return;
       closeCard();

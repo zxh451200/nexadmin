@@ -854,17 +854,35 @@ func (v *siteView) JSStrings() template.JS {
 		"catExpand", "catCollapse",
 		"shareCopiedShort", "shareFailedShort",
 		"chatTranslateSame", "chatTranslated", "chatTranslateFailed", "chatTranslateIn", "chatTranslateOriginal",
+		"chatTranslateSettings", "chatTranslateAutoIn", "chatTranslateInTo", "chatTranslateAutoOut", "chatTranslateOutFrom", "chatTranslateOutTo",
+		"chatTranslateHintIn", "chatTranslateHintOut", "chatTranslateSave",
 		"chatLocalTime", "chatProductLabel", "chatQuantity", "chatGreeting", "chatCollapse", "chatExpand", "subtotal",
 		"skuSelected", "skuLowStock", "skuOutOfStock",
 		"inqMetaProduct", "inqMetaQty",
 		"inqAttachUploading", "inqAttachRemove", "inqAttachTooLarge", "inqAttachType", "inqAttachFailed", "inqAttachLimit",
 		"chatNameCard", "chatAddressCard", "chatCardNameTitle", "chatCardAddressTitle", "chatCardHint", "chatCardName", "chatCardCompany", "chatCardJob", "chatCardEmail", "chatCardPhone",
 		"chatCardRecipient", "chatCardCountry", "chatCardRegion", "chatCardStreet", "chatCardPostcode", "chatCardSend", "chatCardCancel", "chatCardRequired", "chatCardNameLabel", "chatCardAddressLabel",
-		"chatCardCountrySelect", "chatCardCountrySearch", "chatCardRegionSelect", "chatCardRegionSearch", "chatCardSearchEmpty", "chatCardCity",
+		"chatCardCountrySelect", "chatCardCountrySearch", "chatCardRegionSelect", "chatCardRegionSearch", "chatCardSearchEmpty", "chatCardCity", "chatCardCitySelect", "chatCardCityEmpty", "chatCardCitySearch",
 	} {
 		m[k] = v.T("site.js." + k)
 	}
 	b, _ := json.Marshal(m)
+	return template.JS(b)
+}
+
+// LangsJSON 把站点语言清单以 JSON 交给客服挂件的翻译设置（选择源/目标语言用）：
+// 挂件是无脚本不工作的增强层，语言码必须在站点已配置清单里，前端不自带名单。
+func (v *siteView) LangsJSON() template.JS {
+	type langChip struct {
+		C string `json:"c"`
+		N string `json:"n"`
+		D bool   `json:"d,omitempty"` // 站点默认语言：翻译设置的「翻译成」默认值
+	}
+	chips := make([]langChip, 0, len(v.Languages))
+	for _, l := range v.Languages {
+		chips = append(chips, langChip{C: l.Code, N: l.Label, D: l.Default})
+	}
+	b, _ := json.Marshal(chips)
 	return template.JS(b)
 }
 
