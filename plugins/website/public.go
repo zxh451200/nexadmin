@@ -771,6 +771,15 @@ func (h *siteHandler) notFoundPage(c *gin.Context) bool {
 	if m != http.MethodGet && m != http.MethodHead {
 		return false
 	}
+	// 站点默认语言切换后释放出来的旧前缀：老收藏 / 旧索引链接 301 到去前缀地址，
+	// 根路径已由新默认语言接管，别让旧地址直接落 404。
+	if target := releasedRedirectPath(c.Request.URL.Path); target != "" {
+		if q := c.Request.URL.RawQuery; q != "" {
+			target += "?" + q
+		}
+		c.Redirect(http.StatusMovedPermanently, target)
+		return true
+	}
 	v, err := h.baseView(c.Request.Context(), languageForPath(c.Request.URL.Path).Code, 0)
 	if err != nil {
 		return false
@@ -779,14 +788,15 @@ func (h *siteHandler) notFoundPage(c *gin.Context) bool {
 	return true
 }
 
-// languageForPath 按路径前缀识别语言；未注册的 /en/... 也能渲染英文 404。
+// languageForPath 按路径前缀识别语言；未注册的 /en/... 也能渲染对应语言的 404。
+// 前缀表是运行期表：站点默认语言切换后，原平台默认语言带着合成前缀也能被认出。
 func languageForPath(p string) Language {
 	for _, l := range languages {
 		if l.Prefix != "" && (p == "/"+l.Prefix || strings.HasPrefix(p, "/"+l.Prefix+"/")) {
 			return l
 		}
 	}
-	return DefaultLanguage()
+	return SiteDefaultLanguage()
 }
 
 // GET /robots.txt —— 官网开放收录，后台路径不允许抓取。
@@ -828,7 +838,7 @@ func (h *siteHandler) sitemap(c *gin.Context) {
 	}
 	base := baseURL(c)
 	langs := Languages()
-	def := DefaultLanguage()
+	def := SiteDefaultLanguage()
 	var b strings.Builder
 	b.WriteString(`<?xml version="1.0" encoding="UTF-8"?>` + "\n")
 	b.WriteString(`<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">` + "\n")

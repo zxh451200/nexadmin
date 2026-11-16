@@ -41,6 +41,14 @@ var (
 	langByAlias   = map[string]Language{}
 	localeLoaded  bool
 	displayLocale = "en-US" // 兜底语言（字典缺失时）
+
+	// siteDefaultLang 是官网默认语言（占根路径、无前缀的那门），由站点设置 DefaultLang 决定；
+	// siteDefaultAuto=true 表示根语言就是平台默认语言、首页按浏览器语言协商。
+	// 与 defaultLang（内容原文语言，锚定发布门与机翻源）是两个概念，绝不能混用。
+	siteDefaultLang Language
+	siteDefaultAuto bool
+	// releasedPrefix 记录站点默认语言切换后释放出来的旧前缀：老链接由 404 兜底 301 衔接。
+	releasedPrefix string
 )
 
 func init() { mustLoadLocales() }
@@ -79,14 +87,31 @@ func applyLanguages(list []Language) error {
 	}
 
 	nextDicts := make(map[string]map[string]string, len(list))
-	nextByCode := make(map[string]Language, len(list))
-	nextByAlias := make(map[string]Language, len(list))
 	for _, l := range list {
 		d, err := readDict(l.Code)
 		if err != nil {
 			d = defaultDict
 		}
 		nextDicts[l.Code] = d
+	}
+
+	languages = list
+	defaultLang = def
+	siteDefaultLang = def
+	siteDefaultAuto = true
+	releasedPrefix = ""
+	dicts = nextDicts
+	rebuildLangIndex()
+	localeLoaded = true
+	return nil
+}
+
+// rebuildLangIndex 按 languages 重建 code / 别名索引。字典（dicts）与原文锚点不参与，
+// 所以站点默认语言调整运行期前缀后只需重建这一层。
+func rebuildLangIndex() {
+	nextByCode := make(map[string]Language, len(languages))
+	nextByAlias := make(map[string]Language, len(languages))
+	for _, l := range languages {
 		nextByCode[l.Code] = l
 		nextByAlias[strings.ToLower(l.Code)] = l
 		if l.Prefix != "" {
@@ -99,14 +124,8 @@ func applyLanguages(list []Language) error {
 			}
 		}
 	}
-
-	languages = list
-	defaultLang = def
-	dicts = nextDicts
 	langByCode = nextByCode
 	langByAlias = nextByAlias
-	localeLoaded = true
-	return nil
 }
 
 func readDict(code string) (map[string]string, error) {
@@ -136,6 +155,84 @@ func Languages() []Language {
 
 // DefaultLanguage 返回默认语言（根路径）。
 func DefaultLanguage() Language { return defaultLang }
+
+// SiteDefaultLanguage 返回官网默认语言（占根路径、无前缀的那门）。
+// 与 DefaultLanguage（内容原文语言，锚定发布门与机翻源）是两个概念：
+// 站点设置「官网默认语言」只改公开站的显示与地址结构，不动原文锚点。
+func SiteDefaultLanguage() Language { return siteDefaultLang }
+
+// SiteDefaultAuto 报告官网默认语言是否为「跟随浏览器」：根语言是平台默认，
+// 首页由 langNegotiate 按 cookie / Accept-Language 协商。
+func SiteDefaultAuto() bool { return siteDefaultAuto }
+
+// sitePrefixFor 给语言合成路径前缀：语基优先（zh-CN → zh），撞已有前缀退全码小写（zh_cn）。
+func sitePrefixFor(code string, used map[string]bool) string {
+	base := strings.ToLower(code)
+	if i := strings.IndexByte(base, '-'); i > 0 {
+		base = base[:i]
+	}
+	if !used[base] {
+		return base
+	}
+	return strings.ToLower(strings.ReplaceAll(code, "-", "_"))
+}
+
+// SetSiteDefault 应用站点设置里的官网默认语言（plg_website_setting.default_lang）。
+// 空 / auto：平台默认语言继续占根，首页按浏览器语言协商（siteDefaultAuto=true）。
+// 具体语言：该语言独占根路径，原平台默认语言在运行期语言表里合成前缀（语基，如 /zh）——
+// 只改官网自己的运行期表，sys_language 与平台校验（默认语言不许有前缀）都不受影响。
+// 公开站路由在引擎构建期按这份表注册，所以改完设置要重启才生效；与改语言清单同一约束。
+// 原文语言锚点（defaultLang 与 Language.Default）绝不动：发布门与机翻源不受显示默认影响。
+func SetSiteDefault(code string) {
+	code = strings.TrimSpace(code)
+	releasedPrefix = ""
+	if code == "" || code == "auto" || code == defaultLang.Code {
+		siteDefaultLang, siteDefaultAuto = defaultLang, true
+		return
+	}
+	target, ok := LanguageByCode(code)
+	if !ok {
+		// 清单里没有的语言（如停用后再启动）：回落平台默认，别让站点断线。
+		siteDefaultLang, siteDefaultAuto = defaultLang, true
+		return
+	}
+	siteDefaultAuto = false
+	used := map[string]bool{}
+	for _, it := range languages {
+		if it.Code != target.Code {
+			used[it.Prefix] = true
+		}
+	}
+	out := make([]Language, len(languages))
+	for i, it := range languages {
+		switch {
+		case it.Code == target.Code:
+			releasedPrefix = it.Prefix
+			it.Prefix = ""
+		case it.Code == defaultLang.Code:
+			it.Prefix = sitePrefixFor(it.Code, used)
+		}
+		out[i] = it
+	}
+	languages = out
+	siteDefaultLang = target
+	rebuildLangIndex()
+}
+
+// releasedRedirectPath 把已释放旧前缀的链接归到去前缀地址；不是旧前缀路径返回空串。
+// 根路径语言已换人，老收藏/旧索引链接经这里 301 衔接，而不是直接落 404。
+func releasedRedirectPath(p string) string {
+	if releasedPrefix == "" {
+		return ""
+	}
+	if p == "/"+releasedPrefix {
+		return "/"
+	}
+	if strings.HasPrefix(p, "/"+releasedPrefix+"/") {
+		return p[len(releasedPrefix)+1:]
+	}
+	return ""
+}
 
 // LanguageByCode 精确或大小写不敏感匹配语言 code。
 func LanguageByCode(code string) (Language, bool) {
@@ -260,16 +357,16 @@ func requestHTTPS(c *gin.Context) bool {
 	return c.Request.TLS != nil || strings.EqualFold(c.GetHeader("X-Forwarded-Proto"), "https")
 }
 
-// langNegotiate 处理 ?lang= 切换与“记住的语言”回跳；只挂在默认（无前缀）分组上。
+// langNegotiate 处理 ?lang= 切换与首页的语言协商；只挂在默认（无前缀）分组上。
 func langNegotiate(c *gin.Context) {
 	if q := strings.TrimSpace(c.Query("lang")); q != "" {
 		if l, ok := LanguageByCode(q); ok {
 			setLangCookie(c, l.Code)
 			route := stripLangPrefix(c.Request.URL.Path)
-			// 默认语言的无前缀路径就地渲染，不经 302 回跳：回跳要把语言交给 cookie，
+			// 根语言的路径就地渲染，不经 302 回跳：回跳要把语言交给 cookie，
 			// 而 cookie 写不进去或被并发覆盖时，下一条 "/" 会按旧 cookie 把访客送去
-			// /en——点了中文「首页」却看到英文正是这条路。URL 已点明语言就别再问 cookie。
-			if l.Default && route == c.Request.URL.Path {
+			// 别的语言——点了「首页」却看到别的语言正是这条路。URL 已点明语言就别再问 cookie。
+			if l.Code == siteDefaultLang.Code && route == c.Request.URL.Path {
 				c.Next()
 				return
 			}
@@ -284,10 +381,21 @@ func langNegotiate(c *gin.Context) {
 			return
 		}
 	}
-	// 只对首页做 cookie 回跳：深链保持访客点进来的那个 URL。
+	// 只对首页做协商：深链保持访客点进来的那个 URL。
 	if c.Request.URL.Path == "/" {
 		if ck, err := c.Cookie(langCookie); err == nil {
-			if l, ok := LanguageByCode(ck); ok && !l.Default {
+			// 记住的语言优先：回跳到访客上次选的语言。
+			if l, ok := LanguageByCode(ck); ok && l.Code != siteDefaultLang.Code {
+				c.Redirect(http.StatusFound, l.Home())
+				c.Abort()
+				return
+			}
+		} else if siteDefaultAuto {
+			// 跟随浏览器：cookie 还没有时按 Accept-Language 挑一门（没匹配就留在根语言）。
+			// 302 而不是 301：浏览器语言会变，搜索引擎也不该把协商结果当规范地址——
+			// 规范地址由 hreflang alternates 与根页面自己的 canonical 声明。
+			if l, ok := negotiateAcceptLanguage(c.GetHeader("Accept-Language")); ok && l.Code != siteDefaultLang.Code {
+				setLangCookie(c, l.Code)
 				c.Redirect(http.StatusFound, l.Home())
 				c.Abort()
 				return
@@ -332,8 +440,9 @@ func negotiateAcceptLanguage(header string) (Language, bool) {
 	return best, best.Code != ""
 }
 
-// suggestLanguage 判断默认语言首页是否该给访客一个切换提示：
-// 已显式选过语言（有 cookie）或浏览器本来就偏好默认语言时不提示。
+// suggestLanguage 判断根语言首页是否该给访客一个切换提示：
+// 已显式选过语言（有 cookie）或浏览器本来就偏好根语言时不提示。
+// auto 模式下可匹配的浏览器语言已被 302 直达，这里只兜「清单里没有的语言」。
 func suggestLanguage(c *gin.Context) (Language, bool) {
 	if c.Request.URL.Path != "/" {
 		return Language{}, false
@@ -342,7 +451,7 @@ func suggestLanguage(c *gin.Context) (Language, bool) {
 		return Language{}, false
 	}
 	l, ok := negotiateAcceptLanguage(c.GetHeader("Accept-Language"))
-	if !ok || l.Default || l.Code == defaultLang.Code {
+	if !ok || l.Code == siteDefaultLang.Code {
 		return Language{}, false
 	}
 	return l, true

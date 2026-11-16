@@ -432,11 +432,11 @@ func (v *siteView) TN(n any, key string, args ...any) string {
 }
 
 // Home 返回当前语言的首页链接。
-// 默认语言的首页是无前缀的 "/"，它同时是语言中立入口：服务端会按 cookie 把访客送回
-// 上次选择的语言（langNegotiate）。所以站内链接必须显式带 ?lang=——否则访客正在读
-// 中文深链、浏览器却存着旧的英文 cookie 时，点「首页」会被送去英文站。
+// 根语言（站点默认语言）的首页是无前缀的 "/"，它同时是语言中立入口：服务端会按 cookie /
+// 浏览器语言把访客送回合适的选择（langNegotiate）。所以站内链接必须显式带 ?lang=——否则访客
+// 正在读中文深链、浏览器却存着旧的英文 cookie 时，点「首页」会被送去别的语言。
 func (v *siteView) Home() string {
-	if v.Lang.Default {
+	if v.Lang.Code == SiteDefaultLanguage().Code {
 		return "/?lang=" + url.QueryEscape(v.Lang.Code)
 	}
 	return v.Lang.Home()
@@ -546,8 +546,8 @@ func (v *siteView) productsURL(page int) string {
 	return base
 }
 
-// Switch 是语言切换菜单的链接：切到默认语言时带 ?lang= 覆盖已记住的语言 cookie，
-// 其余情况保留当前筛选参数。
+// Switch 是语言切换菜单的链接：切到根语言（站点默认语言）时带 ?lang= 覆盖已记住的语言
+// cookie，其余情况保留当前筛选参数。
 func (v *siteView) Switch(l Language) string {
 	route := v.Route
 	if route == "" {
@@ -555,7 +555,7 @@ func (v *siteView) Switch(l Language) string {
 	}
 	vals, _ := url.ParseQuery(v.Query)
 	vals.Del("lang")
-	if l.Default {
+	if l.Code == SiteDefaultLanguage().Code {
 		vals.Set("lang", l.Code)
 	}
 	if enc := vals.Encode(); enc != "" {

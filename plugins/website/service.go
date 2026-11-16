@@ -52,7 +52,7 @@ var slugReg = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,63}$`)
 
 // reservedSlugs 只保留插件自己的路由段（/news、/products、/p）。页面、新闻与产品分别挂在
 // /p/:slug、/news/:slug 与 /products/:slug 下，天然带命名空间，不会与后台 SPA 路径
-//（/about、/system 等）冲突，因此后台路径不必保留——about、login-guide 这类自然 slug 都允许。
+// （/about、/system 等）冲突，因此后台路径不必保留——about、login-guide 这类自然 slug 都允许。
 var reservedSlugs = map[string]bool{"news": true, "p": true, "products": true}
 
 // ValidateSlug 校验 slug 合法且不占用本插件的路由段。

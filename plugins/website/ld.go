@@ -153,10 +153,10 @@ func productJSONLD(v *siteView, p *Product) template.JS {
 // xmlEscape 是 RSS 文本的最小转义：正文里的 & < > ' " 都会破坏 XML 结构。
 var rssEsc = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", `"`, "&#34;", "'", "&#39;")
 
-// GET /rss.xml —— 新闻订阅源（默认语言最近 20 篇）；蜘蛛与订阅器借此发现内容更新。
+// GET /rss.xml —— 新闻订阅源（官网默认语言最近 20 篇）；蜘蛛与订阅器借此发现内容更新。
 func (h *siteHandler) rss(c *gin.Context) {
 	ctx := c.Request.Context()
-	lang := DefaultLanguage()
+	lang := SiteDefaultLanguage()
 	posts, _, err := h.svc.PublishedPostsPage(ctx, lang.Code, termFilter{}, 1, 20)
 	if err != nil {
 		c.String(http.StatusInternalServerError, "rss unavailable")
