@@ -27,7 +27,7 @@ type LeafletNS = {
 
 declare global {
   interface Window {
-    __L?: LeafletNS
+    L?: LeafletNS
   }
 }
 
@@ -37,7 +37,7 @@ let leafletSdk: Promise<LeafletNS> | null = null
 
 /** 加载一次 Leaflet（JS + CSS）；失败时错误留在 promise 上，调用方兜成提示。 */
 function loadLeaflet(): Promise<LeafletNS> {
-  if (window.__L) return Promise.resolve(window.__L)
+  if (window.L) return Promise.resolve(window.L)
   if (leafletSdk) return leafletSdk
   leafletSdk = new Promise<LeafletNS>((resolve, reject) => {
     const base = `https://unpkg.com/leaflet@${LEAFLET_VERSION}/dist`
@@ -49,7 +49,8 @@ function loadLeaflet(): Promise<LeafletNS> {
     const script = document.createElement('script')
     script.async = true
     script.src = `${base}/leaflet.js`
-    script.onload = () => (window.__L ? resolve(window.__L) : reject(new Error('Leaflet: global missing')))
+    // Leaflet 挂的全局是 window.L（与高德挂 AMap、百度挂 BMap 同理）
+    script.onload = () => (window.L ? resolve(window.L) : reject(new Error('Leaflet: global missing')))
     script.onerror = () => reject(new Error('Leaflet: load failed'))
     document.head.appendChild(script)
   })
