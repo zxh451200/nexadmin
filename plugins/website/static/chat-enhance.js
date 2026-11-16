@@ -758,6 +758,14 @@
         if (f.required && !v) missing = true;
       });
       if (missing) { note(t('chatCardRequired', '请填写必填项')); return; }
+      // 地址卡片：把区号拼进电话值（用户自己带了 + 的不重复拼）；phoneDial 只进
+      // localStorage（下次开卡还原前缀块），不进消息正文，消息里已含在电话值里。
+      if (kind === 'address' && addrState) {
+        vals.phoneDial = addrState.dial;
+        if (vals.phone && addrState.dial && vals.phone.charAt(0) !== '+') {
+          vals.phone = addrState.dial + ' ' + vals.phone;
+        }
+      }
       saveCard(kind, vals);
       var lines = [def.marker];
       def.fields.forEach(function (f) { if (vals[f.key]) lines.push(f.label + ': ' + vals[f.key]); });
@@ -849,11 +857,19 @@
       var inMore = t && t.closest && t.closest('[data-chat-more]');
       if (emojiPop && !emojiPop.hidden && !emojiPop.contains(t) && !inEmoji) emojiPop.hidden = true;
       if (morePop && !morePop.hidden && !morePop.contains(t) && !inMore) morePop.hidden = true;
+      // 下拉展开层点外面就收：卡片区内部的点击（点别的字段）也算外面
+      if (cardPop && !cardPop.hidden) {
+        Array.prototype.forEach.call(cardPop.querySelectorAll('.chat-card-drop'), function (d) {
+          if (!d.hidden && !d.parentElement.contains(t)) d.hidden = true;
+        });
+      }
     });
     document.addEventListener('keydown', function (e) {
       if (e.key !== 'Escape') return;
       if (emojiPop) emojiPop.hidden = true;
       if (morePop) morePop.hidden = true;
+      // Esc 先收下拉再收卡片：连按两次才把整个地址卡关掉
+      if (cardPop && !cardPop.hidden && closeOpenDrops()) return;
       if (cardPop && !cardPop.hidden) closeCard();
     });
     // 「更多」菜单贴着头部下沿展开：头部高度会随「客服姓名 + 本地时间」那一行出现而变，
@@ -893,6 +909,8 @@
       if (e.key !== 'Escape') return;
       if (emojiPop) emojiPop.hidden = true;
       if (morePop) morePop.hidden = true;
+      // Esc 先收下拉再收卡片（与上面第一个 Esc 处理器同口径）
+      if (cardPop && !cardPop.hidden && closeOpenDrops()) return;
       closeCard();
       // 放大后的窗口用 Esc 还原，和浮层一样不必再去点菜单。
       if (state.expanded && expandBtn) expandBtn.click();

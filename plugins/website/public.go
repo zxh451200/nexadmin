@@ -731,6 +731,7 @@ func (h *siteHandler) contactFail(c *gin.Context, status int, code string) {
 var assetTypes = map[string]string{
 	".css":   "text/css; charset=utf-8",
 	".js":    "application/javascript; charset=utf-8",
+	".json":  "application/json",
 	".svg":   "image/svg+xml",
 	".png":   "image/png",
 	".jpg":   "image/jpeg",
