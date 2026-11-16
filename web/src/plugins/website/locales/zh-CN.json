@@ -696,6 +696,24 @@
     "languages": {
       "manageShort": "语言清单在「系统设置 → 语言管理」维护",
       "manageHint": "要增加或删改语言，请到「系统设置 → 语言管理」：官网与后台界面共用同一份语言清单。改完需重启服务，公开站才会按新前缀注册页面路由。"
+    },
+    "review": {
+      "manage": "评价管理",
+      "desc": "录入真实回访评价；公开站只读已发布条目",
+      "add": "新增评价",
+      "count": "{{count}} 条评价",
+      "empty": "还没有评价，点「新增评价」录入",
+      "anonymous": "匿名买家",
+      "author": "买家",
+      "country": "国家 / 地区",
+      "rating": "星级",
+      "ratingAria": "{{rating}} 星",
+      "contentPlaceholder": "评价正文（留空只显示星级）",
+      "quantity": "采购数量",
+      "verified": "已验证采购",
+      "published": "公开显示",
+      "draft": "未发布",
+      "deleteConfirm": "删除 {{who}} 的这条评价？"
     }
   }
 }

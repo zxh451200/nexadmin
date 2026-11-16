@@ -81,8 +81,9 @@ type Setting struct {
 // 因此这里不挂用户表外键，Author/Country 用展示名，Verified 表示「已验证采购」。
 type ProductReview struct {
 	database.PlatformModel
-	ProductID uint   `gorm:"column:product_id;not null;index" json:"productId"`
-	Author    string `gorm:"size:64;not null;default:''" json:"author"`
+	// ProductID 用 idgen.ID：雪花 ID 走 MarshalJSON 输出字符串，裸 uint 到 JS 会丢精度。
+	ProductID idgen.ID `gorm:"column:product_id;not null;index" json:"productId"`
+	Author    string   `gorm:"size:64;not null;default:''" json:"author"`
 	// Country 是买家所在国家/地区（展示用，如 Germany）；空 = 不显示国旗位。
 	Country string `gorm:"size:64;not null;default:''" json:"country"`
 	// Rating 是 1-5 星；服务层钳制到该区间，0 视为非法。

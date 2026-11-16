@@ -1461,3 +1461,59 @@ export function useAliSyncStatus(jobId?: string) {
     },
   })
 }
+
+// ---- 商品评价（后台录入；公开站只读，匿名官网无登录态） ----
+
+/** 后台评价行：productId 是雪花字符串（idgen.ID MarshalJSON），别用 Number 解析。 */
+export interface ProductReviewItem {
+  id: string
+  productId: string
+  author: string
+  country: string
+  /** 1-5；后端钳制越界值 */
+  rating: number
+  content: string
+  verified: boolean
+  quantity: string
+  published: boolean
+  createdAt: string
+}
+
+/** 录入/修改表单：编辑时带 id。published 不传保持原值（后端指针语义）。 */
+export interface ProductReviewForm {
+  author: string
+  country: string
+  rating: number
+  content: string
+  verified: boolean
+  quantity: string
+  published?: boolean
+}
+
+/** 某个商品的评价列表（含未发布草稿）。 */
+export function useReviews(productId: string | undefined) {
+  return useQuery({
+    queryKey: [...KEY, 'reviews', productId ?? ''],
+    enabled: !!productId,
+    queryFn: () => api.get<ProductReviewItem[]>(`${BASE}/reviews`, { productId: productId! }),
+  })
+}
+
+export function useSaveReview(productId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (f: ProductReviewForm & { id?: string }) =>
+      f.id
+        ? api.put<ProductReviewItem>(`${BASE}/reviews/${f.id}`, { ...f, productId })
+        : api.post<ProductReviewItem>(`${BASE}/reviews`, { ...f, productId }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: [...KEY, 'reviews', productId] }),
+  })
+}
+
+export function useDeleteReview(productId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.del<null>(`${BASE}/reviews/${id}`),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: [...KEY, 'reviews', productId] }),
+  })
+}

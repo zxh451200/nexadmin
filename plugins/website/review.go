@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"nexadmin/core/response"
+	"nexadmin/pkg/idgen"
 )
 
 // 评价展示与录入的口径集中在这里：
@@ -108,8 +109,9 @@ func clampRating(r int) int {
 }
 
 // ReviewForm 是后台录入/修改评价的表单。
+// ProductID 用字符串：雪花 ID 从前端过来是字符串（与列表接口回传的形态一致），这里再解析。
 type ReviewForm struct {
-	ProductID int64  `json:"productId"`
+	ProductID string `json:"productId"`
 	Author    string `json:"author"`
 	Country   string `json:"country"`
 	Rating    int    `json:"rating"`
@@ -158,11 +160,15 @@ func (s *Service) ReviewTotals(ctx context.Context, productIDs []int64) (map[int
 
 // CreateReview 录入一条评价：商品必须存在（草稿商品也行，上线后自然生效）。
 func (s *Service) CreateReview(ctx context.Context, f ReviewForm) (*ProductReview, error) {
-	if err := s.checkReviewProduct(ctx, f.ProductID); err != nil {
+	pid, err := reviewProductID(f.ProductID)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.checkReviewProduct(ctx, int64(pid)); err != nil {
 		return nil, err
 	}
 	row := &ProductReview{
-		ProductID: uint(f.ProductID),
+		ProductID: pid,
 		Author:    trimLen(f.Author, 64),
 		Country:   trimLen(f.Country, 64),
 		Rating:    clampRating(defaultInt(f.Rating, 5)),
@@ -222,6 +228,20 @@ func (s *Service) checkReviewProduct(ctx context.Context, productID int64) error
 		return response.BadRequest("website.review_product_required")
 	}
 	return nil
+}
+
+// reviewProductID 解析表单里的商品 ID（雪花字符串）：空或非数字统一报「需要商品」，
+// 不让调用方猜哪个字段错了。
+func reviewProductID(raw string) (idgen.ID, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 0, response.BadRequest("website.review_product_required")
+	}
+	pid, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || pid <= 0 {
+		return 0, response.BadRequest("website.review_product_required")
+	}
+	return idgen.ID(pid), nil
 }
 
 func defaultInt(v, def int) int {

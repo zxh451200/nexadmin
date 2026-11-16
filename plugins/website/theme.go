@@ -503,7 +503,7 @@ func seedDemoTx(ctx context.Context, tx *gorm.DB, themeID string, data DemoData,
 			continue
 		}
 		row := ProductReview{
-			ProductID: uint(prod.ID),
+			ProductID: prod.ID,
 			Author:    trimLen(rv.Author, 64),
 			Country:   trimLen(rv.Country, 64),
 			Rating:    clampRating(defaultInt(rv.Rating, 5)),
