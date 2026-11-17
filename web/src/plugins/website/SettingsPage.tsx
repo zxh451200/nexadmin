@@ -45,6 +45,7 @@ import {
 type SharedTextKey =
   | 'siteName' | 'logoUrl' | 'faviconUrl' | 'ogImageUrl' | 'headCode' | 'titleSuffix' | 'homeSlug' | 'homeCtaHref' | 'contactEmail'
   | 'contactPhone' | 'qrCodeUrl' | 'qrCodeCaption' | 'icp' | 'contactConsentUrl' | 'theme' | 'defaultLang'
+  | 'defaultCurrency' | 'currencyRates'
   | 'staffCount' | 'annualRevenue' | 'mainMarkets' | 'responseTime'
 type SharedSettings = Pick<SiteSettingsForm, SharedTextKey | 'marketEnabled' | 'messageNotifyEmail' | 'contactConsent' | 'establishedYear'> & {
   socials: SocialLink[]
@@ -75,6 +76,17 @@ const SOCIAL_PLATFORMS: SocialPlatform[] = [
 
 /** 可翻译字段：归 LocaleFormProvider，与后端 setting schema 同源。 */
 type LocalizedKey = 'siteDesc' | 'homeTitle' | 'homeSubtitle' | 'homeCtaLabel' | 'seoKeywords' | 'footerNote'
+
+/** 汇率表 JSON 的键集合（默认币种下拉的选项源）：USD 置顶，其余按码排序；
+    解析失败返回空数组——前端不拦，真正的结构校验在后端保存时做。 */
+function currencyRatesKeys(raw: string): string[] {
+  try {
+    const obj = JSON.parse(raw) as Record<string, number>
+    return Object.keys(obj).sort((a, b) => (a === 'USD' ? -1 : b === 'USD' ? 1 : a.localeCompare(b)))
+  } catch {
+    return []
+  }
+}
 
 /**
  * 分区导航：按「谁在什么时候改它」切组，形态与平台「系统设置」一致
@@ -421,6 +433,38 @@ function SettingsFormBody({
                 {t('plugin_website.languages.manageShort')}
                 <FieldHint text={t('plugin_website.languages.manageHint')} />
               </p>
+              {/* 币种换算（对标阿里右上角「语言-币种」选择器）：汇率表是 {"USD":1,"EUR":0.92}
+                  文本，USD 恒为基准 1；表非空时公开站头部出「语言-币种」弹层，价格按
+                  访客所选币种换算展示。默认币种下拉的选项直接取汇率表的键。 */}
+              <SharedFieldShell labelKey="plugin_website.fields.currencyRates" hint={t('plugin_website.hint.currencyRates')}>
+                <Textarea
+                  rows={3}
+                  value={shared.currencyRates}
+                  disabled={sharedDisabled}
+                  onChange={(e) => set('currencyRates', e.target.value)}
+                  placeholder={'{"USD":1,"EUR":0.92,"CNY":7.1}'}
+                />
+              </SharedFieldShell>
+              {shared.currencyRates.trim() ? (
+                <SharedFieldShell labelKey="plugin_website.fields.defaultCurrency" hint={t('plugin_website.hint.defaultCurrency')}>
+                  {/* Radix Select 不收空串值，用 off 哨兵表示「不启用换算」，与 defaultLang 的 auto 同一手法 */}
+                  <Select
+                    value={shared.defaultCurrency || 'off'}
+                    disabled={sharedDisabled}
+                    onValueChange={(v) => set('defaultCurrency', v === 'off' ? '' : v)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="off">{t('plugin_website.settings.defaultCurrencyOff')}</SelectItem>
+                      {currencyRatesKeys(shared.currencyRates).map((code) => (
+                        <SelectItem key={code} value={code}>{code}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </SharedFieldShell>
+              ) : null}
             </>
           ) : null}
           {tab === 'footer' ? (
@@ -633,6 +677,8 @@ export default function SettingsPage() {
         homeCtaHref: data.homeCtaHref,
         theme: data.theme ?? '',
         defaultLang: data.defaultLang ?? '',
+        defaultCurrency: data.defaultCurrency ?? '',
+        currencyRates: data.currencyRates ?? '',
         contactEmail: data.contactEmail,
         contactPhone: data.contactPhone,
         qrCodeUrl: data.qrCodeUrl,

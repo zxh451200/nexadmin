@@ -27,6 +27,7 @@
       "consentUrlInvalid": "With message consent on, the privacy policy URL is required: an in-site path (e.g. /p/privacy) or a full https:// URL",
       "defaultLangAuto": "Follow browser language",
       "defaultLangSource": "source language",
+      "defaultCurrencyOff": "No currency conversion",
       "defaultTheme": "Default theme",
       "demoImport": "Import demo content",
       "demoImported": "Demo content imported: {{total}} added, {{skipped}} existing skipped",
@@ -580,6 +581,8 @@
     "fields": {
       "theme": "Theme template",
       "defaultLang": "Default site language",
+      "currencyRates": "Currency rates",
+      "defaultCurrency": "Default display currency",
       "siteName": "Site name",
       "siteDesc": "Site description (SEO)",
       "logoUrl": "Logo URL",
@@ -648,6 +651,8 @@
     },
     "hint": {
       "defaultLang": "Follow browser = first visit opens the matching version; pick a language = it owns the root path and the previous default moves under a prefix (e.g. /zh). Public-site routes register at startup, so a restart is required after changing",
+      "currencyRates": "JSON like {\"USD\":1,\"EUR\":0.92,\"CNY\":7.1}: USD is the base (always 1) and the keys are the currencies offered in the public site header's language-and-currency popover; leave empty to disable conversion and show prices in each product's own currency",
+      "defaultCurrency": "Currency seen by visitors who have not picked one (including search crawlers); must be one of the keys in the rates table",
       "homeTitle": "Use a line break for two lines; the last line renders as gradient text",
       "logoUrl": "≤240×240 square, transparent PNG/SVG recommended (nav shows it ~32–40px tall; {{types}}, ≤{{max}}); leave empty for the built-in letter mark",
       "faviconUrl": "64×64 or 128×128 square PNG recommended (browser tabs render only 16–32px; {{types}}, ≤{{max}}); leave empty for the built-in favicon.svg",

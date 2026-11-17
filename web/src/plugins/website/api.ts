@@ -60,6 +60,10 @@ export interface SiteSettings {
   theme: string
   /** 官网默认语言（占根路径）：空 / auto = 跟随浏览器语言协商；具体 code = 该语言独占根路径。改完需重启 */
   defaultLang: string
+  /** 展示币种（未选币种的访客看到的）：空 = 不启用换算，价格按商品各自币种直出 */
+  defaultCurrency: string
+  /** 汇率表 JSON 文本 {"USD":1,"EUR":0.92}：USD 恒为基准 1，键集合即头部可选币种 */
+  currencyRates: string
   homeTitle: string
   homeSubtitle: string
   homeCtaLabel: string

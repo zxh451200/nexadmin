@@ -27,6 +27,7 @@
       "consentUrlInvalid": "开启留言同意后，隐私政策地址必填：站内路径（如 /p/privacy）或完整 https:// 地址",
       "defaultLangAuto": "跟随浏览器语言",
       "defaultLangSource": "原文语言",
+      "defaultCurrencyOff": "不启用币种换算",
       "defaultTheme": "默认主题",
       "demoImport": "导入演示内容",
       "demoImported": "演示内容导入完成：新增 {{total}} 条，跳过已存在 {{skipped}} 条",
@@ -580,6 +581,8 @@
     "fields": {
       "theme": "主题模板",
       "defaultLang": "官网默认语言",
+      "currencyRates": "汇率表",
+      "defaultCurrency": "默认展示币种",
       "siteName": "站点名称",
       "siteDesc": "站点描述（SEO）",
       "logoUrl": "Logo 地址",
@@ -648,6 +651,8 @@
     },
     "hint": {
       "defaultLang": "跟随浏览器 = 首访按浏览器语言进入对应版本；选具体语言 = 该语言独占根路径、原默认语言挂前缀（如 /zh）。公开站路由在启动期注册，改完需重启生效",
+      "currencyRates": "{\"USD\":1,\"EUR\":0.92,\"CNY\":7.1} 形态的 JSON：USD 恒为基准 1，键集合即公开站头部「语言-币种」弹层的可选币种；清空 = 不启用换算，价格按商品各自币种直出",
+      "defaultCurrency": "访客未选择币种时（含搜索引擎爬虫）看到的币种，必须在汇率表里",
       "homeTitle": "两行标题请用换行分隔，末行渲染为渐变文字",
       "logoUrl": "建议 ≤240×240 正方形、透明底 PNG/SVG（导航栏展示高约 32–40px；{{types}}，≤{{max}}）；留空使用内置字母标志",
       "faviconUrl": "建议 64×64 或 128×128 正方形 PNG（浏览器标签实际只有 16–32px；{{types}}，≤{{max}}）；留空使用内置 favicon.svg",
