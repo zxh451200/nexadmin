@@ -76,30 +76,6 @@ type Setting struct {
 	ResponseTime    string `gorm:"column:response_time;size:32;not null;default:''" json:"responseTime"` // 平均响应，如 ≤4h
 }
 
-// ProductReview 是商品评价（对标阿里商详「评价」区）。
-// 匿名站点没有登录买家，评价由运营在后台录入真实回访内容，公开站只读；
-// 因此这里不挂用户表外键，Author/Country 用展示名，Verified 表示「已验证采购」。
-type ProductReview struct {
-	database.PlatformModel
-	// ProductID 用 idgen.ID：雪花 ID 走 MarshalJSON 输出字符串，裸 uint 到 JS 会丢精度。
-	ProductID idgen.ID `gorm:"column:product_id;not null;index" json:"productId"`
-	Author    string   `gorm:"size:64;not null;default:''" json:"author"`
-	// Country 是买家所在国家/地区（展示用，如 Germany）；空 = 不显示国旗位。
-	Country string `gorm:"size:64;not null;default:''" json:"country"`
-	// Rating 是 1-5 星；服务层钳制到该区间，0 视为非法。
-	Rating int `gorm:"not null;default:5" json:"rating"`
-	// Content 是评价正文；空评价允许（只有星级），详情页按有正文才出引用块。
-	Content string `gorm:"type:text" json:"content"`
-	// Verified 表示该评价来自已验证的真实采购（阿里显示的 verified 标）。
-	Verified bool `gorm:"not null;default:false" json:"verified"`
-	// Quantity 是这笔采购的数量（如 20 sets），空 = 不显示。
-	Quantity string `gorm:"size:64;not null;default:''" json:"quantity"`
-	// Published 是公开可见：后台草稿（false）不进聚合与列表，方便先录入后放量。
-	Published bool `gorm:"not null;default:true" json:"published"`
-}
-
-func (ProductReview) TableName() string { return "plg_website_product_review" }
-
 func (Setting) TableName() string { return "plg_website_setting" }
 
 // SocialLink 是页脚的社交图标（Platform 取自 render.go 的 socialIconPaths 键）与外部主页地址。
@@ -423,10 +399,6 @@ type Product struct {
 	Currency     string  `gorm:"size:8;not null;default:'USD'" json:"currency"`
 	PriceUnit    string  `gorm:"size:32;not null;default:''" json:"priceUnit"` // 计量单位：piece / set…
 	Moq          int     `gorm:"column:moq;not null;default:0" json:"moq"`     // 最小起订量
-	// RatingAvg / RatingCount 是列表卡片的评分摘要（gorm:"-" 不入库）：
-	// 列表页一次批量算好塞进来，模板直接用；详情页看 ProductReviews 的完整统计。
-	RatingAvg   float64 `gorm:"-" json:"ratingAvg"`
-	RatingCount int     `gorm:"-" json:"ratingCount"`
 	LeadTimeDays int     `gorm:"column:lead_time_days;not null;default:0" json:"leadTimeDays"`
 	// Port 是装运港口，支持多选（逗号拼接，如 "Shenzhen, Ningbo"），宽度与 PaymentTerms 对齐。
 	Port string `gorm:"size:100;not null;default:''" json:"port"`

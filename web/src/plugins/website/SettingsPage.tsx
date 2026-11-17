@@ -136,7 +136,7 @@ function SettingsFormBody({
     try {
       const rep = await seed.mutateAsync(selectedTheme.id)
       const total =
-        rep.settings + rep.navs + rep.features + rep.categories + rep.pages + rep.posts + rep.productCategories + rep.products + rep.reviews
+        rep.settings + rep.navs + rep.features + rep.categories + rep.pages + rep.posts + rep.productCategories + rep.products
       toast.success(t('plugin_website.settings.demoImported', { total, skipped: rep.skipped }))
     } catch {
       toast.error(t('common.operateFailed'))

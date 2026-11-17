@@ -47,14 +47,6 @@
 
       <div class="pd-info">
         <h1>{{.Product.Title}}</h1>
-        {{/* 评分行对标阿里标题下方的「5.0 (N 评价)」：没有评价整行不渲染 */}}
-        {{if .ProductReviews.Total}}
-        <div class="pd-rating-row">
-          <span class="pd-stars" aria-hidden="true">{{starRow .ProductReviews.AvgValue}}</span>
-          <strong>{{.ProductReviews.Average}}</strong>
-          <span class="pd-rating-count">{{$.TF "product.reviewsCount" .ProductReviews.Total}}</span>
-        </div>
-        {{end}}
         <div class="pd-badges">
           {{range .Product.Categories}}<a class="pd-badge" href="{{$.URL "/products"}}?category={{.Slug}}">{{.Title}}</a>{{end}}
           {{if .Product.Views}}<span class="pd-badge pd-badge-quiet">{{.TF "product.views" .Product.Views}}</span>{{end}}
@@ -186,7 +178,6 @@
       {{if .Product.ProductSpecs}}<button type="button" role="tab" id="pd-tab-attrs" aria-controls="pd-panel-attrs" aria-selected="true">{{.T "product.tabAttrs"}}</button>{{end}}
       {{if or .Product.Content .Product.Summary}}<button type="button" role="tab" id="pd-tab-desc" aria-controls="pd-panel-desc" aria-selected="false">{{.T "product.tabDesc"}}</button>{{end}}
       {{if or .Product.PaymentTerms .Product.Moq .Product.LeadTimeDays .Product.Port $trade.Pkg $trade.Supply}}<button type="button" role="tab" id="pd-tab-ship" aria-controls="pd-panel-ship" aria-selected="false">{{.T "product.tabShipping"}}</button>{{end}}
-      {{with .ProductReviews}}{{if .Total}}<a class="pd-tab-anchor" href="#pd-reviews">{{$.T "product.tabReviews"}}</a>{{end}}{{end}}
     </div>
     {{if .Product.ProductSpecs}}
     <section class="pd-panel" id="pd-panel-attrs" role="tabpanel" aria-labelledby="pd-tab-attrs">
@@ -217,45 +208,6 @@
       </div>
     </section>
     {{end}}
-
-    {{with .ProductReviews}}{{if .Total}}
-    <section class="pd-reviews" id="pd-reviews" aria-label="{{$.T "product.reviewsTitle"}}">
-      <h2 class="pd-section-title">{{$.T "product.reviewsTitle"}}</h2>
-      <div class="pd-review-summary">
-        <div class="pd-review-score">
-          <strong>{{.Average}}</strong>
-          <span class="pd-stars" aria-hidden="true">{{starRow .AvgValue}}</span>
-          <span class="pd-review-count">{{$.TF "product.reviewsCount" .Total}}</span>
-        </div>
-        <ul class="pd-review-dist">
-          {{range .Stars}}<li>
-            <span class="pd-review-star">{{.Star}}{{$.T "product.reviewStarUnit"}}</span>
-            <span class="pd-review-bar"><i style="width:{{.Percent}}%"></i></span>
-            <span class="pd-review-num">{{.Count}}</span>
-          </li>{{end}}
-        </ul>
-      </div>
-      <ul class="pd-review-list">
-        {{range .List}}<li class="pd-review-item">
-          <div class="pd-review-head">
-            <span class="pd-review-avatar" aria-hidden="true">{{initial .Author}}</span>
-            <span class="pd-review-who">
-              <span class="pd-review-name">{{if .Author}}{{.Author}}{{else}}{{$.T "product.reviewAnonymous"}}{{end}}</span>
-              {{if .Country}}<span class="pd-review-country">{{.Country}}</span>{{end}}
-            </span>
-            <span class="pd-stars pd-stars-sm" aria-label="{{$.TF "product.reviewRatingAria" .Rating}}">{{starRow .StarsFloat}}</span>
-          </div>
-          {{if .Content}}<p class="pd-review-body">{{.Content}}</p>{{end}}
-          <div class="pd-review-meta">
-            {{if .Verified}}<span class="pd-review-verified">{{uiIcon "badge-check" "pd-review-vico"}}{{$.T "product.reviewVerified"}}</span>{{end}}
-            {{if .Quantity}}<span>{{$.TF "product.reviewQty" .Quantity}}</span>{{end}}
-            <span class="pd-review-date">{{.CreatedAt.Format "2006-01-02"}}</span>
-          </div>
-        </li>{{end}}
-      </ul>
-      {{if gt .Total (len .List)}}<p class="pd-review-more">{{$.TF "product.reviewsMore" .Total}}</p>{{end}}
-    </section>
-    {{end}}{{end}}
 
     {{if .ProductsRelated}}
     <section class="pd-recommend">

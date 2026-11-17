@@ -701,24 +701,6 @@
     "languages": {
       "manageShort": "The language list is maintained in System settings → Languages.",
       "manageHint": "To add or change languages, go to System settings → Languages: the site and the admin UI share one language list. Restart the server afterwards so the public site registers routes for the new prefixes."
-    },
-    "review": {
-      "manage": "Reviews",
-      "desc": "Enter real follow-up reviews; the public site shows published entries only",
-      "add": "Add review",
-      "count": "{{count}} reviews",
-      "empty": "No reviews yet — use “Add review” to enter one",
-      "anonymous": "Anonymous buyer",
-      "author": "Buyer",
-      "country": "Country / region",
-      "rating": "Rating",
-      "ratingAria": "{{rating}} stars",
-      "contentPlaceholder": "Review body (leave empty to show the rating only)",
-      "quantity": "Purchased quantity",
-      "verified": "Verified purchase",
-      "published": "Published",
-      "draft": "Unpublished",
-      "deleteConfirm": "Delete this review from {{who}}?"
     }
   }
 }

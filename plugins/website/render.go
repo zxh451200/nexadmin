@@ -416,30 +416,6 @@ var tplFuncs = template.FuncMap{
 		}
 		return strconv.FormatFloat(v, 'f', 2, 64)
 	},
-	// avgText 给列表卡的均分固定一位小数（5 显示成 5.0，和商详的 4.7 对齐）。
-	"avgText": func(v float64) string {
-		return strconv.FormatFloat(math.Round(v*10)/10, 'f', 1, 64)
-	},
-	// starRow 画五颗星：四舍五入到整星，亮的实心、灭的描边。
-	// 只由下面这段固定标记拼成，不含用户输入，所以可以安全地当 HTML 输出。
-	"starRow": func(v float64) template.HTML {
-		n := int(math.Round(v))
-		if n > 5 {
-			n = 5
-		}
-		if n < 0 {
-			n = 0
-		}
-		var b strings.Builder
-		for i := 1; i <= 5; i++ {
-			if i <= n {
-				b.WriteString(`<span class="pd-star is-on">★</span>`)
-			} else {
-				b.WriteString(`<span class="pd-star">★</span>`)
-			}
-		}
-		return template.HTML(b.String())
-	},
 	// specOf 按一组候选标签取商品的第一个匹配规格值（主题选型表用）：
 	// 标签在库里的写法与语言相关，传入多个语言的写法（如 "功率", "Power"）谁先命中用谁。
 	"specOf": func(p Product, labels ...string) string {
@@ -600,8 +576,6 @@ type siteView struct {
 	ProductSort      string
 	ProductsFeatured []Product
 	Product          *Product
-	// ProductReviews 是商详评价区（均分/分布/列表）。Total=0 时模板整段不渲染。
-	ProductReviews productReviewStats
 	// InquiryAccept / InquiryMaxBytes / InquiryMaxText / InquiryMaxFiles 是询盘附件的生效限制，
 	// 只有商详页填（弹窗在那里）；空表示附件不可用（存储未装配）。
 	InquiryAccept   string

@@ -486,20 +486,6 @@ func (h *siteHandler) productsList(c *gin.Context) {
 	// 折树放在 href 填完之后：Children 是结构体拷贝，链接跟着一起带过去，
 	// 不用在树里再拼一遍查询串。
 	v.ProductCategoryTree = NestProductCategories(v.ProductCategories)
-	// 列表卡评分：一次批量算（对标阿里搜索结果卡的星级），查失败只是不显示星级，
-	// 不挡列表主内容。
-	ids := make([]int64, 0, len(products))
-	for i := range products {
-		ids = append(ids, int64(products[i].ID))
-	}
-	if ratings, rerr := h.svc.ProductRatingSummaries(ctx, ids); rerr == nil {
-		for i := range products {
-			if r, ok := ratings[int64(products[i].ID)]; ok {
-				products[i].RatingAvg = r.Avg
-				products[i].RatingCount = r.Count
-			}
-		}
-	}
 	v.Products = products
 	v.ProductsTotal = int(total)
 	v.ProductsPage, v.ProductsTotalPages = pageOf(page), pagesOf(total, productsPageSize)
@@ -557,12 +543,6 @@ func (h *siteHandler) productDetail(c *gin.Context) {
 		v.SeoKeywords = p.SeoKeywords
 	}
 	v.Product = p
-	// 评价区：只有已发布评价参与聚合；加载失败不挡详情（评价是增强信息）。
-	if stats, rerr := h.svc.PublicProductReviews(c.Request.Context(), int64(p.ID)); rerr == nil {
-		v.ProductReviews = stats
-	} else if h.log != nil {
-		h.log.Warn("website: 商品评价加载失败", zap.Error(rerr), zap.String("slug", slug))
-	}
 	// 询盘附件的生效限制随页面下发（弹窗里直接渲染 accept 与上限，不再多一次请求）。
 	lim := InquiryAttachmentLimitsFor(c.Request.Context())
 	v.InquiryAccept, v.InquiryMaxBytes, v.InquiryMaxText, v.InquiryMaxFiles =

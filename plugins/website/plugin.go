@@ -164,13 +164,6 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.POST("/products/:id/copy", core.Perm("website:product"), core.Desc("复制产品"), h.copyProduct)
 	g.DELETE("/products/:id", core.Perm("website:product"), core.Desc("删除产品"), h.deleteProduct)
 
-	// 商品评价：匿名官网无登录态，评价由运营录入真实回访内容，公开站只读。
-	// 读写都挂 website:product —— 评价是商品内容的一部分，不该拆出第二个权限点。
-	g.GET("/reviews", core.Perm("website:product"), core.Desc("商品评价列表"), h.listReviews)
-	g.POST("/reviews", core.Perm("website:product"), core.Desc("新增商品评价"), h.createReview)
-	g.PUT("/reviews/:id", core.Perm("website:product"), core.Desc("更新商品评价"), h.updateReview)
-	g.DELETE("/reviews/:id", core.Perm("website:product"), core.Desc("删除商品评价"), h.deleteReview)
-
 	// 类目清单挂在 website:product 下：商品表单的类目复选框要读它；
 	// 变更动作走独立的 website:product-category（后台单独一个菜单项）。
 	g.GET("/product-categories", core.Perm("website:product"), core.Desc("产品类目列表"), h.listProductCategories)

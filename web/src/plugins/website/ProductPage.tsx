@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { CircleAlert, CircleCheck, CloudDownload, CloudUpload, Copy, Download, ExternalLink, Eye, FileUp, Pencil, Plus, RefreshCw, Settings2, Star, Trash2, X } from 'lucide-react'
+import { CircleAlert, CircleCheck, CloudDownload, CloudUpload, Copy, Download, ExternalLink, Eye, FileUp, Pencil, Plus, RefreshCw, Settings2, Trash2, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -42,9 +42,6 @@ import { Input } from '@/framework/ui/input'
 import { Label } from '@/framework/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import { Tabs, TabsList, TabsTrigger } from '@/framework/ui/tabs'
-import { Skeleton } from '@/framework/ui/skeleton'
-import { Textarea } from '@/framework/ui/textarea'
-import { EmptyState } from '@/framework/components/EmptyState'
 import { AliTradeFields, safeParseAliTrade } from './AliTradeFields'
 import { EditorSchemaGate } from './EditorSchemaGate'
 import TranslationStatus from './TranslationStatus'
@@ -87,10 +84,6 @@ import {
   type AliPreview,
   type AliTrade,
   usePreviewAliSync,
-  useReviews,
-  useSaveReview,
-  useDeleteReview,
-  type ProductReviewItem,
   type ContentDraft,
   type ContentQuery,
   type ProductCategoryNode,
@@ -1692,7 +1685,7 @@ export default function ProductPage() {
   const { data: aliConfig } = useAliConfig()
   const [aliOpen, setAliOpen] = useState(false)
   const [pullOpen, setPullOpen] = useState(false)
-  const [reviewsOf, setReviewsOf] = useState<SiteProduct | null>(null)  // 列表缩略图点开看大图：记整行，弹窗同时用 coverUrl 和标题。
+  // 列表缩略图点开看大图：记整行，弹窗同时用 coverUrl 和标题。
   const [preview, setPreview] = useState<SiteProduct | null>(null)
 
   const openAt = (row: SiteProduct | null, code?: string) => {
@@ -2065,9 +2058,6 @@ export default function ProductPage() {
             <Button variant="ghost" size="icon" aria-label={t('plugin_website.ali.syncAction')} onClick={() => setSyncTarget({ mode: 'single', product: row })}>
               <CloudUpload aria-hidden="true" />
             </Button>
-            <Button variant="ghost" size="icon" aria-label={t('plugin_website.review.manage')} onClick={() => setReviewsOf(row)}>
-              <Star aria-hidden="true" />
-            </Button>
             <Button variant="ghost" size="icon" className="text-destructive" aria-label={t('common.delete')} onClick={() => void onDelete([row])}>
               <Trash2 aria-hidden="true" />
             </Button>
@@ -2086,7 +2076,6 @@ export default function ProductPage() {
       {importOpen && <ProductImportDialog onOpenChange={setImportOpen} />}
       {aliOpen && <AliConfigDialog onOpenChange={setAliOpen} />}
       {pullOpen && <AliPullDialog onOpenChange={setPullOpen} />}
-      {reviewsOf && <ReviewsDialog product={reviewsOf} onClose={() => setReviewsOf(null)} />}
       <Lightbox
         open={!!preview}
         onOpenChange={(o) => !o && setPreview(null)}
@@ -2096,144 +2085,3 @@ export default function ProductPage() {
   )
 }
 
-
-// ---- 商品评价管理：匿名官网没有登录态，评价由运营录入真实回访内容，公开站只读 ----
-
-function starsOf(rating: number): string {
-  const n = Math.min(5, Math.max(1, rating))
-  return '★'.repeat(n) + '☆'.repeat(5 - n)
-}
-
-function ReviewsDialog({ product, onClose }: { product: SiteProduct; onClose: () => void }) {
-  const { t } = useTranslation()
-  const { data: reviews = [], isLoading } = useReviews(product.id)
-  const save = useSaveReview(product.id)
-  const remove = useDeleteReview(product.id)
-  const confirm = useConfirm()
-  // null = 列表态；编辑带 id，新增为空表单（published 默认公开）
-  const [editing, setEditing] = useState<{
-    id?: string
-    author: string
-    country: string
-    rating: number
-    content: string
-    verified: boolean
-    quantity: string
-    published: boolean
-  } | null>(null)
-
-  const submit = async () => {
-    if (!editing) return
-    try {
-      // productId 由 useSaveReview 闭包注入（product 固定），表单里只带内容字段
-      await save.mutateAsync(editing)
-      toast.success(t('common.operateSuccess'))
-      setEditing(null)
-    } catch {
-      toast.error(t('common.operateFailed'))
-    }
-  }
-
-  const onDelete = async (r: ProductReviewItem) => {
-    const who = r.author || t('plugin_website.review.anonymous')
-    if (!(await confirm({ description: t('plugin_website.review.deleteConfirm', { who }) }))) return
-    try {
-      await remove.mutateAsync(r.id)
-      toast.success(t('common.operateSuccess'))
-    } catch {
-      toast.error(t('common.operateFailed'))
-    }
-  }
-
-  return (
-    <ResponsiveDialog open onOpenChange={(v) => !v && onClose()} size="lg" title={`${t('plugin_website.review.manage')} — ${product.title}`} description={t('plugin_website.review.desc')}>
-      <div className="flex flex-col gap-3">
-        {editing ? (
-          <div className="flex flex-col gap-3 rounded-lg border bg-muted/30 p-3">
-            <div className="flex flex-wrap items-end gap-2">
-              <div className="flex flex-col gap-1">
-                <Label>{t('plugin_website.review.author')}</Label>
-                <Input className="w-40" maxLength={64} value={editing.author} onChange={(e) => setEditing({ ...editing, author: e.target.value })} placeholder={t('plugin_website.review.anonymous')} />
-              </div>
-              <div className="flex flex-col gap-1">
-                <Label>{t('plugin_website.review.country')}</Label>
-                <Input className="w-40" maxLength={64} value={editing.country} onChange={(e) => setEditing({ ...editing, country: e.target.value })} />
-              </div>
-              <div className="flex flex-col gap-1">
-                <Label>{t('plugin_website.review.rating')}</Label>
-                <Select value={String(editing.rating)} onValueChange={(v) => setEditing({ ...editing, rating: Number(v) })}>
-                  <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {[5, 4, 3, 2, 1].map((n) => (
-                      <SelectItem key={n} value={String(n)}>
-                        {'★'.repeat(n)}{'☆'.repeat(5 - n)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex flex-col gap-1">
-                <Label>{t('plugin_website.review.quantity')}</Label>
-                <Input className="w-32" maxLength={64} value={editing.quantity} onChange={(e) => setEditing({ ...editing, quantity: e.target.value })} placeholder="20 sets" />
-              </div>
-            </div>
-            <Textarea rows={3} maxLength={1000} value={editing.content} onChange={(e) => setEditing({ ...editing, content: e.target.value })} placeholder={t('plugin_website.review.contentPlaceholder')} />
-            <div className="flex flex-wrap items-center gap-6">
-              <SwitchRow label={t('plugin_website.review.verified')} checked={editing.verified} onCheckedChange={(v) => setEditing({ ...editing, verified: v })} />
-              <SwitchRow label={t('plugin_website.review.published')} checked={editing.published} onCheckedChange={(v) => setEditing({ ...editing, published: v })} />
-            </div>
-            <div className="flex items-center justify-end gap-2">
-              <Button variant="ghost" onClick={() => setEditing(null)}>{t('common.cancel')}</Button>
-              <Button onClick={() => void submit()} disabled={save.isPending}>{t('common.save')}</Button>
-            </div>
-          </div>
-        ) : (
-          <>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">{t('plugin_website.review.count', { count: reviews.length })}</span>
-              <Button size="sm" onClick={() => setEditing({ author: '', country: '', rating: 5, content: '', verified: false, quantity: '', published: true })}>
-                <Plus aria-hidden="true" />
-                {t('plugin_website.review.add')}
-              </Button>
-            </div>
-            {isLoading ? (
-              <div className="flex flex-col gap-2">
-                <Skeleton className="h-16 w-full" />
-                <Skeleton className="h-16 w-full" />
-              </div>
-            ) : reviews.length === 0 ? (
-              <EmptyState title={t('plugin_website.review.empty')} />
-            ) : (
-              <ul className="flex flex-col divide-y">
-                {reviews.map((r) => (
-                  <li key={r.id} className="flex items-start gap-3 py-2">
-                    <span className="w-24 shrink-0 text-warning" aria-label={t('plugin_website.review.ratingAria', { rating: r.rating })}>
-                      {starsOf(r.rating)}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm">
-                        <span className="font-medium">{r.author || t('plugin_website.review.anonymous')}</span>
-                        {r.country ? <span className="text-muted-foreground"> · {r.country}</span> : null}
-                        {r.verified ? <Badge variant="secondary" className="ms-2">{t('plugin_website.review.verified')}</Badge> : null}
-                        {!r.published ? <Badge variant="outline" className="ms-2">{t('plugin_website.review.draft')}</Badge> : null}
-                      </p>
-                      {r.content ? <p className="mt-0.5 line-clamp-2 text-sm text-muted-foreground">{r.content}</p> : null}
-                    </div>
-                    <div className="flex shrink-0 items-center">
-                      <Button variant="ghost" size="icon" aria-label={t('common.edit')} onClick={() => setEditing({ id: r.id, author: r.author, country: r.country, rating: r.rating, content: r.content, verified: r.verified, quantity: r.quantity, published: r.published })}>
-                        <Pencil aria-hidden="true" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="text-destructive" aria-label={t('common.delete')} onClick={() => void onDelete(r)}>
-                        <Trash2 aria-hidden="true" />
-                      </Button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </>
-        )}
-      </div>
-    </ResponsiveDialog>
-  )
-}
