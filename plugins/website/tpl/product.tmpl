@@ -181,8 +181,44 @@
       <button type="button" class="pd-sticky-cta" data-pd-sticky-go>{{.T "product.sendInquiry"}}</button>
     </div>
 
+    <div class="pd-tabs" data-tabs role="tablist">
+      {{if .Product.ProductSpecs}}<button type="button" role="tab" id="pd-tab-attrs" aria-controls="pd-panel-attrs" aria-selected="true">{{.T "product.tabAttrs"}}</button>{{end}}
+      {{if or .Product.Content .Product.Summary}}<button type="button" role="tab" id="pd-tab-desc" aria-controls="pd-panel-desc" aria-selected="false">{{.T "product.tabDesc"}}</button>{{end}}
+      {{if or .Product.PaymentTerms .Product.Moq .Product.LeadTimeDays .Product.Port $trade.Pkg $trade.Supply}}<button type="button" role="tab" id="pd-tab-ship" aria-controls="pd-panel-ship" aria-selected="false">{{.T "product.tabShipping"}}</button>{{end}}
+      {{with .ProductReviews}}{{if .Total}}<a class="pd-tab-anchor" href="#pd-reviews">{{$.T "product.tabReviews"}}</a>{{end}}{{end}}
+    </div>
+    {{if .Product.ProductSpecs}}
+    <section class="pd-panel" id="pd-panel-attrs" role="tabpanel" aria-labelledby="pd-tab-attrs">
+      <h2>{{.T "product.specTableTitle"}}</h2>
+      <div class="pd-spec-table">{{range .Product.ProductSpecs}}<div class="pd-spec-cell"><span class="pd-spec-label">{{.Label}}</span><span>{{.Value}}</span></div>{{end}}</div>
+    </section>
+    {{end}}
+    {{if or .Product.Content .Product.Summary}}
+    <section class="pd-panel" id="pd-panel-desc" role="tabpanel" aria-labelledby="pd-tab-desc">
+      {{if .Product.Summary}}<p class="pd-summary">{{.Product.Summary}}</p>{{end}}
+      {{if .Product.Content}}<div class="article-body pd-body">{{safeHTML .Product.Content}}</div>{{end}}
+    </section>
+    {{end}}
+    {{if or .Product.PaymentTerms .Product.Moq .Product.LeadTimeDays .Product.Port $trade.Pkg $trade.Supply}}
+    <section class="pd-panel" id="pd-panel-ship" role="tabpanel" aria-labelledby="pd-tab-ship">
+      <h2>{{.T "product.tabShipping"}}</h2>
+      <div class="pd-spec-table">
+        {{if .Product.Moq}}<div class="pd-spec-cell"><span class="pd-spec-label">{{.T "products.moqLabel"}}</span><span>{{.Product.Moq}} {{.Product.PriceUnit}}</span></div>{{end}}
+        {{if .Product.PaymentTerms}}<div class="pd-spec-cell"><span class="pd-spec-label">{{.T "products.paymentTerms"}}</span><span>{{.Product.PaymentTerms}}</span></div>{{end}}
+        {{if .Product.LeadTimeDays}}<div class="pd-spec-cell"><span class="pd-spec-label">{{.T "products.leadTimeLabel"}}</span><span>{{.TF "products.leadTime" .Product.LeadTimeDays}}</span></div>{{end}}
+        {{if .Product.Port}}<div class="pd-spec-cell"><span class="pd-spec-label">{{.T "products.portLabel"}}</span><span>{{.Product.Port}}</span></div>{{end}}
+        {{with $trade.Supply}}<div class="pd-spec-cell"><span class="pd-spec-label">{{$.T "product.supplyCapacity"}}</span><span>{{.Number}} {{.Unit}}{{if .Period}} / {{.Period}}{{end}}</span></div>{{end}}
+        {{with $trade.Pkg}}
+        {{if .Dim}}<div class="pd-spec-cell"><span class="pd-spec-label">{{$.T "product.packageSize"}}</span><span>{{.Dim}}</span></div>{{end}}
+        {{if .Weight}}<div class="pd-spec-cell"><span class="pd-spec-label">{{$.T "product.grossWeight"}}</span><span>{{.Weight}} kg</span></div>{{end}}
+        {{if .Cubic}}<div class="pd-spec-cell"><span class="pd-spec-label">{{$.T "product.volumeLabel"}}</span><span>{{.Cubic}} m³</span></div>{{end}}
+        {{end}}
+      </div>
+    </section>
+    {{end}}
+
     {{with .ProductReviews}}{{if .Total}}
-    <section class="pd-reviews" aria-label="{{$.T "product.reviewsTitle"}}">
+    <section class="pd-reviews" id="pd-reviews" aria-label="{{$.T "product.reviewsTitle"}}">
       <h2 class="pd-section-title">{{$.T "product.reviewsTitle"}}</h2>
       <div class="pd-review-summary">
         <div class="pd-review-score">
@@ -232,46 +268,11 @@
     </section>
     {{end}}
 
-    <div class="pd-tabs" data-tabs role="tablist">
-      {{if .Product.ProductSpecs}}<button type="button" role="tab" id="pd-tab-attrs" aria-controls="pd-panel-attrs" aria-selected="true">{{.T "product.tabAttrs"}}</button>{{end}}
-      {{if or .Product.Content .Product.Summary}}<button type="button" role="tab" id="pd-tab-desc" aria-controls="pd-panel-desc" aria-selected="false">{{.T "product.tabDesc"}}</button>{{end}}
-      {{if or .Product.PaymentTerms .Product.Moq .Product.LeadTimeDays .Product.Port $trade.Pkg $trade.Supply}}<button type="button" role="tab" id="pd-tab-ship" aria-controls="pd-panel-ship" aria-selected="false">{{.T "product.tabShipping"}}</button>{{end}}
-    </div>
-    {{if .Product.ProductSpecs}}
-    <section class="pd-panel" id="pd-panel-attrs" role="tabpanel" aria-labelledby="pd-tab-attrs">
-      <h2>{{.T "product.specTableTitle"}}</h2>
-      <div class="pd-spec-table">{{range .Product.ProductSpecs}}<div class="pd-spec-cell"><span class="pd-spec-label">{{.Label}}</span><span>{{.Value}}</span></div>{{end}}</div>
-    </section>
-    {{end}}
-    {{if or .Product.Content .Product.Summary}}
-    <section class="pd-panel" id="pd-panel-desc" role="tabpanel" aria-labelledby="pd-tab-desc">
-      {{if .Product.Summary}}<p class="pd-summary">{{.Product.Summary}}</p>{{end}}
-      {{if .Product.Content}}<div class="article-body pd-body">{{safeHTML .Product.Content}}</div>{{end}}
-    </section>
-    {{end}}
-    {{if or .Product.PaymentTerms .Product.Moq .Product.LeadTimeDays .Product.Port $trade.Pkg $trade.Supply}}
-    <section class="pd-panel" id="pd-panel-ship" role="tabpanel" aria-labelledby="pd-tab-ship">
-      <h2>{{.T "product.tabShipping"}}</h2>
-      <div class="pd-spec-table">
-        {{if .Product.Moq}}<div class="pd-spec-cell"><span class="pd-spec-label">{{.T "products.moqLabel"}}</span><span>{{.Product.Moq}} {{.Product.PriceUnit}}</span></div>{{end}}
-        {{if .Product.PaymentTerms}}<div class="pd-spec-cell"><span class="pd-spec-label">{{.T "products.paymentTerms"}}</span><span>{{.Product.PaymentTerms}}</span></div>{{end}}
-        {{if .Product.LeadTimeDays}}<div class="pd-spec-cell"><span class="pd-spec-label">{{.T "products.leadTimeLabel"}}</span><span>{{.TF "products.leadTime" .Product.LeadTimeDays}}</span></div>{{end}}
-        {{if .Product.Port}}<div class="pd-spec-cell"><span class="pd-spec-label">{{.T "products.portLabel"}}</span><span>{{.Product.Port}}</span></div>{{end}}
-        {{with $trade.Supply}}<div class="pd-spec-cell"><span class="pd-spec-label">{{$.T "product.supplyCapacity"}}</span><span>{{.Number}} {{.Unit}}{{if .Period}} / {{.Period}}{{end}}</span></div>{{end}}
-        {{with $trade.Pkg}}
-        {{if .Dim}}<div class="pd-spec-cell"><span class="pd-spec-label">{{$.T "product.packageSize"}}</span><span>{{.Dim}}</span></div>{{end}}
-        {{if .Weight}}<div class="pd-spec-cell"><span class="pd-spec-label">{{$.T "product.grossWeight"}}</span><span>{{.Weight}} kg</span></div>{{end}}
-        {{if .Cubic}}<div class="pd-spec-cell"><span class="pd-spec-label">{{$.T "product.volumeLabel"}}</span><span>{{.Cubic}} m³</span></div>{{end}}
-        {{end}}
-      </div>
-    </section>
-    {{end}}
-
     {{shareBar $}}
     {{if or .ProductPrev .ProductNext}}
     <nav class="dt-nav" aria-label="{{.T "detail.navAria"}}">
-      {{if .ProductPrev}}<a class="dt-nav-item dt-prev" href="{{.URL "/products"}}/{{.ProductPrev.Slug}}"><small>← {{.T "detail.prev"}}</small><span>{{.ProductPrev.Title}}</span></a>{{else}}<span class="dt-nav-item dt-empty"></span>{{end}}
-      {{if .ProductNext}}<a class="dt-nav-item dt-next" href="{{.URL "/products"}}/{{.ProductNext.Slug}}"><small>{{.T "detail.next"}} →</small><span>{{.ProductNext.Title}}</span></a>{{else}}<span class="dt-nav-item dt-empty"></span>{{end}}
+      {{if .ProductPrev}}<a class="dt-nav-item dt-prev" href="{{.URL "/products"}}/{{.ProductPrev.Slug}}"><small>{{.T "detail.prev"}}</small><span class="dt-t">{{.ProductPrev.Title}}</span></a>{{else}}<span class="dt-nav-item dt-empty"></span>{{end}}
+      {{if .ProductNext}}<a class="dt-nav-item dt-next" href="{{.URL "/products"}}/{{.ProductNext.Slug}}"><small>{{.T "detail.next"}}</small><span class="dt-t">{{.ProductNext.Title}}</span></a>{{else}}<span class="dt-nav-item dt-empty"></span>{{end}}
     </nav>
     {{end}}
     <p class="pd-back"><a href="{{.URL "/products"}}">{{.T "products.back"}}</a></p>
