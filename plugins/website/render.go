@@ -117,6 +117,13 @@ func inquiryDialog(v any) template.HTML {
 		product = sv.Product
 	}
 	esc := template.HTMLEscapeString
+	// 可见的单位走 unitName（中文站 set → 套）；data-* 与正文提交仍用 PriceUnit 原值。
+	unit := func(raw string) string {
+		if sv == nil {
+			return raw
+		}
+		return sv.UnitName(raw)
+	}
 	money := func(v float64) string {
 		if v == math.Trunc(v) {
 			return strconv.FormatFloat(v, 'f', 0, 64)
@@ -156,7 +163,7 @@ func inquiryDialog(v any) template.HTML {
 			}
 			b.WriteString(`<span class="inq-prod-price">` + esc(price))
 			if product.PriceUnit != "" {
-				b.WriteString(` / ` + esc(product.PriceUnit))
+				b.WriteString(` / ` + esc(unit(product.PriceUnit)))
 			}
 			b.WriteString(`</span>`)
 		}
@@ -178,7 +185,7 @@ func inquiryDialog(v any) template.HTML {
 		b.WriteString(`<button type="button" class="inq-step" data-inq-qty-plus aria-label="` + esc(t("product.qtyInc")) + `">+</button>`)
 		b.WriteString(`</span>`)
 		if product.PriceUnit != "" {
-			b.WriteString(`<span class="inq-qty-unit">` + esc(product.PriceUnit) + `</span>`)
+			b.WriteString(`<span class="inq-qty-unit">` + esc(unit(product.PriceUnit)) + `</span>`)
 		}
 		b.WriteString(`</span>`)
 		b.WriteString(`</span></div>`)

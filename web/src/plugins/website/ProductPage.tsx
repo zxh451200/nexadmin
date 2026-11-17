@@ -30,9 +30,10 @@ import { Uploader } from '@/framework/components/Uploader'
 import { VideoUrlField } from '@/framework/components/VideoUrlField'
 import { FilePickerDialog, PickFromLibraryButton } from '@/framework/components/FilePickerDialog'
 import { OptionList, type Option } from '@/framework/components/pickers/OptionList'
+import { useDictItems } from '@/framework/components/pickers/useDictItems'
 import { PickerShell } from '@/framework/components/pickers/PickerShell'
 import { PickerTrigger } from '@/framework/components/pickers/PickerTrigger'
-import { CURRENCIES, PAYMENT_TERMS, PORTS, UNITS } from './constants'
+import { CURRENCIES, PAYMENT_TERMS, PORTS } from './constants'
 import { saveBlob } from '@/framework/components/export/csv'
 import { slugify } from './format'
 import { Badge } from '@/framework/ui/badge'
@@ -214,9 +215,20 @@ function useEnumOptions(values: readonly string[], keyPrefix: string): Option[] 
   )
 }
 
-const useUnitOptions = () => useEnumOptions(UNITS, 'plugin_website.unit')
 const usePortOptions = () => useEnumOptions(PORTS, 'plugin_website.port')
 const usePaymentTermOptions = () => useEnumOptions(PAYMENT_TERMS, 'plugin_website.payment')
+
+/** 计量单位下拉：数据源是后台字典 unit，不再用前端常量。
+ *  value 与官网详情页 unit.* 文案、存量商品（piece / set / m²）同一套词表；
+ *  运营在「系统 → 字典」里加「柜」「托」这类单位，商品表单立刻可选，不用发版。
+ *  展示成「set · 套」：左边是写进库、发给平台的原值，右边是给人看的译名。 */
+function useUnitOptions(): Option[] {
+  const { data = [] } = useDictItems('unit')
+  return useMemo(
+    () => data.map((d) => ({ value: d.value, label: d.label && d.label !== d.value ? `${d.value} · ${d.label}` : d.value })),
+    [data],
+  )
+}
 
 /** 枚举字段下拉（可搜）：币种/装运港口/付款方式不再手写。
  * 多选时按「逗号+空格」拼接回原字符串，与老数据的 "T/T, L/C" 存储格式互通；
@@ -229,6 +241,7 @@ function ConstantPicker({
   placeholder,
   disabled,
   className,
+  allowCustom,
 }: {
   value: string
   onChange: (v: string) => void
@@ -237,6 +250,8 @@ function ConstantPicker({
   placeholder?: string
   disabled?: boolean
   className?: string
+  /** 允许输入列表外的值（单位这类开放词表用）：搜索框里打什么就能存什么 */
+  allowCustom?: boolean
 }) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
@@ -251,6 +266,12 @@ function ConstantPicker({
   }, [options, selected])
   const kw = search.trim().toLowerCase()
   const shown = kw ? all.filter((o) => o.label.toLowerCase().includes(kw) || o.value.toLowerCase().includes(kw)) : all
+  // 允许自定义时，列表里没有的写法在末尾补一行可点的「使用自定义值」，
+  // 点完就把原文存进去（官网详情页对认不出的单位原样显示，不会瞎翻译）。
+  const typed = search.trim()
+  const custom = allowCustom && typed && !all.some((o) => o.value.toLowerCase() === typed.toLowerCase())
+    ? [{ value: typed, label: `${t('plugin_website.product.useCustom')} "${typed}"` }]
+    : []
   const pick = (v: string) => {
     if (multiple) {
       onChange((selected.includes(v) ? selected.filter((x) => x !== v) : [...selected, v]).join(', '))
@@ -276,7 +297,7 @@ function ConstantPicker({
         />
       }
     >
-      <OptionList options={shown} value={selected} multiple={multiple} onSelect={pick} search={search} onSearchChange={setSearch} />
+      <OptionList options={custom.length ? [...shown, ...custom] : shown} value={selected} multiple={multiple} onSelect={pick} search={search} onSearchChange={setSearch} />
     </PickerShell>
   )
 }
@@ -698,6 +719,7 @@ function ProductFormBody({
               options={unitOptions}
               placeholder="piece"
               disabled={sharedDisabled}
+              allowCustom
             />
           </SharedFieldShell>
           <SharedFieldShell labelKey="plugin_website.product.moq">

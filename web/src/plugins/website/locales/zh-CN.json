@@ -265,6 +265,7 @@
       "priceMax": "价格（止）",
       "currency": "币种",
       "priceUnit": "计量单位",
+      "useCustom": "使用自定义值",
       "moq": "最小起订量",
       "leadTimeDays": "发货天数",
       "freightAmount": "运费金额（0=待定）",

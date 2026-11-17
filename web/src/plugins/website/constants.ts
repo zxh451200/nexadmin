@@ -38,8 +38,6 @@ export const PORTS = [
 /** 常用付款方式（外贸标准缩写） */
 export const PAYMENT_TERMS = ['T/T', 'L/C', 'D/P', 'D/A', 'O/A', 'Western Union', 'PayPal', 'MoneyGram', 'Escrow', 'Cash', 'Credit Card'] as const
 
-/** 常用计量单位（计件/计重/计长/容积），外贸报价单常见写法 */
-export const UNITS = [
-  'piece', 'set', 'unit', 'pair', 'dozen', 'roll', 'sheet', 'bag', 'box', 'carton',
-  'pallet', 'barrel', 'kg', 'g', 'ton', 'lb', 'm', 'cm', 'mm', 'm²', 'm³', 'L', 'mL',
-] as const
+// 计量单位不放这里：词表归后台字典 unit（系统 → 字典 → 计量单位），
+// 商品表单用 useDictItems('unit') 取，官网详情页按 unit.* 文案翻译。
+// 曾经这里有一份 UNITS 常量，与字典并存就会出现两套写法（piece / pcs），别再复制回来。

@@ -265,6 +265,7 @@
       "priceMax": "Price (max)",
       "currency": "Currency",
       "priceUnit": "Unit",
+      "useCustom": "Use custom value",
       "moq": "MOQ",
       "leadTimeDays": "Lead time (days)",
       "freightAmount": "Freight amount (0 = TBD)",

@@ -83,6 +83,37 @@ var seedTypes = []seedType{
 		{"tablet", "平板", "Tablet", "warning"},
 		{"other", "其他", "Other", "default"},
 	}},
+	// 计量单位：商品/报价/库存共用。业务表只存 value（piece、set、m²…），展示文案一律按当前语言取，
+	// 所以英文站显示 set、中文站显示「套」，不需要在每个页面写死单位。
+	// 内置项只锁 value：运营可以改译名（i18nJson）、可以新增「托」「柜」这类自定义单位，也可以停用。
+	// value 词表与后台商品表单的原 UNITS 常量完全一致（piece / m² / L / mL 这些写法不能改，
+	// 存量商品存的就是它们，改一个值就会让同一个单位在库里出现两种写法）。
+	// 必须追加在末尾：类型 ID 由下标 i 推导（typeSeedID），插在中间会把既有安装的种子 ID 全部挤位。
+	{Code: "unit", Name: "计量单位", Remark: "商品/报价/库存的计量单位，库里存 value，界面按语言显示 label", Disabled: false, Items: []seedItem{
+		{"piece", "件", "Piece", "default"},
+		{"set", "套", "Set", "default"},
+		{"unit", "台", "Unit", "default"},
+		{"pair", "对", "Pair", "default"},
+		{"dozen", "打", "Dozen", "default"},
+		{"roll", "卷", "Roll", "default"},
+		{"sheet", "张", "Sheet", "default"},
+		{"bag", "袋", "Bag", "default"},
+		{"box", "箱", "Box", "default"},
+		{"carton", "纸箱", "Carton", "default"},
+		{"pallet", "托盘", "Pallet", "default"},
+		{"barrel", "桶", "Barrel", "default"},
+		{"kg", "千克", "Kilogram", "default"},
+		{"g", "克", "Gram", "default"},
+		{"ton", "吨", "Tonne", "default"},
+		{"lb", "磅", "Pound", "default"},
+		{"m", "米", "Meter", "default"},
+		{"cm", "厘米", "Centimeter", "default"},
+		{"mm", "毫米", "Millimeter", "default"},
+		{"m²", "平方米", "Square meter", "default"},
+		{"m³", "立方米", "Cubic meter", "default"},
+		{"L", "升", "Liter", "default"},
+		{"mL", "毫升", "Milliliter", "default"},
+	}},
 }
 
 // isBuiltinType 编码是否属于出厂字典类型。
