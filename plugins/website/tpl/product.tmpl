@@ -162,8 +162,8 @@
           <strong>{{uiIcon "shield" "pd-pay-ico"}} {{.T "product.paymentTitle"}}</strong>
           <ul class="pd-pay-methods" aria-label="{{.T "product.paymentMethodsAria"}}">
             {{range .Product.PaymentChips}}
-            {{/* 品牌项输出各自的官方色图形/字标（白底方块）；贸易术语仍走中性线框图标。 */}}
-            <li class="pd-pay-chip pd-pay-{{.Kind}}" title="{{.Label}}" aria-label="{{.Label}}">{{if eq .Kind "visa"}}<span class="pd-logo-visa" aria-hidden="true">VISA</span>{{else if eq .Kind "mc"}}<span class="pd-logo-mc" aria-hidden="true"><i></i><i></i></span>{{else if eq .Kind "paypal"}}<span class="pd-logo-paypal" aria-hidden="true">Pay<b>Pal</b></span>{{else if eq .Kind "apple"}}<span class="pd-logo-apple" aria-hidden="true"></span><span class="pd-logo-apple-pay" aria-hidden="true">Pay</span>{{else if eq .Kind "up"}}<span class="pd-logo-up" aria-hidden="true">UnionPay</span>{{else}}{{if .Icon}}{{uiIcon .Icon "pd-pay-icon"}}{{end}}{{.Label}}{{end}}</li>
+            {{/* 品牌项用 static/pay/*.svg（CC0 官方彩色原图）；贸易术语仍走中性线框图标。 */}}
+            <li class="pd-pay-chip pd-pay-{{.Kind}}" title="{{.Label}}" aria-label="{{.Label}}">{{if eq .Kind "visa"}}<img class="pd-logo-img" src="/website-assets/pay/visa.svg" alt="">{{else if eq .Kind "mc"}}<img class="pd-logo-img" src="/website-assets/pay/mastercard.svg" alt="">{{else if eq .Kind "paypal"}}<img class="pd-logo-img" src="/website-assets/pay/paypal.svg" alt="">{{else if eq .Kind "apple"}}<img class="pd-logo-img" src="/website-assets/pay/apple-pay.svg" alt="">{{else}}{{if .Icon}}{{uiIcon .Icon "pd-pay-icon"}}{{end}}{{.Label}}{{end}}</li>
             {{end}}
           </ul>
           <p class="pd-pay-note">{{.TF "product.paymentNote" .SiteName}}</p>

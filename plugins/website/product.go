@@ -748,8 +748,9 @@ func (s *Service) PublishedRelatedProducts(ctx context.Context, lang string, pro
 }
 
 // paymentChip 是详情页「安全支付」里的一枚支付方式徽标。
-// Label 是给人看的名字，Kind 决定品牌样式（visa/mc/apple/paypal/up），Icon 是 uiIconPaths 里的图标名。
-// 品牌项由模板按 Kind 输出各自的官方色图形/字标（白底小方块，颜色来自品牌规范，不是自造配色）；
+// Label 是给人看的名字，Kind 决定品牌样式（visa/mc/apple/paypal），Icon 是 uiIconPaths 里的图标名。
+// 品牌项由模板按 Kind 输出 static/pay/*.svg（payrexx/payment-logos，CC0-1.0，官方彩色原图，
+// 自带白底卡片）；商标仍归各品牌方，这里只作「受理该支付方式」的指示性使用，不改形、不暗示背书。
 // 贸易术语（T/T、L/C…）不是品牌，仍走中性线框图标；未收录的取值退化成 plain 文本。
 // 后台填什么就展示什么。
 type paymentChip struct {
@@ -784,8 +785,6 @@ var paymentAliases = map[string]paymentChip{
 	"master card":          {Label: "Mastercard", Kind: "mc"},
 	"apple pay":            {Label: "Apple Pay", Kind: "apple"},
 	"applepay":             {Label: "Apple Pay", Kind: "apple"},
-	"unionpay":             {Label: "UnionPay", Kind: "up"},
-	"银联":                   {Label: "UnionPay", Kind: "up"},
 	"alipay":               {Label: "Alipay", Kind: "plain", Icon: "wallet"},
 	"支付宝":                  {Label: "Alipay", Kind: "plain", Icon: "wallet"},
 	"wechat pay":           {Label: "WeChat Pay", Kind: "plain", Icon: "wallet"},
