@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -134,11 +135,14 @@ func productJSONLD(v *siteView, p *Product) template.JS {
 		m["category"] = strings.Join(cats, " > ")
 	}
 	if p.PriceMin > 0 {
+		// 报价随展示币种换算：爬虫（无币种 cookie）看到的是站点默认币种，
+		// 与页面渲染同一口径，rich result 的价格不会和正文打架。
+		amount, _ := strconv.ParseFloat(v.FxMoney(p.PriceMin, p.Currency), 64)
 		m["offers"] = map[string]any{
 			"@type":         "Offer",
 			"url":           v.Canonical(),
-			"price":         p.PriceMin,
-			"priceCurrency": p.Currency,
+			"price":         amount,
+			"priceCurrency": v.FxCur(p.Currency),
 			"itemCondition": "https://schema.org/NewCondition",
 			"availability":  "https://schema.org/InStock",
 		}

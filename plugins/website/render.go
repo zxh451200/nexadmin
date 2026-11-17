@@ -130,6 +130,19 @@ func inquiryDialog(v any) template.HTML {
 		}
 		return strconv.FormatFloat(v, 'f', 2, 64)
 	}
+	// 询盘弹窗里的商品价随展示币种换算（与页面同一口径）；无视图时回退原币种直出。
+	curOf := func(from string) string {
+		if sv == nil {
+			return from
+		}
+		return sv.FxCur(from)
+	}
+	fxMoney := func(v float64, from string) string {
+		if sv == nil {
+			return money(v)
+		}
+		return sv.FxMoney(v, from)
+	}
 
 	var b strings.Builder
 	b.WriteString(`<div class="inq" data-inquiry hidden><div class="inq-mask" data-inquiry-close></div>`)
@@ -157,9 +170,9 @@ func inquiryDialog(v any) template.HTML {
 		}
 		b.WriteString(`<span class="inq-prod-text"><strong>` + esc(product.Title) + `</strong>`)
 		if product.PriceMin > 0 {
-			price := product.Currency + money(product.PriceMin)
+			price := curOf(product.Currency) + fxMoney(product.PriceMin, product.Currency)
 			if product.PriceMax > product.PriceMin {
-				price += "-" + money(product.PriceMax)
+				price += "-" + fxMoney(product.PriceMax, product.Currency)
 			}
 			b.WriteString(`<span class="inq-prod-price">` + esc(price))
 			if product.PriceUnit != "" {
@@ -618,6 +631,14 @@ type siteView struct {
 	Suggest     bool
 	SuggestLang Language
 
+	// 币种（对标阿里右上角「语言-币种」选择器）：汇率表配好且访客解析出展示币种
+	// 时 CurrencyOn = true，头部才渲染「语言-币种」弹层；价格换算走 fx。
+	// fx 在 baseView 装配、render 阶段按 cookie 升级展示币种。
+	CurrencyOn       bool
+	DisplayCurrency  string
+	CurrencyOptions  []currencyOption
+	fx               *fx
+
 	// 插件市场（目录来自 config/plugin-market.yaml，与后台插件市场同源）
 	MarketEnabled    bool
 	MarketAvailable  bool
@@ -670,6 +691,25 @@ func (v *siteView) SocialLabel(platform string) string { return v.T("social." + 
 
 // TF 是带参数的文案（字典里用 %s / %d）。
 func (v *siteView) TF(key string, args ...any) string { return trf(v.Lang.Code, key, args...) }
+
+// FxCur 返回价格前缀该用的币种码：展示币种与原币种相同、或换算未启用/
+// 原币种不在汇率表里时原样返回。模板里 {{.Product.Currency}} 一律换成它。
+func (v *siteView) FxCur(from string) string {
+	if v.fx == nil {
+		return from
+	}
+	return v.fx.cur(from)
+}
+
+// FxMoney 把原币种金额换算成展示币种并按 money 口径格式化。
+// 模板里 {{money X}} 一律换成 {{.FxMoney X .某Currency}}，两个调用共享同一个
+// from 才不会出现「前缀换了数字没换」的错价。
+func (v *siteView) FxMoney(amount float64, from string) string {
+	if v.fx == nil {
+		return compactMoney(amount)
+	}
+	return v.fx.money(amount, from)
+}
 
 // TN 是按数量选单复数的文案：n==1 用 <key>.one，其余用 <key>.other。
 // 中文两种写法相同；新增有单复数规则的语言时按该语言字典补齐即可。
@@ -842,6 +882,7 @@ func (v *siteView) JSStrings() template.JS {
 		"shareLabel", "shareWechat", "shareWeibo", "shareFacebook", "shareX", "shareLinkedIn", "shareCopy",
 		"shareWechatTitle", "shareWechatTip", "shareSystemShare", "shareClose", "shareCopied", "shareCopyFailed",
 		"catExpand", "catCollapse",
+		"shipToEmpty",
 		"shareCopiedShort", "shareFailedShort",
 		"chatTranslateSame", "chatTranslated", "chatTranslateFailed", "chatTranslateIn", "chatTranslateOriginal",
 		"chatTranslateSettings", "chatTranslateAutoIn", "chatTranslateInTo", "chatTranslateAutoOut", "chatTranslateOutFrom", "chatTranslateOutTo",

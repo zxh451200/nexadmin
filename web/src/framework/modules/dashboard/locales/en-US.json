@@ -15,6 +15,10 @@
       "unreadMessages": "Unread messages",
       "storage": "Storage used"
     },
+    "kpi": {
+      "delta": "{{value}}%",
+      "storageDetail": "of {{total}} GB total"
+    },
     "storageValue": "{{used}} / {{total}} GB",
     "loginTrend": "Logins, last 7 days",
     "requestTrend": "Requests, last 7 days",

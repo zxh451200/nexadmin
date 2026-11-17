@@ -59,8 +59,11 @@
     '.chat-emoji-pop button:hover{background:rgba(128,128,128,.18)}',
     '.chat-emoji-pop::-webkit-scrollbar{width:6px}',
     '.chat-emoji-pop::-webkit-scrollbar-thumb{border-radius:3px;background:rgba(128,128,128,.4)}',
-    '.chat-msg-translate{margin:2px 0 0;padding:0;border:0;background:transparent;color:inherit;font-size:10.5px;text-decoration:underline;cursor:pointer;opacity:.65}',
+    // 译文链接并进「名字 · 时间」那一行：单独一行会让每条客服消息多占 16px，
+    // 一条会话里十几条就是半屏空白。
+    '.chat-msg-translate{margin:0;padding:0;border:0;background:transparent;color:inherit;font:inherit;font-size:inherit;text-decoration:underline;text-underline-offset:2px;cursor:pointer;opacity:.75}',
     '.chat-msg-translate:hover{opacity:1}',
+    '.chat-meta-sep{opacity:.6}',
     // 翻译设置弹层：对齐阿里聊天窗口的「翻译设置」——收到/发送两组开关各带语言选择。
     // 位置挂在头部下沿（--chat-head-h 由脚本实时量），配色沿用 Canvas/currentColor。
     '.chat-settings-pop{position:absolute;z-index:22;inset-inline-end:10px;inset-block-start:calc(var(--chat-head-h,86px) + 4px);box-sizing:border-box;width:min(320px,calc(100% - 16px));padding:14px;border:1px solid rgba(128,128,128,.28);border-radius:8px;background:Canvas;color:CanvasText;box-shadow:0 16px 38px rgba(0,0,0,.22);font-size:12px}',
@@ -75,23 +78,35 @@
     '.chat-switch:checked::after{inset-inline-start:18px}',
     '.chat-settings-fields{display:flex;align-items:center;gap:8px;margin:9px 0 2px}',
     '.chat-settings-fields span{flex:none;opacity:.72}',
-    '.chat-settings-pop select{box-sizing:border-box;flex:1;min-width:0;height:30px;padding:0 6px;border:1px solid rgba(128,128,128,.34);border-radius:4px;background:transparent;color:inherit;font:inherit;font-size:12.5px}',
-    '.chat-settings-pop select:focus{outline:none;border-color:rgba(128,128,128,.72)}',
+    // 语言下拉复用地址卡的自定义控件：原生 <select> 的展开层由系统绘制，系统蓝高亮和浮层配色对不上
+    '.chat-settings-pop .chat-card-select{flex:1;min-width:0}',
+    '.chat-settings-pop .chat-card-trigger{height:30px;font-size:12.5px}',
+    '.chat-settings-pop .chat-card-trig-flag{display:none}',
     '.chat-settings-hint{margin:6px 0 13px;font-size:11px;line-height:1.5;opacity:.6}',
     '.chat-settings-actions{display:flex;justify-content:flex-end;margin-top:2px}',
     '.chat-settings-actions button{height:32px;padding:0 14px;border:1px solid rgba(128,128,128,.36);border-radius:4px;background:transparent;color:inherit;font:inherit;font-size:12.5px;cursor:pointer}',
     '.chat-settings-actions button:hover{border-color:currentColor}',
     '.chat-settings-actions .is-primary{border-color:transparent;background:var(--pc-accent,CanvasText);color:Canvas;font-weight:600}',
     '.chat-settings-actions .is-primary:hover{filter:brightness(1.08);border-color:transparent}',
-    // 翻译快捷浮层（工具栏文A 按钮）：立即翻译主按钮 + 两个自动翻译开关行 + 设置链接
+    // 翻译快捷浮层（工具栏文A 按钮）：立即翻译主按钮 + 两个自动翻译开关行 + 设置入口。
+    // 贴着工具栏弹出（与表情、地址卡同位置）：原来从头部下方展开，离触发按钮半屏远，
+    // 还压住最新一条消息。宽度比完整表单窄一档，弱化「设置表单」的观感。
+    '.chat-settings-pop.is-quick{inset-block-start:auto;inset-block-end:96px;inset-inline-end:8px;width:min(300px,calc(100% - 16px));padding:12px 14px 10px}',
+    '.chat-settings-pop:focus{outline:none}',
+    '.chat-tr-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}',
+    '.chat-tr-head h3{margin:0;font-size:12.5px}',
     '.chat-tr-now{box-sizing:border-box;width:100%;height:32px;margin-bottom:4px;border:1px solid transparent;border-radius:4px;background:var(--pc-accent,CanvasText);color:Canvas;font:inherit;font-size:12.5px;font-weight:600;cursor:pointer}',
     '.chat-tr-now:hover{filter:brightness(1.08)}',
-    '.chat-tr-now[disabled]{opacity:.5;cursor:default}',
-    '.chat-tr-row{display:flex;align-items:center;gap:8px;padding:7px 2px;font-size:12px;cursor:pointer}',
+    '.chat-tr-now[disabled]{opacity:.5;cursor:default;filter:none}',
+    '.chat-tr-row{display:flex;align-items:center;gap:8px;padding:8px 2px;font-size:12px;cursor:pointer}',
     '.chat-tr-row+.chat-tr-row{border-top:1px solid rgba(128,128,128,.14)}',
     '.chat-tr-row .chat-switch{flex:none}',
     '.chat-tr-more{margin-top:2px;padding:0;border:0;background:transparent;color:inherit;font:inherit;font-size:11.5px;text-decoration:underline;text-underline-offset:3px;cursor:pointer;opacity:.7}',
     '.chat-tr-more:hover{opacity:1}',
+    '.chat-tr-head .chat-tr-more{margin:0;text-decoration:none}',
+    '.chat-tr-head .chat-tr-more:hover{text-decoration:underline}',
+    '.chat-tr-msg{margin:6px 2px 2px;font-size:11.5px;line-height:1.5;color:inherit;opacity:.7}',
+    '.chat-tr-msg.is-err{color:var(--red,#eb5757);opacity:1}',
     '.chat-compose textarea{resize:vertical;max-height:220px}',
     '.chat-card-pop{position:absolute;z-index:22;inset-inline-start:8px;inset-block-end:96px;box-sizing:border-box;width:min(324px,calc(100% - 16px));padding:16px 16px 14px;border:1px solid rgba(128,128,128,.28);border-radius:8px;background:Canvas;color:CanvasText;box-shadow:0 16px 38px rgba(0,0,0,.22);font-size:12px}',
     '.chat-card-pop[hidden]{display:none}',
@@ -100,10 +115,14 @@
     '.chat.is-expanded .chat-card-pop{width:min(480px,calc(100% - 32px));inset-inline-start:16px;padding:20px 22px 16px;font-size:13px}',
     '.chat.is-expanded .chat-card-pop h3{font-size:15px}',
     '.chat.is-expanded .chat-card-hint{margin-bottom:18px;font-size:12px}',
+    '.chat.is-expanded .chat-card-error{font-size:12px}',
     '.chat.is-expanded .chat-card-fields{gap:14px}',
     '.chat.is-expanded .chat-card-fields label{gap:6px;font-size:12.5px}',
     '.chat.is-expanded .chat-card-fields input,.chat.is-expanded .chat-card-trigger,.chat.is-expanded .chat-phone-wrap{height:38px;font-size:13.5px}',
     '.chat.is-expanded .chat-card-actions button{height:40px;font-size:13.5px}',
+    // 翻译设置里的语言下拉不要跟着地址卡放大：这套表单是 12.5px 的密度
+    '.chat.is-expanded .chat-settings-pop .chat-card-trigger{height:30px;font-size:12.5px}',
+    '.chat.is-expanded .chat-settings-pop .chat-card-options button{font-size:12px;line-height:30px}',
     '.chat.is-expanded .chat-card-search{height:32px;font-size:12.5px}',
     '.chat.is-expanded .chat-card-options button{font-size:12.5px;line-height:32px}',
     '.chat.is-expanded .chat-phone-dial{font-size:13px}',
@@ -113,12 +132,18 @@
     // 不透明度只能落在字段文字上：label 整体 opacity 会把里面的下拉展开层
     // 一起压成 82% 半透明，底下的「详细地址」就透出来了（opacity 造出的是整组合成）
     '.chat-card-fields label{display:flex;flex-direction:column;gap:5px;min-width:0;font-size:11.5px}',
-    '.chat-card-fields label>span{opacity:.82}',
+    // 星号单独一层：放在半透明的标签文字里会被一起压成粉红
+    '.chat-card-label{display:flex;align-items:center;gap:2px}',
+    '.chat-card-fields .chat-card-label>span{opacity:.82}',
+    '.chat-card-fields .req{font-style:normal;color:var(--red,#eb5757)}',
     '.chat-card-fields label.wide{grid-column:1/-1}',
     '.chat-card-fields input{box-sizing:border-box;width:100%;height:32px;padding:0 10px;border:1px solid rgba(128,128,128,.34);border-radius:4px;background:transparent;color:inherit;font:inherit;font-size:12.5px;transition:border-color .15s ease,box-shadow .15s ease}',
     // 聚焦别用深色描边：currentColor 在浅色主题里就是近黑，1px 边框叠 3px 光晕后
     // 比卡片本身还抢眼。改成「边线加深一档 + 一层极淡的光晕」，安静但看得见。
     '.chat-card-fields input:focus{outline:none;border-color:rgba(128,128,128,.72);box-shadow:0 0 0 3px rgba(128,128,128,.13);background:rgba(128,128,128,.03)}',
+    // 校验失败标在可见控件上：下拉的取值位是隐藏 input，红框要落到触发钮
+    '.chat-card-fields input.is-invalid,.chat-card-fields .chat-card-trigger.is-invalid{border-color:rgba(235,87,87,.72);box-shadow:0 0 0 3px rgba(235,87,87,.12)}',
+    '.chat-card-error{margin:10px 0 0;font-size:11.5px;line-height:1.5;color:var(--red,#eb5757)}',
     '.chat-card-actions{display:flex;gap:10px;margin-top:18px}',
     '.chat-card-actions button{flex:1;height:34px;border:1px solid rgba(128,128,128,.36);border-radius:4px;background:transparent;color:inherit;font:inherit;font-size:12.5px;cursor:pointer}',
     '.chat-card-actions button:hover{border-color:currentColor}',
@@ -316,6 +341,13 @@
       try { localStorage.setItem('nexchat.translate', JSON.stringify(trSettings)); } catch (e) { /* 隐私模式忽略 */ }
     }
     function curInTo() { return trSettings.inTo || pageLang; }
+    // 语言码 → 站点语言清单里的显示名（清单拉不到就退回语言码，不空着）
+    function langDisplay(code) {
+      for (var i = 0; i < LANGS.length; i++) {
+        if (LANGS[i].c === code) return LANGS[i].n || code;
+      }
+      return code || '';
+    }
 
     // 译文缓存：历史消息每次开面板都重渲染，靠缓存避免重复烧限流额度（10 次/分/IP）。
     var trCache = (function () {
@@ -358,6 +390,9 @@
     }
     function note(text) {
       if (!log) return;
+      // 连点同一个动作不该刷屏：最后一条提示文字相同就跳过
+      var last = log.lastElementChild;
+      if (last && last.classList && last.classList.contains('chat-note') && last.textContent === text) return;
       var p = document.createElement('p');
       p.className = 'chat-note';
       p.textContent = text;
@@ -369,6 +404,8 @@
       // 立即翻译的动作移进了浮层（openSettings 的 compact 分支）。
       translateBtn.addEventListener('click', function () { openSettings(true); });
     }
+    // 快捷浮层开着时草稿变化要同步主按钮的可用态（关掉浮层后 syncQuickNow 会被清空）
+    if (input) input.addEventListener('input', function () { if (syncQuickNow) syncQuickNow(); });
 
     // ---- 收到的客服消息：气泡下挂「翻译」按钮（手动），开启设置后自动整批翻译 ----
     // 把气泡换成译文并记录原文：手动按钮负责「查看原文 ↔ 译文」来回切。
@@ -482,7 +519,18 @@
             note(t('chatTranslateFailed', '翻译失败，请稍后重试'));
           }).then(function () { btn.disabled = false; });
         });
-        row.appendChild(btn);
+        // 翻译入口并进元信息行：气泡下只剩一行「名字 · 时间 · 翻译此消息」
+        var metaEl = row.querySelector('.chat-meta');
+        if (metaEl) {
+          var sep = document.createElement('span');
+          sep.className = 'chat-meta-sep';
+          sep.setAttribute('aria-hidden', 'true');
+          sep.textContent = '·';
+          metaEl.appendChild(sep);
+          metaEl.appendChild(btn);
+        } else {
+          row.appendChild(btn);
+        }
 
         // 头部客服身份：从消息 meta 里取坐席名，AI 回答不冒充真人
         var meta = row.querySelector('.chat-meta');
@@ -664,7 +712,8 @@
         // 现在 1+1 / 占满 / 1+1，每行都收在同一列宽上。
         fields: [
           { key: 'name', label: t('chatCardName', '姓名'), required: true },
-          { key: 'phone', label: t('chatCardPhone', '电话'), required: true },
+          // 名片没有国家选择器，电话必须自带区号才能回拨；提示语只进占位符，不进名片正文
+          { key: 'phone', label: t('chatCardPhone', '电话'), required: true, ph: t('chatCardPhonePh', '国家区号 + 号码') },
           { key: 'company', label: t('chatCardCompany', '公司'), wide: true },
           { key: 'job', label: t('chatCardJob', '职位') },
           { key: 'email', label: t('chatCardEmail', '邮箱') }
@@ -673,16 +722,16 @@
       address: {
         title: t('chatCardAddressTitle', '收货地址'),
         marker: '[' + t('chatCardAddressLabel', '收货地址') + ']',
-        // 对齐 Alibaba 添加地址：国家/地区 → 州/省 → 城市三段（州与城市都是必填），
-        // 城市 在州/省右边并排，详细地址独占一行，邮编收尾。
+        // 对齐 Alibaba 添加地址：国家/地区 → 州/省 → 城市 → 邮编（城市与邮编同一行），
+        // 详细地址独占一行收尾。之前城市、邮编各自半行、右边空着，两列网格看着参差。
         fields: [
           { key: 'recipient', label: t('chatCardRecipient', '收件人'), required: true },
           { key: 'phone', label: t('chatCardPhone', '电话'), required: true },
           { key: 'country', label: t('chatCardCountry', '国家/地区'), required: true },
           { key: 'region', label: t('chatCardRegion', '州/省'), required: true },
           { key: 'city', label: t('chatCardCity', '城市'), required: true },
-          { key: 'street', label: t('chatCardStreet', '详细地址'), required: true, wide: true },
-          { key: 'postcode', label: t('chatCardPostcode', '邮编') }
+          { key: 'postcode', label: t('chatCardPostcode', '邮编') },
+          { key: 'street', label: t('chatCardStreet', '详细地址'), required: true, wide: true }
         ]
       }
     };
@@ -691,6 +740,40 @@
     cardPop.setAttribute('data-chat-card-pop', '');
     cardPop.hidden = true;
     if (panel) panel.appendChild(cardPop);
+    // 校验红框在用户改动该字段时就清掉；卡片内容每次打开重建，监听挂在容器上一次就够。
+    // 下拉里的搜索框不算「改了这个字段」——打字清掉红框但值仍是空的，会误导。
+    cardPop.addEventListener('input', function (e) {
+      var t = e.target;
+      if (t && t.classList && t.classList.contains('chat-card-search')) return;
+      clearFieldInvalid(t);
+    });
+    cardPop.addEventListener('click', function (e) {
+      if (e.target && e.target.closest && e.target.closest('[data-opt]')) clearFieldInvalid(e.target);
+    });
+    // 下拉的取值位是隐藏 input：红框要标在可见的触发钮上
+    function cardFieldControl(el) {
+      if (!el) return null;
+      if (el.type === 'hidden') return el.parentElement ? el.parentElement.querySelector('.chat-card-trigger') : null;
+      return el;
+    }
+    function clearFieldInvalid(node) {
+      var lab = node && node.closest ? node.closest('label') : null;
+      if (!lab) return;
+      Array.prototype.forEach.call(lab.querySelectorAll('.is-invalid'), function (x) {
+        x.classList.remove('is-invalid');
+        x.removeAttribute('aria-invalid');
+      });
+    }
+    function showCardError(msg) {
+      var p = cardPop.querySelector('.chat-card-error');
+      if (!p) {
+        p = document.createElement('p');
+        p.className = 'chat-card-error';
+        p.setAttribute('role', 'alert');
+        cardPop.insertBefore(p, cardPop.querySelector('.chat-card-actions'));
+      }
+      p.textContent = msg;
+    }
     // 打开卡片时面板是否本来就已展开：false 说明是卡片自己展开的，关卡要退回去
     var cardWasExpanded = false;
     var activeKind = null;
@@ -701,8 +784,23 @@
     var settingsPop = document.createElement('div');
     settingsPop.className = 'chat-settings-pop';
     settingsPop.setAttribute('data-chat-settings-pop', '');
+    settingsPop.setAttribute('role', 'dialog');
+    settingsPop.setAttribute('aria-label', t('chat.translate', '翻译'));
+    settingsPop.setAttribute('tabindex', '-1');
     settingsPop.hidden = true;
     if (panel) panel.appendChild(settingsPop);
+    // 弹层从多个入口（工具栏文A、快捷浮层里的设置、点外/Esc）开关，aria-expanded
+    // 统一跟着 hidden 走，不在每个关它的地方各写一遍。
+    if (translateBtn) {
+      translateBtn.setAttribute('aria-haspopup', 'dialog');
+      translateBtn.setAttribute('aria-expanded', 'false');
+      if (window.MutationObserver) {
+        new window.MutationObserver(function () {
+          translateBtn.setAttribute('aria-expanded', settingsPop.hidden ? 'false' : 'true');
+          if (settingsPop.hidden) syncQuickNow = null;
+        }).observe(settingsPop, { attributes: true, attributeFilter: ['hidden'] });
+      }
+    }
 
     // 可搜索下拉（国家/州省）：选项由调用方灌入，选中值放在 hidden input 的
     // data-field 上 —— submitCard 仍按 [data-field] 取值，普通字段与下拉字段共用一条路径。
@@ -791,7 +889,7 @@
       trig.addEventListener('click', function () {
         var open = drop.hidden;
         // 同时只开一个下拉，别让国家列表压住州省列表
-        Array.prototype.forEach.call(cardPop.querySelectorAll('.chat-card-drop'), function (d) { if (d !== drop) d.hidden = true; });
+        Array.prototype.forEach.call(document.querySelectorAll('.chat-card-drop'), function (d) { if (d !== drop) d.hidden = true; });
         drop.hidden = !open;
         trig.setAttribute('aria-expanded', open ? 'true' : 'false');
         if (!drop.hidden) {
@@ -823,7 +921,9 @@
             ? t('chatCardCountrySearch', '搜索国家/地区')
             : key === 'city'
               ? t('chatCardCitySearch', '搜索城市')
-              : t('chatCardRegionSearch', '搜索省/州'));
+              : String(key).indexOf('lang-') === 0
+                ? t('chatTranslatePick', '选择语言')
+                : t('chatCardRegionSearch', '搜索省/州'));
           render(search.value);
         },
         clear: function () {
@@ -833,6 +933,8 @@
           txtEl.textContent = placeholder;
           txtEl.classList.add('is-ph');
         },
+        // 当前选中项的语言码（settings 表单保存时要用码，不是显示名）
+        key: function () { return selKey; },
         // 数据拉不到，或存过的不在数据集里的旧手写值：整体退回普通文本框，不挡发卡
         fallbackText: function (val) {
           handle.dead = true;
@@ -992,9 +1094,18 @@
             };
           });
           sel.setItems(items);
+          // 无存档国家时退回头部「交货至」记的国家（ISO2 码，site.js 写入）：
+          // 买家在头部选过一次，地址卡就不必从头挑。
+          var shipCode = '';
+          try { shipCode = localStorage.getItem('nex-site-shipto') || ''; } catch (e) { /* 隐私模式忽略 */ }
           var hit = null;
           for (var i = 0; i < items.length; i++) {
             if (items[i].raw.zh === savedVal || items[i].raw.en === savedVal) { hit = items[i]; break; }
+          }
+          if (!hit && shipCode) {
+            for (var j = 0; j < items.length; j++) {
+              if (items[j].raw.c === shipCode) { hit = items[j]; break; }
+            }
           }
           if (hit) {
             sel.apply(hit);
@@ -1046,20 +1157,36 @@
       def.fields.forEach(function (f) {
         var label = document.createElement('label');
         if (f.wide) label.className = 'wide';
+        var head = document.createElement('span');
+        head.className = 'chat-card-label';
         var span = document.createElement('span');
-        span.textContent = f.label + (f.required ? ' *' : '');
-        label.appendChild(span);
+        span.textContent = f.label;
+        head.appendChild(span);
+        if (f.required) {
+          // 星号只做视觉提示，读屏靠控件的 aria-required
+          var req = document.createElement('i');
+          req.className = 'req';
+          req.setAttribute('aria-hidden', 'true');
+          req.textContent = '*';
+          head.appendChild(req);
+        }
+        label.appendChild(head);
         if (kind === 'address' && f.key === 'country') buildCountry(label, saved.country);
         else if (kind === 'address' && f.key === 'region') buildRegion(label, saved.region);
         else if (kind === 'address' && f.key === 'city') buildCity(label, saved.city);
         else if (kind === 'address' && f.key === 'phone') buildPhone(label, saved);
         else {
           var inp = document.createElement('input');
-          inp.type = f.key === 'email' ? 'email' : 'text';
+          inp.type = f.key === 'email' ? 'email' : (f.key === 'phone' ? 'tel' : 'text');
           inp.value = saved[f.key] || '';
+          if (f.ph) inp.placeholder = f.ph;
           inp.setAttribute('data-field', f.key);
           inp.setAttribute('autocomplete', 'off');
           label.appendChild(inp);
+        }
+        if (f.required) {
+          var ctl = label.querySelector('input:not([type="hidden"]),.chat-card-trigger');
+          if (ctl) ctl.setAttribute('aria-required', 'true');
         }
         grid.appendChild(label);
       });
@@ -1080,14 +1207,27 @@
     }
 
     function submitCard(kind) {
-      var def = CARD_DEFS[kind], vals = {}, missing = false;
+      var def = CARD_DEFS[kind], vals = {}, firstBad = null;
       def.fields.forEach(function (f) {
         var el = cardPop.querySelector('[data-field="' + f.key + '"]');
         var v = el ? String(el.value || '').trim() : '';
         vals[f.key] = v;
-        if (f.required && !v) missing = true;
+        if (f.required && !v) {
+          var ctl = cardFieldControl(el);
+          if (ctl) {
+            ctl.classList.add('is-invalid');
+            ctl.setAttribute('aria-invalid', 'true');
+            if (!firstBad) firstBad = ctl;
+          }
+        }
       });
-      if (missing) { note(t('chatCardRequired', '请填写必填项')); return; }
+      // 必填提示必须落在卡片里：note() 写进的消息区正被这张卡片盖住，
+      // 用户只会看到「点了发送没反应」。
+      if (firstBad) {
+        showCardError(t('chatCardRequired', '请填写必填项'));
+        firstBad.focus();
+        return;
+      }
       // 地址卡片：把区号拼进电话值（用户自己带了 + 的不重复拼）；phoneDial 只进
       // localStorage（下次开卡还原前缀块），不进消息正文，消息里已含在电话值里。
       if (kind === 'address' && addrState) {
@@ -1138,10 +1278,23 @@
     // 收到的消息：自动把客服消息翻成所选语言（批量管道在 decorateMessages 里）；
     // 发送的消息：发送时自动翻成对方语言（capture 拦截在 form submit 上）。
     // 选项数据来自页面 #site-langs；清单拉不到就只显示当前值，设置仍可开关。
-    function closeSettings() { settingsPop.hidden = true; }
+    function closeSettings() { settingsPop.hidden = true; syncQuickNow = null; }
+    function focusSettingsPop() {
+      // 打开弹层把焦点收进容器（tabindex=-1）：文A 后面 DOM 里只剩附件和发送，
+      // 不接管焦点的话键盘用户 Tab 不进来。preventScroll 防小窗里页面被滚走。
+      try { settingsPop.focus({ preventScroll: true }); } catch (e) { settingsPop.focus(); }
+    }
+    // Esc 收弹层：先记焦点在不在里面再隐藏——display:none 会先把焦点甩给 body
+    function closeSettingsByKey() {
+      if (settingsPop.hidden) return;
+      var inside = settingsPop.contains(document.activeElement);
+      settingsPop.hidden = true;
+      if (inside && translateBtn) translateBtn.focus();
+    }
     // compact 模式是工具栏「翻译」按钮的快捷浮层：立即翻译输入内容 + 两个自动翻译
-    // 开关 + 进完整设置的链接——原来文A 按钮直接翻译、设置藏在更多菜单，两个入口
+    // 开关 + 进完整设置的入口——原来文A 按钮直接翻译、设置藏在更多菜单，两个入口
     // 看起来像同一功能的两份，融合成一个浮层。
+    var syncQuickNow = null;
     function openSettings(compact) {
       if (!settingsPop.hidden) { closeSettings(); return; }
       if (cardPop) cardPop.hidden = true;
@@ -1154,14 +1307,58 @@
         outTo: trSettings.outTo || siteDefaultLang || pageLang
       };
       settingsPop.textContent = '';
+      settingsPop.classList.toggle('is-quick', !!compact);
       if (compact) {
-        // 快捷浮层：立即翻译输入内容 + 两个自动翻译开关 + 完整设置入口。
+        // 快捷浮层：标题行（右侧进完整设置）+ 立即翻译 + 两个自动翻译开关。
         // 开关变化即时保存；autoIn 变化后跑一遍管道，把未翻的客服消息补上。
-        settingsPop.appendChild(Object.assign(document.createElement('button'), {
-          type: 'button', className: 'chat-tr-now',
-          textContent: t('chatTranslateNow', '翻译输入内容')
-        }));
-        var nowBtn = settingsPop.lastChild;
+        var headRow = document.createElement('div');
+        headRow.className = 'chat-tr-head';
+        var headTitle = document.createElement('h3');
+        headTitle.textContent = t('chat.translate', '翻译');
+        var link = document.createElement('button');
+        link.type = 'button';
+        link.className = 'chat-tr-more';
+        link.textContent = t('chatTranslateOptions', '设置…');
+        // 外点监听按这个属性豁免入口按钮；没有它，click 冒泡到 document 会把刚打开的表单关掉
+        link.setAttribute('data-chat-translate-settings', '');
+        // openSettings 的 toggle 守卫会拦下「浮层开着时再调 openSettings」——先隐身再进完整表单
+        link.addEventListener('click', function () { settingsPop.hidden = true; openSettings(false); });
+        headRow.appendChild(headTitle);
+        headRow.appendChild(link);
+        settingsPop.appendChild(headRow);
+
+        // 主按钮带上目标语言：原来只说「翻译输入内容」，目标语言藏在设置里，用户不知道译成什么。
+        // 语言清单缺失时 langDisplay 只能回语言码，就别把「翻译为 zh-CN」这种码露给访客。
+        var toName = langDisplay(cur.outTo);
+        var idleLabel = toName && toName !== cur.outTo
+          ? t('chatTranslateNowTo', '翻译为 %s').replace('%s', toName)
+          : t('chatTranslateNow', '翻译输入内容');
+        var busyLabel = t('chatTranslating', '翻译中…');
+        var nowBtn = document.createElement('button');
+        nowBtn.type = 'button';
+        nowBtn.className = 'chat-tr-now';
+        nowBtn.textContent = idleLabel;
+        var busy = false;
+        // 空草稿时按钮是禁用态：之前看着可点，点了静默无反应
+        syncQuickNow = function () {
+          nowBtn.disabled = busy || !String((input && input.value) || '').trim();
+        };
+        syncQuickNow();
+        settingsPop.appendChild(nowBtn);
+        // 翻译结果就地提示：写进消息区会留下一条条「当前语言一致」的药丸（连点就连串）
+        var trMsg = document.createElement('p');
+        trMsg.className = 'chat-tr-msg';
+        trMsg.hidden = true;
+        settingsPop.appendChild(trMsg);
+        var trMsgTimer = 0;
+        var showTrMsg = function (text, isErr) {
+          trMsg.textContent = text;
+          trMsg.classList.toggle('is-err', !!isErr);
+          trMsg.hidden = false;
+          window.clearTimeout(trMsgTimer);
+          trMsgTimer = window.setTimeout(function () { trMsg.hidden = true; }, 2400);
+        };
+
         var quickRow = function (label, key, onChange) {
           var row = document.createElement('label');
           row.className = 'chat-tr-row';
@@ -1182,52 +1379,58 @@
         quickRow(t('chatTranslateAutoOut', '自动翻译我发送的消息'), 'autoOut', null);
         nowBtn.addEventListener('click', function () {
           var text = String((input && input.value) || '').trim();
-          if (!text || nowBtn.disabled) return;
-          nowBtn.disabled = true;
+          if (!text || busy) return;
+          busy = true;
+          nowBtn.textContent = busyLabel;
+          syncQuickNow();
           translateBatch([text], 'out', { from: trSettings.outFrom || '', to: trSettings.outTo || '' })
             .then(function (data) {
-              if (input && !data.skipped) input.value = data.texts[0];
-              if (data.skipped) note(t('chatTranslateSame', '当前语言一致，无需翻译'));
-              else note(t('chatTranslated', '已翻译为对方语言'));
+              if (data.skipped) {
+                showTrMsg(t('chatTranslateSame', '当前语言一致，无需翻译'));
+                return;
+              }
+              if (input) input.value = data.texts[0];
+              // 不往消息区写「已翻译」：输入框里的文字变了就是反馈，日志留给真正的对话
+              // 翻完就收起，用户直接看输入框里的译文、接着发送
+              settingsPop.hidden = true;
+              if (input) input.focus();
             }).catch(function () {
-              note(t('chatTranslateFailed', '翻译失败，请稍后重试'));
-            }).then(function () { nowBtn.disabled = false; });
+              showTrMsg(t('chatTranslateFailed', '翻译失败，请稍后重试'), true);
+            }).then(function () {
+              busy = false;
+              nowBtn.textContent = idleLabel;
+              syncQuickNow();
+            });
         });
-        var link = document.createElement('button');
-        link.type = 'button';
-        link.className = 'chat-tr-more';
-        link.textContent = t('chatTranslateSettings', '翻译设置…');
-        // 外点监听按这个属性豁免入口按钮；没有它，click 冒泡到 document 会把刚打开的表单关掉
-        link.setAttribute('data-chat-translate-settings', '');
-        // openSettings 的 toggle 守卫会拦下「浮层开着时再调 openSettings」——先隐身再进完整表单
-        link.addEventListener('click', function () { settingsPop.hidden = true; openSettings(false); });
-        settingsPop.appendChild(link);
         settingsPop.hidden = false;
+        focusSettingsPop();
         return;
       }
       var h = document.createElement('h3');
       h.textContent = t('chatTranslateSettings', '翻译设置');
       settingsPop.appendChild(h);
 
+      // 语言选择用挂件自己的下拉（和地址卡同款）：原生 <select> 的展开层是系统画的，
+      // 选项高亮是系统蓝，跟这套 Canvas/currentColor 的浮层完全不是一路。
+      // 返回 { el, value() }：el 放进表单，保存时读 value()（语言码）。
+      var langPickSeq = 0;
       function langSelect(value) {
-        var sel = document.createElement('select');
         var opts = LANGS.length ? LANGS : [{ c: value, n: value }];
-        var hit = false;
-        opts.forEach(function (l) {
-          var o = document.createElement('option');
-          o.value = l.c;
-          o.textContent = l.n;
-          if (l.c === value) { o.selected = true; hit = true; }
-          sel.appendChild(o);
-        });
-        if (!hit && value) { // 存过的语言码不在清单里（站点改过语言配置）：保底显示原值
-          var o = document.createElement('option');
-          o.value = value;
-          o.textContent = value;
-          o.selected = true;
-          sel.appendChild(o);
+        var picker = buildSelect('lang-' + (++langPickSeq), t('chatTranslatePick', '选择语言'), null, '', '');
+        picker.setItems(opts.map(function (l) {
+          return {
+            key: l.c,
+            disp: l.n || l.c,
+            needle: String((l.n || '') + ' ' + l.c).toLowerCase()
+          };
+        }));
+        var hit = null;
+        for (var i = 0; i < opts.length; i++) {
+          if (opts[i].c === value) { hit = opts[i]; break; }
         }
-        return sel;
+        if (hit) picker.apply({ key: hit.c, disp: hit.n || hit.c });
+        else if (value) picker.apply({ key: value, disp: value }); // 存过的语言码不在清单里：保底显示原值
+        return { el: picker.wrap, value: picker.key };
       }
       function groupRow(label, checked) {
         var row = document.createElement('div');
@@ -1264,14 +1467,14 @@
       var inGroup = groupRow(t('chatTranslateAutoIn', '翻译收到的消息'), cur.autoIn);
       var inToSel = langSelect(cur.inTo);
       settingsPop.appendChild(inGroup.row);
-      settingsPop.appendChild(fieldsRow([t('chatTranslateInTo', '翻译为'), inToSel]));
+      settingsPop.appendChild(fieldsRow([t('chatTranslateInTo', '翻译为'), inToSel.el]));
       settingsPop.appendChild(hint(t('chatTranslateHintIn', '收到的消息将自动翻译成您选择的语言；原有消息可在气泡下方手动切换原文。')));
 
       var outGroup = groupRow(t('chatTranslateAutoOut', '翻译发送的消息'), cur.autoOut);
       var outFromSel = langSelect(cur.outFrom);
       var outToSel = langSelect(cur.outTo);
       settingsPop.appendChild(outGroup.row);
-      settingsPop.appendChild(fieldsRow([t('chatTranslateOutFrom', '从'), outFromSel, t('chatTranslateOutTo', '翻译成'), outToSel]));
+      settingsPop.appendChild(fieldsRow([t('chatTranslateOutFrom', '从'), outFromSel.el, t('chatTranslateOutTo', '翻译成'), outToSel.el]));
       settingsPop.appendChild(hint(t('chatTranslateHintOut', '发送前将自动翻译成所选语言；翻译失败时会发送原文。')));
 
       var actions = document.createElement('div');
@@ -1282,10 +1485,10 @@
       save.textContent = t('chatTranslateSave', '保存并应用');
       save.addEventListener('click', function () {
         trSettings.autoIn = inGroup.sw.checked;
-        trSettings.inTo = inToSel.value;
+        trSettings.inTo = inToSel.value();
         trSettings.autoOut = outGroup.sw.checked;
-        trSettings.outFrom = outFromSel.value;
-        trSettings.outTo = outToSel.value;
+        trSettings.outFrom = outFromSel.value();
+        trSettings.outTo = outToSel.value();
         saveTrSettings();
         closeSettings();
         // 目标语言变了要让自动管道重新评估：已翻的气泡保留（按钮可切回原文），
@@ -1295,13 +1498,14 @@
       actions.appendChild(save);
       settingsPop.appendChild(actions);
       settingsPop.hidden = false;
+      focusSettingsPop();
     }
     // 翻译只有一个入口：底部工具栏的文A（快捷浮层，内含「翻译设置…」进完整表单）。
     // 原来更多菜单里还有一个「翻译设置」，两个入口位置分散、点开的东西也不一样，
     // 用户反馈「两个红的乱跑」——删掉菜单项，避免同一功能出现两份入口。
 
     // ---- 表情与更多菜单 ----
-    // 表情按钮懒构建：不占每次页面加载的成本，第一次点开才铺按钮；
+    // 表情按钮懒构建：不占每次页面加载的成本，挂件打开后空闲时才铺按钮；
     // 选中用浮层上的一个事件委托，不再给 176 个按钮各自挂监听。
     var emojiBuilt = false;
     var buildEmojis = function () {
@@ -1317,6 +1521,39 @@
         emojiPop.appendChild(b);
       });
     };
+    // 首开的停顿不在建 DOM（实测 ~2ms），而在 176 个 emoji 字形的首次布局＋光栅化
+    // （实测 ~260ms，点开那一刻才做就是「卡一下」）。挂件打开后空闲预热一次：
+    // 透明显示一帧把字形画进缓存，之后点开只剩重新显示（实测 ~27ms）。
+    var emojiWarming = false;
+    var emojiWarmDone = false;
+    var emojiWarmQueued = false;
+    var stopEmojiWarm = function () {
+      if (!emojiWarming) return;
+      emojiWarming = false;
+      emojiPop.hidden = true;
+      emojiPop.style.opacity = '';
+      emojiPop.style.pointerEvents = '';
+    };
+    var warmEmojis = function () {
+      if (emojiWarmDone || !emojiPop || !panel || panel.hidden || !emojiPop.hidden) return;
+      emojiWarmDone = true;
+      buildEmojis();
+      emojiWarming = true;
+      emojiPop.style.opacity = '0';
+      emojiPop.style.pointerEvents = 'none';
+      emojiPop.hidden = false;
+      void emojiPop.offsetHeight;
+      var raf = window.requestAnimationFrame || function (cb) { return window.setTimeout(cb, 16); };
+      raf(function () { raf(stopEmojiWarm); });
+    };
+    var scheduleEmojiWarm = function () {
+      if (emojiWarmDone || emojiWarmQueued) return;
+      emojiWarmQueued = true;
+      // 固定 200ms：主题页的大图/进场动画会把 requestIdleCallback 一直往后推
+      // （最迟 1.5s 超时才跑），而用户往往在面板打开后一两秒就点表情，正好撞上冷启动。
+      // 200ms 落在面板进场动画（180ms）之后，预热不打断动画，又赶在点击之前。
+      window.setTimeout(function () { emojiWarmQueued = false; warmEmojis(); }, 200);
+    };
     if (emojiPop) {
       emojiPop.addEventListener('click', function (e) {
         var em = e.target && e.target.getAttribute && e.target.getAttribute('data-em');
@@ -1329,12 +1566,28 @@
     }
     if (emojiBtn && emojiPop) {
       emojiBtn.addEventListener('click', function () {
-        if (!emojiPop.hidden) { emojiPop.hidden = true; return; }
+        // 预热收尾前用户就点了：接管这块浮层，别让收尾把它再藏回去
+        var wasWarming = emojiWarming;
+        if (wasWarming) {
+          emojiWarming = false;
+          emojiPop.style.opacity = '';
+          emojiPop.style.pointerEvents = '';
+        }
+        if (!wasWarming && !emojiPop.hidden) { emojiPop.hidden = true; return; }
         buildEmojis();
         emojiPop.hidden = false;
         if (cardPop) cardPop.hidden = true;
         if (settingsPop) settingsPop.hidden = true;
       });
+      // 面板是点开才出现的：一露头就排一次空闲预热，只做一次
+      if (panel) {
+        if (!panel.hidden) scheduleEmojiWarm();
+        if (window.MutationObserver) {
+          new window.MutationObserver(function () {
+            if (!panel.hidden) scheduleEmojiWarm();
+          }).observe(panel, { attributes: true, attributeFilter: ['hidden'] });
+        }
+      }
     }
     // 点浮层以外的任何地方都收起：原来只有「再点一次按钮」才关，
     // 点聊天区、点页面空白、换了别的话题，这块大浮层就一直杵在消息上面。
@@ -1351,11 +1604,17 @@
           if (!d.hidden && !d.parentElement.contains(t)) d.hidden = true;
         });
       }
+      // 翻译设置里的语言下拉同理（浮层本身不关，只收起下拉）
+      if (settingsPop && !settingsPop.hidden) {
+        Array.prototype.forEach.call(settingsPop.querySelectorAll('.chat-card-drop'), function (d) {
+          if (!d.hidden && !d.parentElement.contains(t)) d.hidden = true;
+        });
+      }
     });
     document.addEventListener('keydown', function (e) {
       if (e.key !== 'Escape') return;
       if (emojiPop) emojiPop.hidden = true;
-      if (settingsPop) settingsPop.hidden = true;
+      closeSettingsByKey();
       // Esc 先收下拉再收卡片：连按两次才把整个地址卡关掉
       if (escForCard(e)) return;
       if (cardPop && !cardPop.hidden) closeCard();
@@ -1397,7 +1656,7 @@
     document.addEventListener('keydown', function (e) {
       if (e.key !== 'Escape') return;
       if (emojiPop) emojiPop.hidden = true;
-      if (settingsPop) settingsPop.hidden = true;
+      closeSettingsByKey();
       // Esc 先收下拉再收卡片（与上面第一个 Esc 处理器同口径）
       if (escForCard(e)) return;
       closeCard();

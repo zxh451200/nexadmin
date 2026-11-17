@@ -51,6 +51,10 @@ type SettingForm struct {
 	// DefaultLang 是官网默认语言：空 / auto = 跟随浏览器语言协商；具体 code = 该语言占根路径。
 	// 服务层校验 code 在语言清单内；公开站路由在启动期注册，改完需重启。
 	DefaultLang string `json:"defaultLang"`
+	// DefaultCurrency / CurrencyRates 是展示币种与汇率表（JSON 文本），对标阿里
+	// 「语言-币种」选择器；清洗与校验见 currency.go 的 normalizeCurrencySetting。
+	DefaultCurrency string `json:"defaultCurrency"`
+	CurrencyRates   string `json:"currencyRates"`
 	// 供应商实力档案（对标阿里商详供应商卡）：成立年份用指针，设置页分区块保存时不传就不改。
 	// 其余四项是字符串，传空即清空展示（运营可能只想留其中几项）。
 	EstablishedYear *int   `json:"establishedYear"`

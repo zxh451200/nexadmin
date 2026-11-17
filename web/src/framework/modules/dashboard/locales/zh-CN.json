@@ -15,6 +15,10 @@
       "unreadMessages": "未读消息",
       "storage": "存储用量"
     },
+    "kpi": {
+      "delta": "{{value}}%",
+      "storageDetail": "总量 {{total}} GB"
+    },
     "storageValue": "{{used}} / {{total}} GB",
     "loginTrend": "近 7 天登录趋势",
     "requestTrend": "近 7 天请求量",

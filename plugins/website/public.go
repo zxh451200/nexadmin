@@ -79,7 +79,12 @@ func (h *siteHandler) baseView(ctx context.Context, lang string, postLimit int) 
 		return nil, err
 	}
 	set := data.Setting
+	// 币种换算器：汇率表在站点设置里维护（USD 基准），展示币种先取站点默认，
+	// render 阶段按访客 cookie（nex-site-currency）升级。表为空时 fx 不启用，
+	// 模板 FxCur/FxMoney 原样返回，价格行为与旧版一致。
+	rates, _ := parseCurrencyRates(set.CurrencyRatesJSON)
 	v := &siteView{
+		fx: &fx{rates: rates, display: set.DefaultCurrency},
 		SiteName: set.SiteName, SiteDesc: set.SiteDesc, LogoURL: set.LogoURL,
 		FaviconURL: set.FaviconURL, OgImageURL: set.OgImageURL,
 		HeadCode:    template.HTML(set.HeadCode),
@@ -127,6 +132,21 @@ func (h *siteHandler) render(c *gin.Context, name string, status int, v *siteVie
 		return
 	}
 	v.ensureLang()
+	// 展示币种按访客 cookie 升级：cookie 值必须在汇率表内才认（防脏值/越权码），
+	// 之后才能决定头部弹层显不显示（CurrencyOn）。所有公开页都过 render，
+	// 弹层数据与价格换算在这里统一定型。
+	if len(v.fx.rates) > 0 {
+		if cur, cerr := c.Cookie(currencyCookie); cerr == nil {
+			if _, ok := v.fx.rates[strings.ToUpper(cur)]; ok {
+				v.fx.display = strings.ToUpper(cur)
+			}
+		}
+	}
+	if v.fx.enabled() {
+		v.CurrencyOn = true
+		v.DisplayCurrency = v.fx.display
+		v.CurrencyOptions = currencyOptions(v.fx.rates, v.Lang.Code)
+	}
 	// canonical / og:url 需要绝对且带语言前缀的地址；Route 保留无前缀路径用于导航。
 	v.BaseURL = baseURL(c)
 	v.Route = stripLangPrefix(c.Request.URL.Path)

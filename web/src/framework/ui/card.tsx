@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils'
  * 卡片底板的类串。`Card` 用它；宿主必须是 li / section / form / a 这类语义标签时，
  * 直接 `cn(cardSurface, ...)` 复用同一份样式，别再手抄一遍类名（抄了迟早和 Card 漂移）。
  */
-export const cardSurface = 'card-edge rounded-lg border bg-card text-card-foreground transition-shadow duration-(--motion-base) ease-(--ease-standard)'
+export const cardSurface = 'card-edge relative rounded-lg border bg-card text-card-foreground transition-shadow duration-(--motion-base) ease-(--ease-standard)'
 
 const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(({ className, ...props }, ref) => (
   <div ref={ref} className={cn(cardSurface, className)} {...props} />
@@ -39,4 +39,11 @@ const CardFooter = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDiv
 ))
 CardFooter.displayName = 'CardFooter'
 
-export { Card, CardHeader, CardFooter, CardTitle, CardDescription, CardContent }
+// 卡片头部右上角的操作插槽（shadcn 同款）：Info 图标 / 「查看更多 →」这类常驻入口。
+// 绝对定位贴在卡面右上，与 CardHeader 的 p-4 md:p-6 对齐；不占标题排版位。
+const CardAction = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(({ className, ...props }, ref) => (
+  <div ref={ref} className={cn('absolute top-4 inset-e-4 flex items-center gap-2', className)} {...props} />
+))
+CardAction.displayName = 'CardAction'
+
+export { Card, CardHeader, CardFooter, CardTitle, CardDescription, CardContent, CardAction }

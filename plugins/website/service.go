@@ -290,6 +290,13 @@ func (s *Service) SaveSettings(ctx context.Context, f SettingForm) (*Setting, er
 			return nil, response.BadRequest("website.default_lang_invalid")
 		}
 	}
+	// 展示币种与汇率表（对标阿里「语言-币种」）：normalizeCurrencySetting 校验
+	// 汇率 JSON 结构与默认币种在表内，表为空时两者一起清空（关掉换算）。
+	defCur, ratesJSON, cerr := normalizeCurrencySetting(f.DefaultCurrency, f.CurrencyRates)
+	if cerr != nil {
+		return nil, cerr
+	}
+	row.DefaultCurrency, row.CurrencyRatesJSON = defCur, ratesJSON
 	socials, err := normalizeSocials(f.Socials)
 	if err != nil {
 		return nil, err

@@ -27,7 +27,7 @@ export default function DashboardPage() {
   const { t, i18n } = useTranslation()
   const { perms } = usePermission()
   const user = useAuth((s) => s.user)
-  const { data, isError } = useDashboardStats()
+  const { isError } = useDashboardStats()
   const layoutQuery = useDashboardLayout()
   const save = useSaveDashboardLayout()
   const reset = useResetDashboardLayout()
@@ -72,32 +72,29 @@ export default function DashboardPage() {
 
   return (
     <PageContainer>
-      <section className="relative overflow-hidden rounded-2xl border bg-card p-5 shadow-xs md:p-8">
-        {/* 装饰：点阵 + 一团品牌柔光，亮暗主题自适应，不再整块涂品牌渐变 */}
-        <div aria-hidden="true" className="tech-grid pointer-events-none absolute inset-0 opacity-70 mask-[linear-gradient(to_bottom_left,black,transparent_70%)]" />
-        <div aria-hidden="true" className="pointer-events-none absolute -inset-e-16 -top-24 size-72 rounded-full bg-primary/10 blur-3xl" />
-        <div aria-hidden="true" className="pointer-events-none absolute -bottom-24 inset-s-1/3 size-64 rounded-full bg-primary/5 blur-3xl" />
-        <div className="relative flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-          <div className="min-w-0">
-            <h1 className="text-xl font-semibold tracking-tight md:text-3xl">
-              {t('dashboard.welcome', { greeting: t(`dashboard.greeting.${greetingKey(now.getHours())}`), name })}
-            </h1>
-            <p className="mt-2 text-sm text-muted-foreground md:text-base">{t('dashboard.welcomeSub', { date: dateText })}</p>
-          </div>
-          {data ? (
-            <div className="flex flex-wrap gap-2">
-              <div className="rounded-xl border bg-muted/50 px-4 py-2">
-                <p className="text-xs text-muted-foreground">{t('dashboard.stat.todayLogin')}</p>
-                <p className="num text-xl font-semibold">{data.todayLogin.value}</p>
-              </div>
-              <div className="rounded-xl border bg-muted/50 px-4 py-2">
-                <p className="text-xs text-muted-foreground">{t('dashboard.stat.unreadMessages')}</p>
-                <p className="num text-xl font-semibold">{data.unreadMessages.value}</p>
-              </div>
-            </div>
-          ) : null}
+      {/* 页头照抄 shadcn 教育仪表盘：左侧标题一行 + muted 副行，右侧小按钮，无装饰底板 */}
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div className="min-w-0 space-y-1">
+          <h1 className="text-2xl tracking-tight md:text-3xl">
+            {t('dashboard.welcome', { greeting: t(`dashboard.greeting.${greetingKey(now.getHours())}`), name })}
+          </h1>
+          <p className="text-sm text-muted-foreground">{t('dashboard.welcomeSub', { date: dateText })}</p>
         </div>
-      </section>
+        {!editing ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="lg:w-fit"
+            aria-label={t('dashboard.layout.edit')}
+            disabled={layoutQuery.isLoading}
+            onClick={() => setEditing(true)}
+          >
+            <LayoutGrid className="size-4" aria-hidden="true" />
+            {t('dashboard.layout.edit')}
+          </Button>
+        ) : null}
+      </div>
 
       {isError ? (
         <p role="alert" className="text-sm text-destructive">
@@ -109,19 +106,6 @@ export default function DashboardPage() {
         <LayoutEditor cards={cards} base={layout} saving={save.isPending || reset.isPending} onSave={onSave} onExit={() => setEditing(false)} onReset={onReset} />
       ) : (
         <>
-          <div className="flex justify-end">
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              aria-label={t('dashboard.layout.edit')}
-              title={t('dashboard.layout.edit')}
-              disabled={layoutQuery.isLoading}
-              onClick={() => setEditing(true)}
-            >
-              <LayoutGrid className="size-4" aria-hidden="true" />
-            </Button>
-          </div>
           {layoutQuery.isLoading ? (
             <div className={CARD_GRID}>
               <Skeleton className="h-28 w-full md:col-span-4" />

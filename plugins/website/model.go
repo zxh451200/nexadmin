@@ -66,6 +66,12 @@ type Setting struct {
 	DefaultLang string `gorm:"column:default_lang;size:16;not null;default:''" json:"defaultLang"`
 	// SeedVersion 记录出厂内容补种进度：升级后只补一次新增的出厂条目，不复活管理员删掉的内容。
 	SeedVersion int `gorm:"not null;default:1" json:"-"`
+	// DefaultCurrency 是访客未选择币种时的展示币种（对标阿里右上角「语言-币种」）；
+	// 空 = 不启用换算，价格按商品各自 currency 字段直出（旧版行为）。
+	DefaultCurrency string `gorm:"column:default_currency;size:8;not null;default:''" json:"defaultCurrency"`
+	// CurrencyRatesJSON 是汇率表文本 {"USD":1,"EUR":0.92,...}：USD 恒为基准 1，
+	// 键集合同时是头部弹层的可选币种清单；解析与校验收在 currency.go。
+	CurrencyRatesJSON string `gorm:"column:currency_rates;type:text" json:"currencyRates"`
 	// ---- 供应商资质：对标阿里商详左侧供应商卡的「实力档案」四项 ----
 	// 全部是字符串而不是数值区间枚举：阿里的年营收/员工数是下拉区间（US$10M-US$50M、500+），
 	// 用字符串能原样存区间写法，也允许运营写本地口径（如「年产能 12GWh」）。

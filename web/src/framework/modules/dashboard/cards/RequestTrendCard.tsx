@@ -1,27 +1,31 @@
 import { useTranslation } from 'react-i18next'
-import { ChartCard } from '@/framework/components/ChartCard'
-import { TrendChart } from '@/framework/components/TrendChart'
+import { Card, CardContent, CardHeader, CardTitle } from '@/framework/ui/card'
 import { Skeleton } from '@/framework/ui/skeleton'
 import { useDashboardStats } from '../api'
+import { DotBarChart } from './DotBarChart'
 
 export default function RequestTrendCard() {
   const { t } = useTranslation()
   const { data } = useDashboardStats()
   return (
-    <ChartCard title={t('dashboard.requestTrend')}>
-      {data ? (
-        <TrendChart
-          data={data.requestTrend}
-          xKey="date"
-          type="area"
-          series={[
-            { key: 'requests', label: t('dashboard.series.requests') },
-            { key: 'errors', label: t('dashboard.series.errors') },
-          ]}
-        />
-      ) : (
-        <Skeleton className="h-72 w-full" />
-      )}
-    </ChartCard>
+    <Card className="flex h-full flex-col transition-shadow hover:glow motion-reduce:transition-none">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm">{t('dashboard.requestTrend')}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {data ? (
+          <DotBarChart
+            data={data.requestTrend}
+            xKey="date"
+            series={[
+              { key: 'requests', label: t('dashboard.series.requests'), color: 'hsl(var(--chart-3))' },
+              { key: 'errors', label: t('dashboard.series.errors'), color: 'hsl(var(--destructive))' },
+            ]}
+          />
+        ) : (
+          <Skeleton className="h-72 w-full" />
+        )}
+      </CardContent>
+    </Card>
   )
 }

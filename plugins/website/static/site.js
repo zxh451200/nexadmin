@@ -156,16 +156,125 @@
 
   // ---- 语言菜单开合（委托：<details> 原生负责开合，这里只管关） ----
   document.addEventListener('click', function (e) {
-    document.querySelectorAll('details.lang-switch[open]').forEach(function (box) {
+    document.querySelectorAll('details.lang-switch[open],details.ship-to[open]').forEach(function (box) {
       if (!box.contains(e.target)) box.removeAttribute('open');
     });
   });
   document.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape') return;
-    document.querySelectorAll('details.lang-switch[open]').forEach(function (box) {
+    document.querySelectorAll('details.lang-switch[open],details.ship-to[open]').forEach(function (box) {
       box.removeAttribute('open');
     });
   });
+
+  // ---- 「设置语言和币种」弹层（对标阿里右上角）：服务端出结构，这里只管保存 ----
+  // 币种写一年期全站 cookie（服务端 render 按 cookie 换算价格），语言跳模板写好的
+  // Switch 地址；币种变了就刷新当前页，语言变了跳对应语言页（cookie 先落盘再跳）。
+  var localeMenu = document.querySelector('[data-locale-menu]');
+  if (localeMenu) {
+    var localeSave = localeMenu.querySelector('[data-locale-save]');
+    var localeLang = localeMenu.querySelector('[data-locale-lang]');
+    var localeCur = localeMenu.querySelector('[data-locale-currency]');
+    if (localeSave && localeLang && localeCur) {
+      localeSave.addEventListener('click', function () {
+        // 选中态是否被用户改过：对照服务端模板写死的 defaultSelected，
+        // 不跟页面 URL 比（Switch 地址带不带查询串对不上会误判）。
+        var curChanged = !localeCur.selectedOptions[0] || !localeCur.selectedOptions[0].defaultSelected;
+        var langChanged = !localeLang.selectedOptions[0] || !localeLang.selectedOptions[0].defaultSelected;
+        if (curChanged) {
+          document.cookie = 'nex-site-currency=' + encodeURIComponent(localeCur.value) + ';path=/;max-age=31536000;samesite=Lax';
+        }
+        if (langChanged) {
+          window.location.href = localeLang.value;
+          return;
+        }
+        if (curChanged) window.location.reload();
+        else localeMenu.closest('details').removeAttribute('open');
+      });
+    }
+  }
+
+  // ---- 交货至（对标阿里「交货至: 🇨🇳 CN」）：纯展示 + localStorage 记忆 ----
+  // 国家清单复用地址卡的 country-region.json（{c: ISO2, zh, en, dial}），首次展开才拉。
+  // 只管展示与记忆；询盘/客服侧通过 chat-enhance 读同一个 localStorage 键取默认国家。
+  var shipTo = document.querySelector('[data-ship-to]');
+  if (shipTo) {
+    var SHIP_KEY = 'nex-site-shipto';
+    var shipVal = shipTo.querySelector('[data-ship-to-val]');
+    var shipList = shipTo.querySelector('[data-ship-to-list]');
+    var shipSearch = shipTo.querySelector('[data-ship-to-search]');
+    var shipData = null;
+    // 国旗 = ISO2 码两个字母各加 regional-indicator 偏移（与 chat-enhance 同口径）
+    function shipFlag(code) {
+      var out = '';
+      for (var i = 0; i < code.length; i++) out += String.fromCodePoint(0x1F1E6 + code.charCodeAt(i) - 65);
+      return out;
+    }
+    function shipName(c) {
+      return /^en/i.test(String(document.documentElement.lang || '')) ? c.en : (c.zh || c.en);
+    }
+    function shipRender(filter) {
+      if (!shipList) return;
+      var f = String(filter || '').toLowerCase();
+      shipList.textContent = '';
+      var added = 0;
+      (shipData || []).forEach(function (c) {
+        var name = shipName(c) || c.c;
+        if (f && name.toLowerCase().indexOf(f) < 0 && c.c.toLowerCase().indexOf(f) < 0) return;
+        if (added >= 60) return;
+        added++;
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.setAttribute('role', 'option');
+        b.setAttribute('data-ship-code', c.c);
+        b.textContent = shipFlag(c.c) + ' ' + name;
+        shipList.appendChild(b);
+      });
+      if (!added) {
+        var empty = document.createElement('p');
+        empty.className = 'ship-to-empty';
+        empty.textContent = msg('shipToEmpty', 'No matches');
+        shipList.appendChild(empty);
+      }
+    }
+    function shipApply(code) {
+      if (!shipVal) return;
+      var c = (shipData || []).filter(function (x) { return x.c === code; })[0];
+      shipVal.textContent = shipFlag(code) + ' ' + code;
+      shipVal.hidden = false;
+      if (c) shipVal.setAttribute('title', shipName(c));
+    }
+    function shipSet(code) {
+      try { localStorage.setItem(SHIP_KEY, code); } catch (err) { /* 隐私模式忽略 */ }
+      shipApply(code);
+      shipTo.removeAttribute('open');
+    }
+    // 初次渲染摘要：存过的国家 > 默认 US。清单没到位时也先亮出码，展开后再补 title。
+    var shipSaved = 'US';
+    try { shipSaved = localStorage.getItem(SHIP_KEY) || 'US'; } catch (err) { /* 隐私模式忽略 */ }
+    shipApply(shipSaved);
+    shipTo.addEventListener('toggle', function () {
+      if (!shipTo.open || !shipList) return;
+      if (shipData) { shipRender(''); if (shipSearch) shipSearch.focus(); return; }
+      shipRender('');
+      if (window.fetch) {
+        fetch('/website-assets/country-region.json', { credentials: 'same-origin' })
+          .then(function (res) { if (!res.ok) throw new Error('unavailable'); return res.json(); })
+          .then(function (list) {
+            shipData = Array.isArray(list) ? list : [];
+            shipRender('');
+            shipApply(shipSaved);
+          })
+          .catch(function () { shipData = []; shipRender(''); });
+      }
+      if (shipSearch) shipSearch.focus();
+    });
+    if (shipSearch) shipSearch.addEventListener('input', function () { shipRender(shipSearch.value); });
+    if (shipList) shipList.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-ship-code]');
+      if (b) shipSet(b.getAttribute('data-ship-code'));
+    });
+  }
 
   // ---- AI 提示框 CTA：提交后平滑滚到快速开始（仅首页渲染该表单） ----
   document.addEventListener('submit', function (e) {

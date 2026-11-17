@@ -333,6 +333,100 @@ html[data-scheme="light"] .brand-mark {
   z-index: 70;
 }
 
+/* 「设置语言和币种」弹层（对标阿里）：沿用 lang-menu 的容器外观，
+   内部是标题 + 说明 + 两个下拉 + 保存主钮，宽度比语言菜单宽一档。 */
+.locale-menu { min-width: 264px; padding: 14px; }
+.locale-menu h4 { margin: 0 0 4px; font-size: 14px; color: var(--text); }
+.locale-hint { margin: 0 0 12px; font-size: 12px; line-height: 1.6; color: var(--text-2); }
+.locale-field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px; font-size: 12px; color: var(--text-2); }
+.locale-field select {
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--panel-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+.locale-field select:focus-visible { outline: none; border-color: var(--accent); }
+.locale-save {
+  width: 100%;
+  height: 36px;
+  margin-top: 2px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter 0.15s;
+}
+.locale-save:hover { filter: brightness(1.08); }
+
+/* 交货至（对标阿里「交货至: 🇨🇳 CN」）：触发钮是 label + 国旗码两段，
+   弹层是搜索框 + 国家清单（site.js 从 country-region.json 渲染）。 */
+.ship-to { position: relative; }
+.ship-to summary {
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 32px;
+  padding: 0 9px;
+  border-radius: 999px;
+  color: var(--text-2);
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+  white-space: nowrap;
+}
+.ship-to summary::-webkit-details-marker { display: none; }
+.ship-to summary:hover,
+.ship-to[open] summary { color: var(--text); background: var(--hover); }
+.ship-to-val { font-weight: 700; font-size: 12.5px; letter-spacing: 0.02em; }
+.ship-to-menu { min-width: 236px; padding: 8px; }
+.ship-to-search {
+  box-sizing: border-box;
+  width: 100%;
+  height: 30px;
+  margin-bottom: 6px;
+  padding: 0 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+}
+.ship-to-search:focus-visible { outline: none; border-color: var(--accent); }
+.ship-to-list { max-height: 240px; overflow-y: auto; }
+.ship-to-list button {
+  display: block;
+  width: 100%;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 13px;
+  text-align: start;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ship-to-list button:hover { color: var(--text); background: var(--hover-2); }
+.ship-to-empty { margin: 4px; padding: 6px 8px; font-size: 12px; color: var(--text-2); }
+/* 窄屏：交货至只留旗标码，label 藏掉，给顶部一行省位 */
+@media (max-width: 900px) {
+  .ship-to-label { display: none; }
+  .ship-to-menu { min-width: 200px; }
+}
+
 .nav-toggle {
   display: none;
   width: 34px;
