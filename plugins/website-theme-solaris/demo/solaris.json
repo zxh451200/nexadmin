@@ -171,7 +171,7 @@
       "slug": "ess-100mwh",
       "title": "100MWh 工商业储能项目",
       "summary": "两充两放策略与 EMS 智能调度，为制造园区拿到清晰的储能经济账。",
-      "coverUrl": "/website-assets/theme/solaris/assets/sl-project-main.webp",
+      "coverUrl": "/website-assets/theme/solaris/assets/sl-project-side-two.webp",
       "author": "SOLARIS 项目部",
       "pinned": true,
       "categories": [
@@ -200,7 +200,7 @@
       "slug": "phuket-microgrid",
       "title": "普吉岛光储微电网",
       "summary": "弱电网岛屿的光储微电网：构网型逆变器让度假村供电自主可控。",
-      "coverUrl": "/website-assets/theme/solaris/assets/sl-project-side-two.webp",
+      "coverUrl": "/website-assets/theme/solaris/assets/sl-project-main.webp",
       "author": "SOLARIS 项目部",
       "categories": [
         {
