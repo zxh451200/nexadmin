@@ -569,6 +569,13 @@ defineMock([
       let rows = callbacks.filter((c) => !kw || c.paymentNo.toLowerCase().includes(kw))
       if (query.channelCode) rows = rows.filter((c) => c.channelCode === query.channelCode)
       if (query.ok !== undefined && query.ok !== '') rows = rows.filter((c) => String(c.ok) === String(query.ok))
+      // 时间范围与后端同口径：yyyy-mm-dd 含两端，to 取当天结束的排他上界
+      const from = query.createdFrom ? new Date(`${query.createdFrom}T00:00:00`).getTime() : 0
+      const to = query.createdTo ? new Date(`${query.createdTo}T23:59:59.999`).getTime() : Infinity
+      rows = rows.filter((c) => {
+        const t = new Date(c.createdAt).getTime()
+        return t >= from && t <= to
+      })
       return paginate([...rows].reverse(), query)
     },
   },

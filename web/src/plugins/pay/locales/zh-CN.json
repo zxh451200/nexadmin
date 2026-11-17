@@ -137,7 +137,8 @@
       "remark": "备注",
       "billDate": "账单日期",
       "batchNo": "批次号",
-      "payerId": "买家标识"
+      "payerId": "买家标识",
+      "notifyId": "渠道通知流水号"
     },
     "channel": {
       "create": "新建渠道",
@@ -429,6 +430,24 @@
       "platformCerts": "微信平台证书下载",
       "signing": "签名可生成",
       "gateway": "网关可达且接受签名"
+    },
+    "callbacks": {
+      "searchPlaceholder": "支付单号"
+    },
+    "callbackResult": {
+      "accepted": "入账成功",
+      "duplicate": "重复通知（已处理过）",
+      "signInvalid": "验签失败",
+      "staleNotify": "通知时间窗异常",
+      "orderNotFound": "支付单不存在",
+      "amountMismatch": "金额不一致",
+      "ignoredState": "单据已是 {{state}}，通知忽略"
+    },
+    "jumpToOrder": "查看支付单",
+    "copy": {
+      "action": "复制",
+      "done": "已复制到剪贴板",
+      "failed": "复制失败"
     }
   }
 }

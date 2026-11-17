@@ -62,7 +62,8 @@ export default function PayPage() {
           {canSettle ? <TabsTrigger value="settle">{t('plugin_pay.tabs.settle')}</TabsTrigger> : null}
         </TabsList>
         <TabsContent value="orders" className="m-0">
-          <OrdersTab />
+          {/* kw 是回调审计跳转（CallbacksTab）带来的支付单号深链，挂载时作为初始关键词 */}
+          <OrdersTab initialKeyword={params.get('kw') ?? undefined} />
         </TabsContent>
         <TabsContent value="refunds" className="m-0">
           <RefundsTab />

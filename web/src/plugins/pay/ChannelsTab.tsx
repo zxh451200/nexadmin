@@ -219,7 +219,7 @@ function ChannelFormDialog({ open, onOpenChange, editing, providers }: Props) {
       toast.success(t('common.operateSuccess'))
       onOpenChange(false)
     } catch {
-      toast.error(t('common.operateFailed'))
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -233,7 +233,9 @@ function ChannelFormDialog({ open, onOpenChange, editing, providers }: Props) {
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             {t('common.cancel')}
           </Button>
-          <Button onClick={() => void submit()}>{t('common.save')}</Button>
+          <Button onClick={() => void submit()} disabled={save.isPending}>
+            {save.isPending ? t('common.loading') : t('common.save')}
+          </Button>
         </>
       }
     >
@@ -328,7 +330,7 @@ function ChannelFormDialog({ open, onOpenChange, editing, providers }: Props) {
               <label key={f.key} className="flex flex-col gap-1 text-sm">
                 <span>
                   {fieldLabel(f.key)}
-                  {f.required && <span className="text-destructive"> *</span>}
+                  {f.required && <RequiredMark />}
                 </span>
                 {f.type === 'select' ? (
                   <Select
@@ -395,7 +397,7 @@ export function ChannelsTab() {
         setSelected((s) => s.filter((id) => id !== c.id))
         toast.success(t('common.operateSuccess'))
       } catch {
-        toast.error(t('common.operateFailed'))
+        // 失败原因由 http 拦截器统一弹出
       }
     }
   }
@@ -409,7 +411,7 @@ export function ChannelsTab() {
       setSelected([])
       toast.success(deleted < ids.length ? t('plugin_pay.channel.deletedPartial', { deleted, total: ids.length }) : t('common.operateSuccess'))
     } catch {
-      toast.error(t('common.operateFailed'))
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 

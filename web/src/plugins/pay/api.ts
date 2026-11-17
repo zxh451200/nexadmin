@@ -139,15 +139,21 @@ export interface PayCallback {
   id: string
   channelCode: string
   paymentNo: string
+  /** 渠道给这条通知的流水号（取证/排障检索用），验签失败的行没有 */
+  notifyId?: string
   ok: boolean
   result: string
   payload?: string
   createdAt: string
 }
 
-/** 重放回调的可行判定（与后端 replayableResult 同口径）：只有已验签且落账失败的。 */
+/**
+ * 重放回调的可行判定（与后端 replayableResult 同口径）：只有已验签且落账失败的。
+ * 注意 ignored_state 前缀是下划线（后端 ResultIgnoredStatePrefix = "ignored_state_"，
+ * 后拼资金单状态），此前写成冒号导致这类行的重放按钮永远不出现。
+ */
 export const callbackReplayable = (cb: PayCallback): boolean =>
-  cb.ok && (cb.result === 'order_not_found' || cb.result === 'amount_mismatch' || cb.result.startsWith('ignored_state:'))
+  cb.ok && (cb.result === 'order_not_found' || cb.result === 'amount_mismatch' || cb.result.startsWith('ignored_state_'))
 
 export function useReplayCallback() {
   const invalidate = useInvalidate()
@@ -386,6 +392,9 @@ export interface OrderQuery extends PageQuery {
 export interface CallbackQuery extends PageQuery {
   channelCode?: string
   ok?: boolean
+  /** 回调时间范围（含两端 yyyy-mm-dd），与支付单列表同一组参数名 */
+  createdFrom?: string
+  createdTo?: string
 }
 export interface RefundQuery extends PageQuery {
   status?: string

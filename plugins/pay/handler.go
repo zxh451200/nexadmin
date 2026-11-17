@@ -391,10 +391,14 @@ func (h *handler) providers(c *gin.Context) {
 // ---- callbacks ----
 
 // GET /plugins/pay/callbacks —— 契约 listCallbacks（回调审计）。
+// 关键词参数名是 keyword：前端筛选框一直发的就是这个名字，此前读 paymentNo
+// 导致搜索完全失效；orderDateRange 的两个日期参数与支付单列表同名。
 func (h *handler) listCallbacks(c *gin.Context) {
 	page, size := response.ParsePage(c)
 	q := CallbackQuery{
-		Channel: c.Query("channelCode"), Keyword: c.Query("paymentNo"), Page: page, PageSize: size,
+		Channel: c.Query("channelCode"), Keyword: c.Query("keyword"),
+		CreatedFrom: c.Query("createdFrom"), CreatedTo: c.Query("createdTo"),
+		Page: page, PageSize: size,
 	}
 	if v, err := strconv.ParseBool(c.Query("ok")); err == nil {
 		q.OK = &v

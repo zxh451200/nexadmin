@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { RefreshCw, Ban, Download, Eye, RotateCcw } from 'lucide-react'
+import { RefreshCw, Ban, Download, RotateCcw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 import { parseISO } from 'date-fns'
@@ -9,6 +9,7 @@ import { useAsyncJob } from '@/framework/hooks/use-async-job'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { DatePicker } from '@/framework/components/DatePicker'
+import { DetailAction } from '@/framework/components/DetailAction'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Segmented } from '@/framework/components/Segmented'
@@ -66,12 +67,13 @@ const toOrderQuery = (d: OrderDraft): OrderQuery => ({
   createdTo: d.createdTo,
 })
 
-export function OrdersTab() {
+export function OrdersTab({ initialKeyword }: { initialKeyword?: string }) {
   const { t, i18n } = useTranslation()
   const confirm = useConfirm()
   const { start: startExportJob } = useAsyncJob()
-  const [draft, setDraft] = useState<OrderDraft>({})
-  const [filters, setFilters] = useState<OrderQuery>({})
+  // 回调审计深链跳转（?kw=支付单号）挂载时套用一次：后续筛选完全归用户管
+  const [draft, setDraft] = useState<OrderDraft>(initialKeyword ? { keyword: initialKeyword } : {})
+  const [filters, setFilters] = useState<OrderQuery>(initialKeyword ? { keyword: initialKeyword } : {})
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   // 视图写进 URL：?view=stats 可以直接分享给同事
@@ -96,7 +98,7 @@ export function OrdersTab() {
         await close.mutateAsync(o.paymentNo)
         toast.success(t('common.operateSuccess'))
       } catch {
-        toast.error(t('common.operateFailed'))
+        // 失败原因由 http 拦截器统一弹出
       }
     }
   }
@@ -106,7 +108,7 @@ export function OrdersTab() {
       await sync.mutateAsync(o.paymentNo)
       toast.success(t('common.operateSuccess'))
     } catch {
-      toast.error(t('common.operateFailed'))
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -118,7 +120,7 @@ export function OrdersTab() {
     try {
       await startExportJob(() => createOrderExportJob({ ...filters }))
     } catch {
-      toast.error(t('common.operateFailed'))
+      // 创建失败的原因由 http 拦截器统一弹出
     } finally {
       setExporting(false)
     }
@@ -321,15 +323,13 @@ export function OrdersTab() {
         emptyText={t('plugin_pay.empty')}
         toolbar={
           <Button type="button" variant="outline" onClick={() => void onExport()} disabled={exporting}>
-            <Download className="me-2 size-4" aria-hidden="true" />
+            <Download aria-hidden="true" />
             {t('common.export')}
           </Button>
         }
         rowActions={(o) => (
           <div className="flex items-center">
-            <Button variant="ghost" size="icon" aria-label={t('common.detail')} onClick={() => setDetail(o)}>
-              <Eye aria-hidden="true" />
-            </Button>
+            <DetailAction onClick={() => setDetail(o)} />
             {o.status === 'pending' ? (
               <Can perm="pay:edit">
                 <Button variant="ghost" size="icon" aria-label={t('plugin_pay.sync')} onClick={() => void onSync(o)}>
@@ -396,7 +396,7 @@ function OrderDetailDialog({
           {o && refundable && onRefund ? (
             <Can perm="pay:refund">
               <Button onClick={() => onRefund(o.paymentNo)}>
-                <RotateCcw className="me-2 size-4" aria-hidden="true" />
+                <RotateCcw aria-hidden="true" />
                 {t('plugin_pay.refund')}
               </Button>
             </Can>

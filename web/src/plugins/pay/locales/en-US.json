@@ -137,7 +137,8 @@
       "remark": "Remark",
       "billDate": "Bill date",
       "batchNo": "Batch No",
-      "payerId": "Payer ID"
+      "payerId": "Payer ID",
+      "notifyId": "Gateway notify ID"
     },
     "channel": {
       "create": "New Channel",
@@ -429,6 +430,24 @@
       "platformCerts": "WeChat platform certificates",
       "signing": "Signature can be generated",
       "gateway": "Gateway reachable and accepted the signature"
+    },
+    "callbacks": {
+      "searchPlaceholder": "Payment no."
+    },
+    "callbackResult": {
+      "accepted": "Accepted",
+      "duplicate": "Duplicate (already processed)",
+      "signInvalid": "Signature verification failed",
+      "staleNotify": "Stale notification (clock skew)",
+      "orderNotFound": "Order not found",
+      "amountMismatch": "Amount mismatch",
+      "ignoredState": "Order already {{state}}, notification ignored"
+    },
+    "jumpToOrder": "View payment",
+    "copy": {
+      "action": "Copy",
+      "done": "Copied to clipboard",
+      "failed": "Copy failed"
     }
   }
 }

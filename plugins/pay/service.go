@@ -1029,15 +1029,28 @@ func (s *Service) ListOrders(ctx context.Context, q OrderQuery) ([]Order, int64,
 
 // CallbackQuery 过滤回调审计列表。
 type CallbackQuery struct {
-	Channel  string
-	Keyword  string
-	OK       *bool
-	Page     int
-	PageSize int
+	Channel string
+	Keyword string
+	OK      *bool
+	// CreatedFrom/CreatedTo 回调时间范围，口径与 OrderQuery 一致（含两端 yyyy-mm-dd，
+	// to 取当天结束的排他上界）；复用 orderDateRange 解析，非法值显式报错——
+	// 排障高频问题是「只看某天渠道在推哪些通知」，静默忽略等于给错数据。
+	CreatedFrom string
+	CreatedTo   string
+	Page        int
+	PageSize    int
 }
 
 // ListCallbacks 分页列出回调审计。
 func (s *Service) ListCallbacks(ctx context.Context, q CallbackQuery) ([]Callback, int64, error) {
+	loc := s.loc
+	if loc == nil {
+		loc = time.UTC
+	}
+	from, to, err := orderDateRange(q.CreatedFrom, q.CreatedTo, loc)
+	if err != nil {
+		return nil, 0, err
+	}
 	db := s.db.WithContext(ctx).Model(&Callback{})
 	if q.Channel != "" {
 		db = db.Where("channel_code = ?", q.Channel)
@@ -1047,6 +1060,12 @@ func (s *Service) ListCallbacks(ctx context.Context, q CallbackQuery) ([]Callbac
 	}
 	if kw := strings.TrimSpace(q.Keyword); kw != "" {
 		db = db.Where("LOWER(payment_no) LIKE LOWER(?)", "%"+escapeLike(kw)+"%")
+	}
+	if !from.IsZero() {
+		db = db.Where("created_at >= ?", from)
+	}
+	if !to.IsZero() {
+		db = db.Where("created_at < ?", to)
 	}
 	var total int64
 	if err := db.Count(&total).Error; err != nil {

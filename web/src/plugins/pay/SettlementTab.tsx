@@ -135,12 +135,17 @@ function RuleDialog({ rule, onClose }: { rule: PayCommissionRule | null; onClose
   const [fixed, setFixed] = useState(((rule?.fixedMinor ?? 0) / 100).toFixed(2))
   const [currency, setCurrency] = useState(rule?.currency ?? 'CNY')
   const [status, setStatus] = useState(rule?.status ?? 'active')
+  // 行内校验提示：提交未过时点亮（toast 仍是快捷反馈）
+  const [showErrors, setShowErrors] = useState(false)
+  const bizTypeMissing = !bizType.trim()
 
   const submit = async () => {
     if (!bizType.trim()) {
+      setShowErrors(true)
       toast.error(t('plugin_pay.settle.invalidRule'))
       return
     }
+    setShowErrors(false)
     try {
       await save.mutateAsync({
         subjectId: subjectId.trim(),
@@ -153,7 +158,7 @@ function RuleDialog({ rule, onClose }: { rule: PayCommissionRule | null; onClose
       toast.success(t('common.operateSuccess'))
       onClose()
     } catch {
-      toast.error(t('common.operateFailed'))
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -167,7 +172,9 @@ function RuleDialog({ rule, onClose }: { rule: PayCommissionRule | null; onClose
           <Button variant="outline" onClick={onClose}>
             {t('common.cancel')}
           </Button>
-          <Button onClick={() => void submit()}>{t('common.save')}</Button>
+          <Button onClick={() => void submit()} disabled={save.isPending}>
+            {save.isPending ? t('common.loading') : t('common.save')}
+          </Button>
         </>
       }
     >
@@ -182,7 +189,12 @@ function RuleDialog({ rule, onClose }: { rule: PayCommissionRule | null; onClose
               {t('plugin_pay.fields.bizType')}
               <RequiredMark />
             </span>
-            <Input value={bizType} onChange={(e) => setBizType(e.target.value)} />
+            <Input
+              value={bizType}
+              aria-invalid={showErrors && bizTypeMissing}
+              onChange={(e) => setBizType(e.target.value)}
+            />
+            {showErrors && bizTypeMissing ? <span className="text-xs text-destructive">{t('plugin_pay.settle.invalidRule')}</span> : null}
           </label>
           <label className="flex flex-col gap-1">
             {t('plugin_pay.fields.status')}
@@ -230,7 +242,7 @@ function SettlementsPanel() {
       await confirmSettlement.mutateAsync(s.id)
       toast.success(t('common.operateSuccess'))
     } catch {
-      toast.error(t('common.operateFailed'))
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -316,18 +328,23 @@ function GenerateDialog({ onClose }: { onClose: () => void }) {
   const [subjectId, setSubjectId] = useState('')
   const [periodStart, setPeriodStart] = useState(() => ymd(new Date(new Date().getFullYear(), new Date().getMonth(), 1)))
   const [periodEnd, setPeriodEnd] = useState(() => ymd(new Date()))
+  // 行内校验提示：提交未过时点亮（toast 仍是快捷反馈）
+  const [showErrors, setShowErrors] = useState(false)
+  const periodInvalid = !periodStart || !periodEnd || periodEnd < periodStart
 
   const submit = async () => {
     if (!periodStart || !periodEnd || periodEnd < periodStart) {
+      setShowErrors(true)
       toast.error(t('plugin_pay.settle.invalidPeriod'))
       return
     }
+    setShowErrors(false)
     try {
       await generate.mutateAsync({ subjectId: subjectId.trim(), periodStart, periodEnd })
       toast.success(t('common.operateSuccess'))
       onClose()
     } catch {
-      toast.error(t('common.operateFailed'))
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -366,6 +383,7 @@ function GenerateDialog({ onClose }: { onClose: () => void }) {
             <DatePicker value={periodEnd} onChange={setPeriodEnd} allowClear={false} fromDate={periodStart ? parseISO(periodStart) : undefined} />
           </label>
         </div>
+        {showErrors && periodInvalid ? <p className="text-xs text-destructive">{t('plugin_pay.settle.invalidPeriod')}</p> : null}
       </div>
     </ResponsiveDialog>
   )
@@ -573,12 +591,17 @@ function ChannelPayDialog({
   const confirm = useConfirm()
   const pay = usePayPayoutViaChannel()
   const [channelCode, setChannelCode] = useState('')
+  // 行内校验提示：提交未过时点亮（toast 仍是快捷反馈）
+  const [showErrors, setShowErrors] = useState(false)
+  const channelMissing = !channelCode
 
   const submit = async () => {
     if (!channelCode) {
+      setShowErrors(true)
       toast.error(t('plugin_pay.settle.pickPayoutChannelFirst'))
       return
     }
+    setShowErrors(false)
     if (!(await confirm({ destructive: true, description: t('plugin_pay.settle.channelPayConfirm', { no: batch.batchNo, code: channelCode }) }))) {
       return
     }
@@ -587,7 +610,7 @@ function ChannelPayDialog({
       toast.success(t('common.operateSuccess'))
       onClose()
     } catch {
-      toast.error(t('common.operateFailed'))
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -623,7 +646,7 @@ function ChannelPayDialog({
               <RequiredMark />
             </span>
             <Select value={channelCode} onValueChange={setChannelCode}>
-              <SelectTrigger aria-label={t('plugin_pay.settle.pickPayoutChannel')}>
+              <SelectTrigger aria-label={t('plugin_pay.settle.pickPayoutChannel')} aria-invalid={showErrors && channelMissing}>
                 <SelectValue placeholder={t('plugin_pay.auth.pickChannel')} />
               </SelectTrigger>
               <SelectContent>
@@ -634,6 +657,9 @@ function ChannelPayDialog({
                 ))}
               </SelectContent>
             </Select>
+            {showErrors && channelMissing ? (
+              <span className="text-xs text-destructive">{t('plugin_pay.settle.pickPayoutChannelFirst')}</span>
+            ) : null}
           </label>
         )}
       </div>
@@ -648,21 +674,26 @@ function CreatePayoutDialog({ onClose }: { onClose: () => void }) {
   const [selected, setSelected] = useState<string[]>([])
   const [method, setMethod] = useState('')
   const [note, setNote] = useState('')
+  // 行内校验提示：提交未过时点亮（toast 仍是快捷反馈）
+  const [showErrors, setShowErrors] = useState(false)
+  const noneSelected = selected.length === 0
 
   const toggle = (id: string) =>
     setSelected((list) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]))
 
   const submit = async () => {
     if (selected.length === 0) {
+      setShowErrors(true)
       toast.error(t('plugin_pay.settle.pickSettlement'))
       return
     }
+    setShowErrors(false)
     try {
       await create.mutateAsync({ settlementIds: selected, method: method.trim(), note: note.trim() })
       toast.success(t('common.operateSuccess'))
       onClose()
     } catch {
-      toast.error(t('common.operateFailed'))
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -699,6 +730,7 @@ function CreatePayoutDialog({ onClose }: { onClose: () => void }) {
             </label>
           ))}
         </div>
+        {showErrors && noneSelected ? <p className="text-xs text-destructive">{t('plugin_pay.settle.pickSettlement')}</p> : null}
         <div className="grid grid-cols-2 gap-3">
           <label className="flex flex-col gap-1">
             {t('plugin_pay.settle.payoutMethod')}
@@ -718,18 +750,23 @@ function MarkPaidDialog({ batch, onClose }: { batch: PayPayoutBatch; onClose: ()
   const { t } = useTranslation()
   const mark = useMarkPayoutPaid()
   const [receiptNo, setReceiptNo] = useState('')
+  // 行内校验提示：提交未过时点亮（toast 仍是快捷反馈）
+  const [showErrors, setShowErrors] = useState(false)
+  const receiptMissing = !receiptNo.trim()
 
   const submit = async () => {
     if (!receiptNo.trim()) {
+      setShowErrors(true)
       toast.error(t('plugin_pay.settle.receiptRequired'))
       return
     }
+    setShowErrors(false)
     try {
       await mark.mutateAsync({ id: batch.id, receiptNo: receiptNo.trim() })
       toast.success(t('common.operateSuccess'))
       onClose()
     } catch {
-      toast.error(t('common.operateFailed'))
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -755,7 +792,13 @@ function MarkPaidDialog({ batch, onClose }: { batch: PayPayoutBatch; onClose: ()
             {t('plugin_pay.settle.receiptNo')}
             <RequiredMark />
           </span>
-          <Input value={receiptNo} maxLength={64} onChange={(e) => setReceiptNo(e.target.value)} />
+          <Input
+            value={receiptNo}
+            maxLength={64}
+            aria-invalid={showErrors && receiptMissing}
+            onChange={(e) => setReceiptNo(e.target.value)}
+          />
+          {showErrors && receiptMissing ? <span className="text-xs text-destructive">{t('plugin_pay.settle.receiptRequired')}</span> : null}
         </label>
       </div>
     </ResponsiveDialog>

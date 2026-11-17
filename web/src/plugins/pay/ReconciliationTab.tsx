@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { Download, ListChecks, Plus, Trash2 } from 'lucide-react'
+import { Download, Plus, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { DatePicker } from '@/framework/components/DatePicker'
+import { DetailAction } from '@/framework/components/DetailAction'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { RequiredMark } from '@/framework/components/RequiredMark'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
@@ -166,11 +167,7 @@ export function ReconciliationTab() {
             </Button>
           </Can>
         }
-        rowActions={(r) => (
-          <Button variant="ghost" size="icon" aria-label={t('plugin_pay.reconcile.diffs')} onClick={() => setDetail(r)}>
-            <ListChecks aria-hidden="true" />
-          </Button>
-        )}
+        rowActions={(r) => <DetailAction onClick={() => setDetail(r)} label={t('plugin_pay.reconcile.diffs')} />}
       />
       {runOpen ? <RunReconcileDialog onClose={() => setRunOpen(false)} /> : null}
       {detail ? <DiffsDialog task={detail} onClose={() => setDetail(null)} /> : null}
@@ -227,7 +224,7 @@ function RunReconcileDialog({ onClose }: { onClose: () => void }) {
       toast.success(t('common.operateSuccess'))
       onClose()
     } catch {
-      toast.error(t('common.operateFailed'))
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -363,7 +360,7 @@ function DiffsDialog({ task, onClose }: { task: PayReconcileTask; onClose: () =>
       await resolve.mutateAsync({ id: diff.id, action, note: notes[diff.id] ?? '' })
       toast.success(t('common.operateSuccess'))
     } catch {
-      toast.error(t('common.operateFailed'))
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 

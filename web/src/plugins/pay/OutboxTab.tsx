@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { Ban, Eye, Inbox, RefreshCw } from 'lucide-react'
+import { Ban, Inbox, RefreshCw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { DetailAction } from '@/framework/components/DetailAction'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { RequiredMark } from '@/framework/components/RequiredMark'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
@@ -67,7 +68,7 @@ export function OutboxTab() {
       await retry.mutateAsync(row.eventId)
       toast.success(t('common.operateSuccess'))
     } catch {
-      toast.error(t('common.operateFailed'))
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -195,9 +196,7 @@ export function OutboxTab() {
         emptyText={t('plugin_pay.outbox.empty')}
         rowActions={(r) => (
           <div className="flex items-center">
-            <Button variant="ghost" size="icon" aria-label={t('common.detail')} onClick={() => setDetail(r)}>
-              <Eye aria-hidden="true" />
-            </Button>
+            <DetailAction onClick={() => setDetail(r)} />
             {actionable(r.status) ? (
               <Can perm="pay:outbox">
                 <Button variant="ghost" size="icon" aria-label={t('plugin_pay.outbox.retry')} onClick={() => void onRetry(r)}>
@@ -302,7 +301,7 @@ function DiscardDialog({ row, onClose }: { row: PayOutboxEvent; onClose: () => v
       toast.success(t('common.operateSuccess'))
       onClose()
     } catch {
-      toast.error(t('common.operateFailed'))
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
