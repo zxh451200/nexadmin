@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { ChevronLeft, ChevronRight, CircleCheck, CircleX, Loader2, MapPin, Pencil, Plus, Power, Trash2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, CircleCheck, CircleX, Loader2, MapPin, Pencil, Plus, Power, Trash2, User, Wifi, WifiOff } from 'lucide-react'
 import { Can } from '@/framework/auth/Can'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { EmptyState } from '@/framework/components/EmptyState'
@@ -15,6 +15,7 @@ import { SimpleSelect } from '@/framework/components/SimpleSelect'
 import { SwitchRow } from '@/framework/components/SwitchField'
 import { LocationField, type GeoPoint } from '@/framework/map'
 import { TrendChart } from '@/framework/components/TrendChart'
+import { useWs } from '@/framework/hooks/useWs'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Card } from '@/framework/ui/card'
@@ -108,6 +109,10 @@ export default function DevicePage() {
   // 顶部总览：不点进详情就知道机群整体健不健康
   const stats = useDeviceStats()
 
+  // 实时链路状态：WS 断开时页面并未死掉（8s 轮询兜底），但用户得知道此刻看到的数据
+  // 是推的还是轮询来的，避免盯着一个已经不动的值以为还是实时。
+  const { status: wsStatus } = useWs()
+
   // WS：命中帧即刷全部查询（8s 轮询兜底）；统计、列表、规则、事件都在 KEY 前缀下
   useDeviceFeed(() => {
     void queryClient.invalidateQueries({ queryKey: ['plugin_devicehub'] })
@@ -153,17 +158,33 @@ export default function DevicePage() {
           </Can>
         }
       />
-      {stats.data ? (
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-1 rounded-xl border border-border bg-card px-4 py-2.5 text-sm">
-          <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-            {t('plugin_devicehub.overview.total')}
-            <span className="font-semibold text-foreground tabular-nums">{stats.data.total}</span>
-          </span>
-          <StatDot tone="success" label={t('plugin_devicehub.status.online')} value={stats.data.online} />
-          <StatDot tone="destructive" label={t('plugin_devicehub.status.offline')} value={stats.data.offline} />
-          <StatDot tone="neutral" label={t('plugin_devicehub.status.disabled')} value={stats.data.disabled} />
-        </div>
-      ) : null}
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-1 rounded-xl border border-border bg-card px-4 py-2.5 text-sm">
+        {stats.data ? (
+          <>
+            <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+              {t('plugin_devicehub.overview.total')}
+              <span className="font-semibold text-foreground tabular-nums">{stats.data.total}</span>
+            </span>
+            <StatDot tone="success" label={t('plugin_devicehub.status.online')} value={stats.data.online} />
+            <StatDot tone="destructive" label={t('plugin_devicehub.status.offline')} value={stats.data.offline} />
+            <StatDot tone="neutral" label={t('plugin_devicehub.status.disabled')} value={stats.data.disabled} />
+          </>
+        ) : null}
+        <span
+          className={cn(
+            'ms-auto inline-flex items-center gap-1.5 text-xs',
+            wsStatus === 'open' ? 'text-muted-foreground' : 'text-warning',
+          )}
+          title={t('plugin_devicehub.ws.hint')}
+        >
+          {wsStatus === 'open' ? (
+            <Wifi aria-hidden="true" className="size-3.5 text-success" />
+          ) : (
+            <WifiOff aria-hidden="true" className="size-3.5" />
+          )}
+          {wsStatus === 'open' ? t('plugin_devicehub.ws.connected') : t('plugin_devicehub.ws.fallback')}
+        </span>
+      </div>
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[20rem_1fr]">
         {/* 设备列表：标题 + 搜索 + 滚动列表。self-start：卡随内容收口，不被右侧详情的行高拉长成一块空板；
             高度仍封顶，设备多了在卡内滚动。 */}
@@ -826,7 +847,17 @@ function CommandsPanel({ deviceNo, points }: { deviceNo: string; points: Point[]
               )}
               <span className="text-xs">{t(`plugin_devicehub.command.status.${cmd.status}`)}</span>
               <span className="font-mono text-xs">{cmd.rawValue}</span>
-              <span className="text-xs text-muted-foreground">{cmd.result}</span>
+              {cmd.result ? <span className="text-xs text-muted-foreground">{cmd.result}</span> : null}
+              {/* 下发人与回执时间都由后端落库带回：审计不进弹窗也能对账（谁、何时下发、何时执行成功） */}
+              {cmd.operatorName ? (
+                <span className="inline-flex items-center gap-0.5 text-xs text-muted-foreground" title={t('plugin_devicehub.command.operator')}>
+                  <User aria-hidden="true" className="size-3" />
+                  {cmd.operatorName}
+                </span>
+              ) : null}
+              {cmd.status === 'done' && cmd.doneAt ? (
+                <span className="text-xs text-muted-foreground">{t('plugin_devicehub.command.receipt', { time: formatTime(cmd.doneAt) })}</span>
+              ) : null}
               <span className="ms-auto text-xs text-muted-foreground">{formatTime(cmd.createdAt)}</span>
             </div>
           ))}

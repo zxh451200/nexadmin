@@ -31,6 +31,8 @@ const (
 	ProviderGoogle Provider = "google"
 	// OSM 即 OpenStreetMap：开源免费，无任何 Key；检索/逆地理走 Nominatim 公益服务
 	ProviderOSM Provider = "osm"
+	// 天地图：浏览器 JS SDK 与服务端 Web API 共用一个 tk（服务端缺省沿用浏览器 Key）
+	ProviderTianditu Provider = "tianditu"
 )
 
 // ProviderConfig 是单家厂商的配置。服务端专用 Key 永远不下发浏览器。
@@ -51,10 +53,11 @@ type ProviderView struct {
 }
 
 type ConfigView struct {
-	AMap   ProviderView `json:"amap"`
-	Baidu  ProviderView `json:"baidu"`
-	Google ProviderView `json:"google"`
-	OSM    ProviderView `json:"osm"`
+	AMap     ProviderView `json:"amap"`
+	Baidu    ProviderView `json:"baidu"`
+	Google   ProviderView `json:"google"`
+	OSM      ProviderView `json:"osm"`
+	Tianditu ProviderView `json:"tianditu"`
 }
 
 type providerReq struct {
@@ -64,9 +67,10 @@ type providerReq struct {
 }
 
 type configReq struct {
-	AMap   providerReq `json:"amap"`
-	Baidu  providerReq `json:"baidu"`
-	Google providerReq `json:"google"`
+	AMap     providerReq `json:"amap"`
+	Baidu    providerReq `json:"baidu"`
+	Google   providerReq `json:"google"`
+	Tianditu providerReq `json:"tianditu"`
 	// OSM 免 Key：只需要开关，不带任何凭据字段
 	OSM struct {
 		Enabled bool `json:"enabled"`
@@ -74,9 +78,10 @@ type configReq struct {
 }
 
 var settingKeys = map[Provider][2]string{
-	ProviderAMap:   {"maps.amap.enabled", "maps.amap.public_key"},
-	ProviderBaidu:  {"maps.baidu.enabled", "maps.baidu.public_key"},
-	ProviderGoogle: {"maps.google.enabled", "maps.google.public_key"},
+	ProviderAMap:     {"maps.amap.enabled", "maps.amap.public_key"},
+	ProviderBaidu:    {"maps.baidu.enabled", "maps.baidu.public_key"},
+	ProviderGoogle:   {"maps.google.enabled", "maps.google.public_key"},
+	ProviderTianditu: {"maps.tianditu.enabled", "maps.tianditu.public_key"},
 }
 
 func serverKeyName(p Provider) string {
@@ -87,26 +92,30 @@ func serverKeyName(p Provider) string {
 		return "maps.baidu.server_key"
 	case ProviderGoogle:
 		return "maps.google.server_key"
+	case ProviderTianditu:
+		return "maps.tianditu.server_key"
 	}
 	return ""
 }
 
 type service struct {
-	db     *gorm.DB
-	amap   *amapClient
-	baidu  *baiduClient
-	google *googleClient
-	osm    *osmClient
+	db       *gorm.DB
+	amap     *amapClient
+	baidu    *baiduClient
+	google   *googleClient
+	osm      *osmClient
+	tianditu *tiandituClient
 }
 
 func newService(db *gorm.DB) *service {
 	hc := &http.Client{Timeout: 8 * time.Second}
 	return &service{
-		db:     db,
-		amap:   &amapClient{hc: hc, baseURL: "https://restapi.amap.com"},
-		baidu:  &baiduClient{hc: hc, baseURL: "https://api.map.baidu.com"},
-		google: &googleClient{hc: hc, baseURL: "https://maps.googleapis.com"},
-		osm:    &osmClient{hc: hc, baseURL: "https://nominatim.openstreetmap.org"},
+		db:       db,
+		amap:     &amapClient{hc: hc, baseURL: "https://restapi.amap.com"},
+		baidu:    &baiduClient{hc: hc, baseURL: "https://api.map.baidu.com"},
+		google:   &googleClient{hc: hc, baseURL: "https://maps.googleapis.com"},
+		osm:      &osmClient{hc: hc, baseURL: "https://nominatim.openstreetmap.org"},
+		tianditu: &tiandituClient{hc: hc, baseURL: "https://api.tianditu.gov.cn"},
 	}
 }
 
@@ -129,9 +138,10 @@ func (s *service) Config(ctx context.Context) (Config, error) {
 	}
 	osmEnabled := m["maps.osm.enabled"] == "true"
 	return Config{
-		ProviderAMap:   get(ProviderAMap),
-		ProviderBaidu:  get(ProviderBaidu),
-		ProviderGoogle: get(ProviderGoogle),
+		ProviderAMap:     get(ProviderAMap),
+		ProviderBaidu:    get(ProviderBaidu),
+		ProviderGoogle:   get(ProviderGoogle),
+		ProviderTianditu: get(ProviderTianditu),
 		// OSM 无凭据：只读开关
 		ProviderOSM: ProviderConfig{Enabled: osmEnabled},
 	}, nil
@@ -142,7 +152,7 @@ func view(c Config) ConfigView {
 		cfg := c[p]
 		return ProviderView{Enabled: cfg.Enabled, PublicKey: cfg.PublicKey, HasServerKey: cfg.ServerKey != ""}
 	}
-	return ConfigView{AMap: pv(ProviderAMap), Baidu: pv(ProviderBaidu), Google: pv(ProviderGoogle), OSM: pv(ProviderOSM)}
+	return ConfigView{AMap: pv(ProviderAMap), Baidu: pv(ProviderBaidu), Google: pv(ProviderGoogle), OSM: pv(ProviderOSM), Tianditu: pv(ProviderTianditu)}
 }
 
 // SaveConfig 保存各厂商配置；服务端 Key 留空表示沿用旧值（前端永远不回显）。
@@ -152,13 +162,14 @@ func (s *service) SaveConfig(ctx context.Context, in configReq) (ConfigView, err
 		return ConfigView{}, err
 	}
 	next := Config{}
-	for p, req := range map[Provider]providerReq{ProviderAMap: in.AMap, ProviderBaidu: in.Baidu, ProviderGoogle: in.Google} {
+	for p, req := range map[Provider]providerReq{ProviderAMap: in.AMap, ProviderBaidu: in.Baidu, ProviderGoogle: in.Google, ProviderTianditu: in.Tianditu} {
 		pub := strings.TrimSpace(req.PublicKey)
 		server := strings.TrimSpace(req.ServerKey)
 		if server == "" {
 			server = cur[p].ServerKey
 		}
-		if p == ProviderGoogle && server == "" {
+		// 谷歌与天地图浏览器/服务端共用同一个 Key：服务端缺省沿用浏览器 Key
+		if (p == ProviderGoogle || p == ProviderTianditu) && server == "" {
 			server = pub
 		}
 		next[p] = ProviderConfig{Enabled: req.Enabled, PublicKey: pub, ServerKey: server}
@@ -220,6 +231,8 @@ func (s *service) Regeo(ctx context.Context, provider Provider, lng, lat float64
 		return s.google.Regeo(ctx, pc.ServerKey, lng, lat)
 	case ProviderOSM:
 		return s.osm.Regeo(ctx, lng, lat)
+	case ProviderTianditu:
+		return s.tianditu.Regeo(ctx, pc.ServerKey, lng, lat)
 	}
 	return "", badRequest("maps.provider_unknown")
 }
@@ -270,6 +283,8 @@ func (s *service) Geocode(ctx context.Context, provider Provider, address string
 		return s.google.Geocode(ctx, key, address)
 	case ProviderOSM:
 		return s.osm.Geocode(ctx, address)
+	case ProviderTianditu:
+		return s.tianditu.Geocode(ctx, key, address)
 	}
 	return 0, 0, badRequest("maps.provider_unknown")
 }
@@ -293,6 +308,8 @@ func (s *service) PlaceSearch(ctx context.Context, provider Provider, keywords, 
 		return s.google.Search(ctx, key, keywords)
 	case ProviderOSM:
 		return s.osm.Search(ctx, keywords)
+	case ProviderTianditu:
+		return s.tianditu.Search(ctx, key, keywords)
 	}
 	return nil, badRequest("maps.provider_unknown")
 }

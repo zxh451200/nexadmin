@@ -1274,17 +1274,9 @@
       settingsPop.appendChild(actions);
       settingsPop.hidden = false;
     }
-    if (morePop) {
-      var trSettingsBtn = document.createElement('button');
-      trSettingsBtn.type = 'button';
-      trSettingsBtn.textContent = t('chatTranslateSettings', '翻译设置');
-      trSettingsBtn.setAttribute('data-chat-translate-settings', '');
-      trSettingsBtn.addEventListener('click', function () {
-        morePop.hidden = true;
-        openSettings(false); // 菜单入口给完整设置表单；快捷开关在工具栏文A 浮层里
-      });
-      morePop.appendChild(trSettingsBtn);
-    }
+    // 翻译只有一个入口：底部工具栏的文A（快捷浮层，内含「翻译设置…」进完整表单）。
+    // 原来更多菜单里还有一个「翻译设置」，两个入口位置分散、点开的东西也不一样，
+    // 用户反馈「两个红的乱跑」——删掉菜单项，避免同一功能出现两份入口。
 
     // ---- 表情与更多菜单 ----
     // 表情按钮懒构建：不占每次页面加载的成本，第一次点开才铺按钮；

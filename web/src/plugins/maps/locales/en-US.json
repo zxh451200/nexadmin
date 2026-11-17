@@ -2,7 +2,7 @@
   "plugin_maps": {
     "menu": "Maps",
     "title": "Map service",
-    "desc": "Free basic map plugin: enable AMap, Baidu or Google as needed; OpenStreetMap works out of the box without any key. Picking runs in the browser; reverse geocoding goes through the server proxy.",
+    "desc": "Free basic map plugin: enable AMap, Baidu, Google or Tianditu as needed; OpenStreetMap works out of the box without any key. Picking runs in the browser; reverse geocoding goes through the server proxy.",
     "configTitle": "Provider keys",
     "configDesc": "Fill in the providers you enable. Server keys stay on the backend; the API only reports whether one exists. OpenStreetMap needs no key at all.",
     "enabledTag": "Enabled",
@@ -11,7 +11,8 @@
       "amap": "AMap",
       "baidu": "Baidu Maps",
       "google": "Google Maps",
-      "osm": "OpenStreetMap (free)"
+      "osm": "OpenStreetMap (free)",
+      "tianditu": "Tianditu"
     },
     "keys": {
       "amapPublic": "JS API key (web)",
@@ -23,7 +24,10 @@
       "googlePublic": "API key",
       "googleServer": "Server key (blank = same)",
       "googleHint": "Google Cloud: enable Maps JavaScript API and Geocoding API. Maps usually fail to load in mainland China; intended for overseas deployments.",
-      "osmHint": "Completely free, no key required: Leaflet + OSM tiles in the browser, search and reverse geocoding via the Nominatim public service. Slower in mainland China and thinner Chinese POI coverage than AMap/Baidu — good as a fallback and for overseas use; swap in a self-hosted endpoint under heavy load."
+      "osmHint": "Completely free, no key required: Leaflet + OSM tiles in the browser, search and reverse geocoding via the Nominatim public service. Slower in mainland China and thinner Chinese POI coverage than AMap/Baidu — good as a fallback and for overseas use; swap in a self-hosted endpoint under heavy load.",
+      "tiandituPublic": "Browser key (tk)",
+      "tiandituServer": "Server key (blank = same)",
+      "tiandituHint": "Tianditu: apply for a tk at console.tianditu.gov.cn/api/key after real-name verification. The same key works in the browser and for server-side geocoding; coordinates are CGCS2000 (equivalent to wgs84)."
     },
     "demoTitle": "Picker test",
     "demoDesc": "Pick an enabled provider, click the map or drag the marker, then confirm. The coordinate system follows the provider (gcj02 / bd09 / wgs84).",
@@ -37,6 +41,9 @@
     "osmLoadFailed": "Failed to load OpenStreetMap tiles. The official servers can be slow or unreachable from mainland China; retry later or self-host a tile server.",
     "googleLoadFailed": "Failed to load the Google Maps script. Networks in mainland China usually cannot reach it directly.",
     "googleGlobalMissing": "The Google Maps script loaded but its global object is missing. Check that the key allows this domain.",
+    "tiandituLoadFailed": "Failed to load the Tianditu script. Check that the key is valid and api.tianditu.gov.cn is reachable, then retry.",
+    "baseVec": "Vector basemap",
+    "baseImg": "Satellite imagery",
     "clickHint": "Click the map to pick a location",
     "confirm": "Confirm"
   }

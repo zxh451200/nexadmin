@@ -6,6 +6,7 @@ let config: MapsConfigView = {
   baidu: { enabled: false, publicKey: '', hasServerKey: false },
   google: { enabled: false, publicKey: '', hasServerKey: false },
   osm: { enabled: false, publicKey: '', hasServerKey: false },
+  tianditu: { enabled: false, publicKey: '', hasServerKey: false },
 }
 
 defineMock([
@@ -18,7 +19,7 @@ defineMock([
     method: 'PUT',
     url: '/plugins/maps/config',
     handler: ({ body }): MapsConfigView => {
-      const pick = (id: 'amap' | 'baidu' | 'google') => ({
+      const pick = (id: 'amap' | 'baidu' | 'google' | 'tianditu') => ({
         enabled: !!body?.[id]?.enabled,
         publicKey: String(body?.[id]?.publicKey ?? ''),
         hasServerKey: config[id].hasServerKey || !!body?.[id]?.serverKey,
@@ -27,6 +28,7 @@ defineMock([
         amap: pick('amap'),
         baidu: pick('baidu'),
         google: pick('google'),
+        tianditu: pick('tianditu'),
         osm: { enabled: !!body?.osm?.enabled, publicKey: '', hasServerKey: false },
       }
       return config
@@ -42,6 +44,7 @@ defineMock([
         baidu: '北京市东城区天安门广场（百度）',
         google: 'Tiananmen Square, Dongcheng, Beijing',
         osm: 'Tiananmen Square, Dongcheng District, Beijing, China',
+        tianditu: '北京市东城区天安门广场（天地图）',
       }
       return { address: names[provider] ?? names.amap }
     },

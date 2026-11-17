@@ -2,11 +2,13 @@
   /* 品牌渐变：靛蓝为主，尾端带一点青。
      只用于按钮/logo/进度条/激活竖条这类小面积元素，深色下同样保持满强度——
      之前深色把渐变压到 19–26% 明度，主按钮变成一坨发灰的藏青（和亮靛蓝激活标签并列时尤其明显）。
-     大面积品牌面板（登录页左栏）走 login-brand / login-page-bg，那里才需要压暗。 */
+     大面积品牌面板（登录页左栏）走 login-brand / login-page-bg，那里才需要压暗。
+     中间停靠点固定用 --brand-from 而不是 --primary：深色主按钮现在是白底黑字
+     （shadcn neutral 形态），引用 --primary 会把渐变中段染成白色。 */
   background-image: linear-gradient(
     135deg,
     hsl(var(--brand-from)) 0%,
-    hsl(var(--primary)) 55%,
+    hsl(var(--brand-from)) 55%,
     hsl(var(--brand-to)) 170%
   );
 }
@@ -94,10 +96,10 @@
   backdrop-filter: blur(14px);
   .dark & {
     background-color: hsl(var(--card) / 0.6);
-    border-color: hsl(var(--brand-from) / 0.22);
+    border-color: hsl(0 0% 100% / 0.1);
     box-shadow:
       inset 0 1px 0 0 hsl(0 0% 100% / 0.05),
-      0 24px 48px -24px hsl(var(--brand-from) / 0.35);
+      0 24px 48px -24px hsl(0 0% 0% / 0.6);
   }
 }
 
@@ -149,18 +151,6 @@
      勾选一行要明显强于扫过一行——之前选中 bg-muted/50 反而比 hover 还浅。
      两档差 1.22:1 → 1.57:1，扫过与勾选才在灰阶屏上也分得开。 */
   background-color: color-mix(in oklab, hsl(var(--foreground)) 16%, hsl(var(--card)));
-}
-
-@utility dark-atmo {
-  /* 深色画布氛围：主区顶部一层极淡的品牌色渐晕（靛蓝 + 青），往下极缓衰减。
-     纯平的 9.5% 岩板底在大面积留白页上读作「死黑平地」；渐晕给黑底一点纵深。
-     半透明压得很低、半径铺得很宽——氛围要的是「察觉不到但少了会平」，一旦能看出
-     光斑边界就变成了脏。只覆盖 .dark；侧栏/卡片是实底，会自然挡住渐晕。 */
-  .dark & {
-    background-image:
-      radial-gradient(90rem 44rem at 20% -16rem, hsl(var(--brand-from) / 0.055), transparent 68%),
-      radial-gradient(100rem 48rem at 80% -18rem, hsl(var(--brand-to) / 0.045), transparent 68%);
-  }
 }
 
 @utility touch-only {

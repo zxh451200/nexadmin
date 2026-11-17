@@ -18,9 +18,10 @@ const EMPTY: MapsConfigInput = {
   baidu: { enabled: false, publicKey: '', serverKey: '' },
   google: { enabled: false, publicKey: '', serverKey: '' },
   osm: { enabled: false, publicKey: '', serverKey: '' },
+  tianditu: { enabled: false, publicKey: '', serverKey: '' },
 }
 
-const ORDER: MapProviderId[] = ['amap', 'baidu', 'google', 'osm']
+const ORDER: MapProviderId[] = ['amap', 'baidu', 'google', 'osm', 'tianditu']
 
 /** 地图服务：作为「系统设置 → 存储与集成」的一个分区渲染，旧地址 /system/map 重定向到 ?tab=maps。 */
 export function MapSection() {
@@ -40,6 +41,7 @@ export function MapSection() {
       google: { enabled: cfg.data.google.enabled, publicKey: cfg.data.google.publicKey, serverKey: '' },
       // 旧后端响应里没有 osm 字段（滚动升级期）：缺省当未启用，别让设置页崩掉
       osm: { enabled: cfg.data.osm?.enabled ?? false, publicKey: '', serverKey: '' },
+      tianditu: { enabled: cfg.data.tianditu?.enabled ?? false, publicKey: cfg.data.tianditu?.publicKey ?? '', serverKey: '' },
     })
   }, [cfg.data])
 

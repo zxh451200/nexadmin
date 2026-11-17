@@ -34,7 +34,7 @@ func (h *handler) SaveConfig(c *gin.Context) {
 	response.OK(c, v)
 }
 
-// Regeo GET /plugins/maps/regeo?provider=amap|baidu|google|osm&lng=&lat=
+// Regeo GET /plugins/maps/regeo?provider=amap|baidu|google|osm|tianditu&lng=&lat=
 func (h *handler) Regeo(c *gin.Context) {
 	provider := validProvider(c)
 	lng, err1 := strconv.ParseFloat(c.Query("lng"), 64)
@@ -54,7 +54,7 @@ func (h *handler) Regeo(c *gin.Context) {
 // validProvider 校验 provider 参数并回传强类型；非法时直接回 400。
 func validProvider(c *gin.Context) Provider {
 	p := Provider(c.Query("provider"))
-	if p != ProviderAMap && p != ProviderBaidu && p != ProviderGoogle && p != ProviderOSM {
+	if p != ProviderAMap && p != ProviderBaidu && p != ProviderGoogle && p != ProviderOSM && p != ProviderTianditu {
 		response.Fail(c, badRequest("maps.provider_invalid"))
 		return ""
 	}

@@ -65,35 +65,35 @@
   color-scheme: light;
 }
 
-/* 深色：同一色相（≈230）、饱和度压到 10% 的黑曜石底。所有大面只有一种颜色——
-   侧栏 = 画布 = 卡片 = 弹窗底（8.5%），分区全交给发丝线、边框与投影；
-   界面里唯一更亮的灰是表单字段（白墨 6% 混进底色 ≈13.5%），表达「可输入」。
-   饱和度是关键：16% 的蓝味在 9% 明度上会发闷发蓝泥（「一黑一灰不细腻」的根源），
-   压到 10% 后蓝色只从主色/激活态来，底子接近 Linear/Vercel 的中性黑。 */
+/* 深色：照抄 shadcn/ui neutral 深色（arhamkhnz/next-shadcn-admin-dashboard 的 oklch
+   灰阶换算成 HSL 近似值）。三个关键形态：
+   1. 画布近黑（4%）、卡片/侧栏/弹窗浮起一档（9%）、选中悬停层再一档（15%）——
+      分区靠「明度阶梯」而不是靠底色色相，与亮色（白卡浮在灰画布上）逻辑一致；
+   2. 主按钮深色下是白底黑字（primary 90%）——模板原生形态，品牌靛蓝只在
+      图表点缀/登录页品牌面板里出现；
+   3. 边框是模板 white/10%、white/15% 半透明线在 #0a0a0a 底上的不透明折算
+      （14% / 21%），避免每个消费点都要改 alpha 写法。
+   图表色深色下照抄模板灰阶（明度梯度 82/45/32/25/15%），系列区分靠明度；
+   状态色（success/warning/info）保持彩色——模板的状态徽章（绿/黄）本身就是彩的。 */
 .dark {
-  --background: 230 10% 8.5%;
-  --foreground: 220 14% 95%;
-  --card: 230 10% 8.5%;
-  --card-foreground: 220 14% 95%;
-  --popover: 230 10% 8.5%;
-  --popover-foreground: 220 14% 95%;
+  --background: 0 0% 4%;
+  --foreground: 0 0% 98%;
+  --card: 0 0% 9%;
+  --card-foreground: 0 0% 98%;
+  --popover: 0 0% 9%;
+  --popover-foreground: 0 0% 98%;
 
-  --primary: 238 84% 64%;
-  --primary-foreground: 0 0% 100%;
-  /* 选中/悬停底：原 14% 与页面底只差 1.16:1，灰阶屏上「选没选中」要靠猜。
-     抬到 17% 后差 1.27:1，同时把 accent 从带蓝味的 235/28% 收回中性 230/8%——
-     悬停层不该再引入第二种色相。 */
-  --secondary: 230 8% 17%;
-  --secondary-foreground: 220 14% 95%;
-  --muted: 230 8% 10.5%;
-  --muted-foreground: 220 8% 66%;
-  --accent: 230 8% 17%;
-  --accent-foreground: 220 14% 95%;
+  --primary: 0 0% 90%;
+  --primary-foreground: 0 0% 9%;
+  --secondary: 0 0% 15%;
+  --secondary-foreground: 0 0% 98%;
+  --muted: 0 0% 15%;
+  --muted-foreground: 0 0% 64%;
+  --accent: 0 0% 15%;
+  --accent-foreground: 0 0% 98%;
 
-  /* 危险色：62% 亮红只会配出「红底黑字」，和主按钮的「彩底白字」不是一套语言；
-     降到 50% 才能让白字过 AA（≈4.9:1），图标直接当文字用也有 3.6:1 */
-  --destructive: 0 70% 50%;
-  --destructive-foreground: 0 0% 100%;
+  --destructive: 0 90% 65%;
+  --destructive-foreground: 0 0% 9%;
   --success: 152 55% 52%;
   --success-foreground: 228 16% 7%;
   --warning: 34 92% 58%;
@@ -101,36 +101,29 @@
   --info: 192 85% 56%;
   --info-foreground: 228 16% 7%;
 
-  /* 深色边界：原 20%/22% 对 8.5% 的底只有 1.40:1，1px 线在低亮度屏上基本消失。
-     抬到 24%/32% 后分隔线 1.62:1、可交互控件边 2.02:1；再往上（到 3:1 要 40%）
-     整页会变成线框稿，所以只把「能点」的那一档抬高，分隔线保持发丝。
-     表单字段另有 white/26 的覆写（见 ui/input.tsx），实测边界 ≈2.7:1。 */
-  --border: 230 8% 24%;
-  --input: 230 8% 32%;
-  --ring: 238 90% 70%;
+  --border: 0 0% 14%;
+  --input: 0 0% 21%;
+  --ring: 0 0% 45%;
 
   --brand-from: 243 90% 66%;
   --brand-to: 192 95% 52%;
 
-  /* 侧栏与画布严格同一张底：右缘一根发丝线分区。
-     激活底色 18% 在 8.5% 的栏底上依然读得出「当前在哪」。 */
-  --sidebar: 230 10% 8.5%;
-  --sidebar-foreground: 220 10% 79%;
-  /* 激活底色：低饱和靛蓝，足够在栏底上读出“当前在哪”，又不和主色按钮抢注意力 */
-  --sidebar-accent: 235 28% 18%;
-  --sidebar-accent-foreground: 230 100% 96%;
-  --sidebar-border: 230 8% 13%;
+  --sidebar: 0 0% 9%;
+  --sidebar-foreground: 0 0% 98%;
+  --sidebar-accent: 0 0% 15%;
+  --sidebar-accent-foreground: 0 0% 98%;
+  --sidebar-border: 0 0% 14%;
 
-  --chart-1: 238 90% 70%;
-  --chart-2: 192 95% 52%;
-  --chart-3: 268 85% 72%;
-  --chart-4: 160 70% 48%;
-  --chart-5: 38 95% 58%;
-  --chart-1-foreground: 232 40% 6%;
-  --chart-2-foreground: 232 40% 6%;
-  --chart-3-foreground: 232 40% 6%;
-  --chart-4-foreground: 232 40% 6%;
-  --chart-5-foreground: 232 40% 6%;
+  --chart-1: 0 0% 82%;
+  --chart-2: 0 0% 45%;
+  --chart-3: 0 0% 32%;
+  --chart-4: 0 0% 25%;
+  --chart-5: 0 0% 15%;
+  --chart-1-foreground: 0 0% 9%;
+  --chart-2-foreground: 0 0% 98%;
+  --chart-3-foreground: 0 0% 98%;
+  --chart-4-foreground: 0 0% 98%;
+  --chart-5-foreground: 0 0% 98%;
 
   color-scheme: dark;
 }

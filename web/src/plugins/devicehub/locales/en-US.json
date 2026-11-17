@@ -67,6 +67,11 @@
       "stale": "Stale · updated {{ago}}",
       "none": "No data collected yet"
     },
+    "ws": {
+      "connected": "Live push connected",
+      "fallback": "Live push down · polling every 8s",
+      "hint": "Values arrive via WebSocket push; when it disconnects the page falls back to 8-second polling"
+    },
     "point": {
       "add": "Add point",
       "edit": "Edit point",
@@ -130,6 +135,8 @@
       "required": "Pick a point and fill the value",
       "boolOnly": "Boolean points accept 0 or 1 only",
       "sent": "Command sent, waiting for receipt",
+      "operator": "Sent by",
+      "receipt": "Receipt {{time}}",
       "hint": "Commands are high-risk: writable points only; every send is operation-logged.",
       "status": {
         "queued": "Queued",

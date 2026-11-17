@@ -2,7 +2,7 @@
   "plugin_maps": {
     "menu": "地图服务",
     "title": "地图服务",
-    "desc": "免费基础地图插件：高德 / 百度 / 谷歌按需启用，OpenStreetMap 免 Key 开箱即用；地图选点在前端，逆地理编码走后端代理。",
+    "desc": "免费基础地图插件：高德 / 百度 / 谷歌 / 天地图按需启用，OpenStreetMap 免 Key 开箱即用；地图选点在前端，逆地理编码走后端代理。",
     "configTitle": "厂商 Key",
     "configDesc": "启用哪家就填哪家；服务端 Key 只保存在后端，接口只回「有没有」。OpenStreetMap 无需任何 Key。",
     "enabledTag": "已启用",
@@ -11,7 +11,8 @@
       "amap": "高德地图",
       "baidu": "百度地图",
       "google": "Google 地图",
-      "osm": "OpenStreetMap（免费开源）"
+      "osm": "OpenStreetMap（免费开源）",
+      "tianditu": "天地图"
     },
     "keys": {
       "amapPublic": "JS API Key（Web 端）",
@@ -23,7 +24,10 @@
       "googlePublic": "API Key",
       "googleServer": "服务端 Key（留空同上）",
       "googleHint": "Google Cloud：启用 Maps JavaScript API 与 Geocoding API；中国大陆网络通常无法加载地图，仅适合出海场景。",
-      "osmHint": "完全免费、无需申请任何 Key：地图走 Leaflet + OSM 瓦片，检索/逆地理走 Nominatim 公益服务。国内访问偏慢、中文地点数据不如高德/百度全，适合兜底与出海场景；重负载可自建服务替换地址。"
+      "osmHint": "完全免费、无需申请任何 Key：地图走 Leaflet + OSM 瓦片，检索/逆地理走 Nominatim 公益服务。国内访问偏慢、中文地点数据不如高德/百度全，适合兜底与出海场景；重负载可自建服务替换地址。",
+      "tiandituPublic": "浏览器 Key（tk）",
+      "tiandituServer": "服务端 Key（留空同上）",
+      "tiandituHint": "天地图：实名认证后在 console.tianditu.gov.cn/api/key 申请 tk；浏览器加载与服务端地理编码可用同一个 Key，坐标系 CGCS2000（等同 wgs84）。"
     },
     "demoTitle": "选点测试",
     "demoDesc": "选一家已启用的厂商，点地图或拖标记，确认后回填坐标与地址；坐标系随厂商（gcj02 / bd09 / wgs84）。",
@@ -37,6 +41,9 @@
     "osmLoadFailed": "OpenStreetMap 瓦片加载失败；官方服务器在国内网络下可能较慢或不可达，稍后重试或自建瓦片服务。",
     "googleLoadFailed": "Google 地图脚本加载失败；中国大陆网络通常无法直接访问。",
     "googleGlobalMissing": "Google 地图脚本已加载但全局对象缺失，请检查 Key 是否允许当前域名。",
+    "tiandituLoadFailed": "天地图脚本加载失败；请检查 Key 是否有效、网络能否访问 api.tianditu.gov.cn，稍后重试。",
+    "baseVec": "矢量底图",
+    "baseImg": "影像底图",
     "clickHint": "点击地图选择位置",
     "confirm": "确定"
   }

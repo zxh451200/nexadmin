@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { AlertTriangle, BotMessageSquare, RefreshCw, Trash2, Upload } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { AlertTriangle, BotMessageSquare, CircleCheck, CircleX, Clock, Loader2, RefreshCw, Trash2, Upload } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
@@ -9,6 +9,7 @@ import { Input } from '@/framework/ui/input'
 import { Label } from '@/framework/ui/label'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
+import { SimpleSelect } from '@/framework/components/SimpleSelect'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { DataTable, type Column } from '@/framework/components/DataTable'
@@ -25,32 +26,49 @@ import {
   type KbDocument,
 } from './api'
 
-/** 上传弹窗：一期只收 txt/md（≤2MB），同步切分并向量化，成功即入列。 */
+/** 单个文件在批量上传过程中的行状态：等待 → 上传中 → 成功/失败。 */
+type UploadState = 'pending' | 'uploading' | 'done' | 'failed'
+
+/** 上传弹窗：一期只收 txt/md（≤2MB），同步切分并向量化，成功即入列。
+ * 多文件逐个串行上传：后端单次同步切块 + 向量化（十几秒级），并行只会互相挤占。 */
 function UploadDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const { t } = useTranslation()
   const [files, setFiles] = useState<File[]>([])
+  const [states, setStates] = useState<Record<string, UploadState>>({})
   const [busy, setBusy] = useState(false)
   const ready = files.length > 0 && !busy
+  const okCount = Object.values(states).filter((s) => s === 'done').length
+  const failCount = Object.values(states).filter((s) => s === 'failed').length
 
   const submit = async () => {
     if (!ready) return
     setBusy(true)
+    const failed = new Set<string>()
+    setStates(Object.fromEntries(files.map((f) => [f.name, 'pending' as UploadState])))
     let ok = 0
     let fail = 0
     for (const file of files) {
+      setStates((s) => ({ ...s, [file.name]: 'uploading' }))
       try {
         const doc = await uploadDocument(file)
         ok++
+        setStates((s) => ({ ...s, [file.name]: 'done' }))
         toast.success(t('plugin_kb.uploadDone', { name: doc.title, count: doc.chunkCount }))
       } catch (e) {
         fail++
+        // 失败原因同时落在行上（超限 / 格式不支持 / 抽取失败一眼定位）与 toast 里
+        failed.add(file.name)
+        setStates((s) => ({ ...s, [file.name]: 'failed' }))
         toast.error(`${file.name}: ${(e as Error).message}`)
       }
     }
     setBusy(false)
-    if (ok > 0) {
+    if (ok > 0 && fail === 0) {
       setFiles([])
       onOpenChange(false)
+    } else if (ok > 0) {
+      // 部分成功：留下失败行在弹窗里，用户可以只补传失败的文件
+      setFiles((fs) => fs.filter((f) => failed.has(f.name)))
     } else {
       toast.error(t('plugin_kb.uploadAllFailed', { fail }))
     }
@@ -60,7 +78,10 @@ function UploadDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v:
     <ResponsiveDialog
       open={open}
       onOpenChange={(o) => {
-        if (!o) setFiles([])
+        if (!o) {
+          setFiles([])
+          setStates({})
+        }
         onOpenChange(o)
       }}
       title={t('plugin_kb.uploadTitle')}
@@ -68,12 +89,12 @@ function UploadDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v:
       size="md"
       footer={
         <>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" disabled={busy} onClick={() => onOpenChange(false)}>
             {t('common.cancel')}
           </Button>
           <Button onClick={() => void submit()} disabled={!ready}>
-            <Upload className="me-2 size-4" aria-hidden="true" />
-            {t('plugin_kb.upload')}
+            {busy ? <Loader2 className="me-2 size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Upload className="me-2 size-4" aria-hidden="true" />}
+            {busy ? t('plugin_kb.uploadBusy', { done: okCount, fail: failCount }) : t('plugin_kb.upload')}
           </Button>
         </>
       }
@@ -85,6 +106,30 @@ function UploadDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v:
           files={files}
           onChange={setFiles}
         />
+        {Object.keys(states).length > 0 ? (
+          <ul className="divide-y divide-border rounded-lg border border-border text-sm">
+            {files.map((f, i) => {
+              const st = states[f.name] ?? 'pending'
+              return (
+                <li key={`${f.name}-${i}`} className="flex items-center gap-2 px-3 py-2">
+                  {st === 'done' ? (
+                    <CircleCheck aria-hidden="true" className="size-4 shrink-0 text-success" />
+                  ) : st === 'failed' ? (
+                    <CircleX aria-hidden="true" className="size-4 shrink-0 text-destructive" />
+                  ) : st === 'uploading' ? (
+                    <Loader2 aria-hidden="true" className="size-4 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none" />
+                  ) : (
+                    <Clock aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
+                  )}
+                  <span className="min-w-0 flex-1 truncate" title={f.name}>
+                    {f.name}
+                  </span>
+                  <span className="shrink-0 text-xs text-muted-foreground">{t(`plugin_kb.uploadState.${st}`)}</span>
+                </li>
+              )
+            })}
+          </ul>
+        ) : null}
         <p className="text-xs text-muted-foreground">{t('plugin_kb.uploadHint')}</p>
       </div>
     </ResponsiveDialog>
@@ -173,8 +218,12 @@ export default function KbPage() {
   const [uploadOpen, setUploadOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [question, setQuestion] = useState('')
+  // 状态筛选：ready/failed 走后端 ?status=；「需重新向量化」是「模型已变更」的推导态，
+  // 后端没有这个状态值，拉全量后在前端过滤。
+  const [statusFilter, setStatusFilter] = useState<'all' | 'ready' | 'failed' | 'reembed'>('all')
+  const [selected, setSelected] = useState<string[]>([])
 
-  const docs = useDocuments()
+  const docs = useDocuments(statusFilter === 'ready' || statusFilter === 'failed' ? statusFilter : undefined)
   const status = useKbStatus()
   const settings = useKbSettings()
   const remove = useDeleteDocument()
@@ -183,6 +232,13 @@ export default function KbPage() {
 
   const embedModel = status.data?.embedModel ?? ''
   const needReembed = (d: KbDocument) => d.status === 'failed' || (!!embedModel && !!d.model && d.model !== embedModel)
+  const rows = useMemo(() => {
+    const all = docs.data ?? []
+    if (statusFilter === 'reembed') {
+      return all.filter((d) => d.status === 'failed' || (!!embedModel && !!d.model && d.model !== embedModel))
+    }
+    return all
+  }, [docs.data, statusFilter, embedModel])
 
   const onDelete = async (d: KbDocument) => {
     const ok = await confirm({
@@ -197,6 +253,50 @@ export default function KbPage() {
     } catch (e) {
       toast.error((e as Error).message)
     }
+  }
+
+  // 批量删除：后端只有单条 DELETE，前端逐条循环；条数大时串行耗时可接受（文档量级小）
+  const onBatchDelete = async (ids: string[]) => {
+    const targets = (docs.data ?? []).filter((d) => ids.includes(d.id))
+    if (targets.length === 0) return
+    const ok = await confirm({
+      title: t('common.delete'),
+      description: t('plugin_kb.batchDeleteConfirm', { count: targets.length }),
+      destructive: true,
+    })
+    if (!ok) return
+    let done = 0
+    let fail = 0
+    for (const d of targets) {
+      try {
+        await remove.mutateAsync(d.id)
+        done++
+      } catch {
+        fail++
+      }
+    }
+    if (fail > 0) toast.warning(t('plugin_kb.batchDeleteDone', { done, fail }))
+    else toast.success(t('plugin_kb.batchDeleteDone', { done, fail }))
+    setSelected([])
+  }
+
+  // 批量重新向量化：同样逐条调单文档接口，只挑真正「需重新向量化」的行
+  const onBatchReembed = async (ids: string[]) => {
+    const targets = (docs.data ?? []).filter((d) => ids.includes(d.id) && needReembed(d))
+    if (targets.length === 0) return
+    let done = 0
+    let fail = 0
+    for (const d of targets) {
+      try {
+        await reembed.mutateAsync(d.id)
+        done++
+      } catch {
+        fail++
+      }
+    }
+    if (fail > 0) toast.warning(t('plugin_kb.batchReembedDone', { done, fail }))
+    else toast.success(t('plugin_kb.batchReembedDone', { done, fail }))
+    setSelected([])
   }
 
   const onReembed = async (d: KbDocument) => {
@@ -319,11 +419,50 @@ export default function KbPage() {
 
       <DataTable
         columns={columns}
-        data={docs.data ?? []}
+        data={rows}
         rowKey="id"
         loading={docs.isLoading}
         columnSettingsKey="plugin-kb-documents"
         emptyText={t('plugin_kb.empty')}
+        selection={{ selected, onChange: setSelected }}
+        batchActions={(ids) => {
+          const reembedTargets = rows.filter((d) => ids.includes(d.id) && needReembed(d))
+          return (
+            <>
+              {reembedTargets.length > 0 ? (
+                <Can perm="kb:edit">
+                  <Button size="sm" variant="outline" disabled={reembed.isPending} onClick={() => void onBatchReembed(ids)}>
+                    <RefreshCw aria-hidden="true" />
+                    {t('plugin_kb.batchReembed', { count: reembedTargets.length })}
+                  </Button>
+                </Can>
+              ) : null}
+              <Can perm="kb:delete">
+                <Button size="sm" variant="destructive" disabled={remove.isPending} onClick={() => void onBatchDelete(ids)}>
+                  <Trash2 aria-hidden="true" />
+                  {t('plugin_kb.batchDelete')}
+                </Button>
+              </Can>
+            </>
+          )
+        }}
+        toolbar={
+          <SimpleSelect
+            className="w-44"
+            aria-label={t('plugin_kb.filterStatus')}
+            value={statusFilter}
+            onChange={(v) => {
+              setStatusFilter(v as 'all' | 'ready' | 'failed' | 'reembed')
+              setSelected([])
+            }}
+            options={[
+              { value: 'all', label: t('plugin_kb.filterAll') },
+              { value: 'ready', label: t('plugin_kb.status.ready') },
+              { value: 'failed', label: t('plugin_kb.status.failed') },
+              { value: 'reembed', label: t('plugin_kb.filterReembed') },
+            ]}
+          />
+        }
       />
 
       {/* 测试提问：不走 IM，直接验证检索命中与模型回答（调阈值用）。 */}
