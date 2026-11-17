@@ -34,8 +34,20 @@
     '.chat-head .chat-tool:hover{background:rgba(255,255,255,.14)}',
     '.chat-tool[disabled],.chat-attach[disabled]{opacity:.4;cursor:default}',
     '.chat-send svg{width:17px;height:17px}',
-    '.chat-emoji-pop,.chat-more-pop{position:absolute;z-index:20;display:flex;flex-wrap:wrap;gap:4px;padding:8px;border:1px solid rgba(128,128,128,.3);border-radius:4px;background:Canvas;color:CanvasText;box-shadow:0 12px 28px rgba(0,0,0,.18)}',
-    '.chat-emoji-pop[hidden],.chat-more-pop[hidden]{display:none}',
+    // 头部「放大/还原」占同一个按钮位，两态只换图标；替掉原来的 ··· 菜单——
+    // 那个菜单只有「放大窗口 / 清空输入」两项，一个动作属于窗口、一个属于输入框，
+    // 都挂在右上角既不贴身又要点两次（清空还是不可逆操作，混在中性菜单里没有区分）。
+    '.chat-expand>span{display:none;align-items:center;justify-content:center}',
+    '.chat-expand>.chat-ico-expand{display:inline-flex}',
+    '.chat.is-expanded>.chat-ico-expand{display:none}',
+    '.chat.is-expanded>.chat-ico-restore{display:inline-flex}',
+    // 清空输入只在真有草稿时露头：用 :placeholder-shown 判断，发送后 chat-widget.js
+    // 直接改 value（不触发 input 事件）也会自动收起，不用再同步一份状态。
+    '.chat-clear{display:none}',
+    '.chat-compose textarea:not(:placeholder-shown)~.chat-compose-bar .chat-clear{display:inline-flex}',
+    '.chat-clear:hover{background:rgba(235,87,87,.14);color:var(--red,#eb5757)}',
+    '.chat-emoji-pop{position:absolute;z-index:20;display:flex;flex-wrap:wrap;gap:4px;padding:8px;border:1px solid rgba(128,128,128,.3);border-radius:4px;background:Canvas;color:CanvasText;box-shadow:0 12px 28px rgba(0,0,0,.18)}',
+    '.chat-emoji-pop[hidden]{display:none}',
     '.chat-emoji-pop{inset-inline-start:8px;inset-block-end:96px;display:grid;grid-template-columns:repeat(9,minmax(0,1fr));gap:2px;box-sizing:border-box;width:min(304px,calc(100% - 16px));max-height:216px;overflow-y:auto;padding:8px}',
     // content-visibility：176 个 emoji 首开时光栅化全部字形，弱机/高负载下点开有可感知的停顿；
     // 视口内只有 ~45 个，屏外的跳过绘制（滚动到再画），首开绘制量直接砍到 1/4
@@ -43,13 +55,10 @@
     '.chat-emoji-pop button:hover{background:rgba(128,128,128,.18)}',
     '.chat-emoji-pop::-webkit-scrollbar{width:6px}',
     '.chat-emoji-pop::-webkit-scrollbar-thumb{border-radius:3px;background:rgba(128,128,128,.4)}',
-    '.chat-more-pop{inset-inline-end:10px;inset-block-start:calc(var(--chat-head-h,86px) + 4px);flex-direction:column;min-width:120px}',
-    '.chat-more-pop button{padding:6px 8px;border:0;border-radius:3px;background:transparent;color:inherit;text-align:start;font:inherit;font-size:12px;cursor:pointer}',
-    '.chat-more-pop button:hover{background:rgba(128,128,128,.14)}',
     '.chat-msg-translate{margin:2px 0 0;padding:0;border:0;background:transparent;color:inherit;font-size:10.5px;text-decoration:underline;cursor:pointer;opacity:.65}',
     '.chat-msg-translate:hover{opacity:1}',
     // 翻译设置弹层：对齐阿里聊天窗口的「翻译设置」——收到/发送两组开关各带语言选择。
-    // 位置挂在头部下沿（同 more 菜单的 --chat-head-h 口径），配色沿用 Canvas/currentColor。
+    // 位置挂在头部下沿（--chat-head-h 由脚本实时量），配色沿用 Canvas/currentColor。
     '.chat-settings-pop{position:absolute;z-index:22;inset-inline-end:10px;inset-block-start:calc(var(--chat-head-h,86px) + 4px);box-sizing:border-box;width:min(320px,calc(100% - 16px));padding:14px;border:1px solid rgba(128,128,128,.28);border-radius:8px;background:Canvas;color:CanvasText;box-shadow:0 16px 38px rgba(0,0,0,.22);font-size:12px}',
     '.chat-settings-pop[hidden]{display:none}',
     '.chat-settings-pop h3{margin:0 0 10px;font-size:13.5px;font-weight:600}',
@@ -249,8 +258,6 @@
     var translateBtn = root.querySelector('[data-chat-translate]');
     var emojiBtn = root.querySelector('[data-chat-emoji]');
     var emojiPop = root.querySelector('[data-chat-emoji-pop]');
-    var moreBtn = root.querySelector('[data-chat-more]');
-    var morePop = root.querySelector('[data-chat-more-pop]');
     var expandBtn = root.querySelector('[data-chat-expand]');
     var clearBtn = root.querySelector('[data-chat-clear]');
     var agentBox = root.querySelector('[data-chat-agent]');
@@ -863,7 +870,6 @@
     function openCard(kind) {
       if (activeKind === kind && !cardPop.hidden) { closeCard(); return; }
       if (emojiPop) emojiPop.hidden = true;
-      if (morePop) morePop.hidden = true;
       if (settingsPop) settingsPop.hidden = true;
       // 地址表单字段多，380px 收起面板里挤成一团：面板不在展开态就先展开，
       // 关卡时按 cardWasExpanded 还原。展开切换走 expandBtn.click()，
@@ -1123,7 +1129,6 @@
       if (!settingsPop.hidden) { closeSettings(); return; }
       if (cardPop) cardPop.hidden = true;
       if (emojiPop) emojiPop.hidden = true;
-      if (morePop) morePop.hidden = true;
       var cur = {
         autoIn: trSettings.autoIn,
         inTo: curInTo(),
@@ -1310,19 +1315,8 @@
         if (!emojiPop.hidden) { emojiPop.hidden = true; return; }
         buildEmojis();
         emojiPop.hidden = false;
-        if (morePop) morePop.hidden = true;
         if (cardPop) cardPop.hidden = true;
         if (settingsPop) settingsPop.hidden = true;
-      });
-    }
-    if (moreBtn && morePop) {
-      moreBtn.addEventListener('click', function () {
-        morePop.hidden = !morePop.hidden;
-        if (!morePop.hidden) {
-          if (emojiPop) emojiPop.hidden = true;
-          if (cardPop) cardPop.hidden = true;
-          if (settingsPop) settingsPop.hidden = true;
-        }
       });
     }
     // 点浮层以外的任何地方都收起：原来只有「再点一次按钮」才关，
@@ -1330,9 +1324,7 @@
     document.addEventListener('click', function (e) {
       var t = e.target;
       var inEmoji = t && t.closest && t.closest('[data-chat-emoji]');
-      var inMore = t && t.closest && t.closest('[data-chat-more]');
       if (emojiPop && !emojiPop.hidden && !emojiPop.contains(t) && !inEmoji) emojiPop.hidden = true;
-      if (morePop && !morePop.hidden && !morePop.contains(t) && !inMore) morePop.hidden = true;
       // 翻译设置 / 翻译快捷浮层：点外面就收（文A 入口按钮与菜单里的设置项都不算外面）
       if (settingsPop && !settingsPop.hidden &&
           !settingsPop.contains(t) && !(t && t.closest && t.closest('[data-chat-translate-settings], [data-chat-translate]'))) settingsPop.hidden = true;
@@ -1346,14 +1338,13 @@
     document.addEventListener('keydown', function (e) {
       if (e.key !== 'Escape') return;
       if (emojiPop) emojiPop.hidden = true;
-      if (morePop) morePop.hidden = true;
       if (settingsPop) settingsPop.hidden = true;
       // Esc 先收下拉再收卡片：连按两次才把整个地址卡关掉
       if (escForCard(e)) return;
       if (cardPop && !cardPop.hidden) closeCard();
     });
-    // 「更多」菜单贴着头部下沿展开：头部高度会随「客服姓名 + 本地时间」那一行出现而变，
-    // 写死 top 就会像之前那样压在标题和 × 上面，交给 ResizeObserver 实时量。
+    // 翻译设置弹层贴着头部下沿展开：头部高度会随「客服姓名 + 本地时间」那一行出现而变，
+    // 写死 top 就会压在标题和 × 上面，交给 ResizeObserver 实时量。
     var headEl = root.querySelector('.chat-head');
     if (headEl) {
       var syncHeadH = function () { panel.style.setProperty('--chat-head-h', headEl.offsetHeight + 'px'); };
@@ -1364,15 +1355,18 @@
       expandBtn.addEventListener('click', function () {
         state.expanded = !state.expanded;
         root.classList.toggle('is-expanded', state.expanded);
-        expandBtn.textContent = state.expanded ? t('chatCollapse', '收起面板') : t('chatExpand', '展开面板');
-        if (morePop) morePop.hidden = true;
+        // 图标（放大 ↔ 还原）由 CSS 按 .is-expanded 切，脚本只换可达名字，
+        // 别像以前那样写 textContent —— 那会把按钮里的图标整个抹掉。
+        var label = state.expanded ? t('chatCollapse', '还原窗口') : t('chatExpand', '放大窗口');
+        expandBtn.setAttribute('aria-label', label);
+        expandBtn.setAttribute('title', label);
+        expandBtn.setAttribute('aria-pressed', state.expanded ? 'true' : 'false');
       });
     }
     if (clearBtn) {
       clearBtn.addEventListener('click', function () {
         if (input) input.value = '';
         clearProduct();
-        if (morePop) morePop.hidden = true;
         if (input) input.focus();
       });
     }
@@ -1382,13 +1376,10 @@
     document.addEventListener('click', function (e) {
       if (emojiPop && !emojiPop.hidden &&
           !inNode(e.target, '[data-chat-emoji-pop]') && !inNode(e.target, '[data-chat-emoji]')) emojiPop.hidden = true;
-      if (morePop && !morePop.hidden &&
-          !inNode(e.target, '[data-chat-more-pop]') && !inNode(e.target, '[data-chat-more]')) morePop.hidden = true;
     });
     document.addEventListener('keydown', function (e) {
       if (e.key !== 'Escape') return;
       if (emojiPop) emojiPop.hidden = true;
-      if (morePop) morePop.hidden = true;
       if (settingsPop) settingsPop.hidden = true;
       // Esc 先收下拉再收卡片（与上面第一个 Esc 处理器同口径）
       if (escForCard(e)) return;

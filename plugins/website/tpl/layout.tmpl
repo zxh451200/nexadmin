@@ -216,7 +216,10 @@
           <span class="chat-agent" data-chat-agent hidden><span data-chat-agent-name></span> <span data-chat-agent-time></span></span>
         </div>
       </div>
-      <button class="chat-tool" type="button" data-chat-more aria-label="{{.T "chat.more"}}" title="{{.T "chat.more"}}">{{uiIcon "dots"}}</button>
+      <button class="chat-tool chat-expand" type="button" data-chat-expand aria-label="{{.T "chat.expand"}}" title="{{.T "chat.expand"}}" aria-pressed="false">
+        <span class="chat-ico-expand">{{uiIcon "maximize"}}</span>
+        <span class="chat-ico-restore">{{uiIcon "minimize"}}</span>
+      </button>
       <button class="chat-close" type="button" data-chat-close aria-label="{{.T "chat.close"}}">
         {{uiIcon "close"}}
       </button>
@@ -247,10 +250,6 @@
         <button class="chat-product-remove" type="button" data-chat-product-remove aria-label="{{.T "chat.removeProduct"}}">×</button>
       </div>
       <div class="chat-emoji-pop" data-chat-emoji-pop hidden></div>
-      <div class="chat-more-pop" data-chat-more-pop hidden>
-        <button type="button" data-chat-expand>{{.T "chat.expand"}}</button>
-        <button type="button" data-chat-clear>{{.T "chat.clear"}}</button>
-      </div>
       <div class="chat-compose">
         <textarea id="chat-input" data-chat-input rows="1" maxlength="2000" placeholder="{{.T "chat.placeholder"}}" aria-label="{{.T "chat.inputLabel"}}"></textarea>
         <div class="chat-compose-bar">
@@ -260,6 +259,7 @@
           </button>
           <button class="chat-handoff" type="button" data-chat-handoff hidden>{{.T "chat.handoff"}}</button>
           <span class="chat-hint" aria-hidden="true">{{.T "chat.inputHint"}}</span>
+          <button class="chat-tool chat-clear" type="button" data-chat-clear aria-label="{{.T "chat.clear"}}" title="{{.T "chat.clear"}}">{{uiIcon "eraser"}}</button>
           <button class="chat-send" type="submit" data-chat-send aria-label="{{.T "chat.send"}}">
             {{uiIcon "send"}}
           </button>

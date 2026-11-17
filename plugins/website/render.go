@@ -275,6 +275,11 @@ var uiIconPaths = map[string]string{
 	"mood-smile":   `<path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" /><path d="M9 10l.01 0" /><path d="M15 10l.01 0" /><path d="M9.5 15a3.5 3.5 0 0 0 5 0" />`,
 	"language":     `<path d="M4 5h7" /><path d="M9 3v2c0 4.418 -2.239 8 -5 8" /><path d="M5 9c0 2.144 2.952 3.908 6.7 4" /><path d="M12 20l4 -9l4 9" /><path d="M19.1 18h-6.2" />`,
 	"dots":         `<path d="M5 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" /><path d="M12 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" /><path d="M19 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" />`,
+	// 客服头部「放大/还原」是同一个按钮位上的两态，配「清空输入」；
+	// minimize 是 maximize 的向内收版本，切换只换图标不换按钮，避免和关闭 × 挤成三个。
+	"maximize": `<path d="M4 8v-2a2 2 0 0 1 2 -2h2" /><path d="M4 16v2a2 2 0 0 0 2 2h2" /><path d="M16 4h2a2 2 0 0 1 2 2v2" /><path d="M16 20h2a2 2 0 0 0 2 -2v-2" />`,
+	"minimize": `<path d="M15 19v-2a2 2 0 0 1 2 -2h2" /><path d="M15 5v2a2 2 0 0 0 2 2h2" /><path d="M5 15h2a2 2 0 0 1 2 2v2" /><path d="M5 9h2a2 2 0 0 0 2 -2v-2" />`,
+	"eraser":   `<path d="M19 20h-10.5l-4.21 -4.3a1 1 0 0 1 0 -1.41l10 -10a1 1 0 0 1 1.41 0l5 5a1 1 0 0 1 0 1.41l-9.2 9.3" /><path d="M18 13.3l-6.3 -6.3" />`,
 	// 「安全支付」贸易术语徽标，同样来自 Tabler v3.36.0 outline：
 	// bank=电汇 T/T、file-check=信用证 L/C、file-text=托收 D/P·D/A、
 	// file-invoice=赊账 O/A、wallet=电子钱包（支付宝/微信）、cash=现金。
