@@ -39,12 +39,16 @@
     // 都挂在右上角既不贴身又要点两次（清空还是不可逆操作，混在中性菜单里没有区分）。
     '.chat-expand>span{display:none;align-items:center;justify-content:center}',
     '.chat-expand>.chat-ico-expand{display:inline-flex}',
-    '.chat.is-expanded>.chat-ico-expand{display:none}',
-    '.chat.is-expanded>.chat-ico-restore{display:inline-flex}',
+    '.chat.is-expanded .chat-expand>.chat-ico-expand{display:none}',
+    '.chat.is-expanded .chat-expand>.chat-ico-restore{display:inline-flex}',
     // 清空输入只在真有草稿时露头：用 :placeholder-shown 判断，发送后 chat-widget.js
     // 直接改 value（不触发 input 事件）也会自动收起，不用再同步一份状态。
     '.chat-clear{display:none}',
     '.chat-compose textarea:not(:placeholder-shown)~.chat-compose-bar .chat-clear{display:inline-flex}',
+    // 按钮是凭空多出来的，不能让整排跳一下：把它右侧的提示文字改成吃掉剩余空间的弹性项，
+    // 并把发送键的 auto 边距归零（否则两个 auto 边距各分一半，清空键又飘回中间）。
+    '.chat-compose textarea:not(:placeholder-shown)~.chat-compose-bar .chat-hint{margin-inline-start:0;flex:1 1 auto}',
+    '.chat-compose textarea:not(:placeholder-shown)~.chat-compose-bar .chat-send{margin-inline-start:0}',
     '.chat-clear:hover{background:rgba(235,87,87,.14);color:var(--red,#eb5757)}',
     '.chat-emoji-pop{position:absolute;z-index:20;display:flex;flex-wrap:wrap;gap:4px;padding:8px;border:1px solid rgba(128,128,128,.3);border-radius:4px;background:Canvas;color:CanvasText;box-shadow:0 12px 28px rgba(0,0,0,.18)}',
     '.chat-emoji-pop[hidden]{display:none}',
