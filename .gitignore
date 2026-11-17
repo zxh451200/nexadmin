@@ -11,22 +11,22 @@ config/config.yaml
 .env.*.local
 *.log
 
-# 鎻掍欢鎺堟潈绉侀挜锛堝紑鍙戠敤锛岀姝㈡彁浜わ級
+# 插件授权秘钥（开发用，禁止提交）
 .dev-keys/
 
-# 缂栬瘧浜х墿
+# 编译产物
 /nexadmin
 /server
 /cmd/nexadmin/nexadmin
 *.exe
 
-# 瀹夊叏鎵弿鎻掍欢鐘舵€?
+# 安全扫描插件状态
 .mimosa/
 
-# Python 瀛楄妭鐮佺紦瀛?
+# Python 字节码缓存
 __pycache__/
 
-# 鏈湴宸ュ叿浼氳瘽浜х墿
+# 本地工具会话产物
 .zcode/
 .qoder/
 .tmp/
@@ -35,3 +35,6 @@ __pycache__/
 test-results/
 playwright-report/
 /.e2e-artifacts/
+
+# 本地 AI 会话产物（记忆日志、截图对照图），不入库
+.workbuddy/
