@@ -404,6 +404,10 @@ var tplFuncs = template.FuncMap{
 		}
 		return strconv.FormatFloat(v, 'f', 2, 64)
 	},
+	// avgText 给列表卡的均分固定一位小数（5 显示成 5.0，和商详的 4.7 对齐）。
+	"avgText": func(v float64) string {
+		return strconv.FormatFloat(math.Round(v*10)/10, 'f', 1, 64)
+	},
 	// starRow 画五颗星：四舍五入到整星，亮的实心、灭的描边。
 	// 只由下面这段固定标记拼成，不含用户输入，所以可以安全地当 HTML 输出。
 	"starRow": func(v float64) template.HTML {

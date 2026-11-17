@@ -21,8 +21,8 @@
     {{shareBar $}}
     {{if or .PostPrev .PostNext}}
     <nav class="dt-nav" aria-label="{{.T "detail.navAria"}}">
-      {{if .PostPrev}}<a class="dt-nav-item dt-prev" href="{{.URL "/news"}}/{{.PostPrev.Slug}}"><small>← {{.T "detail.prev"}}</small><span>{{.PostPrev.Title}}</span></a>{{else}}<span class="dt-nav-item dt-empty"></span>{{end}}
-      {{if .PostNext}}<a class="dt-nav-item dt-next" href="{{.URL "/news"}}/{{.PostNext.Slug}}"><small>{{.T "detail.next"}} →</small><span>{{.PostNext.Title}}</span></a>{{else}}<span class="dt-nav-item dt-empty"></span>{{end}}
+      {{if .PostPrev}}<a class="dt-nav-item dt-prev" href="{{.URL "/news"}}/{{.PostPrev.Slug}}"><small>{{.T "detail.prev"}}</small><span class="dt-t">{{.PostPrev.Title}}</span></a>{{else}}<span class="dt-nav-item dt-empty"></span>{{end}}
+      {{if .PostNext}}<a class="dt-nav-item dt-next" href="{{.URL "/news"}}/{{.PostNext.Slug}}"><small>{{.T "detail.next"}}</small><span class="dt-t">{{.PostNext.Title}}</span></a>{{else}}<span class="dt-nav-item dt-empty"></span>{{end}}
     </nav>
     {{end}}
     <p class="article-back"><a href="{{.URL "/news"}}">{{.T "news.back"}}</a></p>

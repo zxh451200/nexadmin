@@ -24,6 +24,7 @@
         "features": "Feature switches"
       },
       "emailInvalid": "Invalid email address.",
+      "consentUrlInvalid": "With message consent on, the privacy policy URL is required: an in-site path (e.g. /p/privacy) or a full https:// URL",
       "defaultLangAuto": "Follow browser language",
       "defaultLangSource": "source language",
       "defaultTheme": "Default theme",
@@ -38,7 +39,9 @@
       "friendName": "Site name",
       "friendUrl": "URL",
       "addFriendLink": "Add friend link",
-      "demoImportWarn": "Writes the brand's sample products and news (insert-only), and replaces brand identity content entirely: site name, home copy, navigation and feature cards; safe to repeat."
+      "demoImportWarn": "Writes the brand's sample products and news (insert-only), and replaces brand identity content entirely: site name, home copy, navigation and feature cards; safe to repeat.",
+      "supplierProfile": "Supplier profile",
+      "supplierProfileHint": "These five rows appear on the supplier card of a product page; empty rows are hidden."
     },
     "social": {
       "github": "GitHub",
@@ -82,7 +85,7 @@
       "deleteBatchConfirm": "Delete the selected {{count}} messages?",
       "searchPlaceholder": "Search name, email or content",
       "notifyEmail": "Copy new messages by email",
-      "notifyEmailHint": "Send a copy of every new message to the contact email above. Skipped automatically when SMTP is not configured. In-app notifications are always sent.",
+      "notifyEmailHint": "Send a copy of every new message to the contact email in “Contact & footer”. Skipped automatically when SMTP is not configured. In-app notifications are always sent.",
       "consent": "Messages require consent to the privacy policy",
       "consentHint": "When on, the contact page adds a required checkbox and submissions without it are rejected. Recommended for delivered client sites — collecting a name, phone and email is processing personal data.",
       "attachments": "Attachments",
@@ -289,7 +292,8 @@
         "sourceOwn": "Own template",
         "sourceAli": "Alibaba template",
         "sourceHint": "With \"Alibaba template\" the headers are matched via the column mapping, and rows whose Product ID already exists update instead of creating duplicates"
-      }
+      },
+      "certifications": "Certifications"
     },
     "ali": {
       "configTitle": "Alibaba sync · Open platform credentials",
@@ -634,7 +638,12 @@
       "pinned": "Pinned",
       "author": "Author",
       "authorPlaceholder": "e.g. Marketing (leave empty to hide)",
-      "views": "Views"
+      "views": "Views",
+      "establishedYear": "Established year",
+      "staffCount": "Employees",
+      "annualRevenue": "Annual revenue",
+      "mainMarkets": "Main markets",
+      "responseTime": "Response time"
     },
     "hint": {
       "defaultLang": "Follow browser = first visit opens the matching version; pick a language = it owns the root path and the previous default moves under a prefix (e.g. /zh). Public-site routes register at startup, so a restart is required after changing",
@@ -650,7 +659,9 @@
       "qrCodeUrl": "≥500×500 square PNG with a quiet margin recommended (scanners need it; {{types}}, ≤{{max}}); shown in the footer and on the contact page — leave empty to hide the QR code",
       "socials": "Social icons in the footer and on the contact page; up to {{max}}, https:// or mailto:",
       "friendLinks": "The “Links” column in the footer; up to {{max}}, hidden when empty",
-      "navHref": "Pick a site page here. Choose “Custom link” for an external URL (must start with https://) or an in-page anchor."
+      "navHref": "Pick a site page here. Choose “Custom link” for an external URL (must start with https://) or an in-page anchor.",
+      "establishedYear": "Shown on the supplier card; 0 or empty hides this row",
+      "certifications": "Comma-separated, e.g. CE, UL 1973, UN38.3. Rendered as badges on the product page; known names get an icon."
     },
     "placeholder": {
       "siteName": "NexAdmin",
@@ -669,7 +680,8 @@
       "socialUrl": "https://… or mailto:…",
       "friendName": "e.g. Vite",
       "friendUrl": "https://…",
-      "icp": "e.g. 京ICP备00000000号"
+      "icp": "e.g. 京ICP备00000000号",
+      "establishedYear": "e.g. 2012"
     },
     "market": {
       "enabled": "Enable public plugin marketplace",

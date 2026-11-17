@@ -257,6 +257,11 @@ func seedDemoTx(ctx context.Context, tx *gorm.DB, themeID string, data DemoData,
 	if err := tx.Exec("DELETE FROM plg_website_product_category_rel WHERE product_id IN (SELECT id FROM plg_website_product WHERE demo_of <> '')").Error; err != nil {
 		return err
 	}
+	// 评价表也没有 demo_of，同样靠商品行圈定范围：不先删就每切一次主题留下
+	// 一批指向已删演示商品的悬空评价（公开侧查不到，但后台统计与库容都脏）。
+	if err := tx.Exec("DELETE FROM plg_website_product_review WHERE product_id IN (SELECT id FROM plg_website_product WHERE demo_of <> '')").Error; err != nil {
+		return err
+	}
 	if err := tx.Exec("DELETE FROM plg_website_product WHERE demo_of <> ''").Error; err != nil {
 		return err
 	}
@@ -489,17 +494,29 @@ func seedDemoTx(ctx context.Context, tx *gorm.DB, themeID string, data DemoData,
 
 	// 8. 商品评价：按商品 slug 关联，且只在该商品还没有任何评价时补种——
 	// 运营录入的真实回访不能被切主题覆盖（评价是独立表，不随商品删除重建）。
+	// 判定按「商品」整体做一次：逐条判会让同一商品的第 2 条起被自己刚插入的首条挡住，
+	// 一商品只落一条（旧实现实测 9 条演示评价只入库 3 条）。
+	seeded := map[int64]bool{}
+	blocked := map[int64]bool{}
 	for i := range data.Reviews {
 		rv := data.Reviews[i]
 		var prod Product
 		if err := tx.Where("slug = ?", rv.ProductSlug).First(&prod).Error; err != nil {
 			continue // 商品不在库里就跳过，演示数据不该把整次导入打断
 		}
-		var n int64
-		if err := tx.Model(&ProductReview{}).Where("product_id = ?", prod.ID).Count(&n).Error; err != nil {
-			return err
+		pid := int64(prod.ID)
+		if !seeded[pid] && !blocked[pid] {
+			var n int64
+			if err := tx.Model(&ProductReview{}).Where("product_id = ?", prod.ID).Count(&n).Error; err != nil {
+				return err
+			}
+			if n > 0 {
+				blocked[pid] = true
+				continue
+			}
+			seeded[pid] = true
 		}
-		if n > 0 {
+		if blocked[pid] {
 			continue
 		}
 		row := ProductReview{

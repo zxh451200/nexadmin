@@ -24,6 +24,7 @@
         "features": "功能开关"
       },
       "emailInvalid": "邮箱格式不正确",
+      "consentUrlInvalid": "开启留言同意后，隐私政策地址必填：站内路径（如 /p/privacy）或完整 https:// 地址",
       "defaultLangAuto": "跟随浏览器语言",
       "defaultLangSource": "原文语言",
       "defaultTheme": "默认主题",
@@ -38,7 +39,9 @@
       "friendName": "站点名称",
       "friendUrl": "链接地址",
       "addFriendLink": "添加友情链接",
-      "demoImportWarn": "将写入该品牌的示例产品与新闻（只增不删），并整体替换站点名称、首页文案、导航与首页特性卡片等品牌门面内容；可重复执行。"
+      "demoImportWarn": "将写入该品牌的示例产品与新闻（只增不删），并整体替换站点名称、首页文案、导航与首页特性卡片等品牌门面内容；可重复执行。",
+      "supplierProfile": "供应商实力档案",
+      "supplierProfileHint": "这五行出现在商品详情左栏的供应商卡里，留空的项目自动隐藏。"
     },
     "social": {
       "github": "GitHub",
@@ -82,7 +85,7 @@
       "deleteBatchConfirm": "确认删除选中的 {{count}} 条留言？",
       "searchPlaceholder": "搜索称呼、邮箱或内容",
       "notifyEmail": "新留言抄送邮箱",
-      "notifyEmailHint": "把新收到的留言抄送一封到上面的联系邮箱；未配置 SMTP 时自动跳过。站内信不受这一项影响，始终发送。",
+      "notifyEmailHint": "把新收到的留言抄送到「联系与页脚」里配置的联系邮箱；未配置 SMTP 时自动跳过。站内信不受这一项影响，始终发送。",
       "consent": "留言需同意隐私政策",
       "consentHint": "打开后，官网联系页的留言表单会多一个必勾项，没勾选就不入库。交付客户的站点建议打开——收集称呼、电话、邮箱属于处理个人信息。",
       "attachments": "附件",
@@ -289,7 +292,8 @@
         "sourceOwn": "本站模板",
         "sourceAli": "阿里模板",
         "sourceHint": "选「阿里模板」时表头按「阿里列名映射」识别，Product ID 命中的商品会被更新而不是新建"
-      }
+      },
+      "certifications": "认证资质"
     },
     "ali": {
       "configTitle": "阿里国际站同步 · 开放平台凭据",
@@ -634,7 +638,12 @@
       "pinned": "置顶",
       "author": "作者",
       "authorPlaceholder": "如：市场部（留空不显示）",
-      "views": "浏览量"
+      "views": "浏览量",
+      "establishedYear": "成立年份",
+      "staffCount": "员工人数",
+      "annualRevenue": "年营收",
+      "mainMarkets": "主要市场",
+      "responseTime": "平均响应"
     },
     "hint": {
       "defaultLang": "跟随浏览器 = 首访按浏览器语言进入对应版本；选具体语言 = 该语言独占根路径、原默认语言挂前缀（如 /zh）。公开站路由在启动期注册，改完需重启生效",
@@ -650,7 +659,9 @@
       "qrCodeUrl": "建议 ≥500×500 正方形 PNG、四周留白边（扫码需要余量；{{types}}，≤{{max}}）；展示在页脚与联系页，留空则不显示二维码",
       "socials": "页脚与联系页的社交图标；最多 {{max}} 个，支持 https:// 与 mailto:",
       "friendLinks": "页脚「友情链接」列；最多 {{max}} 个，留空则不显示该列",
-      "navHref": "站内页面直接选；外部链接或页内锚点选「自定义链接」，外部地址需以 https:// 开头。"
+      "navHref": "站内页面直接选；外部链接或页内锚点选「自定义链接」，外部地址需以 https:// 开头。",
+      "establishedYear": "商详供应商卡展示；0 或留空则不显示这一行",
+      "certifications": "多个用逗号分隔，如 CE, UL 1973, UN38.3；详情页会渲染成认证徽章，识别的认证自动配图标。"
     },
     "placeholder": {
       "siteName": "NexAdmin",
@@ -669,7 +680,8 @@
       "socialUrl": "https://… 或 mailto:…",
       "friendName": "例如 Vite",
       "friendUrl": "https://…",
-      "icp": "京ICP备00000000号"
+      "icp": "京ICP备00000000号",
+      "establishedYear": "如 2012"
     },
     "market": {
       "enabled": "启用官网插件市场",

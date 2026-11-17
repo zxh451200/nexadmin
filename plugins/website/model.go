@@ -423,6 +423,10 @@ type Product struct {
 	Currency     string  `gorm:"size:8;not null;default:'USD'" json:"currency"`
 	PriceUnit    string  `gorm:"size:32;not null;default:''" json:"priceUnit"` // 计量单位：piece / set…
 	Moq          int     `gorm:"column:moq;not null;default:0" json:"moq"`     // 最小起订量
+	// RatingAvg / RatingCount 是列表卡片的评分摘要（gorm:"-" 不入库）：
+	// 列表页一次批量算好塞进来，模板直接用；详情页看 ProductReviews 的完整统计。
+	RatingAvg   float64 `gorm:"-" json:"ratingAvg"`
+	RatingCount int     `gorm:"-" json:"ratingCount"`
 	LeadTimeDays int     `gorm:"column:lead_time_days;not null;default:0" json:"leadTimeDays"`
 	// Port 是装运港口，支持多选（逗号拼接，如 "Shenzhen, Ningbo"），宽度与 PaymentTerms 对齐。
 	Port string `gorm:"size:100;not null;default:''" json:"port"`

@@ -274,7 +274,8 @@
       "author": "方案部",
       "content": "<p>BESS-215 把电芯、BMS、液冷温控、消防与变流器集成进一个 20 尺标准柜，现场并网即用，是工商业储能的基准机型。</p>",
       "i18nJson": "{\"en-US\":{\"title\":\"215kWh All-in-One ESS Cabinet\",\"summary\":\"An integrated cabinet with cells, BMS, liquid cooling and fire suppression — plug-and-play C&I storage.\",\"content\":\"<p>The BESS-215 integrates cells, BMS, liquid cooling, fire suppression and the converter into one 20-foot cabinet: connect and commission, the benchmark unit for commercial and industrial storage.</p>\"}}",
-      "certificationsJson": "[\"CE\", \"UL 1973\", \"UN38.3\", \"IEC 62619\", \"ISO 9001\"]"
+      "certificationsJson": "[\"CE\", \"UL 1973\", \"UN38.3\", \"IEC 62619\", \"ISO 9001\"]",
+      "imagesJson": "[\"/website-assets/theme/solaris/assets/sl-storage.webp\", \"/website-assets/theme/solaris/assets/sl-container.webp\", \"/website-assets/theme/solaris/assets/sl-sustainability.webp\"]"
     },
     {
       "slug": "hybrid-inverter-100",
@@ -282,7 +283,16 @@
       "keywords": "混合逆变器 光储一体",
       "summary": "光储一体逆变器，支持离网与并网无缝切换，弱电网也能稳定构网。",
       "coverUrl": "/website-assets/theme/solaris/assets/sl-inverter.webp",
+      "imagesJson": "[\"/website-assets/theme/solaris/assets/sl-inverter.webp\", \"/website-assets/theme/solaris/assets/sl-solar.webp\", \"/website-assets/theme/solaris/assets/sl-microgrid.webp\"]",
       "priceMin": 850,
+      "priceMax": 1100,
+      "priceUnit": "piece",
+      "moq": 1,
+      "leadTimeDays": 25,
+      "port": "Shenzhen",
+      "paymentTerms": "T/T, L/C",
+      "aliTradeJson": "{\"priceType\":\"ladder\",\"ladder\":[{\"qty\":1,\"price\":850},{\"qty\":20,\"price\":790},{\"qty\":100,\"price\":735}],\"package\":{\"length\":60,\"width\":45,\"height\":25,\"weight\":45,\"shippingTemplate\":\"2008472002\"},\"supply\":{\"number\":2000,\"quantityUnit\":\"Set/Sets\",\"timeUnit\":\"Month\"},\"logistics\":[],\"sample\":{\"enabled\":true,\"maxQty\":1,\"price\":1100,\"description\":\"sample ok\"},\"custom\":[{\"type\":\"Customized logo\",\"quantity\":50}],\"group\":[\"806382565\"],\"skuProps\":[{\"name\":\"额定功率\",\"values\":[\"100 kW\",\"125 kW\"]},{\"name\":\"接入方式\",\"values\":[\"并网\",\"离网\"]}],\"skus\":[{\"props\":{\"额定功率\":\"100 kW\",\"接入方式\":\"并网\"},\"price\":850,\"stock\":60,\"code\":\"HI100-G\"},{\"props\":{\"额定功率\":\"100 kW\",\"接入方式\":\"离网\"},\"price\":920,\"stock\":30,\"code\":\"HI100-O\"},{\"props\":{\"额定功率\":\"125 kW\",\"接入方式\":\"并网\"},\"price\":1050,\"stock\":18,\"code\":\"HI125-G\"},{\"props\":{\"额定功率\":\"125 kW\",\"接入方式\":\"离网\"},\"price\":1100,\"stock\":0,\"code\":\"HI125-O\"}]}",
+      "certificationsJson": "[\"CE\", \"VDE 4105\", \"EN 50549\", \"ISO 9001\"]",
       "currency": "USD",
       "specsJson": "[{\"label\":\"型号\",\"value\":\"HI-100\"},{\"label\":\"额定容量\",\"value\":\"100 kW\"},{\"label\":\"循环寿命\",\"value\":\"—\"},{\"label\":\"关键特性\",\"value\":\"构网型 · 离并网切换\"},{\"label\":\"应用场景\",\"value\":\"微电网\"}]",
       "categories": [
@@ -292,14 +302,7 @@
       ],
       "author": "方案部",
       "content": "<p>HI-100 支持构网型运行，弱电网与孤岛场景下依旧稳定输出，与 SOLARIS 储能柜组成即装即用的微电网。</p>",
-      "i18nJson": "{\"en-US\":{\"title\":\"100kW Hybrid Inverter\",\"summary\":\"A solar+storage inverter with seamless off-grid and on-grid switching for weak grids.\",\"content\":\"<p>The HI-100 supports grid-forming operation, staying stable in weak grids and islands — pair it with a SOLARIS cabinet for a ready-made microgrid.</p>\"}}",
-      "priceMax": 1100,
-      "priceUnit": "piece",
-      "moq": 1,
-      "leadTimeDays": 25,
-      "port": "Shenzhen",
-      "paymentTerms": "T/T, L/C",
-      "certificationsJson": "[\"CE\", \"VDE 4105\", \"EN 50549\", \"ISO 9001\"]"
+      "i18nJson": "{\"en-US\":{\"title\":\"100kW Hybrid Inverter\",\"summary\":\"A solar+storage inverter with seamless off-grid and on-grid switching for weak grids.\",\"content\":\"<p>The HI-100 supports grid-forming operation, staying stable in weak grids and islands — pair it with a SOLARIS cabinet for a ready-made microgrid.</p>\"}}"
     },
     {
       "slug": "ems-platform",
@@ -307,7 +310,16 @@
       "keywords": "能源管理 AI调度",
       "summary": "智能控制发电与储能运行的能源管理系统：效率更高、成本更低。",
       "coverUrl": "/website-assets/theme/solaris/assets/sl-monitor.webp",
+      "imagesJson": "[\"/website-assets/theme/solaris/assets/sl-monitor.webp\", \"/website-assets/theme/solaris/assets/sl-process.webp\"]",
       "priceMin": 3200,
+      "priceMax": 4800,
+      "priceUnit": "set",
+      "moq": 1,
+      "leadTimeDays": 30,
+      "port": "Shanghai",
+      "paymentTerms": "T/T, L/C",
+      "aliTradeJson": "{\"priceType\":\"ladder\",\"ladder\":[{\"qty\":1,\"price\":3200},{\"qty\":10,\"price\":2900}],\"package\":{\"length\":0,\"width\":0,\"height\":0,\"weight\":0,\"shippingTemplate\":\"\"},\"supply\":{\"number\":200,\"quantityUnit\":\"Set/Sets\",\"timeUnit\":\"Month\"},\"logistics\":[],\"sample\":{\"enabled\":false},\"custom\":[{\"type\":\"Customized logo\",\"quantity\":1},{\"type\":\"Graphic customization\",\"quantity\":1}],\"group\":[\"806382565\"]}",
+      "certificationsJson": "[\"CE\", \"IEC 62443\", \"ISO 27001\", \"ISO 9001\"]",
       "currency": "USD",
       "specsJson": "[{\"label\":\"型号\",\"value\":\"EMS-Cloud\"},{\"label\":\"额定容量\",\"value\":\"不限\"},{\"label\":\"循环寿命\",\"value\":\"—\"},{\"label\":\"关键特性\",\"value\":\"AI 调度 · 远程运维\"},{\"label\":\"应用场景\",\"value\":\"全场景\"}]",
       "categories": [
@@ -317,14 +329,7 @@
       ],
       "author": "方案部",
       "content": "<p>EMS-Cloud 以 AI 预测负荷与电价，自动编排充放策略，让每一度电都落在最值钱的时段。</p>",
-      "i18nJson": "{\"en-US\":{\"title\":\"EMS Energy Management Platform\",\"summary\":\"An energy management system that intelligently controls generation and storage: higher efficiency, lower cost.\",\"content\":\"<p>EMS-Cloud forecasts load and tariffs with AI and orchestrates charge/discharge strategies automatically, putting every kWh in the most valuable window.</p>\"}}",
-      "priceMax": 4800,
-      "priceUnit": "set",
-      "moq": 1,
-      "leadTimeDays": 30,
-      "port": "Shanghai",
-      "paymentTerms": "T/T, L/C",
-      "certificationsJson": "[\"CE\", \"IEC 62443\", \"ISO 27001\", \"ISO 9001\"]"
+      "i18nJson": "{\"en-US\":{\"title\":\"EMS Energy Management Platform\",\"summary\":\"An energy management system that intelligently controls generation and storage: higher efficiency, lower cost.\",\"content\":\"<p>EMS-Cloud forecasts load and tariffs with AI and orchestrates charge/discharge strategies automatically, putting every kWh in the most valuable window.</p>\"}}"
     },
     {
       "slug": "ess-container-mwh",
@@ -332,7 +337,16 @@
       "keywords": "电网级储能 集装箱",
       "summary": "电网级集装箱方案，为大规模新能源消纳与电网调频而生。",
       "coverUrl": "/website-assets/theme/solaris/assets/sl-container.webp",
+      "imagesJson": "[\"/website-assets/theme/solaris/assets/sl-container.webp\", \"/website-assets/theme/solaris/assets/sl-industrial.webp\", \"/website-assets/theme/solaris/assets/sl-project-main.webp\"]",
       "priceMin": 78000,
+      "priceMax": 96000,
+      "priceUnit": "set",
+      "moq": 1,
+      "leadTimeDays": 45,
+      "port": "Ningbo",
+      "paymentTerms": "T/T, L/C, O/A",
+      "aliTradeJson": "{\"priceType\":\"ladder\",\"ladder\":[{\"qty\":1,\"price\":78000},{\"qty\":3,\"price\":74000},{\"qty\":6,\"price\":70500}],\"package\":{\"length\":6058,\"width\":2438,\"height\":2591,\"weight\":22000,\"shippingTemplate\":\"2008472002\"},\"supply\":{\"number\":30,\"quantityUnit\":\"Set/Sets\",\"timeUnit\":\"Month\"},\"logistics\":[\"battery.builtinBatteryLithium.oneLessHundredWh\"],\"sample\":{\"enabled\":false},\"custom\":[{\"type\":\"Customized logo\",\"quantity\":1}],\"group\":[\"806382565\"],\"skuProps\":[{\"name\":\"容量\",\"values\":[\"3.44 MWh\",\"5 MWh\"]}],\"skus\":[{\"props\":{\"容量\":\"3.44 MWh\"},\"price\":78000,\"stock\":12,\"code\":\"ESS-3440\"},{\"props\":{\"容量\":\"5 MWh\"},\"price\":96000,\"stock\":4,\"code\":\"ESS-5000\"}]}",
+      "certificationsJson": "[\"CE\", \"UL 9540\", \"UN38.3\", \"IEC 62933\", \"ISO 9001\"]",
       "currency": "USD",
       "specsJson": "[{\"label\":\"型号\",\"value\":\"ESS-MWh\"},{\"label\":\"额定容量\",\"value\":\"3.44 MWh\"},{\"label\":\"循环寿命\",\"value\":\"8,000 次\"},{\"label\":\"关键特性\",\"value\":\"电网级调频\"},{\"label\":\"应用场景\",\"value\":\"新能源电站\"}]",
       "categories": [
@@ -342,14 +356,7 @@
       ],
       "author": "方案部",
       "content": "<p>ESS-MWh 面向新能源电站与独立储能电站：3.44MWh 单柜、pack 级安全设计与电网级调频响应。</p>",
-      "i18nJson": "{\"en-US\":{\"title\":\"MWh-Class Container Storage System\",\"summary\":\"A grid-scale container solution for large-scale renewable consumption and frequency regulation.\",\"content\":\"<p>The ESS-MWh targets renewable plants and standalone storage: 3.44MWh per container, pack-level safety design and grid-grade frequency response.</p>\"}}",
-      "priceMax": 96000,
-      "priceUnit": "set",
-      "moq": 1,
-      "leadTimeDays": 45,
-      "port": "Ningbo",
-      "paymentTerms": "T/T, L/C, O/A",
-      "certificationsJson": "[\"CE\", \"UL 9540\", \"UN38.3\", \"IEC 62933\", \"ISO 9001\"]"
+      "i18nJson": "{\"en-US\":{\"title\":\"MWh-Class Container Storage System\",\"summary\":\"A grid-scale container solution for large-scale renewable consumption and frequency regulation.\",\"content\":\"<p>The ESS-MWh targets renewable plants and standalone storage: 3.44MWh per container, pack-level safety design and grid-grade frequency response.</p>\"}}"
     }
   ],
   "reviews": [

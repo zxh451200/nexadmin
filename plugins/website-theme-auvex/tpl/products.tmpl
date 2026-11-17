@@ -110,6 +110,7 @@
             </a>
             <div class="pc-card-body">
               <a class="pc-card-title" href="{{$.URL "/products"}}/{{.Slug}}">{{.Title}}</a>
+              {{if .RatingCount}}<div class="pc-card-rating"><span class="pd-stars" aria-hidden="true">{{starRow .RatingAvg}}</span><span class="pc-card-rating-avg">{{avgText .RatingAvg}}</span><span class="pc-card-rating-count">{{$.TF "product.reviewsCount" .RatingCount}}</span></div>{{end}}
               <div class="pc-card-price">{{if .PriceMin}}{{.Currency}}{{money .PriceMin}}{{if and .PriceMax (gt .PriceMax .PriceMin)}}-{{money .PriceMax}}{{end}}{{if .PriceUnit}} / {{.PriceUnit}}{{end}}{{else}}{{$.T "product.priceOnRequest"}}{{end}}</div>
               {{if .Moq}}<div class="pc-card-moq">{{$.T "products.moqLabel"}}: {{.Moq}}{{if .PriceUnit}} {{.PriceUnit}}{{end}}</div>{{end}}
               {{if .Categories}}<div class="pc-card-terms">{{range .Categories}}<span class="pc-term">{{.Title}}</span>{{end}}</div>{{end}}

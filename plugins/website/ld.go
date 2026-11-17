@@ -143,6 +143,17 @@ func productJSONLD(v *siteView, p *Product) template.JS {
 			"availability":  "https://schema.org/InStock",
 		}
 	}
+	// 评价聚合进 Product 结构化数据：Google 会据此在搜索结果里出星级，
+	// 这也是阿里商详唯一让搜索引擎读到评分的地方；没有评价就不加这一段。
+	if v.ProductReviews.Total > 0 {
+		m["aggregateRating"] = map[string]any{
+			"@type":       "AggregateRating",
+			"ratingValue": v.ProductReviews.Average,
+			"reviewCount": v.ProductReviews.Total,
+			"bestRating":  5,
+			"worstRating": 1,
+		}
+	}
 	return marshalLD([]any{m, breadcrumbJSONLD(
 		[2]string{v.T("layout.home"), strings.TrimSuffix(v.BaseURL, "/") + v.Home()},
 		[2]string{v.T("layout.product"), strings.TrimSuffix(v.BaseURL, "/") + v.URL("/products")},

@@ -82,6 +82,16 @@ export interface SiteSettings {
   contactConsent: boolean
   /** 被同意的政策地址：站内 /p/xxx 或完整 https:// 地址（开启时必填） */
   contactConsentUrl: string
+  /** 成立年份：商详供应商卡的「实力档案」，0 = 不展示 */
+  establishedYear: number
+  /** 员工规模（演示 500+），空 = 不展示 */
+  staffCount: string
+  /** 年营收区间（如 US$50M - US$100M），空 = 不展示 */
+  annualRevenue: string
+  /** 主营市场（逗号/顿号分隔的自然语言），空 = 不展示 */
+  mainMarkets: string
+  /** 平均响应时长（如 ≤4h），空 = 不展示 */
+  responseTime: string
   i18nJson: string
   updatedAt: string
 }
@@ -335,6 +345,8 @@ export interface SiteProduct {
   specsJson: string
   /** 阿里交易与规格（JSON 文本；表单编辑时解析成 AliTrade） */
   aliTradeJson?: string
+  /** 认证资质（JSON 数组文本，如 ["CE","UL 1973"]）：详情页渲染成认证徽章排 */
+  certificationsJson?: string
   status: ProductStatus
   /** 阿里同步预留（一期只读展示） */
   alibabaProductId: string
@@ -418,6 +430,8 @@ export interface ProductForm {
   specs: ProductSpec[]
   /** 阿里交易与规格（阶梯价/SKU/包装/供货/物流属性/样品/定制/分组）；null = 本次不改 */
   aliTrade?: AliTrade | null
+  /** 认证资质名称清单；undefined = 本次不改（保留原值），[] = 清空 */
+  certifications?: string[]
   /** 所属类目的完整 ID 列表；空 = 清空类目 */
   categoryIds: string[]
   i18nJson: string
@@ -589,6 +603,8 @@ export interface DemoReport {
   posts: number
   productCategories: number
   products: number
+  /** 商品评价：只在商品还没有任何评价时补种，所以可能小于演示 JSON 里的条数。 */
+  reviews: number
   skipped: number
 }
 

@@ -26,7 +26,12 @@
         "url": "https://x.com/auvexmachinery"
       }
     ],
-    "i18nJson": "{\"en-US\":{\"siteDesc\":\"AUVEX MACHINERY delivers high-precision CNC machining centers and automation for a more precise, efficient and sustainable manufacturing world.\",\"homeTitle\":\"Engineering\\nthe Future of Precision\",\"homeSubtitle\":\"AUVEX MACHINERY delivers high-performance CNC solutions so every part is machined more precisely, efficiently and sustainably.\",\"homeCtaLabel\":\"Explore Machines\",\"seoKeywords\":\"CNC machines,5-axis machining,VMC,precision manufacturing,turning centers\",\"footerNote\":\"High-performance CNC machines and automation, engineered for precision industry.\"}}"
+    "i18nJson": "{\"en-US\":{\"siteDesc\":\"AUVEX MACHINERY delivers high-precision CNC machining centers and automation for a more precise, efficient and sustainable manufacturing world.\",\"homeTitle\":\"Engineering\\nthe Future of Precision\",\"homeSubtitle\":\"AUVEX MACHINERY delivers high-performance CNC solutions so every part is machined more precisely, efficiently and sustainably.\",\"homeCtaLabel\":\"Explore Machines\",\"seoKeywords\":\"CNC machines,5-axis machining,VMC,precision manufacturing,turning centers\",\"footerNote\":\"High-performance CNC machines and automation, engineered for precision industry.\"}}",
+    "establishedYear": 2009,
+    "staffCount": "300+",
+    "annualRevenue": "US$20M - US$50M",
+    "mainMarkets": "欧洲、北美、东南亚、中东",
+    "responseTime": "≤6h"
   },
   "navs": [
     {
@@ -227,7 +232,16 @@
       "keywords": "flagship 五轴加工中心",
       "summary": "高精度五轴联动加工中心，胜任复杂零件与多面加工的高效率方案。",
       "coverUrl": "/website-assets/theme/auvex/assets/au-machine-one.webp",
-      "priceMin": 0,
+      "imagesJson": "[\"/website-assets/theme/auvex/assets/au-machine-one.webp\", \"/website-assets/theme/auvex/assets/au-precision.webp\", \"/website-assets/theme/auvex/assets/au-blueprint.webp\"]",
+      "priceMin": 68000,
+      "priceMax": 92000,
+      "priceUnit": "Set",
+      "moq": 1,
+      "leadTimeDays": 45,
+      "port": "Shanghai",
+      "paymentTerms": "T/T, L/C",
+      "aliTradeJson": "{\"priceType\":\"ladder\",\"ladder\":[{\"qty\":1,\"price\":68000},{\"qty\":2,\"price\":64000},{\"qty\":5,\"price\":59800}],\"package\":{\"length\":420,\"width\":300,\"height\":320,\"weight\":9800,\"shippingTemplate\":\"2008472003\"},\"supply\":{\"number\":12,\"quantityUnit\":\"Set/Sets\",\"timeUnit\":\"Month\"},\"logistics\":[],\"sample\":{\"enabled\":false},\"custom\":[{\"type\":\"Customized logo\",\"quantity\":1},{\"type\":\"Graphic customization\",\"quantity\":1}],\"group\":[\"806382565\"],\"skuProps\":[{\"name\":\"数控系统\",\"values\":[\"SIEMENS 840D\",\"FANUC 31i\"]},{\"name\":\"刀库\",\"values\":[\"24 刀位\",\"40 刀位\"]}],\"skus\":[{\"props\":{\"数控系统\":\"SIEMENS 840D\",\"刀库\":\"24 刀位\"},\"price\":68000,\"stock\":6,\"code\":\"VX650-S24\"},{\"props\":{\"数控系统\":\"SIEMENS 840D\",\"刀库\":\"40 刀位\"},\"price\":72000,\"stock\":4,\"code\":\"VX650-S40\"},{\"props\":{\"数控系统\":\"FANUC 31i\",\"刀库\":\"24 刀位\"},\"price\":70500,\"stock\":3,\"code\":\"VX650-F24\"},{\"props\":{\"数控系统\":\"FANUC 31i\",\"刀库\":\"40 刀位\"},\"price\":74500,\"stock\":0,\"code\":\"VX650-F40\"}]}",
+      "certificationsJson": "[\"CE\", \"ISO 9001\", \"TÜV\", \"GOST-R\"]",
       "currency": "USD",
       "specsJson": "[{\"label\":\"型号\",\"value\":\"VX-650\"},{\"label\":\"主轴转速\",\"value\":\"24,000 RPM\"},{\"label\":\"定位精度\",\"value\":\"±0.003mm\"},{\"label\":\"关键特性\",\"value\":\"五轴联动 · RTCP\"},{\"label\":\"应用场景\",\"value\":\"航空航天\"}]",
       "categories": [
@@ -245,7 +259,16 @@
       "keywords": "立式加工中心 数控机床",
       "summary": "刚性强、可靠性高的立式加工中心，适合高效率批量生产。",
       "coverUrl": "/website-assets/theme/auvex/assets/au-machine-two.webp",
-      "priceMin": 0,
+      "imagesJson": "[\"/website-assets/theme/auvex/assets/au-machine-two.webp\", \"/website-assets/theme/auvex/assets/au-factory.webp\"]",
+      "priceMin": 32000,
+      "priceMax": 41000,
+      "priceUnit": "Set",
+      "moq": 1,
+      "leadTimeDays": 35,
+      "port": "Shanghai",
+      "paymentTerms": "T/T, L/C",
+      "aliTradeJson": "{\"priceType\":\"ladder\",\"ladder\":[{\"qty\":1,\"price\":32000},{\"qty\":2,\"price\":30500},{\"qty\":4,\"price\":29200}],\"package\":{\"length\":360,\"width\":280,\"height\":300,\"weight\":7200,\"shippingTemplate\":\"2008472003\"},\"supply\":{\"number\":20,\"quantityUnit\":\"Set/Sets\",\"timeUnit\":\"Month\"},\"logistics\":[],\"sample\":{\"enabled\":false},\"custom\":[{\"type\":\"Customized logo\",\"quantity\":1}],\"group\":[\"806382565\"]}",
+      "certificationsJson": "[\"CE\", \"ISO 9001\", \"TÜV\"]",
       "currency": "USD",
       "specsJson": "[{\"label\":\"型号\",\"value\":\"VM-1150\"},{\"label\":\"主轴转速\",\"value\":\"12,000 RPM\"},{\"label\":\"定位精度\",\"value\":\"±0.005mm\"},{\"label\":\"关键特性\",\"value\":\"重载铸铁机身\"},{\"label\":\"应用场景\",\"value\":\"模具制造\"}]",
       "categories": [
@@ -263,7 +286,16 @@
       "keywords": "车削中心 精密车削",
       "summary": "高端精密车削能力，带动力刀塔与副主轴，一机完成车铣复合。",
       "coverUrl": "/website-assets/theme/auvex/assets/au-machine-three.webp",
-      "priceMin": 0,
+      "imagesJson": "[\"/website-assets/theme/auvex/assets/au-machine-three.webp\", \"/website-assets/theme/auvex/assets/au-mold.webp\"]",
+      "priceMin": 23500,
+      "priceMax": 29800,
+      "priceUnit": "Set",
+      "moq": 1,
+      "leadTimeDays": 30,
+      "port": "Ningbo",
+      "paymentTerms": "T/T, L/C",
+      "aliTradeJson": "{\"priceType\":\"ladder\",\"ladder\":[{\"qty\":1,\"price\":23500},{\"qty\":2,\"price\":22400},{\"qty\":5,\"price\":21300}],\"package\":{\"length\":300,\"width\":240,\"height\":260,\"weight\":5200,\"shippingTemplate\":\"2008472003\"},\"supply\":{\"number\":18,\"quantityUnit\":\"Set/Sets\",\"timeUnit\":\"Month\"},\"logistics\":[],\"sample\":{\"enabled\":false},\"custom\":[{\"type\":\"Customized logo\",\"quantity\":1}],\"group\":[\"806382565\"]}",
+      "certificationsJson": "[\"CE\", \"ISO 9001\"]",
       "currency": "USD",
       "specsJson": "[{\"label\":\"型号\",\"value\":\"TC-300\"},{\"label\":\"主轴转速\",\"value\":\"6,000 RPM\"},{\"label\":\"定位精度\",\"value\":\"±0.004mm\"},{\"label\":\"关键特性\",\"value\":\"动力刀塔 · 副主轴\"},{\"label\":\"应用场景\",\"value\":\"精密轴类\"}]",
       "categories": [
@@ -274,6 +306,98 @@
       "author": "外贸部",
       "content": "<p>TC-300 面向精密轴类与盘类零件：动力刀塔支持车铣复合工序，副主轴实现背面加工一次完成。</p>",
       "i18nJson": "{\"en-US\":{\"title\":\"TC-300 Precision Turning Center\",\"keywords\":\"turning center precision turning\",\"summary\":\"High-precision turning with a driven tool turret and sub-spindle — turn-mill in one machine.\",\"content\":\"<p>The TC-300 targets precision shafts and discs: a driven tool turret enables turn-mill operations, and the sub-spindle finishes back-side work in one setup.</p>\"}}"
+    }
+  ],
+  "reviews": [
+    {
+      "productSlug": "vx-650",
+      "author": "Klaus Brenner",
+      "country": "德国",
+      "rating": 5,
+      "verified": true,
+      "quantity": "1 台",
+      "daysAgo": 18,
+      "content": "从下单到到厂 42 天，比合同提前了三天。安装调试由厂家工程师远程配合本地服务商完成，RTCP 标定后连续切削 8 小时，尺寸漂移在 0.004mm 以内。"
+    },
+    {
+      "productSlug": "vx-650",
+      "author": "Luis Ferreira",
+      "country": "葡萄牙",
+      "rating": 4,
+      "verified": true,
+      "quantity": "1 台",
+      "daysAgo": 46,
+      "content": "机床本身很稳，五轴联动加工叶轮一次装夹成形，省了两道工序。扣一星是因为 40 刀位刀库要额外订，交期又加了四周。"
+    },
+    {
+      "productSlug": "vx-650",
+      "author": "Ahmed Al-Sayed",
+      "country": "阿联酋",
+      "rating": 5,
+      "verified": true,
+      "quantity": "2 台",
+      "daysAgo": 88,
+      "content": "两台并排投产半年，主轴 24,000 转长期跑铝件没有异响。备件清单和电气图纸都是英文的，本地电工看得懂。"
+    },
+    {
+      "productSlug": "vm-1150",
+      "author": "Marek Nowak",
+      "country": "波兰",
+      "rating": 5,
+      "verified": true,
+      "quantity": "3 台",
+      "daysAgo": 25,
+      "content": "重载铸铁机身确实压得住振，模具钢开粗 6mm 一刀也不颤。三台同批到货，地脚调平后几何精度一次验收通过。"
+    },
+    {
+      "productSlug": "vm-1150",
+      "author": "Nguyen Van Minh",
+      "country": "越南",
+      "rating": 4,
+      "verified": true,
+      "quantity": "2 台",
+      "daysAgo": 63,
+      "content": "性价比高，批量加工法兰盘节拍比原来的老机床快 30%。说明书里气路图页码标错了，销售第二天就发了修订版。"
+    },
+    {
+      "productSlug": "vm-1150",
+      "author": "Carlos Mendoza",
+      "country": "墨西哥",
+      "rating": 5,
+      "verified": true,
+      "quantity": "1 台",
+      "daysAgo": 101,
+      "content": "从上海港到曼萨尼约港 28 天，木箱加固到位，拆箱没有磕碰。售后按季度回访，第二次上门做了丝杠预紧检查。"
+    },
+    {
+      "productSlug": "tc-300",
+      "author": "Sophie Martin",
+      "country": "法国",
+      "rating": 5,
+      "verified": true,
+      "quantity": "1 台",
+      "daysAgo": 15,
+      "content": "车铣复合一机搞定，副主轴对接后同轴度 0.008mm，省掉二次装夹。动力刀塔换刀声音很干脆。"
+    },
+    {
+      "productSlug": "tc-300",
+      "author": "Yusuf Demir",
+      "country": "土耳其",
+      "rating": 4,
+      "verified": true,
+      "quantity": "2 台",
+      "daysAgo": 54,
+      "content": "精密轴类批量加工很合适，表面粗糙度稳定在 Ra0.8。希望以后能选配棒料送料机，现在还得自己配。"
+    },
+    {
+      "productSlug": "tc-300",
+      "author": "Ravi Sharma",
+      "country": "印度",
+      "rating": 5,
+      "verified": true,
+      "quantity": "3 台",
+      "daysAgo": 120,
+      "content": "三台分布在两个厂区，操作界面一致，培训一天就能上手。备件从上海发过来一般五天内到。"
     }
   ]
 }

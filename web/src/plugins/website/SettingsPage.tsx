@@ -45,7 +45,8 @@ import {
 type SharedTextKey =
   | 'siteName' | 'logoUrl' | 'faviconUrl' | 'ogImageUrl' | 'headCode' | 'titleSuffix' | 'homeSlug' | 'homeCtaHref' | 'contactEmail'
   | 'contactPhone' | 'qrCodeUrl' | 'qrCodeCaption' | 'icp' | 'contactConsentUrl' | 'theme' | 'defaultLang'
-type SharedSettings = Pick<SiteSettingsForm, SharedTextKey | 'marketEnabled' | 'messageNotifyEmail' | 'contactConsent'> & {
+  | 'staffCount' | 'annualRevenue' | 'mainMarkets' | 'responseTime'
+type SharedSettings = Pick<SiteSettingsForm, SharedTextKey | 'marketEnabled' | 'messageNotifyEmail' | 'contactConsent' | 'establishedYear'> & {
   socials: SocialLink[]
   friendLinks: FriendLink[]
 }
@@ -135,7 +136,7 @@ function SettingsFormBody({
     try {
       const rep = await seed.mutateAsync(selectedTheme.id)
       const total =
-        rep.settings + rep.navs + rep.features + rep.categories + rep.pages + rep.posts + rep.productCategories + rep.products
+        rep.settings + rep.navs + rep.features + rep.categories + rep.pages + rep.posts + rep.productCategories + rep.products + rep.reviews
       toast.success(t('plugin_website.settings.demoImported', { total, skipped: rep.skipped }))
     } catch {
       toast.error(t('common.operateFailed'))
@@ -156,6 +157,8 @@ function SettingsFormBody({
 
   // 邮箱格式校验：设置侧此前没有（投稿侧有）；留空合法——联系邮箱选填
   const emailInvalid = shared.contactEmail.trim() !== '' && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(shared.contactEmail.trim())
+  // 留言同意开着时政策地址必填，格式与后端 footerURLValid 同规则：站内路径/锚点或完整 http(s) 地址。
+  const consentInvalid = shared.contactConsent && !/^(https?:\/\/[^\s/]+|[#/])/i.test(shared.contactConsentUrl.trim())
   // 未保存提示：shared 相对「载入/上次保存」的快照有变化即脏；刷新与关窗由浏览器原生拦截。
   // 多语言字段在 Provider 内部，脏标记只覆盖共用字段——大头都在这边。
   const savedRef = useRef<SharedSettings | null>(null)
@@ -185,6 +188,10 @@ function SettingsFormBody({
     const base = lf.baseValues()
     if (emailInvalid) {
       toast.error(t('plugin_website.settings.emailInvalid'))
+      return
+    }
+    if (consentInvalid) {
+      toast.error(t('plugin_website.settings.consentUrlInvalid'))
       return
     }
     try {
@@ -420,6 +427,32 @@ function SettingsFormBody({
             <>
               {sharedInput('contactEmail', emailInvalid ? t('plugin_website.settings.emailInvalid') : undefined)}
               {sharedInput('contactPhone')}
+              {/* 供应商实力档案：商详左栏供应商卡的五行数据，对齐阿里的「店铺实力」；
+                  全空就不展示那一块，所以这里不设必填 */}
+              <div className="flex flex-col gap-3 rounded-lg border border-border p-3">
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-sm font-medium">{t('plugin_website.settings.supplierProfile')}</span>
+                  <span className="text-xs text-muted-foreground">{t('plugin_website.settings.supplierProfileHint')}</span>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <SharedFieldShell labelKey="plugin_website.fields.establishedYear" hint={t('plugin_website.hint.establishedYear')}>
+                    <Input
+                      type="number"
+                      inputMode="numeric"
+                      min={0}
+                      max={new Date().getFullYear()}
+                      value={shared.establishedYear || ''}
+                      disabled={sharedDisabled}
+                      placeholder={t('plugin_website.placeholder.establishedYear', { defaultValue: '' })}
+                      onChange={(e) => onSharedChange({ ...shared, establishedYear: Number(e.target.value) || 0 })}
+                    />
+                  </SharedFieldShell>
+                  {sharedInput('staffCount')}
+                  {sharedInput('annualRevenue')}
+                  {sharedInput('mainMarkets')}
+                  {sharedInput('responseTime')}
+                </div>
+              </div>
               <SharedFieldShell labelKey="plugin_website.fields.qrCodeUrl" hint={t('plugin_website.hint.qrCodeUrl', mediaHint)}>
                 <ImageUrlField
                   value={shared.qrCodeUrl}
@@ -522,38 +555,52 @@ function SettingsFormBody({
             </>
           ) : null}
           {tab === 'features' ? (
-            <>
+            // 开关收进一个带分隔线的组（bare 行，与产品/文章发布卡片同一套语言），
+            // 不再是卡片里一条开关套一个边框的「盒中盒」。
+            <div className="divide-y divide-border rounded-lg border border-border">
               <SwitchRow
+                bare
+                className="px-3 py-2.5"
                 label={t('plugin_website.message.notifyEmail')}
                 description={t('plugin_website.message.notifyEmailHint')}
                 checked={shared.messageNotifyEmail}
                 disabled={sharedDisabled}
                 onCheckedChange={(v) => onSharedChange({ ...shared, messageNotifyEmail: v })}
               />
+              <div className="flex flex-col gap-3 px-3 py-2.5">
+                <SwitchRow
+                  bare
+                  label={t('plugin_website.message.consent')}
+                  description={t('plugin_website.message.consentHint')}
+                  checked={shared.contactConsent}
+                  disabled={sharedDisabled}
+                  onCheckedChange={(v) => onSharedChange({ ...shared, contactConsent: v })}
+                />
+                {/* 政策地址只在开启后出现：关着时摆一个必填框只会让人以为现在就在拦投稿。
+                    缩进挂在开关下面，不另起一格，避免分隔线把它和开关拆开。 */}
+                {shared.contactConsent ? (
+                  <div className="ps-5">
+                    {sharedInput('contactConsentUrl', consentInvalid ? t('plugin_website.settings.consentUrlInvalid') : undefined)}
+                  </div>
+                ) : null}
+              </div>
               <SwitchRow
-                label={t('plugin_website.message.consent')}
-                description={t('plugin_website.message.consentHint')}
-                checked={shared.contactConsent}
-                disabled={sharedDisabled}
-                onCheckedChange={(v) => onSharedChange({ ...shared, contactConsent: v })}
-              />
-              {/* 政策地址只在开启后出现：关着时摆一个必填框只会让人以为现在就在拦投稿 */}
-              {shared.contactConsent ? sharedInput('contactConsentUrl') : null}
-              <SwitchRow
+                bare
+                className="px-3 py-2.5"
                 label={t('plugin_website.market.enabled')}
                 description={t('plugin_website.market.enabledHint')}
                 checked={shared.marketEnabled}
                 disabled={sharedDisabled}
                 onCheckedChange={(v) => onSharedChange({ ...shared, marketEnabled: v })}
               />
-            </>
+            </div>
           ) : null}
         </section>
         <LocaleFormActions />
         {/* 保存条常驻：五个分区共用一份表单，切分区不丢改动，也不该让人以为每个分区各存一次 */}
         <div className="flex items-center gap-3">
           {dirty ? <span className="text-xs text-warning">{t('plugin_website.settings.unsaved')}</span> : null}
-          <Button onClick={() => void submit()} disabled={save.isPending || emailInvalid}>{t('common.save')}</Button>
+          <Button onClick={() => void submit()} disabled={save.isPending || emailInvalid || consentInvalid}>{t('common.save')}</Button>
         </div>
       </div>
     </div>
@@ -595,6 +642,11 @@ export default function SettingsPage() {
         messageNotifyEmail: data.messageNotifyEmail,
         contactConsent: data.contactConsent,
         contactConsentUrl: data.contactConsentUrl ?? '',
+        establishedYear: data.establishedYear ?? 0,
+        staffCount: data.staffCount ?? '',
+        annualRevenue: data.annualRevenue ?? '',
+        mainMarkets: data.mainMarkets ?? '',
+        responseTime: data.responseTime ?? '',
         socials: data.socials ?? [],
         friendLinks: data.friendLinks ?? [],
       })

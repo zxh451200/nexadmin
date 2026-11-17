@@ -158,6 +158,40 @@ func (s *Service) ReviewTotals(ctx context.Context, productIDs []int64) (map[int
 	return out, nil
 }
 
+// productRating 是列表卡的评分摘要（均分 + 条数）。
+type productRating struct {
+	Avg   float64
+	Count int
+}
+
+// ProductRatingSummaries 一次算完一批商品的评分：列表页几十张卡不能一张查一次库
+// （ReviewTotals 那个逐商品循环的做法只适合后台单页少量商品）。
+// 只算已发布评价，与商详口径一致；没有评价的商品不在 map 里。
+func (s *Service) ProductRatingSummaries(ctx context.Context, productIDs []int64) (map[int64]productRating, error) {
+	out := make(map[int64]productRating, len(productIDs))
+	if len(productIDs) == 0 {
+		return out, nil
+	}
+	type row struct {
+		ProductID int64
+		N         int
+		Avg       float64
+	}
+	var rows []row
+	err := s.db.WithContext(ctx).Model(&ProductReview{}).
+		Select("product_id, COUNT(*) AS n, AVG(rating) AS avg").
+		Where("product_id IN ? AND published = ?", productIDs, true).
+		Group("product_id").
+		Scan(&rows).Error
+	if err != nil {
+		return out, err
+	}
+	for _, r := range rows {
+		out[r.ProductID] = productRating{Avg: math.Round(r.Avg*10) / 10, Count: r.N}
+	}
+	return out, nil
+}
+
 // CreateReview 录入一条评价：商品必须存在（草稿商品也行，上线后自然生效）。
 func (s *Service) CreateReview(ctx context.Context, f ReviewForm) (*ProductReview, error) {
 	pid, err := reviewProductID(f.ProductID)

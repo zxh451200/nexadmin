@@ -26,7 +26,12 @@
         "url": "https://www.facebook.com/torkon.industrial"
       }
     ],
-    "i18nJson": "{\"en-US\":{\"siteDesc\":\"High-performance professional tools, engineered for power, precision and durability.\",\"homeTitle\":\"BUILT FOR\\nTHE TOUGHEST JOBS\",\"homeSubtitle\":\"High-performance tools for professionals. Engineered for power, precision and durability.\",\"homeCtaLabel\":\"Explore Products\",\"seoKeywords\":\"power tools,industrial,brushless,impact wrench,drill,cut-off saw\",\"footerNote\":\"High-performance professional power tools, built for global industry and manufacturing.\"}}"
+    "i18nJson": "{\"en-US\":{\"siteDesc\":\"High-performance professional tools, engineered for power, precision and durability.\",\"homeTitle\":\"BUILT FOR\\nTHE TOUGHEST JOBS\",\"homeSubtitle\":\"High-performance tools for professionals. Engineered for power, precision and durability.\",\"homeCtaLabel\":\"Explore Products\",\"seoKeywords\":\"power tools,industrial,brushless,impact wrench,drill,cut-off saw\",\"footerNote\":\"High-performance professional power tools, built for global industry and manufacturing.\"}}",
+    "establishedYear": 2011,
+    "staffCount": "800+",
+    "annualRevenue": "US$50M - US$100M",
+    "mainMarkets": "欧洲、北美、南美、东南亚",
+    "responseTime": "≤4h"
   },
   "navs": [
     {
@@ -223,15 +228,17 @@
       "keywords": "new 无刷电钻 充电电钻",
       "summary": "20V 无刷平台，150Nm 扭矩，轻量化机身适合长时间举升作业。",
       "coverUrl": "/website-assets/theme/torkon/assets/tk-drill-cut.webp",
-      "imagesJson": "[\"/website-assets/theme/torkon/assets/tk-drill.webp\",\"/website-assets/theme/torkon/assets/tk-drill-rail.webp\"]",
+      "imagesJson": "[\"/website-assets/theme/torkon/assets/tk-drill.webp\", \"/website-assets/theme/torkon/assets/tk-drill-rail.webp\", \"/website-assets/theme/torkon/assets/tk-drill-cut.webp\"]",
       "priceMin": 89,
       "priceMax": 129,
-      "currency": "USD",
       "priceUnit": "piece",
       "moq": 50,
       "leadTimeDays": 15,
       "port": "上海港",
       "paymentTerms": "T/T, L/C",
+      "aliTradeJson": "{\"priceType\":\"ladder\",\"ladder\":[{\"qty\":50,\"price\":89},{\"qty\":200,\"price\":82},{\"qty\":500,\"price\":76}],\"package\":{\"length\":42,\"width\":32,\"height\":12,\"weight\":2.1,\"shippingTemplate\":\"2008472011\"},\"supply\":{\"number\":20000,\"quantityUnit\":\"Piece/Pieces\",\"timeUnit\":\"Month\"},\"logistics\":[\"battery.builtinBatteryLithium.oneLessHundredWh\"],\"sample\":{\"enabled\":true,\"maxQty\":2,\"price\":129,\"description\":\"sample ok\"},\"custom\":[{\"type\":\"Customized logo\",\"quantity\":500},{\"type\":\"Customized packaging\",\"quantity\":1000}],\"group\":[\"806382577\"],\"skuProps\":[{\"name\":\"电压\",\"values\":[\"110V\",\"220V\"]},{\"name\":\"插头\",\"values\":[\"EU\",\"US\"]}],\"skus\":[{\"props\":{\"电压\":\"110V\",\"插头\":\"EU\"},\"price\":89,\"stock\":120,\"code\":\"TKD20V-1\"},{\"props\":{\"电压\":\"220V\",\"插头\":\"EU\"},\"price\":93,\"stock\":90,\"code\":\"TKD20V-2\"}]}",
+      "certificationsJson": "[\"CE\", \"GS\", \"EMC\", \"RoHS\"]",
+      "currency": "USD",
       "specsJson": "[{\"label\":\"型号\",\"value\":\"TKD-20V\"},{\"label\":\"功率\",\"value\":\"750W\"},{\"label\":\"空载转速\",\"value\":\"1,200 RPM\"},{\"label\":\"关键特性\",\"value\":\"无刷电机 · 轻量化机身\"},{\"label\":\"应用场景\",\"value\":\"装配与维修\"}]",
       "categories": [
         {
@@ -248,15 +255,17 @@
       "keywords": "flagship 无刷冲击扳手 充电扳手",
       "summary": "旗舰机型：850Nm 最大扭矩，四档速控与 LED 照明，重载拆松一次到位。",
       "coverUrl": "/website-assets/theme/torkon/assets/tk-impact-cut.webp",
-      "imagesJson": "[\"/website-assets/theme/torkon/assets/tk-impact.webp\",\"/website-assets/theme/torkon/assets/tk-impact-rail.webp\"]",
+      "imagesJson": "[\"/website-assets/theme/torkon/assets/tk-impact.webp\", \"/website-assets/theme/torkon/assets/tk-impact-rail.webp\", \"/website-assets/theme/torkon/assets/tk-impact-cut.webp\"]",
       "priceMin": 159,
       "priceMax": 219,
-      "currency": "USD",
       "priceUnit": "piece",
       "moq": 50,
       "leadTimeDays": 15,
       "port": "上海港",
       "paymentTerms": "T/T, L/C",
+      "aliTradeJson": "{\"priceType\":\"ladder\",\"ladder\":[{\"qty\":50,\"price\":159},{\"qty\":200,\"price\":148},{\"qty\":500,\"price\":138}],\"package\":{\"length\":44,\"width\":34,\"height\":14,\"weight\":3.4,\"shippingTemplate\":\"2008472011\"},\"supply\":{\"number\":12000,\"quantityUnit\":\"Piece/Pieces\",\"timeUnit\":\"Month\"},\"logistics\":[\"battery.builtinBatteryLithium.oneLessHundredWh\"],\"sample\":{\"enabled\":true,\"maxQty\":2,\"price\":219,\"description\":\"sample ok\"},\"custom\":[{\"type\":\"Customized logo\",\"quantity\":500},{\"type\":\"Customized packaging\",\"quantity\":1000}],\"group\":[\"806382577\"],\"skuProps\":[{\"name\":\"电压\",\"values\":[\"110V\",\"220V\"]}],\"skus\":[{\"props\":{\"电压\":\"110V\"},\"price\":159,\"stock\":120,\"code\":\"TKI850-1\"},{\"props\":{\"电压\":\"220V\"},\"price\":163,\"stock\":90,\"code\":\"TKI850-2\"}]}",
+      "certificationsJson": "[\"CE\", \"GS\", \"ETL\", \"RoHS\"]",
+      "currency": "USD",
       "specsJson": "[{\"label\":\"型号\",\"value\":\"TKI-850\"},{\"label\":\"功率\",\"value\":\"1,100W\"},{\"label\":\"空载转速\",\"value\":\"2,400 RPM\"},{\"label\":\"关键特性\",\"value\":\"850Nm 扭矩 · 四档速控 · LED\"},{\"label\":\"应用场景\",\"value\":\"重载拆装\"}]",
       "categories": [
         {
@@ -273,14 +282,17 @@
       "keywords": "角磨机 切割打磨",
       "summary": "125mm 锯片，900W 电机，防振手柄让长时间切割更稳。",
       "coverUrl": "/website-assets/theme/torkon/assets/tk-grinder-cut.webp",
+      "imagesJson": "[\"/website-assets/theme/torkon/assets/tk-grinder.webp\", \"/website-assets/theme/torkon/assets/tk-grinder-rail.webp\", \"/website-assets/theme/torkon/assets/tk-grinder-cut.webp\"]",
       "priceMin": 69,
       "priceMax": 99,
-      "currency": "USD",
       "priceUnit": "piece",
       "moq": 50,
       "leadTimeDays": 15,
       "port": "上海港",
       "paymentTerms": "T/T, L/C",
+      "aliTradeJson": "{\"priceType\":\"ladder\",\"ladder\":[{\"qty\":50,\"price\":69},{\"qty\":200,\"price\":64},{\"qty\":500,\"price\":59}],\"package\":{\"length\":38,\"width\":30,\"height\":14,\"weight\":2.4,\"shippingTemplate\":\"2008472011\"},\"supply\":{\"number\":25000,\"quantityUnit\":\"Piece/Pieces\",\"timeUnit\":\"Month\"},\"logistics\":[],\"sample\":{\"enabled\":true,\"maxQty\":3,\"price\":99,\"description\":\"sample ok\"},\"custom\":[{\"type\":\"Customized logo\",\"quantity\":500},{\"type\":\"Customized packaging\",\"quantity\":1000}],\"group\":[\"806382577\"]}",
+      "certificationsJson": "[\"CE\", \"GS\", \"EN 60745\", \"RoHS\"]",
+      "currency": "USD",
       "specsJson": "[{\"label\":\"型号\",\"value\":\"TKG-125\"},{\"label\":\"功率\",\"value\":\"900W\"},{\"label\":\"空载转速\",\"value\":\"8,500 RPM\"},{\"label\":\"关键特性\",\"value\":\"防振手柄 · 防重启\"},{\"label\":\"应用场景\",\"value\":\"金属加工\"}]",
       "categories": [
         {
@@ -297,14 +309,17 @@
       "keywords": "电锤 工业建造",
       "summary": "3.6J 单击能量，SDS-Max 六角柄，混凝土钻孔与开凿两相宜。",
       "coverUrl": "/website-assets/theme/torkon/assets/tk-hammer-cut.webp",
+      "imagesJson": "[\"/website-assets/theme/torkon/assets/tk-hammer.webp\", \"/website-assets/theme/torkon/assets/tk-hammer-rail.webp\", \"/website-assets/theme/torkon/assets/tk-hammer-cut.webp\"]",
       "priceMin": 189,
       "priceMax": 249,
-      "currency": "USD",
       "priceUnit": "piece",
       "moq": 30,
       "leadTimeDays": 20,
       "port": "上海港",
       "paymentTerms": "T/T, L/C",
+      "aliTradeJson": "{\"priceType\":\"ladder\",\"ladder\":[{\"qty\":30,\"price\":189},{\"qty\":150,\"price\":176},{\"qty\":400,\"price\":165}],\"package\":{\"length\":46,\"width\":36,\"height\":16,\"weight\":4.6,\"shippingTemplate\":\"2008472011\"},\"supply\":{\"number\":8000,\"quantityUnit\":\"Piece/Pieces\",\"timeUnit\":\"Month\"},\"logistics\":[],\"sample\":{\"enabled\":true,\"maxQty\":1,\"price\":249,\"description\":\"sample ok\"},\"custom\":[{\"type\":\"Customized logo\",\"quantity\":500},{\"type\":\"Customized packaging\",\"quantity\":1000}],\"group\":[\"806382577\"]}",
+      "certificationsJson": "[\"CE\", \"GS\", \"ETL\", \"RoHS\"]",
+      "currency": "USD",
       "specsJson": "[{\"label\":\"型号\",\"value\":\"TKH-36S\"},{\"label\":\"功率\",\"value\":\"1,300W\"},{\"label\":\"空载转速\",\"value\":\"620 RPM\"},{\"label\":\"关键特性\",\"value\":\"3.6J 单击能量 · 减振框架\"},{\"label\":\"应用场景\",\"value\":\"混凝土施工\"}]",
       "categories": [
         {
@@ -321,14 +336,17 @@
       "keywords": "圆锯 切割工具",
       "summary": "185mm 锯片，1,400W 电机，0-50° 斜切满足木工与钢结构下料。",
       "coverUrl": "/website-assets/theme/torkon/assets/tk-saw-cut.webp",
+      "imagesJson": "[\"/website-assets/theme/torkon/assets/tk-flagship.webp\", \"/website-assets/theme/torkon/assets/tk-factory-1.webp\"]",
       "priceMin": 119,
       "priceMax": 159,
-      "currency": "USD",
       "priceUnit": "piece",
       "moq": 50,
       "leadTimeDays": 15,
       "port": "上海港",
       "paymentTerms": "T/T, L/C",
+      "aliTradeJson": "{\"priceType\":\"ladder\",\"ladder\":[{\"qty\":50,\"price\":119},{\"qty\":200,\"price\":111},{\"qty\":500,\"price\":104}],\"package\":{\"length\":40,\"width\":32,\"height\":15,\"weight\":3.8,\"shippingTemplate\":\"2008472011\"},\"supply\":{\"number\":15000,\"quantityUnit\":\"Piece/Pieces\",\"timeUnit\":\"Month\"},\"logistics\":[],\"sample\":{\"enabled\":true,\"maxQty\":2,\"price\":159,\"description\":\"sample ok\"},\"custom\":[{\"type\":\"Customized logo\",\"quantity\":500},{\"type\":\"Customized packaging\",\"quantity\":1000}],\"group\":[\"806382577\"]}",
+      "certificationsJson": "[\"CE\", \"GS\", \"ETL\", \"RoHS\"]",
+      "currency": "USD",
       "specsJson": "[{\"label\":\"型号\",\"value\":\"TKCS-185\"},{\"label\":\"功率\",\"value\":\"1,400W\"},{\"label\":\"空载转速\",\"value\":\"5,200 RPM\"},{\"label\":\"关键特性\",\"value\":\"0-50° 斜切 · 铝质底板\"},{\"label\":\"应用场景\",\"value\":\"木工与钢结构\"}]",
       "categories": [
         {
@@ -338,6 +356,128 @@
       "author": "外贸部",
       "content": "<p>TKCS-185 以 1,400W 直流电机驱动 185mm 硬质合金锯片，铝质底板与 0-50° 斜切机构兼顾精度与耐用。</p>",
       "i18nJson": "{\"en-US\":{\"title\":\"TKCS-185 Circular Saw\",\"keywords\":\"circular saw cutting tools\",\"summary\":\"185mm blade, 1,400W motor and 0-50° bevel for carpentry and structural steel.\",\"content\":\"<p>The TKCS-185 drives a 185mm carbide blade with a 1,400W motor; the aluminium base and 0-50° bevel mechanism balance precision and durability.</p>\"}}"
+    }
+  ],
+  "reviews": [
+    {
+      "productSlug": "tkd-20v",
+      "author": "Jonas Weber",
+      "country": "德国",
+      "rating": 5,
+      "verified": true,
+      "quantity": "600 pcs",
+      "daysAgo": 12,
+      "content": "第五次返单了。批次一致性很好，20V 电池和去年那批能通用，终端客户没投诉过接口松动。"
+    },
+    {
+      "productSlug": "tkd-20v",
+      "author": "Marco Rossi",
+      "country": "意大利",
+      "rating": 5,
+      "verified": true,
+      "quantity": "240 pcs",
+      "daysAgo": 38,
+      "content": "150Nm 拧木结构螺栓完全不费劲，机身比同类轻 200 克左右。彩盒印刷按我们的设计做的，色彩偏差很小。"
+    },
+    {
+      "productSlug": "tkd-20v",
+      "author": "Tom Baker",
+      "country": "英国",
+      "rating": 4,
+      "verified": true,
+      "quantity": "120 pcs",
+      "daysAgo": 77,
+      "content": "工具本身没问题，就是 EU 插头版本发货时混了两箱 UK，补发很快，三天就到了。"
+    },
+    {
+      "productSlug": "tki-850",
+      "author": "Diego Alvarez",
+      "country": "西班牙",
+      "rating": 5,
+      "verified": true,
+      "quantity": "300 pcs",
+      "daysAgo": 21,
+      "content": "850Nm 拆卡车轮胎螺母基本一枪一个，四档限扭对修理厂很实用。LED 位置照得准。"
+    },
+    {
+      "productSlug": "tki-850",
+      "author": "Erik Johansson",
+      "country": "瑞典",
+      "rating": 5,
+      "verified": true,
+      "quantity": "180 pcs",
+      "daysAgo": 49,
+      "content": "北欧冬天在户外用，低温下电池衰减比预期小。整批做了 ETL 认证文件，清关没被卡。"
+    },
+    {
+      "productSlug": "tki-850",
+      "author": "Ben Carter",
+      "country": "美国",
+      "rating": 4,
+      "verified": true,
+      "quantity": "90 pcs",
+      "daysAgo": 95,
+      "content": "扭矩够，重量略压手，长时间举着干活会累。配件包里应该再加一个加长杆。"
+    },
+    {
+      "productSlug": "tkg-125",
+      "author": "Paulo Silva",
+      "country": "巴西",
+      "rating": 4,
+      "verified": true,
+      "quantity": "1200 pcs",
+      "daysAgo": 33,
+      "content": "价格有竞争力，防振手柄效果明显。有一台碳刷磨损偏快，寄了视频过去，直接补发了一台新的。"
+    },
+    {
+      "productSlug": "tkg-125",
+      "author": "Anna Kowalska",
+      "country": "波兰",
+      "rating": 5,
+      "verified": true,
+      "quantity": "500 pcs",
+      "daysAgo": 68,
+      "content": "125mm 切割片通用性好，900W 切不锈钢管不掉速。包装改成吸塑后运输破损率从 3% 降到 0。"
+    },
+    {
+      "productSlug": "tkh-36s",
+      "author": "Hassan Karim",
+      "country": "阿联酋",
+      "rating": 4,
+      "verified": true,
+      "quantity": "150 pcs",
+      "daysAgo": 27,
+      "content": "3.6J 打混凝土梁很轻松，减振框架确实降低手部疲劳。SDS-Max 钻头我们本地配的，接口完全对得上。"
+    },
+    {
+      "productSlug": "tkh-36s",
+      "author": "Sven Nilsson",
+      "country": "瑞典",
+      "rating": 5,
+      "verified": true,
+      "quantity": "80 pcs",
+      "daysAgo": 73,
+      "content": "开凿模式效率高，连续作业半小时机壳温度还可以。说明书多语言里有瑞典语，施工队看得懂。"
+    },
+    {
+      "productSlug": "tkcs-185",
+      "author": "Lucas Meyer",
+      "country": "德国",
+      "rating": 5,
+      "verified": true,
+      "quantity": "260 pcs",
+      "daysAgo": 17,
+      "content": "0-50° 斜切调节很顺，铝底板不生锈。木工客户反馈锯路直，配的锯片质量超出这个价位。"
+    },
+    {
+      "productSlug": "tkcs-185",
+      "author": "Ivan Petrov",
+      "country": "保加利亚",
+      "rating": 4,
+      "verified": true,
+      "quantity": "140 pcs",
+      "daysAgo": 60,
+      "content": "整机做工扎实，电源线略短，两米半在工地有时不够。其余都满意，返单已下。"
     }
   ]
 }

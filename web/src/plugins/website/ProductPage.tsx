@@ -496,6 +496,8 @@ function ProductFormBody({
   const [freightAmount, setFreightAmount] = useState(editing?.freightAmount ? String(editing.freightAmount) : '')
   const [port, setPort] = useState(editing?.port ?? '')
   const [paymentTerms, setPaymentTerms] = useState(editing?.paymentTerms ?? '')
+  // 认证资质：库里是 JSON 数组，表单里一行逗号分隔（CE, UL 1973, UN38.3）
+  const [certifications, setCertifications] = useState(() => parseCertifications(editing?.certificationsJson))
   const portOptions = usePortOptions()
   const paymentTermOptions = usePaymentTermOptions()
   const [specs, setSpecs] = useState<ProductSpec[]>(() => safeParseSpecs(editing?.specsJson))
@@ -559,6 +561,7 @@ function ProductFormBody({
           freightAmount: parseNum(freightAmount),
           port,
           paymentTerms,
+          certifications: splitCertifications(certifications),
           specs: specs.filter((sp) => sp.label.trim() || sp.value.trim()),
           aliTrade,
           categoryIds: catIds,
@@ -745,6 +748,16 @@ function ProductFormBody({
               options={paymentTermOptions}
               multiple
               placeholder="T/T, L/C"
+              disabled={sharedDisabled}
+            />
+          </SharedFieldShell>
+          {/* 认证资质不做固定下拉：各行业认证差异大（CE/UL/UN38.3/IEC/ISO/FCC…），
+              运营直接写名字，详情页按名称自动配图标 */}
+          <SharedFieldShell labelKey="plugin_website.product.certifications" hint={t('plugin_website.hint.certifications')}>
+            <Input
+              value={certifications}
+              onChange={(e) => setCertifications(e.target.value)}
+              placeholder="CE, UL 1973, UN38.3, ISO 9001"
               disabled={sharedDisabled}
             />
           </SharedFieldShell>
@@ -1549,6 +1562,22 @@ function safeParseArray(raw?: string): string[] {
   } catch {
     return []
   }
+}
+
+/** 认证清单在库里是 JSON 数组文本，表单里编成一个逗号分隔的输入框；坏数据原样显示。 */
+function parseCertifications(raw?: string): string {
+  if (!raw) return ''
+  try {
+    const out = JSON.parse(raw)
+    return Array.isArray(out) ? out.map((x) => String(x)).join(', ') : ''
+  } catch {
+    return raw
+  }
+}
+
+/** 逗号（中英文）、顿号、分号都当分隔符，与服务端 normalizeCertifications 同口径。 */
+function splitCertifications(v: string): string[] {
+  return v.split(/[,，、;；]/).map((s) => s.trim()).filter(Boolean)
 }
 
 function safeParseSpecs(raw?: string): ProductSpec[] {

@@ -486,6 +486,20 @@ func (h *siteHandler) productsList(c *gin.Context) {
 	// 折树放在 href 填完之后：Children 是结构体拷贝，链接跟着一起带过去，
 	// 不用在树里再拼一遍查询串。
 	v.ProductCategoryTree = NestProductCategories(v.ProductCategories)
+	// 列表卡评分：一次批量算（对标阿里搜索结果卡的星级），查失败只是不显示星级，
+	// 不挡列表主内容。
+	ids := make([]int64, 0, len(products))
+	for i := range products {
+		ids = append(ids, int64(products[i].ID))
+	}
+	if ratings, rerr := h.svc.ProductRatingSummaries(ctx, ids); rerr == nil {
+		for i := range products {
+			if r, ok := ratings[int64(products[i].ID)]; ok {
+				products[i].RatingAvg = r.Avg
+				products[i].RatingCount = r.Count
+			}
+		}
+	}
 	v.Products = products
 	v.ProductsTotal = int(total)
 	v.ProductsPage, v.ProductsTotalPages = pageOf(page), pagesOf(total, productsPageSize)
