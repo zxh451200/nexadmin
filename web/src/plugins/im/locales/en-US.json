@@ -107,13 +107,17 @@
       "confirm": "Delete conversation {{no}}? Its messages and attachments will be deleted too, and this cannot be undone."
     },
     "batch": {
-      "selectAllClosed": "Select all closed",
       "delete": "Delete selected",
       "deleteTitle": "Delete conversations",
       "deleteConfirm": "Delete the selected {{count}} conversations? Their messages and attachments will be deleted too, and this cannot be undone.",
       "deleted": "Deleted {{count}} conversation(s)",
       "skipped": "{{count}} open conversation(s) were skipped",
-      "onlyClosed": "Only closed conversations can be deleted"
+      "selectAll": "Select all actionable ({{count}})",
+      "close": "Close selected",
+      "closeTitle": "Close conversations",
+      "closeConfirm": "Close {{count}} open conversations? Visitors will start a new conversation when they message again.",
+      "closed": "Closed {{count}} conversations",
+      "closeSkipped": "{{count}} conversations changed state and were skipped"
     },
     "notify": {
       "on": "Desktop alerts on",
@@ -129,7 +133,8 @@
       "manage": "Manage quick replies",
       "empty": "No quick replies yet",
       "name": "Title, e.g. Greeting",
-      "content": "Reply content"
+      "content": "Reply content",
+      "deleteConfirm": "Delete quick reply \"{{name}}\"?"
     },
     "senders": {
       "visitor": "Visitor",
@@ -174,6 +179,7 @@
     "pickConversationTitle": "Select a conversation",
     "today": "Today",
     "yesterday": "Yesterday",
+    "earlier": "Earlier",
     "bizRef": "Business reference {{no}}"
   }
 }

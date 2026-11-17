@@ -35,7 +35,7 @@ import { Checkbox } from '@/framework/ui/checkbox'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/framework/ui/dropdown-menu'
 import { Input } from '@/framework/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/framework/ui/popover'
-import { Switch } from '@/framework/ui/switch'
+import { SwitchRow } from '@/framework/components/SwitchField'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/framework/ui/tabs'
 import { Textarea } from '@/framework/ui/textarea'
 import { cn } from '@/lib/utils'
@@ -132,7 +132,7 @@ function notifyDesktop(title: string, body: string) {
 export default function ImPage() {
   const { t } = useTranslation()
   const confirm = useConfirm()
-  const { isSuper } = usePermission()
+  const { isSuper, has } = usePermission()
   const [params, setParams] = useSearchParams()
   // 站内信深链：/im/conversations?conv=IMxxx 直接打开对应会话。
   const linkedConv = params.get('conv') || undefined
@@ -295,7 +295,7 @@ export default function ImPage() {
       await send.mutateAsync({ convNo: selected, content })
       await refresh()
     } catch {
-      toast.error(t('common.operateFailed'))
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -307,7 +307,7 @@ export default function ImPage() {
       await send.mutateAsync({ convNo: selected, content: '', attachmentToken: att.token })
       await refresh()
     } catch {
-      toast.error(t('plugin_im.uploadFailed'))
+      // 失败原因由 http 拦截器统一弹出
     } finally {
       setUploading(false)
     }
@@ -319,7 +319,7 @@ export default function ImPage() {
       await refresh()
       toast.success(t('common.operateSuccess'))
     } catch {
-      toast.error(t('common.operateFailed'))
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -330,7 +330,7 @@ export default function ImPage() {
         await refresh()
         toast.success(t('common.operateSuccess'))
       } catch {
-        toast.error(t('common.operateFailed'))
+        // 失败原因由 http 拦截器统一弹出
       }
     }
   }
@@ -341,7 +341,7 @@ export default function ImPage() {
       await refresh()
       toast.success(t('common.operateSuccess'))
     } catch {
-      toast.error(t('common.operateFailed'))
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -352,7 +352,7 @@ export default function ImPage() {
       toast.success(t('common.operateSuccess'))
       return true
     } catch {
-      toast.error(t('common.operateFailed'))
+      // 失败原因由 http 拦截器统一弹出
       return false
     }
   }
@@ -364,7 +364,7 @@ export default function ImPage() {
       toast.success(t('common.operateSuccess'))
       return true
     } catch {
-      toast.error(t('common.operateFailed'))
+      // 失败原因由 http 拦截器统一弹出
       return false
     }
   }
@@ -377,7 +377,7 @@ export default function ImPage() {
       if (selected === c.convNo) setSelected(undefined)
       toast.success(t('common.operateSuccess'))
     } catch {
-      toast.error(t('common.operateFailed'))
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -396,7 +396,7 @@ export default function ImPage() {
         }),
       )
     } catch {
-      toast.error(t('common.operateFailed'))
+      // 创建失败的原因由 http 拦截器统一弹出
     } finally {
       setExporting(false)
     }
@@ -407,7 +407,7 @@ export default function ImPage() {
       await recall.mutateAsync({ convNo: c.convNo, seq: m.seq })
       await refresh()
     } catch {
-      toast.error(t('plugin_im.recallFailed'))
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -419,7 +419,7 @@ export default function ImPage() {
       toast.success(t('common.operateSuccess'))
       return true
     } catch {
-      toast.error(t('common.operateFailed'))
+      // 失败原因由 http 拦截器统一弹出
       return false
     }
   }
@@ -431,10 +431,20 @@ export default function ImPage() {
   // 追加式加载更多让总数与位置永远不可见。
   const pages = Math.max(1, Math.ceil(total / CONV_PAGE_SIZE))
 
-  // 批量删除沿用单条删除的口径：超管、且只有已结束的会话可删（进行中的后端会跳过，勾上也是白勾）。
+  // 勾选 = 批量操作的选择器，不是「删除」的附属品：
+  // - 进行中的会话可批量关闭（im:edit）——进行中占绝大多数，勾选框不能对这些行是死的；
+  // - 已结束的会话可批量删除（超管，消息与附件一并删，不可逆）。
+  // 行的可操作性按状态分别判断；删除沿用单条删除的口径（后端对进行中的会话会跳过）。
   const canPick = isSuper
+  const canCloseBatch = has('im:edit')
+  const canBatch = canPick || canCloseBatch
   const deletable = list.filter((c) => c.status === 'closed').map((c) => c.convNo)
-  const allPicked = deletable.length > 0 && deletable.every((no) => picked.includes(no))
+  const selectableNos = list
+    .filter((c) => (c.status === 'open' ? canCloseBatch : canPick))
+    .map((c) => c.convNo)
+  const pickedOpen = picked.filter((no) => list.some((c) => c.convNo === no && c.status === 'open'))
+  const pickedClosed = picked.filter((no) => deletable.includes(no))
+  const allPicked = selectableNos.length > 0 && selectableNos.every((no) => picked.includes(no))
 
   // 会话被删掉或翻页移出视野时同步收掉勾选项，别让看不见的会话留在待删清单里。
   useEffect(() => {
@@ -478,8 +488,38 @@ export default function ImPage() {
   const togglePicked = (convNo: string, on: boolean) =>
     setPicked((p) => (on ? [...new Set([...p, convNo])] : p.filter((x) => x !== convNo)))
 
+  // 批量关闭进行中的会话（im:edit）：确认一次，逐条调用单个关闭（后端幂等，
+  // 状态已变化的行自然失败），结束后统一回报成功与跳过数。
+  const [closingBatch, setClosingBatch] = useState(false)
+  const onClosePicked = async () => {
+    const nos = [...pickedOpen]
+    if (nos.length === 0) return
+    if (
+      !(await confirm({
+        destructive: true,
+        title: t('plugin_im.batch.closeTitle'),
+        description: t('plugin_im.batch.closeConfirm', { count: nos.length }),
+      }))
+    )
+      return
+    setClosingBatch(true)
+    try {
+      const results = await Promise.allSettled(nos.map((no) => close.mutateAsync(no)))
+      const ok = results.filter((r) => r.status === 'fulfilled').length
+      const skipped = nos.length - ok
+      await convs.refetch()
+      setPicked([])
+      if (ok > 0) toast.success(t('plugin_im.batch.closed', { count: ok }))
+      if (skipped > 0) toast.warning(t('plugin_im.batch.closeSkipped', { count: skipped }))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
+    } finally {
+      setClosingBatch(false)
+    }
+  }
+
   const onDeletePicked = async () => {
-    const nos = [...picked]
+    const nos = pickedClosed
     if (nos.length === 0) return
     if (
       !(await confirm({
@@ -496,7 +536,7 @@ export default function ImPage() {
       toast.success(t('plugin_im.batch.deleted', { count: res.deleted }))
       if (res.skipped.length > 0) toast.warning(t('plugin_im.batch.skipped', { count: res.skipped.length }))
     } catch {
-      toast.error(t('common.operateFailed'))
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -534,11 +574,28 @@ export default function ImPage() {
         </div>
         <TabsContent value="workbench">
       {/* 分栏几何与工单中心同款（24rem 列 + 桌面定高 + 移动端左栏限高）：两套坐席工作台并排打开不会互相打架。
-          17rem = 顶部栏+页签条+页头+「会话/统计」页签行+间距；两处常量必须同步改 */}
-      <div className="grid h-auto min-h-96 grid-cols-1 gap-4 md:h-[calc(100vh-17rem)] md:min-h-144 md:grid-cols-[24rem_1fr]">
-        {/* relative 是浮动 BatchBar（absolute）的定位锚：批量条贴卡片底边，不挤压内部滚动列表（与工单队列同款） */}
-        <Card className="relative flex max-h-128 min-h-0 flex-col gap-2 p-2 md:max-h-none">
-          <div className="flex flex-wrap items-center gap-2">
+          17rem = 顶部栏+页签条+页头+「会话/统计」页签行+间距；两处常量必须同步改。
+          整块工作台合成一张卡、栏间用发丝线分隔（学 Studio Chat 的「应用面板」骨架）：
+          深色下两张圆角卡漂浮的仪表盘感会稀释对话流的沉浸感 */}
+      <Card className="grid h-auto min-h-96 grid-cols-1 overflow-hidden md:h-[calc(100vh-17rem)] md:min-h-144 md:grid-cols-[24rem_1fr]">
+        {/* relative 是浮动 BatchBar（absolute）的定位锚：批量条贴左栏底边，不挤压内部滚动列表（与工单队列同款） */}
+        <div className="relative flex max-h-128 min-h-0 flex-col gap-2 p-2 md:max-h-none">
+          {/* 状态是最高频的切换：学 Studio Chat 收件箱把 All/Open/Closed 做成段选页签常驻，
+              筛选弹层只留低频的归属维度。状态 chips 仍生效——点 chip 撤销与点页签等价 */}
+          <Tabs value={status ?? ALL} onValueChange={(v) => setStatus(v === ALL ? undefined : v)}>
+            <TabsList className="w-full">
+              <TabsTrigger value={ALL} className="flex-1">
+                {t('plugin_im.all')}
+              </TabsTrigger>
+              <TabsTrigger value="open" className="flex-1">
+                {t('plugin_im.status.open')}
+              </TabsTrigger>
+              <TabsTrigger value="closed" className="flex-1">
+                {t('plugin_im.status.closed')}
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <div className="flex items-center gap-2">
             <Input
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
@@ -546,7 +603,7 @@ export default function ImPage() {
               aria-label={t('common.keyword')}
               className="min-w-32 flex-1"
             />
-            {/* 筛选收进弹层、选中的显示成 chips：与工单中心同一套（24rem 窄栏铺不下几个常驻控件） */}
+            {/* 低频筛选收进弹层、选中的显示成 chips：与工单中心同一套（24rem 窄栏铺不下几个常驻控件） */}
             <Popover open={filtersOpen} onOpenChange={setFiltersOpen}>
               <PopoverTrigger asChild>
                 <Button variant="outline" className="h-10 shrink-0 md:h-9">
@@ -564,18 +621,6 @@ export default function ImPage() {
                 </Button>
               </PopoverTrigger>
               <PopoverContent align="end" className="w-72 space-y-2">
-                <SimpleSelect
-                  aria-label={t('plugin_im.fields.status')}
-                  label={t('plugin_im.fields.status')}
-                  className="w-full"
-                  value={status ?? ALL}
-                  onChange={(v) => setStatus(v === ALL ? undefined : v)}
-                  options={[
-                    { value: ALL, label: t('plugin_im.all') },
-                    { value: 'open', label: t('plugin_im.status.open') },
-                    { value: 'closed', label: t('plugin_im.status.closed') },
-                  ]}
-                />
                 <SimpleSelect
                   aria-label={t('plugin_im.fields.assignee')}
                   label={t('plugin_im.fields.assignee')}
@@ -625,52 +670,79 @@ export default function ImPage() {
               ))}
             </div>
           ) : null}
-          {canPick && deletable.length > 0 ? (
-            // 全选框 = 表格的全选列头：只在有可删的已结束会话时出现（没有的话这行纯属占位），
-            // 勾选框与行内勾选框左对齐（行内是 ps-2 + px-1.5，同为 14px）；文案带上可删数量。
-            // 删除动作下沉到浮动 BatchBar，与工单队列同一套。
+          {canBatch && selectableNos.length > 0 ? (
+            // 全选框 = 表格的全选列头：只要存在可操作的会话就出现；「可操作」按权限与状态
+            // 分别判断（进行中→关闭，已结束→超管删除），勾选框与行内勾选框左对齐
+            //（行内是 ps-2 + px-1.5，同为 14px）。动作下沉到浮动 BatchBar，与工单队列同一套。
             <div className="flex items-center gap-2 border-b pb-1.5 pt-0.5">
               <span className="flex shrink-0 items-center ps-2">
                 <span className="px-1.5">
                   <Checkbox
                     id="im-pick-all"
                     checked={allPicked ? true : picked.length > 0 ? 'indeterminate' : false}
-                    onCheckedChange={(v) => setPicked(v === true ? deletable : [])}
+                    onCheckedChange={(v) => setPicked(v === true ? selectableNos : [])}
                   />
                 </span>
               </span>
               <label htmlFor="im-pick-all" className="min-w-0 flex-1 cursor-pointer truncate text-xs text-muted-foreground">
-                {t('plugin_im.batch.selectAllClosed')}（{deletable.length}）
+                {t('plugin_im.batch.selectAll', { count: selectableNos.length })}
               </label>
             </div>
           ) : null}
           {picked.length > 0 ? (
             <BatchBar count={picked.length} onClear={() => setPicked([])} mode="absolute">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="text-destructive"
-                disabled={deleteConvs.isPending}
-                onClick={() => void onDeletePicked()}
-              >
-                <Trash2 aria-hidden="true" />
-                {t('plugin_im.batch.delete')}
-              </Button>
+              {canCloseBatch && pickedOpen.length > 0 ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={closingBatch}
+                  onClick={() => void onClosePicked()}
+                >
+                  <Ban aria-hidden="true" />
+                  {t('plugin_im.batch.close')}（{pickedOpen.length}）
+                </Button>
+              ) : null}
+              {canPick && pickedClosed.length > 0 ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="text-destructive"
+                  disabled={deleteConvs.isPending}
+                  onClick={() => void onDeletePicked()}
+                >
+                  <Trash2 aria-hidden="true" />
+                  {t('plugin_im.batch.delete')}（{pickedClosed.length}）
+                </Button>
+              ) : null}
             </BatchBar>
           ) : null}
           <div className="min-h-0 flex-1 overflow-y-auto">
-            {list.map((c) => (
-              <ConvListItem
-                key={c.id}
-                conv={c}
-                active={c.convNo === selected}
-                canPick={canPick}
-                picked={picked.includes(c.convNo)}
-                onTogglePick={(on) => togglePicked(c.convNo, on)}
-                onSelect={() => setSelected(c.convNo)}
-              />
-            ))}
+            {CONV_GROUPS.map((g) => {
+              const rows = list.filter((c) => convGroupOf(c) === g)
+              if (rows.length === 0) return null
+              return (
+                <div key={g}>
+                  {/* 粘性节头：滚动时分节名一直可见，和 Studio Chat 的 Today 组头同一行为 */}
+                  <div className="sticky top-0 z-10 bg-card/95 px-2 py-1.5 text-[11px] font-medium text-muted-foreground backdrop-blur">
+                    {g === 'today' ? t('plugin_im.today') : g === 'yesterday' ? t('plugin_im.yesterday') : t('plugin_im.earlier')}
+                  </div>
+                  {rows.map((c) => (
+                    <ConvListItem
+                      key={c.id}
+                      conv={c}
+                      active={c.convNo === selected}
+                      selectable={c.status === 'open' ? canCloseBatch : canPick}
+                      canBatch={canBatch}
+                      picked={picked.includes(c.convNo)}
+                      onTogglePick={(on) => togglePicked(c.convNo, on)}
+                      onSelect={() => setSelected(c.convNo)}
+                    />
+                  ))}
+                </div>
+              )
+            })}
             {!convs.isLoading && list.length === 0 ? <EmptyState title={t('plugin_im.empty')} className="py-8" /> : null}
           </div>
           {/* 批量模式下分页让位给悬浮 BatchBar：勾选时翻页无意义，两者又共享卡片底边会互相压住 */}
@@ -700,7 +772,7 @@ export default function ImPage() {
               </div>
             </div>
           ) : null}
-        </Card>
+        </div>
 
         <ChatPane
           conv={chat.conv}
@@ -724,7 +796,7 @@ export default function ImPage() {
           onMerge={onMerge}
           canDelete={isSuper}
         />
-      </div>
+      </Card>
         </TabsContent>
         <TabsContent value="stats">
           <StatsPanel />
@@ -736,18 +808,33 @@ export default function ImPage() {
   )
 }
 
+const CONV_GROUPS = ['today', 'yesterday', 'earlier'] as const
+
+/** 列表按最后消息时间分节（学 Studio Chat 的 Pinned/Today 组头节奏）；没有消息的归入「更早」。 */
+function convGroupOf(c: ImConversation): (typeof CONV_GROUPS)[number] {
+  if (!c.lastMsgAt) return 'earlier'
+  const d = new Date(c.lastMsgAt)
+  if (Number.isNaN(d.getTime())) return 'earlier'
+  const start = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime()
+  const days = Math.round((start(new Date()) - start(d)) / 86_400_000)
+  return days <= 0 ? 'today' : days === 1 ? 'yesterday' : 'earlier'
+}
+
 function ConvListItem({
   conv,
   active,
-  canPick,
+  selectable,
+  canBatch,
   picked,
   onTogglePick,
   onSelect,
 }: {
   conv: ImConversation
   active: boolean
-  /** 只有超管看得到勾选框 */
-  canPick: boolean
+  /** 这一行能否勾选：进行中（im:edit 可批量关闭）或已结束（超管可批量删除） */
+  selectable: boolean
+  /** 用户是否有任何批量能力（决定勾选列是否存在） */
+  canBatch: boolean
   picked: boolean
   onTogglePick: (on: boolean) => void
   onSelect: () => void
@@ -789,18 +876,19 @@ function ConvListItem({
       </span>
     </>
   )
-  const checkbox = canPick ? (
+  const checkbox = canBatch ? (
     // 勾选列等高热区：label 纵向撑满整行（QueueRow 的勾选列已 items-stretch），
-    // 横向再各留 6px——不重叠相邻行，也不压住行按钮
+    // 横向再各留 6px——不重叠相邻行，也不压住行按钮。
+    // 不可操作的行渲染禁用勾选框保持列对齐，不给「只有已结束的会话可删除」这类
+    // 误导提示——勾选的语义是批量操作（关闭/删除），禁用只出现在权限够不上的组合里
     <label
-      htmlFor={cbId}
-      className="flex cursor-pointer items-center px-1.5"
-      title={conv.status === 'closed' ? undefined : t('plugin_im.batch.onlyClosed')}
+      htmlFor={selectable ? cbId : undefined}
+      className={cn('flex items-center px-1.5', selectable ? 'cursor-pointer' : 'cursor-not-allowed opacity-40')}
     >
       <Checkbox
-        id={cbId}
+        id={selectable ? cbId : undefined}
         checked={picked}
-        disabled={conv.status !== 'closed'}
+        disabled={!selectable}
         aria-label={visitor}
         onCheckedChange={(v) => onTogglePick(v === true)}
       />
@@ -970,16 +1058,17 @@ function ChatPane({
   }, [messages.length, conv?.convNo])
 
   if (!conv) {
-    // 移动端会话列表在上方，空态文案不提「左侧」
+    // 移动端会话列表在上方，空态文案不提「左侧」。
+    // 合并卡后聊天栏自带分栏线：移动端纵向 border-t，桌面横向 border-s
     return (
-      <Card className="flex items-center justify-center">
+      <div className="flex min-h-0 flex-col items-center justify-center border-t md:border-t-0 md:border-s">
         <EmptyState
           icon={<MessagesSquare aria-hidden="true" className="size-6" />}
           title={t('plugin_im.pickConversationTitle')}
           description={t(isMobile ? 'plugin_im.pickConversationMobile' : 'plugin_im.pickConversation')}
           className="py-16"
         />
-      </Card>
+      </div>
     )
   }
 
@@ -1000,7 +1089,8 @@ function ChatPane({
   }
 
   return (
-    <Card className="flex min-h-0 flex-col">
+    // 合并卡后的聊天栏：自带分栏发丝线（移动端 border-t、桌面 border-s），不再是独立圆角卡
+    <div className="flex min-h-0 flex-col border-t md:border-t-0 md:border-s">
       <div className="flex flex-wrap items-center gap-2 border-b px-4 py-2">
         <Avatar className="size-9 shrink-0">
           <AvatarFallback className="text-xs">{initials(conv.visitorName || conv.visitorToken)}</AvatarFallback>
@@ -1031,13 +1121,14 @@ function ChatPane({
               </Button>
             )}
           </Can>
-          {/* 管理类动作收进「更多」：铺开成六七个纯图标按钮既没人看得懂，也把会话信息挤没了 */}
+          {/* 管理类动作收进「更多」：铺开成六七个纯图标按钮既没人看得懂，也把会话信息挤没了。
+              头部按钮学 Studio Chat 全部图标化（tooltip 由 Button 的 aria-label 自动带出），
+              只有「认领/释放」保留文字——它是坐席最常用的主动作，图标语义太弱 */}
           {showMoreMenu ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm">
+                <Button variant="ghost" size="icon" aria-label={t('common.more')}>
                   <Ellipsis aria-hidden="true" />
-                  {t('common.more')}
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="min-w-44">
@@ -1072,9 +1163,8 @@ function ChatPane({
           ) : null}
           {conv.status === 'open' ? (
             <Can perm="im:edit">
-              <Button variant="outline" size="sm" onClick={() => onClose(conv)}>
+              <Button variant="ghost" size="icon" aria-label={t('plugin_im.close')} onClick={() => onClose(conv)}>
                 <Ban aria-hidden="true" />
-                {t('plugin_im.close')}
               </Button>
             </Can>
           ) : (
@@ -1149,7 +1239,7 @@ function ChatPane({
         </div>
       ) : null}
 
-      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-4">
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
         {hasMore ? (
           <div className="text-center">
             <Button variant="ghost" size="sm" onClick={onLoadOlder}>
@@ -1170,6 +1260,12 @@ function ChatPane({
               label={day.kind === 'today' ? t('plugin_im.today') : day.kind === 'yesterday' ? t('plugin_im.yesterday') : day.text}
             />
           ) : null
+          // 同一天里组与组隔了 5 分钟以上，补一条居中时间：学 Studio Chat 用节奏替代逐条时间戳
+          const gapClock =
+            !newDay &&
+            !!prev &&
+            prev.kind !== 'system' &&
+            new Date(m.createdAt).getTime() - new Date(prev.createdAt).getTime() > 300_000
           if (m.kind === 'system') {
             return (
               <Fragment key={m.id}>
@@ -1199,6 +1295,11 @@ function ChatPane({
           return (
             <Fragment key={m.id}>
               {separator}
+              {gapClock ? (
+                <div className="py-0.5 text-center text-[11px] text-muted-foreground" title={formatTime(m.createdAt, i18n.language)}>
+                  {formatClock(m.createdAt, i18n.language)}
+                </div>
+              ) : null}
               <div className={cn('flex items-end gap-2', mine ? 'flex-row-reverse' : 'flex-row')}>
                 {groupStart ? (
                   <Avatar className="mb-0.5 size-7 shrink-0" aria-hidden="true">
@@ -1276,7 +1377,7 @@ function ChatPane({
       {conv.status === 'open' ? (
         <Can perm="im:reply">
           <form
-            className="flex items-end gap-2 border-t p-3"
+            className="border-t p-3"
             onSubmit={(e) => {
               e.preventDefault()
               submit()
@@ -1293,42 +1394,52 @@ function ChatPane({
                 if (file) onUploadFile(file)
               }}
             />
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              disabled={uploading}
-              onClick={() => fileRef.current?.click()}
-              aria-label={t('plugin_im.attach')}
-              title={t('plugin_im.attach')}
-            >
-              <Paperclip aria-hidden="true" />
-            </Button>
-            <QuickReplyPicker
-              onPick={(content) => {
-                setDraft((prev) => (prev ? `${prev}\n${content}` : content))
-                inputRef.current?.focus()
-              }}
-            />
-            <Textarea
-              ref={inputRef}
-              value={draft}
-              onChange={(e) => onChangeDraft(e.target.value)}
-              placeholder={t('plugin_im.replyPlaceholder')}
-              aria-label={t('plugin_im.replyPlaceholder')}
-              rows={1}
-              className="max-h-32 min-h-10 flex-1 resize-none py-2"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-                  e.preventDefault()
-                  submit()
-                }
-              }}
-            />
-            <Button type="submit" disabled={sending || !draft.trim()}>
-              <Send aria-hidden="true" />
-              {t('plugin_im.send')}
-            </Button>
+            {/* 输入卡学 Studio Chat 的 composer：无边框输入区铺满卡片，工具行沉到底部，
+                发送键收成圆形主按钮；focus-within 时整卡描边亮起，替代 textarea 自己的 ring */}
+            <div className="flex flex-col gap-1 rounded-xl border border-input bg-background px-2.5 py-2 transition-colors focus-within:border-ring dark:border-input dark:bg-input/30">
+              <Textarea
+                ref={inputRef}
+                value={draft}
+                onChange={(e) => onChangeDraft(e.target.value)}
+                placeholder={t('plugin_im.replyPlaceholder')}
+                aria-label={t('plugin_im.replyPlaceholder')}
+                rows={2}
+                className="max-h-32 min-h-10 resize-none border-0 bg-transparent p-1 shadow-none focus-visible:ring-0"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                    e.preventDefault()
+                    submit()
+                  }
+                }}
+              />
+              <div className="flex items-center gap-0.5">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  disabled={uploading}
+                  onClick={() => fileRef.current?.click()}
+                  aria-label={t('plugin_im.attach')}
+                >
+                  <Paperclip aria-hidden="true" />
+                </Button>
+                <QuickReplyPicker
+                  onPick={(content) => {
+                    setDraft((prev) => (prev ? `${prev}\n${content}` : content))
+                    inputRef.current?.focus()
+                  }}
+                />
+                <Button
+                  type="submit"
+                  size="icon"
+                  className="ms-auto rounded-full"
+                  disabled={sending || !draft.trim()}
+                  aria-label={t('plugin_im.send')}
+                >
+                  <Send aria-hidden="true" />
+                </Button>
+              </div>
+            </div>
           </form>
         </Can>
       ) : (
@@ -1358,7 +1469,7 @@ function ChatPane({
         }}
       />
       <MergeDialog open={mergeOpen} onOpenChange={setMergeOpen} conv={conv} onConfirm={onMerge} />
-    </Card>
+    </div>
   )
 }
 
@@ -1483,7 +1594,7 @@ function QuickReplyPicker({ onPick }: { onPick: (content: string) => void }) {
     <>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <Button type="button" variant="outline" size="icon" aria-label={t('plugin_im.quickReply.title')} title={t('plugin_im.quickReply.title')}>
+          <Button type="button" variant="ghost" size="icon" aria-label={t('plugin_im.quickReply.title')}>
             <MessageSquare aria-hidden="true" />
           </Button>
         </PopoverTrigger>
@@ -1518,6 +1629,7 @@ function QuickReplyPicker({ onPick }: { onPick: (content: string) => void }) {
 
 function QuickReplyManager() {
   const { t } = useTranslation()
+  const confirm = useConfirm()
   const [open, setOpen] = useState(false)
   const replies = useQuickReplies(open)
   const save = useSaveQuickReply()
@@ -1538,7 +1650,16 @@ function QuickReplyManager() {
       reset()
       toast.success(t('common.operateSuccess'))
     } catch {
-      toast.error(t('common.operateFailed'))
+      // 失败原因由 http 拦截器统一弹出
+    }
+  }
+  const onDelete = async (q: ImQuickReply) => {
+    if (!(await confirm({ destructive: true, description: t('plugin_im.quickReply.deleteConfirm', { name: q.title }) }))) return
+    try {
+      await del.mutateAsync(q.id)
+      toast.success(t('common.operateSuccess'))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -1588,8 +1709,8 @@ function QuickReplyManager() {
                   {t('common.cancel')}
                 </Button>
               ) : null}
-              <Button size="sm" onClick={() => void submit()} disabled={!title.trim() || !content.trim()}>
-                {editing ? t('common.save') : t('common.add')}
+              <Button size="sm" onClick={() => void submit()} disabled={save.isPending || !title.trim() || !content.trim()}>
+                {save.isPending ? t('common.loading') : editing ? t('common.save') : t('common.add')}
               </Button>
             </div>
           </div>
@@ -1617,7 +1738,7 @@ function QuickReplyManager() {
                   size="icon"
                   aria-label={t('common.delete')}
                   onClick={() => {
-                    void del.mutateAsync(q.id).then(() => toast.success(t('common.operateSuccess'))).catch(() => toast.error(t('common.operateFailed')))
+                    void onDelete(q)
                   }}
                 >
                   <Trash2 aria-hidden="true" />
@@ -1670,7 +1791,7 @@ function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (
       toast.success(t('common.operateSuccess'))
       onOpenChange(false)
     } catch {
-      toast.error(t('common.operateFailed'))
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -1691,7 +1812,7 @@ function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (
           </Button>
           {canEdit ? (
             <Button onClick={() => void submit()} disabled={!form || save.isPending}>
-              {t('common.save')}
+              {save.isPending ? t('common.loading') : t('common.save')}
             </Button>
           ) : null}
         </div>
@@ -1710,32 +1831,23 @@ function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (
         )
       ) : (
         <div className="flex flex-col gap-4">
-          <label className="flex items-center justify-between gap-3 text-sm">
-            <span>{t('plugin_im.settings.businessHours')}</span>
-            <Switch
-              checked={form.businessHours}
-              onCheckedChange={(checked) => setForm({ ...form, businessHours: checked })}
-              aria-label={t('plugin_im.settings.businessHours')}
-            />
-          </label>
-          <label className="flex items-center justify-between gap-3 text-sm">
-            <span>{t('plugin_im.settings.autoAssign')}</span>
-            <Switch
-              checked={form.autoAssign}
-              onCheckedChange={(checked) => setForm({ ...form, autoAssign: checked })}
-              aria-label={t('plugin_im.settings.autoAssign')}
-            />
-          </label>
-          <p className="-mt-2 text-xs text-muted-foreground">{t('plugin_im.settings.autoAssignHint')}</p>
-          <label className="flex items-center justify-between gap-3 text-sm">
-            <span>{t('plugin_im.settings.aiEnabled')}</span>
-            <Switch
-              checked={form.aiEnabled}
-              onCheckedChange={(checked) => setForm({ ...form, aiEnabled: checked })}
-              aria-label={t('plugin_im.settings.aiEnabled')}
-            />
-          </label>
-          <p className="-mt-2 text-xs text-muted-foreground">{t('plugin_im.settings.aiEnabledHint')}</p>
+          <SwitchRow
+            label={t('plugin_im.settings.businessHours')}
+            checked={form.businessHours}
+            onCheckedChange={(checked) => setForm({ ...form, businessHours: checked })}
+          />
+          <SwitchRow
+            label={t('plugin_im.settings.autoAssign')}
+            description={t('plugin_im.settings.autoAssignHint')}
+            checked={form.autoAssign}
+            onCheckedChange={(checked) => setForm({ ...form, autoAssign: checked })}
+          />
+          <SwitchRow
+            label={t('plugin_im.settings.aiEnabled')}
+            description={t('plugin_im.settings.aiEnabledHint')}
+            checked={form.aiEnabled}
+            onCheckedChange={(checked) => setForm({ ...form, aiEnabled: checked })}
+          />
           {form.aiEnabled ? (
             <label className="flex flex-col gap-1 text-xs text-muted-foreground">
               {t('plugin_im.settings.aiFallbackText')}

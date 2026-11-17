@@ -25,8 +25,9 @@ export function ChatBubble({ side, tone = 'default', meta, badge, children, clas
     <div className={cn('flex', side === 'end' ? 'justify-end' : 'justify-start')}>
       <div
         className={cn(
-          // overflow-wrap:anywhere：长 URL/无空格长串在气泡内折行，不顶破 75% 气泡
-          'max-w-[75%] rounded-lg px-3 py-2 text-sm [overflow-wrap:anywhere]',
+          // overflow-wrap:anywhere：长 URL/无空格长串在气泡内折行，不顶破 75% 气泡。
+          // rounded-2xl：大气泡圆角是 Studio Chat 一类客服台的观感基准，工单对话流同步受益
+          'max-w-[75%] rounded-2xl px-3.5 py-2.5 text-sm [overflow-wrap:anywhere]',
           tone === 'primary'
             ? 'bg-primary text-primary-foreground'
             : tone === 'warning'

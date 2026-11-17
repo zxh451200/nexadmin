@@ -107,13 +107,17 @@
       "confirm": "删除会话 {{no}}？该会话的消息与附件会一并删除，且无法恢复。"
     },
     "batch": {
-      "selectAllClosed": "全选已结束会话",
       "delete": "删除所选",
       "deleteTitle": "批量删除会话",
       "deleteConfirm": "删除所选 {{count}} 个会话？它们的消息与附件会一并删除，且无法恢复。",
       "deleted": "已删除 {{count}} 个会话",
       "skipped": "{{count}} 个进行中的会话未删除",
-      "onlyClosed": "只有已结束的会话可删除"
+      "selectAll": "全选可操作会话（{{count}}）",
+      "close": "关闭所选",
+      "closeTitle": "批量关闭会话",
+      "closeConfirm": "关闭所选 {{count}} 个进行中的会话？关闭后访客再发消息会开启新会话。",
+      "closed": "已关闭 {{count}} 个会话",
+      "closeSkipped": "{{count}} 个会话状态已变化，未关闭"
     },
     "notify": {
       "on": "已开启桌面提醒",
@@ -129,7 +133,8 @@
       "manage": "管理快捷回复",
       "empty": "还没有快捷回复",
       "name": "标题，如：问候",
-      "content": "回复内容"
+      "content": "回复内容",
+      "deleteConfirm": "确定删除快捷回复「{{name}}」吗？"
     },
     "senders": {
       "visitor": "访客",
@@ -174,6 +179,7 @@
     "pickConversationTitle": "选择一个会话",
     "today": "今天",
     "yesterday": "昨天",
+    "earlier": "更早",
     "bizRef": "业务单号 {{no}}"
   }
 }
