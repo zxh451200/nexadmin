@@ -60,12 +60,49 @@
       {{else}}<a href="{{$.URL .Href}}"{{if eq .Href $.Route}} aria-current="page"{{end}}>{{.Label}}</a>{{end}}{{end}}
     </nav>
     <div class="sl-header-actions">
+      {{/* 交货至（对标阿里头部「交货至: 🇨🇳 CN」）：展示 + localStorage 记忆，
+           国家清单由共享 site.js 按 data 属性接管；无 JS 时清单为空但不影响页面。 */}}
+      <details class="sl-ship" data-ship-to>
+        <summary aria-label="{{.T "locale.shipTo"}}" data-ship-to-trigger>
+          <span class="sl-ship-label">{{.T "locale.shipTo"}}</span>
+          <span class="ship-to-val" data-ship-to-val hidden></span>
+        </summary>
+        <div class="sl-pop sl-ship-pop" data-ship-to-menu>
+          <input class="ship-to-search" type="text" data-ship-to-search placeholder="{{.T "locale.shipToSearch"}}" aria-label="{{.T "locale.shipToSearch"}}">
+          <div class="ship-to-list" data-ship-to-list role="listbox" aria-label="{{.T "locale.shipTo"}}"></div>
+        </div>
+      </details>
+      {{if .CurrencyOn}}
+      {{/* 「设置语言和币种」弹层（对标阿里）：保存走共享 site.js，币种写 cookie
+           由服务端换算价格，语言跳 Switch 地址。汇率表为空时回退纯语言菜单。 */}}
+      <details class="sl-locale" data-locale-pop>
+        <summary aria-label="{{.T "locale.title"}}" data-locale-trigger>{{icon "globe"}}<span>{{.Lang.Short}}-{{.DisplayCurrency}}</span></summary>
+        <div class="sl-pop" data-locale-menu>
+          <h4>{{.T "locale.title"}}</h4>
+          <p class="sl-pop-hint">{{.T "locale.hint"}}</p>
+          <label class="sl-pop-field">
+            <span>{{.T "locale.language"}}</span>
+            <select data-locale-lang>
+              {{range .Languages}}<option value="{{$.Switch .}}"{{if eq .Code $.Lang.Code}} selected{{end}}>{{.Label}}</option>{{end}}
+            </select>
+          </label>
+          <label class="sl-pop-field">
+            <span>{{.T "locale.currency"}}</span>
+            <select data-locale-currency>
+              {{range .CurrencyOptions}}<option value="{{.Code}}"{{if eq .Code $.DisplayCurrency}} selected{{end}}>{{.Label}}</option>{{end}}
+            </select>
+          </label>
+          <button type="button" class="sl-pop-save" data-locale-save>{{.T "locale.save"}}</button>
+        </div>
+      </details>
+      {{else}}
       <details class="sl-lang">
         <summary aria-label="{{.T "layout.lang"}}">{{.Lang.Short}}</summary>
         <div class="sl-langmenu">
           {{range .Languages}}<a href="{{$.Switch .}}" hreflang="{{.HTMLLang}}" lang="{{.HTMLLang}}"{{if eq .Code $.Lang.Code}} aria-current="true"{{end}}>{{.Label}}</a>{{end}}
         </div>
       </details>
+      {{end}}
       <a class="sl-btn sl-btn-blue" href="{{.URL "/contact"}}">{{.T "theme.solaris.quote"}}</a>
       <details class="sl-mnav-btn">
         <summary aria-label="{{.T "layout.openMenu"}}"><span></span><span></span><span></span></summary>

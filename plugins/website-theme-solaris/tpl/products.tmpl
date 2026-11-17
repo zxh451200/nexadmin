@@ -69,7 +69,7 @@
               <span class="pc-showcase-cover">{{if .CoverURL}}<img src="{{.CoverURL}}" alt="" loading="lazy">{{else}}<span class="pc-card-fallback">{{initial .Title}}</span>{{end}}{{if .VideoURL}}<span class="pc-play" aria-hidden="true">&#9654;</span>{{end}}</span>
               <span class="pc-showcase-info">
                 <span class="pc-showcase-name">{{.Title}}</span>
-                <span class="pc-showcase-price">{{if .PriceMin}}{{.Currency}}{{money .PriceMin}}{{if and .PriceMax (gt .PriceMax .PriceMin)}}-{{money .PriceMax}}{{end}}{{else}}{{$.T "product.priceOnRequest"}}{{end}}</span>
+                <span class="pc-showcase-price">{{if .PriceMin}}{{$.FxCur .Currency}}{{$.FxMoney .PriceMin .Currency}}{{if and .PriceMax (gt .PriceMax .PriceMin)}}-{{$.FxMoney .PriceMax .Currency}}{{end}}{{else}}{{$.T "product.priceOnRequest"}}{{end}}</span>
                 {{if .Moq}}<span class="pc-showcase-moq">{{$.T "products.moqLabel"}}: {{.Moq}}</span>{{end}}
               </span>
             </a>
@@ -110,10 +110,10 @@
             </a>
             <div class="pc-card-body">
               <a class="pc-card-title" href="{{$.URL "/products"}}/{{.Slug}}">{{.Title}}</a>
-              <div class="pc-card-price">{{if .PriceMin}}{{.Currency}}{{money .PriceMin}}{{if and .PriceMax (gt .PriceMax .PriceMin)}}-{{money .PriceMax}}{{end}}{{if .PriceUnit}} / {{.PriceUnit}}{{end}}{{else}}{{$.T "product.priceOnRequest"}}{{end}}</div>
+              <div class="pc-card-price">{{if .PriceMin}}{{$.FxCur .Currency}}{{$.FxMoney .PriceMin .Currency}}{{if and .PriceMax (gt .PriceMax .PriceMin)}}-{{$.FxMoney .PriceMax .Currency}}{{end}}{{if .PriceUnit}} / {{.PriceUnit}}{{end}}{{else}}{{$.T "product.priceOnRequest"}}{{end}}</div>
               {{if .Moq}}<div class="pc-card-moq">{{$.T "products.moqLabel"}}: {{.Moq}}{{if .PriceUnit}} {{.PriceUnit}}{{end}}</div>{{end}}
               {{if .Categories}}<div class="pc-card-terms">{{range .Categories}}<span class="pc-term">{{.Title}}</span>{{end}}</div>{{end}}
-              <a class="pc-card-cta" href="{{$.URL "/contact"}}" data-chat-open-product data-chat-title="{{.Title}}" data-chat-price="{{if .PriceMin}}{{.Currency}}{{money .PriceMin}}{{else}}{{$.T "product.priceOnRequest"}}{{end}}" data-chat-moq="{{if .Moq}}{{$.T "products.moqLabel"}}: {{.Moq}}{{end}}" data-chat-url="{{$.URL "/products"}}/{{.Slug}}" data-chat-cover="{{.CoverURL}}">{{$.T "products.inquiryNow"}}</a>
+              <a class="pc-card-cta" href="{{$.URL "/contact"}}" data-chat-open-product data-chat-title="{{.Title}}" data-chat-price="{{if .PriceMin}}{{$.FxCur .Currency}}{{$.FxMoney .PriceMin .Currency}}{{else}}{{$.T "product.priceOnRequest"}}{{end}}" data-chat-moq="{{if .Moq}}{{$.T "products.moqLabel"}}: {{.Moq}}{{end}}" data-chat-url="{{$.URL "/products"}}/{{.Slug}}" data-chat-cover="{{.CoverURL}}">{{$.T "products.inquiryNow"}}</a>
             </div>
           </div>
           {{end}}

@@ -155,14 +155,16 @@
   });
 
   // ---- 语言菜单开合（委托：<details> 原生负责开合，这里只管关） ----
+  // 选择器按 data 属性匹配：内置主题与品牌主题（如 Solaris）的弹层外壳类名不同，
+  // 行为钩子统一走 data-locale-pop / data-ship-to。
   document.addEventListener('click', function (e) {
-    document.querySelectorAll('details.lang-switch[open],details.ship-to[open]').forEach(function (box) {
+    document.querySelectorAll('details[data-locale-pop][open],details[data-ship-to][open],details.lang-switch[open]').forEach(function (box) {
       if (!box.contains(e.target)) box.removeAttribute('open');
     });
   });
   document.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape') return;
-    document.querySelectorAll('details.lang-switch[open],details.ship-to[open]').forEach(function (box) {
+    document.querySelectorAll('details[data-locale-pop][open],details[data-ship-to][open],details.lang-switch[open]').forEach(function (box) {
       box.removeAttribute('open');
     });
   });
@@ -219,8 +221,11 @@
       shipList.textContent = '';
       var added = 0;
       (shipData || []).forEach(function (c) {
+        // 过滤对中英文名与 ISO2 码都开放（与地址卡国家搜索的 needle 同口径）：
+        // 中文界面下访客同样会用英文名搜（Germany 而不是 德国）
         var name = shipName(c) || c.c;
-        if (f && name.toLowerCase().indexOf(f) < 0 && c.c.toLowerCase().indexOf(f) < 0) return;
+        var needle = (c.zh + ' ' + c.en + ' ' + c.c).toLowerCase();
+        if (f && needle.indexOf(f) < 0) return;
         if (added >= 60) return;
         added++;
         var b = document.createElement('button');

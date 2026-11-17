@@ -115,7 +115,7 @@
       {{if .CurrencyOn}}
       {{/* 「设置语言和币种」弹层（对标阿里）：触发钮显示「语言-币种」，保存时
            币种写 cookie、语言跳 Switch 地址，页面刷新后服务端按新币种渲染。 */}}
-      <details class="lang-switch locale-switch">
+      <details class="lang-switch locale-switch" data-locale-pop>
         <summary aria-label="{{.T "locale.title"}}" data-locale-trigger>{{icon "globe"}}<span>{{.Lang.Short}}-{{.DisplayCurrency}}</span></summary>
         <div class="lang-menu locale-menu" data-locale-menu>
           <h4>{{.T "locale.title"}}</h4>

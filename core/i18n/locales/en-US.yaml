@@ -788,6 +788,8 @@ website:
   preview_unavailable: "Preview link is unavailable: no signing key is configured on this server."
   home_slug_missing: "The page chosen as homepage does not exist; create it under Pages first."
   default_lang_invalid: "The default site language is not in the language list; pick an enabled language."
+  currency_rates_invalid: "Invalid currency rates: expected JSON like {\"USD\":1,\"EUR\":0.92} with 3-letter uppercase codes, positive rates, at most 24 currencies, and USD fixed at 1."
+  currency_default_invalid: "The default display currency must be one of the currencies in the rates table."
   notify_inquiry_title: "Website enquiry from %s"
   notify_content_empty: "(empty)"
   joins_too_many: "A dataset can declare at most 2 joined tables."

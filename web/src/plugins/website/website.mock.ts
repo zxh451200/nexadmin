@@ -41,6 +41,8 @@ const settings: SiteSettings = {
   i18nJson: '',
   theme: '',
   defaultLang: '',
+  defaultCurrency: '',
+  currencyRates: '',
   updatedAt: ago(60 * 24),
 }
 
