@@ -189,15 +189,26 @@
   // 合并生成，来源与许可见 docs/功能与权限清单.md。首次打开地址卡才拉取，失败时退回手写输入。
   var COUNTRY_DATA = null;
   var COUNTRY_REQ = null;
+  function fetchCountries() {
+    return fetch('/website-assets/country-region.json', { credentials: 'same-origin' })
+      .then(function (res) { if (!res.ok) throw new Error('HTTP ' + res.status); return res.json(); })
+      .then(function (list) { COUNTRY_DATA = Array.isArray(list) ? list : []; return COUNTRY_DATA; });
+  }
   function loadCountries() {
     if (COUNTRY_DATA) return Promise.resolve(COUNTRY_DATA);
     if (!COUNTRY_REQ) {
-      COUNTRY_REQ = fetch('/website-assets/country-region.json', { credentials: 'same-origin' })
-        .then(function (res) { if (!res.ok) throw new Error('unavailable'); return res.json(); })
-        .then(function (list) { COUNTRY_DATA = Array.isArray(list) ? list : []; return COUNTRY_DATA; })
-        .catch(function (err) { COUNTRY_REQ = null; throw err; });
+      COUNTRY_REQ = fetchCountries().catch(function (err) { COUNTRY_REQ = null; throw err; });
     }
-    return COUNTRY_REQ;
+    // 只在真拿不到时才退回手写输入：重部署/切网瞬间的一次失败不该把下拉直接降级，
+    // 隔一拍重试一次再放弃；放弃时留一条 warn，下次有人问「怎么变成输入框了」能直接看到原因。
+    return COUNTRY_REQ.catch(function (err) {
+      return new Promise(function (resolve) { setTimeout(resolve, 600); })
+        .then(fetchCountries)
+        .catch(function (err2) {
+          console.warn('[chat-enhance] 国家/地区数据不可用（/website-assets/country-region.json），已退回手写输入：', err2 || err);
+          throw err2 || err;
+        });
+    });
   }
   // 国旗不必存数据：ISO2 码的两个字母各加 regional-indicator 偏移就是 emoji
   function flagEmoji(code) {
@@ -696,7 +707,7 @@
     // 可搜索下拉（国家/州省）：选项由调用方灌入，选中值放在 hidden input 的
     // data-field 上 —— submitCard 仍按 [data-field] 取值，普通字段与下拉字段共用一条路径。
     // 选项不超过 12 个就不出搜索框（多数国家的州省一屏能看全）。
-    function buildSelect(key, placeholder, onPick, emptyText) {
+    function buildSelect(key, placeholder, onPick, emptyText, fallbackPh) {
       var wrap = document.createElement('div');
       wrap.className = 'chat-card-select';
       var trig = document.createElement('button');
@@ -828,6 +839,8 @@
           var inp = document.createElement('input');
           inp.type = 'text';
           inp.value = val || '';
+          // 兜底框带上提示语：只有一行空输入没有任何说明，看起来像控件坏了
+          if (fallbackPh) inp.placeholder = fallbackPh;
           inp.setAttribute('data-field', key);
           inp.setAttribute('autocomplete', 'off');
           wrap.replaceWith(inp);
@@ -969,7 +982,7 @@
       function buildCountry(label, savedVal) {
         var sel = buildSelect('country', t('chatCardCountrySelect', '选择国家/地区'), function (it) {
           applyCountry(it.raw, false);
-        });
+        }, '', t('chatCardCountryInput', '输入国家/地区'));
         label.appendChild(sel.wrap);
         loadCountries().then(function (list) {
           var items = list.map(function (c) {

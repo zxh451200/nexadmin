@@ -885,6 +885,7 @@
   "site.js.chatCardNameLabel": "名片",
   "site.js.chatCardAddressLabel": "收货地址",
   "site.js.chatCardCountrySelect": "选择国家/地区",
+  "site.js.chatCardCountryInput": "输入国家/地区",
   "site.js.chatCardCountrySearch": "搜索国家/地区",
   "site.js.chatCardRegionSelect": "选择省/州",
   "site.js.chatCardRegionSearch": "搜索省/州",

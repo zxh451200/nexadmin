@@ -885,6 +885,7 @@
   "site.js.chatCardNameLabel": "Business card",
   "site.js.chatCardAddressLabel": "Shipping address",
   "site.js.chatCardCountrySelect": "Select country/region",
+  "site.js.chatCardCountryInput": "Enter country/region",
   "site.js.chatCardCountrySearch": "Search country/region",
   "site.js.chatCardRegionSelect": "Select state/province",
   "site.js.chatCardRegionSearch": "Search state/province",
