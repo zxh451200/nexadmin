@@ -1231,10 +1231,26 @@ export default function TicketPage() {
               高度约束只给桌面双栏：移动端单列下 calc 高度会把队列和会话各压成半屏。
               17rem = 顶部栏+页签条+页头+「列表/统计」页签行+间距，与 ImPage 同步改。
               桌面再给一个下限：窗口矮到算出来的高度装不下「头部+次级面板+会话保底+回复框」时，
-              让整页滚，而不是把会话挤成一条缝。 */}
-          <div className="grid h-auto min-h-96 grid-cols-1 gap-4 md:h-[calc(100vh-17rem)] md:min-h-144 md:grid-cols-[24rem_1fr]">
-            {/* relative：批量条 anchored 锚定在队列卡片底边，不盖住右侧会话区 */}
-            <Card className="relative flex max-h-128 min-h-0 flex-col gap-2 p-2 md:max-h-none">
+              让整页滚，而不是把会话挤成一条缝。
+              整块工作台合成一张卡、栏间发丝线分隔（与在线客服同一「应用面板」骨架）：
+              深色下两张圆角卡漂浮的仪表盘感会稀释对话流的沉浸感。 */}
+          <Card className="grid h-auto min-h-96 grid-cols-1 overflow-hidden md:h-[calc(100vh-17rem)] md:min-h-144 md:grid-cols-[24rem_1fr]">
+            {/* relative：批量条 anchored 锚定在左栏底边，不盖住右侧会话区 */}
+            <div className="relative flex max-h-128 min-h-0 flex-col gap-2 p-2 md:max-h-none">
+              {/* 状态是最高频的切换：学 IM 会话队列把段选页签常驻，筛选弹层不再重复状态维度。
+                  6 个档位在 24rem 栏内排得下（触发器收紧内边距） */}
+              <Tabs value={statusFilter ?? ALL} onValueChange={(v) => setStatusFilter(v === ALL ? undefined : v)}>
+                <TabsList className="w-full">
+                  <TabsTrigger value={ALL} className="flex-1 px-1">
+                    {t('plugin_ticket.all')}
+                  </TabsTrigger>
+                  {STATUSES.map((s) => (
+                    <TabsTrigger key={s} value={s} className="flex-1 px-1">
+                      {t(`plugin_ticket.status.${s}`)}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </Tabs>
               <div className="flex flex-wrap items-center gap-2">
                 <Input
                   value={keyword}
@@ -1316,17 +1332,6 @@ export default function TicketPage() {
                       options={[
                         { value: '0', label: t('plugin_ticket.all') },
                         ...(allTags.data ?? []).map((tag) => ({ value: tag, label: tag })),
-                      ]}
-                    />
-                    <SimpleSelect
-                      aria-label={t('plugin_ticket.fields.status')}
-                      label={t('plugin_ticket.fields.status')}
-                      className="w-full"
-                      value={statusFilter ?? ALL}
-                      onChange={(v) => setStatusFilter(v === ALL ? undefined : v)}
-                      options={[
-                        { value: ALL, label: t('plugin_ticket.all') },
-                        ...STATUSES.map((s) => ({ value: s, label: t(`plugin_ticket.status.${s}`) })),
                       ]}
                     />
                     <SimpleSelect
@@ -1468,7 +1473,7 @@ export default function TicketPage() {
                   </Button>
                 </div>
               </div>
-            </Card>
+            </div>
 
             <TicketThread
               ticket={replies.data?.ticket}
@@ -1498,7 +1503,7 @@ export default function TicketPage() {
               onOpenTicket={(no) => selectTicket(no)}
               onDelete={(tk) => removeTicket(tk)}
             />
-          </div>
+          </Card>
         </TabsContent>
         <TabsContent value="stats">
           <TicketStatsPanel />
@@ -1549,6 +1554,7 @@ export default function TicketPage() {
         title={t('plugin_ticket.create.title')}
         description={t('plugin_ticket.create.description')}
         size="md"
+        side="right"
         footer={
           <>
             <Button variant="outline" onClick={() => setCreateOpen(false)}>
@@ -2784,12 +2790,13 @@ function TicketThread({
 
   if (!ticket) {
     return (
-      <Card className="flex items-center justify-center text-sm text-muted-foreground">
+      // 合并卡后的会话栏自带分栏线：移动端纵向 border-t，桌面横向 border-s
+      <div className="flex min-h-0 items-center justify-center border-t text-sm text-muted-foreground md:border-t-0 md:border-s">
         {/* 移动端队列在上方，「左侧」不成立；用 hook 切文案而不是 CSS（文本没法响应式） */}
         {loading
           ? t('plugin_ticket.loading')
           : t(isMobile ? 'plugin_ticket.pickTicketMobile' : 'plugin_ticket.pickTicket')}
-      </Card>
+      </div>
     )
   }
 
@@ -2940,7 +2947,8 @@ function TicketThread({
   const otherMoves = statusMoves.filter((m) => m !== primaryMove)
 
   return (
-    <Card className="flex min-h-0 flex-col">
+    // 合并卡后的会话栏：自带分栏发丝线（移动端 border-t、桌面 border-s），不再是独立圆角卡
+    <div className="flex min-h-0 flex-col border-t md:border-t-0 md:border-s">
       {/* 标题区在左、动作区在右：动作跟着这张单走，不该在标题下面再铺一行工具条。
           窄屏给标题整行，否则三个按钮能把标题挤成「工单…」 */}
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 border-b px-4 py-3">
@@ -3029,12 +3037,12 @@ function TicketThread({
                 {primaryMove.label}
               </Button>
             ) : null}
-            {/* 管理类动作和其余状态流转一起收进「更多」：同权重按钮铺开会把头部压成一坨，窄屏还会把文字挤没 */}
+            {/* 管理类动作和其余状态流转一起收进「更多」：同权重按钮铺开会把头部压成一坨，窄屏还会把文字挤没。
+                头部按钮学 IM 会话头部图标化，tooltip 由 Button 的 aria-label 自动带出 */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm">
+                <Button variant="ghost" size="icon" aria-label={t('common.more')}>
                   <Ellipsis aria-hidden="true" />
-                  {t('common.more')}
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="min-w-44">
@@ -3187,55 +3195,74 @@ function TicketThread({
       {ticket.status !== 'closed' ? (
         <Can perm="ticket:reply">
           <form
-            className="space-y-2 border-t p-3"
+            className="border-t p-3"
             onSubmit={(e) => {
               e.preventDefault()
               submit()
             }}
           >
-            <div className="flex flex-wrap items-center gap-2">
-              <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <Checkbox
-                  checked={internal}
-                  onCheckedChange={(v) => setInternal(v === true)}
-                  aria-label={t('plugin_ticket.internal.label')}
-                />
-                {t('plugin_ticket.internal.label')}
-              </label>
-              <span className="hidden text-[11px] text-muted-foreground sm:inline">{t('plugin_ticket.internal.hint')}</span>
-              {/* 附件与快捷回复并到这一行右侧；「管理快捷回复」只留菜单里那一个入口，
-                  同一个动作摆两枚按钮（齿轮 + 菜单项）是多余的噪音 */}
-              <div className="ms-auto flex items-center gap-1">
-                <input
-                  ref={fileRef}
-                  type="file"
-                  className="hidden"
-                  accept={quota?.accept}
-                  onChange={(e) => {
-                    const file = e.target.files?.[0]
-                    if (file) void onUpload(file, internal)
-                    e.target.value = ''
-                  }}
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  aria-label={t('plugin_ticket.attachments.add')}
-                  disabled={uploading}
-                  onClick={() => fileRef.current?.click()}
-                >
-                  <Paperclip aria-hidden="true" />
-                </Button>
-                {/* 空列表不再禁用按钮：一个灰掉的闪电只会被读成「坏了」，而真正的门槛是还没有话术。
-                    与 IM 的 QuickReplyPicker 同款：Popover 卡片列出「标题 + 内容预览」两行条目。 */}
-                <Popover open={pickOpen} onOpenChange={setPickOpen}>
-                  <PopoverTrigger asChild>
-                    <Button type="button" variant="outline" size="sm">
-                      <Zap aria-hidden="true" />
-                      {t('plugin_ticket.canned.label')}
-                    </Button>
-                  </PopoverTrigger>
+            {/* 输入卡学 IM 会话的 composer：无边框输入区铺满卡片，内部备注开关与工具沉到底部
+                工具行，发送键收成圆形主按钮；勾了内部备注时提交键切备注形态 */}
+            <input
+              ref={fileRef}
+              type="file"
+              className="hidden"
+              accept={quota?.accept}
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (file) void onUpload(file, internal)
+                e.target.value = ''
+              }}
+            />
+            <div className="flex flex-col gap-1 rounded-xl border border-input bg-background px-2.5 py-2 transition-colors focus-within:border-ring dark:border-input dark:bg-input/30">
+              <Textarea
+                ref={draftRef}
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={onDraftKeyDown}
+                onPaste={onPasteFiles}
+                onDragOver={(e) => {
+                  if (e.dataTransfer.types.includes('Files')) e.preventDefault()
+                }}
+                onDrop={onDropFiles}
+                placeholder={
+                  internal
+                    ? t('plugin_ticket.internal.label')
+                    : t('plugin_ticket.replyPlaceholder')
+                }
+                aria-label={t('plugin_ticket.replyPlaceholder')}
+                rows={2}
+                className="max-h-32 min-h-10 resize-none border-0 bg-transparent p-1 shadow-none focus-visible:ring-0"
+              />
+              <div className="flex items-center gap-0.5">
+                <label className="flex items-center gap-1.5 pe-1 text-xs text-muted-foreground">
+                  <Checkbox
+                    checked={internal}
+                    onCheckedChange={(v) => setInternal(v === true)}
+                    aria-label={t('plugin_ticket.internal.label')}
+                  />
+                  {t('plugin_ticket.internal.label')}
+                </label>
+                <span className="hidden text-[11px] text-muted-foreground lg:inline">{t('plugin_ticket.internal.hint')}</span>
+                <div className="ms-auto flex items-center gap-0.5">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label={t('plugin_ticket.attachments.add')}
+                    disabled={uploading}
+                    onClick={() => fileRef.current?.click()}
+                  >
+                    <Paperclip aria-hidden="true" />
+                  </Button>
+                  {/* 空列表不再禁用按钮：一个灰掉的闪电只会被读成「坏了」，而真正的门槛是还没有话术。
+                      与 IM 的 QuickReplyPicker 同款：Popover 卡片列出「标题 + 内容预览」两行条目。 */}
+                  <Popover open={pickOpen} onOpenChange={setPickOpen}>
+                    <PopoverTrigger asChild>
+                      <Button type="button" variant="ghost" size="icon" aria-label={t('plugin_ticket.canned.label')}>
+                        <Zap aria-hidden="true" />
+                      </Button>
+                    </PopoverTrigger>
                   <PopoverContent align="end" className="w-72 p-1">
                     <div className="max-h-64 overflow-y-auto">
                       {canned.map((row) => (
@@ -3271,32 +3298,18 @@ function TicketThread({
                     </Can>
                   </PopoverContent>
                 </Popover>
+                <Button
+                  type="submit"
+                  size="icon"
+                  className="rounded-full"
+                  variant={internal ? 'outline' : 'default'}
+                  disabled={sending || !draft.trim()}
+                  aria-label={internal ? t('plugin_ticket.internal.label') : t('plugin_ticket.send')}
+                >
+                  {internal ? <StickyNote aria-hidden="true" /> : <Send aria-hidden="true" />}
+                </Button>
+                </div>
               </div>
-            </div>
-            <div className="flex items-end gap-2">
-              <Textarea
-                ref={draftRef}
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={onDraftKeyDown}
-                onPaste={onPasteFiles}
-                onDragOver={(e) => {
-                  if (e.dataTransfer.types.includes('Files')) e.preventDefault()
-                }}
-                onDrop={onDropFiles}
-                placeholder={
-                  internal
-                    ? t('plugin_ticket.internal.label')
-                    : t('plugin_ticket.replyPlaceholder')
-                }
-                aria-label={t('plugin_ticket.replyPlaceholder')}
-                rows={2}
-                className="min-h-0 min-w-0 flex-1 resize-none"
-              />
-              <Button type="submit" variant={internal ? 'outline' : 'default'} disabled={sending || !draft.trim()}>
-                {internal ? <StickyNote aria-hidden="true" /> : <Send aria-hidden="true" />}
-                {internal ? t('plugin_ticket.internal.label') : t('plugin_ticket.send')}
-              </Button>
             </div>
           </form>
         </Can>
@@ -3305,7 +3318,7 @@ function TicketThread({
           {t('plugin_ticket.closedNotice')}
         </div>
       )}
-    </Card>
+    </div>
   )
 }
 

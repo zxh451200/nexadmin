@@ -132,22 +132,22 @@ export function TicketStatsPanel() {
             <p className="mb-1 text-xs font-medium text-muted-foreground">{t('plugin_ticket.stats.slaFirst')}</p>
             <table className="w-full text-xs">
               <thead>
-                <tr className="text-left text-muted-foreground">
+                <tr className="text-start text-muted-foreground">
                   <th className="font-medium">{t('plugin_ticket.stats.priority')}</th>
-                  <th className="text-right font-medium">{t('plugin_ticket.stats.target')}</th>
-                  <th className="text-right font-medium">{t('plugin_ticket.stats.total')}</th>
-                  <th className="text-right font-medium">{t('plugin_ticket.stats.breached')}</th>
-                  <th className="text-right font-medium">{t('plugin_ticket.stats.breachRate')}</th>
+                  <th className="text-end font-medium">{t('plugin_ticket.stats.target')}</th>
+                  <th className="text-end font-medium">{t('plugin_ticket.stats.total')}</th>
+                  <th className="text-end font-medium">{t('plugin_ticket.stats.breached')}</th>
+                  <th className="text-end font-medium">{t('plugin_ticket.stats.breachRate')}</th>
                 </tr>
               </thead>
               <tbody>
                 {data.slaByPriority.map((r) => (
                   <tr key={r.priority} className="border-t border-border/60">
                     <td className="py-1.5">{r.priority}</td>
-                    <td className="num py-1.5 text-right">{minutes(r.targetMinutes)}</td>
-                    <td className="num py-1.5 text-right">{r.total.toLocaleString()}</td>
-                    <td className="num py-1.5 text-right">{r.breached.toLocaleString()}</td>
-                    <td className={`num py-1.5 text-right ${r.breachRate > 0 ? 'text-destructive' : 'text-muted-foreground'}`}>{r.breachRate}%</td>
+                    <td className="num py-1.5 text-end">{minutes(r.targetMinutes)}</td>
+                    <td className="num py-1.5 text-end">{r.total.toLocaleString()}</td>
+                    <td className="num py-1.5 text-end">{r.breached.toLocaleString()}</td>
+                    <td className={`num py-1.5 text-end ${r.breachRate > 0 ? 'text-destructive' : 'text-muted-foreground'}`}>{r.breachRate}%</td>
                   </tr>
                 ))}
               </tbody>
@@ -157,20 +157,20 @@ export function TicketStatsPanel() {
             <p className="mb-1 text-xs font-medium text-muted-foreground">{t('plugin_ticket.stats.slaResolution')}</p>
             <table className="w-full text-xs">
               <thead>
-                <tr className="text-left text-muted-foreground">
+                <tr className="text-start text-muted-foreground">
                   <th className="font-medium">{t('plugin_ticket.stats.priority')}</th>
-                  <th className="text-right font-medium">{t('plugin_ticket.stats.target')}</th>
-                  <th className="text-right font-medium">{t('plugin_ticket.stats.breached')}</th>
-                  <th className="text-right font-medium">{t('plugin_ticket.stats.breachRate')}</th>
+                  <th className="text-end font-medium">{t('plugin_ticket.stats.target')}</th>
+                  <th className="text-end font-medium">{t('plugin_ticket.stats.breached')}</th>
+                  <th className="text-end font-medium">{t('plugin_ticket.stats.breachRate')}</th>
                 </tr>
               </thead>
               <tbody>
                 {data.slaByPriority.map((r) => (
                   <tr key={r.priority} className="border-t border-border/60">
                     <td className="py-1.5">{r.priority}</td>
-                    <td className="num py-1.5 text-right">{minutes(r.resolutionTargetMinutes)}</td>
-                    <td className="num py-1.5 text-right">{r.resolutionBreached.toLocaleString()}</td>
-                    <td className={`num py-1.5 text-right ${r.resolutionBreachRate > 0 ? 'text-destructive' : 'text-muted-foreground'}`}>{r.resolutionBreachRate}%</td>
+                    <td className="num py-1.5 text-end">{minutes(r.resolutionTargetMinutes)}</td>
+                    <td className="num py-1.5 text-end">{r.resolutionBreached.toLocaleString()}</td>
+                    <td className={`num py-1.5 text-end ${r.resolutionBreachRate > 0 ? 'text-destructive' : 'text-muted-foreground'}`}>{r.resolutionBreachRate}%</td>
                   </tr>
                 ))}
               </tbody>

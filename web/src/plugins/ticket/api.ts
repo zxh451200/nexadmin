@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react'
 import { api, tokenStore } from '@/framework/request/http'
 import type { Page, PageQuery } from '@/framework/request/types'
 import { useWs } from '@/framework/hooks/useWs'
+import { useHiddenPause } from '@/framework/hooks/use-hidden-pause'
 
 export type TicketStatus = 'open' | 'processing' | 'pending' | 'resolved' | 'closed'
 export type TicketPriority = 'low' | 'normal' | 'high' | 'urgent'
@@ -244,7 +245,7 @@ export function useTickets(query: TicketQueryParams) {
     queryKey: [...KEY, 'tickets', query],
     queryFn: () => api.get<Page<Ticket>>(`${BASE}/tickets`, query),
     placeholderData: keepPreviousData,
-    refetchInterval: 8000,
+    refetchInterval: useHiddenPause(8000),
   })
 }
 
@@ -253,7 +254,7 @@ export function useReplies(ticketNo?: string) {
     queryKey: [...KEY, 'replies', ticketNo],
     queryFn: () => api.get<RepliesResult>(`${BASE}/tickets/${ticketNo}/replies`, { since: 0, limit: 200 }),
     enabled: !!ticketNo,
-    refetchInterval: 3000,
+    refetchInterval: useHiddenPause(3000),
   })
 }
 
@@ -557,9 +558,15 @@ export function useAddLink() {
 /** 删除工单：回复/活动/关联/附件一并清掉，不可恢复。高危操作，独立权限点 ticket:delete。 */
 export function useDeleteTicket() {
   const invalidate = useInvalidate()
+  const qc = useQueryClient()
   return useMutation({
     mutationFn: (ticketNo: string) => api.del<unknown>(`${BASE}/tickets/${ticketNo}`, undefined, { silent: true }),
-    onSuccess: invalidate,
+    onSuccess: (_v, ticketNo) => {
+      // 先把已删单号的回复缓存移除再失效：invalidate 会对它再发一次请求，
+      // 404「工单不存在」的报错 toast 会抢在选中态清空之前弹出
+      qc.removeQueries({ queryKey: [...KEY, 'replies', ticketNo] })
+      invalidate()
+    },
   })
 }
 
