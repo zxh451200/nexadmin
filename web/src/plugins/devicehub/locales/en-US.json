@@ -104,7 +104,8 @@
       "disabled": "Disabled",
       "never": "Never collected",
       "required": "Point name and address are required",
-      "deleteConfirm": "Delete point \"{{name}}\"? History is kept."
+      "deleteConfirm": "Delete point \"{{name}}\"? History is kept.",
+      "noneEnabled": "All points are disabled; enable one to see live values"
     },
     "history": {
       "range": "Range",

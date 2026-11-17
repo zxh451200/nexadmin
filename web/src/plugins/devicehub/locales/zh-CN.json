@@ -104,7 +104,8 @@
       "disabled": "停用",
       "never": "从未采集",
       "required": "测点名称与采集地址必填",
-      "deleteConfirm": "确认删除测点「{{name}}」？历史数据保留。"
+      "deleteConfirm": "确认删除测点「{{name}}」？历史数据保留。",
+      "noneEnabled": "测点都已停用，启用后这里显示实时值"
     },
     "history": {
       "range": "时间范围",

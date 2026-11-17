@@ -11,6 +11,7 @@ import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { JsonInput } from '@/framework/components/JsonInput'
 import { FormGrid, FormGridFull, FormSection } from '@/framework/components/FormLayout'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
+import { RequiredMark } from '@/framework/components/RequiredMark'
 import { SimpleSelect } from '@/framework/components/SimpleSelect'
 import { SwitchRow } from '@/framework/components/SwitchField'
 import { LocationField, type GeoPoint } from '@/framework/map'
@@ -58,9 +59,9 @@ const DATA_TYPES: PointDataType[] = ['bool', 'int16', 'uint16', 'int32', 'float3
 const OPS: AlarmOp[] = ['gt', 'lt', 'ge', 'le', 'eq', 'ne']
 const LEVELS: AlarmLevel[] = ['info', 'warn', 'critical']
 
-function statusVariant(s: string): 'success' | 'destructive' | 'outline' {
+function statusVariant(s: string): 'success' | 'secondary' | 'destructive' | 'outline' {
   if (s === 'online') return 'success'
-  if (s === 'offline') return 'destructive'
+  if (s === 'offline') return 'secondary'
   return 'outline'
 }
 
@@ -140,7 +141,7 @@ export default function DevicePage() {
       toast.success(t('common.operateSuccess'))
       setSelectedNo(undefined)
     } catch {
-      toast.error(t('common.operateFailed'))
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -166,7 +167,7 @@ export default function DevicePage() {
               <span className="font-semibold text-foreground tabular-nums">{stats.data.total}</span>
             </span>
             <StatDot tone="success" label={t('plugin_devicehub.status.online')} value={stats.data.online} />
-            <StatDot tone="destructive" label={t('plugin_devicehub.status.offline')} value={stats.data.offline} />
+            <StatDot tone="neutral" label={t('plugin_devicehub.status.offline')} value={stats.data.offline} />
             <StatDot tone="neutral" label={t('plugin_devicehub.status.disabled')} value={stats.data.disabled} />
           </>
         ) : null}
@@ -185,10 +186,10 @@ export default function DevicePage() {
           {wsStatus === 'open' ? t('plugin_devicehub.ws.connected') : t('plugin_devicehub.ws.fallback')}
         </span>
       </div>
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[20rem_1fr]">
+      <Card className="grid grid-cols-1 overflow-hidden xl:grid-cols-[20rem_1fr]">
         {/* 设备列表：标题 + 搜索 + 滚动列表。self-start：卡随内容收口，不被右侧详情的行高拉长成一块空板；
             高度仍封顶，设备多了在卡内滚动。 */}
-        <Card className="flex max-h-[70vh] min-h-0 flex-col gap-2 self-start p-2 xl:max-h-[calc(100dvh-11rem)]">
+        <div className="flex max-h-[70vh] min-h-0 flex-col gap-2 p-2 xl:max-h-[calc(100dvh-11rem)] xl:border-e">
           <div className="flex items-center justify-between gap-2 px-1 pt-1">
             <span className="text-sm font-medium text-foreground">{t('plugin_devicehub.device.list')}</span>
             <span className="num text-xs text-muted-foreground tabular-nums">{total}</span>
@@ -259,17 +260,17 @@ export default function DevicePage() {
               </span>
             </div>
           ) : null}
-        </Card>
+        </div>
 
         {/* 详情 */}
         {selectedNo ? (
           <DeviceDetail deviceNo={selectedNo} onEdit={openEdit} onDelete={onDelete} />
         ) : (
-          <Card className="flex items-center justify-center text-sm text-muted-foreground">
+          <div className="flex min-h-64 items-center justify-center border-t text-sm text-muted-foreground xl:border-t-0 xl:border-s">
             {t('plugin_devicehub.pickDevice')}
-          </Card>
+          </div>
         )}
-      </div>
+      </Card>
 
       {formOpen ? <DeviceFormDialog device={editing} onOpenChange={setFormOpen} /> : null}
     </PageContainer>
@@ -293,7 +294,8 @@ function DeviceDetail({
   const [tab, setTab] = useState('points')
 
   return (
-    <Card className="flex min-h-0 flex-col gap-3 p-4">
+    // 合并卡后的详情栏：自带分栏发丝线（移动端 border-t、桌面 border-s），不再是独立圆角卡
+    <div className="flex min-h-0 flex-col gap-3 p-4 border-t xl:border-t-0 xl:border-s">
       {/* 头部两行：第一行设备名 + 状态 + 操作；第二行编号/协议/地址，视觉上不与操作按钮抢一行 */}
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
@@ -347,6 +349,8 @@ function DeviceDetail({
           右上角给「多久没更新」：值自身上没有时间戳变化，采集停了页面看起来和正常一模一样。 */}
       {(() => {
         const live = (points.data ?? []).filter((p) => p.enabled)
+        // 一个测点都没有时整块不渲染：空态引导只留给下方「测点配置」页签说一遍，别一句话一屏出两次
+        if ((points.data ?? []).length === 0) return null
         const latest = live.reduce<string | null>((acc, p) => (p.lastTs && (!acc || p.lastTs > acc) ? p.lastTs : acc), null)
         const stale = latest != null && Date.now() - new Date(latest).getTime() > 90_000
         return (
@@ -361,6 +365,9 @@ function DeviceDetail({
               </p>
             ) : null}
             <div className="max-h-56 overflow-y-auto">
+              {(points.data ?? []).length > 0 && live.length === 0 ? (
+                <p className="text-[11px] text-muted-foreground">{t('plugin_devicehub.point.noneEnabled')}</p>
+              ) : null}
               <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
                 {live.map((p) => (
                   <div key={p.id} className="rounded-lg border border-border p-2.5">
@@ -378,12 +385,7 @@ function DeviceDetail({
                     </p>
                   </div>
                 ))}
-                {(points.data ?? []).length === 0 ? (
-                  <p className="col-span-full rounded-lg border border-dashed border-border py-4 text-center text-sm text-muted-foreground">
-                    {t('plugin_devicehub.point.empty')}
-                  </p>
-                ) : null}
-              </div>
+                </div>
             </div>
           </>
         )
@@ -411,7 +413,7 @@ function DeviceDetail({
           <AlarmsPanel key={deviceNo} deviceNo={deviceNo} points={points.data ?? []} />
         </TabsContent>
       </Tabs>
-    </Card>
+    </div>
   )
 }
 
@@ -451,7 +453,7 @@ function PointsPanel({ deviceNo, points }: { deviceNo: string; points: Point[] }
       await del.mutateAsync(p.id)
       toast.success(t('common.operateSuccess'))
     } catch {
-      toast.error(t('common.operateFailed'))
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -526,17 +528,23 @@ function PointFormDialog({ deviceNo, point, onOpenChange }: { deviceNo: string; 
         }
       : { name: '', address: '', unit: '', rw: 'r', dataType: 'float32', scale: 1, pollIntervalMs: 0, deadband: 0, enabled: true, sort: 0 },
   )
+  // 行内校验提示：提交未过时点亮，行内小字按当前值定位（toast 仍是快捷反馈）
+  const [showErrors, setShowErrors] = useState(false)
+  const nameMissing = !form.name.trim()
+  const addressMissing = !form.address.trim()
   const submit = async () => {
     if (!form.name.trim() || !form.address.trim()) {
+      setShowErrors(true)
       toast.error(t('plugin_devicehub.point.required'))
       return
     }
+    setShowErrors(false)
     try {
       await save.mutateAsync({ ...form, pointId: point?.id })
       toast.success(t('common.operateSuccess'))
       onOpenChange(false)
-    } catch (e) {
-      toast.error(e instanceof Error && e.message ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   }
   return (
@@ -545,6 +553,7 @@ function PointFormDialog({ deviceNo, point, onOpenChange }: { deviceNo: string; 
       onOpenChange={onOpenChange}
       title={point ? t('plugin_devicehub.point.edit') : t('plugin_devicehub.point.add')}
       size="md"
+      side="right"
       footer={
         <>
           <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
@@ -556,7 +565,13 @@ function PointFormDialog({ deviceNo, point, onOpenChange }: { deviceNo: string; 
         <FormSection title={t('plugin_devicehub.point.section.basic')}>
           <FormGrid cols={2}>
             <Field label={t('plugin_devicehub.point.name')} required>
-              <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} maxLength={100} />
+              <Input
+                value={form.name}
+                aria-invalid={showErrors && nameMissing}
+                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                maxLength={100}
+              />
+              {showErrors && nameMissing ? <span className="text-xs text-destructive">{t('plugin_devicehub.point.required')}</span> : null}
             </Field>
             <Field label={t('plugin_devicehub.point.unit')}>
               <Input value={form.unit} onChange={(e) => setForm((f) => ({ ...f, unit: e.target.value }))} maxLength={16} placeholder={t('plugin_devicehub.point.unitPlaceholder')} />
@@ -568,7 +583,16 @@ function PointFormDialog({ deviceNo, point, onOpenChange }: { deviceNo: string; 
                 required
                 hint={<code className="font-mono">{t(`plugin_devicehub.point.addressFormat.${protocol}`)}</code>}
               >
-                <Input value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} className="font-mono" maxLength={128} />
+                <Input
+                  value={form.address}
+                  aria-invalid={showErrors && addressMissing}
+                  onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
+                  className="font-mono"
+                  maxLength={128}
+                />
+                {showErrors && addressMissing ? (
+                  <span className="text-xs text-destructive">{t('plugin_devicehub.point.required')}</span>
+                ) : null}
               </Field>
             </FormGridFull>
             <Field label={t('plugin_devicehub.point.dataType')}>
@@ -622,7 +646,7 @@ function Field({ label, required, hint, children }: { label: string; required?: 
     <label className="block space-y-1.5">
       <span className="text-xs font-medium text-foreground">
         {label}
-        {required ? <span className="text-destructive"> *</span> : null}
+        {required ? <RequiredMark /> : null}
       </span>
       {children}
       {hint ? <span className="block text-[11px] leading-relaxed text-muted-foreground">{hint}</span> : null}
@@ -761,24 +785,31 @@ function CommandsPanel({ deviceNo, points }: { deviceNo: string; points: Point[]
   const pointId = writable.some((p) => p.id === pickedId) ? pickedId : (writable[0]?.id ?? '')
   const target = writable.find((x) => x.id === pointId)
   const [value, setValue] = useState('')
+  // 行内校验提示：提交未过时点亮，行内小字按当前值定位（toast 仍是快捷反馈）
+  const [showErrors, setShowErrors] = useState(false)
+  const valueMissing = value === ''
+  const valueNotBool = target?.dataType === 'bool' && value !== '0' && value !== '1'
 
   const submit = async () => {
     if (!pointId || value === '') {
+      setShowErrors(true)
       toast.error(t('plugin_devicehub.command.required'))
       return
     }
     const p = writable.find((x) => x.id === pointId)
     // bool 测点只接受 0/1
     if (p?.dataType === 'bool' && value !== '0' && value !== '1') {
+      setShowErrors(true)
       toast.error(t('plugin_devicehub.command.boolOnly'))
       return
     }
+    setShowErrors(false)
     try {
       await create.mutateAsync({ pointId, value: Number(value) })
       toast.success(t('plugin_devicehub.command.sent'))
       setValue('')
-    } catch (e) {
-      toast.error(e instanceof Error && e.message ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -809,7 +840,7 @@ function CommandsPanel({ deviceNo, points }: { deviceNo: string; points: Point[]
           <label className="block space-y-1">
             <span className="text-xs font-medium text-foreground">
               {t('plugin_devicehub.command.value')}
-              <span className="text-destructive"> *</span>
+              <RequiredMark />
             </span>
             {target?.dataType === 'bool' ? (
               // 开关量不给自由输入：只能填 0/1，让用户手打纯属制造一次报错
@@ -824,8 +855,16 @@ function CommandsPanel({ deviceNo, points }: { deviceNo: string; points: Point[]
                 ]}
               />
             ) : (
-              <Input className="w-32" value={value} onChange={(e) => setValue(e.target.value)} placeholder={t('plugin_devicehub.command.valuePlaceholder')} />
+              <Input
+                className="w-32"
+                value={value}
+                aria-invalid={showErrors && (valueMissing || valueNotBool)}
+                onChange={(e) => setValue(e.target.value)}
+                placeholder={t('plugin_devicehub.command.valuePlaceholder')}
+              />
             )}
+            {showErrors && valueMissing ? <span className="block text-xs text-destructive">{t('plugin_devicehub.command.required')}</span> : null}
+            {showErrors && valueNotBool ? <span className="block text-xs text-destructive">{t('plugin_devicehub.command.boolOnly')}</span> : null}
           </label>
           <Button onClick={() => void submit()} disabled={create.isPending}>
             {t('plugin_devicehub.command.send')}
@@ -1027,7 +1066,9 @@ function PointRules({ point, rules, onEdit }: { point: Point; rules: AlarmRule[]
                     cooldownSeconds: r.cooldownSeconds,
                   })
                   .then(() => toast.success(t('common.operateSuccess')))
-                  .catch((e: unknown) => toast.error(e instanceof Error && e.message ? e.message : t('common.operateFailed')))
+                  .catch(() => {
+                    // 失败原因由 http 拦截器统一弹出
+                  })
               }}
             >
               <Power aria-hidden="true" />
@@ -1045,8 +1086,8 @@ function PointRules({ point, rules, onEdit }: { point: Point; rules: AlarmRule[]
                 try {
                   await del.mutateAsync(r.id)
                   toast.success(t('common.operateSuccess'))
-                } catch (e) {
-                  toast.error(e instanceof Error && e.message ? e.message : t('common.operateFailed'))
+                } catch {
+                  // 失败原因由 http 拦截器统一弹出
                 }
               }}
             >
@@ -1069,12 +1110,18 @@ function AlarmRuleDialog({ points, rule, onOpenChange }: { points: Point[]; rule
   const [level, setLevel] = useState<AlarmLevel>(rule?.level ?? 'warn')
   const [cooldown, setCooldown] = useState(rule?.cooldownSeconds ?? 300)
   const [enabled, setEnabled] = useState(rule?.enabled ?? true)
+  // 行内校验提示：提交未过时点亮，行内小字按当前值定位（toast 仍是快捷反馈）
+  const [showErrors, setShowErrors] = useState(false)
+  const nameMissing = !name.trim()
+  const thresholdMissing = threshold === ''
 
   const submit = async () => {
     if (!pointId || !name.trim() || threshold === '') {
+      setShowErrors(true)
       toast.error(t('plugin_devicehub.alarm.required'))
       return
     }
+    setShowErrors(false)
     try {
       await save.mutateAsync({
         ruleId: rule?.id,
@@ -1082,8 +1129,8 @@ function AlarmRuleDialog({ points, rule, onOpenChange }: { points: Point[]; rule
       })
       toast.success(t('common.operateSuccess'))
       onOpenChange(false)
-    } catch (e) {
-      toast.error(e instanceof Error && e.message ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -1093,6 +1140,7 @@ function AlarmRuleDialog({ points, rule, onOpenChange }: { points: Point[]; rule
       onOpenChange={onOpenChange}
       title={rule ? t('plugin_devicehub.alarm.editRule') : t('plugin_devicehub.alarm.addRule')}
       size="md"
+      side="right"
       footer={
         <>
           <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
@@ -1112,7 +1160,13 @@ function AlarmRuleDialog({ points, rule, onOpenChange }: { points: Point[]; rule
             />
           </Field>
           <Field label={t('plugin_devicehub.alarm.name')} required>
-            <Input value={name} onChange={(e) => setName(e.target.value)} maxLength={100} />
+            <Input
+              value={name}
+              aria-invalid={showErrors && nameMissing}
+              onChange={(e) => setName(e.target.value)}
+              maxLength={100}
+            />
+            {showErrors && nameMissing ? <span className="text-xs text-destructive">{t('plugin_devicehub.alarm.required')}</span> : null}
           </Field>
           <Field label={t('plugin_devicehub.alarm.op')}>
             <SimpleSelect
@@ -1123,7 +1177,14 @@ function AlarmRuleDialog({ points, rule, onOpenChange }: { points: Point[]; rule
             />
           </Field>
           <Field label={t('plugin_devicehub.alarm.threshold')} required>
-            <Input type="number" step="0.001" value={threshold} onChange={(e) => setThreshold(e.target.value)} />
+            <Input
+              type="number"
+              step="0.001"
+              value={threshold}
+              aria-invalid={showErrors && thresholdMissing}
+              onChange={(e) => setThreshold(e.target.value)}
+            />
+            {showErrors && thresholdMissing ? <span className="text-xs text-destructive">{t('plugin_devicehub.alarm.required')}</span> : null}
           </Field>
           <Field label={t('plugin_devicehub.alarm.levelText')}>
             <SimpleSelect
@@ -1169,12 +1230,18 @@ function DeviceFormDialog({ device, onOpenChange }: { device: Device | null; onO
       ? { lng: device.lng, lat: device.lat, address: device.location || undefined }
       : null,
   )
+  // 行内校验提示：提交未过时点亮，行内小字按当前值定位（toast 仍是快捷反馈）
+  const [showErrors, setShowErrors] = useState(false)
+  const nameMissing = !form.name.trim()
+  const endpointMissing = !form.endpoint.trim()
 
   const submit = async () => {
     if (!form.name.trim() || !form.endpoint.trim()) {
+      setShowErrors(true)
       toast.error(t('plugin_devicehub.device.required'))
       return
     }
+    setShowErrors(false)
     try {
       await save.mutateAsync({
         ...form,
@@ -1183,8 +1250,8 @@ function DeviceFormDialog({ device, onOpenChange }: { device: Device | null; onO
       })
       toast.success(t('common.operateSuccess'))
       onOpenChange(false)
-    } catch (e) {
-      toast.error(e instanceof Error && e.message ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -1194,6 +1261,7 @@ function DeviceFormDialog({ device, onOpenChange }: { device: Device | null; onO
       onOpenChange={onOpenChange}
       title={device ? t('plugin_devicehub.device.edit') : t('plugin_devicehub.device.add')}
       size="md"
+      side="right"
       footer={
         <>
           <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
@@ -1205,7 +1273,13 @@ function DeviceFormDialog({ device, onOpenChange }: { device: Device | null; onO
         <FormSection title={t('plugin_devicehub.device.section.basic')}>
           <FormGrid cols={2}>
             <Field label={t('plugin_devicehub.device.name')} required>
-              <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} maxLength={100} />
+              <Input
+                value={form.name}
+                aria-invalid={showErrors && nameMissing}
+                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                maxLength={100}
+              />
+              {showErrors && nameMissing ? <span className="text-xs text-destructive">{t('plugin_devicehub.device.required')}</span> : null}
             </Field>
             <Field label={t('plugin_devicehub.device.protocol')} required>
               <SimpleSelect
@@ -1234,11 +1308,15 @@ function DeviceFormDialog({ device, onOpenChange }: { device: Device | null; onO
             >
               <Input
                 value={form.endpoint}
+                aria-invalid={showErrors && endpointMissing}
                 onChange={(e) => setForm((f) => ({ ...f, endpoint: e.target.value }))}
                 className="font-mono"
                 maxLength={255}
                 placeholder={form.protocol === 'mqtt' ? 'tcp://192.168.1.10:1883' : '192.168.1.20:502'}
               />
+              {showErrors && endpointMissing ? (
+                <span className="text-xs text-destructive">{t('plugin_devicehub.device.required')}</span>
+              ) : null}
             </Field>
             <Field
               label={t('plugin_devicehub.device.config')}
