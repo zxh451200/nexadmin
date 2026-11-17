@@ -87,6 +87,7 @@ export function ScreenDialog({ open, onOpenChange, editing }: Props) {
       open={open}
       onOpenChange={onOpenChange}
       size="xl"
+      side="right"
       title={editing ? t('plugin_report.screen.editTitle') : t('plugin_report.screen.createTitle')}
       description={t('plugin_report.screen.editorHint')}
       footer={

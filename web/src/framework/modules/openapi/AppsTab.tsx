@@ -48,8 +48,8 @@ export function AppsTab() {
     try {
       await fn()
       toast.success(t('common.operateSuccess'))
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -68,8 +68,8 @@ export function AppsTab() {
       else await remove.mutateAsync(list[0].id)
       setSelected((ids) => ids.filter((id) => !list.some((a) => a.id === id)))
       toast.success(t('common.operateSuccess'))
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -78,8 +78,8 @@ export function AppsTab() {
     try {
       const res = await reset.mutateAsync(a.id)
       setSecret({ app: a, appSecret: res.appSecret })
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 

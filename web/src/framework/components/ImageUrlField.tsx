@@ -30,6 +30,8 @@ export interface ImageUrlFieldProps {
   /** true = 输入行在上、预览/上传卡在下（长表单里先看到输入再看到图）；默认横排（卡在左、输入在右） */
   previewBelow?: boolean
   'aria-label'?: string
+  /** 行内校验失败时标红输入框（提示文案由调用方在字段下方自绘） */
+  'aria-invalid'?: boolean
 }
 
 /**
@@ -48,6 +50,7 @@ export function ImageUrlField({
   previewClassName = 'size-24',
   previewBelow = false,
   'aria-label': ariaLabel,
+  'aria-invalid': ariaInvalid,
 }: ImageUrlFieldProps) {
   const { t } = useTranslation()
   const { data: cfg } = useUploadConfig()
@@ -173,7 +176,11 @@ export function ImageUrlField({
         spellCheck={false}
         className="min-w-0 flex-1"
         aria-label={ariaLabel ?? title}
+        aria-invalid={ariaInvalid}
       />
+      {/* 上传始终在行内：有值时也要能直接换图（先清除再上传会让预览闪没）；
+          清除只在有值时出现，紧挨文件库入口 */}
+      {uploadBtn}
       {value ? (
         <Button
           type="button"
@@ -187,9 +194,7 @@ export function ImageUrlField({
         >
           <Trash2 aria-hidden="true" />
         </Button>
-      ) : (
-        uploadBtn
-      )}
+      ) : null}
       {/* 文件库弹窗：已传过的图片直接选（缩略图网格 + 关键词可搜、按上传时间倒序） */}
       <PickFromLibraryButton className="shrink-0" disabled={disabled} onClick={() => setPickOpen(true)} />
     </div>

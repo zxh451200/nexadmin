@@ -32,8 +32,8 @@ export function ImportDialog({ open, onOpenChange }: ImportDialogProps) {
     try {
       const blob = await fetchImportTemplate()
       saveBlob(`${t('user.import.templateFilename')}.${blobExt(blob)}`, blob)
-    } catch (e) {
-      toast.error(e instanceof Error && e.message ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -52,8 +52,8 @@ export function ImportDialog({ open, onOpenChange }: ImportDialogProps) {
     }
     try {
       setResult(await importUsers.mutateAsync(file))
-    } catch (e) {
-      toast.error(e instanceof Error && e.message ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 

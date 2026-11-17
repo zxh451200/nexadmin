@@ -238,7 +238,7 @@ export default function SetupWizard() {
                 )}
                 {step === LAST_STEP && phase !== 'done' && (
                   <Button type="button" onClick={execute} disabled={phase === 'running'}>
-                    {phase === 'running' && <Loader2 className="me-2 size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />}
+                    {phase === 'running' && <Loader2 className="animate-spin motion-reduce:animate-none" aria-hidden="true" />}
                     {phase === 'failed' ? t('setup.retry') : t('setup.execute')}
                   </Button>
                 )}

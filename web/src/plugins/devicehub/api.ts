@@ -4,6 +4,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { api } from '@/framework/request/http'
 import type { Page } from '@/framework/request/types'
 import { useWs } from '@/framework/hooks/useWs'
+import { useHiddenPause } from '@/framework/hooks/use-hidden-pause'
 
 const BASE = '/plugins/devicehub'
 const KEY = ['plugin_devicehub'] as const
@@ -172,7 +173,7 @@ export function useDevices(query: { kw?: string; page: number; pageSize: number 
     queryKey: [...KEY, 'devices', query],
     queryFn: () => api.get<Page<Device>>(`${BASE}/devices`, query),
     placeholderData: keepPreviousData,
-    refetchInterval: 8000, // WS 兜底轮询
+    refetchInterval: useHiddenPause(8000), // WS 兜底轮询
   })
 }
 
@@ -190,7 +191,7 @@ export function useDeviceStats() {
   return useQuery({
     queryKey: [...KEY, 'stats'],
     queryFn: () => api.get<DeviceStats>(`${BASE}/stats`),
-    refetchInterval: 8000,
+    refetchInterval: useHiddenPause(8000),
   })
 }
 
@@ -223,7 +224,7 @@ export function usePoints(deviceNo?: string) {
     queryKey: [...KEY, 'points', deviceNo],
     queryFn: () => api.get<Point[]>(`${BASE}/devices/${deviceNo}/points`),
     enabled: !!deviceNo,
-    refetchInterval: 8000,
+    refetchInterval: useHiddenPause(8000),
   })
 }
 
@@ -282,7 +283,7 @@ export function useCommands(deviceNo?: string) {
     queryKey: [...KEY, 'commands', deviceNo],
     queryFn: () => api.get<CommandRow[]>(`${BASE}/devices/${deviceNo}/commands`, { limit: 50 }),
     enabled: !!deviceNo,
-    refetchInterval: 5000,
+    refetchInterval: useHiddenPause(5000),
   })
 }
 
@@ -301,7 +302,7 @@ export function useAlarmEvents(deviceNo?: string, query: { level?: string; page?
     queryFn: () =>
       api.get<Page<AlarmEvent>>(`${BASE}/alarms`, deviceNo ? { deviceNo, ...query } : query),
     placeholderData: keepPreviousData,
-    refetchInterval: 8000,
+    refetchInterval: useHiddenPause(8000),
   })
 }
 

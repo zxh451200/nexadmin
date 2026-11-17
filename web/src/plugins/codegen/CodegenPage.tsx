@@ -419,7 +419,7 @@ export default function CodegenPage() {
           <div className="flex flex-wrap justify-end gap-2">
             <Can perm="codegen:edit">
               <Button variant="outline" onClick={() => { setSaveName(module); setSaveOpen(true) }} disabled={!isPlatform || !canPreview}>
-                <Save className="me-2 size-4" aria-hidden="true" />
+                <Save aria-hidden="true" />
                 {t('plugin_codegen.action.saveConfig')}
               </Button>
             </Can>
@@ -443,7 +443,7 @@ export default function CodegenPage() {
             </Button>
             <Can perm="codegen:install">
               <Button variant="outline" onClick={() => { setOverwrite(false); setInstallOpen(true) }} disabled={!isPlatform || !output}>
-                <FolderInput className="me-2 size-4" aria-hidden="true" />
+                <FolderInput aria-hidden="true" />
                 {t('plugin_codegen.action.install')}
               </Button>
             </Can>

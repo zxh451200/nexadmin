@@ -76,8 +76,8 @@ export function DeliveriesTab() {
       await retry.mutateAsync(d.id)
       toast.success(t('openapi.deliveries.retryQueued'))
       setDetail(null)
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 

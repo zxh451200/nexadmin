@@ -10,11 +10,13 @@ import { usePermission } from '@/framework/auth/usePermission'
 import { CountrySelect, useCountryNames } from '@/framework/components/CountrySelect'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DatePicker } from '@/framework/components/DatePicker'
+import { DetailAction } from '@/framework/components/DetailAction'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { useIsMobile } from '@/framework/hooks/use-mobile'
 import { RequiredMark } from '@/framework/components/RequiredMark'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
+import { SwitchRow } from '@/framework/components/SwitchField'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/framework/ui/dropdown-menu'
@@ -162,6 +164,12 @@ function CustomerFormDialog({
 
   const set = (patch: Partial<CrmCustomerForm>) => setDraft((d) => ({ ...d, ...patch }))
 
+  // 行内校验提示：提交未过时点亮，行内小字按当前值定位（toast 仍是快捷反馈）
+  const [showErrors, setShowErrors] = useState(false)
+  const nameMissing = !(value.name ?? '').trim()
+  const externalNoMissing = !!value.externalSource && !(value.externalNo ?? '').trim()
+  const idPairBroken = !!value.idType?.trim() !== !!value.idNo?.trim()
+
   // 换类型就清掉另一组字段：企业客户背着一条护照号，列表、导出和入住核验都会说假话。
   const setType = (next: CustomerType) =>
     setDraft((d) =>
@@ -178,17 +186,21 @@ function CustomerFormDialog({
   const submit = async () => {
     const data = { ...value, name: (value.name ?? '').trim() } as CrmCustomerForm
     if (!data.name) {
+      setShowErrors(true)
       toast.error(t('plugin_crm.nameRequired'))
       return
     }
     if (data.externalSource && !data.externalNo?.trim()) {
+      setShowErrors(true)
       toast.error(t('plugin_crm.externalNoRequired'))
       return
     }
     if (!!data.idType?.trim() !== !!data.idNo?.trim()) {
+      setShowErrors(true)
       toast.error(t('plugin_crm.idPairRequired'))
       return
     }
+    setShowErrors(false)
     try {
       await save.mutateAsync({ id: editing?.id, data })
       toast.success(t('common.operateSuccess'))
@@ -203,12 +215,15 @@ function CustomerFormDialog({
       open={open}
       onOpenChange={onOpenChange}
       title={isNew ? t('plugin_crm.customer.create') : t('plugin_crm.customer.edit')}
+      side="right"
       footer={
         <>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             {t('common.cancel')}
           </Button>
-          <Button onClick={() => void submit()}>{t('common.save')}</Button>
+          <Button disabled={save.isPending} onClick={() => void submit()}>
+            {save.isPending ? t('common.loading') : t('common.save')}
+          </Button>
         </>
       }
     >
@@ -240,9 +255,11 @@ function CustomerFormDialog({
           </span>
           <Input
             value={value.name ?? ''}
+            aria-invalid={showErrors && nameMissing}
             placeholder={t(`plugin_crm.customer.namePlaceholder.${isCompany ? 'company' : 'person'}`)}
             onChange={(e) => set({ name: e.target.value })}
           />
+          {showErrors && nameMissing ? <span className="text-xs text-destructive">{t('plugin_crm.nameRequired')}</span> : null}
         </label>
         <div className="grid grid-cols-2 gap-3">
           <label className="flex flex-col gap-1">
@@ -338,7 +355,13 @@ function CustomerFormDialog({
             </div>
             <label className="flex flex-col gap-1">
               {t('plugin_crm.fields.idNo')}
-              <Input maxLength={64} value={value.idNo ?? ''} onChange={(e) => set({ idNo: e.target.value })} />
+              <Input
+                maxLength={64}
+                value={value.idNo ?? ''}
+                aria-invalid={showErrors && idPairBroken}
+                onChange={(e) => set({ idNo: e.target.value })}
+              />
+              {showErrors && idPairBroken ? <span className="text-xs text-destructive">{t('plugin_crm.idPairRequired')}</span> : null}
             </label>
           </>
         )}
@@ -383,13 +406,17 @@ function CustomerFormDialog({
           <label className="flex flex-col gap-1">
             <span>
               {t('plugin_crm.fields.externalNo')}
-              {value.externalSource ? <span className="text-destructive"> *</span> : null}
+              {value.externalSource ? <RequiredMark /> : null}
             </span>
             <Input
               value={value.externalNo ?? ''}
+              aria-invalid={showErrors && externalNoMissing}
               disabled={!isNew || !value.externalSource}
               onChange={(e) => set({ externalNo: e.target.value })}
             />
+            {showErrors && externalNoMissing ? (
+              <span className="text-xs text-destructive">{t('plugin_crm.externalNoRequired')}</span>
+            ) : null}
           </label>
         </div>
         <p className="text-xs text-muted-foreground">{t('plugin_crm.customer.anchorHint')}</p>
@@ -1256,7 +1283,7 @@ export function CustomersTab() {
             aria-controls="crm-more-filters"
             onClick={() => setMoreOpen((v) => !v)}
           >
-            <SlidersHorizontal className="me-2 size-4" aria-hidden="true" />
+            <SlidersHorizontal aria-hidden="true" />
             {t(moreOpen ? 'plugin_crm.filter.less' : 'plugin_crm.filter.more')}
             {moreActive > 0 ? (
               <Badge variant="secondary" className="ms-1.5">
@@ -1433,7 +1460,7 @@ export function CustomersTab() {
               </Button>
             </Can>
             <Button variant="outline" onClick={() => void onExport()} disabled={exporting || inPool} title={inPool ? t('plugin_crm.pool.exportDisabled') : undefined}>
-              <Download className="me-2 size-4" aria-hidden="true" />
+              <Download aria-hidden="true" />
               {t('common.export')}
             </Button>
             {/* 低频动作收进「更多」：疑似重复是巡检工具、待跟进是当日清单、自定义字段是平台设置，
@@ -1470,9 +1497,7 @@ export function CustomersTab() {
         }
         rowActions={(cu) => (
           <>
-            <Button variant="ghost" size="icon" aria-label={t('common.detail')} onClick={() => setDetail(cu)}>
-              <Eye aria-hidden="true" />
-            </Button>
+            <DetailAction onClick={() => setDetail(cu)} />
             {inPool ? (
               <Can perm="crm:pool">
                 <Button
@@ -1934,14 +1959,18 @@ function FieldsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v:
                 <span>{t('plugin_crm.customer.field.sortLabel')}</span>
                 <Input inputMode="numeric" value={draft.sort} onChange={(e) => setDraft({ ...draft, sort: Number(e.target.value) || 0 })} />
               </label>
-              <label className="flex items-center gap-2 pt-5 text-sm">
-                <Switch checked={draft.required} onCheckedChange={(v) => setDraft({ ...draft, required: v })} />
-                {t('plugin_crm.customer.field.required')}
-              </label>
-              <label className="flex items-center gap-2 text-sm">
-                <Switch checked={draft.enabled} onCheckedChange={(v) => setDraft({ ...draft, enabled: v })} />
-                {t('plugin_crm.customer.field.enabledLabel')}
-              </label>
+              <SwitchRow
+                label={t('plugin_crm.customer.field.required')}
+                checked={draft.required}
+                onCheckedChange={(v) => setDraft({ ...draft, required: v })}
+                bare
+              />
+              <SwitchRow
+                label={t('plugin_crm.customer.field.enabledLabel')}
+                checked={draft.enabled}
+                onCheckedChange={(v) => setDraft({ ...draft, enabled: v })}
+                bare
+              />
             </div>
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={closeForm}>

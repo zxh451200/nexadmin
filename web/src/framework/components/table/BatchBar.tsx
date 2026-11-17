@@ -39,7 +39,7 @@ export function BatchBar({
       aria-label={t('dataTable.batchActions')}
     >
       <div className="flex justify-center px-2">
-        <div className="pointer-events-auto flex max-w-full flex-wrap items-center gap-1 rounded-2xl border border-border bg-popover px-2 py-1.5 text-popover-foreground shadow-lg overlay-panel animate-in fade-in-0 slide-in-from-bottom-1 duration-(--motion-fast) ease-(--ease-standard) motion-reduce:animate-none">
+        <div className="pointer-events-auto flex max-w-full flex-wrap items-center gap-1 rounded-xl border border-border bg-popover px-2 py-1.5 text-popover-foreground shadow-lg overlay-panel animate-in fade-in-0 slide-in-from-bottom-1 duration-(--motion-fast) ease-(--ease-standard) motion-reduce:animate-none">
           <span className="num ps-2 text-sm text-foreground" aria-live="polite">
             {t('dataTable.selectedCount', { count })}
           </span>

@@ -23,11 +23,20 @@ export interface KbHit {
   score: number
 }
 
+export interface KbChunk {
+  id: string
+  seq: number
+  /** 该块的入库文本（与向量一起参与检索的原文）。 */
+  content: string
+}
+
 export interface KbAnswer {
   answer: string
   hits: KbHit[]
   /** true = 检索未命中，没有调用模型；前端提示走人工。 */
   handoff: boolean
+  /** 召回调试：handoff 时不设阈值的 topK 候选——看「最接近的候选差多少分」再调阈值。 */
+  candidates?: KbHit[]
 }
 
 export interface KbSettings {
@@ -88,6 +97,26 @@ export function useReembedDocument() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (id: string) => api.post<KbDocument>(`${BASE}/documents/${id}/reembed`),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: KEY }),
+  })
+}
+
+/** 知识块预览：一篇文档切出来的全部块（按切分顺序），排查「AI 为什么这么答」用。 */
+export function useDocumentChunks(id: string | null) {
+  return useQuery({
+    queryKey: [...KEY, 'documents', id, 'chunks'],
+    queryFn: () =>
+      api.get<{ document: KbDocument; chunks: KbChunk[] }>(`${BASE}/documents/${id}/chunks`),
+    enabled: !!id,
+  })
+}
+
+/** 重命名：只改展示标题，切块与向量不动（无需重新向量化）。 */
+export function useRenameDocument() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, title }: { id: string; title: string }) =>
+      api.put<KbDocument>(`${BASE}/documents/${id}`, { title }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: KEY }),
   })
 }

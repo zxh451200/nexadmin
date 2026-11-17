@@ -203,7 +203,7 @@ export default function TenantPackagePage() {
         toolbar={
           <Can perm="tenantPkg:create">
             <Button type="button" onClick={() => openForm(null)}>
-              <Plus className="me-2 h-4 w-4" aria-hidden="true" />
+              <Plus aria-hidden="true" />
               {t('common.add')}
             </Button>
           </Can>
@@ -251,6 +251,7 @@ export default function TenantPackagePage() {
         open={open}
         onOpenChange={setOpen}
         size="lg"
+        side="right"
         title={editing ? t('tenantPkg.edit') : t('tenantPkg.create')}
         footer={
           <>

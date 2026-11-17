@@ -222,11 +222,26 @@ export default function DesignerPage() {
 
         <TabsContent value="design" className="m-0">
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-[12rem_minmax(0,1fr)_22rem]">
-            <FieldPalette onAdd={add} />
-            <section aria-label={t('plugin_formbuilder.designer.canvas')} className="min-w-0">
+            {/* 字段数到顶的行内提示：面板常驻显示，点击仍以 toast 兜底 */}
+            <FieldPalette
+              onAdd={add}
+              limitHint={fields.length >= MaxFields ? t('plugin_formbuilder.designer.tooMany', { n: MaxFields }) : undefined}
+            />
+            <section aria-label={t('plugin_formbuilder.designer.canvas')} className="min-w-0 space-y-2">
               <FieldCanvas fields={fields} selected={sel} onSelect={select} onMove={move} />
+              {/* 发布前缺字段的行内提示 */}
+              {fields.length === 0 ? <p className="text-xs text-destructive">{t('plugin_formbuilder.designer.needField')}</p> : null}
             </section>
             <div ref={propsRef} className="scroll-mt-4 rounded-lg border border-border bg-card p-4 lg:sticky lg:top-4 lg:max-h-[calc(100dvh-6rem)] lg:self-start lg:overflow-y-auto">
+              {sel >= 0 && fieldProblems(fields[sel]).length > 0 ? (
+                <div role="alert" className="mb-3 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2">
+                  {fieldProblems(fields[sel]).map((p) => (
+                    <p key={p} className="text-xs text-destructive">
+                      {t(`plugin_formbuilder.problem.${p}`)}
+                    </p>
+                  ))}
+                </div>
+              ) : null}
               {sel >= 0 ? (
                 <FieldProps
                   key={sel}

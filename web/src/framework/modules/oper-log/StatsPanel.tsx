@@ -126,20 +126,20 @@ export function OperStatsPanel() {
         <div data-tone="warning">
           <table className="w-full text-xs">
             <thead>
-              <tr className="text-left text-muted-foreground">
+              <tr className="text-start text-muted-foreground">
                 <th className="font-medium">{t('operLog.stats.col.url')}</th>
                 <th className="font-medium">{t('operLog.stats.col.method')}</th>
-                <th className="text-right font-medium">{t('operLog.stats.col.count')}</th>
-                <th className="text-right font-medium">{t('operLog.stats.col.avgMs')}</th>
+                <th className="text-end font-medium">{t('operLog.stats.col.count')}</th>
+                <th className="text-end font-medium">{t('operLog.stats.col.avgMs')}</th>
               </tr>
             </thead>
             <tbody>
               {data.slowest.map((u) => (
                 <tr key={`${u.method} ${u.url}`} className="border-t border-border/60">
-                  <td className="max-w-0 truncate py-1.5 pr-3" title={u.url}>{u.url}</td>
-                  <td className="py-1.5 pr-3 text-muted-foreground">{u.method}</td>
-                  <td className="num py-1.5 text-right">{u.count.toLocaleString()}</td>
-                  <td className="num py-1.5 text-right">{u.avgMs.toLocaleString()} ms</td>
+                  <td className="max-w-0 truncate py-1.5 pe-3" title={u.url}>{u.url}</td>
+                  <td className="py-1.5 pe-3 text-muted-foreground">{u.method}</td>
+                  <td className="num py-1.5 text-end">{u.count.toLocaleString()}</td>
+                  <td className="num py-1.5 text-end">{u.avgMs.toLocaleString()} ms</td>
                 </tr>
               ))}
             </tbody>

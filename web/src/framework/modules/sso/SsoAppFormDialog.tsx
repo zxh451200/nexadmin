@@ -105,6 +105,7 @@ export function SsoAppFormDialog({ open, onOpenChange, editing, onCreated }: Pro
       open={open}
       onOpenChange={onOpenChange}
       size="lg"
+      side="right"
       title={editing ? t('sso.form.editTitle') : t('sso.form.createTitle')}
       footer={
         <>

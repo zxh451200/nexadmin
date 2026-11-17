@@ -60,7 +60,7 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 			d.Log.Sugar().Warnw(msg, "err", err.Error())
 		}
 	})
-	h := &handler{svc: m.service(d)}
+	h := &handler{svc: m.service(d), db: d.DB}
 	h.Register(r, d)
 }
 

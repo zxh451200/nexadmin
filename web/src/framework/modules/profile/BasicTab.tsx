@@ -80,8 +80,8 @@ export function BasicTab() {
         bio: v.bio,
       })
       toast.success(t('profile.basic.saved'))
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   })
 

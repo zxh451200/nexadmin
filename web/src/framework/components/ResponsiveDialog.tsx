@@ -26,6 +26,13 @@ export interface ResponsiveDialogProps {
   footer?: ReactNode
   /** 桌面弹窗宽度 */
   size?: 'sm' | 'md' | 'lg' | 'xl'
+  /**
+   * 桌面呈现位置：center（默认）= 居中弹窗；right = 右侧抽屉。
+   * 全站约定：实体的新建/编辑长表单（多字段、多分区、要滚动）用 right；
+   * 短表单、详情查看、选择器、确认框、登录流程用默认 center。
+   * 手机端不受影响：两种形态都是底部抽屉。
+   */
+  side?: 'center' | 'right'
   /** 高度固定为 85dvh（手机 92dvh），正文占满余下空间；多页签表单切换时弹窗不再变高变矮 */
   fixedHeight?: boolean
   className?: string
@@ -40,7 +47,15 @@ const sizeClass = {
   xl: 'md:max-w-4xl',
 } as const
 
-/** 桌面(>=md)为居中 Dialog，手机为底部 Drawer；header 与 footer 固定，中间内容滚动 */
+// 右侧抽屉的桌面宽度：与居中弹窗的 size 档位一一对应。
+const drawerWidthClass = {
+  sm: 'w-[min(92vw,26rem)]',
+  md: 'w-[min(92vw,34rem)]',
+  lg: 'w-[min(92vw,44rem)]',
+  xl: 'w-[min(92vw,52rem)]',
+} as const
+
+/** 桌面(>=md)为居中 Dialog（side="right" 时为右侧抽屉），手机为底部 Drawer；header 与 footer 固定，中间内容滚动 */
 export function ResponsiveDialog({
   open,
   onOpenChange,
@@ -49,17 +64,25 @@ export function ResponsiveDialog({
   children,
   footer,
   size = 'md',
+  side = 'center',
   fixedHeight,
   className,
   contentClassName,
 }: ResponsiveDialogProps) {
   const isMobile = useIsMobile()
+  // 右侧抽屉只发生在桌面；手机上两种形态统一走底部抽屉（方向不能带 right）。
+  const useRight = !isMobile && side === 'right'
 
-  if (isMobile) {
+  if (isMobile || useRight) {
     return (
-      <Drawer open={open} onOpenChange={onOpenChange}>
-        <DrawerContent className={cn('flex flex-col', fixedHeight ? 'h-[92dvh]' : 'max-h-[92dvh]')}>
-          <DrawerHeader className="text-start">
+      <Drawer open={open} onOpenChange={onOpenChange} direction={useRight ? 'right' : undefined}>
+        <DrawerContent
+          side={useRight ? 'right' : undefined}
+          className={cn(
+            useRight ? drawerWidthClass[size] : cn('flex flex-col', fixedHeight ? 'h-[92dvh]' : 'max-h-[92dvh]'),
+          )}
+        >
+          <DrawerHeader className={cn('text-start', useRight && 'shrink-0 border-b border-border dark:border-white/10')}>
             <DrawerTitle>{title}</DrawerTitle>
             {description ? (
               <DrawerDescription>{description}</DrawerDescription>
@@ -67,11 +90,24 @@ export function ResponsiveDialog({
               <DrawerDescription className="sr-only">{title}</DrawerDescription>
             )}
           </DrawerHeader>
-          <div className={cn('min-h-0 flex-1 px-4 pb-4', fixedHeight ? 'overflow-hidden' : 'overflow-y-auto', className)}>
+          <div
+            className={cn(
+              'min-h-0 flex-1 px-4 pb-4',
+              useRight ? 'pt-4 overflow-y-auto' : fixedHeight ? 'overflow-hidden' : 'overflow-y-auto',
+              className,
+            )}
+          >
             {children}
           </div>
           {footer ? (
-            <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-border px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] [&>button]:w-full">
+            <div
+              className={cn(
+                'flex shrink-0 flex-col-reverse gap-2 border-t border-border px-4 pt-3 dark:border-white/10',
+                useRight
+                  ? 'items-end pb-4'
+                  : 'pb-[max(1rem,env(safe-area-inset-bottom))] [&>button]:w-full',
+              )}
+            >
               {footer}
             </div>
           ) : null}

@@ -87,7 +87,7 @@ export default function FilePage() {
       await update.mutateAsync({ id: f.id, patch: { visibility: f.visibility === 'public' ? 'private' : 'public' } })
       toast.success(t('common.operateSuccess'))
     } catch {
-      toast.error(t('common.operateFailed'))
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -100,7 +100,7 @@ export default function FilePage() {
       setSelected((s) => s.filter((x) => !ids.includes(x)))
       toast.success(t('common.operateSuccess'))
     } catch {
-      toast.error(t('common.operateFailed'))
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -112,7 +112,7 @@ export default function FilePage() {
       setSelected([])
       setMoving(null)
     } catch {
-      toast.error(t('common.operateFailed'))
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -265,7 +265,7 @@ export default function FilePage() {
   const uploadBtn = (
     <Can perm="file:upload">
       <Button onClick={() => setUploadOpen(true)}>
-        <Upload className="me-2 size-4" aria-hidden="true" />
+        <Upload aria-hidden="true" />
         {t('fileMgr.upload')}
       </Button>
     </Can>

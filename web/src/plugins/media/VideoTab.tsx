@@ -51,8 +51,8 @@ export function VideoTab() {
     try {
       await save.mutateAsync(form)
       toast.success(t('common.operateSuccess'))
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -61,16 +61,23 @@ export function VideoTab() {
     try {
       setProgress(0)
       const target = await createVideoUpload(file.name)
-      await uploadToTus(target.uploadUrl, file, {
-        kind: 'video',
-        headers: target.headers,
-        onProgress: setProgress,
-      })
-      await saveVideo({ videoId: target.videoId, name: file.name, size: file.size })
-      await qc.invalidateQueries({ queryKey: ['media', 'video', 'assets'] })
-      toast.success(t('common.operateSuccess'))
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+      try {
+        await uploadToTus(target.uploadUrl, file, {
+          kind: 'video',
+          headers: target.headers,
+          onProgress: setProgress,
+        })
+      } catch {
+        // tus 直传不走 http 拦截器：上传失败这里给唯一一条提示
+        toast.error(t('common.operateFailed'))
+      }
+      try {
+        await saveVideo({ videoId: target.videoId, name: file.name, size: file.size })
+        await qc.invalidateQueries({ queryKey: ['media', 'video', 'assets'] })
+        toast.success(t('common.operateSuccess'))
+      } catch {
+        // 失败原因由 http 拦截器统一弹出
+      }
     } finally {
       setProgress(null)
     }
@@ -86,8 +93,8 @@ export function VideoTab() {
       setRegId('')
       setRegName('')
       toast.success(t('common.operateSuccess'))
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -99,7 +106,7 @@ export function VideoTab() {
       setSelected((s) => s.filter((id) => id !== row.id))
       toast.success(t('common.operateSuccess'))
     } catch {
-      toast.error(t('common.operateFailed'))
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -113,7 +120,7 @@ export function VideoTab() {
       setSelected([])
       toast.success(deleted < ids.length ? t('plugin_media.video.deletedPartial', { deleted, total: ids.length }) : t('common.operateSuccess'))
     } catch {
-      toast.error(t('common.operateFailed'))
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 

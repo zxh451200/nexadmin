@@ -1127,8 +1127,8 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
                     className={cn(
                       'relative h-[3px] rounded-full',
                       drop.mode === 'blocked'
-                        ? 'bg-destructive shadow-[0_0_10px_rgba(220,38,38,0.45)]'
-                        : 'bg-primary shadow-[0_0_10px_rgba(46,52,234,0.45)]',
+                        ? 'bg-destructive shadow-[0_0_10px_hsl(var(--destructive)/0.45)]'
+                        : 'bg-primary shadow-[0_0_10px_hsl(var(--primary)/0.45)]',
                     )}
                   >
                     <span
@@ -1148,7 +1148,7 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
                       className={cn(
                         'absolute inset-s-4 top-[-11px] whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-medium shadow-xs',
                         drop.mode === 'blocked'
-                          ? 'bg-destructive text-white'
+                          ? 'bg-destructive text-destructive-foreground'
                           : 'bg-primary text-primary-foreground',
                       )}
                     >

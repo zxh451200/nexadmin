@@ -95,6 +95,7 @@ export function RuleFormDialog({ open, onOpenChange, editing }: Props) {
             <Input
               id="sec-rule-cidr"
               className="font-mono"
+              aria-invalid={!!error}
               value={v.cidr}
               onChange={(e) => setV((s) => ({ ...s, cidr: e.target.value }))}
               placeholder="203.0.113.0/24, 2001:db8::/32"

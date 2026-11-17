@@ -113,6 +113,7 @@ export function DefineTableDialog({ open, onOpenChange, pending, onSubmit }: Pro
       open={open}
       onOpenChange={onOpenChange}
       size="xl"
+      side="right"
       title={t('plugin_codegen.define.title')}
       description={t('plugin_codegen.define.description')}
       footer={
@@ -137,6 +138,7 @@ export function DefineTableDialog({ open, onOpenChange, pending, onSubmit }: Pro
               <span className="me-1.5 border-e border-input pe-2 font-mono text-sm text-muted-foreground">biz_</span>
               <Input
                 id="codegen-def-name"
+                aria-invalid={error === 'errName'}
                 value={name}
                 onChange={(e) => setName(e.target.value.trim().toLowerCase())}
                 placeholder="product"
@@ -154,6 +156,7 @@ export function DefineTableDialog({ open, onOpenChange, pending, onSubmit }: Pro
             </Label>
             <Input
               id="codegen-def-migration"
+              aria-invalid={error === 'errMigration'}
               value={migration}
               onChange={(e) => setMigration(e.target.value.trim())}
               placeholder="001"
@@ -206,6 +209,7 @@ export function DefineTableDialog({ open, onOpenChange, pending, onSubmit }: Pro
                       value={r.name}
                       onChange={(e) => patch(r.id, { name: e.target.value.trim().toLowerCase() })}
                       aria-label={t('plugin_codegen.define.fieldName')}
+                      aria-invalid={error === 'errFieldName' || error === 'errReserved' || error === 'errFieldDup'}
                       maxLength={48}
                       autoComplete="off"
                     />
@@ -241,6 +245,7 @@ export function DefineTableDialog({ open, onOpenChange, pending, onSubmit }: Pro
                       onChange={(e) => patch(r.id, { length: e.target.value })}
                       placeholder="255"
                       aria-label={t('plugin_codegen.define.fieldLength')}
+                      aria-invalid={error === 'errLength'}
                       disabled={r.kind !== 'string'}
                       min={1}
                       max={4000}
@@ -252,6 +257,7 @@ export function DefineTableDialog({ open, onOpenChange, pending, onSubmit }: Pro
                       onChange={(e) => patch(r.id, { dict: e.target.value.trim().toLowerCase() })}
                       placeholder="sys_status"
                       aria-label={t('plugin_codegen.define.fieldDict')}
+                      aria-invalid={error === 'errDict'}
                       maxLength={48}
                       disabled={r.kind !== 'string'}
                       className="font-mono"

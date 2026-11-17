@@ -43,7 +43,7 @@ const btns = (parentId: string, prefix: string, actions: string[]) =>
 const CRUD = ['create', 'update', 'delete']
 
 // 工作台
-menu(null, 'dashboard.menu', '/dashboard', 'dashboard/DashboardPage', 'dashboard:view', 'LayoutDashboard', 10, {
+menu(null, 'dashboard.menu', '/dashboard', 'dashboard/DashboardPage', 'dashboard:view', 'House', 10, {
   keepAlive: false,
 })
 

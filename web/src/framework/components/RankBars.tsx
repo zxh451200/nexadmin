@@ -39,7 +39,7 @@ export function RankBars({
                 <div className="tone-bar h-full rounded-full" style={{ width: `${(i.value / max) * 100}%` }} />
               </div>
             </div>
-            <span className="num whitespace-nowrap text-right text-muted-foreground">
+            <span className="num whitespace-nowrap text-end text-muted-foreground">
               {formatValue ? formatValue(i.value) : i.value.toLocaleString()}
             </span>
           </>

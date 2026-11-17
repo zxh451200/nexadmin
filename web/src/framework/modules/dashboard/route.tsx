@@ -5,6 +5,6 @@ export const routes: ModuleRoute[] = [
   {
     path: 'dashboard',
     component: lazy(() => import('./DashboardPage')),
-    menu: { title: 'dashboard.menu', icon: 'LayoutDashboard', order: 0, group: 'dashboard' },
+    menu: { title: 'dashboard.menu', icon: 'House', order: 0, group: 'dashboard' },
   },
 ]

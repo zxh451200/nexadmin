@@ -76,8 +76,8 @@ export default function MenuPage() {
     try {
       await del.mutateAsync(row.id)
       toast.success(t('common.operateSuccess'))
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -95,8 +95,7 @@ export default function MenuPage() {
       toast.success(t('common.operateSuccess'))
       setSelected([])
     } catch {
-      // 具体理由（父节点不存在 / 按钮必须挂菜单等）由请求层 toast，这里只兜一句操作失败
-      toast.error(t('common.operateFailed'))
+      // 具体理由（父节点不存在 / 按钮必须挂菜单等）由请求层 toast
     }
   }
 
@@ -135,7 +134,7 @@ export default function MenuPage() {
         toolbar={
           <Can perm="menu:create">
             <Button type="button" disabled={!isPlatform} onClick={() => openCreate(null)}>
-              <Plus className="me-2 size-4" aria-hidden="true" />
+              <Plus aria-hidden="true" />
               {t('sysMenu.action.add')}
             </Button>
           </Can>
@@ -143,13 +142,14 @@ export default function MenuPage() {
         columns={columns}
         data={shown}
         loading={isLoading}
+        emptyText={t('common.empty')}
         columnSettingsKey="sysMenu"
         forceExpandAll={filter.active}
         selection={{ selected, onChange: setSelected }}
         batchActions={(ids) => (
           <Can perm="menu:delete">
             <Button type="button" variant="destructive" size="sm" disabled={!isPlatform} onClick={() => void onDeleteBatch(ids)}>
-              <Trash2 className="me-2 size-4" aria-hidden="true" />
+              <Trash2 aria-hidden="true" />
               {t('common.delete')}
             </Button>
           </Can>

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { AlertTriangle, BotMessageSquare, CircleCheck, CircleX, Clock, Loader2, RefreshCw, Trash2, Upload } from 'lucide-react'
+import { AlertTriangle, BotMessageSquare, CircleCheck, CircleX, Clock, FileText, Loader2, Pencil, RefreshCw, Trash2, Upload } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
@@ -14,13 +14,16 @@ import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { Textarea } from '@/framework/ui/textarea'
+import { errMsg } from '@/lib/errMsg'
 import {
   uploadDocument,
   useAsk,
   useDeleteDocument,
+  useDocumentChunks,
   useDocuments,
   useKbSettings,
   useKbStatus,
+  useRenameDocument,
   useReembedDocument,
   useSaveKbSettings,
   type KbDocument,
@@ -56,10 +59,11 @@ function UploadDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v:
         toast.success(t('plugin_kb.uploadDone', { name: doc.title, count: doc.chunkCount }))
       } catch (e) {
         fail++
+        // uploadDocument 走原生 fetch、不经 http 拦截器：这条 toast 是失败原因的唯一反馈。
         // 失败原因同时落在行上（超限 / 格式不支持 / 抽取失败一眼定位）与 toast 里
         failed.add(file.name)
         setStates((s) => ({ ...s, [file.name]: 'failed' }))
-        toast.error(`${file.name}: ${(e as Error).message}`)
+        toast.error(`${file.name}: ${errMsg(e, t('common.operateFailed'))}`)
       }
     }
     setBusy(false)
@@ -93,7 +97,7 @@ function UploadDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v:
             {t('common.cancel')}
           </Button>
           <Button onClick={() => void submit()} disabled={!ready}>
-            {busy ? <Loader2 className="me-2 size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Upload className="me-2 size-4" aria-hidden="true" />}
+            {busy ? <Loader2 className="animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Upload aria-hidden="true" />}
             {busy ? t('plugin_kb.uploadBusy', { done: okCount, fail: failCount }) : t('plugin_kb.upload')}
           </Button>
         </>
@@ -136,6 +140,96 @@ function UploadDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v:
   )
 }
 
+/** 知识块预览弹窗：看这篇文档切出来的全部块——库里实际参与检索的文本。
+ * 排查「AI 为什么这么答 / 为什么没命中」时从这里入手，不用对着块数黑盒猜。 */
+function ChunksDialog({ doc, onOpenChange }: { doc: KbDocument; onOpenChange: (v: boolean) => void }) {
+  const { t } = useTranslation()
+  const chunks = useDocumentChunks(doc.id)
+  const list = chunks.data?.chunks ?? []
+  return (
+    <ResponsiveDialog
+      open
+      onOpenChange={onOpenChange}
+      title={t('plugin_kb.chunksTitle', { name: doc.title })}
+      description={t('plugin_kb.chunksDesc', { count: doc.chunkCount, model: doc.model })}
+      size="lg"
+      footer={
+        <Button variant="outline" onClick={() => onOpenChange(false)}>
+          {t('common.close')}
+        </Button>
+      }
+    >
+      {chunks.isLoading ? (
+        <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
+          <Loader2 className="me-2 size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+          {t('common.loading')}
+        </div>
+      ) : list.length === 0 ? (
+        <p className="py-6 text-center text-sm text-muted-foreground">{t('plugin_kb.chunksEmpty')}</p>
+      ) : (
+        <ol className="flex max-h-[26rem] flex-col gap-2 overflow-y-auto pe-1">
+          {list.map((c) => (
+            <li key={c.id} className="flex gap-2.5 rounded-md border border-border p-2.5">
+              <span className="num shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">#{c.seq}</span>
+              <p className="min-w-0 flex-1 whitespace-pre-wrap break-words text-sm leading-relaxed">{c.content}</p>
+            </li>
+          ))}
+        </ol>
+      )}
+    </ResponsiveDialog>
+  )
+}
+
+/** 重命名弹窗：只改展示标题，切块与向量不动。 */
+function RenameDialog({ doc, onOpenChange }: { doc: KbDocument; onOpenChange: (v: boolean) => void }) {
+  const { t } = useTranslation()
+  const save = useRenameDocument()
+  const [title, setTitle] = useState(doc.title)
+  const submit = async () => {
+    if (!title.trim()) return
+    try {
+      await save.mutateAsync({ id: doc.id, title })
+      toast.success(t('common.operateSuccess'))
+      onOpenChange(false)
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
+    }
+  }
+  return (
+    <ResponsiveDialog
+      open
+      onOpenChange={onOpenChange}
+      title={t('plugin_kb.renameTitle')}
+      description={t('plugin_kb.renameDesc', { name: doc.title })}
+      size="sm"
+      footer={
+        <>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            {t('common.cancel')}
+          </Button>
+          <Button onClick={() => void submit()} disabled={save.isPending || !title.trim()}>
+            {t('common.save')}
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="kb-rename">{t('plugin_kb.fields.title')}</Label>
+        <Input
+          id="kb-rename"
+          value={title}
+          maxLength={200}
+          autoFocus
+          onChange={(e) => setTitle(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && title.trim() && !save.isPending) void submit()
+          }}
+        />
+      </div>
+    </ResponsiveDialog>
+  )
+}
+
 /** 检索设置弹窗：阈值 / TopK / 追加风格要求。 */
 function SettingsDialog({
   open,
@@ -158,8 +252,8 @@ function SettingsDialog({
       await save.mutateAsync({ threshold: Number(threshold), topK: Number(topK), systemPrompt })
       toast.success(t('common.operateSuccess'))
       onOpenChange(false)
-    } catch (e) {
-      toast.error((e as Error).message)
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -217,6 +311,8 @@ export default function KbPage() {
   const confirm = useConfirm()
   const [uploadOpen, setUploadOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [chunksDoc, setChunksDoc] = useState<KbDocument | null>(null)
+  const [renameDoc, setRenameDoc] = useState<KbDocument | null>(null)
   const [question, setQuestion] = useState('')
   // 状态筛选：ready/failed 走后端 ?status=；「需重新向量化」是「模型已变更」的推导态，
   // 后端没有这个状态值，拉全量后在前端过滤。
@@ -250,8 +346,8 @@ export default function KbPage() {
     try {
       await remove.mutateAsync(d.id)
       toast.success(t('common.operateSuccess'))
-    } catch (e) {
-      toast.error((e as Error).message)
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -303,8 +399,8 @@ export default function KbPage() {
     try {
       await reembed.mutateAsync(d.id)
       toast.success(t('plugin_kb.reembedDone', { name: d.title }))
-    } catch (e) {
-      toast.error((e as Error).message)
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -318,10 +414,18 @@ export default function KbPage() {
       }
       const top = res.hits[0]
       toast.success(t('plugin_kb.askDone', { title: top?.title ?? '', score: top?.score ?? 0 }))
-    } catch (e) {
-      toast.error((e as Error).message)
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   }
+
+  // 统计条：文档 / 知识块 / 未就绪，数据都在现有接口里，前端汇总（量级小不做后端聚合）
+  const stats = useMemo(() => {
+    const all = docs.data ?? []
+    const chunks = all.reduce((n, d) => n + d.chunkCount, 0)
+    const failed = all.filter((d) => d.status !== 'ready').length
+    return { docs: all.length, chunks, failed }
+  }, [docs.data])
 
   const columns: Column<KbDocument>[] = [
     {
@@ -330,9 +434,14 @@ export default function KbPage() {
       mobile: 'title',
       render: (d) => (
         <div className="min-w-0">
-          <span className="block max-w-[20rem] truncate font-medium text-foreground" title={d.title}>
+          <button
+            type="button"
+            className="block max-w-[20rem] truncate font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+            title={t('plugin_kb.chunksOpen')}
+            onClick={() => setChunksDoc(d)}
+          >
             {d.title}
-          </span>
+          </button>
           <div className="text-xs text-muted-foreground">{d.sourceName}</div>
         </div>
       ),
@@ -373,6 +482,9 @@ export default function KbPage() {
       render: (d) => (
         <div className="flex items-center gap-1">
           <Can perm="kb:edit">
+            <Button variant="ghost" size="icon" title={t('plugin_kb.rename')} onClick={() => setRenameDoc(d)}>
+              <Pencil aria-hidden="true" />
+            </Button>
             {needReembed(d) ? (
               <Button variant="ghost" size="icon" title={t('plugin_kb.reembed')} disabled={reembed.isPending} onClick={() => void onReembed(d)}>
                 <RefreshCw aria-hidden="true" />
@@ -402,7 +514,7 @@ export default function KbPage() {
                 {t('plugin_kb.settingsTitle')}
               </Button>
               <Button onClick={() => setUploadOpen(true)}>
-                <Upload className="me-2 size-4" aria-hidden="true" />
+                <Upload aria-hidden="true" />
                 {t('plugin_kb.upload')}
               </Button>
             </Can>
@@ -411,9 +523,23 @@ export default function KbPage() {
       />
 
       {status.data && (!status.data.embedReady || !status.data.chatReady) ? (
-        <div className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2.5 text-sm text-warning-foreground">
+        <div className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2.5 text-sm text-warning">
           <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
           <span>{status.data.embedReady ? t('plugin_kb.missingChat') : t('plugin_kb.missingEmbed')}</span>
+        </div>
+      ) : null}
+
+      {docs.data ? (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+          <span className="inline-flex items-center gap-1.5">
+            <FileText className="size-3.5" aria-hidden="true" />
+            {t('plugin_kb.statsDocs', { count: stats.docs })}
+          </span>
+          <span>{t('plugin_kb.statsChunks', { count: stats.chunks })}</span>
+          {status.data?.embedModel ? <span>{t('plugin_kb.statsModel', { model: status.data.embedModel })}</span> : null}
+          {stats.failed > 0 ? (
+            <span className="text-warning">{t('plugin_kb.statsFailed', { count: stats.failed })}</span>
+          ) : null}
         </div>
       ) : null}
 
@@ -484,25 +610,49 @@ export default function KbPage() {
             </Button>
           </div>
           {ask.data ? (
-            <div className="flex flex-col gap-2 text-sm">
-              <div className="rounded-md bg-muted px-3 py-2 whitespace-pre-wrap">{ask.data.answer}</div>
-              <div className="flex flex-col gap-1">
-                {ask.data.hits.map((h) => (
-                  <div key={h.documentId + h.excerpt.slice(0, 8)} className="flex items-baseline gap-2 text-xs text-muted-foreground">
-                    <Badge variant="outline" className="shrink-0">
-                      {t('plugin_kb.hitScore', { score: h.score })}
-                    </Badge>
-                    <span className="font-medium text-foreground">{h.title}</span>
-                    <span className="min-w-0 truncate">{h.excerpt}</span>
+            ask.data.handoff ? (
+              // 检索未命中：候选列表帮定位「差多少」——若候选分数普遍接近阈值，
+              // 说明知识库里有沾边内容，调低阈值或补文档；普遍很低则是问的东西库里没有。
+              <div className="flex flex-col gap-2 text-sm">
+                <div className="rounded-md bg-warning/10 px-3 py-2 text-warning">{t('plugin_kb.askHandoff')}</div>
+                {ask.data.candidates?.length ? (
+                  <div className="flex flex-col gap-1">
+                    <p className="text-xs text-muted-foreground">{t('plugin_kb.candidatesTitle')}</p>
+                    {ask.data.candidates.map((h) => (
+                      <div key={h.documentId + h.excerpt.slice(0, 8)} className="flex items-baseline gap-2 text-xs text-muted-foreground">
+                        <Badge variant="outline" className="shrink-0">
+                          {t('plugin_kb.hitScore', { score: h.score })}
+                        </Badge>
+                        <span className="font-medium text-foreground">{h.title}</span>
+                        <span className="min-w-0 truncate">{h.excerpt}</span>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                ) : null}
               </div>
-            </div>
+            ) : (
+              <div className="flex flex-col gap-2 text-sm">
+                <div className="rounded-md bg-muted px-3 py-2 whitespace-pre-wrap">{ask.data.answer}</div>
+                <div className="flex flex-col gap-1">
+                  {ask.data.hits.map((h) => (
+                    <div key={h.documentId + h.excerpt.slice(0, 8)} className="flex items-baseline gap-2 text-xs text-muted-foreground">
+                      <Badge variant="outline" className="shrink-0">
+                        {t('plugin_kb.hitScore', { score: h.score })}
+                      </Badge>
+                      <span className="font-medium text-foreground">{h.title}</span>
+                      <span className="min-w-0 truncate">{h.excerpt}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
           ) : null}
         </div>
       </Can>
 
       <UploadDialog open={uploadOpen} onOpenChange={setUploadOpen} />
+      {chunksDoc ? <ChunksDialog doc={chunksDoc} onOpenChange={(v) => !v && setChunksDoc(null)} /> : null}
+      {renameDoc ? <RenameDialog doc={renameDoc} onOpenChange={(v) => !v && setRenameDoc(null)} /> : null}
       {settings.data ? (
         <SettingsDialog
           open={settingsOpen}

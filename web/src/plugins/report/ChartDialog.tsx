@@ -70,6 +70,7 @@ export function ChartDialog({ open, onOpenChange, editing }: Props) {
       open={open}
       onOpenChange={onOpenChange}
       size="xl"
+      side="right"
       title={editing ? t('plugin_report.chart.editTitle') : t('plugin_report.chart.createTitle')}
       footer={
         <>

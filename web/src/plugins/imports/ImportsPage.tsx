@@ -100,7 +100,7 @@ function NewImportDialog({
             {t('common.cancel')}
           </Button>
           <Button onClick={() => void submit()} disabled={run.isPending || !ready}>
-            <Upload className="me-2 size-4" aria-hidden="true" />
+            <Upload aria-hidden="true" />
             {t('plugin_imports.run')}
           </Button>
         </>
@@ -359,7 +359,7 @@ export default function ImportsPage() {
           <>
             <Can perm="imports:run">
               <Button onClick={() => setImportOpen(true)}>
-                <Upload className="me-2 size-4" aria-hidden="true" />
+                <Upload aria-hidden="true" />
                 {t('plugin_imports.newImport')}
               </Button>
             </Can>

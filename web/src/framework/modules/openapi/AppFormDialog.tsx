@@ -64,8 +64,8 @@ export function AppFormDialog({ open, onOpenChange, editing, onCreated }: Props)
       toast.success(t('common.operateSuccess'))
       onOpenChange(false)
       if (!editing && typeof (res as Partial<OpenAppCreated>).appSecret === 'string') onCreated(res as OpenAppCreated)
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   })
 

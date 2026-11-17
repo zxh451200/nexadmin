@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { Plus, Trash2 } from 'lucide-react'
 
 import { EmptyState } from '@/framework/components/EmptyState'
+import { RequiredMark } from '@/framework/components/RequiredMark'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { SimpleSelect } from '@/framework/components/SimpleSelect'
 import { Button } from '@/framework/ui/button'
@@ -98,9 +99,7 @@ export function StartDialog({
           <label className="flex flex-col gap-1 text-sm">
             <span className="text-xs text-muted-foreground">
               {t('plugin_workflow.fields.definition')}
-              <span aria-hidden="true" className="ms-0.5 text-destructive">
-                *
-              </span>
+              <RequiredMark />
             </span>
             <SimpleSelect
               aria-label={t('plugin_workflow.fields.definition')}
@@ -112,9 +111,7 @@ export function StartDialog({
           <label className="flex flex-col gap-1 text-sm">
             <span className="text-xs text-muted-foreground">
               {t('plugin_workflow.fields.title')}
-              <span aria-hidden="true" className="ms-0.5 text-destructive">
-                *
-              </span>
+              <RequiredMark />
             </span>
             <Input
               value={title}

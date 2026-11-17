@@ -45,6 +45,8 @@ function ModelFormDialog({
   const save = useSaveModel()
   const isNew = !editing
   const [draft, setDraft] = useState<Partial<AiModelForm>>({})
+  // 必填校验的行内提示状态：提交未过时点亮，字段一改即清除（toast 仍是快捷反馈）
+  const [nameMissing, setNameMissing] = useState(false)
 
   const value: Partial<AiModelForm> = editing
     ? {
@@ -68,6 +70,7 @@ function ModelFormDialog({
   const submit = async () => {
     const data = { ...value, name: (value.name ?? '').trim() } as AiModelForm
     if (!data.name) {
+      setNameMissing(true)
       toast.error(t('plugin_aigateway.nameRequired'))
       return
     }
@@ -80,7 +83,7 @@ function ModelFormDialog({
       toast.success(t('common.operateSuccess'))
       onOpenChange(false)
     } catch {
-      toast.error(t('common.operateFailed'))
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -89,12 +92,15 @@ function ModelFormDialog({
       open={open}
       onOpenChange={onOpenChange}
       title={isNew ? t('plugin_aigateway.model.create') : t('plugin_aigateway.model.edit')}
+      side="right"
       footer={
         <>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             {t('common.cancel')}
           </Button>
-          <Button onClick={() => void submit()}>{t('common.save')}</Button>
+          <Button disabled={save.isPending} onClick={() => void submit()}>
+            {save.isPending ? t('common.loading') : t('common.save')}
+          </Button>
         </>
       }
     >
@@ -120,7 +126,15 @@ function ModelFormDialog({
               {t('plugin_aigateway.fields.name')}
               <RequiredMark />
             </span>
-            <Input value={value.name ?? ''} onChange={(e) => set({ name: e.target.value })} />
+            <Input
+              aria-invalid={nameMissing}
+              value={value.name ?? ''}
+              onChange={(e) => {
+                setNameMissing(false)
+                set({ name: e.target.value })
+              }}
+            />
+            {nameMissing ? <span className="text-xs text-destructive">{t('plugin_aigateway.nameRequired')}</span> : null}
           </label>
         </div>
         <div className="grid grid-cols-2 gap-3">
@@ -187,7 +201,7 @@ export function ModelsTab() {
         setSelected((s) => s.filter((x) => x !== m.id))
         toast.success(t('common.operateSuccess'))
       } catch {
-        toast.error(t('common.operateFailed'))
+        // 失败原因由 http 拦截器统一弹出
       }
     }
   }
@@ -200,7 +214,7 @@ export function ModelsTab() {
       setSelected([])
       toast.success(t('common.operateSuccess'))
     } catch {
-      toast.error(t('common.operateFailed'))
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -213,7 +227,7 @@ export function ModelsTab() {
         toast.error(t('plugin_aigateway.model.pingFail', { detail: res.detail ?? '' }))
       }
     } catch {
-      toast.error(t('common.operateFailed'))
+      // 失败原因由 http 拦截器统一弹出；业务失败（res.ok=false）在上面带 detail 展示
     }
   }
 

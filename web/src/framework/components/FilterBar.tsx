@@ -23,7 +23,7 @@ export function FilterBar({ children, onSearch, onReset, className }: FilterBarP
     return (
       <div className={cn('flex items-center', className)}>
         <Button type="button" variant="outline" className="w-full" onClick={() => setOpen(true)}>
-          <Filter className="me-2 h-4 w-4" aria-hidden="true" />
+          <Filter aria-hidden="true" />
           {t('filterBar.filter')}
         </Button>
         <Drawer open={open} onOpenChange={setOpen}>
@@ -45,11 +45,11 @@ export function FilterBar({ children, onSearch, onReset, className }: FilterBarP
               </div>
               <div className="flex shrink-0 gap-2 border-t border-border bg-background px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
                 <Button type="button" variant="outline" className="flex-1" onClick={onReset}>
-                  <RotateCcw className="me-2 h-4 w-4" aria-hidden="true" />
+                  <RotateCcw aria-hidden="true" />
                   {t('common.reset')}
                 </Button>
                 <Button type="submit" className="flex-1">
-                  <Search className="me-2 h-4 w-4" aria-hidden="true" />
+                  <Search aria-hidden="true" />
                   {t('common.search')}
                 </Button>
               </div>
@@ -72,11 +72,11 @@ export function FilterBar({ children, onSearch, onReset, className }: FilterBarP
       <div className="flex items-center gap-2">
         {/* 与筛选控件同高：Input/Select 桌面端 md:h-8，按钮默认 md:h-9 会高出一截 */}
         <Button type="submit" className="md:h-8">
-          <Search className="me-2 h-4 w-4" aria-hidden="true" />
+          <Search aria-hidden="true" />
           {t('common.search')}
         </Button>
         <Button type="button" variant="outline" className="md:h-8" onClick={onReset}>
-          <RotateCcw className="me-2 h-4 w-4" aria-hidden="true" />
+          <RotateCcw aria-hidden="true" />
           {t('common.reset')}
         </Button>
       </div>

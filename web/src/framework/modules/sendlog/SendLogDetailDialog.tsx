@@ -21,7 +21,7 @@ interface Props {
 }
 
 /** 发送详情：桌面是居中弹窗，手机是底部抽屉（ResponsiveDialog）。列表行先显示，详情接口返回后覆盖。 */
-export function SendLogDetailDrawer({ log, onClose }: Props) {
+export function SendLogDetailDialog({ log, onClose }: Props) {
   const { t, i18n } = useTranslation()
   const { data } = useSendLog(log?.id ?? null)
   const row = data ?? log

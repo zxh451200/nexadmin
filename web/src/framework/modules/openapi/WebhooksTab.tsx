@@ -58,8 +58,8 @@ export function WebhooksTab() {
     try {
       await fn()
       toast.success(t('common.operateSuccess'))
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -78,8 +78,8 @@ export function WebhooksTab() {
       else await remove.mutateAsync(list[0].id)
       setSelected((ids) => ids.filter((id) => !list.some((w) => w.id === id)))
       toast.success(t('common.operateSuccess'))
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -88,8 +88,8 @@ export function WebhooksTab() {
     try {
       const res = await reset.mutateAsync(w.id)
       setSecret({ name: w.name, secret: res.secret })
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -97,8 +97,8 @@ export function WebhooksTab() {
     setTestingId(w.id)
     try {
       setTesting({ name: w.name, result: await test.mutateAsync(w.id) })
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因（如地址不可达）由 http 拦截器统一弹出
     } finally {
       setTestingId(null)
     }

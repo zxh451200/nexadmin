@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { ChevronDown, ChevronRight, Eye, FileUp, History, Loader2, RefreshCw, RotateCcw, Undo2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, Eye, History, Loader2, RefreshCw, RotateCcw, Undo2, Upload } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
@@ -168,17 +168,17 @@ export function RegionSection() {
           <Can perm="region:sync">
             <Button type="button" variant="outline" disabled={!isPlatform || syncing || preview.isPending || sync.isPending || !source.trim()} onClick={() => void runPreview()}>
               {preview.isPending ? (
-                <Loader2 className="me-2 size-4 animate-spin" aria-hidden="true" />
+                <Loader2 className="animate-spin" aria-hidden="true" />
               ) : (
-                <Eye className="me-2 size-4" aria-hidden="true" />
+                <Eye aria-hidden="true" />
               )}
               {t('region.preview')}
             </Button>
             <Button type="button" disabled={!isPlatform || syncing || sync.isPending || !source.trim()} onClick={() => void runSync()}>
               {syncing || sync.isPending ? (
-                <Loader2 className="me-2 size-4 animate-spin" aria-hidden="true" />
+                <Loader2 className="animate-spin" aria-hidden="true" />
               ) : (
-                <RefreshCw className="me-2 size-4" aria-hidden="true" />
+                <RefreshCw aria-hidden="true" />
               )}
               {syncing
                 ? t('region.syncStage', { stage: t(`region.stage.${status.data?.stage ?? 'fetching'}`) })
@@ -200,18 +200,18 @@ export function RegionSection() {
             />
             <Button type="button" variant="outline" disabled={!isPlatform || importFile.isPending} onClick={() => uploadRef.current?.click()}>
               {importFile.isPending ? (
-                <Loader2 className="me-2 size-4 animate-spin" aria-hidden="true" />
+                <Loader2 className="animate-spin" aria-hidden="true" />
               ) : (
-                <FileUp className="me-2 size-4" aria-hidden="true" />
+                <Upload aria-hidden="true" />
               )}
               {t('region.upload')}
             </Button>
             <Button type="button" variant="outline" disabled={!isPlatform || reset.isPending || data.builtin} onClick={() => void runReset()}>
-              <RotateCcw className="me-2 size-4" aria-hidden="true" />
+              <RotateCcw aria-hidden="true" />
               {t('region.reset')}
             </Button>
             <Button type="button" variant="outline" onClick={() => setHistoryOpen(true)}>
-              <History className="me-2 size-4" aria-hidden="true" />
+              <History aria-hidden="true" />
               {t('region.history')}
             </Button>
           </Can>
@@ -232,7 +232,7 @@ export function RegionSection() {
             </Button>
             <Can perm="region:sync">
               <Button type="button" disabled={!isPlatform} onClick={() => { setPreviewRes(null); void runSync() }}>
-                <RefreshCw className="me-2 size-4" aria-hidden="true" />
+                <RefreshCw aria-hidden="true" />
                 {t('region.sync')}
               </Button>
             </Can>

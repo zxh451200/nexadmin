@@ -73,7 +73,7 @@ export function AiWriteButton({ target, format, getText, getBrief, onResult, cla
           text,
           format: target === 'title' ? 'text' : format,
           tone: tone === 'default' ? '' : tone,
-          // 关键词永远要英文（发阿里国际站用），不跟随界面语言。
+          // 关键词永远要英文（外贸搜索用），不跟随界面语言。
           lang: target === 'keywords' ? 'en-US' : mode === 'write' ? i18n.language : '',
         },
         { silent: true },

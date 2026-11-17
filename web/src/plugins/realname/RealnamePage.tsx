@@ -191,7 +191,7 @@ export default function RealnamePage() {
   const [draft, setDraft] = useState<{ keyword?: string; status?: string[]; all?: '1'; range?: DateRangeValue }>({})
   const [filters, setFilters] = useState<{ keyword?: string; status?: string; all?: '1'; range?: DateRangeValue }>({})
   const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(20)
+  const [pageSize, setPageSize] = useState(10)
   const { data, isLoading } = useVerifications({
     keyword: filters.keyword, status: filters.status, all: filters.all,
     from: filters.range?.from, to: filters.range?.to,
@@ -207,8 +207,8 @@ export default function RealnamePage() {
       await del.mutateAsync([row.id])
       setPage(pageAfterDelete(page, rows.length, 1))
       toast.success(t('common.operateSuccess'))
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因已由请求层统一提示。
     }
   }
 
@@ -219,8 +219,8 @@ export default function RealnamePage() {
       setPage(pageAfterDelete(page, data?.list?.length ?? 0, ids.length))
       setSelected([])
       toast.success(t('common.operateSuccess'))
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因已由请求层统一提示。
     }
   }
 
@@ -297,7 +297,7 @@ export default function RealnamePage() {
         actions={
           <Can perm="realname:config">
             <Button variant="outline" onClick={() => setConfigOpen(true)}>
-              <Settings2 className="me-2 h-4 w-4" aria-hidden="true" />
+              <Settings2 aria-hidden="true" />
               {t('plugin_realname.configTitle')}
             </Button>
           </Can>
@@ -336,7 +336,7 @@ export default function RealnamePage() {
             <div className="flex flex-wrap items-center gap-2">
               <Can perm="realname:verify">
                 <Button type="submit" disabled={verify.isPending || !name.trim() || !number.trim()}>
-                  <ShieldCheck className="me-2 h-4 w-4" aria-hidden="true" />
+                  <ShieldCheck aria-hidden="true" />
                   {verify.isPending ? t('common.loading') : t('plugin_realname.submit')}
                 </Button>
               </Can>

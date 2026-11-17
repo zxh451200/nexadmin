@@ -21,8 +21,8 @@ export function SessionsTab() {
     try {
       await kick.mutateAsync(row.id)
       toast.success(t('profile.sessions.kicked'))
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -59,6 +59,7 @@ export function SessionsTab() {
         data={data}
         rowKey="id"
         loading={isLoading}
+        columnSettingsKey="profile-sessions"
         pagination={false}
         rowActions={(row) =>
           row.current ? null : (

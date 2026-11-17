@@ -3,7 +3,7 @@ import { ArrowDown, ArrowUp, Copy, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
-import { Switch } from '@/framework/ui/switch'
+import { SwitchRow } from '@/framework/components/SwitchField'
 import { Textarea } from '@/framework/ui/textarea'
 import type { Cond, FormField } from './api'
 import { CondEditor } from './CondEditor'
@@ -85,12 +85,12 @@ export function FieldProps({ field: f, index, total, refs, usedKeys, onChange, o
         </Field>
       ) : null}
       {hasValue(f) ? (
-        <div className="flex items-center justify-between gap-3">
-          <label htmlFor={`${id}-required`} className="text-sm font-medium">
-            {f.type === 'switch' ? t('plugin_formbuilder.prop.mustOn') : t('plugin_formbuilder.prop.required')}
-          </label>
-          <Switch id={`${id}-required`} checked={!!f.required} onCheckedChange={(v) => patch({ required: v || undefined })} />
-        </div>
+        <SwitchRow
+          label={f.type === 'switch' ? t('plugin_formbuilder.prop.mustOn') : t('plugin_formbuilder.prop.required')}
+          checked={!!f.required}
+          onCheckedChange={(v) => patch({ required: v || undefined })}
+          bare
+        />
       ) : null}
 
       {hasValue(f) ? <FieldRules f={f} id={id} patch={patch} /> : null}

@@ -68,6 +68,7 @@ export function ReportDialog({ open, onOpenChange, editing }: Props) {
       open={open}
       onOpenChange={onOpenChange}
       size="xl"
+      side="right"
       title={editing ? t('plugin_report.report.editTitle') : t('plugin_report.report.createTitle')}
       footer={
         <>

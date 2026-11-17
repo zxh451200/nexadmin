@@ -283,6 +283,7 @@ export function SourceFormDialog({ open, onOpenChange, editing }: Props) {
       open={open}
       onOpenChange={onOpenChange}
       size="lg"
+      side="right"
       title={editing ? t('plugin_identity.editTitle') : t('plugin_identity.createTitle')}
       footer={
         <>

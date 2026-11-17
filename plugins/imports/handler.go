@@ -1,14 +1,17 @@
 package imports
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"mime"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 
 	"nexadmin/core"
 	"nexadmin/core/auth"
@@ -22,7 +25,11 @@ import (
 
 const xlsxMIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
-type handler struct{ svc *Service }
+type handler struct {
+	svc *Service
+	// db 用于把台账里的操作人 ID 批量换成用户名；nil 时（无 DB）照旧显示原值。
+	db *gorm.DB
+}
 
 func respond(c *gin.Context, data any, err error) {
 	if err != nil {
@@ -37,6 +44,44 @@ func actor(c *gin.Context) string {
 		return fmt.Sprintf("%d", int64(cl.UserID))
 	}
 	return ""
+}
+
+// resolveCreators 把台账 CreatedBy 里存的操作人 ID 批量换成用户名（与导出中心
+// ownerNames 同一套口径：查 sys_user，取不到就保留原值）。/views 原地修改。
+// 台账列存的是 ID 而不是用户名：ID 是稳定键，改名/重名都不会丢归属。
+func (h *handler) resolveCreators(ctx context.Context, views []JobView) {
+	if h.db == nil || len(views) == 0 {
+		return
+	}
+	seen := make(map[int64]bool, len(views))
+	ids := make([]int64, 0, len(views))
+	for _, v := range views {
+		n, err := strconv.ParseInt(v.CreatedBy, 10, 64)
+		if err != nil || n <= 0 || seen[n] {
+			continue
+		}
+		seen[n] = true
+		ids = append(ids, n)
+	}
+	if len(ids) == 0 {
+		return
+	}
+	var us []struct {
+		ID       int64
+		Username string
+	}
+	if err := h.db.WithContext(ctx).Table("sys_user").Select("id, username").Where("id IN ?", ids).Scan(&us).Error; err != nil {
+		return
+	}
+	names := make(map[int64]string, len(us))
+	for _, u := range us {
+		names[u.ID] = u.Username
+	}
+	for i := range views {
+		if n, err := strconv.ParseInt(views[i].CreatedBy, 10, 64); err == nil && names[n] != "" {
+			views[i].CreatedBy = names[n]
+		}
+	}
 }
 
 // GET /plugins/imports/sources —— 已注册导入源(来源下拉 + 列说明)。
@@ -116,6 +161,9 @@ func (h *handler) run(c *gin.Context) {
 	v, err := h.svc.Run(c.Request.Context(), RunInput{
 		Source: source, FileName: fh.Filename, Content: content,
 	}, actor(c))
+	if v != nil {
+		h.resolveCreators(c.Request.Context(), []JobView{*v})
+	}
 	respond(c, v, err)
 }
 
@@ -129,6 +177,7 @@ func (h *handler) list(c *gin.Context) {
 		response.Fail(c, err)
 		return
 	}
+	h.resolveCreators(c.Request.Context(), list)
 	response.Page(c, list, total, page, size)
 }
 
@@ -140,6 +189,9 @@ func (h *handler) get(c *gin.Context) {
 		return
 	}
 	v, err := h.svc.GetJob(c.Request.Context(), id)
+	if v != nil {
+		h.resolveCreators(c.Request.Context(), []JobView{*v})
+	}
 	respond(c, v, err)
 }
 
@@ -178,6 +230,9 @@ func (h *handler) cancel(c *gin.Context) {
 		return
 	}
 	v, err := h.svc.GetJob(c.Request.Context(), id)
+	if v != nil {
+		h.resolveCreators(c.Request.Context(), []JobView{*v})
+	}
 	respond(c, v, err)
 }
 

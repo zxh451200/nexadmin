@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { VideoIcon } from 'lucide-react'
+import { Trash2, VideoIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import { Button } from '@/framework/ui/button'
@@ -87,15 +87,26 @@ export function VideoUrlField({
           className="min-w-0 flex-1 font-mono"
           aria-label={ariaLabel ?? title}
         />
-        {!value ? uploadBtn : null}
+        {/* 上传始终在行内：有值时也要能直接换视频（先清除再上传会让预览闪没）；
+            清除只在有值时出现，紧挨文件库入口——与 ImageUrlField 同款形态 */}
+        {uploadBtn}
+        {value ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-9 shrink-0"
+            disabled={disabled}
+            onClick={() => onChange('')}
+            aria-label={t('common.clear')}
+            title={t('common.clear')}
+          >
+            <Trash2 aria-hidden="true" />
+          </Button>
+        ) : null}
         {/* 文件库弹窗：已传过的视频直接选（缩略图网格 + 关键词可搜、按上传时间倒序） */}
         <PickFromLibraryButton className="shrink-0" disabled={disabled} onClick={() => setPickOpen(true)} />
       </div>
-      {value ? (
-        <Button type="button" variant="ghost" className="shrink-0 px-3" disabled={disabled} onClick={() => onChange('')}>
-          {t('common.clear')}
-        </Button>
-      ) : null}
       {previewBelow ? null : hint}
     </div>
   )

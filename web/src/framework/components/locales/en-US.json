@@ -1,4 +1,8 @@
 {
+  "constantPicker": {
+    "useCustom": "Use custom value \"{{value}}\"",
+    "pleaseSelect": "Select"
+  },
   "dataTable": {
     "columnSettings": "Columns",
     "columnSettingsHint": "Choose columns to display",

@@ -42,6 +42,8 @@ func (h *handler) Register(r *gin.RouterGroup, d *core.Deps) {
 	g.Use(core.RequirePlatformFeature())
 	g.GET("/documents", core.Perm("kb:list"), h.list)
 	g.POST("/documents", core.Perm("kb:edit"), h.upload)
+	g.GET("/documents/:id/chunks", core.Perm("kb:list"), h.chunks)
+	g.PUT("/documents/:id", core.Perm("kb:edit"), h.rename)
 	g.DELETE("/documents/:id", core.Perm("kb:delete"), d.OperLogMiddleware("kb", "delete"), h.remove)
 	g.POST("/documents/:id/reembed", core.Perm("kb:edit"), h.reembed)
 	g.GET("/settings", core.Perm("kb:list"), h.getSettings)
@@ -113,6 +115,29 @@ func (h *handler) upload(c *gin.Context) {
 	respond(c, doc, err)
 }
 
+// GET /plugins/kb/documents/:id/chunks —— 知识块预览：看库里实际参与检索的文本，
+// 排查「AI 为什么这么答 / 为什么没命中」时用。
+func (h *handler) chunks(c *gin.Context) {
+	doc, list, err := h.svc.ListChunks(c.Request.Context(), c.Param("id"))
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, gin.H{"document": doc, "chunks": list})
+}
+
+// PUT /plugins/kb/documents/:id —— 重命名：只改展示标题，切块与向量不动（无需重嵌）。
+func (h *handler) rename(c *gin.Context) {
+	var in struct {
+		Title string `json:"title"`
+	}
+	if !response.BindJSON(c, &in) {
+		return
+	}
+	doc, err := h.svc.RenameDocument(c.Request.Context(), c.Param("id"), in.Title)
+	respond(c, doc, err)
+}
+
 // DELETE /plugins/kb/documents/:id —— 删除文档与切块。
 func (h *handler) remove(c *gin.Context) {
 	respond(c, gin.H{"ok": true}, h.svc.DeleteDocument(c.Request.Context(), c.Param("id")))
@@ -172,6 +197,7 @@ func (h *handler) ask(c *gin.Context) {
 	if cl != nil {
 		who = ai.Caller{UserID: strconv.FormatInt(int64(cl.UserID), 10), TenantID: strconv.FormatInt(int64(cl.TenantID), 10), Exempt: cl.Super}
 	}
-	res, err := h.svc.Answer(c.Request.Context(), who, in.Query)
+	// 管理端测试提问打开召回调试：handoff 时带回最接近的候选与分数，调阈值不用盲调
+	res, err := h.svc.Answer(c.Request.Context(), who, in.Query, true)
 	respond(c, res, err)
 }

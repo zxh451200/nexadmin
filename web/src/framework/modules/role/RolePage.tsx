@@ -54,8 +54,8 @@ export default function RolePage() {
       await del.mutateAsync(r.id)
       setSelected((s) => s.filter((id) => id !== r.id))
       toast.success(t('common.operateSuccess'))
-    } catch (e) {
-      toast.error(e instanceof Error && e.message ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -67,7 +67,7 @@ export default function RolePage() {
       setSelected((s) => s.filter((id) => !ids.includes(id)))
       toast.success(t('common.operateSuccess'))
     } catch {
-      toast.error(t('common.operateFailed'))
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -77,8 +77,8 @@ export default function RolePage() {
       await startExportJob(() =>
         createRoleExportJob({ keyword: filter.applied.keyword || undefined, status: filter.applied.status.join(',') || undefined }),
       )
-    } catch (e) {
-      toast.error(e instanceof Error && e.message ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -138,13 +138,13 @@ export default function RolePage() {
           <>
             <Can perm="role:create">
               <Button type="button" onClick={() => openForm(null)}>
-                <Plus className="me-2 h-4 w-4" aria-hidden="true" />
+                <Plus aria-hidden="true" />
                 {t('common.create')}
               </Button>
             </Can>
             <Can perm="role:list">
               <Button type="button" variant="outline" onClick={() => void onExport()}>
-                <Download className="me-2 h-4 w-4" aria-hidden="true" />
+                <Download aria-hidden="true" />
                 {t('common.export')}
               </Button>
             </Can>
@@ -160,7 +160,7 @@ export default function RolePage() {
         batchActions={(ids) => (
           <Can perm="role:delete">
             <Button type="button" variant="destructive" size="sm" onClick={() => void removeBatch(ids)}>
-              <Trash2 className="me-2 h-4 w-4" aria-hidden="true" />
+              <Trash2 aria-hidden="true" />
               {t('common.delete')}
             </Button>
           </Can>

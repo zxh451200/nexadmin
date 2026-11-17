@@ -132,8 +132,8 @@ export function DictDataPanel({ type, onBack }: Props) {
       await save.mutateAsync({ id: editing?.id, body: { ...values, typeId: type.id, i18nJson: buildI18nJSON(i18n) } })
       toast.success(t('common.operateSuccess'))
       setOpen(false)
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   })
 
@@ -143,8 +143,8 @@ export function DictDataPanel({ type, onBack }: Props) {
       await del.mutateAsync(row.id)
       setSelected((s) => s.filter((x) => x !== row.id))
       toast.success(t('common.operateSuccess'))
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -156,8 +156,8 @@ export function DictDataPanel({ type, onBack }: Props) {
       await delBatch.mutateAsync(ids)
       setSelected([])
       toast.success(t('common.operateSuccess'))
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -292,6 +292,7 @@ export function DictDataPanel({ type, onBack }: Props) {
       <ResponsiveDialog
         open={open}
         onOpenChange={setOpen}
+        side="right"
         title={editing ? t('dict.data.edit') : t('dict.data.create')}
         footer={
           <>

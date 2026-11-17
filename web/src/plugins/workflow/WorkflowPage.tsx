@@ -135,7 +135,7 @@ function StartFlow({ open, onClose }: { open: boolean; onClose: () => void }) {
           toast.success(t('plugin_workflow.startSuccess', { title: inst.title || v.title }))
           onClose()
         } catch {
-          toast.error(t('common.operateFailed'))
+          // 失败原因由 http 拦截器统一弹出
         }
       }}
     />
@@ -314,7 +314,7 @@ function DefList() {
         setSelectedDefs((s) => s.filter((id) => id !== d.id))
         toast.success(t('common.operateSuccess'))
       } catch {
-        toast.error(t('common.operateFailed'))
+        // 失败原因由 http 拦截器统一弹出
       }
     }
   }
@@ -331,7 +331,7 @@ function DefList() {
       setSelectedDefs([])
       toast.success(deleted < ids.length ? t('plugin_workflow.deletedPartial', { deleted, total: ids.length }) : t('common.operateSuccess'))
     } catch {
-      toast.error(t('common.operateFailed'))
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -438,6 +438,7 @@ function DefVersionsDialog({ def, onClose }: { def: WfDef | null; onClose: () =>
     try {
       setXml({ version, text: await fetchDefVersionXML(def!.id, version) })
     } catch {
+      // fetchDefVersionXML 是 silent 请求：这条 toast 是版本 XML 加载失败的唯一反馈，不能删
       toast.error(t('common.operateFailed'))
     } finally {
       setLoadingXml(false)
@@ -450,7 +451,7 @@ function DefVersionsDialog({ def, onClose }: { def: WfDef | null; onClose: () =>
       await rollback.mutateAsync({ id: def.id, version })
       toast.success(t('plugin_workflow.rollbackVersionDone', { version }))
     } catch {
-      toast.error(t('common.operateFailed'))
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -535,7 +536,7 @@ function DefEditor({
       toast.success(t('common.operateSuccess'))
       onClose()
     } catch {
-      toast.error(t('common.operateFailed'))
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -563,14 +564,14 @@ function DefEditor({
         <label className="flex flex-col gap-1 text-sm">
           <span className="text-xs text-muted-foreground">
             {t('plugin_workflow.fields.defName')}
-            <span aria-hidden="true" className="ms-0.5 text-destructive">*</span>
+            <RequiredMark />
           </span>
           <Input required value={name} onChange={(e) => setName(e.target.value)} className="w-56" />
         </label>
         <label className="flex flex-col gap-1 text-sm">
           <span className="text-xs text-muted-foreground">
             {t('plugin_workflow.fields.defKey')}
-            <span aria-hidden="true" className="ms-0.5 text-destructive">*</span>
+            <RequiredMark />
           </span>
           <Input required value={key} onChange={(e) => setKey(e.target.value)} disabled={!!def} className="w-44 font-mono" />
         </label>
@@ -658,7 +659,7 @@ function InstanceDrawer({ id, onClose }: { id?: string; onClose: () => void }) {
       await urge.mutateAsync(inst.id)
       toast.success(t('plugin_workflow.urgeDone'))
     } catch {
-      toast.error(t('common.operateFailed'))
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -717,7 +718,7 @@ function InstanceDrawer({ id, onClose }: { id?: string; onClose: () => void }) {
       setComment('')
       setRollbackTo('')
     } catch {
-      toast.error(t('common.operateFailed'))
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -731,7 +732,7 @@ function InstanceDrawer({ id, onClose }: { id?: string; onClose: () => void }) {
       setCountersignUsers([])
       setCountersignOpen(false)
     } catch {
-      toast.error(t('common.operateFailed'))
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -744,7 +745,7 @@ function InstanceDrawer({ id, onClose }: { id?: string; onClose: () => void }) {
       setTransferOpen(false)
       setComment('')
     } catch {
-      toast.error(t('common.operateFailed'))
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 

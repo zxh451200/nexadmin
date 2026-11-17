@@ -7,10 +7,12 @@ import { FIELD_TYPES } from './schema'
 interface Props {
   onAdd: (type: FieldType) => void
   disabled?: boolean
+  /** 字段数到顶的常驻提示：非空时挂在按钮区下方（点击仍以 toast 兜底） */
+  limitHint?: string
 }
 
 /** 字段类型面板：点击把该类型的字段加到当前选中字段之后（没有选中则加到末尾） */
-export function FieldPalette({ onAdd, disabled }: Props) {
+export function FieldPalette({ onAdd, disabled, limitHint }: Props) {
   const { t } = useTranslation()
   return (
     <section aria-labelledby="fb-palette" className="flex flex-col gap-2">
@@ -28,6 +30,7 @@ export function FieldPalette({ onAdd, disabled }: Props) {
           )
         })}
       </div>
+      {limitHint ? <p className="text-xs text-destructive">{limitHint}</p> : null}
     </section>
   )
 }

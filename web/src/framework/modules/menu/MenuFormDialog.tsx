@@ -208,8 +208,8 @@ export function MenuFormDialog({ open, onOpenChange, editing, defaultParentId, t
       else await create.mutateAsync(body)
       toast.success(t('common.operateSuccess'))
       onOpenChange(false)
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   })
 
@@ -220,6 +220,7 @@ export function MenuFormDialog({ open, onOpenChange, editing, defaultParentId, t
       open={open}
       onOpenChange={onOpenChange}
       size="lg"
+      side="right"
       title={editing ? t('sysMenu.action.edit') : t('sysMenu.action.add')}
       footer={
         <>

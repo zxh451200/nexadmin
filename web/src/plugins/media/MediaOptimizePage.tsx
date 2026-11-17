@@ -17,7 +17,7 @@ import { VideoTab } from './VideoTab'
 
 type RowState = 'idle' | 'working' | 'done' | 'error'
 
-const PAGE_SIZE = 20
+const PAGE_SIZE = 10
 
 export default function MediaOptimizePage() {
   const { t, i18n } = useTranslation()

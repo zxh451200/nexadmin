@@ -4,12 +4,13 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { api } from '@/framework/request/http'
 import { PlatformNotice } from '@/framework/components/PlatformNotice'
+import { RequiredMark } from '@/framework/components/RequiredMark'
+import { SwitchRow } from '@/framework/components/SwitchField'
 import { usePermission } from '@/framework/auth/usePermission'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Card } from '@/framework/ui/card'
 import { Input } from '@/framework/ui/input'
-import { Switch } from '@/framework/ui/switch'
 import { Textarea } from '@/framework/ui/textarea'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
@@ -67,30 +68,39 @@ export function LdapSection() {
   return (
     <Card className="max-w-lg space-y-3 p-6">
       <PlatformNotice />
-      <div className="flex items-center gap-2">
-        <Plug className="size-5 text-muted-foreground" aria-hidden="true" />
-        <span className="text-sm font-medium">{t('plugin_ldap.enabled')}</span>
-        <Switch checked={cur.enabled ?? false} onCheckedChange={(v) => set('enabled', v)} />
-      </div>
+      <SwitchRow
+        label={
+          <span className="inline-flex items-center gap-2">
+            <Plug className="size-4 text-muted-foreground" aria-hidden="true" />
+            {t('plugin_ldap.enabled')}
+          </span>
+        }
+        checked={cur.enabled ?? false}
+        onCheckedChange={(v) => set('enabled', v)}
+      />
       <label className="flex flex-col gap-1 text-sm">
-        {t('plugin_ldap.host')} <Input value={val('host')} onChange={(e) => set('host', e.target.value)} />
+        <span>
+          {t('plugin_ldap.host')}
+          <RequiredMark />
+        </span>
+        <Input value={val('host')} onChange={(e) => set('host', e.target.value)} />
       </label>
       <label className="flex flex-col gap-1 text-sm">
         {t('plugin_ldap.port')} <Input type="number" value={val('port', '389')} onChange={(e) => set('port', Number(e.target.value) || 389)} />
       </label>
-      <div className="flex gap-4 text-sm">
-        <label className="flex items-center gap-1">
-          ldaps <Switch checked={cur.useTLS ?? false} onCheckedChange={(v) => set('useTLS', v)} />
-        </label>
-        <label className="flex items-center gap-1">
-          StartTLS <Switch checked={cur.startTLS ?? false} onCheckedChange={(v) => set('startTLS', v as never)} />
-        </label>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <SwitchRow label={t('plugin_ldap.ldaps')} checked={cur.useTLS ?? false} onCheckedChange={(v) => set('useTLS', v)} bare />
+        <SwitchRow label={t('plugin_ldap.startTLS')} checked={cur.startTLS ?? false} onCheckedChange={(v) => set('startTLS', v)} bare />
       </div>
       <label className="flex flex-col gap-1 text-sm">
-        Bind DN <Input value={val('bindDN')} onChange={(e) => set('bindDN', e.target.value)} />
+        <span>
+          {t('plugin_ldap.bindDn')}
+          <RequiredMark />
+        </span>
+        <Input value={val('bindDN')} onChange={(e) => set('bindDN', e.target.value)} />
       </label>
       <label className="flex flex-col gap-1 text-sm">
-        Bind Password
+        {t('plugin_ldap.bindPassword')}
         <Input type="password" value={bindPassword} onChange={(e) => setBindPassword(e.target.value)} placeholder={config.data?.hasBindPassword ? t('plugin_ldap.pwKeep') : ''} />
       </label>
       <label className="flex flex-col gap-1 text-sm">
@@ -105,27 +115,27 @@ export function LdapSection() {
         <span className="text-xs text-muted-foreground">{t('plugin_ldap.caCertHint')}</span>
       </label>
       <label className="flex flex-col gap-1 text-sm">
-        Base DN <Input value={val('baseDN')} onChange={(e) => set('baseDN', e.target.value)} />
+        <span>
+          {t('plugin_ldap.baseDn')}
+          <RequiredMark />
+        </span>
+        <Input value={val('baseDN')} onChange={(e) => set('baseDN', e.target.value)} />
       </label>
       <label className="flex flex-col gap-1 text-sm">
-        User Filter <Input value={val('userFilter', '(uid=%s)')} onChange={(e) => set('userFilter', e.target.value)} />
+        {t('plugin_ldap.userFilter')} <Input value={val('userFilter', '(uid=%s)')} onChange={(e) => set('userFilter', e.target.value)} />
       </label>
       <label className="flex flex-col gap-1 text-sm">
-        Attr Username <Input value={val('attrUsername', 'uid')} onChange={(e) => set('attrUsername', e.target.value)} />
+        {t('plugin_ldap.attrUsername')} <Input value={val('attrUsername', 'uid')} onChange={(e) => set('attrUsername', e.target.value)} />
       </label>
       <label className="flex flex-col gap-1 text-sm">
-        Attr Email <Input value={val('attrEmail', 'mail')} onChange={(e) => set('attrEmail', e.target.value)} />
+        {t('plugin_ldap.attrEmail')} <Input value={val('attrEmail', 'mail')} onChange={(e) => set('attrEmail', e.target.value)} />
       </label>
       <label className="flex flex-col gap-1 text-sm">
-        Attr Nickname <Input value={val('attrNickname', 'cn')} onChange={(e) => set('attrNickname', e.target.value)} />
+        {t('plugin_ldap.attrNickname')} <Input value={val('attrNickname', 'cn')} onChange={(e) => set('attrNickname', e.target.value)} />
       </label>
-      <div className="flex gap-4 text-sm">
-        <label className="flex items-center gap-1">
-          {t('plugin_ldap.matchExisting')} <Switch checked={cur.matchExisting ?? false} onCheckedChange={(v) => set('matchExisting', v)} />
-        </label>
-        <label className="flex items-center gap-1">
-          {t('plugin_ldap.autoCreate')} <Switch checked={cur.autoCreate ?? false} onCheckedChange={(v) => set('autoCreate', v)} />
-        </label>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <SwitchRow label={t('plugin_ldap.matchExisting')} checked={cur.matchExisting ?? false} onCheckedChange={(v) => set('matchExisting', v)} bare />
+        <SwitchRow label={t('plugin_ldap.autoCreate')} checked={cur.autoCreate ?? false} onCheckedChange={(v) => set('autoCreate', v)} bare />
       </div>
       <div className="flex gap-2">
         <Button onClick={() => save.mutate()} disabled={!isPlatform || !canEdit || save.isPending}>

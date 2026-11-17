@@ -43,8 +43,8 @@ export function PasswordTab() {
       await change.mutateAsync({ oldPassword: v.oldPassword, newPassword: v.newPassword })
       form.reset()
       toast.success(t('profile.password.done'))
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因（如旧密码不对）由 http 拦截器统一弹出
     }
   })
 

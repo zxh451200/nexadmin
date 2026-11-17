@@ -76,7 +76,7 @@ export function MessageTab({ unread }: { unread: number }) {
       await readAll.mutateAsync()
       toast.success(t('common.operateSuccess'))
     } catch {
-      toast.error(t('common.operateFailed'))
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -88,7 +88,7 @@ export function MessageTab({ unread }: { unread: number }) {
       setSelected((s) => s.filter((x) => x !== m.id))
       toast.success(t('common.operateSuccess'))
     } catch {
-      toast.error(t('common.operateFailed'))
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -101,7 +101,7 @@ export function MessageTab({ unread }: { unread: number }) {
       setSelected([])
       toast.success(deleted < ids.length ? t('message.deletedPartial', { deleted, total: ids.length }) : t('common.operateSuccess'))
     } catch {
-      toast.error(t('common.operateFailed'))
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -114,7 +114,7 @@ export function MessageTab({ unread }: { unread: number }) {
       setPage(1)
       toast.success(t('common.operateSuccess'))
     } catch {
-      toast.error(t('common.operateFailed'))
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -183,6 +183,7 @@ export function MessageTab({ unread }: { unread: number }) {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        columnSettingsKey="message-inbox"
         onRowClick={open}
         toolbar={
           <>

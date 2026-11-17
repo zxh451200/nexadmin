@@ -59,8 +59,8 @@ export function PostSection() {
       await del.mutateAsync(row.id)
       setSelected((s) => s.filter((id) => id !== row.id))
       toast.success(t('common.operateSuccess'))
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -72,7 +72,7 @@ export function PostSection() {
       setSelected((s) => s.filter((id) => !ids.includes(id)))
       toast.success(t('common.operateSuccess'))
     } catch {
-      toast.error(t('common.operateFailed'))
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -100,8 +100,8 @@ export function PostSection() {
   const onExport = async () => {
     try {
       await startExportJob(() => createPostExportJob({ keyword: filter.applied.keyword || undefined }))
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -114,13 +114,13 @@ export function PostSection() {
           <>
             <Can perm="post:create">
               <Button type="button" onClick={() => openEdit(null)}>
-                <Plus className="me-2 size-4" aria-hidden="true" />
+                <Plus aria-hidden="true" />
                 {t('post.action.add')}
               </Button>
             </Can>
             <Can perm="post:list">
               <Button type="button" variant="outline" onClick={() => void onExport()}>
-                <Download className="me-2 size-4" aria-hidden="true" />
+                <Download aria-hidden="true" />
                 {t('common.export')}
               </Button>
             </Can>
@@ -135,7 +135,7 @@ export function PostSection() {
         batchActions={(ids) => (
           <Can perm="post:delete">
             <Button type="button" variant="destructive" size="sm" onClick={() => void onDeleteBatch(ids)}>
-              <Trash2 className="me-2 size-4" aria-hidden="true" />
+              <Trash2 aria-hidden="true" />
               {t('common.delete')}
             </Button>
           </Can>

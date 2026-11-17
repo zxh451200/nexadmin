@@ -25,7 +25,7 @@ import {
   type SendLogQuery,
 } from './api'
 import { SendLogCleanDialog } from './SendLogCleanDialog'
-import { SendLogDetailDrawer } from './SendLogDetailDrawer'
+import { SendLogDetailDialog } from './SendLogDetailDialog'
 import { CHANNEL_VARIANT, STATUS_VARIANT } from './status'
 
 interface Filters {
@@ -166,7 +166,7 @@ export default function SendLogPage() {
         toolbar={
           <Can perm="sendlog:delete">
             <Button type="button" variant="outline" onClick={() => setCleanOpen(true)}>
-              <Eraser className="me-2 size-4" aria-hidden="true" />
+              <Eraser aria-hidden="true" />
               {t('sendlog.action.clean')}
             </Button>
           </Can>
@@ -182,7 +182,7 @@ export default function SendLogPage() {
         batchActions={(ids) => (
           <Can perm="sendlog:delete">
             <Button type="button" variant="destructive" size="sm" className="h-10 md:h-8" onClick={() => onDelete(ids)}>
-              <Trash2 className="me-2 size-4" aria-hidden="true" />
+              <Trash2 aria-hidden="true" />
               {t('sendlog.action.deleteSelected')}
             </Button>
           </Can>
@@ -197,7 +197,7 @@ export default function SendLogPage() {
           },
         }}
       />
-      <SendLogDetailDrawer log={detail} onClose={() => setDetail(null)} />
+      <SendLogDetailDialog log={detail} onClose={() => setDetail(null)} />
       <SendLogCleanDialog
         open={cleanOpen}
         onOpenChange={setCleanOpen}

@@ -61,6 +61,18 @@
     "ask": "提问",
     "askDone": "命中《{{title}}》（相似度 {{score}}）",
     "askHandoff": "知识库里没有找到可信的依据——线上客服会礼貌说明并转人工，不会编造",
-    "hitScore": "{{score}}"
+    "hitScore": "{{score}}",
+    "chunksOpen": "查看知识块",
+    "chunksTitle": "知识块 · {{name}}",
+    "chunksDesc": "共 {{count}} 块 · 向量化模型 {{model}}",
+    "chunksEmpty": "这篇文档没有知识块",
+    "rename": "重命名",
+    "renameTitle": "重命名文档",
+    "renameDesc": "修改《{{name}}》的展示标题；切块与向量不受影响，无需重新向量化。",
+    "candidatesTitle": "未达阈值的最接近候选（调阈值参考）：",
+    "statsDocs": "{{count}} 篇文档",
+    "statsChunks": "{{count}} 个知识块",
+    "statsModel": "向量化模型 {{model}}",
+    "statsFailed": "{{count}} 篇未就绪"
   }
 }

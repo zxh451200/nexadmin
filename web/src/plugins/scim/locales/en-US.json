@@ -6,7 +6,9 @@
     "tokenName": "Token name",
     "createToken": "Create token",
     "revoke": "Revoke",
+    "revokeConfirm": "Revoke token \"{{name}}\"? Integrations using it stop working immediately and this cannot be undone.",
     "columns": { "name": "Name", "createdAt": "Created", "lastUsed": "Last used", "revoked": "Revoked", "actions": "Actions" },
+    "empty": "No data",
     "btn": { "token": "Manage SCIM tokens" }
   }
 }

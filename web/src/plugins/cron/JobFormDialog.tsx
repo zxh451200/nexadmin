@@ -109,6 +109,7 @@ export function JobFormDialog({ open, onOpenChange, editing }: Props) {
       open={open}
       onOpenChange={onOpenChange}
       size="lg"
+      side="right"
       title={editing ? t('plugin_cron.editTitle') : t('plugin_cron.createTitle')}
       footer={
         <>

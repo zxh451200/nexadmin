@@ -45,7 +45,7 @@ export function KeyRotationDialog({ open, onOpenChange }: Props) {
           </Button>
           <Can perm="sso:edit">
             <Button type="button" onClick={onRotate} disabled={rotate.isPending}>
-              <RefreshCw className="me-2 h-4 w-4" aria-hidden="true" />
+              <RefreshCw aria-hidden="true" />
               {rotate.isPending ? t('common.loading') : t('sso.keys.rotate')}
             </Button>
           </Can>

@@ -3,6 +3,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { MENU_BADGES_KEY } from '@/framework/layout/menuBadge'
 import { api } from '@/framework/request/http'
 import type { Page, PageQuery } from '@/framework/request/types'
+import { useHiddenPause } from '@/framework/hooks/use-hidden-pause'
 
 export type ConvStatus = 'open' | 'closed'
 export type SenderType = 'visitor' | 'agent' | 'bot' | 'system'
@@ -145,7 +146,7 @@ export function useConversations(query: ConvQuery) {
     queryKey: [...KEY, 'convs', query],
     queryFn: () => api.get<Page<ImConversation>>(`${BASE}/conversations`, query),
     placeholderData: keepPreviousData,
-    refetchInterval: 5000,
+    refetchInterval: useHiddenPause(5000),
   })
 }
 

@@ -104,6 +104,7 @@ export function RoleFormDialog({ open, onOpenChange, role, nextSort }: RoleFormD
       open={open}
       onOpenChange={onOpenChange}
       size="md"
+      side="right"
       title={isEdit ? t('role.form.editTitle') : t('role.form.createTitle')}
       footer={
         <>

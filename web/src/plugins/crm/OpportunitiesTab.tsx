@@ -64,6 +64,9 @@ function OpportunityFormDialog({
 
   const value = draft
   const set = (patch: Partial<CrmOpportunityForm>) => setDraft((d) => ({ ...d, ...patch }))
+  // 行内校验提示：提交未过时点亮（toast 仍是快捷反馈）
+  const [showErrors, setShowErrors] = useState(false)
+  const titleMissing = !(value.title ?? '').trim()
   // 联系人下拉：跟随所选客户加载（数量小不分页）；编辑态用它回显已选联系人名。
   const { data: contacts = [] } = useContacts(
     value.customerId && value.customerId !== '0' ? value.customerId : undefined,
@@ -72,9 +75,11 @@ function OpportunityFormDialog({
   const submit = async () => {
     const data = { ...value, title: (value.title ?? '').trim() } as CrmOpportunityForm
     if (!data.title) {
+      setShowErrors(true)
       toast.error(t('plugin_crm.titleRequired'))
       return
     }
+    setShowErrors(false)
     try {
       await save.mutateAsync({ id: editing?.id, data })
       toast.success(t('common.operateSuccess'))
@@ -89,12 +94,15 @@ function OpportunityFormDialog({
       open={open}
       onOpenChange={onOpenChange}
       title={isNew ? t('plugin_crm.opp.create') : t('plugin_crm.opp.edit')}
+      side="right"
       footer={
         <>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             {t('common.cancel')}
           </Button>
-          <Button onClick={() => void submit()}>{t('common.save')}</Button>
+          <Button disabled={save.isPending} onClick={() => void submit()}>
+            {save.isPending ? t('common.loading') : t('common.save')}
+          </Button>
         </>
       }
     >
@@ -104,7 +112,12 @@ function OpportunityFormDialog({
             {t('plugin_crm.fields.title')}
             <RequiredMark />
           </span>
-          <Input value={value.title ?? ''} onChange={(e) => set({ title: e.target.value })} />
+          <Input
+            value={value.title ?? ''}
+            aria-invalid={showErrors && titleMissing}
+            onChange={(e) => set({ title: e.target.value })}
+          />
+          {showErrors && titleMissing ? <span className="text-xs text-destructive">{t('plugin_crm.titleRequired')}</span> : null}
         </label>
         <label className="flex flex-col gap-1">
           {t('plugin_crm.fields.customerId')}

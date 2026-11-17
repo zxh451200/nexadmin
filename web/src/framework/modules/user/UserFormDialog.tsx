@@ -133,8 +133,8 @@ export function UserFormDialog({ open, onOpenChange, user }: UserFormDialogProps
       else await create.mutateAsync(input)
       toast.success(t('common.operateSuccess'))
       onOpenChange(false)
-    } catch (e) {
-      toast.error(e instanceof Error && e.message ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   })
 
@@ -143,6 +143,7 @@ export function UserFormDialog({ open, onOpenChange, user }: UserFormDialogProps
       open={open}
       onOpenChange={onOpenChange}
       size="lg"
+      side="right"
       title={isEdit ? t('user.form.editTitle') : t('user.form.createTitle')}
       description={isEdit ? undefined : t('user.form.defaultPasswordHint')}
       footer={

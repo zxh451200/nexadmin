@@ -41,8 +41,8 @@ export function CustomerImportDialog({ open, onOpenChange }: CustomerImportDialo
     try {
       const blob = await fetchCustomerImportTemplate(format)
       saveBlob(`${t('plugin_crm.import.templateFilename')}.${blobExt(blob)}`, blob)
-    } catch (e) {
-      toast.error(e instanceof Error && e.message ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     } finally {
       setDownloading(false)
     }
@@ -53,8 +53,8 @@ export function CustomerImportDialog({ open, onOpenChange }: CustomerImportDialo
     setDownloading(true)
     try {
       saveBlob(`${t('plugin_crm.import.errorsFilename')}-${job.id}.csv`, await fetchCustomerImportErrors(job.id))
-    } catch (e) {
-      toast.error(e instanceof Error && e.message ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     } finally {
       setDownloading(false)
     }
@@ -67,8 +67,8 @@ export function CustomerImportDialog({ open, onOpenChange }: CustomerImportDialo
     }
     try {
       setJob(await importCustomers.mutateAsync(file))
-    } catch (e) {
-      toast.error(e instanceof Error && e.message ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 

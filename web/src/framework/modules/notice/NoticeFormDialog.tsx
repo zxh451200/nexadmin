@@ -125,9 +125,8 @@ export function NoticeFormDialog({ open, onOpenChange, editing }: Props) {
       await save.mutateAsync({ id: editing?.id, data })
       toast.success(t('common.operateSuccess'))
       onOpenChange(false)
-    } catch (e) {
-      // 受限操作者发布对象越权时，后端返回明确文案（已本地化），直接透传
-      toast.error(e instanceof Error && e.message ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因（含受限操作者发布对象越权的明确文案）由 http 拦截器统一弹出
     }
   })
 
@@ -136,6 +135,7 @@ export function NoticeFormDialog({ open, onOpenChange, editing }: Props) {
       open={open}
       onOpenChange={onOpenChange}
       size="xl"
+      side="right"
       title={editing ? t('notice.editTitle') : t('notice.createTitle')}
       footer={
         <>

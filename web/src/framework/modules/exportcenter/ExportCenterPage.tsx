@@ -16,6 +16,7 @@ import { Button } from '@/framework/ui/button'
 import { Progress } from '@/framework/ui/progress'
 import { OptionPicker } from '@/framework/components/OptionPicker'
 import { cn } from '@/lib/utils'
+import { errMsg } from '@/lib/errMsg'
 import { fmtDateTime } from '../oper-log/format'
 import {
   downloadJobFile,
@@ -40,8 +41,6 @@ const STATUS_VARIANT: Record<JobStatus, BadgeProps['variant']> = {
   failed: 'destructive',
   canceled: 'outline',
 }
-
-const errMsg = (e: unknown, fallback: string) => (e instanceof Error && e.message ? e.message : fallback)
 
 export default function ExportCenterPage() {
   const { t, i18n } = useTranslation()
@@ -254,7 +253,7 @@ export default function ExportCenterPage() {
               />
             </Can>
             <Button type="button" variant="outline" disabled={refreshing} onClick={() => void onRefresh()}>
-              <RefreshCw className={cn('me-2 size-4', refreshing && 'animate-spin')} aria-hidden="true" />
+              <RefreshCw className={cn(refreshing && 'animate-spin')} aria-hidden="true" />
               {t('jobs.action.refresh')}
             </Button>
           </>
@@ -274,7 +273,7 @@ export default function ExportCenterPage() {
               disabled={busy === 'batch' || !(data?.list ?? []).some((j) => ids.includes(j.id) && j.downloadable)}
               onClick={() => void onDownloadBatch(ids)}
             >
-              <Download className="me-2 size-4" aria-hidden="true" />
+              <Download aria-hidden="true" />
               {t('jobs.action.downloadBatch')}
             </Button>
             <Button variant="destructive" size="sm" disabled={delBatch.isPending} onClick={() => void onDeleteBatch(ids)}>

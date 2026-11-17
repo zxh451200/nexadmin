@@ -155,7 +155,7 @@ func (b *bot) answer(data im.EventData) {
 	}
 	// AI 侧的限流/配额键用会话号（访客匿名，没有用户身份），平台级调用不受租户开关约束。
 	who := ai.Caller{UserID: "kb:" + data.ConvNo, Exempt: true}
-	res, err := b.svc.Answer(ctx, who, question)
+	res, err := b.svc.Answer(ctx, who, question, false)
 	if err != nil {
 		if b.log != nil {
 			b.log.Warn("kb: auto answer failed", "convNo", data.ConvNo, "err", err.Error())

@@ -1,5 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { collectAllPages } from '@/framework/components/export/ExportCsvButton'
+import { useHiddenPause } from '@/framework/hooks/use-hidden-pause'
 import { api, http } from '@/framework/request/http'
 import type { Page } from '@/framework/request/types'
 
@@ -219,7 +220,7 @@ export function useDeliveries(query: DeliveryQuery) {
     queryFn: () => api.get<Page<Delivery>>('/openapi/deliveries', { ...query }),
     placeholderData: keepPreviousData,
     // pending 的投递在后台持续重试，页面不刷会一直停在旧状态
-    refetchInterval: 8000,
+    refetchInterval: useHiddenPause(8000),
   })
 }
 

@@ -126,7 +126,7 @@ export function PhoneForm({
         />
         {captchaEnabled && needCaptcha ? <CaptchaField form={form} captcha={captcha} onRefresh={refresh} mode={mode} onModeChange={setMode} /> : null}
         <Button type="submit" className="w-full" disabled={submitting}>
-          {submitting && <Loader2 className="me-2 size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />}
+          {submitting && <Loader2 className="animate-spin motion-reduce:animate-none" aria-hidden="true" />}
           {t('login.submit')}
         </Button>
       </form>

@@ -52,8 +52,8 @@ export function MapSection() {
     try {
       await save.mutateAsync(form)
       toast.success(t('common.operateSuccess'))
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 

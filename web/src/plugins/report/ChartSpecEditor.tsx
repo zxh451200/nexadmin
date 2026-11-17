@@ -1,10 +1,10 @@
 import { Plus, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { SwitchRow } from '@/framework/components/SwitchField'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
 import { Label } from '@/framework/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
-import { Switch } from '@/framework/ui/switch'
 import { cn } from '@/lib/utils'
 import type { Agg, Bucket, ChartConfig, ChartType, SourceCol } from './api'
 import { aggsFor, colorVar, COLOR_TOKENS } from './chartData'
@@ -148,30 +148,29 @@ export function ChartSpecEditor({ table, type, columns, value, onChange }: Props
       <section className="grid grid-cols-1 gap-3 md:grid-cols-3">
         <div className="flex flex-col gap-2">
           <Label>{t('plugin_report.chart.orderBy')}</Label>
-          <div className="grid grid-cols-[1fr_auto] items-center gap-2">
-            <Select
-              value={value.orderBy[0]?.ref ?? NONE}
-              onValueChange={(v) => patch({ orderBy: v === NONE ? [] : [{ ref: v, desc: value.orderBy[0]?.desc }] })}
-            >
-              <SelectTrigger aria-label={t('plugin_report.chart.orderBy')}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={NONE}>{t('plugin_report.chart.orderDefault')}</SelectItem>
-                {outputs.map((o) => (
-                  <SelectItem key={o} value={o}>
-                    {o.startsWith('d') ? t('plugin_report.chart.dimensionN', { n: Number(o.slice(1)) + 1 }) : t('plugin_report.chart.measureN', { n: Number(o.slice(1)) + 1 })}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Switch
-              checked={!!value.orderBy[0]?.desc}
-              disabled={value.orderBy.length === 0}
-              aria-label={t('plugin_report.chart.desc')}
-              onCheckedChange={(v) => patch({ orderBy: [{ ref: value.orderBy[0].ref, desc: v }] })}
-            />
-          </div>
+          <Select
+            value={value.orderBy[0]?.ref ?? NONE}
+            onValueChange={(v) => patch({ orderBy: v === NONE ? [] : [{ ref: v, desc: value.orderBy[0]?.desc }] })}
+          >
+            <SelectTrigger aria-label={t('plugin_report.chart.orderBy')}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NONE}>{t('plugin_report.chart.orderDefault')}</SelectItem>
+              {outputs.map((o) => (
+                <SelectItem key={o} value={o}>
+                  {o.startsWith('d') ? t('plugin_report.chart.dimensionN', { n: Number(o.slice(1)) + 1 }) : t('plugin_report.chart.measureN', { n: Number(o.slice(1)) + 1 })}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <SwitchRow
+            label={t('plugin_report.chart.desc')}
+            checked={!!value.orderBy[0]?.desc}
+            disabled={value.orderBy.length === 0}
+            onCheckedChange={(v) => patch({ orderBy: [{ ref: value.orderBy[0].ref, desc: v }] })}
+            bare
+          />
         </div>
         <div className="flex flex-col gap-2">
           <Label htmlFor="chart-limit">{t('plugin_report.chart.limit')}</Label>
@@ -225,10 +224,7 @@ export function ChartSpecEditor({ table, type, columns, value, onChange }: Props
           })}
         </div>
         {type === 'bar' || type === 'area' ? (
-          <label className="flex items-center gap-2 text-sm">
-            <Switch checked={!!value.stacked} onCheckedChange={(v) => patch({ stacked: v })} aria-label={t('plugin_report.chart.stacked')} />
-            {t('plugin_report.chart.stacked')}
-          </label>
+          <SwitchRow label={t('plugin_report.chart.stacked')} checked={!!value.stacked} onCheckedChange={(v) => patch({ stacked: v })} bare />
         ) : null}
       </section>
     </div>

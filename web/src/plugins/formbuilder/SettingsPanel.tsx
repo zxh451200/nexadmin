@@ -1,9 +1,9 @@
 import { Download } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { DateTimePicker } from '@/framework/components/DateTimePicker'
+import { SwitchRow } from '@/framework/components/SwitchField'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
-import { Switch } from '@/framework/ui/switch'
 import { Textarea } from '@/framework/ui/textarea'
 import { downloadDefinition, useVersions, type Audience, type FormDefinition, type FormSettings } from './api'
 import { AudiencePicker } from './AudiencePicker'
@@ -47,15 +47,13 @@ export function SettingsPanel({ formId, def, audience, onDef, onAudience }: Prop
         <h2 id="fb-set-rules" className="text-sm font-semibold">
           {t('plugin_formbuilder.settings.rules')}
         </h2>
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <label htmlFor="fb-set-repeat" className="text-sm font-medium">
-              {t('plugin_formbuilder.settings.allowRepeat')}
-            </label>
-            <p className="text-xs text-muted-foreground">{t('plugin_formbuilder.settings.allowRepeatHint')}</p>
-          </div>
-          <Switch id="fb-set-repeat" checked={s.allowRepeat} onCheckedChange={(v) => setS({ allowRepeat: v })} />
-        </div>
+        <SwitchRow
+          label={t('plugin_formbuilder.settings.allowRepeat')}
+          description={t('plugin_formbuilder.settings.allowRepeatHint')}
+          checked={s.allowRepeat}
+          onCheckedChange={(v) => setS({ allowRepeat: v })}
+          bare
+        />
         <Field id="fb-set-deadline" label={t('plugin_formbuilder.fields.deadline')} hint={t('plugin_formbuilder.settings.deadlineHint')}>
           <DateTimePicker id="fb-set-deadline" value={s.deadline ?? ''} onChange={(v) => setS({ deadline: v || null })} placeholder={t('plugin_formbuilder.settings.noDeadline')} />
         </Field>

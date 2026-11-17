@@ -235,7 +235,7 @@ export function PasswordForm({
         ) : null}
 
         <Button type="submit" className="w-full" disabled={submitting || verifying}>
-          {(submitting || verifying) && <Loader2 className="me-2 size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />}
+          {(submitting || verifying) && <Loader2 className="animate-spin motion-reduce:animate-none" aria-hidden="true" />}
           {challenge ? t('login.otpSubmit') : t('login.submit')}
         </Button>
         {onForgot && !challenge ? (

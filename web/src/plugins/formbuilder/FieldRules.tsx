@@ -1,8 +1,8 @@
 import { useTranslation } from 'react-i18next'
 import { DatePicker } from '@/framework/components/DatePicker'
+import { SwitchRow } from '@/framework/components/SwitchField'
 import { Input } from '@/framework/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
-import { Switch } from '@/framework/ui/switch'
 import { Textarea } from '@/framework/ui/textarea'
 import type { FormField } from './api'
 import { Field, NumInput } from './controls'
@@ -58,12 +58,7 @@ export function FieldRules({ f, id, patch }: RulesProps) {
             <NumInput id={`${id}-max`} value={f.max} onChange={(v) => patch({ max: v })} />
           </Field>
         </div>
-        <div className="flex items-center justify-between gap-3">
-          <label htmlFor={`${id}-integer`} className="text-sm font-medium">
-            {P('integer')}
-          </label>
-          <Switch id={`${id}-integer`} checked={!!f.integer} onCheckedChange={(v) => patch({ integer: v || undefined })} />
-        </div>
+        <SwitchRow label={P('integer')} checked={!!f.integer} onCheckedChange={(v) => patch({ integer: v || undefined })} bare />
         <Field id={`${id}-default`} label={P('default')}>
           <NumInput id={`${id}-default`} value={typeof f.default === 'number' ? f.default : undefined} onChange={(v) => patch({ default: v })} />
         </Field>
@@ -88,14 +83,7 @@ export function FieldRules({ f, id, patch }: RulesProps) {
     )
   }
   if (f.type === 'switch') {
-    return (
-      <div className="flex items-center justify-between gap-3">
-        <label htmlFor={`${id}-default`} className="text-sm font-medium">
-          {P('defaultOn')}
-        </label>
-        <Switch id={`${id}-default`} checked={f.default === true} onCheckedChange={(v) => patch({ default: v ? true : undefined })} />
-      </div>
-    )
+    return <SwitchRow label={P('defaultOn')} checked={f.default === true} onCheckedChange={(v) => patch({ default: v ? true : undefined })} bare />
   }
   if (f.type === 'rating') {
     return (

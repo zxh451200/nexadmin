@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Download, Lock, Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { EmptyState } from '@/framework/components/EmptyState'
 import { Badge, type BadgeProps } from '@/framework/ui/badge'
@@ -68,8 +67,8 @@ export function DocsTab() {
     setDownloading(true)
     try {
       saveBlob('openapi.json', await downloadOpenApiJson())
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     } finally {
       setDownloading(false)
     }

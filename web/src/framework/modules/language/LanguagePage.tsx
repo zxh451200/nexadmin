@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { ChevronDown, GripVertical, Plus, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, GripVertical, Plus, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import {
@@ -51,13 +51,22 @@ const PREFIX_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/
 const RTL_BASE = /^(ar|he|fa|ur|yi|ps|ku)(-|$)/
 const deriveDir = (code: string): 'ltr' | 'rtl' => (RTL_BASE.test(code.trim()) ? 'rtl' : 'ltr')
 
-/** 一行语言的问题；空串表示没问题。 */
-function rowError(r: LanguageRow, rows: LanguageRow[], index: number, dupMsg: string, codeMsg: string, prefixMsg: string) {
+/** 一行语言的错误分别挂在各自字段下：code 是「格式 / 重复」，prefix 是「格式」。
+ *  错误要跟着出错输入框走，不能像旧版那样全堆在 code 字段下面，让人看着 prefix 的
+ *  红字去改代码。kind 用于保存失败时把视口滚到出错字段。 */
+function rowError(
+  r: LanguageRow,
+  rows: LanguageRow[],
+  index: number,
+  dupMsg: string,
+  codeMsg: string,
+  prefixMsg: string,
+): { kind: 'code' | 'prefix'; message: string } | null {
   const code = r.code.trim()
-  if (!CODE_RE.test(code)) return codeMsg
-  if (rows.some((o, i) => i !== index && o.code.trim().toLowerCase() === code.toLowerCase())) return dupMsg
-  if (!r.default && r.prefix && !PREFIX_RE.test(r.prefix.trim())) return prefixMsg
-  return ''
+  if (!CODE_RE.test(code)) return { kind: 'code', message: codeMsg }
+  if (rows.some((o, i) => i !== index && o.code.trim().toLowerCase() === code.toLowerCase())) return { kind: 'code', message: dupMsg }
+  if (!r.default && r.prefix && !PREFIX_RE.test(r.prefix.trim())) return { kind: 'prefix', message: prefixMsg }
+  return null
 }
 
 /**
@@ -78,15 +87,17 @@ export function LanguageSection() {
   const [hydrated, setHydrated] = useState(false)
   const restoredDraft = useRef(false)
   const hydratedRef = useRef(false)
-  // 新增行的聚焦：点「添加语言」后新卡片可能出现在视口外，聚焦它的代码输入框并滚到可见处
-  const [focusRowId, setFocusRowId] = useState<string | null>(null)
-  const codeInputs = useRef(new Map<string, HTMLInputElement>())
+  // 新增行 / 报错行的聚焦：目标卡片可能出现在视口外，滚到可见处并聚焦对应输入框。
+  // focusRow 携带字段位（code/prefix），保存报错时直接落到出错的那颗输入框上。
+  const [focusRow, setFocusRow] = useState<{ rowId: string; field: 'code' | 'prefix' } | null>(null)
+  const fieldInputs = useRef(new Map<string, HTMLInputElement>())
   useEffect(() => {
-    if (!focusRowId) return
-    codeInputs.current.get(focusRowId)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
-    codeInputs.current.get(focusRowId)?.focus()
-    setFocusRowId(null)
-  }, [focusRowId])
+    if (!focusRow) return
+    const el = fieldInputs.current.get(`${focusRow.rowId}:${focusRow.field}`)
+    el?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    el?.focus()
+    setFocusRow(null)
+  }, [focusRow])
   // 服务端上一份数据的指纹：用来区分“确实刷新了”和“本地有改动，别覆盖”
   const serverSig = useRef('')
   // rows 的最新值：effect 里判断“是否与服务端一致”要用它，不能读闭包里的旧值
@@ -162,7 +173,7 @@ export function LanguageSection() {
   const addRow = () => {
     const row = emptyRow()
     setRows((prev) => [...prev, row])
-    setFocusRowId(row.rowId)
+    setFocusRow({ rowId: row.rowId, field: 'code' })
   }
 
   const remove = async (i: number) => {
@@ -184,13 +195,20 @@ export function LanguageSection() {
     })
   }
 
-  const firstError = rows
-    .map((r, i) => rowError(r, rows, i, t('language.codeDup'), t('language.codeInvalid'), t('language.prefixInvalid')))
-    .find((err) => err !== '')
+  const firstError = useMemo(() => {
+    for (let i = 0; i < rows.length; i++) {
+      const e = rowError(rows[i], rows, i, t('language.codeDup'), t('language.codeInvalid'), t('language.prefixInvalid'))
+      if (e) return { index: i, ...e }
+    }
+    return null
+  }, [rows, t])
 
   const submit = async () => {
     if (firstError) {
-      toast.error(firstError)
+      toast.error(firstError.message)
+      // 报错不说完就完：把视口滚到出错的那颗输入框（长列表里错误卡片可能在好几屏外）
+      const row = rows[firstError.index]
+      if (row) setFocusRow({ rowId: row.rowId, field: firstError.kind })
       return
     }
     try {
@@ -227,7 +245,7 @@ export function LanguageSection() {
               {t('language.add')}
             </Button>
             <Button type="button" onClick={() => void submit()} disabled={!isPlatform || save.isPending || !dirty}>
-              {t('common.save')}
+              {save.isPending ? t('common.loading') : t('common.save')}
             </Button>
           </div>
         </Can>
@@ -238,6 +256,8 @@ export function LanguageSection() {
           <div className="flex flex-col gap-3">
             {rows.map((row, i) => {
               const err = rowError(row, rows, i, t('language.codeDup'), t('language.codeInvalid'), t('language.prefixInvalid'))
+              const codeErr = err?.kind === 'code' ? err.message : undefined
+              const prefixErr = err?.kind === 'prefix' ? err.message : undefined
               return (
                 <SortableCard key={row.rowId} id={row.rowId} label={t('language.reorder')} disabled={!canEdit}>
                   {(handle) => (
@@ -280,14 +300,15 @@ export function LanguageSection() {
                       </div>
 
                       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                        <Field label={t('language.fields.code')} error={err}>
+                        <Field label={t('language.fields.code')} error={codeErr}>
                           <Input
                             value={row.code}
                             className="font-mono"
                             placeholder="ja-JP"
+                            aria-invalid={!!codeErr}
                             ref={(el) => {
-                              if (el) codeInputs.current.set(row.rowId, el)
-                              else codeInputs.current.delete(row.rowId)
+                              if (el) fieldInputs.current.set(`${row.rowId}:code`, el)
+                              else fieldInputs.current.delete(`${row.rowId}:code`)
                             }}
                             onChange={(e) =>
                               patch(i, {
@@ -321,6 +342,11 @@ export function LanguageSection() {
                             className="font-mono"
                             placeholder={row.default ? '' : 'ja'}
                             disabled={row.default}
+                            aria-invalid={!!prefixErr}
+                            ref={(el) => {
+                              if (el) fieldInputs.current.set(`${row.rowId}:prefix`, el)
+                              else fieldInputs.current.delete(`${row.rowId}:prefix`)
+                            }}
                             onChange={(e) => patch(i, { prefix: e.target.value })}
                           />
                         </Field>
@@ -353,6 +379,21 @@ export function LanguageSection() {
         </SortableContext>
       </DndContext>
 
+      {/* 底部重复一组操作：卡片多时改到底部不用滚回顶部找保存；与顶部同一套 disabled 口径 */}
+      {rows.length > 0 ? (
+        <Can perm="language:update">
+          <div className="flex items-center justify-end gap-2">
+            <Button type="button" variant="outline" onClick={addRow}>
+              <Plus aria-hidden="true" />
+              {t('language.add')}
+            </Button>
+            <Button type="button" onClick={() => void submit()} disabled={!isPlatform || save.isPending || !dirty}>
+              {save.isPending ? t('common.loading') : t('common.save')}
+            </Button>
+          </div>
+        </Can>
+      ) : null}
+
       <p className="text-xs text-muted-foreground">{t('language.hint')}</p>
       <p className="text-xs text-muted-foreground">{t('language.configHint')}</p>
 
@@ -363,7 +404,7 @@ export function LanguageSection() {
         <Button asChild variant="outline" size="sm" className="ms-auto">
           <a href="/admin/system/i18n-editor">
             {t('language.i18nEditorCta')}
-            <ChevronDown className="ms-1 size-4 -rotate-90" aria-hidden="true" />
+            <ChevronRight className="ms-1 size-4" aria-hidden="true" />
           </a>
         </Button>
       </div>

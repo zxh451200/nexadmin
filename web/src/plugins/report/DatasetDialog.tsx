@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Plus, X } from 'lucide-react'
 import { FormGrid, FormGridFull, FormLayout } from '@/framework/components/FormLayout'
+import { RequiredMark } from '@/framework/components/RequiredMark'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Button } from '@/framework/ui/button'
 import { Checkbox } from '@/framework/ui/checkbox'
@@ -84,6 +85,7 @@ export function DatasetDialog({ open, onOpenChange, editing }: Props) {
       open={open}
       onOpenChange={onOpenChange}
       size="xl"
+      side="right"
       title={editing ? t('plugin_report.dataset.editTitle') : t('plugin_report.dataset.createTitle')}
       description={t('plugin_report.dataset.safeHint')}
       footer={
@@ -132,7 +134,7 @@ export function DatasetDialog({ open, onOpenChange, editing }: Props) {
             <fieldset className="flex flex-col gap-2">
               <legend className="mb-1 text-sm font-medium">
                 {t('plugin_report.dataset.columns')}
-                <span aria-hidden="true" className="ms-0.5 text-destructive">*</span>
+                <RequiredMark />
               </legend>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3">
                 {(src?.columns ?? []).map((c) => (

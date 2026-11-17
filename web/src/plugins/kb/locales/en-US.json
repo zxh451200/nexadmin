@@ -61,6 +61,18 @@
     "ask": "Ask",
     "askDone": "Matched \"{{title}}\" (score {{score}})",
     "askHandoff": "No trustworthy match in the knowledge base — live chat would politely explain and hand off to a human, never fabricate",
-    "hitScore": "{{score}}"
+    "hitScore": "{{score}}",
+    "chunksOpen": "View chunks",
+    "chunksTitle": "Chunks · {{name}}",
+    "chunksDesc": "{{count}} chunks · embedding model {{model}}",
+    "chunksEmpty": "This document has no chunks",
+    "rename": "Rename",
+    "renameTitle": "Rename document",
+    "renameDesc": "Change the display title of “{{name}}”. Chunks and vectors are not affected.",
+    "candidatesTitle": "Closest candidates below the threshold (for tuning):",
+    "statsDocs": "{{count}} documents",
+    "statsChunks": "{{count}} chunks",
+    "statsModel": "Embedding model {{model}}",
+    "statsFailed": "{{count}} not ready"
   }
 }

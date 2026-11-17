@@ -65,7 +65,7 @@ export function NoticeTab() {
       await readAll.mutateAsync()
       toast.success(t('common.operateSuccess'))
     } catch {
-      toast.error(t('common.operateFailed'))
+      // 失败原因由 http 拦截器统一弹出
     }
   }
   // 导出的类型/级别列要和页面上的 DictTag 用同一份字典，否则中英文对不上
@@ -81,7 +81,7 @@ export function NoticeTab() {
       setSelected([])
       toast.success(dismissed < ids.length ? t('message.dismissedPartial', { dismissed, total: ids.length }) : t('common.operateSuccess'))
     } catch {
-      toast.error(t('common.operateFailed'))
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -94,7 +94,7 @@ export function NoticeTab() {
       if (data?.list.length === 1 && page > 1) setPage(page - 1)
       toast.success(t('common.operateSuccess'))
     } catch {
-      toast.error(t('common.operateFailed'))
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -107,7 +107,7 @@ export function NoticeTab() {
       setPage(1)
       toast.success(t('common.operateSuccess'))
     } catch {
-      toast.error(t('common.operateFailed'))
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -197,6 +197,7 @@ export function NoticeTab() {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        columnSettingsKey="notice-inbox"
         onRowClick={open}
         emptyText={applied.keyword || applied.type || applied.onlyUnread ? t('message.emptyFiltered') : t('message.emptyNotices')}
         pagination={{

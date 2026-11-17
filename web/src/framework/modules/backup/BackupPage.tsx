@@ -25,8 +25,6 @@ import {
   type BackupRecord,
 } from './api'
 
-const errMsg = (e: unknown, fallback: string) => (e instanceof Error && e.message ? e.message : fallback)
-
 function saveBlob(filename: string, blob: Blob) {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
@@ -89,8 +87,8 @@ export default function BackupPage() {
     setDownloading(r.id)
     try {
       saveBlob(r.fileName, await downloadBackup(r.id))
-    } catch (e) {
-      toast.error(errMsg(e, t('common.operateFailed')))
+    } catch {
+      // 失败原因（含下载接口报错）由 http 拦截器统一弹出
     } finally {
       setDownloading(null)
     }
@@ -116,8 +114,7 @@ export default function BackupPage() {
       setSelected([])
       toast.success(deleted < ids.length ? t('backup.deletedPartial', { deleted, total: ids.length }) : t('common.operateSuccess'))
     } catch {
-      // 具体原因（如「已有备份正在进行」）由 http 拦截器弹出，这里补一条通用失败提示
-      toast.error(t('common.operateFailed'))
+      // 具体原因（如「已有备份正在进行」）由 http 拦截器弹出
     }
   }
 
@@ -237,6 +234,7 @@ export default function BackupPage() {
         data={rows}
         rowKey="id"
         loading={list.isLoading}
+        columnSettingsKey="backup-records"
         emptyText={restoreHelp}
         pagination={{
           page,

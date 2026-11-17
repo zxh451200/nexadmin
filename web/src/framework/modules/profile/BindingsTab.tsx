@@ -44,8 +44,8 @@ function PhoneDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
       await send.mutateAsync(phone)
       setLeft(60)
       toast.success(t('profile.bindings.codeSent'))
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -56,8 +56,8 @@ function PhoneDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
       await bind.mutateAsync({ phone, code })
       toast.success(t('profile.bindings.bindDone'))
       onOpenChange(false)
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -132,12 +132,13 @@ export function BindingsTab() {
     try {
       await unbind.mutateAsync(key)
       toast.success(t('profile.bindings.unbindDone'))
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
   // 跳转到第三方授权页；回来后由 /login/oauth/:provider 页完成绑定并回到本页
+  // startOAuthBind 是 silent 请求：失败时这里这条 toast 是唯一反馈，不能删
   const onBind = async (key: string, name: string) => {
     try {
       await bindProvider.mutateAsync(key)

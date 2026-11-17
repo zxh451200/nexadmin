@@ -22,7 +22,6 @@ import { Button } from '@/framework/ui/button'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/framework/ui/form'
 import { Input } from '@/framework/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
-import { Switch } from '@/framework/ui/switch'
 import { Textarea } from '@/framework/ui/textarea'
 import {
   CONFIG_VALUE_TYPES,
@@ -95,15 +94,14 @@ export function ParamsSection() {
     setEditing(row)
     setOpen(true)
   }
-  const fail = (e: unknown) => toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
 
   const submit = form.handleSubmit(async (values) => {
     try {
       await save.mutateAsync({ id: editing?.id, body: values })
       toast.success(t('common.operateSuccess'))
       setOpen(false)
-    } catch (e) {
-      fail(e)
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   })
 
@@ -116,8 +114,8 @@ export function ParamsSection() {
       setPage(pageAfterDelete(page, rows.length, removed))
       toast.success(t('common.operateSuccess'))
       setSelected((s) => s.filter((id) => !ids.includes(id)))
-    } catch (e) {
-      fail(e)
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -125,8 +123,8 @@ export function ParamsSection() {
     try {
       await refresh.mutateAsync()
       toast.success(t('sysConfig.refreshed'))
-    } catch (e) {
-      fail(e)
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -218,13 +216,13 @@ export function ParamsSection() {
           <>
             <Can perm="config:create">
               <Button type="button" disabled={!isPlatform} onClick={() => openForm(null)}>
-                <Plus className="me-2 h-4 w-4" aria-hidden="true" />
+                <Plus aria-hidden="true" />
                 {t('common.add')}
               </Button>
             </Can>
             <Can perm="config:update">
               <Button type="button" variant="outline" onClick={refreshCache} disabled={!isPlatform || refresh.isPending}>
-                <RefreshCw className="me-2 h-4 w-4" aria-hidden="true" />
+                <RefreshCw aria-hidden="true" />
                 {t('sysConfig.refreshCache')}
               </Button>
             </Can>
@@ -341,30 +339,24 @@ export function ParamsSection() {
                 <SwitchField control={form.control} name="isPublic" label={t('sysConfig.isPublic')} />
               </FormGridFull>
               <FormGridFull>
-                <FormField
-                  control={form.control}
-                  name="value"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t('sysConfig.value')}</FormLabel>
-                      <FormControl>
-                        {type === 'boolean' ? (
-                          <div className="flex min-h-11 items-center md:min-h-9">
-                            <Switch
-                              checked={field.value === 'true'}
-                              onCheckedChange={(c) => field.onChange(c ? 'true' : 'false')}
-                            />
-                          </div>
-                        ) : type === 'json' ? (
-                          <JsonInput {...field} objectOnly={false} rows={4} />
-                        ) : (
-                          <Input {...field} type={type === 'number' ? 'number' : 'text'} />
-                        )}
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                {type === 'boolean' ? (
+                  /* 布尔值的存储形态是 'true'/'false' 字符串：用 SwitchField 的 valueOn/valueOff 指定 */
+                  <SwitchField control={form.control} name="value" label={t('sysConfig.value')} valueOn="true" valueOff="false" />
+                ) : (
+                  <FormField
+                    control={form.control}
+                    name="value"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('sysConfig.value')}</FormLabel>
+                        <FormControl>
+                          {type === 'json' ? <JsonInput {...field} objectOnly={false} rows={4} /> : <Input {...field} type={type === 'number' ? 'number' : 'text'} />}
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
               </FormGridFull>
               <FormGridFull>
                 <FormField

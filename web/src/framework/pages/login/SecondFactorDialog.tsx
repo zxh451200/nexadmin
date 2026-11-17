@@ -71,7 +71,7 @@ export function SecondFactorDialog({ challenge, onVerified, onCancel, onChalleng
             {t('common.cancel')}
           </Button>
           <Button type="button" disabled={submitting} onClick={() => void submit()}>
-            {submitting && <Loader2 className="me-2 size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />}
+            {submitting && <Loader2 className="animate-spin motion-reduce:animate-none" aria-hidden="true" />}
             {t('login.otpSubmit')}
           </Button>
         </>

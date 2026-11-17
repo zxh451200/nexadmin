@@ -206,13 +206,13 @@ export default function RecyclePage() {
           <>
             <Can perm="recycle:restore">
               <Button type="button" variant="outline" size="sm" disabled={blocked(selectedRows)} onClick={() => void onRestoreBatch(selectedRows)}>
-                <RotateCcw className="me-2 size-4" aria-hidden="true" />
+                <RotateCcw aria-hidden="true" />
                 {t('recycle.action.restore')}
               </Button>
             </Can>
             <Can perm="recycle:delete">
               <Button type="button" variant="destructive" size="sm" disabled={blocked(selectedRows)} onClick={() => void onPurgeBatch(selectedRows)}>
-                <Trash2 className="me-2 size-4" aria-hidden="true" />
+                <Trash2 aria-hidden="true" />
                 {t('recycle.action.purge')}
               </Button>
             </Can>

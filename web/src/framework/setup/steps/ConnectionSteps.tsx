@@ -111,7 +111,7 @@ function TestConnection({ url, payload }: { url: string; payload: unknown }) {
   return (
     <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
       <Button type="button" variant="outline" onClick={run} disabled={loading}>
-        {loading && <Loader2 className="me-2 size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />}
+        {loading && <Loader2 className="animate-spin motion-reduce:animate-none" aria-hidden="true" />}
         {t('setup.testConnection')}
       </Button>
       {result && (

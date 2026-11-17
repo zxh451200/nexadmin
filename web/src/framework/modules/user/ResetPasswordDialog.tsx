@@ -47,8 +47,8 @@ export function ResetPasswordDialog({ user, onOpenChange }: ResetPasswordDialogP
       await reset.mutateAsync({ id: user.id, password: v.password })
       toast.success(t('user.resetPassword.success'))
       onOpenChange(false)
-    } catch (e) {
-      toast.error(e instanceof Error && e.message ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因（如密码强度校验）由 http 拦截器统一弹出
     }
   })
 

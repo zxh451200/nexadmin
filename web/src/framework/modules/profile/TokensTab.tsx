@@ -277,6 +277,7 @@ export function TokensTab() {
         data={rows}
         rowKey="id"
         loading={isLoading}
+        columnSettingsKey="profile-tokens"
         pagination={false}
         emptyText={t('profile.tokens.empty')}
         selection={{ selected, onChange: setSelected }}

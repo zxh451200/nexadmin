@@ -104,7 +104,7 @@ export function ForgotPasswordDialog({ open, onOpenChange, channels }: Props) {
     }
   }
 
-  const spinner = <Loader2 className="me-2 size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+  const spinner = <Loader2 className="animate-spin motion-reduce:animate-none" aria-hidden="true" />
 
   const footer =
     step === 1 ? (

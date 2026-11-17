@@ -239,6 +239,23 @@ func (c *indexCache) invalidate() {
 	c.mu.Unlock()
 }
 
+// queryVector 把问题文本向量化；失败统一映射成用户可读的错误 key（模型没配好 / 调用失败）。
+func (s *Service) queryVector(ctx context.Context, cfg ai.Config, query string) ([]float64, error) {
+	vecs, err := s.gw.Client.Embeddings(ctx, cfg, []string{strings.TrimSpace(query)})
+	if err != nil {
+		if s.log != nil {
+			s.log.Warn("kb: query embedding failed", "err", err.Error())
+		}
+		switch {
+		case errors.Is(err, ai.ErrDisabled):
+			return nil, response.Unavailable("kb.embed_unavailable")
+		default:
+			return nil, response.New(502, "kb.embed_failed")
+		}
+	}
+	return vecs[0], nil
+}
+
 // Retrieve 以问题向量做余弦 topK；低于阈值的命中一律丢弃——丢弃后为空就由调用方兜底转人工，
 // 这是「不瞎回答」的第一道闸。
 func (s *Service) Retrieve(ctx context.Context, query string) ([]Hit, error) {
@@ -254,45 +271,42 @@ func (s *Service) Retrieve(ctx context.Context, query string) ([]Hit, error) {
 	}
 	cfg = cfg.Normalize()
 	st := s.Settings(ctx)
-	vecs, err := s.gw.Client.Embeddings(ctx, cfg, []string{strings.TrimSpace(query)})
+	q, err := s.queryVector(ctx, cfg, query)
 	if err != nil {
-		if s.log != nil {
-			s.log.Warn("kb: query embedding failed", "err", err.Error())
-		}
-		switch {
-		case errors.Is(err, ai.ErrDisabled):
-			return nil, response.Unavailable("kb.embed_unavailable")
-		default:
-			return nil, response.New(502, "kb.embed_failed")
-		}
+		return nil, err
 	}
 	chunks, err := s.chunks(ctx, cfg.EmbedModel)
 	if err != nil {
 		return nil, err
 	}
-	q := vecs[0]
+	return selectTop(q, chunks, st.Threshold, st.TopK), nil
+}
+
+// selectTop 是余弦 topK 的公共选择器：threshold 过滤 + 按分排序截断。
+// Retrieve 用它做「过阈值」检索；召回调试（Candidates）用 threshold=0 看最接近的候选。
+func selectTop(q []float64, chunks []indexedChunk, threshold float64, topK int) []Hit {
 	type scored struct {
 		chunk *indexedChunk
 		score float64
 	}
-	top := make([]scored, 0, st.TopK)
+	top := make([]scored, 0, topK)
 	worst := func() float64 {
-		if len(top) < st.TopK {
+		if len(top) < topK {
 			return math.SmallestNonzeroFloat64
 		}
 		return top[len(top)-1].score
 	}
 	for i := range chunks {
 		sc := cosine(q, chunks[i].vector)
-		if sc < st.Threshold || sc <= worst() {
+		if sc < threshold || sc <= worst() {
 			continue
 		}
 		top = append(top, scored{&chunks[i], sc})
 		for j := len(top) - 1; j > 0 && top[j].score > top[j-1].score; j-- {
 			top[j], top[j-1] = top[j-1], top[j]
 		}
-		if len(top) > st.TopK {
-			top = top[:st.TopK]
+		if len(top) > topK {
+			top = top[:topK]
 		}
 	}
 	hits := make([]Hit, 0, len(top))
@@ -302,7 +316,34 @@ func (s *Service) Retrieve(ctx context.Context, query string) ([]Hit, error) {
 			Excerpt: truncateRunes(t.chunk.content, 160), Score: roundScore(t.score),
 		})
 	}
-	return hits, nil
+	return hits
+}
+
+// Candidates 返回不设阈值的 topK 命中——召回调试用：阈值调高了检索不到时，
+// 看看「最接近的候选差多少分」再决定调多少，不用盲调。只给管理端测试提问；
+// IM 机器人不调它（handoff 兜底不需要候选，省一次 query embedding）。
+func (s *Service) Candidates(ctx context.Context, query string) ([]Hit, error) {
+	if s.gw == nil {
+		return nil, response.Unavailable("kb.plugin_inactive")
+	}
+	cfg, err := s.gw.Load(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if !cfg.EmbedReady() {
+		return nil, response.Unavailable("kb.embed_unavailable")
+	}
+	cfg = cfg.Normalize()
+	st := s.Settings(ctx)
+	q, err := s.queryVector(ctx, cfg, query)
+	if err != nil {
+		return nil, err
+	}
+	chunks, err := s.chunks(ctx, cfg.EmbedModel)
+	if err != nil {
+		return nil, err
+	}
+	return selectTop(q, chunks, 0, st.TopK), nil
 }
 
 // chunks 返回可检索切块（模型一致 + 文档 ready），带指纹缓存的懒加载。
@@ -418,6 +459,49 @@ func (s *Service) DeleteDocument(ctx context.Context, id string) error {
 		s.cache.invalidate()
 	}
 	return err
+}
+
+// ListChunks 返回一篇文档的全部知识块（按切分顺序）；向量字段不外发。
+// 给前端的块预览用：排查「AI 为什么这么答」时直接看库里实际参与检索的文本。
+func (s *Service) ListChunks(ctx context.Context, id string) (*Document, []Chunk, error) {
+	docID, err := idgen.Parse(id)
+	if err != nil {
+		return nil, nil, response.BadRequest("error.bad_request")
+	}
+	var doc Document
+	if err := s.db.WithContext(ctx).Take(&doc, int64(docID)).Error; err != nil {
+		return nil, nil, response.NotFound("kb.document_not_found")
+	}
+	var chunks []Chunk
+	if err := s.db.WithContext(ctx).Where("document_id = ?", docID).Order("seq").
+		Limit(500).Find(&chunks).Error; err != nil {
+		return nil, nil, err
+	}
+	return &doc, chunks, nil
+}
+
+// RenameDocument 只改展示标题，不动切块与向量（无需重新向量化）。
+func (s *Service) RenameDocument(ctx context.Context, id, title string) (*Document, error) {
+	docID, err := idgen.Parse(id)
+	if err != nil {
+		return nil, response.BadRequest("error.bad_request")
+	}
+	title = strings.TrimSpace(title)
+	if title == "" {
+		return nil, response.BadRequest("kb.title_required")
+	}
+	if utf8.RuneCountInString(title) > 200 {
+		title = string([]rune(title)[:200])
+	}
+	res := s.db.WithContext(ctx).Model(&Document{}).Where("id = ?", int64(docID)).
+		Updates(map[string]any{"title": title, "updated_at": s.now()})
+	if res.Error != nil {
+		return nil, res.Error
+	}
+	if res.RowsAffected == 0 {
+		return nil, response.NotFound("kb.document_not_found")
+	}
+	return s.reload(ctx, docID)
 }
 
 // Reembed 用当前配置的 embedding 模型重跑一篇文档（模型切换后的旧文档补救）。

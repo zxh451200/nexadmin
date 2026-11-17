@@ -1,8 +1,8 @@
 import { useTranslation } from 'react-i18next'
 import { RemoteSelect } from '@/framework/components/RemoteSelect'
+import { SwitchRow } from '@/framework/components/SwitchField'
 import { Checkbox } from '@/framework/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
-import { Switch } from '@/framework/ui/switch'
 import { Field, NumInput } from './controls'
 import { OptionsEditor } from './OptionsEditor'
 import { isMulti } from './schema'
@@ -21,16 +21,12 @@ export function OptionRules({ f, id, patch }: RulesProps) {
   return (
     <>
       {f.type === 'select' ? (
-        <div className="flex items-center justify-between gap-3">
-          <label htmlFor={`${id}-multiple`} className="text-sm font-medium">
-            {P('multiple')}
-          </label>
-          <Switch
-            id={`${id}-multiple`}
-            checked={!!f.multiple}
-            onCheckedChange={(v) => patch({ multiple: v || undefined, default: undefined, min: undefined, max: undefined })}
-          />
-        </div>
+        <SwitchRow
+          label={P('multiple')}
+          checked={!!f.multiple}
+          onCheckedChange={(v) => patch({ multiple: v || undefined, default: undefined, min: undefined, max: undefined })}
+          bare
+        />
       ) : null}
 
       <Field id={`${id}-source`} label={P('optionSource')}>

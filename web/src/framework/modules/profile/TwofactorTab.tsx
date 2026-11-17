@@ -87,8 +87,8 @@ export function TwofactorTab() {
       setUri(res.uri)
       setCode('')
       setEnrollOpen(true)
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -103,8 +103,8 @@ export function TwofactorTab() {
       setCode('')
       setRecoveryTitle(t('profile.twofactor.confirmDone'))
       setRecovery(res)
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -113,8 +113,8 @@ export function TwofactorTab() {
       const res = await regen.mutateAsync()
       setRecoveryTitle(t('profile.twofactor.regenDone'))
       setRecovery(res)
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -129,8 +129,8 @@ export function TwofactorTab() {
       setPassword('')
       setCode('')
       toast.success(t('profile.twofactor.disabled'))
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 

@@ -114,8 +114,8 @@ export default function LoginLogPage() {
       setPage(pageAfterDelete(page, rows.length, removed))
       setSelected([])
       toast.success(t('common.operateSuccess'))
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -127,8 +127,8 @@ export default function LoginLogPage() {
       setSelected([])
       setPage(1)
       toast.success(t('loginLog.clean.done', { count: res.removed }))
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -136,8 +136,8 @@ export default function LoginLogPage() {
   const onExport = async () => {
     try {
       await startExportJob(() => createLoginLogExportJob(toQuery(applied)))
-    } catch (e) {
-      toast.error(e instanceof Error && e.message ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -217,13 +217,13 @@ export default function LoginLogPage() {
           <>
             <Can perm="loginLog:export">
               <Button type="button" variant="outline" onClick={() => void onExport()}>
-                <Download className="me-2 size-4" aria-hidden="true" />
+                <Download aria-hidden="true" />
                 {t('loginLog.action.export')}
               </Button>
             </Can>
             <Can perm="loginLog:delete">
               <Button type="button" variant="outline" onClick={() => setCleanOpen(true)}>
-                <Eraser className="me-2 size-4" aria-hidden="true" />
+                <Eraser aria-hidden="true" />
                 {t('loginLog.clean.title')}
               </Button>
             </Can>
@@ -238,7 +238,7 @@ export default function LoginLogPage() {
         batchActions={(ids) => (
           <Can perm="loginLog:delete">
             <Button type="button" variant="destructive" size="sm" className="h-10 md:h-8" onClick={() => onDelete(ids)}>
-              <Trash2 className="me-2 size-4" aria-hidden="true" />
+              <Trash2 aria-hidden="true" />
               {t('loginLog.action.deleteSelected')}
             </Button>
           </Can>

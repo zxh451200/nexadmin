@@ -48,8 +48,8 @@ function useSendTest(form: UseFormReturn<any>) { // eslint-disable-line @typescr
       const r = await test.mutateAsync({ section: 'notify', body: { ...form.getValues(), channel, to } })
       if (r.ok) toast.success(t('settings.test.ok'))
       else toast.error(t('settings.test.failed', { reason: t(`settings.test.reason.${r.reason ?? 'unknown'}`) }))
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出；业务失败（r.ok=false）在上面按 reason 展示
     }
   }
   return { run, pending: test.isPending }
@@ -66,7 +66,7 @@ function MailTest({ form }: { form: UseFormReturn<any> }) { // eslint-disable-li
         <Input id="notify-mail-to" type="email" value={to} onChange={(e) => setTo(e.target.value)} placeholder="you@example.com" />
         <Can perm="settings:update">
           <Button type="button" variant="outline" className="sm:w-auto" disabled={pending} onClick={() => void run('mail', to.trim())}>
-            {pending ? <Loader2 className="me-2 h-4 w-4 animate-spin" aria-hidden="true" /> : <Send className="me-2 h-4 w-4" aria-hidden="true" />}
+            {pending ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Send aria-hidden="true" />}
             {t('settings.notify.sendTest')}
           </Button>
         </Can>
@@ -116,7 +116,7 @@ function Robots({ form }: { form: UseFormReturn<any> }) { // eslint-disable-line
           <SwitchField control={form.control} name={`robots.${i}.markdown`} label={t('settings.notify.markdown')} bare />
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Button type="button" variant="ghost" onClick={() => remove(i)}>
-              <Trash2 className="me-2 h-4 w-4" aria-hidden="true" />
+              <Trash2 aria-hidden="true" />
               {t('settings.notify.removeRobot')}
             </Button>
             <Can perm="settings:update">
@@ -126,7 +126,7 @@ function Robots({ form }: { form: UseFormReturn<any> }) { // eslint-disable-line
                 disabled={pending}
                 onClick={() => void run(`robot:${form.getValues(`robots.${i}.name`) as string}`)}
               >
-                <Send className="me-2 h-4 w-4" aria-hidden="true" />
+                <Send aria-hidden="true" />
                 {t('settings.notify.sendTest')}
               </Button>
             </Can>

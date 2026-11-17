@@ -31,8 +31,8 @@ export default function OnlinePage() {
     try {
       await force.mutateAsync(row.id)
       toast.success(t('online.forced'))
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -77,7 +77,7 @@ export default function OnlinePage() {
       <DataTable<OnlineUser>
         toolbar={
           <Button type="button" variant="outline" disabled={isFetching} onClick={() => refetch()}>
-            <RefreshCw className={isFetching ? 'me-2 size-4 animate-spin' : 'me-2 size-4'} aria-hidden="true" />
+            <RefreshCw className={isFetching ? 'animate-spin' : undefined} aria-hidden="true" />
             {t('common.refresh')}
           </Button>
         }

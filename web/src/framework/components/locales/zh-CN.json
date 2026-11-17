@@ -1,4 +1,8 @@
 {
+  "constantPicker": {
+    "useCustom": "使用自定义值 \"{{value}}\"",
+    "pleaseSelect": "请选择"
+  },
   "dataTable": {
     "columnSettings": "列设置",
     "columnSettingsHint": "选择要显示的列",

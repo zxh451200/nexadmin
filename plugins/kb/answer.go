@@ -22,13 +22,18 @@ type AnswerResult struct {
 	Answer  string `json:"answer"`
 	Hits    []Hit  `json:"hits"`
 	Handoff bool   `json:"handoff"`
+	// Candidates 是 handoff 时才有的召回调试信息：不设阈值的 topK 候选及分数——
+	// 管理端调阈值时看「最接近的候选差多少」，不用盲调。IM 机器人不请求它。
+	Candidates []Hit `json:"candidates,omitempty"`
 }
 
 // answerTimeout 单轮问答的超时：知识问答不需要工具循环，60s 足够。
 const answerTimeout = 60 * time.Second
 
 // Answer 基于知识库回答一个问题（测试提问与 IM 机器人共用）。
-func (s *Service) Answer(ctx context.Context, who ai.Caller, question string) (*AnswerResult, error) {
+// withCandidates：handoff（检索未命中）时额外返回不设阈值的 topK 候选——只有管理端
+// 测试提问需要它做召回调试；IM 机器人传 false，handoff 兜底不多花一次 embedding。
+func (s *Service) Answer(ctx context.Context, who ai.Caller, question string, withCandidates bool) (*AnswerResult, error) {
 	if s.gw == nil {
 		return nil, response.Unavailable("kb.plugin_inactive")
 	}
@@ -44,7 +49,15 @@ func (s *Service) Answer(ctx context.Context, who ai.Caller, question string) (*
 		return nil, err
 	}
 	if len(hits) == 0 {
-		return &AnswerResult{Hits: hits, Handoff: true}, nil
+		out := &AnswerResult{Hits: hits, Handoff: true}
+		if withCandidates {
+			// 调试信息失败不拦兜底：转人工话术照走，只是管理端少看一眼候选
+			candidates, cerr := s.Candidates(ctx, question)
+			if cerr == nil {
+				out.Candidates = candidates
+			}
+		}
+		return out, nil
 	}
 	cfg, err := s.gw.Load(ctx)
 	if err != nil {

@@ -42,14 +42,12 @@ export function SectionCard<K extends SectionKey>({ section, value, schema, test
     form.reset(value)
   }, [value, form])
 
-  const fail = (e: unknown) => toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
-
   const submit = form.handleSubmit(async (body) => {
     try {
       await save.mutateAsync({ section, body })
       toast.success(t('common.operateSuccess'))
-    } catch (e) {
-      fail(e)
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   })
 
@@ -58,8 +56,8 @@ export function SectionCard<K extends SectionKey>({ section, value, schema, test
       const r = await test.mutateAsync({ section, body: form.getValues() })
       if (r.ok) toast.success(t('settings.test.ok'))
       else toast.error(t('settings.test.failed', { reason: t(`settings.test.reason.${r.reason ?? 'unknown'}`) }))
-    } catch (e) {
-      fail(e)
+    } catch {
+      // 失败原因由 http 拦截器统一弹出；业务失败（r.ok=false）在上面按 reason 展示
     }
   }
 
@@ -80,9 +78,9 @@ export function SectionCard<K extends SectionKey>({ section, value, schema, test
               {testable ? (
                 <Button type="button" variant="outline" className="w-full sm:w-auto" disabled={!isPlatform || test.isPending} onClick={runTest}>
                   {test.isPending ? (
-                    <Loader2 className="me-2 h-4 w-4 animate-spin" aria-hidden="true" />
+                    <Loader2 className="animate-spin" aria-hidden="true" />
                   ) : (
-                    <PlugZap className="me-2 h-4 w-4" aria-hidden="true" />
+                    <PlugZap aria-hidden="true" />
                   )}
                   {t('settings.testConnection')}
                 </Button>

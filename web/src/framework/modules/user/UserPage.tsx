@@ -34,7 +34,6 @@ import { UserFormDialog } from './UserFormDialog'
 
 const iconBtn = 'h-11 w-11 md:h-9 md:w-9'
 const isLocked = (u: User) => !!u.locked && (!u.lockedUntil || new Date(u.lockedUntil).getTime() > Date.now())
-const errMsg = (e: unknown, fallback: string) => (e instanceof Error && e.message ? e.message : fallback)
 
 export default function UserPage() {
   const { t, i18n } = useTranslation()
@@ -82,8 +81,8 @@ export default function UserPage() {
       setPage(pageAfterDelete(page, rows.length, removed))
       setSelected((s) => s.filter((x) => !ids.includes(x)))
       toast.success(t('common.operateSuccess'))
-    } catch (e) {
-      toast.error(errMsg(e, t('common.operateFailed')))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -91,8 +90,8 @@ export default function UserPage() {
     try {
       await setStatus.mutateAsync({ id: u.id, status: on ? '1' : '0' })
       toast.success(t('user.statusChanged'))
-    } catch (e) {
-      toast.error(errMsg(e, t('common.operateFailed')))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -104,8 +103,8 @@ export default function UserPage() {
       toast.success(
         res.skipped > 0 ? t('user.batchStatusPartial', { updated: res.updated, skipped: res.skipped }) : t('user.statusChanged'),
       )
-    } catch (e) {
-      toast.error(errMsg(e, t('common.operateFailed')))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -113,8 +112,8 @@ export default function UserPage() {
     try {
       await unlock.mutateAsync(u.id)
       toast.success(t('user.unlock.success'))
-    } catch (e) {
-      toast.error(errMsg(e, t('common.operateFailed')))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -123,8 +122,8 @@ export default function UserPage() {
     try {
       const q = toUserQuery(applied)
       await startExportJob(() => createExportJob(q))
-    } catch (e) {
-      toast.error(errMsg(e, t('common.operateFailed')))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -231,19 +230,19 @@ export default function UserPage() {
           <>
             <Can perm="user:create">
               <Button type="button" onClick={() => openForm(null)}>
-                <Plus className="me-2 h-4 w-4" aria-hidden="true" />
+                <Plus aria-hidden="true" />
                 {t('common.create')}
               </Button>
             </Can>
             <Can perm="user:import">
               <Button type="button" variant="outline" onClick={() => setImportOpen(true)}>
-                <Upload className="me-2 h-4 w-4" aria-hidden="true" />
+                <Upload aria-hidden="true" />
                 {t('common.import')}
               </Button>
             </Can>
             <Can perm="user:export">
               <Button type="button" variant="outline" onClick={() => void exportUsers()}>
-                <Download className="me-2 h-4 w-4" aria-hidden="true" />
+                <Download aria-hidden="true" />
                 {t('common.export')}
               </Button>
             </Can>
@@ -281,7 +280,7 @@ export default function UserPage() {
                 size="sm"
                 onClick={() => remove(ids, t('user.deleteBatch', { count: ids.length }))}
               >
-                <Trash2 className="me-2 h-4 w-4" aria-hidden="true" />
+                <Trash2 aria-hidden="true" />
                 {t('common.delete')}
               </Button>
             </Can>

@@ -98,8 +98,8 @@ export default function OperLogPage() {
       setPage(pageAfterDelete(page, rows.length, removed))
       setSelected([])
       toast.success(t('common.operateSuccess'))
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -111,8 +111,8 @@ export default function OperLogPage() {
       setSelected([])
       setPage(1)
       toast.success(t('operLog.clean.done', { count: res.removed }))
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -120,8 +120,8 @@ export default function OperLogPage() {
   const onExport = async () => {
     try {
       await startExportJob(() => createOperLogExportJob(toQuery(applied)))
-    } catch (e) {
-      toast.error(e instanceof Error && e.message ? e.message : t('common.operateFailed'))
+    } catch {
+      // 创建失败的原因由 http 拦截器统一弹出
     }
   }
 
@@ -139,9 +139,12 @@ export default function OperLogPage() {
     // 满高布局：logs 页签整页撑满主区，表格内部滚动、分页钉底；stats 页签保持文档流
     <PageContainer className="h-full min-h-0">
       <PageHeader title={t('operLog.menu')} description={t('operLog.description')} />
-      {/* 列表与统计分屏：查操作记录的人不该先滚过一屏图表 */}
-      <Tabs value={view} onValueChange={setView} className="flex min-h-0 flex-1 flex-col items-start gap-4">
-        <TabsList className="w-fit">
+      {/* 列表与统计分屏：查操作记录的人不该先滚过一屏图表。
+          TabsList 必须 shrink-0：全高链（h-full → flex-1 → min-h-0）下统计内容超出视口时，
+          flex 会把首行页签压扁，而 TabsList 自带 overflow-y-hidden，标签直接被裁掉半行。
+          不能加 items-start：纵向 flex 里它让 TabsContent 收缩成 fit-content，统计网格缩成一窄条 */}
+      <Tabs value={view} onValueChange={setView} className="flex min-h-0 flex-1 flex-col gap-4">
+        <TabsList className="w-fit shrink-0">
           <TabsTrigger value="logs">{t('operLog.view.logs')}</TabsTrigger>
           <TabsTrigger value="stats">{t('operLog.view.stats')}</TabsTrigger>
         </TabsList>
@@ -180,13 +183,13 @@ export default function OperLogPage() {
           <>
             <Can perm="operLog:export">
               <Button type="button" variant="outline" onClick={() => void onExport()}>
-                <Download className="me-2 size-4" aria-hidden="true" />
+                <Download aria-hidden="true" />
                 {t('operLog.action.export')}
               </Button>
             </Can>
             <Can perm="operLog:delete">
               <Button type="button" variant="outline" onClick={() => setCleanOpen(true)}>
-                <Eraser className="me-2 size-4" aria-hidden="true" />
+                <Eraser aria-hidden="true" />
                 {t('operLog.action.clean')}
               </Button>
             </Can>
@@ -203,7 +206,7 @@ export default function OperLogPage() {
         batchActions={(ids) => (
           <Can perm="operLog:delete">
             <Button type="button" variant="destructive" size="sm" className="h-10 md:h-8" onClick={() => onDelete(ids)}>
-              <Trash2 className="me-2 size-4" aria-hidden="true" />
+              <Trash2 aria-hidden="true" />
               {t('operLog.action.deleteSelected')}
             </Button>
           </Can>

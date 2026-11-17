@@ -101,7 +101,7 @@ function BrandPanel({ name, logoUrl, copyright }: { name: string; logoUrl?: stri
         aria-hidden="true"
       >
         <div className="absolute inset-0 rounded-full border border-primary-foreground/22" />
-        <div className="absolute top-[-3px] left-1/2 size-1.5 -translate-x-1/2 rounded-full bg-primary-foreground/60" />
+        <div className="absolute top-[-3px] start-1/2 size-1.5 -translate-x-1/2 rounded-full bg-primary-foreground/60" />
       </div>
       <div
         className="pointer-events-none absolute bottom-28 inset-s-[46%] size-2.5 animate-[login-float_12s_ease-in-out_infinite] rounded-full bg-primary-foreground/35 motion-reduce:animate-none"

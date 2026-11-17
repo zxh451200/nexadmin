@@ -28,8 +28,8 @@ export function IpRulesTab() {
       await fn()
       toast.success(t('common.operateSuccess'))
       return true
-    } catch (e) {
-      toast.error(e instanceof Error && e.message ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
       return false
     }
   }
@@ -50,8 +50,8 @@ export function IpRulesTab() {
       const { deleted } = await removeBatch.mutateAsync(ids)
       setSelected([])
       toast.success(deleted < ids.length ? t('plugin_security.ip.deletedPartial', { deleted, total: ids.length }) : t('common.operateSuccess'))
-    } catch (e) {
-      toast.error(e instanceof Error && e.message ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 

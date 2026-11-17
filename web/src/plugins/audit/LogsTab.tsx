@@ -1,12 +1,12 @@
 import { useState } from 'react'
-import { Download, Eraser } from 'lucide-react'
+import { Eraser } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
 import { DataTable, type Column } from '@/framework/components/DataTable'
 import { DetailAction } from '@/framework/components/DetailAction'
 import { DateRangePicker, type DateRangeValue } from '@/framework/components/DateRangePicker'
-import { downloadCsv } from '@/framework/components/export/csv'
+import { ExportCsvButton, type CsvColumn } from '@/framework/components/export/ExportCsvButton'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { OptionPicker } from '@/framework/components/OptionPicker'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
@@ -136,44 +136,26 @@ export function LogsTab() {
   const [detail, setDetail] = useState<string | null>(null)
   const [cleanOpen, setCleanOpen] = useState(false)
 
-  const query: LogQuery = {
+  const exportQuery = {
     table: applied.table?.length ? applied.table.join(',') : undefined,
     operator: applied.operator?.trim() || undefined,
     action: applied.action?.length ? applied.action.join(',') : undefined,
     from: applied.range.from,
     to: applied.range.to,
-    page,
-    pageSize,
   }
+  const query: LogQuery = { ...exportQuery, page, pageSize }
   const { data, isLoading } = useLogs(query)
   const { data: tables } = useLogTables()
 
-  // 导出当前筛选下的全部记录（服务端封顶 20000 行）；CSV 由前端拼装，列与列表一致。
-  const onExport = async () => {
-    try {
-      const rows = await fetchAuditLogsForExport({
-        table: applied.table?.length ? applied.table.join(',') : undefined,
-        operator: applied.operator?.trim() || undefined,
-        action: applied.action?.length ? applied.action.join(',') : undefined,
-        from: applied.range.from,
-        to: applied.range.to,
-      })
-      const stamp = new Date().toISOString().slice(0, 10)
-      downloadCsv(`audit-logs-${stamp}.csv`, [
-        [
-          t('plugin_audit.fields.time'), t('plugin_audit.fields.table'), t('plugin_audit.fields.rowPk'),
-          t('plugin_audit.fields.action'), t('plugin_audit.fields.operator'), t('plugin_audit.fields.changedFields'),
-        ],
-        ...rows.map((l) => [
-          formatTime(l.createdAt, i18n.language), l.table, l.rowPk,
-          t(`plugin_audit.action.${l.action}`), operatorLabel(l), l.fields,
-        ]),
-      ])
-      toast.success(t('plugin_audit.exportDone', { count: rows.length }))
-    } catch {
-      toast.error(t('common.operateFailed'))
-    }
-  }
+  // 导出当前筛选下的全部记录（服务端封顶 20000 行）；列与列表一致。
+  const exportColumns: CsvColumn<AuditLog>[] = [
+    { header: t('plugin_audit.fields.time'), value: (l) => formatTime(l.createdAt, i18n.language) },
+    { header: t('plugin_audit.fields.table'), value: (l) => l.table },
+    { header: t('plugin_audit.fields.rowPk'), value: (l) => l.rowPk },
+    { header: t('plugin_audit.fields.action'), value: (l) => t(`plugin_audit.action.${l.action}`) },
+    { header: t('plugin_audit.fields.operator'), value: (l) => operatorLabel(l) },
+    { header: t('plugin_audit.fields.changedFields'), value: (l) => l.fields },
+  ]
 
   const columns: Column<AuditLog>[] = [
     { key: 'createdAt', title: t('plugin_audit.fields.time'), mobile: 'sub', render: (l) => <span className="num">{formatTime(l.createdAt, i18n.language)}</span> },
@@ -249,10 +231,7 @@ export function LogsTab() {
         emptyText={t('plugin_audit.empty')}
         toolbar={
           <>
-            <Button variant="outline" onClick={() => void onExport()}>
-              <Download aria-hidden="true" />
-              {t('plugin_audit.export')}
-            </Button>
+            <ExportCsvButton filename="audit-logs" columns={exportColumns} getRows={() => fetchAuditLogsForExport(exportQuery)} />
             <Can perm="audit:clean">
               <Button variant="outline" onClick={() => setCleanOpen(true)}>
                 <Eraser aria-hidden="true" />

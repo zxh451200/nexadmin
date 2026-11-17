@@ -53,7 +53,7 @@ export default function StatsCard() {
   if (isLoading || !data) {
     return (
       <div className="card-edge overflow-hidden rounded-xl border border-border bg-card">
-        <div className="grid grid-cols-2 divide-y divide-border md:grid-cols-4 md:divide-x md:divide-y-0">
+        <div className="grid grid-cols-2 divide-y divide-border md:grid-cols-4 md:divide-x md:divide-y-0 rtl:divide-x-reverse">
           {Array.from({ length: 4 }, (_, i) => (
             <div key={i} className="p-4 md:p-5">
               <Skeleton className="h-24 w-full" />
@@ -66,7 +66,7 @@ export default function StatsCard() {
 
   return (
     <div className="card-edge overflow-hidden rounded-xl border border-border bg-card">
-      <div className="grid grid-cols-2 divide-y divide-border md:grid-cols-4 md:divide-x md:divide-y-0">
+      <div className="grid grid-cols-2 divide-y divide-border md:grid-cols-4 md:divide-x md:divide-y-0 rtl:divide-x-reverse">
         <KpiCell title={t('dashboard.stat.users')} value={fmt(data.users.value)} delta={deltaBadge(data.users, t)} />
         <KpiCell title={t('dashboard.stat.todayLogin')} value={fmt(data.todayLogin.value)} delta={deltaBadge(data.todayLogin, t)} />
         <KpiCell title={t('dashboard.stat.unreadMessages')} value={fmt(data.unreadMessages.value)} delta={deltaBadge(data.unreadMessages, t)} />

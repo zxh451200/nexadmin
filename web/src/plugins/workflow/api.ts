@@ -1,4 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useHiddenPause } from '@/framework/hooks/use-hidden-pause'
 import { api } from '@/framework/request/http'
 import type { Page, PageQuery } from '@/framework/request/types'
 
@@ -122,7 +123,7 @@ export function useInstances(query: WfQuery & { todo?: string; done?: string }) 
     queryKey: [...KEY, 'instances', query],
     queryFn: () => api.get<Page<WfInst>>(`${BASE}/instances`, query),
     placeholderData: keepPreviousData,
-    refetchInterval: 8000,
+    refetchInterval: useHiddenPause(8000),
   })
 }
 

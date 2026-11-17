@@ -86,6 +86,7 @@ export function ClientErrorsTab() {
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}
+        columnSettingsKey="client-errors"
         onRowClick={setDetail}
         rowActions={(r) => <DetailAction onClick={() => setDetail(r)} />}
         pagination={{

@@ -385,6 +385,7 @@ export default function SourceFormDialog({ open, onOpenChange, editing }: Props)
       open={open}
       onOpenChange={onOpenChange}
       size="lg"
+      side="right"
       fixedHeight
       title={editing ? t('plugin_saml.edit') : t('plugin_saml.add')}
       footer={

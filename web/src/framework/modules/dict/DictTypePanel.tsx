@@ -89,8 +89,8 @@ export function DictTypePanel({ selectedId, onSelect, onDeleted }: Props) {
       await save.mutateAsync({ id: editing?.id, body: values })
       toast.success(t('common.operateSuccess'))
       setOpen(false)
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   })
 
@@ -101,8 +101,8 @@ export function DictTypePanel({ selectedId, onSelect, onDeleted }: Props) {
       setSelected((s) => s.filter((x) => x !== row.id))
       toast.success(t('common.operateSuccess'))
       onDeleted(row.id)
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
@@ -121,8 +121,8 @@ export function DictTypePanel({ selectedId, onSelect, onDeleted }: Props) {
       setSelected([])
       deletable.forEach((id) => onDeleted(id))
       toast.success(skipped > 0 ? t('dict.type.batchDeletedSkipped', { count: deletable.length, skipped }) : t('common.operateSuccess'))
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t('common.operateFailed'))
+    } catch {
+      // 失败原因由 http 拦截器统一弹出
     }
   }
 
