@@ -1,6 +1,6 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import { Copy, Download, ExternalLink, Eye, History, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { Copy, Download, ExternalLink, Eye, History, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -30,6 +30,7 @@ import { RequiredMark } from '@/framework/components/RequiredMark'
 import { DateTimePicker } from '@/framework/components/DateTimePicker'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { SwitchRow } from '@/framework/components/SwitchField'
+import { TagsInput } from '@/framework/components/TagsInput'
 import { ImageUrlField } from '@/framework/components/ImageUrlField'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
@@ -122,7 +123,6 @@ function PostFormBody({
   const save = useSavePost()
   const saveCategory = useSaveCategory()
   const { data: categories = [], isLoading: categoriesLoading } = useCategories()
-  const { data: knownTags = [] } = useTags()
   const lf = useLocaleForm()
   const { disabled: sharedDisabled } = useSharedField()
   const [slug, setSlug] = useState(editing?.slug ?? '')
@@ -134,8 +134,6 @@ function PostFormBody({
   const [author, setAuthor] = useState(editing?.author ?? '')
   const [catIds, setCatIds] = useState<string[]>(() => (editing?.categories ?? []).map((c) => c.id))
   const [tags, setTags] = useState<string[]>(() => (editing?.tags ?? []).map((x) => x.name))
-  const [tagInput, setTagInput] = useState('')
-  const tagInputRef = useRef<HTMLInputElement>(null)
   const [newCatTitle, setNewCatTitle] = useState('')
   const [newCatSlug, setNewCatSlug] = useState('')
   const [catFormOpen, setCatFormOpen] = useState(false)
@@ -170,19 +168,6 @@ function PostFormBody({
     } catch {
       // 服务端原因由 http 拦截器统一弹出，这里再补一条「操作失败」就是同一件事说两遍
     }
-  }
-
-  /** 逗号/回车提交：名字按忽略大小写去重，超出上限的部分丢掉（输入框那时已经置灰）。 */
-  const commitTags = (raw: string) => {
-    const picked: string[] = []
-    for (const part of raw.split(',')) {
-      const name = part.trim().replace(/\s+/g, ' ').slice(0, 64)
-      if (!name) continue
-      if ([...tags, ...picked].some((x) => x.toLowerCase() === name.toLowerCase())) continue
-      picked.push(name)
-    }
-    setTagInput('')
-    if (picked.length) setTags((cur) => [...cur, ...picked].slice(0, tagsMax))
   }
 
   const submit = async () => {
@@ -234,11 +219,14 @@ function PostFormBody({
       onOpenChange={onOpenChange}
       title={editing ? t('plugin_website.post.edit') : t('plugin_website.post.create')}
       size="lg"
+      side="right"
       className="space-y-4"
       footer={
         <>
           <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
-          <Button onClick={() => void submit()}>{t('common.save')}</Button>
+          <Button disabled={save.isPending} onClick={() => void submit()}>
+            {save.isPending ? t('common.loading') : t('common.save')}
+          </Button>
         </>
       }
     >
@@ -336,67 +324,35 @@ function PostFormBody({
             </div>
           </SharedGroup>
           <SharedGroup labelKey="plugin_website.post.tags">
-            <div className="flex flex-col gap-1.5" role="group" aria-label={t('plugin_website.post.tags')}>
-              {/* 标签输入二合一：已建标签以芯片嵌在输入框内，回车/逗号添加，空值 Backspace 删最后一个 */}
-              <div
-                className={cn(
-                  'flex min-h-11 w-full flex-wrap items-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-base shadow-xs',
-                  'transition-[color,box-shadow,border-color] duration-(--motion-fast) ease-(--ease-standard)',
-                  'focus-within:border-ring focus-within:outline-hidden focus-within:ring-2 focus-within:ring-ring/40',
-                  'dark:border-white/26 dark:bg-white/[0.06] md:min-h-8 md:py-1 md:text-sm',
-                  (sharedDisabled || atTagLimit) && 'cursor-not-allowed opacity-50',
-                )}
-                onClick={() => tagInputRef.current?.focus()}
-              >
-                {tags.map((name) => (
-                  /* 芯片收薄到 22px（py-0 + 20px 删除钮 + 描边）：md:size-5 显式压掉 icon 按钮的 md:h-9，
-                     否则 36px 的删除钮会把整框撑到 ~50px，比普通 Input 高出一截 */
-                  <Badge key={name} variant="secondary" className="gap-0.5 py-0 ps-2 pe-1">
-                    <span className="max-w-40 truncate">{name}</span>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="size-5 md:size-5 [&_svg]:size-3"
-                      disabled={sharedDisabled}
-                      aria-label={t('plugin_website.post.tagRemove', { name })}
-                      onClick={() => setTags((cur) => cur.filter((x) => x !== name))}
-                    >
-                      <X aria-hidden="true" />
-                    </Button>
-                  </Badge>
-                ))}
-                <input
-                  ref={tagInputRef}
-                  value={tagInput}
-                  maxLength={64}
-                  list="post-tag-options"
-                  disabled={sharedDisabled || atTagLimit}
-                  onChange={(e) => setTagInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ',') {
-                      e.preventDefault()
-                      commitTags(tagInput)
-                    } else if (e.key === 'Backspace' && !tagInput && tags.length) {
-                      setTags((cur) => cur.slice(0, -1))
-                    }
-                  }}
-                  // 失焦也收词：直接点保存时来不及回车，输入到一半的标签不能丢
-                  onBlur={() => commitTags(tagInput)}
-                  className="min-w-16 flex-1 bg-transparent outline-hidden placeholder:text-muted-foreground"
-                  placeholder={tags.length ? '' : t('plugin_website.post.tagInputPlaceholder')}
-                  aria-label={t('plugin_website.post.tags')}
-                />
-              </div>
-              {atTagLimit ? (
-                <span className="text-xs text-muted-foreground">{t('plugin_website.post.tagLimit', { max: tagsMax })}</span>
-              ) : null}
-              {/* 补全走已有标签：同一个主题词长成新名字，公开侧就多出两个入口 */}
-              <datalist id="post-tag-options">
-                {knownTags.map((x) => (
-                  <option key={x.id} value={x.name} />
-                ))}
-              </datalist>
-            </div>
+            {/* 标签输入二合一（框架 TagsInput）：已建标签以芯片嵌在输入框内，回车/逗号收词，空值 Backspace 删最后一个。
+                分隔符只收半角逗号（与原 commitTags 口径一致），回拼用「, 」。 */}
+            <TagsInput
+              value={tags.join(', ')}
+              onChange={(v) =>
+                setTags(
+                  v
+                    .split(',')
+                    .map((s) => s.trim())
+                    .filter(Boolean),
+                )
+              }
+              max={tagsMax}
+              list="post-tag-options"
+              separators={/,/}
+              joinWith=", "
+              placeholder={t('plugin_website.post.tagInputPlaceholder')}
+              ariaLabel={t('plugin_website.post.tags')}
+              disabled={sharedDisabled}
+            />
+            {/* 已建标签作为候选：datalist 自动补全（TagsInput 的 list 透传），打字时直接选，不用背拼写 */}
+            <datalist id="post-tag-options">
+              {tags.map((tag) => (
+                <option key={tag} value={tag} />
+              ))}
+            </datalist>
+            {atTagLimit ? (
+              <span className="text-xs text-muted-foreground">{t('plugin_website.post.tagLimit', { max: tagsMax })}</span>
+            ) : null}
           </SharedGroup>
         </FormSection>
         <FormSection title={t('plugin_website.post.section.seo')}>
@@ -1152,7 +1108,7 @@ export default function PostPage() {
             </Button>
             <Button variant="outline" onClick={() => setCatOpen(true)}>{t('plugin_website.post.manageCategories')}</Button>
             <Button variant="outline" onClick={() => void onExport()} disabled={exporting}>
-              <Download className="me-2 size-4" aria-hidden="true" />
+              <Download aria-hidden="true" />
               {t('common.export')}
             </Button>
           </Can>
@@ -1167,7 +1123,7 @@ export default function PostPage() {
               {t('plugin_website.post.offlineBatch')}
             </Button>
             <Button variant="destructive" size="sm" onClick={() => void onDelete(selectedRows)}>
-              <Trash2 className="me-2 size-4" aria-hidden="true" />
+              <Trash2 aria-hidden="true" />
               {t('common.delete')}
             </Button>
           </Can>

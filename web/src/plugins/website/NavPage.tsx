@@ -199,6 +199,8 @@ function NavFormBody({
       hints: [t('plugin_website.nav.errUnknownHint1'), t('plugin_website.nav.errUnknownHint2')],
     }
   }
+  // 必填校验的行内提示状态：提交未过时点亮，重渲染时按当前值定位到缺的字段（toast 仍是快捷反馈）
+  const [requiredMissing, setRequiredMissing] = useState(false)
   const [parentId, setParentId] = useState(editing?.parentId ?? defaultParentId)
   // 排序留字符串中间态：Number() 直转会让清空/负号输入瞬间跳成 0，小数会在提交时被后端 400。
   const [sortText, setSortText] = useState(String(editing?.sort ?? 0))
@@ -231,9 +233,11 @@ function NavFormBody({
     const base = lf.baseValues()
     const finalHref = target === CUSTOM_HREF ? href.trim() : target
     if (!(base.label ?? '').trim() || !finalHref) {
+      setRequiredMissing(true)
       toast.error(t('plugin_website.nav.required'))
       return
     }
+    setRequiredMissing(false)
     if (target === CUSTOM_HREF) {
       const err = checkHref(finalHref)
       if (err) {
@@ -261,11 +265,18 @@ function NavFormBody({
     }
   }
 
+  // 行内必填提示：提交失败后按当前值定位是缺了名称还是链接
+  const currentLabel = (lf.baseValues().label ?? '').trim()
+  const currentHref = target === CUSTOM_HREF ? href.trim() : target
+  const labelMissing = requiredMissing && !currentLabel
+  const hrefMissing = requiredMissing && !currentHref
+
   return (
     <ResponsiveDialog
       open
       onOpenChange={onOpenChange}
       title={editing ? t('plugin_website.nav.edit') : t('plugin_website.nav.create')}
+      side="right"
       className="space-y-4"
       footer={
         <>
@@ -280,6 +291,7 @@ function NavFormBody({
       </div>
       <div className="flex flex-col gap-3">
         <LocalizedField fieldKey="label" required />
+        {labelMissing ? <p className="text-xs text-destructive">{t('plugin_website.nav.required')}</p> : null}
         <SharedFieldShell labelKey="plugin_website.nav.hrefTarget" required>
           <SimpleSelect
             value={target}
@@ -293,11 +305,13 @@ function NavFormBody({
           <SharedFieldShell labelKey="plugin_website.fields.navHref" required>
             <Input
               required
+              aria-invalid={!!hrefError || hrefMissing}
               value={href}
               disabled={sharedDisabled}
-              onChange={(e) => { setHrefError(null); setHref(e.target.value) }}
+              onChange={(e) => { setHrefError(null); setRequiredMissing(false); setHref(e.target.value) }}
               placeholder="https://example.com/page"
             />
+            {hrefMissing ? <p className="text-xs text-destructive">{t('plugin_website.nav.required')}</p> : null}
           </SharedFieldShell>
         )}
         <p className="text-xs text-muted-foreground">{t('plugin_website.hint.navHref')}</p>
@@ -486,7 +500,7 @@ export default function NavPage() {
         batchActions={(ids) => (
           <Can perm="website:nav">
             <Button variant="destructive" size="sm" onClick={() => void onDeleteBatch(ids)}>
-              <Trash2 className="me-2 size-4" aria-hidden="true" />
+              <Trash2 aria-hidden="true" />
               {t('common.delete')}
             </Button>
           </Can>

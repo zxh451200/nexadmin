@@ -6,6 +6,7 @@ import { Can } from '@/framework/auth/Can'
 import { useAsyncJob } from '@/framework/hooks/use-async-job'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { DataTable, type Column } from '@/framework/components/DataTable'
+import { DetailAction } from '@/framework/components/DetailAction'
 import { FilterBar } from '@/framework/components/FilterBar'
 import { OptionPicker } from '@/framework/components/OptionPicker'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
@@ -204,7 +205,7 @@ export default function MessagePage() {
         toolbar={
           <Can perm="website:message">
             <Button type="button" variant="outline" onClick={() => void onExport()} disabled={exporting}>
-              <Download className="me-2 size-4" aria-hidden="true" />
+              <Download aria-hidden="true" />
               {t('common.export')}
             </Button>
           </Can>
@@ -228,21 +229,22 @@ export default function MessagePage() {
         batchActions={(ids) => (
           <Can perm="website:message">
             <Button type="button" variant="outline" size="sm" onClick={() => void applyStatus(ids, 'read')}>
-              <Inbox className="me-2 size-4" aria-hidden="true" />
+              <Inbox aria-hidden="true" />
               {t('plugin_website.message.markRead')}
             </Button>
             <Button type="button" variant="outline" size="sm" onClick={() => void applyStatus(ids, 'handled')}>
-              <CheckCheck className="me-2 size-4" aria-hidden="true" />
+              <CheckCheck aria-hidden="true" />
               {t('plugin_website.message.markHandled')}
             </Button>
             <Button type="button" variant="destructive" size="sm" onClick={() => void onDelete(selectedRows)}>
-              <Trash2 className="me-2 size-4" aria-hidden="true" />
+              <Trash2 aria-hidden="true" />
               {t('common.delete')}
             </Button>
           </Can>
         )}
         rowActions={(row) => (
           <Can perm="website:message">
+            <DetailAction onClick={() => open(row)} />
             {row.status !== 'handled' ? (
               <Button
                 variant="ghost"

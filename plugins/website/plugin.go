@@ -45,7 +45,7 @@ func (m *module) service(d *core.Deps) *Service {
 		if d.Config != nil {
 			m.svc.SetConfigImageMaxMB(d.Config.Upload.MaxSizeImageMB)
 		}
-		// 共享缓存（阿里类目树等外部数据）：cache 未装配时服务层自动降级直连。
+		// 共享缓存：cache 未装配时服务层自动降级直连。
 		m.svc.SetCache(d.Cache)
 	})
 	return m.svc
@@ -174,33 +174,6 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 
 	g.POST("/media", core.Perm("website:setting"), core.Desc("上传 logo/封面图片"), h.uploadMedia)
 
-	// 阿里国际站同步（二期）：凭据管理挂 website:setting（改的是全站凭据），
-	// 发品动作挂 website:product（和商品编辑同一动作面）。
-	g.GET("/ali-config", core.Perm("website:setting"), core.Desc("读取阿里开放平台凭据"), h.getAliConfig)
-	g.PUT("/ali-config", core.Perm("website:setting"), core.Desc("保存阿里开放平台凭据"), h.saveAliConfig)
-	g.POST("/ali/test", core.Perm("website:setting"), core.Desc("阿里开放平台连接测试"), h.testAliConnection)
-	g.POST("/ali/refresh-status", core.Perm("website:product"), core.Desc("从阿里刷新发品审核状态"), h.refreshAliStatus)
-	g.GET("/ali/categories", core.Perm("website:product"), core.Desc("阿里类目子级"), h.listAliCategories)
-	g.GET("/ali-columns", core.Perm("website:product"), core.Desc("阿里模板列名映射清单"), h.listAliColumns)
-	g.POST("/ali-columns", core.Perm("website:setting"), core.Desc("新增阿里模板列映射"), h.createAliColumn)
-	g.PUT("/ali-columns/:id", core.Perm("website:setting"), core.Desc("修改阿里模板列映射"), h.updateAliColumn)
-	g.DELETE("/ali-columns/:id", core.Perm("website:setting"), core.Desc("删除阿里模板列映射"), h.deleteAliColumn)
-	g.POST("/products/export-ali", core.Perm("website:product"), core.Desc("提交阿里模板导出任务"), h.aliTemplateExport)
-	g.GET("/ali/sync-status", core.Perm("website:product"), core.Desc("批量同步进度"), h.syncProductStatus)
-	g.POST("/products/:id/sync", core.Perm("website:product"), core.Desc("同步商品到阿里国际站"), h.syncProduct)
-	g.POST("/products/:id/ali-preview", core.Perm("website:product"), core.Desc("预览阿里提交内容（不写阿里）"), h.previewAliSync)
-	g.POST("/products/pull-ali", core.Perm("website:product"), core.Desc("从阿里拉取商品到本地"), h.pullAliProduct)
-	g.POST("/products/:id/ali-category", core.Perm("website:product"), core.Desc("绑定商品阿里类目"), h.bindAliCategory)
-	g.POST("/products/sync-batch", core.Perm("website:product"), core.Desc("批量同步商品到阿里国际站"), h.syncProductBatch)
-
-	// 批量同步的任务体：闭包捕获 svc。注册是覆盖写，热挂载下幂等。
-	job.Register("website.ali-sync", func(ctx context.Context, j *job.Job, report job.Report) (job.ResultFile, error) {
-		return m.service(d).RunAliSyncJob(ctx, j, report)
-	})
-	// 产品异步导出的任务体：worker 流式写 xlsx，进度与下载在导出中心。
-	job.Register(jobTypeAliTemplateExport, func(ctx context.Context, j *job.Job, report job.Report) (job.ResultFile, error) {
-		return m.service(d).RunAliTemplateExportJob(ctx, j, report)
-	})
 	// 产品异步导出的任务体：worker 流式写 xlsx，进度与下载在导出中心。
 	job.Register(jobTypeProductExport, func(ctx context.Context, j *job.Job, report job.Report) (job.ResultFile, error) {
 		return m.service(d).RunProductExportJob(ctx, j, report)
@@ -360,11 +333,6 @@ func (m *module) Start(ctx context.Context, d *core.Deps) error {
 		ensureSeed(ctx, svc, d.Log)
 		ensureSeedBackfill(ctx, svc, d.Log)
 		ensureSeedI18n(ctx, svc, d.Log)
-	}
-	// 阿里模板列名映射是数据不是代码：出厂补一份按官方 schema 展示名做的默认映射，
-	// 已有行（含管理员改过的）不动。品牌主题下也要有，否则导入中心拿不到阿里源。
-	if err := svc.ensureAliColumns(ctx); err != nil {
-		d.Log.Warn("website: seed ali column map failed", zap.Error(err))
 	}
 	// 只订阅一次：重复挂载会把同一个事件挂两遍，一条留言就发多封通知。
 	m.sub.Do(func() {

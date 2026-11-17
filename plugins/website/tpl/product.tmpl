@@ -58,8 +58,7 @@
         {{end}}
         <p class="pd-price">{{if .Product.PriceMin}}{{.FxCur .Product.Currency}}{{if and .Product.PriceMax (gt .Product.PriceMax .Product.PriceMin)}}{{.FxMoney .Product.PriceMin .Product.Currency}}-{{.FxMoney .Product.PriceMax .Product.Currency}}{{else}}{{.FxMoney .Product.PriceMin .Product.Currency}}{{end}}{{if .Product.PriceUnit}}<span class="pd-price-unit"> / {{.UnitName .Product.PriceUnit}}</span>{{end}}{{else}}{{.T "product.priceOnRequest"}}{{end}}</p>
         {{if .Product.Moq}}<p class="pd-moq">{{.T "products.moqLabel"}}: {{.Product.Moq}}{{if .Product.PriceUnit}} {{.UnitName .Product.PriceUnit}}{{end}}</p>{{end}}
-        {{$trade := .Product.TradeInfo}}
-        {{/* 数量紧跟 MOQ（对齐阿里价格块下方就是数量控件）；阶梯价与 SKU 选型随后 */}}
+        {{/* 数量紧跟 MOQ：价格块下方就是数量控件 */}}
         <div class="pd-qty" data-pd-qty data-pd-qty-min="{{if gt .Product.Moq 1}}{{.Product.Moq}}{{else}}1{{end}}"{{if .Product.PriceUnit}} data-pd-qty-unit="{{.Product.PriceUnit}}"{{end}}>
           <label class="pd-qty-label" for="pd-qty-input">{{.T "product.quantity"}}</label>
           <div class="pd-stepper">
@@ -69,46 +68,6 @@
           </div>
           {{if .Product.PriceUnit}}<span class="pd-qty-unit">{{.UnitName .Product.PriceUnit}}</span>{{end}}
         </div>
-        {{/* 选型（阶梯价 / SKU）与数量对齐阿里：跟在中栏价格下方，买家看完价直接选 */}}
-        {{if $trade.Ladder}}
-        <div class="pd-ladder" data-pd-ladder data-currency="{{.FxCur .Product.Currency}}" role="table" aria-label="{{.T "product.priceTiers"}}">
-          {{range $trade.Ladder}}<div class="pd-ladder-row" role="row" data-ladder-qty="{{.Qty}}" data-ladder-price="{{$.FxMoney .Price $.Product.Currency}}">
-            <span class="pd-ladder-range" role="cell">{{if .Last}}≥{{.Qty}}{{else}}{{.Range}}{{end}}</span>
-            <span class="pd-ladder-price" role="cell">{{$.FxCur $.Product.Currency}}{{$.FxMoney .Price $.Product.Currency}}{{if $.Product.PriceUnit}} <small>/ {{$.UnitName $.Product.PriceUnit}}</small>{{end}}</span>
-          </div>{{end}}
-        </div>
-        {{end}}
-        {{if $trade.Skus}}
-        <div class="pd-skus" data-pd-skus data-currency="{{.FxCur .Product.Currency}}" data-base-price="{{.FxMoney .Product.PriceMin .Product.Currency}}"{{if .Product.PriceUnit}} data-unit="{{.Product.PriceUnit}}" data-unit-label="{{.UnitName .Product.PriceUnit}}"{{end}}>
-          {{range $pi, $prop := $trade.SkuProps}}
-          <div class="pd-sku-group" data-sku-prop="{{$prop.Name}}">
-            <span class="pd-sku-label">{{$prop.Name}}</span>
-            <div class="pd-sku-values">
-              {{range $prop.Values}}<button type="button" class="pd-sku-value" data-sku-value="{{.}}">{{.}}</button>{{end}}
-            </div>
-          </div>
-          {{end}}
-          {{range $trade.Skus}}<span class="pd-sku-data" hidden data-sku-key="{{.Key}}" data-sku-price="{{$.FxMoney .Price $.Product.Currency}}" data-sku-stock="{{.Stock}}" data-sku-code="{{.Code}}"></span>{{end}}
-          <p class="pd-sku-hint" data-pd-sku-hint hidden></p>
-        </div>
-        {{end}}
-        {{if or $trade.Sample $trade.Custom}}
-        <div class="pd-keyattrs pd-offers">
-          <h2>{{.T "product.sampleAndCustom"}}</h2>
-          {{with $trade.Sample}}
-          <div class="pd-offer-row">
-            <span class="pd-offer-name">{{$.T "product.sampleService"}}</span>
-            <span class="pd-offer-meta">{{if .MaxQty}}{{$.T "product.sampleMaxQty"}} {{.MaxQty}}{{end}}{{if .Price}} · {{$.FxCur $.Product.Currency}}{{$.FxMoney .Price $.Product.Currency}}{{end}}</span>
-          </div>
-          {{end}}
-          {{range $trade.Custom}}
-          <div class="pd-offer-row">
-            <span class="pd-offer-name">{{if eq .Type "Customized logo"}}{{$.T "product.customLogo"}}{{else if eq .Type "Customized packaging"}}{{$.T "product.customPackaging"}}{{else if eq .Type "Graphic customization"}}{{$.T "product.customGraphic"}}{{else}}{{.Type}}{{end}}</span>
-            <span class="pd-offer-meta">{{$.T "product.customMoq"}} {{.Quantity}}</span>
-          </div>
-          {{end}}
-        </div>
-        {{end}}
         {{if .Product.ProductSpecs}}
         <div class="pd-keyattrs">
           <h2>{{.T "product.keyAttrs"}}</h2>
@@ -119,8 +78,7 @@
       </div>
 
       <aside class="pd-inquiry" aria-label="{{.T "product.serviceTitle"}}">
-        {{$trade := .Product.TradeInfo}}
-        {{/* 小计卡置顶对标阿里右栏 Shipping：数量在中栏联动，这里只算账 */}}
+        {{/* 小计卡置顶：数量在中栏联动，这里只算账 */}}
         <div class="pd-sum" data-pd-sum data-pd-currency="{{.FxCur .Product.Currency}}" data-pd-price="{{.FxMoney .Product.PriceMin .Product.Currency}}" data-pd-freight="{{.FxMoney .Product.FreightAmount .Product.Currency}}"{{if not .Product.PriceMin}} hidden{{end}}>
           <div class="pd-sum-row"><span>{{.T "product.sumProducts"}}</span><span data-pd-sum-products></span></div>
           <div class="pd-sum-row"><span>{{.T "product.sumFreight"}}</span><span data-pd-sum-freight>{{if gt .Product.FreightAmount 0.0}}{{.FxCur .Product.Currency}}{{.FxMoney .Product.FreightAmount .Product.Currency}}{{else}}{{.T "product.freightTbd"}}{{end}}</span></div>
@@ -136,12 +94,6 @@
           {{if .Product.Port}}<div class="pd-inq-row"><span>{{.T "products.portLabel"}}</span><span>{{.Product.Port}}</span></div>{{end}}
           {{if .Product.LeadTimeDays}}<div class="pd-inq-row"><span>{{.T "products.leadTimeLabel"}}</span><span>{{.TF "products.leadTime" .Product.LeadTimeDays}}</span></div>{{end}}
           {{if .Product.PaymentTerms}}<div class="pd-inq-row"><span>{{.T "products.paymentTerms"}}</span><span>{{.Product.PaymentTerms}}</span></div>{{end}}
-          {{with $trade.Supply}}<div class="pd-inq-row"><span>{{$.T "product.supplyCapacity"}}</span><span>{{.Number}} {{.Unit}}{{if .Period}} / {{.Period}}{{end}}</span></div>{{end}}
-          {{with $trade.Pkg}}
-          {{if .Dim}}<div class="pd-inq-row"><span>{{$.T "product.packageSize"}}</span><span>{{.Dim}}</span></div>{{end}}
-          {{if .Weight}}<div class="pd-inq-row"><span>{{$.T "product.grossWeight"}}</span><span>{{.Weight}} kg</span></div>{{end}}
-          {{if .Cubic}}<div class="pd-inq-row"><span>{{$.T "product.volumeLabel"}}</span><span>{{.Cubic}} m³</span></div>{{end}}
-          {{end}}
         </div>
         <div class="pd-inq-section pd-service">
           <strong>{{.T "product.serviceTitle"}}</strong>
@@ -165,7 +117,7 @@
     </div>
 
 
-    {{$trade := .Product.TradeInfo}}
+    {{/* 吸顶询盘条：窄屏滚动到中部后常驻 */}}
     <div class="pd-sticky" data-pd-sticky>
       <div class="pd-sticky-info">
         <span class="pd-sticky-price">{{if .Product.PriceMin}}{{.FxCur .Product.Currency}}{{.FxMoney .Product.PriceMin .Product.Currency}}{{else}}{{.T "product.priceOnRequest"}}{{end}}</span>
@@ -177,7 +129,7 @@
     <div class="pd-tabs" data-tabs role="tablist">
       {{if .Product.ProductSpecs}}<button type="button" role="tab" id="pd-tab-attrs" aria-controls="pd-panel-attrs" aria-selected="true">{{.T "product.tabAttrs"}}</button>{{end}}
       {{if or .Product.Content .Product.Summary}}<button type="button" role="tab" id="pd-tab-desc" aria-controls="pd-panel-desc" aria-selected="false">{{.T "product.tabDesc"}}</button>{{end}}
-      {{if or .Product.PaymentTerms .Product.Moq .Product.LeadTimeDays .Product.Port $trade.Pkg $trade.Supply}}<button type="button" role="tab" id="pd-tab-ship" aria-controls="pd-panel-ship" aria-selected="false">{{.T "product.tabShipping"}}</button>{{end}}
+      {{if or .Product.PaymentTerms .Product.Moq .Product.LeadTimeDays .Product.Port}}<button type="button" role="tab" id="pd-tab-ship" aria-controls="pd-panel-ship" aria-selected="false">{{.T "product.tabShipping"}}</button>{{end}}
     </div>
     {{if .Product.ProductSpecs}}
     <section class="pd-panel" id="pd-panel-attrs" role="tabpanel" aria-labelledby="pd-tab-attrs">
@@ -191,7 +143,7 @@
       {{if .Product.Content}}<div class="article-body pd-body">{{safeHTML .Product.Content}}</div>{{end}}
     </section>
     {{end}}
-    {{if or .Product.PaymentTerms .Product.Moq .Product.LeadTimeDays .Product.Port $trade.Pkg $trade.Supply}}
+    {{if or .Product.PaymentTerms .Product.Moq .Product.LeadTimeDays .Product.Port}}
     <section class="pd-panel" id="pd-panel-ship" role="tabpanel" aria-labelledby="pd-tab-ship">
       <h2>{{.T "product.tabShipping"}}</h2>
       <div class="pd-spec-table">
@@ -199,12 +151,6 @@
         {{if .Product.PaymentTerms}}<div class="pd-spec-cell"><span class="pd-spec-label">{{.T "products.paymentTerms"}}</span><span>{{.Product.PaymentTerms}}</span></div>{{end}}
         {{if .Product.LeadTimeDays}}<div class="pd-spec-cell"><span class="pd-spec-label">{{.T "products.leadTimeLabel"}}</span><span>{{.TF "products.leadTime" .Product.LeadTimeDays}}</span></div>{{end}}
         {{if .Product.Port}}<div class="pd-spec-cell"><span class="pd-spec-label">{{.T "products.portLabel"}}</span><span>{{.Product.Port}}</span></div>{{end}}
-        {{with $trade.Supply}}<div class="pd-spec-cell"><span class="pd-spec-label">{{$.T "product.supplyCapacity"}}</span><span>{{.Number}} {{.Unit}}{{if .Period}} / {{.Period}}{{end}}</span></div>{{end}}
-        {{with $trade.Pkg}}
-        {{if .Dim}}<div class="pd-spec-cell"><span class="pd-spec-label">{{$.T "product.packageSize"}}</span><span>{{.Dim}}</span></div>{{end}}
-        {{if .Weight}}<div class="pd-spec-cell"><span class="pd-spec-label">{{$.T "product.grossWeight"}}</span><span>{{.Weight}} kg</span></div>{{end}}
-        {{if .Cubic}}<div class="pd-spec-cell"><span class="pd-spec-label">{{$.T "product.volumeLabel"}}</span><span>{{.Cubic}} m³</span></div>{{end}}
-        {{end}}
       </div>
     </section>
     {{end}}

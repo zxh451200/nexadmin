@@ -4,8 +4,8 @@ import "strings"
 
 // 计量单位的「人读」显示。
 //
-// 商详的 PriceUnit 是卖家自由文本（model.go 里 size:32，阿里拉回来是 "Set/Sets"，
-// 后台下拉给的是 piece / set / m²，手填常是 "套"、"pcs"），库里只有一份原文。
+// 商详的 PriceUnit 是卖家自由文本（model.go 里 size:32，后台下拉给的是 piece / set / m²，
+// 手填常是 "套"、"pcs"、"Set/Sets"），库里只有一份原文。
 // 以前模板直接把它打到页面上，所以中文站也会看到英文 set。这里只做展示层归一：
 //
 //  1. 常见写法（中英、单复数、Set/Sets、pcs/piece）归一到单位码；
@@ -15,7 +15,7 @@ import "strings"
 // 单位码就是 sys_dict.unit 的 value，也是后台商品表单下拉的取值（原 UNITS 常量），
 // 存量商品存的就是它们，所以别在这里自创第三套写法。
 //
-// 数据侧不动：data-* 属性、询价载荷、导入导出、阿里回传仍然用 PriceUnit 原文，
+// 数据侧不动：data-* 属性、询价载荷、导入导出仍然用 PriceUnit 原文，
 // 只有给人看的文本走 unitName，避免把「展示翻译」渗进数据契约。
 var unitAliases = map[string]string{
 	"piece": "piece", "pieces": "piece", "pcs": "piece", "pc": "piece", "pce": "piece",

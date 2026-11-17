@@ -83,8 +83,10 @@ p { margin: 0; }
 .sl-btn svg { width: 16px; height: 16px; }
 .sl-btn span[aria-hidden] { display: inline-block; transition: transform .2s ease; }
 .sl-btn:hover span[aria-hidden] { transform: translateX(3px); }
-.sl-btn-amber, .sl-btn-blue { background: var(--sl-amber); color: #fff; }
-.sl-btn-amber:hover, .sl-btn-blue:hover { background: var(--sl-amber-deep); }
+/* 琥珀底配白字对比度只有 2.66:1（13px 小字远低于 AA 4.5:1），改墨色文字 5.5:1 达标。
+   sl-btn-blue 是导航「获取方案报价」的历史类名，底色同为琥珀，跟随改墨字。 */
+.sl-btn-amber, .sl-btn-blue { background: var(--sl-amber); color: var(--sl-ink); }
+.sl-btn-amber:hover, .sl-btn-blue:hover { background: var(--sl-amber-deep); color: var(--sl-ink); }
 .sl-btn-ghost-green { background: transparent; color: var(--sl-forest); border-color: #c3cbbd; }
 .sl-btn-ghost-green:hover { border-color: var(--sl-forest); background: rgba(31, 70, 51, .04); }
 .sl-btn-ghost { background: transparent; color: #fff; border-color: rgba(255, 255, 255, .45); }

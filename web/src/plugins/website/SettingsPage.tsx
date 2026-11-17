@@ -14,6 +14,7 @@ import {
   type TranslateBatch,
 } from '@/framework/components/i18n'
 import { FieldHint } from '@/framework/components/FieldHint'
+import { ConstantPicker } from '@/framework/components/ConstantPicker'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
 import { ImageUrlField } from '@/framework/components/ImageUrlField'
@@ -86,6 +87,143 @@ function currencyRatesKeys(raw: string): string[] {
   } catch {
     return []
   }
+}
+
+/** 汇率行：编辑态把 JSON 文本摊成「币种码 + 兑美元汇率」两列，保存时再拼回去。 */
+interface RateRow {
+  code: string
+  rate: string
+}
+
+/** 宽松解析：JSON 坏了当空表（编辑器里重新录入），USD 恒为基准 1 且置顶。 */
+function parseRateRows(raw: string): RateRow[] {
+  let obj: Record<string, number> = {}
+  try {
+    obj = JSON.parse(raw) as Record<string, number>
+  } catch {
+    return []
+  }
+  return Object.entries(obj)
+    .sort((a, b) => (a[0] === 'USD' ? -1 : b[0] === 'USD' ? 1 : a[0].localeCompare(b[0])))
+    .map(([code, rate]) => ({ code, rate: String(rate) }))
+}
+
+function serializeRateRows(rows: RateRow[]): string {
+  const out: Record<string, number> = {}
+  for (const r of rows) {
+    const code = r.code.trim().toUpperCase()
+    const rate = Number(r.rate)
+    if (!/^[A-Z]{3}$/.test(code) || !Number.isFinite(rate) || rate <= 0) continue
+    out[code] = code === 'USD' ? 1 : rate
+  }
+  return Object.keys(out).length ? JSON.stringify(out) : ''
+}
+
+const RATES_MAX = 24
+
+/** 自定义 <head> 代码校验：后端原样以 template.HTML 注入页面 head，写坏一个未闭合的
+    <script>/<style> 整站都会挂。只拦会破坏文档结构的写法——标签配对与文档级标签，
+    不做完整 HTML 解析（管理员可信输入，统计脚本片段的合法形态有限）。 */
+function headCodeInvalid(raw: string): 'script' | 'style' | 'docTag' | null {
+  const v = raw.toLowerCase()
+  if ((v.match(/<script\b/g) ?? []).length !== (v.match(/<\/script>/g) ?? []).length) return 'script'
+  if ((v.match(/<style\b/g) ?? []).length !== (v.match(/<\/style>/g) ?? []).length) return 'style'
+  if (/<\/?(head|body|html)\b/i.test(raw)) return 'docTag'
+  return null
+}
+
+/** 员工规模 / 年营收 / 平均响应 / 主要市场的惯用档位（对标阿里店铺实力档案）。
+    存量自由文本不在档位里时由 ConstantPicker 自动补进选项，不会丢显示。 */
+const STAFF_COUNT_OPTIONS = ['1-50', '51-100', '101-500', '501-1000', '1000+']
+const ANNUAL_REVENUE_OPTIONS = ['US$1M-10M', 'US$10M-50M', 'US$50M-100M', 'US$100M+']
+const RESPONSE_TIME_OPTIONS = ['≤1h', '≤4h', '≤8h', '≤24h', '>24h']
+const MAIN_MARKET_OPTIONS = ['欧洲', '北美', '南美', '东南亚', '中东', '非洲', '大洋洲', '东亚', '中亚', '全球']
+
+/** 汇率表编辑器：替代手写 JSON——USD 是基准（恒 1、不可删改），其余币种行可增删改。
+    序列化口径与后端 parseCurrencyRates 一致（^[A-Z]{3}$、rate>0、USD=1、最多 24 个）；
+    行内非法的币种码/汇率不进序列化结果并就地标红，保存时后端仍会兜底校验。 */
+function CurrencyRatesEditor({ value, onChange, disabled }: { value: string; onChange: (v: string) => void; disabled?: boolean }) {
+  const { t } = useTranslation()
+  const [rows, setRows] = useState<RateRow[]>(() => parseRateRows(value))
+  const edit = (i: number, patch: Partial<RateRow>) => {
+    setRows((rs) => {
+      const next = rs.map((r, j) => (j === i ? { ...r, ...patch } : r))
+      onChange(serializeRateRows(next))
+      return next
+    })
+  }
+  const codeInvalid = (r: RateRow) => r.code.trim() !== '' && !/^[A-Z]{3}$/.test(r.code.trim().toUpperCase())
+  const rateInvalid = (r: RateRow) => r.code.trim() !== '' && r.code.trim().toUpperCase() !== 'USD' && (r.rate.trim() === '' || !(Number(r.rate) > 0))
+  return (
+    <div className="flex flex-col gap-2">
+      {rows.length === 0 ? <p className="text-xs text-muted-foreground">{t('plugin_website.rates.empty')}</p> : null}
+      <div className="flex flex-col gap-1.5">
+        {rows.map((r, i) => {
+          const isBase = r.code.trim().toUpperCase() === 'USD'
+          return (
+            <div key={i} className="flex items-center gap-2">
+              <Input
+                value={r.code}
+                maxLength={3}
+                disabled={disabled || isBase}
+                aria-label={t('plugin_website.rates.codeLabel')}
+                className={cn('w-24 font-mono uppercase', codeInvalid(r) && 'border-destructive')}
+                onChange={(e) => edit(i, { code: e.target.value.toUpperCase() })}
+                placeholder={t('plugin_website.rates.codePlaceholder')}
+              />
+              <Input
+                value={isBase ? '1' : r.rate}
+                disabled={disabled || isBase}
+                inputMode="decimal"
+                aria-label={t('plugin_website.rates.rateLabel')}
+                className={cn('w-32', rateInvalid(r) && 'border-destructive')}
+                onChange={(e) => edit(i, { rate: e.target.value })}
+                placeholder={t('plugin_website.rates.ratePlaceholder')}
+              />
+              {isBase ? (
+                <span className="shrink-0 text-xs text-muted-foreground">{t('plugin_website.rates.baseNote')}</span>
+              ) : (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="size-8 shrink-0"
+                  disabled={disabled}
+                  aria-label={t('common.delete')}
+                  onClick={() =>
+                    setRows((rs) => {
+                      const next = rs.filter((_, j) => j !== i)
+                      onChange(serializeRateRows(next))
+                      return next
+                    })
+                  }
+                >
+                  <Trash2 aria-hidden="true" />
+                </Button>
+              )}
+            </div>
+          )
+        })}
+      </div>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="w-fit"
+        disabled={disabled || rows.length >= RATES_MAX}
+        onClick={() =>
+          setRows((rs) => {
+            const next = [...rs, { code: '', rate: '' }]
+            return next
+          })
+        }
+      >
+        <Plus aria-hidden="true" />
+        {t('plugin_website.rates.add')}
+      </Button>
+      <p className="text-xs text-muted-foreground">{t('plugin_website.rates.hint', { max: RATES_MAX })}</p>
+    </div>
+  )
 }
 
 /**
@@ -171,6 +309,8 @@ function SettingsFormBody({
   const emailInvalid = shared.contactEmail.trim() !== '' && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(shared.contactEmail.trim())
   // 留言同意开着时政策地址必填，格式与后端 footerURLValid 同规则：站内路径/锚点或完整 http(s) 地址。
   const consentInvalid = shared.contactConsent && !/^(https?:\/\/[^\s/]+|[#/])/i.test(shared.contactConsentUrl.trim())
+  // 自定义 <head> 代码：拦截未闭合的 script/style 与文档级标签（校验规则见 headCodeInvalid）
+  const headInvalid = headCodeInvalid(shared.headCode)
   // 未保存提示：shared 相对「载入/上次保存」的快照有变化即脏；刷新与关窗由浏览器原生拦截。
   // 多语言字段在 Provider 内部，脏标记只覆盖共用字段——大头都在这边。
   const savedRef = useRef<SharedSettings | null>(null)
@@ -206,6 +346,10 @@ function SettingsFormBody({
       toast.error(t('plugin_website.settings.consentUrlInvalid'))
       return
     }
+    if (headInvalid) {
+      toast.error(t(`plugin_website.settings.headInvalid${headInvalid === 'script' ? 'Script' : headInvalid === 'style' ? 'Style' : 'DocTag'}`))
+      return
+    }
     try {
       await save.mutateAsync({
         ...shared,
@@ -222,7 +366,7 @@ function SettingsFormBody({
       setDirty(false)
       toast.success(t('common.operateSuccess'))
     } catch {
-      toast.error(t('common.operateFailed'))
+      // 失败原因由 http 拦截器统一弹出，这里只做本地状态收尾
     }
   }
 
@@ -292,10 +436,14 @@ function SettingsFormBody({
           {tab === 'brand' ? (
             <>
               <SharedFieldShell labelKey="plugin_website.fields.theme" hint={t('plugin_website.hint.theme')}>
+                {/* 默认主题在存储里的合法值是空串（后端 themeRegistered("") = true、
+                    themeActive 以「非空且已注册」判品牌主题激活）。/themes 清单把默认主题
+                    作为 id:"default" 的选项下发，选中后必须折回空串——原样存 "default" 会被
+                    后端 website.theme_not_found 拒掉，且语义上等于激活了一个不存在的品牌主题 */}
                 <Select
-                  value={shared.theme || '__default'}
+                  value={shared.theme || 'default'}
                   disabled={sharedDisabled}
-                  onValueChange={(v) => set('theme', v === '__default' ? '' : v)}
+                  onValueChange={(v) => set('theme', v === 'default' ? '' : v)}
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -402,9 +550,15 @@ function SettingsFormBody({
                   value={shared.headCode}
                   disabled={sharedDisabled}
                   maxLength={5000}
+                  aria-invalid={!!headInvalid}
                   onChange={(e) => set('headCode', e.target.value)}
                   placeholder={t('plugin_website.placeholder.headCode', { defaultValue: '' })}
                 />
+                {headInvalid ? (
+                  <span className="text-xs text-destructive">
+                    {t(`plugin_website.settings.headInvalid${headInvalid === 'script' ? 'Script' : headInvalid === 'style' ? 'Style' : 'DocTag'}`)}
+                  </span>
+                ) : null}
               </SharedFieldShell>
               {/* 官网默认语言：跟随浏览器（auto）或指定语言占根路径；原文语言（平台默认）只作标记不隐藏。
                   Radix Select 不收空串值，用 auto 哨兵，与 homeSlug 同一手法。 */}
@@ -433,16 +587,16 @@ function SettingsFormBody({
                 {t('plugin_website.languages.manageShort')}
                 <FieldHint text={t('plugin_website.languages.manageHint')} />
               </p>
-              {/* 币种换算（对标阿里右上角「语言-币种」选择器）：汇率表是 {"USD":1,"EUR":0.92}
-                  文本，USD 恒为基准 1；表非空时公开站头部出「语言-币种」弹层，价格按
-                  访客所选币种换算展示。默认币种下拉的选项直接取汇率表的键。 */}
+              {/* 币种换算（对标阿里右上角「语言-币种」选择器）：汇率表曾是手写 JSON 文本，
+                  极易写错（大小写/引号/非数字），改为结构化行编辑器——USD 恒为基准 1；
+                  表非空时公开站头部出「语言-币种」弹层，价格按访客所选币种换算展示。
+                  默认币种下拉的选项直接取汇率表的键。 */}
               <SharedFieldShell labelKey="plugin_website.fields.currencyRates" hint={t('plugin_website.hint.currencyRates')}>
-                <Textarea
-                  rows={3}
+                <CurrencyRatesEditor
+                  key={shared.currencyRates}
                   value={shared.currencyRates}
                   disabled={sharedDisabled}
-                  onChange={(e) => set('currencyRates', e.target.value)}
-                  placeholder={'{"USD":1,"EUR":0.92,"CNY":7.1}'}
+                  onChange={(v) => set('currencyRates', v)}
                 />
               </SharedFieldShell>
               {shared.currencyRates.trim() ? (
@@ -480,21 +634,68 @@ function SettingsFormBody({
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <SharedFieldShell labelKey="plugin_website.fields.establishedYear" hint={t('plugin_website.hint.establishedYear')}>
-                    <Input
-                      type="number"
-                      inputMode="numeric"
-                      min={0}
-                      max={new Date().getFullYear()}
-                      value={shared.establishedYear || ''}
+                    {/* 年份下拉：1970 至今年，「不展示」哨兵 = off（0） */}
+                    <Select
+                      value={shared.establishedYear > 0 ? String(shared.establishedYear) : 'off'}
                       disabled={sharedDisabled}
-                      placeholder={t('plugin_website.placeholder.establishedYear', { defaultValue: '' })}
-                      onChange={(e) => onSharedChange({ ...shared, establishedYear: Number(e.target.value) || 0 })}
+                      onValueChange={(v) => onSharedChange({ ...shared, establishedYear: v === 'off' ? 0 : Number(v) })}
+                    >
+                      <SelectTrigger aria-label={t('plugin_website.fields.establishedYear')}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="off">{t('plugin_website.settings.estYearOff')}</SelectItem>
+                        {Array.from({ length: new Date().getFullYear() - 1970 + 1 }, (_, i) => new Date().getFullYear() - i).map((y) => (
+                          <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </SharedFieldShell>
+                  <SharedFieldShell labelKey="plugin_website.fields.staffCount">
+                    <ConstantPicker
+                      value={shared.staffCount}
+                      onChange={(v) => set('staffCount', v)}
+                      disabled={sharedDisabled}
+                      allowCustom
+                      placeholder={t('plugin_website.placeholder.staffCount', { defaultValue: '' })}
+                      aria-label={t('plugin_website.fields.staffCount')}
+                      options={STAFF_COUNT_OPTIONS.map((v) => ({ value: v, label: v }))}
                     />
                   </SharedFieldShell>
-                  {sharedInput('staffCount')}
-                  {sharedInput('annualRevenue')}
-                  {sharedInput('mainMarkets')}
-                  {sharedInput('responseTime')}
+                  <SharedFieldShell labelKey="plugin_website.fields.annualRevenue">
+                    <ConstantPicker
+                      value={shared.annualRevenue}
+                      onChange={(v) => set('annualRevenue', v)}
+                      disabled={sharedDisabled}
+                      allowCustom
+                      placeholder={t('plugin_website.placeholder.annualRevenue', { defaultValue: '' })}
+                      aria-label={t('plugin_website.fields.annualRevenue')}
+                      options={ANNUAL_REVENUE_OPTIONS.map((v) => ({ value: v, label: v }))}
+                    />
+                  </SharedFieldShell>
+                  <SharedFieldShell labelKey="plugin_website.fields.mainMarkets">
+                    <ConstantPicker
+                      value={shared.mainMarkets}
+                      onChange={(v) => set('mainMarkets', v)}
+                      disabled={sharedDisabled}
+                      allowCustom
+                      multiple
+                      placeholder={t('plugin_website.placeholder.mainMarkets', { defaultValue: '' })}
+                      aria-label={t('plugin_website.fields.mainMarkets')}
+                      options={MAIN_MARKET_OPTIONS.map((v) => ({ value: v, label: v }))}
+                    />
+                  </SharedFieldShell>
+                  <SharedFieldShell labelKey="plugin_website.fields.responseTime">
+                    <ConstantPicker
+                      value={shared.responseTime}
+                      onChange={(v) => set('responseTime', v)}
+                      disabled={sharedDisabled}
+                      allowCustom
+                      placeholder={t('plugin_website.placeholder.responseTime', { defaultValue: '' })}
+                      aria-label={t('plugin_website.fields.responseTime')}
+                      options={RESPONSE_TIME_OPTIONS.map((v) => ({ value: v, label: v }))}
+                    />
+                  </SharedFieldShell>
                 </div>
               </div>
               <SharedFieldShell labelKey="plugin_website.fields.qrCodeUrl" hint={t('plugin_website.hint.qrCodeUrl', mediaHint)}>
@@ -644,7 +845,7 @@ function SettingsFormBody({
         {/* 保存条常驻：五个分区共用一份表单，切分区不丢改动，也不该让人以为每个分区各存一次 */}
         <div className="flex items-center gap-3">
           {dirty ? <span className="text-xs text-warning">{t('plugin_website.settings.unsaved')}</span> : null}
-          <Button onClick={() => void submit()} disabled={save.isPending || emailInvalid || consentInvalid}>{t('common.save')}</Button>
+          <Button onClick={() => void submit()} disabled={save.isPending || emailInvalid || consentInvalid || !!headInvalid}>{t('common.save')}</Button>
         </div>
       </div>
     </div>

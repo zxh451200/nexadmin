@@ -722,7 +722,7 @@
       address: {
         title: t('chatCardAddressTitle', '收货地址'),
         marker: '[' + t('chatCardAddressLabel', '收货地址') + ']',
-        // 对齐 Alibaba 添加地址：国家/地区 → 州/省 → 城市 → 邮编（城市与邮编同一行），
+        // 对齐主流电商地址表单：国家/地区 → 州/省 → 城市 → 邮编（城市与邮编同一行），
         // 详细地址独占一行收尾。之前城市、邮编各自半行、右边空着，两列网格看着参差。
         fields: [
           { key: 'recipient', label: t('chatCardRecipient', '收件人'), required: true },

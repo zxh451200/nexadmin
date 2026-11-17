@@ -329,31 +329,17 @@ func (Tag) TableName() string { return "plg_website_tag" }
 
 // ---- 产品中心 ----
 
-// 产品状态：对齐阿里国际站的商品状态机。本地一期只用 draft / online / offline；
-// pending / rejected 留给二期同步——商品提交到阿里审核后回写「审核中 / 审核不通过」。
+// 产品状态：draft / online / offline 三态状态机。
 const (
-	ProductDraft    = "draft"    // 草稿
-	ProductOnline   = "online"   // 上架：公开站可见
-	ProductOffline  = "offline"  // 下架：曾上架后撤下，与草稿区分（对齐阿里的页签）
-	ProductPending  = "pending"  // 审核中（预留：同步到阿里后回写）
-	ProductRejected = "rejected" // 审核不通过（预留）
+	ProductDraft   = "draft"   // 草稿
+	ProductOnline  = "online"  // 上架：公开站可见
+	ProductOffline = "offline" // 下架：曾上架后撤下，与草稿区分
 )
 
 // productStatuses 是合法状态集；保存与批量操作都按它校验。
 var productStatuses = map[string]bool{
 	ProductDraft: true, ProductOnline: true, ProductOffline: true,
-	ProductPending: true, ProductRejected: true,
 }
-
-// 产品同步状态：一期只落库展示，二期接阿里开放平台 API 后由同步任务写入。
-const (
-	ProductSyncNone    = "none"    // 从未同步
-	ProductSyncPending = "pending" // 已提交同步，待确认
-	ProductSyncSynced  = "synced"  // 已发布到阿里
-	ProductSyncFailed  = "failed"  // 上次同步失败
-	// ProductSyncRejected 是阿里侧审核不通过：由「刷新阿里状态」从 product.list 回写。
-	ProductSyncRejected = "rejected"
-)
 
 // ProductCategory 是产品类目：对标阿里的「商品分组」，但支持最多 3 级树形层级。
 // 标题只存默认语言：与新闻分类一样，类目是组织维度，跨语言展示时直接落原文。
@@ -374,10 +360,8 @@ type ProductCategory struct {
 
 func (ProductCategory) TableName() string { return "plg_website_product_category" }
 
-// Product 是产品中心的一条商品：字段对标阿里发品表单（名称/关键词/图集/价格区间/
-// 起订量/发货期/港口/动态属性/详情富文本），多语言与发布机制与新闻同口径。
-// AlibabaProductID / SyncStatus / SyncedAt 是二期「一键同步到阿里」的预留位，
-// 一期只落库与展示，不发起任何对阿里的请求。
+// Product 是产品中心的一条商品：名称/关键词/图集/价格区间/起订量/发货期/港口/
+// 动态属性/详情富文本，多语言与发布机制与新闻同口径。
 type Product struct {
 	database.PlatformModel
 	Slug  string `gorm:"size:64;not null;uniqueIndex:uk_plg_website_product_slug" json:"slug"`
@@ -399,7 +383,7 @@ type Product struct {
 	// ImagesJSON 是图集 URL 数组（[]string 的 JSON 文本）：走 text 列三库行为一致，前端自己解析。
 	ImagesJSON string `gorm:"column:images;type:text" json:"imagesJson"`
 	VideoURL   string `gorm:"size:255;not null;default:''" json:"videoUrl"`
-	// 贸易字段：对标阿里发品的「价格与物流」。价格 0 = 未定价（只展示询盘）。
+	// 贸易字段：价格与物流。价格 0 = 未定价（只展示询盘）。
 	PriceMin     float64 `gorm:"not null;default:0" json:"priceMin"`
 	PriceMax     float64 `gorm:"not null;default:0" json:"priceMax"`
 	Currency     string  `gorm:"size:8;not null;default:'USD'" json:"currency"`
@@ -408,30 +392,20 @@ type Product struct {
 	LeadTimeDays int     `gorm:"column:lead_time_days;not null;default:0" json:"leadTimeDays"`
 	// Port 是装运港口，支持多选（逗号拼接，如 "Shenzhen, Ningbo"），宽度与 PaymentTerms 对齐。
 	Port string `gorm:"size:100;not null;default:''" json:"port"`
-	// PaymentTerms 是付款方式（对标阿里商详「交易信息」的 Payment Terms）：如 "T/T, L/C"。
+	// PaymentTerms 是付款方式（商详「交易信息」的 Payment Terms）：如 "T/T, L/C"。
 	PaymentTerms string `gorm:"column:payment_terms;size:100;not null;default:''" json:"paymentTerms"`
 	// FreightAmount 是运费金额（与 Price 同币种）；0 = 未报价，详情页仍标「待定」。
 	FreightAmount float64 `gorm:"column:freight_amount;not null;default:0" json:"freightAmount"`
 	// SpecsJSON 是动态属性键值对（[{"label":"Brand Name","value":"…"}] 的 JSON 文本）：
-	// 阿里的类目属性各行业不同，本地不建属性字典，存成有序键值对最贴近同步语义。
+	// 各行业属性不同，本地不建属性字典，存成有序键值对。
 	SpecsJSON string `gorm:"column:specs;type:text" json:"specsJson"`
-	// Status 取 ProductDraft / ProductOnline / … 之一；online 即「上架」，公开站唯一可见状态。
+	// Status 取 ProductDraft / ProductOnline / ProductOffline 之一；online 即「上架」，
+	// 公开站唯一可见状态。
 	Status string `gorm:"size:16;not null;default:'draft';index" json:"status"`
-	// 阿里同步预留：阿里侧商品 ID（回写后本地据此更新）、同步状态与最近同步时间。
-	AlibabaProductID string     `gorm:"column:alibaba_product_id;size:64;not null;default:'';index" json:"alibabaProductId"`
-	SyncStatus       string     `gorm:"column:sync_status;size:16;not null;default:'none'" json:"syncStatus"`
-	SyncedAt         *time.Time `gorm:"column:synced_at" json:"syncedAt,omitempty"`
-	// AlibabaCategoryID 是商品绑定的阿里叶子类目 ID（同步对话框选完回填，二期同步用）。
-	AlibabaCategoryID string `gorm:"column:alibaba_category_id;size:32;not null;default:''" json:"alibabaCategoryId"`
-	// AliTradeJSON 是发品用的交易与规格数据（阶梯价/包装/供货/物流属性/样品/定制/分组/SKU），
-	// 只在同步阿里与阿里模板导出时使用；结构见 ali_trade.go。空 = 没有阿里交易信息。
-	AliTradeJSON string `gorm:"column:ali_trade;type:text" json:"aliTradeJson"`
 	// CertificationsJSON 是商品认证资质（[]string 的 JSON 文本，如 ["CE","UL","UN38.3"]）。
-	// 对标阿里商详的「认证」徽章排：只存名称，图标由名称归一（见 certificationIcons）后出图，
+	// 商详的「认证」徽章排：只存名称，图标由名称归一（见 certificationIcons）后出图，
 	// 不认识的认证仍以文字徽章展示——和支付方式一样，后台填什么就展示什么。
 	CertificationsJSON string `gorm:"column:certifications;type:text" json:"certificationsJson"`
-	// SyncError 是最近一次同步失败的原因（code+文案，截 500）：列表悬停展示，成功同步后清空。
-	SyncError string `gorm:"column:sync_error;size:500;not null;default:''" json:"syncError"`
 	// Categories 是商品所属类目；关联表 plg_website_product_category_rel，保存时整体替换。
 	// 关联表由迁移 024 建表，列名是 product_id / category_id：类目侧列名必须显式指定——
 	// GORM 默认按关联模型名推导出 product_category_id，与表结构不符，挂类目会报 1054。
@@ -445,21 +419,6 @@ type Product struct {
 }
 
 func (Product) TableName() string { return "plg_website_product" }
-
-// AliConfig 是阿里国际站开放平台的接入凭据（单行表，二期同步用）。
-// AppSecret 与 SessionKey 加密落库（core/secret，AES-256-GCM，密文列 json:"-" 不出接口）；
-// 接口视图只回「已配置」布尔，参照 plugins/realname 的 ConfigView 模式。
-type AliConfig struct {
-	database.PlatformModel
-	AppKey string `gorm:"size:64;not null;default:''" json:"appKey"`
-	// AppSecretEnc / SessionKeyEnc 是 core/secret 密文（enc:v1:…）；明文永不落库、不出接口。
-	AppSecretEnc  string `gorm:"column:app_secret_enc;type:text" json:"-"`
-	SessionKeyEnc string `gorm:"column:session_key_enc;type:text" json:"-"`
-	// ApiGateway 是 TOP 网关地址：默认正式环境，留沙箱切换口。
-	ApiGateway string `gorm:"column:api_gateway;size:100;not null;default:'https://gw.api.taobao.com/router/rest'" json:"apiGateway"`
-}
-
-func (AliConfig) TableName() string { return "plg_website_ali_config" }
 
 // Published 报告商品的默认语言是否处于上架态：多语言发布机制（published_json 的
 // NormalizePublish / Published 判定）需要一个「整篇是否发布」的布尔，产品由状态机推导。

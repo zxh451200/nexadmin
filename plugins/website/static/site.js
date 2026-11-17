@@ -1111,10 +1111,10 @@
     });
   }
 
-  // ---- 产品详情页：阿里式三栏商详组件，样式随脚本注入（四套主题共用） ----
-  var PD_CSS = ".pd-page{display:block;padding:26px 0 40px}\n.pd-wrap{max-width:1360px;margin:0 auto;padding:0 24px}\n.pd-crumb{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 18px;font-size:12px;opacity:.8}\n.pd-crumb a{color:inherit;text-decoration:none}\n.pd-crumb a:hover{text-decoration:underline}\n.pd-top{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr) 272px;gap:22px;align-items:start}\n.pd-media{position:relative;min-width:0}\n.pd-info{min-width:0}\n.pd-gallery{display:grid;grid-template-columns:68px minmax(0,1fr);grid-auto-rows:68px;gap:8px;align-items:start}\n.pd-stage{position:relative;display:flex;align-items:center;justify-content:center;grid-column:2;grid-row:1 / span 6;align-self:stretch;min-height:0;overflow:hidden;border:1px solid rgba(128,128,128,.2);border-radius:3px;background:var(--pc-paper,transparent);cursor:zoom-in}\n.pd-stage>.pd-main-img{display:block;max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;transform-origin:50% 50%;transition:transform .18s ease-out;will-change:transform}\n\n.pd-zoom-tip{position:absolute;inset-inline-end:10px;inset-block-end:10px;z-index:3;padding:4px 8px;border-radius:3px;background:rgba(12,14,18,.6);color:#fff;font-size:11px;line-height:1.3;opacity:0;pointer-events:none;transition:opacity .15s}\n.pd-stage:hover .pd-zoom-tip{opacity:1}\n.pd-stage.is-zooming>.pd-zoom-tip{opacity:0}\n.pd-stage.is-video{cursor:default}\n.pd-stage.is-video>.pd-main-img,.pd-stage.is-video>.pd-zoom-tip{display:none}\n.pd-video{position:absolute;inset:0;background:#000}\n.pd-video video,.pd-video iframe{display:block;width:100%;height:100%;border:0;background:#000;object-fit:contain}\n.pd-main-fallback{display:flex;align-items:center;justify-content:center;font-size:48px;opacity:.5}\n.pd-gallery>.pd-thumb{grid-column:1;width:68px;height:68px;padding:0;border:1px solid rgba(128,128,128,.28);border-radius:3px;background:transparent;overflow:hidden;cursor:pointer;opacity:.72}\n.pd-gallery>.pd-thumb:hover,.pd-gallery>.pd-thumb.active{opacity:1;border-color:currentColor}\n.pd-gallery>.pd-thumb img{width:100%;height:100%;object-fit:cover}\n.pd-gallery>.pd-thumb-video{position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;color:#fff;background:rgba(128,128,128,.22) center/cover no-repeat}\n.pd-gallery>.pd-thumb-video::after{content:'';position:absolute;inset:0;background:rgba(0,0,0,.22)}\n.pd-thumb-play{position:relative;z-index:1;display:flex;align-items:center;justify-content:center;width:24px;height:24px;border:1px solid rgba(255,255,255,.92);border-radius:50%;background:rgba(0,0,0,.38)}\n.pd-thumb-play::before{content:'';width:0;height:0;margin-inline-start:2px;border-block:5px solid transparent;border-inline-start:8px solid #fff}\n.pd-media-tabs{display:flex;justify-content:center;gap:16px;margin-top:10px;font-size:12px}\n.pd-media-tabs a{color:inherit}\n.pd-supplier{margin-top:14px;padding:14px;border:1px solid rgba(128,128,128,.22);border-radius:3px;font-size:12px}\n.pd-supplier-name{display:inline-block;margin-bottom:6px;font-size:14px;font-weight:600;color:inherit;text-decoration:none}\n.pd-supplier-name:hover{text-decoration:underline}\n.pd-supplier-row{display:flex;flex-wrap:wrap;gap:12px;opacity:.85}\n.pd-supplier-cats{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px;font-size:11px;opacity:.8}\n.pd-supplier-cats span{padding:1px 7px;border-radius:2px;background:rgba(128,128,128,.12)}\n.pd-supplier-desc{margin:0 0 8px;font-size:11.5px;line-height:1.65;opacity:.75}\n.pd-supplier-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px 10px;margin:11px 0 0;padding:11px 0 0;border-top:1px dashed rgba(128,128,128,.28)}\n.pd-supplier-stats>div{min-width:0}\n.pd-supplier-stats dt{margin:0 0 2px;font-size:10.5px;line-height:1.4;opacity:.6}\n.pd-supplier-stats dd{margin:0;font-size:12px;font-weight:600;line-height:1.4;overflow-wrap:anywhere}\n.pd-info h1{margin:0 0 10px;font-size:24px;font-weight:600;line-height:1.35}\n.pd-rating-row{display:flex;align-items:center;gap:8px;margin:0 0 12px;font-size:12px}\n.pd-rating-row .pd-stars .pd-star{font-size:14px}\n.pd-rating-row strong{font-size:13px;font-weight:700}\n.pd-rating-count{opacity:.68}\n.pd-badges{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}\n.pd-badge{padding:2px 8px;border:1px solid rgba(128,128,128,.3);border-radius:2px;color:inherit;font-size:11px;text-decoration:none}\n.pd-badge-quiet{border-color:transparent;background:rgba(128,128,128,.1);opacity:.72}\n.pd-certs{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 14px}\n.pd-cert{display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 8px;border:1px solid rgba(128,128,128,.26);border-radius:3px;background:var(--pc-soft,rgba(128,128,128,.07));font-size:11px;font-weight:600;letter-spacing:.02em;white-space:nowrap}\n.pd-cert-ico{width:13px;height:13px;flex:none;color:var(--pc-accent,currentColor)}\n.pd-price{margin:0 0 10px;padding:10px 14px;border-radius:4px;background:rgba(240,160,32,.08);font-size:30px;overflow-wrap:anywhere;font-weight:700;line-height:1.15}\n.pd-price-unit{font-size:13px;font-weight:400;opacity:.7}\n.pd-moq{margin:0 0 16px;font-size:12px;opacity:.8}\n.pd-qty{display:flex;align-items:center;gap:10px;padding:10px 0;font-size:13px}\n.pd-qty-label{font-weight:600}\n.pd-stepper{display:inline-flex;align-items:center;gap:2px;padding:3px;border:1px solid rgba(128,128,128,.32);border-radius:999px;background:Canvas}\n.pd-stepper:focus-within{border-color:var(--pc-accent,currentColor)}\n.pd-step{display:flex;align-items:center;justify-content:center;width:26px;height:26px;padding:0;border:0;border-radius:50%;background:transparent;color:inherit;font:inherit;font-size:16px;line-height:1;cursor:pointer}\n.pd-step:hover:not(:disabled){background:rgba(128,128,128,.16)}\n.pd-step:disabled{opacity:.3;cursor:not-allowed}\n.pd-step-input{width:46px;padding:0;border:0;background:transparent;color:inherit;font:inherit;font-size:14px;text-align:center;appearance:textfield}\n.pd-step-input:focus{outline:0}\n.pd-qty-unit{font-size:12px;opacity:.7}\n.pd-ladder{display:flex;flex-direction:column;gap:2px;margin:0 0 10px}\n.pd-ladder-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 8px;border:1px solid transparent;border-radius:3px;font-size:12px;transition:background .15s,border-color .15s}\n.pd-ladder-row.is-active{border-color:var(--pc-accent,currentColor);background:var(--pc-soft,rgba(128,128,128,.09))}\n.pd-ladder-range{opacity:.72;white-space:nowrap}\n.pd-ladder-row.is-active .pd-ladder-range{opacity:1;font-weight:600}\n.pd-ladder-price{font-size:15px;font-weight:700;white-space:nowrap}\n.pd-ladder-price small{font-size:11px;font-weight:400;opacity:.6}\n.pd-subtotal{margin:0 0 2px;font-size:11.5px;line-height:1.6;opacity:.75}\n.pd-sum{margin:0 0 6px;font-size:12px}\n.pd-sum-row{display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:3px 0}\n.pd-sum-row>span:first-child{opacity:.7}\n.pd-sum-row>span:last-child{font-weight:600;white-space:nowrap}\n.pd-sum-total{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-top:8px;padding-top:8px;border-top:1px dashed rgba(128,128,128,.3);font-size:14px;font-weight:700}\n.pd-sum-total>span:last-child{white-space:nowrap}\n.pd-offer-row{display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:3px 0;font-size:12px}\n.pd-offer-name{opacity:.85}\n.pd-offer-meta{font-weight:600;text-align:end}\n.pd-sticky{display:none;position:fixed;inset-inline:0;inset-block-end:0;z-index:60;align-items:center;gap:12px;padding:10px 14px;border-top:1px solid rgba(128,128,128,.25);background:Canvas;box-shadow:0 -8px 24px rgba(0,0,0,.12)}\n.pd-sticky-info{display:flex;flex:1;flex-direction:column;min-width:0;line-height:1.3}\n.pd-sticky-price{font-size:17px;font-weight:700}\n.pd-sticky-meta{font-size:11px;opacity:.7}\n.pd-sticky-cta{flex:none;padding:10px 18px;border:1px solid var(--pc-accent,currentColor);border-radius:3px;background:var(--pc-accent,currentColor);color:#fff;font:inherit;font-size:13px;font-weight:600;cursor:pointer}\n.pd-keyattrs{padding:14px;border-radius:3px;background:rgba(128,128,128,.07)}\n.pd-keyattrs h2{margin:0 0 10px;font-size:14px;font-weight:600}\n.pd-attr-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}\n.pd-attr-grid>div:nth-child(n+7){display:none}\n.pd-attr-label{display:block;margin-bottom:3px;font-size:11px;opacity:.65}\n.pd-attr-value{display:block;font-size:13px;word-break:break-word}\n.pd-summary{margin:14px 0 0;font-size:13px;line-height:1.75;opacity:.88}\n.pd-inquiry{position:sticky;top:84px;max-height:calc(100vh - 100px);overflow-y:auto;padding:16px;border:1px solid rgba(128,128,128,.25);border-radius:4px}\n.pd-inquiry.is-tall{position:static;max-height:none;overflow:visible}\n.pd-inq-section{padding:12px 0;border-top:1px solid rgba(128,128,128,.2);font-size:12px}\n.pd-inq-section strong{display:block;margin-bottom:6px;font-size:13px}\n.pd-inq-row{display:flex;justify-content:space-between;gap:10px;padding:3px 0}\n.pd-inq-row span:first-child{opacity:.7}\n.pd-service{display:flex;flex-direction:column;gap:6px}\n.pd-service span{color:var(--pc-accent,currentColor);font-weight:700}\n.pd-cta{display:block;box-sizing:border-box;width:100%;margin-top:8px;padding:11px 12px;border:1px solid var(--pc-accent,currentColor);border-radius:3px;font-size:13px;font-weight:600;text-align:center;text-decoration:none}\n.pd-cta-primary{background:var(--pc-accent,currentColor);color:#fff}\n.pd-cta-secondary{border-color:rgba(128,128,128,.4);background:transparent;color:inherit}\n.pd-foot-note{margin:10px 0 0;font-size:11px;line-height:1.6;opacity:.7}\n.pd-skus{display:flex;flex-direction:column;gap:10px;padding:2px 0 12px;border-bottom:1px solid rgba(128,128,128,.2)}\n.pd-sku-group{display:flex;flex-direction:column;gap:6px}\n.pd-sku-label{font-size:11.5px;font-weight:600;opacity:.85}\n.pd-sku-values{display:flex;flex-wrap:wrap;gap:6px}\n.pd-sku-value{min-width:36px;min-height:30px;padding:4px 11px;border:1px solid rgba(128,128,128,.36);border-radius:3px;background:Canvas;color:inherit;font:inherit;font-size:12px;line-height:1.3;cursor:pointer;transition:border-color .15s,background .15s}\n.pd-sku-value:hover{border-color:var(--pc-accent,currentColor)}\n.pd-sku-value.is-active{border-color:var(--pc-accent,currentColor);background:var(--pc-soft,rgba(128,128,128,.09));font-weight:600}\n.pd-sku-value.is-oos{opacity:.38;text-decoration:line-through;cursor:not-allowed}\n.pd-sku-hint{margin:2px 0 0;font-size:11px;line-height:1.5;opacity:.72}\n.pd-pay-ico{width:15px;height:15px;margin-inline-end:5px;vertical-align:-3px;color:var(--pc-accent,currentColor)}\n.pd-pay-methods{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin:2px 0 8px;padding:0;list-style:none}\n.pd-pay-chip{display:inline-flex;align-items:center;justify-content:center;gap:3px;height:23px;padding:0 6px;border:1px solid rgba(128,128,128,.32);border-radius:3px;background:Canvas;color:inherit;font-size:10.5px;font-weight:700;line-height:1;letter-spacing:.03em;white-space:nowrap}\n.pd-pay-icon{width:13px;height:13px;flex:none;opacity:.8;color:inherit}\n.pd-pay-visa{color:#1a1f71;font-style:italic;font-size:10.5px}\n.pd-pay-mc{gap:0}\n.pd-pay-mc-red,.pd-pay-mc-amber{display:block;width:11px;height:11px;border-radius:50%}\n.pd-pay-mc-red{background:#eb001b}\n.pd-pay-mc-amber{margin-inline-start:-4px;background:#f79e1b;opacity:.92}\n.pd-pay-paypal{font-style:italic;color:#003087}\n.pd-pay-visa,.pd-pay-mc,.pd-pay-paypal,.pd-pay-apple{height:24px;padding:0;border:0;background:transparent;border-radius:3px;overflow:hidden}\n.pd-logo-img{display:block;width:auto;height:24px;max-width:none}\n.pd-pay-note{margin:0;font-size:10.5px;line-height:1.6;opacity:.62}\n.pd-reviews{margin-top:34px;scroll-margin-top:72px}\n.pd-review-summary{display:grid;grid-template-columns:180px minmax(0,1fr);gap:22px;align-items:center;padding:16px 18px;border:1px solid rgba(128,128,128,.22);border-radius:4px}\n.pd-review-score{display:flex;flex-direction:column;align-items:center;gap:5px}\n.pd-review-score strong{font-size:38px;font-weight:700;line-height:1;letter-spacing:-.02em}\n.pd-stars{display:inline-flex;gap:2px;line-height:1}\n.pd-star{font-size:15px;line-height:1;color:rgba(128,128,128,.3)}\n.pd-star.is-on{color:#f0a020}\n.pd-stars-sm .pd-star{font-size:12px}\n.pd-review-count{font-size:12px;opacity:.68}\n.pd-review-dist{display:flex;flex-direction:column;gap:5px;margin:0;padding:0;list-style:none}\n.pd-review-dist li{display:grid;grid-template-columns:44px minmax(0,1fr) 30px;gap:10px;align-items:center;font-size:11.5px}\n.pd-review-star{opacity:.7;white-space:nowrap}\n.pd-review-bar{height:6px;overflow:hidden;border-radius:999px;background:rgba(128,128,128,.16)}\n.pd-review-bar>i{display:block;height:100%;border-radius:999px;background:#f0a020}\n.pd-review-num{text-align:end;opacity:.7;font-variant-numeric:tabular-nums}\n.pd-review-list{margin:10px 0 0;padding:0;list-style:none}\n.pd-review-item{padding:16px 0;border-bottom:1px solid rgba(128,128,128,.16)}\n.pd-review-head{display:flex;align-items:center;gap:10px;margin-bottom:8px}\n.pd-review-avatar{display:flex;align-items:center;justify-content:center;flex:none;width:32px;height:32px;border-radius:50%;background:var(--pc-soft,rgba(128,128,128,.14));font-size:13px;font-weight:600;line-height:1}\n.pd-review-who{display:flex;flex-direction:column;gap:1px;min-width:0;line-height:1.35}\n.pd-review-name{font-size:13px;font-weight:600}\n.pd-review-country{font-size:11px;opacity:.6}\n.pd-review-head .pd-stars{margin-inline-start:auto;flex:none}\n.pd-review-body{margin:0 0 8px;font-size:13.5px;line-height:1.8;overflow-wrap:anywhere}\n.pd-review-meta{display:flex;flex-wrap:wrap;align-items:center;gap:12px;font-size:11px;opacity:.68}\n.pd-review-verified{display:inline-flex;align-items:center;gap:3px;color:var(--pc-accent,currentColor);font-weight:600;opacity:1}\n.pd-review-vico{width:13px;height:13px;flex:none}\n.pd-review-date{margin-inline-start:auto;font-variant-numeric:tabular-nums}\n.pd-review-more{margin:14px 0 0;font-size:12px;opacity:.62}\n.pd-recommend{margin-top:34px}\n.pd-section-title{margin:0 0 14px;font-size:18px;font-weight:600}\n.pd-rec-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}\n.pd-rec-card{min-width:0;color:inherit;text-decoration:none}\n.pd-rec-cover{display:block;aspect-ratio:1/1;overflow:hidden;border:1px solid rgba(128,128,128,.18);border-radius:3px;background:var(--pc-paper,transparent)}\n.pd-rec-cover img{width:100%;height:100%;object-fit:cover}\n.pd-rec-fallback{display:flex;align-items:center;justify-content:center;height:100%;font-size:30px;opacity:.5}\n.pd-rec-name{display:block;margin-top:6px;overflow:hidden;font-size:12px;line-height:1.4;text-overflow:ellipsis;white-space:nowrap}\n.pd-rec-price{display:block;margin-top:3px;font-size:13px;font-weight:600}\n.pd-rec-moq{display:block;font-size:11px;opacity:.7}\n.pd-tabs{position:sticky;top:64px;z-index:5;display:flex;gap:24px;margin-top:34px;border-bottom:1px solid rgba(128,128,128,.25);background:Canvas}\n.pd-tabs [role=\"tab\"]{padding:12px 2px;border:0;border-bottom:2px solid transparent;background:transparent;color:inherit;font:inherit;font-size:14px;cursor:pointer}\n.pd-tabs [role=\"tab\"][aria-selected=\"true\"]{border-bottom-color:var(--pc-accent,currentColor);font-weight:600}\n.pd-tabs .pd-tab-anchor{padding:12px 2px;border-bottom:2px solid transparent;color:inherit;font-size:14px;text-decoration:none}\n.pd-tabs .pd-tab-anchor:hover{color:var(--pc-accent,currentColor)}\n.pd-tabs>a{display:inline-flex;align-items:center;padding:12px 2px;border-bottom:2px solid transparent;color:inherit;text-decoration:none;font-size:14px}\n.pd-tabs>a:hover{border-bottom-color:currentColor}\n.pd-panel{padding-top:20px}\n.pd-panel h2{margin:0 0 12px;font-size:17px;font-weight:600}\n.pd-spec-table{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));overflow:hidden;border:1px solid rgba(128,128,128,.22);border-radius:3px}\n.pd-spec-cell{display:grid;grid-template-columns:minmax(0,140px) minmax(0,1fr);gap:10px;padding:10px 12px;border-bottom:1px solid rgba(128,128,128,.18);font-size:13px}\n.pd-spec-cell:nth-child(odd){border-inline-end:1px solid rgba(128,128,128,.18)}\n.pd-spec-label{opacity:.65}\n.pd-body{font-size:14px;line-height:1.8}\n.pd-body img{max-width:100%;height:auto}\n.pd-back{margin-top:14px;font-size:13px}\n.pd-back a{color:inherit}\n@media(max-width:1180px){.pd-top{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.pd-inquiry{grid-column:1/-1;position:static}.pd-rec-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}\n@media(max-width:760px){.pd-wrap{padding:0 16px}.pd-top{grid-template-columns:1fr}.pd-review-summary{grid-template-columns:1fr;gap:14px}.pd-review-score{flex-direction:row;justify-content:flex-start;gap:10px}.pd-review-score strong{font-size:30px}.pd-inquiry{grid-column:auto}.pd-attr-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.pd-rec-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.pd-spec-table{grid-template-columns:1fr}.pd-spec-cell:nth-child(odd){border-inline-end:0}.pd-tabs{top:0}.pd-info h1{font-size:21px}}\n@media(hover:none){.pd-zoom-tip{display:none}}\n@media(max-width:760px){.pd-sticky{display:none}.pd-sticky.is-on{display:flex}.pd-inquiry{max-height:none;overflow:visible}}\n@media(hover:none){.pd-step{width:32px;height:32px}.pd-step-input{width:52px}}\n@media(max-width:760px){.pd-gallery{display:flex;flex-wrap:wrap;gap:8px}.pd-stage{flex:1 0 100%;min-height:0}.pd-stage>.pd-main-img{height:auto;min-height:0;object-fit:contain}.pd-stage.is-video{aspect-ratio:16/9}.pd-gallery>.pd-thumb{flex:none;width:56px;height:56px}}\n/* 右下客服挂件是 fixed，会长期压住 sticky 询盘栏底部的支付徽标与说明文字；\n   页面滚动甩不掉它，所以让侧栏底边停在挂件上沿之上。侧栏本就 overflow-y:auto，\n   缩短的只是可视区，内容仍能在侧栏内滚到。挂件没显示（未装 im 插件）时不生效，\n   窄屏右栏不 sticky，也不生效。 */\n@media(min-width:1181px){body:has(.chat:not([hidden])) .pd-inquiry:not(.is-tall){max-height:calc(100vh - 210px)}}";
+  // ---- 产品详情页：三栏商详组件，样式随脚本注入（四套主题共用） ----
+  var PD_CSS = ".pd-page{display:block;padding:26px 0 40px}\n.pd-wrap{max-width:1360px;margin:0 auto;padding:0 24px}\n.pd-crumb{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 18px;font-size:12px;opacity:.8}\n.pd-crumb a{color:inherit;text-decoration:none}\n.pd-crumb a:hover{text-decoration:underline}\n.pd-top{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr) 272px;gap:22px;align-items:stretch}\n.pd-media{position:relative;min-width:0}\n.pd-info{min-width:0;display:flex;flex-direction:column}\n.pd-gallery{display:grid;grid-template-columns:68px minmax(0,1fr);grid-auto-rows:68px;gap:8px;align-items:start}\n.pd-stage{position:relative;display:flex;align-items:center;justify-content:center;grid-column:2;grid-row:1 / span 6;align-self:stretch;min-height:0;overflow:hidden;border:1px solid rgba(128,128,128,.2);border-radius:3px;background:var(--pc-paper,transparent);cursor:zoom-in}\n.pd-stage>.pd-main-img{display:block;max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;transform-origin:50% 50%;transition:transform .18s ease-out;will-change:transform}\n\n.pd-zoom-tip{position:absolute;inset-inline-end:10px;inset-block-end:10px;z-index:3;padding:4px 8px;border-radius:3px;background:rgba(12,14,18,.6);color:#fff;font-size:11px;line-height:1.3;opacity:0;pointer-events:none;transition:opacity .15s}\n.pd-stage:hover .pd-zoom-tip{opacity:1}\n.pd-stage.is-zooming>.pd-zoom-tip{opacity:0}\n.pd-stage.is-video{cursor:default}\n.pd-stage.is-video>.pd-main-img,.pd-stage.is-video>.pd-zoom-tip{display:none}\n.pd-video{position:absolute;inset:0;background:#000}\n.pd-video video,.pd-video iframe{display:block;width:100%;height:100%;border:0;background:#000;object-fit:contain}\n.pd-main-fallback{display:flex;align-items:center;justify-content:center;font-size:48px;opacity:.5}\n.pd-gallery>.pd-thumb{grid-column:1;width:68px;height:68px;padding:0;border:1px solid rgba(128,128,128,.28);border-radius:3px;background:transparent;overflow:hidden;cursor:pointer;opacity:.72}\n.pd-gallery>.pd-thumb:hover,.pd-gallery>.pd-thumb.active{opacity:1;border-color:currentColor}\n.pd-gallery>.pd-thumb img{width:100%;height:100%;object-fit:cover}\n.pd-gallery>.pd-thumb-video{position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;color:#fff;background:rgba(128,128,128,.22) center/cover no-repeat}\n.pd-gallery>.pd-thumb-video::after{content:'';position:absolute;inset:0;background:rgba(0,0,0,.22)}\n.pd-thumb-play{position:relative;z-index:1;display:flex;align-items:center;justify-content:center;width:24px;height:24px;border:1px solid rgba(255,255,255,.92);border-radius:50%;background:rgba(0,0,0,.38)}\n.pd-thumb-play::before{content:'';width:0;height:0;margin-inline-start:2px;border-block:5px solid transparent;border-inline-start:8px solid #fff}\n.pd-media-tabs{display:flex;justify-content:center;gap:16px;margin-top:10px;font-size:12px}\n.pd-media-tabs a{color:inherit}\n.pd-supplier{margin-top:14px;padding:14px;border:1px solid rgba(128,128,128,.22);border-radius:3px;font-size:12px}\n.pd-supplier-name{display:inline-block;margin-bottom:6px;font-size:14px;font-weight:600;color:inherit;text-decoration:none}\n.pd-supplier-name:hover{text-decoration:underline}\n.pd-supplier-row{display:flex;flex-wrap:wrap;gap:12px;opacity:.85}\n.pd-supplier-cats{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px;font-size:11px;opacity:.8}\n.pd-supplier-cats span{padding:1px 7px;border-radius:2px;background:rgba(128,128,128,.12)}\n.pd-supplier-desc{margin:0 0 8px;font-size:11.5px;line-height:1.65;opacity:.75}\n.pd-supplier-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px 10px;margin:11px 0 0;padding:11px 0 0;border-top:1px dashed rgba(128,128,128,.28)}\n.pd-supplier-stats>div{min-width:0}\n.pd-supplier-stats dt{margin:0 0 2px;font-size:10.5px;line-height:1.4;opacity:.6}\n.pd-supplier-stats dd{margin:0;font-size:12px;font-weight:600;line-height:1.4;overflow-wrap:anywhere}\n.pd-info h1{margin:0 0 10px;font-size:24px;font-weight:600;line-height:1.35}\n.pd-rating-row{display:flex;align-items:center;gap:8px;margin:0 0 12px;font-size:12px}\n.pd-rating-row .pd-stars .pd-star{font-size:14px}\n.pd-rating-row strong{font-size:13px;font-weight:700}\n.pd-rating-count{opacity:.68}\n.pd-badges{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}\n.pd-badge{padding:2px 8px;border:1px solid rgba(128,128,128,.3);border-radius:2px;color:inherit;font-size:11px;text-decoration:none}\n.pd-badge-quiet{border-color:transparent;background:rgba(128,128,128,.1);opacity:.72}\n.pd-certs{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 14px}\n.pd-cert{display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 8px;border:1px solid rgba(128,128,128,.26);border-radius:3px;background:var(--pc-soft,rgba(128,128,128,.07));font-size:11px;font-weight:600;letter-spacing:.02em;white-space:nowrap}\n.pd-cert-ico{width:13px;height:13px;flex:none;color:var(--pc-accent,currentColor)}\n.pd-price{margin:0 0 10px;padding:10px 14px;border-radius:4px;background:rgba(240,160,32,.08);font-size:30px;overflow-wrap:anywhere;font-weight:700;line-height:1.15}\n.pd-price-unit{font-size:13px;font-weight:400;opacity:.7}\n.pd-moq{margin:0 0 16px;font-size:12px;opacity:.8}\n.pd-qty{display:flex;align-items:center;gap:10px;padding:10px 0;font-size:13px}\n.pd-qty-label{font-weight:600}\n.pd-stepper{display:inline-flex;align-items:center;gap:2px;padding:3px;border:1px solid rgba(128,128,128,.32);border-radius:999px;background:Canvas}\n.pd-stepper:focus-within{border-color:var(--pc-accent,currentColor)}\n.pd-step{display:flex;align-items:center;justify-content:center;width:26px;height:26px;padding:0;border:0;border-radius:50%;background:transparent;color:inherit;font:inherit;font-size:16px;line-height:1;cursor:pointer}\n.pd-step:hover:not(:disabled){background:rgba(128,128,128,.16)}\n.pd-step:disabled{opacity:.3;cursor:not-allowed}\n.pd-step-input{width:46px;padding:0;border:0;background:transparent;color:inherit;font:inherit;font-size:14px;text-align:center;appearance:textfield}\n.pd-step-input:focus{outline:0}\n.pd-qty-unit{font-size:12px;opacity:.7}\n.pd-subtotal{margin:0 0 2px;font-size:11.5px;line-height:1.6;opacity:.75}\n.pd-sum{margin:0 0 6px;font-size:12px}\n.pd-sum-row{display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:3px 0}\n.pd-sum-row>span:first-child{opacity:.7}\n.pd-sum-row>span:last-child{font-weight:600;white-space:nowrap}\n.pd-sum-total{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-top:8px;padding-top:8px;border-top:1px dashed rgba(128,128,128,.3);font-size:14px;font-weight:700}\n.pd-sum-total>span:last-child{white-space:nowrap}\n.pd-offer-row{display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:3px 0;font-size:12px}\n.pd-offer-name{opacity:.85}\n.pd-offer-meta{font-weight:600;text-align:end}\n.pd-sticky{display:none;position:fixed;inset-inline:0;inset-block-end:0;z-index:60;align-items:center;gap:12px;padding:10px 14px;border-top:1px solid rgba(128,128,128,.25);background:Canvas;box-shadow:0 -8px 24px rgba(0,0,0,.12)}\n.pd-sticky-info{display:flex;flex:1;flex-direction:column;min-width:0;line-height:1.3}\n.pd-sticky-price{font-size:17px;font-weight:700}\n.pd-sticky-meta{font-size:11px;opacity:.7}\n.pd-sticky-cta{flex:none;padding:10px 18px;border:1px solid var(--pc-accent,currentColor);border-radius:3px;background:var(--pc-accent,currentColor);color:#fff;font:inherit;font-size:13px;font-weight:600;cursor:pointer}\n.pd-keyattrs{padding:14px;border-radius:3px;background:rgba(128,128,128,.07);flex:1 0 auto}\n.pd-keyattrs h2{margin:0 0 10px;font-size:14px;font-weight:600}\n.pd-attr-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}\n.pd-attr-grid>div:nth-child(n+7){display:none}\n.pd-attr-label{display:block;margin-bottom:3px;font-size:11px;opacity:.65}\n.pd-attr-value{display:block;font-size:13px;word-break:break-word}\n.pd-summary{margin:14px 0 0;font-size:13px;line-height:1.75;opacity:.88}\n.pd-inquiry{position:sticky;top:84px;max-height:calc(100vh - 100px);overflow-y:auto;padding:16px;border:1px solid rgba(128,128,128,.25);border-radius:4px}\n.pd-inquiry.is-tall{position:static;max-height:none;overflow:visible}\n.pd-inq-section{padding:12px 0;border-top:1px solid rgba(128,128,128,.2);font-size:12px}\n.pd-inq-section strong{display:block;margin-bottom:6px;font-size:13px}\n.pd-inq-row{display:flex;justify-content:space-between;gap:10px;padding:3px 0}\n.pd-inq-row span:first-child{opacity:.7}\n.pd-service{display:flex;flex-direction:column;gap:6px}\n.pd-service span{color:var(--pc-accent,currentColor);font-weight:700}\n.pd-cta{display:block;box-sizing:border-box;width:100%;margin-top:8px;padding:11px 12px;border:1px solid var(--pc-accent,currentColor);border-radius:3px;font-size:13px;font-weight:600;text-align:center;text-decoration:none}\n.pd-cta-primary{background:var(--pc-accent,currentColor);color:#fff}\n.pd-cta-secondary{border-color:rgba(128,128,128,.4);background:transparent;color:inherit}\n.pd-foot-note{margin:10px 0 0;font-size:11px;line-height:1.6;opacity:.7}\n.pd-pay-ico{width:15px;height:15px;margin-inline-end:5px;vertical-align:-3px;color:var(--pc-accent,currentColor)}\n.pd-pay-methods{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin:2px 0 8px;padding:0;list-style:none}\n.pd-pay-chip{display:inline-flex;align-items:center;justify-content:center;gap:3px;height:23px;padding:0 6px;border:1px solid rgba(128,128,128,.32);border-radius:3px;background:Canvas;color:inherit;font-size:10.5px;font-weight:700;line-height:1;letter-spacing:.03em;white-space:nowrap}\n.pd-pay-icon{width:13px;height:13px;flex:none;opacity:.8;color:inherit}\n.pd-pay-visa{color:#1a1f71;font-style:italic;font-size:10.5px}\n.pd-pay-mc{gap:0}\n.pd-pay-mc-red,.pd-pay-mc-amber{display:block;width:11px;height:11px;border-radius:50%}\n.pd-pay-mc-red{background:#eb001b}\n.pd-pay-mc-amber{margin-inline-start:-4px;background:#f79e1b;opacity:.92}\n.pd-pay-paypal{font-style:italic;color:#003087}\n.pd-pay-visa,.pd-pay-mc,.pd-pay-paypal,.pd-pay-apple{height:24px;padding:0;border:0;background:transparent;border-radius:3px;overflow:hidden}\n.pd-logo-img{display:block;width:auto;height:24px;max-width:none}\n.pd-pay-note{margin:0;font-size:10.5px;line-height:1.6;opacity:.62}\n.pd-reviews{margin-top:34px;scroll-margin-top:72px}\n.pd-review-summary{display:grid;grid-template-columns:180px minmax(0,1fr);gap:22px;align-items:center;padding:16px 18px;border:1px solid rgba(128,128,128,.22);border-radius:4px}\n.pd-review-score{display:flex;flex-direction:column;align-items:center;gap:5px}\n.pd-review-score strong{font-size:38px;font-weight:700;line-height:1;letter-spacing:-.02em}\n.pd-stars{display:inline-flex;gap:2px;line-height:1}\n.pd-star{font-size:15px;line-height:1;color:rgba(128,128,128,.3)}\n.pd-star.is-on{color:#f0a020}\n.pd-stars-sm .pd-star{font-size:12px}\n.pd-review-count{font-size:12px;opacity:.68}\n.pd-review-dist{display:flex;flex-direction:column;gap:5px;margin:0;padding:0;list-style:none}\n.pd-review-dist li{display:grid;grid-template-columns:44px minmax(0,1fr) 30px;gap:10px;align-items:center;font-size:11.5px}\n.pd-review-star{opacity:.7;white-space:nowrap}\n.pd-review-bar{height:6px;overflow:hidden;border-radius:999px;background:rgba(128,128,128,.16)}\n.pd-review-bar>i{display:block;height:100%;border-radius:999px;background:#f0a020}\n.pd-review-num{text-align:end;opacity:.7;font-variant-numeric:tabular-nums}\n.pd-review-list{margin:10px 0 0;padding:0;list-style:none}\n.pd-review-item{padding:16px 0;border-bottom:1px solid rgba(128,128,128,.16)}\n.pd-review-head{display:flex;align-items:center;gap:10px;margin-bottom:8px}\n.pd-review-avatar{display:flex;align-items:center;justify-content:center;flex:none;width:32px;height:32px;border-radius:50%;background:var(--pc-soft,rgba(128,128,128,.14));font-size:13px;font-weight:600;line-height:1}\n.pd-review-who{display:flex;flex-direction:column;gap:1px;min-width:0;line-height:1.35}\n.pd-review-name{font-size:13px;font-weight:600}\n.pd-review-country{font-size:11px;opacity:.6}\n.pd-review-head .pd-stars{margin-inline-start:auto;flex:none}\n.pd-review-body{margin:0 0 8px;font-size:13.5px;line-height:1.8;overflow-wrap:anywhere}\n.pd-review-meta{display:flex;flex-wrap:wrap;align-items:center;gap:12px;font-size:11px;opacity:.68}\n.pd-review-verified{display:inline-flex;align-items:center;gap:3px;color:var(--pc-accent,currentColor);font-weight:600;opacity:1}\n.pd-review-vico{width:13px;height:13px;flex:none}\n.pd-review-date{margin-inline-start:auto;font-variant-numeric:tabular-nums}\n.pd-review-more{margin:14px 0 0;font-size:12px;opacity:.62}\n.pd-recommend{margin-top:34px}\n.pd-section-title{margin:0 0 14px;font-size:18px;font-weight:600}\n.pd-rec-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}\n.pd-rec-card{min-width:0;color:inherit;text-decoration:none}\n.pd-rec-cover{display:block;aspect-ratio:1/1;overflow:hidden;border:1px solid rgba(128,128,128,.18);border-radius:3px;background:var(--pc-paper,transparent)}\n.pd-rec-cover img{width:100%;height:100%;object-fit:cover}\n.pd-rec-fallback{display:flex;align-items:center;justify-content:center;height:100%;font-size:30px;opacity:.5}\n.pd-rec-name{display:block;margin-top:6px;overflow:hidden;font-size:12px;line-height:1.4;text-overflow:ellipsis;white-space:nowrap}\n.pd-rec-price{display:block;margin-top:3px;font-size:13px;font-weight:600}\n.pd-rec-moq{display:block;font-size:11px;opacity:.7}\n.pd-tabs{position:sticky;top:64px;z-index:5;display:flex;gap:24px;margin-top:34px;border-bottom:1px solid rgba(128,128,128,.25);background:Canvas}\n.pd-tabs [role=\"tab\"]{padding:12px 2px;border:0;border-bottom:2px solid transparent;background:transparent;color:inherit;font:inherit;font-size:14px;cursor:pointer}\n.pd-tabs [role=\"tab\"][aria-selected=\"true\"]{border-bottom-color:var(--pc-accent,currentColor);font-weight:600}\n.pd-tabs .pd-tab-anchor{padding:12px 2px;border-bottom:2px solid transparent;color:inherit;font-size:14px;text-decoration:none}\n.pd-tabs .pd-tab-anchor:hover{color:var(--pc-accent,currentColor)}\n.pd-tabs>a{display:inline-flex;align-items:center;padding:12px 2px;border-bottom:2px solid transparent;color:inherit;text-decoration:none;font-size:14px}\n.pd-tabs>a:hover{border-bottom-color:currentColor}\n.pd-panel{padding-top:20px}\n.pd-panel h2{margin:0 0 12px;font-size:17px;font-weight:600}\n.pd-spec-table{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));overflow:hidden;border:1px solid rgba(128,128,128,.22);border-radius:3px}\n.pd-spec-cell{display:grid;grid-template-columns:minmax(0,140px) minmax(0,1fr);gap:10px;padding:10px 12px;border-bottom:1px solid rgba(128,128,128,.18);font-size:13px}\n.pd-spec-cell:nth-child(odd){border-inline-end:1px solid rgba(128,128,128,.18)}\n.pd-spec-label{opacity:.65}\n.pd-body{font-size:14px;line-height:1.8}\n.pd-body img{max-width:100%;height:auto}\n.pd-back{margin-top:14px;font-size:13px}\n.pd-back a{color:inherit}\n@media(max-width:1180px){.pd-top{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.pd-inquiry{grid-column:1/-1;position:static}.pd-rec-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}\n@media(max-width:760px){.pd-wrap{padding:0 16px}.pd-top{grid-template-columns:1fr}.pd-review-summary{grid-template-columns:1fr;gap:14px}.pd-review-score{flex-direction:row;justify-content:flex-start;gap:10px}.pd-review-score strong{font-size:30px}.pd-inquiry{grid-column:auto}.pd-attr-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.pd-rec-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.pd-spec-table{grid-template-columns:1fr}.pd-spec-cell:nth-child(odd){border-inline-end:0}.pd-tabs{top:0}.pd-info h1{font-size:21px}}\n@media(hover:none){.pd-zoom-tip{display:none}}\n@media(max-width:760px){.pd-sticky{display:none}.pd-sticky.is-on{display:flex}.pd-inquiry{max-height:none;overflow:visible}}\n@media(hover:none){.pd-step{width:32px;height:32px}.pd-step-input{width:52px}}\n@media(max-width:760px){.pd-gallery{display:flex;flex-wrap:wrap;gap:8px}.pd-stage{flex:1 0 100%;min-height:0}.pd-stage>.pd-main-img{height:auto;min-height:0;object-fit:contain}.pd-stage.is-video{aspect-ratio:16/9}.pd-gallery>.pd-thumb{flex:none;width:56px;height:56px}}\n/* 右下客服挂件是 fixed，会长期压住 sticky 询盘栏底部的支付徽标与说明文字；\n   页面滚动甩不掉它，所以让侧栏底边停在挂件上沿之上。侧栏本就 overflow-y:auto，\n   缩短的只是可视区，内容仍能在侧栏内滚到。挂件没显示（未装 im 插件）时不生效，\n   窄屏右栏不 sticky，也不生效。 */\n@media(min-width:1181px){body:has(.chat:not([hidden])) .pd-inquiry:not(.is-tall){max-height:calc(100vh - 210px)}}";
   // ---- 商详「数量」步进器：下限是起订量，上限只挡溢出；输入框允许直接敲数 ----
-  // 阿里的数量控件是 -/数字/+：我们沿用它，但把最小值钉在 MOQ 上，避免出现
+  // 数量控件是 -/数字/+ 形态，但把最小值钉在 MOQ 上，避免出现
   // 「填了 1 件去询价、起订量却是 5 件」这种自相矛盾的询盘。
   function initProductQty() {
     var box = document.querySelector('[data-pd-qty]');
@@ -1157,32 +1157,18 @@
     sync();
   }
 
-  // ---- 阶梯价：数量落在哪一档就高亮哪一档，并算小计 ----
-  // 阿里的阶梯价是「1-9 → $1200 / ≥10 → $1100」这种分段表，访客改数量时当前档要跟着亮，
-  // 否则一列价格看不出自己按哪档。档位数据由模板写在 data-ladder-* 上，这里只做匹配。
-  function initProductLadder() {
-    var table = document.querySelector('[data-pd-ladder]');
+  // ---- 商详小计卡：数量 × 单价 → 商品小计 / 运费 / 合计 ----
+  function initProductSubtotal() {
     var sum = document.querySelector('[data-pd-sum]');
     var legacy = document.querySelector('[data-pd-subtotal]');
     var cur = document.querySelector('[data-pd-qty-input]');
-    if (!table && !sum) return;
-    var currency = (table && table.getAttribute('data-currency')) || (sum && sum.getAttribute('data-pd-currency')) || '';
-    // 没有阶梯价的商品也要能算小计：模板把起价写在 data-pd-price 上兜底
+    if (!sum && !legacy) return;
+    var currency = sum ? sum.getAttribute('data-pd-currency') || '' : '';
+    // 模板把起价写在 data-pd-price 上兜底
     var basePrice = sum ? parseFloat(sum.getAttribute('data-pd-price')) || 0 : 0;
     // 运费按商品配置计入合计：0 = 未报价，模板里仍显示「待定」，合计先按商品小计走。
     var baseFreight = sum ? parseFloat(sum.getAttribute('data-pd-freight')) || 0 : 0;
     var freightCell = sum ? sum.querySelector('[data-pd-sum-freight]') : null;
-    var rows = [];
-    if (table) {
-      Array.prototype.forEach.call(table.querySelectorAll('[data-ladder-qty]'), function (el) {
-        rows.push({
-          el: el,
-          qty: parseInt(el.getAttribute('data-ladder-qty'), 10) || 0,
-          price: parseFloat(el.getAttribute('data-ladder-price')) || 0
-        });
-      });
-    }
-    rows.sort(function (a, b) { return a.qty - b.qty; });
 
     function money(v) {
       // 口径必须和模板里的 money 函数一致（整数不带小数、不加千分位），
@@ -1192,19 +1178,7 @@
     }
     function apply() {
       var qty = cur ? parseInt(String(cur.value).replace(/[^\d]/g, ''), 10) || 0 : 0;
-      var unit = basePrice;
-      if (rows.length) {
-        var hit = rows[0];
-        for (var i = 0; i < rows.length; i++) if (qty >= rows[i].qty) hit = rows[i];
-        rows.forEach(function (r) {
-          var on = r === hit;
-          r.el.classList.toggle('is-active', on);
-          if (on) r.el.setAttribute('aria-current', 'true');
-          else r.el.removeAttribute('aria-current');
-        });
-        unit = hit.price;
-      }
-      var amount = qty > 0 ? qty * unit : 0;
+      var amount = qty > 0 ? qty * basePrice : 0;
       // 结算小结：商品小计 / 运费总计 / 小计。运费 0 = 未报价（模板里是「待定」），
       // 合计先按商品小计走；有报价时才计入，和后台商品字段同一口径。
       if (sum) {
@@ -1220,7 +1194,7 @@
       // 老模板沿用的一行式「小计：N × 单价 = 金额」，有就照旧填，没有就不管
       if (legacy) {
         legacy.hidden = !amount;
-        if (amount) legacy.textContent = msg('subtotal', '小计') + '：' + qty + ' × ' + money(unit) + ' = ' + money(amount);
+        if (amount) legacy.textContent = msg('subtotal', '小计') + '：' + qty + ' × ' + money(basePrice) + ' = ' + money(amount);
       }
     }
 
@@ -1234,137 +1208,6 @@
     var plus = document.querySelector('[data-pd-qty-plus]');
     if (minus) minus.addEventListener('click', later);
     if (plus) plus.addEventListener('click', later);
-    // SKU 选中后基准价会写到 data-pd-price，跟着重读再算小计
-    window.addEventListener('pd:sku', function () {
-      basePrice = sum ? parseFloat(sum.getAttribute('data-pd-price')) || 0 : basePrice;
-      // SKU 切价会重写 data-ladder-price，行缓存也要跟着更新，否则小计按旧档价算
-      rows.forEach(function (r) { r.price = parseFloat(r.el.getAttribute('data-ladder-price')) || 0; });
-      apply();
-    });
-    apply();
-  }
-
-  // ---- SKU 销售属性联动：选齐所有属性 → 命中一条 SKU → 换价 + 库存提示 ----
-  // 数据由模板写在 data-sku-* 上（后台 AliTrade 的 skuProps/skus），这里只做比对。
-  // 没填 SKU 的商品整块不渲染，本函数直接返回。
-  function initProductSku() {
-    var box = document.querySelector('[data-pd-skus]');
-    if (!box) return;
-    var currency = box.getAttribute('data-currency') || '';
-    // 重绘的是给人看的文本，优先用模板写好的译名；data-unit 保留原值供数据契约使用。
-    var unit = box.getAttribute('data-unit-label') || box.getAttribute('data-unit') || '';
-    var base = parseFloat(box.getAttribute('data-base-price')) || 0;
-    var groups = Array.prototype.slice.call(box.querySelectorAll('[data-sku-prop]'));
-    var skus = [];
-    Array.prototype.forEach.call(box.querySelectorAll('[data-sku-key]'), function (el) {
-      skus.push({
-        key: el.getAttribute('data-sku-key'),
-        price: parseFloat(el.getAttribute('data-sku-price')) || 0,
-        stock: parseInt(el.getAttribute('data-sku-stock'), 10) || 0,
-        code: el.getAttribute('data-sku-code') || ''
-      });
-    });
-    var hint = box.querySelector('[data-pd-sku-hint]');
-    var priceEl = document.querySelector('.pd-info .pd-price');
-    var ladder = document.querySelector('[data-pd-ladder]');
-    var sum = document.querySelector('[data-pd-sum]');
-    var selected = groups.map(function () { return ''; });
-    // 阶梯价原始档缓存：SKU 切价时从原始值重算，绝不在已缩放的值上再乘（会累乘漂移）。
-    var ladderRows = ladder ? Array.prototype.slice.call(ladder.querySelectorAll('[data-ladder-price]')).map(function (el) {
-      return { el: el, cell: el.querySelector('.pd-ladder-price'), base: parseFloat(el.getAttribute('data-ladder-price')) || 0 };
-    }) : [];
-    var firstBase = ladderRows.length ? ladderRows[0].base : 0;
-
-    function money(v) {
-      var n = Math.round(v * 100) / 100;
-      return currency + (n === Math.trunc(n) ? String(n) : n.toFixed(2));
-    }
-    function keyOf(vals) {
-      // 与 Go 端 productTrade 拼键顺序一致：属性名=值，按属性顺序用 | 连接。
-      return groups.map(function (g, i) { return g.getAttribute('data-sku-prop') + '=' + vals[i]; }).join('|');
-    }
-    function findSku() {
-      if (selected.some(function (v) { return !v; })) return null;
-      var key = keyOf(selected);
-      for (var i = 0; i < skus.length; i++) if (skus[i].key === key) return skus[i];
-      return null;
-    }
-    // 标出在当前已选条件下仍可成套的候选值，把凑不出 SKU 或库存 0 的置灰。
-    function markAvailable() {
-      groups.forEach(function (g, gi) {
-        Array.prototype.forEach.call(g.querySelectorAll('[data-sku-value]'), function (btn) {
-          var val = btn.getAttribute('data-sku-value');
-          var trial = selected.slice();
-          trial[gi] = val;
-          if (trial.some(function (v) { return !v; })) { btn.classList.remove('is-oos'); return; }
-          var hit = null, k = keyOf(trial);
-          for (var i = 0; i < skus.length; i++) if (skus[i].key === k) { hit = skus[i]; break; }
-          btn.classList.toggle('is-oos', !hit || hit.stock <= 0);
-        });
-      });
-    }
-    function apply() {
-      groups.forEach(function (g, gi) {
-        Array.prototype.forEach.call(g.querySelectorAll('[data-sku-value]'), function (btn) {
-          btn.classList.toggle('is-active', btn.getAttribute('data-sku-value') === selected[gi]);
-        });
-      });
-      markAvailable();
-      var hit = findSku();
-      var price = hit ? hit.price : base;
-      // 命中 SKU：把单价和库存通知给阶梯价/小计；有阶梯价时按其档位比例不便推断，
-      // 这里直接把当前单价作为「起步价」写回，让小计按选中规格算。
-      if (sum) sum.setAttribute('data-pd-price', String(price));
-      if (priceEl && hit) {
-        // 重绘要保留 .pd-price-unit 结构，否则单位会跟着 30px 大字号一起放大。
-        priceEl.textContent = money(price);
-        if (unit) {
-          var pu = document.createElement('span');
-          pu.className = 'pd-price-unit';
-          pu.textContent = ' / ' + unit;
-          priceEl.appendChild(pu);
-        }
-      }
-      if (ladder && ladderRows.length) {
-        // 以 SKU 价作首档，其余档按原始档与首档的比例缩放，保持「≥10 更便宜」的折扣关系。
-        // 没选齐时回落到原始阶梯价。始终从 base 重算，避免切规格时累乘漂移。
-        var anchor = hit ? price : firstBase;
-        var ratio = firstBase > 0 && anchor > 0 ? anchor / firstBase : 1;
-        ladderRows.forEach(function (r) {
-          var next = Math.round(r.base * ratio * 100) / 100;
-          r.el.setAttribute('data-ladder-price', String(next));
-          if (r.cell) {
-            r.cell.textContent = money(next);
-            if (unit) {
-              var label = document.createElement('small');
-              label.textContent = ' / ' + unit;
-              r.cell.appendChild(label);
-            }
-          }
-        });
-      }
-      window.dispatchEvent(new CustomEvent('pd:sku', { detail: { price: price, code: hit ? hit.code : '' } }));
-      if (hint) {
-        if (hit && hit.stock > 0) {
-          hint.hidden = false;
-          hint.textContent = msg('skuSelected', '已选规格') + '：' + (hit.code ? hit.code + ' · ' : '') + money(price) + (hit.stock <= 10 ? ' · ' + msg('skuLowStock', '仅剩') + ' ' + hit.stock : '');
-        } else if (hit && hit.stock <= 0) {
-          hint.hidden = false;
-          hint.textContent = msg('skuOutOfStock', '该规格暂时缺货');
-        } else {
-          hint.hidden = true;
-        }
-      }
-    }
-    groups.forEach(function (g, gi) {
-      Array.prototype.forEach.call(g.querySelectorAll('[data-sku-value]'), function (btn) {
-        btn.addEventListener('click', function () {
-          if (btn.classList.contains('is-oos')) return;
-          selected[gi] = selected[gi] === btn.getAttribute('data-sku-value') ? '' : btn.getAttribute('data-sku-value');
-          apply();
-        });
-      });
-    });
     apply();
   }
 
@@ -1385,7 +1228,7 @@
   }
 
   // ---- 右栏 sticky 的高度守卫 ----
-  // 交易信息齐的商品（阶梯价 + 包装 + 样品 + 定制…）右栏会比视口还高：
+  // 信息多的商品（属性 + 详情 + 运输 + 认证…）右栏会比视口还高：
   // 这时还 sticky 的话底部按钮永远在屏幕外，所以超过视口就让它回到文档流跟着页面走。
   function initInquirySticky() {
     var box = document.querySelector('.pd-inquiry');
@@ -1773,8 +1616,7 @@
     if (first && !document.querySelector('.pd-gallery .pd-thumb.active')) first.classList.add('active');
     initGalleryZoom();
     initProductQty();
-    initProductSku();
-    initProductLadder();
+  initProductSubtotal();
     initInquiry();
     initStickyInquiry();
     initInquirySticky();

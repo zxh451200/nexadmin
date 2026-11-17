@@ -62,13 +62,17 @@ function PageFormBody({ onOpenChange, editing }: { onOpenChange: (v: boolean) =>
   const [sort, setSort] = useState(editing?.sort ?? 0)
   // 分享图与封面同一套规则：站内相对路径或绝对地址，别的拦住——og:image 跟着指向它。
   const ogInvalid = ogImage.trim() !== '' && !/^(https?:\/\/|\/)/i.test(ogImage.trim())
+  // 必填校验的行内提示状态：提交未过时点亮，下次提交重验（toast 仍是快捷反馈）
+  const [titleMissing, setTitleMissing] = useState(false)
 
   const submit = async () => {
     const base = lf.baseValues()
     if (!(base.title ?? '').trim()) {
+      setTitleMissing(true)
       toast.error(t('plugin_website.page.required'))
       return
     }
+    setTitleMissing(false)
     if (ogInvalid) {
       toast.error(t('plugin_website.fields.coverInvalid'))
       return
@@ -104,11 +108,14 @@ function PageFormBody({ onOpenChange, editing }: { onOpenChange: (v: boolean) =>
       onOpenChange={onOpenChange}
       title={editing ? t('plugin_website.page.edit') : t('plugin_website.page.create')}
       size="lg"
+      side="right"
       className="space-y-4"
       footer={
         <>
           <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
-          <Button onClick={() => void submit()}>{t('common.save')}</Button>
+          <Button disabled={save.isPending} onClick={() => void submit()}>
+            {save.isPending ? t('common.loading') : t('common.save')}
+          </Button>
         </>
       }
     >
@@ -118,6 +125,7 @@ function PageFormBody({ onOpenChange, editing }: { onOpenChange: (v: boolean) =>
       </div>
       <div className="flex flex-col gap-3">
         <LocalizedField fieldKey="title" required />
+        {titleMissing ? <p className="text-xs text-destructive">{t('plugin_website.page.required')}</p> : null}
         <SharedFieldShell labelKey="plugin_website.fields.slug">
           <Input
             value={slug}
@@ -136,6 +144,7 @@ function PageFormBody({ onOpenChange, editing }: { onOpenChange: (v: boolean) =>
           <ImageUrlField
             value={ogImage}
             onChange={setOgImage}
+            aria-invalid={ogInvalid}
             disabled={sharedDisabled}
             title={t('plugin_website.fields.ogUpload')}
             hint={t('plugin_website.fields.ogHint')}
@@ -390,7 +399,7 @@ export default function PagePage() {
               {t('plugin_website.page.offlineBatch')}
             </Button>
             <Button variant="destructive" size="sm" onClick={() => void onDelete(selectedRows)}>
-              <Trash2 className="me-2 size-4" aria-hidden="true" />
+              <Trash2 aria-hidden="true" />
               {t('common.delete')}
             </Button>
           </Can>

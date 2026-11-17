@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math"
 	"net/url"
 	"path"
 	"strconv"
@@ -126,7 +125,7 @@ func normalizeProductKeywords(s string) string {
 }
 
 // SaveProduct 新建或更新一条商品。Status 只接受 draft / online——offline 由列表的
-// 上下架动作写入，pending / rejected 属于阿里的审核流转，本地表单不该直接设。
+// 上下架动作写入，本地表单不该直接设。
 func (s *Service) SaveProduct(ctx context.Context, id idgen.ID, f ProductForm) (*Product, error) {
 	f.Slug = strings.TrimSpace(f.Slug)
 	f.Title = trimLen(f.Title, 200)
@@ -253,16 +252,8 @@ func (s *Service) SaveProduct(ctx context.Context, id idgen.ID, f ProductForm) (
 	row.FreightAmount = f.FreightAmount
 	row.SpecsJSON, row.Author = specsJSON, f.Author
 	// 认证清单：nil = 本次不改（老客户端不带该字段），空数组 = 运营清空。
-	// 与 AliTrade 同一套「不改 vs 清空」语义，避免升级后老表单把认证刷没了。
 	if f.Certifications != nil {
 		row.CertificationsJSON = normalizeCertifications(f.Certifications)
-	}
-	if f.AliTrade != nil {
-		tradeJSON, terr := normalizeAliTrade(f.AliTrade)
-		if terr != nil {
-			return nil, terr
-		}
-		row.AliTradeJSON = tradeJSON
 	}
 	row.Content, row.Status, row.I18nJSON = htmlsafe.Sanitize(f.Content), f.Status, i18n
 	pub, err := pi18n.NormalizePublish(f.PublishedJSON, row.Published(), pi18n.ParseDoc(i18n),
@@ -322,8 +313,8 @@ func (s *Service) DeleteProducts(ctx context.Context, ids []idgen.ID) (int64, er
 	return deleted, nil
 }
 
-// SetProductsStatus 批量上架/下线商品，返回实际改动条数。草稿可以直接下线成 offline
-// （阿里的「下架」页签就是这么算的），上架则把任何状态都顶到 online。
+// SetProductsStatus 批量上架/下线商品，返回实际改动条数。草稿可以直接下线成 offline，
+// 上架则把任何状态都顶到 online。
 func (s *Service) SetProductsStatus(ctx context.Context, ids []idgen.ID, status string) (int64, error) {
 	if len(ids) == 0 {
 		return 0, response.BadRequest("website.product_ids_empty")
@@ -340,8 +331,8 @@ func (s *Service) SetProductsStatus(ctx context.Context, ids []idgen.ID, status 
 	return tx.RowsAffected, tx.Error
 }
 
-// CopyProduct 复制一件商品：内容、译文、图片、贸易字段与类目原样带走，状态归草稿、
-// 同步信息清零（副本还没同步过阿里），slug 取 <slug>-copy，撞车递增为 -copy-2、-copy-3…。
+// CopyProduct 复制一件商品：内容、译文、图片、贸易字段与类目原样带走，状态归草稿，
+// slug 取 <slug>-copy，撞车递增为 -copy-2、-copy-3…。
 func (s *Service) CopyProduct(ctx context.Context, id idgen.ID) (*Product, error) {
 	var src Product
 	if err := s.db.WithContext(ctx).Preload("Categories").First(&src, "id = ?", int64(id)).Error; err != nil {
@@ -358,8 +349,7 @@ func (s *Service) CopyProduct(ctx context.Context, id idgen.ID) (*Product, error
 		CoverURL: src.CoverURL, ImagesJSON: src.ImagesJSON, VideoURL: src.VideoURL,
 		PriceMin: src.PriceMin, PriceMax: src.PriceMax, Currency: src.Currency, PriceUnit: src.PriceUnit,
 		Moq: src.Moq, LeadTimeDays: src.LeadTimeDays, Port: src.Port, SpecsJSON: src.SpecsJSON,
-		AliTradeJSON: src.AliTradeJSON, CertificationsJSON: src.CertificationsJSON,
-		Status: ProductDraft,
+		CertificationsJSON: src.CertificationsJSON, Status: ProductDraft,
 	}
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(&row).Error; err != nil {
@@ -796,165 +786,6 @@ var paymentAliases = map[string]paymentChip{
 	"cash":                 {Label: "Cash", Kind: "plain", Icon: "cash"},
 }
 
-// ---- 商详「交易信息」 ----
-//
-// 阶梯价 / 包装 / 供货能力 / 样品 / 定制这些字段一直存在 AliTradeJSON 里，
-// 但此前只用于「同步阿里发品」和「导出阿里模板」，商详页一个都没露 —— 数据白存。
-// 下面把它们整理成模板能直接 range 的形状；没有数据的项返回零值，模板据此整段不渲染。
-
-// productLadderRow 是阶梯价的一档：从 Qty 起，到下一档的前一件为止。
-type productLadderRow struct {
-	Qty   int
-	Price float64
-	// Range 是给人看的数量区间（"1-9" / "10+"）：数字加符号，四套语言都不用翻。
-	Range string
-	// Last 标最后一档，模板把 "10+" 渲染成「≥10」。
-	Last bool
-}
-
-// productPkg 是包装与体积（尺寸单位 cm、重量 kg，与阿里发品口径一致）。
-type productPkg struct {
-	Dim    string  // "120 × 100 × 220 cm"
-	Cubic  float64 // 体积，m³（海运/拼箱按方计费时的常用口径）
-	Weight float64
-}
-
-// productSupply 是供货能力："500 Set/Sets / Month"。
-type productSupply struct {
-	Number float64
-	Unit   string
-	Period string
-}
-
-// productSample 是样品服务。
-type productSample struct {
-	MaxQty int
-	Price  float64
-}
-
-// productCustom 是一项定制服务：定制类型 + 起订量。
-type productCustom struct {
-	Type     string
-	Quantity int
-}
-
-// productSkuProp 是一条销售属性的展示视图（如「颜色」= [黑, 白]）。
-type productSkuProp struct {
-	Name   string
-	Values []string
-}
-
-// productSku 是一条 SKU 组合的展示视图。Props 用「属性名=值」拼成稳定键供前端比对，
-// 价格/库存直接来自后台；没有 SKU 数据时这两组切片都是空，模板整块不渲染。
-type productSku struct {
-	Key   string
-	Price float64
-	Stock int
-	Code  string
-}
-
-// productTrade 是商详交易信息区的整体视图。
-type productTrade struct {
-	Ladder   []productLadderRow
-	Pkg      *productPkg
-	Supply   *productSupply
-	Sample   *productSample
-	Custom   []productCustom
-	SkuProps []productSkuProp
-	Skus     []productSku
-	Unit     string
-}
-
-// TradeInfo 从 AliTradeJSON 组装商详交易信息。坏数据当「没有」（与 AliTrade 的容错一致），
-// 不让一条脏 JSON 把整块详情页搞挂。
-func (p Product) TradeInfo() productTrade {
-	t := p.AliTrade()
-	out := productTrade{Unit: strings.TrimSpace(p.PriceUnit)}
-
-	rows := make([]productLadderRow, 0, len(t.Ladder))
-	for _, l := range t.Ladder {
-		if l.Qty <= 0 || l.Price <= 0 {
-			continue
-		}
-		rows = append(rows, productLadderRow{Qty: l.Qty, Price: l.Price})
-	}
-	for i := range rows {
-		if i+1 < len(rows) {
-			rows[i].Range = fmt.Sprintf("%d-%d", rows[i].Qty, rows[i+1].Qty-1)
-		} else {
-			rows[i].Range = fmt.Sprintf("%d+", rows[i].Qty)
-			rows[i].Last = true
-		}
-	}
-	out.Ladder = rows
-
-	if t.Package.Length > 0 && t.Package.Width > 0 && t.Package.Height > 0 {
-		out.Pkg = &productPkg{
-			Dim:    fmt.Sprintf("%.0f × %.0f × %.0f cm", t.Package.Length, t.Package.Width, t.Package.Height),
-			Cubic:  math.Round(t.Package.Length*t.Package.Width*t.Package.Height/1e4) / 100,
-			Weight: t.Package.Weight,
-		}
-	} else if t.Package.Weight > 0 {
-		out.Pkg = &productPkg{Weight: t.Package.Weight}
-	}
-
-	if t.Supply.Number > 0 {
-		unit := strings.TrimSpace(t.Supply.QuantityUnit)
-		if unit == "" {
-			unit = out.Unit
-		}
-		out.Supply = &productSupply{Number: t.Supply.Number, Unit: unit, Period: strings.TrimSpace(t.Supply.TimeUnit)}
-	}
-
-	if t.Sample.Enabled {
-		out.Sample = &productSample{MaxQty: t.Sample.MaxQty, Price: t.Sample.Price}
-	}
-
-	for _, c := range t.Custom {
-		if strings.TrimSpace(c.Type) == "" {
-			continue
-		}
-		out.Custom = append(out.Custom, productCustom{Type: strings.TrimSpace(c.Type), Quantity: c.Quantity})
-	}
-
-	// SKU：按后台定义的属性顺序展开，组合键也按同一顺序拼「名称=值」，前端据此比对选中态。
-	// 值去重、跳过空项，避免同一个值渲染两个按钮。
-	for _, prop := range t.SKUProps {
-		name := strings.TrimSpace(prop.Name)
-		if name == "" {
-			continue
-		}
-		vals := make([]string, 0, len(prop.Values))
-		seen := make(map[string]bool, len(prop.Values))
-		for _, raw := range prop.Values {
-			v := strings.TrimSpace(raw)
-			if v == "" || seen[v] {
-				continue
-			}
-			seen[v] = true
-			vals = append(vals, v)
-		}
-		if len(vals) > 0 {
-			out.SkuProps = append(out.SkuProps, productSkuProp{Name: name, Values: vals})
-		}
-	}
-	if len(out.SkuProps) > 0 {
-		for _, s := range t.SKUs {
-			if s.Price <= 0 {
-				continue
-			}
-			parts := make([]string, 0, len(out.SkuProps))
-			for _, prop := range out.SkuProps {
-				parts = append(parts, prop.Name+"="+strings.TrimSpace(s.Props[prop.Name]))
-			}
-			out.Skus = append(out.Skus, productSku{
-				Key: strings.Join(parts, "|"), Price: s.Price, Stock: s.Stock, Code: strings.TrimSpace(s.Code),
-			})
-		}
-	}
-	return out
-}
-
 // PaymentChips 把「T/T, L/C」这类自由文本拆成支付方式徽标：先按逗号/分号/顿号分段
 // （不能按斜杠拆，T/T、L/C、D/P 本身就带斜杠），再按别名表归一，未收录的照原文显示。
 // 同一项多次出现只留一枚；空字符串返回 nil，模板据此整段不渲染。
@@ -1069,7 +900,7 @@ func normalizeCertifications(in []string) string {
 }
 
 // Certifications 解析后台填的认证清单。支持 JSON 数组（后台表单保存的形态）
-// 与逗号/顿号/分号分隔的纯文本（阿里同步回写或人工直填），两种都能吃；
+// 与逗号/顿号/分号分隔的纯文本（导入或人工直填），两种都能吃；
 // 去重、去空、限长 24 字，返回 nil 时模板整段不渲染。
 func (p Product) Certifications() []productCert {
 	raw := strings.TrimSpace(p.CertificationsJSON)
@@ -1116,9 +947,6 @@ func (p Product) Certifications() []productCert {
 	}
 	return out
 }
-
-// IsSynced 报告商品已同步到阿里（列表同步徽标的展示语义；一期只读，二期由同步任务写入）。
-func (p Product) IsSynced() bool { return p.SyncStatus == ProductSyncSynced }
 
 // productVideo 是详情页能直接播的视频：Kind=file 交给原生 <video>，
 // Kind=embed 交给第三方播放器 iframe。前端据此决定用哪种播放器。

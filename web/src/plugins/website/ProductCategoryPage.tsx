@@ -123,6 +123,10 @@ function CategoryFormDialog({
   const [slug, setSlug] = useState(editing?.slug ?? '')
   const [parentId, setParentId] = useState(defaultParentId)
   const [sort, setSort] = useState(editing ? String(editing.sort) : '0')
+  // 行内校验提示：提交未过时点亮，行内小字按当前值定位（toast 仍是快捷反馈）
+  const [showErrors, setShowErrors] = useState(false)
+  const titleMissing = !title.trim()
+  const slugBad = slug.trim() !== '' && !slugReg.test(slug.trim())
 
   /** 上级候选：自己与自己的后代不能当上级（会成环），层级到顶的也不能再挂子级。 */
   const parentOptions = useMemo(() => {
@@ -150,15 +154,18 @@ function CategoryFormDialog({
 
   const submit = async () => {
     if (!title.trim()) {
+      setShowErrors(true)
       toast.error(t('plugin_website.productCategory.required'))
       return
     }
     // 手填了 slug 才做本地格式校验；留空 = 服务端按标题走 pkg/slug 行业标准生成
     const finalSlug = slug.trim()
     if (finalSlug && !slugReg.test(finalSlug)) {
+      setShowErrors(true)
       toast.error(t('plugin_website.productCategory.slugInvalid'))
       return
     }
+    setShowErrors(false)
     try {
       await save.mutateAsync({
         id: editing?.id,
@@ -180,21 +187,32 @@ function CategoryFormDialog({
       footer={
         <>
           <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
-          <Button onClick={() => void submit()}>{t('common.save')}</Button>
+          <Button disabled={save.isPending} onClick={() => void submit()}>
+            {save.isPending ? t('common.loading') : t('common.save')}
+          </Button>
         </>
       }
     >
       <SharedRow label={t('plugin_website.productCategory.name')} required>
-        <Input value={title} maxLength={100} onChange={(e) => setTitle(e.target.value)} placeholder="Water Pumps" />
+        <Input
+          value={title}
+          maxLength={100}
+          aria-invalid={showErrors && titleMissing}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Water Pumps"
+        />
+        {showErrors && titleMissing ? <span className="text-xs text-destructive">{t('plugin_website.productCategory.required')}</span> : null}
       </SharedRow>
       <SharedRow label={t('plugin_website.fields.slug')}>
         <Input
           value={slug}
           maxLength={64}
+          aria-invalid={showErrors && slugBad}
           onChange={(e) => setSlug(e.target.value)}
           placeholder={t('plugin_website.fields.slugAuto')}
           className="font-mono"
         />
+        {showErrors && slugBad ? <span className="text-xs text-destructive">{t('plugin_website.productCategory.slugInvalid')}</span> : null}
         <span className="text-xs text-muted-foreground">/products?category={slug || '…'}</span>
       </SharedRow>
       <SharedRow label={t('plugin_website.productCategory.parent')}>
@@ -347,7 +365,7 @@ export default function ProductCategoryPage() {
         batchActions={(ids) => (
           <Can perm="website:product-category">
             <Button variant="destructive" size="sm" onClick={() => void onDeleteBatch(ids)}>
-              <Trash2 className="me-2 size-4" aria-hidden="true" />
+              <Trash2 aria-hidden="true" />
               {t('common.delete')}
             </Button>
           </Can>

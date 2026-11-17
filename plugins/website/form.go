@@ -216,7 +216,7 @@ type ProductForm struct {
 	SeoDesc     string `json:"seoDesc"`
 	SeoKeywords string `json:"seoKeywords"`
 	Content     string `json:"content"`
-	// Status 只接受 draft / online（上架）；offline 及审核态由列表动作与同步回写维护。
+	// Status 只接受 draft / online（上架）；offline 由列表动作维护。
 	Status string `json:"status"`
 	// CoverURL 是主图；Images 是图集 URL 列表（保存时整体替换，上限 10 张）。
 	CoverURL string   `json:"coverUrl"`
@@ -234,9 +234,6 @@ type ProductForm struct {
 	PaymentTerms string `json:"paymentTerms"`
 	// FreightAmount 是运费金额（与价格同币种）；负数按 0 处理，0 = 详情页标「待定」。
 	FreightAmount float64 `json:"freightAmount"`
-	// AliTrade 是发品用的交易与规格数据（阶梯价/包装/供货/物流属性/样品/定制/分组/SKU）；
-	// nil = 本次不改（老客户端不带这个字段），非 nil 时整体替换（结构与校验见 ali_trade.go）。
-	AliTrade *AliTrade `json:"aliTrade"`
 	// Specs 是动态属性键值对（上限 50 条）；CategoryIDs 是所属类目的完整列表，保存时整体替换。
 	Specs       []SpecItem `json:"specs"`
 	CategoryIDs []idgen.ID `json:"categoryIds"`
@@ -269,25 +266,4 @@ type ProductCategoryOrderItem struct {
 // ProductCategoryOrderForm 是一次批量排序请求。
 type ProductCategoryOrderForm struct {
 	Items []ProductCategoryOrderItem `json:"items"`
-}
-
-// AliConfigForm 是阿里开放平台凭据表单：Secret/SessionKey 三态
-// （空或掩码 = 保持旧值，其余 = 重新加密），参照 realname/aigateway 的凭据模式。
-type AliConfigForm struct {
-	AppKey     string `json:"appKey"`
-	AppSecret  string `json:"appSecret"`
-	SessionKey string `json:"sessionKey"`
-	// ApiGateway 是 TOP 网关地址；留空 = 沿用默认（正式环境）。
-	ApiGateway string `json:"apiGateway"`
-}
-
-// ProductSyncForm 是同步到阿里的入参：Market 取 inquiry（询盘品，默认）/ wholesale（下单品）。
-type ProductSyncForm struct {
-	IDs    []idgen.ID `json:"ids"`
-	Market string     `json:"market"`
-}
-
-// AliCategoryBindForm 是商品绑定阿里类目的入参（同步对话框选完叶子类目回填）。
-type AliCategoryBindForm struct {
-	CategoryID string `json:"categoryId"`
 }

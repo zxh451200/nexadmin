@@ -303,20 +303,14 @@ export interface ProductSpec {
   value: string
 }
 
-/**
- * 产品状态机，对齐阿里国际站：本地一期只用 draft / online / offline；
- * pending / rejected 留给二期同步——商品提交到阿里审核后回写「审核中 / 审核不通过」。
- */
-export type ProductStatus = 'draft' | 'online' | 'offline' | 'pending' | 'rejected'
-
-/** 同步状态：none=从未同步，pending=已提交待确认，synced=已发布到阿里，failed=上次失败。 */
-export type ProductSyncStatus = 'none' | 'pending' | 'synced' | 'failed'
+/** 产品状态机：draft（草稿）/ online（上架，公开站唯一可见）/ offline（下架）。 */
+export type ProductStatus = 'draft' | 'online' | 'offline'
 
 export interface SiteProduct {
   id: string
   slug: string
   title: string
-  /** 搜索关键词（对标阿里的 1-3 个关键词，空格分隔） */
+  /** 搜索关键词（最多 3 个，空格分隔） */
   keywords: string
   summary: string
   /** 独立 meta 标题；空 = 用「标题 - 站点名」 */
@@ -343,69 +337,21 @@ export interface SiteProduct {
   /** 运费金额（与价格同币种）；0 = 未报价 */
   freightAmount: number
   port: string
-  /** 付款方式（如 "T/T, L/C"），详情页「交易信息」块展示 */
+  /** 付款方式（如 "T/T, L/C"），详情页「运输」块展示 */
   paymentTerms: string
   /** 动态属性键值对的 JSON 文本 */
   specsJson: string
-  /** 阿里交易与规格（JSON 文本；表单编辑时解析成 AliTrade） */
-  aliTradeJson?: string
   /** 认证资质（JSON 数组文本，如 ["CE","UL 1973"]）：详情页渲染成认证徽章排 */
   certificationsJson?: string
   status: ProductStatus
-  /** 阿里同步预留（一期只读展示） */
-  alibabaProductId: string
-  syncStatus: ProductSyncStatus
-  syncedAt?: string | null
   /** 所属类目；保存时按完整列表整体替换 */
   categories?: ProductCategoryNode[]
-  /** 绑定的阿里叶子类目 ID（同步对话框选完回填） */
-  alibabaCategoryId: string
-  /** 最近一次同步失败原因（成功同步后清空） */
-  syncError: string
   i18nJson: string
   /** 非默认语言发布态；空 = 所有语言沿用 status（online 即发布） */
   publishedJson: string
   views: number
   author: string
   updatedAt: string
-}
-
-
-/** 阿里发品用的交易与规格（后端 ali_trade.go 同构）；只在同步/预览/阿里模板导出时使用。 */
-export interface AliLadder {
-  qty: number
-  price: number
-}
-
-export interface AliTrade {
-  priceType?: '' | 'fob' | 'ladder' | 'sku'
-  ladder: AliLadder[]
-  package: { length: number; width: number; height: number; weight: number; shippingTemplate: string }
-  supply: { number: number; quantityUnit: string; timeUnit: string }
-  /** 物流属性：阿里 option value，如 battery.battery.oneLessHundredWh */
-  logistics: string[]
-  sample: { enabled: boolean; maxQty: number; price: number; description: string }
-  custom: { type: string; quantity: number }[]
-  /** 商品分组路径 ID（一/二/三级） */
-  group: string[]
-  skuProps: { name: string; values: string[] }[]
-  skus: { props: Record<string, string>; price: number; stock: number; code: string }[]
-}
-
-/** 表单里的默认值：空交易信息。 */
-export function emptyAliTrade(): AliTrade {
-  return {
-    priceType: '',
-    ladder: [],
-    package: { length: 0, width: 0, height: 0, weight: 0, shippingTemplate: '' },
-    supply: { number: 0, quantityUnit: '', timeUnit: '' },
-    logistics: [],
-    sample: { enabled: false, maxQty: 0, price: 0, description: '' },
-    custom: [],
-    group: [],
-    skuProps: [],
-    skus: [],
-  }
 }
 
 export interface ProductForm {
@@ -432,8 +378,6 @@ export interface ProductForm {
   port: string
   paymentTerms: string
   specs: ProductSpec[]
-  /** 阿里交易与规格（阶梯价/SKU/包装/供货/物流属性/样品/定制/分组）；null = 本次不改 */
-  aliTrade?: AliTrade | null
   /** 认证资质名称清单；undefined = 本次不改（保留原值），[] = 清空 */
   certifications?: string[]
   /** 所属类目的完整 ID 列表；空 = 清空类目 */
@@ -445,7 +389,7 @@ export interface ProductForm {
 }
 
 /**
- * 产品类目：对标阿里的「商品分组」，但支持最多 3 级树形层级。
+ * 产品类目：组织维度，支持最多 3 级树形层级。
  * 后端给平铺清单，前端自己组树（与导航同款）。
  */
 export interface ProductCategoryNode {
@@ -470,46 +414,6 @@ export interface ProductCategoryOrderItem {
   id: string
   parentId: string
   sort: number
-}
-
-// ---- 阿里国际站同步（二期） ----
-
-/** 阿里发品类型：询盘品（信息要求低，默认）/ 下单品（需要价格/SKU/物流）。 */
-export type AliMarket = 'inquiry' | 'wholesale'
-
-/** 阿里开放平台凭据视图：Secret/Session 只回「已配置」，明文永不出接口。 */
-export interface AliConfig {
-  appKey: string
-  hasSecret: boolean
-  hasSession: boolean
-  apiGateway: string
-}
-
-export interface AliConfigForm {
-  appKey: string
-  /** 空或 "********" = 保持旧值 */
-  appSecret: string
-  /** 空或 "********" = 保持旧值 */
-  sessionKey: string
-  /** TOP 网关；留空 = 沿用默认（正式环境） */
-  apiGateway: string
-}
-
-/** 阿里类目树节点（后端代理 alibaba.icbu.category.get.new 并缓存）。 */
-export interface AliCategoryNode {
-  id: string
-  name: string
-  cnName: string
-  leaf: boolean
-}
-
-/** 批量同步的 job 进度视图（后端代理 job.Get）。 */
-export interface AliSyncStatus {
-  jobId: string
-  status: 'queued' | 'running' | 'success' | 'failed' | 'canceled'
-  progress: number
-  message: string
-  error: string
 }
 
 /** 特性卡片内置图标：名称 + SVG 内部标记。路径以后端 iconPaths 为准，前端不另存一份。 */
@@ -1150,86 +1054,10 @@ export function createProductExportJob(
 }
 
 /**
- * 阿里批量模板列名映射：导入中心的「阿里模板导入」与「导出阿里模板」共用这一张表。
- * 真实模板到位后改表里的行即可（列名、别名、本站字段、顺序），不用发版。
- */
-export interface AliColumn {
-  id: string
-  aliHeader: string
-  ourKey: string
-  aliases: string
-  required: boolean
-  sort: number
-  note: string
-}
-
-export type AliColumnInput = Omit<AliColumn, 'id'>
-
-export function useAliColumns() {
-  return useQuery({
-    queryKey: [...KEY, 'ali-columns'],
-    queryFn: () => api.get<AliColumn[]>(`${BASE}/ali-columns`),
-  })
-}
-
-export function useSaveAliColumn() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (input: AliColumnInput & { id?: string }) =>
-      input.id
-        ? api.put<AliColumn>(`${BASE}/ali-columns/${input.id}`, input)
-        : api.post<AliColumn>(`${BASE}/ali-columns`, input),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: [...KEY, 'ali-columns'] }),
-  })
-}
-
-export function useDeleteAliColumn() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (id: string) => api.del<null>(`${BASE}/ali-columns/${id}`),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: [...KEY, 'ali-columns'] }),
-  })
-}
-
-/** 从阿里刷新已发品商品的审核状态：product.list 拉回状态按 alibaba_product_id 回写 sync_status。 */
-export function useRefreshAliStatus() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: () => api.post<{ scanned: number; updated: number }>(`${BASE}/ali/refresh-status`, undefined, { silent: true }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: [...KEY, 'products'] }),
-  })
-}
-
-/** 从阿里拉取一个商品到本地（按阿里商品 ID；已有则更新，否则新建草稿）。 */
-export function usePullAliProduct() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (body: { aliProductId: string; categoryId?: string }) =>
-      api.post<{ productId: string; title: string; notes: string[] | null }>(`${BASE}/products/pull-ali`, body, { silent: true }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: [...KEY, 'products'] }),
-  })
-}
-
-/** 创建「阿里模板」导出任务：列名与列序按映射表出 xlsx，下载在导出中心 */
-export function createAliTemplateExportJob(
-  query: Pick<ContentQuery, 'keyword' | 'status' | 'categoryIds'> & { ids?: string[] },
-) {
-  return api.post<{ jobId: string }>(`${BASE}/products/export-ali`, {
-    keyword: query.keyword ?? '',
-    status: query.status ?? '',
-    categoryIds: query.categoryIds ?? '',
-    ids: query.ids ?? [],
-  })
-}
-
-/**
  * 产品在导入中心（plugins/imports）的来源标识，与后端 SourceProducts 同源；
  * 文件解析/模板/逐行报错/台账都由导入中心负责，这里只是它的一个前端调用方。
  */
 export const PRODUCT_IMPORT_SOURCE = 'website_products'
-
-/** 「阿里模板导入」在导入中心的来源标识（与后端 SourceProductsAli 同源）。 */
-export const PRODUCT_ALI_IMPORT_SOURCE = 'website_products_ali'
 
 /** 导入中心任务视图（与 plugins/imports/api.ts 的 ImportJob 同形，只取弹窗用到的字段）。 */
 export interface ProductImportJob {
@@ -1373,97 +1201,5 @@ export function useReorderProductCategories() {
     mutationFn: (items: ProductCategoryOrderItem[]) => api.put<null>(`${BASE}/product-categories/reorder`, { items }),
     // 失败时 TreeTable 会回滚乐观数据并 toast，这里只保证最终与库一致
     onSettled: () => void qc.invalidateQueries({ queryKey: [...KEY, 'product-categories'] }),
-  })
-}
-
-/** 阿里开放平台凭据视图（Secret/Session 只有 has 布尔）。 */
-export function useAliConfig() {
-  return useQuery({
-    queryKey: [...KEY, 'ali-config'],
-    queryFn: () => api.get<AliConfig>(`${BASE}/ali-config`),
-  })
-}
-
-/** 保存凭据：Secret/Session 空或掩码 = 保持旧值。 */
-export function useSaveAliConfig() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (data: AliConfigForm) => api.put<AliConfig>(`${BASE}/ali-config`, data),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: [...KEY, 'ali-config'] }),
-  })
-}
-
-/** 连接测试（网关可达 + AppKey/Secret 签名通过）；silent：结果由页面 toast。 */
-export function fetchAliTest(): Promise<void> {
-  return api.post<{ ok: boolean }>(`${BASE}/ali/test`, undefined, { silent: true }).then(() => undefined)
-}
-
-/**
- * 阿里类目子级（parentId "0" = 一级），后端缓存 24h。
- * 类目树是同步对话框按需展开才拉的：不 prefetch、加载态由调用方渲染。
- */
-export function fetchAliCategories(parentId: string): Promise<AliCategoryNode[]> {
-  return api.get<AliCategoryNode[]>(`${BASE}/ali/categories`, { parentId }, { silent: true })
-}
-
-/** 把选好的阿里叶子类目 ID 回填到商品。 */
-export function useBindAliCategory() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: ({ id, categoryId }: { id: string; categoryId: string }) =>
-      api.post<null>(`${BASE}/products/${id}/ali-category`, { categoryId }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: [...KEY, 'products'] }),
-  })
-}
-
-/** 单个商品发到阿里（同步等待）；错误由调用方捕获 toast（后端已把失败原因写回商品行）。 */
-export function useSyncProduct() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: ({ id, market }: { id: string; market: AliMarket }) =>
-      api.post<{ alibabaProductId: string }>(`${BASE}/products/${id}/sync`, { market }, { silent: true }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: [...KEY, 'products'] }),
-  })
-}
-
-/** 预览：按该类目发品规则组装提交内容（不传图、不写阿里）。missing 非空即代表现在提交会被拒。 */
-export interface AliPreview {
-  alibabaProductId: string
-  xml: string
-  missing: string[]
-  notes: string[]
-  updated: boolean
-}
-
-export function usePreviewAliSync() {
-  return useMutation({
-    mutationFn: ({ id, market }: { id: string; market: AliMarket }) =>
-      api.post<AliPreview>(`${BASE}/products/${id}/ali-preview`, { market }, { silent: true }),
-  })
-}
-
-/** 批量同步：提交后台 job，返回 jobId。 */
-export function useSyncProductBatch() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: ({ ids, market }: { ids: string[]; market: AliMarket }) =>
-      api.post<{ jobId: string }>(`${BASE}/products/sync-batch`, { ids, market }, { silent: true }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: [...KEY, 'products'] }),
-  })
-}
-
-/**
- * 批量同步进度轮询：job 未结束时 2s 刷新，结束（success/failed/canceled）后停止。
- * silent：失败由对话框读取 error 展示，不走全局 toast。
- */
-export function useAliSyncStatus(jobId?: string) {
-  return useQuery({
-    queryKey: [...KEY, 'ali-sync-status', jobId],
-    queryFn: () => api.get<AliSyncStatus>(`${BASE}/ali/sync-status`, { jobId }, { silent: true }),
-    enabled: !!jobId,
-    refetchInterval: (query) => {
-      const status = query.state.data?.status
-      return status === 'success' || status === 'failed' || status === 'canceled' ? false : 2000
-    },
   })
 }

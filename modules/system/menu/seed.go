@@ -67,7 +67,7 @@ func buildSeed() []seedItem {
 	crud := []string{"create", "update", "delete"}
 	with := func(extra ...string) []string { return append(append([]string{}, crud...), extra...) }
 
-	b.menu("", "dashboard.menu", "/dashboard", "dashboard/DashboardPage", "dashboard:view", "LayoutDashboard", 10, noCache)
+	b.menu("", "dashboard.menu", "/dashboard", "dashboard/DashboardPage", "dashboard:view", "House", 10, noCache)
 
 	system := b.dir("sysMenu.dir.system", "Settings", "/system", 50)
 	user := b.menu(system, "user.menu", "/system/user", "user/UserPage", "user:list", "Users", 10)

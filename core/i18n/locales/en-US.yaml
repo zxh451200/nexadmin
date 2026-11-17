@@ -176,6 +176,7 @@ kb:
   rate_limited: Too many requests; please retry later
   question_required: Please enter a question to test
   question_too_long: Question is too long (max %s characters)
+  title_required: Please enter the document title
   settings_invalid: Threshold must be within 0~1 and TopK within 1~10
 imports:
   job_not_found: Import job not found
@@ -773,6 +774,8 @@ website:
   friend_link_too_many: "At most %d friend links."
   qr_url_invalid: "Invalid QR code URL: upload an image or enter an https:// address."
   url_invalid: "Invalid URL: enter an https:// address or an on-site path starting with /."
+  theme_not_found: "Theme template not found or not enabled; pick another one"
+  established_year_invalid: "Invalid established year"
   contact_name_required: "Please enter your name."
   contact_email_invalid: "Please enter a valid email address."
   contact_content_short: "The message must be at least 5 characters."
@@ -800,49 +803,6 @@ website:
   product_category_title_required: "A product category needs a name."
   product_category_not_found: "Product category not found."
   product_category_in_use: "This category (including children) still has products; move them to another category before deleting."
-  ali_market_invalid: "Invalid publishing type."
-  ali_gateway_https: "The API gateway URL must start with https://."
-  ali_not_configured: "Alibaba credentials are not configured: fill in the AppKey and AppSecret under \"Open platform credentials\" at the top of the products page."
-  ali_category_invalid: "Invalid Alibaba category id."
-  ali_category_required: "Pick an Alibaba leaf category first."
-  ali_english_required: "Publishing to Alibaba requires the English master copy: fill in the product title under the English tab first."
-  ali_price_required: "Wholesale products need a minimum price."
-  ali_sync_unavailable: "Batch sync is unavailable: the background job service is not ready."
-  ali_required_missing: "The posting rules for this category require these fields first: %s"
-  ali_gateway_rejected: "Alibaba did not accept this submission: %s"
-  ali_schema_unreadable: "Cannot read the posting rules for this category: %s"
-  ali_note_keywords_dropped: "%d keywords given, this category accepts %d; the rest were dropped"
-  ali_note_desc_type_fallback: 'The description type could not be matched to "Standard editing"; fell back to "%s"'
-  ali_note_attr_to_custom: 'Category attribute "%s": value "%s" is not in this category''s options, moved to custom attributes'
-  ali_note_custom_overflow: "Custom attributes exceed the %d allowed for this category; %d not submitted"
-  ali_note_wholesale_price_type: "Wholesale products need a price type (ladder or SKU), but no ladder prices or SKU lines exist locally: sync as an inquiry product, or fill those fields first"
-  ali_note_scprice_unknown: "Could not resolve the inquiry price type (scPrice) option"
-  ali_note_currency_unmatched: "Currency %s is not in this category's FOB currency options, so the FOB price cannot be submitted"
-  ali_note_unit_unmatched: 'Unit of measure "%s" is not in this category''s options; check the allowed units in Alibaba'
-  ali_note_payment_no_predefined: "This category's payment method rule has no predefined-method field, so payment terms were skipped"
-  ali_note_payment_dropped: 'Payment terms "%s" are not predefined options here and the rule has no self-defined field, so they were dropped'
-  ali_note_image_skipped: "Image URL %s is not an absolute URL, skipped"
-  ali_note_image_failed: "Failed to upload image %s to the Alibaba photo bank: %s"
-  ali_price_type_invalid: "Invalid price type: use fob / ladder / sku"
-  ali_product_id_invalid: "The Alibaba product ID is invalid."
-  ali_product_title_missing: "The Alibaba product has no title, cannot pull it back."
-  ali_pull_no_content: "The Alibaba product has no description body (superText is empty)."
-  ali_note_price_type_unresolved: 'Could not map price type "%s" to an option of this category'
-  ali_note_wholesale_no_fob: "Wholesale products have no FOB price: switch the price type to ladder or SKU"
-  ali_note_no_ladder_field: "This category's rules have no ladder price field; ladder prices were not submitted"
-  ali_note_supply_unit_unmatched: 'Supply quantity unit "%s" is not in this category''s options'
-  ali_note_supply_time_unmatched: 'Supply period unit "%s" is not in this category''s options'
-  ali_note_shipping_template_unmatched: 'Shipping template "%s" is not among this category''s templates'
-  ali_note_logistics_unmatched: 'Logistics attribute "%s" has expired or does not belong to this category'
-  ali_note_no_saleprop: "This category's rules have no sale property field; SKUs were not submitted"
-  ali_note_no_sku: "This category's rules have no SKU field; SKUs were not submitted"
-  ali_note_saleprop_unknown: 'Sale property "%s" is not a spec attribute of this category'
-  ali_note_saleprop_value_unmatched: 'Sale property "%s": value "%s" is not among this category''s options'
-  ali_note_sku_unmatched: 'SKU "%s": its property combination does not match this category''s sale properties, skipped'
-  import_ali_title: "Alibaba.com template import"
-  ali_column_header_required: "The Alibaba header is required and must be at most 100 characters."
-  ali_column_key_unknown: "Unknown local field: %s"
-  ali_column_header_exists: "This Alibaba header is already mapped: %s"
   rating_invalid: "The rating must be between 1 and 5."
   import_products_title: "Product import"
   export_center_disabled: "The export center is disabled; async export jobs cannot be submitted."

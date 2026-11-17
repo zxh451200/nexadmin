@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { ChevronDown, CircleAlert, CircleCheck, CloudDownload, CloudUpload, Copy, Download, ExternalLink, Eye, FileUp, Pencil, Plus, RefreshCw, Settings2, Trash2, X } from 'lucide-react'
+import { CircleAlert, CircleCheck, Copy, Download, ExternalLink, Eye, Loader2, Pencil, Plus, Trash2, Upload, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Can } from '@/framework/auth/Can'
+import { ConstantPicker } from '@/framework/components/ConstantPicker'
 import { OptionPicker } from '@/framework/components/OptionPicker'
 import { useAsyncJob } from '@/framework/hooks/use-async-job'
 import { useConfirm } from '@/framework/components/ConfirmDialog'
@@ -26,6 +26,7 @@ import { SwitchRow } from '@/framework/components/SwitchField'
 import { TagsInput } from '@/framework/components/TagsInput'
 import { Lightbox } from '@/framework/upload/Lightbox'
 import { FileDropField } from '@/framework/components/FileDropField'
+import { FormSection } from '@/framework/components/FormLayout'
 import { ImageUrlField } from '@/framework/components/ImageUrlField'
 import { Uploader } from '@/framework/components/Uploader'
 import { VideoUrlField } from '@/framework/components/VideoUrlField'
@@ -39,35 +40,19 @@ import { saveBlob } from '@/framework/components/export/csv'
 import { slugify } from './format'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/framework/ui/collapsible'
 import { Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle } from '@/framework/ui/drawer'
 import { Input } from '@/framework/ui/input'
 import { Label } from '@/framework/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
 import { Tabs, TabsList, TabsTrigger } from '@/framework/ui/tabs'
-import { AliTradeFields, safeParseAliTrade } from './AliTradeFields'
 import { EditorSchemaGate } from './EditorSchemaGate'
 import TranslationStatus from './TranslationStatus'
 import {
-  fetchAliCategories,
-  fetchAliTest,
   fetchProductImportJob,
   fetchProductImportTemplate,
   fetchProductPreview,
   createProductExportJob,
-  createAliTemplateExportJob,
-  PRODUCT_ALI_IMPORT_SOURCE,
   PRODUCT_IMPORT_SOURCE,
-  useAliColumns,
-  useDeleteAliColumn,
-  useSaveAliColumn,
-  useRefreshAliStatus,
-  usePullAliProduct,
-  type AliColumn,
   translateContent,
-  useAliConfig,
-  useAliSyncStatus,
-  useBindAliCategory,
   useCopyProduct,
   useDeleteProduct,
   useDeleteProducts,
@@ -76,17 +61,9 @@ import {
   useProductCategories,
   useProducts,
   useRunProductImport,
-  useSaveAliConfig,
   useSaveProduct,
   useSetProductStatus,
-  useSyncProduct,
-  useSyncProductBatch,
   toContentQuery,
-  type AliCategoryNode,
-  type AliMarket,
-  type AliPreview,
-  type AliTrade,
-  usePreviewAliSync,
   type ContentDraft,
   type ContentQuery,
   type ProductCategoryNode,
@@ -110,25 +87,8 @@ function statusBadge(status: ProductStatus, t: (k: string) => string) {
       return <Badge variant="success">{t('plugin_website.product.statusOnline')}</Badge>
     case 'offline':
       return <Badge variant="warning">{t('plugin_website.product.statusOffline')}</Badge>
-    case 'pending':
-      return <Badge variant="info">{t('plugin_website.product.statusPending')}</Badge>
-    case 'rejected':
-      return <Badge variant="destructive">{t('plugin_website.product.statusRejected')}</Badge>
     default:
       return <Badge variant="outline">{t('plugin_website.product.statusDraft')}</Badge>
-  }
-}
-
-function syncBadge(r: SiteProduct, t: (k: string) => string) {
-  switch (r.syncStatus) {
-    case 'synced':
-      return <Badge variant="success">{t('plugin_website.product.syncSynced')}</Badge>
-    case 'pending':
-      return <Badge variant="info">{t('plugin_website.product.syncPending')}</Badge>
-    case 'failed':
-      return <Badge variant="destructive">{t('plugin_website.product.syncFailed')}</Badge>
-    default:
-      return <span className="text-xs text-muted-foreground">{t('plugin_website.product.syncNone')}</span>
   }
 }
 
@@ -194,7 +154,7 @@ function useCurrencyOptions(): Option[] {
 }
 
 /**
- * 贸易字段选项：value 存的永远是行业通用英文（落库 + 同步阿里 + 官网展示都用它），
+ * 贸易字段选项：value 存的永远是行业通用英文（落库 + 官网展示都用它），
  * 界面文案在译文里给了中文名时显示「value · 中文名」，随界面语言变。
  * 译文缺失或与值相同（英文界面）就只显示英文值，不会出现「T/T · T/T」。
  */
@@ -227,76 +187,7 @@ function useUnitOptions(): Option[] {
 }
 
 /** 枚举字段下拉（可搜）：币种/装运港口/付款方式不再手写。
- * 多选时按「逗号+空格」拼接回原字符串，与老数据的 "T/T, L/C" 存储格式互通；
- * 存量手写值不在列表里时补进选项，编辑老数据不会丢显示。 */
-function ConstantPicker({
-  value,
-  onChange,
-  options,
-  multiple,
-  placeholder,
-  disabled,
-  className,
-  allowCustom,
-}: {
-  value: string
-  onChange: (v: string) => void
-  options: Option[]
-  multiple?: boolean
-  placeholder?: string
-  disabled?: boolean
-  className?: string
-  /** 允许输入列表外的值（单位这类开放词表用）：搜索框里打什么就能存什么 */
-  allowCustom?: boolean
-}) {
-  const { t } = useTranslation()
-  const [open, setOpen] = useState(false)
-  const [search, setSearch] = useState('')
-  const selected = useMemo(() => value.split(',').map((s) => s.trim()).filter(Boolean), [value])
-  const all = useMemo(() => {
-    const list = [...options]
-    for (const v of selected) {
-      if (!list.some((o) => o.value === v)) list.push({ value: v, label: v })
-    }
-    return list
-  }, [options, selected])
-  const kw = search.trim().toLowerCase()
-  const shown = kw ? all.filter((o) => o.label.toLowerCase().includes(kw) || o.value.toLowerCase().includes(kw)) : all
-  // 允许自定义时，列表里没有的写法在末尾补一行可点的「使用自定义值」，
-  // 点完就把原文存进去（官网详情页对认不出的单位原样显示，不会瞎翻译）。
-  const typed = search.trim()
-  const custom = allowCustom && typed && !all.some((o) => o.value.toLowerCase() === typed.toLowerCase())
-    ? [{ value: typed, label: `${t('plugin_website.product.useCustom')} "${typed}"` }]
-    : []
-  const pick = (v: string) => {
-    if (multiple) {
-      onChange((selected.includes(v) ? selected.filter((x) => x !== v) : [...selected, v]).join(', '))
-    } else {
-      onChange(v)
-      setOpen(false)
-    }
-  }
-  return (
-    <PickerShell
-      open={open}
-      onOpenChange={setOpen}
-      disabled={disabled}
-      title={placeholder ?? t('common.pleaseSelect')}
-      trigger={
-        <PickerTrigger
-          className={className}
-          disabled={disabled}
-          placeholder={placeholder}
-          hasValue={selected.length > 0}
-          allowClear={false}
-          display={selected.map((v) => all.find((o) => o.value === v)?.label ?? v).join(', ')}
-        />
-      }
-    >
-      <OptionList options={custom.length ? [...shown, ...custom] : shown} value={selected} multiple={multiple} onSelect={pick} search={search} onSearchChange={setSearch} />
-    </PickerShell>
-  )
-}
+ * 实现已提为框架共享组件（framework/components/ConstantPicker），站点设置的枚举字段同用一份。 */
 
 /**
  * 产品类目多选（可搜）：与付款方式同款的弹出选择器，收起时只占一行，
@@ -518,7 +409,6 @@ function ProductFormBody({
   const portOptions = usePortOptions()
   const paymentTermOptions = usePaymentTermOptions()
   const [specs, setSpecs] = useState<ProductSpec[]>(() => safeParseSpecs(editing?.specsJson))
-  const [aliTrade, setAliTrade] = useState<AliTrade>(() => safeParseAliTrade(editing?.aliTradeJson))
   const [seoKeywords, setSeoKeywords] = useState(editing?.seoKeywords ?? '')
   const [noindex, setNoindex] = useState(editing?.noindex ?? false)
   const [author, setAuthor] = useState(editing?.author ?? '')
@@ -541,25 +431,6 @@ function ProductFormBody({
       toast.error(t('plugin_website.fields.coverInvalid'))
       return
     }
-    // 英文母本校验（对齐阿里）：配置了英文且英文不是默认语言时，上架前必须先填英文标题——
-    // 二期同步阿里直接取英文内容，没有母本同步就是空发。
-    if (online) {
-      const en = lf.locales.find((l) => l.code.toLowerCase().startsWith('en'))
-      if (en && en.code !== lf.defaultLocale) {
-        let enTitle = ''
-        try {
-          const doc = JSON.parse(lf.serialize().i18nJson || '{}') as Record<string, Record<string, string>>
-          enTitle = (doc[en.code]?.title ?? '').trim()
-        } catch {
-          // serialize 出来的 JSON 不会坏；坏了就当没填，走下面的拦截
-        }
-        if (!enTitle) {
-          toast.error(t('plugin_website.product.englishTitleRequired'))
-          lf.setActive(en.code)
-          return
-        }
-      }
-    }
     try {
       await save.mutateAsync({
         id: editing?.id,
@@ -580,7 +451,6 @@ function ProductFormBody({
           paymentTerms,
           certifications: splitCertifications(certifications),
           specs: specs.filter((sp) => sp.label.trim() || sp.value.trim()),
-          aliTrade,
           categoryIds: catIds,
           noindex,
           author,
@@ -795,16 +665,6 @@ function ProductFormBody({
           <SpecsEditor specs={specs} onChange={setSpecs} disabled={sharedDisabled} />
         </SharedGroup>
         </FormSection>
-        {/* 阿里发品子表单只对要同步阿里的商品有意义：默认折叠收起，不做阿里同步的用户不再被它占掉半屏；
-            编辑已填过阿里交易数据的商品时自动展开，省一次点击 */}
-        <FormSection
-          title={t('plugin_website.ali.trade.section')}
-          collapsible
-          defaultOpen={!!editing?.aliTradeJson}
-        >
-          <p className="text-xs leading-relaxed text-muted-foreground">{t('plugin_website.ali.trade.sectionHint')}</p>
-          <AliTradeFields key={editing?.id ?? 'new'} value={aliTrade} onChange={setAliTrade} disabled={sharedDisabled} />
-        </FormSection>
         <FormSection title={t('plugin_website.product.detailSection')}>
           <LocalizedField fieldKey="content" className="min-h-40" />
           {/* SEO 标题/描述纵向排：两列并排时短输入框配高文本域，高低参差看着乱 */}
@@ -852,46 +712,12 @@ function ProductFormBody({
         </div>
         <DrawerFooter className="shrink-0 flex-row justify-end gap-2 border-t border-border px-6 py-3">
           <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
-          <Button onClick={() => void submit()}>{t('common.save')}</Button>
+          <Button disabled={save.isPending} onClick={() => void submit()}>
+            {save.isPending ? t('common.loading') : t('common.save')}
+          </Button>
         </DrawerFooter>
       </DrawerContent>
     </Drawer>
-  )
-}
-
-/** 表单分区：竖色条标题 + 延伸分隔线，长表单的视觉锚点（替代裸的加粗一行）。
- *  collapsible 时标题行变成折叠钮（尾部箭头），defaultOpen 控制初始展开——给可选的整段子表单用。 */
-function FormSection({
-  title, children, collapsible, defaultOpen = false,
-}: {
-  title: string
-  children: ReactNode
-  collapsible?: boolean
-  defaultOpen?: boolean
-}) {
-  const header = (
-    <>
-      <span className="h-4 w-1 shrink-0 rounded-full bg-primary" aria-hidden="true" />
-      <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-      <span className="h-px min-w-4 flex-1 bg-border" aria-hidden="true" />
-    </>
-  )
-  if (!collapsible) {
-    return (
-      <section className="flex flex-col gap-3">
-        <div className="flex items-center gap-2">{header}</div>
-        {children}
-      </section>
-    )
-  }
-  return (
-    <Collapsible defaultOpen={defaultOpen} className="flex flex-col gap-3">
-      <CollapsibleTrigger className="group flex w-full items-center gap-2 rounded text-start focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
-        {header}
-        <ChevronDown className="size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180" aria-hidden="true" />
-      </CollapsibleTrigger>
-      <CollapsibleContent className="flex flex-col gap-3">{children}</CollapsibleContent>
-    </Collapsible>
   )
 }
 
@@ -917,292 +743,12 @@ function SharedGroup({ labelKey, action, children }: { labelKey: string; action?
 }
 
 /**
- * 凭据字段：标签行左标签、右保存状态（小圆点 + 文字，取代占宽的琥珀徽章），输入框顶格对齐。
- */
-function CredField({ htmlFor, label, ok, children }: { htmlFor: string; label: string; ok: boolean; children: ReactNode }) {
-  const { t } = useTranslation()
-  return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex items-center justify-between gap-2">
-        <Label htmlFor={htmlFor}>{label}</Label>
-        <span
-          className={cn(
-            'inline-flex items-center gap-1.5 text-[11px] font-medium',
-            ok ? 'text-success' : 'text-warning',
-          )}
-        >
-          <span className={cn('size-1.5 rounded-full', ok ? 'bg-success' : 'bg-warning')} aria-hidden="true" />
-          {ok ? t('plugin_website.ali.configured') : t('plugin_website.ali.configMissing')}
-        </span>
-      </div>
-      {children}
-    </div>
-  )
-}
-
-/**
- * 阿里开放平台凭据弹窗：AppKey 明文，Secret/SessionKey 密码框（已配置时占位提示「留空保持不变」）。
- * 保存走独立 PUT（凭据三态在后端处理），连接测试调 category 接口验证网关+签名。
- * 入口是页头的「阿里同步配置」按钮：凭据是一次性配置，不该常驻占掉列表首屏；
- * 按钮上常显「未配置」徽标，缺什么一目了然（原折叠卡的自动展开在此等价为按钮徽标提示）。
- */
-function AliConfigDialog({ onOpenChange }: { onOpenChange: (v: boolean) => void }) {
-  const { t } = useTranslation()
-  const { data: config, isLoading } = useAliConfig()
-  const save = useSaveAliConfig()
-  const [appKey, setAppKey] = useState('')
-  const [appSecret, setAppSecret] = useState('')
-  const [sessionKey, setSessionKey] = useState('')
-  const [apiGateway, setApiGateway] = useState('')
-  const [testState, setTestState] = useState<'idle' | 'testing' | 'ok' | 'fail'>('idle')
-  // 配置到货时回填非敏感字段一次（后续用户编辑不覆盖）。
-  const [loaded, setLoaded] = useState<string>('')
-  if (config && loaded !== config.appKey) {
-    setLoaded(config.appKey)
-    setAppKey(config.appKey)
-    setApiGateway(config.apiGateway)
-  }
-
-  const submit = async () => {
-    try {
-      await save.mutateAsync({
-        appKey,
-        appSecret,
-        sessionKey,
-        apiGateway,
-      })
-      setAppSecret('')
-      setSessionKey('')
-      toast.success(t('common.operateSuccess'))
-      onOpenChange(false)
-    } catch {
-      // 服务端原因由 http 拦截器统一弹出
-    }
-  }
-
-  const test = async () => {
-    setTestState('testing')
-    try {
-      await fetchAliTest()
-      setTestState('ok')
-      toast.success(t('plugin_website.ali.testOk'))
-    } catch {
-      setTestState('fail')
-      toast.error(t('plugin_website.ali.testFail'))
-    }
-  }
-
-  if (isLoading) return null
-  return (
-    <>
-    <ResponsiveDialog
-      open
-      onOpenChange={onOpenChange}
-      title={t('plugin_website.ali.configTitle')}
-      description={t('plugin_website.ali.configDesc')}
-      size="md"
-      footer={
-        <>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
-          <Button onClick={() => void submit()} disabled={save.isPending}>
-            {t('plugin_website.ali.save')}
-          </Button>
-        </>
-      }
-    >
-      <div className="flex flex-col gap-6 text-sm">
-        {/* 分区与商品表单同款（竖色条标题）：三项凭据同构，状态挂在标签行右端，不再各自顶一枚琥珀徽章 */}
-        <FormSection title={t('plugin_website.ali.credentialSection')}>
-          <div className="flex flex-col gap-4">
-            <CredField htmlFor="ali-app-key" label={t('plugin_website.ali.appKey')} ok={!!config?.appKey}>
-              <Input
-                id="ali-app-key"
-                value={appKey}
-                onChange={(e) => setAppKey(e.target.value)}
-                // 这个弹窗形似登录表单（多个输入 + 密码框），浏览器会把站内账号密码自动填进来：
-                // 截图里的 AppKey=admin、AppSecret=10 个圆点就是这么来的。Chrome 的自动填充底色是冷蓝，
-                // 两个框因此比同排其它控件亮一档；更糟的是点「保存凭据」会把这串站点密码当成
-                // AppSecret 加密存库。new-password 是 Chrome 唯一遵从而不填充的写法。
-                autoComplete="off"
-                name="ali-app-key"
-              />
-            </CredField>
-            <CredField htmlFor="ali-app-secret" label={t('plugin_website.ali.appSecret')} ok={!!config?.hasSecret}>
-              <Input
-                id="ali-app-secret"
-                type="password"
-                value={appSecret}
-                onChange={(e) => setAppSecret(e.target.value)}
-                placeholder={config?.hasSecret ? t('plugin_website.ali.configuredAlready') : undefined}
-                autoComplete="new-password"
-                name="ali-app-secret"
-              />
-            </CredField>
-            <CredField htmlFor="ali-session-key" label={t('plugin_website.ali.sessionKey')} ok={!!config?.hasSession}>
-              <Input
-                id="ali-session-key"
-                type="password"
-                value={sessionKey}
-                onChange={(e) => setSessionKey(e.target.value)}
-                placeholder={config?.hasSession ? t('plugin_website.ali.configuredAlready') : undefined}
-                autoComplete="new-password"
-                name="ali-session-key"
-              />
-            </CredField>
-            <p className="text-xs leading-relaxed text-muted-foreground">{t('plugin_website.ali.secretHint')}</p>
-          </div>
-        </FormSection>
-        <FormSection title={t('plugin_website.ali.gatewaySection')}>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="ali-api-gateway">{t('plugin_website.ali.apiGateway')}</Label>
-            {/* 测试按钮贴着网关输入（它验的就是网关+签名）；结果占提示行（成功后替换提示，失败时也不会把输入框挤窄） */}
-            <div className="flex items-center gap-2">
-              <Input
-                id="ali-api-gateway"
-                value={apiGateway}
-                onChange={(e) => setApiGateway(e.target.value)}
-                placeholder="https://gw.api.taobao.com/router/rest"
-                className="min-w-0 flex-1 font-mono text-xs"
-                autoComplete="off"
-                name="ali-api-gateway"
-              />
-              <Button
-                variant="outline"
-                onClick={() => void test()}
-                disabled={testState === 'testing'}
-                className="h-10 shrink-0 px-3 md:h-8"
-              >
-                {testState === 'testing' ? t('common.loading') : t('plugin_website.ali.test')}
-              </Button>
-            </div>
-            {testState === 'ok' ? (
-              <p className="flex items-center gap-1.5 text-xs text-success">
-                <CircleCheck className="size-3.5 shrink-0" aria-hidden="true" />
-                {t('plugin_website.ali.testOk')}
-              </p>
-            ) : testState === 'fail' ? (
-              <p className="flex items-center gap-1.5 text-xs text-destructive">
-                <CircleAlert className="size-3.5 shrink-0" aria-hidden="true" />
-                {t('plugin_website.ali.testFail')}
-              </p>
-            ) : (
-              <p className="text-xs leading-relaxed text-muted-foreground">{t('plugin_website.ali.gatewayHint')}</p>
-            )}
-          </div>
-        </FormSection>
-        <FormSection title={t('plugin_website.ali.columnSection')}>
-          <AliColumnSection />
-        </FormSection>
-      </div>
-    </ResponsiveDialog>
-    </>
-  )
-}
-
-/** 阿里模板映射可选的本站字段（与后端 aliOurKeys 同一集合）。 */
-const ALI_OUR_KEYS = [
-  'alibabaProductId', 'alibabaCategoryId', 'title', 'keywords', 'summary', 'content', 'categories',
-  'status', 'coverUrl', 'images', 'videoUrl', 'priceMin', 'priceMax', 'currency', 'priceUnit',
-  'moq', 'leadTimeDays', 'port', 'paymentTerms', 'specs', 'author',
-]
-
-/**
- * 一行「阿里列名 ↔ 本站字段」映射。改完点保存，导入中心的阿里源与「导出阿里模板」立刻按新表头走
- * ——列名是数据不是代码，拿到真实模板后在这里校对即可，不用发版。
- */
-function AliColumnRow({ col }: { col: AliColumn }) {
-  const { t } = useTranslation()
-  const save = useSaveAliColumn()
-  const del = useDeleteAliColumn()
-  const [form, setForm] = useState<AliColumn>(col)
-  useEffect(() => setForm(col), [col])
-  const dirty = JSON.stringify(form) !== JSON.stringify(col)
-  const patch = (part: Partial<AliColumn>) => setForm((f) => ({ ...f, ...part }))
-  return (
-    <div className="flex flex-col gap-2 rounded-md border border-border p-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <Input
-          className="min-w-32 flex-1"
-          value={form.aliHeader}
-          onChange={(e) => patch({ aliHeader: e.target.value })}
-          placeholder={t('plugin_website.ali.column.header')}
-          aria-label={t('plugin_website.ali.column.header')}
-        />
-        <Select value={form.ourKey} onValueChange={(v) => patch({ ourKey: v })}>
-          <SelectTrigger className="w-40 shrink-0" aria-label={t('plugin_website.ali.column.ourKey')}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {ALI_OUR_KEYS.map((k) => (
-              <SelectItem key={k} value={k}>{k}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Input
-          className="w-20 shrink-0"
-          type="number"
-          value={form.sort}
-          onChange={(e) => patch({ sort: Number(e.target.value) || 0 })}
-          aria-label={t('plugin_website.ali.column.sort')}
-        />
-        <Button type="button" size="sm" variant="outline" disabled={!dirty || save.isPending} onClick={() => void save.mutateAsync(form)}>
-          {t('common.save')}
-        </Button>
-        <Button type="button" size="sm" variant="ghost" disabled={del.isPending} onClick={() => void del.mutateAsync(col.id)}>
-          {t('common.delete')}
-        </Button>
-      </div>
-      <Input
-        value={form.aliases}
-        onChange={(e) => patch({ aliases: e.target.value })}
-        placeholder={t('plugin_website.ali.column.aliases')}
-        aria-label={t('plugin_website.ali.column.aliases')}
-        className="font-mono text-xs"
-      />
-    </div>
-  )
-}
-
-/** 阿里批量模板的列名映射清单：新增行按 Sort 追加到末尾。 */
-function AliColumnSection() {
-  const { t } = useTranslation()
-  const { data: cols } = useAliColumns()
-  const save = useSaveAliColumn()
-  const rows = cols ?? []
-  const add = () =>
-    void save.mutateAsync({
-      aliHeader: '',
-      ourKey: 'specs',
-      aliases: '',
-      required: false,
-      sort: (rows[rows.length - 1]?.sort ?? 0) + 10,
-      note: '',
-    })
-  return (
-    <div className="flex flex-col gap-2">
-      <p className="text-xs leading-relaxed text-muted-foreground">{t('plugin_website.ali.columnHint')}</p>
-      <div className="flex max-h-80 flex-col gap-2 overflow-y-auto pe-1">
-        {rows.map((c) => (
-          <AliColumnRow key={c.id} col={c} />
-        ))}
-      </div>
-      <Button type="button" variant="outline" size="sm" className="self-start" disabled={save.isPending} onClick={add}>
-        {t('plugin_website.ali.columnAdd')}
-      </Button>
-    </div>
-  )
-}
-
-
-/**
  * 产品导入弹窗（页内完成，不跳导入中心）：模板下载、文件上传、进度与逐行失败清单。
  * 执行走通用导入中心接口（source=website_products）：行数少同步完成，多时后台跑、这里轮询。
  */
 function ProductImportDialog({ onOpenChange }: { onOpenChange: (v: boolean) => void }) {
   const { t } = useTranslation()
   const run = useRunProductImport()
-  // 模板来源：本站模板（自家列名）或阿里批量模板（列名按「阿里列名映射」识别，属性列自动落动态属性）
-  const [source, setSource] = useState<string>(PRODUCT_IMPORT_SOURCE)
   const [file, setFile] = useState<File | null>(null)
   const [job, setJob] = useState<ProductImportJob | null>(null)
   const running = job?.status === 'pending' || job?.status === 'running'
@@ -1219,17 +765,17 @@ function ProductImportDialog({ onOpenChange }: { onOpenChange: (v: boolean) => v
 
   const downloadTemplate = async () => {
     try {
-      const blob = await fetchProductImportTemplate(source)
+      const blob = await fetchProductImportTemplate(PRODUCT_IMPORT_SOURCE)
       saveBlob(`${t('plugin_website.product.import.templateFilename')}.csv`, blob)
-    } catch (e) {
-      toast.error(e instanceof Error && e.message ? e.message : t('common.operateFailed'))
+    } catch {
+      // 服务端原因由 http 拦截器统一弹出
     }
   }
 
   const start = async () => {
     if (!file) return
     try {
-      setJob(await run.mutateAsync({ file, source }))
+      setJob(await run.mutateAsync({ file, source: PRODUCT_IMPORT_SOURCE }))
     } catch {
       // 服务端原因（文件不合法、无导入权限等）由 http 拦截器统一弹出
     }
@@ -1252,28 +798,6 @@ function ProductImportDialog({ onOpenChange }: { onOpenChange: (v: boolean) => v
       }
     >
       <div className="flex flex-col gap-5">
-        <div className="flex flex-col gap-2">
-          <Label>{t('plugin_website.product.import.source')}</Label>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant={source === PRODUCT_IMPORT_SOURCE ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => { setSource(PRODUCT_IMPORT_SOURCE); setJob(null) }}
-            >
-              {t('plugin_website.product.import.sourceOwn')}
-            </Button>
-            <Button
-              type="button"
-              variant={source === PRODUCT_ALI_IMPORT_SOURCE ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => { setSource(PRODUCT_ALI_IMPORT_SOURCE); setJob(null) }}
-            >
-              {t('plugin_website.product.import.sourceAli')}
-            </Button>
-          </div>
-          <p className="text-xs leading-relaxed text-muted-foreground">{t('plugin_website.product.import.sourceHint')}</p>
-        </div>
         <div className="flex flex-col gap-1.5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <Label htmlFor="product-import-file">{t('plugin_website.product.import.file')}</Label>
@@ -1297,7 +821,7 @@ function ProductImportDialog({ onOpenChange }: { onOpenChange: (v: boolean) => v
           <div className="flex flex-col gap-2.5 rounded-lg border border-border bg-muted/50 p-3" role="status">
             <p className="flex items-center gap-2 text-sm font-medium text-foreground">
               {running ? (
-                <span className="size-4 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />
+                <Loader2 className="size-4 shrink-0 animate-spin" aria-hidden="true" />
               ) : (job.errors?.length ?? 0) > 0 || job.status === 'failed' ? (
                 <CircleAlert className="size-4 shrink-0 text-warning" aria-hidden="true" />
               ) : (
@@ -1318,300 +842,6 @@ function ProductImportDialog({ onOpenChange }: { onOpenChange: (v: boolean) => v
             ) : null}
           </div>
         ) : null}
-      </div>
-    </ResponsiveDialog>
-  )
-}
-
-/** 类目浏览状态：面包屑路径（push 进入子级，pop 返回）。 */
-interface CatPathEntry {
-  id: string
-  label: string
-}
-
-/**
- * 阿里类目树选择器：按需展开拉子级，叶子才可选。
- * current 列表用 useQuery 缓存（key=父 ID），切语言/重开弹窗不重复拉。
- */
-function AliCategoryPicker({
-  selected, onSelect, path, onPathChange,
-}: {
-  selected: AliCategoryNode | null
-  onSelect: (node: AliCategoryNode | null) => void
-  path: CatPathEntry[]
-  onPathChange: (path: CatPathEntry[]) => void
-}) {
-  const { t } = useTranslation()
-  const parent = path.length ? path[path.length - 1].id : '0'
-  const { data: nodes = [], isLoading } = useQuery({
-    queryKey: ['plugin_website', 'ali-categories', parent],
-    queryFn: () => fetchAliCategories(parent),
-  })
-  const enter = (node: AliCategoryNode) => {
-    onPathChange([...path, { id: node.id, label: node.cnName || node.name }])
-    onSelect(null)
-  }
-  const rootLabel = t('plugin_website.ali.categoryRoot')
-  return (
-    <div className="rounded-md border border-border">
-      <div className="flex flex-wrap items-center gap-1 border-b border-border px-2 py-1.5 text-xs text-muted-foreground">
-        <button type="button" className="hover:text-foreground" onClick={() => onPathChange([])}>
-          {rootLabel}
-        </button>
-        {path.map((p, i) => (
-          <span key={p.id} className="inline-flex items-center gap-1">
-            <span aria-hidden="true">/</span>
-            {i === path.length - 1 ? (
-              <span className="text-foreground">{p.label}</span>
-            ) : (
-              <button type="button" className="hover:text-foreground" onClick={() => onPathChange(path.slice(0, i + 1))}>
-                {p.label}
-              </button>
-            )}
-          </span>
-        ))}
-      </div>
-      <div className="max-h-56 overflow-y-auto">
-        {isLoading ? <p className="px-2 py-3 text-xs text-muted-foreground">{t('common.loading')}</p> : null}
-        {!isLoading && !nodes.length ? <p className="px-2 py-3 text-xs text-muted-foreground">{t('plugin_website.ali.categoryEmpty')}</p> : null}
-        {nodes.map((n) => (
-          <button
-            key={n.id}
-            type="button"
-            className={cn(
-              'flex min-h-9 w-full items-center gap-2 px-2 text-start text-sm hover:bg-accent/60',
-              selected?.id === n.id && 'bg-accent/60',
-            )}
-            onClick={() => (n.leaf ? onSelect(n) : enter(n))}
-          >
-            <span className="min-w-0 flex-1 truncate">{n.cnName || n.name}</span>
-            {n.leaf ? (
-              <Badge variant="success">{t('plugin_website.ali.categoryLeaf')}</Badge>
-            ) : (
-              <span className="text-xs text-muted-foreground" aria-hidden="true">›</span>
-            )}
-          </button>
-        ))}
-      </div>
-      <p className="border-t border-border px-2 py-1.5 text-xs text-muted-foreground">{t('plugin_website.ali.categoryLeafHint')}</p>
-    </div>
-  )
-}
-
-/** 同步对话框目标：单个商品或一批。 */
-export interface AliSyncTarget {
-  mode: 'single' | 'batch'
-  product?: SiteProduct
-  ids?: string[]
-}
-
-/** 从阿里拉取：输入阿里商品 ID（可选类目 ID），本地已有则更新、没有则新建草稿。 */
-function AliPullDialog({ onOpenChange }: { onOpenChange: (v: boolean) => void }) {
-  const { t } = useTranslation()
-  const pull = usePullAliProduct()
-  const [aliId, setAliId] = useState('')
-  const [categoryId, setCategoryId] = useState('')
-  const submit = async () => {
-    if (!aliId.trim()) return
-    try {
-      const res = await pull.mutateAsync({ aliProductId: aliId.trim(), categoryId: categoryId.trim() || undefined })
-      toast.success(t('plugin_website.ali.pullOk', { title: res.title }))
-      for (const n of res.notes ?? []) toast.message(n)
-      onOpenChange(false)
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : t('plugin_website.ali.pullFailed'))
-    }
-  }
-  return (
-    <ResponsiveDialog
-      open
-      onOpenChange={onOpenChange}
-      size="md"
-      title={t('plugin_website.ali.pullTitle')}
-      description={t('plugin_website.ali.pullDesc')}
-      footer={
-        <>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
-          <Button onClick={() => void submit()} disabled={!aliId.trim() || pull.isPending}>
-            {pull.isPending ? t('common.loading') : t('plugin_website.ali.pullButton')}
-          </Button>
-        </>
-      }
-    >
-      <div className="flex flex-col gap-3 text-sm">
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="ali-pull-id">{t('plugin_website.ali.pullAliId')}</Label>
-          <Input id="ali-pull-id" value={aliId} onChange={(e) => setAliId(e.target.value)} placeholder="1600999000001" autoComplete="off" />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="ali-pull-cat">{t('plugin_website.ali.pullCategoryId')}</Label>
-          <Input id="ali-pull-cat" value={categoryId} onChange={(e) => setCategoryId(e.target.value)} placeholder="201274203" autoComplete="off" />
-        </div>
-      </div>
-    </ResponsiveDialog>
-  )
-}
-
-/**
- * 同步到阿里对话框：选阿里叶子类目（选中即回填商品）+ 发品类型，确认后执行。
- * 单个同步等待结果（成功带阿里商品 ID）；批量提交 job 后切换到进度视图（轮询 ali/sync-status）。
- */
-function AliSyncDialog({ target, onOpenChange }: { target: AliSyncTarget; onOpenChange: (v: boolean) => void }) {
-  const { t } = useTranslation()
-  const bindCategory = useBindAliCategory()
-  const syncOne = useSyncProduct()
-  const syncBatch = useSyncProductBatch()
-  const preview = usePreviewAliSync()
-  const [previewData, setPreviewData] = useState<AliPreview | null>(null)
-  const [market, setMarket] = useState<AliMarket>('inquiry')
-  const [selected, setSelected] = useState<AliCategoryNode | null>(null)
-  const [path, setPath] = useState<CatPathEntry[]>([])
-  const [jobId, setJobId] = useState<string | null>(null)
-  const { data: jobStatus } = useAliSyncStatus(jobId ?? undefined)
-
-  const count = target.mode === 'single' ? 1 : (target.ids?.length ?? 0)
-  const busy = syncOne.isPending || syncBatch.isPending || (!!jobId && (jobStatus?.status === 'queued' || jobStatus?.status === 'running'))
-  const done = !!jobStatus && (jobStatus.status === 'success' || jobStatus.status === 'failed' || jobStatus.status === 'canceled')
-
-  const confirm = async () => {
-    if (!selected) {
-      toast.error(t('plugin_website.ali.categoryRequired'))
-      return
-    }
-    if (target.mode === 'single' && target.product) {
-      try {
-        if (target.product.alibabaCategoryId !== selected.id) {
-          await bindCategory.mutateAsync({ id: target.product.id, categoryId: selected.id })
-        }
-        const res = await syncOne.mutateAsync({ id: target.product.id, market })
-        toast.success(t('plugin_website.ali.syncDone', { id: res.alibabaProductId }))
-        onOpenChange(false)
-      } catch (err) {
-        // 后端已把失败原因写回商品行；这里把报错读出来 toast（silent 请求不走全局拦截器）
-        const msg = err instanceof Error ? err.message : ''
-        toast.error(msg || t('plugin_website.ali.syncFailed'))
-      }
-      return
-    }
-    try {
-      const res = await syncBatch.mutateAsync({ ids: target.ids ?? [], market })
-      if (selected && target.ids?.length) {
-        // 批量也把所选类目回填到每个商品上（后台逐个同步时按它发品）
-        await Promise.all(target.ids.map((id) => bindCategory.mutateAsync({ id, categoryId: selected.id }).catch(() => null)))
-      }
-      toast.success(t('plugin_website.ali.syncSubmitted'))
-      setJobId(res.jobId)
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : ''
-      toast.error(msg || t('plugin_website.ali.syncFailed'))
-    }
-  }
-
-  // 预览：先按所选/已绑定类目取该类目规则，再本地组装提交内容，不写阿里。
-  const runPreview = async () => {
-    if (target.mode !== 'single' || !target.product) return
-    if (!selected && !target.product.alibabaCategoryId) {
-      toast.error(t('plugin_website.ali.categoryRequired'))
-      return
-    }
-    try {
-      if (selected && target.product.alibabaCategoryId !== selected.id) {
-        await bindCategory.mutateAsync({ id: target.product.id, categoryId: selected.id })
-      }
-      setPreviewData(await preview.mutateAsync({ id: target.product.id, market }))
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : ''
-      toast.error(msg || t('plugin_website.ali.previewFailed'))
-    }
-  }
-
-  return (
-    <ResponsiveDialog
-      open
-      onOpenChange={onOpenChange}
-      title={t('plugin_website.ali.syncTitle')}
-      description={target.mode === 'single'
-        ? t('plugin_website.ali.syncOneHint', { name: target.product?.title ?? '' })
-        : t('plugin_website.ali.syncCount', { count })}
-      size="md"
-      footer={
-        <>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
-          {target.mode === 'single' && !jobId ? (
-            <Button variant="outline" onClick={() => void runPreview()} disabled={busy || preview.isPending}>
-              {t('plugin_website.ali.preview')}
-            </Button>
-          ) : null}
-          {jobId && !done ? (
-            <Button disabled>{t('common.loading')}</Button>
-          ) : (
-            <Button onClick={() => void confirm()} disabled={busy}>{t('plugin_website.ali.confirm')}</Button>
-          )}
-        </>
-      }
-    >
-      <div className="flex flex-col gap-3 text-sm">
-        {jobId ? (
-          <div className="flex flex-col gap-1 rounded-md border border-border p-3">
-            <p className="font-medium">{t('plugin_website.ali.progressTitle')}</p>
-            <p className="num text-xs text-muted-foreground">{jobStatus?.message || t('common.loading')}</p>
-            {done && jobStatus?.status === 'failed' ? (
-              <p className="text-xs text-destructive">{jobStatus.error}</p>
-            ) : null}
-            {done ? <p className="text-xs text-muted-foreground">{t('plugin_website.ali.jobDone')}</p> : null}
-          </div>
-        ) : (
-          <>
-            <div>
-              <p className="mb-1">{t('plugin_website.ali.category')}</p>
-              <AliCategoryPicker selected={selected} onSelect={setSelected} path={path} onPathChange={setPath} />
-              {selected ? (
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {t('plugin_website.ali.selectedCategory', { name: selected.cnName || selected.name, id: selected.id })}
-                </p>
-              ) : target.mode === 'single' && target.product?.alibabaCategoryId ? (
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {t('plugin_website.ali.boundCategory', { id: target.product.alibabaCategoryId })}
-                </p>
-              ) : null}
-            </div>
-            <div>
-              <p className="mb-1">{t('plugin_website.ali.market')}</p>
-              <Select value={market} onValueChange={(v) => setMarket(v as AliMarket)}>
-                <SelectTrigger className="w-full" aria-label={t('plugin_website.ali.market')}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="inquiry">{t('plugin_website.ali.marketInquiry')}</SelectItem>
-                  <SelectItem value="wholesale">{t('plugin_website.ali.marketWholesale')}</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="mt-1 text-xs text-muted-foreground">{t('plugin_website.ali.englishHint')}</p>
-            </div>
-            {previewData ? (
-              <div className="flex flex-col gap-2 rounded-md border border-border p-3">
-                <p className="font-medium">{t('plugin_website.ali.previewTitle')}</p>
-                <p className="text-xs text-muted-foreground">
-                  {t(previewData.updated ? 'plugin_website.ali.previewUpdated' : 'plugin_website.ali.previewNew')}
-                </p>
-                {(previewData.missing?.length ?? 0) > 0 ? (
-                  <p className="text-xs text-destructive">{t('plugin_website.ali.previewMissing', { fields: previewData.missing.join('、') })}</p>
-                ) : (
-                  <p className="text-xs text-success">{t('plugin_website.ali.previewOk')}</p>
-                )}
-                {(previewData.notes?.length ?? 0) > 0 ? (
-                  <ul className="list-disc space-y-1 ps-5 text-xs text-muted-foreground">
-                    {previewData.notes.map((n) => (
-                      <li key={n}>{n}</li>
-                    ))}
-                  </ul>
-                ) : null}
-                <p className="text-xs font-medium">{t('plugin_website.ali.previewXml')}</p>
-                <pre className="max-h-48 overflow-auto rounded-md bg-muted p-2 text-[11px] leading-relaxed">{previewData.xml}</pre>
-              </div>
-            ) : null}
-          </>
-        )}
       </div>
     </ResponsiveDialog>
   )
@@ -1715,7 +945,7 @@ export default function ProductPage() {
   const flatCats = useMemo(() => flattenCatTree(buildCatTree(categories)), [categories])
   const [draft, setDraft] = useState<ContentDraft>({})
   const [filters, setFilters] = useState<ContentQuery>({})
-  // 状态页签（对齐阿里：全部/上架/下架/草稿/审核）与关键词筛选分开：页签是快筛，FilterBar 管关键词与类目。
+  // 状态页签（全部/上架/下架/草稿）与关键词筛选分开：页签是快筛，FilterBar 管关键词与类目。
   const [statusTab, setStatusTab] = useState<string>(ALL)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
@@ -1730,12 +960,6 @@ export default function ProductPage() {
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<SiteProduct | null>(null)
   const [focus, setFocus] = useState<{ code: string; nonce: number } | null>(null)
-  // 阿里同步对话框的目标：单个商品或一批；null = 关闭。
-  const [syncTarget, setSyncTarget] = useState<AliSyncTarget | null>(null)
-  // 阿里凭据配置入口在页头：按钮上带「未配置」徽标（页面与弹窗共用同一个 useAliConfig 缓存）。
-  const { data: aliConfig } = useAliConfig()
-  const [aliOpen, setAliOpen] = useState(false)
-  const [pullOpen, setPullOpen] = useState(false)
   // 列表缩略图点开看大图：记整行，弹窗同时用 coverUrl 和标题。
   const [preview, setPreview] = useState<SiteProduct | null>(null)
 
@@ -1796,17 +1020,6 @@ export default function ProductPage() {
     }
   }
 
-  // 从阿里拉一轮发品审核状态回写（审核中 / 通过 / 不通过），「审核」页签靠它出内容
-  const refreshStatus = useRefreshAliStatus()
-  const onRefreshAliStatus = async () => {
-    try {
-      const r = await refreshStatus.mutateAsync()
-      toast.success(t('plugin_website.ali.refreshDone', { scanned: r.scanned, updated: r.updated }))
-    } catch {
-      toast.error(t('plugin_website.ali.refreshFailed'))
-    }
-  }
-
   const [exporting, setExporting] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
   const { start: startExportJob } = useAsyncJob()
@@ -1823,22 +1036,6 @@ export default function ProductPage() {
       // 服务端原因由 http 拦截器统一弹出，这里再补一条「操作失败」就是同一件事说两遍
     } finally {
       setExporting(false)
-    }
-  }
-
-  // 阿里模板导出：同一套筛选/勾选，列名与列序按「阿里列名映射」出，下载在导出中心
-  const [exportingAli, setExportingAli] = useState(false)
-  const onExportAli = async () => {
-    setExportingAli(true)
-    try {
-      const query = selected.length
-        ? { ids: selected }
-        : { keyword: filters.keyword, status: effectiveStatus, categoryIds: filters.categoryIds }
-      await startExportJob(async () => ({ id: (await createAliTemplateExportJob(query)).jobId }))
-    } catch {
-      // 服务端原因由 http 拦截器统一弹出
-    } finally {
-      setExportingAli(false)
     }
   }
 
@@ -1923,16 +1120,6 @@ export default function ProductPage() {
       },
     },
     {
-      key: 'sync',
-      title: t('plugin_website.product.syncColumn'),
-      mobile: 'hidden',
-      render: (r) => (
-        <span title={r.syncError || undefined} className="inline-flex">
-          {syncBadge(r, t)}
-        </span>
-      ),
-    },
-    {
       key: 'i18n',
       title: t('plugin_website.i18n.status'),
       mobile: 'hidden',
@@ -1976,17 +1163,6 @@ export default function ProductPage() {
       <PageHeader
         title={t('plugin_website.product.title')}
         description={t('plugin_website.product.desc')}
-        actions={
-          <Can perm="website:setting">
-            <Button variant="outline" onClick={() => setAliOpen(true)}>
-              <Settings2 aria-hidden="true" />
-              {t('plugin_website.ali.configEntry')}
-              {aliConfig && !(aliConfig.hasSecret && aliConfig.hasSession) ? (
-                <Badge variant="warning">{t('plugin_website.ali.configMissing')}</Badge>
-              ) : null}
-            </Button>
-          </Can>
-        }
       />
       <FilterBar
         onSearch={() => { setFilters(toContentQuery(draft)); setPage(1); setSelected([]) }}
@@ -2052,29 +1228,12 @@ export default function ProductPage() {
               {t('plugin_website.product.create')}
             </Button>
             <Button variant="outline" onClick={() => void onExport()} disabled={exporting}>
-              <Download className="me-2 size-4" aria-hidden="true" />
+              <Download aria-hidden="true" />
               {t('common.export')}
-            </Button>
-            <Button variant="outline" onClick={() => setPullOpen(true)}>
-              <CloudDownload className="me-2 size-4" aria-hidden="true" />
-              {t('plugin_website.ali.pullButton')}
-            </Button>
-            {/* 审核状态不随发品自动到位（阿里有审核期）：按钮主动从阿里拉一轮状态回写 */}
-            <Button
-              variant="outline"
-              onClick={() => void onRefreshAliStatus()}
-              disabled={refreshStatus.isPending}
-            >
-              <RefreshCw className="me-2 size-4" aria-hidden="true" />
-              {refreshStatus.isPending ? t('common.loading') : t('plugin_website.ali.refreshStatus')}
-            </Button>
-            <Button variant="outline" onClick={() => void onExportAli()} disabled={exportingAli}>
-              <Download className="me-2 size-4" aria-hidden="true" />
-              {t('plugin_website.ali.exportTemplate')}
             </Button>
             {/* 导入在页内弹窗完成（模板下载/上传/失败清单）；台账与更多来源在导入中心。 */}
             <Button variant="outline" onClick={() => setImportOpen(true)}>
-              <FileUp className="me-2 size-4" aria-hidden="true" />
+              <Upload aria-hidden="true" />
               {t('plugin_website.product.importEntry')}
             </Button>
           </Can>
@@ -2088,12 +1247,8 @@ export default function ProductPage() {
             <Button variant="outline" size="sm" onClick={() => void applyStatus(ids, 'offline')}>
               {t('plugin_website.product.offlineBatch')}
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setSyncTarget({ mode: 'batch', ids })}>
-              <CloudUpload className="me-2 size-4" aria-hidden="true" />
-              {t('plugin_website.ali.syncBatch')}
-            </Button>
             <Button variant="destructive" size="sm" onClick={() => void onDelete(selectedRows)}>
-              <Trash2 className="me-2 size-4" aria-hidden="true" />
+              <Trash2 aria-hidden="true" />
               {t('common.delete')}
             </Button>
           </Can>
@@ -2109,9 +1264,6 @@ export default function ProductPage() {
             <Button variant="ghost" size="icon" aria-label={t('common.edit')} onClick={() => openAt(row)}>
               <Pencil aria-hidden="true" />
             </Button>
-            <Button variant="ghost" size="icon" aria-label={t('plugin_website.ali.syncAction')} onClick={() => setSyncTarget({ mode: 'single', product: row })}>
-              <CloudUpload aria-hidden="true" />
-            </Button>
             <Button variant="ghost" size="icon" className="text-destructive" aria-label={t('common.delete')} onClick={() => void onDelete([row])}>
               <Trash2 aria-hidden="true" />
             </Button>
@@ -2126,10 +1278,7 @@ export default function ProductPage() {
           initialLocale={focus?.code}
         />
       )}
-      {syncTarget && <AliSyncDialog target={syncTarget} onOpenChange={(v) => !v && setSyncTarget(null)} />}
       {importOpen && <ProductImportDialog onOpenChange={setImportOpen} />}
-      {aliOpen && <AliConfigDialog onOpenChange={setAliOpen} />}
-      {pullOpen && <AliPullDialog onOpenChange={setPullOpen} />}
       <Lightbox
         open={!!preview}
         onOpenChange={(o) => !o && setPreview(null)}

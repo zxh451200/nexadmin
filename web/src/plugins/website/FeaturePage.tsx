@@ -17,13 +17,13 @@ import {
 } from '@/framework/components/i18n'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
+import { SwitchRow } from '@/framework/components/SwitchField'
 import { OptionList } from '@/framework/components/pickers/OptionList'
 import { PickerShell } from '@/framework/components/pickers/PickerShell'
 import { PickerTrigger } from '@/framework/components/pickers/PickerTrigger'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
-import { Switch } from '@/framework/ui/switch'
 import { EditorSchemaGate } from './EditorSchemaGate'
 import TranslationStatus from './TranslationStatus'
 import {
@@ -123,15 +123,19 @@ function FeatureFormBody({ onOpenChange, editing }: { onOpenChange: (v: boolean)
   // 排序留字符串中间态：Number() 直转会让清空/负号输入瞬间跳成 0。
   const [sortText, setSortText] = useState(String(editing?.sort ?? 0))
   const [enabled, setEnabled] = useState(editing?.enabled ?? true)
+  // 必填校验的行内提示状态：提交未过时点亮，下次提交重验（toast 仍是快捷反馈）
+  const [titleMissing, setTitleMissing] = useState(false)
   const resolvedIcon = icon || icons[0]?.name || ''
   const sort = Math.trunc(Number(sortText)) || 0
 
   const submit = async () => {
     const base = lf.baseValues()
     if (!(base.title ?? '').trim()) {
+      setTitleMissing(true)
       toast.error(t('plugin_website.feature.required'))
       return
     }
+    setTitleMissing(false)
     try {
       await save.mutateAsync({
         id: editing?.id,
@@ -157,6 +161,7 @@ function FeatureFormBody({ onOpenChange, editing }: { onOpenChange: (v: boolean)
       open
       onOpenChange={onOpenChange}
       title={editing ? t('plugin_website.feature.edit') : t('plugin_website.feature.create')}
+      side="right"
       className="space-y-4"
       footer={
         <>
@@ -171,6 +176,7 @@ function FeatureFormBody({ onOpenChange, editing }: { onOpenChange: (v: boolean)
       </div>
       <div className="flex flex-col gap-3">
         <LocalizedField fieldKey="title" required />
+        {titleMissing ? <p className="text-xs text-destructive">{t('plugin_website.feature.required')}</p> : null}
         <LocalizedField fieldKey="description" />
         <SharedFieldShell labelKey="plugin_website.fields.featureIcon">
           <FeatureIconSelect
@@ -191,9 +197,12 @@ function FeatureFormBody({ onOpenChange, editing }: { onOpenChange: (v: boolean)
             onChange={(e) => setSortText(e.target.value)}
           />
         </SharedFieldShell>
-        <SharedFieldShell labelKey="plugin_website.fields.enabled" className="flex-row items-center justify-between">
-          <Switch checked={enabled} disabled={sharedDisabled} onCheckedChange={setEnabled} />
-        </SharedFieldShell>
+        <SwitchRow
+          label={t('plugin_website.fields.enabled')}
+          checked={enabled}
+          disabled={sharedDisabled}
+          onCheckedChange={setEnabled}
+        />
         <LocaleFormActions />
       </div>
     </ResponsiveDialog>
@@ -294,7 +303,7 @@ export default function FeaturePage() {
         batchActions={(ids) => (
           <Can perm="website:feature">
             <Button variant="destructive" size="sm" onClick={() => void onDelete(features.filter((f) => ids.includes(f.id)))}>
-              <Trash2 className="me-2 size-4" aria-hidden="true" />
+              <Trash2 aria-hidden="true" />
               {t('common.delete')}
             </Button>
           </Can>

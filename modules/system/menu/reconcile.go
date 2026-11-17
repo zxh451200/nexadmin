@@ -29,6 +29,8 @@ import (
 //     消息中心（隐藏行）提到顶级；组清空后目录连同授权一起删（同 2/6 的空目录清理模式）。
 //  12. 2026-11 归类微调：客户数据（crm）从顶级单项归入 dir:/biz，AI 网关从顶级单项归入 dir:/system；
 //     知识库与报表中心在 dir:/biz 内同占 sort 70，知识库贴到 80。
+//  13. 2026-11 图标去重：工作台的 LayoutDashboard 与应用中心的 LayoutGrid 在收起图标栏里都是 2×2 格子，
+//     相邻两枚肉眼难分，出厂图标仍为 LayoutDashboard 的工作台收敛为 House；管理员改过图标的行不动。
 //
 // 播种只补不改（core/seed 按 code 判断，已存在的一律不动），所以老库必须在这里收敛一次。
 // 条件只匹配「坏形状」本身（顶级 / 挂在旧目录下），管理员自己挪过位置的菜单不会被拽回来；
@@ -392,6 +394,15 @@ func reconcileMenuShape(db *gorm.DB) (checked, fixed int, err error) {
 				fixed += int(res.RowsAffected)
 			}
 		}
+
+		// 工作台图标去重（见注释 13）：只认出厂值 LayoutDashboard，管理员改过图标的不拽。
+		checked++
+		res := tx.Exec(`UPDATE sys_menu SET icon = ? WHERE code = ? AND type = 'menu' AND icon = ?`,
+			"House", "dashboard:view", "LayoutDashboard")
+		if res.Error != nil {
+			return res.Error
+		}
+		fixed += int(res.RowsAffected)
 		return nil
 	})
 	if err != nil {
