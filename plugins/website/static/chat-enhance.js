@@ -82,6 +82,18 @@
     '.chat-compose textarea{resize:vertical;max-height:220px}',
     '.chat-card-pop{position:absolute;z-index:22;inset-inline-start:8px;inset-block-end:96px;box-sizing:border-box;width:min(324px,calc(100% - 16px));padding:16px 16px 14px;border:1px solid rgba(128,128,128,.28);border-radius:8px;background:Canvas;color:CanvasText;box-shadow:0 16px 38px rgba(0,0,0,.22);font-size:12px}',
     '.chat-card-pop[hidden]{display:none}',
+    // 展开面板（760px）里的地址卡放大一档：380px 收起面板装不下大表单，
+    // 打开卡片时 JS 会先把面板切到展开态，这里给足字号和控件尺寸的对齐增量。
+    '.chat.is-expanded .chat-card-pop{width:min(480px,calc(100% - 32px));inset-inline-start:16px;padding:20px 22px 16px;font-size:13px}',
+    '.chat.is-expanded .chat-card-pop h3{font-size:15px}',
+    '.chat.is-expanded .chat-card-hint{margin-bottom:18px;font-size:12px}',
+    '.chat.is-expanded .chat-card-fields{gap:14px}',
+    '.chat.is-expanded .chat-card-fields label{gap:6px;font-size:12.5px}',
+    '.chat.is-expanded .chat-card-fields input,.chat.is-expanded .chat-card-trigger,.chat.is-expanded .chat-phone-wrap{height:38px;font-size:13.5px}',
+    '.chat.is-expanded .chat-card-actions button{height:40px;font-size:13.5px}',
+    '.chat.is-expanded .chat-card-search{height:32px;font-size:12.5px}',
+    '.chat.is-expanded .chat-card-options button{font-size:12.5px;line-height:32px}',
+    '.chat.is-expanded .chat-phone-dial{font-size:13px}',
     '.chat-card-pop h3{margin:0 0 4px;font-size:13.5px;font-weight:600}',
     '.chat-card-hint{margin:0 0 16px;font-size:11px;line-height:1.5;opacity:.66}',
     '.chat-card-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px 10px}',
@@ -657,6 +669,8 @@
     cardPop.setAttribute('data-chat-card-pop', '');
     cardPop.hidden = true;
     if (panel) panel.appendChild(cardPop);
+    // 打开卡片时面板是否本来就已展开：false 说明是卡片自己展开的，关卡要退回去
+    var cardWasExpanded = false;
     var activeKind = null;
     // 地址卡片的下拉状态（国家对象、区号）要跨 openCard/submitCard 两个函数使用
     var addrState = null;
@@ -839,13 +853,23 @@
     function saveCard(kind, vals) {
       try { localStorage.setItem('nexchat.card.' + kind, JSON.stringify(vals)); } catch (e) { /* 隐私模式忽略 */ }
     }
-    function closeCard() { cardPop.hidden = true; activeKind = null; }
+    function closeCard() {
+      cardPop.hidden = true;
+      activeKind = null;
+      // 卡片是自己展开面板的，关掉就还原；期间用户手动收起过（expanded 已为 false）则不动
+      if (!cardWasExpanded && state.expanded && expandBtn) expandBtn.click();
+    }
 
     function openCard(kind) {
       if (activeKind === kind && !cardPop.hidden) { closeCard(); return; }
       if (emojiPop) emojiPop.hidden = true;
       if (morePop) morePop.hidden = true;
       if (settingsPop) settingsPop.hidden = true;
+      // 地址表单字段多，380px 收起面板里挤成一团：面板不在展开态就先展开，
+      // 关卡时按 cardWasExpanded 还原。展开切换走 expandBtn.click()，
+      // 面板宽度的过渡动画自己会跟上。
+      cardWasExpanded = state.expanded;
+      if (!cardWasExpanded && expandBtn) expandBtn.click();
       activeKind = kind;
       var def = CARD_DEFS[kind];
       var saved = readCard(kind);
