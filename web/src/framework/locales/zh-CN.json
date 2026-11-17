@@ -111,6 +111,8 @@
     "expandAllGroups": "全部展开",
     "collapseAllGroups": "全部收起",
     "collapseSidebar": "收起侧边栏",
+    "contentWide": "内容切换为全宽",
+    "contentComfort": "内容切换为舒适宽度",
     "language": "切换语言",
     "notifications": "通知",
     "notificationsUnread": "通知，{{count}} 条未读",

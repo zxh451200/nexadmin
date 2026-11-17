@@ -21,11 +21,12 @@ export interface OnlineQuery {
   keyword?: string
 }
 
-export function useOnlineList(query: OnlineQuery) {
+export function useOnlineList(query: OnlineQuery, options?: { refetchInterval?: number }) {
   return useQuery({
     queryKey: ['online', 'list', query],
     queryFn: () => api.get<Page<OnlineUser>>('/online-users', { ...query }),
     placeholderData: keepPreviousData,
+    refetchInterval: options?.refetchInterval,
   })
 }
 

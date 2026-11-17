@@ -19,9 +19,13 @@
       "delta": "{{value}}%",
       "storageDetail": "of {{total}} GB total"
     },
+    "onlineTitle": "Live users",
+    "onlineNow": "online now",
+    "onlineJustNow": "just now",
+    "onlineEmpty": "No users online right now",
     "storageValue": "{{used}} / {{total}} GB",
-    "loginTrend": "Logins, last 7 days",
-    "requestTrend": "Requests, last 7 days",
+    "loginTrend": "Logins, last 30 days",
+    "requestTrend": "Requests, last 30 days",
     "operRatio": "Operation types",
     "series": {
       "logins": "Successful",

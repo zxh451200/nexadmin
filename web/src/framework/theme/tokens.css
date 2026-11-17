@@ -128,6 +128,144 @@
   color-scheme: dark;
 }
 
+/* ---- 主题预设（照抄模板 data-theme-preset 机制，oklch→HSL 近似换算）----
+   挂在 <html data-preset="…"> 上；预设排在 .dark 之后：light 预设块盖 ：root，
+   .dark + 预设（双选择器）盖 .dark。default 不写块 = 现有靛蓝/neutral 主题本身。 */
+
+[data-preset='tangerine'] {
+  --radius: 0.625rem;
+  --background: 220 14% 94%;
+  --foreground: 0 0% 24%;
+  --card: 0 0% 100%;
+  --card-foreground: 0 0% 24%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 0 0% 24%;
+  --primary: 24 74% 54%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 220 14% 96%;
+  --secondary-foreground: 232 20% 36%;
+  --muted: 220 14% 97%;
+  --muted-foreground: 220 9% 46%;
+  --accent: 220 14% 91%;
+  --accent-foreground: 235 45% 38%;
+  --destructive: 0 74% 56%;
+  --border: 220 13% 88%;
+  --input: 220 14% 96%;
+  --ring: 24 74% 54%;
+  --brand-from: 20 85% 55%;
+  --brand-to: 35 95% 55%;
+  --sidebar: 220 14% 89%;
+  --sidebar-foreground: 0 0% 24%;
+  --sidebar-accent: 220 14% 91%;
+  --sidebar-accent-foreground: 235 45% 38%;
+  --sidebar-border: 220 13% 91%;
+  --chart-1: 225 20% 62%;
+  --chart-2: 30 55% 68%;
+  --chart-3: 228 20% 48%;
+  --chart-4: 230 18% 40%;
+  --chart-5: 235 22% 33%;
+}
+
+.dark[data-preset='tangerine'] {
+  --background: 232 16% 17%;
+  --foreground: 0 0% 92%;
+  --card: 232 14% 21%;
+  --card-foreground: 0 0% 92%;
+  --popover: 232 15% 19%;
+  --popover-foreground: 0 0% 92%;
+  --primary: 24 74% 54%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 232 14% 21%;
+  --secondary-foreground: 0 0% 92%;
+  --muted: 232 14% 21%;
+  --muted-foreground: 225 8% 62%;
+  --accent: 235 16% 24%;
+  --accent-foreground: 225 30% 80%;
+  --destructive: 0 74% 56%;
+  --border: 233 14% 27%;
+  --input: 233 14% 27%;
+  --ring: 24 74% 54%;
+  --brand-from: 20 85% 60%;
+  --brand-to: 35 95% 58%;
+  --sidebar: 232 14% 21%;
+  --sidebar-foreground: 0 0% 92%;
+  --sidebar-accent: 235 16% 24%;
+  --sidebar-accent-foreground: 225 30% 80%;
+  --sidebar-border: 233 14% 27%;
+  --chart-1: 225 20% 62%;
+  --chart-2: 30 55% 68%;
+  --chart-3: 228 20% 48%;
+  --chart-4: 230 18% 40%;
+  --chart-5: 235 22% 33%;
+}
+
+[data-preset='soft-pop'] {
+  --radius: 1rem;
+  --background: 120 12% 97%;
+  --foreground: 0 0% 7%;
+  --card: 0 0% 100%;
+  --card-foreground: 0 0% 7%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 0 0% 7%;
+  --primary: 262 80% 54%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 175 40% 55%;
+  --secondary-foreground: 0 0% 100%;
+  --muted: 0 0% 95%;
+  --muted-foreground: 0 0% 34%;
+  --accent: 70 65% 60%;
+  --accent-foreground: 0 0% 10%;
+  --destructive: 0 70% 55%;
+  --border: 0 0% 12%;
+  --input: 0 0% 42%;
+  --ring: 262 80% 54%;
+  --brand-from: 262 80% 56%;
+  --brand-to: 175 55% 45%;
+  --sidebar: 120 12% 97%;
+  --sidebar-foreground: 0 0% 7%;
+  --sidebar-accent: 70 65% 60%;
+  --sidebar-accent-foreground: 0 0% 10%;
+  --sidebar-border: 0 0% 14%;
+  --chart-1: 262 80% 54%;
+  --chart-2: 175 45% 52%;
+  --chart-3: 70 65% 58%;
+  --chart-4: 350 75% 60%;
+  --chart-5: 150 60% 55%;
+}
+
+.dark[data-preset='soft-pop'] {
+  --background: 0 0% 4%;
+  --foreground: 0 0% 98%;
+  --card: 230 15% 17%;
+  --card-foreground: 0 0% 98%;
+  --popover: 230 15% 17%;
+  --popover-foreground: 0 0% 98%;
+  --primary: 262 65% 62%;
+  --primary-foreground: 0 0% 7%;
+  --secondary: 175 45% 60%;
+  --secondary-foreground: 0 0% 7%;
+  --muted: 0 0% 21%;
+  --muted-foreground: 0 0% 78%;
+  --accent: 75 70% 68%;
+  --accent-foreground: 0 0% 10%;
+  --destructive: 0 70% 62%;
+  --border: 0 0% 30%;
+  --input: 0 0% 92%;
+  --ring: 262 65% 62%;
+  --brand-from: 262 70% 64%;
+  --brand-to: 175 60% 52%;
+  --sidebar: 0 0% 4%;
+  --sidebar-foreground: 0 0% 98%;
+  --sidebar-accent: 75 70% 68%;
+  --sidebar-accent-foreground: 0 0% 10%;
+  --sidebar-border: 0 0% 30%;
+  --chart-1: 262 65% 62%;
+  --chart-2: 175 55% 62%;
+  --chart-3: 75 70% 68%;
+  --chart-4: 350 70% 66%;
+  --chart-5: 150 60% 62%;
+}
+
 @layer utilities {
   /* ---- 色调（tone）：组件只写 data-tone，颜色一律来自令牌，避免拼动态类名 ---- */
   [data-tone] {

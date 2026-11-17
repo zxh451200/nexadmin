@@ -3,6 +3,10 @@
     "toggle": "Toggle theme",
     "light": "Light",
     "dark": "Dark",
-    "system": "System"
+    "system": "System",
+    "preset": "Accent",
+    "presetDefault": "Default indigo",
+    "presetTangerine": "Tangerine",
+    "presetSoftPop": "Soft Pop"
   }
 }

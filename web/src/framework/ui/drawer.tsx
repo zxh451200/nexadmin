@@ -21,19 +21,22 @@ DrawerOverlay.displayName = DrawerPrimitive.Overlay.displayName
 
 const DrawerContent = React.forwardRef<
   React.ElementRef<typeof DrawerPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Content>
->(({ className, children, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Content> & { side?: 'bottom' | 'right' }
+>(({ side = 'bottom', className, children, ...props }, ref) => (
   <DrawerPortal>
     <DrawerOverlay />
     <DrawerPrimitive.Content
       ref={ref}
       className={cn(
-        'fixed inset-x-0 bottom-0 z-50 mt-24 flex max-h-[92dvh] flex-col rounded-t-xl border bg-popover text-popover-foreground overlay-panel pb-safe *:min-w-0',
+        'fixed z-50 flex flex-col border bg-popover text-popover-foreground overlay-panel *:min-w-0',
+        side === 'bottom' && 'inset-x-0 bottom-0 mt-24 max-h-[92dvh] rounded-t-xl border-t pb-safe',
+        // 右侧抽屉（长表单用，模板 products 页的新增/编辑形态）：配合 <Drawer direction="right">
+        side === 'right' && 'inset-y-0 end-0 h-full w-[min(92vw,42rem)] rounded-s-xl border-e',
         className,
       )}
       {...props}
     >
-      <div className="mx-auto mt-3 h-1.5 w-12 shrink-0 rounded-full bg-muted" />
+      {side === 'bottom' ? <div className="mx-auto mt-3 h-1.5 w-12 shrink-0 rounded-full bg-muted" /> : null}
       {children}
     </DrawerPrimitive.Content>
   </DrawerPortal>

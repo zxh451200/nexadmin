@@ -1,6 +1,6 @@
 import { Fragment, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate, useOutlet } from 'react-router-dom'
-import { ChevronsUpDown, Download, LogOut, Maximize, Menu, Minimize, PanelLeftClose, PanelLeftOpen, RotateCw, Search, UserRound } from 'lucide-react'
+import { ChevronsUpDown, Download, FoldHorizontal, LogOut, Maximize, Menu, Minimize, PanelLeftClose, PanelLeftOpen, RotateCw, Search, UnfoldHorizontal, UserRound } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
@@ -46,6 +46,7 @@ import { useDemoMode } from '@/framework/hooks/use-demo-mode'
 import { useIosInstallHint, usePwaInstall } from '@/framework/pwa/install'
 
 const COLLAPSE_KEY = 'nex-sidebar-collapsed'
+const CONTENT_WIDE_KEY = 'nex-content-wide'
 
 function UserMenu() {
   const { t } = useTranslation()
@@ -117,6 +118,8 @@ export function AppLayout() {
   const outlet = useOutlet()
   const tabs = useTabs((s) => s.tabs)
   const [isFullscreen, setIsFullscreen] = useState(() => !!document.fullscreenElement)
+  // 内容宽度（模板 layout-controls）：comfortable = 默认 max-w-7xl；wide = 去掉限宽，宽表铺满
+  const [contentWide, setContentWide] = useState(() => localStorage.getItem(CONTENT_WIDE_KEY) === '1')
   const isMobile = useIsMobile()
   const isMac = /mac|iphone|ipad/i.test(navigator.platform)
   const demo = useDemoMode()
@@ -125,6 +128,13 @@ export function AppLayout() {
   const toggleFullscreen = () => {
     if (document.fullscreenElement) void document.exitFullscreen()
     else void document.documentElement.requestFullscreen?.()
+  }
+
+  const toggleContentWide = () => {
+    setContentWide((w) => {
+      localStorage.setItem(CONTENT_WIDE_KEY, w ? '0' : '1')
+      return !w
+    })
   }
   useEffect(() => {
     const onChange = () => setIsFullscreen(!!document.fullscreenElement)
@@ -280,6 +290,17 @@ export function AppLayout() {
           >
             {isFullscreen ? <Minimize className="size-4" aria-hidden="true" /> : <Maximize className="size-4" aria-hidden="true" />}
           </Button>
+          {/* 内容宽度切换：默认舒适（max-w-7xl），宽表页可切全宽铺满 */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn('hidden size-9 md:inline-flex', contentWide && 'text-primary')}
+            aria-label={contentWide ? t('layout.contentComfort') : t('layout.contentWide')}
+            title={contentWide ? t('layout.contentComfort') : t('layout.contentWide')}
+            onClick={toggleContentWide}
+          >
+            {contentWide ? <FoldHorizontal className="size-4" aria-hidden="true" /> : <UnfoldHorizontal className="size-4" aria-hidden="true" />}
+          </Button>
           <LanguageSwitch />
           <ThemeToggle />
           <JobIndicator />
@@ -294,6 +315,7 @@ export function AppLayout() {
         <main
           id="main-content"
           ref={mainRef}
+          data-content-wide={contentWide || undefined}
           className="min-h-0 flex-1 overflow-y-auto pb-safe"
           tabIndex={-1}
           onScroll={(e) => scrollTops.current.set(activeKey, e.currentTarget.scrollTop)}
@@ -301,9 +323,11 @@ export function AppLayout() {
           {isMobile ? (
             <Suspense fallback={<PageLoading />}>{outlet}</Suspense>
           ) : (
-            // 每个标签一个容器，非当前的用 hidden 隐藏而不卸载，状态（筛选、分页等）得以保留
+            // 每个标签一个容器，非当前的用 hidden 隐藏而不卸载，状态（筛选、分页等）得以保留；
+            // 活动页签给 h-full：满高页（DataTable fill）的 h-full 链条从这里接上主区高度，
+            // 普通页面根元素没有 h-full，高度仍是内容自适应，不受影响
             pageKeys.map((k) => (
-              <div key={`${k}#${refreshes[k] ?? 0}`} className={k === activeKey ? undefined : 'hidden'}>
+              <div key={`${k}#${refreshes[k] ?? 0}`} className={k === activeKey ? 'h-full' : 'hidden'}>
                 <PageActiveContext.Provider value={k === activeKey}>
                   <Suspense fallback={<PageLoading />}>{k === activeKey ? outlet : cache.get(k)}</Suspense>
                 </PageActiveContext.Provider>

@@ -136,16 +136,16 @@ export default function OperLogPage() {
   ]
 
   return (
-    <PageContainer>
+    // 满高布局：logs 页签整页撑满主区，表格内部滚动、分页钉底；stats 页签保持文档流
+    <PageContainer className="h-full min-h-0">
       <PageHeader title={t('operLog.menu')} description={t('operLog.description')} />
       {/* 列表与统计分屏：查操作记录的人不该先滚过一屏图表 */}
-      <Tabs value={view} onValueChange={setView}>
+      <Tabs value={view} onValueChange={setView} className="flex min-h-0 flex-1 flex-col items-start gap-4">
         <TabsList className="w-fit">
           <TabsTrigger value="logs">{t('operLog.view.logs')}</TabsTrigger>
           <TabsTrigger value="stats">{t('operLog.view.stats')}</TabsTrigger>
         </TabsList>
-        <TabsContent value="logs">
-          <div className="flex flex-col gap-4">
+        <TabsContent value="logs" className="flex min-h-0 w-full flex-1 flex-col gap-4">
       <AiFilterBox
         scope="operLog"
         onApply={(f) => {
@@ -174,6 +174,8 @@ export default function OperLogPage() {
         <DateRangePicker value={draft.range} onChange={(v) => setDraft({ ...draft, range: v })} ariaLabel={t('operLog.filter.time')} className="md:w-64" placeholder={t('operLog.filter.time')} />
       </FilterBar>
       <DataTable<OperLog>
+        fill
+        className="min-h-0 flex-1"
         toolbar={
           <>
             <Can perm="operLog:export">
@@ -216,7 +218,6 @@ export default function OperLogPage() {
           },
         }}
       />
-          </div>
         </TabsContent>
         <TabsContent value="stats">
           <OperStatsPanel />

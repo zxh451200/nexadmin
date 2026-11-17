@@ -45,6 +45,12 @@ export interface DataTableProps<T> {
   /** 嵌在已有卡片/分区里时用：不再自带边框与投影，避免"卡片里再画一圈" */
   bare?: boolean
   /**
+   * 满高形态（模板 products 页的整页表格）：配合 h-full 的页面容器，桌面端表格区
+   * flex-1 + 内部滚动、表头吸顶，页面本身不滚；分页/批量条钉在视口底部。
+   * 移动端忽略（窄屏卡片本来就顺文档流滚）。
+   */
+  fill?: boolean
+  /**
    * 批量条放哪：viewport（默认）浮在视口底边；root 锚定在表格容器底边。
    * 主从双栏页（字典管理）必须用 root——两个表格都往视口 portal 会叠在一起。
    */
@@ -86,6 +92,7 @@ export function DataTable<T>({
   emptyText,
   className,
   bare,
+  fill,
   batchBarPlacement,
 }: DataTableProps<T>) {
   const { t } = useTranslation()
@@ -219,15 +226,18 @@ export function DataTable<T>({
   // 列显示设置：统一放在表格上方工具栏右端，和 TreeTable 一致
   const settingsNode = columnSettingsKey && !isMobile ? <ColumnSettings columns={columns} hidden={hidden} onToggle={toggle} onReset={reset} /> : null
 
+  // 满高形态：表头吸顶（th 各自 sticky，Table 元素不参与 overflow 裁剪）
+  const thSticky = fill ? 'sticky top-0 z-10 bg-card' : undefined
+
   const desktop = (
-    <div className={cn('overflow-hidden', bare ? 'bg-transparent' : 'card-edge rounded-xl border border-border bg-card')}>
-      {/* 列多时横向滚动，不许把最后一列（操作）裁掉 */}
-      <div ref={scrollRef} className="overflow-x-auto">
+    <div className={cn('overflow-hidden', fill && 'flex min-h-0 flex-1 flex-col', bare ? 'bg-transparent' : 'card-edge rounded-xl border border-border bg-card')}>
+      {/* 列多时横向滚动，不许把最后一列（操作）裁掉；满高时纵向滚动也收在这里 */}
+      <div ref={scrollRef} className={cn('overflow-x-auto', fill && 'min-h-0 flex-1 overflow-y-auto')}>
         <Table>
         <TableHeader>
           <TableRow>
             {selection ? (
-              <TableHead className="w-12">
+              <TableHead className={cn('w-12', thSticky)}>
                 <SelectBox checked={headState} onChange={toggleAll} label={t('dataTable.selectAllRows')} />
               </TableHead>
             ) : null}
@@ -235,7 +245,7 @@ export function DataTable<T>({
               <TableHead
                 key={c.key}
                 style={c.width !== undefined ? { width: c.width } : undefined}
-                className={cn('whitespace-nowrap', alignClass(c.align))}
+                className={cn('whitespace-nowrap', thSticky, alignClass(c.align))}
               >
                 {c.title}
               </TableHead>
@@ -245,6 +255,7 @@ export function DataTable<T>({
               <TableHead
                 className={cn(
                   'text-end',
+                  thSticky,
                   pinActions && 'sticky inset-e-0 z-20 bg-card shadow-[inset_1px_0_0_hsl(var(--border))]',
                 )}
               >

@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next'
 import { Card, CardContent, CardHeader, CardTitle } from '@/framework/ui/card'
 import { Skeleton } from '@/framework/ui/skeleton'
 import { useDashboardStats } from '../api'
-import { DotBarChart } from './DotBarChart'
+import { TrendArea } from './TrendArea'
 
 export default function LoginTrendCard() {
   const { t } = useTranslation()
@@ -14,7 +14,7 @@ export default function LoginTrendCard() {
       </CardHeader>
       <CardContent>
         {data ? (
-          <DotBarChart
+          <TrendArea
             data={data.loginTrend}
             xKey="date"
             series={[

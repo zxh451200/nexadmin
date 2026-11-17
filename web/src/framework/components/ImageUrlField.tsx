@@ -107,7 +107,13 @@ export function ImageUrlField({
           src={value}
           alt=""
           loading="lazy"
-          className={cn('rounded-md border border-border bg-muted/40 object-contain p-1', previewClassName)}
+          className={cn('rounded-md border border-border bg-muted object-contain p-1', previewClassName)}
+          style={{
+            // 细棋盘格垫底：透明 PNG/SVG、暗色 logo 在深色主题下不再与底色融成一块
+            backgroundImage:
+              'repeating-conic-gradient(hsl(var(--muted-foreground) / 0.14) 0% 25%, transparent 0% 50%)',
+            backgroundSize: '10px 10px',
+          }}
         />
       </button>
       {/* 悬停/聚焦时浮现操作；触屏没有 hover，仍走卡片点开放大 + 行内「清除」按钮 */}
@@ -154,34 +160,43 @@ export function ImageUrlField({
     </Button>
   )
   const hintEl = hint && !crop ? <p className="text-xs text-muted-foreground">{hint}</p> : null
+  // 一行吃下所有元素：[预览] [输入框] [清除/上传] [从文件库选择]。
+  // 之前「清除」竖排在输入列下方被 flex-col 拉成整行宽的居中大按钮，预览也掉出输入行——一行字段裂成三截。
   const inputEl = (
-    <div className={previewBelow ? 'flex items-center gap-2' : 'flex min-w-0 flex-1 flex-col gap-2'}>
-      <div className="flex min-w-0 flex-1 items-center gap-2">
-        <Input
-          value={value}
-          disabled={disabled}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
-          inputMode="url"
-          spellCheck={false}
-          className="min-w-0 flex-1"
-          aria-label={ariaLabel ?? title}
-        />
-        {!value ? uploadBtn : null}
-        {/* 文件库弹窗：已传过的图片直接选（缩略图网格 + 关键词可搜、按上传时间倒序） */}
-        <PickFromLibraryButton className="shrink-0" disabled={disabled} onClick={() => setPickOpen(true)} />
-      </div>
+    <div className="flex min-w-0 flex-1 items-center gap-2">
+      <Input
+        value={value}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        inputMode="url"
+        spellCheck={false}
+        className="min-w-0 flex-1"
+        aria-label={ariaLabel ?? title}
+      />
       {value ? (
-        <Button type="button" variant="ghost" className="shrink-0 px-3" disabled={disabled} onClick={() => onChange('')}>
-          {t('common.clear')}
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="size-9 shrink-0"
+          disabled={disabled}
+          onClick={() => onChange('')}
+          aria-label={t('common.clear')}
+          title={t('common.clear')}
+        >
+          <Trash2 aria-hidden="true" />
         </Button>
-      ) : null}
-      {previewBelow ? null : hintEl}
+      ) : (
+        uploadBtn
+      )}
+      {/* 文件库弹窗：已传过的图片直接选（缩略图网格 + 关键词可搜、按上传时间倒序） */}
+      <PickFromLibraryButton className="shrink-0" disabled={disabled} onClick={() => setPickOpen(true)} />
     </div>
   )
 
   return (
-    <div className={previewBelow ? 'flex flex-col gap-2' : 'flex items-center gap-3'}>
+    <div className="flex flex-col gap-2">
       {previewBelow ? (
         <>
           {/* 输入行在上、预览卡在下：长表单里先填地址再看效果（商品封面/视频的形态） */}
@@ -192,8 +207,11 @@ export function ImageUrlField({
       ) : (
         <>
           {/* 卡在左、URL 行在右：上传卡不再孤零零吊在左下角，右侧一行正好吃掉整行宽度 */}
-          {cardEl}
-          {inputEl}
+          <div className="flex items-center gap-3">
+            {cardEl}
+            {inputEl}
+          </div>
+          {hintEl}
         </>
       )}
       {value ? (

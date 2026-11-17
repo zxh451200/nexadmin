@@ -15,8 +15,8 @@ const DialogOverlay = React.forwardRef<
   <DialogPrimitive.Overlay
     ref={ref}
     // Radix 只给定位不给底色：不铺遮罩时弹窗和页面同亮度，深色下内容、边框全糊在一起。
-    // 深色遮罩不用纯黑——带主题色相的深蓝黑既压得住页面，又不和配色打架（纯黑灰罩显得脏）。
-    className={cn('fixed inset-0 z-50 bg-black/40 dark:bg-[hsl(230_28%_3%_/_0.68)]', className)}
+    // 深色照抄 shadcn neutral：纯黑罩（旧配色时代带蓝味的遮罩在灰阶底上会显出一层脏蓝）。
+    className={cn('fixed inset-0 z-50 bg-black/40 dark:bg-black/70', className)}
     {...props}
   />
 ))

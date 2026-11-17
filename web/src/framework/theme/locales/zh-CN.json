@@ -3,6 +3,10 @@
     "toggle": "切换主题",
     "light": "浅色",
     "dark": "深色",
-    "system": "跟随系统"
+    "system": "跟随系统",
+    "preset": "主题色",
+    "presetDefault": "默认靛蓝",
+    "presetTangerine": "柑橘",
+    "presetSoftPop": "软糖波普"
   }
 }

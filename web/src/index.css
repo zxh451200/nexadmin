@@ -102,6 +102,14 @@
   }
 }
 
+/* 内容宽度切换（AppLayout 顶栏按钮）：wide 模式放开 PageContainer 的 max-w-7xl，宽表铺满。
+   PageContainer 的 max-w-7xl 是 mx-auto 居中的，放开后自然全宽，无需改组件。 */
+@layer utilities {
+  [data-content-wide='true'] .page-enter {
+    max-width: none;
+  }
+}
+
 @utility pt-safe {
   padding-top: env(safe-area-inset-top);
 }

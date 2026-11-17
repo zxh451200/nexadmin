@@ -24,7 +24,9 @@ import (
 
 func init() { core.RegisterBuiltin(module{}) }
 
-const trendDays = 7
+// 趋势窗口：30 天。逐日两条 COUNT（成功/失败）× 30 天 = 60 次，都走 tenant_id+created_at
+// 范围扫描，单次毫秒级；工作台 stats 是低频接口，可接受。模板同款图表的美观一半靠点数密度。
+const trendDays = 30
 
 // 登录日志里“成功”的判定条件。依赖 log 模块 sys_login_log.status 的取值约定，如有出入只改这两行。
 const (

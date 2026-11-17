@@ -9,7 +9,8 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: 'bg-brand-gradient text-primary-foreground shadow-xs hover:brightness-110',
+        // 浅色保持品牌渐变；深色照抄 shadcn neutral——主按钮是白底黑字（primary 90%）
+        default: 'bg-brand-gradient text-primary-foreground shadow-xs hover:brightness-110 dark:bg-none dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90 dark:hover:brightness-100',
         destructive: 'bg-destructive text-destructive-foreground hover:bg-destructive/90',
         // 深色下描边按钮走“透明底 + 亮边”（Linear 的 secondary 就是这样）：
         // 用 bg-background 会把它变成画布色的洞，在弹窗这类更亮的浮层上尤其明显

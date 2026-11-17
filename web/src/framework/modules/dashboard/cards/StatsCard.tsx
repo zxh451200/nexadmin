@@ -1,12 +1,13 @@
 import { ArrowDown, ArrowUp, Info } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/framework/ui/badge'
-import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/framework/ui/card'
 import { Skeleton } from '@/framework/ui/skeleton'
 import { useDashboardStats } from '../api'
 
-/** KPI 卡照抄 shadcn 教育仪表盘：text-sm 标题 + 右上角 Info、text-3xl 大数字 + 涨跌徽章、
-    右下角右对齐 muted 明细行。基线不可比时不展示百分比：1 → 0 会算出 -100% 这种噪声。 */
+/** KPI 条照抄模板 analytics-kpi-strip：外层一张卡（ring 边框 + overflow-hidden），
+    内部四格用 divide 分隔，移动端自动变两列 divide-y 堆叠。
+    格内沿用教育仪表盘 KPI：text-sm 标题 + Info、text-3xl 大数字 + 涨跌徽章、右下 muted 明细行。
+    基线不可比时不展示百分比：1 → 0 会算出 -100% 这种噪声。 */
 function deltaBadge(s: { delta?: number; comparable?: boolean }, t: (k: string, vars?: Record<string, unknown>) => string) {
   if (!s.comparable || !s.delta || s.delta === 0) return null
   const up = s.delta > 0
@@ -19,6 +20,31 @@ function deltaBadge(s: { delta?: number; comparable?: boolean }, t: (k: string, 
   )
 }
 
+interface KpiCellProps {
+  title: string
+  value: string
+  delta?: React.ReactNode
+  detail?: string
+}
+
+function KpiCell({ title, value, delta, detail }: KpiCellProps) {
+  return (
+    <div className="flex flex-col gap-3 p-4 md:p-5">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm font-normal text-muted-foreground">{title}</span>
+        <Info className="size-3.5 shrink-0 text-muted-foreground/70" aria-hidden="true" />
+      </div>
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-2">
+          <span className="num text-2xl leading-none tracking-tight md:text-3xl">{value}</span>
+          {delta}
+        </div>
+        {detail ? <div className="num text-end text-xs text-muted-foreground">{detail}</div> : null}
+      </div>
+    </div>
+  )
+}
+
 export default function StatsCard() {
   const { t, i18n } = useTranslation()
   const { data, isLoading } = useDashboardStats()
@@ -26,45 +52,31 @@ export default function StatsCard() {
 
   if (isLoading || !data) {
     return (
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-4 xl:grid-cols-4">
-        {Array.from({ length: 4 }, (_, i) => (
-          <Skeleton key={i} className="h-32 w-full" />
-        ))}
+      <div className="card-edge overflow-hidden rounded-xl border border-border bg-card">
+        <div className="grid grid-cols-2 divide-y divide-border md:grid-cols-4 md:divide-x md:divide-y-0">
+          {Array.from({ length: 4 }, (_, i) => (
+            <div key={i} className="p-4 md:p-5">
+              <Skeleton className="h-24 w-full" />
+            </div>
+          ))}
+        </div>
       </div>
     )
   }
 
-  const cards = [
-    { title: t('dashboard.stat.users'), value: fmt(data.users.value), delta: deltaBadge(data.users, t), detail: undefined as string | undefined },
-    { title: t('dashboard.stat.todayLogin'), value: fmt(data.todayLogin.value), delta: deltaBadge(data.todayLogin, t), detail: undefined },
-    { title: t('dashboard.stat.unreadMessages'), value: fmt(data.unreadMessages.value), delta: deltaBadge(data.unreadMessages, t), detail: undefined },
-    {
-      title: t('dashboard.stat.storage'),
-      value: `${data.storage.usedGb}`,
-      delta: deltaBadge(data.storage, t),
-      detail: data.storage.totalGb > 0 ? t('dashboard.kpi.storageDetail', { total: data.storage.totalGb }) : undefined,
-    },
-  ]
-
   return (
-    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-4 xl:grid-cols-4">
-      {cards.map((c) => (
-        <Card key={c.title}>
-          <CardHeader>
-            <CardTitle className="text-sm">{c.title}</CardTitle>
-            <CardAction>
-              <Info className="size-3 text-muted-foreground" aria-hidden="true" />
-            </CardAction>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-2">
-            <div className="flex items-center gap-2">
-              <span className="num text-3xl leading-none tracking-tight">{c.value}</span>
-              {c.delta}
-            </div>
-            {c.detail ? <div className="num text-end text-xs text-muted-foreground">{c.detail}</div> : null}
-          </CardContent>
-        </Card>
-      ))}
+    <div className="card-edge overflow-hidden rounded-xl border border-border bg-card">
+      <div className="grid grid-cols-2 divide-y divide-border md:grid-cols-4 md:divide-x md:divide-y-0">
+        <KpiCell title={t('dashboard.stat.users')} value={fmt(data.users.value)} delta={deltaBadge(data.users, t)} />
+        <KpiCell title={t('dashboard.stat.todayLogin')} value={fmt(data.todayLogin.value)} delta={deltaBadge(data.todayLogin, t)} />
+        <KpiCell title={t('dashboard.stat.unreadMessages')} value={fmt(data.unreadMessages.value)} delta={deltaBadge(data.unreadMessages, t)} />
+        <KpiCell
+          title={t('dashboard.stat.storage')}
+          value={`${data.storage.usedGb}`}
+          delta={deltaBadge(data.storage, t)}
+          detail={data.storage.totalGb > 0 ? t('dashboard.kpi.storageDetail', { total: data.storage.totalGb }) : undefined}
+        />
+      </div>
     </div>
   )
 }

@@ -111,6 +111,8 @@
     "expandAllGroups": "Expand all",
     "collapseAllGroups": "Collapse all",
     "collapseSidebar": "Collapse sidebar",
+    "contentWide": "Switch content to full width",
+    "contentComfort": "Switch content to comfortable width",
     "language": "Switch language",
     "notifications": "Notifications",
     "notificationsUnread": "Notifications, {{count}} unread",

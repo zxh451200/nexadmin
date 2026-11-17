@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { CircleAlert, CircleCheck, CloudDownload, CloudUpload, Copy, Download, ExternalLink, Eye, FileUp, Pencil, Plus, RefreshCw, Settings2, Trash2, X } from 'lucide-react'
+import { ChevronDown, CircleAlert, CircleCheck, CloudDownload, CloudUpload, Copy, Download, ExternalLink, Eye, FileUp, Pencil, Plus, RefreshCw, Settings2, Trash2, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -23,6 +23,7 @@ import {
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { SwitchRow } from '@/framework/components/SwitchField'
+import { TagsInput } from '@/framework/components/TagsInput'
 import { Lightbox } from '@/framework/upload/Lightbox'
 import { FileDropField } from '@/framework/components/FileDropField'
 import { ImageUrlField } from '@/framework/components/ImageUrlField'
@@ -38,6 +39,8 @@ import { saveBlob } from '@/framework/components/export/csv'
 import { slugify } from './format'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/framework/ui/collapsible'
+import { Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle } from '@/framework/ui/drawer'
 import { Input } from '@/framework/ui/input'
 import { Label } from '@/framework/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/framework/ui/select'
@@ -603,24 +606,30 @@ function ProductFormBody({
   }
 
   return (
-    <ResponsiveDialog
-      open
-      onOpenChange={onOpenChange}
-      title={editing ? t('plugin_website.product.edit') : t('plugin_website.product.create')}
-      size="lg"
-      className="space-y-4"
-      footer={
-        <>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
-          <Button onClick={() => void submit()}>{t('common.save')}</Button>
-        </>
-      }
-    >
-      <div className="flex items-center justify-between gap-2 pb-1">
-        <LocaleSwitcher />
-        <span className="text-xs text-muted-foreground">{t('plugin_website.i18n.switchHint')}</span>
-      </div>
-      <div className="flex flex-col gap-5">
+    // 长表单走右侧抽屉（模板 products 页形态）：字段多，居中弹窗又高又窄，侧滑面板装得下且不遮标题
+    <Drawer open direction="right" onOpenChange={onOpenChange}>
+      <DrawerContent side="right" className="w-[min(92vw,46rem)]">
+        <DrawerHeader className="shrink-0 border-b border-border px-6 pb-4 pt-5">
+          <DrawerTitle>{editing ? t('plugin_website.product.edit') : t('plugin_website.product.create')}</DrawerTitle>
+          <DrawerDescription className="sr-only">{t('plugin_website.product.desc')}</DrawerDescription>
+          <DrawerClose asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="absolute top-3.5 end-4"
+              aria-label={t('common.close')}
+            >
+              <X aria-hidden="true" />
+            </Button>
+          </DrawerClose>
+        </DrawerHeader>
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-4">
+          <div className="flex items-center justify-between gap-2 pb-1">
+            <LocaleSwitcher />
+            <span className="text-xs text-muted-foreground">{t('plugin_website.i18n.switchHint')}</span>
+          </div>
+          <div className="flex flex-col gap-5">
         <FormSection title={t('plugin_website.product.basicSection')}>
           <LocalizedField fieldKey="title" required />
           <LocalizedField fieldKey="keywords" aiTarget="keywords" tags={{ max: maxKeywords }} placeholder={t('plugin_website.fields.productKeywordsPlaceholder')} />
@@ -675,6 +684,7 @@ function ProductFormBody({
           <ImagesField images={images} onChange={setImages} disabled={sharedDisabled} />
         </FormSection>
         <FormSection title={t('plugin_website.product.tradeSection')}>
+        {/* 价格三件套 + 数量/交期各占一整行 3 列，运费并入下面 2 列行——7 个字段 3 列排必出孤行 */}
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
           <SharedFieldShell labelKey="plugin_website.product.priceMin">
             <Input
@@ -733,17 +743,6 @@ function ProductFormBody({
               onChange={(e) => setLeadTimeDays(e.target.value)}
             />
           </SharedFieldShell>
-          <SharedFieldShell labelKey="plugin_website.product.freightAmount">
-            <Input
-              type="number"
-              min="0"
-              step="0.01"
-              value={freightAmount}
-              placeholder="0"
-              disabled={sharedDisabled}
-              onChange={(e) => setFreightAmount(e.target.value)}
-            />
-          </SharedFieldShell>
         </div>
         <div className="grid gap-3 md:grid-cols-2">
           <SharedFieldShell labelKey="plugin_website.product.port">
@@ -766,13 +765,28 @@ function ProductFormBody({
               disabled={sharedDisabled}
             />
           </SharedFieldShell>
-          {/* 认证资质不做固定下拉：各行业认证差异大（CE/UL/UN38.3/IEC/ISO/FCC…），
-              运营直接写名字，详情页按名称自动配图标 */}
-          <SharedFieldShell labelKey="plugin_website.product.certifications" hint={t('plugin_website.hint.certifications')}>
+          <SharedFieldShell labelKey="plugin_website.product.freightAmount">
             <Input
+              type="number"
+              min="0"
+              step="0.01"
+              value={freightAmount}
+              placeholder="0"
+              disabled={sharedDisabled}
+              onChange={(e) => setFreightAmount(e.target.value)}
+            />
+          </SharedFieldShell>
+          {/* 认证资质不做固定下拉：各行业认证差异大（CE/UL/UN38.3/IEC/ISO/FCC…），
+              运营直接写名字，详情页按名称自动配图标。标签形态与搜索关键词同款，
+              但词内允许空格（UL 1973、ISO 9001），只按逗号/顿号/分号收词。 */}
+          <SharedFieldShell labelKey="plugin_website.product.certifications" hint={t('plugin_website.hint.certifications')}>
+            <TagsInput
               value={certifications}
-              onChange={(e) => setCertifications(e.target.value)}
+              onChange={setCertifications}
+              separators={CERT_SEPARATORS}
+              joinWith=", "
               placeholder="CE, UL 1973, UN38.3, ISO 9001"
+              ariaLabel={t('plugin_website.product.certifications')}
               disabled={sharedDisabled}
             />
           </SharedFieldShell>
@@ -781,7 +795,13 @@ function ProductFormBody({
           <SpecsEditor specs={specs} onChange={setSpecs} disabled={sharedDisabled} />
         </SharedGroup>
         </FormSection>
-        <FormSection title={t('plugin_website.ali.trade.section')}>
+        {/* 阿里发品子表单只对要同步阿里的商品有意义：默认折叠收起，不做阿里同步的用户不再被它占掉半屏；
+            编辑已填过阿里交易数据的商品时自动展开，省一次点击 */}
+        <FormSection
+          title={t('plugin_website.ali.trade.section')}
+          collapsible
+          defaultOpen={!!editing?.aliTradeJson}
+        >
           <p className="text-xs leading-relaxed text-muted-foreground">{t('plugin_website.ali.trade.sectionHint')}</p>
           <AliTradeFields key={editing?.id ?? 'new'} value={aliTrade} onChange={setAliTrade} disabled={sharedDisabled} />
         </FormSection>
@@ -829,21 +849,49 @@ function ProductFormBody({
           </SharedFieldShell>
         </FormSection>
       </div>
-    </ResponsiveDialog>
+        </div>
+        <DrawerFooter className="shrink-0 flex-row justify-end gap-2 border-t border-border px-6 py-3">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
+          <Button onClick={() => void submit()}>{t('common.save')}</Button>
+        </DrawerFooter>
+      </DrawerContent>
+    </Drawer>
   )
 }
 
-/** 表单分区：竖色条标题 + 延伸分隔线，长表单的视觉锚点（替代裸的加粗一行）。 */
-function FormSection({ title, children }: { title: string; children: ReactNode }) {
+/** 表单分区：竖色条标题 + 延伸分隔线，长表单的视觉锚点（替代裸的加粗一行）。
+ *  collapsible 时标题行变成折叠钮（尾部箭头），defaultOpen 控制初始展开——给可选的整段子表单用。 */
+function FormSection({
+  title, children, collapsible, defaultOpen = false,
+}: {
+  title: string
+  children: ReactNode
+  collapsible?: boolean
+  defaultOpen?: boolean
+}) {
+  const header = (
+    <>
+      <span className="h-4 w-1 shrink-0 rounded-full bg-primary" aria-hidden="true" />
+      <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+      <span className="h-px min-w-4 flex-1 bg-border" aria-hidden="true" />
+    </>
+  )
+  if (!collapsible) {
+    return (
+      <section className="flex flex-col gap-3">
+        <div className="flex items-center gap-2">{header}</div>
+        {children}
+      </section>
+    )
+  }
   return (
-    <section className="flex flex-col gap-3">
-      <div className="flex items-center gap-2">
-        <span className="h-4 w-1 shrink-0 rounded-full bg-primary" aria-hidden="true" />
-        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-        <span className="h-px min-w-4 flex-1 bg-border" aria-hidden="true" />
-      </div>
-      {children}
-    </section>
+    <Collapsible defaultOpen={defaultOpen} className="flex flex-col gap-3">
+      <CollapsibleTrigger className="group flex w-full items-center gap-2 rounded text-start focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
+        {header}
+        <ChevronDown className="size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180" aria-hidden="true" />
+      </CollapsibleTrigger>
+      <CollapsibleContent className="flex flex-col gap-3">{children}</CollapsibleContent>
+    </Collapsible>
   )
 }
 
@@ -1590,9 +1638,12 @@ function parseCertifications(raw?: string): string {
   }
 }
 
-/** 逗号（中英文）、顿号、分号都当分隔符，与服务端 normalizeCertifications 同口径。 */
+/** 认证资质的拆分口径：逗号（中英文）、顿号、分号都算，与服务端 normalizeCertifications 同源。
+ *  空格不算——认证名自带空格（UL 1973、ISO 9001），拆了就碎。 */
+const CERT_SEPARATORS = /[,，、;；]+/
+
 function splitCertifications(v: string): string[] {
-  return v.split(/[,，、;；]/).map((s) => s.trim()).filter(Boolean)
+  return v.split(CERT_SEPARATORS).map((s) => s.trim()).filter(Boolean)
 }
 
 function safeParseSpecs(raw?: string): ProductSpec[] {
@@ -1920,7 +1971,8 @@ export default function ProductPage() {
   ]
 
   return (
-    <PageContainer>
+    // 满高布局（模板 products 页）：整页撑满主区，表格内部滚动、分页钉底
+    <PageContainer className="h-full min-h-0">
       <PageHeader
         title={t('plugin_website.product.title')}
         description={t('plugin_website.product.desc')}
@@ -1977,6 +2029,8 @@ export default function ProductPage() {
         </TabsList>
       </Tabs>
       <DataTable
+        fill
+        className="min-h-0 flex-1"
         columns={columns}
         data={data?.list ?? []}
         rowKey="id"

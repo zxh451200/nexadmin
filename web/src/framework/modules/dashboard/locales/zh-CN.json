@@ -19,9 +19,13 @@
       "delta": "{{value}}%",
       "storageDetail": "总量 {{total}} GB"
     },
+    "onlineTitle": "实时在线",
+    "onlineNow": "人在线",
+    "onlineJustNow": "刚刚",
+    "onlineEmpty": "当前没有在线用户",
     "storageValue": "{{used}} / {{total}} GB",
-    "loginTrend": "近 7 天登录趋势",
-    "requestTrend": "近 7 天请求量",
+    "loginTrend": "近 30 天登录趋势",
+    "requestTrend": "近 30 天请求量",
     "operRatio": "操作类型占比",
     "series": {
       "logins": "登录成功",

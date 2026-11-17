@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import { Button } from '@/framework/ui/button'
 import { BrandMark } from '@/framework/components/BrandMark'
+import { Popover, PopoverContent, PopoverTrigger } from '@/framework/ui/popover'
 import { ScrollArea } from '@/framework/ui/scroll-area'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/framework/ui/tooltip'
 import type { MenuNode } from '@/framework/router/types'
@@ -25,6 +26,71 @@ interface SidebarProps {
   onNavigate?: () => void
   /** 提供后在底部显示「收起 / 展开侧边栏」按钮（手机抽屉不需要） */
   onToggleCollapse?: () => void
+}
+
+/** 收起态（icon rail）的一级目录：图标触发浮出子菜单（shadcn sidebar collapsible="icon" 的形态）。
+    旧实现把所有叶子平铺成超长图标列，菜单多的站点一屏放不下；浮出后轨上只留每目录一枚图标。 */
+function GroupFlyout({ group, onNavigate }: { group: MenuNode; onNavigate?: () => void }) {
+  const { t } = useTranslation()
+  const { pathname } = useLocation()
+  const childPaths = useMemo(() => (group.children ?? []).filter((c) => c.path).map((c) => c.path as string), [group])
+  const badges = useMenuBadges(childPaths)
+  const active = childPaths.some((p) => pathname === p || pathname.startsWith(p + '/'))
+  const badgeTotal = childPaths.reduce((n, p) => n + (badges[p] ?? 0), 0)
+
+  return (
+    <Popover>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <PopoverTrigger
+            className={cn(
+              'relative flex h-9 w-full items-center justify-center rounded-md transition-colors',
+              'hover:bg-sidebar-accent/60 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring',
+              active && 'bg-sidebar-accent/60 text-sidebar-accent-foreground',
+            )}
+            aria-label={t(group.title!)}
+            aria-haspopup="menu"
+          >
+            <DynamicIcon name={group.icon} className="size-4" />
+            {badgeTotal > 0 && <span aria-hidden="true" className="absolute inset-e-2.5 top-1.5 size-2 rounded-full bg-primary" />}
+          </PopoverTrigger>
+        </TooltipTrigger>
+        {/* Tooltip 与 Popover 同用一枚触发器：hover 给目录名，点击弹子菜单（Tooltip 的 asChild 桥接见上） */}
+        <TooltipContent side="right">{t(group.title!)}</TooltipContent>
+      </Tooltip>
+      <PopoverContent side="right" align="start" sideOffset={6} className="w-56 p-2">
+        <p className="px-2 pb-1.5 text-xs font-medium text-muted-foreground">{t(group.title!)}</p>
+        <ul className="space-y-0.5">
+          {group.children?.map((item) => {
+            const badge = item.path ? (badges[item.path] ?? 0) : 0
+            return (
+              <li key={item.key}>
+                <NavLink
+                  to={item.path!}
+                  onClick={onNavigate}
+                  className={({ isActive }) =>
+                    cn(
+                      'flex min-h-9 items-center gap-2.5 rounded-md px-2.5 text-sm transition-colors',
+                      'hover:bg-sidebar-accent/60 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring',
+                      isActive ? 'bg-primary/10 font-medium text-primary' : 'text-sidebar-foreground/90',
+                    )
+                  }
+                >
+                  <DynamicIcon name={item.icon} className="size-4 shrink-0" />
+                  <span className="min-w-0 flex-1 truncate">{t(item.title)}</span>
+                  {badge > 0 && (
+                    <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 py-0.5 text-[11px] leading-none font-medium text-primary-foreground">
+                      {badge > 99 ? '99+' : badge}
+                    </span>
+                  )}
+                </NavLink>
+              </li>
+            )
+          })}
+        </ul>
+      </PopoverContent>
+    </Popover>
+  )
 }
 
 export function Sidebar({ menu, homePath = HOME_PATH, collapsed = false, onNavigate, onToggleCollapse }: SidebarProps) {
@@ -168,16 +234,22 @@ export function Sidebar({ menu, homePath = HOME_PATH, collapsed = false, onNavig
 
       <ScrollArea className="flex-1">
         <nav aria-label={t('layout.navigation')} className="space-y-1 p-2">
-          {menu.map((group, gi) => {
+          {menu.map((group) => {
             const bare = !group.title // 顶级单项（如工作台）：没有分组标题，直接是一级菜单
             const open = !isClosed(group.key)
 
-            // 图标模式：所有菜单只显示图标，分组之间用细线隔开
+            // 图标模式：顶级单项直接是图标链接；一级目录收成图标 + 浮出子菜单。
+            // 分组靠间距区分（目录行多 py-0.5），不放分隔线——深色下线要么糊成噪点要么太扎眼。
             if (collapsed) {
               return (
                 <div key={group.key}>
-                  {!bare && gi > 0 && <div className="mx-2 my-2 h-px bg-sidebar-border" role="separator" />}
-                  <ul className="space-y-1">{group.children?.map((item) => renderItem(item, false))}</ul>
+                  {bare ? (
+                    <ul className="space-y-1">{group.children?.map((item) => renderItem(item, false))}</ul>
+                  ) : (
+                    <div className="py-0.5">
+                      <GroupFlyout group={group} onNavigate={onNavigate} />
+                    </div>
+                  )}
                 </div>
               )
             }

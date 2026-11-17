@@ -339,7 +339,8 @@ export default function PagePage() {
   ]
 
   return (
-    <PageContainer>
+    // 满高布局（模板 products 页）：整页撑满主区，表格内部滚动、分页钉底
+    <PageContainer className="h-full min-h-0">
       <PageHeader title={t('plugin_website.page.title')} description={t('plugin_website.page.desc')} />
       <FilterBar
         onSearch={() => { setFilters(toContentQuery(draft)); setPage(1) }}
@@ -365,6 +366,8 @@ export default function PagePage() {
         />
       </FilterBar>
       <DataTable
+        fill
+        className="min-h-0 flex-1"
         columns={columns}
         data={data?.list ?? []}
         rowKey="id"
