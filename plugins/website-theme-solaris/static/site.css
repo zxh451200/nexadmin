@@ -182,31 +182,41 @@ p { margin: 0; }
   .sl-stat:first-child { padding-inline-start: 0; }
 }
 
-/* ---- 服务条（图标底座 + 主副文案 + 竖分隔） ---- */
-.sl-service { background: #fff; border-block: 1px solid var(--sl-line); }
+/* ---- 服务条（浅绿能力带：方形图标底座 + 衬线标题 + 主副文案，发丝线分栏） ---- */
+.sl-service { background: var(--sl-sage); border-block: 1px solid var(--sl-line); padding-block: 30px; }
 .sl-service-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .sl-service-item {
-  display: flex; align-items: center; gap: 13px;
-  padding: 22px 26px;
-  border-inline-start: 1px solid var(--sl-line-soft);
+  display: grid; grid-template-columns: 46px minmax(0, 1fr); align-items: start; gap: 14px;
+  padding: 6px 26px;
+  border-inline-start: 1px solid #d5ddce;
   transition: background 0.18s ease;
 }
 .sl-service-item:first-child { border-inline-start: 0; padding-inline-start: 0; }
-.sl-service-item:hover { background: var(--sl-mist, rgba(36, 79, 61, 0.04)); }
+.sl-service-item:hover { background: rgba(255, 255, 255, .5); }
 .sl-service-ico {
-  width: auto; height: auto; flex: none;
+  width: 46px; height: 46px; flex: none;
   display: inline-flex; align-items: center; justify-content: center;
+  background: #fff; border: 1px solid #ccd6c7; border-radius: 2px;
   color: var(--sl-forest);
+  transition: border-color .2s ease, color .2s ease;
 }
 .sl-service-ico svg { width: 22px; height: 22px; }
-.sl-service-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.sl-service-item strong { font-family: var(--sl-sans); font-size: 13.5px; font-weight: 600; letter-spacing: .01em; white-space: nowrap; }
-.sl-service-text span { display: none; }
+.sl-service-text { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.sl-service-item strong { font-family: var(--sl-serif); font-size: 16px; font-weight: 600; color: var(--sl-forest); letter-spacing: 0; }
+/* 副文案单行省略：4 列窄栏里不让它断成"方案。"这类孤字行 */
+.sl-service-text span {
+  display: block; color: var(--sl-muted); font-size: 12px; line-height: 1.6;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+}
 @media (max-width: 980px) {
-  .sl-service-grid { grid-template-columns: 1fr 1fr; }
-  .sl-service-item { padding: 16px 14px; }
+  .sl-service { padding-block: 22px; }
+  .sl-service-grid { grid-template-columns: 1fr 1fr; row-gap: 22px; }
+  .sl-service-item { padding: 4px 14px; }
   .sl-service-item:nth-child(odd) { border-inline-start: 0; padding-inline-start: 0; }
-  .sl-service-text span { display: none; }
+}
+@media (max-width: 560px) {
+  .sl-service-grid { grid-template-columns: 1fr; row-gap: 20px; }
+  .sl-service-item, .sl-service-item:nth-child(odd) { border-inline-start: 0; padding-inline-start: 0; }
 }
 
 /* ---- 通用 section ---- */
@@ -548,6 +558,8 @@ p { margin: 0; }
 .chat-close { width: 30px; height: 30px; flex: none; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 4px; background: transparent; color: rgba(255, 255, 255, .7); cursor: pointer; }
 .chat-close:hover { background: rgba(255, 255, 255, .12); color: #fff; }
 .chat-close svg { width: 18px; height: 18px; }
+.chat-clear-log { color: rgba(255, 255, 255, .7); }
+.chat-clear-log:hover { background: rgba(255, 255, 255, .12); color: #fff; }
 .chat-offline { padding: 8px 14px; border-block-end: 1px solid #eee; background: #fdf6e3; color: #8a6d1a; font-size: 12px; }
 .chat-log { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; padding: 16px 14px 8px; }
 .chat-empty { margin: auto 0; display: flex; flex-direction: column; align-items: center; text-align: center; }
@@ -561,9 +573,15 @@ p { margin: 0; }
 .chat-msg { max-width: 84%; display: flex; flex-direction: column; gap: 3px; }
 .chat-msg[data-from="visitor"] { align-self: flex-end; align-items: flex-end; }
 .chat-msg[data-from="agent"] { align-self: flex-start; }
-.chat-bubble { padding: 9px 12px; border: 1px solid #dfe3d8; border-radius: 4px; background: #fff; font-size: 13.5px; line-height: 1.5; overflow-wrap: anywhere; }
-.chat-msg[data-from="visitor"] .chat-bubble { background: #1f4633; border-color: transparent; color: #fff; }
+.chat-bubble { padding: 9px 12px; border: 0; border-radius: 4px; background: #edf0e6; font-size: 13.5px; line-height: 1.5; overflow-wrap: anywhere; }
+.chat-msg[data-from="visitor"] .chat-bubble { background: #1f4633; color: #fff; }
 .chat-meta { font-size: 11px; color: #9a9da3; }
+/* 系统提示 / 日期分隔 / 知识库来源：结构同 plugins/website/static/site.css，主题只换色；
+   漏掉这三条时日期和「会话已结束」会退化成裸段落，日志就没有层级。 */
+.chat-sources { display: block; margin-top: 6px; padding-top: 6px; border-top: 1px dashed #dfe3d8; font-size: 11px; color: #9a9da3; }
+.chat-note { align-self: center; padding: 3px 10px; border: 1px solid #dfe3d8; border-radius: 999px; background: #faf9f4; font-size: 11px; color: #9a9da3; text-align: center; }
+.chat-day { display: flex; align-items: center; gap: 10px; align-self: stretch; margin: 2px 0; font-size: 11px; color: #9a9da3; }
+.chat-day::before, .chat-day::after { content: ""; flex: 1; height: 1px; background: #dfe3d8; }
 .chat-image { display: block; max-width: 100%; max-height: 220px; min-width: 80px; min-height: 60px; object-fit: cover; border-radius: 2px; }
 .chat-file { display: flex; align-items: center; gap: 6px; color: inherit; text-decoration: underline; }
 .chat-file-meta { font-size: 11px; opacity: .7; }
@@ -715,3 +733,86 @@ section[id] { scroll-margin-top: 96px; }
    居中用 left + translateX，不随书写方向翻转；z-index 高于微信分享弹层。 */
 .site-toast { position: fixed; left: 50%; bottom: 30px; transform: translateX(-50%) translateY(10px); opacity: 0; z-index: 10000; padding: 9px 16px; border: 1px solid var(--pc-line); border-radius: 6px; background: var(--pc-card); color: var(--pc-ink); font-size: 13px; box-shadow: 0 18px 40px -20px rgba(0, 0, 0, .45); pointer-events: none; transition: opacity .2s, transform .2s; }
 .site-toast.show { opacity: 1; transform: translateX(-50%); }
+
+/* ============================================================
+   视觉与动效增强层（追加，不修改上方任何规则）
+   仅用主题已有类名；尊重 prefers-reduced-motion。
+   ============================================================ */
+/* Hero 实景缓慢推进，静止感变呼吸感 */
+.sl-hero-media img { animation: sl-drift 26s ease-in-out infinite alternate; }
+@keyframes sl-drift { from { transform: scale(1.015); } to { transform: scale(1.07); } }
+
+/* 统计数字落在实景上会发糊：加深左侧渐隐，并给统计条本身加一层浅底承托 */
+.sl-hero-media::after { background: linear-gradient(90deg, var(--sl-paper) 0%, rgba(250,249,244,.99) 20%, rgba(250,249,244,.96) 32%, rgba(250,249,244,.88) 42%, rgba(250,249,244,.55) 50%, rgba(250,249,244,.18) 58%, transparent 64%); }
+.sl-hero-stats { background: linear-gradient(90deg, rgba(250,249,244,.94) 0%, rgba(250,249,244,.72) 62%, rgba(250,249,244,0) 100%); padding: 8px 0; border-radius: 2px; }
+
+/* 导航当前项：从「常驻下划线」改为「滑入下划线」，悬停同款 */
+.sl-nav > a[aria-current="page"] { box-shadow: none; }
+.sl-nav > a::after {
+  content: ""; position: absolute; left: 10px; right: 10px; bottom: 2px; height: 2px;
+  background: var(--sl-amber); transform: scaleX(0); transform-origin: left;
+  transition: transform .28s cubic-bezier(.2,.7,.3,1);
+}
+.sl-nav > a:hover::after, .sl-nav > a[aria-current="page"]::after { transform: scaleX(1); }
+
+/* 卡片悬停轻上浮，与已有阴影过渡叠加 */
+.sl-product-card, .sl-project-card { transition: border-color .2s, box-shadow .25s, transform .25s cubic-bezier(.2,.7,.3,1); }
+.sl-product-card:hover, .sl-project-card:hover { transform: translateY(-4px); }
+
+/* 服务条图标微交互：只加深底座描边，保持深绿线稿风格统一 */
+.sl-service-item:hover .sl-service-ico { border-color: var(--sl-forest-2); }
+
+/* 应用场景图放大更明显 */
+.sl-app-card img { transition: transform .6s cubic-bezier(.2,.7,.3,1); }
+.sl-app-card:hover img { transform: scale(1.08); }
+
+/* 评价卡悬停反馈 */
+.sl-quote { transition: box-shadow .25s, border-color .25s; }
+.sl-quote:hover { border-color: var(--sl-line); box-shadow: 0 16px 34px -28px rgba(20,40,28,.4); }
+
+/* 降低动态效果偏好：关掉所有非必要动画 */
+@media (prefers-reduced-motion: reduce) {
+  .sl-hero-media img { animation: none !important; }
+}
+
+/* 厂区通栏用 100vw 撑满，滚动条存在时会比可视区宽 8px 导致横向滚动；约束为可视宽度 */
+.sl-campus-band { width: 100%; max-width: 100vw; margin-inline: calc(50% - 50vw); }
+
+/* ============================================================
+   质感增强层 2：逐行进场 / 阅读进度 / 回到顶部（追加，不改上方规则）
+   关键内容默认可见，进场只用 backwards 增强，绝不用 forwards 吞内容。
+   ============================================================ */
+
+/* Hero 标题两行依次上浮；父级 .sl-hero-copy 已整体 reveal，这里做二级错峰 */
+.sl-hero-title .sl-hero-accent0,
+.sl-hero-title .sl-hero-accent1 { animation: sl-line-in .8s cubic-bezier(.2,.7,.3,1) backwards; }
+.sl-hero-title .sl-hero-accent0 { animation-delay: .12s; }
+.sl-hero-title .sl-hero-accent1 { animation-delay: .28s; }
+@keyframes sl-line-in { from { opacity: 0; transform: translateY(18px); } }
+
+/* 眉题短线随 reveal 展开：从 0 长到 15px */
+.sl-eyebrow::before { transform-origin: left center; }
+[data-reveal].revealed .sl-eyebrow::before { animation: sl-rule-in .65s cubic-bezier(.2,.7,.3,1) backwards .18s; }
+@keyframes sl-rule-in { from { transform: scaleX(0); } }
+
+/* 回到顶部：默认隐藏，滚过一屏后浮现；位于客服挂件上方 */
+.sl-to-top {
+  position: fixed; right: 24px; bottom: 84px; z-index: 89;
+  width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--sl-line); border-radius: 2px; background: #fff; color: var(--sl-forest);
+  cursor: pointer; box-shadow: 0 12px 30px -18px rgba(20, 40, 28, .5);
+  opacity: 0; transform: translateY(8px); pointer-events: none;
+  transition: opacity .22s ease, transform .22s ease, background .16s, color .16s, border-color .16s;
+}
+.sl-to-top.is-on { opacity: 1; transform: none; pointer-events: auto; }
+.sl-to-top:hover { background: var(--sl-forest); border-color: var(--sl-forest); color: #fff; }
+.sl-to-top svg { width: 18px; height: 18px; }
+@media (max-width: 520px) { .sl-to-top { right: 14px; bottom: 74px; } }
+
+/* 降低动态效果偏好：关掉进场动画，进度条/回顶保留但不做过渡 */
+@media (prefers-reduced-motion: reduce) {
+  .sl-hero-title .sl-hero-accent0,
+  .sl-hero-title .sl-hero-accent1,
+  [data-reveal].revealed .sl-eyebrow::before { animation: none !important; }
+  .sl-to-top { transition: none !important; }
+}

@@ -468,6 +468,8 @@ p { margin: 0; }
 .chat-close { width: 30px; height: 30px; flex: none; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 2px; background: transparent; color: rgba(255, 255, 255, .7); cursor: pointer; }
 .chat-close:hover { background: rgba(255, 255, 255, .12); color: #fff; }
 .chat-close svg { width: 18px; height: 18px; }
+.chat-clear-log { color: rgba(255, 255, 255, .7); }
+.chat-clear-log:hover { background: rgba(255, 255, 255, .12); color: #fff; }
 .chat-offline { padding: 8px 14px; border-block-end: 1px solid #eee; background: #fdf6e3; color: #8a6d1a; font-size: 12px; }
 .chat-log { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; padding: 16px 14px 8px; }
 .chat-empty { margin: auto 0; display: flex; flex-direction: column; align-items: center; text-align: center; }
@@ -481,9 +483,15 @@ p { margin: 0; }
 .chat-msg { max-width: 84%; display: flex; flex-direction: column; gap: 3px; }
 .chat-msg[data-from="visitor"] { align-self: flex-end; align-items: flex-end; }
 .chat-msg[data-from="agent"] { align-self: flex-start; }
-.chat-bubble { padding: 9px 12px; border: 1px solid #e2e8f0; border-radius: 4px; background: #fff; font-size: 13.5px; line-height: 1.5; overflow-wrap: anywhere; }
-.chat-msg[data-from="visitor"] .chat-bubble { background: #1273de; border-color: transparent; color: #fff; }
+.chat-bubble { padding: 9px 12px; border: 0; border-radius: 4px; background: #f0f4fa; font-size: 13.5px; line-height: 1.5; overflow-wrap: anywhere; }
+.chat-msg[data-from="visitor"] .chat-bubble { background: #1273de; color: #fff; }
 .chat-meta { font-size: 11px; color: #9a9da3; }
+/* 系统提示 / 日期分隔 / 知识库来源：结构同 plugins/website/static/site.css，主题只换色；
+   漏掉这三条时日期和「会话已结束」会退化成裸段落，日志就没有层级。 */
+.chat-sources { display: block; margin-top: 6px; padding-top: 6px; border-top: 1px dashed #e2e8f0; font-size: 11px; color: #9a9da3; }
+.chat-note { align-self: center; padding: 3px 10px; border: 1px solid #e2e8f0; border-radius: 999px; background: #f6f9fc; font-size: 11px; color: #9a9da3; text-align: center; }
+.chat-day { display: flex; align-items: center; gap: 10px; align-self: stretch; margin: 2px 0; font-size: 11px; color: #9a9da3; }
+.chat-day::before, .chat-day::after { content: ""; flex: 1; height: 1px; background: #e2e8f0; }
 .chat-image { display: block; max-width: 100%; max-height: 220px; min-width: 80px; min-height: 60px; object-fit: cover; border-radius: 2px; }
 .chat-file { display: flex; align-items: center; gap: 6px; color: inherit; text-decoration: underline; }
 .chat-file-meta { font-size: 11px; opacity: .7; }

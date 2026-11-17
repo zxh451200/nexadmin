@@ -2389,6 +2389,22 @@ html[data-scheme="light"] .chat-panel { box-shadow: 0 28px 64px -18px rgba(8, 9,
 }
 .chat-close:hover { background: var(--hover); color: var(--text); }
 .chat-close svg { width: 18px; height: 18px; }
+/* 清空聊天记录：与关闭按钮同规格，注入在头部工具区 */
+.chat-clear-log {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.chat-clear-log:hover { background: var(--hover); color: var(--text); }
+.chat-clear-log svg { width: 16px; height: 16px; }
 .chat-offline {
   margin: 0;
   padding: 8px 14px;
@@ -2451,7 +2467,7 @@ html[data-scheme="light"] .chat-panel { box-shadow: 0 28px 64px -18px rgba(8, 9,
 .chat-msg[data-from="agent"] { align-self: flex-start; }
 .chat-bubble {
   padding: 9px 12px;
-  border: 1px solid var(--hairline);
+  border: 0;
   border-radius: 14px;
   background: var(--panel-3);
   color: var(--text);
@@ -2460,9 +2476,9 @@ html[data-scheme="light"] .chat-panel { box-shadow: 0 28px 64px -18px rgba(8, 9,
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.chat-msg[data-from="visitor"] .chat-bubble { background: var(--accent); border-color: transparent; color: #fff; border-end-end-radius: 4px; }
+.chat-msg[data-from="visitor"] .chat-bubble { background: var(--accent); color: #fff; border-end-end-radius: 4px; }
 .chat-msg[data-from="agent"] .chat-bubble { border-end-start-radius: 4px; }
-.chat-meta { font-size: 11px; color: var(--text-3); }
+.chat-meta { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-3); }
 .chat-sources { display: block; margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--border, rgba(127, 127, 127, 0.3)); font-size: 11px; color: var(--text-3); }
 .chat-note {
   align-self: center;
@@ -2474,6 +2490,9 @@ html[data-scheme="light"] .chat-panel { box-shadow: 0 28px 64px -18px rgba(8, 9,
   color: var(--text-3);
   text-align: center;
 }
+/* 跨天日期分隔：两侧细线夹住日期，和药丸状的状态提示区分开 */
+.chat-day { display: flex; align-items: center; gap: 10px; align-self: stretch; margin: 2px 0; font-size: 11px; color: var(--text-3); }
+.chat-day::before, .chat-day::after { content: ""; flex: 1; height: 1px; background: var(--hairline); }
 .chat-image { display: block; max-width: 100%; max-height: 220px; min-width: 80px; min-height: 60px; object-fit: contain; border-radius: 8px; }
 .chat-file { display: flex; align-items: center; gap: 6px; color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 .chat-file-meta { font-size: 11px; opacity: 0.7; }

@@ -846,12 +846,13 @@ func (v *siteView) JSStrings() template.JS {
 		"chatTranslateSame", "chatTranslated", "chatTranslateFailed", "chatTranslateIn", "chatTranslateOriginal",
 		"chatTranslateSettings", "chatTranslateAutoIn", "chatTranslateInTo", "chatTranslateAutoOut", "chatTranslateOutFrom", "chatTranslateOutTo",
 		"chatTranslateHintIn", "chatTranslateHintOut", "chatTranslateSave",
-		"chatLocalTime", "chatProductLabel", "chatQuantity", "chatGreeting", "chatCollapse", "chatExpand", "subtotal",
+		"chatTranslateOptions", "chatTranslateNow", "chatTranslateNowTo", "chatTranslating", "chatTranslatePick",
+		"chatLocalTime", "chatToday", "chatYesterday", "chatProductLabel", "chatQuantity", "chatGreeting", "chatCollapse", "chatExpand", "subtotal",
 		"skuSelected", "skuLowStock", "skuOutOfStock",
 		"inqMetaProduct", "inqMetaQty",
 		"inqAttachUploading", "inqAttachRemove", "inqAttachTooLarge", "inqAttachType", "inqAttachFailed", "inqAttachLimit",
 		"chatNameCard", "chatAddressCard", "chatCardNameTitle", "chatCardAddressTitle", "chatCardHint", "chatCardName", "chatCardCompany", "chatCardJob", "chatCardEmail", "chatCardPhone",
-		"chatCardRecipient", "chatCardCountry", "chatCardRegion", "chatCardStreet", "chatCardPostcode", "chatCardSend", "chatCardCancel", "chatCardRequired", "chatCardNameLabel", "chatCardAddressLabel",
+		"chatCardRecipient", "chatCardCountry", "chatCardRegion", "chatCardStreet", "chatCardPostcode", "chatCardSend", "chatCardCancel", "chatCardRequired", "chatCardNameLabel", "chatCardAddressLabel", "chatCardPhonePh",
 		"chatCardCountrySelect", "chatCardCountrySearch", "chatCardRegionSelect", "chatCardRegionSearch", "chatCardSearchEmpty", "chatCardCity", "chatCardCitySelect", "chatCardCityEmpty", "chatCardCitySearch",
 	} {
 		m[k] = v.T("site.js." + k)

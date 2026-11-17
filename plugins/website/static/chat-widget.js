@@ -178,6 +178,83 @@
       if (code === 'handoff') return t('chatHandoff', '已转人工客服，请稍候');
       return m.content || '';
     }
+    function noteCodeOf(m) {
+      if (!m.meta) return '';
+      try { return (JSON.parse(m.meta) || {}).code || ''; } catch (e) { return ''; }
+    }
+
+    // 会话状态是最容易刷屏的一类系统消息：结束 → 重新开启常常成对出现，攒几轮就是
+    // 一叠药丸。这里就地改写最后一条状态条：同一状态不重复追加，来回切换只留最新一次。
+    var STATE_NOTES = { conv_closed: 1, conv_reopened: 1, conv_merged_into: 1 };
+    var lastNoteEl = null;
+    function appendNoteEl(code, text) {
+      var p = document.createElement('p');
+      p.className = 'chat-note';
+      if (code) p.setAttribute('data-code', code);
+      p.textContent = text;
+      log.appendChild(p);
+      return p;
+    }
+    function addSystemNote(code, text) {
+      var prev = lastNoteEl && lastNoteEl.isConnected ? lastNoteEl : null;
+      // 只有状态条还是日志最后一项时才就地改写：中间夹了真实消息，说明状态变化
+      // 发生在那条消息之后，应该另起一条，不能回头改早先那条。
+      // 日期分隔符（.chat-day）是本地排版元素、不是真实消息，允许它夹在中间：
+      // 否则跨天时"先插日期再渲染状态条"会让相邻判断失败，每天各留一条状态药丸。
+      var tail = log.lastElementChild;
+      while (tail && tail !== prev && tail.classList && tail.classList.contains('chat-day')) {
+        tail = tail.previousElementSibling;
+      }
+      var adjacent = !!prev && prev === tail;
+      if (adjacent && STATE_NOTES[code]) {
+        var pc = prev.getAttribute('data-code');
+        if (pc === code) { lastNoteEl = prev; return; }
+        if (pc && STATE_NOTES[pc]) {
+          prev.setAttribute('data-code', code);
+          prev.textContent = text;
+          // 再往前如果也停在同一状态（多轮来回），旧的那条删掉，只留最后一次；
+          // 中间夹的日期分隔符一并带走，避免留下孤立的分隔线。
+          var before = prev.previousElementSibling;
+          while (before && before.classList &&
+                 (before.classList.contains('chat-note') || before.classList.contains('chat-day'))) {
+            if (before.classList.contains('chat-note') && before.getAttribute('data-code') !== code) break;
+            var dead = before;
+            before = before.previousElementSibling;
+            dead.remove();
+            if (dead === lastNoteEl) lastNoteEl = prev;
+          }
+          lastNoteEl = prev;
+          return;
+        }
+      }
+      lastNoteEl = appendNoteEl(code, text);
+    }
+
+    // 会话跨天时插一条日期分隔：只有 HH:mm 的话，隔天再看分不清哪条属于哪天
+    var lastDayKey = '';
+    function dayKeyOf(iso) {
+      var d = new Date(iso);
+      return isNaN(d.getTime()) ? '' : d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+    }
+    function dayLabelOf(iso) {
+      var d = new Date(iso);
+      var now = new Date();
+      var k = dayKeyOf(iso);
+      if (k === dayKeyOf(now)) return t('chatToday', '今天');
+      if (k === dayKeyOf(new Date(now.getTime() - 864e5))) return t('chatYesterday', '昨天');
+      try {
+        return d.toLocaleDateString(document.documentElement.lang || undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+      } catch (e) { return k; }
+    }
+    function ensureDayDivider(iso) {
+      var k = dayKeyOf(iso);
+      if (!k || k === lastDayKey) return;
+      lastDayKey = k;
+      var d = document.createElement('p');
+      d.className = 'chat-day';
+      d.textContent = dayLabelOf(iso);
+      log.appendChild(d);
+    }
 
     function fileLink(att, url) {
       var file = document.createElement('a');
@@ -199,11 +276,11 @@
       var stick = atBottom();
       if (empty) empty.hidden = true;
       if (m.kind === 'system') {
-        var note = document.createElement('p');
-        note.className = 'chat-note';
-        note.textContent = systemText(m);
-        log.appendChild(note);
+        // 系统状态提示是居中药丸，不需要日期分隔；跨天时若也插 .chat-day，
+        // 会和状态条交替堆成一串「日期/会话已结束/日期/会话已重新开启」，正是刷屏的来源。
+        addSystemNote(noteCodeOf(m), systemText(m));
       } else {
+        ensureDayDivider(m.createdAt);
         var from = m.senderType === 'visitor' ? 'visitor' : 'agent';
         var row = document.createElement('div');
         row.className = 'chat-msg';
@@ -263,10 +340,7 @@
     function addLocalNote(text) {
       if (!text) return;
       if (empty) empty.hidden = true;
-      var note = document.createElement('p');
-      note.className = 'chat-note';
-      note.textContent = text;
-      log.appendChild(note);
+      lastNoteEl = appendNoteEl('', text);
       log.scrollTop = log.scrollHeight;
     }
 
@@ -275,10 +349,8 @@
     function showLoadErr() {
       if (loadErrNote && loadErrNote.isConnected) return;
       if (empty) empty.hidden = true;
-      loadErrNote = document.createElement('p');
-      loadErrNote.className = 'chat-note';
-      loadErrNote.textContent = t('chatErrLoad', '客服连接不上，请刷新页面再试');
-      log.appendChild(loadErrNote);
+      loadErrNote = appendNoteEl('', t('chatErrLoad', '客服连接不上，请刷新页面再试'));
+      lastNoteEl = loadErrNote;
       log.scrollTop = log.scrollHeight;
     }
     function clearLoadErr() {
@@ -355,7 +427,7 @@
     function pull() {
       if (!st.convNo || st.pulling) return Promise.resolve();
       st.pulling = true;
-      return api('/conversations/' + encodeURIComponent(st.convNo) + '/messages?since=' + st.lastSeq + '&limit=50')
+      return api('/conversations/' + encodeURIComponent(st.convNo) + '/messages?since=' + st.lastSeq + '&limit=20')
         .then(function (data) {
           var rows = (data && data.messages) || [];
           rows.forEach(function (m) {
@@ -425,6 +497,10 @@
       if (!keepLog && log) {
         log.textContent = '';
         if (empty) { empty.hidden = false; log.appendChild(empty); }
+        // 收敛状态是闭包变量，不在 st 里；不清会被清空前的旧值污染首次渲染。
+        lastNoteEl = null;
+        lastDayKey = '';
+        loadErrNote = null;
       }
       stopRealtime();
       applyConv({ status: 'open', rating: 0, closedBy: '' });
@@ -433,7 +509,7 @@
     function startNew() {
       if (st.starting) return;
       st.starting = true;
-      resetConv(true);
+      resetConv(false);
       addLocalNote(t('chatNewNote', '已为你开启新会话'));
       ensureConv()
         .then(function () { return pull(); })
@@ -510,8 +586,8 @@
         .catch(function (err) {
           if (err && err.status === 409) {
             restarted = true;
+            resetConv(false);
             addLocalNote(t('chatClosed', '会话已结束，发送新消息会开启新会话'));
-            resetConv(true);
             return post();
           }
           throw err;
@@ -562,8 +638,8 @@
         })
         .catch(function (err) {
           if (err && err.status === 409) {
+            resetConv(false);
             addLocalNote(t('chatClosed', '会话已结束，发送新消息会开启新会话'));
-            resetConv(true);
           } else {
             addLocalNote(t('chatUploadFailed', '上传失败，请重试'));
           }
@@ -615,6 +691,31 @@
       });
     }
     if (newBtn) newBtn.addEventListener('click', startNew);
+
+    // 清空聊天记录按钮：注入到头部，避免改三套主题的模板。
+    // 只清当前视图（DOM + 收敛状态），不动会话号/游标/已读集合，
+    // 这样增量拉取不会把清空前的旧消息又拉回来，服务端历史也不受影响。
+    var head = root.querySelector('.chat-head');
+    if (head && log) {
+      var clearLogBtn = document.createElement('button');
+      clearLogBtn.type = 'button';
+      clearLogBtn.className = 'chat-tool chat-clear-log';
+      clearLogBtn.setAttribute('data-chat-clear-log', '');
+      clearLogBtn.setAttribute('aria-label', t('chat.clearLog', '清空聊天记录'));
+      clearLogBtn.setAttribute('title', t('chat.clearLog', '清空聊天记录'));
+      clearLogBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v5M14 11v5"/></svg>';
+      var expandBtn = head.querySelector('[data-chat-expand]');
+      if (expandBtn) head.insertBefore(clearLogBtn, expandBtn);
+      else head.appendChild(clearLogBtn);
+      clearLogBtn.addEventListener('click', function () {
+        log.textContent = '';
+        if (empty) { empty.hidden = false; log.appendChild(empty); }
+        lastNoteEl = null;
+        lastDayKey = '';
+        loadErrNote = null;
+        addLocalNote(t('chat.clearLogDone', '聊天记录已清空'));
+      });
+    }
     stars.forEach(function (btn) {
       btn.addEventListener('click', function () {
         if (st.rating > 0) return;
