@@ -142,7 +142,13 @@ func (h *siteHandler) render(c *gin.Context, name string, status int, v *siteVie
 	}
 	// 站点默认分享图兜底：内容级 OGImage 为空时用站点设置（absURL 补协议），仍空由模板回退内置 og.png。
 	if v.OGImage == "" && v.OgImageURL != "" {
-		v.OGImage = absURL(v.BaseURL, v.OgImageURL)
+		v.OGImage = v.OgImageURL
+	}
+	// handler 阶段 v.BaseURL 尚未就位（在上方 131 行才赋值），内容级 OGImage 此时可能还是相对路径。
+	// 统一在这里做绝对化：og:image / twitter:image 与 ImageObject JSON-LD 都要求绝对 URL，
+	// 相对路径在微信 / Facebook / LinkedIn 的分享卡片上会被忽略。
+	if v.OGImage != "" {
+		v.OGImage = absURL(v.BaseURL, v.OGImage)
 	}
 	var b strings.Builder
 	if err := t.ExecuteTemplate(&b, "layout", v); err != nil {
