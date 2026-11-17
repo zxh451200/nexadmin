@@ -47,7 +47,7 @@
     '.chat-compose textarea:not(:placeholder-shown)~.chat-compose-bar .chat-clear{display:inline-flex}',
     // 按钮是凭空多出来的，不能让整排跳一下：把它右侧的提示文字改成吃掉剩余空间的弹性项，
     // 并把发送键的 auto 边距归零（否则两个 auto 边距各分一半，清空键又飘回中间）。
-    '.chat-compose textarea:not(:placeholder-shown)~.chat-compose-bar .chat-hint{margin-inline-start:0;flex:1 1 auto}',
+    '.chat-compose textarea:not(:placeholder-shown)~.chat-compose-bar .chat-hint{margin-inline-start:0;flex:1 1 auto;min-width:0}',
     '.chat-compose textarea:not(:placeholder-shown)~.chat-compose-bar .chat-send{margin-inline-start:0}',
     '.chat-clear:hover{background:rgba(235,87,87,.14);color:var(--red,#eb5757)}',
     '.chat-emoji-pop{position:absolute;z-index:20;display:flex;flex-wrap:wrap;gap:4px;padding:8px;border:1px solid rgba(128,128,128,.3);border-radius:4px;background:Canvas;color:CanvasText;box-shadow:0 12px 28px rgba(0,0,0,.18)}',
