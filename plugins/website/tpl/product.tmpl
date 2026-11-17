@@ -87,7 +87,7 @@
         </div>
         {{end}}
         {{if $trade.Skus}}
-        <div class="pd-skus" data-pd-skus data-currency="{{.Product.Currency}}" data-base-price="{{.Product.PriceMin}}"{{if .Product.PriceUnit}} data-unit="{{.Product.PriceUnit}}"{{end}}>
+        <div class="pd-skus" data-pd-skus data-currency="{{.Product.Currency}}" data-base-price="{{.Product.PriceMin}}"{{if .Product.PriceUnit}} data-unit="{{.Product.PriceUnit}}" data-unit-label="{{.UnitName .Product.PriceUnit}}"{{end}}>
           {{range $pi, $prop := $trade.SkuProps}}
           <div class="pd-sku-group" data-sku-prop="{{$prop.Name}}">
             <span class="pd-sku-label">{{$prop.Name}}</span>

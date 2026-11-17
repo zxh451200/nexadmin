@@ -64,8 +64,8 @@
           {{range .Product.Certifications}}<span class="pd-cert">{{uiIcon .Icon "pd-cert-ico"}}<span>{{.Name}}</span></span>{{end}}
         </div>
         {{end}}
-        <p class="pd-price">{{if .Product.PriceMin}}{{.Product.Currency}}{{if and .Product.PriceMax (gt .Product.PriceMax .Product.PriceMin)}}{{money .Product.PriceMin}}-{{money .Product.PriceMax}}{{else}}{{money .Product.PriceMin}}{{end}}{{if .Product.PriceUnit}}<span class="pd-price-unit"> / {{.Product.PriceUnit}}</span>{{end}}{{else}}{{.T "product.priceOnRequest"}}{{end}}</p>
-        {{if .Product.Moq}}<p class="pd-moq">{{.T "products.moqLabel"}}: {{.Product.Moq}}{{if .Product.PriceUnit}} {{.Product.PriceUnit}}{{end}}</p>{{end}}
+        <p class="pd-price">{{if .Product.PriceMin}}{{.Product.Currency}}{{if and .Product.PriceMax (gt .Product.PriceMax .Product.PriceMin)}}{{money .Product.PriceMin}}-{{money .Product.PriceMax}}{{else}}{{money .Product.PriceMin}}{{end}}{{if .Product.PriceUnit}}<span class="pd-price-unit"> / {{.UnitName .Product.PriceUnit}}</span>{{end}}{{else}}{{.T "product.priceOnRequest"}}{{end}}</p>
+        {{if .Product.Moq}}<p class="pd-moq">{{.T "products.moqLabel"}}: {{.Product.Moq}}{{if .Product.PriceUnit}} {{.UnitName .Product.PriceUnit}}{{end}}</p>{{end}}
         {{$trade := .Product.TradeInfo}}
         {{/* 数量紧跟 MOQ（对齐阿里价格块下方就是数量控件）；阶梯价与 SKU 选型随后 */}}
         <div class="pd-qty" data-pd-qty data-pd-qty-min="{{if gt .Product.Moq 1}}{{.Product.Moq}}{{else}}1{{end}}"{{if .Product.PriceUnit}} data-pd-qty-unit="{{.Product.PriceUnit}}"{{end}}>
@@ -75,18 +75,18 @@
             <input class="pd-step-input" id="pd-qty-input" data-pd-qty-input type="text" inputmode="numeric" autocomplete="off" value="{{if gt .Product.Moq 1}}{{.Product.Moq}}{{else}}1{{end}}" aria-label="{{.T "product.quantity"}}">
             <button type="button" class="pd-step" data-pd-qty-plus aria-label="{{.T "product.qtyInc"}}">+</button>
           </div>
-          {{if .Product.PriceUnit}}<span class="pd-qty-unit">{{.Product.PriceUnit}}</span>{{end}}
+          {{if .Product.PriceUnit}}<span class="pd-qty-unit">{{.UnitName .Product.PriceUnit}}</span>{{end}}
         </div>
         {{if $trade.Ladder}}
         <div class="pd-ladder" data-pd-ladder data-currency="{{.Product.Currency}}" role="table" aria-label="{{.T "product.priceTiers"}}">
           {{range $trade.Ladder}}<div class="pd-ladder-row" role="row" data-ladder-qty="{{.Qty}}" data-ladder-price="{{.Price}}">
             <span class="pd-ladder-range" role="cell">{{if .Last}}≥{{.Qty}}{{else}}{{.Range}}{{end}}</span>
-            <span class="pd-ladder-price" role="cell">{{$.Product.Currency}}{{money .Price}}{{if $.Product.PriceUnit}} <small>/ {{$.Product.PriceUnit}}</small>{{end}}</span>
+            <span class="pd-ladder-price" role="cell">{{$.Product.Currency}}{{money .Price}}{{if $.Product.PriceUnit}} <small>/ {{$.UnitName $.Product.PriceUnit}}</small>{{end}}</span>
           </div>{{end}}
         </div>
         {{end}}
         {{if $trade.Skus}}
-        <div class="pd-skus" data-pd-skus data-currency="{{.Product.Currency}}" data-base-price="{{.Product.PriceMin}}"{{if .Product.PriceUnit}} data-unit="{{.Product.PriceUnit}}"{{end}}>
+        <div class="pd-skus" data-pd-skus data-currency="{{.Product.Currency}}" data-base-price="{{.Product.PriceMin}}"{{if .Product.PriceUnit}} data-unit="{{.Product.PriceUnit}}" data-unit-label="{{.UnitName .Product.PriceUnit}}"{{end}}>
           {{range $pi, $prop := $trade.SkuProps}}
           <div class="pd-sku-group" data-sku-prop="{{$prop.Name}}">
             <span class="pd-sku-label">{{$prop.Name}}</span>
@@ -203,7 +203,7 @@
     <section class="pd-panel" id="pd-panel-ship" role="tabpanel" aria-labelledby="pd-tab-ship">
       <h2>{{.T "product.tabShipping"}}</h2>
       <div class="pd-spec-table">
-        {{if .Product.Moq}}<div class="pd-spec-cell"><span class="pd-spec-label">{{.T "products.moqLabel"}}</span><span>{{.Product.Moq}} {{.Product.PriceUnit}}</span></div>{{end}}
+        {{if .Product.Moq}}<div class="pd-spec-cell"><span class="pd-spec-label">{{.T "products.moqLabel"}}</span><span>{{.Product.Moq}} {{.UnitName .Product.PriceUnit}}</span></div>{{end}}
         {{if .Product.PaymentTerms}}<div class="pd-spec-cell"><span class="pd-spec-label">{{.T "products.paymentTerms"}}</span><span>{{.Product.PaymentTerms}}</span></div>{{end}}
         {{if .Product.LeadTimeDays}}<div class="pd-spec-cell"><span class="pd-spec-label">{{.T "products.leadTimeLabel"}}</span><span>{{.TF "products.leadTime" .Product.LeadTimeDays}}</span></div>{{end}}
         {{if .Product.Port}}<div class="pd-spec-cell"><span class="pd-spec-label">{{.T "products.portLabel"}}</span><span>{{.Product.Port}}</span></div>{{end}}
@@ -263,7 +263,7 @@
       <div class="pd-rec-grid">{{range .ProductsRelated}}<a class="pd-rec-card" href="{{$.URL "/products"}}/{{.Slug}}">
         <span class="pd-rec-cover">{{if .CoverURL}}<img src="{{.CoverURL}}" alt="" loading="lazy">{{else}}<span class="pd-rec-fallback">{{initial .Title}}</span>{{end}}</span>
         <span class="pd-rec-name">{{.Title}}</span>
-        {{if .PriceMin}}<span class="pd-rec-price">{{.Currency}}{{money .PriceMin}}{{if .PriceUnit}} / {{.PriceUnit}}{{end}}</span>{{end}}
+        {{if .PriceMin}}<span class="pd-rec-price">{{.Currency}}{{money .PriceMin}}{{if .PriceUnit}} / {{$.UnitName .PriceUnit}}{{end}}</span>{{end}}
         {{if .Moq}}<span class="pd-rec-moq">{{$.T "products.moqLabel"}}: {{.Moq}}</span>{{end}}
       </a>{{end}}</div>
     </section>
