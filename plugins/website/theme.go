@@ -29,7 +29,7 @@ import (
 // default（/docs /plugins 等框架自带页通常不必换肤）。
 var pageNames = []string{
 	"docs", "docs-index", "home", "plugins", "plugin",
-	"news", "post", "products", "product", "page", "contact", "notfound", "error",
+	"news", "post", "products", "product", "page", "contact", "sitemap", "notfound", "error",
 }
 
 var themeIDRe = regexp.MustCompile(`^[a-z][a-z0-9-]{1,47}$`)

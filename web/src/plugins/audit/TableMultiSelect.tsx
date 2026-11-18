@@ -54,7 +54,7 @@ export function TableMultiSelect({ options, value, onChange, disabled, 'aria-lab
               <CommandGroup>
                 {options.map((name) => (
                   <CommandItem key={name} value={name} onSelect={() => toggle(name)}>
-                    <Check className={selected.has(name) ? 'h-4 w-4 opacity-100' : 'h-4 w-4 opacity-0'} aria-hidden="true" />
+                    <Check className={selected.has(name) ? 'h-4 w-4 text-primary opacity-100' : 'h-4 w-4 text-primary opacity-0'} aria-hidden="true" />
                     <span className="font-mono text-xs">{name}</span>
                   </CommandItem>
                 ))}

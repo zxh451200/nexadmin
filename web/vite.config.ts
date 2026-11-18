@@ -40,10 +40,12 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (!id.includes('node_modules')) return undefined
+          // 不给 recharts 单独分组：分出来后 rolldown 会把框架 vendor 并进图表组，
+          // 入口静态依赖它 → index.html 预加载 435KB 图表库到每一页（含登录页）。
+          // 现在图表库跟着用到它的懒加载页面走（ChartBox 共享 chunk），首屏不加载。
           if (/[\\/]node_modules[\\/](react|react-dom|react-router|react-router-dom|i18next|react-i18next)[\\/]/.test(id)) {
             return 'framework-vendor'
           }
-          if (/[\\/]node_modules[\\/](recharts|d3-[^/\\]+)[\\/]/.test(id)) return 'charts-vendor'
           if (/[\\/]node_modules[\\/](xlsx|exceljs)[\\/]/.test(id)) return 'data-vendor'
           if (/[\\/]node_modules[\\/](@radix-ui|lucide-react|sonner|cmdk|tailwind-merge|class-variance-authority)[\\/]/.test(id)) {
             return 'ui-vendor'

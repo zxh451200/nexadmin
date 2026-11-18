@@ -61,9 +61,10 @@
     "infoDimensions": "Dimensions",
     "uploadPasteHint": "Drag files into the upload area, or paste screenshots with Ctrl+V",
     "sortBy": "Sort",
-    "sortNewest": "Newest first",
-    "sortOldest": "Oldest first",
+    "sortNewest": "Date, newest first",
+    "sortOldest": "Date, oldest first",
     "sortNameAsc": "Name A-Z",
+    "sortNameDesc": "Name Z-A",
     "sortSizeDesc": "Size, largest first",
     "sortSizeAsc": "Size, smallest first"
   }

@@ -230,7 +230,13 @@ function CategoryPicker({
     node: (
       <span className="flex w-full items-center gap-2">
         <span className="truncate" style={{ paddingInlineStart: `${(c.depth - 1) * 16}px` }}>{c.title}</span>
-        <span className="num ms-auto text-xs text-muted-foreground">{c.productCount}</span>
+        {/* 计数是子树口径（含后代），和筛选结果条数一致；有子类目的行补一句说明，免得被当成「直挂数」 */}
+        <span
+          className="num ms-auto text-xs text-muted-foreground"
+          title={c.children?.length ? t('plugin_website.product.categoryCountIncl', { count: c.productCount }) : undefined}
+        >
+          {c.productCount}
+        </span>
       </span>
     ),
   }))
@@ -295,6 +301,7 @@ function ImagesField({
           type: 'image/*',
         }))}
         onChange={(files) => onChange(files.map((f) => f.url))}
+        entryFluid
         entryExtra={
           atLimit ? (
             <span className="text-xs text-muted-foreground">{t('plugin_website.product.imageLimit', { max: IMAGES_MAX })}</span>
@@ -477,7 +484,8 @@ function ProductFormBody({
 
   return (
     // 长表单走右侧抽屉（模板 products 页形态）：字段多，居中弹窗又高又窄，侧滑面板装得下且不遮标题
-    <Drawer open direction="right" onOpenChange={onOpenChange}>
+    // handleOnly：右面板不接内容拖拽——vaul 对 right 方向是「按哪儿都能甩」，图集空白处一拖面板就横移
+    <Drawer open direction="right" handleOnly onOpenChange={onOpenChange}>
       <DrawerContent side="right" className="w-[min(92vw,46rem)]">
         <DrawerHeader className="shrink-0 border-b border-border px-6 pb-4 pt-5">
           <DrawerTitle>{editing ? t('plugin_website.product.edit') : t('plugin_website.product.create')}</DrawerTitle>

@@ -10,6 +10,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"nexadmin/core"
 	"nexadmin/pkg/idgen"
 )
 
@@ -115,7 +116,14 @@ func (s *Service) ListOper(ctx context.Context, q Query) ([]OperView, int64, err
 		return nil, 0, err
 	}
 	var rows []OperLog
-	if err := tx.Order("created_at DESC").Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Find(&rows).Error; err != nil {
+	order := core.OrderBy(q.Sort, q.Desc, map[string]string{
+		"created_at": "created_at",
+		"operator":   "operator",
+		"module":     "module",
+		"status":     "status",
+		"cost_ms":    "cost_ms",
+	}, "created_at")
+	if err := tx.Order(order).Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Find(&rows).Error; err != nil {
 		return nil, 0, err
 	}
 	out := make([]OperView, len(rows))
@@ -133,7 +141,13 @@ func (s *Service) ListLogin(ctx context.Context, q Query) ([]LoginView, int64, e
 		return nil, 0, err
 	}
 	var rows []LoginLog
-	if err := tx.Order("created_at DESC").Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Find(&rows).Error; err != nil {
+	order := core.OrderBy(q.Sort, q.Desc, map[string]string{
+		"created_at": "created_at",
+		"username":   "username",
+		"ip":         "ip",
+		"status":     "status",
+	}, "created_at")
+	if err := tx.Order(order).Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Find(&rows).Error; err != nil {
 		return nil, 0, err
 	}
 	out := make([]LoginView, len(rows))

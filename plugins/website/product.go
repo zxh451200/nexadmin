@@ -62,6 +62,11 @@ func productTx(tx *gorm.DB, q ContentQuery) *gorm.DB {
 
 // ListProducts 是管理端产品列表：带类目徽标，按更新时间倒序。
 func (s *Service) ListProducts(ctx context.Context, q ContentQuery) ([]Product, int64, error) {
+	ids, err := s.categorySubtreeFilter(ctx, q.CategoryIDs)
+	if err != nil {
+		return nil, 0, err
+	}
+	q.CategoryIDs = ids
 	tx := productTx(s.db.WithContext(ctx).Model(&Product{}), q)
 	var total int64
 	if err := tx.Count(&total).Error; err != nil {
@@ -488,29 +493,74 @@ func (s *Service) publishedProductSitemapEntries(ctx context.Context) ([]Product
 
 // ---- 产品类目 ----
 
-// productCategoryCountRow 是「某个类目下有多少商品」的一行聚合结果。
-type productCategoryCountRow struct {
-	CategoryID int64 `gorm:"column:category_id"`
-	Count      int64 `gorm:"column:c"`
+// categorySubtreeFilter 把筛选用的类目 id 展开成「自身 + 全部后代」。
+// 产品类目是树，选父类目就该把子类目下的商品一起查出来——公开站（descendantSlugs → term.Slugs）
+// 一直是这个口径，管理端此前只命中直挂：同一个父类目点下去，前后台数出来的条数不一样，
+// 商品只挂子类时后台甚至一条都查不到。展开用全表父子关系（类目是十几到几百条的小表），
+// 不写递归 SQL，MySQL/MariaDB/PG 三套库行为一致。
+// 传进来的 id 若已被删（脏 URL/旧书签），保留原值让 IN 命中空集，绝不能退化成「不过滤」。
+func (s *Service) categorySubtreeFilter(ctx context.Context, ids []idgen.ID) ([]idgen.ID, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	var rows []ProductCategory
+	if err := s.db.WithContext(ctx).Select("id", "parent_id").Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	parents := makeParentMap(rows)
+	seen := make(map[uint64]bool, len(ids)*2)
+	out := make([]idgen.ID, 0, len(ids))
+	for _, id := range ids {
+		for _, sub := range navSubtreeIDs(parents, uint64(id)) {
+			if seen[sub] {
+				continue
+			}
+			seen[sub] = true
+			out = append(out, idgen.ID(sub))
+		}
+	}
+	if len(out) == 0 {
+		return ids, nil
+	}
+	return out, nil
 }
 
 // ListProductCategories 是类目的平铺清单（前端自己组树），带每个类目的商品数。
+// 计数是「子树」口径：父类目 = 自身直挂 + 所有后代，同一商品在多处挂载只算一次。
+// 业界归档类目（Amazon browse node / Magento 锚点类目）都是这么算的，也是唯一能和
+// 筛选对上的算法——否则父类目显示 0、点进去却有一串子类商品。GROUP BY 只能给直挂数，
+// 去重求和得靠集合：把每个 (商品, 类目) 沿祖先链往上记一次，祖先拿到的天然是并集。
 func (s *Service) ListProductCategories(ctx context.Context) ([]ProductCategory, error) {
 	var rows []ProductCategory
 	if err := s.db.WithContext(ctx).Order("sort, id").Find(&rows).Error; err != nil {
 		return nil, err
 	}
-	var counts []productCategoryCountRow
+	var rels []struct {
+		ProductID  int64 `gorm:"column:product_id"`
+		CategoryID int64 `gorm:"column:category_id"`
+	}
 	if err := s.db.WithContext(ctx).Table("plg_website_product_category_rel").
-		Select("category_id, COUNT(*) AS c").Group("category_id").Scan(&counts).Error; err != nil {
+		Select("product_id, category_id").Scan(&rels).Error; err != nil {
 		return nil, err
 	}
-	byID := make(map[int64]int64, len(counts))
-	for _, r := range counts {
-		byID[r.CategoryID] = r.Count
+	parents := makeParentMap(rows)
+	seen := make(map[uint64]map[int64]struct{}, len(rows))
+	for _, rel := range rels {
+		id := uint64(rel.CategoryID)
+		visited := make(map[uint64]bool, 4)
+		for id != 0 && !visited[id] { // visited 防环：脏数据把父级指成环时别死循环
+			visited[id] = true
+			set := seen[id]
+			if set == nil {
+				set = make(map[int64]struct{}, 4)
+				seen[id] = set
+			}
+			set[rel.ProductID] = struct{}{}
+			id = parents[id]
+		}
 	}
 	for i := range rows {
-		rows[i].ProductCount = byID[int64(rows[i].ID)]
+		rows[i].ProductCount = int64(len(seen[uint64(rows[i].ID)]))
 	}
 	return rows, nil
 }
@@ -1125,6 +1175,18 @@ func ProductCategoryLinks(rows []ProductCategory, active string) []productCatLin
 	}
 	out := make([]productCatLink, 0, len(rows))
 	seen := make(map[int]bool, len(rows))
+	// 整棵子树标记为已访问：空类目整枝不出现时，子节点不能被下面「成环孤儿」的兜底
+	// 当成顶级再挂一遍（计数是子树口径，父类目 0 = 后代也 0）。
+	var markSeen func(id uint64)
+	markSeen = func(id uint64) {
+		for _, child := range children[id] {
+			if seen[child] {
+				continue
+			}
+			seen[child] = true
+			markSeen(uint64(rows[child].ID))
+		}
+	}
 	var walk func(idx, depth int, parent string)
 	walk = func(idx, depth int, parent string) {
 		if seen[idx] || depth > 3 { // 防环 + 与后台一致的层级上限
@@ -1133,6 +1195,12 @@ func ProductCategoryLinks(rows []ProductCategory, active string) []productCatLin
 		seen[idx] = true
 		c := rows[idx]
 		id := uint64(c.ID)
+		// 没有商品的类目不进前台导航：点进去只有空归档页，行业站（Amazon browse node /
+		// Magento 锚点类目）都不挂空节点。当前选中的那条例外——跟着链接进来的人要看得出自己在哪。
+		if c.ProductCount == 0 && c.Slug != active && !trail[id] {
+			markSeen(id)
+			return
+		}
 		out = append(out, productCatLink{
 			Name:        c.Title,
 			Slug:        c.Slug,

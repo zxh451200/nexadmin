@@ -1,0 +1,35 @@
+{{define "content"}}
+<section class="sl-section sl-pagehead">
+  <div class="sl-wrap">
+    <p class="sl-eyebrow">{{.SiteName}}</p>
+    <h1 class="sl-page-title">{{.T "layout.sitemap"}}</h1>
+    {{if .Desc}}<p class="sl-sitemap-lead">{{.Desc}}</p>{{end}}
+  </div>
+</section>
+<section class="sl-section sl-sitemap">
+  <div class="sl-wrap sl-sitemap-grid">
+    <nav class="sl-sitemap-col" aria-label="{{.T "sitemap.main"}}">
+      <h2>{{.T "sitemap.main"}}</h2>
+      <ul>
+        <li><a href="{{.URL "/"}}">{{.T "layout.home"}}</a></li>
+        <li><a href="{{.URL "/products"}}">{{.T "layout.product"}}</a></li>
+        <li><a href="{{.URL "/news"}}">{{.T "layout.news"}}</a></li>
+        {{if .DocsEnabled}}<li><a href="{{.URL "/docs"}}">{{.T "layout.docs"}}</a></li>{{end}}
+        <li><a href="{{.URL "/contact"}}">{{.T "layout.contactUs"}}</a></li>
+      </ul>
+    </nav>
+    {{range .SitemapGroups}}
+    <nav class="sl-sitemap-col" aria-label="{{.Title}}">
+      <h2>{{.Title}}</h2>
+      <ul>
+        {{range .Links}}<li><a href="{{$.URL .Href}}">{{.Label}}</a></li>{{end}}
+      </ul>
+      {{if .MoreHref}}
+      {{/* 只列最新若干条，剩下的交给栏目列表页：内容涨到几千条，这一页的高度也不变 */}}
+      <p class="sl-sitemap-all"><a href="{{$.URL .MoreHref}}">{{$.T "sitemap.viewAll"}} →</a></p>
+      {{end}}
+    </nav>
+    {{end}}
+  </div>
+</section>
+{{end}}

@@ -29,6 +29,10 @@ export interface OperLogQuery {
   type?: string
   startDate?: string
   endDate?: string
+  /** 表头排序字段（后端白名单：created_at / operator / module / status / cost_ms） */
+  sort?: string
+  /** true = 倒序 */
+  desc?: boolean
 }
 
 export function useOperLogList(query: OperLogQuery) {

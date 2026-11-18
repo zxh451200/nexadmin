@@ -63,6 +63,9 @@ export default function OperLogPage() {
   const [applied, setApplied] = useState<Filters>(emptyFilters)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
+  // 表头排序：时间最新的在前是默认，点列头切换
+  const [sort, setSort] = useState('created_at')
+  const [desc, setDesc] = useState(true)
   const [selected, setSelected] = useState<string[]>([])
   const [detail, setDetail] = useState<OperLog | null>(null)
   const [cleanOpen, setCleanOpen] = useState(false)
@@ -73,7 +76,7 @@ export default function OperLogPage() {
   const [cleanDays, setCleanDays] = useState<string>('30')
   const { start: startExportJob } = useAsyncJob()
 
-  const { data, isLoading } = useOperLogList({ page, pageSize, ...toQuery(applied) })
+  const { data, isLoading } = useOperLogList({ page, pageSize, sort, desc, ...toQuery(applied) })
   const del = useDeleteOperLogs()
   const clean = useCleanOperLogs()
 
@@ -126,13 +129,13 @@ export default function OperLogPage() {
   }
 
   const columns: Column<OperLog>[] = [
-    { key: 'module', title: t('operLog.col.module'), mobile: 'title' },
+    { key: 'module', title: t('operLog.col.module'), sortKey: 'module', mobile: 'title' },
     { key: 'type', title: t('operLog.col.type'), render: (r) => <DictTag dict="oper_type" value={r.type} />, mobile: 'sub' },
-    { key: 'operator', title: t('operLog.col.operator') },
+    { key: 'operator', title: t('operLog.col.operator'), sortKey: 'operator' },
     { key: 'ip', title: t('operLog.col.ip'), render: (r) => <span className="num">{r.ip}</span> },
-    { key: 'status', title: t('operLog.col.status'), render: (r) => <DictTag dict="login_status" value={r.status} /> },
-    { key: 'costMs', title: t('operLog.col.cost'), align: 'end', render: (r) => <span className="num">{r.costMs} ms</span> },
-    { key: 'createdAt', title: t('operLog.col.time'), render: (r) => <span className="num">{fmtDateTime(r.createdAt, i18n.language)}</span> },
+    { key: 'status', title: t('operLog.col.status'), sortKey: 'status', render: (r) => <DictTag dict="login_status" value={r.status} /> },
+    { key: 'costMs', title: t('operLog.col.cost'), sortKey: 'cost_ms', align: 'end', render: (r) => <span className="num">{r.costMs} ms</span> },
+    { key: 'createdAt', title: t('operLog.col.time'), sortKey: 'created_at', render: (r) => <span className="num">{fmtDateTime(r.createdAt, i18n.language)}</span> },
   ]
 
   return (
@@ -196,6 +199,16 @@ export default function OperLogPage() {
           </>
         }
         columns={columns}
+        sort={{
+          key: sort,
+          desc,
+          onChange: (key, nextDesc) => {
+            setSort(key)
+            setDesc(nextDesc)
+            setPage(1)
+            setSelected([])
+          },
+        }}
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}

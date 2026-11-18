@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
+import { DndContext, KeyboardSensor, MouseSensor, TouchSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, arrayMove, rectSortingStrategy, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { ImagePlus, Upload, VideoIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -35,6 +35,9 @@ export interface UploaderProps {
   enablePaste?: boolean
   /** 渲染在上传按钮右侧的附加入口（如「从文件库选择」）；上限已满/译文态时随入口行一起置灰 */
   entryExtra?: React.ReactNode
+  /** 入口行输入框不设宽度上限：默认 sm:max-w-sm 让宽屏下的地址框不至于长到离谱，
+   *  但和上方同为 URL 字段的行并排时会短一截、右端还空一块，这种表单里传 true 让整行吃满 */
+  entryFluid?: boolean
 }
 
 const NO_CROP_TYPES = ['image/gif', 'image/svg+xml']
@@ -46,7 +49,7 @@ const MIME_BY_EXT: Record<string, string> = {
   pdf: 'application/pdf', zip: 'application/zip',
 }
 
-export function Uploader({ kind, multiple, maxCount, crop, visibility = 'private', value, onChange, disabled, className, enablePaste, entryExtra }: UploaderProps) {
+export function Uploader({ kind, multiple, maxCount, crop, visibility = 'private', value, onChange, disabled, className, enablePaste, entryExtra, entryFluid }: UploaderProps) {
   const { t } = useTranslation()
   const { data: cfg } = useUploadConfig()
   const limit = maxCount ?? (multiple ? 9 : 1)
@@ -65,8 +68,11 @@ export function Uploader({ kind, multiple, maxCount, crop, visibility = 'private
   const [urlText, setUrlText] = useState('')
   const [importing, setImporting] = useState(false)
 
+  // 桌面按下就走（位移 5px 起算，点一下仍是「看大图」）；触屏长按 200ms，免得滑动页面误触。
+  // 之前两种设备共用 PointerSensor 的 delay:200——鼠标按住后一移动就超 tolerance，看起来就是「拖不动」。
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   )
 
@@ -269,7 +275,7 @@ export function Uploader({ kind, multiple, maxCount, crop, visibility = 'private
           }}
           placeholder={t('uploader.urlPlaceholder', { kind: t(`uploader.kind_${kind}`) })}
           aria-label={t('uploader.urlPlaceholder', { kind: t(`uploader.kind_${kind}`) })}
-          className="h-9 min-w-56 flex-1 text-sm sm:max-w-sm"
+          className={cn('h-9 min-w-56 flex-1 text-sm', !entryFluid && 'sm:max-w-sm')}
         />
         <Button
           type="button"

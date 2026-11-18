@@ -2963,3 +2963,32 @@ html[data-scheme="light"] .chat-panel { box-shadow: 0 28px 64px -18px rgba(8, 9,
 @media(max-width:980px){.pc-layout{grid-template-columns:200px minmax(0,1fr);gap:18px}.pc-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:760px){.pc-wrap{padding:0 16px}.pc-layout{grid-template-columns:1fr}.pc-showcase-list{max-height:220px}.pc-side-title{padding:0 12px}.pc-cat-row,.pc-cat-all-row{padding-inline-start:12px}.pc-cat-caret{display:none}.pc-cat-sub{position:static;display:block;width:auto;min-width:0;max-width:none;padding:0 0 6px 14px;border:0;border-radius:0;background:transparent;box-shadow:none}.pc-sort{margin-inline-start:0}}
 @media(max-width:480px){.pc-grid{grid-template-columns:1fr}.pc-shophead{padding:14px}.pc-shoptag{min-width:100%}}
+
+/* ---- 站点地图（/sitemap）：固定入口 + 产品/新闻/独立页的链接索引 ---- */
+
+.sitemap-lead { margin: 16px 0 0; max-width: 560px; color: var(--text-2); font-size: 15px; line-height: 1.7; }
+.sitemap-section { padding-top: 36px; }
+.sitemap-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 40px 32px;
+  align-items: start;
+}
+.sitemap-col h2 {
+  margin: 0 0 14px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.sitemap-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 9px; }
+.sitemap-list a { color: var(--text-2); font-size: 14px; line-height: 1.5; transition: color 0.15s ease; }
+.sitemap-list a:hover { color: var(--text); }
+/* 列表末尾的「查看全部」：站点地图只列最新 12 条，其余去栏目列表页（有分页）看 */
+.sitemap-all { margin: 14px 0 0; font-size: 13px; line-height: 1.5; }
+.sitemap-all a { color: var(--text-2); transition: color 0.15s ease; }
+.sitemap-all a:hover { color: var(--text); }
+@media (max-width: 760px) { .sitemap-grid { grid-template-columns: 1fr 1fr; gap: 28px 20px; } }
+@media (max-width: 480px) { .sitemap-grid { grid-template-columns: 1fr; } }
+

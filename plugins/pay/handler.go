@@ -657,6 +657,13 @@ func (h *handler) notify(c *gin.Context) {
 	response.OK(c, gin.H{"paymentNo": o.PaymentNo, "status": o.Status})
 }
 
+// GET /plugins/pay/public/channels —— 平台级站点（官网商品页）公开的启用渠道清单：
+// 只回 code/名称/提供方/能力矩阵，绝不回凭据。站点据此渲染购买渠道选择，并在下单时
+// 用相同的渠道码调 pay.Create。幂等铁律不受影响：金额仍由业务侧服务端计算。
+func (h *handler) publicChannels(c *gin.Context) {
+	response.OK(c, h.svc.EnabledChannelsGlobal(c.Request.Context()))
+}
+
 // operatorOf 取当前登录者标识（审计字段；匿名上下文为空）。
 func operatorOf(c *gin.Context) string {
 	if v := c.GetString("operatorId"); v != "" {

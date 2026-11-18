@@ -2,6 +2,7 @@ package core
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"io/fs"
@@ -9,6 +10,7 @@ import (
 	"net/url"
 	"path"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 	"unicode/utf8"
@@ -30,6 +32,58 @@ const (
 // sw.js 若被长缓存，浏览器永远拿不到新版 Service Worker（站点无法更新）；manifest 与离线页同理需及时生效。
 // sw.js 位于站点根，默认作用域即 "/"，无需 Service-Worker-Allowed 头。
 var noCacheFiles = map[string]bool{"sw.js": true, "manifest.webmanifest": true, "offline.html": true}
+
+// 文本类静态资源走 gzip。构建产物是不可变的（带 hash），压缩结果按文件名常驻内存：
+// 首屏 index+ui-vendor+charts 合计约 3.2MB，压缩后约 0.95MB，远程/VPN 下差别是秒级。
+const (
+	gzipMinSize  = 1024
+	gzipCacheCap = 16 << 20
+)
+
+var compressibleExt = map[string]bool{
+	".js": true, ".mjs": true, ".css": true, ".html": true, ".json": true,
+	".svg": true, ".txt": true, ".map": true, ".webmanifest": true,
+}
+
+var (
+	gzipCache     sync.Map // name -> []byte
+	gzipCacheSize atomic.Int64
+)
+
+func compressible(name string) bool { return compressibleExt[strings.ToLower(path.Ext(name))] }
+
+// 只认显式 gzip：Accept-Encoding 里的 br 等其它编码我们没有实现，不能假装支持。
+func acceptsGzip(header string) bool {
+	for _, part := range strings.Split(strings.ToLower(header), ",") {
+		if coding, _, _ := strings.Cut(strings.TrimSpace(part), ";"); coding == "gzip" || coding == "*" {
+			return true
+		}
+	}
+	return false
+}
+
+func gzipAsset(name string, raw []byte) []byte {
+	if v, ok := gzipCache.Load(name); ok {
+		return v.([]byte)
+	}
+	var buf bytes.Buffer
+	zw, err := gzip.NewWriterLevel(&buf, gzip.BestCompression)
+	if err != nil { // 不会发生（级别常量合法），保守回退到原文件
+		return raw
+	}
+	_, _ = zw.Write(raw)
+	_ = zw.Close()
+	data := buf.Bytes()
+	if gzipCacheSize.Add(int64(len(data))) <= gzipCacheCap {
+		if actual, loaded := gzipCache.LoadOrStore(name, data); loaded {
+			gzipCacheSize.Add(-int64(len(data)))
+			return actual.([]byte)
+		}
+		return data
+	}
+	gzipCacheSize.Add(-int64(len(data))) // 超上限：本次照常返回，不缓存
+	return data
+}
 
 // AdminPrefix 是后台 SPA 的固定路径前缀。后台独占该前缀，官网接管其余路径：
 // 只有 /admin 与 /admin/* 会回退到 index.html，未注册的其它路径交给官网 404。
@@ -202,6 +256,15 @@ func staticHandlerWith(fsys fs.FS, site func(c *gin.Context) (SiteInfo, bool)) f
 				c.Header("Content-Type", "application/manifest+json")
 			}
 			c.Header("Cache-Control", cc)
+			// Range 请求按原始字节理解，压缩后偏移会错位，直接发原文件；
+			// 其它情况（浏览器取 JS/CSS）一律协商 gzip，Content-Length 由压缩后长度决定。
+			if compressible(name) {
+				c.Header("Vary", "Accept-Encoding")
+				if len(raw) >= gzipMinSize && c.Request.Header.Get("Range") == "" && acceptsGzip(c.Request.Header.Get("Accept-Encoding")) {
+					raw = gzipAsset(name, raw)
+					c.Header("Content-Encoding", "gzip")
+				}
+			}
 			http.ServeContent(c.Writer, c.Request, name, time.Time{}, bytes.NewReader(raw))
 			return true
 		}

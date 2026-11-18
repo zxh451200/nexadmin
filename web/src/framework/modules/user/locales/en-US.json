@@ -6,6 +6,7 @@
     "keyword": "Keyword",
     "keywordPlaceholder": "Username / name / phone / email",
     "dept": "Department",
+    "gender": "Gender",
     "allDepts": "All departments",
     "col": {
       "avatar": "Avatar",

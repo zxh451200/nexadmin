@@ -172,7 +172,7 @@ export default function CacheMonitorPage() {
           <CardTitle className="text-base font-medium">{t('cacheMonitor.prefix.title')}</CardTitle>
         </CardHeader>
         <CardContent>
-          <DataTable<CachePrefix> columns={prefixColumns} data={latest?.prefixes ?? []} rowKey="prefix" loading={!latest} pagination={false} />
+          <DataTable<CachePrefix> bare columns={prefixColumns} data={latest?.prefixes ?? []} rowKey="prefix" loading={!latest} pagination={false} />
         </CardContent>
       </Card>
     </PageContainer>

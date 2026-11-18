@@ -33,6 +33,7 @@
 {{if .PluginLD}}<script type="application/ld+json">{{.PluginLD}}</script>{{end}}
 {{if .HeadCode}}{{.HeadCode}}{{end}}
 <link rel="stylesheet" href="/website-assets/theme/solaris/site.css?v={{assetV "theme/solaris/site.css"}}">
+{{if or (eq .Route "/products") (hasPrefix .Route "/products/")}}<link rel="stylesheet" href="/website-assets/site-pd.css?v={{assetV "site-pd.css"}}">{{end}}
 <noscript><style>[data-reveal]{opacity:1;transform:none}[role="tabpanel"][hidden]{display:block !important}.sl-mnav[hidden]{display:block !important}</style></noscript>
 </head>
 <body>
@@ -139,6 +140,7 @@
       <h4>{{.T "layout.company"}}</h4>
       {{range .Navs}}{{if eq .Href "/p/about"}}<a href="{{$.URL .Href}}">{{.Label}}</a>{{end}}{{end}}
       <a href="{{.URL "/contact"}}">{{.T "layout.contactUs"}}</a>
+      <a href="{{.URL "/sitemap"}}">{{.T "layout.sitemap"}}</a>
     </nav>
     <nav class="sl-footer-col" aria-label="{{.T "layout.contact"}}">
       <h4>{{.T "layout.contact"}}</h4>

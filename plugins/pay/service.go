@@ -136,7 +136,14 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Order, *PayParam
 		return nil, nil, err
 	}
 
-	ch, err := s.pickChannel(ctx, in.ChannelCode)
+	// 平台级站点（官网商品页）的匿名下单：请求上下文没有租户，渠道按全局定位，
+	// 支付单归属渠道所属租户——管理员在哪个租户配置的渠道，单就落进哪个租户的
+	// 对账与退款视图。显式跳过租户闸后 BeforeCreate 保留下面手动填的 TenantID。
+	anon := false
+	if _, ok := tenant.From(ctx); !ok && !tenant.Skipped(ctx) {
+		anon = true
+	}
+	ch, err := s.pickChannelFor(ctx, in.ChannelCode, anon)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -177,6 +184,11 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Order, *PayParam
 		OperatorID: truncate(in.OperatorID, 64), MetadataJSON: meta,
 		Status:   StatusPending,
 		ExpireAt: ptr(time.Now().UTC().Add(time.Duration(in.ExpireSec) * time.Second)),
+	}
+	if anon {
+		// 匿名下单：单归属渠道租户，插入在 skip 上下文里（BeforeCreate 保留显式值）
+		o.TenantID = ch.TenantID
+		ctx = tenant.Skip(ctx)
 	}
 	o.ID = id
 	if err := s.db.WithContext(ctx).Create(o).Error; err != nil {
@@ -1119,6 +1131,42 @@ func (s *Service) pickChannel(ctx context.Context, code string) (*Channel, error
 		return nil, response.Conflict(errNoChannel)
 	}
 	return &ch, err
+}
+
+// pickChannelFor 按下单上下文选渠道：租户请求走租户内渠道；平台级匿名下单
+// （官网商品页）没有租户上下文，按全局定位启用渠道——渠道归属租户即支付单归属租户。
+func (s *Service) pickChannelFor(ctx context.Context, code string, anon bool) (*Channel, error) {
+	if !anon {
+		return s.pickChannel(ctx, code)
+	}
+	if code != "" {
+		return s.loadChannelGlobal(ctx, code)
+	}
+	var ch Channel
+	err := s.db.WithContext(tenant.Skip(ctx)).Where("enabled = ?", true).Order("sort, id").Take(&ch).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, response.Conflict(errNoChannel)
+	}
+	return &ch, err
+}
+
+// EnabledChannelsGlobal 平台级站点用的启用渠道清单（全局定位、只回安全字段 + 能力矩阵）。
+func (s *Service) EnabledChannelsGlobal(ctx context.Context) []ChannelView {
+	var rows []Channel
+	if err := s.db.WithContext(tenant.Skip(ctx)).Where("enabled = ?", true).Order("sort, id").Find(&rows).Error; err != nil {
+		return nil
+	}
+	out := make([]ChannelView, 0, len(rows))
+	for i := range rows {
+		v := channelToView(&rows[i])
+		if p, err := LookupProvider(rows[i].Provider); err == nil {
+			if cp, isCaps := p.(CapabilityProvider); isCaps {
+				v.Capabilities = cp.Capabilities()
+			}
+		}
+		out = append(out, *v)
+	}
+	return out
 }
 
 func (s *Service) loadChannel(ctx context.Context, code string) (*Channel, error) {

@@ -144,7 +144,11 @@ defineMock([
       const kw = String(query.keyword ?? '').trim().toLowerCase()
       let rows = files.slice()
       if (query.groupId) rows = rows.filter((f) => f.groupId === (query.groupId === 'none' ? '' : String(query.groupId)))
-      if (query.category) rows = rows.filter((f) => f.category === String(query.category))
+      // category 与后端同口径：逗号拼接多值（附件选择器发 doc,other），不能整串精确匹配
+      if (query.category) {
+        const cats = String(query.category).split(',').map((s) => s.trim()).filter(Boolean)
+        if (cats.length) rows = rows.filter((f) => cats.includes(f.category))
+      }
       if (kw) rows = rows.filter((f) => f.name.toLowerCase().includes(kw) || f.uploader.toLowerCase().includes(kw))
       if (query.from) rows = rows.filter((f) => f.createdAt.slice(0, 10) >= String(query.from))
       if (query.to) rows = rows.filter((f) => f.createdAt.slice(0, 10) <= String(query.to))

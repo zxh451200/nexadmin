@@ -6,6 +6,7 @@
   "dataTable": {
     "columnSettings": "Columns",
     "columnSettingsHint": "Choose columns to display",
+    "sortByColumn": "Sort by {{column}}",
     "resetColumns": "Reset to default",
     "dragHandle": "Drag to reorder",
     "moveUp": "Move up",

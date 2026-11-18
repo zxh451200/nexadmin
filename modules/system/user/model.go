@@ -121,6 +121,9 @@ type listQuery struct {
 	Gender         []string
 	CreatedFrom    string // YYYY-MM-DD，闭区间
 	CreatedTo      string
+	// 表头排序：Sort 取 nickname / username / created_at（白名单外的值回退 created_at），Desc = 倒序
+	Sort string
+	Desc bool
 }
 
 // actor 是当前操作者，用于数据范围和“不能操作自己”的判断。

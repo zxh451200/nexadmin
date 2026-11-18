@@ -80,12 +80,12 @@ function UserMenu() {
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem className="min-h-11 md:min-h-8" onSelect={() => navigate('/profile')}>
-          <UserRound className="me-2 size-4" aria-hidden="true" />
+          <UserRound className="size-4" aria-hidden="true" />
           {t('layout.profile')}
         </DropdownMenuItem>
         {canInstall && (
           <DropdownMenuItem className="min-h-11 md:min-h-8" onSelect={() => void install()}>
-            <Download className="me-2 size-4" aria-hidden="true" />
+            <Download className="size-4" aria-hidden="true" />
             {t('pwa.install')}
           </DropdownMenuItem>
         )}
@@ -96,7 +96,7 @@ function UserMenu() {
             navigate('/login', { replace: true })
           }}
         >
-          <LogOut className="me-2 size-4" aria-hidden="true" />
+          <LogOut className="size-4" aria-hidden="true" />
           {t('layout.logout')}
         </DropdownMenuItem>
       </DropdownMenuContent>

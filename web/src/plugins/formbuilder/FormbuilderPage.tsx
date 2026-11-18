@@ -264,30 +264,30 @@ export default function FormbuilderPage() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onSelect={() => onCopy(f)}>
-                  <Copy className="me-2 size-4" aria-hidden="true" />
+                  <Copy className="size-4" aria-hidden="true" />
                   {t('plugin_formbuilder.copy')}
                 </DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => void onExportDefinition(f)}>
-                  <Download className="me-2 size-4" aria-hidden="true" />
+                  <Download className="size-4" aria-hidden="true" />
                   {t('plugin_formbuilder.import.export')}
                 </DropdownMenuItem>
                 <Can perm="formbuilder:publish">
                   {f.status === 'published' ? (
                     <DropdownMenuItem onSelect={() => void onOffline(f)}>
-                      <PowerOff className="me-2 size-4" aria-hidden="true" />
+                      <PowerOff className="size-4" aria-hidden="true" />
                       {t('plugin_formbuilder.offline')}
                     </DropdownMenuItem>
                   ) : null}
                   {f.status === 'offline' ? (
                     <DropdownMenuItem onSelect={() => void attempt(() => setOnline.mutateAsync({ id: f.id, online: true }))}>
-                      <Power className="me-2 size-4" aria-hidden="true" />
+                      <Power className="size-4" aria-hidden="true" />
                       {t('plugin_formbuilder.online')}
                     </DropdownMenuItem>
                   ) : null}
                 </Can>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => void onDelete(f)}>
-                  <Trash2 className="me-2 size-4" aria-hidden="true" />
+                  <Trash2 className="size-4" aria-hidden="true" />
                   {t('common.delete')}
                 </DropdownMenuItem>
               </DropdownMenuContent>

@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
+import { cn } from '@/lib/utils'
 import { PageContainer, PageHeader } from '@/framework/components/PageHeader'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/framework/ui/tabs'
 import { BasicTab } from './BasicTab'
@@ -20,6 +21,9 @@ const TABS = [
   { key: 'preferences', Comp: PreferencesTab },
 ] as const
 
+/** 自带卡片的 tab：表格/行列表自己就是那张卡，TabsContent 不再套外层框 */
+const SELF_SURFACED = new Set<string>(['sessions', 'tokens', 'bindings'])
+
 export default function ProfilePage() {
   const { t } = useTranslation()
   const [params] = useSearchParams() // 第三方绑定完成后以 ?tab=bindings 回到「账号绑定」
@@ -36,7 +40,13 @@ export default function ProfilePage() {
           ))}
         </TabsList>
         {TABS.map(({ key, Comp }) => (
-          <TabsContent key={key} value={key} className="mt-4 rounded-lg border border-border bg-card p-4 md:p-6">
+          // 列表/绑定类 tab 自己就是一张卡（表格/行列表），外面不再套框——套两层正是这里的问题；
+          // 表单类 tab 没有自己的容器，由 TabsContent 提供那张卡。
+          <TabsContent
+            key={key}
+            value={key}
+            className={cn('mt-4', !SELF_SURFACED.has(key) && 'rounded-lg border border-border bg-card p-4 md:p-6')}
+          >
             <Comp />
           </TabsContent>
         ))}

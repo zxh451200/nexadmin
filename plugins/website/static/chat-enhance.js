@@ -150,6 +150,8 @@
     '.chat-card-fields input:focus{outline:none;border-color:rgba(128,128,128,.72);box-shadow:0 0 0 3px rgba(128,128,128,.13);background:rgba(128,128,128,.03)}',
     // 校验失败标在可见控件上：下拉的取值位是隐藏 input，红框要落到触发钮
     '.chat-card-fields input.is-invalid,.chat-card-fields .chat-card-trigger.is-invalid{border-color:rgba(235,87,87,.72);box-shadow:0 0 0 3px rgba(235,87,87,.12)}',
+    // 电话的可见边框在包裹层：红框标在 wrap 上，input 自己 border:0 标了也看不见
+    '.chat-card-fields .chat-phone-wrap.is-invalid{border-color:rgba(235,87,87,.72);box-shadow:0 0 0 3px rgba(235,87,87,.12)}',
     '.chat-card-error{margin:10px 0 0;font-size:11.5px;line-height:1.5;color:var(--red,#eb5757)}',
     '.chat-card-actions{display:flex;gap:10px;margin-top:18px}',
     '.chat-card-actions button{flex:1;height:34px;border:1px solid rgba(128,128,128,.36);border-radius:4px;background:transparent;color:inherit;font:inherit;font-size:12.5px;cursor:pointer}',
@@ -185,6 +187,7 @@
     '.chat-opt-flag{flex:none;line-height:1}',
     '.chat-opt-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
     '.chat-opt-dial{flex:none;opacity:.55;font-size:11px}',
+    '.chat-opt-sub{flex:none;opacity:.5;font-size:11px}',
     '.chat-opt-empty{display:block;padding:8px 9px;font-size:11.5px;opacity:.55}',
     // 电话区号前缀：随国家联动，纯展示；提交值里才真正拼上区号
     '.chat-phone-wrap{display:flex;align-items:center;box-sizing:border-box;width:100%;height:32px;padding:0 10px;border:1px solid rgba(128,128,128,.34);border-radius:4px;background:transparent;transition:border-color .15s ease,box-shadow .15s ease}',
@@ -712,6 +715,58 @@
     }
 
     // ---- 名牌 / 地址卡片：访客填一次，之后一键复用；发送走原挂件的 send() ----
+    // 电话的格式化与校验不自己写：用 libphonenumber-js（Google libphonenumber 的 JS 移植，
+    // MIT，各语言生态的事实标准，元数据随库发布）。按需加载——只有打开地址卡才拉这份脚本，
+    // 首屏与其他卡片不付这份体积；加载失败就退回纯手输，不挡发卡。
+    var phoneLib = null;
+    var phoneLibLoading = null;
+    function loadPhoneLib() {
+      if (phoneLib) return Promise.resolve(phoneLib);
+      if (phoneLibLoading) return phoneLibLoading;
+      phoneLibLoading = new Promise(function (resolve) {
+        var s = document.createElement('script');
+        s.src = '/website-assets/vendor/libphonenumber-js/libphonenumber-js.min.js?v=1.13.16';
+        s.async = true;
+        s.onload = function () {
+          phoneLib = window.libphonenumber || null;
+          resolve(phoneLib);
+        };
+        s.onerror = function () { resolve(null); };
+        document.head.appendChild(s);
+      });
+      return phoneLibLoading;
+    }
+    // 按所选国家边输边分组（138 0000 0000）。重写 value 会把光标甩到末尾，
+    // 所以先数光标前有几个数字，格式化后在同样多数字的位置把光标放回去。
+    function formatAsYouType(inp, iso) {
+      if (!phoneLib || !inp || !inp.value) return;
+      var val = inp.value;
+      var caret = inp.selectionStart == null ? val.length : inp.selectionStart;
+      var digitsBefore = (val.slice(0, caret).match(/\d/g) || []).length;
+      var out;
+      try {
+        // 用户自己打了 + 就按国际格式走，否则交给国家决定分组
+        out = val.charAt(0) === '+' ? new phoneLib.AsYouType().input(val) : (iso ? new phoneLib.AsYouType(iso).input(val) : val);
+      } catch (e) { return; }
+      if (!out || out === val) return;
+      inp.value = out;
+      var pos = 0, seen = 0;
+      for (var i = 0; i < out.length && seen < digitsBefore; i++) {
+        if (/\d/.test(out.charAt(i))) seen++;
+        pos = i + 1;
+      }
+      try { inp.setSelectionRange(pos, pos); } catch (e) { /* 不支持就算了 */ }
+    }
+    // 只判「能确定打不通」的号码：库没到位、国家缺元数据、带分机号这类写法一律放行，
+    // 不能因为一个判不了的号码把客人挡在发送按钮外。
+    function phoneDefinitelyInvalid(full, iso) {
+      if (!phoneLib || !full) return false;
+      if (/[转ext#]/i.test(full)) return false;
+      try {
+        return phoneLib.isValidPhoneNumber(String(full).replace(/[\s()\-.]/g, ''), iso || undefined) === false;
+      } catch (e) { return false; }
+    }
+
     var CARD_DEFS = {
       name: {
         title: t('chatCardNameTitle', '我的名片'),
@@ -744,6 +799,13 @@
         ]
       }
     };
+    // 城市名多带变音符号（Pārūn、Yŏnmu、Mīr Bachah Kōṯ），按原文比较时访客敲 parun
+    // 一条都搜不到。比较前两边都折成无变音的小写形式，列表里仍显示原文。
+    function foldSearch(s) {
+      s = String(s == null ? '' : s);
+      if (s.normalize) s = s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      return s.toLowerCase();
+    }
     var cardPop = document.createElement('div');
     cardPop.className = 'chat-card-pop';
     cardPop.setAttribute('data-chat-card-pop', '');
@@ -759,11 +821,12 @@
     cardPop.addEventListener('click', function (e) {
       if (e.target && e.target.closest && e.target.closest('[data-opt]')) clearFieldInvalid(e.target);
     });
-    // 下拉的取值位是隐藏 input：红框要标在可见的触发钮上
+    // 下拉的取值位是隐藏 input：红框要标在可见的触发钮上；电话的边框在 wrap 上，同理
     function cardFieldControl(el) {
       if (!el) return null;
       if (el.type === 'hidden') return el.parentElement ? el.parentElement.querySelector('.chat-card-trigger') : null;
-      return el;
+      var phoneWrap = el.closest ? el.closest('.chat-phone-wrap') : null;
+      return phoneWrap || el;
     }
     function clearFieldInvalid(node) {
       var lab = node && node.closest ? node.closest('label') : null;
@@ -854,7 +917,10 @@
       var selKey = null;
       function render(q) {
         opts.textContent = '';
-        q = String(q || '').toLowerCase();
+        q = foldSearch(q);
+        // 用拉丁字母搜（germany / japan）时，结果行把英文名放到主位、中文名作副标：
+        // 中文界面下列表全是中文名，英文命中了也看不出来，用户会以为「不支持英文检索」。
+        var latin = /^[a-z][a-z\s.'-]*$/.test(q);
         var n = 0;
         if (onClear) {
           // 空项固定在最上面，搜索时也保留：选了就别无退路是最恼人的那类下拉
@@ -887,8 +953,14 @@
           }
           var nm = document.createElement('span');
           nm.className = 'chat-opt-name';
-          nm.textContent = it.disp;
+          nm.textContent = latin && it.en ? it.en : it.disp;
           b.appendChild(nm);
+          if (latin && it.en && it.zh && it.zh !== it.en) {
+            var sub = document.createElement('span');
+            sub.className = 'chat-opt-sub';
+            sub.textContent = it.zh;
+            b.appendChild(sub);
+          }
           if (it.dial) {
             var dl = document.createElement('span');
             dl.className = 'chat-opt-dial';
@@ -957,6 +1029,12 @@
                 ? t('chatTranslatePick', '选择语言')
                 : t('chatCardRegionSearch', '搜索省/州'));
           render(search.value);
+          // 清单是异步拉来的：下拉先开、数据后到时，触发钮那一下 focus 落在还没显示的
+          // 搜索框上等于没落，访客直接打字会全打在页面上（看着就像「搜不了」）。
+          // 数据到位且下拉还开着，把焦点补进搜索框。
+          if (!drop.hidden && !search.hidden) {
+            try { search.focus({ preventScroll: true }); } catch (e) { search.focus(); }
+          }
         },
         clear: function () {
           selKey = null;
@@ -1004,15 +1082,29 @@
       return false;
     }
 
+    // 只有「发送」过的卡片才落盘做一键复用；没提交的输入只留在内存里。
+    // 之前把收起卡片也写成 localStorage 草稿，访客随手点开地址卡、选了中国/州省就关掉，
+    // 下次（哪怕换了会话、刷新过页面）再打开就带着 中国 / Beijing / +86 这些他从没提交过的值，
+    // 看上去像「默认值」，实际是上次的半截草稿。草稿留在内存里只服务同一次打开/收起。
+    var cardDrafts = {};
+    // 旧版本写下的键里可能是不完整的草稿（收件人还是空的）：带 __v:2 标记才算本版本的
+    // 「已发送卡片」，没有标记的一律不认，避免升级后旧草稿又冒出来一次。
     function readCard(kind) {
-      try { return JSON.parse(localStorage.getItem('nexchat.card.' + kind) || '{}') || {}; }
-      catch (e) { return {}; }
+      var saved;
+      try { saved = JSON.parse(localStorage.getItem('nexchat.card.' + kind) || '{}') || {}; }
+      catch (e) { saved = {}; }
+      if (saved.__v !== 2) saved = {};
+      var draft = cardDrafts[kind];
+      return draft || saved;
     }
     function saveCard(kind, vals) {
+      vals.__v = 2;
       try { localStorage.setItem('nexchat.card.' + kind, JSON.stringify(vals)); } catch (e) { /* 隐私模式忽略 */ }
+      // 发送成功即草稿使命结束，之后再打开用的是落盘的那份
+      delete cardDrafts[kind];
     }
     // 收起卡片 ≠ 放弃输入：切换底部工具、点空白都会把卡片收起来，
-    // 未提交的字段要原样留给下次打开（提交后同样保留，卡片本就用来一键复用）。
+    // 未提交的字段要原样留给下次打开——只进内存，不落盘（提交后由 saveCard 落盘复用）。
     function saveCardDraft() {
       if (!activeKind || cardPop.hidden) return;
       var def = CARD_DEFS[activeKind];
@@ -1029,11 +1121,14 @@
           vals.phone = vals.phone.slice(vals.phoneDial.length + 1);
         }
       }
-      saveCard(activeKind, vals);
+      cardDrafts[activeKind] = vals;
     }
 
-    function closeCard() {
-      saveCardDraft();
+    // discard：点「取消」是明确放弃这次输入，连同内存草稿一起丢掉；
+    // 点空白 / 切底部工具只是把卡片收起来，输入留着下次打开还在。
+    function closeCard(discard) {
+      if (discard && activeKind) delete cardDrafts[activeKind];
+      else saveCardDraft();
       cardPop.hidden = true;
       activeKind = null;
       // 卡片是自己展开面板的，关掉就还原；期间用户手动收起过（expanded 已为 false）则不动
@@ -1064,8 +1159,10 @@
       // 地址卡片的国家/州省/电话走专用控件：对齐阿里「添加地址」的形态 ——
       // 国家带国旗可搜索、州省跟着国家换成下拉、电话自动带区号。
       // 数据是异步的：先铺好空下拉，拉到数据再灌选项并回填存过的值。
-      var addr = { country: null, dial: '', dialEl: null, citySel: null, cityData: null, cityDataReady: false, curRegion: '', pendingRegion: '', pendingCity: '' };
+      var addr = { country: null, dial: '', dialEl: null, phoneInp: null, citySel: null, cityData: null, cityDataReady: false, curRegion: '', pendingRegion: '', pendingCity: '' };
       addrState = kind === 'address' ? addr : null;
+      // 地址卡才需要电话库：异步预热，输入与提交时按已加载与否降级
+      if (kind === 'address') loadPhoneLib();
       var regionSel = null;
       function dispName(c) { return siteLangEn() ? c.en : c.zh; }
       // 城市下拉跟随所选州：该州有城市数据（GeoNames，按国家拆文件）就给下拉，
@@ -1079,7 +1176,7 @@
           addr.citySel.fallbackText(addr.pendingCity || '');
           return;
         }
-        addr.citySel.setItems(list.map(function (nm) { return { key: nm, disp: nm, needle: nm.toLowerCase() }; }));
+        addr.citySel.setItems(list.map(function (nm) { return { key: nm, disp: nm, needle: foldSearch(nm) }; }));
         if (addr.pendingCity && list.indexOf(addr.pendingCity) >= 0) {
           addr.citySel.apply({ key: addr.pendingCity, disp: addr.pendingCity, needle: addr.pendingCity.toLowerCase() });
         } else {
@@ -1111,7 +1208,7 @@
           if (addr.citySel && !addr.citySel.dead) addr.citySel.fallbackText(addr.pendingCity || '');
           return;
         }
-        regionSel.setItems(rs.map(function (nm) { return { key: nm, disp: nm, needle: nm.toLowerCase() }; }));
+        regionSel.setItems(rs.map(function (nm) { return { key: nm, disp: nm, needle: foldSearch(nm) }; }));
         if (addr.pendingRegion && rs.indexOf(addr.pendingRegion) >= 0) {
           regionSel.apply({ key: addr.pendingRegion, disp: addr.pendingRegion, needle: addr.pendingRegion.toLowerCase() });
           syncCities(addr.pendingRegion);
@@ -1134,6 +1231,8 @@
           addr.dialEl.textContent = addr.dial;
           addr.dialEl.hidden = !addr.dial;
         }
+        // 换国家后已填的号码按新国家的分组重排（否则一直是旧国家的分段）
+        if (addr.phoneInp && addr.phoneInp.value) formatAsYouType(addr.phoneInp, c.c);
         syncRegion(c);
         loadCityData(c.c);
       }
@@ -1159,6 +1258,8 @@
           var items = list.map(function (c) {
             return {
               key: c.c, disp: dispName(c), flag: flagEmoji(c.c), dial: c.dial, raw: c,
+              // en/zh 给搜索结果的「英文名主位 + 中文名副标」用（见 render 的 latin 判定）
+              en: c.en, zh: c.zh,
               needle: (c.zh + ' ' + c.en + ' ' + c.c + ' ' + (c.dial || '')).toLowerCase()
             };
           });
@@ -1183,7 +1284,7 @@
         addr.pendingRegion = savedVal || '';
         var sel = buildSelect('region', t('chatCardRegionSelect', '选择省/州'), function (it) {
           syncCities(it.key);
-        }, undefined, undefined, function () {
+        }, undefined, t('chatCardRegionInput', '输入省/州'), function () {
           syncCities('');
           if (addr.citySel && !addr.citySel.dead) addr.citySel.clear();
         });
@@ -1192,7 +1293,7 @@
       }
       function buildCity(label, savedVal) {
         addr.pendingCity = savedVal || '';
-        var sel = buildSelect('city', t('chatCardCitySelect', '选择城市'), function () { /* 城市无下级联动 */ }, t('chatCardCityEmpty', '先选择州/省'), undefined, function () { /* 清空由组件自身处理 */ });
+        var sel = buildSelect('city', t('chatCardCitySelect', '选择城市'), function () { /* 城市无下级联动 */ }, t('chatCardCityEmpty', '先选择州/省'), t('chatCardCityInput', '输入城市名'), function () { /* 清空由组件自身处理 */ });
         addr.citySel = sel;
         label.appendChild(sel.wrap);
       }
@@ -1213,6 +1314,14 @@
         wrap.appendChild(dial); wrap.appendChild(inp);
         label.appendChild(wrap);
         addr.dialEl = dial;
+        addr.phoneInp = inp;
+        // 边输边分组，失焦时再整一遍（粘贴半截号码也能收敛成标准写法）
+        inp.addEventListener('input', function () {
+          formatAsYouType(inp, addr.country ? addr.country.c : '');
+        });
+        inp.addEventListener('blur', function () {
+          formatAsYouType(inp, addr.country ? addr.country.c : '');
+        });
         if (saved.phoneDial) {
           addr.dial = saved.phoneDial;
           dial.textContent = saved.phoneDial;
@@ -1259,7 +1368,8 @@
       var actions = document.createElement('div'); actions.className = 'chat-card-actions';
       var cancel = document.createElement('button');
       cancel.type = 'button'; cancel.textContent = t('chatCardCancel', '取消');
-      cancel.addEventListener('click', closeCard);
+      // 包一层：直接把 closeCard 挂监听会把事件对象当 discard 传进去
+      cancel.addEventListener('click', function () { closeCard(true); });
       var send = document.createElement('button');
       send.type = 'button'; send.className = 'is-primary';
       send.textContent = t('chatCardSend', '发送卡片');
@@ -1300,6 +1410,18 @@
         if (vals.phone && addrState.dial && vals.phone.charAt(0) !== '+') {
           vals.phone = addrState.dial + ' ' + vals.phone;
         }
+        // 号码能不能拨通交给 libphonenumber-js：填错了客服回拨不了，比拦一下更糟
+        if (phoneDefinitelyInvalid(vals.phone, addrState.country ? addrState.country.c : '')) {
+          var phoneEl = cardPop.querySelector('[data-field="phone"]');
+          var phoneCtl = cardFieldControl(phoneEl);
+          if (phoneCtl) {
+            phoneCtl.classList.add('is-invalid');
+            phoneCtl.setAttribute('aria-invalid', 'true');
+          }
+          showCardError(t('chatCardPhoneInvalid', '电话号码格式不对，请检查国家/地区与号码'));
+          if (phoneEl) phoneEl.focus();
+          return;
+        }
       }
       saveCard(kind, vals);
       var lines = [def.marker];
@@ -1309,7 +1431,8 @@
         var cur = String(input.value || '').trim();
         input.value = cur ? cur + '\n\n' + text : text;
       }
-      closeCard();
+      // 已经落盘成「已发送卡片」，内存草稿到此为止（别再回写一份）
+      closeCard(true);
       // requestSubmit 会触发 form 的 submit 事件：商品引用上下文的 capture 监听与
       // 原挂件 send() 都会照常执行，不需要复制任何会话逻辑。
       if (form && typeof form.requestSubmit === 'function') form.requestSubmit();
@@ -1338,9 +1461,10 @@
         closeCard();
       });
     }
-    // 重新开始会话才清空卡片资料：先收起（收起会存草稿）再删，避免顺序把清空又写回来
+    // 重新开始会话才清空卡片资料：先收起（收起会存内存草稿）再删，避免顺序把清空又写回来
     root.addEventListener('chat:session-reset', function () {
       if (!cardPop.hidden) closeCard();
+      cardDrafts = {};
       ['name', 'address'].forEach(function (k) {
         try { localStorage.removeItem('nexchat.card.' + k); } catch (e) { /* 隐私模式忽略 */ }
       });

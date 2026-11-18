@@ -80,9 +80,54 @@ type Setting struct {
 	AnnualRevenue   string `gorm:"column:annual_revenue;size:64;not null;default:''" json:"annualRevenue"`
 	MainMarkets     string `gorm:"column:main_markets;size:200;not null;default:''" json:"mainMarkets"`
 	ResponseTime    string `gorm:"column:response_time;size:32;not null;default:''" json:"responseTime"` // 平均响应，如 ≤4h
+	// PurchaseEnabled 打开产品在线购买：有定价的产品详情页出「立即购买」入口，
+	// 访客（匿名）下单 → pay 中台收款。默认关：升级不改存量站点的公开表单。
+	PurchaseEnabled bool `gorm:"column:purchase_enabled;not null;default:false" json:"purchaseEnabled"`
 }
 
 func (Setting) TableName() string { return "plg_website_setting" }
+
+// 站点订单状态：pending=待支付（支付单已建）→ paid / failed / closed。
+// failed/closed 来自 pay 事件（渠道拒绝 / 过期关单）；删除不做——交易凭证不进回收站。
+const (
+	OrderPending = "pending"
+	OrderPaid    = "paid"
+	OrderFailed  = "failed"
+	OrderClosed  = "closed"
+)
+
+// SiteOrder 是官网商品页的访客订单（平台级：整个部署主体对外的交易窗口，与留言同归属）。
+// 金额铁律与 pay 中台一致：金额由服务端按产品定价与数量计算，绝不透传客户端金额。
+type SiteOrder struct {
+	database.PlatformModel
+	OrderNo   string `gorm:"size:40;not null;uniqueIndex:uk_website_order_no" json:"orderNo"`
+	ProductID idgen.ID `gorm:"not null;index" json:"-"`
+	// ProductSlug/Title 是下单时的快照：商品后来改名/下架不影响订单回执。
+	ProductSlug  string  `gorm:"size:64;not null" json:"-"`
+	ProductTitle string  `gorm:"size:200;not null" json:"productTitle"`
+	Qty          int     `gorm:"not null;default:1" json:"qty"`
+	UnitPrice    float64 `gorm:"not null;default:0" json:"unitPrice"` // 产品定价（Product.Currency）
+	// Currency/AmountMinor 是产品定价币种与金额（2 位小数的最小单位）；
+	// PayCurrency/PayAmountMinor/FxRateMicro 是实际收款币种（渠道决定，CNY-only 渠道
+	// 按站点汇率表换算），与 pay 中台 Order 的外币单字段一一对应。
+	Currency       string `gorm:"size:8;not null;default:''" json:"currency"`
+	AmountMinor    int64  `gorm:"not null;default:0" json:"amountMinor"`
+	PayCurrency    string `gorm:"column:pay_currency;size:8;not null;default:''" json:"payCurrency"`
+	PayAmountMinor int64  `gorm:"column:pay_amount_minor;not null;default:0" json:"payAmountMinor"`
+	FxRateMicro    int64  `gorm:"column:fx_rate_micro;not null;default:1000000" json:"fxRateMicro"`
+	// BuyerEmail 是订单确认与售后联系的必填项（匿名访客的唯一联系方式）。
+	BuyerEmail string `gorm:"column:buyer_email;size:128;not null;default:''" json:"buyerEmail"`
+	BuyerPhone string `gorm:"column:buyer_phone;size:64;not null;default:''" json:"buyerPhone"`
+	Remark     string `gorm:"size:300;not null;default:''" json:"remark"`
+	// Status 与 PaymentNo 关联 pay 中台支付单；pay.* 事件翻转本地状态。
+	Status     string    `gorm:"size:16;not null;default:'pending';index" json:"status"`
+	PaymentNo  string    `gorm:"column:payment_no;size:40;not null;default:''" json:"paymentNo"`
+	PaidAt     *time.Time `json:"paidAt,omitempty"`
+	CreatedAt  time.Time `json:"createdAt"`
+	UpdatedAt  time.Time `json:"updatedAt"`
+}
+
+func (SiteOrder) TableName() string { return "plg_website_order" }
 
 // SocialLink 是页脚的社交图标（Platform 取自 render.go 的 socialIconPaths 键）与外部主页地址。
 type SocialLink struct {

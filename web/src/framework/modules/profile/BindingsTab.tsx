@@ -7,7 +7,6 @@ import { RequiredMark } from '@/framework/components/RequiredMark'
 import { ResponsiveDialog } from '@/framework/components/ResponsiveDialog'
 import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
-import { Card } from '@/framework/ui/card'
 import { Input } from '@/framework/ui/input'
 import { Label } from '@/framework/ui/label'
 import { fmtDateTime } from '../oper-log/format'
@@ -153,60 +152,69 @@ export function BindingsTab() {
     }
   }
 
-  const row = 'flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between'
+  // 行样式对齐列表页的表格行：同一张卡里一行一条、内容左动作右、行间一条分隔线，
+  // 不再每条绑定各自套一张小卡——卡套卡在 Tab 内容卡里看着像套了两层
+  const row = 'flex flex-col gap-3 py-2.5 sm:flex-row sm:items-center sm:justify-between'
 
   return (
-    <div className="flex max-w-2xl flex-col gap-6">
-      <section className="flex flex-col gap-3">
-        <h3 className="text-sm font-medium text-foreground">{t('profile.bindings.phoneTitle')}</h3>
-        <Card className={row}>
-          <div className="min-w-0">
-            <p className="text-sm text-foreground">
-              {data?.phone ? t('profile.bindings.phoneBound', { phone: data.phone }) : t('profile.bindings.phoneUnbound')}
-            </p>
-          </div>
-          <div className="flex shrink-0 flex-wrap gap-2">
-            <Button type="button" variant="outline" onClick={() => setPhoneOpen(true)}>
-              {data?.phone ? t('profile.bindings.change') : t('profile.bindings.bind')}
-            </Button>
-            {data?.phone ? (
-              <Button type="button" variant="ghost" className="text-destructive" onClick={() => onUnbind('phone', t('profile.bindings.phoneTitle'))}>
-                {t('profile.bindings.unbind')}
+    // 账号绑定自带一张卡（外层 TabsContent 对它的 tab 是平铺的），卡内一行一条
+    <div className="rounded-lg border border-border bg-card p-4 md:p-6">
+      <div className="flex max-w-2xl flex-col gap-6">
+      <section className="flex flex-col">
+        <h3 className="pb-1 text-sm font-medium text-foreground">{t('profile.bindings.phoneTitle')}</h3>
+        <div className="divide-y divide-border/60 border-t border-border/60">
+          <div className={row}>
+            <div className="min-w-0">
+              <p className="text-sm text-foreground">
+                {data?.phone ? t('profile.bindings.phoneBound', { phone: data.phone }) : t('profile.bindings.phoneUnbound')}
+              </p>
+            </div>
+            <div className="flex shrink-0 flex-wrap gap-2">
+              <Button type="button" variant="outline" onClick={() => setPhoneOpen(true)}>
+                {data?.phone ? t('profile.bindings.change') : t('profile.bindings.bind')}
               </Button>
-            ) : null}
-          </div>
-        </Card>
-      </section>
-      <section className="flex flex-col gap-3">
-        <h3 className="text-sm font-medium text-foreground">{t('profile.bindings.thirdParty')}</h3>
-        {(data?.providers ?? []).map((p) => (
-          <Card key={p.key} className={row}>
-            <div className="flex min-w-0 flex-col gap-1">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium text-foreground">{p.name}</span>
-                <Badge variant={p.bound ? 'success' : 'secondary'}>
-                  {p.bound ? t('profile.bindings.bound') : t('profile.bindings.notBound')}
-                </Badge>
-              </div>
-              {p.bound ? (
-                <span className="truncate text-xs text-muted-foreground">
-                  {t('profile.bindings.boundAs', { name: p.externalName ?? '-', time: fmtDateTime(p.boundAt, i18n.language) })}
-                </span>
+              {data?.phone ? (
+                <Button type="button" variant="ghost" className="text-destructive" onClick={() => onUnbind('phone', t('profile.bindings.phoneTitle'))}>
+                  {t('profile.bindings.unbind')}
+                </Button>
               ) : null}
             </div>
-            {p.bound ? (
-              <Button type="button" variant="outline" className="shrink-0" onClick={() => onUnbind(p.key, p.name)}>
-                {t('profile.bindings.unbind')}
-              </Button>
-            ) : (
-              <Button type="button" className="shrink-0" disabled={bindProvider.isPending} onClick={() => void onBind(p.key, p.name)}>
-                {t('profile.bindings.bind')}
-              </Button>
-            )}
-          </Card>
-        ))}
+          </div>
+        </div>
+      </section>
+      <section className="flex flex-col">
+        <h3 className="pb-1 text-sm font-medium text-foreground">{t('profile.bindings.thirdParty')}</h3>
+        <div className="divide-y divide-border/60 border-t border-border/60">
+          {(data?.providers ?? []).map((p) => (
+            <div key={p.key} className={row}>
+              <div className="flex min-w-0 flex-col gap-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-foreground">{p.name}</span>
+                  <Badge variant={p.bound ? 'success' : 'secondary'}>
+                    {p.bound ? t('profile.bindings.bound') : t('profile.bindings.notBound')}
+                  </Badge>
+                </div>
+                {p.bound ? (
+                  <span className="truncate text-xs text-muted-foreground">
+                    {t('profile.bindings.boundAs', { name: p.externalName ?? '-', time: fmtDateTime(p.boundAt, i18n.language) })}
+                  </span>
+                ) : null}
+              </div>
+              {p.bound ? (
+                <Button type="button" variant="outline" className="shrink-0" onClick={() => onUnbind(p.key, p.name)}>
+                  {t('profile.bindings.unbind')}
+                </Button>
+              ) : (
+                <Button type="button" className="shrink-0" disabled={bindProvider.isPending} onClick={() => void onBind(p.key, p.name)}>
+                  {t('profile.bindings.bind')}
+                </Button>
+              )}
+            </div>
+          ))}
+        </div>
       </section>
       <PhoneDialog open={phoneOpen} onOpenChange={setPhoneOpen} />
+      </div>
     </div>
   )
 }

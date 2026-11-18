@@ -1,10 +1,9 @@
-import { Check, Monitor, Moon, Sun } from 'lucide-react'
+import { Monitor, Moon, Sun } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/framework/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
@@ -14,11 +13,13 @@ import {
 import { useTheme, type ThemeMode, type ThemePreset } from './ThemeProvider'
 
 
-/** 各预设的样板色：与 tokens.css / [data-preset] 里的 --primary 对齐 */
-const PRESET_SWATCH: Array<{ value: ThemePreset; label: string; color: string }> = [
-  { value: 'default', label: 'theme.presetDefault', color: 'hsl(238 82% 55%)' },
-  { value: 'tangerine', label: 'theme.presetTangerine', color: 'hsl(24 74% 54%)' },
-  { value: 'soft-pop', label: 'theme.presetSoftPop', color: 'hsl(262 80% 54%)' },
+/** 各预设的样板色：与 tokens.css 里该预设亮/深两套 --primary 对齐。
+ *  深色下「默认」是白底主按钮（模板原形态 90% 灰白），色块必须跟着变，
+ *  否则「蓝圆点 + 白勾」一行里自相矛盾。 */
+const PRESET_SWATCH: Array<{ value: ThemePreset; label: string; light: string; dark: string }> = [
+  { value: 'default', label: 'theme.presetDefault', light: 'hsl(238 82% 55%)', dark: 'hsl(0 0% 90%)' },
+  { value: 'tangerine', label: 'theme.presetTangerine', light: 'hsl(24 74% 54%)', dark: 'hsl(24 74% 54%)' },
+  { value: 'soft-pop', label: 'theme.presetSoftPop', light: 'hsl(262 80% 54%)', dark: 'hsl(262 65% 62%)' },
 ]
 
 export function ThemeToggle() {
@@ -34,30 +35,33 @@ export function ThemeToggle() {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-44">
         <DropdownMenuRadioGroup value={mode} onValueChange={(v) => setMode(v as ThemeMode)}>
-          <DropdownMenuRadioItem value="light">
-            <Sun className="me-2 h-4 w-4" />
+          <DropdownMenuRadioItem value="light" indicator="end">
+            <Sun className="h-4 w-4" />
             {t('theme.light')}
           </DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="dark">
-            <Moon className="me-2 h-4 w-4" />
+          <DropdownMenuRadioItem value="dark" indicator="end">
+            <Moon className="h-4 w-4" />
             {t('theme.dark')}
           </DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="system">
-            <Monitor className="me-2 h-4 w-4" />
+          <DropdownMenuRadioItem value="system" indicator="end">
+            <Monitor className="h-4 w-4" />
             {t('theme.system')}
           </DropdownMenuRadioItem>
         </DropdownMenuRadioGroup>
         <DropdownMenuSeparator />
         <DropdownMenuLabel>{t('theme.preset')}</DropdownMenuLabel>
-        {PRESET_SWATCH.map((s) => (
-          <DropdownMenuItem key={s.value} className="justify-between" onSelect={() => setPreset(s.value)}>
-            <span className="flex items-center gap-2">
-              <span className="size-3.5 rounded-full ring-1 ring-foreground/20" style={{ background: s.color }} aria-hidden="true" />
+        <DropdownMenuRadioGroup value={preset} onValueChange={(v) => setPreset(v as ThemePreset)}>
+          {PRESET_SWATCH.map((s) => (
+            <DropdownMenuRadioItem key={s.value} value={s.value} indicator="end">
+              <span
+                className="size-4 rounded-full ring-1 ring-foreground/20"
+                style={{ background: resolved === 'dark' ? s.dark : s.light }}
+                aria-hidden="true"
+              />
               {t(s.label)}
-            </span>
-            {preset === s.value && <Check className="size-4 text-foreground" aria-hidden="true" />}
-          </DropdownMenuItem>
-        ))}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   )

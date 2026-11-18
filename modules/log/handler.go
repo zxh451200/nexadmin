@@ -30,9 +30,11 @@ func query(c *gin.Context) Query {
 	if size > maxPageSize {
 		size = maxPageSize
 	}
+	sortField, desc := response.ParseSort(c)
 	return Query{Keyword: c.Query("keyword"), Status: response.ParseList(c.Query("status"), response.MaxFilterValues),
 		Type: response.ParseList(c.Query("type"), response.MaxFilterValues), LoginType: response.ParseList(c.Query("loginType"), response.MaxFilterValues),
-		StartDate: c.Query("startDate"), EndDate: c.Query("endDate"), Page: page, PageSize: size}
+		StartDate: c.Query("startDate"), EndDate: c.Query("endDate"), Page: page, PageSize: size,
+		Sort: sortField, Desc: desc}
 }
 
 // scope 解析操作者的数据范围；失败时已写入响应。

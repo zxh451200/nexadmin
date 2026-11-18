@@ -34,6 +34,10 @@ export interface LoginLogQuery {
   loginType?: string
   startDate?: string
   endDate?: string
+  /** 表头排序字段（后端白名单：created_at / username / ip / status） */
+  sort?: string
+  /** true = 倒序 */
+  desc?: boolean
 }
 
 export function useLoginLogList(query: LoginLogQuery) {

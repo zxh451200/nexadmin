@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { ChevronDown, ChevronUp } from 'lucide-react'
+import { ArrowDown, ArrowUp } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { DndContext, DragOverlay, type DragEndEvent, type DragStartEvent } from '@dnd-kit/core'
 import { arrayMove, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { useCompactLayout } from './table/use-compact-layout'
 import { useOverflowX } from './table/use-overflow-x'
-import { Button } from '@/framework/ui/button'
 import { Checkbox } from '@/framework/ui/checkbox'
 import { Skeleton } from '@/framework/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/framework/ui/table'
@@ -36,6 +35,12 @@ export interface DataTableProps<T> {
   rowActions?: (row: T) => ReactNode
   /** 拖动排序；与 pagination 同时开启时忽略拖动并 console.warn */
   sortable?: { onReorder: (orderedIds: string[]) => void | Promise<unknown> }
+  /**
+   * 服务端排序（受控）：给了它，声明了 sortKey 的列会把表头变成可点按钮，点了就在升/降之间切。
+   * 排序值由调用方持有并回填（一般同时也喂给工具条的下拉），这里只负责交互与状态指示，
+   * 不排序 data ——数据顺序是后端给的。
+   */
+  sort?: { key: string; desc: boolean; onChange: (key: string, desc: boolean) => void }
   onRowClick?: (row: T) => void
   toolbar?: ReactNode
   /** 提供后启用列显示/隐藏设置，并按此 key 存 localStorage */
@@ -86,6 +91,7 @@ export function DataTable<T>({
   batchActions,
   rowActions,
   sortable,
+  sort,
   onRowClick,
   toolbar,
   columnSettingsKey,
@@ -176,22 +182,6 @@ export function DataTable<T>({
     }
   }
 
-  // 移动端的显式上/下移：触屏长按拖拽发现性差、滚动易误取消；与 TreeTable 的同名能力对等。
-  const nudge = async (id: string, delta: -1 | 1) => {
-    if (!sortable) return
-    const from = ids.indexOf(id)
-    const to = from + delta
-    if (from < 0 || to < 0 || to >= ids.length) return
-    const next = arrayMove(rows, from, to)
-    setOverride(next)
-    try {
-      await sortable.onReorder(next.map(getKey))
-    } catch {
-      setOverride(null)
-      toast.error(t('dataTable.reorderFailed'))
-    }
-  }
-
   const selected = selection?.selected ?? []
   const allSelected = rows.length > 0 && ids.every((id) => selected.includes(id))
   const someSelected = ids.some((id) => selected.includes(id))
@@ -241,20 +231,54 @@ export function DataTable<T>({
                 <SelectBox checked={headState} onChange={toggleAll} label={t('dataTable.selectAllRows')} />
               </TableHead>
             ) : null}
-            {visibleColumns.map((c) => (
-              <TableHead
-                key={c.key}
-                style={c.width !== undefined ? { width: c.width } : undefined}
-                className={cn('whitespace-nowrap', thSticky, alignClass(c.align))}
-              >
-                {c.title}
-              </TableHead>
-            ))}
+            {visibleColumns.map((c) => {
+              const sortableCol = !!sort && !!c.sortKey
+              const active = sortableCol && sort!.key === c.sortKey
+              return (
+                <TableHead
+                  key={c.key}
+                  style={c.width !== undefined ? { width: c.width } : undefined}
+                  className={cn('group/th whitespace-nowrap', thSticky, alignClass(c.align))}
+                  aria-sort={active ? (sort!.desc ? 'descending' : 'ascending') : sortableCol ? 'none' : undefined}
+                >
+                  {sortableCol ? (
+                    // 表头即排序入口：点一下升序、再点降序。只有「当前排序列」显示箭头（↑/↓ 两种状态，
+                    // 不再是第三种双箭头）；未排序的列悬停才浮出淡箭头，充当「这里能点」的提示。
+                    <button
+                      type="button"
+                      onClick={() => sort!.onChange(c.sortKey!, active ? !sort!.desc : false)}
+                      title={t('dataTable.sortByColumn', { column: typeof c.title === 'string' ? c.title : c.key })}
+                      className={cn(
+                        '-mx-1 inline-flex max-w-full items-center gap-1 rounded-sm px-1 py-0.5 text-start transition-colors hover:text-foreground',
+                        active ? 'text-foreground' : 'text-muted-foreground',
+                      )}
+                    >
+                      <span className="truncate">{c.title}</span>
+                      {active ? (
+                        sort!.desc ? (
+                          <ArrowDown className="size-3.5 shrink-0" aria-hidden="true" />
+                        ) : (
+                          <ArrowUp className="size-3.5 shrink-0" aria-hidden="true" />
+                        )
+                      ) : (
+                        <ArrowUp
+                          className="size-3.5 shrink-0 opacity-0 transition-opacity group-hover/th:opacity-40"
+                          aria-hidden="true"
+                        />
+                      )}
+                    </button>
+                  ) : (
+                    c.title
+                  )}
+                </TableHead>
+              )
+            })}
             {rowActions ? (
-              // 操作列吸在右侧：宽表格横向滚动时也始终可见
+              // 操作列吸在右侧：宽表格横向滚动时也始终可见。w-px 让自动列宽按内容收缩，
+              // 剩余宽度回到正文列——否则这块空白会被摊给操作列，图标右对齐后左侧空一大块。
               <TableHead
                 className={cn(
-                  'text-end',
+                  'w-px whitespace-nowrap text-end',
                   thSticky,
                   pinActions && 'sticky inset-e-0 z-20 bg-card shadow-[inset_1px_0_0_hsl(var(--border))]',
                 )}
@@ -317,7 +341,7 @@ export function DataTable<T>({
                     {rowActions ? (
                       <TableCell
                         className={cn(
-                          'whitespace-nowrap text-end',
+                          'w-px whitespace-nowrap text-end',
                           pinActions &&
                             (selected.includes(id)
                               ? // 选中行不挂 hover 色：row-selected 不透明，行体与钉住的行尾同色
@@ -351,7 +375,8 @@ export function DataTable<T>({
   const mobile = (
     <div className={dense ? 'flex flex-col gap-1.5' : 'flex flex-col gap-3'}>
       {selection && rows.length > 0 && !loading ? (
-        <label className="flex min-h-11 items-center gap-1 text-sm text-muted-foreground">
+        // ps-2：与卡片首列复选框对齐——手机卡 px-3 减掉 leading 的 -ms-1、紧凑行本身就是 px-2，两种形态合起来都是 8px
+        <label className="flex min-h-11 items-center gap-1 ps-2 text-sm text-muted-foreground">
           <SelectBox checked={headState} onChange={toggleAll} label={t('dataTable.selectAllRows')} />
           {t('common.selectAll')}
         </label>
@@ -385,45 +410,20 @@ export function DataTable<T>({
                 index={index}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
                 leading={
-                  <>
-                    {sortEnabled ? <SortableHandle className="drag-handle-quiet" /> : null}
-                    {selection ? (
-                      <SelectBox
-                        checked={selected.includes(id)}
-                        onChange={() => toggleOne(id)}
-                        label={t('dataTable.selectRow')}
-                      />
-                    ) : null}
-                  </>
+                  selection ? (
+                    <SelectBox
+                      checked={selected.includes(id)}
+                      onChange={() => toggleOne(id)}
+                      label={t('dataTable.selectRow')}
+                    />
+                  ) : null
                 }
                 actions={
                   sortEnabled ? (
                     <>
-                      {/* 上/下移放在底部操作行（与编辑同排）：竖堆在把手旁会把卡片撑高。
-                          触屏没有长按拖拽的确定性，靠它们排序；桌面窄栏有把手 + hover，
-                          两枚箭头每卡都挂是纯噪声，touch-only 收掉。 */}
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="size-8 touch-only"
-                        disabled={index <= 0}
-                        aria-label={t('dataTable.moveUp')}
-                        onClick={() => void nudge(id, -1)}
-                      >
-                        <ChevronUp className="size-4" aria-hidden="true" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="size-8 touch-only"
-                        disabled={index >= rows.length - 1}
-                        aria-label={t('dataTable.moveDown')}
-                        onClick={() => void nudge(id, 1)}
-                      >
-                        <ChevronDown className="size-4" aria-hidden="true" />
-                      </Button>
+                      {/* 排序把手跟行操作同排（编辑左边），常显：卡片里静默把手只会在左侧留下一段空槽，
+                          上下移按钮又要占两格、还多点一次。把手常显后触屏也能直接按住拖。 */}
+                      <SortableHandle className="size-8" />
                       {rowActions ? rowActions(row) : null}
                     </>
                   ) : (
@@ -451,6 +451,9 @@ export function DataTable<T>({
 
   return (
     <div ref={rootRef} className={cn('relative flex flex-col gap-3', className)}>
+      {/* 工具条在卡片外面、与卡片同宽（全站口径）。自定义工具条里的控件按右边缘对齐时，
+          注意别把「列设置」这类只在某些视图出现的按钮算进来——它由这里统一占右侧槽位，
+          页面自己再排一个视图专属按钮（如网格/列表切换）时要预留同宽空位，否则切视图整排控件会跳。 */}
       {showToolbar ? (
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">{toolbar}</div>

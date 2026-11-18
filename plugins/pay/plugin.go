@@ -128,6 +128,9 @@ func (m *module) Register(r *gin.RouterGroup, d *core.Deps) {
 	// 公开路由：渠道网关回调（验签兜底）与 mock 收银台。
 	p := d.Public.Group("/plugins/pay")
 	p.POST("/notify/:channelCode", h.notify)
+	// 平台级站点（官网商品页）匿名下单用的公开端点：渠道清单（无凭据）。
+	// 下单本身走进程内 pay.Create（业务插件 import），不走公开 HTTP。
+	p.GET("/public/channels", h.publicChannels)
 	p.GET("/mock/cashier", h.mockCashier)
 	p.POST("/mock/cashier/confirm", h.mockConfirm)
 }

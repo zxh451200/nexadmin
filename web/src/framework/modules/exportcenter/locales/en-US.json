@@ -16,6 +16,7 @@
       "website.product-export": "Product export",
       "website.post-export": "Post export",
       "website.message-export": "Message export",
+      "website.ali-template-export": "Alibaba template export",
       "formbuilder.export": "Form export",
       "operlog.export": "Operation log export",
       "loginlog.export": "Login log export",

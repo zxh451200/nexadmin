@@ -149,9 +149,9 @@ export default function ImPage() {
   const [keyword, setKeyword] = useState('')
   const [filtersOpen, setFiltersOpen] = useState(false)
   // 生效中的筛选 chips + 一键重置：与工单中心同一交互（点 chip 撤销对应维度）。
-  // 关键词不算 chip——它本身就在搜索框里看得见，再列一枚等于同一件事说两遍。
+  // 关键词不算 chip——它本身就在搜索框里看得见，再列一枚等于同一件事说两遍；
+  // 状态也不算——状态段选页签常驻可见，再挂一枚「状态 已关闭」chip 是同一个信号说两遍。
   const activeFilters: { key: string; label: string; value: string; clear: () => void }[] = [
-    ...(status ? [{ key: 'status', label: t('plugin_im.fields.status'), value: t(`plugin_im.status.${status}`), clear: () => setStatus(undefined) }] : []),
     ...(assignee !== 'all'
       ? [{ key: 'assignee', label: t('plugin_im.fields.assignee'), value: t(`plugin_im.assignee.${assignee}`), clear: () => setAssignee('all') }]
       : []),
@@ -670,25 +670,6 @@ export default function ImPage() {
               ))}
             </div>
           ) : null}
-          {canBatch && selectableNos.length > 0 ? (
-            // 全选框 = 表格的全选列头：只要存在可操作的会话就出现；「可操作」按权限与状态
-            // 分别判断（进行中→关闭，已结束→超管删除），勾选框与行内勾选框左对齐
-            //（行内是 ps-2 + px-1.5，同为 14px）。动作下沉到浮动 BatchBar，与工单队列同一套。
-            <div className="flex items-center gap-2 border-b pb-1.5 pt-0.5">
-              <span className="flex shrink-0 items-center ps-2">
-                <span className="px-1.5">
-                  <Checkbox
-                    id="im-pick-all"
-                    checked={allPicked ? true : picked.length > 0 ? 'indeterminate' : false}
-                    onCheckedChange={(v) => setPicked(v === true ? selectableNos : [])}
-                  />
-                </span>
-              </span>
-              <label htmlFor="im-pick-all" className="min-w-0 flex-1 cursor-pointer truncate text-xs text-muted-foreground">
-                {t('plugin_im.batch.selectAll', { count: selectableNos.length })}
-              </label>
-            </div>
-          ) : null}
           {picked.length > 0 ? (
             <BatchBar count={picked.length} onClear={() => setPicked([])} mode="absolute">
               {canCloseBatch && pickedOpen.length > 0 ? (
@@ -745,11 +726,28 @@ export default function ImPage() {
             })}
             {!convs.isLoading && list.length === 0 ? <EmptyState title={t('plugin_im.empty')} className="py-8" /> : null}
           </div>
-          {/* 批量模式下分页让位给悬浮 BatchBar：勾选时翻页无意义，两者又共享卡片底边会互相压住 */}
+          {/* 批量模式下分页让位给悬浮 BatchBar：勾选时翻页无意义，两者又共享卡片底边会互相压住。
+              全选收在这里而不是列表上方：与工单中心同一套页脚（全选 + 总数 + 翻页），
+              左栏上方只留「状态页签 + 搜索筛选」，不再堆四层。 */}
           {picked.length === 0 ? (
             <div className="flex items-center justify-between gap-2 border-t pt-2 text-xs text-muted-foreground">
-              <span>{t('dataTable.totalCount', { count: total })}</span>
-              <div className="flex items-center gap-1">
+              <div className="flex min-w-0 items-center gap-2">
+                {canBatch && selectableNos.length > 0 ? (
+                  <label
+                    htmlFor="im-pick-all"
+                    className="flex min-w-0 cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-colors hover:bg-accent/40"
+                  >
+                    <Checkbox
+                      id="im-pick-all"
+                      checked={allPicked ? true : picked.length > 0 ? 'indeterminate' : false}
+                      onCheckedChange={(v) => setPicked(v === true ? selectableNos : [])}
+                    />
+                    <span className="truncate">{t('plugin_im.batch.selectAll', { count: selectableNos.length })}</span>
+                  </label>
+                ) : null}
+                <span className="shrink-0">{t('dataTable.totalCount', { count: total })}</span>
+              </div>
+              <div className="flex shrink-0 items-center gap-1">
                 <Button
                   variant="ghost"
                   size="icon"

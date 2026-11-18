@@ -45,6 +45,10 @@ export interface UserQuery {
   /** YYYY-MM-DD，创建时间闭区间（AI 筛选产出） */
   createdFrom?: string
   createdTo?: string
+  /** 表头排序字段（后端白名单：nickname / username / created_at），空 = 默认 created_at */
+  sort?: string
+  /** true = 倒序 */
+  desc?: boolean
 }
 
 /** 筛选条件（页面 state）：枚举字段是数组，发请求前用 toUserQuery 拼成 CSV */

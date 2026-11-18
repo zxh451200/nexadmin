@@ -113,11 +113,15 @@ export default function NoticePage() {
         <div className="flex min-w-0 items-center gap-2">
           {n.pinned ? <Badge variant="outline">{t('notice.pinnedTag')}</Badge> : null}
           {n.platform ? <Badge variant="info">{t('notice.platformTag')}</Badge> : null}
+          {/* 手机卡片没有独立的「类型」列位置：并进这一排徽章，别让它在标题下单独占一行 */}
+          <span className="md:hidden">
+            <DictTag dict="notice_type" value={n.type} />
+          </span>
           <span className="min-w-0 max-w-[18rem] truncate font-medium text-foreground">{n.title}</span>
         </div>
       ),
     },
-    { key: 'type', title: t('notice.fields.type'), mobile: 'sub', render: (n) => <DictTag dict="notice_type" value={n.type} /> },
+    { key: 'type', title: t('notice.fields.type'), mobile: 'hidden', render: (n) => <DictTag dict="notice_type" value={n.type} /> },
     { key: 'level', title: t('notice.fields.level'), render: (n) => <DictTag dict="notice_level" value={n.level} /> },
     { key: 'status', title: t('notice.fields.status'), render: (n) => <DictTag dict="notice_status" value={n.status} /> },
     { key: 'scope', title: t('notice.fields.scope'), render: (n) => t(`notice.scope.${n.scope}`) },

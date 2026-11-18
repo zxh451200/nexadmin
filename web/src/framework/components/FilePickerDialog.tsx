@@ -20,8 +20,13 @@ import { cn } from '@/lib/utils'
 
 const PAGE_SIZE = 18
 
-/** kind → /files 的 category 过滤（'file' 覆盖 doc+other，与文件管理页的逗号拼接口径一致） */
-const CATEGORY_BY_KIND: Record<UploadKind, string> = { image: 'image', video: 'video', file: 'doc,other' }
+/** kind → /files 的 category 过滤。附件（file）不筛类别：上传本来就不限类型（图片/压缩包/音视频都能挂），
+ *  选择器如果只看 doc,other，库里只有图片时就是永久空列表。 */
+const CATEGORY_BY_KIND: Record<UploadKind, string | undefined> = {
+  image: 'image',
+  video: 'video',
+  file: undefined,
+}
 
 /** 库文件 → 上传组件通用值（公告附件、表单 file 等直接吃 UploadedFile 的入口用） */
 export function toUploadedFile(f: FileItem): UploadedFile {

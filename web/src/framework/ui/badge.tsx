@@ -5,7 +5,9 @@ import { cn } from '@/lib/utils'
 const badgeBase =
   // 11px/medium + 收一档内边距：徽章是辅助信息，不该和正文争字重；tone-chip 的同色淡底
   // 在 11px 下更经得起一行十几枚的排布（12px/semibold 会整列发黑）。
-  'inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-medium leading-4 transition-colors focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background'
+  // whitespace-nowrap：窄卡片/窄格里徽章会被 flex 压到最窄，中文会逐字竖排（「置顶」变两行）；
+  // 不允许换行后，min-content 就是整词宽度，被压缩的会换成同排的标题/其它内容。
+  'inline-flex items-center whitespace-nowrap rounded-md border px-2 py-0.5 text-[11px] font-medium leading-4 transition-colors focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background'
 
 /** 状态色调：与 StatCard 同一套令牌，颜色一律由 tokens.css 的 [data-tone] + .tone-chip 给出 */
 export type BadgeTone =

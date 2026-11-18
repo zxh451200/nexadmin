@@ -863,7 +863,7 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
             {rowActions ? (
               <TableCell
                 className={cn(
-                  'whitespace-nowrap text-end',
+                  'w-px whitespace-nowrap text-end',
                   pinActions &&
                     (selectedSet.has(node.id)
                       ? // 选中行不挂 hover 色：row-selected 不透明，行体与钉住的行尾同色
@@ -919,7 +919,7 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
               // 操作列吸在右侧：宽表格横向滚动时也始终可见
               <TableHead
                 className={cn(
-                  'text-end',
+                  'w-px whitespace-nowrap text-end',
                   pinActions && 'sticky inset-e-0 z-20 bg-card shadow-[inset_1px_0_0_hsl(var(--border))]',
                 )}
               >

@@ -291,6 +291,9 @@ func (h *siteHandler) registerPages(g *gin.RouterGroup, bareHome bool) {
 	g.HEAD("/products/:slug", h.productDetail)
 	g.GET("/p/:slug", h.pageDetail)
 	g.HEAD("/p/:slug", h.pageDetail)
+	// 站点地图：给访客看的 HTML 索引（/sitemap.xml 是给爬虫的，两者口径一致）。
+	g.GET("/sitemap", h.sitemapPage)
+	g.HEAD("/sitemap", h.sitemapPage)
 	// 在线留言：GET 是联系页，POST 是同一个地址的投稿入口（无 JS 也能直接表单提交）。
 	// 投稿限流在 handler 内判定（contactAllowed），这样超限时无 JS 的表单提交
 	// 也能 303 回联系页带错误提示，而不是被中间件直接吐一段 JSON。

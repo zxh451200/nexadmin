@@ -41,7 +41,8 @@ export function FilePreview({ file, className, children }: FilePreviewProps) {
     return (
       <div className={cn('group relative overflow-hidden rounded-md border border-border bg-muted', className)}>
         <button type="button" aria-label={t('common.preview')} className="block size-full" onClick={() => setZoom(true)}>
-          <img src={file.url} alt={file.name} className="aspect-square size-full object-cover" loading="lazy" />
+          {/* draggable=false：图块本身是拖动排序的抓手，别让浏览器再起一个原生图片拖影 */}
+          <img src={file.url} alt={file.name} draggable={false} className="aspect-square size-full object-cover" loading="lazy" />
         </button>
         <Lightbox open={zoom} onOpenChange={setZoom} slides={[{ src: file.url, alt: file.name }]} />
         {children}
@@ -51,7 +52,7 @@ export function FilePreview({ file, className, children }: FilePreviewProps) {
 
   if (cat === 'video') {
     return (
-      <div className={cn('relative overflow-hidden rounded-md border border-border bg-muted', className)}>
+      <div className={cn('group relative overflow-hidden rounded-md border border-border bg-muted', className)}>
         <video src={file.url} poster={file.posterUrl} controls preload="metadata" playsInline className="aspect-video size-full bg-muted object-cover" />
         {children}
       </div>

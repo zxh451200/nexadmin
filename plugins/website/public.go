@@ -594,6 +594,33 @@ func (h *siteHandler) productDetail(c *gin.Context) {
 	h.render(c, "product", http.StatusOK, v)
 }
 
+// GET /sitemap —— 给访客看的站点地图（HTML）。爬虫用的 XML 在 /sitemap.xml，
+// 两者口径一致：未发布、noindex、该语言没发的都不进，避免索引把人送进 404。
+func (h *siteHandler) sitemapPage(c *gin.Context) {
+	ctx := c.Request.Context()
+	lang := langOf(c)
+	v, err := h.baseView(ctx, lang.Code, 0)
+	if err != nil {
+		c.String(http.StatusInternalServerError, "site unavailable")
+		return
+	}
+	groups, err := h.svc.SitemapGroups(ctx, lang.Code)
+	if err != nil {
+		c.String(http.StatusInternalServerError, "site unavailable")
+		return
+	}
+	for i := range groups {
+		groups[i].Title = v.T("sitemap." + groups[i].Key)
+	}
+	v.SitemapGroups = groups
+	// 品牌主题站不把框架自带的 /docs 摆进站点地图：那套文档是给后台使用者看的，
+	// 品牌站导航里也没有入口，列出来只会让访客点进一片与业务无关的页面。
+	v.DocsEnabled = v.ThemeID == ""
+	v.Title = v.composeTitle(v.T("layout.sitemap"))
+	v.Desc = v.T("sitemap.desc")
+	h.render(c, "sitemap", http.StatusOK, v)
+}
+
 // GET /p/:slug —— 自定义页。
 func (h *siteHandler) pageDetail(c *gin.Context) {
 	lang := langOf(c)
@@ -911,7 +938,7 @@ func (h *siteHandler) sitemap(c *gin.Context) {
 		}
 	}
 	// 文档区也进 sitemap（内容由框架 docs/*.md 渲染，随版本更新）。
-	entries = append(entries, SitemapEntry{Loc: "/docs"}, SitemapEntry{Loc: "/contact"})
+	entries = append(entries, SitemapEntry{Loc: "/docs"}, SitemapEntry{Loc: "/contact"}, SitemapEntry{Loc: "/sitemap"})
 	for _, g := range docGroups {
 		for _, it := range g.Items {
 			entries = append(entries, SitemapEntry{Loc: "/docs/" + it.Slug})

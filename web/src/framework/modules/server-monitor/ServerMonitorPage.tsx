@@ -240,7 +240,7 @@ export default function ServerMonitorPage() {
                 <CardTitle className="text-base font-medium">{t('serverMonitor.disk.title')}</CardTitle>
               </CardHeader>
               <CardContent>
-                <DataTable<DiskInfo> columns={diskColumns} data={disks} rowKey="mount" loading={!latest} pagination={false} />
+                <DataTable<DiskInfo> bare columns={diskColumns} data={disks} rowKey="mount" loading={!latest} pagination={false} />
               </CardContent>
             </Card>
           </div>

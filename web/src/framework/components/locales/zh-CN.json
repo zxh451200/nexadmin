@@ -6,6 +6,7 @@
   "dataTable": {
     "columnSettings": "列设置",
     "columnSettingsHint": "选择要显示的列",
+    "sortByColumn": "按「{{column}}」排序",
     "resetColumns": "恢复默认",
     "dragHandle": "拖动排序",
     "moveUp": "上移",

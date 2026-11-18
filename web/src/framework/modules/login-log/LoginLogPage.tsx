@@ -85,9 +85,12 @@ export default function LoginLogPage() {
   const view = params.get('view') === 'stats' ? 'stats' : 'logs'
   const setView = (v: string) => setParams(v === 'stats' ? { view: v } : {}, { replace: true })
   const [selected, setSelected] = useState<string[]>([])
+  // 表头排序：默认时间倒序，点列头切换
+  const [sort, setSort] = useState('created_at')
+  const [desc, setDesc] = useState(true)
   const { start: startExportJob } = useAsyncJob()
 
-  const { data, isLoading } = useLoginLogList({ page, pageSize, ...toQuery(applied) })
+  const { data, isLoading } = useLoginLogList({ page, pageSize, sort, desc, ...toQuery(applied) })
   const del = useDeleteLoginLogs()
   const clean = useCleanLoginLogs()
   const [cleanOpen, setCleanOpen] = useState(false)
@@ -142,14 +145,14 @@ export default function LoginLogPage() {
   }
 
   const columns: Column<LoginLog>[] = [
-    { key: 'username', title: t('loginLog.col.username'), mobile: 'title' },
+    { key: 'username', title: t('loginLog.col.username'), sortKey: 'username', mobile: 'title' },
     {
       key: 'loginType',
       title: t('loginLog.col.type'),
       mobile: 'sub',
       render: (r) => <Badge variant={TYPE_VARIANT[r.loginType as LoginType]}>{t(`loginLog.type.${r.loginType}`, { defaultValue: r.loginType })}</Badge>,
     },
-    { key: 'ip', title: t('loginLog.col.ip'), render: (r) => <span className="num">{r.ip}</span> },
+    { key: 'ip', title: t('loginLog.col.ip'), sortKey: 'ip', render: (r) => <span className="num">{r.ip}</span> },
     {
       key: 'location',
       title: t('loginLog.col.location'),
@@ -165,7 +168,7 @@ export default function LoginLogPage() {
       title: t('loginLog.col.os'),
       render: (r) => (r.os ? <span className="block max-w-[10rem] truncate" title={r.os}>{r.os}</span> : <span className="text-muted-foreground">-</span>),
     },
-    { key: 'status', title: t('loginLog.col.status'), render: (r) => <DictTag dict="login_status" value={r.status} /> },
+    { key: 'status', title: t('loginLog.col.status'), sortKey: 'status', render: (r) => <DictTag dict="login_status" value={r.status} /> },
     {
       key: 'failReason',
       title: t('loginLog.col.reason'),
@@ -180,7 +183,7 @@ export default function LoginLogPage() {
         )
       },
     },
-    { key: 'createdAt', title: t('loginLog.col.time'), render: (r) => <span className="num">{fmtDateTime(r.createdAt, i18n.language)}</span> },
+    { key: 'createdAt', title: t('loginLog.col.time'), sortKey: 'created_at', render: (r) => <span className="num">{fmtDateTime(r.createdAt, i18n.language)}</span> },
   ]
 
   return (
@@ -230,6 +233,16 @@ export default function LoginLogPage() {
           </>
         }
         columns={columns}
+        sort={{
+          key: sort,
+          desc,
+          onChange: (key, nextDesc) => {
+            setSort(key)
+            setDesc(nextDesc)
+            setPage(1)
+            setSelected([])
+          },
+        }}
         data={data?.list ?? []}
         rowKey="id"
         loading={isLoading}

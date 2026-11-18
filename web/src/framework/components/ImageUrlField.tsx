@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
 import { precheckFile, useUploadConfig } from '@/framework/upload/precheck'
 import { uploadFile } from '@/framework/upload/uploadClient'
 import { toWebp, webpName } from '@/framework/upload/toWebp'
+import { TileActions } from '@/framework/upload/TileActions'
 import { Lightbox } from '@/framework/upload/Lightbox'
 import { FilePickerDialog, PickFromLibraryButton } from './FilePickerDialog'
 import { ResponsiveDialog } from './ResponsiveDialog'
@@ -119,33 +120,13 @@ export function ImageUrlField({
           }}
         />
       </button>
-      {/* 悬停/聚焦时浮现操作；触屏没有 hover，仍走卡片点开放大 + 行内「清除」按钮 */}
-      <div className="pointer-events-none absolute inset-0 flex items-center justify-center gap-1 rounded-md bg-black/50 opacity-0 transition-opacity group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100">
-        <Button
-          type="button"
-          size="icon"
-          variant="ghost"
-          className="size-7 text-white hover:bg-white/20 hover:text-white"
-          disabled={disabled}
-          onClick={() => setZoom(true)}
-          aria-label={t('common.preview')}
-          title={t('common.preview')}
-        >
-          <ZoomIn aria-hidden="true" />
-        </Button>
-        <Button
-          type="button"
-          size="icon"
-          variant="ghost"
-          className="size-7 text-white hover:bg-white/20 hover:text-white"
-          disabled={disabled}
-          onClick={() => onChange('')}
-          aria-label={t('common.clear')}
-          title={t('common.clear')}
-        >
-          <Trash2 aria-hidden="true" />
-        </Button>
-      </div>
+      {/* 操作按钮与图集/视频块共用 TileActions：悬停聚焦浮出、触屏常显，不再整块盖黑蒙版 */}
+      <TileActions
+        actions={[
+          { key: 'preview', label: t('common.preview'), icon: <ZoomIn className="size-4" aria-hidden="true" />, onSelect: () => setZoom(true), disabled },
+          { key: 'clear', label: t('common.clear'), icon: <Trash2 className="size-4" aria-hidden="true" />, onSelect: () => onChange(''), disabled, destructive: true },
+        ]}
+      />
     </div>
   ) : null
   const uploadBtn = (
@@ -178,23 +159,9 @@ export function ImageUrlField({
         aria-label={ariaLabel ?? title}
         aria-invalid={ariaInvalid}
       />
-      {/* 上传始终在行内：有值时也要能直接换图（先清除再上传会让预览闪没）；
-          清除只在有值时出现，紧挨文件库入口 */}
+      {/* 上传始终在行内：有值时也要能直接换图（先清除再上传会让预览闪没）。
+          清除不在这里重复：预览卡悬停/聚焦已浮出清除，行内再放一个只是并排多一枚垃圾桶。 */}
       {uploadBtn}
-      {value ? (
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="size-9 shrink-0"
-          disabled={disabled}
-          onClick={() => onChange('')}
-          aria-label={t('common.clear')}
-          title={t('common.clear')}
-        >
-          <Trash2 aria-hidden="true" />
-        </Button>
-      ) : null}
       {/* 文件库弹窗：已传过的图片直接选（缩略图网格 + 关键词可搜、按上传时间倒序） */}
       <PickFromLibraryButton className="shrink-0" disabled={disabled} onClick={() => setPickOpen(true)} />
     </div>

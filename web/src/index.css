@@ -217,6 +217,13 @@
   #main-content {
     scrollbar-gutter: stable;
   }
+
+  /* recharts 的扇区/形状带 tabindex="-1"，只为鼠标点选服务、不在 Tab 序列里；
+     点一下 Chrome 会给它套 UA 焦点环——深色主题下是一圈白框，看着像渲染缺陷。
+     根 svg（tabindex=0）是键盘入口，保留它的焦点环不动。 */
+  .recharts-wrapper [tabindex='-1']:focus {
+    outline: none;
+  }
   /* 细滚动条 */
   * {
     scrollbar-width: thin;

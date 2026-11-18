@@ -496,7 +496,7 @@ export function SourceFormDialog({ open, onOpenChange, editing }: Props) {
                     control={c}
                     name="matchExisting"
                     label={p('matchExisting')}
-                    hint={canMatch ? h('matchExisting') : t('plugin_identity.perm.matchNoPerm')}
+                    hint={canMatch ? h('matchExisting') : h('matchNoPerm')}
                     disabled={!canMatch}
                   />
                 </FormGridFull>

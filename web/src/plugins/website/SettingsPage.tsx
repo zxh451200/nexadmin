@@ -141,16 +141,28 @@ const MAIN_MARKET_OPTIONS = ['欧洲', '北美', '南美', '东南亚', '中东'
 
 /** 汇率表编辑器：替代手写 JSON——USD 是基准（恒 1、不可删改），其余币种行可增删改。
     序列化口径与后端 parseCurrencyRates 一致（^[A-Z]{3}$、rate>0、USD=1、最多 24 个）；
-    行内非法的币种码/汇率不进序列化结果并就地标红，保存时后端仍会兜底校验。 */
+    行内非法的币种码/汇率不进序列化结果并就地标红，保存时后端仍会兜底校验。
+    行状态是编辑期间的事实源：value 只在「外部变更」（保存后重取/主题导入）且不等于
+    本地最近一次序列化结果时才重同步——每敲一键都拿 value 重挂载会把未填完的行清掉。 */
 function CurrencyRatesEditor({ value, onChange, disabled }: { value: string; onChange: (v: string) => void; disabled?: boolean }) {
   const { t } = useTranslation()
   const [rows, setRows] = useState<RateRow[]>(() => parseRateRows(value))
+  const lastSerialized = useRef(serializeRateRows(parseRateRows(value)))
+  useEffect(() => {
+    if (value !== lastSerialized.current) {
+      const next = parseRateRows(value)
+      lastSerialized.current = serializeRateRows(next)
+      setRows(next)
+    }
+  }, [value])
+  const commit = (next: RateRow[]) => {
+    setRows(next)
+    const s = serializeRateRows(next)
+    lastSerialized.current = s
+    onChange(s)
+  }
   const edit = (i: number, patch: Partial<RateRow>) => {
-    setRows((rs) => {
-      const next = rs.map((r, j) => (j === i ? { ...r, ...patch } : r))
-      onChange(serializeRateRows(next))
-      return next
-    })
+    commit(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)))
   }
   const codeInvalid = (r: RateRow) => r.code.trim() !== '' && !/^[A-Z]{3}$/.test(r.code.trim().toUpperCase())
   const rateInvalid = (r: RateRow) => r.code.trim() !== '' && r.code.trim().toUpperCase() !== 'USD' && (r.rate.trim() === '' || !(Number(r.rate) > 0))
@@ -190,13 +202,7 @@ function CurrencyRatesEditor({ value, onChange, disabled }: { value: string; onC
                   className="size-8 shrink-0"
                   disabled={disabled}
                   aria-label={t('common.delete')}
-                  onClick={() =>
-                    setRows((rs) => {
-                      const next = rs.filter((_, j) => j !== i)
-                      onChange(serializeRateRows(next))
-                      return next
-                    })
-                  }
+                  onClick={() => commit(rows.filter((_, j) => j !== i))}
                 >
                   <Trash2 aria-hidden="true" />
                 </Button>
@@ -211,12 +217,7 @@ function CurrencyRatesEditor({ value, onChange, disabled }: { value: string; onC
         size="sm"
         className="w-fit"
         disabled={disabled || rows.length >= RATES_MAX}
-        onClick={() =>
-          setRows((rs) => {
-            const next = [...rs, { code: '', rate: '' }]
-            return next
-          })
-        }
+        onClick={() => setRows((rs) => [...rs, { code: '', rate: '' }])}
       >
         <Plus aria-hidden="true" />
         {t('plugin_website.rates.add')}
@@ -593,7 +594,6 @@ function SettingsFormBody({
                   默认币种下拉的选项直接取汇率表的键。 */}
               <SharedFieldShell labelKey="plugin_website.fields.currencyRates" hint={t('plugin_website.hint.currencyRates')}>
                 <CurrencyRatesEditor
-                  key={shared.currencyRates}
                   value={shared.currencyRates}
                   disabled={sharedDisabled}
                   onChange={(v) => set('currencyRates', v)}

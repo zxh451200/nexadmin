@@ -1,5 +1,5 @@
-import { useMemo, useState, type ReactNode } from 'react'
-import { Copy, Download, Eye, FolderInput, Globe, Lock, MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
+import { memo, useMemo, useState, type ReactNode } from 'react'
+import { Copy, Download, Eye, FolderInput, Globe, Lock, MoreHorizontal, MoreVertical, Pencil, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
@@ -182,9 +182,11 @@ interface MenuProps {
   onDelete: (f: FileItem) => void
   /** 缩略图上的浮层触发器需要自带底色，否则压在图片上看不清 */
   triggerClassName?: string
+  /** 卡片（竖排信息）用竖三点，表格行用横三点——两种容器里的「更多」习惯不同 */
+  verticalIcon?: boolean
 }
 
-export function FileActionsMenu({ file, onPreview, onToggleVisibility, onMove, onRename, onDelete, triggerClassName }: MenuProps) {
+export const FileActionsMenu = memo(function FileActionsMenu({ file, onPreview, onToggleVisibility, onMove, onRename, onDelete, triggerClassName, verticalIcon }: MenuProps) {
   const { t } = useTranslation()
   const { has } = usePermission()
   const isPublic = file.visibility === 'public'
@@ -192,34 +194,34 @@ export function FileActionsMenu({ file, onPreview, onToggleVisibility, onMove, o
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon" aria-label={t('common.more')} className={cn('size-11 md:size-8', triggerClassName)} onClick={(e) => e.stopPropagation()}>
-          <MoreHorizontal className="size-4" aria-hidden="true" />
+          {verticalIcon ? <MoreVertical className="size-4" aria-hidden="true" /> : <MoreHorizontal className="size-4" aria-hidden="true" />}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
         <DropdownMenuItem className="min-h-11 md:min-h-8" onSelect={() => onPreview(file)}>
-          <Eye className="me-2 size-4" aria-hidden="true" />
+          <Eye className="size-4" aria-hidden="true" />
           {t('common.preview')}
         </DropdownMenuItem>
         <DropdownMenuItem className="min-h-11 md:min-h-8" onSelect={() => downloadFile(file)}>
-          <Download className="me-2 size-4" aria-hidden="true" />
+          <Download className="size-4" aria-hidden="true" />
           {t('common.download')}
         </DropdownMenuItem>
         <DropdownMenuItem className="min-h-11 md:min-h-8" onSelect={() => void copyLink(file, t)}>
-          <Copy className="me-2 size-4" aria-hidden="true" />
+          <Copy className="size-4" aria-hidden="true" />
           {t('fileMgr.copyLink')}
         </DropdownMenuItem>
         {has('file:upload') && (
           <>
             <DropdownMenuItem className="min-h-11 md:min-h-8" onSelect={() => onRename(file)}>
-              <Pencil className="me-2 size-4" aria-hidden="true" />
+              <Pencil className="size-4" aria-hidden="true" />
               {t('common.rename')}
             </DropdownMenuItem>
             <DropdownMenuItem className="min-h-11 md:min-h-8" onSelect={() => onToggleVisibility(file)}>
-              {isPublic ? <Lock className="me-2 size-4" aria-hidden="true" /> : <Globe className="me-2 size-4" aria-hidden="true" />}
+              {isPublic ? <Lock className="size-4" aria-hidden="true" /> : <Globe className="size-4" aria-hidden="true" />}
               {isPublic ? t('fileMgr.setPrivate') : t('fileMgr.setPublic')}
             </DropdownMenuItem>
             <DropdownMenuItem className="min-h-11 md:min-h-8" onSelect={() => onMove(file)}>
-              <FolderInput className="me-2 size-4" aria-hidden="true" />
+              <FolderInput className="size-4" aria-hidden="true" />
               {t('fileMgr.moveTo')}
             </DropdownMenuItem>
           </>
@@ -227,14 +229,14 @@ export function FileActionsMenu({ file, onPreview, onToggleVisibility, onMove, o
         <Can perm="file:delete">
           <DropdownMenuSeparator />
           <DropdownMenuItem className="min-h-11 text-destructive focus:text-destructive md:min-h-8" onSelect={() => onDelete(file)}>
-            <Trash2 className="me-2 size-4" aria-hidden="true" />
+            <Trash2 className="size-4" aria-hidden="true" />
             {t('common.delete')}
           </DropdownMenuItem>
         </Can>
       </DropdownMenuContent>
     </DropdownMenu>
   )
-}
+})
 
 /** 重命名弹窗：后端 Update 一直支持 name patch，界面上从来没有入口。 */
 export function RenameDialog({

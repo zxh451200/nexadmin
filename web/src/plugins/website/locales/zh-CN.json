@@ -251,6 +251,7 @@
       "categorySearch": "搜索类目…",
       "categoryNoMatch": "没有匹配的类目",
       "categoriesEmpty": "还没有类目，先到「产品类目」里建一个",
+      "categoryCountIncl": "含子类目共 {{count}} 件商品",
       "coverUpload": "上传主图",
       "coverHint": "建议 800×800，上传后按此比例裁剪；也用于社交分享预览图",
       "images": "图集",
@@ -435,7 +436,7 @@
       "parentRoot": "顶级（无上级）",
       "addChild": "新增子类目",
       "nameColumn": "类目名称",
-      "countColumn": "商品数",
+      "countColumn": "商品数（含子类）",
       "deleteConfirm": "确认删除类目「{{name}}」？该类目下还有 {{count}} 个商品，需先移走。",
       "deleteBatchConfirm": "确认删除选中的 {{count}} 个类目？子类目会一并删除。"
     },

@@ -1,4 +1,4 @@
-import { AlertCircle, GripVertical, RefreshCw, RotateCcw, X } from 'lucide-react'
+import { AlertCircle, RefreshCw, RotateCcw, Trash2, X } from 'lucide-react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useTranslation } from 'react-i18next'
@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils'
 import { Progress } from '@/framework/ui/progress'
 import { FilePreview, fileCategory } from '@/framework/components/FilePreview'
 import { formatSize } from './precheck'
+import { TileActions } from './TileActions'
 import type { UploadedFile } from './types'
 
 export interface PendingItem {
@@ -20,9 +21,6 @@ export interface PendingItem {
 export const tileSize = (cat: 'image' | 'video' | 'file') =>
   cat === 'file' ? 'w-full' : cat === 'video' ? 'w-full max-w-xs sm:w-56' : 'size-28 md:size-32'
 
-const barBtn =
-  'inline-flex h-11 flex-1 items-center justify-center text-foreground hover:bg-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring md:h-8'
-
 export function FileTile({
   file,
   sortable,
@@ -36,25 +34,13 @@ export function FileTile({
 }) {
   const { t } = useTranslation()
   const cat = fileCategory(file)
-  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: file.id, disabled: !sortable })
+  const { listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: file.id, disabled: !sortable })
   // 被拖图块自身不做补间，否则跟手慢半拍
   const style = { transform: CSS.Transform.toString(transform), transition: isDragging ? undefined : transition }
-
-  const handle = sortable && (
-    <button
-      ref={setActivatorNodeRef}
-      type="button"
-      aria-label={t('uploader.drag')}
-      className={cn(
-        'inline-flex size-11 touch-none items-center justify-center rounded-md bg-background/80 text-muted-foreground backdrop-blur-sm hover:text-foreground md:size-8',
-        cat === 'file' ? 'shrink-0' : 'absolute inset-s-1 top-1 z-10',
-      )}
-      {...attributes}
-      {...listeners}
-    >
-      <GripVertical className="size-4" aria-hidden="true" />
-    </button>
-  )
+  // 整块图就是拖动抓手：不再单独放一个「六点方块」——它看着像菜单按钮，还得多按一次才拖。
+  // 鼠标靠 distance:5 区分「点开大图」与「拖动」；触屏靠长按，所以容器不能加 touch-none，否则页面滑不动。
+  // 不给容器 role="button"：里面已经有点图放大、替换、删除三个按钮，再套一层按钮语义只会更乱。
+  const dragProps = sortable ? { ...listeners, tabIndex: 0, 'aria-label': t('uploader.drag') } : {}
 
   const actions =
     cat === 'file' ? (
@@ -67,25 +53,28 @@ export function FileTile({
         </button>
       </div>
     ) : (
-      <div className="absolute inset-x-0 bottom-0 z-10 flex divide-x divide-border border-t border-border bg-background/85 backdrop-blur-sm rtl:divide-x-reverse">
-        <button type="button" aria-label={t('common.replace')} className={barBtn} onClick={onReplace}>
-          <RefreshCw className="size-4" aria-hidden="true" />
-        </button>
-        <button type="button" aria-label={t('common.remove')} className={cn(barBtn, 'text-destructive')} onClick={onRemove}>
-          <X className="size-4" aria-hidden="true" />
-        </button>
-      </div>
+      <TileActions
+        actions={[
+          { key: 'replace', label: t('common.replace'), icon: <RefreshCw className="size-4" aria-hidden="true" />, onSelect: onReplace },
+          { key: 'remove', label: t('common.remove'), icon: <Trash2 className="size-4" aria-hidden="true" />, onSelect: onRemove, destructive: true },
+        ]}
+      />
     )
 
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className={cn('flex items-center gap-1', tileSize(cat), cat !== 'file' && 'block', isDragging && 'z-20 opacity-80 shadow-lg')}
+      {...dragProps}
+      className={cn(
+        'flex items-center gap-1 outline-hidden',
+        tileSize(cat),
+        cat !== 'file' && 'block',
+        sortable && 'cursor-grab active:cursor-grabbing focus-visible:ring-2 focus-visible:ring-ring',
+        isDragging && 'z-20 cursor-grabbing opacity-80 shadow-lg',
+      )}
     >
-      {cat === 'file' && handle}
-      <FilePreview file={file} className={cn(cat === 'file' ? 'min-w-0 flex-1' : 'size-full', cat === 'video' && 'pb-11 md:pb-8')}>
-        {cat !== 'file' && handle}
+      <FilePreview file={file} className={cn(cat === 'file' ? 'min-w-0 flex-1' : 'size-full')}>
         {actions}
       </FilePreview>
     </div>

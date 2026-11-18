@@ -61,9 +61,10 @@
     "infoDimensions": "尺寸",
     "uploadPasteHint": "支持拖拽文件到上传区，或 Ctrl+V 粘贴截图",
     "sortBy": "排序",
-    "sortNewest": "最新优先",
-    "sortOldest": "最早优先",
+    "sortNewest": "按时间 从新到旧",
+    "sortOldest": "按时间 从旧到新",
     "sortNameAsc": "按名称 A-Z",
+    "sortNameDesc": "按名称 Z-A",
     "sortSizeDesc": "按大小 从大到小",
     "sortSizeAsc": "按大小 从小到大"
   }

@@ -1760,8 +1760,138 @@ func (s *Service) SitemapEntries(ctx context.Context) ([]SitemapEntry, error) {
 	return out, nil
 }
 
-// ---- 市场统计与评分 ----
+// SitemapLink 是 /sitemap 页里的一条链接：给访客看的标题 + 站内路径。
+type SitemapLink struct {
+	Label string
+	Href  string
+}
 
+// SitemapGroup 是 /sitemap 页的一组链接（产品 / 新闻 / 独立页各一组）。
+// Key 是分组标识（products / news / pages），标题由处理器按站点语言翻译后填入 Title。
+// Links 是站点地图上平铺的那几条（最多 sitemapGroupPreview 条）；MoreHref 是该栏列表页的
+// 站内路径，模板据此在末尾放一行「查看全部」——几千条内容也不能靠往一页里塞。
+type SitemapGroup struct {
+	Key      string
+	Title    string
+	Links    []SitemapLink
+	MoreHref string
+}
+
+// sitemapGroupCap 是每组最多取多少条：站点地图只展示最新若干条，取 200 条足够判断
+// 「还有更多」，再多也没有意义；完整 URL 清单由 /sitemap.xml 承担。
+const sitemapGroupCap = 200
+
+// sitemapGroupPreview 是每组在站点地图上平铺的条数。站点地图是「地图」不是「清单」：
+// 几百上千条全铺开，那一列会变成一根长柱、同排其它栏目旁边留一大片空白，页脚被推到很远；
+// 末尾给一行「查看全部」跳到栏目列表（那里有分页与筛选），页高与内容量就脱钩了。
+const sitemapGroupPreview = 12
+
+// newSitemapGroup 按预览阈值截断。moreHref 为空表示该组没有列表页可跳（独立页面），
+// 这种组整列照列，不截断也不留「查看全部」——截了就没地方看剩下的了。
+func newSitemapGroup(key string, links []SitemapLink, moreHref string) SitemapGroup {
+	g := SitemapGroup{Key: key, Links: links, MoreHref: moreHref}
+	if moreHref != "" && len(links) > sitemapGroupPreview {
+		g.Links = links[:sitemapGroupPreview]
+	}
+	return g
+}
+
+// SitemapGroups 汇总 /sitemap 页要展示的已发布内容，标题按 lang 取译文。
+// 口径与 /sitemap.xml 一致：未发布、noindex、定时未到的都不出现在站点地图里，
+// 否则「给访客的索引」会点进 404 或 meta robots 明确拒绝收录的页面。
+func (s *Service) SitemapGroups(ctx context.Context, lang string) ([]SitemapGroup, error) {
+	// 该语言是否真的发布了这一条：多语言站点里「中文已发、英文没译」的内容
+	// 挂到英文站地图上，点进去是 404。
+	visible := func(published bool, publishedJSON string) bool {
+		for _, l := range visibleLanguages(published, publishedJSON) {
+			if l.Code == lang {
+				return true
+			}
+		}
+		return false
+	}
+	groups := make([]SitemapGroup, 0, 3)
+	var err error
+	if groups, err = s.sitemapProducts(ctx, lang, visible, groups); err != nil {
+		return nil, err
+	}
+	if groups, err = s.sitemapPosts(ctx, lang, visible, groups); err != nil {
+		return nil, err
+	}
+	return s.sitemapPages(ctx, lang, visible, groups)
+}
+
+func (s *Service) sitemapProducts(ctx context.Context, lang string, visible func(bool, string) bool, groups []SitemapGroup) ([]SitemapGroup, error) {
+	var rows []Product
+	if err := s.db.WithContext(ctx).Model(&Product{}).
+		Where("status = ? AND noindex = ?", ProductOnline, false).
+		// status 必须一起取：Published() 判的是 status == online，漏选会让整组产品
+		// 被判成未发布，站点地图里产品栏目直接消失。
+		Select("slug", "title", "i18n_json", "status", "published_json").
+		Order("updated_at DESC, id DESC").Limit(sitemapGroupCap).
+		Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	links := make([]SitemapLink, 0, len(rows))
+	for i := range rows {
+		if !visible(rows[i].Published(), rows[i].PublishedJSON) {
+			continue
+		}
+		rows[i].localize(lang)
+		links = append(links, SitemapLink{Label: rows[i].Title, Href: "/products/" + rows[i].Slug})
+	}
+	if len(links) == 0 {
+		return groups, nil
+	}
+	return append(groups, newSitemapGroup("products", links, "/products")), nil
+}
+
+func (s *Service) sitemapPosts(ctx context.Context, lang string, visible func(bool, string) bool, groups []SitemapGroup) ([]SitemapGroup, error) {
+	var rows []Post
+	if err := livePostTx(s.db.WithContext(ctx)).Where("noindex = ?", false).
+		Select("slug", "title", "i18n_json", "published", "published_json").
+		Order("published_at DESC, id DESC").Limit(sitemapGroupCap).
+		Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	links := make([]SitemapLink, 0, len(rows))
+	for i := range rows {
+		if !visible(rows[i].Published, rows[i].PublishedJSON) {
+			continue
+		}
+		rows[i].localize(lang)
+		links = append(links, SitemapLink{Label: rows[i].Title, Href: "/news/" + rows[i].Slug})
+	}
+	if len(links) == 0 {
+		return groups, nil
+	}
+	return append(groups, newSitemapGroup("news", links, "/news")), nil
+}
+
+func (s *Service) sitemapPages(ctx context.Context, lang string, visible func(bool, string) bool, groups []SitemapGroup) ([]SitemapGroup, error) {
+	var rows []Page
+	if err := s.db.WithContext(ctx).Model(&Page{}).
+		Where("published = ? AND noindex = ?", true, false).
+		Select("slug", "title", "i18n_json", "published", "published_json").
+		Order("CASE WHEN sort > 0 THEN 0 ELSE 1 END, sort ASC, updated_at DESC").
+		Limit(sitemapGroupCap).Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	links := make([]SitemapLink, 0, len(rows))
+	for i := range rows {
+		if !visible(rows[i].Published, rows[i].PublishedJSON) {
+			continue
+		}
+		rows[i].localize(lang)
+		links = append(links, SitemapLink{Label: rows[i].Title, Href: "/p/" + rows[i].Slug})
+	}
+	if len(links) == 0 {
+		return groups, nil
+	}
+	return append(groups, newSitemapGroup("pages", links, "")), nil
+}
+
+// ---- 市场统计与评分 ----
 func ratingVoter(pluginID, ip string) string {
 	sum := sha256.Sum256([]byte(pluginID + "|" + ip))
 	return hex.EncodeToString(sum[:])

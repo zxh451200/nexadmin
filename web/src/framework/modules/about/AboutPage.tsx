@@ -109,7 +109,7 @@ export default function AboutPage() {
               </SelectContent>
             </Select>
           </div>
-          <DataTable<LicenseRow> columns={columns} data={filtered} rowKey="name" loading={lic.isLoading} pagination={false} />
+          <DataTable<LicenseRow> bare columns={columns} data={filtered} rowKey="name" loading={lic.isLoading} pagination={false} />
         </CardContent>
       </Card>
     </PageContainer>

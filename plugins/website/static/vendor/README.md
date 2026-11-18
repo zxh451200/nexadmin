@@ -7,6 +7,7 @@
 | 目录 | 组件 | 版本 | 许可 | 用途 | 上游 |
 | --- | --- | --- | --- | --- | --- |
 | `viewerjs/` | Viewer.js | 1.15.2 | MIT | 商品图 / 正文图的全屏查看器：拖拽、滚轮/双指缩放、旋转、翻转、缩略图导航、键盘操作 | https://github.com/fengyuanchen/viewerjs |
+| `libphonenumber-js/` | libphonenumber-js | 1.13.16 | MIT | 客服地址卡电话的按国家分组与提交前校验（Google libphonenumber 的 JS 移植，元数据随包发布） | https://gitlab.com/catamphetamine/libphonenumber-js |
 
 ## 接入方式
 
@@ -21,6 +22,13 @@
 - Viewer.js 1.x 的按钮是纯图形、提示文案固定英文，组件没有 locale 选项；
   `viewerLabels()` 在 shown 后补 `aria-label/title`，文案走本站双语文案。
 - 升级时先看 `plugins/website/static/site.js` 的 `ensureViewer` / `openLb` / `viewerLabels`。
+- libphonenumber-js 同样**按需加载**：只有打开客服「收货地址」卡片才注入脚本（182KB 原始、
+  gzip 后约 55KB），首屏与其他卡片不付。接入在 `chat-enhance.js` 的 `loadPhoneLib` /
+  `formatAsYouType` / `phoneDefinitelyInvalid`：边输边按所选国家分组（`138 0000 0000`，
+  用户自带 `+` 时按国际格式），提交前判一次号码能不能拨通。
+- 校验只拦「能确定打不通」的：库没加载、国家缺元数据、带分机号（`转 1234` / `ext.` / `#`）
+  这类写法一律放行——判不了就把客人挡在发送按钮外，比放过一个错号更糟。
+- 升级时改 `chat-enhance.js` 里 `s.src` 的版本串并同步上表。
 
 ## 为什么从 PhotoSwipe 换成 Viewer.js
 

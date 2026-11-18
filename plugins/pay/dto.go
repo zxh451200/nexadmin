@@ -24,20 +24,23 @@ type ChannelForm struct {
 
 // ChannelView 是渠道视图（凭据只回是否有配置，不回内容）。
 type ChannelView struct {
-	ID        idgen.ID  `json:"id"`
-	TenantID  idgen.ID  `json:"tenantId"`
-	Code      string    `json:"code"`
-	Name      string    `json:"name"`
-	Provider  string    `json:"provider"`
-	Method    string    `json:"method"`
-	Scene     string    `json:"scene"`
-	SubjectID string    `json:"subjectId"`
-	FeeRateBp int64     `json:"feeRateBp"`
-	NotifyURL string    `json:"notifyUrl"`
-	Enabled   bool      `json:"enabled"`
-	Sort      int       `json:"sort"`
-	HasConfig bool      `json:"hasConfig"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	ID        idgen.ID     `json:"id"`
+	TenantID  idgen.ID     `json:"tenantId"`
+	Code      string       `json:"code"`
+	Name      string       `json:"name"`
+	Provider  string       `json:"provider"`
+	Method    string       `json:"method"`
+	Scene     string       `json:"scene"`
+	SubjectID string       `json:"subjectId"`
+	FeeRateBp int64        `json:"feeRateBp"`
+	NotifyURL string       `json:"notifyUrl"`
+	Enabled   bool         `json:"enabled"`
+	Sort      int          `json:"sort"`
+	HasConfig bool         `json:"hasConfig"`
+	UpdatedAt time.Time    `json:"updatedAt"`
+	// Capabilities 只有公开渠道清单端点（EnabledChannelsGlobal）会填：站点据此
+	// 决定哪些渠道能出现在购买入口，以及该渠道收什么币种。管理端列表不回它。
+	Capabilities Capabilities `json:"capabilities,omitempty"`
 }
 
 func channelToView(ch *Channel) *ChannelView {

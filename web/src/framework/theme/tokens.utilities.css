@@ -157,14 +157,6 @@
   background-color: color-mix(in oklab, hsl(var(--foreground)) 16%, hsl(var(--card)));
 }
 
-@utility touch-only {
-  /* 只在无 hover 指针（触屏）显示：桌面窄栏的紧凑卡片有拖拽把手，
-     上/下移按钮是触屏端的排序替代品，在桌面上每卡两枚箭头是纯噪声。 */
-  @media (hover: hover) and (pointer: fine) {
-    display: none;
-  }
-}
-
 @utility tone-rule {
   /* 卡片顶边色线：成排 KPI 卡靠它做色彩分区。
      末端不能淡到透明——否则每张卡右侧三分之一都没有线，冷色（紫/青）在浅底上更看不出来。 */

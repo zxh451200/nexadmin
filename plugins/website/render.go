@@ -472,6 +472,7 @@ var pageTmpl = map[string]*template.Template{
 	"products":   mustPage("products"),
 	"product":    mustPage("product"),
 	"page":       mustPage("page"),
+	"sitemap":    mustPage("sitemap"),
 	"contact":    mustPage("contact"),
 	"notfound":   mustPage("notfound"),
 	"error":      mustPage("error"),
@@ -606,6 +607,8 @@ type siteView struct {
 	// NewsPage / NewsTotalPages 是公开新闻列表的分页状态（news.tmpl 渲染翻页链接）。
 	NewsPage       int
 	NewsTotalPages int
+	// SitemapGroups 是 /sitemap 页的内容索引：固定入口 + 产品 / 新闻 / 独立页分组。
+	SitemapGroups []SitemapGroup
 	// NewsCategories 是新闻页的栏目导航（含当前高亮那一项）。
 	NewsCategories []termLink
 	// NewsKind/NewsTermName 说明这一页是栏目还是标签归档：空 = 全部新闻。
@@ -895,6 +898,10 @@ func (v *siteView) JSStrings() template.JS {
 		"chatNameCard", "chatAddressCard", "chatCardNameTitle", "chatCardAddressTitle", "chatCardHint", "chatCardName", "chatCardCompany", "chatCardJob", "chatCardEmail", "chatCardPhone",
 		"chatCardRecipient", "chatCardCountry", "chatCardRegion", "chatCardStreet", "chatCardPostcode", "chatCardSend", "chatCardCancel", "chatCardRequired", "chatCardNameLabel", "chatCardAddressLabel", "chatCardPhonePh",
 		"chatCardCountrySelect", "chatCardCountrySearch", "chatCardRegionSelect", "chatCardRegionSearch", "chatCardSearchEmpty", "chatCardCity", "chatCardCitySelect", "chatCardCityEmpty", "chatCardCitySearch",
+		// chatCardCountryInput / chatCardRegionInput / chatCardCityInput 是「数据拉不到、
+		// 或该国/州没有清单，退回手写」时的提示语，chatCardPhoneInvalid 是电话校验提示：
+		// 漏在清单外，英文站会退化成中文兜底
+		"chatCardCountryInput", "chatCardRegionInput", "chatCardCityInput", "chatCardPhoneInvalid",
 	} {
 		m[k] = v.T("site.js." + k)
 	}

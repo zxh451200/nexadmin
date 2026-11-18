@@ -41,12 +41,14 @@ func queryOf(c *gin.Context) listQuery {
 	if strings.TrimSpace(deptRaw) == "" {
 		deptRaw = c.Query("deptId")
 	}
+	sortField, desc := response.ParseSort(c)
 	return listQuery{
 		Page: page, PageSize: size, Keyword: c.Query("keyword"),
 		Status: response.ParseList(c.Query("status"), response.MaxFilterValues),
 		DeptIDs: response.ParseFilterIDs(deptRaw, response.MaxFilterValues),
 		Gender: response.ParseList(c.Query("gender"), response.MaxFilterValues),
 		CreatedFrom: c.Query("createdFrom"), CreatedTo: c.Query("createdTo"),
+		Sort: sortField, Desc: desc,
 	}
 }
 

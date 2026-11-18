@@ -42,6 +42,9 @@ export default function UserPage() {
   const [applied, setApplied] = useState<UserFilters>({})
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
+  // 表头排序：与筛选分开存，改排序不重置筛选条件
+  const [sort, setSort] = useState('created_at')
+  const [desc, setDesc] = useState(true)
   const [selected, setSelected] = useState<string[]>([])
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<User | null>(null)
@@ -49,7 +52,7 @@ export default function UserPage() {
   const [importOpen, setImportOpen] = useState(false)
   const { start: startExportJob } = useAsyncJob()
 
-  const list = useUserList({ page, pageSize, ...toUserQuery(applied) })
+  const list = useUserList({ page, pageSize, sort, desc, ...toUserQuery(applied) })
   const del = useDeleteUsers()
   const setStatus = useUpdateUserStatus()
   const batch = useBatchUserStatus()
@@ -140,8 +143,8 @@ export default function UserPage() {
         </Avatar>
       ),
     },
-    { key: 'nickname', title: t('user.col.nickname'), mobile: 'title' },
-    { key: 'username', title: t('user.col.username'), mobile: 'sub' },
+    { key: 'nickname', title: t('user.col.nickname'), sortKey: 'nickname', mobile: 'title' },
+    { key: 'username', title: t('user.col.username'), sortKey: 'username', mobile: 'sub' },
     { key: 'deptName', title: t('user.col.dept') },
     {
       key: 'roleNames',
@@ -187,6 +190,7 @@ export default function UserPage() {
     {
       key: 'createdAt',
       title: t('user.col.createdAt'),
+      sortKey: 'created_at',
       render: (u) => <span className="num">{new Date(u.createdAt).toLocaleString(i18n.language)}</span>,
     },
   ]
@@ -253,6 +257,16 @@ export default function UserPage() {
         rowKey="id"
         loading={list.isLoading}
         columnSettingsKey="user-list"
+        sort={{
+          key: sort,
+          desc,
+          onChange: (key, nextDesc) => {
+            setSort(key)
+            setDesc(nextDesc)
+            setPage(1)
+            setSelected([])
+          },
+        }}
         pagination={{
           page,
           pageSize,

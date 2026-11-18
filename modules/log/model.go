@@ -93,6 +93,9 @@ type Query struct {
 	Page      int
 	PageSize  int
 	Scope     *datascope.Scope // 操作者的数据范围；nil = 不裁剪（仅内部调用），HTTP 入口必须设置
+	// 表头排序：Sort 走各列表的白名单，Desc = 倒序（默认 created_at DESC）
+	Sort string
+	Desc bool
 }
 
 // jsonOrText 把库里的文本还原成接口值：合法 JSON 原样输出，否则当字符串。

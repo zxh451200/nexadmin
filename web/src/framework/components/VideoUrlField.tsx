@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { Trash2, VideoIcon } from 'lucide-react'
+import { Play, Trash2, VideoIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import { Button } from '@/framework/ui/button'
 import { Input } from '@/framework/ui/input'
+import { TileActions } from '@/framework/upload/TileActions'
 import { FilePickerDialog, PickFromLibraryButton } from './FilePickerDialog'
 import { ResponsiveDialog } from './ResponsiveDialog'
 import { Uploader, type UploadedFile } from './Uploader'
@@ -25,7 +26,7 @@ export interface VideoUrlFieldProps {
 /**
  * 单视频字段的统一形态：URL 输入 + 上传/预览卡 + 清除（对齐 ImageUrlField 的收敛后形态）。
  * 上传走 Uploader 的 video 通道：断点续传 + 自动截海报帧，大文件也有进度可看；
- * 预览卡直接内联播放，清除入口在输入框旁。
+ * 预览卡直接内联播放；清除在帧缩略的悬停/聚焦浮层上（与封面图同款），行内不再重复一枚垃圾桶。
  */
 export function VideoUrlField({
   value,
@@ -44,21 +45,30 @@ export function VideoUrlField({
 
   // 卡片：有值=帧缩略（点开放大播放）。无值时不再渲染独立的虚线/按钮块——上传入口并入输入行行首
   const cardEl = value ? (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={() => setZoom(true)}
-      aria-label={t('common.preview')}
-      title={t('common.preview')}
-      className={cn('block shrink-0 rounded-md focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed', previewBelow && 'self-start')}
-    >
-      <video
-        src={value}
-        preload="metadata"
-        muted
-        className="size-24 rounded-md border border-border bg-muted/40 object-cover"
+    <div className={cn('group relative shrink-0', previewBelow && 'self-start')}>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setZoom(true)}
+        aria-label={t('common.preview')}
+        title={t('common.preview')}
+        className="block rounded-md focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed"
+      >
+        <video
+          src={value}
+          preload="metadata"
+          muted
+          className="size-24 rounded-md border border-border bg-muted/40 object-cover"
+        />
+      </button>
+      {/* 与封面图、图集同款浮层（TileActions）：预览 + 清除都落在图块右上角 */}
+      <TileActions
+        actions={[
+          { key: 'preview', label: t('common.preview'), icon: <Play className="size-4" aria-hidden="true" />, onSelect: () => setZoom(true), disabled },
+          { key: 'clear', label: t('common.clear'), icon: <Trash2 className="size-4" aria-hidden="true" />, onSelect: () => onChange(''), disabled, destructive: true },
+        ]}
       />
-    </button>
+    </div>
   ) : null
   const uploadBtn = (
     <Button
@@ -87,23 +97,9 @@ export function VideoUrlField({
           className="min-w-0 flex-1 font-mono"
           aria-label={ariaLabel ?? title}
         />
-        {/* 上传始终在行内：有值时也要能直接换视频（先清除再上传会让预览闪没）；
-            清除只在有值时出现，紧挨文件库入口——与 ImageUrlField 同款形态 */}
+        {/* 上传始终在行内：有值时也要能直接换视频（先清除再上传会让预览闪没）。
+            清除不在这里重复：帧缩略悬停/聚焦已浮出清除，与封面图一致。 */}
         {uploadBtn}
-        {value ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="size-9 shrink-0"
-            disabled={disabled}
-            onClick={() => onChange('')}
-            aria-label={t('common.clear')}
-            title={t('common.clear')}
-          >
-            <Trash2 aria-hidden="true" />
-          </Button>
-        ) : null}
         {/* 文件库弹窗：已传过的视频直接选（缩略图网格 + 关键词可搜、按上传时间倒序） */}
         <PickFromLibraryButton className="shrink-0" disabled={disabled} onClick={() => setPickOpen(true)} />
       </div>

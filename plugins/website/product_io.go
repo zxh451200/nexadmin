@@ -427,6 +427,12 @@ func (s *Service) RunProductExportJob(ctx context.Context, j *job.Job, report jo
 		return job.ResultFile{}, job.Errorf("任务参数无效")
 	}
 	q := p.query()
+	// 导出与列表同口径：选父类目要连子类目的商品一起导，不然同一组条件导出的行数比看到的少。
+	ids, err := s.categorySubtreeFilter(ctx, q.CategoryIDs)
+	if err != nil {
+		return job.ResultFile{}, err
+	}
+	q.CategoryIDs = ids
 	tx := exportProductTx(s.db.WithContext(ctx).Model(&Product{}), q, p.IDs)
 	var total int64
 	if err := tx.Count(&total).Error; err != nil {

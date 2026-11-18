@@ -16,6 +16,7 @@
       "website.product-export": "产品导出",
       "website.post-export": "新闻导出",
       "website.message-export": "留言导出",
+      "website.ali-template-export": "阿里模板导出",
       "formbuilder.export": "表单导出",
       "operlog.export": "操作日志导出",
       "loginlog.export": "登录日志导出",

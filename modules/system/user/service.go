@@ -8,6 +8,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"nexadmin/core"
 	"nexadmin/core/cache"
 	"nexadmin/core/database"
 	"nexadmin/core/notify"
@@ -131,7 +132,13 @@ func (s *service) list(ctx context.Context, q listQuery, me actor) ([]*userDTO, 
 		return nil, 0, err
 	}
 	var rows []User
-	if err := tx.Order("created_at DESC, id DESC").Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Find(&rows).Error; err != nil {
+	// 排序白名单：只有用户真能看懂的三列，其余请求值回退 created_at
+	order := core.OrderBy(q.Sort, q.Desc, map[string]string{
+		"nickname":   "nickname",
+		"username":   "username",
+		"created_at": "created_at",
+	}, "created_at")
+	if err := tx.Order(order).Offset((q.Page - 1) * q.PageSize).Limit(q.PageSize).Find(&rows).Error; err != nil {
 		return nil, 0, err
 	}
 	out, err := s.toDTOs(ctx, rows)

@@ -76,7 +76,7 @@ const DropdownMenuCheckboxItem = React.forwardRef<
   <DropdownMenuPrimitive.CheckboxItem ref={ref} className={cn(itemBase, 'ps-8', className)} checked={checked} {...props}>
     <span className="absolute inset-s-2 flex h-3.5 w-3.5 items-center justify-center">
       <DropdownMenuPrimitive.ItemIndicator>
-        <Check className="h-4 w-4" />
+        <Check className="h-4 w-4 text-primary" />
       </DropdownMenuPrimitive.ItemIndicator>
     </span>
     {children}
@@ -84,14 +84,29 @@ const DropdownMenuCheckboxItem = React.forwardRef<
 ))
 DropdownMenuCheckboxItem.displayName = DropdownMenuPrimitive.CheckboxItem.displayName
 
+/** 单选标记位置：start = 行首圆点（默认，适合纯文字列表）；
+ *  end = 行尾对勾（适合每行已有前导图标/色块的列表，与普通菜单项的选中态一致）。 */
+type DropdownMenuRadioItemProps = React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.RadioItem> & {
+  indicator?: 'start' | 'end'
+}
+
 const DropdownMenuRadioItem = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.RadioItem>,
-  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.RadioItem>
->(({ className, children, ...props }, ref) => (
-  <DropdownMenuPrimitive.RadioItem ref={ref} className={cn(itemBase, 'ps-8', className)} {...props}>
-    <span className="absolute inset-s-2 flex h-3.5 w-3.5 items-center justify-center">
+  DropdownMenuRadioItemProps
+>(({ className, children, indicator = 'start', ...props }, ref) => (
+  <DropdownMenuPrimitive.RadioItem
+    ref={ref}
+    className={cn(itemBase, indicator === 'end' ? 'pe-8' : 'ps-8', className)}
+    {...props}
+  >
+    <span
+      className={cn(
+        'absolute flex items-center justify-center',
+        indicator === 'end' ? 'inset-e-2 h-4 w-4' : 'inset-s-2 h-3.5 w-3.5',
+      )}
+    >
       <DropdownMenuPrimitive.ItemIndicator>
-        <Circle className="h-2 w-2 fill-current" />
+        {indicator === 'end' ? <Check className="h-4 w-4 text-primary" /> : <Circle className="h-2 w-2 fill-current text-primary" />}
       </DropdownMenuPrimitive.ItemIndicator>
     </span>
     {children}

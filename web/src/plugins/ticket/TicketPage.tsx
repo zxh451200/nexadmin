@@ -1103,15 +1103,8 @@ export default function TicketPage() {
     g.enabled ? g.name : `${g.name} · ${t('plugin_ticket.groups.disabled')}`
 
   // 下拉收进弹出面板后，屏上要仍看得出「筛了什么、怎么取消」：生效条件一枚 chip，点一下就撤掉该条件。
+  // 状态不列 chip：状态段选页签常驻可见，再挂一枚「状态 xx」是同一个信号说两遍。
   const activeFilters: { key: string; label: string; value?: string; clear: () => void }[] = []
-  if (statusFilter) {
-    activeFilters.push({
-      key: 'status',
-      label: t('plugin_ticket.fields.status'),
-      value: t(`plugin_ticket.status.${statusFilter}`),
-      clear: () => setStatusFilter(undefined),
-    })
-  }
   if (priorityFilter) {
     activeFilters.push({
       key: 'priority',
@@ -1439,17 +1432,18 @@ export default function TicketPage() {
               </div>
 
               <div className="flex items-center justify-between gap-2 border-t pt-2 text-xs text-muted-foreground">
-                <div className="flex items-center gap-2">
-                  <label className="flex items-center gap-2">
+                <div className="flex items-center gap-3">
+                  {/* 全选做成可悬停的整块热区，与左侧列表行的勾选列同一观感，不再是一枚裸勾选框 */}
+                  <label className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-colors hover:bg-accent/40">
                     <Checkbox
                       checked={pageAllChecked ? true : pageCheckedCount > 0 ? 'indeterminate' : false}
                       onCheckedChange={(v) => togglePageAll(v === true)}
                       aria-label={t('common.selectAll')}
                       disabled={list.length === 0}
                     />
-                    {t('common.selectAll')}
+                    <span className="whitespace-nowrap">{t('common.selectAll')}</span>
                   </label>
-                  <span>{t('dataTable.totalCount', { count: total })}</span>
+                  <span className="whitespace-nowrap">{t('dataTable.totalCount', { count: total })}</span>
                 </div>
                 <div className="flex items-center gap-1">
                   <Button
