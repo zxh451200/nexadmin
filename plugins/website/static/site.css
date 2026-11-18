@@ -365,6 +365,63 @@ html[data-scheme="light"] .brand-mark {
   transition: filter 0.15s;
 }
 .locale-save:hover { filter: brightness(1.08); }
+/* 设置弹层里的自绘下拉（site.js 在原生 select 上叠 nx-select）：
+   原生展开列表由系统绘制（系统蓝高亮、方框白卡），与深色/亮色两套皮都不搭。 */
+.nx-select { position: relative; }
+.nx-select select { display: none; }
+.nx-select-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  box-sizing: border-box;
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--panel-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  text-align: start;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.nx-select-btn:hover { border-color: var(--text-3); }
+.nx-select-btn:focus-visible { outline: none; border-color: var(--accent); }
+.nx-select-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nx-select-arrow { flex: none; width: 12px; height: 12px; color: var(--text-2); transition: transform 0.15s; }
+.nx-select.is-open .nx-select-arrow { transform: rotate(180deg); }
+.nx-select-list {
+  position: absolute;
+  inset-inline: 0;
+  top: calc(100% + 4px);
+  z-index: 20;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  max-height: 216px;
+  overflow: auto;
+  background: var(--panel-3);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  box-shadow: 0 16px 32px -18px rgba(0, 0, 0, 0.6);
+}
+.nx-select-list[hidden] { display: none; }
+.nx-select-opt {
+  padding: 7px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nx-select-opt:hover, .nx-select-opt.is-active { background: var(--hover-2); }
+.nx-select-opt.is-selected { color: var(--text); font-weight: 600; background: var(--accent-soft); }
 
 /* 交货至（对标阿里「交货至: 🇨🇳 CN」）：触发钮是 label + 国旗码两段，
    弹层是搜索框 + 国家清单（site.js 从 country-region.json 渲染）。 */
@@ -421,6 +478,26 @@ html[data-scheme="light"] .brand-mark {
 }
 .ship-to-list button:hover { color: var(--text); background: var(--hover-2); }
 .ship-to-empty { margin: 4px; padding: 6px 8px; font-size: 12px; color: var(--text-2); }
+/* 国家清单与币种清单的滚动条：系统原生滚动条带箭头和凹槽，与深/亮两套皮都不搭，
+   统一成细条、透明轨道、无可点箭头。
+   标准属性只给 Firefox：Chromium 一旦看到 scrollbar-width/color 就改用带箭头的
+   原生细滚动条、无视 ::-webkit-scrollbar，观感回退。 */
+@supports (-moz-appearance: none) {
+  .ship-to-list, .nx-select-list {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+  }
+}
+.ship-to-list::-webkit-scrollbar, .nx-select-list::-webkit-scrollbar { width: 8px; height: 8px; }
+.ship-to-list::-webkit-scrollbar-track, .nx-select-list::-webkit-scrollbar-track { background: transparent; }
+.ship-to-list::-webkit-scrollbar-thumb, .nx-select-list::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 999px;
+}
+.ship-to-list::-webkit-scrollbar-thumb:hover, .nx-select-list::-webkit-scrollbar-thumb:hover {
+  background: var(--text-3);
+}
+.ship-to-list::-webkit-scrollbar-button, .nx-select-list::-webkit-scrollbar-button { display: none; }
 /* 窄屏：交货至只留旗标码，label 藏掉，给顶部一行省位 */
 @media (max-width: 900px) {
   .ship-to-label { display: none; }
@@ -2410,6 +2487,26 @@ html[data-scheme="light"] .hero-arc { opacity: 0.32; }
 }
 .chat-launcher:hover { background: var(--btn-primary-hover); transform: translateY(-1px); }
 .chat-launcher svg { width: 20px; height: 20px; }
+/* 面板收起时的未读角标（chat-widget.js 注入到启动钮里） */
+.chat-launcher { position: relative; }
+.chat-launcher-unread {
+  position: absolute;
+  inset-block-start: -6px;
+  inset-inline-end: -6px;
+  box-sizing: border-box;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #e5484d;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9);
+  pointer-events: none;
+}
 
 /* 单面浮层：整块比页面亮一档，内部只用 1px 分隔线，不再堆色带 */
 .chat-panel {
@@ -2805,9 +2902,13 @@ html[data-scheme="light"] .chat-panel { box-shadow: 0 28px 64px -18px rgba(8, 9,
 .pc-cat-tree{display:flex;flex-direction:column}
 .pc-cat-item{position:relative}
 .pc-cat-row,.pc-cat-all-row{display:flex;align-items:center;gap:6px;padding:9px 12px;border-inline-start:2px solid transparent;color:var(--pc-muted);font-size:13px;line-height:1.4;text-decoration:none}
+/* 选中态只留左侧竖条 + 主色文字：当前项再铺一层底会与悬停项叠成两块相同的底色，
+   看着像同时选中两行。 */
 .pc-cat-row:hover,.pc-cat-all-row:hover{background:var(--pc-soft);color:var(--pc-ink)}
-.pc-cat-row.active,.pc-cat-all-row.active{border-inline-start-color:var(--pc-accent);background:var(--pc-soft);color:var(--pc-accent);font-weight:600}
-.pc-cat-row.is-trail{color:var(--pc-ink);font-weight:600}
+.pc-cat-row.active,.pc-cat-all-row.active{border-inline-start-color:var(--pc-accent);background:transparent;color:var(--pc-accent);font-weight:600}
+/* 选中子分类时父级只加粗、没有竖条，和「一级被选中」看起来不是同一套语言：
+   让选中路径上的父级也带上主色竖条，精确命中的那一项再用主色文字区分。 */
+.pc-cat-row.is-trail{border-inline-start-color:var(--pc-accent);color:var(--pc-ink);font-weight:600}
 .pc-cat-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pc-cat-caret{flex:none;font-size:14px;line-height:1;opacity:.45;transition:transform .15s,opacity .15s}
 .pc-cat-item:hover>.pc-cat-row .pc-cat-caret,.pc-cat-item:focus-within>.pc-cat-row .pc-cat-caret{opacity:1;transform:translateX(2px)}
@@ -2817,7 +2918,8 @@ html[data-scheme="light"] .chat-panel { box-shadow: 0 28px 64px -18px rgba(8, 9,
 .pc-sub-item{padding:1px 0}
 .pc-sub-link{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:2px;color:var(--pc-ink);font-size:12.5px;line-height:1.45;text-decoration:none}
 .pc-sub-link:hover{background:var(--pc-soft);color:var(--pc-accent)}
-.pc-sub-link.active{background:var(--pc-soft);color:var(--pc-accent);font-weight:600}
+/* 与主列表同口径：选中靠左侧主色圆点 + 主色文字，不再铺底 */
+.pc-sub-link.active{background:transparent;color:var(--pc-accent);font-weight:600}
 .pc-sub-link.active::before{content:"";flex:none;width:4px;height:4px;border-radius:50%;background:currentColor}
 .pc-sub-name{flex:1;min-width:0}
 .pc-sub-grand{display:flex;flex-wrap:wrap;gap:2px 12px;padding:2px 10px 7px}

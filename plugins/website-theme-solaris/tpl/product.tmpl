@@ -16,8 +16,11 @@
             {{if .Product.CoverURL}}<img class="product-gallery-main pd-main-img" src="{{.Product.CoverURL}}" data-zoom="{{.Product.CoverURL}}" alt="{{.Product.Title}}">{{else}}<span class="pd-main-img pd-main-fallback">{{initial .Product.Title}}</span>{{end}}
             <span class="pd-zoom-tip" aria-hidden="true">{{.T "product.zoomTip"}}</span>
           </div>
+          {{/* 缩略图轨道单独包一层：图片少时整轨在主图旁垂直居中，而不是顶着上沿留出半截空槽 */}}
+          <div class="pd-thumbs">
           {{with .Product.Video}}<button type="button" class="product-gallery-thumb pd-thumb pd-thumb-video" data-video-kind="{{.Kind}}" data-video-src="{{.Src}}" data-video-poster="{{$.Product.CoverURL}}" aria-label="{{$.T "product.playVideo"}}"><span class="pd-thumb-play" aria-hidden="true"></span></button>{{end}}
           {{range .Product.ProductImages}}<button type="button" class="product-gallery-thumb pd-thumb" data-gallery-src="{{.}}" aria-label="{{$.T "products.galleryThumbAria"}}"><img src="{{.}}" alt="" loading="lazy"></button>{{end}}
+          </div>
         </div>
         {{end}}
         {{if and .Product.VideoURL (not .Product.Video)}}<div class="pd-media-tabs"><a href="{{.Product.VideoURL}}" target="_blank" rel="noopener">{{.T "products.watchVideo"}}</a></div>{{end}}

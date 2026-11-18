@@ -1,6 +1,6 @@
-import { Fragment, useEffect, useId, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { ArrowRightLeft, Ban, Bell, BellOff, ChevronLeft, ChevronRight, ChevronUp, CircleCheck, Download, Ellipsis, FileText, Lock, Merge, MessageSquare, MessagesSquare, Paperclip, Pencil, Send, Settings2, SlidersHorizontal, Star, StickyNote, Tag, Timer, Trash2, Undo2, UserMinus, UserPlus, UserRound, X } from 'lucide-react'
+import { ArrowRightLeft, Ban, Bell, BellOff, ChevronLeft, ChevronRight, ChevronUp, CircleCheck, Download, Ellipsis, FileText, Globe, Lock, Merge, MessageSquare, MessagesSquare, Paperclip, Pencil, Send, Settings2, SlidersHorizontal, Star, StickyNote, Tag, Timer, Trash2, Undo2, UserMinus, UserPlus, UserRound, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Can } from '@/framework/auth/Can'
@@ -76,7 +76,7 @@ import {
   type SenderType,
 } from './api'
 import { formatSize } from '@/framework/upload/precheck'
-import { daySeparator, formatClock, formatTime, initials, relativeStamp } from './format'
+import { daySeparator, formatClock, formatTime, initials, relativeStamp, uaSummary } from './format'
 
 const ALL = '__all'
 /** 会话队列每页条数：与工单列表同一档 */
@@ -1020,13 +1020,16 @@ function ChatPane({
   const userId = useAuth((s) => s.user?.id)
   const myName = useAuth((s) => s.user?.nickname || s.user?.username)
   const { has } = usePermission()
+  // 访客来源是只读信息，能看会话的人都能看
+  const hasSource = !!(conv?.visitorIp || conv?.visitorUa || conv?.visitorRef)
   // 「更多」只在真有可收项时出现，别给没权限的坐席摆一个空菜单
-  const showMoreMenu = has('im:edit') || (canDelete && conv?.status === 'closed')
+  const showMoreMenu = has('im:edit') || (canDelete && conv?.status === 'closed') || hasSource
   const [draft, setDraft] = useState('')
   const [tagDraft, setTagDraft] = useState<string | null>(null)
   const [noteDraft, setNoteDraft] = useState<string | null>(null)
   const [mergeOpen, setMergeOpen] = useState(false)
   const [transferOpen, setTransferOpen] = useState(false)
+  const [sourceOpen, setSourceOpen] = useState(false)
   const [zoomImageId, setZoomImageId] = useState<string | null>(null)
   // 会话里已加载的图片消息：点开任意一张，左右就能翻到其余的
   const imageSlides = useMemo<(LightboxSlide & { id: string })[]>(() => {
@@ -1051,6 +1054,7 @@ function ChatPane({
     setDraft('')
     setTransferOpen(false)
     setMergeOpen(false)
+    setSourceOpen(false)
   }, [conv?.convNo])
 
   useEffect(() => {
@@ -1152,6 +1156,12 @@ function ChatPane({
                     </DropdownMenuItem>
                   ) : null}
                 </Can>
+                {hasSource ? (
+                  <DropdownMenuItem onClick={() => setSourceOpen(true)}>
+                    <Globe aria-hidden="true" />
+                    {t('plugin_im.source.action')}
+                  </DropdownMenuItem>
+                ) : null}
                 {canDelete && conv.status === 'closed' ? (
                   <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => onDelete(conv)}>
                     <Trash2 aria-hidden="true" />
@@ -1469,7 +1479,75 @@ function ChatPane({
         }}
       />
       <MergeDialog open={mergeOpen} onOpenChange={setMergeOpen} conv={conv} onConfirm={onMerge} />
+      <SourceDialog open={sourceOpen} onOpenChange={setSourceOpen} conv={conv} />
     </div>
+  )
+}
+
+/** 访客来源：IP / 来源页 / 设备浏览器（服务端在访客打开会话时记录，仅坐席可见）。 */
+function SourceDialog({
+  open,
+  onOpenChange,
+  conv,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  conv: ImConversation
+}) {
+  const { t } = useTranslation()
+  const rows: { label: string; value: ReactNode }[] = [
+    {
+      label: t('plugin_im.source.ref'),
+      value: conv.visitorRef ? (
+        <a
+          href={conv.visitorRef}
+          target="_blank"
+          rel="noreferrer noopener"
+          className="break-all text-primary hover:underline"
+        >
+          {conv.visitorRef}
+        </a>
+      ) : (
+        <span className="text-muted-foreground">{t('plugin_im.source.refEmpty')}</span>
+      ),
+    },
+    {
+      label: t('plugin_im.source.ip'),
+      value: conv.visitorIp || <span className="text-muted-foreground">{t('plugin_im.source.ipEmpty')}</span>,
+    },
+    {
+      label: t('plugin_im.source.ua'),
+      value: conv.visitorUa ? uaSummary(conv.visitorUa) : <span className="text-muted-foreground">{t('plugin_im.source.uaEmpty')}</span>,
+    },
+  ]
+  return (
+    <ResponsiveDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={t('plugin_im.source.title')}
+      description={t('plugin_im.source.hint')}
+      size="sm"
+      footer={
+        <Button variant="outline" onClick={() => onOpenChange(false)}>
+          {t('common.close')}
+        </Button>
+      }
+    >
+      <dl className="space-y-3 text-sm">
+        {rows.map((row) => (
+          <div key={row.label}>
+            <dt className="text-xs text-muted-foreground">{row.label}</dt>
+            <dd className="mt-0.5 break-all">{row.value}</dd>
+          </div>
+        ))}
+        {conv.visitorUa ? (
+          <div>
+            <dt className="text-xs text-muted-foreground">{t('plugin_im.source.uaRaw')}</dt>
+            <dd className="mt-0.5 break-all font-mono text-[11px] leading-relaxed text-muted-foreground">{conv.visitorUa}</dd>
+          </div>
+        ) : null}
+      </dl>
+    </ResponsiveDialog>
   )
 }
 

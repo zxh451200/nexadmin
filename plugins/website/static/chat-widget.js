@@ -20,6 +20,26 @@
 
     var launcher = root.querySelector('[data-chat-open]');
     var panel = root.querySelector('[data-chat-panel]');
+    // 未读提醒：面板收起时客服发来的消息只能在启动钮上提醒，点开即清零。
+    var unreadEl = null;
+    var unreadCount = 0;
+    var launcherLabel = launcher ? (launcher.getAttribute('aria-label') || '') : '';
+    if (launcher) {
+      unreadEl = document.createElement('span');
+      unreadEl.className = 'chat-launcher-unread';
+      unreadEl.hidden = true;
+      unreadEl.setAttribute('aria-hidden', 'true');
+      launcher.appendChild(unreadEl);
+    }
+    function paintUnread() {
+      if (!launcher) return;
+      if (unreadEl) {
+        unreadEl.textContent = unreadCount > 99 ? '99+' : String(unreadCount);
+        unreadEl.hidden = unreadCount <= 0;
+      }
+      launcher.setAttribute('aria-label', unreadCount > 0 ? launcherLabel + ' (' + unreadCount + ')' : launcherLabel);
+    }
+    function clearUnread() { if (unreadCount) { unreadCount = 0; paintUnread(); } }
     var log = root.querySelector('[data-chat-log]');
     var empty = root.querySelector('[data-chat-empty]');
     var form = root.querySelector('[data-chat-form]');
@@ -40,6 +60,82 @@
     var fileInput = root.querySelector('[data-chat-file]');
     var offlineEl = root.querySelector('[data-chat-offline]');
     var handoffBtn = root.querySelector('[data-chat-handoff]');
+    var headEl = root.querySelector('.chat-head');
+
+    // ---- 新消息提示音 / 桌面通知：面板收起或页面在后台时，让客服回复能被听见 ----
+    // 声音用 WebAudio 现场合成（无外部音频文件）；AudioContext 必须在用户手势里创建，
+    // 所以在打开面板/点开关时解锁。桌面通知只在站点已获授权时才发，绝不主动弹权限框。
+    var soundOn = true;
+    try { soundOn = localStorage.getItem('nexchat.sound') !== '0'; } catch (e) { /* 隐私模式忽略 */ }
+    var audioCtx = null;
+    function unlockAudio() {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      if (!audioCtx) {
+        try { audioCtx = new AC(); } catch (e) { audioCtx = null; }
+      }
+      if (audioCtx && audioCtx.state === 'suspended') {
+        try { audioCtx.resume().catch(function () {}); } catch (e) { /* 忽略 */ }
+      }
+    }
+    function chime() {
+      if (!soundOn || !audioCtx || audioCtx.state !== 'running') return;
+      try {
+        var t0 = audioCtx.currentTime;
+        [880, 660].forEach(function (freq, i) {
+          var osc = audioCtx.createOscillator();
+          var gain = audioCtx.createGain();
+          osc.type = 'sine';
+          osc.frequency.value = freq;
+          var at = t0 + i * 0.11;
+          gain.gain.setValueAtTime(0.0001, at);
+          gain.gain.exponentialRampToValueAtTime(0.12, at + 0.015);
+          gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.18);
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.start(at);
+          osc.stop(at + 0.2);
+        });
+      } catch (e) { /* 音频不可用时静默 */ }
+    }
+    function notifyAgent(m) {
+      if (!soundOn || !document.hidden) return;
+      try {
+        if (!window.Notification || Notification.permission !== 'granted') return;
+        var text = m.content ? String(m.content).slice(0, 140) : t('chat.attach', '附件');
+        var n = new Notification(t('chat.title', '在线客服'), { body: text, tag: 'nex-chat' });
+        n.onclick = function () {
+          try { window.focus(); } catch (e) { /* 忽略 */ }
+          openPanel();
+          n.close();
+        };
+      } catch (e) { /* 忽略 */ }
+    }
+    var soundBtn = null;
+    var SOUND_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 15h-2a1 1 0 0 1 -1 -1v-4a1 1 0 0 1 1 -1h2l3.5 -4.5a.8 .8 0 0 1 1.5 .5v14a.8 .8 0 0 1 -1.5 .5l-3.5 -4.5"/><path d="M15 8a5 5 0 0 1 0 8"/><path d="M17.7 5a9 9 0 0 1 0 14"/></svg>';
+    var SOUND_OFF_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 15h-2a1 1 0 0 1 -1 -1v-4a1 1 0 0 1 1 -1h2l3.5 -4.5a.8 .8 0 0 1 1.5 .5v14a.8 .8 0 0 1 -1.5 .5l-3.5 -4.5"/><path d="M15 8a5 5 0 0 1 0 8"/><path d="M16 10l4 4"/><path d="M20 10l-4 4"/></svg>';
+    function paintSound() {
+      if (!soundBtn) return;
+      soundBtn.innerHTML = soundOn ? SOUND_ICON : SOUND_OFF_ICON;
+      var label = soundOn ? t('chat.soundOn', '消息提示音：开') : t('chat.soundOff', '消息提示音：关');
+      soundBtn.setAttribute('aria-label', label);
+      soundBtn.setAttribute('aria-pressed', soundOn ? 'true' : 'false');
+      soundBtn.title = label;
+      soundBtn.classList.toggle('is-off', !soundOn);
+    }
+    if (headEl) {
+      soundBtn = document.createElement('button');
+      soundBtn.type = 'button';
+      soundBtn.className = 'chat-tool chat-sound';
+      soundBtn.addEventListener('click', function () {
+        soundOn = !soundOn;
+        try { localStorage.setItem('nexchat.sound', soundOn ? '1' : '0'); } catch (e) { /* 忽略 */ }
+        paintSound();
+        if (soundOn) { unlockAudio(); chime(); }
+      });
+      headEl.insertBefore(soundBtn, headEl.querySelector('[data-chat-expand]') || headEl.querySelector('[data-chat-close]'));
+      paintSound();
+    }
 
     var st = {
       convNo: '',
@@ -273,6 +369,18 @@
     function addMessage(m) {
       if (!m || !m.seq || st.seen[m.seq]) return;
       st.seen[m.seq] = 1;
+      // 面板收起时客服来的消息在启动钮上留未读（访客自己的消息与系统药丸不算）；
+      // 面板收起或标签页在后台时还要响一声，后台再补系统通知（已授权时）。
+      if (m.senderType !== 'visitor' && m.kind !== 'system' && panel) {
+        if (panel.hidden) {
+          unreadCount += 1;
+          paintUnread();
+        }
+        if (panel.hidden || document.hidden) {
+          chime();
+          notifyAgent(m);
+        }
+      }
       var stick = atBottom();
       if (empty) empty.hidden = true;
       if (m.kind === 'system') {
@@ -510,6 +618,8 @@
       if (st.starting) return;
       st.starting = true;
       resetConv(false);
+      // 新会话从零开始：增强层据此清掉上一轮的卡片草稿（增强层不在时没人监听，无副作用）
+      try { root.dispatchEvent(new CustomEvent('chat:session-reset')); } catch (e) { /* 老浏览器忽略 */ }
       addLocalNote(t('chatNewNote', '已为你开启新会话'));
       ensureConv()
         .then(function () { return pull(); })
@@ -544,6 +654,8 @@
       if (!panel) return;
       panel.hidden = false;
       root.classList.add('chat-open');
+      clearUnread();
+      unlockAudio();
       if (launcher) launcher.setAttribute('aria-expanded', 'true');
       ensureConv()
         .then(function () { return pull(); })

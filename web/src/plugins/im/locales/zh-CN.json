@@ -66,6 +66,18 @@
       "label": "备注",
       "placeholder": "内部备注，仅坐席可见"
     },
+    "source": {
+      "action": "访客来源",
+      "title": "访客来源",
+      "hint": "访客最近一次打开会话时记录的来源信息，仅坐席可见",
+      "ref": "来源页",
+      "refEmpty": "直接访问（未记录来源页）",
+      "ip": "IP 地址",
+      "ipEmpty": "未记录",
+      "ua": "设备与浏览器",
+      "uaEmpty": "未记录",
+      "uaRaw": "User-Agent"
+    },
     "online": "在线",
     "offline": "离线",
     "recall": {

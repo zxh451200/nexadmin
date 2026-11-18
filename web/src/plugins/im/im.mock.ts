@@ -21,6 +21,9 @@ const convs: ImConversation[] = [
     unread: 2,
     visitorReadSeq: 0,
     rating: 0,
+    visitorIp: '203.0.113.24',
+    visitorUa: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
+    visitorRef: 'https://shop.example.com/products/ess-container-mwh',
   },
   {
     id: '2',
@@ -37,6 +40,9 @@ const convs: ImConversation[] = [
     unread: 0,
     visitorReadSeq: 0,
     rating: 0,
+    visitorIp: '198.51.100.7',
+    visitorUa: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    visitorRef: '',
   },
   {
     id: '3',

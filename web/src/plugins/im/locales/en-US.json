@@ -66,6 +66,18 @@
       "label": "Note",
       "placeholder": "Internal note, visible to agents only"
     },
+    "source": {
+      "action": "Visitor source",
+      "title": "Visitor source",
+      "hint": "Recorded when the visitor last opened this conversation; visible to agents only",
+      "ref": "Referrer",
+      "refEmpty": "Direct visit (no referrer recorded)",
+      "ip": "IP address",
+      "ipEmpty": "Not recorded",
+      "ua": "Device & browser",
+      "uaEmpty": "Not recorded",
+      "uaRaw": "User-Agent"
+    },
     "online": "Online",
     "offline": "Offline",
     "recall": {

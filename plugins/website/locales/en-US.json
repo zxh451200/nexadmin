@@ -431,6 +431,8 @@
   "chat.send": "Send",
   "chat.typing": "Support is typing…",
   "chat.attach": "Send an image or file",
+  "chat.soundOn": "Message sound: on",
+  "chat.soundOff": "Message sound: off",
   "chat.offline": "Support is offline right now. Leave a message and we'll reply soon.",
   "chat.closedTitle": "This conversation has ended",
   "chat.closedAuto": "This conversation ended after being idle",

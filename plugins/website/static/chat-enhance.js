@@ -33,6 +33,9 @@
     // 头部是深色底，灰底会糊成一块浅斑，改用白色高光
     '.chat-head .chat-tool:hover{background:rgba(255,255,255,.14)}',
     '.chat-tool[disabled],.chat-attach[disabled]{opacity:.4;cursor:default}',
+    // 提示音关闭时图标压暗，按下态只看这一处，不再另点颜色
+    '.chat-sound.is-off{opacity:.42}',
+    '.chat-sound.is-off:hover{opacity:.7}',
     '.chat-send svg{width:17px;height:17px}',
     // 头部「放大/还原」占同一个按钮位，两态只换图标；替掉原来的 ··· 菜单——
     // 那个菜单只有「放大窗口 / 清空输入」两项，一个动作属于窗口、一个属于输入框，
@@ -59,6 +62,10 @@
     '.chat-emoji-pop button:hover{background:rgba(128,128,128,.18)}',
     '.chat-emoji-pop::-webkit-scrollbar{width:6px}',
     '.chat-emoji-pop::-webkit-scrollbar-thumb{border-radius:3px;background:rgba(128,128,128,.4)}',
+    // emoji 字形预热条：页面空闲时把 18px 字形先光栅化进缓存，点开只剩布局与显示。
+    // 1% 透明度（0 会被浏览器跳过绘制）、fixed 不占布局、不接收事件，两帧后自删。
+    '.chat-emoji-warm{position:fixed;inset-inline-start:0;inset-block-start:0;z-index:0;display:grid;grid-template-columns:repeat(9,minmax(0,1fr));box-sizing:border-box;width:200px;max-height:240px;overflow:hidden;opacity:.01;pointer-events:none;font-size:18px;line-height:1}',
+    '.chat-emoji-warm span{display:flex;align-items:center;justify-content:center;aspect-ratio:1/1}',
     // 译文链接并进「名字 · 时间」那一行：单独一行会让每条客服消息多占 16px，
     // 一条会话里十几条就是半屏空白。
     '.chat-msg-translate{margin:0;padding:0;border:0;background:transparent;color:inherit;font:inherit;font-size:inherit;text-decoration:underline;text-underline-offset:2px;cursor:pointer;opacity:.75}',
@@ -979,7 +986,29 @@
     function saveCard(kind, vals) {
       try { localStorage.setItem('nexchat.card.' + kind, JSON.stringify(vals)); } catch (e) { /* 隐私模式忽略 */ }
     }
+    // 收起卡片 ≠ 放弃输入：切换底部工具、点空白都会把卡片收起来，
+    // 未提交的字段要原样留给下次打开（提交后同样保留，卡片本就用来一键复用）。
+    function saveCardDraft() {
+      if (!activeKind || cardPop.hidden) return;
+      var def = CARD_DEFS[activeKind];
+      if (!def) return;
+      var vals = {};
+      def.fields.forEach(function (f) {
+        var el = cardPop.querySelector('[data-field="' + f.key + '"]');
+        vals[f.key] = el ? String(el.value || '').trim() : '';
+      });
+      if (activeKind === 'address' && addrState) {
+        vals.phoneDial = addrState.dial || '';
+        // 与提交同口径：区号单独存，号码里剥掉前缀，回显时再拼回去
+        if (vals.phone && vals.phoneDial && vals.phone.indexOf(vals.phoneDial + ' ') === 0) {
+          vals.phone = vals.phone.slice(vals.phoneDial.length + 1);
+        }
+      }
+      saveCard(activeKind, vals);
+    }
+
     function closeCard() {
+      saveCardDraft();
       cardPop.hidden = true;
       activeKind = null;
       // 卡片是自己展开面板的，关掉就还原；期间用户手动收起过（expanded 已为 false）则不动
@@ -988,6 +1017,8 @@
 
     function openCard(kind) {
       if (activeKind === kind && !cardPop.hidden) { closeCard(); return; }
+      // 换卡片类型时先把上一张的输入存成草稿，再重建
+      saveCardDraft();
       if (emojiPop) emojiPop.hidden = true;
       if (settingsPop) settingsPop.hidden = true;
       // 地址表单字段多，380px 收起面板里挤成一团：面板不在展开态就先展开，
@@ -1273,6 +1304,13 @@
         closeCard();
       });
     }
+    // 重新开始会话才清空卡片资料：先收起（收起会存草稿）再删，避免顺序把清空又写回来
+    root.addEventListener('chat:session-reset', function () {
+      if (!cardPop.hidden) closeCard();
+      ['name', 'address'].forEach(function (k) {
+        try { localStorage.removeItem('nexchat.card.' + k); } catch (e) { /* 隐私模式忽略 */ }
+      });
+    });
 
     // ---- 翻译设置弹层（对齐阿里聊天窗口的「翻译设置」）----
     // 收到的消息：自动把客服消息翻成所选语言（批量管道在 decorateMessages 里）；
@@ -1297,7 +1335,7 @@
     var syncQuickNow = null;
     function openSettings(compact) {
       if (!settingsPop.hidden) { closeSettings(); return; }
-      if (cardPop) cardPop.hidden = true;
+      if (cardPop && !cardPop.hidden) { saveCardDraft(); cardPop.hidden = true; }
       if (emojiPop) emojiPop.hidden = true;
       var cur = {
         autoIn: trSettings.autoIn,
@@ -1554,6 +1592,55 @@
       // 200ms 落在面板进场动画（180ms）之后，预热不打断动画，又赶在点击之前。
       window.setTimeout(function () { emojiWarmQueued = false; warmEmojis(); }, 200);
     };
+    // 上面的预热要等面板打开，用户开面板后立刻点表情仍会落空（200ms 空窗）。
+    // 首次点开的停顿其实是 176 个 emoji 字形的首次光栅化，与面板是否打开无关：
+    // 页面空闲时就用一条不可见的预热条把 18px 字形画进缓存，并顺手把按钮铺好，
+    // 点开时只剩取消 hidden 与布局；预热条两帧后自删，不占布局、不影响 LCP。
+    var glyphWarmed = false;
+    var warmEmojiGlyphs = function () {
+      if (glyphWarmed || !document.body) return;
+      glyphWarmed = true;
+      var box = document.createElement('div');
+      box.className = 'chat-emoji-warm';
+      box.setAttribute('aria-hidden', 'true');
+      document.body.appendChild(box);
+      // 只预热首开可见的 7 行（9 列 × 7 = 63）：弹层首屏就这几行，
+      // 滚动后才露头的行交给按钮上的 content-visibility 惰性绘制。
+      // 分 3 帧铺，单帧只光栅化 ~21 个字形，避免加载后在主线程压出长任务。
+      var pool = EMOJIS.slice(0, 63);
+      var i = 0;
+      var raf = window.requestAnimationFrame || function (cb) { return window.setTimeout(cb, 16); };
+      var step = function () {
+        var end = Math.min(i + 21, pool.length);
+        for (; i < end; i++) {
+          var s = document.createElement('span');
+          s.textContent = pool[i];
+          box.appendChild(s);
+        }
+        void box.offsetHeight;
+        // 双 rAF：让这一帧先真正光栅化，再铺下一批（单 rAF 会并进同一帧）
+        if (i < pool.length) { raf(function () { raf(step); }); return; }
+        buildEmojis();
+        raf(function () { raf(function () { if (box.parentNode) box.parentNode.removeChild(box); }); });
+      };
+      step();
+    };
+    if (emojiPop) {
+      // 空闲预热可能被进场动画与首屏长任务拖到 ~2s，用户开面板再点表情会抢在前面；
+      // 客服启动钮一有交互（桌面悬停、移动端触摸、键盘聚焦）就先热身，
+      // 等面板开完再挪到表情上时字形已经在缓存里了。
+      var launcher = root.querySelector('.chat-launcher');
+      if (launcher) {
+        ['pointerenter', 'touchstart', 'mousedown', 'focusin'].forEach(function (evt) {
+          launcher.addEventListener(evt, warmEmojiGlyphs, { passive: true });
+        });
+      }
+      if (window.requestIdleCallback) {
+        window.requestIdleCallback(warmEmojiGlyphs, { timeout: 800 });
+      } else {
+        window.setTimeout(warmEmojiGlyphs, 300);
+      }
+    }
     if (emojiPop) {
       emojiPop.addEventListener('click', function (e) {
         var em = e.target && e.target.getAttribute && e.target.getAttribute('data-em');
@@ -1576,7 +1663,7 @@
         if (!wasWarming && !emojiPop.hidden) { emojiPop.hidden = true; return; }
         buildEmojis();
         emojiPop.hidden = false;
-        if (cardPop) cardPop.hidden = true;
+        if (cardPop && !cardPop.hidden) { saveCardDraft(); cardPop.hidden = true; }
         if (settingsPop) settingsPop.hidden = true;
       });
       // 面板是点开才出现的：一露头就排一次空闲预热，只做一次

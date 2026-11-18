@@ -23,6 +23,35 @@ export function formatClock(iso: string | null | undefined, lang: string): strin
     : new Intl.DateTimeFormat(lang, { hour: '2-digit', minute: '2-digit', hour12: false }).format(d)
 }
 
+/** 把原始 UA 归纳成「系统 · 浏览器」；认不出时退回截断的原文，别让坐席看一整串 token。 */
+export function uaSummary(ua: string | undefined | null): string {
+  const s = ua || ''
+  if (!s) return ''
+  const browser = /Edg\//.test(s)
+    ? 'Edge'
+    : /OPR\//.test(s)
+      ? 'Opera'
+      : /Firefox\//.test(s)
+        ? 'Firefox'
+        : /Chrome\//.test(s)
+          ? 'Chrome'
+          : /Safari\//.test(s)
+            ? 'Safari'
+            : ''
+  const os = /Windows NT/.test(s)
+    ? 'Windows'
+    : /Android/.test(s)
+      ? 'Android'
+      : /iPhone|iPad|iPod/.test(s)
+        ? 'iOS'
+        : /Mac OS X/.test(s)
+          ? 'macOS'
+          : /Linux/.test(s)
+            ? 'Linux'
+            : ''
+  return [os, browser].filter(Boolean).join(' · ') || s.slice(0, 60)
+}
+
 const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
 
 const daysAgo = (d: Date) => Math.round((startOfDay(new Date()) - startOfDay(d)) / 86_400_000)

@@ -431,6 +431,8 @@
   "chat.send": "发送",
   "chat.typing": "客服正在输入…",
   "chat.attach": "发送图片或文件",
+  "chat.soundOn": "消息提示音：开",
+  "chat.soundOff": "消息提示音：关",
   "chat.offline": "客服当前不在线，留言后我们会尽快回复",
   "chat.closedTitle": "会话已结束",
   "chat.closedAuto": "会话因长时间无消息已结束",
