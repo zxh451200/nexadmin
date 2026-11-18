@@ -1038,6 +1038,14 @@ func (p Product) Video() *productVideo {
 		return nil
 	}
 	if host == "bilibili.com" || host == "m.bilibili.com" || host == "player.bilibili.com" {
+		// 播放器嵌入页把 BV 号放在 ?bvid= 而不是路径里：从 B 站「嵌入代码」直接粘过来的
+		// 链接也要能用，否则后台填了地址、详情页却没有视频。
+		if bv := u.Query().Get("bvid"); len(bv) > 2 && strings.EqualFold(bv[:2], "bv") {
+			if id := videoID(bv[2:]); id != "" {
+				return &productVideo{Kind: "embed", Src: "https://player.bilibili.com/player.html?bvid=BV" + id + "&autoplay=1&high_quality=1&danmaku=0"}
+			}
+			return nil
+		}
 		for _, seg := range strings.Split(strings.Trim(u.Path, "/"), "/") {
 			if !strings.HasPrefix(seg, "BV") {
 				continue

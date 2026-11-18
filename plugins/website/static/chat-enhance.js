@@ -178,6 +178,8 @@
     '.chat-card-options::-webkit-scrollbar{width:6px}',
     '.chat-card-options::-webkit-scrollbar-thumb{border-radius:3px;background:rgba(128,128,128,.4)}',
     '.chat-card-options button{display:flex;align-items:center;gap:6px;width:100%;padding:0 9px;border:0;background:transparent;color:inherit;font:inherit;font-size:12px;line-height:28px;cursor:pointer;text-align:start}',
+    '.chat-card-options .is-clear{color:rgba(128,128,128,.9)}',
+    '.chat-card-options .is-clear::before{content:"";width:4px;height:4px;flex:none;border-radius:50%;background:currentColor;opacity:.6}',
     '.chat-card-options button:hover{background:rgba(128,128,128,.14)}',
     '.chat-card-options button.is-sel{font-weight:600}',
     '.chat-opt-flag{flex:none;line-height:1}',
@@ -812,7 +814,9 @@
     // 可搜索下拉（国家/州省）：选项由调用方灌入，选中值放在 hidden input 的
     // data-field 上 —— submitCard 仍按 [data-field] 取值，普通字段与下拉字段共用一条路径。
     // 选项不超过 12 个就不出搜索框（多数国家的州省一屏能看全）。
-    function buildSelect(key, placeholder, onPick, emptyText, fallbackPh) {
+    // onClear 给出时，选项列表顶部会有「请选择」空项：点它把值清回占位符，
+    // 并通知调用方做级联清理（换国家清州省城市、清国家收区号等）。
+    function buildSelect(key, placeholder, onPick, emptyText, fallbackPh, onClear) {
       var wrap = document.createElement('div');
       wrap.className = 'chat-card-select';
       var trig = document.createElement('button');
@@ -852,6 +856,20 @@
         opts.textContent = '';
         q = String(q || '').toLowerCase();
         var n = 0;
+        if (onClear) {
+          // 空项固定在最上面，搜索时也保留：选了就别无退路是最恼人的那类下拉
+          var cb = document.createElement('button');
+          cb.type = 'button';
+          cb.setAttribute('role', 'option');
+          cb.setAttribute('data-clear', '1');
+          cb.className = 'is-clear';
+          if (!selKey) cb.classList.add('is-sel');
+          var cn = document.createElement('span');
+          cn.className = 'chat-opt-name';
+          cn.textContent = placeholder;
+          cb.appendChild(cn);
+          opts.appendChild(cb);
+        }
         for (var i = 0; i < items.length; i++) {
           var it = items[i];
           if (q && it.needle.indexOf(q) < 0) continue;
@@ -906,8 +924,15 @@
       });
       search.addEventListener('input', function () { render(search.value); });
       opts.addEventListener('click', function (e) {
-        var b = e.target.closest ? e.target.closest('[data-opt]') : null;
+        var b = e.target.closest ? e.target.closest('[data-opt],[data-clear]') : null;
         if (!b) return;
+        if (b.getAttribute('data-clear')) {
+          handle.clear();
+          drop.hidden = true;
+          trig.setAttribute('aria-expanded', 'false');
+          if (onClear) onClear();
+          return;
+        }
         var it = null;
         for (var i = 0; i < items.length; i++) {
           if (String(items[i].key) === b.getAttribute('data-opt')) { it = items[i]; break; }
@@ -1112,10 +1137,23 @@
         syncRegion(c);
         loadCityData(c.c);
       }
+      // 清空国家：区号收起，州省/城市跟着清空（旧国家的州省清单不能留着误导）
+      function clearCountry() {
+        addr.country = null;
+        addr.dial = '';
+        addr.cityData = null;
+        addr.cityDataReady = false;
+        addr.curRegion = '';
+        addr.pendingRegion = '';
+        addr.pendingCity = '';
+        if (addr.dialEl) { addr.dialEl.textContent = ''; addr.dialEl.hidden = true; }
+        if (regionSel && !regionSel.dead) regionSel.clear();
+        if (addr.citySel && !addr.citySel.dead) addr.citySel.clear();
+      }
       function buildCountry(label, savedVal) {
         var sel = buildSelect('country', t('chatCardCountrySelect', '选择国家/地区'), function (it) {
           applyCountry(it.raw, false);
-        }, '', t('chatCardCountryInput', '输入国家/地区'));
+        }, '', t('chatCardCountryInput', '输入国家/地区'), clearCountry);
         label.appendChild(sel.wrap);
         loadCountries().then(function (list) {
           var items = list.map(function (c) {
@@ -1125,18 +1163,11 @@
             };
           });
           sel.setItems(items);
-          // 无存档国家时退回头部「交货至」记的国家（ISO2 码，site.js 写入）：
-          // 买家在头部选过一次，地址卡就不必从头挑。
-          var shipCode = '';
-          try { shipCode = localStorage.getItem('nex-site-shipto') || ''; } catch (e) { /* 隐私模式忽略 */ }
+          // 只有存过的地址（草稿/上次提交）才回填国家：不再继承头部「交货至」，
+          // 避免开卡就带着一个用户没选过的国家（以及对应的电话区号）。
           var hit = null;
           for (var i = 0; i < items.length; i++) {
             if (items[i].raw.zh === savedVal || items[i].raw.en === savedVal) { hit = items[i]; break; }
-          }
-          if (!hit && shipCode) {
-            for (var j = 0; j < items.length; j++) {
-              if (items[j].raw.c === shipCode) { hit = items[j]; break; }
-            }
           }
           if (hit) {
             sel.apply(hit);
@@ -1152,13 +1183,16 @@
         addr.pendingRegion = savedVal || '';
         var sel = buildSelect('region', t('chatCardRegionSelect', '选择省/州'), function (it) {
           syncCities(it.key);
+        }, undefined, undefined, function () {
+          syncCities('');
+          if (addr.citySel && !addr.citySel.dead) addr.citySel.clear();
         });
         regionSel = sel;
         label.appendChild(sel.wrap);
       }
       function buildCity(label, savedVal) {
         addr.pendingCity = savedVal || '';
-        var sel = buildSelect('city', t('chatCardCitySelect', '选择城市'), function () { /* 城市无下级联动 */ }, t('chatCardCityEmpty', '先选择州/省'));
+        var sel = buildSelect('city', t('chatCardCitySelect', '选择城市'), function () { /* 城市无下级联动 */ }, t('chatCardCityEmpty', '先选择州/省'), undefined, function () { /* 清空由组件自身处理 */ });
         addr.citySel = sel;
         label.appendChild(sel.wrap);
       }
