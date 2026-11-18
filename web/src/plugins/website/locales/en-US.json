@@ -252,6 +252,8 @@
       "categoryNoMatch": "No matching categories",
       "categoriesEmpty": "No categories yet — create one under \"Product categories\" first",
       "categoryCountIncl": "{{count}} products including subcategories",
+      "categoryGroupTag": "Group",
+      "categoryLeafHint": "Parent categories only group and roll up products — assign products to a leaf category. Existing parent tags can still be removed.",
       "coverUpload": "Upload main image",
       "coverHint": "Suggested 800×800; also used as the social share preview",
       "images": "Gallery",

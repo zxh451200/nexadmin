@@ -194,13 +194,16 @@ function useUnitOptions(): Option[] {
  * 展开才见树形清单（缩进表层级、右侧商品数）；搜索命中时连同祖先链一起保留，层级不丢。
  */
 function CategoryPicker({
-  value, onChange, categories, disabled, className,
+  value, onChange, categories, disabled, className, leafOnly = false,
 }: {
   value: string[]
   onChange: (ids: string[]) => void
   categories: CatNode[]
   disabled?: boolean
   className?: string
+  /** 挂载用（商品表单）：父级只作分组，不能勾；已经挂着的存量父级仍可取消。
+   *  筛选用的选择器保持 false——按父级筛是「按整棵子树筛」，那是合法操作。 */
+  leafOnly?: boolean
 }) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
@@ -224,22 +227,38 @@ function CategoryPicker({
     }
     return categories.filter((c) => keep.has(c.id))
   }, [categories, byId, kw])
-  const options: Option[] = shown.map((c) => ({
-    value: c.id,
-    label: c.title,
-    node: (
-      <span className="flex w-full items-center gap-2">
-        <span className="truncate" style={{ paddingInlineStart: `${(c.depth - 1) * 16}px` }}>{c.title}</span>
-        {/* 计数是子树口径（含后代），和筛选结果条数一致；有子类目的行补一句说明，免得被当成「直挂数」 */}
-        <span
-          className="num ms-auto text-xs text-muted-foreground"
-          title={c.children?.length ? t('plugin_website.product.categoryCountIncl', { count: c.productCount }) : undefined}
-        >
-          {c.productCount}
+  const options: Option[] = shown.map((c) => {
+    const isGroup = leafOnly && !!c.children?.length
+    const selected = value.includes(c.id)
+    return {
+      value: c.id,
+      label: c.title,
+      // 分组行不可点；但已经挂着的（存量数据）要能取消，否则商品永远摘不掉这个父级
+      disabled: isGroup && !selected,
+      node: (
+        <span className="flex w-full items-center gap-2">
+          <span
+            className={cn('truncate', isGroup && 'font-medium')}
+            style={{ paddingInlineStart: `${(c.depth - 1) * 16}px` }}
+          >
+            {c.title}
+          </span>
+          {isGroup ? (
+            <span className="shrink-0 rounded-sm bg-muted px-1.5 py-0.5 text-[11px] leading-none text-muted-foreground">
+              {t('plugin_website.product.categoryGroupTag')}
+            </span>
+          ) : null}
+          {/* 计数是子树口径（含后代），和筛选结果条数一致；有子类目的行补一句说明，免得被当成「直挂数」 */}
+          <span
+            className="num ms-auto text-xs text-muted-foreground"
+            title={c.children?.length ? t('plugin_website.product.categoryCountIncl', { count: c.productCount }) : undefined}
+          >
+            {c.productCount}
+          </span>
         </span>
-      </span>
-    ),
-  }))
+      ),
+    }
+  })
   const toggle = (id: string) => onChange(value.includes(id) ? value.filter((x) => x !== id) : [...value, id])
   // 触发器按树形顺序显示已选名称，与清单里的视觉一致。
   const selectedTitles = categories.filter((c) => value.includes(c.id)).map((c) => c.title)
@@ -268,6 +287,13 @@ function CategoryPicker({
         search={search}
         onSearchChange={setSearch}
         emptyText={t(kw ? 'plugin_website.product.categoryNoMatch' : 'plugin_website.product.categoriesEmpty')}
+        footer={
+          leafOnly ? (
+            <p className="border-t border-border px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+              {t('plugin_website.product.categoryLeafHint')}
+            </p>
+          ) : undefined
+        }
       />
     </PickerShell>
   )
@@ -525,7 +551,7 @@ function ProductFormBody({
               <span className="truncate text-xs text-muted-foreground">{productPath}</span>
             </SharedFieldShell>
             <SharedFieldShell labelKey="plugin_website.product.categories">
-              <CategoryPicker value={catIds} onChange={setCatIds} categories={flatCats} disabled={sharedDisabled} />
+              <CategoryPicker value={catIds} onChange={setCatIds} categories={flatCats} disabled={sharedDisabled} leafOnly />
             </SharedFieldShell>
           </div>
         </FormSection>

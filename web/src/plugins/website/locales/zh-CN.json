@@ -252,6 +252,8 @@
       "categoryNoMatch": "没有匹配的类目",
       "categoriesEmpty": "还没有类目，先到「产品类目」里建一个",
       "categoryCountIncl": "含子类目共 {{count}} 件商品",
+      "categoryGroupTag": "分组",
+      "categoryLeafHint": "父级类目只作分组与归档聚合，商品请挂到末级类目；已经挂着的父级可以取消。",
       "coverUpload": "上传主图",
       "coverHint": "建议 800×800，上传后按此比例裁剪；也用于社交分享预览图",
       "images": "图集",

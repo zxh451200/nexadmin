@@ -242,6 +242,10 @@ func (s *Service) SaveProduct(ctx context.Context, id idgen.ID, f ProductForm) (
 	} else {
 		row = Product{}
 	}
+	// 类目挂在有子类目的父级上要拦住：见 assertLeafProductCategories 的说明（存量放行）。
+	if err := s.assertLeafProductCategories(ctx, cats, id); err != nil {
+		return nil, err
+	}
 	i18n, err := pi18n.Normalize(f.I18nJSON, siteLocales{}, productI18nFields)
 	if err != nil {
 		return nil, response.BadRequest("website.i18n_invalid").Wrap(err)
@@ -493,8 +497,48 @@ func (s *Service) publishedProductSitemapEntries(ctx context.Context) ([]Product
 
 // ---- 产品类目 ----
 
-// categorySubtreeFilter 把筛选用的类目 id 展开成「自身 + 全部后代」。
-// 产品类目是树，选父类目就该把子类目下的商品一起查出来——公开站（descendantSlugs → term.Slugs）
+// assertLeafProductCategories 拦住「把商品挂到还有子类目的类目上」。
+// 行业口径（Amazon 的 item type、Google 商品分类、Shopify taxonomy）商品只落末级节点：
+// 父级是分组与归档用的，挂上去「这件商品到底属于哪个类目」就二义了——详情页的类目标签、
+// 归档链接、面包屑都会同时出现父和子。既有存量挂载一律放行（老数据照常保存、可以取消），
+// 只拒绝本次新加的父级挂载：判断依据是「该商品当前已经挂着的类目 id」白名单。
+func (s *Service) assertLeafProductCategories(ctx context.Context, cats []ProductCategory, id idgen.ID) error {
+	if len(cats) == 0 {
+		return nil
+	}
+	kept := make(map[int64]bool, len(cats))
+	if id != 0 {
+		var cur []struct {
+			CategoryID int64 `gorm:"column:category_id"`
+		}
+		if err := s.db.WithContext(ctx).Table("plg_website_product_category_rel").
+			Select("category_id").Where("product_id = ?", int64(id)).Scan(&cur).Error; err != nil {
+			return err
+		}
+		for _, c := range cur {
+			kept[c.CategoryID] = true
+		}
+	}
+	ids := make([]int64, 0, len(cats))
+	for _, c := range cats {
+		if !kept[int64(c.ID)] {
+			ids = append(ids, int64(c.ID))
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	var n int64
+	if err := s.db.WithContext(ctx).Model(&ProductCategory{}).Where("parent_id IN ?", ids).Count(&n).Error; err != nil {
+		return err
+	}
+	if n > 0 {
+		return response.BadRequest("website.product_category_not_leaf")
+	}
+	return nil
+}
+
+// categorySubtreeFilter 把筛选用的类目 id 展开成「自身 + 全部后代」。// 产品类目是树，选父类目就该把子类目下的商品一起查出来——公开站（descendantSlugs → term.Slugs）
 // 一直是这个口径，管理端此前只命中直挂：同一个父类目点下去，前后台数出来的条数不一样，
 // 商品只挂子类时后台甚至一条都查不到。展开用全表父子关系（类目是十几到几百条的小表），
 // 不写递归 SQL，MySQL/MariaDB/PG 三套库行为一致。

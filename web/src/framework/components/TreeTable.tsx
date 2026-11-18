@@ -1085,6 +1085,7 @@ export function TreeTable<T extends { id: string; children?: T[] }>({
               ids={allParents}
               expanded={forceExpandAll ? new Set(allParents) : expanded}
               onChange={commitExpanded}
+              className="h-10 md:h-9"
             />
           ) : null}
           {columnSettingsKey && !isMobile ? (
