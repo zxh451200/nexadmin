@@ -31,6 +31,8 @@
   --sl-ink: #202a22;
   --sl-muted: #6e7b70;
   --sl-paper: #faf9f4;
+  /* 商品详情页签条与页面同底（吸顶时仍是不透明实底，只是不再是一条白石带） */
+  --pd-bg: var(--sl-paper);
   --sl-sage: #edf0e6;
   --sl-card: #ffffff;
   --sl-line: #dfe3d8;
