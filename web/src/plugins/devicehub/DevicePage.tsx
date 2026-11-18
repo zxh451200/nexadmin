@@ -21,6 +21,7 @@ import { Badge } from '@/framework/ui/badge'
 import { Button } from '@/framework/ui/button'
 import { Card } from '@/framework/ui/card'
 import { Input } from '@/framework/ui/input'
+import { Skeleton } from '@/framework/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/framework/ui/tabs'
 import { cn } from '@/lib/utils'
 import { formatAgo, formatTime, formatTimeSec } from './format'
@@ -202,7 +203,12 @@ export default function DevicePage() {
             aria-label={t('plugin_devicehub.device.search')}
           />
           {devices.isLoading ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">{t('common.loading')}</p>
+            /* 加载骨架按行形状占位，与 DataTable 的骨架同一语言 */
+            <div className="flex flex-col gap-2 py-2">
+              {Array.from({ length: 6 }, (_, k) => (
+                <Skeleton key={k} className="h-12 w-full" />
+              ))}
+            </div>
           ) : total === 0 ? (
             kwQuery ? (
               <p className="py-8 text-center text-sm text-muted-foreground">{t('plugin_devicehub.device.noMatch')}</p>

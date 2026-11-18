@@ -54,6 +54,7 @@ import { SimpleSelect } from '@/framework/components/SimpleSelect'
 // 附件大小与 IM 会话同一份共享实现（framework/upload/precheck），不再各写一版
 import { formatSize as sharedFormatSize } from '@/framework/upload/precheck'
 import { Badge } from '@/framework/ui/badge'
+import { Skeleton } from '@/framework/ui/skeleton'
 import { Button } from '@/framework/ui/button'
 import { Card } from '@/framework/ui/card'
 import { Checkbox } from '@/framework/ui/checkbox'
@@ -1427,7 +1428,12 @@ export default function TicketPage() {
                   <EmptyState title={filtered ? t('plugin_ticket.emptyFiltered') : t('plugin_ticket.empty')} className="py-8" />
                 ) : null}
                 {tickets.isLoading && list.length === 0 ? (
-                  <div className="py-8 text-center text-sm text-muted-foreground">{t('plugin_ticket.loading')}</div>
+                  /* 加载骨架与 DataTable 同一语言：几行灰条代替一句「加载中」文本 */
+                  <div className="flex flex-col gap-2 py-4">
+                    {Array.from({ length: 5 }, (_, k) => (
+                      <Skeleton key={k} className="h-12 w-full" />
+                    ))}
+                  </div>
                 ) : null}
               </div>
 
@@ -3145,7 +3151,12 @@ function TicketThread({
 
       <div ref={scrollerRef} className="min-h-32 flex-1 space-y-2 overflow-y-auto p-4">
         {loading && replies.length === 0 ? (
-          <div className="text-center text-sm text-muted-foreground">{t('plugin_ticket.loading')}</div>
+          /* 会话流加载骨架：按气泡形状占位（左右交错），与列表骨架同一语言 */
+          <div className="flex flex-col gap-3">
+            <Skeleton className="h-10 w-3/5 rounded-2xl" />
+            <Skeleton className="ms-auto h-14 w-2/5 rounded-2xl" />
+            <Skeleton className="h-10 w-1/2 rounded-2xl" />
+          </div>
         ) : null}
         {stream.map((item) => {
           if (item.kind === 'act') {
