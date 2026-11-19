@@ -119,6 +119,8 @@ export interface NavItem {
   /** 上级导航 ID；"0" = 顶级（雪花 ID 用字符串避免丢精度） */
   parentId: string
   label: string
+  /** 二级面板里跟在标题下的一句话说明；为空则该子项落在右侧链接列 */
+  description: string
   href: string
   sort: number
   enabled: boolean
@@ -128,6 +130,7 @@ export interface NavItem {
 export interface NavForm {
   parentId: string
   label: string
+  description: string
   href: string
   sort: number
   enabled: boolean

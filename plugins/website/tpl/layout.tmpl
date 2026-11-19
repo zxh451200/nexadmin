@@ -81,18 +81,38 @@
       <div class="nav-item has-sub">
         <a href="{{$.URL .Href}}"{{if eq .Href $.Route}} aria-current="page"{{end}}>{{.Label}}</a>
         <button class="nav-caret" type="button" data-nav-toggle aria-expanded="false" aria-label="{{$.TF "layout.subNav" .Label}}">{{uiIcon "chevron-down"}}</button>
-        <ul class="nav-sub">
-          {{range .Children}}
-          <li{{if .Children}} class="has-sub"{{end}}>
-            <a href="{{$.URL .Href}}"{{if eq .Href $.Route}} aria-current="page"{{end}}>{{.Label}}</a>
-            {{if .Children}}
-            <ul class="nav-sub nav-sub-3">
-              {{range .Children}}<li><a href="{{$.URL .Href}}"{{if eq .Href $.Route}} aria-current="page"{{end}}>{{.Label}}</a></li>{{end}}
-            </ul>
-            {{end}}
-          </li>
-          {{end}}
-        </ul>
+        {{/* 二级面板（对标 Linear 的 Resources）：填了「说明」的子项排成左侧卡片区（标题 + 一句话），
+             没填说明的落到右侧纯链接列。整张导航都没填说明时卡片区为空、CSS 收成之前那根窄下拉，
+             所以老站点不改数据也不会突然变宽。 */}}
+        <div class="nav-panel" data-nav-panel>
+          <ul class="nav-panel-cards">
+            {{range .Children}}{{if .Description}}
+            <li{{if .Children}} class="has-sub"{{end}}>
+              <a class="nav-card" href="{{$.URL .Href}}"{{if eq .Href $.Route}} aria-current="page"{{end}}>
+                <span class="nav-card-title">{{.Label}}</span>
+                <span class="nav-card-desc">{{.Description}}</span>
+              </a>
+              {{if .Children}}
+              <ul class="nav-sub nav-sub-3">
+                {{range .Children}}<li><a href="{{$.URL .Href}}"{{if eq .Href $.Route}} aria-current="page"{{end}}>{{.Label}}</a></li>{{end}}
+              </ul>
+              {{end}}
+            </li>
+            {{end}}{{end}}
+          </ul>
+          <ul class="nav-panel-links">
+            {{range .Children}}{{if not .Description}}
+            <li{{if .Children}} class="has-sub"{{end}}>
+              <a href="{{$.URL .Href}}"{{if eq .Href $.Route}} aria-current="page"{{end}}>{{.Label}}</a>
+              {{if .Children}}
+              <ul class="nav-sub nav-sub-3">
+                {{range .Children}}<li><a href="{{$.URL .Href}}"{{if eq .Href $.Route}} aria-current="page"{{end}}>{{.Label}}</a></li>{{end}}
+              </ul>
+              {{end}}
+            </li>
+            {{end}}{{end}}
+          </ul>
+        </div>
       </div>
       {{else}}<a href="{{$.URL .Href}}"{{if eq .Href $.Route}} aria-current="page"{{end}}>{{.Label}}</a>{{end}}{{end}}
       {{if .MarketEnabled}}<a href="{{.URL "/plugins"}}"{{if hasPrefix .Route "/plugins"}} aria-current="page"{{end}}>{{.T "layout.market"}}</a>{{end}}

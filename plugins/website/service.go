@@ -457,6 +457,7 @@ func navPageSlug(href string) (string, bool) {
 
 func (s *Service) SaveNav(ctx context.Context, id idgen.ID, f ItemForm) (*Nav, error) {
 	f.Label = trimLen(f.Label, 64)
+	f.Description = trimLen(f.Description, 200)
 	f.Href = trimLen(f.Href, 255)
 	if f.Label == "" || f.Href == "" {
 		return nil, response.BadRequest("website.nav_required")
@@ -500,6 +501,7 @@ func (s *Service) SaveNav(ctx context.Context, id idgen.ID, f ItemForm) (*Nav, e
 		return nil, response.BadRequest("website.i18n_invalid").Wrap(err)
 	}
 	row.ParentID, row.Label, row.Href = f.ParentID, f.Label, f.Href
+	row.Description = f.Description
 	row.Sort, row.Enabled, row.I18nJSON = f.Sort, f.Enabled, i18n
 	if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
 		return nil, err

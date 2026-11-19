@@ -68,7 +68,10 @@ var entityViews = map[string]entityDef{
 	},
 	"nav": {
 		fields: navI18nFields,
-		views:  []fieldView{{"label", "plugin_website.fields.navLabel", widgetText, 0}},
+		views: []fieldView{
+			{"label", "plugin_website.fields.navLabel", widgetText, 0},
+			{"description", "plugin_website.fields.navDesc", widgetTextarea, 2},
+		},
 	},
 	"feature": {
 		fields: featureI18nFields,

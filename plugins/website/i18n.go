@@ -592,7 +592,9 @@ func (set *Setting) localize(code string) {
 }
 
 func (n *Nav) localize(code string) {
-	n.Label = pi18n.Pick(translations(n.I18nJSON, code), "label", n.Label)
+	tr := translations(n.I18nJSON, code)
+	n.Label = pi18n.Pick(tr, "label", n.Label)
+	n.Description = pi18n.Pick(tr, "description", n.Description)
 }
 
 func (f *Feature) localize(code string) {
@@ -635,7 +637,7 @@ var (
 		"siteDesc": {Max: 300}, "homeTitle": {Max: 200}, "homeSubtitle": {Max: 500},
 		"homeCtaLabel": {Max: 64}, "seoKeywords": {Max: 300}, "footerNote": {Max: 300},
 	}
-	navI18nFields     = pi18n.Fields{"label": {Max: 64}}
+	navI18nFields = pi18n.Fields{"label": {Max: 64}, "description": {Max: 200}}
 	featureI18nFields = pi18n.Fields{
 		"title": {Max: 128}, "description": {Max: 500},
 	}

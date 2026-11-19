@@ -13,7 +13,7 @@ import (
 // 老版本升级上来的库由 ensureSeedI18n 只补空白译文（已有译文不动）。
 
 // seedVersion 是当前出厂内容版本：新增出厂条目时 +1，并在 ensureSeedBackfill 里补种。
-const seedVersion = 5
+const seedVersion = 6
 
 func enText(fields map[string]string) string {
 	return i18nJSON(map[string]map[string]string{"en-US": fields})
@@ -49,7 +49,7 @@ func defaultSetting() Setting {
 func defaultNavs() []Nav {
 	return []Nav{
 		{Label: "首页", Href: "/", Sort: 5, Enabled: true, I18nJSON: enText(map[string]string{"label": "Home"})},
-		{Label: "动态", Href: "/news", Sort: 20, Enabled: true, I18nJSON: enText(map[string]string{"label": "News"})},
+		{Label: "新闻", Href: "/news", Sort: 20, Enabled: true, I18nJSON: enText(map[string]string{"label": "News"})},
 		{Label: "关于", Href: "/p/about", Sort: 30, Enabled: true, I18nJSON: enText(map[string]string{"label": "About"})},
 		{Label: "联系", Href: "/contact", Sort: 40, Enabled: true, I18nJSON: enText(map[string]string{"label": "Contact"})},
 	}
@@ -334,6 +334,11 @@ func ensureSeedBackfill(ctx context.Context, s *Service, log *zap.Logger) {
 			warn("nav contact", s.db.WithContext(ctx).Create(&n).Error)
 		}
 	}
+	// v6：出厂的 /news 从「动态」改叫「新闻」——栏目本来就是新闻，叫「动态」既含糊又和
+	// 产品更新混在一起。只改仍是出厂名（动态/更新）的那条，管理员自定义的名称不动。
+	warn("nav news label", s.db.WithContext(ctx).Model(&Nav{}).
+		Where("href = ? AND label IN ?", "/news", []string{"动态", "更新"}).
+		Update("label", "新闻").Error)
 	warn("seed_version", s.db.WithContext(ctx).Model(&Setting{}).Where("id = ?", int64(set.ID)).
 		Update("seed_version", seedVersion).Error)
 }

@@ -52,9 +52,9 @@ const settings: SiteSettings = {
 }
 
 let navs: NavItem[] = [
-  { id: id(1), parentId: '0', label: '能力', href: '#features', sort: 10, enabled: true, i18nJson: '' },
-  { id: id(2), parentId: '0', label: '动态', href: '/news', sort: 20, enabled: true, i18nJson: '' },
-  { id: id(3), parentId: '0', label: '关于', href: '/p/about', sort: 30, enabled: true, i18nJson: '' },
+  { id: id(1), parentId: '0', label: '能力', description: '', href: '#features', sort: 10, enabled: true, i18nJson: '' },
+  { id: id(2), parentId: '0', label: '新闻', description: '', href: '/news', sort: 20, enabled: true, i18nJson: '' },
+  { id: id(3), parentId: '0', label: '关于', description: '', href: '/p/about', sort: 30, enabled: true, i18nJson: '' },
 ]
 
 let features: FeatureItem[] = [
@@ -515,7 +515,7 @@ defineMock([
     method: 'POST',
     url: '/plugins/website/navs',
     handler: ({ body }) => {
-      const row: NavItem = { id: id(100 + navs.length), parentId: String(body.parentId ?? '0'), label: body.label, href: body.href, sort: body.sort ?? 0, enabled: !!body.enabled, i18nJson: body.i18nJson ?? '' }
+      const row: NavItem = { id: id(100 + navs.length), parentId: String(body.parentId ?? '0'), label: body.label, description: body.description ?? '', href: body.href, sort: body.sort ?? 0, enabled: !!body.enabled, i18nJson: body.i18nJson ?? '' }
       navs = [...navs, row]
       return row
     },

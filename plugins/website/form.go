@@ -73,10 +73,12 @@ type ItemForm struct {
 	// ParentID 为上级导航 ID，0 = 顶级。
 	ParentID NavParentID `json:"parentId"`
 	Label    string      `json:"label"`
-	Href     string      `json:"href"`
-	Sort     int         `json:"sort"`
-	Enabled  bool        `json:"enabled"`
-	I18nJSON string      `json:"i18nJson"`
+	// Description 是二级面板里的说明，可空；空则该项退化成纯链接。
+	Description string `json:"description"`
+	Href        string `json:"href"`
+	Sort        int    `json:"sort"`
+	Enabled     bool   `json:"enabled"`
+	I18nJSON    string `json:"i18nJson"`
 }
 
 // NavOrderItem 是一条拖拽排序指令：把 ID 挂到 ParentID 下并写入 Sort。

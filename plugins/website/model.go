@@ -239,6 +239,8 @@ type Nav struct {
 	// ParentID 是上级导航 ID，0 = 顶级；JSON 里按字符串传输（雪花 ID 超出 JS 安全整数）。
 	ParentID NavParentID `gorm:"index:idx_plg_website_nav_parent;not null;default:0" json:"parentId"`
 	Label    string      `gorm:"size:64;not null" json:"label"`
+	// Description 是二级菜单里跟在标题下的一句话说明；为空时面板退化成纯链接列。
+	Description string `gorm:"size:200;not null;default:''" json:"description"`
 	Href     string      `gorm:"size:255;not null" json:"href"`
 	Sort     int         `json:"sort"`
 	Enabled  bool        `json:"enabled"`

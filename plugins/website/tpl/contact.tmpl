@@ -2,7 +2,6 @@
 <section class="section contact-page">
   <div class="container contact-grid">
     <div class="contact-intro">
-      <p class="eyebrow">{{.T "contact.eyebrow"}}</p>
       <h1 class="page-title">{{.T "contact.title"}}</h1>
       <p class="contact-lede">{{.TF "contact.lede" .SiteName}}</p>
 
@@ -67,7 +66,6 @@
 
     <form class="contact-form" method="post" action="{{.URL "/contact"}}" data-contact-form novalidate>
       <h2 class="contact-form-title">{{.T "contact.formTitle"}}</h2>
-      <p class="contact-form-hint">{{.T "contact.formHint"}}</p>
 
       <p class="contact-status" data-contact-status role="status" aria-live="polite"{{if and (not .ContactSent) (not .ContactError)}} hidden{{end}}>
         {{if .ContactSent}}<span class="contact-status-ok">{{.T "contact.sent"}}</span>{{end}}
@@ -76,19 +74,19 @@
 
       <label class="field">
         <span class="field-label">{{.T "contact.name"}}</span>
-        <input name="name" required maxlength="64" autocomplete="name">
+        <input name="name" required maxlength="64" autocomplete="name" placeholder="{{.T "contact.namePh"}}">
       </label>
       <label class="field">
         <span class="field-label">{{.T "contact.email"}}</span>
-        <input name="email" type="email" required maxlength="128" autocomplete="email">
+        <input name="email" type="email" required maxlength="128" autocomplete="email" placeholder="{{.T "contact.emailPh"}}">
       </label>
       <label class="field">
         <span class="field-label">{{.T "contact.phoneOpt"}}</span>
-        <input name="phone" type="tel" maxlength="32" autocomplete="tel">
+        <input name="phone" type="tel" maxlength="32" autocomplete="tel" placeholder="{{.T "contact.phonePh"}}">
       </label>
       <label class="field">
         <span class="field-label">{{.T "contact.message"}}</span>
-        <textarea name="content" rows="5" required minlength="5" maxlength="2000"></textarea>
+        <textarea name="content" rows="5" required minlength="5" maxlength="2000" placeholder="{{.T "contact.messagePh"}}"></textarea>
       </label>
       <label class="contact-hp" aria-hidden="true">
         <span>Company</span>
@@ -100,7 +98,12 @@
         <span>{{.T "contact.consent"}} <a href="{{.ConsentURL}}" target="_blank" rel="noopener noreferrer">{{.T "contact.consentPolicy"}}</a></span>
       </label>
       {{end}}
-      <button class="btn btn-primary" type="submit">{{.T "contact.send"}}</button>
+      <div class="contact-actions">
+        <button class="btn btn-primary" type="submit">{{.T "contact.send"}}</button>
+        <p class="contact-form-hint">
+          {{if .ContactEmail}}{{.T "contact.orEmail"}} <a href="mailto:{{.ContactEmail}}">{{.ContactEmail}}</a>{{else}}{{.T "contact.formHint"}}{{end}}
+        </p>
+      </div>
     </form>
   </div>
 </section>

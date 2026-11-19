@@ -301,7 +301,7 @@ export default function PagePage() {
       return
     }
     try {
-      await saveNav.mutateAsync({ data: { parentId: '0', label: row.title, href, sort: 0, enabled: true, i18nJson: '' } })
+      await saveNav.mutateAsync({ data: { parentId: '0', label: row.title, description: '', href, sort: 0, enabled: true, i18nJson: '' } })
       toast.success(t('plugin_website.page.navAdded'))
     } catch {
       toast.error(t('common.operateFailed'))

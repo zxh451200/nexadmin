@@ -255,6 +255,7 @@ function NavFormBody({
           enabled,
           // 行上的裸列永远存原文；nav 不可按语言发布，只回传 i18nJson
           label: base.label ?? '',
+          description: base.description ?? '',
           i18nJson: lf.serialize().i18nJson,
         },
       })
@@ -292,6 +293,9 @@ function NavFormBody({
       <div className="flex flex-col gap-3">
         <LocalizedField fieldKey="label" required />
         {labelMissing ? <p className="text-xs text-destructive">{t('plugin_website.nav.required')}</p> : null}
+        {/* 可选：填了才会让这个子项在大面板里变成「标题 + 说明」卡片，不填就是右侧一行链接 */}
+        <LocalizedField fieldKey="description" placeholder={t('plugin_website.nav.descPlaceholder')} />
+        <p className="text-xs text-muted-foreground">{t('plugin_website.hint.navDesc')}</p>
         <SharedFieldShell labelKey="plugin_website.nav.hrefTarget" required>
           <SimpleSelect
             value={target}
@@ -376,7 +380,7 @@ function NavFormDialog({
       schema={schema}
       locales={languages}
       defaultLocale={defaultLocale}
-      base={{ label: editing?.label ?? '' }}
+      base={{ label: editing?.label ?? '', description: editing?.description ?? '' }}
       i18nJson={editing?.i18nJson}
       translate={translate}
     >

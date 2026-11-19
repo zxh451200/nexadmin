@@ -128,6 +128,7 @@
       "hrefDocs": "Documentation",
       "hrefPage": "Page",
       "hrefCustom": "Custom link…",
+      "descPlaceholder": "One line explaining what this entry leads to (optional)",
       "errNoSlash": "Enter a full site path or a full URL.",
       "errNoSlashHint": "Site paths start with / (e.g. /p/about); external URLs start with https://.",
       "errUnknownPath": "The site has no page at “{{path}}”.",
@@ -493,6 +494,7 @@
       "icp": "ICP filing no.",
       "footerNote": "Footer note",
       "navLabel": "Label",
+      "navDesc": "Description",
       "navHref": "Href",
       "featureTitle": "Title",
       "featureDesc": "Description",
@@ -555,6 +557,7 @@
       "socials": "Social icons in the footer and on the contact page; up to {{max}}, https:// or mailto:",
       "friendLinks": "The “Links” column in the footer; up to {{max}}, hidden when empty",
       "navHref": "Pick a site page here. Choose “Custom link” for an external URL (must start with https://) or an in-page anchor.",
+      "navDesc": "Entries with a description show up as title + description cards in the dropdown; the rest fall into a plain link column on the right.",
       "establishedYear": "Shown on the supplier card; 0 or empty hides this row",
       "certifications": "Comma-separated, e.g. CE, UL 1973, UN38.3. Rendered as badges on the product page; known names get an icon."
     },

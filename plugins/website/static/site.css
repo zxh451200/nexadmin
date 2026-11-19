@@ -1887,57 +1887,74 @@ html[data-scheme="light"] .shot-light { display: block; }
 .footer-qr img { display: block; width: 96px; height: 96px; border-radius: 8px; background: #fff; padding: 4px; }
 .footer-qr figcaption { margin-top: 6px; font-size: 12px; color: var(--text-3); }
 
-/* ---- 联系页（联系方式 + 在线留言） ---- */
+/* ---- 联系页（联系方式 + 在线留言） ----
+   Linear 式扁平版式：表单不铺卡片、字段直接落在页面底上；
+   左栏标题收到 40px 以内，右栏只留一条浅色字段流 + 白色小胶囊按钮。 */
 
-.contact-page { padding-top: 72px; }
-.contact-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: 72px; align-items: start; }
-.contact-lede { margin: 16px 0 0; max-width: 46ch; color: var(--text-2); font-size: 15px; line-height: 1.8; }
-.contact-channels { list-style: none; padding: 0; margin: 32px 0 0; display: flex; flex-direction: column; gap: 16px; }
-.contact-channels li { display: flex; align-items: center; gap: 14px; }
-.contact-ico {
-  display: inline-flex;
-  width: 38px;
-  height: 38px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  color: var(--text-2);
+.contact-page {
+  padding-top: 80px;
+  /* 表单控件色阶：浅色皮白底 + 淡描边；深色皮半透明白底 + 更亮描边（见下方深色作用域） */
+  --cf-bg: #ffffff;
+  --cf-border: rgba(8, 9, 10, 0.1);
+  --cf-border-hover: rgba(8, 9, 10, 0.18);
+  --cf-border-focus: rgba(8, 9, 10, 0.3);
+  --cf-halo: rgba(94, 109, 210, 0.14);
 }
-.contact-ico svg { width: 17px; height: 17px; }
-.contact-channels a { color: var(--text); font-size: 15px; }
-.contact-channels a:hover { color: var(--accent-2); }
-.contact-label { display: block; font-size: 12px; color: var(--text-3); margin-bottom: 2px; }
-.contact-social { margin-top: 28px; }
-.contact-qr { margin-top: 28px; }
-.contact-form {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 28px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background: var(--panel);
+html:not([data-scheme="light"]) .contact-page {
+  --cf-bg: rgba(255, 255, 255, 0.04);
+  --cf-border: rgba(255, 255, 255, 0.075);
+  --cf-border-hover: rgba(255, 255, 255, 0.16);
+  --cf-border-focus: rgba(255, 255, 255, 0.3);
+  --cf-halo: rgba(125, 140, 255, 0.16);
 }
-.contact-form-title { margin: 0; font-size: 18px; }
-.contact-form-hint { margin: -8px 0 0; font-size: 13px; color: var(--text-3); }
-.field { display: flex; flex-direction: column; gap: 6px; }
+
+.contact-grid { display: grid; grid-template-columns: minmax(0, 0.92fr) minmax(0, 1fr); gap: 88px; align-items: start; }
+.contact-intro { padding-top: 2px; }
+.contact-intro .page-title { font-size: clamp(30px, 3.2vw, 40px); font-weight: 600; letter-spacing: -0.032em; line-height: 1.1; }
+.contact-lede { margin: 14px 0 0; max-width: 40ch; color: var(--text-2); font-size: 15px; line-height: 1.75; }
+.contact-channels { list-style: none; padding: 0; margin: 30px 0 0; display: flex; flex-direction: column; gap: 14px; }
+.contact-channels li { display: flex; align-items: flex-start; gap: 10px; }
+/* 渠道图标去掉 38px 描边方块：Linear 的联系页里没有这种“按钮感”图标 */
+.contact-ico { width: auto; height: auto; margin-top: 2px; border: 0; border-radius: 0; background: none; color: var(--text-3); }
+.contact-ico svg { width: 15px; height: 15px; }
+.contact-channels a { font-size: 14px; }
+.contact-label { display: block; font-size: 12px; color: var(--text-3); margin-bottom: 1px; }
+.contact-social { margin-top: 30px; }
+.contact-qr { margin-top: 30px; }
+
+/* 表单：无边框、无底色、无内边距——只是页面上的字段序列 */
+.contact-form { display: flex; flex-direction: column; gap: 16px; max-width: 520px; padding: 0; border: 0; background: none; }
+.contact-form-title { margin: 0 0 2px; font-size: 14px; font-weight: 500; color: var(--text-2); }
+.field { display: flex; flex-direction: column; gap: 7px; }
 .field-label { font-size: 13px; color: var(--text-2); }
 .field input,
 .field textarea {
   width: 100%;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--input-bg);
+  border-radius: 7px;
+  border: 1px solid var(--cf-border);
+  background: var(--cf-bg);
   color: var(--text);
-  padding: 10px 12px;
+  padding: 9px 12px;
   font: inherit;
   font-size: 14px;
-  transition: border-color 0.15s;
+  line-height: 1.5;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
-.field textarea { resize: vertical; min-height: 120px; }
+.field input::placeholder,
+.field textarea::placeholder { color: var(--text-3); }
+.field input:hover,
+.field textarea:hover { border-color: var(--cf-border-hover); }
+.field textarea { resize: vertical; min-height: 132px; }
+/* 焦点只提亮描边 + 一圈极淡光晕，不用主题紫描边（Linear 的输入框焦点就是这么收着的） */
 .field input:focus-visible,
-.field textarea:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 1px; border-color: transparent; }
+.field textarea:focus-visible { outline: none; border-color: var(--cf-border-focus); box-shadow: 0 0 0 3px var(--cf-halo); }
+
+.contact-actions { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-top: 4px; }
+.contact-form .btn-primary { width: auto; height: 38px; padding: 0 18px; border-radius: 999px; font-size: 13.5px; font-weight: 500; }
+.contact-form-hint { margin: 0; font-size: 13px; color: var(--text-3); }
+.contact-form-hint a { color: var(--text-2); text-decoration: underline; text-underline-offset: 2px; text-decoration-color: var(--border-strong); }
+.contact-form-hint a:hover { color: var(--text); }
+
 .contact-hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
 .contact-consent { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; color: var(--text-2); }
 /* 自绘复选框：站点没声明 color-scheme，原生控件在深色下会画成纯白方块，勾选/未勾选看不出区别。 */
@@ -1963,8 +1980,11 @@ html[data-scheme="light"] .shot-light { display: block; }
 .contact-status-err { color: var(--red); }
 
 @media (max-width: 900px) {
-  .contact-page { padding-top: 48px; }
-  .contact-grid { grid-template-columns: 1fr; gap: 40px; }
+  .contact-page { padding-top: 40px; }
+  .contact-grid { grid-template-columns: 1fr; gap: 44px; }
+  .contact-form { max-width: none; }
+  .contact-form .btn-primary { flex: 1 1 auto; }
+  .contact-form-hint { flex-basis: 100%; }
 }
 
 /* ---- 进场动画 ---- */
@@ -3080,7 +3100,7 @@ html[data-scheme="light"] .chat-panel { box-shadow: 0 28px 64px -18px rgba(8, 9,
 .pc-card-price{font-size:16px;font-weight:700;color:var(--pc-accent);overflow-wrap:anywhere}
 .pc-card-moq{font-size:11px;opacity:.75}
 .pc-card-terms{display:flex;flex-wrap:wrap;gap:4px;margin-top:2px}
-.pc-term{padding:2px 6px;border-radius:2px;background:var(--pc-soft);color:var(--pc-accent);font-size:10px}
+.pc-term{padding:2px 7px;border-radius:999px;background:var(--hover);color:var(--text-3);font-size:10.5px}
 .pc-card-cta{display:block;margin-top:auto;padding:7px 10px;border:1px solid rgba(128,128,128,.45);border-radius:20px;color:inherit;font-size:11.5px;text-align:center;text-decoration:none}
 .pc-card-cta:hover{border-color:var(--pc-accent);color:var(--pc-accent)}
 .pc-badge{position:absolute;inset-block-start:8px;inset-inline-start:8px;z-index:1;padding:3px 8px;border-radius:2px;background:var(--pc-accent);color:#fff;font-size:10px}
@@ -3093,6 +3113,92 @@ html[data-scheme="light"] .chat-panel { box-shadow: 0 28px 64px -18px rgba(8, 9,
 @media(max-width:980px){.pc-layout{grid-template-columns:200px minmax(0,1fr);gap:18px}.pc-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:760px){.pc-wrap{padding:0 16px}.pc-layout{grid-template-columns:1fr}.pc-showcase-list{max-height:220px}.pc-side-title{padding:0 12px}.pc-cat-row,.pc-cat-all-row{padding-inline-start:12px}.pc-cat-caret{display:none}.pc-cat-sub{position:static;display:block;width:auto;min-width:0;max-width:none;padding:0 0 6px 14px;border:0;border-radius:0;background:transparent;box-shadow:none}.pc-sort{margin-inline-start:0}}
 @media(max-width:480px){.pc-grid{grid-template-columns:1fr}.pc-shophead{padding:14px}.pc-shoptag{min-width:100%}}
+
+/* 插件市场：.section 的通用 88px 上下内边距把页头与工具条撑成了两块空白地，
+   这里按块级选择器压回一屏连贯的节奏。 */
+.section.market-head { padding: 72px 0 28px; }
+.section.market-body { padding-top: 0; }
+.market-stats { margin-top: 18px; }
+
+/* ---- 产品中心：把「阿里店铺式」的多盒子/高饱和收成 Linear 的克制版式 ----
+   只覆盖表面层（描边、底色、圆角、字号、强调色），不动 pc-* 的布局骨架与交互
+   （分类浮层、橱窗滚动、排序表单都按原样工作）。 */
+.pc-wrap { max-width: 1200px; padding: 0 28px; }
+.pc-shophead {
+  margin: 4px 0 22px;
+  padding: 0 0 16px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+}
+.pc-shopbrand { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
+.pc-shoptag { font-size: 13px; color: var(--text-2); }
+.pc-shopcta { padding: 7px 14px; border-radius: 999px; background: var(--btn-primary-bg); color: var(--btn-primary-fg); font-size: 13px; font-weight: 500; }
+.pc-side { gap: 26px; }
+/* 左栏三块原来各套一层描边卡，改成一整条无框栏：只留小标题 + 列表 */
+.pc-search, .pc-cats, .pc-showcase { padding: 0; border: 0; border-radius: 0; background: transparent; }
+.pc-search-label, .pc-side-title {
+  margin: 0 0 10px;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text-3);
+}
+.pc-search-row input {
+  height: 38px;
+  padding: 0 44px 0 11px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--input-bg);
+  font-size: 13.5px;
+}
+.pc-search-row input:focus { outline: none; border-color: var(--border-strong); box-shadow: 0 0 0 3px var(--accent-soft); }
+.pc-search-row button { width: 38px; height: 38px; border-radius: 0 7px 7px 0; background: transparent; color: var(--text-2); }
+.pc-search-row button:hover { color: var(--text); }
+.pc-cat-row, .pc-cat-all-row { padding: 8px 10px; border-radius: 6px; border-inline-start: 0; font-size: 13.5px; }
+.pc-cat-row:hover, .pc-cat-all-row:hover { background: var(--hover); color: var(--text); }
+.pc-cat-row.active, .pc-cat-all-row.active { background: var(--hover); color: var(--text); font-weight: 500; }
+.pc-cat-row.is-trail { border-inline-start: 0; color: var(--text); font-weight: 500; }
+.pc-cat-sub { border-radius: 10px; background: var(--panel-2); box-shadow: 0 18px 44px rgba(0, 0, 0, 0.45); }
+.pc-sub-link { border-radius: 6px; font-size: 13px; }
+.pc-sub-link:hover { background: var(--hover); color: var(--text); }
+.pc-sub-link.active { color: var(--text); font-weight: 500; }
+.pc-showcase-cover { border-radius: 6px; }
+.pc-showcase-name { font-size: 12.5px; }
+.pc-showcase-price { font-size: 12px; font-weight: 500; color: var(--text-2); }
+.pc-meta { padding: 0 0 12px; margin: 0 0 18px; }
+.pc-meta-title { font-size: 15px; font-weight: 600; }
+.pc-meta-count { font-size: 13px; color: var(--text-3); opacity: 1; }
+.pc-sort { font-size: 13px; }
+.pc-sort label { color: var(--text-3); opacity: 1; }
+.pc-sort select { height: 32px; border-radius: 7px; border-color: var(--border); background: var(--input-bg); font-size: 13px; }
+.pc-sort-submit { height: 32px; border: 0; border-radius: 999px; background: var(--btn-primary-bg); color: var(--btn-primary-fg); font-size: 13px; font-weight: 500; }
+.pc-clear { font-size: 13px; color: var(--text-2); }
+.pc-grid { gap: 16px; }
+.pc-card { border-radius: 10px; background: var(--panel); }
+.pc-card:hover { border-color: var(--border-strong); box-shadow: 0 16px 32px -24px rgba(0, 0, 0, 0.5); }
+.pc-card-body { gap: 7px; padding: 13px 14px 14px; }
+.pc-card-title { font-size: 13.5px; font-weight: 500; color: var(--text); }
+.pc-card-title:hover { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
+.pc-card-price { font-size: 15px; font-weight: 500; color: var(--text); }
+.pc-card-moq { font-size: 12px; color: var(--text-3); opacity: 1; }
+.pc-card-cta {
+  padding: 7px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  color: var(--text);
+  font-size: 12.5px;
+  transition: background 0.15s, border-color 0.15s;
+}
+.pc-card-cta:hover { border-color: var(--border-strong); background: var(--hover); color: var(--text); }
+.pc-badge { padding: 2px 7px; border-radius: 999px; background: var(--btn-primary-bg); color: var(--btn-primary-fg); font-size: 10.5px; font-weight: 500; }
+.pc-badge-hot { background: #b5651d; }
+.pc-pager { font-size: 13px; }
+.pc-pager-link { color: var(--text); font-weight: 500; text-decoration: underline; text-underline-offset: 3px; }
+.pc-pager-status { color: var(--text-3); opacity: 1; }
 
 /* ---- 站点地图（/sitemap）：固定入口 + 产品/新闻/独立页的链接索引 ---- */
 
@@ -3128,35 +3234,36 @@ html[data-scheme="light"] .chat-panel { box-shadow: 0 28px 64px -18px rgba(8, 9,
    html[data-scheme="light"] 的亮色皮由上面原有规则接管。
    ============================================================ */
 
-/* 1. 深色底从近黑提到可辨的层级，正文与次要文字整体提亮，
-   让 13–14px 的说明文字不再糊在背景里。 */
+/* 1. 深色色阶直接取 linear.app 实测值：近黑底不泛蓝，描边压到 7%/12%，
+   次要文字退到 #8a8f98（Linear 的二级灰）。表面只比底色亮一档，
+   靠留白和描边分层，而不是靠“卡片更亮”分层。 */
 html:not([data-scheme="light"]) {
-  --bg: #0b0d11;
-  --bg-soft: #0e1116;
-  --panel: #12161c;
-  --panel-2: #171b22;
-  --panel-3: #1d222b;
-  --border: rgba(255, 255, 255, 0.11);
-  --border-strong: rgba(255, 255, 255, 0.18);
-  --text: #f5f7fa;
-  --text-2: #a9b1bf;
-  --text-3: #818a99;
-  --lead: #c8cfda;
-  --prose: #d3d9e2;
-  --accent: #7d8cff;
-  --accent-2: #a9b4ff;
-  --accent-soft: rgba(125, 140, 255, 0.16);
-  --wash: rgba(255, 255, 255, 0.035);
-  --banner-bg: rgba(255, 255, 255, 0.03);
-  --hover: rgba(255, 255, 255, 0.07);
-  --hover-2: rgba(255, 255, 255, 0.11);
-  --code-bg: rgba(255, 255, 255, 0.08);
-  --track: rgba(255, 255, 255, 0.1);
-  --hairline: rgba(255, 255, 255, 0.1);
-  --input-bg: rgba(255, 255, 255, 0.05);
-  --topbar-border: rgba(255, 255, 255, 0.12);
-  --scroll-thumb: #303641;
-  --scroll-thumb-hover: #414957;
+  --bg: #08090a;
+  --bg-soft: #0b0c0e;
+  --panel: #0d0e10;
+  --panel-2: #101112;
+  --panel-3: #16171a;
+  --border: rgba(255, 255, 255, 0.07);
+  --border-strong: rgba(255, 255, 255, 0.12);
+  --text: #f7f8f8;
+  --text-2: #8a8f98;
+  --text-3: #62666d;
+  --lead: #b4b8c0;
+  --prose: #c3c7cf;
+  --accent: #5e6ad2;
+  --accent-2: #8a8ff0;
+  --accent-soft: rgba(94, 109, 210, 0.14);
+  --wash: rgba(255, 255, 255, 0.02);
+  --banner-bg: rgba(255, 255, 255, 0.022);
+  --hover: rgba(255, 255, 255, 0.05);
+  --hover-2: rgba(255, 255, 255, 0.07);
+  --code-bg: rgba(255, 255, 255, 0.06);
+  --track: rgba(255, 255, 255, 0.07);
+  --hairline: rgba(255, 255, 255, 0.06);
+  --input-bg: rgba(255, 255, 255, 0.03);
+  --topbar-border: rgba(255, 255, 255, 0.08);
+  --scroll-thumb: #232529;
+  --scroll-thumb-hover: #2f3237;
   --radius: 10px;
   --radius-lg: 16px;
 }
@@ -3252,11 +3359,12 @@ body { line-height: 1.7; }
 
 /* 8. 内页共用：列表行、卡片、表格里的次要文字整体抬一档；
    卡片换成面板色，和分区底色拉开层级。 */
-.post-card, .product-card, .feature, .plugin-card, .docs-card {
+/* 文档索引保持整页一体的白纸感：行与行只靠发丝线分隔，不铺面板底 */
+.post-card, .product-card, .feature, .plugin-card {
   background: var(--panel);
   border-color: var(--border);
 }
-.post-card:hover, .product-card:hover, .feature:hover, .plugin-card:hover { border-color: var(--accent); }
+.post-card:hover, .product-card:hover, .feature:hover, .plugin-card:hover { border-color: var(--border-strong); }
 .post-date, .post-row time, .article-meta, .pager-status { font-size: 13px; color: var(--text-2); }
 .post-card h3, .post-row h2 { font-weight: 600; }
 .post-card p, .post-row p, .product-card-summary, .product-moq, .product-lead { font-size: 14px; color: var(--text-2); }
@@ -4328,4 +4436,55 @@ html[data-scheme="light"] .hp-cta-glow {
   .hp-post-arrow { transition: none; }
   .hp-plugin:hover { transform: none; }
 }
+
+/* ============================================================
+   商品详情页（默认主题）Linear 化
+   site-pd.css 是四套主题共用的，不能直接改；这里用 .pd-page 前缀
+   在本主题的样式表里加高优先级的表面覆盖：白胶囊主按钮、中性描边、
+   去掉橙色价格块与主色小标签。
+   ============================================================ */
+
+.pd-page .pd-crumb { font-size: 12.5px; color: var(--text-3); opacity: 1; }
+.pd-page .pd-stage { border-color: var(--border); border-radius: 10px; }
+.pd-page .pd-gallery .pd-thumb { border-color: var(--border); border-radius: 8px; }
+.pd-page .pd-gallery .pd-thumb:hover,
+.pd-page .pd-gallery .pd-thumb.active { border-color: var(--border-strong); }
+.pd-page .pd-supplier { border-color: var(--border); border-radius: 12px; background: var(--panel); }
+.pd-page .pd-info h1 { font-size: 26px; font-weight: 600; letter-spacing: -0.02em; }
+.pd-page .pd-badge { padding: 3px 9px; border-color: var(--border); border-radius: 999px; color: var(--text-2); font-size: 11.5px; }
+.pd-page .pd-badge-quiet { border-color: transparent; background: var(--hover); color: var(--text-3); opacity: 1; }
+.pd-page .pd-cert { height: 24px; padding: 0 9px; border-color: var(--border); border-radius: 999px; background: transparent; color: var(--text-2); font-weight: 500; letter-spacing: 0; }
+.pd-page .pd-cert-ico { color: var(--text-3); }
+/* 价格不再铺琥珀色底：Linear 的价格就是一行白字 */
+.pd-page .pd-price { margin: 2px 0 10px; padding: 0; border-radius: 0; background: none; font-size: 26px; font-weight: 600; letter-spacing: -0.02em; }
+.pd-page .pd-price-unit { font-size: 13px; color: var(--text-3); opacity: 1; }
+.pd-page .pd-moq { font-size: 12.5px; color: var(--text-3); opacity: 1; }
+.pd-page .pd-stepper { border-color: var(--border); background: var(--input-bg); color: var(--text); }
+.pd-page .pd-stepper:focus-within { border-color: var(--border-strong); }
+.pd-page .pd-step:hover:not(:disabled) { background: var(--hover); }
+.pd-page .pd-qty-label { color: var(--text-2); font-weight: 500; }
+.pd-page .pd-cta { border-radius: 999px; font-size: 13.5px; font-weight: 500; }
+.pd-page .pd-cta-primary { border-color: transparent; background: var(--btn-primary-bg); color: var(--btn-primary-fg); }
+.pd-page .pd-cta-primary:hover { background: var(--btn-primary-hover); }
+.pd-page .pd-cta-secondary { border-color: var(--border-strong); color: var(--text); }
+.pd-page .pd-cta-secondary:hover { background: var(--hover); }
+.pd-page .pd-inquiry { border-color: var(--border); border-radius: 12px; background: var(--panel); }
+.pd-page .pd-inq-section { border-top-color: var(--border); }
+.pd-page .pd-service span { color: var(--text); font-weight: 500; }
+.pd-page .pd-pay-chip { border-color: var(--border); background: var(--input-bg); }
+.pd-page .pd-keyattrs { border: 1px solid var(--border); border-radius: 12px; background: transparent; }
+.pd-page .pd-attr-label { color: var(--text-3); opacity: 1; }
+.pd-page .pd-summary { color: var(--text-2); opacity: 1; }
+.pd-page .pd-tabs { border-bottom-color: var(--border); background: var(--bg); }
+.pd-page .pd-tabs [role="tab"][aria-selected="true"] { border-bottom-color: var(--text); }
+.pd-page .pd-tabs .pd-tab-anchor:hover { color: var(--text); }
+.pd-page .pd-spec-table { border-color: var(--border); border-radius: 10px; }
+.pd-page .pd-spec-cell { border-bottom-color: var(--border); }
+.pd-page .pd-spec-cell:nth-child(odd) { border-inline-end-color: var(--border); }
+.pd-page .pd-review-summary { border-color: var(--border); border-radius: 12px; }
+.pd-page .pd-review-item { border-bottom-color: var(--border); }
+.pd-page .pd-review-verified { color: var(--text-2); }
+.pd-page .pd-rec-cover { border-color: var(--border); border-radius: 10px; }
+.pd-page .pd-sticky-cta { border-color: transparent; border-radius: 999px; background: var(--btn-primary-bg); color: var(--btn-primary-fg); font-weight: 500; }
+.pd-page .pd-sticky { border-top-color: var(--border); background: var(--bg); }
 
