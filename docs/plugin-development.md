@@ -427,19 +427,65 @@ cd web && npx tsc --noEmit && npx eslint src
 
 **多实例部署要注意什么？** 插件没有现成的分布式锁可用，后台任务要自己防重复执行，cron 示例用数据库乐观抢占（`UPDATE ... WHERE last_slot < ?` 看影响行数），可以参照。框架层面的多实例要求与已知并发窗口以《部署与运维指南》第 10 节为准。
 
-**已知限制（框架当前版本）**
-- 域名校验已实现：授权里的 `domains` 会与当前站点域名比对（精确或 `*.example.com` 通配；站点域名取自 `site.domain` / `site.domains` / `sso.issuer`，都没配时用第一次请求的 `Host`，`license.allow_dev_hosts` 可放行本机地址）。不匹配时插件状态为 `invalid`，路由返回 403，原因显示在插件管理页。授权里没写 `domains` 表示不绑定域名。
-- 授权到期会自动下线：后台定时检查（`CheckEvery`，默认每小时）加每次进入插件路由前的检查，到期的插件被标为 `expired`，路由返回 403，不需要重启；定时检查只影响插件管理页的状态刷新，请求路径上是实时判定的。
-- `requires_nexadmin` 已校验：插件挂载时（以及 `nexadmin plugin install`）会按它检查框架版本，不满足则不挂载（状态 `invalid`，授权再有效也没用），`plugin install` 可用 `--allow-incompatible` 跳过（仅 CLI；后台市场不提供该开关）。该项为空，或框架版本未知（开发环境没有版本号）时放行；写错而无法解析的范围视为不满足。
-- 授权不联网回查，只有离线吊销：发行方用 `plugin revoke`（或授权后台导出）生成签名的吊销清单 `config/license-revoked.json`，随升级包分发；框架验签后把序列号命中的授权标为 `revoked`（路由返回 403，原因显示在插件管理页），文件变化后无需重启。这只是辅助手段，不是强保护：源码交付下买家可以删除清单或改掉校验代码；没有序列号的旧授权不能被单独吊销。仍应缩短授权有效期、按期续签；发行方私钥泄露或需要整体作废时，从公钥集合里去掉对应公钥（`config/license-keys.pub` 或内置列表），由该钥签发的授权会全部失效。
-- 支持多把公钥：校验时用内置公钥加 `config/license-keys.pub`（每行一把 base64，`#` 起为注释）里追加的公钥，授权文件里的 `kid` 指明用哪一把（旧授权文件没有 `kid`，依次尝试全部公钥）。发行方轮换密钥时先追加新公钥，等旧授权都过期后再去掉旧公钥，不必改源码。内置的是开发公钥，正式发行前必须替换（`nexadmin release check` 会拦截）。
-- 运行期启停（插件管理页开关）能立刻生效的和不能立刻生效的，划开写：
-  - **立刻生效**：插件自己的路由（`gate`/`admit` 按运行期状态判定，停用后请求直接 403 并带上原因）、`GET /plugins/active` 的可用性判据、侧栏菜单可见性（`MenuVisible` 与 `/plugins/active` 同一判据，所以停用后不会留一个点进去 403 的入口）。这一侧不需要重启。
-  - **需要重启**：已经建立的 WebSocket / SSE 长连接（守卫只追加不摘除）、事件订阅（`core/event` 只有 `Subscribe`，没有 `Unsubscribe`）、作业注册（`core/job` 的运行期注销不是公开能力）、插件里用 `sync.Once` 造出来的 service 单例，以及后台 worker——除非 Module 实现 `plugin.RestartableStarter`（`Start` 返回后给出 `Done()`，ctx 取消后所有任务确认退出），否则被停用的 worker 不会在线重新拉起：重新启用会留下 `needRestart=true`，此时**接口和菜单也仍然不可用**（框架不假装它已经活了），必须重启服务。当前官方插件都还没实现 `RestartableStarter`，所以带 worker 的插件停用后再启用都要重启。
-  - 想做可恢复的 worker：实现 `RestartableStarter`（`Done()` 必须在本轮所有任务退出后关闭），框架会在恢复启用时重新 `Start` 一次并给一份新的 ctx。
-  - 停用清单是节点本地文件（`data/licenses/disabled.json`），集群多节点不会自动同步：要么逐节点切换，要么用配置 `disabled_plugins`（随配置分发）。`nexadmin plugin list` 只读磁盘与配置，不读这个叠加层。
-- 插件路由只有在声明「仅 API」热挂载契约后才可能在导入授权时即时挂载；当前官方插件未逐个声明，导入授权后请以返回的 `needRestart` 为准，必要时重启。声明需实现 `plugin.RuntimeRoutes` 的 `RequiresRootRoutes() bool` 并返回 `false`，且所有路由位于 `/api/v1/plugins/<id>/` 下。
-- 插件的迁移、菜单写入和热挂载在真实数据库上还未完整验证，请在提交说明中写明你的验证范围。
+## 12. 已知限制（当前版本）
 
+这一节写的是"框架现在就是这样"的边界，不是待办清单。写插件前先扫一遍，能省掉一轮返工。
 
+### 域名绑定
 
+授权里的 `domains` 会和站点域名比对：精确匹配，或 `*.example.com` 通配。站点域名取自 `site.domain` / `site.domains` / `sso.issuer`，都没配时用第一次请求的 `Host`；本机地址可用 `license.allow_dev_hosts` 放行。
+
+不匹配时插件状态为 `invalid`、路由返回 403，原因显示在插件管理页。授权里没写 `domains` 表示不绑定域名。
+
+### 授权到期
+
+到期自动下线，不需要重启。后台定时检查（`CheckEvery`，默认每小时）负责刷新插件管理页的状态；每次进入插件路由前还有一次实时判定，所以状态刷新慢一拍也不影响拦截。
+
+### 框架版本范围
+
+`requires_nexadmin` 在插件挂载时校验，`nexadmin plugin install` 也会校验。不满足就不挂载——状态 `invalid`，授权再有效也没用。
+
+- CLI 安装可用 `--allow-incompatible` 跳过，后台市场没有这个开关。
+- 该项为空，或框架版本未知（开发环境没有版本号）时放行。
+- 写错而无法解析的范围视为不满足。
+
+### 吊销与公钥
+
+授权**不联网回查**，只有离线吊销：发行方用 `plugin revoke`（或授权后台导出）生成签名清单 `config/license-revoked.json`，随升级包分发；框架验签后把序列号命中的授权标为 `revoked`（403，原因见插件管理页），文件变化后不用重启。
+
+> [!WARNING]
+> 离线吊销只是辅助手段，不是强保护。源码交付下买家可以删掉清单或改掉校验代码；没有序列号的旧授权也无法单独吊销。真正管用的是缩短有效期、按期续签。私钥泄露或要整体作废时，从公钥集合（`config/license-keys.pub` 或内置列表）里去掉对应公钥，该钥签发的授权全部失效。
+
+支持多把公钥：内置公钥 + `config/license-keys.pub` 里追加的（每行一把 base64，`#` 起为注释）。授权文件里的 `kid` 指明用哪一把；旧授权没有 `kid`，依次尝试全部。轮换时先追加新公钥，等旧授权过期后再去掉旧的，不必改源码。内置的是开发公钥，正式发行前必须替换（`nexadmin release check` 会拦截）。
+
+### 运行期启停：什么立刻生效
+
+**立刻生效**（不需要重启）：
+
+- 插件自己的路由——`gate` / `admit` 按运行期状态判定，停用后请求直接 403 并带原因
+- `GET /plugins/active` 的可用性判据
+- 侧栏菜单可见性——`MenuVisible` 与 `/plugins/active` 同一判据，不会留下一个点进去 403 的入口
+
+**需要重启**：
+
+- 已建立的 WebSocket / SSE 长连接——守卫只追加、不摘除
+- 事件订阅——`core/event` 只有 `Subscribe`，没有 `Unsubscribe`
+- 作业注册——`core/job` 的运行期注销不是公开能力
+- 插件里用 `sync.Once` 造出来的 service 单例
+- 后台 worker——除非 Module 实现 `plugin.RestartableStarter`
+
+`RestartableStarter` 的约定：`Start` 返回时要给出 `Done()`，ctx 取消后所有任务确认退出，框架才会在恢复启用时重新 `Start` 一次并给一份新的 ctx。
+
+**当前官方插件都还没实现它**，所以带 worker 的插件停用后再启用必须重启：重新启用会留下 `needRestart=true`，此时接口和菜单也仍然不可用——框架不假装它已经活了。
+
+停用清单是节点本地文件（`data/licenses/disabled.json`），集群多节点不会自动同步：要么逐节点切换，要么用配置 `disabled_plugins` 随配置分发。`nexadmin plugin list` 只读磁盘与配置，不读这个叠加层。
+
+### 热挂载
+
+插件路由只有在声明「仅 API」热挂载契约之后，才可能在导入授权时即时挂载。当前官方插件未逐个声明，导入授权后请以返回的 `needRestart` 为准，必要时重启。
+
+声明方式：实现 `plugin.RuntimeRoutes` 的 `RequiresRootRoutes() bool` 并返回 `false`，且所有路由位于 `/api/v1/plugins/<id>/` 下。
+
+### 真库验证范围
+
+插件的迁移、菜单写入与热挂载在真实数据库上尚未完整验证。提交时在说明里写清你的验证范围，不要用单元测试的结论代替。

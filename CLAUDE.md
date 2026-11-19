@@ -34,7 +34,7 @@ cd web && npx tsc --noEmit && npx eslint src
 
 涉及迁移时补跑 `nexadmin-server migrate --dry-run`；涉及官网时截图验证浅色/深色两套主题。
 Go 与前端自动化用例已于 2026-11-08 整体清理（commit 22ff72c），行为验证按 `AGENTS.md` 第 3 节与
-`docs/功能与权限清单.md` 的手工/真库复跑配方执行。
+`docs-internal/功能清单-内部记录.md` 的手工/真库复跑配方执行。
 
 ## 4. 常用命令
 
@@ -48,4 +48,4 @@ Go 与前端自动化用例已于 2026-11-08 整体清理（commit 22ff72c），
 
 ## 5. 文档索引
 
-`docs/二次开发指南.md`（二开总纲）、`docs/quickstart.md`（15 分钟上手）、`docs/plugin-development.md`（插件开发）、`docs/配置参考.md`、`docs/部署与运维指南.md`、`docs/功能与权限清单.md`、`core/README.md`（框架内核能力地图）。
+`docs/二次开发指南.md`（二开总纲）、`docs/quickstart.md`（15 分钟上手）、`docs/plugin-development.md`（插件开发）、`docs/配置参考.md`、`docs/部署与运维指南.md`、`docs/features.md`、`core/README.md`（框架内核能力地图）。

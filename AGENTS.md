@@ -41,7 +41,7 @@ cd web && npm run typecheck && npm run lint
 **Go 与前端自动化用例已整体清理（2026-11-08，commit 22ff72c）**：Go 单测、`TestIT*`、契约 golden、
 web e2e/playwright 都随 `go test` 步骤一起移除了（`scripts/ci` 的 Python 助手用例仍留在 CI 里），
 `go test ./...` 现在只剩 `core/auth` 两个纯函数用例，不能当作行为验证。
-拖拽几何、迁移、登录链路这类物理/真库/整链行为按 `docs/功能与权限清单.md` 里的手工复跑配方实测，
+拖拽几何、迁移、登录链路这类物理/真库/整链行为按 `docs-internal/功能清单-内部记录.md` 里的手工复跑配方实测，
 并在提交说明里写清验证方式；新加代码不要顺手恢复测试基础设施。
 
 ## 4. 常用命令
@@ -56,4 +56,4 @@ web e2e/playwright 都随 `go test` 步骤一起移除了（`scripts/ci` 的 Pyt
 
 ## 5. 文档索引
 
-`docs/二次开发指南.md`（二开总纲）、`docs/quickstart.md`（15 分钟上手）、`docs/plugin-development.md`（插件开发）、`docs/配置参考.md`、`docs/部署与运维指南.md`、`docs/功能与权限清单.md`、`core/README.md`（框架内核能力地图）。
+`docs/二次开发指南.md`（二开总纲）、`docs/quickstart.md`（15 分钟上手）、`docs/plugin-development.md`（插件开发）、`docs/配置参考.md`、`docs/部署与运维指南.md`、`docs/features.md`、`core/README.md`（框架内核能力地图）。

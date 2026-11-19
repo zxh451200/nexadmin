@@ -10,8 +10,8 @@
       <summary>{{.T "docs.title"}}</summary>
       <nav aria-label="{{.T "docs.title"}}">
         {{range .DocNav}}
-        {{$open := false}}{{range .Items}}{{if .Active}}{{$open = true}}{{end}}{{end}}
-        <details class="docs-group"{{if $open}} open{{end}}>
+        {{/* 与 docs.tmpl 同一口径：默认展开，层级一眼可见 */}}
+        <details class="docs-group" open>
           <summary class="docs-group-title">{{.Title}}</summary>
           <ul>
             {{range .Items}}<li><a href="{{.URL}}" lang="{{.Language}}"{{if .Active}} class="active" aria-current="page"{{end}}>{{.Title}}</a></li>{{end}}

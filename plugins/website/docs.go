@@ -107,8 +107,20 @@ var docGroups = []docGroup{
 			Summary: "插件包结构、清单、后端与前端约定，以及打包和安装验证。"},
 	}},
 	{Key: "ref", Items: []docItem{
-		{Slug: "features", File: "功能与权限清单.md", Title: "功能与权限清单",
-			Summary: "内置模块、登录方式、权限码与数据范围的完整清单（精确口径，供核对）。"},
+		// 原「功能与权限清单」是 79k 字单页，已拆成索引 + 6 篇：模块 / 认证 / 权限 / 插件 / 权限码。
+		// 工程记录与手工复跑配方搬去 docs/_internal/（下划线开头，go:embed 不收录）。
+		{Slug: "features", File: "features.md", Title: "功能与权限清单",
+			Summary: "按能力查：模块清单、登录认证、开放平台与额度、插件授权、权限码对照。"},
+		{Slug: "features-modules", File: "features-modules.md", Title: "内置模块清单",
+			Summary: "内置模块与插件各能做什么、入口在哪、依赖什么。"},
+		{Slug: "features-auth", File: "features-auth.md", Title: "登录与认证",
+			Summary: "登录方式、令牌与会话的有效期和失效规则。"},
+		{Slug: "features-access", File: "features-access.md", Title: "开放平台与权限",
+			Summary: "开放平台接入、角色与数据范围、租户额度、演示站模式的判定口径。"},
+		{Slug: "features-plugins", File: "features-plugins.md", Title: "插件与授权",
+			Summary: "插件怎么交付与安装、free 与 pro 的区别、授权文件校验什么、运行期怎么启停。"},
+		{Slug: "features-permissions", File: "features-permissions.md", Title: "权限码与接口对照",
+			Summary: "权限码与后端接口的完整对照表，供实现与核对。"},
 		{Slug: "config", File: "配置参考.md", Title: "配置参考",
 			Summary: "配置文件加载规则与各分区的键、默认值和运行期开关。"},
 		{Slug: "deploy", File: "部署与运维指南.md", Title: "部署与运维指南",
@@ -343,7 +355,7 @@ func renderDocHTML(file string) (template.HTML, error) {
 		return "", fmt.Errorf("docs markdown: %w", err)
 	}
 	// 正文标题交给页面模板渲染（docs.tmpl 用 manifest 的标题 + 站点样式），去掉 md 里自己的 h1。
-	s := buf.String()
+	s := applyCallouts(buf.String(), docLangLabel(file))
 	if i := strings.Index(s, "<h1"); i >= 0 {
 		if j := strings.Index(s[i:], "</h1>"); j >= 0 {
 			s = s[:i] + s[i+j+len("</h1>"):]

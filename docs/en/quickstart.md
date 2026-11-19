@@ -79,86 +79,66 @@ go build ./... && go vet ./... && go test ./...
 (cd web && npx tsc --noEmit && npx eslint src)
 ```
 
-## 5. Install and Use Plugins
+## 5. Install and use plugins
 
-### Free Plugins (Ready to Go)
+### Free plugins
 
-**Default build scope**: the framework master and official release packages compile `totp` (two-factor) by default, and `nexadmin new` includes it; `ldap` and the other free plugins are installed on demand. They do not conflict: LDAP verifies the password, TOTP asks for a code after login succeeds. Do not enable both `ldap` and `identity` directory sources at the same time — both register external authenticators, only one takes effect, which looks like "configured but not working".
+Scheduled jobs, the code generator, the import center and other general-purpose capabilities ship with the framework and need no licence file. Install the scheduled-jobs plugin once to see the whole flow.
 
-**What are free plugins?** General-purpose capabilities like Scheduled Jobs (cron), Code Generator (codegen), and Data Import (imports) are offered freely with the framework. They don't require license files or extra fees.
+> [!NOTE]
+> The master and official release packages compile `totp` (two-factor) by default, and `nexadmin new` carries it over; other free plugins are installed on demand. `ldap` and `totp` do not conflict — one verifies the password, the other asks for a code after sign-in. Do **not** enable `ldap` and `identity` directory sources together: both register external authenticators, only one takes effect, and "configured but silent" is the hardest failure to diagnose.
 
-**Installation steps (using cron as an example):**
-
-#### Method 1: Command Line (for developers)
+#### Install from the CLI
 
 ```bash
-# Prerequisite: Download the free plugin package from our GitHub repository
-# Assuming you've placed cron.zip in your project root
+# Prerequisite: cron.zip is in the project root (from a release package or the repo)
 
-# 1. Stop the running backend service
-./bin/nexadmin-server stop  # or Ctrl+C
-
-# 2. Install the plugin (automatically writes to source tree)
-go run ./cmd/nexadmin plugin install ./cron.zip
-
-# 3. Rebuild (about 30 seconds)
-sh scripts/build.sh
-
-# 4. Restart the service
-./bin/nexadmin-server start
+./bin/nexadmin-server stop                        # 1. stop the service
+go run ./cmd/nexadmin plugin install ./cron.zip   # 2. unpack and register the source
+sh scripts/build.sh                               # 3. rebuild, about 30 seconds
+./bin/nexadmin-server start                       # 4. start
 ```
 
-#### Method 2: Web Interface (requires a writable source tree and build toolchain)
+#### Install from the plugin marketplace
 
-If you've started development mode (`go run ./cmd/server`), you can directly visit `http://localhost:8080/admin/system/plugin` → Plugin Marketplace tab:
+If development mode (`go run ./cmd/server`) is already running, open `http://localhost:8080/admin/system/plugin` → Marketplace:
 
-1. Find the "Scheduled Jobs" card (marked "Free")
-2. Click the "Install" button
-3. Wait for the progress bar to show "Installation complete" (auto-compiles and restarts)
-4. Refresh the page; you'll see cron's status as "Active"
+1. Find the "Scheduled Jobs" card (marked Free)
+2. Click Install and let the progress bar finish
+3. Refresh; the status reads Active
 
-**✅ How to verify after installation?**
+#### Verify the install
 
-- **Check in admin**: Visit `/admin/system/plugin`, confirm cron status is `active`
-- **Functional test**: Visit `/admin/plugins/cron/jobs`, create a task that runs every 5 minutes
-- **Log confirmation**: Check `logs/nexadmin.out`; you should see scheduler startup logs
+- The plugin page shows cron as `active`
+- `/admin/plugins/cron/jobs` lets you create a task that runs in 5 minutes
+- `logs/nexadmin.out` contains the scheduler startup line
 
----
+### Pro plugins
 
-### Pro Plugins (License Required)
+Workflow, data audit, the payment hub and similar capabilities need a separate licence.
 
-**What are pro plugins?** Advanced features like Workflow Engine, Data Audit (audit), Payment Integration (pay), etc., require separate licenses.
+1. **Get a licence**: request a `.lic` file from the vendor
+2. **Install the source**: follow the steps above to bring the package in
+3. **Import the licence**: open the plugin page, select the plugin, paste the licence contents
+4. **Restart**: when the UI reports `needRestart`, run `./bin/nexadmin-server restart`
 
-**Installation flow:**
+> [!WARNING]
+> A licence only activates a plugin that is **already compiled into the binary**. Three more things invalidate it: serving a domain other than the licensed one, expiry (the plugin is disabled automatically), and a `requires_nexadmin` version mismatch. Plugins that report `needRestart=true` extend root routes or startup-time authentication and cannot be enabled without a restart.
 
-1. **Purchase license**: Contact vendor to get `.lic` file
-2. **Install plugin**: First follow the "install plugin" steps above to install source code
-3. **Import license**: In Plugin Management → select the corresponding pro plugin → paste license content
-4. **Check status**: If it prompts `needRestart=true`, execute `./bin/nexadmin-server restart`
-
-**⚠️ Important Notes**
-
-- Free plugins **don't require license files**; no need to handle license
-- After importing pro plugin authorization, if it prompts `needRestart=true`, this means the plugin uses root routes or authentication extensions which must be loaded at server startup, so restart is required. Other pro plugins become active immediately after license import
-- **Domain Binding**: If your plugin license binds a specific domain (like `example.com`), you must use this exact domain when accessing; otherwise the license becomes invalid.
-- **Expiry**: All Pro licenses have an expiration date (e.g., `2027-12-31`). They will auto-disable after expiry. Renewal requires importing a new license.
-
----
-
-**📦 License FAQ**
+#### Licence FAQ
 
 | Question | Answer |
 |---|---|
-| Q: Why does my plugin prompt a restart needed? | A: This plugin uses root routes or auth extensions which must be loaded at server startup, requiring restart. Other plugins activate immediately after license import. |
-| Q: How do I know what's free vs paid? | A: In Plugin Marketplace, free plugins are labeled "Free", Pro plugins show "TBD" or a specific price. |
-| Q: Can I transfer licenses? | A: Each license binds a customer name and domain. For domain changes, contact vendor to reissue. |
-| Q: Is there a trial version? | A: Currently auto-trial isn't provided. For Pro evaluation, contact vendor for temporary license. |
+| Why does it ask for a restart? | The plugin extends root routes or startup-time authentication, which can only load when the service starts. Other plugins activate as soon as the licence is imported. |
+| How do I tell free from paid? | The marketplace marks free plugins as Free; pro plugins show a price or "TBD". |
+| Can a licence be transferred? | Each licence binds a customer name and a domain. Reissuing is required to change the domain. |
+| Is there a trial? | There is no automatic trial. Ask the vendor for a temporary licence to evaluate pro features. |
 
 ## 6. Licensing, disabling and service lifecycle
 
 Free plugins need no `.lic`. For pro plugins, a platform super admin imports the license in Plugin Management; the file is stored at `data/licenses/<id>.lic`. Source installation still needs a build, and license import only activates compiled plugins: when it returns `needRestart=true`, restart as instructed. Not every plugin can be hot-activated. Domain binding, expiry and the `requires_nexadmin` range must all match.
 
-**Formal purchase terms have not been published.** This guide sets no prices, refund rules, revenue shares or IP terms; free / pro is a runtime classification, not a legal license grant.
+Free / pro is a runtime classification, not a legal licence grant; pricing, refunds and IP terms are not defined in this guide.
 
 ```bash
 ./bin/nexadmin-server status

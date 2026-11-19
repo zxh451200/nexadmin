@@ -10,8 +10,9 @@
       <summary>{{.T "docs.title"}}</summary>
       <nav aria-label="{{.T "docs.title"}}">
         {{range .DocNav}}
-        {{$open := false}}{{range .Items}}{{if .Active}}{{$open = true}}{{end}}{{end}}
-        <details class="docs-group"{{if $open}} open{{end}}>
+        {{/* 默认展开：文档就三组九篇，收起时只剩三个互不相干的标题，看不出层级；
+             折叠能力留给用户手动点，窄屏也照样能收。 */}}
+        <details class="docs-group" open>
           <summary class="docs-group-title">{{.Title}}</summary>
           <ul>
             {{range .Items}}<li><a href="{{.URL}}" lang="{{.Language}}"{{if .Active}} class="active" aria-current="page"{{end}}>{{.Title}}</a></li>{{end}}
